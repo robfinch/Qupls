@@ -1,0 +1,135 @@
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2023  Robert Finch, Waterloo
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+//
+// BSD 3-Clause License
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are met:
+//
+// 1. Redistributions of source code must retain the above copyright notice, this
+//    list of conditions and the following disclaimer.
+//
+// 2. Redistributions in binary form must reproduce the above copyright notice,
+//    this list of conditions and the following disclaimer in the documentation
+//    and/or other materials provided with the distribution.
+//
+// 3. Neither the name of the copyright holder nor the names of its
+//    contributors may be used to endorse or promote products derived from
+//    this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+// FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+// DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+// SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+// CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+// OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+// ============================================================================
+
+import QuplsPkg::*;
+
+module Qupls_alu_sched(alu0_idle, alu1_idle, robentry_islot, could_issue, 
+	head, rob, robentry_issue, entry0, entry1, entry0v, entry1v);
+input alu0_idle;
+input alu1_idle;
+output reg [1:0] robentry_islot [0:ROB_ENTRIES-1];
+input rob_bitmask_t could_issue;
+input rob_ndx_t [7:0] head;
+input rob_entry_t [ROB_ENTRIES-1:0] rob;
+output rob_bitmask_t robentry_issue;
+output rob_ndx_t entry0;
+output rob_ndx_t entry1;
+output reg entry0v;
+output reg entry1v;
+
+integer n;
+
+// FPGAs do not handle race loops very well.
+// The (old) simulator didn't handle the asynchronous race loop properly in the 
+// original code. It would issue two instructions to the same islot. So the
+// issue logic has been re-written to eliminate the asynchronous loop.
+// Can't issue to the ALU if it's busy doing a long running operation like a 
+// divide.
+// ToDo: fix the memory synchronization, see fp_issue below
+
+reg issued0, issued1, no_issue0, no_issue1;
+reg [3:0] issued_on0, issued_on1;
+integer hd, synchd, shd;
+
+always_comb
+begin
+	issued_on0 = 'd0;
+	issued_on1 = 'd0;
+	issued0 = 'd0;
+	issued1 = 'd0;
+	no_issue0 = 'd0;
+	no_issue1 = 'd0;
+	robentry_issue = 'd0;
+	entry0 = 'd0;
+	entry1 = 'd0;
+	entry0v = 'd0;
+	entry1v = 'd0;
+	for (n = 0; n < ROB_ENTRIES; n = n + 1) begin
+		robentry_islot[n] = 2'b00;
+		if (alu0_idle) begin
+			for (hd = 0; hd < 8; hd = hd + 1)
+				if (!issued0 && could_issue[head[hd]] && rob[head[hd]].decbus.alu) begin
+					// Search for a preceding sync instruction. If there is one then do
+					// not issue.
+					if (hd > 0) begin
+						shd = hd - 1;
+						for (synchd = 0; synchd < 8; synchd = synchd + 1) begin
+							if (rob[shd].v & rob[shd].decbus.sync)
+								no_issue0 = 1'b1;
+								shd = shd - 1;
+						end
+					end
+					if (!no_issue0) begin
+				  	robentry_issue[head[hd]] = 1'b1;
+				  	robentry_islot[head[hd]] = 2'b00;
+				  	issued0 = 1'b1;
+				  	entry0 = head[hd];
+				  	entry0v = 1'b1;
+					end
+				end
+		end
+	end
+
+	if (NALU > 1) begin
+		for (n = 0; n < ROB_ENTRIES; n = n + 1) begin
+			if (alu1_idle) begin
+				for (hd = 0; hd < 8; hd = hd + 1)
+					if (!issued0 && !issued1 && could_issue[head[hd]] && rob[head[hd]].decbus.alu) begin
+						// Search for a preceding sync instruction. If there is one then do
+						// not issue.
+						if (hd > 0) begin
+							shd = hd - 1;
+							for (synchd = 0; synchd < 8; synchd = synchd + 1) begin
+								if (rob[shd].v & rob[shd].decbus.sync)
+									no_issue1 = 1'b1;
+									shd = shd - 1;
+							end
+						end
+						if (!no_issue1) begin
+					  	robentry_issue[head[hd]] = 1'b1;
+					  	robentry_islot[head[hd]] = 2'b01;
+					  	issued1 = 1'b1;
+					  	entry1 = head[hd];
+					  	entry1v = 1'b1;
+						end
+					end
+			end
+		end
+	end
+
+end
+
+endmodule
