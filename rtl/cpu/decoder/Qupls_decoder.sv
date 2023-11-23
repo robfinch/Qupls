@@ -36,11 +36,13 @@
 
 import QuplsPkg::*;
 
-module Qupls_decoder(instr, db);
+module Qupls_decoder(clk, instr, db);
+input clk;
 input instruction_t [3:0] instr;
-output decode_bus_t db;
+output decode_bus_t dbo;
 
 instruction_t ins;
+decode_bus_t db;
 
 always_comb
 	ins = instr[0];
@@ -202,5 +204,8 @@ Qupls_decode_fpu ufpu
 	.instr(ins),
 	.fpu(db.fpu)
 );
+
+always_ff @(posedge clk)
+	dbo <= db;
 
 endmodule

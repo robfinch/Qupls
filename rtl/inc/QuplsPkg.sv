@@ -1069,10 +1069,10 @@ typedef struct packed
 typedef struct packed
 {
 	logic v;
-	regspec_t Ra;
-	regspec_t Rb;
-	regspec_t Rc;
-	regspec_t Rt;
+	aregno_t Ra;
+	aregno_t Rb;
+	aregno_t Rc;
+	aregno_t Rt;
 	logic Ta;
 	logic Tb;
 	logic Tt;
@@ -1264,13 +1264,14 @@ const address_t RSTSP = 32'hFFFFFFF0;
 
 typedef struct packed {
 	logic v;
-	logic [5:0] sn;
+	logic [7:0] sn;
 	iq_owner_t owner;
 	logic out;
 	logic done;
 	logic bt;
 	logic agen;
 	decode_bus_t decbus;
+	pregno_t pRt;
 	logic br;
 	pc_address_t brtgt;
 	bts_t bts;				// branch target source

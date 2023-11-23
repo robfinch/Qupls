@@ -102,6 +102,8 @@ genvar g,h;
 rndx_t alu0_re;
 reg [127:0] message;
 
+reg [39:0] I;	// Committed instructions
+
 op_src_t alu0_argA_src;
 op_src_t alu0_argB_src;
 op_src_t alu0_argC_src;
@@ -143,7 +145,8 @@ pregno_t store_argC_reg;
 pregno_t [26:0] rf_reg;
 value_t [26:0] rfo;
 
-rob_entry_t [ROB_ENTRIES-1:0] rob;
+rob_entry_t [ROB_ENTRIES-1:0] rob [0:3];
+reg [ROB_ENTRIES-1:0] rob_v, robentry_stomp;
 
 rob_ndx_t alu0_sndx;
 rob_ndx_t alu1_sndx;
@@ -154,7 +157,7 @@ initial begin: Init
 	integer i,j;
 
 	for (i=0; i < ROB_QENTRIES; i=i+1) begin
-	  	rob[i].v = INV;
+	  	rob_v[i] = INV;
 	end
 
 //	dram2 = 0;
@@ -256,7 +259,9 @@ ICacheLine ic_line_hi, ic_line_lo;
 // FETCH
 //
 
-pc_address_t pc0, pc1, pc2, pc3, pc4;
+pc_address_t pc0, pc1, pc2, pc3, pc4, pc5, pc6;
+pc_address_t pc0d, pc1d, pc2d, pc3d, pc4d, pc5d, pc6d;
+pc_address_t pc0r, pc1r, pc2r, pc3r, pc4r, pc5r, pc6r;
 pc_address_t next_pc;
 wire ntakb,ptakb;
 reg invce = 1'b0;
@@ -273,14 +278,54 @@ asid_t ic_miss_asid;
 wire [1:0] ic_wway;
 
 reg [1023:0] ic_line;
-wire [4:0] len0, len1, len2, len3;
-reg [255:0] ins0, ins1, ins2, ins3, ins4;
+wire [4:0] len0, len1, len2, len3, len4, len5;
+instruction_t ins0, ins1, ins2, ins3, ins4, ins5, ins6;
 reg ins0_v, ins1_v, ins2_v, ins3_v;
+reg [3:0] ins_v;
+reg insnq0,insnq1,insnq2,insnq3;
+reg [3:0] qd, cqd, qs;
+reg [3:0] next_cqd;
+wire pe_alldq;
+reg fetch_new;
+
+wire pt0, pt1, pt2, pt3;		// predict taken branches
+
+always_comb
+	ins_v = {ins0_v,ins1_v,ins2_v,ins3_v};
+
+// Track which instructions are valid. Instructions will be valid right after a
+// cache line has been fetched. As instructions are queued they are marked
+// invalid. insx_v really only applies when instruction queuing takes more than
+// one clock.
+
+always_ff @(posedge clk)
+if (rst) begin
+	ins0_v <= 1'b0;
+	ins1_v <= 1'b0;
+	ins2_v <= 1'b0;
+	ins3_v <= 1'b0;
+end
+else begin
+	if (fetch_new) begin
+		ins0_v <= 1'b1;
+		ins1_v <= 1'b1;
+		ins2_v <= 1'b1;
+		ins3_v <= 1'b1;
+	end
+	else begin
+		ins0_v = ins0_v & ~(qd[0]|qs[0]);
+		ins1_v = ins1_v & ~(qd[1]|qs[1]);
+		ins2_v = ins2_v & ~(qd[2]|qs[2]);
+		ins3_v = ins3_v & ~(qd[3]|qs[3]);
+	end
+end
 
 Qupls_ins_length ul0 (ins0, len0);
 Qupls_ins_length ul1 (ins1, len1);
 Qupls_ins_length ul2 (ins2, len2);
 Qupls_ins_length ul3 (ins3, len3);
+Qupls_ins_length ul4 (ins4, len4);
+Qupls_ins_length ul5 (ins5, len5);
   
 Qupls_icache
 #(.CORENO(CORENO),.CID(0))
@@ -359,6 +404,236 @@ always_comb pc1 = {pc0[43:12] + len0,12'h0};
 always_comb pc2 = {pc1[43:12] + len1,12'h0};
 always_comb pc3 = {pc2[43:12] + len2,12'h0};
 always_comb pc4 = {pc3[43:12] + len3,12'h0};
+always_comb pc5 = {pc4[43:12] + len4,12'h0};
+always_comb pc6 = {pc5[43:12] + len5,12'h0};
+
+// qd indicates which instructions will queue in a given cycle.
+// qs indicates which instructions are stomped on.
+always_comb
+begin
+	qd = 'd0;
+	qs = 'd0;
+	if (branchmiss)
+	else if (ihit || |pc[11:0])
+		case (~cqd)
+
+    4'b0000: ; // do nothing
+
+    4'b0001:	
+    	if (rob_v[tail0]==INV)
+    		qd = qd | 4'b0001;
+    4'b0010:	
+    	if (rob_v[tail0]==INV)
+    		qd = qd | 4'b0010;
+    4'b0011:
+    	if (rob_v[tail0]==INV) begin
+    		qd = qd | 4'b0010;
+    		if (!pt2) begin
+    			if (rob_v[tail1]==INV)
+    				qd = qd | 4'b0001;
+    		end
+    		else
+    			qs = qs | 4'b0001;
+    	end
+    4'b0100:	
+    	if (rob_v[tail0]==INV)
+    		qd = qd | 4'b0100;
+    4'b0101:
+    	if (rob_v[tail0]==INV) begin
+    		qd = qd | 4'b0100;
+    		if (!pt1) begin
+    			if (rob_v[tail1]==INV)
+	    			qd = qd | 4'b0001;
+	    	end
+	    	else
+	    		qs = qs | 4'b0001;
+    	end
+    4'b0110:
+    	if (rob_v[tail0]==INV) begin
+    		qd = qd | 4'b0100;
+    		if (!pt1) begin
+    			if (rob_v[tail1]==INV)
+    				qd = qd | 4'b0010;
+    		end
+    		else
+	    		qs = qs | 4'b0010;
+    	end
+    4'b0111:
+    	if (rob_v[tail0]==INV) begin
+    		qd = qd | 4'b0100;
+    		if (!pt1) begin
+	    		if (rob_v[tail1]==INV) begin
+	    			qd = qd  | 4'b0010;
+	    			if (!pt2) begin
+	    				if (rob_v[tail2]==INV)
+		    				qd = qd  | 4'b0001;
+		    		end
+		    		else
+		    			qs = qs | 4'b0001;
+		    	end
+    		end
+    		else
+    			qs = qs | 4'b0011;
+    	end
+    4'b1000:
+    	if (rob_v[tail0]==INV)
+	   		qd = qd | 4'b1000;
+    4'b1001:
+    	if (rob_v[tail0]==INV) begin
+    		qd = qd | 4'b1000;
+    		if (!pt0) begin
+    			if (rob_v[tail1]==INV)
+	    			qd = qd | 4'b0001;
+	    	end
+	    	else
+	    		qs = qs | 4'b0001;
+    	end
+    4'b1010:
+    	if (rob_v[tail0]==INV) begin
+    		qd = qd | 4'b1000;
+    		if (!pt0) begin
+    			if (rob_v[tail1]==INV)
+	    			qd = qd | 4'b0010;
+	    	end
+	    	else
+	    		qs = qs | 4'b0010;
+    	end
+    4'b1011:
+    	if (rob_v[tail0]==INV) begin
+    		qd = qd | 4'b1000;
+    		if (!pt0) begin
+    			if (rob_v[tail1]==INV) begin
+	    			qd = qd | 4'b0010;
+    				if (!pt2) begin
+    					if (rob_v[tail2]==INV)
+		    				qd = qd | 4'b0001;
+		    		end
+		    		else
+		    			qs = qs | 4'b0001;
+		    	end
+		    	else
+		    		qs = qs | 4'b0011;
+    		end
+    	end
+    4'b1100:
+    	if (rob_v[tail0]==INV) begin
+    		qd = qd | 4'b1000;
+    		if (!pt0) begin
+    			if (rob_v[tail1]==INV)
+	    			qd = qd | 4'b0100;
+	    	end
+	    	else
+	    		qs = qs | 4'b0100;
+    	end
+    4'b1101:
+    	if (rob_v[tail0]==INV) begin
+    		qd = qd | 4'b1000;
+    		if (!pt0) begin
+    			if (rob_v[tail1]==INV) begin
+		    		qd = qd | 4'b0100;
+	    			if (!pt1) begin
+	    				if (rob_v[tail2]==INV)
+			    			qd = qd | 4'b0001;
+			    	end
+			    	else
+			    		qs = qs | 4'b0001;
+			    end
+    		end
+    		else
+    			qs = qs | 4'b0101;
+    	end
+    4'b1110:
+    	if (rob_v[tail0]==INV) begin
+    		qd = qd | 4'b1000;
+    		if (!pt0) begin
+    			if (rob_v[tail1]==INV) begin
+		    		qd = qd | 4'b0100;
+	    			if (!pt1) begin
+	    				if (rob_v[tail2]==INV)
+			    			qd = qd | 4'b0010;
+			    	end
+			    	else
+			    		qs = qs | 4'b0010;
+		    	end
+    		end
+    		else
+    			qs = qs | 4'b0110;
+    	end
+    4'b1111:
+    	if (rob_v[tail0]==INV) begin
+    		qd = qd | 4'b1000;
+    		if (!pt0) begin
+    			if (rob_v[tail1]==INV) begin
+	    			qd = qd | 4'b0100;
+	    			if (!pt1) begin
+	    				if (rob_v[tail2]==INV) begin
+			    			qd = qd | 4'b0010;
+		    				if (!pt2) begin
+		    					if (rob_v[tail3]==INV)
+				    				qd = qd | 4'b0001;
+				    		end
+				    		else
+				    			qs = qs | 4'b0001;
+			    		end
+			    	end
+			    	else
+			    		qs = qs | 4'b0011;
+    			end
+    		end
+    		else
+    			qs = qs | 4'b0111;
+    	end
+    endcase
+end
+
+// cumulative queued.
+always_comb
+	next_cqd = cqd | qd | qs;
+always_ff @(posedge clk)
+if (rst)
+	cqd <= 4'd0;
+else begin
+	cqd <= next_cqd;
+	if (next_cqd == 4'b1111)
+		cqd <= 'd0;
+end
+
+edge_det ued1 (.rst(rst), .clk(clk), .ce(1'b1), .i(next_cqd==4'b1111), .pe(pe_alldq), .ne(), .ee());
+
+always_comb
+	fetch_new = (ihit & ~irq & (pe_allqd|allqd) & ~(|pc[11:0]) & ~branchmiss) |
+							(|pc[11:0] & ~irq & (pe_allqd|allqd) & ~branchmiss);
+
+always_ff @(posedge clk)
+if (rst) begin
+	pc0 <= RST_PC;
+	allqd <= 1'b1;
+end
+else begin
+	if (pe_allqd & ~(ihit & ~irq))
+		allqd <= 1'b1;
+	if (branchmiss) begin
+		allqd <= 1'b0;
+   	pc0 <= misspc;
+  end
+  else begin
+		if (|pc0[11:0]) begin
+		  if (~irq) begin
+		  	if (~|next_micro_ip)
+		  		pc0 <= pc0 + 16'h5000;
+	  		pc0[11:0] <= next_micro_ip;
+			end
+		end
+		else if (ihit) begin
+		  if (~irq) begin
+		  	if (pe_allqd|allqd) begin
+			  	pc0 <= next_pc;
+			  	allqd <= 1'b0;
+			  end
+			end
+		end
+	end
+end
 
 always_comb
 	ic_line = {ic_line_hi.data,ic_line_lo.data};
@@ -372,37 +647,108 @@ always_comb
 	ins3 = ic_line >> {pc3[17:12],3'd0};
 always_comb
 	ins4 = ic_line >> {pc4[17:12],3'd0};
+always_comb
+	ins5 = ic_line >> {pc5[17:12],3'd0};
+always_comb
+	ins6 = ic_line >> {pc6[17:12],3'd0};
 
 //
 // DECODE
 //
 decode_bus_t db0, db1, db2, db3;
+decode_bus_t db0r, db1r, db2r, db3r;
+instruction_t [3:0] instr [0:3];
+pregno_t pRt0, pRt1, pRt2, pRt3;
+pregno_t [3:0] tags2free;
+wire [PREGS-1:0] avail_reg;						// available registers
+
+assign instr[0][0] = ins0;
+assign instr[0][1] = ins1;
+assign instr[0][2] = ins2;
+assign instr[0][3] = ins3;
+
+assign instr[1][0] = ins1;
+assign instr[1][1] = ins2;
+assign instr[1][2] = ins3;
+assign instr[1][3] = ins4;
+
+assign instr[2][0] = ins2;
+assign instr[2][1] = ins3;
+assign instr[2][2] = ins4;
+assign instr[2][3] = ins5;
+
+assign instr[3][0] = ins3;
+assign instr[3][1] = ins4;
+assign instr[3][2] = ins5;
+assign instr[3][3] = ins6;
 
 Qupls_decoder udeci0
 (
-	.instr(ins0),
+	.clk(clk),
+	.instr(instr[0]),
 	.db(db0)
 );
 
 Qupls_decoder udeci1
 (
-	.instr(ins1),
+	.clk(clk),
+	.instr(instr[1]),
 	.db(db1)
 );
 
 Qupls_decoder udeci2
 (
-	.instr(ins2),
+	.clk(clk),
+	.instr(instr[2]),
 	.db(db2)
 );
 
 Qupls_decoder udeci3
 (
-	.instr(ins3),
+	.clk(clk),
+	.instr(instr[3]),
 	.db(db3)
 );
 
+//
+// RENAME
+//
+Qupls_reg_renamer utrn1
+(
+	.rst(rst),
+	.clk(clk),
+	.list2free(),
+	.tags2free(tags2free),
+	.freevals(4'hF),
+	.alloc0(|db0.Rt),
+	.alloc1(|db1.Rt),
+	.alloc2(|db2.Rt),
+	.alloc3(|db3.Rt),
+	.wo0(pRt0),
+	.wo1(pRt1),
+	.wo2(pRt2),
+	.wo3(pRt3),
+	.avail(avail_reg)
+);
 
+always_ff @(posedge clk)
+	db0r <= db0;
+always_ff @(posedge clk)
+	db1r <= db1;
+always_ff @(posedge clk)
+	db2r <= db2;
+always_ff @(posedge clk)
+	db3r <= db3;
+
+always_ff @(posedge clk)
+	pc0r <= pc0d;
+always_ff @(posedge clk)
+	pc1r <= pc1d;
+always_ff @(posedge clk)
+	pc2r <= pc2d;
+always_ff @(posedge clk)
+	pc3r <= pc3d;
+	
 reg wrport0_v;
 reg wrport1_v;
 reg wrport2_v;
@@ -455,6 +801,7 @@ Qupls_regfile4w18r urf1 (
 
 // note that, for all intents & purposes, iqentry_done == iqentry_agen ... no need to duplicate
 rob_ndx_t [7:0] head;
+rob_ndx_t tail;
 
 Qupls_head uhd1
 (
@@ -476,25 +823,33 @@ generate begin : issue_logic
 for (g = 0; g < ROB_ENTRIES; g = g + 1) begin
 	assign args_valid[g] = (rob[g].argA_v
 						// Or forwarded
+						/*
 				    || (rob[g].decbus.Ra == alu0_Rt && alu0_v)
 				    || (rob[g].decbus.Ra == alu1_Rt && alu1_v)
 				    || (rob[g].decbus.Ra == fpu0_Rt && fpu0_v)
 				    || (rob[g].decbus.Ra == fcu_Rt && fcu_v)
-				    || (rob[g].decbus.Ra == load_Rt && load_v))
+				    || (rob[g].decbus.Ra == load_Rt && load_v)
+				    */
+				    )
 				    && (rob[g].argB_v
 						// Or forwarded
+						/*
 				    || (rob[g].decbus.Rb == alu0_Rt && alu0_v)
 				    || (rob[g].decbus.Rb == alu1_Rt && alu1_v)
 				    || (rob[g].decbus.Rb == fpu0_Rt && fpu0_v)
 				    || (rob[g].decbus.Rb == fcu_Rt && fcu_v)
-				    || (rob[g].decbus.Rb == load_Rt && load_v))
+				    || (rob[g].decbus.Rb == load_Rt && load_v)
+				    */
+				    )
 				    && (rob[g].argC_v
 						// Or forwarded
+						/*
 				    || (rob[g].decbus.Rc == alu0_Rt && alu0_v)
 				    || (rob[g].decbus.Rc == alu1_Rt && alu1_v)
 				    || (rob[g].decbus.Rc == fpu0_Rt && fpu0_v)
 				    || (rob[g].decbus.Rc == fcu_Rt && fcu_v)
 				    || (rob[g].decbus.Rc == load_Rt && load_v)
+				    */
 				    || (rob[g].mem & ~rob[g].agen))
 				    ;
 assign could_issue[g] = rob_v[g] && !rob[g].done 
@@ -528,6 +883,91 @@ assign alu0_argT_reg = rob[alu0_sndx].decbus.Rt;
 
 always_ff @(posedge clk)
 begin
+//
+// DATAINCOMING
+//
+// wait for operand/s to appear on alu busses and puts them into 
+// the iqentry_a1 and iqentry_a2 slots (if appropriate)
+// as well as the appropriate iqentry_res slots (and setting valid bits)
+//
+	//
+	// put results into the appropriate instruction entries
+	//
+	if (alu0_v && rob[alu0_sndx].v && rob[alu0_sndx].owner==QuplsPkg::ALU0) begin
+    rob[ sndx ].exc <= alu0_exc;
+    rob[ alu0_sndx ].done <= (!rob[ alu0_sndx ].load
+    	&& !rob[ alu0_sndx ].store
+    	&& !rob[ alu0_sndx ].decbus.multicycle
+    	);
+    rob[ alu0_sndx ].out <= INV;
+    rob[ alu0_sndx ].agen <= VAL;
+    if (!rob[ alu0_sndx ].load && !rob[ alu0_sndx ].store)
+    	iqentry_issue_reg[alu0_sndx] <= 1'b0;
+    if ((rob[ alu0_sndx].mul || rob[ alu0_sndx].mulu) && mul0_done) begin
+	    rob[ alu0_sndx ].done <= VAL;
+	    rob[ alu0_sndx ].out <= INV;
+  	end
+    if ((rob[ alu0_sndx].div || rob[ alu0_sndx].divu) && div0_done) begin
+	    rob[ alu0_sndx ].done <= VAL;
+	    rob[ alu0_sndx ].out <= INV;
+  	end
+	end
+	if (NALU > 1 && alu1_v && rob[alu1_sndx].v && rob[alu1_sndx].owner==QuplsPkg::ALU1) begin
+    rob[ alu1_sndx ].exc <= alu1_exc;
+    rob[ alu1_sndx ].done <= (!rob[ alu1_sndx ].load && !rob[ alu1_sndx ].store);
+    rob[ alu1_sndx ].out <= INV;
+    rob[ alu1_sndx ].agen <= VAL;
+	end
+	if (NFPU > 0 && fpu_v && rob[fpu_sndx].v && rob[fpu_sndx].owner==QuplsPkg::FPU0) begin
+    rob[ fpu_sndx ].exc <= fpu_exc;
+    rob[ fpu_sndx ].done <= fpu_done;
+    rob[ fpu_sndx ].out <= INV;
+    rob[ fpu_sndx ].agen <= VAL;
+	end
+	if (fcu_v && rob[fcu_sndx].v && rob[fcu_sndx].out && rob[fcu_sndx].owner==QuplsPkg::FCU) begin
+    rob[ fcu_sndx ].exc <= fcu_exc;
+    rob[ fcu_sndx ].done <= VAL;
+    rob[ fcu_sndx ].out <= INV;
+    rob[ fcu_sndx ].agen <= VAL;
+    rob[ fcu_sndx ].takb <= takb;
+    rob[ fcu_sndx ].brtgt <= tgtpc;
+	end
+	if (load_v && rob[load_sndx].v && rob[load_sndx].owner==QuplsPkg::LOAD) begin
+    rob[ load_sndx ].exc <= load_exc;
+    rob[ load_sndx ].done <= load_done;
+    rob[ load_sndx ].out <= INV;
+    rob[ load_sndx ].agen <= VAL;
+	end
+	// If data for stomped instruction, ignore
+	// dram_vn will be false for stomped data
+	if (dram_v0 && iq_v[ dram_id0[2:0] ] && rob[ dram_id0[2:0] ].mem  && rob[dram0_id[2:0]].owner==Thor2024pkg::DRAM0) begin
+    rob[ dram_id0[2:0] ].res <= dram_bus0;
+    rob[ dram_id0[2:0] ].exc <= dram_exc0;
+    rob[ dram_id0[2:0] ].out <= INV;
+    rob[ dram_id0[2:0] ].done <= VAL;
+	end
+	if (NDATA_PORTS > 1) begin
+		if (dram_v1 && iq_v[ dram_id1[2:0] ] && rob[ dram_id1[2:0] ].mem  && rob[dram1_id[2:0]].owner==Thor2024pkg::DRAM1) begin
+	    rob[ dram_id1[2:0] ].res <= dram_bus1;
+	    rob[ dram_id1[2:0] ].exc <= dram_exc1;
+	    rob[ dram_id1[2:0] ].out <= INV;
+	    rob[ dram_id1[2:0] ].done <= VAL;
+		end
+	end
+
+	// Set the IQ entry = DONE as soon as the SW is let loose to the memory system
+	// If the store is unaligned, setting .out to INV will cause a second bus cycle.
+	if (dram0 == DRAMSLOT_ACTIVE && dram0_ack && dram0_store && !dram0_stomp) begin
+    rob[ dram0_id[2:0] ].done <= !dram0_more || !SUPPORT_UNALIGNED_MEMORY;
+    rob[ dram0_id[2:0] ].out <= INV;
+	end
+	if (NDATA_PORTS > 1) begin
+		if (dram1 == DRAMSLOT_ACTIVE && dram1_ack && dram1_store && !dram1_stomp) begin
+	    rob[ dram1_id[2:0] ].done <= !dram1_more || !SUPPORT_UNALIGNED_MEMORY;
+	    rob[ dram1_id[2:0] ].out <= INV;
+		end
+	end
+	
 	//
 	// see if anybody wants the results ... look at lots of buses:
 	//  - alu0_bus
@@ -546,10 +986,6 @@ begin
 	    rob[nn].argB_v <= VAL;
 		if (rob[nn].argC_v == INV && rob[nn].decbus.Rc == wrport0_Rt && rob_v[nn] == VAL && wrport0_v == VAL)
 	    rob[nn].argC_v <= VAL;
-		if (rob[nn].argT_v == INV && rob[nn].decbus.Rt == wrport0_Rt && rob_v[nn] == VAL && wrport0_v == VAL)
-	    rob[nn].argT_v <= VAL;
-		if (rob[nn].argP_v == INV && rob[nn].decbus.Rp == wrport0_Rt && rob_v[nn] == VAL && wrport0_v == VAL)
-	    rob[nn].argP_v <= VAL;
 
 		if (NALU > 1) begin
 			if (rob[nn].argA_v == INV && rob[nn].decbus.Ra == wrport1_Rt && rob_v[nn] == VAL && wrport1_v == VAL)
@@ -558,10 +994,6 @@ begin
 		    rob[nn].argB_v <= VAL;
 			if (rob[nn].argC_v == INV && rob[nn].decbus.Rc == wrport1_Rt && rob_v[nn] == VAL && wrport1_v == VAL)
 		    rob[nn].argC_v <= VAL;
-			if (rob[nn].argT_v == INV && rob[nn].decbus.Rt == wrport1_Rt && rob_v[nn] == VAL && wrport1_v == VAL)
-		    rob[nn].argT_v <= VAL;
-			if (rob[nn].argP_v == INV && rob[nn].decbus.Rp == wrport1_Rt && rob_v[nn] == VAL && wrport1_v == VAL)
-		    rob[nn].argP_v <= VAL;
 		end
 
 		if (rob[nn].argA_v == INV && rob[nn].decbus.Ra == wrport2_Rt && rob_v[nn] == VAL && wrport2_v == VAL)
@@ -570,14 +1002,70 @@ begin
 	    rob[nn].argB_v <= VAL;
 		if (rob[nn].argC_v == INV && rob[nn].decbus.Rc == wrport2_Rt && rob_v[nn] == VAL && wrport2_v == VAL)
 	    rob[nn].argC_v <= VAL;
-		if (rob[nn].argT_v == INV && rob[nn].decbus.Rt == wrport2_Rt && rob_v[nn] == VAL && wrport2_v == VAL)
-	    rob[nn].argT_v <= VAL;
-		if (rob[nn].argP_v == INV && rob[nn].decbus.Rp == wrport2_Rt && rob_v[nn] == VAL && wrport2_v == VAL)
-	    rob[nn].argP_v <= VAL;
+
+		if (rob[nn].argA_v == INV && rob[nn].decbus.Ra == wrport3_Rt && rob_v[nn] == VAL && wrport3_v == VAL)
+	    rob[nn].argA_v <= VAL;
+		if (rob[nn].argB_v == INV && rob[nn].decbus.Rb == wrport3_Rt && rob_v[nn] == VAL && wrport3_v == VAL)
+	    rob[nn].argB_v <= VAL;
+		if (rob[nn].argC_v == INV && rob[nn].decbus.Rc == wrport3_Rt && rob_v[nn] == VAL && wrport3_v == VAL)
+	    rob[nn].argC_v <= VAL;
 
 	end
 
 
+	// Reservation stations
+
+	if (alu0_available) begin
+		alu0_argA <= rob[alu0_sndx].imma | rfo_alu0_argA;
+		alu0_argB <= rfo_alu0_argB;
+		alu0_argC <= rob[alu0_sndx].immc | rfo_alu0_argC;
+		alu0_argI	<= rob[alu0_sndx].decbus.immb;
+		alu0_ld <= 1'b1;
+		alu0_instr <= rob[alu0_sndx].op;
+		alu0_div <= rob[alu0_sndx].decbus.div;
+		alu0_pc <= rob[alu0_sndx].pc;
+    rob[alu0_sndx].out <= VAL;
+    rob[alu0_sndx].owner <= QuplsPkg::ALU0;
+	end
+
+	if (alu1_available) begin
+		alu1_argA <= rob[alu1_sndx].imma | rfo_alu1_argA;
+		alu1_argB <= rfo_alu1_argB;
+		alu1_argC <= rob[alu1_sndx].immc | rfo_alu1_argC;
+		alu1_argI	<= rob[alu1_sndx].decbus.immb;
+		alu1_ld <= 1'b1;
+		alu1_instr <= rob[alu1_sndx].op;
+		alu1_div <= rob[alu1_sndx].decbus.div;
+		alu1_pc <= rob[alu1_sndx].pc;
+    rob[alu1_sndx].out <= VAL;
+    rob[alu1_sndx].owner <= QuplsPkg::ALU1;
+	end
+
+	if (fpu0_available) begin
+		fpu0_argA <= rob[fpu0_sndx].imma | rfo_fpu0_argA;
+		fpu0_argB <= rfo_fpu0_argB;
+		fpu0_argC <= rob[fpu0_sndx].immc | rfo_fpu0_argC;
+		fpu0_argI	<= rob[fpu0_sndx].decbus.immb;
+		fpu0_ld <= 1'b1;
+		fpu0_instr <= rob[fpu0_sndx].op;
+		fpu0_div <= rob[fpu0_sndx].decbus.div;
+		fpu0_pc <= rob[fpu0_sndx].pc;
+    rob[fpu0_sndx].out <= VAL;
+    rob[fpu0_sndx].owner <= QuplsPkg::FPU0;
+	end
+
+	fcu_argA <= rob[fcu_sndx].imma | rfo_fcu_argA;
+	fcu_argB <= rfo_fcu_argB;
+	fcu_argC <= rob[fcu_sndx].immc | rfo_fcu_argC;
+	fcu_argI <= rob[fcu_sndx].decbus.immb;
+	fcu_ld <= 1'b1;
+	fcu_instr <= rob[fcu_sndx].op;
+	fcu_div <= rob[fcu_sndx].decbus.div;
+	fcu_pc <= rob[fcu_sndx].pc;
+  rob[fcu_sndx].out <= VAL;
+  rob[fcu_sndx].owner <= QuplsPkg::FCU;
+
+/*
 	// Operand source muxes
 	if (alu0_available) begin
 		case(alu0_argA_src)
@@ -658,365 +1146,120 @@ begin
     rob[alu1_sndx].out <= VAL;
     rob[alu1_sndx].owner <= QuplsPkg::alu1;
   end
-
-	//
-	// enqueue fetchbuf0 and fetchbuf1, but only if there is room, 
-	// and ignore fetchbuf1 if fetchbuf0 has a backwards branch in it.
-	//
-	// also, do some instruction-decode ... set the operand_valid bits in the IQ
-	// appropriately so that the DATAINCOMING stage does not have to look at the opcode
-	//
-	if (!branchmiss) 	// don't bother doing anything if there's been a branch miss
-
-		case ({ins0_v, ins1_v, ins2_v, ins3_v})
-
-    4'b0000: ; // do nothing
-
-    4'b0001:	tEnque(3'd1,db3,pc3,ins3,pt3,tail0);
-    4'b0010:	tEnque(3'd1,db2,pc2,ins2,pt2,tail0);
-    4'b0011:
-    	begin
-    		tEnque(3'd1,db2,pc2,ins2,pt2,tail0);
-    		if (!pt2)
-    			tEnque(3'd2,db3,pc3,ins3,pt3,tail1);
-    	end
-    4'b0100:	tEnque(3'd1,db1,pc1,ins1,pt1,tail0);
-    4'b0101:
-    	begin
-    		tEnque(3'd1,db1,pc1,ins1,pt1,tail0);
-    		if (!pt1)
-    			tEnque(3'd2,db3,pc3,ins3,pt3,tail1);
-    	end
-    4'b0110:
-    	begin
-    		tEnque(3'd1,db1,pc1,ins1,pt1,tail0);
-    		if (!pt1)
-    			tEnque(3'd2,db2,pc2,ins2,pt2,tail1);
-    	end
-    4'b0111:
-    	begin
-    		tEnque(3'd1,db1,pc1,ins1,pt1,tail0);
-    		if (!pt1) begin
-    			tEnque(3'd2,db2,pc2,ins2,pt2,tail1);
-    			if (!pt2)
-    				tEnque(3'd3,db3,pc3,ins3,pt3,tail2);
-    		end
-    	end
-    4'b1000:	tEnque(3'd1,db0,pc0,ins0,pt0,tail0);
-    4'b1001:
-    	begin
-    		tEnque(3'd1,db0,pc0,ins0,pt0,tail0);
-    		if (!pt0)
-    			tEnque(3'd2,db3,pc3,ins3,pt3,tail1);
-    	end
-    4'b1010:
-    	begin
-    		tEnque(3'd1,db0,pc0,ins0,pt0,tail0);
-    		if (!pt0)
-    			tEnque(3'd2,db2,pc2,ins2,pt2,tail1);
-    	end
-    4'b1011:
-    	begin
-    		tEnque(3'd1,db0,pc0,ins0,pt0,tail0);
-    		if (!pt0) begin
-    			tEnque(3'd2,db2,pc2,ins2,pt2,tail1);
-    			if (!pt2)
-    				tEnque(3'd3,db3,pc3,ins3,pt3,tail2);
-    		end
-    	end
-    4'b1100:
-    	begin
-    		tEnque(3'd1,db0,pc0,ins0,pt0,tail0);
-    		if (!pt0)
-    			tEnque(3'd2,db1,pc1,ins1,pt1,tail1);
-    	end
-    4'b1101:
-    	begin
-    		tEnque(3'd1,db0,pc0,ins0,pt0,tail0);
-    		if (!pt0) begin
-    			tEnque(3'd2,db1,pc1,ins1,pt1,tail1);
-    			if (!pt1)
-    				tEnque(3'd3,db3,pc3,ins3,pt3,tail2);
-    		end
-    	end
-    4'b1110:
-    	begin
-    		tEnque(3'd1,db0,pc0,ins0,pt0,tail0);
-    		if (!pt0) begin
-    			tEnque(3'd2,db1,pc1,ins1,pt1,tail1);
-    			if (!pt1)
-    				tEnque(3'd3,db2,pc2,ins2,pt2,tail2);
-    		end
-    	end
-    4'b1111:
-    	begin
-    		tEnque(3'd1,db0,pc0,ins0,pt0,tail0);
-    		if (!pt0) begin
-    			tEnque(3'd2,db1,pc1,ins1,pt1,tail1);
-    			if (!pt1) begin
-    				tEnque(3'd3,db2,pc2,ins2,pt2,tail2);
-    				if (!pt2)
-    					tEnque(3'd4,db3,pc3,ins3,pt3,tail3);
-    			end
-    		end
-    	end
-    endcase
-
-/* 
-    2'b11:
-    	if (rob_v[tail0] == INV) begin
-
-				//
-				// if the first instruction is a backwards branch, enqueue it & stomp on all following instructions
-				//
-				if (pt0) begin
-					did_branchback1 <= branchback & ~did_branchback;
-					for (n12 = 0; n12 < ROB_ENTRIES; n12 = n12 + 1)
-						rob[n12].sn <= rob[n12].sn - 2'd1;
-//						rob[n12].sn <= |rob[n12].sn ? rob[n12].sn - 2'd1 : rob[n12].sn;
-					rob[tail0].sn <= 6'h3F;
-					rob[tail0].owner <= Thor2025pkg::NONE;
-			    rob[tail0].done <= db0.nop;
-			    rob[tail0].out <=	INV;
-			    rob[tail0].op <=	fetchbuf0_instr[0]; 			// BEQ
-			    rob[tail0].bt <= VAL;
-			    rob[tail0].agen <= INV;
-			    rob[tail0].pc <=	fetchbuf0_pc;
-			    rob[tail0].decbus <= db0;
-			    rob[tail0].exc    <=	FLT_NONE;
-					rob[tail0].takb <= 1'b0;
-					rob[tail0].brtgt <= 'd0;
-					rob[tail0].argA_v <= fnSourceAv(fetchbuf0_instr[0]) || rf_v[ db0.Ra ];
-					rob[tail0].argB_v <= fnSourceBv(fetchbuf0_instr[0]) || rf_v[ db0.Rb ];
-					rob[tail0].argC_v <= fnSourceCv(fetchbuf0_instr[0]) || rf_v[ db0.Rc ];
-					rob[tail0].argT_v <= fnSourceTv(fetchbuf0_instr[0]) || rf_v[ db0.Rt ];
-					rob[tail0].argP_v <= fnSourcePv(fetchbuf0_instr[0]) || rf_v[ db0.Rp ];
-					lastq0 <= {1'b0,tail0};
-					lastq1 <= {1'b1,tail0};
-					if (!db0.pfx) begin
-						atom_mask <= atom_mask >> 4'd3;
-						pred_mask <= {4'hF,pred_mask} >> 4'd4;
-						postfix_mask <= 'd0;
-					end
-					else
-						postfix_mask <= {postfix_mask[4:0],1'b1};
-					if (postfix_mask[5])
-						rob[tail0].exc <= FLT_PFX;
-					if (fnIsPred(fetchbuf0_instr[0]))
-						pred_mask <= fetchbuf0_instr[0][34:7];
-					iqentry_issue_reg[tail0] <= 1'b0;
-				end
-
-				else begin	// fetchbuf0 doesn't contain a backwards branch
-					if (!db0.pfx)
-						pred_mask <= {8'hFF,pred_mask} >> 4'd8;
-			    //
-			    // so -- we can enqueue 1 or 2 instructions, depending on space in the IQ
-			    // update tail0/tail1 separately (at top)
-			    // update the rf_v and rf_source bits separately (at end)
-			    //   the problem is that if we do have two instructions, 
-			    //   they may interact with each other, so we have to be
-			    //   careful about where things point.
-			    //
-
-			    //
-			    // enqueue the first instruction ...
-			    //
-					did_branchback1 <= branchback & ~did_branchback;
-					for (n12 = 0; n12 < ROB_ENTRIES; n12 = n12 + 1)
-						rob[n12].sn <= rob[n12].sn - 2'd1;
-//						rob[n12].sn <= |rob[n12].sn ? rob[n12].sn - 2'd1 : rob[n12].sn;
-					rob[tail0].sn <= 6'h3F;
-					rob[tail0].owner <= Thor2025pkg::NONE;
-			    rob[tail0].done <= db0.nop;
-			    rob[tail0].out <= INV;
-			    rob[tail0].op <= fetchbuf0_instr[0]; 
-			    rob[tail0].bt <= INV;//ptakb;
-			    rob[tail0].agen <= INV;
-			    rob[tail0].pc <= fetchbuf0_pc;
-			    rob[tail0].exc    <=   FLT_NONE;
-					rob[tail0].br <= db0.br;
-					rob[tail0].bts <= db0.bts;
-					rob[tail0].takb <= 1'b0;
-					rob[tail0].brtgt <= 'd0;
-					rob[tail0].argA_v <= fnSourceAv(fetchbuf0_instr[0]) || rf_v[ db0.Ra ];
-					rob[tail0].argB_v <= fnSourceBv(fetchbuf0_instr[0]) || rf_v[ db0.Rb ];
-					rob[tail0].argC_v <= fnSourceCv(fetchbuf0_instr[0]) || rf_v[ db0.Rc ];
-					rob[tail0].argT_v <= fnSourceTv(fetchbuf0_instr[0]) || rf_v[ db0.Rt ];
-					rob[tail0].argP_v <= fnSourcePv(fetchbuf0_instr[0]) || rf_v[ db0.Rp ];
-					lastq0 <= {1'b0,tail0};
-					lastq1 <= {1'b1,tail0};
-					if (!db0.pfx) begin
-						atom_mask <= atom_mask >> 4'd3;
-						pred_mask <= {4'hF,pred_mask} >> 4'd4;
-						postfix_mask <= 'd0;
-					end
-					else
-						postfix_mask <= {postfix_mask[4:0],1'b1};
-					if (postfix_mask[5])
-						rob[tail0].exc <= FLT_PFX;
-					if (fnIsPred(fetchbuf0_instr[0]))
-						pred_mask <= fetchbuf0_instr[0][34:7];
-					iqentry_issue_reg[tail0] <= 1'b0;
-
-			    //
-			    // if there is room for a second instruction, enqueue it
-			    //
-			    if (rob_v[tail1] == INV && SUPPORT_Q2) begin
-
-						for (n12 = 0; n12 < ROB_ENTRIES; n12 = n12 + 1)
-							rob[n12].sn <= rob[n12].sn - 2'd2;
-//							rob[n12].sn <= |rob[n12].sn ? rob[n12].sn - 2'd2 : rob[n12].sn;
-						rob[tail0].sn <= 6'h3E;	// <- this needs be done again here
-						rob[tail1].sn <= 6'h3F;
-						rob[tail1].owner <= Thor2025pkg::NONE;
-						rob[tail1].done <= db1.nop;
-						rob[tail1].out <= INV;
-						rob[tail1].res <= `ZERO;
-						rob[tail1].op <= fetchbuf1_instr[0]; 
-						rob[tail1].bt <= pt1;
-						rob[tail1].agen <= INV;
-						rob[tail1].pc <= fetchbuf1_pc;
-						rob[tail1].exc <= FLT_NONE;
-						rob[tail1].br <= db1.br;
-						rob[tail1].bts <= db1.bts;
-						rob[tail1].takb <= 1'b0;
-						rob[tail1].brtgt <= 'd0;
-						lastq1 <= {1'b0,tail1};
-						if (!db1.pfx) begin
-							atom_mask <= atom_mask >> 4'd6;
-							pred_mask <= {8'hFF,pred_mask} >> 4'd8;
-							postfix_mask <= 'd0;
-						end
-						else if (!db0.pfx) begin
-							postfix_mask <= 'd0;
-						end
-						else
-							postfix_mask <= {postfix_mask[4:0],1'b1};
-						if (postfix_mask[5])
-							rob[tail1].exc <= FLT_PFX;
-						if (fnIsPred(fetchbuf1_instr[0]))
-							pred_mask <= fetchbuf1_instr[0][34:7];
-						iqentry_issue_reg[tail1] <= 1'b0;
-
-						// If the first instruction targets a register of the second, then
-						// the register for the second instruction should be marked invalid.
-
-						// if the argument is an immediate or not needed, we're done
-						if (fnSourceAv(fetchbuf1_instr[0]))
-					    rob[tail1].argA_v <= VAL;
-						// otherwise, if previous instruction does write to RF ... see if overlap
-						else if (db0.Rt != 'd0 && db1.Ra == db0.Rt)
-					    rob[tail1].argA_v <= INV;
-						// if no overlap, get info from rf_v and rf_source
-						else
-					    rob[tail1].argA_v <= rf_v [ db1.Ra ];
-
-						// if the argument is an immediate or not needed, we're done
-						if (fnSourceBv(fetchbuf1_instr[0]))
-					    rob[tail1].argB_v <= VAL;
-						// otherwise, if previous instruction does write to RF ... see if overlap
-						else if (db0.Rt0 != 'd0 && db1.Rb == db0.Rt)
-					    rob[tail1].argB_v <= INV;
-						end
-						// if no overlap, get info from rf_v and rf_source
-						else
-					    rob[tail1].argB_v <= rf_v [ db1.Rb ];
-
-						//
-						// SOURCE 3 ... 
-						//
-						// if the argument is an immediate or not needed, we're done
-						if (fnSourceCv(fetchbuf1_instr[0]))
-					    rob[tail1].argC_v <= VAL;
-						// otherwise, previous instruction does write to RF ... see if overlap
-						else if (db0.Rt != 'd0 && db1.Rc == db0.Rt)
-					    rob[tail1].argC_v <= INV;
-						// if no overlap, get info from rf_v and rf_source
-						else
-					    rob[tail1].argC_v <= rf_v [ db1.Rc ];
-
-						//
-						// SOURCE T ... 
-						//
-						// if the argument is an immediate or not needed, we're done
-						if (fnSourceTv(fetchbuf1_instr[0]))
-					    rob[tail1].argT_v <= VAL;
-						// otherwise, if previous instruction does write to RF ... see if overlap
-						else if (db0.Rt != 'd0 && db1.Rt == db0.Rt)
-					    rob[tail1].argT_v <= INV;
-						// if no overlap, get info from rf_v and rf_source
-						else
-					    rob[tail1].argT_v <= rf_v [ db1.Rt ];
-
-						//
-						// SOURCE P ... 
-						//
-						// if the argument is an immediate or not needed, we're done
-						if (fnSourcePv(fetchbuf1_instr[0]))
-					    rob[tail1].argP_v <= VAL;
-						// otherwise, previous instruction does write to RF ... see if overlap
-						else if (db0.Rt != 'd0 && db1.Rp == db0.Rt)
-					    rob[tail1].argP_v <= INV;
-						// if no overlap, get info from rf_v and rf_source
-						else
-					    rob[tail1].argP_v <= rf_v [ db1.Rp ];
-					end	
-	    	end// ends the "else fetchbuf0 doesn't have a backwards branch" clause
-	    end
-		endcase
 */
+//
+// ENQUE
+//
+	if (branchmiss) begin
+    if (robentry_stomp[0] & ~robentry_stomp[15])
+			tail <= 0;
+    else if (robentry_stomp[1] & ~robentry_stomp[0])
+			tail <= 1;
+    else if (robentry_stomp[2] & ~robentry_stomp[1])
+			tail <= 2;
+    else if (robentry_stomp[3] & ~robentry_stomp[2]) 
+			tail <= 3;
+    else if (robentry_stomp[4] & ~robentry_stomp[3]) 
+			tail <= 4;
+    else if (robentry_stomp[5] & ~robentry_stomp[4]) 
+			tail <= 5;
+    else if (robentry_stomp[6] & ~robentry_stomp[5]) 
+			tail <= 6;
+    else if (robentry_stomp[7] & ~robentry_stomp[6]) 
+			tail <= 7;
+    else if (robentry_stomp[8] & ~robentry_stomp[7]) 
+			tail <= 8;
+    else if (robentry_stomp[9] & ~robentry_stomp[8]) 
+			tail <= 9;
+    else if (robentry_stomp[10] & ~robentry_stomp[9]) 
+			tail <= 10;
+    else if (robentry_stomp[11] & ~robentry_stomp[10]) 
+			tail <= 11;
+    else if (robentry_stomp[12] & ~robentry_stomp[11]) 
+			tail <= 12;
+    else if (robentry_stomp[13] & ~robentry_stomp[12]) 
+			tail <= 13;
+    else if (robentry_stomp[14] & ~robentry_stomp[13]) 
+			tail <= 14;
+    else if (robentry_stomp[15] & ~robentry_stomp[14]) 
+			tail <= 15;
+	end
+	else begin
+		if (rob_v[tail]==INV) begin
+			for (n12 = 0; n12 < ROB_ENTRIES; n12 = n12 + 1)
+				for (n13 = 0; n13 < 4; n13 = n13 + 1)
+					rob[n12][n13].sn <= rob[n12][n13].sn - 4;
+			tEnque(8'hFC,db0r,pc0r,ins0r,pt0,tail,0, 1'b0, pRt0, avail_reg | (192'd1 << pRt0));
+			tEnque(8'hFD,db1r,pc1r,ins1r,pt1,tail,1, pt0, pRt1, avail_reg | (192'd1 << pRt0) | (192'd1 << pRt1));
+			tEnque(8'hFE,db2r,pc2r,ins2r,pt2,tail,2, pt0|pt1, pRt2, avail_reg | (192'd1 << pRt0) | (192'd1 << pRt1) | (192'd1 << pRt2));
+			tEnque(8'hFF,db3r,pc3r,ins3r,pt3,tail,3, pt0|pt1|pt2, pRt3, avail_reg | (192'd1 << pRt0) | (192'd1 << pRt1) | (192'd1 << pRt2)| (192'd1 << pRt3));
+			rob_v[tail] <= VAL;
+			tail <= (tail + 2'd1) % ROB_ENTRIES;
+		end
+	end
+
+//
+// COMMIT
+//
+// The head pointer is advance only once all four ROB entries have committed.
+//
+	if (((
+		((rob[head][0].v && rob[head][0].done) || !rob[head][0].v) &&
+		((rob[head][1].v && rob[head][1].done) || !rob[head][1].v) &&
+		((rob[head][2].v && rob[head][2].done) || !rob[head][2].v) &&
+		((rob[head][3].v && rob[head][3].done) || !rob[head][3].v)
+		) || !rob_v[head]) && head != tail)
+	begin
+		rob_v[head] <= INV;
+		tags2free[0] <= rob[head][0].pRt;
+		tags2free[1] <= rob[head][1].pRt;
+		tags2free[2] <= rob[head][2].pRt;
+		tags2free[3] <= rob[head][3].pRt;
+		head <= (head + 2'd1) % ROB_ENTRIES;
+		I <= I + rob[head][0].v + rob[head][1].v + rob[head][2].v + rob[head][3].v;
+	end
+	else begin
+		tags2free[0] <= 'd0;
+		tags2free[1] <= 'd0;
+		tags2free[2] <= 'd0;
+		tags2free[3] <= 'd0;
+	end
+	
+end
 
 task tEnque;
-input [2:0] qcnt;
+input [7:0] sn;
 input decode_bus_t db;
 input pc_address_t pc;
-input [255:0] ins;
+input instruction_t ins;
 input pt;
 input rob_ndx_t tail;
+input [1:0] slot;
+input stomp;
+input pregno_t pRt;
+input [PREGS-1:0] avail;
+integer n12;
+integer n13;
 begin
-	if (rob_v[tail] == INV) begin
-		did_branchback1 <= branchback & ~did_branchback;
-		for (n12 = 0; n12 < ROB_ENTRIES; n12 = n12 + 1)
-			rob[n12].sn <= rob[n12].sn - qcnt;
-//					rob[n12].sn <= |rob[n12].sn ? rob[n12].sn - 2'd1 : rob[n12].sn;
-		rob[tail].sn <= 6'h3F;
-		if (qcnt > 1) begin
-			rob[(tail-1) % ROB_ENTRIES] <= 6'h3E;
-			if (qcnt > 2) begin
-				rob[(tail-2) % ROB_ENTRIES] <= 6'h3D;
-				if (qcnt > 3)
-					rob[(tail-3) % ROB_ENTRIES] <= 6'h3C;
-			end
-		end
-		rob[tail].owner <= QuplsPkg::NONE;
-		rob[tail].done <= db.nop;
-		rob[tail].out <= INV;
-		rob[tail].op <= ins;
-		rob[tail].bt <= pt;
-		rob[tail].agen <= INV;
-		rob[tail].pc <= pc;
-		rob[tail].decbus <= db;
-		rob[tail].exc <= FLT_NONE;
-		rob[tail].takb <= 1'b0;
-		rob[tail].brtgt <= 'd0;
-		rob[tail].argA_v <= fnSourceAv(ins) || rf_v[ db.Ra ];
-		rob[tail].argB_v <= fnSourceBv(ins) || rf_v[ db.Rb ];
-		rob[tail].argC_v <= fnSourceCv(ins) || rf_v[ db.Rc ];
-		rob[tail].argT_v <= fnSourceTv(ins) || rf_v[ db.Rt ];
-		/*
-		if (!db.pfx) begin
-			atom_mask <= atom_mask >> 4'd3;
-			pred_mask <= {4'hF,pred_mask} >> 4'd4;
-			postfix_mask <= 'd0;
-		end
-		else
-			postfix_mask <= {postfix_mask[4:0],1'b1};
-		if (postfix_mask[5])
-			rob[tail0].exc <= FLT_PFX;
-		iqentry_issue_reg[tail0] <= 1'b0;
-		*/
-	end
+	rob[tail][slot].sn <= sn;
+	rob[tail][slot].owner <= QuplsPkg::NONE;
+	rob[tail][slot].done <= db.nop;
+	rob[tail][slot].out <= INV;
+	rob[tail][slot].op <= ins;
+	rob[tail][slot].bt <= pt;
+	rob[tail][slot].agen <= INV;
+	rob[tail][slot].pc <= pc;
+	rob[tail][slot].decbus <= db;
+	rob[tail][slot].pRt <= pRt;
+	rob[tail][slot].exc <= FLT_NONE;
+	rob[tail][slot].takb <= 1'b0;
+	rob[tail][slot].brtgt <= 'd0;
+	rob[tail][slot].argA_v <= fnSourceAv(ins);
+	rob[tail][slot].argB_v <= fnSourceBv(ins);
+	rob[tail][slot].argC_v <= fnSourceCv(ins);
+	rob[tail][slot].argT_v <= fnSourceTv(ins);
+	rob[tail][slot].avail <= avail;
+	rob[tail][slot].v <= ~stomp;
 end
 endtask
 

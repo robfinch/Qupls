@@ -106,7 +106,9 @@ end
 else begin
 	case({alloc3,alloc2,alloc1,alloc0} & {v3,v2,v1,v0})
 	4'b0000:
-	 	avail <= avail | availy;
+		begin
+	 		avail <= avail | availy;
+	 	end
 	4'b0001:
 		begin
 			wo0 <= {2'b00,o0};

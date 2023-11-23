@@ -14,6 +14,7 @@ always_comb
 		2'd2:	len = 5'd10;
 		2'd3:	len = 5'd18;
 		endcase
+	OP_NOP:	len = 5'd1;
 	default:	len = 5'd4;
 	endcase
 
