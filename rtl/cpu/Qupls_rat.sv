@@ -50,7 +50,7 @@ module Qupls_rat(rst, clk, nq, stallq, cndx, avail, flush, miss_cp, wr0, wr1, wr
 	wra, wrra, wrb, wrrb, wrc, wrrc, wrd, wrrd, cmtav, cmtbv, cmtcv, cmtdv,
 	cmtaa, cmtba, cmtca, cmtda, cmtap, cmtbp, cmtcp, cmtdp, cmtbr,
 	freea, freeb, freec, freed, free_bitlist);
-parameter NPORT = 18;
+parameter NPORT = 16;
 input rst;
 input clk;
 input nq;			// enqueue instruction
