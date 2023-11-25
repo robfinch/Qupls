@@ -200,48 +200,47 @@ assign rf_reg[0] = alu0_argA_reg;
 assign rf_reg[1] = alu0_argB_reg;
 assign rf_reg[2] = alu0_argC_reg;
 
-assign rf_reg[5] = alu1_argA_reg;
-assign rf_reg[6] = alu1_argB_reg;
-assign rf_reg[7] = alu1_argC_reg;
+assign rf_reg[3] = alu1_argA_reg;
+assign rf_reg[4] = alu1_argB_reg;
+assign rf_reg[5] = alu1_argC_reg;
 
-assign rf_reg[10] = fpu0_argA_reg;
-assign rf_reg[11] = fpu0_argB_reg;
-assign rf_reg[12] = fpu0_argC_reg;
+assign rf_reg[6] = fpu0_argA_reg;
+assign rf_reg[7] = fpu0_argB_reg;
+assign rf_reg[8] = fpu0_argC_reg;
 
-assign rf_reg[15] = fcu_argA_reg;
-assign rf_reg[16] = fcu_argB_reg;
-assign rf_reg[17] = fcu_argT_reg;
+assign rf_reg[9] = fcu_argA_reg;
+assign rf_reg[10] = fcu_argB_reg;
 
-assign rf_reg[18] = agen0_argA_reg;
-assign rf_reg[19] = agen0_argB_reg;
+assign rf_reg[11] = agen0_argA_reg;
+assign rf_reg[12] = agen0_argB_reg;
 
-assign rf_reg[23] = agen1_argA_reg;
-assign rf_reg[24] = agen1_argB_reg;
+assign rf_reg[13] = agen1_argA_reg;
+assign rf_reg[14] = agen1_argB_reg;
 
-assign rf_reg[25] = store_argC_reg;
+assign rf_reg[15] = store_argC_reg;
 
 assign rfo_alu0_argA = rfo[0];
 assign rfo_alu0_argB = rfo[1];
 assign rfo_alu0_argC = rfo[2];
 
-assign rfo_alu1_argA = rfo[5];
-assign rfo_alu1_argB = rfo[6];
-assign rfo_alu1_argC = rfo[7];
+assign rfo_alu1_argA = rfo[3];
+assign rfo_alu1_argB = rfo[4];
+assign rfo_alu1_argC = rfo[5];
 
-assign rfo_fpu0_argA = rfo[10];
-assign rfo_fpu0_argB = rfo[11];
-assign rfo_fpu0_argC = rfo[12];
+assign rfo_fpu0_argA = rfo[6];
+assign rfo_fpu0_argB = rfo[7];
+assign rfo_fpu0_argC = rfo[8];
 
-assign rfo_fcu_argA = rfo[15];
-assign rfo_fcu_argB = rfo[16];
+assign rfo_fcu_argA = rfo[9];
+assign rfo_fcu_argB = rfo[10];
 
-assign rfo_agen0_argA = rfo[18];
-assign rfo_agen0_argB = rfo[19];
+assign rfo_agen0_argA = rfo[11];
+assign rfo_agen0_argB = rfo[12];
 
-assign rfo_agen1_argA = rfo[23];
-assign rfo_agen1_argB = rfo[24];
+assign rfo_agen1_argA = rfo[13];
+assign rfo_agen1_argB = rfo[14];
 
-assign rfo_store_argC = rfo[25];
+assign rfo_store_argC = rfo[15];
 
 /*
 	alu0_argA_reg <= rob[alu0_re].Ra;
@@ -882,7 +881,7 @@ assign wrport1_res = alu1_res;
 assign wrport2_res = load_res;
 assign wrport3_res = fpu_res;
 
-Qupls_regfile4w18r urf1 (
+Qupls_regfile4w16r urf1 (
 	.rst(rst),
 	.clk(clk), 
 	.wr0(wrport0_v),
@@ -1065,7 +1064,10 @@ assign agen1_argB_reg = rob[agen1_rndx].decbus.Rb;
 
 value_t agen0_res, agen1_res;
 wire tlb_miss0, tlb_miss1;
-tlb_entry_t tlb_entry0, tlb_entry1;
+wire tlb_wr;
+wire tlb_way;
+tlb_entry_t tlb_entry0, tlb_entry1, tlb_entry;
+wire [6:0] tlb_entryno;
 instruction_t agen0_op, agen1_op;
 reg agen0_load, agen1_load;
 reg agen0_store, agen1_store;
@@ -1106,10 +1108,10 @@ Qupls_agen uag1
 Qupls_tlb utlb1
 (
 	.clk(clk),
-	.wr(),
-	.way(),
-	.entry_no(),
-	.entry_i(),
+	.wr(tlb_wr),
+	.way(tlb_way),
+	.entry_no(tlb_entryno),
+	.entry_i(tlb_entry),
 	.entry_o(),
 	.vadr0(agen0_res),
 	.vadr1(agen1_res),
@@ -1117,8 +1119,29 @@ Qupls_tlb utlb1
 	.asid1(asid),
 	.entry0(tlb_entry0),
 	.entry1(tlb_entry1),
-	.miss0(tlb_miss0),
-	.miss1(tlb_miss1)
+	.miss_o(tlb_miss),
+	.missadr_o(tlb_missadr),
+	.missasid_o(tlb_missasid),
+	.missack(tlb_missack)
+);
+
+Qupls_ptable_walker uptw1
+(
+	.rst(rst),
+	.clk(clk),
+	.tlbmiss(tlb_miss),
+	.tlb_missadr(tlb_missadr),
+	.tlb_missasid(tlb_missasid),
+	.in_que(tlb_missack),
+	.ftas_req(),
+	.ftas_resp(),
+	.ftam_req(),
+	.ftam_resp(),
+	.fault_o(),
+	.tlb_wr(tlb_wr),
+	.tlb_way(tlb_way),
+	.tlb_entryno(tlb_entryno),
+	.tlb_entry(tlb_entry)
 );
 
 always_ff @(posedge clk)
@@ -1433,7 +1456,7 @@ begin
 		if (storeq[sq_tail].v==INV) begin
 			storeq[sq_tail].v <= VAL;
 			storeq[sq_tail].vadr <= agen0_res;
-			storeq[lq_tail].padr <= {tlb_entry0.pte.ppn,agen0_res[15:0]};
+			storeq[sq_tail].padr <= {tlb_entry0.pte.ppn,agen0_res[15:0]};
 			storeq[sq_tail].memsz <= fnMemsz(agen0_op);
 			sq_tail <= (sq_tail + 2'd1) % STOREQ_ENTRIES;
 		end
@@ -1442,7 +1465,7 @@ begin
 		if (storeq[sq_tail].v==INV) begin
 			storeq[sq_tail].v <= VAL;
 			storeq[sq_tail].vadr <= agen1_res;
-			storeq[lq_tail].padr <= {tlb_entry1.pte.ppn,agen1_res[15:0]};
+			storeq[sq_tail].padr <= {tlb_entry1.pte.ppn,agen1_res[15:0]};
 			storeq[sq_tail].memsz <= fnMemsz(agen1_op);
 			sq_tail <= (sq_tail + 2'd1) % STOREQ_ENTRIES;
 		end
