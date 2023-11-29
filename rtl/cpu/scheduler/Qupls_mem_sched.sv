@@ -108,7 +108,7 @@ begin
 				end
 			end
 			// no preceding instruction is ready to go
-			else if (mem_ready < 2'd2) begin
+			else if (mem_ready < NDATA_PORTS) begin
 				if (robentry_memready[ heads[hd] ])
 					mem_ready = mem_ready + 2'd1;
 				if (!robentry_stomp[heads[hd]] && robentry_memready[ heads[hd] ] ) begin

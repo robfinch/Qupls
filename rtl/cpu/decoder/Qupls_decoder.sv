@@ -205,6 +205,12 @@ Qupls_decode_fpu ufpu
 	.fpu(db.fpu)
 );
 
+Qupls_decode_oddball uob0
+(
+	.instr(ins),
+	.oddball(db.oddball)
+);
+
 always_ff @(posedge clk)
 begin
 	dbo <= 'd0;	// in case a signal was missed / unused.
