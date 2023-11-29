@@ -57,6 +57,8 @@ begin
 		res <= a + i;
 	OP_LDX,OP_STX:
 		res <= a + bs + i;
+	OP_AMO:
+		res <= a + b;
 	default:
 		res <= 'd0;
 	endcase

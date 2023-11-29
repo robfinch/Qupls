@@ -44,11 +44,11 @@ function fnIsLoadz;
 input instruction_t op;
 begin
 	case(op.any.opcode)
-	OP_LDBU,OP_LDWU,OP_LDTU,OP_LDOU:
+	OP_LDBU,OP_LDWU,OP_LDTU:
 		fnIsLoadz = 1'b1;
 	OP_LDX:
 		case(op.lsn.func)
-		FN_LDBUX,FN_LDWUX,FN_LDTUX,FN_LDOUX:
+		FN_LDBUX,FN_LDWUX,FN_LDTUX:
 			fnIsLoadz = 1'b1;
 		default:
 			fnIsLoadz = 1'b0;

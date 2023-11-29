@@ -40,7 +40,7 @@ import fta_bus_pkg::*;
 import QuplsPkg::*;
 import Qupls_cache_pkg::*;
 
-module Qupls_icache_req_generator(rst, clk, hit, miss_adr, miss_asid,
+module Qupls_icache_req_generator(rst, clk, hit, tlb_v, miss_adr, miss_asid,
 	wbm_req, full, vtags, snoop_v, snoop_adr, snoop_cid, ack);
 parameter CORENO = 6'd1;
 parameter CID = 6'd0;
@@ -48,6 +48,7 @@ parameter WAIT = 6'd6;
 input rst;
 input clk;
 input hit;
+input tlb_v;
 input fta_address_t miss_adr;
 input QuplsPkg::asid_t miss_asid;
 output fta_cmd_request128_t wbm_req;
@@ -115,7 +116,7 @@ else begin
 			lfsr_cnt <= lfsr_cnt + 2'd1;
 		end
 	WAIT4MISS:
-		if (!hit) begin
+		if (!hit & tlb_v) begin
 			tid_cnt <= 4'h0;
 			wbm_req.tid.core = CORENO;
 			wbm_req.tid.channel = CID;			

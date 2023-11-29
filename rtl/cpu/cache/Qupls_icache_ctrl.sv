@@ -41,7 +41,7 @@ import QuplsPkg::*;
 import Qupls_cache_pkg::*;
 
 module Qupls_icache_ctrl(rst, clk, wbm_req, wbm_resp, ftam_full,
-	hit, miss_adr, miss_asid,
+	hit, tlb_v, miss_adr, miss_asid,
 	wr_ic, way, line_o, snoop_adr, snoop_v, snoop_cid);
 parameter WAYS = 4;
 parameter CORENO = 6'd1;
@@ -53,6 +53,7 @@ output fta_cmd_request128_t wbm_req;
 input fta_cmd_response128_t wbm_resp;
 input ftam_full;
 input hit;
+input tlb_v;
 input fta_address_t miss_adr;
 input QuplsPkg::asid_t miss_asid;
 output wr_ic;
@@ -77,6 +78,7 @@ icrq1
 	.rst(rst),
 	.clk(clk),
 	.hit(hit), 
+	.tlb_v(tlb_v),
 	.miss_adr(miss_adr),
 	.miss_asid(miss_asid),
 	.wbm_req(wbm_req),

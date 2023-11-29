@@ -32,35 +32,53 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 10 LUTs
 // ============================================================================
 
-import QuplsPkg::*;
+module Qupls_blend(a, c0, c1, o);
+input value_t a;
+input value_t c0;
+input value_t c1;
+output value_t o;
 
-module Qupls_ins_length(ins, len);
-input instruction_t ins;
-output reg [4:0] len;					// length in bytes
+typedef struct packed {
+	logic [1:0] pad;
+	logic [9:0] r;
+	logic [9:0] g;
+	logic [9:0] b;
+} RGB;
+
+reg [20:0] r0, g0, b0;
+reg [20:0] r1, g1, b1;
+RGB argb0, argb1;
+RGB c0rgb0, c0rgb1;
+RGB c1rgb0, c1rgb1;
+
+assign argb0 = a[31:0];
+assign argb1 = a[63:32];
+assign c0rgb0 = c0[31:0];
+assign c0rgb1 = c0[63:32];
+assign c1rgb0 = c1[31:0];
+assign c1rgb1 = c1[63:32];
 
 always_comb
-	casez(ins.any.opcode)
-	7'h2?:	len = 5'd5;			// Branches
-	OP_AMO:	len = 5'd5;
-	OP_CSR:	len = 5'd5;
-	OP_FLT2,OP_FLT3:				// floating point
-					len = 5'd5;
-	OP_LDX:	len = 5'd4;
-	OP_STX:	len = 5'd4;
-	OP_R1,OP_LDOQ,OP_STOQ,OP_ADDQ:
-					len = 5'd3;
-	OP_PFXA,OP_PFXB,OP_PFXC:
-		case(ins.pfx.len)
-		2'd0:	len = 5'd4;
-		2'd1:	len = 5'd6;
-		2'd2:	len = 5'd10;
-		2'd3:	len = 5'd18;
-		endcase
-	OP_NOP:	len = 5'd1;
-	default:	len = 5'd4;
-	endcase
+begin
+	r0 = {argb0.r,1'b0} * c0rgb0.r + argb0.r * {~c1rgb0.r,1'b0};
+	g0 = {argb0.g,1'b0} * c0rgb0.g + argb0.g * {~c1rgb0.g,1'b0};
+	b0 = {argb0.b,1'b0} * c0rgb0.b + argb0.b * {~c1rgb0.b,1'b0};
+	r1 = {argb1.r,1'b0} * c0rgb1.r + argb1.r * {~c1rgb1.r,1'b0};
+	g1 = {argb1.g,1'b0} * c0rgb1.g + argb1.g * {~c1rgb1.g,1'b0};
+	b1 = {argb1.b,1'b0} * c0rgb1.b + argb1.b * {~c1rgb1.b,1'b0};
+	// Saturate to white
+	r0 = r0[20] ? 10'h3FF : r0[19:10];
+	g0 = g0[20] ? 10'h3FF : g0[19:10];
+	b0 = b0[20] ? 10'h3FF : b0[19:10];
+	r1 = r1[20] ? 10'h3FF : r1[19:10];
+	g1 = g1[20] ? 10'h3FF : g1[19:10];
+	b1 = b1[20] ? 10'h3FF : b1[19:10];
+	
+	o = 'd0;
+	o[29: 0] = {r0[9:0],g0[9:0],b0[9:0]};
+	o[61:32] = {r1[9:0],g1[9:0],b1[9:0]};
+end
 
 endmodule

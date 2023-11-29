@@ -129,7 +129,6 @@ miss_queue_t [MISSQ_SIZE-1:0] miss_queue;
 reg [31:0] miss_adr;
 asid_t miss_asid;
 reg wr1,wr2;
-reg [3:0] stk;
 reg [63:0] stlb_adr;
 reg [10:0] addrb;
 reg cs_config, cs_hwtw;
@@ -229,7 +228,7 @@ else begin
 		sresp.dat <= 'd0;
 		casez(sreq.padr[15:0])
 		16'hFF00:	sresp.dat[63: 0] <= fault_adr;
-		16'hFF10:	sresp.dat[59:48] <= fault_asid;
+		16'hFF10:	sresp.dat[63:48] <= fault_asid;
 		16'hFF20:	sresp.dat[63: 0] <= ptbr;
 		16'hFF30:	sresp.dat <= pt_attr;
 		default:	sresp.dat <= 'd0;
@@ -295,7 +294,6 @@ if (rst) begin
 	ftam_req.bte <= fta_bus_pkg::LINEAR;
 	ftam_req.cti <= fta_bus_pkg::CLASSIC;
 	tid <= 8'd1;
-	stk <= 'd0;
 	upd_req <= 'd0;
 	for (nn = 0; nn < MISSQ_SIZE; nn = nn + 1)
 		miss_queue[nn] <= 'd0;
@@ -327,17 +325,19 @@ else begin
 
 	case(req_state)
 	IDLE:
-		// Check for update to TLB.
-		// Update the TLB by writing TLB registers with the translation.
-		// Advance to the next miss.
-		if (upd_req) begin
-			upd_req <= 'd0;
-			tlb_wr <= 1'b1;
-			tlb_way <= way;
-			tlb_entryno <= miss_adr[22:16];
-			tlb_entry <= pte;
-		end
-		else begin
+		begin
+			// Check for update to TLB.
+			// Update the TLB by writing TLB registers with the translation.
+			// Advance to the next miss.
+			if (upd_req) begin
+				upd_req <= 'd0;
+				tlb_wr <= 1'b1;
+				tlb_way <= way;
+				tlb_entryno <= miss_adr[22:16];
+				tlb_entry.pte <= pte;
+				tlb_entry.vpn.vpn <= miss_adr[31:23];
+				tlb_entry.vpn.asid <= miss_asid;
+			end
 			// Run a bus cycle.
 			if (sel_qe >= 0) begin
 				miss_queue[sel_qe].bc <= 1'b0;
@@ -357,14 +357,13 @@ else begin
 				tranbuf[tid & 15].rdy <= 1'b0;
 				tranbuf[tid & 15].asid <= miss_queue[sel_qe].asid;
 				tranbuf[tid & 15].vadr <= {miss_queue[sel_qe].tadr[31:3],3'b0};
-				tranbuf[tid & 15].stk <= stk;
+				tranbuf[tid & 15].stk <= sel_qe;
 				tid <= tid + 2'd1;
 				if (&tid)
 					tid <= 8'd1;
-				stk <= sel_qe;
 			end
 		end
-	// Remain in fault state until cleared by accessing the table-walker register.
+		// Remain in fault state until cleared by accessing the table-walker register.
 	FAULT:
 		if (cs_hwtw && sreq.padr[15:0]==16'hFF00) begin
 			tlbmiss_ip <= 'd0;
@@ -383,7 +382,7 @@ else begin
 
 	// Search for ready translations and update the TLB.
 	if (sel_tran >= 0) begin
-		miss_queue[tranbuf[sel_tran]].bc <= 1'b1;
+		miss_queue[tranbuf[sel_tran].stk].bc <= 1'b1;
 		// We're done if level zero processed.
 		if (miss_queue[tranbuf[sel_tran].stk].lvl==3'd0) begin
 			// Allow capture of new TLB misses.

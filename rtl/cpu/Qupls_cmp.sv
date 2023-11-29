@@ -32,35 +32,64 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 10 LUTs
 // ============================================================================
 
 import QuplsPkg::*;
 
-module Qupls_ins_length(ins, len);
-input instruction_t ins;
-output reg [4:0] len;					// length in bytes
+module Qupls_cmp(ir, a, b, o);
+input instruction_t ir;
+input value_t a;
+input value_t b;
+output value_t o;
 
 always_comb
-	casez(ins.any.opcode)
-	7'h2?:	len = 5'd5;			// Branches
-	OP_AMO:	len = 5'd5;
-	OP_CSR:	len = 5'd5;
-	OP_FLT2,OP_FLT3:				// floating point
-					len = 5'd5;
-	OP_LDX:	len = 5'd4;
-	OP_STX:	len = 5'd4;
-	OP_R1,OP_LDOQ,OP_STOQ,OP_ADDQ:
-					len = 5'd3;
-	OP_PFXA,OP_PFXB,OP_PFXC:
-		case(ins.pfx.len)
-		2'd0:	len = 5'd4;
-		2'd1:	len = 5'd6;
-		2'd2:	len = 5'd10;
-		2'd3:	len = 5'd18;
+begin
+	o = 'd0;
+	case(ir.any.opcode)
+	OP_R2:
+		case(ir.r2.func)
+		FN_CMP:
+			begin
+				o[0] = a == b;
+				o[1] = a != b;
+				o[2] = $signed(a) < $signed(b);
+				o[3] = $signed(a) <= $signed(b);
+				o[4] = $signed(a) >= $signed(b);
+				o[5] = $signed(a) > $signed(b);
+				o[6] = ~a[b[4:0]];
+				o[7] =  a[b[4:0]];
+			end
+		FN_CMPU:
+			begin
+				o[2] = a < b;
+				o[3] = a <= b;
+				o[4] = a >= b;
+				o[5] = a > b;
+			end
+		default:
+			o = 'd0;
 		endcase
-	OP_NOP:	len = 5'd1;
-	default:	len = 5'd4;
+	OP_CMPI:
+		begin
+			o[0] = a == b;
+			o[1] = a != b;
+			o[2] = $signed(a) < $signed(b);
+			o[3] = $signed(a) <= $signed(b);
+			o[4] = $signed(a) >= $signed(b);
+			o[5] = $signed(a) > $signed(b);
+			o[6] = ~a[b[4:0]];
+			o[7] =  a[b[4:0]];
+		end
+	OP_CMPUI:
+		begin
+			o[2] = a < b;
+			o[3] = a <= b;
+			o[4] = a >= b;
+			o[5] = a > b;
+		end
+	default:
+		o = 'd0;
 	endcase
+end
 
 endmodule

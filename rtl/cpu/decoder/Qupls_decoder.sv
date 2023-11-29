@@ -36,7 +36,7 @@
 
 import QuplsPkg::*;
 
-module Qupls_decoder(clk, instr, db);
+module Qupls_decoder(clk, instr, dbo);
 input clk;
 input instruction_t [3:0] instr;
 output decode_bus_t dbo;
@@ -206,6 +206,9 @@ Qupls_decode_fpu ufpu
 );
 
 always_ff @(posedge clk)
+begin
+	dbo <= 'd0;	// in case a signal was missed / unused.
 	dbo <= db;
+end
 
 endmodule

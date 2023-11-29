@@ -96,9 +96,11 @@ parameter SUPPORT_PGREL	= 1'b0;	// Page relative branching, must be zero
 parameter SUPPORT_REP = 1'b1;
 parameter REP_BIT = 31;
 
-parameter ROB_ENTRIES = 16;	// currently must be 16
-parameter ROB_SLOTS = 4;
+parameter ROB_ENTRIES = 32;	// currently must be 16
 parameter NCHECK = 16;			// number of checkpoints
+parameter LOADQ_ENTRIES = 8;
+parameter STOREQ_ENTRIES = 8;
+parameter LSQ_ENTRIES = 12;
 
 // Uncomment to have page relative branches.
 //`define PGREL 1
@@ -127,6 +129,7 @@ parameter INSN_LEN = 8'd5;
 parameter NDATA_PORTS = 1;
 parameter NALU = 1;
 parameter NFPU = 1;
+parameter NAGEN = 2;
 
 parameter RAS_DEPTH	= 4;
 
@@ -151,7 +154,8 @@ parameter PANIC_COMMIT = 4'd13;
 parameter PANIC_CHECKPOINT_INDEX = 4'd14;
 
 
-typedef logic [3:0] rob_ndx_t;
+typedef logic [4:0] rob_ndx_t;
+typedef logic [3:0] lsq_ndx_t;
 typedef logic [NREGS-1:1] reg_bitmask_t;
 
 typedef enum logic [2:0] {
@@ -208,14 +212,17 @@ typedef enum logic [6:0] {
 	OP_COM			= 7'd20,
 	OP_DIVUI		= 7'd21,
 	OP_DEP			= 7'd23,
-	/* 24 to 31 empty
-	*/
+	OP_MINMAX3	= 7'd24,
+	OP_MUX			= 7'd25,
+	OP_PTRDIF		= 7'd27,
+	OP_ADDQ			= 7'd28,
 	OP_DBcc			= 7'd29,
 	OP_BSR			= 7'd32,
 	OP_DBRA			= 7'd33,
 	OP_MCB			= 7'd34,
 	OP_RTD			= 7'd35,
 	OP_JSR			= 7'd36,
+	OP_CMPUI		= 7'd38,
 	
 	OP_BccU			= 7'd40,
 	OP_Bcc			= 7'd41,
@@ -247,17 +254,22 @@ typedef enum logic [6:0] {
 	OP_LDT			= 7'd68,
 	OP_LDTU			= 7'd69,
 	OP_LDO			= 7'd70,
-	OP_LDOU			= 7'd71,
+	OP_LDOQ			= 7'd71,
 	OP_LDA			= 7'd74,
 	OP_CACHE		= 7'd75,
+	OP_LDAX			= 7'd78,
 	OP_LDX			= 7'd79,	
 	OP_STB			= 7'd80,
 	OP_STW			= 7'd81,
 	OP_STT			= 7'd82,
 	OP_STO			= 7'd83,
+	OP_STOQ			= 7'd84,
+	OP_STPTR		= 7'd86,
 	OP_STX			= 7'd87,
 	OP_SHIFT		= 7'd88,
 	OP_BLEND		= 7'd89,
+	OP_AMO			= 7'd92,
+	OP_CAS			= 7'd93,
 	OP_FLT2			= 7'd98,
 	OP_FLT3			= 7'd99,
 	OP_IRQ			= 7'd112,
@@ -405,6 +417,7 @@ typedef enum logic [6:0] {
 	FN_CMP			= 7'd03,
 	FN_ADD			= 7'd04,
 	FN_SUB			= 7'd05,
+	FN_CMPU			= 7'd06,
 	FN_NAND			= 7'd08,
 	FN_NOR			= 7'd09,
 	FN_ENOR			= 7'd10,
@@ -445,23 +458,23 @@ typedef enum logic [2:0] {
 	RND_FL = 3'd7			// round according to flags register
 } fround_t;
 
-typedef enum logic [5:0] {
-	FN_LDBX = 6'd0,
-	FN_LDBUX = 6'd1,
-	FN_LDWX = 6'd2,
-	FN_LDWUX = 6'd3,
-	FN_LDTX = 6'd4,
-	FN_LDTUX = 6'd5,
-	FN_LDOX = 6'd6,
-	FN_LDOUX = 6'd7,
-	FN_LDAX = 6'd10
+typedef enum logic [4:0] {
+	FN_LDBX = 5'd0,
+	FN_LDBUX = 5'd1,
+	FN_LDWX = 5'd2,
+	FN_LDWUX = 5'd3,
+	FN_LDTX = 5'd4,
+	FN_LDTUX = 5'd5,
+	FN_LDOX = 5'd6,
+	FN_LDOUX = 5'd7,
+	FN_LDAX = 5'd10
 } ldn_func_t;
 
-typedef enum logic [5:0] {
-	FN_STBX = 6'd0,
-	FN_STWX = 6'd2,
-	FN_STTX = 6'd4,
-	FN_STOX = 6'd6
+typedef enum logic [4:0] {
+	FN_STBX = 5'd0,
+	FN_STWX = 5'd2,
+	FN_STTX = 5'd4,
+	FN_STOX = 5'd6
 } stn_func_t;
 
 typedef union packed {
@@ -621,10 +634,12 @@ typedef enum logic [3:0] {
 	ALU1 = 4'd2,
 	FPU0 = 4'd3,
 	FPU1 = 4'd4,
-	DRAM0 = 4'd5,
-	DRAM1 = 4'd6,
-	FCU = 4'd7
-} iq_owner_t;
+	AGEN0 = 4'd5,
+	AGEN1 = 4'd6,
+	FCU = 4'd7,
+	DRAM0 = 4'd8,
+	DRAM1 = 4'd9
+} rob_owner_t;
 
 parameter CSR_SR		= 16'h?004;
 parameter CSR_CAUSE	= 16'h?006;
@@ -783,6 +798,7 @@ typedef struct packed
 typedef logic [5:0] aregno_t;		// architectural register number
 typedef logic [7:0] pregno_t;		// physical register number
 typedef logic [3:0] rndx_t;			// ROB index
+typedef logic [6:0] tregno_t;
 
 typedef struct packed
 {
@@ -949,12 +965,8 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [103:0] pad;
-	logic [1:0] fmt;
-	logic [2:0] pr;
+	logic [111:0] pad;
 	lsn_func_t func;
-	logic c;
-	logic resv;
 	logic [1:0] sc;
 	regspec_t Rb;
 	regspec_t Ra;
@@ -1099,8 +1111,9 @@ typedef struct packed
 	logic backbr;			// backwards target branch
 	bts_t bts;				// branch target source
 	logic alu;				// true if instruction must use alu (alu or mem)
-	logic alu0;				// true if instruction must use alu #0
+	logic alu0;				// true if instruction must use only alu #0
 	logic fpu;				// FPU op
+	logic fpu0;				// true if instruction must use only fpu #0
 	logic mul;
 	logic mulu;
 	logic div;
@@ -1262,16 +1275,21 @@ typedef struct packed
 const pc_address_t RSTPC	= 44'hFFFD00000A0;
 const address_t RSTSP = 32'hFFFFFFF0;
 
+typedef logic [15:0] seqnum_t;
+
 typedef struct packed {
 	logic v;
-	logic [7:0] sn;
-	iq_owner_t owner;
+	seqnum_t sn;
+	rob_owner_t owner;
 	logic out;
 	logic done;
 	logic bt;
-	logic agen;
 	decode_bus_t decbus;
-	pregno_t pRt;
+	pregno_t pRa;
+	pregno_t pRb;
+	pregno_t pRc;
+	pregno_t pRt;							// current Rt value
+	pregno_t nRt;							// new Rt
 	logic br;
 	pc_address_t brtgt;
 	bts_t bts;				// branch target source
@@ -1285,7 +1303,33 @@ typedef struct packed {
 	logic argB_v;
 	logic argC_v;
 	pc_address_t pc;
+	virtual_address_t vadr;
+	physical_address_t padr;
+	lsq_ndx_t lsqndx;
 } rob_entry_t;
+
+typedef struct packed {
+	logic v;
+	seqnum_t sn;
+	logic agen;						// virtual address calculated
+	logic tlb;						// address translated by TLB
+	rob_ndx_t rndx;				// reference to related ROB entry
+	virtual_address_t vadr;
+	physical_address_t padr;
+	logic [1:0] omode;		// operating mode
+	memop_t func;					// operation to perform
+	logic [3:0] func2;		// more resolution to function
+	cause_code_t cause;
+	logic [3:0] cache_type;
+	logic [63:0] sel;			// +16 for unaligned accesses
+	asid_t asid;
+	code_address_t vcadr;		// victim cache address
+	logic dchit;
+	memsz_t sz;						// indicates size of data
+	logic [7:0] bytcnt;		// byte count of data to load/store
+	regspec_t tgt;				// target register
+	logic [511:0] res;		// stores unaligned data as well (must be last field)
+} lsq_entry_t;
 
 function fnIsBranch;
 input instruction_t ir;
@@ -1672,7 +1716,7 @@ function fnIsLoadz;
 input instruction_t op;
 begin
 	case(op.any.opcode)
-	OP_LDBU,OP_LDWU,OP_LDTU,OP_LDOU:
+	OP_LDBU,OP_LDWU,OP_LDTU:
 		fnIsLoadz = 1'b1;
 	OP_LDX:
 		case(op.lsn.func)
@@ -1894,7 +1938,7 @@ begin
 		fnMemsz = wyde;
 	OP_LDT,OP_LDTU,OP_STT:
 		fnMemsz = tetra;
-	OP_LDO,OP_LDOU,OP_STO:
+	OP_LDO,OP_STO:
 		fnMemsz = octa;
 	OP_LDX:
 		case(ir.lsn.func)
@@ -1933,7 +1977,7 @@ begin
 		fnSel = 16'h0003;
 	OP_LDT,OP_LDTU,OP_STT:
 		fnSel = 16'h000F;
-	OP_LDO,OP_LDOU,OP_STO:
+	OP_LDO,OP_STO:
 		fnSel = 16'h00FF;
 	OP_LDX:
 		case(ir.lsn.func)
