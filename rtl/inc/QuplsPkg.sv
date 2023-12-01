@@ -96,11 +96,13 @@ parameter SUPPORT_PGREL	= 1'b0;	// Page relative branching, must be zero
 parameter SUPPORT_REP = 1'b1;
 parameter REP_BIT = 31;
 
+parameter SUPPORT_LOAD_BYPASSING = 1'b0;
 parameter ROB_ENTRIES = 32;	// currently must be 16
 parameter NCHECK = 16;			// number of checkpoints
 parameter LOADQ_ENTRIES = 8;
 parameter STOREQ_ENTRIES = 8;
 parameter LSQ_ENTRIES = 12;
+parameter LSQ2 = 1'b0;			// Queue two LSQ entries at once?
 
 // Uncomment to have page relative branches.
 //`define PGREL 1
@@ -130,6 +132,7 @@ parameter NDATA_PORTS = 1;
 parameter NALU = 1;
 parameter NFPU = 1;
 parameter NAGEN = 2;
+parameter NLSQ_PORTS = 1;
 
 parameter RAS_DEPTH	= 4;
 
@@ -795,10 +798,10 @@ typedef struct packed
 	logic [5:0] num;
 } regspec_t;
 
-typedef logic [5:0] aregno_t;		// architectural register number
-typedef logic [7:0] pregno_t;		// physical register number
+typedef logic [$clog2(AREGS)-1:0] aregno_t;		// architectural register number
+typedef logic [$clog2(PREGS)-1:0] pregno_t;		// physical register number
 typedef logic [3:0] rndx_t;			// ROB index
-typedef logic [6:0] tregno_t;
+typedef logic [$clog2(PREGS)-1:0] tregno_t;
 
 typedef struct packed
 {
@@ -1146,6 +1149,7 @@ typedef struct packed
 	logic pfx;
 	logic popq;
 	logic sync;
+	logic oddball;
 } decode_bus_t;
 
 typedef struct packed
@@ -1302,6 +1306,7 @@ typedef struct packed {
 	logic argA_v;
 	logic argB_v;
 	logic argC_v;
+	value_t arg;
 	pc_address_t pc;
 	virtual_address_t vadr;
 	physical_address_t padr;
@@ -1317,6 +1322,9 @@ typedef struct packed {
 	virtual_address_t vadr;
 	physical_address_t padr;
 	logic [1:0] omode;		// operating mode
+	logic load;						// 1=load
+	logic loadz;
+	logic store;
 	memop_t func;					// operation to perform
 	logic [3:0] func2;		// more resolution to function
 	cause_code_t cause;
@@ -1327,7 +1335,8 @@ typedef struct packed {
 	logic dchit;
 	memsz_t sz;						// indicates size of data
 	logic [7:0] bytcnt;		// byte count of data to load/store
-	regspec_t tgt;				// target register
+	pregno_t Rt;
+	logic datav;					// store data is valid
 	logic [511:0] res;		// stores unaligned data as well (must be last field)
 } lsq_entry_t;
 

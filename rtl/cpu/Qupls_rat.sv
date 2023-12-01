@@ -38,6 +38,11 @@
 //
 // ToDo: add a valid bit
 // Research shows having 16 checkpoints is almost as good as infinity.
+//
+// 4500 LUTs / 42 FFs for 64/192
+// 9100 LUTs / 42 FFs for 2*64/192 (two banks of 64 arch. regs).
+// 12100 LUTs / 42 FFs for 4*64/192 (four banks of 64 arch. regs).
+// 17000 LUTs / 42 FFs for 8*64/192 (eight banks of 64 arch. regs).
 // ============================================================================
 //
 import QuplsPkg::*;
@@ -46,11 +51,15 @@ module Qupls_rat(rst, clk, nq, stallq, cndx, avail, flush, miss_cp, wr0, wr1, wr
 	qbr0, qbr1, qbr2, qbr3,
 	rn,
 	rrn,
-	vn,
+	vn, 
+	wrbanka, wrbankb, wrbankc, wrbankd, cmtbanka, cmtbankb, cmtbankc, cmtbankd, rnbank,
 	wra, wrra, wrb, wrrb, wrc, wrrc, wrd, wrrd, cmtav, cmtbv, cmtcv, cmtdv,
 	cmtaa, cmtba, cmtca, cmtda, cmtap, cmtbp, cmtcp, cmtdp, cmtbr,
 	freea, freeb, freec, freed, free_bitlist);
 parameter NPORT = 16;
+parameter BANKS = 2;
+localparam RBIT=$clog2(PREGS);
+localparam BBIT=$clog2(BANKS)-1;
 input rst;
 input clk;
 input nq;			// enqueue instruction
@@ -67,6 +76,10 @@ input wr0;
 input wr1;
 input wr2;
 input wr3;
+input [BBIT:0] wrbanka;
+input [BBIT:0] wrbankb;
+input [BBIT:0] wrbankc;
+input [BBIT:0] wrbankd;
 input aregno_t wra;	// architectural register
 input aregno_t wrb;
 input aregno_t wrc;
@@ -79,6 +92,10 @@ input cmtav;							// commit valid
 input cmtbv;
 input cmtcv;
 input cmtdv;
+input [BBIT:0] cmtbanka;
+input [BBIT:0] cmtbankb;
+input [BBIT:0] cmtbankc;
+input [BBIT:0] cmtbankd;
 input aregno_t cmtaa;				// architectural register being committed
 input aregno_t cmtba;
 input aregno_t cmtca;
@@ -88,6 +105,7 @@ input pregno_t cmtbp;
 input pregno_t cmtcp;
 input pregno_t cmtdp;
 input cmtbr;								// comitting a branch
+input [BBIT:0] rnbank [NPORT-1:0];
 input aregno_t rn [NPORT-1:0];		// architectural register
 output pregno_t rrn [NPORT-1:0];	// physical register
 output reg [NPORT-1:0] vn;			// translation is valid for register
@@ -99,11 +117,11 @@ output reg [PREGS-1:0] free_bitlist;	// bit vector of registers to free on branc
 
 
 integer n,m,n1,n2;
-reg [AREGS-1:0] cpram_we;
-wire [AREGS*8-1:0] cpram_out;
-reg [AREGS*8-1:0] cpram_in;
+reg [AREGS*BANKS-1:0] cpram_we;
+wire [AREGS*BANKS*RBIT-1:0] cpram_out;
+reg [AREGS*BANKS*RBIT-1:0] cpram_in;
 
-Qupls_checkpointRam cpram1
+Qupls_checkpointRam #(.BANKS(BANKS)) cpram1
 (
 	.clka(clk),
 	.ena(1'b1),
@@ -129,7 +147,7 @@ wire qbr_ok = qbr && nob < 6'd15;
 generate begin : gRRN
 	for (g = 0; g < NPORT; g = g + 1) begin
 		always_comb
-			rrn[g] = cpram_out >> {rn[g],3'b0};
+			rrn[g] = cpram_out >> {(rn[g] * RBIT),rnbank[g]};
 		always_comb
 			vn[g] = 1'b1;//cpmv[cndx][rn[g]];
 	end
@@ -143,7 +161,7 @@ if (rst)
 	freea <= 'd0;
 else begin
 	if (cmtav)
-		freea <= cpram_out >> {cmtaa,3'b0};
+		freea <= cpram_out >> (cmtaa * RBIT);
 	else
 	 	freea <= cmtap;
 end
@@ -155,7 +173,7 @@ if (rst)
 	freeb <= 'd0;
 else begin
 	if (cmtbv)
-		freeb <= cpram_out >> {cmtba,3'b0};
+		freeb <= cpram_out >> (cmtba * RBIT);
 	else
 	 	freeb <= cmtbp;
 end
@@ -167,7 +185,7 @@ if (rst)
 	freec <= 'd0;
 else begin
 	if (cmtcv)
-		freec <= cpram_out >> {cmtca,3'b0};
+		freec <= cpram_out >> (cmtca * RBIT);
 	else
 	 	freec <= cmtcp;
 end
@@ -179,7 +197,7 @@ if (rst)
 	freed <= 'd0;
 else begin
 	if (cmtav)
-		freed <= cpram_out >> {cmtda,3'b0};
+		freed <= cpram_out >> (cmtda * RBIT);
 	else
 	 	freed <= cmtdp;
 end
@@ -219,29 +237,29 @@ else
 always_comb
 begin
 	cpram_in = 'd0;
-	cpram_in = cpram_in | (({8{cmtav}} & cmtap) << {cmtaa,3'b0});
-	cpram_in = cpram_in | (({8{cmtbv}} & cmtbp) << {cmtba,3'b0});
-	cpram_in = cpram_in | (({8{cmtcv}} & cmtcp) << {cmtca,3'b0});
-	cpram_in = cpram_in | (({8{cmtdv}} & cmtdp) << {cmtda,3'b0});
-	cpram_in = cpram_in | (({8{nq & wr0}} & wrra) << {wra,3'b0});
-	cpram_in = cpram_in | (({8{nq & wr1}} & wrrb) << {wrb,3'b0});
-	cpram_in = cpram_in | (({8{nq & wr2}} & wrrc) << {wrc,3'b0});
-	cpram_in = cpram_in | (({8{nq & wr3}} & wrrd) << {wrd,3'b0});
+	cpram_in = cpram_in | (({RBIT{cmtav}} & cmtap) << {(cmtaa * RBIT),cmtbanka});
+	cpram_in = cpram_in | (({RBIT{cmtbv}} & cmtbp) << {(cmtba * RBIT),cmtbankb});
+	cpram_in = cpram_in | (({RBIT{cmtcv}} & cmtcp) << {(cmtca * RBIT),cmtbankc});
+	cpram_in = cpram_in | (({RBIT{cmtdv}} & cmtdp) << {(cmtda * RBIT),cmtbankd});
+	cpram_in = cpram_in | (({RBIT{nq & wr0}} & wrra) << {(wra * RBIT),wrbanka});
+	cpram_in = cpram_in | (({RBIT{nq & wr1}} & wrrb) << {(wrb * RBIT),wrbankb});
+	cpram_in = cpram_in | (({RBIT{nq & wr2}} & wrrc) << {(wrc * RBIT),wrbankc});
+	cpram_in = cpram_in | (({RBIT{nq & wr3}} & wrrd) << {(wrd * RBIT),wrbankd});
 end
 
 // Add registers to the checkpoint map.
 always_comb
 begin
 	cpram_we = 'd0;
-	cpram_we = cpram_we | (cmtav << cmtaa);
-	cpram_we = cpram_we | (cmtbv << cmtba);
-	cpram_we = cpram_we | (cmtcv << cmtca);
-	cpram_we = cpram_we | (cmtdv << cmtda);
+	cpram_we = cpram_we | (cmtav << {cmtaa,cmtbanka});
+	cpram_we = cpram_we | (cmtbv << {cmtba,cmtbankb});
+	cpram_we = cpram_we | (cmtcv << {cmtca,cmtbankc});
+	cpram_we = cpram_we | (cmtdv << {cmtda,cmtbankd});
 
-	cpram_we = cpram_we | ({nq & wr0} << wra);
-	cpram_we = cpram_we | ({nq & wr1} << wrb);
-	cpram_we = cpram_we | ({nq & wr2} << wrc);
-	cpram_we = cpram_we | ({nq & wr3} << wrd);
+	cpram_we = cpram_we | ({nq & wr0} << {wra,wrbanka});
+	cpram_we = cpram_we | ({nq & wr1} << {wrb,wrbankb});
+	cpram_we = cpram_we | ({nq & wr2} << {wrc,wrbankc});
+	cpram_we = cpram_we | ({nq & wr3} << {wrd,wrbankd});
 
 end
 

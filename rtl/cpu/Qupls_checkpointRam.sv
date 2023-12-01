@@ -38,10 +38,12 @@
 import QuplsPkg::SIM;
 
 module Qupls_checkpointRam(clka, ena, wea, addra, dina, clkb, enb, addrb, doutb);
-localparam WID=AREGS*8;
+parameter BANKS=4;
+localparam RBIT=$clog2(PREGS);
+localparam WID=AREGS*BANKS*RBIT;
 input clka;
 input ena;
-input [AREGS-1:0] wea;
+input [AREGS*BANKS-1:0] wea;
 input [3:0] addra;
 input [WID-1:0] dina;
 input clkb;
@@ -57,7 +59,7 @@ integer n;
 reg [WID-1:0] mem [0:NCHECK-1];
 reg [3:0] raddrb;
 initial begin
-	for (n = 0; n < 16; n = n + 1)
+	for (n = 0; n < NCHECK; n = n + 1)
 		mem[n] = 0;
 end
 
@@ -66,7 +68,7 @@ if (SIM) begin
 
 	for (g = 0; g < AREGS; g = g + 1)
 		always_ff @(posedge clka)
-			if (ena & wea[g]) mem[addra][g*8+7:g*8] <= dina[g*8+7:g*8];
+			if (ena & wea[g]) mem[addra][g*RBIT+RBIT-1:g*RBIT] <= dina[g*RBIT+RBIT-1:g*RBIT];
 
 	always_ff @(posedge clkb)
 		raddrb <= addrb;
@@ -99,12 +101,12 @@ else begin
    xpm_memory_dpdistram #(
       .ADDR_WIDTH_A(4),               // DECIMAL
       .ADDR_WIDTH_B(4),               // DECIMAL
-      .BYTE_WRITE_WIDTH_A(8),        	// DECIMAL
+      .BYTE_WRITE_WIDTH_A(RBIT),      // DECIMAL
       .CLOCKING_MODE("common_clock"), // String
       .MEMORY_INIT_FILE("none"),      // String
       .MEMORY_INIT_PARAM("0"),        // String
       .MEMORY_OPTIMIZATION("true"),   // String
-      .MEMORY_SIZE(WID*16),           // DECIMAL
+      .MEMORY_SIZE(WID*NCHECK),       // DECIMAL
       .MESSAGE_CONTROL(0),            // DECIMAL
       .READ_DATA_WIDTH_A(WID),        // DECIMAL
       .READ_DATA_WIDTH_B(WID),        // DECIMAL

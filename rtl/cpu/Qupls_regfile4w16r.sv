@@ -33,6 +33,9 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
+// 7000 LUTs / 384 FFs / 64 BRAM	(64-bit)
+// 8700 LUTs / 384 FFs / 64 BRAM	(128-bit)
+// 9400 LUTs / 384 FFs / 64 BRAM	(144-bit)
 // ============================================================================
 //
 import QuplsPkg::*;
@@ -41,7 +44,7 @@ module Qupls_regfile4w16r(rst, clk,
 	wr0, wr1, wr2, wr3, we0, we1, we2, we3,
 	wa0, wa1, wa2, wa3, i0, i1, i2, i3,
 	rclk, ra, o);
-parameter WID=64;
+parameter WID = 64;
 parameter RBIT = 8;
 parameter RPORTS = 16;
 input rst;
