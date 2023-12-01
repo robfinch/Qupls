@@ -45,7 +45,7 @@ parameter NFTAGS = 4;
 input rst;
 input clk;
 input [PREGS-1:0] list2free;
-input pregno_t tags2free [NFTAGS-1:0];		// register tags to free
+input pregno_t [NFTAGS-1:0] tags2free;		// register tags to free
 input [NFTAGS-1:0] freevals;					// bitmnask indicating which tags to free
 input alloc0;					// allocate target register 0
 input alloc1;
@@ -61,7 +61,7 @@ integer n;
 reg [PREGS-1:0] availy;
 reg [PREGS-1:0] availx [0:NFTAGS-1];
 
-wire [5:0] o0, o1, o2, o4;
+wire [5:0] o0, o1, o2, o3;
 wire v0, v1, v2, v3;
 
 ffo48 uffo0(avail[ 47:  0], o0);

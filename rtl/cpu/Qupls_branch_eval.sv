@@ -1,11 +1,10 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2023  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//	Qupls_cache_hit.sv
 //
 // BSD 3-Clause License
 // Redistribution and use in source and binary forms, with or without
@@ -33,67 +32,78 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 356 LUTs / 22 FFs                                                                          
+// 450 LUTs
 // ============================================================================
-
+//
 import QuplsPkg::*;
-import QuplsMmupkg::*;
-import Qupls_cache_pkg::*;
 
-module Qupls_cache_hit(clk, adr, ndx, tag, valid, hit, rway, cv);
-parameter LINES=256;
-parameter WAYS=4;
-parameter AWID=32;
-parameter TAGBIT=14;
-input clk;
-input QuplsPkg::address_t adr;
-input [$clog2(LINES)-1:0] ndx;
-input cache_tag_t [3:0] tag;
-input [LINES-1:0] valid [0:WAYS-1];
-output reg hit;
-output [1:0] rway;
-output reg cv;
+module Qupls_branch_eval(instr, a, b, takb);
+input instruction_t instr;
+input value_t a;
+input value_t b;
+output reg takb;
 
-reg [1:0] prev_rway = 'd0;
-reg [WAYS-1:0] hit1, snoop_hit1;
-reg hit2;
-reg cv2, cv1;
-reg [1:0] rway1;
+value_t fcmpo;
+wire fcmp_nan;
 
-integer k,ks;
-always_comb//ff @(posedge clk)
-begin
-	for (k = 0; k < WAYS; k = k + 1)
-	  hit1[k] = tag[k[1:0]]==adr[$bits(QuplsPkg::address_t)-1:TAGBIT] && 
-	  					valid[k][ndx]==1'b1;
-end
+fpCompare64 ufpcmp1
+(
+	.a(a),
+	.b(b),
+	.o(fcmpo),
+	.inf(),
+	.nan(fcmp_nan),
+	.snan()
+);
 
-integer k1;
 always_comb
-begin
-	cv2 = 1'b0;
-	for (k1 = 0; k1 < WAYS; k1 = k1 + 1)
-	  cv2 = cv2 | valid[k1][ndx]==1'b1;
-end
-
-integer n;
-always_comb
-begin
-	rway1 = prev_rway;
-	for (n = 0; n < WAYS; n = n + 1)	
-		if (hit1[n]) rway1 = n;
-end
-
-always_ff @(posedge clk)
-	prev_rway <= rway1;
-assign rway = rway1;
-
-always_comb//ff @(posedge clk)
-	hit = |hit1;
-
-always_ff @(posedge clk)
-	cv1 <= cv2;
-always_ff @(posedge clk)
-	cv <= cv1;	
+	case(instr.any.opcode)
+	OP_DBRA:	takb = a!='d0;
+	OP_BccU:	// integer unsigned branches
+		case(instr.br.fn)
+		EQ:	takb = a==b;
+		NE:	takb = a!=b;
+		LT:	takb = a < b;
+		LE:	takb = a <= b;
+		GT:	takb = a > b;
+		GE:	takb = a >= b;
+		BC:	takb = ~a[b[5:0]];
+		BS:	takb = a[b[5:0]];
+		BCI: takb = ~a[instr.br.Rb];
+		BSI: takb = a[instr.br.Rb];
+		default:	takb = 1'b0;
+		endcase	
+	OP_Bcc:	// integer signed branches
+		case(instr.br.fn)
+		EQ:	takb = a==b;
+		NE:	takb = a!=b;
+		LT:	takb = $signed(a) < $signed(b);
+		LE:	takb = $signed(a) <= $signed(b);
+		GT:	takb = $signed(a) > $signed(b);
+		GE:	takb = $signed(a) >= $signed(b);
+		BC:	takb = ~a[b[5:0]];
+		BS:	takb = a[b[5:0]];
+		BCI: takb = ~a[instr.br.Rb];
+		BSI: takb = a[instr.br.Rb];
+		default:	takb = 1'b0;
+		endcase	
+	OP_FBccD:
+		case(instr.fbr.fn)
+		FEQ:	takb = fcmpo[0];
+		FNE:	takb = ~fcmpo[0];
+		FLT:	takb = fcmpo[1];
+		FLE:	takb = fcmpo[2];
+		FGT: takb = ~fcmpo[2];
+		FGE: takb = ~fcmpo[1];
+		FULT: takb = fcmpo[1] | fcmp_nan;
+		FULE: takb = fcmpo[2] | fcmp_nan;
+		FUGT: takb = ~fcmpo[2] | fcmp_nan;
+		FUGE: takb = ~fcmpo[1] | fcmp_nan;
+		FORD: takb = ~fcmp_nan;
+		FUN:	takb = fcmp_nan;
+		default:	takb = 1'b0;
+		endcase	
+	default:	takb = 1'b0;
+	endcase
 
 endmodule

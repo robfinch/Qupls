@@ -185,6 +185,7 @@ end
 
 fta_cmd_request128_t sreq;
 fta_cmd_response128_t sresp;
+wire sack;
 wire [127:0] cfg_out;
 wire cs_bar0;
 
@@ -206,7 +207,7 @@ always_ff @(posedge clk)
 always_comb
 	cs_rgn <= cs_bar0 && sreq.cyc && sreq.stb;
 
-vtdl #(.WID(1), .DEP(16)) urdyd1 (.clk(clk_i), .ce(1'b1), .a(4'd1), .d(cs_rgn|cs_config), .q(sack));
+vtdl #(.WID(1), .DEP(16)) urdyd1 (.clk(clk), .ce(1'b1), .a(4'd1), .d(cs_rgn|cs_config), .q(sack));
 
 pci128_config #(
 	.CFG_BUS(CFG_BUS),

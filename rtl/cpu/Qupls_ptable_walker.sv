@@ -142,6 +142,7 @@ reg tlbmiss_v;
 fta_cmd_request128_t sreq;
 fta_cmd_response128_t sresp;
 wire irq_en;
+wire cs_tw;
 wire [127:0] cfg_out;
 
 always_ff @(posedge clk)
@@ -162,7 +163,7 @@ always_ff @(posedge clk)
 always_comb
 	cs_hwtw <= cs_tw && sreq.cyc && sreq.stb;
 
-vtdl #(.WID(1), .DEP(16)) urdyd1 (.clk(clk_i), .ce(1'b1), .a(4'd1), .d(cs_hwtw|cs_config), .q(sack));
+vtdl #(.WID(1), .DEP(16)) urdyd1 (.clk(clk), .ce(1'b1), .a(4'd1), .d(cs_hwtw|cs_config), .q(sack));
 
 pci128_config #(
 	.CFG_BUS(CFG_BUS),

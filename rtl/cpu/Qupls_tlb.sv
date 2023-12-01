@@ -101,12 +101,12 @@ output rob_ndx_t agen1_rndx_o;
 tlb_entry_t entry0;
 tlb_entry_t entry1;
 tlb_entry_t pc_entry;
-tlb_entry_t t0a, t0b, t1a, t1b, t2a, t2b;
+tlb_entry_t t0a, t0b, t1a, t1b, t2a, t2b, entry_oa, entry_ob;
 reg [3:0] head, tail;
 address_t [MISSQ_ENTRIES-1:0] missadr;
 asid_t [MISSQ_ENTRIES-1:0] missasid;
 REGION region0, region1, region2;
-wire [7:0] sel0, sel1;
+wire [7:0] sel0, sel1, sel2;
 operating_mode_t omd0a, omd1a, pc_omda;
 
 integer n;

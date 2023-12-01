@@ -107,18 +107,18 @@ end
 else
 `endif
 begin
-	if (wr && way==2'd0) vtags0[vadr_i[HIBIT:LOBIT]] <= {vadr_i[$bits(Quplspkg::address_t)-1:TAGBIT]};
-	if (wr && way==2'd1) vtags1[vadr_i[HIBIT:LOBIT]] <= {vadr_i[$bits(Quplspkg::address_t)-1:TAGBIT]};
-	if (wr && way==2'd2) vtags2[vadr_i[HIBIT:LOBIT]] <= {vadr_i[$bits(Quplspkg::address_t)-1:TAGBIT]};
-	if (wr && way==2'd3) vtags3[vadr_i[HIBIT:LOBIT]] <= {vadr_i[$bits(Quplspkg::address_t)-1:TAGBIT]};
+	if (wr && way==2'd0) vtags0[vadr_i[HIBIT:LOBIT]] <= {vadr_i[$bits(QuplsPkg::address_t)-1:TAGBIT]};
+	if (wr && way==2'd1) vtags1[vadr_i[HIBIT:LOBIT]] <= {vadr_i[$bits(QuplsPkg::address_t)-1:TAGBIT]};
+	if (wr && way==2'd2) vtags2[vadr_i[HIBIT:LOBIT]] <= {vadr_i[$bits(QuplsPkg::address_t)-1:TAGBIT]};
+	if (wr && way==2'd3) vtags3[vadr_i[HIBIT:LOBIT]] <= {vadr_i[$bits(QuplsPkg::address_t)-1:TAGBIT]};
 end
 
 always_ff @(posedge clk)
 begin
-	if (wr && way==2'd0) ptags0[vadr_i[HIBIT:LOBIT]] <= {padr_i[$bits(Quplspkg::address_t)-1:TAGBIT]};
-	if (wr && way==2'd1) ptags1[vadr_i[HIBIT:LOBIT]] <= {padr_i[$bits(Quplspkg::address_t)-1:TAGBIT]};
-	if (wr && way==2'd2) ptags2[vadr_i[HIBIT:LOBIT]] <= {padr_i[$bits(Quplspkg::address_t)-1:TAGBIT]};
-	if (wr && way==2'd3) ptags3[vadr_i[HIBIT:LOBIT]] <= {padr_i[$bits(Quplspkg::address_t)-1:TAGBIT]};
+	if (wr && way==2'd0) ptags0[vadr_i[HIBIT:LOBIT]] <= {padr_i[$bits(QuplsPkg::address_t)-1:TAGBIT]};
+	if (wr && way==2'd1) ptags1[vadr_i[HIBIT:LOBIT]] <= {padr_i[$bits(QuplsPkg::address_t)-1:TAGBIT]};
+	if (wr && way==2'd2) ptags2[vadr_i[HIBIT:LOBIT]] <= {padr_i[$bits(QuplsPkg::address_t)-1:TAGBIT]};
+	if (wr && way==2'd3) ptags3[vadr_i[HIBIT:LOBIT]] <= {padr_i[$bits(QuplsPkg::address_t)-1:TAGBIT]};
 end
 
 assign tag[0] = vtags0[ndx];

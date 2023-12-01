@@ -36,10 +36,9 @@
 
 import QuplsPkg::*;
 
-module Qupls_btb(rst, clk, rclk, pc0, pc1, pc2, pc3, next_pc, takb,
+module Qupls_btb(rst, clk, rclk, pc0, pc1, pc2, pc3, pc4, next_pc, takb,
 	commit_pc0, commit_brtgt0, commit_takb0, commit_pc1, commit_brtgt1, commit_takb1,
-	commit_pc2, commit_brtgt2, commit_takb2, commit_pc3, commit_brtgt3, commit_takb3,
-	len3
+	commit_pc2, commit_brtgt2, commit_takb2, commit_pc3, commit_brtgt3, commit_takb3
 	);
 input rst;
 input clk;
@@ -48,6 +47,7 @@ input pc_address_t pc0;
 input pc_address_t pc1;
 input pc_address_t pc2;
 input pc_address_t pc3;
+input pc_address_t pc4;
 output pc_address_t next_pc;
 output reg takb;
 input pc_address_t commit_pc0;
@@ -62,7 +62,6 @@ input commit_takb2;
 input pc_address_t commit_pc3;
 input pc_address_t commit_brtgt3;
 input commit_takb3;
-input [4:0] len3;
 
 typedef struct packed {
 	logic takb;
@@ -422,7 +421,7 @@ begin
 		takb <= 1'b1;
 	end
 	else begin
-		next_pc <= pc3 + {len3,12'h0};
+		next_pc <= pc4;
 		next_pc[11:0] <= 'd0;
 		takb <= 1'b0;
 	end

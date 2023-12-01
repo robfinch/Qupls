@@ -36,10 +36,10 @@
 // 352 LUTs / 4096 FFs                                                                          
 // ============================================================================
 
-import Thor2024pkg::*;
-import Thor2024_cache_pkg::*;
+import QuplsPkg::*;
+import Qupls_cache_pkg::*;
 
-module Thor2024_cache_tag(rst, clk, wr, vadr_i, padr_i, way, rclk, ndx, tag,
+module Qupls_cache_tag(rst, clk, wr, vadr_i, padr_i, way, rclk, ndx, tag,
 	sndx, ptag0, ptag1, ptag2, ptag3);
 parameter LINES=64;
 parameter WAYS=4;
@@ -49,8 +49,8 @@ parameter TAGBIT=HIBIT+2;	// +1 more for odd/even lines
 input rst;
 input clk;
 input wr;
-input Thor2024pkg::address_t vadr_i;
-input Thor2024pkg::address_t padr_i;
+input QuplsPkg::address_t vadr_i;
+input QuplsPkg::address_t padr_i;
 input [1:0] way;
 input rclk;
 input [$clog2(LINES)-1:0] ndx;
@@ -98,10 +98,10 @@ if (rst) begin
 end
 else
 begin
-	if (wr && way==2'd0) vtags0[vadr_i[HIBIT:LOBIT]] <= {vadr_i[$bits(Thor2024pkg::address_t)-1:TAGBIT]};
-	if (wr && way==2'd1) vtags1[vadr_i[HIBIT:LOBIT]] <= {vadr_i[$bits(Thor2024pkg::address_t)-1:TAGBIT]};
-	if (wr && way==2'd2) vtags2[vadr_i[HIBIT:LOBIT]] <= {vadr_i[$bits(Thor2024pkg::address_t)-1:TAGBIT]};
-	if (wr && way==2'd3) vtags3[vadr_i[HIBIT:LOBIT]] <= {vadr_i[$bits(Thor2024pkg::address_t)-1:TAGBIT]};
+	if (wr && way==2'd0) vtags0[vadr_i[HIBIT:LOBIT]] <= {vadr_i[$bits(QuplsPkg::address_t)-1:TAGBIT]};
+	if (wr && way==2'd1) vtags1[vadr_i[HIBIT:LOBIT]] <= {vadr_i[$bits(QuplsPkg::address_t)-1:TAGBIT]};
+	if (wr && way==2'd2) vtags2[vadr_i[HIBIT:LOBIT]] <= {vadr_i[$bits(QuplsPkg::address_t)-1:TAGBIT]};
+	if (wr && way==2'd3) vtags3[vadr_i[HIBIT:LOBIT]] <= {vadr_i[$bits(QuplsPkg::address_t)-1:TAGBIT]};
 end
 
 always_ff @(posedge clk)
@@ -113,10 +113,10 @@ if (rst) begin
 end
 else
 begin
-	if (wr && way==2'd0) ptags0[vadr_i[HIBIT:LOBIT]] <= {padr_i[$bits(Thor2024pkg::address_t)-1:TAGBIT]};
-	if (wr && way==2'd1) ptags1[vadr_i[HIBIT:LOBIT]] <= {padr_i[$bits(Thor2024pkg::address_t)-1:TAGBIT]};
-	if (wr && way==2'd2) ptags2[vadr_i[HIBIT:LOBIT]] <= {padr_i[$bits(Thor2024pkg::address_t)-1:TAGBIT]};
-	if (wr && way==2'd3) ptags3[vadr_i[HIBIT:LOBIT]] <= {padr_i[$bits(Thor2024pkg::address_t)-1:TAGBIT]};
+	if (wr && way==2'd0) ptags0[vadr_i[HIBIT:LOBIT]] <= {padr_i[$bits(QuplsPkg::address_t)-1:TAGBIT]};
+	if (wr && way==2'd1) ptags1[vadr_i[HIBIT:LOBIT]] <= {padr_i[$bits(QuplsPkg::address_t)-1:TAGBIT]};
+	if (wr && way==2'd2) ptags2[vadr_i[HIBIT:LOBIT]] <= {padr_i[$bits(QuplsPkg::address_t)-1:TAGBIT]};
+	if (wr && way==2'd3) ptags3[vadr_i[HIBIT:LOBIT]] <= {padr_i[$bits(QuplsPkg::address_t)-1:TAGBIT]};
 end
 
 assign tag[0] = vtags0[ndx];

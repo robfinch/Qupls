@@ -117,6 +117,7 @@ endfunction
 reg issued_alu0, issued_alu1, issued_fpu0, issued_fpu1, issued_fcu, no_issue;
 reg issued_agen0, issued_agen1;
 reg issued_mem0, issued_mem1;
+reg issued_lsq0, issued_lsq1;
 integer hd, synchd, shd, slot;
 
 always_comb
@@ -130,6 +131,8 @@ begin
 	issued_agen1 = 'd0;
 	issued_mem0 = 'd0;
 	issued_mem1 = 'd0;
+	issued_lsq0 = 'd0;
+	issued_lsq1 = 'd0;
 	no_issue = 'd0;
 	robentry_issue = 'd0;
 	robentry_fpu_issue = 'd0;

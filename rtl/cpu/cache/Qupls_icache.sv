@@ -248,9 +248,9 @@ begin
 	vcne = NVICTIM;
 	vcno = NVICTIM;
 	for (n = 0; n < NVICTIM; n = n + 1) begin
-		if (victim_cache[n].vtag[$bits(Quplspkg::address_t)-1:LOBIT-1]=={ip[$bits(Quplspkg::address_t)-1:LOBIT]+ip[LOBIT-1],1'b0} && victim_cache[n].v==4'hF)
+		if (victim_cache[n].vtag[$bits(QuplsPkg::address_t)-1:LOBIT-1]=={ip[$bits(QuplsPkg::address_t)-1:LOBIT]+ip[LOBIT-1],1'b0} && victim_cache[n].v==4'hF)
 			vcne = n;
-		if (victim_cache[n].vtag[$bits(Quplspkg::address_t)-1:LOBIT-1]=={ip[$bits(Quplspkg::address_t)-1:LOBIT],1'b1} && victim_cache[n].v==4'hF)
+		if (victim_cache[n].vtag[$bits(QuplsPkg::address_t)-1:LOBIT-1]=={ip[$bits(QuplsPkg::address_t)-1:LOBIT],1'b1} && victim_cache[n].v==4'hF)
 			vcno = n;
 	end
 end
@@ -278,7 +278,7 @@ always_comb
 			else begin
 				ic_line_hi_o = 'd0;
 				ic_line_hi_o.v = {4{ihit2o}};
-				ic_line_hi_o.vtag = {ip2[$bits(Quplspkg::address_t)-1:LOBIT],1'b1,{LOBIT-1{1'b0}}};
+				ic_line_hi_o.vtag = {ip2[$bits(QuplsPkg::address_t)-1:LOBIT],1'b1,{LOBIT-1{1'b0}}};
 				ic_line_hi_o.data = ic_oline.data;
 			end
 			if (vce) begin
@@ -288,7 +288,7 @@ always_comb
 			else begin
 				ic_line_lo_o = 'd0;
 				ic_line_lo_o.v = {4{ihit2e}};
-				ic_line_lo_o.vtag = {ip2[$bits(Quplspkg::address_t)-1:LOBIT],{LOBIT{1'b0}}};
+				ic_line_lo_o.vtag = {ip2[$bits(QuplsPkg::address_t)-1:LOBIT],{LOBIT{1'b0}}};
 				ic_line_lo_o.data = ic_eline.data;
 			end
 		end
@@ -301,7 +301,7 @@ always_comb
 			else begin
 				ic_line_hi_o = 'd0;
 				ic_line_hi_o.v = {4{ihit2e}};
-				ic_line_hi_o.vtag = {ip2[$bits(Quplspkg::address_t)-1:LOBIT]+1'b1,{LOBIT{1'b0}}};
+				ic_line_hi_o.vtag = {ip2[$bits(QuplsPkg::address_t)-1:LOBIT]+1'b1,{LOBIT{1'b0}}};
 				ic_line_hi_o.data = ic_eline.data;
 			end
 			if (vco) begin
@@ -311,7 +311,7 @@ always_comb
 			else begin
 				ic_line_lo_o = 'd0;
 				ic_line_lo_o.v = {4{ihit2o}};
-				ic_line_lo_o.vtag = {ip2[$bits(Quplspkg::address_t)-1:LOBIT],1'b1,{LOBIT-1{1'b0}}};
+				ic_line_lo_o.vtag = {ip2[$bits(QuplsPkg::address_t)-1:LOBIT],1'b1,{LOBIT-1{1'b0}}};
 				ic_line_lo_o.data = ic_oline.data;
 			end
 		end
@@ -452,26 +452,26 @@ else begin
 	// in size. So, there is no need to compare every physical address, just every
 	// address in a set will do.
 	if (snoop_v && snoop_cid != CID) begin
-		if (snoop_adr[$bits(Quplspkg::address_t)-1:TAGBIT]==ptags0e)
+		if (snoop_adr[$bits(QuplsPkg::address_t)-1:TAGBIT]==ptags0e)
 			valide[0][snoop_adr[HIBIT:LOBIT]] <= 1'b0;
-		if (snoop_adr[$bits(Quplspkg::address_t)-1:TAGBIT]==ptags1e)
+		if (snoop_adr[$bits(QuplsPkg::address_t)-1:TAGBIT]==ptags1e)
 			valide[1][snoop_adr[HIBIT:LOBIT]] <= 1'b0;
-		if (snoop_adr[$bits(Quplspkg::address_t)-1:TAGBIT]==ptags2e)
+		if (snoop_adr[$bits(QuplsPkg::address_t)-1:TAGBIT]==ptags2e)
 			valide[2][snoop_adr[HIBIT:LOBIT]] <= 1'b0;
-		if (snoop_adr[$bits(Quplspkg::address_t)-1:TAGBIT]==ptags3e)
+		if (snoop_adr[$bits(QuplsPkg::address_t)-1:TAGBIT]==ptags3e)
 			valide[3][snoop_adr[HIBIT:LOBIT]] <= 1'b0;
 
-		if (snoop_adr[$bits(Quplspkg::address_t)-1:TAGBIT]==ptags0o)
+		if (snoop_adr[$bits(QuplsPkg::address_t)-1:TAGBIT]==ptags0o)
 			valido[0][snoop_adr[HIBIT:LOBIT]] <= 1'b0;
-		if (snoop_adr[$bits(Quplspkg::address_t)-1:TAGBIT]==ptags1o)
+		if (snoop_adr[$bits(QuplsPkg::address_t)-1:TAGBIT]==ptags1o)
 			valido[1][snoop_adr[HIBIT:LOBIT]] <= 1'b0;
-		if (snoop_adr[$bits(Quplspkg::address_t)-1:TAGBIT]==ptags2o)
+		if (snoop_adr[$bits(QuplsPkg::address_t)-1:TAGBIT]==ptags2o)
 			valido[2][snoop_adr[HIBIT:LOBIT]] <= 1'b0;
-		if (snoop_adr[$bits(Quplspkg::address_t)-1:TAGBIT]==ptags3o)
+		if (snoop_adr[$bits(QuplsPkg::address_t)-1:TAGBIT]==ptags3o)
 			valido[3][snoop_adr[HIBIT:LOBIT]] <= 1'b0;
 	// Invalidate victim cache entries matching the snoop address
 		for (g = 0; g < NVICTIM; g = g + 1) begin
-			if (snoop_adr[$bits(Quplspkg::address_t)-1:LOBIT]==victim_cache[g].ptag[$bits(Quplspkg::address_t)-1:LOBIT])
+			if (snoop_adr[$bits(QuplsPkg::address_t)-1:LOBIT]==victim_cache[g].ptag[$bits(QuplsPkg::address_t)-1:LOBIT])
 				victim_cache[g].v <= 4'h0;
 		end
 	end
@@ -489,9 +489,9 @@ always_comb
 
 always_comb
 	if (!ihit1e)
-		miss_adr = {ip[$bits(Quplspkg::address_t)-1:LOBIT]+iel,1'b0,{LOBIT-1{1'b0}}};
+		miss_adr = {ip[$bits(QuplsPkg::address_t)-1:LOBIT]+iel,1'b0,{LOBIT-1{1'b0}}};
 	else if (!ihit1o)
-		miss_adr = {ip[$bits(Quplspkg::address_t)-1:LOBIT],1'b1,{LOBIT-1{1'b0}}};
+		miss_adr = {ip[$bits(QuplsPkg::address_t)-1:LOBIT],1'b1,{LOBIT-1{1'b0}}};
 	else
 		miss_adr = 32'hFFFD0000;
 

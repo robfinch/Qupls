@@ -63,13 +63,13 @@ input [WID-1:0] i1;
 input [WID-1:0] i2;
 input [WID-1:0] i3;
 input rclk;
-input [RBIT:0] ra [0:RPORTS-1];
-output reg [WID-1:0] o [0:RPORTS-1];
+input pregno_t [RPORTS-1:0] ra;
+output value_t [RPORTS-1:0] o;
 
-wire [WID-1:0] o0 [0:RPORTS-1];
-wire [WID-1:0] o1 [0:RPORTS-1];
-wire [WID-1:0] o2 [0:RPORTS-1];
-wire [WID-1:0] o3 [0:RPORTS-1];
+value_t [RPORTS-1:0] o0;
+value_t [RPORTS-1:0] o1;
+value_t [RPORTS-1:0] o2;
+value_t [RPORTS-1:0] o3;
 
 genvar g;
 

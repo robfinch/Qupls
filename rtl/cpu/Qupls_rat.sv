@@ -106,8 +106,8 @@ input pregno_t cmtcp;
 input pregno_t cmtdp;
 input cmtbr;								// comitting a branch
 input [BBIT:0] rnbank [NPORT-1:0];
-input aregno_t rn [NPORT-1:0];		// architectural register
-output pregno_t rrn [NPORT-1:0];	// physical register
+input aregno_t [NPORT-1:0] rn;		// architectural register
+output pregno_t [NPORT-1:0] rrn;	// physical register
 output reg [NPORT-1:0] vn;			// translation is valid for register
 output pregno_t freea;	// previous register to free
 output pregno_t freeb;

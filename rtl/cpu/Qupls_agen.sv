@@ -44,7 +44,7 @@ input value_t b;
 input value_t i;
 output value_t res;
 
-reg value_t bs;
+value_t bs;
 
 always_comb
 	bs = b << ir.lsn.sc;
