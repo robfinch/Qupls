@@ -41,19 +41,6 @@ import QuplsPkg::*;
 
 `define ZERO		64'd0
 
-// JALR and EXTENDED are synonyms
-`define EXTEND	3'd7
-
-// system-call subclasses:
-`define SYS_NONE	3'd0
-`define SYS_CALL	3'd1
-`define SYS_MFSR	3'd2
-`define SYS_MTSR	3'd3
-`define SYS_RFU1	3'd4
-`define SYS_RFU2	3'd5
-`define SYS_RFU3	3'd6
-`define SYS_EXC		3'd7	// doesn't need to be last, but what the heck
-
 //
 // define PANIC types
 //
@@ -1084,11 +1071,13 @@ wire cmtbr = (
 	(rob[head3].br & rob_v[head3])) && do_commit
 	;
 	
+wire restore_chkpt = branchmiss;
+
 Qupls_reg_renamer utrn1
 (
 	.rst(rst),
 	.clk(clk),
-	.list2free(),
+	.list2free(free_bitlist),
 	.tags2free(tags2free),
 	.freevals(4'hF),
 	.alloc0(|db0.Rt),
@@ -1108,9 +1097,9 @@ Qupls_rat urat1
 	.clk(clk),
 	.nq(nq),
 	.stallq(stallq),
-	.cndx(cndx),
+	.cndx_o(cndx),
 	.avail(),
-	.flush(branchmiss),
+	.restore(restore_chkpt),
 	.miss_cp(),
 	.wr0(|db0r.Rt),
 	.wr1(|db1r.Rt),
@@ -1353,13 +1342,13 @@ wire lsq0_rndxv, lsq1_rndxv;
 
 Qupls_sched uscd1
 (
-	.alu0_idle(),
-	.alu1_idle(),
-	.fpu0_idle(),
-	.fpu1_idle(),
-	.fcu_idle(),
-	.agen0_idle(),
-	.agen1_idle(),
+	.alu0_idle(alu0_idle),
+	.alu1_idle(alu1_idle),
+	.fpu0_idle(fpu0_idle),
+	.fpu1_idle(1'b0),
+	.fcu_idle(fcu_idle),
+	.agen0_idle(agen0_idle),
+	.agen1_idle(agen1_idle),
 	.robentry_islot(),
 	.could_issue(could_issue), 
 	.head(head),
@@ -1408,6 +1397,17 @@ Qupls_mem_sched umems1
 assign alu0_argA_reg = rob[alu0_rndx].decbus.Ra;
 assign alu0_argB_reg = rob[alu0_rndx].decbus.Rb;
 assign alu0_argC_reg = rob[alu0_rndx].decbus.Rc;
+
+assign alu1_argA_reg = rob[alu1_rndx].decbus.Ra;
+assign alu1_argB_reg = rob[alu1_rndx].decbus.Rb;
+assign alu1_argC_reg = rob[alu1_rndx].decbus.Rc;
+
+assign fpu0_argA_reg = rob[fpu0_rndx].decbus.Ra;
+assign fpu0_argB_reg = rob[fpu0_rndx].decbus.Rb;
+assign fpu0_argC_reg = rob[fpu0_rndx].decbus.Rc;
+
+assign fcu_argA_reg = rob[fcu_rndx].decbus.Ra;
+assign fcu_argB_reg = rob[fcu_rndx].decbus.Rb;
 
 assign agen0_argA_reg = rob[agen0_rndx].decbus.Ra;
 assign agen0_argB_reg = rob[agen0_rndx].decbus.Rb;
@@ -2300,10 +2300,10 @@ else begin
 			rob_v[tail3] <= VAL;
 			for (n12 = 0; n12 < ROB_ENTRIES; n12 = n12 + 1)
 				rob[n12].sn <= rob[n12].sn - 4;
-			tEnque(16'hFFFC,db0r,pc0r,ins0r,pt0,tail0, 1'b0, prn[0], prn[1], prn[2], prn[3], nRt0, avail_reg & ~(192'd1 << nRt0), cndx);
-			tEnque(16'hFFFD,db1r,pc1r,ins1r,pt1,tail1, pt0, prn[4], prn[5], prn[6], prn[7], nRt1, avail_reg & ~((192'd1 << nRt0) | (192'd1 << nRt1)), cndx);
-			tEnque(16'hFFFE,db2r,pc2r,ins2r,pt2,tail2, pt0|pt1, prn[8], prn[9], prn[10], prn[11], nRt2, avail_reg & ~((192'd1 << nRt0) | (192'd1 << nRt1) | (192'd1 << nRt2)), cndx);
-			tEnque(16'hFFFF,db3r,pc3r,ins3r,pt3,tail3, pt0|pt1|pt2, prn[12], prn[13], prn[14], prn[15], nRt3, avail_reg & ~((192'd1 << nRt0) | (192'd1 << nRt1) | (192'd1 << nRt2)| (192'd1 << nRt3)), cndx);
+			tEnque(8'hFC,db0r,pc0r,ins0r,pt0,tail0, 1'b0, prn[0], prn[1], prn[2], prn[3], nRt0, avail_reg & ~(192'd1 << nRt0), cndx);
+			tEnque(8'hFD,db1r,pc1r,ins1r,pt1,tail1, pt0, prn[4], prn[5], prn[6], prn[7], nRt1, avail_reg & ~((192'd1 << nRt0) | (192'd1 << nRt1)), cndx);
+			tEnque(8'hFE,db2r,pc2r,ins2r,pt2,tail2, pt0|pt1, prn[8], prn[9], prn[10], prn[11], nRt2, avail_reg & ~((192'd1 << nRt0) | (192'd1 << nRt1) | (192'd1 << nRt2)), cndx);
+			tEnque(8'hFF,db3r,pc3r,ins3r,pt3,tail3, pt0|pt1|pt2, prn[12], prn[13], prn[14], prn[15], nRt3, avail_reg & ~((192'd1 << nRt0) | (192'd1 << nRt1) | (192'd1 << nRt2)| (192'd1 << nRt3)), cndx);
 			tail0 <= (tail0 + 3'd4) % ROB_ENTRIES;
 		end
 	end
@@ -2319,11 +2319,12 @@ else begin
 		lsq[lsq_tail0].store <= rob[lsq0_rndx].decbus.store;
 		store_argC_reg <= rob[lsq0_rndx].decbus.pRc;
 		store_tail <= lsq_tail0;
+		lsq[lsq_tail0].Rc <= rob[lsq0_rndx].decbus.pRc;
 		lsq[lsq_tail0].Rt <= rob[lsq0_rndx].decbus.pRt;
 		lsq[lsq_tail0].memsz <= fnMemsz(rob[lsq0_rndx].op);
 		for (n12 = 0; n12 < LSQ_ENTRIES; n12 = n12 + 1)
 			lsq[n12].sn <= lsq[n12].sn - 1;
-		lsq[lsq_tail].sn <= 16'hFFFF;
+		lsq[lsq_tail].sn <= 8'hFF;
 		lsq_tail <= (lsq_tail + 2'd1) % LSQ_ENTRIES;
 		rob[lsq0_rndx].lsq <= 1'b1;
 		rob[lsq0_rndx].lsqndx <= lsq_tail0;
@@ -2335,12 +2336,13 @@ else begin
 			lsq[lsq_tail1].load <= rob[lsq1_rndx].decbus.load;
 			lsq[lsq_tail1].loadz <= rob[lsq1_rndx].decbus.loadz;
 			lsq[lsq_tail1].store <= rob[lsq1_rndx].decbus.store;
+			lsq[lsq_tail1].Rc <= rob[lsq1_rndx].decbus.pRc;
 			lsq[lsq_tail1].Rt <= rob[lsq1_rndx].decbus.pRt;
 			lsq[lsq_tail1].memsz <= fnMemsz(rob[lsq1_rndx].op);
 			for (n12 = 0; n12 < LSQ_ENTRIES; n12 = n12 + 1)
 				lsq[n12].sn <= lsq[n12].sn - 2;
-			lsq[lsq_tail0].sn <= 16'hFFFE;
-			lsq[lsq_tail1].sn <= 16'hFFFF;
+			lsq[lsq_tail0].sn <= 8'hFE;
+			lsq[lsq_tail1].sn <= 8'hFF;
 			lsq_tail <= (lsq_tail + 2'd2) % LSQ_ENTRIES;
 			rob[lsq1_rndx].lsq <= 1'b1;
 			rob[lsq1_rndx].lsqndx <= lsq_tail1;

@@ -39,15 +39,15 @@
 // ToDo: add a valid bit
 // Research shows having 16 checkpoints is almost as good as infinity.
 //
-// 4500 LUTs / 42 FFs for 64/192
-// 9100 LUTs / 42 FFs for 2*64/192 (two banks of 64 arch. regs).
-// 12100 LUTs / 42 FFs for 4*64/192 (four banks of 64 arch. regs).
-// 17000 LUTs / 42 FFs for 8*64/192 (eight banks of 64 arch. regs).
+// 4750 LUTs / 560 FFs for 64/192
+// 10010 LUTs / 860 FFs for 2*64/192 (two banks of 64 arch. regs).
+// 13000 LUTs / 1100 FFs for 4*64/192 (four banks of 64 arch. regs).
+// 18500 LUTs / 1410 FFs for 8*64/192 (eight banks of 64 arch. regs).
 // ============================================================================
 //
 import QuplsPkg::*;
 
-module Qupls_rat(rst, clk, nq, stallq, cndx, avail, flush, miss_cp, wr0, wr1, wr2, wr3,
+module Qupls_rat(rst, clk, nq, stallq, cndx_o, avail, restore, miss_cp, wr0, wr1, wr2, wr3,
 	qbr0, qbr1, qbr2, qbr3,
 	rn,
 	rrn,
@@ -68,9 +68,9 @@ input qbr0;		// enqueue branch, slot 0
 input qbr1;
 input qbr2;
 input qbr3;
-output reg [3:0] cndx;		// current checkpoint index
+output [3:0] cndx_o;			// current checkpoint index
 input [PREGS-1:0] avail;	// list of available registers at checkpoint comes from ROB
-input flush;							// pipeline flush
+input restore;						// checkpoint restore
 input [3:0] miss_cp;			// checkpoint map index of branch miss
 input wr0;
 input wr1;
@@ -119,7 +119,11 @@ output reg [PREGS-1:0] free_bitlist;	// bit vector of registers to free on branc
 integer n,m,n1,n2;
 reg [AREGS*BANKS-1:0] cpram_we;
 wire [AREGS*BANKS*RBIT-1:0] cpram_out;
+reg [AREGS*BANKS*RBIT-1:0] cpram_outr;
 reg [AREGS*BANKS*RBIT-1:0] cpram_in;
+reg new_chkpt;							// new_chkpt map for current checkpoint
+reg [3:0] cndx;
+assign cndx_o = cndx;
 
 Qupls_checkpointRam #(.BANKS(BANKS)) cpram1
 (
@@ -217,13 +221,18 @@ else
 // Increment checkpoint on a branch queue
 
 always_ff @(posedge clk)
-if (rst)
+if (rst) begin
 	cndx <= 'd0;
+	new_chkpt <= 'd0;
+end
 else begin
-	if (flush)
+	new_chkpt <= 'd0;
+	if (restore)
 		cndx <= miss_cp;
-	else if (qbr_ok)
+	else if (qbr_ok) begin
 		cndx <= cndx + 1;
+		new_chkpt <= 1'b1;
+	end
 end
 
 // Stall the enqueue of instructions if there are too many outstanding branches.
@@ -232,6 +241,9 @@ if (rst)
 	stallq <= 'd0;
 else
 	stallq <= qbr && nob==6'd15;
+
+always_ff @(posedge clk)
+	cpram_outr <= cpram_out;
 
 // Committing and queuing target register cannot be the same.
 always_comb
@@ -245,6 +257,8 @@ begin
 	cpram_in = cpram_in | (({RBIT{nq & wr1}} & wrrb) << {(wrb * RBIT),wrbankb});
 	cpram_in = cpram_in | (({RBIT{nq & wr2}} & wrrc) << {(wrc * RBIT),wrbankc});
 	cpram_in = cpram_in | (({RBIT{nq & wr3}} & wrrd) << {(wrd * RBIT),wrbankd});
+	if (new_chkpt)
+		cpram_in = cpram_outr;
 end
 
 // Add registers to the checkpoint map.
@@ -261,6 +275,8 @@ begin
 	cpram_we = cpram_we | ({nq & wr2} << {wrc,wrbankc});
 	cpram_we = cpram_we | ({nq & wr3} << {wrd,wrbankd});
 
+	if (new_chkpt)
+		cpram_we = ~'d0;
 end
 
 // Add registers allocated since the branch miss instruction to the list of
@@ -268,7 +284,7 @@ end
 always_comb
 begin
 	// But not the registers allocated up to the branch miss
-	if (flush)
+	if (restore)
 		free_bitlist = avail;
 	else
 		free_bitlist = 'd0;
