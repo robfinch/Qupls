@@ -135,8 +135,6 @@ reg cs_config, cs_hwtw;
 
 reg way;
 SHPTE pte;
-reg [31:0] tlbmiss_adr;
-asid_t tlbmiss_asid;
 reg tlbmiss_v;
 
 fta_cmd_request128_t sreq;
@@ -245,7 +243,7 @@ begin
 	in_que = 1'b0;
 	for (n1 = 0; n1 < MISSQ_SIZE; n1 = n1 + 1) begin
 		if (miss_queue[n1].v) begin
-			if (tlbmiss_asid==miss_queue[n1].asid && tlbmiss_adr==miss_queue[n1].adr)
+			if (tlb_missasid==miss_queue[n1].asid && tlb_missadr==miss_queue[n1].adr)
 				in_que = 1'b1;
 		end
 	end
@@ -313,12 +311,12 @@ else begin
 			miss_queue[empty_qe].o <= 1'b0;
 			miss_queue[empty_qe].bc <= 1'b1;
 			miss_queue[empty_qe].lvl <= ptbr.level;
-			miss_queue[empty_qe].asid <= tlbmiss_asid;
-			miss_queue[empty_qe].adr <= tlbmiss_adr;
+			miss_queue[empty_qe].asid <= tlb_missasid;
+			miss_queue[empty_qe].adr <= tlb_missadr;
 			
 			case(ptbr.level)
-			3'd0:	miss_queue[empty_qe].tadr <= {ptbr.adr,3'd0} + {tlbmiss_adr[28:16],3'h0};
-			3'd1:	miss_queue[empty_qe].tadr <= {ptbr.adr,3'd0} + {tlbmiss_adr[31:29],3'h0};
+			3'd0:	miss_queue[empty_qe].tadr <= {ptbr.adr,3'd0} + {tlb_missadr[28:16],3'h0};
+			3'd1:	miss_queue[empty_qe].tadr <= {ptbr.adr,3'd0} + {tlb_missadr[31:29],3'h0};
 			default:	miss_queue[empty_qe].tadr <= 'd0;
 			endcase
 		end

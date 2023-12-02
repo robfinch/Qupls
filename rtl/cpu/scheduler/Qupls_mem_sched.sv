@@ -47,8 +47,8 @@ input rob_bitmask_t robentry_stomp;
 input rob_entry_t [ROB_ENTRIES-1:0] rob;
 input lsq_entry_t [15:0] lsq;
 output rob_bitmask_t robentry_memissue;
-output rob_ndx_t ndx0;
-output rob_ndx_t ndx1;
+output lsq_ndx_t ndx0;
+output lsq_ndx_t ndx1;
 output reg ndx0v;
 output reg ndx1v;
 

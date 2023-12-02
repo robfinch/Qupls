@@ -38,7 +38,7 @@ import QuplsPkg::*;
 
 module Qupls_sched(alu0_idle, alu1_idle, fpu0_idle ,fpu1_idle, fcu_idle,
 	agen0_idle, agen1_idle, lsq0_idle, lsq1_idle,
-	robentry_islot, could_issue, 
+	robentry_islot_i, robentry_islot_o, could_issue, 
 	head, rob, robentry_issue, robentry_fpu_issue, robentry_fcu_issue,
 	robentry_agen_issue, mem_issue, robentry_lsq_issue,
 	alu0_rndx, alu1_rndx, alu0_rndxv, alu1_rndxv,
@@ -56,7 +56,8 @@ input agen0_idle;
 input agen1_idle;
 input lsq0_idle;
 input lsq1_idle;
-output reg [1:0] robentry_islot [0:ROB_ENTRIES-1];
+input [1:0] robentry_islot_i [0:ROB_ENTRIES-1];
+output reg [1:0] robentry_islot_o [0:ROB_ENTRIES-1];
 input rob_bitmask_t could_issue;
 input rob_ndx_t head;
 input rob_entry_t [ROB_ENTRIES-1:0] rob;
@@ -89,7 +90,7 @@ output reg lsq1_rndxv;
 output reg mem0_rndxv;
 output reg mem1_rndxv;
 
-integer m,n;
+integer m,n,h;
 rob_ndx_t [WINDOW_SIZE-1:0] heads;
 
 always_comb
@@ -153,8 +154,13 @@ begin
 	fcu_rndxv = 'd0;
 	agen0_rndxv = 'd0;
 	agen1_rndxv = 'd0;
+	lsq0_rndx = 'd0;
+	lsq0_rndxv = 'd0;
+	lsq1_rndx = 'd0;
+	lsq1_rndxv = 'd0;
+	for (h = 0; h < ROB_ENTRIES; h = h + 1)
+		robentry_islot_o[h] = robentry_islot_i[h];
 	for (hd = 0; hd < WINDOW_SIZE; hd = hd + 1) begin
-		robentry_islot[heads[hd]] = 2'b00;
 		// Search for a preceding sync instruction. If there is one then do
 		// not issue.
 		for (shd = 0; shd < ROB_ENTRIES; shd = shd + 1) begin
@@ -165,7 +171,7 @@ begin
 			if (could_issue[heads[hd]]) begin
 				if (!issued_alu0 && alu0_idle && rob[heads[hd]].decbus.alu) begin
 			  	robentry_issue[heads[hd]] = 1'b1;
-			  	robentry_islot[heads[hd]] = 2'b00;
+			  	robentry_islot_o[heads[hd]] = 2'b00;
 			  	issued_alu0 = 1'b1;
 			  	alu0_rndx = heads[hd];
 			  	alu0_rndxv = 1'b1;
@@ -173,7 +179,7 @@ begin
 				if (NALU > 1) begin
 					if (!issued_alu1 && alu1_idle && rob[heads[hd]].decbus.alu && !rob[heads[hd]].decbus.alu0) begin
 				  	robentry_issue[heads[hd]] = 1'b1;
-				  	robentry_islot[heads[hd]] = 2'b01;
+				  	robentry_islot_o[heads[hd]] = 2'b01;
 				  	issued_alu1 = 1'b1;
 				  	alu1_rndx = heads[hd];
 				  	alu1_rndxv = 1'b1;
@@ -182,7 +188,7 @@ begin
 				if (NFPU > 0) begin
 					if (!issued_fpu0 && fpu0_idle && rob[heads[hd]].decbus.fpu) begin
 				  	robentry_fpu_issue[heads[hd]] = 1'b1;
-				  	robentry_islot[heads[hd]] = 2'b00;
+				  	robentry_islot_o[heads[hd]] = 2'b00;
 				  	issued_fpu0 = 1'b1;
 				  	fpu0_rndx = heads[hd];
 				  	fpu0_rndxv = 1'b1;
@@ -191,7 +197,7 @@ begin
 				if (NFPU > 1) begin
 					if (!issued_fpu1 && fpu1_idle && rob[heads[hd]].decbus.fpu && !rob[heads[hd]].decbus.fpu0) begin
 				  	robentry_fpu_issue[heads[hd]] = 1'b1;
-				  	robentry_islot[heads[hd]] = 2'b01;
+				  	robentry_islot_o[heads[hd]] = 2'b01;
 				  	issued_fpu1 = 1'b1;
 				  	fpu1_rndx = heads[hd];
 				  	fpu1_rndxv = 1'b1;
@@ -199,7 +205,7 @@ begin
 				end
 				if (!issued_fcu && fcu_idle && rob[heads[hd]].decbus.fc) begin
 			  	robentry_fcu_issue[heads[hd]] = 1'b1;
-			  	robentry_islot[heads[hd]] = 2'b00;
+			  	robentry_islot_o[heads[hd]] = 2'b00;
 			  	issued_fcu = 1'b1;
 			  	fcu_rndx = heads[hd];
 			  	fcu_rndxv = 1'b1;
@@ -224,7 +230,7 @@ begin
 				*/
 				if (!issued_lsq0 && lsq0_idle && (rob[heads[hd]].decbus.load | rob[heads[hd]].decbus.store) && !rob[heads[hd]].lsq) begin
 					robentry_lsq_issue[heads[hd]] = 1'b1;
-			  	robentry_islot[heads[hd]] = 2'b00;
+			  	robentry_islot_o[heads[hd]] = 2'b00;
 					issued_lsq0 = 1'b1;
 					lsq0_rndx = heads[hd];
 					lsq0_rndxv = 1'b1;
@@ -232,7 +238,7 @@ begin
 				if (NLSQ_PORTS > 1) begin
 					if (!issued_lsq1 && lsq1_idle && (rob[heads[hd]].decbus.load | rob[heads[hd]].decbus.store) && !rob[heads[hd]].lsq) begin
 						robentry_lsq_issue[heads[hd]] = 1'b1;
-				  	robentry_islot[heads[hd]] = 2'b01;
+				  	robentry_islot_o[heads[hd]] = 2'b01;
 						issued_lsq1 = 1'b1;
 						lsq1_rndx = heads[hd];
 						lsq1_rndxv = 1'b1;
