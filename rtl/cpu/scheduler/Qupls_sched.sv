@@ -40,11 +40,10 @@ module Qupls_sched(alu0_idle, alu1_idle, fpu0_idle ,fpu1_idle, fcu_idle,
 	agen0_idle, agen1_idle, lsq0_idle, lsq1_idle,
 	robentry_islot_i, robentry_islot_o, could_issue, 
 	head, rob, robentry_issue, robentry_fpu_issue, robentry_fcu_issue,
-	robentry_agen_issue, mem_issue, robentry_lsq_issue,
+	robentry_agen_issue, mem_issue,
 	alu0_rndx, alu1_rndx, alu0_rndxv, alu1_rndxv,
 	fpu0_rndx, fpu0_rndxv, fpu1_rndx, fpu1_rndxv, fcu_rndx, fcu_rndxv,
 	agen0_rndx, agen1_rndx, agen0_rndxv, agen1_rndxv,
-	lsq0_rndx, lsq1_rndx, lsq0_rndxv, lsq1_rndxv,
 	mem0_rndx, mem1_rndx, mem0_rndxv, mem1_rndxv);
 parameter WINDOW_SIZE = 16;
 input alu0_idle;
@@ -66,7 +65,6 @@ output rob_bitmask_t robentry_fpu_issue;
 output rob_bitmask_t robentry_fcu_issue;
 output rob_bitmask_t robentry_agen_issue;
 output rob_bitmask_t mem_issue;
-output rob_bitmask_t robentry_lsq_issue;
 output rob_ndx_t alu0_rndx;
 output rob_ndx_t alu1_rndx;
 output rob_ndx_t fpu0_rndx;
@@ -74,8 +72,6 @@ output rob_ndx_t fpu1_rndx;
 output rob_ndx_t fcu_rndx;
 output rob_ndx_t agen0_rndx;
 output rob_ndx_t agen1_rndx;
-output rob_ndx_t lsq0_rndx;
-output rob_ndx_t lsq1_rndx;
 output rob_ndx_t mem0_rndx;
 output rob_ndx_t mem1_rndx;
 output reg alu0_rndxv;
@@ -85,8 +81,6 @@ output reg fpu1_rndxv;
 output reg fcu_rndxv;
 output reg agen0_rndxv;
 output reg agen1_rndxv;
-output reg lsq0_rndxv;
-output reg lsq1_rndxv;
 output reg mem0_rndxv;
 output reg mem1_rndxv;
 
@@ -132,8 +126,6 @@ begin
 	issued_agen1 = 'd0;
 	issued_mem0 = 'd0;
 	issued_mem1 = 'd0;
-	issued_lsq0 = 'd0;
-	issued_lsq1 = 'd0;
 	no_issue = 'd0;
 	robentry_issue = 'd0;
 	robentry_fpu_issue = 'd0;
@@ -154,10 +146,6 @@ begin
 	fcu_rndxv = 'd0;
 	agen0_rndxv = 'd0;
 	agen1_rndxv = 'd0;
-	lsq0_rndx = 'd0;
-	lsq0_rndxv = 'd0;
-	lsq1_rndx = 'd0;
-	lsq1_rndxv = 'd0;
 	for (h = 0; h < ROB_ENTRIES; h = h + 1)
 		robentry_islot_o[h] = robentry_islot_i[h];
 	for (hd = 0; hd < WINDOW_SIZE; hd = hd + 1) begin
@@ -210,40 +198,24 @@ begin
 			  	fcu_rndx = heads[hd];
 			  	fcu_rndxv = 1'b1;
 				end
-				/*
-				if (!issued_agen0 && agen0_idle && (rob[heads[hd]].decbus.load | rob[heads[hd]].decbus.store) && !rob[heads[hd]].agen) begin
+				
+				if (!issued_agen0 && agen0_idle && (rob[heads[hd]].decbus.load | rob[heads[hd]].decbus.store)) begin
 					robentry_agen_issue[heads[hd]] = 1'b1;
-			  	robentry_islot[heads[hd]] = 2'b00;
+			  	robentry_islot_o[heads[hd]] = 2'b00;
 					issued_agen0 = 1'b1;
 					agen0_rndx = heads[hd];
 					agen0_rndxv = 1'b1;
 				end
 				if (NAGEN > 1) begin
-					if (!issued_agen1 && agen1_idle && (rob[heads[hd]].decbus.load | rob[heads[hd]].decbus.store) && !rob[heads[hd]].agen) begin
+					if (!issued_agen1 && agen1_idle && (rob[heads[hd]].decbus.load | rob[heads[hd]].decbus.store)) begin
 						robentry_agen_issue[heads[hd]] = 1'b1;
-				  	robentry_islot[heads[hd]] = 2'b01;
+				  	robentry_islot_o[heads[hd]] = 2'b01;
 						issued_agen1 = 1'b1;
 						agen1_rndx = heads[hd];
 						agen1_rndxv = 1'b1;
 					end
 				end
-				*/
-				if (!issued_lsq0 && lsq0_idle && (rob[heads[hd]].decbus.load | rob[heads[hd]].decbus.store) && !rob[heads[hd]].lsq) begin
-					robentry_lsq_issue[heads[hd]] = 1'b1;
-			  	robentry_islot_o[heads[hd]] = 2'b00;
-					issued_lsq0 = 1'b1;
-					lsq0_rndx = heads[hd];
-					lsq0_rndxv = 1'b1;
-				end
-				if (NLSQ_PORTS > 1) begin
-					if (!issued_lsq1 && lsq1_idle && (rob[heads[hd]].decbus.load | rob[heads[hd]].decbus.store) && !rob[heads[hd]].lsq) begin
-						robentry_lsq_issue[heads[hd]] = 1'b1;
-				  	robentry_islot_o[heads[hd]] = 2'b01;
-						issued_lsq1 = 1'b1;
-						lsq1_rndx = heads[hd];
-						lsq1_rndxv = 1'b1;
-					end
-				end
+				
 				/*
 				if (!issued_mem0 && mem0_idle && (rob[heads[hd]].decbus.load | rob[heads[hd]].decbus.store) && rob[heads[hd]].tlb) begin
 					if (!fnNoPriorLS(heads[hd]])) begin

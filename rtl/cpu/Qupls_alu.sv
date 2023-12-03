@@ -183,9 +183,17 @@ always_comb
 	OP_LDAX:	bus = a + i + (b << ir[26:25]);
 	OP_BLEND:	bus = ALU0 ? blendo : 0;
 	OP_NOP:		bus = 0;
-	OP_PFXA:	bus = 0;
-	OP_PFXB:	bus = 0;
-	OP_PFXC:	bus = 0;
+	OP_PFXA32:	bus = 0;
+	OP_PFXB32:	bus = 0;
+	OP_PFXC32:	bus = 0;
+	OP_PFXA64:	bus = 0;
+	OP_PFXB64:	bus = 0;
+	OP_PFXC64:	bus = 0;
+	OP_PFXA128:	bus = 0;
+	OP_PFXB128:	bus = 0;
+	OP_PFXC128:	bus = 0;
+	OP_VEC:	bus = 0;
+	OP_VECZ:	bus = 0;
 	default:	bus = {2{32'hDEADBEEF}};
 	endcase
 

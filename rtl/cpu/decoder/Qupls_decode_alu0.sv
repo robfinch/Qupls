@@ -45,7 +45,19 @@ output alu0;
 function fnIsAlu0;
 input instruction_t ir;
 begin
-	fnIsAlu0 = ir.any.opcode==OP_CSR;
+	case(ir.any.opcode)
+	OP_R2:
+		case(ir.r2.func)
+		FN_DIV,FN_DIVU,FN_MOD,FN_MODU:
+			fnIsAlu0 = 1'b1;
+		default:
+			fnIsAlu0 = 1'b0;
+		endcase
+	OP_CSR:	fnIsAlu0 = 1'b1;
+	OP_BSR,OP_JSR:	fnIsAlu0 = 1'b1;
+	OP_DIVI: 	fnIsAlu0 = 1'b1;
+	default:	fnIsAlu0 = 1'b0;
+	endcase
 end
 endfunction
 

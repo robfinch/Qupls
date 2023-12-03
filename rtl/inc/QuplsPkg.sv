@@ -130,8 +130,8 @@ parameter REGFILE_LATENCY = 2;
 parameter INSN_LEN = 8'd5;
 parameter NDATA_PORTS = 1;
 parameter NALU = 1;
-parameter NFPU = 1;
-parameter NAGEN = 2;
+parameter NFPU = 0;
+parameter NAGEN = 1;
 parameter NLSQ_PORTS = 1;
 
 parameter RAS_DEPTH	= 4;
@@ -246,10 +246,19 @@ typedef enum logic [6:0] {
 	OP_BBCI			= 7'd46,
 	OP_BBSI			= 7'd47,
 */
+	OP_PFXC32		= 7'd48,
+	OP_PFXC64		= 7'd49,
+	OP_PFXC128	= 7'd50,
 	OP_ENTER		= 7'd52,
 	OP_LEAVE		= 7'd53,
 	OP_PUSH			= 7'd54,
 	OP_POP			= 7'd55,
+	OP_PFXA32		= 7'd56,
+	OP_PFXA64		= 7'd57,
+	OP_PFXA128	= 7'd58,
+	OP_PFXB32		= 7'd60,
+	OP_PFXB64		= 7'd61,
+	OP_PFXB128	= 7'd62,
 	OP_LDB			= 7'd64,
 	OP_LDBU			= 7'd65,
 	OP_LDW			= 7'd66,
@@ -277,13 +286,12 @@ typedef enum logic [6:0] {
 	OP_FLT3			= 7'd99,
 	OP_IRQ			= 7'd112,
 	OP_FENCE		= 7'd114,
+	OP_VECZ			= 7'd118,
+	OP_VEC			= 7'd119,
 	OP_REP			= 7'd120,
 	OP_PRED			= 7'd121,
 	OP_ATOM			= 7'd122,
 	OP_TPFX			= 7'd123,
-	OP_PFXA			= 7'd124,
-	OP_PFXB			= 7'd125,
-	OP_PFXC			= 7'd126,
 	OP_NOP			= 7'd127
 } opcode_t;
 /*
@@ -766,6 +774,7 @@ typedef enum logic [1:0] {
 } addr_upd_t;
 
 typedef logic [ROB_ENTRIES-1:0] rob_bitmask_t;
+typedef logic [LSQ_ENTRIES-1:0] lsq_bitmask_t;
 typedef logic [TidMSB:0] Tid;
 typedef logic [TidMSB:0] tid_t;
 typedef logic [11:0] order_tag_t;
@@ -1279,15 +1288,17 @@ typedef struct packed
 const pc_address_t RSTPC	= 44'hFFFD00000A0;
 const address_t RSTSP = 32'hFFFFFFF0;
 
-typedef logic [15:0] seqnum_t;
+typedef logic [7:0] seqnum_t;
 
 typedef struct packed {
 	logic v;
 	seqnum_t sn;
 	rob_owner_t owner;
 	logic out;
+	logic lsq;
 	logic done;
 	logic bt;
+	operating_mode_t om;		// operating mode
 	decode_bus_t decbus;
 	pregno_t pRa;
 	pregno_t pRb;
@@ -1321,10 +1332,11 @@ typedef struct packed {
 	rob_ndx_t rndx;				// reference to related ROB entry
 	virtual_address_t vadr;
 	physical_address_t padr;
-	logic [1:0] omode;		// operating mode
+	operating_mode_t omode;	// operating mode
 	logic load;						// 1=load
 	logic loadz;
 	logic store;
+	instruction_t op;
 	memop_t func;					// operation to perform
 	logic [3:0] func2;		// more resolution to function
 	cause_code_t cause;
@@ -1333,9 +1345,10 @@ typedef struct packed {
 	asid_t asid;
 	code_address_t vcadr;		// victim cache address
 	logic dchit;
-	memsz_t sz;						// indicates size of data
+	memsz_t memsz;				// indicates size of data
 	logic [7:0] bytcnt;		// byte count of data to load/store
 	pregno_t Rt;
+	pregno_t Rc;					// 'C' register for store
 	logic datav;					// store data is valid
 	logic [511:0] res;		// stores unaligned data as well (must be last field)
 } lsq_entry_t;
@@ -1835,7 +1848,25 @@ endfunction
 function fnIsNop;
 input instruction_t ir;
 begin
-	fnIsNop = ir.any.opcode==OP_NOP || ir.any.opcode==OP_PFXA || ir.any.opcode==OP_PFXB || ir.any.opcode==OP_PFXC;
+	fnIsNop = ir.any.opcode==OP_NOP ||
+		ir.any.opcode==OP_PFXA32 ||
+		ir.any.opcode==OP_PFXB32 ||
+		ir.any.opcode==OP_PFXC32 ||
+		ir.any.opcode==OP_PFXA64 ||
+		ir.any.opcode==OP_PFXB64 ||
+		ir.any.opcode==OP_PFXC64 ||
+		ir.any.opcode==OP_PFXA128 ||
+		ir.any.opcode==OP_PFXB128 ||
+		ir.any.opcode==OP_PFXC128 ||
+		ir.any.opcode==OP_VEC ||
+		ir.any.opcode==OP_VECZ
+		;
+		/*
+		ir.any.opcode==OP_PFXA ||
+		ir.any.opcode==OP_PFXB ||
+		ir.any.opcode==OP_PFXC
+		;
+		*/
 end
 endfunction
 
@@ -1872,7 +1903,19 @@ endfunction
 function fnIsPostfix;
 input instruction_t ir;
 begin
-	fnIsPostfix = ir.any.opcode==OP_PFXA || ir.any.opcode==OP_PFXB || ir.any.opcode==OP_PFXC;
+	fnIsPostfix = //ir.any.opcode==OP_PFXA || ir.any.opcode==OP_PFXB || ir.any.opcode==OP_PFXC;
+		ir.any.opcode==OP_PFXA32 ||
+		ir.any.opcode==OP_PFXB32 ||
+		ir.any.opcode==OP_PFXC32 ||
+		ir.any.opcode==OP_PFXA64 ||
+		ir.any.opcode==OP_PFXB64 ||
+		ir.any.opcode==OP_PFXC64 ||
+		ir.any.opcode==OP_PFXA128 ||
+		ir.any.opcode==OP_PFXB128 ||
+		ir.any.opcode==OP_PFXC128 ||
+		ir.any.opcode==OP_VEC ||
+		ir.any.opcode==OP_VECZ
+		;
 end
 endfunction
 

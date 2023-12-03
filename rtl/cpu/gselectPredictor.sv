@@ -35,7 +35,7 @@
 //=============================================================================
 //
 
-module gselectPredictor(rst, clk, clk2x, en, xbr0, xbr1, xbr2, xbr3,
+module gselectPredictor(rst, clk, en, xbr0, xbr1, xbr2, xbr3,
 	xip0, xip1, xip2, xip3, takb0, takb1, takb2, takb3, ip0, predict_taken0,
 	ip1, predict_taken1, ip2, predict_taken2, ip3, predict_taken3
 	);
@@ -43,7 +43,6 @@ parameter AMSB=31;
 parameter DBW=16;
 input rst;
 input clk;
-input clk2x;
 input en;
 input xbr0;
 input xbr1;

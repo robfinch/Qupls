@@ -49,7 +49,7 @@ begin
 	OP_JSR:
 		fnIsFlowCtrl = 1'b1;
 	OP_DBRA,
-	OP_Bcc:
+	OP_Bcc,OP_BccU,OP_FBccH,OP_FBccS,OP_FBccD,OP_FBccQ:
 		fnIsFlowCtrl = 1'b1;	
 	OP_BSR,OP_RTD:
 		fnIsFlowCtrl = 1'b1;	

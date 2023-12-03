@@ -32,7 +32,7 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 92000 LUTs
+// 97500 LUTs / 33000 FFs / 50 BRAMs
 // ============================================================================
 
 import const_pkg::*;
@@ -86,7 +86,7 @@ fta_cmd_request128_t [1:0] ftadm_req;
 fta_cmd_response128_t [1:0] ftadm_resp;
 
 
-integer nn,mm,n3,n4,m4,n5,n6,n7,n8,n9,n10,n12,n14,n15;
+integer nn,mm,n3,n4,m4,n5,n6,n7,n8,n9,n10,n12,n14,n15,n16,n17;
 genvar g,h;
 rndx_t alu0_re;
 reg [127:0] message;
@@ -127,6 +127,7 @@ value_t rfo_agen1_argA;
 value_t rfo_agen0_argB;
 value_t rfo_agen1_argB;
 value_t rfo_store_argC;
+value_t store_argC;
 value_t load_res;
 value_t ma0,ma1;				// memory address
 
@@ -140,9 +141,6 @@ pregno_t alu1_argB_reg;
 pregno_t fpu0_argA_reg;
 pregno_t fpu0_argB_reg;
 pregno_t fpu0_argC_reg;
-pregno_t fpu_argA_reg;
-pregno_t fpu_argB_reg;
-pregno_t fpu_argC_reg;
 
 pregno_t fcu_argA_reg;
 pregno_t fcu_argB_reg;
@@ -161,9 +159,12 @@ value_t [14:0] rfo;
 rob_entry_t [ROB_ENTRIES-1:0] rob;
 reg [1:0] robentry_islot [0:ROB_ENTRIES-1];
 wire [1:0] next_robentry_islot [0:ROB_ENTRIES-1];
+reg [1:0] lsq_islot [0:LSQ_ENTRIES-1];
+wire [1:0] next_lsq_islot [0:LSQ_ENTRIES-1];
 rob_bitmask_t robentry_stomp;
 rob_bitmask_t robentry_issue;
 rob_bitmask_t robentry_fcu_issue;
+lsq_bitmask_t lsq_mem_issue;
 lsq_entry_t [7:0] loadq, storeq;
 lsq_entry_t [15:0] lsq;
 lsq_ndx_t lq_tail, lq_head;
@@ -260,6 +261,26 @@ wire        fpu_v;
 wire fpu_done1;
 reg fpu_done;
 
+reg fpu1_idle = 1'b1;
+reg        fpu1_available;
+reg        fpu1_dataready;
+reg  [4:0] fpu1_sourceid;
+instruction_t fpu1_instr;
+value_t fpu1_argA;
+value_t fpu1_argB;
+value_t fpu1_argC;
+value_t fpu1_argT;
+value_t fpu1_argP;
+value_t fpu1_argI;	// only used by BEQ
+pregno_t fpu1_Rt;
+pc_address_t fpu1_pc;
+value_t fpu1_res;
+rob_ndx_t fpu1_id;
+cause_code_t fpu1_exc = FLT_NONE;
+wire        fpu1_v;
+wire fpu1_done1;
+reg fpu1_done;
+
 reg fcu_idle = 1'b1;
 reg        fcu_available;
 reg        fcu_dataready;
@@ -269,9 +290,6 @@ bts_t fcu_bts;
 reg        fcu_bt;
 value_t fcu_argA;
 value_t fcu_argB;
-value_t fcu_argC;
-value_t fcu_argT;
-value_t fcu_argP;
 value_t fcu_argI;	// only used by BEQ
 pc_address_t fcu_pc;
 value_t fcu_res;
@@ -283,6 +301,7 @@ pc_address_t fcu_misspc;
 instruction_t fcu_missir;
 reg takb;
 reg fcu_done;
+rob_ndx_t fcu_rndx;
 
 value_t agen0_argA;
 value_t agen0_argB;
@@ -320,10 +339,10 @@ reg  [4:0] dram_id1;
 cause_code_t dram_exc1;
 reg        dram_v1;
 
-reg [639:0] dram0_data;
-virtual_address_t dram0_vaddr;
-physical_address_t dram0_paddr;
-reg [79:0] dram0_sel;
+reg [639:0] dram0_data, dram0_datah;
+virtual_address_t dram0_vaddr, dram0_vaddrh;
+physical_address_t dram0_paddr, dram0_paddrh;
+reg [79:0] dram0_sel, dram0_selh;
 instruction_t dram0_op;
 memsz_t dram0_memsz;
 rob_ndx_t dram0_id;
@@ -340,11 +359,12 @@ reg dram0_erc;
 reg [9:0] dram0_shift;
 reg dram0_stomp;
 reg [11:0] dram0_tocnt;
+reg dram0_done;
 
-reg [639:0] dram1_data;
-virtual_address_t dram1_vaddr;
-physical_address_t dram1_paddr;
-reg [79:0] dram1_sel;
+reg [639:0] dram1_data, dram1_datah;
+virtual_address_t dram1_vaddr, dram1_vaddrh;
+physical_address_t dram1_paddr, dram1_paddrh;
+reg [79:0] dram1_sel, dram1_selh;
 instruction_t dram1_op;
 memsz_t dram1_memsz;
 rob_ndx_t dram1_id;
@@ -361,6 +381,22 @@ reg dram1_hi;
 reg [9:0] dram1_shift;
 reg dram1_stomp;
 reg [11:0] dram1_tocnt;
+reg dram1_done;
+
+reg [2:0] dramN [0:NDATA_PORTS-1];
+reg [511:0] dramN_data [0:NDATA_PORTS-1];
+reg [63:0] dramN_sel [0:NDATA_PORTS-1];
+address_t dramN_addr [0:NDATA_PORTS-1];
+address_t dramN_vaddr [0:NDATA_PORTS-1];
+address_t dramN_paddr [0:NDATA_PORTS-1];
+reg [NDATA_PORTS-1:0] dramN_load;
+reg [NDATA_PORTS-1:0] dramN_loadz;
+reg [NDATA_PORTS-1:0] dramN_store;
+reg [NDATA_PORTS-1:0] dramN_ack;
+reg [NDATA_PORTS-1:0] dramN_erc;
+reg [7:0] dramN_tid [0:NDATA_PORTS-1];
+memsz_t dramN_memsz;
+
 
 pc_address_t commit_pc0, commit_pc1, commit_pc2, commit_pc3;
 pc_address_t commit_brtgt0;
@@ -472,7 +508,8 @@ ICacheLine ic_line_hi, ic_line_lo;
 // FETCH
 //
 
-pc_address_t pc0, pc1, pc2, pc3, pc4, pc5, pc6;
+pc_address_t pc, pc0, pc1, pc2, pc3, pc4, pc5, pc6, pc7;
+reg [5:0] off0, off1, off2, off3, off4, off5, off6, off7;
 pc_address_t pc0d, pc1d, pc2d, pc3d, pc4d, pc5d, pc6d;
 pc_address_t pc0r, pc1r, pc2r, pc3r, pc4r, pc5r, pc6r;
 pc_address_t next_pc;
@@ -491,8 +528,9 @@ asid_t ic_miss_asid;
 wire [1:0] ic_wway;
 
 reg [1023:0] ic_line;
+wire [1023:0] ic_line2;
 reg [511:0] ins;
-instruction_t ins0, ins1, ins2, ins3, ins4, ins5, ins6;
+instruction_t ins0, ins1, ins2, ins3, ins4, ins5, ins6, ins7;
 reg ins0_v, ins1_v, ins2_v, ins3_v;
 reg [3:0] ins_v;
 reg insnq0,insnq1,insnq2,insnq3;
@@ -556,7 +594,7 @@ uic1
 	.invall(ic_invall),
 	.invline(ic_invline),
 	.ip_asid(ip_asid),
-	.ip(pc0[43:12]),
+	.ip(pc[43:12]),
 	.ip_o(),
 	.ihit_o(ihito),
 	.ihit(ihit),
@@ -622,34 +660,56 @@ gselectPredictor ugsp1
 	.rst(rst),
 	.clk(clk),
 	.en(1'b1),
-	.xbr0(commit0_br),
-	.xbr1(commit1_br),
-	.xbr2(commit2_br),
-	.xbr3(commit3_br),
-	.xip0(commit_pc0), 
-	.xip1(commit_pc1),
-	.xip2(commit_pc2),
-	.xip3(commit_pc3),
+	.xbr0(commit_br0),
+	.xbr1(commit_br1),
+	.xbr2(commit_br2),
+	.xbr3(commit_br3),
+	.xip0(commit_pc0[43:12]), 
+	.xip1(commit_pc1[43:12]),
+	.xip2(commit_pc2[43:12]),
+	.xip3(commit_pc3[43:12]),
 	.takb0(commit_takb0),
 	.takb1(commit_takb1),
 	.takb2(commit_takb2),
 	.takb3(commit_takb3),
-	.ip0(pc0),
+	.ip0(pc0[43:12]),
 	.predict_taken0(pt0),
-	.ip1(pc1),
-	.predict_taken0(pt1),
-	.ip2(pc2),
-	.predict_taken0(pt2),
-	.ip3(pc3),
-	.predict_taken0(pt3)
+	.ip1(pc1[43:12]),
+	.predict_taken1(pt1),
+	.ip2(pc2[43:12]),
+	.predict_taken2(pt2),
+	.ip3(pc3[43:12]),
+	.predict_taken3(pt3)
 );
 
-always_comb pc1 = {pc0[43:12] + 6'd5,12'h0};
-always_comb pc2 = {pc0[43:12] + 6'd10,12'h0};
-always_comb pc3 = {pc0[43:12] + 6'd15,12'h0};
-always_comb pc4 = {pc0[43:12] + 6'd20,12'h0};
-always_comb pc5 = {pc0[43:12] + 6'd25,12'h0};
-always_comb pc6 = {pc0[43:12] + 6'd30,12'h0};
+pc_address_t pco;
+wire [4:0] len [0:63];
+wire [4:0] len0, len1, len2, len3, len4, len5;
+
+// 3 cycle latency
+Qupls_ins_lengths uils1
+(
+	.clk_i(clk),
+	.line_i(ic_line),
+	.line_o(ic_line2),
+	.pc_i(pc),
+	.pc_o(pco),
+	.len0_o(len0),
+	.len1_o(len1),
+	.len2_o(len2),
+	.len3_o(len3),
+	.len4_o(len4),
+	.len5_o(len5)
+);
+
+always_comb pc0 = {pco[43:12] + 3'd0,12'h0};
+always_comb pc1 = {pc0[43:12] + len0,12'h0};
+always_comb pc2 = {pc1[43:12] + len1,12'h0};
+always_comb pc3 = {pc2[43:12] + len2,12'h0};
+always_comb pc4 = {pc3[43:12] + len3,12'h0};
+always_comb pc5 = {pc4[43:12] + len4,12'h0};
+always_comb pc6 = {pc5[43:12] + len5,12'h0};
+//always_comb pc7 = {pc6[43:12] + len6,12'h0};
 
 // qd indicates which instructions will queue in a given cycle.
 // qs indicates which instructions are stomped on.
@@ -848,12 +908,12 @@ reg allqd;
 edge_det ued1 (.rst(rst), .clk(clk), .ce(1'b1), .i(next_cqd==4'b1111), .pe(pe_alldq), .ne(), .ee());
 
 always_comb
-	fetch_new = (ihito & ~hirq & (pe_allqd|allqd) & ~(|pc0[11:0]) & ~branchmiss) |
-							(|pc0[11:0] & ~hirq & (pe_allqd|allqd) & ~branchmiss);
+	fetch_new = (ihito & ~hirq & (pe_allqd|allqd) & ~(|pc[11:0]) & ~branchmiss) |
+							(|pc[11:0] & ~hirq & (pe_allqd|allqd) & ~branchmiss);
 
 always_ff @(posedge clk)
 if (rst) begin
-	pc0 <= RSTPC;
+	pc <= RSTPC;
 	allqd <= 1'b1;
 end
 else begin
@@ -861,20 +921,20 @@ else begin
 		allqd <= 1'b1;
 	if (branchmiss) begin
 		allqd <= 1'b0;
-   	pc0 <= misspc;
+   	pc <= misspc;
   end
   else begin
-		if (|pc0[11:0]) begin
+		if (|pc[11:0]) begin
 		  if (~hirq) begin
 		  	if (~|next_micro_ip)
-		  		pc0 <= pc0 + 16'h5000;
-	  		pc0[11:0] <= next_micro_ip;
+		  		pc <= pc4;
+	  		pc[11:0] <= next_micro_ip;
 			end
 		end
 		else if (ihito) begin
 		  if (~hirq) begin
 		  	if (pe_allqd|allqd) begin
-			  	pc0 <= next_pc;
+			  	pc <= next_pc;
 			  	allqd <= 1'b0;
 			  end
 			end
@@ -892,19 +952,21 @@ else
 always_comb
 	ic_line = {ic_line_hi.data,ic_line_lo.data};
 always_ff @(posedge clk)
-	ins0 <= hirq ? {FN_IRQ,1'b0,vect_i,5'd0,2'd0,irq_i,OP_SYS} : ic_line >> {pc0[17:12],3'd0};
+	ins <= ic_line2 >> {pco[17:12],3'd0};
 always_ff @(posedge clk)
-	ins1 <= hirq ? {FN_IRQ,1'b0,vect_i,5'd0,2'd0,irq_i,OP_SYS} : ic_line >> {pc1[17:12],3'd0};
+	ins0 <= hirq ? {'d0,FN_IRQ,1'b0,vect_i,5'd0,2'd0,irq_i,OP_SYS} : ic_line2 >> {pc0[17:12],3'd0};
 always_ff @(posedge clk)
-	ins2 <= hirq ? {FN_IRQ,1'b0,vect_i,5'd0,2'd0,irq_i,OP_SYS} : ic_line >> {pc2[17:12],3'd0};
+	ins1 <= hirq ? {'d0,FN_IRQ,1'b0,vect_i,5'd0,2'd0,irq_i,OP_SYS} : ic_line2 >> {pc1[17:12],3'd0};
 always_ff @(posedge clk)
-	ins3 <= hirq ? {FN_IRQ,1'b0,vect_i,5'd0,2'd0,irq_i,OP_SYS} : ic_line >> {pc3[17:12],3'd0};
+	ins2 <= hirq ? {'d0,FN_IRQ,1'b0,vect_i,5'd0,2'd0,irq_i,OP_SYS} : ic_line2 >> {pc2[17:12],3'd0};
 always_ff @(posedge clk)
-	ins4 <= hirq ? {FN_IRQ,1'b0,vect_i,5'd0,2'd0,irq_i,OP_SYS} : ic_line >> {pc4[17:12],3'd0};
+	ins3 <= hirq ? {'d0,FN_IRQ,1'b0,vect_i,5'd0,2'd0,irq_i,OP_SYS} : ic_line2 >> {pc3[17:12],3'd0};
 always_ff @(posedge clk)
-	ins5 <= hirq ? {FN_IRQ,1'b0,vect_i,5'd0,2'd0,irq_i,OP_SYS} : ic_line >> {pc5[17:12],3'd0};
+	ins4 <= hirq ? {'d0,FN_IRQ,1'b0,vect_i,5'd0,2'd0,irq_i,OP_SYS} : ic_line2 >> {pc4[17:12],3'd0};
 always_ff @(posedge clk)
-	ins6 <= hirq ? {FN_IRQ,1'b0,vect_i,5'd0,2'd0,irq_i,OP_SYS} : ic_line >> {pc6[17:12],3'd0};
+	ins5 <= hirq ? {'d0,FN_IRQ,1'b0,vect_i,5'd0,2'd0,irq_i,OP_SYS} : ic_line2 >> {pc5[17:12],3'd0};
+always_ff @(posedge clk)
+	ins6 <= hirq ? {'d0,FN_IRQ,1'b0,vect_i,5'd0,2'd0,irq_i,OP_SYS} : ic_line2 >> {pc6[17:12],3'd0};
 
 wire [NDATA_PORTS-1:0] dcache_load;
 wire [NDATA_PORTS-1:0] dhit;
@@ -919,16 +981,6 @@ wire DCacheLine dump_o[0:NDATA_PORTS-1];
 wire [NDATA_PORTS-1:0] dump_ack;
 wire [NDATA_PORTS-1:0] dwr;
 wire [1:0] dway [0:NDATA_PORTS-1];
-
-reg [1:0] dramN [0:NDATA_PORTS-1];
-reg [79:0] dramN_sel [0:NDATA_PORTS-1];
-tid_t [NDATA_PORTS-1:0] dramN_tid;
-wire [NDATA_PORTS-1:0] dramN_store, dramN_load, dramN_loadz;
-wire [NDATA_PORTS-1:0] dramN_erc = 2'b00;
-address_t [NDATA_PORTS-1:0] dramN_vaddr, dramN_paddr;
-value_t [NDATA_PORTS-1:0] dramN_data;
-memsz_t [NDATA_PORTS-1:0] dramN_memsz;
-reg [NDATA_PORTS-1:0] dramN_ack;
 
 generate begin : gDcache
 for (g = 0; g < NDATA_PORTS; g = g + 1) begin
@@ -1018,6 +1070,38 @@ end
 end
 endgenerate
 
+always_comb
+begin
+	dramN[0] = dram0;
+	dramN_paddr[0] = dram0_paddr;
+	dramN_vaddr[0] = dram0_vaddr;
+	dramN_data[0] = dram0_data[511:0];
+	dramN_sel[0] = dram0_sel[63:0];
+	dramN_store[0] = dram0_store;
+	dramN_erc[0] = dram0_erc;
+	dramN_load[0] = dram0_load;
+	dramN_loadz[0] = dram0_loadz;
+	dramN_memsz[0] = dram0_memsz;
+	dramN_tid[0] = dram0_tid;
+	dram0_ack = dramN_ack[0];
+
+	if (NDATA_PORTS > 1) begin
+		dramN[1] = dram1;
+		dramN_vaddr[1] = dram1_vaddr;
+		dramN_paddr[1] = dram1_paddr;
+		dramN_data[1] = dram1_data[511:0];
+		dramN_sel[1] = dram1_sel[63:0];
+		dramN_store[1] = dram1_store;
+		dramN_erc[1] = dram1_erc;
+		dramN_load[1] = dram1_load;
+		dramN_loadz[1] = dram1_loadz;
+		dramN_memsz[1] = dram1_memsz;
+		dramN_tid[1] = dram1_tid;
+		dram1_ack = dramN_ack[1];
+	end
+	else
+		dram1_ack = 1'b0;
+end
 
 //
 // DECODE
@@ -1270,21 +1354,26 @@ reg wrport1_v;
 reg wrport2_v;
 reg wrport3_v;
 reg wrport4_v;
+reg wrport5_v;
 value_t wrport0_res;
 value_t wrport1_res;
 value_t wrport2_res;
 value_t wrport3_res;
 value_t wrport4_res;
+value_t wrport5_res;
 pregno_t wrport0_Rt;
 pregno_t wrport1_Rt;
 pregno_t wrport2_Rt;
 pregno_t wrport3_Rt;
 pregno_t wrport4_Rt;
+pregno_t wrport5_Rt;
 
 always_comb wrport0_v = alu0_v;
 always_comb wrport1_v = alu1_v;
 always_comb wrport2_v = dram_v0;
 always_comb wrport3_v = fpu_v;
+always_comb wrport4_v = dram_v1;
+always_comb wrport5_v = fpu1_v;
 assign wrport0_Rt = alu0_Rt;
 assign wrport1_Rt = alu1_Rt;
 assign wrport2_Rt = dram0_Rt;
@@ -1293,7 +1382,8 @@ assign wrport0_res = alu0_res;
 assign wrport1_res = alu1_res;
 assign wrport2_res = dram_bus0;
 assign wrport3_res = fpu_res;
-//assign wrport4_res = dram1_res;
+assign wrport4_res = dram_bus1;
+assign wrport5_res = fpu1_res;
 
 Qupls_regfile4w15r urf1 (
 	.rst(rst),
@@ -1360,12 +1450,12 @@ always_comb
 		end
 	BTS_BSR:
 		begin
-			tgtpc = fcu_pc + {{33{fcu_instr[39]}},fcu_instr[39:9],12'h000};
+			tgtpc = alu0_pc + {{33{alu0_instr[39]}},alu0_instr[39:9],12'h000};
 			tgtpc[11:0] = 'd0;
 		end
 	BTS_CALL:
 		begin
-			tgtpc = fcu_argA + {fcu_argI,12'h000};
+			tgtpc = alu0_argA + {alu0_argI,12'h000};
 			tgtpc[11:0] = 'd0;
 		end
 	BTS_RTI:
@@ -1525,13 +1615,12 @@ endgenerate
 rob_ndx_t alu0_rndx;
 rob_ndx_t alu1_rndx;
 rob_ndx_t fpu0_rndx; 
-rob_ndx_t fcu_rndx;
+rob_ndx_t mem0_rndx;
+rob_ndx_t mem1_rndx;
 lsq_ndx_t mem0_lsndx, mem1_lsndx;
 lsq_ndx_t mem0_lsndx2, mem1_lsndx2;
-rob_ndx_t lsq0_rndx, lsq1_rndx;
 wire mem0_lsndxv, mem1_lsndxv;
 reg mem0_lsndxv2, mem1_lsndxv2;
-wire lsq0_rndxv, lsq1_rndxv;
 wire fpu0_rndxv, fcu_rndxv;
 wire alu0_rndxv, alu1_rndxv;
 wire agen0_rndxv, agen1_rndxv;
@@ -1553,10 +1642,9 @@ Qupls_sched uscd1
 	.head(head0),
 	.rob(rob),
 	.robentry_issue(robentry_issue),
-	.robentry_fpu_issue(),
-	.robentry_fcu_issue(),
-	.robentry_agen_issue(),
-	.robentry_lsq_issue(),
+	.robentry_fpu_issue(robentry_fpu_issue),
+	.robentry_fcu_issue(robentry_fcu_issue),
+	.robentry_agen_issue(robentry_agen_issue),
 	.alu0_rndx(alu0_rndx),
 	.alu1_rndx(alu1_rndx),
 	.alu0_rndxv(alu0_rndxv),
@@ -1570,15 +1658,15 @@ Qupls_sched uscd1
 	.agen0_rndx(agen0_rndx),
 	.agen1_rndx(agen1_rndx),
 	.agen0_rndxv(agen0_rndxv),
-	.agen1_rndxv(agen1_rndxv),
-	.lsq0_rndx(lsq0_rndx),
-	.lsq1_rndx(lsq1_rndx),
-	.lsq0_rndxv(lsq0_rndxv),
-	.lsq1_rndxv(lsq1_rndxv)
+	.agen1_rndxv(agen1_rndxv)
 );
 
 always_ff @(posedge clk)
 	robentry_islot <= next_robentry_islot;
+always_ff @(posedge clk)
+	lsq_islot <= next_lsq_islot;
+
+lsq_bitmask_t lsq_memissue;
 
 Qupls_mem_sched umems1
 (
@@ -1588,7 +1676,9 @@ Qupls_mem_sched umems1
 	.robentry_stomp(robentry_stomp),
 	.rob(rob),
 	.lsq(lsq),
-	.robentry_memissue(),
+	.islot_i(lsq_islot),
+	.islot_o(next_lsq_islot),
+	.memissue(lsq_memissue),
 	.ndx0(mem0_lsndx),
 	.ndx1(mem1_lsndx),
 	.ndx0v(mem0_lsndxv),
@@ -1611,9 +1701,9 @@ assign alu0_argC_reg = rob[alu0_rndx].pRc;
 assign alu1_argA_reg = rob[alu1_rndx].pRa;
 assign alu1_argB_reg = rob[alu1_rndx].pRb;
 
-assign fpu_argA_reg = rob[fpu0_rndx].pRa;
-assign fpu_argB_reg = rob[fpu0_rndx].pRb;
-assign fpu_argC_reg = rob[fpu0_rndx].pRc;
+assign fpu0_argA_reg = rob[fpu0_rndx].pRa;
+assign fpu0_argB_reg = rob[fpu0_rndx].pRb;
+assign fpu0_argC_reg = rob[fpu0_rndx].pRc;
 
 assign fcu_argA_reg = rob[fcu_rndx].pRa;
 assign fcu_argB_reg = rob[fcu_rndx].pRb;
@@ -1623,8 +1713,6 @@ assign agen0_argB_reg = rob[agen0_rndx].pRb;
 
 assign agen1_argA_reg = rob[agen1_rndx].pRa;
 assign agen1_argB_reg = rob[agen1_rndx].pRb;
-
-assign store_argC_reg = lsq[lsq0_rndx].Rc;
 
 //
 // EXECUTE
@@ -1683,7 +1771,7 @@ endgenerate
 	    alu1_id = alu1_rndx;
 
     assign  fcu_v = fcu_dataready;
-    assign  fcu_id = fcu_sourceid;
+    assign  fcu_id = fcu_rndx;
 
 generate begin : gFpu
 if (NFPU > 0) begin
@@ -1698,7 +1786,26 @@ if (NFPU > 0) begin
 		.c(fpu_argC),
 		.i(fpu_argI),
 		.o(fpu_res),
+		.p(~'d0),
+		.t('d0),
 		.done(fpu_done)
+	);
+end
+if (NFPU > 1) begin
+	Qupls_fpu ufpu2
+	(
+		.rst(rst),
+		.clk(clk),
+		.ir(fpu1_instr),
+		.rm('d0),
+		.a(fpu1_argA),
+		.b(fpu1_argB),
+		.c(fpu1_argC),
+		.i(fpu1_argI),
+		.o(fpu1_res),
+		.p(~'d0),
+		.t('d0),
+		.done(fpu1_done)
 	);
 end
 end
@@ -1935,6 +2042,30 @@ begin
 				fcu_done = 1'b1;
 end
 
+// Stores are done as soon as they issue.
+// Loads are done when there is an ack back from the memory system.
+always_comb
+begin
+	dram0_done = 'd0;
+	for (n16 = 0; n16 < LSQ_ENTRIES; n16 = n16 + 1)
+		if (lsq[n16].store ? (lsq_memissue[n16] && lsq_islot[n16]==2'd0 && !robentry_stomp[lsq[n16].rndx]) :
+			(dram0 == DRAMSLOT_ACTIVE && dram0_ack &&
+				(dram0_hi ? (dram0_load & ~dram0_stomp) : (dram0_load & ~dram0_more & ~dram0_stomp)))
+			)
+			dram0_done = 1'b1;
+end
+
+always_comb
+begin
+	dram1_done = 'd0;
+	for (n17 = 0; n17 < LSQ_ENTRIES; n17 = n17 + 1)
+		if (lsq[n17].store ? (lsq_memissue[n17] && lsq_islot[n17]==2'd1 && !robentry_stomp[lsq[n17].rndx]) :
+			(dram1 == DRAMSLOT_ACTIVE && dram1_ack &&
+				(dram1_hi ? (dram1_load & ~dram1_stomp) : (dram1_load & ~dram1_more & ~dram1_stomp)))
+			)
+			dram1_done = 1'b1;
+end
+
 function integer fnLoadBypassIndex;
 input lsq_ndx_t lsndx;
 integer n15;
@@ -2009,29 +2140,16 @@ else begin
 	end
 	// If data for stomped instruction, ignore
 	// dram_vn will be false for stomped data
-	if (dram_v0 && rob[ dram_id0 ].v && (rob[ dram_id0 ].decbus.load||rob[ dram_id0 ].decbus.store) && rob[dram0_id].owner==QuplsPkg::DRAM0) begin
+	if (dram0_done && rob[ dram_id0 ].v && rob[dram0_id].owner==QuplsPkg::DRAM0) begin
     rob[ dram_id0 ].exc <= dram_exc0;
     rob[ dram_id0 ].out <= INV;
     rob[ dram_id0 ].done <= VAL;
 	end
 	if (NDATA_PORTS > 1) begin
-		if (dram_v1 && rob[ dram_id1 ].v && (rob[ dram_id1 ].decbus.load||rob[ dram_id1 ].decbus.store) && rob[dram1_id].owner==QuplsPkg::DRAM1) begin
+		if (dram1_done && rob[ dram_id1 ].v && rob[dram1_id].owner==QuplsPkg::DRAM1) begin
 	    rob[ dram_id1 ].exc <= dram_exc1;
 	    rob[ dram_id1 ].out <= INV;
 	    rob[ dram_id1 ].done <= VAL;
-		end
-	end
-
-	// Set the IQ entry = DONE as soon as the SW is let loose to the memory system
-	// If the store is unaligned, setting .out to INV will cause a second bus cycle.
-	if (dram0 == DRAMSLOT_ACTIVE && dram0_ack && dram0_store && !dram0_stomp) begin
-    rob[ dram0_id[2:0] ].done <= !dram0_more || !SUPPORT_UNALIGNED_MEMORY;
-    rob[ dram0_id[2:0] ].out <= INV;
-	end
-	if (NDATA_PORTS > 1) begin
-		if (dram1 == DRAMSLOT_ACTIVE && dram1_ack && dram1_store && !dram1_stomp) begin
-	    rob[ dram1_id[2:0] ].done <= !dram1_more || !SUPPORT_UNALIGNED_MEMORY;
-	    rob[ dram1_id[2:0] ].out <= INV;
 		end
 	end
 	
@@ -2131,6 +2249,7 @@ else begin
 		fcu_argA <= rob[fcu_rndx].decbus.imma | rfo_fcu_argA;
 		fcu_argB <= rfo_fcu_argB;
 		fcu_argI <= rob[fcu_rndx].decbus.immb;
+		fcu_instr <= rob[fcu_rndx].op;
 		fcu_pc <= rob[fcu_rndx].pc;
 	  rob[fcu_rndx].out <= VAL;
 	  rob[fcu_rndx].owner <= QuplsPkg::FCU;
@@ -2152,6 +2271,13 @@ else begin
 		agen1_pc <= rob[agen1_rndx].pc;
     rob[agen1_rndx].out <= VAL;
     rob[agen1_rndx].owner <= QuplsPkg::AGEN1;
+	end
+	
+	if (lsq[dram0_id].v && lsq[dram0_id].store) begin
+		store_argC <= rfo_store_argC;
+	end
+	if (lsq[dram0_id].v && lsq[dram1_id].store) begin
+		store_argC <= rfo_store_argC;
 	end
 
 /*
@@ -2430,18 +2556,22 @@ else begin
 		dram0_Rt	<= lsq[mem0_lsndx].Rt;
 		if (dram0_more && SUPPORT_UNALIGNED_MEMORY) begin
 			dram0_hi <= 1'b1;
-			dram0_sel <= dram0_sel >> 8'd64;
-			dram0_vaddr <= {lsq[mem0_lsndx].vadr[$bits(virtual_address_t)-1:6] + 2'd1,6'h0};
-			dram0_paddr <= {lsq[mem0_lsndx].padr[$bits(physical_address_t)-1:6] + 2'd1,6'h0};
-			dram0_data <= dram0_data >> 12'd512;
-			dram0_shift <= {7'd64-lsq[mem0_lsndx].padr[5:0],3'b0};
+			dram0_sel <= dram0_selh >> 8'd64;
+			dram0_vaddr <= {dram0_vaddrh[$bits(virtual_address_t)-1:6] + 2'd1,6'h0};
+			dram0_paddr <= {dram0_paddrh[$bits(physical_address_t)-1:6] + 2'd1,6'h0};
+			dram0_data <= dram0_datah >> 12'd512;
+			dram0_shift <= {7'd64-dram0_paddrh[5:0],3'b0};
 		end
 		else begin
 			dram0_hi <= 1'b0;
 			dram0_sel <= {64'h0,fnSel(rob[lsq[mem0_lsndx].rndx].op)} << lsq[mem0_lsndx].padr[5:0];
+			dram0_selh <= {64'h0,fnSel(rob[lsq[mem0_lsndx].rndx].op)} << lsq[mem0_lsndx].padr[5:0];
 			dram0_vaddr <= lsq[mem0_lsndx].vadr;
 			dram0_paddr <= lsq[mem0_lsndx].padr;
-			dram0_data <= {448'h0,rfo_store_argC} << {lsq[mem0_lsndx].padr[5:0],3'b0};
+			dram0_vaddrh <= lsq[mem0_lsndx].vadr;
+			dram0_paddrh <= lsq[mem0_lsndx].padr;
+			dram0_data <= {448'h0,store_argC} << {lsq[mem0_lsndx].padr[5:0],3'b0};
+			dram0_datah <= {448'h0,store_argC} << {lsq[mem0_lsndx].padr[5:0],3'b0};
 			dram0_shift <= {lsq[mem0_lsndx].padr[5:0],3'd0};
 		end
 		dram0_memsz <= fnMemsz(rob[lsq[mem0_lsndx].rndx].op);
@@ -2472,18 +2602,22 @@ else begin
 			dram1_Rt <= lsq[mem1_lsndx].Rt;
 			if (dram1_more && SUPPORT_UNALIGNED_MEMORY) begin
 				dram1_hi <= 1'b1;
-				dram1_sel <= dram1_sel >> 8'd64;
-				dram1_vaddr <= {lsq[mem1_lsndx].vadr[$bits(virtual_address_t)-1:6] + 2'd1,6'h0};
-				dram1_paddr <= {lsq[mem1_lsndx].padr[$bits(physical_address_t)-1:6] + 2'd1,6'h0};
-				dram1_data <= dram1_data >> 12'd512;
-				dram1_shift <= {7'd64-lsq[mem1_lsndx].padr[5:0],3'b0};
+				dram1_sel <= dram1_selh >> 8'd64;
+				dram1_vaddr <= {dram1_vaddrh[$bits(virtual_address_t)-1:6] + 2'd1,6'h0};
+				dram1_paddr <= {dram1_paddrh[$bits(physical_address_t)-1:6] + 2'd1,6'h0};
+				dram1_data <= dram1_datah >> 12'd512;
+				dram1_shift <= {7'd64-dram1_paddrh[5:0],3'b0};
 			end
 			else begin
 				dram1_hi <= 1'b0;
 				dram1_sel <= {64'h0,fnSel(lsq[mem1_lsndx].op)} << lsq[mem1_lsndx].padr[5:0];
+				dram1_selh <= {64'h0,fnSel(lsq[mem1_lsndx].op)} << lsq[mem1_lsndx].padr[5:0];
 				dram1_vaddr	<= lsq[mem1_lsndx].vadr;
 				dram1_paddr	<= lsq[mem1_lsndx].padr;
-				dram1_data	<= {448'h0,rfo_store_argC} << {lsq[mem1_lsndx].padr[5:0],3'b0};
+				dram1_vaddrh	<= lsq[mem1_lsndx].vadr;
+				dram1_paddrh	<= lsq[mem1_lsndx].padr;
+				dram1_data	<= {448'h0,store_argC} << {lsq[mem1_lsndx].padr[5:0],3'b0};
+				dram1_datah	<= {448'h0,store_argC} << {lsq[mem1_lsndx].padr[5:0],3'b0};
 				dram1_shift <= {lsq[mem1_lsndx].padr[5:0],3'd0};
 			end
 			dram1_memsz <= fnMemsz(lsq[mem1_lsndx].op);
@@ -2525,46 +2659,46 @@ else begin
 
 	// Place up to two instructions into the load/store queue in order.	
 
-	if (lsq[lsq_tail0].v==INV && lsq0_rndxv) begin	// Can an entry be queued?
-		lsq[lsq_tail0].rndx <= lsq0_rndx;
+	if (lsq[lsq_tail0].v==INV && agen0_rndxv) begin	// Can an entry be queued?
+		lsq[lsq_tail0].rndx <= agen0_rndx;
 		lsq[lsq_tail0].v <= 1'b1;
 		lsq[lsq_tail0].agen <= 1'b0;
 		lsq[lsq_tail0].tlb <= 1'b0;
-		lsq[lsq_tail0].op <= rob[lsq0_rndx].op;
-		lsq[lsq_tail0].load <= rob[lsq0_rndx].decbus.load;
-		lsq[lsq_tail0].loadz <= rob[lsq0_rndx].decbus.loadz;
-		lsq[lsq_tail0].store <= rob[lsq0_rndx].decbus.store;
-		store_argC_reg <= rob[lsq0_rndx].pRc;
+		lsq[lsq_tail0].op <= rob[agen0_rndx].op;
+		lsq[lsq_tail0].load <= rob[agen0_rndx].decbus.load;
+		lsq[lsq_tail0].loadz <= rob[agen0_rndx].decbus.loadz;
+		lsq[lsq_tail0].store <= rob[agen0_rndx].decbus.store;
+		store_argC_reg <= rob[agen0_rndx].pRc;
 		//store_tail <= lsq_tail0;
-		lsq[lsq_tail0].Rc <= rob[lsq0_rndx].pRc;
-		lsq[lsq_tail0].Rt <= rob[lsq0_rndx].pRt;
-		lsq[lsq_tail0].memsz <= fnMemsz(rob[lsq0_rndx].op);
+		lsq[lsq_tail0].Rc <= rob[agen0_rndx].pRc;
+		lsq[lsq_tail0].Rt <= rob[agen0_rndx].pRt;
+		lsq[lsq_tail0].memsz <= fnMemsz(rob[agen0_rndx].op);
 		for (n12 = 0; n12 < LSQ_ENTRIES; n12 = n12 + 1)
 			lsq[n12].sn <= lsq[n12].sn - 1;
 		lsq[lsq_tail].sn <= 8'hFF;
 		lsq_tail <= (lsq_tail + 2'd1) % LSQ_ENTRIES;
-		rob[lsq0_rndx].lsq <= 1'b1;
-		rob[lsq0_rndx].lsqndx <= lsq_tail0;
-		if (LSQ2 && lsq[lsq_tail1].v==INV && lsq1_rndxv) begin	// Can a second entry be queued?
+		rob[agen0_rndx].lsq <= 1'b1;
+		rob[agen0_rndx].lsqndx <= lsq_tail0;
+		if (LSQ2 && lsq[lsq_tail1].v==INV && agen1_rndxv) begin	// Can a second entry be queued?
 			lsq[lsq_tail1].v <= VAL;
-			lsq[lsq_tail1].rndx <= lsq1_rndx;
+			lsq[lsq_tail1].rndx <= agen1_rndx;
 			lsq[lsq_tail1].v <= 1'b1;
 			lsq[lsq_tail1].agen <= 1'b0;
 			lsq[lsq_tail1].tlb <= 1'b0;
-			lsq[lsq_tail1].op <= rob[lsq1_rndx].op;
-			lsq[lsq_tail1].load <= rob[lsq1_rndx].decbus.load;
-			lsq[lsq_tail1].loadz <= rob[lsq1_rndx].decbus.loadz;
-			lsq[lsq_tail1].store <= rob[lsq1_rndx].decbus.store;
-			lsq[lsq_tail1].Rc <= rob[lsq1_rndx].pRc;
-			lsq[lsq_tail1].Rt <= rob[lsq1_rndx].pRt;
-			lsq[lsq_tail1].memsz <= fnMemsz(rob[lsq1_rndx].op);
+			lsq[lsq_tail1].op <= rob[agen1_rndx].op;
+			lsq[lsq_tail1].load <= rob[agen1_rndx].decbus.load;
+			lsq[lsq_tail1].loadz <= rob[agen1_rndx].decbus.loadz;
+			lsq[lsq_tail1].store <= rob[agen1_rndx].decbus.store;
+			lsq[lsq_tail1].Rc <= rob[agen1_rndx].pRc;
+			lsq[lsq_tail1].Rt <= rob[agen1_rndx].pRt;
+			lsq[lsq_tail1].memsz <= fnMemsz(rob[agen1_rndx].op);
 			for (n12 = 0; n12 < LSQ_ENTRIES; n12 = n12 + 1)
 				lsq[n12].sn <= lsq[n12].sn - 2;
 			lsq[lsq_tail0].sn <= 8'hFE;
 			lsq[lsq_tail1].sn <= 8'hFF;
 			lsq_tail <= (lsq_tail + 2'd2) % LSQ_ENTRIES;
-			rob[lsq1_rndx].lsq <= 1'b1;
-			rob[lsq1_rndx].lsqndx <= lsq_tail1;
+			rob[agen1_rndx].lsq <= 1'b1;
+			rob[agen1_rndx].lsqndx <= lsq_tail1;
 		end
 	end
 	if (lsq[store_tail].store && lsq[store_tail].v && !lsq[store_tail].datav) begin
@@ -2572,14 +2706,18 @@ else begin
 		if (rob[lsq[store_tail].rndx].argC_v)
 			lsq[store_tail].datav <= VAL;
 	end
+	if (lsq[mem0_lsndx].store)
+		store_argC_reg <= lsq[mem0_lsndx].Rc;
+	if (lsq[mem1_lsndx].store)
+		store_argC_reg <= lsq[mem1_lsndx].Rc;
 
 	// Store TLB translation in LSQ
-	if (mem0_lsndxv) lsq[mem0_lsndx].agen <= 1'b1;
+	if (mem0_lsndxv2) lsq[mem0_lsndx2].agen <= 1'b1;
 	if (mem0_lsndxv2) lsq[mem0_lsndx2].tlb <= 1'b1;
 	if (mem0_lsndxv2) lsq[mem0_lsndx2].vadr <= tlb0_res;
 	if (mem0_lsndxv2) lsq[mem0_lsndx2].padr <= {tlb_entry0.pte.ppn,tlb0_res[15:0]};
 	if (NAGEN > 1) begin
-		if (mem1_lsndxv) lsq[mem1_lsndx].agen <= 1'b1;
+		if (mem1_lsndxv2) lsq[mem1_lsndx2].agen <= 1'b1;
 		if (mem1_lsndxv2) lsq[mem1_lsndx2].tlb <= 1'b1;
 		if (mem1_lsndxv2) lsq[mem1_lsndx2].vadr <= tlb1_res;
 		if (mem1_lsndxv2) lsq[mem1_lsndx2].padr <= {tlb_entry1.pte.ppn,tlb1_res[15:0]};
@@ -2836,7 +2974,7 @@ begin
 	fcu_bt <= 'd0;
 	fcu_argA <= 'd0;
 	fcu_argB <= 'd0;
-	fcu_argC <= 'd0;
+//	fcu_argC <= 'd0;
 	/*
 	for (n11 = 0; n11 < NDATA_PORTS; n11 = n11 + 1) begin
 		dramN[n11] <= 'd0;

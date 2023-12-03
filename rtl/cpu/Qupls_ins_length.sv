@@ -44,7 +44,7 @@ output reg [4:0] len;					// length in bytes
 always_comb
 	casez(ins.any.opcode)
 	7'h2?:	len = 5'd5;			// Branches
-	OP_AMO:	len = 5'd5;
+	OP_AMO:	len = 5'd4;
 	OP_CSR:	len = 5'd5;
 	OP_FLT2,OP_FLT3:				// floating point
 					len = 5'd5;
@@ -52,6 +52,13 @@ always_comb
 	OP_STX:	len = 5'd4;
 	OP_R1,OP_LDOQ,OP_STOQ,OP_ADDQ:
 					len = 5'd3;
+	OP_PFXA32,OP_PFXB32,OP_PFXC32:
+					len = 5'd5;
+	OP_PFXA64,OP_PFXB64,OP_PFXC64:
+					len = 5'd9;
+	OP_PFXA128,OP_PFXB128,OP_PFXC128:
+					len = 5'd17;
+	/*
 	OP_PFXA,OP_PFXB,OP_PFXC:
 		case(ins.pfx.len)
 		2'd0:	len = 5'd4;
@@ -59,6 +66,9 @@ always_comb
 		2'd2:	len = 5'd10;
 		2'd3:	len = 5'd18;
 		endcase
+	*/
+	OP_VEC,OP_VECZ:
+					len = 5'd2;
 	OP_NOP:	len = 5'd1;
 	default:	len = 5'd4;
 	endcase
