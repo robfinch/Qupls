@@ -33,7 +33,7 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 // Instruction Length Decode
-// - pipelined into two clocks
+// - pipelined into three clocks
 //
 // 1300 LUTs / 2500 FFs
 // ============================================================================

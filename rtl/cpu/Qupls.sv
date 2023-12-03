@@ -200,6 +200,7 @@ value_t alu0_argC;
 value_t alu0_argI;	// only used by BEQ
 pregno_t alu0_Rt;
 value_t alu0_cmpo;
+bts_t alu0_bts;
 pc_address_t alu0_pc;
 value_t alu0_res;
 rob_ndx_t alu0_id;
@@ -226,6 +227,7 @@ value_t alu1_argC;
 value_t alu1_argI;	// only used by BEQ
 pregno_t alu1_Rt;
 value_t alu1_cmpo;
+bts_t alu1_bts;
 pc_address_t alu1_pc;
 value_t alu1_res;
 wire  [4:0] alu1_id;
@@ -1526,7 +1528,7 @@ always_comb
 if (fcu_dataready) begin
 	case(fcu_bts)
 	BTS_REG,BTS_DISP:
-		fcu_branchmiss = TRUE;//((takb && ~fcu_bt) || (!takb && fcu_bt));
+		fcu_branchmiss = ((takb && ~fcu_bt) || (!takb && fcu_bt));
 	BTS_BSR,BTS_CALL,BTS_RET:
 		fcu_branchmiss = TRUE;//((takb && ~fcu_bt) || (!takb && fcu_bt));
 	default:
@@ -1717,6 +1719,8 @@ assign agen1_argB_reg = rob[agen1_rndx].pRb;
 //
 // EXECUTE
 //
+pc_address_t alu0_misspc, alu1_misspc;
+
 value_t csr_res;
 always_comb
 	tReadCSR(csr_res,alu0_argI[15:0]);
@@ -1733,6 +1737,9 @@ Qupls_alu #(.ALU0(1'b1)) ualu0
 	.b(alu0_argB),
 	.c(alu0_argC),
 	.i(alu0_argI),
+	.bts(alu0_bts),
+	.pc(alu0_pc),
+	.misspc(alu0_misspc),
 	.csr(csr_res),
 	.o(alu0_res),
 	.mul_done(mul0_done),
@@ -1754,6 +1761,9 @@ if (NALU > 1) begin
 		.b(alu1_argB),
 		.c(alu1_argC),
 		.i(alu1_argI),
+		.bts(alu1_bts),
+		.pc(alu1_pc),
+		.misspc(alu1_misspc),
 		.csr('d0),
 		.o(alu1_res),
 		.mul_done(mul1_done),
@@ -2212,6 +2222,7 @@ else begin
 		alu0_ld <= 1'b1;
 		alu0_instr <= rob[alu0_rndx].op;
 		alu0_div <= rob[alu0_rndx].decbus.div;
+		alu0_bts <= rob[alu0_rndx].decbus.bts;
 		alu0_pc <= rob[alu0_rndx].pc;
 		rob[alu0_rndx].arg <= rob[alu0_rndx].decbus.immc | rfo_alu0_argC;
     rob[alu0_rndx].out <= VAL;
@@ -2227,6 +2238,7 @@ else begin
 			alu1_ld <= 1'b1;
 			alu1_instr <= rob[alu1_rndx].op;
 			alu1_div <= rob[alu1_rndx].decbus.div;
+			alu1_bts <= rob[alu1_rndx].decbus.bts;
 			alu1_pc <= rob[alu1_rndx].pc;
 	    rob[alu1_rndx].out <= VAL;
 	    rob[alu1_rndx].owner <= QuplsPkg::ALU1;
@@ -2251,6 +2263,7 @@ else begin
 		fcu_argI <= rob[fcu_rndx].decbus.immb;
 		fcu_instr <= rob[fcu_rndx].op;
 		fcu_pc <= rob[fcu_rndx].pc;
+		fcu_bt <= rob[fcu_rndx].bt;
 	  rob[fcu_rndx].out <= VAL;
 	  rob[fcu_rndx].owner <= QuplsPkg::FCU;
 	end
