@@ -39,7 +39,7 @@
 import const_pkg::*;
 import QuplsPkg::*;
 
-module Qupls_alu(rst, clk, clk2x, ld, ir, div, a, b, c, i, bts, pc, misspc, csr,
+module Qupls_alu(rst, clk, clk2x, ld, ir, div, a, b, c, i, pc, csr,
 	o, mul_done, div_done, div_dbz);
 parameter ALU0 = 1'b0;
 input rst;
@@ -52,9 +52,7 @@ input value_t a;
 input value_t b;
 input value_t c;
 input value_t i;
-input bts_t bts;
 input pc_address_t pc;
-output pc_address_t misspc;
 input value_t csr;
 output value_t o;
 output reg mul_done;
@@ -125,7 +123,6 @@ Qupls_blend ublend0
 
 always_comb
 begin
-	misspc = 'd0;
 	case(ir.any.opcode)
 	OP_R2:
 		case(ir.r2.func)
@@ -201,22 +198,7 @@ begin
 	OP_VECZ:	bus = 0;
 	// Write the next PC to the link register.
 	OP_BSR,OP_JSR:
-		begin		
-			case(bts)
-			BTS_BSR:
-				begin
-					misspc = pc + {{33{ir[39]}},ir[39:9],12'h000};
-					misspc[11:0] = 'd0;
-				end
-			BTS_CALL:
-				begin
-					misspc = a + {i,12'h000};
-					misspc[11:0] = 'd0;
-				end
-			default:	;
-			endcase
-			bus = {pc[43:12] + 4'd5,12'h000};
-		end
+						bus = {pc[43:12] + 4'd5,12'h000};
 	default:	bus = {2{32'hDEADBEEF}};
 	endcase
 end

@@ -421,44 +421,47 @@ typedef enum logic [3:0] {
 } fbranch_cnd_t;
 */
 // R2 ops
-typedef enum logic [6:0] {
-	FN_AND			= 7'd00,
-	FN_OR				= 7'd01,
-	FN_EOR			= 7'd02,
-	FN_CMP			= 7'd03,
-	FN_ADD			= 7'd04,
-	FN_SUB			= 7'd05,
-	FN_CMPU			= 7'd06,
-	FN_NAND			= 7'd08,
-	FN_NOR			= 7'd09,
-	FN_ENOR			= 7'd10,
-	FN_ANDC			= 7'd11,
-	FN_ORC			= 7'd12,
-	FN_MUL			= 7'd16,
-	FN_DIV			= 7'd17,
-	FN_MULU			= 7'd19,
-	FN_DIVU			= 7'd20,
-	FN_MULSU		= 7'd21,
-	FN_DIVSU		= 7'd22,
-	FN_MULH			= 7'd24,
-	FN_MOD			= 7'd25,
-	FN_MULUH		= 7'd27,
-	FN_MODU			= 7'd28,
-	FN_MULSUH		= 7'd29,
-	FN_MODSU		= 7'd30,
-	NNA_MTWT		= 7'd40,
-	NNA_MTIN		= 7'd41,
-	NNA_MTBIAS	= 7'd42,
-	NNA_MTFB		= 7'd43,
-	NNA_MTMC		= 7'd44,
-	NNA_MTBC		= 7'd45,
-	FN_SEQ			= 7'd80,
-	FN_SNE			= 7'd81,
-	FN_SLT			= 7'd82,
-	FN_SLE			= 7'd83,
-	FN_SLTU			= 7'd84,
-	FN_SLEU			= 7'd85
+typedef enum logic [5:0] {
+	FN_AND			= 6'd00,
+	FN_OR				= 6'd01,
+	FN_EOR			= 6'd02,
+	FN_CMP			= 6'd03,
+	FN_ADD			= 6'd04,
+	FN_SUB			= 6'd05,
+	FN_CMPU			= 6'd06,
+	FN_NAND			= 6'd08,
+	FN_NOR			= 6'd09,
+	FN_ENOR			= 6'd10,
+	FN_ANDC			= 6'd11,
+	FN_ORC			= 6'd12,
+	FN_MUL			= 6'd16,
+	FN_DIV			= 6'd17,
+	FN_MULU			= 6'd19,
+	FN_DIVU			= 6'd20,
+	FN_MULSU		= 6'd21,
+	FN_DIVSU		= 6'd22,
+	FN_MULH			= 6'd24,
+	FN_MOD			= 6'd25,
+	FN_MULUH		= 6'd27,
+	FN_MODU			= 6'd28,
+	FN_MULSUH		= 6'd29,
+	FN_MODSU		= 6'd30,
+	NNA_MTWT		= 6'd40,
+	NNA_MTIN		= 6'd41,
+	NNA_MTBIAS	= 6'd42,
+	NNA_MTFB		= 6'd43,
+	NNA_MTMC		= 6'd44,
+	NNA_MTBC		= 6'd45
 } r2func_t;
+
+typedef enum logic [5:0] {
+	FN_SEQ			= 6'd16,
+	FN_SNE			= 6'd17,
+	FN_SLT			= 6'd18,
+	FN_SLE			= 6'd19,
+	FN_SLTU			= 6'd20,
+	FN_SLEU			= 6'd21
+} r2bfunc_t;
 
 typedef enum logic [2:0] {
 	RND_NE = 3'd0,		// nearest ties to even
@@ -834,9 +837,9 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [111:0] pad;
-	logic [22:0] imm;
-	logic [1:0] len;
+	logic [103:0] pad;
+	logic [31:0] imm;
+	logic resv;
 	opcode_t opcode;
 } postfix_t;
 
@@ -891,11 +894,9 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [103:0] pad;
-	logic [2:0] fmt;
-	logic [2:0] pr;
+	logic [111:0] pad;
 	r2func_t func;
-	logic [1:0] im;
+	logic resv;
 	regspec_t Rb;
 	regspec_t Ra;
 	regspec_t Rt;
@@ -904,11 +905,20 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [103:0] pad;
-	logic [2:0] fmt;
-	logic [2:0] pr;
+	logic [111:0] pad;
+	r2bfunc_t func;
+	logic resv;
+	regspec_t Rb;
+	regspec_t Ra;
+	regspec_t Rt;
+	opcode_t opcode;
+} r2binst_t;
+
+typedef struct packed
+{
+	logic [111:0] pad;
 	r2func_t func2;
-	logic [1:0] im;
+	logic resv;
 	r1func_t func;
 	regspec_t Ra;
 	regspec_t Rt;
@@ -1049,6 +1059,7 @@ typedef union packed
 	f3inst_t	f3;
 	r1inst_t	r1;
 	r2inst_t	r2;
+	r2binst_t	r2b;
 	brinst_t	br;
 	fbrinst_t	fbr;
 	mcb_inst_t mcb;
@@ -1296,7 +1307,7 @@ typedef struct packed {
 	rob_owner_t owner;
 	logic out;
 	logic lsq;
-	logic done;
+	logic [1:0] done;
 	logic bt;
 	operating_mode_t om;		// operating mode
 	decode_bus_t decbus;

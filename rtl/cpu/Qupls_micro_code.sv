@@ -1,0 +1,281 @@
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2023  Robert Finch, Waterloo
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+//
+// BSD 3-Clause License
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are met:
+//
+// 1. Redistributions of source code must retain the above copyright notice, this
+//    list of conditions and the following disclaimer.
+//
+// 2. Redistributions in binary form must reproduce the above copyright notice,
+//    this list of conditions and the following disclaimer in the documentation
+//    and/or other materials provided with the distribution.
+//
+// 3. Neither the name of the copyright holder nor the names of its
+//    contributors may be used to endorse or promote products derived from
+//    this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+// FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+// DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+// SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+// CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+// OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+//
+// There are four copies of this micro-code so that four instructions may be
+// queued at the same time.
+// The micro-code pointer only points to a row of micro-code, so it advances
+// by four. Micro-code branch targets must be addressed at a multiple of four.
+// ============================================================================
+
+module Qupls_micro_code(micro_ip, micro_ir, next_ip, instr);
+input [11:0] micro_ip;
+input instruction_t micro_ir;
+output reg [11:0] next_ip;
+output instruction_t instr;
+parameter SP = 6'd63;
+parameter FP = 6'd62;
+parameter LR1 = 6'd57;
+parameter MC0 = 6'd48;
+parameter MC1 = 6'd49;
+parameter MC2 = 6'd50;
+parameter MC3 = 6'd51;
+
+always_comb
+case(micro_ip)
+12'h000:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
+12'h000:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
+12'h000:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
+12'h000:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
+// ENTER
+12'h004:	begin next_ip = 12'h008; instr = {'d0,13'h1FC0,SP,SP,OP_ADDI}; end				// SP = SP - 64
+12'h005:	begin next_ip = 12'h008; instr = {'d0,13'h0000,SP,FP,OP_STO};	end		// Mem[SP] = FP
+12'h006:	begin next_ip = 12'h008; instr = {'d0,13'h0010,SP,LR1,OP_STO};	end	// Mem16[sp] = LR1
+12'h007:	begin next_ip = 12'h008; instr = {'d0,13'h0020,SP,6'd0,OP_STO}; end		// Mem32[sp] = 0
+12'h008:	begin next_ip = 12'h000; instr = {'d0,13'h0030,SP,6'd0,OP_STO}; end		// Mem48[sp] = 0
+12'h009:	begin next_ip = 12'h000; instr = {'d0,FN_OR,1'd0,6'd0,SP,FP,OP_R2};	end // FP = SP
+12'h00A:	begin next_ip = 12'h000; instr = {'d0,13'h0000,SP,SP,OP_ADDI}; end				// SP = SP + const
+12'h00B:	begin next_ip = 12'h000; instr = {micro_ir[39:8],1'b0,OP_PFXB32};	end	
+12'h00C:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
+12'h00D:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
+12'h00E:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
+12'h00E:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
+// LEAVE
+12'h010:	begin next_ip = 12'h014; instr = {'d0,13'h0000,6'd0,FP,SP,OP_ORI}; end		// SP = FP
+12'h011:	begin next_ip = 12'h014; instr = {'d0,13'h0000,SP,FP,OP_LDO};	end			// FP = Mem[SP]
+12'h012:	begin next_ip = 12'h014; instr = {'d0,13'h0010,SP,LR1,OP_LDO};	end		// LR1 = Mem16[sp]
+12'h013:	begin next_ip = 12'h014; instr = {'d0,13'h0040,SP,SP,OP_ADDI}; end					// SP = SP + 64
+12'h014:	begin next_ip = 12'h000; instr = {'d0,13'h0000,SP,SP,OP_ADDI}; end				// SP = SP + const
+12'h015:	begin next_ip = 12'h000; instr = {'d0,micro_ir[31:13],4'h0,1'b0,OP_PFXB32};	end	
+12'h016:	begin next_ip = 12'h000; instr = {'d0,7'h00,micro_ir[12:7],LR1,6'd0,OP_JSR}; end	// PC = LR1 + const
+12'h017:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
+// PUSH
+12'h020:	begin next_ip = 12'h024; instr = {'d0,-{6'h00,micro_ir[39:37],4'h0},SP,SP,OP_ADDI}; end				// SP = SP - N * 16
+12'h021:	begin next_ip = 12'h024; instr = micro_ir[39:37] > 3'd0 ? {'d0,9'h0,4'h0,SP,micro_ir[12: 7],OP_STO} : {'d0,OP_NOP};	end		// Mem[SP] = Rs
+12'h022:	begin next_ip = 12'h024; instr = micro_ir[39:37] > 3'd1 ? {'d0,9'h1,4'h0,SP,micro_ir[18:13],OP_STO} : {'d0,OP_NOP};	end		// Mem[SP] = Ra
+12'h023:	begin next_ip = 12'h024; instr = micro_ir[39:37] > 3'd2 ? {'d0,9'h2,4'h0,SP,micro_ir[24:19],OP_STO} : {'d0,OP_NOP};	end		// Mem[SP] = Rb
+12'h024:	begin next_ip = 12'h000; instr = micro_ir[39:37] > 3'd3 ? {'d0,9'h3,4'h0,SP,micro_ir[30:25],OP_STO} : {'d0,OP_NOP};	end		// Mem[SP] = Rc
+12'h025:	begin next_ip = 12'h000; instr = micro_ir[39:37] > 3'd4 ? {'d0,9'h4,4'h0,SP,micro_ir[36:31],OP_STO} : {'d0,OP_NOP};	end		// Mem[SP] = Rc
+12'h026:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
+12'h027:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
+// POP
+12'h030:	begin next_ip = 12'h034; instr = micro_ir[39:37] > 3'd0 ? {'d0,9'h0,4'h0,SP,micro_ir[12: 7],OP_LDO} : {33'd0,OP_NOP};	end		// Rt = Mem[SP]
+12'h031:	begin next_ip = 12'h034; instr = micro_ir[39:37] > 3'd1 ? {'d0,9'h1,4'h0,SP,micro_ir[18:13],OP_LDO} : {33'd0,OP_NOP};	end		// Ra = Mem[SP]
+12'h032:	begin next_ip = 12'h034; instr = micro_ir[39:37] > 3'd2 ? {'d0,9'h2,4'h0,SP,micro_ir[24:19],OP_LDO} : {33'd0,OP_NOP};	end		// Rb = Mem[SP]
+12'h033:	begin next_ip = 12'h034; instr = micro_ir[39:37] > 3'd3 ? {'d0,9'h3,4'h0,SP,micro_ir[30:25],OP_LDO} : {33'd0,OP_NOP};	end		// Rc = Mem[SP]
+12'h034:	begin next_ip = 12'h000; instr = micro_ir[39:37] > 3'd4 ? {'d0,9'h4,4'h0,SP,micro_ir[36:31],OP_LDO} : {33'd0,OP_NOP};	end		// Rc = Mem[SP]
+12'h035:	begin next_ip = 12'h000; instr = {'d0,6'h00,micro_ir[39:37],4'h0,SP,SP,OP_ADDI}; end				// SP = SP + N * 16
+12'h036:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
+12'h037:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
+// FDIV
+12'h040:	begin next_ip = 12'h044; instr = {'d0,2'd1,FN_FLT1,3'd0,1'b0,FN_FRES,micro_ir[18:13],micro_ir[12:7],OP_FLT2}; end
+12'h041:	begin next_ip = 12'h044; instr = {'d0,FN_FLT1,4'b0,FN_FNEG,micro_ir[18:13],micro_ir[18:13],OP_FLT2}; end
+12'h042:	begin next_ip = 12'h044; instr = {'d0,FN_FLT1,4'b0,FN_FCONST,6'd2,6'd58,OP_FLT2}; end
+12'h043:	begin next_ip = 12'h044; instr = {'d0,FN_FMA,6'd58,micro_ir[18:13],micro_ir[12:7],6'd47,OP_FLT3}; end
+12'h044:	begin next_ip = 12'h048; instr = {'d0,FN_FMA,6'd0,6'd47,micro_ir[12:7],micro_ir[12:7],OP_FLT3}; end
+12'h045:	begin next_ip = 12'h048; instr = {'d0,FN_FMA,6'd58,micro_ir[18:13],micro_ir[12:7],6'd47,OP_FLT3}; end
+12'h046:	begin next_ip = 12'h048; instr = {'d0,FN_FMA,6'd0,6'd47,micro_ir[12:7],micro_ir[12:7],OP_FLT3}; end
+12'h047:	begin next_ip = 12'h048; instr = {'d0,FN_FMA,6'd58,micro_ir[18:13],micro_ir[12:7],6'd47,OP_FLT3}; end
+12'h048:	begin next_ip = 12'h04C; instr = {'d0,FN_FMA,6'd0,6'd47,micro_ir[12:7],micro_ir[12:7],OP_FLT3}; end
+12'h049:	begin next_ip = 12'h04C; instr = {'d0,FN_FMA,6'd58,micro_ir[18:13],micro_ir[12:7],6'd47,OP_FLT3}; end
+12'h04A:	begin next_ip = 12'h04C; instr = {'d0,FN_FMA,6'd0,6'd47,micro_ir[12:7],micro_ir[12:7],OP_FLT3}; end
+12'h04B:	begin next_ip = 12'h04C; instr = {'d0,FN_FLT1,4'b0,FN_FNEG,micro_ir[18:13],micro_ir[18:13],OP_FLT2}; end
+12'h04C:	begin next_ip = 12'h000; instr = {'d0,FN_FMA,6'd0,micro_ir[18:13],micro_ir[12:7],micro_ir[12:7],OP_FLT3}; end
+12'h04D:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
+12'h04E:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
+12'h04F:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
+
+// Lomont Reciprocal Square Root
+// float RcpSqrt1 (float x)
+// {
+//   float xhalf = 0.5f*x;
+//   int i = *(int*)&x; // represent float as an integer  ()
+//	 i = 0x5f375a86 – (i >> 1);// integer division by two and change in sign
+//	 float y = *(float*)&i; // represent integer as a float  ()
+//
+// initial approximation 0
+//   y = y*(1.5f – xhalf *y*y); // first NR iteration			9.16 bits accurate
+//	 y = y*(1.5f – xhalf *y*y); // second NR iteration	 17.69 bits accurate
+//	 y = y*(1.5f – xhalf *y*y); // third NR iteration	   35 bits accurate
+//   y = y*(1.5f – xhalf *y*y); // fourth NR iteration	 70 bits accurate
+//	 return y;
+// }
+//64-bit magic used:
+//0x5FE6EB50C7B537A9
+// Approximately 119 clock cycles.
+12'h050:	begin next_ip = 12'h054; instr = {3'd0,12'h068,6'd0,micro_ir[18:13],3'd2,2'd0,1'b0,OP_MCB};	end		// if -tive
+12'h051:	begin next_ip = 12'h054; instr = {'d0,FN_FLT1,4'b0,FN_FCONST,6'd57,MC0,OP_FLT2}; end	// MC0 = infinity
+12'h052:	begin next_ip = 12'h054; instr = {3'd0,12'h06C,MC0,micro_ir[18:13],3'd0,2'd0,1'b0,OP_MCB}; end			// if = infinity
+12'h053:	begin next_ip = 12'h054; instr = {'d0,FN_FLT1,4'b0,FN_FCONST,6'd0,MC0,OP_FLT2}; end	// MC0 = 0.5
+12'h054:	begin next_ip = 12'h058; instr = {'d0,FN_MUL,4'b0,MC0,micro_ir[18:13],MC1,OP_FLT2}; end	// MC1 = x * MC0
+12'h055:	begin next_ip = 12'h058; instr = {'d0,1'b0,1'b1,OP_LSR,7'd1,micro_ir[18:13],MC2,OP_SHIFT}; end	// MC2 = i>>1
+12'h056:	begin next_ip = 12'h058; instr = {'d0,FN_FLT1,4'b0,FN_FCONST,6'd4,MC0,OP_FLT2}; end			// MC0 = MAGIC
+12'h057:	begin next_ip = 12'h058; instr = {'d0,FN_SUB,4'b00,MC2,MC0,MC2,OP_FLT2}; end							// MC2 = MAGIC - MC2
+12'h058:	begin next_ip = 12'h05C; instr = {'d0,FN_MUL,4'b0,MC2,MC2,MC3,OP_FLT2}; end							// MC3 = MC2 * MC2
+12'h059:	begin next_ip = 12'h05C; instr = {'d0,FN_FLT1,4'b0,FN_FCONST,6'd3,MC0,OP_FLT2}; end			// MC0 = 1.5
+12'h05A:	begin next_ip = 12'h05C; instr = {'d0,FN_FNMS,MC0,MC3,MC1,micro_ir[12:7],OP_FLT3}; end		// Rt = -(MC3 * MC1 - MC0)
+12'h05B:	begin next_ip = 12'h05C; instr = {'d0,FN_MUL,4'b0,MC2,micro_ir[12:7],MC2,OP_FLT2}; end		// MC2 = MC2 * Rt
+12'h05C:	begin next_ip = 12'h060; instr = {'d0,FN_MUL,4'b0,MC2,MC2,MC3,OP_FLT2}; end							// MC3 = MC2 * MC2
+12'h05D:	begin next_ip = 12'h060; instr = {'d0,FN_FNMS,MC0,MC3,MC1,micro_ir[12:7],OP_FLT3}; end		// Rt = -(MC3 * MC1 - MC0)
+12'h05E:	begin next_ip = 12'h060; instr = {'d0,FN_MUL,4'b0,MC2,micro_ir[12:7],MC2,OP_FLT2}; end		// MC2 = MC2 * Rt
+12'h05F:	begin next_ip = 12'h060; instr = {'d0,FN_MUL,4'b0,MC2,MC2,MC3,OP_FLT2}; end							// MC3 = MC2 * MC2
+12'h060:	begin next_ip = 12'h064; instr = {'d0,FN_FNMS,MC0,MC3,MC1,micro_ir[12:7],OP_FLT3}; end		// Rt = -(MC3 * MC1 - MC0)
+12'h061:	begin next_ip = 12'h064; instr = {'d0,FN_MUL,4'b0,MC2,micro_ir[12:7],MC2,OP_FLT2}; end		// MC2 = MC2 * Rt
+12'h062:	begin next_ip = 12'h064; instr = {'d0,FN_MUL,4'b0,MC2,MC2,MC3,OP_FLT2}; end							// MC3 = MC2 * MC2
+12'h063:	begin next_ip = 12'h064; instr = {'d0,FN_FNMS,MC0,MC3,MC1,micro_ir[12:7],OP_FLT3}; end		// Rt = -(MC3 * MC1 - MC0)
+12'h064:	begin next_ip = 12'h000; instr = {'d0,FN_MUL,4'b0,MC2,micro_ir[12:7],micro_ir[12:7],OP_FLT2}; end		// Rt = MC2 * Rt
+12'h065:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
+12'h066:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
+12'h067:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
+12'h068:	begin next_ip = 12'h000; instr = {'d0,FN_FLT1,2'b0,FN_FCONST,6'd63,micro_ir[12:7],OP_FLT2}; end		// Rt = Nan (square root of negative)
+12'h069:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
+12'h06A:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
+12'h06B:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
+12'h06C:	begin next_ip = 12'h000; instr = {'d0,FN_FLT1,4'b0,FN_FCONST,6'd62,micro_ir[12:7],OP_FLT2}; end		// Rt = Nan (square root of infinity)
+12'h06D:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
+12'h06E:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
+12'h06F:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
+
+// FRSQRTE9
+// Approximately 46 clock cycles.
+12'h070:	begin next_ip = 12'h074; instr = {3'd0,12'h068,6'd0,micro_ir[18:13],3'd2,2'd0,1'b0,OP_MCB};	end		// if -tive
+12'h071:	begin next_ip = 12'h074; instr = {'d0,FN_FLT1,4'b0,FN_FCONST,6'd57,MC0,OP_FLT2}; end	// MC0 = infinity
+12'h072:	begin next_ip = 12'h074; instr = {3'd0,12'h06C,MC0,micro_ir[18:13],3'd0,2'd0,1'b0,OP_MCB}; end			// if = infinity
+12'h073:	begin next_ip = 12'h074; instr = {'d0,FN_FLT1,4'b0,FN_FCONST,6'd0,MC0,OP_FLT2}; end	// MC0 = 0.5
+12'h074:	begin next_ip = 12'h078; instr = {'d0,FN_MUL,4'b0,MC0,micro_ir[18:13],MC1,OP_FLT2}; end	// MC1 = x * MC0
+12'h075:	begin next_ip = 12'h078; instr = {'d0,1'b0,1'b1,OP_LSR,7'd1,micro_ir[18:13],MC2,OP_SHIFT}; end	// MC2 = i>>1
+12'h076:	begin next_ip = 12'h078; instr = {'d0,FN_FLT1,4'b0,FN_FCONST,6'd4,MC0,OP_FLT2}; end			// MC0 = MAGIC
+12'h077:	begin next_ip = 12'h078; instr = {'d0,FN_SUB,4'b00,MC2,MC0,MC2,OP_FLT2}; end							// MC2 = MAGIC - MC2
+12'h078:	begin next_ip = 12'h000; instr = {'d0,FN_MUL,4'b0,MC2,MC2,MC3,OP_FLT2}; end							// MC3 = MC2 * MC2
+12'h079:	begin next_ip = 12'h000; instr = {'d0,FN_FLT1,4'b0,FN_FCONST,6'd3,MC0,OP_FLT2}; end			// MC0 = 1.5
+12'h07A:	begin next_ip = 12'h000; instr = {'d0,FN_FNMS,MC0,MC3,MC1,micro_ir[12:7],OP_FLT3}; end		// Rt = -(MC3 * MC1 - MC0)
+12'h07B:	begin next_ip = 12'h000; instr = {'d0,FN_MUL,4'b0,MC2,micro_ir[12:7],micro_ir[12:7],OP_FLT2}; end		// MC2 = MC2 * Rt
+12'h07C:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
+12'h07D:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
+12'h07E:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
+12'h07F:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
+
+// FRSQRTE17
+// Approximately 70 clock cycles
+12'h080:	begin next_ip = 12'h084; instr = {3'd0,12'h068,6'd0,micro_ir[18:13],3'd2,2'd0,1'b0,OP_MCB};	end		// if -tive
+12'h081:	begin next_ip = 12'h084; instr = {'d0,FN_FLT1,4'b0,FN_FCONST,6'd57,MC0,OP_FLT2}; end	// MC0 = infinity
+12'h082:	begin next_ip = 12'h084; instr = {3'd0,12'h06C,MC0,micro_ir[18:13],3'd0,2'd0,1'b0,OP_MCB}; end			// if = infinity
+12'h083:	begin next_ip = 12'h084; instr = {'d0,FN_FLT1,4'b0,FN_FCONST,6'd0,MC0,OP_FLT2}; end	// MC0 = 0.5
+12'h084:	begin next_ip = 12'h088; instr = {'d0,FN_MUL,4'b0,MC0,micro_ir[18:13],MC1,OP_FLT2}; end	// MC1 = x * MC0
+12'h085:	begin next_ip = 12'h088; instr = {'d0,1'b0,1'b1,OP_LSR,7'd1,micro_ir[18:13],MC2,OP_SHIFT}; end	// MC2 = i>>1
+12'h086:	begin next_ip = 12'h088; instr = {'d0,FN_FLT1,4'b0,FN_FCONST,6'd4,MC0,OP_FLT2}; end			// MC0 = MAGIC
+12'h087:	begin next_ip = 12'h088; instr = {'d0,FN_SUB,4'b00,MC2,MC0,MC2,OP_FLT2}; end							// MC2 = MAGIC - MC2
+12'h088:	begin next_ip = 12'h08C; instr = {'d0,FN_MUL,4'b0,MC2,MC2,MC3,OP_FLT2}; end							// MC3 = MC2 * MC2
+12'h089:	begin next_ip = 12'h08C; instr = {'d0,FN_FLT1,4'b0,FN_FCONST,6'd3,MC0,OP_FLT2}; end			// MC0 = 1.5
+12'h08A:	begin next_ip = 12'h08C; instr = {'d0,FN_FNMS,MC0,MC3,MC1,micro_ir[12:7],OP_FLT3}; end		// Rt = -(MC3 * MC1 - MC0)
+12'h08B:	begin next_ip = 12'h08C; instr = {'d0,FN_MUL,4'b0,MC2,micro_ir[12:7],MC2,OP_FLT2}; end		// MC2 = MC2 * Rt
+12'h08C:	begin next_ip = 12'h000; instr = {'d0,FN_MUL,4'b0,MC2,MC2,MC3,OP_FLT2}; end							// MC3 = MC2 * MC2
+12'h08D:	begin next_ip = 12'h000; instr = {'d0,FN_FNMS,MC0,MC3,MC1,micro_ir[12:7],OP_FLT3}; end		// Rt = -(MC3 * MC1 - MC0)
+12'h08E:	begin next_ip = 12'h000; instr = {'d0,FN_MUL,4'b0,MC2,micro_ir[12:7],micro_ir[12:7],OP_FLT2}; end		// Rt = MC2 * Rt
+12'h08F:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
+
+// FRSQRTE34
+// Approximately 94 clock cycles
+12'h0A0:	begin next_ip = 12'h0A4; instr = {3'd0,12'h068,6'd0,micro_ir[18:13],3'd2,2'd0,1'b0,OP_MCB};	end		// if -tive
+12'h0A1:	begin next_ip = 12'h0A4; instr = {'d0,FN_FLT1,4'b0,FN_FCONST,6'd57,MC0,OP_FLT2}; end	// MC0 = infinity
+12'h0A2:	begin next_ip = 12'h0A4; instr = {3'd0,12'h06C,MC0,micro_ir[18:13],3'd0,2'd0,1'b0,OP_MCB}; end			// if = infinity
+12'h0A3:	begin next_ip = 12'h0A4; instr = {'d0,FN_FLT1,4'b0,FN_FCONST,6'd0,MC0,OP_FLT2}; end	// MC0 = 0.5
+12'h0A4:	begin next_ip = 12'h0A8; instr = {'d0,FN_MUL,4'b0,MC0,micro_ir[18:13],MC1,OP_FLT2}; end	// MC1 = x * MC0
+12'h0A5:	begin next_ip = 12'h0A8; instr = {'d0,1'b0,1'b1,OP_LSR,7'd1,micro_ir[18:13],MC2,OP_SHIFT}; end	// MC2 = i>>1
+12'h0A6:	begin next_ip = 12'h0A8; instr = {'d0,FN_FLT1,4'b0,FN_FCONST,6'd4,MC0,OP_FLT2}; end			// MC0 = MAGIC
+12'h0A7:	begin next_ip = 12'h0A8; instr = {'d0,FN_SUB,4'b00,MC2,MC0,MC2,OP_FLT2}; end							// MC2 = MAGIC - MC2
+12'h0A8:	begin next_ip = 12'h0AC; instr = {'d0,FN_MUL,4'b0,MC2,MC2,MC3,OP_FLT2}; end							// MC3 = MC2 * MC2
+12'h0A9:	begin next_ip = 12'h0AC; instr = {'d0,FN_FLT1,4'b0,FN_FCONST,6'd3,MC0,OP_FLT2}; end			// MC0 = 1.5
+12'h0AA:	begin next_ip = 12'h0AC; instr = {'d0,FN_FNMS,MC0,MC3,MC1,micro_ir[12:7],OP_FLT3}; end		// Rt = -(MC3 * MC1 - MC0)
+12'h0AB:	begin next_ip = 12'h0AC; instr = {'d0,FN_MUL,4'b0,MC2,micro_ir[12:7],MC2,OP_FLT2}; end		// MC2 = MC2 * Rt
+12'h0AC:	begin next_ip = 12'h0B0; instr = {'d0,FN_MUL,4'b0,MC2,MC2,MC3,OP_FLT2}; end							// MC3 = MC2 * MC2
+12'h0AD:	begin next_ip = 12'h0B0; instr = {'d0,FN_FNMS,MC0,MC3,MC1,micro_ir[12:7],OP_FLT3}; end		// Rt = -(MC3 * MC1 - MC0)
+12'h0AE:	begin next_ip = 12'h0B0; instr = {'d0,FN_MUL,4'b0,MC2,micro_ir[12:7],MC2,OP_FLT2}; end		// MC2 = MC2 * Rt
+12'h0AF:	begin next_ip = 12'h0B0; instr = {'d0,FN_MUL,4'b0,MC2,MC2,MC3,OP_FLT2}; end							// MC3 = MC2 * MC2
+12'h0B0:	begin next_ip = 12'h000; instr = {'d0,FN_FNMS,MC0,MC3,MC1,micro_ir[12:7],OP_FLT3}; end		// Rt = -(MC3 * MC1 - MC0)
+12'h0B1:	begin next_ip = 12'h000; instr = {'d0,FN_MUL,4'b0,MC2,micro_ir[12:7],micro_ir[12:7],OP_FLT2}; end		// Rt = MC2 * Rt
+12'h0B2:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
+12'h0B3:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
+
+// FRES16
+// 22 clocks
+// x[i+1] = x[i]*(2 - x[i]*a)
+12'h0C0:	begin next_ip = 12'h0C4; instr = {'d0,FN_FLT1,4'b0,FN_ISNAN,micro_ir[18:13],micro_ir[12:7],OP_FLT2}; end
+12'h0C1:	begin next_ip = 12'h0C4; instr = {3'd0,12'h0C8,6'd0,micro_ir[12:7],3'd1,2'd0,1'b0,OP_MCB}; end
+12'h0C2:	begin next_ip = 12'h0C4; instr = {'d0,FN_FLT1,4'b0,FN_FRES,micro_ir[18:13],micro_ir[12:7],OP_FLT2}; end
+12'h0C3:	begin next_ip = 12'h0C4; instr = {'d0,FN_FLT1,4'b0,FN_FCONST,6'd2,MC0,OP_FLT2}; end
+12'h0C4:	begin next_ip = 12'h000; instr = {'d0,FN_FNMS,MC0,micro_ir[18:13],micro_ir[12:7],MC1,OP_FLT3}; end
+12'h0C5:	begin next_ip = 12'h000; instr = {'d0,FN_FMA,6'd0,MC1,micro_ir[12:7],micro_ir[12:7],OP_FLT3}; end
+12'h0C6:	begin next_ip = 12'h000; instr = {'d0,FN_OR,1'b0,6'd0,micro_ir[18:13],micro_ir[12:7],OP_R2}; end		// Rt = Ra = NaN
+12'h0C7:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
+12'h0C8:	begin next_ip = 12'h000; instr = {'d0,FN_OR,1'b0,6'd0,micro_ir[18:13],micro_ir[12:7],OP_R2}; end		// Rt = Ra = NaN
+12'h0C9:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
+12'h0CA:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
+12'h0CB:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
+
+// FRES32
+// 38 clocks
+12'h0D0:	begin next_ip = 12'h0D4; instr = {'d0,FN_FLT1,4'b0,FN_ISNAN,micro_ir[18:13],micro_ir[12:7],OP_FLT2}; end
+12'h0D1:	begin next_ip = 12'h0D4; instr = {3'd0,12'h0C8,6'd0,micro_ir[12:7],3'd1,2'd0,1'b0,OP_MCB}; end
+12'h0D2:	begin next_ip = 12'h0D4; instr = {'d0,FN_FLT1,4'b0,FN_FRES,micro_ir[18:13],micro_ir[12:7],OP_FLT2}; end
+12'h0D3:	begin next_ip = 12'h0D4; instr = {'d0,FN_FLT1,4'b0,FN_FCONST,6'd2,MC0,OP_FLT2}; end
+12'h0D4:	begin next_ip = 12'h0E8; instr = {'d0,FN_FNMS,MC0,micro_ir[18:13],micro_ir[12:7],MC1,OP_FLT3}; end
+12'h0D5:	begin next_ip = 12'h0E8; instr = {'d0,FN_FMA,6'd0,MC1,micro_ir[12:7],micro_ir[12:7],OP_FLT3}; end
+12'h0D6:	begin next_ip = 12'h0E8; instr = {'d0,OP_NOP};	end
+12'h0D7:	begin next_ip = 12'h0E8; instr = {'d0,OP_NOP};	end
+
+// FRES64
+// 54 clocks
+12'h0E0:	begin next_ip = 12'h0E4; instr = {'d0,FN_FLT1,4'b0,FN_ISNAN,micro_ir[18:13],micro_ir[12:7],OP_FLT2}; end
+12'h0E1:	begin next_ip = 12'h0E4; instr = {3'd0,12'h0C8,6'd0,micro_ir[12:7],3'd1,2'd0,1'b0,OP_MCB}; end
+12'h0E2:	begin next_ip = 12'h0E4; instr = {'d0,FN_FLT1,4'b0,FN_FRES,micro_ir[18:13],micro_ir[12:7],OP_FLT2}; end
+12'h0E3:	begin next_ip = 12'h0E4; instr = {'d0,FN_FLT1,4'b0,FN_FCONST,6'd2,MC0,OP_FLT2}; end
+12'h0E4:	begin next_ip = 12'h0E8; instr = {'d0,FN_FNMS,MC0,micro_ir[18:13],micro_ir[12:7],MC1,OP_FLT3}; end
+12'h0E5:	begin next_ip = 12'h0E8; instr = {'d0,FN_FMA,6'd0,MC1,micro_ir[12:7],micro_ir[12:7],OP_FLT3}; end
+12'h0E6:	begin next_ip = 12'h0E8; instr = {'d0,FN_FNMS,MC0,micro_ir[18:13],micro_ir[12:7],MC1,OP_FLT3}; end
+12'h0E7:	begin next_ip = 12'h0E8; instr = {'d0,FN_FMA,6'd0,MC1,micro_ir[12:7],micro_ir[12:7],OP_FLT3}; end
+12'h0E8:	begin next_ip = 12'h000; instr = {'d0,FN_FNMS,MC0,micro_ir[18:13],micro_ir[12:7],MC1,OP_FLT3}; end
+12'h0E9:	begin next_ip = 12'h000; instr = {'d0,FN_FMA,6'd0,MC1,micro_ir[12:7],micro_ir[12:7],OP_FLT3}; end
+12'h0EA:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
+12'h0EB:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
+
+// RESET
+12'h0F0:	begin next_ip = 12'h000; instr = {'d0,13'h1FE0,6'd0,SP,OP_LDO};	end			// SP = Mem[FFFFFFE0]
+12'h0F1:	begin next_ip = 12'h000; instr = {'d0,13'h1FF0,6'd0,MC0,OP_LDO};	end			// PC = Mem[FFFFFFF0]
+12'h0F2:	begin next_ip = 12'h000; instr = {'d0,13'h0000,MC0,6'd0,OP_JSR};	end
+12'h0F3:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
+default:	begin next_ip = 12'h000; instr = 40'hFFFFFFFFFF; end	// NOP
+endcase
+
+endmodule
