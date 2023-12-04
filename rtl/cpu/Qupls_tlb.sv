@@ -395,7 +395,7 @@ Qupls_active_region uar1
       .douta(),   // READ_DATA_WIDTH_A-bit output: Data output for port A read operations.
       .doutb(t2a),   // READ_DATA_WIDTH_B-bit output: Data output for port B read operations.
       .addra(entry_no),   // ADDR_WIDTH_A-bit input: Address for port A write and read operations.
-      .addrb(pc_vadr[34:28]),   // ADDR_WIDTH_B-bit input: Address for port B write and read operations.
+      .addrb(pc_vadr[22:16]),   // ADDR_WIDTH_B-bit input: Address for port B write and read operations.
       .clka(clk),     // 1-bit input: Clock signal for port A. Also clocks port B when parameter CLOCKING_MODE
                        // is "common_clock".
 
@@ -453,7 +453,7 @@ Qupls_active_region uar1
       .douta(),   // READ_DATA_WIDTH_A-bit output: Data output for port A read operations.
       .doutb(t2b),   // READ_DATA_WIDTH_B-bit output: Data output for port B read operations.
       .addra(entry_no),   // ADDR_WIDTH_A-bit input: Address for port A write and read operations.
-      .addrb(pc_vadr[34:28]),   // ADDR_WIDTH_B-bit input: Address for port B write and read operations.
+      .addrb(pc_vadr[22:16]),   // ADDR_WIDTH_B-bit input: Address for port B write and read operations.
       .clka(clk),     // 1-bit input: Clock signal for port A. Also clocks port B when parameter CLOCKING_MODE
                        // is "common_clock".
 
@@ -498,7 +498,7 @@ begin
 		if (vadr1==missadr[n] && asid1==missasid[n])
 			inq1 = 1'b1;
 	for (n = 0; n < MISSQ_ENTRIES-1; n = n + 1)
-		if (pc_vadr[43:12]==missadr[n] && pc_asid==missasid[n])
+		if (pc_vadr==missadr[n] && pc_asid==missasid[n])
 			pc_inq = 1'b1;
 end
 
@@ -519,9 +519,9 @@ begin
 	end
 	else
 		miss1 = !inq1;
-	if (t2a.vpn.vpn[8:0]==pc_vadr[43:35] && t2a.vpn.asid==pc_asid) begin
+	if (t2a.vpn.vpn[8:0]==pc_vadr[31:23] && t2a.vpn.asid==pc_asid) begin
 	end
-	else if (t2b.vpn.vpn[8:0]==pc_vadr[43:35] && t2b.vpn.asid==pc_asid) begin
+	else if (t2b.vpn.vpn[8:0]==pc_vadr[31:23] && t2b.vpn.asid==pc_asid) begin
 	end
 	else
 		pc_miss = !pc_inq;
@@ -615,13 +615,13 @@ else begin
 		end
 	end
 
-	if (t2a.vpn.vpn[8:0]==pc_vadr[43:35] && t2a.vpn.asid==pc_asid) begin
+	if (t2a.vpn.vpn[8:0]==pc_vadr[31:23] && t2a.vpn.asid==pc_asid) begin
 		pc_entry <= t2a;
 		pc_tlb_res <= {pc_vadr,12'h0};
 		pc_omda <= pc_omd;
 		pc_tlb_v <= 'd1;
 	end
-	else if (t2b.vpn.vpn[8:0]==pc_vadr[43:35] && t2b.vpn.asid==pc_asid) begin
+	else if (t2b.vpn.vpn[8:0]==pc_vadr[31:23] && t2b.vpn.asid==pc_asid) begin
 		pc_entry <= t2b;
 		pc_tlb_res <= {pc_vadr,12'h0};
 		pc_omda <= pc_omd;
@@ -638,7 +638,7 @@ else begin
 		3'b000:	;
 		3'b001:
 			begin
-				missadr[tail] <= pc_vadr[43:12];
+				missadr[tail] <= pc_vadr;
 				missasid[tail] <= pc_asid;
 				tail <= (tail + 1) % MISSQ_ENTRIES;
 			end
@@ -650,7 +650,7 @@ else begin
 			end
 		3'b011:
 			begin
-				missadr[tail] <= pc_vadr[43:12];
+				missadr[tail] <= pc_vadr;
 				missasid[tail] <= pc_asid;
 				missadr[(tail+1) % MISSQ_ENTRIES] <= vadr0;
 				missasid[(tail+1) % MISSQ_ENTRIES] <= asid0;
@@ -664,7 +664,7 @@ else begin
 			end
 		3'b101:
 			begin
-				missadr[tail] <= pc_vadr[43:12];
+				missadr[tail] <= pc_vadr;
 				missasid[tail] <= pc_asid;
 				missadr[(tail+1) % MISSQ_ENTRIES] <= vadr1;
 				missasid[(tail+1) % MISSQ_ENTRIES] <= asid1;
@@ -680,7 +680,7 @@ else begin
 			end
 		3'b111:
 			begin
-				missadr[tail] <= pc_vadr[43:12];
+				missadr[tail] <= pc_vadr;
 				missasid[tail] <= pc_asid;
 				missadr[(tail+1) % MISSQ_ENTRIES] <= vadr0;
 				missasid[(tail+1) % MISSQ_ENTRIES] <= asid0;

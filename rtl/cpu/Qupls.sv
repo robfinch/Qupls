@@ -163,15 +163,34 @@ reg [1:0] lsq_islot [0:LSQ_ENTRIES-1];
 wire [1:0] next_lsq_islot [0:LSQ_ENTRIES-1];
 rob_bitmask_t robentry_stomp;
 rob_bitmask_t robentry_issue;
+rob_bitmask_t robentry_fpu_issue;
 rob_bitmask_t robentry_fcu_issue;
+rob_bitmask_t robentry_agen_issue;
 lsq_bitmask_t lsq_mem_issue;
 lsq_entry_t [7:0] loadq, storeq;
 lsq_entry_t [15:0] lsq;
 lsq_ndx_t lq_tail, lq_head;
+wire nq;
 
 rob_ndx_t tail0, tail1, tail2, tail3;
 rob_ndx_t head0, head1, head2, head3;
 rob_ndx_t store_tail;
+reg_bitmask_t reg_bitmask;
+reg_bitmask_t Ra_bitmask;
+reg_bitmask_t Rt_bitmask;
+reg ls_bmf;		// load or store bitmask flag
+instruction_t hold_ir;
+reg hold_ins;
+reg pack_regs;
+reg [2:0] scale_regs;
+rob_ndx_t grplen0;
+rob_ndx_t grplen1;
+rob_ndx_t grplen2;
+rob_ndx_t grplen3;
+reg last0;
+reg last1;
+reg last2;
+reg last3;
 
 always_comb tail1 = (tail0 + 1) % ROB_ENTRIES;
 always_comb tail2 = (tail0 + 2) % ROB_ENTRIES;
@@ -287,8 +306,9 @@ reg        fcu_available;
 reg        fcu_dataready;
 reg  [4:0] fcu_sourceid;
 instruction_t fcu_instr;
-bts_t fcu_bts;
+instruction_t fcu_missir;
 reg        fcu_bt;
+bts_t fcu_bts;
 value_t fcu_argA;
 value_t fcu_argB;
 value_t fcu_argI;	// only used by BEQ
@@ -299,7 +319,6 @@ cause_code_t fcu_exc;
 wire        fcu_v;
 reg fcu_branchmiss;
 pc_address_t fcu_misspc;
-instruction_t fcu_missir;
 reg takb;
 reg fcu_done;
 rob_ndx_t fcu_rndx;
@@ -419,12 +438,14 @@ cause_code_t [3:0] cause;
 status_reg_t sr_stack [0:8];
 status_reg_t sr;
 pc_address_t [8:0] pc_stack;
+mc_stack_t [8:0] mc_stack;			// micro-code exception stack
 wire [2:0] im = sr.ipl;
 reg [5:0] regset = 6'd0;
 asid_t asid;
 asid_t ip_asid;
 pc_address_t [3:0] kvec;
 pc_address_t avec;
+rob_bitmask_t err_mask;
 reg ERC = 1'b0;
 
 reg [2:0] atom_mask;
@@ -530,7 +551,6 @@ wire [1:0] ic_wway;
 
 reg [1023:0] ic_line;
 wire [1023:0] ic_line2;
-reg [511:0] ins;
 instruction_t ins0, ins1, ins2, ins3, ins4, ins5, ins6, ins7;
 reg ins0_v, ins1_v, ins2_v, ins3_v;
 reg [3:0] ins_v;
@@ -544,6 +564,7 @@ pc_address_t pc_tlb_res;
 wire pc_tlb_v;
 
 wire pt0, pt1, pt2, pt3;		// predict taken branches
+reg regs;
 
 reg branchmiss, branchmiss_next;
 rob_ndx_t missid;
@@ -560,6 +581,7 @@ reg mip3v;
 reg nmip;
 reg mipv;
 
+instruction_t micro_ir;
 instruction_t mc_ins0;
 instruction_t mc_ins1;
 instruction_t mc_ins2;
@@ -567,6 +589,11 @@ instruction_t mc_ins3;
 instruction_t mc_ins4;
 instruction_t mc_ins5;
 instruction_t mc_ins6;
+
+wire mc_last0;
+wire mc_last1;
+wire mc_last2;
+wire mc_last3;
 
 always_comb
 	ins_v = {ins0_v,ins1_v,ins2_v,ins3_v};
@@ -615,7 +642,7 @@ uic1
 	.invall(ic_invall),
 	.invline(ic_invline),
 	.ip_asid(ip_asid),
-	.ip(pc[43:12]),
+	.ip(pc),
 	.ip_o(),
 	.ihit_o(ihito),
 	.ihit(ihit),
@@ -685,21 +712,21 @@ gselectPredictor ugsp1
 	.xbr1(commit_br1),
 	.xbr2(commit_br2),
 	.xbr3(commit_br3),
-	.xip0(commit_pc0[43:12]), 
-	.xip1(commit_pc1[43:12]),
-	.xip2(commit_pc2[43:12]),
-	.xip3(commit_pc3[43:12]),
+	.xip0(commit_pc0), 
+	.xip1(commit_pc1),
+	.xip2(commit_pc2),
+	.xip3(commit_pc3),
 	.takb0(commit_takb0),
 	.takb1(commit_takb1),
 	.takb2(commit_takb2),
 	.takb3(commit_takb3),
-	.ip0(pc0[43:12]),
+	.ip0(pc0),
 	.predict_taken0(pt0),
-	.ip1(pc1[43:12]),
+	.ip1(pc1),
 	.predict_taken1(pt1),
-	.ip2(pc2[43:12]),
+	.ip2(pc2),
 	.predict_taken2(pt2),
-	.ip3(pc3[43:12]),
+	.ip3(pc3),
 	.predict_taken3(pt3)
 );
 
@@ -711,6 +738,7 @@ wire [4:0] len0, len1, len2, len3, len4, len5;
 Qupls_ins_lengths uils1
 (
 	.clk_i(clk),
+	.en_i(!hold_ins),
 	.line_i(ic_line),
 	.line_o(ic_line2),
 	.pc_i(pc),
@@ -723,13 +751,14 @@ Qupls_ins_lengths uils1
 	.len5_o(len5)
 );
 
-always_comb pc0 = {pco[43:12] + 5'd0,mip0};
-always_comb pc1 = {pc0[43:12] + mip0v ? 5'd0 : len0,mip1};
-always_comb pc2 = {pc1[43:12] + mip0v ? 5'd0 : len1,mip2};
-always_comb pc3 = {pc2[43:12] + mip0v ? 5'd0 : len2,mip3};
-always_comb pc4 = {pc3[43:12] + mip0v ? 5'd0 : len3,12'h0};
-always_comb pc5 = {pc4[43:12] + mip0v ? 5'd0 : len4,12'h0};
-always_comb pc6 = {pc5[43:12] + mip0v ? 5'd0 : len5,12'h0};
+always_comb pc0 = pco + 5'd0;
+always_comb pc1 = pc0 + len0;
+always_comb pc2 = pc1 + len1;
+always_comb pc3 = pc2 + len2;
+always_comb pc4 = pc3 + len3;
+always_comb pc5 = pc4 + len4;
+always_comb pc6 = pc5 + len5;
+
 //always_comb pc7 = {pc6[43:12] + len6,12'h0};
 
 // qd indicates which instructions will queue in a given cycle.
@@ -740,7 +769,7 @@ begin
 	qs = 'd0;
 	if (branchmiss)
 		;
-	else if (ihito || |pc0[11:0])
+	else if (ihito || mipv)
 		case (~cqd)
 
     4'b0000: ; // do nothing
@@ -754,7 +783,7 @@ begin
     4'b0011:
     	if (rob[tail0].v==INV) begin
     		qd = qd | 4'b0010;
-    		if (!pt2 && !mip2v) begin
+    		if (!pt2 && !mip2v && !db2.regs) begin
     			if (rob[tail1].v==INV)
     				qd = qd | 4'b0001;
     		end
@@ -767,7 +796,7 @@ begin
     4'b0101:
     	if (rob[tail0].v==INV) begin
     		qd = qd | 4'b0100;
-    		if (!pt1 && !mip1v) begin
+    		if (!pt1 && !mip1v && !db1.regs) begin
     			if (rob[tail1].v==INV)
 	    			qd = qd | 4'b0001;
 	    	end
@@ -777,7 +806,7 @@ begin
     4'b0110:
     	if (rob[tail0].v==INV) begin
     		qd = qd | 4'b0100;
-    		if (!pt1 && !mip1v) begin
+    		if (!pt1 && !mip1v && !db1.regs) begin
     			if (rob[tail1].v==INV)
     				qd = qd | 4'b0010;
     		end
@@ -787,10 +816,10 @@ begin
     4'b0111:
     	if (rob[tail0].v==INV) begin
     		qd = qd | 4'b0100;
-    		if (!pt1 && !mip1v) begin
+    		if (!pt1 && !mip1v && !db1.regs) begin
 	    		if (rob[tail1].v==INV) begin
 	    			qd = qd  | 4'b0010;
-	    			if (!pt2 && !mip2v) begin
+	    			if (!pt2 && !mip2v && !db2.regs) begin
 	    				if (rob[tail2].v==INV)
 		    				qd = qd  | 4'b0001;
 		    		end
@@ -807,7 +836,7 @@ begin
     4'b1001:
     	if (rob[tail0].v==INV) begin
     		qd = qd | 4'b1000;
-    		if (!pt0 && !mip0v) begin
+    		if (!pt0 && !mip0v && !db0.regs) begin
     			if (rob[tail1].v==INV)
 	    			qd = qd | 4'b0001;
 	    	end
@@ -817,7 +846,7 @@ begin
     4'b1010:
     	if (rob[tail0].v==INV) begin
     		qd = qd | 4'b1000;
-    		if (!pt0 && !mip0v) begin
+    		if (!pt0 && !mip0v && !db0.regs) begin
     			if (rob[tail1].v==INV)
 	    			qd = qd | 4'b0010;
 	    	end
@@ -827,10 +856,10 @@ begin
     4'b1011:
     	if (rob[tail0].v==INV) begin
     		qd = qd | 4'b1000;
-    		if (!pt0 && !mip0v) begin
+    		if (!pt0 && !mip0v && !db0.regs) begin
     			if (rob[tail1].v==INV) begin
 	    			qd = qd | 4'b0010;
-    				if (!pt2 && !mip2v) begin
+    				if (!pt2 && !mip2v && !db2.regs) begin
     					if (rob[tail2].v==INV)
 		    				qd = qd | 4'b0001;
 		    		end
@@ -844,7 +873,7 @@ begin
     4'b1100:
     	if (rob[tail0].v==INV) begin
     		qd = qd | 4'b1000;
-    		if (!pt0 && !mip0v) begin
+    		if (!pt0 && !mip0v && !db0.regs) begin
     			if (rob[tail1].v==INV)
 	    			qd = qd | 4'b0100;
 	    	end
@@ -854,10 +883,10 @@ begin
     4'b1101:
     	if (rob[tail0].v==INV) begin
     		qd = qd | 4'b1000;
-    		if (!pt0 && !mip0v) begin
+    		if (!pt0 && !mip0v && !db0.regs) begin
     			if (rob[tail1].v==INV) begin
 		    		qd = qd | 4'b0100;
-	    			if (!pt1 && !mip1v) begin
+	    			if (!pt1 && !mip1v && !db1.regs) begin
 	    				if (rob[tail2].v==INV)
 			    			qd = qd | 4'b0001;
 			    	end
@@ -871,10 +900,10 @@ begin
     4'b1110:
     	if (rob[tail0].v==INV) begin
     		qd = qd | 4'b1000;
-    		if (!pt0 && !mip0v) begin
+    		if (!pt0 && !mip0v && !db0.regs) begin
     			if (rob[tail1].v==INV) begin
 		    		qd = qd | 4'b0100;
-	    			if (!pt1 && !mip1v) begin
+	    			if (!pt1 && !mip1v && !db1.regs) begin
 	    				if (rob[tail2].v==INV)
 			    			qd = qd | 4'b0010;
 			    	end
@@ -888,13 +917,13 @@ begin
     4'b1111:
     	if (rob[tail0].v==INV) begin
     		qd = qd | 4'b1000;
-    		if (!pt0 && !mip0v) begin
+    		if (!pt0 && !mip0v && !db0.regs) begin
     			if (rob[tail1].v==INV) begin
 	    			qd = qd | 4'b0100;
-	    			if (!pt1 && !mip1v) begin
+	    			if (!pt1 && !mip1v && !db1.regs) begin
 	    				if (rob[tail2].v==INV) begin
 			    			qd = qd | 4'b0010;
-		    				if (!pt2 && !mip2v) begin
+		    				if (!pt2 && !mip2v && !db2.regs) begin
 		    					if (rob[tail3].v==INV)
 				    				qd = qd | 4'b0001;
 				    		end
@@ -929,8 +958,11 @@ reg allqd;
 edge_det ued1 (.rst(rst), .clk(clk), .ce(1'b1), .i(next_cqd==4'b1111), .pe(pe_alldq), .ne(), .ee());
 
 always_comb
-	fetch_new = (ihito & ~hirq & (pe_allqd|allqd) & ~(|pc[11:0]) & ~branchmiss) |
-							(|pc[11:0] & ~hirq & (pe_allqd|allqd) & ~branchmiss);
+	fetch_new = (ihito & ~hirq & (pe_allqd|allqd) & ~mipv & ~branchmiss) |
+							(mipv & ~hirq & (pe_allqd|allqd) & ~branchmiss);
+
+always_comb
+	hold_ins = ~|reg_bitmask || mipv;
 
 always_ff @(posedge clk)
 if (rst) begin
@@ -942,20 +974,15 @@ else begin
 		allqd <= 1'b1;
 	if (branchmiss) begin
 		allqd <= 1'b0;
-   	pc <= misspc;
+		if (branchmiss_state==3'd2)
+   		pc <= misspc;
   end
   else begin
-		if (|pc[11:0]) begin
+		if (ihito) begin
 		  if (~hirq) begin
-		  	if (~|next_micro_ip)
-		  		pc <= pc4;
-	  		pc[11:0] <= next_micro_ip;
-			end
-		end
-		else if (ihito) begin
-		  if (~hirq) begin
-		  	if (pe_allqd|allqd) begin
-			  	pc <= mipv ? pc : next_pc;
+		  	//... If all queued and the register bitmask is empty
+		  	if ((pe_allqd|allqd) && !hold_ins) begin
+			  	pc <= next_pc;
 			  	allqd <= 1'b0;
 			  end
 			end
@@ -996,6 +1023,10 @@ Qupls_micro_code umc3 (
 	.next_ip(),
 	.instr(mc_ins3)
 );
+
+always_comb mc_ins4 = {'d0,OP_NOP};
+always_comb mc_ins5 = {'d0,OP_NOP};
+always_comb mc_ins6 = {'d0,OP_NOP};
 
 function [11:0] fnMip;
 input instruction_t ir;
@@ -1044,43 +1075,142 @@ always_comb mip3v = |mip3;
 always_comb nmip = |next_micro_ip;
 always_comb mipv = |micro_ip;
 
+/*
 always_ff @(posedge clk)
-if (rst)
+if (rst) begin
 	micro_ip <= 12'h0F0;
+end
 else begin
   if (~hirq) begin
   	if (pe_allqd|allqd)
 			micro_ip <= next_micro_ip;
 	end
-			 if (mip0v) micro_ip <= mip0;
-	else if (mip1v) micro_ip <= mip1;
-	else if (mip2v) micro_ip <= mip2;
-	else if (mip3v) micro_ip <= mip3;
+			 if (mip0v) begin micro_ip <= mip0; end
+	else if (mip1v) begin micro_ip <= mip1; end
+	else if (mip2v) begin micro_ip <= mip2; end
+	else if (mip3v) begin micro_ip <= mip3; end
 end
+*/
+
+wire [6:0] iRn0;
+wire [6:0] iRn1;
+wire [6:0] iRn2;
+wire [6:0] iRn3;
+wire [95:0] iRnm0;
+wire [95:0] iRnm1;
+wire [95:0] iRnm2;
+wire [95:0] iRnm3;
+assign iRnm0 = ~(96'd1 << iRn0);
+assign iRnm1 = ~(96'd1 << iRn1);
+assign iRnm2 = ~(96'd1 << iRn2);
+assign iRnm3 = ~(96'd1 << iRn3);
+flo96 uflo0 (reg_bitmask,iRn0);
+flo96 uflo1 (reg_bitmask & iRnm0,iRn1);
+flo96 uflo2 (reg_bitmask & iRnm0 & iRnm1,iRn2);
+flo96 uflo3 (reg_bitmask & iRnm0 & iRnm1 & iRnm2,iRn3);
+aregno_t regcnt;
 
 // Extract instructions
 always_comb
 	ic_line = {ic_line_hi.data,ic_line_lo.data};
-always_ff @(posedge clk)
-	ins <= ic_line2 >> {pco[17:12],3'd0};
-always_ff @(posedge clk)
-	ins0 <= hirq ? {'d0,FN_IRQ,1'b0,vect_i,5'd0,2'd0,irq_i,OP_SYS} : mipv ? mc_ins0 : ic_line2 >> {pc0[17:12],3'd0};
-always_ff @(posedge clk)
-	ins1 <= hirq ? {'d0,FN_IRQ,1'b0,vect_i,5'd0,2'd0,irq_i,OP_SYS} : mipv ? mc_ins1 : ic_line2 >> {pc1[17:12],3'd0};
-always_ff @(posedge clk)
-	ins2 <= hirq ? {'d0,FN_IRQ,1'b0,vect_i,5'd0,2'd0,irq_i,OP_SYS} : mipv ? mc_ins2 : ic_line2 >> {pc2[17:12],3'd0};
-always_ff @(posedge clk)
-	ins3 <= hirq ? {'d0,FN_IRQ,1'b0,vect_i,5'd0,2'd0,irq_i,OP_SYS} : mipv ? mc_ins3 : ic_line2 >> {pc3[17:12],3'd0};
-always_ff @(posedge clk)
-	ins4 <= hirq ? {'d0,FN_IRQ,1'b0,vect_i,5'd0,2'd0,irq_i,OP_SYS} : mipv ? mc_ins4 : ic_line2 >> {pc4[17:12],3'd0};
-always_ff @(posedge clk)
-	ins5 <= hirq ? {'d0,FN_IRQ,1'b0,vect_i,5'd0,2'd0,irq_i,OP_SYS} : mipv ? mc_ins5 : ic_line2 >> {pc5[17:12],3'd0};
-always_ff @(posedge clk)
-	ins6 <= hirq ? {'d0,FN_IRQ,1'b0,vect_i,5'd0,2'd0,irq_i,OP_SYS} : mipv ? mc_ins6 : ic_line2 >> {pc6[17:12],3'd0};
+	
+Qupls_extract_ins uiext1
+(
+	.clk_i(clk),
+	.en_i(1'b1),
+	.irq_i(irq_i),
+	.hirq_i(hirq),
+	.vect_i(vect_i),
+	.mipv_i(mipv),
+	.ic_line_i(ic_line2),
+	.pc0_i(pc0),
+	.pc1_i(pc1),
+	.pc2_i(pc2),
+	.pc3_i(pc3),
+	.pc4_i(pc4),
+	.pc5_i(pc5),
+	.pc6_i(pc6),
+	.ls_bmf_i(ls_bmf),
+	.pack_regs_i(pack_regs),
+	.scale_regs_i(scale_regs),
+	.regcnt_i(regcnt),
+	.mc_ins0_i(mc_ins0),
+	.mc_ins1_i(mc_ins1),
+	.mc_ins2_i(mc_ins2),
+	.mc_ins3_i(mc_ins3),
+	.mc_ins4_i(mc_ins4),
+	.mc_ins5_i(mc_ins5),
+	.mc_ins6_i(mc_ins6),
+	.iRn0_i(iRn0),
+	.iRn1_i(iRn1),
+	.iRn2_i(iRn2),
+	.iRn3_i(iRn3),
+	.ins0_o(ins0),
+	.ins1_o(ins1),
+	.ins2_o(ins2),
+	.ins3_o(ins3),
+	.ins4_o(ins4),
+	.ins5_o(ins5),
+	.ins6_o(ins6)
+);
 
-always_comb mc_ins4 = {'d0,OP_NOP};
-always_comb mc_ins5 = {'d0,OP_NOP};
-always_comb mc_ins6 = {'d0,OP_NOP};
+// Register memory packing flag.
+always_ff @(posedge clk)
+if (rst)
+	pack_regs <= 'd0;
+else begin
+	if (db0.regs) pack_regs <= ins0[7];
+	else if (db1.regs) pack_regs <= ins1[7];
+	else if (db2.regs) pack_regs <= ins2[7];
+	else if (db3.regs) pack_regs <= ins3[7];
+end
+
+// Register list load or store flag.
+always_ff @(posedge clk)
+if (rst)
+	ls_bmf <= 'd0;
+else begin
+	if (db0.regs) ls_bmf <= ins0[8];
+	else if (db1.regs) ls_bmf <= ins1[8];
+	else if (db2.regs) ls_bmf <= ins2[8];
+	else if (db3.regs) ls_bmf <= ins3[8];
+end
+
+// Index scaling for register list.
+always_ff @(posedge clk)
+if (rst)
+	scale_regs <= 'd0;
+else begin
+	if (db0.regs) scale_regs <= ins0[11:9];
+	else if (db1.regs) scale_regs <= ins1[11:9];
+	else if (db2.regs) scale_regs <= ins2[11:9];
+	else if (db3.regs) scale_regs <= ins3[11:9];
+end
+
+// Capture register list bitmask.
+always_ff @(posedge clk)
+if (rst)
+	reg_bitmask <= 'd0;
+else begin
+	if (db0.regs) reg_bitmask <= ins0[71:16];
+	else if (db1.regs) reg_bitmask <= ins1[71:16];
+	else if (db2.regs) reg_bitmask <= ins2[71:16];
+	else if (db3.regs) reg_bitmask <= ins3[71:16];
+	if (nq && |reg_bitmask)
+		reg_bitmask <= reg_bitmask & iRnm0 & iRnm1 & iRnm2 & iRnm3;
+end
+
+always_ff @(posedge clk)
+if (rst)
+	regcnt <= 'd0;
+else begin
+	if (db0.regs) regcnt <= 'd0;
+	else if (db1.regs) regcnt <= 'd0;
+	else if (db2.regs) regcnt <= 'd0;
+	else if (db3.regs) regcnt <= 'd0;
+	if (nq && |reg_bitmask)
+		regcnt <= regcnt + ~&iRn0 + ~&iRn1 + ~&iRn2 + ~&iRn3;
+end
 
 wire [NDATA_PORTS-1:0] dcache_load;
 wire [NDATA_PORTS-1:0] dhit;
@@ -1255,6 +1385,7 @@ assign instr[3][3] = ins6;
 Qupls_decoder udeci0
 (
 	.clk(clk),
+	.en(1'b1),
 	.instr(instr[0]),
 	.dbo(db0)
 );
@@ -1262,6 +1393,7 @@ Qupls_decoder udeci0
 Qupls_decoder udeci1
 (
 	.clk(clk),
+	.en(1'b1),
 	.instr(instr[1]),
 	.dbo(db1)
 );
@@ -1269,6 +1401,7 @@ Qupls_decoder udeci1
 Qupls_decoder udeci2
 (
 	.clk(clk),
+	.en(1'b1),
 	.instr(instr[2]),
 	.dbo(db2)
 );
@@ -1276,6 +1409,7 @@ Qupls_decoder udeci2
 Qupls_decoder udeci3
 (
 	.clk(clk),
+	.en(1'b1),
 	.instr(instr[3]),
 	.dbo(db3)
 );
@@ -1326,7 +1460,16 @@ assign arnbank[15] = sr.om & {2{|db3.Rt}};
 
 
 wire stallq;
-wire nq = !branchmiss && rob[tail0].v==INV;
+assign nq = !branchmiss && rob[tail0].v==INV;
+
+reg signed [$clog2(ROB_ENTRIES):0] cmtlen;			// Will always be >= 0
+reg signed [$clog2(ROB_ENTRIES):0] group_len;		// Commit group length
+
+always_comb
+	if (head0 > tail0)
+		cmtlen = head0-tail0;
+	else
+		cmtlen = ROB_ENTRIES+head0-tail0;
 
 wire do_commit =
 	((
@@ -1334,7 +1477,8 @@ wire do_commit =
 		((rob[head1].v && &rob[head1].done) || !rob[head1].v) &&
 		((rob[head2].v && &rob[head2].done) || !rob[head2].v) &&
 		((rob[head3].v && &rob[head3].done) || !rob[head3].v)
-		) && head0 != tail0 && head0 != tail1 && head0 != tail2 && head0 != tail3)
+		) && head0 != tail0 && head0 != tail1 && head0 != tail2 && head0 != tail3 &&
+		cmtlen >= group_len)
 	;
 
 wire cmtbr = (
@@ -1409,10 +1553,10 @@ Qupls_rat urat1
 	.rn(arn),
 	.rrn(prn),
 	.vn(),
-	.wrbanka(sr.om & {2{|db0r.Rt[5:3]}}),
-	.wrbankb(sr.om & {2{|db1r.Rt[5:3]}}),
-	.wrbankc(sr.om & {2{|db2r.Rt[5:3]}}),
-	.wrbankd(sr.om & {2{|db3r.Rt[5:3]}}),
+	.wrbanka(sr.om==2'd0 ? 1'b0 : 1'b1),
+	.wrbankb(sr.om==2'd0 ? 1'b0 : 1'b1),
+	.wrbankc(sr.om==2'd0 ? 1'b0 : 1'b1),
+	.wrbankd(sr.om==2'd0 ? 1'b0 : 1'b1),
 	.wra(db0r.Rt),
 	.wrra(nRt0),
 	.wrb(db1r.Rt),
@@ -1421,10 +1565,10 @@ Qupls_rat urat1
 	.wrrc(nRt2),
 	.wrd(db3r.Rt),
 	.wrrd(nRt3),
-	.cmtbanka(rob[head0].om & {2{|rob[head0].decbus.Rt[5:3]}}),
-	.cmtbankb(rob[head1].om & {2{|rob[head1].decbus.Rt[5:3]}}),
-	.cmtbankc(rob[head2].om & {2{|rob[head2].decbus.Rt[5:3]}}),
-	.cmtbankd(rob[head3].om & {2{|rob[head3].decbus.Rt[5:3]}}),
+	.cmtbanka(rob[head0].om==2'd0 ? 1'b0 : 1'b1),
+	.cmtbankb(rob[head1].om==2'd0 ? 1'b0 : 1'b1),
+	.cmtbankc(rob[head2].om==2'd0 ? 1'b0 : 1'b1),
+	.cmtbankd(rob[head3].om==2'd0 ? 1'b0 : 1'b1),
 	.cmtav(do_commit & rob[head0].v),
 	.cmtbv(do_commit & rob[head1].v),
 	.cmtcv(do_commit & rob[head2].v),
@@ -1542,7 +1686,10 @@ begin
 	n7 = 'd0;
 	stail = 'd0;
 	for (n5 = 0; n5 < ROB_ENTRIES; n5 = n5 + 1) begin
-		n6 = (n5 - 1) % ROB_ENTRIES;
+		if (n5==0)
+			n6 = ROB_ENTRIES - 1;
+		else
+			n6 = n5 - 1;
 		if (robentry_stomp[n5] && !robentry_stomp[n6] && !n7) begin
 			stail = n5;
 			n7 = 1'b1;
@@ -1554,30 +1701,24 @@ pc_address_t tgtpc;
 
 always_comb
 	case(fcu_bts)
-	BTS_REG:
-		tgtpc = fcu_argC;
 	BTS_DISP:
 		begin
 			tgtpc = fcu_pc + {{{47{fcu_instr[39]}},fcu_instr[39:25],fcu_instr[12:11],2'b0} +
-											  {{47{fcu_instr[39]}},fcu_instr[39:25],fcu_instr[12:11]},12'h000};
-			tgtpc[11:0] = 'd0;
+											  {{47{fcu_instr[39]}},fcu_instr[39:25],fcu_instr[12:11]}};
 		end
 	BTS_BSR:
 		begin
-			tgtpc = alu0_pc + {{33{alu0_instr[39]}},alu0_instr[39:9],12'h000};
-			tgtpc[11:0] = 'd0;
+			tgtpc = alu0_pc + {{33{alu0_instr[39]}},alu0_instr[39:9]};
 		end
 	BTS_CALL:
 		begin
-			tgtpc = alu0_argA + {alu0_argI,12'h000};
-			tgtpc[11:0] = 'd0;
+			tgtpc = alu0_argA + {alu0_argI};
 		end
 	BTS_RTI:
 		tgtpc = fcu_instr[8:7]==2'd1 ? pc_stack[1] : pc_stack[0];
 	BTS_RET:
 		begin
-			tgtpc = fcu_argC + {fcu_instr[18:11],12'h000};
-			tgtpc[11:0] = 'd0;
+			tgtpc = fcu_argA + fcu_instr[11:7];
 		end
 	default:
 		tgtpc = RSTPC;
@@ -1585,7 +1726,7 @@ always_comb
 
 pc_address_t tpc;
 always_comb
-	tpc = fcu_pc + 16'h5000;
+	tpc = fcu_pc + 4'd5;
 
 modFcuMissPC umisspc1
 (
@@ -1595,7 +1736,6 @@ modFcuMissPC umisspc1
 	.pc_stack(pc_stack),
 	.bt(fcu_bt),
 	.argA(fcu_argA),
-	.argC(fcu_argC),
 	.argI(fcu_argI),
 	.misspc(fcu_misspc)
 );
@@ -1750,8 +1890,6 @@ endgenerate
 rob_ndx_t alu0_rndx;
 rob_ndx_t alu1_rndx;
 rob_ndx_t fpu0_rndx; 
-rob_ndx_t mem0_rndx;
-rob_ndx_t mem1_rndx;
 lsq_ndx_t mem0_lsndx, mem1_lsndx;
 lsq_ndx_t mem0_lsndx2, mem1_lsndx2;
 wire mem0_lsndxv, mem1_lsndxv;
@@ -2084,10 +2222,10 @@ Qupls_tlb utlb1
 	.agen1_rndx_i(agen1_rndx1),
 	.agen0_rndx_o(agen0_rndx2),
 	.agen1_rndx_o(agen1_rndx2),
-	.load0_i(agen_load0),
-	.load1_i(agen_load1),
-	.store0_i(agen_store0),
-	.store1_i(agen_store1),
+	.load0_i(),
+	.load1_i(),
+	.store0_i(),
+	.store1_i(),
 	.asid0(asid),
 	.asid1(asid),
 	.pc_asid(ic_miss_asid),
@@ -2234,6 +2372,18 @@ end
 else begin
 	alu0_ld <= 'd0;
 	alu1_ld <= 'd0;
+			 if (mip0v) begin micro_ir <= ins0; end
+	else if (mip1v) begin micro_ir <= ins1; end
+	else if (mip2v) begin micro_ir <= ins2; end
+	else if (mip3v) begin micro_ir <= ins3; end
+  if (~hirq) begin
+  	if (pe_allqd|allqd)
+			micro_ip <= next_micro_ip;
+	end
+			 if (mip0v) begin micro_ip <= mip0; end
+	else if (mip1v) begin micro_ip <= mip1; end
+	else if (mip2v) begin micro_ip <= mip2; end
+	else if (mip3v) begin micro_ip <= mip3; end
 
 //
 // DATAINCOMING
@@ -2395,6 +2545,7 @@ else begin
 		fcu_instr <= rob[fcu_rndx].op;
 		fcu_pc <= rob[fcu_rndx].pc;
 		fcu_bt <= rob[fcu_rndx].bt;
+		fcu_bts <= rob[fcu_rndx].decbus.bts;
 	  rob[fcu_rndx].out <= VAL;
 	  rob[fcu_rndx].owner <= QuplsPkg::FCU;
 	end
@@ -2795,10 +2946,10 @@ else begin
 			rob[tail3].v <= VAL;
 			for (n12 = 0; n12 < ROB_ENTRIES; n12 = n12 + 1)
 				rob[n12].sn <= rob[n12].sn - 4;
-			tEnque(8'hFC,db0r,pc0r,ins0,pt0,tail0, 1'b0, prn[0], prn[1], prn[2], prn[3], nRt0, avail_reg & ~(192'd1 << nRt0), cndx);
-			tEnque(8'hFD,db1r,pc1r,ins1,pt1,tail1, pt0|mip0v, prn[4], prn[5], prn[6], prn[7], nRt1, avail_reg & ~((192'd1 << nRt0) | (192'd1 << nRt1)), cndx);
-			tEnque(8'hFE,db2r,pc2r,ins2,pt2,tail2, pt0|pt1|mip0v|mip1v, prn[8], prn[9], prn[10], prn[11], nRt2, avail_reg & ~((192'd1 << nRt0) | (192'd1 << nRt1) | (192'd1 << nRt2)), cndx);
-			tEnque(8'hFF,db3r,pc3r,ins3,pt3,tail3, pt0|pt1|pt2|mip0v|mip1v|mip2v, prn[12], prn[13], prn[14], prn[15], nRt3, avail_reg & ~((192'd1 << nRt0) | (192'd1 << nRt1) | (192'd1 << nRt2)| (192'd1 << nRt3)), cndx);
+			tEnque(8'hFC,db0r,pc0r,ins0,pt0,tail0, 1'b0, prn[0], prn[1], prn[2], prn[3], nRt0, avail_reg & ~(192'd1 << nRt0), cndx, grplen0, last0);
+			tEnque(8'hFD,db1r,pc1r,ins1,pt1,tail1, pt0|mip0v, prn[4], prn[5], prn[6], prn[7], nRt1, avail_reg & ~((192'd1 << nRt0) | (192'd1 << nRt1)), cndx, grplen1, last1);
+			tEnque(8'hFE,db2r,pc2r,ins2,pt2,tail2, pt0|pt1|mip0v|mip1v, prn[8], prn[9], prn[10], prn[11], nRt2, avail_reg & ~((192'd1 << nRt0) | (192'd1 << nRt1) | (192'd1 << nRt2)), cndx, grplen2, last3);
+			tEnque(8'hFF,db3r,pc3r,ins3,pt3,tail3, pt0|pt1|pt2|mip0v|mip1v|mip2v, prn[12], prn[13], prn[14], prn[15], nRt3, avail_reg & ~((192'd1 << nRt0) | (192'd1 << nRt1) | (192'd1 << nRt2)| (192'd1 << nRt3)), cndx,grplen3,last3);
 			tail0 <= (tail0 + 3'd4) % ROB_ENTRIES;
 		end
 	end
@@ -2892,8 +3043,6 @@ else begin
 		commit_br1 <= rob[head1].br;
 		commit_br2 <= rob[head2].br;
 		commit_br3 <= rob[head3].br;
-		if (rob[head0].exc != FLT_NONE)
-			tProcessExc(head0,rob[head0].pc);
 		rob[head0].v <= INV;
 		rob[head0].done <= 'd0;
 		rob[head0].lsq <= 'd0;
@@ -2901,12 +3050,13 @@ else begin
 			lsq[rob[head0].lsqndx].v <= INV;
 		tags2free[0] <= rob[head0].pRt;
 		head0 <= (head0 + 3'd1) % ROB_ENTRIES;
+		group_len <= group_len - 1;
+		if (group_len <= 0)
+			group_len <= rob[head0].group_len;
 		I <= I + rob[head0].v;
 		if (rob[head0].decbus.oddball)
 			tOddballCommit(1'b1, head0);
 		else if (rob[head1].decbus.oddball && rob[head0].exc==FLT_NONE) begin
-			if (rob[head1].exc != FLT_NONE)
-				tProcessExc(head1,rob[head1].pc);
 			rob[head1].v <= INV;
 			rob[head1].done <= 'd0;
 			rob[head1].lsq <= 'd0;
@@ -2915,11 +3065,10 @@ else begin
 			tags2free[1] <= rob[head1].pRt;
 			tOddballCommit(1'b1, head1);
 			head0 <= (head0 + 3'd2) % ROB_ENTRIES;
+			group_len <= group_len - 2;
 			I <= I + rob[head0].v + rob[head1].v;
 		end
 		else if (rob[head2].decbus.oddball && rob[head0].exc==FLT_NONE && rob[head1].exc==FLT_NONE) begin
-			if (rob[head2].exc != FLT_NONE)
-				tProcessExc(head2,rob[head2].pc);
 			rob[head1].v <= INV;
 			rob[head2].v <= INV;
 			rob[head1].lsq <= 'd0;
@@ -2934,11 +3083,10 @@ else begin
 			tags2free[2] <= rob[head2].pRt;
 			tOddballCommit(1'b1, head2);
 			head0 <= (head0 + 3'd3) % ROB_ENTRIES;
+			group_len <= group_len - 3;
 			I <= I + rob[head0].v + rob[head1].v + rob[head2].v;
 		end
 		else if (rob[head3].decbus.oddball && rob[head0].exc==FLT_NONE && rob[head1].exc==FLT_NONE && rob[head2].exc==FLT_NONE) begin
-			if (rob[head3].exc != FLT_NONE)
-				tProcessExc(head3,rob[head3].pc);
 			rob[head1].v <= INV;
 			rob[head2].v <= INV;
 			rob[head3].v <= INV;
@@ -2959,6 +3107,7 @@ else begin
 			tags2free[3] <= rob[head3].pRt;
 			tOddballCommit(1'b1, head3);
 			head0 <= (head0 + 3'd4) % ROB_ENTRIES;
+			group_len <= group_len - 4;
 			I <= I + rob[head0].v + rob[head1].v + rob[head2].v + rob[head3].v;
 		end
 		else begin
@@ -2970,10 +3119,9 @@ else begin
 					lsq[rob[head1].lsqndx].v <= INV;
 				tags2free[1] <= rob[head1].pRt;
 				head0 <= (head0 + 3'd2) % ROB_ENTRIES;
+				group_len <= group_len - 2;
 				I <= I + rob[head0].v + rob[head1].v;
-				if (rob[head1].exc != FLT_NONE)
-					tProcessExc(head1,rob[head1].pc);
-				else begin
+				if (rob[head1].exc == FLT_NONE) begin
 					rob[head2].v <= INV;
 					rob[head2].done <= 'd0;
 					rob[head2].lsq <= 'd0;
@@ -2981,23 +3129,42 @@ else begin
 						lsq[rob[head2].lsqndx].v <= INV;
 					tags2free[2] <= rob[head2].pRt;
 					head0 <= (head0 + 3'd3) % ROB_ENTRIES;
+					group_len <= group_len - 3;
 					I <= I + rob[head0].v + rob[head1].v + rob[head2].v;
-					if (rob[head2].exc != FLT_NONE)
-						tProcessExc(head2,rob[head2].pc);
-					else begin
+					if (rob[head2].exc == FLT_NONE) begin
 						rob[head3].v <= INV;
 						rob[head3].done <= 'd0;
 						rob[head3].lsq <= 'd0;
 						if (rob[head3].lsq)
 							lsq[rob[head3].lsqndx].v <= INV;
 						tags2free[3] <= rob[head3].pRt;
-						if (rob[head3].exc != FLT_NONE)
-							tProcessExc(head2,rob[head3].pc);
 						head0 <= (head0 + 3'd4) % ROB_ENTRIES;
+						group_len <= group_len - 4;
 						I <= I + rob[head0].v + rob[head1].v + rob[head2].v + rob[head3].v;
 					end
 				end
 			end
+		end
+		// Trigger exception processing for last instruction in gruop.
+		if (rob[head0].exc != FLT_NONE) begin
+			err_mask[head0] <= 1'b1;
+			if (rob[head0].last)
+				tProcessExc(head0,rob[head0].pc);
+		end
+		if (rob[head1].exc != FLT_NONE) begin
+			err_mask[head1] <= 1'b1;
+			if (rob[head1].last)
+				tProcessExc(head1,rob[head1].pc);
+		end
+		if (rob[head2].exc != FLT_NONE) begin
+			err_mask[head2] <= 1'b1;
+			if (rob[head2].last)
+				tProcessExc(head2,rob[head2].pc);
+		end
+		if (rob[head3].exc != FLT_NONE) begin
+			err_mask[head3] <= 1'b1;
+			if (rob[head3].last)
+				tProcessExc(head3,rob[head3].pc);
 		end
 	end
 	else begin
@@ -3071,10 +3238,13 @@ end
 
 task tReset;
 begin
+	micro_ir <= {'d0,OP_NOP};
+	micro_ip <= 12'h0F0;
 	for (n14 = 0; n14 < 4; n14 = n14 + 1) begin
 		kvec[n14] <= RSTPC >> 12;
 		avec[n14] <= RSTPC >> 12;
 	end
+	err_mask <= 'd0;
 	excir <= {33'd0,OP_NOP};
 	excmiss <= 1'b0;
 	excmisspc <= RSTPC;
@@ -3164,6 +3334,14 @@ begin
 		dramN_tid[n11] = {4'd0,n11[0],3'd0};
 	end
 	*/
+	grplen0 <= 'd0;
+	grplen1 <= 'd0;
+	grplen2 <= 'd0;
+	grplen3 <= 'd0;
+	last0 <= 1'b1;
+	last1 <= 1'b1;
+	last2 <= 1'b1;
+	last3 <= 1'b1;
 end
 endtask
 
@@ -3182,6 +3360,8 @@ input pregno_t pRt;
 input pregno_t nRt;
 input [PREGS-1:0] avail;
 input [3:0] cndx;
+input rob_ndx_t grplen;
+input last;
 integer n12;
 integer n13;
 begin
@@ -3195,6 +3375,8 @@ begin
 	rob[tail].argB_v <= fnSourceBv(ins);
 	rob[tail].argC_v <= fnSourceCv(ins);
 	rob[tail].owner <= QuplsPkg::NONE;
+	rob[tail].group_len <= grplen;
+	rob[tail].last <= last;
 
 	rob[tail].om <= sr.om;
 	rob[tail].op <= ins;
@@ -3425,7 +3607,12 @@ begin
 	for (nn = 1; nn < 8; nn = nn + 1)
 		pc_stack[nn] <= pc_stack[nn-1];
 	pc_stack[0] <= retpc;
+	for (nn = 1; nn < 8; nn = nn + 1)
+		mc_stack[nn] <= mc_stack[nn-1];
+	mc_stack[0].ir <= micro_ir;
+	mc_stack[0].ip <= micro_ip;
 	sr.ipl <= 3'd7;
+	sr.mcip <= micro_ip;
 	excir <= rob[id].op;
 	excid <= id;
 	excmiss <= 1'b1;
@@ -3441,6 +3628,7 @@ task tProcessRti;
 input twoup;
 integer nn;
 begin
+	err_mask <= 'd0;
 	sr <= twoup ? sr_stack[1] : sr_stack[0];
 	for (nn = 0; nn < 7; nn = nn + 1)
 		sr_stack[nn] <= sr_stack[nn+1+twoup];
@@ -3452,6 +3640,15 @@ begin
 		pc_stack[nn] <=	pc_stack[nn+1+twoup];
 	pc_stack[7] <= RSTPC;
 	pc_stack[8] <= RSTPC;
+	// Unstack the micro-code instruction register
+	micro_ir <= twoup ? mc_stack[1].ir : mc_stack[0].ir;
+	micro_ip <= twoup ? mc_stack[1].ip : mc_stack[0].ip;
+	for (nn = 0; nn < 7; nn = nn + 1)
+		mc_stack[nn] <=	mc_stack[nn+1+twoup];
+	mc_stack[7].ir <= {'d0,OP_NOP};
+	mc_stack[8].ir <= {'d0,OP_NOP};
+	mc_stack[7].ip <= 12'h0;
+	mc_stack[8].ip <= 12'h0;
 end
 endtask
 
@@ -3475,14 +3672,13 @@ endtask
 
 endmodule
 
-module modFcuMissPC(instr, bts, pc, pc_stack, bt, argA, argC, argI, misspc);
+module modFcuMissPC(instr, bts, pc, pc_stack, bt, argA, argI, misspc);
 input instruction_t instr;
 input bts_t bts;
 input pc_address_t pc;
 input pc_address_t [8:0] pc_stack;
 input bt;
 input value_t argA;
-input value_t argC;
 input value_t argI;
 output pc_address_t misspc;
 
@@ -3491,37 +3687,38 @@ always_comb
 	tpc = pc + 16'h5000;
 
 always_comb
+begin
 	case(bts)
+	/*
 	BTS_REG:
 		 begin
-			misspc = bt ? tpc : argC + {{53{instr[39]}},instr[39:31],instr[12:11],12'h000};
-			misspc[11:0] = 'd0;
+			misspc = bt ? tpc : argC + {{53{instr[39]}},instr[39:31],instr[12:11]};
 		end
+	*/
 	BTS_DISP:
 		begin
-			misspc = bt ? tpc : pc + {{47{instr[39]}},instr[39:25],instr[12:11],12'h000};
-			misspc[11:0] = 'd0;
+			misspc = bt ? tpc : pc + {{47{instr[39]}},instr[39:25],instr[12:11]};
 		end
 	BTS_BSR:
 		begin
-			misspc = pc + {{33{instr[39]}},instr[39:9],12'h000};
-			misspc[11:0] = 'd0;
+			misspc = pc + {{33{instr[39]}},instr[39:9]};
 		end
 	BTS_CALL:
 		begin
-			misspc = argA + {argI,12'h000};
-			misspc[11:0] = 'd0;
+			misspc = argA + argI;
 		end
 	// Must be tested before Ret
 	BTS_RTI:
-		misspc = instr[8:7]==2'd1 ? pc_stack[1] : pc_stack[0];
+		begin
+			misspc = instr[8:7]==2'd1 ? pc_stack[1] : pc_stack[0];
+		end
 	BTS_RET:
 		begin
-			misspc = argC + {instr[18:11],12'h000};
-			misspc[11:0] = 'd0;
+			misspc = argA + instr[10:7];
 		end
 	default:
 		misspc = RSTPC;
 	endcase
+end
 
 endmodule

@@ -36,8 +36,9 @@
 
 import QuplsPkg::*;
 
-module Qupls_decoder(clk, instr, dbo);
+module Qupls_decoder(clk, en, instr, dbo);
 input clk;
+input en;
 input instruction_t [3:0] instr;
 output decode_bus_t dbo;
 
@@ -95,6 +96,12 @@ Qupls_decode_fc ufc1
 (
 	.instr(ins),
 	.fc(db.fc)
+);
+
+Qupls_decode_cjb ucjb1
+(
+	.instr(ins),
+	.cjb(db.cjb)
 );
 
 Qupls_decode_branch udecbr
@@ -211,8 +218,20 @@ Qupls_decode_oddball uob0
 	.oddball(db.oddball)
 );
 
+Qupls_decode_regs uregs0
+(
+	.instr(ins),
+	.regs(db.regs)
+);
+
+Qupls_decode_brk ubrk1
+(
+	.instr(ins),
+	.brk(db.brk)
+);
+
 always_ff @(posedge clk)
-begin
+if (en) begin
 	dbo <= 'd0;	// in case a signal was missed / unused.
 	dbo <= db;
 end

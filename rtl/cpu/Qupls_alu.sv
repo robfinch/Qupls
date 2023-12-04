@@ -146,6 +146,10 @@ begin
 		FN_NOR:	bus = ~(a | b);
 		FN_ENOR:	bus = ~(a ^ b);
 		FN_ORC:	bus = a | ~b;
+		default:	bus = {2{32'hDEADBEEF}};
+		endcase
+	OP_R2B:
+		case(ir.r2b.func)
 		FN_SEQ:	bus = a == b;
 		FN_SNE:	bus = a != b;
 		FN_SLT:	bus = $signed(a) < $signed(b);
@@ -198,7 +202,7 @@ begin
 	OP_VECZ:	bus = 0;
 	// Write the next PC to the link register.
 	OP_BSR,OP_JSR:
-						bus = {pc[43:12] + 4'd5,12'h000};
+						bus = pc + 4'd5;
 	default:	bus = {2{32'hDEADBEEF}};
 	endcase
 end

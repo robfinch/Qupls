@@ -64,6 +64,9 @@ begin
 	imma = 'd0;
 	immb = 'd0;
 	immc = 'd0;
+	finsA = 'd0;
+	finsB = 'd0;
+	finsC = 'd0;
 	case(ins[0].any.opcode)
 	OP_ADDI,OP_CMPI,OP_MULI,OP_DIVI,OP_SUBFI,OP_SLTI:
 		immb = {{51{ins[0][31]}},ins[0][31:19]};

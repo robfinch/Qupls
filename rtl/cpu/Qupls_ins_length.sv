@@ -67,6 +67,7 @@ always_comb
 		2'd3:	len = 5'd18;
 		endcase
 	*/
+	OP_REGS:	len = 5'd9;
 	OP_VEC,OP_VECZ:
 					len = 5'd2;
 	OP_NOP:	len = 5'd1;

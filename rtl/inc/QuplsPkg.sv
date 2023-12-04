@@ -217,6 +217,7 @@ typedef enum logic [6:0] {
 	OP_DEP			= 7'd23,
 	OP_MINMAX3	= 7'd24,
 	OP_MUX			= 7'd25,
+	OP_R2B			= 7'd26,
 	OP_PTRDIF		= 7'd27,
 	OP_ADDQ			= 7'd28,
 	OP_DBcc			= 7'd29,
@@ -286,6 +287,7 @@ typedef enum logic [6:0] {
 	OP_FLT3			= 7'd99,
 	OP_IRQ			= 7'd112,
 	OP_FENCE		= 7'd114,
+	OP_REGS			= 7'd117,
 	OP_VECZ			= 7'd118,
 	OP_VEC			= 7'd119,
 	OP_REP			= 7'd120,
@@ -701,6 +703,8 @@ parameter CSR_MLDT	= 16'h3052;
 parameter CSR_MTCB	= 16'h3054;
 parameter CSR_MBVEC	= 16'b0011000001011???;
 parameter CSR_MSP		= 16'h3060;
+parameter CSR_SR_STACK		= 16'h308?;
+parameter CSR_MCIR_STACK 	= 16'h309?;
 parameter CSR_MEPC	= 16'h3108;
 parameter CSR_TIME	= 16'h?FE0;
 parameter CSR_MTIME	= 16'h3FE0;
@@ -784,7 +788,7 @@ typedef logic [11:0] order_tag_t;
 typedef logic [11:0] ASID;
 typedef logic [11:0] asid_t;
 typedef logic [31:0] address_t;
-typedef logic [43:0] pc_address_t;
+typedef logic [31:0] pc_address_t;
 /*
 struct packed {
 	logic [31:0] pc;
@@ -817,6 +821,14 @@ typedef logic [$clog2(PREGS)-1:0] tregno_t;
 
 typedef struct packed
 {
+	logic [11:0] ip;
+	logic [51:0] ir;
+} mc_stack_t;
+
+typedef struct packed
+{
+	logic [19:0] resv4;	// padding to 64-bits
+	logic [11:0] mcip;	// micro-code instruction pointer
 	logic [7:0] pl;			// privilege level
 	logic [6:0] resv3;
 	logic mprv;					// memory access priv indicator	
@@ -831,7 +843,7 @@ typedef struct packed
 	logic hie;					// hypervisor interrupt enable
 	logic sie;					// supervisor interrupt enable
 	logic uie;					// user interrupt enable
-} status_reg_t;				// 32 bits
+} status_reg_t;				// 64 bits
 
 // Instruction types, makes decoding easier
 
@@ -1077,13 +1089,11 @@ typedef union packed
 } instruction_t;
 
 typedef struct packed {
-	address_t adr;
-	logic [3:0] resv2;
+	pc_address_t adr;
 	logic v;
 	logic [2:0] icnt;
-	logic [REP_BIT:0] imm;
-	logic resv;
-	logic [15:9] ins;
+	logic [25:0] imm;
+	logic [13:7] ins;
 } rep_buffer_t;
 
 typedef struct packed
@@ -1108,27 +1118,13 @@ typedef struct packed
 	aregno_t Rb;
 	aregno_t Rc;
 	aregno_t Rt;
-	logic Ta;
-	logic Tb;
-	logic Tt;
-	logic hasRa;
-	logic hasRb;
-	logic hasRc;
-	logic hasRt;
-	logic hasRp;
 	logic Rtsrc;	// Rt is a source register
 	logic has_imm;
 	value_t imma;
 	value_t immb;
 	value_t immc;
 	prec_t prc;
-	logic rfwr;
-	logic vrfwr;
 	logic csr;
-	logic csrrd;
-	logic csrrw;
-	logic csrrs;
-	logic csrrc;
 	logic nop;				// NOP semantics
 	logic fc;					// flow control op
 	logic backbr;			// backwards target branch
@@ -1170,6 +1166,7 @@ typedef struct packed
 	logic popq;
 	logic sync;
 	logic oddball;
+	logic regs;					// register list modifier
 } decode_bus_t;
 
 typedef struct packed
@@ -1296,7 +1293,7 @@ typedef struct packed
 } writeback_info_t;
 */
 
-const pc_address_t RSTPC	= 44'hFFFD00000A0;
+const pc_address_t RSTPC	= 32'hFFFD0000;
 const address_t RSTSP = 32'hFFFFFFF0;
 
 typedef logic [7:0] seqnum_t;
@@ -1304,6 +1301,8 @@ typedef logic [7:0] seqnum_t;
 typedef struct packed {
 	logic v;
 	seqnum_t sn;
+	logic last;							// 1=last instruction in group
+	rob_ndx_t group_len;		// length of instruction group
 	rob_owner_t owner;
 	logic out;
 	logic lsq;
@@ -1318,7 +1317,6 @@ typedef struct packed {
 	pregno_t nRt;							// new Rt
 	logic br;
 	pc_address_t brtgt;
-	bts_t bts;				// branch target source
 	logic takb;
 	logic [3:0] cndx;					// checkpoint index
 	logic [PREGS-1:0] avail;	// available registers at time of queue
@@ -1507,6 +1505,10 @@ begin
 		FN_NOR:	fnSourceAv = fnConstReg(ir.r2.Ra) || fnImma(ir);
 		FN_ENOR:	fnSourceAv = fnConstReg(ir.r2.Ra) || fnImma(ir);
 		FN_ORC:	fnSourceAv = fnConstReg(ir.r2.Ra) || fnImma(ir);
+		default:	fnSourceAv = 1'b1;
+		endcase
+	OP_R2B:
+		case(ir.r2b.func)
 		FN_SEQ:	fnSourceAv = fnConstReg(ir.r2.Ra) || fnImma(ir);
 		FN_SNE:	fnSourceAv = fnConstReg(ir.r2.Ra) || fnImma(ir);
 		FN_SLT:	fnSourceAv = fnConstReg(ir.r2.Ra) || fnImma(ir);
@@ -1564,6 +1566,10 @@ begin
 		FN_NOR:	fnSourceBv = fnConstReg(ir.r2.Rb) || fnImmb(ir);
 		FN_ENOR:	fnSourceBv = fnConstReg(ir.r2.Rb) || fnImmb(ir);
 		FN_ORC:	fnSourceBv = fnConstReg(ir.r2.Rb) || fnImmb(ir);
+		default:	fnSourceBv = 1'b1;
+		endcase
+	OP_R2B:
+		case(ir.r2b.func)
 		FN_SEQ:	fnSourceBv = fnConstReg(ir.r2.Rb) || fnImmb(ir);
 		FN_SNE:	fnSourceBv = fnConstReg(ir.r2.Rb) || fnImmb(ir);
 		FN_SLT:	fnSourceBv = fnConstReg(ir.r2.Rb) || fnImmb(ir);
@@ -1641,6 +1647,10 @@ begin
 		FN_NOR:	fnSourceTv = fnConstReg(ir.r2.Rt);
 		FN_ENOR:	fnSourceTv = fnConstReg(ir.r2.Rt);
 		FN_ORC:	fnSourceTv = fnConstReg(ir.r2.Rt);
+		default:	fnSourceTv = 1'b1;
+		endcase
+	OP_R2B:
+		case(ir.r2b.func)
 		FN_SEQ:	fnSourceTv = fnConstReg(ir.r2.Rt);
 		FN_SNE:	fnSourceTv = fnConstReg(ir.r2.Rt);
 		FN_SLT:	fnSourceTv = fnConstReg(ir.r2.Rt);
@@ -1698,6 +1708,10 @@ begin
 		FN_NOR:	fnSourcePv = ~ir.r2.fmt[0];
 		FN_ENOR:	fnSourcePv = ~ir.r2.fmt[0];
 		FN_ORC:	fnSourcePv = ~ir.r2.fmt[0];
+		default:	fnSourcePv = 1'b1;
+		endcase
+	OP_R2B:
+		case(ir.r2b.func)
 		FN_SEQ:	fnSourcePv = ~ir.r2.fmt[0];
 		FN_SNE:	fnSourcePv = ~ir.r2.fmt[0];
 		FN_SLT:	fnSourcePv = ~ir.r2.fmt[0];

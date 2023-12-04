@@ -88,7 +88,7 @@ btb_entry_t tmp0, tmp1, tmp2, tmp3;
       .AUTO_SLEEP_TIME(0),            // DECIMAL
       .BYTE_WRITE_WIDTH_A($bits(btb_entry_t)),        // DECIMAL
       .CASCADE_HEIGHT(0),             // DECIMAL
-      .CLOCKING_MODE("common_clock"), // String
+      .CLOCKING_MODE("independent_clock"), // String
       .ECC_MODE("no_ecc"),            // String
       .MEMORY_INIT_FILE("none"),      // String
       .MEMORY_INIT_PARAM("0"),        // String
@@ -123,7 +123,7 @@ btb_entry_t tmp0, tmp1, tmp2, tmp3;
       .clka(clk),                     // 1-bit input: Clock signal for port A. Also clocks port B when
                                        // parameter CLOCKING_MODE is "common_clock".
 
-      .clkb(clk),                     // 1-bit input: Clock signal for port B when parameter CLOCKING_MODE is
+      .clkb(rclk),                     // 1-bit input: Clock signal for port B when parameter CLOCKING_MODE is
                                        // "independent_clock". Unused when parameter CLOCKING_MODE is
                                        // "common_clock".
 
@@ -168,7 +168,7 @@ btb_entry_t tmp0, tmp1, tmp2, tmp3;
       .AUTO_SLEEP_TIME(0),            // DECIMAL
       .BYTE_WRITE_WIDTH_A($bits(btb_entry_t)),        // DECIMAL
       .CASCADE_HEIGHT(0),             // DECIMAL
-      .CLOCKING_MODE("common_clock"), // String
+      .CLOCKING_MODE("independent_clock"), // String
       .ECC_MODE("no_ecc"),            // String
       .MEMORY_INIT_FILE("none"),      // String
       .MEMORY_INIT_PARAM("0"),        // String
@@ -203,7 +203,7 @@ btb_entry_t tmp0, tmp1, tmp2, tmp3;
       .clka(clk),                     // 1-bit input: Clock signal for port A. Also clocks port B when
                                        // parameter CLOCKING_MODE is "common_clock".
 
-      .clkb(clk),                     // 1-bit input: Clock signal for port B when parameter CLOCKING_MODE is
+      .clkb(rclk),                     // 1-bit input: Clock signal for port B when parameter CLOCKING_MODE is
                                        // "independent_clock". Unused when parameter CLOCKING_MODE is
                                        // "common_clock".
 
@@ -248,7 +248,7 @@ btb_entry_t tmp0, tmp1, tmp2, tmp3;
       .AUTO_SLEEP_TIME(0),            // DECIMAL
       .BYTE_WRITE_WIDTH_A($bits(btb_entry_t)),        // DECIMAL
       .CASCADE_HEIGHT(0),             // DECIMAL
-      .CLOCKING_MODE("common_clock"), // String
+      .CLOCKING_MODE("independent_clock"), // String
       .ECC_MODE("no_ecc"),            // String
       .MEMORY_INIT_FILE("none"),      // String
       .MEMORY_INIT_PARAM("0"),        // String
@@ -283,7 +283,7 @@ btb_entry_t tmp0, tmp1, tmp2, tmp3;
       .clka(clk),                     // 1-bit input: Clock signal for port A. Also clocks port B when
                                        // parameter CLOCKING_MODE is "common_clock".
 
-      .clkb(clk),                     // 1-bit input: Clock signal for port B when parameter CLOCKING_MODE is
+      .clkb(rclk),                     // 1-bit input: Clock signal for port B when parameter CLOCKING_MODE is
                                        // "independent_clock". Unused when parameter CLOCKING_MODE is
                                        // "common_clock".
 
@@ -328,7 +328,7 @@ btb_entry_t tmp0, tmp1, tmp2, tmp3;
       .AUTO_SLEEP_TIME(0),            // DECIMAL
       .BYTE_WRITE_WIDTH_A($bits(btb_entry_t)),        // DECIMAL
       .CASCADE_HEIGHT(0),             // DECIMAL
-      .CLOCKING_MODE("common_clock"), // String
+      .CLOCKING_MODE("independent_clock"), // String
       .ECC_MODE("no_ecc"),            // String
       .MEMORY_INIT_FILE("none"),      // String
       .MEMORY_INIT_PARAM("0"),        // String
@@ -363,7 +363,7 @@ btb_entry_t tmp0, tmp1, tmp2, tmp3;
       .clka(clk),                     // 1-bit input: Clock signal for port A. Also clocks port B when
                                        // parameter CLOCKING_MODE is "common_clock".
 
-      .clkb(clk),                     // 1-bit input: Clock signal for port B when parameter CLOCKING_MODE is
+      .clkb(rclk),                     // 1-bit input: Clock signal for port B when parameter CLOCKING_MODE is
                                        // "independent_clock". Unused when parameter CLOCKING_MODE is
                                        // "common_clock".
 
@@ -399,24 +399,24 @@ btb_entry_t tmp0, tmp1, tmp2, tmp3;
 
    );
 
-always_ff @(posedge rclk)
+always_ff @(posedge clk)
 	addrb0 <= pc0[21:12];
 
 always_comb
 begin
-	if (pc0[43:12]==doutb0.pc[43:12] && doutb0.takb) begin
+	if (pc0==doutb0.pc && doutb0.takb) begin
 		next_pc <= doutb0.tgt;
 		takb <= 1'b1;
 	end
-	else if (pc1[43:12]==doutb1.pc[43:12] && doutb1.takb) begin
+	else if (pc1==doutb1.pc && doutb1.takb) begin
 		next_pc <= doutb1.tgt;
 		takb <= 1'b1;
 	end
-	else if (pc2[43:12]==doutb2.pc[43:12] && doutb2.takb) begin
+	else if (pc2==doutb2.pc && doutb2.takb) begin
 		next_pc <= doutb2.tgt;
 		takb <= 1'b1;
 	end
-	else if (pc3[43:12]==doutb3.pc[43:12] && doutb3.takb) begin
+	else if (pc3==doutb3.pc && doutb3.takb) begin
 		next_pc <= doutb3.tgt;
 		takb <= 1'b1;
 	end

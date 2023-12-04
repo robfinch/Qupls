@@ -55,9 +55,9 @@ parameter MC3 = 6'd51;
 always_comb
 case(micro_ip)
 12'h000:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
-12'h000:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
-12'h000:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
-12'h000:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
+12'h001:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
+12'h002:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
+12'h003:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
 // ENTER
 12'h004:	begin next_ip = 12'h008; instr = {'d0,13'h1FC0,SP,SP,OP_ADDI}; end				// SP = SP - 64
 12'h005:	begin next_ip = 12'h008; instr = {'d0,13'h0000,SP,FP,OP_STO};	end		// Mem[SP] = FP
@@ -70,7 +70,7 @@ case(micro_ip)
 12'h00C:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
 12'h00D:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
 12'h00E:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
-12'h00E:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
+12'h00F:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
 // LEAVE
 12'h010:	begin next_ip = 12'h014; instr = {'d0,13'h0000,6'd0,FP,SP,OP_ORI}; end		// SP = FP
 12'h011:	begin next_ip = 12'h014; instr = {'d0,13'h0000,SP,FP,OP_LDO};	end			// FP = Mem[SP]

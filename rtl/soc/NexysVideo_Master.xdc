@@ -6,7 +6,7 @@
 
 #Clock Signal
 set_property -dict {PACKAGE_PIN R4 IOSTANDARD LVCMOS33} [get_ports xclk]
-create_clock -period 25.000 -name xclk -waveform {0.000 12.500} -add [get_ports xclk]
+create_clock -period 50.000 -name xclk -waveform {0.000 10.000} -add [get_ports xclk]
 set_property CLOCK_DEDICATED_ROUTE BACKBONE [get_nets -of_objects [get_ports xclk]]
 #create_generated_clock -name clk20 -source [get_pins ucg1/clk_in1] -divide_by 32 -multiply_by 8 [get_pins ucg1/clk20]
 #create_generated_clock -name clk40 -source [get_pins ucg1/clk_in1] -divide_by 16 -multiply_by 8 [get_pins ucg1/clk40]
