@@ -156,6 +156,9 @@ parameter PANIC_BADTARGETID	 = 4'd12;
 parameter PANIC_COMMIT = 4'd13;
 parameter PANIC_CHECKPOINT_INDEX = 4'd14;
 
+parameter DRAMSLOT_AVAIL = 2'd0;
+parameter DRAMSLOT_READY = 2'd1;
+parameter DRAMSLOT_ACTIVE = 2'd2;
 
 typedef logic [4:0] rob_ndx_t;
 typedef logic [3:0] lsq_ndx_t;

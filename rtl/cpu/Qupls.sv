@@ -63,9 +63,6 @@ module Qupls(coreno_i, rst_i, clk_i, clk2x_i, irq_i, vect_i,
 	fta_req, fta_resp, snoop_adr, snoop_v, snoop_cid);
 parameter CORENO = 6'd1;
 parameter CID = 6'd1;
-parameter DRAMSLOT_AVAIL = 3'd0;
-parameter DRAMSLOT_READY = 3'd1;
-parameter DRAMSLOT_ACTIVE = 3'd2;
 input [63:0] coreno_i;
 input rst_i;
 input clk_i;
@@ -202,6 +199,8 @@ always_comb head3 = (head0 + 3) % ROB_ENTRIES;
 
 decode_bus_t db0, db1, db2, db3;
 decode_bus_t db0r, db1r, db2r, db3r;
+instruction_t ins0q, ins1q, ins2q, ins3q;
+instruction_t ins0r, ins1r, ins2r, ins3r;
 
 reg [3:0] regx0;
 reg [3:0] regx1;
@@ -335,11 +334,15 @@ reg takb;
 reg fcu_done;
 rob_ndx_t fcu_rndx;
 
+instruction_t agen0_op;
+rob_ndx_t agen0_id, last_agen0_id;
 value_t agen0_argA;
 value_t agen0_argB;
 value_t agen0_argI;
 pc_address_t agen0_pc;
 
+instruction_t agen1_op;
+rob_ndx_t agen1_id, last_agen1_id;
 value_t agen1_argA;
 value_t agen1_argB;
 value_t agen1_argI;
@@ -357,9 +360,9 @@ reg excmiss;
 instruction_t excir;
 
 wire dram_avail;
-reg	[2:0] dram0,dram0p;	// state of the DRAM request (latency = 4; can have three in pipeline)
-reg	[2:0] dram1,dram1p;	// state of the DRAM request (latency = 4; can have three in pipeline)
-//reg	 [1:0] dram2;	// state of the DRAM request (latency = 4; can have three in pipeline)
+wire [1:0] dram0;	// state of the DRAM request
+wire [1:0] dram1;	// state of the DRAM request
+
 value_t dram_bus0;
 regspec_t dram_tgt0;
 reg  [4:0] dram_id0;
@@ -384,8 +387,8 @@ reg dram0_store;
 pregno_t dram0_Rt, dram_Rt0;
 cause_code_t dram0_exc;
 reg dram0_ack;
-reg [7:0] dram0_tid;
-reg dram0_more;
+fta_tranid_t dram0_tid;
+wire dram0_more;
 reg dram0_hi;
 reg dram0_erc;
 reg [9:0] dram0_shift;
@@ -406,8 +409,8 @@ reg dram1_store;
 pregno_t dram1_Rt, dram_Rt1;
 cause_code_t dram1_exc;
 reg dram1_ack;
-reg [7:0] dram1_tid;
-reg dram1_more;
+fta_tranid_t dram1_tid;
+wire dram1_more;
 reg dram1_erc;
 reg dram1_hi;
 reg [9:0] dram1_shift;
@@ -426,7 +429,7 @@ reg [NDATA_PORTS-1:0] dramN_loadz;
 reg [NDATA_PORTS-1:0] dramN_store;
 reg [NDATA_PORTS-1:0] dramN_ack;
 reg [NDATA_PORTS-1:0] dramN_erc;
-reg [7:0] dramN_tid [0:NDATA_PORTS-1];
+fta_tranid_t dramN_tid [0:NDATA_PORTS-1];
 memsz_t dramN_memsz;
 
 
@@ -1267,7 +1270,7 @@ for (g = 0; g < NDATA_PORTS; g = g + 1) begin
 
 	always_comb
 	begin
-		cpu_request_i[g].cid = CID + g + 1;
+		cpu_request_i[g].cid = g + 1;
 		cpu_request_i[g].tid = dramN_tid[g];
 		cpu_request_i[g].om = fta_bus_pkg::MACHINE;
 		cpu_request_i[g].cmd = dramN_store[g] ? fta_bus_pkg::CMD_STORE : dramN_loadz[g] ? fta_bus_pkg::CMD_LOADZ : dramN_load[g] ? fta_bus_pkg::CMD_LOAD : fta_bus_pkg::CMD_NONE;
@@ -1326,7 +1329,7 @@ for (g = 0; g < NDATA_PORTS; g = g + 1) begin
 		.dce(1'b1),
 		.ftam_req(ftadm_req[g]),
 		.ftam_resp(ftadm_resp[g]),
-		.ftam_full(ftadm_full),
+		.ftam_full(ftadm_resp[g].rty),
 		.acr(),
 		.hit(dhit[g]),
 		.modified(modified[g]),
@@ -1636,6 +1639,22 @@ always_ff @(posedge clk)
 	db2r <= db2;
 always_ff @(posedge clk)
 	db3r <= db3;
+always_ff @(posedge clk)
+	ins0q <= ins0;
+always_ff @(posedge clk)
+	ins1q <= ins1;
+always_ff @(posedge clk)
+	ins2q <= ins2;
+always_ff @(posedge clk)
+	ins3q <= ins3;
+always_ff @(posedge clk)
+	ins0r <= ins0q;
+always_ff @(posedge clk)
+	ins1r <= ins1q;
+always_ff @(posedge clk)
+	ins2r <= ins2q;
+always_ff @(posedge clk)
+	ins3r <= ins3q;
 
 always_ff @(posedge clk)
 	pc0r <= pc0d;
@@ -1942,7 +1961,7 @@ Qupls_sched uscd1
 	.fpu1_idle(1'b0),
 	.fcu_idle(fcu_idle),
 	.agen0_idle(agen0_idle),
-	.agen1_idle(agen1_idle),
+	.agen1_idle(1'b0),
 	.lsq0_idle(lsq0_idle),
 	.lsq1_idle(lsq1_idle),
 	.robentry_islot_i(robentry_islot),
@@ -2132,13 +2151,12 @@ wire tlb_wr;
 wire tlb_way;
 tlb_entry_t tlb_entry0, tlb_entry1, tlb_entry;
 wire [6:0] tlb_entryno;
-instruction_t agen0_op, agen1_op;
 reg agen0_load, agen1_load;
 reg agen0_store, agen1_store;
 wire tlb0_load, tlb0_store;
 wire tlb1_load, tlb1_store;
 reg stall_load, stall_store;
-reg stall_tlb0, stall_tlb1;
+reg stall_tlb0 ='d0, stall_tlb1='d0;
 
 always_comb
 	stall_load = (tlb0_v & tlb0_load & loadq[lq_tail]==VAL) ||
@@ -2149,13 +2167,9 @@ always_comb
 							(tlb1_v & tlb1_store & storeq[lq_tail]==VAL)
 							;
 always_comb
-	stall_tlb0 = (tlb0_v & tlb0_load & loadq[lq_tail]==VAL) ||
-							(tlb0_v & tlb0_store & storeq[lq_tail]==VAL)
-							;
+	stall_tlb0 = (tlb0_v && lsq[lsq_tail]==VAL);
 always_comb
-	stall_tlb1 = (tlb1_v & tlb1_load & loadq[lq_tail]==VAL) ||
-							(tlb1_v & tlb1_store & storeq[lq_tail]==VAL)
-							;
+	stall_tlb1 = (tlb1_v && lsq[lsq_tail]==VAL);
 
 /*
 reg in_loadq0, in_storeq0;
@@ -2175,10 +2189,6 @@ begin
 end
 */
 always_ff @(posedge clk)
-	agen0_op <= rob[agen0_rndx].op;
-always_ff @(posedge clk)
-	agen1_op <= rob[agen1_rndx].op;
-always_ff @(posedge clk)
 	agen0_load <= rob[agen0_rndx].decbus.load;
 always_ff @(posedge clk)
 	agen1_load <= rob[agen1_rndx].decbus.load;
@@ -2191,24 +2201,25 @@ rob_ndx_t agen0_rndx1, agen1_rndx1;
 rob_ndx_t agen0_rndx2, agen1_rndx2;
 reg agen0_rndxv1, agen1_rndxv1;
 wire agen0_rndxv2, agen1_rndxv2;
+reg agen0_v, agen1_v;
 
 Qupls_agen uag0
 (
 	.clk(clk),
-	.ir(rob[agen0_rndx].op),
-	.a(rfo_agen0_argA),
-	.b(rfo_agen0_argB),
-	.i(rob[agen0_rndx].decbus.immb),
+	.ir(agen0_op),
+	.a(agen0_argA),
+	.b(agen0_argB),
+	.i(agen0_argI),
 	.res(agen0_res)
 );
 
 Qupls_agen uag1
 (
 	.clk(clk),
-	.ir(rob[agen1_rndx].op),
-	.a(rfo_agen1_argA),
-	.b(rfo_agen1_argB),
-	.i(rob[agen1_rndx].decbus.immb),
+	.ir(agen1_op),
+	.a(agen1_argA),
+	.b(agen1_argB),
+	.i(agen1_argI),
 	.res(agen1_res)
 );
 
@@ -2216,6 +2227,8 @@ always_ff @(posedge clk) agen0_rndx1 <= agen0_rndx;
 always_ff @(posedge clk) agen1_rndx1 <= agen1_rndx;
 always_ff @(posedge clk) agen0_rndxv1 <= agen0_rndxv;
 always_ff @(posedge clk) agen1_rndxv1 <= agen1_rndxv;
+always_ff @(posedge clk) agen0_v <= rob[agen0_id].out;
+always_ff @(posedge clk) agen1_v <= rob[agen1_id].out;
 
 reg cantlsq0, cantlsq1;
 always_comb
@@ -2223,9 +2236,9 @@ begin
 	cantlsq0 = 1'b0;
 	cantlsq1 = 1'b0;
 	for (n11 = 0; n11 < ROB_ENTRIES; n11 = n11 + 1) begin
-		if ((rob[n11].decbus.load | rob[n11].decbus.store) && rob[n11].sn < rob[agen0_rndx].sn && !rob[n11].lsq)
+		if ((rob[n11].decbus.load | rob[n11].decbus.store) && rob[n11].sn < rob[agen0_id].sn && !rob[n11].lsq)
 			cantlsq0 = 1'b1;
-		if ((rob[n11].decbus.load | rob[n11].decbus.store) && rob[n11].sn < rob[agen1_rndx].sn && !rob[n11].lsq)
+		if ((rob[n11].decbus.load | rob[n11].decbus.store) && rob[n11].sn < rob[agen1_id].sn && !rob[n11].lsq)
 			cantlsq1 = 1'b1;
 	end
 end
@@ -2253,10 +2266,12 @@ Qupls_tlb utlb1
 	.pc_vadr(ic_miss_adr),
 	.op0(agen0_op),
 	.op1(agen1_op),
-	.agen0_rndx_i(agen0_rndx1),
-	.agen1_rndx_i(agen1_rndx1),
+	.agen0_rndx_i(agen0_id),
+	.agen1_rndx_i(agen1_id),
 	.agen0_rndx_o(agen0_rndx2),
 	.agen1_rndx_o(agen1_rndx2),
+	.agen0_v(agen0_v),
+	.agen1_v(agen1_v),
 	.load0_i(),
 	.load1_i(),
 	.store0_i(),
@@ -2285,7 +2300,7 @@ Qupls_tlb utlb1
 	.missack(tlb_missack)
 );
 
-Qupls_ptable_walker uptw1
+Qupls_ptable_walker #(.CID(3)) uptw1
 (
 	.rst(rst),
 	.clk(clk),
@@ -2399,6 +2414,90 @@ endfunction
 integer lbndx0, lbndx1;
 always_comb	lbndx0 = fnLoadBypassIndex(mem0_lsndx);
 always_comb lbndx1 = fnLoadBypassIndex(mem1_lsndx);
+
+reg dram0_setready;
+always_comb
+begin
+	dram0_setready <= FALSE;
+	if (SUPPORT_LOAD_BYPASSING && lbndx0 > 0)
+		;
+	else if (dram0 == DRAMSLOT_AVAIL && mem0_lsndxv)
+		dram0_setready <= TRUE;
+end
+
+reg dram1_setready;
+always_comb
+begin
+	dram1_setready <= FALSE;
+	if (NDATA_PORTS > 1) begin
+		if (SUPPORT_LOAD_BYPASSING && lbndx1 > 0)
+			;
+		else if (dram1 == DRAMSLOT_AVAIL && mem1_lsndxv)
+			dram1_setready <= TRUE;
+	end
+end
+
+reg dram0_timeout;
+always_comb
+begin
+	dram0_timeout <= FALSE;
+	if (SUPPORT_BUS_TO) begin
+		if (dram0_tocnt[10])
+			dram0_timeout <= TRUE;
+		else if (dram0_tocnt[8])
+			dram0_timeout <= TRUE;
+	end
+end
+
+reg dram1_timeout;
+always_comb
+begin
+	dram1_timeout <= FALSE;
+	if (SUPPORT_BUS_TO && NDATA_PORTS > 1) begin
+		if (dram1_tocnt[10])
+			dram1_timeout <= TRUE;
+		else if (dram1_tocnt[8])
+			dram1_timeout <= TRUE;
+	end
+end
+
+Qupls_mem_state udrst0
+(
+	.rst_i(rst),
+	.clk_i(clk),
+	.ack_i(dram0_ack),
+	.set_ready_i(dram0_setready),
+	.set_avail_i(dram0_timeout),
+	.state_o(dram0)
+);
+
+Qupls_mem_state udrst1
+(
+	.rst_i(rst),
+	.clk_i(clk),
+	.ack_i(dram1_ack),
+	.set_ready_i(dram1_setready),
+	.set_avail_i(dram1_timeout),
+	.state_o(dram1)
+);
+
+Qupls_mem_more ummore0
+(
+	.rst_i(rst),
+	.clk_i(clk),
+	.state_i(dram0),
+	.sel_i(dram0_sel),
+	.more_o(dram0_more)
+);
+
+Qupls_mem_more ummore1
+(
+	.rst_i(rst),
+	.clk_i(clk),
+	.state_i(dram1),
+	.sel_i(dram1_sel),
+	.more_o(dram1_more)
+);
 
 always_ff @(posedge clk)
 if (rst) begin
@@ -2594,17 +2693,23 @@ else begin
 		agen0_argB <= rfo_agen0_argB;
 		agen0_argI <= rob[agen0_rndx].decbus.immb;
 		agen0_pc <= rob[agen0_rndx].pc;
+		agen0_op <= rob[agen0_rndx].op;
+		agen0_id <= agen0_rndx;
 	  rob[agen0_rndx].out <= VAL;
 	  rob[agen0_rndx].owner <= QuplsPkg::AGEN0;
 	end
 
-	if (NAGEN > 1 && agen1_rndxv) begin
-		agen1_argA <= rob[agen1_rndx].decbus.imma | rfo_agen1_argA;
-		agen1_argB <= rfo_agen1_argB;
-		agen1_argI <= rob[agen1_rndx].decbus.immb;
-		agen1_pc <= rob[agen1_rndx].pc;
-    rob[agen1_rndx].out <= VAL;
-    rob[agen1_rndx].owner <= QuplsPkg::AGEN1;
+	if (NAGEN > 1) begin
+		if (agen1_rndxv) begin
+			agen1_argA <= rob[agen1_rndx].decbus.imma | rfo_agen1_argA;
+			agen1_argB <= rfo_agen1_argB;
+			agen1_argI <= rob[agen1_rndx].decbus.immb;
+			agen1_pc <= rob[agen1_rndx].pc;
+			agen1_op <= rob[agen1_rndx].op;
+			agen1_id <= agen1_rndx;
+	    rob[agen1_rndx].out <= VAL;
+	    rob[agen1_rndx].owner <= QuplsPkg::AGEN1;
+		end
 	end
 	
 	if (lsq[dram0_id].v && lsq[dram0_id].store) begin
@@ -2705,55 +2810,24 @@ else begin
 // update the memory queues and put data out on bus if appropriate
 //
 
-	//
-	// dram0, dram1, dram2 are the "state machines" that keep track
-	// of three pipelined DRAM requests.  if any has the value "00", 
-	// then it can accept a request (which bumps it up to the value "01"
-	// at the end of the cycle).  once it hits the value "11" the request
-	// is finished and the dram_bus takes the value.  if it is a store, the 
-	// dram_bus value is not used, but the dram_v value along with the
-	// dram_id value signals the waiting memq entry that the store is
-	// completed and the instruction can commit.
-	//
-
-	if (rst)
-		dram0 <= DRAMSLOT_AVAIL;
-	else
+	if (!rst)
 		case(dram0)
 		DRAMSLOT_AVAIL:	;
-		DRAMSLOT_READY:
-			begin
-				dram0 <= dram0 + 2'd1;
-				if (|dram0_sel[79:64]) begin
-					dram0_more <= SUPPORT_UNALIGNED_MEMORY;
-				end
-			end
+		DRAMSLOT_READY:	;
 		DRAMSLOT_ACTIVE:
 			begin
-				if (dram0_ack)
-					dram0 <= DRAMSLOT_AVAIL;
 				dram0_tocnt <= dram0_tocnt + 2'd1;
 			end
 		default:	;
 		endcase
 
 	if (NDATA_PORTS > 1) begin
-		if (rst)
-			dram1 <= DRAMSLOT_AVAIL;
-		else
+		if (!rst)
 			case(dram1)
 			DRAMSLOT_AVAIL:	;
-			DRAMSLOT_READY:
-				begin
-					dram1 <= dram1 + 2'd1;
-					if (|dram1_sel[79:64]) begin
-						dram1_more <= SUPPORT_UNALIGNED_MEMORY;
-					end
-				end
+			DRAMSLOT_READY:	;
 			DRAMSLOT_ACTIVE:
 				begin
-					if (dram1_ack)
-						dram1 <= DRAMSLOT_AVAIL;
 					dram1_tocnt <= dram1_tocnt + 2'd1;
 				end
 			default:	;
@@ -2769,11 +2843,9 @@ else begin
 			rob[dram0_id].done <= 2'b11;
 			rob[dram0_id].out <= INV;
 			lsq[rob[dram0_id].lsqndx].v <= INV;
-			dram0 <= DRAMSLOT_AVAIL;
 			dram0_tocnt <= 'd0;
 		end
 		else if (dram0_tocnt[8]) begin
-			dram0 <= DRAMSLOT_AVAIL;
 			rob[dram0_id].out <= INV;
 		end
 		if (NDATA_PORTS > 1) begin
@@ -2783,11 +2855,9 @@ else begin
 				rob[dram1_id].done <= 2'b11;
 				rob[dram1_id].out <= INV;
 				lsq[rob[dram1_id].lsqndx].v <= INV;
-				dram1 <= DRAMSLOT_AVAIL;
 				dram1_tocnt <= 'd0;
 			end
 			else if (dram1_tocnt[8]) begin
-				dram1 <= DRAMSLOT_AVAIL;
 				rob[dram1_id].out <= INV;
 			end
 		end
@@ -2878,7 +2948,6 @@ else begin
 		rob[lsq[lbndx0].rndx].done <= 2'b11;
 	end
   else if (dram0 == DRAMSLOT_AVAIL && mem0_lsndxv) begin
-		dram0 <= DRAMSLOT_READY;
 		dram0_exc <= FLT_NONE;
 		dram0_stomp <= 1'b0;
 		dram0_id <= lsq[mem0_lsndx].rndx;
@@ -2909,8 +2978,9 @@ else begin
 			dram0_shift <= {lsq[mem0_lsndx].padr[5:0],3'd0};
 		end
 		dram0_memsz <= fnMemsz(rob[lsq[mem0_lsndx].rndx].op);
-		dram0_tid[2:0] <= dram0_tid[2:0] + 2'd1;
-		dram0_tid[7:3] <= {4'h1,1'b0};
+		dram0_tid.core <= CORENO;
+		dram0_tid.channel <= 3'd1;
+		dram0_tid.tranid <= dram0_tid.tranid + 2'd1;
 		rob[lsq[mem0_lsndx].rndx].out <= VAL;
 		rob[lsq[mem0_lsndx].rndx].owner <= QuplsPkg::DRAM0;
     dram0_tocnt <= 'd0;
@@ -2924,7 +2994,6 @@ else begin
 			rob[lsq[lbndx1].rndx].done <= 2'b11;
 		end
 	  else if (dram1 == DRAMSLOT_AVAIL && NDATA_PORTS > 1 && mem1_lsndxv) begin
-			dram1 <= DRAMSLOT_READY;
 			dram1_exc <= FLT_NONE;
 			dram1_stomp <= 1'b0;
 			dram1_id <= lsq[mem1_lsndx].rndx;
@@ -2955,8 +3024,9 @@ else begin
 				dram1_shift <= {lsq[mem1_lsndx].padr[5:0],3'd0};
 			end
 			dram1_memsz <= fnMemsz(lsq[mem1_lsndx].op);
-			dram1_tid[2:0] <= dram1_tid[2:0] + 2'd1;
-			dram1_tid[7:3] <= {4'h2,1'b0};
+			dram1_tid.core <= CORENO;
+			dram1_tid.channel <= 3'd2;
+			dram1_tid.tranid <= dram1_tid.tranid + 2'd1;
 			rob[lsq[mem1_lsndx].rndx].out	<= VAL;
 			rob[lsq[mem1_lsndx].rndx].owner <= QuplsPkg::DRAM1;
 	    dram1_tocnt <= 'd0;
@@ -2987,56 +3057,58 @@ else begin
 			rob[tail3].v <= VAL;
 			for (n12 = 0; n12 < ROB_ENTRIES; n12 = n12 + 1)
 				rob[n12].sn <= rob[n12].sn - 4;
-			tEnque(8'hFC,db0r,pc0r,ins0,pt0,tail0, 1'b0, prn[0], prn[1], prn[2], prn[3], nRt0, avail_reg & ~(192'd1 << nRt0), cndx, grplen0, last0);
-			tEnque(8'hFD,db1r,pc1r,ins1,pt1,tail1, pt0|mip0v, prn[4], prn[5], prn[6], prn[7], nRt1, avail_reg & ~((192'd1 << nRt0) | (192'd1 << nRt1)), cndx, grplen1, last1);
-			tEnque(8'hFE,db2r,pc2r,ins2,pt2,tail2, pt0|pt1|mip0v|mip1v, prn[8], prn[9], prn[10], prn[11], nRt2, avail_reg & ~((192'd1 << nRt0) | (192'd1 << nRt1) | (192'd1 << nRt2)), cndx, grplen2, last3);
-			tEnque(8'hFF,db3r,pc3r,ins3,pt3,tail3, pt0|pt1|pt2|mip0v|mip1v|mip2v, prn[12], prn[13], prn[14], prn[15], nRt3, avail_reg & ~((192'd1 << nRt0) | (192'd1 << nRt1) | (192'd1 << nRt2)| (192'd1 << nRt3)), cndx,grplen3,last3);
+			tEnque(8'hFC,db0r,pc0r,ins0r,pt0,tail0, 1'b0, prn[0], prn[1], prn[2], prn[3], nRt0, avail_reg & ~(192'd1 << nRt0), cndx, grplen0, last0);
+			tEnque(8'hFD,db1r,pc1r,ins1r,pt1,tail1, pt0|mip0v, prn[4], prn[5], prn[6], prn[7], nRt1, avail_reg & ~((192'd1 << nRt0) | (192'd1 << nRt1)), cndx, grplen1, last1);
+			tEnque(8'hFE,db2r,pc2r,ins2r,pt2,tail2, pt0|pt1|mip0v|mip1v, prn[8], prn[9], prn[10], prn[11], nRt2, avail_reg & ~((192'd1 << nRt0) | (192'd1 << nRt1) | (192'd1 << nRt2)), cndx, grplen2, last3);
+			tEnque(8'hFF,db3r,pc3r,ins3r,pt3,tail3, pt0|pt1|pt2|mip0v|mip1v|mip2v, prn[12], prn[13], prn[14], prn[15], nRt3, avail_reg & ~((192'd1 << nRt0) | (192'd1 << nRt1) | (192'd1 << nRt2)| (192'd1 << nRt3)), cndx,grplen3,last3);
 			tail0 <= (tail0 + 3'd4) % ROB_ENTRIES;
 		end
 	end
 
 	// Place up to two instructions into the load/store queue in order.	
 
-	if (lsq[lsq_tail0].v==INV && agen0_rndxv) begin	// Can an entry be queued?
-		lsq[lsq_tail0].rndx <= agen0_rndx;
+	if (lsq[lsq_tail0].v==INV && agen0_v) begin	// Can an entry be queued?
+		last_agen0_id <= agen0_id;
+		lsq[lsq_tail0].rndx <= agen0_id;
 		lsq[lsq_tail0].v <= 1'b1;
 		lsq[lsq_tail0].agen <= 1'b0;
 		lsq[lsq_tail0].tlb <= 1'b0;
-		lsq[lsq_tail0].op <= rob[agen0_rndx].op;
-		lsq[lsq_tail0].load <= rob[agen0_rndx].decbus.load;
-		lsq[lsq_tail0].loadz <= rob[agen0_rndx].decbus.loadz;
-		lsq[lsq_tail0].store <= rob[agen0_rndx].decbus.store;
-		store_argC_reg <= rob[agen0_rndx].pRc;
+		lsq[lsq_tail0].op <= rob[agen0_id].op;
+		lsq[lsq_tail0].load <= rob[agen0_id].decbus.load;
+		lsq[lsq_tail0].loadz <= rob[agen0_id].decbus.loadz;
+		lsq[lsq_tail0].store <= rob[agen0_id].decbus.store;
+		store_argC_reg <= rob[agen0_id].pRc;
 		//store_tail <= lsq_tail0;
-		lsq[lsq_tail0].Rc <= rob[agen0_rndx].pRc;
-		lsq[lsq_tail0].Rt <= rob[agen0_rndx].pRt;
-		lsq[lsq_tail0].memsz <= fnMemsz(rob[agen0_rndx].op);
+		lsq[lsq_tail0].Rc <= rob[agen0_id].pRc;
+		lsq[lsq_tail0].Rt <= rob[agen0_id].pRt;
+		lsq[lsq_tail0].memsz <= fnMemsz(rob[agen0_id].op);
 		for (n12 = 0; n12 < LSQ_ENTRIES; n12 = n12 + 1)
 			lsq[n12].sn <= lsq[n12].sn - 1;
 		lsq[lsq_tail].sn <= 8'hFF;
-		lsq_tail <= (lsq_tail + 2'd1) % LSQ_ENTRIES;
-		rob[agen0_rndx].lsq <= 1'b1;
-		rob[agen0_rndx].lsqndx <= lsq_tail0;
-		if (LSQ2 && lsq[lsq_tail1].v==INV && agen1_rndxv) begin	// Can a second entry be queued?
+		if (agen0_id != last_agen0_id)
+			lsq_tail <= (lsq_tail + 2'd1) % LSQ_ENTRIES;
+		rob[agen0_id].lsq <= 1'b1;
+		rob[agen0_id].lsqndx <= lsq_tail0;
+		if (LSQ2 && lsq[lsq_tail1].v==INV && agen1_v) begin	// Can a second entry be queued?
 			lsq[lsq_tail1].v <= VAL;
-			lsq[lsq_tail1].rndx <= agen1_rndx;
+			lsq[lsq_tail1].rndx <= agen1_id;
 			lsq[lsq_tail1].v <= 1'b1;
 			lsq[lsq_tail1].agen <= 1'b0;
 			lsq[lsq_tail1].tlb <= 1'b0;
-			lsq[lsq_tail1].op <= rob[agen1_rndx].op;
-			lsq[lsq_tail1].load <= rob[agen1_rndx].decbus.load;
-			lsq[lsq_tail1].loadz <= rob[agen1_rndx].decbus.loadz;
-			lsq[lsq_tail1].store <= rob[agen1_rndx].decbus.store;
-			lsq[lsq_tail1].Rc <= rob[agen1_rndx].pRc;
-			lsq[lsq_tail1].Rt <= rob[agen1_rndx].pRt;
-			lsq[lsq_tail1].memsz <= fnMemsz(rob[agen1_rndx].op);
+			lsq[lsq_tail1].op <= rob[agen1_id].op;
+			lsq[lsq_tail1].load <= rob[agen1_id].decbus.load;
+			lsq[lsq_tail1].loadz <= rob[agen1_id].decbus.loadz;
+			lsq[lsq_tail1].store <= rob[agen1_id].decbus.store;
+			lsq[lsq_tail1].Rc <= rob[agen1_id].pRc;
+			lsq[lsq_tail1].Rt <= rob[agen1_id].pRt;
+			lsq[lsq_tail1].memsz <= fnMemsz(rob[agen1_id].op);
 			for (n12 = 0; n12 < LSQ_ENTRIES; n12 = n12 + 1)
 				lsq[n12].sn <= lsq[n12].sn - 2;
 			lsq[lsq_tail0].sn <= 8'hFE;
 			lsq[lsq_tail1].sn <= 8'hFF;
 			lsq_tail <= (lsq_tail + 2'd2) % LSQ_ENTRIES;
-			rob[agen1_rndx].lsq <= 1'b1;
-			rob[agen1_rndx].lsqndx <= lsq_tail1;
+			rob[agen1_id].lsq <= 1'b1;
+			rob[agen1_id].lsqndx <= lsq_tail1;
 		end
 	end
 	if (lsq[store_tail].store && lsq[store_tail].v && !lsq[store_tail].datav) begin
@@ -3050,15 +3122,23 @@ else begin
 		store_argC_reg <= lsq[mem1_lsndx].Rc;
 
 	// Store TLB translation in LSQ
-	if (mem0_lsndxv2) lsq[mem0_lsndx2].agen <= 1'b1;
-	if (mem0_lsndxv2) lsq[mem0_lsndx2].tlb <= 1'b1;
-	if (mem0_lsndxv2) lsq[mem0_lsndx2].vadr <= tlb0_res;
-	if (mem0_lsndxv2) lsq[mem0_lsndx2].padr <= {tlb_entry0.pte.ppn,tlb0_res[15:0]};
+	if (tlb0_v) begin
+		rob[agen0_rndx2].out <= 1'b0;
+		rob[agen0_rndx2].done[0] <= 1'b1;
+		lsq[rob[agen0_rndx2].lsqndx].agen <= 1'b1;
+		lsq[rob[agen0_rndx2].lsqndx].tlb <= 1'b1;
+		lsq[rob[agen0_rndx2].lsqndx].vadr <= tlb0_res;
+		lsq[rob[agen0_rndx2].lsqndx].padr <= {tlb_entry0.pte.ppn,tlb0_res[15:0]};
+	end
 	if (NAGEN > 1) begin
-		if (mem1_lsndxv2) lsq[mem1_lsndx2].agen <= 1'b1;
-		if (mem1_lsndxv2) lsq[mem1_lsndx2].tlb <= 1'b1;
-		if (mem1_lsndxv2) lsq[mem1_lsndx2].vadr <= tlb1_res;
-		if (mem1_lsndxv2) lsq[mem1_lsndx2].padr <= {tlb_entry1.pte.ppn,tlb1_res[15:0]};
+		if (tlb1_v) begin
+			rob[agen1_rndx2].out <= 1'b0;
+			rob[agen1_rndx2].done[0] <= 1'b1;
+			lsq[rob[agen1_rndx2].lsqndx].agen <= 1'b1;
+			lsq[rob[agen1_rndx2].lsqndx].tlb <= 1'b1;
+			lsq[rob[agen1_rndx2].lsqndx].vadr <= tlb1_res;
+			lsq[rob[agen1_rndx2].lsqndx].padr <= {tlb_entry1.pte.ppn,tlb1_res[15:0]};
+		end
 	end
 
 //
@@ -3218,6 +3298,8 @@ else begin
 	// Branchmiss
 	// Invalidate instructions newer than the branch in the ROB.
 	if (branchmiss_state==3'd2) begin
+		last_agen0_id <= ~agen0_id;
+		last_agen1_id <= ~agen1_id;
 		for (n3 = 0; n3 < ROB_ENTRIES; n3 = n3 + 1) begin
 			if (rob[n3].sn > rob[missid].sn) begin
 				rob[n3].v <= INV;
@@ -3238,12 +3320,13 @@ end
 
 // External bus arbiter. Simple priority encoded.
 
-always_ff @(posedge clk)
+always_comb
 begin
+	
 	// Setup to retry.
 	ftatm_resp.rty <= 1'b1;
 	ftaim_resp.rty <= 1'b1;
-	ftadm_resp[1].rty <= 1'b1;
+	ftadm_resp[0].rty <= 1'b1;
 	ftadm_resp[1].rty <= 1'b1;
 		
 	// Cancel retry if bus aquired.
@@ -3267,6 +3350,7 @@ begin
 		fta_req <= 'd0;
 
 	// Route bus responses.
+	/*
 	if (fta_resp.cid==ftatm_req.cid)
 		ftatm_resp <= fta_resp;
 	else if (fta_resp.cid==ftaim_req.cid)
@@ -3275,15 +3359,15 @@ begin
 		ftadm_resp[0] <= fta_resp;
 	else if (fta_resp.cid==ftadm_req[1].cid)
 		ftadm_resp[1] <= fta_resp;
-	/*
-	case(fta_resp.cid)
-	4'd0:	ftaim_resp <= fta_resp;
-	4'd1:	ftadm_resp[0] <= fta_resp;
-	4'd2:	ftadm_resp[1] <= fta_resp;
-	4'd3:	ftatm_resp <= fta_resp;
+	*/
+	case(fta_resp.tid.channel)
+	3'd0:	ftaim_resp <= fta_resp;
+	3'd1:	ftadm_resp[0] <= fta_resp;
+//	4'd2:	ftadm_resp[1] <= fta_resp;
+	3'd3:	ftatm_resp <= fta_resp;
 	default:	;	// response was not for us
 	endcase
-	*/
+	
 end
 
 task tReset;
@@ -3291,8 +3375,8 @@ begin
 	micro_ir <= {'d0,OP_NOP};
 	micro_ip <= 12'h0F0;
 	for (n14 = 0; n14 < 4; n14 = n14 + 1) begin
-		kvec[n14] <= RSTPC >> 12;
-		avec[n14] <= RSTPC >> 12;
+		kvec[n14] <= RSTPC;
+		avec[n14] <= RSTPC;
 	end
 	err_mask <= 'd0;
 	excir <= {33'd0,OP_NOP};
@@ -3307,8 +3391,6 @@ begin
 //	postfix_mask <= 'd0;
 	dram_exc0 <= FLT_NONE;
 	dram_exc1 <= FLT_NONE;
-	dram0 <= DRAMSLOT_AVAIL;
-	dram0p <= DRAMSLOT_AVAIL;
 	dram0_stomp <= 'd0;
 	dram0_vaddr <= 'd0;
 	dram0_paddr <= 'd0;
@@ -3322,12 +3404,9 @@ begin
 	dram0_op <= OP_NOP;
 	dram0_Rt <= 'd0;
 	dram0_tid <= 'd0;
-	dram0_more <= 'd0;
 	dram0_hi <= 'd0;
 	dram0_shift <= 'd0;
 	dram0_tocnt <= 'd0;
-	dram1 <= DRAMSLOT_AVAIL;
-	dram1p <= DRAMSLOT_AVAIL;
 	dram1_stomp <= 'd0;
 	dram1_vaddr <= 'd0;
 	dram1_paddr <= 'd0;
@@ -3341,7 +3420,6 @@ begin
 	dram1_op <= OP_NOP;
 	dram1_Rt <= 'd0;
 	dram1_tid <= 8'h08;
-	dram1_more <= 'd0;
 	dram1_hi <= 'd0;
 	dram1_shift <= 'd0;
 	dram1_tocnt <= 'd0;
@@ -3349,8 +3427,12 @@ begin
 	dram_v1 <= 'd0;
 	panic <= `PANIC_NONE;
 	for (n14 = 0; n14 < ROB_ENTRIES; n14 = n14 + 1) begin
+		rob[n14] <= 'd0;
 		rob[n14].sn <= 'd0;
 		rob[n14].owner <= NONE;
+	end
+	for (n14 = 0; n14 < LSQ_ENTRIES; n14 = n14 + 1) begin
+		lsq[n14] <= 'd0;
 	end
 	alu0_available <= 1;
 	alu0_dataready <= 0;
@@ -3397,6 +3479,12 @@ begin
 	tail0 <= 'd0;
 	head0 <= 'd0;
 	rstcnt <= 'd0;
+	lsq_head <= 'd0;
+	lsq_tail <= 'd0;
+	agen0_id <= 'd0;
+	agen1_id <= 'd0;
+	last_agen0_id <= 5'd31;
+	last_agen1_id <= 5'd31;
 end
 endtask
 

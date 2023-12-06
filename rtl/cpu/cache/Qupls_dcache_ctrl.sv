@@ -45,7 +45,7 @@ import Qupls_cache_pkg::*;
 module Qupls_dcache_ctrl(rst_i, clk_i, dce, ftam_req, ftam_resp, ftam_full, acr, hit, modified,
 	cache_load, cpu_request_i, cpu_request_i2, data_to_cache_o, response_from_cache_i, wr, uway, way,
 	dump, dump_i, dump_ack, snoop_adr, snoop_v, snoop_cid);
-parameter CID = 2;
+parameter CID = 3'd1;
 parameter CORENO = 6'd1;
 parameter WAYS = 4;
 parameter NSEL = 32;
@@ -270,7 +270,7 @@ else begin
 	cache_load_data.pri <= 4'd7;
 	wr <= 1'b0;
 	// Grab the bus for only 1 clock.
-	if (ftam_req.cyc)
+	if (ftam_req.cyc && !ftam_full)
 		tBusClear();
 	// Ack pulses for only 1 clock.
 	for (nn = 0; nn < 4; nn = nn + 1)
@@ -283,8 +283,10 @@ else begin
 			ftam_req.cmd <= fta_bus_pkg::CMD_DCACHE_LOAD;
 			ftam_req.sz  <= fta_bus_pkg::hexi;
 			ftam_req.blen <= 'd0;
-			ftam_req.cid <= 3'd7;					// CPU channel id
-			ftam_req.tid <= 'd0;						// transaction id (not used)
+			ftam_req.cid <= CID;					// CPU channel id
+			ftam_req.tid.core <= CORENO;
+			ftam_req.tid.channel <= CID;
+			ftam_req.tid.tranid <= 'd0;		// transaction id
 			ftam_req.csr  <= 'd0;					// clear/set reservation
 			ftam_req.pl	<= 'd0;						// privilege level
 			ftam_req.pri	<= 4'h7;					// average priority (higher is better).
@@ -338,8 +340,10 @@ else begin
 					!non_cacheable,
 					dump_i.asid,
 					{dump_i.vtag[$bits(fta_address_t)-1:Qupls_cache_pkg::DCacheTagLoBit],dump_cnt[1:0],{Qupls_cache_pkg::DCacheTagLoBit-2{1'h0}}},
+					{dump_i.ptag[$bits(fta_address_t)-1:Qupls_cache_pkg::DCacheTagLoBit],dump_cnt[1:0],{Qupls_cache_pkg::DCacheTagLoBit-2{1'h0}}},
 					16'hFFFF,
 					dump_i.data >> {dump_cnt,7'd0},
+					CID,
 					cpu_request_i2.tid,
 					dump_cnt[1:0],
 					1'b0
@@ -364,8 +368,10 @@ else begin
 					!non_cacheable,
 					cpu_request_i2.asid,
 					{cpu_request_i2.vadr[$bits(fta_address_t)-1:Qupls_cache_pkg::DCacheTagLoBit],load_cnt[1:0],{Qupls_cache_pkg::DCacheTagLoBit-2{1'h0}}},
+					{cpu_request_i2.padr[$bits(fta_address_t)-1:Qupls_cache_pkg::DCacheTagLoBit],load_cnt[1:0],{Qupls_cache_pkg::DCacheTagLoBit-2{1'h0}}},
 					16'hFFFF,
 					'd0,
+					CID,
 					cpu_request_i2.tid,
 					load_cnt[1:0],
 					1'b1
@@ -519,7 +525,7 @@ else begin
 
 	// Look for outstanding transactions to execute.
 	if (nn4 < 'd16) begin
-		if (!ftam_full) begin
+//		if (!ftam_full) begin
 			last_out <= nn4;
 			if (!tran_req[nn4].we || tran_req[nn4].cti==fta_bus_pkg::ERC)
 				tran_out[nn4] <= 1'b1;
@@ -531,7 +537,7 @@ else begin
 			ftam_req <= tran_req[nn4];
 			wait_cnt <= 'd0;
 //			req_state <= RAND_DELAY;
-		end
+//		end
 	end
 
 	// Only the cache index need be compared for snoop hit.
@@ -585,9 +591,11 @@ input fta_operating_mode_t om;
 input wr;
 input cache;
 input QuplsPkg::asid_t asid;
-input QuplsPkg::address_t adr;
+input QuplsPkg::address_t vadr;
+input QuplsPkg::address_t padr;
 input [15:0] sel;
 input [127:0] data;
+input [3:0] cid;
 input fta_tranid_t tid;
 input [1:0] which;
 input ack;
@@ -601,7 +609,7 @@ begin
 		cache ? fta_bus_pkg::CMD_DCACHE_LOAD : fta_bus_pkg::CMD_LOADZ;
 	tran_req[ndxx].sz <= fta_bus_pkg::hexi;
 	tran_req[ndxx].blen <= 'd0;
-	tran_req[ndxx].cid <= tid.channel;
+	tran_req[ndxx].cid <= cid;
 	tran_req[ndxx].tid.core <= tid.core;
 	tran_req[ndxx].tid.channel <= tid.channel;
 	tran_req[ndxx].tid.tranid <= ndxx;
@@ -613,7 +621,8 @@ begin
 	tran_req[ndxx].we <= wr;
 	tran_req[ndxx].csr <= 'd0;
 	tran_req[ndxx].asid <= asid;
-	tran_req[ndxx].vadr <= adr;
+	tran_req[ndxx].vadr <= vadr;
+	tran_req[ndxx].padr <= padr;
 	tran_req[ndxx].data1 <= data;
 	tran_req[ndxx].pl <= 'd0;
 	tran_req[ndxx].pri <= 4'h7;
@@ -621,7 +630,7 @@ begin
 	tran_req[ndxx].seg <= fta_bus_pkg::DATA;
 	tran_active[ndxx] <= 1'b1;
 //	tran_done[ndx] <= 1'b0;
-	tran_load_data[ndxx].adr <= adr;
+	tran_load_data[ndxx].adr <= padr;
 	tran_write_allocate[ndxx] <= wr & allocate;
 	if (wr & ~allocate)
 		tran_done[ndxx] <= 1'b1;
@@ -660,8 +669,10 @@ begin
 					!non_cacheable,
 					cpu_request_i2.asid,
 					{cpu_request_i2.vadr[$bits(fta_address_t)-1:6],2'd0,4'h0},
+					{cpu_request_i2.padr[$bits(fta_address_t)-1:6],2'd0,4'h0},
 					cpu_request_i2.sel[15:0],
 					cpu_request_i2.dat[127:0],
+					CID,
 					cpu_request_i2.tid,
 					2'd0,
 					cpu_request_i2.cti==fta_bus_pkg::ERC || !cpu_request_i2.we
@@ -679,8 +690,10 @@ begin
 						!non_cacheable,
 						cpu_request_i2.asid,
 						{cpu_request_i2.vadr[$bits(fta_address_t)-1:6],2'd1,4'h0},
+						{cpu_request_i2.padr[$bits(fta_address_t)-1:6],2'd1,4'h0},
 						cpu_request_i2.sel[31:16],
 						cpu_request_i2.dat[255:128],
+						CID,
 						cpu_request_i2.tid,
 						2'd1,
 						cpu_request_i2.cti==fta_bus_pkg::ERC || !cpu_request_i2.we
@@ -698,8 +711,10 @@ begin
 							!non_cacheable,
 							cpu_request_i2.asid,
 							{cpu_request_i2.vadr[$bits(fta_address_t)-1:6],2'd2,4'h0},
+							{cpu_request_i2.padr[$bits(fta_address_t)-1:6],2'd2,4'h0},
 							cpu_request_i2.sel[47:32],
 							cpu_request_i2.dat[383:256],
+							CID,
 							cpu_request_i2.tid,
 							2'd2,
 							cpu_request_i2.cti==fta_bus_pkg::ERC || !cpu_request_i2.we
@@ -719,8 +734,10 @@ begin
 								!non_cacheable,
 								cpu_request_i2.asid,
 								{cpu_request_i2.vadr[$bits(fta_address_t)-1:6],2'd3,4'h0},
+								{cpu_request_i2.padr[$bits(fta_address_t)-1:6],2'd3,4'h0},
 								cpu_request_i2.sel[63:48],
 								cpu_request_i2.dat[511:384],
+								CID,
 								cpu_request_i2.tid,
 								2'd3,
 								cpu_request_i2.cti==fta_bus_pkg::ERC || !cpu_request_i2.we
@@ -736,7 +753,6 @@ begin
 	2'd1:	
 		begin
 			wr_cnt <= 2'd2;
-			tran_done[{cpu_request_i2.tid[1:0],2'b00}] <= 1'b1;
 			if (|cpu_request_i2.sel[31:16]) begin
 				v[tid_cnt & 4'hF][1] <= 1'b0;
 				tAddr(
@@ -745,8 +761,10 @@ begin
 					!non_cacheable,
 					cpu_request_i2.asid,
 					{cpu_request_i2.vadr[$bits(fta_address_t)-1:6],2'd1,4'h0},
+					{cpu_request_i2.padr[$bits(fta_address_t)-1:6],2'd1,4'h0},
 					cpu_request_i2.sel[31:16],
 					cpu_request_i2.dat[255:128],
+					CID,
 					cpu_request_i2.tid,
 					2'd1,
 					cpu_request_i2.cti==fta_bus_pkg::ERC || !cpu_request_i2.we
@@ -764,8 +782,10 @@ begin
 						!non_cacheable,
 						cpu_request_i2.asid,
 						{cpu_request_i2.vadr[$bits(fta_address_t)-1:6],2'd2,4'h0},
+						{cpu_request_i2.padr[$bits(fta_address_t)-1:6],2'd2,4'h0},
 						cpu_request_i2.sel[47:32],
 						cpu_request_i2.dat[383:256],
+						CID,
 						cpu_request_i2.tid,
 						2'd2,
 						cpu_request_i2.cti==fta_bus_pkg::ERC || !cpu_request_i2.we
@@ -785,8 +805,10 @@ begin
 							!non_cacheable,
 							cpu_request_i2.asid,
 							{cpu_request_i2.vadr[$bits(fta_address_t)-1:6],2'd3,4'h0},
+							{cpu_request_i2.padr[$bits(fta_address_t)-1:6],2'd3,4'h0},
 							cpu_request_i2.sel[63:48],
 							cpu_request_i2.dat[511:384],
+							CID,
 							cpu_request_i2.tid,
 							2'd3,
 							cpu_request_i2.cti==fta_bus_pkg::ERC || !cpu_request_i2.we
@@ -801,8 +823,6 @@ begin
 	2'd2:
 		begin
 			wr_cnt <= 2'd3;
-			tran_done[{cpu_request_i2.tid[1:0],2'b00}] <= 1'b1;
-			tran_done[{cpu_request_i2.tid[1:0],2'b01}] <= 1'b1;
 			if (|cpu_request_i2.sel[47:32]) begin
 				v[tid_cnt & 4'hF][2] <= 1'b0;
 				tAddr(
@@ -811,8 +831,10 @@ begin
 					!non_cacheable,
 					cpu_request_i2.asid,
 					{cpu_request_i2.vadr[$bits(fta_address_t)-1:6],2'd2,4'h0},
+					{cpu_request_i2.padr[$bits(fta_address_t)-1:6],2'd2,4'h0},
 					cpu_request_i2.sel[47:32],
 					cpu_request_i2.dat[383:256],
+					CID,
 					cpu_request_i2.tid,
 					2'd2,
 					cpu_request_i2.cti==fta_bus_pkg::ERC || !cpu_request_i2.we
@@ -832,8 +854,10 @@ begin
 						!non_cacheable,
 						cpu_request_i2.asid,
 						{cpu_request_i2.vadr[$bits(fta_address_t)-1:6],2'd3,4'h0},
+						{cpu_request_i2.padr[$bits(fta_address_t)-1:6],2'd3,4'h0},
 						cpu_request_i2.sel[63:48],
 						cpu_request_i2.dat[511:384],
+						CID,
 						cpu_request_i2.tid,
 						2'd3,
 						cpu_request_i2.cti==fta_bus_pkg::ERC || !cpu_request_i2.we
@@ -849,9 +873,6 @@ begin
 			wr_cnt <= 2'd0;
 			cpu_request_queued <= 1'b1;
 			loaded <= 1'b0;
-			tran_done[{cpu_request_i2.tid[1:0],2'b00}] <= 1'b1;
-			tran_done[{cpu_request_i2.tid[1:0],2'b01}] <= 1'b1;
-			tran_done[{cpu_request_i2.tid[1:0],2'b10}] <= 1'b1;
 			if (|cpu_request_i2.sel[63:48]) begin
 				v[tid_cnt & 4'hF][3] <= 1'b0;
 				tAddr(
@@ -860,8 +881,10 @@ begin
 					!non_cacheable,
 					cpu_request_i2.asid,
 					{cpu_request_i2.vadr[$bits(fta_address_t)-1:6],2'd3,4'h0},
+					{cpu_request_i2.padr[$bits(fta_address_t)-1:6],2'd3,4'h0},
 					cpu_request_i2.sel[63:48],
 					cpu_request_i2.dat[511:384],
+					CID,
 					cpu_request_i2.tid,
 					2'd3,
 					cpu_request_i2.cti==fta_bus_pkg::ERC || !cpu_request_i2.we

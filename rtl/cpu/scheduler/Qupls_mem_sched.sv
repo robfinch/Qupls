@@ -40,7 +40,7 @@ import QuplsPkg::*;
 module Qupls_mem_sched(rst, clk, head, robentry_stomp, rob, lsq, memissue,
 	ndx0, ndx1, ndx0v, ndx1v, islot_i, islot_o);
 parameter WINDOW_SIZE = 12;
-parameter LSQ_WINDOW_SIZE = 16;
+parameter LSQ_WINDOW_SIZE = LSQ_ENTRIES;
 input rst;
 input clk;
 input rob_ndx_t head;
@@ -48,7 +48,7 @@ input rob_bitmask_t robentry_stomp;
 input rob_entry_t [ROB_ENTRIES-1:0] rob;
 input lsq_entry_t [15:0] lsq;
 input [1:0] islot_i [0:LSQ_ENTRIES-1];
-input reg [1:0] islot_o [0:LSQ_ENTRIES-1];
+output reg [1:0] islot_o [0:LSQ_ENTRIES-1];
 output lsq_bitmask_t memissue;
 output lsq_ndx_t ndx0;
 output lsq_ndx_t ndx1;
@@ -60,7 +60,7 @@ rob_bitmask_t robentry_memready;
 rob_ndx_t [WINDOW_SIZE-1:0] heads;
 rob_bitmask_t robentry_memopsvalid;
 reg [1:0] issued, mem_ready;
-reg no_issue;
+reg no_issue, do_issue;
 reg [1:0] stores;
 
 always_comb
@@ -74,19 +74,19 @@ for (n9 = 0; n9 < ROB_ENTRIES; n9 = n9 + 1)
 always_comb
 for (n10 = 0; n10 < ROB_ENTRIES; n10 = n10 + 1)
   robentry_memready[n10] = (rob[n10].v
-  		& robentry_memopsvalid[n10] 
+  		&& robentry_memopsvalid[n10] 
 //  		& ~robentry_memissue[n10] 
-  		& ~rob[n10].done 
-  		& lsq[rob[n10].lsqndx].tlb
+  		&& (rob[n10].done==2'b01) 
 //  		& ~rob[n10].out
-  		&  rob[n10].lsq
-  		& ~robentry_stomp[n10])
+  		&&  rob[n10].lsq
+  		&& !robentry_stomp[n10])
   		;
 
 always_comb
 begin
 	issued = 'd0;
 	no_issue = 'd0;
+	do_issue = 'd0;
 	mem_ready = 'd0;
 	memissue = 'd0;
 	ndx0 = 'd0;
@@ -117,6 +117,7 @@ begin
 					// Check previous instructions.
 					for (phd = 0; phd < WINDOW_SIZE; phd = phd + 1) begin
 						if (rob[heads[phd]].v && rob[heads[phd]].sn < rob[lsq[hd ].rndx].sn) begin
+							do_issue = 1'b1;
 							// ... and there is no fence
 //							if (lsq[heads[phd]].fence && rob[heads[phd]].decbus.immb[15:0]==16'hFF00)
 //								no_issue = 1'b1;
@@ -124,7 +125,7 @@ begin
 							if (rob[heads[phd]].decbus.store && rob[heads[phd]].decbus.fc)
 								no_issue = 1'b1;
 							// ... and previous mem op without an address yet,
-							if ((rob[heads[phd]].decbus.load|rob[heads[phd]].decbus.store) && !lsq[rob[heads[phd]].lsqndx].tlb)
+							if ((rob[heads[phd]].decbus.load|rob[heads[phd]].decbus.store) && !rob[heads[phd]].done[0])
 								no_issue = 1'b1;
 							// ... and there is no address-overlap with any preceding instruction
 							if (lsq[rob[heads[phd]].lsqndx].padr[$bits(physical_address_t)-1:4]==lsq[hd].padr[$bits(physical_address_t)-1:4])
@@ -134,8 +135,7 @@ begin
 				end
 				if (stores > 2'd0 && lsq[hd].store)
 					no_issue = 1'b1;
-				if (!no_issue) begin
-					mem_ready = mem_ready + 2'd1;
+				if (do_issue && !no_issue) begin
 					memissue[ hd ] =	1'b1;
 					issued = issued + 2'd1;
 					if (mem_ready==2'd1) begin
@@ -149,6 +149,7 @@ begin
 					if (lsq[hd].store)
 						stores = stores + 2'd1;
 					islot_o[hd] = mem_ready;
+					mem_ready = mem_ready + 2'd1;
 				end
 			end
 		end		

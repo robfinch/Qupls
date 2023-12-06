@@ -37,6 +37,7 @@
 
 import fta_bus_pkg::*;
 import QuplsMmupkg::*;
+import QuplsPkg::*;
 
 module Qupls_tlb(rst, clk, ftas_req, ftas_resp,
 	wr, way, entry_no, entry_i, entry_o, vadr0, vadr1, pc_vadr, omd0, omd1, pc_omd,
@@ -45,7 +46,7 @@ module Qupls_tlb(rst, clk, ftas_req, ftas_resp,
 	tlb0_v, tlb1_v, pc_tlb_v, op0, op1, tlb0_op, tlb1_op, tlb0_res, tlb1_res, pc_tlb_res,
 	load0_i, load1_i, store0_i, store1_i, load0_o, load1_o, store0_o, store1_o,
 	stall_tlb0, stall_tlb1,
-	agen0_rndx_i, agen1_rndx_i, agen0_rndx_o, agen1_rndx_o);
+	agen0_rndx_i, agen1_rndx_i, agen0_rndx_o, agen1_rndx_o, agen0_v, agen1_v);
 parameter TLB_ENTRIES = 128;
 parameter MISSQ_ENTRIES = 16;
 input rst;
@@ -97,6 +98,8 @@ input rob_ndx_t agen0_rndx_i;
 input rob_ndx_t agen1_rndx_i;
 output rob_ndx_t agen0_rndx_o;
 output rob_ndx_t agen1_rndx_o;
+input agen0_v;
+input agen1_v;
 
 reg [6:0] entryno, entryno_rst;
 tlb_entry_t entryi, entryi_rst;
@@ -557,6 +560,9 @@ if (rst) begin
 end
 else begin
 	miss_o <= 1'b0;
+	tlb0_v <= 'd0;
+	tlb1_v <= 'd0;
+	pc_tlb_v <= 'd0;
 	if (!stall_tlb0) begin
 		if (t0a.vpn.vpn[8:0]==vadr0[31:23] && t0a.vpn.asid==asid0) begin
 			entry0 <= t0a;
@@ -565,7 +571,7 @@ else begin
 			load0_o <= load0_i;
 			store0_o <= store0_i;
 			agen0_rndx_o <= agen0_rndx_i;
-			tlb0_v <= 1'd1;
+			tlb0_v <= agen0_v;
 			omd0a <= omd0;
 		end
 		else if (t0b.vpn.vpn[8:0]==vadr0[31:23] && t0b.vpn.asid==asid0) begin
@@ -575,20 +581,12 @@ else begin
 			load0_o <= load0_i;
 			store0_o <= store0_i;
 			agen0_rndx_o <= agen0_rndx_i;
-			tlb0_v <= 1'd1;
+			tlb0_v <= agen0_v;
 			omd0a <= omd0;
-		end
-		else begin
-			entry0 <= 'd0;
-			tlb0_v <= 'd0;
-			tlb0_op <= 'd0;
-			tlb0_res <= 'd0;
-			load0_o <= 'd0;
-			store0_o <= 'd0;
 		end
 	end
 
-	if (!stall_tlb1) begin
+	if (NAGEN > 1 && !stall_tlb1) begin
 		if (t1a.vpn.vpn[8:0]==vadr1[31:23] && t1a.vpn.asid==asid1) begin
 			entry1 <= t1a;
 			tlb1_op <= op1;
@@ -596,7 +594,7 @@ else begin
 			load1_o <= load1_i;
 			store1_o <= store1_i;
 			agen1_rndx_o <= agen1_rndx_i;
-			tlb1_v <= 1'd1;
+			tlb1_v <= agen1_v;
 			omd1a <= omd1;
 		end
 		else if (t1b.vpn.vpn[8:0]==vadr1[31:23] && t1b.vpn.asid==asid1) begin
@@ -606,16 +604,8 @@ else begin
 			load1_o <= load1_i;
 			store1_o <= store1_i;
 			agen1_rndx_o <= agen1_rndx_i;
-			tlb1_v <= 1'd1;
+			tlb1_v <= agen1_v;
 			omd1a <= omd1;
-		end
-		else begin
-			entry1 <= 'd0;
-			tlb1_v <= 'd0;
-			tlb1_op <= 'd0;
-			tlb1_res <= 'd0;
-			load1_o <= 'd0;
-			store1_o <= 'd0;
 		end
 	end
 
@@ -630,11 +620,6 @@ else begin
 		pc_tlb_res <= pc_vadr;
 		pc_omda <= pc_omd;
 		pc_tlb_v <= 'd1;
-	end
-	else begin
-		pc_entry <= 'd0;
-		pc_tlb_v <= 'd0;
-		pc_tlb_res <= 'd0;
 	end
 
 	if ((head != (tail - 1) % MISSQ_ENTRIES) && (head != (tail - 2) % MISSQ_ENTRIES) && (head != (tail - 3) % MISSQ_ENTRIES))
