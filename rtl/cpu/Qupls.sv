@@ -94,6 +94,7 @@ wire rst;
 wire clk;
 wire clk2x;
 assign rst = rst_i;
+reg [3:0] rstcnt;
 reg [3:0] panic;
 reg int_commit;		// IRQ committed
 // hirq squashes the pc increment if there's an irq.
@@ -325,7 +326,7 @@ value_t fcu_argB;
 value_t fcu_argI;	// only used by BEQ
 pc_address_t fcu_pc;
 value_t fcu_res;
-wire  [4:0] fcu_id;
+rob_ndx_t fcu_id;
 cause_code_t fcu_exc;
 wire        fcu_v;
 reg fcu_branchmiss;
@@ -638,7 +639,7 @@ end
 
 
 wire ftaim_full, ftadm_full;
-wire ihito,ihit;
+wire ihito,ihit,ihit2;
 
 Qupls_icache
 #(.CORENO(CORENO),.CID(0))
@@ -754,6 +755,8 @@ Qupls_ins_lengths uils1
 	.en_i(!hold_ins),
 	.line_i(ic_line),
 	.line_o(ic_line2),
+	.hit_i(ihito),
+	.hit_o(ihit2),
 	.pc_i(pc),
 	.pc_o(pco),
 	.len0_o(len0),
@@ -1135,10 +1138,10 @@ assign iRnm0 = ~(96'd1 << iRn0);
 assign iRnm1 = ~(96'd1 << iRn1);
 assign iRnm2 = ~(96'd1 << iRn2);
 assign iRnm3 = ~(96'd1 << iRn3);
-flo96 uflo0 (reg_bitmask,iRn0);
-flo96 uflo1 (reg_bitmask & iRnm0,iRn1);
-flo96 uflo2 (reg_bitmask & iRnm0 & iRnm1,iRn2);
-flo96 uflo3 (reg_bitmask & iRnm0 & iRnm1 & iRnm2,iRn3);
+flo96 uflo0 ({29'd0,reg_bitmask},iRn0);
+flo96 uflo1 ({29'd0,reg_bitmask} & iRnm0,iRn1);
+flo96 uflo2 ({29'd0,reg_bitmask} & iRnm0 & iRnm1,iRn2);
+flo96 uflo3 ({29'd0,reg_bitmask} & iRnm0 & iRnm1 & iRnm2,iRn3);
 aregno_t regcnt;
 
 // Extract instructions
@@ -1153,7 +1156,7 @@ Qupls_extract_ins uiext1
 	.irq_i(irq_i),
 	.hirq_i(hirq),
 	.vect_i(vect_i),
-	.mipv_i(mipv2),
+	.mipv_i(mipv),
 	.mip_i(micro_ip),
 	.ic_line_i(ic_line2),
 	.pc0_i(pc0),
@@ -1494,8 +1497,9 @@ assign arnbank[14] = sr.om & {2{|db3.Rc}};
 assign arnbank[15] = sr.om & {2{|db3.Rt}};
 
 
-wire stallq;
+wire stallq, rat_stallq;
 assign nq = !branchmiss && rob[tail0].v==INV;
+assign stallq = !(ihit2 || mipv || mipv2 || !rstcnt[2]) || rat_stallq;
 
 reg signed [$clog2(ROB_ENTRIES):0] cmtlen;			// Will always be >= 0
 reg signed [$clog2(ROB_ENTRIES):0] group_len;		// Commit group length
@@ -1571,7 +1575,7 @@ Qupls_rat urat1
 	.rst(rst),
 	.clk(clk),
 	.nq(nq),
-	.stallq(stallq),
+	.stallq(rat_stallq),
 	.cndx_o(cndx),
 	.avail(free_exc_bitlist),
 	.restore(restore_chkpt),
@@ -1709,7 +1713,7 @@ Qupls_regfile4w15r urf1 (
 always_comb
 for (n4 = 0; n4 < ROB_ENTRIES; n4 = n4 + 1) begin
 		robentry_stomp[n4] =
-			branchmiss
+			(branchmiss || branchmiss_state!=3'd7)
 			&& rob[n4].sn > rob[missid].sn
 			&& rob[n4].v
 		;
@@ -1834,7 +1838,7 @@ always_comb
 always_comb	//ff @(posedge clk)
 	branchmiss = branchmiss_next;
 always_comb
-	missid = excmiss ? excid : fcu_rndx;
+	missid = excmiss ? excid : fcu_id;
 always_ff @(posedge clk)
 	if (branchmiss_state==3'd1)
 		misspc = excmiss ? excmisspc : fcu_misspc;
@@ -2078,7 +2082,6 @@ endgenerate
 	    alu1_id = alu1_rndx;
 
     assign  fcu_v = fcu_dataready;
-    assign  fcu_id = fcu_rndx;
 
 generate begin : gFpu
 if (NFPU > 0) begin
@@ -2402,6 +2405,8 @@ if (rst) begin
 	tReset();
 end
 else begin
+	if (!rstcnt[2])
+		rstcnt <= rstcnt + 1;
 	alu0_ld <= 'd0;
 	alu1_ld <= 'd0;
 			 if (mip0v) begin micro_ir <= ins0; end
@@ -2462,6 +2467,7 @@ else begin
     rob[ fcu_rndx ].out <= INV;
     rob[ fcu_rndx ].takb <= takb;
     rob[ fcu_rndx ].brtgt <= tgtpc;
+    fcu_bts <= BTS_NONE;
 	end
 	// If data for stomped instruction, ignore
 	// dram_vn will be false for stomped data
@@ -2578,6 +2584,7 @@ else begin
 		fcu_pc <= rob[fcu_rndx].pc;
 		fcu_bt <= rob[fcu_rndx].bt;
 		fcu_bts <= rob[fcu_rndx].decbus.bts;
+		fcu_id <= fcu_rndx;
 	  rob[fcu_rndx].out <= VAL;
 	  rob[fcu_rndx].owner <= QuplsPkg::FCU;
 	end
@@ -2965,7 +2972,9 @@ else begin
 
 	// Do not queue while processing a branch miss. Once the queue has been
 	// invalidated (state 2), quing new instructions can begin.
-	if (branchmiss || branchmiss_state < 3'd3)
+	// Only reset the tail if something was stomped on. It could be that there
+	// are no valid instructions following the branch in the queue.
+	if ((branchmiss || branchmiss_state < 3'd3) && |robentry_stomp)
 		tail0 <= stail;		// computed above
 	else if (!stallq) begin
 		if (rob[tail0].v==INV &&
@@ -3358,6 +3367,7 @@ begin
 	fcu_instr <= OP_NOP;
 //	fcu_exc <= FLT_NONE;
 	fcu_bt <= 'd0;
+	fcu_bts <= BTS_NONE;
 	fcu_argA <= 'd0;
 	fcu_argB <= 'd0;
 //	fcu_argC <= 'd0;
@@ -3379,10 +3389,14 @@ begin
 	grplen1 <= 'd0;
 	grplen2 <= 'd0;
 	grplen3 <= 'd0;
+	group_len <= 'd0;
 	last0 <= 1'b1;
 	last1 <= 1'b1;
 	last2 <= 1'b1;
 	last3 <= 1'b1;
+	tail0 <= 'd0;
+	head0 <= 'd0;
+	rstcnt <= 'd0;
 end
 endtask
 

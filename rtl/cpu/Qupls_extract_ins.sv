@@ -149,6 +149,8 @@ always_comb ins1_ = ic_line2 >> {pc1[5:0],3'd0};
 always_comb ins2_ = ic_line2 >> {pc2[5:0],3'd0};
 always_comb ins3_ = ic_line2 >> {pc3[5:0],3'd0};
 
+wire reglist_active0 = ~&iRn0;	// register list is active on slot zero
+
 Qupls_ins_extract_mux umux0
 (
 	.rst(rst_i),
@@ -164,7 +166,7 @@ Qupls_ins_extract_mux umux0
 	.mc_ins(mc_ins0_i),
 	.ins0(ins0_),
 	.insi(ins0_),
-	.iRn0(iRn0),
+	.reglist_active0(reglist_active0),
 	.iRn(iRn0),
 	.ls_bmf(ls_bmf_i),
 	.scale_regs_i(scale_regs_i),
@@ -187,7 +189,7 @@ Qupls_ins_extract_mux umux1
 	.mc_ins(mc_ins1_i),
 	.ins0(ins0_),
 	.insi(ins1_),
-	.iRn0(iRn0),
+	.reglist_active0(reglist_active0),
 	.iRn(iRn1),
 	.ls_bmf(ls_bmf_i),
 	.scale_regs_i(scale_regs_i),
@@ -210,7 +212,7 @@ Qupls_ins_extract_mux umux2
 	.mc_ins(mc_ins2_i),
 	.ins0(ins0_),
 	.insi(ins2_),
-	.iRn0(iRn0),
+	.reglist_active0(reglist_active0),
 	.iRn(iRn2),
 	.ls_bmf(ls_bmf_i),
 	.scale_regs_i(scale_regs_i),
@@ -233,7 +235,7 @@ Qupls_ins_extract_mux umux3
 	.mc_ins(mc_ins3_i),
 	.ins0(ins0_),
 	.insi(ins3_),
-	.iRn0(iRn0),
+	.reglist_active0(reglist_active0),
 	.iRn(iRn3),
 	.ls_bmf(ls_bmf_i),
 	.scale_regs_i(scale_regs_i),
