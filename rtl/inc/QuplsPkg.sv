@@ -49,7 +49,7 @@ parameter SIM = 1'b0;
 //`define SUPPORT_128BIT_OPS	1
 `define NLANES	4
 `define NTHREADS	4
-`define NREGS		64
+`define NREGS		68
 parameter PREGS = 192;
 
 `define L1CacheLines	1024
@@ -267,7 +267,8 @@ typedef enum logic [6:0] {
 	OP_LDT			= 7'd68,
 	OP_LDTU			= 7'd69,
 	OP_LDO			= 7'd70,
-	OP_LDOQ			= 7'd71,
+	OP_LDOU			= 7'd71,
+	OP_LDH			= 7'd72,
 	OP_LDA			= 7'd74,
 	OP_CACHE		= 7'd75,
 	OP_LDAX			= 7'd78,
@@ -276,13 +277,15 @@ typedef enum logic [6:0] {
 	OP_STW			= 7'd81,
 	OP_STT			= 7'd82,
 	OP_STO			= 7'd83,
-	OP_STOQ			= 7'd84,
+	OP_STH			= 7'd84,
 	OP_STPTR		= 7'd86,
 	OP_STX			= 7'd87,
 	OP_SHIFT		= 7'd88,
 	OP_BLEND		= 7'd89,
 	OP_AMO			= 7'd92,
 	OP_CAS			= 7'd93,
+	OP_STCTX		= 7'd94,
+	OP_LDCTX		= 7'd95,
 	OP_FLT2			= 7'd98,
 	OP_FLT3			= 7'd99,
 	OP_IRQ			= 7'd112,
@@ -483,14 +486,16 @@ typedef enum logic [4:0] {
 	FN_LDTUX = 5'd5,
 	FN_LDOX = 5'd6,
 	FN_LDOUX = 5'd7,
+	FN_LDHX = 5'd8,
 	FN_LDAX = 5'd10
 } ldn_func_t;
 
 typedef enum logic [4:0] {
 	FN_STBX = 5'd0,
-	FN_STWX = 5'd2,
-	FN_STTX = 5'd4,
-	FN_STOX = 5'd6
+	FN_STWX = 5'd1,
+	FN_STTX = 5'd2,
+	FN_STOX = 5'd3,
+	FN_STHX = 5'd4
 } stn_func_t;
 
 typedef union packed {
@@ -701,6 +706,7 @@ parameter CSR_MTCBPTR=16'h3050;
 parameter CSR_MGDT	= 16'h3051;
 parameter CSR_MLDT	= 16'h3052;
 parameter CSR_MTCB	= 16'h3054;
+parameter CSR_CTX		= 16'h3053;
 parameter CSR_MBVEC	= 16'b0011000001011???;
 parameter CSR_MSP		= 16'h3060;
 parameter CSR_SR_STACK		= 16'h308?;
@@ -865,9 +871,10 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [103:0] pad;
-	logic [2:0] fmt;
-	logic [2:0] pr;
+	logic [96:0] pad;
+	opcode_t pfx_opcode;
+	logic [3:0] resv;
+	logic [1:0] prc;
 	f3func_t func;
 	regspec_t Rc;
 	regspec_t Rb;
@@ -878,9 +885,10 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [103:0] pad;
-	logic [2:0] fmt;
-	logic [2:0] pr;
+	logic [96:0] pad;
+	opcode_t pfx_opcode;
+	logic [3:0] resv2;
+	logic [1:0] prc;
 	f2func_t func;
 	fround_t rnd;
 	logic resv;
@@ -892,9 +900,10 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [103:0] pad;
-	logic [2:0] fmt;
-	logic [2:0] pr;
+	logic [96:0] pad;
+	opcode_t pfx_opcode;
+	logic [3:0] resv2;
+	logic [1:0] prc;
 	f2func_t func2;
 	fround_t rnd;
 	logic resv;
@@ -906,7 +915,8 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [111:0] pad;
+	logic [104:0] pad;
+	opcode_t pfx_opcode;
 	r2func_t func;
 	logic resv;
 	regspec_t Rb;
@@ -917,7 +927,8 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [111:0] pad;
+	logic [104:0] pad;
+	opcode_t pfx_opcode;
 	r2bfunc_t func;
 	logic resv;
 	regspec_t Rb;
@@ -952,10 +963,9 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [103:0] pad;
-	logic [1:0] fmt;
-	logic [2:0] pr;
-	logic [15:0] imm;
+	logic [104:0] pad;
+	opcode_t pfx_opcode;
+	logic [12:0] imm;
 	regspec_t Ra;
 	regspec_t Rt;
 	opcode_t opcode;
@@ -1022,6 +1032,19 @@ typedef struct packed
 typedef struct packed
 {
 	logic [103:0] pad;
+	logic [3:0] seven;
+	logic [4:0] resv;
+	regspec_t Rc;
+	regspec_t Rb;
+	regspec_t	Ra;
+	logic [1:0] displo;
+	branch_fn_t fn;
+	opcode_t opcode;
+} brrinst_t;
+
+typedef struct packed
+{
+	logic [103:0] pad;
 	logic [14:0] disphi;
 	regspec_t Rb;
 	regspec_t	Ra;
@@ -1045,21 +1068,18 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [103:0] pad;
-	logic [1:0] fmt;
-	logic [2:0] pr;
-	logic [15:0] immhi;
+	logic [95:0] pad;
+	logic [28:0] immhi;
 	regspec_t Ra;
-	logic [3:0] immlo;
-	logic [1:0] lk;
+	regspec_t Rt;
 	opcode_t opcode;
 } jsrinst_t;
 
 typedef struct packed
 {
-	logic [95:0] pad;
-	logic [37:0] disp;
-	logic [2:0] lk;
+	logic [103:0] pad;
+	logic [26:0] disp;
+	regspec_t Rt;
 	opcode_t opcode;
 } bsrinst_t;
 
@@ -1073,6 +1093,7 @@ typedef union packed
 	r2inst_t	r2;
 	r2binst_t	r2b;
 	brinst_t	br;
+	brrinst_t	brr;
 	fbrinst_t	fbr;
 	mcb_inst_t mcb;
 	jsrinst_t	jsr;
@@ -1427,7 +1448,7 @@ input instruction_t ir;
 begin
 	if (ir.any.opcode==OP_JSR && ir.jsr.Rt!=6'd0)
 		fnIsCallType = 1'b1;
-	else if (ir.any.opcode==OP_BSR && ir.bsr.lk!=2'd0)
+	else if (ir.any.opcode==OP_BSR && ir.bsr.Rt!=6'd0)
 		fnIsCallType = 1'b1;
 	else
 		fnIsCallType = 1'b0;
@@ -1671,11 +1692,11 @@ begin
 	OP_SLTI:	fnSourceTv = fnConstReg(ir.ri.Rt);
 	OP_SHIFT:	fnSourceTv = fnConstReg(ir.ri.Rt);
 	OP_MOV:		fnSourceTv = fnConstReg(ir.ri.Rt);
-	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDA:
+	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDOU,OP_LDH,OP_LDA:
 		fnSourceTv = fnConstReg(ir.ls.Rt);
 	OP_LDX:
 		fnSourceTv = fnConstReg(ir.lsn.Rt);
-	OP_STB,OP_STW,OP_STT,OP_STO,OP_STX:
+	OP_STB,OP_STW,OP_STT,OP_STO,OP_STH,OP_STX:
 		fnSourceTv = 1'b1;
 	OP_DBRA: fnSourceTv = 1'b1;
 	8'b00101???:
@@ -1686,57 +1707,64 @@ begin
 end
 endfunction
 
+// If the instruction is followed by a vector postfix then it
+// uses a mask register, otherwise it does not.
 function fnSourcePv;
 input instruction_t ir;
+reg vec,veci,vecf;
 begin
+	vec = ir.r2.pfx_opcode==OP_VEC || ir.r2.pfx_opcode==OP_VECZ;
+	veci = ir.ri.pfx_opcode==OP_VEC || ir.ri.pfx_opcode==OP_VECZ;
+	vecf = ir.f2.pfx_opcode==OP_VEC || ir.f2.pfx_opcode==OP_VECZ;
 	casez(ir.r2.opcode)
-	OP_SYS:	fnSourcePv = ~ir.r2.fmt[0];
+	OP_SYS:	fnSourcePv = ~vec;
 	OP_R2:
 		case(ir.r2.func)
-		FN_ADD:	fnSourcePv = ~ir.r2.fmt[0];
-		FN_CMP:	fnSourcePv = ~ir.r2.fmt[0];
-		FN_MUL:	fnSourcePv = ~ir.r2.fmt[0];
-		FN_DIV:	fnSourcePv = ~ir.r2.fmt[0];
-		FN_SUB:	fnSourcePv = ~ir.r2.fmt[0];
-		FN_MULU: fnSourcePv = ~ir.r2.fmt[0];
-		FN_DIVU: fnSourcePv = ~ir.r2.fmt[0];
-		FN_AND:	fnSourcePv = ~ir.r2.fmt[0];
-		FN_OR:	fnSourcePv = ~ir.r2.fmt[0];
-		FN_EOR:	fnSourcePv = ~ir.r2.fmt[0];
-		FN_ANDC:	fnSourcePv = ~ir.r2.fmt[0];
-		FN_NAND:	fnSourcePv = ~ir.r2.fmt[0];
-		FN_NOR:	fnSourcePv = ~ir.r2.fmt[0];
-		FN_ENOR:	fnSourcePv = ~ir.r2.fmt[0];
-		FN_ORC:	fnSourcePv = ~ir.r2.fmt[0];
+		FN_ADD:	fnSourcePv = ~vec;
+		FN_CMP:	fnSourcePv = ~vec;
+		FN_MUL:	fnSourcePv = ~vec;
+		FN_DIV:	fnSourcePv = ~vec;
+		FN_SUB:	fnSourcePv = ~vec;
+		FN_MULU: fnSourcePv = ~vec;
+		FN_DIVU: fnSourcePv = ~vec;
+		FN_AND:	fnSourcePv = ~vec;
+		FN_OR:	fnSourcePv = ~vec;
+		FN_EOR:	fnSourcePv = ~vec;
+		FN_ANDC:	fnSourcePv = ~vec;
+		FN_NAND:	fnSourcePv = ~vec;
+		FN_NOR:	fnSourcePv = ~vec;
+		FN_ENOR:	fnSourcePv = ~vec;
+		FN_ORC:	fnSourcePv = ~vec;
 		default:	fnSourcePv = 1'b1;
 		endcase
 	OP_R2B:
 		case(ir.r2b.func)
-		FN_SEQ:	fnSourcePv = ~ir.r2.fmt[0];
-		FN_SNE:	fnSourcePv = ~ir.r2.fmt[0];
-		FN_SLT:	fnSourcePv = ~ir.r2.fmt[0];
-		FN_SLE:	fnSourcePv = ~ir.r2.fmt[0];
-		FN_SLTU:	fnSourcePv = ~ir.r2.fmt[0];
-		FN_SLEU:	fnSourcePv = ~ir.r2.fmt[0];
+		FN_SEQ:	fnSourcePv = ~vec;
+		FN_SNE:	fnSourcePv = ~vec;
+		FN_SLT:	fnSourcePv = ~vec;
+		FN_SLE:	fnSourcePv = ~vec;
+		FN_SLTU:	fnSourcePv = ~vec;
+		FN_SLEU:	fnSourcePv = ~vec;
 		default:	fnSourcePv = 1'b1;
 		endcase
 	OP_JSR,
-	OP_ADDI:	fnSourcePv = ~ir.ri.fmt[0];
-	OP_CMPI:	fnSourcePv = ~ir.ri.fmt[0];
-	OP_MULI:	fnSourcePv = ~ir.ri.fmt[0];
-	OP_DIVI:	fnSourcePv = ~ir.ri.fmt[0];
-	OP_ANDI:	fnSourcePv = ~ir.ri.fmt[0];
-	OP_ORI:		fnSourcePv = ~ir.ri.fmt[0];
-	OP_EORI:	fnSourcePv = ~ir.ri.fmt[0];
-	OP_SLTI:	fnSourcePv = ~ir.ri.fmt[0];
-	OP_SHIFT:	fnSourcePv = ~ir.r2.fmt[0];
-	OP_MOV:		fnSourcePv = ~ir.r2.fmt[0];
-	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDA:
-		fnSourcePv = ~ir.ri.fmt[0];
+	OP_ADDI:	fnSourcePv = ~veci;
+	OP_CMPI:	fnSourcePv = ~veci;
+	OP_MULI:	fnSourcePv = ~veci;
+	OP_DIVI:	fnSourcePv = ~veci;
+	OP_ANDI:	fnSourcePv = ~veci;
+	OP_ORI:		fnSourcePv = ~veci;
+	OP_EORI:	fnSourcePv = ~veci;
+	OP_SLTI:	fnSourcePv = ~veci;
+	OP_SHIFT:	fnSourcePv = ~vec;
+	OP_FLT2,OP_FLT3:	fnSourcePv = ~vecf;	
+	OP_MOV:		fnSourcePv = ~vec;
+	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDOU,OP_LDH,OP_LDA:
+		fnSourcePv = ~veci;
 	OP_LDX:
-		fnSourcePv = ~ir.ri.fmt[0];
-	OP_STB,OP_STW,OP_STT,OP_STO,OP_STX:
-		fnSourcePv = ~ir.ri.fmt[0];
+		fnSourcePv = ~veci;
+	OP_STB,OP_STW,OP_STT,OP_STO,OP_STH,OP_STX:
+		fnSourcePv = ~veci;
 	OP_DBRA,
 	8'b00101???:
 		fnSourcePv = 1'b1;
@@ -1750,7 +1778,7 @@ function fnIsLoad;
 input [18:0] op;
 begin
 	case(opcode_t'(op[6:0]))
-	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,
+	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDOU,OP_LDH,
 	OP_LDX:
 		fnIsLoad = 1'b1;
 	default:
@@ -1763,7 +1791,7 @@ function fnIsLoadz;
 input instruction_t op;
 begin
 	case(op.any.opcode)
-	OP_LDBU,OP_LDWU,OP_LDTU:
+	OP_LDBU,OP_LDWU,OP_LDTU,OP_LDOU:
 		fnIsLoadz = 1'b1;
 	OP_LDX:
 		case(op.lsn.func)
@@ -1840,8 +1868,8 @@ begin
 		fnImmb = 1'b1;
 	OP_RTD:
 		fnImmb = 1'b1;
-	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDA,OP_CACHE,
-	OP_STB,OP_STW,OP_STT,OP_STO:
+	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDOU,OP_LDH,OP_LDA,OP_CACHE,
+	OP_STB,OP_STW,OP_STT,OP_STO,OP_STH:
 		fnImmb = 1'b1;
 	OP_LDX,OP_STX:
 		fnImmb = &ir.lsn.Rb;
@@ -2015,8 +2043,10 @@ begin
 		fnMemsz = wyde;
 	OP_LDT,OP_LDTU,OP_STT:
 		fnMemsz = tetra;
-	OP_LDO,OP_STO:
+	OP_LDO,OP_LDOU,OP_STO:
 		fnMemsz = octa;
+	OP_LDH,OP_STH:
+		fnMemsz = hexi;
 	OP_LDX:
 		case(ir.lsn.func)
 		FN_LDBX,FN_LDBUX:
@@ -2027,6 +2057,8 @@ begin
 			fnMemsz = tetra;
 		FN_LDOX,FN_LDOUX:
 			fnMemsz = octa;
+		FN_LDHX:
+			fnMemsz = hexi;
 		default
 			fnMemsz = octa;
 		endcase
@@ -2036,6 +2068,7 @@ begin
 		FN_STWX:	fnMemsz = wyde;
 		FN_STTX:	fnMemsz = tetra;
 		FN_STOX:	fnMemsz = octa;
+		FN_STHX:	fnMemsz = hexi;
 		default:	fnMemsz = octa;
 		endcase
 	default:
@@ -2054,8 +2087,10 @@ begin
 		fnSel = 16'h0003;
 	OP_LDT,OP_LDTU,OP_STT:
 		fnSel = 16'h000F;
-	OP_LDO,OP_STO:
+	OP_LDO,OP_LDOU,OP_STO:
 		fnSel = 16'h00FF;
+	OP_LDH,OP_STH:
+		fnSel = 16'hFFFF;
 	OP_LDX:
 		case(ir.lsn.func)
 		FN_LDBX,FN_LDBUX:
@@ -2066,6 +2101,8 @@ begin
 			fnSel = 16'h000F;
 		FN_LDOX,FN_LDOUX:
 			fnSel = 16'h00FF;
+		FN_LDHX:
+			fnSel = 16'hFFFF;
 		default
 			fnSel = 16'h00FF;
 		endcase
@@ -2075,6 +2112,7 @@ begin
 		FN_STWX:	fnSel = 16'h0003;
 		FN_STTX:	fnSel = 16'h000F;
 		FN_STOX:	fnSel = 16'h00FF;
+		FN_STHX:	fnSel = 16'hFFFF;
 		default:	fnSel = 16'h00FF;
 		endcase
 	default:

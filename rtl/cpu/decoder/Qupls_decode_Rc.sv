@@ -36,20 +36,21 @@
 
 import QuplsPkg::*;
 
-module Qupls_decode_Rc(instr, Rc);
+module Qupls_decode_Rc(instr, regx, Rc);
 input instruction_t instr;
-output regspec_t Rc;
+input [3:0] regx;
+output aregno_t Rc;
 
-function regspec_t fnRc;
+function aregno_t fnRc;
 input instruction_t ir;
 begin
 	case(ir.any.opcode)
 	OP_RTD:
-		fnRc = 6'd56 + ir[8:7];
+		fnRc = 7'd56 + ir[8:7];
 	OP_STB,OP_STW,OP_STT,OP_STO,OP_STX:
-		fnRc = ir[12:7];
+		fnRc = {regx[0],ir[12:7]};
 	default:
-		fnRc = ir[30:25];
+		fnRc = {regx[3],ir[30:25]};
 	endcase
 end
 endfunction

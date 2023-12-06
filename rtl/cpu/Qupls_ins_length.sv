@@ -50,7 +50,7 @@ always_comb
 					len = 5'd5;
 	OP_LDX:	len = 5'd4;
 	OP_STX:	len = 5'd4;
-	OP_R1,OP_LDOQ,OP_STOQ,OP_ADDQ:
+	OP_R1,OP_ADDQ:
 					len = 5'd3;
 	OP_PFXA32,OP_PFXB32,OP_PFXC32:
 					len = 5'd5;
@@ -70,7 +70,8 @@ always_comb
 	OP_REGS:	len = 5'd9;
 	OP_VEC,OP_VECZ:
 					len = 5'd2;
-	OP_NOP:	len = 5'd1;
+	OP_NOP,OP_STCTX,OP_LDCTX:
+					len = 5'd1;
 	default:	len = 5'd4;
 	endcase
 

@@ -86,7 +86,7 @@ fta_cmd_request128_t [1:0] ftadm_req;
 fta_cmd_response128_t [1:0] ftadm_resp;
 
 
-integer nn,mm,n3,n4,m4,n5,n6,n7,n8,n9,n10,n12,n14,n15,n16,n17;
+integer nn,mm,n2,n3,n4,m4,n5,n6,n7,n8,n9,n10,n11,n12,n13,n14,n15,n16,n17;
 genvar g,h;
 rndx_t alu0_re;
 reg [127:0] message;
@@ -199,6 +199,17 @@ always_comb head1 = (head0 + 1) % ROB_ENTRIES;
 always_comb head2 = (head0 + 2) % ROB_ENTRIES;
 always_comb head3 = (head0 + 3) % ROB_ENTRIES;
 
+decode_bus_t db0, db1, db2, db3;
+decode_bus_t db0r, db1r, db2r, db3r;
+
+reg [3:0] regx0;
+reg [3:0] regx1;
+reg [3:0] regx2;
+reg [3:0] regx3;
+wire [3:0] mc_regx0;
+wire [3:0] mc_regx1;
+wire [3:0] mc_regx2;
+wire [3:0] mc_regx3;
 rob_ndx_t alu0_sndx;
 rob_ndx_t alu1_sndx;
 wire alu0_sv;
@@ -579,7 +590,7 @@ reg mip1v;
 reg mip2v;
 reg mip3v;
 reg nmip;
-reg mipv;
+reg mipv, mipv2;
 
 instruction_t micro_ir;
 instruction_t mc_ins0;
@@ -649,7 +660,7 @@ uic1
 	.ic_line_hi_o(ic_line_hi),
 	.ic_line_lo_o(ic_line_lo),
 	.ic_valid(ic_valid),
-	.miss_adr(ic_miss_adr),
+	.miss_vadr(ic_miss_adr),
 	.miss_asid(ic_miss_asid),
 	.ic_line_i(ic_line_o),
 	.wway(ic_wway),
@@ -664,10 +675,11 @@ icctrl1
 	.clk(clk),
 	.wbm_req(ftaim_req),
 	.wbm_resp(ftaim_resp),
-	.ftam_full(ftaim_full),
+	.ftam_full(ftaim_resp.rty),
 	.hit(ihit),
 	.tlb_v(pc_tlb_v),
-	.miss_adr({tlb_pc_entry.pte.ppn,pc_tlb_res[15:0]}),
+	.miss_vadr(ic_miss_adr),
+	.miss_padr({tlb_pc_entry.pte.ppn,pc_tlb_res[15:0]}),
 	.miss_asid(tlb_pc_entry.vpn.asid),
 	.wr_ic(wr_ic),
 	.way(ic_wway),
@@ -737,6 +749,7 @@ wire [4:0] len0, len1, len2, len3, len4, len5;
 // 3 cycle latency
 Qupls_ins_lengths uils1
 (
+	.rst_i(rst),
 	.clk_i(clk),
 	.en_i(!hold_ins),
 	.line_i(ic_line),
@@ -962,7 +975,7 @@ always_comb
 							(mipv & ~hirq & (pe_allqd|allqd) & ~branchmiss);
 
 always_comb
-	hold_ins = ~|reg_bitmask || mipv;
+	hold_ins = |reg_bitmask || mipv;
 
 always_ff @(posedge clk)
 if (rst) begin
@@ -991,42 +1004,58 @@ else begin
 end
 
 always_comb
-if ((fnIsAtom(ins0) || fnIsAtom(ins1)) && irq_i != 3'd7)
+if ((fnIsAtom(ins0) || fnIsAtom(ins1) || fnIsAtom(ins2) || fnIsAtom(ins3)) && irq_i != 3'd7)
 	hirq = 'd0;
 else
-	hirq = (irq_i > im) && ~int_commit && (irq_i > atom_mask[2:0]);
+	hirq = (irq_i > sr.ipl) && !int_commit && (irq_i > atom_mask[2:0]);
 
 Qupls_micro_code umc0 (
 	.micro_ip({micro_ip[11:2],2'd0}),
 	.micro_ir(micro_ir),
 	.next_ip(next_micro_ip),
-	.instr(mc_ins0)
+	.instr(mc_ins0),
+	.regx(mc_regx0)
 );
 
 Qupls_micro_code umc1 (
 	.micro_ip({micro_ip[11:2],2'd1}),
 	.micro_ir(micro_ir),
 	.next_ip(),
-	.instr(mc_ins1)
+	.instr(mc_ins1),
+	.regx(mc_regx1)
 );
 
 Qupls_micro_code umc2 (
 	.micro_ip({micro_ip[11:2],2'd2}),
 	.micro_ir(micro_ir),
 	.next_ip(),
-	.instr(mc_ins2)
+	.instr(mc_ins2),
+	.regx(mc_regx2)
 );
 
 Qupls_micro_code umc3 (
 	.micro_ip({micro_ip[11:2],2'd3}),
 	.micro_ir(micro_ir),
 	.next_ip(),
-	.instr(mc_ins3)
+	.instr(mc_ins3),
+	.regx(mc_regx3)
 );
 
 always_comb mc_ins4 = {'d0,OP_NOP};
 always_comb mc_ins5 = {'d0,OP_NOP};
 always_comb mc_ins6 = {'d0,OP_NOP};
+
+always_ff @(posedge clk) regx0 <= mipv2 ? mc_regx0 : 'd0;
+always_ff @(posedge clk) regx1 <= mipv2 ? mc_regx1 : 'd0;
+always_ff @(posedge clk) regx2 <= mipv2 ? mc_regx2 : 'd0;
+always_ff @(posedge clk) regx3 <= mipv2 ? mc_regx3 : 'd0;
+
+always_ff @(posedge clk)
+if (rst)
+	mipv2 <= 1'd0;
+else begin
+	mipv2 <= mipv;
+end
 
 function [11:0] fnMip;
 input instruction_t ir;
@@ -1059,6 +1088,8 @@ begin
 		FN_FDIV:	fnMip = 12'h040;
 		default:	fnMip = 12'h000;
 		endcase
+	OP_STCTX:	fnMip = 12'h100;
+	OP_LDCTX:	fnMip = 12'h150;
 	default:	fnMip = 12'h000;
 	endcase
 end
@@ -1116,12 +1147,14 @@ always_comb
 	
 Qupls_extract_ins uiext1
 (
+	.rst_i(rst),
 	.clk_i(clk),
 	.en_i(1'b1),
 	.irq_i(irq_i),
 	.hirq_i(hirq),
 	.vect_i(vect_i),
-	.mipv_i(mipv),
+	.mipv_i(mipv2),
+	.mip_i(micro_ip),
 	.ic_line_i(ic_line2),
 	.pc0_i(pc0),
 	.pc1_i(pc1),
@@ -1192,10 +1225,10 @@ always_ff @(posedge clk)
 if (rst)
 	reg_bitmask <= 'd0;
 else begin
-	if (db0.regs) reg_bitmask <= ins0[71:16];
-	else if (db1.regs) reg_bitmask <= ins1[71:16];
-	else if (db2.regs) reg_bitmask <= ins2[71:16];
-	else if (db3.regs) reg_bitmask <= ins3[71:16];
+	if (db0.regs) reg_bitmask <= ins0[79:16];
+	else if (db1.regs) reg_bitmask <= ins1[79:16];
+	else if (db2.regs) reg_bitmask <= ins2[79:16];
+	else if (db3.regs) reg_bitmask <= ins3[79:16];
 	if (nq && |reg_bitmask)
 		reg_bitmask <= reg_bitmask & iRnm0 & iRnm1 & iRnm2 & iRnm3;
 end
@@ -1350,8 +1383,6 @@ end
 //
 // DECODE
 //
-decode_bus_t db0, db1, db2, db3;
-decode_bus_t db0r, db1r, db2r, db3r;
 instruction_t [3:0] instr [0:3];
 pregno_t pRa0, pRa1, pRa2, pRa3;
 pregno_t pRb0, pRb1, pRb2, pRb3;
@@ -1387,6 +1418,7 @@ Qupls_decoder udeci0
 	.clk(clk),
 	.en(1'b1),
 	.instr(instr[0]),
+	.regx(regx0),
 	.dbo(db0)
 );
 
@@ -1395,6 +1427,7 @@ Qupls_decoder udeci1
 	.clk(clk),
 	.en(1'b1),
 	.instr(instr[1]),
+	.regx(regx1),
 	.dbo(db1)
 );
 
@@ -1403,6 +1436,7 @@ Qupls_decoder udeci2
 	.clk(clk),
 	.en(1'b1),
 	.instr(instr[2]),
+	.regx(regx2),
 	.dbo(db2)
 );
 
@@ -1411,6 +1445,7 @@ Qupls_decoder udeci3
 	.clk(clk),
 	.en(1'b1),
 	.instr(instr[3]),
+	.regx(regx3),
 	.dbo(db3)
 );
 
@@ -1798,17 +1833,14 @@ always_comb
 	branchmiss_next = (excmiss | fcu_branchmiss);// & ~branchmiss;
 always_comb	//ff @(posedge clk)
 	branchmiss = branchmiss_next;
-//always_comb
-//	missid = excmiss ? excid : fcu_sourceid;
+always_comb
+	missid = excmiss ? excid : fcu_rndx;
 always_ff @(posedge clk)
 	if (branchmiss_state==3'd1)
 		misspc = excmiss ? excmisspc : fcu_misspc;
 always_ff @(posedge clk)
 	if (branchmiss_state==3'd1)
 		missir = excmiss ? excir : fcu_missir;
-always_ff @(posedge clk)
-	if (branchmiss_state==3'd1)
-		missid = excmiss ? excid : fcu_rndx;
 
 always_ff @(posedge clk)
 if (rst)
@@ -2187,10 +2219,10 @@ always_comb
 begin
 	cantlsq0 = 1'b0;
 	cantlsq1 = 1'b0;
-	for (n6 = 0; n6 < ROB_ENTRIES; n6 = n6 + 1) begin
-		if ((rob[n6].decbus.load | rob[n6].decbus.store) && rob[n6].sn < rob[agen0_rndx].sn && !rob[n6].lsq)
+	for (n11 = 0; n11 < ROB_ENTRIES; n11 = n11 + 1) begin
+		if ((rob[n11].decbus.load | rob[n11].decbus.store) && rob[n11].sn < rob[agen0_rndx].sn && !rob[n11].lsq)
 			cantlsq0 = 1'b1;
-		if ((rob[n6].decbus.load | rob[n6].decbus.store) && rob[n6].sn < rob[agen1_rndx].sn && !rob[n6].lsq)
+		if ((rob[n11].decbus.load | rob[n11].decbus.store) && rob[n11].sn < rob[agen1_rndx].sn && !rob[n11].lsq)
 			cantlsq1 = 1'b1;
 	end
 end
@@ -2277,16 +2309,16 @@ begin
 	lsq_tail0 = lsq_tail;
 	lsq_tail1 = lsq_tail + 1;
 	lsq_heads[0] = lsq_head;
-	for (n5 = 1; n5 < LSQ_ENTRIES; n5 = n5 + 1)
-		lsq_heads[n5] = lsq_heads[n5-1];	
+	for (n2 = 1; n2 < LSQ_ENTRIES; n2 = n2 + 1)
+		lsq_heads[n2] = (lsq_heads[n2-1]+1) % LSQ_ENTRIES;
 end
 
 always_comb
 begin
 	alu0_done = 'd0;
-	for (n7 = 0; n7 < ROB_ENTRIES; n7 = n7 + 1)
-		if (robentry_issue[n7] && robentry_islot[n7] == 2'd0 && !robentry_stomp[n7] &&
-			(rob[n7].decbus.div|rob[n7].decbus.divu ? div0_done : 1'b1) && (rob[n7].decbus.mul|rob[n7].decbus.mulu ? mul0_done : 1'b1))
+	for (n13 = 0; n13 < ROB_ENTRIES; n13 = n13 + 1)
+		if (robentry_issue[n13] && robentry_islot[n13] == 2'd0 && !robentry_stomp[n13] &&
+			(rob[n13].decbus.div|rob[n13].decbus.divu ? div0_done : 1'b1) && (rob[n13].decbus.mul|rob[n13].decbus.mulu ? mul0_done : 1'b1))
 				alu0_done = 1'b1;
 end
 
@@ -2767,7 +2799,7 @@ else begin
     	dram0_sel <= 'd0;
   	end
     if (dram0_store)
-    	$display("m[%h] <- %h", dram0_addr, dram0_data);
+    	$display("m[%h] <- %h", dram0_vaddr, dram0_data);
 	end
 	else if (dram0 == DRAMSLOT_ACTIVE && dram0_ack) begin
 		// If there is more to do, trigger a second instruction issue.
@@ -2783,7 +2815,7 @@ else begin
     	dram0_sel <= 'd0;
   	end
     if (dram0_store)
-    	$display("m[%h] <- %h", dram0_addr, dram0_data);
+    	$display("m[%h] <- %h", dram0_vaddr, dram0_data);
 	end
 	else
 		dram_v0 <= INV;
@@ -2800,7 +2832,7 @@ else begin
 	    	dram1_sel <= 'd0;
 	  	end
 	    if (dram1_store)
-	     	$display("m[%h] <- %h", dram1_addr, dram1_data);
+	     	$display("m[%h] <- %h", dram1_vaddr, dram1_data);
 		end
 		else if (dram1 == DRAMSLOT_ACTIVE && dram1_ack) begin
 			// If there is more to do, trigger a second instruction issue.
@@ -2816,7 +2848,7 @@ else begin
 	    	dram1_sel <= 'd0;
 	  	end
 	    if (dram1_store)
-	     	$display("m[%h] <- %h", dram1_addr, dram1_data);
+	     	$display("m[%h] <- %h", dram1_vaddr, dram1_data);
 		end
 		else
 			dram_v1 <= INV;
@@ -3226,6 +3258,15 @@ begin
 		fta_req <= 'd0;
 
 	// Route bus responses.
+	if (fta_resp.cid==ftatm_req.cid)
+		ftatm_resp <= fta_resp;
+	else if (fta_resp.cid==ftaim_req.cid)
+		ftaim_resp <= fta_resp;
+	else if (fta_resp.cid==ftadm_req[0].cid)
+		ftadm_resp[0] <= fta_resp;
+	else if (fta_resp.cid==ftadm_req[1].cid)
+		ftadm_resp[1] <= fta_resp;
+	/*
 	case(fta_resp.cid)
 	4'd0:	ftaim_resp <= fta_resp;
 	4'd1:	ftadm_resp[0] <= fta_resp;
@@ -3233,7 +3274,7 @@ begin
 	4'd3:	ftatm_resp <= fta_resp;
 	default:	;	// response was not for us
 	endcase
-
+	*/
 end
 
 task tReset;

@@ -46,7 +46,8 @@ import QuplsPkg::*;
 import Qupls_cache_pkg::*;
 
 module Qupls_icache(rst,clk,invce,snoop_adr,snoop_v,snoop_cid,invall,invline,
-	ip_asid,ip,ip_o,ihit_o,ihit,ic_line_hi_o,ic_line_lo_o,ic_valid,miss_adr,miss_asid,
+	ip_asid,ip,ip_o,ihit_o,ihit,ic_line_hi_o,ic_line_lo_o,ic_valid,
+	miss_vadr,miss_asid,
 	ic_line_i,wway,wr_ic
 	);
 parameter CORENO = 6'd1;
@@ -77,7 +78,7 @@ output ICacheLine ic_line_hi_o;
 output ICacheLine ic_line_lo_o;
 output reg ic_valid;
 output QuplsPkg::asid_t miss_asid;
-output QuplsPkg::code_address_t miss_adr;
+output QuplsPkg::code_address_t miss_vadr;
 input ICacheLine ic_line_i;
 input [LOG_WAYS:0] wway;
 input wr_ic;
@@ -489,10 +490,10 @@ always_comb
 
 always_comb
 	if (!ihit1e)
-		miss_adr = {ip[$bits(QuplsPkg::address_t)-1:LOBIT]+iel,1'b0,{LOBIT-1{1'b0}}};
+		miss_vadr = {ip[$bits(QuplsPkg::address_t)-1:LOBIT]+iel,1'b0,{LOBIT-1{1'b0}}};
 	else if (!ihit1o)
-		miss_adr = {ip[$bits(QuplsPkg::address_t)-1:LOBIT],1'b1,{LOBIT-1{1'b0}}};
+		miss_vadr = {ip[$bits(QuplsPkg::address_t)-1:LOBIT],1'b1,{LOBIT-1{1'b0}}};
 	else
-		miss_adr = 32'hFFFD0000;
+		miss_vadr = 32'hFFFD0000;
 
 endmodule

@@ -40,8 +40,9 @@
 
 import QuplsPkg::*;
 
-module Qupls_ins_lengths(clk_i, en_i, line_i, line_o, pc_i, pc_o,
+module Qupls_ins_lengths(rst_i, clk_i, en_i, line_i, line_o, pc_i, pc_o,
 	len0_o, len1_o, len2_o, len3_o, len4_o, len5_o);
+input rst_i;
 input clk_i;
 input en_i;										// pipeline enable
 input [1023:0] line_i;
@@ -75,40 +76,50 @@ generate begin : gInsLen
 	for (g = 0; g < 64; g = g + 1) begin
 		Qupls_ins_length uiln0 (line_i[g*8+7:g*8], len[g]);
 		always_ff @(posedge clk)
-			if (en) lenr[g] <= len[g];
+			if (rst_i) lenr[g] <= 5'd1; else if (en) lenr[g] <= len[g];
 		always_ff @(posedge clk)
-			if (en) lenr2[g] <= lenr[g];
+			if (rst_i) lenr2[g] <= 5'd1; else if (en) lenr2[g] <= lenr[g];
 	end
 end
 endgenerate
 
 always_ff @(posedge clk)
-	if (en) liner <= line_i;
+if (rst_i)
+	liner <= {1024{1'b1}};	// NOP
+else begin
+	if (en)
+		liner <= line_i;
+end
 always_ff @(posedge clk)
-	if (en) liner2 <= liner;
+if (rst_i)
+	liner2 <= {1024{1'b1}};	// NOP
+else begin
+	if (en)
+		liner2 <= liner;
+end
 always_ff @(posedge clk)
-	if (en) pcr <= pc_i;
+	if (rst_i) pcr <= RSTPC; else if (en) pcr <= pc_i;
 always_ff @(posedge clk)
-	if (en) pcr2 <= pcr;
+	if (rst_i) pcr2 <= RSTPC; else if (en) pcr2 <= pcr;
 
 always_comb len0 = lenr[pcr[17:12]];
 always_comb len1 = lenr[pcr[17:12]+len0];
 always_comb len2 = lenr[pcr[17:12]+len0+len1];
-always_ff @(posedge clk) if (en) len0r2 <= len0;
-always_ff @(posedge clk) if (en) len1r2 <= len1;
-always_ff @(posedge clk) if (en) len2r2 <= len2;
-always_ff @(posedge clk) if (en) len012r2 <= len0 + len1 + len2;
+always_ff @(posedge clk) if (rst_i) len0r2 <= 5'd1; else if (en) len0r2 <= len0;
+always_ff @(posedge clk) if (rst_i) len1r2 <= 5'd1; else if (en) len1r2 <= len1;
+always_ff @(posedge clk) if (rst_i) len2r2 <= 5'd1; else if (en) len2r2 <= len2;
+always_ff @(posedge clk) if (rst_i) len012r2 <= 5'd3; else if (en) len012r2 <= len0 + len1 + len2;
 always_comb len3 = lenr2[pcr2[17:12]+len012r2];
 always_comb len4 = lenr2[pcr2[17:12]+len012r2+len3];
 always_comb len5 = lenr2[pcr2[17:12]+len012r2+len3+len4];
 
-always_ff @(posedge clk) if (en) pc_o <= pcr2;
-always_ff @(posedge clk) if (en) line_o <= liner2;
-always_ff @(posedge clk) if (en) len0_o <= len0r2;
-always_ff @(posedge clk) if (en) len1_o <= len1r2;
-always_ff @(posedge clk) if (en) len2_o <= len2r2;
-always_ff @(posedge clk) if (en) len3_o <= len3;
-always_ff @(posedge clk) if (en) len4_o <= len4;
-always_ff @(posedge clk) if (en) len5_o <= len5;
+always_ff @(posedge clk) if (rst_i) pc_o <= RSTPC; else begin if (en) pc_o <= pcr2; end
+always_ff @(posedge clk) if (rst_i) line_o <= ~'d0; else begin if (en) line_o <= liner2; end
+always_ff @(posedge clk) if (rst_i) len0_o <= 5'd1; else if (en) len0_o <= len0r2;
+always_ff @(posedge clk) if (rst_i) len1_o <= 5'd1; else if (en) len1_o <= len1r2;
+always_ff @(posedge clk) if (rst_i) len2_o <= 5'd1; else if (en) len2_o <= len2r2;
+always_ff @(posedge clk) if (rst_i) len3_o <= 5'd1; else if (en) len3_o <= len3;
+always_ff @(posedge clk) if (rst_i) len4_o <= 5'd1; else if (en) len4_o <= len4;
+always_ff @(posedge clk) if (rst_i) len5_o <= 5'd1; else if (en) len5_o <= len5;
 
 endmodule

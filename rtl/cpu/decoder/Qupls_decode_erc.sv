@@ -45,7 +45,7 @@ input instruction_t op;
 begin
 	case(op.any.opcode)
 	OP_STX:
-		fnIsErc = op.lsn.func[5];
+		fnIsErc = op.lsn.func[4];
 	default:
 		fnIsErc = 1'b0;
 	endcase

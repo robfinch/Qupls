@@ -36,14 +36,15 @@
 
 import QuplsPkg::*;
 
-module Qupls_decode_Rb(instr, Rb);
+module Qupls_decode_Rb(instr, regx, Rb);
 input instruction_t instr;
-output regspec_t Rb;
+input regx;
+output aregno_t Rb;
 
-function regspec_t fnRb;
+function aregno_t fnRb;
 input instruction_t ir;
 begin
-	fnRb = ir[24:19];
+	fnRb = {regx,ir[24:19]};
 end
 endfunction
 

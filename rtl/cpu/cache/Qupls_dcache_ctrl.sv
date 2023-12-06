@@ -105,7 +105,7 @@ reg [2:0] dump_cnt;
 reg [511:0] upd_dat;
 reg we_r;
 reg [15:0] tran_active, tran_done, tran_loaded, tran_write_allocate;
-reg [1:0] tran_cnt [0:3];
+reg [1:0] tran_cnt [0:15];
 tran_state_t [15:0] tran_state;
 reg [7:0] ndx;
 reg [3:0] v [0:15];

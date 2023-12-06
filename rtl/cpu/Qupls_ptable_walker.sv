@@ -206,6 +206,7 @@ upci
 always_ff @(posedge clk, posedge rst)
 if (rst) begin
 	ptbr <= 'd0;
+	pt_attr <= 'd0;
 end
 else begin
 	if (cs_hwtw && sreq.we)
@@ -369,6 +370,8 @@ else begin
 			fault <= 'd0;
 			req_state <= IDLE;		
 		end
+	default:
+		req_state <= IDLE;	
 	endcase
 
 	// Capture responses.

@@ -40,8 +40,8 @@ import fta_bus_pkg::*;
 import QuplsPkg::*;
 import Qupls_cache_pkg::*;
 
-module Qupls_icache_req_generator(rst, clk, hit, tlb_v, miss_adr, miss_asid,
-	wbm_req, full, vtags, snoop_v, snoop_adr, snoop_cid, ack);
+module Qupls_icache_req_generator(rst, clk, hit, tlb_v, miss_vadr, miss_padr,
+	miss_asid, wbm_req, full, vtags, snoop_v, snoop_adr, snoop_cid, ack);
 parameter CORENO = 6'd1;
 parameter CID = 6'd0;
 parameter WAIT = 6'd6;
@@ -49,7 +49,8 @@ input rst;
 input clk;
 input hit;
 input tlb_v;
-input fta_address_t miss_adr;
+input fta_address_t miss_vadr;
+input fta_address_t miss_padr;
 input QuplsPkg::asid_t miss_asid;
 output fta_cmd_request128_t wbm_req;
 input full;
@@ -66,7 +67,7 @@ typedef enum logic [3:0] {
 } state_t;
 state_t req_state;
 
-QuplsPkg::address_t madr, vadr;
+QuplsPkg::address_t madr, vadr, padr;
 reg [7:0] lfsr_cnt;
 reg [3:0] tid_cnt;
 wire [16:0] lfsr_o;
@@ -127,11 +128,13 @@ else begin
 			wbm_req.stb <= 1'b1;
 			wbm_req.sel <= 16'hFFFF;
 			wbm_req.we <= 1'b0;
-			wbm_req.vadr <= {miss_adr[$bits(fta_address_t)-1:Qupls_cache_pkg::ICacheTagLoBit],{Qupls_cache_pkg::ICacheTagLoBit{1'h0}}};
+			wbm_req.vadr <= {miss_vadr[$bits(fta_address_t)-1:Qupls_cache_pkg::ICacheTagLoBit],{Qupls_cache_pkg::ICacheTagLoBit{1'h0}}};
+			wbm_req.padr <= {miss_padr[$bits(fta_address_t)-1:Qupls_cache_pkg::ICacheTagLoBit],{Qupls_cache_pkg::ICacheTagLoBit{1'h0}}};
 			wbm_req.asid <= miss_asid;
-			vtags[4'd0] <= {miss_adr[$bits(fta_address_t)-1:Qupls_cache_pkg::ICacheTagLoBit],{Qupls_cache_pkg::ICacheTagLoBit{1'h0}}};
-			vadr <= {miss_adr[$bits(fta_address_t)-1:Qupls_cache_pkg::ICacheTagLoBit],{Qupls_cache_pkg::ICacheTagLoBit{1'h0}}};
-			madr <= {miss_adr[$bits(fta_address_t)-1:Qupls_cache_pkg::ICacheTagLoBit],{Qupls_cache_pkg::ICacheTagLoBit{1'h0}}};
+			vtags[4'd0] <= {miss_vadr[$bits(fta_address_t)-1:Qupls_cache_pkg::ICacheTagLoBit],{Qupls_cache_pkg::ICacheTagLoBit{1'h0}}};
+			vadr <= {miss_vadr[$bits(fta_address_t)-1:Qupls_cache_pkg::ICacheTagLoBit],{Qupls_cache_pkg::ICacheTagLoBit{1'h0}}};
+			padr <= {miss_padr[$bits(fta_address_t)-1:Qupls_cache_pkg::ICacheTagLoBit],{Qupls_cache_pkg::ICacheTagLoBit{1'h0}}};
+			madr <= {miss_vadr[$bits(fta_address_t)-1:Qupls_cache_pkg::ICacheTagLoBit],{Qupls_cache_pkg::ICacheTagLoBit{1'h0}}};
 			if (!full) begin
 				req_state <= STATE3;
 			end
@@ -153,9 +156,11 @@ else begin
 			wbm_req.stb <= 1'b1;
 			wbm_req.sel <= 16'hFFFF;
 			wbm_req.vadr <= vadr + 5'd16;
+			wbm_req.padr <= padr + 5'd16;
 			vtags[4'd1] <= madr + 5'd16;
 			if (!full) begin
 				vadr <= vadr + 5'd16;
+				padr <= padr + 5'd16;
 				madr <= madr + 5'd16;
 				req_state <= STATE4;
 			end
@@ -175,9 +180,11 @@ else begin
 			wbm_req.stb <= 1'b1;
 			wbm_req.sel <= 16'hFFFF;
 			wbm_req.vadr <= vadr + 5'd16;
+			wbm_req.padr <= padr + 5'd16;
 			vtags[4'd2] <= madr + 5'd16;
 			if (!full) begin
 				vadr <= vadr + 5'd16;
+				padr <= padr + 5'd16;
 				madr <= madr + 5'd16;
 				req_state <= STATE5;
 			end
@@ -197,10 +204,12 @@ else begin
 			wbm_req.stb <= 1'b1;
 			wbm_req.sel <= 16'hFFFF;
 			wbm_req.vadr <= vadr + 5'd16;
+			wbm_req.padr <= padr + 5'd16;
 			vtags[4'd3] <= madr + 5'd16;
 			if (!full) begin
 				wait_cnt <= 'd0;
 				vadr <= vadr + 5'd16;
+				padr <= padr + 5'd16;
 				madr <= madr + 5'd16;
 				req_state <= WAIT_ACK;
 			end
@@ -226,7 +235,7 @@ else begin
 	endcase
 	// Only the cache index need be compared for snoop hit.
 	if (snoop_v && snoop_adr[Qupls_cache_pkg::ITAG_BIT:Qupls_cache_pkg::ICacheTagLoBit]==
-		miss_adr[Qupls_cache_pkg::ITAG_BIT:Qupls_cache_pkg::ICacheTagLoBit] &&
+		miss_padr[Qupls_cache_pkg::ITAG_BIT:Qupls_cache_pkg::ICacheTagLoBit] &&
 		snoop_cid != CID) begin
 		tBusClear();
 		req_state <= WAIT4MISS;		

@@ -27,13 +27,12 @@ assign fta_resp.tid = tidi;
 wire rst = ~cpu_resetn;
 
 Qupls_mpu ucpu1 (
-	.coreno_i(6'd1),
 	.rst_i(rst),
 	.clk_i(xclk),
 	.clk2x_i(xclk),
 	.irq_bus(irq_i),
-	.fta_req(fta_req),
-	.fta_resp(fta_resp),
+	.ftam_req(fta_req),
+	.ftam_resp(fta_resp),
 	.clk0(1'b0),
 	.gate0(1'b0),
 	.out0(),

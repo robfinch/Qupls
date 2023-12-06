@@ -98,6 +98,9 @@ input rob_ndx_t agen1_rndx_i;
 output rob_ndx_t agen0_rndx_o;
 output rob_ndx_t agen1_rndx_o;
 
+reg [6:0] entryno, entryno_rst;
+tlb_entry_t entryi, entryi_rst;
+reg wayi, wri;
 tlb_entry_t entry0;
 tlb_entry_t entry1;
 tlb_entry_t pc_entry;
@@ -162,7 +165,7 @@ Qupls_active_region uar1
    xpm_memory_dpdistram_inst0 (
       .douta(entry_oa),   // READ_DATA_WIDTH_A-bit output: Data output for port A read operations.
       .doutb(t0a),   // READ_DATA_WIDTH_B-bit output: Data output for port B read operations.
-      .addra(entry_no),   // ADDR_WIDTH_A-bit input: Address for port A write and read operations.
+      .addra(entryno),   // ADDR_WIDTH_A-bit input: Address for port A write and read operations.
       .addrb(vadr0[22:16]),   // ADDR_WIDTH_B-bit input: Address for port B write and read operations.
       .clka(clk),     // 1-bit input: Clock signal for port A. Also clocks port B when parameter CLOCKING_MODE
                        // is "common_clock".
@@ -170,8 +173,8 @@ Qupls_active_region uar1
       .clkb(clk),     // 1-bit input: Clock signal for port B when parameter CLOCKING_MODE is
                        // "independent_clock". Unused when parameter CLOCKING_MODE is "common_clock".
 
-      .dina(entry_i),     // WRITE_DATA_WIDTH_A-bit input: Data input for port A write operations.
-      .ena(~way),       // 1-bit input: Memory enable signal for port A. Must be high on clock cycles when read
+      .dina(entryi),     // WRITE_DATA_WIDTH_A-bit input: Data input for port A write operations.
+      .ena(~wayi),       // 1-bit input: Memory enable signal for port A. Must be high on clock cycles when read
                        // or write operations are initiated. Pipelined internally.
 
       .enb(1'b1),       // 1-bit input: Memory enable signal for port B. Must be high on clock cycles when read
@@ -185,7 +188,7 @@ Qupls_active_region uar1
       .rstb(1'b0),     // 1-bit input: Reset signal for the final port B output register stage. Synchronously
                        // resets output port doutb to the value specified by parameter READ_RESET_VALUE_B.
 
-      .wea(wr)        // WRITE_DATA_WIDTH_A/BYTE_WRITE_WIDTH_A-bit input: Write enable vector for port A input
+      .wea(wri)        // WRITE_DATA_WIDTH_A/BYTE_WRITE_WIDTH_A-bit input: Write enable vector for port A input
                        // data port dina. 1 bit wide when word-wide writes are used. In byte-wide write
                        // configurations, each bit controls the writing one byte of dina to address addra. For
                        // example, to synchronously write only bits [15-8] of dina when WRITE_DATA_WIDTH_A is
@@ -220,7 +223,7 @@ Qupls_active_region uar1
    xpm_memory_dpdistram_inst1 (
       .douta(entry_ob),   // READ_DATA_WIDTH_A-bit output: Data output for port A read operations.
       .doutb(t0b),   // READ_DATA_WIDTH_B-bit output: Data output for port B read operations.
-      .addra(entry_no),   // ADDR_WIDTH_A-bit input: Address for port A write and read operations.
+      .addra(entryno),   // ADDR_WIDTH_A-bit input: Address for port A write and read operations.
       .addrb(vadr0[22:16]),   // ADDR_WIDTH_B-bit input: Address for port B write and read operations.
       .clka(clk),     // 1-bit input: Clock signal for port A. Also clocks port B when parameter CLOCKING_MODE
                        // is "common_clock".
@@ -228,8 +231,8 @@ Qupls_active_region uar1
       .clkb(clk),     // 1-bit input: Clock signal for port B when parameter CLOCKING_MODE is
                        // "independent_clock". Unused when parameter CLOCKING_MODE is "common_clock".
 
-      .dina(entry_i),     // WRITE_DATA_WIDTH_A-bit input: Data input for port A write operations.
-      .ena(way),       // 1-bit input: Memory enable signal for port A. Must be high on clock cycles when read
+      .dina(entryi),     // WRITE_DATA_WIDTH_A-bit input: Data input for port A write operations.
+      .ena(wayi),       // 1-bit input: Memory enable signal for port A. Must be high on clock cycles when read
                        // or write operations are initiated. Pipelined internally.
 
       .enb(1'b1),       // 1-bit input: Memory enable signal for port B. Must be high on clock cycles when read
@@ -243,7 +246,7 @@ Qupls_active_region uar1
       .rstb(1'b0),     // 1-bit input: Reset signal for the final port B output register stage. Synchronously
                        // resets output port doutb to the value specified by parameter READ_RESET_VALUE_B.
 
-      .wea(wr)        // WRITE_DATA_WIDTH_A/BYTE_WRITE_WIDTH_A-bit input: Write enable vector for port A input
+      .wea(wri)        // WRITE_DATA_WIDTH_A/BYTE_WRITE_WIDTH_A-bit input: Write enable vector for port A input
                        // data port dina. 1 bit wide when word-wide writes are used. In byte-wide write
                        // configurations, each bit controls the writing one byte of dina to address addra. For
                        // example, to synchronously write only bits [15-8] of dina when WRITE_DATA_WIDTH_A is
@@ -278,7 +281,7 @@ Qupls_active_region uar1
    xpm_memory_dpdistram_inst2 (
       .douta(),   // READ_DATA_WIDTH_A-bit output: Data output for port A read operations.
       .doutb(t1a),   // READ_DATA_WIDTH_B-bit output: Data output for port B read operations.
-      .addra(entry_no),   // ADDR_WIDTH_A-bit input: Address for port A write and read operations.
+      .addra(entryno),   // ADDR_WIDTH_A-bit input: Address for port A write and read operations.
       .addrb(vadr1[22:16]),   // ADDR_WIDTH_B-bit input: Address for port B write and read operations.
       .clka(clk),     // 1-bit input: Clock signal for port A. Also clocks port B when parameter CLOCKING_MODE
                        // is "common_clock".
@@ -286,8 +289,8 @@ Qupls_active_region uar1
       .clkb(clk),     // 1-bit input: Clock signal for port B when parameter CLOCKING_MODE is
                        // "independent_clock". Unused when parameter CLOCKING_MODE is "common_clock".
 
-      .dina(entry_i),     // WRITE_DATA_WIDTH_A-bit input: Data input for port A write operations.
-      .ena(~way),       // 1-bit input: Memory enable signal for port A. Must be high on clock cycles when read
+      .dina(entryi),     // WRITE_DATA_WIDTH_A-bit input: Data input for port A write operations.
+      .ena(~wayi),       // 1-bit input: Memory enable signal for port A. Must be high on clock cycles when read
                        // or write operations are initiated. Pipelined internally.
 
       .enb(1'b1),       // 1-bit input: Memory enable signal for port B. Must be high on clock cycles when read
@@ -301,7 +304,7 @@ Qupls_active_region uar1
       .rstb(1'b0),     // 1-bit input: Reset signal for the final port B output register stage. Synchronously
                        // resets output port doutb to the value specified by parameter READ_RESET_VALUE_B.
 
-      .wea(wr)        // WRITE_DATA_WIDTH_A/BYTE_WRITE_WIDTH_A-bit input: Write enable vector for port A input
+      .wea(wri)        // WRITE_DATA_WIDTH_A/BYTE_WRITE_WIDTH_A-bit input: Write enable vector for port A input
                        // data port dina. 1 bit wide when word-wide writes are used. In byte-wide write
                        // configurations, each bit controls the writing one byte of dina to address addra. For
                        // example, to synchronously write only bits [15-8] of dina when WRITE_DATA_WIDTH_A is
@@ -336,7 +339,7 @@ Qupls_active_region uar1
    xpm_memory_dpdistram_inst3 (
       .douta(),   // READ_DATA_WIDTH_A-bit output: Data output for port A read operations.
       .doutb(t1b),   // READ_DATA_WIDTH_B-bit output: Data output for port B read operations.
-      .addra(entry_no),   // ADDR_WIDTH_A-bit input: Address for port A write and read operations.
+      .addra(entryno),   // ADDR_WIDTH_A-bit input: Address for port A write and read operations.
       .addrb(vadr1[22:16]),   // ADDR_WIDTH_B-bit input: Address for port B write and read operations.
       .clka(clk),     // 1-bit input: Clock signal for port A. Also clocks port B when parameter CLOCKING_MODE
                        // is "common_clock".
@@ -344,8 +347,8 @@ Qupls_active_region uar1
       .clkb(clk),     // 1-bit input: Clock signal for port B when parameter CLOCKING_MODE is
                        // "independent_clock". Unused when parameter CLOCKING_MODE is "common_clock".
 
-      .dina(entry_i),     // WRITE_DATA_WIDTH_A-bit input: Data input for port A write operations.
-      .ena(way),       // 1-bit input: Memory enable signal for port A. Must be high on clock cycles when read
+      .dina(entryi),     // WRITE_DATA_WIDTH_A-bit input: Data input for port A write operations.
+      .ena(wayi),       // 1-bit input: Memory enable signal for port A. Must be high on clock cycles when read
                        // or write operations are initiated. Pipelined internally.
 
       .enb(1'b1),       // 1-bit input: Memory enable signal for port B. Must be high on clock cycles when read
@@ -359,7 +362,7 @@ Qupls_active_region uar1
       .rstb(1'b0),     // 1-bit input: Reset signal for the final port B output register stage. Synchronously
                        // resets output port doutb to the value specified by parameter READ_RESET_VALUE_B.
 
-      .wea(wr)        // WRITE_DATA_WIDTH_A/BYTE_WRITE_WIDTH_A-bit input: Write enable vector for port A input
+      .wea(wri)        // WRITE_DATA_WIDTH_A/BYTE_WRITE_WIDTH_A-bit input: Write enable vector for port A input
                        // data port dina. 1 bit wide when word-wide writes are used. In byte-wide write
                        // configurations, each bit controls the writing one byte of dina to address addra. For
                        // example, to synchronously write only bits [15-8] of dina when WRITE_DATA_WIDTH_A is
@@ -394,7 +397,7 @@ Qupls_active_region uar1
    xpm_memory_dpdistram_inst4 (
       .douta(),   // READ_DATA_WIDTH_A-bit output: Data output for port A read operations.
       .doutb(t2a),   // READ_DATA_WIDTH_B-bit output: Data output for port B read operations.
-      .addra(entry_no),   // ADDR_WIDTH_A-bit input: Address for port A write and read operations.
+      .addra(entryno),   // ADDR_WIDTH_A-bit input: Address for port A write and read operations.
       .addrb(pc_vadr[22:16]),   // ADDR_WIDTH_B-bit input: Address for port B write and read operations.
       .clka(clk),     // 1-bit input: Clock signal for port A. Also clocks port B when parameter CLOCKING_MODE
                        // is "common_clock".
@@ -402,8 +405,8 @@ Qupls_active_region uar1
       .clkb(clk),     // 1-bit input: Clock signal for port B when parameter CLOCKING_MODE is
                        // "independent_clock". Unused when parameter CLOCKING_MODE is "common_clock".
 
-      .dina(entry_i),     // WRITE_DATA_WIDTH_A-bit input: Data input for port A write operations.
-      .ena(~way),       // 1-bit input: Memory enable signal for port A. Must be high on clock cycles when read
+      .dina(entryi),     // WRITE_DATA_WIDTH_A-bit input: Data input for port A write operations.
+      .ena(~wayi),       // 1-bit input: Memory enable signal for port A. Must be high on clock cycles when read
                        // or write operations are initiated. Pipelined internally.
 
       .enb(1'b1),       // 1-bit input: Memory enable signal for port B. Must be high on clock cycles when read
@@ -417,7 +420,7 @@ Qupls_active_region uar1
       .rstb(1'b0),     // 1-bit input: Reset signal for the final port B output register stage. Synchronously
                        // resets output port doutb to the value specified by parameter READ_RESET_VALUE_B.
 
-      .wea(wr)        // WRITE_DATA_WIDTH_A/BYTE_WRITE_WIDTH_A-bit input: Write enable vector for port A input
+      .wea(wri)        // WRITE_DATA_WIDTH_A/BYTE_WRITE_WIDTH_A-bit input: Write enable vector for port A input
                        // data port dina. 1 bit wide when word-wide writes are used. In byte-wide write
                        // configurations, each bit controls the writing one byte of dina to address addra. For
                        // example, to synchronously write only bits [15-8] of dina when WRITE_DATA_WIDTH_A is
@@ -452,7 +455,7 @@ Qupls_active_region uar1
    xpm_memory_dpdistram_inst5 (
       .douta(),   // READ_DATA_WIDTH_A-bit output: Data output for port A read operations.
       .doutb(t2b),   // READ_DATA_WIDTH_B-bit output: Data output for port B read operations.
-      .addra(entry_no),   // ADDR_WIDTH_A-bit input: Address for port A write and read operations.
+      .addra(entryno),   // ADDR_WIDTH_A-bit input: Address for port A write and read operations.
       .addrb(pc_vadr[22:16]),   // ADDR_WIDTH_B-bit input: Address for port B write and read operations.
       .clka(clk),     // 1-bit input: Clock signal for port A. Also clocks port B when parameter CLOCKING_MODE
                        // is "common_clock".
@@ -460,8 +463,8 @@ Qupls_active_region uar1
       .clkb(clk),     // 1-bit input: Clock signal for port B when parameter CLOCKING_MODE is
                        // "independent_clock". Unused when parameter CLOCKING_MODE is "common_clock".
 
-      .dina(entry_i),     // WRITE_DATA_WIDTH_A-bit input: Data input for port A write operations.
-      .ena(way),       // 1-bit input: Memory enable signal for port A. Must be high on clock cycles when read
+      .dina(entryi),     // WRITE_DATA_WIDTH_A-bit input: Data input for port A write operations.
+      .ena(wayi),       // 1-bit input: Memory enable signal for port A. Must be high on clock cycles when read
                        // or write operations are initiated. Pipelined internally.
 
       .enb(1'b1),       // 1-bit input: Memory enable signal for port B. Must be high on clock cycles when read
@@ -475,7 +478,7 @@ Qupls_active_region uar1
       .rstb(1'b0),     // 1-bit input: Reset signal for the final port B output register stage. Synchronously
                        // resets output port doutb to the value specified by parameter READ_RESET_VALUE_B.
 
-      .wea(wr)        // WRITE_DATA_WIDTH_A/BYTE_WRITE_WIDTH_A-bit input: Write enable vector for port A input
+      .wea(wri)        // WRITE_DATA_WIDTH_A/BYTE_WRITE_WIDTH_A-bit input: Write enable vector for port A input
                        // data port dina. 1 bit wide when word-wide writes are used. In byte-wide write
                        // configurations, each bit controls the writing one byte of dina to address addra. For
                        // example, to synchronously write only bits [15-8] of dina when WRITE_DATA_WIDTH_A is
@@ -544,6 +547,7 @@ if (rst) begin
 	store1_o <= 'd0;
 	
 	pc_entry <= 'd0;
+	pc_tlb_res <= RSTPC;
 	
 	omd0a <= OM_MACHINE;
 	omd1a <= OM_MACHINE;
@@ -617,13 +621,13 @@ else begin
 
 	if (t2a.vpn.vpn[8:0]==pc_vadr[31:23] && t2a.vpn.asid==pc_asid) begin
 		pc_entry <= t2a;
-		pc_tlb_res <= {pc_vadr,12'h0};
+		pc_tlb_res <= pc_vadr;
 		pc_omda <= pc_omd;
 		pc_tlb_v <= 'd1;
 	end
 	else if (t2b.vpn.vpn[8:0]==pc_vadr[31:23] && t2b.vpn.asid==pc_asid) begin
 		pc_entry <= t2b;
-		pc_tlb_res <= {pc_vadr,12'h0};
+		pc_tlb_res <= pc_vadr;
 		pc_omda <= pc_omd;
 		pc_tlb_v <= 'd1;
 	end
@@ -807,4 +811,35 @@ end
 
 assign entry_o = way ? entry_ob : entry_oa;
 
+reg [7:0] rstcnt;
+
+always_ff @(posedge clk) entryno = rstcnt[7] ? entry_no : entryno_rst;
+always_ff @(posedge clk) entryi = rstcnt[7] ? entry_i : entryi_rst;
+always_ff @(posedge clk) wayi = rstcnt[7] ? way : 'd0;
+always_ff @(posedge clk) wri = rstcnt[7] ? wr : 1'b1;
+
+// This little machine sets up four entries in the TLB to point to the system
+// ROM area.
+
+always_ff @(posedge clk)
+if (rst) begin
+	rstcnt <= 8'd124;	
+	entryno_rst <= 7'd124;
+	entryi_rst <= 'd0;
+	entryi_rst.vpn.vpn <= 20'hFFFFF;
+	entryi_rst.pte.v <= 1'b1;
+	entryi_rst.pte.mrwx <= 3'd7;
+	entryi_rst.pte.rgn <= 3'd7;			// ROM area
+	entryi_rst.pte.lvl <= 5'd0;
+	entryi_rst.pte.ppn <= 32'hFFFFFFFC;
+end
+else begin
+	if (!rstcnt[7]) begin
+		rstcnt <= rstcnt + 1;
+		entryno_rst <= entryno_rst + 1;
+		entryi_rst.pte.ppn <= entryi_rst.pte.ppn + 1;
+	end
+end
+
 endmodule
+

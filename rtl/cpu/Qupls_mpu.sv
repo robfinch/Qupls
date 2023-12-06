@@ -61,11 +61,6 @@ output out2;
 input clk3;
 input gate3;
 output out3;
-parameter CHANNELS = 5;
-
-fta_cmd_request128_t [CHANNELS-1:0] wbn_req;
-fta_cmd_response128_t [CHANNELS-1:0] wbn_resp;
-wire [CHANNELS-1:0] ftam_fifo_full;
 
 wire cs_config, cs_io;
 assign cs_config = ftam_req.padr[31:28]==4'hD;
@@ -87,7 +82,7 @@ wire [63:0] pit_dato;
 wire [31:0] page_fault;
 fta_cmd_request32_t wbm32_req;
 fta_cmd_request64_t wbm64_req;
-fta_cmd_response128_t [3:0] resp_ch;
+fta_cmd_response128_t [2:0] resp_ch;
 fta_cmd_response128_t pwalk_resp;
 fta_cmd_request128_t pwalk_mreq;
 fta_cmd_response128_t pwalk_mresp;
@@ -96,14 +91,6 @@ fta_cmd_response128_t pic128_resp;
 fta_cmd_response64_t pit_resp;
 fta_cmd_response128_t pit128_resp;
 fta_cmd_response128_t wb128_resp;
-fta_cmd_request128_t cpu1_ireq;
-fta_cmd_response128_t cpu1_iresp;
-fta_cmd_request128_t [NDATA_PORTS-1:0] cpu1_dreq;
-fta_cmd_response128_t [NDATA_PORTS-1:0] cpu1_dresp;
-fta_cmd_request128_t cpu2_ireq;
-fta_cmd_response128_t cpu2_iresp;
-fta_cmd_request128_t [NDATA_PORTS-1:0] cpu2_dreq;
-fta_cmd_response128_t [NDATA_PORTS-1:0] cpu2_dresp;
 
 fta_bridge128to64 ubridge1
 (
@@ -279,61 +266,7 @@ ucpu2
 );
 */
 
-/*
-Quplsseq
-#(
-	.CORENO(6'd2),
-	.CID(6'd2)
-)
-ucpu2
-(
-	.coreno_i(128'd2),
-	.rst_i(rst_i),
-	.clk_i(clk_i),
-	.bok_i(1'b0),
-	.iftam_req(cpu2_ireq),
-	.iftam_resp(cpu2_iresp),
-	.dftam_req(cpu2_dreq),
-	.dftam_resp(cpu2_dresp),
-	.rb_i(1'b0),
-	.snoop_v(snoop_v),
-	.snoop_adr(snoop_adr),
-	.snoop_cid(snoop_cid)
-);
-*/
-
-always_comb wbn_req[0] = cpu1_ireq;
-always_comb cpu1_iresp = wbn_resp[0];
-always_comb wbn_req[1] = cpu1_dreq[0];
-always_comb cpu1_dresp[0] = wbn_resp[1];
-always_comb wbn_req[2] = NDATA_PORTS > 1 ? cpu1_dreq[1] : 'd0;
-always_comb cpu1_dresp[1] = wbn_resp[2];
-//always_comb wbn_req[3] = cpu1_dreq[2];
-//always_comb cpu1_dresp[2] = wbn_resp[3];
-always_comb wbn_req[4] = pwalk_mreq;
-always_comb pwalk_mresp = wbn_resp[4];
-/*
-always_comb wbn_req[4] = cpu2_ireq;
-always_comb cpu2_iresp = wbn_resp[4];
-always_comb wbn_req[5] = cpu2_dreq[0];
-always_comb cpu2_dresp[0] = wbn_resp[5];
-always_comb wbn_req[6] = cpu2_dreq[1];
-always_comb cpu2_dresp[1] = wbn_resp[6];
-always_comb wbn_req[7] = cpu2_dreq[2];
-always_comb cpu2_dresp[2] = wbn_resp[7];
-*/
-always_comb wbn_req[3] = 'd0;
-always_comb wbn_req[5] = 'd0;
-always_comb wbn_req[6] = 'd0;
-always_comb wbn_req[7] = 'd0;
-/*
-always_comb cpu2_iresp = wbn_resp[2];
-always_comb cpu2_dresp = wbn_resp[3];
-*/
-
-
-fta_respbuf 
-#(.CHANNELS(3))
+fta_respbuf #(.CHANNELS(4))
 urb1
 (
 	.rst(rst_i),
@@ -345,6 +278,7 @@ urb1
 assign resp_ch[0] = pic128_resp;
 assign resp_ch[1] = pit128_resp;
 assign resp_ch[2] = ftam_resp;
+assign resp_ch[3] = 'd0;
 
 always_comb
 	iirq = irq_bus|pit_irq;

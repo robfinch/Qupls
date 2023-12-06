@@ -36,10 +36,11 @@
 
 import QuplsPkg::*;
 
-module Qupls_decoder(clk, en, instr, dbo);
+module Qupls_decoder(clk, en, instr, regx, dbo);
 input clk;
 input en;
 input instruction_t [3:0] instr;
+input [3:0] regx;
 output decode_bus_t dbo;
 
 instruction_t ins;
@@ -47,6 +48,8 @@ decode_bus_t db;
 
 always_comb
 	ins = instr[0];
+
+assign db.v = 1'b1;
 
 Qupls_decode_imm udcimm
 (
@@ -59,24 +62,28 @@ Qupls_decode_imm udcimm
 Qupls_decode_Ra udcra
 (
 	.instr(ins),
+	.regx(regx[1]),
 	.Ra(db.Ra)
 );
 
 Qupls_decode_Rb udcrb
 (
 	.instr(ins),
+	.regx(regx[2]),
 	.Rb(db.Rb)
 );
 
 Qupls_decode_Rc udcrc
 (
 	.instr(ins),
+	.regx(regx),
 	.Rc(db.Rc)
 );
 
 Qupls_decode_Rt udcrt
 (
 	.instr(ins),
+	.regx(regx[0]),
 	.Rt(db.Rt)
 );
 
@@ -228,6 +235,12 @@ Qupls_decode_brk ubrk1
 (
 	.instr(ins),
 	.brk(db.brk)
+);
+
+Qupls_decode_csr ucsr1
+(
+	.instr(ins),
+	.csr(db.csr)
 );
 
 always_ff @(posedge clk)

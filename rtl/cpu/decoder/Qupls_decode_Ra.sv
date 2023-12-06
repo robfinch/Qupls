@@ -36,20 +36,21 @@
 
 import QuplsPkg::*;
 
-module Qupls_decode_Ra(instr, Ra);
+module Qupls_decode_Ra(instr, regx, Ra);
 input instruction_t instr;
-output regspec_t Ra;
+input regx;
+output aregno_t Ra;
 
-function regspec_t fnRa;
+function aregno_t fnRa;
 input instruction_t ir;
 begin
 	case(ir.any.opcode)
 	OP_RTD:
-		fnRa = 6'd62;
+		fnRa = 7'd62;
 	OP_DBRA:
-		fnRa = 6'd55;
+		fnRa = 7'd55;
 	default:
-		fnRa = ir[18:13];
+		fnRa = {regx,ir[18:13]};
 	endcase
 end
 endfunction
