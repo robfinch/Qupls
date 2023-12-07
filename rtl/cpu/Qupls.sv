@@ -233,7 +233,7 @@ pc_address_t alu0_pc;
 value_t alu0_res;
 rob_ndx_t alu0_id;
 cause_code_t alu0_exc = FLT_NONE;
-wire        alu0_v;
+reg alu0_v;
 double_value_t alu0_prod,alu0_prod1,alu0_prod2;
 double_value_t alu0_produ,alu0_produ1,alu0_produ2;
 reg [3:0] mul0_cnt;
@@ -326,7 +326,7 @@ pc_address_t fcu_pc;
 value_t fcu_res;
 rob_ndx_t fcu_id;
 cause_code_t fcu_exc;
-wire        fcu_v;
+reg fcu_v;
 reg fcu_branchmiss;
 pc_address_t fcu_misspc;
 reg takb;
@@ -1720,7 +1720,7 @@ pregno_t wrport3_Rt;
 pregno_t wrport4_Rt;
 pregno_t wrport5_Rt;
 
-always_comb wrport0_v = alu0_v;
+always_comb wrport0_v = alu0_v & alu0_done;
 always_comb wrport1_v = alu1_v;
 always_comb wrport2_v = dram_v0;
 always_comb wrport3_v = fpu_v;
@@ -2030,19 +2030,20 @@ always_ff @(posedge clk)
 always_ff @(posedge clk)
 	lsq_islot <= next_lsq_islot;
 
-lsq_bitmask_t lsq_memissue;
+rob_bitmask_t rob_memissue;
 
 Qupls_mem_sched umems1
 (
 	.rst(rst),
 	.clk(clk),
 	.head(head0),
+	.lsq_head(lsq_head),
 	.robentry_stomp(robentry_stomp),
 	.rob(rob),
 	.lsq(lsq),
 	.islot_i(lsq_islot),
 	.islot_o(next_lsq_islot),
-	.memissue(lsq_memissue),
+	.memissue(rob_memissue),
 	.ndx0(mem0_lsndx),
 	.ndx1(mem1_lsndx),
 	.ndx0v(mem0_lsndxv),
@@ -2130,10 +2131,10 @@ end
 end
 endgenerate
 
-    assign  alu0_v = alu0_dataready,
-	    alu1_v = alu1_dataready;
+//assign alu0_v = alu0_dataready;
+assign alu1_v = alu1_dataready;
 
-    assign  fcu_v = fcu_dataready;
+//assign  fcu_v = fcu_dataready;
 
 generate begin : gFpu
 if (NFPU > 0) begin
@@ -2347,6 +2348,7 @@ begin
 	end
 end
 
+/*
 always_comb
 begin
 	alu0_done = 'd0;
@@ -2364,7 +2366,7 @@ begin
 			(rob[n8].decbus.div|rob[n8].decbus.divu ? 1'b1 : 1'b1) && (rob[n8].decbus.mul|rob[n8].decbus.mulu ? mul1_done : 1'b1))
 				alu1_done = 1'b1;
 end
-
+*/
 /*
 always_comb
 begin
@@ -2390,7 +2392,7 @@ begin
 	dram0_done = 'd0;
 	for (n16r = 0; n16r < LSQ_ENTRIES; n16r = n16r + 1) begin
 		for (n16c = 0; n16c < 2; n16c = n16c + 1)
-		if (lsq[n16r][n16c].store ? (lsq_memissue[{n16r,n16c[0]}] && lsq_islot[{n16r,n16c[0]}]==2'd0 && !robentry_stomp[lsq[n16r][n16c].rndx]) :
+		if (lsq[n16r][n16c].store ? (rob_memissue[lsq[n16r][n16c].rndx] && lsq_islot[{n16r,n16c[0]}]==2'd0 && !robentry_stomp[lsq[n16r][n16c].rndx]) :
 			(dram0 == DRAMSLOT_ACTIVE && dram0_ack &&
 				(dram0_hi ? (dram0_load & ~dram0_stomp) : (dram0_load & ~dram0_more & ~dram0_stomp)))
 			)
@@ -2403,7 +2405,7 @@ begin
 	dram1_done = 'd0;
 	for (n17r = 0; n17r < LSQ_ENTRIES; n17r = n17r + 1) begin
 		for (n17c = 0; n17c < 2; n17c = n17c + 1)
-		if (lsq[n17r][n17c].store ? (lsq_memissue[{n17r,n17c[0]}] && lsq_islot[{n17r,n17c[0]}]==2'd0 && !robentry_stomp[lsq[n17r][n17c].rndx]) :
+		if (lsq[n17r][n17c].store ? (rob_memissue[lsq[n17r][n17c].rndx] && lsq_islot[{n17r,n17c[0]}]==2'd0 && !robentry_stomp[lsq[n17r][n17c].rndx]) :
 			(dram1 == DRAMSLOT_ACTIVE && dram1_ack &&
 				(dram1_hi ? (dram1_load & ~dram1_stomp) : (dram1_load & ~dram1_more & ~dram1_stomp)))
 			)
@@ -2554,26 +2556,34 @@ else begin
 	//
 	// put results into the appropriate instruction entries
 	//
-	if (alu0_v && rob[alu0_id].v && rob[alu0_id].owner==QuplsPkg::ALU0) begin
+	if (alu0_v && rob[alu0_id].v) begin
     rob[ alu0_id ].exc <= alu0_exc;
     rob[ alu0_id ].done[0] <= !rob[ alu0_id ].decbus.multicycle;
-    if (!rob[ alu0_id ].decbus.fc)
+    if (!rob[ alu0_id ].decbus.fc) begin
     	rob[ alu0_id ].done[1] <= VAL;
+    	alu0_done <= 1'b1;
+    	alu0_v <= INV;
+    end
     rob[ alu0_id ].out <= INV;
-    if (!rob[ alu0_id ].decbus.multicycle && !rob[ alu0_id ].decbus.fc)
+    if (!rob[ alu0_id ].decbus.multicycle)
 	    alu0_idle <= 1'b1;
     if ((rob[ alu0_id ].decbus.mul || rob[ alu0_id ].decbus.mulu) && mul0_done) begin
+    	alu0_done <= 1'b1;
+    	alu0_v <= INV;
 	    rob[ alu0_id ].done <= 2'b11;
 	    rob[ alu0_id ].out <= INV;
 	    alu0_idle <= 1'b1;
   	end
     if ((rob[ alu0_id ].decbus.div || rob[ alu0_id ].decbus.divu) && div0_done) begin
+    	alu0_done <= 1'b1;
+    	alu0_v <= INV;
 	    rob[ alu0_id ].done <= 2'b11;
 	    rob[ alu0_id ].out <= INV;
 	    alu0_idle <= 1'b1;
   	end
 	end
 	if (NALU > 1 && alu1_v && rob[alu1_id].v && rob[alu1_id].owner==QuplsPkg::ALU1) begin
+   	alu1_done <= 1'b1;
     rob[ alu1_id ].exc <= alu1_exc;
     rob[ alu1_id ].done[0] <= 1'b1;
     rob[ alu1_id ].done[1] <= 1'b1;
@@ -2586,7 +2596,8 @@ else begin
     rob[ fpu0_id ].done[1] <= 1'b1;
     rob[ fpu0_id ].out <= INV;
 	end
-	if (fcu_v && rob[fcu_id].v && rob[fcu_id].out && rob[fcu_id].owner==QuplsPkg::FCU) begin
+	if (fcu_v && rob[fcu_id].v) begin
+		fcu_v <= INV;
     rob[ fcu_id ].exc <= fcu_exc;
     if (!rob[ fcu_id ].decbus.alu)
     	rob[ fcu_id ].done[0] <= VAL;
@@ -2616,7 +2627,7 @@ else begin
 			rob[agen0_id].exc <= FLT_PAGE;
 			rob[agen0_id].done[1] <= 1'b1;
 		end
-		if (rob[agen0_id].lsq) begin
+		if (rob[agen0_id].lsq && !rob[agen0_id].done[0]) begin
 			agen0_idle <= 1'b1;
 			rob[agen0_id].done[0] <= 1'b1;
 			rob[agen0_id].out <= 1'b0;
@@ -2632,7 +2643,7 @@ else begin
 				rob[agen1_id].exc <= FLT_PAGE;
 				rob[agen1_id].done[1] <= 1'b1;
 			end
-			if (rob[agen1_id].lsq) begin
+			if (rob[agen1_id].lsq && !rob[agen1_id].done[0]) begin
 				agen1_idle <= 1'b1;
 				rob[agen1_id].done[0] <= 1'b1;
 				rob[agen1_id].out <= 1'b0;
@@ -2694,9 +2705,11 @@ else begin
 
 	// Reservation stations
 
-	if (alu0_available && alu0_rndxv) begin
+	if (alu0_available && alu0_rndxv && !alu0_v) begin
+		alu0_v <= VAL;
 		alu0_id <= alu0_rndx;
 		alu0_idle <= 1'b0;
+		alu0_done <= 1'b0;
 		alu0_argA <= rob[alu0_rndx].decbus.imma | rfo_alu0_argA;
 		alu0_argB <= rfo_alu0_argB;
 		alu0_argC <= rob[alu0_rndx].decbus.immc | rfo_alu0_argC;
@@ -2715,6 +2728,7 @@ else begin
 		if (alu1_available && alu1_rndxv) begin
 			alu1_id <= alu1_rndx;
 			alu1_idle <= 1'b0;
+			alu1_done <= 1'b0;
 			alu1_argA <= rob[alu1_rndx].decbus.imma | rfo_alu1_argA;
 			alu1_argB <= rfo_alu1_argB;
 			alu1_argI	<= rob[alu1_rndx].decbus.immb;
@@ -2741,7 +2755,8 @@ else begin
     rob[fpu0_rndx].owner <= QuplsPkg::FPU0;
 	end
 
-	if (fcu_rndxv) begin
+	if (fcu_rndxv && !fcu_v) begin
+		fcu_v <= VAL;
 		fcu_id <= fcu_rndx;
 		fcu_argA <= rob[fcu_rndx].decbus.imma | rfo_fcu_argA;
 		fcu_argB <= rfo_fcu_argB;
@@ -2755,7 +2770,7 @@ else begin
 	  rob[fcu_rndx].owner <= QuplsPkg::FCU;
 	end
 
-	if (agen0_rndxv) begin
+	if (agen0_rndxv && agen0_idle) begin
 		agen0_idle <= 1'b0;
 		agen0_id <= agen0_rndx;
 		agen0_argA <= rob[agen0_rndx].decbus.imma | rfo_agen0_argA;
@@ -2768,7 +2783,7 @@ else begin
 	end
 
 	if (NAGEN > 1) begin
-		if (agen1_rndxv) begin
+		if (agen1_rndxv && agen1_idle) begin
 			agen1_idle <= 1'b0;
 			agen1_id <= agen1_rndx;
 			agen1_argA <= rob[agen1_rndx].decbus.imma | rfo_agen1_argA;
@@ -3167,9 +3182,11 @@ else begin
 	// Place up to two instructions into the load/store queue in order.	
 
 	if (lsq[lsq_tail0.row][0].v==INV && rob[agen0_id].out) begin	// Can an entry be queued?
+		rob[agen0_id].out <= FALSE;
 		rob[agen0_id].lsq <= 1'b1;
 		rob[agen0_id].lsqndx <= lsq_tail0;
 		if (LSQ2 && lsq[lsq_tail0.row][1].v==INV && rob[agen1_id].out) begin	// Can a second entry be queued?
+			rob[agen1_id].out <= FALSE;
 			rob[agen1_id].lsq <= 1'b1;
 			rob[agen1_id].lsqndx <= {lsq_tail0.row,1'b1};
 		end
@@ -3528,6 +3545,7 @@ begin
 	alu1_dataready <= 0;
 	alu0_ld <= 1'b0;
 	alu1_ld <= 1'b0;
+	alu0_v <= INV;
 	fpu_available <= 1;
 	fpu_dataready <= 0;
 	fcu_available <= 1;
@@ -3540,6 +3558,7 @@ begin
 	fcu_bts <= BTS_NONE;
 	fcu_argA <= 'd0;
 	fcu_argB <= 'd0;
+	fcu_v <= INV;
 //	fcu_argC <= 'd0;
 	/*
 	for (n11 = 0; n11 < NDATA_PORTS; n11 = n11 + 1) begin
@@ -3571,6 +3590,8 @@ begin
 	lsq_tail <= 'd0;
 	alu0_idle <= 1'b1;
 	alu1_idle <= 1'b1;
+	alu0_done <= 1'b1;
+	alu1_done <= 1'b1;
 	agen0_id <= 'd0;
 	agen1_id <= 'd0;
 	agen0_idle <= 1'b1;

@@ -37,28 +37,30 @@
 
 import QuplsPkg::*;
 
-module Qupls_mem_sched(rst, clk, head, robentry_stomp, rob, lsq, memissue,
+module Qupls_mem_sched(rst, clk, head, lsq_head, robentry_stomp, rob, lsq, memissue,
 	ndx0, ndx1, ndx0v, ndx1v, islot_i, islot_o);
 parameter WINDOW_SIZE = 12;
 parameter LSQ_WINDOW_SIZE = LSQ_ENTRIES;
 input rst;
 input clk;
 input rob_ndx_t head;
+input lsq_ndx_t lsq_head;
 input rob_bitmask_t robentry_stomp;
 input rob_entry_t [ROB_ENTRIES-1:0] rob;
 input lsq_entry_t [1:0] lsq [0:7];
 input [1:0] islot_i [0:LSQ_ENTRIES*2-1];
 output reg [1:0] islot_o [0:LSQ_ENTRIES*2-1];
-output lsq_bitmask_t memissue;
+output rob_bitmask_t memissue;
 output lsq_ndx_t ndx0;
 output lsq_ndx_t ndx1;
 output reg ndx0v;
 output reg ndx1v;
 
-integer m,hd,phd,n9,n10,n11,col,row;
+integer m,hd,phd,n9,n10,n11,col,row,q,r;
 rob_bitmask_t robentry_memready;
 rob_ndx_t [WINDOW_SIZE-1:0] heads;
 rob_bitmask_t robentry_memopsvalid;
+lsq_ndx_t [LSQ_WINDOW_SIZE-1:0] lsq_heads;
 reg [1:0] issued, mem_ready;
 reg no_issue, do_issue;
 reg [1:0] stores;
@@ -66,6 +68,12 @@ reg [1:0] stores;
 always_comb
 for (m = 0; m < WINDOW_SIZE; m = m + 1)
 	heads[m] = (head + m) % ROB_ENTRIES;
+
+always_comb
+for (q = 0; q < LSQ_WINDOW_SIZE; q = q + 1) begin
+	lsq_heads[q].row = (lsq_head.row + q) % LSQ_ENTRIES;
+	lsq_heads[q].col = 'd0;
+end
 
 always_comb
 for (n9 = 0; n9 < ROB_ENTRIES; n9 = n9 + 1)
@@ -99,25 +107,32 @@ begin
 		for (col = 0; col < 2; col = col + 1) begin
 			if (issued < NDATA_PORTS) begin
 				if (row==0) begin
-					if (robentry_memready[ lsq[row][col].rndx ]) begin
+					if (robentry_memready[ lsq[lsq_heads[row].row][0].rndx ] &&
+						lsq[lsq_heads[row].row][0].v
+					) begin
 						mem_ready = 2'd1;
-						memissue[ lsq[row][col].rndx ] =	1'b1;
+						memissue[ lsq[lsq_heads[row].row][0].rndx ] =	1'b1;
 						issued = 2'd1;
-						ndx0 = row;
+						ndx0 = lsq_heads[row];
+						ndx0.col = col;
 						ndx0v = 1'b1;
-						if (lsq[row][col].store)
+						if (lsq[lsq_heads[row].row][0].store)
 							stores = 2'd1;
 						islot_o[{row,col[0]}] = 2'd0;
 					end
 				end
 				// no preceding instruction is ready to go
 				else if (mem_ready < NDATA_PORTS) begin
-					if (robentry_memready[ lsq[row][col].rndx ])
+					if (robentry_memready[ lsq[lsq_heads[row].row][col].rndx ] &&
+						lsq[lsq_heads[row].row][col].v
+					)
 						mem_ready = mem_ready + 2'd1;
-					if (!robentry_stomp[lsq[row][col].rndx] && robentry_memready[ lsq[row ][col].rndx] ) begin
+					if (!robentry_stomp[lsq[lsq_heads[row].row][col].rndx] &&
+						robentry_memready[ lsq[lsq_heads[row].row][col].rndx] && 
+						lsq[lsq_heads[row].row][col].v) begin
 						// Check previous instructions.
 						for (phd = 0; phd < WINDOW_SIZE; phd = phd + 1) begin
-							if (rob[heads[phd]].v && rob[heads[phd]].sn < rob[lsq[row ][col].rndx].sn) begin
+							if (rob[heads[phd]].v && rob[heads[phd]].sn < rob[lsq[lsq_heads[row].row][col].rndx].sn) begin
 								do_issue = 1'b1;
 								// ... and there is no fence
 	//							if (lsq[heads[phd]].fence && rob[heads[phd]].decbus.immb[15:0]==16'hFF00)
@@ -129,29 +144,31 @@ begin
 								if ((rob[heads[phd]].decbus.load|rob[heads[phd]].decbus.store) && !rob[heads[phd]].done[0])
 									no_issue = 1'b1;
 								// ... and there is no address-overlap with any preceding instruction
-								if (lsq[rob[heads[phd]].lsqndx.row][rob[heads[phd]].lsqndx.col].padr[$bits(physical_address_t)-1:4]==lsq[row][col].padr[$bits(physical_address_t)-1:4])
+								if (lsq[rob[heads[phd]].lsqndx.row][rob[heads[phd]].lsqndx.col].padr[$bits(physical_address_t)-1:4]==lsq[lsq_heads[row].row][col].padr[$bits(physical_address_t)-1:4])
 									no_issue = 1'b1;
 							end
 						end
 					end
 					
-					if (stores > 2'd0 && lsq[row][col].store)
+					if (stores > 2'd0 && lsq[lsq_heads[row].row][col].store)
 						no_issue = 1'b1;
 					if (do_issue && !no_issue) begin
-						memissue[ {row,col[0]} ] =	1'b1;
-						issued = issued + 2'd1;
-						if (mem_ready==2'd1) begin
-							ndx1 = row;
+						memissue[ lsq[lsq_heads[row].row][col].rndx ] =	1'b1;
+						if (issued==2'd1) begin
+							ndx1 = lsq_heads[row];
+							ndx1.col = col;
 							ndx1v = 1'b1;
 						end
 						else begin
-							ndx0 = row;
+							ndx0 = lsq_heads[row];
+							ndx0.col = col;
 							ndx0v = 1'b1;
 						end
-						if (lsq[row][col].store)
+						if (lsq[lsq_heads[row].row][col].store)
 							stores = stores + 2'd1;
-						islot_o[{row,col[0]}] = mem_ready;
-						mem_ready = mem_ready + 2'd1;
+						islot_o[{row,col[0]}] = issued;
+						issued = issued + 2'd1;
+//						mem_ready = mem_ready + 2'd1;
 					end
 				end
 			end
