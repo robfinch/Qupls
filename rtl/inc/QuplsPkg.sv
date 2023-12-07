@@ -101,7 +101,7 @@ parameter ROB_ENTRIES = 32;	// currently must be 16
 parameter NCHECK = 16;			// number of checkpoints
 parameter LOADQ_ENTRIES = 8;
 parameter STOREQ_ENTRIES = 8;
-parameter LSQ_ENTRIES = 12;
+parameter LSQ_ENTRIES = 8;
 parameter LSQ2 = 1'b0;			// Queue two LSQ entries at once?
 
 // Uncomment to have page relative branches.
@@ -161,7 +161,12 @@ parameter DRAMSLOT_READY = 2'd1;
 parameter DRAMSLOT_ACTIVE = 2'd2;
 
 typedef logic [4:0] rob_ndx_t;
-typedef logic [3:0] lsq_ndx_t;
+typedef struct packed
+{
+	logic [2:0] row;
+	logic col;
+} lsq_ndx_t;
+
 typedef logic [NREGS-1:1] reg_bitmask_t;
 
 typedef enum logic [2:0] {
@@ -733,6 +738,7 @@ typedef enum logic [11:0] {
 	FLT_EXV		= 12'h003,
 	FLT_TLBMISS = 12'h04,
 	FLT_DCM		= 12'h005,
+	FLT_PAGE	= 12'h006,
 	FLT_CANARY= 12'h00B,
 	FLT_SSM		= 12'h020,
 	FLT_DBG		= 12'h021,
@@ -1370,6 +1376,7 @@ typedef struct packed {
 	logic loadz;
 	logic store;
 	instruction_t op;
+	pc_address_t pc;
 	memop_t func;					// operation to perform
 	logic [3:0] func2;		// more resolution to function
 	cause_code_t cause;

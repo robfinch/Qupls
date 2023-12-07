@@ -39,9 +39,9 @@ import fta_bus_pkg::*;
 import QuplsMmupkg::*;
 import QuplsPkg::*;
 
-module Qupls_ptable_walker(rst, clk, tlbmiss, tlb_missadr, tlb_missasid, in_que,
-	ftas_req, ftas_resp,
-	ftam_req, ftam_resp, fault_o, tlb_wr, tlb_way, tlb_entryno, tlb_entry);
+module Qupls_ptable_walker(rst, clk, tlbmiss, tlb_missadr, tlb_missasid, tlb_missqn,
+	in_que, ftas_req, ftas_resp,
+	ftam_req, ftam_resp, fault_o, faultq_o, tlb_wr, tlb_way, tlb_entryno, tlb_entry);
 parameter CID = 6'd3;
 
 parameter IO_ADDR = 32'hFEFC0001;
@@ -74,12 +74,14 @@ input clk;
 input tlbmiss;
 input address_t tlb_missadr;
 input asid_t tlb_missasid;
+input [1:0] tlb_missqn;
 output reg in_que;
 input fta_cmd_request128_t ftas_req;
 output fta_cmd_response128_t ftas_resp;
 output fta_cmd_request128_t ftam_req;
 input fta_cmd_response128_t ftam_resp;
 output [31:0] fault_o;
+output reg [1:0] faultq_o;
 output reg tlb_wr;
 output reg tlb_way;
 output reg [6:0] tlb_entryno;
@@ -98,6 +100,7 @@ typedef struct packed {
 	logic [2:0] lvl;	// level begin processed
 	logic o;					// out
 	logic bc;					// 1=bus cycle complete
+	logic [1:0] qn;
 	asid_t asid;
 	address_t adr;		// address to translate
 	address_t tadr;		// temporary address
@@ -314,6 +317,7 @@ else begin
 			miss_queue[empty_qe].lvl <= ptbr.level;
 			miss_queue[empty_qe].asid <= tlb_missasid;
 			miss_queue[empty_qe].adr <= tlb_missadr;
+			miss_queue[empty_qe].qn <= tlb_missqn;
 			
 			case(ptbr.level)
 			3'd0:	miss_queue[empty_qe].tadr <= {ptbr.adr,3'd0} + {tlb_missadr[28:16],3'h0};
@@ -365,10 +369,12 @@ else begin
 		end
 		// Remain in fault state until cleared by accessing the table-walker register.
 	FAULT:
-		if (cs_hwtw && sreq.padr[15:0]==16'hFF00) begin
-			tlbmiss_ip <= 'd0;
+		begin
 			fault <= 'd0;
-			req_state <= IDLE;		
+			if (cs_hwtw && sreq.padr[15:0]==16'hFF00) begin
+				tlbmiss_ip <= 'd0;
+				req_state <= IDLE;		
+			end
 		end
 	default:
 		req_state <= IDLE;	
@@ -399,6 +405,7 @@ else begin
 		pte <= tranbuf[sel_tran].pte;
 		// If translation is not valid, cause a page fault.
 		if (~tranbuf[sel_tran].pte.v) begin
+			faultq_o <= miss_queue[tranbuf[sel_tran].stk].qn;
 			fault <= 1'b1;
 			fault_asid <= tranbuf[sel_tran].asid;
 			fault_adr <= tranbuf[sel_tran].vadr;

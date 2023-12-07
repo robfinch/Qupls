@@ -48,7 +48,7 @@ begin
 	case(ir.any.opcode)
 	OP_R2:
 		case(ir.r2.func)
-		FN_DIV,FN_DIVU,FN_MOD,FN_MODU:
+		FN_DIV,FN_DIVU,FN_DIVSU,FN_MOD,FN_MODU,FN_MODSU:
 			fnIsAlu0 = 1'b1;
 		default:
 			fnIsAlu0 = 1'b0;

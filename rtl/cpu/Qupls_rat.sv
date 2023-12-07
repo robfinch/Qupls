@@ -147,11 +147,15 @@ reg [5:0] nob;
 wire qbr_ok = qbr && nob < 6'd15;
 
 // Read register names from current checkpoint.
-
+// Bypass new register mappings if reg selected.
 generate begin : gRRN
 	for (g = 0; g < NPORT; g = g + 1) begin
 		always_comb
-			rrn[g] = cpram_out >> {(rn[g] * RBIT),rnbank[g]};
+			rrn[g] = wr0 && rn[g]==wra ? wrra :
+							 wr1 && rn[g]==wrb ? wrrb :
+							 wr2 && rn[g]==wrc ? wrrc :
+							 wr3 && rn[g]==wrd ? wrrd :
+							 cpram_out >> {(rn[g] * RBIT),rnbank[g]};
 		always_comb
 			vn[g] = 1'b1;//cpmv[cndx][rn[g]];
 	end

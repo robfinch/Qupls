@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2023  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -36,71 +36,31 @@
 
 import QuplsPkg::*;
 
-module Qupls_decode_alu(instr, alu);
+module Qupls_decode_multicycle(instr, multicycle);
 input instruction_t instr;
-output alu;
+output multicycle;
 
-function fnIsAlu;
+function fnIsMC;
 input instruction_t ir;
 begin
-	case(ir.r2.opcode)
-	OP_SYS:	fnIsAlu = 1'b0;
+	case(ir.any.opcode)
 	OP_R2:
 		case(ir.r2.func)
-		FN_ADD:	fnIsAlu = 1'b1;
-		FN_CMP:	fnIsAlu = 1'b1;
-		FN_MUL:	fnIsAlu = 1'b1;
-		FN_DIV:	fnIsAlu = 1'b1;
-		FN_SUB:	fnIsAlu = 1'b1;
-		FN_MULU: fnIsAlu = 1'b1;
-		FN_DIVU: fnIsAlu = 1'b1;
-		FN_AND:	fnIsAlu = 1'b1;
-		FN_OR:	fnIsAlu = 1'b1;
-		FN_EOR:	fnIsAlu = 1'b1;
-		FN_ANDC:	fnIsAlu = 1'b1;
-		FN_NAND:	fnIsAlu = 1'b1;
-		FN_NOR:	fnIsAlu = 1'b1;
-		FN_ENOR:	fnIsAlu = 1'b1;
-		FN_ORC:	fnIsAlu = 1'b1;
-		default:	fnIsAlu = 1'b0;
+		FN_MUL,FN_MULU,FN_MULSU,FN_MULH,FN_MULUH,FN_MULSUH,
+		FN_DIV,FN_DIVU,FN_DIVSU,FN_MOD,FN_MODU,FN_MODSU:
+			fnIsMC = 1'b1;
+		default:
+			fnIsMC = 1'b0;
 		endcase
-	OP_R2B:
-		case(ir.r2b.func)
-		FN_SEQ:	fnIsAlu = 1'b1;
-		FN_SNE:	fnIsAlu = 1'b1;
-		FN_SLT:	fnIsAlu = 1'b1;
-		FN_SLE:	fnIsAlu = 1'b1;
-		FN_SLTU:	fnIsAlu = 1'b1;
-		FN_SLEU:	fnIsAlu = 1'b1;
-		default:	fnIsAlu = 1'b0;
-		endcase
-	OP_ADDI:	fnIsAlu = 1'b1;
-	OP_SUBFI:	fnIsAlu = 1'b1;
-	OP_CMPI:	fnIsAlu = 1'b1;
-	OP_MULI:	fnIsAlu = 1'b1;
-	OP_DIVI:	fnIsAlu = 1'b1;
-	OP_ANDI:	fnIsAlu = 1'b1;
-	OP_ORI:		fnIsAlu = 1'b1;
-	OP_EORI:	fnIsAlu = 1'b1;
-	OP_SLTI:	fnIsAlu = 1'b1;
-	OP_SHIFT:	fnIsAlu = 1'b1;
-	OP_CSR:		fnIsAlu = 1'b1;
-	OP_MOV:		fnIsAlu = 1'b1;
-	OP_PFXA32,OP_PFXB32,OP_PFXC32,
-	OP_PFXA64,OP_PFXB64,OP_PFXC64,
-	OP_PFXA128,OP_PFXB128,OP_PFXC128,
-	OP_VEC,OP_VECZ,
-	OP_NOP,OP_PUSH,OP_POP,OP_ENTER,OP_LEAVE,OP_ATOM:
-		fnIsAlu = 1'b1;
-	OP_FENCE:
-		fnIsAlu = 1'b1;
-	OP_BSR,OP_JSR:
-		fnIsAlu = 1'b1;
-	default:	fnIsAlu = 1'b0;
+	OP_MULI,OP_MULUI:
+			fnIsMC = 1'b1;
+	OP_DIVI,OP_DIVUI:
+		 	fnIsMC = 1'b1;
+	default:	fnIsMC = 1'b0;
 	endcase
 end
 endfunction
 
-assign alu = fnIsAlu(instr);
+assign multicycle = fnIsMC(instr);
 
 endmodule

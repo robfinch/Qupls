@@ -48,7 +48,8 @@ module Qupls_extract_ins(rst_i, clk_i, en_i, irq_i, hirq_i, vect_i, mipv_i, mip_
 	ls_bmf_i, pack_regs_i, scale_regs_i, regcnt_i,
 	mc_ins0_i, mc_ins1_i, mc_ins2_i, mc_ins3_i, mc_ins4_i, mc_ins5_i, mc_ins6_i,
 	iRn0_i, iRn1_i, iRn2_i, iRn3_i,
-	ins0_o, ins1_o, ins2_o, ins3_o, ins4_o, ins5_o, ins6_o);
+	ins0_o, ins1_o, ins2_o, ins3_o, ins4_o, ins5_o, ins6_o,
+	pc0_o, pc1_o, pc2_o, pc3_o, pc4_o, pc5_o, pc6_o);
 input rst_i;
 input clk_i;
 input en_i;
@@ -87,6 +88,13 @@ output instruction_t ins3_o;
 output instruction_t ins4_o;
 output instruction_t ins5_o;
 output instruction_t ins6_o;
+output pc_address_t pc0_o;
+output pc_address_t pc1_o;
+output pc_address_t pc2_o;
+output pc_address_t pc3_o;
+output pc_address_t pc4_o;
+output pc_address_t pc5_o;
+output pc_address_t pc6_o;
 
 wire clk = clk_i;
 wire en = en_i;
@@ -260,5 +268,13 @@ always_comb ins3_o = ins3;
 always_comb ins4_o = ins4;
 always_comb ins5_o = ins5;
 always_comb ins6_o = ins6;
+
+always_ff @(posedge clk) if (en) pc0_o <= pc0;
+always_ff @(posedge clk) if (en) pc1_o <= pc1;
+always_ff @(posedge clk) if (en) pc2_o <= pc2;
+always_ff @(posedge clk) if (en) pc3_o <= pc3;
+always_ff @(posedge clk) if (en) pc4_o <= pc4;
+always_ff @(posedge clk) if (en) pc5_o <= pc5;
+always_ff @(posedge clk) if (en) pc6_o <= pc6;
 
 endmodule

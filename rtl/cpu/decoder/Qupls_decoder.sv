@@ -243,6 +243,12 @@ Qupls_decode_csr ucsr1
 	.csr(db.csr)
 );
 
+Qupls_decode_multicycle udmc1
+(
+	.instr(ins),
+	.multicycle(db.multicycle)
+);
+
 always_ff @(posedge clk)
 if (en) begin
 	dbo <= 'd0;	// in case a signal was missed / unused.

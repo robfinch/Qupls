@@ -83,7 +83,8 @@ fta_cmd_request128_t [1:0] ftadm_req;
 fta_cmd_response128_t [1:0] ftadm_resp;
 
 
-integer nn,mm,n2,n3,n4,m4,n5,n6,n7,n8,n9,n10,n11,n12,n13,n14,n15,n16,n17;
+integer nn,mm,n2,n3,n4,m4,n5,n6,n7,n8,n9,n10,n11,n12,n13,n14,n15,n17;
+integer n16r, n16c, n12r, n12c, n14r, n14c, n17r, n17c;
 genvar g,h;
 rndx_t alu0_re;
 reg [127:0] message;
@@ -157,22 +158,21 @@ value_t [14:0] rfo;
 rob_entry_t [ROB_ENTRIES-1:0] rob;
 reg [1:0] robentry_islot [0:ROB_ENTRIES-1];
 wire [1:0] next_robentry_islot [0:ROB_ENTRIES-1];
-reg [1:0] lsq_islot [0:LSQ_ENTRIES-1];
-wire [1:0] next_lsq_islot [0:LSQ_ENTRIES-1];
+reg [1:0] lsq_islot [0:LSQ_ENTRIES*2-1];
+wire [1:0] next_lsq_islot [0:LSQ_ENTRIES*2-1];
 rob_bitmask_t robentry_stomp;
 rob_bitmask_t robentry_issue;
 rob_bitmask_t robentry_fpu_issue;
 rob_bitmask_t robentry_fcu_issue;
 rob_bitmask_t robentry_agen_issue;
 lsq_bitmask_t lsq_mem_issue;
-lsq_entry_t [7:0] loadq, storeq;
-lsq_entry_t [15:0] lsq;
+lsq_entry_t [1:0] lsq [0:7];
 lsq_ndx_t lq_tail, lq_head;
 wire nq;
 
 rob_ndx_t tail0, tail1, tail2, tail3;
 rob_ndx_t head0, head1, head2, head3;
-rob_ndx_t store_tail;
+lsq_ndx_t store_tail;
 reg_bitmask_t reg_bitmask;
 reg_bitmask_t Ra_bitmask;
 reg_bitmask_t Rt_bitmask;
@@ -198,6 +198,7 @@ always_comb head2 = (head0 + 2) % ROB_ENTRIES;
 always_comb head3 = (head0 + 3) % ROB_ENTRIES;
 
 decode_bus_t db0, db1, db2, db3;
+decode_bus_t db0q, db1q, db2q, db3q;
 decode_bus_t db0r, db1r, db2r, db3r;
 instruction_t ins0q, ins1q, ins2q, ins3q;
 instruction_t ins0r, ins1r, ins2r, ins3r;
@@ -215,10 +216,8 @@ rob_ndx_t alu1_sndx;
 wire alu0_sv;
 wire alu1_sv;
 
-reg flu0_idle = 1'b1;
-reg agen0_idle = 1'b1;
-reg agen1_idle = 1'b1;
-reg alu0_idle = 1'b1;
+reg fpu0_idle = 1'b1;
+reg alu0_idle;
 reg        alu0_available;
 reg        alu0_dataready;
 reg  [4:0] alu0_sourceid;
@@ -259,7 +258,7 @@ value_t alu1_cmpo;
 bts_t alu1_bts;
 pc_address_t alu1_pc;
 value_t alu1_res;
-wire  [4:0] alu1_id;
+rob_ndx_t alu1_id;
 cause_code_t alu1_exc;
 wire        alu1_v;
 double_value_t alu1_prod,alu1_prod1,alu1_prod2;
@@ -286,7 +285,7 @@ value_t fpu_argI;	// only used by BEQ
 pregno_t fpu_Rt;
 pc_address_t fpu_pc;
 value_t fpu_res;
-rob_ndx_t fpu_id;
+rob_ndx_t fpu0_id;
 cause_code_t fpu_exc = FLT_NONE;
 wire        fpu_v;
 wire fpu_done1;
@@ -334,19 +333,25 @@ reg takb;
 reg fcu_done;
 rob_ndx_t fcu_rndx;
 
+wire tlb0_v, tlb1_v;
+
+reg agen0_idle;
 instruction_t agen0_op;
 rob_ndx_t agen0_id, last_agen0_id;
 value_t agen0_argA;
 value_t agen0_argB;
 value_t agen0_argI;
 pc_address_t agen0_pc;
+cause_code_t agen0_exc;
 
+reg agen1_idle = 1'b1;
 instruction_t agen1_op;
 rob_ndx_t agen1_id, last_agen1_id;
 value_t agen1_argA;
 value_t agen1_argB;
 value_t agen1_argI;
 pc_address_t agen1_pc;
+cause_code_t agen1_exc;
 
 reg lsq0_idle = 1'b1;
 reg lsq1_idle = 1'b1;
@@ -548,6 +553,7 @@ ICacheLine ic_line_hi, ic_line_lo;
 pc_address_t pc, pc0, pc1, pc2, pc3, pc4, pc5, pc6, pc7;
 reg [5:0] off0, off1, off2, off3, off4, off5, off6, off7;
 pc_address_t pc0d, pc1d, pc2d, pc3d, pc4d, pc5d, pc6d;
+pc_address_t pc0q, pc1q, pc2q, pc3q, pc4q, pc5q, pc6q;
 pc_address_t pc0r, pc1r, pc2r, pc3r, pc4r, pc5r, pc6r;
 pc_address_t next_pc;
 wire ntakb,ptakb;
@@ -609,6 +615,21 @@ wire mc_last0;
 wire mc_last1;
 wire mc_last2;
 wire mc_last3;
+
+value_t agen0_res, agen1_res;
+wire tlb_miss0, tlb_miss1;
+wire tlb_missack;
+wire tlb_wr;
+wire tlb_way;
+tlb_entry_t tlb_entry0, tlb_entry1, tlb_entry;
+wire [6:0] tlb_entryno;
+reg agen0_load, agen1_load;
+reg agen0_store, agen1_store;
+wire tlb0_load, tlb0_store;
+wire tlb1_load, tlb1_store;
+reg stall_load, stall_store;
+reg stall_tlb0 ='d0, stall_tlb1='d0;
+
 
 always_comb
 	ins_v = {ins0_v,ins1_v,ins2_v,ins3_v};
@@ -1051,10 +1072,10 @@ always_comb mc_ins4 = {'d0,OP_NOP};
 always_comb mc_ins5 = {'d0,OP_NOP};
 always_comb mc_ins6 = {'d0,OP_NOP};
 
-always_ff @(posedge clk) regx0 <= mipv2 ? mc_regx0 : 'd0;
-always_ff @(posedge clk) regx1 <= mipv2 ? mc_regx1 : 'd0;
-always_ff @(posedge clk) regx2 <= mipv2 ? mc_regx2 : 'd0;
-always_ff @(posedge clk) regx3 <= mipv2 ? mc_regx3 : 'd0;
+always_ff @(posedge clk) regx0 <= mipv2|~rstcnt[2] ? mc_regx0 : 'd0;
+always_ff @(posedge clk) regx1 <= mipv2|~rstcnt[2] ? mc_regx1 : 'd0;
+always_ff @(posedge clk) regx2 <= mipv2|~rstcnt[2] ? mc_regx2 : 'd0;
+always_ff @(posedge clk) regx3 <= mipv2|~rstcnt[2] ? mc_regx3 : 'd0;
 
 always_ff @(posedge clk)
 if (rst)
@@ -1190,7 +1211,14 @@ Qupls_extract_ins uiext1
 	.ins3_o(ins3),
 	.ins4_o(ins4),
 	.ins5_o(ins5),
-	.ins6_o(ins6)
+	.ins6_o(ins6),
+	.pc0_o(pc0d),
+	.pc1_o(pc1d),
+	.pc2_o(pc2d),
+	.pc3_o(pc3d),
+	.pc4_o(pc4d),
+	.pc5_o(pc5d),
+	.pc6_o(pc6d)
 );
 
 // Register memory packing flag.
@@ -1559,6 +1587,7 @@ Qupls_reg_renamer utrn1
 (
 	.rst(rst),
 	.clk(clk),
+	.en(!stallq),
 	.list2free(free_bitlist),
 	.tags2free(tags2free),
 	.freevals(4'hF),
@@ -1655,15 +1684,22 @@ always_ff @(posedge clk)
 	ins2r <= ins2q;
 always_ff @(posedge clk)
 	ins3r <= ins3q;
-
 always_ff @(posedge clk)
-	pc0r <= pc0d;
+	pc0q <= pc0d;
 always_ff @(posedge clk)
-	pc1r <= pc1d;
+	pc1q <= pc1d;
 always_ff @(posedge clk)
-	pc2r <= pc2d;
+	pc2q <= pc2d;
 always_ff @(posedge clk)
-	pc3r <= pc3d;
+	pc3q <= pc3d;
+always_ff @(posedge clk)
+	pc0r <= pc0q;
+always_ff @(posedge clk)
+	pc1r <= pc1q;
+always_ff @(posedge clk)
+	pc2r <= pc2q;
+always_ff @(posedge clk)
+	pc3r <= pc3q;
 	
 reg wrport0_v;
 reg wrport1_v;
@@ -2097,9 +2133,6 @@ endgenerate
     assign  alu0_v = alu0_dataready,
 	    alu1_v = alu1_dataready;
 
-    assign  alu0_id = alu0_rndx,
-	    alu1_id = alu1_rndx;
-
     assign  fcu_v = fcu_dataready;
 
 generate begin : gFpu
@@ -2141,35 +2174,11 @@ end
 endgenerate
 
 assign fpu_v = fpu_dataready;
-assign fpu_id = fpu0_rndx;
-
-value_t agen0_res, agen1_res;
-wire tlb_miss0, tlb_miss1;
-wire tlb0_v, tlb1_v;
-wire tlb_missack;
-wire tlb_wr;
-wire tlb_way;
-tlb_entry_t tlb_entry0, tlb_entry1, tlb_entry;
-wire [6:0] tlb_entryno;
-reg agen0_load, agen1_load;
-reg agen0_store, agen1_store;
-wire tlb0_load, tlb0_store;
-wire tlb1_load, tlb1_store;
-reg stall_load, stall_store;
-reg stall_tlb0 ='d0, stall_tlb1='d0;
 
 always_comb
-	stall_load = (tlb0_v & tlb0_load & loadq[lq_tail]==VAL) ||
-							(tlb1_v & tlb1_load & loadq[lq_tail]==VAL)
-							;
+	stall_tlb0 = (tlb0_v && lsq[lsq_tail.row][lsq_tail.col]==VAL);
 always_comb
-	stall_store = (tlb0_v & tlb0_store & storeq[lq_tail]==VAL) ||
-							(tlb1_v & tlb1_store & storeq[lq_tail]==VAL)
-							;
-always_comb
-	stall_tlb0 = (tlb0_v && lsq[lsq_tail]==VAL);
-always_comb
-	stall_tlb1 = (tlb1_v && lsq[lsq_tail]==VAL);
+	stall_tlb1 = (tlb1_v && lsq[lsq_tail.row][lsq_tail.col]==VAL);
 
 /*
 reg in_loadq0, in_storeq0;
@@ -2247,6 +2256,9 @@ wire tlb_miss;
 virtual_address_t tlb_missadr;
 asid_t tlb_missasid;
 instruction_t tlb0_op, tlb1_op;
+wire [1:0] tlb_missqn;
+wire [31:0] pg_fault;
+wire [1:0] pg_faultq;
 
 Qupls_tlb utlb1
 (
@@ -2297,6 +2309,7 @@ Qupls_tlb utlb1
 	.miss_o(tlb_miss),
 	.missadr_o(tlb_missadr),
 	.missasid_o(tlb_missasid),
+	.missqn_o(tlb_missqn),
 	.missack(tlb_missack)
 );
 
@@ -2307,28 +2320,31 @@ Qupls_ptable_walker #(.CID(3)) uptw1
 	.tlbmiss(tlb_miss),
 	.tlb_missadr(tlb_missadr),
 	.tlb_missasid(tlb_missasid),
+	.tlb_missqn(tlb_missqn),
 	.in_que(tlb_missack),
 	.ftas_req(),
 	.ftas_resp(),
 	.ftam_req(ftatm_req),
 	.ftam_resp(ftatm_resp),
-	.fault_o(),
+	.fault_o(pg_fault),
+	.faultq_o(pg_faultq),
 	.tlb_wr(tlb_wr),
 	.tlb_way(tlb_way),
 	.tlb_entryno(tlb_entryno),
 	.tlb_entry(tlb_entry)
 );
 
-reg [3:0] lsq_tail, lsq_tail0, lsq_tail1;
-reg [3:0] lsq_head;
-reg [3:0] lsq_heads [0:LSQ_ENTRIES];
+lsq_ndx_t lsq_tail, lsq_tail0;
+lsq_ndx_t lsq_head;
+lsq_ndx_t lsq_heads [0:LSQ_ENTRIES];
 always_comb
 begin
 	lsq_tail0 = lsq_tail;
-	lsq_tail1 = lsq_tail + 1;
 	lsq_heads[0] = lsq_head;
-	for (n2 = 1; n2 < LSQ_ENTRIES; n2 = n2 + 1)
-		lsq_heads[n2] = (lsq_heads[n2-1]+1) % LSQ_ENTRIES;
+	for (n2 = 1; n2 < LSQ_ENTRIES; n2 = n2 + 1) begin
+		lsq_heads[n2].row = (lsq_heads[n2-1].row+1) % LSQ_ENTRIES;
+		lsq_heads[n2].col = 0;
+	end
 end
 
 always_comb
@@ -2372,46 +2388,53 @@ end
 always_comb
 begin
 	dram0_done = 'd0;
-	for (n16 = 0; n16 < LSQ_ENTRIES; n16 = n16 + 1)
-		if (lsq[n16].store ? (lsq_memissue[n16] && lsq_islot[n16]==2'd0 && !robentry_stomp[lsq[n16].rndx]) :
+	for (n16r = 0; n16r < LSQ_ENTRIES; n16r = n16r + 1) begin
+		for (n16c = 0; n16c < 2; n16c = n16c + 1)
+		if (lsq[n16r][n16c].store ? (lsq_memissue[{n16r,n16c[0]}] && lsq_islot[{n16r,n16c[0]}]==2'd0 && !robentry_stomp[lsq[n16r][n16c].rndx]) :
 			(dram0 == DRAMSLOT_ACTIVE && dram0_ack &&
 				(dram0_hi ? (dram0_load & ~dram0_stomp) : (dram0_load & ~dram0_more & ~dram0_stomp)))
 			)
 			dram0_done = 1'b1;
+	end
 end
 
 always_comb
 begin
 	dram1_done = 'd0;
-	for (n17 = 0; n17 < LSQ_ENTRIES; n17 = n17 + 1)
-		if (lsq[n17].store ? (lsq_memissue[n17] && lsq_islot[n17]==2'd1 && !robentry_stomp[lsq[n17].rndx]) :
+	for (n17r = 0; n17r < LSQ_ENTRIES; n17r = n17r + 1) begin
+		for (n17c = 0; n17c < 2; n17c = n17c + 1)
+		if (lsq[n17r][n17c].store ? (lsq_memissue[{n17r,n17c[0]}] && lsq_islot[{n17r,n17c[0]}]==2'd0 && !robentry_stomp[lsq[n17r][n17c].rndx]) :
 			(dram1 == DRAMSLOT_ACTIVE && dram1_ack &&
 				(dram1_hi ? (dram1_load & ~dram1_stomp) : (dram1_load & ~dram1_more & ~dram1_stomp)))
 			)
 			dram1_done = 1'b1;
+	end
 end
 
-function integer fnLoadBypassIndex;
+function lsq_ndx_t fnLoadBypassIndex;
 input lsq_ndx_t lsndx;
-integer n15;
+integer n15r,n15c;
 seqnum_t stsn;
 begin
 	fnLoadBypassIndex = -1;
 	stsn = 8'hFF;
-	for (n15 = 0; n15 < LSQ_ENTRIES; n15 = n15 + 1) begin
+	for (n15r = 0; n15r < LSQ_ENTRIES; n15r = n15r + 1) begin
+		for (n15c = 0; n15c < 2; n15c = n15c + 1) begin
 		if (
-			(lsq[lsndx].memsz==lsq[n15].memsz) &&		// memory size matches
-			(lsq[lsndx].load && lsq[n15].store) &&	// and trying to load
-			 lsq[lsndx].sn > lsq[n15].sn && lsq[n15].v && lsq[n15].datav &&
-			 	stsn > lsq[n15].sn) begin
-			 	stsn = lsq[n15].sn;
-			 	fnLoadBypassIndex = n15;
+			(lsq[lsndx.row][lsndx.col].memsz==lsq[n15r][n15c].memsz) &&		// memory size matches
+			(lsq[lsndx.row][lsndx.col].load && lsq[n15r][n15c].store) &&	// and trying to load
+			 lsq[lsndx.row][lsndx.col].sn > lsq[n15r][n15c].sn && lsq[n15r][n15c].v && lsq[n15r][n15c].datav &&
+			 	stsn > lsq[n15r][n15c].sn) begin
+			 	stsn = lsq[n15r][n15c].sn;
+			 	fnLoadBypassIndex.row = n15r;
+			 	fnLoadBypassIndex.col = n15c;
 			end
+		end
 	end
 end
 endfunction
 
-integer lbndx0, lbndx1;
+lsq_ndx_t lbndx0, lbndx1;
 always_comb	lbndx0 = fnLoadBypassIndex(mem0_lsndx);
 always_comb lbndx1 = fnLoadBypassIndex(mem1_lsndx);
 
@@ -2531,55 +2554,93 @@ else begin
 	//
 	// put results into the appropriate instruction entries
 	//
-	if (alu0_v && rob[alu0_rndx].v && rob[alu0_rndx].owner==QuplsPkg::ALU0) begin
-    rob[ alu0_rndx ].exc <= alu0_exc;
-    rob[ alu0_rndx ].done[0] <= !rob[ alu0_rndx ].decbus.multicycle;
-    if (!rob[ alu0_rndx ].decbus.fc)
-    	rob[ alu0_rndx ].done[1] <= VAL;
-    rob[ alu0_rndx ].out <= INV;
-    if ((rob[ alu0_rndx].decbus.mul || rob[ alu0_rndx].decbus.mulu) && mul0_done) begin
-	    rob[ alu0_rndx ].done <= 2'b11;
-	    rob[ alu0_rndx ].out <= INV;
+	if (alu0_v && rob[alu0_id].v && rob[alu0_id].owner==QuplsPkg::ALU0) begin
+    rob[ alu0_id ].exc <= alu0_exc;
+    rob[ alu0_id ].done[0] <= !rob[ alu0_id ].decbus.multicycle;
+    if (!rob[ alu0_id ].decbus.fc)
+    	rob[ alu0_id ].done[1] <= VAL;
+    rob[ alu0_id ].out <= INV;
+    if (!rob[ alu0_id ].decbus.multicycle && !rob[ alu0_id ].decbus.fc)
+	    alu0_idle <= 1'b1;
+    if ((rob[ alu0_id ].decbus.mul || rob[ alu0_id ].decbus.mulu) && mul0_done) begin
+	    rob[ alu0_id ].done <= 2'b11;
+	    rob[ alu0_id ].out <= INV;
+	    alu0_idle <= 1'b1;
   	end
-    if ((rob[ alu0_rndx].decbus.div || rob[ alu0_rndx].decbus.divu) && div0_done) begin
-	    rob[ alu0_rndx ].done <= 2'b11;
-	    rob[ alu0_rndx ].out <= INV;
+    if ((rob[ alu0_id ].decbus.div || rob[ alu0_id ].decbus.divu) && div0_done) begin
+	    rob[ alu0_id ].done <= 2'b11;
+	    rob[ alu0_id ].out <= INV;
+	    alu0_idle <= 1'b1;
   	end
 	end
-	if (NALU > 1 && alu1_v && rob[alu1_rndx].v && rob[alu1_rndx].owner==QuplsPkg::ALU1) begin
-    rob[ alu1_rndx ].exc <= alu1_exc;
-    rob[ alu1_rndx ].done[0] <= (!rob[ alu1_rndx ].decbus.load && !rob[ alu1_rndx ].decbus.store);
-    rob[ alu1_rndx ].done[1] <= 1'b1;
-    rob[ alu1_rndx ].out <= INV;
+	if (NALU > 1 && alu1_v && rob[alu1_id].v && rob[alu1_id].owner==QuplsPkg::ALU1) begin
+    rob[ alu1_id ].exc <= alu1_exc;
+    rob[ alu1_id ].done[0] <= 1'b1;
+    rob[ alu1_id ].done[1] <= 1'b1;
+    rob[ alu1_id ].out <= INV;
+    alu1_idle <= 1'b1;
 	end
-	if (NFPU > 0 && fpu_v && rob[fpu0_rndx].v && rob[fpu0_rndx].owner==QuplsPkg::FPU0) begin
-    rob[ fpu0_rndx ].exc <= fpu_exc;
-    rob[ fpu0_rndx ].done[0] <= fpu_done;
-    rob[ fpu0_rndx ].done[1] <= 1'b1;
-    rob[ fpu0_rndx ].out <= INV;
+	if (NFPU > 0 && fpu_v && rob[fpu0_id].v && rob[fpu0_id].owner==QuplsPkg::FPU0) begin
+    rob[ fpu0_id ].exc <= fpu_exc;
+    rob[ fpu0_id ].done[0] <= fpu_done;
+    rob[ fpu0_id ].done[1] <= 1'b1;
+    rob[ fpu0_id ].out <= INV;
 	end
-	if (fcu_v && rob[fcu_rndx].v && rob[fcu_rndx].out && rob[fcu_rndx].owner==QuplsPkg::FCU) begin
-    rob[ fcu_rndx ].exc <= fcu_exc;
-    if (!rob[ fcu_rndx ].decbus.alu)
-    	rob[ fcu_rndx ].done[0] <= VAL;
-    rob[ fcu_rndx ].done[1] <= VAL;
-    rob[ fcu_rndx ].out <= INV;
-    rob[ fcu_rndx ].takb <= takb;
-    rob[ fcu_rndx ].brtgt <= tgtpc;
+	if (fcu_v && rob[fcu_id].v && rob[fcu_id].out && rob[fcu_id].owner==QuplsPkg::FCU) begin
+    rob[ fcu_id ].exc <= fcu_exc;
+    if (!rob[ fcu_id ].decbus.alu)
+    	rob[ fcu_id ].done[0] <= VAL;
+    rob[ fcu_id ].done[1] <= VAL;
+    rob[ fcu_id ].out <= INV;
+    rob[ fcu_id ].takb <= takb;
+    rob[ fcu_id ].brtgt <= tgtpc;
     fcu_bts <= BTS_NONE;
 	end
 	// If data for stomped instruction, ignore
 	// dram_vn will be false for stomped data
-	if (dram0_done && rob[ dram_id0 ].v && rob[dram0_id].owner==QuplsPkg::DRAM0) begin
-    rob[ dram_id0 ].exc <= dram_exc0;
-    rob[ dram_id0 ].out <= INV;
-    rob[ dram_id0 ].done <= 2'b11;
+	if (dram0_done && rob[ dram0_id ].v) begin
+    rob[ dram0_id ].exc <= dram_exc0;
+    rob[ dram0_id ].out <= INV;
+    rob[ dram0_id ].done <= 2'b11;
 	end
 	if (NDATA_PORTS > 1) begin
-		if (dram1_done && rob[ dram_id1 ].v && rob[dram1_id].owner==QuplsPkg::DRAM1) begin
-	    rob[ dram_id1 ].exc <= dram_exc1;
-	    rob[ dram_id1 ].out <= INV;
-	    rob[ dram_id1 ].done <= 2'b11;
+		if (dram1_done && rob[ dram1_id ].v) begin
+	    rob[ dram1_id ].exc <= dram_exc1;
+	    rob[ dram1_id ].out <= INV;
+	    rob[ dram1_id ].done <= 2'b11;
+		end
+	end
+	// Store TLB translation in LSQ
+	if (tlb0_v) begin
+		if (|pg_fault && pg_faultq==2'd1) begin
+			rob[agen0_id].exc <= FLT_PAGE;
+			rob[agen0_id].done[1] <= 1'b1;
+		end
+		if (rob[agen0_id].lsq) begin
+			agen0_idle <= 1'b1;
+			rob[agen0_id].done[0] <= 1'b1;
+			rob[agen0_id].out <= 1'b0;
+			lsq[rob[agen0_id].lsqndx.row][rob[agen0_id].lsqndx.col].agen <= 1'b1;
+			lsq[rob[agen0_id].lsqndx.row][rob[agen0_id].lsqndx.col].tlb <= 1'b1;
+			lsq[rob[agen0_id].lsqndx.row][rob[agen0_id].lsqndx.col].vadr <= tlb0_res;
+			lsq[rob[agen0_id].lsqndx.row][rob[agen0_id].lsqndx.col].padr <= {tlb_entry0.pte.ppn,tlb0_res[15:0]};
+		end
+	end
+	if (NAGEN > 1) begin
+		if (tlb1_v) begin
+			if (|pg_fault && pg_faultq==2'd2) begin
+				rob[agen1_id].exc <= FLT_PAGE;
+				rob[agen1_id].done[1] <= 1'b1;
+			end
+			if (rob[agen1_id].lsq) begin
+				agen1_idle <= 1'b1;
+				rob[agen1_id].done[0] <= 1'b1;
+				rob[agen1_id].out <= 1'b0;
+				lsq[rob[agen1_id].lsqndx.row][rob[agen1_id].lsqndx.col].agen <= 1'b1;
+				lsq[rob[agen1_id].lsqndx.row][rob[agen1_id].lsqndx.col].tlb <= 1'b1;
+				lsq[rob[agen1_id].lsqndx.row][rob[agen1_id].lsqndx.col].vadr <= tlb1_res;
+				lsq[rob[agen1_id].lsqndx.row][rob[agen1_id].lsqndx.col].padr <= {tlb_entry1.pte.ppn,tlb1_res[15:0]};
+			end
 		end
 	end
 	
@@ -2634,6 +2695,8 @@ else begin
 	// Reservation stations
 
 	if (alu0_available && alu0_rndxv) begin
+		alu0_id <= alu0_rndx;
+		alu0_idle <= 1'b0;
 		alu0_argA <= rob[alu0_rndx].decbus.imma | rfo_alu0_argA;
 		alu0_argB <= rfo_alu0_argB;
 		alu0_argC <= rob[alu0_rndx].decbus.immc | rfo_alu0_argC;
@@ -2650,6 +2713,8 @@ else begin
 
 	if (NALU > 1) begin
 		if (alu1_available && alu1_rndxv) begin
+			alu1_id <= alu1_rndx;
+			alu1_idle <= 1'b0;
 			alu1_argA <= rob[alu1_rndx].decbus.imma | rfo_alu1_argA;
 			alu1_argB <= rfo_alu1_argB;
 			alu1_argI	<= rob[alu1_rndx].decbus.immb;
@@ -2664,6 +2729,7 @@ else begin
 	end
 
 	if (fpu_available && fpu0_rndxv) begin
+		fpu0_id <= fpu0_rndx;
 		fpu_argA <= rob[fpu0_rndx].decbus.imma | rfo_fpu0_argA;
 		fpu_argB <= rfo_fpu0_argB;
 		fpu_argC <= rob[fpu0_rndx].decbus.immc | rfo_fpu0_argC;
@@ -2676,6 +2742,7 @@ else begin
 	end
 
 	if (fcu_rndxv) begin
+		fcu_id <= fcu_rndx;
 		fcu_argA <= rob[fcu_rndx].decbus.imma | rfo_fcu_argA;
 		fcu_argB <= rfo_fcu_argB;
 		fcu_argI <= rob[fcu_rndx].decbus.immb;
@@ -2689,33 +2756,37 @@ else begin
 	end
 
 	if (agen0_rndxv) begin
+		agen0_idle <= 1'b0;
+		agen0_id <= agen0_rndx;
 		agen0_argA <= rob[agen0_rndx].decbus.imma | rfo_agen0_argA;
 		agen0_argB <= rfo_agen0_argB;
 		agen0_argI <= rob[agen0_rndx].decbus.immb;
 		agen0_pc <= rob[agen0_rndx].pc;
 		agen0_op <= rob[agen0_rndx].op;
-		agen0_id <= agen0_rndx;
 	  rob[agen0_rndx].out <= VAL;
 	  rob[agen0_rndx].owner <= QuplsPkg::AGEN0;
 	end
 
 	if (NAGEN > 1) begin
 		if (agen1_rndxv) begin
+			agen1_idle <= 1'b0;
+			agen1_id <= agen1_rndx;
 			agen1_argA <= rob[agen1_rndx].decbus.imma | rfo_agen1_argA;
 			agen1_argB <= rfo_agen1_argB;
 			agen1_argI <= rob[agen1_rndx].decbus.immb;
 			agen1_pc <= rob[agen1_rndx].pc;
 			agen1_op <= rob[agen1_rndx].op;
-			agen1_id <= agen1_rndx;
 	    rob[agen1_rndx].out <= VAL;
 	    rob[agen1_rndx].owner <= QuplsPkg::AGEN1;
 		end
 	end
 	
-	if (lsq[dram0_id].v && lsq[dram0_id].store) begin
+	if (lsq[rob[dram0_id].lsqndx.row][rob[dram0_id].lsqndx.col].v &&
+		lsq[rob[dram0_id].lsqndx.row][rob[dram0_id].lsqndx.col].store) begin
 		store_argC <= rfo_store_argC;
 	end
-	if (lsq[dram0_id].v && lsq[dram1_id].store) begin
+	if (lsq[rob[dram1_id].lsqndx.row][rob[dram1_id].lsqndx.col].v &&
+		lsq[rob[dram1_id].lsqndx.row][rob[dram1_id].lsqndx.col].store) begin
 		store_argC <= rfo_store_argC;
 	end
 
@@ -2842,7 +2913,7 @@ else begin
 				rob[dram0_id].exc <= FLT_BERR;
 			rob[dram0_id].done <= 2'b11;
 			rob[dram0_id].out <= INV;
-			lsq[rob[dram0_id].lsqndx].v <= INV;
+			lsq[rob[dram0_id].lsqndx.row][rob[dram0_id].lsqndx.col].v <= INV;
 			dram0_tocnt <= 'd0;
 		end
 		else if (dram0_tocnt[8]) begin
@@ -2854,7 +2925,7 @@ else begin
 					rob[dram1_id].exc <= FLT_BERR;
 				rob[dram1_id].done <= 2'b11;
 				rob[dram1_id].out <= INV;
-				lsq[rob[dram1_id].lsqndx].v <= INV;
+				lsq[rob[dram1_id].lsqndx.row][rob[dram1_id].lsqndx.col].v <= INV;
 				dram1_tocnt <= 'd0;
 			end
 			else if (dram1_tocnt[8]) begin
@@ -2941,22 +3012,22 @@ else begin
 	// dramN_addr var. We can tell when to use it by the setting of the more
 	// flag.
 	if (SUPPORT_LOAD_BYPASSING && lbndx0 > 0) begin
-		dram_bus0 <= fnDati(1'b0,dram0_op,lsq[lbndx0].res);
-		dram_Rt0 <= lsq[lbndx0].Rt;
-		dram_v0 <= lsq[lbndx0].v;
-		lsq[lbndx0].v <= INV;
-		rob[lsq[lbndx0].rndx].done <= 2'b11;
+		dram_bus0 <= fnDati(1'b0,dram0_op,lsq[lbndx0.row][lbndx0.col].res);
+		dram_Rt0 <= lsq[lbndx0.row][lbndx0.col].Rt;
+		dram_v0 <= lsq[lbndx0.row][lbndx0.col].v;
+		lsq[lbndx0.row][lbndx0.col].v <= INV;
+		rob[lsq[lbndx0.row][lbndx0.col].rndx].done <= 2'b11;
 	end
   else if (dram0 == DRAMSLOT_AVAIL && mem0_lsndxv) begin
 		dram0_exc <= FLT_NONE;
 		dram0_stomp <= 1'b0;
-		dram0_id <= lsq[mem0_lsndx].rndx;
-		dram0_op <= lsq[mem0_lsndx].op;
-		dram0_load <= lsq[mem0_lsndx].load;
-		dram0_loadz <= lsq[mem0_lsndx].loadz;
-		dram0_store <= lsq[mem0_lsndx].store;
-		dram0_erc <= rob[lsq[mem0_lsndx].rndx].decbus.erc;
-		dram0_Rt	<= lsq[mem0_lsndx].Rt;
+		dram0_id <= lsq[mem0_lsndx.row][mem0_lsndx.col].rndx;
+		dram0_op <= lsq[mem0_lsndx.row][mem0_lsndx.col].op;
+		dram0_load <= lsq[mem0_lsndx.row][mem0_lsndx.col].load;
+		dram0_loadz <= lsq[mem0_lsndx.row][mem0_lsndx.col].loadz;
+		dram0_store <= lsq[mem0_lsndx.row][mem0_lsndx.col].store;
+		dram0_erc <= rob[lsq[mem0_lsndx.row][mem0_lsndx.col].rndx].decbus.erc;
+		dram0_Rt	<= lsq[mem0_lsndx.row][mem0_lsndx.col].Rt;
 		if (dram0_more && SUPPORT_UNALIGNED_MEMORY) begin
 			dram0_hi <= 1'b1;
 			dram0_sel <= dram0_selh >> 8'd64;
@@ -2967,42 +3038,42 @@ else begin
 		end
 		else begin
 			dram0_hi <= 1'b0;
-			dram0_sel <= {64'h0,fnSel(rob[lsq[mem0_lsndx].rndx].op)} << lsq[mem0_lsndx].padr[5:0];
-			dram0_selh <= {64'h0,fnSel(rob[lsq[mem0_lsndx].rndx].op)} << lsq[mem0_lsndx].padr[5:0];
-			dram0_vaddr <= lsq[mem0_lsndx].vadr;
-			dram0_paddr <= lsq[mem0_lsndx].padr;
-			dram0_vaddrh <= lsq[mem0_lsndx].vadr;
-			dram0_paddrh <= lsq[mem0_lsndx].padr;
-			dram0_data <= {448'h0,store_argC} << {lsq[mem0_lsndx].padr[5:0],3'b0};
-			dram0_datah <= {448'h0,store_argC} << {lsq[mem0_lsndx].padr[5:0],3'b0};
-			dram0_shift <= {lsq[mem0_lsndx].padr[5:0],3'd0};
+			dram0_sel <= {64'h0,fnSel(rob[lsq[mem0_lsndx.row][mem0_lsndx.col].rndx].op)} << lsq[mem0_lsndx.row][mem0_lsndx.col].padr[5:0];
+			dram0_selh <= {64'h0,fnSel(rob[lsq[mem0_lsndx.row][mem0_lsndx.col].rndx].op)} << lsq[mem0_lsndx.row][mem0_lsndx.col].padr[5:0];
+			dram0_vaddr <= lsq[mem0_lsndx.row][mem0_lsndx.col].vadr;
+			dram0_paddr <= lsq[mem0_lsndx.row][mem0_lsndx.col].padr;
+			dram0_vaddrh <= lsq[mem0_lsndx.row][mem0_lsndx.col].vadr;
+			dram0_paddrh <= lsq[mem0_lsndx.row][mem0_lsndx.col].padr;
+			dram0_data <= {448'h0,store_argC} << {lsq[mem0_lsndx.row][mem0_lsndx.col].padr[5:0],3'b0};
+			dram0_datah <= {448'h0,store_argC} << {lsq[mem0_lsndx.row][mem0_lsndx.col].padr[5:0],3'b0};
+			dram0_shift <= {lsq[mem0_lsndx.row][mem0_lsndx.col].padr[5:0],3'd0};
 		end
-		dram0_memsz <= fnMemsz(rob[lsq[mem0_lsndx].rndx].op);
+		dram0_memsz <= fnMemsz(rob[lsq[mem0_lsndx.row][mem0_lsndx.col].rndx].op);
 		dram0_tid.core <= CORENO;
 		dram0_tid.channel <= 3'd1;
 		dram0_tid.tranid <= dram0_tid.tranid + 2'd1;
-		rob[lsq[mem0_lsndx].rndx].out <= VAL;
-		rob[lsq[mem0_lsndx].rndx].owner <= QuplsPkg::DRAM0;
+		rob[lsq[mem0_lsndx.row][mem0_lsndx.col].rndx].out <= VAL;
+		rob[lsq[mem0_lsndx.row][mem0_lsndx.col].rndx].owner <= QuplsPkg::DRAM0;
     dram0_tocnt <= 'd0;
   end
   if (NDATA_PORTS > 1) begin
 		if (SUPPORT_LOAD_BYPASSING && lbndx1 > 0) begin
-			dram_bus1 <= fnDati(1'b0,dram1_op,lsq[lbndx1].res);
-			dram_Rt1 <= lsq[lbndx1].Rt;
-			dram_v1 <= lsq[lbndx1].v;
-			lsq[lbndx1].v <= INV;
-			rob[lsq[lbndx1].rndx].done <= 2'b11;
+			dram_bus1 <= fnDati(1'b0,dram1_op,lsq[lbndx1.row][lbndx1.col].res);
+			dram_Rt1 <= lsq[lbndx1.row][lbndx1.col].Rt;
+			dram_v1 <= lsq[lbndx1.row][lbndx1.col].v;
+			lsq[lbndx1.row][lbndx1.col].v <= INV;
+			rob[lsq[lbndx1.row][lbndx1.col].rndx].done <= 2'b11;
 		end
 	  else if (dram1 == DRAMSLOT_AVAIL && NDATA_PORTS > 1 && mem1_lsndxv) begin
 			dram1_exc <= FLT_NONE;
 			dram1_stomp <= 1'b0;
-			dram1_id <= lsq[mem1_lsndx].rndx;
-			dram1_op <= lsq[mem1_lsndx].op;
-			dram1_load <= lsq[mem1_lsndx].load;
-			dram1_loadz <= lsq[mem1_lsndx].loadz;
-			dram1_store <= lsq[mem1_lsndx].store;
-			dram1_erc <= rob[lsq[mem1_lsndx].rndx].decbus.erc;
-			dram1_Rt <= lsq[mem1_lsndx].Rt;
+			dram1_id <= lsq[mem1_lsndx.row][mem1_lsndx.col].rndx;
+			dram1_op <= lsq[mem1_lsndx.row][mem1_lsndx.col].op;
+			dram1_load <= lsq[mem1_lsndx.row][mem1_lsndx.col].load;
+			dram1_loadz <= lsq[mem1_lsndx.row][mem1_lsndx.col].loadz;
+			dram1_store <= lsq[mem1_lsndx.row][mem1_lsndx.col].store;
+			dram1_erc <= rob[lsq[mem1_lsndx.row][mem1_lsndx.col].rndx].decbus.erc;
+			dram1_Rt <= lsq[mem1_lsndx.row][mem1_lsndx.col].Rt;
 			if (dram1_more && SUPPORT_UNALIGNED_MEMORY) begin
 				dram1_hi <= 1'b1;
 				dram1_sel <= dram1_selh >> 8'd64;
@@ -3013,22 +3084,22 @@ else begin
 			end
 			else begin
 				dram1_hi <= 1'b0;
-				dram1_sel <= {64'h0,fnSel(lsq[mem1_lsndx].op)} << lsq[mem1_lsndx].padr[5:0];
-				dram1_selh <= {64'h0,fnSel(lsq[mem1_lsndx].op)} << lsq[mem1_lsndx].padr[5:0];
-				dram1_vaddr	<= lsq[mem1_lsndx].vadr;
-				dram1_paddr	<= lsq[mem1_lsndx].padr;
-				dram1_vaddrh	<= lsq[mem1_lsndx].vadr;
-				dram1_paddrh	<= lsq[mem1_lsndx].padr;
-				dram1_data	<= {448'h0,store_argC} << {lsq[mem1_lsndx].padr[5:0],3'b0};
-				dram1_datah	<= {448'h0,store_argC} << {lsq[mem1_lsndx].padr[5:0],3'b0};
-				dram1_shift <= {lsq[mem1_lsndx].padr[5:0],3'd0};
+				dram1_sel <= {64'h0,fnSel(lsq[mem1_lsndx.row][mem1_lsndx.col].op)} << lsq[mem1_lsndx.row][mem1_lsndx.col].padr[5:0];
+				dram1_selh <= {64'h0,fnSel(lsq[mem1_lsndx.row][mem1_lsndx.col].op)} << lsq[mem1_lsndx.row][mem1_lsndx.col].padr[5:0];
+				dram1_vaddr	<= lsq[mem1_lsndx.row][mem1_lsndx.col].vadr;
+				dram1_paddr	<= lsq[mem1_lsndx.row][mem1_lsndx.col].padr;
+				dram1_vaddrh	<= lsq[mem1_lsndx.row][mem1_lsndx.col].vadr;
+				dram1_paddrh	<= lsq[mem1_lsndx.row][mem1_lsndx.col].padr;
+				dram1_data	<= {448'h0,store_argC} << {lsq[mem1_lsndx.row][mem1_lsndx.col].padr[5:0],3'b0};
+				dram1_datah	<= {448'h0,store_argC} << {lsq[mem1_lsndx.row][mem1_lsndx.col].padr[5:0],3'b0};
+				dram1_shift <= {lsq[mem1_lsndx.row][mem1_lsndx.col].padr[5:0],3'd0};
 			end
-			dram1_memsz <= fnMemsz(lsq[mem1_lsndx].op);
+			dram1_memsz <= fnMemsz(lsq[mem1_lsndx.row][mem1_lsndx.col].op);
 			dram1_tid.core <= CORENO;
 			dram1_tid.channel <= 3'd2;
 			dram1_tid.tranid <= dram1_tid.tranid + 2'd1;
-			rob[lsq[mem1_lsndx].rndx].out	<= VAL;
-			rob[lsq[mem1_lsndx].rndx].owner <= QuplsPkg::DRAM1;
+			rob[lsq[mem1_lsndx.row][mem1_lsndx.col].rndx].out	<= VAL;
+			rob[lsq[mem1_lsndx.row][mem1_lsndx.col].rndx].owner <= QuplsPkg::DRAM1;
 	    dram1_tocnt <= 'd0;
 	  end
 	end
@@ -3059,87 +3130,102 @@ else begin
 				rob[n12].sn <= rob[n12].sn - 4;
 			tEnque(8'hFC,db0r,pc0r,ins0r,pt0,tail0, 1'b0, prn[0], prn[1], prn[2], prn[3], nRt0, avail_reg & ~(192'd1 << nRt0), cndx, grplen0, last0);
 			tEnque(8'hFD,db1r,pc1r,ins1r,pt1,tail1, pt0|mip0v, prn[4], prn[5], prn[6], prn[7], nRt1, avail_reg & ~((192'd1 << nRt0) | (192'd1 << nRt1)), cndx, grplen1, last1);
+				// If the instruction's source register is the same as a previous target
+				// register, use the register mapping of the previous target register.
+				// The register mapping will not have been updated in the RAT yet in
+				// time to be available for the source register.
+				if (db1r.Ra==db0r.Rt) rob[tail1].pRa <= nRt0;
+				if (db1r.Rb==db0r.Rt) rob[tail1].pRb <= nRt0;
+				if (db1r.Rc==db0r.Rt) rob[tail1].pRc <= nRt0;
+				if (db1r.Rt==db0r.Rt) rob[tail1].pRt <= nRt0;
 			tEnque(8'hFE,db2r,pc2r,ins2r,pt2,tail2, pt0|pt1|mip0v|mip1v, prn[8], prn[9], prn[10], prn[11], nRt2, avail_reg & ~((192'd1 << nRt0) | (192'd1 << nRt1) | (192'd1 << nRt2)), cndx, grplen2, last3);
+				if (db2r.Ra==db0r.Rt) rob[tail2].pRa <= nRt0;
+				if (db2r.Rb==db0r.Rt) rob[tail2].pRb <= nRt0;
+				if (db2r.Rc==db0r.Rt) rob[tail2].pRc <= nRt0;
+				if (db2r.Rt==db0r.Rt) rob[tail2].pRt <= nRt0;
+				if (db2r.Ra==db1r.Rt) rob[tail2].pRa <= nRt1;
+				if (db2r.Rb==db1r.Rt) rob[tail2].pRb <= nRt1;
+				if (db2r.Rc==db1r.Rt) rob[tail2].pRc <= nRt1;
+				if (db2r.Rt==db1r.Rt) rob[tail2].pRt <= nRt1;
 			tEnque(8'hFF,db3r,pc3r,ins3r,pt3,tail3, pt0|pt1|pt2|mip0v|mip1v|mip2v, prn[12], prn[13], prn[14], prn[15], nRt3, avail_reg & ~((192'd1 << nRt0) | (192'd1 << nRt1) | (192'd1 << nRt2)| (192'd1 << nRt3)), cndx,grplen3,last3);
+				if (db2r.Ra==db0r.Rt) rob[tail3].pRa <= nRt0;
+				if (db2r.Rb==db0r.Rt) rob[tail3].pRb <= nRt0;
+				if (db2r.Rc==db0r.Rt) rob[tail3].pRc <= nRt0;
+				if (db2r.Rt==db0r.Rt) rob[tail3].pRt <= nRt0;
+				if (db2r.Ra==db1r.Rt) rob[tail3].pRa <= nRt1;
+				if (db2r.Rb==db1r.Rt) rob[tail3].pRb <= nRt1;
+				if (db2r.Rc==db1r.Rt) rob[tail3].pRc <= nRt1;
+				if (db2r.Rt==db2r.Rt) rob[tail3].pRt <= nRt1;
+				if (db2r.Ra==db2r.Rt) rob[tail3].pRa <= nRt2;
+				if (db2r.Rb==db2r.Rt) rob[tail3].pRb <= nRt2;
+				if (db2r.Rc==db2r.Rt) rob[tail3].pRc <= nRt2;
+				if (db2r.Rt==db2r.Rt) rob[tail3].pRt <= nRt2;
 			tail0 <= (tail0 + 3'd4) % ROB_ENTRIES;
 		end
 	end
 
 	// Place up to two instructions into the load/store queue in order.	
 
-	if (lsq[lsq_tail0].v==INV && agen0_v) begin	// Can an entry be queued?
-		last_agen0_id <= agen0_id;
-		lsq[lsq_tail0].rndx <= agen0_id;
-		lsq[lsq_tail0].v <= 1'b1;
-		lsq[lsq_tail0].agen <= 1'b0;
-		lsq[lsq_tail0].tlb <= 1'b0;
-		lsq[lsq_tail0].op <= rob[agen0_id].op;
-		lsq[lsq_tail0].load <= rob[agen0_id].decbus.load;
-		lsq[lsq_tail0].loadz <= rob[agen0_id].decbus.loadz;
-		lsq[lsq_tail0].store <= rob[agen0_id].decbus.store;
-		store_argC_reg <= rob[agen0_id].pRc;
-		//store_tail <= lsq_tail0;
-		lsq[lsq_tail0].Rc <= rob[agen0_id].pRc;
-		lsq[lsq_tail0].Rt <= rob[agen0_id].pRt;
-		lsq[lsq_tail0].memsz <= fnMemsz(rob[agen0_id].op);
-		for (n12 = 0; n12 < LSQ_ENTRIES; n12 = n12 + 1)
-			lsq[n12].sn <= lsq[n12].sn - 1;
-		lsq[lsq_tail].sn <= 8'hFF;
-		if (agen0_id != last_agen0_id)
-			lsq_tail <= (lsq_tail + 2'd1) % LSQ_ENTRIES;
+	if (lsq[lsq_tail0.row][0].v==INV && rob[agen0_id].out) begin	// Can an entry be queued?
 		rob[agen0_id].lsq <= 1'b1;
 		rob[agen0_id].lsqndx <= lsq_tail0;
-		if (LSQ2 && lsq[lsq_tail1].v==INV && agen1_v) begin	// Can a second entry be queued?
-			lsq[lsq_tail1].v <= VAL;
-			lsq[lsq_tail1].rndx <= agen1_id;
-			lsq[lsq_tail1].v <= 1'b1;
-			lsq[lsq_tail1].agen <= 1'b0;
-			lsq[lsq_tail1].tlb <= 1'b0;
-			lsq[lsq_tail1].op <= rob[agen1_id].op;
-			lsq[lsq_tail1].load <= rob[agen1_id].decbus.load;
-			lsq[lsq_tail1].loadz <= rob[agen1_id].decbus.loadz;
-			lsq[lsq_tail1].store <= rob[agen1_id].decbus.store;
-			lsq[lsq_tail1].Rc <= rob[agen1_id].pRc;
-			lsq[lsq_tail1].Rt <= rob[agen1_id].pRt;
-			lsq[lsq_tail1].memsz <= fnMemsz(rob[agen1_id].op);
-			for (n12 = 0; n12 < LSQ_ENTRIES; n12 = n12 + 1)
-				lsq[n12].sn <= lsq[n12].sn - 2;
-			lsq[lsq_tail0].sn <= 8'hFE;
-			lsq[lsq_tail1].sn <= 8'hFF;
-			lsq_tail <= (lsq_tail + 2'd2) % LSQ_ENTRIES;
+		if (LSQ2 && lsq[lsq_tail0.row][1].v==INV && rob[agen1_id].out) begin	// Can a second entry be queued?
 			rob[agen1_id].lsq <= 1'b1;
-			rob[agen1_id].lsqndx <= lsq_tail1;
+			rob[agen1_id].lsqndx <= {lsq_tail0.row,1'b1};
 		end
 	end
-	if (lsq[store_tail].store && lsq[store_tail].v && !lsq[store_tail].datav) begin
-		lsq[store_tail].res <= rfo_store_argC;
-		if (rob[lsq[store_tail].rndx].argC_v)
-			lsq[store_tail].datav <= VAL;
-	end
-	if (lsq[mem0_lsndx].store)
-		store_argC_reg <= lsq[mem0_lsndx].Rc;
-	if (lsq[mem1_lsndx].store)
-		store_argC_reg <= lsq[mem1_lsndx].Rc;
 
-	// Store TLB translation in LSQ
-	if (tlb0_v) begin
-		rob[agen0_rndx2].out <= 1'b0;
-		rob[agen0_rndx2].done[0] <= 1'b1;
-		lsq[rob[agen0_rndx2].lsqndx].agen <= 1'b1;
-		lsq[rob[agen0_rndx2].lsqndx].tlb <= 1'b1;
-		lsq[rob[agen0_rndx2].lsqndx].vadr <= tlb0_res;
-		lsq[rob[agen0_rndx2].lsqndx].padr <= {tlb_entry0.pte.ppn,tlb0_res[15:0]};
-	end
-	if (NAGEN > 1) begin
-		if (tlb1_v) begin
-			rob[agen1_rndx2].out <= 1'b0;
-			rob[agen1_rndx2].done[0] <= 1'b1;
-			lsq[rob[agen1_rndx2].lsqndx].agen <= 1'b1;
-			lsq[rob[agen1_rndx2].lsqndx].tlb <= 1'b1;
-			lsq[rob[agen1_rndx2].lsqndx].vadr <= tlb1_res;
-			lsq[rob[agen1_rndx2].lsqndx].padr <= {tlb_entry1.pte.ppn,tlb1_res[15:0]};
+	if (lsq[lsq_tail0.row][0].v==INV && rob[agen0_id].out) begin	// Can an entry be queued?
+		lsq[lsq_tail0.row][0].rndx <= agen0_id;
+		lsq[lsq_tail0.row][0].v <= VAL;
+		lsq[lsq_tail0.row][0].agen <= 1'b0;
+		lsq[lsq_tail0.row][0].tlb <= 1'b0;
+		lsq[lsq_tail0.row][0].op <= rob[agen0_id].op;
+		lsq[lsq_tail0.row][0].pc <= rob[agen0_id].pc;
+		lsq[lsq_tail0.row][0].load <= rob[agen0_id].decbus.load;
+		lsq[lsq_tail0.row][0].loadz <= rob[agen0_id].decbus.loadz;
+		lsq[lsq_tail0.row][0].store <= rob[agen0_id].decbus.store;
+		store_argC_reg <= rob[agen0_id].pRc;
+		//store_tail <= lsq_tail0;
+		lsq[lsq_tail0.row][0].Rc <= rob[agen0_id].pRc;
+		lsq[lsq_tail0.row][0].Rt <= rob[agen0_id].pRt;
+		lsq[lsq_tail0.row][0].memsz <= fnMemsz(rob[agen0_id].op);
+		for (n12r = 0; n12r < LSQ_ENTRIES; n12r = n12r + 1)
+			for (n12c = 0; n12c < 2; n12c = n12c + 1)
+				lsq[n12r][n12c].sn <= lsq[n12r][n12c].sn - 1;
+		lsq[lsq_tail0.row][0].sn <= 8'hFF;
+		lsq_tail.row <= (lsq_tail.row + 2'd1) % LSQ_ENTRIES;
+		lsq_tail.col <= 'd0;
+		if (LSQ2 && lsq[lsq_tail0.row][1].v==INV && rob[agen1_id].out) begin	// Can a second entry be queued?
+			lsq[lsq_tail0.row][1].rndx <= agen1_id;
+			lsq[lsq_tail0.row][1].v <= VAL;
+			lsq[lsq_tail0.row][1].agen <= 1'b0;
+			lsq[lsq_tail0.row][1].tlb <= 1'b0;
+			lsq[lsq_tail0.row][1].op <= rob[agen1_id].op;
+			lsq[lsq_tail0.row][1].pc <= rob[agen1_id].pc;
+			lsq[lsq_tail0.row][1].load <= rob[agen1_id].decbus.load;
+			lsq[lsq_tail0.row][1].loadz <= rob[agen1_id].decbus.loadz;
+			lsq[lsq_tail0.row][1].store <= rob[agen1_id].decbus.store;
+			lsq[lsq_tail0.row][1].Rc <= rob[agen1_id].pRc;
+			lsq[lsq_tail0.row][1].Rt <= rob[agen1_id].pRt;
+			lsq[lsq_tail0.row][1].memsz <= fnMemsz(rob[agen1_id].op);
+			for (n12r = 0; n12r < LSQ_ENTRIES; n12r = n12r + 1)
+				for (n12c = 0; n12c < 2; n12c = n12c + 1)
+					lsq[n12r][n12c].sn <= lsq[n12r][n12c].sn - 2;
+			lsq[lsq_tail0.row][0].sn <= 8'hFE;
+			lsq[lsq_tail0.row][1].sn <= 8'hFF;
 		end
 	end
+	if (lsq[store_tail.row][store_tail.col].store &&
+	 	lsq[store_tail.row][store_tail.col].v && !lsq[store_tail.row][store_tail.col].datav) begin
+		lsq[store_tail.row][store_tail.col].res <= rfo_store_argC;
+		if (rob[lsq[store_tail.row][store_tail.col].rndx].argC_v)
+			lsq[store_tail.row][store_tail.col].datav <= VAL;
+	end
+	if (lsq[mem0_lsndx.row][mem0_lsndx.col].store)
+		store_argC_reg <= lsq[mem0_lsndx.row][mem0_lsndx.col].Rc;
+	if (lsq[mem1_lsndx.row][mem1_lsndx.col].store)
+		store_argC_reg <= lsq[mem1_lsndx.row][mem1_lsndx.col].Rc;
 
 //
 // COMMIT
@@ -3168,7 +3254,7 @@ else begin
 		rob[head0].done <= 'd0;
 		rob[head0].lsq <= 'd0;
 		if (rob[head0].lsq)
-			lsq[rob[head0].lsqndx].v <= INV;
+			lsq[rob[head0].lsqndx.row][rob[head0].lsqndx.col].v <= INV;
 		tags2free[0] <= rob[head0].pRt;
 		head0 <= (head0 + 3'd1) % ROB_ENTRIES;
 		group_len <= group_len - 1;
@@ -3182,7 +3268,7 @@ else begin
 			rob[head1].done <= 'd0;
 			rob[head1].lsq <= 'd0;
 			if (rob[head1].lsq)
-				lsq[rob[head1].lsqndx].v <= INV;
+				lsq[rob[head1].lsqndx.row][rob[head1].lsqndx.col].v <= INV;
 			tags2free[1] <= rob[head1].pRt;
 			tOddballCommit(1'b1, head1);
 			head0 <= (head0 + 3'd2) % ROB_ENTRIES;
@@ -3197,9 +3283,9 @@ else begin
 			rob[head1].done <= 'd0;
 			rob[head2].done <= 'd0;
 			if (rob[head1].lsq)
-				lsq[rob[head1].lsqndx].v <= INV;
+				lsq[rob[head1].lsqndx.row][rob[head1].lsqndx.col].v <= INV;
 			if (rob[head2].lsq)
-				lsq[rob[head2].lsqndx].v <= INV;
+				lsq[rob[head2].lsqndx.row][rob[head2].lsqndx.col].v <= INV;
 			tags2free[1] <= rob[head1].pRt;
 			tags2free[2] <= rob[head2].pRt;
 			tOddballCommit(1'b1, head2);
@@ -3218,11 +3304,11 @@ else begin
 			rob[head2].done <= 'd0;
 			rob[head3].done <= 'd0;
 			if (rob[head1].lsq)
-				lsq[rob[head1].lsqndx].v <= INV;
+				lsq[rob[head1].lsqndx.row][rob[head1].lsqndx.col].v <= INV;
 			if (rob[head2].lsq)
-				lsq[rob[head2].lsqndx].v <= INV;
+				lsq[rob[head2].lsqndx.row][rob[head2].lsqndx.col].v <= INV;
 			if (rob[head3].lsq)
-				lsq[rob[head3].lsqndx].v <= INV;
+				lsq[rob[head3].lsqndx.row][rob[head3].lsqndx.col].v <= INV;
 			tags2free[1] <= rob[head1].pRt;
 			tags2free[2] <= rob[head2].pRt;
 			tags2free[3] <= rob[head3].pRt;
@@ -3237,7 +3323,7 @@ else begin
 				rob[head1].lsq <= 'd0;
 				rob[head1].done <= 'd0;
 				if (rob[head1].lsq)
-					lsq[rob[head1].lsqndx].v <= INV;
+					lsq[rob[head1].lsqndx.row][rob[head1].lsqndx.col].v <= INV;
 				tags2free[1] <= rob[head1].pRt;
 				head0 <= (head0 + 3'd2) % ROB_ENTRIES;
 				group_len <= group_len - 2;
@@ -3247,7 +3333,7 @@ else begin
 					rob[head2].done <= 'd0;
 					rob[head2].lsq <= 'd0;
 					if (rob[head2].lsq)
-						lsq[rob[head2].lsqndx].v <= INV;
+						lsq[rob[head2].lsqndx.row][rob[head2].lsqndx.col].v <= INV;
 					tags2free[2] <= rob[head2].pRt;
 					head0 <= (head0 + 3'd3) % ROB_ENTRIES;
 					group_len <= group_len - 3;
@@ -3257,7 +3343,7 @@ else begin
 						rob[head3].done <= 'd0;
 						rob[head3].lsq <= 'd0;
 						if (rob[head3].lsq)
-							lsq[rob[head3].lsqndx].v <= INV;
+							lsq[rob[head3].lsqndx.row][rob[head3].lsqndx.col].v <= INV;
 						tags2free[3] <= rob[head3].pRt;
 						head0 <= (head0 + 3'd4) % ROB_ENTRIES;
 						group_len <= group_len - 4;
@@ -3307,9 +3393,9 @@ else begin
 				rob[n3].done <= 'd0;
 				// Clear corresponding LSQ entry.
 				if (rob[n3].lsq) begin
-					lsq[rob[n3].lsqndx].v <= INV;
-					lsq[rob[n3].lsqndx].agen <= 'd0;
-					lsq[rob[n3].lsqndx].tlb <= 'd0;
+					lsq[rob[n3].lsqndx.row][rob[n3].lsqndx.col].v <= INV;
+					lsq[rob[n3].lsqndx.row][rob[n3].lsqndx.col].agen <= 'd0;
+					lsq[rob[n3].lsqndx.row][rob[n3].lsqndx.col].tlb <= 'd0;
 				end
 				rob[n3].lsq <= 'd0;
 			end
@@ -3431,8 +3517,10 @@ begin
 		rob[n14].sn <= 'd0;
 		rob[n14].owner <= NONE;
 	end
-	for (n14 = 0; n14 < LSQ_ENTRIES; n14 = n14 + 1) begin
-		lsq[n14] <= 'd0;
+	for (n14r = 0; n14r < LSQ_ENTRIES; n14r = n14r + 1) begin
+		for (n14c = 0; n14c < 2; n14c = n14c + 1) begin
+			lsq[n14r][n14c] <= 'd0;
+		end
 	end
 	alu0_available <= 1;
 	alu0_dataready <= 0;
@@ -3481,8 +3569,12 @@ begin
 	rstcnt <= 'd0;
 	lsq_head <= 'd0;
 	lsq_tail <= 'd0;
+	alu0_idle <= 1'b1;
+	alu1_idle <= 1'b1;
 	agen0_id <= 'd0;
 	agen1_id <= 'd0;
+	agen0_idle <= 1'b1;
+	agen1_idle <= 1'b1;
 	last_agen0_id <= 5'd31;
 	last_agen1_id <= 5'd31;
 end

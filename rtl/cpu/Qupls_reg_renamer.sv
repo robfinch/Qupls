@@ -39,11 +39,12 @@
 //
 import QuplsPkg::*;
 
-module Qupls_reg_renamer(rst,clk,list2free,tags2free,freevals,
+module Qupls_reg_renamer(rst,clk,en,list2free,tags2free,freevals,
 	alloc0,alloc1,alloc2,alloc3,wo0,wo1,wo2,wo3,avail);
 parameter NFTAGS = 4;
 input rst;
 input clk;
+input en;
 input [PREGS-1:0] list2free;
 input pregno_t [NFTAGS-1:0] tags2free;		// register tags to free
 input [NFTAGS-1:0] freevals;					// bitmnask indicating which tags to free
@@ -101,9 +102,10 @@ if (rst) begin
 	wo0 <= 'd0;
 	wo1 <= 'd0;
 	wo2 <= 'd0;
-	wo2 <= 'd0;
+	wo3 <= 'd0;
 end
 else begin
+	if (en)
 	case({alloc3,alloc2,alloc1,alloc0} & {v3,v2,v1,v0})
 	4'b0000:
 		begin

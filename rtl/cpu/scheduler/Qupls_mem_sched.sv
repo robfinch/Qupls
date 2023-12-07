@@ -46,16 +46,16 @@ input clk;
 input rob_ndx_t head;
 input rob_bitmask_t robentry_stomp;
 input rob_entry_t [ROB_ENTRIES-1:0] rob;
-input lsq_entry_t [15:0] lsq;
-input [1:0] islot_i [0:LSQ_ENTRIES-1];
-output reg [1:0] islot_o [0:LSQ_ENTRIES-1];
+input lsq_entry_t [1:0] lsq [0:7];
+input [1:0] islot_i [0:LSQ_ENTRIES*2-1];
+output reg [1:0] islot_o [0:LSQ_ENTRIES*2-1];
 output lsq_bitmask_t memissue;
 output lsq_ndx_t ndx0;
 output lsq_ndx_t ndx1;
 output reg ndx0v;
 output reg ndx1v;
 
-integer m,hd,phd,n9,n10,n11;
+integer m,hd,phd,n9,n10,n11,col,row;
 rob_bitmask_t robentry_memready;
 rob_ndx_t [WINDOW_SIZE-1:0] heads;
 rob_bitmask_t robentry_memopsvalid;
@@ -95,61 +95,64 @@ begin
 	ndx1v = 'd0;
 	stores = 'd0;
 	islot_o = islot_i;
-	for (hd = 0; hd < LSQ_WINDOW_SIZE; hd = hd + 1) begin
-		if (issued < NDATA_PORTS) begin
-			if (hd==0) begin
-				if (robentry_memready[ lsq[hd].rndx ]) begin
-					mem_ready = 2'd1;
-					memissue[ lsq[hd].rndx ] =	1'b1;
-					issued = 2'd1;
-					ndx0 = hd;
-					ndx0v = 1'b1;
-					if (lsq[hd].store)
-						stores = 2'd1;
-					islot_o[hd] = 2'd0;
+	for (row = 0; row < LSQ_WINDOW_SIZE; row = row + 1) begin
+		for (col = 0; col < 2; col = col + 1) begin
+			if (issued < NDATA_PORTS) begin
+				if (row==0) begin
+					if (robentry_memready[ lsq[row][col].rndx ]) begin
+						mem_ready = 2'd1;
+						memissue[ lsq[row][col].rndx ] =	1'b1;
+						issued = 2'd1;
+						ndx0 = row;
+						ndx0v = 1'b1;
+						if (lsq[row][col].store)
+							stores = 2'd1;
+						islot_o[{row,col[0]}] = 2'd0;
+					end
 				end
-			end
-			// no preceding instruction is ready to go
-			else if (mem_ready < NDATA_PORTS) begin
-				if (robentry_memready[ lsq[hd].rndx ])
-					mem_ready = mem_ready + 2'd1;
-				if (!robentry_stomp[lsq[hd].rndx] && robentry_memready[ lsq[hd ].rndx] ) begin
-					// Check previous instructions.
-					for (phd = 0; phd < WINDOW_SIZE; phd = phd + 1) begin
-						if (rob[heads[phd]].v && rob[heads[phd]].sn < rob[lsq[hd ].rndx].sn) begin
-							do_issue = 1'b1;
-							// ... and there is no fence
-//							if (lsq[heads[phd]].fence && rob[heads[phd]].decbus.immb[15:0]==16'hFF00)
-//								no_issue = 1'b1;
-							// ... and, if it is a SW, there is no chance of it being undone
-							if (rob[heads[phd]].decbus.store && rob[heads[phd]].decbus.fc)
-								no_issue = 1'b1;
-							// ... and previous mem op without an address yet,
-							if ((rob[heads[phd]].decbus.load|rob[heads[phd]].decbus.store) && !rob[heads[phd]].done[0])
-								no_issue = 1'b1;
-							// ... and there is no address-overlap with any preceding instruction
-							if (lsq[rob[heads[phd]].lsqndx].padr[$bits(physical_address_t)-1:4]==lsq[hd].padr[$bits(physical_address_t)-1:4])
-								no_issue = 1'b1;
+				// no preceding instruction is ready to go
+				else if (mem_ready < NDATA_PORTS) begin
+					if (robentry_memready[ lsq[row][col].rndx ])
+						mem_ready = mem_ready + 2'd1;
+					if (!robentry_stomp[lsq[row][col].rndx] && robentry_memready[ lsq[row ][col].rndx] ) begin
+						// Check previous instructions.
+						for (phd = 0; phd < WINDOW_SIZE; phd = phd + 1) begin
+							if (rob[heads[phd]].v && rob[heads[phd]].sn < rob[lsq[row ][col].rndx].sn) begin
+								do_issue = 1'b1;
+								// ... and there is no fence
+	//							if (lsq[heads[phd]].fence && rob[heads[phd]].decbus.immb[15:0]==16'hFF00)
+	//								no_issue = 1'b1;
+								// ... and, if it is a SW, there is no chance of it being undone
+								if (rob[heads[phd]].decbus.store && rob[heads[phd]].decbus.fc)
+									no_issue = 1'b1;
+								// ... and previous mem op without an address yet,
+								if ((rob[heads[phd]].decbus.load|rob[heads[phd]].decbus.store) && !rob[heads[phd]].done[0])
+									no_issue = 1'b1;
+								// ... and there is no address-overlap with any preceding instruction
+								if (lsq[rob[heads[phd]].lsqndx.row][rob[heads[phd]].lsqndx.col].padr[$bits(physical_address_t)-1:4]==lsq[row][col].padr[$bits(physical_address_t)-1:4])
+									no_issue = 1'b1;
+							end
 						end
 					end
-				end
-				if (stores > 2'd0 && lsq[hd].store)
-					no_issue = 1'b1;
-				if (do_issue && !no_issue) begin
-					memissue[ hd ] =	1'b1;
-					issued = issued + 2'd1;
-					if (mem_ready==2'd1) begin
-						ndx1 = hd;
-						ndx1v = 1'b1;
+					
+					if (stores > 2'd0 && lsq[row][col].store)
+						no_issue = 1'b1;
+					if (do_issue && !no_issue) begin
+						memissue[ {row,col[0]} ] =	1'b1;
+						issued = issued + 2'd1;
+						if (mem_ready==2'd1) begin
+							ndx1 = row;
+							ndx1v = 1'b1;
+						end
+						else begin
+							ndx0 = row;
+							ndx0v = 1'b1;
+						end
+						if (lsq[row][col].store)
+							stores = stores + 2'd1;
+						islot_o[{row,col[0]}] = mem_ready;
+						mem_ready = mem_ready + 2'd1;
 					end
-					else begin
-						ndx0 = hd;
-						ndx0v = 1'b1;
-					end
-					if (lsq[hd].store)
-						stores = stores + 2'd1;
-					islot_o[hd] = mem_ready;
-					mem_ready = mem_ready + 2'd1;
 				end
 			end
 		end		

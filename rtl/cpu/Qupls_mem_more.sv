@@ -36,6 +36,7 @@
 // unaligned memory.k                                                                          
 // ============================================================================
 //
+import const_pkg::*;
 import QuplsPkg::*;
 
 module Qupls_mem_more(rst_i, clk_i, state_i, sel_i, more_o);

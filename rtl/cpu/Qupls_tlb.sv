@@ -42,7 +42,7 @@ import QuplsPkg::*;
 module Qupls_tlb(rst, clk, ftas_req, ftas_resp,
 	wr, way, entry_no, entry_i, entry_o, vadr0, vadr1, pc_vadr, omd0, omd1, pc_omd,
 	asid0, asid1, pc_asid, entry0_o, entry1_o, pc_entry_o,
-	miss_o, missadr_o, missasid_o, missack,
+	miss_o, missadr_o, missasid_o, missqn_o, missack,
 	tlb0_v, tlb1_v, pc_tlb_v, op0, op1, tlb0_op, tlb1_op, tlb0_res, tlb1_res, pc_tlb_res,
 	load0_i, load1_i, store0_i, store1_i, load0_o, load1_o, store0_o, store1_o,
 	stall_tlb0, stall_tlb1,
@@ -73,6 +73,7 @@ output tlb_entry_t pc_entry_o;
 output reg miss_o;
 output address_t missadr_o;
 output asid_t missasid_o;
+output reg [1:0] missqn_o;
 input missack;
 output reg tlb0_v;
 output reg tlb1_v;
@@ -111,6 +112,7 @@ tlb_entry_t t0a, t0b, t1a, t1b, t2a, t2b, entry_oa, entry_ob;
 reg [3:0] head, tail;
 address_t [MISSQ_ENTRIES-1:0] missadr;
 asid_t [MISSQ_ENTRIES-1:0] missasid;
+reg [1:0] missqn [0:MISSQ_ENTRIES-1];
 REGION region0, region1, region2;
 wire [7:0] sel0, sel1, sel2;
 operating_mode_t omd0a, omd1a, pc_omda;
@@ -627,52 +629,64 @@ else begin
 		3'b000:	;
 		3'b001:
 			begin
+				missqn[tail] <= 2'd0;
 				missadr[tail] <= pc_vadr;
 				missasid[tail] <= pc_asid;
 				tail <= (tail + 1) % MISSQ_ENTRIES;
 			end
 		3'b010:
 			begin
+				missqn[tail] <= 2'd1;
 				missadr[tail] <= vadr0;
 				missasid[tail] <= asid0;
 				tail <= (tail + 1) % MISSQ_ENTRIES;
 			end
 		3'b011:
 			begin
+				missqn[tail] <= 2'd0;
 				missadr[tail] <= pc_vadr;
 				missasid[tail] <= pc_asid;
+				missqn[(tail+1) % MISSQ_ENTRIES] <= 2'd1;
 				missadr[(tail+1) % MISSQ_ENTRIES] <= vadr0;
 				missasid[(tail+1) % MISSQ_ENTRIES] <= asid0;
 				tail <= (tail + 2) % MISSQ_ENTRIES;
 			end
 		3'b100:
 			begin
+				missqn[tail] <= 2'd2;
 				missadr[tail] <= vadr1;
 				missasid[tail] <= asid1;
 				tail <= (tail + 1) % MISSQ_ENTRIES;
 			end
 		3'b101:
 			begin
+				missqn[tail] <= 2'd0;
 				missadr[tail] <= pc_vadr;
 				missasid[tail] <= pc_asid;
+				missqn[(tail+1) % MISSQ_ENTRIES] <= 2'd2;
 				missadr[(tail+1) % MISSQ_ENTRIES] <= vadr1;
 				missasid[(tail+1) % MISSQ_ENTRIES] <= asid1;
 				tail <= (tail + 2) % MISSQ_ENTRIES;
 			end
 		3'b110:
 			begin
+				missqn[tail] <= 2'd1;
 				missadr[tail] <= vadr0;
 				missasid[tail] <= asid0;
+				missqn[(tail+1) % MISSQ_ENTRIES] <= 2'd2;
 				missadr[(tail+1) % MISSQ_ENTRIES] <= vadr1;
 				missasid[(tail+1) % MISSQ_ENTRIES] <= asid1;
 				tail <= (tail + 2) % MISSQ_ENTRIES;
 			end
 		3'b111:
 			begin
+				missqn[tail] <= 2'd0;
 				missadr[tail] <= pc_vadr;
 				missasid[tail] <= pc_asid;
+				missqn[(tail+1) % MISSQ_ENTRIES] <= 2'd1;
 				missadr[(tail+1) % MISSQ_ENTRIES] <= vadr0;
 				missasid[(tail+1) % MISSQ_ENTRIES] <= asid0;
+				missqn[(tail+2) % MISSQ_ENTRIES] <= 2'd2;
 				missadr[(tail+2) % MISSQ_ENTRIES] <= vadr1;
 				missasid[(tail+2) % MISSQ_ENTRIES] <= asid1;
 				tail <= (tail + 3) % MISSQ_ENTRIES;
@@ -682,6 +696,7 @@ else begin
 		head <= (head + 1) % MISSQ_ENTRIES;
 	end
 	if (head != tail) begin
+		missqn_o <= missqn[head];
 		missadr_o <= missadr[head];
 		missasid_o <= missasid[head];
 		miss_o <= 1'b1;

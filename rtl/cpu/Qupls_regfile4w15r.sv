@@ -142,7 +142,7 @@ end
 generate begin : gRFO
 	for (g = 0; g < RPORTS; g = g + 1) begin
 		always_comb
-			o[g] = ra[g][5:0]==6'd0 ? {WID{1'b0}} :
+			o[g] = ra[g]=='d0 ? {WID{1'b0}} :
 				(wr3 && (ra[g]==wa3)) ? i3 :
 				(wr2 && (ra[g]==wa2)) ? i2 :
 				(wr1 && (ra[g]==wa1)) ? i1 :
