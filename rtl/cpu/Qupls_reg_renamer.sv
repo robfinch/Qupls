@@ -35,6 +35,8 @@
 // We need to be able to free many more registers than are allocated in the 
 // event of a pipeline flush. Normally up to four register values will be
 // committed to the register file.
+//
+// 13300 LUTs / 244 FFs
 // ============================================================================
 //
 import QuplsPkg::*;

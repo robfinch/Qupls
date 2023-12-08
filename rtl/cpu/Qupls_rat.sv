@@ -39,7 +39,7 @@
 // ToDo: add a valid bit
 // Research shows having 16 checkpoints is almost as good as infinity.
 //
-// 4750 LUTs / 560 FFs for 64/192
+// 6683 LUTs / 590 FFs for 68/192
 // 10010 LUTs / 860 FFs for 2*64/192 (two banks of 64 arch. regs).
 // 13000 LUTs / 1100 FFs for 4*64/192 (four banks of 64 arch. regs).
 // 18500 LUTs / 1410 FFs for 8*64/192 (eight banks of 64 arch. regs).
@@ -57,9 +57,9 @@ module Qupls_rat(rst, clk, nq, stallq, cndx_o, avail, restore, miss_cp, wr0, wr1
 	cmtaa, cmtba, cmtca, cmtda, cmtap, cmtbp, cmtcp, cmtdp, cmtbr,
 	freea, freeb, freec, freed, free_bitlist);
 parameter NPORT = 16;
-parameter BANKS = 2;
+parameter BANKS = 1;
 localparam RBIT=$clog2(PREGS);
-localparam BBIT=$clog2(BANKS)-1;
+localparam BBIT=0;//$clog2(BANKS)-1;
 input rst;
 input clk;
 input nq;			// enqueue instruction
@@ -155,7 +155,7 @@ generate begin : gRRN
 							 wr1 && rn[g]==wrb ? wrrb :
 							 wr2 && rn[g]==wrc ? wrrc :
 							 wr3 && rn[g]==wrd ? wrrd :
-							 cpram_out >> {(rn[g] * RBIT),rnbank[g]};
+							 cpram_out >> (BANKS < 2) ? (rn[g] * RBIT) : {(rn[g] * RBIT),rnbank[g]};
 		always_comb
 			vn[g] = 1'b1;//cpmv[cndx][rn[g]];
 	end
@@ -253,14 +253,26 @@ always_ff @(posedge clk)
 always_comb
 begin
 	cpram_in = 'd0;
-	cpram_in = cpram_in | (({RBIT{cmtav}} & cmtap) << {(cmtaa * RBIT),cmtbanka});
-	cpram_in = cpram_in | (({RBIT{cmtbv}} & cmtbp) << {(cmtba * RBIT),cmtbankb});
-	cpram_in = cpram_in | (({RBIT{cmtcv}} & cmtcp) << {(cmtca * RBIT),cmtbankc});
-	cpram_in = cpram_in | (({RBIT{cmtdv}} & cmtdp) << {(cmtda * RBIT),cmtbankd});
-	cpram_in = cpram_in | (({RBIT{nq & wr0}} & wrra) << {(wra * RBIT),wrbanka});
-	cpram_in = cpram_in | (({RBIT{nq & wr1}} & wrrb) << {(wrb * RBIT),wrbankb});
-	cpram_in = cpram_in | (({RBIT{nq & wr2}} & wrrc) << {(wrc * RBIT),wrbankc});
-	cpram_in = cpram_in | (({RBIT{nq & wr3}} & wrrd) << {(wrd * RBIT),wrbankd});
+	if (BANKS < 2) begin
+		cpram_in = cpram_in | (({RBIT{cmtav}} & cmtap) << {(cmtaa * RBIT)});
+		cpram_in = cpram_in | (({RBIT{cmtbv}} & cmtbp) << {(cmtba * RBIT)});
+		cpram_in = cpram_in | (({RBIT{cmtcv}} & cmtcp) << {(cmtca * RBIT)});
+		cpram_in = cpram_in | (({RBIT{cmtdv}} & cmtdp) << {(cmtda * RBIT)});
+		cpram_in = cpram_in | (({RBIT{nq & wr0}} & wrra) << {(wra * RBIT)});
+		cpram_in = cpram_in | (({RBIT{nq & wr1}} & wrrb) << {(wrb * RBIT)});
+		cpram_in = cpram_in | (({RBIT{nq & wr2}} & wrrc) << {(wrc * RBIT)});
+		cpram_in = cpram_in | (({RBIT{nq & wr3}} & wrrd) << {(wrd * RBIT)});
+	end
+	else begin
+		cpram_in = cpram_in | (({RBIT{cmtav}} & cmtap) << {(cmtaa * RBIT),cmtbanka});
+		cpram_in = cpram_in | (({RBIT{cmtbv}} & cmtbp) << {(cmtba * RBIT),cmtbankb});
+		cpram_in = cpram_in | (({RBIT{cmtcv}} & cmtcp) << {(cmtca * RBIT),cmtbankc});
+		cpram_in = cpram_in | (({RBIT{cmtdv}} & cmtdp) << {(cmtda * RBIT),cmtbankd});
+		cpram_in = cpram_in | (({RBIT{nq & wr0}} & wrra) << {(wra * RBIT),wrbanka});
+		cpram_in = cpram_in | (({RBIT{nq & wr1}} & wrrb) << {(wrb * RBIT),wrbankb});
+		cpram_in = cpram_in | (({RBIT{nq & wr2}} & wrrc) << {(wrc * RBIT),wrbankc});
+		cpram_in = cpram_in | (({RBIT{nq & wr3}} & wrrd) << {(wrd * RBIT),wrbankd});
+	end
 	if (new_chkpt)
 		cpram_in = cpram_outr;
 end
@@ -269,16 +281,28 @@ end
 always_comb
 begin
 	cpram_we = 'd0;
-	cpram_we = cpram_we | (cmtav << {cmtaa,cmtbanka});
-	cpram_we = cpram_we | (cmtbv << {cmtba,cmtbankb});
-	cpram_we = cpram_we | (cmtcv << {cmtca,cmtbankc});
-	cpram_we = cpram_we | (cmtdv << {cmtda,cmtbankd});
+	if (BANKS < 2) begin
+		cpram_we = cpram_we | (cmtav << {cmtaa});
+		cpram_we = cpram_we | (cmtbv << {cmtba});
+		cpram_we = cpram_we | (cmtcv << {cmtca});
+		cpram_we = cpram_we | (cmtdv << {cmtda});
 
-	cpram_we = cpram_we | ({nq & wr0} << {wra,wrbanka});
-	cpram_we = cpram_we | ({nq & wr1} << {wrb,wrbankb});
-	cpram_we = cpram_we | ({nq & wr2} << {wrc,wrbankc});
-	cpram_we = cpram_we | ({nq & wr3} << {wrd,wrbankd});
+		cpram_we = cpram_we | ({nq & wr0} << {wra});
+		cpram_we = cpram_we | ({nq & wr1} << {wrb});
+		cpram_we = cpram_we | ({nq & wr2} << {wrc});
+		cpram_we = cpram_we | ({nq & wr3} << {wrd});
+	end
+	else begin
+		cpram_we = cpram_we | (cmtav << {cmtaa,cmtbanka});
+		cpram_we = cpram_we | (cmtbv << {cmtba,cmtbankb});
+		cpram_we = cpram_we | (cmtcv << {cmtca,cmtbankc});
+		cpram_we = cpram_we | (cmtdv << {cmtda,cmtbankd});
 
+		cpram_we = cpram_we | ({nq & wr0} << {wra,wrbanka});
+		cpram_we = cpram_we | ({nq & wr1} << {wrb,wrbankb});
+		cpram_we = cpram_we | ({nq & wr2} << {wrc,wrbankc});
+		cpram_we = cpram_we | ({nq & wr3} << {wrd,wrbankd});
+	end
 	if (new_chkpt)
 		cpram_we = ~'d0;
 end

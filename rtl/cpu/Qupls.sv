@@ -287,7 +287,7 @@ pc_address_t fpu_pc;
 value_t fpu_res;
 rob_ndx_t fpu0_id;
 cause_code_t fpu_exc = FLT_NONE;
-wire        fpu_v;
+reg fpu0_v;
 wire fpu_done1;
 reg fpu_done;
 
@@ -1583,7 +1583,7 @@ pregno_t freeb;
 pregno_t freec;
 pregno_t freed;
 
-Qupls_reg_renamer utrn1
+Qupls_reg_renamer2 utrn1
 (
 	.rst(rst),
 	.clk(clk),
@@ -1723,7 +1723,7 @@ pregno_t wrport5_Rt;
 always_comb wrport0_v = alu0_v & alu0_done;
 always_comb wrport1_v = alu1_v;
 always_comb wrport2_v = dram_v0;
-always_comb wrport3_v = fpu_v;
+always_comb wrport3_v = fpu0_v;
 always_comb wrport4_v = dram_v1;
 always_comb wrport5_v = fpu1_v;
 assign wrport0_Rt = alu0_Rt;
@@ -2174,8 +2174,6 @@ end
 end
 endgenerate
 
-assign fpu_v = fpu_dataready;
-
 always_comb
 	stall_tlb0 = (tlb0_v && lsq[lsq_tail.row][lsq_tail.col]==VAL);
 always_comb
@@ -2590,7 +2588,8 @@ else begin
     rob[ alu1_id ].out <= INV;
     alu1_idle <= 1'b1;
 	end
-	if (NFPU > 0 && fpu_v && rob[fpu0_id].v && rob[fpu0_id].owner==QuplsPkg::FPU0) begin
+	if (NFPU > 0 && fpu0_v && rob[fpu0_id].v) begin
+		fpu0_v <= INV;
     rob[ fpu0_id ].exc <= fpu_exc;
     rob[ fpu0_id ].done[0] <= fpu_done;
     rob[ fpu0_id ].done[1] <= 1'b1;
@@ -2742,7 +2741,8 @@ else begin
 		end
 	end
 
-	if (fpu_available && fpu0_rndxv) begin
+	if (fpu_available && fpu0_rndxv && !fpu0_v) begin
+		fpu0_v <= VAL;
 		fpu0_id <= fpu0_rndx;
 		fpu_argA <= rob[fpu0_rndx].decbus.imma | rfo_fpu0_argA;
 		fpu_argB <= rfo_fpu0_argB;
@@ -3546,6 +3546,7 @@ begin
 	alu0_ld <= 1'b0;
 	alu1_ld <= 1'b0;
 	alu0_v <= INV;
+	fpu0_v <= INV;
 	fpu_available <= 1;
 	fpu_dataready <= 0;
 	fcu_available <= 1;
