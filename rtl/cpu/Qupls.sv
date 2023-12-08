@@ -159,7 +159,6 @@ rob_entry_t [ROB_ENTRIES-1:0] rob;
 reg [1:0] robentry_islot [0:ROB_ENTRIES-1];
 wire [1:0] next_robentry_islot [0:ROB_ENTRIES-1];
 reg [1:0] lsq_islot [0:LSQ_ENTRIES*2-1];
-wire [1:0] next_lsq_islot [0:LSQ_ENTRIES*2-1];
 rob_bitmask_t robentry_stomp;
 rob_bitmask_t robentry_issue;
 rob_bitmask_t robentry_fpu_issue;
@@ -216,17 +215,15 @@ rob_ndx_t alu1_sndx;
 wire alu0_sv;
 wire alu1_sv;
 
-reg fpu0_idle = 1'b1;
 reg alu0_idle;
-reg        alu0_available;
-reg        alu0_dataready;
-reg  [4:0] alu0_sourceid;
+reg alu0_available;
+reg alu0_dataready;
 instruction_t alu0_instr;
 reg alu0_div;
 value_t alu0_argA;
 value_t alu0_argB;
 value_t alu0_argC;
-value_t alu0_argI;	// only used by BEQ
+value_t alu0_argI;
 pregno_t alu0_Rt;
 value_t alu0_cmpo;
 pc_address_t alu0_pc;
@@ -244,15 +241,14 @@ reg alu0_ld;
 reg alu0_done;
 
 reg alu1_idle = 1'b1;
-reg        alu1_available;
-reg        alu1_dataready;
-reg  [4:0] alu1_sourceid;
+reg alu1_available;
+reg alu1_dataready;
 instruction_t alu1_instr;
 reg alu1_div;
 value_t alu1_argA;
 value_t alu1_argB;
 value_t alu1_argC;
-value_t alu1_argI;	// only used by BEQ
+value_t alu1_argI;
 pregno_t alu1_Rt;
 value_t alu1_cmpo;
 bts_t alu1_bts;
@@ -260,7 +256,7 @@ pc_address_t alu1_pc;
 value_t alu1_res;
 rob_ndx_t alu1_id;
 cause_code_t alu1_exc;
-wire        alu1_v;
+reg alu1_v;
 double_value_t alu1_prod,alu1_prod1,alu1_prod2;
 double_value_t alu1_produ,alu1_produ1,alu1_produ2;
 reg [3:0] mul1_cnt;
@@ -274,7 +270,6 @@ reg fpu_idle = 1'b1;
 reg fpu0_idle = 1'b1;
 reg        fpu_available;
 reg        fpu_dataready;
-reg  [4:0] fpu_sourceid;
 instruction_t fpu_instr;
 value_t fpu_argA;
 value_t fpu_argB;
@@ -294,7 +289,6 @@ reg fpu_done;
 reg fpu1_idle = 1'b1;
 reg        fpu1_available;
 reg        fpu1_dataready;
-reg  [4:0] fpu1_sourceid;
 instruction_t fpu1_instr;
 value_t fpu1_argA;
 value_t fpu1_argB;
@@ -312,9 +306,8 @@ wire fpu1_done1;
 reg fpu1_done;
 
 reg fcu_idle = 1'b1;
-reg        fcu_available;
-reg        fcu_dataready;
-reg  [4:0] fcu_sourceid;
+reg fcu_available;
+reg fcu_dataready;
 instruction_t fcu_instr;
 instruction_t fcu_missir;
 reg        fcu_bt;
@@ -326,7 +319,7 @@ pc_address_t fcu_pc;
 value_t fcu_res;
 rob_ndx_t fcu_id;
 cause_code_t fcu_exc;
-reg fcu_v;
+reg fcu_v, fcu_v2, fcu_v3;
 reg fcu_branchmiss;
 pc_address_t fcu_misspc;
 reg takb;
@@ -337,7 +330,7 @@ wire tlb0_v, tlb1_v;
 
 reg agen0_idle;
 instruction_t agen0_op;
-rob_ndx_t agen0_id, last_agen0_id;
+rob_ndx_t agen0_id;
 value_t agen0_argA;
 value_t agen0_argB;
 value_t agen0_argI;
@@ -346,7 +339,7 @@ cause_code_t agen0_exc;
 
 reg agen1_idle = 1'b1;
 instruction_t agen1_op;
-rob_ndx_t agen1_id, last_agen1_id;
+rob_ndx_t agen1_id;
 value_t agen1_argA;
 value_t agen1_argB;
 value_t agen1_argI;
@@ -1765,9 +1758,11 @@ Qupls_regfile4w15r urf1 (
 // 
 // additional logic for handling a branch miss (STOMP logic)
 //
-always_comb
+// stomp drives a lot of logic, so it's registered.
+
+always_ff @(posedge clk)
 for (n4 = 0; n4 < ROB_ENTRIES; n4 = n4 + 1) begin
-		robentry_stomp[n4] =
+		robentry_stomp[n4] <=
 			(branchmiss || branchmiss_state!=3'd7)
 			&& rob[n4].sn > rob[missid].sn
 			&& rob[n4].v
@@ -1793,7 +1788,7 @@ end
 
 pc_address_t tgtpc;
 
-always_comb
+always_ff @(posedge clk)
 	case(fcu_bts)
 	BTS_DISP:
 		begin
@@ -1846,6 +1841,9 @@ Qupls_branch_eval ube1
 	.takb(takb)
 );
 
+reg takbr;
+always_ff @(posedge clk) takbr <= takb;
+
 always_comb
 	case(fcu_bts)
 	BTS_RET:
@@ -1870,19 +1868,26 @@ begin
 	end
 end
 
-always_comb
-if (fcu_dataready) begin
-	case(fcu_bts)
-	BTS_REG,BTS_DISP:
-		fcu_branchmiss = ((takb && ~fcu_bt) || (!takb && fcu_bt));
-	BTS_BSR,BTS_CALL,BTS_RET:
-		fcu_branchmiss = TRUE;//((takb && ~fcu_bt) || (!takb && fcu_bt));
-	default:
-		fcu_branchmiss = FALSE;		
-	endcase
+rob_ndx_t fcu_branchmiss_id;
+always_ff @(posedge clk)
+if (rst) begin
+	fcu_branchmiss <= FALSE;
+	fcu_branchmiss_id <= 'd0;
 end
 else begin
-	fcu_branchmiss = FALSE;
+	if (fcu_v2) begin
+		fcu_branchmiss_id <= fcu_id;
+		case(fcu_bts)
+		BTS_REG,BTS_DISP:
+			fcu_branchmiss <= ((takbr && ~fcu_bt) || (!takbr && fcu_bt));
+		BTS_BSR,BTS_CALL,BTS_RET:
+			fcu_branchmiss <= TRUE;//((takb && ~fcu_bt) || (!takb && fcu_bt));
+		default:
+			fcu_branchmiss <= FALSE;		
+		endcase
+	end
+	else
+		fcu_branchmiss <= FALSE;
 end
 
 // Registering the branch miss signals may allow a second miss directly after
@@ -1893,7 +1898,7 @@ always_comb
 always_comb	//ff @(posedge clk)
 	branchmiss = branchmiss_next;
 always_comb
-	missid = excmiss ? excid : fcu_id;
+	missid = excmiss ? excid : fcu_branchmiss_id;
 always_ff @(posedge clk)
 	if (branchmiss_state==3'd1)
 		misspc = excmiss ? excmisspc : fcu_misspc;
@@ -1933,64 +1938,21 @@ end
 
 // note that, for all intents & purposes, iqentry_done == iqentry_agen ... no need to duplicate
 
-rob_bitmask_t args_valid;
-rob_bitmask_t could_issue;
-
-generate begin : issue_logic
-for (g = 0; g < ROB_ENTRIES; g = g + 1) begin
-	assign args_valid[g] = (rob[g].argA_v
-						// Or forwarded
-						/*
-				    || (rob[g].decbus.Ra == alu0_Rt && alu0_v)
-				    || (rob[g].decbus.Ra == alu1_Rt && alu1_v)
-				    || (rob[g].decbus.Ra == fpu0_Rt && fpu0_v)
-				    || (rob[g].decbus.Ra == fcu_Rt && fcu_v)
-				    || (rob[g].decbus.Ra == load_Rt && load_v)
-				    */
-				    )
-				    && (rob[g].argB_v
-						// Or forwarded
-						/*
-				    || (rob[g].decbus.Rb == alu0_Rt && alu0_v)
-				    || (rob[g].decbus.Rb == alu1_Rt && alu1_v)
-				    || (rob[g].decbus.Rb == fpu0_Rt && fpu0_v)
-				    || (rob[g].decbus.Rb == fcu_Rt && fcu_v)
-				    || (rob[g].decbus.Rb == load_Rt && load_v)
-				    */
-				    )
-				    && (rob[g].argC_v)
-						// Or forwarded
-						/*
-				    || (rob[g].decbus.Rc == alu0_Rt && alu0_v)
-				    || (rob[g].decbus.Rc == alu1_Rt && alu1_v)
-				    || (rob[g].decbus.Rc == fpu0_Rt && fpu0_v)
-				    || (rob[g].decbus.Rc == fcu_Rt && fcu_v)
-				    || (rob[g].decbus.Rc == load_Rt && load_v)
-				    */
-				    //|| ((rob[g].decbus.load|rob[g].decbus.store) & ~rob[g].agen))
-				    ;
-assign could_issue[g] = rob[g].v && ! (&rob[g].done)
-												&& !rob[g].out
-												&& args_valid[g]
-												;
-                        //&& ((rob[g].decbus.load|rob[g].decbus.store) ? !rob[g].agen : 1'b1);
-end                                 
-end
-endgenerate
-
 rob_ndx_t alu0_rndx;
 rob_ndx_t alu1_rndx;
 rob_ndx_t fpu0_rndx; 
 lsq_ndx_t mem0_lsndx, mem1_lsndx;
-lsq_ndx_t mem0_lsndx2, mem1_lsndx2;
 wire mem0_lsndxv, mem1_lsndxv;
-reg mem0_lsndxv2, mem1_lsndxv2;
 wire fpu0_rndxv, fcu_rndxv;
 wire alu0_rndxv, alu1_rndxv;
 wire agen0_rndxv, agen1_rndxv;
+rob_bitmask_t rob_memissue;
+
 
 Qupls_sched uscd1
 (
+	.rst(rst),
+	.clk(clk),
 	.alu0_idle(alu0_idle),
 	.alu1_idle(alu1_idle),
 	.fpu0_idle(fpu0_idle),
@@ -2001,8 +1963,7 @@ Qupls_sched uscd1
 	.lsq0_idle(lsq0_idle),
 	.lsq1_idle(lsq1_idle),
 	.robentry_islot_i(robentry_islot),
-	.robentry_islot_o(next_robentry_islot),
-	.could_issue(could_issue), 
+	.robentry_islot_o(robentry_islot),
 	.head(head0),
 	.rob(rob),
 	.robentry_issue(robentry_issue),
@@ -2025,13 +1986,6 @@ Qupls_sched uscd1
 	.agen1_rndxv(agen1_rndxv)
 );
 
-always_ff @(posedge clk)
-	robentry_islot <= next_robentry_islot;
-always_ff @(posedge clk)
-	lsq_islot <= next_lsq_islot;
-
-rob_bitmask_t rob_memissue;
-
 Qupls_mem_sched umems1
 (
 	.rst(rst),
@@ -2042,22 +1996,13 @@ Qupls_mem_sched umems1
 	.rob(rob),
 	.lsq(lsq),
 	.islot_i(lsq_islot),
-	.islot_o(next_lsq_islot),
+	.islot_o(lsq_islot),
 	.memissue(rob_memissue),
 	.ndx0(mem0_lsndx),
 	.ndx1(mem1_lsndx),
 	.ndx0v(mem0_lsndxv),
 	.ndx1v(mem1_lsndxv)
 );
-
-always_ff @(posedge clk)
-	mem0_lsndx2 <= mem0_lsndx;
-always_ff @(posedge clk)
-	mem1_lsndx2 <= mem1_lsndx;
-always_ff @(posedge clk)
-	mem0_lsndxv2 <= mem0_lsndxv;
-always_ff @(posedge clk)
-	mem1_lsndxv2 <= mem1_lsndxv;
 
 assign alu0_argA_reg = rob[alu0_rndx].pRa;
 assign alu0_argB_reg = rob[alu0_rndx].pRb;
@@ -2132,7 +2077,7 @@ end
 endgenerate
 
 //assign alu0_v = alu0_dataready;
-assign alu1_v = alu1_dataready;
+//assign alu1_v = alu1_dataready;
 
 //assign  fcu_v = fcu_dataready;
 
@@ -2375,35 +2320,23 @@ begin
 end
 */
 
-always_comb
-begin
-	fcu_done = 'd0;
-	for (n10 = 0; n10 < ROB_ENTRIES; n10 = n10 + 1)
-		if (robentry_fcu_issue[n10] && !robentry_stomp[n10])
-				fcu_done = 1'b1;
-end
-
 // Stores are done as soon as they issue.
 // Loads are done when there is an ack back from the memory system.
 always_comb
 begin
 	dram0_done = 'd0;
-	for (n16r = 0; n16r < LSQ_ENTRIES; n16r = n16r + 1) begin
-		for (n16c = 0; n16c < 2; n16c = n16c + 1)
-		if (lsq[n16r][n16c].store ? (rob_memissue[lsq[n16r][n16c].rndx] && lsq_islot[{n16r,n16c[0]}]==2'd0 && !robentry_stomp[lsq[n16r][n16c].rndx]) :
-			(dram0 == DRAMSLOT_ACTIVE && dram0_ack &&
-				(dram0_hi ? (dram0_load & ~dram0_stomp) : (dram0_load & ~dram0_more & ~dram0_stomp)))
-			)
-			dram0_done = 1'b1;
-	end
+	if (dram0_store ? !robentry_stomp[dram0_id] :
+		(dram0 == DRAMSLOT_ACTIVE && dram0_ack &&
+			(dram0_hi ? (dram0_load & ~dram0_stomp) : (dram0_load & ~dram0_more & ~dram0_stomp)))
+		)
+		dram0_done = 1'b1;
 end
 
 always_comb
 begin
 	dram1_done = 'd0;
-	for (n17r = 0; n17r < LSQ_ENTRIES; n17r = n17r + 1) begin
-		for (n17c = 0; n17c < 2; n17c = n17c + 1)
-		if (lsq[n17r][n17c].store ? (rob_memissue[lsq[n17r][n17c].rndx] && lsq_islot[{n17r,n17c[0]}]==2'd0 && !robentry_stomp[lsq[n17r][n17c].rndx]) :
+	if (NDATA_PORTS > 1) begin
+		if (dram1_store ? !robentry_stomp[dram1_id] :
 			(dram1 == DRAMSLOT_ACTIVE && dram1_ack &&
 				(dram1_hi ? (dram1_load & ~dram1_stomp) : (dram1_load & ~dram1_more & ~dram1_stomp)))
 			)
@@ -2522,6 +2455,7 @@ Qupls_mem_more ummore1
 	.more_o(dram1_more)
 );
 
+
 always_ff @(posedge clk)
 if (rst) begin
 	tReset();
@@ -2531,6 +2465,8 @@ else begin
 		rstcnt <= rstcnt + 1;
 	alu0_ld <= 'd0;
 	alu1_ld <= 'd0;
+	fcu_v2 <= fcu_v;
+	fcu_v3 <= fcu_v2;
 			 if (mip0v) begin micro_ir <= ins0; end
 	else if (mip1v) begin micro_ir <= ins1; end
 	else if (mip2v) begin micro_ir <= ins2; end
@@ -2554,7 +2490,7 @@ else begin
 	//
 	// put results into the appropriate instruction entries
 	//
-	if (alu0_v && rob[alu0_id].v) begin
+	if (alu0_v && rob[alu0_id].v && !robentry_stomp[alu0_id]) begin
     rob[ alu0_id ].exc <= alu0_exc;
     rob[ alu0_id ].done[0] <= !rob[ alu0_id ].decbus.multicycle;
     if (!rob[ alu0_id ].decbus.fc) begin
@@ -2580,7 +2516,12 @@ else begin
 	    alu0_idle <= 1'b1;
   	end
 	end
-	if (NALU > 1 && alu1_v && rob[alu1_id].v && rob[alu1_id].owner==QuplsPkg::ALU1) begin
+	if (robentry_stomp[alu0_id]) begin
+		alu0_v <= INV;
+		alu0_idle <= TRUE;
+	end
+
+	if (NALU > 1 && alu1_v && rob[alu1_id].v && !robentry_stomp[alu1_id]) begin
    	alu1_done <= 1'b1;
     rob[ alu1_id ].exc <= alu1_exc;
     rob[ alu1_id ].done[0] <= 1'b1;
@@ -2588,23 +2529,40 @@ else begin
     rob[ alu1_id ].out <= INV;
     alu1_idle <= 1'b1;
 	end
-	if (NFPU > 0 && fpu0_v && rob[fpu0_id].v) begin
+	if (robentry_stomp[alu1_id]) begin
+		alu1_v <= INV;
+		alu1_idle <= TRUE;
+	end
+
+	if (NFPU > 0 && fpu0_v && rob[fpu0_id].v && !robentry_stomp[fpu0_id]) begin
 		fpu0_v <= INV;
     rob[ fpu0_id ].exc <= fpu_exc;
     rob[ fpu0_id ].done[0] <= fpu_done;
     rob[ fpu0_id ].done[1] <= 1'b1;
     rob[ fpu0_id ].out <= INV;
 	end
-	if (fcu_v && rob[fcu_id].v) begin
+	if (robentry_stomp[fpu0_id]) begin
+		fpu0_v <= INV;
+	end
+	
+	if (fcu_v && rob[fcu_id].v && fcu_v3 && !robentry_stomp[fcu_id]) begin
 		fcu_v <= INV;
+		fcu_v2 <= INV;
+		fcu_v3 <= INV;
     rob[ fcu_id ].exc <= fcu_exc;
     if (!rob[ fcu_id ].decbus.alu)
     	rob[ fcu_id ].done[0] <= VAL;
     rob[ fcu_id ].done[1] <= VAL;
     rob[ fcu_id ].out <= INV;
-    rob[ fcu_id ].takb <= takb;
-    rob[ fcu_id ].brtgt <= tgtpc;
+    rob[ fcu_id ].takb <= takbr;	// could maybe just use takb
+    rob[ fcu_id ].brtgt <= tgtpc;	// without registers
     fcu_bts <= BTS_NONE;
+	end
+	// Terminate FCU operation on stomp.
+	if (robentry_stomp[fcu_id]) begin
+		fcu_v <= INV;
+		fcu_v2 <= INV;
+		fcu_v3 <= INV;
 	end
 	// If data for stomped instruction, ignore
 	// dram_vn will be false for stomped data
@@ -2636,6 +2594,12 @@ else begin
 			lsq[rob[agen0_id].lsqndx.row][rob[agen0_id].lsqndx.col].padr <= {tlb_entry0.pte.ppn,tlb0_res[15:0]};
 		end
 	end
+	if (robentry_stomp[agen0_id] && rob[agen0_id].lsq) begin
+		lsq[rob[agen0_id].lsqndx.row][rob[agen0_id].lsqndx.col].v <= INV;
+		lsq[rob[agen0_id].lsqndx.row][rob[agen0_id].lsqndx.col].agen <= FALSE;
+		lsq[rob[agen0_id].lsqndx.row][rob[agen0_id].lsqndx.col].tlb <= FALSE;
+	end
+
 	if (NAGEN > 1) begin
 		if (tlb1_v) begin
 			if (|pg_fault && pg_faultq==2'd2) begin
@@ -2651,6 +2615,11 @@ else begin
 				lsq[rob[agen1_id].lsqndx.row][rob[agen1_id].lsqndx.col].vadr <= tlb1_res;
 				lsq[rob[agen1_id].lsqndx.row][rob[agen1_id].lsqndx.col].padr <= {tlb_entry1.pte.ppn,tlb1_res[15:0]};
 			end
+		end
+		if (robentry_stomp[agen1_id] && rob[agen1_id].lsq) begin
+			lsq[rob[agen1_id].lsqndx.row][rob[agen1_id].lsqndx.col].v <= INV;
+			lsq[rob[agen1_id].lsqndx.row][rob[agen1_id].lsqndx.col].agen <= FALSE;
+			lsq[rob[agen1_id].lsqndx.row][rob[agen1_id].lsqndx.col].tlb <= FALSE;
 		end
 	end
 	
@@ -2725,6 +2694,7 @@ else begin
 
 	if (NALU > 1) begin
 		if (alu1_available && alu1_rndxv) begin
+			alu1_v <= VAL;
 			alu1_id <= alu1_rndx;
 			alu1_idle <= 1'b0;
 			alu1_done <= 1'b0;
@@ -3400,25 +3370,21 @@ else begin
 	
 	// Branchmiss
 	// Invalidate instructions newer than the branch in the ROB.
-	if (branchmiss_state==3'd2) begin
-		last_agen0_id <= ~agen0_id;
-		last_agen1_id <= ~agen1_id;
-		for (n3 = 0; n3 < ROB_ENTRIES; n3 = n3 + 1) begin
-			if (rob[n3].sn > rob[missid].sn) begin
-				rob[n3].v <= INV;
-				rob[n3].out <= 'd0;
-				rob[n3].done <= 'd0;
-				// Clear corresponding LSQ entry.
-				if (rob[n3].lsq) begin
-					lsq[rob[n3].lsqndx.row][rob[n3].lsqndx.col].v <= INV;
-					lsq[rob[n3].lsqndx.row][rob[n3].lsqndx.col].agen <= 'd0;
-					lsq[rob[n3].lsqndx.row][rob[n3].lsqndx.col].tlb <= 'd0;
-				end
-				rob[n3].lsq <= 'd0;
+	for (n3 = 0; n3 < ROB_ENTRIES; n3 = n3 + 1) begin
+		if (robentry_stomp[n3]) begin
+			rob[n3].v <= INV;
+			rob[n3].out <= FALSE;
+			rob[n3].done <= FALSE;
+			// Clear corresponding LSQ entry.
+			if (rob[n3].lsq) begin
+				lsq[rob[n3].lsqndx.row][rob[n3].lsqndx.col].v <= INV;
+				lsq[rob[n3].lsqndx.row][rob[n3].lsqndx.col].agen <= 'd0;
+				lsq[rob[n3].lsqndx.row][rob[n3].lsqndx.col].tlb <= 'd0;
 			end
+			rob[n3].lsq <= 'd0;
 		end
 	end
-
+	
 end
 
 // External bus arbiter. Simple priority encoded.
@@ -3546,13 +3512,13 @@ begin
 	alu0_ld <= 1'b0;
 	alu1_ld <= 1'b0;
 	alu0_v <= INV;
+	alu1_v <= INV;
 	fpu0_v <= INV;
 	fpu_available <= 1;
 	fpu_dataready <= 0;
 	fcu_available <= 1;
 	fcu_dataready <= 0;
 	fcu_pc <= 'd0;
-	fcu_sourceid <= 'd0;
 	fcu_instr <= OP_NOP;
 //	fcu_exc <= FLT_NONE;
 	fcu_bt <= 'd0;
@@ -3560,6 +3526,8 @@ begin
 	fcu_argA <= 'd0;
 	fcu_argB <= 'd0;
 	fcu_v <= INV;
+	fcu_v2 <= INV;
+	fcu_v3 <= INV;
 //	fcu_argC <= 'd0;
 	/*
 	for (n11 = 0; n11 < NDATA_PORTS; n11 = n11 + 1) begin
@@ -3597,8 +3565,6 @@ begin
 	agen1_id <= 'd0;
 	agen0_idle <= 1'b1;
 	agen1_idle <= 1'b1;
-	last_agen0_id <= 5'd31;
-	last_agen1_id <= 5'd31;
 end
 endtask
 

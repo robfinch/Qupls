@@ -56,7 +56,7 @@ output lsq_ndx_t ndx1;
 output reg ndx0v;
 output reg ndx1v;
 
-integer m,hd,phd,n9,n10,n11,col,row,q,r;
+integer m,hd,phd,n9,n10,n11,col,row,q,r,i;
 rob_bitmask_t robentry_memready;
 rob_ndx_t [WINDOW_SIZE-1:0] heads;
 rob_bitmask_t robentry_memopsvalid;
@@ -64,6 +64,13 @@ lsq_ndx_t [LSQ_WINDOW_SIZE-1:0] lsq_heads;
 reg [1:0] issued, mem_ready;
 reg no_issue, do_issue;
 reg [1:0] stores;
+
+lsq_ndx_t next_ndx0;
+lsq_ndx_t next_ndx1;
+lsq_ndx_t next_ndx0v;
+lsq_ndx_t next_ndx1v;
+rob_bitmask_t next_memissue;
+reg [1:0] next_islot_o [0:LSQ_ENTRIES*2-1];
 
 always_comb
 for (m = 0; m < WINDOW_SIZE; m = m + 1)
@@ -96,13 +103,13 @@ begin
 	no_issue = 'd0;
 	do_issue = 'd0;
 	mem_ready = 'd0;
-	memissue = 'd0;
-	ndx0 = 'd0;
-	ndx1 = 'd0;
-	ndx0v = 'd0;
-	ndx1v = 'd0;
+	next_memissue = 'd0;
+	next_ndx0 = 'd0;
+	next_ndx1 = 'd0;
+	next_ndx0v = 'd0;
+	next_ndx1v = 'd0;
 	stores = 'd0;
-	islot_o = islot_i;
+	next_islot_o = islot_i;
 	for (row = 0; row < LSQ_WINDOW_SIZE; row = row + 1) begin
 		for (col = 0; col < 2; col = col + 1) begin
 			if (issued < NDATA_PORTS) begin
@@ -111,14 +118,14 @@ begin
 						lsq[lsq_heads[row].row][0].v
 					) begin
 						mem_ready = 2'd1;
-						memissue[ lsq[lsq_heads[row].row][0].rndx ] =	1'b1;
+						next_memissue[ lsq[lsq_heads[row].row][0].rndx ] =	1'b1;
 						issued = 2'd1;
-						ndx0 = lsq_heads[row];
-						ndx0.col = col;
-						ndx0v = 1'b1;
+						next_ndx0 = lsq_heads[row];
+						next_ndx0.col = col;
+						next_ndx0v = 1'b1;
 						if (lsq[lsq_heads[row].row][0].store)
 							stores = 2'd1;
-						islot_o[{row,col[0]}] = 2'd0;
+						next_islot_o[{row,col[0]}] = 2'd0;
 					end
 				end
 				// no preceding instruction is ready to go
@@ -153,20 +160,20 @@ begin
 					if (stores > 2'd0 && lsq[lsq_heads[row].row][col].store)
 						no_issue = 1'b1;
 					if (do_issue && !no_issue) begin
-						memissue[ lsq[lsq_heads[row].row][col].rndx ] =	1'b1;
+						next_memissue[ lsq[lsq_heads[row].row][col].rndx ] =	1'b1;
 						if (issued==2'd1) begin
-							ndx1 = lsq_heads[row];
-							ndx1.col = col;
-							ndx1v = 1'b1;
+							next_ndx1 = lsq_heads[row];
+							next_ndx1.col = col;
+							next_ndx1v = 1'b1;
 						end
 						else begin
-							ndx0 = lsq_heads[row];
-							ndx0.col = col;
-							ndx0v = 1'b1;
+							next_ndx0 = lsq_heads[row];
+							next_ndx0.col = col;
+							next_ndx0v = 1'b1;
 						end
 						if (lsq[lsq_heads[row].row][col].store)
 							stores = stores + 2'd1;
-						islot_o[{row,col[0]}] = issued;
+						next_islot_o[{row,col[0]}] = issued;
 						issued = issued + 2'd1;
 //						mem_ready = mem_ready + 2'd1;
 					end
@@ -174,6 +181,25 @@ begin
 			end
 		end		
 	end
+end
+
+always_ff @(posedge clk)
+if (rst) begin
+	memissue <= 'd0;
+	ndx0 <= 'd0;
+	ndx1 <= 'd0;
+	ndx0v <= 'd0;
+	ndx1v <= 'd0;
+	for (i = 0; i < LSQ_ENTRIES; i = i + 1)
+		islot_o[i] <= 'd0;
+end
+else begin
+	memissue <= next_memissue;
+	ndx0 <= next_ndx0;
+	ndx1 <= next_ndx1;
+	ndx0v <= next_ndx0v;
+	ndx1v <= next_ndx1v;
+	islot_o <= next_islot_o;
 end
 
 endmodule

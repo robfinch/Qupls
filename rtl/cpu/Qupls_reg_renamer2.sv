@@ -35,6 +35,8 @@
 // We need to be able to free many more registers than are allocated in the 
 // event of a pipeline flush. Normally up to four register values will be
 // committed to the register file.
+//
+// 3700 LUTs / 600 FFs
 // ============================================================================
 //
 import QuplsPkg::*;
@@ -191,9 +193,13 @@ else begin
 	end
 end
 
+// On reset, cause fifo to be loaded with registers.
+// Up to four registers may be freed per clock cycle which is okay since only
+// four registers may be allocated per clock cycle.
+
 always_ff @(posedge clk)
 if (rst)
-	wlist2free <= 'd0;
+	wlist2free <= {256{1'b1}};
 else begin
 	if (en) begin
 
