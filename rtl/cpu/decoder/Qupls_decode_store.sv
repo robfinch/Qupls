@@ -44,7 +44,7 @@ function fnIsStore;
 input instruction_t op;
 begin
 	case(op.any.opcode)
-	OP_STB,OP_STW,OP_STT,OP_STO,
+	OP_STB,OP_STW,OP_STT,OP_STO,OP_STH,
 	OP_STX:
 		fnIsStore = 1'b1;
 	default:

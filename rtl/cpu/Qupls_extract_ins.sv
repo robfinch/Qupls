@@ -42,8 +42,8 @@
 
 import QuplsPkg::*;
 
-module Qupls_extract_ins(rst_i, clk_i, en_i, irq_i, hirq_i, vect_i, mipv_i, mip_i,
-	ic_line_i,
+module Qupls_extract_ins(rst_i, clk_i, en_i, nop_i, irq_i, hirq_i, vect_i,
+	mipv_i, mip_i, ic_line_i,reglist_active,
 	pc0_i, pc1_i, pc2_i, pc3_i, pc4_i, pc5_i, pc6_i,
 	ls_bmf_i, pack_regs_i, scale_regs_i, regcnt_i,
 	mc_ins0_i, mc_ins1_i, mc_ins2_i, mc_ins3_i, mc_ins4_i, mc_ins5_i, mc_ins6_i,
@@ -53,9 +53,11 @@ module Qupls_extract_ins(rst_i, clk_i, en_i, irq_i, hirq_i, vect_i, mipv_i, mip_
 input rst_i;
 input clk_i;
 input en_i;
+input nop_i;
 input [2:0] irq_i;
 input hirq_i;
 input [8:0] vect_i;
+input reglist_active;
 input mipv_i;
 input [11:0] mip_i;
 input [1023:0] ic_line_i;
@@ -134,7 +136,7 @@ wire [6:0] iRn3 = iRn3_i;
 wire [511:0] ic_line2 = ic_line_i;
 wire [11:0] mip = mip_i;
 
-wire hirq = &iRn0 && hirq_i && mip[11:8]!=4'h1;
+wire hirq = ~reglist_active && hirq_i && mip[11:8]!=4'h1;
 
 always_comb regcnt = regcnt_i;
 always_comb pc0 = pc0_i;
@@ -157,13 +159,12 @@ always_comb ins1_ = ic_line2 >> {pc1[5:0],3'd0};
 always_comb ins2_ = ic_line2 >> {pc2[5:0],3'd0};
 always_comb ins3_ = ic_line2 >> {pc3[5:0],3'd0};
 
-wire reglist_active0 = ~&iRn0;	// register list is active on slot zero
-
 Qupls_ins_extract_mux umux0
 (
 	.rst(rst_i),
 	.clk(clk_i),
 	.en(en_i),
+	.nop(nop_i),
 	.rgi(2'd0),
 	.regcnt(regcnt_i),
 	.hirq(hirq),
@@ -174,7 +175,7 @@ Qupls_ins_extract_mux umux0
 	.mc_ins(mc_ins0_i),
 	.ins0(ins0_),
 	.insi(ins0_),
-	.reglist_active0(reglist_active0),
+	.reglist_active(reglist_active),
 	.iRn(iRn0),
 	.ls_bmf(ls_bmf_i),
 	.scale_regs_i(scale_regs_i),
@@ -187,6 +188,7 @@ Qupls_ins_extract_mux umux1
 	.rst(rst_i),
 	.clk(clk_i),
 	.en(en_i),
+	.nop(nop_i),
 	.rgi(2'd1),
 	.regcnt(regcnt_i),
 	.hirq(hirq),
@@ -197,7 +199,7 @@ Qupls_ins_extract_mux umux1
 	.mc_ins(mc_ins1_i),
 	.ins0(ins0_),
 	.insi(ins1_),
-	.reglist_active0(reglist_active0),
+	.reglist_active(reglist_active),
 	.iRn(iRn1),
 	.ls_bmf(ls_bmf_i),
 	.scale_regs_i(scale_regs_i),
@@ -210,6 +212,7 @@ Qupls_ins_extract_mux umux2
 	.rst(rst_i),
 	.clk(clk_i),
 	.en(en_i),
+	.nop(nop_i),
 	.rgi(2'd2),
 	.regcnt(regcnt_i),
 	.hirq(hirq),
@@ -220,7 +223,7 @@ Qupls_ins_extract_mux umux2
 	.mc_ins(mc_ins2_i),
 	.ins0(ins0_),
 	.insi(ins2_),
-	.reglist_active0(reglist_active0),
+	.reglist_active(reglist_active),
 	.iRn(iRn2),
 	.ls_bmf(ls_bmf_i),
 	.scale_regs_i(scale_regs_i),
@@ -233,6 +236,7 @@ Qupls_ins_extract_mux umux3
 	.rst(rst_i),
 	.clk(clk_i),
 	.en(en_i),
+	.nop(nop_i),
 	.rgi(2'd3),
 	.regcnt(regcnt_i),
 	.hirq(hirq),
@@ -243,7 +247,7 @@ Qupls_ins_extract_mux umux3
 	.mc_ins(mc_ins3_i),
 	.ins0(ins0_),
 	.insi(ins3_),
-	.reglist_active0(reglist_active0),
+	.reglist_active(reglist_active),
 	.iRn(iRn3),
 	.ls_bmf(ls_bmf_i),
 	.scale_regs_i(scale_regs_i),
@@ -253,13 +257,19 @@ Qupls_ins_extract_mux umux3
 
 always_ff @(posedge clk)
 if (en)
-	ins4 <= hirq ? {'d0,FN_IRQ,1'b0,vect_i,5'd0,2'd0,irq_i,OP_SYS} : mipv ? mc_ins4 : ic_line2 >> {pc4[5:0],3'd0};
+	ins4 <= hirq ? {'d0,FN_IRQ,1'b0,vect_i,5'd0,2'd0,irq_i,OP_SYS} : 
+		nop_i ? {33'd0,OP_NOP} :
+		mipv ? mc_ins4 : ic_line2 >> {pc4[5:0],3'd0};
 always_ff @(posedge clk)
 if (en)
-	ins5 <= hirq ? {'d0,FN_IRQ,1'b0,vect_i,5'd0,2'd0,irq_i,OP_SYS} : mipv ? mc_ins5 : ic_line2 >> {pc5[5:0],3'd0};
+	ins5 <= hirq ? {'d0,FN_IRQ,1'b0,vect_i,5'd0,2'd0,irq_i,OP_SYS} :
+		nop_i ? {33'd0,OP_NOP} :
+		mipv ? mc_ins5 : ic_line2 >> {pc5[5:0],3'd0};
 always_ff @(posedge clk)
 if (en)
-	ins6 <= hirq ? {'d0,FN_IRQ,1'b0,vect_i,5'd0,2'd0,irq_i,OP_SYS} : mipv ? mc_ins6 : ic_line2 >> {pc6[5:0],3'd0};
+	ins6 <= hirq ? {'d0,FN_IRQ,1'b0,vect_i,5'd0,2'd0,irq_i,OP_SYS} :
+		nop_i ? {33'd0,OP_NOP} :
+		mipv ? mc_ins6 : ic_line2 >> {pc6[5:0],3'd0};
 
 always_comb ins0_o = ins0;
 always_comb ins1_o = ins1;

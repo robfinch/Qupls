@@ -117,6 +117,12 @@ Qupls_decode_branch udecbr
 	.branch(db.br)
 );
 
+Qupls_decode_mcb udecmcb
+(
+	.instr(ins),
+	.mcb(db.mcb)
+);
+
 Qupls_decode_backbr ubkbr1
 (
 	.instr(ins),
@@ -163,12 +169,6 @@ Qupls_decode_divu udivu1
 (
 	.instr(ins),
 	.divu(db.divu)
-);
-
-Qupls_decode_mem umem1
-(
-	.instr(ins),
-	.mem(db.mem)
 );
 
 Qupls_decode_load udecld1
@@ -249,10 +249,17 @@ Qupls_decode_multicycle udmc1
 	.multicycle(db.multicycle)
 );
 
+Qupls_decode_rti udrti1
+(
+	.instr(ins),
+	.rti(db.rti)
+);
+
 always_ff @(posedge clk)
 if (en) begin
 	dbo <= 'd0;	// in case a signal was missed / unused.
 	dbo <= db;
+	dbo.mem <= db.load|db.store;
 end
 
 endmodule

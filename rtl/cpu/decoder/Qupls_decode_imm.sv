@@ -76,40 +76,42 @@ begin
 		immb = {{48{ins[0][34]}},ins[0][34:19]};
 	OP_FENCE:
 		immb = {48'h0,ins[0][23:8]};
+	OP_Bcc,OP_BccU,OP_FBccH,OP_FBccS,OP_FBccD,OP_FBccQ:
+		immc = {{47{ins[39]}},ins[39:25],ins[12:11]}};
 	default:
 		immb = 'd0;
 	endcase
 	ndx = 1;
 	flt = ins[0].any.opcode==OP_FLT2 || ins[0].any.opcode==OP_FLT3;
-	if (ins[ndx].any.opcode==OP_PFXA) begin
-		imma = {{31{ins[ndx][39]}},ins[ndx][39:7]};
+	if (ins[ndx].any.opcode==OP_PFXA32) begin
+		imma = {{32{ins[ndx][39]}},ins[ndx][39:8]};
 		if (flt)
 			imma = imm32x64a;
 		ndx = ndx + 1;
-		if (ins[ndx].any.opcode==OP_PFXA) begin
-			imma[63:33] = {ins[ndx][37:7]};
-			ndx = ndx + 1;
-		end
 	end
-	if (ins[ndx].any.opcode==OP_PFXB) begin
-		immb = {{31{ins[ndx][39]}},ins[ndx][39:7]};
+	else if (ins[ndx].any.opcode==OP_PFXA64) begin
+		imma = ins[ndx][71:8];
+		ndx = ndx + 1;
+	end
+	if (ins[ndx].any.opcode==OP_PFXB32) begin
+		immb = {{32{ins[ndx][39]}},ins[ndx][39:8]};
 		if (flt)
 			immb = imm32x64b;
 		ndx = ndx + 1;
-		if (ins[ndx].any.opcode==OP_PFXB) begin
-			immb[63:33] = {ins[ndx][37:7]};
-			ndx = ndx + 1;
-		end
 	end
-	if (ins[ndx].any.opcode==OP_PFXC) begin
-		immc = {{31{ins[ndx][39]}},ins[ndx][39:7]};
+	else if (ins[ndx].any.opcode==OP_PFXB64) begin
+		immb = {ins[ndx][71:8]};
+		ndx = ndx + 1;
+	end
+	if (ins[ndx].any.opcode==OP_PFXC32) begin
+		immc = {{32{ins[ndx][39]}},ins[ndx][39:8]};
 		if (flt)
 			immc = imm32x64c;
 		ndx = ndx + 1;
-		if (ins[ndx].any.opcode==OP_PFXC) begin
-			immc[63:33] = {ins[ndx][37:7]};
-			ndx = ndx + 1;
-		end
+	end
+	else if (ins[ndx].any.opcode==OP_PFXC64) begin
+		immc = {ins[ndx][71:8]};
+		ndx = ndx + 1;
 	end
 end
 

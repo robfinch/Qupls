@@ -44,7 +44,7 @@ function fnIsLoad;
 input instruction_t op;
 begin
 	case(op.any.opcode)
-	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,
+	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDOU,OP_LDH,
 	OP_LDX:
 		fnIsLoad = 1'b1;
 	default:
@@ -57,7 +57,7 @@ function fnIsStore;
 input instruction_t op;
 begin
 	case(op.any.opcode)
-	OP_STB,OP_STW,OP_STT,OP_STO,
+	OP_STB,OP_STW,OP_STT,OP_STO,OP_STH,
 	OP_STX:
 		fnIsStore = 1'b1;
 	default:

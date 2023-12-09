@@ -41,12 +41,13 @@
 
 import QuplsPkg::*;
 
-module Qupls_ins_extract_mux(rst, clk, en, rgi, hirq, irq_i, vect_i, mipv, 
-	mc_ins0, mc_ins, ins0, insi, reglist_active0, iRn, ls_bmf, scale_regs_i, pack_regs,
+module Qupls_ins_extract_mux(rst, clk, en, nop, rgi, hirq, irq_i, vect_i, mipv, 
+	mc_ins0, mc_ins, ins0, insi, reglist_active, iRn, ls_bmf, scale_regs_i, pack_regs,
 	regcnt, ins);
 input rst;
 input clk;
 input en;
+input nop;
 input hirq;
 input [1:0] rgi;
 input [2:0] irq_i;
@@ -56,7 +57,7 @@ input instruction_t mc_ins;
 input instruction_t mc_ins0;
 input instruction_t ins0;
 input instruction_t insi;
-input reglist_active0;
+input reglist_active;
 input aregno_t iRn;
 input ls_bmf;
 input [2:0] scale_regs_i;
@@ -68,29 +69,9 @@ always_ff @(posedge clk)
 if (rst)
 	ins <= {'d0,OP_NOP};
 else begin
-	if (en) begin
-		// If a register list was active on ins0, we want the ins0 instruction.
-		if (reglist_active0)
-			ins <= hirq ? {'d0,FN_IRQ,1'b0,vect_i,5'd0,2'd0,irq_i,OP_SYS} : mipv ? mc_ins0 : ins0;
-		else
-			ins <= hirq ? {'d0,FN_IRQ,1'b0,vect_i,5'd0,2'd0,irq_i,OP_SYS} : mipv ? mc_ins : insi;
-		// If no register list active, but it was active on ins0, turn instruction
-		// into a NOP.
-		if (&iRn && reglist_active0) ins <= {'d0,OP_NOP};
-		// If a load and a reglist is active, update target register
-		if (~&iRn && ls_bmf) begin
-			ins <= ins0;
-			ins[12:7] <= iRn;
-			ins[31:19] <= {pack_regs ? regcnt + rgi: iRn} << scale_regs_i;
-		end
-		// If a store and a reglist is active, update source register.
-		if (~&iRn && ~ls_bmf) begin
-			ins <= ins0;
-			ins[18:13] <= iRn;
-			ins[31:19] <= {pack_regs ? regcnt + rgi: iRn} << scale_regs_i;
-		end
-	end
+	if (en)
+		ins <= hirq ? {'d0,FN_IRQ,1'b0,vect_i,5'd0,2'd0,irq_i,OP_SYS} :
+			nop ? {'d0,OP_NOP} : mipv ? mc_ins : insi;
 end
 
 endmodule
-

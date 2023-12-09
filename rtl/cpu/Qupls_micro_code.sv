@@ -350,6 +350,76 @@ case(micro_ip)
 12'h142:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
 12'h143:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
 
+// LDCTX
+12'h150:	begin next_ip = 12'h154; instr = {3'd0,2'd0,CSR_CTX,6'h00,MC0,OP_CSR}; regx = 4'h1; end	// MC0 = CTX address
+12'h151:	begin next_ip = 12'h154; instr = {'d0,OP_NOP}; end
+12'h152:	begin next_ip = 12'h154; instr = {'d0,13'h0010,MC0,6'h01,OP_LDH}; regx = 4'h2; end
+12'h153:	begin next_ip = 12'h154; instr = {'d0,13'h0020,MC0,6'h02,OP_LDH}; regx = 4'h2; end
+12'h154:	begin next_ip = 12'h158; instr = {'d0,13'h0030,MC0,6'h03,OP_LDH}; regx = 4'h2; end
+12'h155:	begin next_ip = 12'h158; instr = {'d0,13'h0040,MC0,6'h04,OP_LDH}; regx = 4'h2; end
+12'h156:	begin next_ip = 12'h158; instr = {'d0,13'h0050,MC0,6'h05,OP_LDH}; regx = 4'h2; end
+12'h157:	begin next_ip = 12'h158; instr = {'d0,13'h0060,MC0,6'h06,OP_LDH}; regx = 4'h2; end
+12'h158:	begin next_ip = 12'h15C; instr = {'d0,13'h0070,MC0,6'h07,OP_LDH}; regx = 4'h2; end
+12'h159:	begin next_ip = 12'h15C; instr = {'d0,13'h0080,MC0,6'h08,OP_LDH}; regx = 4'h2; end
+12'h15A:	begin next_ip = 12'h15C; instr = {'d0,13'h0090,MC0,6'h09,OP_LDH}; regx = 4'h2; end
+12'h15B:	begin next_ip = 12'h15C; instr = {'d0,13'h00A0,MC0,6'h0A,OP_LDH}; regx = 4'h2; end
+12'h15C:	begin next_ip = 12'h160; instr = {'d0,13'h00B0,MC0,6'h0B,OP_LDH}; regx = 4'h2; end
+12'h15D:	begin next_ip = 12'h160; instr = {'d0,13'h00C0,MC0,6'h0C,OP_LDH}; regx = 4'h2; end
+12'h15E:	begin next_ip = 12'h160; instr = {'d0,13'h00D0,MC0,6'h0D,OP_LDH}; regx = 4'h2; end
+12'h15F:	begin next_ip = 12'h160; instr = {'d0,13'h00E0,MC0,6'h0E,OP_LDH}; regx = 4'h2; end
+12'h160:	begin next_ip = 12'h164; instr = {'d0,13'h00F0,MC0,6'h0F,OP_LDH}; regx = 4'h2; end
+12'h161:	begin next_ip = 12'h164; instr = {'d0,13'h0100,MC0,6'h10,OP_LDH}; regx = 4'h2; end
+12'h162:	begin next_ip = 12'h164; instr = {'d0,13'h0110,MC0,6'h11,OP_LDH}; regx = 4'h2; end
+12'h163:	begin next_ip = 12'h164; instr = {'d0,13'h0120,MC0,6'h12,OP_LDH}; regx = 4'h2; end
+12'h164:	begin next_ip = 12'h168; instr = {'d0,13'h0130,MC0,6'h13,OP_LDH}; regx = 4'h2; end
+12'h165:	begin next_ip = 12'h168; instr = {'d0,13'h0140,MC0,6'h14,OP_LDH}; regx = 4'h2; end
+12'h166:	begin next_ip = 12'h168; instr = {'d0,13'h0150,MC0,6'h15,OP_LDH}; regx = 4'h2; end
+12'h167:	begin next_ip = 12'h168; instr = {'d0,13'h0160,MC0,6'h16,OP_LDH}; regx = 4'h2; end
+12'h168:	begin next_ip = 12'h16C; instr = {'d0,13'h0170,MC0,6'h17,OP_LDH}; regx = 4'h2; end
+12'h169:	begin next_ip = 12'h16C; instr = {'d0,13'h0180,MC0,6'h18,OP_LDH}; regx = 4'h2; end
+12'h16A:	begin next_ip = 12'h16C; instr = {'d0,13'h0190,MC0,6'h19,OP_LDH}; regx = 4'h2; end
+12'h16B:	begin next_ip = 12'h16C; instr = {'d0,13'h01A0,MC0,6'h1A,OP_LDH}; regx = 4'h2; end
+12'h16C:	begin next_ip = 12'h170; instr = {'d0,13'h01B0,MC0,6'h1B,OP_LDH}; regx = 4'h2; end
+12'h16D:	begin next_ip = 12'h170; instr = {'d0,13'h01C0,MC0,6'h1C,OP_LDH}; regx = 4'h2; end
+12'h16E:	begin next_ip = 12'h170; instr = {'d0,13'h01D0,MC0,6'h1D,OP_LDH}; regx = 4'h2; end
+12'h16F:	begin next_ip = 12'h170; instr = {'d0,13'h01E0,MC0,6'h1E,OP_LDH}; regx = 4'h2; end
+12'h170:	begin next_ip = 12'h174; instr = {'d0,13'h01F0,MC0,6'h1F,OP_LDH}; regx = 4'h2; end
+12'h171:	begin next_ip = 12'h174; instr = {'d0,13'h0200,MC0,6'h20,OP_LDH}; regx = 4'h2; end
+12'h172:	begin next_ip = 12'h174; instr = {'d0,13'h0210,MC0,6'h21,OP_LDH}; regx = 4'h2; end
+12'h173:	begin next_ip = 12'h174; instr = {'d0,13'h0220,MC0,6'h22,OP_LDH}; regx = 4'h2; end
+12'h174:	begin next_ip = 12'h178; instr = {'d0,13'h0230,MC0,6'h23,OP_LDH}; regx = 4'h2; end
+12'h175:	begin next_ip = 12'h178; instr = {'d0,13'h0240,MC0,6'h24,OP_LDH}; regx = 4'h2; end
+12'h176:	begin next_ip = 12'h178; instr = {'d0,13'h0250,MC0,6'h25,OP_LDH}; regx = 4'h2; end
+12'h177:	begin next_ip = 12'h178; instr = {'d0,13'h0260,MC0,6'h26,OP_LDH}; regx = 4'h2; end
+12'h178:	begin next_ip = 12'h17C; instr = {'d0,13'h0270,MC0,6'h27,OP_LDH}; regx = 4'h2; end
+12'h179:	begin next_ip = 12'h17C; instr = {'d0,13'h0280,MC0,6'h28,OP_LDH}; regx = 4'h2; end
+12'h17A:	begin next_ip = 12'h17C; instr = {'d0,13'h0290,MC0,6'h29,OP_LDH}; regx = 4'h2; end
+12'h17B:	begin next_ip = 12'h17C; instr = {'d0,13'h02A0,MC0,6'h2A,OP_LDH}; regx = 4'h2; end
+12'h17C:	begin next_ip = 12'h180; instr = {'d0,13'h02B0,MC0,6'h2B,OP_LDH}; regx = 4'h2; end
+12'h17D:	begin next_ip = 12'h180; instr = {'d0,13'h02C0,MC0,6'h2C,OP_LDH}; regx = 4'h2; end
+12'h17E:	begin next_ip = 12'h180; instr = {'d0,13'h02D0,MC0,6'h2D,OP_LDH}; regx = 4'h2; end
+12'h17F:	begin next_ip = 12'h180; instr = {'d0,13'h02E0,MC0,6'h2E,OP_LDH}; regx = 4'h2; end
+12'h180:	begin next_ip = 12'h184; instr = {'d0,13'h02F0,MC0,6'h2F,OP_LDH}; regx = 4'h2; end
+12'h181:	begin next_ip = 12'h184; instr = {'d0,13'h0300,MC0,6'h30,OP_LDH}; regx = 4'h2; end
+12'h182:	begin next_ip = 12'h184; instr = {'d0,13'h0310,MC0,6'h31,OP_LDH}; regx = 4'h2; end
+12'h183:	begin next_ip = 12'h184; instr = {'d0,13'h0320,MC0,6'h32,OP_LDH}; regx = 4'h2; end
+12'h184:	begin next_ip = 12'h188; instr = {'d0,13'h0330,MC0,6'h33,OP_LDH}; regx = 4'h2; end
+12'h185:	begin next_ip = 12'h188; instr = {'d0,13'h0340,MC0,6'h34,OP_LDH}; regx = 4'h2; end
+12'h186:	begin next_ip = 12'h188; instr = {'d0,13'h0350,MC0,6'h35,OP_LDH}; regx = 4'h2; end
+12'h187:	begin next_ip = 12'h188; instr = {'d0,13'h0360,MC0,6'h36,OP_LDH}; regx = 4'h2; end
+12'h188:	begin next_ip = 12'h18C; instr = {'d0,13'h0370,MC0,6'h37,OP_LDH}; regx = 4'h2; end
+12'h189:	begin next_ip = 12'h18C; instr = {'d0,13'h0380,MC0,6'h38,OP_LDH}; regx = 4'h2; end
+12'h18A:	begin next_ip = 12'h18C; instr = {'d0,13'h0390,MC0,6'h39,OP_LDH}; regx = 4'h2; end
+12'h18B:	begin next_ip = 12'h18C; instr = {'d0,13'h03A0,MC0,6'h3A,OP_LDH}; regx = 4'h2; end
+12'h18C:	begin next_ip = 12'h190; instr = {'d0,13'h03B0,MC0,6'h3B,OP_LDH}; regx = 4'h2; end
+12'h18D:	begin next_ip = 12'h190; instr = {'d0,13'h03C0,MC0,6'h3C,OP_LDH}; regx = 4'h2; end
+12'h18E:	begin next_ip = 12'h190; instr = {'d0,13'h03D0,MC0,6'h3D,OP_LDH}; regx = 4'h2; end
+12'h18F:	begin next_ip = 12'h190; instr = {'d0,13'h03E0,MC0,6'h3E,OP_LDH}; regx = 4'h2; end
+12'h190:	begin next_ip = 12'h000; instr = {'d0,13'h03F0,MC0,6'h3F,OP_LDH}; regx = 4'h2; end
+12'h191:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
+12'h192:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
+12'h193:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
+
 default:	begin next_ip = 12'h000; instr = 40'hFFFFFFFFFF; end	// NOP      regx = 4'h2; 
 endcase
 end

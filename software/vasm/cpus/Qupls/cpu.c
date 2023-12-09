@@ -1025,6 +1025,7 @@ static int is_branch(mnemonic* mnemo)
 {
 	switch(mnemo->ext.format) {
 	case B:
+	case BI:
 	case BZ:
 	case BL:
 	case J:
@@ -2245,38 +2246,32 @@ static size_t encode_immed_RI(instruction_buf* insn, thuge hval, int i)
 	return (isize);
 }
 
-static size_t encode_ipfx(postfix_buf* postfix, thuge hval, int i)
+static void encode_ipfx(postfix_buf* postfix, thuge hval, int i)
 {
-	size_t isize = 4;
-
 	if (!postfix)
-		return (isize);
+		return;
 	if (is_nbit(hval,23LL)) {
-		isize = 4;
 		postfix->size = 4;
 		postfix->opcode = 124LL + i;
 		postfix->val = hval;
-		return (isize);
+		return;
 	}
 	if (is_nbit(hval,39LL)) {
-		isize = 6;
 		postfix->size = 6;
 		postfix->opcode = (124LL + i) + (1LL << 7LL);
 		postfix->val = hval;
-		return (isize);
+		return;
 	}
 	if (is_nbit(hval,71LL)) {
-		isize = 10;
 		postfix->size = 10;
 		postfix->opcode = (124LL + i) + (2LL << 7LL);
 		postfix->val = hval;
-		return (isize);
+		return;
 	}
-	isize = 18;
 	postfix->size = 18;
 	postfix->opcode = (124LL + i) + (3LL << 7LL);
 	postfix->val = hval;
-	return (isize);
+	return;
 }
 
 static size_t encode_immed (
@@ -2558,17 +2553,17 @@ static int encode_vmask(instruction_buf* insn, mnemonic* mnemo, operand* op, int
 
 /* Encode condional branch. */
 
-static void encode_branch_B(instruction_buf* insn, operand* op, int64_t val, int i, unsigned int flags)
+static size_t encode_branch_B(instruction_buf* insn, operand* op, int64_t val, int i, unsigned int flags)
 {
 	uint64_t tgt;
 	thuge hg;
+	size_t isize = 5;
 
 	if (op->type == OP_IMM) {
 		switch(i) {
 		case 0:
 			hg = huge_from_int(val);
 			encode_ipfx(&insn->pfxa, hg, 0);
-			insn->size = insn->opcode_size + insn->pfxa.size;
 			break;
 		case 1:
 			if (flags & FLG_UI6) {
@@ -2578,7 +2573,6 @@ static void encode_branch_B(instruction_buf* insn, operand* op, int64_t val, int
 			else {
 				hg = huge_from_int(val);
 				encode_ipfx(&insn->pfxb, hg, 1);
-				insn->size = insn->opcode_size + insn->pfxb.size;
 			}
 			break;
 		case 2:
@@ -2591,6 +2585,8 @@ static void encode_branch_B(instruction_buf* insn, operand* op, int64_t val, int
 			break;
 		}
 	}
+	isize = insn->size + insn->pfxa.size + insn->pfxb.size;
+	return (isize);
 }
 
 /* Encode uncondional branch, has wider target field. */
@@ -2653,13 +2649,11 @@ static int encode_branch(instruction_buf* insn, mnemonic* mnemo, operand* op, in
 	switch(mnemo->ext.format) {
 
 	case B:
-		encode_branch_B(insn, op, val, i, mnemo->ext.flags);
-		*isize = insn->size;
+		*isize = encode_branch_B(insn, op, val, i, mnemo->ext.flags);
   	return (1);
 
 	case BI:
-		encode_branch_B(insn, op, val, i, mnemo->ext.flags);
-		*isize = insn->size;
+		*isize = encode_branch_B(insn, op, val, i, mnemo->ext.flags);
   	return (1);
 
 	case B2:
@@ -2668,8 +2662,7 @@ static int encode_branch(instruction_buf* insn, mnemonic* mnemo, operand* op, in
   	return (1);
 
 	case BZ:
-		encode_branch_B(insn, op, val, i+1, mnemo->ext.flags);
-		*isize = insn->size;
+		*isize = encode_branch_B(insn, op, val, i+1, mnemo->ext.flags);
   	return (1);
 
 	case BL2:
@@ -3071,7 +3064,7 @@ static void encode_qualifiers(instruction* ip, uint64_t* insn)
    modifier is in byte 1. The total size may be calculated using a simple
    shift and sum.
 */
-size_t encode_thor_instruction(instruction *ip,section *sec,taddr pc,
+size_t encode_qupls_instruction(instruction *ip,section *sec,taddr pc,
   uint64_t *modifier1, uint64_t *modifier2, instruction_buf* insn, dblock *db)
 {
   mnemonic *mnemo = &mnemonics[ip->code];
@@ -3313,7 +3306,7 @@ size_t instruction_size(instruction *ip,section *sec,taddr pc)
 	postfix.lo = postfix.hi = 0;
 	size_t sz = 0;
 
-	sz = encode_thor_instruction(ip,sec,pc,&modifier1,&modifier2,&insn,NULL);
+	sz = encode_qupls_instruction(ip,sec,pc,&modifier1,&modifier2,&insn,NULL);
 	sz = sz + (modifier1 >> 48LL) + (modifier2 >> 48LL);
 
 	if (ip->ext.size != 0) {
@@ -3332,25 +3325,28 @@ size_t instruction_size(instruction *ip,section *sec,taddr pc)
   return (sz);
 }
 
-static unsigned char* encode_pfx(unsigned char *d, thuge val, uint8_t size, uint8_t which)
+static unsigned char* encode_pfx(unsigned char *d, postfix_buf* pfx, uint8_t which)
 {
+	thuge val = pfx->val;
+	int size = pfx->size;
+
 	switch(size) {
 	case 4:
-    d = setval(0,d,1,124LL);
+    d = setval(0,d,1,124LL+which);
     d = setval(0,d,3,val.lo << 1LL);
 		break;
 	case 6:
-    d = setval(0,d,1,124LL|0x80LL);
+    d = setval(0,d,1,(124LL|0x80LL)+which);
     d = setval(0,d,5,val.lo << 1LL);
 		break;
 	case 10:
-    d = setval(0,d,1,124LL);
+    d = setval(0,d,1,124LL+which);
     d = setval(0,d,7,val.lo << 1LL | 1LL);
     d = setval(0,d,1,val.lo >> 55LL | ((val.hi & 1LL) << 63LL));
     d = setval(0,d,1,val.hi >> 1LL);
 		break;
 	case 18:
-    d = setval(0,d,1,124LL|1LL);
+    d = setval(0,d,1,(124LL|0x80LL)+which);
     d = setval(0,d,7,val.lo << 1LL | 1LL);
     d = setval(0,d,1,val.lo >> 55LL | ((val.hi & 1LL) << 63LL));
     d = setval(0,d,8,val.hi >> 1LL);
@@ -3376,7 +3372,7 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
 	modifier1 = 0;
 	modifier2 = 0;
 	postfix.lo = postfix.hi = 0;
-	sz = encode_thor_instruction(ip,sec,pc,&modifier1,&modifier2,&insn,db);
+	sz = encode_qupls_instruction(ip,sec,pc,&modifier1,&modifier2,&insn,db);
 	sz = sz + (modifier1 >> 48LL) + (modifier2 >> 48LL);
 
 //	if (sz != ip->ext.size)
@@ -3430,15 +3426,15 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
     d = setval(0,d,insn.opcode_size,insn.opcode);
     insn_count++;
     if (insn.pfxa.size) {
-    	d = encode_pfx(d, insn.pfxa.val,insn.pfxa.size,0);
+    	d = encode_pfx(d, &insn.pfxa,0);
 	    insn_count++;
     }
     if (insn.pfxb.size) {
-    	d = encode_pfx(d, insn.pfxb.val,insn.pfxb.size,1);
+    	d = encode_pfx(d, &insn.pfxb,1);
 	    insn_count++;
     }
     if (insn.pfxc.size) {
-    	d = encode_pfx(d, insn.pfxc.val,insn.pfxc.size,2);
+    	d = encode_pfx(d, &insn.pfxc,2);
 	    insn_count++;
     }
     pc += d-d2;

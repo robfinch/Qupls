@@ -36,28 +36,22 @@
 
 import QuplsPkg::*;
 
-module Qupls_decode_Ra(instr, regx, Ra);
+module Qupls_decode_mcb(instr, mcb);
 input instruction_t instr;
-input regx;
-output aregno_t Ra;
+output mcb;
 
-function aregno_t fnRa;
+function fnIsBranch;
 input instruction_t ir;
 begin
 	case(ir.any.opcode)
-	OP_RTS:
-		fnRa = {regx,ir[12:7]};
-	OP_RTD:
-		fnRa = 7'd62;
-	OP_DBRA:
-		fnRa = 7'd55;
+	OP_Bcc,OP_BccU,OP_FBccH,OP_FBccS,OP_FBccD,OP_FBccQ:
+		fnIsBranch = ir[39:36]== 4'h8;
 	default:
-		fnRa = {regx,ir[18:13]};
+		fnIsBranch = 1'b0;
 	endcase
 end
 endfunction
 
-assign Ra = fnRa(instr);
+assign mcb = fnIsBranch(instr);//|fnIsMacroInstr(instr);
 
 endmodule
-

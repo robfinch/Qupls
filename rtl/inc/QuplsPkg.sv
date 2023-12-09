@@ -92,8 +92,9 @@ parameter SUPPORT_3COMMIT = PERFORMANCE;
 // cost additional logic.
 parameter SUPPORT_COMMIT23 = PERFORMANCE;
 
+parameter SUPPORT_REGLIST = 1'b0;
 parameter SUPPORT_PGREL	= 1'b0;	// Page relative branching, must be zero
-parameter SUPPORT_REP = 1'b1;
+parameter SUPPORT_REP = 1'b0;
 parameter REP_BIT = 31;
 
 parameter SUPPORT_LOAD_BYPASSING = 1'b0;
@@ -235,7 +236,8 @@ typedef enum logic [6:0] {
 	OP_RTD			= 7'd35,
 	OP_JSR			= 7'd36,
 	OP_CMPUI		= 7'd38,
-	
+	OP_RIQ			= 7'd39,
+
 	OP_BccU			= 7'd40,
 	OP_Bcc			= 7'd41,
 	OP_DFBcc		= 7'd43,
@@ -292,8 +294,7 @@ typedef enum logic [6:0] {
 	OP_BLEND		= 7'd89,
 	OP_AMO			= 7'd92,
 	OP_CAS			= 7'd93,
-	OP_STCTX		= 7'd94,
-	OP_LDCTX		= 7'd95,
+	OP_LSCTX		= 7'd94,
 	OP_FLT2			= 7'd98,
 	OP_FLT3			= 7'd99,
 	OP_IRQ			= 7'd112,
@@ -305,6 +306,7 @@ typedef enum logic [6:0] {
 	OP_PRED			= 7'd121,
 	OP_ATOM			= 7'd122,
 	OP_TPFX			= 7'd123,
+	OP_RTS			= 7'd124,
 	OP_NOP			= 7'd127
 } opcode_t;
 /*
@@ -1185,6 +1187,7 @@ typedef struct packed
 	logic need_steps;
 	logic compress;
 	memsz_t memsz;
+	logic mcb;					// micro-code branch
 	logic br;						// conditional branch
 	logic cjb;					// call, jmp, or bra
 	logic brk;
@@ -1329,45 +1332,42 @@ const address_t RSTSP = 32'hFFFFFFF0;
 typedef logic [7:0] seqnum_t;
 
 typedef struct packed {
-	logic v;
-	seqnum_t sn;
-	logic last;							// 1=last instruction in group
-	rob_ndx_t group_len;		// length of instruction group
-	rob_owner_t owner;
-	logic out;
-	logic lsq;
-	logic [1:0] done;
-	logic bt;
-	operating_mode_t om;		// operating mode
-	decode_bus_t decbus;
-	pregno_t pRa;
+	// The following fields may change state while an instruction is processed.
+	logic v;									// 1=entry is valid, in use
+	seqnum_t sn;							// sequence number, decrements when instructions que
+	logic out;								// 1=instruction is being executed
+	logic lsq;								// 1=instruction has associated LSQ entry
+	lsq_ndx_t lsqndx;					// index to LSQ entry
+	logic [1:0] done;					// 2'b11=instruction is finished executing
+	pc_address_t brtgt;
+	logic takb;								// 1=branch evaluated to taken
+	logic [PREGS-1:0] avail;	// available registers at time of queue (for rollback)
+	cause_code_t exc;					// non-zero indicate exception
+	logic excv;								// 1=exception
+	logic argA_v;							// 1=argument A valid
+	logic argB_v;
+	logic argC_v;
+	value_t arg;							// argument value for CSR instruction
+	// The following fields are loaded at enqueue time, but otherwise do not change.
+	logic last;								// 1=last instruction in group (not used)
+	rob_ndx_t group_len;			// length of instruction group (not used)
+	logic bt;									// branch to be taken as predicted
+	operating_mode_t om;			// operating mode
+	decode_bus_t decbus;			// decoded instruction
+	pregno_t pRa;							// physical registers (see decode bus for arch. regs)
 	pregno_t pRb;
 	pregno_t pRc;
 	pregno_t pRt;							// current Rt value
 	pregno_t nRt;							// new Rt
-	logic br;
-	pc_address_t brtgt;
-	logic takb;
 	logic [3:0] cndx;					// checkpoint index
-	logic [PREGS-1:0] avail;	// available registers at time of queue
-	instruction_t op;
-	cause_code_t exc;
-	regspec_t tgt;
-	logic argA_v;
-	logic argB_v;
-	logic argC_v;
-	value_t arg;
-	pc_address_t pc;
-	virtual_address_t vadr;
-	physical_address_t padr;
-	lsq_ndx_t lsqndx;
+	instruction_t op;					// original instruction
+	pc_address_t pc;					// PC of instruction
 } rob_entry_t;
 
 typedef struct packed {
 	logic v;
 	seqnum_t sn;
-	logic agen;						// virtual address calculated
-	logic tlb;						// address translated by TLB
+	logic agen;						// address generated through to physical address
 	rob_ndx_t rndx;				// reference to related ROB entry
 	virtual_address_t vadr;
 	physical_address_t padr;
@@ -1470,6 +1470,7 @@ input instruction_t ir;
 begin
 	fnIsRet = 1'b0;
 	case(ir.any.opcode)
+	OP_RTS:	fnIsRet = 1'b1;
 	OP_RTD:
 		fnIsRet = ir[10:9]==2'd2;	
 	default:
@@ -1481,10 +1482,23 @@ endfunction
 function fnIsRti;
 input instruction_t ir;
 begin
+	fnIsRti = 1'b0;
+	case(ir.any.opcode)
+	OP_RTS:
+		fnIsRti = ir[15:13]==3'd1 || ir[15:13]==3'd2;	
+	default:
+		fnIsRti = 1'b0;
+	endcase
+end
+endfunction
+/*
+function fnIsRti;
+input instruction_t ir;
+begin
 	fnIsRti = (fnIsRet(ir) && ir[10:9]==2'd1);
 end
 endfunction
-
+*/
 function fnIsFlowCtrl;
 input instruction_t ir;
 begin
@@ -1785,9 +1799,9 @@ end
 endfunction
 
 function fnIsLoad;
-input [18:0] op;
+input instruction_t op;
 begin
-	case(opcode_t'(op[6:0]))
+	case(op.any.opcode)
 	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDOU,OP_LDH,
 	OP_LDX:
 		fnIsLoad = 1'b1;
@@ -1817,10 +1831,10 @@ end
 endfunction
 
 function fnIsStore;
-input [18:0] op;
+input instruction_t op;
 begin
-	case(opcode_t'(op[6:0]))
-	OP_STB,OP_STW,OP_STT,OP_STO,
+	case(op.any.opcode)
+	OP_STB,OP_STW,OP_STT,OP_STO,OP_STOH,
 	OP_STX:
 		fnIsStore = 1'b1;
 	default:

@@ -36,28 +36,23 @@
 
 import QuplsPkg::*;
 
-module Qupls_decode_Ra(instr, regx, Ra);
+module Qupls_decode_rti(instr, rti);
 input instruction_t instr;
-input regx;
-output aregno_t Ra;
+output rti;
 
-function aregno_t fnRa;
+function fnIsRti;
 input instruction_t ir;
 begin
+	fnIsRti = 1'b0;
 	case(ir.any.opcode)
 	OP_RTS:
-		fnRa = {regx,ir[12:7]};
-	OP_RTD:
-		fnRa = 7'd62;
-	OP_DBRA:
-		fnRa = 7'd55;
+		fnIsRti = ir[15:13]==3'd1 || ir[15:13]==3'd2;	
 	default:
-		fnRa = {regx,ir[18:13]};
+		fnIsRti = 1'b0;
 	endcase
 end
 endfunction
 
-assign Ra = fnRa(instr);
+assign rti = fnIsRti(instr);
 
 endmodule
-

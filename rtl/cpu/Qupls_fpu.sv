@@ -36,9 +36,10 @@
 
 import QuplsPkg::*;
 
-module Qupls_fpu(rst, clk, ir, rm, a, b, c, t, i, p, o, done);
+module Qupls_fpu(rst, clk, idle, ir, rm, a, b, c, t, i, p, o, done);
 input rst;
 input clk;
+input idle;
 input instruction_t ir;
 input [2:0] rm;
 input value_t a;
@@ -324,6 +325,7 @@ begin
 end
 
 always_comb
+if (!idle)
 	case(ir.any.opcode)
 	OP_FLT2:
 		case(ir.f2.func)
@@ -356,11 +358,15 @@ always_comb
 		endcase
 	default:	done = 1'b1;
 	endcase
+else
+	done = 1'b0;
 
 always_comb
+	o = bus;
+	/*
 	if (p[0])
 		o = bus;
 	else
 		o = t;
-
+	*/
 endmodule
