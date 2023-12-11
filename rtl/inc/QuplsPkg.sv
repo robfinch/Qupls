@@ -92,6 +92,15 @@ parameter SUPPORT_3COMMIT = PERFORMANCE;
 // cost additional logic.
 parameter SUPPORT_COMMIT23 = PERFORMANCE;
 
+// The following parameter indicates to support variable length instructions.
+// If variable length instructions are not supported, then all instructions
+// are assumed to be five bytes long.
+parameter SUPPORT_VLI = 1'b1;
+// The following indicates to support the variable length instruction
+// accelerator byte.
+parameter SUPPORT_VLIB = 1'b0;
+// The following parameter indicates to use instruction block headers.
+parameter SUPPORT_IBH = 1'b0;
 parameter SUPPORT_REGLIST = 1'b0;
 parameter SUPPORT_PGREL	= 1'b0;	// Page relative branching, must be zero
 parameter SUPPORT_REP = 1'b0;
@@ -169,6 +178,19 @@ typedef struct packed
 } lsq_ndx_t;
 
 typedef logic [NREGS-1:1] reg_bitmask_t;
+typedef logic [5:0] ibh_offset_t;
+
+// Instruction block header.
+// The offset is the low order six bits of the PC needed for an instruction
+// group. This is needed to advance the PC in the branch-target buffer. Only
+// the offset of the first instruction in the group is needed. If the offset
+// is zero the PC will advance to the next cache line, otherwise the PC will
+// advance to the next cache line once all the offsets are used.
+
+typedef struct packed
+{
+	ibh_offset_t [3:0] offs;	// instruction group offsets.
+} ibh_t;	// 24-bits
 
 typedef enum logic [2:0] {
 	OP_SRC_REG = 3'd0,
@@ -305,8 +327,10 @@ typedef enum logic [6:0] {
 	OP_REP			= 7'd120,
 	OP_PRED			= 7'd121,
 	OP_ATOM			= 7'd122,
-	OP_TPFX			= 7'd123,
-	OP_RTS			= 7'd124,
+	OP_RTS			= 7'd123,
+	OP_PFXA			= 7'd124,
+	OP_PFXB			= 7'd125,
+	OP_PFXC			= 7'd126,
 	OP_NOP			= 7'd127
 } opcode_t;
 /*
@@ -1362,6 +1386,7 @@ typedef struct packed {
 	logic [3:0] cndx;					// checkpoint index
 	instruction_t op;					// original instruction
 	pc_address_t pc;					// PC of instruction
+	logic [2:0] grp;					// instruction group of PC
 } rob_entry_t;
 
 typedef struct packed {
@@ -1388,7 +1413,9 @@ typedef struct packed {
 	memsz_t memsz;				// indicates size of data
 	logic [7:0] bytcnt;		// byte count of data to load/store
 	pregno_t Rt;
+	aregno_t aRt;					// reference for freeing
 	pregno_t Rc;					// 'C' register for store
+	operating_mode_t om;	// operating mode
 	logic datav;					// store data is valid
 	logic [511:0] res;		// stores unaligned data as well (must be last field)
 } lsq_entry_t;
@@ -1834,7 +1861,7 @@ function fnIsStore;
 input instruction_t op;
 begin
 	case(op.any.opcode)
-	OP_STB,OP_STW,OP_STT,OP_STO,OP_STOH,
+	OP_STB,OP_STW,OP_STT,OP_STO,OP_STH,
 	OP_STX:
 		fnIsStore = 1'b1;
 	default:

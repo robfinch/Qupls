@@ -42,8 +42,8 @@
 
 import QuplsPkg::*;
 
-module Qupls_extract_ins(rst_i, clk_i, en_i, nop_i, irq_i, hirq_i, vect_i,
-	mipv_i, mip_i, ic_line_i,reglist_active,
+module Qupls_extract_ins(rst_i, clk_i, en_i, nop_i, nop_o, irq_i, hirq_i, vect_i,
+	branchmiss, misspc, mipv_i, mip_i, ic_line_i,reglist_active, grp_i, grp_o,
 	pc0_i, pc1_i, pc2_i, pc3_i, pc4_i, pc5_i, pc6_i,
 	ls_bmf_i, pack_regs_i, scale_regs_i, regcnt_i,
 	mc_ins0_i, mc_ins1_i, mc_ins2_i, mc_ins3_i, mc_ins4_i, mc_ins5_i, mc_ins6_i,
@@ -54,13 +54,18 @@ input rst_i;
 input clk_i;
 input en_i;
 input nop_i;
+output reg nop_o;
 input [2:0] irq_i;
 input hirq_i;
 input [8:0] vect_i;
 input reglist_active;
+input branchmiss;
+input pc_address_t misspc;
 input mipv_i;
 input [11:0] mip_i;
 input [1023:0] ic_line_i;
+input [2:0] grp_i;
+output reg [2:0] grp_o;
 input pc_address_t pc0_i;
 input pc_address_t pc1_i;
 input pc_address_t pc2_i;
@@ -159,12 +164,22 @@ always_comb ins1_ = ic_line2 >> {pc1[5:0],3'd0};
 always_comb ins2_ = ic_line2 >> {pc2[5:0],3'd0};
 always_comb ins3_ = ic_line2 >> {pc3[5:0],3'd0};
 
+// If there was a branch miss, one of the PCs must match the miss PC or an
+// illegal instruction address was targeted. Instructions before the miss PC
+// should not be executed.
+
+reg nop0,nop1,nop2,nop3;
+always_comb nop0 = nop_i || (branchmiss && misspc[5:0] > pc0_i[5:0]);
+always_comb nop1 = nop_i || (branchmiss && misspc[5:0] > pc1_i[5:0]);
+always_comb nop2 = nop_i || (branchmiss && misspc[5:0] > pc2_i[5:0]);
+always_comb nop3 = nop_i;
+
 Qupls_ins_extract_mux umux0
 (
 	.rst(rst_i),
 	.clk(clk_i),
 	.en(en_i),
-	.nop(nop_i),
+	.nop(nop0),
 	.rgi(2'd0),
 	.regcnt(regcnt_i),
 	.hirq(hirq),
@@ -188,7 +203,7 @@ Qupls_ins_extract_mux umux1
 	.rst(rst_i),
 	.clk(clk_i),
 	.en(en_i),
-	.nop(nop_i),
+	.nop(nop1),
 	.rgi(2'd1),
 	.regcnt(regcnt_i),
 	.hirq(hirq),
@@ -212,7 +227,7 @@ Qupls_ins_extract_mux umux2
 	.rst(rst_i),
 	.clk(clk_i),
 	.en(en_i),
-	.nop(nop_i),
+	.nop(nop2),
 	.rgi(2'd2),
 	.regcnt(regcnt_i),
 	.hirq(hirq),
@@ -236,7 +251,7 @@ Qupls_ins_extract_mux umux3
 	.rst(rst_i),
 	.clk(clk_i),
 	.en(en_i),
-	.nop(nop_i),
+	.nop(nop3),
 	.rgi(2'd3),
 	.regcnt(regcnt_i),
 	.hirq(hirq),
@@ -271,6 +286,8 @@ if (en)
 		nop_i ? {33'd0,OP_NOP} :
 		mipv ? mc_ins6 : ic_line2 >> {pc6[5:0],3'd0};
 
+always_ff @(posedge clk) if (en) nop_o <= nop_i;
+
 always_comb ins0_o = ins0;
 always_comb ins1_o = ins1;
 always_comb ins2_o = ins2;
@@ -286,5 +303,6 @@ always_ff @(posedge clk) if (en) pc3_o <= pc3;
 always_ff @(posedge clk) if (en) pc4_o <= pc4;
 always_ff @(posedge clk) if (en) pc5_o <= pc5;
 always_ff @(posedge clk) if (en) pc6_o <= pc6;
+always_ff @(posedge clk) if (en) grp_o <= grp_i;
 
 endmodule

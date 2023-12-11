@@ -115,6 +115,37 @@ begin
 	endcase
 	*/
 	// The following uses less hardware but require postfixes to be in order.
+	if (ins[ndx].any.opcode==OP_PFXA) begin
+		imma = {{32{ins[ndx][39]}},ins[ndx][39:8]};
+		if (flt)
+			imma = imm32x64a;
+		ndx = ndx + 1;
+	end
+	if (ins[ndx].any.opcode==OP_PFXA) begin
+		imma[63:32] = ins[ndx][39:8];
+		ndx = ndx + 1;
+	end
+	if (ins[ndx].any.opcode==OP_PFXB) begin
+		immb = {{32{ins[ndx][39]}},ins[ndx][39:8]};
+		if (flt)
+			immb = imm32x64b;
+		ndx = ndx + 1;
+	end
+	if (ins[ndx].any.opcode==OP_PFXB) begin
+		immb[63:32] = ins[ndx][39:8];
+		ndx = ndx + 1;
+	end
+	if (ins[ndx].any.opcode==OP_PFXC) begin
+		immc = {{32{ins[ndx][39]}},ins[ndx][39:8]};
+		if (flt)
+			immc = imm32x64c;
+		ndx = ndx + 1;
+	end
+	else if (ins[ndx].any.opcode==OP_PFXC) begin
+		immc[63:32] = ins[ndx][39:8];
+		ndx = ndx + 1;
+	end
+	/*
 	if ((ins[ndx].any.opcode==OP_PFXA32)||
 		(ins[ndx].any.opcode==OP_PFXA64)||
 		(ins[ndx].any.opcode==OP_PFXA128))
@@ -127,8 +158,10 @@ begin
 		(ins[ndx].any.opcode==OP_PFXC64)||
 		(ins[ndx].any.opcode==OP_PFXC128))
 		tOPFXC;
+	*/
 end
 
+/*
 task tOPFXA;
 begin
 	if (flt) begin
@@ -191,5 +224,5 @@ begin
 	ndx = ndx + 1;
 end
 endtask
-
+*/
 endmodule

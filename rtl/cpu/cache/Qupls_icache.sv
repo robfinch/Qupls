@@ -46,7 +46,7 @@ import QuplsPkg::*;
 import Qupls_cache_pkg::*;
 
 module Qupls_icache(rst,clk,invce,snoop_adr,snoop_v,snoop_cid,invall,invline,
-	ip_asid,ip,ip_o,ihit_o,ihit,ic_line_hi_o,ic_line_lo_o,ic_valid,
+	nop,nop_o,ip_asid,ip,ip_o,ihit_o,ihit,ic_line_hi_o,ic_line_lo_o,ic_valid,
 	miss_vadr,miss_asid,
 	ic_line_i,wway,wr_ic
 	);
@@ -82,7 +82,8 @@ output QuplsPkg::code_address_t miss_vadr;
 input ICacheLine ic_line_i;
 input [LOG_WAYS:0] wway;
 input wr_ic;
-
+input nop;
+output nop_o;
 
 integer n, m;
 integer g, j;
@@ -122,14 +123,18 @@ wire ihit1e, ihit1o;
 reg ihit2e, ihit2o;
 wire ihit2;
 wire valid2e, valid2o;
+reg nop2;
 
-always_comb	//ff @(posedge clk)
+always_ff @(posedge clk)
+	nop2 <= nop;
+assign nop_o = nop2;
+always_ff @(posedge clk)
 	ip2 <= ip;
 always_comb
 	ihit = ihit1e&ihit1o;
-always_comb	//ff @(posedge clk)
+always_ff @(posedge clk)
 	ihit2e <= ihit1e;
-always_comb	//ff @(posedge clk)
+always_ff @(posedge clk)
 	ihit2o <= ihit1o;
 always_comb
 	// *** The following causes the hit to tend to oscillate between hit
@@ -178,7 +183,8 @@ sram_512x256_1rw1r uicmo
 );
 end
 else begin
-icache_sram_1r1w
+//icache_sram_1r1w
+sram_1r1w
 #(
 	.WID(Qupls_cache_pkg::ICacheLineWidth),
 	.DEP(LINES*WAYS)
@@ -194,7 +200,7 @@ uicme
 	.o(ic_eline.data)
 );
 
-icache_sram_1r1w
+sram_1r1w
 #(
 	.WID(Qupls_cache_pkg::ICacheLineWidth),
 	.DEP(LINES*WAYS)

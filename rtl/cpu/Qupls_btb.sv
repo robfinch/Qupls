@@ -36,13 +36,21 @@
 
 import QuplsPkg::*;
 
-module Qupls_btb(rst, clk, rclk, pc0, pc1, pc2, pc3, pc4, next_pc, takb,
-	commit_pc0, commit_brtgt0, commit_takb0, commit_pc1, commit_brtgt1, commit_takb1,
-	commit_pc2, commit_brtgt2, commit_takb2, commit_pc3, commit_brtgt3, commit_takb3
+module Qupls_btb(rst, clk, en, rclk, block_header, igrp, length_byte,
+	pc, pc0, pc1, pc2, pc3, pc4, next_pc, takb, branchmiss, missgrp, misspc,
+	commit_pc0, commit_brtgt0, commit_takb0, commit_grp0,
+	commit_pc1, commit_brtgt1, commit_takb1, commit_grp1,
+	commit_pc2, commit_brtgt2, commit_takb2, commit_grp2,
+	commit_pc3, commit_brtgt3, commit_takb3, commit_grp3
 	);
 input rst;
 input clk;
+input en;
 input rclk;
+input ibh_t block_header;
+output reg [2:0] igrp;
+input [7:0] length_byte;
+input pc_address_t pc;
 input pc_address_t pc0;
 input pc_address_t pc1;
 input pc_address_t pc2;
@@ -50,21 +58,29 @@ input pc_address_t pc3;
 input pc_address_t pc4;
 output pc_address_t next_pc;
 output reg takb;
+input branchmiss;
+input pc_address_t misspc;
+input [2:0] missgrp;
 input pc_address_t commit_pc0;
 input pc_address_t commit_brtgt0;
 input commit_takb0;
+input [2:0] commit_grp0;
 input pc_address_t commit_pc1;
 input pc_address_t commit_brtgt1;
 input commit_takb1;
+input [2:0] commit_grp1;
 input pc_address_t commit_pc2;
 input pc_address_t commit_brtgt2;
 input commit_takb2;
+input [2:0] commit_grp2;
 input pc_address_t commit_pc3;
 input pc_address_t commit_brtgt3;
 input commit_takb3;
+input [2:0] commit_grp3;
 
 typedef struct packed {
 	logic takb;
+	logic [2:0] grp;
 	pc_address_t pc;
 	pc_address_t tgt;
 } btb_entry_t;
@@ -404,7 +420,11 @@ always_ff @(posedge clk)
 
 always_comb
 begin
-	if (pc0==doutb0.pc && doutb0.takb) begin
+	if (branchmiss) begin
+		next_pc <= misspc;
+		takb <= 1'b1;
+	end
+	else if (pc0==doutb0.pc && doutb0.takb) begin
 		next_pc <= doutb0.tgt;
 		takb <= 1'b1;
 	end
@@ -421,11 +441,53 @@ begin
 		takb <= 1'b1;
 	end
 	else begin
-		next_pc <= pc4;
-		next_pc[11:0] <= 'd0;
+		if (SUPPORT_IBH) begin
+			// Advance to the next group? We know the address of the start of the
+			// group, it is always the same, offset 0.
+			if (igrp >= 3'd3 || block_header.offs[igrp]=='d0)
+				next_pc <= {pc[$bits(pc_address_t)-1:6]+2'd1,6'd0};
+			else
+				next_pc <= {pc[$bits(pc_address_t)-1:6],block_header.offs[igrp]};
+		end
+		else if (SUPPORT_VLI) begin
+			if (SUPPORT_VLIB)
+				next_pc <= pc + length_byte;
+			else
+				next_pc <= pc4;
+		end
+		else
+			next_pc <= pc + 5'd20;	// four instructions
 		takb <= 1'b0;
 	end
 end
+
+generate begin : giGrp
+if (SUPPORT_IBH) begin
+	always_ff @(posedge clk)
+	if (rst)
+		igrp <= 3'd0;
+	else begin
+		if (en) begin
+			if (branchmiss)
+				igrp <= missgrp;
+			else if (pc0==doutb0.pc && doutb0.takb)
+				igrp <= doutb0.grp;
+			else if (pc1==doutb1.pc && doutb1.takb)
+				igrp <= doutb1.grp;
+			else if (pc2==doutb2.pc && doutb2.takb)
+				igrp <= doutb2.grp;
+			else if (pc3==doutb3.pc && doutb3.takb)
+				igrp <= doutb3.grp;
+			else begin
+				igrp <= igrp + 2'd1;
+				if (igrp>=3'd3 || block_header.offs[igrp]=='d0)
+					igrp <= 'd0;
+			end
+		end
+	end
+end
+end
+endgenerate
 
 always_ff @(posedge clk)
 if (rst) begin
@@ -440,15 +502,19 @@ else begin
 	tmp0.pc <= commit_pc0;
 	tmp0.takb <= commit_takb0;
 	tmp0.tgt <= commit_brtgt0;
+	tmp0.grp <= commit_grp0;
 	tmp1.pc <= commit_pc1;
 	tmp1.takb <= commit_takb1;
 	tmp1.tgt <= commit_brtgt1;
+	tmp1.grp <= commit_grp1;
 	tmp2.pc <= commit_pc2;
 	tmp2.takb <= commit_takb2;
 	tmp2.tgt <= commit_brtgt2;
+	tmp2.grp <= commit_grp2;
 	tmp3.pc <= commit_pc3;
 	tmp3.takb <= commit_takb3;
 	tmp3.tgt <= commit_brtgt3;
+	tmp3.grp <= commit_grp3;
 	addra <= commit_pc0[21:12];
 	w <= commit_takb0|commit_takb1|commit_takb2|commit_takb3;
 end

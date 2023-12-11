@@ -143,6 +143,7 @@ reg [WID:1] o1;
 
 				
 // If reading and writing the same address at the same time, return the new data.
+// I do not think this can happen ^^^ the read address would need to be registered for performance.
 
 always_ff @(posedge clk)
 	wr1 <= wr;
@@ -150,11 +151,15 @@ always_ff @(posedge clk)
 	wadr1 <= wadr;
 always_ff @(posedge clk)
 	i1 <= i;
+/*
 always_comb
 	if (wr1 && wadr1==radr)
 		o = i1;
 	else
 		o = o1;
+*/
+always_comb
+	o = o1;
 
 endmodule
 

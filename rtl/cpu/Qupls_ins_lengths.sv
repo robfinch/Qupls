@@ -41,7 +41,7 @@
 import QuplsPkg::*;
 
 module Qupls_ins_lengths(rst_i, clk_i, en_i, hit_i, hit_o, line_i, line_o,
-	pc_i, pc_o, len0_o, len1_o, len2_o, len3_o, len4_o, len5_o);
+	pc_i, pc_o, grp_i, grp_o, len0_o, len1_o, len2_o, len3_o, len4_o, len5_o);
 input rst_i;
 input clk_i;
 input en_i;										// pipeline enable
@@ -51,6 +51,8 @@ input [1023:0] line_i;
 output reg [1023:0] line_o;
 input pc_address_t pc_i;
 output pc_address_t pc_o;
+input [2:0] grp_i;
+output reg [2:0] grp_o;
 output reg [4:0] len0_o;
 output reg [4:0] len1_o;
 output reg [4:0] len2_o;
@@ -75,6 +77,8 @@ wire [4:0] len [0:63];
 reg [4:0] lenr [0:63];
 reg [4:0] lenr2 [0:63];
 reg hit, hit2;
+reg [2:0] grp,grp2;
+
 generate begin : gInsLen
 	for (g = 0; g < 64; g = g + 1) begin
 		Qupls_ins_length uiln0 (line_i[g*8+7:g*8], len[g]);
@@ -89,6 +93,8 @@ endgenerate
 always_ff @(posedge clk) if (rst_i) hit <= 1'b0; else hit <= hit_i;
 always_ff @(posedge clk) if (rst_i) hit2 <= 1'b0; else hit2 <= hit;
 always_ff @(posedge clk) if (rst_i) hit_o <= 1'b0; else hit_o <= hit2;
+always_ff @(posedge clk) if (rst_i) grp <= 'd0; else grp <= grp_i;
+always_ff @(posedge clk) if (rst_i) grp_o <= 'd0; else grp_o <= grp2;
 
 always_ff @(posedge clk)
 if (rst_i)

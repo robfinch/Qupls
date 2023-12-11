@@ -17,7 +17,7 @@
 //    this list of conditions and the following disclaimer in the documentation
 //    and/or other materials provided with the distribution.
 //
-// 3. Neither the name of the copyright holder nor the names of its
+// 3. Neither the name of the copyright ener nor the names of its
 //    contributors may be used to endorse or promote products derived from
 //    this software without specific prior written permission.
 //
@@ -32,46 +32,52 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 10 LUTs
+// Instruction Length Decode
+// - zero latency
+//
+// 1650 LUTs
 // ============================================================================
 
 import QuplsPkg::*;
 
-module Qupls_ins_length(ins, len);
-input instruction_t ins;
-output reg [2:0] len;					// length in bytes
+module Qupls_ins_lengths_L0(rst_i, hit_i, hit_o, line_i, line_o,
+	pc_i, pc_o, grp_i, grp_o, len0_o, len1_o, len2_o, len3_o, len4_o, len5_o);
+input rst_i;
+input hit_i;
+output reg hit_o;
+input [1023:0] line_i;
+output reg [1023:0] line_o;
+input pc_address_t pc_i;
+output pc_address_t pc_o;
+input [2:0] grp_i;
+output reg [2:0] grp_o;
+output reg [4:0] len0_o;
+output reg [4:0] len1_o;
+output reg [4:0] len2_o;
+output reg [4:0] len3_o;
+output reg [4:0] len4_o;
+output reg [4:0] len5_o;
 
-always_comb
-	casez(ins.any.opcode)
-	OP_BSR:	len = 3'd5;
-	OP_JSR:	len = 3'd5;
-	OP_BccU:	len = 3'd5;
-	OP_Bcc:	len = 3'd5;
-	OP_FBccH:	len = 3'd5;
-	OP_FBccS:	len = 3'd5;
-	OP_FBccD:	len = 3'd5;
-	OP_FBccQ:	len = 3'd5;
-	OP_CSR:	len = 3'd5;
-	OP_FLT2,OP_FLT3:				// floating point
-					len = 3'd5;
-	OP_R1,OP_ADDQ:
-					len = 3'd3;
-	OP_PFXA,OP_PFXB,OP_PFXC:
-					len = 3'd5;
-	/*
-	OP_PFXA,OP_PFXB,OP_PFXC:
-		case(ins.pfx.len)
-		2'd0:	len = 5'd4;
-		2'd1:	len = 5'd6;
-		2'd2:	len = 5'd10;
-		2'd3:	len = 5'd18;
-		endcase
-	*/
-	OP_VEC,OP_VECZ,OP_RTS:
-					len = 3'd2;
-	OP_NOP,OP_LSCTX:
-					len = 3'd1;
-	default:	len = 3'd4;
-	endcase
+genvar g;
+
+wire [2:0] len [0:63];
+
+generate begin : gInsLen
+	for (g = 0; g < 64; g = g + 1)
+		Qupls_ins_length uiln0 (line_i[g*8+7:g*8], len[g]);
+end
+endgenerate
+
+always_comb if (rst_i) hit_o = 1'b0; else hit_o = hit_i;
+always_comb if (rst_i) grp_o = 'd0; else grp_o = grp_i;
+
+always_comb if (rst_i) pc_o = RSTPC; else pc_o = pc_i;
+always_comb if (rst_i) line_o = {1024{1'b1}}; else line_o = line_i;
+always_comb if (rst_i) len0_o = 5'd1; else len0_o = len[pc_i[5:0]];
+always_comb if (rst_i) len1_o = 5'd1; else len1_o = len[pc_i[5:0] + len0_o];
+always_comb if (rst_i) len2_o = 5'd1; else len2_o = len[pc_i[5:0] + len0_o + len1_o];
+always_comb if (rst_i) len3_o = 5'd1; else len3_o = len[pc_i[5:0] + len0_o + len1_o + len2_o];
+always_comb if (rst_i) len4_o = 5'd1; else len4_o = len[pc_i[5:0] + len0_o + len1_o + len2_o + len3_o];
+always_comb if (rst_i) len5_o = 5'd1; else len5_o = len[pc_i[5:0] + len0_o + len1_o + len2_o + len3_o + len4_o];
 
 endmodule

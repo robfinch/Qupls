@@ -168,8 +168,12 @@ always_ff @(posedge clk)
 if (rst)
 	freea <= 'd0;
 else begin
-	if (cmtav)
-		freea <= cpram_out >> (cmtaa * RBIT);
+	if (cmtav) begin
+		if (BANKS < 2)
+			freea <= cpram_out >> (cmtaa * RBIT);
+		else
+			freea <= cpram_out >> {(cmtaa * RBIT),cmtbanka};
+	end
 	else
 	 	freea <= cmtap;
 end
@@ -180,8 +184,12 @@ always_ff @(posedge clk)
 if (rst)
 	freeb <= 'd0;
 else begin
-	if (cmtbv)
-		freeb <= cpram_out >> (cmtba * RBIT);
+	if (cmtbv) begin
+		if (BANKS < 2)
+			freeb <= cpram_out >> (cmtba * RBIT);
+		else
+			freeb <= cpram_out >> {(cmtba * RBIT),cmtbankb};
+	end
 	else
 	 	freeb <= cmtbp;
 end
@@ -192,8 +200,12 @@ always_ff @(posedge clk)
 if (rst)
 	freec <= 'd0;
 else begin
-	if (cmtcv)
-		freec <= cpram_out >> (cmtca * RBIT);
+	if (cmtcv) begin
+		if (BANKS < 2)
+			freec <= cpram_out >> (cmtca * RBIT);
+		else
+			freec <= cpram_out >> {(cmtca * RBIT),cmtbankc};
+	end
 	else
 	 	freec <= cmtcp;
 end
@@ -204,8 +216,12 @@ always_ff @(posedge clk)
 if (rst)
 	freed <= 'd0;
 else begin
-	if (cmtav)
-		freed <= cpram_out >> (cmtda * RBIT);
+	if (cmtav) begin
+		if (BANKS < 2)
+			freed <= cpram_out >> (cmtda * RBIT);
+		else
+			freed <= cpram_out >> {(cmtda * RBIT),cmtbankd};
+	end
 	else
 	 	freed <= cmtdp;
 end
