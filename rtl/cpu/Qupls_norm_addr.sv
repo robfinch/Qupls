@@ -32,29 +32,66 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
+// Given a "flat" or unnormalized address, convert it into block,group,and num
 // ============================================================================
 
 import QuplsPkg::*;
 
-module Qupls_decode_nop(instr, nop);
-input instruction_t instr;
-output nop;
+module Qupls_norm_addr(misspc, ibh, len0, len1, len2, missblock, missgrp, missinsn);
+input pc_address_t misspc;	// unnormalized miss address
+input ibh_t ibh;						// instruction block header
+input [2:0] len0;
+input [2:0] len1;
+input [2:0] len2;
+output reg [$bits(pc_address_t)-1:6] missblock;
+output reg [2:0] missgrp;		// group instruction is contained in
+output reg [2:0] missinsn;	// instruction number of address
 
-function fnIsNop;
-input instruction_t ir;
+reg [5:0] grpndx;						// byte index of instruction in group
+
+assign missblock = misspc[$bits(pc_address_t)-1:6];
+
+function [2:0] fnInsnNum;
+input [5:0] pc;
+input [5:0] offs;
+reg [5:0] grpndx;
 begin
-	case(ir.r2.opcode)
-	OP_REGC,
-	OP_PFXA32,OP_PFXB32,OP_PFXC32,
-	OP_PFXA64,OP_PFXB64,OP_PFXC64,
-	OP_PFXA128,OP_PFXB128,OP_PFXC128,
-	OP_VEC,OP_VECZ,OP_NOP,OP_ENTER,OP_LEAVE,OP_PUSH,OP_POP,OP_ATOM:
-		fnIsNop = 1'b1;
-	default:	fnIsNop = 1'b0;
-	endcase
-end
+	grpndx = pc - offs;
+	// Sort
+	if (grpndx > len0+len1+len2)
+		fnInsnNum = 3'd3;
+	else if (grpndx > len0+len1)
+		fnInsnNum = 3'd2;
+	else if (grpndx > len0)
+		fnInsnNum = 3'd1;
+	else
+		fnInsnNum = 3'd0;					// assume first instruction
+end			
 endfunction
 
-assign nop = fnIsNop(instr);
+always_comb
+begin
+	if (misspc[5:0] >= ibh.offs[3])
+		missgrp = 3'd4;
+	else if (misspc[5:0] >= ibh.offs[2])
+		missgrp = 3'd3;
+	else if (misspc[5:0] >= ibh.offs[1])
+		missgrp = 3'd2;
+	else if (misspc[5:0] >= ibh.offs[0])
+		missgrp = 3'd1;
+	else
+		missgrp = 3'd0;
+
+	if (missgrp==3'd0)
+		missinsn = fnInsnNum(misspc[5:0], ibh.offs[0]);
+	else if (missgpr==3'd1)
+		missinsn = fnInsnNum(misspc[5:0], ibh.offs[1]);
+	else if (missgpr==3'd2)
+		missinsn = fnInsnNum(misspc[5:0], ibh.offs[2]);
+	else if (missgpr==3'd3)
+		missinsn = fnInsnNum(misspc[5:0], ibh.offs[3]);
+	else
+		missinsn = fnInsnNum(misspc[5:0], ibh.offs[4]);
+end
 
 endmodule

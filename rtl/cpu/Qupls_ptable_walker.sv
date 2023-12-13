@@ -39,7 +39,10 @@ import fta_bus_pkg::*;
 import QuplsMmupkg::*;
 import QuplsPkg::*;
 
-module Qupls_ptable_walker(rst, clk, tlbmiss, tlb_missadr, tlb_missasid, tlb_missqn,
+module Qupls_ptable_walker(rst, clk, 
+	tlbmiss, tlb_missadr, tlb_missasid, tlb_missid, tlb_missqn,
+	commit0_id, commit0_idv, commit1_id, commit1_idv, commit2_id, commit2_idv,
+	commit3_id, commit3_idv,
 	in_que, ftas_req, ftas_resp,
 	ftam_req, ftam_resp, fault_o, faultq_o, tlb_wr, tlb_way, tlb_entryno, tlb_entry);
 parameter CID = 6'd3;
@@ -74,7 +77,16 @@ input clk;
 input tlbmiss;
 input address_t tlb_missadr;
 input asid_t tlb_missasid;
+input rob_ndx_t tlb_missid;
 input [1:0] tlb_missqn;
+input rob_ndx_t commit0_id;
+input commit0_idv;
+input rob_ndx_t commit1_id;
+input commit1_idv;
+input rob_ndx_t commit2_id;
+input commit2_idv;
+input rob_ndx_t commit3_id;
+input commit3_idv;
 output reg in_que;
 input fta_cmd_request128_t ftas_req;
 output fta_cmd_response128_t ftas_resp;
@@ -101,6 +113,7 @@ typedef struct packed {
 	logic o;					// out
 	logic bc;					// 1=bus cycle complete
 	logic [1:0] qn;
+	rob_ndx_t id;
 	asid_t asid;
 	address_t adr;		// address to translate
 	address_t tadr;		// temporary address
@@ -271,7 +284,12 @@ always_comb
 begin
 	sel_qe = -1;
 	for (n3 = 0; n3 < MISSQ_SIZE; n3 = n3 + 1)
-		if (miss_queue[n3].v && miss_queue[n3].bc && sel_qe < 0)
+		if (miss_queue[n3].v && miss_queue[n3].bc && sel_qe < 0 &&
+			(miss_queue[n3].id==commit0_id && commit0_idv) ||
+			(miss_queue[n3].id==commit1_id && commit1_idv) ||
+			(miss_queue[n3].id==commit2_id && commit2_idv) ||
+			(miss_queue[n3].id==commit3_id && commit3_idv)
+		)	
 			sel_qe = n3;
 end
 
@@ -316,6 +334,7 @@ else begin
 			miss_queue[empty_qe].bc <= 1'b1;
 			miss_queue[empty_qe].lvl <= ptbr.level;
 			miss_queue[empty_qe].asid <= tlb_missasid;
+			miss_queue[empty_qe].id <= tlb_missid;
 			miss_queue[empty_qe].adr <= tlb_missadr;
 			miss_queue[empty_qe].qn <= tlb_missqn;
 			

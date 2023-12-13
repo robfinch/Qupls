@@ -36,26 +36,29 @@
 
 import QuplsPkg::*;
 
-module Qupls_decode_Rc(instr, regx, Rc);
-input instruction_t instr;
+module Qupls_decode_Rc(instr, regx, Rc, Rcc);
+input instruction_t [4:0] instr;
 input [3:0] regx;
 output aregno_t Rc;
+output reg [2:0] Rcc;
 
-function aregno_t fnRc;
-input instruction_t ir;
+always_comb
 begin
-	case(ir.any.opcode)
-	OP_RTD:
-		fnRc = 7'd56 + ir[8:7];
-	OP_STB,OP_STW,OP_STT,OP_STO,OP_STX:
-		fnRc = {regx[0],ir[12:7]};
+	Rc = 'd0;
+	Rcc = 'd0;
+	case(instr[0].any.opcode)
+	OP_STB,OP_STW,OP_STT,OP_STO,OP_STH,OP_STX:
+		Rc = {regx[0],instr[0][12:7]};
+	OP_CLR,OP_COM,OP_DEP,OP_EXT,OP_EXTU,OP_SET:
+		Rc = {regx[3],instr[0][30:25]};
 	default:
-		fnRc = {regx[3],ir[30:25]};
+		Rc = 'd0;
 	endcase
+	if (instr[1].any.opcode==OP_REGC) begin
+		Rc = instr[1][12:7];		
+		Rcc = instr[1][15:13];
+	end
 end
-endfunction
-
-assign Rc = fnRc(instr);
 
 endmodule
 

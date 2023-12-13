@@ -37,7 +37,8 @@
 import QuplsPkg::*;
 
 module Qupls_btb(rst, clk, en, rclk, block_header, igrp, length_byte,
-	pc, pc0, pc1, pc2, pc3, pc4, next_pc, takb, branchmiss, missgrp, misspc,
+	pc, pc0, pc1, pc2, pc3, pc4, next_pc, takb,
+	branchmiss, branchmiss_state, misspc,
 	commit_pc0, commit_brtgt0, commit_takb0, commit_grp0,
 	commit_pc1, commit_brtgt1, commit_takb1, commit_grp1,
 	commit_pc2, commit_brtgt2, commit_takb2, commit_grp2,
@@ -45,7 +46,7 @@ module Qupls_btb(rst, clk, en, rclk, block_header, igrp, length_byte,
 	);
 input rst;
 input clk;
-input en;
+input en;										// enable group to advance
 input rclk;
 input ibh_t block_header;
 output reg [2:0] igrp;
@@ -59,8 +60,8 @@ input pc_address_t pc4;
 output pc_address_t next_pc;
 output reg takb;
 input branchmiss;
+input [2:0] branchmiss_state;
 input pc_address_t misspc;
-input [2:0] missgrp;
 input pc_address_t commit_pc0;
 input pc_address_t commit_brtgt0;
 input commit_takb0;
@@ -420,6 +421,9 @@ always_ff @(posedge clk)
 
 always_comb
 begin
+	// On a branch miss the misspc will have the correct block so the
+	// cache line can be fetched, but the group will not be valid yet.
+	// The group is loaded at state 1 below.
 	if (branchmiss) begin
 		next_pc <= misspc;
 		takb <= 1'b1;
@@ -468,8 +472,19 @@ if (SUPPORT_IBH) begin
 		igrp <= 3'd0;
 	else begin
 		if (en) begin
-			if (branchmiss)
-				igrp <= missgrp;
+			// Instruction block header should be valid again at this state.
+			if (branchmiss_state==3'd3) begin
+				if (pc[5:0] >= ibh.offs[3])
+					igrp <= 3'd4;
+				else if (pc[5:0] >= ibh.offs[2])
+					igrp <= 3'd3;
+				else if (pc[5:0] >= ibh.offs[1])
+					igrp <= 3'd2;
+				else if (pc[5:0] >= ibh.offs[0])
+					igrp <= 3'd1;
+				else
+					igrp <= 3'd0;
+			end
 			else if (pc0==doutb0.pc && doutb0.takb)
 				igrp <= doutb0.grp;
 			else if (pc1==doutb1.pc && doutb1.takb)

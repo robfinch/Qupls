@@ -39,7 +39,7 @@
 import const_pkg::*;
 import QuplsPkg::*;
 
-module Qupls_alu(rst, clk, clk2x, ld, ir, div, a, b, c, i, pc, csr,
+module Qupls_alu(rst, clk, clk2x, ld, ir, div, a, b, c, i, cs, pc, csr,
 	o, mul_done, div_done, div_dbz);
 parameter ALU0 = 1'b0;
 input rst;
@@ -52,6 +52,7 @@ input value_t a;
 input value_t b;
 input value_t c;
 input value_t i;
+input [2:0] cs;
 input pc_address_t pc;
 input value_t csr;
 output value_t o;
@@ -60,6 +61,7 @@ output div_done;
 output div_dbz;
 
 wire cd_args;
+value_t cc;
 reg [3:0] mul_cnt;
 double_value_t prod, prod1, prod2;
 double_value_t produ, produ1, produ2;
@@ -74,6 +76,15 @@ always_comb
 	shr = {{64{ir[33]}},a,64'd0} >> (ir[32] ? ir[24:19] : b[5:0]);
 always_comb
 	asr = {{64{a[63]}},a,64'd0} >> (ir[32] ? ir[24:19] : b[5:0]);
+
+always_comb
+	case(cs)
+	3'd0:	cc = c;			// As is
+	3'd1:	cc = -c;		// Two's complement
+	3'd2:	cc = ~c;		// One's complement
+	3'd3:	cc = {~c[$bits(value_t)-1],c[$bits(value_t)-2:0]};	// Float negate
+	default:	cc = c;
+	endcase
 
 always_ff @(posedge clk)
 begin
@@ -126,8 +137,8 @@ begin
 	case(ir.any.opcode)
 	OP_R2:
 		case(ir.r2.func)
-		FN_ADD:	bus = a + b;
-		FN_SUB:	bus = a - b;
+		FN_ADD:	bus = a + b + cc;
+		FN_SUB:	bus = a - b - cc;
 		FN_CMP:	bus = cmpo;
 		FN_CMPU:	bus = cmpo;
 		FN_MUL:	bus = prod[63:0];
@@ -138,14 +149,14 @@ begin
 		FN_MOD: bus = ALU0 ? div_r : 0;
 		FN_DIVU: bus = ALU0 ? div_q : 0;
 		FN_MODU: bus = ALU0 ? div_r : 0;
-		FN_AND:	bus = a & b;
-		FN_OR:	bus = a | b;
-		FN_EOR:	bus = a ^ b;
-		FN_ANDC:	bus = a & ~b;
-		FN_NAND:	bus = ~(a & b);
-		FN_NOR:	bus = ~(a | b);
-		FN_ENOR:	bus = ~(a ^ b);
-		FN_ORC:	bus = a | ~b;
+		FN_AND:	bus = a & b & ~cc;
+		FN_OR:	bus = a | b | cc;
+		FN_EOR:	bus = a ^ b ^ cc;
+		FN_ANDC:	bus = a & ~b & ~cc;
+		FN_NAND:	bus = ~(a & b & ~cc);
+		FN_NOR:	bus = ~(a | b | cc);
+		FN_ENOR:	bus = ~(a ^ b ^ cc);
+		FN_ORC:	bus = a | ~b | cc;
 		default:	bus = {2{32'hDEADBEEF}};
 		endcase
 	OP_R2B:
@@ -158,8 +169,33 @@ begin
 		FN_SLEU:	bus = a <= b;
 		default:	bus = {2{32'hDEADBEEF}};
 		endcase
+	OP_RIS:
+		case(ir.ris.func)
+		FNS_ADD:	bus = a + b;
+		FNS_SUBF:	bus = b - a;
+		FNS_CMP:	bus = cmpo;
+		FNS_CMPU:	bus = cmpo;
+		FNS_MUL:	bus = prod[63:0];
+		FNS_MULU:	bus = produ[63:0];
+		FNS_MULH:	bus = prod[127:64];
+		FNS_MULUH:	bus = produ[127:64];
+		FNS_DIV: bus = ALU0 ? div_q : 0;
+		FNS_MOD: bus = ALU0 ? div_r : 0;
+		FNS_DIVU: bus = ALU0 ? div_q : 0;
+		FNS_MODU: bus = ALU0 ? div_r : 0;
+		FNS_AND:	bus = a & b;
+		FNS_OR:	bus = a | b;
+		FNS_EOR:	bus = a ^ b;
+		FNS_ANDC:	bus = a & ~b;
+		FNS_NAND:	bus = ~(a & b);
+		FNS_NOR:	bus = ~(a | b);
+		FNS_ENOR:	bus = ~(a ^ b);
+		FNS_ORC:	bus = a | ~b;
+		default:	bus = {2{32'hDEADBEEF}};
+		endcase
 	OP_CSR:		bus = csr;
 	OP_ADDI:	bus = a + b;
+	OP_SUBFI:	bus = b - a;
 	OP_CMPI:	bus = cmpo;
 	OP_CMPUI:	bus = cmpo;
 	OP_MULI:	bus = prod[63:0];
@@ -184,6 +220,7 @@ begin
 		OP_ASRI:	bus = asr[127:64];
 		default:	bus = {2{32'hDEADBEEF}};
 		endcase
+	OP_LDI:		bus = b;
 	OP_MOV:		bus = a;
 	OP_LDA:		bus = a + i;
 	OP_LDAX:	bus = a + i + (b << ir[26:25]);

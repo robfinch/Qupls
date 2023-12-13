@@ -105,7 +105,7 @@ genvar g;
 integer m,n,h,q;
 rob_ndx_t [WINDOW_SIZE-1:0] heads;
 
-always_comb
+always_ff @(posedge clk)
 for (m = 0; m < WINDOW_SIZE; m = m + 1)
 	heads[m] = (head + m) % ROB_ENTRIES;
 
@@ -152,7 +152,7 @@ for (g = 0; g < ROB_ENTRIES; g = g + 1) begin
 				    */
 				    //|| ((rob[g].decbus.load|rob[g].decbus.store) & ~rob[g].agen))
 				    ;
-assign could_issue[g] = rob[g].v && ! (&rob[g].done)
+always_ff @(posedge clk) could_issue[g] = rob[g].v && ! (&rob[g].done)
 												&& !rob[g].out
 												&& args_valid[g]
 												;

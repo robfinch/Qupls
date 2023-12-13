@@ -270,7 +270,7 @@ always_comb//ff @(posedge clk)
 always_comb//ff @(posedge clk)
 	victim_cache_oline <= victim_cache[vco];
 always_comb
-	iel <= ip[LOBIT-1];
+	iel <= ip2[LOBIT-1];
 always_comb//ff @(posedge clk)
 	iel2 <= iel;
 

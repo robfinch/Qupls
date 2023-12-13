@@ -72,11 +72,11 @@ lsq_ndx_t next_ndx1v;
 rob_bitmask_t next_memissue;
 reg [1:0] next_islot_o [0:LSQ_ENTRIES*2-1];
 
-always_comb
+always_ff @(posedge clk)
 for (m = 0; m < WINDOW_SIZE; m = m + 1)
 	heads[m] = (head + m) % ROB_ENTRIES;
 
-always_comb
+always_ff @(posedge clk)
 for (q = 0; q < LSQ_WINDOW_SIZE; q = q + 1) begin
 	lsq_heads[q].row = (lsq_head.row + q) % LSQ_ENTRIES;
 	lsq_heads[q].col = 'd0;
@@ -86,7 +86,7 @@ always_comb
 for (n9 = 0; n9 < ROB_ENTRIES; n9 = n9 + 1)
 	robentry_memopsvalid[n9] = (rob[n9].argA_v & rob[n9].argB_v & (rob[n9].decbus.load|rob[n9].argC_v));
 
-always_comb
+always_ff @(posedge clk)
 for (n10 = 0; n10 < ROB_ENTRIES; n10 = n10 + 1)
   robentry_memready[n10] = (rob[n10].v
   		&& robentry_memopsvalid[n10] 

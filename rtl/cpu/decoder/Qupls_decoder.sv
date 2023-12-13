@@ -39,7 +39,7 @@ import QuplsPkg::*;
 module Qupls_decoder(clk, en, instr, regx, dbo);
 input clk;
 input en;
-input instruction_t [3:0] instr;
+input instruction_t [4:0] instr;
 input [3:0] regx;
 output decode_bus_t dbo;
 
@@ -75,9 +75,10 @@ Qupls_decode_Rb udcrb
 
 Qupls_decode_Rc udcrc
 (
-	.instr(ins),
+	.instr(instr),
 	.regx(regx),
-	.Rc(db.Rc)
+	.Rc(db.Rc),
+	.Rcc(db.Rcc)
 );
 
 Qupls_decode_Rt udcrt

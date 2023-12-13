@@ -41,7 +41,7 @@
 import QuplsPkg::*;
 
 module Qupls_ins_lengths_L0(rst_i, hit_i, hit_o, line_i, line_o,
-	pc_i, pc_o, grp_i, grp_o, len0_o, len1_o, len2_o, len3_o, len4_o, len5_o);
+	pc_i, pc_o, grp_i, grp_o, len0_o, len1_o, len2_o, len3_o, len4_o, len5_o, len6_o);
 input rst_i;
 input hit_i;
 output reg hit_o;
@@ -57,10 +57,11 @@ output reg [4:0] len2_o;
 output reg [4:0] len3_o;
 output reg [4:0] len4_o;
 output reg [4:0] len5_o;
+output reg [4:0] len6_o;
 
 genvar g;
 
-wire [2:0] len [0:63];
+wire [4:0] len [0:63];
 
 generate begin : gInsLen
 	for (g = 0; g < 64; g = g + 1)
@@ -79,5 +80,6 @@ always_comb if (rst_i) len2_o = 5'd1; else len2_o = len[pc_i[5:0] + len0_o + len
 always_comb if (rst_i) len3_o = 5'd1; else len3_o = len[pc_i[5:0] + len0_o + len1_o + len2_o];
 always_comb if (rst_i) len4_o = 5'd1; else len4_o = len[pc_i[5:0] + len0_o + len1_o + len2_o + len3_o];
 always_comb if (rst_i) len5_o = 5'd1; else len5_o = len[pc_i[5:0] + len0_o + len1_o + len2_o + len3_o + len4_o];
+always_comb if (rst_i) len6_o = 5'd1; else len6_o = len[pc_i[5:0] + len0_o + len1_o + len2_o + len3_o + len4_o + len5_o];
 
 endmodule

@@ -39,39 +39,39 @@ import QuplsPkg::*;
 
 module Qupls_ins_length(ins, len);
 input instruction_t ins;
-output reg [2:0] len;					// length in bytes
+output reg [4:0] len;					// length in bytes
 
 always_comb
 	casez(ins.any.opcode)
-	OP_BSR:	len = 3'd5;
-	OP_JSR:	len = 3'd5;
-	OP_BccU:	len = 3'd5;
-	OP_Bcc:	len = 3'd5;
-	OP_FBccH:	len = 3'd5;
-	OP_FBccS:	len = 3'd5;
-	OP_FBccD:	len = 3'd5;
-	OP_FBccQ:	len = 3'd5;
-	OP_CSR:	len = 3'd5;
+	OP_BSR:	len = 5'd5;
+	OP_JSR:	len = 5'd5;
+	OP_BccU:	len = 5'd5;
+	OP_Bcc:	len = 5'd5;
+	OP_FBccH:	len = 5'd5;
+	OP_FBccS:	len = 5'd5;
+	OP_FBccD:	len = 5'd5;
+	OP_FBccQ:	len = 5'd5;
+	OP_CSR:	len = 5'd5;
 	OP_FLT2,OP_FLT3:				// floating point
-					len = 3'd5;
+					len = 5'd5;
 	OP_R1,OP_ADDQ:
-					len = 3'd3;
-	OP_PFXA,OP_PFXB,OP_PFXC:
-					len = 3'd5;
-	/*
-	OP_PFXA,OP_PFXB,OP_PFXC:
-		case(ins.pfx.len)
-		2'd0:	len = 5'd4;
-		2'd1:	len = 5'd6;
-		2'd2:	len = 5'd10;
-		2'd3:	len = 5'd18;
-		endcase
-	*/
+					len = 5'd3;
+//	OP_PFXA,OP_PFXB,OP_PFXC:
+//					len = 5'd5;
+	OP_PFXA32:	len = 5'd5;
+	OP_PFXB32:	len = 5'd5;
+	OP_PFXC32:	len = 5'd5;
+	OP_PFXA64:	len = 5'd9;
+	OP_PFXB64:	len = 5'd9;
+	OP_PFXC64:	len = 5'd9;
+	OP_PFXA128:	len = 5'd17;
+	OP_PFXB128:	len = 5'd17;
+	OP_PFXC128:	len = 5'd17;
 	OP_VEC,OP_VECZ,OP_RTS:
-					len = 3'd2;
+					len = 5'd2;
 	OP_NOP,OP_LSCTX:
-					len = 3'd1;
-	default:	len = 3'd4;
+					len = 5'd1;
+	default:	len = 5'd4;
 	endcase
 
 endmodule

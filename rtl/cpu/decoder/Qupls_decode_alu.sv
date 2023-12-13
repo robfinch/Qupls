@@ -74,6 +74,7 @@ begin
 		FN_SLEU:	fnIsAlu = 1'b1;
 		default:	fnIsAlu = 1'b0;
 		endcase
+	OP_RIS:		fnIsAlu = 1'b1;
 	OP_ADDI:	fnIsAlu = 1'b1;
 	OP_SUBFI:	fnIsAlu = 1'b1;
 	OP_CMPI:	fnIsAlu = 1'b1;
@@ -84,12 +85,14 @@ begin
 	OP_EORI:	fnIsAlu = 1'b1;
 	OP_SLTI:	fnIsAlu = 1'b1;
 	OP_SHIFT:	fnIsAlu = 1'b1;
+	OP_LDI:		fnIsAlu = 1'b1;
 	OP_CSR:		fnIsAlu = 1'b1;
 	OP_MOV:		fnIsAlu = 1'b1;
 	OP_LDA:		fnIsAlu = 1'b1;
 	OP_PFXA32,OP_PFXB32,OP_PFXC32,
 	OP_PFXA64,OP_PFXB64,OP_PFXC64,
 	OP_PFXA128,OP_PFXB128,OP_PFXC128,
+	OP_REGC,
 	OP_VEC,OP_VECZ,
 	OP_NOP,OP_PUSH,OP_POP,OP_ENTER,OP_LEAVE,OP_ATOM:
 		fnIsAlu = 1'b1;

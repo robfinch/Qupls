@@ -41,7 +41,7 @@
 import QuplsPkg::*;
 
 module Qupls_ins_lengths(rst_i, clk_i, en_i, hit_i, hit_o, line_i, line_o,
-	pc_i, pc_o, grp_i, grp_o, len0_o, len1_o, len2_o, len3_o, len4_o, len5_o);
+	pc_i, pc_o, grp_i, grp_o, len0_o, len1_o, len2_o, len3_o, len4_o, len5_o, len6_o);
 input rst_i;
 input clk_i;
 input en_i;										// pipeline enable
@@ -59,6 +59,7 @@ output reg [4:0] len2_o;
 output reg [4:0] len3_o;
 output reg [4:0] len4_o;
 output reg [4:0] len5_o;
+output reg [4:0] len6_o;
 
 genvar g;
 
@@ -72,6 +73,7 @@ reg [4:0] len2, len2r2;
 reg [4:0] len3;
 reg [4:0] len4;
 reg [4:0] len5;
+reg [4:0] len6;
 reg [5:0] len012r2;
 wire [4:0] len [0:63];
 reg [4:0] lenr [0:63];
@@ -125,6 +127,7 @@ always_ff @(posedge clk) if (rst_i) len012r2 <= 5'd3; else if (en) len012r2 <= l
 always_comb len3 = lenr2[pcr2[17:12]+len012r2];
 always_comb len4 = lenr2[pcr2[17:12]+len012r2+len3];
 always_comb len5 = lenr2[pcr2[17:12]+len012r2+len3+len4];
+always_comb len6 = lenr2[pcr2[17:12]+len012r2+len3+len4+len5];
 
 always_ff @(posedge clk) if (rst_i) pc_o <= RSTPC; else begin if (en) pc_o <= pcr2; end
 always_ff @(posedge clk) if (rst_i) line_o <= ~'d0; else begin if (en) line_o <= liner2; end
@@ -134,5 +137,6 @@ always_ff @(posedge clk) if (rst_i) len2_o <= 5'd1; else if (en) len2_o <= len2r
 always_ff @(posedge clk) if (rst_i) len3_o <= 5'd1; else if (en) len3_o <= len3;
 always_ff @(posedge clk) if (rst_i) len4_o <= 5'd1; else if (en) len4_o <= len4;
 always_ff @(posedge clk) if (rst_i) len5_o <= 5'd1; else if (en) len5_o <= len5;
+always_ff @(posedge clk) if (rst_i) len6_o <= 5'd1; else if (en) len6_o <= len6;
 
 endmodule

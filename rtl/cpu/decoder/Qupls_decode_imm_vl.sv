@@ -81,6 +81,10 @@ begin
 		immb = {{51{ins[0][31]}},ins[0][31:19]};
 	OP_FENCE:
 		immb = {48'h0,ins[0][23:8]};
+	OP_LDI:
+		immb = {{53{ins[0][23]}},ins[0][23:13]};
+	OP_Bcc,OP_BccU,OP_FBccH,OP_FBccS,OP_FBccD,OP_FBccQ:
+		immc = {{47{ins[0][39]}},ins[0][39:25],ins[0][12:11]};
 	default:
 		immb = 'd0;
 	endcase
@@ -115,34 +119,34 @@ begin
 	endcase
 	*/
 	// The following uses less hardware but require postfixes to be in order.
-	if (ins[ndx].any.opcode==OP_PFXA) begin
+	if (ins[ndx].any.opcode==OP_PFXA32) begin
 		imma = {{32{ins[ndx][39]}},ins[ndx][39:8]};
 		if (flt)
 			imma = imm32x64a;
 		ndx = ndx + 1;
 	end
-	if (ins[ndx].any.opcode==OP_PFXA) begin
-		imma[63:32] = ins[ndx][39:8];
+	else if (ins[ndx].any.opcode==OP_PFXA64) begin
+		imma = ins[ndx][71:8];
 		ndx = ndx + 1;
 	end
-	if (ins[ndx].any.opcode==OP_PFXB) begin
+	if (ins[ndx].any.opcode==OP_PFXB32) begin
 		immb = {{32{ins[ndx][39]}},ins[ndx][39:8]};
 		if (flt)
 			immb = imm32x64b;
 		ndx = ndx + 1;
 	end
-	if (ins[ndx].any.opcode==OP_PFXB) begin
-		immb[63:32] = ins[ndx][39:8];
+	else if (ins[ndx].any.opcode==OP_PFXB64) begin
+		immb = ins[ndx][71:8];
 		ndx = ndx + 1;
 	end
-	if (ins[ndx].any.opcode==OP_PFXC) begin
+	if (ins[ndx].any.opcode==OP_PFXC32) begin
 		immc = {{32{ins[ndx][39]}},ins[ndx][39:8]};
 		if (flt)
 			immc = imm32x64c;
 		ndx = ndx + 1;
 	end
-	else if (ins[ndx].any.opcode==OP_PFXC) begin
-		immc[63:32] = ins[ndx][39:8];
+	else if (ins[ndx].any.opcode==OP_PFXC64) begin
+		immc = ins[ndx][71:8];
 		ndx = ndx + 1;
 	end
 	/*

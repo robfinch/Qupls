@@ -83,21 +83,25 @@ end
 wire [8:0] bht_wa = {pc[6:0],gbl_branch_hist[2:1]};		// write address
 wire [1:0] bht_xbits = branch_history_table[bht_wa];
 reg [8:0] bht_ra0, bht_ra1, bht_ra2, bht_ra3;
-reg [1:0] bht_ibits;
+reg [1:0] bht_ibits0, bht_ibits1, bht_ibits2, bht_ibits3;
 always_comb
 begin
 	bht_ra0 = {ip0[6:0],gbl_branch_hist[2:1]};	// read address (IF stage)
-	bht_ibits = branch_history_table[bht_ra0];
-	predict_taken0 = (bht_ibits==2'd0 || bht_ibits==2'd1) && en;
+	bht_ibits0 = branch_history_table[bht_ra0];
 	bht_ra1 = {ip1[6:0],gbl_branch_hist[2:1]};	// read address (IF stage)
-	bht_ibits = branch_history_table[bht_ra1];
-	predict_taken1 = (bht_ibits==2'd0 || bht_ibits==2'd1) && en;
+	bht_ibits1 = branch_history_table[bht_ra1];
 	bht_ra2 = {ip2[6:0],gbl_branch_hist[2:1]};	// read address (IF stage)
-	bht_ibits = branch_history_table[bht_ra2];
-	predict_taken2 = (bht_ibits==2'd0 || bht_ibits==2'd1) && en;
+	bht_ibits2 = branch_history_table[bht_ra2];
 	bht_ra3 = {ip3[6:0],gbl_branch_hist[2:1]};	// read address (IF stage)
-	bht_ibits = branch_history_table[bht_ra3];
-	predict_taken3 = (bht_ibits==2'd0 || bht_ibits==2'd1) && en;
+	bht_ibits3 = branch_history_table[bht_ra3];
+end
+
+always_ff @(posedge clk)
+begin
+	predict_taken0 <= (bht_ibits0==2'd0 || bht_ibits0==2'd1) && en;
+	predict_taken1 <= (bht_ibits1==2'd0 || bht_ibits1==2'd1) && en;
+	predict_taken2 <= (bht_ibits2==2'd0 || bht_ibits2==2'd1) && en;
+	predict_taken3 <= (bht_ibits3==2'd0 || bht_ibits3==2'd1) && en;
 end
 
 always_ff @(posedge clk)
