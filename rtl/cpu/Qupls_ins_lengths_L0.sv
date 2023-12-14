@@ -61,11 +61,20 @@ output reg [4:0] len6_o;
 
 genvar g;
 
-wire [4:0] len [0:11];
+wire [4:0] len [0:15];
+function [3:0] fnIndex;
+input [5:0] n;
+begin
+	fnIndex = n / 5;
+end
+endfunction
 
 generate begin : gInsLen
-	for (g = 0; g < 12; g = g + 1)
-		Qupls_ins_length uiln0 (opcode_t'(line_i[g*40+6:g*40]), len[g]);
+	for (g = 0; g < 16; g = g + 1)
+		if (g < 12)
+			Qupls_ins_length uiln0 (opcode_t'(line_i[g*40+6:g*40]), len[g]);
+		else
+			assign len[g] = 5'd5;
 end
 endgenerate
 
@@ -74,12 +83,12 @@ always_comb if (rst_i) grp_o = 'd0; else grp_o = grp_i;
 
 always_comb if (rst_i) pc_o = RSTPC; else pc_o = pc_i;
 always_comb if (rst_i) line_o = {1024{1'b1}}; else line_o = line_i;
-always_comb if (rst_i) len0_o = 5'd1; else len0_o = len[pc_i[5:0]];
-always_comb if (rst_i) len1_o = 5'd1; else len1_o = len[pc_i[5:0] + len0_o];
-always_comb if (rst_i) len2_o = 5'd1; else len2_o = len[pc_i[5:0] + len0_o + len1_o];
-always_comb if (rst_i) len3_o = 5'd1; else len3_o = len[pc_i[5:0] + len0_o + len1_o + len2_o];
-always_comb if (rst_i) len4_o = 5'd1; else len4_o = len[pc_i[5:0] + len0_o + len1_o + len2_o + len3_o];
-always_comb if (rst_i) len5_o = 5'd1; else len5_o = len[pc_i[5:0] + len0_o + len1_o + len2_o + len3_o + len4_o];
-always_comb if (rst_i) len6_o = 5'd1; else len6_o = len[pc_i[5:0] + len0_o + len1_o + len2_o + len3_o + len4_o + len5_o];
+always_comb if (rst_i) len0_o = 5'd1; else len0_o = len[fnIndex(pc_i[5:0])];
+always_comb if (rst_i) len1_o = 5'd1; else len1_o = len[fnIndex(pc_i[5:0] + len0_o)];
+always_comb if (rst_i) len2_o = 5'd1; else len2_o = len[fnIndex(pc_i[5:0] + len0_o + len1_o)];
+always_comb if (rst_i) len3_o = 5'd1; else len3_o = len[fnIndex(pc_i[5:0] + len0_o + len1_o + len2_o)];
+always_comb if (rst_i) len4_o = 5'd1; else len4_o = len[fnIndex(pc_i[5:0] + len0_o + len1_o + len2_o + len3_o)];
+always_comb if (rst_i) len5_o = 5'd1; else len5_o = len[fnIndex(pc_i[5:0] + len0_o + len1_o + len2_o + len3_o + len4_o)];
+always_comb if (rst_i) len6_o = 5'd1; else len6_o = len[fnIndex(pc_i[5:0] + len0_o + len1_o + len2_o + len3_o + len4_o + len5_o)];
 
 endmodule

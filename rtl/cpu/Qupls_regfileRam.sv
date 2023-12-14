@@ -36,10 +36,11 @@
 // ============================================================================
 
 import QuplsPkg::SIM;
+import QuplsPkg::PREGS;
 
 module Qupls_regfileRam(clka, ena, wea, addra, dina, clkb, enb, addrb, doutb);
 parameter WID=64;
-parameter DEP=192;
+parameter DEP=PREGS;
 localparam RBIT=$clog2(DEP)-1;
 input clka;
 input ena;
@@ -58,7 +59,7 @@ integer n;
 reg [WID-1:0] mem [0:DEP-1];
 reg [RBIT:0] raddrb;
 initial begin
-	for (n = 0; n < 4096; n = n + 1)
+	for (n = 0; n < DEP; n = n + 1)
 		mem[n] = 0;
 end
 

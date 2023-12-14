@@ -217,7 +217,7 @@ begin
 		end
 		if (!no_issue) begin
 			if (could_issue[heads[hd]]) begin
-				if (!issued_alu0 && alu0_idle && rob[heads[hd]].decbus.alu && !rob[heads[hd]].done[1]) begin
+				if (!issued_alu0 && alu0_idle && rob[heads[hd]].decbus.alu && !rob[heads[hd]].done[0]) begin
 			  	next_robentry_issue[heads[hd]] = 1'b1;
 			  	next_robentry_islot_o[heads[hd]] = 2'b00;
 			  	issued_alu0 = 1'b1;
@@ -251,7 +251,7 @@ begin
 				  	next_fpu1_rndxv = 1'b1;
 					end
 				end
-				if (!issued_fcu && fcu_idle && rob[heads[hd]].decbus.fc && !rob[heads[hd]].done[0]) begin
+				if (!issued_fcu && fcu_idle && rob[heads[hd]].decbus.fc && !rob[heads[hd]].done[1]) begin
 			  	next_robentry_fcu_issue[heads[hd]] = 1'b1;
 			  	next_robentry_islot_o[heads[hd]] = 2'b00;
 			  	issued_fcu = 1'b1;

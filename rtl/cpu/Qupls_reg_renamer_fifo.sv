@@ -357,7 +357,7 @@ always_comb headreg = dout;
 
    // xpm_fifo_sync: Synchronous FIFO
    // Xilinx Parameterized Macro, version 2022.2
-
+/*
    xpm_fifo_sync #(
       .CASCADE_HEIGHT(0),        // DECIMAL
       .DOUT_RESET_VALUE("0"),    // String
@@ -370,9 +370,9 @@ always_comb headreg = dout;
       .PROG_FULL_THRESH(10),     // DECIMAL
       .RD_DATA_COUNT_WIDTH(1),   // DECIMAL
       .READ_DATA_WIDTH(8),       // DECIMAL
-      .READ_MODE("fwft"),        // String
+      .READ_MODE("std"),        // String
       .SIM_ASSERT_CHK(0),        // DECIMAL; 0=disable simulation messages, 1=enable simulation messages
-      .USE_ADV_FEATURES("0707"), // String
+      .USE_ADV_FEATURES("0F07"), // String
       .WAKEUP_TIME(0),           // DECIMAL
       .WRITE_DATA_WIDTH(8),      // DECIMAL
       .WR_DATA_COUNT_WIDTH(1)    // DECIMAL
@@ -467,8 +467,20 @@ always_comb headreg = dout;
                                      // active-low when rst or wr_rst_busy or rd_rst_busy is active high
 
    );
-
+*/
    // End of xpm_fifo_sync_inst instantiation	
+
+Qupls_rename_fifo2 ufifo1 (
+  .clk(clk),                    // input wire clk
+  .srst(rst),                  // input wire srst
+  .din(din),                    // input wire [7 : 0] din
+  .wr_en(wr_en),                // input wire wr_en
+  .rd_en(rd_en),                // input wire rd_en
+  .dout(dout),                  // output wire [7 : 0] dout
+  .full(),                  // output wire full
+  .empty(),                // output wire empty
+  .almost_empty(almost_empty)  // output wire almost_empty
+);
 
 always_ff @(posedge clk)
 if (rst) begin

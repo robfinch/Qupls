@@ -38,7 +38,7 @@
 package QuplsPkg;
 
 `undef IS_SIM
-parameter SIM = 1'b0;
+parameter SIM = 1'b1;
 
 //`define IS_SIM	1
 // Comment out to remove the sigmoid approximate function
@@ -2205,14 +2205,14 @@ input pc_address_t pc;
 begin
 	if (0) begin	//ICacheBundleWidth==120) begin
 		case(pc[3:0])
-		4'h0:	fnPCInc = pc + 16'h5000;
-		4'h5:	fnPCInc = pc + 16'h5000;
-		4'hA:	fnPCInc = pc + 16'h6000;
-		default:	fnPCInc = pc + 16'h5000;
+		4'h0:	fnPCInc = pc + 4'h5;
+		4'h5:	fnPCInc = pc + 4'h5;
+		4'hA:	fnPCInc = pc + 4'h6;
+		default:	fnPCInc = pc + 4'h5;
 		endcase
 	end
 	else begin
-		fnPCInc = pc + 16'h5000;
+		fnPCInc = pc + 4'h5;
 	end
 end
 endfunction

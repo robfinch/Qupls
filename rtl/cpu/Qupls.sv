@@ -175,7 +175,6 @@ rob_bitmask_t robentry_issue;
 rob_bitmask_t robentry_fpu_issue;
 rob_bitmask_t robentry_fcu_issue;
 rob_bitmask_t robentry_agen_issue;
-lsq_bitmask_t lsq_mem_issue;
 lsq_entry_t [1:0] lsq [0:7];
 lsq_ndx_t lq_tail, lq_head;
 wire nq;
@@ -184,7 +183,7 @@ reg brtgtv;
 pc_address_t brtgt;
 reg pc_in_sync;
 
-rob_ndx_t tail0, tail1, tail2, tail3;
+rob_ndx_t tail0, tail1, tail2, tail3, tail4, tail5, tail6, tail7;
 rob_ndx_t head0, head1, head2, head3;
 lsq_ndx_t store_tail;
 reg_bitmask_t reg_bitmask;
@@ -207,6 +206,10 @@ reg last3;
 always_comb tail1 = (tail0 + 1) % ROB_ENTRIES;
 always_comb tail2 = (tail0 + 2) % ROB_ENTRIES;
 always_comb tail3 = (tail0 + 3) % ROB_ENTRIES;
+always_comb tail4 = (tail0 + 4) % ROB_ENTRIES;
+always_comb tail5 = (tail0 + 5) % ROB_ENTRIES;
+always_comb tail6 = (tail0 + 6) % ROB_ENTRIES;
+always_comb tail7 = (tail0 + 7) % ROB_ENTRIES;
 always_comb head1 = (head0 + 1) % ROB_ENTRIES;
 always_comb head2 = (head0 + 2) % ROB_ENTRIES;
 always_comb head3 = (head0 + 3) % ROB_ENTRIES;
@@ -344,9 +347,9 @@ pc_address_t fcu_pc;
 value_t fcu_res;
 rob_ndx_t fcu_id;
 cause_code_t fcu_exc;
-reg fcu_v, fcu_v2, fcu_v3;
+reg fcu_v, fcu_v2, fcu_v3, fcu_v4, fcu_v5;
 reg fcu_branchmiss;
-pc_address_t fcu_misspc;
+pc_address_t fcu_misspc, fcu_misspc1;
 reg [2:0] fcu_missgrp;
 reg [2:0] fcu_missino;
 reg takb;
@@ -618,7 +621,7 @@ reg [3:0] ins_v;
 reg insnq0,insnq1,insnq2,insnq3;
 reg [3:0] qd, cqd, qs;
 reg [3:0] next_cqd;
-wire pe_alldq;
+wire pe_allqd;
 reg fetch_new;
 tlb_entry_t tlb_pc_entry;
 pc_address_t pc_tlb_res;
@@ -642,7 +645,7 @@ reg mip1v;
 reg mip2v;
 reg mip3v;
 reg nmip;
-reg mipv, mipv2;
+reg mipv, mipv2, mipv3, mipv4;
 
 instruction_t micro_ir;
 instruction_t mc_ins0;
@@ -770,7 +773,7 @@ Qupls_btb ubtb1
 	.clk(clk),
 	.en(!hold_ins),
 	.rclk(~clk),
-	.block_header(ibh_t'(ic_line[511:488])),
+	.block_header(ibh_t'(ic_line[511:480])),
 	.igrp(igrp),
 	.length_byte(length_byte),
 	.pc(icpc),
@@ -919,7 +922,7 @@ generate begin : gInsLengths
 end
 endgenerate
 
-always_comb pc0 = pco + SUPPORT_VLIB ? 5'd1 : 5'd0;
+always_comb pc0 = pco + (SUPPORT_VLIB ? 5'd1 : 5'd0);
 always_comb pc1 = pc0 + len0;
 always_comb pc2 = pc1 + len1;
 always_comb pc3 = pc2 + len2;
@@ -1121,7 +1124,7 @@ end
 
 wire pe_allqd;
 reg allqd;
-edge_det ued1 (.rst(rst), .clk(clk), .ce(1'b1), .i(next_cqd==4'b1111), .pe(pe_alldq), .ne(), .ee());
+edge_det ued1 (.rst(rst), .clk(clk), .ce(1'b1), .i(next_cqd==4'b1111), .pe(pe_allqd), .ne(), .ee());
 
 always_comb
 	fetch_new = (ihito & ~hirq & (pe_allqd|allqd) & ~mipv & ~branchmiss) |
@@ -1206,6 +1209,19 @@ if (rst)
 else begin
 	mipv2 <= mipv;
 end
+always_ff @(posedge clk)
+if (rst)
+	mipv3 <= 1'd0;
+else begin
+	mipv3 <= mipv2;
+end
+always_ff @(posedge clk)
+if (rst)
+	mipv4 <= 1'd0;
+else begin
+	mipv4 <= mipv3;
+end
+
 
 function [11:0] fnMip;
 input instruction_t ir;
@@ -1599,7 +1615,7 @@ assign arnbank[15] = sr.om & {2{|db3.Rt}};
 
 wire stallq, rat_stallq;
 assign nq = !branchmiss && rob[tail0].v==INV;
-assign stallq = !(ihit2 || mipv || mipv2 || !rstcnt[2]) || rat_stallq;
+assign stallq = !(ihit2 || mipv || mipv2 || mipv3 || mipv4 || !rstcnt[2]) || rat_stallq;
 
 reg signed [$clog2(ROB_ENTRIES):0] cmtlen;			// Will always be >= 0
 reg signed [$clog2(ROB_ENTRIES):0] group_len;		// Commit group length
@@ -1619,16 +1635,34 @@ reg do_commit;
 reg cmt0,cmt1,cmt2,cmt3;
 reg cmttlb0, cmttlb1,cmttlb2,cmttlb3;
 reg htcolls;		// head <-> tail collision
-always_comb cmt0 = (rob[head0].v && &rob[head0].done) || !rob[head0].v;
-always_comb cmt1 = ((rob[head1].v && &rob[head1].done) || !rob[head1].v) && !rob[head0].decbus.oddball && !rob[head0].excv;
-always_comb cmt2 = ((rob[head2].v && &rob[head2].done) || !rob[head2].v) &&
+always_comb cmt0 = ((rob[head0].v && &rob[head0].done) || !rob[head0].v);// && head0 != tail0;
+always_comb cmt1 = (((rob[head1].v && &rob[head1].done) || !rob[head1].v) && !rob[head0].decbus.oddball && !rob[head0].excv);// && head0 != tail0 && head0 != tail1;
+always_comb cmt2 = (((rob[head2].v && &rob[head2].done) || !rob[head2].v) &&
 										!rob[head0].decbus.oddball && !rob[head1].decbus.oddball &&
-										!rob[head0].excv && !rob[head1].excv;
-always_comb cmt3 = ((rob[head3].v && &rob[head3].done) || !rob[head3].v) &&
+										!rob[head0].excv && !rob[head1].excv);// &&
+										//head0 != tail0 && head0 != tail1 && head0 != tail2;
+always_comb cmt3 = (((rob[head3].v && &rob[head3].done) || !rob[head3].v) &&
 										!rob[head0].decbus.oddball && !rob[head1].decbus.oddball && !rob[head2].decbus.oddball &&
-										!rob[head0].excv && !rob[head1].excv && !rob[head2].excv;
-always_comb htcolls = head0 == tail0 || head0 == tail1 || head0 == tail2 || head0 == tail3;
+										!rob[head0].excv && !rob[head1].excv && !rob[head2].excv);// &&
+										//head0 != tail0 && head0 != tail1 && head0 != tail2 && head0 != tail3;
 
+function fnColls;
+input rob_ndx_t head;
+input rob_ndx_t tail;
+begin
+	if (head >= tail)
+		fnColls = head - tail > 24;
+	else
+		fnColls = tail - head < 7;
+end
+endfunction
+
+always_comb htcolls = fnColls(head0, tail0);
+/*
+										(
+											head0 == tail0 || head0 == tail1 || head0 == tail2 || head0 == tail3 ||
+											head0 == tail4 || head0 == tail5 || head0 == tail6 || head0 == tail7);
+*/
 always_comb cmttlb0 = (rob[head0].v && rob[head0].lsq && !lsq[rob[head0].lsqndx.row][rob[head0].lsqndx.col].agen);
 always_comb cmttlb1 = (rob[head1].v && rob[head1].lsq && !lsq[rob[head1].lsqndx.row][rob[head1].lsqndx.col].agen);
 always_comb cmttlb2 = (rob[head2].v && rob[head2].lsq && !lsq[rob[head2].lsqndx.row][rob[head2].lsqndx.col].agen);
@@ -1642,16 +1676,14 @@ else begin
 		casez({cmt0,cmt1,cmt2,cmt3})
 		4'b1111:	cmtcnt <= 3'd4;
 		4'b1110:	cmtcnt <= 3'd3;
-		4'b1101:	cmtcnt <= 3'd2;
-		4'b1100:	cmtcnt <= 3'd2;
-		4'b1011:	cmtcnt <= 3'd1;
-		4'b1010:	cmtcnt <= 3'd1;
-		4'b1001:	cmtcnt <= 3'd1;
-		4'b1000:	cmtcnt <= 3'd1;
+		4'b110?:	cmtcnt <= 3'd2;
+		4'b10??:	cmtcnt <= 3'd1;
 		default:	cmtcnt <= 3'd0;
 		endcase
 		do_commit <= cmt0;
 	end
+	else
+		do_commit <= FALSE;
 end
 
 wire cmtbr = (
@@ -1922,10 +1954,10 @@ Qupls_regfile4w15r urf1 (
 	.we1(1'b1),
 	.we2(1'b1),
 	.we3(1'b1),
-	.wa0(wrport0_Rt),
-	.wa1(wrport1_Rt),
-	.wa2(wrport2_Rt),
-	.wa3(wrport3_Rt),
+	.wa0({2'd0,wrport0_Rt}),
+	.wa1({2'd0,wrport1_Rt}),
+	.wa2({2'd0,wrport2_Rt}),
+	.wa3({2'd0,wrport3_Rt}),
 	.i0(wrport0_res),
 	.i1(wrport1_res),
 	.i2(wrport2_res),
@@ -2007,7 +2039,7 @@ modFcuMissPC umisspc1
 	.argA(fcu_argA),
 	.argI(fcu_argI),
 	.ibh(ibh_t'(ic_line2[511:488])),
-	.misspc(fcu_misspc),
+	.misspc(fcu_misspc1),
 	.missgrp(fcu_missgrp)
 );
 
@@ -2082,7 +2114,10 @@ always_comb	//ff @(posedge clk)
 always_comb
 	missid = excmiss ? excid : fcu_branchmiss_id;
 always_ff @(posedge clk)
-	if (branchmiss_state==3'd1)
+	if (fcu_v5)
+		fcu_misspc <= fcu_misspc1;
+always_ff @(posedge clk)
+	if (branchmiss_state==3'd3)
 		misspc = excmiss ? excmisspc : fcu_misspc;
 always_ff @(posedge clk)
 	if (branchmiss_state==3'd1)
@@ -2090,6 +2125,8 @@ always_ff @(posedge clk)
 always_ff @(posedge clk)
 	if (branchmiss_state==3'd1)
 		missir = excmiss ? excir : fcu_missir;
+
+wire s4s7 = pc==misspc && ihito && (rob[fcu_id].done==2'b11 || fcu_idle);
 
 always_ff @(posedge clk)
 if (rst)
@@ -2106,7 +2143,10 @@ else begin
 	3'd3:
 		branchmiss_state <= 3'd4;
 	3'd4:
-		branchmiss_state <= 3'd7;
+		begin
+			if (s4s7)
+				branchmiss_state <= 3'd7;
+		end
 	default:
 		branchmiss_state <= 3'd7;
 	endcase
@@ -2654,6 +2694,8 @@ else begin
 	fpu1_done <= FALSE;
 	fcu_v2 <= fcu_v;
 	fcu_v3 <= fcu_v2;
+	fcu_v4 <= fcu_v3;
+	fcu_v5 <= fcu_v4;
 			 if (mip0v) begin micro_ir <= ins0; end
 	else if (mip1v) begin micro_ir <= ins1; end
 	else if (mip2v) begin micro_ir <= ins2; end
@@ -2751,7 +2793,7 @@ else begin
 	if (robentry_stomp[fpu1_id])
 		fpu1_idle <= TRUE;
 	
-	if (fcu_v && rob[fcu_id].v && fcu_v3 && !robentry_stomp[fcu_id]) begin
+	if (fcu_v && rob[fcu_id].v && fcu_v3 && !robentry_stomp[fcu_id] && branchmiss_state==3'd7) begin
 		fcu_v <= INV;
 		fcu_v2 <= INV;
 		fcu_v3 <= INV;
@@ -2979,7 +3021,7 @@ else begin
 		end
 	end
 
-	if (fcu_rndxv && !fcu_v) begin
+	if (fcu_rndxv && !fcu_v && branchmiss_state==3'd7) begin
 		fcu_v <= VAL;
 		fcu_id <= fcu_rndx;
 		fcu_argA <= rob[fcu_rndx].decbus.imma | rfo_fcu_argA;
@@ -3652,10 +3694,42 @@ begin
 	
 end
 
+function value_t fnRegVal;
+input pregno_t regno;
+begin
+	case (urf1.lvt[regno])
+	2'd0:	fnRegVal = urf1.gRF.genblk1[0].urf0.mem[regno];
+	2'd1:	fnRegVal = urf1.gRF.genblk1[0].urf1.mem[regno];
+	2'd2:	fnRegVal = urf1.gRF.genblk1[0].urf2.mem[regno];
+	2'd3:	fnRegVal = urf1.gRF.genblk1[0].urf3.mem[regno];
+	endcase
+end
+endfunction
+
+generate begin : gDisplay
+if (SIM) begin
+always_ff @(posedge clk) begin: clock_n_debug
+	integer i;
+	integer j;
+
+	$display("\n\n\n\n\n\n\n\n");
+	$display("TIME %0d", $time);
+	$display("%h #", pc);
+	$display("----- Physical Registers -----");
+	for (i=0; i< PREGS; i=i+8)
+	    $display("%d: %h %d: %h %d: %h %d: %h %d: %h %d: %h %d: %h %d: %h #",
+	    	i+0, fnRegVal(i+0), i+1, fnRegVal(i+1), i+2, fnRegVal(i+2), i+3, fnRegVal(i+3),
+	    	i+4, fnRegVal(i+4), i+5, fnRegVal(i+5), i+6, fnRegVal(i+6), i+7, fnRegVal(i+7)
+	    );
+end
+end
+end
+endgenerate
+
 task tReset;
 begin
 	micro_ir <= {'d0,OP_NOP};
-	micro_ip <= 12'h0F0;
+	micro_ip <= 12'h1A0;
 	for (n14 = 0; n14 < 4; n14 = n14 + 1) begin
 		kvec[n14] <= RSTPC;
 		avec[n14] <= RSTPC;
@@ -3740,6 +3814,8 @@ begin
 	fcu_v <= INV;
 	fcu_v2 <= INV;
 	fcu_v3 <= INV;
+	fcu_v4 <= INV;
+	fcu_v5 <= INV;
 //	fcu_argC <= 'd0;
 	/*
 	for (n11 = 0; n11 < NDATA_PORTS; n11 = n11 + 1) begin
@@ -3780,6 +3856,8 @@ begin
 	brtgtv <= FALSE;
 	pc_in_sync <= TRUE;
 	freevals <= 'd0;
+	ls_bmf <= 'd0;
+	reg_bitmask <= 'd0;
 end
 endtask
 

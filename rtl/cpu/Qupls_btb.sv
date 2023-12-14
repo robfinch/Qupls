@@ -456,11 +456,15 @@ begin
 		else if (SUPPORT_VLI) begin
 			if (SUPPORT_VLIB)
 				next_pc <= pc + length_byte;
-			else
-				next_pc <= pc4;
+			else begin
+				if (pc4[5:0] >= block_header[13:8]|| pc4[$bits(pc_address_t)-1:6]!=pc[$bits(pc_address_t)-1:6])
+					next_pc <= {pc[$bits(pc_address_t)-1:6]+2'd1,6'd0};
+				else
+					next_pc <= {pc[$bits(pc_address_t)-1:6],pc4[5:0]};
+			end
 		end
 		else begin
-			if (pc4[5:0] >= block_header[13:8])
+			if (pc4[5:0] >= block_header[13:8]|| pc4[$bits(pc_address_t)-1:6]!=pc[$bits(pc_address_t)-1:6])
 				next_pc <= {pc[$bits(pc_address_t)-1:6]+2'd1,6'd0};
 			else
 				next_pc <= {pc[$bits(pc_address_t)-1:6],pc4[5:0]};
