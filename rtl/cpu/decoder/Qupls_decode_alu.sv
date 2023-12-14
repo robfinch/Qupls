@@ -62,10 +62,6 @@ begin
 		FN_NOR:	fnIsAlu = 1'b1;
 		FN_ENOR:	fnIsAlu = 1'b1;
 		FN_ORC:	fnIsAlu = 1'b1;
-		default:	fnIsAlu = 1'b0;
-		endcase
-	OP_R2B:
-		case(ir.r2b.func)
 		FN_SEQ:	fnIsAlu = 1'b1;
 		FN_SNE:	fnIsAlu = 1'b1;
 		FN_SLT:	fnIsAlu = 1'b1;
@@ -74,7 +70,6 @@ begin
 		FN_SLEU:	fnIsAlu = 1'b1;
 		default:	fnIsAlu = 1'b0;
 		endcase
-	OP_RIS:		fnIsAlu = 1'b1;
 	OP_ADDI:	fnIsAlu = 1'b1;
 	OP_SUBFI:	fnIsAlu = 1'b1;
 	OP_CMPI:	fnIsAlu = 1'b1;

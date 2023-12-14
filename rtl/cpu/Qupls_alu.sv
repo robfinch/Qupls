@@ -157,40 +157,12 @@ begin
 		FN_NOR:	bus = ~(a | b | cc);
 		FN_ENOR:	bus = ~(a ^ b ^ cc);
 		FN_ORC:	bus = a | ~b | cc;
-		default:	bus = {2{32'hDEADBEEF}};
-		endcase
-	OP_R2B:
-		case(ir.r2b.func)
 		FN_SEQ:	bus = a == b;
 		FN_SNE:	bus = a != b;
 		FN_SLT:	bus = $signed(a) < $signed(b);
 		FN_SLE:	bus = $signed(a) <= $signed(b);
 		FN_SLTU:	bus = a < b;
 		FN_SLEU:	bus = a <= b;
-		default:	bus = {2{32'hDEADBEEF}};
-		endcase
-	OP_RIS:
-		case(ir.ris.func)
-		FNS_ADD:	bus = a + b;
-		FNS_SUBF:	bus = b - a;
-		FNS_CMP:	bus = cmpo;
-		FNS_CMPU:	bus = cmpo;
-		FNS_MUL:	bus = prod[63:0];
-		FNS_MULU:	bus = produ[63:0];
-		FNS_MULH:	bus = prod[127:64];
-		FNS_MULUH:	bus = produ[127:64];
-		FNS_DIV: bus = ALU0 ? div_q : 0;
-		FNS_MOD: bus = ALU0 ? div_r : 0;
-		FNS_DIVU: bus = ALU0 ? div_q : 0;
-		FNS_MODU: bus = ALU0 ? div_r : 0;
-		FNS_AND:	bus = a & b;
-		FNS_OR:	bus = a | b;
-		FNS_EOR:	bus = a ^ b;
-		FNS_ANDC:	bus = a & ~b;
-		FNS_NAND:	bus = ~(a & b);
-		FNS_NOR:	bus = ~(a | b);
-		FNS_ENOR:	bus = ~(a ^ b);
-		FNS_ORC:	bus = a | ~b;
 		default:	bus = {2{32'hDEADBEEF}};
 		endcase
 	OP_CSR:		bus = csr;

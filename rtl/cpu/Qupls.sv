@@ -108,7 +108,7 @@ wire [11:0] next_micro_ip;
 
 reg [39:0] I;	// Committed instructions
 
-reg [PREGS-1:0] free_bitlist, free_exc_bitlist;
+reg [PREGS-1:0] free_bitlist;
 rob_ndx_t agen0_rndx, agen1_rndx;
 
 op_src_t alu0_argA_src;
@@ -593,6 +593,7 @@ pc_address_t pc0d, pc1d, pc2d, pc3d, pc4d, pc5d, pc6d, pc7d;
 pc_address_t pc0q, pc1q, pc2q, pc3q, pc4q, pc5q, pc6q, pc7q;
 pc_address_t pc0r, pc1r, pc2r, pc3r, pc4r, pc5r, pc6r, pc7r;
 pc_address_t pc0x, pc1x, pc2x, pc3x, pc4x, pc5x, pc6x, pc7x;
+pc_address_t pc0y, pc1y, pc2y, pc3y, pc4y, pc5y, pc6y, pc7y;
 pc_address_t next_pc;
 reg [2:0] grpd, grpq, grpr;
 wire ntakb,ptakb;
@@ -610,7 +611,7 @@ asid_t ic_miss_asid;
 wire [1:0] ic_wway;
 
 reg [1023:0] ic_line;
-reg [1023:0] ic_line2;
+reg [1023:0] ic_line2, ic_line3;
 instruction_t ins0, ins1, ins2, ins3, ins4, ins5, ins6, ins7;
 reg ins0_v, ins1_v, ins2_v, ins3_v;
 reg [3:0] ins_v;
@@ -1276,6 +1277,8 @@ always_comb
 	ic_line = {ic_line_hi.data,ic_line_lo.data};
 always_ff @(posedge clk)
 	ic_line2 <= ic_line;
+always_ff @(posedge clk)
+	ic_line3 <= ic_line2;
 
 wire exti_nop;	
 // Latency of one.
@@ -1293,18 +1296,18 @@ Qupls_extract_ins uiext1
 	.reglist_active(1'b0),
 	.mipv_i(mipv),
 	.mip_i(micro_ip),
-	.ic_line_i(ic_line2),
+	.ic_line_i(ic_line3),
 	.grp_i(igrp2),
 	.misspc(misspc),
 	.branchmiss(branchmiss_state!=3'd7),
-	.pc0_i(pc0x),
-	.pc1_i(pc1x),
-	.pc2_i(pc2x),
-	.pc3_i(pc3x),
-	.pc4_i(pc4x),
-	.pc5_i(pc5x),
-	.pc6_i(pc6x),
-	.pc7_i(pc7x),
+	.pc0_i(pc0y),
+	.pc1_i(pc1y),
+	.pc2_i(pc2y),
+	.pc3_i(pc3y),
+	.pc4_i(pc4y),
+	.pc5_i(pc5y),
+	.pc6_i(pc6y),
+	.pc7_i(pc7y),
 	.ls_bmf_i(ls_bmf),
 	.pack_regs_i(pack_regs),
 	.scale_regs_i(scale_regs),
@@ -1485,6 +1488,7 @@ pregno_t pRc0, pRc1, pRc2, pRc3;
 pregno_t pRt0, pRt1, pRt2, pRt3;
 pregno_t nRt0, nRt1, nRt2, nRt3;
 pregno_t [3:0] tags2free;
+reg [3:0] freevals;
 wire [PREGS-1:0] avail_reg;						// available registers
 wire [3:0] cndx;											// checkpoint index
 
@@ -1686,14 +1690,14 @@ Qupls_reg_renamer2 utrn1
 (
 	.rst(rst),
 	.clk(clk),
-	.en(!stallq),
+	.en(1'b1),
 	.list2free(free_bitlist),
 	.tags2free(tags2free),
-	.freevals(4'hF),
-	.alloc0(|db0.Rt),
-	.alloc1(|db1.Rt),
-	.alloc2(|db2.Rt),
-	.alloc3(|db3.Rt),
+	.freevals(freevals),
+	.alloc0(|db0.Rt & !stallq),
+	.alloc1(|db1.Rt & !stallq),
+	.alloc2(|db2.Rt & !stallq),
+	.alloc3(|db3.Rt & !stallq),
 	.wo0(nRt0),
 	.wo1(nRt1),
 	.wo2(nRt2),
@@ -1708,7 +1712,7 @@ Qupls_rat urat1
 	.nq(nq),
 	.stallq(rat_stallq),
 	.cndx_o(cndx),
-	.avail(free_exc_bitlist),
+	.avail_i(avail_reg),
 	.restore(restore_chkpt),
 	.miss_cp(rob[missid].cndx),
 	.wr0(|db0r.Rt),
@@ -1813,6 +1817,7 @@ always_ff @(posedge clk)
 	ins2r <= ins2q;
 always_ff @(posedge clk)
 	ins3r <= ins3q;
+
 always_ff @(posedge clk)
 	pc0x <= pc0;
 always_ff @(posedge clk)
@@ -1829,6 +1834,24 @@ always_ff @(posedge clk)
 	pc6x <= pc4 + len4 + len5;
 always_ff @(posedge clk)
 	pc7x <= pc4 + len4 + len5 + len6;
+
+always_ff @(posedge clk)
+	pc0y <= pc0x;
+always_ff @(posedge clk)
+	pc1y <= pc1x;
+always_ff @(posedge clk)
+	pc2y <= pc2x;
+always_ff @(posedge clk)
+	pc3y <= pc3x;
+always_ff @(posedge clk)
+	pc4y <= pc4x;
+always_ff @(posedge clk)
+	pc5y <= pc5x;
+always_ff @(posedge clk)
+	pc6y <= pc6x;
+always_ff @(posedge clk)
+	pc7y <= pc7x;
+
 always_ff @(posedge clk)
 	pc0q <= pc0d;
 always_ff @(posedge clk)
@@ -2614,6 +2637,7 @@ wire stomp1 = pt0||mip0v;
 wire stomp2 = pt0||pt1||mip0v||mip1v;
 wire stomp3 = pt0||pt1||pt2||mip0v||mip1v||mip2v;
 
+
 always_ff @(posedge clk)
 if (rst) begin
 	tReset();
@@ -2621,6 +2645,7 @@ end
 else begin
 	if (!rstcnt[2])
 		rstcnt <= rstcnt + 1;
+	freevals <= 'd0;
 	alu0_ld <= 'd0;
 	alu1_ld <= 'd0;
 	alu0_done <= FALSE;
@@ -3339,8 +3364,8 @@ else begin
 			// little impact on performance.
 			for (n12 = 0; n12 < ROB_ENTRIES; n12 = n12 + 1)
 				rob[n12].sn <= rob[n12].sn - 4;
-			tEnque(8'hFC,db0r,pc0r,grpr,ins0r,pt0r,tail0, stomp0, prn[0], prn[1], prn[2], prn[3], nRt0, avail_reg & ~(192'd1 << nRt0), cndx, grplen0, last0);
-			tEnque(8'hFD,db1r,pc1r,grpr,ins1r,pt1r,tail1, stomp1, prn[4], prn[5], prn[6], prn[7], nRt1, avail_reg & ~((192'd1 << nRt0) | (192'd1 << nRt1)), cndx, grplen1, last1);
+			tEnque(8'hFC,db0r,pc0r,grpr,ins0r,pt0r,tail0, stomp0, prn[0], prn[1], prn[2], prn[3], nRt0, cndx, grplen0, last0);
+			tEnque(8'hFD,db1r,pc1r,grpr,ins1r,pt1r,tail1, stomp1, prn[4], prn[5], prn[6], prn[7], nRt1, cndx, grplen1, last1);
 				// If the instruction's source register is the same as a previous target
 				// register, use the register mapping of the previous target register.
 				// The register mapping will not have been updated in the RAT yet in
@@ -3349,7 +3374,7 @@ else begin
 				if (db1r.Rb==db0r.Rt) rob[tail1].pRb <= nRt0;
 				if (db1r.Rc==db0r.Rt) rob[tail1].pRc <= nRt0;
 				if (db1r.Rt==db0r.Rt) rob[tail1].pRt <= nRt0;
-			tEnque(8'hFE,db2r,pc2r,grpr,ins2r,pt2r,tail2, stomp2, prn[8], prn[9], prn[10], prn[11], nRt2, avail_reg & ~((192'd1 << nRt0) | (192'd1 << nRt1) | (192'd1 << nRt2)), cndx, grplen2, last3);
+			tEnque(8'hFE,db2r,pc2r,grpr,ins2r,pt2r,tail2, stomp2, prn[8], prn[9], prn[10], prn[11], nRt2, cndx, grplen2, last3);
 				if (db2r.Ra==db0r.Rt) rob[tail2].pRa <= nRt0;
 				if (db2r.Rb==db0r.Rt) rob[tail2].pRb <= nRt0;
 				if (db2r.Rc==db0r.Rt) rob[tail2].pRc <= nRt0;
@@ -3358,7 +3383,7 @@ else begin
 				if (db2r.Rb==db1r.Rt) rob[tail2].pRb <= nRt1;
 				if (db2r.Rc==db1r.Rt) rob[tail2].pRc <= nRt1;
 				if (db2r.Rt==db1r.Rt) rob[tail2].pRt <= nRt1;
-			tEnque(8'hFF,db3r,pc3r,grpr,ins3r,pt3r,tail3, stomp3, prn[12], prn[13], prn[14], prn[15], nRt3, avail_reg & ~((192'd1 << nRt0) | (192'd1 << nRt1) | (192'd1 << nRt2)| (192'd1 << nRt3)), cndx,grplen3,last3);
+			tEnque(8'hFF,db3r,pc3r,grpr,ins3r,pt3r,tail3, stomp3, prn[12], prn[13], prn[14], prn[15], nRt3, cndx,grplen3,last3);
 				if (db2r.Ra==db0r.Rt) rob[tail3].pRa <= nRt0;
 				if (db2r.Rb==db0r.Rt) rob[tail3].pRb <= nRt0;
 				if (db2r.Rc==db0r.Rt) rob[tail3].pRc <= nRt0;
@@ -3419,7 +3444,7 @@ else begin
 			lsq[lsq_tail0.row][1].load <= rob[agen1_id].decbus.load;
 			lsq[lsq_tail0.row][1].loadz <= rob[agen1_id].decbus.loadz;
 			lsq[lsq_tail0.row][1].store <= rob[agen1_id].decbus.store;
-			lsq[lsq_tail0.row][1].Rc <= rob[agen1_id].nRc;
+			lsq[lsq_tail0.row][1].Rc <= rob[agen1_id].pRc;
 			lsq[lsq_tail0.row][1].Rt <= rob[agen1_id].nRt;
 			lsq[lsq_tail0.row][1].aRt <= rob[agen1_id].decbus.Rt;
 			lsq[lsq_tail0.row][1].om <= rob[agen1_id].om;
@@ -3491,6 +3516,7 @@ else begin
 			if (rob[head1].lsq)
 				lsq[rob[head1].lsqndx.row][rob[head1].lsqndx.col].v <= INV;
 			tags2free[1] <= rob[head1].pRt;
+			freevals[1] <= |rob[head1].pRt;
 			group_len <= group_len - 2;
 		end
 		if (cmtcnt > 3'd2) begin
@@ -3500,6 +3526,7 @@ else begin
 			if (rob[head2].lsq)
 				lsq[rob[head2].lsqndx.row][rob[head2].lsqndx.col].v <= INV;
 			tags2free[2] <= rob[head2].pRt;
+			freevals[2] <= |rob[head2].pRt;
 			group_len <= group_len - 3;
 		end
 		if (cmtcnt > 3'd3) begin
@@ -3509,11 +3536,13 @@ else begin
 			if (rob[head3].lsq)
 				lsq[rob[head3].lsqndx.row][rob[head3].lsqndx.col].v <= INV;
 			tags2free[3] <= rob[head3].pRt;
+			freevals[3] <= |rob[head3].pRt;
 			group_len <= group_len - 4;
 		end
 		if (rob[head0].lsq)
 			lsq[rob[head0].lsqndx.row][rob[head0].lsqndx.col].v <= INV;
 		tags2free[0] <= rob[head0].pRt;
+		freevals[0] <= |rob[head0].pRt;
 		head0 <= (head0 + cmtcnt) % ROB_ENTRIES;
 		if (group_len <= 0)
 			group_len <= rob[head0].group_len;
@@ -3750,6 +3779,7 @@ begin
 	agen1_idle <= TRUE;
 	brtgtv <= FALSE;
 	pc_in_sync <= TRUE;
+	freevals <= 'd0;
 end
 endtask
 
@@ -3767,7 +3797,6 @@ input pregno_t pRb;
 input pregno_t pRc;
 input pregno_t pRt;
 input pregno_t nRt;
-input [PREGS-1:0] avail;
 input [3:0] cndx;
 input rob_ndx_t grplen;
 input last;
@@ -3801,7 +3830,6 @@ begin
 	rob[tail].pRc <= pRc;
 	rob[tail].pRt <= pRt;
 	rob[tail].nRt <= nRt;
-	rob[tail].avail <= avail;
 	rob[tail].group_len <= grplen;
 	rob[tail].last <= last;
 	rob[tail].v <= !stomp && db.v && !brtgtv;
@@ -4036,7 +4064,6 @@ begin
 		excmisspc <= {kvec[3][$bits(pc_address_t)-1:16] /*+ vecno*/,4'h0,12'h000};
 	else
 		excmisspc <= {avec[$bits(pc_address_t)-1:16] + vecno,4'h0,12'h000};
-	free_exc_bitlist <= rob[id].avail;
 end
 endtask
 

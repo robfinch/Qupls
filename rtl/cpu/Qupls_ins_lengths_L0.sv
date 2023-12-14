@@ -61,11 +61,11 @@ output reg [4:0] len6_o;
 
 genvar g;
 
-wire [4:0] len [0:63];
+wire [4:0] len [0:11];
 
 generate begin : gInsLen
-	for (g = 0; g < 64; g = g + 1)
-		Qupls_ins_length uiln0 (line_i[g*8+7:g*8], len[g]);
+	for (g = 0; g < 12; g = g + 1)
+		Qupls_ins_length uiln0 (opcode_t'(line_i[g*40+6:g*40]), len[g]);
 end
 endgenerate
 

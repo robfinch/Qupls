@@ -116,6 +116,7 @@ typedef struct {
 	uint8_t size;
 	uint8_t opcode_size;
 	uint64_t opcode;
+  uint64_t short_opcode;
 	thuge val;
 	postfix_buf pfxa;
 	postfix_buf pfxb;
@@ -222,6 +223,7 @@ typedef struct {
 #define SI			66
 #define ATOM		67
 #define BI			68
+#define LDI			69
 
 #define OPC(x)	(((x) & 0x7fLL))
 #define LK(x)		(((x) & 1LL) << 7LL)

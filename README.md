@@ -17,25 +17,29 @@ Variable length instruction set.
 64 general purpose registers, unified integer and float register file
 64 vector registers
 4-way Out-of-order execution of instructions
-Interruptible micro-code.
-128 entry, two way TLB for virtual memory support
+128 entry, two way TLB for virtual memory support, shared between instruction and data
 
 ## Out-of-Order Version
 ### Status
 The Qupls OoO machine is currently in development. The base machine has
-been undergoing simulation runs. A long way to go yet. 
+been undergoing simulation runs. A long way to go yet. Some synthesis runs have been performed to get a general idea of the timing. The goal is 40 MHz operation.
 
 ### Register File
 The register file contains 64 registers and is unified, supporting integer and floating-point operations using the same set of registers. 
 There is a dedicated zero register, r0. There is also a register dedicated to refer to the stack canary. Predicate registers are also part of the general purpose register file and the same set of instructions may be applied to them as to other registers. A register is also dedicated to the stack pointer, which is special in that it is banked for different operating modes.
 Four hidden registers are dedicated to micro-code use. They are only accessible from micro-code.
+Registers are renamed to remove dependencies. There are 256 physical registers available.
+
+### Instruction Blocks
+The CPU deals with instructions in instruction blocks which are the same size
+as a cache line. The block header contains the block offset of the last instruction in the block. The CPU uses this to know when to move the instruction pointer to the next block. Instructions must fit entirely within an instruction block or they will be placed in the next block. Occassionally NOPs are inserted into the instruction stream by the assembler to pad the instruction block when instructions will not fit.
 
 ### Instruction Length
 The author has found that in an FPGA the decode of variable length instruction length was on the critical timing path, limiting the maximum clock frequency and performance. So, the instruction length decode is pipelined and takes three clock cycle. This was based on the decision to go with a variable length instruction set for Qupls. Qupls supports extended length constants using postfix instructions. Postfix instructions are associated with the previous instruction and are fetched at the same time as the previous instruction. Effectively they are treated as if they were part of the instruction, but, the program counter still increments by the instruction length so the postfix instructions end up being fetched and treated as NOPs. This is slightly better than using additional instructions to encode constants as the entire instruction word is used to hold a constant making it more memory efficient.
-Most instructions are four bytes, 32-bits, with several exceptions. Branches are five bytes to accomodate a compare-and-branch in a single instruction. NOPs are single byte to allow for alignment. Instructions requiring only a single source register are three bytes long.
+Instructions are built of five byte parcels, 40-bits. Branches are five bytes to accomodate a compare-and-branch in a single instruction.
 
 ### Instruction alignment
-Instructions may be aligned on any byte boundary. Branch displacements and other target addresses are precise to the byte. Code may be relocated to any byte boundary.
+Instructions may are aligned on five byte boundaries within the cache line. Branch displacements and other target addresses are precise to the byte.
 
 ### Pipeline
 Yikes!

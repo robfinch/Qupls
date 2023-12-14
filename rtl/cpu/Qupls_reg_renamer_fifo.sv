@@ -53,8 +53,6 @@ output reg v;							// indicates o0 is valid
 output reg stall;					// stall because no regs are available
 output reg [7:0] headreg;	// register at head of fifo
 
-reg [7:0] fifo [0:ENTRIES-1];
-reg [5:0] head,tail;
 wire almost_empty;
 wire [7:0] dout;
 reg [7:0] din;
@@ -472,19 +470,12 @@ always_comb headreg = dout;
 
    // End of xpm_fifo_sync_inst instantiation	
 
-always_comb
-begin
-	if (freeval)
-		din = tag2free;
-	else
-		din = {FIFONO[1:0],o0[5:0]};
-end
-			
 always_ff @(posedge clk)
 if (rst) begin
 	o <= 'd0;
 	rd_en <= 1'b0;
 	wr_en <= 1'b0;
+	din <= 'd0;
 end
 else begin
 	rd_en <= 1'b0;

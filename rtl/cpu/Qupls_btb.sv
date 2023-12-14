@@ -459,8 +459,13 @@ begin
 			else
 				next_pc <= pc4;
 		end
-		else
-			next_pc <= pc + 5'd20;	// four instructions
+		else begin
+			if (pc4[5:0] >= block_header[13:8])
+				next_pc <= {pc[$bits(pc_address_t)-1:6]+2'd1,6'd0};
+			else
+				next_pc <= {pc[$bits(pc_address_t)-1:6],pc4[5:0]};
+				//next_pc <= pc + 5'd20;	// four instructions
+		end
 		takb <= 1'b0;
 	end
 end

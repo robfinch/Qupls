@@ -47,7 +47,7 @@
 //
 import QuplsPkg::*;
 
-module Qupls_rat(rst, clk, nq, stallq, cndx_o, avail, restore, miss_cp, wr0, wr1, wr2, wr3,
+module Qupls_rat(rst, clk, nq, stallq, cndx_o, avail_i, restore, miss_cp, wr0, wr1, wr2, wr3,
 	qbr0, qbr1, qbr2, qbr3,
 	rn,
 	rrn,
@@ -69,7 +69,7 @@ input qbr1;
 input qbr2;
 input qbr3;
 output [3:0] cndx_o;			// current checkpoint index
-input [PREGS-1:0] avail;	// list of available registers at checkpoint comes from ROB
+input [PREGS-1:0] avail_i;	// list of available registers from renamer
 input restore;						// checkpoint restore
 input [3:0] miss_cp;			// checkpoint map index of branch miss
 input wr0;
@@ -117,10 +117,12 @@ output reg [PREGS-1:0] free_bitlist;	// bit vector of registers to free on branc
 
 
 integer n,m,n1,n2;
-reg [AREGS*BANKS-1:0] cpram_we;
-wire [AREGS*BANKS*RBIT-1:0] cpram_out;
-reg [AREGS*BANKS*RBIT-1:0] cpram_outr;
-reg [AREGS*BANKS*RBIT-1:0] cpram_in;
+localparam WE_WIDTH = $bits(checkpoint_t)/8;
+reg [WE_WIDTH-1:0] cpram_we;
+localparam RAMWIDTH = AREGS*BANKS*RBIT+PREGS;
+checkpoint_t cpram_out;
+checkpoint_t cpram_outr;
+checkpoint_t cpram_in;
 reg new_chkpt;							// new_chkpt map for current checkpoint
 reg [3:0] cndx;
 assign cndx_o = cndx;
@@ -289,8 +291,10 @@ begin
 		cpram_in = cpram_in | (({RBIT{nq & wr2}} & wrrc) << {(wrc * RBIT),wrbankc});
 		cpram_in = cpram_in | (({RBIT{nq & wr3}} & wrrd) << {(wrd * RBIT),wrbankd});
 	end
-	if (new_chkpt)
-		cpram_in = cpram_outr;
+	if (new_chkpt) begin
+		cpram_in.avail = avail_i;
+		cpram_in.regmap = cpram_outr.regmap;
+	end
 end
 
 // Add registers to the checkpoint map.
@@ -320,7 +324,7 @@ begin
 		cpram_we = cpram_we | ({nq & wr3} << {wrd,wrbankd});
 	end
 	if (new_chkpt)
-		cpram_we = ~'d0;
+		cpram_we = {WE_WIDTH{1'b1}};
 end
 
 // Add registers allocated since the branch miss instruction to the list of
@@ -329,9 +333,9 @@ always_comb
 begin
 	// But not the registers allocated up to the branch miss
 	if (restore)
-		free_bitlist = avail;
+		free_bitlist = cpram_outr.avail;
 	else
-		free_bitlist = 'd0;
+		free_bitlist = {PREGS{1'b0}};
 end
 
 endmodule

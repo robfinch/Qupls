@@ -51,6 +51,8 @@ begin
 		fnRa = 7'd62;
 	OP_DBRA:
 		fnRa = 7'd55;
+	OP_FLT2,OP_FLT3:
+		fnRa = {regx,1'b0,ir[16:12]};
 	default:
 		fnRa = {regx,ir[18:13]};
 	endcase

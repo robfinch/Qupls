@@ -66,10 +66,6 @@ begin
 		FN_NOR:	fnRt = {regx,ir.r2.Rt};
 		FN_ENOR:	fnRt = {regx,ir.r2.Rt};
 		FN_ORC:	fnRt = {regx,ir.r2.Rt};
-		default:	fnRt = 'd0;
-		endcase
-	OP_R2B:
-		case(ir.r2b.func)
 		FN_SEQ:	fnRt = {regx,ir.r2.Rt};
 		FN_SNE:	fnRt = {regx,ir.r2.Rt};
 		FN_SLT:	fnRt = {regx,ir.r2.Rt};
@@ -78,8 +74,8 @@ begin
 		FN_SLEU:	fnRt = {regx,ir.r2.Rt};
 		default:	fnRt = 'd0;
 		endcase
-	OP_FLT2:	fnRt = {regx,ir.f2.Rt};
-	OP_FLT3:	fnRt = {regx,ir.f3.Rt};
+	OP_FLT2,OP_FLT3:
+		fnRt = {regx,1'b0,ir[11:7]};
 	OP_MCB:	fnRt = {ir.mcb.lk ? 7'd59 : 7'd00};
 	OP_BSR:	fnRt = {regx,ir.bsr.Rt};
 	OP_JSR:	fnRt = {regx,ir.jsr.Rt};

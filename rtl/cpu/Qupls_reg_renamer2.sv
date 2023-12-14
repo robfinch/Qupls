@@ -143,7 +143,7 @@ Qupls_reg_renamer_fifo #(.FIFONO(3)) ufifo3
 
 always_ff @(posedge clk)
 if (rst)
-	avail <= {PREGS{1'b1}};
+	avail <= {PREGS{1'b0}};
 else begin
 	if (en) begin
 

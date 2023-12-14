@@ -50,7 +50,7 @@ parameter SIM = 1'b0;
 `define NLANES	4
 `define NTHREADS	4
 `define NREGS		68
-parameter PREGS = 192;
+parameter PREGS = 256;
 
 `define L1CacheLines	1024
 `define L1CacheLineSize		256
@@ -143,6 +143,8 @@ parameter NALU = 1;
 parameter NFPU = 0;
 parameter NAGEN = 1;
 parameter NLSQ_PORTS = 1;
+// Number of banks of registers.
+parameter BANKS = 1;
 
 parameter RAS_DEPTH	= 4;
 
@@ -252,13 +254,14 @@ typedef enum logic [6:0] {
 	OP_PTRDIF		= 7'd27,
 	OP_ADDQ			= 7'd28,
 	OP_DBcc			= 7'd29,
+	OP_LDI			= 7'd31,
 	OP_BSR			= 7'd32,
 	OP_DBRA			= 7'd33,
 	OP_MCB			= 7'd34,
 	OP_RTD			= 7'd35,
 	OP_JSR			= 7'd36,
 	OP_CMPUI		= 7'd38,
-	OP_RIQ			= 7'd39,
+	OP_RIS			= 7'd39,
 
 	OP_BccU			= 7'd40,
 	OP_Bcc			= 7'd41,
@@ -317,8 +320,8 @@ typedef enum logic [6:0] {
 	OP_AMO			= 7'd92,
 	OP_CAS			= 7'd93,
 	OP_LSCTX		= 7'd94,
-	OP_FLT2			= 7'd98,
-	OP_FLT3			= 7'd99,
+	OP_FLT2			= 7'd96,
+	OP_FLT3			= 7'd97,
 	OP_IRQ			= 7'd112,
 	OP_FENCE		= 7'd114,
 	OP_REGS			= 7'd117,
@@ -328,9 +331,7 @@ typedef enum logic [6:0] {
 	OP_PRED			= 7'd121,
 	OP_ATOM			= 7'd122,
 	OP_RTS			= 7'd123,
-	OP_PFXA			= 7'd124,
-	OP_PFXB			= 7'd125,
-	OP_PFXC			= 7'd126,
+	OP_REGC			= 7'd126,
 	OP_NOP			= 7'd127
 } opcode_t;
 /*
@@ -460,47 +461,73 @@ typedef enum logic [3:0] {
 } fbranch_cnd_t;
 */
 // R2 ops
-typedef enum logic [5:0] {
-	FN_AND			= 6'd00,
-	FN_OR				= 6'd01,
-	FN_EOR			= 6'd02,
-	FN_CMP			= 6'd03,
-	FN_ADD			= 6'd04,
-	FN_SUB			= 6'd05,
-	FN_CMPU			= 6'd06,
-	FN_NAND			= 6'd08,
-	FN_NOR			= 6'd09,
-	FN_ENOR			= 6'd10,
-	FN_ANDC			= 6'd11,
-	FN_ORC			= 6'd12,
-	FN_MUL			= 6'd16,
-	FN_DIV			= 6'd17,
-	FN_MULU			= 6'd19,
-	FN_DIVU			= 6'd20,
-	FN_MULSU		= 6'd21,
-	FN_DIVSU		= 6'd22,
-	FN_MULH			= 6'd24,
-	FN_MOD			= 6'd25,
-	FN_MULUH		= 6'd27,
-	FN_MODU			= 6'd28,
-	FN_MULSUH		= 6'd29,
-	FN_MODSU		= 6'd30,
-	NNA_MTWT		= 6'd40,
-	NNA_MTIN		= 6'd41,
-	NNA_MTBIAS	= 6'd42,
-	NNA_MTFB		= 6'd43,
-	NNA_MTMC		= 6'd44,
-	NNA_MTBC		= 6'd45
+typedef enum logic [6:0] {
+	FN_AND			= 7'd00,
+	FN_OR				= 7'd01,
+	FN_EOR			= 7'd02,
+	FN_CMP			= 7'd03,
+	FN_ADD			= 7'd04,
+	FN_SUB			= 7'd05,
+	FN_CMPU			= 7'd06,
+	FN_NAND			= 7'd08,
+	FN_NOR			= 7'd09,
+	FN_ENOR			= 7'd10,
+	FN_ANDC			= 7'd11,
+	FN_ORC			= 7'd12,
+	FN_MUL			= 7'd16,
+	FN_DIV			= 7'd17,
+	FN_MULU			= 7'd19,
+	FN_DIVU			= 7'd20,
+	FN_MULSU		= 7'd21,
+	FN_DIVSU		= 7'd22,
+	FN_MULH			= 7'd24,
+	FN_MOD			= 7'd25,
+	FN_MULUH		= 7'd27,
+	FN_MODU			= 7'd28,
+	FN_MULSUH		= 7'd29,
+	FN_MODSU		= 7'd30,
+	FN_PTRDIF		= 7'd32,
+	NNA_MTWT		= 7'd40,
+	NNA_MTIN		= 7'd41,
+	NNA_MTBIAS	= 7'd42,
+	NNA_MTFB		= 7'd43,
+	NNA_MTMC		= 7'd44,
+	NNA_MTBC		= 7'd45,
+	FN_SEQ			= 7'd80,
+	FN_SNE			= 7'd81,
+	FN_SLT			= 7'd82,
+	FN_SLE			= 7'd83,
+	FN_SLTU			= 7'd84,
+	FN_SLEU			= 7'd85
 } r2func_t;
 
-typedef enum logic [5:0] {
-	FN_SEQ			= 6'd16,
-	FN_SNE			= 6'd17,
-	FN_SLT			= 6'd18,
-	FN_SLE			= 6'd19,
-	FN_SLTU			= 6'd20,
-	FN_SLEU			= 6'd21
-} r2bfunc_t;
+typedef enum logic [4:0] {
+	FNS_AND			= 5'd00,
+	FNS_OR			= 5'd01,
+	FNS_EOR			= 5'd02,
+	FNS_CMP			= 5'd03,
+	FNS_ADD			= 5'd04,
+	FNS_SUBF		= 5'd05,
+	FNS_CMPU		= 5'd06,
+	FNS_SLT			= 5'd07,
+	FNS_NAND		= 5'd08,
+	FNS_NOR			= 5'd09,
+	FNS_ENOR		= 5'd10,
+	FNS_ANDC		= 5'd11,
+	FNS_ORC			= 5'd12,
+	FNS_MUL			= 5'd16,
+	FNS_DIV			= 5'd17,
+	FNS_MULU		= 5'd19,
+	FNS_DIVU		= 5'd20,
+	FNS_MULSU		= 5'd21,
+	FNS_DIVSU		= 5'd22,
+	FNS_MULH		= 5'd24,
+	FNS_MOD			= 5'd25,
+	FNS_MULUH		= 5'd27,
+	FNS_MODU		= 5'd28,
+	FNS_MULSUH	= 5'd29,
+	FNS_MODSU		= 5'd30
+} risfunc_t;
 
 typedef enum logic [2:0] {
 	RND_NE = 3'd0,		// nearest ties to even
@@ -950,7 +977,7 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [104:0] pad;
+	logic [103:0] pad;
 	opcode_t pfx_opcode;
 	r2func_t func;
 	logic resv;
@@ -962,19 +989,7 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [104:0] pad;
-	opcode_t pfx_opcode;
-	r2bfunc_t func;
-	logic resv;
-	regspec_t Rb;
-	regspec_t Ra;
-	regspec_t Rt;
-	opcode_t opcode;
-} r2binst_t;
-
-typedef struct packed
-{
-	logic [111:0] pad;
+	logic [110:0] pad;
 	r2func_t func2;
 	logic resv;
 	r1func_t func;
@@ -1126,7 +1141,6 @@ typedef union packed
 	f3inst_t	f3;
 	r1inst_t	r1;
 	r2inst_t	r2;
-	r2binst_t	r2b;
 	brinst_t	br;
 	brrinst_t	brr;
 	fbrinst_t	fbr;
@@ -1174,7 +1188,8 @@ typedef struct packed
 	aregno_t Rb;
 	aregno_t Rc;
 	aregno_t Rt;
-	logic Rtsrc;	// Rt is a source register
+	logic [2:0] Rcc;	// Rc complement status
+	logic Rtsrc;			// Rt is a source register
 	logic has_imm;
 	value_t imma;
 	value_t immb;
@@ -1355,6 +1370,17 @@ const address_t RSTSP = 32'hFFFFFFF0;
 
 typedef logic [7:0] seqnum_t;
 
+typedef struct packed
+{
+	pregno_t [BANKS-1:0] pregs;
+} preg_array_t;
+
+typedef struct packed
+{
+	logic [PREGS-1:0] avail;	// available registers at time of queue (for rollback)
+	preg_array_t [AREGS-1:0] regmap;
+} checkpoint_t;
+
 typedef struct packed {
 	// The following fields may change state while an instruction is processed.
 	logic v;									// 1=entry is valid, in use
@@ -1365,7 +1391,6 @@ typedef struct packed {
 	logic [1:0] done;					// 2'b11=instruction is finished executing
 	pc_address_t brtgt;
 	logic takb;								// 1=branch evaluated to taken
-	logic [PREGS-1:0] avail;	// available registers at time of queue (for rollback)
 	cause_code_t exc;					// non-zero indicate exception
 	logic excv;								// 1=exception
 	logic argA_v;							// 1=argument A valid
@@ -1577,10 +1602,6 @@ begin
 		FN_NOR:	fnSourceAv = fnConstReg(ir.r2.Ra) || fnImma(ir);
 		FN_ENOR:	fnSourceAv = fnConstReg(ir.r2.Ra) || fnImma(ir);
 		FN_ORC:	fnSourceAv = fnConstReg(ir.r2.Ra) || fnImma(ir);
-		default:	fnSourceAv = 1'b1;
-		endcase
-	OP_R2B:
-		case(ir.r2b.func)
 		FN_SEQ:	fnSourceAv = fnConstReg(ir.r2.Ra) || fnImma(ir);
 		FN_SNE:	fnSourceAv = fnConstReg(ir.r2.Ra) || fnImma(ir);
 		FN_SLT:	fnSourceAv = fnConstReg(ir.r2.Ra) || fnImma(ir);
@@ -1638,10 +1659,6 @@ begin
 		FN_NOR:	fnSourceBv = fnConstReg(ir.r2.Rb) || fnImmb(ir);
 		FN_ENOR:	fnSourceBv = fnConstReg(ir.r2.Rb) || fnImmb(ir);
 		FN_ORC:	fnSourceBv = fnConstReg(ir.r2.Rb) || fnImmb(ir);
-		default:	fnSourceBv = 1'b1;
-		endcase
-	OP_R2B:
-		case(ir.r2b.func)
 		FN_SEQ:	fnSourceBv = fnConstReg(ir.r2.Rb) || fnImmb(ir);
 		FN_SNE:	fnSourceBv = fnConstReg(ir.r2.Rb) || fnImmb(ir);
 		FN_SLT:	fnSourceBv = fnConstReg(ir.r2.Rb) || fnImmb(ir);
@@ -1719,16 +1736,11 @@ begin
 		FN_NOR:	fnSourceTv = fnConstReg(ir.r2.Rt);
 		FN_ENOR:	fnSourceTv = fnConstReg(ir.r2.Rt);
 		FN_ORC:	fnSourceTv = fnConstReg(ir.r2.Rt);
-		default:	fnSourceTv = 1'b1;
-		endcase
-	OP_R2B:
-		case(ir.r2b.func)
 		FN_SEQ:	fnSourceTv = fnConstReg(ir.r2.Rt);
 		FN_SNE:	fnSourceTv = fnConstReg(ir.r2.Rt);
 		FN_SLT:	fnSourceTv = fnConstReg(ir.r2.Rt);
 		FN_SLE:	fnSourceTv = fnConstReg(ir.r2.Rt);
 		FN_SLTU:	fnSourceTv = fnConstReg(ir.r2.Rt);
-		FN_SLEU:	fnSourceTv = fnConstReg(ir.r2.Rt);
 		default:	fnSourceTv = 1'b1;
 		endcase
 	OP_JSR,
@@ -1786,10 +1798,6 @@ begin
 		FN_NOR:	fnSourcePv = ~vec;
 		FN_ENOR:	fnSourcePv = ~vec;
 		FN_ORC:	fnSourcePv = ~vec;
-		default:	fnSourcePv = 1'b1;
-		endcase
-	OP_R2B:
-		case(ir.r2b.func)
 		FN_SEQ:	fnSourcePv = ~vec;
 		FN_SNE:	fnSourcePv = ~vec;
 		FN_SLT:	fnSourcePv = ~vec;
@@ -1915,6 +1923,7 @@ input instruction_t ir;
 begin
 	fnImmb = 1'b0;
 	case(ir.any.opcode)
+	OP_RIS,
 	OP_ADDI,OP_CMPI,OP_MULI,OP_DIVI,OP_SUBFI,OP_SLTI:
 		fnImmb = 1'b1;
 	OP_RTD:

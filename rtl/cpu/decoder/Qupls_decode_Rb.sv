@@ -44,7 +44,12 @@ output aregno_t Rb;
 function aregno_t fnRb;
 input instruction_t ir;
 begin
-	fnRb = {regx,ir[24:19]};
+	case(ir.any.opcode)
+	OP_FLT2,OP_FLT3:
+		fnRb = {regx,1'b0,ir[21:17]};
+	default:
+		fnRb = {regx,ir[24:19]};
+	endcase
 end
 endfunction
 

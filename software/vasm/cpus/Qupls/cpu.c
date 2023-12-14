@@ -1,5 +1,6 @@
 #include "vasm.h"
 
+#define SUPPORT_IBH	1
 #define TRACE(x)		/*printf(x)*/
 #define TRACE2(x,y)	/*printf((x),(y))*/
 //#define BRANCH_PGREL 1
@@ -19,8 +20,10 @@ static taddr sd2reg = 60;
 static taddr sd3reg = 59;
 static __int64 regmask = 0x3fLL;
 
-static insn_count = 0;
-static byte_count = 0;
+static int qupls_insn_count = 0;
+static int qupls_byte_count = 0;
+static int qupls_padding_bytes = 0;
+static int qupls_header_bytes = 0;
 
 static insn_sizes1[20000];
 static insn_sizes2[20000];
@@ -69,20 +72,20 @@ static int regop[64] = {
 };
 
 mnemonic mnemonics[]={
-	"abs",	{OP_REG,OP_REG,0,0,0}, {R2,CPU_ALL,0,0x01000002LL,4},
+	"abs",	{OP_REG,OP_REG,0,0,0}, {R2,CPU_ALL,0,0x01000002LL,5},
 
-	"add", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(4LL)|OPC(2LL),4,SZ_UNSIZED,0},	
-	"add", {OP_REG,OP_IMM,OP_REG,0,0}, {RIA,CPU_ALL,0,R2FUNC(4LL)|OPC(2LL),4,SZ_UNSIZED,0},	
-	"add", {OP_REG,OP_REG,OP_IMM,0,0}, {RI,CPU_ALL,0,OPC(4LL),4,SZ_UNSIZED,0},	
+	"add", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(4LL)|OPC(2LL),5,SZ_UNSIZED,0},	
+	"add", {OP_REG,OP_IMM,OP_REG,0,0}, {RIA,CPU_ALL,0,R2FUNC(4LL)|OPC(2LL),5,SZ_UNSIZED,0},	
+	"add", {OP_REG,OP_REG,OP_IMM,0,0}, {RI,CPU_ALL,0,OPC(4LL),5,SZ_UNSIZED,0,0},	
 
-	"and", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(0)|OPC(2LL),4,SZ_UNSIZED,0},	
-	"and", {OP_REG,OP_IMM,OP_REG,0,0}, {RIA,CPU_ALL,0,R2FUNC(0)|OPC(2LL),4,SZ_UNSIZED,0},	
-	"and", {OP_REG,OP_REG,OP_IMM,0,0}, {RI,CPU_ALL,0,OPC(8LL),4,SZ_UNSIZED,0},	
+	"and", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(0)|OPC(2LL),5,SZ_UNSIZED,0},	
+	"and", {OP_REG,OP_IMM,OP_REG,0,0}, {RIA,CPU_ALL,0,R2FUNC(0)|OPC(2LL),5,SZ_UNSIZED,0},	
+	"and", {OP_REG,OP_REG,OP_IMM,0,0}, {RI,CPU_ALL,0,OPC(8LL),5,SZ_UNSIZED,0,0},	
 
-	"asl", {OP_REG,OP_REG,OP_REG,0}, {SH,CPU_ALL,0,SHFUNC(0x00LL)|OPC(88LL),4,SZ_UNSIZED,0},	
-	"asl", {OP_REG,OP_REG,OP_IMM,0}, {SI,CPU_ALL,0,SHFUNC(0x40LL)|OPC(88LL),4,SZ_UNSIZED,0},	
-	"asr", {OP_REG,OP_REG,OP_REG,0}, {SH,CPU_ALL,0,SHFUNC(0x02LL)|OPC(88LL),4,SZ_UNSIZED,0},	
-	"asr", {OP_REG,OP_REG,OP_IMM,0}, {SI,CPU_ALL,0,SHFUNC(0x42LL)|OPC(88LL),4,SZ_UNSIZED,0},	
+	"asl", {OP_REG,OP_REG,OP_REG,0}, {SH,CPU_ALL,0,SHFUNC(0x00LL)|OPC(88LL),5,SZ_UNSIZED,0},	
+	"asl", {OP_REG,OP_REG,OP_IMM,0}, {SI,CPU_ALL,0,SHFUNC(0x40LL)|OPC(88LL),5,SZ_UNSIZED,0},	
+	"asr", {OP_REG,OP_REG,OP_REG,0}, {SH,CPU_ALL,0,SHFUNC(0x02LL)|OPC(88LL),5,SZ_UNSIZED,0},	
+	"asr", {OP_REG,OP_REG,OP_IMM,0}, {SI,CPU_ALL,0,SHFUNC(0x42LL)|OPC(88LL),5,SZ_UNSIZED,0},	
 
 	"atom", {OP_IMM,0,0,0,0}, {ATOM,CPU_ALL,0,FMT2(0)|OPC(122LL),5,SZ_UNSIZED,0},	
 
@@ -150,19 +153,19 @@ mnemonic mnemonics[]={
 	"clmul", 	{OP_REG,OP_REG,OP_REG,0,0}, {R3,CPU_ALL,0,0x5C0000000002LL,6},	
 	"clmulh", 	{OP_REG,OP_REG,OP_REG,0,0}, {R3,CPU_ALL,0,0x5E0000000002LL,6},	
 
-	"clr", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(56LL)|OPC(13LL),4},	
+	"clr", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(56LL)|OPC(13LL),5},	
 	"clr", {OP_VREG|OP_REG,OP_VREG|OP_REG,OP_IMM,OP_IMM,0}, {BFR3II,CPU_ALL,0,FUNC3(0LL)|OPC(13LL),5},	
 
 	"cmovnz", 	{OP_REG,OP_REG,OP_REG,OP_REG,0}, {R3,CPU_ALL,0,0x5A0000000002LL,6},	
 
-	"cmp", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(3LL)|IM2(0)|OPC(2LL),4,SZ_UNSIZED,0},	
-	"cmp", {OP_REG,OP_IMM,OP_REG,0,0}, {RIA,CPU_ALL,0,R2FUNC(3LL)|IM2(1)|OPC(2LL),4,SZ_UNSIZED,0},	
-	"cmp", {OP_REG,OP_REG,OP_IMM,0,0}, {RI,CPU_ALL,0,OPC(11LL),4,SZ_UNSIZED,0},	
+	"cmp", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(3LL)|IM2(0)|OPC(2LL),5,SZ_UNSIZED,0},	
+	"cmp", {OP_REG,OP_IMM,OP_REG,0,0}, {RIA,CPU_ALL,0,R2FUNC(3LL)|IM2(1)|OPC(2LL),5,SZ_UNSIZED,0},	
+	"cmp", {OP_REG,OP_REG,OP_IMM,0,0}, {RI,CPU_ALL,0,OPC(11LL),5,SZ_UNSIZED,0,0},	
 
-	"cntlz", {OP_VREG,OP_VREG,0,0,0}, {R1,CPU_ALL,0,0x00000101,4},
-	"cntlz", {OP_REG,OP_REG,0,0,0}, {R1,CPU_ALL,0,0x00000001,4},
-	"cntpop", {OP_VREG,OP_VREG,0,0,0}, {R1,CPU_ALL,0,0x04000101,4},
-	"cntpop", {OP_REG,OP_REG,0,0,0}, {R1,CPU_ALL,0,0x04000001,4},
+	"cntlz", {OP_VREG,OP_VREG,0,0,0}, {R1,CPU_ALL,0,0x00000101,5},
+	"cntlz", {OP_REG,OP_REG,0,0,0}, {R1,CPU_ALL,0,0x00000001,5},
+	"cntpop", {OP_VREG,OP_VREG,0,0,0}, {R1,CPU_ALL,0,0x04000101,5},
+	"cntpop", {OP_REG,OP_REG,0,0,0}, {R1,CPU_ALL,0,0x04000001,5},
 
 	"com",	{OP_VREG,OP_VREG,0,0,0}, {R3II,CPU_ALL,0,0x1417F00001AALL,6},
 	"com", {OP_REG,OP_REG,0,0,0}, {RIL,CPU_ALL,0,0xFFFFFFF800DALL,6,0xFFF8000ALL,4},
@@ -180,26 +183,26 @@ mnemonic mnemonics[]={
 	"di",		{OP_NEXTREG,OP_NEXTREG,OP_REG,0,0}, {R3RR,CPU_ALL,0,0x2C0000000007LL,6},
 	"dif",	{OP_REG,OP_REG,OP_REG,0,0}, {R3RR,CPU_ALL,0,0x280000000002LL,6},
 
-	"div", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(17LL)|OPC(2LL),4,SZ_UNSIZED,0},	
-	"div", {OP_REG,OP_REG,OP_IMM,0,0}, {RI,CPU_ALL,0,OPC(13LL),4,SZ_UNSIZED,0},	
+	"div", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(17LL)|OPC(2LL),5,SZ_UNSIZED,0},	
+	"div", {OP_REG,OP_REG,OP_IMM,0,0}, {RI,CPU_ALL,0,OPC(13LL),5,SZ_UNSIZED,0},	
 
 	"divu", {OP_VREG,OP_VREG,OP_VREG,OP_VMREG,0}, {R3RR,CPU_ALL,0,0x220000000102LL,6},	
 	"divu", {OP_VREG,OP_VREG,OP_VREG,0,0}, {R3RR,CPU_ALL,0,0x220000000102LL,6},	
-	"divu", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(20LL)|OPC(2LL),4},	
-	"divu", {OP_REG,OP_REG,OP_IMM,0,0}, {RI,CPU_ALL,0,OPC(21LL),4},
+	"divu", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(20LL)|OPC(2LL),5},	
+	"divu", {OP_REG,OP_REG,OP_IMM,0,0}, {RI,CPU_ALL,0,OPC(21LL),5},
 
 	"djmp",	{OP_IMM,0,0,0,0},{J2,CPU_ALL,0,0x000000000021LL,6},
 	"djmp",	{OP_LK,OP_IMM,0,0,0},{JL2,CPU_ALL,0,0x000000000021LL,6},
 
-	"enor", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(2LL)|OPC(2LL),4,SZ_UNSIZED,0},	
-	"enor", {OP_REG,OP_IMM,OP_REG,0,0}, {RIA,CPU_ALL,0,R2FUNC(2LL)|OPC(2LL),4,SZ_UNSIZED,0},	
-	"enor", {OP_REG,OP_REG,OP_IMM,0,0}, {RIB,CPU_ALL,0,R2FUNC(2LL)|OPC(2LL),4,SZ_UNSIZED,0},	
+	"enor", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(2LL)|OPC(2LL),5,SZ_UNSIZED,0},	
+	"enor", {OP_REG,OP_IMM,OP_REG,0,0}, {RIA,CPU_ALL,0,R2FUNC(2LL)|OPC(2LL),5,SZ_UNSIZED,0},	
+	"enor", {OP_REG,OP_REG,OP_IMM,0,0}, {RIB,CPU_ALL,0,R2FUNC(2LL)|OPC(2LL),5,SZ_UNSIZED,0},	
 
 	"enter", {OP_IMM,0,0,0,0}, {ENTER,CPU_ALL,0,OPC(52LL),5,SZ_UNSIZED,0},	
 
-	"eor", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(2LL)|OPC(2LL),4,SZ_UNSIZED,0},	
-	"eor", {OP_REG,OP_IMM,OP_REG,0,0}, {RIA,CPU_ALL,0,R2FUNC(2LL)|OPC(2LL),4,SZ_UNSIZED,0},	
-	"eor", {OP_REG,OP_REG,OP_IMM,0,0}, {RI,CPU_ALL,0,OPC(10LL),4,SZ_UNSIZED,0},	
+	"eor", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(2LL)|OPC(2LL),5,SZ_UNSIZED,0},	
+	"eor", {OP_REG,OP_IMM,OP_REG,0,0}, {RIA,CPU_ALL,0,R2FUNC(2LL)|OPC(2LL),5,SZ_UNSIZED,0},	
+	"eor", {OP_REG,OP_REG,OP_IMM,0,0}, {RI,CPU_ALL,0,OPC(10LL),5,SZ_UNSIZED,0,0},	
 
 	"ext",	{OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(61)|OPC(13),5,SZ_INTALL,SZ_HEXI},
 	"ext",	{OP_REG,OP_REG,OP_IMM,OP_IMM,0}, {BFR3II,CPU_ALL,0,FUNC3(5)|OPC(13),5,SZ_INTALL,SZ_HEXI},
@@ -259,7 +262,7 @@ mnemonic mnemonics[]={
 	"ldh",	{OP_REG,OP_REGIND,0,0}, {REGIND,CPU_ALL,0,OPC(72LL),4, SZ_UNSIZED, SZ_HEXI},	
 	"ldh",	{OP_REG,OP_SCNDX,0,0,0}, {SCNDX,CPU_ALL,0,LSFUNC(8LL)|OPC(79LL),5, SZ_UNSIZED, SZ_HEXI},	
 
-	"ldi", {OP_VREG|OP_REG,OP_NEXTREG,OP_IMM,0,0}, {RI,CPU_ALL,0,OPC(4LL),4, SZ_UNSIZED, 0},	
+	"ldi", {OP_VREG|OP_REG,OP_NEXTREG,OP_IMM,0,0}, {RI,CPU_ALL,0,OPC(4LL),5,SZ_UNSIZED, 0},	
 
 	"ldo",	{OP_REG,OP_IMM,0,0,0}, {DIRECT,CPU_ALL,0,OPC(70LL),4, SZ_UNSIZED, SZ_OCTA},	
 	"ldo",	{OP_REG,OP_REGIND,0,0}, {REGIND,CPU_ALL,0,OPC(70LL),4, SZ_UNSIZED, SZ_OCTA},	
@@ -294,18 +297,18 @@ mnemonic mnemonics[]={
 	"lsr", {OP_REG,OP_REG,OP_REG,0}, {SH,CPU_ALL,0,SHFUNC(0x01LL)|OPC(88LL),4,SZ_UNSIZED,0},	
 	"lsr", {OP_REG,OP_REG,OP_IMM,0}, {SI,CPU_ALL,0,SHFUNC(0x41LL)|OPC(88LL),4,SZ_UNSIZED,0},	
 
-	"max",	{OP_REG,OP_REG,OP_REG,OP_REG,0}, {R3RR,CPU_ALL,0,OPC(24LL),4},	
+	"max",	{OP_REG,OP_REG,OP_REG,OP_REG,0}, {R3RR,CPU_ALL,0,OPC(24LL),5},	
 	"memdb",{0,0,0,0,0},{BITS16,CPU_ALL,0,0xff0000|OPC(114LL),5,SZ_UNSIZED,0},
 	"memsb",{0,0,0,0,0},{BITS16,CPU_ALL,0,0xc00f00|OPC(114LL),5,SZ_UNSIZED,0},
-	"min",	{OP_REG,OP_REG,OP_REG,OP_REG,0}, {R3RR,CPU_ALL,0,0x80000000|OPC(24LL),4},	
+	"min",	{OP_REG,OP_REG,OP_REG,OP_REG,0}, {R3RR,CPU_ALL,0,0x80000000|OPC(24LL),5},	
 
-	"mod", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(25LL)|OPC(2),4,SZ_INTALL,SZ_HEXI},
-	"mod", {OP_REG,OP_REG,OP_IMM,0,0}, {RIL,CPU_ALL,0,R2FUNC(25LL)|OPC(2),4,SZ_INTALL,SZ_HEXI},
-	"modu", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(28LL)|OPC(2),4,SZ_INTALL,SZ_HEXI},
-	"modu", {OP_REG,OP_REG,OP_IMM,0,0}, {RIL,CPU_ALL,0,R2FUNC(28LL)|OPC(2),4,SZ_INTALL,SZ_HEXI},
+	"mod", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(25LL)|OPC(2),5,SZ_INTALL,SZ_HEXI},
+	"mod", {OP_REG,OP_REG,OP_IMM,0,0}, {RIL,CPU_ALL,0,R2FUNC(25LL)|OPC(2),5,SZ_INTALL,SZ_HEXI},
+	"modu", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(28LL)|OPC(2),5,SZ_INTALL,SZ_HEXI},
+	"modu", {OP_REG,OP_REG,OP_IMM,0,0}, {RIL,CPU_ALL,0,R2FUNC(28LL)|OPC(2),5,SZ_INTALL,SZ_HEXI},
 
-	"mov", {OP_REG,OP_REG,0,0,0}, {MV,CPU_ALL,0,OPC(15LL),4, SZ_UNSIZED, 0},	
-	"move", {OP_REG,OP_REG,0,0,0}, {MV,CPU_ALL,0,OPC(15LL),4, SZ_UNSIZED, 0},	
+	"mov", {OP_REG,OP_REG,0,0,0}, {MV,CPU_ALL,0,OPC(15LL),5, SZ_UNSIZED, 0},	
+	"move", {OP_REG,OP_REG,0,0,0}, {MV,CPU_ALL,0,OPC(15LL),5, SZ_UNSIZED, 0},	
 //	"mov",	{OP_REG,OP_REG,0,0,0}, {MV,CPU_ALL,0,0x0817F00000AALL,6},
 //	"move",	{OP_REG,OP_REG,0,0,0}, {MV,CPU_ALL,0,0x0817F00000AALL,6},
 	"movsxb",	{OP_REG,OP_REG,0,0,0}, {MV,CPU_ALL,0,0x8E000000LL|OPC(19LL),4},
@@ -319,39 +322,39 @@ mnemonic mnemonics[]={
 
 	"mtlc",		{OP_NEXTREG,OP_REG,0,0,0}, {R2,CPU_ALL,0,0xA0000052LL,4},
 
-	"mul", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(16LL)|OPC(2LL),4,SZ_UNSIZED,0},	
-	"mul", {OP_REG,OP_REG,OP_IMM,0,0}, {RI,CPU_ALL,0,OPC(6LL),4,SZ_UNSIZED,0},	
+	"mul", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(16LL)|OPC(2LL),5,SZ_UNSIZED,0},	
+	"mul", {OP_REG,OP_REG,OP_IMM,0,0}, {RI,CPU_ALL,0,OPC(6LL),5,SZ_UNSIZED,0,0},	
 
 	"muladd", {OP_REG,OP_REG,OP_REG,OP_REG,0}, {R3RR,CPU_ALL,0,0x0C0000000002LL,6},	
 
 	"mulf", {OP_REG,OP_REG,OP_REG,0,0}, {R3RR,CPU_ALL,0,0x2A0000000002LL,6},	
-	"mulf", {OP_REG,OP_REG,OP_IMM,0,0}, {RI,CPU_ALL,0x15LL,4},
+	"mulf", {OP_REG,OP_REG,OP_IMM,0,0}, {RI,CPU_ALL,0x15LL,5},
 
-	"mulh", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(24LL)|OPC(2LL),4},	
+	"mulh", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(24LL)|OPC(2LL),5},	
 
-	"mulu", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(19LL)|OPC(2LL),4},	
-	"mulu", {OP_REG,OP_REG,OP_IMM,0,0}, {RI,CPU_ALL,0,OPC(14LL),4,SZ_UNSIZED,0},	
+	"mulu", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(19LL)|OPC(2LL),5},	
+	"mulu", {OP_REG,OP_REG,OP_IMM,0,0}, {RI,CPU_ALL,0,OPC(14LL),5,SZ_UNSIZED,0,0},	
 
-	"mux",	{OP_REG,OP_REG,OP_REG,OP_REG,0}, {R3RR,CPU_ALL,0,OPC(25),4},	
+	"mux",	{OP_REG,OP_REG,OP_REG,OP_REG,0}, {R3RR,CPU_ALL,0,OPC(25),5},	
 
 	"nand", {OP_VREG,OP_VREG,OP_VREG|OP_REG|OP_IMM7,OP_VREG|OP_REG|OP_IMM7,0}, {R3,CPU_ALL,0,0x000000000102LL,6},	
 	"nand", {OP_VREG,OP_VREG,OP_VREG|OP_REG|OP_IMM7,OP_VREG|OP_REG|OP_IMM7,OP_VMREG}, {R3,CPU_ALL,0,0x000000000102LL,6},	
-	"nand", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(8LL)|OPC(2LL),4, SZ_INTALL, SZ_HEXI},	
-	"nand", {OP_REG,OP_REG,OP_IMM,0}, {R3RI,CPU_ALL,0,R2FUNC(8LL)|OPC(2LL),4, SZ_INTALL, SZ_HEXI},	
+	"nand", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(8LL)|OPC(2LL),5, SZ_INTALL, SZ_HEXI},	
+	"nand", {OP_REG,OP_REG,OP_IMM,0}, {R3RI,CPU_ALL,0,R2FUNC(8LL)|OPC(2LL),5, SZ_INTALL, SZ_HEXI},	
 
 	"neg", {OP_REG,OP_NEXTREG,OP_REG,0,0}, {R2,CPU_ALL,0,0x0000000DLL,4},	
 //	"neg",	{OP_REG,OP_REG,0,0,0}, {R3,CPU_ALL,0,0x0A000001LL,4},
 
-	"nop",	{0,0,0,0,0}, {BITS16,CPU_ALL,0,0xffffffffffLL,1, SZ_UNSIZED, 0},
+	"nop",	{0,0,0,0,0}, {BITS16,CPU_ALL,0,0xffffffffffLL,5, SZ_UNSIZED, 0},
 
 	"nor", {OP_VREG,OP_VREG,OP_VREG|OP_REG|OP_IMM7,OP_VREG|OP_REG|OP_IMM7,0}, {R3,CPU_ALL,0,0x020000000102LL,6},	
 	"nor", {OP_VREG,OP_VREG,OP_VREG|OP_REG|OP_IMM7,OP_VREG|OP_REG|OP_IMM7,OP_VMREG}, {R3,CPU_ALL,0,0x020000000102LL,6},	
-	"nor", {OP_REG,OP_REG,OP_REG,OP_REG,0}, {R2,CPU_ALL,0,R2FUNC(9LL)|OPC(2LL),4},	
-	"not", {OP_REG,OP_REG,0,0,0}, {R1,CPU_ALL,0,R1FUNC(7LL)|OPC(1),3},
+	"nor", {OP_REG,OP_REG,OP_REG,OP_REG,0}, {R2,CPU_ALL,0,R2FUNC(9LL)|OPC(2LL),5},	
+	"not", {OP_REG,OP_REG,0,0,0}, {R1,CPU_ALL,0,R1FUNC(7LL)|OPC(1),5},
 
-	"or", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(1LL)|OPC(2LL),4,SZ_UNSIZED,0},	
-	"or", {OP_REG,OP_IMM,OP_REG,0,0}, {RIA,CPU_ALL,0,R2FUNC(1LL)|OPC(2LL),4,SZ_UNSIZED,0},	
-	"or", {OP_REG,OP_REG,OP_IMM,0,0}, {RI,CPU_ALL,0,OPC(9LL),4,SZ_UNSIZED,0},	
+	"or", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(1LL)|OPC(2LL),5,SZ_UNSIZED,0},	
+	"or", {OP_REG,OP_IMM,OP_REG,0,0}, {RIA,CPU_ALL,0,R2FUNC(1LL)|OPC(2LL),5,SZ_UNSIZED,0},	
+	"or", {OP_REG,OP_REG,OP_IMM,0,0}, {RI,CPU_ALL,0,OPC(9LL),5,SZ_UNSIZED,0,0},	
 
 	"orf", {OP_VREG|OP_REG,OP_VREG|OP_REG,OP_VREG|OP_REG,OP_VMREG,0}, {R2M,CPU_ALL,0,R2FUNC(9LL)|OPC(2LL),5, SZ_INTALL, SZ_HEXI},
 	"orf", {OP_VREG|OP_REG,OP_VREG|OP_REG,OP_IMM,OP_VMREG,0}, {RIM,CPU_ALL,0,OPC(9LL),5, SZ_INTALL, SZ_HEXI},
@@ -419,42 +422,44 @@ mnemonic mnemonics[]={
 	"resetq",	{OP_NEXTREG,OP_NEXTREG,OP_IMM,0,0},{R3RR,CPU_ALL,0,0x180000000007LL,6},	
 	"resetq",	{OP_NEXTREG,OP_NEXTREG,OP_REG,0,0},{R3RR,CPU_ALL,0,0x180000000007LL,6},	
 
-	"revbit",	{OP_REG,OP_REG,0,0,0}, {R1,CPU_ALL,0,0x50000001LL,4},
+	"revbit",	{OP_REG,OP_REG,0,0,0}, {R1,CPU_ALL,0,0x50000001LL,5},
 
 //	"ret", {OP_REG,0,0,0,0}, {RTDR,CPU_ALL,0,0x80000000LL|R2FUNC(4LL)|OPC(2LL),5,SZ_INTALL,SZ_HEXI},	
-	"ret", {0,0,0,0,0}, {RTDR,CPU_ALL,0,0x0400LL|RT(1)|OPC(35LL),5,SZ_UNSIZED,0},	
+	"ret", {0,0,0,0,0}, {RTDR,CPU_ALL,0,RT(56LL)|OPC(35LL),5,SZ_UNSIZED,0},	
 
-	"rex",	{OP_IMM,OP_REG,0,0,0},{REX,CPU_ALL,0,0x200000000007LL,6},	
+	"rex",	{OP_IMM,OP_REG,0,0,0},{REX,CPU_ALL,0,0x200000000007LL,5},	
 
-	"rol", {OP_REG,OP_REG,OP_REG,0}, {SH,CPU_ALL,0,SHFUNC(0x03LL)|OPC(88LL),4,SZ_UNSIZED,0},	
-	"rol", {OP_REG,OP_REG,OP_IMM,0}, {SI,CPU_ALL,0,SHFUNC(0x43LL)|OPC(88LL),4,SZ_UNSIZED,0},	
-	"ror", {OP_REG,OP_REG,OP_REG,0}, {SH,CPU_ALL,0,SHFUNC(0x04LL)|OPC(88LL),4,SZ_UNSIZED,0},	
-	"ror", {OP_REG,OP_REG,OP_IMM,0}, {SI,CPU_ALL,0,SHFUNC(0x44LL)|OPC(88LL),4,SZ_UNSIZED,0},	
+	"rol", {OP_REG,OP_REG,OP_REG,0}, {SH,CPU_ALL,0,SHFUNC(0x03LL)|OPC(88LL),5,SZ_UNSIZED,0},	
+	"rol", {OP_REG,OP_REG,OP_IMM,0}, {SI,CPU_ALL,0,SHFUNC(0x43LL)|OPC(88LL),5,SZ_UNSIZED,0},	
+	"ror", {OP_REG,OP_REG,OP_REG,0}, {SH,CPU_ALL,0,SHFUNC(0x04LL)|OPC(88LL),5,SZ_UNSIZED,0},	
+	"ror", {OP_REG,OP_REG,OP_IMM,0}, {SI,CPU_ALL,0,SHFUNC(0x44LL)|OPC(88LL),5,SZ_UNSIZED,0},	
 
 	"rtd", {OP_REG,OP_REG,OP_REG,OP_REG,0}, {RTDR,CPU_ALL,0,0x80000000LL|R2FUNC(4LL)|OPC(2LL),5,SZ_INTALL,SZ_HEXI},	
 	"rtd", {OP_NEXTREG,OP_VREG|OP_REG,OP_VREG|OP_REG,OP_IMM}, {RTDI,CPU_ALL,0,0x80000000LL|OPC(4LL),5,SZ_INTALL,SZ_HEXI},	
 	"rtd", {OP_REG,OP_VREG|OP_REG,OP_VREG|OP_REG,OP_IMM}, {RTDI,CPU_ALL,0,0x80000000LL|OPC(4LL),5,SZ_INTALL,SZ_HEXI},	
-	"rte",	{0,0,0,0,0}, {RTS,CPU_ALL,0,0x0423LL, 5},
-	"rti",	{0,0,0,0,0}, {RTS,CPU_ALL,0,0x0423LL, 5},
+	"rte",	{0,0,0,0,0}, {RTS,CPU_ALL,0,0x2023LL, 5},
+	"rte2",	{0,0,0,0,0}, {RTS,CPU_ALL,0,0x4023LL, 5},
+	"rti",	{0,0,0,0,0}, {RTS,CPU_ALL,0,0x2023LL, 5},
+	"rti2",	{0,0,0,0,0}, {RTS,CPU_ALL,0,0x4023LL, 5},
 	"rts", {OP_REG,0,0,0,0}, {RTDR,CPU_ALL,0,0x80000000LL|R2FUNC(4LL)|OPC(2LL),5,SZ_INTALL,SZ_HEXI},	
-	"rts", {0,0,0,0,0}, {RTDR,CPU_ALL,0,0x0400LL|RT(1)|OPC(35LL),5,SZ_UNSIZED,0},	
+	"rts", {0,0,0,0,0}, {RTDR,CPU_ALL,0,RT(56)|OPC(35LL),5,SZ_UNSIZED,0},	
 
 	"sbx", {OP_VREG|OP_REG,OP_VREG|OP_REG,OP_IMM,OP_IMM,0}, {RII,CPU_ALL,0,FUNC3(3LL)|OPC(13LL),5,SZ_INTALL,SZ_HEXI},	
 
 	"sei",	{OP_REG,OP_NEXTREG,OP_REG,0,0},{R3RR,CPU_ALL,0,0x2E0000000007LL,6},	
 
-	"seq", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(16LL)|OPC(26LL),4,SZ_UNSIZED,0},	
-	"seq", {OP_REG,OP_IMM,OP_REG,0,0}, {RIA,CPU_ALL,0,R2FUNC(16LL)|OPC(26LL),4,SZ_UNSIZED,0},	
-	"seq", {OP_REG,OP_REG,OP_IMM,0,0}, {RIB,CPU_ALL,R2FUNC(16LL)|OPC(26LL),4,SZ_UNSIZED,0},	
-	"sle", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(19LL)|OPC(26LL),4,SZ_UNSIZED,0},	
-	"sle", {OP_REG,OP_IMM,OP_REG,0,0}, {RIA,CPU_ALL,0,R2FUNC(19LL)|OPC(26LL),4,SZ_UNSIZED,0},	
-	"sle", {OP_REG,OP_REG,OP_IMM,0,0}, {RIB,CPU_ALL,0,R2FUNC(19LL)|OPC(26LL),4,SZ_UNSIZED,0},	
-	"sleu", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(21LL)|OPC(26LL),4,SZ_UNSIZED,0},	
-	"sleu", {OP_REG,OP_IMM,OP_REG,0,0}, {RIA,CPU_ALL,0,R2FUNC(21LL)|OPC(26LL),4,SZ_UNSIZED,0},	
-	"sleu", {OP_REG,OP_REG,OP_IMM,0,0}, {RIB,CPU_ALL,0,R2FUNC(21LL)|OPC(26LL),4,SZ_UNSIZED,0},	
-	"slt", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(18LL)|OPC(26LL),4,SZ_UNSIZED,0},	
-	"slt", {OP_REG,OP_IMM,OP_REG,0,0}, {RIA,CPU_ALL,0,R2FUNC(18LL)|OPC(26LL),4,SZ_UNSIZED,0},	
-	"slt", {OP_REG,OP_REG,OP_IMM,0,0}, {RI,CPU_ALL,0,OPC(3LL),4,SZ_UNSIZED,0},	
+	"seq", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(16LL)|OPC(26LL),5,SZ_UNSIZED,0},	
+	"seq", {OP_REG,OP_IMM,OP_REG,0,0}, {RIA,CPU_ALL,0,R2FUNC(16LL)|OPC(26LL),5,SZ_UNSIZED,0},	
+	"seq", {OP_REG,OP_REG,OP_IMM,0,0}, {RIB,CPU_ALL,R2FUNC(16LL)|OPC(26LL),5,SZ_UNSIZED,0},	
+	"sle", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(19LL)|OPC(26LL),5,SZ_UNSIZED,0},	
+	"sle", {OP_REG,OP_IMM,OP_REG,0,0}, {RIA,CPU_ALL,0,R2FUNC(19LL)|OPC(26LL),5,SZ_UNSIZED,0},	
+	"sle", {OP_REG,OP_REG,OP_IMM,0,0}, {RIB,CPU_ALL,0,R2FUNC(19LL)|OPC(26LL),5,SZ_UNSIZED,0},	
+	"sleu", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(21LL)|OPC(26LL),5,SZ_UNSIZED,0},	
+	"sleu", {OP_REG,OP_IMM,OP_REG,0,0}, {RIA,CPU_ALL,0,R2FUNC(21LL)|OPC(26LL),5,SZ_UNSIZED,0},	
+	"sleu", {OP_REG,OP_REG,OP_IMM,0,0}, {RIB,CPU_ALL,0,R2FUNC(21LL)|OPC(26LL),5,SZ_UNSIZED,0},	
+	"slt", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(18LL)|OPC(26LL),5,SZ_UNSIZED,0},	
+	"slt", {OP_REG,OP_IMM,OP_REG,0,0}, {RIA,CPU_ALL,0,R2FUNC(18LL)|OPC(26LL),5,SZ_UNSIZED,0},	
+	"slt", {OP_REG,OP_REG,OP_IMM,0,0}, {RI,CPU_ALL,0,OPC(3LL),5,SZ_UNSIZED,0},	
 //	"seq", {OP_REG,OP_REG,OP_REG,OP_REG,0}, {R3RR,CPU_ALL,0,0x4C0000000002LL,6},	
 //	"seq", {OP_REG,OP_REG,OP_REG,OP_IMM,0}, {R3RI,CPU_ALL,0,0x4C0000000002LL,6},	
 
@@ -464,14 +469,14 @@ mnemonic mnemonics[]={
 	"sll",	{OP_REG,OP_REG,OP_REG|OP_IMM7,OP_REG|OP_IMM7,0}, {R3,CPU_ALL,0,0x800000000002LL,6},	
 	"sll",	{OP_REG,OP_REG,OP_REG|OP_IMM7,OP_VMREG,0}, {R2,CPU_ALL,0,SHFUNC(0LL)|OPC(88LL),4},
 //	"sll",	{OP_REG,OP_REG,OP_IMM,0,0}, {SHIFTI,CPU_ALL,0,0x800000000002LL,6},
-	"sll",	{OP_REG,OP_REG,OP_IMM,0,0}, {RI6,CPU_ALL,0,SHFUNC(0LL)|OPC(88LL),4},
-	"sll",	{OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,SHFUNC(0LL)|OPC(88LL),4},
+	"sll",	{OP_REG,OP_REG,OP_IMM,0,0}, {RI6,CPU_ALL,0,SHFUNC(0LL)|OPC(88LL),5},
+	"sll",	{OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,SHFUNC(0LL)|OPC(88LL),5},
 
 //	"sne", {OP_REG,OP_REG,OP_REG,OP_IMM,0}, {R3RI,CPU_ALL,0,0x4E0000000002LL,6},	
 //	"sne", {OP_REG,OP_REG,OP_REG,OP_REG,0}, {R3RR,CPU_ALL,0,0x4E0000000002LL,6},	
-	"sne", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(17LL)|OPC(26LL),4,SZ_UNSIZED,0},	
-	"sne", {OP_REG,OP_IMM,OP_REG,0,0}, {RIA,CPU_ALL,0,R2FUNC(17LL)|OPC(26LL),4,SZ_UNSIZED,0},	
-	"sne", {OP_REG,OP_REG,OP_IMM,0,0}, {RIB,CPU_ALL,0,R2FUNC(17LL)|OPC(26LL),4,SZ_UNSIZED,0},	
+	"sne", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(17LL)|OPC(26LL),5,SZ_UNSIZED,0},	
+	"sne", {OP_REG,OP_IMM,OP_REG,0,0}, {RIA,CPU_ALL,0,R2FUNC(17LL)|OPC(26LL),5,SZ_UNSIZED,0},	
+	"sne", {OP_REG,OP_REG,OP_IMM,0,0}, {RIB,CPU_ALL,0,R2FUNC(17LL)|OPC(26LL),5,SZ_UNSIZED,0},	
 
 	"sra",	{OP_REG,OP_REG,OP_REG|OP_IMM7,OP_REG|OP_IMM7,OP_VMREG}, {R2,CPU_ALL,0,0x840000000002LL,4},	
 	"sra",	{OP_REG,OP_REG,OP_REG|OP_IMM7,OP_REG|OP_IMM7,0}, {R3,CPU_ALL,0,0x840000000002LL,4},	
@@ -484,37 +489,37 @@ mnemonic mnemonics[]={
 	"srl",	{OP_REG,OP_REG,OP_REG|OP_IMM7,OP_REG|OP_IMM7,0}, {R3,CPU_ALL,0,0x820000000002LL,6},	
 	"srl",	{OP_REG,OP_REG,OP_REG|OP_IMM7,OP_VMREG,0}, {R3,CPU_ALL,0,0x820000000002LL,6},	
 //	"srl",	{OP_REG,OP_REG,OP_IMM,0,0}, {SHIFTI,CPU_ALL,0,0x820000000002LL,6},
-	"srl",	{OP_REG,OP_REG,OP_IMM,0,0}, {RI6,CPU_ALL,0,SHFUNC(1LL)|OPC(88LL),4},
-	"srl",	{OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,SHFUNC(1LL)|OPC(88LL),4},
+	"srl",	{OP_REG,OP_REG,OP_IMM,0,0}, {RI6,CPU_ALL,0,SHFUNC(1LL)|OPC(88LL),5},
+	"srl",	{OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,SHFUNC(1LL)|OPC(88LL),5},
 
 	"statq",	{OP_REG,OP_NEXTREG,OP_IMM,0,0},{R3RR,CPU_ALL,0,0x160000000007LL,6},	
 	"statq",	{OP_REG,OP_NEXTREG,OP_REG,0,0},{R3RR,CPU_ALL,0,0x160000000007LL,6},	
 
-	"stb",	{OP_REG,OP_IMM,0,0,0}, {DIRECT,CPU_ALL,0,OPC(80LL),4, SZ_UNSIZED, SZ_BYTE},	
-	"stb",	{OP_REG,OP_REGIND,0,0}, {REGIND,CPU_ALL,0,OPC(80LL),4, SZ_UNSIZED, SZ_BYTE},	
+	"stb",	{OP_REG,OP_IMM,0,0,0}, {DIRECT,CPU_ALL,0,OPC(80LL),5, SZ_UNSIZED, SZ_BYTE},	
+	"stb",	{OP_REG,OP_REGIND,0,0}, {REGIND,CPU_ALL,0,OPC(80LL),5, SZ_UNSIZED, SZ_BYTE},	
 	"stb",	{OP_REG,OP_SCNDX,0,0,0}, {SCNDX,CPU_ALL,0,LSFUNC(0)|OPC(87LL),5, SZ_UNSIZED, SZ_BYTE},	
 
-	"sth",	{OP_REG,OP_IMM,0,0,0}, {DIRECT,CPU_ALL,0,OPC(84LL),4, SZ_UNSIZED, SZ_HEXI},	
-	"sth",	{OP_REG,OP_REGIND,0,0}, {REGIND,CPU_ALL,0,OPC(84LL),4, SZ_UNSIZED, SZ_HEXI},	
+	"sth",	{OP_REG,OP_IMM,0,0,0}, {DIRECT,CPU_ALL,0,OPC(84LL),5, SZ_UNSIZED, SZ_HEXI},	
+	"sth",	{OP_REG,OP_REGIND,0,0}, {REGIND,CPU_ALL,0,OPC(84LL),5, SZ_UNSIZED, SZ_HEXI},	
 	"sth",	{OP_REG,OP_SCNDX,0,0,0}, {SCNDX,CPU_ALL,0,LSFUNC(4LL)|OPC(87LL),5, SZ_UNSIZED, SZ_HEXI},	
 
-	"sto",	{OP_REG,OP_IMM,0,0,0}, {DIRECT,CPU_ALL,0,OPC(83LL),4, SZ_UNSIZED, SZ_OCTA},	
-	"sto",	{OP_REG,OP_REGIND,0,0}, {REGIND,CPU_ALL,0,OPC(83LL),4, SZ_UNSIZED, SZ_OCTA},	
+	"sto",	{OP_REG,OP_IMM,0,0,0}, {DIRECT,CPU_ALL,0,OPC(83LL),5, SZ_UNSIZED, SZ_OCTA},	
+	"sto",	{OP_REG,OP_REGIND,0,0}, {REGIND,CPU_ALL,0,OPC(83LL),5, SZ_UNSIZED, SZ_OCTA},	
 	"sto",	{OP_REG,OP_SCNDX,0,0,0}, {SCNDX,CPU_ALL,0,LSFUNC(3LL)|OPC(87LL),5, SZ_UNSIZED, SZ_OCTA},	
 
-	"stt",	{OP_REG,OP_IMM,0,0,0}, {DIRECT,CPU_ALL,0,OPC(82LL),4, SZ_UNSIZED, SZ_TETRA},	
-	"stt",	{OP_REG,OP_REGIND,0,0}, {REGIND,CPU_ALL,0,OPC(82LL),4, SZ_UNSIZED, SZ_TETRA},	
+	"stt",	{OP_REG,OP_IMM,0,0,0}, {DIRECT,CPU_ALL,0,OPC(82LL),5, SZ_UNSIZED, SZ_TETRA},	
+	"stt",	{OP_REG,OP_REGIND,0,0}, {REGIND,CPU_ALL,0,OPC(82LL),5, SZ_UNSIZED, SZ_TETRA},	
 	"stt",	{OP_REG,OP_SCNDX,0,0,0}, {SCNDX,CPU_ALL,0,LSFUNC(2LL)|OPC(87LL),5, SZ_UNSIZED, SZ_TETRA},	
 
-	"stw",	{OP_REG,OP_IMM,0,0,0}, {DIRECT,CPU_ALL,0,OPC(81LL),4, SZ_UNSIZED, SZ_WYDE},	
-	"stw",	{OP_REG,OP_REGIND,0,0}, {REGIND,CPU_ALL,0,OPC(81LL),4, SZ_UNSIZED, SZ_WYDE},	
+	"stw",	{OP_REG,OP_IMM,0,0,0}, {DIRECT,CPU_ALL,0,OPC(81LL),5, SZ_UNSIZED, SZ_WYDE},	
+	"stw",	{OP_REG,OP_REGIND,0,0}, {REGIND,CPU_ALL,0,OPC(81LL),5, SZ_UNSIZED, SZ_WYDE},	
 	"stw",	{OP_REG,OP_SCNDX,0,0,0}, {SCNDX,CPU_ALL,0,LSFUNC(1LL)|OPC(87LL),5, SZ_UNSIZED, SZ_WYDE},	
 
-	"sub", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(5LL)|OPC(2LL),4,SZ_UNSIZED,0},	
-	"sub", {OP_REG,OP_IMM,OP_REG,0,0}, {RIA,CPU_ALL,0,R2FUNC(5LL)|OPC(2LL),4,SZ_UNSIZED,0},	
-	"sub", {OP_REG,OP_REG,OP_IMM,0,0}, {RI,CPU_ALL,0,OPC(4LL),4,SZ_UNSIZED,0, FLG_NEGIMM},	
+	"sub", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(5LL)|OPC(2LL),5,SZ_UNSIZED,0},	
+	"sub", {OP_REG,OP_IMM,OP_REG,0,0}, {RIA,CPU_ALL,0,R2FUNC(5LL)|OPC(2LL),5,SZ_UNSIZED,0},	
+	"sub", {OP_REG,OP_REG,OP_IMM,0,0}, {RI,CPU_ALL,0,OPC(4LL),5,SZ_UNSIZED,0, FLG_NEGIMM},
 
-	"subf", {OP_REG,OP_REG,OP_IMM,0,0}, {RI,CPU_ALL,0,OPC(5LL),4,SZ_UNSIZED,0},	
+	"subf", {OP_REG,OP_REG,OP_IMM,0,0}, {RI,CPU_ALL,0,OPC(5LL),5,SZ_UNSIZED,0},	
 
 /* 0000_1010_0001_0001_1111_0000_0000_0000_0000_0000_AALL */
 
@@ -537,9 +542,9 @@ mnemonic mnemonics[]={
 	/* Alternate mnemonic for enor */
 
 	/* Alternate mnemonic for eor */
-	"xor", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(2LL)|OPC(2LL),4,SZ_UNSIZED,0},	
-	"xor", {OP_REG,OP_IMM,OP_REG,0,0}, {RIA,CPU_ALL,0,R2FUNC(2LL)|OPC(2LL),4,SZ_UNSIZED,0},	
-	"xor", {OP_REG,OP_REG,OP_IMM,0,0}, {RI,CPU_ALL,0,OPC(10LL),4,SZ_UNSIZED,0},	
+	"xor", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(2LL)|OPC(2LL),5,SZ_UNSIZED,0},	
+	"xor", {OP_REG,OP_IMM,OP_REG,0,0}, {RIA,CPU_ALL,0,R2FUNC(2LL)|OPC(2LL),5,SZ_UNSIZED,0},	
+	"xor", {OP_REG,OP_REG,OP_IMM,0,0}, {RI,CPU_ALL,0,OPC(10LL),5,SZ_UNSIZED,0,0},	
 
 };
 
@@ -1293,6 +1298,10 @@ static int get_reloc_type(operand *op)
   	
   	/* BEQ r1,r2,target */
   	case B:
+  		if (op->number==0) {
+  			rtype = REL_ABS;
+  			break;
+  		}
   		if (op->number==1) {
   			rtype = REL_ABS;
   			break;
@@ -2184,62 +2193,81 @@ static void encode_reg6(instruction_buf* insn, operand *op, mnemonic* mnemo, int
 
 static size_t encode_direct(instruction_buf* insn, thuge val)
 {
-	size_t isize = 4;
+	size_t isize = 5;
 
 	TRACE("endir ");
 	insn->pfxb.size = 0;
 	insn->pfxb.val = val;
 	if (abits > 13) {
-		isize = 8;
-		insn->pfxb.size = 4;
+		insn->pfxb.size = 5;
 	}
-	if (abits > 23) {
-		isize = 10;
-		insn->pfxb.size = 6;
-	}
-	if (abits > 39) {
-		isize = 14;
+	if (abits > 32) {
 		insn->pfxb.size = 10;
 	}
-	if (abits > 71) {
-		isize = 22;
-		insn->pfxb.size = 18;
+	if (abits > 64) {
+		insn->pfxb.size = 20;
 	}
 	if (insn) {
-		insn->opcode = insn->opcode | ((val.lo & 0x1fffLL) << 19LL);
+		insn->opcode = insn->opcode | ((val.lo & 0x1fffffLL) << 19LL);
 	}
 	return (isize);
 }
 
 static size_t encode_immed_RI(instruction_buf* insn, thuge hval, int i)
 {
-	size_t isize = 4;
+	size_t isize = (insn->opcode & 0x7f)==7LL ? 5 : 5;
+	int minbits = (insn->opcode & 0x7f)==7LL ? 15LL : 13LL;
 
+	if (insn->short_opcode & 0x7f==39LL) {
+		isize = 5;
+		minbits = 0;
+	}
 	if (i==2) {
-		if (insn)
-			insn->opcode = insn->opcode | ((hval.lo & 0x1fffLL) << 19LL);
-		if (!is_nbit(hval,13LL)) {
-			isize = 8;
-			insn->size = 8;
-			insn->pfxb.size = 4;
-			insn->pfxb.val = hval;
-			if (!is_nbit(hval,23LL)) {
-				isize = 10;
-				insn->size = 10;
-				insn->pfxb.size = 6;
-				insn->pfxb.val = hval;
+		if (insn) {
+			if ((insn->opcode & 0x7f)==7LL)	// CSR
+				insn->opcode = insn->opcode | ((hval.lo & 0x3fffLL) << 19LL);
+			else
+				insn->opcode = insn->opcode | ((hval.lo & 0x1fffffLL) << 19LL);
+		}
+		if (!is_nbit(hval,minbits)) {
+			if (insn->short_opcode) {
+				isize = 5;
+				insn->size = 5;
+				insn->opcode = insn->short_opcode;
 			}
-			if (!is_nbit(hval,39LL)) {
-				isize = 14;
-				insn->size = 14;
+			insn->pfxb.size = 5;
+			insn->pfxb.val = hval;
+			if (!is_nbit(hval,32LL)) {
 				insn->pfxb.size = 10;
 				insn->pfxb.val = hval;
 			}
-			if (!is_nbit(hval,71LL)) {
-				isize = 22;
-				insn->size = 22;
-				insn->pfxb.size = 18;
+			if (!is_nbit(hval,64LL)) {
+				insn->pfxb.size = 20;
 				insn->pfxb.val = hval;
+			}
+		}
+	}
+	return (isize);
+}
+
+static size_t encode_immed_LDI(instruction_buf* insn, thuge hval, int i)
+{
+	size_t isize = 5;
+	int minbits = 19LL;
+
+	if (insn) {
+		insn->opcode = insn->opcode | ((hval.lo & 0x7ffffLL) << 13LL);
+		insn->size = 5;
+	}
+	if (i==1) {
+		if (!is_nbit(hval,minbits)) {
+			insn->pfxb.val = hval;
+			insn->pfxb.size = 5;
+			if (!is_nbit(hval,32LL)) {
+				insn->pfxb.size = 10;
+			}
+			if (!is_nbit(hval,64LL)) {
+				insn->pfxb.size = 20;
 			}
 		}
 	}
@@ -2250,26 +2278,32 @@ static void encode_ipfx(postfix_buf* postfix, thuge hval, int i)
 {
 	if (!postfix)
 		return;
-	if (is_nbit(hval,23LL)) {
-		postfix->size = 4;
-		postfix->opcode = 124LL + i;
+	if (is_nbit(hval,32LL)) {
+		postfix->size = 5;
+		switch(i) {
+		case 0:	postfix->opcode = 56LL; break;
+		case 1: postfix->opcode = 60LL; break;
+		case 2: postfix->opcode = 48LL; break;
+		}
 		postfix->val = hval;
 		return;
 	}
-	if (is_nbit(hval,39LL)) {
-		postfix->size = 6;
-		postfix->opcode = (124LL + i) + (1LL << 7LL);
-		postfix->val = hval;
-		return;
-	}
-	if (is_nbit(hval,71LL)) {
+	if (is_nbit(hval,64LL)) {
 		postfix->size = 10;
-		postfix->opcode = (124LL + i) + (2LL << 7LL);
+		switch(i) {
+		case 0:	postfix->opcode = 57LL; break;
+		case 1: postfix->opcode = 61LL; break;
+		case 2: postfix->opcode = 49LL; break;
+		}
 		postfix->val = hval;
 		return;
 	}
-	postfix->size = 18;
-	postfix->opcode = (124LL + i) + (3LL << 7LL);
+	postfix->size = 20;
+	switch(i) {
+	case 0:	postfix->opcode = 58LL; break;
+	case 1: postfix->opcode = 62LL; break;
+	case 2: postfix->opcode = 50LL; break;
+	}
 	postfix->val = hval;
 	return;
 }
@@ -2278,7 +2312,7 @@ static size_t encode_immed (
 	instruction_buf* insn, mnemonic* mnemo,
 	operand *op, thuge hval, int constexpr, int i, char vector)
 {
-	size_t isize = 4;
+	size_t isize = 5;
 	thuge val;
 
 	TRACE("enimm ");
@@ -2312,7 +2346,10 @@ static size_t encode_immed (
 
 	val = hval;
 	if (constexpr) {
-		if (mnemo->ext.format==SI) {
+		if (mnemo->ext.format==LDI) {
+			isize = encode_immed_LDI(insn, val, i);
+		}
+		else if (mnemo->ext.format==SI) {
 			if (insn)
 				insn->opcode = insn->opcode | ((val.lo & 0x7fLL) << 19LL);
 		}
@@ -2324,6 +2361,7 @@ static size_t encode_immed (
 			isize = encode_direct(insn, hval);
 		}
 		else if (mnemo->ext.format == CSR) {
+			isize = 5;
 			if (insn) {
 				insn->opcode = insn->opcode | ((val.lo & 0xffLL) << 24LL) | (((val.lo) >> 8LL) << 33LL);
 			}
@@ -2446,6 +2484,7 @@ static size_t encode_immed (
 			isize = encode_direct(insn, hval);
 		}
 		else if (mnemo->ext.format==CSRI) {
+			isize = 5;
 			if (i==1) {
 				if (insn)
 					insn->opcode = insn->opcode | ((val.lo & 0x7fLL) << 16);
@@ -2493,6 +2532,9 @@ static size_t encode_immed (
 		else if (mnemo->ext.format==RI || mnemo->ext.format==RIV || mnemo->ext.format==RIS || 
 			mnemo->ext.format==RIM || mnemo->ext.format==RIMV)
 			isize = encode_immed_RI(insn, val, i);
+		else if (mnemo->ext.format==LDI) {
+			isize = encode_immed_LDI(insn, val, i);
+		}
 		else if (mnemo->ext.format==RIL) {
 		}
 		else if (mnemo->ext.format==RII) {
@@ -2585,7 +2627,6 @@ static size_t encode_branch_B(instruction_buf* insn, operand* op, int64_t val, i
 			break;
 		}
 	}
-	isize = insn->size + insn->pfxa.size + insn->pfxb.size;
 	return (isize);
 }
 
@@ -2621,7 +2662,7 @@ static int encode_J2(instruction_buf* insn, operand* op, int64_t val, int i, int
   	}
   	if (!is_nbit(hg,29LL)) {
   		encode_ipfx(&insn->pfxb,hg,1);
-  		*isize = insn->pfxb.size + 6;
+  		*isize = insn->pfxb.size + 5;
   	}
   	return (1);
 	}
@@ -2760,7 +2801,7 @@ static int encode_branch(instruction_buf* insn, mnemonic* mnemo, operand* op, in
 	  break;
 
 	case J3:
-		*isize = 4;
+		*isize = 5;
 		/*
 	  if (op->type==OP_REGIND) {
 	  	if (insn) {
@@ -2873,11 +2914,9 @@ static size_t encode_scndx(
 		*/
 		if (val.lo != 0LL || val.hi != 0LL)
 			encode_ipfx(&insn->pfxb,val,1);
-		isize = insn->size + insn->pfxb.size;
 	}
 	else {
 		encode_ipfx(&insn->pfxb,val,1);
-		isize = insn->size + insn->pfxb.size;
 	}
 	return (isize);
 }
@@ -2892,7 +2931,7 @@ static size_t encode_jscndx(
 	int pass
 )
 {
-	size_t isize = 6;
+	size_t isize = 5;
 
 	TRACE("E_jscndx:");
 	if (insn) {
@@ -2911,11 +2950,9 @@ static size_t encode_jscndx(
 		*/
 		if (1 || val.lo != 0LL || val.hi != 0LL)
 			encode_ipfx(&insn->pfxb,val,1);
-		isize = insn->size + insn->pfxb.size;
 	}
 	else {
 		encode_ipfx(&insn->pfxb,val,1);
-		isize = insn->size + insn->pfxb.size;
 	}
 	return (isize);
 }
@@ -2930,7 +2967,7 @@ static size_t encode_regind(
 	int pass
 )
 {
-	size_t isize = 4;
+	size_t isize = 5;
 
 	TRACE("Etho5:");
 	if (insn) {
@@ -2938,7 +2975,7 @@ static size_t encode_regind(
 			insn->opcode |= (RT(op->basereg));
 		else if (i==1) {
 			insn->opcode |= (RA(op->basereg));
-			insn->opcode |= (val.lo & 0xffffLL) << 19LL;
+			insn->opcode |= (val.lo & 0x1fffffLL) << 19LL;
 		}
 	}
 	if (pass==1)
@@ -2946,11 +2983,9 @@ static size_t encode_regind(
 	if ((constexpr && pass==1) || ip->ext.const_expr) {
 		if (1 || val.lo != 0LL || val.hi != 0LL)
 			encode_ipfx(&insn->pfxb,val,1);
-		isize = insn->size + insn->pfxb.size;
 	}
 	else {
 		encode_ipfx(&insn->pfxb,val,1);
-		isize = insn->size + insn->pfxb.size;
 	}
 	return (isize);
 }
@@ -3105,6 +3140,7 @@ size_t encode_qupls_instruction(instruction *ip,section *sec,taddr pc,
   	insn->opcode_size = mnemo->ext.len;
     insn->opcode = mnemo->ext.opcode;
   	insn->size = mnemo->ext.len;
+  	insn->short_opcode = mnemo->ext.short_opcode;
   }
 //	encode_qualifiers(ip, insn);
 
@@ -3329,31 +3365,43 @@ static unsigned char* encode_pfx(unsigned char *d, postfix_buf* pfx, uint8_t whi
 {
 	thuge val = pfx->val;
 	int size = pfx->size;
+	uint64_t op;
 
+	switch(which) {
+	case 0: op = 56LL; break;
+	case 1: op = 60LL; break;
+	case 2: op = 48LL; break;
+	}
 	switch(size) {
-	case 4:
-    d = setval(0,d,1,124LL+which);
-    d = setval(0,d,3,val.lo << 1LL);
-		break;
-	case 6:
-    d = setval(0,d,1,(124LL|0x80LL)+which);
-    d = setval(0,d,5,val.lo << 1LL);
+	case 5:
+    d = setval(0,d,1,op);
+    d = setval(0,d,4,val.lo);
+    qupls_insn_count++;
 		break;
 	case 10:
-    d = setval(0,d,1,124LL+which);
-    d = setval(0,d,7,val.lo << 1LL | 1LL);
-    d = setval(0,d,1,val.lo >> 55LL | ((val.hi & 1LL) << 63LL));
-    d = setval(0,d,1,val.hi >> 1LL);
+    d = setval(0,d,1,op+1);
+    d = setval(0,d,8,val.lo);
+    d = setval(0,d,1,val.hi);
+    qupls_insn_count++;
 		break;
-	case 18:
-    d = setval(0,d,1,(124LL|0x80LL)+which);
-    d = setval(0,d,7,val.lo << 1LL | 1LL);
-    d = setval(0,d,1,val.lo >> 55LL | ((val.hi & 1LL) << 63LL));
-    d = setval(0,d,8,val.hi >> 1LL);
-    d = setval(0,d,1,0LL);
+	case 20:
+    d = setval(0,d,1,op+2);
+    d = setval(0,d,8,val.lo);
+    d = setval(0,d,8,val.hi);
+    d = setval(0,d,3,(val.hi>>63LL)?-1LL:0LL);
+    qupls_insn_count++;
 		break;
 	}
 	return (d);
+}
+
+// Test if the instruction will fit into the block.
+// Returns true if the instruction will fit.
+
+static int will_fit_in_block(taddr pc, size_t sz)
+{
+	taddr npc = pc + sz;
+	return ((npc & ~0x3fLL)==(pc & ~0x3fLL)) && ((npc & 0x3fLL) <= 60LL);
 }
 
 /* Convert an instruction into a DATA atom including relocations,
@@ -3366,12 +3414,22 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
   instruction_buf insn;
   size_t sz, pfxsize, szd;
   size_t final_sz;
-  taddr pcd;
+  size_t to_allocate;
+  int bytes_remaining;
+  static int trailer_val = 0;
+  taddr pcd, npc;
+  char* trailer = NULL;
+	static int icnt = 0;
+	static int grpcnt = 0;
+	int will_fit = 1;
+	static int instruction_finished = 0;
+	static int slot = 0;
 
 	TRACE("ei ");
 	modifier1 = 0;
 	modifier2 = 0;
 	postfix.lo = postfix.hi = 0;
+	memset(&insn,0,sizeof(insn));
 	sz = encode_qupls_instruction(ip,sec,pc,&modifier1,&modifier2,&insn,db);
 	sz = sz + (modifier1 >> 48LL) + (modifier2 >> 48LL);
 
@@ -3391,15 +3449,46 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
 	else {
 		final_sz = sz;
 	}
+	final_sz = final_sz + insn.pfxa.size + insn.pfxb.size + insn.pfxc.size;
 
 	insn_sizes2[sz2ndx] = sz;
   if (db) {
-    unsigned char *d = db->data = mymalloc(final_sz);
+    uint8_t *d;
     unsigned char *d2;
     int i;
-    
+#ifdef SUPPORT_IBH    
+  	if (will_fit = will_fit_in_block(pc, final_sz)) {
+  		d = db->data = mymalloc(final_sz);
+	    db->size = final_sz;
+  	}
+  	// Won't fit?
+  	else {
+  		// Update the current trailer with offsets of instruction groups.
+  		npc = pc + final_sz;
+  		bytes_remaining = (64LL - (pc & 0x3fLL)) - 4LL;
+  		if (bytes_remaining < 0) {
+  			printf("bad bytes remaining.\n");
+  			db->size = 0;
+  			return (db);
+  		}
+  		to_allocate = final_sz + bytes_remaining + 4LL;
+  		db->data = mymalloc(to_allocate);
+	    db->size = to_allocate;
+  		// NOP out bytes remaining in previous block.
+  		d = db->data;
+  		
+  		for (i = 0; i < bytes_remaining; i++)
+  			d[i] = 0xff;
+  		qupls_padding_bytes += bytes_remaining;
+  		
+	    d = db->data + bytes_remaining + 4LL;
+  		trailer = db->data + bytes_remaining;
+  	}
+#else
+		d = db->data = mymalloc(final_sz);
     db->size = final_sz;
-
+#endif
+/*
 		if (modifier1 >> 48LL) {
 			if ((pc & 15)==15 && bundleWidth==120) {
 				pc++;
@@ -3418,26 +3507,24 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
 	    pc += 5;
 	    insn_count++;
 	  }
+*/
 		if ((pc & 15)==15 && bundleWidth==120) {
 			pc++;
 	    d = setval(0,d,1,0xffL);
 	  }
 	  d2 = d;
-    d = setval(0,d,insn.opcode_size,insn.opcode);
-    insn_count++;
+    d = setval(0,d,insn.size,insn.opcode);
+//    d = setval(0,d,5,insn.opcode);
+   	qupls_insn_count++;
     if (insn.pfxa.size) {
     	d = encode_pfx(d, &insn.pfxa,0);
-	    insn_count++;
     }
     if (insn.pfxb.size) {
     	d = encode_pfx(d, &insn.pfxb,1);
-	    insn_count++;
     }
     if (insn.pfxc.size) {
     	d = encode_pfx(d, &insn.pfxc,2);
-	    insn_count++;
     }
-    pc += d-d2;
 	  /*
 		while (db->size < insn_sizes1[sz2ndx]) {
 	    d = setval(0,d,5,0x9fLL);	// NOP
@@ -3446,7 +3533,30 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
 		}	
 		sz2ndx++;
 		*/
-    byte_count += db->size;
+#ifdef SUPPORT_IBH
+		icnt++;
+		if (!will_fit) {
+			icnt = 0;
+			grpcnt = 0;
+			trailer_val = ((pc & 0x3fLL) << 8LL) | 0xffLL;
+			if (trailer)
+  			setval(0,trailer,4,trailer_val);
+  		trailer_val = 0;
+  		qupls_header_bytes += 4;
+  	}
+		if (icnt==4) {
+			icnt = 0;
+			// Trailer val records the position of the last instruction in the cache
+			// line.
+			trailer_val = ((pc & 0x3fLL) << 8LL) | 0xffLL;
+//			trailer_val = trailer_val | ((pc & 0x3fLL) << (6LL * grpcnt));
+			grpcnt++;
+			if (grpcnt > 5) {
+				grpcnt = 0;
+			}
+		}
+#endif		
+    qupls_byte_count += db->size;
   }
   return (db);
 }
@@ -3508,15 +3618,6 @@ dblock *eval_data(operand *op,size_t bitsize,section *sec,taddr pc)
   return db;
 }
 
-/* return true, if initialization was successfull */
-int init_cpu()
-{
-	TRACE("icpu ");
-	insn_count = 0;
-	byte_count = 0;
-  return (1);
-}
-
 /* To be inserted at the end of main() for debugging */
 
 void at_end()
@@ -3524,15 +3625,29 @@ void at_end()
 	int lmt = sz1ndx > sz2ndx ? sz2ndx : sz1ndx;
 	int ndx;
 
-	printf("Instructions: %d\n", insn_count);
-	printf("Bytes: %d\n", byte_count);
-	printf("%f bytes per instruction\n", (double)(byte_count)/(double)(insn_count));
+	printf("Instructions: %d\n", qupls_insn_count);
+	printf("Bytes: %d\n", qupls_byte_count);
+	printf("Padding Bytes: %d\n", qupls_padding_bytes);
+	printf("Header bytes: %d\n", qupls_header_bytes);
+	printf("%f bytes per instruction\n", (double)(qupls_byte_count)/(double)(qupls_insn_count));
 	/*
 	for (ndx = 0; ndx < lmt; ndx++) {
 		printf("%csz1=%d, sz2=%d\n", insn_sizes1[ndx]!=insn_sizes2[ndx] ? '*' : ' ', insn_sizes1[ndx], insn_sizes2[ndx]);
 	}
 	*/
 }
+/* return true, if initialization was successfull */
+int init_cpu()
+{
+	TRACE("icpu ");
+	qupls_insn_count = 0;
+	qupls_byte_count = 0;
+	qupls_padding_bytes = 0;
+	qupls_header_bytes = 0;
+	atexit(at_end);
+  return (1);
+}
+
 /* return true, if the passed argument is understood */
 int cpu_args(char *p)
 {
