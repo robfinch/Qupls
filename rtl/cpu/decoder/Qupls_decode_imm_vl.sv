@@ -41,7 +41,7 @@ import QuplsPkg::*;
 
 module Qupls_decode_imm(ins, imma, immb, immc);
 parameter WID=32;
-input instruction_t [3:0] ins;
+input instruction_t [5:0] ins;
 output reg [63:0] imma;
 output reg [63:0] immb;
 output reg [63:0] immc;
@@ -52,6 +52,7 @@ wire [63:0] imm32x64b;
 wire [63:0] imm32x64c;
 reg [2:0] ndx;
 reg flt;
+reg [1:0] fltpr;
 reg [47:0] finsA, finsB, finsC;
 
 fpCvt32To64 ucvt32x64a(finsA[39:8], imm32x64a);
@@ -69,20 +70,19 @@ begin
 	finsC = 'd0;
 	case(ins[0].any.opcode)
 	OP_ADDI,OP_CMPI,OP_MULI,OP_DIVI,OP_SUBFI,OP_SLTI:
-		immb = {{51{ins[0][31]}},ins[0][31:19]};
-	OP_ANDI:	immb = {51'h7FFFFFFFFFFFF,ins[0][31:19]};
-	OP_ORI,OP_EORI:
-		immb = {51'h0000,ins[0][31:19]};
+		immb = {{43{ins[0][39]}},ins[0][39:19]};
+	OP_ANDI:	immb = {64{1'b1}} & ins[0][39:19];
+	OP_ORI,OP_EORI,OP_MULUI,OP_DIVUI:
+		immb = {43'h0000,ins[0][31:19]};
 	OP_CSR:	immb = {53'd0,ins[0][29:19]};
 	OP_RTD:	immb = {{43{ins[0][39]}},ins[0][39:19]};
-	OP_JSR: immb = {{43{ins[0][39]}},ins[0][39:19]};
+	OP_JSR:
+		immb = {{43{ins[0][39]}},ins[0][39:19]};
 	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDA,OP_CACHE,
 	OP_STB,OP_STW,OP_STT,OP_STO:
-		immb = {{51{ins[0][31]}},ins[0][31:19]};
+		immb = {{43{ins[0][39]}},ins[0][39:19]};
 	OP_FENCE:
 		immb = {48'h0,ins[0][23:8]};
-	OP_LDI:
-		immb = {{53{ins[0][23]}},ins[0][23:13]};
 	OP_Bcc,OP_BccU,OP_FBccH,OP_FBccS,OP_FBccD,OP_FBccQ:
 		immc = {{47{ins[0][39]}},ins[0][39:25],ins[0][12:11]};
 	default:
@@ -91,6 +91,7 @@ begin
 
 	ndx = 1;
 	flt = ins[0].any.opcode==OP_FLT2 || ins[0].any.opcode==OP_FLT3;
+	fltpr = ins[0][26:25];
 	// Skip over vector qualifier.
 	if (ins[ndx].any.opcode==OP_VEC || ins[ndx].any.opcode==OP_VECZ)
 		ndx = ndx + 1;
@@ -119,36 +120,38 @@ begin
 	endcase
 	*/
 	// The following uses less hardware but require postfixes to be in order.
+	
 	if (ins[ndx].any.opcode==OP_PFXA32) begin
 		imma = {{32{ins[ndx][39]}},ins[ndx][39:8]};
-		if (flt)
+		if (flt && fltpr==2'd2)
 			imma = imm32x64a;
 		ndx = ndx + 1;
-	end
-	else if (ins[ndx].any.opcode==OP_PFXA64) begin
-		imma = ins[ndx][71:8];
-		ndx = ndx + 1;
+		if (ins[ndx].any.opcode==OP_PFXA32) begin
+			imma[63:32] = ins[ndx][39:8];
+			ndx = ndx + 1;
+		end
 	end
 	if (ins[ndx].any.opcode==OP_PFXB32) begin
 		immb = {{32{ins[ndx][39]}},ins[ndx][39:8]};
-		if (flt)
+		if (flt && fltpr==2'd2)
 			immb = imm32x64b;
 		ndx = ndx + 1;
-	end
-	else if (ins[ndx].any.opcode==OP_PFXB64) begin
-		immb = ins[ndx][71:8];
-		ndx = ndx + 1;
+		if (ins[ndx].any.opcode==OP_PFXB32) begin
+			immb[63:32] = ins[ndx][39:8];
+			ndx = ndx + 1;
+		end
 	end
 	if (ins[ndx].any.opcode==OP_PFXC32) begin
 		immc = {{32{ins[ndx][39]}},ins[ndx][39:8]};
-		if (flt)
+		if (flt && fltpr==2'd2)
 			immc = imm32x64c;
 		ndx = ndx + 1;
+		if (ins[ndx].any.opcode==OP_PFXC32) begin
+			immc[63:32] = ins[ndx][39:8];
+			ndx = ndx + 1;
+		end
 	end
-	else if (ins[ndx].any.opcode==OP_PFXC64) begin
-		immc = ins[ndx][71:8];
-		ndx = ndx + 1;
-	end
+	
 	/*
 	if ((ins[ndx].any.opcode==OP_PFXA32)||
 		(ins[ndx].any.opcode==OP_PFXA64)||

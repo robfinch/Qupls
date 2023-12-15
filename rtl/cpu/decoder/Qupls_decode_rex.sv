@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2023  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -32,46 +32,27 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 10 LUTs
 // ============================================================================
 
 import QuplsPkg::*;
 
-module Qupls_ins_length(op, len);
-input opcode_t op;
-output reg [4:0] len;					// length in bytes
+module Qupls_decode_rex(instr, rex);
+input instruction_t instr;
+output rex;
 
-always_comb
-	casez(op)
-	OP_BSR:	len = 5'd5;
-	OP_JSR:	len = 5'd5;
-	OP_BccU:	len = 5'd5;
-	OP_Bcc:	len = 5'd5;
-	OP_FBccH:	len = 5'd5;
-	OP_FBccS:	len = 5'd5;
-	OP_FBccD:	len = 5'd5;
-	OP_FBccQ:	len = 5'd5;
-	OP_CSR:		len = 5'd5;
-	OP_FLT2:	len = 5'd5;
-	OP_FLT3:	len = 5'd5;
-//	OP_PFXA,OP_PFXB,OP_PFXC:
-//					len = 5'd5;
-	OP_PFXA32:	len = 5'd5;
-	OP_PFXB32:	len = 5'd5;
-	OP_PFXC32:	len = 5'd5;
-	/*
-	OP_PFXA64:	len = 5'd10;
-	OP_PFXB64:	len = 5'd10;
-	OP_PFXC64:	len = 5'd10;
-	OP_PFXA128:	len = 5'd20;
-	OP_PFXB128:	len = 5'd20;
-	OP_PFXC128:	len = 5'd20;
-	*/
-	OP_VEC,OP_VECZ,OP_RTS:
-					len = 5'd5;
-	OP_NOP,OP_LSCTX:
-					len = 5'd5;
-	default:	len = 5'd5;
+function fnIsRex;
+input instruction_t ir;
+begin
+	fnIsRex = 1'b0;
+	case(ir.any.opcode)
+	OP_REX:
+		fnIsRex = 1'b1;	
+	default:
+		fnIsRex = 1'b0;
 	endcase
+end
+endfunction
+
+assign rex = fnIsRex(instr);
 
 endmodule

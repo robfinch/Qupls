@@ -44,6 +44,7 @@ module Qupls_btb(rst, clk, en, rclk, block_header, igrp, length_byte,
 	commit_pc2, commit_brtgt2, commit_takb2, commit_grp2,
 	commit_pc3, commit_brtgt3, commit_takb3, commit_grp3
 	);
+parameter DEP=1024;
 input rst;
 input clk;
 input en;										// enable group to advance
@@ -100,8 +101,8 @@ btb_entry_t tmp0, tmp1, tmp2, tmp3;
    // Xilinx Parameterized Macro, version 2022.2
 
    xpm_memory_sdpram #(
-      .ADDR_WIDTH_A(10),               // DECIMAL
-      .ADDR_WIDTH_B(10),               // DECIMAL
+      .ADDR_WIDTH_A($clog2(DEP)),               // DECIMAL
+      .ADDR_WIDTH_B($clog2(DEP)),               // DECIMAL
       .AUTO_SLEEP_TIME(0),            // DECIMAL
       .BYTE_WRITE_WIDTH_A($bits(btb_entry_t)),        // DECIMAL
       .CASCADE_HEIGHT(0),             // DECIMAL
@@ -110,8 +111,8 @@ btb_entry_t tmp0, tmp1, tmp2, tmp3;
       .MEMORY_INIT_FILE("none"),      // String
       .MEMORY_INIT_PARAM("0"),        // String
       .MEMORY_OPTIMIZATION("true"),   // String
-      .MEMORY_PRIMITIVE("auto"),      // String
-      .MEMORY_SIZE(1024*$bits(btb_entry_t)),             // DECIMAL
+      .MEMORY_PRIMITIVE("block"),      // String
+      .MEMORY_SIZE(DEP*$bits(btb_entry_t)),             // DECIMAL
       .MESSAGE_CONTROL(0),            // DECIMAL
       .READ_DATA_WIDTH_B($bits(btb_entry_t)),         // DECIMAL
       .READ_LATENCY_B(1),             // DECIMAL
@@ -180,8 +181,8 @@ btb_entry_t tmp0, tmp1, tmp2, tmp3;
    // Xilinx Parameterized Macro, version 2022.2
 
    xpm_memory_sdpram #(
-      .ADDR_WIDTH_A(10),               // DECIMAL
-      .ADDR_WIDTH_B(10),               // DECIMAL
+      .ADDR_WIDTH_A($clog2(DEP)),               // DECIMAL
+      .ADDR_WIDTH_B($clog2(DEP)),               // DECIMAL
       .AUTO_SLEEP_TIME(0),            // DECIMAL
       .BYTE_WRITE_WIDTH_A($bits(btb_entry_t)),        // DECIMAL
       .CASCADE_HEIGHT(0),             // DECIMAL
@@ -190,8 +191,8 @@ btb_entry_t tmp0, tmp1, tmp2, tmp3;
       .MEMORY_INIT_FILE("none"),      // String
       .MEMORY_INIT_PARAM("0"),        // String
       .MEMORY_OPTIMIZATION("true"),   // String
-      .MEMORY_PRIMITIVE("auto"),      // String
-      .MEMORY_SIZE(1024*$bits(btb_entry_t)),             // DECIMAL
+      .MEMORY_PRIMITIVE("block"),      // String
+      .MEMORY_SIZE(DEP*$bits(btb_entry_t)),             // DECIMAL
       .MESSAGE_CONTROL(0),            // DECIMAL
       .READ_DATA_WIDTH_B($bits(btb_entry_t)),         // DECIMAL
       .READ_LATENCY_B(1),             // DECIMAL
@@ -260,8 +261,8 @@ btb_entry_t tmp0, tmp1, tmp2, tmp3;
    // Xilinx Parameterized Macro, version 2022.2
 
    xpm_memory_sdpram #(
-      .ADDR_WIDTH_A(10),               // DECIMAL
-      .ADDR_WIDTH_B(10),               // DECIMAL
+      .ADDR_WIDTH_A($clog2(DEP)),               // DECIMAL
+      .ADDR_WIDTH_B($clog2(DEP)),               // DECIMAL
       .AUTO_SLEEP_TIME(0),            // DECIMAL
       .BYTE_WRITE_WIDTH_A($bits(btb_entry_t)),        // DECIMAL
       .CASCADE_HEIGHT(0),             // DECIMAL
@@ -270,8 +271,8 @@ btb_entry_t tmp0, tmp1, tmp2, tmp3;
       .MEMORY_INIT_FILE("none"),      // String
       .MEMORY_INIT_PARAM("0"),        // String
       .MEMORY_OPTIMIZATION("true"),   // String
-      .MEMORY_PRIMITIVE("auto"),      // String
-      .MEMORY_SIZE(1024*$bits(btb_entry_t)),             // DECIMAL
+      .MEMORY_PRIMITIVE("block"),      // String
+      .MEMORY_SIZE(DEP*$bits(btb_entry_t)),             // DECIMAL
       .MESSAGE_CONTROL(0),            // DECIMAL
       .READ_DATA_WIDTH_B($bits(btb_entry_t)),         // DECIMAL
       .READ_LATENCY_B(1),             // DECIMAL
@@ -340,8 +341,8 @@ btb_entry_t tmp0, tmp1, tmp2, tmp3;
    // Xilinx Parameterized Macro, version 2022.2
 
    xpm_memory_sdpram #(
-      .ADDR_WIDTH_A(10),               // DECIMAL
-      .ADDR_WIDTH_B(10),               // DECIMAL
+      .ADDR_WIDTH_A($clog2(DEP)),               // DECIMAL
+      .ADDR_WIDTH_B($clog2(DEP)),               // DECIMAL
       .AUTO_SLEEP_TIME(0),            // DECIMAL
       .BYTE_WRITE_WIDTH_A($bits(btb_entry_t)),        // DECIMAL
       .CASCADE_HEIGHT(0),             // DECIMAL
@@ -350,8 +351,8 @@ btb_entry_t tmp0, tmp1, tmp2, tmp3;
       .MEMORY_INIT_FILE("none"),      // String
       .MEMORY_INIT_PARAM("0"),        // String
       .MEMORY_OPTIMIZATION("true"),   // String
-      .MEMORY_PRIMITIVE("auto"),      // String
-      .MEMORY_SIZE(1024*$bits(btb_entry_t)),             // DECIMAL
+      .MEMORY_PRIMITIVE("block"),      // String
+      .MEMORY_SIZE(DEP*$bits(btb_entry_t)),             // DECIMAL
       .MESSAGE_CONTROL(0),            // DECIMAL
       .READ_DATA_WIDTH_B($bits(btb_entry_t)),         // DECIMAL
       .READ_LATENCY_B(1),             // DECIMAL

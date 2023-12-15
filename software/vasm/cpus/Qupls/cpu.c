@@ -1,6 +1,7 @@
 #include "vasm.h"
 
 #define SUPPORT_IBH	1
+#define SUPPORT_PFX_IMM	1
 #define TRACE(x)		/*printf(x)*/
 #define TRACE2(x,y)	/*printf((x),(y))*/
 //#define BRANCH_PGREL 1
@@ -76,7 +77,7 @@ mnemonic mnemonics[]={
 
 	"add", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(4LL)|OPC(2LL),5,SZ_UNSIZED,0},	
 	"add", {OP_REG,OP_IMM,OP_REG,0,0}, {RIA,CPU_ALL,0,R2FUNC(4LL)|OPC(2LL),5,SZ_UNSIZED,0},	
-	"add", {OP_REG,OP_REG,OP_IMM,0,0}, {RI,CPU_ALL,0,OPC(4LL),5,SZ_UNSIZED,0,0},	
+	"add", {OP_REG,OP_REG,OP_IMM,0,0}, {RI,CPU_ALL,0,OPC(4LL),5,SZ_UNSIZED,0,0,OPC(2LL)|R2FUNC(4LL)},	
 
 	"and", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(0)|OPC(2LL),5,SZ_UNSIZED,0},	
 	"and", {OP_REG,OP_IMM,OP_REG,0,0}, {RIA,CPU_ALL,0,R2FUNC(0)|OPC(2LL),5,SZ_UNSIZED,0},	
@@ -550,7 +551,7 @@ mnemonic mnemonics[]={
 
 const int mnemonic_cnt = sizeof(mnemonics)/sizeof(mnemonics[0]);
 
-int thor_data_operand(int n)
+int qupls_data_operand(int n)
 {
   if (n&OPSZ_FLOAT) return OPSZ_BITS(n)>64?OP_F128:OPSZ_BITS(n)>32?OP_F64:OP_F32;
   if (OPSZ_BITS(n)<=8) return OP_D8;
@@ -2191,11 +2192,75 @@ static void encode_reg6(instruction_buf* insn, operand *op, mnemonic* mnemo, int
 	}
 }
 
+static size_t encode_immed_RI(instruction_buf* insn, thuge hval, int i)
+{
+	size_t isize = (insn->opcode & 0x7f)==7LL ? 5 : 5;
+	int minbits = (insn->opcode & 0x7f)==7LL ? 15LL : 17LL;
+
+	if (insn) {
+		insn->imm0 = 0LL;
+		insn->imm1 = 0LL;
+		insn->imm2 = 0LL;
+		insn->imm3 = 0LL;
+	}
+	if (i==1) {
+		if (insn) {
+			//insn->opcode |= 0x400000LL;	// set swap bit
+			insn->opcode = insn->opcode | ((hval.lo & 0x1fffffLL) << 19LL);
+			if (!is_nbit(hval,minbits)){//||(hval.lo&0x1FE00LL)==0x10000LL) {
+				insn->imm0 = OPC(9LL)|((hval.lo & 0xffffLL) << 23LL)|RA(0)|RT(51LL);	// ORI r51,r0,#imm16
+				insn->imm1 = OPC(9LL)|(((hval.lo >> 16LL) & 0xffffLL)<<23LL)|RA(51LL)|RT(51LL)|SC(1LL);	// ORI r51,r51,#imm16<<16
+				insn->pfxb.size = 5;
+				insn->pfxb.val = hval;
+				if (!is_nbit(hval,32LL)) {
+					insn->imm2 = OPC(9LL)|((hval.hi & 0xffffLL)<<23LL)|RA(51LL)|RT(51LL)|SC(2LL);	// ORI r51,r51,#imm16<<32
+					insn->imm3 = OPC(9LL)|(((hval.hi >> 16LL) & 0xffffLL)<<23LL)|RA(51LL)|RT(51LL)|SC(3LL);	// ORI r51,r51,#imm16<<48
+					insn->pfxb.size = 10;
+					insn->pfxb.val = hval;
+				}
+				if (!is_nbit(hval,64LL)) {
+					insn->pfxb.size = 20;
+					insn->pfxb.val = hval;
+				}
+			}
+		}
+	}
+	if (i==2) {
+		if (insn) {
+			if ((insn->opcode & 0x7f)==7LL)	// CSR
+				insn->opcode = insn->opcode | ((hval.lo & 0x3fffLL) << 19LL);
+			else
+				insn->opcode = insn->opcode | ((hval.lo & 0x1fffffLL) << 19LL);
+//				insn->opcode = insn->opcode | ((hval.lo & 0x1fffffLL) << 19LL);
+		}
+		if (!is_nbit(hval,minbits)) {
+			if (insn) {
+				insn->pfxb.size = 5;
+				insn->pfxb.val = hval;
+				insn->imm0 = OPC(9LL)|((hval.lo & 0xffffLL) << 23LL)|RA(0)|RT(51LL);	// ORI r51,r0,#imm16
+				insn->imm1 = OPC(9LL)|(((hval.lo >> 16LL) & 0xffffLL)<<23LL)|RA(51LL)|RT(51LL)|SC(1LL);	// ORI r51,r51,#imm16<<16
+				if (!is_nbit(hval,32LL)) {
+					insn->pfxb.size = 10;
+					insn->pfxb.val = hval;
+					insn->imm2 = OPC(9LL)|((hval.hi & 0xffffLL)<<23LL)|RA(51LL)|RT(51LL)|SC(2LL);	// ORI r51,r51,#imm16<<32
+					insn->imm3 = OPC(9LL)|(((hval.hi >> 16LL) & 0xffffLL)<<23LL)|RA(51LL)|RT(51LL)|SC(3LL);	// ORI r51,r51,#imm16<<48
+				}
+				if (!is_nbit(hval,64LL)) {
+					insn->pfxb.size = 20;
+					insn->pfxb.val = hval;
+				}
+			}
+		}
+	}
+	return (isize);
+}
+
 static size_t encode_direct(instruction_buf* insn, thuge val)
 {
 	size_t isize = 5;
 
 	TRACE("endir ");
+//	return (encode_immed_RI(insn,val,2));
 	insn->pfxb.size = 0;
 	insn->pfxb.val = val;
 	if (abits > 13) {
@@ -2209,43 +2274,6 @@ static size_t encode_direct(instruction_buf* insn, thuge val)
 	}
 	if (insn) {
 		insn->opcode = insn->opcode | ((val.lo & 0x1fffffLL) << 19LL);
-	}
-	return (isize);
-}
-
-static size_t encode_immed_RI(instruction_buf* insn, thuge hval, int i)
-{
-	size_t isize = (insn->opcode & 0x7f)==7LL ? 5 : 5;
-	int minbits = (insn->opcode & 0x7f)==7LL ? 15LL : 13LL;
-
-	if (insn->short_opcode & 0x7f==39LL) {
-		isize = 5;
-		minbits = 0;
-	}
-	if (i==2) {
-		if (insn) {
-			if ((insn->opcode & 0x7f)==7LL)	// CSR
-				insn->opcode = insn->opcode | ((hval.lo & 0x3fffLL) << 19LL);
-			else
-				insn->opcode = insn->opcode | ((hval.lo & 0x1fffffLL) << 19LL);
-		}
-		if (!is_nbit(hval,minbits)) {
-			if (insn->short_opcode) {
-				isize = 5;
-				insn->size = 5;
-				insn->opcode = insn->short_opcode;
-			}
-			insn->pfxb.size = 5;
-			insn->pfxb.val = hval;
-			if (!is_nbit(hval,32LL)) {
-				insn->pfxb.size = 10;
-				insn->pfxb.val = hval;
-			}
-			if (!is_nbit(hval,64LL)) {
-				insn->pfxb.size = 20;
-				insn->pfxb.val = hval;
-			}
-		}
 	}
 	return (isize);
 }
@@ -2291,18 +2319,18 @@ static void encode_ipfx(postfix_buf* postfix, thuge hval, int i)
 	if (is_nbit(hval,64LL)) {
 		postfix->size = 10;
 		switch(i) {
-		case 0:	postfix->opcode = 57LL; break;
-		case 1: postfix->opcode = 61LL; break;
-		case 2: postfix->opcode = 49LL; break;
+		case 0:	postfix->opcode = 56LL; break;
+		case 1: postfix->opcode = 60LL; break;
+		case 2: postfix->opcode = 48LL; break;
 		}
 		postfix->val = hval;
 		return;
 	}
 	postfix->size = 20;
 	switch(i) {
-	case 0:	postfix->opcode = 58LL; break;
-	case 1: postfix->opcode = 62LL; break;
-	case 2: postfix->opcode = 50LL; break;
+	case 0:	postfix->opcode = 56LL; break;
+	case 1: postfix->opcode = 60LL; break;
+	case 2: postfix->opcode = 48LL; break;
 	}
 	postfix->val = hval;
 	return;
@@ -2316,6 +2344,10 @@ static size_t encode_immed (
 	thuge val;
 
 	TRACE("enimm ");
+	insn->imm0 = 0;
+	insn->imm1 = 0;
+	insn->imm2 = 0;
+	insn->imm3 = 0;
 	insn->pfxa.size = 0;
 	insn->pfxb.size = 0;
 	insn->pfxc.size = 0;
@@ -3379,17 +3411,22 @@ static unsigned char* encode_pfx(unsigned char *d, postfix_buf* pfx, uint8_t whi
     qupls_insn_count++;
 		break;
 	case 10:
-    d = setval(0,d,1,op+1);
-    d = setval(0,d,8,val.lo);
-    d = setval(0,d,1,val.hi);
-    qupls_insn_count++;
+    d = setval(0,d,1,op);
+    d = setval(0,d,4,val.lo);
+    d = setval(0,d,1,op);
+    d = setval(0,d,4,val.lo >> 32LL);
+    qupls_insn_count+=2;
 		break;
 	case 20:
-    d = setval(0,d,1,op+2);
-    d = setval(0,d,8,val.lo);
-    d = setval(0,d,8,val.hi);
-    d = setval(0,d,3,(val.hi>>63LL)?-1LL:0LL);
-    qupls_insn_count++;
+    d = setval(0,d,1,op);
+    d = setval(0,d,4,val.lo);
+    d = setval(0,d,1,op);
+    d = setval(0,d,4,val.lo >> 32LL);
+    d = setval(0,d,1,op);
+    d = setval(0,d,4,val.hi);
+    d = setval(0,d,1,op);
+    d = setval(0,d,4,val.hi >> 32LL);
+    qupls_insn_count+=4;
 		break;
 	}
 	return (d);
@@ -3424,6 +3461,7 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
 	int will_fit = 1;
 	static int instruction_finished = 0;
 	static int slot = 0;
+	int has_imm = 0;
 
 	TRACE("ei ");
 	modifier1 = 0;
@@ -3449,7 +3487,19 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
 	else {
 		final_sz = sz;
 	}
+#ifdef SUPPORT_PFX_IMM
 	final_sz = final_sz + insn.pfxa.size + insn.pfxb.size + insn.pfxc.size;
+#else
+	if (insn.imm0)
+		final_sz += 5;
+	if (insn.imm1)
+		final_sz += 5;
+	if (insn.imm2)
+		final_sz += 5;
+	if (insn.imm3)
+		final_sz += 5;
+#endif
+	has_imm = insn.imm0|insn.imm1|insn.imm2|insn.imm3;
 
 	insn_sizes2[sz2ndx] = sz;
   if (db) {
@@ -3513,9 +3563,32 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
 	    d = setval(0,d,1,0xffL);
 	  }
 	  d2 = d;
+#ifndef SUPPORT_PFX_IMM
+	  if (insn.imm0) {
+	    d = setval(0,d,5,insn.imm0);
+   		qupls_insn_count++;
+  	}
+	  if (insn.imm1) {
+	    d = setval(0,d,5,insn.imm1);
+	   	qupls_insn_count++;
+	  }
+	  if (insn.imm2) {
+	    d = setval(0,d,5,insn.imm2);
+	   	qupls_insn_count++;
+	  }
+	  if (insn.imm3) {
+	    d = setval(0,d,5,insn.imm3);
+	   	qupls_insn_count++;
+	  }
+	  if (has_imm) {
+	  	insn.opcode &= 0x3ffffLL;
+	  	insn.opcode |= RC(51LL)|0x8000000000;
+	  }
+#endif
     d = setval(0,d,insn.size,insn.opcode);
 //    d = setval(0,d,5,insn.opcode);
    	qupls_insn_count++;
+#ifdef SUPPORT_PFX_IMM
     if (insn.pfxa.size) {
     	d = encode_pfx(d, &insn.pfxa,0);
     }
@@ -3525,6 +3598,7 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
     if (insn.pfxc.size) {
     	d = encode_pfx(d, &insn.pfxc,2);
     }
+#endif
 	  /*
 		while (db->size < insn_sizes1[sz2ndx]) {
 	    d = setval(0,d,5,0x9fLL);	// NOP

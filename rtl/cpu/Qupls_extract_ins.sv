@@ -44,12 +44,12 @@ import QuplsPkg::*;
 
 module Qupls_extract_ins(rst_i, clk_i, en_i, nop_i, nop_o, irq_i, hirq_i, vect_i,
 	branchmiss, misspc, mipv_i, mip_i, ic_line_i,reglist_active, grp_i, grp_o,
-	pc0_i, pc1_i, pc2_i, pc3_i, pc4_i, pc5_i, pc6_i, pc7_i,
+	pc0_i, pc1_i, pc2_i, pc3_i, pc4_i, pc5_i, pc6_i, pc7_i, pc8_i,
 	ls_bmf_i, pack_regs_i, scale_regs_i, regcnt_i,
-	mc_ins0_i, mc_ins1_i, mc_ins2_i, mc_ins3_i, mc_ins4_i, mc_ins5_i, mc_ins6_i, mc_ins7_i,
+	mc_ins0_i, mc_ins1_i, mc_ins2_i, mc_ins3_i, mc_ins4_i, mc_ins5_i, mc_ins6_i, mc_ins7_i, mc_ins8_i,
 	iRn0_i, iRn1_i, iRn2_i, iRn3_i,
-	ins0_o, ins1_o, ins2_o, ins3_o, ins4_o, ins5_o, ins6_o, ins7_o,
-	pc0_o, pc1_o, pc2_o, pc3_o, pc4_o, pc5_o, pc6_o, pc7_o);
+	ins0_o, ins1_o, ins2_o, ins3_o, ins4_o, ins5_o, ins6_o, ins7_o, ins8_o,
+	pc0_o, pc1_o, pc2_o, pc3_o, pc4_o, pc5_o, pc6_o, pc7_o, pc8_o);
 input rst_i;
 input clk_i;
 input en_i;
@@ -74,6 +74,7 @@ input pc_address_t pc4_i;
 input pc_address_t pc5_i;
 input pc_address_t pc6_i;
 input pc_address_t pc7_i;
+input pc_address_t pc8_i;
 input ls_bmf_i;
 input pack_regs_i;
 input [2:0] scale_regs_i;
@@ -86,6 +87,7 @@ input instruction_t mc_ins4_i;
 input instruction_t mc_ins5_i;
 input instruction_t mc_ins6_i;
 input instruction_t mc_ins7_i;
+input instruction_t mc_ins8_i;
 input [6:0] iRn0_i;
 input [6:0] iRn1_i;
 input [6:0] iRn2_i;
@@ -98,6 +100,7 @@ output instruction_t ins4_o;
 output instruction_t ins5_o;
 output instruction_t ins6_o;
 output instruction_t ins7_o;
+output instruction_t ins8_o;
 output pc_address_t pc0_o;
 output pc_address_t pc1_o;
 output pc_address_t pc2_o;
@@ -106,6 +109,7 @@ output pc_address_t pc4_o;
 output pc_address_t pc5_o;
 output pc_address_t pc6_o;
 output pc_address_t pc7_o;
+output pc_address_t pc8_o;
 
 wire clk = clk_i;
 wire en = en_i;
@@ -121,6 +125,7 @@ pc_address_t pc4;
 pc_address_t pc5;
 pc_address_t pc6;
 pc_address_t pc7;
+pc_address_t pc8;
 instruction_t ins0;
 instruction_t ins1;
 instruction_t ins2;
@@ -129,6 +134,7 @@ instruction_t ins4;
 instruction_t ins5;
 instruction_t ins6;
 instruction_t ins7;
+instruction_t ins8;
 instruction_t ins0_;
 instruction_t ins1_;
 instruction_t ins2_;
@@ -141,6 +147,7 @@ instruction_t mc_ins4;
 instruction_t mc_ins5;
 instruction_t mc_ins6;
 instruction_t mc_ins7;
+instruction_t mc_ins8;
 wire [6:0] iRn0 = iRn0_i;
 wire [6:0] iRn1 = iRn1_i;
 wire [6:0] iRn2 = iRn2_i;
@@ -159,6 +166,7 @@ always_comb pc4 = pc4_i;
 always_comb pc5 = pc5_i;
 always_comb pc6 = pc6_i;
 always_comb pc7 = pc7_i;
+always_comb pc8 = pc8_i;
 always_comb mc_ins0 = mc_ins0_i;
 always_comb mc_ins1 = mc_ins1_i;
 always_comb mc_ins2 = mc_ins2_i;
@@ -167,6 +175,7 @@ always_comb mc_ins4 = mc_ins4_i;
 always_comb mc_ins5 = mc_ins5_i;
 always_comb mc_ins6 = mc_ins6_i;
 always_comb mc_ins7 = mc_ins7_i;
+always_comb mc_ins8 = mc_ins8_i;
 
 always_comb ins0_ = ic_line2 >> {pc0[5:0],3'd0};
 always_comb ins1_ = ic_line2 >> {pc1[5:0],3'd0};
@@ -299,6 +308,11 @@ if (en)
 	ins7 <= hirq ? {'d0,FN_IRQ,1'b0,vect_i,5'd0,2'd0,irq_i,OP_SYS} :
 		nop_i ? {33'd0,OP_NOP} :
 		mipv ? mc_ins7 : ic_line2 >> {pc7[5:0],3'd0};
+always_ff @(posedge clk)
+if (en)
+	ins8 <= hirq ? {'d0,FN_IRQ,1'b0,vect_i,5'd0,2'd0,irq_i,OP_SYS} :
+		nop_i ? {33'd0,OP_NOP} :
+		mipv ? mc_ins8 : ic_line2 >> {pc8[5:0],3'd0};
 
 always_ff @(posedge clk) if (en) nop_o <= nop_i;
 
@@ -310,6 +324,7 @@ always_comb ins4_o = ins4;
 always_comb ins5_o = ins5;
 always_comb ins6_o = ins6;
 always_comb ins7_o = ins7;
+always_comb ins8_o = ins8;
 
 always_ff @(posedge clk) if (en) pc0_o <= pc0;
 always_ff @(posedge clk) if (en) pc1_o <= pc1;
@@ -319,6 +334,7 @@ always_ff @(posedge clk) if (en) pc4_o <= pc4;
 always_ff @(posedge clk) if (en) pc5_o <= pc5;
 always_ff @(posedge clk) if (en) pc6_o <= pc6;
 always_ff @(posedge clk) if (en) pc7_o <= pc7;
+always_ff @(posedge clk) if (en) pc8_o <= pc8;
 always_ff @(posedge clk) if (en) grp_o <= grp_i;
 
 endmodule

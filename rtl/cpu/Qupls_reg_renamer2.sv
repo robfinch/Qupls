@@ -199,7 +199,7 @@ end
 
 always_ff @(posedge clk)
 if (rst)
-	wlist2free <= {256{1'b1}};
+	wlist2free <= {PREGS{1'b1}};
 else begin
 	if (en) begin
 

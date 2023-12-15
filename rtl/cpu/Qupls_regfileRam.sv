@@ -83,12 +83,12 @@ else begin
       .AUTO_SLEEP_TIME(0),            // DECIMAL
       .BYTE_WRITE_WIDTH_A(WID),       // DECIMAL
       .CASCADE_HEIGHT(0),             // DECIMAL
-      .CLOCKING_MODE("independent_clock"), // String
+      .CLOCKING_MODE("common_clock"), // String
       .ECC_MODE("no_ecc"),            // String
       .MEMORY_INIT_FILE("none"),      // String
       .MEMORY_INIT_PARAM("0"),        // String
       .MEMORY_OPTIMIZATION("true"),   // String
-      .MEMORY_PRIMITIVE("auto"),      // String
+      .MEMORY_PRIMITIVE("block"),     // String
       .MEMORY_SIZE(DEP*WID),             // DECIMAL
       .MESSAGE_CONTROL(0),            // DECIMAL
       .READ_DATA_WIDTH_B(WID),         // DECIMAL

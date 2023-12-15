@@ -4,7 +4,7 @@
 
 #define LITTLEENDIAN 1
 #define BIGENDIAN 0
-#define VASM_CPU_THOR 1
+#define VASM_CPU_QUPLS 1
 #define HAVE_INSTRUCTION_EXTENSION	1
 
 /* maximum number of operands in one mnemonic */
@@ -26,7 +26,7 @@ typedef uint64_t utaddr;
 #define DATA_ALIGN(n) ((n)<=8?1:(n)<=16?2:(n)<=32?4:8)
 
 /* operand class for n-bit data definitions */
-#define DATA_OPERAND(n) thor_data_operand(n)
+#define DATA_OPERAND(n) qupls_data_operand(n)
 
 /* #define NEXT (-1)   use operand_type+1 for next operand */
 
@@ -121,6 +121,10 @@ typedef struct {
 	postfix_buf pfxa;
 	postfix_buf pfxb;
 	postfix_buf pfxc;
+	uint64_t imm0;
+	uint64_t imm1;
+	uint64_t imm2;
+	uint64_t imm3;
 } instruction_buf;
 
 typedef struct {
@@ -233,6 +237,7 @@ typedef struct {
 #define CND3(x)	(((x) & 0x7LL) << 9LL)
 #define IM2(x)		(((x) & 3LL) << 25LL)
 #define S(x)			(((x) & 3LL) << 25LL)
+#define SC(x)			(((x) & 7LL) << 19LL)
 #define SHFUNC(x)	(((x) & 0xf) << 28LL)
 #define R1FUNC(x)	(((x) & 0x1f) << 19LL)
 #define R2FUNC(x)	(((x) & 0x3fLL) << 26LL)
