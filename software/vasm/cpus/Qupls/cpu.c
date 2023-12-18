@@ -1571,18 +1571,20 @@ static thuge make_reloc(int reloctype,operand *op,section *sec,
       	}
 #endif      	
 #ifdef BRANCH_INO
-    		ino = (val.lo & 0x3fLL) / 5LL;
-        if (reloctype == REL_PC) {
-//          	hval = hsub(huge_zero(),pc);
-					//val -= pc;
-					val.lo &= 0xffffffffffffffc0LL;
-					val = hsub(val,huge_from_int(pc & 0xffffffffffffffc0LL));
-					val = hshr(val,2);
-				}
-				else if (reloctype == REL_ABS) {
+		 		if (op->format==B || op->format==BI || op->format==B2 || op->format==BL2 || op->format==BZ) {
 	    		ino = (val.lo & 0x3fLL) / 5LL;
-	    		val.hi = 0;
-					val.lo = ino;
+	        if (reloctype == REL_PC) {
+	//          	hval = hsub(huge_zero(),pc);
+						//val -= pc;
+						val.lo &= 0xffffffffffffffc0LL;
+						val = hsub(val,huge_from_int(pc & 0xffffffffffffffc0LL));
+						val = hshr(val,2);
+					}
+					else if (reloctype == REL_ABS) {
+		    		ino = (val.lo & 0x3fLL) / 5LL;
+		    		val.hi = 0;
+						val.lo = ino;
+					}
 				}
 				else
 #endif		 				
@@ -1905,17 +1907,19 @@ illreloc:
 		else
 #endif		
 #ifdef BRANCH_INO
-    if (reloctype == REL_PC) {
-//          	hval = hsub(huge_zero(),pc);
-			//val -= pc;
-			val.lo &= 0xffffffffffffffc0LL;
-			val = hsub(val,huge_from_int(pc & 0xffffffffffffffc0LL));
-			val = hshr(val,2);
-		}
-		else if (reloctype == REL_ABS) {
-			ino = (val.lo & 0x3fLL) / 5LL;
-			val.hi = 0LL;
-			val.lo = ino;
+ 		if (op->format==B || op->format==B2 || op->format==BL2 || op->format==BZ) {
+	    if (reloctype == REL_PC) {
+	//          	hval = hsub(huge_zero(),pc);
+				//val -= pc;
+				val.lo &= 0xffffffffffffffc0LL;
+				val = hsub(val,huge_from_int(pc & 0xffffffffffffffc0LL));
+				val = hshr(val,2);
+			}
+			else if (reloctype == REL_ABS) {
+				ino = (val.lo & 0x3fLL) / 5LL;
+				val.hi = 0LL;
+				val.lo = ino;
+			}
 		}
 		else
 #endif		 				
