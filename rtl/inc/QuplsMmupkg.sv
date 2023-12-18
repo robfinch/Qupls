@@ -251,10 +251,10 @@ typedef struct packed
 	logic g;
 	logic [1:0] sw;
 	logic [3:0] cache;
-	rwx_t [2:0] mrwx;
-	rwx_t [2:0] hrwx;
-	rwx_t [2:0] srwx;
-	rwx_t [2:0] urwx;
+	rwx_t mrwx;
+	rwx_t hrwx;
+	rwx_t srwx;
+	rwx_t urwx;
 	logic [31:0] ppn;			// 32 bit address space
 } spte_t;	// 64 bits
 

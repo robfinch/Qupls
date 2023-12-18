@@ -38,7 +38,7 @@
 package QuplsPkg;
 
 `undef IS_SIM
-parameter SIM = 1'b1;
+parameter SIM = 1'b0;
 
 //`define IS_SIM	1
 // Comment out to remove the sigmoid approximate function
@@ -49,7 +49,7 @@ parameter SIM = 1'b1;
 //`define SUPPORT_128BIT_OPS	1
 `define NLANES	4
 `define NTHREADS	4
-`define NREGS		68
+`define NREGS		69
 parameter PREGS = 256;
 
 `define L1CacheLines	1024
@@ -60,6 +60,8 @@ parameter PREGS = 256;
 `define L1ICacheWays 4
 
 `define L1DCacheWays 4
+
+parameter XWID = 4;
 
 // Select building for performance or size.
 // If this is set to one extra logic will be included to improve performance.
@@ -647,11 +649,11 @@ typedef enum logic [5:0] {
 	FN_FCOS = 6'd33
 } f1func_t;
 
-typedef enum logic [2:0] {
-	FN_FMA = 3'd0,
-	FN_FMS = 3'd1,
-	FN_FNMA = 3'd2,
-	FN_FNMS = 3'd3
+typedef enum logic [3:0] {
+	FN_FMA = 4'd0,
+	FN_FMS = 4'd1,
+	FN_FNMA = 4'd2,
+	FN_FNMS = 4'd3
 } f3func_t;
 
 typedef enum logic [6:0] {
@@ -917,7 +919,7 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [103:0] pad;
+	logic [39:0] pad;
 	logic [31:0] imm;
 	logic resv;
 	opcode_t opcode;
@@ -926,17 +928,17 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [136:0] payload;
+	logic [39:0] pad;
+	logic [32:0] payload;
 	opcode_t opcode;
 } anyinst_t;
 
 
 typedef struct packed
 {
-	logic [96:0] pad;
-	opcode_t pfx_opcode;
-	logic [3:0] resv;
+	logic [39:0] pad;
 	logic [1:0] prc;
+	fround_t rmd;
 	f3func_t func;
 	regspec_t Rc;
 	regspec_t Rb;
@@ -947,13 +949,11 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [96:0] pad;
-	opcode_t pfx_opcode;
-	logic [3:0] resv2;
-	logic [1:0] prc;
+	logic [39:0] pad;
 	f2func_t func;
+	logic [4:0] resv;
+	logic [1:0] prc;
 	fround_t rnd;
-	logic resv;
 	regspec_t Rb;
 	regspec_t Ra;
 	regspec_t Rt;
@@ -962,13 +962,11 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [96:0] pad;
-	opcode_t pfx_opcode;
-	logic [3:0] resv2;
-	logic [1:0] prc;
+	logic [39:0] pad;
+	logic [4:0] resv;
 	f2func_t func2;
+	logic [1:0] prc;
 	fround_t rnd;
-	logic resv;
 	f1func_t func;
 	regspec_t Ra;
 	regspec_t Rt;
@@ -977,10 +975,10 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [103:0] pad;
-	opcode_t pfx_opcode;
+	logic [39:0] pad;
 	r2func_t func;
-	logic resv;
+	logic [1:0] resv;
+	regspec_t Rc;
 	regspec_t Rb;
 	regspec_t Ra;
 	regspec_t Rt;
@@ -989,10 +987,9 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [110:0] pad;
-	r2func_t func2;
-	logic resv;
+	logic [39:0] pad;
 	r1func_t func;
+	logic [14:0] resv;
 	regspec_t Ra;
 	regspec_t Rt;
 	opcode_t opcode;
@@ -1000,7 +997,7 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [103:0] pad;
+	logic [39:0] pad;
 	logic [2:0] fmt;
 	logic [2:0] pr;
 	sys_func_t func;
@@ -1013,9 +1010,8 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [104:0] pad;
-	opcode_t pfx_opcode;
-	logic [12:0] imm;
+	logic [39:0] pad;
+	logic [20:0] imm;
 	regspec_t Ra;
 	regspec_t Rt;
 	opcode_t opcode;
@@ -1023,7 +1019,7 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [103:0] pad;
+	logic [39:0] pad;
 	logic [2:0] fmt;
 	logic [2:0] pr;
 	logic b;
@@ -1036,7 +1032,7 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [103:0] pad;
+	logic [39:0] pad;
 	logic [1:0] fmt;
 	logic [2:0] pr;
 	logic [1:0] op;
@@ -1048,10 +1044,8 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [103:0] pad;
-	logic [1:0] fmt;
-	logic [2:0] pr;
-	logic [15:0] disp;
+	logic [39:0] pad;
+	logic [20:0] disp;
 	regspec_t Ra;
 	regspec_t Rt;
 	opcode_t opcode;
@@ -1059,7 +1053,7 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [111:0] pad;
+	logic [47:0] pad;
 	lsn_func_t func;
 	logic [1:0] sc;
 	regspec_t Rb;
@@ -1070,7 +1064,7 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [103:0] pad;
+	logic [39:0] pad;
 	logic [14:0] disphi;
 	regspec_t Rb;
 	regspec_t	Ra;
@@ -1081,7 +1075,7 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [103:0] pad;
+	logic [39:0] pad;
 	logic [3:0] seven;
 	logic [4:0] resv;
 	regspec_t Rc;
@@ -1094,7 +1088,7 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [103:0] pad;
+	logic [39:0] pad;
 	logic [14:0] disphi;
 	regspec_t Rb;
 	regspec_t	Ra;
@@ -1105,7 +1099,7 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [103:0] pad;
+	logic [39:0] pad;
 	logic [3:0] resv2;
 	logic [10:0] tgt;
 	regspec_t Rb;
@@ -1118,8 +1112,8 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [95:0] pad;
-	logic [28:0] immhi;
+	logic [39:0] pad;
+	logic [20:0] immhi;
 	regspec_t Ra;
 	regspec_t Rt;
 	opcode_t opcode;
@@ -1127,7 +1121,7 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [103:0] pad;
+	logic [39:0] pad;
 	logic [26:0] disp;
 	regspec_t Rt;
 	opcode_t opcode;
@@ -1194,6 +1188,7 @@ typedef struct packed
 	value_t imma;
 	value_t immb;
 	value_t immc;
+	logic swap;				// Swap A,B operands
 	prec_t prc;
 	logic csr;
 	logic nop;				// NOP semantics
@@ -1370,9 +1365,16 @@ const address_t RSTSP = 32'hFFFFFFF0;
 
 typedef logic [7:0] seqnum_t;
 
+// Register number with valid bit
+typedef struct packed 
+{
+	logic v;
+	pregno_t rg;
+} vpregno_t;
+
 typedef struct packed
 {
-	pregno_t [BANKS-1:0] pregs;
+	vpregno_t [BANKS-1:0] pregs;
 } preg_array_t;
 
 typedef struct packed
@@ -1776,9 +1778,10 @@ function fnSourcePv;
 input instruction_t ir;
 reg vec,veci,vecf;
 begin
-	vec = ir.r2.pfx_opcode==OP_VEC || ir.r2.pfx_opcode==OP_VECZ;
-	veci = ir.ri.pfx_opcode==OP_VEC || ir.ri.pfx_opcode==OP_VECZ;
-	vecf = ir.f2.pfx_opcode==OP_VEC || ir.f2.pfx_opcode==OP_VECZ;
+	// ToDo: fix for vector instructions
+	vec = 1'b0;//ir.r2.pfx_opcode==OP_VEC || ir.r2.pfx_opcode==OP_VECZ;
+	veci = 1'b0;//ir.ri.pfx_opcode==OP_VEC || ir.ri.pfx_opcode==OP_VECZ;
+	vecf = 1'b0;//ir.f2.pfx_opcode==OP_VEC || ir.f2.pfx_opcode==OP_VECZ;
 	casez(ir.r2.opcode)
 	OP_SYS:	fnSourcePv = ~vec;
 	OP_R2:

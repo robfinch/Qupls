@@ -72,7 +72,7 @@ begin
 		FN_SLE:	fnRt = {regx,ir.r2.Rt};
 		FN_SLTU:	fnRt = {regx,ir.r2.Rt};
 		FN_SLEU:	fnRt = {regx,ir.r2.Rt};
-		default:	fnRt = 'd0;
+		default:	fnRt = 7'd0;
 		endcase
 	OP_FLT2,OP_FLT3:
 		fnRt = {regx,1'b0,ir[11:7]};
@@ -97,7 +97,7 @@ begin
 	OP_LDX:
 		fnRt = {regx,ir.ls.Rt};
 	default:
-		fnRt = 'd0;
+		fnRt = 7'd0;
 	endcase
 end
 endfunction

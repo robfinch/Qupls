@@ -84,7 +84,8 @@ fta_cmd_response128_t [1:0] ftadm_resp;
 
 
 integer nn,mm,n2,n3,n4,m4,n5,n6,n7,n8,n9,n10,n11,n12,n13,n14,n15,n17;
-integer n16r, n16c, n12r, n12c, n14r, n14c, n17r, n17c;
+integer n16r, n16c, n12r, n12c, n14r, n14c, n17r, n17c, n18r, n18c;
+integer n19;
 genvar g,h;
 rndx_t alu0_re;
 reg [127:0] message;
@@ -214,11 +215,10 @@ always_comb head1 = (head0 + 1) % ROB_ENTRIES;
 always_comb head2 = (head0 + 2) % ROB_ENTRIES;
 always_comb head3 = (head0 + 3) % ROB_ENTRIES;
 
-decode_bus_t db0, db1, db2, db3;
-decode_bus_t db0q, db1q, db2q, db3q;
-decode_bus_t db0r, db1r, db2r, db3r;
-instruction_t ins0q, ins1q, ins2q, ins3q;
-instruction_t ins0r, ins1r, ins2r, ins3r;
+decode_bus_t db0_q, db1_q, db2_q, db3_q;				// Queue stage inputs
+instruction_t ins0_q, ins1_q, ins2_q, ins3_q;
+decode_bus_t db0_r, db1_r, db2_r, db3_r;				// Regfetch/rename stage inputs
+instruction_t ins0_r, ins1_r, ins2_r, ins3_r;
 
 reg [3:0] regx0;
 reg [3:0] regx1;
@@ -334,7 +334,7 @@ cause_code_t fpu1_exc = FLT_NONE;
 wire        fpu1_v;
 wire fpu1_done1;
 
-reg fcu_idle = 1'b1;
+reg fcu_idle;
 reg fcu_available;
 instruction_t fcu_instr;
 instruction_t fcu_missir;
@@ -342,12 +342,13 @@ reg        fcu_bt;
 bts_t fcu_bts;
 value_t fcu_argA;
 value_t fcu_argB;
+value_t fcu_argBr;
 value_t fcu_argI;	// only used by BEQ
 pc_address_t fcu_pc;
 value_t fcu_res;
 rob_ndx_t fcu_id;
 cause_code_t fcu_exc;
-reg fcu_v, fcu_v2, fcu_v3, fcu_v4, fcu_v5;
+reg fcu_v, fcu_v2, fcu_v3, fcu_v4, fcu_v5, fcu_v6;
 reg fcu_branchmiss;
 pc_address_t fcu_misspc, fcu_misspc1;
 reg [2:0] fcu_missgrp;
@@ -513,6 +514,15 @@ reg [2:0] atom_mask;
 assign clk = clk_i;				// convenience
 assign clk2x = clk2x_i;
 
+function pc_address_t fnTargetIP;
+input pc_address_t ip;
+input value_t tgt;
+reg [5:0] lo;
+begin
+	lo = {tgt[3:0],2'b0} + tgt[3:0];
+	fnTargetIP = {ip[$bits(pc_address_t)-1:6]+tgt[$bits(value_t)-1:4],lo};
+end
+endfunction
 
 initial begin: Init
 	integer i,j;
@@ -592,13 +602,12 @@ ICacheLine ic_line_hi, ic_line_lo;
 
 pc_address_t pc, pc0, pc1, pc2, pc3, pc4, pc5, pc6, pc7, pc8;
 reg [5:0] off0, off1, off2, off3, off4, off5, off6, off7;
-pc_address_t pc0d, pc1d, pc2d, pc3d, pc4d, pc5d, pc6d, pc7d, pc8d;
-pc_address_t pc0q, pc1q, pc2q, pc3q, pc4q, pc5q, pc6q, pc7q, pc8q;
-pc_address_t pc0r, pc1r, pc2r, pc3r, pc4r, pc5r, pc6r, pc7r, pc8r;
-pc_address_t pc0x, pc1x, pc2x, pc3x, pc4x, pc5x, pc6x, pc7x, pc8x;
-pc_address_t pc0y, pc1y, pc2y, pc3y, pc4y, pc5y, pc6y, pc7y, pc8y;
+pc_address_t pc0_d, pc1_d, pc2_d, pc3_d, pc4_d, pc5_d, pc6_d, pc7_d, pc8_d;
+pc_address_t pc0_q, pc1_q, pc2_q, pc3_q, pc4_q, pc5_q, pc6_q, pc7_q, pc8_q;
+pc_address_t pc0_r, pc1_r, pc2_r, pc3_r, pc4_r, pc5_r, pc6_r, pc7_r, pc8_r;
+pc_address_t pc0_x, pc1_x, pc2_x, pc3_x, pc4_x, pc5_x, pc6_x, pc7_x, pc8_x;
 pc_address_t next_pc;
-reg [2:0] grpd, grpq, grpr;
+reg [2:0] grp_d, grp_q, grp_r;
 wire ntakb,ptakb;
 reg invce = 1'b0;
 reg dc_invline = 1'b0;
@@ -614,8 +623,9 @@ asid_t ic_miss_asid;
 wire [1:0] ic_wway;
 
 reg [1023:0] ic_line;
-reg [1023:0] ic_line2, ic_line3;
-instruction_t ins0, ins1, ins2, ins3, ins4, ins5, ins6, ins7, ins8;
+wire [1023:0] ic_line2;
+reg [1023:0] ic_line_x;
+instruction_t ins0_d, ins1_d, ins2_d, ins3_d, ins4_d, ins5_d, ins6_d, ins7_d, ins8_d;
 reg ins0_v, ins1_v, ins2_v, ins3_v;
 reg [XWID-1:0] ins_v;
 reg insnq0,insnq1,insnq2,insnq3;
@@ -627,9 +637,9 @@ tlb_entry_t tlb_pc_entry;
 pc_address_t pc_tlb_res;
 wire pc_tlb_v;
 
-wire pt0, pt1, pt2, pt3;		// predict taken branches
-reg pt0q, pt1q, pt2q, pt3q;
-reg pt0r, pt1r, pt2r, pt3r;
+wire pt0_d, pt1_d, pt2_d, pt3_d;		// predict taken branches
+reg pt0_r, pt1_r, pt2_r, pt3_r;
+reg pt0_q, pt1_q, pt2_q, pt3_q;
 reg regs;
 
 reg branchmiss, branchmiss_next;
@@ -717,6 +727,7 @@ end
 
 wire ftaim_full, ftadm_full;
 wire ihito,ihit,ihit2;
+reg ihit_x, ihit_d, ihit_r, ihit_q;
 wire icnop;
 pc_address_t icpc;
 wire [2:0] igrp;
@@ -829,14 +840,14 @@ gselectPredictor ugsp1
 	.takb1(commit_takb1),
 	.takb2(commit_takb2),
 	.takb3(commit_takb3),
-	.ip0(pc0x),
-	.predict_taken0(pt0),
-	.ip1(pc1x),
-	.predict_taken1(pt1),
-	.ip2(pc2x),
-	.predict_taken2(pt2),
-	.ip3(pc3x),
-	.predict_taken3(pt3)
+	.ip0(pc0_x),
+	.predict_taken0(pt0_d),
+	.ip1(pc1_x),
+	.predict_taken1(pt1_d),
+	.ip2(pc2_x),
+	.predict_taken2(pt2_d),
+	.ip3(pc3_x),
+	.predict_taken3(pt3_d)
 );
 
 pc_address_t pco;
@@ -874,7 +885,7 @@ generate begin : gInsLengths
 		(
 			.rst_i(rst),
 			.line_i(ic_line),
-			.line_o(),
+			.line_o(ic_line2),
 			.hit_i(ihito),
 			.hit_o(ihit2),
 			.pc_i(icpc),
@@ -916,7 +927,7 @@ generate begin : gInsLengths
 		);
 	end
 	else begin
-		//assign ic_line2 = ic_line;
+		assign ic_line2 = ic_line;
 		assign ihit2 = ihito;
 		assign pco = icpc;
 		assign len0 = 4'd5;
@@ -950,9 +961,10 @@ always_comb
 begin
 	qd = {XWID{1'd0}};
 	qs = {XWID{1'd0}};
-	if (branchmiss)
+	if ((branchmiss || branchmiss_state < 3'd4) && |robentry_stomp)
 		;
-	else if (ihito || mipv)
+	else if ((ihito || mipv) && !stallq && 
+		rob[tail0].v==INV && rob[tail1].v==INV && rob[tail2].v==INV && rob[tail3].v==INV)
 		if (XWID==2)
 			case (~cqd[1:0])
 
@@ -967,7 +979,7 @@ begin
 	    2'b11:
 	    	if (rob[tail0].v==INV) begin
 	    		qd = qd | 2'b10;
-	    		if (!pt2 && !mip2v && !db2r.regs) begin
+	    		if (!pt2_q && !mip2v && !db2_q.regs) begin
 	    			if (rob[tail1].v==INV)
 	    				qd = qd | 2'b01;
 	    		end
@@ -989,7 +1001,7 @@ begin
 	    3'b011:
 	    	if (rob[tail0].v==INV) begin
 	    		qd = qd | 3'b010;
-	    		if (!pt2 && !mip2v && !db2r.regs) begin
+	    		if (!pt2_q && !mip2v && !db2_q.regs) begin
 	    			if (rob[tail1].v==INV)
 	    				qd = qd | 3'b001;
 	    		end
@@ -1002,7 +1014,7 @@ begin
 	    3'b101:
 	    	if (rob[tail0].v==INV) begin
 	    		qd = qd | 3'b100;
-	    		if (!pt1 && !mip1v && !db1r.regs) begin
+	    		if (!pt1_q && !mip1v && !db1_q.regs) begin
 	    			if (rob[tail1].v==INV)
 		    			qd = qd | 3'b001;
 		    	end
@@ -1012,7 +1024,7 @@ begin
 	    3'b110:
 	    	if (rob[tail0].v==INV) begin
 	    		qd = qd | 3'b100;
-	    		if (!pt1 && !mip1v && !db1r.regs) begin
+	    		if (!pt1_q && !mip1v && !db1_q.regs) begin
 	    			if (rob[tail1].v==INV)
 	    				qd = qd | 3'b10;
 	    		end
@@ -1022,10 +1034,10 @@ begin
 	    3'b111:
 	    	if (rob[tail0].v==INV) begin
 	    		qd = qd | 3'b100;
-	    		if (!pt1 && !mip1v && !db1r.regs) begin
+	    		if (!pt1_q && !mip1v && !db1_q.regs) begin
 		    		if (rob[tail1].v==INV) begin
 		    			qd = qd  | 3'b010;
-		    			if (!pt2 && !mip2v && !db2r.regs) begin
+		    			if (!pt2_q && !mip2v && !db2_q.regs) begin
 		    				if (rob[tail2].v==INV)
 			    				qd = qd  | 3'b001;
 			    		end
@@ -1051,7 +1063,7 @@ begin
     4'b0011:
     	if (rob[tail0].v==INV) begin
     		qd = qd | 4'b0010;
-    		if (!pt2 && !mip2v && !db2r.regs) begin
+    		if (!pt2_q && !mip2v && !db2_q.regs) begin
     			if (rob[tail1].v==INV)
     				qd = qd | 4'b0001;
     		end
@@ -1064,7 +1076,7 @@ begin
     4'b0101:
     	if (rob[tail0].v==INV) begin
     		qd = qd | 4'b0100;
-    		if (!pt1 && !mip1v && !db1r.regs) begin
+    		if (!pt1_q && !mip1v && !db1_q.regs) begin
     			if (rob[tail1].v==INV)
 	    			qd = qd | 4'b0001;
 	    	end
@@ -1074,7 +1086,7 @@ begin
     4'b0110:
     	if (rob[tail0].v==INV) begin
     		qd = qd | 4'b0100;
-    		if (!pt1 && !mip1v && !db1r.regs) begin
+    		if (!pt1_q && !mip1v && !db1_q.regs) begin
     			if (rob[tail1].v==INV)
     				qd = qd | 4'b0010;
     		end
@@ -1084,10 +1096,10 @@ begin
     4'b0111:
     	if (rob[tail0].v==INV) begin
     		qd = qd | 4'b0100;
-    		if (!pt1 && !mip1v && !db1r.regs) begin
+    		if (!pt1_q && !mip1v && !db1_q.regs) begin
 	    		if (rob[tail1].v==INV) begin
 	    			qd = qd  | 4'b0010;
-	    			if (!pt2 && !mip2v && !db2r.regs) begin
+	    			if (!pt2_q && !mip2v && !db2_q.regs) begin
 	    				if (rob[tail2].v==INV)
 		    				qd = qd  | 4'b0001;
 		    		end
@@ -1104,7 +1116,7 @@ begin
     4'b1001:
     	if (rob[tail0].v==INV) begin
     		qd = qd | 4'b1000;
-    		if (!pt0 && !mip0v && !db0r.regs) begin
+    		if (!pt0_q && !mip0v && !db0_q.regs) begin
     			if (rob[tail1].v==INV)
 	    			qd = qd | 4'b0001;
 	    	end
@@ -1114,7 +1126,7 @@ begin
     4'b1010:
     	if (rob[tail0].v==INV) begin
     		qd = qd | 4'b1000;
-    		if (!pt0 && !mip0v && !db0r.regs) begin
+    		if (!pt0_q && !mip0v && !db0_q.regs) begin
     			if (rob[tail1].v==INV)
 	    			qd = qd | 4'b0010;
 	    	end
@@ -1124,10 +1136,10 @@ begin
     4'b1011:
     	if (rob[tail0].v==INV) begin
     		qd = qd | 4'b1000;
-    		if (!pt0 && !mip0v && !db0r.regs) begin
+    		if (!pt0_q && !mip0v && !db0_q.regs) begin
     			if (rob[tail1].v==INV) begin
 	    			qd = qd | 4'b0010;
-    				if (!pt2 && !mip2v && !db2r.regs) begin
+    				if (!pt2_q && !mip2v && !db2_q.regs) begin
     					if (rob[tail2].v==INV)
 		    				qd = qd | 4'b0001;
 		    		end
@@ -1141,7 +1153,7 @@ begin
     4'b1100:
     	if (rob[tail0].v==INV) begin
     		qd = qd | 4'b1000;
-    		if (!pt0 && !mip0v && !db0r.regs) begin
+    		if (!pt0_q && !mip0v && !db0_q.regs) begin
     			if (rob[tail1].v==INV)
 	    			qd = qd | 4'b0100;
 	    	end
@@ -1151,10 +1163,10 @@ begin
     4'b1101:
     	if (rob[tail0].v==INV) begin
     		qd = qd | 4'b1000;
-    		if (!pt0 && !mip0v && !db0r.regs) begin
+    		if (!pt0_q && !mip0v && !db0_q.regs) begin
     			if (rob[tail1].v==INV) begin
 		    		qd = qd | 4'b0100;
-	    			if (!pt1 && !mip1v && !db1r.regs) begin
+	    			if (!pt1_q && !mip1v && !db1_q.regs) begin
 	    				if (rob[tail2].v==INV)
 			    			qd = qd | 4'b0001;
 			    	end
@@ -1168,10 +1180,10 @@ begin
     4'b1110:
     	if (rob[tail0].v==INV) begin
     		qd = qd | 4'b1000;
-    		if (!pt0 && !mip0v && !db0r.regs) begin
+    		if (!pt0_q && !mip0v && !db0_q.regs) begin
     			if (rob[tail1].v==INV) begin
 		    		qd = qd | 4'b0100;
-	    			if (!pt1 && !mip1v && !db1r.regs) begin
+	    			if (!pt1_q && !mip1v && !db1_q.regs) begin
 	    				if (rob[tail2].v==INV)
 			    			qd = qd | 4'b0010;
 			    	end
@@ -1185,13 +1197,13 @@ begin
     4'b1111:
     	if (rob[tail0].v==INV) begin
     		qd = qd | 4'b1000;
-    		if (!pt0 && !mip0v && !db0r.regs) begin
+    		if (!pt0_q && !mip0v && !db0_q.regs) begin
     			if (rob[tail1].v==INV) begin
 	    			qd = qd | 4'b0100;
-	    			if (!pt1 && !mip1v && !db1r.regs) begin
+	    			if (!pt1_q && !mip1v && !db1_q.regs) begin
 	    				if (rob[tail2].v==INV) begin
 			    			qd = qd | 4'b0010;
-		    				if (!pt2 && !mip2v && !db2r.regs) begin
+		    				if (!pt2_q && !mip2v && !db2_q.regs) begin
 		    					if (rob[tail3].v==INV)
 				    				qd = qd | 4'b0001;
 				    		end
@@ -1239,6 +1251,8 @@ end
 else begin
 	if (pe_allqd & ~(ihito & ~hirq))
 		allqd <= 1'b1;
+	if (next_cqd=={XWID{1'b1}})
+		allqd <= 1'b1;
 	if (branchmiss)
 		allqd <= 1'b0;
 	if (ihito) begin
@@ -1254,7 +1268,7 @@ else begin
 end
 
 always_comb
-if ((fnIsAtom(ins0) || fnIsAtom(ins1) || fnIsAtom(ins2) || fnIsAtom(ins3)) && irq_i != 3'd7)
+if ((fnIsAtom(ins0_d) || fnIsAtom(ins1_d) || fnIsAtom(ins2_d) || fnIsAtom(ins3_d)) && irq_i != 3'd7)
 	hirq = 1'd0;
 else
 	hirq = (irq_i > sr.ipl) && !int_commit && (irq_i > atom_mask[2:0]);
@@ -1421,10 +1435,10 @@ begin
 end
 endfunction
 
-always_comb	mip0 = fnMip(ins0);
-always_comb	mip1 = fnMip(ins1);
-always_comb	mip2 = fnMip(ins2);
-always_comb	mip3 = fnMip(ins3);
+always_comb	mip0 = fnMip(ins0_d);
+always_comb	mip1 = fnMip(ins1_d);
+always_comb	mip2 = fnMip(ins2_d);
+always_comb	mip3 = fnMip(ins3_d);
 always_comb mip0v = |mip0;
 always_comb mip1v = |mip1;
 always_comb mip2v = |mip2;
@@ -1453,13 +1467,14 @@ end
 always_comb
 	ic_line = {ic_line_hi.data,ic_line_lo.data};
 always_ff @(posedge clk)
-	ic_line2 <= ic_line;
-always_ff @(posedge clk)
-	ic_line3 <= ic_line2;
+	ic_line_x <= ic_line2;
+
+// <signal>_x	: instruction extract stage input
+// <signal>_d	: instruction extract stage output
 
 wire exti_nop;	
 // Latency of one.
-// pt0, etc. should be in line with ins0, etc
+// pt0_d, etc. should be in line with ins0_d, etc
 Qupls_extract_ins uiext1
 (
 	.rst_i(rst),
@@ -1473,19 +1488,19 @@ Qupls_extract_ins uiext1
 	.reglist_active(1'b0),
 	.mipv_i(mipv),
 	.mip_i(micro_ip),
-	.ic_line_i(ic_line3),
+	.ic_line_i(ic_line_x),
 	.grp_i(igrp2),
 	.misspc(misspc),
 	.branchmiss(branchmiss_state!=3'd7),
-	.pc0_i(pc0y),
-	.pc1_i(pc1y),
-	.pc2_i(pc2y),
-	.pc3_i(pc3y),
-	.pc4_i(pc4y),
-	.pc5_i(pc5y),
-	.pc6_i(pc6y),
-	.pc7_i(pc7y),
-	.pc8_i(pc8y),
+	.pc0_i(pc0_x),
+	.pc1_i(pc1_x),
+	.pc2_i(pc2_x),
+	.pc3_i(pc3_x),
+	.pc4_i(pc4_x),
+	.pc5_i(pc5_x),
+	.pc6_i(pc6_x),
+	.pc7_i(pc7_x),
+	.pc8_i(pc8_x),
 	.ls_bmf_i(ls_bmf),
 	.pack_regs_i(pack_regs),
 	.scale_regs_i(scale_regs),
@@ -1503,25 +1518,25 @@ Qupls_extract_ins uiext1
 	.iRn1_i(iRn1r),
 	.iRn2_i(iRn2r),
 	.iRn3_i(iRn3r),
-	.ins0_o(ins0),
-	.ins1_o(ins1),
-	.ins2_o(ins2),
-	.ins3_o(ins3),
-	.ins4_o(ins4),
-	.ins5_o(ins5),
-	.ins6_o(ins6),
-	.ins7_o(ins7),
-	.ins8_o(ins8),
+	.ins0_o(ins0_d),
+	.ins1_o(ins1_d),
+	.ins2_o(ins2_d),
+	.ins3_o(ins3_d),
+	.ins4_o(ins4_d),
+	.ins5_o(ins5_d),
+	.ins6_o(ins6_d),
+	.ins7_o(ins7_d),
+	.ins8_o(ins8_d),
 	.grp_o(grpd),
-	.pc0_o(pc0d),
-	.pc1_o(pc1d),
-	.pc2_o(pc2d),
-	.pc3_o(pc3d),
-	.pc4_o(pc4d),
-	.pc5_o(pc5d),
-	.pc6_o(pc6d),
-	.pc7_o(pc7d),
-	.pc8_o(pc8d)
+	.pc0_o(pc0_d),
+	.pc1_o(pc1_d),
+	.pc2_o(pc2_d),
+	.pc3_o(pc3_d),
+	.pc4_o(pc4_d),
+	.pc5_o(pc5_d),
+	.pc6_o(pc6_d),
+	.pc7_o(pc7_d),
+	.pc8_o(pc8_d)
 );
 
 wire [NDATA_PORTS-1:0] dcache_load;
@@ -1667,39 +1682,39 @@ pregno_t pRa0, pRa1, pRa2, pRa3;
 pregno_t pRb0, pRb1, pRb2, pRb3;
 pregno_t pRc0, pRc1, pRc2, pRc3;
 pregno_t pRt0, pRt1, pRt2, pRt3;
-pregno_t nRt0, nRt1, nRt2, nRt3;
+pregno_t Rt0_q, Rt1_q, Rt2_q, Rt3_q;
 pregno_t [3:0] tags2free;
 reg [3:0] freevals;
 wire [PREGS-1:0] avail_reg;						// available registers
 wire [3:0] cndx;											// checkpoint index
 
-assign instr[0][0] = ins0;
-assign instr[0][1] = ins1;
-assign instr[0][2] = ins2;
-assign instr[0][3] = ins3;
-assign instr[0][4] = ins4;
-assign instr[0][5] = ins5;
+assign instr[0][0] = ins0_d;
+assign instr[0][1] = ins1_d;
+assign instr[0][2] = ins2_d;
+assign instr[0][3] = ins3_d;
+assign instr[0][4] = ins4_d;
+assign instr[0][5] = ins5_d;
 
-assign instr[1][0] = ins1;
-assign instr[1][1] = ins2;
-assign instr[1][2] = ins3;
-assign instr[1][3] = ins4;
-assign instr[1][4] = ins5;
-assign instr[1][5] = ins6;
+assign instr[1][0] = ins1_d;
+assign instr[1][1] = ins2_d;
+assign instr[1][2] = ins3_d;
+assign instr[1][3] = ins4_d;
+assign instr[1][4] = ins5_d;
+assign instr[1][5] = ins6_d;
 
-assign instr[2][0] = ins2;
-assign instr[2][1] = ins3;
-assign instr[2][2] = ins4;
-assign instr[2][3] = ins5;
-assign instr[2][4] = ins6;
-assign instr[2][5] = ins7;
+assign instr[2][0] = ins2_d;
+assign instr[2][1] = ins3_d;
+assign instr[2][2] = ins4_d;
+assign instr[2][3] = ins5_d;
+assign instr[2][4] = ins6_d;
+assign instr[2][5] = ins7_d;
 
-assign instr[3][0] = ins3;
-assign instr[3][1] = ins4;
-assign instr[3][2] = ins5;
-assign instr[3][3] = ins6;
-assign instr[3][4] = ins7;
-assign instr[3][5] = ins8;
+assign instr[3][0] = ins3_d;
+assign instr[3][1] = ins4_d;
+assign instr[3][2] = ins5_d;
+assign instr[3][3] = ins6_d;
+assign instr[3][4] = ins7_d;
+assign instr[3][5] = ins8_d;
 
 generate begin : gDecoders
 	case(XWID)
@@ -1711,7 +1726,7 @@ generate begin : gDecoders
 				.en(1'b1),
 				.instr(instr[0]),
 				.regx(regx0),
-				.dbo(db0)
+				.dbo(db0_r)
 			);
 		end
 	2:
@@ -1722,7 +1737,7 @@ generate begin : gDecoders
 				.en(1'b1),
 				.instr(instr[0]),
 				.regx(regx0),
-				.dbo(db0)
+				.dbo(db0_r)
 			);
 
 			Qupls_decoder udeci1
@@ -1731,7 +1746,7 @@ generate begin : gDecoders
 				.en(1'b1),
 				.instr(instr[1]),
 				.regx(regx1),
-				.dbo(db1)
+				.dbo(db1_r)
 			);
 		end
 	3:
@@ -1742,7 +1757,7 @@ generate begin : gDecoders
 				.en(1'b1),
 				.instr(instr[0]),
 				.regx(regx0),
-				.dbo(db0)
+				.dbo(db0_r)
 			);
 
 			Qupls_decoder udeci1
@@ -1751,7 +1766,7 @@ generate begin : gDecoders
 				.en(1'b1),
 				.instr(instr[1]),
 				.regx(regx1),
-				.dbo(db1)
+				.dbo(db1_r)
 			);
 
 			Qupls_decoder udeci2
@@ -1760,7 +1775,7 @@ generate begin : gDecoders
 				.en(1'b1),
 				.instr(instr[2]),
 				.regx(regx2),
-				.dbo(db2)
+				.dbo(db2_r)
 			);
 		end
 	4:
@@ -1771,7 +1786,7 @@ generate begin : gDecoders
 				.en(1'b1),
 				.instr(instr[0]),
 				.regx(regx0),
-				.dbo(db0)
+				.dbo(db0_r)
 			);
 
 			Qupls_decoder udeci1
@@ -1780,7 +1795,7 @@ generate begin : gDecoders
 				.en(1'b1),
 				.instr(instr[1]),
 				.regx(regx1),
-				.dbo(db1)
+				.dbo(db1_r)
 			);
 
 			Qupls_decoder udeci2
@@ -1789,7 +1804,7 @@ generate begin : gDecoders
 				.en(1'b1),
 				.instr(instr[2]),
 				.regx(regx2),
-				.dbo(db2)
+				.dbo(db2_r)
 			);
 
 			Qupls_decoder udeci3
@@ -1798,7 +1813,7 @@ generate begin : gDecoders
 				.en(1'b1),
 				.instr(instr[3]),
 				.regx(regx3),
-				.dbo(db3)
+				.dbo(db3_r)
 			);
 		end
 	endcase
@@ -1810,49 +1825,50 @@ endgenerate
 //
 aregno_t [15:0] arn;
 pregno_t [15:0] prn;
+wire [15:0] prnv;
 wire [0:0] arnbank [15:0];
 
-assign arn[0] = db0.Ra;
-assign arn[1] = db0.Rb;
-assign arn[2] = db0.Rc;
-assign arn[3] = db0.Rt;
+assign arn[0] = db0_q.Ra;
+assign arn[1] = db0_q.Rb;
+assign arn[2] = db0_q.Rc;
+assign arn[3] = db0_q.Rt;
 
-assign arn[4] = db1.Ra;
-assign arn[5] = db1.Rb;
-assign arn[6] = db1.Rc;
-assign arn[7] = db1.Rt;
+assign arn[4] = db1_q.Ra;
+assign arn[5] = db1_q.Rb;
+assign arn[6] = db1_q.Rc;
+assign arn[7] = db1_q.Rt;
 
-assign arn[8] = db2.Ra;
-assign arn[9] = db2.Rb;
-assign arn[10] = db2.Rc;
-assign arn[11] = db2.Rt;
+assign arn[8] = db2_q.Ra;
+assign arn[9] = db2_q.Rb;
+assign arn[10] = db2_q.Rc;
+assign arn[11] = db2_q.Rt;
 
-assign arn[12] = db3.Ra;
-assign arn[13] = db3.Rb;
-assign arn[14] = db3.Rc;
-assign arn[15] = db3.Rt;
+assign arn[12] = db3_q.Ra;
+assign arn[13] = db3_q.Rb;
+assign arn[14] = db3_q.Rc;
+assign arn[15] = db3_q.Rt;
 
-assign arnbank[0] = sr.om & {2{|db0.Ra}};
-assign arnbank[1] = sr.om & {2{|db0.Rb}};
-assign arnbank[2] = sr.om & {2{|db0.Rc}};
-assign arnbank[3] = sr.om & {2{|db0.Rt}};
-assign arnbank[4] = sr.om & {2{|db1.Ra}};
-assign arnbank[5] = sr.om & {2{|db1.Rb}};
-assign arnbank[6] = sr.om & {2{|db1.Rc}};
-assign arnbank[7] = sr.om & {2{|db1.Rt}};
-assign arnbank[8] = sr.om & {2{|db2.Ra}};
-assign arnbank[9] = sr.om & {2{|db2.Rb}};
-assign arnbank[10] = sr.om & {2{|db2.Rc}};
-assign arnbank[11] = sr.om & {2{|db2.Rt}};
-assign arnbank[12] = sr.om & {2{|db3.Ra}};
-assign arnbank[13] = sr.om & {2{|db3.Rb}};
-assign arnbank[14] = sr.om & {2{|db3.Rc}};
-assign arnbank[15] = sr.om & {2{|db3.Rt}};
+assign arnbank[0] = sr.om & {2{|db0_q.Ra}} & 0;
+assign arnbank[1] = sr.om & {2{|db0_q.Rb}} & 0;
+assign arnbank[2] = sr.om & {2{|db0_q.Rc}} & 0;
+assign arnbank[3] = sr.om & {2{|db0_q.Rt}} & 0;
+assign arnbank[4] = sr.om & {2{|db1_q.Ra}} & 0;
+assign arnbank[5] = sr.om & {2{|db1_q.Rb}} & 0;
+assign arnbank[6] = sr.om & {2{|db1_q.Rc}} & 0;
+assign arnbank[7] = sr.om & {2{|db1_q.Rt}} & 0;
+assign arnbank[8] = sr.om & {2{|db2_q.Ra}} & 0;
+assign arnbank[9] = sr.om & {2{|db2_q.Rb}} & 0;
+assign arnbank[10] = sr.om & {2{|db2_q.Rc}} & 0;
+assign arnbank[11] = sr.om & {2{|db2_q.Rt}} & 0;
+assign arnbank[12] = sr.om & {2{|db3_q.Ra}} & 0;
+assign arnbank[13] = sr.om & {2{|db3_q.Rb}} & 0;
+assign arnbank[14] = sr.om & {2{|db3_q.Rc}} & 0;
+assign arnbank[15] = sr.om & {2{|db3_q.Rt}} & 0;
 
 
 wire stallq, rat_stallq;
 assign nq = !branchmiss && rob[tail0].v==INV;
-assign stallq = !(ihit2 || mipv || mipv2 || mipv3 || mipv4 || !rstcnt[2]) || rat_stallq;
+assign stallq = !(ihit_q || mipv || mipv2 || mipv3 || mipv4 || !rstcnt[2]) || rat_stallq;
 
 reg signed [$clog2(ROB_ENTRIES):0] cmtlen;			// Will always be >= 0
 reg signed [$clog2(ROB_ENTRIES):0] group_len;		// Commit group length
@@ -1979,20 +1995,42 @@ Qupls_reg_renamer2 utrn1
 (
 	.rst(rst),
 	.clk(clk),
-	.en(1'b1),
+	.en(!((branchmiss || branchmiss_state < 3'd4) && |robentry_stomp) && !stallq),
 	.list2free(free_bitlist),
 	.tags2free(tags2free),
 	.freevals(freevals),
-	.alloc0(|db0.Rt && !stallq),
-	.alloc1(|db1.Rt && !stallq && XWID > 1),
-	.alloc2(|db2.Rt && !stallq && XWID > 2),
-	.alloc3(|db3.Rt && !stallq && XWID > 3),
-	.wo0(nRt0),
-	.wo1(nRt1),
-	.wo2(nRt2),
-	.wo3(nRt3),
+	.alloc0(|db0_r.Rt && !stallq),
+	.alloc1(|db1_r.Rt && !stallq && XWID > 1),
+	.alloc2(|db2_r.Rt && !stallq && XWID > 2),
+	.alloc3(|db3_r.Rt && !stallq && XWID > 3),
+	.wo0(Rt0_q),
+	.wo1(Rt1_q),
+	.wo2(Rt2_q),
+	.wo3(Rt3_q),
 	.avail(avail_reg)
 );
+/*
+always_ff @(posedge clk)
+begin
+	if (!stallq && (db0_q.Rt==7'd63 ||
+		db1_q.Rt==7'd63 ||
+		db2_q.Rt==7'd63 ||
+		db3_q.Rt==7'd63
+	))
+		$finish;
+	for (n19 = 0; n19 < 16; n19 = n19 + 1)
+		if (arn[n19]==7'd63)
+			$finish;
+end
+*/
+pregno_t Rt0_r;
+pregno_t Rt1_r;
+pregno_t Rt2_r;
+pregno_t Rt3_r;
+always_ff @(posedge clk) Rt0_r <= Rt0_q;
+always_ff @(posedge clk) Rt1_r <= Rt1_q;
+always_ff @(posedge clk) Rt2_r <= Rt2_q;
+always_ff @(posedge clk) Rt3_r <= Rt3_q;
 
 Qupls_rat urat1
 (	
@@ -2004,30 +2042,30 @@ Qupls_rat urat1
 	.avail_i(avail_reg),
 	.restore(restore_chkpt),
 	.miss_cp(rob[missid].cndx),
-	.wr0(|db0r.Rt),
-	.wr1(|db1r.Rt && XWID > 1),
-	.wr2(|db2r.Rt && XWID > 2),
-	.wr3(|db3r.Rt && XWID > 3),
-	.qbr0(pt0),
-	.qbr1(pt1),
-	.qbr2(pt2),
-	.qbr3(pt3),
+	.wr0(|db0_q.Rt),
+	.wr1(|db1_q.Rt && XWID > 1),
+	.wr2(|db2_q.Rt && XWID > 2),
+	.wr3(|db3_q.Rt && XWID > 3),
+	.qbr0(pt0_r),
+	.qbr1(pt1_r),
+	.qbr2(pt2_r),
+	.qbr3(pt3_r),
 	.rnbank(arnbank),
 	.rn(arn),
 	.rrn(prn),
-	.vn(),
-	.wrbanka(sr.om==2'd0 ? 1'b0 : 1'b1),
-	.wrbankb(sr.om==2'd0 ? 1'b0 : 1'b1),
-	.wrbankc(sr.om==2'd0 ? 1'b0 : 1'b1),
-	.wrbankd(sr.om==2'd0 ? 1'b0 : 1'b1),
-	.wra(db0r.Rt),
-	.wrra(nRt0),
-	.wrb(db1r.Rt),
-	.wrrb(nRt1),
-	.wrc(db2r.Rt),
-	.wrrc(nRt2),
-	.wrd(db3r.Rt),
-	.wrrd(nRt3),
+	.vn(prnv),
+	.wrbanka(sr.om==2'd0 ? 1'b0 : 1'b0),	// For now, only 1 bank
+	.wrbankb(sr.om==2'd0 ? 1'b0 : 1'b0),
+	.wrbankc(sr.om==2'd0 ? 1'b0 : 1'b0),
+	.wrbankd(sr.om==2'd0 ? 1'b0 : 1'b0),
+	.wra(db0_q.Rt),
+	.wrra(Rt0_r),
+	.wrb(db1_q.Rt),
+	.wrrb(Rt1_r),
+	.wrc(db2_q.Rt),
+	.wrrc(Rt2_r),
+	.wrd(db3_q.Rt),
+	.wrrd(Rt3_r),
 	.cmtbanka(alu0_bank),
 	.cmtbankb(alu1_bank),
 	.cmtbankc(dram0_bank),
@@ -2051,7 +2089,7 @@ Qupls_rat urat1
 	.freed(freed),
 	.free_bitlist(free_bitlist)
 );
-
+/*
 always_ff @(posedge clk)
 begin
 	db0r <= db0;
@@ -2074,97 +2112,102 @@ always_ff @(posedge clk) begin
 	if (brtgtv)
 		db3r.v <= FALSE;
 end
+*/
+
+// The cycle after the length is calculated
+// instruction extract inputs
 always_ff @(posedge clk)
-	pt0q <= pt0;
+	ihit_x <= ihit2;
 always_ff @(posedge clk)
-	pt1q <= pt1;
+	pc0_x <= pc0;
 always_ff @(posedge clk)
-	pt2q <= pt2;
+	pc1_x <= pc1;
 always_ff @(posedge clk)
-	pt3q <= pt3;
+	pc2_x <= pc2;
 always_ff @(posedge clk)
-	pt0r <= pt0q;
+	pc3_x <= pc3;
 always_ff @(posedge clk)
-	pt1r <= pt1q;
+	pc4_x <= pc4;
 always_ff @(posedge clk)
-	pt2r <= pt2q;
+	pc5_x <= pc4 + len4;
 always_ff @(posedge clk)
-	pt3r <= pt3q;
+	pc6_x <= pc4 + len4 + len5;
 always_ff @(posedge clk)
-	ins0q <= ins0;
+	pc7_x <= pc4 + len4 + len5 + len6;
 always_ff @(posedge clk)
-	ins1q <= ins1;
-always_ff @(posedge clk)
-	ins2q <= ins2;
-always_ff @(posedge clk)
-	ins3q <= ins3;
-always_ff @(posedge clk)
-	ins0r <= ins0q;
-always_ff @(posedge clk)
-	ins1r <= ins1q;
-always_ff @(posedge clk)
-	ins2r <= ins2q;
-always_ff @(posedge clk)
-	ins3r <= ins3q;
+	pc8_x <= pc4 + len4 + len5 + len6 + len7;
 
 always_ff @(posedge clk)
-	pc0x <= pc0;
+	ihit_d <= ihit_x;
 always_ff @(posedge clk)
-	pc1x <= pc1;
+	ihit_r <= ihit_d;
 always_ff @(posedge clk)
-	pc2x <= pc2;
+	ihit_q <= ihit_r;
+
+// Register fetch/rename stage inputs
 always_ff @(posedge clk)
-	pc3x <= pc3;
+	pc0_r <= pc0_d;
 always_ff @(posedge clk)
-	pc4x <= pc4;
+	pc1_r <= pc1_d;
 always_ff @(posedge clk)
-	pc5x <= pc4 + len4;
+	pc2_r <= pc2_d;
 always_ff @(posedge clk)
-	pc6x <= pc4 + len4 + len5;
+	pc3_r <= pc3_d;
 always_ff @(posedge clk)
-	pc7x <= pc4 + len4 + len5 + len6;
+	ins0_r <= ins0_d;
 always_ff @(posedge clk)
-	pc8x <= pc4 + len4 + len5 + len6 + len7;
+	ins1_r <= ins1_d;
+always_ff @(posedge clk)
+	ins2_r <= ins2_d;
+always_ff @(posedge clk)
+	ins3_r <= ins3_d;
+always_ff @(posedge clk)
+	pt0_r <= pt0_d;
+always_ff @(posedge clk)
+	pt1_r <= pt1_d;
+always_ff @(posedge clk)
+	pt2_r <= pt2_d;
+always_ff @(posedge clk)
+	pt3_r <= pt3_d;
+
+// Instruction queue inputs
+always_ff @(posedge clk)
+	pc0_q <= pc0_r;
+always_ff @(posedge clk)
+	pc1_q <= pc1_r;
+always_ff @(posedge clk)
+	pc2_q <= pc2_r;
+always_ff @(posedge clk)
+	pc3_q <= pc3_r;
+always_ff @(posedge clk)
+	ins0_q <= ins0_r;
+always_ff @(posedge clk)
+	ins1_q <= ins1_r;
+always_ff @(posedge clk)
+	ins2_q <= ins2_r;
+always_ff @(posedge clk)
+	ins3_q <= ins3_r;
+always_ff @(posedge clk)
+	pt0_q <= pt0_r;
+always_ff @(posedge clk)
+	pt1_q <= pt1_r;
+always_ff @(posedge clk)
+	pt2_q <= pt2_r;
+always_ff @(posedge clk)
+	pt3_q <= pt3_r;
+always_ff @(posedge clk)
+	db0_q <= db0_r;
+always_ff @(posedge clk)
+	db1_q <= db1_r;
+always_ff @(posedge clk)
+	db2_q <= db2_r;
+always_ff @(posedge clk)
+	db3_q <= db3_r;
 
 always_ff @(posedge clk)
-	pc0y <= pc0x;
+	grp_q <= grp_r;
 always_ff @(posedge clk)
-	pc1y <= pc1x;
-always_ff @(posedge clk)
-	pc2y <= pc2x;
-always_ff @(posedge clk)
-	pc3y <= pc3x;
-always_ff @(posedge clk)
-	pc4y <= pc4x;
-always_ff @(posedge clk)
-	pc5y <= pc5x;
-always_ff @(posedge clk)
-	pc6y <= pc6x;
-always_ff @(posedge clk)
-	pc7y <= pc7x;
-always_ff @(posedge clk)
-	pc8y <= pc8x;
-
-always_ff @(posedge clk)
-	pc0q <= pc0d;
-always_ff @(posedge clk)
-	pc1q <= pc1d;
-always_ff @(posedge clk)
-	pc2q <= pc2d;
-always_ff @(posedge clk)
-	pc3q <= pc3d;
-always_ff @(posedge clk)
-	pc0r <= pc0q;
-always_ff @(posedge clk)
-	pc1r <= pc1q;
-always_ff @(posedge clk)
-	pc2r <= pc2q;
-always_ff @(posedge clk)
-	pc3r <= pc3q;
-always_ff @(posedge clk)
-	grpq <= grpd;
-always_ff @(posedge clk)
-	grpr <= grpq;
+	grp_r <= grp_d;
 
 reg wrport0_v;
 reg wrport1_v;
@@ -2312,7 +2355,7 @@ Qupls_branch_eval ube1
 (
 	.instr(fcu_instr),
 	.a(fcu_argA),
-	.b(fcu_argB),
+	.b(fcu_argBr),
 	.takb(takb)
 );
 
@@ -2363,6 +2406,8 @@ else begin
 	end
 	else
 		fcu_branchmiss <= FALSE;
+	if (fcu_v3)
+		fcu_branchmiss <= FALSE;
 end
 
 // Registering the branch miss signals may allow a second miss directly after
@@ -2375,10 +2420,10 @@ always_comb	//ff @(posedge clk)
 always_comb
 	missid = excmiss ? excid : fcu_branchmiss_id;
 always_ff @(posedge clk)
-	if (fcu_v5)
+	if (fcu_v6)
 		fcu_misspc <= fcu_misspc1;
 always_ff @(posedge clk)
-	if (branchmiss_state==3'd3)
+	if (branchmiss_state==3'd4)
 		misspc = excmiss ? excmisspc : fcu_misspc;
 always_ff @(posedge clk)
 	if (branchmiss_state==3'd1)
@@ -2387,7 +2432,9 @@ always_ff @(posedge clk)
 	if (branchmiss_state==3'd1)
 		missir = excmiss ? excir : fcu_missir;
 
-wire s4s7 = pc==misspc && ihito && (rob[fcu_id].done==2'b11 || fcu_idle);
+wire s4s7 = (pc==misspc && ihito && (rob[fcu_id].done==2'b11 || fcu_idle)) ||
+	(robentry_stomp[fcu_id] || (rob[fcu_id].out && !rob[fcu_id].v))
+	;
 
 always_ff @(posedge clk)
 if (rst)
@@ -2404,6 +2451,8 @@ else begin
 	3'd3:
 		branchmiss_state <= 3'd4;
 	3'd4:
+		branchmiss_state <= 3'd5;
+	3'd5:
 		begin
 			if (s4s7)
 				branchmiss_state <= 3'd7;
@@ -2675,8 +2724,25 @@ always_ff @(posedge clk) agen0_rndx1 <= agen0_rndx;
 always_ff @(posedge clk) agen1_rndx1 <= agen1_rndx;
 always_ff @(posedge clk) agen0_rndxv1 <= agen0_rndxv;
 always_ff @(posedge clk) agen1_rndxv1 <= agen1_rndxv;
-always_ff @(posedge clk) agen0_v <= rob[agen0_id].out;
-always_ff @(posedge clk) agen1_v <= rob[agen1_id].out;
+// Make Agen valid sticky
+always_ff @(posedge clk) 
+if (rst)
+	agen0_v <= FALSE;
+else begin
+	if (rob[agen0_id].out)
+		agen0_v <= TRUE;
+	if (tlb0_v)
+		agen0_v <= FALSE;
+end
+always_ff @(posedge clk) 
+if (rst)
+	agen1_v <= FALSE;
+else begin
+	if (rob[agen1_id].out)
+		agen1_v <= TRUE;
+	if (tlb1_v)
+		agen1_v <= FALSE;
+end
 
 reg cantlsq0, cantlsq1;
 always_comb
@@ -2934,9 +3000,9 @@ Qupls_mem_more ummore1
 
 // When to stomp on instructions enqueuing.
 wire stomp0 = 1'b0;
-wire stomp1 = pt0||mip0v||XWID < 2;
-wire stomp2 = pt0||pt1||mip0v||mip1v || XWID < 3;
-wire stomp3 = pt0||pt1||pt2||mip0v||mip1v||mip2v || XWID < 4;
+wire stomp1 = pt0_q||mip0v||XWID < 2;
+wire stomp2 = pt0_q||pt1_q||mip0v||mip1v || XWID < 3;
+wire stomp3 = pt0_q||pt1_q||pt2_q||mip0v||mip1v||mip2v || XWID < 4;
 
 
 always_ff @(posedge clk)
@@ -2957,10 +3023,11 @@ else begin
 	fcu_v3 <= fcu_v2;
 	fcu_v4 <= fcu_v3;
 	fcu_v5 <= fcu_v4;
-			 if (mip0v) begin micro_ir <= ins0; end
-	else if (mip1v) begin micro_ir <= ins1; end
-	else if (mip2v) begin micro_ir <= ins2; end
-	else if (mip3v) begin micro_ir <= ins3; end
+	fcu_v6 <= fcu_v5;
+			 if (mip0v) begin micro_ir <= ins0_d; end
+	else if (mip1v) begin micro_ir <= ins1_d; end
+	else if (mip2v) begin micro_ir <= ins2_d; end
+	else if (mip3v) begin micro_ir <= ins3_d; end
   if (~hirq) begin
   	if (pe_allqd|allqd)
 			micro_ip <= next_micro_ip;
@@ -3058,6 +3125,8 @@ else begin
 		fcu_v <= INV;
 		fcu_v2 <= INV;
 		fcu_v3 <= INV;
+		if (fcu_v3)
+			fcu_idle <= TRUE;
     rob[ fcu_id ].exc <= fcu_exc;
     rob[ fcu_id ].excv <= |fcu_exc;
     if (!rob[ fcu_id ].decbus.alu)
@@ -3065,13 +3134,14 @@ else begin
     rob[ fcu_id ].done[1] <= VAL;
     rob[ fcu_id ].out <= INV;
     rob[ fcu_id ].takb <= takbr;	// could maybe just use takb
-    fcu_bts <= BTS_NONE;
+//    fcu_bts <= BTS_NONE;
 	end
 	// Terminate FCU operation on stomp.
-	if (robentry_stomp[fcu_id]) begin
+	if (robentry_stomp[fcu_id] || (rob[fcu_id].out && !rob[fcu_id].v)) begin
 		fcu_v <= INV;
 		fcu_v2 <= INV;
 		fcu_v3 <= INV;
+		fcu_idle <= TRUE;
 	end
 	// If data for stomped instruction, ignore
 	// dram_vn will be false for stomped data
@@ -3080,6 +3150,14 @@ else begin
     rob[ dram0_id ].excv <= |dram_exc0;
     rob[ dram0_id ].out <= INV;
     rob[ dram0_id ].done <= 2'b11;
+		for (n18r = 0; n18r < LSQ_ENTRIES; n18r = n18r + 1) begin
+			for (n18c = 0; n18c < LSQ_ENTRIES; n18c = n18c + 1) begin
+				if (lsq[n18r][n18c].rndx==dram0_id) begin
+					lsq[n18r][n18c].v <= INV;
+					lsq[n18r][n18c].agen <= FALSE;
+				end
+			end
+		end
 	end
 	if (NDATA_PORTS > 1) begin
 		if (dram1_done && rob[ dram1_id ].v) begin
@@ -3087,6 +3165,14 @@ else begin
 	    rob[ dram1_id ].excv <= |dram_exc1;
 	    rob[ dram1_id ].out <= INV;
 	    rob[ dram1_id ].done <= 2'b11;
+			for (n18r = 0; n18r < LSQ_ENTRIES; n18r = n18r + 1) begin
+				for (n18c = 0; n18c < LSQ_ENTRIES; n18c = n18c + 1) begin
+					if (lsq[n18r][n18c].rndx==dram1_id) begin
+						lsq[n18r][n18c].v <= INV;
+						lsq[n18r][n18c].agen <= FALSE;
+					end
+				end
+			end
 		end
 	end
 	// Store TLB translation in LSQ
@@ -3103,14 +3189,26 @@ else begin
 			agen0_idle <= TRUE;
 			rob[agen0_id].done[0] <= 1'b1;
 			rob[agen0_id].out <= 1'b0;
-			lsq[rob[agen0_id].lsqndx.row][rob[agen0_id].lsqndx.col].agen <= TRUE;
-			lsq[rob[agen0_id].lsqndx.row][rob[agen0_id].lsqndx.col].vadr <= tlb0_res;
-			lsq[rob[agen0_id].lsqndx.row][rob[agen0_id].lsqndx.col].padr <= {tlb_entry0.pte.ppn,tlb0_res[15:0]};
+			for (n18r = 0; n18r < LSQ_ENTRIES; n18r = n18r + 1) begin
+				for (n18c = 0; n18c < LSQ_ENTRIES; n18c = n18c + 1) begin
+					if (lsq[n18r][n18c].rndx==agen0_id) begin
+						lsq[n18r][n18c].agen <= TRUE;
+						lsq[n18r][n18c].vadr <= tlb0_res;
+						lsq[n18r][n18c].padr <= {tlb_entry0.pte.ppn,tlb0_res[15:0]};
+					end
+				end
+			end
 		end
 	end
 	if (robentry_stomp[agen0_id] && rob[agen0_id].lsq) begin
-		lsq[rob[agen0_id].lsqndx.row][rob[agen0_id].lsqndx.col].v <= INV;
-		lsq[rob[agen0_id].lsqndx.row][rob[agen0_id].lsqndx.col].agen <= FALSE;
+		for (n18r = 0; n18r < LSQ_ENTRIES; n18r = n18r + 1) begin
+			for (n18c = 0; n18c < LSQ_ENTRIES; n18c = n18c + 1) begin
+				if (lsq[n18r][n18c].rndx==agen0_id) begin
+					lsq[n18r][n18c].v <= INV;
+					lsq[n18r][n18c].agen <= FALSE;
+				end
+			end
+		end
 	end
 
 	if (NAGEN > 1) begin
@@ -3125,14 +3223,26 @@ else begin
 				agen1_idle <= TRUE;
 				rob[agen1_id].done[0] <= 1'b1;
 				rob[agen1_id].out <= 1'b0;
-				lsq[rob[agen1_id].lsqndx.row][rob[agen1_id].lsqndx.col].agen <= TRUE;
-				lsq[rob[agen1_id].lsqndx.row][rob[agen1_id].lsqndx.col].vadr <= tlb1_res;
-				lsq[rob[agen1_id].lsqndx.row][rob[agen1_id].lsqndx.col].padr <= {tlb_entry1.pte.ppn,tlb1_res[15:0]};
+				for (n18r = 0; n18r < LSQ_ENTRIES; n18r = n18r + 1) begin
+					for (n18c = 0; n18c < LSQ_ENTRIES; n18c = n18c + 1) begin
+						if (lsq[n18r][n18c].rndx==agen1_id) begin
+							lsq[n18r][n18c].agen <= TRUE;
+							lsq[n18r][n18c].vadr <= tlb1_res;
+							lsq[n18r][n18c].padr <= {tlb_entry1.pte.ppn,tlb1_res[15:0]};
+						end
+					end
+				end
 			end
 		end
 		if (robentry_stomp[agen1_id] && rob[agen1_id].lsq) begin
-			lsq[rob[agen1_id].lsqndx.row][rob[agen1_id].lsqndx.col].v <= INV;
-			lsq[rob[agen1_id].lsqndx.row][rob[agen1_id].lsqndx.col].agen <= FALSE;
+			for (n18r = 0; n18r < LSQ_ENTRIES; n18r = n18r + 1) begin
+				for (n18c = 0; n18c < LSQ_ENTRIES; n18c = n18c + 1) begin
+					if (lsq[n18r][n18c].rndx==agen1_id) begin
+						lsq[n18r][n18c].v <= INV;
+						lsq[n18r][n18c].agen <= FALSE;
+					end
+				end
+			end
 		end
 	end
 	
@@ -3195,7 +3305,7 @@ else begin
 			if (rob[nn].argC_v == INV && rob[nn].pRc == wrport5_Rt && rob[nn].v == VAL && wrport5_v == VAL)
 		    rob[nn].argC_v <= VAL;
 	  end
-
+	  
 	end
 
 //
@@ -3282,11 +3392,13 @@ else begin
 		end
 	end
 
-	if (fcu_rndxv && !fcu_v && branchmiss_state==3'd7) begin
+	if (fcu_rndxv && fcu_idle && (branchmiss_state==3'd7)) begin
+		fcu_idle <= FALSE;
 		fcu_v <= VAL;
 		fcu_id <= fcu_rndx;
 		fcu_argA <= rob[fcu_rndx].decbus.imma | rfo_fcu_argA;
 		fcu_argB <= rfo_fcu_argB;
+		fcu_argBr <= rob[fcu_rndx].decbus.immb | rfo_fcu_argB;
 		fcu_argI <= rob[fcu_rndx].decbus.immb;
 		fcu_instr <= rob[fcu_rndx].op;
 		fcu_pc <= rob[fcu_rndx].pc;
@@ -3652,7 +3764,7 @@ else begin
 	// invalidated (state 2), quing new instructions can begin.
 	// Only reset the tail if something was stomped on. It could be that there
 	// are no valid instructions following the branch in the queue.
-	if ((branchmiss || branchmiss_state < 3'd3) && |robentry_stomp)
+	if ((branchmiss || branchmiss_state < 3'd4) && |robentry_stomp)
 		tail0 <= stail;		// computed above
 	else if (!stallq) begin
 		if (rob[tail0].v==INV &&
@@ -3667,43 +3779,45 @@ else begin
 			// little impact on performance.
 			for (n12 = 0; n12 < ROB_ENTRIES; n12 = n12 + 1)
 				rob[n12].sn <= rob[n12].sn - 4;
-			tEnque(9'h100-XWID,db0r,pc0r,grpr,ins0r,pt0r,tail0, stomp0, prn[0], prn[1], prn[2], prn[3], nRt0, cndx, grplen0, last0);
+			tEnque(9'h100-XWID,db0_q,pc0_q,grp_q,ins0_q,pt0_q,tail0,
+				stomp0, prn[0], prn[1], prn[2], prn[3], prnv[0], prnv[1], prnv[2],
+				Rt0_q, cndx, grplen0, last0);
 			if (XWID > 1) begin
-				tEnque(9'h101-XWID,db1r,pc1r,grpr,ins1r,pt1r,tail1, stomp1, prn[4], prn[5], prn[6], prn[7], nRt1, cndx, grplen1, last1);
+				tEnque(9'h101-XWID,db1_q,pc1_q,grp_q,ins1_q,pt1_q,tail1,
+				stomp1, prn[4], prn[5], prn[6], prn[7], prnv[4], prnv[5], prnv[6],
+				Rt1_q, cndx, grplen1, last1);
 					// If the instruction's source register is the same as a previous target
 					// register, use the register mapping of the previous target register.
 					// The register mapping will not have been updated in the RAT yet in
 					// time to be available for the source register.
-				if (db1r.Ra==db0r.Rt) rob[tail1].pRa <= nRt0;
-				if (db1r.Rb==db0r.Rt) rob[tail1].pRb <= nRt0;
-				if (db1r.Rc==db0r.Rt) rob[tail1].pRc <= nRt0;
-				if (db1r.Rt==db0r.Rt) rob[tail1].pRt <= nRt0;
+				if (db1_q.Ra==db0_q.Rt && db1_q.Ra!=7'd0) begin $display("bypass: ar%d to pr%d", db1_q.Ra, Rt0_q); rob[tail1].pRa <= Rt0_q; rob[tail1].argA_v <= fnSourceAv(ins1_q); end
+				if (db1_q.Rb==db0_q.Rt && db1_q.Rb!=7'd0) begin rob[tail1].pRb <= Rt0_q; rob[tail1].argB_v <= fnSourceBv(ins1_q); end
+				if (db1_q.Rc==db0_q.Rt && db1_q.Rc!=7'd0) begin rob[tail1].pRc <= Rt0_q; rob[tail1].argC_v <= fnSourceCv(ins1_q); end
 			end
 			if (XWID > 2) begin
-				tEnque(9'h102-XWID,db2r,pc2r,grpr,ins2r,pt2r,tail2, stomp2, prn[8], prn[9], prn[10], prn[11], nRt2, cndx, grplen2, last3);
-				if (db2r.Ra==db0r.Rt) rob[tail2].pRa <= nRt0;
-				if (db2r.Rb==db0r.Rt) rob[tail2].pRb <= nRt0;
-				if (db2r.Rc==db0r.Rt) rob[tail2].pRc <= nRt0;
-				if (db2r.Rt==db0r.Rt) rob[tail2].pRt <= nRt0;
-				if (db2r.Ra==db1r.Rt) rob[tail2].pRa <= nRt1;
-				if (db2r.Rb==db1r.Rt) rob[tail2].pRb <= nRt1;
-				if (db2r.Rc==db1r.Rt) rob[tail2].pRc <= nRt1;
-				if (db2r.Rt==db1r.Rt) rob[tail2].pRt <= nRt1;
+				tEnque(9'h102-XWID,db2_q,pc2_q,grp_q,ins2_q,pt2_q,tail2,
+				stomp2, prn[8], prn[9], prn[10], prn[11], prnv[8], prnv[9], prnv[10], 
+				Rt2_q, cndx, grplen2, last3);
+				if (db2_q.Ra==db0_q.Rt && db2_q.Ra!=7'd0) begin $display("bypass: ar%d to pr%d", db2_q.Ra, Rt0_q); rob[tail2].pRa <= Rt0_q; rob[tail2].argA_v <= fnSourceAv(ins2_q); end
+				if (db2_q.Rb==db0_q.Rt && db2_q.Rb!=7'd0) begin rob[tail2].pRb <= Rt0_q; rob[tail2].argB_v <= fnSourceBv(ins2_q); end
+				if (db2_q.Rc==db0_q.Rt && db2_q.Rc!=7'd0) begin rob[tail2].pRc <= Rt0_q; rob[tail2].argC_v <= fnSourceCv(ins2_q); end
+				if (db2_q.Ra==db1_q.Rt && db2_q.Ra!=7'd0) begin $display("bypass: ar%d to pr%d", db2_q.Ra, Rt1_q); rob[tail2].pRa <= Rt1_q; rob[tail2].argA_v <= fnSourceAv(ins2_q); end
+				if (db2_q.Rb==db1_q.Rt && db2_q.Rb!=7'd0) begin rob[tail2].pRb <= Rt1_q; rob[tail2].argB_v <= fnSourceBv(ins2_q); end
+				if (db2_q.Rc==db1_q.Rt && db2_q.Rc!=7'd0) begin rob[tail2].pRc <= Rt1_q; rob[tail2].argC_v <= fnSourceCv(ins2_q); end
 			end
 			if (XWID > 3) begin
-				tEnque(9'h103-XWID,db3r,pc3r,grpr,ins3r,pt3r,tail3, stomp3, prn[12], prn[13], prn[14], prn[15], nRt3, cndx,grplen3,last3);
-				if (db2r.Ra==db0r.Rt) rob[tail3].pRa <= nRt0;
-				if (db2r.Rb==db0r.Rt) rob[tail3].pRb <= nRt0;
-				if (db2r.Rc==db0r.Rt) rob[tail3].pRc <= nRt0;
-				if (db2r.Rt==db0r.Rt) rob[tail3].pRt <= nRt0;
-				if (db2r.Ra==db1r.Rt) rob[tail3].pRa <= nRt1;
-				if (db2r.Rb==db1r.Rt) rob[tail3].pRb <= nRt1;
-				if (db2r.Rc==db1r.Rt) rob[tail3].pRc <= nRt1;
-				if (db2r.Rt==db2r.Rt) rob[tail3].pRt <= nRt1;
-				if (db2r.Ra==db2r.Rt) rob[tail3].pRa <= nRt2;
-				if (db2r.Rb==db2r.Rt) rob[tail3].pRb <= nRt2;
-				if (db2r.Rc==db2r.Rt) rob[tail3].pRc <= nRt2;
-				if (db2r.Rt==db2r.Rt) rob[tail3].pRt <= nRt2;
+				tEnque(9'h103-XWID,db3_q,pc3_q,grp_q,ins3_q,pt3_q,tail3,
+				stomp3, prn[12], prn[13], prn[14], prn[15], prnv[12], prnv[13], prnv[14],
+				Rt3_q, cndx,grplen3,last3);
+				if (db3_q.Ra==db0_q.Rt && db3_q.Ra!=7'd0) begin $display("bypass: ar%d to pr%d", db3_q.Ra, Rt0_q); rob[tail3].pRa <= Rt0_q; rob[tail3].argA_v <= fnSourceAv(ins3_q); end
+				if (db3_q.Rb==db0_q.Rt && db3_q.Rb!=7'd0) begin rob[tail3].pRb <= Rt0_q; rob[tail3].argB_v <= fnSourceBv(ins3_q); end
+				if (db3_q.Rc==db0_q.Rt && db3_q.Rc!=7'd0) begin rob[tail3].pRc <= Rt0_q; rob[tail3].argC_v <= fnSourceCv(ins3_q); end
+				if (db3_q.Ra==db1_q.Rt && db3_q.Ra!=7'd0) begin $display("bypass: ar%d to pr%d", db3_q.Ra, Rt1_q); rob[tail3].pRa <= Rt1_q; rob[tail3].argA_v <= fnSourceAv(ins3_q); end
+				if (db3_q.Rb==db1_q.Rt && db3_q.Rb!=7'd0) begin rob[tail3].pRb <= Rt1_q; rob[tail3].argB_v <= fnSourceBv(ins3_q); end
+				if (db3_q.Rc==db1_q.Rt && db3_q.Rc!=7'd0) begin rob[tail3].pRc <= Rt1_q; rob[tail3].argC_v <= fnSourceCv(ins3_q); end
+				if (db3_q.Ra==db2_q.Rt && db3_q.Ra!=7'd0) begin $display("bypass: ar%d to pr%d", db3_q.Ra, Rt2_q); rob[tail3].pRa <= Rt2_q; rob[tail3].argA_v <= fnSourceAv(ins3_q); end
+				if (db3_q.Rb==db2_q.Rt && db3_q.Rb!=7'd0) begin rob[tail3].pRb <= Rt2_q; rob[tail3].argB_v <= fnSourceBv(ins3_q); end
+				if (db3_q.Rc==db2_q.Rt && db3_q.Rc!=7'd0) begin rob[tail3].pRc <= Rt2_q; rob[tail3].argC_v <= fnSourceCv(ins3_q); end
 			end
 			tail0 <= (tail0 + 3'd4) % ROB_ENTRIES;
 		end
@@ -4066,10 +4180,26 @@ begin
 	alu1_ld <= 1'b0;
 	alu0_out <= INV;
 	alu1_out <= INV;
+	alu0_aRt <= 7'd0;
+	alu1_aRt <= 7'd0;
+	alu0_Rt <= 7'd0;
+	alu1_Rt <= 7'd0;
+	fpu0_Rt <= 7'd0;
+	fpu1_Rt <= 7'd0;
+	dram0_Rt <= 7'd0;
+	dram1_Rt <= 7'd0;
+	alu0_bank <= 2'd0;
+	alu1_bank <= 2'd0;
+	fpu0_bank <= 2'd0;
+	fpu1_bank <= 2'd0;
+	dram0_bank <= 2'd0;
+	dram1_bank <= 2'd0;
 	fpu0_out <= INV;
 	fpu0_idle <= TRUE;
 	fpu0_available <= 1;
+	fpu0_aRt <= 7'd0;
 	fpu1_idle <= TRUE;
+	fpu1_aRt <= 7'd0;
 	fcu_available <= 1;
 	fcu_pc <= 64'd0;
 	fcu_instr <= OP_NOP;
@@ -4083,6 +4213,10 @@ begin
 	fcu_v3 <= INV;
 	fcu_v4 <= INV;
 	fcu_v5 <= INV;
+	fcu_v6 <= INV;
+	fcu_idle <= TRUE;
+	dram0_aRt <= 7'd0;
+	dram1_aRt <= 7'd0;
 //	fcu_argC <= 'd0;
 	/*
 	for (n11 = 0; n11 < NDATA_PORTS; n11 = n11 + 1) begin
@@ -4142,6 +4276,9 @@ input pregno_t pRb;
 input pregno_t pRc;
 input pregno_t pRt;
 input pregno_t nRt;
+input pRav;
+input pRbv;
+input pRcv;
 input [3:0] cndx;
 input rob_ndx_t grplen;
 input last;
@@ -4150,17 +4287,19 @@ integer n13;
 begin
 	// "dynamic" fields, these fields may change after enqueue
 	rob[tail].sn <= sn;
+	// NOP type instructions appear in the queue but they do not get scheduled or
+	// execute. They are marked done immediately.
 	rob[tail].done <= {2{db.nop}};
 	rob[tail].out <= INV;
 	rob[tail].lsq <= INV;
 	rob[tail].takb <= 1'b0;
 	rob[tail].exc <= FLT_NONE;
 	rob[tail].excv <= FALSE;
-	rob[tail].argA_v <= fnSourceAv(ins);
-	rob[tail].argB_v <= fnSourceBv(ins);
-	rob[tail].argC_v <= fnSourceCv(ins);
+	rob[tail].argA_v <= fnSourceAv(ins) | pRav;
+	rob[tail].argB_v <= fnSourceBv(ins) | pRbv;
+	rob[tail].argC_v <= fnSourceCv(ins) | pRcv;
 	// "static" fields, these fields remain constant after enqueue
-	rob[tail].brtgt <= db.mcb ? db.immc[10:0] : pc + db.immc;
+	rob[tail].brtgt <= db.mcb ? db.immc[10:0] : fnTargetIP(pc,db.immc);
 	rob[tail].om <= sr.om;
 //	rob[tail].rmd <= fpscr.rmd;
 	rob[tail].op <= ins;
@@ -4179,8 +4318,13 @@ begin
 	rob[tail].last <= last;
 	rob[tail].v <= !stomp && db.v && !brtgtv;
 	if (!stomp && db.v && !brtgtv) begin
-		brtgt <= db.mcb ? db.immc[10:0] : pc + db.immc;
+		brtgt <= db.mcb ? db.immc[10:0] : fnTargetIP(pc,db.immc);
 		brtgtv <= db.br & pt;
+	end
+	$display("mapped A: ar%d to pr%d", db.Ra, pRa);
+	if (pRa==8'd0 && db.Ra != 7'd0) begin
+		$display("tail: %d", tail);
+		$finish;
 	end
 end
 endtask
@@ -4468,8 +4612,14 @@ input ibh_t ibh;
 output pc_address_t misspc;
 output reg [2:0] missgrp;
 
+reg [5:0] ino;
+reg [5:0] ino5;
+reg [63:0] disp;
 always_comb
 begin
+	ino = {2'd0,instr[26:25],instr[12:11]};
+	ino5 = {ino,2'd0} + ino;
+	disp = {{47{instr[39]}},instr[39:25],instr[12:11]};
 	case(bts)
 	/*
 	BTS_REG:
@@ -4479,11 +4629,14 @@ begin
 	*/
 	BTS_DISP:
 		begin
-			misspc = bt ? pc + 4'd5 : pc + {{47{instr[39]}},instr[39:25],instr[12:11]};
+			misspc = bt ? pc + 4'd5 : fnTargetIP(pc,disp);
+//			misspc = bt ? pc + 4'd5 : pc + {{47{instr[39]}},instr[39:25],instr[12:11]};
 		end
 	BTS_BSR:
 		begin
-			misspc = pc + {{37{instr[39]}},instr[39:13]};
+			ino = {2'd0,instr[16:13]};
+			ino5 = {ino,2'd0} + ino;
+			misspc = {pc[$bits(pc_address_t)-1:6] + {{37{instr[39]}},instr[39:17]},ino5};
 		end
 	BTS_CALL:
 		begin

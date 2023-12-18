@@ -108,7 +108,7 @@ input cmtbr;								// comitting a branch
 input [BBIT:0] rnbank [NPORT-1:0];
 input aregno_t [NPORT-1:0] rn;		// architectural register
 output pregno_t [NPORT-1:0] rrn;	// physical register
-output reg [NPORT-1:0] vn;			// translation is valid for register
+output reg [NPORT-1:0] vn;			// register valid
 output pregno_t freea;	// previous register to free
 output pregno_t freeb;
 output pregno_t freec;
@@ -116,8 +116,8 @@ output pregno_t freed;
 output reg [PREGS-1:0] free_bitlist;	// bit vector of registers to free on branch miss
 
 
-integer n,m,n1,n2;
-localparam WE_WIDTH = $bits(checkpoint_t)/8;
+integer n,m,n1,n2,n3;
+localparam WE_WIDTH = $bits(checkpoint_t)/$bits(vpregno_t);
 reg [WE_WIDTH-1:0] cpram_we;
 localparam RAMWIDTH = AREGS*BANKS*RBIT+PREGS;
 checkpoint_t cpram_out;
@@ -153,13 +153,22 @@ wire qbr_ok = qbr && nob < 6'd15;
 generate begin : gRRN
 	for (g = 0; g < NPORT; g = g + 1) begin
 		always_comb
-			rrn[g] = wr0 && rn[g]==wra ? wrra :
+			rrn[g] = rn[g]==7'd0 ? 8'd0 :
+							 wr0 && rn[g]==wra ? wrra :
 							 wr1 && rn[g]==wrb ? wrrb :
 							 wr2 && rn[g]==wrc ? wrrc :
 							 wr3 && rn[g]==wrd ? wrrd :
-							 cpram_out >> (BANKS < 2) ? (rn[g] * RBIT) : {(rn[g] * RBIT),rnbank[g]};
+							 	(BANKS < 2) ? cpram_out.regmap[rn[g]].pregs[0].rg :
+							 								cpram_out.regmap[rn[g]].pregs[rnbank[g]].rg;
+//							 	 >> ((BANKS < 2) ? (rn[g] * RBIT) : {(rn[g] * RBIT),rnbank[g]});
 		always_comb
-			vn[g] = 1'b1;//cpmv[cndx][rn[g]];
+			vn[g] = rn[g]==7'd0 ? 1'b1 :
+							wr0 && rn[g]==wra ? 1'b1 :
+							wr1 && rn[g]==wrb ? 1'b1 :
+							wr2 && rn[g]==wrc ? 1'b1 :
+							wr3 && rn[g]==wrd ? 1'b1 :
+							(BANKS < 2) ? cpram_out.regmap[rn[g]].pregs[0].v :
+							 								cpram_out.regmap[rn[g]].pregs[rnbank[g]].v;
 	end
 end
 endgenerate
@@ -172,9 +181,9 @@ if (rst)
 else begin
 	if (cmtav) begin
 		if (BANKS < 2)
-			freea <= cpram_out >> (cmtaa * RBIT);
+			freea <= cpram_out.regmap[cmtaa].pregs[0].rg;// >> (cmtaa * RBIT);
 		else
-			freea <= cpram_out >> {(cmtaa * RBIT),cmtbanka};
+			freea <= cpram_out.regmap[cmtaa].pregs[cmtbanka].rg;// >> {(cmtaa * RBIT),cmtbanka};
 	end
 	else
 	 	freea <= cmtap;
@@ -188,9 +197,9 @@ if (rst)
 else begin
 	if (cmtbv) begin
 		if (BANKS < 2)
-			freeb <= cpram_out >> (cmtba * RBIT);
+			freeb <= cpram_out.regmap[cmtba].pregs[0].rg;// >> (cmtaa * RBIT);
 		else
-			freeb <= cpram_out >> {(cmtba * RBIT),cmtbankb};
+			freeb <= cpram_out.regmap[cmtba].pregs[cmtbankb].rg;// >> {(cmtaa * RBIT),cmtbanka};
 	end
 	else
 	 	freeb <= cmtbp;
@@ -204,9 +213,9 @@ if (rst)
 else begin
 	if (cmtcv) begin
 		if (BANKS < 2)
-			freec <= cpram_out >> (cmtca * RBIT);
+			freec <= cpram_out.regmap[cmtca].pregs[0].rg;// >> (cmtaa * RBIT);
 		else
-			freec <= cpram_out >> {(cmtca * RBIT),cmtbankc};
+			freec <= cpram_out.regmap[cmtca].pregs[cmtbankc].rg;// >> {(cmtaa * RBIT),cmtbanka};
 	end
 	else
 	 	freec <= cmtcp;
@@ -220,9 +229,9 @@ if (rst)
 else begin
 	if (cmtav) begin
 		if (BANKS < 2)
-			freed <= cpram_out >> (cmtda * RBIT);
+			freed <= cpram_out.regmap[cmtda].pregs[0].rg;// >> (cmtaa * RBIT);
 		else
-			freed <= cpram_out >> {(cmtda * RBIT),cmtbankd};
+			freed <= cpram_out.regmap[cmtda].pregs[cmtbankd].rg;// >> {(cmtaa * RBIT),cmtbanka};
 	end
 	else
 	 	freed <= cmtdp;
@@ -261,35 +270,67 @@ end
 always_comb
 if (rst)
 	stallq <= 'd0;
-else
-	stallq <= qbr && nob==6'd15;
+else begin
+	stallq <= 1'b0;
+	for (n3 = 0; n3 < AREGS; n3 = n3 + 1)
+		if (/*(rrn[n3]==8'd0 && rn[n3]!=7'd0) || */ qbr && nob==6'd15)
+			stallq <= 1'b1;
+end
+
 
 always_ff @(posedge clk)
 	cpram_outr <= cpram_out;
 
 // Committing and queuing target register cannot be the same.
+// The target register established during queue is marked invalid. It will not
+// be valid until a value commits.
 always_comb
 begin
 	cpram_in = 'd0;
 	if (BANKS < 2) begin
+		
+		if (cmtav) begin cpram_in.regmap[cmtaa].pregs[0].rg = cmtap; cpram_in.regmap[cmtaa].pregs[0].v = VAL; end
+		if (cmtbv) begin cpram_in.regmap[cmtba].pregs[0].rg = cmtbp; cpram_in.regmap[cmtba].pregs[0].v = VAL; end
+		if (cmtcv) begin cpram_in.regmap[cmtca].pregs[0].rg = cmtcp; cpram_in.regmap[cmtca].pregs[0].v = VAL; end
+		if (cmtdv) begin cpram_in.regmap[cmtda].pregs[0].rg = cmtdp; cpram_in.regmap[cmtda].pregs[0].v = VAL; end
+		
+		if (wr0) begin cpram_in.regmap[wra].pregs[0].rg = wrra; cpram_in.regmap[wra].pregs[0].v = INV; end
+		if (wr1) begin cpram_in.regmap[wrb].pregs[0].rg = wrrb; cpram_in.regmap[wrb].pregs[0].v = INV; end
+		if (wr2) begin cpram_in.regmap[wrc].pregs[0].rg = wrrc; cpram_in.regmap[wrc].pregs[0].v = INV; end
+		if (wr3) begin cpram_in.regmap[wrd].pregs[0].rg = wrrd; cpram_in.regmap[wrd].pregs[0].v = INV; end
+		/*
 		cpram_in = cpram_in | (({RBIT{cmtav}} & cmtap) << {(cmtaa * RBIT)});
 		cpram_in = cpram_in | (({RBIT{cmtbv}} & cmtbp) << {(cmtba * RBIT)});
 		cpram_in = cpram_in | (({RBIT{cmtcv}} & cmtcp) << {(cmtca * RBIT)});
 		cpram_in = cpram_in | (({RBIT{cmtdv}} & cmtdp) << {(cmtda * RBIT)});
-		cpram_in = cpram_in | (({RBIT{nq & wr0}} & wrra) << {(wra * RBIT)});
-		cpram_in = cpram_in | (({RBIT{nq & wr1}} & wrrb) << {(wrb * RBIT)});
-		cpram_in = cpram_in | (({RBIT{nq & wr2}} & wrrc) << {(wrc * RBIT)});
-		cpram_in = cpram_in | (({RBIT{nq & wr3}} & wrrd) << {(wrd * RBIT)});
+		cpram_in = cpram_in | (({RBIT{wr0}} & wrra) << {(wra * RBIT)});
+		cpram_in = cpram_in | (({RBIT{wr1}} & wrrb) << {(wrb * RBIT)});
+		cpram_in = cpram_in | (({RBIT{wr2}} & wrrc) << {(wrc * RBIT)});
+		cpram_in = cpram_in | (({RBIT{wr3}} & wrrd) << {(wrd * RBIT)});
+		*/
 	end
+	// ToDo: for more than one bank
 	else begin
+		/*
+		if (cmtav) cpram_in.regmap[cmtaa].pregs[cmtbanka].rg = cmtap;
+		if (cmtbv) cpram_in.regmap[cmtba].pregs[cmtbankb].rg = cmtbp;
+		if (cmtcv) cpram_in.regmap[cmtca].pregs[cmtbankc].rg = cmtcp;
+		if (cmtdv) cpram_in.regmap[cmtda].pregs[cmtbankd].rg = cmtdp;
+		*/
+		if (wr0) cpram_in.regmap[wra].pregs[wrbanka].rg = wrra;
+		if (wr1) cpram_in.regmap[wrb].pregs[wrbankb].rg = wrrb;
+		if (wr2) cpram_in.regmap[wrc].pregs[wrbankc].rg = wrrc;
+		if (wr3) cpram_in.regmap[wrd].pregs[wrbankd].rg = wrrd;
+		/*
 		cpram_in = cpram_in | (({RBIT{cmtav}} & cmtap) << {(cmtaa * RBIT),cmtbanka});
 		cpram_in = cpram_in | (({RBIT{cmtbv}} & cmtbp) << {(cmtba * RBIT),cmtbankb});
 		cpram_in = cpram_in | (({RBIT{cmtcv}} & cmtcp) << {(cmtca * RBIT),cmtbankc});
 		cpram_in = cpram_in | (({RBIT{cmtdv}} & cmtdp) << {(cmtda * RBIT),cmtbankd});
-		cpram_in = cpram_in | (({RBIT{nq & wr0}} & wrra) << {(wra * RBIT),wrbanka});
-		cpram_in = cpram_in | (({RBIT{nq & wr1}} & wrrb) << {(wrb * RBIT),wrbankb});
-		cpram_in = cpram_in | (({RBIT{nq & wr2}} & wrrc) << {(wrc * RBIT),wrbankc});
-		cpram_in = cpram_in | (({RBIT{nq & wr3}} & wrrd) << {(wrd * RBIT),wrbankd});
+		cpram_in = cpram_in | (({RBIT{wr0}} & wrra) << {(wra * RBIT),wrbanka});
+		cpram_in = cpram_in | (({RBIT{wr1}} & wrrb) << {(wrb * RBIT),wrbankb});
+		cpram_in = cpram_in | (({RBIT{wr2}} & wrrc) << {(wrc * RBIT),wrbankc});
+		cpram_in = cpram_in | (({RBIT{wr3}} & wrrd) << {(wrd * RBIT),wrbankd});
+		*/
 	end
 	if (new_chkpt) begin
 		cpram_in.avail = avail_i;
@@ -307,10 +348,10 @@ begin
 		cpram_we = cpram_we | (cmtcv << {cmtca});
 		cpram_we = cpram_we | (cmtdv << {cmtda});
 
-		cpram_we = cpram_we | ({nq & wr0} << {wra});
-		cpram_we = cpram_we | ({nq & wr1} << {wrb});
-		cpram_we = cpram_we | ({nq & wr2} << {wrc});
-		cpram_we = cpram_we | ({nq & wr3} << {wrd});
+		cpram_we = cpram_we | ({wr0} << {wra});
+		cpram_we = cpram_we | ({wr1} << {wrb});
+		cpram_we = cpram_we | ({wr2} << {wrc});
+		cpram_we = cpram_we | ({wr3} << {wrd});
 	end
 	else begin
 		cpram_we = cpram_we | (cmtav << {cmtaa,cmtbanka});
@@ -318,10 +359,10 @@ begin
 		cpram_we = cpram_we | (cmtcv << {cmtca,cmtbankc});
 		cpram_we = cpram_we | (cmtdv << {cmtda,cmtbankd});
 
-		cpram_we = cpram_we | ({nq & wr0} << {wra,wrbanka});
-		cpram_we = cpram_we | ({nq & wr1} << {wrb,wrbankb});
-		cpram_we = cpram_we | ({nq & wr2} << {wrc,wrbankc});
-		cpram_we = cpram_we | ({nq & wr3} << {wrd,wrbankd});
+		cpram_we = cpram_we | ({wr0} << {wra,wrbanka});
+		cpram_we = cpram_we | ({wr1} << {wrb,wrbankb});
+		cpram_we = cpram_we | ({wr2} << {wrc,wrbankc});
+		cpram_we = cpram_we | ({wr3} << {wrd,wrbankd});
 	end
 	if (new_chkpt)
 		cpram_we = {WE_WIDTH{1'b1}};

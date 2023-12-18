@@ -40,15 +40,15 @@ import QuplsPkg::SIM;
 module Qupls_checkpointRam(clka, ena, wea, addra, dina, clkb, enb, addrb, doutb);
 parameter BANKS=4;
 localparam RBIT=$clog2(PREGS);
-localparam WID=$bits(checkpoint_t);
+localparam WID=$bits(checkpoint_t) + $bits(vpregno_t) - ($bits(checkpoint_t) % $bits(vpregno_t));
 input clka;
 input ena;
-input [WID/8-1:0] wea;
-input [5:0] addra;
+input [(WID/$bits(vpregno_t))-1:0] wea;
+input [3:0] addra;
 input [WID-1:0] dina;
 input clkb;
 input enb;
-input [5:0] addrb;
+input [3:0] addrb;
 output [WID-1:0] doutb;
 
 genvar g;
@@ -101,7 +101,7 @@ else begin
    xpm_memory_dpdistram #(
       .ADDR_WIDTH_A(4),               // DECIMAL
       .ADDR_WIDTH_B(4),               // DECIMAL
-      .BYTE_WRITE_WIDTH_A(8),      		// DECIMAL
+      .BYTE_WRITE_WIDTH_A($bits(vpregno_t)),      		// DECIMAL
       .CLOCKING_MODE("common_clock"), // String
       .MEMORY_INIT_FILE("none"),      // String
       .MEMORY_INIT_PARAM("0"),        // String

@@ -425,7 +425,7 @@ begin
 	// On a branch miss the misspc will have the correct block so the
 	// cache line can be fetched, but the group will not be valid yet.
 	// The group is loaded at state 1 below.
-	if (branchmiss) begin
+	if (branchmiss_state==3'd4 || branchmiss_state==3'd5) begin
 		next_pc <= misspc;
 		takb <= 1'b1;
 	end
@@ -483,7 +483,7 @@ if (SUPPORT_IBH) begin
 	else begin
 		if (en) begin
 			// Instruction block header should be valid again at this state.
-			if (branchmiss_state==3'd3) begin
+			if (branchmiss_state==3'd4) begin
 				if (pc[5:0] >= ibh.offs[3])
 					igrp <= 3'd4;
 				else if (pc[5:0] >= ibh.offs[2])

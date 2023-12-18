@@ -47,7 +47,7 @@ module Qupls_ptable_walker(rst, clk,
 	ftam_req, ftam_resp, fault_o, faultq_o, tlb_wr, tlb_way, tlb_entryno, tlb_entry);
 parameter CID = 6'd3;
 
-parameter IO_ADDR = 32'hFEFC0001;
+parameter IO_ADDR = 32'hFFF40001;	//32'hFEFC0001;
 parameter IO_ADDR_MASK = 32'h00FF0000;
 
 parameter CFG_BUS = 8'd0;
@@ -320,6 +320,7 @@ if (rst) begin
 		miss_queue[nn] <= 'd0;
 	way <= 'd0;
 	tlb_wr <= 1'b0;
+	tlb_way <= 1'b0;
 end
 else begin
 

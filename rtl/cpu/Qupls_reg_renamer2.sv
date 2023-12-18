@@ -80,7 +80,7 @@ Qupls_reg_renamer_fifo #(.FIFONO(0)) ufifo0
 	.en(en),
 	.wlist2free(wlist2free[63:0]),
 	.alloc(alloc0),
-	.freeval(freevals[0]), 
+	.freeval(freevals[0] & ~avail[tags2free[0]]), 
 	.tag2free(tags2free[0]),
 	.o(wo0),
 	.wo(o0),
@@ -97,7 +97,7 @@ Qupls_reg_renamer_fifo #(.FIFONO(1)) ufifo1
 	.en(en),
 	.wlist2free(wlist2free[127:64]),
 	.alloc(alloc1),
-	.freeval(freevals[1]), 
+	.freeval(freevals[1] & ~avail[tags2free[1]]), 
 	.tag2free(tags2free[1]),
 	.o(wo1),
 	.wo(o1),
@@ -114,7 +114,7 @@ Qupls_reg_renamer_fifo #(.FIFONO(2)) ufifo2
 	.en(en),
 	.wlist2free(wlist2free[191:128]),
 	.alloc(alloc2),
-	.freeval(freevals[2]), 
+	.freeval(freevals[2] & ~avail[tags2free[2]]), 
 	.tag2free(tags2free[2]),
 	.o(wo2),
 	.wo(o2),
@@ -131,7 +131,7 @@ Qupls_reg_renamer_fifo #(.FIFONO(3)) ufifo3
 	.en(en),
 	.wlist2free(wlist2free[255:192]),
 	.alloc(alloc3),
-	.freeval(freevals[3]), 
+	.freeval(freevals[3] & ~avail[tags2free[3]]), 
 	.tag2free(tags2free[3]),
 	.o(wo3),
 	.wo(o3),
@@ -193,23 +193,24 @@ else begin
 	end
 end
 
-// On reset, cause fifo to be loaded with registers.
+// On reset, the fifo is preset full of registers with a mem file.
 // Up to four registers may be freed per clock cycle which is okay since only
 // four registers may be allocated per clock cycle.
 
 always_ff @(posedge clk)
 if (rst)
-	wlist2free <= {PREGS{1'b1}};
+	wlist2free <= {PREGS{1'b0}};
 else begin
 	if (en) begin
 
 		wlist2free <= (wlist2free | list2free) & 
+			~avail &	// Cannot free available registers
 			~({192'd0,{63'd0,v0 & ~freevals[0]} << s0[5:0]}) &
 			~({128'd0,{63'd0,v1 & ~freevals[1]} << s1[5:0], 64'd0}) &
 			~({64'd0,{63'd0,v2 & ~freevals[2]} << s2[5:0],128'd0}) &
 			~({{63'd0,v3 & ~freevals[3]} << s3[5:0],192'd0})
 			;
-
+		wlist2free[0] <= 1'b0;
 	end
 end
 

@@ -42,7 +42,7 @@ import QuplsPkg::*;
 module Qupls_tlb(rst, clk, ftas_req, ftas_resp,
 	wr, way, entry_no, entry_i, entry_o, vadr0, vadr1, pc_vadr, omd0, omd1, pc_omd,
 	asid0, asid1, pc_asid, entry0_o, entry1_o, pc_entry_o,
-	miss_o, missadr_o, missasid_o, missqn_o, missack,
+	miss_o, missadr_o, missasid_o, missid_o, missqn_o, missack,
 	tlb0_v, tlb1_v, pc_tlb_v, op0, op1, tlb0_op, tlb1_op, tlb0_res, tlb1_res, pc_tlb_res,
 	load0_i, load1_i, store0_i, store1_i, load0_o, load1_o, store0_o, store1_o,
 	stall_tlb0, stall_tlb1,
@@ -73,6 +73,7 @@ output tlb_entry_t pc_entry_o;
 output reg miss_o;
 output address_t missadr_o;
 output asid_t missasid_o;
+output rob_ndx_t missid_o;
 output reg [1:0] missqn_o;
 input missack;
 output reg tlb0_v;
@@ -113,6 +114,7 @@ reg [3:0] head, tail;
 address_t [MISSQ_ENTRIES-1:0] missadr;
 asid_t [MISSQ_ENTRIES-1:0] missasid;
 reg [1:0] missqn [0:MISSQ_ENTRIES-1];
+rob_ndx_t [MISSQ_ENTRIES-1:0] missid;
 REGION region0, region1, region2;
 wire [7:0] sel0, sel1, sel2;
 operating_mode_t omd0a, omd1a, pc_omda;
@@ -559,6 +561,9 @@ if (rst) begin
 	
 	agen0_rndx_o <= 'd0;
 	agen1_rndx_o <= 'd0;
+	
+	head <= 4'd0;
+	tail <= 4'd0;
 end
 else begin
 	miss_o <= 1'b0;
@@ -625,7 +630,7 @@ else begin
 	end
 
 	if ((head != (tail - 1) % MISSQ_ENTRIES) && (head != (tail - 2) % MISSQ_ENTRIES) && (head != (tail - 3) % MISSQ_ENTRIES))
-		case ({miss1,miss0,pc_miss})
+		case ({miss1 & ~stall_tlb1,miss0 & ~stall_tlb0,pc_miss})
 		3'b000:	;
 		3'b001:
 			begin
@@ -639,6 +644,7 @@ else begin
 				missqn[tail] <= 2'd1;
 				missadr[tail] <= vadr0;
 				missasid[tail] <= asid0;
+				missid[tail] <= agen0_rndx_i;
 				tail <= (tail + 1) % MISSQ_ENTRIES;
 			end
 		3'b011:
@@ -649,6 +655,7 @@ else begin
 				missqn[(tail+1) % MISSQ_ENTRIES] <= 2'd1;
 				missadr[(tail+1) % MISSQ_ENTRIES] <= vadr0;
 				missasid[(tail+1) % MISSQ_ENTRIES] <= asid0;
+				missid[(tail+1) % MISSQ_ENTRIES] <= agen0_rndx_i;
 				tail <= (tail + 2) % MISSQ_ENTRIES;
 			end
 		3'b100:
@@ -656,6 +663,7 @@ else begin
 				missqn[tail] <= 2'd2;
 				missadr[tail] <= vadr1;
 				missasid[tail] <= asid1;
+				missid[tail] <= agen1_rndx_i;
 				tail <= (tail + 1) % MISSQ_ENTRIES;
 			end
 		3'b101:
@@ -666,6 +674,7 @@ else begin
 				missqn[(tail+1) % MISSQ_ENTRIES] <= 2'd2;
 				missadr[(tail+1) % MISSQ_ENTRIES] <= vadr1;
 				missasid[(tail+1) % MISSQ_ENTRIES] <= asid1;
+				missid[(tail+1) % MISSQ_ENTRIES] <= agen1_rndx_i;
 				tail <= (tail + 2) % MISSQ_ENTRIES;
 			end
 		3'b110:
@@ -673,9 +682,11 @@ else begin
 				missqn[tail] <= 2'd1;
 				missadr[tail] <= vadr0;
 				missasid[tail] <= asid0;
+				missid[tail] <= agen0_rndx_i;
 				missqn[(tail+1) % MISSQ_ENTRIES] <= 2'd2;
 				missadr[(tail+1) % MISSQ_ENTRIES] <= vadr1;
 				missasid[(tail+1) % MISSQ_ENTRIES] <= asid1;
+				missid[(tail+1) % MISSQ_ENTRIES] <= agen1_rndx_i;
 				tail <= (tail + 2) % MISSQ_ENTRIES;
 			end
 		3'b111:
@@ -686,9 +697,11 @@ else begin
 				missqn[(tail+1) % MISSQ_ENTRIES] <= 2'd1;
 				missadr[(tail+1) % MISSQ_ENTRIES] <= vadr0;
 				missasid[(tail+1) % MISSQ_ENTRIES] <= asid0;
+				missid[(tail+1) % MISSQ_ENTRIES] <= agen0_rndx_i;
 				missqn[(tail+2) % MISSQ_ENTRIES] <= 2'd2;
 				missadr[(tail+2) % MISSQ_ENTRIES] <= vadr1;
 				missasid[(tail+2) % MISSQ_ENTRIES] <= asid1;
+				missid[(tail+2) % MISSQ_ENTRIES] <= agen1_rndx_i;
 				tail <= (tail + 3) % MISSQ_ENTRIES;
 			end
 		endcase
@@ -699,6 +712,7 @@ else begin
 		missqn_o <= missqn[head];
 		missadr_o <= missadr[head];
 		missasid_o <= missasid[head];
+		missid_o <= missid[head];
 		miss_o <= 1'b1;
 	end
 end
@@ -823,21 +837,27 @@ always_ff @(posedge clk) wri = rstcnt[7] ? wr : 1'b1;
 
 always_ff @(posedge clk)
 if (rst) begin
-	rstcnt <= 8'd124;	
-	entryno_rst <= 7'd124;
+	rstcnt <= 8'd116;	
+	entryno_rst <= 7'd116;
 	entryi_rst <= 'd0;
-	entryi_rst.vpn.vpn <= 20'hFFFFF;
+	entryi_rst.vpn.vpn <= 20'hFFFFF;	// Bits 23 to 42 of address
 	entryi_rst.pte.v <= 1'b1;
 	entryi_rst.pte.mrwx <= 3'd7;
 	entryi_rst.pte.rgn <= 3'd7;			// ROM area
 	entryi_rst.pte.lvl <= 5'd0;
-	entryi_rst.pte.ppn <= 32'hFFFFFFFC;
+	entryi_rst.pte.ppn <= 32'hFFFFFFF4;
 end
 else begin
 	if (!rstcnt[7]) begin
 		rstcnt <= rstcnt + 1;
 		entryno_rst <= entryno_rst + 1;
 		entryi_rst.pte.ppn <= entryi_rst.pte.ppn + 1;
+		case(rstcnt[3:2])
+		2'd1:	entryi_rst.pte.rgn <= 3'd6;	// IO
+		2'd2: entryi_rst.pte.rgn <= 3'd4;	// scratchpad RAM
+		2'd3:	entryi_rst.pte.rgn <= 3'd7;	// ROM
+		default:	entryi_rst.pte.rgn <= 3'd6;
+		endcase
 	end
 end
 
