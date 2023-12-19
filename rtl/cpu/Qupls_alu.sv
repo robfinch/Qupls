@@ -39,7 +39,7 @@
 import const_pkg::*;
 import QuplsPkg::*;
 
-module Qupls_alu(rst, clk, clk2x, ld, ir, div, a, b, c, i, cs, pc, csr,
+module Qupls_alu(rst, clk, clk2x, ld, ir, div, a, b, bi, c, i, cs, pc, csr,
 	o, mul_done, div_done, div_dbz);
 parameter ALU0 = 1'b0;
 input rst;
@@ -50,6 +50,7 @@ input instruction_t ir;
 input div;
 input value_t a;
 input value_t b;
+input value_t bi;
 input value_t c;
 input value_t i;
 input [2:0] cs;
@@ -71,11 +72,11 @@ value_t cmpo;
 value_t bus;
 value_t blendo;
 always_comb
-	shl = {64'd0,a,{64{ir[33]}}} << (ir[32] ? ir[24:19] : b[5:0]);
+	shl = {64'd0,a,{64{ir[33]}}} << (ir[32] ? ir[24:19] : bi[5:0]);
 always_comb
-	shr = {{64{ir[33]}},a,64'd0} >> (ir[32] ? ir[24:19] : b[5:0]);
+	shr = {{64{ir[33]}},a,64'd0} >> (ir[32] ? ir[24:19] : bi[5:0]);
 always_comb
-	asr = {{64{a[63]}},a,64'd0} >> (ir[32] ? ir[24:19] : b[5:0]);
+	asr = {{64{a[63]}},a,64'd0} >> (ir[32] ? ir[24:19] : bi[5:0]);
 
 always_comb
 	case(cs)
@@ -88,13 +89,13 @@ always_comb
 
 always_ff @(posedge clk)
 begin
-	prod2 <= $signed(a) * $signed(b);
+	prod2 <= $signed(a) * $signed(bi);
 	prod1 <= prod2;
 	prod <= prod1;
 end
 always_ff @(posedge clk)
 begin
-	produ2 <= a * b;
+	produ2 <= a * bi;
 	produ1 <= produ2;
 	produ <= produ1;
 end
@@ -116,7 +117,7 @@ Qupls_divider udiv0(
 	.sgn(div),
 	.sgnus(1'b0),
 	.a(a),
-	.b(b),
+	.b(bi),
 	.qo(div_q),
 	.ro(div_r),
 	.dvByZr(div_dbz),
@@ -128,7 +129,7 @@ Qupls_blend ublend0
 (
 	.a(c),
 	.c0(a),
-	.c1(b),
+	.c1(bi),
 	.o(blendo)
 );
 
@@ -166,18 +167,18 @@ begin
 		default:	bus = {2{32'hDEADBEEF}};
 		endcase
 	OP_CSR:		bus = csr;
-	OP_ADDI:	bus = a + b;
-	OP_SUBFI:	bus = b - a;
+	OP_ADDI:	bus = a + i;
+	OP_SUBFI:	bus = i - a;
 	OP_CMPI:	bus = cmpo;
 	OP_CMPUI:	bus = cmpo;
 	OP_MULI:	bus = prod[63:0];
 	OP_MULUI:	bus = produ[63:0];
 	OP_DIVI:	bus = ALU0 ? div_q : 0;
 	OP_DIVUI:	bus = ALU0 ? div_q : 0;
-	OP_ANDI:	bus = a & b;
-	OP_ORI:		bus = a | b;
-	OP_EORI:	bus = a ^ b;
-	OP_SLTI:	bus = $signed(a) < $signed(b);
+	OP_ANDI:	bus = a & i;
+	OP_ORI:		bus = a | i;
+	OP_EORI:	bus = a ^ i;
+	OP_SLTI:	bus = $signed(a) < $signed(i);
 	OP_SHIFT:
 		case(ir.shifti.func)
 		OP_ASL:	bus = shl[127:64];
@@ -192,7 +193,6 @@ begin
 		OP_ASRI:	bus = asr[127:64];
 		default:	bus = {2{32'hDEADBEEF}};
 		endcase
-	OP_LDI:		bus = b;
 	OP_MOV:		bus = a;
 	OP_LDA:		bus = a + i;
 	OP_LDAX:	bus = a + i + (b << ir[26:25]);

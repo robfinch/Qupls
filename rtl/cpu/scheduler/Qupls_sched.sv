@@ -141,7 +141,7 @@ for (g = 0; g < ROB_ENTRIES; g = g + 1) begin
 				    || (rob[g].decbus.Rb == load_Rt && load_v)
 				    */
 				    )
-				    && (rob[g].argC_v)
+				    && ((rob[g].argC_v)
 						// Or forwarded
 						/*
 				    || (rob[g].decbus.Rc == alu0_Rt && alu0_v)
@@ -150,7 +150,7 @@ for (g = 0; g < ROB_ENTRIES; g = g + 1) begin
 				    || (rob[g].decbus.Rc == fcu_Rt && fcu_v)
 				    || (rob[g].decbus.Rc == load_Rt && load_v)
 				    */
-				    //|| ((rob[g].decbus.load|rob[g].decbus.store) & ~rob[g].agen))
+				    || (rob[g].decbus.mem))// & ~rob[g].agen))
 				    ;
 always_ff @(posedge clk) could_issue[g] = rob[g].v && ! (&rob[g].done)
 												&& !rob[g].out
@@ -171,6 +171,7 @@ endgenerate
 // ToDo: fix the memory synchronization, see fp_issue below
 
 reg issued_alu0, issued_alu1, issued_fpu0, issued_fpu1, issued_fcu, no_issue;
+reg no_issue_fc;
 reg issued_agen0, issued_agen1;
 reg issued_mem0, issued_mem1;
 reg issued_lsq0, issued_lsq1;
@@ -178,16 +179,17 @@ integer hd, synchd, shd, slot;
 
 always_comb
 begin
-	issued_alu0 = 'd0;
-	issued_alu1 = 'd0;
-	issued_fpu0 = 'd0;
-	issued_fpu1 = 'd0;
-	issued_fcu = 'd0;
-	issued_agen0 = 'd0;
-	issued_agen1 = 'd0;
-	issued_mem0 = 'd0;
-	issued_mem1 = 'd0;
-	no_issue = 'd0;
+	issued_alu0 = 1'd0;
+	issued_alu1 = 1'd0;
+	issued_fpu0 = 1'd0;
+	issued_fpu1 = 1'd0;
+	issued_fcu = 1'd0;
+	issued_agen0 = 1'd0;
+	issued_agen1 = 1'd0;
+	issued_mem0 = 1'd0;
+	issued_mem1 = 1'd0;
+	no_issue = 1'd0;
+	no_issue_fc = 1'd0;
 	next_robentry_issue = 'd0;
 	next_robentry_fpu_issue = 'd0;
 	next_robentry_fcu_issue = 'd0;
@@ -252,14 +254,20 @@ begin
 					end
 				end
 				if (!issued_fcu && fcu_idle && rob[heads[hd]].decbus.fc && !rob[heads[hd]].done[1]) begin
-			  	next_robentry_fcu_issue[heads[hd]] = 1'b1;
-			  	next_robentry_islot_o[heads[hd]] = 2'b00;
-			  	issued_fcu = 1'b1;
-			  	next_fcu_rndx = heads[hd];
-			  	next_fcu_rndxv = 1'b1;
+					for (shd = 0; shd < ROB_ENTRIES; shd = shd + 1) begin
+						if (rob[shd].v & rob[shd].decbus.fc && rob[shd].sn < rob[heads[hd]].sn && !rob[shd].done[1])
+							no_issue_fc = 1'b1;
+					end
+					if (!no_issue_fc) begin
+				  	next_robentry_fcu_issue[heads[hd]] = 1'b1;
+				  	next_robentry_islot_o[heads[hd]] = 2'b00;
+				  	issued_fcu = 1'b1;
+				  	next_fcu_rndx = heads[hd];
+				  	next_fcu_rndxv = 1'b1;
+			  	end
 				end
 				
-				if (!issued_agen0 && agen0_idle && (rob[heads[hd]].decbus.load | rob[heads[hd]].decbus.store) && !rob[heads[hd]].done[0]) begin
+				if (!issued_agen0 && agen0_idle && rob[heads[hd]].decbus.mem && !rob[heads[hd]].done[0]) begin
 					next_robentry_agen_issue[heads[hd]] = 1'b1;
 			  	next_robentry_islot_o[heads[hd]] = 2'b00;
 					issued_agen0 = 1'b1;
@@ -267,7 +275,7 @@ begin
 					next_agen0_rndxv = 1'b1;
 				end
 				if (NAGEN > 1) begin
-					if (!issued_agen1 && agen1_idle && (rob[heads[hd]].decbus.load | rob[heads[hd]].decbus.store) && !rob[heads[hd]].done[0]) begin
+					if (!issued_agen1 && agen1_idle && rob[heads[hd]].decbus.mem && !rob[heads[hd]].done[0]) begin
 						next_robentry_agen_issue[heads[hd]] = 1'b1;
 				  	next_robentry_islot_o[heads[hd]] = 2'b01;
 						issued_agen1 = 1'b1;
@@ -330,7 +338,7 @@ else begin
 	robentry_issue <= next_robentry_issue;
 	robentry_fpu_issue <= 'd0;
 	robentry_fcu_issue <= 'd0;
-	robentry_agen_issue <= 'd0;
+	robentry_agen_issue <= next_robentry_agen_issue;
 	alu0_rndx <= next_alu0_rndx;
 	alu1_rndx <= next_alu1_rndx;
 	fpu0_rndx <= next_fpu0_rndx;

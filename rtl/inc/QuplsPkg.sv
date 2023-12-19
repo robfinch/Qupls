@@ -38,7 +38,7 @@
 package QuplsPkg;
 
 `undef IS_SIM
-parameter SIM = 1'b0;
+parameter SIM = 1'b1;
 
 //`define IS_SIM	1
 // Comment out to remove the sigmoid approximate function
@@ -859,6 +859,7 @@ typedef logic [11:0] ASID;
 typedef logic [11:0] asid_t;
 typedef logic [31:0] address_t;
 typedef logic [31:0] pc_address_t;
+typedef logic [11:0] mc_address_t;
 /*
 struct packed {
 	logic [31:0] pc;
@@ -1392,6 +1393,7 @@ typedef struct packed {
 	lsq_ndx_t lsqndx;					// index to LSQ entry
 	logic [1:0] done;					// 2'b11=instruction is finished executing
 	pc_address_t brtgt;
+	mc_address_t mcbrtgt;			// micro-code branch target
 	logic takb;								// 1=branch evaluated to taken
 	cause_code_t exc;					// non-zero indicate exception
 	logic excv;								// 1=exception

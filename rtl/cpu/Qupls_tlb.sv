@@ -119,7 +119,7 @@ REGION region0, region1, region2;
 wire [7:0] sel0, sel1, sel2;
 operating_mode_t omd0a, omd1a, pc_omda;
 
-integer n;
+integer n,m;
 
 Qupls_active_region uar1
 (
@@ -564,6 +564,11 @@ if (rst) begin
 	
 	head <= 4'd0;
 	tail <= 4'd0;
+	for (m = 0; m < MISSQ_ENTRIES; m = m + 1) begin
+		missqn[m] <= 2'd0;
+		missadr[m] <= {$bits(address_t){1'b0}};
+		missasid[m] <= {$bits(asid_t){1'b0}};
+	end
 end
 else begin
 	miss_o <= 1'b0;

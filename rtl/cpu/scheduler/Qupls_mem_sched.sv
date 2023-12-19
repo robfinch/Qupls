@@ -47,7 +47,7 @@ input rob_ndx_t head;
 input lsq_ndx_t lsq_head;
 input rob_bitmask_t robentry_stomp;
 input rob_entry_t [ROB_ENTRIES-1:0] rob;
-input lsq_entry_t [1:0] lsq [0:7];
+input lsq_entry_t [1:0] lsq [0:LSQ_ENTRIES-1];
 input [1:0] islot_i [0:LSQ_ENTRIES*2-1];
 output reg [1:0] islot_o [0:LSQ_ENTRIES*2-1];
 output rob_bitmask_t memissue;
@@ -56,10 +56,10 @@ output lsq_ndx_t ndx1;
 output reg ndx0v;
 output reg ndx1v;
 
-integer m,hd,phd,n9,n10,n11,col,row,q,r,i;
-rob_bitmask_t robentry_memready;
+integer m,hd,phd,n9r,n10,n11,col,row,q,r,i,n9c;
+rob_bitmask_t memready;
 rob_ndx_t [WINDOW_SIZE-1:0] heads;
-rob_bitmask_t robentry_memopsvalid;
+lsq_bitmask_t [1:0] memopsvalid;
 lsq_ndx_t [LSQ_WINDOW_SIZE-1:0] lsq_heads;
 reg [1:0] issued, mem_ready;
 reg no_issue, do_issue;
@@ -82,14 +82,18 @@ for (q = 0; q < LSQ_WINDOW_SIZE; q = q + 1) begin
 	lsq_heads[q].col = 'd0;
 end
 
+// We need only check the LSQ for valid operands.
+// The A,B operands must have been valid for the entry to be placed in the LSQ.
+// The C operand is only needed for stores.
 always_comb
-for (n9 = 0; n9 < ROB_ENTRIES; n9 = n9 + 1)
-	robentry_memopsvalid[n9] = (rob[n9].argA_v & rob[n9].argB_v & (rob[n9].decbus.load|rob[n9].argC_v));
+for (n9r = 0; n9r < LSQ_ENTRIES; n9r = n9r + 1)
+	for (n9c = 0; n9c < 2; n9c = n9c + 1)
+		memopsvalid[n9c][n9r] = lsq[n9r][n9c].v && lsq[n9r][n9c].agen && (lsq[n9r][n9c].load|lsq[n9r][n9c].datav);
 
 always_ff @(posedge clk)
 for (n10 = 0; n10 < ROB_ENTRIES; n10 = n10 + 1)
-  robentry_memready[n10] = (rob[n10].v
-  		&& robentry_memopsvalid[n10] 
+  memready[n10] = (rob[n10].v
+  		&& memopsvalid[rob[n10].lsqndx.row][rob[n10].lsqndx.col] 
 //  		& ~robentry_memissue[n10] 
   		&& (rob[n10].done==2'b01) 
 //  		& ~rob[n10].out
@@ -114,7 +118,7 @@ begin
 		for (col = 0; col < 2; col = col + 1) begin
 			if (issued < NDATA_PORTS) begin
 				if (row==0) begin
-					if (robentry_memready[ lsq[lsq_heads[row].row][0].rndx ] &&
+					if (memready[ lsq[lsq_heads[row].row][0].rndx ] &&
 						lsq[lsq_heads[row].row][0].v
 					) begin
 						mem_ready = 2'd1;
@@ -130,29 +134,31 @@ begin
 				end
 				// no preceding instruction is ready to go
 				else if (mem_ready < NDATA_PORTS) begin
-					if (robentry_memready[ lsq[lsq_heads[row].row][col].rndx ] &&
+					if (memready[ lsq[lsq_heads[row].row][col].rndx ] &&
 						lsq[lsq_heads[row].row][col].v
 					)
 						mem_ready = mem_ready + 2'd1;
 					if (!robentry_stomp[lsq[lsq_heads[row].row][col].rndx] &&
-						robentry_memready[ lsq[lsq_heads[row].row][col].rndx] && 
+						memready[ lsq[lsq_heads[row].row][col].rndx] && 
 						lsq[lsq_heads[row].row][col].v) begin
 						// Check previous instructions.
 						for (phd = 0; phd < WINDOW_SIZE; phd = phd + 1) begin
-							if (rob[heads[phd]].v && rob[heads[phd]].sn < rob[lsq[lsq_heads[row].row][col].rndx].sn) begin
+							if (rob[heads[phd]].v) begin // && rob[heads[phd]].sn < rob[lsq[lsq_heads[row].row][col].rndx].sn) begin
 								do_issue = 1'b1;
 								// ... and there is no fence
 	//							if (lsq[heads[phd]].fence && rob[heads[phd]].decbus.immb[15:0]==16'hFF00)
 	//								no_issue = 1'b1;
 								// ... and, if it is a SW, there is no chance of it being undone
-								if (rob[heads[phd]].decbus.store && rob[heads[phd]].decbus.fc)
-									no_issue = 1'b1;
-								// ... and previous mem op without an address yet,
-								if ((rob[heads[phd]].decbus.load|rob[heads[phd]].decbus.store) && !rob[heads[phd]].done[0])
-									no_issue = 1'b1;
-								// ... and there is no address-overlap with any preceding instruction
-								if (lsq[rob[heads[phd]].lsqndx.row][rob[heads[phd]].lsqndx.col].padr[$bits(physical_address_t)-1:4]==lsq[lsq_heads[row].row][col].padr[$bits(physical_address_t)-1:4])
-									no_issue = 1'b1;
+								if (rob[heads[phd]].sn < rob[lsq[lsq_heads[row].row][col].rndx].sn) begin
+									if (rob[lsq[lsq_heads[row].row][col].rndx].decbus.store && rob[heads[phd]].decbus.fc)
+										no_issue = 1'b1;
+									// ... and previous mem op without an address yet,
+									if ((rob[heads[phd]].decbus.load|rob[heads[phd]].decbus.store) && !rob[heads[phd]].done[0])
+										no_issue = 1'b1;
+									// ... and there is no address-overlap with any preceding instruction
+									if (lsq[rob[heads[phd]].lsqndx.row][rob[heads[phd]].lsqndx.col].padr[$bits(physical_address_t)-1:4]==lsq[lsq_heads[row].row][col].padr[$bits(physical_address_t)-1:4])
+										no_issue = 1'b1;
+								end
 							end
 						end
 					end

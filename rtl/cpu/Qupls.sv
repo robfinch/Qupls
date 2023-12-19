@@ -100,12 +100,13 @@ reg int_commit;		// IRQ committed
 // Normally atom_mask is zero.
 reg hirq;
 pc_address_t misspc;
+mc_address_t miss_mcip, mcbrtgt;
 wire [$bits(pc_address_t)-1:6] missblock;
 reg [2:0] missgrp;
 wire [2:0] missino;
 
 instruction_t missir;
-wire [11:0] next_micro_ip;
+mc_address_t next_micro_ip;
 
 reg [39:0] I;	// Committed instructions
 
@@ -179,6 +180,7 @@ rob_bitmask_t robentry_agen_issue;
 lsq_entry_t [1:0] lsq [0:7];
 lsq_ndx_t lq_tail, lq_head;
 wire nq;
+reg [3:0] wnq;
 
 reg brtgtv;
 pc_address_t brtgt;
@@ -244,6 +246,7 @@ instruction_t alu0_instr;
 reg alu0_div;
 value_t alu0_argA;
 value_t alu0_argB;
+value_t alu0_argBI;
 value_t alu0_argC;
 value_t alu0_argI;
 pregno_t alu0_Rt;
@@ -269,6 +272,7 @@ instruction_t alu1_instr;
 reg alu1_div;
 value_t alu1_argA;
 value_t alu1_argB;
+value_t alu1_argBI;
 value_t alu1_argC;
 value_t alu1_argI;
 reg [2:0] alu1_cs;
@@ -351,6 +355,7 @@ cause_code_t fcu_exc;
 reg fcu_v, fcu_v2, fcu_v3, fcu_v4, fcu_v5, fcu_v6;
 reg fcu_branchmiss;
 pc_address_t fcu_misspc, fcu_misspc1;
+mc_address_t fcu_miss_mcip, fcu_miss_mcip1;
 reg [2:0] fcu_missgrp;
 reg [2:0] fcu_missino;
 reg takb;
@@ -388,6 +393,8 @@ pc_address_t excmisspc;
 reg [2:0] excmissgrp;
 reg excmiss;
 instruction_t excir;
+reg excret;
+pc_address_t exc_ret_pc;
 
 wire dram_avail;
 wire [1:0] dram0;	// state of the DRAM request
@@ -509,7 +516,7 @@ pc_address_t avec;
 rob_bitmask_t err_mask;
 reg ERC = 1'b0;
 
-reg [2:0] atom_mask;
+reg [32:0] atom_mask;
 
 assign clk = clk_i;				// convenience
 assign clk2x = clk2x_i;
@@ -629,7 +636,7 @@ instruction_t ins0_d, ins1_d, ins2_d, ins3_d, ins4_d, ins5_d, ins6_d, ins7_d, in
 reg ins0_v, ins1_v, ins2_v, ins3_v;
 reg [XWID-1:0] ins_v;
 reg insnq0,insnq1,insnq2,insnq3;
-reg [XWID-1:0] qd, cqd, qs;
+reg [XWID-1:0] qd, cqd;
 reg [XWID-1:0] next_cqd;
 wire pe_allqd;
 reg fetch_new;
@@ -645,11 +652,11 @@ reg regs;
 reg branchmiss, branchmiss_next;
 rob_ndx_t missid;
 
-reg [11:0] micro_ip;
-reg [11:0] mip0;
-reg [11:0] mip1;
-reg [11:0] mip2;
-reg [11:0] mip3;
+mc_address_t micro_ip;
+mc_address_t mip0;
+mc_address_t mip1;
+mc_address_t mip2;
+mc_address_t mip3;
 reg mip0v;
 reg mip1v;
 reg mip2v;
@@ -711,14 +718,14 @@ else begin
 		ins3_v <= 1'b1;
 	end
 	else begin
-		ins0_v <= ins0_v & ~(qd[0]|qs[0]);
-		ins1_v <= ins1_v & ~(qd[1]|qs[1]);
+		ins0_v <= ins0_v & ~(qd[0]);
+		ins1_v <= ins1_v & ~(qd[1]);
 		if (XWID==3)
-			ins2_v <= ins2_v & ~(qd[2]|qs[2]);
+			ins2_v <= ins2_v & ~(qd[2]);
 		else
 			ins2_v <= TRUE;
 		if (XWID==4)
-			ins3_v <= ins3_v & ~(qd[3]|qs[3]);
+			ins3_v <= ins3_v & ~(qd[3]);
 		else
 			ins3_v <= TRUE;
 	end
@@ -956,37 +963,33 @@ always_comb pc8 = pc7 + len7;
 //always_comb pc7 = {pc6[43:12] + len6,12'h0};
 
 // qd indicates which instructions will queue in a given cycle.
-// qs indicates which instructions are stomped on.
 always_comb
 begin
 	qd = {XWID{1'd0}};
-	qs = {XWID{1'd0}};
 	if ((branchmiss || branchmiss_state < 3'd4) && |robentry_stomp)
 		;
-	else if ((ihito || mipv) && !stallq && 
-		rob[tail0].v==INV && rob[tail1].v==INV && rob[tail2].v==INV && rob[tail3].v==INV)
+	else if ((ihito || mipv) && !stallq)
 		if (XWID==2)
 			case (~cqd[1:0])
 
 	    2'b00: ; // do nothing
 
-	    2'b01:	
-	    	if (rob[tail0].v==INV)
-	    		qd = qd | 2'b01;
+	    2'b01:
+	    	panic <= PANIC_INVALIDIQSTATE;
+	    // Queued on zero in previous cycle, but not on one.
 	    2'b10:	
-	    	if (rob[tail0].v==INV)
-	    		qd = qd | 2'b10;
+	    	if (rob[tail1].v==INV)
+	    		qd = 2'b10;
 	    2'b11:
 	    	if (rob[tail0].v==INV) begin
-	    		qd = qd | 2'b10;
-	    		if (!pt2_q && !mip2v && !db2_q.regs) begin
+	    		qd = 2'b01;
+	    		if (!pt0_q && !mip0v && !db0_q.regs) begin
 	    			if (rob[tail1].v==INV)
-	    				qd = qd | 2'b01;
+	    				qd = 2'b11;
 	    		end
-	    		else
-	    			qs = qs | 2'b01;
 	    	end
 	    endcase
+	  // ToDo: fix 3-wide
 	  else if (XWID==3)
 			case (~cqd)
 
@@ -1005,8 +1008,6 @@ begin
 	    			if (rob[tail1].v==INV)
 	    				qd = qd | 3'b001;
 	    		end
-	    		else
-	    			qs = qs | 3'b001;
 	    	end
 	    3'b100:	
 	    	if (rob[tail0].v==INV)
@@ -1018,8 +1019,6 @@ begin
 	    			if (rob[tail1].v==INV)
 		    			qd = qd | 3'b001;
 		    	end
-		    	else
-		    		qs = qs | 3'b001;
 	    	end
 	    3'b110:
 	    	if (rob[tail0].v==INV) begin
@@ -1028,8 +1027,6 @@ begin
 	    			if (rob[tail1].v==INV)
 	    				qd = qd | 3'b10;
 	    		end
-	    		else
-		    		qs = qs | 3'b010;
 	    	end
 	    3'b111:
 	    	if (rob[tail0].v==INV) begin
@@ -1041,12 +1038,8 @@ begin
 		    				if (rob[tail2].v==INV)
 			    				qd = qd  | 3'b001;
 			    		end
-			    		else
-			    			qs = qs | 3'b001;
 			    	end
 	    		end
-	    		else
-	    			qs = qs | 3'b011;
 	    	end
 	    endcase
 		else
@@ -1055,175 +1048,78 @@ begin
     4'b0000: ; // do nothing
 
     4'b0001:	
-    	if (rob[tail0].v==INV)
-    		qd = qd | 4'b0001;
+    	panic <= PANIC_INVALIDIQSTATE;
     4'b0010:	
-    	if (rob[tail0].v==INV)
-    		qd = qd | 4'b0010;
+    	panic <= PANIC_INVALIDIQSTATE;
     4'b0011:
-    	if (rob[tail0].v==INV) begin
-    		qd = qd | 4'b0010;
-    		if (!pt2_q && !mip2v && !db2_q.regs) begin
-    			if (rob[tail1].v==INV)
-    				qd = qd | 4'b0001;
-    		end
-    		else
-    			qs = qs | 4'b0001;
-    	end
+    	panic <= PANIC_INVALIDIQSTATE;
     4'b0100:	
-    	if (rob[tail0].v==INV)
-    		qd = qd | 4'b0100;
+    	panic <= PANIC_INVALIDIQSTATE;
     4'b0101:
-    	if (rob[tail0].v==INV) begin
-    		qd = qd | 4'b0100;
-    		if (!pt1_q && !mip1v && !db1_q.regs) begin
-    			if (rob[tail1].v==INV)
-	    			qd = qd | 4'b0001;
-	    	end
-	    	else
-	    		qs = qs | 4'b0001;
-    	end
+    	panic <= PANIC_INVALIDIQSTATE;
     4'b0110:
-    	if (rob[tail0].v==INV) begin
-    		qd = qd | 4'b0100;
-    		if (!pt1_q && !mip1v && !db1_q.regs) begin
-    			if (rob[tail1].v==INV)
-    				qd = qd | 4'b0010;
-    		end
-    		else
-	    		qs = qs | 4'b0010;
-    	end
+    	panic <= PANIC_INVALIDIQSTATE;
     4'b0111:
-    	if (rob[tail0].v==INV) begin
-    		qd = qd | 4'b0100;
-    		if (!pt1_q && !mip1v && !db1_q.regs) begin
-	    		if (rob[tail1].v==INV) begin
-	    			qd = qd  | 4'b0010;
-	    			if (!pt2_q && !mip2v && !db2_q.regs) begin
-	    				if (rob[tail2].v==INV)
-		    				qd = qd  | 4'b0001;
-		    		end
-		    		else
-		    			qs = qs | 4'b0001;
-		    	end
-    		end
-    		else
-    			qs = qs | 4'b0011;
-    	end
+    	panic <= PANIC_INVALIDIQSTATE;
     4'b1000:
-    	if (rob[tail0].v==INV)
-	   		qd = qd | 4'b1000;
+    	if (rob[tail3].v==INV)
+	   		qd = 4'b1000;
+	  // Cannot have an instruction in the middle that has not queued.
     4'b1001:
-    	if (rob[tail0].v==INV) begin
-    		qd = qd | 4'b1000;
-    		if (!pt0_q && !mip0v && !db0_q.regs) begin
-    			if (rob[tail1].v==INV)
-	    			qd = qd | 4'b0001;
-	    	end
-	    	else
-	    		qs = qs | 4'b0001;
-    	end
+    	panic <= PANIC_INVALIDIQSTATE;
     4'b1010:
-    	if (rob[tail0].v==INV) begin
-    		qd = qd | 4'b1000;
-    		if (!pt0_q && !mip0v && !db0_q.regs) begin
-    			if (rob[tail1].v==INV)
-	    			qd = qd | 4'b0010;
-	    	end
-	    	else
-	    		qs = qs | 4'b0010;
-    	end
+    	panic <= PANIC_INVALIDIQSTATE;
     4'b1011:
-    	if (rob[tail0].v==INV) begin
-    		qd = qd | 4'b1000;
-    		if (!pt0_q && !mip0v && !db0_q.regs) begin
-    			if (rob[tail1].v==INV) begin
-	    			qd = qd | 4'b0010;
-    				if (!pt2_q && !mip2v && !db2_q.regs) begin
-    					if (rob[tail2].v==INV)
-		    				qd = qd | 4'b0001;
-		    		end
-		    		else
-		    			qs = qs | 4'b0001;
-		    	end
-		    	else
-		    		qs = qs | 4'b0011;
-    		end
-    	end
+    	panic <= PANIC_INVALIDIQSTATE;
     4'b1100:
-    	if (rob[tail0].v==INV) begin
-    		qd = qd | 4'b1000;
-    		if (!pt0_q && !mip0v && !db0_q.regs) begin
-    			if (rob[tail1].v==INV)
-	    			qd = qd | 4'b0100;
+    	if (rob[tail2].v==INV) begin
+    		qd = 4'b0100;
+    		if (!pt2_q && !mip2v && !db2_q.regs) begin
+    			if (rob[tail3].v==INV) begin
+	    			qd = 4'b1100;
+	    		end
 	    	end
-	    	else
-	    		qs = qs | 4'b0100;
     	end
     4'b1101:
-    	if (rob[tail0].v==INV) begin
-    		qd = qd | 4'b1000;
-    		if (!pt0_q && !mip0v && !db0_q.regs) begin
-    			if (rob[tail1].v==INV) begin
-		    		qd = qd | 4'b0100;
-	    			if (!pt1_q && !mip1v && !db1_q.regs) begin
-	    				if (rob[tail2].v==INV)
-			    			qd = qd | 4'b0001;
-			    	end
-			    	else
-			    		qs = qs | 4'b0001;
-			    end
-    		end
-    		else
-    			qs = qs | 4'b0101;
-    	end
+    	panic <= PANIC_INVALIDIQSTATE;
     4'b1110:
-    	if (rob[tail0].v==INV) begin
-    		qd = qd | 4'b1000;
-    		if (!pt0_q && !mip0v && !db0_q.regs) begin
-    			if (rob[tail1].v==INV) begin
-		    		qd = qd | 4'b0100;
-	    			if (!pt1_q && !mip1v && !db1_q.regs) begin
-	    				if (rob[tail2].v==INV)
-			    			qd = qd | 4'b0010;
+    	if (rob[tail1].v==INV) begin
+    		qd = 4'b0010;
+    		if (!pt1_q && !mip1v && !db1_q.regs) begin
+    			if (rob[tail2].v==INV) begin
+		    		qd = 4'b0110;
+	    			if (!pt2_q && !mip2v && !db2_q.regs) begin
+	    				if (rob[tail3].v==INV) begin
+			    			qd = 4'b1110;
+			    		end
 			    	end
-			    	else
-			    		qs = qs | 4'b0010;
 		    	end
     		end
-    		else
-    			qs = qs | 4'b0110;
     	end
     4'b1111:
     	if (rob[tail0].v==INV) begin
-    		qd = qd | 4'b1000;
+    		qd = 4'b0001;
     		if (!pt0_q && !mip0v && !db0_q.regs) begin
     			if (rob[tail1].v==INV) begin
-	    			qd = qd | 4'b0100;
+	    			qd = 4'b0011;
 	    			if (!pt1_q && !mip1v && !db1_q.regs) begin
 	    				if (rob[tail2].v==INV) begin
-			    			qd = qd | 4'b0010;
+			    			qd = 4'b0111;
 		    				if (!pt2_q && !mip2v && !db2_q.regs) begin
 		    					if (rob[tail3].v==INV)
-				    				qd = qd | 4'b0001;
+				    				qd = 4'b1111;
 				    		end
-				    		else
-				    			qs = qs | 4'b0001;
 			    		end
 			    	end
-			    	else
-			    		qs = qs | 4'b0011;
     			end
     		end
-    		else
-    			qs = qs | 4'b0111;
     	end
     endcase
 end
 
 // cumulative queued.
 always_comb
-	next_cqd = cqd | qd | qs;
+	next_cqd = cqd | qd;
 always_ff @(posedge clk)
 if (rst)
 	cqd <= {XWID{1'd0}};
@@ -1243,11 +1139,11 @@ always_comb
 always_comb
 	hold_ins = |reg_bitmask || mipv;
 
+// All queued flag.
+
 always_ff @(posedge clk)
-if (rst) begin
-	pc <= RSTPC;
+if (rst)
 	allqd <= 1'b1;
-end
 else begin
 	if (pe_allqd & ~(ihito & ~hirq))
 		allqd <= 1'b1;
@@ -1259,9 +1155,29 @@ else begin
 	  if (~hirq) begin
 	  	//... If all queued and the register bitmask is empty
 	  	// Chenge PC to branch target if late branch predictor indicates such.
-	  	if ((pe_allqd|allqd) && !hold_ins) begin
-		  	pc <= brtgtv ? brtgt : next_pc;
+	  	if ((pe_allqd|allqd) && !hold_ins)
 		  	allqd <= 1'b0;
+		end
+	end
+end
+
+// Could use the lack of a PC change to fetch from an alternate path.
+
+always_ff @(posedge clk)
+if (rst)
+	pc <= RSTPC;
+else begin
+	if (ihito) begin						// must have a cache hit
+	  if (~hirq) begin					// and no pending interrupt
+	  	//... If all queued and the register bitmask is empty
+	  	// Chenge PC to branch target if late branch predictor indicates such.
+	  	if ((pe_allqd|allqd) && !hold_ins) begin
+	  		if (excret)
+	  			pc <= exc_ret_pc;
+	  		else if (brtgtv)			// late PC predictor
+	  			pc <= brtgt;
+	  		else
+	  			pc <= next_pc;			// early PC predictor from BTB logic
 		  end
 		end
 	end
@@ -1888,16 +1804,16 @@ reg do_commit;
 reg cmt0,cmt1,cmt2,cmt3;
 reg cmttlb0, cmttlb1,cmttlb2,cmttlb3;
 reg htcolls;		// head <-> tail collision
-always_comb cmt0 = ((rob[head0].v && &rob[head0].done) || !rob[head0].v);// && head0 != tail0;
-always_comb cmt1 = XWID > 1 && (((rob[head1].v && &rob[head1].done) || !rob[head1].v) && !rob[head0].decbus.oddball && !rob[head0].excv);// && head0 != tail0 && head0 != tail1;
+always_comb cmt0 = ((rob[head0].v && &rob[head0].done) || !rob[head0].v) && head0 != tail0;
+always_comb cmt1 = XWID > 1 && (((rob[head1].v && &rob[head1].done) || !rob[head1].v) && !rob[head0].decbus.oddball && !rob[head0].excv) && head0 != tail0 && head0 != tail1;
 always_comb cmt2 = XWID > 2 && (((rob[head2].v && &rob[head2].done) || !rob[head2].v) &&
 										!rob[head0].decbus.oddball && !rob[head1].decbus.oddball &&
-										!rob[head0].excv && !rob[head1].excv);// &&
-										//head0 != tail0 && head0 != tail1 && head0 != tail2;
+										!rob[head0].excv && !rob[head1].excv) &&
+										head0 != tail0 && head0 != tail1 && head0 != tail2;
 always_comb cmt3 = XWID > 3 && (((rob[head3].v && &rob[head3].done) || !rob[head3].v) &&
 										!rob[head0].decbus.oddball && !rob[head1].decbus.oddball && !rob[head2].decbus.oddball &&
-										!rob[head0].excv && !rob[head1].excv && !rob[head2].excv);// &&
-										//head0 != tail0 && head0 != tail1 && head0 != tail2 && head0 != tail3;
+										!rob[head0].excv && !rob[head1].excv && !rob[head2].excv) &&
+										head0 != tail0 && head0 != tail1 && head0 != tail2 && head0 != tail3;
 
 function fnColls;
 input rob_ndx_t head;
@@ -1911,17 +1827,17 @@ begin
 			fnColls = tail - head < 1;
 	2:
 		if (head >= tail)
-			fnColls = head - tail > 28;
+			fnColls = head - tail > 29;
 		else
 			fnColls = tail - head < 3;
 	3:
 		if (head >= tail)
-			fnColls = head - tail > 26;
+			fnColls = head - tail > 28;
 		else
 			fnColls = tail - head < 5;
 	4:
 		if (head >= tail)
-			fnColls = head - tail > 24;
+			fnColls = head - tail > 27;
 		else
 			fnColls = tail - head < 7;
 	default:
@@ -1941,22 +1857,25 @@ always_comb cmttlb1 = XWID > 1 && (rob[head1].v && rob[head1].lsq && !lsq[rob[he
 always_comb cmttlb2 = XWID > 2 && (rob[head2].v && rob[head2].lsq && !lsq[rob[head2].lsqndx.row][rob[head2].lsqndx.col].agen);
 always_comb cmttlb3 = XWID > 3 && (rob[head3].v && rob[head3].lsq && !lsq[rob[head3].lsqndx.row][rob[head3].lsqndx.col].agen);
 
-always_ff @(posedge clk)
-if (rst)
-	cmtcnt <= 3'd0;
+always_comb//ff @(posedge clk)
+if (rst) begin
+	cmtcnt = 3'd0;
+	do_commit = FALSE;
+end
 else begin
+	cmtcnt = 3'd0;
 	if (!htcolls) begin
 		casez({cmt0,cmt1,cmt2,cmt3})
-		4'b1111:	cmtcnt <= 3'd4;
-		4'b1110:	cmtcnt <= 3'd3;
-		4'b110?:	cmtcnt <= 3'd2;
-		4'b10??:	cmtcnt <= 3'd1;
-		default:	cmtcnt <= 3'd0;
+		4'b1111:	cmtcnt = 3'd4;
+		4'b1110:	cmtcnt = 3'd3;
+		4'b110?:	cmtcnt = 3'd2;
+		4'b10??:	cmtcnt = 3'd1;
+		default:	cmtcnt = 3'd0;
 		endcase
-		do_commit <= cmt0;
+		do_commit = cmt0;
 	end
 	else
-		do_commit <= FALSE;
+		do_commit = FALSE;
 end
 
 wire cmtbr = (
@@ -2070,10 +1989,10 @@ Qupls_rat urat1
 	.cmtbankb(alu1_bank),
 	.cmtbankc(dram0_bank),
 	.cmtbankd(fpu0_bank),
-	.cmtav(alu0_done & ~alu0_idle),
-	.cmtbv(alu1_done & ~alu1_idle),
-	.cmtcv(dram0_done & ~dram0_idle),
-	.cmtdv(fpu0_done & ~fpu0_idle),
+	.cmtav(alu0_done),
+	.cmtbv(alu1_done),
+	.cmtcv(dram0_done),
+	.cmtdv(fpu0_done),
 	.cmtaa(alu0_aRt),
 	.cmtba(alu1_aRt),
 	.cmtca(dram0_aRt),
@@ -2271,6 +2190,11 @@ Qupls_regfile4w15r urf1 (
 	.o(rfo)
 );
 
+always_ff @(posedge clk)
+begin
+	$display("wr:%d Rt=%d res=%x", wrport0_v, wrport0_Rt, wrport0_res);
+end
+
 
 // 
 // additional logic for handling a branch miss (STOMP logic)
@@ -2337,6 +2261,7 @@ modFcuMissPC umisspc1
 (
 	.instr(fcu_instr),
 	.bts(fcu_bts),
+	.micro_ip(micro_ip),
 	.pc(fcu_pc),
 	.pc_stack(pc_stack),
 	.bt(fcu_bt),
@@ -2344,7 +2269,8 @@ modFcuMissPC umisspc1
 	.argI(fcu_argI),
 	.ibh(ibh_t'(ic_line2[511:480])),
 	.misspc(fcu_misspc1),
-	.missgrp(fcu_missgrp)
+	.missgrp(fcu_missgrp),
+	.miss_mcip(fcu_miss_mcip1)
 );
 
 always_comb
@@ -2423,8 +2349,14 @@ always_ff @(posedge clk)
 	if (fcu_v6)
 		fcu_misspc <= fcu_misspc1;
 always_ff @(posedge clk)
+	if (fcu_v6)
+		fcu_miss_mcip <= fcu_miss_mcip1;
+always_ff @(posedge clk)
 	if (branchmiss_state==3'd4)
 		misspc = excmiss ? excmisspc : fcu_misspc;
+always_ff @(posedge clk)
+	if (branchmiss_state==3'd4)
+		miss_mcip <= fcu_miss_mcip;
 always_ff @(posedge clk)
 	if (branchmiss_state==3'd1)
 		missgrp = excmiss ? excmissgrp : fcu_missgrp;
@@ -2581,6 +2513,7 @@ Qupls_alu #(.ALU0(1'b1)) ualu0
 	.div(alu0_div),
 	.a(alu0_argA),
 	.b(alu0_argB),
+	.bi(alu0_argBI),
 	.c(alu0_argC),
 	.i(alu0_argI),
 	.cs(alu0_cs),
@@ -2604,6 +2537,7 @@ if (NALU > 1) begin
 		.div(alu1_div),
 		.a(alu1_argA),
 		.b(alu1_argB),
+		.bi(alu1_argBI),
 		.c(alu1_argC),
 		.i(alu1_argI),
 		.cs(alu1_cs),
@@ -2734,6 +2668,7 @@ else begin
 	if (tlb0_v)
 		agen0_v <= FALSE;
 end
+
 always_ff @(posedge clk) 
 if (rst)
 	agen1_v <= FALSE;
@@ -2999,11 +2934,26 @@ Qupls_mem_more ummore1
 );
 
 // When to stomp on instructions enqueuing.
-wire stomp0 = 1'b0;
-wire stomp1 = pt0_q||mip0v||XWID < 2;
-wire stomp2 = pt0_q||pt1_q||mip0v||mip1v || XWID < 3;
-wire stomp3 = pt0_q||pt1_q||pt2_q||mip0v||mip1v||mip2v || XWID < 4;
+// If the slot is not queuing then it is stomped on.
+wire stomp0 = ~qd[0];
+wire stomp1 = ~qd[1]||pt0_q||mip0v||XWID < 2;
+wire stomp2 = ~qd[2]||pt0_q||pt1_q||mip0v||mip1v || XWID < 3;
+wire stomp3 = ~qd[3]||pt0_q||pt1_q||pt2_q||mip0v||mip1v||mip2v || XWID < 4;
 
+always_ff @(posedge clk)
+if (rst) begin
+	micro_ip <= 12'h1A0;
+end
+else begin
+  if (~hirq) begin
+  	if (pe_allqd|allqd)
+			micro_ip <= (brtgtv & mipv) ? mcbrtgt : next_micro_ip;
+	end
+			 if (mip0v) begin micro_ip <= mip0; end
+	else if (mip1v) begin micro_ip <= mip1; end
+	else if (mip2v) begin micro_ip <= mip2; end
+	else if (mip3v) begin micro_ip <= mip3; end
+end
 
 always_ff @(posedge clk)
 if (rst) begin
@@ -3029,13 +2979,19 @@ else begin
 	else if (mip2v) begin micro_ir <= ins2_d; end
 	else if (mip3v) begin micro_ir <= ins3_d; end
   if (~hirq) begin
-  	if (pe_allqd|allqd)
-			micro_ip <= next_micro_ip;
+  	if ((pe_allqd|allqd) && !hold_ins)
+  		excret <= FALSE;
 	end
-			 if (mip0v) begin micro_ip <= mip0; end
-	else if (mip1v) begin micro_ip <= mip1; end
-	else if (mip2v) begin micro_ip <= mip2; end
-	else if (mip3v) begin micro_ip <= mip3; end
+	
+	// Set atom mask
+	if (fnIsAtom(ins0_d))
+		atom_mask <= ins0_d[39:7];
+	if (fnIsAtom(ins1_d))
+		atom_mask <= ins1_d[39:7];
+	if (fnIsAtom(ins2_d))
+		atom_mask <= ins2_d[39:7];
+	if (fnIsAtom(ins3_d))
+		atom_mask <= ins3_d[39:7];
 
 	// This test in sync with PC update
 	if (!branchmiss && ihito && !hirq && ((pe_allqd|allqd) && !hold_ins))
@@ -3047,7 +3003,7 @@ else begin
 // Once the operation is done, flag the ROB entry as done and mark the unit
 // as idle. Record any exceptions that may have occurred.
 //
-	if (!alu0_idle && rob[alu0_id].v && !robentry_stomp[alu0_id]) begin
+	if (rob[alu0_id].v && !rob[alu0_id].done[0]) begin
     rob[ alu0_id ].exc <= alu0_exc;
     rob[ alu0_id ].excv <= |alu0_exc;
     rob[ alu0_id ].done[0] <= !rob[ alu0_id ].decbus.multicycle;
@@ -3071,10 +3027,8 @@ else begin
 	    rob[ alu0_id ].out <= INV;
   	end
 	end
-	if (robentry_stomp[alu0_id])
-		alu0_idle <= TRUE;
 
-	if (NALU > 1 && !alu1_idle && rob[alu1_id].v && !robentry_stomp[alu1_id]) begin
+	if (NALU > 1 && rob[alu1_id].v && !rob[alu1_id].done[0]) begin
    	alu1_done <= TRUE;
     alu1_idle <= TRUE;
     rob[ alu1_id ].exc <= alu1_exc;
@@ -3083,10 +3037,8 @@ else begin
     rob[ alu1_id ].done[1] <= 1'b1;
     rob[ alu1_id ].out <= INV;
 	end
-	if (robentry_stomp[alu1_id])
-		alu1_idle <= TRUE;
 
-	if (NFPU > 0 && !fpu0_idle && rob[fpu0_id].v && !robentry_stomp[fpu0_id]) begin
+	if (NFPU > 0 && !fpu0_idle && rob[fpu0_id].v) begin
 		if (fpu0_done) begin
 			fpu0_idle <= TRUE;
 			/*
@@ -3106,10 +3058,8 @@ else begin
     rob[ fpu0_id ].done[1] <= 1'b1;
     rob[ fpu0_id ].out <= INV;
 	end
-	if (robentry_stomp[fpu0_id])
-		fpu0_idle <= TRUE;
 	
-	if (NFPU > 1 && !fpu1_idle && rob[fpu1_id].v && !robentry_stomp[fpu1_id]) begin
+	if (NFPU > 1 && !fpu1_idle && rob[fpu1_id].v) begin
 		if (fpu1_done)
 			fpu1_idle <= TRUE;
     rob[ fpu1_id ].exc <= fpu1_exc;
@@ -3118,8 +3068,6 @@ else begin
     rob[ fpu1_id ].done[1] <= 1'b1;
     rob[ fpu1_id ].out <= INV;
 	end
-	if (robentry_stomp[fpu1_id])
-		fpu1_idle <= TRUE;
 	
 	if (fcu_v && rob[fcu_id].v && fcu_v3 && !robentry_stomp[fcu_id] && branchmiss_state==3'd7) begin
 		fcu_v <= INV;
@@ -3136,13 +3084,6 @@ else begin
     rob[ fcu_id ].takb <= takbr;	// could maybe just use takb
 //    fcu_bts <= BTS_NONE;
 	end
-	// Terminate FCU operation on stomp.
-	if (robentry_stomp[fcu_id] || (rob[fcu_id].out && !rob[fcu_id].v)) begin
-		fcu_v <= INV;
-		fcu_v2 <= INV;
-		fcu_v3 <= INV;
-		fcu_idle <= TRUE;
-	end
 	// If data for stomped instruction, ignore
 	// dram_vn will be false for stomped data
 	if (dram0_done && rob[ dram0_id ].v) begin
@@ -3150,14 +3091,7 @@ else begin
     rob[ dram0_id ].excv <= |dram_exc0;
     rob[ dram0_id ].out <= INV;
     rob[ dram0_id ].done <= 2'b11;
-		for (n18r = 0; n18r < LSQ_ENTRIES; n18r = n18r + 1) begin
-			for (n18c = 0; n18c < LSQ_ENTRIES; n18c = n18c + 1) begin
-				if (lsq[n18r][n18c].rndx==dram0_id) begin
-					lsq[n18r][n18c].v <= INV;
-					lsq[n18r][n18c].agen <= FALSE;
-				end
-			end
-		end
+    tInvalidateLSQ(dram0_id);
 	end
 	if (NDATA_PORTS > 1) begin
 		if (dram1_done && rob[ dram1_id ].v) begin
@@ -3165,49 +3099,25 @@ else begin
 	    rob[ dram1_id ].excv <= |dram_exc1;
 	    rob[ dram1_id ].out <= INV;
 	    rob[ dram1_id ].done <= 2'b11;
-			for (n18r = 0; n18r < LSQ_ENTRIES; n18r = n18r + 1) begin
-				for (n18c = 0; n18c < LSQ_ENTRIES; n18c = n18c + 1) begin
-					if (lsq[n18r][n18c].rndx==dram1_id) begin
-						lsq[n18r][n18c].v <= INV;
-						lsq[n18r][n18c].agen <= FALSE;
-					end
-				end
-			end
+	    tInvalidateLSQ(dram1_id);
 		end
 	end
 	// Store TLB translation in LSQ
 	// If there is a TLB miss it could be a number of cycles before output
 	// becomes valid.
-	if (tlb0_v && !agen0_idle) begin
+	if (tlb0_v && rob[agen0_id].v && !rob[agen0_id].done[0] && rob[agen0_id].decbus.mem) begin
 		if (|pg_fault && pg_faultq==2'd1) begin
 			agen0_idle <= TRUE;
 			rob[agen0_id].exc <= FLT_PAGE;
 			rob[agen0_id].excv <= TRUE;
-			rob[agen0_id].done[1] <= 1'b1;
+			rob[agen0_id].done <= 2'b11;
+			rob[agen0_id].out <= 1'b0;
 		end
 		if (rob[agen0_id].lsq && !rob[agen0_id].done[0]) begin
 			agen0_idle <= TRUE;
 			rob[agen0_id].done[0] <= 1'b1;
 			rob[agen0_id].out <= 1'b0;
-			for (n18r = 0; n18r < LSQ_ENTRIES; n18r = n18r + 1) begin
-				for (n18c = 0; n18c < LSQ_ENTRIES; n18c = n18c + 1) begin
-					if (lsq[n18r][n18c].rndx==agen0_id) begin
-						lsq[n18r][n18c].agen <= TRUE;
-						lsq[n18r][n18c].vadr <= tlb0_res;
-						lsq[n18r][n18c].padr <= {tlb_entry0.pte.ppn,tlb0_res[15:0]};
-					end
-				end
-			end
-		end
-	end
-	if (robentry_stomp[agen0_id] && rob[agen0_id].lsq) begin
-		for (n18r = 0; n18r < LSQ_ENTRIES; n18r = n18r + 1) begin
-			for (n18c = 0; n18c < LSQ_ENTRIES; n18c = n18c + 1) begin
-				if (lsq[n18r][n18c].rndx==agen0_id) begin
-					lsq[n18r][n18c].v <= INV;
-					lsq[n18r][n18c].agen <= FALSE;
-				end
-			end
+			tSetLSQ(agen0_id, tlb0_res, tlb_entry0);
 		end
 	end
 
@@ -3218,30 +3128,13 @@ else begin
 				rob[agen1_id].exc <= FLT_PAGE;
 				rob[agen1_id].excv <= TRUE;
 				rob[agen1_id].done[1] <= 1'b1;
+				rob[agen1_id].out <= 1'b0;
 			end
 			if (rob[agen1_id].lsq && !rob[agen1_id].done[0]) begin
 				agen1_idle <= TRUE;
 				rob[agen1_id].done[0] <= 1'b1;
 				rob[agen1_id].out <= 1'b0;
-				for (n18r = 0; n18r < LSQ_ENTRIES; n18r = n18r + 1) begin
-					for (n18c = 0; n18c < LSQ_ENTRIES; n18c = n18c + 1) begin
-						if (lsq[n18r][n18c].rndx==agen1_id) begin
-							lsq[n18r][n18c].agen <= TRUE;
-							lsq[n18r][n18c].vadr <= tlb1_res;
-							lsq[n18r][n18c].padr <= {tlb_entry1.pte.ppn,tlb1_res[15:0]};
-						end
-					end
-				end
-			end
-		end
-		if (robentry_stomp[agen1_id] && rob[agen1_id].lsq) begin
-			for (n18r = 0; n18r < LSQ_ENTRIES; n18r = n18r + 1) begin
-				for (n18c = 0; n18c < LSQ_ENTRIES; n18c = n18c + 1) begin
-					if (lsq[n18r][n18c].rndx==agen1_id) begin
-						lsq[n18r][n18c].v <= INV;
-						lsq[n18r][n18c].agen <= FALSE;
-					end
-				end
+				tSetLSQ(agen1_id, tlb1_res, tlb_entry1);
 			end
 		end
 	end
@@ -3318,11 +3211,15 @@ else begin
 
 	// Reservation stations
 
+	// If the operation is not multi-cycle assume it will complete within one
+	// clock cycle, in which case the ALU is still idle. This allows back-to-back
+	// issue of ALU operations to the ALU.
 	if (alu0_available && alu0_rndxv && alu0_idle) begin
-		alu0_idle <= FALSE;
+		alu0_idle <= !rob[alu0_rndx].decbus.multicycle;
 		alu0_id <= alu0_rndx;
 		alu0_argA <= rob[alu0_rndx].decbus.imma | rfo_alu0_argA;
 		alu0_argB <= rfo_alu0_argB;
+		alu0_argBI <= rob[alu0_rndx].decbus.immb | rfo_alu0_argB;
 		alu0_argC <= rob[alu0_rndx].decbus.immc | rfo_alu0_argC;
 		alu0_argI	<= rob[alu0_rndx].decbus.immb;
 		alu0_cs <= rob[alu0_rndx].decbus.Rcc;
@@ -3339,10 +3236,11 @@ else begin
 
 	if (NALU > 1) begin
 		if (alu1_available && alu1_rndxv && alu1_idle) begin
-			alu1_idle <= FALSE;
+			alu1_idle <= !rob[alu1_rndx].decbus.multicycle;
 			alu1_id <= alu1_rndx;
 			alu1_argA <= rob[alu1_rndx].decbus.imma | rfo_alu1_argA;
 			alu1_argB <= rfo_alu1_argB;
+			alu1_argBI <= rob[alu1_rndx].decbus.immb | rfo_alu1_argB;
 			alu1_argI	<= rob[alu1_rndx].decbus.immb;
 			alu1_cs <= rob[alu1_rndx].decbus.Rcc;
 			alu1_Rt <= rob[alu1_rndx].nRt;
@@ -3364,7 +3262,7 @@ else begin
 			fpu0_argB <= rfo_fpu0_argB;
 			fpu0_argC <= rob[fpu0_rndx].decbus.immc | rfo_fpu0_argC;
 			fpu0_argI	<= rob[fpu0_rndx].decbus.immb;
-			fpu0_Rt <= rob[fpu0_rndx].pRt;
+			fpu0_Rt <= rob[fpu0_rndx].nRt;
 			fpu0_aRt <= rob[fpu0_rndx].decbus.Rt;
 			fpu0_cs <= rob[fpu0_rndx].decbus.Rcc;
 			fpu0_bank <= rob[fpu0_rndx].om==2'd0 ? 1'b0 : 1'b1;
@@ -3382,7 +3280,7 @@ else begin
 			fpu1_argB <= rfo_fpu1_argB;
 			fpu1_argC <= rob[fpu1_rndx].decbus.immc | rfo_fpu1_argC;
 			fpu1_argI	<= rob[fpu1_rndx].decbus.immb;
-			fpu1_Rt <= rob[fpu1_rndx].pRt;
+			fpu1_Rt <= rob[fpu1_rndx].nRt;
 			fpu1_aRt <= rob[fpu1_rndx].decbus.Rt;
 			fpu1_cs <= rob[fpu1_rndx].decbus.Rcc;
 			fpu1_bank <= rob[fpu1_rndx].om==2'd0 ? 1'b0 : 1'b1;
@@ -3780,12 +3678,13 @@ else begin
 			for (n12 = 0; n12 < ROB_ENTRIES; n12 = n12 + 1)
 				rob[n12].sn <= rob[n12].sn - 4;
 			tEnque(9'h100-XWID,db0_q,pc0_q,grp_q,ins0_q,pt0_q,tail0,
-				stomp0, prn[0], prn[1], prn[2], prn[3], prnv[0], prnv[1], prnv[2],
-				Rt0_q, cndx, grplen0, last0);
+				stomp0, prn[0], prn[1], prn[2], prn[3], Rt0_q, prnv[0], prnv[1], prnv[2],
+				cndx, grplen0, last0);
+			atom_mask <= atom_mask[32:3];
 			if (XWID > 1) begin
 				tEnque(9'h101-XWID,db1_q,pc1_q,grp_q,ins1_q,pt1_q,tail1,
-				stomp1, prn[4], prn[5], prn[6], prn[7], prnv[4], prnv[5], prnv[6],
-				Rt1_q, cndx, grplen1, last1);
+				stomp1, prn[4], prn[5], prn[6], prn[7], Rt1_q, prnv[4], prnv[5], prnv[6],
+				cndx, grplen1, last1);
 					// If the instruction's source register is the same as a previous target
 					// register, use the register mapping of the previous target register.
 					// The register mapping will not have been updated in the RAT yet in
@@ -3793,22 +3692,24 @@ else begin
 				if (db1_q.Ra==db0_q.Rt && db1_q.Ra!=7'd0) begin $display("bypass: ar%d to pr%d", db1_q.Ra, Rt0_q); rob[tail1].pRa <= Rt0_q; rob[tail1].argA_v <= fnSourceAv(ins1_q); end
 				if (db1_q.Rb==db0_q.Rt && db1_q.Rb!=7'd0) begin rob[tail1].pRb <= Rt0_q; rob[tail1].argB_v <= fnSourceBv(ins1_q); end
 				if (db1_q.Rc==db0_q.Rt && db1_q.Rc!=7'd0) begin rob[tail1].pRc <= Rt0_q; rob[tail1].argC_v <= fnSourceCv(ins1_q); end
+				atom_mask <= atom_mask[32:6];
 			end
 			if (XWID > 2) begin
 				tEnque(9'h102-XWID,db2_q,pc2_q,grp_q,ins2_q,pt2_q,tail2,
-				stomp2, prn[8], prn[9], prn[10], prn[11], prnv[8], prnv[9], prnv[10], 
-				Rt2_q, cndx, grplen2, last3);
+				stomp2, prn[8], prn[9], prn[10], prn[11], Rt2_q, prnv[8], prnv[9], prnv[10], 
+				cndx, grplen2, last3);
 				if (db2_q.Ra==db0_q.Rt && db2_q.Ra!=7'd0) begin $display("bypass: ar%d to pr%d", db2_q.Ra, Rt0_q); rob[tail2].pRa <= Rt0_q; rob[tail2].argA_v <= fnSourceAv(ins2_q); end
 				if (db2_q.Rb==db0_q.Rt && db2_q.Rb!=7'd0) begin rob[tail2].pRb <= Rt0_q; rob[tail2].argB_v <= fnSourceBv(ins2_q); end
 				if (db2_q.Rc==db0_q.Rt && db2_q.Rc!=7'd0) begin rob[tail2].pRc <= Rt0_q; rob[tail2].argC_v <= fnSourceCv(ins2_q); end
 				if (db2_q.Ra==db1_q.Rt && db2_q.Ra!=7'd0) begin $display("bypass: ar%d to pr%d", db2_q.Ra, Rt1_q); rob[tail2].pRa <= Rt1_q; rob[tail2].argA_v <= fnSourceAv(ins2_q); end
 				if (db2_q.Rb==db1_q.Rt && db2_q.Rb!=7'd0) begin rob[tail2].pRb <= Rt1_q; rob[tail2].argB_v <= fnSourceBv(ins2_q); end
 				if (db2_q.Rc==db1_q.Rt && db2_q.Rc!=7'd0) begin rob[tail2].pRc <= Rt1_q; rob[tail2].argC_v <= fnSourceCv(ins2_q); end
+				atom_mask <= atom_mask[32:9];
 			end
 			if (XWID > 3) begin
 				tEnque(9'h103-XWID,db3_q,pc3_q,grp_q,ins3_q,pt3_q,tail3,
-				stomp3, prn[12], prn[13], prn[14], prn[15], prnv[12], prnv[13], prnv[14],
-				Rt3_q, cndx,grplen3,last3);
+				stomp3, prn[12], prn[13], prn[14], prn[15], Rt3_q, prnv[12], prnv[13], prnv[14],
+				cndx,grplen3,last3);
 				if (db3_q.Ra==db0_q.Rt && db3_q.Ra!=7'd0) begin $display("bypass: ar%d to pr%d", db3_q.Ra, Rt0_q); rob[tail3].pRa <= Rt0_q; rob[tail3].argA_v <= fnSourceAv(ins3_q); end
 				if (db3_q.Rb==db0_q.Rt && db3_q.Rb!=7'd0) begin rob[tail3].pRb <= Rt0_q; rob[tail3].argB_v <= fnSourceBv(ins3_q); end
 				if (db3_q.Rc==db0_q.Rt && db3_q.Rc!=7'd0) begin rob[tail3].pRc <= Rt0_q; rob[tail3].argC_v <= fnSourceCv(ins3_q); end
@@ -3818,6 +3719,7 @@ else begin
 				if (db3_q.Ra==db2_q.Rt && db3_q.Ra!=7'd0) begin $display("bypass: ar%d to pr%d", db3_q.Ra, Rt2_q); rob[tail3].pRa <= Rt2_q; rob[tail3].argA_v <= fnSourceAv(ins3_q); end
 				if (db3_q.Rb==db2_q.Rt && db3_q.Rb!=7'd0) begin rob[tail3].pRb <= Rt2_q; rob[tail3].argB_v <= fnSourceBv(ins3_q); end
 				if (db3_q.Rc==db2_q.Rt && db3_q.Rc!=7'd0) begin rob[tail3].pRc <= Rt2_q; rob[tail3].argC_v <= fnSourceCv(ins3_q); end
+				atom_mask <= atom_mask[32:12];
 			end
 			tail0 <= (tail0 + 3'd4) % ROB_ENTRIES;
 		end
@@ -3825,58 +3727,38 @@ else begin
 
 	// Place up to two instructions into the load/store queue in order.	
 
-	if (lsq[lsq_tail0.row][0].v==INV && rob[agen0_id].out) begin	// Can an entry be queued?
-		rob[agen0_id].out <= FALSE;
-		rob[agen0_id].lsq <= 1'b1;
-		rob[agen0_id].lsqndx <= lsq_tail0;
-		if (LSQ2 && lsq[lsq_tail0.row][1].v==INV && rob[agen1_id].out) begin	// Can a second entry be queued?
-			rob[agen1_id].out <= FALSE;
-			rob[agen1_id].lsq <= 1'b1;
-			rob[agen1_id].lsqndx <= {lsq_tail0.row,1'b1};
+	if (lsq[lsq_tail0.row][0].v==INV && rob[agen0_id].out && !rob[agen0_id].lsq && rob[agen0_id].decbus.mem) begin	// Can an entry be queued?
+		if (!fnIsInLSQ(agen0_id)) begin
+			rob[agen0_id].lsq <= 1'b1;
+			rob[agen0_id].lsqndx <= lsq_tail0;
+		end
+		if (LSQ2 && lsq[lsq_tail0.row][1].v==INV && rob[agen1_id].out && !rob[agen1_id].lsq && rob[agen1_id].decbus.mem) begin	// Can a second entry be queued?
+			if (!fnIsInLSQ(agen1_id)) begin
+				rob[agen1_id].lsq <= 1'b1;
+				rob[agen1_id].lsqndx <= {lsq_tail0.row,1'b1};
+			end
 		end
 	end
 
-	if (lsq[lsq_tail0.row][0].v==INV && rob[agen0_id].out) begin	// Can an entry be queued?
-		lsq[lsq_tail0.row][0].rndx <= agen0_id;
-		lsq[lsq_tail0.row][0].v <= VAL;
-		lsq[lsq_tail0.row][0].agen <= FALSE;
-		lsq[lsq_tail0.row][0].op <= rob[agen0_id].op;
-		lsq[lsq_tail0.row][0].pc <= rob[agen0_id].pc;
-		lsq[lsq_tail0.row][0].load <= rob[agen0_id].decbus.load;
-		lsq[lsq_tail0.row][0].loadz <= rob[agen0_id].decbus.loadz;
-		lsq[lsq_tail0.row][0].store <= rob[agen0_id].decbus.store;
-		store_argC_reg <= rob[agen0_id].pRc;
-		//store_tail <= lsq_tail0;
-		lsq[lsq_tail0.row][0].Rc <= rob[agen0_id].pRc;
-		lsq[lsq_tail0.row][0].Rt <= rob[agen0_id].nRt;
-		lsq[lsq_tail0.row][0].aRt <= rob[agen0_id].decbus.Rt;
-		lsq[lsq_tail0.row][0].om <= rob[agen0_id].om;
-		lsq[lsq_tail0.row][0].memsz <= fnMemsz(rob[agen0_id].op);
-		for (n12r = 0; n12r < LSQ_ENTRIES; n12r = n12r + 1)
-			for (n12c = 0; n12c < 2; n12c = n12c + 1)
-				lsq[n12r][n12c].sn <= lsq[n12r][n12c].sn - 1;
-		lsq[lsq_tail0.row][0].sn <= 8'hFF;
-		lsq_tail.row <= (lsq_tail.row + 2'd1) % LSQ_ENTRIES;
-		lsq_tail.col <= 3'd0;
-		if (LSQ2 && lsq[lsq_tail0.row][1].v==INV && rob[agen1_id].out) begin	// Can a second entry be queued?
-			lsq[lsq_tail0.row][1].rndx <= agen1_id;
-			lsq[lsq_tail0.row][1].v <= VAL;
-			lsq[lsq_tail0.row][1].agen <= FALSE;
-			lsq[lsq_tail0.row][1].op <= rob[agen1_id].op;
-			lsq[lsq_tail0.row][1].pc <= rob[agen1_id].pc;
-			lsq[lsq_tail0.row][1].load <= rob[agen1_id].decbus.load;
-			lsq[lsq_tail0.row][1].loadz <= rob[agen1_id].decbus.loadz;
-			lsq[lsq_tail0.row][1].store <= rob[agen1_id].decbus.store;
-			lsq[lsq_tail0.row][1].Rc <= rob[agen1_id].pRc;
-			lsq[lsq_tail0.row][1].Rt <= rob[agen1_id].nRt;
-			lsq[lsq_tail0.row][1].aRt <= rob[agen1_id].decbus.Rt;
-			lsq[lsq_tail0.row][1].om <= rob[agen1_id].om;
-			lsq[lsq_tail0.row][1].memsz <= fnMemsz(rob[agen1_id].op);
+	if (lsq[lsq_tail0.row][0].v==INV && rob[agen0_id].out && !rob[agen0_id].lsq && rob[agen0_id].decbus.mem) begin	// Can an entry be queued?
+		if (!fnIsInLSQ(agen0_id)) begin
 			for (n12r = 0; n12r < LSQ_ENTRIES; n12r = n12r + 1)
 				for (n12c = 0; n12c < 2; n12c = n12c + 1)
-					lsq[n12r][n12c].sn <= lsq[n12r][n12c].sn - 2;
-			lsq[lsq_tail0.row][0].sn <= 8'hFE;
-			lsq[lsq_tail0.row][1].sn <= 8'hFF;
+					lsq[n12r][n12c].sn <= lsq[n12r][n12c].sn - 1;
+			tEnqueLSE(8'hFF, lsq_tail0, agen0_id, rob[agen0_id], 2'd1);
+			store_tail <= lsq_tail0;
+			lsq_tail.row <= (lsq_tail.row + 2'd1) % LSQ_ENTRIES;
+			lsq_tail.col <= 3'd0;
+		end
+		if (LSQ2 && lsq[lsq_tail0.row][1].v==INV && rob[agen1_id].out && !rob[agen1_id].lsq && rob[agen1_id].decbus.mem) begin	// Can a second entry be queued?
+			if (!fnIsInLSQ(agen1_id)) begin
+				for (n12r = 0; n12r < LSQ_ENTRIES; n12r = n12r + 1)
+					for (n12c = 0; n12c < 2; n12c = n12c + 1)
+						lsq[n12r][n12c].sn <= lsq[n12r][n12c].sn - 2;
+				tEnqueLSE(8'hFF, {lsq_tail0.row,lsq_tail0.col|1}, agen1_id, rob[agen1_id], 2'd2);
+				store_tail <= {lsq_tail0.row,lsq_tail0.col|1};
+				lsq[lsq_tail0.row][0].sn <= 8'hFE;
+			end
 		end
 	end
 	if (lsq[store_tail.row][store_tail.col].store &&
@@ -3897,14 +3779,16 @@ else begin
 // Only the first exception is processed.
 // Trigger page walk TLB update for outstanding agen request. Must be done when
 // the instruction is at the commit stage to mitigate Spectre attacks.
-	commit0_id <= head0;
-	commit1_id <= head1;
-	commit2_id <= head2;
-	commit3_id <= head3;
-	commit0_idv <= cmttlb0;
-	commit1_idv <= cmttlb1;
-	commit2_idv <= cmttlb2;
-	commit3_idv <= cmttlb3;
+	if (!htcolls) begin
+		commit0_id <= head0;
+		commit1_id <= head1;
+		commit2_id <= head2;
+		commit3_id <= head3;
+		commit0_idv <= cmttlb0;
+		commit1_idv <= cmttlb1;
+		commit2_idv <= cmttlb2;
+		commit3_idv <= cmttlb3;
+	end
 	if (do_commit) begin
 		commit_pc0 <= rob[head0].pc;
 		commit_pc1 <= rob[head1].pc;
@@ -3979,40 +3863,52 @@ else begin
 		else if (rob[head3].decbus.oddball && !rob[head3].excv && cmtcnt > 3'd3)
 			tOddballCommit(1'b1, head3);
 		// Trigger exception processing for last instruction in group.
-		if (rob[head0].excv) begin
+		if (rob[head0].excv)
 //			err_mask[head0] <= 1'b1;
 //			if (rob[head0].last)
 			tProcessExc(head0,rob[head0].pc);
-		end
-		else if (rob[head1].excv && XWID > 1) begin
+		else if (rob[head1].excv && cmtcnt > 3'd1)
 			tProcessExc(head1,rob[head1].pc);
-		end
-		else if (rob[head2].excv && XWID > 2) begin
+		else if (rob[head2].excv && cmtcnt > 3'd2)
 			tProcessExc(head2,rob[head2].pc);
-		end
-		else if (rob[head3].excv && XWID > 3) begin
+		else if (rob[head3].excv && cmtcnt > 3'd3)
 			tProcessExc(head3,rob[head3].pc);
-		end
 	end
 	else begin
 		tags2free[0] <= 8'd0;
 		tags2free[1] <= 8'd0;
 		tags2free[2] <= 8'd0;
 		tags2free[3] <= 8'd0;
+		freevals <= 4'd0;
 	end
 	
-	// Branchmiss
+	// Branchmiss stomping
+	// Mark functional units stomped on idle.
 	// Invalidate instructions newer than the branch in the ROB.
+	// Free up load / store queue entries.
+	if (robentry_stomp[alu0_id])
+		alu0_idle <= TRUE;
+	if (robentry_stomp[alu1_id])
+		alu1_idle <= TRUE;
+	if (robentry_stomp[fpu0_id])
+		fpu0_idle <= TRUE;
+	if (robentry_stomp[fpu1_id])
+		fpu1_idle <= TRUE;
+	// Terminate FCU operation on stomp.
+	if (robentry_stomp[fcu_id] || (rob[fcu_id].out && !rob[fcu_id].v)) begin
+		fcu_v <= INV;
+		fcu_v2 <= INV;
+		fcu_v3 <= INV;
+		fcu_idle <= TRUE;
+	end
 	for (n3 = 0; n3 < ROB_ENTRIES; n3 = n3 + 1) begin
 		if (robentry_stomp[n3]) begin
 			rob[n3].v <= INV;
 			rob[n3].out <= FALSE;
-			// Clear corresponding LSQ entry.
-			if (rob[n3].lsq) begin
-				lsq[rob[n3].lsqndx.row][rob[n3].lsqndx.col].v <= INV;
-				lsq[rob[n3].lsqndx.row][rob[n3].lsqndx.col].agen <= FALSE;
-			end
 			rob[n3].lsq <= 1'd0;
+			// Clear corresponding LSQ entries.
+			if (rob[n3].lsq)
+				tInvalidateLSQ(n3);
 		end
 	end
 	
@@ -4074,7 +3970,11 @@ begin
 	endcase
 	
 end
-/*
+
+// The following only works for simulation. The code needs to be commented
+// out for synthesis.
+
+// We only want the live value of the register for display.
 function value_t fnRegVal;
 input pregno_t regno;
 begin
@@ -4088,7 +3988,7 @@ end
 endfunction
 
 generate begin : gDisplay
-if (SIM) begin
+begin
 always_ff @(posedge clk) begin: clock_n_debug
 	integer i;
 	integer j;
@@ -4106,7 +4006,67 @@ end
 end
 end
 endgenerate
-*/
+
+// Detect if a ROB entry already has an LSQ entry. Used at queue time to prevent
+// the same ROB entry from using multiple LSQ entries.
+
+function fnIsInLSQ;
+input rob_ndx_t id;
+integer n18r, n18c;
+begin
+	fnIsInLSQ = FALSE;
+	for (n18r = 0; n18r < LSQ_ENTRIES; n18r = n18r + 1) begin
+		for (n18c = 0; n18c < LSQ_ENTRIES; n18c = n18c + 1) begin
+			if (lsq[n18r][n18c].rndx==id && lsq[n18r][n18c].v==VAL) begin
+				fnIsInLSQ = TRUE;
+			end
+		end
+	end
+end
+endfunction
+
+// Invalidate LSQ entries associated with a ROB entry. This searches the LSQ
+// which is small in case multiple LSQ entries are associated. This is an
+// issue in the core's current operation.
+
+task tInvalidateLSQ;
+input rob_ndx_t id;
+integer n18r, n18c;
+begin
+	for (n18r = 0; n18r < LSQ_ENTRIES; n18r = n18r + 1) begin
+		for (n18c = 0; n18c < LSQ_ENTRIES; n18c = n18c + 1) begin
+			if (lsq[n18r][n18c].rndx==id) begin
+				lsq[n18r][n18c].v <= INV;
+				lsq[n18r][n18c].agen <= FALSE;
+			end
+		end
+	end
+end
+endtask
+
+// Update the address fields in the LSQ entries.
+
+task tSetLSQ;
+input rob_ndx_t id;
+input address_t adr;
+input tlb_entry_t tlbe;
+integer n18r, n18c;
+begin
+	for (n18r = 0; n18r < LSQ_ENTRIES; n18r = n18r + 1) begin
+		for (n18c = 0; n18c < LSQ_ENTRIES; n18c = n18c + 1) begin
+			if (lsq[n18r][n18c].rndx==id) begin
+				lsq[n18r][n18c].agen <= TRUE;
+				lsq[n18r][n18c].vadr <= adr;
+				lsq[n18r][n18c].padr <= {tlbe.pte.ppn,adr[15:0]};
+			end
+		end
+	end
+end
+endtask
+
+// Reset.
+// A lot of resets to keep simulation happy.
+
 task tReset;
 begin
 	micro_ir <= {33'd0,OP_NOP};
@@ -4119,6 +4079,8 @@ begin
 	excir <= {33'd0,OP_NOP};
 	excmiss <= 1'b0;
 	excmisspc <= RSTPC;
+	excret <= FALSE;
+	exc_ret_pc <= RSTPC;
 	sr <= 64'd0;
 	sr.om <= OM_MACHINE;
 	sr.ipl <= 3'd7;				// non-maskable interrupts only
@@ -4214,6 +4176,7 @@ begin
 	fcu_v4 <= INV;
 	fcu_v5 <= INV;
 	fcu_v6 <= INV;
+	fcu_id <= 5'd0;
 	fcu_idle <= TRUE;
 	dram0_aRt <= 7'd0;
 	dram1_aRt <= 7'd0;
@@ -4250,6 +4213,13 @@ begin
 	alu1_idle <= TRUE;
 	alu0_done <= TRUE;
 	alu1_done <= TRUE;
+	alu0_id <= 5'd0;
+	alu1_id <= 5'd0;
+	alu0_argA <= {$bits(value_t){1'b0}};
+	alu0_argB <= {$bits(value_t){1'b0}};
+	alu0_argBI <= {$bits(value_t){1'b0}};
+	alu0_argC <= {$bits(value_t){1'b0}};
+	alu0_argI <= {$bits(value_t){1'b0}};
 	agen0_id <= 5'd0;
 	agen1_id <= 5'd0;
 	agen0_idle <= TRUE;
@@ -4259,8 +4229,16 @@ begin
 	freevals <= 4'd0;
 	ls_bmf <= 1'd0;
 	reg_bitmask <= 64'd0;
+	commit0_id <= ROB_ENTRIES-4;
+	commit1_id <= ROB_ENTRIES-3;
+	commit2_id <= ROB_ENTRIES-2;
+	commit3_id <= ROB_ENTRIES-1;
 end
 endtask
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// Queue instruction.
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 task tEnque;
 input seqnum_t sn;
@@ -4299,7 +4277,8 @@ begin
 	rob[tail].argB_v <= fnSourceBv(ins) | pRbv;
 	rob[tail].argC_v <= fnSourceCv(ins) | pRcv;
 	// "static" fields, these fields remain constant after enqueue
-	rob[tail].brtgt <= db.mcb ? db.immc[10:0] : fnTargetIP(pc,db.immc);
+	rob[tail].brtgt <= fnTargetIP(pc,db.immc);
+	rob[tail].mcbrtgt <= db.immc[11:0];
 	rob[tail].om <= sr.om;
 //	rob[tail].rmd <= fpscr.rmd;
 	rob[tail].op <= ins;
@@ -4318,14 +4297,41 @@ begin
 	rob[tail].last <= last;
 	rob[tail].v <= !stomp && db.v && !brtgtv;
 	if (!stomp && db.v && !brtgtv) begin
-		brtgt <= db.mcb ? db.immc[10:0] : fnTargetIP(pc,db.immc);
+		brtgt <= fnTargetIP(pc,db.immc);
+		mcbrtgt <= db.immc[11:0];
 		brtgtv <= db.br & pt;
 	end
-	$display("mapped A: ar%d to pr%d", db.Ra, pRa);
-	if (pRa==8'd0 && db.Ra != 7'd0) begin
-		$display("tail: %d", tail);
-		$finish;
-	end
+end
+endtask
+
+// Queue to the load / store queue.
+
+task tEnqueLSE;
+input seqnum_t sn;
+input lsq_ndx_t ndx;
+input rob_ndx_t id;
+input rob_entry_t rob;
+input [1:0] n;
+begin
+	lsq[ndx.row][ndx.col].rndx <= id;
+	lsq[ndx.row][ndx.col].v <= VAL;
+	lsq[ndx.row][ndx.col].agen <= FALSE;
+	lsq[ndx.row][ndx.col].op <= rob.op;
+	lsq[ndx.row][ndx.col].pc <= rob.pc;
+	lsq[ndx.row][ndx.col].load <= rob.decbus.load;
+	lsq[ndx.row][ndx.col].loadz <= rob.decbus.loadz;
+	lsq[ndx.row][ndx.col].store <= rob.decbus.store;
+	store_argC_reg <= rob.pRc;
+	//store_tail <= ndx;
+	lsq[ndx.row][ndx.col].Rc <= rob.pRc;
+	lsq[ndx.row][ndx.col].Rt <= rob.nRt;
+	lsq[ndx.row][ndx.col].aRt <= rob.decbus.Rt;
+	lsq[ndx.row][ndx.col].om <= rob.om;
+	lsq[ndx.row][ndx.col].memsz <= fnMemsz(rob.op);
+	for (n12r = 0; n12r < LSQ_ENTRIES; n12r = n12r + 1)
+		for (n12c = 0; n12c < 2; n12c = n12c + 1)
+			lsq[n12r][n12c].sn <= lsq[n12r][n12c].sn - n;
+	lsq[ndx.row][ndx.col].sn <= sn;
 end
 endtask
 
@@ -4556,6 +4562,7 @@ task tProcessRti;
 input twoup;
 integer nn;
 begin
+	excret <= TRUE;
 	err_mask <= 64'd0;
 	sr <= twoup ? sr_stack[1] : sr_stack[0];
 	for (nn = 0; nn < 7; nn = nn + 1)
@@ -4568,9 +4575,10 @@ begin
 		pc_stack[nn] <=	pc_stack[nn+1+twoup];
 	pc_stack[7] <= RSTPC;
 	pc_stack[8] <= RSTPC;
+	exc_ret_pc <= twoup ? pc_stack[1] : pc_stack[0];
 	// Unstack the micro-code instruction register
-	micro_ir <= twoup ? mc_stack[1].ir : mc_stack[0].ir;
-	micro_ip <= twoup ? mc_stack[1].ip : mc_stack[0].ip;
+//	micro_ir <= twoup ? mc_stack[1].ir : mc_stack[0].ir;
+//	exc_mcip <= twoup ? mc_stack[1].ip : mc_stack[0].ip;
 	for (nn = 0; nn < 7; nn = nn + 1)
 		mc_stack[nn] <=	mc_stack[nn+1+twoup];
 	mc_stack[7].ir <= {33'd0,OP_NOP};
@@ -4600,10 +4608,11 @@ endtask
 
 endmodule
 
-module modFcuMissPC(instr, bts, pc, pc_stack, bt, argA, argI, ibh, misspc, missgrp);
+module modFcuMissPC(instr, bts, pc, pc_stack, micro_ip, bt, argA, argI, ibh, misspc, missgrp, miss_mcip);
 input instruction_t instr;
 input bts_t bts;
 input pc_address_t pc;
+input mc_address_t micro_ip;
 input pc_address_t [8:0] pc_stack;
 input bt;
 input value_t argA;
@@ -4611,6 +4620,7 @@ input value_t argI;
 input ibh_t ibh;
 output pc_address_t misspc;
 output reg [2:0] missgrp;
+output mc_address_t miss_mcip;
 
 reg [5:0] ino;
 reg [5:0] ino5;
@@ -4620,6 +4630,7 @@ begin
 	ino = {2'd0,instr[26:25],instr[12:11]};
 	ino5 = {ino,2'd0} + ino;
 	disp = {{47{instr[39]}},instr[39:25],instr[12:11]};
+	miss_mcip = 12'h1A0;
 	case(bts)
 	/*
 	BTS_REG:
@@ -4630,6 +4641,7 @@ begin
 	BTS_DISP:
 		begin
 			misspc = bt ? pc + 4'd5 : fnTargetIP(pc,disp);
+			miss_mcip = bt ? micro_ip + 3'd4 : instr[36:25];
 //			misspc = bt ? pc + 4'd5 : pc + {{47{instr[39]}},instr[39:25],instr[12:11]};
 		end
 	BTS_BSR:

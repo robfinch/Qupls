@@ -40,9 +40,9 @@
 // ============================================================================
 
 module Qupls_micro_code(micro_ip, micro_ir, next_ip, instr, regx);
-input [11:0] micro_ip;
+input mc_address_t micro_ip;
 input instruction_t micro_ir;
-output reg [11:0] next_ip;
+output mc_address_t next_ip;
 output instruction_t instr;
 output reg [3:0] regx;
 parameter SP = 6'd63;
