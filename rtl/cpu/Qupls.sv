@@ -85,7 +85,7 @@ fta_cmd_response128_t [1:0] ftadm_resp;
 
 integer nn,mm,n2,n3,n4,m4,n5,n6,n7,n8,n9,n10,n11,n12,n13,n14,n15,n17;
 integer n16r, n16c, n12r, n12c, n14r, n14c, n17r, n17c, n18r, n18c;
-integer n19;
+integer n19,i;
 genvar g,h;
 rndx_t alu0_re;
 reg [127:0] message;
@@ -968,7 +968,7 @@ begin
 	qd = {XWID{1'd0}};
 	if ((branchmiss || branchmiss_state < 3'd4) && |robentry_stomp)
 		;
-	else if ((ihito || mipv) && !stallq)
+	else if ((ihito || mipv || mipv2 || mipv3 || mipv4) && !stallq)
 		if (XWID==2)
 			case (~cqd[1:0])
 
@@ -1045,7 +1045,7 @@ begin
 		else
 		case (~cqd)
 
-    4'b0000: ; // do nothing
+//    4'b0000: ; // do nothing
 
     4'b0001:	
     	panic <= PANIC_INVALIDIQSTATE;
@@ -1074,7 +1074,7 @@ begin
     4'b1100:
     	if (rob[tail2].v==INV) begin
     		qd = 4'b0100;
-    		if (!pt2_q && !mip2v && !db2_q.regs) begin
+    		if (!pt2_q && !db2_q.regs) begin
     			if (rob[tail3].v==INV) begin
 	    			qd = 4'b1100;
 	    		end
@@ -1085,10 +1085,10 @@ begin
     4'b1110:
     	if (rob[tail1].v==INV) begin
     		qd = 4'b0010;
-    		if (!pt1_q && !mip1v && !db1_q.regs) begin
+    		if (!pt1_q && !db1_q.regs) begin
     			if (rob[tail2].v==INV) begin
 		    		qd = 4'b0110;
-	    			if (!pt2_q && !mip2v && !db2_q.regs) begin
+	    			if (!pt2_q && !db2_q.regs) begin
 	    				if (rob[tail3].v==INV) begin
 			    			qd = 4'b1110;
 			    		end
@@ -1096,16 +1096,16 @@ begin
 		    	end
     		end
     	end
-    4'b1111:
+    4'b1111,4'b0000:
     	if (rob[tail0].v==INV) begin
     		qd = 4'b0001;
-    		if (!pt0_q && !mip0v && !db0_q.regs) begin
+    		if (!pt0_q && !db0_q.regs) begin
     			if (rob[tail1].v==INV) begin
 	    			qd = 4'b0011;
-	    			if (!pt1_q && !mip1v && !db1_q.regs) begin
+	    			if (!pt1_q && !db1_q.regs) begin
 	    				if (rob[tail2].v==INV) begin
 			    			qd = 4'b0111;
-		    				if (!pt2_q && !mip2v && !db2_q.regs) begin
+		    				if (!pt2_q && !db2_q.regs) begin
 		    					if (rob[tail3].v==INV)
 				    				qd = 4'b1111;
 				    		end
@@ -2936,9 +2936,9 @@ Qupls_mem_more ummore1
 // When to stomp on instructions enqueuing.
 // If the slot is not queuing then it is stomped on.
 wire stomp0 = ~qd[0];
-wire stomp1 = ~qd[1]||pt0_q||mip0v||XWID < 2;
-wire stomp2 = ~qd[2]||pt0_q||pt1_q||mip0v||mip1v || XWID < 3;
-wire stomp3 = ~qd[3]||pt0_q||pt1_q||pt2_q||mip0v||mip1v||mip2v || XWID < 4;
+wire stomp1 = ~qd[1]||pt0_q||XWID < 2;
+wire stomp2 = ~qd[2]||pt0_q||pt1_q || XWID < 3;
+wire stomp3 = ~qd[3]||pt0_q||pt1_q||pt2_q || XWID < 4;
 
 always_ff @(posedge clk)
 if (rst) begin
@@ -3995,13 +3995,79 @@ always_ff @(posedge clk) begin: clock_n_debug
 
 	$display("\n\n\n\n\n\n\n\n");
 	$display("TIME %0d", $time);
+	$display("----- Fetch -----");
 	$display("%h #", pc);
+	$display("cache: %x", ic_line[255:0]);
 	$display("----- Physical Registers -----");
 	for (i=0; i< PREGS; i=i+8)
 	    $display("%d: %h %d: %h %d: %h %d: %h %d: %h %d: %h %d: %h %d: %h #",
 	    	i+0, fnRegVal(i+0), i+1, fnRegVal(i+1), i+2, fnRegVal(i+2), i+3, fnRegVal(i+3),
 	    	i+4, fnRegVal(i+4), i+5, fnRegVal(i+5), i+6, fnRegVal(i+6), i+7, fnRegVal(i+7)
 	    );
+	$display("----- Decode -----");
+	$display("pc0: %x ins0: %x", pc0_d[23:0], ins0_d[39:0]);
+	$display("pc1: %x ins1: %x", pc1_d[23:0], ins1_d[39:0]);
+	$display("pc2: %x ins2: %x", pc2_d[23:0], ins2_d[39:0]);
+	$display("pc3: %x ins3: %x", pc3_d[23:0], ins3_d[39:0]);
+	$display("----- Rename -----");
+	$display("pc0: %x ins0: %x  Rt: %x->%x  Ra: %x->%x  Rb: %x->%x  Rc: %x->%x", pc0_r[23:0], ins0_r[39:0],
+		db0_r.Rt, prn[3], db0_r.Ra, prn[1], db0_r.Rb, prn[2], db0_r.Rc, prn[3]);
+	$display("pc1: %x ins1: %x  Rt: %x->%x  Ra: %x->%x  Rb: %x->%x  Rc: %x->%x", pc1_r[23:0], ins1_r[39:0], 
+		db1_r.Rt, prn[7], db1_r.Ra, prn[4], db1_r.Rb, prn[5], db1_r.Rc, prn[6]);
+	$display("pc2: %x ins2: %x  Rt: %x->%x  Ra: %x->%x  Rb: %x->%x  Rc: %x->%x", pc2_r[23:0], ins2_r[39:0],
+		db2_r.Rt, prn[11], db2_r.Ra, prn[8], db2_r.Rb, prn[9], db2_r.Rc, prn[10]);
+	$display("pc3: %x ins3: %x  Rt: %x->%x  Ra: %x->%x  Rb: %x->%x  Rc: %x->%x", pc3_r[23:0], ins3_r[39:0],
+		db3_r.Rt, prn[15], db3_r.Ra, prn[12], db3_r.Rb, prn[13], db3_r.Rc, prn[14]);
+	$display("----- Queue Time -----");
+	$display("pc 0: %x  1: %x  2: %x  3: %x", pc0_q, pc1_q, pc2_q, pc3_q);
+	$display("insn 0: %x  1: %x  2: %x  3: %x", ins0_q, ins1_q, ins2_q, ins3_q);
+	$display("----- Queue ----- %h", qd);
+	for (i = 0; i < ROB_ENTRIES; i = i + 1) begin
+    $display("%c%c sn:%h %d: %c%c%c%c%c %d %c%c %d %c %c%d Rt 0%d %h Ra%d %c Rb%d %c Rc%d %c %h #",
+			(i[4:0]==head0)?72:46, (i[4:0]==tail0)?84:46, rob[i].sn, i[5:0],
+			rob[i].v?"v":"-", rob[i].done[0]?"d":"-", rob[i].done[1]?"d":"-", rob[i].out?"o":"-", rob[i].bt?"t":"-", rob_memissue[i], rob[i].lsq?"q":"-", robentry_issue[i]?"i":"-",
+			robentry_islot[i], robentry_stomp[i]?"s":"-",
+			(rob[i].decbus.fc ? "b" : rob[i].decbus.mem ? "m" : "a"),
+			rob[i].op.any.opcode, rob[i].decbus.Rt, rob[i].exc, rob[i].decbus.Ra, rob[i].argA_v?"v":" ",
+			rob[i].decbus.Rb, rob[i].argB_v?"v":" ", rob[i].decbus.Rc, rob[i].argC_v?"v":" ", rob[i].pc);
+	end
+	$display("----- LSQ -----");
+	for (i = 0; i < LSQ_ENTRIES; i = i + 1) begin
+		$display("%c%c sn:%h %d: %d %c%c v%h p%h", (i[2:0]==lsq_head.row)?72:46,(i[2:0]==lsq_tail.row)?84:46, lsq[i][0].sn, i[2:0],
+			lsq[i][0].rndx,
+			lsq[i][0].v?"v":" ",lsq[i][0].agen?"a":" ",lsq[i][0].vadr,lsq[i][0].padr);
+	end
+	$display("----- Memory -----");
+	$display("%d%c v%h p%h, %h %c%d %o #",
+	    dram0, dram0_ack?"A":" ", dram0_vaddr, dram0_paddr, dram0_data, ((dram0_load || dram0_store) ? 109 : 97), dram0_op, dram0_id);
+	if (NDATA_PORTS > 1) begin
+	$display("%d v%h p%h %h %c%d %o #",
+	    dram1, dram1_vaddr, dram1_paddr, dram1_data, ((dram1_load || dram1_store) ? 109 : 97), dram1_op, dram1_id);
+	end
+//	$display("%d %h %h %c%d %o #",
+//	    dram2, dram2_addr, dram2_data, (fnIsFlowCtrl(dram2_op) ? 98 : (dram2_load || dram2_store) ? 109 : 97), 
+//	    dram2_op, dram2_id);
+	$display("%d %h %o %h #", dram_v0, dram_bus0, dram_id0, dram_exc0);
+	$display("%d %h %o %h #", dram_v1, dram_bus1, dram_id1, dram_exc1);
+
+	$display("----- ALU -----");
+	$display("%d %h %h %h %h %c%d pc:%h #",
+		alu0_dataready, alu0_argI, alu0_argA, alu0_argB, alu0_argC,
+		 ((fnIsLoad(alu0_instr) || fnIsStore(alu0_instr)) ? 109 : 97),
+		alu0_instr, alu0_pc);
+	$display("idle:%d res:%h rid:%o #", alu0_idle, alu0_res, alu0_id);
+
+	$display("%d %h %h %h %c%d pc:%h #",
+		alu1_dataready, alu1_argI, alu1_argA, alu1_argB, 
+		 ((fnIsLoad(alu1_instr) || fnIsStore(alu1_instr)) ? 109 : 97),
+		alu1_instr, alu1_pc);
+	$display("idle:%d res:%h rid:%o #", alu1_idle, alu1_res, alu1_id);
+
+	$display("----- Commit -----");
+	$display("0: %h #", commit0_id);
+	$display("1: %h #", commit1_id);
+	$display("2: %h #", commit2_id);
+	$display("3: %h #", commit3_id);
 end
 end
 end
@@ -4295,7 +4361,7 @@ begin
 	rob[tail].nRt <= nRt;
 	rob[tail].group_len <= grplen;
 	rob[tail].last <= last;
-	rob[tail].v <= !stomp && db.v && !brtgtv;
+	rob[tail].v <= !stomp && db.v;
 	if (!stomp && db.v && !brtgtv) begin
 		brtgt <= fnTargetIP(pc,db.immc);
 		mcbrtgt <= db.immc[11:0];

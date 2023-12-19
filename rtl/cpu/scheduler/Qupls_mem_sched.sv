@@ -93,7 +93,7 @@ for (n9r = 0; n9r < LSQ_ENTRIES; n9r = n9r + 1)
 always_ff @(posedge clk)
 for (n10 = 0; n10 < ROB_ENTRIES; n10 = n10 + 1)
   memready[n10] = (rob[n10].v
-  		&& memopsvalid[rob[n10].lsqndx.row][rob[n10].lsqndx.col] 
+  		&& memopsvalid[rob[n10].lsqndx.col][rob[n10].lsqndx.row] 
 //  		& ~robentry_memissue[n10] 
   		&& (rob[n10].done==2'b01) 
 //  		& ~rob[n10].out
