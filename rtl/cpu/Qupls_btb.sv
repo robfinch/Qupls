@@ -425,7 +425,7 @@ begin
 	// On a branch miss the misspc will have the correct block so the
 	// cache line can be fetched, but the group will not be valid yet.
 	// The group is loaded at state 1 below.
-	if (branchmiss_state==3'd4 || branchmiss_state==3'd5) begin
+	if (branchmiss_state==3'd5) begin
 		next_pc <= misspc;
 		takb <= 1'b1;
 	end

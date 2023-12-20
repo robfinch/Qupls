@@ -39,12 +39,15 @@
 
 import QuplsPkg::*;
 
-module Qupls_decode_imm(ins, imma, immb, immc);
+module Qupls_decode_imm(ins, imma, immb, immc, has_imma, has_immb, has_immc);
 parameter WID=32;
 input instruction_t [5:0] ins;
 output reg [63:0] imma;
 output reg [63:0] immb;
 output reg [63:0] immc;
+output reg has_imma;
+output reg has_immb;
+output reg has_immc;
 
 instruction_t insf;
 wire [63:0] imm32x64a;
@@ -65,26 +68,59 @@ begin
 	imma = 'd0;
 	immb = 'd0;
 	immc = 'd0;
+	has_imma = 1'b0;
+	has_immb = 1'b0;
+	has_immc = 1'b0;
 	finsA = 'd0;
 	finsB = 'd0;
 	finsC = 'd0;
 	case(ins[0].any.opcode)
 	OP_ADDI,OP_CMPI,OP_MULI,OP_DIVI,OP_SUBFI,OP_SLTI:
-		immb = {{43{ins[0][39]}},ins[0][39:19]};
-	OP_ANDI:	immb = {64{1'b1}} & ins[0][39:19];
+		begin
+			immb = {{43{ins[0][39]}},ins[0][39:19]};
+			has_immb = 1'b1;
+		end
+	OP_ANDI:
+		begin
+			immb = {64{1'b1}} & ins[0][39:19];
+			has_immb = 1'b1;
+		end
 	OP_ORI,OP_EORI,OP_MULUI,OP_DIVUI:
-		immb = {43'h0000,ins[0][31:19]};
-	OP_CSR:	immb = {53'd0,ins[0][29:19]};
-	OP_RTD:	immb = {{43{ins[0][39]}},ins[0][39:19]};
+		begin
+			immb = {43'h0000,ins[0][31:19]};
+			has_immb = 1'b1;
+		end
+	OP_CSR:
+		begin
+			immb = {53'd0,ins[0][29:19]};
+			has_immb = 1'b1;
+		end
+	OP_RTD:
+		begin
+			immb = {{43{ins[0][39]}},ins[0][39:19]};
+			has_immb = 1'b1;
+		end
 	OP_JSR:
-		immb = {{43{ins[0][39]}},ins[0][39:19]};
+		begin
+			immb = {{43{ins[0][39]}},ins[0][39:19]};
+			has_immb = 1'b1;
+		end
 	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDA,OP_CACHE,
 	OP_STB,OP_STW,OP_STT,OP_STO:
-		immb = {{43{ins[0][39]}},ins[0][39:19]};
+		begin
+			immb = {{43{ins[0][39]}},ins[0][39:19]};
+			has_immb = 1'b1;
+		end
 	OP_FENCE:
-		immb = {48'h0,ins[0][23:8]};
+		begin
+			immb = {48'h0,ins[0][23:8]};
+			has_immb = 1'b1;
+		end
 	OP_Bcc,OP_BccU,OP_FBccH,OP_FBccS,OP_FBccD,OP_FBccQ:
-		immc = {{47{ins[0][39]}},ins[0][39:25],ins[0][12:11]};
+		begin
+			immc = {{47{ins[0][39]}},ins[0][39:25],ins[0][12:11]};
+			has_immb = 1'b1;
+		end
 	default:
 		immb = 'd0;
 	endcase
@@ -122,6 +158,7 @@ begin
 	// The following uses less hardware but require postfixes to be in order.
 	
 	if (ins[ndx].any.opcode==OP_PFXA32) begin
+		has_imma = 1'b1;
 		imma = {{32{ins[ndx][39]}},ins[ndx][39:8]};
 		if (flt && fltpr==2'd2)
 			imma = imm32x64a;
@@ -132,6 +169,7 @@ begin
 		end
 	end
 	if (ins[ndx].any.opcode==OP_PFXB32) begin
+		has_immb = 1'b1;
 		immb = {{32{ins[ndx][39]}},ins[ndx][39:8]};
 		if (flt && fltpr==2'd2)
 			immb = imm32x64b;
@@ -142,6 +180,7 @@ begin
 		end
 	end
 	if (ins[ndx].any.opcode==OP_PFXC32) begin
+		has_immc = 1'b1;
 		immc = {{32{ins[ndx][39]}},ins[ndx][39:8]};
 		if (flt && fltpr==2'd2)
 			immc = imm32x64c;

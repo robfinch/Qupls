@@ -526,7 +526,7 @@ else begin
 	// Look for outstanding transactions to execute.
 	if (nn4 < 'd16) begin
 //		if (!ftam_full) begin
-			last_out <= nn4;
+			last_out <= tran_req[nn4].tid[3:0];
 			if (!tran_req[nn4].we || tran_req[nn4].cti==fta_bus_pkg::ERC)
 				tran_out[nn4] <= 1'b1;
 			else begin

@@ -146,7 +146,7 @@ integer mndx;
 wire qbr = qbr0|qbr1|qbr2|qbr3;
 // number of outstanding branches
 reg [5:0] nob;
-wire qbr_ok = qbr && nob < 6'd15;
+wire qbr_ok = nq && qbr && nob < 6'd15;
 
 // Read register names from current checkpoint.
 // Bypass new register mappings if reg selected.

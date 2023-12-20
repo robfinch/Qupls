@@ -56,7 +56,10 @@ Qupls_decode_imm udcimm
 	.ins(instr),
 	.imma(db.imma),
 	.immb(db.immb),
-	.immc(db.immc)
+	.immc(db.immc),
+	.has_imma(db.has_imma),
+	.has_immb(db.has_immb),
+	.has_immc(db.has_immc)
 );
 
 Qupls_decode_Ra udcra
