@@ -164,6 +164,7 @@ pregno_t agen1_argA_reg;
 pregno_t agen1_argB_reg;
 
 pregno_t store_argC_reg;
+lsq_ndx_t store_argC_id;
 
 pregno_t [14:0] rf_reg;
 value_t [14:0] rfo;
@@ -173,6 +174,7 @@ reg [1:0] robentry_islot [0:ROB_ENTRIES-1];
 wire [1:0] next_robentry_islot [0:ROB_ENTRIES-1];
 reg [1:0] lsq_islot [0:LSQ_ENTRIES*2-1];
 rob_bitmask_t robentry_stomp;
+reg stomp_f, stomp_x, stomp_d, stomp_r, stomp_q;
 rob_bitmask_t robentry_issue;
 rob_bitmask_t robentry_fpu_issue;
 rob_bitmask_t robentry_fcu_issue;
@@ -637,9 +639,11 @@ reg ins0_v, ins1_v, ins2_v, ins3_v;
 reg [XWID-1:0] ins_v;
 reg insnq0,insnq1,insnq2,insnq3;
 reg [XWID-1:0] qd, cqd;
+reg [XWID-1:0] qd_x,qd_d,qd_r,qd_q;
 reg [XWID-1:0] next_cqd;
 wire pe_allqd;
 reg fetch_new;
+reg fetch_new_block, fetch_new_block_x;
 tlb_entry_t tlb_pc_entry;
 pc_address_t pc_tlb_res;
 wire pc_tlb_v;
@@ -801,7 +805,7 @@ Qupls_btb ubtb1
 	.block_header(ibh_t'(ic_line[511:480])),
 	.igrp(igrp),
 	.length_byte(length_byte),
-	.pc(icpc),
+	.pc(pc),
 	.pc0(pc0),
 	.pc1(pc1),
 	.pc2(pc2),
@@ -887,7 +891,7 @@ endgenerate
 // 3 cycle latency
 // If not supporting variable lengths the latency is reduced.
 generate begin : gInsLengths
-	if (SUPPORT_VLI) begin
+	if (FALSE && SUPPORT_VLI) begin
 		Qupls_ins_lengths_L0 uils1
 		(
 			.rst_i(rst),
@@ -909,7 +913,7 @@ generate begin : gInsLengths
 			.len7_o(len7)
 		);
 	end
-	else if (SUPPORT_IBH) begin
+	else if (FALSE && SUPPORT_IBH) begin
 		Qupls_ins_lengths uils1
 		(
 			.rst_i(rst),
@@ -936,7 +940,7 @@ generate begin : gInsLengths
 	else begin
 		assign ic_line2 = ic_line;
 		assign ihit2 = ihito;
-		assign pco = icpc;
+		assign pco = pc;
 		assign len0 = 4'd5;
 		assign len1 = 4'd5;
 		assign len2 = 4'd5;
@@ -961,6 +965,16 @@ always_comb pc7 = pc6 + len6;
 always_comb pc8 = pc7 + len7;
 */
 //always_comb pc7 = {pc6[43:12] + len6,12'h0};
+always_comb
+	stomp_f = |robentry_stomp || branchmiss_state < 3'd7;
+always_ff @(posedge clk)
+	stomp_x <= |robentry_stomp || branchmiss_state < 3'd7;
+always_ff @(posedge clk)
+	stomp_d <= stomp_x | |robentry_stomp || branchmiss_state < 3'd7;
+always_ff @(posedge clk)
+	stomp_r <= stomp_d | |robentry_stomp || branchmiss_state < 3'd7;
+always_ff @(posedge clk)
+	stomp_q <= stomp_r | |robentry_stomp || branchmiss_state < 3'd7;
 
 // qd indicates which instructions will queue in a given cycle.
 always_comb
@@ -1096,7 +1110,7 @@ begin
 		    	end
     		end
     	end
-    4'b1111,4'b0000:
+    default:
     	if (rob[tail0].v==INV) begin
     		qd = 4'b0001;
     		if (!pt0_q && !db0_q.regs) begin
@@ -1137,7 +1151,16 @@ always_comb
 							(mipv & ~hirq & (pe_allqd|allqd) & ~branchmiss);
 
 always_comb
+	fetch_new_block = pc[$bits(pc_address_t)-1:6]!=icpc[$bits(pc_address_t)-1:6];
+always_ff @(posedge clk)
+	fetch_new_block_x <= fetch_new_block;
+
+always_comb
 	hold_ins = |reg_bitmask || mipv;
+
+reg get_next_pc;
+always_comb
+	get_next_pc = ((pe_allqd||allqd||&next_cqd) && !hold_ins) && ihito && ~hirq;
 
 // All queued flag.
 
@@ -1151,13 +1174,8 @@ else begin
 		allqd <= 1'b1;
 	if (branchmiss)
 		allqd <= 1'b0;
-	if (ihito) begin
-	  if (~hirq) begin
-	  	//... If all queued and the register bitmask is empty
-	  	// Chenge PC to branch target if late branch predictor indicates such.
-	  	if ((pe_allqd|allqd) && !hold_ins)
-		  	allqd <= 1'b0;
-		end
+	if (get_next_pc) begin
+  	allqd <= &next_cqd;
 	end
 end
 
@@ -1167,19 +1185,13 @@ always_ff @(posedge clk)
 if (rst)
 	pc <= RSTPC;
 else begin
-	if (ihito) begin						// must have a cache hit
-	  if (~hirq) begin					// and no pending interrupt
-	  	//... If all queued and the register bitmask is empty
-	  	// Chenge PC to branch target if late branch predictor indicates such.
-	  	if ((pe_allqd|allqd) && !hold_ins) begin
-	  		if (excret)
-	  			pc <= exc_ret_pc;
-	  		else if (brtgtv)			// late PC predictor
-	  			pc <= brtgt;
-	  		else
-	  			pc <= next_pc;			// early PC predictor from BTB logic
-		  end
-		end
+	if (get_next_pc) begin
+		if (excret)
+			pc <= exc_ret_pc;
+		else if (brtgtv)			// late PC predictor
+			pc <= brtgt;
+		else
+			pc <= next_pc;			// early PC predictor from BTB logic
 	end
 end
 
@@ -1396,7 +1408,7 @@ Qupls_extract_ins uiext1
 	.rst_i(rst),
 	.clk_i(clk),
 	.en_i(1'b1),
-	.nop_i(icnop|brtgtv),
+	.nop_i(icnop||brtgtv||fetch_new_block_x),
 	.nop_o(exti_nop),
 	.irq_i(irq_i),
 	.hirq_i(hirq),
@@ -1407,7 +1419,7 @@ Qupls_extract_ins uiext1
 	.ic_line_i(ic_line_x),
 	.grp_i(igrp2),
 	.misspc(misspc),
-	.branchmiss(branchmiss_state!=3'd7),
+	.branchmiss(branchmiss_state!=3'd7 && branchmiss_state > 3'd3),
 	.pc0_i(pc0_x),
 	.pc1_i(pc1_x),
 	.pc2_i(pc2_x),
@@ -1783,8 +1795,11 @@ assign arnbank[15] = sr.om & {2{|db3_q.Rt}} & 0;
 
 
 wire stallq, rat_stallq;
+reg room_for_que;
+always_comb
+	room_for_que = rob[tail0].v==INV && rob[tail1].v==INV && rob[tail2].v==INV && rob[tail3].v==INV;
 assign nq = !branchmiss && rob[tail0].v==INV;
-assign stallq = !(ihit_q || mipv || mipv2 || mipv3 || mipv4 || !rstcnt[2]) || rat_stallq;
+assign stallq = !(ihit_q || mipv || mipv2 || mipv3 || mipv4 || !rstcnt[2]) || rat_stallq || !room_for_que;
 
 reg signed [$clog2(ROB_ENTRIES):0] cmtlen;			// Will always be >= 0
 reg signed [$clog2(ROB_ENTRIES):0] group_len;		// Commit group length
@@ -2038,23 +2053,23 @@ end
 always_ff @(posedge clk)
 	ihit_x <= ihit2;
 always_ff @(posedge clk)
-	pc0_x <= pc0;
+	pc0_x <= icpc;
 always_ff @(posedge clk)
-	pc1_x <= pc1;
+	pc1_x <= icpc + 4'd5;
 always_ff @(posedge clk)
-	pc2_x <= pc2;
+	pc2_x <= icpc + 4'd10;
 always_ff @(posedge clk)
-	pc3_x <= pc3;
+	pc3_x <= icpc + 4'd15;
 always_ff @(posedge clk)
-	pc4_x <= pc4;
+	pc4_x <= icpc + 5'd20;
 always_ff @(posedge clk)
-	pc5_x <= pc4 + len4;
+	pc5_x <= icpc + 5'd25;
 always_ff @(posedge clk)
-	pc6_x <= pc4 + len4 + len5;
+	pc6_x <= icpc + 5'd30;
 always_ff @(posedge clk)
-	pc7_x <= pc4 + len4 + len5 + len6;
+	pc7_x <= icpc + 6'd35;
 always_ff @(posedge clk)
-	pc8_x <= pc4 + len4 + len5 + len6 + len7;
+	pc8_x <= icpc + 6'd40;
 
 always_ff @(posedge clk)
 	ihit_d <= ihit_x;
@@ -2062,6 +2077,14 @@ always_ff @(posedge clk)
 	ihit_r <= ihit_d;
 always_ff @(posedge clk)
 	ihit_q <= ihit_r;
+always_ff @(posedge clk)
+	qd_x <= qd;
+always_ff @(posedge clk)
+	qd_d <= qd_x;
+always_ff @(posedge clk)
+	qd_r <= qd_d;
+always_ff @(posedge clk)
+	qd_q <= qd_r;
 
 // Register fetch/rename stage inputs
 always_ff @(posedge clk)
@@ -2115,13 +2138,25 @@ always_ff @(posedge clk)
 always_ff @(posedge clk)
 	pt3_q <= pt3_r;
 always_ff @(posedge clk)
+begin
 	db0_q <= db0_r;
+	db0_q.v <= db0_r.v & ~stomp_r;
+end
 always_ff @(posedge clk)
+begin
 	db1_q <= db1_r;
+	db1_q.v <= db1_r.v & ~stomp_r;
+end
 always_ff @(posedge clk)
+begin
 	db2_q <= db2_r;
+	db2_q.v <= db2_r.v & ~stomp_r;
+end
 always_ff @(posedge clk)
+begin
 	db3_q <= db3_r;
+	db3_q.v <= db3_r.v & ~stomp_r;
+end
 
 always_ff @(posedge clk)
 	grp_q <= grp_r;
@@ -2346,23 +2381,47 @@ always_comb	//ff @(posedge clk)
 always_comb
 	missid = excmiss ? excid : fcu_branchmiss_id;
 always_ff @(posedge clk)
+if (rst)
+	fcu_misspc <= RSTPC;
+else begin
 	if (fcu_v6)
 		fcu_misspc <= fcu_misspc1;
+end		
 always_ff @(posedge clk)
+if (rst)
+	fcu_miss_mcip <= 12'h1A0;
+else begin
 	if (fcu_v6)
 		fcu_miss_mcip <= fcu_miss_mcip1;
+end
 always_ff @(posedge clk)
+if (rst)
+	misspc <= RSTPC;
+else begin
 	if (branchmiss_state==3'd4)
 		misspc = excmiss ? excmisspc : fcu_misspc;
+end
 always_ff @(posedge clk)
+if (rst)
+	miss_mcip <= 12'h1A0;
+else begin
 	if (branchmiss_state==3'd4)
 		miss_mcip <= fcu_miss_mcip;
+end
 always_ff @(posedge clk)
+if (rst)
+	missgrp <= 4'd0;
+else begin
 	if (branchmiss_state==3'd1)
 		missgrp = excmiss ? excmissgrp : fcu_missgrp;
+end
 always_ff @(posedge clk)
+if (rst)
+	missir <= {33'd0,OP_NOP};
+else begin
 	if (branchmiss_state==3'd1)
 		missir = excmiss ? excir : fcu_missir;
+end
 
 wire s4s7 = (pc==misspc && ihito && (rob[fcu_id].done==2'b11 || fcu_idle)) ||
 	(robentry_stomp[fcu_id] || (rob[fcu_id].out && !rob[fcu_id].v))
@@ -2935,10 +2994,10 @@ Qupls_mem_more ummore1
 
 // When to stomp on instructions enqueuing.
 // If the slot is not queuing then it is stomped on.
-wire stomp0 = ~qd[0];
-wire stomp1 = ~qd[1]||pt0_q||XWID < 2;
-wire stomp2 = ~qd[2]||pt0_q||pt1_q || XWID < 3;
-wire stomp3 = ~qd[3]||pt0_q||pt1_q||pt2_q || XWID < 4;
+wire stomp0 = ~qd_q[0]||stomp_q;
+wire stomp1 = ~qd_q[1]||stomp_q||pt0_q||XWID < 2;
+wire stomp2 = ~qd_q[2]||stomp_q||pt0_q||pt1_q || XWID < 3;
+wire stomp3 = ~qd_q[3]||stomp_q||pt0_q||pt1_q||pt2_q || XWID < 4;
 
 always_ff @(posedge clk)
 if (rst) begin
@@ -3150,7 +3209,7 @@ else begin
 	    rob[nn].argB_v <= VAL;
 		if (rob[nn].argC_v == INV && rob[nn].pRc == wrport0_Rt && rob[nn].v == VAL && wrport0_v == VAL)
 	    rob[nn].argC_v <= VAL;
-
+	    
 		// ALU1
 		if (NALU > 1) begin
 			if (rob[nn].argA_v == INV && rob[nn].pRa == wrport1_Rt && rob[nn].v == VAL && wrport1_v == VAL)
@@ -3200,6 +3259,39 @@ else begin
 	  end
 	  
 	end
+
+	// Set LSQ register C, it may be waiting for data
+
+  for (n3 = 0; n3 < LSQ_ENTRIES; n3 = n3 + 1) begin
+  	for (n12 = 0; n12 < NDATA_PORTS; n12 = n12 + 1) begin
+	  	if (lsq[n3][n12].v==VAL && lsq[n3][n12].datav==INV) begin
+	  		if (lsq[n3][n12].Rc==wrport0_Rt && wrport0_v==VAL) begin
+	  			lsq[n3][n12].datav <= VAL;
+	  			lsq[n3][n12].res <= alu0_res;
+	  		end
+	  		else if (NALU > 1 && lsq[n3][n12].Rc==wrport1_Rt && wrport1_v==VAL) begin
+	  			lsq[n3][n12].datav <= VAL;
+	  			lsq[n3][n12].res <= alu1_res;
+	  		end
+	  		else if (lsq[n3][n12].Rc==wrport2_Rt && wrport2_v==VAL) begin
+	  			lsq[n3][n12].datav <= VAL;
+	  			lsq[n3][n12].res <= dram_bus0;
+	  		end
+	  		else if (lsq[n3][n12].Rc==wrport3_Rt && wrport3_v==VAL) begin
+	  			lsq[n3][n12].datav <= VAL;
+	  			lsq[n3][n12].res <= fpu0_res;
+	  		end
+	  		else if (NDATA_PORTS > 1 && lsq[n3][n12].Rc==wrport4_Rt && wrport4_v==VAL) begin
+	  			lsq[n3][n12].datav <= VAL;
+	  			lsq[n3][n12].res <= dram_bus1;
+	  		end
+	  		else if (NFPU > 1 && lsq[n3][n12].Rc==wrport5_Rt && wrport5_v==VAL) begin
+	  			lsq[n3][n12].datav <= VAL;
+	  			lsq[n3][n12].res <= fpu1_res;
+	  		end
+	  	end
+  	end
+  end
 
 //
 // ISSUE 
@@ -3311,6 +3403,7 @@ else begin
 		agen0_id <= agen0_rndx;
 		agen0_argA <= rob[agen0_rndx].decbus.imma | rfo_agen0_argA;
 		agen0_argB <= rfo_agen0_argB;
+		store_argC_reg <= rob[agen0_rndx].pRc;
 		agen0_argI <= rob[agen0_rndx].decbus.immb;
 		agen0_pc <= rob[agen0_rndx].pc;
 		agen0_op <= rob[agen0_rndx].op;
@@ -3323,20 +3416,21 @@ else begin
 			agen1_id <= agen1_rndx;
 			agen1_argA <= rob[agen1_rndx].decbus.imma | rfo_agen1_argA;
 			agen1_argB <= rfo_agen1_argB;
+			store_argC_reg <= rob[agen1_rndx].pRc;
 			agen1_argI <= rob[agen1_rndx].decbus.immb;
 			agen1_pc <= rob[agen1_rndx].pc;
 			agen1_op <= rob[agen1_rndx].op;
 	    rob[agen1_rndx].out <= VAL;
 		end
 	end
+	store_argC_reg <= lsq[lsq_head.row][lsq_head.col].Rc;
+	store_argC_id <= lsq_head;
 	
-	if (lsq[rob[dram0_id].lsqndx.row][rob[dram0_id].lsqndx.col].v &&
-		lsq[rob[dram0_id].lsqndx.row][rob[dram0_id].lsqndx.col].store) begin
-		store_argC <= rfo_store_argC;
-	end
-	if (lsq[rob[dram1_id].lsqndx.row][rob[dram1_id].lsqndx.col].v &&
-		lsq[rob[dram1_id].lsqndx.row][rob[dram1_id].lsqndx.col].store) begin
-		store_argC <= rfo_store_argC;
+	if (lsq[store_argC_id.row][store_argC_id.col].v==VAL) begin
+		if (prnv[14]) begin
+			lsq[store_argC_id.row][store_argC_id.col].res <= rfo_store_argC;
+			lsq[store_argC_id.row][store_argC_id.col].datav <= VAL;
+		end
 	end
 
 /*
@@ -3453,7 +3547,8 @@ else begin
 			end
 			rob[dram0_id].done <= 2'b11;
 			rob[dram0_id].out <= INV;
-			lsq[rob[dram0_id].lsqndx.row][rob[dram0_id].lsqndx.col].v <= INV;
+			tInvalidateLSQ(dram0_id);
+			//lsq[rob[dram0_id].lsqndx.row][rob[dram0_id].lsqndx.col].v <= INV;
 			dram0_tocnt <= 12'd0;
 		end
 		else if (dram0_tocnt[8]) begin
@@ -3467,7 +3562,8 @@ else begin
 				end
 				rob[dram1_id].done <= 2'b11;
 				rob[dram1_id].out <= INV;
-				lsq[rob[dram1_id].lsqndx.row][rob[dram1_id].lsqndx.col].v <= INV;
+				tInvalidateLSQ(dram1_id);
+//				lsq[rob[dram1_id].lsqndx.row][rob[dram1_id].lsqndx.col].v <= INV;
 				dram1_tocnt <= 12'd0;
 			end
 			else if (dram1_tocnt[8]) begin
@@ -3740,7 +3836,7 @@ else begin
 		end
 	end
 
-	if (lsq[lsq_tail0.row][0].v==INV && rob[agen0_id].out && !rob[agen0_id].lsq && rob[agen0_id].decbus.mem) begin	// Can an entry be queued?
+	if (lsq[lsq_tail0.row][0].v==INV && rob[agen0_id].out && !rob[agen0_id].lsq && rob[agen0_id].decbus.mem && !(&rob[agen0_id].done)) begin	// Can an entry be queued?
 		if (!fnIsInLSQ(agen0_id)) begin
 			for (n12r = 0; n12r < LSQ_ENTRIES; n12r = n12r + 1)
 				for (n12c = 0; n12c < 2; n12c = n12c + 1)
@@ -3750,7 +3846,7 @@ else begin
 			lsq_tail.row <= (lsq_tail.row + 2'd1) % LSQ_ENTRIES;
 			lsq_tail.col <= 3'd0;
 		end
-		if (LSQ2 && lsq[lsq_tail0.row][1].v==INV && rob[agen1_id].out && !rob[agen1_id].lsq && rob[agen1_id].decbus.mem) begin	// Can a second entry be queued?
+		if (LSQ2 && lsq[lsq_tail0.row][1].v==INV && rob[agen1_id].out && !rob[agen1_id].lsq && rob[agen1_id].decbus.mem && !(&rob[agen1_id].done)) begin	// Can a second entry be queued?
 			if (!fnIsInLSQ(agen1_id)) begin
 				for (n12r = 0; n12r < LSQ_ENTRIES; n12r = n12r + 1)
 					for (n12c = 0; n12c < 2; n12c = n12c + 1)
@@ -3761,16 +3857,6 @@ else begin
 			end
 		end
 	end
-	if (lsq[store_tail.row][store_tail.col].store &&
-	 	lsq[store_tail.row][store_tail.col].v && !lsq[store_tail.row][store_tail.col].datav) begin
-		lsq[store_tail.row][store_tail.col].res <= rfo_store_argC;
-		if (rob[lsq[store_tail.row][store_tail.col].rndx].argC_v)
-			lsq[store_tail.row][store_tail.col].datav <= VAL;
-	end
-	if (lsq[mem0_lsndx.row][mem0_lsndx.col].store)
-		store_argC_reg <= lsq[mem0_lsndx.row][mem0_lsndx.col].Rc;
-	if (lsq[mem1_lsndx.row][mem1_lsndx.col].store)
-		store_argC_reg <= lsq[mem1_lsndx.row][mem1_lsndx.col].Rc;
 
 //
 // COMMIT
@@ -3881,6 +3967,9 @@ else begin
 		tags2free[3] <= 8'd0;
 		freevals <= 4'd0;
 	end
+	// ToDo: fix LSQ head update.
+	if (lsq[lsq_head.row][lsq_head.col].v==INV && lsq_head != lsq_tail)
+		lsq_head.row <= lsq_head.row + 1;
 	
 	// Branchmiss stomping
 	// Mark functional units stomped on idle.
@@ -3997,7 +4086,11 @@ always_ff @(posedge clk) begin: clock_n_debug
 	$display("TIME %0d", $time);
 	$display("----- Fetch -----");
 	$display("%h #", pc);
-	$display("cache: %x", ic_line[255:0]);
+	$display("cache: %x", ic_line[511:0]);
+	$display("Lengths: 0:%d  1:%d  2:%d  3:%d  4:%d  5:%d  6:%d  7:%d" , len0, len1, len2, len3, len4, len5, len6, len7);
+	$display("----- Instruction Extract -----");
+	$display("pc 0: %h  1: %h  2: %h  3: %h  4: %h", pc0_x, pc1_x, pc2_x, pc3_x, pc4_x);
+	$display("line: %h", ic_line_x[511:0]);
 	$display("----- Physical Registers -----");
 	for (i=0; i< PREGS; i=i+8)
 	    $display("%d: %h %d: %h %d: %h %d: %h %d: %h %d: %h %d: %h %d: %h #",
@@ -4023,19 +4116,21 @@ always_ff @(posedge clk) begin: clock_n_debug
 	$display("insn 0: %x  1: %x  2: %x  3: %x", ins0_q, ins1_q, ins2_q, ins3_q);
 	$display("----- Queue ----- %h", qd);
 	for (i = 0; i < ROB_ENTRIES; i = i + 1) begin
-    $display("%c%c sn:%h %d: %c%c%c%c%c %d %c%c %d %c %c%d Rt 0%d %h Ra%d %c Rb%d %c Rc%d %c %h #",
+    $display("%c%c sn:%h %d: %c%c%c%c%c %d %c%c %d %c %c%d Rt 0%d %h Ra%d %c Rb%d %c Rc%d %c %h cp:%h#",
 			(i[4:0]==head0)?72:46, (i[4:0]==tail0)?84:46, rob[i].sn, i[5:0],
 			rob[i].v?"v":"-", rob[i].done[0]?"d":"-", rob[i].done[1]?"d":"-", rob[i].out?"o":"-", rob[i].bt?"t":"-", rob_memissue[i], rob[i].lsq?"q":"-", robentry_issue[i]?"i":"-",
 			robentry_islot[i], robentry_stomp[i]?"s":"-",
 			(rob[i].decbus.fc ? "b" : rob[i].decbus.mem ? "m" : "a"),
 			rob[i].op.any.opcode, rob[i].decbus.Rt, rob[i].exc, rob[i].decbus.Ra, rob[i].argA_v?"v":" ",
-			rob[i].decbus.Rb, rob[i].argB_v?"v":" ", rob[i].decbus.Rc, rob[i].argC_v?"v":" ", rob[i].pc);
+			rob[i].decbus.Rb, rob[i].argB_v?"v":" ", rob[i].decbus.Rc, rob[i].argC_v?"v":" ", rob[i].pc, rob[i].cndx);
 	end
 	$display("----- LSQ -----");
 	for (i = 0; i < LSQ_ENTRIES; i = i + 1) begin
-		$display("%c%c sn:%h %d: %d %c%c v%h p%h", (i[2:0]==lsq_head.row)?72:46,(i[2:0]==lsq_tail.row)?84:46, lsq[i][0].sn, i[2:0],
-			lsq[i][0].rndx,
-			lsq[i][0].v?"v":" ",lsq[i][0].agen?"a":" ",lsq[i][0].vadr,lsq[i][0].padr);
+		$display("%c%c sn:%h %d: %d %c%c%c v%h p%h data:%h %c #", (i[2:0]==lsq_head.row)?72:46,(i[2:0]==lsq_tail.row)?84:46, lsq[i][0].sn, i[2:0],
+			lsq[i][0].rndx,lsq[i][0].store ? "S": "L",
+			lsq[i][0].v?"v":" ",lsq[i][0].agen?"a":" ",lsq[i][0].vadr,lsq[i][0].padr,
+			lsq[i][0].res[511:0],lsq[i][0].datav?"v":" "
+		);
 	end
 	$display("----- Memory -----");
 	$display("%d%c v%h p%h, %h %c%d %o #",
@@ -4299,6 +4394,9 @@ begin
 	commit1_id <= ROB_ENTRIES-3;
 	commit2_id <= ROB_ENTRIES-2;
 	commit3_id <= ROB_ENTRIES-1;
+	pack_regs <= FALSE;
+	scale_regs <= 3'd4;
+	store_argC_id <= 6'd0;
 end
 endtask
 
@@ -4387,7 +4485,7 @@ begin
 	lsq[ndx.row][ndx.col].load <= rob.decbus.load;
 	lsq[ndx.row][ndx.col].loadz <= rob.decbus.loadz;
 	lsq[ndx.row][ndx.col].store <= rob.decbus.store;
-	store_argC_reg <= rob.pRc;
+//	store_argC_reg <= rob.pRc;
 	//store_tail <= ndx;
 	lsq[ndx.row][ndx.col].Rc <= rob.pRc;
 	lsq[ndx.row][ndx.col].Rt <= rob.nRt;

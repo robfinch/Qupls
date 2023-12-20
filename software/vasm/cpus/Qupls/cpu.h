@@ -28,6 +28,8 @@ typedef uint64_t utaddr;
 /* operand class for n-bit data definitions */
 #define DATA_OPERAND(n) qupls_data_operand(n)
 
+#define REL_QUPLS_INO (LAST_STANDARD_RELOC+1)
+
 /* #define NEXT (-1)   use operand_type+1 for next operand */
 
 /* type to store each operand */

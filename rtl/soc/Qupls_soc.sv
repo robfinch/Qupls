@@ -143,7 +143,7 @@ output [0:0] ddr3_odt;
 wire rst, rstn;
 wire xrst = ~cpu_resetn;
 wire locked;
-wire clk10, clk20, clk40, clk50, clk67, clk100, clk200;
+wire clk10, clk20, clk25, clk33, clk40, clk50, clk67, clk100, clk200;
 wire xclk_bufg;
 wire node_clk = clk40;
 fta_cmd_request128_t cpu_req;
@@ -299,7 +299,7 @@ NexysVideoClkgen ucg1
   .clk40(clk40),		// cpu 4x
   .clk20(clk20),		// cpu
   .clk10(clk10),
-  .clk67(clk67),
+  .clk33(clk33),
 //  .clk14(clk14),		// 16x baud clock
   // Status and control signals
   .reset(xrst), 
@@ -788,7 +788,7 @@ fta_asynch2sync128 usas7
 	.resp_i(ch7_aresp)
 );
 
-fta_cmd_response128_t [5:0] resps;
+fta_cmd_response128_t [6:0] resps;
 
 binary_semamem_pci32 usema1
 (
@@ -806,7 +806,12 @@ binary_semamem_pci32 usema1
 	.dat_o(sema_dato)
 );
 
-scratchmem128pci_fta uscr1
+scratchmem128pci_fta
+#(
+	.IO_ADDR(32'hFFFC0001),
+	.CFG_FUNC(3'd0)
+)
+uscr1
 (
 	.rst_i(rst),
 	.cs_config_i(cs_config),
@@ -814,6 +819,23 @@ scratchmem128pci_fta uscr1
 	.clk_i(node_clk),
 	.req(cpu_req),
 	.resp(resps[4]),
+	.ip('d0),
+	.sp('d0)
+);
+
+scratchmem128pci_fta
+#(
+	.IO_ADDR(32'hFFF80001),
+	.CFG_FUNC(3'd1)
+)
+uscr2
+(
+	.rst_i(rst),
+	.cs_config_i(cs_config),
+	.cs_ram_i(cpu_req.padr[31:24]==8'hFF),
+	.clk_i(node_clk),
+	.req(cpu_req),
+	.resp(resps[6]),
 	.ip('d0),
 	.sp('d0)
 );
@@ -1031,7 +1053,7 @@ config_timout_ctr ucfgtoctr1
 	.o(config_to)
 );
 
-fta_respbuf #(.CHANNELS(6)) urspbuf1
+fta_respbuf #(.CHANNELS(7)) urspbuf1
 (
 	.rst(rst),
 	.clk(node_clk),
@@ -1110,7 +1132,7 @@ Qupls_mpu umpu1
 (
 	.rst_i(rst),
 	.clk_i(node_clk),
-	.clk2x_i(clk67),
+	.clk2x_i(clk50),
 	.ftam_req(cpu_req),
 	.ftam_resp(cpu_resp),
 	.irq_bus(irq_bus),

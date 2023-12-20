@@ -187,9 +187,9 @@ always_comb ins3_ = ic_line2 >> {pc3[5:0],3'd0};
 // should not be executed.
 
 reg nop0,nop1,nop2,nop3;
-always_comb nop0 = nop_i || (branchmiss && misspc[5:0] > pc0_i[5:0]);
-always_comb nop1 = nop_i || (branchmiss && misspc[5:0] > pc1_i[5:0]);
-always_comb nop2 = nop_i || (branchmiss && misspc[5:0] > pc2_i[5:0]);
+always_comb nop0 = nop_i || (branchmiss && misspc > pc0_i);
+always_comb nop1 = nop_i || (branchmiss && misspc > pc1_i);
+always_comb nop2 = nop_i || (branchmiss && misspc > pc2_i);
 always_comb nop3 = nop_i;
 
 Qupls_ins_extract_mux umux0

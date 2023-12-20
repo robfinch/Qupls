@@ -63,6 +63,7 @@ lsq_bitmask_t [1:0] memopsvalid;
 lsq_ndx_t [LSQ_WINDOW_SIZE-1:0] lsq_heads;
 reg [1:0] issued, mem_ready;
 reg no_issue, do_issue;
+reg no_issue1, no_issue2, no_issue3;
 reg [1:0] stores;
 
 lsq_ndx_t next_ndx0;
@@ -103,16 +104,19 @@ for (n10 = 0; n10 < ROB_ENTRIES; n10 = n10 + 1)
 
 always_comb
 begin
-	issued = 'd0;
-	no_issue = 'd0;
-	do_issue = 'd0;
-	mem_ready = 'd0;
+	issued = 1'd0;
+	no_issue = 1'd0;
+	no_issue1 = 1'd0;
+	no_issue2 = 1'd0;
+	no_issue3 = 1'd0;
+	do_issue = 1'd0;
+	mem_ready = 1'd0;
 	next_memissue = 'd0;
-	next_ndx0 = 'd0;
-	next_ndx1 = 'd0;
-	next_ndx0v = 'd0;
-	next_ndx1v = 'd0;
-	stores = 'd0;
+	next_ndx0 = 5'd0;
+	next_ndx1 = 5'd0;
+	next_ndx0v = 1'd0;
+	next_ndx1v = 1'd0;
+	stores = 1'd0;
 	next_islot_o = islot_i;
 	for (row = 0; row < LSQ_WINDOW_SIZE; row = row + 1) begin
 		for (col = 0; col < 2; col = col + 1) begin
@@ -121,6 +125,7 @@ begin
 					if (memready[ lsq[lsq_heads[row].row][0].rndx ] &&
 						lsq[lsq_heads[row].row][0].v
 					) begin
+						do_issue = 1'b1;
 						mem_ready = 2'd1;
 						next_memissue[ lsq[lsq_heads[row].row][0].rndx ] =	1'b1;
 						issued = 2'd1;
@@ -148,16 +153,23 @@ begin
 								// ... and there is no fence
 	//							if (lsq[heads[phd]].fence && rob[heads[phd]].decbus.immb[15:0]==16'hFF00)
 	//								no_issue = 1'b1;
-								// ... and, if it is a SW, there is no chance of it being undone
-								if (rob[heads[phd]].sn < rob[lsq[lsq_heads[row].row][col].rndx].sn) begin
-									if (rob[lsq[lsq_heads[row].row][col].rndx].decbus.store && rob[heads[phd]].decbus.fc)
-										no_issue = 1'b1;
-									// ... and previous mem op without an address yet,
-									if ((rob[heads[phd]].decbus.load|rob[heads[phd]].decbus.store) && !rob[heads[phd]].done[0])
-										no_issue = 1'b1;
-									// ... and there is no address-overlap with any preceding instruction
-									if (lsq[rob[heads[phd]].lsqndx.row][rob[heads[phd]].lsqndx.col].padr[$bits(physical_address_t)-1:4]==lsq[lsq_heads[row].row][col].padr[$bits(physical_address_t)-1:4])
-										no_issue = 1'b1;
+								// DO not compare LSQ with itself.
+								if (rob[heads[phd]].lsqndx != lsq_head) begin
+									if (rob[heads[phd]].sn < rob[lsq[lsq_heads[row].row][col].rndx].sn &&
+										rob[lsq[lsq_heads[row].row][col].rndx].v==VAL) begin
+										// ... and, if it is a store, there is no chance of it being undone
+										if (rob[lsq[lsq_heads[row].row][col].rndx].decbus.store && rob[heads[phd]].decbus.fc)
+											no_issue1 = 1'b1;
+										// ... and previous mem op without an address yet,
+										if (rob[heads[phd]].decbus.mem && !rob[heads[phd]].done[0])
+											no_issue2 = 1'b1;
+										// ... and there is no address-overlap with any preceding instruction
+										/* ToDo: fix overlap detection
+										if (lsq[rob[heads[phd]].lsqndx.row][0].padr[$bits(physical_address_t)-1:4]==lsq[lsq_heads[row].row][0].padr[$bits(physical_address_t)-1:4] &&
+											rob[heads[phd]].lsqndx.row != row)
+											no_issue3 = 1'b1;
+										*/
+									end
 								end
 							end
 						end
@@ -165,7 +177,7 @@ begin
 					
 					if (stores > 2'd0 && lsq[lsq_heads[row].row][col].store)
 						no_issue = 1'b1;
-					if (do_issue && !no_issue) begin
+					if (do_issue && !no_issue && !no_issue1 && !no_issue2 && !no_issue3) begin
 						next_memissue[ lsq[lsq_heads[row].row][col].rndx ] =	1'b1;
 						if (issued==2'd1) begin
 							next_ndx1 = lsq_heads[row];

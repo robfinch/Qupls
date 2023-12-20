@@ -235,6 +235,7 @@ ucpu1
 	.clk_i(clk_i),
 	.clk2x_i(clk2x_i),
 	.irq_i(pic_irq[2:0]),
+	.vect_i({1'b0,pic_cause}),
 	.fta_req(ftam_req),
 	.fta_resp(wb128_resp),
 	.snoop_v(snoop_v),

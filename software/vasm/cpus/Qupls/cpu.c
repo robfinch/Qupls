@@ -1348,7 +1348,7 @@ static int get_reloc_type(operand *op)
 	      break;
 	    }
 	    if (op->number==3) {
-	    	rtype = REL_ABS;
+	    	rtype = REL_QUPLS_INO;
 	    	break;
 	    }
  			rtype = REL_PC;
@@ -1561,7 +1561,7 @@ static thuge make_reloc(int reloctype,operand *op,section *sec,
           goto illreloc;
       }
 
-      if (reloctype == REL_PC && !is_pc_reloc(base,sec)) {
+      if ((reloctype == REL_PC || reloctype == REL_QUPLS_INO) && !is_pc_reloc(base,sec)) {
         /* a relative branch - reloc is only needed for external reference */
 				TRACE("m");
 #ifdef BRANCH_PGREL				
@@ -1575,7 +1575,7 @@ static thuge make_reloc(int reloctype,operand *op,section *sec,
 #ifdef BRANCH_INO
 		 		if (op->format==B || (op->format==BI && op->number > 1) || op->format==B2 || op->format==BL2 || op->format==BZ) {
 	    		ino = (val.lo & 0x3fLL) / 5LL;
-	        if (reloctype == REL_PC) {
+	        if (reloctype == REL_PC || reloctype==REL_QUPLS_INO) {
 	//          	hval = hsub(huge_zero(),pc);
 						//val -= pc;
 						val = hsub(val,huge_from_int(pc));
@@ -1584,7 +1584,7 @@ static thuge make_reloc(int reloctype,operand *op,section *sec,
 						val.lo |= ino;
 						return (val);
 					}
-					else if (reloctype == REL_ABS) {
+					else if (reloctype == REL_QUPLS_INO) {
 		    		ino = (val.lo & 0x3fLL) / 5LL;
 		    		val.hi = 0;
 						val.lo = ino;
@@ -1928,7 +1928,7 @@ illreloc:
 #ifdef BRANCH_INO
  		if (op->format==B || (op->format==BI && op->number > 1) || op->format==B2 || op->format==BL2 || op->format==BZ) {
 			ino = (val.lo & 0x3fLL) / 5LL;
-	    if (reloctype == REL_PC) {
+	    if (reloctype == REL_PC || reloctype==REL_QUPLS_INO) {
 	//          	hval = hsub(huge_zero(),pc);
 				//val -= pc;
 				val = hsub(val,huge_from_int(pc));
