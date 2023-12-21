@@ -1186,6 +1186,9 @@ typedef struct packed
 	logic [2:0] Rcc;	// Rc complement status
 	logic Rtsrc;			// Rt is a source register
 	logic has_imm;
+	logic has_imma;
+	logic has_immb;
+	logic has_immc;
 	value_t imma;
 	value_t immb;
 	value_t immc;
@@ -1628,7 +1631,7 @@ begin
 	OP_MOV:		fnSourceAv = fnConstReg(ir.r2.Ra) || fnImma(ir);
 	OP_DBRA:	fnSourceAv = fnConstReg(ir.r2.Ra) || fnImma(ir);
 	8'b00101???:	fnSourceAv = fnConstReg(ir.r2.Ra) || fnImma(ir);
-	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDA:
+	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDOU,OP_LDH,OP_LDA:
 		fnSourceAv = fnConstReg(ir.ls.Ra) || fnImma(ir);
 	OP_LDX:
 		fnSourceAv = fnConstReg(ir.lsn.Ra) || fnImma(ir);
@@ -1688,7 +1691,7 @@ begin
 		endcase
 	OP_DBRA:	fnSourceBv = fnConstReg(ir.br.Rb) || fnImmb(ir);
 	8'b00101???:		fnSourceBv = fnConstReg(ir.br.Rb) || fnImmb(ir);
-	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDA:
+	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDOU,OP_LDH,OP_LDA:
 		fnSourceBv = 1'b1;
 	OP_LDX:
 		fnSourceBv = fnConstReg(ir.lsn.Rb) || fnImmb(ir);
@@ -1705,11 +1708,11 @@ function fnSourceCv;
 input instruction_t ir;
 begin
 	casez(ir.r2.opcode)
-	OP_STB,OP_STW,OP_STT,OP_STO,OP_STX:
+	OP_STB,OP_STW,OP_STT,OP_STO,OP_STH,OP_STX:
 		fnSourceCv = fnConstReg(ir[12:7]);
 	OP_DBRA,
 	8'b00101???:
-		fnSourceCv = fnIsBccR(ir) ? ir[30:25]=='d0 : 1'b1;	
+		fnSourceCv = 1'b1;	
 	OP_RTD:
 		fnSourceCv = 1'd0;
 	default:

@@ -119,7 +119,7 @@ begin
 	OP_Bcc,OP_BccU,OP_FBccH,OP_FBccS,OP_FBccD,OP_FBccQ:
 		begin
 			immc = {{47{ins[0][39]}},ins[0][39:25],ins[0][12:11]};
-			has_immb = 1'b1;
+			has_immc = 1'b1;
 		end
 	default:
 		immb = 'd0;

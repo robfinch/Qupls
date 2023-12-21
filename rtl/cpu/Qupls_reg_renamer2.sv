@@ -42,7 +42,7 @@
 import QuplsPkg::*;
 
 module Qupls_reg_renamer2(rst,clk,en,list2free,tags2free,freevals,
-	alloc0,alloc1,alloc2,alloc3,wo0,wo1,wo2,wo3,avail,stall);
+	alloc0,alloc1,alloc2,alloc3,wo0,wo1,wo2,wo3,wv0,wv1,wv2,wv3,avail,stall);
 parameter NFTAGS = 4;
 parameter PREGS = 256;
 input rst;
@@ -59,6 +59,10 @@ output pregno_t wo0;	// target register tag
 output pregno_t wo1;
 output pregno_t wo2;
 output pregno_t wo3;
+output wv0;
+output wv1;
+output wv2;
+output wv3;
 output reg [PREGS-1:0] avail;				// recorded in ROB
 output reg stall;			// stall enqueue while waiting for register availability
 
@@ -83,6 +87,7 @@ Qupls_reg_renamer_fifo #(.FIFONO(0)) ufifo0
 	.freeval(freevals[0] & ~avail[tags2free[0]]), 
 	.tag2free(tags2free[0]),
 	.o(wo0),
+	.ov(wv0),
 	.wo(o0),
 	.o0(s0),
 	.v(v0),
@@ -100,6 +105,7 @@ Qupls_reg_renamer_fifo #(.FIFONO(1)) ufifo1
 	.freeval(freevals[1] & ~avail[tags2free[1]]), 
 	.tag2free(tags2free[1]),
 	.o(wo1),
+	.ov(wv1),
 	.wo(o1),
 	.o0(s1),
 	.v(v1),
@@ -117,6 +123,7 @@ Qupls_reg_renamer_fifo #(.FIFONO(2)) ufifo2
 	.freeval(freevals[2] & ~avail[tags2free[2]]), 
 	.tag2free(tags2free[2]),
 	.o(wo2),
+	.ov(wv2),
 	.wo(o2),
 	.o0(s2),
 	.v(v2),
@@ -134,6 +141,7 @@ Qupls_reg_renamer_fifo #(.FIFONO(3)) ufifo3
 	.freeval(freevals[3] & ~avail[tags2free[3]]), 
 	.tag2free(tags2free[3]),
 	.o(wo3),
+	.ov(wv3),
 	.wo(o3),
 	.o0(s3),
 	.v(v3),

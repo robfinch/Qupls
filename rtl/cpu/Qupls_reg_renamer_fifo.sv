@@ -36,7 +36,7 @@
 import QuplsPkg::*;
 
 module Qupls_reg_renamer_fifo(rst, clk, en, wlist2free, alloc, freeval, 
-	tag2free, o, wo, o0, v, stall, headreg);
+	tag2free, o, ov, wo, o0, v, stall, headreg);
 parameter FIFONO = 0;
 parameter ENTRIES = 64;
 input rst;
@@ -47,6 +47,7 @@ input alloc;
 input freeval;
 input pregno_t tag2free;
 output pregno_t o;				// register that is allocated
+output reg ov;						// register allocated is a valid one
 output pregno_t wo;				// next value to be assigned to o
 output [6:0] o0;					// register to free from free list
 output reg v;							// indicates o0 is valid
@@ -64,6 +65,7 @@ ffo96 uffo({32'd0,wlist2free}, o0);
 always_comb v = o0!=7'd127;
 
 always_comb stall = (empty && alloc && !(freeval|v));
+// Debugging aid
 always_comb headreg = {FIFONO,dout};
 
 
@@ -81,30 +83,49 @@ Qupls_rename_fifo3 ufifo1
 
 always_ff @(posedge clk)
 if (rst) begin
-	o <= 'd0;
+	o <= 8'd0;
+	ov <= 1'b0;
 	rd_en <= 1'b0;
 	wr_en <= 1'b0;
-	din <= 'd0;
+	din <= 6'd0;
 end
 else begin
 	rd_en <= 1'b0;
 	wr_en <= 1'b0;
+	ov <= 1'b0;
 	if (en) begin
 		if (alloc & ~(freeval|v) & ~stall) begin
 			rd_en <= 1'b1;
 			o <= {FIFONO[1:0],dout};
+			ov <= 1'b1;
 		end
-		else if (freeval && alloc)
+		else if (freeval && alloc) begin
 			o <= tag2free;
-		else if (v && alloc)
+			ov <= 1'b1;
+		end
+		else if (v && alloc) begin
 			o <= {FIFONO[1:0],o0[5:0]};
+			ov <= 1'b1;
+		end
+		// If should not be possible to free up a register with tag zero because
+		// freeval is set only for non-zero registers.
 		else if (freeval) begin
 			din <= tag2free;
 			wr_en <= 1'b1;
+			if (tag2free==8'd0) begin
+				$display("Freeing zero register tag in fifo %d.", FIFONO);
+				$finish;
+			end
 		end
+		// It should not be possible to free register zero off the free list. This
+		// register has a fixed status of marked as not free.
 		else if (v) begin
 			din <= {FIFONO[1:0],o0[5:0]};
 			wr_en <= 1'b1;
+			if ({FIFONO[1:0],o0[5:0]}==8'd0) begin
+				$display("Freeing zero register off freelist in fifo %d.", FIFONO);
+				$finish;
+			end
 		end
 	end
 end

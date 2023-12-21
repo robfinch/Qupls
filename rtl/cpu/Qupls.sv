@@ -348,7 +348,8 @@ reg fcu_idle;
 reg fcu_available;
 instruction_t fcu_instr;
 instruction_t fcu_missir;
-reg        fcu_bt;
+reg fcu_bt;
+reg fcu_cjb;
 bts_t fcu_bts;
 value_t fcu_argA;
 value_t fcu_argB;
@@ -1804,7 +1805,7 @@ wire stallq, rat_stallq;
 reg room_for_que;
 always_comb
 	room_for_que = rob[tail0].v==INV && rob[tail1].v==INV && rob[tail2].v==INV && rob[tail3].v==INV;
-assign nq = !(branchmiss || branchmiss_state < 3'd4) && |robentry_stomp && !stallq
+assign nq = !((branchmiss || branchmiss_state < 3'd4) && |robentry_stomp) && !stallq
 	&& rob[tail0].v==INV && rob[tail1].v==INV && rob[tail2].v==INV && rob[tail3].v==INV;
 assign stallq = !(ihit_q || mipv || mipv2 || mipv3 || mipv4 || !rstcnt[2]) || rat_stallq || !room_for_que;
 
@@ -1928,7 +1929,7 @@ begin
 		int_commit = XWID > 3;
 end
 
-wire restore_chkpt = branchmiss_state==3'd1;
+wire restore_chkpt = branchmiss_state==3'd1 && !fcu_cjb;
 pregno_t freea;
 pregno_t freeb;
 pregno_t freec;
@@ -1937,6 +1938,10 @@ pregno_t Rt0_r;
 pregno_t Rt1_r;
 pregno_t Rt2_r;
 pregno_t Rt3_r;
+wire Rt0_qv;
+wire Rt1_qv;
+wire Rt2_qv;
+wire Rt3_qv;
 
 Qupls_reg_renamer2 utrn1
 (
@@ -1946,14 +1951,18 @@ Qupls_reg_renamer2 utrn1
 	.list2free(free_bitlist),
 	.tags2free(tags2free),
 	.freevals(freevals),
-	.alloc0(|db0_r.Rt && !stallq),
-	.alloc1(|db1_r.Rt && !stallq && XWID > 1),
-	.alloc2(|db2_r.Rt && !stallq && XWID > 2),
-	.alloc3(|db3_r.Rt && !stallq && XWID > 3),
+	.alloc0(|db0_r.Rt && !stomp_r && !stallq),
+	.alloc1(|db1_r.Rt && !stomp_r && !stallq && XWID > 1),
+	.alloc2(|db2_r.Rt && !stomp_r && !stallq && XWID > 2),
+	.alloc3(|db3_r.Rt && !stomp_r && !stallq && XWID > 3),
 	.wo0(Rt0_q),
 	.wo1(Rt1_q),
 	.wo2(Rt2_q),
 	.wo3(Rt3_q),
+	.wv0(Rt0_qv),
+	.wv1(Rt1_qv),
+	.wv2(Rt2_qv),
+	.wv3(Rt3_qv),
 	.avail(avail_reg)
 );
 /*
@@ -1999,10 +2008,10 @@ Qupls_rat urat1
 	.wrbankb(sr.om==2'd0 ? 1'b0 : 1'b0),
 	.wrbankc(sr.om==2'd0 ? 1'b0 : 1'b0),
 	.wrbankd(sr.om==2'd0 ? 1'b0 : 1'b0),
-	.wr0(|db0_q.Rt),
-	.wr1(|db1_q.Rt && XWID > 1),
-	.wr2(|db2_q.Rt && XWID > 2),
-	.wr3(|db3_q.Rt && XWID > 3),
+	.wr0(|db0_q.Rt && Rt0_qv && !stomp_q),
+	.wr1(|db1_q.Rt && Rt1_qv && !stomp_q && XWID > 1),
+	.wr2(|db2_q.Rt && Rt2_qv && !stomp_q && XWID > 2),
+	.wr3(|db3_q.Rt && Rt3_qv && !stomp_q && XWID > 3),
 	.wra(db0_q.Rt),
 	.wrra(Rt0_q),
 	.wrb(db1_q.Rt),
@@ -3412,6 +3421,7 @@ else begin
 		fcu_bt <= rob[fcu_rndx].bt;
 		fcu_bts <= rob[fcu_rndx].decbus.bts;
 		fcu_id <= fcu_rndx;
+		fcu_cjb <= rob[fcu_rndx].decbus.cjb;
 	  rob[fcu_rndx].out <= VAL;
 	end
 
@@ -3793,45 +3803,103 @@ else begin
 			tEnque(9'h100-XWID,db0_q,pc0_q,grp_q,ins0_q,pt0_q,tail0,
 				stomp0, prn[0], prn[1], prn[2], prn[3], Rt0_q, prnv[0], prnv[1], prnv[2],
 				cndx, grplen0, last0);
+			if (prn[0]==8'd0 && db0_q.Ra!=7'd0) begin
+				$display("Enque0: Ra mapped to zero.");
+			end
 			atom_mask <= atom_mask[32:3];
 			if (XWID > 1) begin
 				tEnque(9'h101-XWID,db1_q,pc1_q,grp_q,ins1_q,pt1_q,tail1,
 				stomp1, prn[4], prn[5], prn[6], prn[7], Rt1_q, prnv[4], prnv[5], prnv[6],
 				cndx, grplen1, last1);
+				if (prn[4]==8'd0 && db1_q.Ra!=7'd0) begin
+					$display("Enque1: Ra mapped to zero.");
+				end
 					// If the instruction's source register is the same as a previous target
 					// register, use the register mapping of the previous target register.
 					// The register mapping will not have been updated in the RAT yet in
 					// time to be available for the source register.
-				if (db1_q.Ra==db0_q.Rt && db1_q.Ra!=7'd0) begin rob[tail1].pRa <= Rt0_q; rob[tail1].argA_v <= fnSourceAv(ins1_q) | db1_q.has_imma; end
-				if (db1_q.Rb==db0_q.Rt && db1_q.Rb!=7'd0) begin rob[tail1].pRb <= Rt0_q; rob[tail1].argB_v <= fnSourceBv(ins1_q) | db1_q.has_immb; end
-				if (db1_q.Rc==db0_q.Rt && db1_q.Rc!=7'd0) begin rob[tail1].pRc <= Rt0_q; rob[tail1].argC_v <= fnSourceCv(ins1_q) | db1_q.has_immc; end
+				if (db1_q.Ra==db0_q.Rt && db1_q.Ra!=7'd0 && !stomp_q) begin 
+					rob[tail1].pRa <= Rt0_q;
+					rob[tail1].argA_v <= fnSourceAv(ins1_q) | db1_q.has_imma;
+					if (Rt0_q==8'd00) begin
+						$display("Enque1a: physical target register is zero.");
+						$finish;
+					end
+				end
+				if (db1_q.Rb==db0_q.Rt && db1_q.Rb!=7'd0 && !stomp_q) begin rob[tail1].pRb <= Rt0_q; rob[tail1].argB_v <= fnSourceBv(ins1_q) | db1_q.has_immb; end
+				if (db1_q.Rc==db0_q.Rt && db1_q.Rc!=7'd0 && !stomp_q) begin rob[tail1].pRc <= Rt0_q; rob[tail1].argC_v <= fnSourceCv(ins1_q) | db1_q.has_immc; end
 				atom_mask <= atom_mask[32:6];
 			end
 			if (XWID > 2) begin
 				tEnque(9'h102-XWID,db2_q,pc2_q,grp_q,ins2_q,pt2_q,tail2,
 				stomp2, prn[8], prn[9], prn[10], prn[11], Rt2_q, prnv[8], prnv[9], prnv[10], 
 				cndx, grplen2, last3);
-				if (db2_q.Ra==db0_q.Rt && db2_q.Ra!=7'd0) begin rob[tail2].pRa <= Rt0_q; rob[tail2].argA_v <= fnSourceAv(ins2_q) | db2_q.has_imma; end
-				if (db2_q.Rb==db0_q.Rt && db2_q.Rb!=7'd0) begin rob[tail2].pRb <= Rt0_q; rob[tail2].argB_v <= fnSourceBv(ins2_q) | db2_q.has_immb; end
-				if (db2_q.Rc==db0_q.Rt && db2_q.Rc!=7'd0) begin rob[tail2].pRc <= Rt0_q; rob[tail2].argC_v <= fnSourceCv(ins2_q) | db2_q.has_immc; end
-				if (db2_q.Ra==db1_q.Rt && db2_q.Ra!=7'd0) begin rob[tail2].pRa <= Rt1_q; rob[tail2].argA_v <= fnSourceAv(ins2_q) | db2_q.has_imma; end
-				if (db2_q.Rb==db1_q.Rt && db2_q.Rb!=7'd0) begin rob[tail2].pRb <= Rt1_q; rob[tail2].argB_v <= fnSourceBv(ins2_q) | db2_q.has_immb; end
-				if (db2_q.Rc==db1_q.Rt && db2_q.Rc!=7'd0) begin rob[tail2].pRc <= Rt1_q; rob[tail2].argC_v <= fnSourceCv(ins2_q) | db2_q.has_immc; end
+				if (prn[8]==8'd0 && db2_q.Ra!=7'd0) begin
+					$display("Enque2: Ra mapped to zero.");
+				end
+				if (db2_q.Ra==db0_q.Rt && db2_q.Ra!=7'd0 && !stomp_q) begin
+					$display("Enque2: Ra bypassed to %d.", Rt0_q);
+					rob[tail2].pRa <= Rt0_q;
+					rob[tail2].argA_v <= fnSourceAv(ins2_q) | db2_q.has_imma;
+					if (Rt0_q==8'd00) begin
+						$display("Enque2a0: physical target register is zero.");
+						$finish;
+					end
+				end
+				if (db2_q.Rb==db0_q.Rt && db2_q.Rb!=7'd0 && !stomp_q) begin rob[tail2].pRb <= Rt0_q; rob[tail2].argB_v <= fnSourceBv(ins2_q) | db2_q.has_immb; end
+				if (db2_q.Rc==db0_q.Rt && db2_q.Rc!=7'd0 && !stomp_q) begin rob[tail2].pRc <= Rt0_q; rob[tail2].argC_v <= fnSourceCv(ins2_q) | db2_q.has_immc; end
+				if (db2_q.Ra==db1_q.Rt && db2_q.Ra!=7'd0 && !stomp_q) begin
+					$display("Enque2: Ra bypassed to %d.", Rt1_q);
+					rob[tail2].pRa <= Rt1_q;
+					rob[tail2].argA_v <= fnSourceAv(ins2_q) | db2_q.has_imma;
+					if (Rt1_q==8'd00) begin
+						$display("Enque2a1: physical target register is zero.");
+						$finish;
+					end
+				end
+				if (db2_q.Rb==db1_q.Rt && db2_q.Rb!=7'd0 && !stomp_q) begin rob[tail2].pRb <= Rt1_q; rob[tail2].argB_v <= fnSourceBv(ins2_q) | db2_q.has_immb; end
+				if (db2_q.Rc==db1_q.Rt && db2_q.Rc!=7'd0 && !stomp_q) begin rob[tail2].pRc <= Rt1_q; rob[tail2].argC_v <= fnSourceCv(ins2_q) | db2_q.has_immc; end
 				atom_mask <= atom_mask[32:9];
 			end
 			if (XWID > 3) begin
 				tEnque(9'h103-XWID,db3_q,pc3_q,grp_q,ins3_q,pt3_q,tail3,
 				stomp3, prn[12], prn[13], prn[14], prn[15], Rt3_q, prnv[12], prnv[13], prnv[14],
 				cndx,grplen3,last3);
-				if (db3_q.Ra==db0_q.Rt && db3_q.Ra!=7'd0) begin rob[tail3].pRa <= Rt0_q; rob[tail3].argA_v <= fnSourceAv(ins3_q) | db3_q.has_imma; end
-				if (db3_q.Rb==db0_q.Rt && db3_q.Rb!=7'd0) begin rob[tail3].pRb <= Rt0_q; rob[tail3].argB_v <= fnSourceBv(ins3_q) | db3_q.has_immb; end
-				if (db3_q.Rc==db0_q.Rt && db3_q.Rc!=7'd0) begin rob[tail3].pRc <= Rt0_q; rob[tail3].argC_v <= fnSourceCv(ins3_q) | db3_q.has_immc; end
-				if (db3_q.Ra==db1_q.Rt && db3_q.Ra!=7'd0) begin rob[tail3].pRa <= Rt1_q; rob[tail3].argA_v <= fnSourceAv(ins3_q) | db3_q.has_imma; end
-				if (db3_q.Rb==db1_q.Rt && db3_q.Rb!=7'd0) begin rob[tail3].pRb <= Rt1_q; rob[tail3].argB_v <= fnSourceBv(ins3_q) | db3_q.has_immb; end
-				if (db3_q.Rc==db1_q.Rt && db3_q.Rc!=7'd0) begin rob[tail3].pRc <= Rt1_q; rob[tail3].argC_v <= fnSourceCv(ins3_q) | db3_q.has_immc; end
-				if (db3_q.Ra==db2_q.Rt && db3_q.Ra!=7'd0) begin rob[tail3].pRa <= Rt2_q; rob[tail3].argA_v <= fnSourceAv(ins3_q) | db3_q.has_imma; end
-				if (db3_q.Rb==db2_q.Rt && db3_q.Rb!=7'd0) begin rob[tail3].pRb <= Rt2_q; rob[tail3].argB_v <= fnSourceBv(ins3_q) | db3_q.has_immb; end
-				if (db3_q.Rc==db2_q.Rt && db3_q.Rc!=7'd0) begin rob[tail3].pRc <= Rt2_q; rob[tail3].argC_v <= fnSourceCv(ins3_q) | db3_q.has_immc; end
+				if (prn[12]==8'd0 && db3_q.Ra!=7'd0) begin
+					$display("Enque3: Ra mapped to zero.");
+				end
+				if (db3_q.Ra==db0_q.Rt && db3_q.Ra!=7'd0 && !stomp_q) begin
+					$display("Enque3: Ra bypassed to %d.", Rt0_q);
+					rob[tail3].pRa <= Rt0_q;
+					rob[tail3].argA_v <= fnSourceAv(ins3_q) | db3_q.has_imma;
+					if (Rt0_q==8'd00) begin
+						$display("Enque3a0: physical target register is zero.");
+						$finish;
+					end
+				end
+				if (db3_q.Rb==db0_q.Rt && db3_q.Rb!=7'd0 && !stomp_q) begin rob[tail3].pRb <= Rt0_q; rob[tail3].argB_v <= fnSourceBv(ins3_q) | db3_q.has_immb; end
+				if (db3_q.Rc==db0_q.Rt && db3_q.Rc!=7'd0 && !stomp_q) begin rob[tail3].pRc <= Rt0_q; rob[tail3].argC_v <= fnSourceCv(ins3_q) | db3_q.has_immc; end
+				if (db3_q.Ra==db1_q.Rt && db3_q.Ra!=7'd0 && !stomp_q) begin
+					$display("Enque3: Ra bypassed to %d.", Rt1_q);
+					rob[tail3].pRa <= Rt1_q;
+					rob[tail3].argA_v <= fnSourceAv(ins3_q) | db3_q.has_imma;
+					if (Rt1_q==8'd00) begin
+						$display("Enque3a1: physical target register is zero.");
+					end
+				end
+				if (db3_q.Rb==db1_q.Rt && db3_q.Rb!=7'd0 && !stomp_q) begin rob[tail3].pRb <= Rt1_q; rob[tail3].argB_v <= fnSourceBv(ins3_q) | db3_q.has_immb; end
+				if (db3_q.Rc==db1_q.Rt && db3_q.Rc!=7'd0 && !stomp_q) begin rob[tail3].pRc <= Rt1_q; rob[tail3].argC_v <= fnSourceCv(ins3_q) | db3_q.has_immc; end
+				if (db3_q.Ra==db2_q.Rt && db3_q.Ra!=7'd0 && !stomp_q) begin
+					$display("Enque3: Ra bypassed to %d.", Rt2_q);
+					rob[tail3].pRa <= Rt2_q;
+					rob[tail3].argA_v <= fnSourceAv(ins3_q) | db3_q.has_imma;
+					if (Rt2_q==8'd00) begin
+						$display("Enque3a2: physical target register is zero.");
+						$finish;
+					end
+				end
+				if (db3_q.Rb==db2_q.Rt && db3_q.Rb!=7'd0 && !stomp_q) begin rob[tail3].pRb <= Rt2_q; rob[tail3].argB_v <= fnSourceBv(ins3_q) | db3_q.has_immb; end
+				if (db3_q.Rc==db2_q.Rt && db3_q.Rc!=7'd0 && !stomp_q) begin rob[tail3].pRc <= Rt2_q; rob[tail3].argC_v <= fnSourceCv(ins3_q) | db3_q.has_immc; end
 				atom_mask <= atom_mask[32:12];
 			end
 			tail0 <= (tail0 + 3'd4) % ROB_ENTRIES;
@@ -4137,14 +4205,14 @@ always_ff @(posedge clk) begin: clock_n_debug
 	$display("pc2: %x ins2: %x", pc2_d[23:0], ins2_d[39:0]);
 	$display("pc3: %x ins3: %x", pc3_d[23:0], ins3_d[39:0]);
 	$display("----- Rename -----");
-	$display("pc0: %x ins0: %x  Rt: %x->%x  Ra: %x->%x  Rb: %x->%x  Rc: %x->%x", pc0_r[23:0], ins0_r[39:0],
-		db0_r.Rt, prn[3], db0_r.Ra, prn[1], db0_r.Rb, prn[2], db0_r.Rc, prn[3]);
-	$display("pc1: %x ins1: %x  Rt: %x->%x  Ra: %x->%x  Rb: %x->%x  Rc: %x->%x", pc1_r[23:0], ins1_r[39:0], 
-		db1_r.Rt, prn[7], db1_r.Ra, prn[4], db1_r.Rb, prn[5], db1_r.Rc, prn[6]);
-	$display("pc2: %x ins2: %x  Rt: %x->%x  Ra: %x->%x  Rb: %x->%x  Rc: %x->%x", pc2_r[23:0], ins2_r[39:0],
-		db2_r.Rt, prn[11], db2_r.Ra, prn[8], db2_r.Rb, prn[9], db2_r.Rc, prn[10]);
-	$display("pc3: %x ins3: %x  Rt: %x->%x  Ra: %x->%x  Rb: %x->%x  Rc: %x->%x", pc3_r[23:0], ins3_r[39:0],
-		db3_r.Rt, prn[15], db3_r.Ra, prn[12], db3_r.Rb, prn[13], db3_r.Rc, prn[14]);
+	$display("pc0: %x ins0: %x  Rt: %d->%d  Ra: %d->%d  Rb: %d->%d  Rc: %d->%d", pc0_r[23:0], ins0_r[39:0],
+		db0_q.Rt, prn[3], db0_q.Ra, prn[0], db0_q.Rb, prn[1], db0_q.Rc, prn[2]);
+	$display("pc1: %x ins1: %x  Rt: %d->%d  Ra: %d->%d  Rb: %d->%d  Rc: %d->%d", pc1_r[23:0], ins1_r[39:0], 
+		db1_q.Rt, prn[7], db1_q.Ra, prn[4], db1_q.Rb, prn[5], db1_q.Rc, prn[6]);
+	$display("pc2: %x ins2: %x  Rt: %d->%d  Ra: %d->%d  Rb: %d->%d  Rc: %d->%d", pc2_r[23:0], ins2_r[39:0],
+		db2_q.Rt, prn[11], db2_q.Ra, prn[8], db2_q.Rb, prn[9], db2_q.Rc, prn[10]);
+	$display("pc3: %x ins3: %x  Rt: %d->%d  Ra: %d->%d  Rb: %d->%d  Rc: %d->%d", pc3_r[23:0], ins3_r[39:0],
+		db3_q.Rt, prn[15], db3_q.Ra, prn[12], db3_q.Rb, prn[13], db3_q.Rc, prn[14]);
 	$display("----- Queue Time -----");
 	$display("pc 0: %x  1: %x  2: %x  3: %x", pc0_q, pc1_q, pc2_q, pc3_q);
 	$display("insn 0: %x  1: %x  2: %x  3: %x", ins0_q, ins1_q, ins2_q, ins3_q);
@@ -4155,7 +4223,8 @@ always_ff @(posedge clk) begin: clock_n_debug
 			rob[i].v?"v":"-", rob[i].done[0]?"d":"-", rob[i].done[1]?"d":"-", rob[i].out?"o":"-", rob[i].bt?"t":"-", rob_memissue[i], rob[i].lsq?"q":"-", robentry_issue[i]?"i":"-",
 			robentry_islot[i], robentry_stomp[i]?"s":"-",
 			(rob[i].decbus.fc ? "b" : rob[i].decbus.mem ? "m" : "a"),
-			rob[i].op.any.opcode, rob[i].decbus.Rt, rob[i].nRt, rob[i].exc,
+			rob[i].op.any.opcode, 
+			rob[i].decbus.Rt, rob[i].nRt, rob[i].exc,
 			rob[i].decbus.Ra, rob[i].pRa, rob[i].argA_v?"v":" ",
 			rob[i].decbus.Rb, rob[i].pRb, rob[i].argB_v?"v":" ",
 			rob[i].decbus.Rc, rob[i].pRc, rob[i].argC_v?"v":" ", rob[i].pc, rob[i].cndx);
@@ -4375,6 +4444,7 @@ begin
 	fcu_v6 <= INV;
 	fcu_id <= 5'd0;
 	fcu_idle <= TRUE;
+	fcu_cjb <= FALSE;
 	dram0_aRt <= 7'd0;
 	dram1_aRt <= 7'd0;
 //	fcu_argC <= 'd0;

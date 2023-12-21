@@ -40,6 +40,7 @@ import QuplsPkg::SIM;
 module Qupls_checkpointRam(clka, ena, wea, addra, dina, clkb, enb, addrb, doutb);
 parameter BANKS=4;
 localparam RBIT=$clog2(PREGS);
+localparam QBIT=$bits(vpregno_t);
 localparam WID=$bits(checkpoint_t) + $bits(vpregno_t) - ($bits(checkpoint_t) % $bits(vpregno_t));
 input clka;
 input ena;
@@ -68,9 +69,9 @@ if (SIM) begin
 
 	for (g = 0; g < AREGS; g = g + 1)
 		always_ff @(posedge clka)
-			if (ena & wea[g]) mem[addra][g*RBIT+RBIT-1:g*RBIT] <= dina[g*RBIT+RBIT-1:g*RBIT];
+			if (ena & wea[g]) mem[addra][g*QBIT+QBIT-1:g*QBIT] <= dina[g*QBIT+QBIT-1:g*QBIT];
 
-	always_ff @(posedge clkb)
+	always_ff @(posedge clka)
 		raddrb <= addrb;
 	assign doutb = mem[addrb];
 

@@ -36,9 +36,10 @@
 
 import QuplsPkg::*;
 
-module Qupls_decode_Rc(instr, regx, Rc, Rcc);
+module Qupls_decode_Rc(instr, regx, has_immc, Rc, Rcc);
 input instruction_t [4:0] instr;
 input [3:0] regx;
+input has_immc;
 output aregno_t Rc;
 output reg [2:0] Rcc;
 
@@ -46,18 +47,19 @@ always_comb
 begin
 	Rc = 'd0;
 	Rcc = 'd0;
-	case(instr[0].any.opcode)
-	OP_STB,OP_STW,OP_STT,OP_STO,OP_STH,OP_STX:
-		Rc = {regx[0],instr[0][12:7]};
-	OP_CLR,OP_COM,OP_DEP,OP_EXT,OP_EXTU,OP_SET:
-		Rc = {regx[3],instr[0][30:25]};
-	default:
-		Rc = 'd0;
-	endcase
-	if (instr[1].any.opcode==OP_REGC) begin
-		Rc = instr[1][12:7];		
-		Rcc = instr[1][15:13];
-	end
+	if (!has_immc && !fnSourceCv(instr[0]))
+		case(instr[0].any.opcode)
+		OP_STB,OP_STW,OP_STT,OP_STO,OP_STH,OP_STX:
+			Rc = {regx[0],instr[0][12:7]};
+		OP_CLR,OP_COM,OP_DEP,OP_EXT,OP_EXTU,OP_SET:
+			Rc = {regx[3],instr[0][30:25]};
+		default:
+			Rc = 'd0;
+		endcase
+		if (instr[1].any.opcode==OP_REGC) begin
+			Rc = instr[1][12:7];		
+			Rcc = instr[1][15:13];
+		end
 end
 
 endmodule

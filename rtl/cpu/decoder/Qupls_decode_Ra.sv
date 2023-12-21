@@ -36,30 +36,35 @@
 
 import QuplsPkg::*;
 
-module Qupls_decode_Ra(instr, regx, Ra);
+module Qupls_decode_Ra(instr, regx, has_imma, Ra);
 input instruction_t instr;
 input regx;
+input has_imma;
 output aregno_t Ra;
 
 function aregno_t fnRa;
 input instruction_t ir;
+input has_imma;
 begin
-	case(ir.any.opcode)
-	OP_RTS:
-		fnRa = {regx,ir[12:7]};
-	OP_RTD:
-		fnRa = 7'd62;
-	OP_DBRA:
-		fnRa = 7'd55;
-	OP_FLT2,OP_FLT3:
-		fnRa = {regx,1'b0,ir[16:12]};
-	default:
-		fnRa = {regx,ir[18:13]};
-	endcase
+	if (has_imma || fnSourceAv(ir))
+		fnRa = 7'd0;
+	else
+		case(ir.any.opcode)
+		OP_RTS:
+			fnRa = {regx,ir[12:7]};
+		OP_RTD:
+			fnRa = 7'd62;
+		OP_DBRA:
+			fnRa = 7'd55;
+		OP_FLT2,OP_FLT3:
+			fnRa = {regx,1'b0,ir[16:12]};
+		default:
+			fnRa = {regx,ir[18:13]};
+		endcase
 end
 endfunction
 
-assign Ra = fnRa(instr);
+assign Ra = fnRa(instr, has_imma);
 
 endmodule
 

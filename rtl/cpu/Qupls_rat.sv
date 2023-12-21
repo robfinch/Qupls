@@ -124,7 +124,7 @@ checkpoint_t cpram_out;
 checkpoint_t cpram_outr;
 checkpoint_t cpram_in;
 reg new_chkpt;							// new_chkpt map for current checkpoint
-reg [3:0] cndx;
+reg [3:0] cndx, wndx;
 assign cndx_o = cndx;
 
 Qupls_checkpointRam #(.BANKS(BANKS)) cpram1
@@ -132,7 +132,7 @@ Qupls_checkpointRam #(.BANKS(BANKS)) cpram1
 	.clka(clk),
 	.ena(1'b1),
 	.wea(cpram_we),
-	.addra(cndx),
+	.addra(wndx),
 	.dina(cpram_in),
 	.clkb(clk),
 	.enb(1'b1),
@@ -141,7 +141,7 @@ Qupls_checkpointRam #(.BANKS(BANKS)) cpram1
 );
 
 genvar g;
-integer mndx;
+integer mndx,nn;
 
 wire qbr = qbr0|qbr1|qbr2|qbr3;
 // number of outstanding branches
@@ -150,31 +150,68 @@ wire qbr_ok = nq && qbr && nob < 6'd15;
 
 // Read register names from current checkpoint.
 // Bypass new register mappings if reg selected.
+// ^^^I think bypassing not needed here.^^^
 generate begin : gRRN
 	for (g = 0; g < NPORT; g = g + 1) begin
 		always_comb
+			// Bypass target registers only.
+			if ((g % 4)==3) begin
+				if (rn[g]==7'd0)
+					rrn[g] = 8'd0;
+				else if (rn[g]==wrd && wr3)
+					rrn[g] = wrrd;
+				else if (BANKS < 2)
+					rrn[g] = cpram_out.regmap[rn[g]].pregs[0].rg;
+				else
+					rrn[g] = cpram_out.regmap[rn[g]].pregs[rnbank[g]].rg;  
+			end
+			else
 			rrn[g] = rn[g]==7'd0 ? 8'd0 :
-							 wr0 && rn[g]==wra ? wrra :
+							 /*wr0 && rn[g]==wra ? wrra :
 							 wr1 && rn[g]==wrb ? wrrb :
 							 wr2 && rn[g]==wrc ? wrrc :
-							 wr3 && rn[g]==wrd ? wrrd :
+							 wr3 && rn[g]==wrd ? wrrd :*/
 							 	(BANKS < 2) ? cpram_out.regmap[rn[g]].pregs[0].rg :
 							 								cpram_out.regmap[rn[g]].pregs[rnbank[g]].rg;
 //							 	 >> ((BANKS < 2) ? (rn[g] * RBIT) : {(rn[g] * RBIT),rnbank[g]});
 		always_comb
-			vn[g] = rn[g]==7'd0 ? 1'b1 :
-							wr0 && rn[g]==wra ? 1'b1 :
+			if ((g % 4)==3) begin
+				if (rn[g]==7'd0)
+					vn[g] = 1'b1;
+				else if (rn[g]==wrd && wr3)
+					vn[g] = 1'b1;
+				else if (BANKS < 2)
+					vn[g] = cpram_out.regmap[rn[g]].pregs[0].v;
+				else
+					vn[g] = cpram_out.regmap[rn[g]].pregs[rnbank[g]].v;  
+			end
+			else
+				vn[g] = rn[g]==7'd0 ? 1'b1 :
+							/*wr0 && rn[g]==wra ? 1'b1 :
 							wr1 && rn[g]==wrb ? 1'b1 :
 							wr2 && rn[g]==wrc ? 1'b1 :
-							wr3 && rn[g]==wrd ? 1'b1 :
+							wr3 && rn[g]==wrd ? 1'b1 :*/
 							(BANKS < 2) ? cpram_out.regmap[rn[g]].pregs[0].v :
 							 								cpram_out.regmap[rn[g]].pregs[rnbank[g]].v;
 	end
 end
 endgenerate
+/* Debugging.
+   The register may be bypassed to a previous target register which is non-zero.
+   This test will not detect this.
+always_ff @(posedge clk)
+begin
+	for (nn = 0; nn < NPORT; nn = nn + 1)
+		if (rrn[nn]==8'd0 && rn[nn]!=7'd0) begin
+			$display("RAT: register mapped to zero.");
+			$finish;
+		end
+end
+*/
 
 // If committing register, free previously mapped one, else if discarding the
 // register add it to the free list.
+/*
 always_ff @(posedge clk)
 if (rst)
 	freea <= 'd0;
@@ -188,9 +225,11 @@ else begin
 	else
 	 	freea <= cmtap;
 end
+*/
 
 // If committing register, free previously mapped one, else if discarding the
 // register add it to the free list.
+/*
 always_ff @(posedge clk)
 if (rst)
 	freeb <= 'd0;
@@ -204,9 +243,10 @@ else begin
 	else
 	 	freeb <= cmtbp;
 end
-
+*/
 // If committing register, free previously mapped one, else if discarding the
 // register add it to the free list.
+/*
 always_ff @(posedge clk)
 if (rst)
 	freec <= 'd0;
@@ -220,9 +260,10 @@ else begin
 	else
 	 	freec <= cmtcp;
 end
-
+*/
 // If committing register, free previously mapped one, else if discarding the
 // register add it to the free list.
+/*
 always_ff @(posedge clk)
 if (rst)
 	freed <= 'd0;
@@ -236,7 +277,7 @@ else begin
 	else
 	 	freed <= cmtdp;
 end
-
+*/
 // Adjust the checkpoint index. The index decreases by the number of committed
 // branches. The index increases if a branch is queued. Only one branch is
 // allowed to queue per cycle.
@@ -258,12 +299,16 @@ if (rst) begin
 end
 else begin
 	new_chkpt <= 'd0;
-	if (restore)
+	if (restore) begin
 		cndx <= miss_cp;
-	else if (qbr_ok) begin
-		cndx <= cndx + 1;
-		new_chkpt <= 1'b1;
+		$display("Restoring checkpint %d.", miss_cp);
 	end
+	else if (qbr_ok) begin
+		new_chkpt <= 1'b1;
+		$display("Setting checkpoint %d.", cndx + 1);
+	end
+	if (new_chkpt)
+		cndx <= cndx + 1;
 end
 
 // Stall the enqueue of instructions if there are too many outstanding branches.
@@ -278,7 +323,7 @@ else begin
 end
 
 
-always_ff @(posedge clk)
+always_ff @(negedge clk)
 	cpram_outr <= cpram_out;
 
 // Committing and queuing target register cannot be the same.
@@ -287,17 +332,37 @@ always_ff @(posedge clk)
 always_comb
 begin
 	cpram_in = 'd0;
+	if (new_chkpt) begin
+		cpram_in.avail = avail_i;
+		cpram_in.regmap = cpram_out.regmap;
+	end
 	if (BANKS < 2) begin
 		
-		if (cmtav) begin cpram_in.regmap[cmtaa].pregs[0].rg = cmtap; cpram_in.regmap[cmtaa].pregs[0].v = VAL; end
-		if (cmtbv) begin cpram_in.regmap[cmtba].pregs[0].rg = cmtbp; cpram_in.regmap[cmtba].pregs[0].v = VAL; end
-		if (cmtcv) begin cpram_in.regmap[cmtca].pregs[0].rg = cmtcp; cpram_in.regmap[cmtca].pregs[0].v = VAL; end
-		if (cmtdv) begin cpram_in.regmap[cmtda].pregs[0].rg = cmtdp; cpram_in.regmap[cmtda].pregs[0].v = VAL; end
+		if (cmtav) begin cpram_in.regmap[cmtaa].pregs[0].rg = cpram_out.regmap[cmtaa].pregs[0].rg; cpram_in.regmap[cmtaa].pregs[0].v = VAL; end
+		if (cmtbv) begin cpram_in.regmap[cmtba].pregs[0].rg = cpram_out.regmap[cmtba].pregs[0].rg; cpram_in.regmap[cmtba].pregs[0].v = VAL; end
+		if (cmtcv) begin cpram_in.regmap[cmtca].pregs[0].rg = cpram_out.regmap[cmtca].pregs[0].rg; cpram_in.regmap[cmtca].pregs[0].v = VAL; end
+		if (cmtdv) begin cpram_in.regmap[cmtda].pregs[0].rg = cpram_out.regmap[cmtda].pregs[0].rg; cpram_in.regmap[cmtda].pregs[0].v = VAL; end
 		
 		if (wr0) begin cpram_in.regmap[wra].pregs[0].rg = wrra; cpram_in.regmap[wra].pregs[0].v = INV; end
 		if (wr1) begin cpram_in.regmap[wrb].pregs[0].rg = wrrb; cpram_in.regmap[wrb].pregs[0].v = INV; end
 		if (wr2) begin cpram_in.regmap[wrc].pregs[0].rg = wrrc; cpram_in.regmap[wrc].pregs[0].v = INV; end
 		if (wr3) begin cpram_in.regmap[wrd].pregs[0].rg = wrrd; cpram_in.regmap[wrd].pregs[0].v = INV; end
+		if (wr0 && wrra==8'd0) begin
+			$display("RAT: writing zero register.");
+			$finish;
+		end
+		if (wr1 && wrrb==8'd0) begin
+			$display("RAT: writing zero register.");
+			$finish;
+		end
+		if (wr2 && wrrc==8'd0) begin
+			$display("RAT: writing zero register.");
+			$finish;
+		end
+		if (wr3 && wrrd==8'd0) begin
+			$display("RAT: writing zero register.");
+			$finish;
+		end
 		/*
 		cpram_in = cpram_in | (({RBIT{cmtav}} & cmtap) << {(cmtaa * RBIT)});
 		cpram_in = cpram_in | (({RBIT{cmtbv}} & cmtbp) << {(cmtba * RBIT)});
@@ -332,10 +397,6 @@ begin
 		cpram_in = cpram_in | (({RBIT{wr3}} & wrrd) << {(wrd * RBIT),wrbankd});
 		*/
 	end
-	if (new_chkpt) begin
-		cpram_in.avail = avail_i;
-		cpram_in.regmap = cpram_outr.regmap;
-	end
 end
 
 // Add registers to the checkpoint map.
@@ -366,6 +427,14 @@ begin
 	end
 	if (new_chkpt)
 		cpram_we = {WE_WIDTH{1'b1}};
+end
+
+always_comb
+begin
+	if (new_chkpt)
+		wndx = cndx + 1;
+	else
+		wndx = cndx;
 end
 
 // Add registers allocated since the branch miss instruction to the list of

@@ -66,6 +66,7 @@ Qupls_decode_Ra udcra
 (
 	.instr(ins),
 	.regx(regx[1]),
+	.has_imma(db.has_imma),
 	.Ra(db.Ra)
 );
 
@@ -73,6 +74,7 @@ Qupls_decode_Rb udcrb
 (
 	.instr(ins),
 	.regx(regx[2]),
+	.has_immb(db.has_immb),
 	.Rb(db.Rb)
 );
 
@@ -80,6 +82,7 @@ Qupls_decode_Rc udcrc
 (
 	.instr(instr),
 	.regx(regx),
+	.has_immc(db.has_immc),
 	.Rc(db.Rc),
 	.Rcc(db.Rcc)
 );
