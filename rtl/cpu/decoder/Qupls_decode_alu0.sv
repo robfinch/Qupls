@@ -48,6 +48,7 @@ begin
 	case(ir.any.opcode)
 	OP_R2:
 		case(ir.r2.func)
+		FN_MUL,FN_MULU,FN_MULSU,FN_MULH,FN_MULUH,FN_MULSUH,
 		FN_DIV,FN_DIVU,FN_DIVSU,FN_MOD,FN_MODU,FN_MODSU:
 			fnIsAlu0 = 1'b1;
 		default:
@@ -55,7 +56,8 @@ begin
 		endcase
 	OP_CSR:	fnIsAlu0 = 1'b1;
 	OP_BSR,OP_JSR:	fnIsAlu0 = 1'b1;
-	OP_DIVI: 	fnIsAlu0 = 1'b1;
+	OP_MULI,OP_MULUI,
+	OP_DIVI,OP_DIVUI: 	fnIsAlu0 = 1'b1;
 	default:	fnIsAlu0 = 1'b0;
 	endcase
 end

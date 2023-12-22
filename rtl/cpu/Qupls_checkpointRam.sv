@@ -40,11 +40,11 @@ import QuplsPkg::SIM;
 module Qupls_checkpointRam(clka, ena, wea, addra, dina, clkb, enb, addrb, doutb);
 parameter BANKS=4;
 localparam RBIT=$clog2(PREGS);
-localparam QBIT=$bits(vpregno_t);
-localparam WID=$bits(checkpoint_t) + $bits(vpregno_t) - ($bits(checkpoint_t) % $bits(vpregno_t));
+localparam QBIT=$bits(pregno_t);
+localparam WID=$bits(checkpoint_t) + $bits(pregno_t) - ($bits(checkpoint_t) % $bits(pregno_t));
 input clka;
 input ena;
-input [(WID/$bits(vpregno_t))-1:0] wea;
+input [(WID/$bits(pregno_t))-1:0] wea;
 input [3:0] addra;
 input [WID-1:0] dina;
 input clkb;
@@ -67,9 +67,10 @@ end
 generate begin : gRegfileRam
 if (SIM) begin
 
-	for (g = 0; g < AREGS; g = g + 1)
+//	for (g = 0; g < AREGS; g = g + 1)
 		always_ff @(posedge clka)
-			if (ena & wea[g]) mem[addra][g*QBIT+QBIT-1:g*QBIT] <= dina[g*QBIT+QBIT-1:g*QBIT];
+			if (ena & |wea) mem[addra] <= dina;
+//			if (ena & wea[g]) mem[addra][g*QBIT+QBIT-1:g*QBIT] <= dina[g*QBIT+QBIT-1:g*QBIT];
 
 	always_ff @(posedge clka)
 		raddrb <= addrb;
@@ -102,7 +103,7 @@ else begin
    xpm_memory_dpdistram #(
       .ADDR_WIDTH_A(4),               // DECIMAL
       .ADDR_WIDTH_B(4),               // DECIMAL
-      .BYTE_WRITE_WIDTH_A($bits(vpregno_t)),      		// DECIMAL
+      .BYTE_WRITE_WIDTH_A($bits(pregno_t)),      		// DECIMAL
       .CLOCKING_MODE("common_clock"), // String
       .MEMORY_INIT_FILE("none"),      // String
       .MEMORY_INIT_PARAM("0"),        // String

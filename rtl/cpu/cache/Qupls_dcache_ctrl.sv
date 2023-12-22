@@ -417,9 +417,9 @@ else begin
 	// Could have a string of ack's coming back due to a string of requests.
 	if (ftam_resp.ack) begin
 		// Got an ack back so the tran no longer needs to be performed.
-		tran_active[ftam_resp.tid.tranid] <= 1'b0;
-		tran_out[ftam_resp.tid.tranid] <= 1'b0;
-		tran_done[ftam_resp.tid.tranid] <= 1'b1;
+		tran_active[ftam_resp.tid.tranid[3:0]] <= 1'b0;
+		tran_out[ftam_resp.tid.tranid[3:0]] <= 1'b0;
+		tran_done[ftam_resp.tid.tranid[3:0]] <= 1'b1;
 		tran_load_data[ftam_resp.tid.tranid>>2].ack <= 1'b1;
 		//tran_req[ftam_resp.tid & 4'hF].cyc <= 1'b0;
 		tran_load_data[ftam_resp.tid.tranid>>2].cid <= ftam_resp.cid;

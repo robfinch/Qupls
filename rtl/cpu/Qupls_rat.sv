@@ -32,8 +32,6 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //                                                                          
 //
-// Status: Untested, unused
-//
 // Q+ Register Alias Table
 //
 // ToDo: add a valid bit
@@ -48,7 +46,7 @@
 import QuplsPkg::*;
 
 module Qupls_rat(rst, clk, nq, stallq, cndx_o, avail_i, restore, miss_cp, wr0, wr1, wr2, wr3,
-	qbr0, qbr1, qbr2, qbr3,
+	qbr0, qbr1, qbr2, qbr3, stomped_regs,
 	rn,
 	rrn,
 	vn, 
@@ -68,6 +66,7 @@ input qbr0;		// enqueue branch, slot 0
 input qbr1;
 input qbr2;
 input qbr3;
+input [PREGS-1:0] stomped_regs;
 output [3:0] cndx_o;			// current checkpoint index
 input [PREGS-1:0] avail_i;	// list of available registers from renamer
 input restore;						// checkpoint restore
@@ -117,7 +116,7 @@ output reg [PREGS-1:0] free_bitlist;	// bit vector of registers to free on branc
 
 
 integer n,m,n1,n2,n3;
-localparam WE_WIDTH = $bits(checkpoint_t)/$bits(vpregno_t);
+localparam WE_WIDTH = $bits(checkpoint_t)/$bits(pregno_t);
 reg [WE_WIDTH-1:0] cpram_we;
 localparam RAMWIDTH = AREGS*BANKS*RBIT+PREGS;
 checkpoint_t cpram_out;
@@ -161,9 +160,9 @@ generate begin : gRRN
 				else if (rn[g]==wrd && wr3)
 					rrn[g] = wrrd;
 				else if (BANKS < 2)
-					rrn[g] = cpram_out.regmap[rn[g]].pregs[0].rg;
+					rrn[g] = cpram_out.regmap[rn[g]].pregs[0];
 				else
-					rrn[g] = cpram_out.regmap[rn[g]].pregs[rnbank[g]].rg;  
+					rrn[g] = cpram_out.regmap[rn[g]].pregs[rnbank[g]];  
 			end
 			else
 			rrn[g] = rn[g]==7'd0 ? 8'd0 :
@@ -171,8 +170,8 @@ generate begin : gRRN
 							 wr1 && rn[g]==wrb ? wrrb :
 							 wr2 && rn[g]==wrc ? wrrc :
 							 wr3 && rn[g]==wrd ? wrrd :*/
-							 	(BANKS < 2) ? cpram_out.regmap[rn[g]].pregs[0].rg :
-							 								cpram_out.regmap[rn[g]].pregs[rnbank[g]].rg;
+							 	(BANKS < 2) ? cpram_out.regmap[rn[g]].pregs[0] :
+							 								cpram_out.regmap[rn[g]].pregs[rnbank[g]];
 //							 	 >> ((BANKS < 2) ? (rn[g] * RBIT) : {(rn[g] * RBIT),rnbank[g]});
 		always_comb
 			if ((g % 4)==3) begin
@@ -180,10 +179,8 @@ generate begin : gRRN
 					vn[g] = 1'b1;
 				else if (rn[g]==wrd && wr3)
 					vn[g] = 1'b1;
-				else if (BANKS < 2)
-					vn[g] = cpram_out.regmap[rn[g]].pregs[0].v;
 				else
-					vn[g] = cpram_out.regmap[rn[g]].pregs[rnbank[g]].v;  
+					vn[g] = cpram_out.valid[0].bits[rrn[g]];;//cpram_out.regmap[rn[g]].pregs[0].v;
 			end
 			else
 				vn[g] = rn[g]==7'd0 ? 1'b1 :
@@ -191,8 +188,9 @@ generate begin : gRRN
 							wr1 && rn[g]==wrb ? 1'b1 :
 							wr2 && rn[g]==wrc ? 1'b1 :
 							wr3 && rn[g]==wrd ? 1'b1 :*/
-							(BANKS < 2) ? cpram_out.regmap[rn[g]].pregs[0].v :
-							 								cpram_out.regmap[rn[g]].pregs[rnbank[g]].v;
+							(BANKS < 2) ?
+								cpram_out.valid[0].bits[rrn[g]]://cpram_out.regmap[rn[g]].pregs[0].v;
+								cpram_out.valid[rnbank[g]].bits[rrn[g]];
 	end
 end
 endgenerate
@@ -211,7 +209,7 @@ end
 
 // If committing register, free previously mapped one, else if discarding the
 // register add it to the free list.
-/*
+/* Dead code
 always_ff @(posedge clk)
 if (rst)
 	freea <= 'd0;
@@ -326,27 +324,71 @@ end
 always_ff @(negedge clk)
 	cpram_outr <= cpram_out;
 
-// Committing and queuing target register cannot be the same.
+// Committing and queuing target physical register cannot be the same.
 // The target register established during queue is marked invalid. It will not
 // be valid until a value commits.
 always_comb
 begin
-	cpram_in = 'd0;
+	cpram_in = cpram_out;
 	if (new_chkpt) begin
 		cpram_in.avail = avail_i;
-		cpram_in.regmap = cpram_out.regmap;
 	end
 	if (BANKS < 2) begin
 		
-		if (cmtav) begin cpram_in.regmap[cmtaa].pregs[0].rg = cpram_out.regmap[cmtaa].pregs[0].rg; cpram_in.regmap[cmtaa].pregs[0].v = VAL; end
-		if (cmtbv) begin cpram_in.regmap[cmtba].pregs[0].rg = cpram_out.regmap[cmtba].pregs[0].rg; cpram_in.regmap[cmtba].pregs[0].v = VAL; end
-		if (cmtcv) begin cpram_in.regmap[cmtca].pregs[0].rg = cpram_out.regmap[cmtca].pregs[0].rg; cpram_in.regmap[cmtca].pregs[0].v = VAL; end
-		if (cmtdv) begin cpram_in.regmap[cmtda].pregs[0].rg = cpram_out.regmap[cmtda].pregs[0].rg; cpram_in.regmap[cmtda].pregs[0].v = VAL; end
+		if (cmtav) begin 
+			//cpram_in.regmap[cmtaa].pregs[0] = cmtap;//cpram_out.regmap[cmtaa].pregs[0];
+			cpram_in.valid[0].bits[cmtap] <= VAL;
+			if (cpram_out.regmap[cmtaa].pregs[0] != cmtap) begin
+				$display("Qupls RAT: reg mismatch.");
+			end
+		end
+		if (cmtbv) begin
+			//cpram_in.regmap[cmtba].pregs[0] = cmtbp;//cpram_out.regmap[cmtba].pregs[0];
+			cpram_in.valid[0].bits[cmtbp] <= VAL;
+			if (cpram_out.regmap[cmtba].pregs[0] != cmtbp) begin
+				$display("Qupls RAT: reg mismatch.");
+			end
+		end
+		if (cmtcv) begin
+			//cpram_in.regmap[cmtca].pregs[0] = cmtcp;//cpram_out.regmap[cmtca].pregs[0];
+			cpram_in.valid[0].bits[cmtcp] <= VAL;
+			if (cpram_out.regmap[cmtca].pregs[0] != cmtcp) begin
+				$display("Qupls RAT: reg mismatch.");
+			end
+		end
+		if (cmtdv) begin
+			//cpram_in.regmap[cmtda].pregs[0] = cmtdp;//cpram_out.regmap[cmtda].pregs[0];
+			cpram_in.valid[0].bits[cmtdp] <= VAL;
+			if (cpram_out.regmap[cmtda].pregs[0] != cmtdp) begin
+				$display("Qupls RAT: reg mismatch.");
+			end
+		end
 		
-		if (wr0) begin cpram_in.regmap[wra].pregs[0].rg = wrra; cpram_in.regmap[wra].pregs[0].v = INV; end
-		if (wr1) begin cpram_in.regmap[wrb].pregs[0].rg = wrrb; cpram_in.regmap[wrb].pregs[0].v = INV; end
-		if (wr2) begin cpram_in.regmap[wrc].pregs[0].rg = wrrc; cpram_in.regmap[wrc].pregs[0].v = INV; end
-		if (wr3) begin cpram_in.regmap[wrd].pregs[0].rg = wrrd; cpram_in.regmap[wrd].pregs[0].v = INV; end
+		if (wr0) begin
+			cpram_in.regmap[wra].pregs[0] = wrra;
+			if (wra != 7'd0)
+				cpram_in.valid[0].bits[wrra] <= INV;
+			$display("Qupls RAT: tgt reg %d replaced with %d.", cpram_out.regmap[wra].pregs[0], wrra);
+		end
+		if (wr1) begin
+			cpram_in.regmap[wrb].pregs[0] = wrrb;
+			if (wrb != 7'd0)
+				cpram_in.valid[0].bits[wrrb] <= INV;
+			$display("Qupls RAT: tgt reg %d replaced with %d.", cpram_out.regmap[wrb].pregs[0], wrrb);
+		end
+		if (wr2) begin
+			cpram_in.regmap[wrc].pregs[0] = wrrc;
+			if (wrc != 7'd0)
+				cpram_in.valid[0].bits[wrrc] <= INV;
+			$display("Qupls RAT: tgt reg %d replaced with %d.", cpram_out.regmap[wrc].pregs[0], wrrc);
+		end
+		if (wr3) begin
+			cpram_in.regmap[wrd].pregs[0] = wrrd;
+			if (wrd != 7'd0)
+				cpram_in.valid[0].bits[wrrd] <= INV;
+			$display("Qupls RAT: tgt reg %d replaced with %d.", cpram_out.regmap[wrd].pregs[0], wrrd);
+		end
+	
 		if (wr0 && wrra==8'd0) begin
 			$display("RAT: writing zero register.");
 			$finish;
@@ -363,70 +405,26 @@ begin
 			$display("RAT: writing zero register.");
 			$finish;
 		end
-		/*
-		cpram_in = cpram_in | (({RBIT{cmtav}} & cmtap) << {(cmtaa * RBIT)});
-		cpram_in = cpram_in | (({RBIT{cmtbv}} & cmtbp) << {(cmtba * RBIT)});
-		cpram_in = cpram_in | (({RBIT{cmtcv}} & cmtcp) << {(cmtca * RBIT)});
-		cpram_in = cpram_in | (({RBIT{cmtdv}} & cmtdp) << {(cmtda * RBIT)});
-		cpram_in = cpram_in | (({RBIT{wr0}} & wrra) << {(wra * RBIT)});
-		cpram_in = cpram_in | (({RBIT{wr1}} & wrrb) << {(wrb * RBIT)});
-		cpram_in = cpram_in | (({RBIT{wr2}} & wrrc) << {(wrc * RBIT)});
-		cpram_in = cpram_in | (({RBIT{wr3}} & wrrd) << {(wrd * RBIT)});
-		*/
+
 	end
 	// ToDo: for more than one bank
 	else begin
-		/*
-		if (cmtav) cpram_in.regmap[cmtaa].pregs[cmtbanka].rg = cmtap;
-		if (cmtbv) cpram_in.regmap[cmtba].pregs[cmtbankb].rg = cmtbp;
-		if (cmtcv) cpram_in.regmap[cmtca].pregs[cmtbankc].rg = cmtcp;
-		if (cmtdv) cpram_in.regmap[cmtda].pregs[cmtbankd].rg = cmtdp;
-		*/
-		if (wr0) cpram_in.regmap[wra].pregs[wrbanka].rg = wrra;
-		if (wr1) cpram_in.regmap[wrb].pregs[wrbankb].rg = wrrb;
-		if (wr2) cpram_in.regmap[wrc].pregs[wrbankc].rg = wrrc;
-		if (wr3) cpram_in.regmap[wrd].pregs[wrbankd].rg = wrrd;
-		/*
-		cpram_in = cpram_in | (({RBIT{cmtav}} & cmtap) << {(cmtaa * RBIT),cmtbanka});
-		cpram_in = cpram_in | (({RBIT{cmtbv}} & cmtbp) << {(cmtba * RBIT),cmtbankb});
-		cpram_in = cpram_in | (({RBIT{cmtcv}} & cmtcp) << {(cmtca * RBIT),cmtbankc});
-		cpram_in = cpram_in | (({RBIT{cmtdv}} & cmtdp) << {(cmtda * RBIT),cmtbankd});
-		cpram_in = cpram_in | (({RBIT{wr0}} & wrra) << {(wra * RBIT),wrbanka});
-		cpram_in = cpram_in | (({RBIT{wr1}} & wrrb) << {(wrb * RBIT),wrbankb});
-		cpram_in = cpram_in | (({RBIT{wr2}} & wrrc) << {(wrc * RBIT),wrbankc});
-		cpram_in = cpram_in | (({RBIT{wr3}} & wrrd) << {(wrd * RBIT),wrbankd});
-		*/
+		if (wr0) cpram_in.regmap[wra].pregs[wrbanka] = wrra;
+		if (wr1) cpram_in.regmap[wrb].pregs[wrbankb] = wrrb;
+		if (wr2) cpram_in.regmap[wrc].pregs[wrbankc] = wrrc;
+		if (wr3) cpram_in.regmap[wrd].pregs[wrbankd] = wrrd;
 	end
+
+	// Mark stomped on registers valid.	Thier old value is the true value, 
+	// pending updates are cancelled.
+	cpram_in.valid[0].bits = cpram_in.valid[0].bits | stomped_regs;
+
 end
 
 // Add registers to the checkpoint map.
 always_comb
 begin
-	cpram_we = 'd0;
-	if (BANKS < 2) begin
-		cpram_we = cpram_we | (cmtav << {cmtaa});
-		cpram_we = cpram_we | (cmtbv << {cmtba});
-		cpram_we = cpram_we | (cmtcv << {cmtca});
-		cpram_we = cpram_we | (cmtdv << {cmtda});
-
-		cpram_we = cpram_we | ({wr0} << {wra});
-		cpram_we = cpram_we | ({wr1} << {wrb});
-		cpram_we = cpram_we | ({wr2} << {wrc});
-		cpram_we = cpram_we | ({wr3} << {wrd});
-	end
-	else begin
-		cpram_we = cpram_we | (cmtav << {cmtaa,cmtbanka});
-		cpram_we = cpram_we | (cmtbv << {cmtba,cmtbankb});
-		cpram_we = cpram_we | (cmtcv << {cmtca,cmtbankc});
-		cpram_we = cpram_we | (cmtdv << {cmtda,cmtbankd});
-
-		cpram_we = cpram_we | ({wr0} << {wra,wrbanka});
-		cpram_we = cpram_we | ({wr1} << {wrb,wrbankb});
-		cpram_we = cpram_we | ({wr2} << {wrc,wrbankc});
-		cpram_we = cpram_we | ({wr3} << {wrd,wrbankd});
-	end
-	if (new_chkpt)
-		cpram_we = {WE_WIDTH{1'b1}};
+	cpram_we = {WE_WIDTH{1'b1}};
 end
 
 always_comb

@@ -118,6 +118,8 @@ rob_ndx_t [MISSQ_ENTRIES-1:0] missid;
 REGION region0, region1, region2;
 wire [7:0] sel0, sel1, sel2;
 operating_mode_t omd0a, omd1a, pc_omda;
+reg [7:0] rstcnt;
+
 
 integer n,m;
 
@@ -522,13 +524,13 @@ begin
 	else if (t0b.vpn.vpn[8:0]==vadr0[31:23] && t0b.vpn.asid==asid0) begin
 	end
 	else
-		miss0 = !inq0;
+		miss0 = !inq0 && agen0_v;
 	if (t1a.vpn.vpn[8:0]==vadr1[31:23] && t1a.vpn.asid==asid1) begin
 	end
 	else if (t1b.vpn.vpn[8:0]==vadr1[31:23] && t1b.vpn.asid==asid1) begin
 	end
 	else
-		miss1 = !inq1;
+		miss1 = !inq1 && agen1_v;
 	if (t2a.vpn.vpn[8:0]==pc_vadr[31:23] && t2a.vpn.asid==pc_asid) begin
 	end
 	else if (t2b.vpn.vpn[8:0]==pc_vadr[31:23] && t2b.vpn.asid==pc_asid) begin
@@ -634,7 +636,10 @@ else begin
 		pc_tlb_v <= 'd1;
 	end
 
-	if ((head != (tail - 1) % MISSQ_ENTRIES) && (head != (tail - 2) % MISSQ_ENTRIES) && (head != (tail - 3) % MISSQ_ENTRIES))
+	// Delay a few cycles to prevent a false PC miss. It takes a couple of cycles
+	// for the PC to reset.
+
+	if (rstcnt[7] && (head != (tail - 1) % MISSQ_ENTRIES) && (head != (tail - 2) % MISSQ_ENTRIES) && (head != (tail - 3) % MISSQ_ENTRIES))
 		case ({miss1 & ~stall_tlb1,miss0 & ~stall_tlb0,pc_miss})
 		3'b000:	;
 		3'b001:
@@ -829,8 +834,6 @@ begin
 end
 
 assign entry_o = way ? entry_ob : entry_oa;
-
-reg [7:0] rstcnt;
 
 always_ff @(posedge clk) entryno = rstcnt[7] ? entry_no : entryno_rst;
 always_ff @(posedge clk) entryi = rstcnt[7] ? entry_i : entryi_rst;

@@ -228,11 +228,13 @@ begin
 				end
 				if (NALU > 1) begin
 					if (!issued_alu1 && alu1_idle && rob[heads[hd]].decbus.alu && !rob[heads[hd]].decbus.alu0) begin
-				  	next_robentry_issue[heads[hd]] = 1'b1;
-				  	next_robentry_islot_o[heads[hd]] = 2'b01;
-				  	issued_alu1 = 1'b1;
-				  	next_alu1_rndx = heads[hd];
-				  	next_alu1_rndxv = 1'b1;
+						if (!next_robentry_issue[heads[hd]]) begin	// Did ALU #0 already grab it?
+					  	next_robentry_issue[heads[hd]] = 1'b1;
+					  	next_robentry_islot_o[heads[hd]] = 2'b01;
+					  	issued_alu1 = 1'b1;
+					  	next_alu1_rndx = heads[hd];
+					  	next_alu1_rndxv = 1'b1;
+				  	end
 					end
 				end
 				if (NFPU > 0) begin
@@ -246,11 +248,13 @@ begin
 				end
 				if (NFPU > 1) begin
 					if (!issued_fpu1 && fpu1_idle && rob[heads[hd]].decbus.fpu && !rob[heads[hd]].decbus.fpu0) begin
-				  	next_robentry_fpu_issue[heads[hd]] = 1'b1;
-				  	next_robentry_islot_o[heads[hd]] = 2'b01;
-				  	issued_fpu1 = 1'b1;
-				  	next_fpu1_rndx = heads[hd];
-				  	next_fpu1_rndxv = 1'b1;
+						if (!next_robentry_fpu_issue[heads[hd]]) begin
+					  	next_robentry_fpu_issue[heads[hd]] = 1'b1;
+					  	next_robentry_islot_o[heads[hd]] = 2'b01;
+					  	issued_fpu1 = 1'b1;
+					  	next_fpu1_rndx = heads[hd];
+					  	next_fpu1_rndxv = 1'b1;
+				  	end
 					end
 				end
 				if (!issued_fcu && fcu_idle && rob[heads[hd]].decbus.fc && !rob[heads[hd]].done[1]) begin

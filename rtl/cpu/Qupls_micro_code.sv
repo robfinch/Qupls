@@ -415,7 +415,7 @@ case(micro_ip)
 12'h193:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
 
 // RESET...
-// This to prime the renamer.
+// This to prime the renamer and TLB.
 12'h1A0:	begin next_ip = 12'h1A4; instr = {'d0,21'h123456,6'd0,MC0,OP_ADDI}; regx = 4'h1; end
 12'h1A1:	begin next_ip = 12'h1A4; instr = {'d0,21'h123456,6'd0,MC0,OP_ADDI}; regx = 4'h1; end
 12'h1A2:	begin next_ip = 12'h1A4; instr = {'d0,21'h123456,6'd0,MC0,OP_ADDI}; regx = 4'h1; end
@@ -432,12 +432,20 @@ case(micro_ip)
 12'h1AE:	begin next_ip = 12'h1B0; instr = {'d0,21'h123456,6'd0,MC0,OP_ADDI}; regx = 4'h1; end
 12'h1AE:	begin next_ip = 12'h1B0; instr = {'d0,21'h123456,6'd0,MC0,OP_ADDI}; regx = 4'h1; end
 12'h1AF:	begin next_ip = 12'h1B0; instr = {'d0,21'h123456,6'd0,MC0,OP_ADDI}; regx = 4'h1; end
+12'h1B0:	begin next_ip = 12'h1B4; instr = {'d0,21'h123456,6'd0,MC0,OP_ADDI}; regx = 4'h1; end
+12'h1B1:	begin next_ip = 12'h1B4; instr = {'d0,21'h123456,6'd0,MC0,OP_ADDI}; regx = 4'h1; end
+12'h1B2:	begin next_ip = 12'h1B4; instr = {'d0,21'h123456,6'd0,MC0,OP_ADDI}; regx = 4'h1; end
+12'h1B3:	begin next_ip = 12'h1B4; instr = {'d0,21'h123456,6'd0,MC0,OP_ADDI}; regx = 4'h1; end
+12'h1B4:	begin next_ip = 12'h1B8; instr = {'d0,21'h123456,6'd0,MC0,OP_ADDI}; regx = 4'h1; end
+12'h1B5:	begin next_ip = 12'h1B8; instr = {'d0,21'h123456,6'd0,MC0,OP_ADDI}; regx = 4'h1; end
+12'h1B6:	begin next_ip = 12'h1B8; instr = {'d0,21'h123456,6'd0,MC0,OP_ADDI}; regx = 4'h1; end
+12'h1B7:	begin next_ip = 12'h1B8; instr = {'d0,21'h123456,6'd0,MC0,OP_ADDI}; regx = 4'h1; end
 
-12'h1B0:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
-12'h1B1:	begin next_ip = 12'h000; instr = {'d0,21'h1FFFE0,6'd0,SP,OP_LDO};	end			// SP = Mem[FFFFFFE0]
-12'h1B2:	begin next_ip = 12'h000; instr = {'d0,21'h1FFFF0,6'd0,MC0,OP_LDO}; regx = 4'h1; end			// PC = Mem[FFFFFFF0]
-12'h1B3:	begin next_ip = 12'h000; instr = {'d0,21'h000000,MC0,6'd0,OP_JSR}; regx = 4'h2; end
-12'h1B4:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
+12'h1B8:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
+12'h1B9:	begin next_ip = 12'h000; instr = {'d0,21'h1FFFE0,6'd0,SP,OP_LDO};	end			// SP = Mem[FFFFFFE0]
+12'h1BA:	begin next_ip = 12'h000; instr = {'d0,21'h1FFFF0,6'd0,MC0,OP_LDO}; regx = 4'h1; end			// PC = Mem[FFFFFFF0]
+12'h1BB:	begin next_ip = 12'h000; instr = {'d0,21'h000000,MC0,6'd0,OP_JSR}; regx = 4'h2; end
+12'h1BC:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
 
 default:	begin next_ip = 12'h000; instr = 40'hFFFFFFFFFF; end	// NOP      regx = 4'h2; 
 endcase

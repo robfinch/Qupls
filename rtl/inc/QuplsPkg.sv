@@ -1369,21 +1369,20 @@ const address_t RSTSP = 32'hFFFFFFF0;
 
 typedef logic [7:0] seqnum_t;
 
-// Register number with valid bit
-typedef struct packed 
-{
-	logic v;
-	pregno_t rg;
-} vpregno_t;
-
 typedef struct packed
 {
-	vpregno_t [BANKS-1:0] pregs;
+	pregno_t [BANKS-1:0] pregs;
 } preg_array_t;
 
 typedef struct packed
 {
+	logic [PREGS-1:0] bits;
+} valid_array_t;
+
+typedef struct packed
+{
 	logic [PREGS-1:0] avail;	// available registers at time of queue (for rollback)
+	valid_array_t [BANKS-1:0] valid;	// physical register valid bitmap
 	preg_array_t [AREGS-1:0] regmap;
 } checkpoint_t;
 
