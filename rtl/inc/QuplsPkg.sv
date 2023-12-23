@@ -110,7 +110,7 @@ parameter REP_BIT = 31;
 
 parameter SUPPORT_LOAD_BYPASSING = 1'b0;
 parameter ROB_ENTRIES = 32;	// currently must be 16
-parameter NCHECK = 16;			// number of checkpoints
+parameter NCHECK = 3;			// number of checkpoints
 parameter LOADQ_ENTRIES = 8;
 parameter STOREQ_ENTRIES = 8;
 parameter LSQ_ENTRIES = 8;
@@ -174,6 +174,7 @@ parameter DRAMSLOT_AVAIL = 2'd0;
 parameter DRAMSLOT_READY = 2'd1;
 parameter DRAMSLOT_ACTIVE = 2'd2;
 
+typedef logic [3:0] checkpt_ndx_t;
 typedef logic [4:0] rob_ndx_t;
 typedef struct packed
 {
@@ -1376,13 +1377,7 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [PREGS-1:0] bits;
-} valid_array_t;
-
-typedef struct packed
-{
 	logic [PREGS-1:0] avail;	// available registers at time of queue (for rollback)
-	valid_array_t [BANKS-1:0] valid;	// physical register valid bitmap
 	preg_array_t [AREGS-1:0] regmap;
 } checkpoint_t;
 

@@ -34,27 +34,29 @@
 //
 // Q+ Register Alias Table
 //
-// ToDo: add a valid bit
 // Research shows having 16 checkpoints is almost as good as infinity.
+// Registers are marked valid on stomp at a rate of eight per clock cycle.
+// There are a max of 32 regs to update (32 entries in ROB). While stomping
+// is occurring other updates are not allowed.
 //
-// 6683 LUTs / 590 FFs for 68/192
-// 10010 LUTs / 860 FFs for 2*64/192 (two banks of 64 arch. regs).
-// 13000 LUTs / 1100 FFs for 4*64/192 (four banks of 64 arch. regs).
-// 18500 LUTs / 1410 FFs for 8*64/192 (eight banks of 64 arch. regs).
+// 7700 LUTs / 1800 FFs / 1 BRAM	for 1*69/256 (one bank of 69 arch. regs).
 // ============================================================================
 //
 import QuplsPkg::*;
 
-module Qupls_rat(rst, clk, nq, stallq, cndx_o, avail_i, restore, miss_cp, wr0, wr1, wr2, wr3,
-	qbr0, qbr1, qbr2, qbr3, stomped_regs,
+module Qupls_rat(rst, clk, nq, stallq, cndx_o, avail_i, restore, rob,
+	stomp, miss_cp, wr0, wr1, wr2, wr3,
+	wra_cp, wrb_cp, wrc_cp, wrd_cp, qbr0, qbr1, qbr2, qbr3,
 	rn,
-	rrn,
+	rrn, rn_cp,
 	vn, 
 	wrbanka, wrbankb, wrbankc, wrbankd, cmtbanka, cmtbankb, cmtbankc, cmtbankd, rnbank,
 	wra, wrra, wrb, wrrb, wrc, wrrc, wrd, wrrd, cmtav, cmtbv, cmtcv, cmtdv,
+	cmta_cp, cmtb_cp, cmtc_cp, cmtd_cp,
 	cmtaa, cmtba, cmtca, cmtda, cmtap, cmtbp, cmtcp, cmtdp, cmtbr,
 	freea, freeb, freec, freed, free_bitlist);
-parameter NPORT = 16;
+parameter XWID = 4;
+parameter NPORT = XWID*4;
 parameter BANKS = 1;
 localparam RBIT=$clog2(PREGS);
 localparam BBIT=0;//$clog2(BANKS)-1;
@@ -62,12 +64,13 @@ input rst;
 input clk;
 input nq;			// enqueue instruction
 output reg stallq;
+input rob_entry_t [ROB_ENTRIES-1:0] rob;
+input rob_bitmask_t stomp;
 input qbr0;		// enqueue branch, slot 0
 input qbr1;
 input qbr2;
 input qbr3;
-input [PREGS-1:0] stomped_regs;
-output [3:0] cndx_o;			// current checkpoint index
+output checkpt_ndx_t cndx_o;			// current checkpoint index
 input [PREGS-1:0] avail_i;	// list of available registers from renamer
 input restore;						// checkpoint restore
 input [3:0] miss_cp;			// checkpoint map index of branch miss
@@ -75,6 +78,10 @@ input wr0;
 input wr1;
 input wr2;
 input wr3;
+input checkpt_ndx_t wra_cp;
+input checkpt_ndx_t wrb_cp;
+input checkpt_ndx_t wrc_cp;
+input checkpt_ndx_t wrd_cp;
 input [BBIT:0] wrbanka;
 input [BBIT:0] wrbankb;
 input [BBIT:0] wrbankc;
@@ -91,6 +98,10 @@ input cmtav;							// commit valid
 input cmtbv;
 input cmtcv;
 input cmtdv;
+input checkpt_ndx_t cmta_cp;
+input checkpt_ndx_t cmtb_cp;
+input checkpt_ndx_t cmtc_cp;
+input checkpt_ndx_t cmtd_cp;
 input [BBIT:0] cmtbanka;
 input [BBIT:0] cmtbankb;
 input [BBIT:0] cmtbankc;
@@ -106,6 +117,7 @@ input pregno_t cmtdp;
 input cmtbr;								// comitting a branch
 input [BBIT:0] rnbank [NPORT-1:0];
 input aregno_t [NPORT-1:0] rn;		// architectural register
+input checkpt_ndx_t rn_cp [0:NPORT-1];
 output pregno_t [NPORT-1:0] rrn;	// physical register
 output reg [NPORT-1:0] vn;			// register valid
 output pregno_t freea;	// previous register to free
@@ -123,8 +135,12 @@ checkpoint_t cpram_out;
 checkpoint_t cpram_outr;
 checkpoint_t cpram_in;
 reg new_chkpt;							// new_chkpt map for current checkpoint
-reg [3:0] cndx, wndx;
+checkpt_ndx_t cndx, wndx;
 assign cndx_o = cndx;
+reg [PREGS-1:0] valid [0:BANKS-1][0:NCHECK-1];
+reg [ROB_ENTRIES-1:0] stomp_r;
+reg [1:0] stomp_cnt;
+reg stomp_act;
 
 Qupls_checkpointRam #(.BANKS(BANKS)) cpram1
 (
@@ -137,6 +153,60 @@ Qupls_checkpointRam #(.BANKS(BANKS)) cpram1
 	.enb(1'b1),
 	.addrb(cndx),
 	.doutb(cpram_out)
+);
+
+reg [7:0] cpv_wr;
+checkpt_ndx_t cpv_wc [0:7];
+pregno_t [7:0] cpv_wa;
+reg [7:0] cpv_i;
+wire [NPORT-1:0] cpv_o;
+
+always_comb cpv_wr[0] = stomp_act ? stomp_r[{stomp_cnt,3'd0}] : cmtav;
+always_comb cpv_wr[1] = stomp_act ? stomp_r[{stomp_cnt,3'd1}] : cmtbv;
+always_comb cpv_wr[2] = stomp_act ? stomp_r[{stomp_cnt,3'd2}] : cmtcv;
+always_comb cpv_wr[3] = stomp_act ? stomp_r[{stomp_cnt,3'd3}] : cmtdv;
+always_comb cpv_wr[4] = stomp_act ? stomp_r[{stomp_cnt,3'd4}] : wra != 7'd0 && wr0;
+always_comb cpv_wr[5] = stomp_act ? stomp_r[{stomp_cnt,3'd5}] : wra != 7'd0 && wr1;
+always_comb cpv_wr[6] = stomp_act ? stomp_r[{stomp_cnt,3'd6}] : wra != 7'd0 && wr2;
+always_comb cpv_wr[7] = stomp_act ? stomp_r[{stomp_cnt,3'd7}] : wra != 7'd0 && wr3;
+always_comb cpv_wc[0] = stomp_act ? rob[{stomp_cnt,3'd0}].cndx : cmta_cp;
+always_comb cpv_wc[1] = stomp_act ? rob[{stomp_cnt,3'd1}].cndx : cmtb_cp;
+always_comb cpv_wc[2] = stomp_act ? rob[{stomp_cnt,3'd2}].cndx : cmtc_cp;
+always_comb cpv_wc[3] = stomp_act ? rob[{stomp_cnt,3'd3}].cndx : cmtd_cp;
+always_comb cpv_wc[4] = stomp_act ? rob[{stomp_cnt,3'd4}].cndx : wra_cp;
+always_comb cpv_wc[5] = stomp_act ? rob[{stomp_cnt,3'd5}].cndx : wrb_cp;
+always_comb cpv_wc[6] = stomp_act ? rob[{stomp_cnt,3'd6}].cndx : wrc_cp;
+always_comb cpv_wc[7] = stomp_act ? rob[{stomp_cnt,3'd7}].cndx : wrd_cp;
+always_comb cpv_wa[0] = stomp_act ? rob[{stomp_cnt,3'd0}].nRt : cmtap;
+always_comb cpv_wa[1] = stomp_act ? rob[{stomp_cnt,3'd1}].nRt : cmtbp;
+always_comb cpv_wa[2] = stomp_act ? rob[{stomp_cnt,3'd2}].nRt : cmtcp;
+always_comb cpv_wa[3] = stomp_act ? rob[{stomp_cnt,3'd3}].nRt : cmtdp;
+always_comb cpv_wa[4] = stomp_act ? rob[{stomp_cnt,3'd4}].nRt : wrra;
+always_comb cpv_wa[5] = stomp_act ? rob[{stomp_cnt,3'd5}].nRt : wrrb;
+always_comb cpv_wa[6] = stomp_act ? rob[{stomp_cnt,3'd6}].nRt : wrrc;
+always_comb cpv_wa[7] = stomp_act ? rob[{stomp_cnt,3'd7}].nRt : wrrd;
+always_comb cpv_i[0] = VAL;
+always_comb cpv_i[1] = VAL;
+always_comb cpv_i[2] = VAL;
+always_comb cpv_i[3] = VAL;
+always_comb cpv_i[4] = stomp_act;
+always_comb cpv_i[5] = stomp_act;
+always_comb cpv_i[6] = stomp_act;
+always_comb cpv_i[7] = stomp_act;
+
+Qupls_checkpoint_valid_ram3 ucpr2
+(
+	.rst(rst),
+	.clka(clk),
+	.wr(cpv_wr),
+	.wc(cpv_wc),
+	.wa(cpv_wa),
+	.setall(1'b0),
+	.i(cpv_i),
+	.clkb(~clk),
+	.rc(rn_cp),
+	.ra(rrn),
+	.o(cpv_o)
 );
 
 genvar g;
@@ -180,7 +250,7 @@ generate begin : gRRN
 				else if (rn[g]==wrd && wr3)
 					vn[g] = 1'b1;
 				else
-					vn[g] = cpram_out.valid[0].bits[rrn[g]];;//cpram_out.regmap[rn[g]].pregs[0].v;
+					vn[g] = valid[0][cndx][rrn[g]];//cpram_out.regmap[rn[g]].pregs[0].v;
 			end
 			else
 				vn[g] = rn[g]==7'd0 ? 1'b1 :
@@ -189,8 +259,8 @@ generate begin : gRRN
 							wr2 && rn[g]==wrc ? 1'b1 :
 							wr3 && rn[g]==wrd ? 1'b1 :*/
 							(BANKS < 2) ?
-								cpram_out.valid[0].bits[rrn[g]]://cpram_out.regmap[rn[g]].pregs[0].v;
-								cpram_out.valid[rnbank[g]].bits[rrn[g]];
+								cpv_o://cpram_out.regmap[rn[g]].pregs[0].v;
+								cpv_o;	// ToFix later
 	end
 end
 endgenerate
@@ -335,75 +405,34 @@ begin
 	end
 	if (BANKS < 2) begin
 		
-		if (cmtav) begin 
-			//cpram_in.regmap[cmtaa].pregs[0] = cmtap;//cpram_out.regmap[cmtaa].pregs[0];
-			cpram_in.valid[0].bits[cmtap] <= VAL;
-			if (cpram_out.regmap[cmtaa].pregs[0] != cmtap) begin
-				$display("Qupls RAT: reg mismatch.");
-			end
-		end
-		if (cmtbv) begin
-			//cpram_in.regmap[cmtba].pregs[0] = cmtbp;//cpram_out.regmap[cmtba].pregs[0];
-			cpram_in.valid[0].bits[cmtbp] <= VAL;
-			if (cpram_out.regmap[cmtba].pregs[0] != cmtbp) begin
-				$display("Qupls RAT: reg mismatch.");
-			end
-		end
-		if (cmtcv) begin
-			//cpram_in.regmap[cmtca].pregs[0] = cmtcp;//cpram_out.regmap[cmtca].pregs[0];
-			cpram_in.valid[0].bits[cmtcp] <= VAL;
-			if (cpram_out.regmap[cmtca].pregs[0] != cmtcp) begin
-				$display("Qupls RAT: reg mismatch.");
-			end
-		end
-		if (cmtdv) begin
-			//cpram_in.regmap[cmtda].pregs[0] = cmtdp;//cpram_out.regmap[cmtda].pregs[0];
-			cpram_in.valid[0].bits[cmtdp] <= VAL;
-			if (cpram_out.regmap[cmtda].pregs[0] != cmtdp) begin
-				$display("Qupls RAT: reg mismatch.");
-			end
-		end
-		
 		if (wr0) begin
 			cpram_in.regmap[wra].pregs[0] = wrra;
-			if (wra != 7'd0)
-				cpram_in.valid[0].bits[wrra] <= INV;
 			$display("Qupls RAT: tgt reg %d replaced with %d.", cpram_out.regmap[wra].pregs[0], wrra);
 		end
-		if (wr1) begin
+		if (wr1 && XWID > 1) begin
 			cpram_in.regmap[wrb].pregs[0] = wrrb;
-			if (wrb != 7'd0)
-				cpram_in.valid[0].bits[wrrb] <= INV;
 			$display("Qupls RAT: tgt reg %d replaced with %d.", cpram_out.regmap[wrb].pregs[0], wrrb);
 		end
-		if (wr2) begin
+		if (wr2 && XWID > 2) begin
 			cpram_in.regmap[wrc].pregs[0] = wrrc;
-			if (wrc != 7'd0)
-				cpram_in.valid[0].bits[wrrc] <= INV;
 			$display("Qupls RAT: tgt reg %d replaced with %d.", cpram_out.regmap[wrc].pregs[0], wrrc);
 		end
-		if (wr3) begin
+		if (wr3 && XWID > 3) begin
 			cpram_in.regmap[wrd].pregs[0] = wrrd;
-			if (wrd != 7'd0)
-				cpram_in.valid[0].bits[wrrd] <= INV;
 			$display("Qupls RAT: tgt reg %d replaced with %d.", cpram_out.regmap[wrd].pregs[0], wrrd);
 		end
 	
 		if (wr0 && wrra==8'd0) begin
 			$display("RAT: writing zero register.");
-			$finish;
 		end
 		if (wr1 && wrrb==8'd0) begin
 			$display("RAT: writing zero register.");
-			$finish;
 		end
 		if (wr2 && wrrc==8'd0) begin
 			$display("RAT: writing zero register.");
-			$finish;
 		end
 		if (wr3 && wrrd==8'd0) begin
 			$display("RAT: writing zero register.");
-			$finish;
 		end
 
 	end
@@ -415,10 +444,32 @@ begin
 		if (wr3) cpram_in.regmap[wrd].pregs[wrbankd] = wrrd;
 	end
 
-	// Mark stomped on registers valid.	Thier old value is the true value, 
-	// pending updates are cancelled.
-	cpram_in.valid[0].bits = cpram_in.valid[0].bits | stomped_regs;
+end
 
+// Mark stomped on registers valid.	Thier old value is the true value, 
+// pending updates are cancelled. If stomp is active, commmit and update are
+// ignored.
+// Eight write ports to the valid bits are shared between stomp logic,
+// commit logic and update logic.
+// Note: setting for r0 to valid is okay because r0 is always valid.
+
+integer j,k;
+
+always_ff @(posedge clk)
+if (rst) begin
+	for (j = 0; j < BANKS; j = j + 1)
+		for (k = 0; k < NCHECK; k = k + 1)
+			valid[j][k] <= {256{1'b1}};
+	stomp_r <= {ROB_ENTRIES{1'b0}};
+	stomp_cnt <= 2'd0;
+	stomp_act <= FALSE;
+end
+else begin
+	stomp_cnt <= stomp_cnt + 2'd1;
+	stomp_r <= stomp_r | stomp;	
+	stomp_act <= |stomp_r | stomp;
+	for (j = 0; j < 8; j = j + 1)
+		stomp_r[{stomp_cnt,j[2:0]}] <= 1'b0;
 end
 
 // Add registers to the checkpoint map.

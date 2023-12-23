@@ -600,7 +600,8 @@ else begin
 		end
 	end
 
-	if (NAGEN > 1 && !stall_tlb1) begin
+//	if (NAGEN > 1 && !stall_tlb1) begin
+	if (!stall_tlb1) begin
 		if (t1a.vpn.vpn[8:0]==vadr1[31:23] && t1a.vpn.asid==asid1) begin
 			entry1 <= t1a;
 			tlb1_op <= op1;

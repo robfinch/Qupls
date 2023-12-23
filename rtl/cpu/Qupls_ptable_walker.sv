@@ -35,6 +35,7 @@
 // 1200 LUTs / 2720 FFs                                                                          
 // ============================================================================
 
+import const_pkg::*;
 import fta_bus_pkg::*;
 import QuplsMmupkg::*;
 import QuplsPkg::*;
@@ -44,7 +45,8 @@ module Qupls_ptable_walker(rst, clk,
 	commit0_id, commit0_idv, commit1_id, commit1_idv, commit2_id, commit2_idv,
 	commit3_id, commit3_idv,
 	in_que, ftas_req, ftas_resp,
-	ftam_req, ftam_resp, fault_o, faultq_o, tlb_wr, tlb_way, tlb_entryno, tlb_entry);
+	ftam_req, ftam_resp, fault_o, faultq_o, tlb_wr, tlb_way, tlb_entryno, tlb_entry,
+	ptw_vadr, ptw_vv, ptw_padr, ptw_pv);
 parameter CID = 6'd3;
 
 parameter IO_ADDR = 32'hFFF40001;	//32'hFEFC0001;
@@ -98,6 +100,10 @@ output reg tlb_wr;
 output reg tlb_way;
 output reg [6:0] tlb_entryno;
 output tlb_entry_t tlb_entry;
+output virtual_address_t ptw_vadr;
+output reg ptw_vv;
+input physical_address_t ptw_padr;
+input ptw_pv;
 
 integer nn,n1,n2,n3,n4;
 
@@ -307,6 +313,8 @@ reg [12:0] pindex;
 always_comb
 	pindex = miss_queue[tranbuf[sel_tran].stk].adr[31:16] >> (miss_queue[tranbuf[sel_tran].stk].lvl * 13);
 
+reg ptw_ppv;
+
 always_ff @(posedge clk)
 if (rst) begin
 	tlbmiss_ip <= 'd0;
@@ -321,9 +329,14 @@ if (rst) begin
 	way <= 'd0;
 	tlb_wr <= 1'b0;
 	tlb_way <= 1'b0;
+	ptw_vv <= FALSE;
+	ptw_ppv <= FALSE;
+	ptw_vadr <= {$bits(virtual_address_t){1'b0}};
 end
 else begin
 
+	if (ptw_pv)
+		ptw_vv <= FALSE;
 	tlb_wr <= 1'b0;
 	way <= ~way;
 
@@ -362,8 +375,13 @@ else begin
 				tlb_entry.vpn.vpn <= miss_adr[31:23];
 				tlb_entry.vpn.asid <= miss_asid;
 			end
-			// Run a bus cycle.
 			if (sel_qe >= 0) begin
+				ptw_vadr <= {miss_queue[sel_qe].tadr[31:3],3'b0};
+				ptw_vv <= TRUE;
+				ptw_ppv <= FALSE;
+			end
+			if (ptw_pv & ~ptw_ppv) begin
+				ptw_ppv <= TRUE;
 				miss_queue[sel_qe].bc <= 1'b0;
 				miss_queue[sel_qe].o <= 1'b1;
 				miss_queue[sel_qe].lvl <= miss_queue[sel_qe].lvl - 1;
@@ -373,21 +391,23 @@ else begin
 				ftam_req.we <= 1'b0;
 				ftam_req.sel <= 64'h0FF << {miss_queue[sel_qe].tadr[5:3],3'b0};
 				ftam_req.asid <= miss_queue[sel_qe].asid;
-				ftam_req.vadr <= {miss_queue[sel_qe].tadr[31:3],3'b0};
+				ftam_req.vadr <= ptw_vadr;
+				ftam_req.padr <= ptw_padr;
 				ftam_req.tid <= tid;
 				ftam_req.cid <= CID;
 				// Record outstanding transaction.
 				tranbuf[tid & 15].v <= 1'b1;
 				tranbuf[tid & 15].rdy <= 1'b0;
 				tranbuf[tid & 15].asid <= miss_queue[sel_qe].asid;
-				tranbuf[tid & 15].vadr <= {miss_queue[sel_qe].tadr[31:3],3'b0};
+				tranbuf[tid & 15].vadr <= ptw_vadr;
+				tranbuf[tid & 15].padr <= ptw_padr;
 				tranbuf[tid & 15].stk <= sel_qe;
 				tid <= tid + 2'd1;
 				if (&tid)
 					tid <= 8'd1;
 			end
 		end
-		// Remain in fault state until cleared by accessing the table-walker register.
+	// Remain in fault state until cleared by accessing the table-walker register.
 	FAULT:
 		begin
 			fault <= 'd0;

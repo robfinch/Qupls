@@ -38,7 +38,7 @@ import QuplsPkg::*;
 
 module Qupls_sched(rst, clk, alu0_idle, alu1_idle, fpu0_idle ,fpu1_idle, fcu_idle,
 	agen0_idle, agen1_idle, lsq0_idle, lsq1_idle,
-	robentry_islot_i, robentry_islot_o,
+	stomp_i, robentry_islot_i, robentry_islot_o,
 	head, rob, robentry_issue, robentry_fpu_issue, robentry_fcu_issue,
 	robentry_agen_issue,
 	alu0_rndx, alu1_rndx, alu0_rndxv, alu1_rndxv,
@@ -56,6 +56,7 @@ input agen0_idle;
 input agen1_idle;
 input lsq0_idle;
 input lsq1_idle;
+input [ROB_ENTRIES-1:0] stomp_i;
 input [1:0] robentry_islot_i [0:ROB_ENTRIES-1];
 output reg [1:0] robentry_islot_o [0:ROB_ENTRIES-1];
 input rob_ndx_t head;
@@ -217,7 +218,7 @@ begin
 			if (rob[shd].v & rob[shd].decbus.sync && rob[shd].sn < rob[heads[hd]].sn)
 				no_issue = 1'b1;
 		end
-		if (!no_issue) begin
+		if (!no_issue && !stomp_i[heads[hd]]) begin
 			if (could_issue[heads[hd]]) begin
 				if (!issued_alu0 && alu0_idle && rob[heads[hd]].decbus.alu && !rob[heads[hd]].done[0]) begin
 			  	next_robentry_issue[heads[hd]] = 1'b1;

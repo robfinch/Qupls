@@ -458,14 +458,30 @@ begin
 			if (SUPPORT_VLIB)
 				next_pc <= pc + length_byte;
 			else begin
-				if (pc4[5:0] >= block_header[13:8]|| pc4[$bits(pc_address_t)-1:6]!=pc[$bits(pc_address_t)-1:6])
+				if (pc0[5:0] >= block_header[13:8])
+					next_pc <= {pc[$bits(pc_address_t)-1:6]+2'd1,6'd0};
+				else if (pc1[5:0] >= block_header[13:8])
+					next_pc <= {pc[$bits(pc_address_t)-1:6]+2'd1,6'd0};
+				else if (pc2[5:0] >= block_header[13:8])
+					next_pc <= {pc[$bits(pc_address_t)-1:6]+2'd1,6'd0};
+				else if (pc3[5:0] >= block_header[13:8])
+					next_pc <= {pc[$bits(pc_address_t)-1:6]+2'd1,6'd0};
+				else if (pc4[5:0] >= block_header[13:8]|| pc4[7:6]!=pc[7:6])
 					next_pc <= {pc[$bits(pc_address_t)-1:6]+2'd1,6'd0};
 				else
 					next_pc <= {pc[$bits(pc_address_t)-1:6],pc4[5:0]};
 			end
 		end
 		else begin
-			if (pc4[5:0] >= block_header[13:8]|| pc4[$bits(pc_address_t)-1:6]!=pc[$bits(pc_address_t)-1:6])
+			if (pc0[5:0] >= block_header[13:8])
+				next_pc <= {pc[$bits(pc_address_t)-1:6]+2'd1,6'd0};
+			else if (pc1[5:0] >= block_header[13:8])
+				next_pc <= {pc[$bits(pc_address_t)-1:6]+2'd1,6'd0};
+			else if (pc2[5:0] >= block_header[13:8])
+				next_pc <= {pc[$bits(pc_address_t)-1:6]+2'd1,6'd0};
+			else if (pc3[5:0] >= block_header[13:8])
+				next_pc <= {pc[$bits(pc_address_t)-1:6]+2'd1,6'd0};
+			else if (pc4[5:0] >= block_header[13:8]|| pc4[7:6]!=pc[7:6])
 				next_pc <= {pc[$bits(pc_address_t)-1:6]+2'd1,6'd0};
 			else
 				next_pc <= {pc[$bits(pc_address_t)-1:6],pc4[5:0]};

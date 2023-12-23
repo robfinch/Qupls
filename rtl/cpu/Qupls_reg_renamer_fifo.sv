@@ -93,6 +93,7 @@ else begin
 	rd_en <= 1'b0;
 	wr_en <= 1'b0;
 	ov <= 1'b0;
+	o <= 8'd0;
 	if (en) begin
 		if (alloc & ~(freeval|v) & ~stall) begin
 			rd_en <= 1'b1;
@@ -142,6 +143,8 @@ else begin
 			wo = tag2free;
 		else if (v && alloc)
 			wo = {FIFONO[1:0],o0[5:0]};
+		else
+			wo = 8'd0;
 	end
 end
 
