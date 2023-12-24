@@ -36,12 +36,13 @@
 //                                                                          
 // ============================================================================
 
-module sram_1r1w(rst, clk, wr, wadr, radr, i, o);
+module sram_1r1w(rst, clk, ce, wr, wadr, radr, i, o);
 parameter WID=512;
 parameter DEP=256;
 parameter RL=1;
 input rst;
 input clk;
+input ce;
 input wr;
 input [$clog2(DEP)-1:0] wadr;
 input [$clog2(DEP)-1:0] radr;
@@ -110,10 +111,10 @@ reg [WID:1] o1;
                                // "common_clock".
 
       .dina(i),                // WRITE_DATA_WIDTH_A-bit input: Data input for port A write operations.
-      .ena(wr),                // 1-bit input: Memory enable signal for port A. Must be high on clock
+      .ena(ce),                // 1-bit input: Memory enable signal for port A. Must be high on clock
                                // cycles when write operations are initiated. Pipelined internally.
 
-      .enb(1'b1),              // 1-bit input: Memory enable signal for port B. Must be high on clock
+      .enb(ce),              // 1-bit input: Memory enable signal for port B. Must be high on clock
                                        // cycles when read operations are initiated. Pipelined internally.
 
       .injectdbiterra(1'b0), 	// 1-bit input: Controls double bit error injection on input data when
@@ -124,7 +125,7 @@ reg [WID:1] o1;
                               // ECC enabled (Error injection capability is not available in
                               // "decode_only" mode).
 
-      .regceb(1'b1),	        // 1-bit input: Clock Enable for the last register stage on the output
+      .regceb(ce),	        // 1-bit input: Clock Enable for the last register stage on the output
                       	      // data path.
 
       .rstb(rst),             // 1-bit input: Reset signal for the final port B output register stage.
@@ -146,10 +147,13 @@ reg [WID:1] o1;
 // I do not think this can happen ^^^ the read address would need to be registered for performance.
 
 always_ff @(posedge clk)
+if (ce)
 	wr1 <= wr;
 always_ff @(posedge clk)
+if (ce)
 	wadr1 <= wadr;
 always_ff @(posedge clk)
+if (ce)
 	i1 <= i;
 /*
 always_comb

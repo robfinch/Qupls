@@ -38,9 +38,10 @@
 
 import Qupls_cache_pkg::*;
 
-module sram_512x256_1rw1r(rst, clk, wr, wadr, radr, i, o, wo);
+module sram_512x256_1rw1r(rst, clk, ce, wr, wadr, radr, i, o, wo);
 input rst;
 input clk;
+input ce;
 input wr;
 input [7:0] wadr;
 input [7:0] radr;
@@ -116,11 +117,11 @@ ICacheLine o1;
 
       .dina(i),                     // WRITE_DATA_WIDTH_A-bit input: Data input for port A write operations.
       .dinb('d0),                     // WRITE_DATA_WIDTH_B-bit input: Data input for port B write operations.
-      .ena(wr),                       // 1-bit input: Memory enable signal for port A. Must be high on clock
+      .ena(ce),                       // 1-bit input: Memory enable signal for port A. Must be high on clock
                                        // cycles when read or write operations are initiated. Pipelined
                                        // internally.
 
-      .enb(1'b1),                       // 1-bit input: Memory enable signal for port B. Must be high on clock
+      .enb(ce),                       // 1-bit input: Memory enable signal for port B. Must be high on clock
                                        // cycles when read or write operations are initiated. Pipelined
                                        // internally.
 
@@ -140,10 +141,10 @@ ICacheLine o1;
                                        // ECC enabled (Error injection capability is not available in
                                        // "decode_only" mode).
 
-      .regcea(1'b1),                 // 1-bit input: Clock Enable for the last register stage on the output
+      .regcea(ce),                 // 1-bit input: Clock Enable for the last register stage on the output
                                        // data path.
 
-      .regceb(1'b1),                 // 1-bit input: Clock Enable for the last register stage on the output
+      .regceb(ce),                 // 1-bit input: Clock Enable for the last register stage on the output
                                        // data path.
 
       .rsta(rst),                     // 1-bit input: Reset signal for the final port A output register stage.
@@ -333,10 +334,13 @@ ICacheLine o1;
 // If reading and writing the same address at the same time, return the new data.
 
 always_ff @(posedge clk)
+if (ce)
 	wr1 <= wr;
 always_ff @(posedge clk)
+if (ce)
 	wadr1 <= wadr;
 always_ff @(posedge clk)
+if (ce)
 	i1 <= i;
 always_comb
 	if (wr1 && wadr1==radr)

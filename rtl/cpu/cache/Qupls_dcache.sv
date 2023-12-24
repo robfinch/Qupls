@@ -213,6 +213,7 @@ for (g = 0; g < WAYS; g = g + 1) begin : gFor
 	(
 		.rst(rst),
 		.clk(clk),
+		.ce(1'b1),
 		.wr(wr && way==g && cache_load),
 		.wadr(vndx),
 		.radr(snoop_adr[HIBIT:LOBIT]),

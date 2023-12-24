@@ -39,7 +39,7 @@
 import QuplsPkg::*;
 import Qupls_cache_pkg::*;
 
-module Qupls_cache_tag(rst, clk, wr, vadr_i, padr_i, way, rclk, ndx, tag,
+module Qupls_cache_tag(rst, clk, ce, wr, vadr_i, padr_i, way, rclk, ndx, tag,
 	ptags0, ptags1, ptags2, ptags3);
 parameter LINES=64;
 parameter WAYS=4;
@@ -48,6 +48,7 @@ parameter HIBIT=$clog2(LINES)-1+LOBIT;
 parameter TAGBIT=HIBIT+2;	// +1 more for odd/even lines
 input rst;
 input clk;
+input ce;
 input wr;
 input QuplsPkg::address_t vadr_i;
 input QuplsPkg::address_t padr_i;
@@ -106,7 +107,7 @@ if (rst) begin
 end
 else
 `endif
-begin
+if (ce) begin
 	if (wr && way==2'd0) vtags0[vadr_i[HIBIT:LOBIT]] <= {vadr_i[$bits(QuplsPkg::address_t)-1:TAGBIT]};
 	if (wr && way==2'd1) vtags1[vadr_i[HIBIT:LOBIT]] <= {vadr_i[$bits(QuplsPkg::address_t)-1:TAGBIT]};
 	if (wr && way==2'd2) vtags2[vadr_i[HIBIT:LOBIT]] <= {vadr_i[$bits(QuplsPkg::address_t)-1:TAGBIT]};
@@ -114,7 +115,7 @@ begin
 end
 
 always_ff @(posedge clk)
-begin
+if (ce) begin
 	if (wr && way==2'd0) ptags0[vadr_i[HIBIT:LOBIT]] <= {padr_i[$bits(QuplsPkg::address_t)-1:TAGBIT]};
 	if (wr && way==2'd1) ptags1[vadr_i[HIBIT:LOBIT]] <= {padr_i[$bits(QuplsPkg::address_t)-1:TAGBIT]};
 	if (wr && way==2'd2) ptags2[vadr_i[HIBIT:LOBIT]] <= {padr_i[$bits(QuplsPkg::address_t)-1:TAGBIT]};

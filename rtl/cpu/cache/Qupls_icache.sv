@@ -45,7 +45,7 @@ import fta_bus_pkg::*;
 import QuplsPkg::*;
 import Qupls_cache_pkg::*;
 
-module Qupls_icache(rst,clk,invce,snoop_adr,snoop_v,snoop_cid,invall,invline,
+module Qupls_icache(rst,clk,ce,invce,snoop_adr,snoop_v,snoop_cid,invall,invline,
 	nop,nop_o,ip_asid,ip,ip_o,ihit_o,ihit,ic_line_hi_o,ic_line_lo_o,ic_valid,
 	miss_vadr,miss_asid,
 	ic_line_i,wway,wr_ic
@@ -63,6 +63,7 @@ localparam LOG_WAYS = $clog2(WAYS)-1;
 
 input rst;
 input clk;
+input ce;
 input invce;
 input QuplsPkg::address_t snoop_adr;
 input snoop_v;
@@ -126,15 +127,19 @@ wire valid2e, valid2o;
 reg nop2;
 
 always_ff @(posedge clk)
+if (ce)
 	nop2 <= nop;
 assign nop_o = nop2;
 always_ff @(posedge clk)
+if (ce)
 	ip2 <= ip;
 always_comb
 	ihit = ihit1e&ihit1o;
 always_ff @(posedge clk)
+if (ce)
 	ihit2e <= ihit1e;
 always_ff @(posedge clk)
+if (ce)
 	ihit2o <= ihit1o;
 always_comb
 	// *** The following causes the hit to tend to oscillate between hit
@@ -162,6 +167,7 @@ sram_512x256_1rw1r uicme
 (
 	.rst(rst),
 	.clk(clk),
+	.ce(ce),
 	.wr(icache_wre),
 	.wadr({wway,ic_line_i.vadr[HIBIT:LOBIT]}),
 	.radr({ic_rwaye,ip[HIBIT:LOBIT]+ip[LOBIT-1]}),
@@ -174,6 +180,7 @@ sram_512x256_1rw1r uicmo
 (
 	.rst(rst),
 	.clk(clk),
+	.ce(ce),
 	.wr(icache_wro),
 	.wadr({wway,ic_line_i.vadr[HIBIT:LOBIT]}),
 	.radr({ic_rwayo,ip[HIBIT:LOBIT]}),
@@ -193,9 +200,10 @@ uicme
 (
 	.rst(rst),
 	.clk(clk),
+	.ce(ce),
 	.wr(icache_wre),
 	.wadr({wway,ic_line_i.vtag[HIBIT:LOBIT]}),
-	.radr({ic_rwaye,ip[HIBIT:LOBIT]+iel}),
+	.radr({ic_rwaye,ip[HIBIT:LOBIT]+ip[LOBIT-1]}),
 	.i(ic_line_i.data),
 	.o(ic_eline.data)
 );
@@ -209,6 +217,7 @@ uicmo
 (
 	.rst(rst),
 	.clk(clk),
+	.ce(ce),
 	.wr(icache_wro),
 	.wadr({wway,ic_line_i.vtag[HIBIT:LOBIT]}),
 	.radr({ic_rwayo,ip[HIBIT:LOBIT]}),
@@ -220,11 +229,13 @@ end
 endgenerate
 
 always_ff @(posedge clk)
+if (ce)
 	icache_wre2 <= icache_wre;
 
 // Address of the victim line is the address of the update line.
 // Write the victim cache if updating the cache and the victim line is valid.
 always_ff @(posedge clk)
+if (ce) begin
 if ((icache_wre|icache_wro) && NVICTIM > 0) begin
 	victim_line.vtag <= ic_line_i.vtag;
 	victim_line.ptag <= ic_line_i.ptag;
@@ -239,9 +250,11 @@ if ((icache_wre|icache_wro) && NVICTIM > 0) begin
 end
 else
 	victim_wr <= 'd0;
+end
 
 // Victim data comes from old data in the line that is being updated.
 always_ff @(posedge clk)
+if (ce)
 if (NVICTIM > 0) begin
 	if (icache_wre2)
 		victim_line.data <= victim_eline.data;
@@ -336,12 +349,13 @@ uictage
 (
 	.rst(rst),
 	.clk(clk),
+	.ce(ce),
 	.wr(icache_wre),
 	.vadr_i(ic_line_i.vtag),
 	.padr_i(ic_line_i.ptag),
 	.way(wway),
 	.rclk(clk),
-	.ndx(ip[HIBIT:LOBIT]+iel),	// virtual index (same bits as physical address)
+	.ndx(ip[HIBIT:LOBIT]+ip[LOBIT-1]),	// virtual index (same bits as physical address)
 	.tag(victage),
 	.sndx(snoop_adr[HIBIT:LOBIT]),
 	.ptag0(ptags0e),
@@ -362,6 +376,7 @@ uictago
 (
 	.rst(rst),
 	.clk(clk),
+	.ce(ce),
 	.wr(icache_wro),
 	.vadr_i(ic_line_i.vtag),
 	.padr_i(ic_line_i.ptag),
@@ -385,8 +400,9 @@ Qupls_cache_hit
 uichite
 (
 	.clk(clk),
+	.ce(ce),
 	.adr(ip),
-	.ndx(ip[HIBIT:LOBIT]+iel),
+	.ndx(ip[HIBIT:LOBIT]+ip[LOBIT-1]),
 	.tag(victage),
 	.valid(valide),
 	.hit(ihit1e),
@@ -403,6 +419,7 @@ Qupls_cache_hit
 uichito
 (
 	.clk(clk),
+	.ce(ce),
 	.adr(ip),
 	.ndx(ip[HIBIT:LOBIT]),
 	.tag(victago),
@@ -427,7 +444,7 @@ if (rst) begin
 		valido[g] <= 'd0;
 	end
 end
-else begin
+else if (ce) begin
 	if (victim_wr) begin
 		victim_count <= victim_count + 2'd1;
 		if (victim_count>=NVICTIM-1)
@@ -496,7 +513,7 @@ always_comb
 
 always_comb
 	if (!ihit1e)
-		miss_vadr = {ip[$bits(QuplsPkg::address_t)-1:LOBIT]+iel,1'b0,{LOBIT-1{1'b0}}};
+		miss_vadr = {ip[$bits(QuplsPkg::address_t)-1:LOBIT]+ip[LOBIT-1],1'b0,{LOBIT-1{1'b0}}};
 	else if (!ihit1o)
 		miss_vadr = {ip[$bits(QuplsPkg::address_t)-1:LOBIT],1'b1,{LOBIT-1{1'b0}}};
 	else
