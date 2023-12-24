@@ -285,6 +285,7 @@ if (en) begin
 	dbo <= 'd0;	// in case a signal was missed / unused.
 	dbo <= db;
 	dbo.mem <= db.load|db.store;
+	db.sync = db.fence && ins[15:8]==8'hFF;
 end
 
 endmodule

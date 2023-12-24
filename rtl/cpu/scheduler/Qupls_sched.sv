@@ -228,7 +228,7 @@ begin
 			  	next_alu0_rndxv = 1'b1;
 				end
 				if (NALU > 1) begin
-					if (!issued_alu1 && alu1_idle && rob[heads[hd]].decbus.alu && !rob[heads[hd]].decbus.alu0) begin
+					if (!issued_alu1 && alu1_idle && rob[heads[hd]].decbus.alu && !rob[heads[hd]].done[0] && !rob[heads[hd]].decbus.alu0) begin
 						if (!next_robentry_issue[heads[hd]]) begin	// Did ALU #0 already grab it?
 					  	next_robentry_issue[heads[hd]] = 1'b1;
 					  	next_robentry_islot_o[heads[hd]] = 2'b01;

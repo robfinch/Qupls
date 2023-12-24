@@ -375,8 +375,11 @@ else begin
 		new_chkpt <= 1'b1;
 		$display("Setting checkpoint %d.", cndx + 1);
 	end
-	if (new_chkpt)
+	if (new_chkpt) begin
 		cndx <= cndx + 1;
+		if (cndx >= NCHECK-1)
+			cndx <= 4'd0;
+	end
 end
 
 // Stall the enqueue of instructions if there are too many outstanding branches.
@@ -387,7 +390,7 @@ else begin
 	stallq <= 1'b0;
 	for (n3 = 0; n3 < AREGS; n3 = n3 + 1)
 		if (/*(rrn[n3]==8'd0 && rn[n3]!=7'd0) || */ qbr && nob==6'd15)
-			stallq <= 1'b1;
+			stallq <= 1'b0;	// ToDo: Fix
 end
 
 

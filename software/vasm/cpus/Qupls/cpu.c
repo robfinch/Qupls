@@ -548,7 +548,7 @@ mnemonic mnemonics[]={
 	"sxt",	{OP_REG,OP_REG,0,0,0}, {MV,CPU_ALL,0,0xBE000000LL|OPC(19LL),4},
 	"sxw",	{OP_REG,OP_REG,0,0,0}, {MV,CPU_ALL,0,0x9E000000LL|OPC(19LL),4},
 
-	"sync", {0,0,0,0,0}, {BITS16,CPU_ALL,0,0xF7LL,2},
+	"sync", {0,0,0,0,0}, {BITS40,CPU_ALL,0,0xFF00|OPC(114LL),5},
 	"sys",	{OP_IMM,0,0,0,0}, {BITS40,CPU_ALL,0,OPC(0LL),5},
 	"syscall",	{0,0,0,0,0}, {BITS40,CPU_ALL,0,OPC(0LL),5},
 

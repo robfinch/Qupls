@@ -84,10 +84,10 @@ fta_cmd_response128_t [1:0] ftadm_resp;
 fta_cmd_response128_t fta_resp1;
 fta_cmd_response128_t ptable_resp;
 
-real IPC;
+real IPC,PIPC;
 integer nn,mm,n2,n3,n4,m4,n5,n6,n7,n8,n9,n10,n11,n12,n13,n14,n15,n17;
 integer n16r, n16c, n12r, n12c, n14r, n14c, n17r, n17c, n18r, n18c;
-integer n19,n20,n21,n22,n23,n24,n25,n26,i;
+integer n19,n20,n21,n22,n23,n24,n25,n26,n27,i;
 genvar g,h;
 rndx_t alu0_re;
 reg [127:0] message;
@@ -175,6 +175,7 @@ pregno_t agen1_argB_reg;
 
 pregno_t store_argC_reg;
 lsq_ndx_t store_argC_id;
+lsq_ndx_t store_argC_id1;
 
 pregno_t [14:0] rf_reg;
 value_t [14:0] rfo;
@@ -201,7 +202,6 @@ reg advance_pipeline;
 
 rob_ndx_t tail0, tail1, tail2, tail3, tail4, tail5, tail6, tail7;
 rob_ndx_t head0, head1, head2, head3;
-lsq_ndx_t store_tail;
 reg_bitmask_t reg_bitmask;
 reg_bitmask_t Ra_bitmask;
 reg_bitmask_t Rt_bitmask;
@@ -2377,7 +2377,7 @@ end
 always_ff @(posedge clk)
 for (n4 = 0; n4 < ROB_ENTRIES; n4 = n4 + 1) begin
 		robentry_stomp[n4] <=
-			(branchmiss || branchmiss_state!=3'd7)
+			((branchmiss|(takb && (fcu_v2|fcu_v3|fcu_v4))) || branchmiss_state!=3'd7)
 			&& rob[n4].sn > rob[missid].sn
 			//&& rob[n4].v
 		;
@@ -3597,24 +3597,16 @@ else begin
 
 	if (lsq[lsq_tail0.row][0].v==INV && rob[agen0_id].out && !rob[agen0_id].lsq && rob[agen0_id].decbus.mem && !(&rob[agen0_id].done)) begin	// Can an entry be queued?
 		if (!fnIsInLSQ(agen0_id)) begin
-			for (n12r = 0; n12r < LSQ_ENTRIES; n12r = n12r + 1)
-				for (n12c = 0; n12c < 2; n12c = n12c + 1)
-					lsq[n12r][n12c].sn <= lsq[n12r][n12c].sn - 1;
 			if (!robentry_stomp[agen0_id] && rob[agen0_id].v==VAL) begin
 				tEnqueLSE(8'hFF, lsq_tail0, agen0_id, rob[agen0_id], 2'd1);
-				store_tail <= lsq_tail0;
 				lsq_tail.row <= (lsq_tail.row + 2'd1) % LSQ_ENTRIES;
 				lsq_tail.col <= 3'd0;
 			end
 		end
 		if (LSQ2 && lsq[lsq_tail0.row][1].v==INV && rob[agen1_id].out && !rob[agen1_id].lsq && rob[agen1_id].decbus.mem && !(&rob[agen1_id].done)) begin	// Can a second entry be queued?
 			if (!fnIsInLSQ(agen1_id)) begin
-				for (n12r = 0; n12r < LSQ_ENTRIES; n12r = n12r + 1)
-					for (n12c = 0; n12c < 2; n12c = n12c + 1)
-						lsq[n12r][n12c].sn <= lsq[n12r][n12c].sn - 2;
 				if (!robentry_stomp[agen1_id] && rob[agen1_id].v==VAL) begin
 					tEnqueLSE(8'hFF, {lsq_tail0.row,lsq_tail0.col|1}, agen1_id, rob[agen1_id], 2'd2);
-					store_tail <= {lsq_tail0.row,lsq_tail0.col|1};
 					lsq[lsq_tail0.row][0].sn <= 8'hFE;
 				end
 			end
@@ -3759,13 +3751,17 @@ else begin
 	    rob[agen1_rndx].out <= VAL;
 		end
 	end
-	store_argC_reg <= lsq[lsq_head.row][lsq_head.col].Rc;
-	store_argC_id <= lsq_head;
+	if (lsq[lsq_head.row][lsq_head.col].v==VAL) begin
+		store_argC_reg <= lsq[lsq_head.row][lsq_head.col].Rc;
+		store_argC_id <= lsq_head;
+		store_argC_id1 <= store_argC_id;
+	end
 	
-	if (lsq[store_argC_id.row][store_argC_id.col].v==VAL) begin
+	if (lsq[store_argC_id1.row][store_argC_id1.col].v==VAL && lsq[store_argC_id1.row][store_argC_id1.col].datav==INV) begin
 		if (prnv[14]) begin
-			lsq[store_argC_id.row][store_argC_id.col].res <= rfo_store_argC;
-			lsq[store_argC_id.row][store_argC_id.col].datav <= VAL;
+			$display("Q+ CPU: LSQ Rc=%h from r%d", rfo_store_argC, store_argC_reg);
+			lsq[store_argC_id1.row][store_argC_id1.col].res <= rfo_store_argC;
+			lsq[store_argC_id1.row][store_argC_id1.col].datav <= VAL;
 		end
 	end
 
@@ -4062,26 +4058,29 @@ else begin
   	for (n12 = 0; n12 < NDATA_PORTS; n12 = n12 + 1) begin
 	  	if (lsq[n3][n12].v==VAL && lsq[n3][n12].datav==INV) begin
 	  		if (lsq[n3][n12].Rc==wrport0_Rt && wrport0_v==VAL) begin
+	  			$display("Q+ CPU: LSQ bypass from ALU0=%h r%d", alu0_res, wrport0_Rt);
 	  			lsq[n3][n12].datav <= VAL;
 	  			lsq[n3][n12].res <= alu0_res;
 	  		end
-	  		else if (NALU > 1 && lsq[n3][n12].Rc==wrport1_Rt && wrport1_v==VAL) begin
+	  		if (NALU > 1 && lsq[n3][n12].Rc==wrport1_Rt && wrport1_v==VAL) begin
+	  			$display("Q+ CPU: LSQ bypass from ALU1=%h r%d", alu1_res, wrport1_Rt);
 	  			lsq[n3][n12].datav <= VAL;
 	  			lsq[n3][n12].res <= alu1_res;
 	  		end
-	  		else if (lsq[n3][n12].Rc==wrport2_Rt && wrport2_v==VAL) begin
+	  		if (lsq[n3][n12].Rc==wrport2_Rt && wrport2_v==VAL) begin
+	  			$display("Q+ CPU: LSQ bypass from MEM0=%h r%d", dram_bus0, wrport2_Rt);
 	  			lsq[n3][n12].datav <= VAL;
 	  			lsq[n3][n12].res <= dram_bus0;
 	  		end
-	  		else if (lsq[n3][n12].Rc==wrport3_Rt && wrport3_v==VAL) begin
+	  		if (NFPU > 0 && lsq[n3][n12].Rc==wrport3_Rt && wrport3_v==VAL) begin
 	  			lsq[n3][n12].datav <= VAL;
 	  			lsq[n3][n12].res <= fpu0_res;
 	  		end
-	  		else if (NDATA_PORTS > 1 && lsq[n3][n12].Rc==wrport4_Rt && wrport4_v==VAL) begin
+	  		if (NDATA_PORTS > 1 && lsq[n3][n12].Rc==wrport4_Rt && wrport4_v==VAL) begin
 	  			lsq[n3][n12].datav <= VAL;
 	  			lsq[n3][n12].res <= dram_bus1;
 	  		end
-	  		else if (NFPU > 1 && lsq[n3][n12].Rc==wrport5_Rt && wrport5_v==VAL) begin
+	  		if (NFPU > 1 && lsq[n3][n12].Rc==wrport5_Rt && wrport5_v==VAL) begin
 	  			lsq[n3][n12].datav <= VAL;
 	  			lsq[n3][n12].res <= fpu1_res;
 	  		end
@@ -4334,6 +4333,11 @@ else begin
 // Trigger page walk TLB update for outstanding agen request. Must be done when
 // the instruction is at the commit stage to mitigate Spectre attacks.
 
+	freevals <= 4'd0;
+	tags2free[0] <= 8'd0;
+	tags2free[1] <= 8'd0;
+	tags2free[2] <= 8'd0;
+	tags2free[3] <= 8'd0;
 	if (!htcolls) begin
 		commit0_id <= head0;
 		commit1_id <= head1;
@@ -4371,6 +4375,8 @@ else begin
 		group_len <= group_len - 1;
 		rob[head0].v <= INV;
 		rob[head0].lsq <= 1'd0;
+		tags2free[0] <= rob[head0].pRt;
+		freevals[0] <= |rob[head0].pRt;
 		if (cmtcnt > 3'd1) begin
 			IV <= IV + rob[head0].v + rob[head1].v;
 			rob[head1].v <= INV;
@@ -4404,8 +4410,6 @@ else begin
 		I <= I + cmtcnt;
 		if (rob[head0].lsq)
 			lsq[rob[head0].lsqndx.row][rob[head0].lsqndx.col].v <= INV;
-		tags2free[0] <= rob[head0].pRt;
-		freevals[0] <= |rob[head0].pRt;
 		head0 <= (head0 + cmtcnt) % ROB_ENTRIES;
 		if (group_len <= 0)
 			group_len <= rob[head0].group_len;
@@ -4429,13 +4433,6 @@ else begin
 			tProcessExc(head2,rob[head2].pc);
 		else if (rob[head3].excv && cmtcnt > 3'd3)
 			tProcessExc(head3,rob[head3].pc);
-	end
-	else begin
-		tags2free[0] <= 8'd0;
-		tags2free[1] <= 8'd0;
-		tags2free[2] <= 8'd0;
-		tags2free[3] <= 8'd0;
-		freevals <= 4'd0;
 	end
 	// ToDo: fix LSQ head update.
 	if (lsq[lsq_head.row][lsq_head.col].v==INV && lsq_head != lsq_tail)
@@ -4681,7 +4678,8 @@ always_ff @(posedge clk) begin: clock_n_debug
 
 	$display("----- Stats -----");	
 	IPC = real'(I)/real'(tick);
-	$display("Clock ticks: %d Instructions: %d:%d IPC: %f", tick, I, IV, IPC);
+	PIPC = PIPC > IPC ? PIPC : IPC;
+	$display("Clock ticks: %d Instructions: %d:%d IPC: %f Peak: %f", tick, I, IV, IPC, PIPC);
 	$display("I-Cache hit clocks: %d", icache_cnt);
 end
 end
@@ -4919,7 +4917,8 @@ begin
 	commit3_id <= ROB_ENTRIES-1;
 	pack_regs <= FALSE;
 	scale_regs <= 3'd4;
-	store_argC_id <= 6'd0;
+	store_argC_id <= 5'd0;
+	store_argC_id1 <= 5'd0;
 	alu0_stomp <= FALSE;
 	alu1_stomp <= FALSE;
 	fpu0_stomp <= FALSE;
@@ -5027,7 +5026,6 @@ begin
 	lsq[ndx.row][ndx.col].loadz <= rob.decbus.loadz;
 	lsq[ndx.row][ndx.col].store <= rob.decbus.store;
 //	store_argC_reg <= rob.pRc;
-	//store_tail <= ndx;
 	lsq[ndx.row][ndx.col].Rc <= rob.pRc;
 	lsq[ndx.row][ndx.col].Rt <= rob.nRt;
 	lsq[ndx.row][ndx.col].aRt <= rob.decbus.Rt;

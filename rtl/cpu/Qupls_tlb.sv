@@ -641,7 +641,7 @@ else begin
 	// for the PC to reset.
 
 	if (rstcnt[7] && (head != (tail - 1) % MISSQ_ENTRIES) && (head != (tail - 2) % MISSQ_ENTRIES) && (head != (tail - 3) % MISSQ_ENTRIES))
-		case ({miss1 & ~stall_tlb1,miss0 & ~stall_tlb0,pc_miss})
+		case ({miss1 & ~stall_tlb1 & ~inq1,miss0 & ~stall_tlb0 & ~inq0,pc_miss})
 		3'b000:	;
 		3'b001:
 			begin
@@ -719,7 +719,7 @@ else begin
 	if (missack) begin
 		head <= (head + 1) % MISSQ_ENTRIES;
 	end
-	if (head != tail) begin
+	if (head != tail && !missack) begin
 		missqn_o <= missqn[head];
 		missadr_o <= missadr[head];
 		missasid_o <= missasid[head];

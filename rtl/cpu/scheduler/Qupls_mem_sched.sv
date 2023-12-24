@@ -35,6 +35,7 @@
 // 5000 LUTs / 32 FFs
 // ============================================================================
 
+import const_pkg::*;
 import QuplsPkg::*;
 
 module Qupls_mem_sched(rst, clk, head, lsq_head, robentry_stomp, rob, lsq, memissue,
@@ -72,6 +73,63 @@ lsq_ndx_t next_ndx0v;
 lsq_ndx_t next_ndx1v;
 rob_bitmask_t next_memissue;
 reg [1:0] next_islot_o [0:LSQ_ENTRIES*2-1];
+
+// Detect if there is a previous flow control operation. Stores need to know
+// this as they cannot be done until it is guarenteed that the program flow
+// will not change.
+
+function fnHasPreviousFc;
+input rob_ndx_t id;
+integer n;
+begin
+	fnHasPreviousFc = FALSE;
+	for (n = 0; n < ROB_ENTRIES; n = n + 1)
+		if (rob[n].v==VAL && rob[n].sn < rob[id].sn && rob[n].decbus.fc)
+			fnHasPreviousFc = TRUE;
+end
+endfunction
+
+// Detect if there is a non finished memory operation outstanding previous to
+// this one. If sequential consistency is not necessary then the memory op
+// does not need to be completed.
+
+function fnHasPreviousMem;
+input rob_ndx_t id;
+input seq;		// Sequential consistency.
+integer n;
+begin
+	fnHasPreviousMem = FALSE;
+	for (n = 0; n < ROB_ENTRIES; n = n + 1)
+		if (rob[n].v==VAL && rob[n].sn < rob[id].sn && rob[n].decbus.mem && !rob[n].done[0] && (seq ? !rob[n].done[1]:1'b1))
+			fnHasPreviousMem = TRUE;
+end
+endfunction
+
+// Detect if a LSQ entry has an overlap with a previous LSQ entry. This need
+// only check the LSQ where the addresses are located.
+// First the load / store must be before the tested one.
+// Then if the address is not generated yet, we do not know, so play it safe
+// and assume it overlaps.
+// Finally, check the physical address, this could be at cache-line alignment
+// but for now, we use the alignment of the largest load / store, 16B.
+
+function fnHasPreviousOverlap;
+input lsq_ndx_t id;
+integer n,c;
+begin
+	fnHasPreviousOverlap = FALSE;
+	for (n = 0; n < LSQ_ENTRIES; n = n + 1) begin
+		for (c = 0; c < 2; c = c + 1) begin
+			if (lsq[n][c].sn < lsq[id.row][id.col].sn) begin
+				if (!lsq[n][c].agen)
+					fnHasPreviousOverlap = TRUE;
+				if (lsq[n][c].padr[$bits(physical_address_t)-1:4]==lsq[id.row][id.col].padr[$bits(physical_address_t)-1:4])
+					fnHasPreviousOverlap = TRUE;
+			end
+		end
+	end
+end
+endfunction
 
 always_ff @(posedge clk)
 for (m = 0; m < WINDOW_SIZE; m = m + 1)
@@ -140,38 +198,27 @@ begin
 				// no preceding instruction is ready to go
 				else if (mem_ready < NDATA_PORTS) begin
 					if (memready[ lsq[lsq_heads[row].row][col].rndx ] &&
-						lsq[lsq_heads[row].row][col].v
+						lsq[lsq_heads[row].row][col].v==VAL
 					)
 						mem_ready = mem_ready + 2'd1;
 					if (!robentry_stomp[lsq[lsq_heads[row].row][col].rndx] &&
-						memready[ lsq[lsq_heads[row].row][col].rndx] && 
-						lsq[lsq_heads[row].row][col].v) begin
+						memready[ lsq[lsq_heads[row].row][col].rndx])
+					begin
 						// Check previous instructions.
-						for (phd = 0; phd < WINDOW_SIZE; phd = phd + 1) begin
-							if (rob[heads[phd]].v) begin // && rob[heads[phd]].sn < rob[lsq[lsq_heads[row].row][col].rndx].sn) begin
-								do_issue = 1'b1;
-								// ... and there is no fence
-	//							if (lsq[heads[phd]].fence && rob[heads[phd]].decbus.immb[15:0]==16'hFF00)
-	//								no_issue = 1'b1;
-								// DO not compare LSQ with itself.
-								if (rob[heads[phd]].lsqndx != lsq_head) begin
-									if (rob[heads[phd]].sn < rob[lsq[lsq_heads[row].row][col].rndx].sn &&
-										rob[lsq[lsq_heads[row].row][col].rndx].v==VAL) begin
-										// ... and, if it is a store, there is no chance of it being undone
-										if (rob[lsq[lsq_heads[row].row][col].rndx].decbus.store && rob[heads[phd]].decbus.fc)
-											no_issue1 = 1'b1;
-										// ... and previous mem op without an address yet,
-										if (rob[heads[phd]].decbus.mem && !rob[heads[phd]].done[0])
-											no_issue2 = 1'b1;
-										// ... and there is no address-overlap with any preceding instruction
-										/* ToDo: fix overlap detection
-										if (lsq[rob[heads[phd]].lsqndx.row][0].padr[$bits(physical_address_t)-1:4]==lsq[lsq_heads[row].row][0].padr[$bits(physical_address_t)-1:4] &&
-											rob[heads[phd]].lsqndx.row != row)
-											no_issue3 = 1'b1;
-										*/
-									end
-								end
-							end
+						if (lsq[lsq_heads[row].row][col].v==VAL && lsq[lsq_heads[row].row][col].agen) begin // && rob[heads[phd]].sn < rob[lsq[lsq_heads[row].row][col].rndx].sn) begin
+							do_issue = 1'b1;
+							// ... and there is no fence
+//							if (lsq[heads[phd]].fence && rob[heads[phd]].decbus.immb[15:0]==16'hFF00)
+//								no_issue = 1'b1;
+							// ... and, if it is a store, there is no chance of it being undone
+							if (lsq[lsq_heads[row].row][col].store && fnHasPreviousFc(lsq[lsq_heads[row].row][col].rndx))
+								no_issue1 = 1'b1;
+							// ... and previous mem op without an address yet, or not done
+							if (fnHasPreviousMem(lsq[lsq_heads[row].row][col].rndx,1))
+								no_issue2 = 1'b1;
+							// ... and there is no address-overlap with any preceding instruction
+							if (fnHasPreviousOverlap(rob[heads[phd]].lsqndx))
+								no_issue3 = 1'b1;
 						end
 					end
 					

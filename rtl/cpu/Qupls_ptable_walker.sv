@@ -47,7 +47,8 @@ module Qupls_ptable_walker(rst, clk,
 	in_que, ftas_req, ftas_resp,
 	ftam_req, ftam_resp, fault_o, faultq_o, tlb_wr, tlb_way, tlb_entryno, tlb_entry,
 	ptw_vadr, ptw_vv, ptw_padr, ptw_pv);
-parameter CID = 6'd3;
+parameter CORENO = 6'd1;
+parameter CID = 3'd3;
 
 parameter IO_ADDR = 32'hFFF40001;	//32'hFEFC0001;
 parameter IO_ADDR_MASK = 32'h00FF0000;
@@ -261,13 +262,14 @@ else begin
 end
 
 // Find out if the tlb miss is already in the miss queue.
+reg in_que1;
 always_comb
 begin
-	in_que = 1'b0;
+	in_que1 = 1'b0;
 	for (n1 = 0; n1 < MISSQ_SIZE; n1 = n1 + 1) begin
 		if (miss_queue[n1].v) begin
 			if (tlb_missasid==miss_queue[n1].asid && tlb_missadr==miss_queue[n1].adr)
-				in_que = 1'b1;
+				in_que1 = 1'b1;
 		end
 	end
 end
@@ -277,7 +279,7 @@ integer empty_qe;
 always_comb
 begin
 	empty_qe = -1;
-	if (tlbmiss && !in_que) begin
+	if (tlbmiss && !in_que1) begin
 		for (n2 = 0; n2 < MISSQ_SIZE; n2 = n2 + 1)
 			if (~miss_queue[n2].v && empty_qe < 0)
 				empty_qe = n2;
@@ -322,16 +324,21 @@ if (rst) begin
 	ftam_req.cid <= CID;
 	ftam_req.bte <= fta_bus_pkg::LINEAR;
 	ftam_req.cti <= fta_bus_pkg::CLASSIC;
-	tid <= 8'd1;
+	tid.core <= CORENO;
+	tid.channel <= CID;
+	tid.tranid <= 4'd1;
 	upd_req <= 'd0;
 	for (nn = 0; nn < MISSQ_SIZE; nn = nn + 1)
 		miss_queue[nn] <= 'd0;
+	for (nn = 0; nn < 16; nn = nn + 1)
+		tranbuf[nn] <= {$bits(tran_buf_t){1'b0}};
 	way <= 'd0;
 	tlb_wr <= 1'b0;
 	tlb_way <= 1'b0;
 	ptw_vv <= FALSE;
 	ptw_ppv <= FALSE;
 	ptw_vadr <= {$bits(virtual_address_t){1'b0}};
+	in_que <= FALSE;
 end
 else begin
 
@@ -340,9 +347,18 @@ else begin
 	tlb_wr <= 1'b0;
 	way <= ~way;
 
+	in_que <= FALSE;
+	if (in_que1 && !in_que && tlbmiss)
+		in_que <= 1'b1;
+
+	// Grab the bus for only 1 clock.
+	if (ftam_req.cyc && !ftam_resp.rty)
+		tBusClear();
+
 	// Capture miss
 	if (empty_qe >= 0) begin
-		if (!in_que) begin
+		if (!in_que1) begin
+			$display("PTW: miss queue loaded, adr=%h", tlb_missadr);
 			miss_queue[empty_qe].v <= 1'b1;
 			miss_queue[empty_qe].o <= 1'b0;
 			miss_queue[empty_qe].bc <= 1'b1;
@@ -381,30 +397,35 @@ else begin
 				ptw_ppv <= FALSE;
 			end
 			if (ptw_pv & ~ptw_ppv) begin
+				$display("PTW: table walk triggered.");
 				ptw_ppv <= TRUE;
-				miss_queue[sel_qe].bc <= 1'b0;
-				miss_queue[sel_qe].o <= 1'b1;
-				miss_queue[sel_qe].lvl <= miss_queue[sel_qe].lvl - 1;
-				ftam_req <= 'd0;		// clear all fields.
-				ftam_req.cyc <= 1'b1;
-				ftam_req.stb <= 1'b1;
-				ftam_req.we <= 1'b0;
-				ftam_req.sel <= 64'h0FF << {miss_queue[sel_qe].tadr[5:3],3'b0};
-				ftam_req.asid <= miss_queue[sel_qe].asid;
-				ftam_req.vadr <= ptw_vadr;
-				ftam_req.padr <= ptw_padr;
-				ftam_req.tid <= tid;
-				ftam_req.cid <= CID;
-				// Record outstanding transaction.
-				tranbuf[tid & 15].v <= 1'b1;
-				tranbuf[tid & 15].rdy <= 1'b0;
-				tranbuf[tid & 15].asid <= miss_queue[sel_qe].asid;
-				tranbuf[tid & 15].vadr <= ptw_vadr;
-				tranbuf[tid & 15].padr <= ptw_padr;
-				tranbuf[tid & 15].stk <= sel_qe;
-				tid <= tid + 2'd1;
-				if (&tid)
-					tid <= 8'd1;
+				if (miss_queue[sel_qe].lvl != 3'd7) begin
+					$display("PTW: walk level=%d", miss_queue[sel_qe].lvl);
+					miss_queue[sel_qe].bc <= 1'b0;
+					miss_queue[sel_qe].o <= 1'b1;
+					miss_queue[sel_qe].lvl <= miss_queue[sel_qe].lvl - 1;
+					ftam_req <= 'd0;		// clear all fields.
+					ftam_req.cyc <= 1'b1;
+					ftam_req.stb <= 1'b1;
+					ftam_req.we <= 1'b0;
+					ftam_req.sel <= 64'h0FF << {miss_queue[sel_qe].tadr[5:3],3'b0};
+					ftam_req.asid <= miss_queue[sel_qe].asid;
+					ftam_req.vadr <= ptw_vadr;
+					ftam_req.padr <= ptw_padr;
+					ftam_req.tid <= tid;
+					ftam_req.cid <= CID;
+					// Record outstanding transaction.
+					tranbuf[tid & 15].v <= 1'b1;
+					tranbuf[tid & 15].id <= tid;
+					tranbuf[tid & 15].rdy <= 1'b0;
+					tranbuf[tid & 15].asid <= miss_queue[sel_qe].asid;
+					tranbuf[tid & 15].vadr <= ptw_vadr;
+					tranbuf[tid & 15].padr <= ptw_padr;
+					tranbuf[tid & 15].stk <= sel_qe;
+					tid.tranid <= tid.tranid + 2'd1;
+					if (&tid.tranid)
+						tid.tranid <= 4'd1;
+				end
 			end
 		end
 	// Remain in fault state until cleared by accessing the table-walker register.
@@ -426,16 +447,19 @@ else begin
 		tranbuf[ftam_resp.tid & 15].pte <= ftam_resp.dat[63:0];
 		tranbuf[ftam_resp.tid & 15].padr <= ftam_resp.adr;
 		tranbuf[ftam_resp.tid & 15].rdy <= 1'b1;
+		$display("PTW: bus ack.");
 	end
 
 	// Search for ready translations and update the TLB.
 	if (sel_tran >= 0) begin
+		$display("PTW: selected tran:%d", sel_tran[4:0]);
 		miss_queue[tranbuf[sel_tran].stk].bc <= 1'b1;
 		// We're done if level zero processed.
 		if (miss_queue[tranbuf[sel_tran].stk].lvl==3'd0) begin
 			// Allow capture of new TLB misses.
 			miss_queue[tranbuf[sel_tran].stk].v <= 1'b0;
 			miss_queue[tranbuf[sel_tran].stk].o <= 1'b0;
+			miss_queue[tranbuf[sel_tran].stk].bc <= 1'b0;
 		end
 		tranbuf[sel_tran].v <= 1'b0;
 		tranbuf[sel_tran].rdy <= 1'b0;
@@ -452,9 +476,20 @@ else begin
 			req_state <= FAULT;
 		end
 		// Otherwise translation was valid, update it in the TLB.
-		else if (miss_queue[tranbuf[sel_tran].stk].lvl==3'd0)
+		else if (miss_queue[tranbuf[sel_tran].stk].lvl==3'd0) begin
 			upd_req <= 1'b1;
+			$display("PTW: TLB update request triggered.");
+		end
 	end
 end
+
+task tBusClear;
+begin
+	ftam_req.cyc <= 1'b0;
+	ftam_req.stb <= 1'b0;
+	ftam_req.sel <= 16'h0000;
+	ftam_req.we <= 1'b0;
+end
+endtask
 
 endmodule
