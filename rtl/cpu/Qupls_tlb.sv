@@ -35,6 +35,7 @@
 // 8500 LUTs / 4100 FFs
 // ============================================================================
 
+import const_pkg::*;
 import fta_bus_pkg::*;
 import QuplsMmupkg::*;
 import QuplsPkg::*;
@@ -83,8 +84,8 @@ input instruction_t op0;
 input instruction_t op1;
 output instruction_t tlb0_op;
 output instruction_t tlb1_op;
-output address_t tlb0_res;
-output address_t tlb1_res;
+output physical_address_t tlb0_res;
+output physical_address_t tlb1_res;
 output pc_address_t pc_tlb_res;
 input load0_i;
 input store0_i;
@@ -119,7 +120,7 @@ REGION region0, region1, region2;
 wire [7:0] sel0, sel1, sel2;
 operating_mode_t omd0a, omd1a, pc_omda;
 reg [7:0] rstcnt;
-
+reg pc_tlb_v1, pc_tlb_v2;
 
 integer n,m;
 
@@ -514,6 +515,45 @@ begin
 			pc_inq = 1'b1;
 end
 
+wire cd_pc, cd_vadr0, cd_vadr1;
+reg tlb_v0a, tlb_v0b;
+reg tlb_v1a, tlb_v1b;
+change_det #(.WID($bits(pc_address_t))) ucd1 (.rst(rst), .clk(clk), .ce(1'b1), .i(pc_vadr), .cd(cd_pc));
+change_det #(.WID($bits(virtual_address_t))) ucd2 (.rst(rst), .clk(clk), .ce(1'b1), .i(vadr0), .cd(cd_vadr0));
+change_det #(.WID($bits(virtual_address_t))) ucd3 (.rst(rst), .clk(clk), .ce(1'b1), .i(vadr1), .cd(cd_vadr1));
+
+always_comb
+	if (t2a.vpn.vpn[8:0]==pc_vadr[31:23] && t2a.vpn.asid==pc_asid)
+		pc_tlb_v1 = 1'd1;
+	else if (t2b.vpn.vpn[8:0]==pc_vadr[31:23] && t2b.vpn.asid==pc_asid)
+		pc_tlb_v1 = 1'd1;
+	else
+		pc_tlb_v1 = FALSE;
+
+always_comb
+	if (!stall_tlb0) begin
+		if (t0a.vpn.vpn[8:0]==vadr0[31:23] && t0a.vpn.asid==asid0)
+			tlb_v0b <= agen0_v;
+		else if (t0b.vpn.vpn[8:0]==vadr0[31:23] && t0b.vpn.asid==asid0)
+			tlb_v0b <= agen0_v;
+	end
+
+always_comb
+//	if (NAGEN > 1 && !stall_tlb1) begin
+	if (!stall_tlb1) begin
+		if (t1a.vpn.vpn[8:0]==vadr1[31:23] && t1a.vpn.asid==asid1)
+			tlb_v1b <= agen1_v;
+		else if (t1b.vpn.vpn[8:0]==vadr1[31:23] && t1b.vpn.asid==asid1)
+			tlb_v1b <= agen1_v;
+	end
+		
+always_comb
+	pc_tlb_v = pc_tlb_v1 & pc_tlb_v2 & !cd_pc;
+always_comb
+	tlb0_v = tlb_v0a & tlb_v0b & !cd_vadr0;
+always_comb
+	tlb1_v = tlb_v1a & tlb_v1b & !cd_vadr1;
+
 always_comb
 begin
 	miss0 = 'd0;
@@ -542,16 +582,16 @@ end
 always_ff @(posedge clk)
 if (rst) begin
 	entry0 <= 'd0;
-	tlb0_v <= 'd0;
+	tlb_v0a <= 'd0;
 	tlb0_op <= 'd0;
-	tlb0_res <= 'd0;
+	tlb0_res <= {$bits(physical_address_t){1'd0}};
 	load0_o <= 'd0;
 	store0_o <= 'd0;
 
 	entry1 <= 'd0;
-	tlb1_v <= 'd0;
+	tlb_v1a <= 'd0;
 	tlb1_op <= 'd0;
-	tlb1_res <= 'd0;
+	tlb1_res <= {$bits(physical_address_t){1'd0}};
 	load1_o <= 'd0;
 	store1_o <= 'd0;
 	
@@ -574,28 +614,28 @@ if (rst) begin
 end
 else begin
 	miss_o <= 1'b0;
-	tlb0_v <= 'd0;
-	tlb1_v <= 'd0;
-	pc_tlb_v <= 'd0;
+	tlb_v0a <= 1'd0;
+	tlb_v1a <= 1'd0;
+	pc_tlb_v2 <= 1'd0;
 	if (!stall_tlb0) begin
 		if (t0a.vpn.vpn[8:0]==vadr0[31:23] && t0a.vpn.asid==asid0) begin
 			entry0 <= t0a;
 			tlb0_op <= op0;
-			tlb0_res <= vadr0;
+			tlb0_res <= {t0a.pte.ppn,vadr0[15:0]};
 			load0_o <= load0_i;
 			store0_o <= store0_i;
 			agen0_rndx_o <= agen0_rndx_i;
-			tlb0_v <= agen0_v;
+			tlb_v0a <= agen0_v;
 			omd0a <= omd0;
 		end
 		else if (t0b.vpn.vpn[8:0]==vadr0[31:23] && t0b.vpn.asid==asid0) begin
 			entry0 <= t0b;
 			tlb0_op <= op0;
-			tlb0_res <= vadr0;
+			tlb0_res <= {t0b.pte.ppn,vadr0[15:0]};
 			load0_o <= load0_i;
 			store0_o <= store0_i;
 			agen0_rndx_o <= agen0_rndx_i;
-			tlb0_v <= agen0_v;
+			tlb_v0a <= agen0_v;
 			omd0a <= omd0;
 		end
 	end
@@ -605,36 +645,36 @@ else begin
 		if (t1a.vpn.vpn[8:0]==vadr1[31:23] && t1a.vpn.asid==asid1) begin
 			entry1 <= t1a;
 			tlb1_op <= op1;
-			tlb1_res <= vadr1;
+			tlb1_res <= {t1a.pte.ppn,vadr1[15:0]};
 			load1_o <= load1_i;
 			store1_o <= store1_i;
 			agen1_rndx_o <= agen1_rndx_i;
-			tlb1_v <= agen1_v;
+			tlb_v1a <= agen1_v;
 			omd1a <= omd1;
 		end
 		else if (t1b.vpn.vpn[8:0]==vadr1[31:23] && t1b.vpn.asid==asid1) begin
 			entry1 <= t1b;
 			tlb1_op <= op1;
-			tlb1_res <= vadr1;
+			tlb1_res <= {t1b.pte.ppn,vadr1[15:0]};
 			load1_o <= load1_i;
 			store1_o <= store1_i;
 			agen1_rndx_o <= agen1_rndx_i;
-			tlb1_v <= agen1_v;
+			tlb_v1a <= agen1_v;
 			omd1a <= omd1;
 		end
 	end
 
 	if (t2a.vpn.vpn[8:0]==pc_vadr[31:23] && t2a.vpn.asid==pc_asid) begin
 		pc_entry <= t2a;
-		pc_tlb_res <= pc_vadr;
+		pc_tlb_res <= {t2a.pte.ppn,pc_vadr[15:0]};
 		pc_omda <= pc_omd;
-		pc_tlb_v <= 'd1;
+		pc_tlb_v2 <= 1'd1;
 	end
 	else if (t2b.vpn.vpn[8:0]==pc_vadr[31:23] && t2b.vpn.asid==pc_asid) begin
 		pc_entry <= t2b;
-		pc_tlb_res <= pc_vadr;
+		pc_tlb_res <= {t2b.pte.ppn,pc_vadr[15:0]};
 		pc_omda <= pc_omd;
-		pc_tlb_v <= 'd1;
+		pc_tlb_v2 <= 1'd1;
 	end
 
 	// Delay a few cycles to prevent a false PC miss. It takes a couple of cycles

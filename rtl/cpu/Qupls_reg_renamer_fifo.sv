@@ -57,17 +57,18 @@ output reg [7:0] headreg;	// register at head of fifo
 wire empty;
 wire [5:0] dout;
 reg [7:0] din;
-wire rd_rst_busy, wr_rst_busy;
 reg rd_en, wr_en;
 
 ffo96 uffo({32'd0,wlist2free}, o0);
 
 always_comb v = o0!=7'd127;
 
-always_comb stall = (empty && alloc && !(freeval|v));
+always_comb stall = empty && alloc;
 // Debugging aid
 always_comb headreg = {FIFONO,dout};
 
+always_comb
+	rd_en = en & alloc & ~stall;
 
 Qupls_rename_fifo3 ufifo1
 (
@@ -81,40 +82,37 @@ Qupls_rename_fifo3 ufifo1
   .empty(empty)
 );
 
+// Note that while a register is freed by tag2free, it is not immediately reused
+// if alloc is requested. This avoids timing issues where a freed register is
+// reallocated and marked valid when it really is not.
+
 always_ff @(posedge clk)
 if (rst) begin
 	o <= 8'd0;
 	ov <= 1'b0;
-	rd_en <= 1'b0;
+end
+else begin
+	if (en) begin
+		o <= {FIFONO[1:0],dout};
+		ov <= 1'b1;
+	end
+end
+
+always_ff @(posedge clk)
+if (rst) begin
 	wr_en <= 1'b0;
 	din <= 6'd0;
 end
 else begin
-	rd_en <= 1'b0;
-	wr_en <= 1'b0;
-	ov <= 1'b0;
-	o <= 8'd0;
 	if (en) begin
-		if (alloc & ~(freeval|v) & ~stall) begin
-			rd_en <= 1'b1;
-			o <= {FIFONO[1:0],dout};
-			ov <= 1'b1;
-		end
-		else if (freeval && alloc) begin
-			o <= tag2free;
-			ov <= 1'b1;
-		end
-		else if (v && alloc) begin
-			o <= {FIFONO[1:0],o0[5:0]};
-			ov <= 1'b1;
-		end
+		wr_en <= 1'b0;
 		// If should not be possible to free up a register with tag zero because
 		// freeval is set only for non-zero registers.
-		else if (freeval) begin
+		if (freeval) begin
 			din <= tag2free;
 			wr_en <= 1'b1;
 			if (tag2free==8'd0) begin
-				$display("Freeing zero register tag in fifo %d.", FIFONO);
+				$display("Qupls: Freeing zero register tag in fifo %d.", FIFONO);
 				$finish;
 			end
 		end
@@ -124,7 +122,7 @@ else begin
 			din <= {FIFONO[1:0],o0[5:0]};
 			wr_en <= 1'b1;
 			if ({FIFONO[1:0],o0[5:0]}==8'd0) begin
-				$display("Freeing zero register off freelist in fifo %d.", FIFONO);
+				$display("Qupls: Freeing zero register off freelist in fifo %d.", FIFONO);
 				$finish;
 			end
 		end
@@ -134,18 +132,7 @@ end
 always_comb
 if (rst)
 	wo = 'd0;
-else begin
-	wo = o;
-	if (en) begin
-		if (alloc & ~(freeval|v) & ~stall)
-			wo = {FIFONO[1:0],dout};
-		else if (freeval && alloc)
-			wo = tag2free;
-		else if (v && alloc)
-			wo = {FIFONO[1:0],o0[5:0]};
-		else
-			wo = 8'd0;
-	end
-end
+else
+	wo = {FIFONO[1:0],dout};
 
 endmodule

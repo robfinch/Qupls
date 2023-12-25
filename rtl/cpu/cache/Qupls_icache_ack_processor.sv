@@ -85,7 +85,7 @@ else begin
 		if (wbm_resp.tid != last_tid) begin
 			last_tid <= wbm_resp.tid;
 		end
-		case(wbm_resp.adr[5:4])
+		case(wbm_resp.adr[5:4])	// could be tranid[1:0]
 		2'b00:
 			begin
 				v[wbm_resp.tid.tranid[3:2]][0] <= 1'b1;

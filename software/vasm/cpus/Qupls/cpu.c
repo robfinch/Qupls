@@ -161,7 +161,7 @@ mnemonic mnemonics[]={
 
 	"brk",	{0,0,0,0,0}, {R1,CPU_ALL,0,0x00,5,SZ_UNSIZED,0},
 
-	"bsr",	{OP_IMM,0,0,0,0}, {B2,CPU_ALL,0,RT(1)|OPC(32LL),5,SZ_UNSIZED,0},
+	"bsr",	{OP_IMM,0,0,0,0}, {B2,CPU_ALL,0,RT(56LL)|OPC(32LL),5,SZ_UNSIZED,0},
 	"bsr",	{OP_REG,OP_IMM,0,0,0}, {BL2,CPU_ALL,0,OPC(32LL),5,SZ_UNSIZED,0},
 
 	"bytndx", 	{OP_REG,OP_REG,OP_REG,0,0}, {R3,CPU_ALL,0,0xAA0000000002LL,6},	
@@ -651,10 +651,33 @@ int set_default_qualifiers(char **q,int *q_len)
   return (1);
 }
 
+static int huge_chkrange2(thuge h,int bits)
+{
+  uint64_t v,mask;
+
+  if (bits >= HUGEBITS)
+    return 1;
+
+  if (bits >= HUGEBITS/2) {
+    mask = ~0LL << (bits - HUGEBITS/2);
+    v = h.hi & mask;
+    return (v & (1LL << (bits - HUGEBITS/2))) ? (v ^ mask) == 0 : v == 0;
+  }    
+
+  mask = ~0LL << bits;
+  v = h.lo & mask;
+  if (v & (1LL << bits))
+    return h.hi == ~0 && (v ^ mask) == 0;
+  return h.hi == 0 && v == 0;
+}
+
+
+
 /* check if a given value fits within a certain number of bits */
-static int is_nbit(thuge val, int64_t n)
+static int is_nbit(thuge val, int n)
 {
 	thuge low, high;
+	return (huge_chkrange2(val, n));
   if (n > 95LL)
     return (1);
   low = hneg(hshl(huge_from_int(1LL), n-1LL));
@@ -1347,10 +1370,6 @@ static int get_reloc_type(operand *op)
 	      }
 	      break;
 	    }
-	    if (op->number==3) {
-	    	rtype = REL_QUPLS_INO;
-	    	break;
-	    }
  			rtype = REL_PC;
       break;
 
@@ -1398,7 +1417,7 @@ static int get_reloc_type(operand *op)
           cpu_error(11);
           break;
       }
- 			rtype = REL_PC;
+    	rtype = REL_PC;
       break;
   		
   	/* JEQ r1,r2,target */
@@ -1561,7 +1580,7 @@ static thuge make_reloc(int reloctype,operand *op,section *sec,
           goto illreloc;
       }
 
-      if ((reloctype == REL_PC || reloctype == REL_QUPLS_INO) && !is_pc_reloc(base,sec)) {
+      if ((reloctype == REL_PC) && !is_pc_reloc(base,sec)) {
         /* a relative branch - reloc is only needed for external reference */
 				TRACE("m");
 #ifdef BRANCH_PGREL				
@@ -1575,21 +1594,13 @@ static thuge make_reloc(int reloctype,operand *op,section *sec,
 #ifdef BRANCH_INO
 		 		if (op->format==B || (op->format==BI && op->number > 1) || op->format==B2 || op->format==BL2 || op->format==BZ) {
 	    		ino = (val.lo & 0x3fLL) / 5LL;
-	        if (reloctype == REL_PC || reloctype==REL_QUPLS_INO) {
-	//          	hval = hsub(huge_zero(),pc);
-						//val -= pc;
-						val = hsub(val,huge_from_int(pc));
-						val = hshr(val,2);
-						val.lo &= 0xfffffffffffffff0LL;
-						val.lo |= ino;
-						return (val);
-					}
-					else if (reloctype == REL_QUPLS_INO) {
-		    		ino = (val.lo & 0x3fLL) / 5LL;
-		    		val.hi = 0;
-						val.lo = ino;
-						return (val);
-					}
+//          	hval = hsub(huge_zero(),pc);
+					//val -= pc;
+					val = hsub(val,huge_from_int(pc));
+					val = hshr(val,2);
+					val.lo &= 0xfffffffffffffff0LL;
+					val.lo |= ino;
+					return (val);
 				}
 				else
 #endif		 				
@@ -1633,13 +1644,16 @@ static thuge make_reloc(int reloctype,operand *op,section *sec,
                            pos,size,disp,mask);
       }
       else {  /* instruction operand */
-        addend = (btype == BASE_PCREL) ? hadd(val, huge_from_int(disp)) : val;
+      	if (op->format != B2 && op->format != BL2)
+        	addend = (btype == BASE_PCREL) ? hadd(val, huge_from_int(disp)) : val;
+        else
+        	addend = val;
       	switch(op->format) {
       	case B:
-      	case BI:
+      	case BI:	/* ToDo: fix for branch to external, REL_QUPLS_BRANCH */
 		      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
                          8,32,5,0xffffffffLL);
-      		if (!is_nbit(addend,32LL)) {
+      		if (!is_nbit(addend,32)) {
 			      add_extnreloc_masked(reloclist,base,addend.lo>>32LL,reloctype,
                          8,32,10,0xffffffffLL);
       			
@@ -1647,8 +1661,16 @@ static thuge make_reloc(int reloctype,operand *op,section *sec,
       		break;
       	case B2:
       	case BL2:
-		      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
-                           17,23,0,0x7fffff0LL);
+	    		ino = (addend.lo & 0x3fLL) / 5LL;
+					addend = hsub(addend,huge_from_int(pc));
+					addend = hshr(addend,2);
+					addend.lo &= 0xfffffffffffffff0LL;
+					addend.lo |= ino;
+					val = addend;
+	      	add_extnreloc_masked(reloclist,base,addend.lo,REL_ABS,
+                         13,4,0,0xfLL);
+	      	add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
+                         17,23,0,0x7fffff0LL);
           break;
       	/* Conditional jump */
       	case J:
@@ -1676,15 +1698,15 @@ static thuge make_reloc(int reloctype,operand *op,section *sec,
         case RIM:
         case RIMV:
         case RTDI:
-        	if (is_nbit(addend,21LL)) {
+        	if (is_nbit(addend,21)) {
 			      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
                            19,21,0,0x1fffffLL);
         	}	/* ToDo: fix for 31 bits and above */
-        	else if (is_nbit(addend,32LL)) {
+        	else if (is_nbit(addend,32)) {
 			      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
                            8,32,5,0xffffffffLL);
         	}
-        	else if (is_nbit(addend,64LL)) {
+        	else if (is_nbit(addend,64)) {
 			      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
                            8,32,5,0xffffffffLL);
             shl64 = hshl(addend,32LL);
@@ -1702,15 +1724,15 @@ static thuge make_reloc(int reloctype,operand *op,section *sec,
         	}
         	break;
         case DIRECT:
-        	if (is_nbit(addend,21LL)) {
+        	if (is_nbit(addend,21)) {
 			      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
                            19,21,0,0x1fffffLL);
         	}
-        	else if (is_nbit(addend,32LL) || abits < 33) {
+        	else if (is_nbit(addend,32) || abits < 33) {
 			      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
                            8,32,5,0xffffffffLL);
         	}
-        	else if (is_nbit(addend,64LL) || abits < 65) {
+        	else if (is_nbit(addend,64) || abits < 65) {
 			      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
                            8,32,5,0xffffffffLL);
 			      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
@@ -1730,15 +1752,15 @@ static thuge make_reloc(int reloctype,operand *op,section *sec,
         		}
         		else
         		*/
-	        	if (is_nbit(addend,21LL)) {
+	        	if (is_nbit(addend,21)) {
 				      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
 	                           19,21,0,0x1fffffLL);
 	        	}
-	        	else if (is_nbit(addend,32LL) || abits < 33) {
+	        	else if (is_nbit(addend,32) || abits < 33) {
 				      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
 	                           8,32,5,0xffffffffLL);
 	        	}
-	        	else if (is_nbit(addend,64LL) || abits < 65) {
+	        	else if (is_nbit(addend,64) || abits < 65) {
 				      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
 	                           8,32,5,0xffffffffLL);
 				      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
@@ -1752,15 +1774,15 @@ static thuge make_reloc(int reloctype,operand *op,section *sec,
         		int org_sdr = sdreg;
         		sdreg = sd2reg;
         		reloctype = REL_SD;
-	        	if (is_nbit(addend,21LL)) {
+	        	if (is_nbit(addend,21)) {
 				      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
 	                           19,21,0,0x1fffffLL);
 	        	}
-	        	else if (is_nbit(addend,32LL) || abits < 33) {
+	        	else if (is_nbit(addend,32) || abits < 33) {
 				      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
 	                           8,32,5,0xffffffffLL);
 	        	}
-	        	else if (is_nbit(addend,64LL) || abits < 65) {
+	        	else if (is_nbit(addend,64) || abits < 65) {
 				      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
 	                           8,32,5,0xffffffffLL);
 				      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
@@ -1775,15 +1797,15 @@ static thuge make_reloc(int reloctype,operand *op,section *sec,
         		int org_sdr = sdreg;
         		sdreg = sd3reg;
         		reloctype = REL_SD;
-	        	if (is_nbit(addend,21LL)) {
+	        	if (is_nbit(addend,21)) {
 				      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
 	                           19,21,0,0x1fffffLL);
 	        	}
-	        	else if (is_nbit(addend,32LL) || abits < 33) {
+	        	else if (is_nbit(addend,32) || abits < 33) {
 				      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
 	                           8,32,5,0xffffffffLL);
 	        	}
-	        	else if (is_nbit(addend,64LL) || abits < 65) {
+	        	else if (is_nbit(addend,64) || abits < 65) {
 				      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
 	                           8,32,5,0xffffffffLL);
 				      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
@@ -1795,15 +1817,15 @@ static thuge make_reloc(int reloctype,operand *op,section *sec,
 						sdreg = org_sdr;        		
         	}
         	else {
-	        	if (is_nbit(addend,21LL)) {
+	        	if (is_nbit(addend,21)) {
 				      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
 	                           19,21,0,0x1fffffLL);
 	        	}
-	        	else if (is_nbit(addend,32LL) || abits < 33) {
+	        	else if (is_nbit(addend,32) || abits < 33) {
 				      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
 	                           8,32,5,0xffffffffLL);
 	        	}
-	        	else if (is_nbit(addend,64LL) || abits < 65) {
+	        	else if (is_nbit(addend,64) || abits < 65) {
 				      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
 	                           8,32,5,0xffffffffLL);
 				      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
@@ -1825,11 +1847,11 @@ static thuge make_reloc(int reloctype,operand *op,section *sec,
         		}
         		else
         		*/
-	        	if (is_nbit(addend,32LL) || abits < 33) {
+	        	if (is_nbit(addend,32) || abits < 33) {
 				      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
 	                           8,32,5,0xffffffffLL);
 	        	}
-	        	else if (is_nbit(addend,64LL) || abits < 65) {
+	        	else if (is_nbit(addend,64) || abits < 65) {
 				      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
 	                           8,32,5,0xffffffffLL);
 				      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
@@ -1843,11 +1865,11 @@ static thuge make_reloc(int reloctype,operand *op,section *sec,
         		int org_sdr = sdreg;
         		sdreg = sd2reg;
         		reloctype = REL_SD;
-	        	if (is_nbit(addend,32LL) || abits < 33) {
+	        	if (is_nbit(addend,32) || abits < 33) {
 				      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
 	                           8,32,5,0xffffffffLL);
 	        	}
-	        	else if (is_nbit(addend,64LL) || abits < 65) {
+	        	else if (is_nbit(addend,64) || abits < 65) {
 				      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
 	                           8,32,5,0xffffffffLL);
 				      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
@@ -1862,11 +1884,11 @@ static thuge make_reloc(int reloctype,operand *op,section *sec,
         		int org_sdr = sdreg;
         		sdreg = sd3reg;
         		reloctype = REL_SD;
-	        	if (is_nbit(addend,32LL) || abits < 33) {
+	        	if (is_nbit(addend,32) || abits < 33) {
 				      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
 	                           8,32,5,0xffffffffLL);
 	        	}
-	        	else if (is_nbit(addend,64LL) || abits < 65) {
+	        	else if (is_nbit(addend,64) || abits < 65) {
 				      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
 	                           8,32,5,0xffffffffLL);
 				      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
@@ -1878,11 +1900,11 @@ static thuge make_reloc(int reloctype,operand *op,section *sec,
 						sdreg = org_sdr;        		
         	}
         	else {
-	        	if (is_nbit(addend,32LL) || abits < 33) {
+	        	if (is_nbit(addend,32) || abits < 33) {
 				      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
 	                           8,32,5,0xffffffffLL);
 	        	}
-	        	else if (is_nbit(addend,64LL) || abits < 65) {
+	        	else if (is_nbit(addend,64) || abits < 65) {
 				      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
 	                           8,32,5,0xffffffffLL);
 				      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
@@ -1928,18 +1950,12 @@ illreloc:
 #ifdef BRANCH_INO
  		if (op->format==B || (op->format==BI && op->number > 1) || op->format==B2 || op->format==BL2 || op->format==BZ) {
 			ino = (val.lo & 0x3fLL) / 5LL;
-	    if (reloctype == REL_PC || reloctype==REL_QUPLS_INO) {
 	//          	hval = hsub(huge_zero(),pc);
-				//val -= pc;
-				val = hsub(val,huge_from_int(pc));
-				val = hshr(val,2);
-				val.lo &= 0xfffffffffffffff0LL;
-				val.lo |= ino;
-			}
-			else if (reloctype == REL_ABS) {
-				val.hi = 0LL;
-				val.lo = ino;
-			}
+			//val -= pc;
+			val = hsub(val,huge_from_int(pc));
+			val = hshr(val,2);
+			val.lo &= 0xfffffffffffffff0LL;
+			val.lo |= ino;
 		}
 		else
 #endif		 				
@@ -2278,7 +2294,10 @@ static void encode_reg6(instruction_buf* insn, operand *op, mnemonic* mnemo, int
 static size_t encode_immed_RI(instruction_buf* insn, thuge hval, int i)
 {
 	size_t isize = (insn->opcode & 0x7f)==7LL ? 5 : 5;
-	int minbits = (insn->opcode & 0x7f)==7LL ? 15LL : 21LL;
+	int minbits = (insn->opcode & 0x7f)==7LL ? 15 : 21;
+
+	if (hval.lo & 0x8000000000000000LL)
+		hval.hi = 0xffffffffffffffffLL;
 
 	if (insn) {
 		insn->imm0 = 0LL;
@@ -2296,11 +2315,11 @@ static size_t encode_immed_RI(instruction_buf* insn, thuge hval, int i)
 				insn->imm1 = OPC(9LL)|(((hval.lo >> 16LL) & 0xffffLL)<<23LL)|RA(51LL)|RT(51LL)|SC(1LL);	// ORI r51,r51,#imm16<<16
 				insn->pfxb.size = 5;
 				insn->pfxb.val = hval;
-				if (!is_nbit(hval,32LL)) {
+				if (!is_nbit(hval,32)) {
 					insn->imm2 = OPC(9LL)|((hval.hi & 0xffffLL)<<23LL)|RA(51LL)|RT(51LL)|SC(2LL);	// ORI r51,r51,#imm16<<32
 					insn->imm3 = OPC(9LL)|(((hval.hi >> 16LL) & 0xffffLL)<<23LL)|RA(51LL)|RT(51LL)|SC(3LL);	// ORI r51,r51,#imm16<<48
 					insn->pfxb.size = 10;
-					if (!is_nbit(hval,64LL)) {
+					if (!is_nbit(hval,64)) {
 						insn->pfxb.size = 20;
 					}
 				}
@@ -2322,11 +2341,11 @@ static size_t encode_immed_RI(instruction_buf* insn, thuge hval, int i)
 				insn->pfxb.val = hval;
 				insn->imm0 = OPC(9LL)|((hval.lo & 0xffffLL) << 23LL)|RA(0)|RT(51LL);	// ORI r51,r0,#imm16
 				insn->imm1 = OPC(9LL)|(((hval.lo >> 16LL) & 0xffffLL)<<23LL)|RA(51LL)|RT(51LL)|SC(1LL);	// ORI r51,r51,#imm16<<16
-				if (!is_nbit(hval,32LL)) {
+				if (!is_nbit(hval,32)) {
 					insn->pfxb.size = 10;
 					insn->imm2 = OPC(9LL)|((hval.hi & 0xffffLL)<<23LL)|RA(51LL)|RT(51LL)|SC(2LL);	// ORI r51,r51,#imm16<<32
 					insn->imm3 = OPC(9LL)|(((hval.hi >> 16LL) & 0xffffLL)<<23LL)|RA(51LL)|RT(51LL)|SC(3LL);	// ORI r51,r51,#imm16<<48
-					if (!is_nbit(hval,64LL)) {
+					if (!is_nbit(hval,64)) {
 						insn->pfxb.size = 20;
 					}
 				}
@@ -2372,10 +2391,10 @@ static size_t encode_immed_LDI(instruction_buf* insn, thuge hval, int i)
 		if (!is_nbit(hval,minbits)) {
 			insn->pfxb.val = hval;
 			insn->pfxb.size = 5;
-			if (!is_nbit(hval,32LL)) {
+			if (!is_nbit(hval,32)) {
 				insn->pfxb.size = 10;
 			}
-			if (!is_nbit(hval,64LL)) {
+			if (!is_nbit(hval,64)) {
 				insn->pfxb.size = 20;
 			}
 		}
@@ -2391,7 +2410,6 @@ static void encode_ipfx(postfix_buf* postfix, thuge hval, int i)
 		printf("Illegal postfix index.\n");		
 		exit(0);
 	}
-	printf("setting val(%d)=%I64d\n", i, hval.lo);
 	postfix->val.lo = hval.lo;
 	postfix->val.hi = hval.hi;
 	if (is_nbit(hval,32LL)) {
@@ -2476,7 +2494,6 @@ static size_t encode_immed (
 		}
 		else if (mnemo->ext.format==R2) {
 			if (insn) {
-				printf("encode R2\n");
 				switch(i) {
 				case 1:	encode_ipfx(&insn->pfxa,val,i-1); break;
 				case 2:	encode_ipfx(&insn->pfxb,val,i-1); break;
@@ -2719,7 +2736,6 @@ static size_t encode_branch_B(instruction_buf* insn, operand* op, int64_t val, i
 		switch(i) {
 		case 0:
 			hg = huge_from_int(val);
-			printf("encode B0\n");
 			encode_ipfx(&insn->pfxa, hg, 0);
 			break;
 		case 1:
@@ -2729,7 +2745,6 @@ static size_t encode_branch_B(instruction_buf* insn, operand* op, int64_t val, i
 			}
 			else {
 				hg = huge_from_int(val);
-				printf("encode B1\n");
 				encode_ipfx(&insn->pfxb, hg, 1);
 			}
 			break;
@@ -2743,8 +2758,6 @@ static size_t encode_branch_B(instruction_buf* insn, operand* op, int64_t val, i
   			tgt = (((val & 0x1fff0LL) >> 4LL) << 27LL);
   			insn->opcode |= tgt;
   		}
-			break;
-		case 3:
 			if (insn) {
   			tgt = ((val & 3LL) << 11LL);
   			insn->opcode |= tgt;
@@ -2782,8 +2795,6 @@ static void encode_branch_BL2(instruction_buf* insn, operand* op, int64_t val, i
 			case 1:
   			tgt = ((val & 0xfLL) << 13LL);
   			insn->opcode |= tgt;
-		  	break;
-			case 2:
   			tgt = (((val & 0x7ffffffLL) >> 4LL) << 17LL);
   			insn->opcode |= tgt;
 		  	break;
@@ -2811,7 +2822,6 @@ static int encode_J2(instruction_buf* insn, operand* op, int64_t val, int i, int
   		insn->opcode |= tgt;
   	}
   	if (!is_nbit(hg,29LL)) {
-  		printf("encode J3\n");
   		encode_ipfx(&insn->pfxb,hg,1);
   		*isize = insn->pfxb.size + 5;
   	}
@@ -3066,12 +3076,10 @@ static size_t encode_scndx(
 				same during the second pass. The size of the constant will be known.
 		*/
 		if (val.lo != 0LL || val.hi != 0LL) {
-			printf("Encode scndx a\n");
 			encode_ipfx(&insn->pfxb,val,1);
 		}
 	}
 	else {
-		printf("Encode scndx b\n");
 		encode_ipfx(&insn->pfxb,val,1);
 	}
 	return (isize);
@@ -3107,12 +3115,10 @@ static size_t encode_jscndx(
 				same during the second pass. The size of the constant will be known.
 		*/
 		if (1 || val.lo != 0LL || val.hi != 0LL) {
-			printf("Encode jscndx a\n");
 			encode_ipfx(&insn->pfxb,val,1);
 		}
 	}
 	else {
-		printf("Encode jscndx b\n");
 		encode_ipfx(&insn->pfxb,val,1);
 	}
 	return (isize);
@@ -3143,12 +3149,10 @@ static size_t encode_regind(
 		ip->ext.const_expr = constexpr;
 	if ((constexpr && pass==1) || ip->ext.const_expr) {
 		if (1 || val.lo != 0LL || val.hi != 0LL) {
-			printf("Encode regind a\n");
 			encode_ipfx(&insn->pfxb,val,1);
 		}
 	}
 	else {
-		printf("Encode regind b\n");
 		encode_ipfx(&insn->pfxb,val,1);
 	}
 	return (isize);
@@ -3160,6 +3164,8 @@ static size_t encode_regind(
 
 static void create_split_target_operands(instruction* ip, mnemonic* mnemo)
 {
+	return;
+	/* dead code */
 	switch(mnemo->ext.format) {
 	case B:
 	case BI:
@@ -3168,7 +3174,7 @@ static void create_split_target_operands(instruction* ip, mnemonic* mnemo)
 			ip->op[3] = new_operand();
 			memcpy(ip->op[3], ip->op[2], sizeof(operand));
 			ip->op[3]->number = 3;
-			ip->op[3]->attr = REL_ABS;
+			ip->op[3]->attr = REL_PC;
 			ip->op[3]->value = copy_tree(ip->op[2]->value);
 		}
 		break;
@@ -3179,7 +3185,7 @@ static void create_split_target_operands(instruction* ip, mnemonic* mnemo)
 			ip->op[2] = new_operand();
 			memcpy(ip->op[2], ip->op[1], sizeof(operand));
 			ip->op[2]->number = 2;
-			ip->op[2]->attr = REL_ABS;
+			ip->op[2]->attr = REL_PC;
 			ip->op[2]->value = copy_tree(ip->op[1]->value);
 		}
 		break;
@@ -3189,7 +3195,7 @@ static void create_split_target_operands(instruction* ip, mnemonic* mnemo)
 			ip->op[1] = new_operand();
 			memcpy(ip->op[1], ip->op[0], sizeof(operand));
 			ip->op[1]->number = 1;
-			ip->op[1]->attr = REL_ABS;
+			ip->op[1]->attr = REL_PC;
 			ip->op[1]->value = copy_tree(ip->op[0]->value);
 		}
 		break;
@@ -3615,8 +3621,6 @@ static unsigned char* encode_pfx(unsigned char *d, postfix_buf* pfx, uint8_t whi
 	}
 	switch(size) {
 	case 5:
-		if (val.lo==65536)
-			printf("found 65536\n");
     d = setval(0,d,1,op);
     d = setval(0,d,4,val.lo);
     qupls_insn_count++;

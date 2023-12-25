@@ -72,6 +72,7 @@ reg [7:0] lfsr_cnt;
 reg [3:0] tid_cnt;
 wire [16:0] lfsr_o;
 reg [5:0] wait_cnt;
+reg [1:0] tid;
 
 lfsr17 #(.WID(17)) ulfsr1
 (
@@ -90,6 +91,7 @@ if (rst) begin
 	lfsr_cnt <= 'd0;
 	wait_cnt <= 'd0;
 	vtags <= 'd0;
+	tid <= 2'd0;
 end
 else begin
 	case(req_state)
@@ -115,13 +117,14 @@ else begin
 			if (lfsr_cnt=={CID,2'b0})
 				req_state <= WAIT4MISS;
 			lfsr_cnt <= lfsr_cnt + 2'd1;
+			tid <= 4'h0;
 		end
 	WAIT4MISS:
 		if (!hit & tlb_v) begin
 			tid_cnt <= 4'h0;
 			wbm_req.tid.core = CORENO;
 			wbm_req.tid.channel = CID;			
-			wbm_req.tid.tranid <= 'h0;
+			wbm_req.tid.tranid <= {tid,2'd0};
 			wbm_req.blen <= 6'd1;
 			wbm_req.cti <= fta_bus_pkg::FIXED;
 			wbm_req.cyc <= 1'b1;
@@ -131,7 +134,7 @@ else begin
 			wbm_req.vadr <= {miss_vadr[$bits(fta_address_t)-1:Qupls_cache_pkg::ICacheTagLoBit],{Qupls_cache_pkg::ICacheTagLoBit{1'h0}}};
 			wbm_req.padr <= {miss_padr[$bits(fta_address_t)-1:Qupls_cache_pkg::ICacheTagLoBit],{Qupls_cache_pkg::ICacheTagLoBit{1'h0}}};
 			wbm_req.asid <= miss_asid;
-			vtags[4'd0] <= {miss_vadr[$bits(fta_address_t)-1:Qupls_cache_pkg::ICacheTagLoBit],{Qupls_cache_pkg::ICacheTagLoBit{1'h0}}};
+			vtags[{tid,2'd0}] <= {miss_vadr[$bits(fta_address_t)-1:Qupls_cache_pkg::ICacheTagLoBit],{Qupls_cache_pkg::ICacheTagLoBit{1'h0}}};
 			vadr <= {miss_vadr[$bits(fta_address_t)-1:Qupls_cache_pkg::ICacheTagLoBit],{Qupls_cache_pkg::ICacheTagLoBit{1'h0}}};
 			padr <= {miss_padr[$bits(fta_address_t)-1:Qupls_cache_pkg::ICacheTagLoBit],{Qupls_cache_pkg::ICacheTagLoBit{1'h0}}};
 			madr <= {miss_vadr[$bits(fta_address_t)-1:Qupls_cache_pkg::ICacheTagLoBit],{Qupls_cache_pkg::ICacheTagLoBit{1'h0}}};
@@ -150,14 +153,14 @@ else begin
 		begin
 			wbm_req.tid.core = CORENO;
 			wbm_req.tid.channel = CID;			
-			wbm_req.tid.tranid <= 4'h1;
+			wbm_req.tid.tranid <= {tid,2'd1};
 			wbm_req.cti <= fta_bus_pkg::FIXED;
 			wbm_req.cyc <= 1'b1;
 			wbm_req.stb <= 1'b1;
 			wbm_req.sel <= 16'hFFFF;
 			wbm_req.vadr <= vadr + 5'd16;
 			wbm_req.padr <= padr + 5'd16;
-			vtags[4'd1] <= madr + 5'd16;
+			vtags[{tid,2'd1}] <= madr + 5'd16;
 			if (!full) begin
 				vadr <= vadr + 5'd16;
 				padr <= padr + 5'd16;
@@ -174,14 +177,14 @@ else begin
 		begin
 			wbm_req.tid.core = CORENO;
 			wbm_req.tid.channel = CID;			
-			wbm_req.tid.tranid <= 4'h2;
+			wbm_req.tid.tranid <= {tid,2'd2};
 			wbm_req.cti <= fta_bus_pkg::FIXED;
 			wbm_req.cyc <= 1'b1;
 			wbm_req.stb <= 1'b1;
 			wbm_req.sel <= 16'hFFFF;
 			wbm_req.vadr <= vadr + 5'd16;
 			wbm_req.padr <= padr + 5'd16;
-			vtags[4'd2] <= madr + 5'd16;
+			vtags[{tid,2'd2}] <= madr + 5'd16;
 			if (!full) begin
 				vadr <= vadr + 5'd16;
 				padr <= padr + 5'd16;
@@ -198,14 +201,14 @@ else begin
 		begin
 			wbm_req.tid.core = CORENO;
 			wbm_req.tid.channel = CID;			
-			wbm_req.tid.tranid <= 4'h3;
+			wbm_req.tid.tranid <= {tid,2'd3};
 			wbm_req.cti <= fta_bus_pkg::EOB;
 			wbm_req.cyc <= 1'b1;
 			wbm_req.stb <= 1'b1;
 			wbm_req.sel <= 16'hFFFF;
 			wbm_req.vadr <= vadr + 5'd16;
 			wbm_req.padr <= padr + 5'd16;
-			vtags[4'd3] <= madr + 5'd16;
+			vtags[{tid,2'd3}] <= madr + 5'd16;
 			if (!full) begin
 				wait_cnt <= 'd0;
 				vadr <= vadr + 5'd16;
@@ -229,7 +232,10 @@ else begin
 	WAIT_UPD1:
 		req_state <= WAIT_UPD2;
 	WAIT_UPD2:
-		req_state <= WAIT4MISS;
+		begin
+			tid <= tid + 2'd1;
+			req_state <= WAIT4MISS;
+		end
 	default:
 		req_state <= RESET;
 	endcase

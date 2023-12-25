@@ -155,45 +155,29 @@ if (rst)
 else begin
 	if (en) begin
 
-		if (alloc0 & ~(freevals[0]|v0) & ~stalla0)
+		if (alloc0 & ~stalla0)
 			avail[head0] <= 1'b0;
-		else if (freevals[0] && alloc0)
-			;
-		else if (v0 & alloc0)
-			;
 		else if (freevals[0])
 			avail[tags2free[0]] <= 1'b1;
 		else if (v0)
 			avail[o0] <= 1'b1;
 		
-		if (alloc1 & ~(freevals[1]|v1) & ~stalla1)
+		if (alloc1 & ~stalla1)
 			avail[head1] <= 1'b0;
-		else if (freevals[1] && alloc1)
-			;
-		else if (v1 & alloc1)
-			;
 		else if (freevals[1])
 			avail[tags2free[1]] <= 1'b1;
 		else if (v1)
 			avail[o1] <= 1'b1;
 
-		if (alloc2 & ~(freevals[2]|v2) & ~stalla2)
+		if (alloc2 & ~stalla2)
 			avail[head2] <= 1'b0;
-		else if (freevals[2] && alloc2)
-			;
-		else if (v2 & alloc2)
-			;
 		else if (freevals[2])
 			avail[tags2free[2]] <= 1'b1;
 		else if (v2)
 			avail[o2] <= 1'b1;
 
-		if (alloc3 & ~(freevals[3]|v3) & ~stalla3)
+		if (alloc3 & ~stalla3)
 			avail[head3] <= 1'b0;
-		else if (freevals[3] && alloc3)
-			;
-		else if (v3 & alloc3)
-			;
 		else if (freevals[3])
 			avail[tags2free[3]] <= 1'b1;
 		else if (v3)

@@ -134,7 +134,7 @@ typedef struct packed {
 	asid_t asid;
 	address_t vadr;
 	address_t padr;
-	SHPTE pte;
+	spte_t pte;
 	logic [127:0] dat;
 } tran_buf_t;
 
@@ -151,14 +151,11 @@ fta_tranid_t tid;
 miss_queue_t [MISSQ_SIZE-1:0] miss_queue;
 reg [31:0] miss_adr;
 asid_t miss_asid;
-reg wr1,wr2;
 reg [63:0] stlb_adr;
-reg [10:0] addrb;
 reg cs_config, cs_hwtw;
 
 reg way;
-SHPTE pte;
-reg tlbmiss_v;
+spte_t pte;
 
 fta_cmd_request128_t sreq;
 fta_cmd_response128_t sresp;
@@ -311,9 +308,18 @@ begin
 end
 
 // Computer page index for a given page level.
+reg [2:0] lvla;
+always_comb
+if (sel_tran >= 0)
+	lvla = miss_queue[tranbuf[sel_tran].stk].lvl+3'd1;
+else
+	lvla = 3'd0;
 reg [12:0] pindex;
 always_comb
-	pindex = miss_queue[tranbuf[sel_tran].stk].adr[31:16] >> (miss_queue[tranbuf[sel_tran].stk].lvl * 13);
+if (sel_tran >= 0)
+	pindex = miss_queue[tranbuf[sel_tran].stk].adr[31:16] >> (lvla * 4'd13);
+else
+	pindex = 13'd0;
 
 reg ptw_ppv;
 
@@ -339,6 +345,14 @@ if (rst) begin
 	ptw_ppv <= FALSE;
 	ptw_vadr <= {$bits(virtual_address_t){1'b0}};
 	in_que <= FALSE;
+	fault <= 1'b0;
+	fault_asid <= {$bits(asid_t){1'b0}};
+	fault_adr <= {$bits(virtual_address_t){1'b0}};
+	miss_adr <= {$bits(virtual_address_t){1'b0}};
+	miss_asid <= {$bits(asid_t){1'b0}};
+	pte <= {$bits(spte_t){1'b0}};
+	tlb_entryno <= 7'd0;
+	tlb_entry <= {$bits(tlb_entry_t){1'b0}};
 end
 else begin
 
@@ -444,7 +458,7 @@ else begin
 	// Capture responses.
 	if (ftam_resp.ack) begin
 		tranbuf[ftam_resp.tid & 15].dat <= ftam_resp.dat;
-		tranbuf[ftam_resp.tid & 15].pte <= ftam_resp.dat[63:0];
+		tranbuf[ftam_resp.tid & 15].pte <= ftam_resp.dat >> {ftam_resp.adr[3],6'b0};
 		tranbuf[ftam_resp.tid & 15].padr <= ftam_resp.adr;
 		tranbuf[ftam_resp.tid & 15].rdy <= 1'b1;
 		$display("PTW: bus ack.");
@@ -455,7 +469,7 @@ else begin
 		$display("PTW: selected tran:%d", sel_tran[4:0]);
 		miss_queue[tranbuf[sel_tran].stk].bc <= 1'b1;
 		// We're done if level zero processed.
-		if (miss_queue[tranbuf[sel_tran].stk].lvl==3'd0) begin
+		if (miss_queue[tranbuf[sel_tran].stk].lvl==3'd7) begin
 			// Allow capture of new TLB misses.
 			miss_queue[tranbuf[sel_tran].stk].v <= 1'b0;
 			miss_queue[tranbuf[sel_tran].stk].o <= 1'b0;
@@ -469,6 +483,7 @@ else begin
 		pte <= tranbuf[sel_tran].pte;
 		// If translation is not valid, cause a page fault.
 		if (~tranbuf[sel_tran].pte.v) begin
+			$display("PTW: page fault");
 			faultq_o <= miss_queue[tranbuf[sel_tran].stk].qn;
 			fault <= 1'b1;
 			fault_asid <= tranbuf[sel_tran].asid;
@@ -476,7 +491,7 @@ else begin
 			req_state <= FAULT;
 		end
 		// Otherwise translation was valid, update it in the TLB.
-		else if (miss_queue[tranbuf[sel_tran].stk].lvl==3'd0) begin
+		else if (miss_queue[tranbuf[sel_tran].stk].lvl==3'd7) begin
 			upd_req <= 1'b1;
 			$display("PTW: TLB update request triggered.");
 		end
