@@ -68,18 +68,17 @@ always_ff @(posedge clka)
 for (n = 0; n < NPORT; n = n + 1)
 	if (wr[n]) begin
 		if (setall)
-			mem[wa[n]] <= 16'hFFFF;
+			mem[wa[n]] <= {NCHECK{1'b1}};
 		else
 			mem[wa[n]][wc[n]] <= i[n];
 	end
 
 genvar g;
 generate begin : gMem
-	for (g = 0; g < NPORT; g = g + 1) begin
+	for (g = 0; g < NRDPORT; g = g + 1) begin
 		always_comb
 		begin
-			o[g] <= mem[ra[g]][rc[g]];
-			o[g+NRDPORT/2] <= mem[ra[g+NRDPORT/2]][rc[g+NRDPORT/2]];
+			o[g] = mem[ra[g]][rc[g]];
 		end
 	end
 end

@@ -136,10 +136,8 @@ if (ce)
 always_comb
 	ihit = ihit1e&ihit1o;
 always_ff @(posedge clk)
-if (ce)
 	ihit2e <= ihit1e;
 always_ff @(posedge clk)
-if (ce)
 	ihit2o <= ihit1o;
 always_comb
 	// *** The following causes the hit to tend to oscillate between hit
@@ -229,13 +227,11 @@ end
 endgenerate
 
 always_ff @(posedge clk)
-if (ce)
 	icache_wre2 <= icache_wre;
 
 // Address of the victim line is the address of the update line.
 // Write the victim cache if updating the cache and the victim line is valid.
 always_ff @(posedge clk)
-if (ce) begin
 if ((icache_wre|icache_wro) && NVICTIM > 0) begin
 	victim_line.vtag <= ic_line_i.vtag;
 	victim_line.ptag <= ic_line_i.ptag;
@@ -250,11 +246,9 @@ if ((icache_wre|icache_wro) && NVICTIM > 0) begin
 end
 else
 	victim_wr <= 'd0;
-end
 
 // Victim data comes from old data in the line that is being updated.
 always_ff @(posedge clk)
-if (ce)
 if (NVICTIM > 0) begin
 	if (icache_wre2)
 		victim_line.data <= victim_eline.data;
@@ -349,7 +343,6 @@ uictage
 (
 	.rst(rst),
 	.clk(clk),
-	.ce(ce),
 	.wr(icache_wre),
 	.vadr_i(ic_line_i.vtag),
 	.padr_i(ic_line_i.ptag),
@@ -376,7 +369,6 @@ uictago
 (
 	.rst(rst),
 	.clk(clk),
-	.ce(ce),
 	.wr(icache_wro),
 	.vadr_i(ic_line_i.vtag),
 	.padr_i(ic_line_i.ptag),
@@ -400,7 +392,6 @@ Qupls_cache_hit
 uichite
 (
 	.clk(clk),
-	.ce(ce),
 	.adr(ip),
 	.ndx(ip[HIBIT:LOBIT]+ip[LOBIT-1]),
 	.tag(victage),
@@ -419,7 +410,6 @@ Qupls_cache_hit
 uichito
 (
 	.clk(clk),
-	.ce(ce),
 	.adr(ip),
 	.ndx(ip[HIBIT:LOBIT]),
 	.tag(victago),
@@ -444,7 +434,7 @@ if (rst) begin
 		valido[g] <= 'd0;
 	end
 end
-else if (ce) begin
+else begin
 	if (victim_wr) begin
 		victim_count <= victim_count + 2'd1;
 		if (victim_count>=NVICTIM-1)

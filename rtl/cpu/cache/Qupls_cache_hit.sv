@@ -40,13 +40,12 @@ import QuplsPkg::*;
 import QuplsMmupkg::*;
 import Qupls_cache_pkg::*;
 
-module Qupls_cache_hit(clk, ce, adr, ndx, tag, valid, hit, rway, cv);
+module Qupls_cache_hit(clk, adr, ndx, tag, valid, hit, rway, cv);
 parameter LINES=256;
 parameter WAYS=4;
 parameter AWID=32;
 parameter TAGBIT=14;
 input clk;
-input ce;
 input QuplsPkg::address_t adr;
 input [$clog2(LINES)-1:0] ndx;
 input cache_tag_t [3:0] tag;
@@ -86,7 +85,6 @@ begin
 end
 
 always_ff @(posedge clk)
-if (ce)
 	prev_rway <= rway1;
 assign rway = rway1;
 
@@ -94,10 +92,8 @@ always_comb//ff @(posedge clk)
 	hit = |hit1;
 
 always_ff @(posedge clk)
-if (ce)
 	cv1 <= cv2;
 always_ff @(posedge clk)
-if (ce)
 	cv <= cv1;	
 
 endmodule

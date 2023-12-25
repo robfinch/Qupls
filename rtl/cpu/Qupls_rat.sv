@@ -166,9 +166,9 @@ always_comb cpv_wr[1] = stomp_act ? stomp_r[{stomp_cnt,3'd1}] : cmtbv;
 always_comb cpv_wr[2] = stomp_act ? stomp_r[{stomp_cnt,3'd2}] : cmtcv;
 always_comb cpv_wr[3] = stomp_act ? stomp_r[{stomp_cnt,3'd3}] : cmtdv;
 always_comb cpv_wr[4] = stomp_act ? stomp_r[{stomp_cnt,3'd4}] : wra != 7'd0 && wr0;
-always_comb cpv_wr[5] = stomp_act ? stomp_r[{stomp_cnt,3'd5}] : wra != 7'd0 && wr1;
-always_comb cpv_wr[6] = stomp_act ? stomp_r[{stomp_cnt,3'd6}] : wra != 7'd0 && wr2;
-always_comb cpv_wr[7] = stomp_act ? stomp_r[{stomp_cnt,3'd7}] : wra != 7'd0 && wr3;
+always_comb cpv_wr[5] = stomp_act ? stomp_r[{stomp_cnt,3'd5}] : wrb != 7'd0 && wr1;
+always_comb cpv_wr[6] = stomp_act ? stomp_r[{stomp_cnt,3'd6}] : wrc != 7'd0 && wr2;
+always_comb cpv_wr[7] = stomp_act ? stomp_r[{stomp_cnt,3'd7}] : wrd != 7'd0 && wr3;
 always_comb cpv_wc[0] = stomp_act ? rob[{stomp_cnt,3'd0}].cndx : cmta_cp;
 always_comb cpv_wc[1] = stomp_act ? rob[{stomp_cnt,3'd1}].cndx : cmtb_cp;
 always_comb cpv_wc[2] = stomp_act ? rob[{stomp_cnt,3'd2}].cndx : cmtc_cp;
@@ -244,23 +244,33 @@ generate begin : gRRN
 							 								cpram_out.regmap[rn[g]].pregs[rnbank[g]];
 //							 	 >> ((BANKS < 2) ? (rn[g] * RBIT) : {(rn[g] * RBIT),rnbank[g]});
 		always_comb
+			/*
 			if ((g % 4)==3) begin
 				if (rn[g]==7'd0)
 					vn[g] = 1'b1;
 				else if (rn[g]==wrd && wr3)
-					vn[g] = 1'b1;
+					vn[g] = cpv_i[7];
 				else
-					vn[g] = valid[0][cndx][rrn[g]];//cpram_out.regmap[rn[g]].pregs[0].v;
+					vn[g] = cpv_o;//valid[0][cndx][rrn[g]];//cpram_out.regmap[rn[g]].pregs[0].v;
 			end
 			else
-				vn[g] = rn[g]==7'd0 ? 1'b1 :
-							/*wr0 && rn[g]==wra ? 1'b1 :
-							wr1 && rn[g]==wrb ? 1'b1 :
-							wr2 && rn[g]==wrc ? 1'b1 :
-							wr3 && rn[g]==wrd ? 1'b1 :*/
-							(BANKS < 2) ?
-								cpv_o://cpram_out.regmap[rn[g]].pregs[0].v;
-								cpv_o;	// ToFix later
+			*/
+			begin
+				if (rn[g]==7'd0)
+					vn[g] = 1'b1;
+				else if (wr0 && rn[g]==wra)
+					vn[g] = cpv_i[4];
+				else if (wr1 && rn[g]==wrb)
+					vn[g] = cpv_i[5];
+				else if (wr2 && rn[g]==wrc)
+					vn[g] = cpv_i[6];
+				else if (wr3 && rn[g]==wrd)
+					vn[g] = cpv_i[7];
+				else if (BANKS < 2)
+					vn[g] = cpv_o[g];
+				else
+					vn[g] = cpv_o[g];
+			end
 	end
 end
 endgenerate

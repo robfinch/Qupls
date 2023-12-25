@@ -117,11 +117,11 @@ ICacheLine o1;
 
       .dina(i),                     // WRITE_DATA_WIDTH_A-bit input: Data input for port A write operations.
       .dinb('d0),                     // WRITE_DATA_WIDTH_B-bit input: Data input for port B write operations.
-      .ena(ce),                       // 1-bit input: Memory enable signal for port A. Must be high on clock
+      .ena(1'b1),                       // 1-bit input: Memory enable signal for port A. Must be high on clock
                                        // cycles when read or write operations are initiated. Pipelined
                                        // internally.
 
-      .enb(ce),                       // 1-bit input: Memory enable signal for port B. Must be high on clock
+      .enb(1'b1),                       // 1-bit input: Memory enable signal for port B. Must be high on clock
                                        // cycles when read or write operations are initiated. Pipelined
                                        // internally.
 
@@ -141,10 +141,10 @@ ICacheLine o1;
                                        // ECC enabled (Error injection capability is not available in
                                        // "decode_only" mode).
 
-      .regcea(ce),                 // 1-bit input: Clock Enable for the last register stage on the output
+      .regcea(1'b1),                 // 1-bit input: Clock Enable for the last register stage on the output
                                        // data path.
 
-      .regceb(ce),                 // 1-bit input: Clock Enable for the last register stage on the output
+      .regceb(1'b1),                 // 1-bit input: Clock Enable for the last register stage on the output
                                        // data path.
 
       .rsta(rst),                     // 1-bit input: Reset signal for the final port A output register stage.

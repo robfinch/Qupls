@@ -111,7 +111,7 @@ reg [WID:1] o1;
                                // "common_clock".
 
       .dina(i),                // WRITE_DATA_WIDTH_A-bit input: Data input for port A write operations.
-      .ena(ce),                // 1-bit input: Memory enable signal for port A. Must be high on clock
+      .ena(1'b1),                // 1-bit input: Memory enable signal for port A. Must be high on clock
                                // cycles when write operations are initiated. Pipelined internally.
 
       .enb(ce),              // 1-bit input: Memory enable signal for port B. Must be high on clock
