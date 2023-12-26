@@ -1037,11 +1037,23 @@ always_comb pc8 = pc7 + len7;
 // The PC might be correct if the BTB picked the correct PC.
 
 wire stomp_any = FALSE;//|robentry_stomp;
+reg bms, bms2;
+always_ff @(posedge clk)
+if (rst) begin
+	bms <= FALSE;
+	bms2 <= FALSE;
+end
+else begin
+	if (advance_pipeline) begin
+		bms <= branchmiss_state < 3'd7;
+		bms2 <= bms;
+	end
+end
 
 always_comb
 begin
 	stomp_f = FALSE;
-	if (stomp_any || branchmiss_state < 3'd7) begin
+	if (stomp_any || branchmiss_state < 3'd7 || bms) begin
 //		if (misspc != pc0)
 			stomp_f = TRUE;
 	end
@@ -1060,7 +1072,7 @@ if (rst)
 	stomp_x <= FALSE;
 else begin
 	if (advance_pipeline)
-		stomp_x <= stomp_any || stomp_f;
+		stomp_x <= stomp_any || stomp_f || (!ihit2 && !mipv);
 end
 
 always_ff @(posedge clk)
@@ -1979,7 +1991,7 @@ end
 always_comb
 	room_for_que = enqueue_room > 3'd3;
 assign nq = !((branchmiss || branchmiss_state < 3'd4) && |robentry_stomp) && !stallq && enqueue_room > 3'd3;
-assign stallq = !(ihito || mipv || mipv2 || mipv3 || mipv4 || !rstcnt[2]) || rat_stallq || !room_for_que;
+assign stallq = !rstcnt[2] || rat_stallq || !room_for_que;
 
 reg signed [$clog2(ROB_ENTRIES):0] cmtlen;			// Will always be >= 0
 reg signed [$clog2(ROB_ENTRIES):0] group_len;		// Commit group length
@@ -2192,11 +2204,13 @@ end
 */
 pc_address_t pc0_w;
 always_ff @(posedge clk)
+if (advance_pipeline)
 	pc0_w <= pc0;
 
 // The cycle after the length is calculated
 // instruction extract inputs
 always_ff @(posedge clk)
+if (advance_pipeline)
 	ihit_x <= ihit2;
 always_ff @(posedge clk)
 if (advance_pipeline)
@@ -3471,6 +3485,8 @@ end
 // =============================================================================
 // =============================================================================
 
+reg load_lsq_argc;
+
 always_ff @(posedge clk)
 if (rst) begin
 	tReset();
@@ -3519,6 +3535,8 @@ else begin
 	if (!branchmiss && ihito && !hirq && ((pe_allqd|allqd) && !hold_ins && advance_pipeline))
 		brtgtv <= FALSE;	// PC has been updated
 
+	load_lsq_argc <= FALSE;
+
 // ----------------------------------------------------------------------------
 // ENQUEUE
 // ----------------------------------------------------------------------------
@@ -3535,7 +3553,8 @@ else begin
 		if (rob[tail0].v==INV &&
 			rob[tail1].v==INV && 
 			rob[tail2].v==INV && 
-			rob[tail3].v==INV) begin
+			rob[tail3].v==INV &&
+			!stomp_q) begin
 			// On a predicted taken branch the front end will continue to send
 			// instructions to be queued, but they will be ignored as they are
 			// treated as NOPs as the valid bit will not be set. They will however
@@ -3693,7 +3712,7 @@ else begin
 	// clock cycle, in which case the ALU is still idle. This allows back-to-back
 	// issue of ALU operations to the ALU.
 	if (alu0_available && alu0_rndxv && alu0_idle) begin
-		alu0_idle <= INV;//!rob[alu0_rndx].decbus.multicycle;	// Needs work yet.
+		alu0_idle <= rob[alu0_rndx].done[0];//!rob[alu0_rndx].decbus.multicycle;	// Needs work yet.
 		alu0_id <= alu0_rndx;
 		alu0_idv <= VAL;
 		alu0_argA <= rob[alu0_rndx].decbus.imma | rfo_alu0_argA;
@@ -3829,13 +3848,18 @@ else begin
 		store_argC_id <= lsq_head;
 		store_argC_id1 <= store_argC_id;
 	end
-	
+
+	// It takes a clock cycle for the register to be read once it is known to be
+	// valid. A flag, load_lsq_argc, is set to delay by a clock. This flag pulses
+	// for only a single clock cycle.
 	if (lsq[store_argC_id1.row][store_argC_id1.col].v==VAL && lsq[store_argC_id1.row][store_argC_id1.col].datav==INV) begin
-		if (prnv[14]) begin
-			$display("Q+ CPU: LSQ Rc=%h from r%d", rfo_store_argC, store_argC_reg);
-			lsq[store_argC_id1.row][store_argC_id1.col].res <= rfo_store_argC;
-			lsq[store_argC_id1.row][store_argC_id1.col].datav <= VAL;
-		end
+		if (prnv[14])
+			load_lsq_argc <= TRUE;
+	end
+	if (load_lsq_argc) begin
+		$display("Q+ CPU: LSQ Rc=%h from r%d", rfo_store_argC, store_argC_reg);
+		lsq[store_argC_id1.row][store_argC_id1.col].res <= rfo_store_argC;
+		lsq[store_argC_id1.row][store_argC_id1.col].datav <= VAL;
 	end
 
 /*
@@ -3930,10 +3954,17 @@ else begin
 	if (rob[alu0_id].v && !rob[alu0_id].done[0] && alu0_idv) begin
     rob[ alu0_id ].exc <= alu0_exc;
     rob[ alu0_id ].excv <= |alu0_exc;
-    rob[ alu0_id ].done[0] <= !rob[ alu0_id ].decbus.multicycle;
-    alu0_idv <= rob[ alu0_id ].decbus.multicycle;
-    if (!rob[ alu0_id ].decbus.fc)
-    	rob[ alu0_id ].done[1] <= VAL;
+    if (!rob[ alu0_id ].decbus.multicycle) begin
+    	rob[ alu0_id ].done[0] <= TRUE;
+    	alu0_idv <= INV;
+    end
+    if (!rob[ alu0_id ].decbus.fc) begin
+    	rob[ alu0_id ].done[1] <= TRUE;
+    	if (!rob[ alu0_id ].decbus.multicycle)
+	    	alu0_idle <= TRUE;
+    end
+    else
+    	alu0_idle <= TRUE;
     rob[ alu0_id ].out <= INV;
     if (!rob[ alu0_id ].decbus.multicycle) begin
     	alu0_done <= TRUE;
@@ -4701,7 +4732,7 @@ always_ff @(posedge clk) begin: clock_n_debug
 	$display("TIME %0d", $time);
 	$display("----- Fetch -----");
 	$display("i$ pc input:  %h #", pc);
-	$display("i$ pc output: %h #", pc0_w);
+	$display("i$ pc output: %h %s#", pc0_w, stomp_f ? stompstr:no_stompstr);
 	$display("cache: %x", ic_line[511:0]);
 	$display("Lengths: 0:%d  1:%d  2:%d  3:%d  4:%d  5:%d  6:%d  7:%d" , len0, len1, len2, len3, len4, len5, len6, len7);
 	$display("----- Instruction Extract ----- %s", stomp_x ? stompstr : no_stompstr);
@@ -4781,7 +4812,7 @@ always_ff @(posedge clk) begin: clock_n_debug
 		alu0_dataready, alu0_argI, alu0_argA, alu0_argB, alu0_argC,
 		 ((fnIsLoad(alu0_instr) || fnIsStore(alu0_instr)) ? 109 : 97),
 		alu0_instr, alu0_pc);
-	$display("idle:%d res:%h rid:%o #", alu0_idle, alu0_res, alu0_id);
+	$display("idle:%d res:%h rid:%d #", alu0_idle, alu0_res, alu0_id);
 
 	if (NALU > 1) begin
 		$display("%d I=%h A=%h B=%h %c%d pc:%h #",
@@ -5503,7 +5534,7 @@ begin
 		end
 	BTS_RET:
 		begin
-			tgtpc = argA;
+			tgtpc = argA + instr[7:4];
 		end
 	default:
 		tgtpc = RSTPC;

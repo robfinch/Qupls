@@ -243,21 +243,23 @@ generate begin : gRRN
 							 	(BANKS < 2) ? cpram_out.regmap[rn[g]].pregs[0] :
 							 								cpram_out.regmap[rn[g]].pregs[rnbank[g]];
 //							 	 >> ((BANKS < 2) ? (rn[g] * RBIT) : {(rn[g] * RBIT),rnbank[g]});
+
+		// Unless it us a target register, we want the old unbypassed value.
 		always_comb
-			/*
+			
 			if ((g % 4)==3) begin
 				if (rn[g]==7'd0)
 					vn[g] = 1'b1;
 				else if (rn[g]==wrd && wr3)
 					vn[g] = cpv_i[7];
 				else
-					vn[g] = cpv_o;//valid[0][cndx][rrn[g]];//cpram_out.regmap[rn[g]].pregs[0].v;
+					vn[g] = cpv_o[g];//valid[0][cndx][rrn[g]];//cpram_out.regmap[rn[g]].pregs[0].v;
 			end
 			else
-			*/
 			begin
 				if (rn[g]==7'd0)
 					vn[g] = 1'b1;
+				/*
 				else if (wr0 && rn[g]==wra)
 					vn[g] = cpv_i[4];
 				else if (wr1 && rn[g]==wrb)
@@ -266,6 +268,7 @@ generate begin : gRRN
 					vn[g] = cpv_i[6];
 				else if (wr3 && rn[g]==wrd)
 					vn[g] = cpv_i[7];
+				*/
 				else if (BANKS < 2)
 					vn[g] = cpv_o[g];
 				else
@@ -274,6 +277,14 @@ generate begin : gRRN
 	end
 end
 endgenerate
+always_ff @(posedge clk)
+begin
+	for (nn = 0; nn < NPORT; nn = nn + 1)
+		if (rrn[nn]==8'd74 && rn[nn]==7'd1) begin
+			$display("RAT: pr74v=%d.", vn[nn]);
+		end
+end
+
 /* Debugging.
    The register may be bypassed to a previous target register which is non-zero.
    This test will not detect this.
