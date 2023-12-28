@@ -282,6 +282,8 @@ int ENODE::GetNaturalSize()
 		return (2);
 	case en_bmap:
 		return (sizeOfWord);
+	case en_sync:
+		return (4);
 	case en_aggregate:
 	case en_end_aggregate:
 		return (p[0]->GetNaturalSize());
@@ -1604,7 +1606,15 @@ Operand *ENODE::GenIndex(bool neg)
 				ap1->offset2->i = -ap1->offset2->i;
 		}
 		// Scale a constant index by the type size.
-		Int128::Mul(&ap1->offset->i128,&ap1->offset->i128,Int128::MakeInt128(p[1]->tp->size));
+		if (!ap1->is_scaled && pass==1) {
+			int sz;
+			if (ap1->tp->type==bt_pointer)
+				sz = ap1->tp->btpp->size;
+			else
+				sz = ap1->tp->size;
+			Int128::Mul(&ap1->offset->i128, &ap1->offset->i128, Int128::MakeInt128(sz));
+			ap1->is_scaled = true;
+		}
 		return (ap1);
 	}
 	if (ap2->mode == am_ind && ap1->mode == am_reg) {

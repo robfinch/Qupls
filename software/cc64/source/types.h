@@ -1108,6 +1108,7 @@ public:
 	unsigned short int sregs;
 	unsigned int segment : 4;
 	unsigned int defseg : 1;
+	bool is_scaled;
 	bool tempflag;
 	bool memref;
 	bool argref;							// refers to a function argument

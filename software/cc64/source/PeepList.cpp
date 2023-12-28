@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2017-2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2017-2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -575,7 +575,7 @@ void PeepList::OptDoubleTargetRemoval()
 }
 
 // Optimize away the usage of a register containing just an integer constant
-// value.
+// value. Unless it is a load / store address
 
 void PeepList::OptConstReg()
 {
@@ -607,18 +607,22 @@ void PeepList::OptConstReg()
 					}
 				}
 			}
-			count += ip->oper2->OptRegConst(ip->insn->amclass2, true);
-			count += ip->oper3->OptRegConst(ip->insn->amclass3, true);
-			count += ip->oper4->OptRegConst(ip->insn->amclass4, true);
+			if (!ip->insn->IsStore() && !ip->insn->IsLoad()) {
+				count += ip->oper2->OptRegConst(ip->insn->amclass2, true);
+				count += ip->oper3->OptRegConst(ip->insn->amclass3, true);
+				count += ip->oper4->OptRegConst(ip->insn->amclass4, true);
+			}
 		}
 	}
 
 	if (count < 4) {
 		for (ip = head; ip; ip = ip->fwd) {
 			if (ip->insn) {
-				ip->oper2->OptRegConst(ip->insn->amclass2, false);
-				ip->oper3->OptRegConst(ip->insn->amclass3, false);
-				ip->oper4->OptRegConst(ip->insn->amclass4, false);
+				if (!ip->insn->IsStore() && !ip->insn->IsLoad()) {
+					ip->oper2->OptRegConst(ip->insn->amclass2, false);
+					ip->oper3->OptRegConst(ip->insn->amclass3, false);
+					ip->oper4->OptRegConst(ip->insn->amclass4, false);
+				}
 			}
 		}
 		// Remove all def's of registers containing a constant

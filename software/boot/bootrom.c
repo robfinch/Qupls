@@ -3,7 +3,7 @@
 */
 private void Delay3s(void)
 {
-	__int64* leds = 0xFEDFFF00;
+	__int64* leds = 0x0FEDFFF00;
 	int cnt;
 	
 	for (cnt = 0; cnt < 300000; cnt++)
@@ -30,6 +30,7 @@ public void bootrom(void)
 	pgtbl[0x1EDC] = 0x83000FFFFFFFFEDC;	/* Keyboard */
 	pgtbl[0x1EE1] = 0x83000FFFFFFFFEE1;	/* random number generator */
 	__sync(0x0FFFF);
+	cnt = sizeof(pRand[1]);
 	pRand[1] = 0;						/* select random stream #0 */
 	pRand[2] = 0x99999999;	/* set random seed value */
 	pRand[3] = 0x99999999;

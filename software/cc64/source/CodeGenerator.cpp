@@ -385,7 +385,7 @@ void CodeGenerator::GenerateStore(Operand *ap1, Operand *ap3, int size, Operand*
 	//else if (ap1->mode==am_fpreg)
 	//	GenerateTriadic(op_fsto,0,ap1,ap3, mask);
 	else {
-		if (ap3->mode == am_direct && !ap3->offset->i128.IsNBit(20)) {
+		if (ap3->mode == am_direct && ap3->offset && !ap3->offset->i128.IsNBit(20)) {
 			Operand* ap4;
 			ap4 = GetTempRegister();
 			GenerateLoadConst(MakeImmediate(ap3->offset->i128), ap4);
