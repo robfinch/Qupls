@@ -98,6 +98,7 @@ void Compiler::compile()
 	ZeroMemory(&typeTable,sizeof(typeTable));
 	ZeroMemory(&functionTable, sizeof(functionTable));
 	ZeroMemory(&DataLabels, sizeof(DataLabels));
+	ZeroMemory(&seg_aligned, sizeof(seg_aligned));
 	AddStandardTypes();
 
 	// Setup a master function.

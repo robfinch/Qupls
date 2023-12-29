@@ -332,7 +332,7 @@ extern int getline(int listflag);
 extern void compile();
 
 // Init.c
-extern void doinit(Symbol *sp);
+extern void doinit(Symbol *sp, bool glbls);
 // Func.c
 extern Symbol *makeint(char *);
 extern void funcbody(Symbol *sp);
@@ -421,5 +421,7 @@ extern txtoStream irfs;
 extern CSet* ru, * rru;
 extern OCODE* gHeadif;
 extern std::map<int, std::string*> DataLabelMap;
+
+extern int seg_aligned[20];
 
 #endif

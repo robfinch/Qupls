@@ -1608,12 +1608,14 @@ Operand *ENODE::GenIndex(bool neg)
 		// Scale a constant index by the type size.
 		if (!ap1->is_scaled && pass==1) {
 			int sz;
-			if (ap1->tp->type==bt_pointer)
-				sz = ap1->tp->btpp->size;
-			else
-				sz = ap1->tp->size;
-			Int128::Mul(&ap1->offset->i128, &ap1->offset->i128, Int128::MakeInt128(sz));
-			ap1->is_scaled = true;
+			if (ap1->tp) {
+				if (ap1->tp->type == bt_pointer)
+					sz = ap1->tp->btpp->size;
+				else
+					sz = ap1->tp->size;
+				Int128::Mul(&ap1->offset->i128, &ap1->offset->i128, Int128::MakeInt128(sz));
+				ap1->is_scaled = true;
+			}
 		}
 		return (ap1);
 	}

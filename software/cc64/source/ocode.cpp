@@ -77,7 +77,7 @@ bool OCODE::HasSourceReg(int regno) const
 	// Push has an implied target, so oper1 is actually a source.
 	// For deposit, the target is also a source
 	// For orm, orh, the target is also a source
-	if (oper1 && !insn->HasTarget() || opcode==op_push || opcode==op_dep || opcode==op_orm || opcode==op_orh) {
+	if (oper1 && !insn->HasTarget() || opcode==op_push || opcode==op_dep || opcode==op_ors || opcode==op_adds) {
 		if (oper1) {
 			if (oper1->preg == regno)
 				return (true);

@@ -138,9 +138,9 @@ int main(int argc, char **argv)
 	compiler.os_code = false;
 #ifdef QUPLS
 	cpu.fileExt = ".asm";
-	cpu.lea_op = op_lea;
+	cpu.lea_op = op_lda;
 	cpu.pagesize = 14;
-	cpu.code_align = 5;					// power of two
+	cpu.code_align = 6;					// power of two
 	cpu.SupportsBand = false;
 	cpu.SupportsBor = false;
 	cpu.SupportsBBC = true;

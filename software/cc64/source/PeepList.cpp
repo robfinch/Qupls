@@ -1284,6 +1284,7 @@ void PeepList::flush(txtoStream& tfs)
 	static bool first = true;
 	txtoStream* oofs;
 	OCODE *ip;
+	extern int curseg;
 
 /*
 	if (pass == 2) {
@@ -1306,7 +1307,7 @@ void PeepList::flush(txtoStream& tfs)
 				//ofs.printf("%s", (char *)currentFn->sym->mangledName->c_str());
 			}
 			else
-				put_label(tfs, (int)ip->oper1, (char *)"", GetNamespace(), 'C', 0);
+				put_label(tfs, (int)ip->oper1, (char*)"", GetNamespace(), 'C', 0, curseg);
 		}
 		else
 			ip->store(tfs);

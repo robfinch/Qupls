@@ -4,12 +4,12 @@
 // into 64 byte blocks. Currently must be used with the next constant.
 #define SUPPORT_IBH	1
 // The following generates code to support postfix immediates.
-#define SUPPORT_PFX_IMM	1
+//#define SUPPORT_PFX_IMM	1
 
 // The following uses code supporting the shifted immediate instruction set.
 // Where there are no immediate postfixes. It should not be defined when
 // SUPPORT_PFX_IMM is defined.
-//#define SUPPORT_SI_IMM 1
+#define SUPPORT_SI_IMM 1
 
 // The following enables code to support memory page (64kB) relative branching.
 // Generally not used.
@@ -21,6 +21,9 @@
 // six bits. However, it does mean that code needs to be block (64 byte)
 // relative.
 #define BRANCH_INO 1
+
+// Ordinary PC relative branches
+//#define BRANCH_PCREL	1
 
 #define TRACE(x)		/*printf(x)*/
 #define TRACE2(x,y)	/*printf((x),(y))*/
@@ -381,6 +384,10 @@ mnemonic mnemonics[]={
 	"orf", {OP_VREG|OP_REG,OP_VREG|OP_REG,OP_VREG|OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(9LL)|OPC(2LL),5, SZ_INTALL, SZ_HEXI},	
 	"orf", {OP_VREG|OP_REG,OP_VREG|OP_REG,OP_IMM,0}, {RI,CPU_ALL,0,OPC(9LL),5, SZ_INTALL, SZ_HEXI},	
 
+	"ors",{OP_REG,OP_IMM,OP_IMM,0,0}, {RIS,CPU_ALL,0,OPC(59LL),5,SZ_UNSIZED,0,0},
+
+	"padi", {0,0,0,0,0}, {PADI,CPU_ALL,0,0xFF,0},
+
 	"peekq",	{OP_REG,OP_NEXTREG,OP_IMM,0,0},{R3RR,CPU_ALL,0,0x140000000007LL,6},	
 	"peekq",	{OP_REG,OP_NEXTREG,OP_REG,0,0},{R3RR,CPU_ALL,0,0x140000000007LL,6},	
 
@@ -445,7 +452,7 @@ mnemonic mnemonics[]={
 	"revbit",	{OP_REG,OP_REG,0,0,0}, {R1,CPU_ALL,0,0x50000001LL,5},
 
 //	"ret", {OP_REG,0,0,0,0}, {RTDR,CPU_ALL,0,0x80000000LL|R2FUNC(4LL)|OPC(2LL),5,SZ_INTALL,SZ_HEXI},	
-	"ret", {0,0,0,0,0}, {RTDR,CPU_ALL,0,RT(56LL)|OPC(35LL),5,SZ_UNSIZED,0},	
+	"ret", {0,0,0,0,0}, {RTDR,CPU_ALL,0,RA(56LL)|RT(32LL)|OPC(35LL),5,SZ_UNSIZED,0},	
 
 	"rex",	{OP_IMM,OP_REG,0,0,0},{REX,CPU_ALL,0,0x200000000007LL,5},	
 
@@ -548,7 +555,7 @@ mnemonic mnemonics[]={
 	"sxt",	{OP_REG,OP_REG,0,0,0}, {MV,CPU_ALL,0,0xBE000000LL|OPC(19LL),4},
 	"sxw",	{OP_REG,OP_REG,0,0,0}, {MV,CPU_ALL,0,0x9E000000LL|OPC(19LL),4},
 
-	"sync", {0,0,0,0,0}, {BITS40,CPU_ALL,0,0xFF00|OPC(114LL),5},
+	"sync", {OP_IMM,0,0,0,0}, {SYNC,CPU_ALL,0,0xFF00|OPC(114LL),5},
 	"sys",	{OP_IMM,0,0,0,0}, {BITS40,CPU_ALL,0,OPC(0LL),5},
 	"syscall",	{0,0,0,0,0}, {BITS40,CPU_ALL,0,OPC(0LL),5},
 
@@ -1256,10 +1263,12 @@ int parse_operand(char *p,int len,operand *op,int optype)
 	    op->type=-1;
 	    if (*p == '[') {
 	    	tree = number_expr((taddr)0);
+	    	op->type = OP_REGIND;
 	    }
 	    else {
 	    	tree=parse_expr_huge(&p);
 	    	while (is_identchar(*p)) p++;
+	    	op->type = OP_REGIND_DISP;
 	    }
 	    if(!tree)
 	      return (PO_NOMATCH);
@@ -1546,6 +1555,39 @@ static int get_reloc_type(operand *op)
   return (rtype);
 }
 
+/* Compute branch displacement field value using one of three different
+  methods.
+*/
+static thuge calc_branch_disp(thuge val, taddr pc)
+{
+	uint64_t ino;
+	uint64_t pg_offs;
+
+	printf("val=%I64x pc=%I64x\n", val.lo, pc);
+#ifdef BRANCH_PGREL        	
+	ino = (val.lo & 0x3fLL) / 5LL;
+	pg_offs = ((val.lo >> 6LL) & 0x3ffLL;
+	val.lo &= 0xffffffffffff0000LL;
+	val = hsub(val,huge_from_int(pc & 0xffffffffffff0000LL));
+	val = hshr(val,2);
+	val.lo &= 0xffffffffffffc000LL;
+	val.lo |= ino;
+	val.lo |= pg_offs << 4LL;
+#endif
+#ifdef BRANCH_INO
+	ino = (val.lo & 0x3fLL) >> 2;
+	val.lo &= 0xffffffffffffffc0LL;
+	val = hsub(val,huge_from_int(pc & 0xffffffffffffffc0LL));
+	val = hshr(val,2);
+	val.lo &= 0xfffffffffffffff0LL;
+	val.lo |= ino;
+#endif
+#ifdef BRANCH_PCREL
+	val = hsub(val,huge_from_int(pc));
+#endif
+	return (val);
+}
+
 /* create a reloc-entry when operand contains a non-constant expression */
 static thuge make_reloc(int reloctype,operand *op,section *sec,
                         taddr pc,rlist **reloclist, int *constexpr)
@@ -1583,29 +1625,10 @@ static thuge make_reloc(int reloctype,operand *op,section *sec,
       if ((reloctype == REL_PC) && !is_pc_reloc(base,sec)) {
         /* a relative branch - reloc is only needed for external reference */
 				TRACE("m");
-#ifdef BRANCH_PGREL				
-				/* Should be relative branch, let's make sure. */
-		 		if (op->format==B || op->format==BI || op->format==B2 || op->format==BL2 || op->format==BZ) {
- 					val.lo &= 0xffffffffffffc000LL;
- 					val = hsub(val,huge_from_int(pc & 0xffffffffffffc000LL));
-        	return (val);
-      	}
-#endif      	
-#ifdef BRANCH_INO
 		 		if (op->format==B || (op->format==BI && op->number > 1) || op->format==B2 || op->format==BL2 || op->format==BZ) {
-	    		ino = (val.lo & 0x3fLL) / 5LL;
-//          	hval = hsub(huge_zero(),pc);
-					//val -= pc;
-					val = hsub(val,huge_from_int(pc));
-					val = hshr(val,2);
-					val.lo &= 0xfffffffffffffff0LL;
-					val.lo |= ino;
+		 			val = calc_branch_disp(val, pc);
 					return (val);
 				}
-				else
-#endif		 				
-				val = hsub(val,huge_from_int(pc));
-	    	return (val);
       }
 
 			eval_expr(op->value,&val.lo,sec,pc);
@@ -1692,8 +1715,19 @@ static thuge make_reloc(int reloctype,operand *op,section *sec,
 		      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
                            19,13,0,0x7ffc0LL);
           break;
-        case RI:
         case RIS:
+		      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
+                         16,24,0,0xffffffLL);
+        	if (!is_nbit(addend,24)) {
+			      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
+                           16,24,5,0xffffff00000LL);
+        	}
+        	if (!is_nbit(addend,40)) {
+			      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
+                           16,24,10,0xffffff0000000000LL);
+        	}
+        	break;
+        case RI:
         case RIV:
         case RIM:
         case RIMV:
@@ -1934,36 +1968,8 @@ illreloc:
 	  if (val.lo & 0x8000000000000000LL)
 	  	val.hi = 0xFFFFFFFFFFFFFFFFLL;
 //		eval_expr_huge(op->value,&val);
-#ifdef BRANCH_PGREL 		
- 		if (op->format==B || op->format==B2 || op->format==BL2 || op->format==BZ) {
- 			if (reloctype == REL_PC) {
- 				val.lo &= 0xffffffffffffc000LL;
- 				val = hsub(val,huge_from_int(pc & 0xffffffffffffc000LL));
- 			}
- 			else if (reloctype==REL_ABS) {
- 				val.hi = 0;
- 				val.lo &= 0x3fffLL;
- 			}
- 		} 	
-		else
-#endif		
-#ifdef BRANCH_INO
- 		if (op->format==B || (op->format==BI && op->number > 1) || op->format==B2 || op->format==BL2 || op->format==BZ) {
-			ino = (val.lo & 0x3fLL) / 5LL;
-	//          	hval = hsub(huge_zero(),pc);
-			//val -= pc;
-			val = hsub(val,huge_from_int(pc));
-			val = hshr(val,2);
-			val.lo &= 0xfffffffffffffff0LL;
-			val.lo |= ino;
-		}
-		else
-#endif		 				
-		if (reloctype == REL_PC) {
-			/* a relative reference to an absolute label */
-			TRACE("n");
-			return hsub(val,huge_from_int(pc));
-		}
+ 		if (op->format==B || (op->format==BI && op->number > 1) || op->format==B2 || op->format==BL2 || op->format==BZ)
+ 			val = calc_branch_disp(val, pc);
   }
 
 	TRACE("m");
@@ -2296,6 +2302,9 @@ static size_t encode_immed_RI(instruction_buf* insn, thuge hval, int i)
 	size_t isize = (insn->opcode & 0x7f)==7LL ? 5 : 5;
 	int minbits = (insn->opcode & 0x7f)==7LL ? 15 : 21;
 
+	if ((insn->opcode & 0x7f)==51LL || (insn->opcode & 0x7f)==59LL)
+		minbits = 128;
+
 	if (hval.lo & 0x8000000000000000LL)
 		hval.hi = 0xffffffffffffffffLL;
 
@@ -2305,6 +2314,7 @@ static size_t encode_immed_RI(instruction_buf* insn, thuge hval, int i)
 		insn->imm2 = 0LL;
 		insn->imm3 = 0LL;
 	}
+#ifdef UNDEF
 	if (i==1) {
 		if (insn) {
 			insn->pfxb.size = 0;
@@ -2318,6 +2328,32 @@ static size_t encode_immed_RI(instruction_buf* insn, thuge hval, int i)
 				if (!is_nbit(hval,32)) {
 					insn->imm2 = OPC(9LL)|((hval.hi & 0xffffLL)<<23LL)|RA(51LL)|RT(51LL)|SC(2LL);	// ORI r51,r51,#imm16<<32
 					insn->imm3 = OPC(9LL)|(((hval.hi >> 16LL) & 0xffffLL)<<23LL)|RA(51LL)|RT(51LL)|SC(3LL);	// ORI r51,r51,#imm16<<48
+					insn->pfxb.size = 10;
+					if (!is_nbit(hval,64)) {
+						insn->pfxb.size = 20;
+					}
+				}
+			}
+		}
+	}
+#endif
+	if (i==1) {
+		if (insn) {
+			insn->pfxb.size = 0;
+			//insn->opcode |= 0x400000LL;	// set swap bit
+			insn->opcode = insn->opcode | ((hval.lo & 0x1fffffLL) << 19LL);
+			if (!is_nbit(hval,minbits)){//||(hval.lo&0x1FE00LL)==0x10000LL) {
+				insn->imm0 = OPC(9LL)|((hval.lo & 0x1fffffLL) << 19LL)|RA(0)|RT(51LL);	// ORI r51,r0,#imm21
+				insn->imm1 = OPC(51LL)|(((hval.lo >> 21LL) & 0x7ffffffLL)<<13LL)|RT(51LL);	// ORIM r51,#imm27<<21
+				if (!is_nbit(hval,48))
+					insn->imm2 = OPC(59LL)|(((hval.lo >> 48LL) & 0x7ffffffLL)<<13LL)|RA(51LL);	// ORI r51,#imm27<<48
+/*
+				insn->imm0 = OPC(9LL)|((hval.lo & 0xffffLL) << 23LL)|RA(0)|RT(51LL);	// ORI r51,r0,#imm16
+				insn->imm1 = OPC(9LL)|(((hval.lo >> 16LL) & 0xffffLL)<<23LL)|RA(51LL)|RT(51LL)|SC(1LL);	// ORI r51,r51,#imm16<<16
+*/
+				insn->pfxb.size = 5;
+				insn->pfxb.val = hval;
+				if (!is_nbit(hval,32)) {
 					insn->pfxb.size = 10;
 					if (!is_nbit(hval,64)) {
 						insn->pfxb.size = 20;
@@ -2360,12 +2396,22 @@ static size_t encode_direct(instruction_buf* insn, thuge val)
 	size_t isize = 5;
 
 	TRACE("endir ");
+	// We can always encode if fewer than 22 address bits are needed.
+	if (abits < 22) {
+		if (insn)
+			insn->opcode = insn->opcode | ((val.lo & 0x1fffffLL) << 19LL);
+		return (isize);
+	}
+	// Also if the address will fit into a 21 bit value.
+	if (is_nbit(val,22)) {
+		if (insn)
+			insn->opcode = insn->opcode | ((val.lo & 0x1fffffLL) << 19LL);
+		return (isize);
+	}
 //	return (encode_immed_RI(insn,val,2));
 	insn->pfxb.size = 0;
 	insn->pfxb.val = val;
-	if (abits > 13) {
-		insn->pfxb.size = 5;
-	}
+	insn->pfxb.size = 5;
 	if (abits > 32) {
 		insn->pfxb.size = 10;
 	}
@@ -2564,12 +2610,23 @@ static size_t encode_immed (
 			if (insn)
 				insn->opcode = insn->opcode | ((val.lo & 0x7fffffLL) << 9LL);
 		}
+		else if (mnemo->ext.format==RIS) {
+			if (insn) {
+				if (i==1) {
+					insn->opcode = insn->opcode | ((val.lo & 0xffffffLL) << 16LL);
+				}
+				else if (i==2) {
+					insn->opcode = insn->opcode | ((val.lo & 0x7LL) << 13LL);
+				}			
+			}
+		}
 		else if (mnemo->ext.format==RIL || mnemo->ext.format==RTDI) {
 		}
 		else if (mnemo->ext.format==REP) {
 		}
-		else if (mnemo->ext.format==RI) {
-			isize = encode_immed_RI(insn, val, i);
+		else if (mnemo->ext.format==SYNC) {
+			if (insn)
+				insn->opcode = insn->opcode | ((val.lo & 0x7ffffLL) << 8LL);
 		}
 		else {
 			/*
@@ -2652,7 +2709,17 @@ static size_t encode_immed (
 				if (insn)
 					insn->opcode = insn->opcode | BFWID(val.lo);
 		}
-		else if (mnemo->ext.format==RI || mnemo->ext.format==RIV || mnemo->ext.format==RIS || 
+		else if (mnemo->ext.format==RIS) {
+			if (insn) {
+				if (i==1) {
+					insn->opcode = insn->opcode | ((val.lo & 0xffffffLL) << 16LL);
+				}
+				else if (i==2) {
+					insn->opcode = insn->opcode | ((val.lo & 0x7LL) << 13LL);
+				}			
+			}
+		}
+		else if (mnemo->ext.format==RI || mnemo->ext.format==RIV ||
 			mnemo->ext.format==RIM || mnemo->ext.format==RIMV) {
 			isize = encode_immed_RI(insn, val, i);
 		}
@@ -2752,20 +2819,32 @@ static size_t encode_branch_B(instruction_buf* insn, operand* op, int64_t val, i
 			   instruction slot number, 4 bits, and a second field containing the
 			   block relative displacement. The value is already composed properly.
 			*/
-#ifdef BRANCH_INO
+#ifdef BRANCH_PGREL
 		case 2:
 	  	if (insn) {
   			tgt = (((val & 0x1fff0LL) >> 4LL) << 27LL);
   			insn->opcode |= tgt;
-  		}
-			if (insn) {
   			tgt = ((val & 3LL) << 11LL);
   			insn->opcode |= tgt;
   			tgt = (((val & 0xfLL) >> 2LL) << 25LL);
   			insn->opcode |= tgt;
 			}
 			break;
-#else			
+#endif
+#ifdef BRANCH_INO
+		case 2:
+	  	if (insn) {
+  			tgt = (((val & 0x1fff0LL) >> 4LL) << 27LL);
+  			insn->opcode |= tgt;
+  			tgt = ((val & 3LL) << 11LL);
+  			insn->opcode |= tgt;
+  			tgt = (((val & 0xfLL) >> 2LL) << 25LL);
+  			insn->opcode |= tgt;
+  			printf("opcode=%I64x, disp=%I64x\n", insn->opcode, val);
+			}
+			break;
+#endif
+#ifdef BRANCH_PCREL		
 		case 2:
 	  	if (insn) {
   			tgt = ((val & 3LL) << 11LL);
@@ -3145,15 +3224,40 @@ static size_t encode_regind(
 			insn->opcode |= (val.lo & 0x1fffffLL) << 19LL;
 		}
 	}
+	return (isize);
+}
+
+static size_t encode_regind_disp(
+	instruction *ip,
+	instruction_buf* insn,
+	operand* op,
+	thuge val,
+	int constexpr,
+	int i,
+	int pass
+)
+{
+	size_t isize = 5;
+
+	TRACE("Etho5:");
+	if (insn) {
+		if (i==0)
+			insn->opcode |= (RT(op->basereg));
+		else if (i==1) {
+			insn->opcode |= (RA(op->basereg));
+			insn->opcode |= (val.lo & 0x1fffffLL) << 19LL;
+		}
+	}
 	if (pass==1)
 		ip->ext.const_expr = constexpr;
 	if ((constexpr && pass==1) || ip->ext.const_expr) {
-		if (1 || val.lo != 0LL || val.hi != 0LL) {
+		if (op->value || val.lo != 0LL || val.hi != 0LL) {
 			encode_ipfx(&insn->pfxb,val,1);
 		}
 	}
 	else {
-		encode_ipfx(&insn->pfxb,val,1);
+		if (op->value)
+			encode_ipfx(&insn->pfxb,val,1);
 	}
 	return (isize);
 }
@@ -3292,6 +3396,7 @@ size_t encode_qupls_instruction(instruction *ip,section *sec,taddr pc,
 {
   mnemonic *mnemo = &mnemonics[ip->code];
   size_t isize = 5;
+  static taddr prev_pc = 0;
   int i;
   operand op;
 	int constexpr;
@@ -3302,6 +3407,7 @@ size_t encode_qupls_instruction(instruction *ip,section *sec,taddr pc,
 	char ext;
 	uint64_t szcode;
 	int setsz = 0;
+	int called_makereloc = 0;
 
 	TRACE("Eto:");
 	if (modifier1)
@@ -3330,6 +3436,10 @@ size_t encode_qupls_instruction(instruction *ip,section *sec,taddr pc,
   	insn->size = mnemo->ext.len;
   	insn->short_opcode = mnemo->ext.short_opcode;
   }
+	if (mnemo->ext.format==PADI) {
+		isize = 64LL - (pc & 0x3fLL);
+		insn->size = isize;
+	}
 //	encode_qualifiers(ip, insn);
 
 
@@ -3374,60 +3484,22 @@ size_t encode_qupls_instruction(instruction *ip,section *sec,taddr pc,
     }
 	*/
 		constexpr = 1;
+		called_makereloc = 0;
     if ((reloctype = get_reloc_type(&op)) != REL_NONE) {
       if (db != NULL) {
         val = make_reloc(reloctype,&op,sec,pc,&db->relocs,&constexpr);
+        called_makereloc = 1;
       }
       else {
       	val.lo = val.hi = 0;
         if (!eval_expr(op.value,&val.lo,sec,pc)) {
         	if (val.lo & 0x8000000000000000LL)
         		val.hi = 0xFFFFFFFFFFFFFFFFLL;
-#ifdef BRANCH_PGREL        	
-        	if (is_branch_target_oper(mnemo, i)) {
-	          if (reloctype == REL_PC) {
-	//          	hval = hsub(huge_zero(),pc);
-							//val -= pc;
-							val.lo &= 0xffffffffffffc000LL;
-							val = hsub(val,huge_from_int(pc & 0xffffffffffffc000LL));
-						}
-			 			else if (reloctype==REL_ABS) {
-			 				val.hi = 0;
-			 				val.lo &= 0x3fffLL;
-			 			}
-		 			}
-		 			else
-#endif
-#ifdef BRANCH_INO
         	if (is_branch_target_oper(mnemo, i))
         	{
-        		uint64_t ino;
-//						eval_expr_huge(op.value,&val);
-        		ino = (val.lo & 0x3fLL) / 5LL;
-						//val = hsub(val,huge_from_int(pc));
-	          if (reloctype == REL_PC) {
-	//          	hval = hsub(huge_zero(),pc);
-							//val -= pc;
-							val = hsub(val,huge_from_int(pc));
-							val = hshr(val,2);
-							val.lo &= 0xfffffffffffffff0LL;
-							val.lo |= ino;
-						}
-			 			else if (reloctype==REL_ABS) {
-			 				val.hi = 0LL;
-			 				val.lo = val.lo & 0x3fLL;
-			 				val.lo = val.lo / 5LL;
-			 			}
+	          if (reloctype == REL_PC)
+	          	val = calc_branch_disp(val, pc);
 		 			}
-		 			else
-#endif		 				
-
-		 			if (is_branch_target_oper(mnemo,i)) {
-	          if (reloctype == REL_PC) {
-							val = hsub(val,huge_from_int(pc));
-						}		 			
-		 			}
-		 			
         }
         else {
         	if (val.lo & 0x8000000000000000LL)
@@ -3447,23 +3519,10 @@ size_t encode_qupls_instruction(instruction *ip,section *sec,taddr pc,
       }
     }
   	if (is_branch_target_oper(mnemo, i)) {
-  		uint64_t ino;
 //						eval_expr_huge(op.value,&val);
-  		ino = (val.lo & 0x3fLL) / 5LL;
 			//val = hsub(val,huge_from_int(pc));
-      if (reloctype == REL_PC) {
-//          	hval = hsub(huge_zero(),pc);
-				//val -= pc;
-				val = hsub(val,huge_from_int(pc));
-				val = hshr(val,2);
-				val.lo &= 0xfffffffffffffff0LL;
-				val.lo |= ino;
-			}
- 			else if (reloctype==REL_ABS) {
- 				val.hi = 0LL;
- 				val.lo = val.lo & 0x3fLL;
- 				val.lo = val.lo / 5LL;
- 			}
+      if (reloctype == REL_PC && !called_makereloc)
+      	val = calc_branch_disp(val, pc);
 //			val = hsub(wval,huge_from_int(pc));
 		}
 
@@ -3552,6 +3611,8 @@ size_t encode_qupls_instruction(instruction *ip,section *sec,taddr pc,
     }
     else if ((mnemo->operand_type[i]&OP_REGIND)==OP_REGIND && op.type==OP_REGIND)
 			isize = encode_regind(ip, insn, &op, val, constexpr, i, db==NULL);
+    else if ((mnemo->operand_type[i]&OP_REGIND_DISP)==OP_REGIND_DISP && op.type==OP_REGIND_DISP)
+			isize = encode_regind_disp(ip, insn, &op, val, constexpr, i, db==NULL);
     else if ((mnemo->operand_type[i]&OP_SCNDX)==OP_SCNDX && op.type==OP_SCNDX)
 			isize = encode_scndx(ip, insn, &op, val, constexpr, i, db==NULL);
     else if ((mnemo->operand_type[i]&OP_IND_SCNDX)==OP_IND_SCNDX && op.type==OP_IND_SCNDX)
@@ -3571,10 +3632,111 @@ static int will_fit_in_block(taddr pc, size_t sz)
 	return ((npc & ~0x3fLL)==(pc & ~0x3fLL)) && ((npc & 0x3fLL) <= 60LL);
 }
 
+static void convert_opcode_to_r3(instruction_buf* insn, int64_t* pOpcode)
+{
+	int64_t op;
+
+	switch(insn->opcode & 0x3fLL) {
+	case 4LL:	// ADDI
+		op = insn->opcode & 0x3ff80LL;	// Keep Ra,Rt
+		op |= OPC(2LL);		// R3 opcode
+		op |= RB(51LL);
+		op |= R3FUNC(4LL);
+		break;
+	case 8LL:	// ANDI
+		op = insn->opcode & 0x3ff80LL;	// Keep Ra,Rt
+		op |= OPC(2LL);		// R3 opcode
+		op |= RB(51LL);
+		op |= R3FUNC(8LL);
+		break;
+	case 9LL:	// ORI
+		op = insn->opcode & 0x3ff80LL;	// Keep Ra,Rt
+		op |= OPC(2LL);		// R3 opcode
+		op |= RB(51LL);
+		op |= R3FUNC(9LL);
+		break;
+	case 10LL:	// EORI
+		op = insn->opcode & 0x3ff80LL;	// Keep Ra,Rt
+		op |= OPC(2LL);		// R3 opcode
+		op |= RB(51LL);
+		op |= R3FUNC(10LL);
+		break;
+	// Loads
+	case 64LL:	// LDB
+		op = insn->opcode & 0x3ff80LL;	// Keep Ra,Rt
+		op |= OPC(79LL);		// LD indexed opcode
+		op |= RB(51LL);
+		op |= FUNC5(0LL);
+		break;
+	case 65LL:	// LDBU
+		op = insn->opcode & 0x3ff80LL;	// Keep Ra,Rt
+		op |= OPC(79LL);		// LD indexed opcode
+		op |= RB(51LL);
+		op |= FUNC5(1LL);
+		break;
+	case 66LL:	// LDW
+		op = insn->opcode & 0x3ff80LL;	// Keep Ra,Rt
+		op |= OPC(79LL);		// LD indexed opcode
+		op |= RB(51LL);
+		op |= FUNC5(2LL);
+		break;
+	case 67LL:	// LDWU
+		op = insn->opcode & 0x3ff80LL;	// Keep Ra,Rt
+		op |= OPC(79LL);		// LD indexed opcode
+		op |= RB(51LL);
+		op |= FUNC5(3LL);
+		break;
+	case 68LL:	// LDT
+		op = insn->opcode & 0x3ff80LL;	// Keep Ra,Rt
+		op |= OPC(79LL);		// LD indexed opcode
+		op |= RB(51LL);
+		op |= FUNC5(4LL);
+		break;
+	case 69LL:	// LDTU
+		op = insn->opcode & 0x3ff80LL;	// Keep Ra,Rt
+		op |= OPC(79LL);		// LD indexed opcode
+		op |= RB(51LL);
+		op |= FUNC5(5LL);
+		break;
+	case 70LL:	// LDO
+		op = insn->opcode & 0x3ff80LL;	// Keep Ra,Rt
+		op |= OPC(79LL);		// LD indexed opcode
+		op |= RB(51LL);
+		op |= FUNC5(6LL);
+		break;
+	// Stores
+	case 80LL:	// STB
+		op = insn->opcode & 0x3ff80LL;	// Keep Ra,Rt
+		op |= OPC(87LL);		// ST indexed opcode
+		op |= RB(51LL);
+		op |= FUNC5(0LL);
+		break;
+	case 81LL:	// STW
+		op = insn->opcode & 0x3ff80LL;	// Keep Ra,Rt
+		op |= OPC(87LL);		// ST indexed opcode
+		op |= RB(51LL);
+		op |= FUNC5(1LL);
+		break;
+	case 82LL:	// STT
+		op = insn->opcode & 0x3ff80LL;	// Keep Ra,Rt
+		op |= OPC(87LL);		// ST indexed opcode
+		op |= RB(51LL);
+		op |= FUNC5(2LL);
+		break;
+	case 83LL:	// STO
+		op = insn->opcode & 0x3ff80LL;	// Keep Ra,Rt
+		op |= OPC(87LL);		// ST indexed opcode
+		op |= RB(51LL);
+		op |= FUNC5(3LL);
+		break;
+	}
+}
+
 /* Calculate the size of the current instruction; must be identical
    to the data created by eval_instruction. */
 size_t instruction_size(instruction *ip,section *sec,taddr pc)
 {
+  mnemonic *mnemo = &mnemonics[ip->code];
   uint64_t modifier1, modifier2;
   instruction_buf insn;
 	taddr apc;
@@ -3590,7 +3752,7 @@ size_t instruction_size(instruction *ip,section *sec,taddr pc)
 #ifdef SUPPORT_PFX_IMM
 	sz = sz + insn.pfxa.size + insn.pfxb.size + insn.pfxc.size;
 #endif
- 	if (!will_fit_in_block(pc, sz))
+ 	if (!will_fit_in_block(pc, sz) && !mnemo->ext.format==PADI)
 	{
 		apc = (pc + 64LL) & ~0x3fLL;		// align IP to next block
 		sz = apc - pc + sz;
@@ -3658,10 +3820,30 @@ static unsigned char* encode_pfx(unsigned char *d, postfix_buf* pfx, uint8_t whi
 	return (d);
 }
 
+static char* out_si_imm(taddr pc, taddr* pco, int64_t imm, char *d)
+{
+	if (will_fit_in_block(pc,5)) {
+		d = setval(0,d,5,imm);
+		qupls_insn_count++;
+		pc += 5;
+	}
+	else {
+		d = setval(0,d,4,0x00003cff);
+		d = setval(0,d,5,imm);
+		qupls_insn_count+=2;
+		pc &= 0xffffffffffffffc0LL;
+		pc += 64LL;
+	}
+	if (pco)
+		*pco = pc;
+	return (d);
+}
+
 /* Convert an instruction into a DATA atom including relocations,
    when necessary. */
 dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
 {
+  mnemonic *mnemo = &mnemonics[ip->code];
   dblock *db = new_dblock();
   uint64_t modifier1, modifier2, pfxndx;
   instruction_buf insn;
@@ -3676,8 +3858,11 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
   char* trailer = NULL;
 	static int icnt = 0;
 	static int grpcnt = 0;
+	static taddr prev_pc = 0;
 	int will_fit = 1;
 	int has_imm = 0;
+	int pc_wrapped = 0;
+	int block_changed = 0;
 
 	TRACE("ei ");
 	modifier1 = 0;
@@ -3725,14 +3910,42 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
     unsigned char *d2;
     int i;
 #ifdef SUPPORT_IBH
+		// did the block change?
+		if ((prev_pc & 0xffffffffffffffc0LL) != (pc & 0xffffffffffffffc0LL))
+			block_changed = 1;
 		// If the instruction will fit into the block, things are easy and 
 		// straight-forward.    
-  	if (will_fit = will_fit_in_block(pc, final_sz)) {
+  	if (will_fit = (will_fit_in_block(pc, final_sz) || mnemo->ext.format==PADI)) {
+  		//if (block_changed)
+ 			//	final_sz += pc - prev_pc + final_sz;
+			/*
+  		if ((pc & 0x3f) == 1LL) {
+  			final_sz += 4;
+  			pc_wrapped = 1;
+  			pc &= 0xffffffffffffffc0LL;
+  		}
+  		*/
   		d = db->data = mymalloc(final_sz);
+  		/*
+  		if (block_changed) {
+  			while ((prev_pc & 0x3fLL) < 0x3cLL) {
+  				d = setval(0,d,1,0xffL);
+  				prev_pc++;
+  			}
+  			trailer = d;
+  			d += 4;
+  		}
+  		*/
+  		/*
+  		if (pc_wrapped) {
+  			trailer = d;
+  			d += 4;
+  		}
+  		*/
 	    db->size = final_sz;
-  		last_pc = pc;
 			memset(&insn,0,sizeof(insn));
   		encode_qupls_instruction(ip,sec,pc,&modifier1,&modifier2,&insn,db);
+  		last_pc = pc;
   	}
   	// Won't fit?
   	// Move instruction to the next block. This entails aligning the IP to the
@@ -3771,9 +3984,24 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
 	    d = db->data + bytes_remaining + 4LL;		// Now point to instruction area.
   		trailer = db->data + bytes_remaining;		// and get pointer to trailer
   	}
+  	if (mnemo->ext.format==PADI) {
+  		trailer = d + db->size - 4;
+  	}
+#else
+#if SUPPORT_SI_IMM
+		if (will_fit_in_block(pc,final_sz)) {
+			d = db->data = mymalloc(final_sz);
+  	  db->size = final_sz;	
+		}
+		else {
+			final_sz += 4LL;	// add room for block trailer
+			d = db->data = mymalloc(final_sz);
+  	  db->size = final_sz;	
+		}
 #else
 		d = db->data = mymalloc(final_sz);
     db->size = final_sz;
+#endif
 #endif
 		insn_sizes2[sz2ndx] = db->size;
 /*
@@ -3802,32 +4030,27 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
 	  }
 	  d2 = d;
 #ifdef SUPPORT_SI_IMM
-	  if (insn.imm0) {
-	    d = setval(0,d,5,insn.imm0);
-   		qupls_insn_count++;
-  	}
-	  if (insn.imm1) {
-	    d = setval(0,d,5,insn.imm1);
-	   	qupls_insn_count++;
-	  }
-	  if (insn.imm2) {
-	    d = setval(0,d,5,insn.imm2);
-	   	qupls_insn_count++;
-	  }
-	  if (insn.imm3) {
-	    d = setval(0,d,5,insn.imm3);
-	   	qupls_insn_count++;
-	  }
+	  if (insn.imm0)
+			d = out_si_imm(pc, &pc, insn.imm0, d);
+	  if (insn.imm1)
+			d = out_si_imm(pc, &pc, insn.imm1, d);
+	 	if (insn.imm2)
+			d = out_si_imm(pc, &pc, insn.imm2, d);
+	  if (insn.imm3)
+			d = out_si_imm(pc, &pc, insn.imm3, d);
 	  if (has_imm) {
-	  	insn.opcode &= 0x3ffffLL;
-	  	insn.opcode |= RC(51LL)|0x8000000000;
+	  	convert_opcode_to_r3(&insn, &insn.opcode);
+	  	//insn.opcode &= 0x3ffffLL;
+	  	//insn.opcode |= RC(51LL)|0x8000000000;
 	  }
-#endif
+		d = out_si_imm(pc, &pc, insn.opcode, d);
+#else		
 		// Finally, output the code bytes.
     d = setval(0,d,insn.size,insn.opcode);
 //    d = setval(0,d,5,insn.opcode);
 		pc += insn.size;	// should be 5
    	qupls_insn_count++;
+#endif
    	// We count postfixes as instructions. It helps make the code density
    	// statistic look better, and they roughly correspond to additional
    	// instructions, although they are processed as a unit with the 
@@ -3855,14 +4078,14 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
 		*/
 		sz2ndx++;
 		/* Finally, output the trailer (header) once an instruction will not fit at
-		   the end of a block.
+		   the end of a block. The trailer is encoded as a debug breakpoint.
 		*/
 #ifdef SUPPORT_IBH
 		icnt++;
-		if (!will_fit) {
+		if (!will_fit || mnemo->ext.format==PADI) {
 			icnt = 0;
 			grpcnt = 0;
-			trailer_val = ((last_pc & 0x3fLL) << 8LL) | 0xffLL;
+			trailer_val = ((last_pc & 0x3fLL) << 16LL) | OPC(0LL) | (33LL << 7LL);
 			if (trailer)
   			setval(0,trailer,4,trailer_val);
   		trailer_val = 0;
@@ -3881,6 +4104,7 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
 #endif		
     qupls_byte_count += db->size;	/* and more stats */
   }
+	prev_pc = pc;
   return (db);
 }
 

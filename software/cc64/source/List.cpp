@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2012-2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -151,12 +151,16 @@ void put_ty(TYP *tp, int isco)
                 }
 }
 
-void list_var(Symbol *sp, int i)
+void list_var(Symbol *sp, int i, int segment)
 {
 	TypeArray *ta;
 	Function *fn;
-	
+
 		int     j;
+
+    if (sp->segment != (e_sg)segment)
+      return;
+
         for(j = i; j; --j)
                 lfs.printf("    ");
 		if (sp->tp)
@@ -241,22 +245,29 @@ void ListTable(TABLE *t, int i)
 {
 	Symbol *sp;
 	int nn;
+  int segment;
 
 	if (t==&gsyms[0]) {
-		for (nn = 0; nn < 257; nn++) {
-			t = &gsyms[nn];
-			sp = t->headp;
-			while(sp != nullptr) {
-				list_var(sp,i);
-				sp = sp->nextp;
+    for (segment = noseg; segment < lastseg; segment = segment + 1) {
+      for (nn = 0; nn < 257; nn++) {
+        t = &gsyms[nn];
+        sp = t->headp;
+        while (sp != nullptr) {
+          list_var(sp, i, segment);
+          sp = sp->nextp;
+        }
       }
     }
 	}
 	else {
-		sp = t->headp;
-		while(sp != nullptr) {
-			list_var(sp,i);
-			sp = sp->nextp;
+    for (segment = noseg; segment < lastseg; segment = segment + 1) {
+      sp = t->headp;
+      while (sp != nullptr) {
+        if (sp->storage_class != sc_global) {
+          list_var(sp, i, segment);
+          sp = sp->nextp;
+        }
+      }
     }
 	}
 }

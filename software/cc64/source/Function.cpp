@@ -256,6 +256,7 @@ void Function::GenerateBody(bool force_inline)
 			IsInline = true;
 		PeepOpt();
 		FlushPeep(ofs);
+		ofs.printf("\tpadi\n");
 		switch (syntax) {
 		case MOT:
 			break;
@@ -332,7 +333,7 @@ void Function::DoFuncptrAssign(Function *sp)
 //		sp->sym->initexp->p[0] = ep1;
 //	else
 //		sp->sym->initexp = ep1;
-	doinit(sp->sym);
+	doinit(sp->sym, false);
 }
 
 /*
@@ -464,7 +465,7 @@ int Function::Parse(bool local)
 			node2 = makesnode(en_cnacon, new std::string(*UnknownFuncName()), new std::string(*UnknownFuncName()), stringlit((char*)UnknownFuncName()->c_str()));
 			node = makenode(en_assign, node, node2);
 			sp->sym->initexp = makenode(en_void, nullptr, node);
-			doinit(sp->sym);
+			doinit(sp->sym, false);
 			goto j2;
 		}
 		sp->Init();
@@ -1095,6 +1096,7 @@ void Function::Generate()
 	ENODE* node;
 	extern bool first_dataseg;
 	first_dataseg = true;
+	ZeroMemory(seg_aligned, sizeof(seg_aligned));
 
 	if (opt_vreg)
 		cpu.SetVirtualRegisters();

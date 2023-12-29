@@ -182,7 +182,7 @@ enum e_rc {
 	rc_none, rc_int, rc_float, rc_posit, rc_cmp
 };
 
-enum e_sg { noseg, codeseg, dataseg, stackseg, bssseg, idataseg, tlsseg, rodataseg };
+enum e_sg { noseg, codeseg, dataseg, stackseg, bssseg, idataseg, tlsseg, rodataseg, lastseg };
 
 enum e_op {
 	op_none,
@@ -297,7 +297,7 @@ enum e_op {
 	op_vfadd, op_vfadds, op_vfsub,
 	op_lda,
 	// Q+
-	op_orm, op_orh,
+	op_adds, op_ors,
 	// Built in functions
 	op_abs, op_mulf, op_bytendx, op_zxw, op_zxt, op_bmap,
 	op_wydendx, op_sync,

@@ -1871,9 +1871,9 @@ void QuplsCodeGenerator::GenerateLoadConst(Operand* ap1, Operand* ap2)
 				if (ap1->offset) {
 					ip = GenerateDiadic(cpu.ldi_op, 0, ap2, MakeImmediate(ap1->offset->i128.low & 0xfffffLL));
 					if (!ap1->offset->i128.IsNBit(20))
-						GenerateDiadic(op_orm, 0, ap2, MakeImmediate((ap1->offset->i128.low >> 20LL) & 0xffffffLL));
+						GenerateTriadic(op_ors, 0, ap2, MakeImmediate((ap1->offset->i128.low >> 20LL) & 0xffffffLL), MakeImmediate(1));
 					if (!ap1->offset->i128.IsNBit(44))
-						GenerateDiadic(op_orh, 0, ap2, MakeImmediate((ap1->offset->i128.low >> 44LL) & 0xffffffLL));
+						GenerateTriadic(op_ors, 0, ap2, MakeImmediate((ap1->offset->i128.low >> 44LL) & 0xffffffLL), MakeImmediate(2));
 					/*
 					ip = GenerateDiadic(cpu.ldi_op, 0, ap2, MakeImmediate(ap1->offset->i128.low & 0xffffLL));
 					if (!ap1->offset->i128.IsNBit(16))

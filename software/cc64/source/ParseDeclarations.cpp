@@ -2012,7 +2012,7 @@ void Declaration::ParseAssign(Symbol *sp)
 	else {
 		if (sp) {
 			if (sp->tp->isArray && !sp->IsExternal) {
-				doinit(sp);
+				doinit(sp, true);
 				return;
 			}
 		}
@@ -2382,7 +2382,7 @@ int Declaration::ParseFunction(TABLE* table, Symbol* sp, Symbol* parent, e_sc al
 		sp->tp->type != bt_func && sp->tp->type != bt_ifunc && sp->storage_class != sc_typedef) {
 		//(atan)()
 		if (lastst != closepa && !sp->IsExternal)
-			doinit(sp);
+			doinit(sp, false);
 	}
 	return (0);
 }
@@ -2824,12 +2824,17 @@ void GlobalDeclaration::Parse()
 
 		case id:
 			lc_static += declare(NULL, &gsyms[0], sc_global, lc_static, bt_struct, &symo, false, 0);
-			if (symo)
+			if (symo) {
 				if (symo->fi) {
 					symo->fi->inline_threshold = inline_threshold;
 					symo->fi->IsInline = inline_threshold > 0 && !symo->fi->IsPrototype;
 					symo->fi->depth = 0;
 				}
+				else {
+					if (symo->segment == noseg)
+						symo->segment = bssseg;
+				}
+			}
 			inline_threshold = compiler.autoInline;
 			isCoroutine = false;
 			break;
@@ -2892,12 +2897,19 @@ void GlobalDeclaration::Parse()
     case kw_static:
       NextToken();
 			lc_static += declare(NULL,&gsyms[0],sc_static,lc_static,bt_struct, &symo, false, 0);
-			if (symo)
+			if (symo) {
 				if (symo->fi) {
 					symo->fi->inline_threshold = inline_threshold;
 					symo->fi->IsInline = inline_threshold > 0 && !symo->fi->IsPrototype;
 					symo->fi->depth = 0;
 				}
+				// Not a function, must be a var.
+				else {
+					// If we don't know the segment assume bss.
+					if (symo->segment == noseg)
+						symo->segment = bssseg;
+				}
+			}
 			inline_threshold = compiler.autoInline;
 			isCoroutine = false;
 			break;

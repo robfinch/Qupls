@@ -1168,7 +1168,7 @@ int64_t Symbol::InitializePointerToUnion(txtoStream& tfs, ENODE* rootnode, TYP* 
 	if (sp) {
 		lbl = *sp->name;
 		lbl.append("_data");
-		put_label(tfs, (int)sp->value.i, (char*)lbl.c_str(), GetPrivateNamespace(), 'D', tp->size);
+		put_label(tfs, (int)sp->value.i, (char*)lbl.c_str(), GetPrivateNamespace(), 'D', tp->size, sp->segment);
 	}
 	return (nbytes);
 }

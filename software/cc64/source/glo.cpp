@@ -241,6 +241,7 @@ Function *currentFn = nullptr;
 int callsFn = FALSE;
 int stmtdepth = 0;
 
+int seg_aligned[20];
 char nmspace[20][100];
 int bsave_mask;
 short int loop_active;

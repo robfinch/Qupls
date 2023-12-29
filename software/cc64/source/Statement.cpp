@@ -264,7 +264,7 @@ Statement *Statement::ParseFirstcall()
 	sp->tp = &stdbyte;
 	st = lastst;
 	lastst = kw_firstcall;       // fake out doinit()
-	doinit(sp);
+	doinit(sp, false);
 	lastst = st;
 	// doinit should set realname
 	snp->fcname = my_strdup(sp->realname);

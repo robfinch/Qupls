@@ -1,4 +1,5 @@
 /* (c) in 2021-2023 by Robert Finch */
+#define BITSPERBYTE 8
 #define FLOAT_PARSER 1
 #include "hugeint.h"
 
@@ -70,6 +71,7 @@ typedef struct {
 #define OP_VREG						0x02000000L
 #define OP_IMM7						0x04000000L
 #define OP_CAREGIND				0x08000000L
+#define OP_REGIND_DISP		0x10000000L
 
 #define OP_NEXT			0x20000000L
 #define OP_NEXTREG	0x10000000L
@@ -230,6 +232,8 @@ typedef struct {
 #define ATOM		67
 #define BI			68
 #define LDI			69
+#define SYNC		70
+#define PADI		71
 
 #define OPC(x)	(((x) & 0x7fLL))
 #define LK(x)		(((x) & 1LL) << 7LL)
@@ -242,7 +246,8 @@ typedef struct {
 #define SC(x)			(((x) & 7LL) << 19LL)
 #define SHFUNC(x)	(((x) & 0xf) << 28LL)
 #define R1FUNC(x)	(((x) & 0x1f) << 19LL)
-#define R2FUNC(x)	(((x) & 0x3fLL) << 26LL)
+#define R2FUNC(x)	(((x) & 0x3fLL) << 33LL)
+#define R3FUNC(x)	(((x) & 0x3fLL) << 33LL)
 #define LSFUNC(x)	(((x) & 0x1fLL) << 30LL)
 #define FMT2(x)		(((x) & 3LL) << 38LL)
 #define FMT3(x)		(((x) & 7LL) << 37LL)

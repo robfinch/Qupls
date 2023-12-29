@@ -195,6 +195,8 @@ static std::string GetSegmentDecl(Symbol* sp)
 				decl.append("\t.bss\n");
 			else if (curseg == tlsseg)
 				decl.append("\t.tls\n");
+			else if (curseg == noseg)
+				decl.append("\t.bss\n");
 		}
 	}
 	return (decl);
@@ -355,7 +357,7 @@ static void SetDefaultAlign(Symbol* sp, e_sg oseg)
 	}
 }
 
-void doinit(Symbol *sp)
+void doinit(Symbol *sp, bool gbls)
 {
 	static bool first = true;
 	static char workbuf[5000];
@@ -423,18 +425,20 @@ void doinit(Symbol *sp)
 	// Initialize constants into read-only data segment. Constants may be placed
 	// in ROM along with code.
 	if (sp->isConst)
-    oseg = rodataseg;
+		oseg = rodataseg;
 
 	slptr = lptr;
 	// Spit out an alignment pseudo-op
-	if (IsFuncptrAssign(sp))
-		SetFuncPointerAlign(sp, oseg);
-	else if (sp->storage_class == sc_thread)
-		SetThreadAlign(sp, oseg);
-	else if (sp->storage_class == sc_static || lastst==assign)
-		SetStaticAlign(sp, oseg);
-	else
-		SetDefaultAlign(sp, oseg);
+	if (sp->storage_class != sc_global || gbls) {
+		if (IsFuncptrAssign(sp))
+			SetFuncPointerAlign(sp, oseg);
+		else if (sp->storage_class == sc_thread)
+			SetThreadAlign(sp, oseg);
+		else if (sp->storage_class == sc_static || lastst == assign)
+			SetStaticAlign(sp, oseg);
+		else
+			SetDefaultAlign(sp, oseg);
+	}
 	
 	oseg = (e_sg)curseg;
 
@@ -443,7 +447,7 @@ void doinit(Symbol *sp)
 		aligndecl = "";
 		objdecl = "";
 		skipfmtword = "";// GetSkipFormatWord(sp);
-		sp->realname = my_strdup(put_label(ofs,(int)sp->value.i, (char *)sp->name->c_str(), GetPrivateNamespace(), 'D', sp->tp->size));
+		sp->realname = my_strdup(put_label(ofs,(int)sp->value.i, (char *)sp->name->c_str(), GetPrivateNamespace(), 'D', sp->tp->size, sp->segment));
 		output_name = sp->realname;
 	}
 	else {

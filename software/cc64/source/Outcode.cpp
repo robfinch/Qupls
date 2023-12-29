@@ -56,6 +56,7 @@ Instruction opl[358] =
 { "#string", op_string },
 { "abs", op_abs,2,1,false,am_reg,am_reg,0,0 },
 { "add",op_add,1,1,false,am_reg,am_reg,am_reg|am_imm,0 },
+{ "adds",op_adds,1,1,false,am_reg,am_imm,am_imm, 0 },
 { "addu", op_addu,1,1 },
 { "and",op_and,1,1,false,am_reg,am_reg,am_reg|am_imm,0 },
 { "andcm",op_andcm,1,1,false,am_reg,am_reg,am_reg,0 },
@@ -272,8 +273,7 @@ Instruction opl[358] =
 { "not",op_not,2,1, false,am_reg, am_reg,0,0 },
 { "nr", op_nr },
 { "or",op_or,1,1,false,am_reg,am_reg,am_reg | am_imm,0 },
-{ "orh",op_orh,1,1,false,am_reg,am_reg | am_imm,0, 0 },
-{ "orm",op_orm,1,1,false,am_reg,am_reg | am_imm,0, 0 },
+{ "ors",op_ors,1,1,false,am_reg,am_imm,am_imm, 0 },
 { "orcm",op_orcm,1,1,false,am_reg,am_reg,am_reg,0 },
 { "orf",op_orf,1,1,false,am_reg,am_reg,am_reg | am_imm,0 },
 { "padd", op_padd, 6, 1, false, am_reg, am_reg, am_reg, 0 },
@@ -602,10 +602,12 @@ char *put_labels(txtoStream& tfs, char *buf)
 	return (buf);
 }
 
-char *put_label(txtoStream& tfs, int lab, char *nm, char *ns, char d, int sz)
+char *put_label(txtoStream& tfs, int lab, char *nm, char *ns, char d, int sz, int segment)
 {
   static char buf[500];
 
+	if (d != 'C')
+		seg(ofs, segment, 14);
 	if (ns == nullptr)
 		ns = (char *)"";
 	if (lab < 0) {
@@ -665,8 +667,8 @@ char *put_label(txtoStream& tfs, int lab, char *nm, char *ns, char d, int sz)
 	return (buf);
 }
 
-char* put_label(txtoStream& tfs, int lab, const char* nm, const char* ns, char d, int sz) {
-	return (put_label(tfs, lab, (char*)nm, (char*)ns, d, sz));
+char* put_label(txtoStream& tfs, int lab, const char* nm, const char* ns, char d, int sz, int segment) {
+	return (put_label(tfs, lab, (char*)nm, (char*)ns, d, sz, segment));
 }
 
 
@@ -1249,21 +1251,27 @@ void dumplits(txtoStream& tfs)
 	lp = numeric_tab;
 	struct clit* ct;
 	Float128* qt;
+	bool roseg_out = false;
 
 	dfs.printf("<Dumplits>\n");
-	roseg(tfs);
 	if (compiler.casetab) {
+		roseg(tfs);
+		roseg_out = true;
 		nl(tfs);
 		align(tfs,8);
 		nl(tfs);
 	}
 	for (ct = compiler.casetab; ct; ct = ct->next) {
+		if (roseg_out == false) {
+			roseg(tfs);
+			roseg_out = true;
+		}
 		nl(tfs);
 		if (ct->pass == 2) {
 #ifdef LOCAL_LABELS
 			put_label(tfs, casetab->label, "", ""/*casetab->nmspace*/, 'R', casetab->num * 4);// 'D');
 #else
-			put_label(tfs, ct->label, "", ct->nmspace, 'R', ct->num * 4);// 'D');
+			put_label(tfs, ct->label, "", ct->nmspace, 'R', ct->num * 4, curseg);// 'D');
 #endif
 		}
 		for (nn = 0; nn < ct->num; nn++) {
@@ -1273,11 +1281,19 @@ void dumplits(txtoStream& tfs)
 	}
 
 	if (numeric_tab) {
+		if (roseg_out == false) {
+			roseg(tfs);
+			roseg_out = true;
+		}
 		nl(tfs);
 		align(tfs,8);
 		nl(tfs);
 	}
 	while (lp != nullptr) {
+		if (roseg_out == false) {
+			roseg(tfs);
+			roseg_out = true;
+		}
 		nl(tfs);
 		if (DataLabels[lp->label])
 			switch (lp->typ) {
@@ -1286,7 +1302,7 @@ void dumplits(txtoStream& tfs)
 #ifdef LOCAL_LABELS
 				put_label(tfs, lp->label, "", ""/*lp->nmspace*/, 'D', sizeOfFPD);
 #else
-				put_label(tfs, lp->label, "", lp->nmspace, 'D', sizeOfFPD);
+				put_label(tfs, lp->label, "", lp->nmspace, 'D', sizeOfFPD, curseg);
 #endif
 				if (syntax == MOT)
 					tfs.printf("\tdc.l\t");
@@ -1300,7 +1316,7 @@ void dumplits(txtoStream& tfs)
 #ifdef LOCAL_LABELS
 				put_label(tfs, lp->label, "", ""/*lp->nmspace*/, 'D', sizeOfFPQ);
 #else
-				put_label(tfs, lp->label, "", lp->nmspace, 'D', sizeOfFPQ);
+				put_label(tfs, lp->label, "", lp->nmspace, 'D', sizeOfFPQ, curseg);
 #endif
 				if (syntax == MOT)
 					tfs.printf("\tdc.l\t");
@@ -1316,7 +1332,7 @@ void dumplits(txtoStream& tfs)
 #ifdef LOCAL_LABELS
 					put_label(tfs, lp->label, "", ""/*lp->nmspace*/, 'D', 2);
 #else
-					put_label(tfs, lp->label, "", lp->nmspace, 'D', 2);
+					put_label(tfs, lp->label, "", lp->nmspace, 'D', 2, curseg);
 #endif
 					if (syntax == MOT)
 						tfs.printf("\tdc.w\t");
@@ -1329,7 +1345,7 @@ void dumplits(txtoStream& tfs)
 #ifdef LOCAL_LABELS
 					put_label(tfs, lp->label, "", ""/*lp->nmspace*/, 'D', 4);
 #else
-					put_label(tfs, lp->label, "", lp->nmspace, 'D', 4);
+					put_label(tfs, lp->label, "", lp->nmspace, 'D', 4, curseg);
 #endif
 					if (syntax == MOT)
 						tfs.printf("\tdc.l\t");
@@ -1342,7 +1358,7 @@ void dumplits(txtoStream& tfs)
 #ifdef LOCAL_LABELS
 					put_label(tfs, lp->label, "", ""/*lp->nmspace*/, 'D', 8);
 #else
-					put_label(tfs, lp->label, "", lp->nmspace, 'D', 8);
+					put_label(tfs, lp->label, "", lp->nmspace, 'D', 8, curseg);
 #endif
 					if (syntax == MOT)
 						tfs.printf("\tdc.q\t");
@@ -1357,14 +1373,14 @@ void dumplits(txtoStream& tfs)
 #ifdef LOCAL_LABELS
 				put_label(tfs, lp->label, "", ""/*lp->nmspace*/, 'D', 0);
 #else
-				put_label(tfs, lp->label, "", lp->nmspace, 'D', 0);
+				put_label(tfs, lp->label, "", lp->nmspace, 'D', 0, curseg);
 #endif
 				break;
 			default:
 #ifdef LOCAL_LABELS
 				put_label(tfs, lp->label, "", ""/*lp->nmspace*/, 'D', 0);
 #else
-				put_label(tfs, lp->label, "", lp->nmspace, 'D', 0);
+				put_label(tfs, lp->label, "", lp->nmspace, 'D', 0, curseg);
 #endif
 				;// printf("hi");
 			}
@@ -1372,6 +1388,10 @@ void dumplits(txtoStream& tfs)
 	}
 
 	if (compiler.quadtab) {
+		if (roseg_out == false) {
+			roseg(tfs);
+			roseg_out = true;
+		}
 		nl(tfs);
 		align(tfs,8);
 		nl(tfs);
@@ -1389,9 +1409,9 @@ void dumplits(txtoStream& tfs)
 		nl(tfs);
 		if (DataLabels[qt->label]) {
 #ifdef LOCAL_LABELS
-			put_label(tfs, quadtab->label, "", ""/*quadtab->nmspace*/, 'D', sizeOfFPQ);
+			put_label(tfs, quadtab->label, "", ""/*quadtab->nmspace*/, 'D', sizeOfFPQ, curseg);
 #else
-			put_label(tfs, qt->label, "", qt->nmspace, 'D', sizeOfFPQ);
+			put_label(tfs, qt->label, "", qt->nmspace, 'D', sizeOfFPQ, curseg);
 #endif
 			tfs.printf("\tdh\t");
 			qt->Pack(64);
@@ -1401,6 +1421,10 @@ void dumplits(txtoStream& tfs)
 	}
 
 	if (strtab) {
+		if (roseg_out == false) {
+			roseg(tfs);
+			roseg_out = true;
+		}
 		nl(tfs);
 		align(tfs,8);
 		nl(tfs);
@@ -1421,9 +1445,9 @@ void dumplits(txtoStream& tfs)
 		if (!lit->isString) {
 			if (DataLabels[lit->label])
 #ifdef LOCAL_LABELS
-				put_label(tfs, lit->label, strip_crlf(&lit->str[1]), ""/*lit->nmspace*/, 'D', ep->esize);
+				put_label(tfs, lit->label, strip_crlf(&lit->str[1]), ""/*lit->nmspace*/, 'D', ep->esize, curseg);
 #else
-				put_label(tfs, lit->label, strip_crlf(&lit->str[1]), lit->nmspace, 'D', ep->esize);
+				put_label(tfs, lit->label, strip_crlf(&lit->str[1]), lit->nmspace, 'D', ep->esize, curseg);
 #endif
 		}
 		else {
@@ -1456,9 +1480,9 @@ void dumplits(txtoStream& tfs)
 				break;
 			}
 #ifdef LOCAL_LABELS
-			put_label(tfs, lit->label, strip_crlf(&lit->str[1]), ""/*lit->nmspace*/, 'D', ln);
+			put_label(tfs, lit->label, strip_crlf(&lit->str[1]), ""/*lit->nmspace*/, 'D', ln, curseg);
 #else
-			put_label(tfs, lit->label, strip_crlf(&lit->str[1]), lit->nmspace, 'D', ln);
+			put_label(tfs, lit->label, strip_crlf(&lit->str[1]), lit->nmspace, 'D', ln, curseg);
 #endif
 		}
 		if (lit->isString) {
@@ -1627,6 +1651,8 @@ void seg(txtoStream& tfs, int sg, int algn)
 			case rodataseg:
 				tfs.printf("\t.rodata\n");
 				break;
+			default:
+				tfs.printf("\t.bss\n");
 			}
 		}
 		curseg = sg;
@@ -1635,8 +1661,10 @@ void seg(txtoStream& tfs, int sg, int algn)
 		tfs.printf("\talign\t%d\n", algn);
 	}
 	else {
-		if ((curseg==dataseg && first_dataseg) || curseg!=dataseg)
+//		if ((curseg == dataseg && !seg_aligned[curseg])/*first_dataseg)*/ || ((curseg != dataseg) && !seg_aligned[curseg]))
+		if (seg_aligned[curseg]==false)
 			tfs.printf("\t.align\t%d\n", algn);
 		first_dataseg = false;
+		seg_aligned[curseg] = true;
 	}
 }
