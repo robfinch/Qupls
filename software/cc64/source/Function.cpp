@@ -131,20 +131,7 @@ void Function::GenerateName(bool force)
 			lbl += "_func";
 		//gen_strlab(lbl);
 	}
-	switch (syntax) {
-	case MOT:
-		ofs.printf("\tsdreg\t%d\n", regGP);
-		break;
-	default:
-		ofs.printf("\t.sdreg\t%d\n", regGP);
-	}
-	switch (syntax) {
-	case MOT:
-		ofs.printf("\tsd2reg\t%d\n", regGP1);
-		break;
-	default:
-		ofs.printf("\t.sd2reg\t%d\n", regGP1);
-	}
+	cg.GenerateSmallDataRegDecl();
 	dfs.printf("B");
 	p = my_strdup((char*)lbl.c_str());
 	dfs.printf("b");
@@ -1090,7 +1077,7 @@ void Function::Generate()
 	OCODE* ip2;
 	bool doCatch = true;
 	int n, nn;
-	int sp, bp, gp, gp1;
+	int sp, bp, gp, gp1, gp2;
 	bool o_retgen;
 	Operand* ap;
 	ENODE* node;
@@ -1140,26 +1127,15 @@ void Function::Generate()
 	// Setup the return block.
 	if (!IsNocall && !prolog)
 		SetupReturnBlock();
-	stmt->CheckReferences(&sp, &bp, &gp, &gp1);
+	stmt->CheckReferences(&sp, &bp, &gp, &gp1, &gp2);
 	//	if (!IsInline)
 	GenerateMonadic(op_hint, 0, MakeImmediate(start_funcbody));
-	if (gp != 0) {
-		Operand* ap = GetTempRegister();
-		//cg.GenerateLoadConst(MakeStringAsNameConst("__data_base", dataseg), ap);
-		cg.GenerateLoadAddress(makereg(regGP), MakeStringAsNameConst((char *)"_start_bss", dataseg));
-		//GenerateTriadic(op_base, 0, makereg(regGP), makereg(regGP), ap);
-		ReleaseTempRegister(ap);
-	}
-	// Compiler now uses global pointer one addressing for the rodataseg
-	if (gp1 != 0) {
-		Operand* ap = GetTempRegister();
-		//cg.GenerateLoadConst(MakeStringAsNameConst("__rodata_base", dataseg), ap);
-		cg.GenerateLoadAddress(makereg(regGP1), MakeStringAsNameConst((char*)currentFn->sym->name->c_str(), codeseg));
-		//cg.GenerateLoadAddress(makereg(regGP1), MakeStringAsNameConst((char *)"_start_rodata", dataseg));
-		//if (!compiler.os_code)
-		//GenerateTriadic(op_base, 0, makereg(regGP1), makereg(regGP1), ap);
-		ReleaseTempRegister(ap);
-	}
+	if (gp != 0)
+		cg.GenerateLoadDataPointer();
+	if (gp1 != 0)
+		cg.GenerateLoadRodataPointer();
+	if (gp2 != 0)
+		cg.GenerateLoadBssPointer();
 
 	if (optimize)
 		currentFn->csetbl->Optimize(stmt);

@@ -628,6 +628,7 @@ Operand* CodeGenerator::GenerateNaconDereference(ENODE* node, TYP* tp, bool isRe
 	{
 		ap1->mode = am_indx;
 		switch (node->segment) {
+		case bssseg: ap1->preg = regGP2; break;
 		case dataseg:	ap1->preg = regGP; break;
 		case rodataseg: ap1->preg = regGP1; break;
 		case tlsseg:	ap1->preg = regTP; break;
@@ -788,6 +789,7 @@ Operand* CodeGenerator::GenerateLabconDereference(ENODE* node, TYP* tp, bool isR
 	{
 		ap1->mode = am_indx;
 		switch (node->segment) {
+		case bssseg: ap1->preg = regGP2; break;
 		case dataseg:	ap1->preg = regGP; break;
 		case rodataseg: ap1->preg = regGP1; break;
 		case tlsseg:	ap1->preg = regTP; break;
@@ -1013,7 +1015,12 @@ Operand *CodeGenerator::GenerateDereference(ENODE *node,int flags,int size, int 
 					//        ap1->mode = am_ind;
 					if (use_gp) {
 						ap1->mode = am_indx;
-						ap1->preg = node->segment == rodataseg ? regGP1 : regGP;
+						switch (node->segment) {
+						case bssseg: ap1->preg = regGP2; break;
+						case rodataseg: ap1->preg = regGP1; break;
+						case dataseg: ap1->preg = regGP; break;
+						default:	ap1->preg = regGP;
+						}
 					}
 					else
 						ap1->mode = am_ind;
@@ -1055,7 +1062,12 @@ Operand *CodeGenerator::GenerateDereference(ENODE *node,int flags,int size, int 
 	//	ap1->segment = dataseg;
 	if (use_gp) {
     ap1->mode = am_indx;
-    ap1->preg = node->segment==rodataseg ? regGP1 : regGP;
+		switch (node->segment) {
+		case bssseg: ap1->preg = regGP2; break;
+		case rodataseg: ap1->preg = regGP1; break;
+		case dataseg: ap1->preg = regGP; break;
+		default:	ap1->preg = regGP;
+		}
     ap1->segment = dataseg;
   }
   else {
@@ -2389,7 +2401,12 @@ Operand* CodeGenerator::GenerateFloatcon(ENODE* node, int flags, int64_t size)
 	else {
 		if (use_gp) {
 			ap1->mode = am_indx;
-			ap1->preg = node->segment == rodataseg ? regGP1 : regGP;
+			switch (node->segment) {
+			case bssseg: ap1->preg = regGP2; break;
+			case rodataseg: ap1->preg = regGP1; break;
+			case dataseg: ap1->preg = regGP; break;
+			default:	ap1->preg = regGP;
+						}
 		}
 		else
 			ap1->mode = am_direct;
@@ -2414,7 +2431,12 @@ Operand* CodeGenerator::GenPositcon(ENODE* node, int flags, int64_t size)
 	ap1->isPtr = node->IsPtr();
 	if (use_gp) {
 		ap1->mode = am_indx;
-		ap1->preg = node->segment == rodataseg ? regGP1 : regGP;
+		switch (node->segment) {
+		case bssseg: ap1->preg = regGP2; break;
+		case rodataseg: ap1->preg = regGP1; break;
+		case dataseg: ap1->preg = regGP; break;
+		default:	ap1->preg = regGP;
+		}
 	}
 	else
 		ap1->mode = am_direct;
@@ -2594,7 +2616,12 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int64_t size,
       ap1 = GetTempRegister();
       ap2 = allocOperand();
       ap2->mode = am_indx;
-      ap2->preg = node->segment==rodataseg ? regGP1 : regGP;      // global pointer
+			switch (node->segment) {
+			case bssseg: ap2->preg = regGP2; break;
+			case rodataseg: ap2->preg = regGP1; break;
+			case dataseg: ap2->preg = regGP; break;
+			default:	ap2->preg = regGP;
+			}
 			//if (node->segment != rodataseg) {
 			//	n2 = makeinode(en_icon, 2048LL);
 			//	ap2->offset = makenode(en_add, ap2->offset, n2);
@@ -3069,15 +3096,14 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int64_t size,
 	case en_sxb:
 		ap1 = GetTempRegister();
 		ap2 = GenerateExpression(node->p[0], am_reg, 1, rhs);
-		Generate4adic(op_sbx, 0, ap1, ap2, MakeImmediate(7), MakeImmediate(127));
+		GenerateSignExtendByte(ap1, ap2);
 		ReleaseTempReg(ap2);
 		goto retpt;
 
 	case en_sxc:
 		ap1 = GetTempRegister();
 		ap2 = GenerateExpression(node->p[0], am_reg, 2, rhs);
-		Generate4adic(op_sbx, 0, ap1, ap2, MakeImmediate(15), MakeImmediate(127));
-		//GenerateDiadic(op_sxw, 0, ap1, ap2);
+		GenerateSignExtendWyde(ap1, ap2);
 		ReleaseTempReg(ap2);
 		goto retpt;
 
@@ -3100,7 +3126,7 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int64_t size,
 			}
 		}
 		ap2->MakeLegal(am_reg, 4);
-		Generate4adic(op_sbx, 0, ap1, ap2, MakeImmediate(31), MakeImmediate(127));
+		GenerateSignExtendTetra(ap1, ap2);
 		//GenerateDiadic(op_sxt, 0, ap1, ap2);
 		ReleaseTempReg(ap2);
 		goto retpt;
@@ -3146,7 +3172,7 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int64_t size,
 		ap1 = GetTempRegister();
 		ap2 = GenerateExpression(node->p[0],am_reg,1,rhs);
 		if (ap2->mode != am_imm)
-			Generate4adic(op_sbx, 0, ap1, ap2, MakeImmediate(7), MakeImmediate(127));
+			GenerateSignExtendByte(ap1, ap2);
 		ReleaseTempRegister(ap2);
 		//GenerateDiadic(op_sxb,0,ap1,ap1);
 		//GenerateDiadic(op_sxb,0,ap1,ap1);
@@ -3156,7 +3182,7 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int64_t size,
 		ap1 = GetTempRegister();
 		ap2 = GenerateExpression(node->p[0],am_reg|am_imm,2,rhs);
 		if (ap2->mode != am_imm)
-			Generate4adic(op_sbx, 0, ap1, ap2, MakeImmediate(15), MakeImmediate(127));
+			GenerateSignExtendWyde(ap1, ap2);
 //		GenerateDiadic(op_sxw,0,ap1,ap1);
 		ReleaseTempRegister(ap2);
 		goto retpt;
@@ -3165,7 +3191,7 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int64_t size,
 		ap1 = GetTempRegister();
 		ap2 = GenerateExpression(node->p[0],am_reg|am_imm,4,rhs);
 		if (ap2->mode != am_imm)
-			Generate4adic(op_sbx, 0, ap1, ap2, MakeImmediate(15), MakeImmediate(127));
+			GenerateSignExtendTetra(ap1, ap2);
 //		GenerateDiadic(op_sxt,0,ap1,ap1);
 		ReleaseTempRegister(ap2);
 		goto retpt;
@@ -4348,5 +4374,80 @@ Operand* CodeGenerator::GenerateBinary(ENODE* node, int flags, int size, int op)
 
 void CodeGenerator::GenerateReturnAndDeallocate(int64_t amt) {
 	GenerateTriadic(op_rtd, 0, makereg(regSP), makereg(regSP), MakeImmediate(amt));
+}
+
+void CodeGenerator::GenerateLoadDataPointer()
+{
+	Operand* ap = GetTempRegister();
+	//cg.GenerateLoadConst(MakeStringAsNameConst("__data_base", dataseg), ap);
+	cg.GenerateLoadAddress(makereg(regGP), MakeStringAsNameConst((char*)"_start_data", dataseg));
+	//GenerateTriadic(op_base, 0, makereg(regGP), makereg(regGP), ap);
+	ReleaseTempRegister(ap);
+}
+
+// Compiler now uses global pointer one addressing for the rodataseg
+void CodeGenerator::GenerateLoadRodataPointer()
+{
+	Operand* ap = GetTempRegister();
+	//cg.GenerateLoadConst(MakeStringAsNameConst("__rodata_base", dataseg), ap);
+	cg.GenerateLoadAddress(makereg(regGP1), MakeStringAsNameConst((char*)currentFn->sym->name->c_str(), codeseg));
+	//cg.GenerateLoadAddress(makereg(regGP1), MakeStringAsNameConst((char *)"_start_rodata", dataseg));
+	//if (!compiler.os_code)
+	//GenerateTriadic(op_base, 0, makereg(regGP1), makereg(regGP1), ap);
+	ReleaseTempRegister(ap);
+}
+
+void CodeGenerator::GenerateLoadBssPointer()
+{
+	Operand* ap = GetTempRegister();
+	//cg.GenerateLoadConst(MakeStringAsNameConst("__data_base", dataseg), ap);
+	cg.GenerateLoadAddress(makereg(regGP2), MakeStringAsNameConst((char*)"_start_bss", bssseg));
+	//GenerateTriadic(op_base, 0, makereg(regGP), makereg(regGP), ap);
+	ReleaseTempRegister(ap);
+}
+
+void CodeGenerator::GenerateSmallDataRegDecl()
+{
+	switch (syntax) {
+	case MOT:
+		ofs.printf("\tsdreg\t%d\n", regGP);
+		break;
+	default:
+		ofs.printf("\t.sdreg\t%d\n", regGP);
+	}
+	switch (syntax) {
+	case MOT:
+		ofs.printf("\tsd2reg\t%d\n", regGP1);
+		break;
+	default:
+		ofs.printf("\t.sd2reg\t%d\n", regGP1);
+	}
+	switch (syntax) {
+	case MOT:
+		ofs.printf("\tsd3reg\t%d\n", regGP2);
+		break;
+	default:
+		ofs.printf("\t.sd3reg\t%d\n", regGP2);
+	}
+}
+
+void CodeGenerator::GenerateSignExtendByte(Operand* tgt, Operand* src)
+{
+	GenerateDiadic(op_movsxb, 0, tgt, src);
+}
+
+void CodeGenerator::GenerateSignExtendWyde(Operand* tgt, Operand* src)
+{
+	GenerateDiadic(op_movsxw, 0, tgt, src);
+}
+
+void CodeGenerator::GenerateSignExtendTetra(Operand* tgt, Operand* src)
+{
+	GenerateDiadic(op_movsxt, 0, tgt, src);
+}
+
+void CodeGenerator::GenerateReturnAndDeallocate(Operand* ap1)
+{
+	GenerateDiadic(op_rtd, 0, ap1, MakeImmediate(0));
 }
 

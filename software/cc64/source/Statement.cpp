@@ -2352,16 +2352,17 @@ void Statement::DumpCompound()
 	s1->Dump();
 }
 
-void Statement::CheckCompoundReferences(int* psp, int* pbp, int* pgp, int* pgp1)
+void Statement::CheckCompoundReferences(int* psp, int* pbp, int* pgp, int* pgp1, int* pgp2)
 {
 	Symbol* spp;
-	int sp, bp, gp, gp1;
+	int sp, bp, gp, gp1, gp2;
 
 	spp = ssyms.headp;
 	while (spp) {
 		if (spp->initexp) {
 			spp->initexp->ResetSegmentCount();
 			spp->initexp->CountSegments();
+			*pgp2 += exp->segcount[bssseg];
 			*psp += exp->segcount[dataseg];
 			*pbp += exp->segcount[dataseg];
 			*pgp += exp->segcount[dataseg];
@@ -2369,41 +2370,46 @@ void Statement::CheckCompoundReferences(int* psp, int* pbp, int* pgp, int* pgp1)
 		}
 		spp = spp->nextp;
 	}
-	s1->CheckReferences(&sp, &bp, &gp, &gp1);
+	s1->CheckReferences(&sp, &bp, &gp, &gp1, &gp2);
 	*psp += sp;
 	*pbp += bp;
 	*pgp += gp;
 	*pgp1 += gp1;
+	*pgp2 += gp2;
 }
 
-void Statement::CheckReferences(int* psp, int* pbp, int* pgp, int* pgp1)
+void Statement::CheckReferences(int* psp, int* pbp, int* pgp, int* pgp1, int* pgp2)
 {
-	int sp, bp, gp, gp1;
+	int sp, bp, gp, gp1, gp2;
 	*psp = 0;
 	*pbp = 0;
 	*pgp = 0;
 	*pgp1 = 0;
+	*pgp2 = 0;
 	Statement* block = this;
 
 	dfs.printf("Statement\n");
 	while (block != NULL) {
 		switch (block->stype) {
 		case st_compound:
-			block->prolog->CheckReferences(&sp, &bp, &gp, &gp1);
+			block->prolog->CheckReferences(&sp, &bp, &gp, &gp1, &gp2);
 			*psp += sp;
 			*pbp += bp;
 			*pgp += gp;
 			*pgp1 += gp1;
-			block->CheckCompoundReferences(&sp, &bp, &gp, &gp1);
+			*pgp2 += gp2;
+			block->CheckCompoundReferences(&sp, &bp, &gp, &gp1, &gp2);
 			*psp += sp;
 			*pbp += bp;
 			*pgp += gp;
 			*pgp1 += gp1;
-			block->epilog->CheckReferences(&sp, &bp, &gp, &gp1);
+			*pgp2 += gp2;
+			block->epilog->CheckReferences(&sp, &bp, &gp, &gp1, &gp2);
 			*psp += sp;
 			*pbp += bp;
 			*pgp += gp;
 			*pgp1 += gp1;
+			*pgp2 += gp2;
 			break;
 		case st_return:
 		case st_throw:
@@ -2413,6 +2419,7 @@ void Statement::CheckReferences(int* psp, int* pbp, int* pgp, int* pgp1)
 			*pbp += exp->segcount[dataseg];
 			*pgp += exp->segcount[dataseg];
 			*pgp1 += exp->segcount[rodataseg];
+			*pgp2 += exp->segcount[bssseg];
 			break;
 		case st_check:
 			block->exp->ResetSegmentCount();
@@ -2421,6 +2428,7 @@ void Statement::CheckReferences(int* psp, int* pbp, int* pgp, int* pgp1)
 			*pbp += exp->segcount[dataseg];
 			*pgp += exp->segcount[dataseg];
 			*pgp1 += exp->segcount[rodataseg];
+			*pgp2 += exp->segcount[bssseg];
 			break;
 		case st_expr:
 			block->exp->ResetSegmentCount();
@@ -2429,6 +2437,7 @@ void Statement::CheckReferences(int* psp, int* pbp, int* pgp, int* pgp1)
 			*pbp += exp->segcount[dataseg];
 			*pgp += exp->segcount[dataseg];
 			*pgp1 += exp->segcount[rodataseg];
+			*pgp2 += exp->segcount[bssseg];
 			break;
 		case st_while:
 		case st_until:
@@ -2440,19 +2449,22 @@ void Statement::CheckReferences(int* psp, int* pbp, int* pgp, int* pgp1)
 			*pbp += exp->segcount[dataseg];
 			*pgp += exp->segcount[dataseg];
 			*pgp1 += exp->segcount[rodataseg];
+			*pgp2 += exp->segcount[bssseg];
 		case st_do:
 		case st_doloop:
 		case st_forever:
-			block->s1->CheckReferences(&sp, &bp, &gp, &gp1);
+			block->s1->CheckReferences(&sp, &bp, &gp, &gp1, &gp2);
 			*psp += sp;
 			*pbp += bp;
 			*pgp += gp;
 			*pgp1 += gp1;
-			block->s2->CheckReferences(&sp, &bp, &gp, &gp1);
+			*pgp2 += gp2;
+			block->s2->CheckReferences(&sp, &bp, &gp, &gp1, &gp2);
 			*psp += sp;
 			*pbp += bp;
 			*pgp += gp;
 			*pgp1 += gp1;
+			*pgp2 += gp2;
 			break;
 		case st_for:
 			block->initExpr->Dump();
@@ -2462,17 +2474,20 @@ void Statement::CheckReferences(int* psp, int* pbp, int* pgp, int* pgp1)
 			*pbp += initExpr->segcount[dataseg];
 			*pgp += initExpr->segcount[dataseg];
 			*pgp1 += initExpr->segcount[rodataseg];
+			*pgp2 += initExpr->segcount[bssseg];
 			block->exp->ResetSegmentCount();
 			block->exp->CountSegments();
 			*psp += exp->segcount[dataseg];
 			*pbp += exp->segcount[dataseg];
 			*pgp += exp->segcount[dataseg];
 			*pgp1 += exp->segcount[rodataseg];
-			block->s1->CheckReferences(&sp, &bp, &gp, &gp1);
+			*pgp2 += exp->segcount[bssseg];
+			block->s1->CheckReferences(&sp, &bp, &gp, &gp1, &gp2);
 			*psp += sp;
 			*pbp += bp;
 			*pgp += gp;
 			*pgp1 += gp1;
+			*pgp2 += gp2;
 			block->incrExpr->Dump();
 			break;
 		case st_if:
@@ -2482,16 +2497,19 @@ void Statement::CheckReferences(int* psp, int* pbp, int* pgp, int* pgp1)
 			*pbp += exp->segcount[dataseg];
 			*pgp += exp->segcount[dataseg];
 			*pgp1 += exp->segcount[rodataseg];
-			block->s1->CheckReferences(&sp, &bp, &gp, &gp1);
+			*pgp2 += exp->segcount[bssseg];
+			block->s1->CheckReferences(&sp, &bp, &gp, &gp1, &gp2);
 			*psp += sp;
 			*pbp += bp;
 			*pgp += gp;
 			*pgp1 += gp1;
-			block->s2->CheckReferences(&sp, &bp, &gp, &gp1);
+			*pgp2 += gp2;
+			block->s2->CheckReferences(&sp, &bp, &gp, &gp1, &gp2);
 			*psp += sp;
 			*pbp += bp;
 			*pgp += gp;
 			*pgp1 += gp1;
+			*pgp2 += gp2;
 			break;
 		case st_switch:
 			block->exp->ResetSegmentCount();
@@ -2500,22 +2518,25 @@ void Statement::CheckReferences(int* psp, int* pbp, int* pgp, int* pgp1)
 			*pbp += exp->segcount[dataseg];
 			*pgp += exp->segcount[dataseg];
 			*pgp1 += exp->segcount[rodataseg];
-			block->s1->CheckReferences(&sp, &bp, &gp, &gp1);
+			*pgp2 += exp->segcount[bssseg];
+			block->s1->CheckReferences(&sp, &bp, &gp, &gp1, &gp2);
 			*psp += sp;
 			*pbp += bp;
 			*pgp += gp;
 			*pgp1 += gp1;
+			*pgp2 += gp2;
 			break;
 		case st_try:
 		case st_catch:
 		case st_case:
 		case st_default:
 		case st_firstcall:
-			block->s1->CheckReferences(&sp, &bp, &gp, &gp1);
+			block->s1->CheckReferences(&sp, &bp, &gp, &gp1, &gp2);
 			*psp += sp;
 			*pbp += bp;
 			*pgp += gp;
 			*pgp1 += gp1;
+			*pgp2 += gp2;
 			break;
 		}
 		block = block->next;

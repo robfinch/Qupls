@@ -43,7 +43,10 @@ typedef struct {
   char ndxreg;
   char scale;
   expr *value;
+  uint64_t mask;
 } operand;
+
+#define OPC_ORS	51
 
 /* operand-types */
 #define OP_REG						0x00000001L
@@ -261,9 +264,12 @@ typedef struct {
 #define RC(x)		(((x) & 0x3fLL) << 25LL)
 #define CA(x)		(((x) & 7LL) << 29LL)
 #define CAB(x)		(((x) & 7LL) << 24LL)
-#define BFOFFS(x)	(((x) & 0x7fLL) << 23LL)
-#define BFWID(x)	(((x) & 0x7fLL) << 30LL)
-
+#define BFOFFS(x)	(((x) & 0x7fLL) << 19LL)
+#define BFWID(x)	(((x) & 0x7fLL) << 26LL)
+#define BFMB(x)	(((x) & 0x7fLL) << 19LL)
+#define BFME(x)	(((x) & 0x7fLL) << 26LL)
+#define BFFUNC(x)	(((x) & 0xfLL) << 36LL)
+#define RTYPE(x)	(((x) & 3LL) << 11LL)
 #define RK(x)			(((x) & 0x3fLL) << 40LL)
 #define SK(x)			(((x) & 1LL) << 46LL)
 

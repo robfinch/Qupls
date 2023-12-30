@@ -1462,6 +1462,14 @@ public:
 	virtual void GenerateInterruptReturn(Function* func) {
 		GenerateZeradic(op_rti);
 	};
+	virtual void GenerateReturnAndDeallocate(Operand* ap1);
+	virtual void GenerateLoadDataPointer(void);
+	virtual void GenerateLoadBssPointer(void);
+	virtual void GenerateLoadRodataPointer(void);
+	virtual void GenerateSmallDataRegDecl(void);
+	virtual void GenerateSignExtendByte(Operand*, Operand*);
+	virtual void GenerateSignExtendWyde(Operand*, Operand*);
+	virtual void GenerateSignExtendTetra(Operand*, Operand*);
 };
 
 class ThorCodeGenerator : public CodeGenerator
@@ -1604,10 +1612,19 @@ public:
 	void GenerateInterruptReturn(Function* func) {
 		GenerateZeradic(op_rti);
 	};
+	void GenerateReturnAndDeallocate(int64_t amt);
+	void GenerateReturnAndDeallocate(Operand* ap1);
 	void GenerateLoadFloat(Operand* ap3, Operand* ap1, int ssize, int size, Operand* mask = nullptr);
 	void GenerateInterruptSave(Function* func);
 	void GenerateInterruptLoad(Function* func);
 	void GenerateLoadConst(Operand* ap1, Operand* ap2);
+	void GenerateLoadDataPointer(void);
+	void GenerateLoadBssPointer(void);
+	void GenerateLoadRodataPointer(void);
+	void GenerateSmallDataRegDecl(void);
+	void GenerateSignExtendByte(Operand*, Operand*);
+	void GenerateSignExtendWyde(Operand*, Operand*);
+	void GenerateSignExtendTetra(Operand*, Operand*);
 };
 
 class RiscvCodeGenerator : public CodeGenerator
@@ -2211,8 +2228,8 @@ public:
 	void GenerateTabularSwitch(int64_t, int64_t, Operand*, bool, int, int);
 	void GenerateYield();
 	bool Generate(int opt = 0);
-	void CheckReferences(int* sp, int* bp, int* gp, int* gp1);
-	void CheckCompoundReferences(int* sp, int* bp, int* gp, int* gp1);
+	void CheckReferences(int* sp, int* bp, int* gp, int* gp1, int* gp2);
+	void CheckCompoundReferences(int* sp, int* bp, int* gp, int* gp1, int* gp2);
 	// Debugging
 	void Dump();
 	void DumpCompound();

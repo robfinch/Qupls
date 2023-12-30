@@ -1904,3 +1904,89 @@ void QuplsCodeGenerator::GenerateLoadConst(Operand* ap1, Operand* ap2)
 	regs[ap2->preg].offset = ap1->offset;
 }
 
+// For now, just assume the data pointers have been set at program start-up.
+
+void QuplsCodeGenerator::GenerateLoadDataPointer()
+{
+	return;
+	Operand* ap = GetTempRegister();
+	//cg.GenerateLoadConst(MakeStringAsNameConst("__data_base", dataseg), ap);
+	cg.GenerateLoadAddress(makereg(regGP), MakeStringAsNameConst((char*)"<_start_data", dataseg));
+	GenerateDiadic(op_ors, 0, makereg(regGP2), MakeStringAsNameConst((char*)"?_start_data,1", dataseg));
+	ReleaseTempRegister(ap);
+}
+
+// Compiler now uses global pointer one addressing for the rodataseg
+void QuplsCodeGenerator::GenerateLoadRodataPointer()
+{
+	return;
+	Operand* ap = GetTempRegister();
+	//cg.GenerateLoadConst(MakeStringAsNameConst("__rodata_base", dataseg), ap);
+	cg.GenerateLoadAddress(makereg(regGP1), MakeStringAsNameConst((char*)currentFn->sym->name->c_str(), codeseg));
+	//cg.GenerateLoadAddress(makereg(regGP1), MakeStringAsNameConst((char *)"_start_rodata", dataseg));
+	//if (!compiler.os_code)
+	//GenerateTriadic(op_base, 0, makereg(regGP1), makereg(regGP1), ap);
+	ReleaseTempRegister(ap);
+}
+
+void QuplsCodeGenerator::GenerateLoadBssPointer()
+{
+	return;
+	Operand* ap = GetTempRegister();
+	//cg.GenerateLoadConst(MakeStringAsNameConst("__data_base", dataseg), ap);
+	cg.GenerateLoadAddress(makereg(regGP2), MakeStringAsNameConst((char*)"<_start_bss", bssseg));
+	GenerateDiadic(op_ors, 0, makereg(regGP2), MakeStringAsNameConst((char*)"?_start_bss,1", bssseg));
+	ReleaseTempRegister(ap);
+}
+
+void QuplsCodeGenerator::GenerateSmallDataRegDecl()
+{
+	switch (syntax) {
+	case MOT:
+		ofs.printf("\tsdreg\t%d\n", regGP);
+		break;
+	default:
+		ofs.printf("\t.sdreg\t%d\n", regGP);
+	}
+	switch (syntax) {
+	case MOT:
+		ofs.printf("\tsd2reg\t%d\n", regGP1);
+		break;
+	default:
+		ofs.printf("\t.sd2reg\t%d\n", regGP1);
+	}
+	switch (syntax) {
+	case MOT:
+		ofs.printf("\tsd3reg\t%d\n", regGP2);
+		break;
+	default:
+		ofs.printf("\t.sd3reg\t%d\n", regGP2);
+	}
+}
+
+void QuplsCodeGenerator::GenerateSignExtendByte(Operand* tgt, Operand* src)
+{
+	Generate4adic(op_ext, 0, tgt, src, MakeImmediate(0), MakeImmediate(7));
+}
+
+void QuplsCodeGenerator::GenerateSignExtendWyde(Operand* tgt, Operand* src)
+{
+	Generate4adic(op_ext, 0, tgt, src, MakeImmediate(0), MakeImmediate(15));
+}
+
+void QuplsCodeGenerator::GenerateSignExtendTetra(Operand* tgt, Operand* src)
+{
+	Generate4adic(op_ext, 0, tgt, src, MakeImmediate(0), MakeImmediate(31));
+}
+
+void QuplsCodeGenerator::GenerateReturnAndDeallocate(Operand* ap1)
+{
+	GenerateDiadic(op_rtd, 0, ap1, MakeImmediate(0));
+}
+
+void QuplsCodeGenerator::GenerateReturnAndDeallocate(int64_t amt)
+{
+	GenerateDiadic(op_rtd, 0, MakeImmediate(amt), MakeImmediate(0));
+}
+
+

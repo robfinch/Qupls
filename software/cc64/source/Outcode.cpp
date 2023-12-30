@@ -47,7 +47,7 @@ struct nlit *numeric_tab = nullptr;
 // Please keep table in alphabetical order.
 // Instruction.cpp has the number of table elements hard-coded in it.
 //
-Instruction opl[358] =
+Instruction opl[361] =
 {   
 { "#", op_remark },
 { "#asm",op_asm,300 },
@@ -255,6 +255,9 @@ Instruction opl[358] =
 { "mov", op_mov,1,1,false,am_reg,am_reg,0,0 },
 { "move",op_move,1,1,false,am_reg,am_reg,0,0 },
 { "movs", op_movs },
+{ "movsxb", op_movsxb,1,1,false,am_reg,am_reg,0,0 },
+{ "movsxt", op_movsxt,1,1,false,am_reg,am_reg,0,0 },
+{ "movsxw", op_movsxw,1,1,false,am_reg,am_reg,0,0 },
 { "mret", op_mret,1,0,0,0,0,0 },
 { "mtbase", op_mtbase,1,0,false,am_reg,am_reg | am_ui6,0,0 },
 { "mtfp", op_mtfp },
@@ -517,7 +520,9 @@ char *RegMoniker(int regno)
 			sprintf_s(&buf[n][0], 20, "gp");
 		else if (regno == regGP1)
 			sprintf_s(&buf[n][0], 20, "gp1");
-//	else if (regno==regPC)
+		else if (regno == regGP2)
+			sprintf_s(&buf[n][0], 20, "gp2");
+	//	else if (regno==regPC)
 //		sprintf_s(&buf[n][0], 20, "$pc");
 	else if (regno==regSP)
 		sprintf_s(&buf[n][0], 20, "sp");
