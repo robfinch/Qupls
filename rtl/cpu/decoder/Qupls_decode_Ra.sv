@@ -50,14 +50,14 @@ begin
 		fnRa = 7'd0;
 	else
 		case(ir.any.opcode)
-		OP_RTS:
-			fnRa = {regx,ir[12:7]};
 		OP_RTD:
-			fnRa = 7'd62;
+			fnRa = {regx,ir[18:13]};
 		OP_DBRA:
 			fnRa = 7'd55;
 		OP_FLT2,OP_FLT3:
 			fnRa = {regx,1'b0,ir[16:12]};
+		OP_ADDSI,OP_ANDSI,OP_ORSI,OP_EORSI:
+			fnRa = {regx,ir[12:7]};
 		default:
 			fnRa = {regx,ir[18:13]};
 		endcase

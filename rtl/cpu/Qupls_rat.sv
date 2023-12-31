@@ -44,7 +44,7 @@
 //
 import QuplsPkg::*;
 
-module Qupls_rat(rst, clk, nq, stallq, cndx_o, avail_i, restore, rob,
+module Qupls_rat(rst, clk, en, nq, stallq, cndx_o, avail_i, restore, rob,
 	stomp, miss_cp, wr0, wr1, wr2, wr3,
 	wra_cp, wrb_cp, wrc_cp, wrd_cp, qbr0, qbr1, qbr2, qbr3,
 	rn,
@@ -62,6 +62,7 @@ localparam RBIT=$clog2(PREGS);
 localparam BBIT=0;//$clog2(BANKS)-1;
 input rst;
 input clk;
+input en;
 input nq;			// enqueue instruction
 output reg stallq;
 input rob_entry_t [ROB_ENTRIES-1:0] rob;
@@ -145,7 +146,7 @@ reg stomp_act;
 Qupls_checkpointRam #(.BANKS(BANKS)) cpram1
 (
 	.clka(clk),
-	.ena(1'b1),
+	.ena(en),
 	.wea(cpram_we),
 	.addra(wndx),
 	.dina(cpram_in),
@@ -156,7 +157,7 @@ Qupls_checkpointRam #(.BANKS(BANKS)) cpram1
 );
 
 reg [7:0] cpv_wr;
-checkpt_ndx_t cpv_wc [0:7];
+checkpt_ndx_t [7:0] cpv_wc;
 pregno_t [7:0] cpv_wa;
 reg [7:0] cpv_i;
 wire [NPORT-1:0] cpv_o;
@@ -198,6 +199,7 @@ Qupls_checkpoint_valid_ram3 ucpr2
 (
 	.rst(rst),
 	.clka(clk),
+	.en(en),
 	.wr(cpv_wr),
 	.wc(cpv_wc),
 	.wa(cpv_wa),
@@ -208,6 +210,10 @@ Qupls_checkpoint_valid_ram3 ucpr2
 	.ra(rrn),
 	.o(cpv_o)
 );
+
+always_ff @(posedge clk)
+if (cpv_wr && cpv_wa==9'd65)
+	$display("Q+ CPV65=%d, wc[3]=%d, wc[7]=%d", cpv_i, cpv_wc[3], cpv_wc[7]);
 
 genvar g;
 integer mndx,nn;
@@ -227,8 +233,10 @@ generate begin : gRRN
 			if ((g % 4)==3) begin
 				if (rn[g]==7'd0)
 					rrn[g] = 8'd0;
+				/* bypass all or none
 				else if (rn[g]==wrd && wr3)
 					rrn[g] = wrrd;
+				*/
 				else if (BANKS < 2)
 					rrn[g] = cpram_out.regmap[rn[g]].pregs[0];
 				else
@@ -250,8 +258,10 @@ generate begin : gRRN
 			if ((g % 4)==3) begin
 				if (rn[g]==7'd0)
 					vn[g] = 1'b1;
+				/*
 				else if (rn[g]==wrd && wr3)
 					vn[g] = cpv_i[7];
+				*/
 				else
 					vn[g] = cpv_o[g];//valid[0][cndx][rrn[g]];//cpram_out.regmap[rn[g]].pregs[0].v;
 			end

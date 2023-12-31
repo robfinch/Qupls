@@ -449,43 +449,45 @@ begin
 		if (SUPPORT_IBH) begin
 			// Advance to the next group? We know the address of the start of the
 			// group, it is always the same, offset 0.
-			if (igrp >= 3'd3 || block_header.offs[igrp]=='d0)
+			if (igrp >= 3'd3/* || block_header.offs[igrp]=='d0*/)
 				next_pc <= {pc[$bits(pc_address_t)-1:6]+2'd1,6'd0};
 			else
-				next_pc <= {pc[$bits(pc_address_t)-1:6],block_header.offs[igrp]};
+				next_pc <= {pc[$bits(pc_address_t)-1:6],block_header[21:16]};
 		end
 		else if (SUPPORT_VLI) begin
 			if (SUPPORT_VLIB)
 				next_pc <= pc + length_byte;
 			else begin
-				if (pc0[5:0] >= block_header[13:8])
+				if (pc0[5:0] >= block_header[21:16])
 					next_pc <= {pc[$bits(pc_address_t)-1:6]+2'd1,6'd0};
-				else if (pc1[5:0] >= block_header[13:8])
+				else if (pc1[5:0] >= block_header[21:16])
 					next_pc <= {pc[$bits(pc_address_t)-1:6]+2'd1,6'd0};
-				else if (pc2[5:0] >= block_header[13:8])
+				else if (pc2[5:0] >= block_header[21:16])
 					next_pc <= {pc[$bits(pc_address_t)-1:6]+2'd1,6'd0};
-				else if (pc3[5:0] >= block_header[13:8])
+				else if (pc3[5:0] >= block_header[21:16])
 					next_pc <= {pc[$bits(pc_address_t)-1:6]+2'd1,6'd0};
-				else if (pc4[5:0] >= block_header[13:8]|| pc4[7:6]!=pc[7:6])
+				else if (pc4[5:0] >= block_header[21:16]|| pc4[7:6]!=pc[7:6])
 					next_pc <= {pc[$bits(pc_address_t)-1:6]+2'd1,6'd0};
 				else
 					next_pc <= {pc[$bits(pc_address_t)-1:6],pc4[5:0]};
 			end
 		end
 		else begin
-			if (pc0[5:0] >= block_header[13:8])
+			/*
+			if (pc0[5:0] >= block_header[21:16])
 				next_pc <= {pc[$bits(pc_address_t)-1:6]+2'd1,6'd0};
-			else if (pc1[5:0] >= block_header[13:8])
+			else if (pc1[5:0] >= block_header[21:16])
 				next_pc <= {pc[$bits(pc_address_t)-1:6]+2'd1,6'd0};
-			else if (pc2[5:0] >= block_header[13:8])
+			else if (pc2[5:0] >= block_header[21:16])
 				next_pc <= {pc[$bits(pc_address_t)-1:6]+2'd1,6'd0};
-			else if (pc3[5:0] >= block_header[13:8])
+			else if (pc3[5:0] >= block_header[21:16])
 				next_pc <= {pc[$bits(pc_address_t)-1:6]+2'd1,6'd0};
-			else if (pc4[5:0] >= block_header[13:8]|| pc4[7:6]!=pc[7:6])
+			else if (pc4[5:0] >= block_header[21:16]|| pc4[7:6]!=pc[7:6])
 				next_pc <= {pc[$bits(pc_address_t)-1:6]+2'd1,6'd0};
 			else
 				next_pc <= {pc[$bits(pc_address_t)-1:6],pc4[5:0]};
-				//next_pc <= pc + 5'd20;	// four instructions
+			*/
+			next_pc <= pc + 5'd20;	// four instructions
 		end
 		takb <= 1'b0;
 	end
@@ -498,9 +500,10 @@ if (SUPPORT_IBH) begin
 		igrp <= 3'd0;
 	else begin
 		if (en) begin
+			/*
 			// Instruction block header should be valid again at this state.
 			if (branchmiss_state==3'd4) begin
-				if (pc[5:0] >= ibh.offs[3])
+				if (pc[5:0] >= ibh[21:16])
 					igrp <= 3'd4;
 				else if (pc[5:0] >= ibh.offs[2])
 					igrp <= 3'd3;
@@ -524,6 +527,7 @@ if (SUPPORT_IBH) begin
 				if (igrp>=3'd3 || block_header.offs[igrp]=='d0)
 					igrp <= 'd0;
 			end
+			*/
 		end
 	end
 end

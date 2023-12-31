@@ -66,17 +66,17 @@ value_t cc;
 reg [3:0] mul_cnt;
 double_value_t prod, prod1, prod2;
 double_value_t produ, produ1, produ2;
-reg [191:0] shl, shr, asr;
+reg [127:0] shl, shr, asr;
 value_t div_q, div_r;
 value_t cmpo;
 value_t bus;
 value_t blendo;
 always_comb
-	shl = {64'd0,a,{64{ir[33]}}} << (ir[32] ? ir[24:19] : bi[5:0]);
+	shl = {b,ir[33] ? ~a : a} << (ir[32] ? ir[31:25] : c[5:0]);
 always_comb
-	shr = {{64{ir[33]}},a,64'd0} >> (ir[32] ? ir[24:19] : bi[5:0]);
+	shr = {ir[33] ? ~b : b,a} >> (ir[32] ? ir[31:25] : c[5:0]);
 always_comb
-	asr = {{64{a[63]}},a,64'd0} >> (ir[32] ? ir[24:19] : bi[5:0]);
+	asr = {{64{a[63]}},a,64'd0} >> (ir[32] ? ir[31:25] : c[5:0]);
 
 always_comb
 	case(cs)
@@ -138,8 +138,20 @@ begin
 	case(ir.any.opcode)
 	OP_R2:
 		case(ir.r2.func)
-		FN_ADD:	bus = a + b + cc;
-		FN_SUB:	bus = a - b - cc;
+		FN_ADD:	
+			case(ir[32:31])
+			2'd0:	bus = a + b + c;
+			2'd2:	bus = a + b + c + 2'd1;
+			2'd3: bus = a + b + c - 2'd1;
+			default:	bus = 64'd0;
+			endcase
+		FN_SUB:	
+			case(ir[32:31])
+			2'd0:	bus = a - b - c;
+			2'd2: bus = a - b - c - 2'd1;
+			2'd3: bus = a - b - c + 2'd1;
+			default:	bus = 64'd0;
+			endcase
 		FN_CMP:	bus = cmpo;
 		FN_CMPU:	bus = cmpo;
 		FN_MUL:	bus = prod[63:0];
@@ -164,6 +176,60 @@ begin
 		FN_SLE:	bus = $signed(a) <= $signed(b);
 		FN_SLTU:	bus = a < b;
 		FN_SLEU:	bus = a <= b;
+		FN_MAX3:
+			begin
+				if ($signed(a) > $signed(b) && $signed(a) > $signed(c))
+					bus = a;
+				else if ($signed(b) > $signed(c))
+					bus = b;
+				else
+					bus = c;
+			end
+		FN_MIN3:
+			begin
+				if ($signed(a) < $signed(b) && $signed(a) < $signed(c))
+					bus = a;
+				else if ($signed(b) < $signed(c))
+					bus = b;
+				else
+					bus = c;
+			end
+		FN_MID3:
+			begin
+				if ($signed(a) > $signed(b) && $signed(a) < $signed(c))
+					bus = a;
+				else if ($signed(b) > $signed(a) && $signed(b) < $signed(c))
+					bus = b;
+				else
+					bus = c;
+			end
+		FN_MIDU3:
+			begin
+				if (a > b && a < c)
+					bus = a;
+				else if (b > a && b < c)
+					bus = b;
+				else
+					bus = c;
+			end
+		FN_MAXU3:
+			begin
+				if (a > b && a > c)
+					bus = a;
+				else if (b > c)
+					bus = b;
+				else
+					bus = c;
+			end
+		FN_MINU3:
+			begin
+				if (a < b && a < c)
+					bus = a;
+				else if (b < c)
+					bus = b;
+				else
+					bus = c;
+			end
 		default:	bus = {2{32'hDEADBEEF}};
 		endcase
 	OP_CSR:		bus = csr;
@@ -179,34 +245,24 @@ begin
 	OP_ORI:		bus = a | i;
 	OP_EORI:	bus = a ^ i;
 	OP_SLTI:	bus = $signed(a) < $signed(i);
+	OP_ADDSI:	bus = a + ({{40{i[23]}},i[23:0]} << (ir[15:13]*20));
+	OP_ANDSI:	bus = a & (64'hffffffffffffffff & ~(64'hffffff << (ir[15:13]*20)) | ({{40{i[23]}},i[23:0]} << (ir[15:13]*20)));
+	OP_ORSI:	bus = a | (i << (ir[15:13]*20));
+	OP_EORSI:	bus = a ^ (i << (ir[15:13]*20));
 	OP_SHIFT:
 		case(ir.shifti.func)
 		OP_ASL:	bus = shl[127:64];
-		OP_LSR:	bus = shr[127:64];
-		OP_ROL:	bus = shl[127:64]|shl[191:128];
-		OP_ROR:	bus = shr[127:64]|shr[63:0];
+		OP_LSR:	bus = shr[63:0];
 		OP_ASR:	bus = asr[127:64];
-		OP_ASLI:	bus = shl[127:64];
-		OP_LSRI:	bus = shr[127:64];
-		OP_ROLI:	bus = shl[127:64]|shl[191:128];
-		OP_RORI:	bus = shr[127:64]|shr[63:0];
-		OP_ASRI:	bus = asr[127:64];
 		default:	bus = {2{32'hDEADBEEF}};
 		endcase
 	OP_MOV:		bus = a;
-	OP_LDA:		bus = a + i;
 	OP_LDAX:	bus = a + i + (b << ir[26:25]);
 	OP_BLEND:	bus = ALU0 ? blendo : 0;
 	OP_NOP:		bus = 0;
 	OP_PFXA32:	bus = 0;
 	OP_PFXB32:	bus = 0;
 	OP_PFXC32:	bus = 0;
-	OP_PFXA64:	bus = 0;
-	OP_PFXB64:	bus = 0;
-	OP_PFXC64:	bus = 0;
-	OP_PFXA128:	bus = 0;
-	OP_PFXB128:	bus = 0;
-	OP_PFXC128:	bus = 0;
 	OP_VEC:	bus = 0;
 	OP_VECZ:	bus = 0;
 	// Write the next PC to the link register.

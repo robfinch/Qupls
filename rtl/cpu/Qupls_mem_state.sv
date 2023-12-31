@@ -41,7 +41,7 @@ input clk_i;
 input ack_i;
 input set_ready_i;
 input set_avail_i;
-output reg [1:0] state_o;
+output dram_state_t state_o;
 
 always_ff @(posedge clk_i)
 if (rst_i)
@@ -50,10 +50,12 @@ else begin
 	case(state_o)
 	DRAMSLOT_AVAIL:	;
 	DRAMSLOT_READY:
-		state_o <= state_o + 2'd1;
+		state_o <= DRAMSLOT_ACTIVE;
 	DRAMSLOT_ACTIVE:
 		if (ack_i)
-			state_o <= DRAMSLOT_AVAIL;
+			state_o <= DRAMSLOT_DELAY;
+	DRAMSLOT_DELAY:
+		state_o <= DRAMSLOT_AVAIL;
 	default:	;
 	endcase
 	if (set_ready_i)

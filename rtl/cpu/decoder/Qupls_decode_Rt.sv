@@ -87,13 +87,15 @@ begin
 		fnRt = {regx,ir.ri.Rt};
 	OP_SLTI,OP_MULUI,OP_DIVUI,OP_ANDI,OP_ORI,OP_EORI:
 		fnRt = {regx,ir.ri.Rt};
+	OP_ADDSI,OP_ANDSI,OP_ORSI,OP_EORSI:
+		fnRt = {regx,ir.ri.Rt};
 	OP_SHIFT:
 		fnRt = {regx,ir.r2.Rt};
 	OP_CSR:
 		fnRt = {regx,ir.csr.Rt};
 	OP_MOV:
 		fnRt = {regx,ir.r2.Rt};
-	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDOU,OP_LDH,OP_LDA,
+	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDOU,OP_LDH,
 	OP_LDX:
 		fnRt = {regx,ir.ls.Rt};
 	default:

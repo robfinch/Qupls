@@ -51,7 +51,9 @@ begin
 		case(instr[0].any.opcode)
 		OP_STB,OP_STW,OP_STT,OP_STO,OP_STH,OP_STX:
 			Rc = {regx[0],instr[0][12:7]};
-		OP_CLR,OP_COM,OP_DEP,OP_EXT,OP_EXTU,OP_SET:
+		OP_SHIFT:
+			Rc = {regx[3],instr[0][30:25]};
+		OP_R2:
 			Rc = {regx[3],instr[0][30:25]};
 		default:
 			Rc = 'd0;

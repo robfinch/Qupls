@@ -39,14 +39,15 @@
 
 import QuplsPkg::*;
 
-module Qupls_checkpoint_valid_ram3(rst, clka, wr, wc, wa, setall, i, clkb, rc, ra, o);
+module Qupls_checkpoint_valid_ram3(rst, clka, en, wr, wc, wa, setall, i, clkb, rc, ra, o);
 parameter BANKS=1;
 parameter NPORT=8;
 parameter NRDPORT=16;
 input rst;
 input clka;
+input en;
 input [NPORT-1:0] wr;
-input checkpt_ndx_t wc [0:NPORT-1];
+input checkpt_ndx_t [NPORT-1:0] wc;
 input pregno_t [NPORT-1:0] wa;
 input setall;
 input [NPORT-1:0] i;
@@ -66,19 +67,21 @@ end
 integer n;
 always_ff @(posedge clka)
 for (n = 0; n < NPORT; n = n + 1)
+if (en) begin
 	if (wr[n]) begin
 		if (setall)
 			mem[wa[n]] <= {NCHECK{1'b1}};
 		else
 			mem[wa[n]][wc[n]] <= i[n];
 	end
+end
 
 genvar g;
 generate begin : gMem
 	for (g = 0; g < NRDPORT; g = g + 1) begin
-		always_comb
+		always_ff @(posedge clkb)
 		begin
-			o[g] = mem[ra[g]][rc[g]];
+			o[g] <= mem[ra[g]][rc[g]];
 		end
 	end
 end

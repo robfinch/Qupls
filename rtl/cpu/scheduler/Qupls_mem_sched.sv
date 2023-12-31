@@ -84,7 +84,7 @@ integer n;
 begin
 	fnHasPreviousFc = FALSE;
 	for (n = 0; n < ROB_ENTRIES; n = n + 1)
-		if (rob[n].v==VAL && rob[n].sn < rob[id].sn && rob[n].decbus.fc)
+		if (rob[n].v==VAL && rob[n].sn < rob[id].sn && rob[n].decbus.fc && rob[n].done!=2'b11)
 			fnHasPreviousFc = TRUE;
 end
 endfunction
@@ -181,17 +181,18 @@ begin
 			if (issued < NDATA_PORTS) begin
 				if (row==0) begin
 					if (memready[ lsq[lsq_heads[row].row][0].rndx ] &&
-						lsq[lsq_heads[row].row][0].v
+						lsq[lsq_heads[row].row][0].v==VAL &&
+						lsq[lsq_heads[row].row][0].agen
 					) begin
 						do_issue = 1'b1;
-						mem_ready = 2'd1;
+						mem_ready = mem_ready + 2'd1;
 						next_memissue[ lsq[lsq_heads[row].row][0].rndx ] =	1'b1;
 						issued = 2'd1;
 						next_ndx0 = lsq_heads[row];
 						next_ndx0.col = col;
 						next_ndx0v = 1'b1;
 						if (lsq[lsq_heads[row].row][0].store)
-							stores = 2'd1;
+							stores = stores + 2'd1;
 						next_islot_o[{row,col[0]}] = 2'd0;
 					end
 				end

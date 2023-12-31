@@ -50,6 +50,8 @@ begin
 		fnRb = 7'd0;
 	else
 		case(ir.any.opcode)
+		OP_RTD:
+			fnRb = 7'd63;
 		OP_FLT2,OP_FLT3:
 			fnRb = {regx,1'b0,ir[21:17]};
 		default:

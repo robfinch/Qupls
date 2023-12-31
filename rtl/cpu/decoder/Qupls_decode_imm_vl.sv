@@ -90,6 +90,21 @@ begin
 			immb = {43'h0000,ins[0][31:19]};
 			has_immb = 1'b1;
 		end
+	OP_ADDSI:
+		begin
+			immb = {{40{ins[0][39]}},ins[0][39:16]};
+			has_immb = 1'b1;
+		end
+	OP_ANDSI:
+		begin
+			immb = {40'hFFFFFFFFFF,ins[0][39:16]};
+			has_immb = 1'b1;
+		end
+	OP_ORSI,OP_EORSI:
+		begin
+			immb = {40'h0,ins[0][39:16]};
+			has_immb = 1'b1;
+		end
 	OP_CSR:
 		begin
 			immb = {53'd0,ins[0][29:19]};
@@ -105,10 +120,15 @@ begin
 			immb = {{43{ins[0][39]}},ins[0][39:19]};
 			has_immb = 1'b1;
 		end
-	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDA,OP_CACHE,
+	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_CACHE,
 	OP_STB,OP_STW,OP_STT,OP_STO:
 		begin
 			immb = {{43{ins[0][39]}},ins[0][39:19]};
+			has_immb = 1'b1;
+		end
+	OP_LDAX:
+		begin
+			immb = {{56{ins[0][34]}},ins[0][34:27]};
 			has_immb = 1'b1;
 		end
 	OP_FENCE:
@@ -156,38 +176,39 @@ begin
 	endcase
 	*/
 	// The following uses less hardware but require postfixes to be in order.
-	
-	if (ins[ndx].any.opcode==OP_PFXA32) begin
-		has_imma = 1'b1;
-		imma = {{32{ins[ndx][39]}},ins[ndx][39:8]};
-		if (flt && fltpr==2'd2)
-			imma = imm32x64a;
-		ndx = ndx + 1;
+	if (SUPPORT_POSTFIX) begin
 		if (ins[ndx].any.opcode==OP_PFXA32) begin
-			imma[63:32] = ins[ndx][39:8];
+			has_imma = 1'b1;
+			imma = {{32{ins[ndx][39]}},ins[ndx][39:8]};
+			if (flt && fltpr==2'd2)
+				imma = imm32x64a;
 			ndx = ndx + 1;
+			if (ins[ndx].any.opcode==OP_PFXA32) begin
+				imma[63:32] = ins[ndx][39:8];
+				ndx = ndx + 1;
+			end
 		end
-	end
-	if (ins[ndx].any.opcode==OP_PFXB32) begin
-		has_immb = 1'b1;
-		immb = {{32{ins[ndx][39]}},ins[ndx][39:8]};
-		if (flt && fltpr==2'd2)
-			immb = imm32x64b;
-		ndx = ndx + 1;
 		if (ins[ndx].any.opcode==OP_PFXB32) begin
-			immb[63:32] = ins[ndx][39:8];
+			has_immb = 1'b1;
+			immb = {{32{ins[ndx][39]}},ins[ndx][39:8]};
+			if (flt && fltpr==2'd2)
+				immb = imm32x64b;
 			ndx = ndx + 1;
+			if (ins[ndx].any.opcode==OP_PFXB32) begin
+				immb[63:32] = ins[ndx][39:8];
+				ndx = ndx + 1;
+			end
 		end
-	end
-	if (ins[ndx].any.opcode==OP_PFXC32) begin
-		has_immc = 1'b1;
-		immc = {{32{ins[ndx][39]}},ins[ndx][39:8]};
-		if (flt && fltpr==2'd2)
-			immc = imm32x64c;
-		ndx = ndx + 1;
 		if (ins[ndx].any.opcode==OP_PFXC32) begin
-			immc[63:32] = ins[ndx][39:8];
+			has_immc = 1'b1;
+			immc = {{32{ins[ndx][39]}},ins[ndx][39:8]};
+			if (flt && fltpr==2'd2)
+				immc = imm32x64c;
 			ndx = ndx + 1;
+			if (ins[ndx].any.opcode==OP_PFXC32) begin
+				immc[63:32] = ins[ndx][39:8];
+				ndx = ndx + 1;
+			end
 		end
 	end
 	

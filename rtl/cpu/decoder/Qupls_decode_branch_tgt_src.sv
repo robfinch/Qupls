@@ -18,6 +18,6 @@ always_comb
 	else if (fnIsRet(ins))
 		bts = BTS_RET;
 	else
-		bts = BTS_NONE;
+		bts = BTS_DISP;
 
 endmodule

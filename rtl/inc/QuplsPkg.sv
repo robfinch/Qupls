@@ -39,8 +39,8 @@ package QuplsPkg;
 
 `undef IS_SIM
 parameter SIM = 1'b1;
+`define IS_SIM	1
 
-//`define IS_SIM	1
 // Comment out to remove the sigmoid approximate function
 //`define SIGMOID	1
 
@@ -73,6 +73,11 @@ parameter PERFORMANCE = 1'b0;
 //		2 = g select predictor
 parameter BRANCH_PREDICTOR = 0;
 
+// The following indicates whether to support postfix instructions or not.
+// Supporting postfix instructions increases the size of the core and reduces
+// the code density.
+parameter SUPPORT_POSTFIX = 0;
+
 // The following indicate to queue two instructions at a time if possible.
 // This parameter should be set to one as queueing only single instructions
 // does not work yet. Queuing only a single instruction would result in a
@@ -97,7 +102,7 @@ parameter SUPPORT_COMMIT23 = PERFORMANCE;
 // The following parameter indicates to support variable length instructions.
 // If variable length instructions are not supported, then all instructions
 // are assumed to be five bytes long.
-parameter SUPPORT_VLI = 1'b1;
+parameter SUPPORT_VLI = 1'b0;
 // The following indicates to support the variable length instruction
 // accelerator byte.
 parameter SUPPORT_VLIB = 1'b0;
@@ -170,9 +175,12 @@ parameter PANIC_BADTARGETID	 = 4'd12;
 parameter PANIC_COMMIT = 4'd13;
 parameter PANIC_CHECKPOINT_INDEX = 4'd14;
 
-parameter DRAMSLOT_AVAIL = 2'd0;
-parameter DRAMSLOT_READY = 2'd1;
-parameter DRAMSLOT_ACTIVE = 2'd2;
+typedef enum logic [1:0] {
+	DRAMSLOT_AVAIL = 2'd0,
+	DRAMSLOT_READY = 2'd1,
+	DRAMSLOT_ACTIVE = 2'd2,
+	DRAMSLOT_DELAY = 2'd3
+} dram_state_t;
 
 typedef logic [3:0] checkpt_ndx_t;
 typedef logic [4:0] rob_ndx_t;
@@ -184,18 +192,6 @@ typedef struct packed
 
 typedef logic [NREGS-1:1] reg_bitmask_t;
 typedef logic [5:0] ibh_offset_t;
-
-// Instruction block header.
-// The offset is the low order six bits of the PC needed for an instruction
-// group. This is needed to advance the PC in the branch-target buffer. Only
-// the offset of the first instruction in the group is needed. If the offset
-// is zero the PC will advance to the next cache line, otherwise the PC will
-// advance to the next cache line once all the offsets are used.
-
-typedef struct packed
-{
-	ibh_offset_t [3:0] offs;	// instruction group offsets.
-} ibh_t;	// 24-bits
 
 typedef enum logic [2:0] {
 	OP_SRC_REG = 3'd0,
@@ -244,13 +240,9 @@ typedef enum logic [6:0] {
 	OP_DIVI			= 7'd13,
 	OP_MULUI		= 7'd14,
 	OP_MOV			= 7'd15,
-	OP_CLR			= 7'd16,
-	OP_SET			= 7'd17,
-	OP_EXTU			= 7'd18,
-	OP_EXT			= 7'd19,
-	OP_COM			= 7'd20,
+	OP_CMPUI		= 7'd19,
 	OP_DIVUI		= 7'd21,
-	OP_DEP			= 7'd23,
+	OP_BFI			= 7'd23,
 	OP_MINMAX3	= 7'd24,
 	OP_MUX			= 7'd25,
 	OP_R2B			= 7'd26,
@@ -263,8 +255,6 @@ typedef enum logic [6:0] {
 	OP_MCB			= 7'd34,
 	OP_RTD			= 7'd35,
 	OP_JSR			= 7'd36,
-	OP_CMPUI		= 7'd38,
-	OP_RIS			= 7'd39,
 
 	OP_BccU			= 7'd40,
 	OP_Bcc			= 7'd41,
@@ -286,18 +276,17 @@ typedef enum logic [6:0] {
 	OP_BBSI			= 7'd47,
 */
 	OP_PFXC32		= 7'd48,
-	OP_PFXC64		= 7'd49,
-	OP_PFXC128	= 7'd50,
+	OP_ADDSI		= 7'd49,
+	OP_ANDSI		= 7'd50,
+	OP_ORSI			= 7'd51,
 	OP_ENTER		= 7'd52,
 	OP_LEAVE		= 7'd53,
 	OP_PUSH			= 7'd54,
 	OP_POP			= 7'd55,
 	OP_PFXA32		= 7'd56,
-	OP_PFXA64		= 7'd57,
-	OP_PFXA128	= 7'd58,
+	OP_LDAX			= 7'd57,
+	OP_EORSI		= 7'd59,
 	OP_PFXB32		= 7'd60,
-	OP_PFXB64		= 7'd61,
-	OP_PFXB128	= 7'd62,
 	OP_LDB			= 7'd64,
 	OP_LDBU			= 7'd65,
 	OP_LDW			= 7'd66,
@@ -307,9 +296,7 @@ typedef enum logic [6:0] {
 	OP_LDO			= 7'd70,
 	OP_LDOU			= 7'd71,
 	OP_LDH			= 7'd72,
-	OP_LDA			= 7'd74,
 	OP_CACHE		= 7'd75,
-	OP_LDAX			= 7'd78,
 	OP_LDX			= 7'd79,	
 	OP_STB			= 7'd80,
 	OP_STW			= 7'd81,
@@ -477,18 +464,24 @@ typedef enum logic [6:0] {
 	FN_ENOR			= 7'd10,
 	FN_ANDC			= 7'd11,
 	FN_ORC			= 7'd12,
+	FN_MID3			= 7'd13,
+	FN_MIDU3		= 7'd14,
 	FN_MUL			= 7'd16,
 	FN_DIV			= 7'd17,
+	FN_MIN3			= 7'd18,
 	FN_MULU			= 7'd19,
 	FN_DIVU			= 7'd20,
 	FN_MULSU		= 7'd21,
 	FN_DIVSU		= 7'd22,
+	FN_MAX3			= 7'd23,
 	FN_MULH			= 7'd24,
 	FN_MOD			= 7'd25,
+	FN_MINU3		= 7'd26,
 	FN_MULUH		= 7'd27,
 	FN_MODU			= 7'd28,
 	FN_MULSUH		= 7'd29,
 	FN_MODSU		= 7'd30,
+	FN_MAXU3		= 7'd31,
 	FN_PTRDIF		= 7'd32,
 	NNA_MTWT		= 7'd40,
 	NNA_MTIN		= 7'd41,
@@ -725,6 +718,21 @@ typedef enum logic [3:0] {
 	DRAM0 = 4'd8,
 	DRAM1 = 4'd9
 } rob_owner_t;
+
+// Instruction block header.
+// The offset is the low order six bits of the PC needed for an instruction
+// group. This is needed to advance the PC in the branch-target buffer. Only
+// the offset of the first instruction in the group is needed. If the offset
+// is zero the PC will advance to the next cache line, otherwise the PC will
+// advance to the next cache line once all the offsets are used.
+
+typedef struct packed
+{
+	logic [9:0] resv;
+	logic [5:0] lastip;
+	logic [8:0] callno;
+	opcode_t opcode;
+} ibh_t;	// 24-bits
 
 parameter CSR_SR		= 16'h?004;
 parameter CSR_CAUSE	= 16'h?006;
@@ -1365,8 +1373,8 @@ typedef struct packed
 } writeback_info_t;
 */
 
-const pc_address_t RSTPC	= 32'hFFFD0000;
-const address_t RSTSP = 32'hFFFFFFF0;
+const pc_address_t RSTPC	= 32'hFFFC0000;
+const address_t RSTSP = 32'hFFFFFFC0;
 
 typedef logic [7:0] seqnum_t;
 
@@ -1385,9 +1393,9 @@ typedef struct packed {
 	// The following fields may change state while an instruction is processed.
 	logic v;									// 1=entry is valid, in use
 	seqnum_t sn;							// sequence number, decrements when instructions que
-	logic out;								// 1=instruction is being executed
 	logic lsq;								// 1=instruction has associated LSQ entry
 	lsq_ndx_t lsqndx;					// index to LSQ entry
+	logic [1:0] out;					// 1=instruction is being executed
 	logic [1:0] done;					// 2'b11=instruction is finished executing
 	pc_address_t brtgt;
 	mc_address_t mcbrtgt;			// micro-code branch target
@@ -1445,6 +1453,34 @@ typedef struct packed {
 	logic datav;					// store data is valid
 	logic [511:0] res;		// stores unaligned data as well (must be last field)
 } lsq_entry_t;
+
+function pc_address_t fnTargetIP;
+input pc_address_t ip;
+input value_t tgt;
+reg [5:0] lo;
+begin
+	if (SUPPORT_IBH) begin
+		case(tgt[3:0])
+		4'd0:	lo = 6'd00;
+		4'd1:	lo = 6'd05;
+		4'd2:	lo = 6'd10;
+		4'd3:	lo = 6'd15;
+		4'd5:	lo = 6'd20;
+		4'd6:	lo = 6'd25;
+		4'd7:	lo = 6'd30;
+		4'd8:	lo = 6'd35;
+		4'd9:	lo = 6'd40;
+		4'd11:	lo = 6'd45;
+		4'd12:	lo = 6'd50;
+		4'd13:	lo = 6'd55;
+		default:	lo = 6'd60;
+		endcase
+		fnTargetIP = {ip[$bits(pc_address_t)-1:6]+tgt[$bits(value_t)-1:4],lo};
+	end
+	else
+		fnTargetIP = ip+tgt;
+end
+endfunction
 
 function fnIsBranch;
 input instruction_t ir;
@@ -1523,9 +1559,8 @@ input instruction_t ir;
 begin
 	fnIsRet = 1'b0;
 	case(ir.any.opcode)
-	OP_RTS:	fnIsRet = 1'b1;
 	OP_RTD:
-		fnIsRet = ir[10:9]==2'd2;	
+		fnIsRet = ir[12:11]==2'd0;
 	default:
 		fnIsRet = 1'b0;
 	endcase
@@ -1611,6 +1646,7 @@ begin
 		FN_SLEU:	fnSourceAv = fnConstReg(ir.r2.Ra) || fnImma(ir);
 		default:	fnSourceAv = 1'b1;
 		endcase
+	OP_RTD:		fnSourceAv = fnConstReg(ir.r2.Ra) || fnImma(ir);
 	OP_JSR,
 	OP_ADDI:	fnSourceAv = fnConstReg(ir.r2.Ra) || fnImma(ir);
 	OP_SUBFI:	fnSourceAv = fnConstReg(ir.r2.Ra) || fnImma(ir);
@@ -1621,11 +1657,15 @@ begin
 	OP_ORI:		fnSourceAv = fnConstReg(ir.r2.Ra) || fnImma(ir);
 	OP_EORI:	fnSourceAv = fnConstReg(ir.r2.Ra) || fnImma(ir);
 	OP_SLTI:	fnSourceAv = fnConstReg(ir.r2.Ra) || fnImma(ir);
+	OP_ADDSI:	fnSourceAv = fnConstReg(ir.r2.Rt) || fnImma(ir);
+	OP_ANDSI:	fnSourceAv = fnConstReg(ir.r2.Rt) || fnImma(ir);
+	OP_ORSI:	fnSourceAv = fnConstReg(ir.r2.Rt) || fnImma(ir);
+	OP_EORSI:	fnSourceAv = fnConstReg(ir.r2.Rt) || fnImma(ir);
 	OP_SHIFT:	fnSourceAv = fnConstReg(ir.r2.Ra) || fnImma(ir);
 	OP_MOV:		fnSourceAv = fnConstReg(ir.r2.Ra) || fnImma(ir);
 	OP_DBRA:	fnSourceAv = fnConstReg(ir.r2.Ra) || fnImma(ir);
 	8'b00101???:	fnSourceAv = fnConstReg(ir.r2.Ra) || fnImma(ir);
-	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDOU,OP_LDH,OP_LDA:
+	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDOU,OP_LDH:
 		fnSourceAv = fnConstReg(ir.ls.Ra) || fnImma(ir);
 	OP_LDX:
 		fnSourceAv = fnConstReg(ir.lsn.Ra) || fnImma(ir);
@@ -1668,6 +1708,7 @@ begin
 		FN_SLEU:	fnSourceBv = fnConstReg(ir.r2.Rb) || fnImmb(ir);
 		default:	fnSourceBv = 1'b1;
 		endcase
+	OP_RTD:		fnSourceBv = 1'b0;
 	OP_JSR,
 	OP_ADDI:	fnSourceBv = 1'b1;
 	OP_SUBFI:	fnSourceBv = 1'b1;
@@ -1685,7 +1726,7 @@ begin
 		endcase
 	OP_DBRA:	fnSourceBv = fnConstReg(ir.br.Rb) || fnImmb(ir);
 	8'b00101???:		fnSourceBv = fnConstReg(ir.br.Rb) || fnImmb(ir);
-	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDOU,OP_LDH,OP_LDA:
+	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDOU,OP_LDH:
 		fnSourceBv = 1'b1;
 	OP_LDX:
 		fnSourceBv = fnConstReg(ir.lsn.Rb) || fnImmb(ir);
@@ -1754,9 +1795,13 @@ begin
 	OP_ORI:		fnSourceTv = fnConstReg(ir.ri.Rt);
 	OP_EORI:	fnSourceTv = fnConstReg(ir.ri.Rt);
 	OP_SLTI:	fnSourceTv = fnConstReg(ir.ri.Rt);
+	OP_ADDSI:	fnSourceTv = fnConstReg(ir.ri.Rt);
+	OP_ANDSI:	fnSourceTv = fnConstReg(ir.ri.Rt);
+	OP_ORSI:	fnSourceTv = fnConstReg(ir.ri.Rt);
+	OP_EORSI:	fnSourceTv = fnConstReg(ir.ri.Rt);
 	OP_SHIFT:	fnSourceTv = fnConstReg(ir.ri.Rt);
 	OP_MOV:		fnSourceTv = fnConstReg(ir.ri.Rt);
-	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDOU,OP_LDH,OP_LDA:
+	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDOU,OP_LDH:
 		fnSourceTv = fnConstReg(ir.ls.Rt);
 	OP_LDX:
 		fnSourceTv = fnConstReg(ir.lsn.Rt);
@@ -1820,7 +1865,7 @@ begin
 	OP_SHIFT:	fnSourcePv = ~vec;
 	OP_FLT2,OP_FLT3:	fnSourcePv = ~vecf;	
 	OP_MOV:		fnSourcePv = ~vec;
-	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDOU,OP_LDH,OP_LDA:
+	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDOU,OP_LDH:
 		fnSourcePv = ~veci;
 	OP_LDX:
 		fnSourcePv = ~veci;
@@ -1899,7 +1944,7 @@ begin
 	OP_ORI,OP_EORI:
 		fnImm = {48'h0000,ins[0][34:19]};
 	OP_RTD:	fnImm = {{16{ins[0][34]}},ins[0][34:19]};
-	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDA,OP_CACHE,
+	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_CACHE,
 	OP_STB,OP_STW,OP_STT,OP_STO:
 		fnImm = {{52{ins[0][34]}},ins[0][34:23]};
 	default:
@@ -1925,12 +1970,11 @@ input instruction_t ir;
 begin
 	fnImmb = 1'b0;
 	case(ir.any.opcode)
-	OP_RIS,
 	OP_ADDI,OP_CMPI,OP_MULI,OP_DIVI,OP_SUBFI,OP_SLTI:
 		fnImmb = 1'b1;
 	OP_RTD:
 		fnImmb = 1'b1;
-	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDOU,OP_LDH,OP_LDA,OP_CACHE,
+	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDOU,OP_LDH,OP_CACHE,
 	OP_STB,OP_STW,OP_STT,OP_STO,OP_STH:
 		fnImmb = 1'b1;
 	OP_LDX,OP_STX:
@@ -1967,12 +2011,6 @@ begin
 		ir.any.opcode==OP_PFXA32 ||
 		ir.any.opcode==OP_PFXB32 ||
 		ir.any.opcode==OP_PFXC32 ||
-		ir.any.opcode==OP_PFXA64 ||
-		ir.any.opcode==OP_PFXB64 ||
-		ir.any.opcode==OP_PFXC64 ||
-		ir.any.opcode==OP_PFXA128 ||
-		ir.any.opcode==OP_PFXB128 ||
-		ir.any.opcode==OP_PFXC128 ||
 		ir.any.opcode==OP_VEC ||
 		ir.any.opcode==OP_VECZ
 		;
@@ -2022,12 +2060,6 @@ begin
 		ir.any.opcode==OP_PFXA32 ||
 		ir.any.opcode==OP_PFXB32 ||
 		ir.any.opcode==OP_PFXC32 ||
-		ir.any.opcode==OP_PFXA64 ||
-		ir.any.opcode==OP_PFXB64 ||
-		ir.any.opcode==OP_PFXC64 ||
-		ir.any.opcode==OP_PFXA128 ||
-		ir.any.opcode==OP_PFXB128 ||
-		ir.any.opcode==OP_PFXC128 ||
 		ir.any.opcode==OP_VEC ||
 		ir.any.opcode==OP_VECZ
 		;

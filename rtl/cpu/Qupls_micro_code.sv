@@ -442,8 +442,8 @@ case(micro_ip)
 12'h1B7:	begin next_ip = 12'h1B8; instr = {'d0,21'h123456,6'd0,MC0,OP_ADDI}; regx = 4'h1; end
 
 12'h1B8:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
-12'h1B9:	begin next_ip = 12'h000; instr = {'d0,21'h1FFFE0,6'd0,SP,OP_LDO};	end			// SP = Mem[FFFFFFE0]
-12'h1BA:	begin next_ip = 12'h000; instr = {'d0,21'h1FFFF0,6'd0,MC0,OP_LDO}; regx = 4'h1; end			// PC = Mem[FFFFFFF0]
+12'h1B9:	begin next_ip = 12'h000; instr = {'d0,21'h1FFFC0,6'd0,SP,OP_LDO};	end			// SP = Mem[FFFFFFE0]
+12'h1BA:	begin next_ip = 12'h000; instr = {'d0,21'h1FFFC8,6'd0,MC0,OP_LDO}; regx = 4'h1; end			// PC = Mem[FFFFFFF0]
 12'h1BB:	begin next_ip = 12'h000; instr = {'d0,21'h000000,MC0,6'd0,OP_JSR}; regx = 4'h2; end
 12'h1BC:	begin next_ip = 12'h000; instr = {'d0,OP_NOP};	end
 

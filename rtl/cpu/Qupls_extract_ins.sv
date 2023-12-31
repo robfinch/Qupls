@@ -188,10 +188,14 @@ always_comb ins3_ = ic_line2 >> {pc3[5:0],3'd0};
 
 reg nop0,nop1,nop2,nop3;
 always_comb nop0 = nop_i || (branchmiss && misspc > pc0_i);
-always_comb nop1 = nop_i || (branchmiss && misspc > pc1_i) || (pc1[5:0] >= ic_line2[493:488] && !mipv_i);
-always_comb nop2 = nop_i || (branchmiss && misspc > pc2_i) || (pc2[5:0] >= ic_line2[493:488] && !mipv_i);
-always_comb nop3 = nop_i || pc3[5:0] >= ic_line2[493:488] && !mipv_i;
-
+always_comb nop1 = nop_i || (branchmiss && misspc > pc1_i);
+always_comb nop2 = nop_i || (branchmiss && misspc > pc2_i);
+always_comb nop3 = nop_i;
+/*
+always_comb nop1 = nop_i || (branchmiss && misspc > pc1_i) || (pc1[5:0] >= ic_line2[501:496] && !mipv_i);
+always_comb nop2 = nop_i || (branchmiss && misspc > pc2_i) || (pc2[5:0] >= ic_line2[501:496] && !mipv_i);
+always_comb nop3 = nop_i || pc3[5:0] >= ic_line2[501:496] && !mipv_i;
+*/
 Qupls_ins_extract_mux umux0
 (
 	.rst(rst_i),
@@ -288,31 +292,36 @@ Qupls_ins_extract_mux umux3
 	.ins(ins3)
 );
 
-always_ff @(posedge clk)
-if (en)
-	ins4 <= hirq ? {'d0,FN_IRQ,1'b0,vect_i,5'd0,2'd0,irq_i,OP_SYS} : 
-		nop_i ? {33'd0,OP_NOP} :
-		mipv ? mc_ins4 : ic_line2 >> {pc4[5:0],3'd0};
-always_ff @(posedge clk)
-if (en)
-	ins5 <= hirq ? {'d0,FN_IRQ,1'b0,vect_i,5'd0,2'd0,irq_i,OP_SYS} :
-		nop_i ? {33'd0,OP_NOP} :
-		mipv ? mc_ins5 : ic_line2 >> {pc5[5:0],3'd0};
-always_ff @(posedge clk)
-if (en)
-	ins6 <= hirq ? {'d0,FN_IRQ,1'b0,vect_i,5'd0,2'd0,irq_i,OP_SYS} :
-		nop_i ? {33'd0,OP_NOP} :
-		mipv ? mc_ins6 : ic_line2 >> {pc6[5:0],3'd0};
-always_ff @(posedge clk)
-if (en)
-	ins7 <= hirq ? {'d0,FN_IRQ,1'b0,vect_i,5'd0,2'd0,irq_i,OP_SYS} :
-		nop_i ? {33'd0,OP_NOP} :
-		mipv ? mc_ins7 : ic_line2 >> {pc7[5:0],3'd0};
-always_ff @(posedge clk)
-if (en)
-	ins8 <= hirq ? {'d0,FN_IRQ,1'b0,vect_i,5'd0,2'd0,irq_i,OP_SYS} :
-		nop_i ? {33'd0,OP_NOP} :
-		mipv ? mc_ins8 : ic_line2 >> {pc8[5:0],3'd0};
+generate begin : gInsExt
+	if (SUPPORT_POSTFIX) begin
+		always_ff @(posedge clk)
+		if (en)
+			ins4 <= hirq ? {'d0,FN_IRQ,1'b0,vect_i,5'd0,2'd0,irq_i,OP_SYS} : 
+				nop_i ? {33'd0,OP_NOP} :
+				mipv ? mc_ins4 : ic_line2 >> {pc4[5:0],3'd0};
+		always_ff @(posedge clk)
+		if (en)
+			ins5 <= hirq ? {'d0,FN_IRQ,1'b0,vect_i,5'd0,2'd0,irq_i,OP_SYS} :
+				nop_i ? {33'd0,OP_NOP} :
+				mipv ? mc_ins5 : ic_line2 >> {pc5[5:0],3'd0};
+		always_ff @(posedge clk)
+		if (en)
+			ins6 <= hirq ? {'d0,FN_IRQ,1'b0,vect_i,5'd0,2'd0,irq_i,OP_SYS} :
+				nop_i ? {33'd0,OP_NOP} :
+				mipv ? mc_ins6 : ic_line2 >> {pc6[5:0],3'd0};
+		always_ff @(posedge clk)
+		if (en)
+			ins7 <= hirq ? {'d0,FN_IRQ,1'b0,vect_i,5'd0,2'd0,irq_i,OP_SYS} :
+				nop_i ? {33'd0,OP_NOP} :
+				mipv ? mc_ins7 : ic_line2 >> {pc7[5:0],3'd0};
+		always_ff @(posedge clk)
+		if (en)
+			ins8 <= hirq ? {'d0,FN_IRQ,1'b0,vect_i,5'd0,2'd0,irq_i,OP_SYS} :
+				nop_i ? {33'd0,OP_NOP} :
+				mipv ? mc_ins8 : ic_line2 >> {pc8[5:0],3'd0};
+	end
+end
+endgenerate
 
 always_ff @(posedge clk) if (en) nop_o <= nop_i;
 
