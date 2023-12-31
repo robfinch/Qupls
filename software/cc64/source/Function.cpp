@@ -243,7 +243,7 @@ void Function::GenerateBody(bool force_inline)
 			IsInline = true;
 		PeepOpt();
 		FlushPeep(ofs);
-		ofs.printf("\tpadi\n");
+//		ofs.printf("\tpadi\n");
 		switch (syntax) {
 		case MOT:
 			break;

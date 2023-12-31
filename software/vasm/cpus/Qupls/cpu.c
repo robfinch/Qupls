@@ -2,7 +2,7 @@
 
 // The following indicates to generate a block header and place instructions
 // into 64 byte blocks. Currently must be used with the next constant.
-#define SUPPORT_IBH	1
+//#define SUPPORT_IBH	1
 // The following generates code to support postfix immediates.
 //#define SUPPORT_PFX_IMM	1
 
@@ -20,10 +20,10 @@
 // two more bits as the instruction slot number encodes into four bits instead of
 // six bits. However, it does mean that code needs to be block (64 byte)
 // relative.
-#define BRANCH_INO 1
+//#define BRANCH_INO 1
 
 // Ordinary PC relative branches
-//#define BRANCH_PCREL	1
+#define BRANCH_PCREL	1
 
 #define TRACE(x)		/*printf(x)*/
 #define TRACE2(x,y)	/*printf((x),(y))*/
@@ -79,7 +79,7 @@ static char *regnames[64] = {
 	"s8",	"s9", "s10", "s11", "s12", "s13", "s14", "s15",
 	"m0", "m1", "m2", "m3", "m4", "m5", "m6", "m7",
 	"a3", "a4", "a5", "a6", "a7", "a8", "a9", "a10",
-	"mc0", "mc1", "mc2", "mc3", "ts", "pc", "cta", "lc",
+	"mc0", "mc1", "mc2", "gp2", "ts", "pc", "cta", "lc",
 	"lr0", "lr1", "lr2", "lr3", "gp1", "gp0", "fp", "sp"
 };
 
@@ -197,7 +197,7 @@ mnemonic mnemonics[]={
 	"cntpop", {OP_REG,OP_REG,0,0,0}, {R1,CPU_ALL,0,0x04000001,5},
 
 	"com",	{OP_VREG,OP_VREG,0,0,0}, {R3II,CPU_ALL,0,0x1417F00001AALL,6},
-	"com", {OP_REG,OP_REG,0,0,0}, {RIL,CPU_ALL,0,0xFFFFFFF800DALL,6,0xFFF8000ALL,4},
+	"com", {OP_REG,OP_REG,0,0,0}, {RI,CPU_ALL,0,0xfffff80000LL|OPC(10LL),5},
 
 	"cpuid", {OP_REG,OP_REG,0,0,0}, {R1,CPU_ALL,0,0x41LL,4},
 	
@@ -275,8 +275,8 @@ mnemonic mnemonics[]={
 	"jsr",	{OP_REG,OP_IMM,0,0,0}, {JL2,CPU_ALL,0,OPC(36LL),6, SZ_UNSIZED,0},
 	"jsr",	{OP_IMM,0,0,0,0}, {J2,CPU_ALL,0,OPC(36LL),6, SZ_UNSIZED,0},
 
-	"lda",	{OP_REG,OP_IMM,0,0,0}, {DIRECT,CPU_ALL,0,OPC(74LL),5, SZ_UNSIZED, 0},	
-	"lda",	{OP_REG,OP_REGIND,0,0}, {REGIND,CPU_ALL,0,OPC(74LL),5, SZ_UNSIZED, 0},	
+	"lda",	{OP_REG,OP_IMM,0,0,0}, {DIRECT,CPU_ALL,0,OPC(4LL),5, SZ_UNSIZED, 0},	
+	"lda",	{OP_REG,OP_REGIND,0,0}, {REGIND,CPU_ALL,0,OPC(4LL),5, SZ_UNSIZED, 0},	
 	"lda",	{OP_REG,OP_SCNDX,0,0,0}, {SCNDX,CPU_ALL,0,LSFUNC(10LL)|S(3)|OPC(79LL),5, SZ_UNSIZED, 0},	
 
 	"ldb",	{OP_REG,OP_IMM,0,0,0}, {DIRECT,CPU_ALL,0,OPC(64LL),5, SZ_UNSIZED, SZ_BYTE},	
@@ -476,13 +476,13 @@ mnemonic mnemonics[]={
 	"rtd", {OP_REG,OP_REG,OP_REG,OP_REG,0}, {RTDR,CPU_ALL,0,0x80000000LL|R2FUNC(4LL)|OPC(2LL),5,SZ_INTALL,SZ_HEXI},	
 	"rtd", {OP_NEXTREG,OP_VREG|OP_REG,OP_VREG|OP_REG,OP_IMM}, {RTDI,CPU_ALL,0,0x80000000LL|OPC(4LL),5,SZ_INTALL,SZ_HEXI},	
 	"rtd", {OP_REG,OP_VREG|OP_REG,OP_VREG|OP_REG,OP_IMM}, {RTDI,CPU_ALL,0,0x80000000LL|OPC(4LL),5,SZ_INTALL,SZ_HEXI},	
-	"rtd", {OP_NEXTREG,OP_IMM,OP_IMM,0,0}, {RTDR,CPU_ALL,0,RTYPE(0LL)|OPC(35LL),5,SZ_INTALL,SZ_HEXI},	
+	"rtd", {OP_NEXTREG,OP_IMM,OP_IMM,0,0}, {RTDR,CPU_ALL,0,RTYPE(0LL)|RA(56LL)|OPC(35LL),5,SZ_INTALL,SZ_HEXI},	
 	"rte",	{0,0,0,0,0}, {RTDR,CPU_ALL,0,RTYPE(1LL)|OPC(35LL), 5},
 	"rte2",	{0,0,0,0,0}, {RTDR,CPU_ALL,0,RTYPE(2LL)|OPC(35LL), 5},
 	"rti",	{0,0,0,0,0}, {RTDR,CPU_ALL,0,RTYPE(1LL)|OPC(35LL), 5},
 	"rti2",	{0,0,0,0,0}, {RTDR,CPU_ALL,0,RTYPE(2LL)|OPC(35LL), 5},
 	"rts", {OP_NEXTREG,OP_REG,0,0,0}, {RTDR,CPU_ALL,0,RTYPE(0LL)|OPC(35LL),5,SZ_INTALL,SZ_HEXI},	
-	"rts", {0,0,0,0,0}, {RTDR,CPU_ALL,0,RA(56)|RTYPE(0LL)|OPC(35LL),5,SZ_UNSIZED,0},	
+	"rts", {0,0,0,0,0}, {RTDR,CPU_ALL,0,RTYPE(0LL)|RA(56LL)|OPC(35LL),5,SZ_UNSIZED,0},	
 
 	"sbx", {OP_VREG|OP_REG,OP_VREG|OP_REG,OP_IMM,OP_IMM,0}, {RII,CPU_ALL,0,FUNC3(3LL)|OPC(13LL),5,SZ_INTALL,SZ_HEXI},	
 
@@ -1590,7 +1590,7 @@ static int get_reloc_type(operand *op)
   return (rtype);
 }
 
-/* Compute branch displacement field value using one of three different
+/* Compute branch target field value using one of three different
   methods.
 */
 static thuge calc_branch_disp(thuge val, taddr pc)
@@ -1599,7 +1599,7 @@ static thuge calc_branch_disp(thuge val, taddr pc)
 	uint64_t pg_offs;
 
 #ifdef BRANCH_PGREL        	
-	ino = (val.lo & 0x3fLL) / 5LL;
+	ino = (val.lo & 0x3fLL) >> 2LL;
 	pg_offs = ((val.lo >> 6LL) & 0x3ffLL;
 	val.lo &= 0xffffffffffff0000LL;
 	val = hsub(val,huge_from_int(pc & 0xffffffffffff0000LL));
@@ -1609,7 +1609,7 @@ static thuge calc_branch_disp(thuge val, taddr pc)
 	val.lo |= pg_offs << 4LL;
 #endif
 #ifdef BRANCH_INO
-	ino = (val.lo & 0x3fLL) >> 2;
+	ino = (val.lo & 0x3fLL) >> 2LL;
 	val.lo &= 0xffffffffffffffc0LL;
 	val = hsub(val,huge_from_int(pc & 0xffffffffffffffc0LL));
 	val = hshr(val,2);
@@ -1718,16 +1718,16 @@ static thuge make_reloc(int reloctype,operand *op,section *sec,
       		break;
       	case B2:
       	case BL2:
-	    		ino = (addend.lo & 0x3fLL) / 5LL;
-					addend = hsub(addend,huge_from_int(pc));
-					addend = hshr(addend,2);
-					addend.lo &= 0xfffffffffffffff0LL;
-					addend.lo |= ino;
-					val = addend;
-	      	add_extnreloc_masked(reloclist,base,addend.lo,REL_ABS,
+#ifdef BRANCH_INO      		
+      		val = calc_branch_disp(addend, pc);
+	      	add_extnreloc_masked(reloclist,base,val.lo,REL_ABS,
                          13,4,0,0xfLL);
-	      	add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
+	      	add_extnreloc_masked(reloclist,base,val.lo,reloctype,
                          17,23,0,0x7fffff0LL);
+#else
+	      	add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
+                         13,27,0,0x7ffffffLL);
+#endif                         
           break;
       	/* Conditional jump */
       	case J:
@@ -2026,9 +2026,12 @@ static void encode_reg(instruction_buf* insn, operand *op, mnemonic* mnemo, int 
 			else if (i==3)
 				insn->opcode = insn->opcode | (RC(op->basereg & 3LL));
 			break;
+		case RISH: case RISM:
+			if (i==0)
+				insn->opcode = insn->opcode | (RT(op->basereg));
+			break;
 		case RIV:
 		case RIS:
-		case RISH: case RISM:
 		case RIMV:			
 			if (i==0)
 				insn->opcode = insn->opcode | (RT(op->basereg));
@@ -2066,18 +2069,20 @@ static void encode_reg(instruction_buf* insn, operand *op, mnemonic* mnemo, int 
 			else if (i==2)
 				insn->opcode = insn->opcode | (RB(op->basereg));
 			break;
-		/*
+		
 		case RTDR:
 			if (i==0)
-				*insn = *insn| (RT(op->basereg & regmask));
+				insn->opcode = insn->opcode| (RT(op->basereg));
 			else if (i==1)
-				*insn = *insn| (RA(op->basereg & regmask));
+				insn->opcode = insn->opcode| (RA(op->basereg));
+			/*
 			else if (i==2)
 				*insn = *insn| (RB(op->basereg & regmask));
 			else if (i==3)
 				*insn = *insn| (RC(op->basereg & 3LL));
+			*/
 			break;
-		*/
+		
 		case R4:
 		case R3:
 		case R3RR:
@@ -3555,6 +3560,8 @@ size_t encode_qupls_instruction(instruction *ip,section *sec,taddr pc,
 #endif
 #ifdef BRANCH_INO
 	create_split_target_operands(ip, mnemo);
+#else
+	create_split_target_operands(ip, mnemo);
 #endif
 
 	// Detect a vector instruction
@@ -3731,8 +3738,12 @@ size_t encode_qupls_instruction(instruction *ip,section *sec,taddr pc,
 */
 static int will_fit_in_block(taddr pc, size_t sz)
 {
+#ifdef SUPPORT_IBH
 	taddr npc = pc + sz;
 	return ((npc & ~0x3fLL)==(pc & ~0x3fLL)) && ((npc & 0x3fLL) <= 60LL);
+#else
+	return (1);
+#endif
 }
 
 static void convert_opcode_to_r3(instruction_buf* insn, int64_t* pOpcode)
@@ -4117,6 +4128,8 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
 		d = db->data = mymalloc(final_sz);
     db->size = final_sz;
 #endif
+		memset(&insn,0,sizeof(insn));
+		encode_qupls_instruction(ip,sec,pc,&modifier1,&modifier2,&insn,db);
 #endif
 		insn_sizes2[sz2ndx] = db->size;
 /*
