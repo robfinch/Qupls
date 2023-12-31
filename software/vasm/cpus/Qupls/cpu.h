@@ -237,6 +237,8 @@ typedef struct {
 #define LDI			69
 #define SYNC		70
 #define PADI		71
+#define RISH		72
+#define RISM		73
 
 #define OPC(x)	(((x) & 0x7fLL))
 #define LK(x)		(((x) & 1LL) << 7LL)

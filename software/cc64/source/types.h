@@ -2517,6 +2517,7 @@ public:
 	std::string fileExt;
 	int nregs;
 	int pagesize;
+	int cache_line_size;
 	int code_align;
 	int NumArgRegs;
 	int NumTmpRegs;

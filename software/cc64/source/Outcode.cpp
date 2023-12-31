@@ -47,7 +47,7 @@ struct nlit *numeric_tab = nullptr;
 // Please keep table in alphabetical order.
 // Instruction.cpp has the number of table elements hard-coded in it.
 //
-Instruction opl[361] =
+Instruction opl[363] =
 {   
 { "#", op_remark },
 { "#asm",op_asm,300 },
@@ -276,6 +276,8 @@ Instruction opl[361] =
 { "not",op_not,2,1, false,am_reg, am_reg,0,0 },
 { "nr", op_nr },
 { "or",op_or,1,1,false,am_reg,am_reg,am_reg | am_imm,0 },
+{ "orh",op_orh,1,1,false,am_reg,am_imm,0, 0 },
+{ "orm",op_orm,1,1,false,am_reg,am_imm,0, 0 },
 { "ors",op_ors,1,1,false,am_reg,am_imm,am_imm, 0 },
 { "orcm",op_orcm,1,1,false,am_reg,am_reg,am_reg,0 },
 { "orf",op_orf,1,1,false,am_reg,am_reg,am_reg | am_imm,0 },
@@ -610,9 +612,10 @@ char *put_labels(txtoStream& tfs, char *buf)
 char *put_label(txtoStream& tfs, int lab, char *nm, char *ns, char d, int sz, int segment)
 {
   static char buf[500];
+	int nn;
 
 	if (d != 'C')
-		seg(ofs, segment, 14);
+		seg(ofs, segment, 6);
 	if (ns == nullptr)
 		ns = (char *)"";
 	if (lab < 0) {
@@ -665,7 +668,19 @@ char *put_label(txtoStream& tfs, int lab, char *nm, char *ns, char d, int sz, in
 				tfs.printf((char*)"# %s\n", (char*)nm);
 			}
 		}
-		if (syntax == MOT) {
+		if (syntax == STD) {
+			if (sz > 0 && (segment==bssseg || segment==noseg)) {
+				tfs.printf("\t.byte\t0");
+				for (nn = 1; nn < sz; nn++) {
+					if ((nn % 32) == 31)
+						tfs.printf("\n\t.byte\t0%c", nn == sz ? ' ' : ',');
+					else
+						tfs.printf(",0");
+				}
+				tfs.printf("\n");
+			}
+		}
+		else if (syntax == MOT) {
 			tfs.printf("\tdcb.b\t%d,0\n", sz);
 		}
 	}
@@ -1579,9 +1594,9 @@ void dseg(txtoStream& tfs)
 		curseg = dataseg;
   }
 	if (syntax == MOT)
-		tfs.printf("\talign\t%d\n", cpu.pagesize);
+		tfs.printf("\talign\t%d\n", 6);// cpu.pagesize);
 	else
-		tfs.printf("\t.align\t%d\n", cpu.pagesize);
+		tfs.printf("\t.align\t%d\n", 6);// cpu.pagesize);
 }
 
 void tseg(txtoStream& tfs)
@@ -1589,7 +1604,7 @@ void tseg(txtoStream& tfs)
 	if( curseg != tlsseg) {
 		nl(tfs);
 		tfs.printf("\t.tls\n");
-		tfs.printf("\t.align\t%d\n", cpu.pagesize);
+		tfs.printf("\t.align\t%d\n", 6);// cpu.pagesize);
 		curseg = tlsseg;
     }
 }
@@ -1600,11 +1615,11 @@ void roseg(txtoStream& tfs)
 		nl(tfs);
 		if (syntax == MOT) {
 			tfs.printf("\tdata\n");
-			tfs.printf("\talign\t%d\n", cpu.pagesize);
+			tfs.printf("\talign\t%d\n", 6);// cpu.pagesize);
 		}
 		else {
 			tfs.printf("\t.rodata\n");
-			tfs.printf("\t.align\t%d\n", cpu.pagesize);
+			tfs.printf("\t.align\t%d\n", 6);// cpu.pagesize);
 		}
 		curseg = rodataseg;
     }

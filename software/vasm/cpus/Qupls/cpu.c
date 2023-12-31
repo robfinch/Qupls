@@ -100,10 +100,16 @@ mnemonic mnemonics[]={
 	"add", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(4LL)|OPC(2LL),5,SZ_UNSIZED,0},	
 	"add", {OP_REG,OP_IMM,OP_REG,0,0}, {RIA,CPU_ALL,0,R2FUNC(4LL)|OPC(2LL),5,SZ_UNSIZED,0},	
 	"add", {OP_REG,OP_REG,OP_IMM,0,0}, {RI,CPU_ALL,0,OPC(4LL),5,SZ_UNSIZED,0,0,OPC(2LL)|R2FUNC(4LL)},	
+	"addh",{OP_REG,OP_IMM,0,0,0}, {RISH,CPU_ALL,0,0x6000LL|OPC(49LL),5,SZ_UNSIZED,0,0},
+	"addm",{OP_REG,OP_IMM,0,0,0}, {RISM,CPU_ALL,0,0x2000LL|OPC(49LL),5,SZ_UNSIZED,0,0},
+	"adds",{OP_REG,OP_IMM,OP_IMM,0,0}, {RIS,CPU_ALL,0,OPC(49LL),5,SZ_UNSIZED,0,0},
 
 	"and", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(0)|OPC(2LL),5,SZ_UNSIZED,0},	
 	"and", {OP_REG,OP_IMM,OP_REG,0,0}, {RIA,CPU_ALL,0,R2FUNC(0)|OPC(2LL),5,SZ_UNSIZED,0},	
 	"and", {OP_REG,OP_REG,OP_IMM,0,0}, {RI,CPU_ALL,0,OPC(8LL),5,SZ_UNSIZED,0,0},	
+	"andh",{OP_REG,OP_IMM,0,0,0}, {RISH,CPU_ALL,0,0x6000LL|OPC(50LL),5,SZ_UNSIZED,0,0},
+	"andm",{OP_REG,OP_IMM,0,0,0}, {RISM,CPU_ALL,0,0x2000LL|OPC(50LL),5,SZ_UNSIZED,0,0},
+	"ands",{OP_REG,OP_IMM,OP_IMM,0,0}, {RIS,CPU_ALL,0,OPC(50LL),5,SZ_UNSIZED,0,0},
 
 	"asl", {OP_REG,OP_REG,OP_REG,0}, {SH,CPU_ALL,0,SHFUNC(0x00LL)|OPC(88LL),5,SZ_UNSIZED,0},	
 	"asl", {OP_REG,OP_REG,OP_IMM,0}, {SI,CPU_ALL,0,SHFUNC(0x40LL)|OPC(88LL),5,SZ_UNSIZED,0},	
@@ -226,6 +232,9 @@ mnemonic mnemonics[]={
 	"eor", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(2LL)|OPC(2LL),5,SZ_UNSIZED,0},	
 	"eor", {OP_REG,OP_IMM,OP_REG,0,0}, {RIA,CPU_ALL,0,R2FUNC(2LL)|OPC(2LL),5,SZ_UNSIZED,0},	
 	"eor", {OP_REG,OP_REG,OP_IMM,0,0}, {RI,CPU_ALL,0,OPC(10LL),5,SZ_UNSIZED,0,0},	
+	"eorh",{OP_REG,OP_IMM,0,0,0}, {RISH,CPU_ALL,0,0x6000LL|OPC(59LL),5,SZ_UNSIZED,0,0},
+	"eorm",{OP_REG,OP_IMM,0,0,0}, {RISM,CPU_ALL,0,0x2000LL|OPC(59LL),5,SZ_UNSIZED,0,0},
+	"eors",{OP_REG,OP_IMM,OP_IMM,0,0}, {RIS,CPU_ALL,0,OPC(59LL),5,SZ_UNSIZED,0,0},
 
 	"ext",	{OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(61)|OPC(13),5,SZ_INTALL,SZ_HEXI},
 	"ext",	{OP_REG,OP_REG,OP_IMM,OP_IMM,0}, {BFR3II,CPU_ALL,0,FUNC3(5)|OPC(13),5,SZ_INTALL,SZ_HEXI},
@@ -384,7 +393,9 @@ mnemonic mnemonics[]={
 	"orf", {OP_VREG|OP_REG,OP_VREG|OP_REG,OP_VREG|OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(9LL)|OPC(2LL),5, SZ_INTALL, SZ_HEXI},	
 	"orf", {OP_VREG|OP_REG,OP_VREG|OP_REG,OP_IMM,0}, {RI,CPU_ALL,0,OPC(9LL),5, SZ_INTALL, SZ_HEXI},	
 
-	"ors",{OP_REG,OP_IMM,OP_IMM,0,0}, {RIS,CPU_ALL,0,OPC(59LL),5,SZ_UNSIZED,0,0},
+	"orh",{OP_REG,OP_IMM,0,0,0}, {RISH,CPU_ALL,0,0x6000LL|OPC(51LL),5,SZ_UNSIZED,0,0},
+	"orm",{OP_REG,OP_IMM,0,0,0}, {RISM,CPU_ALL,0,0x2000LL|OPC(51LL),5,SZ_UNSIZED,0,0},
+	"ors",{OP_REG,OP_IMM,OP_IMM,0,0}, {RIS,CPU_ALL,0,OPC(51LL),5,SZ_UNSIZED,0,0},
 
 	"padi", {0,0,0,0,0}, {PADI,CPU_ALL,0,0xFF,0},
 
@@ -452,6 +463,7 @@ mnemonic mnemonics[]={
 	"revbit",	{OP_REG,OP_REG,0,0,0}, {R1,CPU_ALL,0,0x50000001LL,5},
 
 //	"ret", {OP_REG,0,0,0,0}, {RTDR,CPU_ALL,0,0x80000000LL|R2FUNC(4LL)|OPC(2LL),5,SZ_INTALL,SZ_HEXI},	
+	"ret", {OP_NEXTREG,OP_REG,0,0,0}, {RTDR,CPU_ALL,0,RTYPE(0LL)|OPC(35LL),5,SZ_UNSIZED,0},	
 	"ret", {0,0,0,0,0}, {RTDR,CPU_ALL,0,RA(56LL)|RTYPE(0LL)|OPC(35LL),5,SZ_UNSIZED,0},	
 
 	"rex",	{OP_IMM,OP_REG,0,0,0},{REX,CPU_ALL,0,0x200000000007LL,5},	
@@ -573,7 +585,9 @@ mnemonic mnemonics[]={
 	"xor", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(2LL)|OPC(2LL),5,SZ_UNSIZED,0},	
 	"xor", {OP_REG,OP_IMM,OP_REG,0,0}, {RIA,CPU_ALL,0,R2FUNC(2LL)|OPC(2LL),5,SZ_UNSIZED,0},	
 	"xor", {OP_REG,OP_REG,OP_IMM,0,0}, {RI,CPU_ALL,0,OPC(10LL),5,SZ_UNSIZED,0,0},	
-
+	"xorh",{OP_REG,OP_IMM,0,0,0}, {RISH,CPU_ALL,0,0x6000LL|OPC(59LL),5,SZ_UNSIZED,0,0},
+	"xorm",{OP_REG,OP_IMM,0,0,0}, {RISM,CPU_ALL,0,0x2000LL|OPC(59LL),5,SZ_UNSIZED,0,0},
+	"xors",{OP_REG,OP_IMM,OP_IMM,0,0}, {RIS,CPU_ALL,0,OPC(59LL),5,SZ_UNSIZED,0,0},
 };
 
 const int mnemonic_cnt = sizeof(mnemonics)/sizeof(mnemonics[0]);
@@ -1584,7 +1598,6 @@ static thuge calc_branch_disp(thuge val, taddr pc)
 	uint64_t ino;
 	uint64_t pg_offs;
 
-	printf("val=%I64x pc=%I64x\n", val.lo, pc);
 #ifdef BRANCH_PGREL        	
 	ino = (val.lo & 0x3fLL) / 5LL;
 	pg_offs = ((val.lo >> 6LL) & 0x3ffLL;
@@ -1684,7 +1697,7 @@ static thuge make_reloc(int reloctype,operand *op,section *sec,
         reloctype = REL_ABS;
         addend = val;
         mask = -1;
-      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
+      		add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
                            pos,size,disp,mask);
       }
       else {  /* instruction operand */
@@ -1736,17 +1749,13 @@ static thuge make_reloc(int reloctype,operand *op,section *sec,
 		      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
                            19,13,0,0x7ffc0LL);
           break;
-        case RIS:
+        case RISM:
 		      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
-                         16,24,0,0xffffffLL);
-        	if (!is_nbit(addend,24)) {
-			      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
-                           16,24,5,0xffffff00000LL);
-        	}
-        	if (!is_nbit(addend,40)) {
-			      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
-                           16,24,10,0xffffff0000000000LL);
-        	}
+                         16,24,0,0xffffff00000LL);
+          break;
+        case RISH:
+		      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
+	                       16,24,0,0xfffff00000000000LL);
         	break;
         case RI:
         case RIV:
@@ -2019,6 +2028,7 @@ static void encode_reg(instruction_buf* insn, operand *op, mnemonic* mnemo, int 
 			break;
 		case RIV:
 		case RIS:
+		case RISH: case RISM:
 		case RIMV:			
 			if (i==0)
 				insn->opcode = insn->opcode | (RT(op->basereg));
@@ -2178,7 +2188,7 @@ static void encode_vreg(uint64_t* insn, operand *op, mnemonic* mnemo, int i)
 			break;
 
 		case RIV:
-		case RIS:
+		case RIS: case RISH: case RISM:
 		case RIMV:
 			if (i==0)
 				*insn = *insn| (RT(op->basereg));
@@ -2422,11 +2432,14 @@ static size_t encode_immed_RI(instruction_buf* insn, thuge hval, int i, taddr pc
 	return (isize);
 }
 
-static size_t encode_direct(instruction_buf* insn, thuge val, uint64_t mask)
+static size_t encode_direct(instruction_buf* insn, thuge val, uint64_t mask,
+	int i, taddr pc, section* sec, instruction* ip
+	)
 {
 	size_t isize = 5;
 
 	TRACE("endir ");
+	return (encode_immed_RI(insn, val, i, pc, sec, ip));
 	val.lo &= mask;
 
 	// We can always encode if fewer than 22 address bits are needed.
@@ -2561,7 +2574,7 @@ static size_t encode_immed (
 				insn->opcode = insn->opcode | ((val.lo & 0xffffffLL) << 7LL);
 		}
 		else if (mnemo->ext.format==DIRECT) {
-			isize = encode_direct(insn, hval, op->mask);
+			isize = encode_direct(insn, hval, op->mask, i, pc, sec, ip);
 		}
 		else if (mnemo->ext.format == CSR) {
 			isize = 5;
@@ -2663,6 +2676,26 @@ static size_t encode_immed (
 				}			
 			}
 		}
+		else if (mnemo->ext.format==RISM) {
+			if (insn) {
+				if (i==1) {
+					insn->opcode = insn->opcode | (((val.lo >> 20LL) & 0xffffffLL) << 16LL);
+				}
+				else if (i==2) {
+					insn->opcode = insn->opcode | ((val.lo & 0x7LL) << 13LL);
+				}			
+			}
+		}
+		else if (mnemo->ext.format==RISH) {
+			if (insn) {
+				if (i==1) {
+					insn->opcode = insn->opcode | (((val.lo >> 44LL) & 0xffffffLL) << 16LL);
+				}
+				else if (i==2) {
+					insn->opcode = insn->opcode | ((val.lo & 0x7LL) << 13LL);
+				}			
+			}
+		}
 		else if (mnemo->ext.format==RIL || mnemo->ext.format==RTDI) {
 		}
 		else if (mnemo->ext.format==REP) {
@@ -2704,7 +2737,7 @@ static size_t encode_immed (
 				insn->opcode = insn->opcode | ((val.lo & 0xffffffLL) << 7LL);
 		}
 		else if (mnemo->ext.format==DIRECT) {
-			isize = encode_direct(insn, hval, op->mask);
+			isize = encode_direct(insn, hval, op->mask, i, pc, sec, ip);
 		}
 		else if (mnemo->ext.format==CSRI) {
 			isize = 5;
@@ -2764,6 +2797,26 @@ static size_t encode_immed (
 			if (insn) {
 				if (i==1) {
 					insn->opcode = insn->opcode | ((val.lo & 0xffffffLL) << 16LL);
+				}
+				else if (i==2) {
+					insn->opcode = insn->opcode | ((val.lo & 0x7LL) << 13LL);
+				}			
+			}
+		}
+		else if (mnemo->ext.format==RISM) {
+			if (insn) {
+				if (i==1) {
+					insn->opcode = insn->opcode | (((val.lo >> 20LL) & 0xffffffLL) << 16LL);
+				}
+				else if (i==2) {
+					insn->opcode = insn->opcode | ((val.lo & 0x7LL) << 13LL);
+				}			
+			}
+		}
+		else if (mnemo->ext.format==RISH) {
+			if (insn) {
+				if (i==1) {
+					insn->opcode = insn->opcode | (((val.lo >> 44LL) & 0xffffffLL) << 16LL);
 				}
 				else if (i==2) {
 					insn->opcode = insn->opcode | ((val.lo & 0x7LL) << 13LL);
@@ -2891,7 +2944,6 @@ static size_t encode_branch_B(instruction_buf* insn, operand* op, int64_t val, i
   			insn->opcode |= tgt;
   			tgt = (((val & 0xfLL) >> 2LL) << 25LL);
   			insn->opcode |= tgt;
-  			printf("opcode=%I64x, disp=%I64x\n", insn->opcode, val);
 			}
 			break;
 #endif

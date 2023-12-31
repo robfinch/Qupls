@@ -77,7 +77,11 @@ bool OCODE::HasSourceReg(int regno) const
 	// Push has an implied target, so oper1 is actually a source.
 	// For deposit, the target is also a source
 	// For orm, orh, the target is also a source
-	if (oper1 && !insn->HasTarget() || opcode==op_push || opcode==op_dep || opcode==op_ors || opcode==op_adds) {
+	if (oper1 && !insn->HasTarget() || opcode==op_push || opcode==op_dep ||
+		opcode==op_ors || opcode==op_orm || opcode==op_orh ||
+		opcode == op_eors || opcode == op_eorm || opcode == op_eorh ||
+		opcode == op_ands || opcode == op_andm || opcode == op_andh ||
+		opcode==op_adds || opcode==op_addm || opcode==op_addh) {
 		if (oper1) {
 			if (oper1->preg == regno)
 				return (true);
@@ -1187,6 +1191,7 @@ void OCODE::OptIndexScale()
 		if (frwd->oper2) {
 			// Found a double index.
 			if (frwd->oper2->mode == am_indx2) {
+				/* if (cpu.supports_indx2_disp
 				// Is it the right one?
 				if (frwd->oper2->preg == back->oper1->preg) {
 					frwd->oper2->preg = back->oper2->preg;
@@ -1195,6 +1200,7 @@ void OCODE::OptIndexScale()
 					back->MarkRemove();
 					optimized++;
 				}
+				*/
 			}
 		}
 		// If the target register is assigned to something else

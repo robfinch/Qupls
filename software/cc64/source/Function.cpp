@@ -1942,7 +1942,7 @@ void Function::DumpBss(Statement* stmt)
 	Symbol* sym;
 	static int level = 0;
 
-	seg(ofs, bssseg, 14);
+	seg(ofs, bssseg, 6);
 	if (level == 0) {
 		int nn;
 
