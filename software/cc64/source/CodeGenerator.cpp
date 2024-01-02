@@ -452,7 +452,7 @@ Operand* CodeGenerator::GenerateAddDereference(ENODE* node, TYP* tp, bool isRefT
 	ap1 = node->GenIndex(false);
 	ap1->isUnsigned = !su;//node->isUnsigned;
 // *** may have to fix for stackseg
-	ap1->segment = dataseg;
+	ap1->segment = node->segment;// dataseg;
 	ap1->tp = tp;
 	ap1->bit_offset = node->bit_offset;
 	ap1->bit_width = node->bit_width;
@@ -621,6 +621,7 @@ Operand* CodeGenerator::GenerateAutopconDereference(ENODE* node, TYP* tp, bool i
 Operand* CodeGenerator::GenerateNaconDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size, int64_t siz1, int su)
 {
 	Operand* ap1;
+	Operand* ap2;
 
 	ap1 = allocOperand();
 	ap1->isPtr = isRefType;
@@ -637,21 +638,31 @@ Operand* CodeGenerator::GenerateNaconDereference(ENODE* node, TYP* tp, bool isRe
 		ap1->segment = dataseg;
 	}
 	ap1->offset = node;//makeinode(en_icon,node->p[0]->i);
-	ap1->tp = tp;
-	ap1->isUnsigned = !su;
-	if (!node->isUnsigned)
-		ap1 = ap1->GenerateSignExtend(siz1, size, flags);
-	else
-		ap1->MakeLegal(flags, siz1);
-	ap1->isVolatile = node->isVolatile;
-	switch (node->tp->type) {
-	case bt_float:	ap1->typep = &stdflt; break;
-	case bt_double:	ap1->typep = &stddouble; break;
-	case bt_quad:	ap1->typep = &stdquad; break;
-	case bt_posit:	ap1->typep = &stdposit; break;
+	if (ap1->isPtr) {
+		//ap2 = ap1;
+		
+		ap2 = GetTempRegister();
+		GenerateDiadic(op_lda, 0, ap2, ap1);
+		ReleaseTempRegister(ap1);
+		
 	}
-	ap1->MakeLegal(flags, size);
-	return (ap1);
+	else
+		ap2 = ap1;
+	ap2->tp = tp;
+	ap2->isUnsigned = !su;
+	if (!node->isUnsigned)
+		ap2 = ap2->GenerateSignExtend(siz1, size, flags);
+	else
+		ap2->MakeLegal(flags, siz1);
+	ap2->isVolatile = node->isVolatile;
+	switch (node->tp->type) {
+	case bt_float:	ap2->typep = &stdflt; break;
+	case bt_double:	ap2->typep = &stddouble; break;
+	case bt_quad:	ap2->typep = &stdquad; break;
+	case bt_posit:	ap2->typep = &stdposit; break;
+	}
+	ap2->MakeLegal(flags, size);
+	return (ap2);
 }
 
 Operand* CodeGenerator::GenerateAutovconDereference(ENODE* node, TYP* tp, bool isRefType, int flags, int64_t size)
@@ -974,7 +985,7 @@ Operand *CodeGenerator::GenerateDereference(ENODE *node,int flags,int size, int 
 		}
 		return(ap1);
 	}
-	ap1 = GenerateExpression(node->p[0], am_reg | am_imm, sizeOfWord,rhs); // generate address
+	ap1 = GenerateExpression(node->p[0], am_reg | am_imm, size,rhs); // generate address
 	if (ap1 == nullptr)
 		return (nullptr);
 	ap1->isPtr = node->IsRefType();
@@ -1365,7 +1376,7 @@ Operand* CodeGenerator::GenerateAssignAdd(ENODE* node, int flags, int size, int 
 		intreg = true;
 	}
 
-	ap1 = GenerateExpression(node->p[0], Instruction::Get(op)->amclass1, ssize, 0);
+	ap1 = GenerateExpression(node->p[0], am_all,/*Instruction::Get(op)->amclass1,*/ ssize, 0);	// must allow memory here
 	ap2 = GenerateExpression(node->p[1], Instruction::Get(op)->amclass3, size, 1);
 	if (ap1->mode == am_reg) {
 		GenerateTriadic(op, 0, ap1, ap1, ap2);
@@ -2688,7 +2699,7 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int64_t size,
 			tpsz = sizeOfWord;
 		else
 			tpsz = node->tp->size;
-		ap1 = GenerateDereference(node, flags, tpsz, !node->isUnsigned, (flags & am_bf_assign) ? 0 : 1, rhs);
+		ap1 = GenerateDereference(node, flags, size, !node->isUnsigned, (flags & am_bf_assign) ? 0 : 1, rhs);
 		if (ap1 == nullptr)
 			return (nullptr);
 		ap1->isPtr = TRUE;

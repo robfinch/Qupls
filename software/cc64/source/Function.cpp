@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2017-2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2017-2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -1943,13 +1943,62 @@ void Function::RemoveDuplicates()
 	//}
 }
 
+int Function::CountBss(Statement* stmt)
+{
+	Symbol* sym;
+	static int level = 0;
+	static int bsscount = 0;
+	bool zap_bss_string = false;
+
+	if (level == 0) {
+		int nn;
+
+		bsscount = 0;
+		sym = nullptr;
+		for (nn = 0; nn < compiler.symnum; nn++) {
+			if (compiler.symbolTable[nn].storage_class == sc_global) {
+				if (compiler.symbolTable[nn].segment == bssseg || compiler.symbolTable[nn].segment == noseg) {
+					sym = &compiler.symbolTable[nn];
+					zap_bss_string = false;
+					if (sym && sym->data_string.length() > 0)
+						zap_bss_string = true;
+					if (sym->bss_string.length() > 0 && !zap_bss_string)
+						bsscount++;
+				}
+			}
+		}
+	}
+	level++;
+	for (; stmt; stmt = stmt->next) {
+		for (sym = stmt->ssyms.headp; sym; sym = sym->nextp) {
+			if (sym->fi)
+				continue;
+			zap_bss_string = false;
+			if (sym->data_string.length() > 0)
+				zap_bss_string = true;
+			if (sym->bss_string.length() > 0 && !zap_bss_string) {
+				bsscount++;
+			}
+		}
+		if (stmt->s1 && stmt->s1->stype == st_compound) {
+			bsscount += CountBss(stmt->s1);
+		}
+		if (stmt->s2 && stmt->s2->stype == st_compound) {
+			bsscount += CountBss(stmt->s2);
+		}
+	}
+	level--;
+	return (bsscount);
+}
 
 void Function::DumpBss(Statement* stmt)
 {
 	Symbol* sym;
 	static int level = 0;
 
-	seg(ofs, bssseg, 6);
+	if (CountBss(stmt) > 0)
+		seg(ofs, bssseg, 6);
+
 	if (level == 0) {
 		int nn;
 

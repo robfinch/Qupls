@@ -328,6 +328,7 @@ public:
 	bool hasGPReferences;				// global pointer references
 	bool has_rodata;
 	bool has_data;
+	bool has_bss;
 	bool has_return_block;
 	bool didRemoveReturnBlock;
 	bool retGenerated;
@@ -455,6 +456,7 @@ public:
 	void GenerateBody(bool force_inline);
 	void Generate();
 	void GenerateDefaultCatch();
+	int CountBss(Statement* stmt);
 	void DumpBss(Statement* stmt);
 
 	void CreateVars();
@@ -849,6 +851,9 @@ public:
 	void GenStore(Operand *ap1, Operand *ap3, int size);
 	static void GenRedor(Operand *ap1, Operand *ap2);
 	Operand *GenIndex(bool neg);
+	Operand* GenerateRegRegIndex();
+	Operand* GenerateImmExprIndex(Operand* ap1, bool neg);
+	Operand* GenerateRegImmIndex(Operand* ap1, Operand* ap2, bool neg);
 	Operand *GenSafeHook(int flags, int size);
 	Operand *GenerateShift(int flags, int size, int op);
 	Operand *GenMultiply(int flags, int size, int op);
@@ -1636,6 +1641,7 @@ public:
 	Operand* GenPositcon(ENODE* node, int flags, int64_t size);
 	Operand* GenLabelcon(ENODE* node, int flags, int64_t size);
 	Operand* GenNacon(ENODE* node, int flags, int64_t size);
+	void ConvertOffsetWidthToBeginEnd(Operand* offset, Operand* width, Operand** op_begin, Operand** op_end);
 };
 
 class RiscvCodeGenerator : public CodeGenerator

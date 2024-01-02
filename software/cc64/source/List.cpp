@@ -151,6 +151,25 @@ void put_ty(TYP *tp, int isco)
                 }
 }
 
+std::string SegmentToString(e_sg segment)
+{
+  char buf[20];
+
+  switch (segment) {
+  case codeseg: return("text");
+  case bssseg: return("bss");
+  case rodataseg: return("rodata");;
+  case dataseg: return("data");
+  case tlsseg: return("tls");
+  case noseg: return("none");
+  default: 
+    std::string str;
+    _itoa_s(segment, buf, sizeof(buf), 10);
+    str.append(buf);
+    return (str);
+  }
+}
+
 void list_var(Symbol *sp, int i, int segment)
 {
 	TypeArray *ta;
@@ -167,6 +186,7 @@ void list_var(Symbol *sp, int i, int segment)
 			lfs.printf("%d ", sp->tp->typeno);
 		if (sp->name == nullptr) {
 			lfs.printf((char *)"%-10s =%06x", (char *)"<noname>", (unsigned int)sp->value.u);
+      lfs.printf((char*)" (%s) ", (char*)SegmentToString(sp->segment).c_str());
       if (sp->tp) {
         if (sp->tp->bit_width != nullptr) {
           if (sp->tp->bit_offset->nodetype == en_icon && sp->tp->bit_width->nodetype == en_icon)
@@ -176,10 +196,13 @@ void list_var(Symbol *sp, int i, int segment)
           lfs.printf("  %ld", sp->tp->size);
       }
 		}
-		else if (sp->name->length()== 0)
-			lfs.printf((char *)"%-10s =%06x ",(char *)"<unnamed>",(unsigned int)sp->value.u);
-		else {
+    else if (sp->name->length() == 0) {
+      lfs.printf((char*)"%-10s =%06x ", (char*)"<unnamed>", (unsigned int)sp->value.u);
+      lfs.printf((char*)" (%s) ", (char*)SegmentToString(sp->segment).c_str());
+    }
+    else {
 			lfs.printf((char *)"%-10s =%06x",(char *)sp->name->c_str(),(unsigned int)sp->value.u);
+      lfs.printf((char*)" (%s) ", (char*)SegmentToString(sp->segment).c_str());
       if (sp->tp) {
         if (sp->tp->bit_width != nullptr) {
           if (sp->tp->bit_offset->nodetype == en_icon && sp->tp->bit_width->nodetype == en_icon)
@@ -239,6 +262,21 @@ void list_var(Symbol *sp, int i, int segment)
         ListTable(&(sp->tp->lst), i + 1);
       }
     }
+}
+
+void SegmentHeading(e_sg segment)
+{
+  lfs.write("---------------------------------------------------------------------------------\n");
+  switch (segment) {
+  case codeseg: lfs.write("     TEXT\n"); break;
+  case bssseg: lfs.write("     BSS\n"); break;
+  case rodataseg: lfs.write("     RODATA\n"); break;
+  case dataseg: lfs.write("     DATA\n"); break;
+  case tlsseg: lfs.write("     TLS\n"); break;
+  case noseg: lfs.write("     NONE\n"); break;
+  default: lfs.printf("     %d\n", segment);
+  }
+  lfs.write("---------------------------------------------------------------------------------\n");
 }
 
 void ListTable(TABLE *t, int i)

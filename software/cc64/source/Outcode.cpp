@@ -47,7 +47,7 @@ struct nlit *numeric_tab = nullptr;
 // Please keep table in alphabetical order.
 // Instruction.cpp has the number of table elements hard-coded in it.
 //
-Instruction opl[365] =
+Instruction opl[366] =
 {   
 { ";", op_remark },
 { ";asm",op_asm,300 },
@@ -58,6 +58,7 @@ Instruction opl[365] =
 { "add",op_add,1,1,false,am_reg,am_reg,am_reg|am_imm,0 },
 { "addh",op_addh,1,1,false,am_reg,am_imm,0, 0 },
 { "addm",op_addm,1,1,false,am_reg,am_imm,0, 0 },
+{ "addmo",op_addmo,1,1,false,am_reg,am_reg,am_reg | am_imm,0 },
 { "adds",op_adds,1,1,false,am_reg,am_imm,am_imm, 0 },
 { "addu", op_addu,1,1 },
 { "and",op_and,1,1,false,am_reg,am_reg,am_reg|am_imm,0 },

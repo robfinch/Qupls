@@ -1523,6 +1523,91 @@ void ENODE::GenRedor(Operand *ap1, Operand *ap2)
 	GenerateDiadic(op_not, 0, ap1, ap1);
 }
 
+Operand* ENODE::GenerateRegRegIndex()
+{
+	Operand* ap1, * ap2;
+
+	// Don't need to free ap2 here. It is included in ap1.
+	GenerateHint(8);
+	ap1 = cg.GenerateExpression(p[0], am_reg, sizeOfWord, 0);
+	ap2 = cg.GenerateExpression(p[1], am_reg, sizeOfWord, 0);
+	GenerateHint(9);
+	if (cpu.SupportsIndexed) {
+		ap1->mode = am_indx2;
+		ap1->sreg = ap2->preg;
+		ap1->deep2 = ap2->deep2;
+		ap1->offset = makeinode(en_icon, 0);
+		ap1->scale = scale;
+		ap1->isUnsigned = ap2->isUnsigned;
+	}
+	else {
+		GenerateTriadic(op_add, 0, ap1, ap1, ap2);
+		ap1->mode = am_indx;
+		ap1->deep2 = ap2->deep2;
+		ap1->offset = makeinode(en_icon, 0);
+		ap1->scale = scale;
+		ap1->isUnsigned = ap2->isUnsigned;
+	}
+	return (ap1);
+}
+
+Operand* ENODE::GenerateImmExprIndex(Operand* ap1, bool neg)
+{
+	Operand* ap2;
+
+	ap2 = cg.GenerateExpression(p[1], am_reg | am_imm, sizeOfInt, 1);
+	if (ap2->mode == am_reg && ap2->preg == 0) {	// value is zero
+		ap1->mode = am_direct;
+		if (ap1->offset)
+			DataLabels[ap1->offset->i]++;
+		return (ap1);
+	}
+	ap2->isConst = ap2->mode == am_imm;
+	if (ap2->mode == am_imm && ap2->offset->i != 0)
+		ap2->offset2 = ap2->offset;
+	else
+		ap2->offset2 = nullptr;
+	GenerateHint(9);
+	ap2->mode = am_indx;
+	ap2->offset = ap1->offset;
+	if (neg && pass == 1) {
+		ap2->offset->i = -ap2->offset->i;
+		if (ap2->offset2)
+			ap2->offset2->i = -ap2->offset2->i;
+	}
+	ap2->isUnsigned = ap1->isUnsigned;
+	return (ap2);
+}
+
+// Do we have reg+imm? If so make am_indx
+
+Operand* ENODE::GenerateRegImmIndex(Operand* ap1, Operand* ap2, bool neg)
+{
+	ap1->mode = am_indx;
+	//ap2->preg = ap1->preg;
+	//ap2->deep = ap1->deep;
+	ap1->offset = ap2->offset;
+	ap1->offset2 = ap2->offset2;
+	if (neg && pass == 1) {
+		ap1->offset->i = -ap1->offset->i;
+		if (ap1->offset2)
+			ap1->offset2->i = -ap1->offset2->i;
+	}
+	// Scale a constant index by the type size.
+	if (!ap1->is_scaled && pass == 1) {
+		int sz;
+		if (ap1->tp) {
+			if (ap1->tp->type == bt_pointer)
+				sz = ap1->tp->btpp->size;
+			else
+				sz = ap1->tp->size;
+			Int128::Mul(&ap1->offset->i128, &ap1->offset->i128, Int128::MakeInt128(sz));
+			ap1->is_scaled = true;
+		}
+	}
+	return (ap1);
+}
+
 // ----------------------------------------------------------------------------
 // Generate code to evaluate an index node (^+) and return the addressing mode
 // of the result. This routine takes no flags since it always returns either
@@ -1537,88 +1622,24 @@ Operand *ENODE::GenIndex(bool neg)
 
 //	if ((p[0]->nodetype == en_type || p[0]->nodetype == en_regvar)
 //		&& (p[1]->nodetype == en_type || p[1]->nodetype == en_regvar))
+	/* Both nodes are registers? */
 	if (p[0]->nodetype == en_regvar && p[1]->nodetype == en_regvar)
-	{       /* both nodes are registers */
-			// Don't need to free ap2 here. It is included in ap1.
-		GenerateHint(8);
-		ap1 = cg.GenerateExpression(p[0], am_reg, sizeOfWord, 0);
-		ap2 = cg.GenerateExpression(p[1], am_reg, sizeOfWord, 0);
-		GenerateHint(9);
-		if (cpu.SupportsIndexed) {
-			ap1->mode = am_indx2;
-			ap1->sreg = ap2->preg;
-			ap1->deep2 = ap2->deep2;
-			ap1->offset = makeinode(en_icon, 0);
-			ap1->scale = scale;
-			ap1->isUnsigned = ap2->isUnsigned;
-		}
-		else {
-			GenerateTriadic(op_add, 0, ap1, ap1, ap2);
-			ap1->mode = am_indx;
-			ap1->deep2 = ap2->deep2;
-			ap1->offset = makeinode(en_icon, 0);
-			ap1->scale = scale;
-			ap1->isUnsigned = ap2->isUnsigned;
-		}
-		return (ap1);
-	}
+		return (GenerateRegRegIndex());
+
 	GenerateHint(8);
 //	GenerateHint(begin_index);
 	ap1 = cg.GenerateExpression(p[0], am_reg | am_imm, sizeOfInt, 1);
 	if (ap1->mode == am_imm)
-	{
-		ap2 = cg.GenerateExpression(p[1], am_reg | am_imm, sizeOfInt, 1);
-		if (ap2->mode == am_reg && ap2->preg==0) {	// value is zero
-			ap1->mode = am_direct;
-			if (ap1->offset)
-				DataLabels[ap1->offset->i]++;
-			return (ap1);
-		}
-		ap2->isConst = ap2->mode==am_imm;
-		if (ap2->mode == am_imm && ap2->offset->i != 0)
-			ap2->offset2 = ap2->offset;
-		else
-			ap2->offset2 = nullptr;
-		GenerateHint(9);
-		ap2->mode = am_indx;
-		ap2->offset = ap1->offset;
-		if (neg && pass==1) {
-			ap2->offset->i = -ap2->offset->i;
-			if (ap2->offset2)
-				ap2->offset2->i = -ap2->offset2->i;
-		}
-		ap2->isUnsigned = ap1->isUnsigned;
-		return (ap2);
-	}
+		return (GenerateImmExprIndex(ap1, neg));
+
 	ap2 = cg.GenerateExpression(p[1], am_all, 8, 1);   /* get right op */
 //	GenerateHint(end_index);
 	GenerateHint(9);
-	if (ap2->mode == am_imm && ap1->mode == am_reg) /* make am_indx */
-	{
-		ap1->mode = am_indx;
-		//ap2->preg = ap1->preg;
-		//ap2->deep = ap1->deep;
-		ap1->offset = ap2->offset;
-		ap1->offset2 = ap2->offset2;
-		if (neg && pass==1) {
-			ap1->offset->i = -ap1->offset->i;
-			if (ap1->offset2)
-				ap1->offset2->i = -ap1->offset2->i;
-		}
-		// Scale a constant index by the type size.
-		if (!ap1->is_scaled && pass==1) {
-			int sz;
-			if (ap1->tp) {
-				if (ap1->tp->type == bt_pointer)
-					sz = ap1->tp->btpp->size;
-				else
-					sz = ap1->tp->size;
-				Int128::Mul(&ap1->offset->i128, &ap1->offset->i128, Int128::MakeInt128(sz));
-				ap1->is_scaled = true;
-			}
-		}
-		return (ap1);
-	}
+
+	// Do we have reg+imm? If so make am_indx
+	if (ap2->mode == am_imm)
+		return (GenerateRegImmIndex(ap1, ap2, neg));
+
 	if (ap2->mode == am_ind && ap1->mode == am_reg) {
 		if (cpu.SupportsIndexed) {
 			ap2->mode = am_indx2;
@@ -1633,12 +1654,15 @@ Operand *ENODE::GenIndex(bool neg)
 		}
 		return (ap2);
 	}
+
+	// Direct plus index register equals register indirect addressing.
 	if (ap2->mode == am_direct && ap1->mode == am_reg) {
 		ap2->mode = am_indx;
 		ap2->preg = ap1->preg;
 		ap2->deep = ap1->deep;
 		return (ap2);
 	}
+
 	// ap1->mode must be am_reg
 //	ap2->MakeLegal(am_reg, 8);
 	if (cpu.SupportsIndexed) {

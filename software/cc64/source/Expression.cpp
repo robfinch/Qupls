@@ -2492,12 +2492,16 @@ ENODE* Expression::MakeGlobalNameNode(Symbol* sp)
 	}
 	else {
 		node = makesnode(en_nacon, sp->name, sp->mangledName, sp->value.i);
-		node->segment = dataseg;
+//		node->segment = dataseg;
 	}
 	node->constflag = FALSE;
-	node->esize = sp->tp->size;
+	if (sp->tp->btpp)
+		node->esize = sp->tp->btpp->size;
+	else
+		node->esize = sp->tp->size;
 	node->etype = bt_pointer;//sp->tp->type;
 	node->isUnsigned = TRUE;// sp->tp->isUnsigned;
+	node->segment = sp->segment;
 	return (node);
 }
 

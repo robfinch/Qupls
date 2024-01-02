@@ -120,9 +120,7 @@ void QuplsCodeGenerator::GenerateBitfieldInsert(Operand* ap1, Operand* ap2, int 
 
 	ap1->MakeLegal(am_reg, sizeOfWord);
 	ap2->MakeLegal(am_reg, sizeOfWord);
-	//Generate4adic(op_dep, 0, ap1, ap2, MakeImmediate(offset), MakeImmediate((int64_t)width - 1));
-	Generate4adic(op_clr, 0, ap1, ap1, MakeImmediate(offset), MakeImmediate((int64_t)width - 1));
-	GenerateTriadic(op_lslor, 0, ap1, ap2, MakeImmediate(offset));
+	Generate4adic(op_dep, 0, ap1, ap2, MakeImmediate(offset), MakeImmediate(((int64_t)offset+width-1LL) & 0x3fLL));
 }
 
 
@@ -140,22 +138,16 @@ static Operand* CombineOffsetWidth(Operand* offset, Operand* width)
 	return (ap3);
 }
 
+
 void QuplsCodeGenerator::GenerateBitfieldInsert(Operand* ap1, Operand* ap2, Operand* offset, Operand* width)
 {
-	int nn;
-	uint64_t mask;
-	Operand* ap3;
+	Operand* op_begin;
+	Operand* op_end;
 
-	if (offset->mode == am_imm && width->mode == am_imm) {
-		GenerateBitfieldInsert(ap1, ap2, offset->offset->i, width->offset->i);
-		return;
-	}
-
-	// Combine offset,width into one register.
-	ap3 = CombineOffsetWidth(offset, width);
-
-	GenerateTriadic(op_clr, 0, ap1, ap1, ap3);
-	GenerateTriadic(op_lslor, 0, ap1, ap2, offset);
+	ConvertOffsetWidthToBeginEnd(offset, width, &op_begin, &op_end);
+	Generate4adic(op_dep, 0, ap1, ap2, op_begin, op_end);
+	ReleaseTempReg(op_end);
+	ReleaseTempReg(op_begin);
 }
 
 
@@ -164,29 +156,44 @@ void QuplsCodeGenerator::GenerateBitfieldInsert(Operand* ap1, Operand* ap2, ENOD
 	int nn;
 	uint64_t mask;
 	Operand* ap3, * ap4;
+	Operand* op_begin;
+	Operand* op_end;
 	OCODE* ip;
 
 	ap3 = GenerateExpression(offset, am_reg | am_imm | am_imm0, sizeOfWord, 1);
 	ap4 = GenerateExpression(width, am_reg | am_imm | am_imm0, sizeOfWord, 1);
-	GenerateBitfieldInsert(ap1, ap2, ap3, ap4);
+	ConvertOffsetWidthToBeginEnd(ap3, ap4, &op_begin, &op_end);
+	GenerateBitfieldInsert(ap1, ap2, op_begin, op_end);
+	ReleaseTempReg(op_end);
+	ReleaseTempReg(op_begin);
 	ReleaseTempReg(ap4);
 	ReleaseTempReg(ap3);
 }
 
+void QuplsCodeGenerator::ConvertOffsetWidthToBeginEnd(Operand* offset, Operand* width, Operand** op_begin, Operand** op_end)
+{
+	Int128 me;
+
+	*op_begin = offset->Clone();
+	if (offset->mode == am_imm && width->mode == am_imm) {
+		Int128::Add(&me, &offset->offset->i128, &width->offset->i128);
+		*op_end = compiler.of.OperandFactory::MakeImmediate(me);
+		return;
+	}
+	*op_end = GetTempRegister();
+	GenerateTriadic(op_add, 0, *op_end, offset, width);
+}
 
 Operand* QuplsCodeGenerator::GenerateBitfieldExtract(Operand* ap, Operand* offset, Operand* width)
 {
-	Operand* ap1, * ap3;
+	Operand* ap1, * ap3, *op_begin, * op_end;
+	Int128 me;
 
 	ap1 = GetTempRegister();
-	if (offset->mode == am_imm && width->mode == am_imm) {
-		Generate4adic(isSigned ? op_ext : op_extu, 0, ap1, ap, offset, width);
-		return (ap1);
-	}
-	// Combine offset,width into one register.
-	ap3 = CombineOffsetWidth(offset, width);
-	GenerateTriadic(isSigned ? op_ext : op_extu, 0, ap1, ap, ap3);
-	ReleaseTempRegister(ap3);
+	ConvertOffsetWidthToBeginEnd(offset, width, &op_begin, &op_end);
+	Generate4adic(isSigned ? op_ext : op_extu, 0, ap1, ap, op_begin, op_end);
+	ReleaseTempReg(op_end);
+	ReleaseTempReg(op_begin);
 	return (ap1);
 }
 
@@ -195,11 +202,14 @@ Operand* QuplsCodeGenerator::GenerateBitfieldExtract(Operand* ap, ENODE* offset,
 	Operand* ap1;
 	Operand* ap2;
 	Operand* ap3;
+	Operand* op_begin;
+	Operand* op_end;
 
 	ap1 = GetTempRegister();
 	ap2 = GenerateExpression(offset, am_reg | am_imm | am_imm0, sizeOfWord, 1);
 	ap3 = GenerateExpression(width, am_reg | am_imm | am_imm0, sizeOfWord, 1);
-	ap1 = GenerateBitfieldExtract(ap, ap2, ap3);
+	ConvertOffsetWidthToBeginEnd(ap2, ap3, &op_begin, &op_end);
+	Generate4adic(isSigned ? op_ext : op_extu, 0, ap1, ap, op_begin, op_end);
 	ReleaseTempReg(ap3);
 	ReleaseTempReg(ap2);
 	return (ap1);
@@ -1167,7 +1177,7 @@ int QuplsCodeGenerator::PushArgument(ENODE *ep, int regno, int stkoffs, bool *is
 		else if (ep->tp->IsPositType())
 			ap = cg.GenerateExpression(ep, am_preg, sizeOfPosit,1);
 		else
-			ap = cg.GenerateExpression(ep,am_reg|am_imm,ep->GetNaturalSize(),1);
+			ap = cg.GenerateExpression(ep,am_reg|am_imm,ep->GetNaturalSize(),0);
 	}
 	else if (ep->etype==bt_quad)
 		ap = cg.GenerateExpression(ep,am_reg,sz,1);
@@ -1178,7 +1188,7 @@ int QuplsCodeGenerator::PushArgument(ENODE *ep, int regno, int stkoffs, bool *is
 	else if (ep->etype == bt_posit)
 		ap = cg.GenerateExpression(ep, am_reg, sz,1);
 	else
-		ap = cg.GenerateExpression(ep,am_reg|am_imm,ep->GetNaturalSize(),1);
+		ap = cg.GenerateExpression(ep,am_reg|am_imm,ep->GetNaturalSize(),0);
 	switch(ap->mode) {
 	case am_fpreg:
 		*isFloat = true;

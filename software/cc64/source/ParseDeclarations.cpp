@@ -2829,6 +2829,7 @@ void GlobalDeclaration::Parse()
 					symo->fi->inline_threshold = inline_threshold;
 					symo->fi->IsInline = inline_threshold > 0 && !symo->fi->IsPrototype;
 					symo->fi->depth = 0;
+					symo->segment = codeseg;
 				}
 				else {
 					if (symo->segment == noseg)
@@ -2844,14 +2845,14 @@ void GlobalDeclaration::Parse()
 		case kw_kernel:
 		case kw_interrupt:
 		case kw_coroutine:
-        case kw_task:
+    case kw_task:
 		case kw_naked:
 		case kw_nocall:
 		case kw_oscall:
 		case kw_typedef:
     case kw_virtual:
 		case kw_volatile:
-        case kw_exception:
+    case kw_exception:
 		case kw_int8: case kw_int16: case kw_int32: case kw_int64: case kw_int40: case kw_int80:
 		case kw_byte: case kw_char: case kw_int: case kw_short: case kw_unsigned: case kw_signed:
         case kw_long: case kw_struct: case kw_union: case kw_class:
@@ -2859,26 +2860,35 @@ void GlobalDeclaration::Parse()
 				case kw_float: case kw_double: case kw_float128: case kw_posit:
 		case kw_vector: case kw_vector_mask:
 			lc_static += declare(NULL, &gsyms[0], sc_global, lc_static, bt_struct, &symo, false, 0);
-				if (symo)
-					if (symo->fi) {
-						symo->fi->inline_threshold = inline_threshold;
-						symo->fi->IsInline = inline_threshold > 0 && !symo->fi->IsPrototype;
-						symo->fi->depth = 0;
-					}
-				inline_threshold = compiler.autoInline;
-				isCoroutine = false;
-				break;
-		case kw_const:
-			lc_static += declare(NULL, &gsyms[0], sc_global, lc_static, bt_struct, &symo, false, 0);
-			if (symo)
+			if (symo) {
+				if (symo->segment == noseg)
+					symo->segment = bssseg;
 				if (symo->fi) {
 					symo->fi->inline_threshold = inline_threshold;
 					symo->fi->IsInline = inline_threshold > 0 && !symo->fi->IsPrototype;
 					symo->fi->depth = 0;
+					symo->segment = codeseg;
 				}
+			}
 			inline_threshold = compiler.autoInline;
 			isCoroutine = false;
 			break;
+
+		case kw_const:
+			lc_static += declare(NULL, &gsyms[0], sc_global, lc_static, bt_struct, &symo, false, 0);
+			if (symo) {
+				symo->segment = use_iprel ? codeseg : rodataseg;
+				if (symo->fi) {
+					symo->fi->inline_threshold = inline_threshold;
+					symo->fi->IsInline = inline_threshold > 0 && !symo->fi->IsPrototype;
+					symo->fi->depth = 0;
+					symo->segment = codeseg;
+				}
+			}
+			inline_threshold = compiler.autoInline;
+			isCoroutine = false;
+			break;
+
 		case kw_thread:
 				NextToken();
         lc_thread += declare(NULL,&gsyms[0],sc_thread,lc_thread,bt_struct, &symo, false, 0);
@@ -3069,11 +3079,14 @@ int AutoDeclaration::ParseId(Symbol* parent, TABLE* ssyms, Statement* st)
 			depth++;
 			lc_auto += declare(parent, ssyms, sc_auto, lc_auto, bt_struct, &symo, isLocal, depth);
 			depth--;
-			if (symo)
+			if (symo) {
+				symo->segment = dataseg;
 				if (symo->fi) {
 					symo->fi->inline_threshold = inline_threshold;
 					symo->fi->IsInline = inline_threshold > 0 && !symo->fi->IsPrototype;
+					symo->segment = codeseg;
 				}
+			}
 			inline_threshold = compiler.autoInline;
 			return(0);
 		}
@@ -3138,6 +3151,7 @@ void AutoDeclaration::ParseExtern(Symbol* parent, TABLE* ssyms, Statement* st)
 	depth--;
 	if (symo)
 		if (symo->fi) {
+			symo->segment = codeseg;
 			symo->fi->inline_threshold = inline_threshold;
 			symo->fi->IsInline = inline_threshold > 0 && !symo->fi->IsPrototype;
 		}

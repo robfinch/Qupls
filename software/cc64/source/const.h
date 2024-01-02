@@ -297,6 +297,7 @@ enum e_op {
 	op_vfadd, op_vfadds, op_vfsub,
 	op_lda,
 	// Q+
+	op_addmo,
 	op_addm, op_addh, op_eorm, op_eorh, op_eors, op_andm, op_andh, op_ands,
 	op_adds, op_ors, op_orh, op_orm, op_movsxb, op_movsxw, op_movsxt,
 	// Built in functions

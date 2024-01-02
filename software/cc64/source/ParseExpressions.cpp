@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2012-2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -545,7 +545,7 @@ void Expression::DerefPointer(ENODE** node, TYP* tp)
 {
 	SetRefType(node);
 	(*node)->isUnsigned = true;
-	(*node)->esize = tp->size;
+//	(*node)->esize = tp->size;
 	(*node)->etype = (enum e_bt)tp->type;
 	tp = &stdptr;
 }

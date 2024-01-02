@@ -562,9 +562,10 @@ static void Opt0_addsub(ENODE** node)
 			swap_nodes(ep);
 	}
 	// Add or subtract of zero gets eliminated.
+	// This caused an add dereferencing issue.
 	else if (ep->p[1] && ep->p[1]->nodetype == en_icon) {
 		if (ep->p[1]->i == 0) {
-			*node = ep->p[0];
+			//*node = ep->p[0];
 			return;
 		}
 	}
