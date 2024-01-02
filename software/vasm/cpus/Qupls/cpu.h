@@ -2,6 +2,7 @@
 #define BITSPERBYTE 8
 #define FLOAT_PARSER 1
 #include "hugeint.h"
+//#define SYNTAX_STD_COMMENTCHAR_HASH
 
 #define LITTLEENDIAN 1
 #define BIGENDIAN 0
