@@ -1848,7 +1848,7 @@ void OCODE::store(txtoStream& ofs)
 		ccch = ';';
 		break;
 	default:
-		ccch = '#';
+		ccch = comment_char;
 	}
 
 	nn = 0;
@@ -1871,9 +1871,10 @@ void OCODE::store(txtoStream& ofs)
 				ofs.printf(";====================================================\n");
 				break;
 			default:
-				ofs.printf("#====================================================\n");
-				ofs.printf("# Basic Block %d\n", bb->num);
-				ofs.printf("#====================================================\n");
+				ofs.printf("%c====================================================\n",comment_char);
+				ofs.printf("%c ", comment_char);
+				ofs.printf("Basic Block %d\n", bb->num);
+				ofs.printf("%c====================================================\n",comment_char);
 			}
 		}
 		b = bb;
@@ -1884,7 +1885,8 @@ void OCODE::store(txtoStream& ofs)
 			ofs.printf(";%s\n", (char*)comment->oper1->offset->sp->c_str());
 			break;
 		default:
-			ofs.printf("#%s\n", (char*)comment->oper1->offset->sp->c_str());
+			ofs.printf("%c", comment_char);
+			ofs.printf("%s\n", (char*)comment->oper1->offset->sp->c_str());
 		}
 	}
 	if (remove)

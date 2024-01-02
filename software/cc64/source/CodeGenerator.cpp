@@ -627,13 +627,7 @@ Operand* CodeGenerator::GenerateNaconDereference(ENODE* node, TYP* tp, bool isRe
 	if (use_gp)
 	{
 		ap1->mode = am_indx;
-		switch (node->segment) {
-		case bssseg: ap1->preg = regGP2; break;
-		case dataseg:	ap1->preg = regGP; break;
-		case rodataseg: ap1->preg = regGP1; break;
-		case tlsseg:	ap1->preg = regTP; break;
-		default:	ap1->preg = regPP; break;
-		}
+		ap1->preg = GetSegmentIndexReg((e_sg)node->segment);
 		ap1->segment = node->segment;
 	}
 	else
@@ -788,13 +782,7 @@ Operand* CodeGenerator::GenerateLabconDereference(ENODE* node, TYP* tp, bool isR
 	if (use_gp)
 	{
 		ap1->mode = am_indx;
-		switch (node->segment) {
-		case bssseg: ap1->preg = regGP2; break;
-		case dataseg:	ap1->preg = regGP; break;
-		case rodataseg: ap1->preg = regGP1; break;
-		case tlsseg:	ap1->preg = regTP; break;
-		default:	ap1->preg = regPP; break;
-		}
+		ap1->preg = GetSegmentIndexReg((e_sg)node->segment);
 		ap1->segment = node->segment;
 	}
 	else
@@ -1015,12 +1003,7 @@ Operand *CodeGenerator::GenerateDereference(ENODE *node,int flags,int size, int 
 					//        ap1->mode = am_ind;
 					if (use_gp) {
 						ap1->mode = am_indx;
-						switch (node->segment) {
-						case bssseg: ap1->preg = regGP2; break;
-						case rodataseg: ap1->preg = regGP1; break;
-						case dataseg: ap1->preg = regGP; break;
-						default:	ap1->preg = regGP;
-						}
+						ap1->preg = GetSegmentIndexReg((e_sg)node->segment);
 					}
 					else
 						ap1->mode = am_ind;
@@ -1062,12 +1045,7 @@ Operand *CodeGenerator::GenerateDereference(ENODE *node,int flags,int size, int 
 	//	ap1->segment = dataseg;
 	if (use_gp) {
     ap1->mode = am_indx;
-		switch (node->segment) {
-		case bssseg: ap1->preg = regGP2; break;
-		case rodataseg: ap1->preg = regGP1; break;
-		case dataseg: ap1->preg = regGP; break;
-		default:	ap1->preg = regGP;
-		}
+		ap1->preg = GetSegmentIndexReg((e_sg)node->segment);
     ap1->segment = dataseg;
   }
   else {
@@ -1795,7 +1773,7 @@ void CodeGenerator::GenerateLoadConst(Operand *ap1, Operand *ap2)
 	if (ap1->isPtr) {
 		ap3 = ap1->Clone();
 		ap3->mode = am_direct;
-		GenerateDiadic(op_lda, 0, ap2, ap3);
+		GenerateLoadAddress(ap2, ap3);
 		//if (!compiler.os_code) {
 		//	switch (ap1->segment) {
 		//	case tlsseg:		GenerateTriadic(op_base, 0, ap2, ap2, MakeImmediate(8));	break;
@@ -2359,10 +2337,10 @@ Operand *CodeGenerator::GenerateAutocon(ENODE *node, int flags, int64_t size, TY
 		ap3->bit_width = node->bit_width;
 		//	ap2->type = type;
 		ap3->tp = node->tp;
-		GenerateDiadic(cpu.lea_op, 0, ap1, ap3);
+		GenerateLoadAddress(ap1, ap3);
 	}
 	else
-		GenerateDiadic(cpu.lea_op,0,ap1,ap2);
+		GenerateLoadAddress(ap1, ap2);
 	//if (!compiler.os_code)
 	//	GenerateTriadic(op_base, 0, ap1, ap1, MakeImmediate(10));
 	ap1->MakeLegal(flags,size);
@@ -2431,12 +2409,7 @@ Operand* CodeGenerator::GenPositcon(ENODE* node, int flags, int64_t size)
 	ap1->isPtr = node->IsPtr();
 	if (use_gp) {
 		ap1->mode = am_indx;
-		switch (node->segment) {
-		case bssseg: ap1->preg = regGP2; break;
-		case rodataseg: ap1->preg = regGP1; break;
-		case dataseg: ap1->preg = regGP; break;
-		default:	ap1->preg = regGP;
-		}
+		ap1->preg = GetSegmentIndexReg((e_sg)node->segment);
 	}
 	else
 		ap1->mode = am_direct;
@@ -2459,12 +2432,7 @@ Operand* CodeGenerator::GenLabelcon(ENODE* node, int flags, int64_t size)
 		ap1 = GetTempRegister();
 		ap2 = allocOperand();
 		ap2->mode = am_indx;
-		switch (node->segment) {
-		case tlsseg:	ap2->preg = regTP; break;
-		case dataseg:	ap2->preg = regGP; break;
-		case rodataseg: ap2->preg = regGP1; break;
-		default:	ap2->preg = regPP;
-		}
+		ap2->preg = GetSegmentIndexReg((e_sg)node->segment);
 		ap2->offset = node;     // use as constant node
 		GenerateLoadAddress(ap1, ap2);
 		//if (!compiler.os_code) {
@@ -2483,6 +2451,34 @@ Operand* CodeGenerator::GenLabelcon(ENODE* node, int flags, int64_t size)
 	ap1->isUnsigned = node->isUnsigned;
 	ap1->tp = node->tp;
 	ap1->MakeLegal(flags, size);
+}
+
+Operand* CodeGenerator::GenNacon(ENODE* node, int flags, int64_t size)
+{
+	Operand* ap1, * ap2;
+
+	if (use_gp) {
+		ap1 = GetTempRegister();
+		ap2 = allocOperand();
+		ap2->mode = am_indx;
+		ap2->preg = node->segment == tlsseg ? regTP : regGP;
+		ap2->offset = node;     // use as constant node
+		if (node)
+			DataLabels[node->i]++;
+		GenerateLoadAddress(ap1, ap2);
+		ap1->MakeLegal(flags, size);
+		Leave((char*)"GenNacon", 6);
+		return (ap1);
+	}
+	ap1 = allocOperand();
+	ap1->isPtr = node->IsPtr();
+	ap1->mode = am_imm;
+	ap1->offset = node;
+	if (node->i == 0)
+		node->i = -1;
+	ap1->isUnsigned = node->isUnsigned;
+	ap1->MakeLegal(flags, size);
+	Leave((char*)"GenNacon", 7);
 }
 
 //
@@ -2536,7 +2532,7 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int64_t size,
 		}
 //		GenerateReference(sym, 0);
 		ap1 = GetTempRegister();
-		GenerateLoadAddress(ap1, MakeStringAsNameConst((char *)node->sp->c_str(), rodataseg));
+		GenerateLoadAddress(ap1, MakeStringAsNameConst((char *)node->sp->c_str(), use_iprel ? codeseg : rodataseg));
 		ap1->isPtr = true;
 		sym->acnt++;
 		/*
@@ -2612,36 +2608,9 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int64_t size,
 		goto retpt;
 
   case en_nacon:
-    if (use_gp) {
-      ap1 = GetTempRegister();
-      ap2 = allocOperand();
-      ap2->mode = am_indx;
-			switch (node->segment) {
-			case bssseg: ap2->preg = regGP2; break;
-			case rodataseg: ap2->preg = regGP1; break;
-			case dataseg: ap2->preg = regGP; break;
-			default:	ap2->preg = regGP;
-			}
-			//if (node->segment != rodataseg) {
-			//	n2 = makeinode(en_icon, 2048LL);
-			//	ap2->offset = makenode(en_add, ap2->offset, n2);
-			//}
-			//else
-	      ap2->offset = node;     // use as constant node
-			if (node)
-				DataLabels[node->i]++;
-      GenerateDiadic(cpu.lea_op,0,ap1,ap2);
-			//if (!compiler.os_code) {
-			//	switch (node->segment) {
-			//	case tlsseg:		GenerateTriadic(op_base, 0, ap1, ap1, MakeImmediate(8));	break;
-			//	case rodataseg:	GenerateTriadic(op_base, 0, ap1, ap1, MakeImmediate(12));	break;
-			//	}
-			//}
-			ap1->MakeLegal(flags,size);
-			Leave((char *)"GenExpression",6); 
-			goto retpt;
-		}
-    // fallthru
+		ap1 = GenNacon(node, flags, size);
+		goto retpt;
+
 	case en_cnacon:
       ap1 = allocOperand();
 			ap1->isPtr = node->IsPtr();
@@ -3233,16 +3202,11 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int64_t size,
 	case en_list:
 		ap1 = GetTempRegister();
 		if (use_gp) {
-			switch (node->segment) {
-			case dataseg:	ndxreg = regGP; break;
-			case rodataseg: ndxreg = regGP1; break;
-			case tlsseg:	ndxreg = regTP; break;
-			default:	ndxreg = regPP; break;
-			}
-			GenerateDiadic(cpu.lea_op, 0, ap1, MakeDataLabel(node->i, ndxreg));
+			ndxreg = GetSegmentIndexReg((e_sg)node->segment);
+			GenerateLoadAddress(ap1, MakeDataLabel(node->i, ndxreg));
 		}
 		else
-			GenerateDiadic(cpu.lea_op, 0, ap1, MakeDataLabel(node->i, regZero));
+			GenerateLoadAddress(ap1, MakeDataLabel(node->i, regZero));
 		//if (!compiler.os_code) {
 		//	switch (node->segment) {
 		//	case tlsseg:		GenerateTriadic(op_base, 0, ap1, ap1, MakeImmediate(8));	break;
@@ -3253,7 +3217,7 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int64_t size,
 		goto retpt;
 	case en_object_list:
 		ap1 = GetTempRegister();
-		GenerateDiadic(cpu.lea_op,0,ap1,MakeIndexed(-8,regFP));
+		GenerateLoadAddress(ap1,MakeIndexed(-8,regFP));
 		//if (!compiler.os_code) {
 		//	switch (node->segment) {
 		//	case tlsseg:		GenerateTriadic(op_base, 0, ap1, ap1, MakeImmediate(8));	break;
@@ -3614,7 +3578,7 @@ Operand* CodeGenerator::GenerateTrinary(ENODE* node, int flags, int size, int op
 						if (ap1->isPtr && ap2->isPtr)
 							GenerateTriadic(op, 0, ap3, ap1, ap2);
 						else if (ap2->isPtr) {
-							GenerateDiadic(cpu.lea_op, 0, ap3, op == op_sub ? compiler.of.MakeNegIndexed(ap2->offset, ap1->preg) : MakeIndexed(ap2->offset, ap1->preg));
+							GenerateLoadAddress(ap3, op == op_sub ? compiler.of.MakeNegIndexed(ap2->offset, ap1->preg) : MakeIndexed(ap2->offset, ap1->preg));
 							//if (!compiler.os_code) {
 							//	switch (ap3->segment) {
 							//	case tlsseg:		GenerateTriadic(op_base, 0, ap3, ap3, MakeImmediate(8));	break;
@@ -4343,7 +4307,7 @@ Operand* CodeGenerator::GenerateBinary(ENODE* node, int flags, int size, int op)
 						if (ap1->isPtr && ap2->isPtr)
 							GenerateTriadic(op, 0, ap3, ap1, ap2);
 						else if (ap2->isPtr) {
-							GenerateDiadic(cpu.lea_op, 0, ap3, op == op_sub ? compiler.of.MakeNegIndexed(ap2->offset, ap1->preg) : MakeIndexed(ap2->offset, ap1->preg));
+							GenerateLoadAddress(ap3, op == op_sub ? compiler.of.MakeNegIndexed(ap2->offset, ap1->preg) : MakeIndexed(ap2->offset, ap1->preg));
 							//if (!compiler.os_code) {
 							//	switch (ap3->segment) {
 							//	case tlsseg:		GenerateTriadic(op_base, 0, ap3, ap3, MakeImmediate(8));	break;
@@ -4451,3 +4415,15 @@ void CodeGenerator::GenerateReturnAndDeallocate(Operand* ap1)
 	GenerateDiadic(op_rtd, 0, ap1, MakeImmediate(0));
 }
 
+int CodeGenerator::GetSegmentIndexReg(e_sg segment)
+{
+	switch (segment) {
+	case bssseg: return (regGP2);
+	case dataseg:	return (regGP);
+	case rodataseg: return (regGP1);
+	case tlsseg:	return (regTP);
+	case codeseg: return (regPC);
+	default:	return (regPP);
+	}
+	return (regZero);
+}

@@ -2850,7 +2850,7 @@ void GlobalDeclaration::Parse()
 		case kw_oscall:
 		case kw_typedef:
     case kw_virtual:
-		case kw_volatile: case kw_const:
+		case kw_volatile:
         case kw_exception:
 		case kw_int8: case kw_int16: case kw_int32: case kw_int64: case kw_int40: case kw_int80:
 		case kw_byte: case kw_char: case kw_int: case kw_short: case kw_unsigned: case kw_signed:
@@ -2868,7 +2868,18 @@ void GlobalDeclaration::Parse()
 				inline_threshold = compiler.autoInline;
 				isCoroutine = false;
 				break;
-        case kw_thread:
+		case kw_const:
+			lc_static += declare(NULL, &gsyms[0], sc_global, lc_static, bt_struct, &symo, false, 0);
+			if (symo)
+				if (symo->fi) {
+					symo->fi->inline_threshold = inline_threshold;
+					symo->fi->IsInline = inline_threshold > 0 && !symo->fi->IsPrototype;
+					symo->fi->depth = 0;
+				}
+			inline_threshold = compiler.autoInline;
+			isCoroutine = false;
+			break;
+		case kw_thread:
 				NextToken();
         lc_thread += declare(NULL,&gsyms[0],sc_thread,lc_thread,bt_struct, &symo, false, 0);
 				if (symo)
@@ -3101,7 +3112,7 @@ void AutoDeclaration::ParseStatic(Symbol* parent, TABLE* ssyms, Statement* st)
 			symo->segment = codeseg;
 		}
 		else
-			symo->segment = symo->isConst ? rodataseg : dataseg;
+			symo->segment = symo->isConst ? (use_iprel ? codeseg : rodataseg) : dataseg;
 	}
 	inline_threshold = compiler.autoInline;
 }

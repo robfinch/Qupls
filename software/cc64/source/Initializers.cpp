@@ -425,7 +425,7 @@ void doinit(Symbol *sp, bool gbls)
 	// Initialize constants into read-only data segment. Constants may be placed
 	// in ROM along with code.
 	if (sp->isConst)
-		oseg = rodataseg;
+		oseg = use_iprel ? codeseg : rodataseg;
 
 	slptr = lptr;
 	// Spit out an alignment pseudo-op
@@ -440,7 +440,8 @@ void doinit(Symbol *sp, bool gbls)
 			SetDefaultAlign(sp, oseg);
 	}
 	
-	oseg = (e_sg)curseg;
+	if (curseg != noseg)
+		oseg = (e_sg)curseg;
 
 	if (sp->storage_class == sc_static || sp->storage_class == sc_thread) {
 		segdecl = "";

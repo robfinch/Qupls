@@ -74,7 +74,7 @@ void ThorCodeGenerator::GenerateLea(Operand* ap1, Operand* ap2)
 		GenerateMove(ap1, ap2);
 		break;
 	default:
-		GenerateDiadic(cpu.lea_op, 0, ap1, ap2);
+		GenerateLoadAddress(ap1, ap2);
 		//if (!compiler.os_code) {
 		//	switch (ap1->segment) {
 		//	case tlsseg:		GenerateTriadic(op_base, 0, ap1, ap1, MakeImmediate(8));	break;
@@ -1849,7 +1849,7 @@ void ThorCodeGenerator::GenerateLoadConst(Operand* ap1, Operand* ap2)
 	if (ap1->isPtr) {
 		ap3 = ap1->Clone();
 		ap3->mode = am_direct;
-		GenerateDiadic(cpu.lea_op, 0, ap2, ap3);
+		GenerateLoadAddress(ap2, ap3);
 		//if (!compiler.os_code) {
 		//	switch (ap1->segment) {
 		//	case tlsseg:		GenerateTriadic(op_base, 0, ap2, ap2, MakeImmediate(8));	break;

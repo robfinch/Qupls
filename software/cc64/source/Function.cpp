@@ -58,7 +58,8 @@ void Function::GenerateName(bool force)
 		ofs.printf("\n;{++ %s\n", (char*)nme.c_str());
 		break;
 	default:
-		ofs.printf("\n#{++ %s\n", (char*)nme.c_str());
+		ofs.printf("\n%c", comment_char);
+		ofs.printf("{++ %s\n", (char*)nme.c_str());
 	}
 	lbl = std::string("");
 	if (IsCoroutine)
@@ -74,6 +75,7 @@ void Function::GenerateName(bool force)
 		if (sym->tp->type == bt_pointer)
 			lbl += "_func";
 		else {
+			/*
 			switch (syntax) {
 			case MOT:
 				lbl = "\n\talign 5\n" + lbl;
@@ -81,6 +83,7 @@ void Function::GenerateName(bool force)
 			default:
 				lbl = "\n\t.align 5\n" + lbl;
 			}
+			*/
 		}
 		//			gen_strlab((char *)lbl.c_str());
 		GenerateMonadic(op_fnname, 0, MakeStringAsNameConst((char*)nme.c_str(), codeseg));
@@ -90,6 +93,7 @@ void Function::GenerateName(bool force)
 		if (sym->storage_class == sc_global || sym->storage_class == sc_auto) {
 			//			lbl = "\n\t.global ";
 			//			lbl += *sym->mangledName;
+			/*
 			switch (syntax) {
 			case MOT:
 				lbl = "\n\talign 5\n";
@@ -97,6 +101,7 @@ void Function::GenerateName(bool force)
 			default:
 				lbl = "\n\t.align 5\n";
 			}
+			*/
 			if (!IsInline || force) {
 				ofs.printf((char*)lbl.c_str());
 				//GenerateMonadic(op_verbatium, 0, MakeStringAsNameConst(my_strdup((char*)lbl.c_str()), codeseg));
@@ -111,6 +116,7 @@ void Function::GenerateName(bool force)
 				lbl = "\n\t.local ";
 				lbl += nme;
 				ofs.printf((char*)lbl.c_str());
+				/*
 				switch (syntax) {
 				case MOT:
 					lbl = "\n\talign 5\n";
@@ -118,6 +124,7 @@ void Function::GenerateName(bool force)
 				default:
 					lbl = "\n\t.align 5\n";
 				}
+				*/
 				ofs.printf((char*)lbl.c_str());
 				lbl = nme;
 				//GenerateMonadic(op_verbatium, 0, MakeStringAsNameConst("\n;{+", codeseg));
@@ -146,7 +153,7 @@ Statement *Function::ParseBody()
 	OCODE *ip, *ip2;
 	int oc;
 	int label, lab1;
-	char cc = '#';
+	char cc = comment_char;
 	Function* ofn;
 
 	ofn = currentFn;
@@ -1759,7 +1766,7 @@ void Function::Summary(Statement *stmt)
 			ofs.printf(";--}\n");
 			break;
 		default:
-			ofs.printf("#--}\n");
+			ofs.printf("%c--}\n", comment_char);
 		}
 	/*
 	for (symb = sym->lsyms.headp; symb; symb = symb->nextp) {

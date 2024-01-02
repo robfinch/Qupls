@@ -240,8 +240,14 @@ int Instruction::store(txtoStream& ofs)
 			ofs.write(";");
 			ofs.write(&mnem[1]);
 		}
-		else
-			ofs.write(mnem);
+		else {
+			if (mnem[0] == ';') {
+				ofs.printf("%c", comment_char);
+				ofs.write(&mnem[1]);
+			}
+			else
+				ofs.write(mnem);
+		}
 		break;
 	default:
 		ofs.write(mnem);

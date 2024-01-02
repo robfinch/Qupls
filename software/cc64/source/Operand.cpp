@@ -628,11 +628,11 @@ void Operand::store(txtoStream& ofs)
 			ofs.write("");	// was "#"
 		// Fall through
 	case am_direct:
-		if (offset2) {
-			offset2->PutConstant(ofs, lowhigh, rshift);
-			ofs.printf("+");
-		}
 		offset->PutConstant(ofs, lowhigh, rshift, false, display_opt);
+		if (offset2) {
+			ofs.printf("+");
+			offset2->PutConstant(ofs, lowhigh, rshift);
+		}
 		break;
 	case am_direct2:
 		offset->PutConstant(ofs, lowhigh, rshift);

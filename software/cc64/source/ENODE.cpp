@@ -2435,6 +2435,8 @@ void ENODE::PutConstant(txtoStream& ofs, unsigned int lowhigh, unsigned int rshi
 	Posit16 pos16;
 	Posit32 pos32;
 
+	if (this == nullptr)
+		return;
 	if (i128.high != 0 && i128.high != 0xffffffffffffffffLL)
 		display_opt = 16;
 
@@ -2564,6 +2566,14 @@ void ENODE::PutConstant(txtoStream& ofs, unsigned int lowhigh, unsigned int rshi
 		}
 		break;
 	case en_nacon:
+#ifdef QUPLS
+		if (lowhigh == 1)
+			ofs.write("<");
+		else if (lowhigh == 2)
+			ofs.write("?");
+		else if (lowhigh == 3)
+			ofs.write(">");
+#endif
 		sprintf_s(buf, sizeof(buf), "%s", (char *)sp->c_str());
 		ofs.write(buf);
 		if (lowhigh == 3) {

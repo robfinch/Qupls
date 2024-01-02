@@ -48,6 +48,7 @@
 #define TRACE(x)
 #endif
 
+extern char comment_char;
 extern Compiler compiler;
 extern CPU cpu;
 extern int pass;
@@ -101,6 +102,7 @@ extern int farcode;
 extern int wcharSupport;
 extern int verbose;
 extern int use_gp;
+extern int use_iprel;
 extern int address_bits;
 extern std::ifstream *ifs;
 extern txtoStream ofs;
@@ -409,7 +411,7 @@ extern BasicBlock *basicBlocks[10000];
 extern BasicBlock *sortedBlocks[10000];
 extern Forest forest;
 extern IGraph iGraph;
-extern Instruction opl[363];
+extern Instruction opl[365];
 extern BasicBlock *LastBlock;
 extern Instruction *GetInsn(int);
 extern char inpline[100000];

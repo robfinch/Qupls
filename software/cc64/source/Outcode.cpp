@@ -47,15 +47,17 @@ struct nlit *numeric_tab = nullptr;
 // Please keep table in alphabetical order.
 // Instruction.cpp has the number of table elements hard-coded in it.
 //
-Instruction opl[363] =
+Instruction opl[365] =
 {   
-{ "#", op_remark },
-{ "#asm",op_asm,300 },
-{ "#empty",op_empty },
-{ "#fname", op_fnname },
-{ "#string", op_string },
+{ ";", op_remark },
+{ ";asm",op_asm,300 },
+{ ";empty",op_empty },
+{ ";fname", op_fnname },
+{ ";string", op_string },
 { "abs", op_abs,2,1,false,am_reg,am_reg,0,0 },
 { "add",op_add,1,1,false,am_reg,am_reg,am_reg|am_imm,0 },
+{ "addh",op_addh,1,1,false,am_reg,am_imm,0, 0 },
+{ "addm",op_addm,1,1,false,am_reg,am_imm,0, 0 },
 { "adds",op_adds,1,1,false,am_reg,am_imm,am_imm, 0 },
 { "addu", op_addu,1,1 },
 { "and",op_and,1,1,false,am_reg,am_reg,am_reg|am_imm,0 },
@@ -637,7 +639,9 @@ char *put_label(txtoStream& tfs, int lab, char *nm, char *ns, char d, int sz, in
 				tfs.printf((char*)"%s:	; %s\n", (char*)buf, (char*)nm);
 				break;
 			default:
-				tfs.printf((char*)"%s:	# %s\n", (char*)buf, (char*)nm);
+				tfs.printf((char*)"%s:	", (char*)buf);
+				tfs.printf((char*)"%c ", comment_char);
+				tfs.printf((char*)"%s\n", (char*)nm);
 			}
 		}
 	}
@@ -665,7 +669,7 @@ char *put_label(txtoStream& tfs, int lab, char *nm, char *ns, char d, int sz, in
 				tfs.printf((char*)"; %s\n", (char*)nm);
 				break;
 			default:
-				tfs.printf((char*)"# %s\n", (char*)nm);
+				tfs.printf((char*)"%c %s\n", comment_char, (char*)nm);
 			}
 		}
 		if (syntax == STD) {
@@ -1151,7 +1155,7 @@ int NumericLiteral(ENODE* node)
 	pp = nullptr;
 	if (node) {
 		node->constflag = true;
-		node->segment = rodataseg;
+		node->segment = use_iprel ? codeseg : rodataseg;
 	}
 	// First search for the same literal constant and it's label if found.
 	while (lp) {
@@ -1572,11 +1576,11 @@ void cseg(txtoStream& tfs)
 			nl(tfs);
 			if (syntax == MOT) {
 				tfs.printf("\ttext\n");
-				tfs.printf("\talign\t%d\n", cpu.code_align);
+				//tfs.printf("\talign\t%d\n", cpu.code_align);
 			}
 			else {
 				tfs.printf("\t.text\n");
-				tfs.printf("\t.align\t%d\n", cpu.code_align);
+				//tfs.printf("\t.align\t%d\n", cpu.code_align);
 				curseg = codeseg;
 			}
 		}
@@ -1611,6 +1615,21 @@ void tseg(txtoStream& tfs)
 
 void roseg(txtoStream& tfs)
 {
+	if (use_iprel) {
+		if (curseg != codeseg) {
+			nl(tfs);
+			if (syntax == MOT) {
+				tfs.printf("\tdata\n");
+				tfs.printf("\talign\t%d\n", 6);// cpu.pagesize);
+			}
+			else {
+				tfs.printf("\t.rodata\n");
+				tfs.printf("\t.align\t%d\n", 6);// cpu.pagesize);
+			}
+			curseg = codeseg;
+		}
+		return;
+	}
 	if( curseg != rodataseg) {
 		nl(tfs);
 		if (syntax == MOT) {
@@ -1682,7 +1701,7 @@ void seg(txtoStream& tfs, int sg, int algn)
 	}
 	else {
 //		if ((curseg == dataseg && !seg_aligned[curseg])/*first_dataseg)*/ || ((curseg != dataseg) && !seg_aligned[curseg]))
-		if (seg_aligned[curseg]==false)
+		if (seg_aligned[curseg]==false && curseg!=codeseg)
 			tfs.printf("\t.align\t%d\n", algn);
 		first_dataseg = false;
 		seg_aligned[curseg] = true;

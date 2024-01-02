@@ -277,23 +277,31 @@ void PeepList::SetLabelReference()
 	for (q = head; q; q = q->fwd) {
 		if (q->opcode != op_label && q->opcode != op_nop) {
 			if (q->oper1 && (q->oper1->mode == am_direct || q->oper1->mode == am_imm)) {
-				if (p = PeepList::FindLabel(q->oper1->offset->i)) {
-					p->isReferenced = true;
+				if (q->oper1->offset) {
+					if (p = PeepList::FindLabel(q->oper1->offset->i)) {
+						p->isReferenced = true;
+					}
 				}
 			}
 			if (q->oper2 && (q->oper2->mode == am_direct || q->oper2->mode == am_imm)) {
-				if (p = PeepList::FindLabel(q->oper2->offset->i)) {
-					p->isReferenced = true;
+				if (q->oper2->offset) {
+					if (p = PeepList::FindLabel(q->oper2->offset->i)) {
+						p->isReferenced = true;
+					}
 				}
 			}
 			if (q->oper3 && (q->oper3->mode == am_direct || q->oper3->mode == am_imm)) {
-				if (p = PeepList::FindLabel(q->oper3->offset->i)) {
-					p->isReferenced = true;
+				if (q->oper3->offset) {
+					if (p = PeepList::FindLabel(q->oper3->offset->i)) {
+						p->isReferenced = true;
+					}
 				}
 			}
 			if (q->oper4 && (q->oper4->mode == am_direct || q->oper4->mode == am_imm)) {
-				if (p = PeepList::FindLabel(q->oper4->offset->i)) {
-					p->isReferenced = true;
+				if (q->oper4->offset) {
+					if (p = PeepList::FindLabel(q->oper4->offset->i)) {
+						p->isReferenced = true;
+					}
 				}
 			}
 			// Now search case tables for label

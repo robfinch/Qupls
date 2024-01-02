@@ -27,6 +27,7 @@
 /*      global definitions      */
 
 int syntax;
+char comment_char = ';';
 Compiler compiler;
 CPU cpu;
 int pass;
@@ -72,6 +73,7 @@ int farcode = 0;
 int wcharSupport = 1;
 int verbose = 0;
 int use_gp = 1;
+int use_iprel = 1;
 int address_bits = 32;
 int maxVL = 64;
 int nregs = 128;

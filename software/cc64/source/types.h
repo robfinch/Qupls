@@ -1389,9 +1389,10 @@ public:
 	void GenerateArrayAssign(TYP* tp, ENODE* node1, ENODE* node2, Operand* base);
 	Operand* GenerateAggregateAssign(ENODE* node1, ENODE* node2);
 	Operand* GenerateAutocon(ENODE* node, int flags, int64_t size, TYP* type);
-	Operand* GenerateFloatcon(ENODE* node, int flags, int64_t size);
-	Operand* GenPositcon(ENODE* node, int flags, int64_t size);
-	Operand* GenLabelcon(ENODE* node, int flags, int64_t size);
+	virtual Operand* GenerateFloatcon(ENODE* node, int flags, int64_t size);
+	virtual Operand* GenPositcon(ENODE* node, int flags, int64_t size);
+	virtual Operand* GenLabelcon(ENODE* node, int flags, int64_t size);
+	virtual Operand* GenNacon(ENODE* node, int flags, int64_t size);
 	Operand* GenerateAssign(ENODE* node, int flags, int64_t size);
 	Operand* GenerateBigAssign(Operand* ap1, Operand* ap2, int size, int ssize);
 	Operand* GenerateImmToMemAssign(Operand* ap1, Operand* ap2, int ssize);
@@ -1470,6 +1471,7 @@ public:
 	virtual void GenerateSignExtendByte(Operand*, Operand*);
 	virtual void GenerateSignExtendWyde(Operand*, Operand*);
 	virtual void GenerateSignExtendTetra(Operand*, Operand*);
+	int GetSegmentIndexReg(e_sg seg);
 };
 
 class ThorCodeGenerator : public CodeGenerator
@@ -1625,6 +1627,15 @@ public:
 	void GenerateSignExtendByte(Operand*, Operand*);
 	void GenerateSignExtendWyde(Operand*, Operand*);
 	void GenerateSignExtendTetra(Operand*, Operand*);
+	void GenerateLoadAddress(Operand* ap3, Operand* ap1);
+	void GenerateLoad(Operand* ap3, Operand* ap1, int ssize, int size, Operand* mask = nullptr);
+	void GenerateStore(Operand* ap1, Operand* ap3, int size, Operand* mask = nullptr);
+	void GenerateLoadStore(e_op opcode, Operand* ap1, Operand* ap2);
+
+	Operand* GenerateFloatcon(ENODE* node, int flags, int64_t size);
+	Operand* GenPositcon(ENODE* node, int flags, int64_t size);
+	Operand* GenLabelcon(ENODE* node, int flags, int64_t size);
+	Operand* GenNacon(ENODE* node, int flags, int64_t size);
 };
 
 class RiscvCodeGenerator : public CodeGenerator

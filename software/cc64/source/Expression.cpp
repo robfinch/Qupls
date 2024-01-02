@@ -178,7 +178,7 @@ TYP* Expression::ParsePositConst(ENODE** node)
 	pnode->posit = pval64;
 	//if (parsingAggregate==0 && sizeof_flag == 0)
 	//	pnode->i = NumericLiteral(pnode);
-	pnode->segment = rodataseg;
+	pnode->segment = use_iprel ? codeseg : rodataseg;
 	tptr = &stdposit;
 	switch (float_precision) {
 	case 'D': case 'd':
@@ -233,7 +233,7 @@ TYP* Expression::ParseStringConst(ENODE** node)
 	pnode->etype = bt_pointer;
 	pnode->esize = sizeOfPtr;
 	pnode->constflag = true;
-	pnode->segment = rodataseg;
+	pnode->segment = use_iprel ? codeseg : rodataseg;
 	pnode->SetType(tptr);
 	return (tptr);
 }
@@ -262,7 +262,7 @@ ENODE* Expression::ParseInlineStringConst(ENODE** node)
 	pnode->etype = bt_pointer;
 	pnode->esize = 2;
 	pnode->constflag = true;
-	pnode->segment = rodataseg;
+	pnode->segment = use_iprel ? codeseg : rodataseg;
 	pnode->SetType(tptr);
 	return (pnode);
 }
@@ -309,7 +309,7 @@ ENODE* Expression::ParseStringConstWithSizePrefix(ENODE** node)
 	free(str);
 	pnode->etype = bt_pointer;
 	pnode->constflag = true;
-	pnode->segment = rodataseg;
+	pnode->segment = use_iprel ? codeseg : rodataseg;
 	pnode->SetType(tptr);
 	return (pnode);
 }
@@ -753,8 +753,8 @@ TYP* Expression::ParseAggregate(ENODE** node, Symbol* symi, TYP* tp)
 	str.append(GetPrivateNamespace());
 	hnode->i = litlist(pnode, (char*)str.c_str());
 	pnode->i = litlist(pnode, (char*)str.c_str());
-	hnode->segment = cnst ? rodataseg : dataseg;
-	pnode->segment = cnst ? rodataseg : dataseg;
+	hnode->segment = cnst ? (use_iprel ? codeseg : rodataseg) : dataseg;
+	pnode->segment = cnst ? (use_iprel ? codeseg : rodataseg) : dataseg;
 	hnode->constflag = true;
 	pnode->constflag = true;
 	parsingAggregate--;
@@ -2539,7 +2539,7 @@ ENODE* Expression::MakeConstNameNode(Symbol* sp)
 	}
 	node->constflag = TRUE;
 	node->esize = sp->tp->size;
-	node->segment = rodataseg;
+	node->segment = use_iprel ? codeseg : rodataseg;
 	return (node);
 }
 

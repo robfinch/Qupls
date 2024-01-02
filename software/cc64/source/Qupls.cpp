@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2023-2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -74,7 +74,7 @@ void QuplsCodeGenerator::GenerateLea(Operand* ap1, Operand* ap2)
 		GenerateMove(ap1, ap2);
 		break;
 	default:
-		GenerateDiadic(cpu.lea_op, 0, ap1, ap2);
+		GenerateLoadAddress(ap1, ap2);
 		//if (!compiler.os_code) {
 		//	switch (ap1->segment) {
 		//	case tlsseg:		GenerateTriadic(op_base, 0, ap1, ap1, MakeImmediate(8));	break;
@@ -1848,7 +1848,7 @@ void QuplsCodeGenerator::GenerateLoadConst(Operand* ap1, Operand* ap2)
 	if (ap1->isPtr) {
 		ap3 = ap1->Clone();
 		ap3->mode = am_direct;
-		GenerateDiadic(cpu.lea_op, 0, ap2, ap3);
+		GenerateLoadAddress(ap2, ap3);
 		//if (!compiler.os_code) {
 		//	switch (ap1->segment) {
 		//	case tlsseg:		GenerateTriadic(op_base, 0, ap2, ap2, MakeImmediate(8));	break;
@@ -1869,11 +1869,19 @@ void QuplsCodeGenerator::GenerateLoadConst(Operand* ap1, Operand* ap2)
 				ip = GenerateLoadFloatConst(ap1, ap2);
 			else {
 				if (ap1->offset) {
-					ip = GenerateDiadic(cpu.ldi_op, 0, ap2, MakeImmediate(ap1->offset->i128.low & 0xfffffLL));
-					if (!ap1->offset->i128.IsNBit(20))
-						GenerateDiadic(op_orm, 0, ap2, MakeImmediate((ap1->offset->i128.low >> 20LL) & 0xffffffLL));
-					if (!ap1->offset->i128.IsNBit(44))
-						GenerateDiadic(op_orh, 0, ap2, MakeImmediate((ap1->offset->i128.low >> 44LL) & 0xffffffLL));
+					if (!ap1->offset->i128.IsNBit(21))
+						ip = GenerateDiadic(op_ldi, 0, ap2, MakeImmediate(ap1->offset->i128.low & 0xfffffLL));
+					else
+						ip = GenerateDiadic(op_ldi, 0, ap2, MakeImmediate(ap1->offset->i128.low & 0x1fffffLL));
+					if (!ap1->offset->i128.IsNBit(21))
+						GenerateDiadic(op_addm, 0, ap2, MakeImmediate((ap1->offset->i128.low >> 20LL) & 0xffffffLL));
+					if (!ap1->offset->i128.IsNBit(44)) {
+						if (ap1->offset->i128.low & 0x80000000000LL)
+							GenerateDiadic(op_addh, 0, ap2, MakeImmediate(((ap1->offset->i128.low >> 44LL) + 1) & 0xffffffLL));
+						else
+							GenerateDiadic(op_addh, 0, ap2, MakeImmediate((ap1->offset->i128.low >> 44LL) & 0xffffffLL));
+					}
+					// ToDo handle constant >64 bits
 					/*
 					ip = GenerateDiadic(cpu.ldi_op, 0, ap2, MakeImmediate(ap1->offset->i128.low & 0xffffLL));
 					if (!ap1->offset->i128.IsNBit(16))
@@ -1886,8 +1894,10 @@ void QuplsCodeGenerator::GenerateLoadConst(Operand* ap1, Operand* ap2)
 						GenerateMonadic(op_pfx3, 0, MakeImmediate(ap1->offset->i128.high >> 32LL));
 					*/
 				}
-				else
-					ip = GenerateDiadic(cpu.ldi_op, 0, ap2, MakeImmediate(0xdeadbeefLL));
+				else {
+					error(1000);	// NULL pointer
+					ip = GenerateDiadic(op_ldi, 0, ap2, MakeImmediate(0xdeadbeefLL));
+				}
 			}
 		}
 		if (ip->oper2)
@@ -1908,21 +1918,36 @@ void QuplsCodeGenerator::GenerateLoadConst(Operand* ap1, Operand* ap2)
 
 void QuplsCodeGenerator::GenerateLoadDataPointer()
 {
-	return;
 	Operand* ap = GetTempRegister();
-	//cg.GenerateLoadConst(MakeStringAsNameConst("__data_base", dataseg), ap);
-	cg.GenerateLoadAddress(makereg(regGP), MakeStringAsNameConst((char*)"<_start_data", dataseg));
-	GenerateDiadic(op_orm, 0, makereg(regGP2), MakeStringAsNameConst((char*)"?_start_data", dataseg));
+
+	return;
+	if (address_bits > 21) {
+		cg.GenerateLoadAddress(makereg(regGP), MakeStringAsNameConst((char*)"<_start_data", dataseg));
+		GenerateDiadic(op_orm, 0, makereg(regGP), MakeStringAsNameConst((char*)"?_start_data", dataseg));
+		if (address_bits > 44)
+			GenerateDiadic(op_orh, 0, makereg(regGP), MakeStringAsNameConst((char*)">_start_data", dataseg));
+	}
+	else
+		cg.GenerateLoadAddress(makereg(regGP), MakeStringAsNameConst((char*)"_start_data", dataseg));
 	ReleaseTempRegister(ap);
 }
 
-// Compiler now uses global pointer one addressing for the rodataseg
+// Compiler now uses global pointer two addressing for the rodataseg
 void QuplsCodeGenerator::GenerateLoadRodataPointer()
 {
-	return;
 	Operand* ap = GetTempRegister();
+
+	return;
 	//cg.GenerateLoadConst(MakeStringAsNameConst("__rodata_base", dataseg), ap);
-	cg.GenerateLoadAddress(makereg(regGP1), MakeStringAsNameConst((char*)currentFn->sym->name->c_str(), codeseg));
+//	cg.GenerateLoadAddress(makereg(regGP1), MakeStringAsNameConst((char*)currentFn->sym->name->c_str(), codeseg));
+	if (address_bits > 21) {
+		cg.GenerateLoadAddress(makereg(regGP2), MakeStringAsNameConst((char*)"<_start_rodata", rodataseg));
+		GenerateDiadic(op_orm, 0, makereg(regGP2), MakeStringAsNameConst((char*)"?_start_rodata", rodataseg));
+		if (address_bits > 44)
+			GenerateDiadic(op_orh, 0, makereg(regGP2), MakeStringAsNameConst((char*)">_start_rodata", rodataseg));
+	}
+	else
+		cg.GenerateLoadAddress(makereg(regGP2), MakeStringAsNameConst((char*)"_start_rodata", rodataseg));
 	//cg.GenerateLoadAddress(makereg(regGP1), MakeStringAsNameConst((char *)"_start_rodata", dataseg));
 	//if (!compiler.os_code)
 	//GenerateTriadic(op_base, 0, makereg(regGP1), makereg(regGP1), ap);
@@ -1931,11 +1956,17 @@ void QuplsCodeGenerator::GenerateLoadRodataPointer()
 
 void QuplsCodeGenerator::GenerateLoadBssPointer()
 {
-	return;
 	Operand* ap = GetTempRegister();
-	//cg.GenerateLoadConst(MakeStringAsNameConst("__data_base", dataseg), ap);
-	cg.GenerateLoadAddress(makereg(regGP2), MakeStringAsNameConst((char*)"<_start_bss", bssseg));
-	GenerateDiadic(op_orm, 0, makereg(regGP2), MakeStringAsNameConst((char*)"?_start_bss", bssseg));
+
+	return;
+	if (address_bits > 21) {
+		cg.GenerateLoadAddress(makereg(regGP1), MakeStringAsNameConst((char*)"<_start_bss", bssseg));
+		GenerateDiadic(op_orm, 0, makereg(regGP1), MakeStringAsNameConst((char*)"?_start_bss", bssseg));
+		if (address_bits > 44)
+			GenerateDiadic(op_orh, 0, makereg(regGP1), MakeStringAsNameConst((char*)">_start_bss", bssseg));
+	}
+	else
+		cg.GenerateLoadAddress(makereg(regGP1), MakeStringAsNameConst((char*)"_start_bss", bssseg));
 	ReleaseTempRegister(ap);
 }
 
@@ -1989,4 +2020,284 @@ void QuplsCodeGenerator::GenerateReturnAndDeallocate(int64_t amt)
 	GenerateDiadic(op_rtd, 0, MakeImmediate(amt), MakeImmediate(0));
 }
 
+void QuplsCodeGenerator::GenerateLoadAddress(Operand* ap3, Operand* ap1)
+{
+	Operand* ap2, * ap4;
 
+	if (address_bits > 21)
+		ap1->lowhigh = 1;
+	GenerateDiadic(op_lda, 0, ap3, ap1);
+	if (address_bits > 21) {
+		ap2 = ap1->Clone();
+		ap2->lowhigh = 2;
+		GenerateDiadic(op_orm, 0, ap3, ap2);
+	}
+	if (address_bits > 44) {
+		ap4 = ap1->Clone();
+		ap4->lowhigh = 2;
+		GenerateDiadic(op_orh, 0, ap3, ap4);
+	}
+}
+
+// Generate load or store operation taking into consideration the number of
+// address bits required. If too many bits are needed turn the load or store
+// into a load of the address into a register, then use the register.
+
+void QuplsCodeGenerator::GenerateLoadStore(e_op opcode, Operand* ap1, Operand* ap2)
+{
+	// If fewer than 22 bits addressing, nothing to worry about.
+	if (address_bits < 22) {
+		GenerateDiadic(opcode, 0, ap1, ap2);
+		return;
+	}
+	// Only two modes that have issues: direct and register indirect with disp.
+	if (ap2->mode == am_indx) {
+		if (ap2->preg == 0)
+			ap2->mode = am_direct;
+	}
+	if (ap2->mode == am_direct || ap2->mode==am_direct2) {
+		if (ap2->offset == nullptr || ap2->offset2 != nullptr || ap2->mode == am_direct2 || !ap2->offset->i128.IsNBit(21)) {
+			Operand* ap4;
+			ap4 = GetTempRegister();
+			GenerateLoadAddress(ap4, ap2);
+			GenerateDiadic(opcode, 0, ap1, MakeIndirect(ap4->preg));
+			return;
+		}
+		GenerateDiadic(opcode, 0, ap1, ap2);
+		return;
+	}
+	else if (ap2->mode == am_indx) {
+		if (ap2->offset == nullptr || ap2->offset2!=nullptr || !ap2->offset->i128.IsNBit(21)) {
+			Operand* ap4;
+			ap4 = GetTempRegister();
+			if (ap2->offset) {
+				GenerateLoadConst(MakeImmediate(ap2->offset->i128), ap4);
+				ap2->mode = am_indx2;
+				ap2->offset = nullptr;
+				ap2->sreg = ap4->preg;
+				GenerateDiadic(opcode, 0, ap1, ap2);
+				return;
+			}
+			GenerateLoadConst(ap2, ap4);
+			ap2->mode = am_indx2;
+			ap2->offset = nullptr;
+			ap2->sreg = ap4->preg;
+			GenerateDiadic(opcode, 0, ap1, ap4);
+			return;
+		}
+		GenerateDiadic(opcode, 0, ap1, ap2);
+		return;
+	}
+	else
+		GenerateDiadic(opcode, 0, ap1, ap2);
+}
+
+void QuplsCodeGenerator::GenerateLoad(Operand* ap3, Operand* ap1, int ssize, int size, Operand* mask)
+{
+	std::string* str;
+
+	if (ap3->typep == &stdposit) {
+		switch (ap3->tp->precision) {
+		case 16:
+			GenerateTriadic(op_pldw, 0, ap3, ap1, mask);
+			break;
+		case 32:
+			GenerateTriadic(op_pldt, 0, ap3, ap1, mask);
+			break;
+		default:
+			GenerateTriadic(op_pldo, 0, ap3, ap1, mask);
+			break;
+		}
+	}
+	else if (ap3->typep == &stdvector) {
+		GenerateTriadic(op_loadv, 0, ap3, ap1, mask);
+	}
+	else if (ap3->typep->IsFloatType())
+		GenerateLoadFloat(ap3, ap1, ssize, size, mask);
+	//else if (ap3->mode == am_fpreg) {
+	//	GenerateTriadic(op_fldo, 0, ap3, ap1);
+	//}
+	else if (ap3->isUnsigned) {
+		// If size is zero, probably a pointer to void being processed.
+		switch (size) {
+		case 0: GenerateLoadStore(op_ldbu, ap3, ap1); break;
+		case 1:	GenerateLoadStore(op_ldbu, ap3, ap1); break;
+		case 2:	GenerateLoadStore(op_ldwu, ap3, ap1); break;
+		case 4:	GenerateLoadStore(op_ldtu, ap3, ap1); break;
+		case 8: GenerateLoadStore(op_ldou, ap3, ap1); break;
+		case 16:	GenerateLoadStore(op_ldh, ap3, ap1); break;
+		}
+	}
+	else {
+		switch (size) {
+		case 0: GenerateLoadStore(op_ldb, ap3, ap1); break;
+		case 1:	GenerateLoadStore(op_ldb, ap3, ap1); break;
+		case 2:	GenerateLoadStore(op_ldw, ap3, ap1); break;
+		case 4:	GenerateLoadStore(op_ldt, ap3, ap1); break;
+		case 8:	GenerateLoadStore(op_ldo, ap3, ap1); break;
+		case 16: GenerateLoadStore(op_ldh, ap3, ap1); break;
+		}
+	}
+	ap3->memref = true;
+	ap3->memop = ap1->Clone();
+}
+
+void QuplsCodeGenerator::GenerateStore(Operand* ap1, Operand* ap3, int size, Operand* mask)
+{
+	std::string* str;
+
+	//if (ap1->isPtr) {
+	//	GenerateTriadic(op_std, 0, ap1, ap3);
+	//}
+	//else
+	if (ap3->tp && ap3->tp->IsPositType()) {
+		switch (ap3->tp->precision) {
+		case 16:
+			GenerateTriadic(op_pstw, 0, ap1, ap3, mask);
+			break;
+		case 32:
+			GenerateTriadic(op_pstt, 0, ap1, ap3, mask);
+			break;
+		default:
+			GenerateTriadic(op_psto, 0, ap1, ap3, mask);
+			break;
+		}
+	}
+	if (ap3->typep == &stdposit) {
+		GenerateTriadic(op_sto, 0, ap1, ap3, mask);
+	}
+	else if (ap1->typep == &stdvector)
+		GenerateTriadic(op_sv, 0, ap1, ap3, mask);
+	else if (ap1->typep == &stdflt) {
+		GenerateTriadic(op_sto, 0, ap1, ap3, mask);
+	}
+	else if (ap1->typep == &stddouble) {
+		if (ap1->mode == am_fpreg)
+			printf("ho");
+		GenerateTriadic(op_sto, 0, ap1, ap3, mask);
+	}
+	else if (ap1->typep == &stdquad) {
+		GenerateTriadic(op_stf, 'q', ap1, ap3, mask);
+	}
+	else if (ap1->typep == &stdtriple) {
+		GenerateTriadic(op_stf, 't', ap1, ap3, mask);
+	}
+	//else if (ap1->mode==am_fpreg)
+	//	GenerateTriadic(op_fsto,0,ap1,ap3, mask);
+	else {
+		switch (size) {
+		case 1: GenerateLoadStore(op_stb, ap1, ap3); break;
+		case 2: GenerateLoadStore(op_stw, ap1, ap3); break;
+		case 4: GenerateLoadStore(op_stt, ap1, ap3); break;
+		case 8:	GenerateLoadStore(op_sto, ap1, ap3); break;
+		case 16:	GenerateLoadStore(op_sth, ap1, ap3); break;
+		default:
+			;
+		}
+	}
+}
+
+Operand* QuplsCodeGenerator::GenerateFloatcon(ENODE* node, int flags, int64_t size)
+{
+	Operand* ap1, * ap2;
+
+	// Code for generating a reference to the constant which is 
+	// stored in rodata.
+	ap1 = allocOperand();
+	ap1->isPtr = node->IsPtr();
+	if (node->constflag && node->f128.IsZero()) {
+		ap1->mode = am_reg;
+		ap1->isConst = true;
+		ap1->preg = regZero;
+	}
+	else {
+		if (use_gp) {
+			ap1->mode = am_indx;
+			ap1->preg = GetSegmentIndexReg((e_sg)node->segment);
+		}
+		else
+			ap1->mode = am_direct;
+		ap1->offset = node;
+		if (node)
+			DataLabels[node->i]++;
+	}
+	ap1->typep = &stddouble;
+	if (node)
+		ap1->tp = node->tp;
+	// Don't allow the constant to be loaded into an integer register.
+	ap1->MakeLegal(flags, size);
+	return (ap1);
+}
+
+Operand* QuplsCodeGenerator::GenPositcon(ENODE* node, int flags, int64_t size)
+{
+	Operand* ap1, * ap2;
+
+	ap1 = allocOperand();
+	ap1->isPtr = node->IsPtr();
+	if (use_gp) {
+		ap1->mode = am_indx;
+		ap1->preg = GetSegmentIndexReg((e_sg)node->segment);
+	}
+	else
+		ap1->mode = am_direct;
+	ap1->offset = node;
+	if (node)
+		DataLabels[node->i]++;
+	ap1->typep = &stdposit;
+	if (node)
+		ap1->tp = node->tp;
+	// Don't allow the constant to be loaded into an integer register.
+	ap1->MakeLegal(flags & ~am_reg, size);
+	return (ap1);
+}
+
+Operand* QuplsCodeGenerator::GenLabelcon(ENODE* node, int flags, int64_t size)
+{
+	Operand* ap1, * ap2;
+
+	if (use_gp) {
+		ap1 = GetTempRegister();
+		ap2 = allocOperand();
+		ap2->mode = am_indx;
+		ap2->preg = GetSegmentIndexReg((e_sg)node->segment);
+		ap2->offset = node;     // use as constant node
+		GenerateLoadAddress(ap1, ap2);
+		ap1->MakeLegal(flags, size);
+		return (ap1);
+	}
+	ap1 = allocOperand();
+	ap1->isPtr = node->IsPtr();
+	ap1->mode = am_imm;
+	ap1->offset = node;
+	ap1->isUnsigned = node->isUnsigned;
+	ap1->tp = node->tp;
+	ap1->MakeLegal(flags, size);
+}
+
+Operand* QuplsCodeGenerator::GenNacon(ENODE* node, int flags, int64_t size)
+{
+	Operand* ap1, * ap2;
+
+	if (use_gp) {
+		ap1 = GetTempRegister();
+		ap2 = allocOperand();
+		ap2->mode = am_indx;
+		ap2->preg = GetSegmentIndexReg((e_sg)node->segment);
+		ap2->offset = node;     // use as constant node
+		if (node)
+			DataLabels[node->i]++;
+		GenerateLoadAddress(ap1, ap2);
+		ap1->MakeLegal(flags, size);
+		return (ap1);
+	}
+	ap1 = allocOperand();
+	ap1->isPtr = node->IsPtr();
+	ap1->mode = am_imm;
+	ap1->offset = node;
+	if (node->i == 0)
+		node->i = -1;
+	ap1->isUnsigned = node->isUnsigned;
+	ap1->MakeLegal(flags, size);
+	return (ap1);
+}
