@@ -312,7 +312,7 @@ void Function::DoFuncptrAssign(Function *sp)
 	op = en_assign;
 	ep2 = nullptr;
 	tp2 = exp.ParseAssignOps(&ep2, sp->sym);
-	if (tp2 == nullptr || !IsLValue(ep1))
+	if (tp2 == nullptr || !ep1->IsLValue())
 		error(ERR_LVALUE);
 	else {
 		tp1 = forcefit(&ep2, tp2, &ep1, tp1, false, true);

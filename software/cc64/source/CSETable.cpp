@@ -159,7 +159,7 @@ int CSETable::voidauto2(ENODE *node)
 	uses = 0;
 	voided = false;
 	for (cnt = 0; cnt < csendx; cnt++) {
-		if (IsLValue(table[cnt].exp)) {
+		if (table[cnt].exp->IsLValue()) {
 			if (ENODE::IsEqual(node, table[cnt].exp->p[0])) {
 				table[cnt].voidf = 1;
 				voided = true;

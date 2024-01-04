@@ -1347,36 +1347,43 @@ j1:
 			tptr = &stdshort;
 			pnode = makei128node(en_icon, ival128);
 		}
+		pnode->sym = symi==nullptr?currentSym:symi;
 		pnode->SetType(tptr);
     NextToken();
 		break;
 
 	case kw_floatmax:
 		tptr = ParseFloatMax(&pnode);
+		pnode->sym = symi == nullptr ? currentSym : symi;
 		break;
 
   case rconst:
 		tptr = ParseRealConst(&pnode);
+		pnode->sym = symi == nullptr ? currentSym : symi;
 		break;
 
 	case pconst:
 		tptr = ParsePositConst(&pnode);
+		pnode->sym = symi == nullptr ? currentSym : symi;
 		break;
 
 	case sconst:
 		tptr = ParseStringConst(&pnode);
+		pnode->sym = symi == nullptr ? currentSym : symi;
 		break;
 
 	case asconst:
 		pnode = ParseStringConstWithSizePrefix(node);
 		tptr = &stdstring;
 		pnode->SetType(tptr);
+		pnode->sym = symi == nullptr ? currentSym : symi;
 		break;
 
 	case isconst:
 		pnode = ParseInlineStringConst(node);
 		tptr = &stdstring;
 		pnode->SetType(tptr);
+		pnode->sym = symi == nullptr ? currentSym : symi;
 		break;
 
   case openpa:
@@ -1458,15 +1465,15 @@ j1:
 // not RValues. And we don't want to have to test everywhere for struct types,
 // so we just say it's an LValue.
 //
-bool IsLValue(ENODE *node)
+bool ENODE::IsLValue()
 {
-	if (node==nullptr)
+	if (this==nullptr)
 		return FALSE;
-	switch (node->nodetype) {
+	switch (nodetype) {
 	// A typecast is just a node with an extra type tacked onto it. We want to 
 	// check the node of the cast.
 	case en_cast:
-		return (IsLValue(node->p[1]));
+		return p[1]->IsLValue();
 	case en_ref:
 	case en_fieldref:
 		return (true);
@@ -1483,7 +1490,7 @@ bool IsLValue(ENODE *node)
 	case en_cfd:
 	case en_ccwp: case en_wyde2ptr:
 	case en_cucwp: case en_uwyde2ptr:
-		return IsLValue(node->p[0]);
+		return p[0]->IsLValue();
 		// Detect if there's an addition to a pointer happening.
 	// For an array reference there will be an add node at the top of the
 	// expression tree. This evaluates to an address which is essentially
@@ -1491,18 +1498,18 @@ bool IsLValue(ENODE *node)
 	case en_add:
 	case en_assub:
 	case en_asadd:
-		return (IsLValue(node->p[0]) || IsLValue(node->p[1]));
+		return (p[0]->IsLValue() || p[1]->IsLValue());
 	case en_nacon:
 	case en_autocon:
-		return (node->etype == bt_pointer ||
-			node->etype == bt_struct ||
-			node->etype == bt_union ||
-			node->etype == bt_class ||
-			node->etype == bt_func ||
-			node->etype == bt_ifunc);
+		return (etype == bt_pointer ||
+			etype == bt_struct ||
+			etype == bt_union ||
+			etype == bt_class ||
+			etype == bt_func ||
+			etype == bt_ifunc);
 	// A typecast will connect the types with a void node
 	case en_void:
-		return (IsLValue(node->p[1]));
+		return (p[1]->IsLValue());
 	// Pointer to function?
 	case en_cnacon:
 		return (true);
@@ -1564,7 +1571,7 @@ ENODE *Expression::Autoincdec(TYP *tp, ENODE **node, int flag, bool isPostfix)
 		ep1 = (*node)->Clone();
 	else
 		ep1 = *node;
-	if( IsLValue(ep1) ) {
+	if( ep1->IsLValue() ) {
 		if (tp->type == bt_pointer) {
 			typ = tp->btpp;// tp->btpp;
 			ep2 = makeinode(en_icon,typ->size);
@@ -3122,7 +3129,7 @@ ascomm:
 				NextToken();
 				tp2 = ParseAssignOps(&ep2, symi);
 ascomm2:
-		    if ( tp2 == 0 || !IsLValue(ep1) )
+		    if ( tp2 == 0 || !ep1->IsLValue() )
           error(ERR_LVALUE);
 				else {
 					ep1->i_rhs = ep2->i;

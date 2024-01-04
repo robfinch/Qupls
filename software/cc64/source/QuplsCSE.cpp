@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2017-2024  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -32,15 +32,14 @@
 // can be directly encoded in the instruction. There's no value to
 // placing them in registers.
 
-int CSE::OptimizationDesireability()
+int QuplsCSE::OptimizationDesireability()
 {
 	int depth;
 
 	if (exp==nullptr)
 		return (0);
-	if( voidf )// &&
-                       //exp->i < 32768 && exp->i >= -32768))
-        return (0);
+	if( voidf )
+    return (0);
 	if (exp->nodetype == en_icon) {// &&
 		// zero can have r0 substituted.
 		if (exp->i == 0)
@@ -51,11 +50,6 @@ int CSE::OptimizationDesireability()
 			return (uses);
 		// Optimize large constants
 		return (uses * 2);
-		/*
-		if (exp->i < 32768 && exp->i >= -32768)
-			return (uses / 2);
-		return (uses / 4);
-		*/
 	}
 	/* added this line to disable register optimization of global variables.
     The compiler would assign a register to a global variable ignoring
@@ -64,7 +58,7 @@ int CSE::OptimizationDesireability()
 	if (exp->nodetype == en_nacon)
 		return (0);
 	// Duh, lets not optimize to replace one regvar with another.
-	if (exp->nodetype == en_regvar)
+	if (exp->nodetype == en_regvar || exp->nodetype == en_fpregvar)
 		return (0);
 	// No value to optimizing function call names, the called function
 	// address will typically fit in a single 32/48 bit opcode. It's faster
@@ -97,24 +91,7 @@ int CSE::OptimizationDesireability()
 	depth = max(depth, 1);
 
 	// Left values are worth more to optimization than right values.
-    if(exp->IsLValue() )
-	    return (2 * uses * depth);
-    return (uses * depth);
+  if( exp->IsLValue() )
+	  return (2 * uses * depth);
+  return (uses * depth);
 }
-
-void CSE::AccDuses(int val)
-{
-	if (loop_active > 1)
-		duses += (val != 0) * ((loop_active - 1) * 5);
-	else
-		duses += val;
-}
-
-void CSE::AccUses(int val)
-{
-	if (loop_active > 1)
-		uses += (loop_active - 1) * 5 * val;
-	else
-		uses += val;
-}
-

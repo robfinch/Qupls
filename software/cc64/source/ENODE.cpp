@@ -882,10 +882,21 @@ void ENODE::repexpr()
 		}
 		break;
 		*/
+	case en_icon:
+		if ((csp = currentFn->csetbl->Search(this)) != NULL) {
+			if (!csp->voidf) {
+				if (csp->reg > 0) {
+					nodetype = en_regvar;
+					rg = csp->reg;
+					ru->add(rg);
+					rru->add(nregs - 1 - rg);
+				}
+			}
+		}
+		break;
 	case en_nacon:
 	case en_labcon:
 	case en_pcon:
-	case en_icon:
 	case en_autovcon:
 	case en_autocon:
 	case en_classcon:
@@ -1243,10 +1254,12 @@ void ENODE::scanexpr(int duse)
 	case en_regvar:
 		currentFn->csetbl->InsertNode(this, duse, &first);
 		break;
+	case en_icon:
+		currentFn->csetbl->InsertNode(this, duse, &first);
+		break;
 	case en_cnacon:
 	case en_clabcon:
 	case en_fcon:
-	case en_icon:
 	case en_labcon:
 	case en_nacon:
 		currentFn->csetbl->InsertNode(this, duse, &first);
@@ -2177,7 +2190,21 @@ Operand *ENODE::GenerateAssignLogic(int flags, int size, int op)
 	// Some of the logic operations don't support immediate mode, so we check
 	ap2 = cg.GenerateExpression(p[1], Instruction::Get(op)->amclass3, size, 1);
 	if (ap1->mode == am_reg) {
+		// Check if an immediate value will fit into the 21-bit immediate field. If
+		// not it needs to be loaded into a register.
+		if (ap2->mode == am_imm) {
+			if (ap2->offset) {
+				if (!ap2->offset->i128.IsNBit(21)) {
+					ap3 = GetTempRegister();
+					cg.GenerateLoadConst(ap2, ap3);
+					GenerateTriadic(op, 0, ap1, ap1, ap3);
+					ReleaseTempRegister(ap3);
+					goto j1;
+				}
+			}
+		}
 		GenerateTriadic(op, 0, ap1, ap1, ap2);
+j1:
 		mr = &regs[ap1->preg];
 		if (mr->assigned)
 			mr->modified = true;

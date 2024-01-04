@@ -1232,7 +1232,7 @@ ENODE* Expression::ParseAddressOf(Symbol* symi)
 						}
 						else */
 		ep2 = ep1;
-		if (IsLValue(ep1)) {
+		if (ep1->IsLValue()) {
 			if (ep1->nodetype != en_add) {	// array or pointer manipulation
 				if (ep1->p[0])	// Cheesy hack
 					ep1 = ep1->p[0];

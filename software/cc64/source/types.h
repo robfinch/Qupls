@@ -3,7 +3,7 @@
 
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2023 Robert Finch, Waterloo
+//   \\__/ o\    (C) 2012-2024 Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -773,6 +773,7 @@ public:
 
 	ENODE* Clone();
 
+	bool IsLValue();
 	void SetType(TYP* t) { 
 		if (t == (TYP*)1)
 			printf("hello");
@@ -2073,6 +2074,12 @@ public:
 public:
 	void AccUses(int val);					// accumulate uses
 	void AccDuses(int val);					// accumulate duses
+	virtual int OptimizationDesireability();
+};
+
+class QuplsCSE : public CSE
+{
+public:
 	int OptimizationDesireability();
 };
 

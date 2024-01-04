@@ -261,6 +261,7 @@ void Operand::MakeLegal(int flags, int64_t size)
 			}
 			// If there is a choice between r0 and #0 choose r0.
 			else if (flags & am_imm) {
+				
 				if (tp && tp->IsFloatType()) {
 					return;
 					if (flags & am_reg) {
