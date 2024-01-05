@@ -1207,7 +1207,6 @@ typedef struct packed
 	aregno_t Rt;
 	logic Rtz;
 	logic [2:0] Rcc;	// Rc complement status
-	logic Rtsrc;			// Rt is a source register
 	logic has_imm;
 	logic has_imma;
 	logic has_immb;
@@ -1215,8 +1214,6 @@ typedef struct packed
 	value_t imma;
 	value_t immb;
 	value_t immc;
-	logic swap;				// Swap A,B operands
-	prec_t prc;
 	logic csr;
 	logic nop;				// NOP semantics
 	logic fc;					// flow control op
@@ -1230,34 +1227,22 @@ typedef struct packed
 	logic mulu;
 	logic div;
 	logic divu;
-	logic is_vector;
 	logic multicycle;
 	logic mem;
 	logic load;
 	logic loadz;
-	logic loadr;
-	logic loadn;
-	logic ldsr;
-	logic storer;
-	logic storen;
 	logic store;
 	logic lda;
 	logic erc;
 	logic fence;
-	logic stcr;
-	logic need_steps;
-	logic compress;
-	memsz_t memsz;
 	logic mcb;					// micro-code branch
 	logic br;						// conditional branch
 	logic cjb;					// call, jmp, or bra
 	logic brk;
 	logic irq;
 	logic rti;
-	logic flt;
 	logic rex;
 	logic pfx;
-	logic popq;
 	logic sync;
 	logic oddball;
 	logic regs;					// register list modifier

@@ -320,8 +320,8 @@ wire div1_done,div1_dbz;
 reg alu1_ld;
 
 reg fpu0_idle;
-reg fpu0_done;
-reg fpu0_stomp;
+reg fpu0_done = 1'b0;
+reg fpu0_stomp = 1'b0;
 reg fpu0_available;
 instruction_t fpu0_instr;
 reg [2:0] fpu0_rmd;
@@ -1518,26 +1518,18 @@ always_comb pc0 = pc + (SUPPORT_VLIB ? 5'd1 : 5'd0);
 always_comb 
 begin
 	pc1 = pc0 + len0;
-	if (pc1[7:6]!=pc0[7:6])
-		pc1 = {pc0[$bits(pc_address_t)-1:6],6'h3c};
 end
 always_comb
 begin
 	pc2 = pc1 + len1;
-	if (pc2[7:6]!=pc0[7:6])
-		pc2 = {pc0[$bits(pc_address_t)-1:6],6'h3c};
 end
 always_comb
 begin
 	pc3 = pc2 + len2;
-	if (pc3[7:6]!=pc0[7:6])
-		pc3 = {pc0[$bits(pc_address_t)-1:6],6'h3c};
 end
 always_comb
 begin
 	pc4 = pc3 + len3;
-	if (pc4[7:6]!=pc0[7:6])
-		pc4 = {pc0[$bits(pc_address_t)-1:6],6'h3c};
 end
 /*
 always_comb pc5 = pc4 + len4;
@@ -1677,8 +1669,10 @@ generate begin : gDecoders
 		begin
 			Qupls_decoder udeci0
 			(
+				.rst(rst),
 				.clk(clk),
 				.en(advance_pipeline),
+				.om(sr.om),
 				.instr(instr[0]),
 				.regx(regx0),
 				.dbo(db0_r)
@@ -1688,8 +1682,10 @@ generate begin : gDecoders
 		begin
 			Qupls_decoder udeci0
 			(
+				.rst(rst),
 				.clk(clk),
 				.en(advance_pipeline),
+				.om(sr.om),
 				.instr(instr[0]),
 				.regx(regx0),
 				.dbo(db0_r)
@@ -1697,8 +1693,10 @@ generate begin : gDecoders
 
 			Qupls_decoder udeci1
 			(
+				.rst(rst),
 				.clk(clk),
 				.en(advance_pipeline),
+				.om(sr.om),
 				.instr(instr[1]),
 				.regx(regx1),
 				.dbo(db1_r)
@@ -1708,8 +1706,10 @@ generate begin : gDecoders
 		begin
 			Qupls_decoder udeci0
 			(
+				.rst(rst),
 				.clk(clk),
 				.en(advance_pipeline),
+				.om(sr.om),
 				.instr(instr[0]),
 				.regx(regx0),
 				.dbo(db0_r)
@@ -1717,8 +1717,10 @@ generate begin : gDecoders
 
 			Qupls_decoder udeci1
 			(
+				.rst(rst),
 				.clk(clk),
 				.en(advance_pipeline),
+				.om(sr.om),
 				.instr(instr[1]),
 				.regx(regx1),
 				.dbo(db1_r)
@@ -1726,8 +1728,10 @@ generate begin : gDecoders
 
 			Qupls_decoder udeci2
 			(
+				.rst(rst),
 				.clk(clk),
 				.en(advance_pipeline),
+				.om(sr.om),
 				.instr(instr[2]),
 				.regx(regx2),
 				.dbo(db2_r)
@@ -1737,8 +1741,10 @@ generate begin : gDecoders
 		begin
 			Qupls_decoder udeci0
 			(
+				.rst(rst),
 				.clk(clk),
 				.en(advance_pipeline),
+				.om(sr.om),
 				.instr(instr[0]),
 				.regx(regx0),
 				.dbo(db0_r)
@@ -1746,8 +1752,10 @@ generate begin : gDecoders
 
 			Qupls_decoder udeci1
 			(
+				.rst(rst),
 				.clk(clk),
 				.en(advance_pipeline),
+				.om(sr.om),
 				.instr(instr[1]),
 				.regx(regx1),
 				.dbo(db1_r)
@@ -1755,8 +1763,10 @@ generate begin : gDecoders
 
 			Qupls_decoder udeci2
 			(
+				.rst(rst),
 				.clk(clk),
 				.en(advance_pipeline),
+				.om(sr.om),
 				.instr(instr[2]),
 				.regx(regx2),
 				.dbo(db2_r)
@@ -1764,8 +1774,10 @@ generate begin : gDecoders
 
 			Qupls_decoder udeci3
 			(
+				.rst(rst),
 				.clk(clk),
 				.en(advance_pipeline),
+				.om(sr.om),
 				.instr(instr[3]),
 				.regx(regx3),
 				.dbo(db3_r)
@@ -1915,10 +1927,6 @@ pregno_t freea;
 pregno_t freeb;
 pregno_t freec;
 pregno_t freed;
-pregno_t Rt0_r;
-pregno_t Rt1_r;
-pregno_t Rt2_r;
-pregno_t Rt3_r;
 wire Rt0_qv;
 wire Rt1_qv;
 wire Rt2_qv;
@@ -1946,11 +1954,6 @@ Qupls_reg_renamer2 utrn1
 	.wv3(Rt3_qv),
 	.avail(avail_reg)
 );
-reg alloc0,alloc1,alloc2,alloc3;
-always_ff @(posedge clk) alloc0 = utrn1.alloc0;
-always_ff @(posedge clk) alloc1 = utrn1.alloc1;
-always_ff @(posedge clk) alloc2 = utrn1.alloc2;
-always_ff @(posedge clk) alloc3 = utrn1.alloc3;
 /*
 always_ff @(posedge clk)
 if (advance_pipeline) begin
@@ -1985,12 +1988,6 @@ begin
 		if (arn[n19]==7'd63)
 			$finish;
 end
-*/
-/*
-always_ff @(posedge clk) if (rst) Rt0_q <= 8'd0; else if (nq) Rt0_q <= Rt0_r;
-always_ff @(posedge clk) if (rst) Rt1_q <= 8'd0; else if (nq) Rt1_q <= Rt1_r;
-always_ff @(posedge clk) if (rst) Rt2_q <= 8'd0; else if (nq) Rt2_q <= Rt2_r;
-always_ff @(posedge clk) if (rst) Rt3_q <= 8'd0; else if (nq) Rt3_q <= Rt3_r;
 */
 
 Qupls_rat urat1
@@ -2103,26 +2100,18 @@ always_ff @(posedge clk)
 if (advance_pipeline)
 begin
 	pc1_x = pc0_w + 4'd5;
-	if (pc1_x[7:6]!=pc0_w[7:6])
-		pc1_x = {pc0_w[$bits(pc_address_t)-1:6],6'h3c};
 end
 always_ff @(posedge clk)
 if (advance_pipeline) begin
 	pc2_x = pc0_w + 4'd10;
-	if (pc2_x[7:6]!=pc0_w[7:6])
-		pc2_x = {pc0_w[$bits(pc_address_t)-1:6],6'h3c};
 end
 always_ff @(posedge clk)
 if (advance_pipeline) begin
 	pc3_x = pc0_w + 4'd15;
-	if (pc3_x[7:6]!=pc0_w[7:6])
-		pc3_x = {pc0_w[$bits(pc_address_t)-1:6],6'h3c};
 end
 always_ff @(posedge clk)
 if (advance_pipeline) begin
 	pc4_x = pc0_w + 5'd20;
-	if (pc4_x[7:6]!=pc0_w[7:6])
-		pc4_x = {pc0_w[$bits(pc_address_t)-1:6],6'h3c};
 end
 always_ff @(posedge clk)
 if (advance_pipeline)
@@ -5166,6 +5155,10 @@ begin
 	dram1_cp <= 4'd0;
 	dram_v0 <= 1'd0;
 	dram_v1 <= 1'd0;
+	dram_Rt0 <= 9'd0;
+	dram_Rt1 <= 9'd0;
+	dram_bus0 <= 64'd0;
+	dram_bus1 <= 64'd0;
 	panic <= `PANIC_NONE;
 	for (n14 = 0; n14 < ROB_ENTRIES; n14 = n14 + 1) begin
 		rob[n14] <= {$bits(rob_entry_t){1'd0}};

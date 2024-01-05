@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -36,7 +36,8 @@
 
 import QuplsPkg::*;
 
-module Qupls_decoder(clk, en, om, instr, regx, dbo);
+module Qupls_decoder(rst, clk, en, om, instr, regx, dbo);
+input rst;
 input clk;
 input en;
 input operating_mode_t om;
@@ -232,6 +233,12 @@ Qupls_decode_fpu ufpu
 	.fpu(db.fpu)
 );
 
+Qupls_decode_fpu0 ufpu0
+(
+	.instr(ins.ins),
+	.fpu0(db.fpu0)
+);
+
 Qupls_decode_oddball uob0
 (
 	.instr(ins.ins),
@@ -280,18 +287,25 @@ Qupls_decode_rex udrex1
 	.rex(db.rex)
 );
 
+/*
 Qupls_decode_swap uswp1
 (
 	.instr(ins.ins),
 	.swap(db.swap)
 );
+*/
 
 always_ff @(posedge clk)
-if (en) begin
-	dbo <= {$bits(dbo){1'd0}};	// in case a signal was missed / unused.
-	dbo <= db;
-	dbo.mem <= db.load|db.store;
-	db.sync = db.fence && ins[15:8]==8'hFF;
+if (rst)
+	dbo <= {$bits(dbo){1'd0}};
+else begin
+	if (en) begin
+		dbo <= {$bits(dbo){1'd0}};	// in case a signal was missed / unused.
+		dbo <= db;
+		dbo.mem <= db.load|db.store;
+		dbo.sync <= db.fence && ins[15:8]==8'hFF;
+		dbo.pred <= ins.ins.any.opcode==OP_PRED;
+	end
 end
 
 endmodule

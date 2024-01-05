@@ -152,8 +152,9 @@ wire [6:0] iRn0 = iRn0_i;
 wire [6:0] iRn1 = iRn1_i;
 wire [6:0] iRn2 = iRn2_i;
 wire [6:0] iRn3 = iRn3_i;
-wire [511:0] ic_line2 = ic_line_i;
+wire [1023:0] ic_line2 = ic_line_i;
 wire [11:0] mip = mip_i;
+reg [255:0] ic_line_aligned;
 
 wire hirq = ~reglist_active && hirq_i && mip[11:8]!=4'h1;
 
@@ -178,8 +179,11 @@ always_comb mc_ins7 = mc_ins7_i;
 always_comb mc_ins8 = mc_ins8_i;
 
 always_comb 
+	ic_line_aligned = ic_line2 >> {pc0[5:0],3'd0};
+
+always_comb 
 begin
-	ins0_.ins = ic_line2 >> {pc0[5:0],3'd0};
+	ins0_.ins = ic_line_aligned[39:0];
 	ins0_.aRa = ins0_.ins.r3.Ra;
 	ins0_.aRb = ins0_.ins.r3.Rb;
 	ins0_.aRc = ins0_.ins.r3.Rc;
@@ -188,7 +192,7 @@ begin
 end
 always_comb
 begin
-	ins1_.ins = ic_line2 >> {pc1[5:0],3'd0};
+	ins1_.ins = ic_line_aligned[79:40];
 	ins1_.aRa = ins1_.ins.r3.Ra;
 	ins1_.aRb = ins1_.ins.r3.Rb;
 	ins1_.aRc = ins1_.ins.r3.Rc;
@@ -197,7 +201,7 @@ begin
 end
 always_comb
 begin
-	ins2_.ins = ic_line2 >> {pc2[5:0],3'd0};
+	ins2_.ins = ic_line_aligned[119:80];
 	ins2_.aRa = ins2_.ins.r3.Ra;
 	ins2_.aRb = ins2_.ins.r3.Rb;
 	ins2_.aRc = ins2_.ins.r3.Rc;
@@ -206,7 +210,7 @@ begin
 end
 always_comb
 begin
-	ins3_.ins = ic_line2 >> {pc3[5:0],3'd0};
+	ins3_.ins = ic_line_aligned[159:120];
 	ins3_.aRa = ins3_.ins.r3.Ra;
 	ins3_.aRb = ins3_.ins.r3.Rb;
 	ins3_.aRc = ins3_.ins.r3.Rc;
@@ -351,6 +355,13 @@ generate begin : gInsExt
 			ins8.ins <= hirq ? {'d0,FN_IRQ,1'b0,vect_i,5'd0,2'd0,irq_i,OP_SYS} :
 				nop_i ? {33'd0,OP_NOP} :
 				mipv ? mc_ins8 : ic_line2 >> {pc8[5:0],3'd0};
+	end
+	else begin
+		always_ff @(posedge clk) ins4 <= {$bits(ex_instruction_t){1'b0}};
+		always_ff @(posedge clk) ins5 <= {$bits(ex_instruction_t){1'b0}};
+		always_ff @(posedge clk) ins6 <= {$bits(ex_instruction_t){1'b0}};
+		always_ff @(posedge clk) ins7 <= {$bits(ex_instruction_t){1'b0}};
+		always_ff @(posedge clk) ins8 <= {$bits(ex_instruction_t){1'b0}};
 	end
 end
 endgenerate

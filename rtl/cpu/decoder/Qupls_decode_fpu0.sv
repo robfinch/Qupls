@@ -36,21 +36,34 @@
 
 import QuplsPkg::*;
 
-module Qupls_decode_fpu(instr, fpu);
+module Qupls_decode_fpu0(instr, fpu0);
 input instruction_t instr;
-output fpu;
+output fpu0;
 
-function fnIsFpu;
+function fnIsFpu0;
 input instruction_t ir;
 begin
 	case(ir.r2.opcode)
 	OP_FLT3:
-		fnIsFpu = 1'b1;
-	default:	fnIsFpu = 1'b0;
+		case(ir.f3.func)
+		FN_FLT2:	
+			case(ir.f2.func)
+			FN_FLT1:
+				case(ir.f1.func)
+				FN_FRES:	fnIsFpu0 = 1'b1;
+				FN_FSIN:	fnIsFpu0 = 1'b1;
+				FN_FCOS:	fnIsFpu0 = 1'b1;
+				default:	fnIsFpu0 = 1'b0;
+				endcase
+			default:	fnIsFpu0 = 1'b0;
+			endcase
+		default:	fnIsFpu0 = 1'b0;
+		endcase
+	default:	fnIsFpu0 = 1'b0;
 	endcase
 end
 endfunction
 
-assign fpu = fnIsFpu(instr);
+assign fpu0 = fnIsFpu0(instr);
 
 endmodule
