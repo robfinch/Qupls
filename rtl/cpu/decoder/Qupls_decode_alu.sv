@@ -79,10 +79,10 @@ begin
 	OP_ORI:		fnIsAlu = 1'b1;
 	OP_EORI:	fnIsAlu = 1'b1;
 	OP_SLTI:	fnIsAlu = 1'b1;
+	OP_AIPSI:	fnIsAlu = 1'b1;
 	OP_ADDSI,OP_ORSI,OP_ANDSI,OP_EORSI:
 						fnIsAlu = 1'b1;
 	OP_SHIFT:	fnIsAlu = 1'b1;
-	OP_LDI:		fnIsAlu = 1'b1;
 	OP_CSR:		fnIsAlu = 1'b1;
 	OP_MOV:		fnIsAlu = 1'b1;
 	OP_LDAX:	fnIsAlu = 1'b1;

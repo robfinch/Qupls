@@ -1,7 +1,7 @@
 `timescale 1ns / 10ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2023-2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -49,8 +49,8 @@ parameter SIM = 1'b1;
 //`define SUPPORT_128BIT_OPS	1
 `define NLANES	4
 `define NTHREADS	4
-`define NREGS		69
-parameter PREGS = 256;
+`define NREGS		74	// 330
+parameter PREGS = 256;	// 1024
 
 `define L1CacheLines	1024
 `define L1CacheLineSize		256
@@ -240,16 +240,12 @@ typedef enum logic [6:0] {
 	OP_DIVI			= 7'd13,
 	OP_MULUI		= 7'd14,
 	OP_MOV			= 7'd15,
+	OP_FLT3			= 7'd16,
 	OP_CMPUI		= 7'd19,
 	OP_DIVUI		= 7'd21,
 	OP_BFI			= 7'd23,
-	OP_MINMAX3	= 7'd24,
-	OP_MUX			= 7'd25,
-	OP_R2B			= 7'd26,
-	OP_PTRDIF		= 7'd27,
-	OP_ADDQ			= 7'd28,
-	OP_DBcc			= 7'd29,
-	OP_LDI			= 7'd31,
+	OP_RV3			= 7'd24,
+	OP_RVS3			= 7'd25,
 	OP_BSR			= 7'd32,
 	OP_DBRA			= 7'd33,
 	OP_MCB			= 7'd34,
@@ -285,6 +281,7 @@ typedef enum logic [6:0] {
 	OP_POP			= 7'd55,
 	OP_PFXA32		= 7'd56,
 	OP_LDAX			= 7'd57,
+	OP_AIPSI		= 7'd58,
 	OP_EORSI		= 7'd59,
 	OP_PFXB32		= 7'd60,
 	OP_LDB			= 7'd64,
@@ -310,8 +307,13 @@ typedef enum logic [6:0] {
 	OP_AMO			= 7'd92,
 	OP_CAS			= 7'd93,
 	OP_LSCTX		= 7'd94,
-	OP_FLT2			= 7'd96,
-	OP_FLT3			= 7'd97,
+	OP_LDBIP		= 7'd96,
+	OP_LDBUIP		= 7'd97,
+	OP_LDWIP		= 7'd98,
+	OP_LDWUIP		= 7'd99,
+	OP_LDTIP		= 7'd100,
+	OP_LDTUIP		= 7'd101,
+	OP_LDOIP		= 7'd102,
 	OP_IRQ			= 7'd112,
 	OP_FENCE		= 7'd114,
 	OP_REGS			= 7'd117,
@@ -647,7 +649,8 @@ typedef enum logic [3:0] {
 	FN_FMA = 4'd0,
 	FN_FMS = 4'd1,
 	FN_FNMA = 4'd2,
-	FN_FNMS = 4'd3
+	FN_FNMS = 4'd3,
+	FN_FLT2 = 4'd8
 } f3func_t;
 
 typedef enum logic [6:0] {
@@ -894,10 +897,10 @@ typedef struct packed
 	logic [5:0] num;
 } regspec_t;
 
-typedef logic [$clog2(AREGS)-1:0] aregno_t;		// architectural register number
-typedef logic [$clog2(PREGS)-1:0] pregno_t;		// physical register number
+typedef logic [8:0] aregno_t;		// architectural register number (0 to 330)
+typedef logic [9:0] pregno_t;		// physical register number (0-1023)
 typedef logic [3:0] rndx_t;			// ROB index
-typedef logic [$clog2(PREGS)-1:0] tregno_t;
+typedef logic [9:0] tregno_t;
 
 typedef struct packed
 {
@@ -1145,6 +1148,7 @@ typedef union packed
 	f3inst_t	f3;
 	r1inst_t	r1;
 	r2inst_t	r2;
+	r2inst_t	r3;
 	brinst_t	br;
 	brrinst_t	brr;
 	fbrinst_t	fbr;
@@ -1161,6 +1165,15 @@ typedef union packed
 	postfix_t	pfx;
 	anyinst_t any;
 } instruction_t;
+
+typedef struct packed {
+	aregno_t aRa;
+	aregno_t aRb;
+	aregno_t aRc;
+	aregno_t aRt;
+	logic [5:0] pred_btst;
+	instruction_t ins;
+} ex_instruction_t;
 
 typedef struct packed {
 	pc_address_t adr;
@@ -1192,6 +1205,7 @@ typedef struct packed
 	aregno_t Rb;
 	aregno_t Rc;
 	aregno_t Rt;
+	logic Rtz;
 	logic [2:0] Rcc;	// Rc complement status
 	logic Rtsrc;			// Rt is a source register
 	logic has_imm;
@@ -1247,6 +1261,7 @@ typedef struct packed
 	logic sync;
 	logic oddball;
 	logic regs;					// register list modifier
+	logic pred;					// is predicate instruction modifier
 } decode_bus_t;
 
 typedef struct packed
@@ -1405,6 +1420,8 @@ typedef struct packed {
 	logic argA_v;							// 1=argument A valid
 	logic argB_v;
 	logic argC_v;
+	logic argP_v;
+	logic argT_v;
 	value_t arg;							// argument value for CSR instruction
 	// The following fields are loaded at enqueue time, but otherwise do not change.
 	logic last;								// 1=last instruction in group (not used)
@@ -1415,10 +1432,14 @@ typedef struct packed {
 	pregno_t pRa;							// physical registers (see decode bus for arch. regs)
 	pregno_t pRb;
 	pregno_t pRc;
+	pregno_t pRp;
 	pregno_t pRt;							// current Rt value
 	pregno_t nRt;							// new Rt
+	logic no_pred;						// no predicate
+	logic [1:0] pred_val;
+	logic pred_z;							// zero out registers not selected for operation
 	logic [3:0] cndx;					// checkpoint index
-	instruction_t op;					// original instruction
+	ex_instruction_t op;			// original instruction
 	pc_address_t pc;					// PC of instruction
 	logic [2:0] grp;					// instruction group of PC
 } rob_entry_t;
@@ -1448,6 +1469,7 @@ typedef struct packed {
 	logic [7:0] bytcnt;		// byte count of data to load/store
 	pregno_t Rt;
 	aregno_t aRt;					// reference for freeing
+	logic aRtz;
 	pregno_t Rc;					// 'C' register for store
 	operating_mode_t om;	// operating mode
 	logic datav;					// store data is valid
@@ -1478,7 +1500,7 @@ begin
 		fnTargetIP = {ip[$bits(pc_address_t)-1:6]+tgt[$bits(value_t)-1:4],lo};
 	end
 	else
-		fnTargetIP = ip+tgt;
+		fnTargetIP = ip+{tgt,2'b0}+tgt;
 end
 endfunction
 
@@ -1657,6 +1679,7 @@ begin
 	OP_ORI:		fnSourceAv = fnConstReg(ir.r2.Ra) || fnImma(ir);
 	OP_EORI:	fnSourceAv = fnConstReg(ir.r2.Ra) || fnImma(ir);
 	OP_SLTI:	fnSourceAv = fnConstReg(ir.r2.Ra) || fnImma(ir);
+	OP_AIPSI:	fnSourceAv = 1'b1;
 	OP_ADDSI:	fnSourceAv = fnConstReg(ir.r2.Rt) || fnImma(ir);
 	OP_ANDSI:	fnSourceAv = fnConstReg(ir.r2.Rt) || fnImma(ir);
 	OP_ORSI:	fnSourceAv = fnConstReg(ir.r2.Rt) || fnImma(ir);
@@ -1795,6 +1818,7 @@ begin
 	OP_ORI:		fnSourceTv = fnConstReg(ir.ri.Rt);
 	OP_EORI:	fnSourceTv = fnConstReg(ir.ri.Rt);
 	OP_SLTI:	fnSourceTv = fnConstReg(ir.ri.Rt);
+	OP_AIPSI:	fnSourceTv = fnConstReg(ir.ri.Rt);
 	OP_ADDSI:	fnSourceTv = fnConstReg(ir.ri.Rt);
 	OP_ANDSI:	fnSourceTv = fnConstReg(ir.ri.Rt);
 	OP_ORSI:	fnSourceTv = fnConstReg(ir.ri.Rt);
@@ -1863,7 +1887,7 @@ begin
 	OP_EORI:	fnSourcePv = ~veci;
 	OP_SLTI:	fnSourcePv = ~veci;
 	OP_SHIFT:	fnSourcePv = ~vec;
-	OP_FLT2,OP_FLT3:	fnSourcePv = ~vecf;	
+	OP_FLT3:	fnSourcePv = ~vecf;	
 	OP_MOV:		fnSourcePv = ~vec;
 	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDOU,OP_LDH:
 		fnSourcePv = ~veci;
@@ -1897,8 +1921,6 @@ function fnIsLoadz;
 input instruction_t op;
 begin
 	case(op.any.opcode)
-	OP_LDBU,OP_LDWU,OP_LDTU,OP_LDOU:
-		fnIsLoadz = 1'b1;
 	OP_LDX:
 		case(op.lsn.func)
 		FN_LDBUX,FN_LDWUX,FN_LDTUX,FN_LDOUX:
@@ -2010,9 +2032,7 @@ begin
 	fnIsNop = ir.any.opcode==OP_NOP ||
 		ir.any.opcode==OP_PFXA32 ||
 		ir.any.opcode==OP_PFXB32 ||
-		ir.any.opcode==OP_PFXC32 ||
-		ir.any.opcode==OP_VEC ||
-		ir.any.opcode==OP_VECZ
+		ir.any.opcode==OP_PFXC32
 		;
 		/*
 		ir.any.opcode==OP_PFXA ||
@@ -2059,9 +2079,7 @@ begin
 	fnIsPostfix = //ir.any.opcode==OP_PFXA || ir.any.opcode==OP_PFXB || ir.any.opcode==OP_PFXC;
 		ir.any.opcode==OP_PFXA32 ||
 		ir.any.opcode==OP_PFXB32 ||
-		ir.any.opcode==OP_PFXC32 ||
-		ir.any.opcode==OP_VEC ||
-		ir.any.opcode==OP_VECZ
+		ir.any.opcode==OP_PFXC32;
 		;
 end
 endfunction

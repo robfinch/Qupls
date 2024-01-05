@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2023-2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -41,7 +41,7 @@ import QuplsPkg::*;
 
 module Qupls_decode_imm(ins, imma, immb, immc, has_imma, has_immb, has_immc);
 parameter WID=32;
-input instruction_t [5:0] ins;
+input ex_instruction_t [5:0] ins;
 output reg [63:0] imma;
 output reg [63:0] immb;
 output reg [63:0] immc;
@@ -74,71 +74,72 @@ begin
 	finsA = 'd0;
 	finsB = 'd0;
 	finsC = 'd0;
-	case(ins[0].any.opcode)
+	case(ins[0].ins.any.opcode)
 	OP_ADDI,OP_CMPI,OP_MULI,OP_DIVI,OP_SUBFI,OP_SLTI:
 		begin
-			immb = {{43{ins[0][39]}},ins[0][39:19]};
+			immb = {{43{ins[0].ins[39]}},ins[0].ins[39:19]};
 			has_immb = 1'b1;
 		end
 	OP_ANDI:
 		begin
-			immb = {64{1'b1}} & ins[0][39:19];
+			immb = {64{1'b1}} & ins[0].ins[39:19];
 			has_immb = 1'b1;
 		end
 	OP_ORI,OP_EORI,OP_MULUI,OP_DIVUI:
 		begin
-			immb = {43'h0000,ins[0][31:19]};
+			immb = {43'h0000,ins[0].ins[31:19]};
 			has_immb = 1'b1;
 		end
 	OP_ADDSI:
 		begin
-			immb = {{40{ins[0][39]}},ins[0][39:16]};
+			immb = {{40{ins[0].ins[39]}},ins[0].ins[39:16]};
 			has_immb = 1'b1;
 		end
 	OP_ANDSI:
 		begin
-			immb = {40'hFFFFFFFFFF,ins[0][39:16]};
+			immb = {40'hFFFFFFFFFF,ins[0].ins[39:16]};
 			has_immb = 1'b1;
 		end
 	OP_ORSI,OP_EORSI:
 		begin
-			immb = {40'h0,ins[0][39:16]};
+			immb = {40'h0,ins[0].ins[39:16]};
 			has_immb = 1'b1;
 		end
 	OP_CSR:
 		begin
-			immb = {53'd0,ins[0][29:19]};
+			immb = {53'd0,ins[0].ins[29:19]};
 			has_immb = 1'b1;
 		end
 	OP_RTD:
 		begin
-			immb = {{43{ins[0][39]}},ins[0][39:19]};
+			immb = {{43{ins[0].ins[39]}},ins[0].ins[39:19]};
 			has_immb = 1'b1;
 		end
 	OP_JSR:
 		begin
-			immb = {{43{ins[0][39]}},ins[0][39:19]};
+			immb = {{43{ins[0].ins[39]}},ins[0].ins[39:19]};
 			has_immb = 1'b1;
 		end
+	OP_LDBIP,OP_LDBUIP,OP_LDWIP,OP_LDWUIP,OP_LDTIP,OP_LDTUIP,OP_LDOIP,
 	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_CACHE,
 	OP_STB,OP_STW,OP_STT,OP_STO:
 		begin
-			immb = {{43{ins[0][39]}},ins[0][39:19]};
+			immb = {{43{ins[0].ins[39]}},ins[0].ins[39:19]};
 			has_immb = 1'b1;
 		end
 	OP_LDAX:
 		begin
-			immb = {{56{ins[0][34]}},ins[0][34:27]};
+			immb = {{56{ins[0].ins[34]}},ins[0].ins[34:27]};
 			has_immb = 1'b1;
 		end
 	OP_FENCE:
 		begin
-			immb = {48'h0,ins[0][23:8]};
+			immb = {48'h0,ins[0].ins[23:8]};
 			has_immb = 1'b1;
 		end
 	OP_Bcc,OP_BccU,OP_FBccH,OP_FBccS,OP_FBccD,OP_FBccQ:
 		begin
-			immc = {{47{ins[0][39]}},ins[0][39:25],ins[0][12:11]};
+			immc = {{47{ins[0].ins[39]}},ins[0].ins[39:25],ins[0].ins[12:11]};
 			has_immc = 1'b1;
 		end
 	default:
@@ -146,10 +147,10 @@ begin
 	endcase
 
 	ndx = 1;
-	flt = ins[0].any.opcode==OP_FLT2 || ins[0].any.opcode==OP_FLT3;
-	fltpr = ins[0][26:25];
+	flt = ins[0].ins.any.opcode==OP_FLT3;
+	fltpr = ins[0].ins[26:25];
 	// Skip over vector qualifier.
-	if (ins[ndx].any.opcode==OP_VEC || ins[ndx].any.opcode==OP_VECZ)
+	if (ins[ndx].ins.any.opcode==OP_VEC || ins[ndx].ins.any.opcode==OP_VECZ)
 		ndx = ndx + 1;
 
 	// The following allows three postfixes in any order. But needs more hardware.
@@ -177,36 +178,36 @@ begin
 	*/
 	// The following uses less hardware but require postfixes to be in order.
 	if (SUPPORT_POSTFIX) begin
-		if (ins[ndx].any.opcode==OP_PFXA32) begin
+		if (ins[ndx].ins.any.opcode==OP_PFXA32) begin
 			has_imma = 1'b1;
-			imma = {{32{ins[ndx][39]}},ins[ndx][39:8]};
+			imma = {{32{ins[ndx].ins[39]}},ins[ndx].ins[39:8]};
 			if (flt && fltpr==2'd2)
 				imma = imm32x64a;
 			ndx = ndx + 1;
-			if (ins[ndx].any.opcode==OP_PFXA32) begin
-				imma[63:32] = ins[ndx][39:8];
+			if (ins[ndx].ins.any.opcode==OP_PFXA32) begin
+				imma[63:32] = ins[ndx].ins[39:8];
 				ndx = ndx + 1;
 			end
 		end
-		if (ins[ndx].any.opcode==OP_PFXB32) begin
+		if (ins[ndx].ins.any.opcode==OP_PFXB32) begin
 			has_immb = 1'b1;
-			immb = {{32{ins[ndx][39]}},ins[ndx][39:8]};
+			immb = {{32{ins[ndx].ins[39]}},ins[ndx].ins[39:8]};
 			if (flt && fltpr==2'd2)
 				immb = imm32x64b;
 			ndx = ndx + 1;
-			if (ins[ndx].any.opcode==OP_PFXB32) begin
-				immb[63:32] = ins[ndx][39:8];
+			if (ins[ndx].ins.any.opcode==OP_PFXB32) begin
+				immb[63:32] = ins[ndx].ins[39:8];
 				ndx = ndx + 1;
 			end
 		end
-		if (ins[ndx].any.opcode==OP_PFXC32) begin
+		if (ins[ndx].ins.any.opcode==OP_PFXC32) begin
 			has_immc = 1'b1;
-			immc = {{32{ins[ndx][39]}},ins[ndx][39:8]};
+			immc = {{32{ins[ndx].ins[39]}},ins[ndx].ins[39:8]};
 			if (flt && fltpr==2'd2)
 				immc = imm32x64c;
 			ndx = ndx + 1;
-			if (ins[ndx].any.opcode==OP_PFXC32) begin
-				immc[63:32] = ins[ndx][39:8];
+			if (ins[ndx].ins.any.opcode==OP_PFXC32) begin
+				immc[63:32] = ins[ndx].ins[39:8];
 				ndx = ndx + 1;
 			end
 		end

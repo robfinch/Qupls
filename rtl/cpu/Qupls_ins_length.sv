@@ -52,7 +52,6 @@ always_comb
 	OP_FBccD:	len = 5'd5;
 	OP_FBccQ:	len = 5'd5;
 	OP_CSR:		len = 5'd5;
-	OP_FLT2:	len = 5'd5;
 	OP_FLT3:	len = 5'd5;
 //	OP_PFXA,OP_PFXB,OP_PFXC:
 //					len = 5'd5;

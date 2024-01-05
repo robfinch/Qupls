@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2023-2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -111,20 +111,12 @@ else begin
 		if (freeval) begin
 			din <= tag2free;
 			wr_en <= 1'b1;
-			if (tag2free==8'd0) begin
-				$display("Qupls: Freeing zero register tag in fifo %d.", FIFONO);
-				$finish;
-			end
 		end
 		// It should not be possible to free register zero off the free list. This
 		// register has a fixed status of marked as not free.
 		else if (v) begin
 			din <= {FIFONO[1:0],o0[5:0]};
 			wr_en <= 1'b1;
-			if ({FIFONO[1:0],o0[5:0]}==8'd0) begin
-				$display("Qupls: Freeing zero register off freelist in fifo %d.", FIFONO);
-				$finish;
-			end
 		end
 	end
 end

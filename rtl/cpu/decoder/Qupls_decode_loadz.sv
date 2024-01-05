@@ -44,6 +44,7 @@ function fnIsLoadz;
 input instruction_t op;
 begin
 	case(op.any.opcode)
+	OP_LDBUIP,OP_LDWUIP,OP_LDTUIP,
 	OP_LDBU,OP_LDWU,OP_LDTU:
 		fnIsLoadz = 1'b1;
 	OP_LDX:

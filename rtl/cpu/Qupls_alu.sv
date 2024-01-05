@@ -245,6 +245,7 @@ begin
 	OP_ORI:		bus = a | i;
 	OP_EORI:	bus = a ^ i;
 	OP_SLTI:	bus = $signed(a) < $signed(i);
+	OP_AIPSI:	bus = pc + ({{40{i[23]}},i[23:0]} << (ir[15:13]*20));
 	OP_ADDSI:	bus = a + ({{40{i[23]}},i[23:0]} << (ir[15:13]*20));
 	OP_ANDSI:	bus = a & (64'hffffffffffffffff & ~(64'hffffff << (ir[15:13]*20)) | ({{40{i[23]}},i[23:0]} << (ir[15:13]*20)));
 	OP_ORSI:	bus = a | (i << (ir[15:13]*20));

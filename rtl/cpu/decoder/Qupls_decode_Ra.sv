@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -36,35 +36,41 @@
 
 import QuplsPkg::*;
 
-module Qupls_decode_Ra(instr, regx, has_imma, Ra);
-input instruction_t instr;
+module Qupls_decode_Ra(om, instr, regx, has_imma, Ra);
+input operating_mode_t om;
+input ex_instruction_t instr;
 input regx;
 input has_imma;
 output aregno_t Ra;
 
 function aregno_t fnRa;
-input instruction_t ir;
+input ex_instruction_t ir;
 input has_imma;
 begin
 	if (has_imma || fnSourceAv(ir))
-		fnRa = 7'd0;
+		fnRa = 9'd0;
 	else
-		case(ir.any.opcode)
+		case(ir.ins.any.opcode)
 		OP_RTD:
-			fnRa = {regx,ir[18:13]};
+			fnRa = regx ? ir.aRa | 9'd64 : ir.aRa;
 		OP_DBRA:
-			fnRa = 7'd55;
-		OP_FLT2,OP_FLT3:
-			fnRa = {regx,1'b0,ir[16:12]};
+			fnRa = 9'd55;
+		OP_FLT3:
+			fnRa = regx ? ir.aRa | 9'd64 : ir.aRa;
 		OP_ADDSI,OP_ANDSI,OP_ORSI,OP_EORSI:
-			fnRa = {regx,ir[12:7]};
+			fnRa = regx ? ir.aRa | 9'd64 : ir.aRa;
 		default:
-			fnRa = {regx,ir[18:13]};
+			fnRa = regx ? ir.aRa | 9'd64 : ir.aRa;
 		endcase
 end
 endfunction
 
-assign Ra = fnRa(instr, has_imma);
+always_comb
+begin
+	Ra = fnRa(instr, has_imma);
+	if (Ra==9'd63)
+		Ra = 9'd65+om;
+end
 
 endmodule
 

@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2023-2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -36,17 +36,29 @@
 
 import QuplsPkg::*;
 
-module Qupls_agen(clk, ir, a, b, i, res);
+module Qupls_agen(clk, ir, a, b, i, Ra, Rb, pc, res);
 input clk;
 input instruction_t ir;
 input value_t a;
 input value_t b;
 input value_t i;
+input aregno_t Ra;
+input aregno_t Rb;
+input pc_address_t pc;
 output value_t res;
 
-value_t bs;
+value_t as, bs;
 
 always_comb
+if (Ra==7'd53)
+	as = pc;
+else
+	as = a;
+
+always_comb
+if (Rb==7'd53)
+	bs = pc << ir.lsn.sc;
+else
 	bs = b << ir.lsn.sc;
 
 always_ff @(posedge clk)
@@ -54,11 +66,11 @@ begin
 	case(ir.any.opcode)
 	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,
 	OP_STB,OP_STW,OP_STT,OP_STO:
-		res <= a + i;
+		res <= as + i;
 	OP_LDX,OP_STX:
-		res <= a + bs + i;
+		res <= as + bs + i;
 	OP_AMO:
-		res <= a + b;
+		res <= as + b;
 	default:
 		res <= 'd0;
 	endcase

@@ -256,7 +256,7 @@ generate begin : gRRN
 		always_comb
 			
 			if ((g % 4)==3) begin
-				if (rn[g]==7'd0)
+				if (rn[g]==9'd0)
 					vn[g] = 1'b1;
 				/*
 				else if (rn[g]==wrd && wr3)
@@ -266,34 +266,71 @@ generate begin : gRRN
 					vn[g] = cpv_o[g];//valid[0][cndx][rrn[g]];//cpram_out.regmap[rn[g]].pregs[0].v;
 			end
 			else
+			// Need to bypass if the source register is the same as the previous
+			// target register in the same group of instructions.
 			begin
-				if (rn[g]==7'd0)
-					vn[g] = 1'b1;
-				/*
-				else if (wr0 && rn[g]==wra)
-					vn[g] = cpv_i[4];
-				else if (wr1 && rn[g]==wrb)
-					vn[g] = cpv_i[5];
-				else if (wr2 && rn[g]==wrc)
-					vn[g] = cpv_i[6];
-				else if (wr3 && rn[g]==wrd)
-					vn[g] = cpv_i[7];
-				*/
+				case(g)
+				// First instruction of group, no bypass needed.
+				4'd0,4'd1,4'd2:
+					if (rn[g]==9'd0)
+						vn[g] = 1'b1;
+					else
+						vn[g] = cpv_o[g];
+				// Second instruction of group, bypass only if first instruction target is same.
+				4'd4,4'd5,4'd6:
+					if (rn[g]==9'd0)
+						vn[g] = 1'b1;
+					else if (rn[g]==cpv_wa[0] && cpv_wr[0])
+						vn[g] = cpv_i[0];
+					else if (rn[g]==cpv_wa[4] && cpv_wr[4])
+						vn[g] = cpv_i[4];
+					else
+						vn[g] = cpv_o[g];
+				// Third instruction, check two previous ones.
+				4'd8,4'd9,4'd10:
+					if (rn[g]==9'd0)
+						vn[g] = 1'b1;
+					else if (rn[g]==cpv_wa[0] && cpv_wr[0])
+						vn[g] = cpv_i[0];
+					else if (rn[g]==cpv_wa[4] && cpv_wr[4])
+						vn[g] = cpv_i[4];
+					else if (rn[g]==cpv_wa[1] && cpv_wr[1])
+						vn[g] = cpv_i[1];
+					else if (rn[g]==cpv_wa[5] && cpv_wr[5])
+						vn[g] = cpv_i[5];
+					else
+						vn[g] = cpv_o[g];
+				// Fourth instruction, check three previous ones.						
+				4'd12,4'd13,4'd14:
+					begin
+						if (rn[g]==9'd0)
+							vn[g] = 1'b1;
+						else if (rn[g]==cpv_wa[0] && cpv_wr[0])
+							vn[g] = cpv_i[0];
+						else if (rn[g]==cpv_wa[4] && cpv_wr[4])
+							vn[g] = cpv_i[4];
+						else if (rn[g]==cpv_wa[1] && cpv_wr[1])
+							vn[g] = cpv_i[1];
+						else if (rn[g]==cpv_wa[5] && cpv_wr[5])
+							vn[g] = cpv_i[5];
+						else if (rn[g]==cpv_wa[2] && cpv_wr[2])
+							vn[g] = cpv_i[2];
+						else if (rn[g]==cpv_wa[6] && cpv_wr[6])
+							vn[g] = cpv_i[6];
+						else
+							vn[g] = cpv_o[g];
+					end
+				endcase
+				/*		
 				else if (BANKS < 2)
 					vn[g] = cpv_o[g];
 				else
 					vn[g] = cpv_o[g];
+				*/
 			end
 	end
 end
 endgenerate
-always_ff @(posedge clk)
-begin
-	for (nn = 0; nn < NPORT; nn = nn + 1)
-		if (rrn[nn]==8'd74 && rn[nn]==7'd1) begin
-			$display("RAT: pr74v=%d.", vn[nn]);
-		end
-end
 
 /* Debugging.
    The register may be bypassed to a previous target register which is non-zero.

@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -36,8 +36,9 @@
 
 import QuplsPkg::*;
 
-module Qupls_decode_Rc(instr, regx, has_immc, Rc, Rcc);
-input instruction_t [4:0] instr;
+module Qupls_decode_Rc(om, instr, regx, has_immc, Rc, Rcc);
+input operating_mode_t om;
+input ex_instruction_t [4:0] instr;
 input [3:0] regx;
 input has_immc;
 output aregno_t Rc;
@@ -45,23 +46,25 @@ output reg [2:0] Rcc;
 
 always_comb
 begin
-	Rc = 'd0;
-	Rcc = 'd0;
+	Rc = 9'd0;
+	Rcc = 3'd0;
 	if (!has_immc && !fnSourceCv(instr[0]))
-		case(instr[0].any.opcode)
+		case(instr[0].ins.any.opcode)
 		OP_STB,OP_STW,OP_STT,OP_STO,OP_STH,OP_STX:
-			Rc = {regx[0],instr[0][12:7]};
+			Rc = regx[0] ? instr[0].aRt | 9'd64 : instr[0].aRt;
 		OP_SHIFT:
-			Rc = {regx[3],instr[0][30:25]};
+			Rc = regx[3] ? instr[0].aRc | 9'd64 : instr[0].aRc;
 		OP_R2:
-			Rc = {regx[3],instr[0][30:25]};
+			Rc = regx[3] ? instr[0].aRc | 9'd64 : instr[0].aRc;
 		default:
-			Rc = 'd0;
+			Rc = 9'd0;
 		endcase
-		if (instr[1].any.opcode==OP_REGC) begin
-			Rc = instr[1][12:7];		
-			Rcc = instr[1][15:13];
+		if (instr[1].ins.any.opcode==OP_REGC) begin
+			Rc = instr[1].aRt;		
+			Rcc = instr[1].ins[15:13];
 		end
+	if (Rc==9'd63)
+		Rc = 9'd65 + om;
 end
 
 endmodule

@@ -44,7 +44,7 @@ function fnIsFpu;
 input instruction_t ir;
 begin
 	case(ir.r2.opcode)
-	OP_FLT2,OP_FLT3:
+	OP_FLT3:
 		fnIsFpu = 1'b1;
 	default:	fnIsFpu = 1'b0;
 	endcase

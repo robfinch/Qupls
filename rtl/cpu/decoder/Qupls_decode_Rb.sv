@@ -36,31 +36,37 @@
 
 import QuplsPkg::*;
 
-module Qupls_decode_Rb(instr, regx, has_immb, Rb);
-input instruction_t instr;
+module Qupls_decode_Rb(om, instr, regx, has_immb, Rb);
+input operating_mode_t om;
+input ex_instruction_t instr;
 input regx;
 input has_immb;
 output aregno_t Rb;
 
 function aregno_t fnRb;
-input instruction_t ir;
+input ex_instruction_t ir;
 input has_immb;
 begin
 	if (has_immb || fnSourceBv(ir))
-		fnRb = 7'd0;
+		fnRb = 9'd0;
 	else
-		case(ir.any.opcode)
+		case(ir.ins.any.opcode)
 		OP_RTD:
-			fnRb = 7'd63;
-		OP_FLT2,OP_FLT3:
-			fnRb = {regx,1'b0,ir[21:17]};
+			fnRb = 9'd63;
+		OP_FLT3:
+			fnRb = regx ? ir.aRb | 9'd64 : ir.aRb;
 		default:
-			fnRb = {regx,ir[24:19]};
+			fnRb = regx ? ir.aRb | 9'd64 : ir.aRb;
 		endcase
 end
 endfunction
 
-assign Rb = fnRb(instr, has_immb);
+always_comb
+begin
+	Rb = fnRb(instr, has_immb);
+	if (Rb==9'd63)
+		Rb = 9'd65 + om;
+end
 
 endmodule
 

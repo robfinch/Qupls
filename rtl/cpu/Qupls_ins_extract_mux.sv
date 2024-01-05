@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2023-2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -53,17 +53,17 @@ input [1:0] rgi;
 input [2:0] irq_i;
 input [8:0] vect_i;
 input mipv;
-input instruction_t mc_ins;
-input instruction_t mc_ins0;
-input instruction_t ins0;
-input instruction_t insi;
+input ex_instruction_t mc_ins;
+input ex_instruction_t mc_ins0;
+input ex_instruction_t ins0;
+input ex_instruction_t insi;
 input reglist_active;
 input aregno_t iRn;
 input ls_bmf;
 input [2:0] scale_regs_i;
 input pack_regs;
 input aregno_t regcnt;
-output instruction_t ins;
+output ex_instruction_t ins;
 
 always_ff @(posedge clk)
 if (rst)
