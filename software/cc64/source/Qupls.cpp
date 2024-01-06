@@ -2311,3 +2311,16 @@ Operand* QuplsCodeGenerator::GenNacon(ENODE* node, int flags, int64_t size)
 	ap1->MakeLegal(flags, size);
 	return (ap1);
 }
+
+int QuplsCodeGenerator::GetSegmentIndexReg(e_sg segment)
+{
+	switch (segment) {
+	case bssseg: return (regGP);
+	case dataseg:	return (regGP);
+	case rodataseg: return (regGP);
+	case tlsseg:	return (regTP);
+	case codeseg: return (regPC);
+	default:	return (regPP);
+	}
+	return (regZero);
+}

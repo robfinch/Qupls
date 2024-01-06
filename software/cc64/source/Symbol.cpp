@@ -1301,7 +1301,12 @@ int64_t Symbol::GenerateT(txtoStream& tfs, ENODE* node, TYP* ptp)
 			}
 			else {
 				if (node->nodetype == en_labcon) {
-					GenerateLabelReference(tfs, node->i_lhs, 0, (char *)node->GetLabconLabel(node->i_lhs)->c_str());
+					/*
+					if (this->storage_class==sc_global)
+						GenerateLabelReference(tfs, node->i_lhs, 0, (char*)this->name->c_str());
+					else
+					*/
+						GenerateLabelReference(tfs, node->i_lhs, 0, (char *)node->GetLabconLabel(node->i_lhs)->c_str());
 				}
 				else {
 					nbytes = sizeOfPtr;

@@ -104,6 +104,7 @@ struct slit {
 		bool		isString;
 		int8_t pass;
 	char			*nmspace;
+	Symbol* sym;
 };
 
 struct nlit {
@@ -976,9 +977,9 @@ private:
 	ENODE* SetIntConstSize(TYP* tptr, int64_t val);
 	ENODE *ParseArgumentList(ENODE *hidden, TypeArray *typearray, Symbol* symi);
 	TYP* ParseCharConst(ENODE** node, int sz);
-	TYP* ParseStringConst(ENODE** node);
-	ENODE* ParseStringConstWithSizePrefix(ENODE** node);
-	ENODE* ParseInlineStringConst(ENODE** node);
+	TYP* ParseStringConst(ENODE** node, Symbol* sym);
+	ENODE* ParseStringConstWithSizePrefix(ENODE** node, Symbol* sym);
+	ENODE* ParseInlineStringConst(ENODE** node, Symbol* sym);
 	TYP* ParseRealConst(ENODE** node);
 	TYP* ParsePositConst(ENODE** node);
 	ENODE* ParseAggregateConst(ENODE** node);
@@ -1477,7 +1478,7 @@ public:
 	virtual void GenerateSignExtendByte(Operand*, Operand*);
 	virtual void GenerateSignExtendWyde(Operand*, Operand*);
 	virtual void GenerateSignExtendTetra(Operand*, Operand*);
-	int GetSegmentIndexReg(e_sg seg);
+	virtual int GetSegmentIndexReg(e_sg seg);
 };
 
 class ThorCodeGenerator : public CodeGenerator
@@ -1643,6 +1644,7 @@ public:
 	Operand* GenLabelcon(ENODE* node, int flags, int64_t size);
 	Operand* GenNacon(ENODE* node, int flags, int64_t size);
 	void ConvertOffsetWidthToBeginEnd(Operand* offset, Operand* width, Operand** op_begin, Operand** op_end);
+	int GetSegmentIndexReg(e_sg seg);
 };
 
 class RiscvCodeGenerator : public CodeGenerator
@@ -2074,7 +2076,7 @@ public:
 public:
 	void AccUses(int val);					// accumulate uses
 	void AccDuses(int val);					// accumulate duses
-	virtual int OptimizationDesireability();
+	int OptimizationDesireability();
 };
 
 class QuplsCSE : public CSE

@@ -3688,7 +3688,7 @@ int CodeGenerator::GeneratePrepareFunctionCall(ENODE* node, Function* sym, int* 
 
 void CodeGenerator::GenerateMillicodeCall(Operand* tgt)
 {
-	GenerateDiadic(op_bsr, 0, makereg(regLR + 1), tgt);
+	GenerateDiadic(op_bsr, 0, makereg(regLR + 3), tgt);
 }
 
 bool CodeGenerator::GenerateInlineCall(ENODE* node, Function* sym)

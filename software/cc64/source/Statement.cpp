@@ -446,7 +446,7 @@ Statement *Statement::ParseContinue()
 
 	snp = MakeStatement(st_continue, TRUE);
 	if (lastst == id) {
-		snp->label = (int64_t*)stringlit(lastid);
+		snp->label = (int64_t*)stringlit(lastid,nullptr);
 		NextToken();
 	}
 	if (lastst != end)
@@ -616,7 +616,7 @@ Statement *Statement::ParseCompound(bool assign_cf)
 				printf("clockbug\r\n");
 		if (lastst == id) {
 			snp->name = new std::string(lastid);
-			snp->label = (int64_t*)stringlit(lastid);
+			snp->label = (int64_t*)stringlit(lastid,nullptr);
 		}
 		NextToken();
 	}

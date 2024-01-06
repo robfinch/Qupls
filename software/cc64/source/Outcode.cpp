@@ -532,9 +532,13 @@ char *RegMoniker(int regno)
 	else if (regno==regSP)
 		sprintf_s(&buf[n][0], 20, "sp");
 	else if (regno==regLR)
-		sprintf_s(&buf[n][0], 20, "lr1");
+		sprintf_s(&buf[n][0], 20, "lr0");
 	else if (regno == regLR+1)
+		sprintf_s(&buf[n][0], 20, "lr1");
+	else if (regno == regLR + 2)
 		sprintf_s(&buf[n][0], 20, "lr2");
+	else if (regno == regLR + 3)
+		sprintf_s(&buf[n][0], 20, "lr3");
 	else if (regno == 0) {
 			if (invert)
 				sprintf_s(&buf[n][0], 20, "~r%d", regno);
@@ -612,6 +616,9 @@ char *put_labels(txtoStream& tfs, char *buf)
 	return (buf);
 }
 
+/*
+* Pass -1 as the label number, lab, to just just the namespace parameter as the label.
+*/
 char *put_label(txtoStream& tfs, int lab, char *nm, char *ns, char d, int sz, int segment)
 {
   static char buf[500];
@@ -623,7 +630,7 @@ char *put_label(txtoStream& tfs, int lab, char *nm, char *ns, char d, int sz, in
 		ns = (char *)"";
 	if (lab < 0) {
 		buf[0] = '\0';
-		return buf;
+//		return buf;
 	}
 	if (d == 'C') {
 //		sprintf_s(buf, sizeof(buf), "%s.%05d", ns, lab);
@@ -647,15 +654,25 @@ char *put_label(txtoStream& tfs, int lab, char *nm, char *ns, char d, int sz, in
 		}
 	}
 	else {
-		if (DataLabelMap[lab] != nullptr)
-			ns = (char*)DataLabelMap[lab]->c_str();
-		else
-			DataLabelMap[lab] = new std::string(ns);
-		sprintf_s(buf, sizeof(buf), "%.400s.%05d", ns, lab);
-		if (syntax == STD) {
-			tfs.printf((char*)"\t.type\t%.400s.%05d,@object\n", (char*)ns, lab);
-			tfs.printf((char*)"\t.size\t%.400s.%05d,", (char*)ns, lab);
-			tfs.printf("%d\n", sz);
+		if (lab >= 0) {
+			if (DataLabelMap[lab] != nullptr)
+				ns = (char*)DataLabelMap[lab]->c_str();
+			else
+				DataLabelMap[lab] = new std::string(ns);
+			sprintf_s(buf, sizeof(buf), "%.400s.%05d", ns, lab);
+			if (syntax == STD) {
+				tfs.printf((char*)"\t.type\t%.400s.%05d,@object\n", (char*)ns, lab);
+				tfs.printf((char*)"\t.size\t%.400s.%05d,", (char*)ns, lab);
+				tfs.printf("%d\n", sz);
+			}
+		}
+		else {
+			sprintf_s(buf, sizeof(buf), "%.400s", ns);
+			if (syntax == STD) {
+				tfs.printf((char*)"\t.type\t%.400s,@object\n", (char*)ns);
+				tfs.printf((char*)"\t.size\t%.400s,", (char*)ns);
+				tfs.printf("%d\n", sz);
+			}
 		}
 		if (nm == NULL)
 			tfs.printf("%s:\n", buf);
@@ -1031,7 +1048,7 @@ void GenerateLabelReference(txtoStream& tfs, int n, int64_t offset, char* nmspac
 /*
  *      make s a string literal and return it's label number.
  */
-int stringlit(char *s)
+int stringlit(char *s, Symbol* sym)
 {      
 	struct slit *lp;
 	std::string str;
@@ -1053,6 +1070,7 @@ int stringlit(char *s)
 	}
 	lp->isString = true;
 	lp->pass = pass;
+	lp->sym = sym;
 	return (lp->label);
 }
 

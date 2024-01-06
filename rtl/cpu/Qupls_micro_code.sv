@@ -41,7 +41,8 @@
 // 800 LUTs
 // ============================================================================
 
-module Qupls_micro_code(micro_ip, micro_ir, next_ip, instr, regx);
+module Qupls_micro_code(om, micro_ip, micro_ir, next_ip, instr, regx);
+input operating_mode_t om;
 input mc_address_t micro_ip;
 input instruction_t micro_ir;
 output mc_address_t next_ip;
@@ -49,8 +50,10 @@ output ex_instruction_t instr;
 output reg [3:0] regx;
 parameter SP = 6'd63;
 parameter FP = 6'd62;
+parameter LR0 = 6'd56;
 parameter LR1 = 6'd57;
 // Do not use 6'd0 as some logic will detect this as a zero.
+// 1 to 4 are the stack pointers.
 parameter MC0 = 6'd5;
 parameter MC1 = 6'd6;
 parameter MC2 = 6'd7;
@@ -69,46 +72,230 @@ case(micro_ip)
 12'h001:	begin next_ip = 12'h000; instr.ins = {'d0,OP_NOP};	end
 12'h002:	begin next_ip = 12'h000; instr.ins = {'d0,OP_NOP};	end
 12'h003:	begin next_ip = 12'h000; instr.ins = {'d0,OP_NOP};	end
+
+// -----------------------------------------------------------------------------
 // ENTER
-12'h004:	begin next_ip = 12'h008; instr.ins = {'d0,21'h1FFFC0,SP,SP,OP_ADDI}; end				// SP = SP - 64
-12'h005:	begin next_ip = 12'h008; instr.ins = {'d0,21'h000000,SP,FP,OP_STO};	end		// Mem[SP] = FP
-12'h006:	begin next_ip = 12'h008; instr.ins = {'d0,21'h000010,SP,LR1,OP_STO};	end	// Mem16[sp] = LR1
-12'h007:	begin next_ip = 12'h008; instr.ins = {'d0,21'h000020,SP,6'd0,OP_STO}; end		// Mem32[sp] = 0
-12'h008:	begin next_ip = 12'h000; instr.ins = {'d0,21'h000030,SP,6'd0,OP_STO}; end		// Mem48[sp] = 0
-12'h009:	begin next_ip = 12'h000; instr.ins = {'d0,FN_OR,1'd0,6'd0,SP,FP,OP_R2};	end // FP = SP
-12'h00A:	begin next_ip = 12'h000; instr.ins = {'d0,13'h0000,SP,SP,OP_ADDI}; end				// SP = SP + const
-12'h00B:	begin next_ip = 12'h000; instr.ins = {micro_ir[39:8],1'b0,OP_PFXB32};	end	
+// -----------------------------------------------------------------------------
+12'h004:	
+	begin
+		next_ip = 12'h008;
+		instr.ins = {'d0,21'h1FFFC0,SP,SP,OP_ADDI};
+		instr.aRa = 9'd65 + om;
+		instr.aRt = 9'd65 + om;
+	end				// SP = SP - 64
+12'h005:
+	begin
+		next_ip = 12'h008;
+		instr.ins = {'d0,21'h000000,SP,FP,OP_STO};
+		instr.aRa = 9'd65 + om;
+		instr.aRc = FP;
+		instr.aRt = 9'd0;
+	end		// Mem[SP] = FP
+12'h006:
+	begin
+		next_ip = 12'h008; 
+		instr.ins = {'d0,21'h000010,SP,LR0,OP_STO};
+		instr.aRa = 9'd65 + om;
+		instr.aRc = LR0;
+		instr.aRt = 9'd0;
+	end	// Mem16[sp] = LR0
+12'h007:	
+	begin 
+		next_ip = 12'h008;
+		instr.ins = {'d0,21'h000020,SP,6'd0,OP_STO};
+		instr.aRa = 9'd65 + om;
+		instr.aRc = 9'd0;
+		instr.aRt = 9'd0;
+	end		// Mem32[sp] = 0
+12'h008:
+	begin
+		next_ip = 12'h000;
+		instr.ins = {'d0,21'h000030,SP,6'd0,OP_STO};
+		instr.aRa = 9'd65 + om;
+		instr.aRc = 9'd0;
+		instr.aRt = 9'd0;
+	end		// Mem48[sp] = 0
+12'h009:
+	begin
+		next_ip = 12'h000;
+		instr.ins = {'d0,FN_OR,1'd0,6'd0,SP,FP,OP_R2};
+		instr.aRa = 9'd65 + om;
+		instr.aRt = FP;
+	end // FP = SP
+12'h00A:
+	begin
+		next_ip = 12'h000;
+		instr.ins = {micro_ir[27:8],SP,SP,OP_ADDI};
+		instr.aRa = 9'd65 + om;
+		instr.aRt = 9'd65 + om;
+	end				// SP = SP + const
+12'h00B:
+	begin
+		next_ip = 12'h000;
+		instr.ins = {12'd0,micro_ir[39:28],3'd1,SP,OP_ADDSI};
+		instr.aRa = 9'd65 + om;
+		instr.aRt = 9'd65 + om;
+	end
 12'h00C:	begin next_ip = 12'h000; instr.ins = {'d0,OP_NOP};	end
 12'h00D:	begin next_ip = 12'h000; instr.ins = {'d0,OP_NOP};	end
 12'h00E:	begin next_ip = 12'h000; instr.ins = {'d0,OP_NOP};	end
 12'h00F:	begin next_ip = 12'h000; instr.ins = {'d0,OP_NOP};	end
+
+// -----------------------------------------------------------------------------
 // LEAVE
-12'h010:	begin next_ip = 12'h014; instr.ins = {'d0,13'h0000,6'd0,FP,SP,OP_ORI}; end		// SP = FP
-12'h011:	begin next_ip = 12'h014; instr.ins = {'d0,13'h0000,SP,FP,OP_LDO};	end			// FP = Mem[SP]
-12'h012:	begin next_ip = 12'h014; instr.ins = {'d0,13'h0010,SP,LR1,OP_LDO};	end		// LR1 = Mem16[sp]
-12'h013:	begin next_ip = 12'h014; instr.ins = {'d0,13'h0040,SP,SP,OP_ADDI}; end					// SP = SP + 64
-12'h014:	begin next_ip = 12'h000; instr.ins = {'d0,13'h0000,SP,SP,OP_ADDI}; end				// SP = SP + const
-12'h015:	begin next_ip = 12'h000; instr.ins = {'d0,micro_ir[31:13],4'h0,1'b0,OP_PFXB32};	end	
-12'h016:	begin next_ip = 12'h000; instr.ins = {'d0,7'h00,micro_ir[12:7],LR1,6'd0,OP_JSR}; end	// PC = LR1 + const
-12'h017:	begin next_ip = 12'h000; instr.ins = {'d0,OP_NOP};	end
+// -----------------------------------------------------------------------------
+12'h010:
+	begin
+		next_ip = 12'h014;
+		instr.ins = {'d0,13'h0000,6'd0,FP,SP,OP_ORI};
+		instr.aRa = FP;
+		instr.aRt = 9'd65 + om;
+	end		// SP = FP
+12'h011:
+	begin
+		next_ip = 12'h014;
+		instr.ins = {'d0,13'h0000,SP,FP,OP_LDO};
+		instr.aRt = FP;
+		instr.aRa = 9'd65 + om;
+	end			// FP = Mem[SP]
+12'h012:	
+	begin
+		next_ip = 12'h014;
+		instr.ins = {'d0,13'h0010,SP,LR0,OP_LDO};
+		instr.aRt = LR0;
+		instr.aRa = 9'd65 + om;
+	end		// LR1 = Mem16[sp]
+12'h013:
+	begin
+		next_ip = 12'h014;
+		instr.ins = {'d0,13'h0040,SP,SP,OP_ADDI};
+		instr.aRa = 9'd65 + om;
+		instr.aRt = 9'd65 + om;
+	end					// SP = SP + 64
+12'h014:	
+	begin
+		next_ip = 12'h000;
+		instr.ins = {micro_ir[33:13],SP,SP,OP_ADDI};
+		instr.aRa = 9'd65 + om;
+		instr.aRt = 9'd65 + om;
+	end				// SP = SP + const
+12'h015:	
+	begin 
+		next_ip = 12'h000;
+		instr.ins = {15'd0,micro_ir[39:34],SP,OP_ADDSI};
+		instr.aRa = 9'd65 + om;
+		instr.aRt = 9'd65 + om;
+	end	
+12'h016:
+	begin
+		next_ip = 12'h000;
+		instr.ins = {15'd0,micro_ir[12:7],LR0,6'd0,OP_JSR};
+		instr.aRa = LR0;
+		instr.aRt = 9'd0;
+	end	// PC = LR0 + const
+12'h017:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+
+// -----------------------------------------------------------------------------
 // PUSH
-12'h020:	begin next_ip = 12'h024; instr.ins = {'d0,-{6'h00,micro_ir[39:37],4'h0},SP,SP,OP_ADDI}; end				// SP = SP - N * 16
-12'h021:	begin next_ip = 12'h024; instr.ins = micro_ir[39:37] > 3'd0 ? {'d0,9'h0,4'h0,SP,micro_ir[12: 7],OP_STO} : {'d0,OP_NOP};	end		// Mem[SP] = Rs
-12'h022:	begin next_ip = 12'h024; instr.ins = micro_ir[39:37] > 3'd1 ? {'d0,9'h1,4'h0,SP,micro_ir[18:13],OP_STO} : {'d0,OP_NOP};	end		// Mem[SP] = Ra
-12'h023:	begin next_ip = 12'h024; instr.ins = micro_ir[39:37] > 3'd2 ? {'d0,9'h2,4'h0,SP,micro_ir[24:19],OP_STO} : {'d0,OP_NOP};	end		// Mem[SP] = Rb
-12'h024:	begin next_ip = 12'h000; instr.ins = micro_ir[39:37] > 3'd3 ? {'d0,9'h3,4'h0,SP,micro_ir[30:25],OP_STO} : {'d0,OP_NOP};	end		// Mem[SP] = Rc
-12'h025:	begin next_ip = 12'h000; instr.ins = micro_ir[39:37] > 3'd4 ? {'d0,9'h4,4'h0,SP,micro_ir[36:31],OP_STO} : {'d0,OP_NOP};	end		// Mem[SP] = Rc
-12'h026:	begin next_ip = 12'h000; instr.ins = {'d0,OP_NOP};	end
-12'h027:	begin next_ip = 12'h000; instr.ins = {'d0,OP_NOP};	end
+// -----------------------------------------------------------------------------
+12'h020:
+	begin
+		next_ip = 12'h024;
+		instr.ins = {-{14'h00,micro_ir[39:37],4'h0},SP,SP,OP_ADDI};
+		instr.aRa = 9'd65 + om;
+		instr.aRt = 9'd65 + om;
+	end				// SP = SP - N * 16
+12'h021:
+	begin
+		next_ip = 12'h024;
+		instr.ins = micro_ir[39:37] > 3'd0 ? {17'd0,4'h0,SP,micro_ir[12: 7],OP_STO} : {33'd0,OP_NOP};
+		instr.aRa = 9'd65 + om;
+		instr.aRc = {3'd0,micro_ir[12:7]};
+		instr.aRt = 9'd0;
+	end		// Mem[SP] = Rs
+12'h022:
+	begin
+		next_ip = 12'h024;
+		instr.ins = micro_ir[39:37] > 3'd1 ? {17'h1,4'h0,SP,micro_ir[18:13],OP_STO} : {33'd0,OP_NOP};
+		instr.aRa = 9'd65 + om;
+		instr.aRc = {3'd0,micro_ir[18:13]};
+		instr.aRt = 9'd0;
+	end		// Mem[SP] = Ra
+12'h023:
+	begin
+		next_ip = 12'h024;
+		instr.ins = micro_ir[39:37] > 3'd2 ? {17'h2,4'h0,SP,micro_ir[24:19],OP_STO} : {33'd0,OP_NOP};
+		instr.aRa = 9'd65 + om;
+		instr.aRc = {3'd0,micro_ir[24:19]};
+		instr.aRt = 9'd0;
+	end		// Mem[SP] = Rb
+12'h024:
+	begin
+		next_ip = 12'h000;
+		instr.ins = micro_ir[39:37] > 3'd3 ? {17'h3,4'h0,SP,micro_ir[30:25],OP_STO} : {33'd0,OP_NOP};
+		instr.aRa = 9'd65 + om;
+		instr.aRc = {3'd0,micro_ir[30:25]};
+		instr.aRt = 9'd0;
+	end		// Mem[SP] = Rc
+12'h025:	
+	begin
+		next_ip = 12'h000;
+		instr.ins = micro_ir[39:37] > 3'd4 ? {17'h4,4'h0,SP,micro_ir[36:31],OP_STO} : {33'd0,OP_NOP};
+		instr.aRa = 9'd65 + om;
+		instr.aRc = {3'd0,micro_ir[36:31]};
+		instr.aRt = 9'd0;
+	end		// Mem[SP] = Rc
+12'h026:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+12'h027:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+
+// -----------------------------------------------------------------------------
 // POP
-12'h030:	begin next_ip = 12'h034; instr.ins = micro_ir[39:37] > 3'd0 ? {'d0,9'h0,4'h0,SP,micro_ir[12: 7],OP_LDO} : {33'd0,OP_NOP};	end		// Rt = Mem[SP]
-12'h031:	begin next_ip = 12'h034; instr.ins = micro_ir[39:37] > 3'd1 ? {'d0,9'h1,4'h0,SP,micro_ir[18:13],OP_LDO} : {33'd0,OP_NOP};	end		// Ra = Mem[SP]
-12'h032:	begin next_ip = 12'h034; instr.ins = micro_ir[39:37] > 3'd2 ? {'d0,9'h2,4'h0,SP,micro_ir[24:19],OP_LDO} : {33'd0,OP_NOP};	end		// Rb = Mem[SP]
-12'h033:	begin next_ip = 12'h034; instr.ins = micro_ir[39:37] > 3'd3 ? {'d0,9'h3,4'h0,SP,micro_ir[30:25],OP_LDO} : {33'd0,OP_NOP};	end		// Rc = Mem[SP]
-12'h034:	begin next_ip = 12'h000; instr.ins = micro_ir[39:37] > 3'd4 ? {'d0,9'h4,4'h0,SP,micro_ir[36:31],OP_LDO} : {33'd0,OP_NOP};	end		// Rc = Mem[SP]
-12'h035:	begin next_ip = 12'h000; instr.ins = {'d0,6'h00,micro_ir[39:37],4'h0,SP,SP,OP_ADDI}; end				// SP = SP + N * 16
-12'h036:	begin next_ip = 12'h000; instr.ins = {'d0,OP_NOP};	end
-12'h037:	begin next_ip = 12'h000; instr.ins = {'d0,OP_NOP};	end
+// -----------------------------------------------------------------------------
+12'h030:
+	begin
+		next_ip = 12'h034;
+		instr.ins = micro_ir[39:37] > 3'd0 ? {21'd0,SP,micro_ir[12: 7],OP_LDO} : {33'd0,OP_NOP};
+		instr.aRa = 9'd65 + om;
+		instr.aRt = {3'd0,micro_ir[12:7]};
+	end		// Rt = Mem[SP]
+12'h031:
+	begin
+		next_ip = 12'h034;
+		instr.ins = micro_ir[39:37] > 3'd1 ? {'d0,9'h1,4'h0,SP,micro_ir[18:13],OP_LDO} : {33'd0,OP_NOP};
+		instr.aRa = 9'd65 + om;
+		instr.aRt = {3'd0,micro_ir[18:13]};
+	end		// Ra = Mem[SP]
+12'h032:
+	begin
+		next_ip = 12'h034;
+		instr.ins = micro_ir[39:37] > 3'd2 ? {'d0,9'h2,4'h0,SP,micro_ir[24:19],OP_LDO} : {33'd0,OP_NOP};
+		instr.aRa = 9'd65 + om;
+		instr.aRt = {3'd0,micro_ir[24:19]};
+	end		// Rb = Mem[SP]
+12'h033:	
+	begin
+		next_ip = 12'h034;
+		instr.ins = micro_ir[39:37] > 3'd3 ? {'d0,9'h3,4'h0,SP,micro_ir[30:25],OP_LDO} : {33'd0,OP_NOP};
+		instr.aRa = 9'd65 + om;
+		instr.aRt = {3'd0,micro_ir[30:25]};
+	end		// Rc = Mem[SP]
+12'h034:
+	begin
+		next_ip = 12'h000;
+		instr.ins = micro_ir[39:37] > 3'd4 ? {'d0,9'h4,4'h0,SP,micro_ir[36:31],OP_LDO} : {33'd0,OP_NOP};
+		instr.aRa = 9'd65 + om;
+		instr.aRt = {3'd0,micro_ir[36:31]};
+	end		// Rc = Mem[SP]
+12'h035:
+	begin
+		next_ip = 12'h000;
+		instr.ins = {14'h00,micro_ir[39:37],4'h0,SP,SP,OP_ADDI};
+		instr.aRa = 9'd65 + om;
+		instr.aRt = 9'd65 + om;
+	end				// SP = SP + N * 16
+12'h036:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+12'h037:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+
 // FDIV
 12'h040:	begin next_ip = 12'h044; instr.ins = {'d0,FN_FLT2,2'd0,3'd0,FN_FLT1,FN_FRES,micro_ir[18:13],micro_ir[12:7],OP_FLT3}; end
 12'h041:	begin next_ip = 12'h044; instr.ins = {'d0,FN_FLT2,2'd0,3'd0,FN_FLT1,FN_FNEG,micro_ir[18:13],micro_ir[18:13],OP_FLT3}; end
@@ -422,40 +609,212 @@ case(micro_ip)
 12'h192:	begin next_ip = 12'h000; instr.ins = {'d0,OP_NOP};	end
 12'h193:	begin next_ip = 12'h000; instr.ins = {'d0,OP_NOP};	end
 
+// -----------------------------------------------------------------------------
 // RESET...
 // This to prime the renamer and TLB.
-12'h1A0:	begin next_ip = 12'h1A4; instr.ins = {'d0,21'h123456,6'd0,MC0,OP_ADDI}; regx = 4'h1; end
-12'h1A1:	begin next_ip = 12'h1A4; instr.ins = {'d0,21'h123456,6'd0,MC0,OP_ADDI}; regx = 4'h1; end
-12'h1A2:	begin next_ip = 12'h1A4; instr.ins = {'d0,21'h123456,6'd0,MC0,OP_ADDI}; regx = 4'h1; end
-12'h1A3:	begin next_ip = 12'h1A4; instr.ins = {'d0,21'h123456,6'd0,MC0,OP_ADDI}; regx = 4'h1; end
-12'h1A4:	begin next_ip = 12'h1A8; instr.ins = {'d0,21'h123456,6'd0,MC0,OP_ADDI}; regx = 4'h1; end
-12'h1A5:	begin next_ip = 12'h1A8; instr.ins = {'d0,21'h123456,6'd0,MC0,OP_ADDI}; regx = 4'h1; end
-12'h1A6:	begin next_ip = 12'h1A8; instr.ins = {'d0,21'h123456,6'd0,MC0,OP_ADDI}; regx = 4'h1; end
-12'h1A7:	begin next_ip = 12'h1A8; instr.ins = {'d0,21'h123456,6'd0,MC0,OP_ADDI}; regx = 4'h1; end
-12'h1A8:	begin next_ip = 12'h1AC; instr.ins = {'d0,21'h123456,6'd0,MC0,OP_ADDI}; regx = 4'h1; end
-12'h1A9:	begin next_ip = 12'h1AC; instr.ins = {'d0,21'h123456,6'd0,MC0,OP_ADDI}; regx = 4'h1; end
-12'h1AA:	begin next_ip = 12'h1AC; instr.ins = {'d0,21'h123456,6'd0,MC0,OP_ADDI}; regx = 4'h1; end
-12'h1AB:	begin next_ip = 12'h1AC; instr.ins = {'d0,21'h123456,6'd0,MC0,OP_ADDI}; regx = 4'h1; end
-12'h1AC:	begin next_ip = 12'h1B0; instr.ins = {'d0,21'h123456,6'd0,MC0,OP_ADDI}; regx = 4'h1; end
-12'h1AE:	begin next_ip = 12'h1B0; instr.ins = {'d0,21'h123456,6'd0,MC0,OP_ADDI}; regx = 4'h1; end
-12'h1AE:	begin next_ip = 12'h1B0; instr.ins = {'d0,21'h123456,6'd0,MC0,OP_ADDI}; regx = 4'h1; end
-12'h1AF:	begin next_ip = 12'h1B0; instr.ins = {'d0,21'h123456,6'd0,MC0,OP_ADDI}; regx = 4'h1; end
-12'h1B0:	begin next_ip = 12'h1B4; instr.ins = {'d0,21'h123456,6'd0,MC0,OP_ADDI}; regx = 4'h1; end
-12'h1B1:	begin next_ip = 12'h1B4; instr.ins = {'d0,21'h123456,6'd0,MC0,OP_ADDI}; regx = 4'h1; end
-12'h1B2:	begin next_ip = 12'h1B4; instr.ins = {'d0,21'h123456,6'd0,MC0,OP_ADDI}; regx = 4'h1; end
-12'h1B3:	begin next_ip = 12'h1B4; instr.ins = {'d0,21'h123456,6'd0,MC0,OP_ADDI}; regx = 4'h1; end
-12'h1B4:	begin next_ip = 12'h1B8; instr.ins = {'d0,21'h123456,6'd0,MC0,OP_ADDI}; regx = 4'h1; end
-12'h1B5:	begin next_ip = 12'h1B8; instr.ins = {'d0,21'h123456,6'd0,MC0,OP_ADDI}; regx = 4'h1; end
-12'h1B6:	begin next_ip = 12'h1B8; instr.ins = {'d0,21'h123456,6'd0,MC0,OP_ADDI}; regx = 4'h1; end
-12'h1B7:	begin next_ip = 12'h1B8; instr.ins = {'d0,21'h123456,6'd0,MC0,OP_ADDI}; regx = 4'h1; end
+// -----------------------------------------------------------------------------
+12'h1A0:	
+	begin
+		next_ip = 12'h1A4;
+		instr.ins = {21'h123456,6'd0,MC0,OP_ADDI};
+		instr.aRt = 9'd64 + MC0;
+		regx = 4'h1;
+	end
+12'h1A1:
+	begin
+		next_ip = 12'h1A4;
+		instr.ins = {21'h123456,6'd0,MC0,OP_ADDI};
+		instr.aRt = 9'd64 + MC0;
+		regx = 4'h1;
+	end
+12'h1A2:
+	begin
+		next_ip = 12'h1A4;
+		instr.ins = {21'h123456,6'd0,MC0,OP_ADDI};
+		instr.aRt = 9'd64 + MC0;
+		regx = 4'h1;
+	end
+12'h1A3:
+	begin
+		next_ip = 12'h1A4;
+		instr.ins = {21'h123456,6'd0,MC0,OP_ADDI};
+		instr.aRt = 9'd64 + MC0;
+		regx = 4'h1;
+	end
+12'h1A4:
+	begin
+		next_ip = 12'h1A8;
+		instr.ins = {21'h123456,6'd0,MC0,OP_ADDI};
+		instr.aRt = 9'd64 + MC0;
+		regx = 4'h1;
+	end
+12'h1A5:
+	begin
+		next_ip = 12'h1A8;
+		instr.ins = {21'h123456,6'd0,MC0,OP_ADDI};
+		instr.aRt = 9'd64 + MC0;
+		regx = 4'h1;
+	end
+12'h1A6:
+	begin
+		next_ip = 12'h1A8;
+		instr.ins = {21'h123456,6'd0,MC0,OP_ADDI};
+		instr.aRt = 9'd64 + MC0;
+		regx = 4'h1;
+	end
+12'h1A7:
+	begin
+		next_ip = 12'h1A8;
+		instr.ins = {21'h123456,6'd0,MC0,OP_ADDI};
+		instr.aRt = 9'd64 + MC0;
+		regx = 4'h1;
+	end
+12'h1A8:
+	begin
+		next_ip = 12'h1AC;
+		instr.ins = {21'h123456,6'd0,MC0,OP_ADDI};
+		instr.aRt = 9'd64 + MC0;
+		regx = 4'h1;
+	end
+12'h1A9:
+	begin
+		next_ip = 12'h1AC;
+		instr.ins = {21'h123456,6'd0,MC0,OP_ADDI};
+		instr.aRt = 9'd64 + MC0;
+		regx = 4'h1;
+	end
+12'h1AA:
+	begin
+		next_ip = 12'h1AC;
+		instr.ins = {21'h123456,6'd0,MC0,OP_ADDI};
+		instr.aRt = 9'd64 + MC0;
+		regx = 4'h1;
+	end
+12'h1AB:
+	begin
+		next_ip = 12'h1AC;
+		instr.ins = {21'h123456,6'd0,MC0,OP_ADDI};
+		instr.aRt = 9'd64 + MC0;
+		regx = 4'h1;
+	end
+12'h1AC:
+	begin
+		next_ip = 12'h1B0;
+		instr.ins = {21'h123456,6'd0,MC0,OP_ADDI};
+		instr.aRt = 9'd64 + MC0;
+		regx = 4'h1;
+	end
+12'h1AD:
+	begin
+		next_ip = 12'h1B0;
+		instr.ins = {21'h123456,6'd0,MC0,OP_ADDI};
+		instr.aRt = 9'd64 + MC0;
+		regx = 4'h1;
+	end
+12'h1AE:
+	begin
+		next_ip = 12'h1B0;
+		instr.ins = {21'h123456,6'd0,MC0,OP_ADDI};
+		instr.aRt = 9'd64 + MC0;
+		regx = 4'h1;
+	end
+12'h1AF:
+	begin
+		next_ip = 12'h1B0;
+		instr.ins = {21'h123456,6'd0,MC0,OP_ADDI};
+		instr.aRt = 9'd64 + MC0;
+		regx = 4'h1;
+	end
+12'h1B0:
+	begin
+		next_ip = 12'h1B4;
+		instr.ins = {21'h123456,6'd0,MC0,OP_ADDI};
+		instr.aRt = 9'd64 + MC0;
+		regx = 4'h1;
+	end
+12'h1B1:
+	begin
+		next_ip = 12'h1B4;
+		instr.ins = {21'h123456,6'd0,MC0,OP_ADDI};
+		instr.aRt = 9'd64 + MC0;
+		regx = 4'h1;
+	end
+12'h1B2:
+	begin
+		next_ip = 12'h1B4;
+		instr.ins = {21'h123456,6'd0,MC0,OP_ADDI};
+		instr.aRt = 9'd64 + MC0;
+		regx = 4'h1;
+	end
+12'h1B3:
+	begin
+		next_ip = 12'h1B4;
+		instr.ins = {21'h123456,6'd0,MC0,OP_ADDI};
+		instr.aRt = 9'd64 + MC0;
+		regx = 4'h1;
+	end
+12'h1B4:
+	begin
+		next_ip = 12'h1B8;
+		instr.ins = {21'h123456,6'd0,MC0,OP_ADDI};
+		instr.aRt = 9'd64 + MC0;
+		regx = 4'h1;
+	end
+12'h1B5:
+	begin
+		next_ip = 12'h1B8;
+		instr.ins = {21'h123456,6'd0,MC0,OP_ADDI};
+		instr.aRt = 9'd64 + MC0;
+		regx = 4'h1;
+	end
+12'h1B6:
+	begin
+		next_ip = 12'h1B8;
+		instr.ins = {21'h123456,6'd0,MC0,OP_ADDI};
+		instr.aRt = 9'd64 + MC0;
+		regx = 4'h1;
+	end
+12'h1B7:
+	begin
+		next_ip = 12'h1B8;
+		instr.ins = {21'h123456,6'd0,MC0,OP_ADDI};
+		instr.aRt = 9'd64 + MC0;
+		regx = 4'h1;
+	end
+12'h1B8:	
+	begin
+		next_ip = 12'h000;
+		instr.ins = {33'd0,OP_NOP};
+	end
+12'h1B9:	
+	begin 
+		next_ip = 12'h000;
+		instr.ins = {21'h1FFFC0,6'd0,SP,OP_LDO};
+		instr.aRt = 9'd68;
+	end			// SP = Mem[FFFFFFE0]
+12'h1BA:
+	begin
+		next_ip = 12'h000;
+		instr.ins = {21'h1FFFC8,6'd0,MC0,OP_LDO};
+		instr.aRt = 9'd64 + MC0;
+		regx = 4'h1;
+	end			// PC = Mem[FFFFFFF0]
+12'h1BB:	
+	begin
+		next_ip = 12'h000;
+		instr.ins = {21'h000000,MC0,6'd0,OP_JSR};
+		instr.aRa = 9'd64 + MC0;
+		regx = 4'h2;
+	end
+12'h1BC:	
+	begin
+		next_ip = 12'h000;
+		instr.ins = {33'd0,OP_NOP};
+	end
 
-12'h1B8:	begin next_ip = 12'h000; instr.ins = {'d0,OP_NOP};	end
-12'h1B9:	begin next_ip = 12'h000; instr.ins = {'d0,21'h1FFFC0,6'd0,SP,OP_LDO};	end			// SP = Mem[FFFFFFE0]
-12'h1BA:	begin next_ip = 12'h000; instr.ins = {'d0,21'h1FFFC8,6'd0,MC0,OP_LDO}; regx = 4'h1; end			// PC = Mem[FFFFFFF0]
-12'h1BB:	begin next_ip = 12'h000; instr.ins = {'d0,21'h000000,MC0,6'd0,OP_JSR}; regx = 4'h2; end
-12'h1BC:	begin next_ip = 12'h000; instr.ins = {'d0,OP_NOP};	end
-
+// -----------------------------------------------------------------------------
 // RV3
+// -----------------------------------------------------------------------------
 12'h200:
 	begin
 		next_ip = 12'h204; 
@@ -536,12 +895,14 @@ case(micro_ip)
 		instr.ins = micro_ir;
 		instr.pred_btst = 6'd7;
 	end
-23'h208:	begin next_ip = 12'h000; instr.ins = {'d0,OP_NOP};	end
-23'h209:	begin next_ip = 12'h000; instr.ins = {'d0,OP_NOP};	end
-23'h20A:	begin next_ip = 12'h000; instr.ins = {'d0,OP_NOP};	end
-23'h20B:	begin next_ip = 12'h000; instr.ins = {'d0,OP_NOP};	end
+23'h208:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+23'h209:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+23'h20A:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+23'h20B:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
 
+// -----------------------------------------------------------------------------
 // RVS3
+// -----------------------------------------------------------------------------
 12'h210:
 	begin
 		next_ip = 12'h214; 
@@ -614,10 +975,10 @@ case(micro_ip)
 		instr.ins = micro_ir;
 		instr.pred_btst = 6'd7;
 	end
-23'h218:	begin next_ip = 12'h000; instr.ins = {'d0,OP_NOP};	end
-23'h219:	begin next_ip = 12'h000; instr.ins = {'d0,OP_NOP};	end
-23'h21A:	begin next_ip = 12'h000; instr.ins = {'d0,OP_NOP};	end
-23'h21B:	begin next_ip = 12'h000; instr.ins = {'d0,OP_NOP};	end
+23'h218:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+23'h219:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+23'h21A:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+23'h21B:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
 
 default:	begin next_ip = 12'h000; instr.ins = 40'hFFFFFFFFFF; end	// NOP      regx = 4'h2; 
 endcase

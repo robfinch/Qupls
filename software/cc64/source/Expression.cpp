@@ -204,7 +204,7 @@ TYP* Expression::ParsePositConst(ENODE** node)
 	return (tptr);
 }
 
-TYP* Expression::ParseStringConst(ENODE** node)
+TYP* Expression::ParseStringConst(ENODE** node, Symbol* sym)
 {
 	char* str;
 	ENODE* pnode;
@@ -225,8 +225,10 @@ TYP* Expression::ParseStringConst(ENODE** node)
 	*/
 	pnode = makenodei(en_labcon, (ENODE*)NULL, 0);
 	if (sizeof_flag == 0) {
-		pnode->i = stringlit(str);
+		pnode->i = stringlit(str, sym);
 		pnode->sp = new std::string(&str[1]);
+		if (sym)
+			sym->value.i = pnode->i;
 	}
 	free(str);
 	*node = pnode;
@@ -238,7 +240,7 @@ TYP* Expression::ParseStringConst(ENODE** node)
 	return (tptr);
 }
 
-ENODE* Expression::ParseInlineStringConst(ENODE** node)
+ENODE* Expression::ParseInlineStringConst(ENODE** node, Symbol* sym)
 {
 	ENODE* pnode;
 	TYP* tptr;
@@ -257,7 +259,7 @@ ENODE* Expression::ParseInlineStringConst(ENODE** node)
 	}
 	pnode = makenodei(en_labcon, (ENODE*)NULL, 0);
 	if (sizeof_flag == 0)
-		pnode->i = stringlit(str);
+		pnode->i = stringlit(str, sym);
 	free(str);
 	pnode->etype = bt_pointer;
 	pnode->esize = 2;
@@ -267,7 +269,7 @@ ENODE* Expression::ParseInlineStringConst(ENODE** node)
 	return (pnode);
 }
 
-ENODE* Expression::ParseStringConstWithSizePrefix(ENODE** node)
+ENODE* Expression::ParseStringConstWithSizePrefix(ENODE** node, Symbol* sym)
 {
 	ENODE* pnode;
 	TYP* tptr;
@@ -298,8 +300,12 @@ ENODE* Expression::ParseStringConstWithSizePrefix(ENODE** node)
 		tptr = &stdastring;
 	}
 	pnode = makenodei(en_labcon, (ENODE*)NULL, 0);
-	if (sizeof_flag == 0)
-		pnode->i = stringlit(str);
+	if (sizeof_flag == 0) {
+		pnode->i = stringlit(str, sym);
+		pnode->sym = sym;
+		if (sym)
+			sym->value.i = pnode->i;
+	}
 	switch (str[0]) {
 	case 'B': pnode->esize = 1; break;
 	case 'W': pnode->esize = 2; break;
@@ -648,7 +654,7 @@ TYP* Expression::ParseAggregate(ENODE** node, Symbol* symi, TYP* tp)
 
 	if (tp->type == bt_pointer && tp->btpp && tp->btpp->IsCharType()) {
 		if (lastst == sconst) {
-			tptr = ParseStringConst(node);
+			tptr = ParseStringConst(node, symi);
 			needpunc(e_sym::end, 79);
 			return (tptr);
 		}

@@ -1368,19 +1368,19 @@ j1:
 		break;
 
 	case sconst:
-		tptr = ParseStringConst(&pnode);
+		tptr = ParseStringConst(&pnode, symi == nullptr ? currentSym : symi);
 		pnode->sym = symi == nullptr ? currentSym : symi;
 		break;
 
 	case asconst:
-		pnode = ParseStringConstWithSizePrefix(node);
+		pnode = ParseStringConstWithSizePrefix(node, symi == nullptr ? currentSym : symi);
 		tptr = &stdstring;
 		pnode->SetType(tptr);
 		pnode->sym = symi == nullptr ? currentSym : symi;
 		break;
 
 	case isconst:
-		pnode = ParseInlineStringConst(node);
+		pnode = ParseInlineStringConst(node, symi == nullptr ? currentSym : symi);
 		tptr = &stdstring;
 		pnode->SetType(tptr);
 		pnode->sym = symi == nullptr ? currentSym : symi;

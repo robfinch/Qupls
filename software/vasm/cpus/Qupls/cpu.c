@@ -1909,7 +1909,7 @@ static void encode_reg(instruction_buf* insn, operand *op, mnemonic* mnemo, int 
 			break;			
 		case BL2:
 			if (i==0)
-				insn->opcode = insn->opcode | (RB(op->basereg & 3));
+				insn->opcode = insn->opcode | (RT(op->basereg));
 			break;			
 		case J3:
 			if (i==0)

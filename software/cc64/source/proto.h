@@ -54,7 +54,7 @@ extern void GenerateLabelReference(txtoStream&, int n, int64_t, char*);
 // Outcode.c
 extern void gen_strlab(txtoStream& tfs, char* s);
 extern void dumplits(txtoStream& tfs);
-extern int  stringlit(char* s);
+extern int  stringlit(char* s, Symbol*);
 extern int quadlit(Float128* f128);
 extern void nl(txtoStream&);
 extern void seg(txtoStream&, int sg, int algn);

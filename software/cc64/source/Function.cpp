@@ -455,8 +455,8 @@ int Function::Parse(bool local)
 		else if (lastst == begin) {
 			ENODE* node, *node2;
 
-			node = makesnode(en_cnacon, new std::string(*UnknownFuncName()), new std::string(*UnknownFuncName()), stringlit((char *)UnknownFuncName()->c_str()));
-			node2 = makesnode(en_cnacon, new std::string(*UnknownFuncName()), new std::string(*UnknownFuncName()), stringlit((char*)UnknownFuncName()->c_str()));
+			node = makesnode(en_cnacon, new std::string(*UnknownFuncName()), new std::string(*UnknownFuncName()), stringlit((char *)UnknownFuncName()->c_str(),nullptr));
+			node2 = makesnode(en_cnacon, new std::string(*UnknownFuncName()), new std::string(*UnknownFuncName()), stringlit((char*)UnknownFuncName()->c_str(),nullptr));
 			node = makenode(en_assign, node, node2);
 			sp->sym->initexp = makenode(en_void, nullptr, node);
 			doinit(sp->sym, false);
@@ -1994,6 +1994,7 @@ int Function::CountBss(Statement* stmt)
 void Function::DumpBss(Statement* stmt)
 {
 	Symbol* sym;
+	char* str;
 	static int level = 0;
 
 	if (CountBss(stmt) > 0)
@@ -2009,8 +2010,10 @@ void Function::DumpBss(Statement* stmt)
 					sym = &compiler.symbolTable[nn];
 					if (sym && sym->data_string.length() > 0)
 						sym->bss_string = "";
-					if (sym)
-						ofs.write(sym->bss_string.c_str());
+					if (sym) {
+						str = (char*)sym->bss_string.c_str();
+						ofs.write(str);
+					}
 				}
 			}
 		}
@@ -2023,7 +2026,8 @@ void Function::DumpBss(Statement* stmt)
 			if (sym->data_string.length() > 0)
 				sym->bss_string = "";
 			if (sym->bss_string.length() > 0) {
-				ofs.write(sym->bss_string.c_str());
+				str = (char*)sym->bss_string.c_str();
+				ofs.write(str);
 				sym->bss_string = "";
 			}
 		}

@@ -2625,7 +2625,10 @@ void ENODE::PutConstant(txtoStream& ofs, unsigned int lowhigh, unsigned int rshi
 		else if (lowhigh == 3)
 			ofs.write(">");
 #endif
-		sprintf_s(buf, sizeof(buf), "%s", (char *)sp->c_str());
+		if (sym)
+			sprintf_s(buf, sizeof(buf), "%.400s.%05d", (char*)GetPrivateNamespace(), sym->value.i);
+		else
+			sprintf_s(buf, sizeof(buf), "%s", (char*)sp->c_str());
 		ofs.write(buf);
 		if (lowhigh == 3) {
 			sprintf_s(buf, sizeof(buf), ">>16");
