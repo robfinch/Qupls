@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -70,16 +70,24 @@ begin
 		FN_SLEU:	fnIsAlu = 1'b1;
 		default:	fnIsAlu = 1'b0;
 		endcase
-	OP_ADDI:	fnIsAlu = 1'b1;
+	OP_ADDI,OP_VADDI:	
+		fnIsAlu = 1'b1;
 	OP_SUBFI:	fnIsAlu = 1'b1;
-	OP_CMPI:	fnIsAlu = 1'b1;
-	OP_MULI:	fnIsAlu = 1'b1;
-	OP_DIVI:	fnIsAlu = 1'b1;
-	OP_ANDI:	fnIsAlu = 1'b1;
-	OP_ORI:		fnIsAlu = 1'b1;
-	OP_EORI:	fnIsAlu = 1'b1;
+	OP_CMPI,OP_VCMPI:	
+		fnIsAlu = 1'b1;
+	OP_MULI,OP_VMULI:	
+		fnIsAlu = 1'b1;
+	OP_DIVI,OP_VDIVI:	
+		fnIsAlu = 1'b1;
+	OP_ANDI,OP_VANDI:	
+		fnIsAlu = 1'b1;
+	OP_ORI,OP_VORI:
+		fnIsAlu = 1'b1;
+	OP_EORI,OP_VEORI:
+		fnIsAlu = 1'b1;
 	OP_SLTI:	fnIsAlu = 1'b1;
 	OP_AIPSI:	fnIsAlu = 1'b1;
+	OP_VADDSI,OP_VORSI,OP_VANDSI,OP_VEORSI,
 	OP_ADDSI,OP_ORSI,OP_ANDSI,OP_EORSI:
 						fnIsAlu = 1'b1;
 	OP_SHIFT:	fnIsAlu = 1'b1;

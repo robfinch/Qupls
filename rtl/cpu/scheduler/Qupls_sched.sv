@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2023-2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -45,7 +45,7 @@ module Qupls_sched(rst, clk, alu0_idle, alu1_idle, fpu0_idle ,fpu1_idle, fcu_idl
 	alu0_rndx, alu1_rndx, alu0_rndxv, alu1_rndxv,
 	fpu0_rndx, fpu0_rndxv, fpu1_rndx, fpu1_rndxv, fcu_rndx, fcu_rndxv,
 	agen0_rndx, agen1_rndx, agen0_rndxv, agen1_rndxv);
-parameter WINDOW_SIZE = 16;
+parameter WINDOW_SIZE = SCHED_WINDOW_SIZE;
 input rst;
 input clk;
 input alu0_idle;
@@ -284,7 +284,8 @@ begin
 				end
 			end
 			// Issue flow controls in order, one at a time
-			if (!issued_fcu && fcu_idle && rob[heads[hd]].decbus.fc && !rob[heads[hd]].done[1] && !rob[heads[hd]].out[1] && !fnPriorFC(heads[hd])) begin
+			if (!issued_fcu && fcu_idle && rob[heads[hd]].decbus.fc && !rob[heads[hd]].done[1] && !rob[heads[hd]].out[1] &&
+			 (SUPPORT_OOOFC ? 1'b1 : !fnPriorFC(heads[hd]))) begin
 		  	next_robentry_fcu_issue[heads[hd]] = 1'b1;
 		  	issued_fcu = 1'b1;
 		  	next_fcu_rndx = heads[hd];

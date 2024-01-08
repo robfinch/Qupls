@@ -47,7 +47,7 @@ function aregno_t fnRa;
 input ex_instruction_t ir;
 input has_imma;
 begin
-	if (has_imma || fnSourceAv(ir))
+	if (has_imma)
 		fnRa = 9'd0;
 	else
 		case(ir.ins.any.opcode)
@@ -58,9 +58,12 @@ begin
 		OP_FLT3:
 			fnRa = regx ? ir.aRa | 9'd64 : ir.aRa;
 		OP_ADDSI,OP_ANDSI,OP_ORSI,OP_EORSI:
-			fnRa = regx ? ir.aRa | 9'd64 : ir.aRa;
+			fnRa = regx ? ir.aRt | 9'd64 : ir.aRt;
 		default:
-			fnRa = regx ? ir.aRa | 9'd64 : ir.aRa;
+			if (fnImma(ir))
+				fnRa = 9'd0;
+			else
+				fnRa = regx ? ir.aRa | 9'd64 : ir.aRa;
 		endcase
 end
 endfunction

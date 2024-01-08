@@ -49,7 +49,15 @@ parameter SIM = 1'b1;
 //`define SUPPORT_128BIT_OPS	1
 `define NLANES	4
 `define NTHREADS	4
+
+// Number of architectural registers there are in the core, including registers
+// not visible in the programming model. Each supported vector register counts
+// as eight registers.
 `define NREGS		74	// 330
+
+// Number of physical registers supporting the architectural ones and used in
+// register renaming. There must be significantly more physical registers than
+// architectural ones, or performance will suffer due to stalls. 
 parameter PREGS = 256;	// 1024
 
 `define L1CacheLines	1024
@@ -92,13 +100,6 @@ parameter SUPPORT_OOOFC = 1'b0;
 parameter SUPPORT_UNALIGNED_MEMORY = 1'b0;
 parameter SUPPORT_BUS_TO = 1'b0;
 
-// The following adds support for committing a third result if there is no
-// target register. It takes more hardware.
-parameter SUPPORT_3COMMIT = PERFORMANCE;
-// The following adds two forwarding busses which may improve performance, but
-// cost additional logic.
-parameter SUPPORT_COMMIT23 = PERFORMANCE;
-
 // The following parameter indicates to support variable length instructions.
 // If variable length instructions are not supported, then all instructions
 // are assumed to be five bytes long.
@@ -113,9 +114,24 @@ parameter SUPPORT_PGREL	= 1'b0;	// Page relative branching, must be zero
 parameter SUPPORT_REP = 1'b0;
 parameter REP_BIT = 31;
 
+// Supporting load bypassing may improve performance, but will also increase the
+// size of the core and make it more vulnerable to security attacks.
 parameter SUPPORT_LOAD_BYPASSING = 1'b0;
-parameter ROB_ENTRIES = 32;	// currently must be 16
-parameter NCHECK = 3;			// number of checkpoints
+
+// The following controls the size of the reordering buffer.
+parameter ROB_ENTRIES = 32;
+// The following is the number of ROB entries that are examined by the 
+// scheduler when determining what to issue. The schedule window is
+// between the head of the queue and WINDOW_SIZE entries backwards.
+// Decreasing the window size may reduce hardware but will cost performance.
+parameter SCHED_WINDOW_SIZE = 16;
+
+// The following is the number of branch checkpoints to support. 16 is the
+// recommended maximum. Fewer checkpoints may reduce core performance as stalls
+// will result if there are insufficient checkpoints for the number of
+// outstanding branches.
+parameter NCHECK = 5;			// number of checkpoints
+
 parameter LOADQ_ENTRIES = 8;
 parameter STOREQ_ENTRIES = 8;
 parameter LSQ_ENTRIES = 8;
@@ -193,6 +209,7 @@ typedef struct packed
 typedef logic [NREGS-1:1] reg_bitmask_t;
 typedef logic [5:0] ibh_offset_t;
 
+// The following enumeration not currently used.
 typedef enum logic [2:0] {
 	OP_SRC_REG = 3'd0,
 	OP_SRC_ALU0 = 3'd1,
@@ -244,13 +261,20 @@ typedef enum logic [6:0] {
 	OP_CMPUI		= 7'd19,
 	OP_DIVUI		= 7'd21,
 	OP_BFI			= 7'd23,
-	OP_RV3			= 7'd24,
-	OP_RVS3			= 7'd25,
+	OP_VANDI		= 7'd24,
+	OP_VORI			= 7'd25,
+	OP_VEORI		= 7'd26,
+	OP_VCMPI		= 7'd27,
+	OP_VADDI		= 7'd28,
+	OP_VDIVI		= 7'd29,
+	OP_VMULI		= 7'd30,
 	OP_BSR			= 7'd32,
 	OP_DBRA			= 7'd33,
 	OP_MCB			= 7'd34,
 	OP_RTD			= 7'd35,
 	OP_JSR			= 7'd36,
+	OP_RV3			= 7'd38,
+	OP_RVS3			= 7'd39,
 
 	OP_BccU			= 7'd40,
 	OP_Bcc			= 7'd41,
@@ -271,7 +295,7 @@ typedef enum logic [6:0] {
 	OP_BBCI			= 7'd46,
 	OP_BBSI			= 7'd47,
 */
-	OP_PFXC32		= 7'd48,
+	OP_VADDSI		= 7'd48,
 	OP_ADDSI		= 7'd49,
 	OP_ANDSI		= 7'd50,
 	OP_ORSI			= 7'd51,
@@ -279,11 +303,12 @@ typedef enum logic [6:0] {
 	OP_LEAVE		= 7'd53,
 	OP_PUSH			= 7'd54,
 	OP_POP			= 7'd55,
-	OP_PFXA32		= 7'd56,
+	OP_VANDSI		= 7'd56,
 	OP_LDAX			= 7'd57,
 	OP_AIPSI		= 7'd58,
 	OP_EORSI		= 7'd59,
-	OP_PFXB32		= 7'd60,
+	OP_VORSI		= 7'd60,
+	OP_VEORSI		= 7'd61,
 	OP_LDB			= 7'd64,
 	OP_LDBU			= 7'd65,
 	OP_LDW			= 7'd66,
@@ -322,7 +347,9 @@ typedef enum logic [6:0] {
 	OP_REP			= 7'd120,
 	OP_PRED			= 7'd121,
 	OP_ATOM			= 7'd122,
-	OP_RTS			= 7'd123,
+	OP_PFXA32		= 7'd123,
+	OP_PFXB32		= 7'd124,
+	OP_PFXC32		= 7'd125,
 	OP_REGC			= 7'd126,
 	OP_NOP			= 7'd127
 } opcode_t;
@@ -1238,6 +1265,7 @@ typedef struct packed
 	logic mcb;					// micro-code branch
 	logic br;						// conditional branch
 	logic cjb;					// call, jmp, or bra
+	logic bsr;					// bra or bsr
 	logic brk;
 	logic irq;
 	logic rti;
@@ -1489,6 +1517,69 @@ begin
 end
 endfunction
 
+/*
+function pc_address_t fnTgtIP;
+input pc_address_t ip;
+input bts_t bts;
+input instruction_t instr;
+reg [5:0] ino;
+reg [5:0] ino5;
+value_t disp;
+mc_address_t miss_mcip;
+begin
+	ino = {2'd0,instr[26:25],instr[12:11]};
+	ino5 = {ino,2'd0} + ino;
+	disp = {{47{instr[39]}},instr[39:25],instr[12:11]};
+	miss_mcip = 12'h1A0;
+	case (bts)
+	BTS_DISP:
+		begin
+			fnTgtIP = fnTargetIP(ip,disp);
+		end
+	BTS_BSR:
+		begin
+			if (SUPPORT_IBH) begin
+				ino = {2'd0,instr[16:13]};
+				case(ino[3:0])
+				4'd0:	ino5 = 6'd00;
+				4'd1:	ino5 = 6'd05;
+				4'd2:	ino5 = 6'd10;
+				4'd3:	ino5 = 6'd15;
+				4'd5:	ino5 = 6'd20;
+				4'd6:	ino5 = 6'd25;
+				4'd7:	ino5 = 6'd30;
+				4'd8:	ino5 = 6'd35;
+				4'd9:	ino5 = 6'd40;
+				4'd11:	ino5 = 6'd45;
+				4'd12:	ino5 = 6'd50;
+				4'd13:	ino5 = 6'd55;
+				default:	ino5 = 6'd60;
+				endcase
+				fnTgtIP = {ip[$bits(pc_address_t)-1:6] + {{37{instr[39]}},instr[39:17]},ino5};
+			end
+			else
+				fnTgtIP = ip + {{37{instr[39]}},instr[39:13]};
+		end
+	BTS_CALL:
+		begin
+			fnTgtIP = argA + argI;
+		end
+	// Must be tested before Ret
+	BTS_RTI:
+		begin
+			fnTgtIP = (instr[8:7]==2'd1 ? pc_stack[1] : pc_stack[0]) + instr[12:7];
+		end
+	BTS_RET:
+		begin
+			tgtpc = argA + instr[10:7];
+		end
+	default:
+		tgtpc = RSTPC;
+	endcase
+end
+endfunction
+*/
+
 function fnIsBranch;
 input instruction_t ir;
 begin
@@ -1579,8 +1670,8 @@ input instruction_t ir;
 begin
 	fnIsRti = 1'b0;
 	case(ir.any.opcode)
-	OP_RTS:
-		fnIsRti = ir[15:13]==3'd1 || ir[15:13]==3'd2;	
+	OP_RTD:
+		fnIsRti = ir[12:11]==3'd1 || ir[12:11]==3'd2;	
 	default:
 		fnIsRti = 1'b0;
 	endcase

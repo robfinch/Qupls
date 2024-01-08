@@ -45,8 +45,8 @@ input instruction_t ir;
 begin
 	fnIsRti = 1'b0;
 	case(ir.any.opcode)
-	OP_RTS:
-		fnIsRti = ir[15:13]==3'd1 || ir[15:13]==3'd2;	
+	OP_RTD:
+		fnIsRti = ir[12:11]==3'd1 || ir[12:11]==3'd2;	
 	default:
 		fnIsRti = 1'b0;
 	endcase

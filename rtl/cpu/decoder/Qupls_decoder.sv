@@ -125,6 +125,12 @@ Qupls_decode_cjb ucjb1
 	.cjb(db.cjb)
 );
 
+Qupls_decode_bsr ubsr1
+(
+	.instr(ins.ins),
+	.bsr(db.bsr)
+);
+
 Qupls_decode_branch udecbr
 (
 	.instr(ins.ins),

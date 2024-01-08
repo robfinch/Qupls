@@ -37,7 +37,7 @@
 import QuplsPkg::*;
 
 module Qupls_btb(rst, clk, en, rclk, block_header, igrp, length_byte,
-	pc, pc0, pc1, pc2, pc3, pc4, next_pc, takb,
+	pc, pc0, pc1, pc2, pc3, pc4, next_pc, takb, do_bsr, bsr_tgt,
 	branchmiss, branchmiss_state, misspc,
 	commit_pc0, commit_brtgt0, commit_takb0, commit_grp0,
 	commit_pc1, commit_brtgt1, commit_takb1, commit_grp1,
@@ -60,6 +60,8 @@ input pc_address_t pc3;
 input pc_address_t pc4;
 output pc_address_t next_pc;
 output reg takb;
+input do_bsr;
+input pc_address_t bsr_tgt;
 input branchmiss;
 input [2:0] branchmiss_state;
 input pc_address_t misspc;
@@ -427,6 +429,10 @@ begin
 	// The group is loaded at state 1 below.
 	if (branchmiss_state==3'd5) begin
 		next_pc <= misspc;
+		takb <= 1'b1;
+	end
+	else if (do_bsr) begin
+		next_pc <= bsr_tgt;
 		takb <= 1'b1;
 	end
 	else if (pc0==doutb0.pc && doutb0.takb) begin

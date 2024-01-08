@@ -66,7 +66,7 @@ always_comb
 	OP_PFXB128:	len = 5'd20;
 	OP_PFXC128:	len = 5'd20;
 	*/
-	OP_VEC,OP_VECZ,OP_RTS:
+	OP_RTD:
 					len = 5'd5;
 	OP_NOP,OP_LSCTX:
 					len = 5'd5;

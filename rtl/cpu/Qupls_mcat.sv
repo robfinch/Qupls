@@ -1,10 +1,9 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
-//
 //
 // BSD 3-Clause License
 // Redistribution and use in source and binary forms, with or without
@@ -32,33 +31,63 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
+// micro-code address table (mcat)
+//
 // ============================================================================
-
+//
 import QuplsPkg::*;
 
-module Qupls_decode_fc(instr, fc);
-input instruction_t instr;
-output fc;
+module Qupls_mcat(ir, mip);
+input ex_instruction_t ir;
+output mc_address_t mip;
 
-function fnIsFlowCtrl;
-input instruction_t ir;
+always_comb
 begin
-	fnIsFlowCtrl = 1'b0;
-	case(ir.any.opcode)
-	OP_SYS:	fnIsFlowCtrl = 1'b1;
-	OP_JSR:
-		fnIsFlowCtrl = 1'b1;
-	OP_DBRA,
-	OP_Bcc,OP_BccU,OP_FBccH,OP_FBccS,OP_FBccD,OP_FBccQ:
-		fnIsFlowCtrl = 1'b1;	
-	OP_BSR,OP_RTD:
-		fnIsFlowCtrl = 1'b1;	
-	default:
-		fnIsFlowCtrl = 1'b0;
+	casez(ir.ins.any.opcode)
+	OP_ENTER:	mip = 12'h004;
+	OP_LEAVE:	mip = 12'h010;
+	OP_PUSH:	mip = 12'h020;
+	OP_POP:		mip = 12'h030;
+	OP_FLT3:
+		case(ir.ins.f3.func)
+		FN_FLT2:
+			case(ir.ins.f2.func)
+			FN_FLT1:
+				case(ir.ins.f1.func)
+				FN_FRES:
+					case(ir.ins[26:25])
+					2'd0: mip = 12'h0C0;
+					2'd1:	mip = 12'h0D0;
+					2'd2:	mip = 12'h0E0;
+					2'd3: mip = 12'h0E0;
+					endcase
+				FN_RSQRTE:
+					case(ir.ins[26:25])
+					2'd0:	mip = 12'h050;
+					2'd1:	mip = 12'h0A0;
+					2'd2:	mip = 12'h080;
+					2'd3: mip = 12'h070;
+					endcase
+				default:	mip = 12'h000;			
+				endcase
+			FN_FDIV:	mip = 12'h040;
+			default:	mip = 12'h000;
+			endcase
+		default:	mip = 12'h000;
+		endcase
+	OP_BFI:
+		if (ir.ins[33]==1'b1)
+			mip = 12'h220;
+		else
+			mip = 12'h000;
+	OP_LSCTX:	mip = ir.ins[7] ? 12'h100 : 12'h150;
+	OP_RV3:		mip = 12'h200;
+	OP_RVS3:	mip = 12'h210;
+	7'b11???:	mip = 12'h220;
+	OP_VADDSI,OP_VANDSI,OP_VORSI,OP_VEORSI:
+						mip = 12'h230;
+	default:	mip = 12'h000;
 	endcase
 end
-endfunction
-
-assign fc = fnIsFlowCtrl(instr);
 
 endmodule

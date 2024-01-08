@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -47,7 +47,7 @@ function aregno_t fnRb;
 input ex_instruction_t ir;
 input has_immb;
 begin
-	if (has_immb || fnSourceBv(ir))
+	if (has_immb)
 		fnRb = 9'd0;
 	else
 		case(ir.ins.any.opcode)
@@ -56,7 +56,10 @@ begin
 		OP_FLT3:
 			fnRb = regx ? ir.aRb | 9'd64 : ir.aRb;
 		default:
-			fnRb = regx ? ir.aRb | 9'd64 : ir.aRb;
+			if (fnImmb(ir))
+				fnRb = 9'd0;
+			else
+				fnRb = regx ? ir.aRb | 9'd64 : ir.aRb;
 		endcase
 end
 endfunction

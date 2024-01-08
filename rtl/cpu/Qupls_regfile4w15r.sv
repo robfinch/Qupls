@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2013-2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2013-2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -54,14 +54,14 @@ input we0;
 input we1;
 input we2;
 input we3;
-input [RBIT:0] wa0;
-input [RBIT:0] wa1;
-input [RBIT:0] wa2;
-input [RBIT:0] wa3;
-input [WID-1:0] i0;
-input [WID-1:0] i1;
-input [WID-1:0] i2;
-input [WID-1:0] i3;
+input pregno_t wa0;
+input pregno_t wa1;
+input pregno_t wa2;
+input pregno_t wa3;
+input value_t i0;
+input value_t i1;
+input value_t i2;
+input value_t i3;
 input rclk;
 input pregno_t [RPORTS-1:0] ra;
 output value_t [RPORTS-1:0] o;
@@ -142,7 +142,7 @@ end
 generate begin : gRFO
 	for (g = 0; g < RPORTS; g = g + 1) begin
 		always_comb
-			o[g] = ra[g]=='d0 ? {WID{1'b0}} :
+			o[g] = 
 				(wr3 && (ra[g]==wa3)) ? i3 :
 				(wr2 && (ra[g]==wa2)) ? i2 :
 				(wr1 && (ra[g]==wa1)) ? i1 :

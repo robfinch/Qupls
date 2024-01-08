@@ -97,7 +97,6 @@ begin
 		fnRt = regx ? ir.aRt | 9'd64 : ir.aRt;
 	OP_MOV:
 		fnRt = regx ? ir.aRt | 9'd64 : ir.aRt;
-	OP_LDBIP,OP_LDBUIP,OP_LDWIP,OP_LDWUIP,OP_LDTIP,OP_LDTUIP,OP_LDOIP,
 	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDOU,OP_LDH,
 	OP_LDX:
 		fnRt = regx ? ir.aRt | 9'd64 : ir.aRt;

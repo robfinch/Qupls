@@ -895,10 +895,10 @@ case(micro_ip)
 		instr.ins = micro_ir;
 		instr.pred_btst = 6'd7;
 	end
-23'h208:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
-23'h209:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
-23'h20A:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
-23'h20B:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+12'h208:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+12'h209:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+12'h20A:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+12'h20B:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
 
 // -----------------------------------------------------------------------------
 // RVS3
@@ -975,10 +975,186 @@ case(micro_ip)
 		instr.ins = micro_ir;
 		instr.pred_btst = 6'd7;
 	end
-23'h218:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
-23'h219:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
-23'h21A:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
-23'h21B:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+12'h218:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+12'h219:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+12'h21A:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+12'h21B:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+
+// -----------------------------------------------------------------------------
+// VANDI / VORI / VEORI / VCMPI / VADDI / VDIVI / VMULI
+// -----------------------------------------------------------------------------
+12'h220:
+	begin
+		next_ip = 12'h224; 
+		instr.aRa = {micro_ir.r3.Ra,3'd0} + 8'd74;
+		instr.aRb = 9'd0;
+		instr.aRc = 9'd0;
+		instr.aRt = {micro_ir.r3.Rt,3'd0} + 8'd74;
+		instr.ins = micro_ir;
+		instr.pred_btst = 6'd0;
+	end
+12'h221:
+	begin
+		next_ip = 12'h224; 
+		instr.aRa = {micro_ir.r3.Ra,3'd0} + 8'd74;
+		instr.aRb = 9'd0;
+		instr.aRc = 9'd0;
+		instr.aRt = {micro_ir.r3.Rt,3'd0} + 8'd74;
+		instr.ins = micro_ir;
+		instr.pred_btst = 6'd1;
+	end
+12'h222:
+	begin
+		next_ip = 12'h224; 
+		instr.aRa = {micro_ir.r3.Ra,3'd0} + 8'd74;
+		instr.aRb = 9'd0;
+		instr.aRc = 9'd0;
+		instr.aRt = {micro_ir.r3.Rt,3'd0} + 8'd74;
+		instr.ins = micro_ir;
+		instr.pred_btst = 6'd2;
+	end
+12'h223:
+	begin
+		next_ip = 12'h224; 
+		instr.aRa = {micro_ir.r3.Ra,3'd0} + 8'd74;
+		instr.aRb = 9'd0;
+		instr.aRc = 9'd0;
+		instr.aRt = {micro_ir.r3.Rt,3'd0} + 8'd74;
+		instr.ins = micro_ir;
+		instr.pred_btst = 6'd3;
+	end
+12'h224:
+	begin
+		next_ip = 12'h228; 
+		instr.aRa = {micro_ir.r3.Ra,3'd0} + 8'd74;
+		instr.aRb = 9'd0;
+		instr.aRc = 9'd0;
+		instr.aRt = {micro_ir.r3.Rt,3'd0} + 8'd74;
+		instr.ins = micro_ir;
+		instr.pred_btst = 6'd4;
+	end
+12'h225:
+	begin
+		next_ip = 12'h228; 
+		instr.aRa = {micro_ir.r3.Ra,3'd0} + 8'd74;
+		instr.aRb = 9'd0;
+		instr.aRc = 9'd0;
+		instr.aRt = {micro_ir.r3.Rt,3'd0} + 8'd74;
+		instr.ins = micro_ir;
+		instr.pred_btst = 6'd5;
+	end
+12'h226:
+	begin
+		next_ip = 12'h228; 
+		instr.aRa = {micro_ir.r3.Ra,3'd0} + 8'd74;
+		instr.aRb = 9'd0;
+		instr.aRc = 9'd0;
+		instr.aRt = {micro_ir.r3.Rt,3'd0} + 8'd74;
+		instr.ins = micro_ir;
+		instr.pred_btst = 6'd6;
+	end
+12'h227:
+	begin
+		next_ip = 12'h228; 
+		instr.aRa = {micro_ir.r3.Ra,3'd0} + 8'd74;
+		instr.aRb = 9'd0;
+		instr.aRc = 9'd0;
+		instr.aRt = {micro_ir.r3.Rt,3'd0} + 8'd74;
+		instr.ins = micro_ir;
+		instr.pred_btst = 6'd7;
+	end
+12'h228:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+12'h229:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+12'h22A:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+12'h22B:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+
+// -----------------------------------------------------------------------------
+// VANDSI / VORSI / VEORSI / VADDSI
+// -----------------------------------------------------------------------------
+12'h230:
+	begin
+		next_ip = 12'h234; 
+		instr.aRa = {micro_ir.r3.Rt,3'd0} + 8'd74;
+		instr.aRb = 9'd0;
+		instr.aRc = 9'd0;
+		instr.aRt = {micro_ir.r3.Rt,3'd0} + 8'd74;
+		instr.ins = micro_ir;
+		instr.pred_btst = 6'd0;
+	end
+12'h231:
+	begin
+		next_ip = 12'h234; 
+		instr.aRa = {micro_ir.r3.Rt,3'd0} + 8'd74;
+		instr.aRb = 9'd0;
+		instr.aRc = 9'd0;
+		instr.aRt = {micro_ir.r3.Rt,3'd0} + 8'd74;
+		instr.ins = micro_ir;
+		instr.pred_btst = 6'd1;
+	end
+12'h232:
+	begin
+		next_ip = 12'h234; 
+		instr.aRa = {micro_ir.r3.Rt,3'd0} + 8'd74;
+		instr.aRb = 9'd0;
+		instr.aRc = 9'd0;
+		instr.aRt = {micro_ir.r3.Rt,3'd0} + 8'd74;
+		instr.ins = micro_ir;
+		instr.pred_btst = 6'd2;
+	end
+12'h233:
+	begin
+		next_ip = 12'h234; 
+		instr.aRa = {micro_ir.r3.Rt,3'd0} + 8'd74;
+		instr.aRb = 9'd0;
+		instr.aRc = 9'd0;
+		instr.aRt = {micro_ir.r3.Rt,3'd0} + 8'd74;
+		instr.ins = micro_ir;
+		instr.pred_btst = 6'd3;
+	end
+12'h234:
+	begin
+		next_ip = 12'h238; 
+		instr.aRa = {micro_ir.r3.Rt,3'd0} + 8'd74;
+		instr.aRb = 9'd0;
+		instr.aRc = 9'd0;
+		instr.aRt = {micro_ir.r3.Rt,3'd0} + 8'd74;
+		instr.ins = micro_ir;
+		instr.pred_btst = 6'd4;
+	end
+12'h235:
+	begin
+		next_ip = 12'h238; 
+		instr.aRa = {micro_ir.r3.Rt,3'd0} + 8'd74;
+		instr.aRb = 9'd0;
+		instr.aRc = 9'd0;
+		instr.aRt = {micro_ir.r3.Rt,3'd0} + 8'd74;
+		instr.ins = micro_ir;
+		instr.pred_btst = 6'd5;
+	end
+12'h236:
+	begin
+		next_ip = 12'h238; 
+		instr.aRa = {micro_ir.r3.Rt,3'd0} + 8'd74;
+		instr.aRb = 9'd0;
+		instr.aRc = 9'd0;
+		instr.aRt = {micro_ir.r3.Rt,3'd0} + 8'd74;
+		instr.ins = micro_ir;
+		instr.pred_btst = 6'd6;
+	end
+12'h237:
+	begin
+		next_ip = 12'h238; 
+		instr.aRa = {micro_ir.r3.Rt,3'd0} + 8'd74;
+		instr.aRb = 9'd0;
+		instr.aRc = 9'd0;
+		instr.aRt = {micro_ir.r3.Rt,3'd0} + 8'd74;
+		instr.ins = micro_ir;
+		instr.pred_btst = 6'd7;
+	end
+12'h238:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+12'h239:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+12'h23A:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+12'h23B:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
 
 default:	begin next_ip = 12'h000; instr.ins = 40'hFFFFFFFFFF; end	// NOP      regx = 4'h2; 
 endcase

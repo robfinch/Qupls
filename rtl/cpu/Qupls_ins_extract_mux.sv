@@ -67,11 +67,11 @@ output ex_instruction_t ins;
 
 always_ff @(posedge clk)
 if (rst)
-	ins <= {'d0,OP_NOP};
+	ins <= {33'd0,OP_NOP};
 else begin
 	if (en)
 		ins <= hirq ? {'d0,FN_IRQ,1'b0,vect_i,5'd0,2'd0,irq_i,OP_SYS} :
-			nop ? {'d0,OP_NOP} : mipv ? mc_ins : insi;
+			nop ? {33'd0,OP_NOP} : mipv ? mc_ins : insi;
 end
 
 endmodule

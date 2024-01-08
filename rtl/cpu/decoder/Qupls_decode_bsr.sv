@@ -36,29 +36,22 @@
 
 import QuplsPkg::*;
 
-module Qupls_decode_fc(instr, fc);
+module Qupls_decode_bsr(instr, bsr);
 input instruction_t instr;
-output fc;
+output bsr;
 
-function fnIsFlowCtrl;
+function fnIsBsr;
 input instruction_t ir;
 begin
-	fnIsFlowCtrl = 1'b0;
 	case(ir.any.opcode)
-	OP_SYS:	fnIsFlowCtrl = 1'b1;
-	OP_JSR:
-		fnIsFlowCtrl = 1'b1;
-	OP_DBRA,
-	OP_Bcc,OP_BccU,OP_FBccH,OP_FBccS,OP_FBccD,OP_FBccQ:
-		fnIsFlowCtrl = 1'b1;	
-	OP_BSR,OP_RTD:
-		fnIsFlowCtrl = 1'b1;	
+	OP_BSR:
+		fnIsBsr = 1'b1;	
 	default:
-		fnIsFlowCtrl = 1'b0;
+		fnIsBsr = 1'b0;
 	endcase
 end
 endfunction
 
-assign fc = fnIsFlowCtrl(instr);
+assign bsr = fnIsBsr(instr);
 
 endmodule

@@ -92,7 +92,7 @@ Qupls_reg_renamer_fifo #(.FIFONO(0)) ufifo0
 	.o0(s0),
 	.v(v0),
 	.stall(stalla0),
-	.headreg(head0)
+	.headreg(head0[7:0])
 );
 
 Qupls_reg_renamer_fifo #(.FIFONO(1)) ufifo1
@@ -110,7 +110,7 @@ Qupls_reg_renamer_fifo #(.FIFONO(1)) ufifo1
 	.o0(s1),
 	.v(v1),
 	.stall(stalla1),
-	.headreg(head1)
+	.headreg(head1[7:0])
 );
 
 Qupls_reg_renamer_fifo #(.FIFONO(2)) ufifo2
@@ -128,7 +128,7 @@ Qupls_reg_renamer_fifo #(.FIFONO(2)) ufifo2
 	.o0(s2),
 	.v(v2),
 	.stall(stalla2),
-	.headreg(head2)
+	.headreg(head2[7:0])
 );
 
 Qupls_reg_renamer_fifo #(.FIFONO(3)) ufifo3
@@ -146,8 +146,13 @@ Qupls_reg_renamer_fifo #(.FIFONO(3)) ufifo3
 	.o0(s3),
 	.v(v3),
 	.stall(stalla3),
-	.headreg(head3)
+	.headreg(head3[7:0])
 );
+
+assign head0[9:8] = 2'b0;
+assign head1[9:8] = 2'b0;
+assign head2[9:8] = 2'b0;
+assign head3[9:8] = 2'b0;
 
 always_ff @(posedge clk)
 if (rst)

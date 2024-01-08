@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2023-2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -233,23 +233,34 @@ begin
 		default:	bus = {2{32'hDEADBEEF}};
 		endcase
 	OP_CSR:		bus = csr;
-	OP_ADDI:	bus = a + i;
+	OP_ADDI,OP_VADDI:
+		bus = a + i;
 	OP_SUBFI:	bus = i - a;
-	OP_CMPI:	bus = cmpo;
+	OP_CMPI,OP_VCMPI:
+		bus = cmpo;
 	OP_CMPUI:	bus = cmpo;
-	OP_MULI:	bus = prod[63:0];
+	OP_MULI,OP_VMULI:
+		bus = prod[63:0];
 	OP_MULUI:	bus = produ[63:0];
-	OP_DIVI:	bus = ALU0 ? div_q : 0;
+	OP_DIVI,OP_VDIVI:
+		bus = ALU0 ? div_q : 0;
 	OP_DIVUI:	bus = ALU0 ? div_q : 0;
-	OP_ANDI:	bus = a & i;
-	OP_ORI:		bus = a | i;
-	OP_EORI:	bus = a ^ i;
+	OP_ANDI,OP_VANDI:
+		bus = a & i;
+	OP_ORI,OP_VORI:
+		bus = a | i;
+	OP_EORI,OP_VEORI:
+		bus = a ^ i;
 	OP_SLTI:	bus = $signed(a) < $signed(i);
 	OP_AIPSI:	bus = pc + ({{40{i[23]}},i[23:0]} << (ir[15:13]*20));
-	OP_ADDSI:	bus = a + ({{40{i[23]}},i[23:0]} << (ir[15:13]*20));
-	OP_ANDSI:	bus = a & (64'hffffffffffffffff & ~(64'hffffff << (ir[15:13]*20)) | ({{40{i[23]}},i[23:0]} << (ir[15:13]*20)));
-	OP_ORSI:	bus = a | (i << (ir[15:13]*20));
-	OP_EORSI:	bus = a ^ (i << (ir[15:13]*20));
+	OP_ADDSI,OP_VADDSI:
+		bus = a + ({{40{i[23]}},i[23:0]} << (ir[15:13]*20));
+	OP_ANDSI,OP_VANDSI:
+		bus = a & (64'hffffffffffffffff & ~(64'hffffff << (ir[15:13]*20)) | ({{40{i[23]}},i[23:0]} << (ir[15:13]*20)));
+	OP_ORSI,OP_VORSI:
+		bus = a | (i << (ir[15:13]*20));
+	OP_EORSI,OP_VEORSI:
+		bus = a ^ (i << (ir[15:13]*20));
 	OP_SHIFT:
 		case(ir.shifti.func)
 		OP_ASL:	bus = shl[127:64];

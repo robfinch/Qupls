@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -257,7 +257,6 @@ always_ff @(posedge clk)
 			2'd1:	pma_regions[sreq.padr[8:6]].cta[ABITS-1: 0] <= sreq.data1[ABITS-1:0];
 			2'd2:	pma_regions[sreq.padr[8:6]].at <= sreq.data1;
 			2'd3: pma_regions[sreq.padr[8:6]].lock <= sreq.data1;
-			default:	;
 			endcase
 		end
 	end

@@ -45,7 +45,7 @@
 import QuplsPkg::*;
 
 module Qupls_rat(rst, clk, en, nq, stallq, cndx_o, avail_i, restore, rob,
-	stomp, miss_cp, wr0, wr1, wr2, wr3,
+	stomp, miss_cp, wr0, wr1, wr2, wr3, inc_chkpt,
 	wra_cp, wrb_cp, wrc_cp, wrd_cp, qbr0, qbr1, qbr2, qbr3,
 	rn,
 	rrn, rn_cp,
@@ -64,6 +64,7 @@ input rst;
 input clk;
 input en;
 input nq;			// enqueue instruction
+input inc_chkpt;
 output reg stallq;
 input rob_entry_t [ROB_ENTRIES-1:0] rob;
 input rob_bitmask_t stomp;
@@ -439,7 +440,7 @@ else begin
 		cndx <= miss_cp;
 		$display("Restoring checkpint %d.", miss_cp);
 	end
-	else if (qbr_ok) begin
+	else if (inc_chkpt) begin
 		new_chkpt <= 1'b1;
 		$display("Setting checkpoint %d.", cndx + 1);
 	end

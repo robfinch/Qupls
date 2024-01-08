@@ -48,7 +48,11 @@ always_comb
 begin
 	Rc = 9'd0;
 	Rcc = 3'd0;
-	if (!has_immc && !fnSourceCv(instr[0]))
+	if (has_immc) begin
+		Rc = 9'd0;
+		Rcc = 3'd0;
+	end
+	else
 		case(instr[0].ins.any.opcode)
 		OP_STB,OP_STW,OP_STT,OP_STO,OP_STH,OP_STX:
 			Rc = regx[0] ? instr[0].aRt | 9'd64 : instr[0].aRt;
@@ -57,12 +61,15 @@ begin
 		OP_R2:
 			Rc = regx[3] ? instr[0].aRc | 9'd64 : instr[0].aRc;
 		default:
-			Rc = 9'd0;
+			if (fnImmc(instr[0]))
+				Rc = 9'd0;
+			else
+				Rc = regx[3] ? instr[0].aRc | 9'd64 : instr[0].aRc;
 		endcase
-		if (instr[1].ins.any.opcode==OP_REGC) begin
-			Rc = instr[1].aRt;		
-			Rcc = instr[1].ins[15:13];
-		end
+	if (instr[1].ins.any.opcode==OP_REGC) begin
+		Rc = instr[1].aRt;		
+		Rcc = instr[1].ins[15:13];
+	end
 	if (Rc==9'd63)
 		Rc = 9'd65 + om;
 end

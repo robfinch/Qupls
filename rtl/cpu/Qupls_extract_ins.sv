@@ -40,6 +40,7 @@
 // 5500 LUTs / 1020 FFs
 // ============================================================================
 
+import const_pkg::*;
 import QuplsPkg::*;
 
 module Qupls_extract_ins(rst_i, clk_i, en_i, nop_i, nop_o, irq_i, hirq_i, vect_i,
@@ -49,7 +50,8 @@ module Qupls_extract_ins(rst_i, clk_i, en_i, nop_i, nop_o, irq_i, hirq_i, vect_i
 	mc_ins0_i, mc_ins1_i, mc_ins2_i, mc_ins3_i, mc_ins4_i, mc_ins5_i, mc_ins6_i, mc_ins7_i, mc_ins8_i,
 	iRn0_i, iRn1_i, iRn2_i, iRn3_i,
 	ins0_o, ins1_o, ins2_o, ins3_o, ins4_o, ins5_o, ins6_o, ins7_o, ins8_o,
-	pc0_o, pc1_o, pc2_o, pc3_o, pc4_o, pc5_o, pc6_o, pc7_o, pc8_o);
+	pc0_o, pc1_o, pc2_o, pc3_o, pc4_o, pc5_o, pc6_o, pc7_o, pc8_o,
+	do_bsr, bsr_tgt);
 input rst_i;
 input clk_i;
 input en_i;
@@ -110,6 +112,8 @@ output pc_address_t pc5_o;
 output pc_address_t pc6_o;
 output pc_address_t pc7_o;
 output pc_address_t pc8_o;
+output reg do_bsr;
+output pc_address_t bsr_tgt;
 
 wire clk = clk_i;
 wire en = en_i;
@@ -184,37 +188,37 @@ always_comb
 always_comb 
 begin
 	ins0_.ins = ic_line_aligned[39:0];
-	ins0_.aRa = ins0_.ins.r3.Ra;
-	ins0_.aRb = ins0_.ins.r3.Rb;
-	ins0_.aRc = ins0_.ins.r3.Rc;
-	ins0_.aRt = ins0_.ins.r3.Rt;
+	ins0_.aRa = {3'd0,ins0_.ins.r3.Ra};
+	ins0_.aRb = {3'd0,ins0_.ins.r3.Rb};
+	ins0_.aRc = {3'd0,ins0_.ins.r3.Rc};
+	ins0_.aRt = {3'd0,ins0_.ins.r3.Rt};
 	ins0_.pred_btst = 6'd0;
 end
 always_comb
 begin
 	ins1_.ins = ic_line_aligned[79:40];
-	ins1_.aRa = ins1_.ins.r3.Ra;
-	ins1_.aRb = ins1_.ins.r3.Rb;
-	ins1_.aRc = ins1_.ins.r3.Rc;
-	ins1_.aRt = ins1_.ins.r3.Rt;
+	ins1_.aRa = {3'd0,ins1_.ins.r3.Ra};
+	ins1_.aRb = {3'd0,ins1_.ins.r3.Rb};
+	ins1_.aRc = {3'd0,ins1_.ins.r3.Rc};
+	ins1_.aRt = {3'd0,ins1_.ins.r3.Rt};
 	ins1_.pred_btst = 6'd0;
 end
 always_comb
 begin
 	ins2_.ins = ic_line_aligned[119:80];
-	ins2_.aRa = ins2_.ins.r3.Ra;
-	ins2_.aRb = ins2_.ins.r3.Rb;
-	ins2_.aRc = ins2_.ins.r3.Rc;
-	ins2_.aRt = ins2_.ins.r3.Rt;
+	ins2_.aRa = {3'd0,ins2_.ins.r3.Ra};
+	ins2_.aRb = {3'd0,ins2_.ins.r3.Rb};
+	ins2_.aRc = {3'd0,ins2_.ins.r3.Rc};
+	ins2_.aRt = {3'd0,ins2_.ins.r3.Rt};
 	ins2_.pred_btst = 6'd0;
 end
 always_comb
 begin
 	ins3_.ins = ic_line_aligned[159:120];
-	ins3_.aRa = ins3_.ins.r3.Ra;
-	ins3_.aRb = ins3_.ins.r3.Rb;
-	ins3_.aRc = ins3_.ins.r3.Rc;
-	ins3_.aRt = ins3_.ins.r3.Rt;
+	ins3_.aRa = {3'd0,ins3_.ins.r3.Ra};
+	ins3_.aRb = {3'd0,ins3_.ins.r3.Rb};
+	ins3_.aRc = {3'd0,ins3_.ins.r3.Rc};
+	ins3_.aRt = {3'd0,ins3_.ins.r3.Rt};
 	ins3_.pred_btst = 6'd0;
 end
 
@@ -227,6 +231,42 @@ always_comb nop0 = nop_i || (branchmiss && misspc > pc0_i);
 always_comb nop1 = nop_i || (branchmiss && misspc > pc1_i);
 always_comb nop2 = nop_i || (branchmiss && misspc > pc2_i);
 always_comb nop3 = nop_i;
+reg bsr0,bsr1,bsr2,bsr3;
+pc_address_t bsr0_tgt;
+pc_address_t bsr1_tgt;
+pc_address_t bsr2_tgt;
+pc_address_t bsr3_tgt;
+
+always_comb bsr0 = ins0_.ins.any.opcode==OP_BSR;
+always_comb bsr1 = ins1_.ins.any.opcode==OP_BSR;
+always_comb bsr2 = ins2_.ins.any.opcode==OP_BSR;
+always_comb bsr3 = ins3_.ins.any.opcode==OP_BSR;
+always_comb bsr0_tgt = pc0_i + {{37{ins0_.ins[39]}},ins0_.ins[39:13]};
+always_comb bsr1_tgt = pc1_i + {{37{ins1_.ins[39]}},ins1_.ins[39:13]};
+always_comb bsr2_tgt = pc2_i + {{37{ins2_.ins[39]}},ins2_.ins[39:13]};
+always_comb bsr3_tgt = pc3_i + {{37{ins3_.ins[39]}},ins3_.ins[39:13]};
+always_comb
+begin
+	do_bsr = FALSE;
+	bsr_tgt = pc4;
+	if (bsr0) begin
+		do_bsr = TRUE;
+		bsr_tgt = bsr0_tgt;
+	end
+	else if (bsr1) begin
+		do_bsr = TRUE;
+		bsr_tgt = bsr1_tgt;
+	end
+	else if (bsr2) begin
+		do_bsr = TRUE;
+		bsr_tgt = bsr2_tgt;
+	end
+	else if (bsr3) begin
+		do_bsr = TRUE;
+		bsr_tgt = bsr3_tgt;
+	end
+end
+
 /*
 always_comb nop1 = nop_i || (branchmiss && misspc > pc1_i) || (pc1[5:0] >= ic_line2[501:496] && !mipv_i);
 always_comb nop2 = nop_i || (branchmiss && misspc > pc2_i) || (pc2[5:0] >= ic_line2[501:496] && !mipv_i);
