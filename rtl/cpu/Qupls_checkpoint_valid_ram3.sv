@@ -64,7 +64,6 @@ initial begin
 		mem[m] = {NCHECK{1'b1}};
 end
 
-integer n;
 always_ff @(posedge clka)
 for (n = 0; n < NPORT; n = n + 1)
 if (en) begin

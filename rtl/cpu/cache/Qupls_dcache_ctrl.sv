@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -361,7 +361,7 @@ else begin
 				req_state <= LOAD1;
 			end
 			else begin
-				tBusClear();
+				//tBusClear();
 				cache_dump <= 1'b1;
 				cpu_req_queue[queued_req].is_dump <= 1'b1;
 				tAddr(
@@ -392,7 +392,7 @@ else begin
 				req_state <= RW1;
 			end
 			else begin
-				tBusClear();
+				//tBusClear();
 				load_cache <= 1'b1;
 				cpu_req_queue[queued_req].is_load <= 1'b1;
 				tAddr(
@@ -417,7 +417,7 @@ else begin
 		end
 	RW1:
 		begin
-			tBusClear();
+			//tBusClear();
 			if (cpu_request_queued)
 				req_state <= IDLE;
 			else begin
@@ -435,7 +435,7 @@ else begin
 				req_state <= RAND_DELAY;
 			end
 			else if (ftam_resp.rty) begin
-				tBusClear();
+				//tBusClear();
 				req_state <= IDLE;
 			end
 			if (to_cnt[10]) begin
@@ -577,8 +577,10 @@ else begin
 				cpu_req_queue[nn4[3:2]].out[nn4[1:0]] <= 1'b0;
 				cpu_req_queue[nn4[3:2]].done[nn4[1:0]] <= 1'b1;
 			end
-			ftam_req <= cpu_req_queue[nn4[3:2]].tran_req[nn4[1:0]];
-			cpu_req_queue[nn4[3:2]].tran_req[nn4[1:0]].cyc <= 1'b0;
+			if (cpu_req_queue[nn4[3:2]].tran_req[nn4[1:0]].cyc) begin
+				ftam_req <= cpu_req_queue[nn4[3:2]].tran_req[nn4[1:0]];
+				cpu_req_queue[nn4[3:2]].tran_req[nn4[1:0]].cyc <= 1'b0;
+			end
 			wait_cnt <= 'd0;
 //			req_state <= RAND_DELAY;
 //		end

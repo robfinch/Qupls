@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -36,24 +36,22 @@
 
 import QuplsPkg::*;
 
-module Qupls_decode_store(instr, store);
+module Qupls_decode_r2(instr, r2);
 input instruction_t instr;
-output store;
+output r2;
 
-function fnIsStore;
+function fnIsR2;
 input instruction_t op;
 begin
 	case(op.any.opcode)
-	OP_CST,
-	OP_STB,OP_STW,OP_STT,OP_STO,OP_STH,
-	OP_STX:
-		fnIsStore = 1'b1;
+	OP_R1,OP_R2,OP_R3V,OP_R3VS:
+		fnIsR2 = 1'b1;
 	default:
-		fnIsStore = 1'b0;
+		fnIsR2 = 1'b0;
 	endcase
 end
 endfunction
 
-assign store = fnIsStore(instr);
+assign r2 = fnIsR2(instr);
 
 endmodule

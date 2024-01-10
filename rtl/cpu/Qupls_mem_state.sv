@@ -56,7 +56,6 @@ else begin
 			state_o <= DRAMSLOT_DELAY;
 	DRAMSLOT_DELAY:
 		state_o <= DRAMSLOT_AVAIL;
-	default:	;
 	endcase
 	if (set_ready_i)
 		state_o <= DRAMSLOT_READY;

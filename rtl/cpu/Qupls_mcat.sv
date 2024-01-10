@@ -48,6 +48,8 @@ begin
 	OP_LEAVE:	mip = 12'h010;
 	OP_PUSH:	mip = 12'h020;
 	OP_POP:		mip = 12'h030;
+	OP_PUSHV:	mip = 12'h260;
+	OP_POPV:	mip = 12'h280;
 	OP_FLT3:
 		case(ir.ins.f3.func)
 		FN_FLT2:
@@ -81,8 +83,8 @@ begin
 		else
 			mip = 12'h000;
 	OP_LSCTX:	mip = ir.ins[7] ? 12'h100 : 12'h150;
-	OP_RV3:		mip = 12'h200;
-	OP_RVS3:	mip = 12'h210;
+	OP_R3V:		mip = 12'h200;
+	OP_R3VS:	mip = 12'h210;
 	7'b11???:	mip = 12'h220;
 	OP_VADDSI,OP_VANDSI,OP_VORSI,OP_VEORSI:
 						mip = 12'h230;

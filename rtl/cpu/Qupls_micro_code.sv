@@ -48,6 +48,11 @@ input instruction_t micro_ir;
 output mc_address_t next_ip;
 output ex_instruction_t instr;
 output reg [3:0] regx;
+parameter S0 = 6'd16;
+parameter S1 = 6'd17;
+parameter S2 = 6'd18;
+parameter S3 = 6'd19;
+parameter S4 = 6'd20;
 parameter SP = 6'd63;
 parameter FP = 6'd62;
 parameter LR0 = 6'd56;
@@ -813,7 +818,7 @@ case(micro_ip)
 	end
 
 // -----------------------------------------------------------------------------
-// RV3
+// R3V
 // -----------------------------------------------------------------------------
 12'h200:
 	begin
@@ -901,7 +906,7 @@ case(micro_ip)
 12'h20B:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
 
 // -----------------------------------------------------------------------------
-// RVS3
+// R3VS
 // -----------------------------------------------------------------------------
 12'h210:
 	begin
@@ -1155,6 +1160,615 @@ case(micro_ip)
 12'h239:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
 12'h23A:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
 12'h23B:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+
+// -----------------------------------------------------------------------------
+// sto s0s4
+// -----------------------------------------------------------------------------
+12'h240:
+	begin
+		next_ip = 12'h244;
+		instr.aRa = {4'd0,micro_ir.ls.Ra};
+		instr.aRb = 10'd0;
+		instr.aRc = {4'd0,S0};
+		instr.aRt = 10'd0;
+		instr.ins = {21'h000000,micro_ir.ls.Ra,S0,OP_STO};
+		instr.pred_btst = 6'd0;
+	end
+12'h241:
+	begin
+		next_ip = 12'h244;
+		instr.aRa = {4'd0,micro_ir.ls.Ra};
+		instr.aRb = 10'd0;
+		instr.aRc = {4'd0,S1};
+		instr.aRt = 10'd0;
+		instr.ins = {21'h000008,micro_ir.ls.Ra,S1,OP_STO};
+		instr.pred_btst = 6'd0;
+	end
+12'h242:
+	begin
+		next_ip = 12'h244;
+		instr.aRa = {4'd0,micro_ir.ls.Ra};
+		instr.aRb = 10'd0;
+		instr.aRc = {4'd0,S2};
+		instr.aRt = 10'd0;
+		instr.ins = {21'h000010,micro_ir.ls.Ra,S2,OP_STO};
+		instr.pred_btst = 6'd0;
+	end
+12'h243:
+	begin
+		next_ip = 12'h244;
+		instr.aRa = {4'd0,micro_ir.ls.Ra};
+		instr.aRb = 10'd0;
+		instr.aRc = {4'd0,S3};
+		instr.aRt = 10'd0;
+		instr.ins = {21'h000018,micro_ir.ls.Ra,S3,OP_STO};
+		instr.pred_btst = 6'd0;
+	end
+12'h244:
+	begin
+		next_ip = 12'h000;
+		instr.aRa = {4'd0,micro_ir.ls.Ra};
+		instr.aRb = 10'd0;
+		instr.aRc = {4'd0,S4};
+		instr.aRt = 10'd0;
+		instr.ins = {21'h000018,micro_ir.ls.Ra,S4,OP_STO};
+		instr.pred_btst = 6'd0;
+	end
+12'h245:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+12'h246:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+12'h247:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+
+// -----------------------------------------------------------------------------
+// push vn
+// -----------------------------------------------------------------------------
+12'h260:
+	begin
+		next_ip = 12'h264;
+		instr.aRa = 10'd65+om;
+		instr.aRb = 10'd0;
+		instr.aRc = {4'd0,6'd1};
+		instr.aRt = 10'd65+om;
+		instr.ins = {21'h1FFFC0,SP,SP,OP_ADDI};
+		instr.pred_btst = 6'd0;
+	end
+12'h261:
+	begin
+		next_ip = 12'h264;
+		instr.aRa = 10'd65 + om;
+		instr.aRb = 10'd0;
+		instr.aRc = {1'd0,micro_ir[12:7],3'd0};
+		instr.aRt = 10'd0;
+		instr.ins = {21'h000000,SP,6'd0,OP_STO};
+		instr.pred_btst = 6'd0;
+	end
+12'h262:
+	begin
+		next_ip = 12'h264;
+		instr.aRa = 10'd65 + om;
+		instr.aRb = 10'd0;
+		instr.aRc = {1'd0,micro_ir[12:7],3'd1};
+		instr.aRt = 10'd0;
+		instr.ins = {21'h000008,SP,6'd1,OP_STO};
+		instr.pred_btst = 6'd0;
+	end
+12'h263:
+	begin
+		next_ip = 12'h264;
+		instr.aRa = 10'd65 + om;
+		instr.aRb = 10'd0;
+		instr.aRc = {1'd0,micro_ir[12:7],3'd2};
+		instr.aRt = 10'd0;
+		instr.ins = {21'h000010,SP,6'd2,OP_STO};
+		instr.pred_btst = 6'd0;
+	end
+12'h264:
+	begin
+		next_ip = 12'h268;
+		instr.aRa = 10'd65 + om;
+		instr.aRb = 10'd0;
+		instr.aRc = {1'd0,micro_ir[12:7],3'd3};
+		instr.aRt = 10'd0;
+		instr.ins = {21'h000018,SP,6'd3,OP_STO};
+		instr.pred_btst = 6'd0;
+	end
+12'h265:
+	begin
+		next_ip = 12'h268;
+		instr.aRa = 10'd65 + om;
+		instr.aRb = 10'd0;
+		instr.aRc = {1'd0,micro_ir[12:7],3'd4};
+		instr.aRt = 10'd0;
+		instr.ins = {21'h000020,SP,6'd4,OP_STO};
+		instr.pred_btst = 6'd0;
+	end
+12'h266:
+	begin
+		next_ip = 12'h268;
+		instr.aRa = 10'd65 + om;
+		instr.aRb = 10'd0;
+		instr.aRc = {1'd0,micro_ir[12:7],3'd5};
+		instr.aRt = 10'd0;
+		instr.ins = {21'h000028,SP,6'd5,OP_STO};
+		instr.pred_btst = 6'd0;
+	end
+12'h267:
+	begin
+		next_ip = 12'h268;
+		instr.aRa = 10'd65 + om;
+		instr.aRb = 10'd0;
+		instr.aRc = {1'd0,micro_ir[12:7],3'd6};
+		instr.aRt = 10'd0;
+		instr.ins = {21'h000030,SP,6'd6,OP_STO};
+		instr.pred_btst = 6'd0;
+	end
+12'h268:
+	begin
+		next_ip = 12'h000;
+		instr.aRa = 10'd65 + om;
+		instr.aRb = 10'd0;
+		instr.aRc = {1'd0,micro_ir[12:7],3'd7};
+		instr.aRt = 10'd0;
+		instr.ins = {21'h000038,SP,6'd7,OP_STO};
+		instr.pred_btst = 6'd0;
+	end
+12'h269:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+12'h26A:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+12'h26B:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+
+// -----------------------------------------------------------------------------
+// stv vn,[Ra+Rb*Sc]
+// -----------------------------------------------------------------------------
+12'h270:
+	begin
+		next_ip = 12'h274;
+		instr.aRa = {3'd0,micro_ir[18:13]};
+		instr.aRb = 9'd0;
+		instr.aRc = 9'd0;
+		instr.aRt = {3'd0,micro_ir[18:13]};
+		instr.ins = {8'd0,micro_ir[39:27],micro_ir[18:13],micro_ir[18:13],OP_ADDI};
+		instr.pred_btst = 6'd0;
+	end
+12'h271:
+	begin
+		next_ip = 12'h274;
+		instr.aRa = {3'd0,micro_ir[18:13]};
+		instr.aRb = {3'd0,micro_ir[24:19]};
+		instr.aRc = {micro_ir[12:7],3'd0};
+		instr.aRt = 9'd0;
+		instr.ins = {FN_STOX,8'h00,micro_ir[26:13],6'd0,OP_STX};
+		instr.pred_btst = 6'd0;
+	end
+12'h272:
+	begin
+		next_ip = 12'h274;
+		instr.aRa = {3'd0,micro_ir[18:13]};
+		instr.aRb = {3'd0,micro_ir[24:19]};
+		instr.aRc = {micro_ir[12:7],3'd1};
+		instr.aRt = 9'd0;
+		instr.ins = {FN_STOX,8'h08,micro_ir[26:13],6'd1,OP_STX};
+		instr.pred_btst = 6'd0;
+	end
+12'h273:
+	begin
+		next_ip = 12'h274;
+		instr.aRa = {3'd0,micro_ir[18:13]};
+		instr.aRb = {3'd0,micro_ir[24:19]};
+		instr.aRc = {micro_ir[12:7],3'd2};
+		instr.aRt = 9'd0;
+		instr.ins = {FN_STOX,8'h10,micro_ir[26:13],6'd2,OP_STX};
+		instr.pred_btst = 6'd0;
+	end
+12'h274:
+	begin
+		next_ip = 12'h278;
+		instr.aRa = {3'd0,micro_ir[18:13]};
+		instr.aRb = {3'd0,micro_ir[24:19]};
+		instr.aRc = {micro_ir[12:7],3'd3};
+		instr.aRt = 9'd0;
+		instr.ins = {FN_STOX,8'h18,micro_ir[26:13],6'd3,OP_STX};
+		instr.pred_btst = 6'd0;
+	end
+12'h275:
+	begin
+		next_ip = 12'h278;
+		instr.aRa = {3'd0,micro_ir[18:13]};
+		instr.aRb = {3'd0,micro_ir[24:19]};
+		instr.aRc = {micro_ir[12:7],3'd4};
+		instr.aRt = 9'd0;
+		instr.ins = {FN_STOX,8'h20,micro_ir[26:13],6'd4,OP_STX};
+		instr.pred_btst = 6'd0;
+	end
+12'h276:
+	begin
+		next_ip = 12'h278;
+		instr.aRa = {3'd0,micro_ir[18:13]};
+		instr.aRb = {3'd0,micro_ir[24:19]};
+		instr.aRc = {micro_ir[12:7],3'd5};
+		instr.aRt = 9'd0;
+		instr.ins = {FN_STOX,8'h28,micro_ir[26:13],6'd5,OP_STX};
+		instr.pred_btst = 6'd0;
+	end
+12'h277:
+	begin
+		next_ip = 12'h278;
+		instr.aRa = {3'd0,micro_ir[18:13]};
+		instr.aRb = {3'd0,micro_ir[24:19]};
+		instr.aRc = {micro_ir[12:7],3'd6};
+		instr.aRt = 9'd0;
+		instr.ins = {FN_STOX,8'h30,micro_ir[26:13],6'd6,OP_STX};
+		instr.pred_btst = 6'd0;
+	end
+12'h278:
+	begin
+		next_ip = 12'h000;
+		instr.aRa = {3'd0,micro_ir[18:13]};
+		instr.aRb = {3'd0,micro_ir[24:19]};
+		instr.aRc = {micro_ir[12:7],3'd7};
+		instr.aRt = 9'd0;
+		instr.ins = {FN_STOX,8'h38,micro_ir[26:13],6'd7,OP_STX};
+		instr.pred_btst = 6'd0;
+	end
+12'h279:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+12'h27A:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+12'h27B:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+
+// -----------------------------------------------------------------------------
+// pop vn
+// -----------------------------------------------------------------------------
+12'h280:
+	begin
+		next_ip = 12'h284;
+		instr.aRa = 10'd65 + om;
+		instr.aRb = 10'd0;
+		instr.aRc = {1'd0,micro_ir[12:7],3'd0};
+		instr.aRt = 10'd0;
+		instr.ins = {21'h000000,SP,6'd0,OP_LDO};
+		instr.pred_btst = 6'd0;
+	end
+12'h281:
+	begin
+		next_ip = 12'h284;
+		instr.aRa = 10'd65 + om;
+		instr.aRb = 10'd0;
+		instr.aRc = {1'd0,micro_ir[12:7],3'd1};
+		instr.aRt = 10'd0;
+		instr.ins = {21'h000008,SP,6'd1,OP_LDO};
+		instr.pred_btst = 6'd0;
+	end
+12'h282:
+	begin
+		next_ip = 12'h284;
+		instr.aRa = 10'd65 + om;
+		instr.aRb = 10'd0;
+		instr.aRc = {1'd0,micro_ir[12:7],3'd2};
+		instr.aRt = 10'd0;
+		instr.ins = {21'h000010,SP,6'd2,OP_LDO};
+		instr.pred_btst = 6'd0;
+	end
+12'h283:
+	begin
+		next_ip = 12'h284;
+		instr.aRa = 10'd65 + om;
+		instr.aRb = 10'd0;
+		instr.aRc = {1'd0,micro_ir[12:7],3'd3};
+		instr.aRt = 10'd0;
+		instr.ins = {21'h000018,SP,6'd3,OP_LDO};
+		instr.pred_btst = 6'd0;
+	end
+12'h284:
+	begin
+		next_ip = 12'h288;
+		instr.aRa = 10'd65 + om;
+		instr.aRb = 10'd0;
+		instr.aRc = {1'd0,micro_ir[12:7],3'd4};
+		instr.aRt = 10'd0;
+		instr.ins = {21'h000020,SP,6'd4,OP_LDO};
+		instr.pred_btst = 6'd0;
+	end
+12'h285:
+	begin
+		next_ip = 12'h288;
+		instr.aRa = 10'd65 + om;
+		instr.aRb = 10'd0;
+		instr.aRc = {1'd0,micro_ir[12:7],3'd5};
+		instr.aRt = 10'd0;
+		instr.ins = {21'h000028,SP,6'd5,OP_LDO};
+		instr.pred_btst = 6'd0;
+	end
+12'h286:
+	begin
+		next_ip = 12'h288;
+		instr.aRa = 10'd65 + om;
+		instr.aRb = 10'd0;
+		instr.aRc = {1'd0,micro_ir[12:7],3'd6};
+		instr.aRt = 10'd0;
+		instr.ins = {21'h000030,SP,6'd6,OP_LDO};
+		instr.pred_btst = 6'd0;
+	end
+12'h287:
+	begin
+		next_ip = 12'h288;
+		instr.aRa = 10'd65 + om;
+		instr.aRb = 10'd0;
+		instr.aRc = {1'd0,micro_ir[12:7],3'd7};
+		instr.aRt = 10'd0;
+		instr.ins = {21'h000038,SP,6'd7,OP_LDO};
+		instr.pred_btst = 6'd0;
+	end
+12'h288:
+	begin
+		next_ip = 12'h000;
+		instr.aRa = 10'd65+om;
+		instr.aRb = 10'd0;
+		instr.aRc = {4'd0,6'd1};
+		instr.aRt = 10'd65+om;
+		instr.ins = {21'h00040,SP,SP,OP_ADDI};
+		instr.pred_btst = 6'd0;
+	end
+12'h289:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+12'h28A:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+12'h28B:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+
+// -----------------------------------------------------------------------------
+// ldv vn,[Ra+Rb*Sc],n
+// -----------------------------------------------------------------------------
+12'h290:
+	begin
+		next_ip = 12'h294;
+		instr.aRa = {3'd0,micro_ir[18:13]};
+		instr.aRb = {3'd0,micro_ir[24:19]};
+		instr.aRt = {1'd0,micro_ir[12:7],3'd0};
+		instr.aRc = 9'd0;
+		instr.ins = {FN_LDOX,8'h00,micro_ir[26:13],6'd0,OP_LDO};
+		instr.pred_btst = 6'd0;
+	end
+12'h291:
+	begin
+		next_ip = 12'h294;
+		instr.aRa = {3'd0,micro_ir[18:13]};
+		instr.aRb = {3'd0,micro_ir[24:19]};
+		instr.aRt = {1'd0,micro_ir[12:7],3'd1};
+		instr.aRc = 9'd0;
+		instr.ins = {FN_LDOX,8'h08,micro_ir[26:13],6'd1,OP_LDO};
+		instr.pred_btst = 6'd0;
+	end
+12'h292:
+	begin
+		next_ip = 12'h294;
+		instr.aRa = {3'd0,micro_ir[18:13]};
+		instr.aRb = {3'd0,micro_ir[24:19]};
+		instr.aRt = {1'd0,micro_ir[12:7],3'd2};
+		instr.aRc = 9'd0;
+		instr.ins = {FN_LDOX,8'h10,micro_ir[26:13],6'd2,OP_LDO};
+		instr.pred_btst = 6'd0;
+	end
+12'h293:
+	begin
+		next_ip = 12'h294;
+		instr.aRa = {3'd0,micro_ir[18:13]};
+		instr.aRb = {3'd0,micro_ir[24:19]};
+		instr.aRt = {1'd0,micro_ir[12:7],3'd3};
+		instr.aRc = 9'd0;
+		instr.ins = {FN_LDOX,8'h18,micro_ir[26:13],6'd3,OP_LDO};
+		instr.pred_btst = 6'd0;
+	end
+12'h294:
+	begin
+		next_ip = 12'h298;
+		instr.aRa = {3'd0,micro_ir[18:13]};
+		instr.aRb = {3'd0,micro_ir[24:19]};
+		instr.aRt = {1'd0,micro_ir[12:7],3'd4};
+		instr.aRc = 9'd0;
+		instr.ins = {FN_LDOX,8'h20,micro_ir[26:13],6'd4,OP_LDO};
+		instr.pred_btst = 6'd0;
+	end
+12'h295:
+	begin
+		next_ip = 12'h298;
+		instr.aRa = {3'd0,micro_ir[18:13]};
+		instr.aRb = {3'd0,micro_ir[24:19]};
+		instr.aRt = {1'd0,micro_ir[12:7],3'd5};
+		instr.aRc = 9'd0;
+		instr.ins = {FN_LDOX,8'h28,micro_ir[26:13],6'd5,OP_LDO};
+		instr.pred_btst = 6'd0;
+	end
+12'h296:
+	begin
+		next_ip = 12'h298;
+		instr.aRa = {3'd0,micro_ir[18:13]};
+		instr.aRb = {3'd0,micro_ir[24:19]};
+		instr.aRt = {1'd0,micro_ir[12:7],3'd6};
+		instr.aRc = 9'd0;
+		instr.ins = {FN_LDOX,8'h30,micro_ir[26:13],6'd6,OP_LDO};
+		instr.pred_btst = 6'd0;
+	end
+12'h297:
+	begin
+		next_ip = 12'h298;
+		instr.aRa = {3'd0,micro_ir[18:13]};
+		instr.aRb = {3'd0,micro_ir[24:19]};
+		instr.aRt = {1'd0,micro_ir[12:7],3'd7};
+		instr.aRc = 9'd0;
+		instr.ins = {FN_LDOX,8'h38,micro_ir[26:13],6'd7,OP_LDO};
+		instr.pred_btst = 6'd0;
+	end
+12'h298:
+	begin
+		next_ip = 12'h000;
+		instr.aRa = {3'd0,micro_ir[18:13]};
+		instr.aRb = 9'd0;
+		instr.aRc = 9'd0;
+		instr.aRt = {3'd0,micro_ir[18:13]};
+		instr.ins = {8'd0,micro_ir[39:27],micro_ir[18:13],micro_ir[18:13],OP_ADDI};
+		instr.pred_btst = 6'd0;
+	end
+12'h299:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+12'h29A:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+12'h29B:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+
+// -----------------------------------------------------------------------------
+// pusha
+// -----------------------------------------------------------------------------
+12'h300:
+	begin
+		next_ip = 12'h304;
+		instr.aRa = 10'd65+om;
+		instr.aRb = 10'd0;
+		instr.aRc = {4'd0,6'd1};
+		instr.aRt = 10'd65+om;
+		instr.ins = {21'h1FFE08,SP,SP,OP_ADDI};
+		instr.pred_btst = 6'd0;
+	end
+12'h301:
+	begin
+		next_ip = 12'h304;
+		instr.aRa = 10'd65 + om;
+		instr.aRb = 10'd0;
+		instr.aRc = 10'd1;
+		instr.aRt = 10'd0;
+		instr.ins = {21'h000000,SP,6'd1,OP_STO};
+		instr.pred_btst = 6'd0;
+	end
+12'h302:
+	begin
+		next_ip = 12'h304;
+		instr.aRa = 10'd65 + om;
+		instr.aRb = 10'd0;
+		instr.aRc = 10'd2;
+		instr.aRt = 10'd0;
+		instr.ins = {21'h000008,SP,6'd2,OP_STO};
+		instr.pred_btst = 6'd0;
+	end
+12'h303:
+	begin
+		next_ip = 12'h304;
+		instr.aRa = 10'd65 + om;
+		instr.aRb = 10'd0;
+		instr.aRc = 10'd3;
+		instr.aRt = 10'd0;
+		instr.ins = {21'h000010,SP,6'd3,OP_STO};
+		instr.pred_btst = 6'd0;
+	end
+12'h304:
+	begin
+		next_ip = 12'h308;
+		instr.aRa = 10'd65 + om;
+		instr.aRb = 10'd0;
+		instr.aRc = 10'd4;
+		instr.aRt = 10'd0;
+		instr.ins = {21'h000018,SP,6'd4,OP_STO};
+		instr.pred_btst = 6'd0;
+	end
+12'h305:
+	begin
+		next_ip = 12'h308;
+		instr.aRa = 10'd65 + om;
+		instr.aRb = 10'd0;
+		instr.aRc = 10'd5;
+		instr.aRt = 10'd0;
+		instr.ins = {21'h000020,SP,6'd5,OP_STO};
+		instr.pred_btst = 6'd0;
+	end
+12'h306:
+	begin
+		next_ip = 12'h308;
+		instr.aRa = 10'd65 + om;
+		instr.aRb = 10'd0;
+		instr.aRc = 10'd6;
+		instr.aRt = 10'd0;
+		instr.ins = {21'h000028,SP,6'd6,OP_STO};
+		instr.pred_btst = 6'd0;
+	end
+12'h307:
+	begin
+		next_ip = 12'h308;
+		instr.aRa = 10'd65 + om;
+		instr.aRb = 10'd0;
+		instr.aRc = 10'd7;
+		instr.aRt = 10'd0;
+		instr.ins = {21'h000030,SP,6'd7,OP_STO};
+		instr.pred_btst = 6'd0;
+	end
+12'h308:
+	begin
+		next_ip = 12'h30C;
+		instr.aRa = 10'd65 + om;
+		instr.aRb = 10'd0;
+		instr.aRc = 10'd8;
+		instr.aRt = 10'd0;
+		instr.ins = {21'h000038,SP,6'd8,OP_STO};
+		instr.pred_btst = 6'd0;
+	end
+12'h309:
+	begin
+		next_ip = 12'h30C;
+		instr.aRa = 10'd65 + om;
+		instr.aRb = 10'd0;
+		instr.aRc = 10'd9;
+		instr.aRt = 10'd0;
+		instr.ins = {21'h000040,SP,6'd9,OP_STO};
+		instr.pred_btst = 6'd0;
+	end
+12'h30A:
+	begin
+		next_ip = 12'h30C;
+		instr.aRa = 10'd65 + om;
+		instr.aRb = 10'd0;
+		instr.aRc = 10'd10;
+		instr.aRt = 10'd0;
+		instr.ins = {21'h000048,SP,6'd10,OP_STO};
+		instr.pred_btst = 6'd0;
+	end
+12'h30B:
+	begin
+		next_ip = 12'h30C;
+		instr.aRa = 10'd65 + om;
+		instr.aRb = 10'd0;
+		instr.aRc = 10'd11;
+		instr.aRt = 10'd0;
+		instr.ins = {21'h000050,SP,6'd11,OP_STO};
+		instr.pred_btst = 6'd0;
+	end
+12'h30C:
+	begin
+		next_ip = 12'h310;
+		instr.aRa = 10'd65 + om;
+		instr.aRb = 10'd0;
+		instr.aRc = 10'd12;
+		instr.aRt = 10'd0;
+		instr.ins = {21'h000058,SP,6'd12,OP_STO};
+		instr.pred_btst = 6'd0;
+	end
+12'h30D:
+	begin
+		next_ip = 12'h310;
+		instr.aRa = 10'd65 + om;
+		instr.aRb = 10'd0;
+		instr.aRc = 10'd13;
+		instr.aRt = 10'd0;
+		instr.ins = {21'h000060,SP,6'd13,OP_STO};
+		instr.pred_btst = 6'd0;
+	end
+12'h30E:
+	begin
+		next_ip = 12'h310;
+		instr.aRa = 10'd65 + om;
+		instr.aRb = 10'd0;
+		instr.aRc = 10'd14;
+		instr.aRt = 10'd0;
+		instr.ins = {21'h000068,SP,6'd14,OP_STO};
+		instr.pred_btst = 6'd0;
+	end
+12'h30F:
+	begin
+		next_ip = 12'h310;
+		instr.aRa = 10'd65 + om;
+		instr.aRb = 10'd0;
+		instr.aRc = 10'd15;
+		instr.aRt = 10'd0;
+		instr.ins = {21'h000070,SP,6'd15,OP_STO};
+		instr.pred_btst = 6'd0;
+	end
 
 default:	begin next_ip = 12'h000; instr.ins = 40'hFFFFFFFFFF; end	// NOP      regx = 4'h2; 
 endcase

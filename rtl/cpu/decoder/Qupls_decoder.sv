@@ -101,6 +101,12 @@ Qupls_decode_Rt udcrt
 	.Rtz(db.Rtz)
 );
 
+Qupls_decode_r2 ur2
+(
+	.instr(ins.ins),
+	.r2(db.r2)
+);
+
 Qupls_decode_has_imm uhi
 (
 	.instr(ins.ins),
@@ -215,6 +221,12 @@ Qupls_decode_lda udeclda1
 	.lda(db.lda)
 );
 
+Qupls_decode_cls ucls1
+(
+	.instr(ins.ins),
+	.cls(db.cls)
+);
+
 Qupls_decode_fence udfence1
 (
 	.instr(ins.ins),
@@ -311,6 +323,7 @@ else begin
 		dbo.mem <= db.load|db.store;
 		dbo.sync <= db.fence && ins[15:8]==8'hFF;
 		dbo.pred <= ins.ins.any.opcode==OP_PRED;
+		dbo.predz <= ins.ins[39];
 	end
 end
 

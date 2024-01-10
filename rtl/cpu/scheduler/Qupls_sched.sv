@@ -32,6 +32,8 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
+// 9100 LUTs / 300 FFs (without PRED) WINDOW_SIZE = 12
+// 9700 LUTs / 310 FFs (with PRED)
 // ============================================================================
 
 import const_pkg::*;
@@ -44,7 +46,7 @@ module Qupls_sched(rst, clk, alu0_idle, alu1_idle, fpu0_idle ,fpu1_idle, fcu_idl
 	robentry_agen_issue,
 	alu0_rndx, alu1_rndx, alu0_rndxv, alu1_rndxv,
 	fpu0_rndx, fpu0_rndxv, fpu1_rndx, fpu1_rndxv, fcu_rndx, fcu_rndxv,
-	agen0_rndx, agen1_rndx, agen0_rndxv, agen1_rndxv);
+	agen0_rndx, agen1_rndx, cpytgt0, cpytgt1, agen0_rndxv, agen1_rndxv);
 parameter WINDOW_SIZE = SCHED_WINDOW_SIZE;
 input rst;
 input clk;
@@ -73,6 +75,8 @@ output rob_ndx_t fpu1_rndx;
 output rob_ndx_t fcu_rndx;
 output rob_ndx_t agen0_rndx;
 output rob_ndx_t agen1_rndx;
+output reg cpytgt0;
+output reg cpytgt1;
 output reg alu0_rndxv;
 output reg alu1_rndxv;
 output reg fpu0_rndxv;
@@ -100,8 +104,10 @@ reg next_fpu1_rndxv;
 reg next_fcu_rndxv;
 reg next_agen0_rndxv;
 reg next_agen1_rndxv;
+reg next_cpytgt0;
+reg next_cpytgt1;
 rob_bitmask_t args_valid;
-rob_bitmask_t could_issue;
+rob_bitmask_t could_issue, could_issue_nm;	//nm = no match
 
 genvar g;
 integer m,n,h,q;
@@ -110,6 +116,9 @@ rob_ndx_t [WINDOW_SIZE-1:0] heads;
 always_ff @(posedge clk)
 for (m = 0; m < WINDOW_SIZE; m = m + 1)
 	heads[m] = (head + m) % ROB_ENTRIES;
+
+// Search for a prior load or store. This forces the load / store to be performed
+// in program order.
 
 function fnNoPriorLS;
 input rob_ndx_t ndx;
@@ -120,6 +129,9 @@ begin
 			fnNoPriorLS = 1'b0;
 end
 endfunction
+
+// Search for a prior flow control op. This forces flow control op to be performed
+// in program order.
 
 function fnPriorFC;
 input rob_ndx_t ndx;
@@ -140,6 +152,138 @@ begin
 			fnPriorSync = TRUE;
 end
 endfunction
+
+// fnPriorFalsePred prevents an instruction from being scheduled if the
+// possibility of prior predicate that is false exists. If the predicate
+// value is false or unknown then the instruction will not be scheduled.
+
+function fnPriorFalsePred;
+input rob_ndx_t ndx;
+rob_ndx_t m1;
+rob_ndx_t m2;
+rob_ndx_t m3;
+rob_ndx_t m4;
+rob_ndx_t m5;
+rob_ndx_t m6;
+rob_ndx_t m7;
+rob_ndx_t m8;
+begin
+	fnPriorFalsePred = FALSE;
+	if (SUPPORT_PRED) begin
+		m1 = (ndx + ROB_ENTRIES - 1) % ROB_ENTRIES;
+		m2 = (ndx + ROB_ENTRIES - 2) % ROB_ENTRIES;
+		m3 = (ndx + ROB_ENTRIES - 3) % ROB_ENTRIES;
+		m4 = (ndx + ROB_ENTRIES - 4) % ROB_ENTRIES;
+		m5 = (ndx + ROB_ENTRIES - 5) % ROB_ENTRIES;
+		m6 = (ndx + ROB_ENTRIES - 6) % ROB_ENTRIES;
+		m7 = (ndx + ROB_ENTRIES - 7) % ROB_ENTRIES;
+		m8 = (ndx + ROB_ENTRIES - 8) % ROB_ENTRIES;
+		if (rob[m1].v && rob[m1].sn < rob[ndx].sn && rob[m1].decbus.pred) begin
+			fnPriorFalsePred = TRUE;
+			if (rob[m1].done==2'b11)
+				fnPriorFalsePred = rob[m1].pred_status[0];
+		end
+		else if (rob[m2].v && rob[m2].sn < rob[ndx].sn && rob[m2].decbus.pred) begin
+			fnPriorFalsePred = TRUE;
+			if (rob[m2].done==2'b11)
+				fnPriorFalsePred = rob[m2].pred_status[1];
+		end
+		else if (rob[m3].v && rob[m3].sn < rob[ndx].sn && rob[m3].decbus.pred) begin
+			fnPriorFalsePred = TRUE;
+			if (rob[m3].done==2'b11)
+				fnPriorFalsePred = rob[m3].pred_status[2];
+		end
+		else if (rob[m4].v && rob[m4].sn < rob[ndx].sn && rob[m4].decbus.pred) begin
+			fnPriorFalsePred = TRUE;
+			if (rob[m4].done==2'b11)
+				fnPriorFalsePred = rob[m4].pred_status[3];
+		end
+		else if (rob[m5].v && rob[m5].sn < rob[ndx].sn && rob[m5].decbus.pred) begin
+			fnPriorFalsePred = TRUE;
+			if (rob[m5].done==2'b11)
+				fnPriorFalsePred = rob[m5].pred_status[4];
+		end
+		else if (rob[m6].v && rob[m6].sn < rob[ndx].sn && rob[m6].decbus.pred) begin
+			fnPriorFalsePred = TRUE;
+			if (rob[m6].done==2'b11)
+				fnPriorFalsePred = rob[m6].pred_status[5];
+		end
+		else if (rob[m7].v && rob[m7].sn < rob[ndx].sn && rob[m7].decbus.pred) begin
+			fnPriorFalsePred = TRUE;
+			if (rob[m7].done==2'b11)
+				fnPriorFalsePred = rob[m7].pred_status[6];
+		end
+		else if (rob[m8].v && rob[m8].sn < rob[ndx].sn && rob[m8].decbus.pred) begin
+			fnPriorFalsePred = TRUE;
+			if (rob[m8].done==2'b11)
+				fnPriorFalsePred = rob[m8].pred_status[7];
+		end
+	end
+end
+endfunction
+
+// fnPredFalse signals that a truly false predicate was found for the
+// instruction. The instruction will then be scheduled to execute on the NOP
+// unit.
+
+function fnPredFalse;
+input rob_ndx_t ndx;
+rob_ndx_t m1;
+rob_ndx_t m2;
+rob_ndx_t m3;
+rob_ndx_t m4;
+rob_ndx_t m5;
+rob_ndx_t m6;
+rob_ndx_t m7;
+rob_ndx_t m8;
+begin
+	fnPredFalse = FALSE;
+	if (SUPPORT_PRED) begin
+		m1 = (ndx + ROB_ENTRIES - 1) % ROB_ENTRIES;
+		m2 = (ndx + ROB_ENTRIES - 2) % ROB_ENTRIES;
+		m3 = (ndx + ROB_ENTRIES - 3) % ROB_ENTRIES;
+		m4 = (ndx + ROB_ENTRIES - 4) % ROB_ENTRIES;
+		m5 = (ndx + ROB_ENTRIES - 5) % ROB_ENTRIES;
+		m6 = (ndx + ROB_ENTRIES - 6) % ROB_ENTRIES;
+		m7 = (ndx + ROB_ENTRIES - 7) % ROB_ENTRIES;
+		m8 = (ndx + ROB_ENTRIES - 8) % ROB_ENTRIES;
+		if (rob[m1].v && rob[m1].sn < rob[ndx].sn && rob[m1].decbus.pred) begin
+			if (rob[m1].done==2'b11 && rob[m1].pred_status[0]==FALSE)
+				fnPredFalse = TRUE;
+		end
+		else if (rob[m2].v && rob[m2].sn < rob[ndx].sn && rob[m2].decbus.pred) begin
+			if (rob[m2].done==2'b11 && rob[m2].pred_status[1]==FALSE)
+				fnPredFalse = TRUE;
+		end
+		else if (rob[m3].v && rob[m3].sn < rob[ndx].sn && rob[m3].decbus.pred) begin
+			if (rob[m3].done==2'b11 && rob[m3].pred_status[2]==FALSE)
+				fnPredFalse = TRUE;
+		end
+		else if (rob[m4].v && rob[m4].sn < rob[ndx].sn && rob[m4].decbus.pred) begin
+			if (rob[m4].done==2'b11 && rob[m4].pred_status[3]==FALSE)
+				fnPredFalse = TRUE;
+		end
+		else if (rob[m5].v && rob[m5].sn < rob[ndx].sn && rob[m5].decbus.pred) begin
+			if (rob[m5].done==2'b11 && rob[m5].pred_status[4]==FALSE)
+				fnPredFalse = TRUE;
+		end
+		else if (rob[m6].v && rob[m6].sn < rob[ndx].sn && rob[m6].decbus.pred) begin
+			if (rob[m6].done==2'b11 && rob[m6].pred_status[5]==FALSE)
+				fnPredFalse = TRUE;
+		end
+		else if (rob[m7].v && rob[m7].sn < rob[ndx].sn && rob[m7].decbus.pred) begin
+			if (rob[m7].done==2'b11 && rob[m7].pred_status[6]==FALSE)
+				fnPredFalse = TRUE;
+		end
+		else if (rob[m8].v && rob[m8].sn < rob[ndx].sn && rob[m8].decbus.pred) begin
+			if (rob[m8].done==2'b11 && rob[m8].pred_status[7]==FALSE)
+				fnPredFalse = TRUE;
+		end
+	end
+end
+endfunction
+
+// We evaluate match logic once for the entire ROB so the logic resouce is O(n).
 
 generate begin : issue_logic
 for (g = 0; g < ROB_ENTRIES; g = g + 1) begin
@@ -174,8 +318,24 @@ for (g = 0; g < ROB_ENTRIES; g = g + 1) begin
 				    */
 				    || (rob[g].decbus.mem))// & ~rob[g].agen))
 				    ;
-always_ff @(posedge clk) could_issue[g] = rob[g].v && ! (&rob[g].done)
+				    // If the predicate is known to be false, we do not care what the
+				    // argument registers are, other than Rt. If the predicate is known
+				    // to be true we do not need to wait for Rt.
+always_ff @(posedge clk) could_issue[g] =
+													 rob[g].v
+												&& !stomp_i[g]
+												&& !(&rob[g].done)
 												&& args_valid[g]
+												&& !fnPriorFalsePred(g)
+												&& !fnPriorSync(g)
+												;
+always_ff @(posedge clk) could_issue_nm[g] = 
+													 rob[g].v
+												&& !(&rob[g].done)
+												&& !stomp_i[g]
+												&& rob[g].argT_v 
+												&& fnPredFalse(g)
+												&& SUPPORT_PRED
 												;
                         //&& ((rob[g].decbus.load|rob[g].decbus.store) ? !rob[g].agen : 1'b1);
 end                                 
@@ -198,15 +358,12 @@ reg issued_lsq0, issued_lsq1;
 reg can_issue_alu0;
 reg can_issue_alu1;
 reg can_issue_fpu0;
-reg can_issue_fpu0;
+reg can_issue_fpu1;
 reg can_issue_fcu;
 reg can_issue_agen0;
 reg can_issue_agen1;
 reg flag;
 integer hd, synchd, shd, slot;
-
-// Search for a preceding sync instruction. If there is one then do
-// not issue.
 
 always_comb
 begin
@@ -237,11 +394,12 @@ begin
 	next_fcu_rndxv = INV;
 	next_agen0_rndxv = INV;
 	next_agen1_rndxv = INV;
+	next_cpytgt0 = INV;
 	flag = 1'b0;
 	for (h = 0; h < ROB_ENTRIES; h = h + 1)
 		next_robentry_islot_o[h] = robentry_islot_i[h];
 	for (hd = 0; hd < WINDOW_SIZE; hd = hd + 1) begin
-		flag = !fnPriorSync(heads[hd]) && !stomp_i[heads[hd]] && could_issue[heads[hd]];
+		flag = could_issue[heads[hd]];
 		// Search for a preceding sync instruction. If there is one then do
 		// not issue.
 		if (flag) begin
@@ -311,6 +469,29 @@ begin
 				end
 			end
 		end
+		flag = could_issue_nm[heads[hd]];
+		if (flag) begin
+			if (!issued_alu0 && alu0_idle && !rob[heads[hd]].done[0]) begin
+		  	next_robentry_issue[heads[hd]] = 1'b1;
+		  	next_robentry_islot_o[heads[hd]] = 2'b00;
+		  	issued_alu0 = 1'b1;
+		  	next_alu0_rndx = heads[hd];
+		  	next_alu0_rndxv = 1'b1;
+		  	next_cpytgt0 = 1'b1;
+			end
+			if (NALU > 1) begin
+				if (!issued_alu1 && alu1_idle && !rob[heads[hd]].done[0]) begin
+					if (!next_robentry_issue[heads[hd]]) begin	// Did ALU #0 already grab it?
+				  	next_robentry_issue[heads[hd]] = 1'b1;
+				  	next_robentry_islot_o[heads[hd]] = 2'b01;
+				  	issued_alu1 = 1'b1;
+				  	next_alu1_rndx = heads[hd];
+				  	next_alu1_rndxv = 1'b1;
+				  	next_cpytgt1 = 1'b1;
+			  	end
+				end
+			end
+		end
 	end
 
 end
@@ -323,20 +504,22 @@ if (rst) begin
 	robentry_fpu_issue <= 'd0;
 	robentry_fcu_issue <= 'd0;
 	robentry_agen_issue <= 'd0;
-	alu0_rndx <= 'd0;
-	alu1_rndx <= 'd0;
-	fpu0_rndx <= 'd0;
-	fpu1_rndx <= 'd0;
-	fcu_rndx <= 'd0;
-	agen0_rndx <= 'd0;
-	agen1_rndx <= 'd0;
-	alu0_rndxv <= 'd0;
-	alu1_rndxv <= 'd0;
-	fpu0_rndxv <= 'd0;
-	fpu1_rndxv <= 'd0;
-	fcu_rndxv <= 'd0;
-	agen0_rndxv <= 'd0;
-	agen1_rndxv <= 'd0;
+	alu0_rndx <= 5'd0;
+	alu1_rndx <= 5'd0;
+	fpu0_rndx <= 5'd0;
+	fpu1_rndx <= 5'd0;
+	fcu_rndx <= 5'd0;
+	agen0_rndx <= 1'd0;
+	agen1_rndx <= 1'd0;
+	alu0_rndxv <= 1'd0;
+	alu1_rndxv <= 1'd0;
+	fpu0_rndxv <= 1'd0;
+	fpu1_rndxv <= 1'd0;
+	fcu_rndxv <= 1'd0;
+	agen0_rndxv <= 1'd0;
+	agen1_rndxv <= 1'd0;
+	cpytgt0 <= 1'b0;
+	cpytgt1 <= 1'b0;
 end
 else begin
 	robentry_islot_o <= next_robentry_islot_o;
@@ -358,6 +541,8 @@ else begin
 	fcu_rndxv <= next_fcu_rndxv;
 	agen0_rndxv <= next_agen0_rndxv;
 	agen1_rndxv <= next_agen1_rndxv;
+	cpytgt0 <= next_cpytgt0;
+	cpytgt1 <= next_cpytgt1;
 end
 
 endmodule

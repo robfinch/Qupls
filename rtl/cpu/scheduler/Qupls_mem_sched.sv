@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2023-2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -40,7 +40,7 @@ import QuplsPkg::*;
 
 module Qupls_mem_sched(rst, clk, head, lsq_head, robentry_stomp, rob, lsq, memissue,
 	ndx0, ndx1, ndx0v, ndx1v, islot_i, islot_o);
-parameter WINDOW_SIZE = 12;
+parameter WINDOW_SIZE = SCHED_WINDOW_SIZE;
 parameter LSQ_WINDOW_SIZE = LSQ_ENTRIES;
 input rst;
 input clk;

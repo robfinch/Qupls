@@ -38,7 +38,7 @@ import QuplsPkg::*;
 
 module Qupls_decode_Rc(om, instr, regx, has_immc, Rc, Rcc);
 input operating_mode_t om;
-input ex_instruction_t [4:0] instr;
+input ex_instruction_t [5:0] instr;
 input [3:0] regx;
 input has_immc;
 output aregno_t Rc;

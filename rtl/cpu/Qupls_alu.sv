@@ -39,7 +39,7 @@
 import const_pkg::*;
 import QuplsPkg::*;
 
-module Qupls_alu(rst, clk, clk2x, ld, ir, div, a, b, bi, c, i, cs, pc, csr,
+module Qupls_alu(rst, clk, clk2x, ld, ir, div, cptgt, z, a, b, bi, c, i, t, cs, pc, csr,
 	o, mul_done, div_done, div_dbz);
 parameter ALU0 = 1'b0;
 input rst;
@@ -48,11 +48,14 @@ input clk2x;
 input ld;
 input instruction_t ir;
 input div;
+input cptgt;
+input z;
 input value_t a;
 input value_t b;
 input value_t bi;
 input value_t c;
 input value_t i;
+input value_t t;
 input [2:0] cs;
 input pc_address_t pc;
 input value_t csr;
@@ -71,6 +74,10 @@ value_t div_q, div_r;
 value_t cmpo;
 value_t bus;
 value_t blendo;
+value_t immc6;
+
+always_comb
+	immc6 = {{58{ir[30]}},ir[30:25]};
 always_comb
 	shl = {b,ir[33] ? ~a : a} << (ir[32] ? ir[31:25] : c[5:0]);
 always_comb
@@ -170,12 +177,36 @@ begin
 		FN_NOR:	bus = ~(a | b | cc);
 		FN_ENOR:	bus = ~(a ^ b ^ cc);
 		FN_ORC:	bus = a | ~b | cc;
-		FN_SEQ:	bus = a == b;
-		FN_SNE:	bus = a != b;
-		FN_SLT:	bus = $signed(a) < $signed(b);
-		FN_SLE:	bus = $signed(a) <= $signed(b);
-		FN_SLTU:	bus = a < b;
-		FN_SLEU:	bus = a <= b;
+		FN_SEQ:	
+			case(ir[32:31])
+			2'd1:	bus = a == b ? immc6 : t;
+			default:	bus = a == b ? immc6 : 64'd0;
+			endcase
+		FN_SNE:
+			case(ir[32:31])
+			2'd1:	bus = a != b ? immc6 : t;
+			default:	bus = a != b ? immc6 : 64'd0;
+			endcase
+		FN_SLT:
+			case(ir[32:31])
+			2'd1:	bus = $signed(a) < $signed(b) ? immc6 : t;
+			default: bus = $signed(a) < $signed(b) ? immc6 : 64'd0;
+			endcase
+		FN_SLE:	
+			case(ir[32:31])
+			2'd1: bus = $signed(a) <= $signed(b) ? immc6 : t;
+			default: bus = $signed(a) <= $signed(b) ? immc6 : 64'd0;
+			endcase
+		FN_SLTU:
+			case(ir[32:31])
+			2'd1:	bus = a < b ? immc6 : t;
+			default: bus = a < b ? immc6 : 64'd0;
+			endcase
+		FN_SLEU:
+			case(ir[32:31])
+			2'd1: bus = a <= b ? immc6 : t;
+			default: bus = a <= b ? immc6 : 64'd0;
+			endcase
 		FN_MAX3:
 			begin
 				if ($signed(a) > $signed(b) && $signed(a) > $signed(c))
@@ -285,6 +316,6 @@ begin
 end
 
 always_comb
-	o = bus;
+	o = cptgt ? (z ? 64'd0 : t) : bus;
 
 endmodule

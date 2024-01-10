@@ -55,6 +55,8 @@ begin
 			fnRb = 9'd63;
 		OP_FLT3:
 			fnRb = regx ? ir.aRb | 9'd64 : ir.aRb;
+		OP_CLD,OP_CST:
+			fnRb = regx ? ir.aRc | 9'd64 : ir.aRc;
 		default:
 			if (fnImmb(ir))
 				fnRb = 9'd0;
