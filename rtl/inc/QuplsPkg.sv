@@ -114,23 +114,30 @@ parameter SUPPORT_PGREL	= 1'b0;	// Page relative branching, must be zero
 parameter SUPPORT_REP = 1'b0;
 parameter REP_BIT = 31;
 
+// This parameter indicates if to support vector instructions.
+parameter SUPPORT_VEC = 1'b1;
+parameter SUPPORT_PRED = 1'b1;
+
 // Supporting load bypassing may improve performance, but will also increase the
 // size of the core and make it more vulnerable to security attacks.
 parameter SUPPORT_LOAD_BYPASSING = 1'b0;
 
 // The following controls the size of the reordering buffer.
-parameter ROB_ENTRIES = 32;
+// Setting ROB_ENTRIES below 12 may not work. Setting the number of entries over
+// 63 may require changing the sequence number type.
+parameter ROB_ENTRIES = 16;
+
 // The following is the number of ROB entries that are examined by the 
 // scheduler when determining what to issue. The schedule window is
 // between the head of the queue and WINDOW_SIZE entries backwards.
 // Decreasing the window size may reduce hardware but will cost performance.
-parameter SCHED_WINDOW_SIZE = 16;
+parameter SCHED_WINDOW_SIZE = 10;
 
 // The following is the number of branch checkpoints to support. 16 is the
 // recommended maximum. Fewer checkpoints may reduce core performance as stalls
 // will result if there are insufficient checkpoints for the number of
 // outstanding branches.
-parameter NCHECK = 5;			// number of checkpoints
+parameter NCHECK = 3;			// number of checkpoints
 
 parameter LOADQ_ENTRIES = 8;
 parameter STOREQ_ENTRIES = 8;
@@ -161,10 +168,14 @@ parameter TidMSB = $clog2(`NTHREADS)-1;
 parameter AREGS = `NREGS;
 parameter REGFILE_LATENCY = 2;
 parameter INSN_LEN = 8'd5;
+
+// Number of data ports should be 1 or 2. 2 ports will allow two simulataneous
+// reads, but still only a single write.
 parameter NDATA_PORTS = 1;
+parameter NAGEN = 1;
+// Increasing the number of ALUs will increase performance of vector operations.
 parameter NALU = 1;
 parameter NFPU = 0;
-parameter NAGEN = 1;
 parameter NLSQ_PORTS = 1;
 // Number of banks of registers.
 parameter BANKS = 1;
@@ -273,8 +284,8 @@ typedef enum logic [6:0] {
 	OP_MCB			= 7'd34,
 	OP_RTD			= 7'd35,
 	OP_JSR			= 7'd36,
-	OP_RV3			= 7'd38,
-	OP_RVS3			= 7'd39,
+	OP_R3V			= 7'd38,
+	OP_R3VS			= 7'd39,
 
 	OP_BccU			= 7'd40,
 	OP_Bcc			= 7'd41,
@@ -309,6 +320,8 @@ typedef enum logic [6:0] {
 	OP_EORSI		= 7'd59,
 	OP_VORSI		= 7'd60,
 	OP_VEORSI		= 7'd61,
+	OP_PUSHV		= 7'd62,
+	OP_POPV			= 7'd63,
 	OP_LDB			= 7'd64,
 	OP_LDBU			= 7'd65,
 	OP_LDW			= 7'd66,
@@ -319,6 +332,7 @@ typedef enum logic [6:0] {
 	OP_LDOU			= 7'd71,
 	OP_LDH			= 7'd72,
 	OP_CACHE		= 7'd75,
+	OP_CLD			= 7'd74,
 	OP_LDX			= 7'd79,	
 	OP_STB			= 7'd80,
 	OP_STW			= 7'd81,
@@ -332,6 +346,7 @@ typedef enum logic [6:0] {
 	OP_AMO			= 7'd92,
 	OP_CAS			= 7'd93,
 	OP_LSCTX		= 7'd94,
+	OP_CST		 	= 7'd95,
 	OP_LDBIP		= 7'd96,
 	OP_LDBUIP		= 7'd97,
 	OP_LDWIP		= 7'd98,
@@ -680,21 +695,17 @@ typedef enum logic [3:0] {
 	FN_FLT2 = 4'd8
 } f3func_t;
 
-typedef enum logic [6:0] {
-	OP_ASL 	= 7'd0,
-	OP_LSR	= 7'd1,	
-	OP_ASR	= 7'd2,
-	OP_ROL	= 7'd3,
-	OP_ROR	= 7'd4,
-	OP_ZXB	= 7'd8,
-	OP_SXB	= 7'd9,
-	OP_ASLI	= 7'h40,
-	OP_LSRI	= 7'h41,
-	OP_ASRI	= 7'h42,
-	OP_ROLI	= 7'h43,
-	OP_RORI	= 7'h44,
-	OP_ZXBI	= 7'h48,
-	OP_SXBI	= 7'h49
+typedef enum logic [3:0] {
+	OP_ASL 	= 4'd0,
+	OP_LSR	= 4'd1,	
+	OP_ASR	= 4'd2,
+	OP_ROL	= 4'd3,
+	OP_ROR	= 4'd4,
+	OP_ASLI	= 4'd8,
+	OP_LSRI	= 4'd9,
+	OP_ASRI	= 4'd10,
+	OP_ROLI	= 4'd11,
+	OP_RORI	= 4'd12
 } shift_t;
 
 typedef enum logic [2:0] {
@@ -1017,7 +1028,7 @@ typedef struct packed
 {
 	logic [39:0] pad;
 	r2func_t func;
-	logic [1:0] resv;
+	logic [1:0] op;
 	regspec_t Rc;
 	regspec_t Rb;
 	regspec_t Ra;
@@ -1060,11 +1071,12 @@ typedef struct packed
 typedef struct packed
 {
 	logic [39:0] pad;
-	logic [2:0] fmt;
-	logic [2:0] pr;
-	logic b;
 	shift_t func;
-	logic [6:0] imm;
+	logic [2:0] resv;
+	logic t;
+	logic [3:0] bitno;
+	logic [2:0] Pn;
+	logic [5:0] imm;
 	regspec_t Ra;
 	regspec_t Rt;
 	opcode_t opcode;
@@ -1246,6 +1258,7 @@ typedef struct packed
 	logic fc;					// flow control op
 	logic backbr;			// backwards target branch
 	bts_t bts;				// branch target source
+	logic r2;					// true if r1/r2 format instruction
 	logic alu;				// true if instruction must use alu (alu or mem)
 	logic alu0;				// true if instruction must use only alu #0
 	logic fpu;				// FPU op
@@ -1259,6 +1272,7 @@ typedef struct packed
 	logic load;
 	logic loadz;
 	logic store;
+	logic cls;
 	logic lda;
 	logic erc;
 	logic fence;
@@ -1275,6 +1289,8 @@ typedef struct packed
 	logic oddball;
 	logic regs;					// register list modifier
 	logic pred;					// is predicate instruction modifier
+	logic predz;				// 1=zero out when predicate is false
+	logic cpytgt;
 } decode_bus_t;
 
 typedef struct packed
@@ -1404,17 +1420,12 @@ typedef struct packed
 const pc_address_t RSTPC	= 32'hFFFC0000;
 const address_t RSTSP = 32'hFFFFFFC0;
 
-typedef logic [7:0] seqnum_t;
-
-typedef struct packed
-{
-	pregno_t [BANKS-1:0] pregs;
-} preg_array_t;
+typedef logic [6:0] seqnum_t;
 
 typedef struct packed
 {
 	logic [PREGS-1:0] avail;	// available registers at time of queue (for rollback)
-	preg_array_t [AREGS-1:0] regmap;
+	pregno_t [AREGS-1:0] regmap;
 } checkpoint_t;
 
 typedef struct packed {
@@ -1425,6 +1436,8 @@ typedef struct packed {
 	lsq_ndx_t lsqndx;					// index to LSQ entry
 	logic [1:0] out;					// 1=instruction is being executed
 	logic [1:0] done;					// 2'b11=instruction is finished executing
+	logic rstp;								// indicate physical register reset required
+	logic [7:0] pred_status;	// predicate status for the next eight instructions.
 	pc_address_t brtgt;
 	mc_address_t mcbrtgt;			// micro-code branch target
 	logic takb;								// 1=branch evaluated to taken
@@ -1433,7 +1446,6 @@ typedef struct packed {
 	logic argA_v;							// 1=argument A valid
 	logic argB_v;
 	logic argC_v;
-	logic argP_v;
 	logic argT_v;
 	value_t arg;							// argument value for CSR instruction
 	// The following fields are loaded at enqueue time, but otherwise do not change.
@@ -1445,12 +1457,8 @@ typedef struct packed {
 	pregno_t pRa;							// physical registers (see decode bus for arch. regs)
 	pregno_t pRb;
 	pregno_t pRc;
-	pregno_t pRp;
 	pregno_t pRt;							// current Rt value
 	pregno_t nRt;							// new Rt
-	logic no_pred;						// no predicate
-	logic [1:0] pred_val;
-	logic pred_z;							// zero out registers not selected for operation
 	logic [3:0] cndx;					// checkpoint index
 	ex_instruction_t op;			// original instruction
 	pc_address_t pc;					// PC of instruction
@@ -1483,7 +1491,9 @@ typedef struct packed {
 	pregno_t Rt;
 	aregno_t aRt;					// reference for freeing
 	logic aRtz;
-	pregno_t Rc;					// 'C' register for store
+	aregno_t aRc;
+	pregno_t pRc;					// 'C' register for store
+	logic [3:0] cndx;
 	operating_mode_t om;	// operating mode
 	logic datav;					// store data is valid
 	logic [511:0] res;		// stores unaligned data as well (must be last field)
@@ -1516,6 +1526,7 @@ begin
 		fnTargetIP = ip+{tgt,2'b0}+tgt;
 end
 endfunction
+
 
 /*
 function pc_address_t fnTgtIP;
@@ -1583,9 +1594,9 @@ endfunction
 function fnIsBranch;
 input instruction_t ir;
 begin
-	casez(ir.any.opcode)
+	case(ir.any.opcode)
 	OP_DBRA,
-	8'b00101???:
+	OP_Bcc,OP_BccU,OP_FBccH,OP_FBccS,OP_FBccD,OP_FBccQ:
 		fnIsBranch = 1'b1;
 	default:
 		fnIsBranch = 1'b0;
@@ -1603,10 +1614,10 @@ endfunction
 function fnBranchDispSign;
 input instruction_t ir;
 begin
-	casez(ir.any.opcode)
+	case(ir.any.opcode)
 	OP_BSR,OP_DBRA:
 		fnBranchDispSign = ir[39];
-	8'b00101???:
+	OP_Bcc,OP_BccU,OP_FBccH,OP_FBccS,OP_FBccD,OP_FBccQ:
 		fnBranchDispSign = ir[39] && |ir[38:36];
 	default:	fnBranchDispSign = 1'b0;
 	endcase	
@@ -1616,9 +1627,9 @@ endfunction
 function [63:0] fnBranchDisp;
 input instruction_t ir;
 begin
-	casez(ir.any.opcode)
+	case(ir.any.opcode)
 	OP_DBRA,
-	8'b00101???:
+	OP_Bcc,OP_BccU,OP_FBccH,OP_FBccS,OP_FBccD,OP_FBccQ:
 		fnBranchDisp = {{47{ir[39]}},ir[39:25],ir[12:11]};
 	OP_BSR:	fnBranchDisp = {{33{ir[39]}},ir[39:9]};
 	default:	fnBranchDisp = 'd0;
@@ -1689,12 +1700,12 @@ function fnIsFlowCtrl;
 input instruction_t ir;
 begin
 	fnIsFlowCtrl = 1'b0;
-	casez(ir.any.opcode)
+	case(ir.any.opcode)
 	OP_SYS:	fnIsFlowCtrl = 1'b1;
 	OP_JSR:
 		fnIsFlowCtrl = 1'b1;
 	OP_DBRA,
-	8'b00101???:
+	OP_Bcc,OP_BccU,OP_FBccH,OP_FBccS,OP_FBccD,OP_FBccQ:
 		fnIsFlowCtrl = 1'b1;	
 	OP_BSR,OP_RTD:
 		fnIsFlowCtrl = 1'b1;	
@@ -1717,7 +1728,7 @@ endfunction
 function fnSourceAv;
 input instruction_t ir;
 begin
-	casez(ir.r2.opcode)
+	case(ir.r2.opcode)
 	OP_SYS:	fnSourceAv = 1'b1;
 	OP_R2:
 		case(ir.r2.func)
@@ -1763,7 +1774,8 @@ begin
 	OP_SHIFT:	fnSourceAv = fnConstReg(ir.r2.Ra) || fnImma(ir);
 	OP_MOV:		fnSourceAv = fnConstReg(ir.r2.Ra) || fnImma(ir);
 	OP_DBRA:	fnSourceAv = fnConstReg(ir.r2.Ra) || fnImma(ir);
-	8'b00101???:	fnSourceAv = fnConstReg(ir.r2.Ra) || fnImma(ir);
+	OP_Bcc,OP_BccU,OP_FBccH,OP_FBccS,OP_FBccD,OP_FBccQ:
+		fnSourceAv = fnConstReg(ir.r2.Ra) || fnImma(ir);
 	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDOU,OP_LDH:
 		fnSourceAv = fnConstReg(ir.ls.Ra) || fnImma(ir);
 	OP_LDX:
@@ -1780,7 +1792,7 @@ endfunction
 function fnSourceBv;
 input instruction_t ir;
 begin
-	casez(ir.r2.opcode)
+	case(ir.r2.opcode)
 	OP_SYS:	fnSourceBv = 1'b1;
 	OP_R2:
 		case(ir.r2.func)
@@ -1808,7 +1820,7 @@ begin
 		default:	fnSourceBv = 1'b1;
 		endcase
 	OP_RTD:		fnSourceBv = 1'b0;
-	OP_JSR,
+	OP_JSR,OP_BSR,
 	OP_ADDI:	fnSourceBv = 1'b1;
 	OP_SUBFI:	fnSourceBv = 1'b1;
 	OP_CMPI:	fnSourceBv = 1'b1;
@@ -1824,7 +1836,9 @@ begin
 		1'b1: fnSourceBv = 1'b1;
 		endcase
 	OP_DBRA:	fnSourceBv = fnConstReg(ir.br.Rb) || fnImmb(ir);
-	8'b00101???:		fnSourceBv = fnConstReg(ir.br.Rb) || fnImmb(ir);
+	OP_DBRA,
+	OP_Bcc,OP_BccU,OP_FBccH,OP_FBccS,OP_FBccD,OP_FBccQ:
+		fnSourceBv = fnConstReg(ir.br.Rb) || fnImmb(ir);
 	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDOU,OP_LDH:
 		fnSourceBv = 1'b1;
 	OP_LDX:
@@ -1841,11 +1855,11 @@ endfunction
 function fnSourceCv;
 input instruction_t ir;
 begin
-	casez(ir.r2.opcode)
+	case(ir.r2.opcode)
 	OP_STB,OP_STW,OP_STT,OP_STO,OP_STH,OP_STX:
 		fnSourceCv = fnConstReg(ir[12:7]);
-	OP_DBRA,
-	8'b00101???:
+	OP_DBRA,OP_JSR,OP_BSR,
+	OP_Bcc,OP_BccU,OP_FBccH,OP_FBccS,OP_FBccD,OP_FBccQ:
 		fnSourceCv = 1'b1;	
 	OP_RTD:
 		fnSourceCv = 1'd0;

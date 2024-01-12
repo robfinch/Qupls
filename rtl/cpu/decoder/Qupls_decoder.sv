@@ -324,6 +324,7 @@ else begin
 		dbo.sync <= db.fence && ins[15:8]==8'hFF;
 		dbo.pred <= ins.ins.any.opcode==OP_PRED;
 		dbo.predz <= ins.ins[39];
+		dbo.cpytgt <= 1'b0;
 	end
 end
 

@@ -40,7 +40,7 @@ import QuplsPkg::*;
 
 module Qupls_mem_sched(rst, clk, head, lsq_head, robentry_stomp, rob, lsq, memissue,
 	ndx0, ndx1, ndx0v, ndx1v, islot_i, islot_o);
-parameter WINDOW_SIZE = SCHED_WINDOW_SIZE;
+parameter WINDOW_SIZE = LSQ_ENTRIES;
 parameter LSQ_WINDOW_SIZE = LSQ_ENTRIES;
 input rst;
 input clk;
@@ -57,7 +57,7 @@ output lsq_ndx_t ndx1;
 output reg ndx0v;
 output reg ndx1v;
 
-integer m,hd,phd,n9r,n10,n11,col,row,q,r,i,n9c;
+integer m,n9r,n10,col,row,q,i,n9c;
 rob_bitmask_t memready;
 rob_ndx_t [WINDOW_SIZE-1:0] heads;
 lsq_bitmask_t [1:0] memopsvalid;
@@ -71,8 +71,15 @@ lsq_ndx_t next_ndx0;
 lsq_ndx_t next_ndx1;
 lsq_ndx_t next_ndx0v;
 lsq_ndx_t next_ndx1v;
+lsq_ndx_t tmp_ndx;
 rob_bitmask_t next_memissue;
 reg [1:0] next_islot_o [0:LSQ_ENTRIES*2-1];
+
+always_comb
+if (WINDOW_SIZE > LSQ_ENTRIES) begin
+	$display("Q+ mem sched: bad WINDOW_SIZE %d > %d", WINDOW_SIZE, LSQ_ENTRIES);
+	$finish;
+end
 
 // Detect if there is a previous flow control operation. Stores need to know
 // this as they cannot be done until it is guarenteed that the program flow
@@ -174,6 +181,7 @@ begin
 	next_ndx1 = 5'd0;
 	next_ndx0v = 1'd0;
 	next_ndx1v = 1'd0;
+	tmp_ndx = 5'd0;
 	stores = 1'd0;
 	next_islot_o = islot_i;
 	for (row = 0; row < LSQ_WINDOW_SIZE; row = row + 1) begin
@@ -218,7 +226,9 @@ begin
 							if (fnHasPreviousMem(lsq[lsq_heads[row].row][col].rndx,1))
 								no_issue2 = 1'b1;
 							// ... and there is no address-overlap with any preceding instruction
-							if (fnHasPreviousOverlap(rob[heads[phd]].lsqndx))
+							tmp_ndx.row = row;
+							tmp_ndx.col = col;
+							if (fnHasPreviousOverlap(tmp_ndx))
 								no_issue3 = 1'b1;
 						end
 					end
@@ -256,7 +266,7 @@ if (rst) begin
 	ndx1 <= 'd0;
 	ndx0v <= 'd0;
 	ndx1v <= 'd0;
-	for (i = 0; i < LSQ_ENTRIES; i = i + 1)
+	for (i = 0; i < LSQ_ENTRIES*2; i = i + 1)
 		islot_o[i] <= 'd0;
 end
 else begin

@@ -42,7 +42,6 @@ module Qupls_regfile4w15r(rst, clk,
 	wa0, wa1, wa2, wa3, i0, i1, i2, i3,
 	rclk, ra, o);
 parameter WID=64;
-parameter RBIT = 8;
 parameter RPORTS = 16;
 input rst;
 input clk;
@@ -127,7 +126,7 @@ integer n;
 // Live value table
 reg [1:0] lvt [QuplsPkg::PREGS-1:0];
 
-always_ff @(posedge clk, posedge rst)
+always_ff @(posedge clk)
 if (rst) begin
 	for (n = 0; n < QuplsPkg::PREGS; n = n + 1)
 		lvt[n] <= 'd0;

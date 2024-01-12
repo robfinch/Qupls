@@ -41,7 +41,7 @@
 //
 import QuplsPkg::*;
 
-module Qupls_reg_renamer2(rst,clk,en,list2free,tags2free,freevals,
+module Qupls_reg_renamer3(rst,clk,en,list2free,tags2free,freevals,
 	alloc0,alloc1,alloc2,alloc3,wo0,wo1,wo2,wo3,wv0,wv1,wv2,wv3,avail,stall);
 parameter NFTAGS = 4;
 parameter PREGS = 256;
@@ -59,155 +59,96 @@ output pregno_t wo0;	// target register tag
 output pregno_t wo1;
 output pregno_t wo2;
 output pregno_t wo3;
-output wv0;
-output wv1;
-output wv2;
-output wv3;
+output reg wv0;
+output reg wv1;
+output reg wv2;
+output reg wv3;
 output reg [PREGS-1:0] avail;				// recorded in ROB
 output reg stall;			// stall enqueue while waiting for register availability
 
-reg [PREGS-1:0] wlist2free;
-pregno_t head0, head1, head2, head3;
 wire [7:0] o0,o1,o2,o3;
 wire [6:0] s0, s1, s2, s3;
 wire v0, v1, v2, v3;
-wire stalla0;
-wire stalla1;
-wire stalla2;
-wire stalla3;
+reg stalla0;
+reg stalla1;
+reg stalla2;
+reg stalla3;
 always_comb stall = stalla0|stalla1|stalla2|stalla3;
 
-Qupls_reg_renamer_fifo #(.FIFONO(0)) ufifo0
-(
+always_comb stalla0 = !avail[wo0];
+always_comb stalla1 = !avail[wo1];
+always_comb stalla2 = !avail[wo2];
+always_comb stalla3 = !avail[wo3];
+always_comb wv0 = avail[wo0];
+always_comb wv1 = avail[wo1];
+always_comb wv2 = avail[wo2];
+always_comb wv3 = avail[wo3];
+
+Qupls_renamer_srl #(0) usrl0 (
 	.rst(rst),
 	.clk(clk),
 	.en(en),
-	.wlist2free(wlist2free[63:0]),
-	.alloc(alloc0),
-	.freeval(freevals[0]),// & ~avail[tags2free[0]]), 
-	.tag2free(tags2free[0]),
-	.o(wo0),
-	.ov(wv0),
-	.wo(o0),
-	.o0(s0),
-	.v(v0),
-	.stall(stalla0),
-	.headreg(head0[7:0])
+	.rot(alloc0|stalla0), 
+	.o(wo0[7:0])
 );
 
-Qupls_reg_renamer_fifo #(.FIFONO(1)) ufifo1
-(
+Qupls_renamer_srl #(1) usrl1 (
 	.rst(rst),
 	.clk(clk),
 	.en(en),
-	.wlist2free(wlist2free[127:64]),
-	.alloc(alloc1),
-	.freeval(freevals[1]),// & ~avail[tags2free[1]]), 
-	.tag2free(tags2free[1]),
-	.o(wo1),
-	.ov(wv1),
-	.wo(o1),
-	.o0(s1),
-	.v(v1),
-	.stall(stalla1),
-	.headreg(head1[7:0])
+	.rot(alloc1|stalla1), 
+	.o(wo1[7:0])
 );
 
-Qupls_reg_renamer_fifo #(.FIFONO(2)) ufifo2
-(
+Qupls_renamer_srl #(2) usrl2 (
 	.rst(rst),
 	.clk(clk),
 	.en(en),
-	.wlist2free(wlist2free[191:128]),
-	.alloc(alloc2),
-	.freeval(freevals[2]),// & ~avail[tags2free[2]]), 
-	.tag2free(tags2free[2]),
-	.o(wo2),
-	.ov(wv2),
-	.wo(o2),
-	.o0(s2),
-	.v(v2),
-	.stall(stalla2),
-	.headreg(head2[7:0])
+	.rot(alloc2|stalla2), 
+	.o(wo2[7:0])
 );
 
-Qupls_reg_renamer_fifo #(.FIFONO(3)) ufifo3
-(
+Qupls_renamer_srl #(3) usrl3 (
 	.rst(rst),
 	.clk(clk),
 	.en(en),
-	.wlist2free(wlist2free[255:192]),
-	.alloc(alloc3),
-	.freeval(freevals[3]),// & ~avail[tags2free[3]]), 
-	.tag2free(tags2free[3]),
-	.o(wo3),
-	.ov(wv3),
-	.wo(o3),
-	.o0(s3),
-	.v(v3),
-	.stall(stalla3),
-	.headreg(head3[7:0])
+	.rot(alloc3|stalla3), 
+	.o(wo3[7:0])
 );
 
-assign head0[9:8] = 2'b0;
-assign head1[9:8] = 2'b0;
-assign head2[9:8] = 2'b0;
-assign head3[9:8] = 2'b0;
+always_comb wo0[9:8] = 2'b00;
+always_comb wo1[9:8] = 2'b00;
+always_comb wo2[9:8] = 2'b00;
+always_comb wo3[9:8] = 2'b00;
 
 always_ff @(posedge clk)
 if (rst)
-	avail <= {PREGS{1'b0}};
+	avail <= {{PREGS-1{1'b1}},1'b0};
 else begin
 	if (en) begin
 
 		if (alloc0 & ~stalla0)
-			avail[head0] <= 1'b0;
+			avail[wo0] <= 1'b0;
 		if (freevals[0])
 			avail[tags2free[0]] <= 1'b1;
-		else if (v0)
-			avail[o0] <= 1'b1;
 		
 		if (alloc1 & ~stalla1)
-			avail[head1] <= 1'b0;
+			avail[wo1] <= 1'b0;
 		if (freevals[1])
 			avail[tags2free[1]] <= 1'b1;
-		else if (v1)
-			avail[o1] <= 1'b1;
 
 		if (alloc2 & ~stalla2)
-			avail[head2] <= 1'b0;
+			avail[wo2] <= 1'b0;
 		if (freevals[2])
 			avail[tags2free[2]] <= 1'b1;
-		else if (v2)
-			avail[o2] <= 1'b1;
 
 		if (alloc3 & ~stalla3)
-			avail[head3] <= 1'b0;
+			avail[wo3] <= 1'b0;
 		if (freevals[3])
 			avail[tags2free[3]] <= 1'b1;
-		else if (v3)
-			avail[o3] <= 1'b1;
-	end
-end
-
-// On reset, the fifo is preset full of registers with a mem file.
-// Up to four registers may be freed per clock cycle which is okay since only
-// four registers may be allocated per clock cycle.
-
-always_ff @(posedge clk)
-if (rst)
-	wlist2free <= {PREGS{1'b0}};
-else begin
-	if (en) begin
-
-		wlist2free <= (wlist2free | list2free) & 
-			~avail &	// Cannot free available registers
-			~({192'd0,{63'd0,v0 & ~freevals[0]} << s0[5:0]}) &
-			~({128'd0,{63'd0,v1 & ~freevals[1]} << s1[5:0], 64'd0}) &
-			~({64'd0,{63'd0,v2 & ~freevals[2]} << s2[5:0],128'd0}) &
-			~({{63'd0,v3 & ~freevals[3]} << s3[5:0],192'd0})
-			;
-		wlist2free[0] <= 1'b0;
+			
+		avail <= avail | list2free;
+		avail[0] <= 1'b0;
 	end
 end
 

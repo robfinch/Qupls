@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -41,27 +41,28 @@ module Qupls_checkpointRam(clka, ena, wea, addra, dina, clkb, enb, addrb, doutb)
 parameter BANKS=4;
 localparam RBIT=$clog2(PREGS);
 localparam QBIT=$bits(pregno_t);
-localparam WID=$bits(checkpoint_t) + $bits(pregno_t) - ($bits(checkpoint_t) % $bits(pregno_t));
+localparam WID=$bits(checkpoint_t);
 input clka;
 input ena;
-input [(WID/$bits(pregno_t))-1:0] wea;
+input wea;
 input [3:0] addra;
-input [WID-1:0] dina;
+input checkpoint_t dina;
 input clkb;
 input enb;
 input [3:0] addrb;
-output [WID-1:0] doutb;
+output checkpoint_t doutb;
 
+checkpoint_t doutb1;
 genvar g;
 integer n;
 // The following outside of generate to make it easier to reference in SIM code.
 // It should be stripped out for synthesis as it would not be referenced.
 (* RAM_STYLE="distributed" *)
-reg [WID-1:0] mem [0:NCHECK-1];
+checkpoint_t mem [0:NCHECK-1];
 reg [3:0] raddrb;
 initial begin
 	for (n = 0; n < NCHECK; n = n + 1)
-		mem[n] = 0;
+		mem[n] = {$bits(checkpoint_t){1'b0}};
 end
 
 generate begin : gRegfileRam
@@ -69,12 +70,13 @@ if (SIM) begin
 
 //	for (g = 0; g < AREGS; g = g + 1)
 		always_ff @(posedge clka)
-			if (ena & |wea) mem[addra] <= dina;
+			if (ena & wea) mem[addra] <= dina;
 //			if (ena & wea[g]) mem[addra][g*QBIT+QBIT-1:g*QBIT] <= dina[g*QBIT+QBIT-1:g*QBIT];
 
-	always_ff @(posedge clka)
-		raddrb <= addrb;
-	assign doutb = mem[addrb];
+	always_ff @(posedge clkb)
+		if (enb) raddrb <= addrb;
+//	assign doutb = (ena & wea) ? dina : mem[addrb];
+	assign doutb = mem[raddrb];
 
 end
 else begin
@@ -113,7 +115,7 @@ else begin
       .READ_DATA_WIDTH_A(WID),        // DECIMAL
       .READ_DATA_WIDTH_B(WID),        // DECIMAL
       .READ_LATENCY_A(1),             // DECIMAL
-      .READ_LATENCY_B(0),             // DECIMAL
+      .READ_LATENCY_B(1),             // DECIMAL
       .READ_RESET_VALUE_A("0"),       // String
       .READ_RESET_VALUE_B("0"),       // String
       .RST_MODE_A("SYNC"),            // String
@@ -126,13 +128,13 @@ else begin
    )
    xpm_memory_dpdistram_inst (
       .douta(),   			// READ_DATA_WIDTH_A-bit output: Data output for port A read operations.
-      .doutb(doutb),   // READ_DATA_WIDTH_B-bit output: Data output for port B read operations.
+      .doutb(doutb1),   // READ_DATA_WIDTH_B-bit output: Data output for port B read operations.
       .addra(addra),   // ADDR_WIDTH_A-bit input: Address for port A write and read operations.
       .addrb(addrb),   // ADDR_WIDTH_B-bit input: Address for port B write and read operations.
       .clka(clka),     // 1-bit input: Clock signal for port A. Also clocks port B when parameter CLOCKING_MODE
                        // is "common_clock".
 
-      .clkb(clka),     // 1-bit input: Clock signal for port B when parameter CLOCKING_MODE is
+      .clkb(clkb),     // 1-bit input: Clock signal for port B when parameter CLOCKING_MODE is
                        // "independent_clock". Unused when parameter CLOCKING_MODE is "common_clock".
 
       .dina(dina),     // WRITE_DATA_WIDTH_A-bit input: Data input for port A write operations.
@@ -160,6 +162,8 @@ else begin
 
    // End of xpm_memory_dpdistram_inst instantiation
 
+//	assign doutb = (ena & wea) ? dina : doutb1;
+	assign doutb = doutb1;
 
 /*
 // XPM_MEMORY instantiation template for Simple Dual Port RAM configurations

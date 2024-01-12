@@ -1,10 +1,9 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023-2024  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
-//
 //
 // BSD 3-Clause License
 // Redistribution and use in source and binary forms, with or without
@@ -32,60 +31,37 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 63000 LUTs / 4096 FFs	16 checkpints
-// 20600 LUTs / 1024 FFs   4 checkpoints
-// 11000 LUTs / 768 FFs    3 checkpoints
 // ============================================================================
-
+//
 import QuplsPkg::*;
 
-module Qupls_checkpoint_valid_ram3(rst, clka, en, wr, wc, wa, setall, i, clkb, rc, ra, o);
-parameter BANKS=1;
-parameter NPORT=8;
-parameter NRDPORT=17;
+module Qupls_renamer_srl(rst, clk, en, rot, o);
+parameter N=0;
 input rst;
-input clka;
+input clk;
 input en;
-input [NPORT-1:0] wr;
-input checkpt_ndx_t [NPORT-1:0] wc;
-input pregno_t [NPORT-1:0] wa;
-input setall;
-input [NPORT-1:0] i;
-input clkb;
-input checkpt_ndx_t rc [0:NRDPORT-1];
-input pregno_t [NRDPORT-1:0] ra;
-output reg [NRDPORT-1:0] o;
+input rot;
+output reg [7:0] o;
 
-reg [NCHECK-1:0] mem [0:PREGS-1];
+reg [5:0] mem [0:63];
+integer nn,mm;
 
-integer n,m;
 initial begin
-	for (m = 0; m < PREGS; m = m + 1)
-		mem[m] = {NCHECK{1'b1}};
+	for (nn = 0; nn < 64; nn = nn + 1)
+		mem[nn] = nn;
 end
 
-always_ff @(posedge clka)
-for (n = 0; n < NPORT; n = n + 1)
-if (en) begin
-	if (wr[n]) begin
-		if (setall)
-			mem[wa[n]] <= {NCHECK{1'b1}};
-		else
-			mem[wa[n]][wc[n]] <= i[n];
+always_ff @(posedge clk)
+if (rst)
+	o <= {N[1:0],6'd0};
+else begin
+	if (rot & en) begin
+		for (mm = 0; mm < 63; mm = mm + 1)
+			mem[mm] <= mem[mm+1];
+		mem[63] <= mem[0];
 	end
+	if (rot & en)
+		o <= {N[1:0],mem[0]};
 end
-
-genvar g;
-generate begin : gMem
-	for (g = 0; g < NRDPORT; g = g + 1) begin
-		always_ff @(posedge clkb)
-		if (rst)
-			o[g] <= 1'b1;
-		else begin
-			o[g] <= mem[ra[g]][rc[g]];
-		end
-	end
-end
-endgenerate
 
 endmodule

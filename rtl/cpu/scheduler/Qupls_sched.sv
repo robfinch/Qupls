@@ -321,20 +321,26 @@ for (g = 0; g < ROB_ENTRIES; g = g + 1) begin
 				    // If the predicate is known to be false, we do not care what the
 				    // argument registers are, other than Rt. If the predicate is known
 				    // to be true we do not need to wait for Rt.
+				    // Do not issue to the same slot twice in a row, back-to-back. This
+				    // could only happen when a new instruction happens to queue in the
+				    // slot just finished executing. The new instruction would be
+				    // incorrectly marked done, inheriting the status of the old one.
 always_ff @(posedge clk) could_issue[g] =
 													 rob[g].v
-												&& !stomp_i[g]
+//												&& !stomp_i[g]
 												&& !(&rob[g].done)
-												&& args_valid[g]
+												&& (args_valid[g]||rob[g].decbus.cpytgt)
 												&& !fnPriorFalsePred(g)
 												&& !fnPriorSync(g)
+												&& !robentry_issue[g]
 												;
 always_ff @(posedge clk) could_issue_nm[g] = 
 													 rob[g].v
 												&& !(&rob[g].done)
-												&& !stomp_i[g]
+//												&& !stomp_i[g]
 												&& rob[g].argT_v 
 												&& fnPredFalse(g)
+												&& !robentry_issue[g]
 												&& SUPPORT_PRED
 												;
                         //&& ((rob[g].decbus.load|rob[g].decbus.store) ? !rob[g].agen : 1'b1);
@@ -376,10 +382,10 @@ begin
 	issued_agen1 = 1'd0;
 	no_issue = 1'd0;
 	no_issue_fc = 1'd0;
-	next_robentry_issue = 'd0;
-	next_robentry_fpu_issue = 'd0;
-	next_robentry_fcu_issue = 'd0;
-	next_robentry_agen_issue = 'd0;
+	next_robentry_issue = {$bits(rob_bitmask_t){1'd0}};
+	next_robentry_fpu_issue = {$bits(rob_bitmask_t){1'd0}};
+	next_robentry_fcu_issue = {$bits(rob_bitmask_t){1'd0}};
+	next_robentry_agen_issue = {$bits(rob_bitmask_t){1'd0}};
 	next_alu0_rndx = 5'd0;
 	next_alu1_rndx = 5'd0;
 	next_fpu0_rndx = 5'd0;
@@ -403,7 +409,9 @@ begin
 		// Search for a preceding sync instruction. If there is one then do
 		// not issue.
 		if (flag) begin
-			if (!issued_alu0 && alu0_idle && rob[heads[hd]].decbus.alu && !rob[heads[hd]].done[0] && !rob[heads[hd]].out[0]) begin
+			if (!issued_alu0 && alu0_idle &&
+				((rob[heads[hd]].decbus.alu && !rob[heads[hd]].done[0]) || rob[heads[hd]].decbus.cpytgt) &&
+				!rob[heads[hd]].out[0]) begin
 		  	next_robentry_issue[heads[hd]] = 1'b1;
 		  	next_robentry_islot_o[heads[hd]] = 2'b00;
 		  	issued_alu0 = 1'b1;
@@ -411,7 +419,9 @@ begin
 		  	next_alu0_rndxv = 1'b1;
 			end
 			if (NALU > 1) begin
-				if (!issued_alu1 && alu1_idle && rob[heads[hd]].decbus.alu && !rob[heads[hd]].done[0] && !rob[heads[hd]].out[0] && !rob[heads[hd]].decbus.alu0) begin
+				if (!issued_alu1 && alu1_idle &&
+					((rob[heads[hd]].decbus.alu && !rob[heads[hd]].done[0]) || rob[heads[hd]].decbus.cpytgt) &&
+					!rob[heads[hd]].out[0] && !rob[heads[hd]].decbus.alu0) begin
 					if (!next_robentry_issue[heads[hd]]) begin	// Did ALU #0 already grab it?
 				  	next_robentry_issue[heads[hd]] = 1'b1;
 				  	next_robentry_islot_o[heads[hd]] = 2'b01;
@@ -421,50 +431,52 @@ begin
 			  	end
 				end
 			end
-			if (NFPU > 0) begin
-				if (!issued_fpu0 && fpu0_idle && rob[heads[hd]].decbus.fpu && rob[heads[hd]].out[0]==2'b00) begin
-			  	next_robentry_fpu_issue[heads[hd]] = 1'b1;
-			  	next_robentry_islot_o[heads[hd]] = 2'b00;
-			  	issued_fpu0 = 1'b1;
-			  	next_fpu0_rndx = heads[hd];
-			  	next_fpu0_rndxv = 1'b1;
-				end
-			end
-			if (NFPU > 1) begin
-				if (!issued_fpu1 && fpu1_idle && rob[heads[hd]].decbus.fpu && rob[heads[hd]].out[0]==2'b00 && !rob[heads[hd]].decbus.fpu0) begin
-					if (!next_robentry_fpu_issue[heads[hd]]) begin
+			if (!rob[heads[hd]].decbus.cpytgt) begin
+				if (NFPU > 0) begin
+					if (!issued_fpu0 && fpu0_idle && rob[heads[hd]].decbus.fpu && rob[heads[hd]].out[0]==2'b00) begin
 				  	next_robentry_fpu_issue[heads[hd]] = 1'b1;
-				  	next_robentry_islot_o[heads[hd]] = 2'b01;
-				  	issued_fpu1 = 1'b1;
-				  	next_fpu1_rndx = heads[hd];
-				  	next_fpu1_rndxv = 1'b1;
-			  	end
+				  	next_robentry_islot_o[heads[hd]] = 2'b00;
+				  	issued_fpu0 = 1'b1;
+				  	next_fpu0_rndx = heads[hd];
+				  	next_fpu0_rndxv = 1'b1;
+					end
 				end
-			end
-			// Issue flow controls in order, one at a time
-			if (!issued_fcu && fcu_idle && rob[heads[hd]].decbus.fc && !rob[heads[hd]].done[1] && !rob[heads[hd]].out[1] &&
-			 (SUPPORT_OOOFC ? 1'b1 : !fnPriorFC(heads[hd]))) begin
-		  	next_robentry_fcu_issue[heads[hd]] = 1'b1;
-		  	issued_fcu = 1'b1;
-		  	next_fcu_rndx = heads[hd];
-		  	next_fcu_rndxv = 1'b1;
-			end
+				if (NFPU > 1) begin
+					if (!issued_fpu1 && fpu1_idle && rob[heads[hd]].decbus.fpu && rob[heads[hd]].out[0]==2'b00 && !rob[heads[hd]].decbus.fpu0) begin
+						if (!next_robentry_fpu_issue[heads[hd]]) begin
+					  	next_robentry_fpu_issue[heads[hd]] = 1'b1;
+					  	next_robentry_islot_o[heads[hd]] = 2'b01;
+					  	issued_fpu1 = 1'b1;
+					  	next_fpu1_rndx = heads[hd];
+					  	next_fpu1_rndxv = 1'b1;
+				  	end
+					end
+				end
+				// Issue flow controls in order, one at a time
+				if (!issued_fcu && fcu_idle && rob[heads[hd]].decbus.fc && !rob[heads[hd]].done[1] && !rob[heads[hd]].out[1] &&
+				 (SUPPORT_OOOFC ? 1'b1 : !fnPriorFC(heads[hd]))) begin
+			  	next_robentry_fcu_issue[heads[hd]] = 1'b1;
+			  	issued_fcu = 1'b1;
+			  	next_fcu_rndx = heads[hd];
+			  	next_fcu_rndxv = 1'b1;
+				end
 
-			if (!issued_agen0 && agen0_idle && rob[heads[hd]].decbus.mem && !rob[heads[hd]].done[0] && !rob[heads[hd]].out[0]) begin
-				next_robentry_agen_issue[heads[hd]] = 1'b1;
-		  	next_robentry_islot_o[heads[hd]] = 2'b00;
-				issued_agen0 = 1'b1;
-				next_agen0_rndx = heads[hd];
-				next_agen0_rndxv = 1'b1;
-			end
-			if (NAGEN > 1) begin
-				if (!issued_agen1 && agen1_idle && rob[heads[hd]].decbus.mem && !rob[heads[hd]].done[0] && !rob[heads[hd]].out[0]) begin
-					if (!next_robentry_agen_issue[heads[hd]]) begin
-						next_robentry_agen_issue[heads[hd]] = 1'b1;
-				  	next_robentry_islot_o[heads[hd]] = 2'b01;
-						issued_agen1 = 1'b1;
-						next_agen1_rndx = heads[hd];
-						next_agen1_rndxv = 1'b1;
+				if (!issued_agen0 && agen0_idle && rob[heads[hd]].decbus.mem && !rob[heads[hd]].done[0] && !rob[heads[hd]].out[0]) begin
+					next_robentry_agen_issue[heads[hd]] = 1'b1;
+			  	next_robentry_islot_o[heads[hd]] = 2'b00;
+					issued_agen0 = 1'b1;
+					next_agen0_rndx = heads[hd];
+					next_agen0_rndxv = 1'b1;
+				end
+				if (NAGEN > 1) begin
+					if (!issued_agen1 && agen1_idle && rob[heads[hd]].decbus.mem && !rob[heads[hd]].done[0] && !rob[heads[hd]].out[0]) begin
+						if (!next_robentry_agen_issue[heads[hd]]) begin
+							next_robentry_agen_issue[heads[hd]] = 1'b1;
+					  	next_robentry_islot_o[heads[hd]] = 2'b01;
+							issued_agen1 = 1'b1;
+							next_agen1_rndx = heads[hd];
+							next_agen1_rndxv = 1'b1;
+						end
 					end
 				end
 			end
