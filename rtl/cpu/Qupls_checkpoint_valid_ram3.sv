@@ -39,7 +39,7 @@
 
 import QuplsPkg::*;
 
-module Qupls_checkpoint_valid_ram3(rst, clka, en, wr, wc, wa, setall, i, clkb, rc, ra, o);
+module Qupls_checkpoint_valid_ram3(rst, clka, en, wr, wc, wa, awa, setall, i, clkb, rc, ra, o);
 parameter BANKS=1;
 parameter NPORT=8;
 parameter NRDPORT=17;
@@ -49,6 +49,7 @@ input en;
 input [NPORT-1:0] wr;
 input checkpt_ndx_t [NPORT-1:0] wc;
 input pregno_t [NPORT-1:0] wa;
+input aregno_t [NPORT-1:0] awa;		// debugging
 input setall;
 input [NPORT-1:0] i;
 input clkb;
@@ -66,12 +67,19 @@ end
 
 always_ff @(posedge clka)
 for (n = 0; n < NPORT; n = n + 1)
-if (en) begin
+if (en|1'b1) begin
 	if (wr[n]) begin
 		if (setall)
 			mem[wa[n]] <= {NCHECK{1'b1}};
-		else
+		else begin
 			mem[wa[n]][wc[n]] <= i[n];
+			/*
+			if (awa[n]==9'd68 && i[n]) begin
+				$display("Q+ RAT: chkpt ram wrote a 1 to r%d/%d", awa[n], wa[n]);
+				$finish;
+			end
+			*/
+		end
 	end
 end
 

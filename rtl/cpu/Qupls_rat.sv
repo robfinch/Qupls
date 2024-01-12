@@ -165,17 +165,18 @@ Qupls_checkpointRam #(.BANKS(BANKS)) cpram1
 reg [7:0] cpv_wr;
 checkpt_ndx_t [7:0] cpv_wc;
 pregno_t [7:0] cpv_wa;
+aregno_t [7:0] cpv_awa;
 reg [7:0] cpv_i;
 wire [NPORT-1:0] cpv_o;
-
+/*
 always_comb cpv_wr[0] = stomp_act ? stomp_r[{stomp_cnt,3'd0}] : cmtav;
 always_comb cpv_wr[1] = stomp_act ? stomp_r[{stomp_cnt,3'd1}] : cmtbv;
 always_comb cpv_wr[2] = stomp_act ? stomp_r[{stomp_cnt,3'd2}] : cmtcv;
 always_comb cpv_wr[3] = stomp_act ? stomp_r[{stomp_cnt,3'd3}] : cmtdv;
-always_comb cpv_wr[4] = stomp_act ? stomp_r[{stomp_cnt,3'd4}] : wra != 7'd0 && wr0;
-always_comb cpv_wr[5] = stomp_act ? stomp_r[{stomp_cnt,3'd5}] : wrb != 7'd0 && wr1;
-always_comb cpv_wr[6] = stomp_act ? stomp_r[{stomp_cnt,3'd6}] : wrc != 7'd0 && wr2;
-always_comb cpv_wr[7] = stomp_act ? stomp_r[{stomp_cnt,3'd7}] : wrd != 7'd0 && wr3;
+always_comb cpv_wr[4] = stomp_act ? stomp_r[{stomp_cnt,3'd4}] : wra != 9'd0 && wr0;
+always_comb cpv_wr[5] = stomp_act ? stomp_r[{stomp_cnt,3'd5}] : wrb != 9'd0 && wr1;
+always_comb cpv_wr[6] = stomp_act ? stomp_r[{stomp_cnt,3'd6}] : wrc != 9'd0 && wr2;
+always_comb cpv_wr[7] = stomp_act ? stomp_r[{stomp_cnt,3'd7}] : wrd != 9'd0 && wr3;
 always_comb cpv_wc[0] = stomp_act ? rob[{stomp_cnt,3'd0}].cndx : cmta_cp;
 always_comb cpv_wc[1] = stomp_act ? rob[{stomp_cnt,3'd1}].cndx : cmtb_cp;
 always_comb cpv_wc[2] = stomp_act ? rob[{stomp_cnt,3'd2}].cndx : cmtc_cp;
@@ -200,6 +201,47 @@ always_comb cpv_i[4] = stomp_act;
 always_comb cpv_i[5] = stomp_act;
 always_comb cpv_i[6] = stomp_act;
 always_comb cpv_i[7] = stomp_act;
+*/
+always_comb cpv_wr[0] = cmtav;
+always_comb cpv_wr[1] = cmtbv;
+always_comb cpv_wr[2] = cmtcv;
+always_comb cpv_wr[3] = cmtdv;
+always_comb cpv_wr[4] = wra != 9'd0 && wr0;
+always_comb cpv_wr[5] = wrb != 9'd0 && wr1;
+always_comb cpv_wr[6] = wrc != 9'd0 && wr2;
+always_comb cpv_wr[7] = wrd != 9'd0 && wr3;
+always_comb cpv_wc[0] = cmta_cp;
+always_comb cpv_wc[1] = cmtb_cp;
+always_comb cpv_wc[2] = cmtc_cp;
+always_comb cpv_wc[3] = cmtd_cp;
+always_comb cpv_wc[4] = wra_cp;
+always_comb cpv_wc[5] = wrb_cp;
+always_comb cpv_wc[6] = wrc_cp;
+always_comb cpv_wc[7] = wrd_cp;
+always_comb cpv_wa[0] = cmtap;
+always_comb cpv_wa[1] = cmtbp;
+always_comb cpv_wa[2] = cmtcp;
+always_comb cpv_wa[3] = cmtdp;
+always_comb cpv_wa[4] = wrra;
+always_comb cpv_wa[5] = wrrb;
+always_comb cpv_wa[6] = wrrc;
+always_comb cpv_wa[7] = wrrd;
+always_comb cpv_awa[0] = cmtaa;
+always_comb cpv_awa[1] = cmtba;
+always_comb cpv_awa[2] = cmtca;
+always_comb cpv_awa[3] = cmtda;
+always_comb cpv_awa[4] = wra;
+always_comb cpv_awa[5] = wrb;
+always_comb cpv_awa[6] = wrc;
+always_comb cpv_awa[7] = wrd;
+always_comb cpv_i[0] = VAL;
+always_comb cpv_i[1] = VAL;
+always_comb cpv_i[2] = VAL;
+always_comb cpv_i[3] = VAL;
+always_comb cpv_i[4] = INV;
+always_comb cpv_i[5] = INV;
+always_comb cpv_i[6] = INV;
+always_comb cpv_i[7] = INV;
 
 Qupls_checkpoint_valid_ram3 #(.NRDPORT(NPORT)) ucpr2
 (
@@ -209,6 +251,7 @@ Qupls_checkpoint_valid_ram3 #(.NRDPORT(NPORT)) ucpr2
 	.wr(cpv_wr),
 	.wc(cpv_wc),
 	.wa(cpv_wa),
+	.awa(cpv_awa),
 	.setall(1'b0),
 	.i(cpv_i),
 	.clkb(~clk),
@@ -311,12 +354,16 @@ generate begin : gRRN
 					begin
 						if (rn[g]==9'd0)
 							vn[g] = 1'b1;
+						else if (rrn[g]==10'd1023)
+							vn[g] = 1'b1;
 						else
 							vn[g] = cpv_o[g];
 					end
 				// Second instruction of group, bypass only if first instruction target is same.
 				4'd4,4'd5,4'd6:
 					if (rn[g]==9'd0)
+						vn[g] = 1'b1;
+					else if (rrn[g]==10'd1023)
 						vn[g] = 1'b1;
 					else if (rrn[g]==cpv_wa[0] && cpv_wr[0] && cpv_wc[0]==rn_cp[g])
 						vn[g] = cpv_i[0];
@@ -327,6 +374,8 @@ generate begin : gRRN
 				// Third instruction, check two previous ones.
 				4'd8,4'd9,4'd10:
 					if (rn[g]==9'd0)
+						vn[g] = 1'b1;
+					else if (rrn[g]==10'd1023)
 						vn[g] = 1'b1;
 					else if (rrn[g]==cpv_wa[1] && cpv_wr[1] && cpv_wc[1]==rn_cp[g])
 						vn[g] = cpv_i[1];
@@ -342,6 +391,8 @@ generate begin : gRRN
 				4'd12,4'd13,4'd14:
 					begin
 						if (rn[g]==9'd0)
+							vn[g] = 1'b1;
+						else if (rrn[g]==10'd1023)
 							vn[g] = 1'b1;
 						else if (rrn[g]==cpv_wa[2] && cpv_wr[2] && cpv_wc[2]==rn_cp[g])
 							vn[g] = cpv_i[2];
@@ -359,7 +410,7 @@ generate begin : gRRN
 							vn[g] = cpv_o[g];
 					end
 				endcase
-				
+				/*
 				if (rrn[g]==prev_rn0 && prev_vn0)
 					vn[g] <= 1'b0;
 				if (rrn[g]==prev_rn1 && prev_vn1)
@@ -368,10 +419,18 @@ generate begin : gRRN
 					vn[g] <= 1'b0;
 				if (rrn[g]==prev_rn3 && prev_vn3)
 					vn[g] <= 1'b0;
+				*/
 			end
 	end
 end
 endgenerate
+
+always_ff @(posedge clk)
+begin
+	if (rn[0]==rn[2] && rn[0]==9'd68) begin
+		$display("Q+ RAT: r68/%d %d vn= %d %d", rrn[0], rrn[2], vn[0], vn[2]);
+	end
+end
 
 /* Debugging.
    The register may be bypassed to a previous target register which is non-zero.

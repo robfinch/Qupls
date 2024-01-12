@@ -87,7 +87,7 @@ fta_cmd_response128_t ptable_resp;
 real IPC,PIPC;
 integer nn,mm,n2,n3,n4,m4,n5,n6,n7,n8,n9,n10,n11,n12,n13,n14,n15,n17;
 integer n16r, n16c, n12r, n12c, n14r, n14c, n17r, n17c, n18r, n18c;
-integer n19,n20,n21,n22,n23,n24,n25,n26,n27,n28,i;
+integer n19,n20,n21,n22,n23,n24,n25,n26,n27,n28,n29,i;
 genvar g,h;
 rndx_t alu0_re;
 reg [127:0] message;
@@ -423,6 +423,7 @@ rob_ndx_t fcu_rndx;
 wire tlb0_v, tlb1_v;
 
 reg agen0_idle;
+reg agen0_idle1;
 instruction_t agen0_op;
 rob_ndx_t agen0_id;
 value_t agen0_argA;
@@ -432,6 +433,8 @@ pc_address_t agen0_pc;
 aregno_t agen0_aRa;
 aregno_t agen0_aRb;
 aregno_t agen0_aRt;
+pregno_t agen0_Ra;
+pregno_t agen0_Rb;
 pregno_t agen0_Rt;
 reg [3:0] agen0_cp;
 cause_code_t agen0_exc;
@@ -582,6 +585,7 @@ reg commit3_idv;
 
 // CSRs
 reg [63:0] tick;
+reg [39:0] ren_stalls;
 cause_code_t [3:0] cause;
 status_reg_t sr_stack [0:8];
 status_reg_t sr;
@@ -643,8 +647,8 @@ assign rf_reg[7] = fpu0_argC_reg;
 assign rf_reg[8] = fcu_argA_reg;
 assign rf_reg[9] = fcu_argB_reg;
 
-assign rf_reg[10] = agen0_argA_reg;
-assign rf_reg[11] = agen0_argB_reg;
+assign rf_reg[10] = agen0_Ra;
+assign rf_reg[11] = agen0_Rb;
 
 assign rf_reg[12] = agen1_argA_reg;
 assign rf_reg[13] = agen1_argB_reg;
@@ -1818,6 +1822,7 @@ wire [16:0] arnv;
 pregno_t [16:0] prn;
 checkpt_ndx_t rn_cp [0:16];
 wire [16:0] prnv;
+reg [16:0] prnvv;
 wire [0:0] arnbank [16:0];
 
 assign arn[0] = db0_q.Ra;
@@ -1879,8 +1884,8 @@ assign arnbank[15] = sr.om & {2{|db3_q.Rt}} & 0;
 assign arnbank[16] = 1'b0;
 
 
-wire stallq, rat_stallq;
-always_comb advance_pipeline = !stallq && !rat_stallq;
+wire stallq, rat_stallq, ren_stallq;
+always_comb advance_pipeline = !stallq && !rat_stallq && !ren_stallq;
 reg nq0,nq1,nq2,nq3;
 ibh_t ibh;
 always_comb
@@ -1913,7 +1918,7 @@ end
 always_comb
 	room_for_que = enqueue_room > 3'd3;
 assign nq = !(branchmiss || branchmiss_state < 3'd4) && advance_pipeline && room_for_que && !stomp_q;
-assign stallq = !rstcnt[2] || rat_stallq || !room_for_que;
+assign stallq = !rstcnt[2] || rat_stallq || ren_stallq || !room_for_que;
 
 reg signed [$clog2(ROB_ENTRIES):0] cmtlen;			// Will always be >= 0
 reg signed [$clog2(ROB_ENTRIES):0] group_len;		// Commit group length
@@ -2003,7 +2008,8 @@ Qupls_reg_renamer3 utrn1
 	.wv1(Rt1_qv),
 	.wv2(Rt2_qv),
 	.wv3(Rt3_qv),
-	.avail(avail_reg)
+	.avail(avail_reg),
+	.stall(ren_stallq)
 );
 always_comb Rt0_q1 = Rt0_q;// & {10{~db0_q.Rtz & ~stomp0}};
 always_comb Rt1_q1 = Rt1_q;// & {10{~db1_q.Rtz & ~stomp1}};
@@ -2055,7 +2061,7 @@ Qupls_rat urat1
 	.stallq(rat_stallq),
 	.cndx_o(cndx),
 	.rob(rob),
-	.stomp(32'd0/*robentry_stomp & {32{branchmiss_state==3'd4}}*/),
+	.stomp(robentry_stomp),// & {32{branchmiss_state==3'd4}}),
 	.avail_i(avail_reg),
 	.restore(restore_chkpt),
 	.miss_cp(rob[missid].cndx),
@@ -2347,18 +2353,22 @@ reg wrport3_aRtz;
 reg wrport4_aRtz;
 reg wrport5_aRtz;
 
+// Do not update the register file if the architectural register is zero.
+// A dud rename register is used for architectural register zero, and it
+// should not be updated. The register file bypasses physical 
+// register zero to zero.
 always_comb wrport0_aRtz = alu0_aRtz;
 always_comb wrport1_aRtz = alu1_aRtz;
 always_comb wrport2_aRtz = dram_aRtz0;
 always_comb wrport3_aRtz = fpu0_aRtz;
 always_comb wrport4_aRtz = dram_aRtz1;
 always_comb wrport5_aRtz = fpu1_aRtz;
-always_comb wrport0_v = alu0_done;
-always_comb wrport1_v = alu1_done && NALU > 1;
-always_comb wrport2_v = dram_v0;
-always_comb wrport3_v = fpu0_done && !fpu0_idle && NFPU > 0;
-always_comb wrport4_v = dram_v1 && NDATA_PORTS > 1;
-always_comb wrport5_v = fpu1_done && !fpu1_idle && NFPU > 1;
+always_comb wrport0_v = alu0_done && !alu0_aRtz;
+always_comb wrport1_v = alu1_done && !alu1_aRtz && NALU > 1;
+always_comb wrport2_v = dram_v0 && !dram_aRtz0;
+always_comb wrport3_v = fpu0_done && !fpu0_aRtz && !fpu0_idle && NFPU > 0;
+always_comb wrport4_v = dram_v1 && !dram_aRtz1 && NDATA_PORTS > 1;
+always_comb wrport5_v = fpu1_done && !fpu1_aRtz && !fpu1_idle && NFPU > 1;
 assign wrport0_Rt = alu0_Rt;
 assign wrport0_aRt = alu0_aRt;
 assign wrport1_Rt = NALU > 1 ? alu1_Rt : 9'd0;
@@ -2393,10 +2403,10 @@ Qupls_regfile4w15r urf1 (
 	.wa1(wrport1_Rt),
 	.wa2(wrport2_Rt),
 	.wa3(wrport3_Rt),
-	.i0(wrport0_aRtz ? 64'd0 : wrport0_res),
-	.i1(wrport1_aRtz ? 64'd0 : wrport1_res),
-	.i2(wrport2_aRtz ? 64'd0 : wrport2_res),
-	.i3(wrport3_aRtz ? 64'd0 : wrport3_res),
+	.i0(wrport0_res),
+	.i1(wrport1_res),
+	.i2(wrport2_res),
+	.i3(wrport3_res),
 	.rclk(clk),
 	.ra(rf_reg),
 	.o(rfo)
@@ -2681,7 +2691,7 @@ Qupls_sched uscd1
 	.fpu0_idle(NFPU > 0 ? fpu0_idle : 1'd0),
 	.fpu1_idle(NFPU > 1 ? fpu1_idle : 1'd0),
 	.fcu_idle(fcu_idle),
-	.agen0_idle(agen0_idle),
+	.agen0_idle(agen0_idle1),
 	.agen1_idle(1'b0),
 	.lsq0_idle(lsq0_idle),
 	.lsq1_idle(lsq1_idle),
@@ -3707,18 +3717,24 @@ if (rst) begin
 	agen0_op <= {33'd0,OP_NOP};
 	agen0_cp <= 4'd0;
 	agen0_aRt <= 9'd0;
+	agen0_Ra <= 11'd0;
+	agen0_Rb <= 11'd0;
 	agen0_Rt <= 11'd0;
+	agen0_idle1 <= 1'b0;
 end
 else begin
-	if (agen0_rndxv && agen0_idle) begin
+	agen0_idle1 <= agen0_idle;
+	if (agen0_rndxv && agen0_idle1) begin
 		agen0_id <= agen0_rndx;
-		agen0_argA <= rob[agen0_rndx].decbus.imma | (~|rob[agen0_rndx].op.aRa ? 64'd0 : rfo_agen0_argA);
-		agen0_argB <= ~|rob[agen0_rndx].op.aRb ? 64'd0 : rfo_agen0_argB;
+		agen0_argA <= rob[agen0_rndx].decbus.imma | rfo_agen0_argA;
+		agen0_argB <= rfo_agen0_argB;
 		agen0_argI <= rob[agen0_rndx].decbus.immb;
 		agen0_pc <= rob[agen0_rndx].pc;
 		agen0_aRa <= rob[agen0_rndx].decbus.Ra;
 		agen0_aRb <= rob[agen0_rndx].decbus.Rb;
 		agen0_Rt <= rob[agen0_rndx].nRt;
+		agen0_Ra <= agen0_argA_reg;
+		agen0_Rb <= agen0_argB_reg;
 		agen0_aRt <= rob[agen0_rndx].decbus.Rt;
 		agen0_op <= rob[agen0_rndx].op;
 		agen0_cp <= rob[agen0_rndx].cndx;
@@ -3761,6 +3777,17 @@ reg dram0_idv2;
 reg fcu_setflags;
 always_comb
 	fcu_setflags = fcu_v && rob[fcu_id].v && fcu_v3 && !robentry_stomp[fcu_id] && branchmiss_state==3'd7 && fcu_idv;
+
+always_comb
+for (n29 = 0; n29 < 17; n29 = n29 + 1)
+	prnvv[n29] = prnv[n29]
+		|| (prn[n29]==wrport0_Rt && wrport0_v)
+		|| (prn[n29]==wrport1_Rt && wrport1_v)
+		|| (prn[n29]==wrport2_Rt && wrport2_v)
+		|| (prn[n29]==wrport3_Rt && wrport3_v)
+		|| (prn[n29]==wrport4_Rt && wrport4_v)
+		|| (prn[n29]==wrport5_Rt && wrport5_v)
+		;
 
 always_ff @(posedge clk)
 if (rst) begin
@@ -3842,7 +3869,9 @@ else begin
 			for (n12 = 0; n12 < ROB_ENTRIES; n12 = n12 + 1)
 				rob[n12].sn <= rob[n12].sn - 4;
 			tEnque(8'h80-XWID,db0_q,pc0_q,grp_q,ins0_q,pt0_q,tail0,
-				stomp0, 1'b0, prn[0], prn[1], prn[2], prn[3], Rt0_q, prnv[0], prnv[1], prnv[2], prnv[3],
+				stomp0, 1'b0,
+				prn[0], prn[1], prn[2], prn[3], Rt0_q,
+				prnvv[0], prnvv[1], prnvv[2], prnvv[3],
 				cndx, grplen0, last0);
 			if (prn[0]==11'd0 && db0_q.Ra!=9'd0) begin
 				$display("Enque0: Ra mapped to zero.");
@@ -3851,7 +3880,7 @@ else begin
 			
 			if (XWID > 1) begin
 				tEnque(8'h81-XWID,db1_q,pc1_q,grp_q,ins1_q,pt1_q,tail1,
-					stomp1, ornop1, prn[4], prn[5], prn[6], prn[7], Rt1_q, prnv[4], prnv[5], prnv[6], prnv[7],
+					stomp1, ornop1, prn[4], prn[5], prn[6], prn[7], Rt1_q, prnvv[4], prnvv[5], prnvv[6], prnvv[7],
 					cndx, grplen1, last1);
 				if (prn[4]==11'd0 && db1_q.Ra!=9'd0) begin
 					$display("Enque1: Ra mapped to zero.");
@@ -3862,7 +3891,7 @@ else begin
 					// time to be available for the source register.
 				if (db1_q.Ra==db0_q.Rt && db1_q.Ra!=9'd0) begin 
 					rob[tail1].pRa <= Rt0_q;
-					rob[tail1].argA_v <= fnSourceAv(ins1_q) | db1_q.has_imma | prnv[3];
+					rob[tail1].argA_v <= fnSourceAv(ins1_q) | db1_q.has_imma;
 					if (Rt0_q==11'd00) begin
 						$display("Enque1a: physical target register is zero.");
 					end
@@ -3874,7 +3903,7 @@ else begin
 			
 			if (XWID > 2) begin
 				tEnque(8'h82-XWID,db2_q,pc2_q,grp_q,ins2_q,pt2_q,tail2,
-					stomp2, ornop2, prn[8], prn[9], prn[10], prn[11], Rt2_q, prnv[8], prnv[9], prnv[10], prnv[11],
+					stomp2, ornop2, prn[8], prn[9], prn[10], prn[11], Rt2_q, prnvv[8], prnvv[9], prnvv[10], prnvv[11],
 					cndx, grplen2, last3);
 				if (prn[8]==11'd0 && db2_q.Ra!=9'd0) begin
 					$display("Enque2: Ra mapped to zero.");
@@ -3882,7 +3911,7 @@ else begin
 				if (db2_q.Ra==db0_q.Rt && db2_q.Ra!=9'd0) begin
 					$display("Enque2: Ra bypassed to %d.", Rt0_q);
 					rob[tail2].pRa <= Rt0_q;
-					rob[tail2].argA_v <= fnSourceAv(ins2_q) | db2_q.has_imma | prnv[3];
+					rob[tail2].argA_v <= fnSourceAv(ins2_q) | db2_q.has_imma;
 					if (Rt0_q==11'd00) begin
 						$display("Enque2a0: physical target register is zero.");
 					end
@@ -3892,7 +3921,7 @@ else begin
 				if (db2_q.Ra==db1_q.Rt && db2_q.Ra!=9'd0) begin
 					$display("Enque2: Ra bypassed to %d.", Rt1_q);
 					rob[tail2].pRa <= Rt1_q;
-					rob[tail2].argA_v <= fnSourceAv(ins2_q) | db2_q.has_imma | prnv[7];
+					rob[tail2].argA_v <= fnSourceAv(ins2_q) | db2_q.has_imma;
 					if (Rt1_q==11'd00) begin
 						$display("Enque2a1: physical target register is zero.");
 					end
@@ -3904,7 +3933,7 @@ else begin
 
 			if (XWID > 3) begin
 				tEnque(8'h83-XWID,db3_q,pc3_q,grp_q,ins3_q,pt3_q,tail3,
-					stomp3, ornop3, prn[12], prn[13], prn[14], prn[15], Rt3_q, prnv[12], prnv[13], prnv[14], prnv[15],
+					stomp3, ornop3, prn[12], prn[13], prn[14], prn[15], Rt3_q, prnvv[12], prnvv[13], prnvv[14], prnvv[15],
 					cndx,grplen3,last3);
 				if (prn[12]==11'd0 && db3_q.Ra!=9'd0) begin
 					$display("Enque3: Ra mapped to zero.");
@@ -3912,7 +3941,7 @@ else begin
 				if (db3_q.Ra==db0_q.Rt && db3_q.Ra!=9'd0) begin
 					$display("Enque3: Ra bypassed to %d.", Rt0_q);
 					rob[tail3].pRa <= Rt0_q;
-					rob[tail3].argA_v <= fnSourceAv(ins3_q) | db3_q.has_imma | prnv[3];
+					rob[tail3].argA_v <= fnSourceAv(ins3_q) | db3_q.has_imma;
 					if (Rt0_q==11'd00) begin
 						$display("Enque3a0: physical target register is zero.");
 					end
@@ -3922,7 +3951,7 @@ else begin
 				if (db3_q.Ra==db1_q.Rt && db3_q.Ra!=9'd0) begin
 					$display("Enque3: Ra bypassed to %d.", Rt1_q);
 					rob[tail3].pRa <= Rt1_q;
-					rob[tail3].argA_v <= fnSourceAv(ins3_q) | db3_q.has_imma | prnv[7];
+					rob[tail3].argA_v <= fnSourceAv(ins3_q) | db3_q.has_imma;
 					if (Rt1_q==11'd00) begin
 						$display("Enque3a1: physical target register is zero.");
 					end
@@ -3932,7 +3961,7 @@ else begin
 				if (db3_q.Ra==db2_q.Rt && db3_q.Ra!=9'd0) begin
 					$display("Enque3: Ra bypassed to %d.", Rt2_q);
 					rob[tail3].pRa <= Rt2_q;
-					rob[tail3].argA_v <= fnSourceAv(ins3_q) | db3_q.has_imma | prnv[11];
+					rob[tail3].argA_v <= fnSourceAv(ins3_q) | db3_q.has_imma;
 					if (Rt2_q==11'd00) begin
 						$display("Enque3a2: physical target register is zero.");
 					end
@@ -4036,7 +4065,7 @@ else begin
 		fcu_v <= VAL;
 	end
 
-	if (agen0_rndxv && agen0_idle) begin
+	if (agen0_rndxv && agen0_idle1) begin
 		agen0_idle <= FALSE;
 		agen0_idv <= VAL;
 		store_argC_aReg <= rob[agen0_rndx].decbus.Ra;
@@ -4070,7 +4099,7 @@ else begin
 	// valid. A flag, load_lsq_argc, is set to delay by a clock. This flag pulses
 	// for only a single clock cycle.
 	if (lsq[store_argC_id1.row][store_argC_id1.col].v==VAL && lsq[store_argC_id1.row][store_argC_id1.col].store && lsq[store_argC_id1.row][store_argC_id1.col].datav==INV) begin
-		if (prnv[16]|store_argC_v)
+		if (prnvv[16]|store_argC_v)
 			load_lsq_argc <= TRUE;
 	end
 	if (load_lsq_argc) begin
@@ -4385,7 +4414,7 @@ else begin
 	// Validate arguments
 
 	for (nn = 0; nn < ROB_ENTRIES; nn = nn + 1) begin
-
+		
 		// ALU0
 		if (rob[nn].argA_v == INV && rob[nn].pRa == wrport0_Rt && rob[nn].v == VAL && wrport0_v == VAL)
 	    rob[nn].argA_v <= VAL;
@@ -4997,6 +5026,8 @@ else begin
 		rob[scan+3].cndx <= cndx;
 	end
 	*/
+	if (ren_stallq)
+		ren_stalls <= ren_stalls + 2'd1;
 end
 
 // External bus arbiter. Simple priority encoded.
@@ -5228,6 +5259,7 @@ always_ff @(posedge clk) begin: clock_n_debug
 	IPC = real'(I)/real'(tick);
 	PIPC = PIPC > IPC ? PIPC : IPC;
 	$display("Clock ticks: %d Instructions: %d:%d IPC: %f Peak: %f", tick, I, IV, IPC, PIPC);
+	$display("Stalls due to renamer: %d", ren_stalls);
 	$display("I-Cache hit clocks: %d", icache_cnt);
 end
 end
@@ -5304,6 +5336,7 @@ task tReset;
 begin
 	I <= 0;
 	IV <= 0;
+	ren_stalls <= 0;
 	micro_ir <= {33'd0,OP_NOP};
 	for (n14 = 0; n14 < 4; n14 = n14 + 1) begin
 		kvec[n14] <= RSTPC;
@@ -5525,8 +5558,6 @@ begin
 	rob[tail].argB_v <= fnSourceBv(ins) | pRbv | db.has_immb;
 	rob[tail].argC_v <= fnSourceCv(ins) | pRcv | db.has_immc;
 	rob[tail].argT_v <= fnSourceTv(ins) | pRtv;
-//	rob[tail].argP_v <= fnSourcePv(ins) | pRpv | no_pred;
-//	rob[tail].argT_v <= fnSourceTv(ins) | pRtv | no_pred;
 	// "static" fields, these fields remain constant after enqueue
 	rob[tail].brtgt <= fnTargetIP(pc,db.immc);
 	rob[tail].mcbrtgt <= db.immc[11:0];
@@ -5547,7 +5578,10 @@ begin
 	rob[tail].pRb <= pRb;
 	rob[tail].pRc <= pRc;
 	rob[tail].pRt <= pRt;
-	rob[tail].nRt <= nRt;	//db.Rtz ? 8'd0 : nRt;	//Rt0_q is "sticky", override
+	// Architectural register zero is not renamed, physical register zero is
+	// used which will always read as zero. The renamer will not assign
+	// physical register zero when registers are being renamed.
+	rob[tail].nRt <= db.Rtz ? 11'd0 : nRt;
 	rob[tail].group_len <= grplen;
 	rob[tail].last <= last;
 	rob[tail].v <= VAL;
