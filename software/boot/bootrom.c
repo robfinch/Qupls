@@ -1,7 +1,11 @@
+extern void SerialInit(void);
+extern void SerialTest(void);
+
+int another_var;
 
 /* Display blinking LEDs while delaying to show CPU is working.
 */
-private void Delay3s(void)
+private inline(0) void Delay3s(void)
 {
 	__int64* leds = 0x0FEDFFF00;
 	int cnt;
@@ -12,12 +16,13 @@ private void Delay3s(void)
 
 public void bootrom(void)
 {
-	int* PTBR = 0xfff4ff20;
 	int* pgtbl = 0xfff80000;
+	int* PTBR = 0xfff4ff20;
+	__int64* leds = 0x0FEDFFF00;
 	int cnt;
 	__int32* pRand;
 
-	*PTBR = 0xfff80000;	
+	*PTBR = &pgtbl[0];
 	pRand = 0xFEE1FD00;
 	
 	__sync(0x0FFFF);
@@ -30,9 +35,11 @@ public void bootrom(void)
 	pgtbl[0x1EDC] = 0x83000FFFFFFFFEDC;	/* Keyboard */
 	pgtbl[0x1EE1] = 0x83000FFFFFFFFEE1;	/* random number generator */
 	__sync(0x0FFFF);
-	cnt = sizeof(pRand[1]);
+	leds[0] = -1;
 	pRand[1] = 0;						/* select random stream #0 */
 	pRand[2] = 0x99999999;	/* set random seed value */
 	pRand[3] = 0x99999999;
 	Delay3s();
+	SerialInit();
+	SerialTest();
 }

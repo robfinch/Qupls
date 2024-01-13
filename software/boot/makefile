@@ -7,7 +7,7 @@ CXX = cc64
 #CXX = opt
 CFLAGS2 = -c99 -ID:\cores2023\Qupls\software\inc\ -O=31
 #CFLAGS = -w -S -fno-exceptions
-CFLAGS = -w -fno-exceptions
+CFLAGS = -w -S -fno-exceptions -a21
 
 
 #
@@ -16,24 +16,28 @@ BIOS:
 	del boot_rom.bin
 	del boot_rom.lst
 	cc64 $(CFLAGS) bootrom.c
+	cc64 $(CFLAGS) serial.c
 	cc64 $(CFLAGS) SIEVE.c
 	cc64 $(CFLAGS) printf_again.c
 #	cc64 $(CFLAGS) os_stub.c
 
 	vasmQupls_std_win32.exe -Fvobj -Lbpl=5 -L bootrom.lst bootrom.asm -o bootrom.o
+	vasmQupls_std_win32.exe -Fvobj -Lbpl=5 -L serial.lst serial.asm -o serial.o
 	vasmQupls_std_win32.exe -Fvobj -L boot.lst boot.asm -o boot.o
 	vasmQupls_std_win32.exe -Fvobj -L reset_vector.lst reset_vector.asm -o reset_vector.o
 	vasmQupls_std_win32.exe -Fvobj -L ramtest.lst ramtest.asm -o ramtest.o
 	vasmQupls_std_win32.exe -Fvobj -L fibonacci.lst fibonacci.asm -o fibonacci.o
 	vasmQupls_std_win32.exe -Fvobj -Lbpl=5 -L sieve.lst sieve.asm -o sieve.o
 	vasmQupls_std_win32.exe -Fvobj -Lbpl=5 -L printf_again.lst printf_again.asm -o printf_again.o
+	vasmQupls_std_win32.exe -Fvobj -Lbpl=5 -L ..\cc64rt\source\cc64rt.lst ..\cc64rt\source\cc64rt.asm -o cc64rt.o
 	vasmQupls_std_win32.exe -Fvobj -Lbpl=5 -L ..\cc64rt\source\__store.lst ..\cc64rt\source\__store.asm -o __store.o
 	vasmQupls_std_win32.exe -Fvobj -Lbpl=5 -L ..\cc64rt\source\__load.lst ..\cc64rt\source\__load.asm -o __load.o
 #	vasmQupls_std_win32.exe -Fvobj -L LEDTest.lst LEDTest.asm -o LEDTest.o
 #	vasmrf68000_mot_win32.exe -Fvobj -L cputest.lst cputest.asm -o cputest.o
 #	vasmrf68000_mot_win32.exe -Fvobj -L boot.lst boot.asm -o boot.o -m68010
+#	vasmm68k_std_win32.exe -Fvobj -L boot.lst boot.asm -o boot.o -m68010
 #	vasmrfPhoenix_std_win32.exe -Fvobj -L add.lst add.asm -o add.o
-	vlink -T rom_bios.cmd -brawbin1 boot.o bootrom.o __store.o __load.o reset_vector.o -o boot.bin
+	vlink -M -T rom_bios.cmd -brawbin1 boot.o cc64rt.o __store.o __load.o reset_vector.o -o boot.bin
 	vlink -T ramtest.cmd -brawbin1 ramtest.o -o ramtest.bin
 	vlink -T rom_bios.cmd -brawbin1 fibonacci.o -o fibonacci.bin
 #	vlink -T rom_bios.cmd -brawbin1 __store.o __load.o printf_again.o sieve.o -o sieve.bin
