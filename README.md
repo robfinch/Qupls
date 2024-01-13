@@ -12,7 +12,7 @@ Work started on Qupls in November of 2023. Many years of work have gone into pri
 ### Features Out-of-Order version
 Fixed length instruction set.
 40-bit instructions.
-64-bit datapath
+64-bit datapath / support for 128-bit floats
 32 entry (or more) reorder entry buffer (ROB)
 64 general purpose registers, unified integer and float register file
 64 vector registers
@@ -25,13 +25,14 @@ The Qupls OoO machine is currently in development. The base machine has
 been undergoing simulation runs. A long way to go yet. Some synthesis runs have been performed to get a general idea of the timing. The goal is 40 MHz operation.
 
 ### Register File
-The register file contains 64 architectural registers and is unified, supporting integer and floating-point operations using the same set of registers. 
-There is a dedicated zero register, r0. There is also a register dedicated to refer to the stack canary or instruction pointer. Vector mask registers are also part of the general purpose register file and the same set of instructions may be applied to them as to other registers. A register is also dedicated to the stack pointer. The stack pointer is banked depending on processor operating mode.
+The register file contains 76 architectural registers and is unified, supporting integer and floating-point operations using the same set of registers. 
+There is a dedicated zero register, r0. There is also a register dedicated to refer to the stack canary or instruction pointer. Vector mask registers are also part of the general purpose register file and the same set of instructions may be applied to them as to other registers. A register is also dedicated to the stack pointer. The stack pointer is banked depending on processor operating mode. There are also separate stack pointers for each interrupt level (1 to 7).
 Five hidden registers are dedicated to micro-code use. They are only accessible from micro-code.
-Registers are renamed to remove dependencies. There are 256 physical registers available.
+Registers are renamed to remove dependencies. There are 256 physical registers available. 1536 physical registers are needed to support vector operations.
 
 ### Vector Register File
-The vector register file may contain up to 64 vector registers. Each vector register is made up of eight 64-bit elements, or a total of 512-bits. The vector register file is currently implemented in the same block RAM as the general purpose register file and shares renaming resources with the general purpose registers. Each vector element is renamed.
+The vector register file may contain up to 64 vector registers. Each vector register is made up of eight 64-bit elements or lanes, or a total of 512-bits. The vector register file is currently implemented in the same block RAM as the general purpose register file and shares renaming resources with the general purpose registers. Each vector element is renamed. The first 10 vector registers v0 to v9 are aliased with the general-purpose registers. v0 and r0 to r7 are the same.
+v1 and r8 to r15 are the same. And so on. That leaves 54 vector registers for general purpose use. 
 
 ### Instruction Length
 The author has found that in an FPGA the decode of variable length instruction length was on the critical timing path, limiting the maximum clock frequency and performance. So, instructions are fixed length so that hardware decoders can be positioned at specific locations. Making the instruction length fixed 40-bits aids the hardware in determining the location of instructions and the update of the instruction pointer.
@@ -67,6 +68,7 @@ The ISA supports many arithmetic operations including add, sub, mulitply and div
 ### Floating-point Operations
 The ISA supports floating-point add, subtract, multiply and divide instructions.
 Several floating-point ops have been added to the core, including fused multiply-add, reciprocal and reciprocal square root estimates and sine and cosine functions. Four precisions are directly supported: half, single, double, and quad.
+Quad precision operations are supported using register pairs and the quad precision extension modifier QFEXT. The modifier supplies the high order half of the quad precision values in the registers specified in the modifier. To perform a quad precision op the modifier is run through the ALU (not the FPU) to fetch the high half of the registers while the FPU fetches the low half. Then given both halves of registers the FPU can perform the quad precision operation. The result is written back to the register file using one write port from each of the ALU and FPU. Thus quad precision arithmetic may be performed.
 
 ### Large Constants
 Use of large constants is supported with immediate mode instructions that can shift the immediate constant by multiples of 20-bits. ADD, AND, OR, and EOR all have shifted immediate mode instructions. This is sufficient to allow most calculations using large constants to be perfomed using a minimum of instructions. A 64-bit constant may be loaded into a register using only three instructions.
@@ -85,7 +87,7 @@ There are bits in control register zero assigned for future use to indicate more
 The eventual goal is to support SIMD style vector instructions. The ISA is setup to support these. A large FPGA will be required to support the vector instructions with a full vector ALU. Vector operations mimic the scalar ones. There are no vector branches however. The current implementation implements vector instructions using micro-coded customized scalar instructions. This allows the vector instruction set to execute on the scalar engine. Having more functional units, for instance, multiple ALUs will improve the vector performance.
 
 ## Memory Management
-The core uses virtual addresses which are translated by a TLB. The MMU is internal to the core. The MMU page size is 64kB. This is quite large and was chosen to reduce the number of block RAMs required to implement a hashed page table. It was also based on the recommendation that the page size be at least 16kB to improve memory efficiency and performance. The large page size also means that the address space of the test system can be mapped using only a single level of tables.
+The core uses virtual addresses which are translated by a TLB. The MMU is internal to the core. The MMU page size is 64kB. This is quite large and was chosen to reduce the number of block RAMs required to implement a hashed page table. It was also based on the recommendation that the page size be at least 16kB to improve memory efficiency and performance. The large page size also means that the address space of the test system can be mapped using only a single level of tables. Many small apps <512MB can be managed using just a single MMU page.
 
 ### TLB
 The TLB is two-way associative with 128 entries per way. Instructions and data both use the same TLB and it is always enabled. The TLB is automatically loaded with translations allowing access to the system ROM at reset. One of the first tasks of the BIOS is to setup access to I/O devices so that something as simple as a LED display may happen.
@@ -99,7 +101,7 @@ There is a hardware page table walker. The table walker is triggered by a TLB mi
 The instruction cache is a four-way set associative cache, 32kB in size with a 512-bit line size. There is only a single level of cache. The cache is divided into even and odd lines which are both fetched when the PC changes. Using even / odd lines allows instructions to span cache lines.
 
 ### Data Cache
-The data cache is 64kB in size. The ISA and core implementation supports unaligned data accesses. 
+The data cache is 64kB in size. The ISA and core implementation supports unaligned data accesses. Unaligned access support is a configurable option as it increases the core size.
 
 # Software
 Qupls will use vasm and vlink to assemble and link programs. vlink is used 'out of the box'. A Qupls backend is being written for vasm. The CC64 compiler may be used for high-level work and compiles to vasm compatible source code.
@@ -111,7 +113,7 @@ Including only basic integer instructions the core is about 100,000 LUTs or 160,
 The toolset indicates the core should be able to reach 33 MHz operation. Under absolutely ideal conditions the core may execute four instructions per clock. All stages support processing at least four instructions per clock. Realistically the core will typically execute less than one instruction per clock.
 
 # Putting the Core Together
-There are many components to the CPU core. Some components are generic library components found elsewhere in Github repositories. All components specific to Qupls begin with name prefix "Qupls" and are in the Qupls repository.
+There are many components to the CPU core. Some components are generic library components found elsewhere in Github repositories. All components germaine to Qupls begin with name prefix "Qupls" and are in the Qupls repository.
 
 Qupls.sv is the top level for the CPU. Minimum of about 100k LUTs.
 QuplsMpu.sv is the top level for the MPU which contains the CPU, timers, and interrupt controller.
