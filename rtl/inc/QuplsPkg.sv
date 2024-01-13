@@ -53,7 +53,7 @@ parameter SIM = 1'b1;
 // Number of architectural registers there are in the core, including registers
 // not visible in the programming model. Each supported vector register counts
 // as eight registers.
-`define NREGS		74	// 330
+`define NREGS		80	// 330
 
 // Number of physical registers supporting the architectural ones and used in
 // register renaming. There must be significantly more physical registers than
@@ -117,6 +117,9 @@ parameter REP_BIT = 31;
 // This parameter indicates if to support vector instructions.
 parameter SUPPORT_VEC = 1'b1;
 parameter SUPPORT_PRED = 1'b1;
+
+// This parameter enables support for quad precision operations.
+parameter SUPPORT_QUAD_PRECISION = 1'b1;
 
 // Supporting load bypassing may improve performance, but will also increase the
 // size of the core and make it more vulnerable to security attacks.
@@ -359,7 +362,7 @@ typedef enum logic [6:0] {
 	OP_REGS			= 7'd117,
 	OP_VECZ			= 7'd118,
 	OP_VEC			= 7'd119,
-	OP_REP			= 7'd120,
+	OP_QFEXT		= 7'd120,
 	OP_PRED			= 7'd121,
 	OP_ATOM			= 7'd122,
 	OP_PFXA32		= 7'd123,
@@ -1263,6 +1266,7 @@ typedef struct packed
 	logic alu0;				// true if instruction must use only alu #0
 	logic fpu;				// FPU op
 	logic fpu0;				// true if instruction must use only fpu #0
+	logic quad;				// true if quad precision operation.
 	logic mul;
 	logic mulu;
 	logic div;

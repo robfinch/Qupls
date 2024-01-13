@@ -39,7 +39,7 @@
 import const_pkg::*;
 import QuplsPkg::*;
 
-module Qupls_alu(rst, clk, clk2x, ld, ir, div, cptgt, z, a, b, bi, c, i, t, cs, pc, csr,
+module Qupls_alu(rst, clk, clk2x, ld, ir, div, cptgt, z, a, b, bi, c, i, t, qres, cs, pc, csr,
 	o, mul_done, div_done, div_dbz);
 parameter ALU0 = 1'b0;
 input rst;
@@ -56,6 +56,7 @@ input value_t bi;
 input value_t c;
 input value_t i;
 input value_t t;
+input value_t qres;			// quad precision result from fpu
 input [2:0] cs;
 input pc_address_t pc;
 input value_t csr;
@@ -303,6 +304,7 @@ begin
 	OP_LDAX:	bus = a + i + (b << ir[26:25]);
 	OP_BLEND:	bus = ALU0 ? blendo : 0;
 	OP_NOP:		bus = 0;
+	OP_QFEXT:	bus = qres;
 	OP_PFXA32:	bus = 0;
 	OP_PFXB32:	bus = 0;
 	OP_PFXC32:	bus = 0;

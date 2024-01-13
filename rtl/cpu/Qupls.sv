@@ -358,8 +358,9 @@ reg [2:0] fpu0_cs;
 reg fpu0_bank;
 pc_address_t fpu0_pc;
 value_t fpu0_res;
+double_value_t qdfpu0_res;
 rob_ndx_t fpu0_id;
-cause_code_t fpu0_exc = FLT_NONE;
+cause_code_t fpu0_exc;
 reg fpu0_out;
 wire fpu_done1;
 reg fpu0_idv;
@@ -1275,12 +1276,14 @@ if ((fnIsAtom(ins0_d.ins) || fnIsAtom(ins1_d.ins) || fnIsAtom(ins2_d.ins) || fnI
 else
 	hirq = (irq_i > sr.ipl) && !int_commit && (irq_i > atom_mask[2:0]);
 
+/* ToDo: fix micro-code for XWID other than four */
 generate begin : gMicroCode
 	case(XWID)
 	1:
 		begin
 			Qupls_micro_code umc0 (
 				.om(sr.om),
+				.ipl(sr.ipl),
 				.micro_ip(micro_ip),
 				.micro_ir(micro_ir),
 				.next_ip(next_micro_ip),
@@ -1292,6 +1295,7 @@ generate begin : gMicroCode
 		begin
 			Qupls_micro_code umc0 (
 				.om(sr.om),
+				.ipl(sr.ipl),
 				.micro_ip({micro_ip[11:1],1'd0}),
 				.micro_ir(micro_ir),
 				.next_ip(next_micro_ip),
@@ -1301,6 +1305,7 @@ generate begin : gMicroCode
 
 			Qupls_micro_code umc1 (
 				.om(sr.om),
+				.ipl(sr.ipl),
 				.micro_ip({micro_ip[11:1],1'd1}),
 				.micro_ir(micro_ir),
 				.next_ip(),
@@ -1312,6 +1317,7 @@ generate begin : gMicroCode
 		begin
 			Qupls_micro_code umc0 (
 				.om(sr.om),
+				.ipl(sr.ipl),
 				.micro_ip(micro_ip),
 				.micro_ir(micro_ir),
 				.next_ip(next_micro_ip),
@@ -1321,6 +1327,7 @@ generate begin : gMicroCode
 
 			Qupls_micro_code umc1 (
 				.om(sr.om),
+				.ipl(sr.ipl),
 				.micro_ip(micro_ip+1),
 				.micro_ir(micro_ir),
 				.next_ip(),
@@ -1330,6 +1337,7 @@ generate begin : gMicroCode
 
 			Qupls_micro_code umc2 (
 				.om(sr.om),
+				.ipl(sr.ipl),
 				.micro_ip(micro_ip+2),
 				.micro_ir(micro_ir),
 				.next_ip(),
@@ -1341,6 +1349,7 @@ generate begin : gMicroCode
 		begin
 			Qupls_micro_code umc0 (
 				.om(sr.om),
+				.ipl(sr.ipl),
 				.micro_ip({micro_ip[11:2],2'd0}),
 				.micro_ir(micro_ir),
 				.next_ip(next_micro_ip),
@@ -1350,6 +1359,7 @@ generate begin : gMicroCode
 
 			Qupls_micro_code umc1 (
 				.om(sr.om),
+				.ipl(sr.ipl),
 				.micro_ip({micro_ip[11:2],2'd1}),
 				.micro_ir(micro_ir),
 				.next_ip(),
@@ -1359,6 +1369,7 @@ generate begin : gMicroCode
 
 			Qupls_micro_code umc2 (
 				.om(sr.om),
+				.ipl(sr.ipl),
 				.micro_ip({micro_ip[11:2],2'd2}),
 				.micro_ir(micro_ir),
 				.next_ip(),
@@ -1368,6 +1379,7 @@ generate begin : gMicroCode
 
 			Qupls_micro_code umc3 (
 				.om(sr.om),
+				.ipl(sr.ipl),
 				.micro_ip({micro_ip[11:2],2'd3}),
 				.micro_ir(micro_ir),
 				.next_ip(),
@@ -2791,6 +2803,7 @@ Qupls_alu #(.ALU0(1'b1)) ualu0
 	.c(alu0_argC),
 	.i(alu0_argI),
 	.t(alu0_argT),
+	.qres(qdfpu0_res.H),
 	.cs(alu0_cs),
 	.pc(alu0_pc),
 	.csr(csr_res),
@@ -2818,6 +2831,7 @@ if (NALU > 1) begin
 		.c(alu1_argC),
 		.i(alu1_argI),
 		.t(64'd0),
+		.qres(64'd0),
 		.cs(alu1_cs),
 		.pc(alu1_pc),
 		.csr(14'd0),
@@ -2840,6 +2854,7 @@ always_comb
 
 //assign  fcu_v = fcu_dataready;
 
+// ToDo: add result exception 
 generate begin : gFpu
 if (NFPU > 0) begin
 	Qupls_fpu ufpu1
@@ -2858,6 +2873,24 @@ if (NFPU > 0) begin
 		.t(64'd0),
 		.done(fpu0_done)
 	);
+	if (SUPPORT_QUAD_PRECISION) begin
+		Qupls_fpu ufpu1
+		(
+			.rst(rst),
+			.clk(clk),
+			.idle(fpu0_idle),
+			.ir(fpu0_instr),
+			.rm(3'd0),
+			.a({alu0_argA,fpu0_argA}),
+			.b({alu0_argB,fpu0_argB}),
+			.c({alu0_argC,fpu0_argC}),
+			.i({alu0_argI,fpu0_argI}),
+			.o(qdfpu0_res),
+			.p(~64'd0),
+			.t(128'd0),
+			.done(qdfpu0_done)
+		);
+	end
 end
 if (NFPU > 1) begin
 	Qupls_fpu ufpu2
@@ -3782,11 +3815,11 @@ always_comb
 for (n29 = 0; n29 < 17; n29 = n29 + 1)
 	prnvv[n29] = prnv[n29]
 		|| (prn[n29]==wrport0_Rt && wrport0_v)
-		|| (prn[n29]==wrport1_Rt && wrport1_v)
+		|| (NALU > 1 && prn[n29]==wrport1_Rt && wrport1_v)
 		|| (prn[n29]==wrport2_Rt && wrport2_v)
-		|| (prn[n29]==wrport3_Rt && wrport3_v)
-		|| (prn[n29]==wrport4_Rt && wrport4_v)
-		|| (prn[n29]==wrport5_Rt && wrport5_v)
+		|| (NFPU > 0 && prn[n29]==wrport3_Rt && wrport3_v)
+		|| (NDATA_PORTS > 1 && prn[n29]==wrport4_Rt && wrport4_v)
+		|| (NFPU > 1 && prn[n29]==wrport5_Rt && wrport5_v)
 		;
 
 always_ff @(posedge clk)
@@ -4042,7 +4075,15 @@ else begin
 		if (fpu0_available && fpu0_rndxv && fpu0_idle) begin
 			fpu0_idle <= FALSE;
 			fpu0_idv <= VAL;
+			fpu0_exc <= FLT_NONE;
+			fpu0_excv <= FALSE;
 	    rob[fpu0_rndx].out <= {VAL,VAL};
+	    if (rob[fpu0_rndx].quad && SUPPORT_QUAD_PRECISION) begin
+	    	if (!rob[alu0_id].quad || !rob[alu0_id].out[0] || alu0_id != (fpu0_rndx+ROB_ENTRIES-1) % ROB_ENTRIES) begin
+	    		fpu0_exc <= FLT_QUAD;
+	    		fpu0_excv <= TRUE;
+	    	end
+	    end
 		end
 	end
 
@@ -4301,6 +4342,15 @@ else begin
 		if (fpu0_done) begin
 			fpu0_idle <= TRUE;
 			fpu0_idv <= INV;
+			// If we were executing a quad precision op, the ALU #0 was taken over.
+			// Release the ALU.
+			if (rob[fpu0_id].quad && SUPPORT_QUAD_PRECISION) begin
+				alu0_idle <= TRUE;
+				alu0_idv <= INV;
+				alu0_done <= TRUE;
+		    rob[alu0_id].done <= 2'b11;
+				rob[alu0_id].out <= {INV,INV};
+			end
 			/*
 			if (fpu0_pfx) begin
 				fpu0_argC <= fpu0_argA;
@@ -4312,8 +4362,10 @@ else begin
 			end
 			*/
 		end
-    rob[ fpu0_id ].exc <= fpu0_exc;
-    rob[ fpu0_id ].excv <= |fpu0_exc;
+		if (~|rob[fpu0_id].exc)
+    	rob[ fpu0_id ].exc <= fpu0_res_exc;
+    if (|fpu0_res_exc)
+    	rob[ fpu0_id ].excv <= TRUE;
     rob[ fpu0_id ].done[0] <= fpu0_done;
     rob[ fpu0_id ].done[1] <= 1'b1;
     rob[ fpu0_id ].out <= {INV,INV};
@@ -5339,8 +5391,8 @@ begin
 	ren_stalls <= 0;
 	micro_ir <= {33'd0,OP_NOP};
 	for (n14 = 0; n14 < 4; n14 = n14 + 1) begin
-		kvec[n14] <= RSTPC;
-		avec[n14] <= RSTPC;
+		kvec[n14] <= 32'hFFFFF000;
+		avec[n14] <= 32'hFFFFF000;
 	end
 	err_mask <= 64'd0;
 	excir <= {33'd0,OP_NOP};
@@ -5420,6 +5472,7 @@ begin
 	alu1_ld <= 1'b0;
 	alu0_out <= INV;
 	alu1_out <= INV;
+	fpu0_exc <= FLT_NONE;
 	fpu0_out <= INV;
 	fpu0_idle <= TRUE;
 	fpu0_available <= 1;

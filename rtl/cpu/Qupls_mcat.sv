@@ -45,11 +45,21 @@ always_comb
 begin
 	casez(ir.ins.any.opcode)
 	OP_ENTER:	mip = 12'h004;
-	OP_LEAVE:	mip = 12'h010;
-	OP_PUSH:	mip = 12'h020;
-	OP_POP:		mip = 12'h030;
-	OP_PUSHV:	mip = 12'h260;
-	OP_POPV:	mip = 12'h280;
+	OP_LEAVE:	mip = 12'h1D0;
+	OP_PUSH:
+		case(ir.ins[39:37])
+		3'd0:	mip = 12'h100;			// stctx
+		3'd6:	mip = 12'h260;			// pushv
+		3'd7:	mip = 12'h300;			// pusha
+		default:	mip = 12'h020;	// push	
+		endcase
+	OP_POP:
+		case(ir.ins[39:37])
+		3'd0:	mip = 12'h150;			// ldctx
+		3'd6:	mip = 12'h280;			// popv
+		3'd7: mip = 12'h360;			// popa
+		default:	mip = 12'h030;	// pop
+		endcase
 	OP_FLT3:
 		case(ir.ins.f3.func)
 		FN_FLT2:
@@ -82,7 +92,6 @@ begin
 			mip = 12'h220;
 		else
 			mip = 12'h000;
-	OP_LSCTX:	mip = ir.ins[7] ? 12'h100 : 12'h150;
 	OP_R3V:		mip = 12'h200;
 	OP_R3VS:	mip = 12'h210;
 	7'b11???:	mip = 12'h220;

@@ -41,8 +41,9 @@
 // 800 LUTs
 // ============================================================================
 
-module Qupls_micro_code(om, micro_ip, micro_ir, next_ip, instr, regx);
+module Qupls_micro_code(om, ipl, micro_ip, micro_ir, next_ip, instr, regx);
 input operating_mode_t om;
+input [2:0] ipl;
 input mc_address_t micro_ip;
 input instruction_t micro_ir;
 output mc_address_t next_ip;
@@ -53,19 +54,36 @@ parameter S1 = 6'd17;
 parameter S2 = 6'd18;
 parameter S3 = 6'd19;
 parameter S4 = 6'd20;
+parameter S5 = 6'd21;
+parameter S6 = 6'd22;
+parameter S7 = 6'd23;
+parameter S8 = 6'd24;
+parameter S9 = 6'd25;
 parameter SP = 6'd63;
 parameter FP = 6'd62;
 parameter LR0 = 6'd56;
 parameter LR1 = 6'd57;
 // Do not use 6'd0 as some logic will detect this as a zero.
 // 1 to 4 are the stack pointers.
-parameter MC0 = 6'd5;
-parameter MC1 = 6'd6;
-parameter MC2 = 6'd7;
-parameter MC3 = 6'd8;
+parameter MC0 = 6'd12;
+parameter MC1 = 6'd13;
+parameter MC2 = 6'd14;
+parameter MC3 = 6'd15;
 
+reg [21:0] bamt;
 always_comb
 begin
+	case(micro_ir[28:25])
+	4'd1:	bamt = 21'd1;
+	4'd2:	bamt = 21'd2;
+	4'd3:	bamt = 21'd4;
+	4'd4:	bamt = 21'd8;
+	4'd15:	bamt = 21'h1FFFFF;
+	4'd14:	bamt = 21'h1FFFFE;
+	4'd13:	bamt = 21'h1FFFFC;
+	4'd12:	bamt = 21'h1FFFF8;
+	default:	bamt = 21'h0;
+	endcase
 	regx = 'd0;
 instr.aRa = micro_ir.r3.Ra;
 instr.aRb = micro_ir.r3.Rb;
@@ -80,125 +98,308 @@ case(micro_ip)
 
 // -----------------------------------------------------------------------------
 // ENTER
+//
+//	enter 5,32		; save s0 to s4 and allocate 32 words
 // -----------------------------------------------------------------------------
 12'h004:	
 	begin
 		next_ip = 12'h008;
-		instr.ins = {'d0,21'h1FFFC0,SP,SP,OP_ADDI};
-		instr.aRa = 9'd65 + om;
-		instr.aRt = 9'd65 + om;
-	end				// SP = SP - 64
+		instr.ins = {21'h1FFFE0,SP,SP,OP_ADDI};
+		case(om)
+		2'd0:	begin instr.aRa = 9'd72; instr.aRt = 9'd72; end
+		2'd1:	begin instr.aRa = 9'd73; instr.aRt = 9'd73; end
+		2'd2:	begin instr.aRa = 9'd74; instr.aRt = 9'd74; end
+		2'd3:	begin instr.aRa = 9'd64|ipl; instr.aRt = 9'd64|ipl; end
+		endcase
+	end				// SP = SP - 32
 12'h005:
 	begin
 		next_ip = 12'h008;
-		instr.ins = {'d0,21'h000000,SP,FP,OP_STO};
-		instr.aRa = 9'd65 + om;
+		instr.ins = {21'h000000,SP,FP,OP_STO};
+		case(om)
+		2'd0:	instr.aRa = 9'd72;
+		2'd1:	instr.aRa = 9'd73;
+		2'd2: instr.aRa = 9'd74;
+		2'd3:	instr.aRa = 9'd64|ipl;
+		endcase
 		instr.aRc = FP;
 		instr.aRt = 9'd0;
 	end		// Mem[SP] = FP
 12'h006:
 	begin
 		next_ip = 12'h008; 
-		instr.ins = {'d0,21'h000010,SP,LR0,OP_STO};
-		instr.aRa = 9'd65 + om;
+		instr.ins = {21'h000008,SP,LR0,OP_STO};
+		case(om)
+		2'd0:	instr.aRa = 9'd72;
+		2'd1:	instr.aRa = 9'd73;
+		2'd2: instr.aRa = 9'd74;
+		2'd3:	instr.aRa = 9'd64|ipl;
+		endcase
 		instr.aRc = LR0;
 		instr.aRt = 9'd0;
-	end	// Mem16[sp] = LR0
+	end	// Mem8[sp] = LR0
 12'h007:	
 	begin 
 		next_ip = 12'h008;
-		instr.ins = {'d0,21'h000020,SP,6'd0,OP_STO};
-		instr.aRa = 9'd65 + om;
+		instr.ins = {21'h000010,SP,6'd0,OP_STO};
+		case(om)
+		2'd0:	instr.aRa = 9'd72;
+		2'd1:	instr.aRa = 9'd73;
+		2'd2: instr.aRa = 9'd74;
+		2'd3:	instr.aRa = 9'd64|ipl;
+		endcase
 		instr.aRc = 9'd0;
 		instr.aRt = 9'd0;
-	end		// Mem32[sp] = 0
+	end		// Mem16[sp] = 0
 12'h008:
 	begin
-		next_ip = 12'h000;
-		instr.ins = {'d0,21'h000030,SP,6'd0,OP_STO};
-		instr.aRa = 9'd65 + om;
+		next_ip = 12'h00C;
+		instr.ins = {21'h000018,SP,6'd0,OP_STO};
+		case(om)
+		2'd0:	instr.aRa = 9'd72;
+		2'd1:	instr.aRa = 9'd73;
+		2'd2: instr.aRa = 9'd74;
+		2'd3:	instr.aRa = 9'd64|ipl;
+		endcase
 		instr.aRc = 9'd0;
 		instr.aRt = 9'd0;
-	end		// Mem48[sp] = 0
+	end		// Mem24[sp] = 0
 12'h009:
 	begin
-		next_ip = 12'h000;
-		instr.ins = {'d0,FN_OR,1'd0,6'd0,SP,FP,OP_R2};
-		instr.aRa = 9'd65 + om;
+		next_ip = 12'h00C;
+		instr.ins = {FN_OR,2'd0,6'd0,6'd0,SP,FP,OP_R2};
+		case(om)
+		2'd0:	instr.aRa = 9'd72;
+		2'd1:	instr.aRa = 9'd73;
+		2'd2: instr.aRa = 9'd74;
+		2'd3:	instr.aRa = 9'd64|ipl;
+		endcase
 		instr.aRt = FP;
 	end // FP = SP
 12'h00A:
 	begin
-		next_ip = 12'h000;
-		instr.ins = {micro_ir[27:8],SP,SP,OP_ADDI};
-		instr.aRa = 9'd65 + om;
-		instr.aRt = 9'd65 + om;
-	end				// SP = SP + const
+		next_ip = 12'h00C;
+		instr.ins = {-{14'd0,micro_ir[11:8],3'd0},SP,SP,OP_ADDI};
+		case(om)
+		2'd0:	begin instr.aRa = 9'd72; instr.aRt = 9'd72; end
+		2'd1:	begin instr.aRa = 9'd73; instr.aRt = 9'd73; end
+		2'd2:	begin instr.aRa = 9'd74; instr.aRt = 9'd74; end
+		2'd3:	begin instr.aRa = 9'd64|ipl; instr.aRt = 9'd64|ipl; end
+		endcase
+	end				// SP = SP - NS*8
 12'h00B:
 	begin
-		next_ip = 12'h000;
-		instr.ins = {12'd0,micro_ir[39:28],3'd1,SP,OP_ADDSI};
-		instr.aRa = 9'd65 + om;
-		instr.aRt = 9'd65 + om;
+		if (micro_ir[11:8]>4'd0) begin
+			next_ip = 12'h00C;
+			instr.ins = {21'h000000,SP,S0,OP_STO};
+			case(om)
+			2'd0:	instr.aRa = 9'd72;
+			2'd1:	instr.aRa = 9'd73;
+			2'd2: instr.aRa = 9'd74;
+			2'd3:	instr.aRa = 9'd64|ipl;
+			endcase
+			instr.aRc = S0;
+			instr.aRt = 9'd0;
+		end
+		else begin
+			next_ip = 12'h014;
+			instr.ins = {33'd0,OP_NOP};
+		end
 	end
-12'h00C:	begin next_ip = 12'h000; instr.ins = {'d0,OP_NOP};	end
-12'h00D:	begin next_ip = 12'h000; instr.ins = {'d0,OP_NOP};	end
-12'h00E:	begin next_ip = 12'h000; instr.ins = {'d0,OP_NOP};	end
-12'h00F:	begin next_ip = 12'h000; instr.ins = {'d0,OP_NOP};	end
-
-// -----------------------------------------------------------------------------
-// LEAVE
-// -----------------------------------------------------------------------------
+12'h00C:
+	begin
+		if (micro_ir[11:8]>4'd1) begin
+			next_ip = 12'h010;
+			instr.ins = {21'h000008,SP,S1,OP_STO};
+			case(om)
+			2'd0:	instr.aRa = 9'd72;
+			2'd1:	instr.aRa = 9'd73;
+			2'd2: instr.aRa = 9'd74;
+			2'd3:	instr.aRa = 9'd64|ipl;
+			endcase
+			instr.aRc = S1;
+			instr.aRt = 9'd0;
+		end
+		else begin
+			next_ip = 12'h014;
+			instr.ins = {33'd0,OP_NOP};
+		end
+	end
+12'h00D:
+	begin
+		if (micro_ir[11:8]>4'd2) begin
+			next_ip = 12'h010;
+			instr.ins = {21'h000010,SP,S2,OP_STO};
+			case(om)
+			2'd0:	instr.aRa = 9'd72;
+			2'd1:	instr.aRa = 9'd73;
+			2'd2: instr.aRa = 9'd74;
+			2'd3:	instr.aRa = 9'd64|ipl;
+			endcase
+			instr.aRc = S2;
+			instr.aRt = 9'd0;
+		end
+		else begin
+			next_ip = 12'h014;
+			instr.ins = {33'd0,OP_NOP};
+		end
+	end
+12'h00E:
+	begin
+		if (micro_ir[11:8]>4'd3) begin
+			next_ip = 12'h010;
+			instr.ins = {21'h000018,SP,S3,OP_STO};
+			case(om)
+			2'd0:	instr.aRa = 9'd72;
+			2'd1:	instr.aRa = 9'd73;
+			2'd2: instr.aRa = 9'd74;
+			2'd3:	instr.aRa = 9'd64|ipl;
+			endcase
+			instr.aRc = S3;
+			instr.aRt = 9'd0;
+		end
+		else begin
+			next_ip = 12'h014;
+			instr.ins = {33'd0,OP_NOP};
+		end
+	end
+12'h00F:
+	begin
+		if (micro_ir[11:8]>4'd4) begin
+			next_ip = 12'h010;
+			instr.ins = {21'h000020,SP,S4,OP_STO};
+			case(om)
+			2'd0:	instr.aRa = 9'd72;
+			2'd1:	instr.aRa = 9'd73;
+			2'd2: instr.aRa = 9'd74;
+			2'd3:	instr.aRa = 9'd64|ipl;
+			endcase
+			instr.aRc = S4;
+			instr.aRt = 9'd0;
+		end
+		else begin
+			next_ip = 12'h014;
+			instr.ins = {33'd0,OP_NOP};
+		end
+	end
 12'h010:
 	begin
-		next_ip = 12'h014;
-		instr.ins = {'d0,13'h0000,6'd0,FP,SP,OP_ORI};
-		instr.aRa = FP;
-		instr.aRt = 9'd65 + om;
-	end		// SP = FP
+		if (micro_ir[11:8]>4'd5) begin
+			next_ip = 12'h014;
+			instr.ins = {21'h000028,SP,S5,OP_STO};
+			case(om)
+			2'd0:	instr.aRa = 9'd72;
+			2'd1:	instr.aRa = 9'd73;
+			2'd2: instr.aRa = 9'd74;
+			2'd3:	instr.aRa = 9'd64|ipl;
+			endcase
+			instr.aRc = S5;
+			instr.aRt = 9'd0;
+		end
+		else begin
+			next_ip = 12'h014;
+			instr.ins = {33'd0,OP_NOP};
+		end
+	end
 12'h011:
 	begin
-		next_ip = 12'h014;
-		instr.ins = {'d0,13'h0000,SP,FP,OP_LDO};
-		instr.aRt = FP;
-		instr.aRa = 9'd65 + om;
-	end			// FP = Mem[SP]
-12'h012:	
+		if (micro_ir[11:8]>4'd6) begin
+			next_ip = 12'h014;
+			instr.ins = {21'h000030,SP,S6,OP_STO};
+			case(om)
+			2'd0:	instr.aRa = 9'd72;
+			2'd1:	instr.aRa = 9'd73;
+			2'd2: instr.aRa = 9'd74;
+			2'd3:	instr.aRa = 9'd64|ipl;
+			endcase
+			instr.aRc = S6;
+			instr.aRt = 9'd0;
+		end
+		else begin
+			next_ip = 12'h014;
+			instr.ins = {33'd0,OP_NOP};
+		end
+	end
+12'h012:
 	begin
-		next_ip = 12'h014;
-		instr.ins = {'d0,13'h0010,SP,LR0,OP_LDO};
-		instr.aRt = LR0;
-		instr.aRa = 9'd65 + om;
-	end		// LR1 = Mem16[sp]
+		if (micro_ir[11:8]>4'd7) begin
+			next_ip = 12'h014;
+			instr.ins = {21'h000038,SP,S7,OP_STO};
+			case(om)
+			2'd0:	instr.aRa = 9'd72;
+			2'd1:	instr.aRa = 9'd73;
+			2'd2: instr.aRa = 9'd74;
+			2'd3:	instr.aRa = 9'd64|ipl;
+			endcase
+			instr.aRc = S7;
+			instr.aRt = 9'd0;
+		end
+		else begin
+			next_ip = 12'h014;
+			instr.ins = {33'd0,OP_NOP};
+		end
+	end
 12'h013:
 	begin
-		next_ip = 12'h014;
-		instr.ins = {'d0,13'h0040,SP,SP,OP_ADDI};
-		instr.aRa = 9'd65 + om;
-		instr.aRt = 9'd65 + om;
-	end					// SP = SP + 64
-12'h014:	
+		if (micro_ir[11:8]>4'd8) begin
+			next_ip = 12'h014;
+			instr.ins = {21'h000040,SP,S8,OP_STO};
+			case(om)
+			2'd0:	instr.aRa = 9'd72;
+			2'd1:	instr.aRa = 9'd73;
+			2'd2: instr.aRa = 9'd74;
+			2'd3:	instr.aRa = 9'd64|ipl;
+			endcase
+			instr.aRc = S8;
+			instr.aRt = 9'd0;
+		end
+		else begin
+			next_ip = 12'h014;
+			instr.ins = {33'd0,OP_NOP};
+		end
+	end
+12'h014:
+	begin
+		if (micro_ir[11:8]>4'd9) begin
+			next_ip = 12'h000;
+			instr.ins = {21'h000048,SP,S9,OP_STO};
+			case(om)
+			2'd0:	instr.aRa = 9'd72;
+			2'd1:	instr.aRa = 9'd73;
+			2'd2: instr.aRa = 9'd74;
+			2'd3:	instr.aRa = 9'd64|ipl;
+			endcase
+			instr.aRc = S9;
+			instr.aRt = 9'd0;
+		end
+		else begin
+			next_ip = 12'h000;
+			instr.ins = {33'd0,OP_NOP};
+		end
+	end
+12'h015:
 	begin
 		next_ip = 12'h000;
-		instr.ins = {micro_ir[33:13],SP,SP,OP_ADDI};
-		instr.aRa = 9'd65 + om;
-		instr.aRt = 9'd65 + om;
+		instr.ins = {micro_ir[32:12],SP,SP,OP_ADDI};
+		case(om)
+		2'd0:	begin instr.aRa = 9'd72; instr.aRt = 9'd72; end
+		2'd1:	begin instr.aRa = 9'd73; instr.aRt = 9'd73; end
+		2'd2:	begin instr.aRa = 9'd74; instr.aRt = 9'd74; end
+		2'd3:	begin instr.aRa = 9'd64|ipl; instr.aRt = 9'd64|ipl; end
+		endcase
 	end				// SP = SP + const
-12'h015:	
-	begin 
-		next_ip = 12'h000;
-		instr.ins = {15'd0,micro_ir[39:34],SP,OP_ADDSI};
-		instr.aRa = 9'd65 + om;
-		instr.aRt = 9'd65 + om;
-	end	
 12'h016:
 	begin
 		next_ip = 12'h000;
-		instr.ins = {15'd0,micro_ir[12:7],LR0,6'd0,OP_JSR};
-		instr.aRa = LR0;
-		instr.aRt = 9'd0;
-	end	// PC = LR0 + const
-12'h017:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+		instr.ins = {15'd0,micro_ir[39:31],3'd1,SP,OP_ADDSI};
+		case(om)
+		2'd0:	begin instr.aRa = 9'd72; instr.aRt = 9'd72; end
+		2'd1:	begin instr.aRa = 9'd73; instr.aRt = 9'd73; end
+		2'd2:	begin instr.aRa = 9'd74; instr.aRt = 9'd74; end
+		2'd3:	begin instr.aRa = 9'd64|ipl; instr.aRt = 9'd64|ipl; end
+		endcase
+	end
+12'h017:	begin next_ip = 12'h000; instr.ins = {'d0,OP_NOP};	end
 
 // -----------------------------------------------------------------------------
 // PUSH
@@ -206,47 +407,82 @@ case(micro_ip)
 12'h020:
 	begin
 		next_ip = 12'h024;
-		instr.ins = {-{14'h00,micro_ir[39:37],4'h0},SP,SP,OP_ADDI};
-		instr.aRa = 9'd65 + om;
-		instr.aRt = 9'd65 + om;
+		instr.ins = {-{15'h00,micro_ir[39:37],3'h0},SP,SP,OP_ADDI};
+		case(om)
+		2'd0:	instr.aRa = 9'd72;
+		2'd1:	instr.aRa = 9'd73;
+		2'd2:	instr.aRa = 9'd74;
+		2'd3:	instr.aRa = 9'd64|ipl;
+		endcase
+		case(om)
+		2'd0:	instr.aRt = 9'd72;
+		2'd1:	instr.aRt = 9'd73;
+		2'd2:	instr.aRt = 9'd74;
+		2'd3:	instr.aRt = 9'd64|ipl;
+		endcase
 	end				// SP = SP - N * 16
 12'h021:
 	begin
 		next_ip = 12'h024;
-		instr.ins = micro_ir[39:37] > 3'd0 ? {17'd0,4'h0,SP,micro_ir[12: 7],OP_STO} : {33'd0,OP_NOP};
-		instr.aRa = 9'd65 + om;
+		instr.ins = micro_ir[39:37] > 3'd0 ? {18'd0,3'h0,SP,micro_ir[12: 7],OP_STO} : {33'd0,OP_NOP};
+		case(om)
+		2'd0:	instr.aRa = 9'd72;
+		2'd1:	instr.aRa = 9'd73;
+		2'd2:	instr.aRa = 9'd74;
+		2'd3:	instr.aRa = 9'd64|ipl;
+		endcase
 		instr.aRc = {3'd0,micro_ir[12:7]};
 		instr.aRt = 9'd0;
 	end		// Mem[SP] = Rs
 12'h022:
 	begin
 		next_ip = 12'h024;
-		instr.ins = micro_ir[39:37] > 3'd1 ? {17'h1,4'h0,SP,micro_ir[18:13],OP_STO} : {33'd0,OP_NOP};
-		instr.aRa = 9'd65 + om;
+		instr.ins = micro_ir[39:37] > 3'd1 ? {13'h1,3'h0,SP,micro_ir[18:13],OP_STO} : {33'd0,OP_NOP};
+		case(om)
+		2'd0:	instr.aRa = 9'd72;
+		2'd1:	instr.aRa = 9'd73;
+		2'd2:	instr.aRa = 9'd74;
+		2'd3:	instr.aRa = 9'd64|ipl;
+		endcase
 		instr.aRc = {3'd0,micro_ir[18:13]};
 		instr.aRt = 9'd0;
 	end		// Mem[SP] = Ra
 12'h023:
 	begin
 		next_ip = 12'h024;
-		instr.ins = micro_ir[39:37] > 3'd2 ? {17'h2,4'h0,SP,micro_ir[24:19],OP_STO} : {33'd0,OP_NOP};
-		instr.aRa = 9'd65 + om;
+		instr.ins = micro_ir[39:37] > 3'd2 ? {18'h2,3'h0,SP,micro_ir[24:19],OP_STO} : {33'd0,OP_NOP};
+		case(om)
+		2'd0:	instr.aRa = 9'd72;
+		2'd1:	instr.aRa = 9'd73;
+		2'd2:	instr.aRa = 9'd74;
+		2'd3:	instr.aRa = 9'd64|ipl;
+		endcase
 		instr.aRc = {3'd0,micro_ir[24:19]};
 		instr.aRt = 9'd0;
 	end		// Mem[SP] = Rb
 12'h024:
 	begin
 		next_ip = 12'h000;
-		instr.ins = micro_ir[39:37] > 3'd3 ? {17'h3,4'h0,SP,micro_ir[30:25],OP_STO} : {33'd0,OP_NOP};
-		instr.aRa = 9'd65 + om;
+		instr.ins = micro_ir[39:37] > 3'd3 ? {18'h3,3'h0,SP,micro_ir[30:25],OP_STO} : {33'd0,OP_NOP};
+		case(om)
+		2'd0:	instr.aRa = 9'd72;
+		2'd1:	instr.aRa = 9'd73;
+		2'd2:	instr.aRa = 9'd74;
+		2'd3:	instr.aRa = 9'd64|ipl;
+		endcase
 		instr.aRc = {3'd0,micro_ir[30:25]};
 		instr.aRt = 9'd0;
 	end		// Mem[SP] = Rc
 12'h025:	
 	begin
 		next_ip = 12'h000;
-		instr.ins = micro_ir[39:37] > 3'd4 ? {17'h4,4'h0,SP,micro_ir[36:31],OP_STO} : {33'd0,OP_NOP};
-		instr.aRa = 9'd65 + om;
+		instr.ins = micro_ir[39:37] > 3'd4 ? {18'h4,3'h0,SP,micro_ir[36:31],OP_STO} : {33'd0,OP_NOP};
+		case(om)
+		2'd0:	instr.aRa = 9'd72;
+		2'd1:	instr.aRa = 9'd73;
+		2'd2:	instr.aRa = 9'd74;
+		2'd3:	instr.aRa = 9'd64|ipl;
+		endcase
 		instr.aRc = {3'd0,micro_ir[36:31]};
 		instr.aRt = 9'd0;
 	end		// Mem[SP] = Rc
@@ -260,43 +496,78 @@ case(micro_ip)
 	begin
 		next_ip = 12'h034;
 		instr.ins = micro_ir[39:37] > 3'd0 ? {21'd0,SP,micro_ir[12: 7],OP_LDO} : {33'd0,OP_NOP};
-		instr.aRa = 9'd65 + om;
+		case(om)
+		2'd0:	instr.aRa = 9'd72;
+		2'd1:	instr.aRa = 9'd73;
+		2'd2:	instr.aRa = 9'd74;
+		2'd3:	instr.aRa = 9'd64|ipl;
+		endcase
 		instr.aRt = {3'd0,micro_ir[12:7]};
 	end		// Rt = Mem[SP]
 12'h031:
 	begin
 		next_ip = 12'h034;
-		instr.ins = micro_ir[39:37] > 3'd1 ? {'d0,9'h1,4'h0,SP,micro_ir[18:13],OP_LDO} : {33'd0,OP_NOP};
-		instr.aRa = 9'd65 + om;
+		instr.ins = micro_ir[39:37] > 3'd1 ? {18'h1,3'h0,SP,micro_ir[18:13],OP_LDO} : {33'd0,OP_NOP};
+		case(om)
+		2'd0:	instr.aRa = 9'd72;
+		2'd1:	instr.aRa = 9'd73;
+		2'd2:	instr.aRa = 9'd74;
+		2'd3:	instr.aRa = 9'd64|ipl;
+		endcase
 		instr.aRt = {3'd0,micro_ir[18:13]};
 	end		// Ra = Mem[SP]
 12'h032:
 	begin
 		next_ip = 12'h034;
-		instr.ins = micro_ir[39:37] > 3'd2 ? {'d0,9'h2,4'h0,SP,micro_ir[24:19],OP_LDO} : {33'd0,OP_NOP};
-		instr.aRa = 9'd65 + om;
+		instr.ins = micro_ir[39:37] > 3'd2 ? {18'h2,3'h0,SP,micro_ir[24:19],OP_LDO} : {33'd0,OP_NOP};
+		case(om)
+		2'd0:	instr.aRa = 9'd72;
+		2'd1:	instr.aRa = 9'd73;
+		2'd2:	instr.aRa = 9'd74;
+		2'd3:	instr.aRa = 9'd64|ipl;
+		endcase
 		instr.aRt = {3'd0,micro_ir[24:19]};
 	end		// Rb = Mem[SP]
 12'h033:	
 	begin
 		next_ip = 12'h034;
-		instr.ins = micro_ir[39:37] > 3'd3 ? {'d0,9'h3,4'h0,SP,micro_ir[30:25],OP_LDO} : {33'd0,OP_NOP};
-		instr.aRa = 9'd65 + om;
+		instr.ins = micro_ir[39:37] > 3'd3 ? {18'h3,3'h0,SP,micro_ir[30:25],OP_LDO} : {33'd0,OP_NOP};
+		case(om)
+		2'd0:	instr.aRa = 9'd72;
+		2'd1:	instr.aRa = 9'd73;
+		2'd2:	instr.aRa = 9'd74;
+		2'd3:	instr.aRa = 9'd64|ipl;
+		endcase
 		instr.aRt = {3'd0,micro_ir[30:25]};
 	end		// Rc = Mem[SP]
 12'h034:
 	begin
 		next_ip = 12'h000;
-		instr.ins = micro_ir[39:37] > 3'd4 ? {'d0,9'h4,4'h0,SP,micro_ir[36:31],OP_LDO} : {33'd0,OP_NOP};
-		instr.aRa = 9'd65 + om;
+		instr.ins = micro_ir[39:37] > 3'd4 ? {18'h4,3'h0,SP,micro_ir[36:31],OP_LDO} : {33'd0,OP_NOP};
+		case(om)
+		2'd0:	instr.aRa = 9'd72;
+		2'd1:	instr.aRa = 9'd73;
+		2'd2:	instr.aRa = 9'd74;
+		2'd3:	instr.aRa = 9'd64|ipl;
+		endcase
 		instr.aRt = {3'd0,micro_ir[36:31]};
 	end		// Rc = Mem[SP]
 12'h035:
 	begin
 		next_ip = 12'h000;
-		instr.ins = {14'h00,micro_ir[39:37],4'h0,SP,SP,OP_ADDI};
-		instr.aRa = 9'd65 + om;
-		instr.aRt = 9'd65 + om;
+		instr.ins = {15'h00,micro_ir[39:37],3'h0,SP,SP,OP_ADDI};
+		case(om)
+		2'd0:	instr.aRa = 9'd72;
+		2'd1:	instr.aRa = 9'd73;
+		2'd2:	instr.aRa = 9'd74;
+		2'd3:	instr.aRa = 9'd64|ipl;
+		endcase
+		case(om)
+		2'd0:	instr.aRt = 9'd72;
+		2'd1:	instr.aRt = 9'd73;
+		2'd2:	instr.aRt = 9'd74;
+		2'd3:	instr.aRt = 9'd64|ipl;
+		endcase
 	end				// SP = SP + N * 16
 12'h036:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
 12'h037:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
@@ -474,145 +745,1301 @@ case(micro_ip)
 12'h0EA:	begin next_ip = 12'h000; instr.ins = {'d0,OP_NOP};	end
 12'h0EB:	begin next_ip = 12'h000; instr.ins = {'d0,OP_NOP};	end
 
+// -----------------------------------------------------------------------------
 // STCTX
-12'h100:	begin next_ip = 12'h104; instr.ins = {3'd0,2'd0,CSR_CTX,6'h00,MC0,OP_CSR}; regx = 4'h1; end	// MC0 = CTX address
-12'h101:	begin next_ip = 12'h104; instr.ins = {'d0,OP_NOP}; end
-12'h102:	begin next_ip = 12'h104; instr.ins = {'d0,13'h0010,MC0,6'h01,OP_STH}; regx = 4'h2; end
-12'h103:	begin next_ip = 12'h104; instr.ins = {'d0,13'h0020,MC0,6'h02,OP_STH}; regx = 4'h2; end
-12'h104:	begin next_ip = 12'h108; instr.ins = {'d0,13'h0030,MC0,6'h03,OP_STH}; regx = 4'h2; end
-12'h105:	begin next_ip = 12'h108; instr.ins = {'d0,13'h0040,MC0,6'h04,OP_STH}; regx = 4'h2; end
-12'h106:	begin next_ip = 12'h108; instr.ins = {'d0,13'h0050,MC0,6'h05,OP_STH}; regx = 4'h2; end
-12'h107:	begin next_ip = 12'h108; instr.ins = {'d0,13'h0060,MC0,6'h06,OP_STH}; regx = 4'h2; end
-12'h108:	begin next_ip = 12'h10C; instr.ins = {'d0,13'h0070,MC0,6'h07,OP_STH}; regx = 4'h2; end
-12'h109:	begin next_ip = 12'h10C; instr.ins = {'d0,13'h0080,MC0,6'h08,OP_STH}; regx = 4'h2; end
-12'h10A:	begin next_ip = 12'h10C; instr.ins = {'d0,13'h0090,MC0,6'h09,OP_STH}; regx = 4'h2; end
-12'h10B:	begin next_ip = 12'h10C; instr.ins = {'d0,13'h00A0,MC0,6'h0A,OP_STH}; regx = 4'h2; end
-12'h10C:	begin next_ip = 12'h110; instr.ins = {'d0,13'h00B0,MC0,6'h0B,OP_STH}; regx = 4'h2; end
-12'h10D:	begin next_ip = 12'h110; instr.ins = {'d0,13'h00C0,MC0,6'h0C,OP_STH}; regx = 4'h2; end
-12'h10E:	begin next_ip = 12'h110; instr.ins = {'d0,13'h00D0,MC0,6'h0D,OP_STH}; regx = 4'h2; end
-12'h10F:	begin next_ip = 12'h110; instr.ins = {'d0,13'h00E0,MC0,6'h0E,OP_STH}; regx = 4'h2; end
-12'h110:	begin next_ip = 12'h114; instr.ins = {'d0,13'h00F0,MC0,6'h0F,OP_STH}; regx = 4'h2; end
-12'h111:	begin next_ip = 12'h114; instr.ins = {'d0,13'h0100,MC0,6'h10,OP_STH}; regx = 4'h2; end
-12'h112:	begin next_ip = 12'h114; instr.ins = {'d0,13'h0110,MC0,6'h11,OP_STH}; regx = 4'h2; end
-12'h113:	begin next_ip = 12'h114; instr.ins = {'d0,13'h0120,MC0,6'h12,OP_STH}; regx = 4'h2; end
-12'h114:	begin next_ip = 12'h118; instr.ins = {'d0,13'h0130,MC0,6'h13,OP_STH}; regx = 4'h2; end
-12'h115:	begin next_ip = 12'h118; instr.ins = {'d0,13'h0140,MC0,6'h14,OP_STH}; regx = 4'h2; end
-12'h116:	begin next_ip = 12'h118; instr.ins = {'d0,13'h0150,MC0,6'h15,OP_STH}; regx = 4'h2; end
-12'h117:	begin next_ip = 12'h118; instr.ins = {'d0,13'h0160,MC0,6'h16,OP_STH}; regx = 4'h2; end
-12'h118:	begin next_ip = 12'h11C; instr.ins = {'d0,13'h0170,MC0,6'h17,OP_STH}; regx = 4'h2; end
-12'h119:	begin next_ip = 12'h11C; instr.ins = {'d0,13'h0180,MC0,6'h18,OP_STH}; regx = 4'h2; end
-12'h11A:	begin next_ip = 12'h11C; instr.ins = {'d0,13'h0190,MC0,6'h19,OP_STH}; regx = 4'h2; end
-12'h11B:	begin next_ip = 12'h11C; instr.ins = {'d0,13'h01A0,MC0,6'h1A,OP_STH}; regx = 4'h2; end
-12'h11C:	begin next_ip = 12'h120; instr.ins = {'d0,13'h01B0,MC0,6'h1B,OP_STH}; regx = 4'h2; end
-12'h11D:	begin next_ip = 12'h120; instr.ins = {'d0,13'h01C0,MC0,6'h1C,OP_STH}; regx = 4'h2; end
-12'h11E:	begin next_ip = 12'h120; instr.ins = {'d0,13'h01D0,MC0,6'h1D,OP_STH}; regx = 4'h2; end
-12'h11F:	begin next_ip = 12'h120; instr.ins = {'d0,13'h01E0,MC0,6'h1E,OP_STH}; regx = 4'h2; end
-12'h120:	begin next_ip = 12'h124; instr.ins = {'d0,13'h01F0,MC0,6'h1F,OP_STH}; regx = 4'h2; end
-12'h121:	begin next_ip = 12'h124; instr.ins = {'d0,13'h0200,MC0,6'h20,OP_STH}; regx = 4'h2; end
-12'h122:	begin next_ip = 12'h124; instr.ins = {'d0,13'h0210,MC0,6'h21,OP_STH}; regx = 4'h2; end
-12'h123:	begin next_ip = 12'h124; instr.ins = {'d0,13'h0220,MC0,6'h22,OP_STH}; regx = 4'h2; end
-12'h124:	begin next_ip = 12'h128; instr.ins = {'d0,13'h0230,MC0,6'h23,OP_STH}; regx = 4'h2; end
-12'h125:	begin next_ip = 12'h128; instr.ins = {'d0,13'h0240,MC0,6'h24,OP_STH}; regx = 4'h2; end
-12'h126:	begin next_ip = 12'h128; instr.ins = {'d0,13'h0250,MC0,6'h25,OP_STH}; regx = 4'h2; end
-12'h127:	begin next_ip = 12'h128; instr.ins = {'d0,13'h0260,MC0,6'h26,OP_STH}; regx = 4'h2; end
-12'h128:	begin next_ip = 12'h12C; instr.ins = {'d0,13'h0270,MC0,6'h27,OP_STH}; regx = 4'h2; end
-12'h129:	begin next_ip = 12'h12C; instr.ins = {'d0,13'h0280,MC0,6'h28,OP_STH}; regx = 4'h2; end
-12'h12A:	begin next_ip = 12'h12C; instr.ins = {'d0,13'h0290,MC0,6'h29,OP_STH}; regx = 4'h2; end
-12'h12B:	begin next_ip = 12'h12C; instr.ins = {'d0,13'h02A0,MC0,6'h2A,OP_STH}; regx = 4'h2; end
-12'h12C:	begin next_ip = 12'h130; instr.ins = {'d0,13'h02B0,MC0,6'h2B,OP_STH}; regx = 4'h2; end
-12'h12D:	begin next_ip = 12'h130; instr.ins = {'d0,13'h02C0,MC0,6'h2C,OP_STH}; regx = 4'h2; end
-12'h12E:	begin next_ip = 12'h130; instr.ins = {'d0,13'h02D0,MC0,6'h2D,OP_STH}; regx = 4'h2; end
-12'h12F:	begin next_ip = 12'h130; instr.ins = {'d0,13'h02E0,MC0,6'h2E,OP_STH}; regx = 4'h2; end
-12'h130:	begin next_ip = 12'h134; instr.ins = {'d0,13'h02F0,MC0,6'h2F,OP_STH}; regx = 4'h2; end
-12'h131:	begin next_ip = 12'h134; instr.ins = {'d0,13'h0300,MC0,6'h30,OP_STH}; regx = 4'h2; end
-12'h132:	begin next_ip = 12'h134; instr.ins = {'d0,13'h0310,MC0,6'h31,OP_STH}; regx = 4'h2; end
-12'h133:	begin next_ip = 12'h134; instr.ins = {'d0,13'h0320,MC0,6'h32,OP_STH}; regx = 4'h2; end
-12'h134:	begin next_ip = 12'h138; instr.ins = {'d0,13'h0330,MC0,6'h33,OP_STH}; regx = 4'h2; end
-12'h135:	begin next_ip = 12'h138; instr.ins = {'d0,13'h0340,MC0,6'h34,OP_STH}; regx = 4'h2; end
-12'h136:	begin next_ip = 12'h138; instr.ins = {'d0,13'h0350,MC0,6'h35,OP_STH}; regx = 4'h2; end
-12'h137:	begin next_ip = 12'h138; instr.ins = {'d0,13'h0360,MC0,6'h36,OP_STH}; regx = 4'h2; end
-12'h138:	begin next_ip = 12'h13C; instr.ins = {'d0,13'h0370,MC0,6'h37,OP_STH}; regx = 4'h2; end
-12'h139:	begin next_ip = 12'h13C; instr.ins = {'d0,13'h0380,MC0,6'h38,OP_STH}; regx = 4'h2; end
-12'h13A:	begin next_ip = 12'h13C; instr.ins = {'d0,13'h0390,MC0,6'h39,OP_STH}; regx = 4'h2; end
-12'h13B:	begin next_ip = 12'h13C; instr.ins = {'d0,13'h03A0,MC0,6'h3A,OP_STH}; regx = 4'h2; end
-12'h13C:	begin next_ip = 12'h140; instr.ins = {'d0,13'h03B0,MC0,6'h3B,OP_STH}; regx = 4'h2; end
-12'h13D:	begin next_ip = 12'h140; instr.ins = {'d0,13'h03C0,MC0,6'h3C,OP_STH}; regx = 4'h2; end
-12'h13E:	begin next_ip = 12'h140; instr.ins = {'d0,13'h03D0,MC0,6'h3D,OP_STH}; regx = 4'h2; end
-12'h13F:	begin next_ip = 12'h140; instr.ins = {'d0,13'h03E0,MC0,6'h3E,OP_STH}; regx = 4'h2; end
-12'h140:	begin next_ip = 12'h000; instr.ins = {'d0,13'h03F0,MC0,6'h3F,OP_STH}; regx = 4'h2; end
+// -----------------------------------------------------------------------------
+12'h100:
+	begin
+		next_ip=12'h104;
+		instr.aRa=9'd0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd64+MC0;
+		instr.ins = {3'd0,2'd0,CSR_CTX,6'h00,MC0,OP_CSR};
+		instr.pred_btst=6'd0;
+	end
+12'h101:
+	begin
+		next_ip=12'h104;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd1;
+		instr.aRt=9'd0;
+		instr.ins={21'h00008,MC0,6'd1,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h102:
+	begin
+		next_ip=12'h104;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd2;
+		instr.aRt=9'd0;
+		instr.ins={21'h00010,MC0,6'd2,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h103:
+	begin
+		next_ip=12'h104;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd3;
+		instr.aRt=9'd0;
+		instr.ins={21'h00018,MC0,6'd3,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h104:
+	begin
+		next_ip=12'h108;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd4;
+		instr.aRt=9'd0;
+		instr.ins={21'h00020,MC0,6'd4,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h105:
+	begin
+		next_ip=12'h108;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd5;
+		instr.aRt=9'd0;
+		instr.ins={21'h00028,MC0,6'd5,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h106:
+	begin
+		next_ip=12'h108;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd6;
+		instr.aRt=9'd0;
+		instr.ins={21'h00030,MC0,6'd6,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h107:
+	begin
+		next_ip=12'h108;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd7;
+		instr.aRt=9'd0;
+		instr.ins={21'h00038,MC0,6'd7,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h108:
+	begin
+		next_ip=12'h10C;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd8;
+		instr.aRt=9'd0;
+		instr.ins={21'h00040,MC0,6'd8,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h109:
+	begin
+		next_ip=12'h10C;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd9;
+		instr.aRt=9'd0;
+		instr.ins={21'h00048,MC0,6'd9,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h10A:
+	begin
+		next_ip=12'h10C;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd10;
+		instr.aRt=9'd0;
+		instr.ins={21'h00050,MC0,6'd10,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h10B:
+	begin
+		next_ip=12'h10C;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd11;
+		instr.aRt=9'd0;
+		instr.ins={21'h00058,MC0,6'd11,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h10C:
+	begin
+		next_ip=12'h110;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd12;
+		instr.aRt=9'd0;
+		instr.ins={21'h00060,MC0,6'd12,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h10D:
+	begin
+		next_ip=12'h110;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd13;
+		instr.aRt=9'd0;
+		instr.ins={21'h00068,MC0,6'd13,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h10E:
+	begin
+		next_ip=12'h110;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd14;
+		instr.aRt=9'd0;
+		instr.ins={21'h00070,MC0,6'd14,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h10F:
+	begin
+		next_ip=12'h110;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd15;
+		instr.aRt=9'd0;
+		instr.ins={21'h00078,MC0,6'd15,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h110:
+	begin
+		next_ip=12'h114;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd16;
+		instr.aRt=9'd0;
+		instr.ins={21'h00080,MC0,6'd16,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h111:
+	begin
+		next_ip=12'h114;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd17;
+		instr.aRt=9'd0;
+		instr.ins={21'h00088,MC0,6'd17,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h112:
+	begin
+		next_ip=12'h114;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd18;
+		instr.aRt=9'd0;
+		instr.ins={21'h00090,MC0,6'd18,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h113:
+	begin
+		next_ip=12'h114;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd19;
+		instr.aRt=9'd0;
+		instr.ins={21'h00098,MC0,6'd19,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h114:
+	begin
+		next_ip=12'h118;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd20;
+		instr.aRt=9'd0;
+		instr.ins={21'h000A0,MC0,6'd20,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h115:
+	begin
+		next_ip=12'h118;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd21;
+		instr.aRt=9'd0;
+		instr.ins={21'h000A8,MC0,6'd21,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h116:
+	begin
+		next_ip=12'h118;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd22;
+		instr.aRt=9'd0;
+		instr.ins={21'h000B0,MC0,6'd22,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h117:
+	begin
+		next_ip=12'h118;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd23;
+		instr.aRt=9'd0;
+		instr.ins={21'h000B8,MC0,6'd23,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h118:
+	begin
+		next_ip=12'h11C;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd24;
+		instr.aRt=9'd0;
+		instr.ins={21'h000C0,MC0,6'd24,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h119:
+	begin
+		next_ip=12'h11C;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd25;
+		instr.aRt=9'd0;
+		instr.ins={21'h000C8,MC0,6'd25,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h11A:
+	begin
+		next_ip=12'h11C;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd26;
+		instr.aRt=9'd0;
+		instr.ins={21'h000D0,MC0,6'd26,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h11B:
+	begin
+		next_ip=12'h11C;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd27;
+		instr.aRt=9'd0;
+		instr.ins={21'h000D8,MC0,6'd27,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h11C:
+	begin
+		next_ip=12'h120;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd28;
+		instr.aRt=9'd0;
+		instr.ins={21'h000E0,MC0,6'd28,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h11D:
+	begin
+		next_ip=12'h120;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd29;
+		instr.aRt=9'd0;
+		instr.ins={21'h000E8,MC0,6'd29,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h11E:
+	begin
+		next_ip=12'h120;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd30;
+		instr.aRt=9'd0;
+		instr.ins={21'h000F0,MC0,6'd30,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h11F:
+	begin
+		next_ip=12'h120;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd31;
+		instr.aRt=9'd0;
+		instr.ins={21'h000F8,MC0,6'd31,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h120:
+	begin
+		next_ip=12'h124;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd32;
+		instr.aRt=9'd0;
+		instr.ins={21'h00100,MC0,6'd32,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h121:
+	begin
+		next_ip=12'h124;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd33;
+		instr.aRt=9'd0;
+		instr.ins={21'h00108,MC0,6'd33,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h122:
+	begin
+		next_ip=12'h124;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd34;
+		instr.aRt=9'd0;
+		instr.ins={21'h00110,MC0,6'd34,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h123:
+	begin
+		next_ip=12'h124;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd35;
+		instr.aRt=9'd0;
+		instr.ins={21'h00118,MC0,6'd35,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h124:
+	begin
+		next_ip=12'h128;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd36;
+		instr.aRt=9'd0;
+		instr.ins={21'h00120,MC0,6'd36,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h125:
+	begin
+		next_ip=12'h128;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd37;
+		instr.aRt=9'd0;
+		instr.ins={21'h00128,MC0,6'd37,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h126:
+	begin
+		next_ip=12'h128;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd38;
+		instr.aRt=9'd0;
+		instr.ins={21'h00130,MC0,6'd38,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h127:
+	begin
+		next_ip=12'h128;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd39;
+		instr.aRt=9'd0;
+		instr.ins={21'h00138,MC0,6'd39,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h128:
+	begin
+		next_ip=12'h12C;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd40;
+		instr.aRt=9'd0;
+		instr.ins={21'h00140,MC0,6'd40,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h129:
+	begin
+		next_ip=12'h12C;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd41;
+		instr.aRt=9'd0;
+		instr.ins={21'h00148,MC0,6'd41,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h12A:
+	begin
+		next_ip=12'h12C;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd42;
+		instr.aRt=9'd0;
+		instr.ins={21'h00150,MC0,6'd42,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h12B:
+	begin
+		next_ip=12'h12C;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd43;
+		instr.aRt=9'd0;
+		instr.ins={21'h00158,MC0,6'd43,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h12C:
+	begin
+		next_ip=12'h130;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd44;
+		instr.aRt=9'd0;
+		instr.ins={21'h00160,MC0,6'd44,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h12D:
+	begin
+		next_ip=12'h130;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd45;
+		instr.aRt=9'd0;
+		instr.ins={21'h00168,MC0,6'd45,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h12E:
+	begin
+		next_ip=12'h130;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd46;
+		instr.aRt=9'd0;
+		instr.ins={21'h00170,MC0,6'd46,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h12F:
+	begin
+		next_ip=12'h130;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd47;
+		instr.aRt=9'd0;
+		instr.ins={21'h00178,MC0,6'd47,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h130:
+	begin
+		next_ip=12'h134;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd48;
+		instr.aRt=9'd0;
+		instr.ins={21'h00180,MC0,6'd48,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h131:
+	begin
+		next_ip=12'h134;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd49;
+		instr.aRt=9'd0;
+		instr.ins={21'h00188,MC0,6'd49,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h132:
+	begin
+		next_ip=12'h134;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd50;
+		instr.aRt=9'd0;
+		instr.ins={21'h00190,MC0,6'd50,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h133:
+	begin
+		next_ip=12'h134;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd51;
+		instr.aRt=9'd0;
+		instr.ins={21'h00198,MC0,6'd51,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h134:
+	begin
+		next_ip=12'h138;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd52;
+		instr.aRt=9'd0;
+		instr.ins={21'h001A0,MC0,6'd52,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h135:
+	begin
+		next_ip=12'h138;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd53;
+		instr.aRt=9'd0;
+		instr.ins={21'h001A8,MC0,6'd53,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h136:
+	begin
+		next_ip=12'h138;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd54;
+		instr.aRt=9'd0;
+		instr.ins={21'h001B0,MC0,6'd54,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h137:
+	begin
+		next_ip=12'h138;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd55;
+		instr.aRt=9'd0;
+		instr.ins={21'h001B8,MC0,6'd55,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h138:
+	begin
+		next_ip=12'h13C;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd56;
+		instr.aRt=9'd0;
+		instr.ins={21'h001C0,MC0,6'd56,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h139:
+	begin
+		next_ip=12'h13C;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd57;
+		instr.aRt=9'd0;
+		instr.ins={21'h001C8,MC0,6'd57,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h13A:
+	begin
+		next_ip=12'h13C;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd58;
+		instr.aRt=9'd0;
+		instr.ins={21'h001D0,MC0,6'd58,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h13B:
+	begin
+		next_ip=12'h13C;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd59;
+		instr.aRt=9'd0;
+		instr.ins={21'h001D8,MC0,6'd59,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h13C:
+	begin
+		next_ip=12'h140;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd60;
+		instr.aRt=9'd0;
+		instr.ins={21'h001E0,MC0,6'd60,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h13D:
+	begin
+		next_ip=12'h140;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd61;
+		instr.aRt=9'd0;
+		instr.ins={21'h001E8,MC0,6'd61,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h13E:
+	begin
+		next_ip=12'h140;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd62;
+		instr.aRt=9'd0;
+		instr.ins={21'h001F0,MC0,6'd62,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h13F:
+	begin
+		next_ip=12'h140;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd63;
+		instr.aRt=9'd0;
+		instr.ins={21'h001F8,MC0,6'd63,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h140:	begin next_ip = 12'h000; instr.ins = {'d0,13'h03F0,MC0,6'h3F,OP_STO}; regx = 4'h2; end
 12'h141:	begin next_ip = 12'h000; instr.ins = {'d0,OP_NOP};	end
 12'h142:	begin next_ip = 12'h000; instr.ins = {'d0,OP_NOP};	end
 12'h143:	begin next_ip = 12'h000; instr.ins = {'d0,OP_NOP};	end
 
+// -----------------------------------------------------------------------------
 // LDCTX
-12'h150:	begin next_ip = 12'h154; instr.ins = {3'd0,2'd0,CSR_CTX,6'h00,MC0,OP_CSR}; regx = 4'h1; end	// MC0 = CTX address
-12'h151:	begin next_ip = 12'h154; instr.ins = {'d0,OP_NOP}; end
-12'h152:	begin next_ip = 12'h154; instr.ins = {'d0,13'h0010,MC0,6'h01,OP_LDH}; regx = 4'h2; end
-12'h153:	begin next_ip = 12'h154; instr.ins = {'d0,13'h0020,MC0,6'h02,OP_LDH}; regx = 4'h2; end
-12'h154:	begin next_ip = 12'h158; instr.ins = {'d0,13'h0030,MC0,6'h03,OP_LDH}; regx = 4'h2; end
-12'h155:	begin next_ip = 12'h158; instr.ins = {'d0,13'h0040,MC0,6'h04,OP_LDH}; regx = 4'h2; end
-12'h156:	begin next_ip = 12'h158; instr.ins = {'d0,13'h0050,MC0,6'h05,OP_LDH}; regx = 4'h2; end
-12'h157:	begin next_ip = 12'h158; instr.ins = {'d0,13'h0060,MC0,6'h06,OP_LDH}; regx = 4'h2; end
-12'h158:	begin next_ip = 12'h15C; instr.ins = {'d0,13'h0070,MC0,6'h07,OP_LDH}; regx = 4'h2; end
-12'h159:	begin next_ip = 12'h15C; instr.ins = {'d0,13'h0080,MC0,6'h08,OP_LDH}; regx = 4'h2; end
-12'h15A:	begin next_ip = 12'h15C; instr.ins = {'d0,13'h0090,MC0,6'h09,OP_LDH}; regx = 4'h2; end
-12'h15B:	begin next_ip = 12'h15C; instr.ins = {'d0,13'h00A0,MC0,6'h0A,OP_LDH}; regx = 4'h2; end
-12'h15C:	begin next_ip = 12'h160; instr.ins = {'d0,13'h00B0,MC0,6'h0B,OP_LDH}; regx = 4'h2; end
-12'h15D:	begin next_ip = 12'h160; instr.ins = {'d0,13'h00C0,MC0,6'h0C,OP_LDH}; regx = 4'h2; end
-12'h15E:	begin next_ip = 12'h160; instr.ins = {'d0,13'h00D0,MC0,6'h0D,OP_LDH}; regx = 4'h2; end
-12'h15F:	begin next_ip = 12'h160; instr.ins = {'d0,13'h00E0,MC0,6'h0E,OP_LDH}; regx = 4'h2; end
-12'h160:	begin next_ip = 12'h164; instr.ins = {'d0,13'h00F0,MC0,6'h0F,OP_LDH}; regx = 4'h2; end
-12'h161:	begin next_ip = 12'h164; instr.ins = {'d0,13'h0100,MC0,6'h10,OP_LDH}; regx = 4'h2; end
-12'h162:	begin next_ip = 12'h164; instr.ins = {'d0,13'h0110,MC0,6'h11,OP_LDH}; regx = 4'h2; end
-12'h163:	begin next_ip = 12'h164; instr.ins = {'d0,13'h0120,MC0,6'h12,OP_LDH}; regx = 4'h2; end
-12'h164:	begin next_ip = 12'h168; instr.ins = {'d0,13'h0130,MC0,6'h13,OP_LDH}; regx = 4'h2; end
-12'h165:	begin next_ip = 12'h168; instr.ins = {'d0,13'h0140,MC0,6'h14,OP_LDH}; regx = 4'h2; end
-12'h166:	begin next_ip = 12'h168; instr.ins = {'d0,13'h0150,MC0,6'h15,OP_LDH}; regx = 4'h2; end
-12'h167:	begin next_ip = 12'h168; instr.ins = {'d0,13'h0160,MC0,6'h16,OP_LDH}; regx = 4'h2; end
-12'h168:	begin next_ip = 12'h16C; instr.ins = {'d0,13'h0170,MC0,6'h17,OP_LDH}; regx = 4'h2; end
-12'h169:	begin next_ip = 12'h16C; instr.ins = {'d0,13'h0180,MC0,6'h18,OP_LDH}; regx = 4'h2; end
-12'h16A:	begin next_ip = 12'h16C; instr.ins = {'d0,13'h0190,MC0,6'h19,OP_LDH}; regx = 4'h2; end
-12'h16B:	begin next_ip = 12'h16C; instr.ins = {'d0,13'h01A0,MC0,6'h1A,OP_LDH}; regx = 4'h2; end
-12'h16C:	begin next_ip = 12'h170; instr.ins = {'d0,13'h01B0,MC0,6'h1B,OP_LDH}; regx = 4'h2; end
-12'h16D:	begin next_ip = 12'h170; instr.ins = {'d0,13'h01C0,MC0,6'h1C,OP_LDH}; regx = 4'h2; end
-12'h16E:	begin next_ip = 12'h170; instr.ins = {'d0,13'h01D0,MC0,6'h1D,OP_LDH}; regx = 4'h2; end
-12'h16F:	begin next_ip = 12'h170; instr.ins = {'d0,13'h01E0,MC0,6'h1E,OP_LDH}; regx = 4'h2; end
-12'h170:	begin next_ip = 12'h174; instr.ins = {'d0,13'h01F0,MC0,6'h1F,OP_LDH}; regx = 4'h2; end
-12'h171:	begin next_ip = 12'h174; instr.ins = {'d0,13'h0200,MC0,6'h20,OP_LDH}; regx = 4'h2; end
-12'h172:	begin next_ip = 12'h174; instr.ins = {'d0,13'h0210,MC0,6'h21,OP_LDH}; regx = 4'h2; end
-12'h173:	begin next_ip = 12'h174; instr.ins = {'d0,13'h0220,MC0,6'h22,OP_LDH}; regx = 4'h2; end
-12'h174:	begin next_ip = 12'h178; instr.ins = {'d0,13'h0230,MC0,6'h23,OP_LDH}; regx = 4'h2; end
-12'h175:	begin next_ip = 12'h178; instr.ins = {'d0,13'h0240,MC0,6'h24,OP_LDH}; regx = 4'h2; end
-12'h176:	begin next_ip = 12'h178; instr.ins = {'d0,13'h0250,MC0,6'h25,OP_LDH}; regx = 4'h2; end
-12'h177:	begin next_ip = 12'h178; instr.ins = {'d0,13'h0260,MC0,6'h26,OP_LDH}; regx = 4'h2; end
-12'h178:	begin next_ip = 12'h17C; instr.ins = {'d0,13'h0270,MC0,6'h27,OP_LDH}; regx = 4'h2; end
-12'h179:	begin next_ip = 12'h17C; instr.ins = {'d0,13'h0280,MC0,6'h28,OP_LDH}; regx = 4'h2; end
-12'h17A:	begin next_ip = 12'h17C; instr.ins = {'d0,13'h0290,MC0,6'h29,OP_LDH}; regx = 4'h2; end
-12'h17B:	begin next_ip = 12'h17C; instr.ins = {'d0,13'h02A0,MC0,6'h2A,OP_LDH}; regx = 4'h2; end
-12'h17C:	begin next_ip = 12'h180; instr.ins = {'d0,13'h02B0,MC0,6'h2B,OP_LDH}; regx = 4'h2; end
-12'h17D:	begin next_ip = 12'h180; instr.ins = {'d0,13'h02C0,MC0,6'h2C,OP_LDH}; regx = 4'h2; end
-12'h17E:	begin next_ip = 12'h180; instr.ins = {'d0,13'h02D0,MC0,6'h2D,OP_LDH}; regx = 4'h2; end
-12'h17F:	begin next_ip = 12'h180; instr.ins = {'d0,13'h02E0,MC0,6'h2E,OP_LDH}; regx = 4'h2; end
-12'h180:	begin next_ip = 12'h184; instr.ins = {'d0,13'h02F0,MC0,6'h2F,OP_LDH}; regx = 4'h2; end
-12'h181:	begin next_ip = 12'h184; instr.ins = {'d0,13'h0300,MC0,6'h30,OP_LDH}; regx = 4'h2; end
-12'h182:	begin next_ip = 12'h184; instr.ins = {'d0,13'h0310,MC0,6'h31,OP_LDH}; regx = 4'h2; end
-12'h183:	begin next_ip = 12'h184; instr.ins = {'d0,13'h0320,MC0,6'h32,OP_LDH}; regx = 4'h2; end
-12'h184:	begin next_ip = 12'h188; instr.ins = {'d0,13'h0330,MC0,6'h33,OP_LDH}; regx = 4'h2; end
-12'h185:	begin next_ip = 12'h188; instr.ins = {'d0,13'h0340,MC0,6'h34,OP_LDH}; regx = 4'h2; end
-12'h186:	begin next_ip = 12'h188; instr.ins = {'d0,13'h0350,MC0,6'h35,OP_LDH}; regx = 4'h2; end
-12'h187:	begin next_ip = 12'h188; instr.ins = {'d0,13'h0360,MC0,6'h36,OP_LDH}; regx = 4'h2; end
-12'h188:	begin next_ip = 12'h18C; instr.ins = {'d0,13'h0370,MC0,6'h37,OP_LDH}; regx = 4'h2; end
-12'h189:	begin next_ip = 12'h18C; instr.ins = {'d0,13'h0380,MC0,6'h38,OP_LDH}; regx = 4'h2; end
-12'h18A:	begin next_ip = 12'h18C; instr.ins = {'d0,13'h0390,MC0,6'h39,OP_LDH}; regx = 4'h2; end
-12'h18B:	begin next_ip = 12'h18C; instr.ins = {'d0,13'h03A0,MC0,6'h3A,OP_LDH}; regx = 4'h2; end
-12'h18C:	begin next_ip = 12'h190; instr.ins = {'d0,13'h03B0,MC0,6'h3B,OP_LDH}; regx = 4'h2; end
-12'h18D:	begin next_ip = 12'h190; instr.ins = {'d0,13'h03C0,MC0,6'h3C,OP_LDH}; regx = 4'h2; end
-12'h18E:	begin next_ip = 12'h190; instr.ins = {'d0,13'h03D0,MC0,6'h3D,OP_LDH}; regx = 4'h2; end
-12'h18F:	begin next_ip = 12'h190; instr.ins = {'d0,13'h03E0,MC0,6'h3E,OP_LDH}; regx = 4'h2; end
-12'h190:	begin next_ip = 12'h000; instr.ins = {'d0,13'h03F0,MC0,6'h3F,OP_LDH}; regx = 4'h2; end
-12'h191:	begin next_ip = 12'h000; instr.ins = {'d0,OP_NOP};	end
-12'h192:	begin next_ip = 12'h000; instr.ins = {'d0,OP_NOP};	end
-12'h193:	begin next_ip = 12'h000; instr.ins = {'d0,OP_NOP};	end
+// -----------------------------------------------------------------------------
+12'h150:
+	begin
+		next_ip=12'h154;
+		instr.aRa=9'd0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd64+MC0;
+		instr.ins = {3'd0,2'd0,CSR_CTX,6'h00,MC0,OP_CSR};
+		instr.pred_btst=6'd0;
+	end
+12'h151:
+	begin
+		next_ip=12'h154;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd1;
+		instr.ins={21'h00008,MC0,6'd1,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h152:
+	begin
+		next_ip=12'h154;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd2;
+		instr.ins={21'h00010,MC0,6'd2,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h153:
+	begin
+		next_ip=12'h154;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd3;
+		instr.ins={21'h00018,MC0,6'd3,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h154:
+	begin
+		next_ip=12'h158;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd4;
+		instr.ins={21'h00020,MC0,6'd4,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h155:
+	begin
+		next_ip=12'h158;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd5;
+		instr.ins={21'h00028,MC0,6'd5,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h156:
+	begin
+		next_ip=12'h158;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd6;
+		instr.ins={21'h00030,MC0,6'd6,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h157:
+	begin
+		next_ip=12'h158;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd7;
+		instr.ins={21'h00038,MC0,6'd7,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h158:
+	begin
+		next_ip=12'h15C;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd8;
+		instr.ins={21'h00040,MC0,6'd8,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h159:
+	begin
+		next_ip=12'h15C;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd9;
+		instr.ins={21'h00048,MC0,6'd9,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h15A:
+	begin
+		next_ip=12'h15C;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd10;
+		instr.ins={21'h00050,MC0,6'd10,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h15B:
+	begin
+		next_ip=12'h15C;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd11;
+		instr.ins={21'h00058,MC0,6'd11,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h15C:
+	begin
+		next_ip=12'h160;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd12;
+		instr.ins={21'h00060,MC0,6'd12,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h15D:
+	begin
+		next_ip=12'h160;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd13;
+		instr.ins={21'h00068,MC0,6'd13,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h15E:
+	begin
+		next_ip=12'h160;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd14;
+		instr.ins={21'h00070,MC0,6'd14,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h15F:
+	begin
+		next_ip=12'h160;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd15;
+		instr.ins={21'h00078,MC0,6'd15,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h160:
+	begin
+		next_ip=12'h164;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd16;
+		instr.ins={21'h00080,MC0,6'd16,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h161:
+	begin
+		next_ip=12'h164;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd17;
+		instr.ins={21'h00088,MC0,6'd17,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h162:
+	begin
+		next_ip=12'h164;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd18;
+		instr.ins={21'h00090,MC0,6'd18,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h163:
+	begin
+		next_ip=12'h164;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd19;
+		instr.ins={21'h00098,MC0,6'd19,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h164:
+	begin
+		next_ip=12'h168;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd20;
+		instr.ins={21'h000A0,MC0,6'd20,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h165:
+	begin
+		next_ip=12'h168;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd21;
+		instr.ins={21'h000A8,MC0,6'd21,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h166:
+	begin
+		next_ip=12'h168;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd22;
+		instr.ins={21'h000B0,MC0,6'd22,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h167:
+	begin
+		next_ip=12'h168;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd23;
+		instr.ins={21'h000B8,MC0,6'd23,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h168:
+	begin
+		next_ip=12'h16C;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd24;
+		instr.ins={21'h000C0,MC0,6'd24,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h169:
+	begin
+		next_ip=12'h16C;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd25;
+		instr.ins={21'h000C8,MC0,6'd25,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h16A:
+	begin
+		next_ip=12'h16C;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd26;
+		instr.ins={21'h000D0,MC0,6'd26,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h16B:
+	begin
+		next_ip=12'h16C;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd27;
+		instr.ins={21'h000D8,MC0,6'd27,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h16C:
+	begin
+		next_ip=12'h170;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd28;
+		instr.ins={21'h000E0,MC0,6'd28,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h16D:
+	begin
+		next_ip=12'h170;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd29;
+		instr.ins={21'h000E8,MC0,6'd29,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h16E:
+	begin
+		next_ip=12'h170;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd30;
+		instr.ins={21'h000F0,MC0,6'd30,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h16F:
+	begin
+		next_ip=12'h170;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd31;
+		instr.ins={21'h000F8,MC0,6'd31,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h170:
+	begin
+		next_ip=12'h174;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd32;
+		instr.ins={21'h00100,MC0,6'd32,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h171:
+	begin
+		next_ip=12'h174;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd33;
+		instr.ins={21'h00108,MC0,6'd33,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h172:
+	begin
+		next_ip=12'h174;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd34;
+		instr.ins={21'h00110,MC0,6'd34,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h173:
+	begin
+		next_ip=12'h174;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd35;
+		instr.ins={21'h00118,MC0,6'd35,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h174:
+	begin
+		next_ip=12'h178;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd36;
+		instr.ins={21'h00120,MC0,6'd36,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h175:
+	begin
+		next_ip=12'h178;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd37;
+		instr.ins={21'h00128,MC0,6'd37,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h176:
+	begin
+		next_ip=12'h178;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd38;
+		instr.ins={21'h00130,MC0,6'd38,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h177:
+	begin
+		next_ip=12'h178;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd39;
+		instr.ins={21'h00138,MC0,6'd39,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h178:
+	begin
+		next_ip=12'h17C;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd40;
+		instr.ins={21'h00140,MC0,6'd40,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h179:
+	begin
+		next_ip=12'h17C;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd41;
+		instr.ins={21'h00148,MC0,6'd41,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h17A:
+	begin
+		next_ip=12'h17C;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd42;
+		instr.ins={21'h00150,MC0,6'd42,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h17B:
+	begin
+		next_ip=12'h17C;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd43;
+		instr.ins={21'h00158,MC0,6'd43,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h17C:
+	begin
+		next_ip=12'h180;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd44;
+		instr.ins={21'h00160,MC0,6'd44,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h17D:
+	begin
+		next_ip=12'h180;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd45;
+		instr.ins={21'h00168,MC0,6'd45,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h17E:
+	begin
+		next_ip=12'h180;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd46;
+		instr.ins={21'h00170,MC0,6'd46,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h17F:
+	begin
+		next_ip=12'h180;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd47;
+		instr.ins={21'h00178,MC0,6'd47,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h180:
+	begin
+		next_ip=12'h184;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd48;
+		instr.ins={21'h00180,MC0,6'd48,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h181:
+	begin
+		next_ip=12'h184;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd49;
+		instr.ins={21'h00188,MC0,6'd49,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h182:
+	begin
+		next_ip=12'h184;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd50;
+		instr.ins={21'h00190,MC0,6'd50,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h183:
+	begin
+		next_ip=12'h184;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd51;
+		instr.ins={21'h00198,MC0,6'd51,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h184:
+	begin
+		next_ip=12'h188;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd52;
+		instr.ins={21'h001A0,MC0,6'd52,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h185:
+	begin
+		next_ip=12'h188;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd53;
+		instr.ins={21'h001A8,MC0,6'd53,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h186:
+	begin
+		next_ip=12'h188;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd54;
+		instr.ins={21'h001B0,MC0,6'd54,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h187:
+	begin
+		next_ip=12'h188;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd55;
+		instr.ins={21'h001B8,MC0,6'd55,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h188:
+	begin
+		next_ip=12'h18C;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd56;
+		instr.ins={21'h001C0,MC0,6'd56,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h189:
+	begin
+		next_ip=12'h18C;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd57;
+		instr.ins={21'h001C8,MC0,6'd57,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h18A:
+	begin
+		next_ip=12'h18C;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd58;
+		instr.ins={21'h001D0,MC0,6'd58,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h18B:
+	begin
+		next_ip=12'h18C;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd59;
+		instr.ins={21'h001D8,MC0,6'd59,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h18C:
+	begin
+		next_ip=12'h190;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd60;
+		instr.ins={21'h001E0,MC0,6'd60,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h18D:
+	begin
+		next_ip=12'h190;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd61;
+		instr.ins={21'h001E8,MC0,6'd61,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h18E:
+	begin
+		next_ip=12'h190;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd62;
+		instr.ins={21'h001F0,MC0,6'd62,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h18F:
+	begin
+		next_ip=12'h190;
+		instr.aRa=9'd64+MC0;
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd63;
+		instr.ins={21'h001F8,MC0,6'd63,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h190:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+12'h191:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+12'h192:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+12'h193:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
 
 // -----------------------------------------------------------------------------
 // RESET...
@@ -794,13 +2221,13 @@ case(micro_ip)
 12'h1B9:	
 	begin 
 		next_ip = 12'h000;
-		instr.ins = {21'h1FFFC0,6'd0,SP,OP_LDO};
+		instr.ins = {21'h1FF000,6'd0,SP,OP_LDO};
 		instr.aRt = 9'd68;
 	end			// SP = Mem[FFFFFFE0]
 12'h1BA:
 	begin
 		next_ip = 12'h000;
-		instr.ins = {21'h1FFFC8,6'd0,MC0,OP_LDO};
+		instr.ins = {21'h1FF008,6'd0,MC0,OP_LDO};
 		instr.aRt = 9'd64 + MC0;
 		regx = 4'h1;
 	end			// PC = Mem[FFFFFFF0]
@@ -818,85 +2245,407 @@ case(micro_ip)
 	end
 
 // -----------------------------------------------------------------------------
+// LEAVE
+// - reverses out the ENTER operation
+//	leave 5,32		; leave <saved regs>,stack deallocate
+//
+// Implements the following instructions:
+//	sub sp,sp,NS*8
+//	if (NS>0) ldo s0,[sp]
+//	if (NS>1) ldo s1,8[sp]
+//	...
+//	if (NS>9) ldo s9,72[sp]
+//  mov sp,fp
+//  ldo fp[sp]
+//	ldo lr0,8[sp]
+//  add sp,sp,32
+//	add sp,sp,<constant23
+//	addm sp,sp,?constant23
+//  jmp const6[lr0]
+//
+// -----------------------------------------------------------------------------
+12'h1D0:
+	begin
+		next_ip = 12'h1D4;
+		instr.ins = {-{14'd0,micro_ir[16:13],3'd0},FP,SP,OP_ADDI};
+		instr.aRa = FP;
+		case(om)
+		2'd0:	instr.aRt = 9'd72;
+		2'd1:	instr.aRt = 9'd73;
+		2'd2:	instr.aRt = 9'd74;
+		2'd3:	instr.aRt = 9'd64|ipl;
+		endcase
+	end		// SP = FP-NS*8
+12'h1D1:
+	begin
+		if (micro_ir[16:13]>4'd0) begin
+			next_ip = 12'h1D4;
+			instr.ins = {21'h000000,SP,S0,OP_LDO};
+			case(om)
+			2'd0:	instr.aRa = 9'd72;
+			2'd1:	instr.aRa = 9'd73;
+			2'd2: instr.aRa = 9'd74;
+			2'd3:	instr.aRa = 9'd64|ipl;
+			endcase
+			instr.aRc = 9'd0;
+			instr.aRt = S0;
+		end
+		else begin
+			next_ip = 12'h1D8;
+			instr.ins = {33'd0,OP_NOP};
+		end
+	end
+12'h1D2:
+	begin
+		if (micro_ir[16:13]>4'd1) begin
+			next_ip = 12'h1D4;
+			instr.ins = {21'h000008,SP,S1,OP_LDO};
+			case(om)
+			2'd0:	instr.aRa = 9'd72;
+			2'd1:	instr.aRa = 9'd73;
+			2'd2: instr.aRa = 9'd74;
+			2'd3:	instr.aRa = 9'd64|ipl;
+			endcase
+			instr.aRc = 9'd0;
+			instr.aRt = S1;
+		end
+		else begin
+			next_ip = 12'h1D8;
+			instr.ins = {33'd0,OP_NOP};
+		end
+	end
+12'h1D3:
+	begin
+		if (micro_ir[16:13]>4'd2) begin
+			next_ip = 12'h1D4;
+			instr.ins = {21'h000010,SP,S2,OP_LDO};
+			case(om)
+			2'd0:	instr.aRa = 9'd72;
+			2'd1:	instr.aRa = 9'd73;
+			2'd2: instr.aRa = 9'd74;
+			2'd3:	instr.aRa = 9'd64|ipl;
+			endcase
+			instr.aRc = 9'd0;
+			instr.aRt = S2;
+		end
+		else begin
+			next_ip = 12'h1D8;
+			instr.ins = {33'd0,OP_NOP};
+		end
+	end
+12'h1D4:
+	begin
+		if (micro_ir[16:13]>4'd3) begin
+			next_ip = 12'h1D8;
+			instr.ins = {21'h000018,SP,S3,OP_LDO};
+			case(om)
+			2'd0:	instr.aRa = 9'd72;
+			2'd1:	instr.aRa = 9'd73;
+			2'd2: instr.aRa = 9'd74;
+			2'd3:	instr.aRa = 9'd64|ipl;
+			endcase
+			instr.aRc = 9'd0;
+			instr.aRt = S3;
+		end
+		else begin
+			next_ip = 12'h1D8;
+			instr.ins = {33'd0,OP_NOP};
+		end
+	end
+12'h1D5:
+	begin
+		if (micro_ir[16:13]>4'd4) begin
+			next_ip = 12'h1D8;
+			instr.ins = {21'h000020,SP,S4,OP_LDO};
+			case(om)
+			2'd0:	instr.aRa = 9'd72;
+			2'd1:	instr.aRa = 9'd73;
+			2'd2: instr.aRa = 9'd74;
+			2'd3:	instr.aRa = 9'd64|ipl;
+			endcase
+			instr.aRc = 9'd0;
+			instr.aRt = S4;
+		end
+		else begin
+			next_ip = 12'h1D8;
+			instr.ins = {33'd0,OP_NOP};
+		end
+	end
+12'h1D6:
+	begin
+		if (micro_ir[16:13]>4'd5) begin
+			next_ip = 12'h1D8;
+			instr.ins = {21'h000028,SP,S5,OP_LDO};
+			case(om)
+			2'd0:	instr.aRa = 9'd72;
+			2'd1:	instr.aRa = 9'd73;
+			2'd2: instr.aRa = 9'd74;
+			2'd3:	instr.aRa = 9'd64|ipl;
+			endcase
+			instr.aRc = 9'd0;
+			instr.aRt = S5;
+		end
+		else begin
+			next_ip = 12'h1D8;
+			instr.ins = {33'd0,OP_NOP};
+		end
+	end
+12'h1D7:
+	begin
+		if (micro_ir[16:13]>4'd6) begin
+			next_ip = 12'h1D8;
+			instr.ins = {21'h000030,SP,S6,OP_LDO};
+			case(om)
+			2'd0:	instr.aRa = 9'd72;
+			2'd1:	instr.aRa = 9'd73;
+			2'd2: instr.aRa = 9'd74;
+			2'd3:	instr.aRa = 9'd64|ipl;
+			endcase
+			instr.aRc = 9'd0;
+			instr.aRt = S6;
+		end
+		else begin
+			next_ip = 12'h1D8;
+			instr.ins = {33'd0,OP_NOP};
+		end
+	end
+12'h1D8:
+	begin
+		if (micro_ir[16:13]>4'd7) begin
+			next_ip = 12'h1DC;
+			instr.ins = {21'h000038,SP,S7,OP_LDO};
+			case(om)
+			2'd0:	instr.aRa = 9'd72;
+			2'd1:	instr.aRa = 9'd73;
+			2'd2: instr.aRa = 9'd74;
+			2'd3:	instr.aRa = 9'd64|ipl;
+			endcase
+			instr.aRc = 9'd0;
+			instr.aRt = S7;
+		end
+		else begin
+			next_ip = 12'h1DC;
+			instr.ins = {33'd0,OP_NOP};
+		end
+	end
+12'h1D9:
+	begin
+		if (micro_ir[16:13]>4'd8) begin
+			next_ip = 12'h1DC;
+			instr.ins = {21'h000040,SP,S8,OP_LDO};
+			case(om)
+			2'd0:	instr.aRa = 9'd72;
+			2'd1:	instr.aRa = 9'd73;
+			2'd2: instr.aRa = 9'd74;
+			2'd3:	instr.aRa = 9'd64|ipl;
+			endcase
+			instr.aRc = 9'd0;
+			instr.aRt = S8;
+		end
+		else begin
+			next_ip = 12'h1DC;
+			instr.ins = {33'd0,OP_NOP};
+		end
+	end
+12'h1DA:
+	begin
+		if (micro_ir[16:13]>4'd9) begin
+			next_ip = 12'h1DC;
+			instr.ins = {21'h000040,SP,S9,OP_LDO};
+			case(om)
+			2'd0:	instr.aRa = 9'd72;
+			2'd1:	instr.aRa = 9'd73;
+			2'd2: instr.aRa = 9'd74;
+			2'd3:	instr.aRa = 9'd64|ipl;
+			endcase
+			instr.aRc = 9'd0;
+			instr.aRt = S9;
+		end
+		else begin
+			next_ip = 12'h1DC;
+			instr.ins = {33'd0,OP_NOP};
+		end
+	end
+
+12'h1DB:	// mov sp,fp
+	begin
+		next_ip = 12'h1DC;
+		instr.ins = {21'h000000,FP,SP,OP_ORI};
+		instr.aRa = FP;
+		case(om)
+		2'd0:	instr.aRt = 9'd72;
+		2'd1:	instr.aRt = 9'd73;
+		2'd2:	instr.aRt = 9'd74;
+		2'd3:	instr.aRt = 9'd64|ipl;
+		endcase
+	end
+12'h1DC:	// ldo fp,[sp]
+	begin
+		next_ip = 12'h1E0;
+		instr.ins = {21'h000000,SP,FP,OP_LDO};
+		case(om)
+		2'd0:	instr.aRa = 9'd72;
+		2'd1:	instr.aRa = 9'd73;
+		2'd2:	instr.aRa = 9'd74;
+		2'd3:	instr.aRa = 9'd64|ipl;
+		endcase
+		instr.aRt = FP;
+	end
+12'h1DD:	// ldo lr0,8[sp]
+	begin
+		next_ip = 12'h1E0;
+		instr.ins = {21'h000008,SP,LR0,OP_LDO};
+		instr.aRt = LR0;
+		case(om)
+		2'd0:	instr.aRa = 9'd72;
+		2'd1:	instr.aRa = 9'd73;
+		2'd2:	instr.aRa = 9'd74;
+		2'd3:	instr.aRa = 9'd64|ipl;
+		endcase
+	end
+12'h1DE:	// add sp,sp,32
+	begin
+		next_ip = 12'h1E0;
+		instr.ins = {21'h000020,SP,SP,OP_ADDI};
+		case(om)
+		2'd0:	instr.aRa = 9'd72;
+		2'd1:	instr.aRa = 9'd73;
+		2'd2:	instr.aRa = 9'd74;
+		2'd3:	instr.aRa = 9'd64|ipl;
+		endcase
+		case(om)
+		2'd0:	instr.aRt = 9'd72;
+		2'd1:	instr.aRt = 9'd73;
+		2'd2:	instr.aRt = 9'd74;
+		2'd3:	instr.aRt = 9'd64|ipl;
+		endcase
+	end
+12'h1DF:	// add sp,sp,Constant23
+	begin 
+		next_ip = 12'h1E0;
+		instr.ins = {micro_ir[37:17],SP,SP,OP_ADDI};
+		case(om)
+		2'd0:	instr.aRa = 9'd72;
+		2'd1:	instr.aRa = 9'd73;
+		2'd2:	instr.aRa = 9'd74;
+		2'd3:	instr.aRa = 9'd64|ipl;
+		endcase
+		case(om)
+		2'd0:	instr.aRt = 9'd72;
+		2'd1:	instr.aRt = 9'd73;
+		2'd2:	instr.aRt = 9'd74;
+		2'd3:	instr.aRt = 9'd64|ipl;
+		endcase
+	end	
+12'h1E0:	// add sp,sp,constant23
+	begin 
+		next_ip = 12'h000;
+		instr.ins = {22'd0,micro_ir[39:38],3'd1,SP,OP_ADDSI};
+		case(om)
+		2'd0:	instr.aRa = 9'd72;
+		2'd1:	instr.aRa = 9'd73;
+		2'd2:	instr.aRa = 9'd74;
+		2'd3:	instr.aRa = 9'd64|ipl;
+		endcase
+		case(om)
+		2'd0:	instr.aRt = 9'd72;
+		2'd1:	instr.aRt = 9'd73;
+		2'd2:	instr.aRt = 9'd74;
+		2'd3:	instr.aRt = 9'd64|ipl;
+		endcase
+	end	
+12'h1E1:	// jmp Const6[lr0]
+	begin
+		next_ip = 12'h000;
+		instr.ins = {15'd0,micro_ir[12:7],LR0,6'd0,OP_JSR};
+		instr.aRa = LR0;
+		instr.aRt = 9'd0;
+	end
+12'h1E2:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+12'h1E3:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+
+// -----------------------------------------------------------------------------
 // R3V
+// R3 Vector Instructions
+// - setup so that a PRED modifier may precede the instruction.
 // -----------------------------------------------------------------------------
 12'h200:
 	begin
 		next_ip = 12'h204; 
-		instr.aRa = {micro_ir.r3.Ra,3'd0} + 8'd74;
-		instr.aRb = {micro_ir.r3.Rb,3'd0} + 8'd74;
-		instr.aRc = {micro_ir.r3.Rc,3'd0} + 8'd74;
-		instr.aRt = {micro_ir.r3.Rt,3'd0} + 8'd74;
+		instr.aRa = {micro_ir.r3.Ra,3'd0};
+		instr.aRb = {micro_ir.r3.Rb,3'd0};
+		instr.aRc = {micro_ir.r3.Rc,3'd0};
+		instr.aRt = {micro_ir.r3.Rt,3'd0};
 		instr.ins = micro_ir;
 		instr.pred_btst = 6'd0;
 	end
 12'h201:
 	begin
 		next_ip = 12'h204; 
-		instr.aRa = {micro_ir.r3.Ra,3'd1} + 8'd74;
-		instr.aRb = {micro_ir.r3.Rb,3'd1} + 8'd74;
-		instr.aRc = {micro_ir.r3.Rc,3'd1} + 8'd74;
-		instr.aRt = {micro_ir.r3.Rt,3'd1} + 8'd74;
+		instr.aRa = {micro_ir.r3.Ra,3'd1};
+		instr.aRb = {micro_ir.r3.Rb,3'd1};
+		instr.aRc = {micro_ir.r3.Rc,3'd1};
+		instr.aRt = {micro_ir.r3.Rt,3'd1};
 		instr.ins = micro_ir;
 		instr.pred_btst = 6'd1;
 	end
 12'h202:
 	begin
 		next_ip = 12'h204; 
-		instr.aRa = {micro_ir.r3.Ra,3'd2} + 8'd74;
-		instr.aRb = {micro_ir.r3.Rb,3'd2} + 8'd74;
-		instr.aRc = {micro_ir.r3.Rc,3'd2} + 8'd74;
-		instr.aRt = {micro_ir.r3.Rt,3'd2} + 8'd74;
+		instr.aRa = {micro_ir.r3.Ra,3'd2};
+		instr.aRb = {micro_ir.r3.Rb,3'd2};
+		instr.aRc = {micro_ir.r3.Rc,3'd2};
+		instr.aRt = {micro_ir.r3.Rt,3'd2};
 		instr.ins = micro_ir;
 		instr.pred_btst = 6'd2;
 	end
 12'h203:
 	begin
 		next_ip = 12'h204; 
-		instr.aRa = {micro_ir.r3.Ra,3'd3} + 8'd74;
-		instr.aRb = {micro_ir.r3.Rb,3'd3} + 8'd74;
-		instr.aRc = {micro_ir.r3.Rc,3'd3} + 8'd74;
-		instr.aRt = {micro_ir.r3.Rt,3'd3} + 8'd74;
+		instr.aRa = {micro_ir.r3.Ra,3'd3};
+		instr.aRb = {micro_ir.r3.Rb,3'd3};
+		instr.aRc = {micro_ir.r3.Rc,3'd3};
+		instr.aRt = {micro_ir.r3.Rt,3'd3};
 		instr.ins = micro_ir;
 		instr.pred_btst = 6'd3;
 	end
 12'h204:
 	begin
 		next_ip = 12'h000; 
-		instr.aRa = {micro_ir.r3.Ra,3'd4} + 8'd74;
-		instr.aRb = {micro_ir.r3.Rb,3'd4} + 8'd74;
-		instr.aRc = {micro_ir.r3.Rc,3'd4} + 8'd74;
-		instr.aRt = {micro_ir.r3.Rt,3'd4} + 8'd74;
+		instr.aRa = {micro_ir.r3.Ra,3'd4};
+		instr.aRb = {micro_ir.r3.Rb,3'd4};
+		instr.aRc = {micro_ir.r3.Rc,3'd4};
+		instr.aRt = {micro_ir.r3.Rt,3'd4};
 		instr.ins = micro_ir;
 		instr.pred_btst = 6'd4;
 	end
 12'h205:
 	begin
 		next_ip = 12'h000; 
-		instr.aRa = {micro_ir.r3.Ra,3'd5} + 8'd74;
-		instr.aRb = {micro_ir.r3.Rb,3'd5} + 8'd74;
-		instr.aRc = {micro_ir.r3.Rc,3'd5} + 8'd74;
-		instr.aRt = {micro_ir.r3.Rt,3'd5} + 8'd74;
+		instr.aRa = {micro_ir.r3.Ra,3'd5};
+		instr.aRb = {micro_ir.r3.Rb,3'd5};
+		instr.aRc = {micro_ir.r3.Rc,3'd5};
+		instr.aRt = {micro_ir.r3.Rt,3'd5};
 		instr.ins = micro_ir;
 		instr.pred_btst = 6'd5;
 	end
 12'h206:
 	begin
 		next_ip = 12'h000; 
-		instr.aRa = {micro_ir.r3.Ra,3'd6} + 8'd74;
-		instr.aRb = {micro_ir.r3.Rb,3'd6} + 8'd74;
-		instr.aRc = {micro_ir.r3.Rc,3'd6} + 8'd74;
-		instr.aRt = {micro_ir.r3.Rt,3'd6} + 8'd74;
+		instr.aRa = {micro_ir.r3.Ra,3'd6};
+		instr.aRb = {micro_ir.r3.Rb,3'd6};
+		instr.aRc = {micro_ir.r3.Rc,3'd6};
+		instr.aRt = {micro_ir.r3.Rt,3'd6};
 		instr.ins = micro_ir;
 		instr.pred_btst = 6'd6;
 	end
 12'h207:
 	begin
 		next_ip = 12'h000;
-		instr.aRa = {micro_ir.r3.Ra,3'd7} + 8'd74;
-		instr.aRb = {micro_ir.r3.Rb,3'd7} + 8'd74;
-		instr.aRc = {micro_ir.r3.Rc,3'd7} + 8'd74;
-		instr.aRt = {micro_ir.r3.Rt,3'd7} + 8'd74;
+		instr.aRa = {micro_ir.r3.Ra,3'd7};
+		instr.aRb = {micro_ir.r3.Rb,3'd7};
+		instr.aRc = {micro_ir.r3.Rc,3'd7};
+		instr.aRt = {micro_ir.r3.Rt,3'd7};
 		instr.ins = micro_ir;
 		instr.pred_btst = 6'd7;
 	end
@@ -907,76 +2656,86 @@ case(micro_ip)
 
 // -----------------------------------------------------------------------------
 // R3VS
+// R3 Vector Scalar Instructions
+// - setup so that a PRED modifier may precede the instruction.
 // -----------------------------------------------------------------------------
 12'h210:
 	begin
 		next_ip = 12'h214; 
-		instr.aRa = {micro_ir.r3.Ra,3'd0} + 8'd74;
-		instr.aRc = {micro_ir.r3.Rc,3'd0} + 8'd74;
-		instr.aRt = {micro_ir.r3.Rt,3'd0} + 8'd74;
+		instr.aRa = {micro_ir.r3.Ra,3'd0};
+		instr.aRb = {3'd0,micro_ir.r3.Rb};
+		instr.aRc = {micro_ir.r3.Rc,3'd0};
+		instr.aRt = {micro_ir.r3.Rt,3'd0};
 		instr.ins = micro_ir;
 		instr.pred_btst = 6'd0;
 	end
 12'h211:
 	begin
 		next_ip = 12'h214; 
-		instr.aRa = {micro_ir.r3.Ra,3'd1} + 8'd74;
-		instr.aRc = {micro_ir.r3.Rc,3'd1} + 8'd74;
-		instr.aRt = {micro_ir.r3.Rt,3'd1} + 8'd74;
+		instr.aRa = {micro_ir.r3.Ra,3'd1};
+		instr.aRb = {3'd0,micro_ir.r3.Rb};
+		instr.aRc = {micro_ir.r3.Rc,3'd1};
+		instr.aRt = {micro_ir.r3.Rt,3'd1};
 		instr.ins = micro_ir;
 		instr.pred_btst = 6'd1;
 	end
 12'h212:
 	begin
 		next_ip = 12'h214; 
-		instr.aRa = {micro_ir.r3.Ra,3'd2} + 8'd74;
-		instr.aRc = {micro_ir.r3.Rc,3'd2} + 8'd74;
-		instr.aRt = {micro_ir.r3.Rt,3'd2} + 8'd74;
+		instr.aRa = {micro_ir.r3.Ra,3'd2};
+		instr.aRb = {3'd0,micro_ir.r3.Rb};
+		instr.aRc = {micro_ir.r3.Rc,3'd2};
+		instr.aRt = {micro_ir.r3.Rt,3'd2};
 		instr.ins = micro_ir;
 		instr.pred_btst = 6'd2;
 	end
 12'h213:
 	begin
 		next_ip = 12'h214; 
-		instr.aRa = {micro_ir.r3.Ra,3'd3} + 8'd74;
-		instr.aRc = {micro_ir.r3.Rc,3'd3} + 8'd74;
-		instr.aRt = {micro_ir.r3.Rt,3'd3} + 8'd74;
+		instr.aRa = {micro_ir.r3.Ra,3'd3};
+		instr.aRb = {3'd0,micro_ir.r3.Rb};
+		instr.aRc = {micro_ir.r3.Rc,3'd3};
+		instr.aRt = {micro_ir.r3.Rt,3'd3};
 		instr.ins = micro_ir;
 		instr.pred_btst = 6'd3;
 	end
 12'h214:
 	begin
 		next_ip = 12'h000; 
-		instr.aRa = {micro_ir.r3.Ra,3'd4} + 8'd74;
-		instr.aRc = {micro_ir.r3.Rc,3'd4} + 8'd74;
-		instr.aRt = {micro_ir.r3.Rt,3'd4} + 8'd74;
+		instr.aRa = {micro_ir.r3.Ra,3'd4};
+		instr.aRb = {3'd0,micro_ir.r3.Rb};
+		instr.aRc = {micro_ir.r3.Rc,3'd4};
+		instr.aRt = {micro_ir.r3.Rt,3'd4};
 		instr.ins = micro_ir;
 		instr.pred_btst = 6'd4;
 	end
 12'h215:
 	begin
 		next_ip = 12'h000; 
-		instr.aRa = {micro_ir.r3.Ra,3'd5} + 8'd74;
-		instr.aRc = {micro_ir.r3.Rc,3'd5} + 8'd74;
-		instr.aRt = {micro_ir.r3.Rt,3'd5} + 8'd74;
+		instr.aRa = {micro_ir.r3.Ra,3'd5};
+		instr.aRb = {3'd0,micro_ir.r3.Rb};
+		instr.aRc = {micro_ir.r3.Rc,3'd5};
+		instr.aRt = {micro_ir.r3.Rt,3'd5};
 		instr.ins = micro_ir;
 		instr.pred_btst = 6'd5;
 	end
 12'h216:
 	begin
 		next_ip = 12'h000; 
-		instr.aRa = {micro_ir.r3.Ra,3'd6} + 8'd74;
-		instr.aRc = {micro_ir.r3.Rc,3'd6} + 8'd74;
-		instr.aRt = {micro_ir.r3.Rt,3'd6} + 8'd74;
+		instr.aRa = {micro_ir.r3.Ra,3'd6};
+		instr.aRb = {3'd0,micro_ir.r3.Rb};
+		instr.aRc = {micro_ir.r3.Rc,3'd6};
+		instr.aRt = {micro_ir.r3.Rt,3'd6};
 		instr.ins = micro_ir;
 		instr.pred_btst = 6'd6;
 	end
 12'h217:
 	begin
 		next_ip = 12'h000;
-		instr.aRa = {micro_ir.r3.Ra,3'd7} + 8'd74;
-		instr.aRc = {micro_ir.r3.Rc,3'd7} + 8'd74;
-		instr.aRt = {micro_ir.r3.Rt,3'd7} + 8'd74;
+		instr.aRa = {micro_ir.r3.Ra,3'd7};
+		instr.aRb = {3'd0,micro_ir.r3.Rb};
+		instr.aRc = {micro_ir.r3.Rc,3'd7};
+		instr.aRt = {micro_ir.r3.Rt,3'd7};
 		instr.ins = micro_ir;
 		instr.pred_btst = 6'd7;
 	end
@@ -991,80 +2750,80 @@ case(micro_ip)
 12'h220:
 	begin
 		next_ip = 12'h224; 
-		instr.aRa = {micro_ir.r3.Ra,3'd0} + 8'd74;
+		instr.aRa = {micro_ir.r3.Ra,3'd0};
 		instr.aRb = 9'd0;
 		instr.aRc = 9'd0;
-		instr.aRt = {micro_ir.r3.Rt,3'd0} + 8'd74;
+		instr.aRt = {micro_ir.r3.Rt,3'd0};
 		instr.ins = micro_ir;
 		instr.pred_btst = 6'd0;
 	end
 12'h221:
 	begin
 		next_ip = 12'h224; 
-		instr.aRa = {micro_ir.r3.Ra,3'd0} + 8'd74;
+		instr.aRa = {micro_ir.r3.Ra,3'd0};
 		instr.aRb = 9'd0;
 		instr.aRc = 9'd0;
-		instr.aRt = {micro_ir.r3.Rt,3'd0} + 8'd74;
+		instr.aRt = {micro_ir.r3.Rt,3'd0};
 		instr.ins = micro_ir;
 		instr.pred_btst = 6'd1;
 	end
 12'h222:
 	begin
 		next_ip = 12'h224; 
-		instr.aRa = {micro_ir.r3.Ra,3'd0} + 8'd74;
+		instr.aRa = {micro_ir.r3.Ra,3'd0};
 		instr.aRb = 9'd0;
 		instr.aRc = 9'd0;
-		instr.aRt = {micro_ir.r3.Rt,3'd0} + 8'd74;
+		instr.aRt = {micro_ir.r3.Rt,3'd0};
 		instr.ins = micro_ir;
 		instr.pred_btst = 6'd2;
 	end
 12'h223:
 	begin
 		next_ip = 12'h224; 
-		instr.aRa = {micro_ir.r3.Ra,3'd0} + 8'd74;
+		instr.aRa = {micro_ir.r3.Ra,3'd0};
 		instr.aRb = 9'd0;
 		instr.aRc = 9'd0;
-		instr.aRt = {micro_ir.r3.Rt,3'd0} + 8'd74;
+		instr.aRt = {micro_ir.r3.Rt,3'd0};
 		instr.ins = micro_ir;
 		instr.pred_btst = 6'd3;
 	end
 12'h224:
 	begin
 		next_ip = 12'h228; 
-		instr.aRa = {micro_ir.r3.Ra,3'd0} + 8'd74;
+		instr.aRa = {micro_ir.r3.Ra,3'd0};
 		instr.aRb = 9'd0;
 		instr.aRc = 9'd0;
-		instr.aRt = {micro_ir.r3.Rt,3'd0} + 8'd74;
+		instr.aRt = {micro_ir.r3.Rt,3'd0};
 		instr.ins = micro_ir;
 		instr.pred_btst = 6'd4;
 	end
 12'h225:
 	begin
 		next_ip = 12'h228; 
-		instr.aRa = {micro_ir.r3.Ra,3'd0} + 8'd74;
+		instr.aRa = {micro_ir.r3.Ra,3'd0};
 		instr.aRb = 9'd0;
 		instr.aRc = 9'd0;
-		instr.aRt = {micro_ir.r3.Rt,3'd0} + 8'd74;
+		instr.aRt = {micro_ir.r3.Rt,3'd0};
 		instr.ins = micro_ir;
 		instr.pred_btst = 6'd5;
 	end
 12'h226:
 	begin
 		next_ip = 12'h228; 
-		instr.aRa = {micro_ir.r3.Ra,3'd0} + 8'd74;
+		instr.aRa = {micro_ir.r3.Ra,3'd0};
 		instr.aRb = 9'd0;
 		instr.aRc = 9'd0;
-		instr.aRt = {micro_ir.r3.Rt,3'd0} + 8'd74;
+		instr.aRt = {micro_ir.r3.Rt,3'd0};
 		instr.ins = micro_ir;
 		instr.pred_btst = 6'd6;
 	end
 12'h227:
 	begin
 		next_ip = 12'h228; 
-		instr.aRa = {micro_ir.r3.Ra,3'd0} + 8'd74;
+		instr.aRa = {micro_ir.r3.Ra,3'd0};
 		instr.aRb = 9'd0;
 		instr.aRc = 9'd0;
-		instr.aRt = {micro_ir.r3.Rt,3'd0} + 8'd74;
+		instr.aRt = {micro_ir.r3.Rt,3'd0};
 		instr.ins = micro_ir;
 		instr.pred_btst = 6'd7;
 	end
@@ -1079,80 +2838,80 @@ case(micro_ip)
 12'h230:
 	begin
 		next_ip = 12'h234; 
-		instr.aRa = {micro_ir.r3.Rt,3'd0} + 8'd74;
+		instr.aRa = {micro_ir.r3.Rt,3'd0};
 		instr.aRb = 9'd0;
 		instr.aRc = 9'd0;
-		instr.aRt = {micro_ir.r3.Rt,3'd0} + 8'd74;
+		instr.aRt = {micro_ir.r3.Rt,3'd0};
 		instr.ins = micro_ir;
 		instr.pred_btst = 6'd0;
 	end
 12'h231:
 	begin
 		next_ip = 12'h234; 
-		instr.aRa = {micro_ir.r3.Rt,3'd0} + 8'd74;
+		instr.aRa = {micro_ir.r3.Rt,3'd0};
 		instr.aRb = 9'd0;
 		instr.aRc = 9'd0;
-		instr.aRt = {micro_ir.r3.Rt,3'd0} + 8'd74;
+		instr.aRt = {micro_ir.r3.Rt,3'd0};
 		instr.ins = micro_ir;
 		instr.pred_btst = 6'd1;
 	end
 12'h232:
 	begin
 		next_ip = 12'h234; 
-		instr.aRa = {micro_ir.r3.Rt,3'd0} + 8'd74;
+		instr.aRa = {micro_ir.r3.Rt,3'd0};
 		instr.aRb = 9'd0;
 		instr.aRc = 9'd0;
-		instr.aRt = {micro_ir.r3.Rt,3'd0} + 8'd74;
+		instr.aRt = {micro_ir.r3.Rt,3'd0};
 		instr.ins = micro_ir;
 		instr.pred_btst = 6'd2;
 	end
 12'h233:
 	begin
 		next_ip = 12'h234; 
-		instr.aRa = {micro_ir.r3.Rt,3'd0} + 8'd74;
+		instr.aRa = {micro_ir.r3.Rt,3'd0};
 		instr.aRb = 9'd0;
 		instr.aRc = 9'd0;
-		instr.aRt = {micro_ir.r3.Rt,3'd0} + 8'd74;
+		instr.aRt = {micro_ir.r3.Rt,3'd0};
 		instr.ins = micro_ir;
 		instr.pred_btst = 6'd3;
 	end
 12'h234:
 	begin
 		next_ip = 12'h238; 
-		instr.aRa = {micro_ir.r3.Rt,3'd0} + 8'd74;
+		instr.aRa = {micro_ir.r3.Rt,3'd0};
 		instr.aRb = 9'd0;
 		instr.aRc = 9'd0;
-		instr.aRt = {micro_ir.r3.Rt,3'd0} + 8'd74;
+		instr.aRt = {micro_ir.r3.Rt,3'd0};
 		instr.ins = micro_ir;
 		instr.pred_btst = 6'd4;
 	end
 12'h235:
 	begin
 		next_ip = 12'h238; 
-		instr.aRa = {micro_ir.r3.Rt,3'd0} + 8'd74;
+		instr.aRa = {micro_ir.r3.Rt,3'd0};
 		instr.aRb = 9'd0;
 		instr.aRc = 9'd0;
-		instr.aRt = {micro_ir.r3.Rt,3'd0} + 8'd74;
+		instr.aRt = {micro_ir.r3.Rt,3'd0};
 		instr.ins = micro_ir;
 		instr.pred_btst = 6'd5;
 	end
 12'h236:
 	begin
 		next_ip = 12'h238; 
-		instr.aRa = {micro_ir.r3.Rt,3'd0} + 8'd74;
+		instr.aRa = {micro_ir.r3.Rt,3'd0};
 		instr.aRb = 9'd0;
 		instr.aRc = 9'd0;
-		instr.aRt = {micro_ir.r3.Rt,3'd0} + 8'd74;
+		instr.aRt = {micro_ir.r3.Rt,3'd0};
 		instr.ins = micro_ir;
 		instr.pred_btst = 6'd6;
 	end
 12'h237:
 	begin
 		next_ip = 12'h238; 
-		instr.aRa = {micro_ir.r3.Rt,3'd0} + 8'd74;
+		instr.aRa = {micro_ir.r3.Rt,3'd0};
 		instr.aRb = 9'd0;
 		instr.aRc = 9'd0;
-		instr.aRt = {micro_ir.r3.Rt,3'd0} + 8'd74;
+		instr.aRt = {micro_ir.r3.Rt,3'd0};
 		instr.ins = micro_ir;
 		instr.pred_btst = 6'd7;
 	end
@@ -1224,17 +2983,28 @@ case(micro_ip)
 12'h260:
 	begin
 		next_ip = 12'h264;
-		instr.aRa = 10'd65+om;
+		if (om==2'd3) begin
+			instr.aRa = 9'd64|ipl;
+			instr.aRt = 9'd64|ipl;
+		end
+		else begin
+			instr.aRa = 9'd72|om;
+			instr.aRt = 9'd72|om;
+		end
 		instr.aRb = 10'd0;
 		instr.aRc = {4'd0,6'd1};
-		instr.aRt = 10'd65+om;
 		instr.ins = {21'h1FFFC0,SP,SP,OP_ADDI};
 		instr.pred_btst = 6'd0;
 	end
 12'h261:
 	begin
 		next_ip = 12'h264;
-		instr.aRa = 10'd65 + om;
+		if (om==2'd3) begin
+			instr.aRa = 9'd64|ipl;
+		end
+		else begin
+			instr.aRa = 9'd72|om;
+		end
 		instr.aRb = 10'd0;
 		instr.aRc = {1'd0,micro_ir[12:7],3'd0};
 		instr.aRt = 10'd0;
@@ -1244,7 +3014,12 @@ case(micro_ip)
 12'h262:
 	begin
 		next_ip = 12'h264;
-		instr.aRa = 10'd65 + om;
+		if (om==2'd3) begin
+			instr.aRa = 9'd64|ipl;
+		end
+		else begin
+			instr.aRa = 9'd72|om;
+		end
 		instr.aRb = 10'd0;
 		instr.aRc = {1'd0,micro_ir[12:7],3'd1};
 		instr.aRt = 10'd0;
@@ -1254,7 +3029,12 @@ case(micro_ip)
 12'h263:
 	begin
 		next_ip = 12'h264;
-		instr.aRa = 10'd65 + om;
+		if (om==2'd3) begin
+			instr.aRa = 9'd64|ipl;
+		end
+		else begin
+			instr.aRa = 9'd72|om;
+		end
 		instr.aRb = 10'd0;
 		instr.aRc = {1'd0,micro_ir[12:7],3'd2};
 		instr.aRt = 10'd0;
@@ -1264,7 +3044,12 @@ case(micro_ip)
 12'h264:
 	begin
 		next_ip = 12'h268;
-		instr.aRa = 10'd65 + om;
+		if (om==2'd3) begin
+			instr.aRa = 9'd64|ipl;
+		end
+		else begin
+			instr.aRa = 9'd72|om;
+		end
 		instr.aRb = 10'd0;
 		instr.aRc = {1'd0,micro_ir[12:7],3'd3};
 		instr.aRt = 10'd0;
@@ -1274,7 +3059,12 @@ case(micro_ip)
 12'h265:
 	begin
 		next_ip = 12'h268;
-		instr.aRa = 10'd65 + om;
+		if (om==2'd3) begin
+			instr.aRa = 9'd64|ipl;
+		end
+		else begin
+			instr.aRa = 9'd72|om;
+		end
 		instr.aRb = 10'd0;
 		instr.aRc = {1'd0,micro_ir[12:7],3'd4};
 		instr.aRt = 10'd0;
@@ -1284,7 +3074,12 @@ case(micro_ip)
 12'h266:
 	begin
 		next_ip = 12'h268;
-		instr.aRa = 10'd65 + om;
+		if (om==2'd3) begin
+			instr.aRa = 9'd64|ipl;
+		end
+		else begin
+			instr.aRa = 9'd72|om;
+		end
 		instr.aRb = 10'd0;
 		instr.aRc = {1'd0,micro_ir[12:7],3'd5};
 		instr.aRt = 10'd0;
@@ -1294,7 +3089,12 @@ case(micro_ip)
 12'h267:
 	begin
 		next_ip = 12'h268;
-		instr.aRa = 10'd65 + om;
+		if (om==2'd3) begin
+			instr.aRa = 9'd64|ipl;
+		end
+		else begin
+			instr.aRa = 9'd72|om;
+		end
 		instr.aRb = 10'd0;
 		instr.aRc = {1'd0,micro_ir[12:7],3'd6};
 		instr.aRt = 10'd0;
@@ -1304,7 +3104,12 @@ case(micro_ip)
 12'h268:
 	begin
 		next_ip = 12'h000;
-		instr.aRa = 10'd65 + om;
+		if (om==2'd3) begin
+			instr.aRa = 9'd64|ipl;
+		end
+		else begin
+			instr.aRa = 9'd72|om;
+		end
 		instr.aRb = 10'd0;
 		instr.aRc = {1'd0,micro_ir[12:7],3'd7};
 		instr.aRt = 10'd0;
@@ -1418,7 +3223,12 @@ case(micro_ip)
 12'h280:
 	begin
 		next_ip = 12'h284;
-		instr.aRa = 10'd65 + om;
+		if (om==2'd3) begin
+			instr.aRa = 9'd64|ipl;
+		end
+		else begin
+			instr.aRa = 9'd72|om;
+		end
 		instr.aRb = 10'd0;
 		instr.aRc = {1'd0,micro_ir[12:7],3'd0};
 		instr.aRt = 10'd0;
@@ -1428,7 +3238,12 @@ case(micro_ip)
 12'h281:
 	begin
 		next_ip = 12'h284;
-		instr.aRa = 10'd65 + om;
+		if (om==2'd3) begin
+			instr.aRa = 9'd64|ipl;
+		end
+		else begin
+			instr.aRa = 9'd72|om;
+		end
 		instr.aRb = 10'd0;
 		instr.aRc = {1'd0,micro_ir[12:7],3'd1};
 		instr.aRt = 10'd0;
@@ -1438,7 +3253,12 @@ case(micro_ip)
 12'h282:
 	begin
 		next_ip = 12'h284;
-		instr.aRa = 10'd65 + om;
+		if (om==2'd3) begin
+			instr.aRa = 9'd64|ipl;
+		end
+		else begin
+			instr.aRa = 9'd72|om;
+		end
 		instr.aRb = 10'd0;
 		instr.aRc = {1'd0,micro_ir[12:7],3'd2};
 		instr.aRt = 10'd0;
@@ -1448,7 +3268,12 @@ case(micro_ip)
 12'h283:
 	begin
 		next_ip = 12'h284;
-		instr.aRa = 10'd65 + om;
+		if (om==2'd3) begin
+			instr.aRa = 9'd64|ipl;
+		end
+		else begin
+			instr.aRa = 9'd72|om;
+		end
 		instr.aRb = 10'd0;
 		instr.aRc = {1'd0,micro_ir[12:7],3'd3};
 		instr.aRt = 10'd0;
@@ -1458,7 +3283,12 @@ case(micro_ip)
 12'h284:
 	begin
 		next_ip = 12'h288;
-		instr.aRa = 10'd65 + om;
+		if (om==2'd3) begin
+			instr.aRa = 9'd64|ipl;
+		end
+		else begin
+			instr.aRa = 9'd72|om;
+		end
 		instr.aRb = 10'd0;
 		instr.aRc = {1'd0,micro_ir[12:7],3'd4};
 		instr.aRt = 10'd0;
@@ -1468,7 +3298,12 @@ case(micro_ip)
 12'h285:
 	begin
 		next_ip = 12'h288;
-		instr.aRa = 10'd65 + om;
+		if (om==2'd3) begin
+			instr.aRa = 9'd64|ipl;
+		end
+		else begin
+			instr.aRa = 9'd72|om;
+		end
 		instr.aRb = 10'd0;
 		instr.aRc = {1'd0,micro_ir[12:7],3'd5};
 		instr.aRt = 10'd0;
@@ -1478,7 +3313,12 @@ case(micro_ip)
 12'h286:
 	begin
 		next_ip = 12'h288;
-		instr.aRa = 10'd65 + om;
+		if (om==2'd3) begin
+			instr.aRa = 9'd64|ipl;
+		end
+		else begin
+			instr.aRa = 9'd72|om;
+		end
 		instr.aRb = 10'd0;
 		instr.aRc = {1'd0,micro_ir[12:7],3'd6};
 		instr.aRt = 10'd0;
@@ -1488,7 +3328,12 @@ case(micro_ip)
 12'h287:
 	begin
 		next_ip = 12'h288;
-		instr.aRa = 10'd65 + om;
+		if (om==2'd3) begin
+			instr.aRa = 9'd64|ipl;
+		end
+		else begin
+			instr.aRa = 9'd72|om;
+		end
 		instr.aRb = 10'd0;
 		instr.aRc = {1'd0,micro_ir[12:7],3'd7};
 		instr.aRt = 10'd0;
@@ -1498,10 +3343,16 @@ case(micro_ip)
 12'h288:
 	begin
 		next_ip = 12'h000;
-		instr.aRa = 10'd65+om;
+		if (om==2'd3) begin
+			instr.aRa = 9'd64|ipl;
+			instr.aRt = 9'd64|ipl;
+		end
+		else begin
+			instr.aRa = 9'd72|om;
+			instr.aRt = 9'd72|om;
+		end
 		instr.aRb = 10'd0;
 		instr.aRc = {4'd0,6'd1};
-		instr.aRt = 10'd65+om;
 		instr.ins = {21'h00040,SP,SP,OP_ADDI};
 		instr.pred_btst = 6'd0;
 	end
@@ -1611,165 +3462,1926 @@ case(micro_ip)
 // -----------------------------------------------------------------------------
 12'h300:
 	begin
-		next_ip = 12'h304;
-		instr.aRa = 10'd65+om;
-		instr.aRb = 10'd0;
-		instr.aRc = {4'd0,6'd1};
-		instr.aRt = 10'd65+om;
-		instr.ins = {21'h1FFE08,SP,SP,OP_ADDI};
-		instr.pred_btst = 6'd0;
+		next_ip=12'h304;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+			instr.aRt=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+			instr.aRt=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.ins={21'h1FFE08,SP,SP,ADDI};
+		instr.pred_btst=6'd0;
 	end
 12'h301:
 	begin
-		next_ip = 12'h304;
-		instr.aRa = 10'd65 + om;
-		instr.aRb = 10'd0;
-		instr.aRc = 10'd1;
-		instr.aRt = 10'd0;
-		instr.ins = {21'h000000,SP,6'd1,OP_STO};
-		instr.pred_btst = 6'd0;
+		next_ip=12'h304;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd1;
+		instr.ins={21'h00000,SP,6'd1,OP_STO};
+		instr.pred_btst=6'd0;
 	end
 12'h302:
 	begin
-		next_ip = 12'h304;
-		instr.aRa = 10'd65 + om;
-		instr.aRb = 10'd0;
-		instr.aRc = 10'd2;
-		instr.aRt = 10'd0;
-		instr.ins = {21'h000008,SP,6'd2,OP_STO};
-		instr.pred_btst = 6'd0;
+		next_ip=12'h304;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd2;
+		instr.ins={21'h00008,SP,6'd2,OP_STO};
+		instr.pred_btst=6'd0;
 	end
 12'h303:
 	begin
-		next_ip = 12'h304;
-		instr.aRa = 10'd65 + om;
-		instr.aRb = 10'd0;
-		instr.aRc = 10'd3;
-		instr.aRt = 10'd0;
-		instr.ins = {21'h000010,SP,6'd3,OP_STO};
-		instr.pred_btst = 6'd0;
+		next_ip=12'h304;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd3;
+		instr.ins={21'h00010,SP,6'd3,OP_STO};
+		instr.pred_btst=6'd0;
 	end
 12'h304:
 	begin
-		next_ip = 12'h308;
-		instr.aRa = 10'd65 + om;
-		instr.aRb = 10'd0;
-		instr.aRc = 10'd4;
-		instr.aRt = 10'd0;
-		instr.ins = {21'h000018,SP,6'd4,OP_STO};
-		instr.pred_btst = 6'd0;
+		next_ip=12'h308;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd4;
+		instr.ins={21'h00018,SP,6'd4,OP_STO};
+		instr.pred_btst=6'd0;
 	end
 12'h305:
 	begin
-		next_ip = 12'h308;
-		instr.aRa = 10'd65 + om;
-		instr.aRb = 10'd0;
-		instr.aRc = 10'd5;
-		instr.aRt = 10'd0;
-		instr.ins = {21'h000020,SP,6'd5,OP_STO};
-		instr.pred_btst = 6'd0;
+		next_ip=12'h308;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd5;
+		instr.ins={21'h00020,SP,6'd5,OP_STO};
+		instr.pred_btst=6'd0;
 	end
 12'h306:
 	begin
-		next_ip = 12'h308;
-		instr.aRa = 10'd65 + om;
-		instr.aRb = 10'd0;
-		instr.aRc = 10'd6;
-		instr.aRt = 10'd0;
-		instr.ins = {21'h000028,SP,6'd6,OP_STO};
-		instr.pred_btst = 6'd0;
+		next_ip=12'h308;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd6;
+		instr.ins={21'h00028,SP,6'd6,OP_STO};
+		instr.pred_btst=6'd0;
 	end
 12'h307:
 	begin
-		next_ip = 12'h308;
-		instr.aRa = 10'd65 + om;
-		instr.aRb = 10'd0;
-		instr.aRc = 10'd7;
-		instr.aRt = 10'd0;
-		instr.ins = {21'h000030,SP,6'd7,OP_STO};
-		instr.pred_btst = 6'd0;
+		next_ip=12'h308;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd7;
+		instr.ins={21'h00030,SP,6'd7,OP_STO};
+		instr.pred_btst=6'd0;
 	end
 12'h308:
 	begin
-		next_ip = 12'h30C;
-		instr.aRa = 10'd65 + om;
-		instr.aRb = 10'd0;
-		instr.aRc = 10'd8;
-		instr.aRt = 10'd0;
-		instr.ins = {21'h000038,SP,6'd8,OP_STO};
-		instr.pred_btst = 6'd0;
+		next_ip=12'h30C;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd8;
+		instr.ins={21'h00038,SP,6'd8,OP_STO};
+		instr.pred_btst=6'd0;
 	end
 12'h309:
 	begin
-		next_ip = 12'h30C;
-		instr.aRa = 10'd65 + om;
-		instr.aRb = 10'd0;
-		instr.aRc = 10'd9;
-		instr.aRt = 10'd0;
-		instr.ins = {21'h000040,SP,6'd9,OP_STO};
-		instr.pred_btst = 6'd0;
+		next_ip=12'h30C;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd9;
+		instr.ins={21'h00040,SP,6'd9,OP_STO};
+		instr.pred_btst=6'd0;
 	end
 12'h30A:
 	begin
-		next_ip = 12'h30C;
-		instr.aRa = 10'd65 + om;
-		instr.aRb = 10'd0;
-		instr.aRc = 10'd10;
-		instr.aRt = 10'd0;
-		instr.ins = {21'h000048,SP,6'd10,OP_STO};
-		instr.pred_btst = 6'd0;
+		next_ip=12'h30C;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd10;
+		instr.ins={21'h00048,SP,6'd10,OP_STO};
+		instr.pred_btst=6'd0;
 	end
 12'h30B:
 	begin
-		next_ip = 12'h30C;
-		instr.aRa = 10'd65 + om;
-		instr.aRb = 10'd0;
-		instr.aRc = 10'd11;
-		instr.aRt = 10'd0;
-		instr.ins = {21'h000050,SP,6'd11,OP_STO};
-		instr.pred_btst = 6'd0;
+		next_ip=12'h30C;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd11;
+		instr.ins={21'h00050,SP,6'd11,OP_STO};
+		instr.pred_btst=6'd0;
 	end
 12'h30C:
 	begin
-		next_ip = 12'h310;
-		instr.aRa = 10'd65 + om;
-		instr.aRb = 10'd0;
-		instr.aRc = 10'd12;
-		instr.aRt = 10'd0;
-		instr.ins = {21'h000058,SP,6'd12,OP_STO};
-		instr.pred_btst = 6'd0;
+		next_ip=12'h310;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd12;
+		instr.ins={21'h00058,SP,6'd12,OP_STO};
+		instr.pred_btst=6'd0;
 	end
 12'h30D:
 	begin
-		next_ip = 12'h310;
-		instr.aRa = 10'd65 + om;
-		instr.aRb = 10'd0;
-		instr.aRc = 10'd13;
-		instr.aRt = 10'd0;
-		instr.ins = {21'h000060,SP,6'd13,OP_STO};
-		instr.pred_btst = 6'd0;
+		next_ip=12'h310;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd13;
+		instr.ins={21'h00060,SP,6'd13,OP_STO};
+		instr.pred_btst=6'd0;
 	end
 12'h30E:
 	begin
-		next_ip = 12'h310;
-		instr.aRa = 10'd65 + om;
-		instr.aRb = 10'd0;
-		instr.aRc = 10'd14;
-		instr.aRt = 10'd0;
-		instr.ins = {21'h000068,SP,6'd14,OP_STO};
-		instr.pred_btst = 6'd0;
+		next_ip=12'h310;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd14;
+		instr.ins={21'h00068,SP,6'd14,OP_STO};
+		instr.pred_btst=6'd0;
 	end
 12'h30F:
 	begin
-		next_ip = 12'h310;
-		instr.aRa = 10'd65 + om;
-		instr.aRb = 10'd0;
-		instr.aRc = 10'd15;
-		instr.aRt = 10'd0;
-		instr.ins = {21'h000070,SP,6'd15,OP_STO};
-		instr.pred_btst = 6'd0;
+		next_ip=12'h310;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd15;
+		instr.ins={21'h00070,SP,6'd15,OP_STO};
+		instr.pred_btst=6'd0;
 	end
+12'h310:
+	begin
+		next_ip=12'h314;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd16;
+		instr.ins={21'h00078,SP,6'd16,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h311:
+	begin
+		next_ip=12'h314;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd17;
+		instr.ins={21'h00080,SP,6'd17,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h312:
+	begin
+		next_ip=12'h314;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd18;
+		instr.ins={21'h00088,SP,6'd18,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h313:
+	begin
+		next_ip=12'h314;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd19;
+		instr.ins={21'h00090,SP,6'd19,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h314:
+	begin
+		next_ip=12'h318;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd20;
+		instr.ins={21'h00098,SP,6'd20,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h315:
+	begin
+		next_ip=12'h318;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd21;
+		instr.ins={21'h000A0,SP,6'd21,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h316:
+	begin
+		next_ip=12'h318;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd22;
+		instr.ins={21'h000A8,SP,6'd22,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h317:
+	begin
+		next_ip=12'h318;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd23;
+		instr.ins={21'h000B0,SP,6'd23,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h318:
+	begin
+		next_ip=12'h31C;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd24;
+		instr.ins={21'h000B8,SP,6'd24,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h319:
+	begin
+		next_ip=12'h31C;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd25;
+		instr.ins={21'h000C0,SP,6'd25,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h31A:
+	begin
+		next_ip=12'h31C;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd26;
+		instr.ins={21'h000C8,SP,6'd26,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h31B:
+	begin
+		next_ip=12'h31C;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd27;
+		instr.ins={21'h000D0,SP,6'd27,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h31C:
+	begin
+		next_ip=12'h320;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd28;
+		instr.ins={21'h000D8,SP,6'd28,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h31D:
+	begin
+		next_ip=12'h320;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd29;
+		instr.ins={21'h000E0,SP,6'd29,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h31E:
+	begin
+		next_ip=12'h320;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd30;
+		instr.ins={21'h000E8,SP,6'd30,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h31F:
+	begin
+		next_ip=12'h320;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd31;
+		instr.ins={21'h000F0,SP,6'd31,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h320:
+	begin
+		next_ip=12'h324;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd32;
+		instr.ins={21'h000F8,SP,6'd32,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h321:
+	begin
+		next_ip=12'h324;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd33;
+		instr.ins={21'h00100,SP,6'd33,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h322:
+	begin
+		next_ip=12'h324;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd34;
+		instr.ins={21'h00108,SP,6'd34,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h323:
+	begin
+		next_ip=12'h324;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd35;
+		instr.ins={21'h00110,SP,6'd35,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h324:
+	begin
+		next_ip=12'h328;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd36;
+		instr.ins={21'h00118,SP,6'd36,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h325:
+	begin
+		next_ip=12'h328;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd37;
+		instr.ins={21'h00120,SP,6'd37,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h326:
+	begin
+		next_ip=12'h328;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd38;
+		instr.ins={21'h00128,SP,6'd38,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h327:
+	begin
+		next_ip=12'h328;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd39;
+		instr.ins={21'h00130,SP,6'd39,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h328:
+	begin
+		next_ip=12'h32C;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd40;
+		instr.ins={21'h00138,SP,6'd40,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h329:
+	begin
+		next_ip=12'h32C;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd41;
+		instr.ins={21'h00140,SP,6'd41,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h32A:
+	begin
+		next_ip=12'h32C;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd42;
+		instr.ins={21'h00148,SP,6'd42,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h32B:
+	begin
+		next_ip=12'h32C;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd43;
+		instr.ins={21'h00150,SP,6'd43,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h32C:
+	begin
+		next_ip=12'h330;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd44;
+		instr.ins={21'h00158,SP,6'd44,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h32D:
+	begin
+		next_ip=12'h330;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd45;
+		instr.ins={21'h00160,SP,6'd45,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h32E:
+	begin
+		next_ip=12'h330;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd46;
+		instr.ins={21'h00168,SP,6'd46,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h32F:
+	begin
+		next_ip=12'h330;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd47;
+		instr.ins={21'h00170,SP,6'd47,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h330:
+	begin
+		next_ip=12'h334;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd48;
+		instr.ins={21'h00178,SP,6'd48,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h331:
+	begin
+		next_ip=12'h334;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd49;
+		instr.ins={21'h00180,SP,6'd49,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h332:
+	begin
+		next_ip=12'h334;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd50;
+		instr.ins={21'h00188,SP,6'd50,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h333:
+	begin
+		next_ip=12'h334;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd51;
+		instr.ins={21'h00190,SP,6'd51,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h334:
+	begin
+		next_ip=12'h338;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd52;
+		instr.ins={21'h00198,SP,6'd52,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h335:
+	begin
+		next_ip=12'h338;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd53;
+		instr.ins={21'h001A0,SP,6'd53,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h336:
+	begin
+		next_ip=12'h338;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd54;
+		instr.ins={21'h001A8,SP,6'd54,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h337:
+	begin
+		next_ip=12'h338;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd55;
+		instr.ins={21'h001B0,SP,6'd55,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h338:
+	begin
+		next_ip=12'h33C;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd56;
+		instr.ins={21'h001B8,SP,6'd56,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h339:
+	begin
+		next_ip=12'h33C;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd57;
+		instr.ins={21'h001C0,SP,6'd57,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h33A:
+	begin
+		next_ip=12'h33C;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd58;
+		instr.ins={21'h001C8,SP,6'd58,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h33B:
+	begin
+		next_ip=12'h33C;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd59;
+		instr.ins={21'h001D0,SP,6'd59,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h33C:
+	begin
+		next_ip=12'h340;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd60;
+		instr.ins={21'h001D8,SP,6'd60,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h33D:
+	begin
+		next_ip=12'h340;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd61;
+		instr.ins={21'h001E0,SP,6'd61,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h33E:
+	begin
+		next_ip=12'h340;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd62;
+		instr.ins={21'h001E8,SP,6'd62,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h33F:
+	begin
+		next_ip=12'h340;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd63;
+		instr.ins={21'h001F0,SP,6'd63,OP_STO};
+		instr.pred_btst=6'd0;
+	end
+12'h340:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+12'h341:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+12'h342:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+12'h343:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
 
+// -----------------------------------------------------------------------------
+// popa
+// -----------------------------------------------------------------------------
+12'h360:
+	begin
+		next_ip=12'h364;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd1;
+		instr.ins={21'h00000,SP,6'd1,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h361:
+	begin
+		next_ip=12'h364;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd2;
+		instr.ins={21'h00008,SP,6'd2,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h362:
+	begin
+		next_ip=12'h364;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd3;
+		instr.ins={21'h00010,SP,6'd3,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h363:
+	begin
+		next_ip=12'h364;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd4;
+		instr.ins={21'h00018,SP,6'd4,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h364:
+	begin
+		next_ip=12'h368;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd5;
+		instr.ins={21'h00020,SP,6'd5,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h365:
+	begin
+		next_ip=12'h368;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd6;
+		instr.ins={21'h00028,SP,6'd6,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h366:
+	begin
+		next_ip=12'h368;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd7;
+		instr.ins={21'h00030,SP,6'd7,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h367:
+	begin
+		next_ip=12'h368;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd8;
+		instr.ins={21'h00038,SP,6'd8,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h368:
+	begin
+		next_ip=12'h36C;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd9;
+		instr.ins={21'h00040,SP,6'd9,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h369:
+	begin
+		next_ip=12'h36C;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd10;
+		instr.ins={21'h00048,SP,6'd10,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h36A:
+	begin
+		next_ip=12'h36C;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd11;
+		instr.ins={21'h00050,SP,6'd11,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h36B:
+	begin
+		next_ip=12'h36C;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd12;
+		instr.ins={21'h00058,SP,6'd12,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h36C:
+	begin
+		next_ip=12'h370;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd13;
+		instr.ins={21'h00060,SP,6'd13,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h36D:
+	begin
+		next_ip=12'h370;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd14;
+		instr.ins={21'h00068,SP,6'd14,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h36E:
+	begin
+		next_ip=12'h370;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd15;
+		instr.ins={21'h00070,SP,6'd15,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h36F:
+	begin
+		next_ip=12'h370;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd16;
+		instr.ins={21'h00078,SP,6'd16,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h370:
+	begin
+		next_ip=12'h374;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd17;
+		instr.ins={21'h00080,SP,6'd17,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h371:
+	begin
+		next_ip=12'h374;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd18;
+		instr.ins={21'h00088,SP,6'd18,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h372:
+	begin
+		next_ip=12'h374;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd19;
+		instr.ins={21'h00090,SP,6'd19,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h373:
+	begin
+		next_ip=12'h374;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd20;
+		instr.ins={21'h00098,SP,6'd20,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h374:
+	begin
+		next_ip=12'h378;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd21;
+		instr.ins={21'h000A0,SP,6'd21,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h375:
+	begin
+		next_ip=12'h378;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd22;
+		instr.ins={21'h000A8,SP,6'd22,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h376:
+	begin
+		next_ip=12'h378;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd23;
+		instr.ins={21'h000B0,SP,6'd23,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h377:
+	begin
+		next_ip=12'h378;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd24;
+		instr.ins={21'h000B8,SP,6'd24,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h378:
+	begin
+		next_ip=12'h37C;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd25;
+		instr.ins={21'h000C0,SP,6'd25,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h379:
+	begin
+		next_ip=12'h37C;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd26;
+		instr.ins={21'h000C8,SP,6'd26,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h37A:
+	begin
+		next_ip=12'h37C;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd27;
+		instr.ins={21'h000D0,SP,6'd27,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h37B:
+	begin
+		next_ip=12'h37C;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd28;
+		instr.ins={21'h000D8,SP,6'd28,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h37C:
+	begin
+		next_ip=12'h380;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd29;
+		instr.ins={21'h000E0,SP,6'd29,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h37D:
+	begin
+		next_ip=12'h380;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd30;
+		instr.ins={21'h000E8,SP,6'd30,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h37E:
+	begin
+		next_ip=12'h380;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd31;
+		instr.ins={21'h000F0,SP,6'd31,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h37F:
+	begin
+		next_ip=12'h380;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd32;
+		instr.ins={21'h000F8,SP,6'd32,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h380:
+	begin
+		next_ip=12'h384;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd33;
+		instr.ins={21'h00100,SP,6'd33,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h381:
+	begin
+		next_ip=12'h384;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd34;
+		instr.ins={21'h00108,SP,6'd34,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h382:
+	begin
+		next_ip=12'h384;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd35;
+		instr.ins={21'h00110,SP,6'd35,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h383:
+	begin
+		next_ip=12'h384;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd36;
+		instr.ins={21'h00118,SP,6'd36,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h384:
+	begin
+		next_ip=12'h388;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd37;
+		instr.ins={21'h00120,SP,6'd37,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h385:
+	begin
+		next_ip=12'h388;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd38;
+		instr.ins={21'h00128,SP,6'd38,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h386:
+	begin
+		next_ip=12'h388;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd39;
+		instr.ins={21'h00130,SP,6'd39,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h387:
+	begin
+		next_ip=12'h388;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd40;
+		instr.ins={21'h00138,SP,6'd40,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h388:
+	begin
+		next_ip=12'h38C;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd41;
+		instr.ins={21'h00140,SP,6'd41,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h389:
+	begin
+		next_ip=12'h38C;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd42;
+		instr.ins={21'h00148,SP,6'd42,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h38A:
+	begin
+		next_ip=12'h38C;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd43;
+		instr.ins={21'h00150,SP,6'd43,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h38B:
+	begin
+		next_ip=12'h38C;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd44;
+		instr.ins={21'h00158,SP,6'd44,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h38C:
+	begin
+		next_ip=12'h390;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd45;
+		instr.ins={21'h00160,SP,6'd45,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h38D:
+	begin
+		next_ip=12'h390;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd46;
+		instr.ins={21'h00168,SP,6'd46,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h38E:
+	begin
+		next_ip=12'h390;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd47;
+		instr.ins={21'h00170,SP,6'd47,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h38F:
+	begin
+		next_ip=12'h390;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd48;
+		instr.ins={21'h00178,SP,6'd48,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h390:
+	begin
+		next_ip=12'h394;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd49;
+		instr.ins={21'h00180,SP,6'd49,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h391:
+	begin
+		next_ip=12'h394;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd50;
+		instr.ins={21'h00188,SP,6'd50,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h392:
+	begin
+		next_ip=12'h394;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd51;
+		instr.ins={21'h00190,SP,6'd51,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h393:
+	begin
+		next_ip=12'h394;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd52;
+		instr.ins={21'h00198,SP,6'd52,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h394:
+	begin
+		next_ip=12'h398;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd53;
+		instr.ins={21'h001A0,SP,6'd53,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h395:
+	begin
+		next_ip=12'h398;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd54;
+		instr.ins={21'h001A8,SP,6'd54,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h396:
+	begin
+		next_ip=12'h398;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd55;
+		instr.ins={21'h001B0,SP,6'd55,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h397:
+	begin
+		next_ip=12'h398;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd56;
+		instr.ins={21'h001B8,SP,6'd56,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h398:
+	begin
+		next_ip=12'h39C;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd57;
+		instr.ins={21'h001C0,SP,6'd57,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h399:
+	begin
+		next_ip=12'h39C;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd58;
+		instr.ins={21'h001C8,SP,6'd58,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h39A:
+	begin
+		next_ip=12'h39C;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd59;
+		instr.ins={21'h001D0,SP,6'd59,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h39B:
+	begin
+		next_ip=12'h39C;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd60;
+		instr.ins={21'h001D8,SP,6'd60,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h39C:
+	begin
+		next_ip=12'h3A0;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd61;
+		instr.ins={21'h001E0,SP,6'd61,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h39D:
+	begin
+		next_ip=12'h3A0;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd62;
+		instr.ins={21'h001E8,SP,6'd62,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h39E:
+	begin
+		next_ip=12'h3A0;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.aRt=9'd63;
+		instr.ins={21'h001F0,SP,6'd63,OP_LDO};
+		instr.pred_btst=6'd0;
+	end
+12'h39F:
+	begin
+		next_ip=12'h3A0;
+		if (om==2'd3) begin
+			instr.aRa=9'd64|ipl;
+			instr.aRt=9'd64|ipl;
+		end
+		else begin
+			instr.aRa=9'd72|om;
+			instr.aRt=9'd72|om;
+		end
+		instr.aRb=9'd0;
+		instr.aRc=9'd0;
+		instr.ins={21'h0001F8,SP,SP,OP_ADDI};
+		instr.pred_btst=6'd0;
+	end
+12'h3A0:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+12'h3A1:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+12'h3A2:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+12'h3A3:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+
+// -----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
+/*
+12'h3C0:
+	if (lc_i > 64'd0) begin
+		next_ip = 12'h3C0;
+		if (micro_ir[18:13]==6'd63) begin
+			case(om)
+			2'd0:	instr.aRa=9'd72;
+			2'd1:	instr.aRa=9'd73;
+			2'd2:	instr.aRa=9'd74;
+			2'd3:	instr.aRa=9'd64|ipl;
+			endcase
+		end
+		else
+			instr.aRa = {3'd0,micro_ir[18:13]};
+		instr.aRb = 9'd0;
+		if (micro_ir[12:7]==6'd63) begin
+			case(om)
+			2'd0:	instr.aRc=9'd72;
+			2'd1:	instr.aRc=9'd73;
+			2'd2:	instr.aRc=9'd74;
+			2'd3:	instr.aRc=9'd64|ipl;
+			endcase
+		end
+		else
+			instr.aRc = {3'd0,micro_ir[12:7]};
+		instr.ins={21'h000000,micro_ir[18:13],micro_ir[12:7],OP_STO};
+	end
+	else begin
+		next_ip = 12'h000;
+		instr.ins = {33'd0,OP_NOP};
+	end
+12'h3C1:	// sub lc,lc,1
+	begin
+		lc_o = lc_i - 2'd1;
+		next_ip = 12'h3C0;
+		instr.ins={21'h1FFFFF,6'd55,6'd55,OP_ADDI};
+	end
+12'h3C2:
+	begin
+		next_ip = 12'h3C0;
+		instr.ins={bamt,2'b0,micro_ir[18:13],micro_ir[18:13],OP_ADDI};		
+	end
+12'h3C3:
+	begin
+		next_ip = 12'h3C0;
+		instr.ins = {5'd32,10'h0F0,6'd0,6'd55,2'd0,NE,OP_Bcc};
+	end
+*/
 default:	begin next_ip = 12'h000; instr.ins = 40'hFFFFFFFFFF; end	// NOP      regx = 4'h2; 
 endcase
 end

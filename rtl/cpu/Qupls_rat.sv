@@ -340,6 +340,8 @@ generate begin : gRRN
 				else if (rn[g]==wrd && wr3)
 					vn[g] = cpv_i[7];
 				*/
+				else if (rrn[g]==10'd1023)
+					vn[g] = 1'b1;
 				else
 					vn[g] = cpv_o[g];//valid[0][cndx][rrn[g]];//cpram_out.regmap[rn[g]].pregs[0].v;
 			end
