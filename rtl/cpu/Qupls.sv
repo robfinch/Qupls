@@ -301,6 +301,7 @@ reg alu0_pred;
 reg alu0_predz;
 wire alu0_cpytgt;
 reg alu0_cptgt;
+reg [1:0] alu0_prc;
 
 reg alu1_idle;
 reg alu1_done;
@@ -336,9 +337,10 @@ reg alu1_ld;
 reg alu1_pred;
 reg alu1_predz;
 reg alu1_cptgt;
+reg [1:0] alu1_prc;
 
 reg fpu0_idle;
-reg fpu0_done = 1'b0;
+reg fpu0_done;
 reg fpu0_stomp = 1'b0;
 reg fpu0_available;
 instruction_t fpu0_instr;
@@ -346,24 +348,27 @@ reg [2:0] fpu0_rmd;
 value_t fpu0_argA;
 value_t fpu0_argB;
 value_t fpu0_argC;
-value_t fpu0_argD;
 value_t fpu0_argT;
 value_t fpu0_argP;
 value_t fpu0_argI;	// only used by BEQ
 pregno_t fpu0_Rt;
 aregno_t fpu0_aRt;
 reg fpu0_aRtz;
+pregno_t fpu0_Rt1;
+aregno_t fpu0_aRt1;
+reg fpu0_aRtz1;
 reg [3:0] fpu0_cp;
 reg [2:0] fpu0_cs;
 reg fpu0_bank;
 pc_address_t fpu0_pc;
-value_t fpu0_res;
+value_t fpu0_res, fpu0_resH;
 double_value_t qdfpu0_res;
 rob_ndx_t fpu0_id;
-cause_code_t fpu0_exc;
+cause_code_t fpu0_exc,fpu0_res_exc;
 reg fpu0_out;
 wire fpu_done1;
 reg fpu0_idv;
+reg fpu0_qfext;
 
 reg fpu1_idle;
 reg fpu1_done;
@@ -2387,8 +2392,8 @@ assign wrport1_Rt = NALU > 1 ? alu1_Rt : 9'd0;
 assign wrport1_aRt = NALU > 1 ? alu1_aRt : 7'd0;
 assign wrport2_Rt = dram_Rt0;
 assign wrport2_aRt = dram_aRt0;
-assign wrport3_Rt = NFPU > 0 ? fpu0_Rt : 9'd0;
-assign wrport3_aRt = NFPU > 0 ? fpu0_aRt : 7'd0;
+assign wrport3_Rt = NFPU > 0 ? fpu0_Rt : 11'd0;
+assign wrport3_aRt = NFPU > 0 ? fpu0_aRt : 9'd0;
 assign wrport4_Rt = NDATA_PORTS > 1 ? dram_Rt1 : 9'd0;
 assign wrport4_aRt = NDATA_PORTS > 1 ? dram_aRt1 : 7'd0;
 assign wrport5_Rt = NFPU > 1 ? fpu1_Rt : 9'd0;
@@ -2787,12 +2792,13 @@ wire div_dbz;
 always_comb
 	tReadCSR(csr_res,alu0_argI[15:0]);
 
-Qupls_alu #(.ALU0(1'b1)) ualu0
+Qupls_meta_alu #(.ALU0(1'b1)) ualu0
 (
 	.rst(rst),
 	.clk(clk),
 	.clk2x(clk2x_i),
 	.ld(alu0_ld),
+	.prc(alu0_prc),
 	.ir(alu0_instr),
 	.div(alu0_div),
 	.cptgt(alu0_cptgt),
@@ -2803,10 +2809,10 @@ Qupls_alu #(.ALU0(1'b1)) ualu0
 	.c(alu0_argC),
 	.i(alu0_argI),
 	.t(alu0_argT),
-	.qres(qdfpu0_res.H),
 	.cs(alu0_cs),
 	.pc(alu0_pc),
 	.csr(csr_res),
+	.qres(fpu0_resH),
 	.o(alu0_res),
 	.mul_done(mul0_done),
 	.div_done(div0_done),
@@ -2815,12 +2821,13 @@ Qupls_alu #(.ALU0(1'b1)) ualu0
 
 generate begin : gAlu1
 if (NALU > 1) begin
-	Qupls_alu #(.ALU0(1'b0)) ualu1
+	Qupls_meta_alu #(.ALU0(1'b0)) ualu1
 	(
 		.rst(rst),
 		.clk(clk),
 		.clk2x(clk2x_i),
 		.ld(alu1_ld),
+		.prc(alu1_prc),
 		.ir(alu1_instr),
 		.div(alu1_div),
 		.cptgt(alu1_cptgt),
@@ -2830,17 +2837,47 @@ if (NALU > 1) begin
 		.bi(alu1_argBI),
 		.c(alu1_argC),
 		.i(alu1_argI),
-		.t(64'd0),
-		.qres(64'd0),
+		.t({$bits(value_t){1'd0}}),
 		.cs(alu1_cs),
 		.pc(alu1_pc),
 		.csr(14'd0),
+		.qres(64'd0),
 		.o(alu1_res),
 		.mul_done(mul1_done),
 		.div_done(),
 		.div_dbz()
 	);
 end
+/*
+if (VALU) begin
+	for (g = 0; g < 8; g = g + 1)
+		Qupls_alu #(.ALU0(1'b0)) ualuv1
+		(
+			.rst(rst),
+			.clk(clk),
+			.clk2x(clk2x_i),
+			.ld(valu_ld),
+			.ir(valu_instr),
+			.div(valu_div),
+			.cptgt(valu_cptgt),
+			.z(valu_predz),
+			.a(valu_argA[g]),
+			.b(valu_argB[g]),
+			.bi(valu_argBI),
+			.c(valu1_argC[g]),
+			.i(valu_argI),
+			.t(64'd0),
+			.qres(64'd0),
+			.cs(alu1_cs),
+			.pc(alu1_pc),
+			.csr(14'd0),
+			.o(valu_res[g]),
+			.mul_done(vmul_done[g]),
+			.div_done(),
+			.div_dbz()
+		);
+end
+*/
 end
 endgenerate
 
@@ -2855,26 +2892,11 @@ always_comb
 //assign  fcu_v = fcu_dataready;
 
 // ToDo: add result exception 
+assign fpu0_res_exc = FLT_NONE;
 generate begin : gFpu
 if (NFPU > 0) begin
-	Qupls_fpu ufpu1
-	(
-		.rst(rst),
-		.clk(clk),
-		.idle(fpu0_idle),
-		.ir(fpu0_instr),
-		.rm(3'd0),
-		.a(fpu0_argA),
-		.b(fpu0_argB),
-		.c(fpu0_argC),
-		.i(fpu0_argI),
-		.o(fpu0_res),
-		.p(~64'd0),
-		.t(64'd0),
-		.done(fpu0_done)
-	);
 	if (SUPPORT_QUAD_PRECISION) begin
-		Qupls_fpu ufpu1
+		Qupls_meta_fpu #(.WID(128)) ufpu1
 		(
 			.rst(rst),
 			.clk(clk),
@@ -2884,16 +2906,34 @@ if (NFPU > 0) begin
 			.a({alu0_argA,fpu0_argA}),
 			.b({alu0_argB,fpu0_argB}),
 			.c({alu0_argC,fpu0_argC}),
-			.i({alu0_argI,fpu0_argI}),
-			.o(qdfpu0_res),
+			.i(fpu0_argI),
+			.o({fpu0_resH,fpu0_res}),
 			.p(~64'd0),
 			.t(128'd0),
-			.done(qdfpu0_done)
+			.done(fpu0_done)
+		);
+	end
+	else begin
+		Qupls_meta_fpu #(.WID(64)) ufpu1
+		(
+			.rst(rst),
+			.clk(clk),
+			.idle(fpu0_idle),
+			.ir(fpu0_instr),
+			.rm(3'd0),
+			.a(fpu0_argA),
+			.b(fpu0_argB),
+			.c(fpu0_argC),
+			.i(fpu0_argI),
+			.o(fpu0_res),
+			.p(~64'd0),
+			.t(64'd0),
+			.done(fpu0_done)
 		);
 	end
 end
 if (NFPU > 1) begin
-	Qupls_fpu ufpu2
+	Qupls_meta_fpu #(.WID(64)) ufpu2
 	(
 		.rst(rst),
 		.clk(clk),
@@ -3556,6 +3596,7 @@ if (rst) begin
 	alu0_cp <= 4'd0;
 	alu0_pred <= FALSE;
 	alu0_predz <= FALSE;
+	alu0_prc <= 2'd3;
 end
 else begin
 	if (alu0_available && alu0_rndxv && alu0_idle) begin
@@ -3575,6 +3616,7 @@ else begin
 		alu0_predz <= rob[alu0_rndx].decbus.predz;
 		alu0_div <= rob[alu0_rndx].decbus.div;
 		alu0_cptgt <= alu0_cpytgt|rob[alu0_rndx].decbus.cpytgt;
+		alu0_prc <= rob[alu0_rndx].decbus.prec;
 		if (alu0_cpytgt|rob[alu0_rndx].decbus.cpytgt) begin
 			alu0_instr <= {33'd0,OP_NOP};
 			alu0_pred <= FALSE;
@@ -3608,6 +3650,7 @@ if (rst) begin
 	alu1_cp <= 4'd0;
 	alu1_pred <= FALSE;
 	alu1_predz <= FALSE;
+	alu1_prc <= 2'd3;
 end
 else begin
 	if (NALU > 1) begin
@@ -3629,6 +3672,7 @@ else begin
 			alu1_cp <= rob[alu1_rndx].cndx;
 			alu1_pred <= rob[alu1_rndx].decbus.pred;
 			alu1_predz <= rob[alu1_rndx].decbus.predz;
+			alu1_prc <= rob[alu1_rndx].decbus.prec;
 		end
 	end
 end
@@ -3641,22 +3685,35 @@ if (rst) begin
 	fpu0_argC <= 64'd0;
 	fpu0_argT <= 64'd0;
 	fpu0_argI <= 64'd0;
-	fpu0_Rt <= 8'd0;
+	fpu0_Rt <= 11'd0;
+	fpu0_Rt1 <= 11'd0;
 	fpu0_aRt <= 7'd0;
 	fpu0_aRtz <= TRUE;
+	fpu0_aRt1 <= 7'd0;
+	fpu0_aRtz1 <= TRUE;
 	fpu0_cs <= 1'b0;
 	fpu0_bank <= 1'b0;
 	fpu0_instr <= {33'd0,OP_NOP};
 	fpu0_pc <= RSTPC;
 	fpu0_cp <= 4'd0;
+	fpu0_qfext <= FALSE;
 end
 else begin
 	if (NFPU > 0) begin
 		if (fpu0_available && fpu0_rndxv && fpu0_idle) begin
 			fpu0_id <= fpu0_rndx;
-			fpu0_argA <= rob[fpu0_rndx].decbus.imma | rfo_fpu0_argA;
+			fpu0_argA <= rfo_fpu0_argA;
 			fpu0_argB <= rfo_fpu0_argB;
-			fpu0_argC <= rob[fpu0_rndx].decbus.immc | rfo_fpu0_argC;
+			fpu0_argC <= rfo_fpu0_argC;
+			if (rob[fpu0_rndx].decbus.qfext) begin
+				fpu0_qfext <= TRUE;
+				fpu0_Rt1 <= rob[fpu0_rndx].nRt;
+				fpu0_aRt1 <= rob[fpu0_rndx].decbus.Rt;
+				fpu0_aRtz1 <= rob[fpu0_rndx].decbus.Rtz;
+			end
+			else begin
+				fpu0_qfext <= FALSE;
+			end
 			fpu0_argI	<= rob[fpu0_rndx].decbus.immb;
 			fpu0_Rt <= rob[fpu0_rndx].nRt;
 			fpu0_aRt <= rob[fpu0_rndx].decbus.Rt;
@@ -4076,14 +4133,7 @@ else begin
 			fpu0_idle <= FALSE;
 			fpu0_idv <= VAL;
 			fpu0_exc <= FLT_NONE;
-			fpu0_excv <= FALSE;
 	    rob[fpu0_rndx].out <= {VAL,VAL};
-	    if (rob[fpu0_rndx].quad && SUPPORT_QUAD_PRECISION) begin
-	    	if (!rob[alu0_id].quad || !rob[alu0_id].out[0] || alu0_id != (fpu0_rndx+ROB_ENTRIES-1) % ROB_ENTRIES) begin
-	    		fpu0_exc <= FLT_QUAD;
-	    		fpu0_excv <= TRUE;
-	    	end
-	    end
 		end
 	end
 
@@ -4342,15 +4392,6 @@ else begin
 		if (fpu0_done) begin
 			fpu0_idle <= TRUE;
 			fpu0_idv <= INV;
-			// If we were executing a quad precision op, the ALU #0 was taken over.
-			// Release the ALU.
-			if (rob[fpu0_id].quad && SUPPORT_QUAD_PRECISION) begin
-				alu0_idle <= TRUE;
-				alu0_idv <= INV;
-				alu0_done <= TRUE;
-		    rob[alu0_id].done <= 2'b11;
-				rob[alu0_id].out <= {INV,INV};
-			end
 			/*
 			if (fpu0_pfx) begin
 				fpu0_argC <= fpu0_argA;
@@ -4361,13 +4402,23 @@ else begin
 				fpu0_argD <= 'd0;
 			end
 			*/
+			// If a quad precision op is performed, release the ALU
+			if (rob[fpu0_id].quad) begin
+				if (rob[alu0_id].v && alu0_id==(fpu0_id+ROB_ENTRIES-1)%ROB_ENTRIES) begin
+		    	alu0_done <= TRUE;
+			    alu0_idle <= TRUE;
+			    alu0_idv <= INV;
+			    rob[ alu0_id ].done <= 2'b11;
+			    rob[ alu0_id ].out <= {INV,INV};
+				end
+			end
 		end
 		if (~|rob[fpu0_id].exc)
     	rob[ fpu0_id ].exc <= fpu0_res_exc;
     if (|fpu0_res_exc)
     	rob[ fpu0_id ].excv <= TRUE;
-    rob[ fpu0_id ].done[0] <= fpu0_done;
-    rob[ fpu0_id ].done[1] <= 1'b1;
+    if (fpu0_done)
+    	rob[ fpu0_id ].done <= 2'b11;
     rob[ fpu0_id ].out <= {INV,INV};
 	end
 	
@@ -4954,7 +5005,14 @@ else begin
 	// ToDo: fix LSQ head update.
 	if (lsq[lsq_head.row][lsq_head.col].v==INV && lsq_head != lsq_tail)
 		lsq_head.row <= lsq_head.row + 1;
-	
+
+	if (SUPPORT_QUAD_PRECISION) begin
+		tCheckQFExtDone(head0);	
+		tCheckQFExtDone(head1);	
+		tCheckQFExtDone(head2);	
+		tCheckQFExtDone(head3);	
+	end
+
 	// Branchmiss stomping
 	// Mark functional units stomped on idle.
 	// Invalidate instructions newer than the branch in the ROB.
@@ -5340,6 +5398,28 @@ begin
 	end
 end
 endfunction
+
+// Check if a QFEXT modifier made it to commit without having a following FPU
+// operation. This should generally not happen, but if it does it would stall
+// the machine. So, we just treat the QFEXT like a NOP and release the ALU so
+// the machine can be on its way. Note that the QFEXT would block execution of
+// other ALU ops, so it may act a bit like a SYNC instruction. Another option
+// may be to exception.
+
+task tCheckQFExtDone;
+input rob_ndx_t head;
+begin
+	if (rob[head].v && rob[head].decbus.qfext && !rob[(head+1)%ROB_ENTRIES].fpu && alu0_id==head) begin
+		if (rob[head].done!=2'b11) begin
+			alu0_idle <= TRUE;
+			alu0_idv <= INV;
+			alu0_done <= TRUE;
+	    rob[alu0_id].done <= 2'b11;
+			rob[alu0_id].out <= {INV,INV};
+		end
+	end
+end
+endtask
 
 // Invalidate LSQ entries associated with a ROB entry. This searches the LSQ
 // which is small in case multiple LSQ entries are associated. This is an

@@ -32,63 +32,112 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
+// 46500 LUTs / 11500 FFs / 210 DSPs (quad supported + prec)
+// 10200 LUTs / 4020 FFs / 70 DSPs (no quad or prec, 64-bit fp only)
 // ============================================================================
 
+import const_pkg::*;
 import QuplsPkg::*;
 
-module Qupls_cmp(ir, a, b, o);
-parameter WID=128;
+module Qupls_meta_fpu(rst, clk, idle, prc, ir, rm, a, b, c, t, i, p, o, done);
+parameter WID=SUPPORT_QUAD_PRECISION ? 128 : 64;
+input rst;
+input clk;
+input idle;
+input [1:0] prc;
 input instruction_t ir;
+input [2:0] rm;
 input [WID-1:0] a;
 input [WID-1:0] b;
+input [WID-1:0] c;
+input [WID-1:0] t;
+input [WID-1:0] i;
+input [WID-1:0] p;
 output reg [WID-1:0] o;
+output reg done;
+
+wire [WID-1:0] o16, o32, o64, o128;
+genvar g;
+
+generate begin : gPrec
+if (SUPPORT_PREC) begin
+for (g = 0; g < WID/16; g = g + 1)
+	Qupls_fpu16(
+		.rst(rst),
+		.clk(clk),
+		.idle(idle),
+		.ir(ir),
+		.rm(),
+		.a(a[g*16+15:g*16]),
+		.b(b[g*16+15:g*16]),
+		.c(c[g*16+15:g*16]),
+		.t(t[g*16+15:g*16]),
+		.i(i),
+		.p(p),
+		.o(o16[g*16+15:g*16]),
+		.done()
+);
+for (g = 0; g < WID/32; g = g + 1)
+	Qupls_fpu32(
+		.rst(rst),
+		.clk(clk),
+		.idle(idle),
+		.ir(ir),
+		.rm(),
+		.a(a[g*32+31:g*32]),
+		.b(b[g*32+31:g*32]),
+		.c(c[g*32+31:g*32]),
+		.t(t[g*32+31:g*32]),
+		.i(i),
+		.p(p),
+		.o(o32[g*32+31:g*32]),
+		.done()
+);
+end
+for (g = 0; g < WID/64; g = g + 1)
+	Qupls_fpu64 (
+		.rst(rst),
+		.clk(clk),
+		.idle(idle),
+		.ir(ir),
+		.rm(),
+		.a(a[g*64+63:g*64]),
+		.b(b[g*64+63:g*64]),
+		.c(c[g*64+63:g*64]),
+		.t(t[g*64+63:g*64]),
+		.i(i),
+		.p(p),
+		.o(o64[g*64+63:g*64]),
+		.done()
+);
+if (SUPPORT_QUAD_PRECISION)
+	Qupls_fpu128 (
+		.rst(rst),
+		.clk(clk),
+		.idle(idle),
+		.ir(ir),
+		.rm(),
+		.a(a),
+		.b(b),
+		.c(c),
+		.t(t),
+		.i(i),
+		.p(p),
+		.o(o128),
+		.done()
+);
+end
+endgenerate
 
 always_comb
-begin
-	o = {WID{1'd0}};
-	case(ir.any.opcode)
-	OP_R2:
-		case(ir.r2.func)
-		FN_CMP:
-			begin
-				o[0] = a == b;
-				o[1] = a != b;
-				o[2] = $signed(a) < $signed(b);
-				o[3] = $signed(a) <= $signed(b);
-				o[4] = $signed(a) >= $signed(b);
-				o[5] = $signed(a) > $signed(b);
-				o[6] = ~a[b[6:0]];
-				o[7] =  a[b[6:0]];
-			end
-		FN_CMPU:
-			begin
-				o[2] = a < b;
-				o[3] = a <= b;
-				o[4] = a >= b;
-				o[5] = a > b;
-			end
-		default:
-			o = 'd0;
-		endcase
-	OP_CMPI:
-		begin
-			o[0] = a == b;
-			o[1] = a != b;
-			o[2] = $signed(a) < $signed(b);
-			o[3] = $signed(a) <= $signed(b);
-			o[4] = $signed(a) >= $signed(b);
-			o[5] = $signed(a) > $signed(b);
-			o[6] = ~a[b[6:0]];
-			o[7] =  a[b[6:0]];
-		end
-	OP_CMPUI:
-		begin
-			o[2] = a < b;
-			o[3] = a <= b;
-			o[4] = a >= b;
-			o[5] = a > b;
-		end
+if (SUPPORT_PREC)
+	case(prc)
+	2'd0:	o = o16;
+	2'd1:	o = o32;
+	2'd2:	o = o64;
+	2'd3:	o = o128;
 	endcase
-end
+else
+	o = o64;
 
 endmodule

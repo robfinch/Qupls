@@ -39,9 +39,11 @@
 import const_pkg::*;
 import QuplsPkg::*;
 
-module Qupls_alu(rst, clk, clk2x, ld, ir, div, cptgt, z, a, b, bi, c, i, t, qres, cs, pc, csr,
-	o, mul_done, div_done, div_dbz);
+module Qupls_alu(rst, clk, clk2x, ld, ir, div, cptgt, z, a, b, bi, c, i, t, qres,
+	cs, pc, csr, o, mul_done, div_done, div_dbz);
 parameter ALU0 = 1'b0;
+parameter WID=16;
+parameter LANE=0;
 input rst;
 input clk;
 input clk2x;
@@ -50,50 +52,46 @@ input instruction_t ir;
 input div;
 input cptgt;
 input z;
-input value_t a;
-input value_t b;
-input value_t bi;
-input value_t c;
-input value_t i;
-input value_t t;
-input value_t qres;			// quad precision result from fpu
+input [WID-1:0] a;
+input [WID-1:0] b;
+input [WID-1:0] bi;
+input [WID-1:0] c;
+input [WID-1:0] i;
+input [WID-1:0] t;
+input [WID-1:0] qres;
 input [2:0] cs;
 input pc_address_t pc;
-input value_t csr;
-output value_t o;
+input [WID-1:0] csr;
+output reg [WID-1:0] o;
 output reg mul_done;
 output div_done;
 output div_dbz;
 
+value_t zero = {WID{1'b0}};
 wire cd_args;
 value_t cc;
 reg [3:0] mul_cnt;
-double_value_t prod, prod1, prod2;
-double_value_t produ, produ1, produ2;
-reg [127:0] shl, shr, asr;
-value_t div_q, div_r;
-value_t cmpo;
-value_t bus;
-value_t blendo;
-value_t immc6;
+reg [WID*2-1:0] prod, prod1, prod2;
+reg [WID*2-1:0] produ, produ1, produ2;
+reg [WID*2-1:0] shl, shr, asr;
+wire [WID-1:0] div_q, div_r;
+wire [WID-1:0] cmpo;
+reg [WID-1:0] bus;
+reg [WID-1:0] blendo;
+reg [WID-1:0] immc6;
+reg [21:0] ii;
 
 always_comb
-	immc6 = {{58{ir[30]}},ir[30:25]};
+	ii = {{6{i[WID-1]}},i};
+
+always_comb
+	immc6 = {{WID{ir[30]}},ir[30:25]};
 always_comb
 	shl = {b,ir[33] ? ~a : a} << (ir[32] ? ir[31:25] : c[5:0]);
 always_comb
 	shr = {ir[33] ? ~b : b,a} >> (ir[32] ? ir[31:25] : c[5:0]);
 always_comb
 	asr = {{64{a[63]}},a,64'd0} >> (ir[32] ? ir[31:25] : c[5:0]);
-
-always_comb
-	case(cs)
-	3'd0:	cc = c;			// As is
-	3'd1:	cc = -c;		// Two's complement
-	3'd2:	cc = ~c;		// One's complement
-	3'd3:	cc = {~c[$bits(value_t)-1],c[$bits(value_t)-2:0]};	// Float negate
-	default:	cc = c;
-	endcase
 
 always_ff @(posedge clk)
 begin
@@ -116,9 +114,9 @@ begin
 	mul_done <= mul_cnt[3];
 end
 
-Qupls_cmp ualu_cmp(ir, a, b, cmpo);
+Qupls_cmp #(.WID(WID)) ualu_cmp(ir, a, b, cmpo);
 
-Qupls_divider udiv0(
+Qupls_divider #(.WID(WID)) udiv0(
 	.rst(rst),
 	.clk(clk2x),
 	.ld(ld),
@@ -133,81 +131,76 @@ Qupls_divider udiv0(
 	.idle()
 );
 
-Qupls_blend ublend0
-(
-	.a(c),
-	.c0(a),
-	.c1(bi),
-	.o(blendo)
-);
+generate begin : gBlend
+	if (WID != 64) begin
+		assign blendo = {WID{1'b0}};
+	end
+	else begin
+		Qupls_blend ublend0
+		(
+			.a(c),
+			.c0(a),
+			.c1(bi),
+			.o(blendo)
+		);
+	end
+end
+endgenerate
 
 always_comb
 begin
+	bus = {(WID/16){16'h0000}};
 	case(ir.any.opcode)
 	OP_R2:
 		case(ir.r2.func)
-		FN_ADD:	
-			case(ir[32:31])
-			2'd0:	bus = a + b + c;
-			2'd2:	bus = a + b + c + 2'd1;
-			2'd3: bus = a + b + c - 2'd1;
-			default:	bus = 64'd0;
-			endcase
-		FN_SUB:	
-			case(ir[32:31])
-			2'd0:	bus = a - b - c;
-			2'd2: bus = a - b - c - 2'd1;
-			2'd3: bus = a - b - c + 2'd1;
-			default:	bus = 64'd0;
-			endcase
-		FN_CMP:	bus = cmpo;
-		FN_CMPU:	bus = cmpo;
-		FN_MUL:	bus = prod[63:0];
-		FN_MULU:	bus = produ[63:0];
-		FN_MULH:	bus = prod[127:64];
-		FN_MULUH:	bus = produ[127:64];
-		FN_DIV: bus = ALU0 ? div_q : 0;
-		FN_MOD: bus = ALU0 ? div_r : 0;
-		FN_DIVU: bus = ALU0 ? div_q : 0;
-		FN_MODU: bus = ALU0 ? div_r : 0;
-		FN_AND:	bus = a & b & ~cc;
-		FN_OR:	bus = a | b | cc;
-		FN_EOR:	bus = a ^ b ^ cc;
-		FN_ANDC:	bus = a & ~b & ~cc;
-		FN_NAND:	bus = ~(a & b & ~cc);
-		FN_NOR:	bus = ~(a | b | cc);
-		FN_ENOR:	bus = ~(a ^ b ^ cc);
-		FN_ORC:	bus = a | ~b | cc;
-		FN_SEQ:	
-			case(ir[32:31])
-			2'd1:	bus = a == b ? immc6 : t;
-			default:	bus = a == b ? immc6 : 64'd0;
-			endcase
-		FN_SNE:
-			case(ir[32:31])
-			2'd1:	bus = a != b ? immc6 : t;
-			default:	bus = a != b ? immc6 : 64'd0;
-			endcase
-		FN_SLT:
-			case(ir[32:31])
-			2'd1:	bus = $signed(a) < $signed(b) ? immc6 : t;
-			default: bus = $signed(a) < $signed(b) ? immc6 : 64'd0;
-			endcase
-		FN_SLE:	
-			case(ir[32:31])
-			2'd1: bus = $signed(a) <= $signed(b) ? immc6 : t;
-			default: bus = $signed(a) <= $signed(b) ? immc6 : 64'd0;
-			endcase
-		FN_SLTU:
-			case(ir[32:31])
-			2'd1:	bus = a < b ? immc6 : t;
-			default: bus = a < b ? immc6 : 64'd0;
-			endcase
-		FN_SLEU:
-			case(ir[32:31])
-			2'd1: bus = a <= b ? immc6 : t;
-			default: bus = a <= b ? immc6 : 64'd0;
-			endcase
+		FN_ADD:	bus = a + b + c;
+		FN_SUB:	bus = a - b - c;
+		FN_CMP,FN_CMPU:	bus = cmpo;
+		FN_MUL:	bus = prod[WID-1:0];
+		FN_MULU:	bus = produ[WID-1:0];
+		FN_MULH:	bus = prod[WID*2-1:WID];
+		FN_MULUH:	bus = produ[WID*2-1:WID];
+		FN_DIV: bus = ALU0 ? div_q : zero;
+		FN_MOD: bus = ALU0 ? div_r : zero;
+		FN_DIVU: bus = ALU0 ? div_q : zero;
+		FN_MODU: bus = ALU0 ? div_r : zero;
+		FN_AND:	bus = a & b & ~c;
+		FN_OR:	bus = a | b | c;
+		FN_EOR:	bus = a ^ b ^ c;
+		FN_ANDC:	bus = a & ~b & ~c;
+		FN_NAND:	bus = ~(a & b & ~c);
+		FN_NOR:	bus = ~(a | b | c);
+		FN_ENOR:	bus = ~(a ^ b ^ c);
+		FN_ORC:	bus = a | ~b | c;
+
+		FN_SEQ:	bus = a==b ? c : t;
+		FN_SNE:	bus = a!=b ? c : t;
+		FN_SLT:	bus = $signed(a) < $signed(b) ? c : t;
+		FN_SLE:	bus = $signed(a) <= $signed(b) ? c : t;
+		FN_SLTU:	bus = a < b ? c : t;
+		FN_SLEU: 	bus = a <= b ? c : t;
+
+		FN_SEQI:	bus = a == b ? immc6 : t;
+		FN_SNEI:	bus = a != b ? immc6 : t;
+		FN_SLTI:	bus = $signed(a) < $signed(b) ? immc6 : t;
+		FN_SLEI:	bus = $signed(a) <= $signed(b) ? immc6 : t;
+		FN_SLTUI:	bus = a < b ? immc6 : t;
+		FN_SLEUI:	bus = a <= b ? immc6 : t;
+
+		FN_ZSEQ:	bus = a==b ? c : zero;
+		FN_ZSNE:	bus = a!=b ? c : zero;
+		FN_ZSLT:	bus = $signed(a) < $signed(b) ? c : zero;
+		FN_ZSLE:	bus = $signed(a) <= $signed(b) ? c : zero;
+		FN_ZSLTU:	bus = a < b ? c : zero;
+		FN_ZSLEU:	bus = a <= b ? c : zero;
+
+		FN_ZSEQI: bus = a==b ? immc6 : zero;
+		FN_ZSNEI:	bus = a!=b ? immc6 : zero;
+		FN_ZSLTI:	bus = $signed(a) < $signed(b) ? immc6 : zero;
+		FN_ZSLEI:	bus = $signed(a) <= $signed(b) ? immc6 : zero;
+		FN_ZSLTUI:	bus = a < b ? immc6 : zero;
+		FN_ZSLEUI:	bus = a <= b ? immc6 : zero;
+
 		FN_MAX3:
 			begin
 				if ($signed(a) > $signed(b) && $signed(a) > $signed(c))
@@ -262,7 +255,7 @@ begin
 				else
 					bus = c;
 			end
-		default:	bus = {2{32'hDEADBEEF}};
+		default:	bus = {4{32'hDEADBEEF}};
 		endcase
 	OP_CSR:		bus = csr;
 	OP_ADDI,OP_VADDI:
@@ -272,8 +265,8 @@ begin
 		bus = cmpo;
 	OP_CMPUI:	bus = cmpo;
 	OP_MULI,OP_VMULI:
-		bus = prod[63:0];
-	OP_MULUI:	bus = produ[63:0];
+		bus = prod[WID-1:0];
+	OP_MULUI:	bus = produ[WID-1:0];
 	OP_DIVI,OP_VDIVI:
 		bus = ALU0 ? div_q : 0;
 	OP_DIVUI:	bus = ALU0 ? div_q : 0;
@@ -284,21 +277,20 @@ begin
 	OP_EORI,OP_VEORI:
 		bus = a ^ i;
 	OP_SLTI:	bus = $signed(a) < $signed(i);
-	OP_AIPSI:	bus = pc + ({{40{i[23]}},i[23:0]} << (ir[15:13]*20));
 	OP_ADDSI,OP_VADDSI:
-		bus = a + ({{40{i[23]}},i[23:0]} << (ir[15:13]*20));
+		bus = a + ({{WID{ii[21]}},ii[21:0]} << (ir[15:13]*16));
 	OP_ANDSI,OP_VANDSI:
-		bus = a & (64'hffffffffffffffff & ~(64'hffffff << (ir[15:13]*20)) | ({{40{i[23]}},i[23:0]} << (ir[15:13]*20)));
+		bus = a & ({WID{1'b1}} & ~({{WID{1'b0}},22'h3fffff} << (ir[15:13]*16)) | ({{WID{ii[21]}},ii[21:0]} << (ir[15:13]*16)));
 	OP_ORSI,OP_VORSI:
-		bus = a | (i << (ir[15:13]*20));
+		bus = a | (i << (ir[15:13]*16));
 	OP_EORSI,OP_VEORSI:
-		bus = a ^ (i << (ir[15:13]*20));
+		bus = a ^ (i << (ir[15:13]*16));
 	OP_SHIFT:
 		case(ir.shifti.func)
-		OP_ASL:	bus = shl[127:64];
-		OP_LSR:	bus = shr[63:0];
-		OP_ASR:	bus = asr[127:64];
-		default:	bus = {2{32'hDEADBEEF}};
+		OP_ASL:	bus = shl[WID*2-1:WID];
+		OP_LSR:	bus = shr[WID-1:0];
+		OP_ASR:	bus = asr[WID*2-1:WID];
+		default:	bus = {(WID/16){16'hDEAD}};
 		endcase
 	OP_MOV:		bus = a;
 	OP_LDAX:	bus = a + i + (b << ir[26:25]);
@@ -313,11 +305,11 @@ begin
 	// Write the next PC to the link register.
 	OP_BSR,OP_JSR:
 						bus = pc + 4'd5;
-	default:	bus = {2{32'hDEADBEEF}};
+	default:	bus = {(WID/16){16'hDEAD}};
 	endcase
 end
 
 always_comb
-	o = cptgt ? (z ? 64'd0 : t) : bus;
+	o = cptgt ? (z ? zero : t) : bus;
 
 endmodule

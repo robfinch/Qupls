@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2013-2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2013-2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -44,10 +44,10 @@ input rst;
 input ld;
 input sgn;
 input sgnus;
-input value_t a;
-input value_t b;
-output value_t qo;
-output value_t ro;
+input [WID-1:0] a;
+input [WID-1:0] b;
+output reg [WID-1:0] qo;
+output reg [WID-1:0] ro;
 output done;
 output idle;
 output dvByZr;
@@ -79,7 +79,7 @@ reg a2, b2;
 reg ld1;
 reg sgn1,sgnus1;
 reg sgn2,sgnus2;
-value_t a1, b1;
+reg [WID-1:0] a1, b1;
 
 always_ff @(posedge clk)
 if (rst) begin
