@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "F:\\Documents\\GitHub\\Qupls\\software\\util\\QuplsUtil\\QuplsUtil\\QuplsUtil.csproj": {}
+    "F:\\Cores2024\\Qupls\\software\\util\\QuplsUtil\\QuplsUtil.csproj": {}
   },
   "projects": {
-    "F:\\Documents\\GitHub\\Qupls\\software\\util\\QuplsUtil\\QuplsUtil\\QuplsUtil.csproj": {
+    "F:\\Cores2024\\Qupls\\software\\util\\QuplsUtil\\QuplsUtil.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "F:\\Documents\\GitHub\\Qupls\\software\\util\\QuplsUtil\\QuplsUtil\\QuplsUtil.csproj",
+        "projectUniqueName": "F:\\Cores2024\\Qupls\\software\\util\\QuplsUtil\\QuplsUtil.csproj",
         "projectName": "QuplsUtil",
-        "projectPath": "F:\\Documents\\GitHub\\Qupls\\software\\util\\QuplsUtil\\QuplsUtil\\QuplsUtil.csproj",
+        "projectPath": "F:\\Cores2024\\Qupls\\software\\util\\QuplsUtil\\QuplsUtil.csproj",
         "packagesPath": "C:\\Users\\Robert\\.nuget\\packages\\",
-        "outputPath": "F:\\Documents\\GitHub\\Qupls\\software\\util\\QuplsUtil\\QuplsUtil\\obj\\",
+        "outputPath": "F:\\Cores2024\\Qupls\\software\\util\\QuplsUtil\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "F:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages",
