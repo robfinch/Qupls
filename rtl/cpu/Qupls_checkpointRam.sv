@@ -38,7 +38,6 @@
 import QuplsPkg::SIM;
 
 module Qupls_checkpointRam(clka, ena, wea, addra, dina, clkb, enb, addrb, doutb);
-parameter BANKS=4;
 localparam RBIT=$clog2(PREGS);
 localparam QBIT=$bits(pregno_t);
 localparam WID=$bits(checkpoint_t);

@@ -77,7 +77,7 @@ input snoop_v;
 input [5:0] snoop_cid;
 
 genvar g;
-integer nn,nn1,nn2,nn3,nn4,nn5,nn6,nn7,nn8;
+integer nn,nn1,nn2,nn3,output_tran,nn5,free_queue_entry,nn7,nn8,nn9;
 
 typedef enum logic [3:0] {
 	RESET = 0,
@@ -123,7 +123,7 @@ reg [1:0] active_req;
 reg [1:0] queued_req;
 reg [1:0] tran_cnt [0:15];
 tran_state_t [15:0] tran_state;
-reg [7:0] ndx;
+reg [7:0] completed_tran;
 req_queue_t cpu_req_queue [0:3];
 fta_cmd_response512_t tran_load_data [0:3];
 fta_tranid_t [15:0] tranids;
@@ -137,6 +137,7 @@ reg cpu_request_queued;
 fta_tranid_t lasttid, lasttid2;
 reg bus_busy;
 reg [3:0] tidcnt;
+reg in_que;
 integer which_tran;
 
 always_comb
@@ -186,9 +187,9 @@ always_comb
 generate begin : gCacheLineUpdate
 	for (g = 0; g < 64; g = g + 1) begin : gFor
 		always_comb
-			if (cpu_req_queue[ndx[1:0]].cpu_req.we) begin
-				if (cpu_req_queue[ndx[1:0]].cpu_req.sel[g])
-					upd_dat[g*8+7:g*8] <= cpu_req_queue[ndx[1:0]].cpu_req.dat[g*8+7:g*8];
+			if (cpu_req_queue[completed_tran[1:0]].cpu_req.we) begin
+				if (cpu_req_queue[completed_tran[1:0]].cpu_req.sel[g])
+					upd_dat[g*8+7:g*8] <= cpu_req_queue[completed_tran[1:0]].cpu_req.dat[g*8+7:g*8];
 				else
 //					upd_dat[g*8+7:g*8] <= data_to_cache_o.dat[g*8+7:g*8];
 					upd_dat[g*8+7:g*8] <= response_from_cache_i.dat[g*8+7:g*8];
@@ -210,33 +211,42 @@ end
 // Select a transaction to output
 always_comb
 begin
-	nn4 = 5'd16;
+	output_tran = 5'd16;
 	for (nn3 = 0; nn3 < 16; nn3 = nn3 + 1) begin
 		if (cpu_req_queue[nn3>>2].active[nn3[1:0]]
 			&& !cpu_req_queue[nn3>>2].out[nn3[1:0]] 
 			&& !cpu_req_queue[nn3>>2].done[nn3[1:0]] 
 //			&& !tran_load_data[nn3>>2].ack
-			&& nn4==5'd16)
-			nn4 = nn3;
+			&& output_tran==5'd16)
+			output_tran = nn3;
 	end
 end
 
 // Get index of completed transaction.
 always_comb
 begin
-	ndx = 3'd4;
+	completed_tran = 3'd4;
 	for (nn5 = 0; nn5 < 4; nn5 = nn5 + 1)
 		if (cpu_req_queue[nn5].done==4'b1111)
-			ndx = nn5;
+			completed_tran = nn5;
+end
+
+// Detect if a request is already queued.
+always_comb
+begin
+	in_que = FALSE;
+	for (nn9 = 0; nn9 < 4; nn9 = nn9 + 1)
+		if (cpu_req_queue[nn9].cpu_req.tid==cpu_request_i.tid)
+			in_que = TRUE;
 end
 
 // Get index of free queue entry.
 always_comb
 begin
-	nn6 = 3'd4;
+	free_queue_entry = 3'd4;
 	for (nn7 = 0; nn7 < 4; nn7 = nn7 + 1)
-		if (~cpu_req_queue[nn7].v && nn6==3'd4)
-			nn6 = nn7;
+		if (~cpu_req_queue[nn7].v && free_queue_entry==3'd4)
+			free_queue_entry = nn7;
 end
 
 
@@ -489,51 +499,53 @@ else begin
 	// Acknowledge completed transactions.
 	// Write allocate transactions must be done twice, once to load the cache
 	// and a second time to update it.
-	// ndx selected based on tran_done[].
-	if (ndx < 3'd4) begin
-		active_req <= ndx[1:0];
-		if (cpu_req_queue[ndx[1:0]].is_dump) begin
-			cpu_req_queue[ndx[1:0]].active[2'd0] <= 1'b1;
-			cpu_req_queue[ndx[1:0]].active[2'd1] <= 1'b1;
-			cpu_req_queue[ndx[1:0]].active[2'd2] <= 1'b1;
-			cpu_req_queue[ndx[1:0]].active[2'd3] <= 1'b1;
-			cpu_req_queue[ndx[1:0]].is_dump <= 1'b0;
+	// completed_tran selected based on tran_done[].
+	if (completed_tran < 3'd4) begin
+		active_req <= completed_tran[1:0];
+		if (cpu_req_queue[completed_tran[1:0]].is_dump) begin
+			cpu_req_queue[completed_tran[1:0]].active[2'd0] <= 1'b1;
+			cpu_req_queue[completed_tran[1:0]].active[2'd1] <= 1'b1;
+			cpu_req_queue[completed_tran[1:0]].active[2'd2] <= 1'b1;
+			cpu_req_queue[completed_tran[1:0]].active[2'd3] <= 1'b1;
+			cpu_req_queue[completed_tran[1:0]].is_dump <= 1'b0;
 			dump_ack <= 1'b1;
 		end
-		else if (cpu_req_queue[ndx[1:0]].is_load) begin
-			cpu_req_queue[ndx[1:0]].is_load <= 1'd0;
-			cache_load_data <= tran_load_data[ndx[1:0]];
+		else if (cpu_req_queue[completed_tran[1:0]].is_load) begin
+			cpu_req_queue[completed_tran[1:0]].is_load <= 1'd0;
+			cache_load_data <= tran_load_data[completed_tran[1:0]];
 			wr <= dce & allocate & ~non_cacheable;
 			cache_load <= dce & allocate & ~non_cacheable;
 //				cache_load_data.ack <= 1'b1;
-			cache_load_data.tid <= cpu_req_queue[ndx[1:0]].cpu_req.tid;
-			if (!cpu_req_queue[ndx[1:0]].write_allocate) begin
-				tran_load_data[ndx[1:0]].ack <= 1'b1;
+			cache_load_data.tid <= cpu_req_queue[completed_tran[1:0]].cpu_req.tid;
+			if (!cpu_req_queue[completed_tran[1:0]].write_allocate) begin
+				tran_load_data[completed_tran[1:0]].ack <= 1'b1;
 				cache_load_data.ack <= 1'b1;
-				cpu_req_queue[ndx[1:0]].v <= INV;
+				cpu_req_queue[completed_tran[1:0]].v <= INV;
+				cpu_req_queue[completed_tran[1:0]].cpu_req.tid <= 'd0;
 			end
 			else begin
-				cpu_req_queue[ndx[1:0]].active[2'd0] <= 1'b1;
-				cpu_req_queue[ndx[1:0]].active[2'd1] <= 1'b1;
-				cpu_req_queue[ndx[1:0]].active[2'd2] <= 1'b1;
-				cpu_req_queue[ndx[1:0]].active[2'd3] <= 1'b1;
+				cpu_req_queue[completed_tran[1:0]].active[2'd0] <= 1'b1;
+				cpu_req_queue[completed_tran[1:0]].active[2'd1] <= 1'b1;
+				cpu_req_queue[completed_tran[1:0]].active[2'd2] <= 1'b1;
+				cpu_req_queue[completed_tran[1:0]].active[2'd3] <= 1'b1;
 				cache_load_data.ack <= 1'b0;
 			end
 		end
 		else begin
-			tran_load_data[ndx[1:0]].ack <= 1'b1;
-			cache_load_data <= tran_load_data[ndx[1:0]];
+			tran_load_data[completed_tran[1:0]].ack <= 1'b1;
+			cache_load_data <= tran_load_data[completed_tran[1:0]];
 			cache_load_data.ack <= 1'b1;
 			wr <= dce & allocate & ~non_cacheable;
 //				cache_load_data.ack <= 1'b1;
-//			cache_load_data.tid <= tranids[ndx];
-			cache_load_data.tid <= cpu_req_queue[ndx[1:0]].cpu_req.tid;
-			cpu_req_queue[ndx[1:0]].v <= INV;
+//			cache_load_data.tid <= tranids[completed_tran];
+			cache_load_data.tid <= cpu_req_queue[completed_tran[1:0]].cpu_req.tid;
+			cpu_req_queue[completed_tran[1:0]].v <= INV;
+			cpu_req_queue[completed_tran[1:0]].cpu_req.tid <= 'd0;
 		end
-		cpu_req_queue[ndx[1:0]].done[2'd0] <= 1'b0;
-		cpu_req_queue[ndx[1:0]].done[2'd1] <= 1'b0;
-		cpu_req_queue[ndx[1:0]].done[2'd2] <= 1'b0;
-		cpu_req_queue[ndx[1:0]].done[2'd3] <= 1'b0;
+		cpu_req_queue[completed_tran[1:0]].done[2'd0] <= 1'b0;
+		cpu_req_queue[completed_tran[1:0]].done[2'd1] <= 1'b0;
+		cpu_req_queue[completed_tran[1:0]].done[2'd2] <= 1'b0;
+		cpu_req_queue[completed_tran[1:0]].done[2'd3] <= 1'b0;
 		iway <= lfsr_o[LOG_WAYS:0];
 	end
 
@@ -546,7 +558,7 @@ else begin
 	// If not a hit, and write allocate and the load is done
 	// 	 update the cache.
 	/*
-	if (ndx < 8'd16) begin
+	if (completed_tran < 8'd16) begin
 		// If we have a hit on the cache line, write the data to the cache if
 		// it is a writeable cacheable transaction.
 		if (hit) begin
@@ -566,20 +578,20 @@ else begin
 	*/
 
 	// Look for outstanding transactions to execute.
-	if (nn4 < 5'd16) begin
+	if (output_tran < 5'd16) begin
 //		if (!ftam_full) begin
-			active_req <= nn4[3:2];
-			last_out <= cpu_req_queue[nn4[3:2]].tran_req[nn4[1:0]].tid.tranid;
-			if (!cpu_req_queue[nn4[3:2]].tran_req[nn4[1:0]].we || cpu_req_queue[nn4[3:2]].tran_req[nn4[1:0]].cti==fta_bus_pkg::ERC)
-				cpu_req_queue[nn4[3:2]].out[nn4[1:0]] <= 1'b1;
+			active_req <= output_tran[3:2];
+			last_out <= cpu_req_queue[output_tran[3:2]].tran_req[output_tran[1:0]].tid.tranid;
+			if (!cpu_req_queue[output_tran[3:2]].tran_req[output_tran[1:0]].we || cpu_req_queue[output_tran[3:2]].tran_req[output_tran[1:0]].cti==fta_bus_pkg::ERC)
+				cpu_req_queue[output_tran[3:2]].out[output_tran[1:0]] <= 1'b1;
 			else begin
-				cpu_req_queue[nn4[3:2]].active[nn4[1:0]] <= 1'b0;
-				cpu_req_queue[nn4[3:2]].out[nn4[1:0]] <= 1'b0;
-				cpu_req_queue[nn4[3:2]].done[nn4[1:0]] <= 1'b1;
+				cpu_req_queue[output_tran[3:2]].active[output_tran[1:0]] <= 1'b0;
+				cpu_req_queue[output_tran[3:2]].out[output_tran[1:0]] <= 1'b0;
+				cpu_req_queue[output_tran[3:2]].done[output_tran[1:0]] <= 1'b1;
 			end
-			if (cpu_req_queue[nn4[3:2]].tran_req[nn4[1:0]].cyc) begin
-				ftam_req <= cpu_req_queue[nn4[3:2]].tran_req[nn4[1:0]];
-				cpu_req_queue[nn4[3:2]].tran_req[nn4[1:0]].cyc <= 1'b0;
+			if (cpu_req_queue[output_tran[3:2]].tran_req[output_tran[1:0]].cyc) begin
+				ftam_req <= cpu_req_queue[output_tran[3:2]].tran_req[output_tran[1:0]];
+				cpu_req_queue[output_tran[3:2]].tran_req[output_tran[1:0]].cyc <= 1'b0;
 			end
 			wait_cnt <= 'd0;
 //			req_state <= RAND_DELAY;
@@ -615,16 +627,17 @@ else begin
 		queued_req <= nn2[1:0];
 		cpu_request_i2 <= cpu_req_queue[nn2[1:0]].cpu_req;
 		lasttid2 <= cpu_req_queue[nn2[1:0]].cpu_req.tid;
+		cpu_req_queue[nn2[1:0]].active <= 4'b1111;
 		lasttid <= lasttid2;
 		cpu_request_queued <= 1'b0;
 	end
-	if (cpu_request_i.cyc) begin
-		if (nn6 < 3'd4) begin
-			cpu_req_queue[nn6[1:0]].v <= 1'b1;
-			cpu_req_queue[nn6[1:0]].done <= 4'b0000;
-			cpu_req_queue[nn6[1:0]].active <= 4'b0000;
-			cpu_req_queue[nn6[1:0]].out <= 4'b0000;
-			cpu_req_queue[nn6[1:0]].cpu_req <= cpu_request_i;
+	if (cpu_request_i.cyc && !in_que) begin
+		if (free_queue_entry < 3'd4) begin
+			cpu_req_queue[free_queue_entry[1:0]].v <= 1'b1;
+			cpu_req_queue[free_queue_entry[1:0]].done <= 4'b0000;
+			cpu_req_queue[free_queue_entry[1:0]].active <= 4'b0000;
+			cpu_req_queue[free_queue_entry[1:0]].out <= 4'b0000;
+			cpu_req_queue[free_queue_entry[1:0]].cpu_req <= cpu_request_i;
 		end
 	end
 end
@@ -679,7 +692,7 @@ begin
 		cpu_req_queue[queued_req].tran_req[which].seg <= fta_bus_pkg::DATA;
 		cpu_req_queue[queued_req].active[which] <= 1'b1;
 	end
-//	tran_done[ndx] <= 1'b0;
+//	tran_done[completed_tran] <= 1'b0;
 	tran_load_data[which].adr <= padr;
 	cpu_req_queue[queued_req].write_allocate <= wr & allocate;
 	if (wr & ~allocate)

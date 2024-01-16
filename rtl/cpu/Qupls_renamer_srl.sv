@@ -37,31 +37,33 @@ import QuplsPkg::*;
 
 module Qupls_renamer_srl(rst, clk, en, rot, o);
 parameter N=0;
+localparam SIZE = $clog2(PREGS/4);
+localparam TOPBIT = $clog2(PREGS/4)-1;
 input rst;
 input clk;
 input en;
 input rot;
-output reg [7:0] o;
+output reg [9:0] o = 10'd0;
 
-reg [5:0] mem [0:63];
+reg [TOPBIT:0] mem [0:PREGS/4-1];
 integer nn,mm;
 
 initial begin
-	for (nn = 0; nn < 64; nn = nn + 1)
+	for (nn = 0; nn < PREGS/4; nn = nn + 1)
 		mem[nn] = nn;
 end
 
 always_ff @(posedge clk)
 if (rst)
-	o <= {N[1:0],6'd0};
+	o <= {8'b0,N[1:0],{SIZE{1'd0}}};
 else begin
 	if (rot & en) begin
-		for (mm = 0; mm < 63; mm = mm + 1)
+		for (mm = 0; mm < PREGS/4-1; mm = mm + 1)
 			mem[mm] <= mem[mm+1];
-		mem[63] <= mem[0];
+		mem[PREGS/4-1] <= mem[0];
 	end
 	if (rot & en)
-		o <= {N[1:0],mem[0]};
+		o <= {8'b0,N[1:0],mem[0]};
 end
 
 endmodule

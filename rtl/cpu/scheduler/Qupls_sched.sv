@@ -283,6 +283,28 @@ begin
 end
 endfunction
 
+function fnPriorQFExt;
+input rob_ndx_t id;
+rob_ndx_t idm1;
+begin
+	fnPriorQFExt = FALSE;
+	idm1 = (id + ROB_ENTRIES - 1) % ROB_ENTRIES;
+	if (rob[idm1].decbus.qfext)
+		fnPriorQFExt = TRUE;
+end
+endfunction
+
+function fnPriorQFExtOut;
+input rob_ndx_t id;
+rob_ndx_t idm1;
+begin
+	fnPriorQFExtOut = FALSE;
+	idm1 = (id + ROB_ENTRIES - 1) % ROB_ENTRIES;
+	if (rob[idm1].out[0])
+		fnPriorQFExtOut = fnPriorQFExt(id);
+end
+endfunction
+
 // We evaluate match logic once for the entire ROB so the logic resouce is O(n).
 
 generate begin : issue_logic
@@ -434,11 +456,32 @@ begin
 			if (!rob[heads[hd]].decbus.cpytgt) begin
 				if (NFPU > 0) begin
 					if (!issued_fpu0 && fpu0_idle && rob[heads[hd]].decbus.fpu && rob[heads[hd]].out[0]==2'b00) begin
-				  	next_robentry_fpu_issue[heads[hd]] = 1'b1;
-				  	next_robentry_islot_o[heads[hd]] = 2'b00;
-				  	issued_fpu0 = 1'b1;
-				  	next_fpu0_rndx = heads[hd];
-				  	next_fpu0_rndxv = 1'b1;
+						if (rob[heads[hd]].decbus.prc==2'd3 && SUPPORT_QUAD_PRECISION) begin
+							if (fnPriorQFExtOut(heads[hd])) begin
+						  	next_robentry_fpu_issue[heads[hd]] = 1'b1;
+						  	next_robentry_islot_o[heads[hd]] = 2'b00;
+						  	issued_fpu0 = 1'b1;
+						  	next_fpu0_rndx = heads[hd];
+						  	next_fpu0_rndxv = 1'b1;
+							end
+							// If there was no QFEXT schedule the instruction to execute. It
+							// will exception when it sees that the ALU port is unavailable.
+							// Otherwise wait until the ALU has been scheduled for the op.
+							else if (!fnPriorQFExt(heads[hd])) begin
+						  	next_robentry_fpu_issue[heads[hd]] = 1'b1;
+						  	next_robentry_islot_o[heads[hd]] = 2'b00;
+						  	issued_fpu0 = 1'b1;
+						  	next_fpu0_rndx = heads[hd];
+						  	next_fpu0_rndxv = 1'b1;
+							end
+						end
+						else begin
+					  	next_robentry_fpu_issue[heads[hd]] = 1'b1;
+					  	next_robentry_islot_o[heads[hd]] = 2'b00;
+					  	issued_fpu0 = 1'b1;
+					  	next_fpu0_rndx = heads[hd];
+					  	next_fpu0_rndxv = 1'b1;
+				  	end
 					end
 				end
 				if (NFPU > 1) begin

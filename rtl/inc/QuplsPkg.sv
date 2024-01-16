@@ -53,12 +53,12 @@ parameter SIM = 1'b1;
 // Number of architectural registers there are in the core, including registers
 // not visible in the programming model. Each supported vector register counts
 // as eight registers.
-`define NREGS		80	// 330
+`define NREGS	128	// 330
 
 // Number of physical registers supporting the architectural ones and used in
 // register renaming. There must be significantly more physical registers than
 // architectural ones, or performance will suffer due to stalls. 
-parameter PREGS = 256;	// 1024
+parameter PREGS = 512;	// 1024
 
 `define L1CacheLines	1024
 `define L1CacheLineSize		256
@@ -116,10 +116,18 @@ parameter REP_BIT = 31;
 
 // This parameter indicates if to support vector instructions.
 parameter SUPPORT_VEC = 1'b1;
+
+// This parameter indicates to support the PRED modifier and predicates.
 parameter SUPPORT_PRED = 1'b1;
 
+// This parameter indicates to support the precision field of instructions.
+// If enabled, registers will be treated as SIMD, 4x16, 2x32, or 1x64 bits.
+// If the precision field is not supported, registers are 64-bit without
+// support for 4x16, or 2x32 bit ops.
+parameter SUPPORT_PREC = 1'b0;
+
 // This parameter enables support for quad precision operations.
-parameter SUPPORT_QUAD_PRECISION = 1'b1;
+parameter SUPPORT_QUAD_PRECISION = 1'b0;
 
 // Supporting load bypassing may improve performance, but will also increase the
 // size of the core and make it more vulnerable to security attacks.
@@ -140,7 +148,7 @@ parameter SCHED_WINDOW_SIZE = 10;
 // recommended maximum. Fewer checkpoints may reduce core performance as stalls
 // will result if there are insufficient checkpoints for the number of
 // outstanding branches.
-parameter NCHECK = 3;			// number of checkpoints
+parameter NCHECK = 16;			// number of checkpoints
 
 parameter LOADQ_ENTRIES = 8;
 parameter STOREQ_ENTRIES = 8;
@@ -346,6 +354,7 @@ typedef enum logic [6:0] {
 	OP_STX			= 7'd87,
 	OP_SHIFT		= 7'd88,
 	OP_BLEND		= 7'd89,
+	OP_VSHIFT		= 7'd90,
 	OP_AMO			= 7'd92,
 	OP_CAS			= 7'd93,
 	OP_LSCTX		= 7'd94,
@@ -536,12 +545,31 @@ typedef enum logic [6:0] {
 	NNA_MTFB		= 7'd43,
 	NNA_MTMC		= 7'd44,
 	NNA_MTBC		= 7'd45,
+	FN_V2BITS		= 7'd48,
 	FN_SEQ			= 7'd80,
 	FN_SNE			= 7'd81,
 	FN_SLT			= 7'd82,
 	FN_SLE			= 7'd83,
 	FN_SLTU			= 7'd84,
-	FN_SLEU			= 7'd85
+	FN_SLEU			= 7'd85,
+	FN_SEQI			= 7'd96,
+	FN_SNEI			= 7'd97,
+	FN_SLTI			= 7'd98,
+	FN_SLEI			= 7'd99,
+	FN_SLTUI		= 7'd100,
+	FN_SLEUI		= 7'd101,
+	FN_ZSEQ			= 7'd112,
+	FN_ZSNE			= 7'd113,
+	FN_ZSLT			= 7'd114,
+	FN_ZSLE			= 7'd115,
+	FN_ZSLTU		= 7'd116,
+	FN_ZSLEU		= 7'd117,
+	FN_ZSEQI		= 7'd120,
+	FN_ZSNEI		= 7'd121,
+	FN_ZSLTI		= 7'd122,
+	FN_ZSLEI		= 7'd123,
+	FN_ZSLTUI		= 7'd124,
+	FN_ZSLEUI		= 7'd125
 } r2func_t;
 
 typedef enum logic [4:0] {
@@ -935,10 +963,10 @@ typedef logic [127:0] regs_bitmap_t;
 
 typedef struct packed
 {
-	logic [5:0] num;
+	logic [4:0] num;
 } regspec_t;
 
-typedef logic [8:0] aregno_t;		// architectural register number (0 to 330)
+typedef logic [7:0] aregno_t;		// architectural register number (0 to 255)
 typedef logic [9:0] pregno_t;		// physical register number (0-1023)
 typedef logic [3:0] rndx_t;			// ROB index
 typedef logic [9:0] tregno_t;
@@ -994,6 +1022,7 @@ typedef struct packed
 	logic [1:0] prc;
 	fround_t rmd;
 	f3func_t func;
+	logic [3:0] resv;
 	regspec_t Rc;
 	regspec_t Rb;
 	regspec_t Ra;
@@ -1008,6 +1037,7 @@ typedef struct packed
 	logic [4:0] resv;
 	logic [1:0] prc;
 	fround_t rnd;
+	logic [2:0] resv3;
 	regspec_t Rb;
 	regspec_t Ra;
 	regspec_t Rt;
@@ -1021,6 +1051,7 @@ typedef struct packed
 	f2func_t func2;
 	logic [1:0] prc;
 	fround_t rnd;
+	logic [1:0] resv2;
 	f1func_t func;
 	regspec_t Ra;
 	regspec_t Rt;
@@ -1032,6 +1063,7 @@ typedef struct packed
 	logic [39:0] pad;
 	r2func_t func;
 	logic [1:0] op;
+	logic [3:0] resv4;
 	regspec_t Rc;
 	regspec_t Rb;
 	regspec_t Ra;
@@ -1043,7 +1075,7 @@ typedef struct packed
 {
 	logic [39:0] pad;
 	r1func_t func;
-	logic [14:0] resv;
+	logic [16:0] resv;
 	regspec_t Ra;
 	regspec_t Rt;
 	opcode_t opcode;
@@ -1056,6 +1088,7 @@ typedef struct packed
 	logic [2:0] pr;
 	sys_func_t func;
 	logic [1:0] im;
+	logic [2:0] resv3;
 	regspec_t Rb;
 	regspec_t Ra;
 	regspec_t Rt;
@@ -1066,6 +1099,7 @@ typedef struct packed
 {
 	logic [39:0] pad;
 	logic [20:0] imm;
+	logic [1:0] prc;
 	regspec_t Ra;
 	regspec_t Rt;
 	opcode_t opcode;
@@ -1079,6 +1113,7 @@ typedef struct packed
 	logic t;
 	logic [3:0] bitno;
 	logic [2:0] Pn;
+	logic [1:0] resv2;
 	logic [5:0] imm;
 	regspec_t Ra;
 	regspec_t Rt;
@@ -1091,6 +1126,7 @@ typedef struct packed
 	logic [1:0] fmt;
 	logic [2:0] pr;
 	logic [1:0] op;
+	logic [1:0] resv2;
 	logic [13:0] immlo;
 	regspec_t Ra;
 	regspec_t Rt;
@@ -1101,6 +1137,7 @@ typedef struct packed
 {
 	logic [39:0] pad;
 	logic [20:0] disp;
+	logic [1:0] prc;
 	regspec_t Ra;
 	regspec_t Rt;
 	opcode_t opcode;
@@ -1108,8 +1145,10 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [47:0] pad;
+	logic [39:0] pad;
 	lsn_func_t func;
+	logic [1:0] prc;
+	logic [8:0] disp;
 	logic [1:0] sc;
 	regspec_t Rb;
 	regspec_t Ra;
@@ -1120,10 +1159,10 @@ typedef struct packed
 typedef struct packed
 {
 	logic [39:0] pad;
-	logic [14:0] disphi;
+	logic [17:0] disp;
 	regspec_t Rb;
 	regspec_t	Ra;
-	logic [1:0] displo;
+	logic resv1;
 	branch_fn_t fn;
 	opcode_t opcode;
 } brinst_t;
@@ -1131,23 +1170,10 @@ typedef struct packed
 typedef struct packed
 {
 	logic [39:0] pad;
-	logic [3:0] seven;
-	logic [4:0] resv;
-	regspec_t Rc;
+	logic [17:0] disp;
 	regspec_t Rb;
 	regspec_t	Ra;
-	logic [1:0] displo;
-	branch_fn_t fn;
-	opcode_t opcode;
-} brrinst_t;
-
-typedef struct packed
-{
-	logic [39:0] pad;
-	logic [14:0] disphi;
-	regspec_t Rb;
-	regspec_t	Ra;
-	logic [1:0] displo;
+	logic resv;
 	fbranch_fn_t fn;
 	opcode_t opcode;
 } fbrinst_t;
@@ -1155,11 +1181,10 @@ typedef struct packed
 typedef struct packed
 {
 	logic [39:0] pad;
-	logic [3:0] resv2;
+	logic [6:0] resv2;
 	logic [10:0] tgt;
 	regspec_t Rb;
 	regspec_t	Ra;
-	logic resv;
 	logic lk;
 	logic [3:0] fn;
 	opcode_t opcode;
@@ -1169,6 +1194,7 @@ typedef struct packed
 {
 	logic [39:0] pad;
 	logic [20:0] immhi;
+	logic [1:0] prc;
 	regspec_t Ra;
 	regspec_t Rt;
 	opcode_t opcode;
@@ -1177,7 +1203,7 @@ typedef struct packed
 typedef struct packed
 {
 	logic [39:0] pad;
-	logic [26:0] disp;
+	logic [27:0] disp;
 	regspec_t Rt;
 	opcode_t opcode;
 } bsrinst_t;
@@ -1192,7 +1218,6 @@ typedef union packed
 	r2inst_t	r2;
 	r2inst_t	r3;
 	brinst_t	br;
-	brrinst_t	brr;
 	fbrinst_t	fbr;
 	mcb_inst_t mcb;
 	jsrinst_t	jsr;
@@ -1209,6 +1234,7 @@ typedef union packed
 } instruction_t;
 
 typedef struct packed {
+	logic [2:0] lane;
 	aregno_t aRa;
 	aregno_t aRb;
 	aregno_t aRc;
@@ -1266,7 +1292,7 @@ typedef struct packed
 	logic alu0;				// true if instruction must use only alu #0
 	logic fpu;				// FPU op
 	logic fpu0;				// true if instruction must use only fpu #0
-	logic quad;				// true if quad precision operation.
+	logic [1:0] prc;	// precision of operation, 0=16, 1=32, 2=64, 3=128
 	logic mul;
 	logic mulu;
 	logic div;
@@ -1295,6 +1321,7 @@ typedef struct packed
 	logic pred;					// is predicate instruction modifier
 	logic predz;				// 1=zero out when predicate is false
 	logic cpytgt;
+	logic qfext;				// true if QFEXT modifier
 } decode_bus_t;
 
 typedef struct packed
@@ -2175,13 +2202,6 @@ begin
 		ir.any.opcode==OP_PFXB32 ||
 		ir.any.opcode==OP_PFXC32;
 		;
-end
-endfunction
-
-function fnIsRep;
-input instruction_t ir;
-begin
-	fnIsRep = ir.any.opcode==OP_REP;
 end
 endfunction
 

@@ -41,7 +41,7 @@ module Qupls_regfile4w15r(rst, clk,
 	wr0, wr1, wr2, wr3, we0, we1, we2, we3,
 	wa0, wa1, wa2, wa3, i0, i1, i2, i3,
 	rclk, ra, o);
-parameter WID=64;
+parameter WID=128;
 parameter RPORTS = 16;
 input rst;
 input clk;

@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -39,24 +39,24 @@ import QuplsPkg::SIM;
 import QuplsPkg::PREGS;
 
 module Qupls_regfileRam(clka, ena, wea, addra, dina, clkb, enb, addrb, doutb);
-parameter WID=64;
+parameter WID=$bits(value_t);
 parameter DEP=PREGS;
 localparam RBIT=$clog2(DEP)-1;
 input clka;
 input ena;
 input wea;
 input [RBIT:0] addra;
-input [WID-1:0] dina;
+input value_t dina;
 input clkb;
 input enb;
 input [RBIT:0] addrb;
-output [WID-1:0] doutb;
+output value_t doutb;
 
 integer n;
 // The following outside of generate to make it easier to reference in SIM code.
 // It should be stripped out for synthesis as it would not be referenced.
 (* RAM_STYLE="distributed" *)
-reg [WID-1:0] mem [0:DEP-1];
+value_t mem [0:DEP-1];
 reg [RBIT:0] raddrb;
 initial begin
 	for (n = 0; n < DEP; n = n + 1)

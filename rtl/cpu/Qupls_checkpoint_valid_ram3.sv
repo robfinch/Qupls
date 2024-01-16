@@ -34,7 +34,8 @@
 //
 // 63000 LUTs / 4096 FFs	16 checkpints
 // 20600 LUTs / 1024 FFs   4 checkpoints
-// 11000 LUTs / 768 FFs    3 checkpoints
+// 11000 LUTs / 768 FFs    3 checkpoints (256 regs)
+// 6200 LUTs / 500 FFs 3 checkpoints (150 regs)
 // ============================================================================
 
 import QuplsPkg::*;
@@ -53,11 +54,13 @@ input aregno_t [NPORT-1:0] awa;		// debugging
 input setall;
 input [NPORT-1:0] i;
 input clkb;
-input checkpt_ndx_t rc [0:NRDPORT-1];
+input checkpt_ndx_t [NRDPORT-1:0] rc;
 input pregno_t [NRDPORT-1:0] ra;
 output reg [NRDPORT-1:0] o;
 
 reg [NCHECK-1:0] mem [0:PREGS-1];
+
+genvar g;
 
 integer n,m;
 initial begin
@@ -71,7 +74,8 @@ if (en|1'b1) begin
 	if (wr[n]) begin
 		if (setall)
 			mem[wa[n]] <= {NCHECK{1'b1}};
-		else begin
+		else
+		begin
 			mem[wa[n]][wc[n]] <= i[n];
 			/*
 			if (awa[n]==9'd68 && i[n]) begin
@@ -83,7 +87,6 @@ if (en|1'b1) begin
 	end
 end
 
-genvar g;
 generate begin : gMem
 	for (g = 0; g < NRDPORT; g = g + 1) begin
 		always_ff @(posedge clkb)

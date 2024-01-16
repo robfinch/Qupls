@@ -36,48 +36,56 @@
 
 import QuplsPkg::*;
 
-module Qupls_decode_Ra(om, ipl, instr, regx, has_imma, Ra);
-input operating_mode_t om;
-input [2:0] ipl;
-input ex_instruction_t instr;
-input regx;
-input has_imma;
-output aregno_t Ra;
+module Qupls_decode_prec(instr, prec);
+input instruction_t instr;
+output prec;
 
-function aregno_t fnRa;
-input ex_instruction_t ir;
-input has_imma;
+function fnPrec;
+input instruction_t ir;
 begin
-	if (has_imma)
-		fnRa = 9'd0;
-	else
-		case(ir.ins.any.opcode)
-		OP_RTD:
-			fnRa = ir.aRa;
-		OP_DBRA:
-			fnRa = 9'd55;
-		OP_FLT3:
-			fnRa = ir.aRa;
-		OP_ADDSI,OP_ANDSI,OP_ORSI,OP_EORSI:
-			fnRa = ir.aRt;
-		default:
-			if (fnImma(ir))
-				fnRa = 9'd0;
-			else
-				fnRa = ir.aRa;
-		endcase
+	case(ir.r2.opcode)
+	OP_SYS:	fnPrec = 2'b11;
+	OP_R2:	fnPrec = ir[32:31];
+	OP_ADDI,OP_VADDI:	
+		fnPrec = ir[20:19];
+	OP_SUBFI:	fnPrec = ir[20:19];
+	OP_CMPI,OP_VCMPI:	
+		fnPrec = ir[20:19];
+	OP_MULI,OP_VMULI:	
+		fnPrec = ir[20:19];
+	OP_DIVI,OP_VDIVI:	
+		fnPrec = ir[20:19];
+	OP_ANDI,OP_VANDI:	
+		fnPrec = ir[20:19];
+	OP_ORI,OP_VORI:
+		fnPrec = ir[20:19];
+	OP_EORI,OP_VEORI:
+		fnPrec = ir[20:19];
+	OP_SLTI:	fnPrec = ir[20:19];
+	OP_VADDSI,OP_VORSI,OP_VANDSI,OP_VEORSI,
+	OP_ADDSI,OP_ORSI,OP_ANDSI,OP_EORSI:
+						fnPrec = ir[17:16];
+	OP_SHIFT,OP_VSHIFT:
+		fnPrec = ir[35:34];
+	OP_FLT3:	fnPrec = ir[35:34];
+	OP_CSR:		fnPrec = 2'b11;
+	OP_MOV:		fnPrec = 2'b11;
+	OP_LDAX:	fnPrec = 2'b11;
+	OP_PFXA32,OP_PFXB32,OP_PFXC32,
+	OP_QFEXT,
+	OP_REGC,
+	OP_VEC,OP_VECZ,
+	OP_NOP,OP_PUSH,OP_POP,OP_ENTER,OP_LEAVE,OP_ATOM:
+		fnPrec = 2'b11;
+	OP_FENCE:
+		fnPrec = 2'b11;
+	OP_BSR,OP_JSR:
+		fnPrec = 2'b11;
+	default:	fnPrec = 2'b11;
+	endcase
 end
 endfunction
 
-always_comb
-begin
-	Ra = fnRa(instr, has_imma);
-	if (Ra==9'd31) begin
-		if (om==2'd3)
-			Ra = 9'd32|ipl;
-		else
-			Ra = 9'd40|om;
-	end
-end
+assign prec = fnPrec(instr);
 
 endmodule

@@ -305,6 +305,12 @@ Qupls_decode_rex udrex1
 	.rex(db.rex)
 );
 
+Qupls_decode_prec udprec1
+(
+	.instr(ins.ins),
+	.prec(db.prc)
+);
+
 /*
 Qupls_decode_swap uswp1
 (
@@ -325,6 +331,7 @@ else begin
 		dbo.pred <= ins.ins.any.opcode==OP_PRED;
 		dbo.predz <= ins.ins[39];
 		dbo.cpytgt <= 1'b0;
+		dbo.qfext <= ins.ins.any.opcode==OP_QFEXT;
 	end
 end
 

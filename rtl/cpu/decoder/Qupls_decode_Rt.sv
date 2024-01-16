@@ -36,8 +36,9 @@
 
 import QuplsPkg::*;
 
-module Qupls_decode_Rt(om, instr, regx, Rt, Rtz);
+module Qupls_decode_Rt(om, ipl, instr, regx, Rt, Rtz);
 input operating_mode_t om;
+input [2:0] ipl;
 input ex_instruction_t instr;
 input regx;
 output aregno_t Rt;
@@ -49,57 +50,57 @@ begin
 	case(ir.ins.any.opcode)
 	OP_R2:
 		case(ir.ins.r2.func)
-		FN_ADD:	fnRt = regx ? ir.aRt | 9'd64 : ir.aRt;
-		FN_CMP:	fnRt = regx ? ir.aRt | 9'd64 : ir.aRt;
-		FN_MUL:	fnRt = regx ? ir.aRt | 9'd64 : ir.aRt;
-		FN_DIV:	fnRt = regx ? ir.aRt | 9'd64 : ir.aRt;
-		FN_SUB:	fnRt = regx ? ir.aRt | 9'd64 : ir.aRt;
-		FN_MULU: fnRt = regx ? ir.aRt | 9'd64 : ir.aRt;
-		FN_DIVU:	fnRt = regx ? ir.aRt | 9'd64 : ir.aRt;
-		FN_MULH:	fnRt = regx ? ir.aRt | 9'd64 : ir.aRt;
-		FN_MOD:	fnRt = regx ? ir.aRt | 9'd64 : ir.aRt;
-		FN_MULUH:	fnRt = regx ? ir.aRt | 9'd64 : ir.aRt;
-		FN_MODU:	fnRt = regx ? ir.aRt | 9'd64 : ir.aRt;
-		FN_AND:	fnRt = regx ? ir.aRt | 9'd64 : ir.aRt;
-		FN_OR:	fnRt = regx ? ir.aRt | 9'd64 : ir.aRt;
-		FN_EOR:	fnRt = regx ? ir.aRt | 9'd64 : ir.aRt;
-		FN_ANDC:	fnRt = regx ? ir.aRt | 9'd64 : ir.aRt;
-		FN_NAND:	fnRt = regx ? ir.aRt | 9'd64 : ir.aRt;
-		FN_NOR:	fnRt = regx ? ir.aRt | 9'd64 : ir.aRt;
-		FN_ENOR:	fnRt = regx ? ir.aRt | 9'd64 : ir.aRt;
-		FN_ORC:	fnRt = regx ? ir.aRt | 9'd64 : ir.aRt;
-		FN_SEQ:	fnRt = regx ? ir.aRt | 9'd64 : ir.aRt;
-		FN_SNE:	fnRt = regx ? ir.aRt | 9'd64 : ir.aRt;
-		FN_SLT:	fnRt = regx ? ir.aRt | 9'd64 : ir.aRt;
-		FN_SLE:	fnRt = regx ? ir.aRt | 9'd64 : ir.aRt;
-		FN_SLTU:	fnRt = regx ? ir.aRt | 9'd64 : ir.aRt;
-		FN_SLEU:	fnRt = regx ? ir.aRt | 9'd64 : ir.aRt;
+		FN_ADD:	fnRt = ir.aRt;
+		FN_CMP:	fnRt = ir.aRt;
+		FN_MUL:	fnRt = ir.aRt;
+		FN_DIV:	fnRt = ir.aRt;
+		FN_SUB:	fnRt = ir.aRt;
+		FN_MULU: fnRt = ir.aRt;
+		FN_DIVU:	fnRt = ir.aRt;
+		FN_MULH:	fnRt = ir.aRt;
+		FN_MOD:	fnRt = ir.aRt;
+		FN_MULUH:	fnRt = ir.aRt;
+		FN_MODU:	fnRt = ir.aRt;
+		FN_AND:	fnRt = ir.aRt;
+		FN_OR:	fnRt = ir.aRt;
+		FN_EOR:	fnRt = ir.aRt;
+		FN_ANDC:	fnRt = ir.aRt;
+		FN_NAND:	fnRt = ir.aRt;
+		FN_NOR:	fnRt = ir.aRt;
+		FN_ENOR:	fnRt = ir.aRt;
+		FN_ORC:	fnRt = ir.aRt;
+		FN_SEQ:	fnRt = ir.aRt;
+		FN_SNE:	fnRt = ir.aRt;
+		FN_SLT:	fnRt = ir.aRt;
+		FN_SLE:	fnRt = ir.aRt;
+		FN_SLTU:	fnRt = ir.aRt;
+		FN_SLEU:	fnRt = ir.aRt;
 		default:	fnRt = 9'd0;
 		endcase
 	OP_FLT3:
-		fnRt = regx ? ir.aRt | 9'd64 : ir.aRt;
+		fnRt = ir.aRt;
 	OP_MCB:	fnRt = {ir.ins.mcb.lk ? 9'd59 : 9'd00};
-	OP_BSR:	fnRt = regx ? ir.aRt | 9'd64 : ir.aRt;
-	OP_JSR:	fnRt = regx ? ir.aRt | 9'd64 : ir.aRt;
-	OP_RTD:	fnRt = 9'd63;
+	OP_BSR:	fnRt = ir.aRt;
+	OP_JSR:	fnRt = ir.aRt;
+	OP_RTD:	fnRt = 9'd31;
 	OP_DBRA: fnRt = 9'd55;
 	OP_ADDI,OP_SUBFI,OP_CMPI:
-		fnRt = regx ? ir.aRt | 9'd64 : ir.aRt;
+		fnRt = ir.aRt;
 	OP_MULI,OP_DIVI:
-		fnRt = regx ? ir.aRt | 9'd64 : ir.aRt;
+		fnRt = ir.aRt;
 	OP_SLTI,OP_MULUI,OP_DIVUI,OP_ANDI,OP_ORI,OP_EORI:
-		fnRt = regx ? ir.aRt | 9'd64 : ir.aRt;
+		fnRt = ir.aRt;
 	OP_ADDSI,OP_ANDSI,OP_ORSI,OP_EORSI,OP_AIPSI:
-		fnRt = regx ? ir.aRt | 9'd64 : ir.aRt;
+		fnRt = ir.aRt;
 	OP_SHIFT:
-		fnRt = regx ? ir.aRt | 9'd64 : ir.aRt;
+		fnRt = ir.aRt;
 	OP_CSR:
-		fnRt = regx ? ir.aRt | 9'd64 : ir.aRt;
+		fnRt = ir.aRt;
 	OP_MOV:
-		fnRt = regx ? ir.aRt | 9'd64 : ir.aRt;
+		fnRt = ir.aRt;
 	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDOU,OP_LDH,
 	OP_LDX:
-		fnRt = regx ? ir.aRt | 9'd64 : ir.aRt;
+		fnRt = ir.aRt;
 	default:
 		fnRt = 9'd0;
 	endcase
@@ -109,8 +110,12 @@ endfunction
 always_comb
 begin
 	Rt = fnRt(instr);
-	if (Rt==9'd63)
-		Rt = 9'd65 + om;
+	if (Rt==9'd31) begin
+		if (om==2'd3)
+			Rt = 9'd32|ipl;
+		else
+			Rt = 9'd40|om;
+	end
 end
 always_comb
 	Rtz = ~|Rt;

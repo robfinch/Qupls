@@ -14,8 +14,8 @@ Fixed length instruction set.
 40-bit instructions.
 64-bit datapath / support for 128-bit floats
 32 entry (or more) reorder entry buffer (ROB)
-64 general purpose registers, unified integer and float register file
-64 vector registers
+32 general purpose registers, unified integer and float register file
+32 vector registers
 4-way Out-of-order execution of instructions
 128 entry, two way TLB for virtual memory support, shared between instruction and data
 
@@ -23,23 +23,25 @@ Fixed length instruction set.
 ### Status
 The Qupls OoO machine is currently in development. The base machine has
 been undergoing simulation runs. A long way to go yet. Some synthesis runs have been performed to get a general idea of the timing. The goal is 40 MHz operation.
+The most recent major change to the ISA was a reduction in the number of registers from 64 down to 32. This makes the hardware for the core considerably smaller, meaning more features can be added for the same footprint. There should not be a signficant effect on the performance caused by reducing the number of registers. For instance the ABI spec'd three global pointers for the 64-register version, but really only a single global pointer is needed.
 
 ### Register File
-The register file contains 76 architectural registers and is unified, supporting integer and floating-point operations using the same set of registers. 
-There is a dedicated zero register, r0. There is also a register dedicated to refer to the stack canary or instruction pointer. Vector mask registers are also part of the general purpose register file and the same set of instructions may be applied to them as to other registers. A register is also dedicated to the stack pointer. The stack pointer is banked depending on processor operating mode. There are also separate stack pointers for each interrupt level (1 to 7).
+The register file contains 128 architectural registers with support for 16 vector registers, and is unified, supporting integer and floating-point operations using the same set of registers. 
+There is a dedicated zero register, r0. There is no longer a register dedicated to refer to the stack canary or instruction pointer. Vector mask registers are also part of the general purpose register file and the same set of instructions may be applied to them as to other registers. A register is also dedicated to the stack pointer. The stack pointer is banked depending on processor operating mode. There are also separate stack pointers for each interrupt level (1 to 7).
 Five hidden registers are dedicated to micro-code use. They are only accessible from micro-code.
-Registers are renamed to remove dependencies. There are 256 physical registers available. 1536 physical registers are needed to support vector operations.
+Registers are renamed to remove dependencies. There are 384 physical registers available. 768 physical registers are needed to fully support vector operations.
 
 ### Vector Register File
-The vector register file may contain up to 64 vector registers. Each vector register is made up of eight 64-bit elements or lanes, or a total of 512-bits. The vector register file is currently implemented in the same block RAM as the general purpose register file and shares renaming resources with the general purpose registers. Each vector element is renamed. The first 10 vector registers v0 to v9 are aliased with the general-purpose registers. v0 and r0 to r7 are the same.
-v1 and r8 to r15 are the same. And so on. That leaves 54 vector registers for general purpose use. 
+The vector register file may contain up to 32 vector registers. Each vector register is made up of eight 64-bit elements or lanes, or a total of 512-bits. The vector register file is currently implemented in the same block RAM as the general purpose register file and shares renaming resources with the general purpose registers. Each vector element is renamed. The first six vector registers v0 to v5 are aliased with the general-purpose registers. v0 and r0 to r7 are the same.
+v1 and r8 to r15 are the same. And so on. That leaves 26 vector registers for general purpose use. The demo version running on an XC7A200T is only going to support 16 vector registers.
 
 ### Instruction Length
 The author has found that in an FPGA the decode of variable length instruction length was on the critical timing path, limiting the maximum clock frequency and performance. So, instructions are fixed length so that hardware decoders can be positioned at specific locations. Making the instruction length fixed 40-bits aids the hardware in determining the location of instructions and the update of the instruction pointer.
 The instruction length decode is done within a single clock cycle so it may be used to update the instruction pointer in time to fetch the next block of instructions.
 
 ### Instruction alignment
-Instructions are aligned on five byte boundaries within a subroutine. Conditional branch displacements are in terms of instructions since the branch occurs within a subroutine where all instructions are five bytes. Subroutines may be aligned on any byte boundary, allowing position independent code placement. Unconditional branch and jump displacements are in terms of bytes to accomodate the location of subroutines.
+Instructions are aligned on five byte boundaries within a subroutine. Conditional branch displacements are in terms of instructions since the branch occurs within a subroutine where all instructions are five bytes. Conditional branches have effectively a 19+ bit range, +/-320kB. For software compatibility a critical 18 bits range was needed.
+Subroutines may be aligned on any byte boundary, allowing position independent code placement. Unconditional branch and jump displacements are in terms of bytes to accomodate the location of subroutines.
 
 ### Position Independant Code
 Code is relocatable at any byte boundary; however, within a subroutine or function the instructions should be contiguous, every five bytes, so that conditional branches will work.
@@ -53,14 +55,15 @@ After instruction fetch and extract the instructions are decoded. Decoded archit
 Once instructions are queued in the ROB they may be scheduled for execution. The scheduler has a fixed sized window of instructions it examines to find executable instructions. The window is from the far end of the ROB, the head point, backwards towards recently queued instructions. Only the oldest instructions in the queue are looked at as they are more likely to be ready to execute.
 The next stage is execution. Note that the execute stage waits until all the instruction arguments are valid before trying to execute the instruction. (This is checked by the scheduler).
 Instruction arguments are made valid by the execution or writeback of prior instructions. Note that while the instruction may not be able to execute, decode and execute are *not* stalled. Other instructions are decoded and executed while waiting for an instruction missing arguments. This is the out-of-order feature of the processor. Execution of instructions can be multi-cycle as for loads, stores, multiplies and divides.
-At the end of instruction execution the result is placed into the register file. There may be a maximum of four instruction being executed at the same time. An alu, an fpu a memory and one flow control.
-The last stage, writeback, reorders instructions into program order reading the oldest instructions from the ROB. The core may writeback or commit four instructions per clock cycle.
+At the end of instruction execution the result is placed into the register file. There may be a maximum of four instruction being executed at the same time. An alu, an fpu a memory and one flow control. Support to execute up to seven instructions is partially coded (2 ALU, 2 FPU, 2 Mem, 1 FCU).
+The last stage, writeback, reorders instructions into program order reading the oldest instructions from the ROB. The core may writeback or commit four instructions per clock cycle. Exceptions and several other oddball instructions like CSR updates are also processed at the commit stage.
 
 ### Branch Prediction
 There are two branch predictors, A BTB, branch-target-buffer predictor used early in the pipeline, and a gselect predictor used later. The BTB has 1024 entries. The gselect predictor is a (2,2) correlating predictor with a 512 entry history table. Even if the branch is correctly predicted a number of instructions may end up being stomped on the ROB.
 
 ### Interrupts and Exceptions
-Interrupts and exceptions are precise.
+Interrupts and exceptions are precise. There is a separate exception vector table for each operating mode of the CPU. The exception vector table address is programmable and may contain a maximum of 512 vectors. At reset the vector table is placed high in memory, the first two vectors provide the initial stack pointer and initial instruction pointer values.
+An interrupt will cause the stack pointer to automatically switch to one dedicated for that interrupt level. There are seven interrupt levels supported.
 
 ### Arithmetic Operations
 The ISA supports many arithmetic operations including add, sub, mulitply and divide. Multi-bit shifts and rotates are supported. And a full set of logic operations and their complements are supported. Many ALU operations support three source registers and one destination register.
@@ -98,7 +101,7 @@ If the TLB miss processor runs into an invalid page table entry then a page tabl
 There is a hardware page table walker. The table walker is triggered by a TLB miss and walks the page tables to find a translation.
 
 ### Instruction Cache
-The instruction cache is a four-way set associative cache, 32kB in size with a 512-bit line size. There is only a single level of cache. The cache is divided into even and odd lines which are both fetched when the PC changes. Using even / odd lines allows instructions to span cache lines.
+The instruction cache is a four-way set associative cache, 32kB in size with a 512-bit line size. There is only a single level of cache. (The system also caches values from DRAM and acts a bit like an L2 cache). The cache is divided into even and odd lines which are both fetched when the PC changes. Using even / odd lines allows instructions to span cache lines.
 
 ### Data Cache
 The data cache is 64kB in size. The ISA and core implementation supports unaligned data accesses. Unaligned access support is a configurable option as it increases the core size.

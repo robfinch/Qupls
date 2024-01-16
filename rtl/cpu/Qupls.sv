@@ -109,7 +109,7 @@ reg [2:0] missgrp;
 wire [2:0] missino;
 
 instruction_t missir;
-mc_address_t next_micro_ip;
+mc_address_t next_micro_ip, next_mip;
 
 reg [39:0] I;		// Committed instructions
 reg [39:0] IV;	// Valid committed instructions
@@ -783,6 +783,39 @@ reg stall_load, stall_store;
 reg stall_tlb0 =1'd0, stall_tlb1=1'd0;
 
 // ----------------------------------------------------------------------------
+// Config validations
+// ----------------------------------------------------------------------------
+always_comb
+begin
+	if (NCHECK > 16) begin
+		$display("Q+: Error: more than 16 checkpoints configured.");
+		$finish;
+	end
+	if (NCHECK < 3) begin
+		$display("Q+: Error: not enough checkpoints configured.");	
+		$finish;
+	end
+	if (PREGS > 1024) begin
+		$display("Q+: Error: too many physical registers configured.");
+		$finish;
+	end
+	if (PREGS < NREGS * 3) begin
+		$display("Q+: Warning: physical registere below threshold for good performance.");
+	end
+	if (PREGS < NREGS * 1.25) begin
+		$display("Q+: Error: not enough physical registers.");
+		$finish;
+	end
+	if (ROB_ENTRIES < 12) begin
+		$display("Q+: Error: ROB has too few entries.");
+		$finish;
+	end
+	if (ROB_ENTRIES > 63) begin
+		$display("Q+: Warning: may need to alter code to support number of ROB entries.");
+	end
+end
+
+// ----------------------------------------------------------------------------
 // FETCH stage
 // ----------------------------------------------------------------------------
 
@@ -1303,7 +1336,7 @@ generate begin : gMicroCode
 				.ipl(sr.ipl),
 				.micro_ip({micro_ip[11:1],1'd0}),
 				.micro_ir(micro_ir),
-				.next_ip(next_micro_ip),
+				.next_ip(),
 				.instr(mc_ins0),
 				.regx(mc_regx0)
 			);
@@ -1313,10 +1346,11 @@ generate begin : gMicroCode
 				.ipl(sr.ipl),
 				.micro_ip({micro_ip[11:1],1'd1}),
 				.micro_ir(micro_ir),
-				.next_ip(),
+				.next_ip(next_mip),
 				.instr(mc_ins1),
 				.regx(mc_regx1)
 			);
+			always_comb next_micro_ip = next_mip & 12'hffe;
 		end
 	3:	
 		begin
@@ -1357,7 +1391,7 @@ generate begin : gMicroCode
 				.ipl(sr.ipl),
 				.micro_ip({micro_ip[11:2],2'd0}),
 				.micro_ir(micro_ir),
-				.next_ip(next_micro_ip),
+				.next_ip(),
 				.instr(mc_ins0),
 				.regx(mc_regx0)
 			);
@@ -1387,14 +1421,17 @@ generate begin : gMicroCode
 				.ipl(sr.ipl),
 				.micro_ip({micro_ip[11:2],2'd3}),
 				.micro_ir(micro_ir),
-				.next_ip(),
+				.next_ip(next_mip),
 				.instr(mc_ins3),
 				.regx(mc_regx3)
 			);
+			always_comb next_micro_ip = next_mip & 12'hffc;
 		end
 	endcase
 end
 endgenerate
+
+
 
 always_comb mc_ins4.ins = {33'd0,OP_NOP};
 always_comb mc_ins5.ins = {33'd0,OP_NOP};
@@ -1837,7 +1874,7 @@ endgenerate
 aregno_t [16:0] arn;
 wire [16:0] arnv;
 pregno_t [16:0] prn;
-checkpt_ndx_t rn_cp [0:16];
+checkpt_ndx_t [16:0] rn_cp;
 wire [16:0] prnv;
 reg [16:0] prnvv;
 wire [0:0] arnbank [16:0];
@@ -3601,10 +3638,10 @@ end
 else begin
 	if (alu0_available && alu0_rndxv && alu0_idle) begin
 		alu0_id <= alu0_rndx;
-		alu0_argA <= rob[alu0_rndx].decbus.imma | (~|rob[alu0_rndx].decbus.Ra ? 64'd0 : rfo_alu0_argA);
-		alu0_argB <= (~|rob[alu0_rndx].decbus.Rb ? 64'd0 : rfo_alu0_argB);
-		alu0_argBI <= rob[alu0_rndx].decbus.immb | (~|rob[alu0_rndx].decbus.Rb ? 64'd0 : rfo_alu0_argB);
-		alu0_argC <= rob[alu0_rndx].decbus.immc | rfo_alu0_argC;
+		alu0_argA <= rfo_alu0_argA;
+		alu0_argB <= rfo_alu0_argB;
+		alu0_argBI <= rob[alu0_rndx].decbus.immb | rfo_alu0_argB;
+		alu0_argC <= rfo_alu0_argC;
 		alu0_argT <= rfo_alu0_argT;
 		alu0_argI	<= rob[alu0_rndx].decbus.immb;
 		alu0_cs <= rob[alu0_rndx].decbus.Rcc;
@@ -3616,7 +3653,7 @@ else begin
 		alu0_predz <= rob[alu0_rndx].decbus.predz;
 		alu0_div <= rob[alu0_rndx].decbus.div;
 		alu0_cptgt <= alu0_cpytgt|rob[alu0_rndx].decbus.cpytgt;
-		alu0_prc <= rob[alu0_rndx].decbus.prec;
+		alu0_prc <= rob[alu0_rndx].decbus.prc;
 		if (alu0_cpytgt|rob[alu0_rndx].decbus.cpytgt) begin
 			alu0_instr <= {33'd0,OP_NOP};
 			alu0_pred <= FALSE;
@@ -3656,7 +3693,7 @@ else begin
 	if (NALU > 1) begin
 		if (alu1_available && alu1_rndxv && alu1_idle) begin
 			alu1_id <= alu1_rndx;
-			alu1_argA <= rob[alu1_rndx].decbus.imma | rfo_alu1_argA;
+			alu1_argA <= rfo_alu1_argA;
 			alu1_argB <= rfo_alu1_argB;
 			alu1_argBI <= rob[alu1_rndx].decbus.immb | rfo_alu1_argB;
 			alu1_argI	<= rob[alu1_rndx].decbus.immb;
@@ -3672,7 +3709,7 @@ else begin
 			alu1_cp <= rob[alu1_rndx].cndx;
 			alu1_pred <= rob[alu1_rndx].decbus.pred;
 			alu1_predz <= rob[alu1_rndx].decbus.predz;
-			alu1_prc <= rob[alu1_rndx].decbus.prec;
+			alu1_prc <= rob[alu1_rndx].decbus.prc;
 		end
 	end
 end
@@ -3748,9 +3785,9 @@ else begin
 	if (NFPU > 1) begin
 		if (fpu1_available && fpu1_rndxv && fpu1_idle) begin
 			fpu1_id <= fpu1_rndx;
-			fpu1_argA <= rob[fpu1_rndx].decbus.imma | rfo_fpu1_argA;
+			fpu1_argA <= rfo_fpu1_argA;
 			fpu1_argB <= rfo_fpu1_argB;
-			fpu1_argC <= rob[fpu1_rndx].decbus.immc | rfo_fpu1_argC;
+			fpu1_argC <= rfo_fpu1_argC;
 			fpu1_argI	<= rob[fpu1_rndx].decbus.immb;
 			fpu1_Rt <= rob[fpu1_rndx].nRt;
 			fpu1_aRt <= rob[fpu1_rndx].decbus.Rt;
@@ -3780,7 +3817,7 @@ if (rst) begin
 end
 else begin
 	if (fcu_rndxv && fcu_idle && branchmiss_state==3'd7) begin
-		fcu_argA <= rob[fcu_rndx].decbus.imma | rfo_fcu_argA;
+		fcu_argA <= rfo_fcu_argA;
 		fcu_argB <= rfo_fcu_argB;
 		fcu_argBr <= rob[fcu_rndx].decbus.immb | rfo_fcu_argB;
 		fcu_argI <= rob[fcu_rndx].decbus.immb;
@@ -3816,7 +3853,7 @@ else begin
 	agen0_idle1 <= agen0_idle;
 	if (agen0_rndxv && agen0_idle1) begin
 		agen0_id <= agen0_rndx;
-		agen0_argA <= rob[agen0_rndx].decbus.imma | rfo_agen0_argA;
+		agen0_argA <= rfo_agen0_argA;
 		agen0_argB <= rfo_agen0_argB;
 		agen0_argI <= rob[agen0_rndx].decbus.immb;
 		agen0_pc <= rob[agen0_rndx].pc;
@@ -3849,7 +3886,7 @@ else begin
 	if (NAGEN > 1) begin
 		if (agen1_rndxv && agen1_idle) begin
 			agen1_id <= agen1_rndx;
-			agen1_argA <= rob[agen1_rndx].decbus.imma | rfo_agen1_argA;
+			agen1_argA <= rfo_agen1_argA;
 			agen1_argB <= rfo_agen1_argB;
 			agen1_argI <= rob[agen1_rndx].decbus.immb;
 			agen1_pc <= rob[agen1_rndx].pc;
@@ -4403,7 +4440,7 @@ else begin
 			end
 			*/
 			// If a quad precision op is performed, release the ALU
-			if (rob[fpu0_id].quad) begin
+			if (rob[fpu0_id].decbus.prc==2'd3) begin
 				if (rob[alu0_id].v && alu0_id==(fpu0_id+ROB_ENTRIES-1)%ROB_ENTRIES) begin
 		    	alu0_done <= TRUE;
 			    alu0_idle <= TRUE;
@@ -5409,7 +5446,7 @@ endfunction
 task tCheckQFExtDone;
 input rob_ndx_t head;
 begin
-	if (rob[head].v && rob[head].decbus.qfext && !rob[(head+1)%ROB_ENTRIES].fpu && alu0_id==head) begin
+	if (rob[head].v && rob[head].decbus.qfext && !rob[(head+1)%ROB_ENTRIES].decbus.fpu && alu0_id==head) begin
 		if (rob[head].done!=2'b11) begin
 			alu0_idle <= TRUE;
 			alu0_idv <= INV;

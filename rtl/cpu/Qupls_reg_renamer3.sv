@@ -44,7 +44,6 @@ import QuplsPkg::*;
 module Qupls_reg_renamer3(rst,clk,en,list2free,tags2free,freevals,
 	alloc0,alloc1,alloc2,alloc3,wo0,wo1,wo2,wo3,wv0,wv1,wv2,wv3,avail,stall);
 parameter NFTAGS = 4;
-parameter PREGS = 256;
 input rst;
 input clk;
 input en;
@@ -55,71 +54,72 @@ input alloc0;					// allocate target register 0
 input alloc1;
 input alloc2;
 input alloc3;
-output pregno_t wo0;	// target register tag
-output pregno_t wo1;
-output pregno_t wo2;
-output pregno_t wo3;
-output reg wv0;
-output reg wv1;
-output reg wv2;
-output reg wv3;
-output reg [PREGS-1:0] avail;				// recorded in ROB
+output pregno_t wo0 = 10'd0;	// target register tag
+output pregno_t wo1 = 10'd0;
+output pregno_t wo2 = 10'd0;
+output pregno_t wo3 = 10'd0;
+output reg wv0 = 1'b0;
+output reg wv1 = 1'b0;
+output reg wv2 = 1'b0;
+output reg wv3 = 1'b0;
+output reg [PREGS-1:0] avail = {{PREGS-1{1'b1}},1'b0};				// recorded in ROB
 output reg stall;			// stall enqueue while waiting for register availability
 
-wire [7:0] o0,o1,o2,o3;
-wire [6:0] s0, s1, s2, s3;
-wire v0, v1, v2, v3;
-reg stalla0;
-reg stalla1;
-reg stalla2;
-reg stalla3;
-always_comb stall = stalla0|stalla1|stalla2|stalla3;
+reg rot0 = 1'b0;
+reg rot1 = 1'b0;
+reg rot2 = 1'b0;
+reg rot3 = 1'b0;
+reg stalla0 = 1'b0;
+reg stalla1 = 1'b0;
+reg stalla2 = 1'b0;
+reg stalla3 = 1'b0;
+always_comb stall = 1'b0;//stalla0|stalla1|stalla2|stalla3;
 
-always_comb stalla0 = !avail[wo0];
-always_comb stalla1 = !avail[wo1];
-always_comb stalla2 = !avail[wo2];
-always_comb stalla3 = !avail[wo3];
+always_comb stalla0 = ~avail[wo0];
+always_comb stalla1 = ~avail[wo1];
+always_comb stalla2 = ~avail[wo2];
+always_comb stalla3 = ~avail[wo3];
 always_comb wv0 = avail[wo0];
 always_comb wv1 = avail[wo1];
 always_comb wv2 = avail[wo2];
 always_comb wv3 = avail[wo3];
 
+always_comb rot0 = alloc0|~avail[wo0];
+always_comb rot1 = alloc1|~avail[wo1];
+always_comb rot2 = alloc2|~avail[wo2];
+always_comb rot3 = alloc3|~avail[wo3];
+
 Qupls_renamer_srl #(0) usrl0 (
 	.rst(rst),
 	.clk(clk),
 	.en(en),
-	.rot(alloc0|stalla0), 
-	.o(wo0[7:0])
+	.rot(rot0), 
+	.o(wo0)
 );
 
 Qupls_renamer_srl #(1) usrl1 (
 	.rst(rst),
 	.clk(clk),
 	.en(en),
-	.rot(alloc1|stalla1), 
-	.o(wo1[7:0])
+	.rot(rot1), 
+	.o(wo1)
 );
 
 Qupls_renamer_srl #(2) usrl2 (
 	.rst(rst),
 	.clk(clk),
 	.en(en),
-	.rot(alloc2|stalla2), 
-	.o(wo2[7:0])
+	.rot(rot2), 
+	.o(wo2)
 );
 
 Qupls_renamer_srl #(3) usrl3 (
 	.rst(rst),
 	.clk(clk),
 	.en(en),
-	.rot(alloc3|stalla3), 
-	.o(wo3[7:0])
+	.rot(rot3), 
+	.o(wo3)
 );
-
-always_comb wo0[9:8] = 2'b00;
-always_comb wo1[9:8] = 2'b00;
-always_comb wo2[9:8] = 2'b00;
-always_comb wo3[9:8] = 2'b00;
 
 always_ff @(posedge clk)
 if (rst)
@@ -127,22 +127,22 @@ if (rst)
 else begin
 	if (en) begin
 
-		if (alloc0 & ~stalla0)
+		if (alloc0 & avail[wo0])
 			avail[wo0] <= 1'b0;
 		if (freevals[0])
 			avail[tags2free[0]] <= 1'b1;
 		
-		if (alloc1 & ~stalla1)
+		if (alloc1 & avail[wo1])
 			avail[wo1] <= 1'b0;
 		if (freevals[1])
 			avail[tags2free[1]] <= 1'b1;
 
-		if (alloc2 & ~stalla2)
+		if (alloc2 & avail[wo2])
 			avail[wo2] <= 1'b0;
 		if (freevals[2])
 			avail[tags2free[2]] <= 1'b1;
 
-		if (alloc3 & ~stalla3)
+		if (alloc3 & avail[wo3])
 			avail[wo3] <= 1'b0;
 		if (freevals[3])
 			avail[tags2free[3]] <= 1'b1;

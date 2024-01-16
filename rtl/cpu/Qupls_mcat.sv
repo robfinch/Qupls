@@ -44,6 +44,7 @@ output mc_address_t mip;
 always_comb
 begin
 	casez(ir.ins.any.opcode)
+	OP_SYS:		mip = 12'h130;
 	OP_ENTER:	mip = 12'h004;
 	OP_LEAVE:	mip = 12'h1D0;
 	OP_PUSH:

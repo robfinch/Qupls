@@ -36,8 +36,9 @@
 
 import QuplsPkg::*;
 
-module Qupls_decode_Rb(om, instr, regx, has_immb, Rb);
+module Qupls_decode_Rb(om, ipl, instr, regx, has_immb, Rb);
 input operating_mode_t om;
+input [2:0] ipl;
 input ex_instruction_t instr;
 input regx;
 input has_immb;
@@ -52,16 +53,16 @@ begin
 	else
 		case(ir.ins.any.opcode)
 		OP_RTD:
-			fnRb = 9'd63;
+			fnRb = 9'd31;
 		OP_FLT3:
-			fnRb = regx ? ir.aRb | 9'd64 : ir.aRb;
+			fnRb = ir.aRb;
 		OP_CLD,OP_CST:
-			fnRb = regx ? ir.aRc | 9'd64 : ir.aRc;
+			fnRb = ir.aRc;
 		default:
 			if (fnImmb(ir))
 				fnRb = 9'd0;
 			else
-				fnRb = regx ? ir.aRb | 9'd64 : ir.aRb;
+				fnRb = ir.aRb;
 		endcase
 end
 endfunction
@@ -69,8 +70,12 @@ endfunction
 always_comb
 begin
 	Rb = fnRb(instr, has_immb);
-	if (Rb==9'd63)
-		Rb = 9'd65 + om;
+	if (Rb==9'd31) begin
+		if (om==2'd3)
+			Rb = 9'd32|ipl;
+		else
+			Rb = 9'd40|om;
+	end
 end
 
 endmodule

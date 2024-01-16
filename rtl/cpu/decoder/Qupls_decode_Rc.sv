@@ -36,8 +36,9 @@
 
 import QuplsPkg::*;
 
-module Qupls_decode_Rc(om, instr, regx, has_immc, Rc, Rcc);
+module Qupls_decode_Rc(om, ipl, instr, regx, has_immc, Rc, Rcc);
 input operating_mode_t om;
+input [2:0] ipl;
 input ex_instruction_t [5:0] instr;
 input [3:0] regx;
 input has_immc;
@@ -55,23 +56,27 @@ begin
 	else
 		case(instr[0].ins.any.opcode)
 		OP_STB,OP_STW,OP_STT,OP_STO,OP_STH,OP_STX:
-			Rc = regx[0] ? instr[0].aRt | 9'd64 : instr[0].aRt;
+			Rc = instr[0].aRt;
 		OP_SHIFT:
-			Rc = regx[3] ? instr[0].aRc | 9'd64 : instr[0].aRc;
+			Rc = instr[0].aRc;
 		OP_R2:
-			Rc = regx[3] ? instr[0].aRc | 9'd64 : instr[0].aRc;
+			Rc = instr[0].aRc;
 		default:
 			if (fnImmc(instr[0]))
 				Rc = 9'd0;
 			else
-				Rc = regx[3] ? instr[0].aRc | 9'd64 : instr[0].aRc;
+				Rc = instr[0].aRc;
 		endcase
 	if (instr[1].ins.any.opcode==OP_REGC) begin
 		Rc = instr[1].aRt;		
 		Rcc = instr[1].ins[15:13];
 	end
-	if (Rc==9'd63)
-		Rc = 9'd65 + om;
+	if (Rc==9'd31) begin
+		if (om==2'd3)
+			Rc = 9'd32|ipl;
+		else
+			Rc = 9'd40|om;
+	end
 end
 
 endmodule

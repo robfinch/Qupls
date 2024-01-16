@@ -137,6 +137,11 @@ begin
 			immb = {48'h0,ins[0].ins[23:8]};
 			has_immb = 1'b1;
 		end
+	OP_LDX,OP_STX:
+		begin
+			immb = {{53{ins[0].ins[34]}},ins[0].ins[34:24]};
+			has_immb = 1'b1;
+		end
 	OP_Bcc,OP_BccU,OP_FBccH,OP_FBccS,OP_FBccD,OP_FBccQ:
 		begin
 			immc = {{47{ins[0].ins[39]}},ins[0].ins[39:25],ins[0].ins[12:11]};

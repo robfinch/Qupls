@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -136,9 +136,15 @@ if (ce)
 always_comb
 	ihit = ihit1e&ihit1o;
 always_ff @(posedge clk)
+if (ce)
 	ihit2e <= ihit1e;
 always_ff @(posedge clk)
+if (ce)
 	ihit2o <= ihit1o;
+always_ff @(posedge clk)
+if(ce)
+	ihit_o <= ihit;
+/*	
 always_comb
 	// *** The following causes the hit to tend to oscillate between hit
 	//     and miss.
@@ -148,7 +154,7 @@ always_comb
 	// Might span lines, need hit on both even and odd lines
 	else
 		ihit_o <= ihit2e&ihit2o;
-
+*/
 assign ip_o = ip2;
 
 always_comb	//ff @(posedge clk)

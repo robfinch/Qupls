@@ -40,6 +40,7 @@
 // is occurring other updates are not allowed.
 //
 // 7700 LUTs / 1800 FFs / 1 BRAM	for 1*69/256 (one bank of 69 arch. regs).
+// 18500 LUTs / 3900 FFs / 12 BRAM for (128 arch. 384 phys. regs 16 checkpoints)
 // ============================================================================
 //
 import const_pkg::*;
@@ -121,7 +122,7 @@ input cmtbr;								// comitting a branch
 input [BBIT:0] rnbank [NPORT-1:0];
 input aregno_t [NPORT-1:0] rn;		// architectural register
 input [NPORT-1:0] rnv;
-input checkpt_ndx_t rn_cp [0:NPORT-1];
+input checkpt_ndx_t [NPORT-1:0] rn_cp;
 output pregno_t [NPORT-1:0] rrn;	// physical register
 output reg [NPORT-1:0] vn;			// register valid
 output pregno_t freea;	// previous register to free
@@ -149,7 +150,7 @@ reg stomp_act;
 // There are four "extra" bits in the data to make the size work out evenly.
 // There is also an extra write bit. These are defaulted to prevent sim issues.
 
-Qupls_checkpointRam #(.BANKS(BANKS)) cpram1
+Qupls_checkpointRam cpram1
 (
 	.clka(clk),
 	.ena(en),
@@ -243,7 +244,7 @@ always_comb cpv_i[5] = INV;
 always_comb cpv_i[6] = INV;
 always_comb cpv_i[7] = INV;
 
-Qupls_checkpoint_valid_ram3 #(.NRDPORT(NPORT)) ucpr2
+Qupls_checkpoint_valid_ram4 #(.NRDPORT(NPORT)) ucpr2
 (
 	.rst(rst),
 	.clka(clk),
@@ -261,8 +262,8 @@ Qupls_checkpoint_valid_ram3 #(.NRDPORT(NPORT)) ucpr2
 );
 
 always_ff @(posedge clk)
-if (cpv_wr && cpv_wa==9'd65)
-	$display("Q+ CPV65=%d, wc[3]=%d, wc[7]=%d", cpv_i, cpv_wc[3], cpv_wc[7]);
+if (cpv_wr[6] && cpv_wa[6]==9'd135)
+	$display("Q+ CPV135=%d, wc[6]=%d, wc[6]=%d", cpv_i, cpv_wc[6], cpv_wc[6]);
 
 pregno_t prev_rn0;
 pregno_t prev_rn1;
@@ -396,20 +397,35 @@ generate begin : gRRN
 							vn[g] = 1'b1;
 						else if (rrn[g]==10'd1023)
 							vn[g] = 1'b1;
-						else if (rrn[g]==cpv_wa[2] && cpv_wr[2] && cpv_wc[2]==rn_cp[g])
+						else if (rrn[g]==cpv_wa[2] && cpv_wr[2] && cpv_wc[2]==rn_cp[g]) begin
+							$display("2matched:%d=%d",rrn[g],cpv_i[2]);
 							vn[g] = cpv_i[2];
-						else if (rrn[g]==cpv_wa[6] && cpv_wr[6] && cpv_wc[6]==rn_cp[g])
+						end
+						else if (rrn[g]==cpv_wa[6] && cpv_wr[6] && cpv_wc[6]==rn_cp[g]) begin
+							$display("6matched:%d=%d",rrn[g],cpv_i[6]);
 							vn[g] = cpv_i[6];
-						else if (rrn[g]==cpv_wa[1] && cpv_wr[1] && cpv_wc[1]==rn_cp[g])
+						end
+						else if (rrn[g]==cpv_wa[1] && cpv_wr[1] && cpv_wc[1]==rn_cp[g]) begin
+							$display("1matched:%d=%d",rrn[g],cpv_i[1]);
 							vn[g] = cpv_i[1];
-						else if (rrn[g]==cpv_wa[5] && cpv_wr[5] && cpv_wc[5]==rn_cp[g])
+						end
+						else if (rrn[g]==cpv_wa[5] && cpv_wr[5] && cpv_wc[5]==rn_cp[g]) begin
+							$display("5matched:%d=%d",rrn[g],cpv_i[5]);
 							vn[g] = cpv_i[5];
-						else if (rrn[g]==cpv_wa[0] && cpv_wr[0] && cpv_wc[0]==rn_cp[g])
+						end
+						else if (rrn[g]==cpv_wa[0] && cpv_wr[0] && cpv_wc[0]==rn_cp[g]) begin
+							$display("0matched:%d=%d",rrn[g],cpv_i[0]);
 							vn[g] = cpv_i[0];
-						else if (rrn[g]==cpv_wa[4] && cpv_wr[4] && cpv_wc[4]==rn_cp[g])
+						end
+						else if (rrn[g]==cpv_wa[4] && cpv_wr[4] && cpv_wc[4]==rn_cp[g]) begin
+							$display("4matched:%d=%d",rrn[g],cpv_i[4]);
 							vn[g] = cpv_i[4];
-						else
+						end
+						else begin
+							if (rrn[g]==9'd263)
+								$display("matched263: g=%d %d, rn_cp[g]=%d", g, cpv_o[g], rn_cp[g]);
 							vn[g] = cpv_o[g];
+						end
 					end
 				endcase
 				/*
