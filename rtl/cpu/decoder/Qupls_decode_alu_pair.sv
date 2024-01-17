@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -36,19 +36,25 @@
 
 import QuplsPkg::*;
 
-module Qupls_decode_mulu(instr, mulu);
+module Qupls_decode_alu_pair(instr, alu_pair);
 input instruction_t instr;
-output mulu;
+output alu_pair;
 
-function fnIsMulu;
+function fnIsAluPair;
 input instruction_t ir;
 begin
-	fnIsMulu = ir.any.opcode==OP_MULUI ||
-		(ir.any.opcode==OP_R2 && (ir.r2.func==FN_MULU || ir.r2.func==FN_MULUW))
-		;
+	case(ir.r2.opcode)
+	OP_R2:
+		case(ir.r2.func)
+		FN_MULW:	fnIsAluPair = 1'b1;
+		FN_MULUW: fnIsAluPair = 1'b1;
+		default:	fnIsAluPair = 1'b0;
+		endcase
+	default:	fnIsAluPair = 1'b0;
+	endcase
 end
 endfunction
 
-assign mulu = fnIsMulu(instr);
+assign alu_pair = fnIsAluPair(instr);
 
 endmodule

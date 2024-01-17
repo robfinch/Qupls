@@ -50,24 +50,30 @@ begin
 		FN_ADD:	fnIsAlu = 1'b1;
 		FN_CMP:	fnIsAlu = 1'b1;
 		FN_MUL:	fnIsAlu = 1'b1;
+		FN_MULW:	fnIsAlu = 1'b1;
 		FN_DIV:	fnIsAlu = 1'b1;
 		FN_SUB:	fnIsAlu = 1'b1;
 		FN_MULU: fnIsAlu = 1'b1;
+		FN_MULUW: fnIsAlu = 1'b1;
 		FN_DIVU: fnIsAlu = 1'b1;
 		FN_AND:	fnIsAlu = 1'b1;
 		FN_OR:	fnIsAlu = 1'b1;
 		FN_EOR:	fnIsAlu = 1'b1;
-		FN_ANDC:	fnIsAlu = 1'b1;
 		FN_NAND:	fnIsAlu = 1'b1;
 		FN_NOR:	fnIsAlu = 1'b1;
 		FN_ENOR:	fnIsAlu = 1'b1;
-		FN_ORC:	fnIsAlu = 1'b1;
 		FN_SEQ:	fnIsAlu = 1'b1;
 		FN_SNE:	fnIsAlu = 1'b1;
 		FN_SLT:	fnIsAlu = 1'b1;
 		FN_SLE:	fnIsAlu = 1'b1;
 		FN_SLTU:	fnIsAlu = 1'b1;
 		FN_SLEU:	fnIsAlu = 1'b1;
+		FN_ZSEQ:	fnIsAlu = 1'b1;
+		FN_ZSNE:	fnIsAlu = 1'b1;
+		FN_ZSLT:	fnIsAlu = 1'b1;
+		FN_ZSLE:	fnIsAlu = 1'b1;
+		FN_ZSLTU:	fnIsAlu = 1'b1;
+		FN_ZSLEU:	fnIsAlu = 1'b1;
 		default:	fnIsAlu = 1'b0;
 		endcase
 	OP_ADDI,OP_VADDI:	

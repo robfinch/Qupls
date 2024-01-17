@@ -241,10 +241,10 @@ always_comb bsr0 = ins0_.ins.any.opcode==OP_BSR;
 always_comb bsr1 = ins1_.ins.any.opcode==OP_BSR;
 always_comb bsr2 = ins2_.ins.any.opcode==OP_BSR;
 always_comb bsr3 = ins3_.ins.any.opcode==OP_BSR;
-always_comb bsr0_tgt = pc0_i + {{37{ins0_.ins[39]}},ins0_.ins[39:13]};
-always_comb bsr1_tgt = pc1_i + {{37{ins1_.ins[39]}},ins1_.ins[39:13]};
-always_comb bsr2_tgt = pc2_i + {{37{ins2_.ins[39]}},ins2_.ins[39:13]};
-always_comb bsr3_tgt = pc3_i + {{37{ins3_.ins[39]}},ins3_.ins[39:13]};
+always_comb bsr0_tgt = pc0_i + {{36{ins0_.ins[39]}},ins0_.ins[39:12]};
+always_comb bsr1_tgt = pc1_i + {{36{ins1_.ins[39]}},ins1_.ins[39:12]};
+always_comb bsr2_tgt = pc2_i + {{36{ins2_.ins[39]}},ins2_.ins[39:12]};
+always_comb bsr3_tgt = pc3_i + {{36{ins3_.ins[39]}},ins3_.ins[39:12]};
 always_comb
 begin
 	do_bsr = FALSE;

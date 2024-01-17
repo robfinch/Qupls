@@ -2554,6 +2554,7 @@ void ENODE::PutConstant(txtoStream& ofs, unsigned int lowhigh, unsigned int rshi
 		}
 		else {
 			char buf[150];
+
 			switch (display_opt) {
 			case 1:
 				ofs.write("%");
@@ -2625,6 +2626,12 @@ void ENODE::PutConstant(txtoStream& ofs, unsigned int lowhigh, unsigned int rshi
 		else if (lowhigh == 3)
 			ofs.write(">");
 #endif
+		/* 
+		* The following uses a private namespace if sym is set, which is set for 
+		* string constants while parsing expressions. String constants end up as
+		* rodata items and are made local to the file with GetPrivateNamespace().
+		* A matching label is output when the literal table is dumped.
+		*/
 		if (sym)
 			sprintf_s(buf, sizeof(buf), "%.400s.%05d", (char*)GetPrivateNamespace(), sym->value.i);
 		else

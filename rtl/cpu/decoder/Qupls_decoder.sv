@@ -36,11 +36,12 @@
 
 import QuplsPkg::*;
 
-module Qupls_decoder(rst, clk, en, om, instr, regx, dbo);
+module Qupls_decoder(rst, clk, en, om, ipl, instr, regx, dbo);
 input rst;
 input clk;
 input en;
 input operating_mode_t om;
+input [2:0] ipl;
 input ex_instruction_t [5:0] instr;
 input [3:0] regx;
 output decode_bus_t dbo;
@@ -95,6 +96,7 @@ Qupls_decode_Rc udcrc
 Qupls_decode_Rt udcrt
 (
 	.om(om),
+	.ipl(ipl),
 	.instr(ins),
 	.regx(regx[0]),
 	.Rt(db.Rt),
@@ -171,6 +173,12 @@ Qupls_decode_alu0 udcalu0
 (
 	.instr(ins.ins),
 	.alu0(db.alu0)
+);
+
+Qupls_decode_alu_pair udcalup0
+(
+	.instr(ins.ins),
+	.alu_pair(db.alu_pair)
 );
 
 Qupls_decode_mul umul1

@@ -561,18 +561,26 @@ void Function::SaveGPRegisterVars()
 	if (rmask) {
 		if (rmask->NumMember()) {
 			cnt = 0;
-			cg.GenerateSubtractFrom(makereg(regSP), cg.MakeImmediate(rmask->NumMember() * 8));
+			cg.GenerateSubtractFrom(makereg(regSP), cg.MakeImmediate(rmask->NumMember() * sizeOfWord));
 			rmask->resetPtr();
+			for (nn = 0; nn < rmask->NumMember(); nn++) {
+				if (nn == 0)
+					cg.GenerateStore(makereg(cpu.saved_regs[0]), MakeIndirect(regSP), sizeOfWord);
+				else
+					cg.GenerateStore(makereg(cpu.saved_regs[nn]), MakeIndexed(sizeOfWord * nn, regSP), sizeOfWord);
+			}
+			/*
 			if (rmask->NumMember() == 1)
 				cg.GenerateStore(makereg(cpu.saved_regs[0]), MakeIndirect(regSP), sizeOfWord);
 			else if (rmask->NumMember() == 2) {
 				cg.GenerateStore(makereg(cpu.saved_regs[0]), MakeIndirect(regSP), sizeOfWord);
-				cg.GenerateStore(makereg(cpu.saved_regs[1]), MakeIndexed(16,regSP), sizeOfWord);
+				cg.GenerateStore(makereg(cpu.saved_regs[1]), MakeIndexed(sizeOfWord,regSP), sizeOfWord);
 			}
 			else {
-				sprintf_s(buf, sizeof(buf), "__store_s0s%d", rmask->NumMember());
-				cg.GenerateLocalCall(MakeStringAsNameConst(buf, codeseg));
+				sprintf_s(buf, sizeof(buf), "__store_s0s%d", rmask->NumMember()-1);
+				cg.GenerateMillicodeCall(MakeStringAsNameConst(buf, codeseg));
 			}
+			*/
 			/*
 			for (nn = rmask->lastMember(); nn >= 0; nn = rmask->prevMember()) {
 				cg.GenerateStore(makereg(nregs - 1 - nn), MakeIndexed(cnt, regSP), sizeOfWord);
@@ -734,6 +742,13 @@ int Function::RestoreGPRegisterVars()
 			cnt2 = cnt = save_mask->NumMember() * sizeOfWord;
 			cnt = 0;
 			save_mask->resetPtr();
+			for (nn = 0; nn < save_mask->NumMember(); nn++) {
+				if (nn==0)
+					cg.GenerateLoad(makereg(cpu.saved_regs[0]), MakeIndirect(regSP), sizeOfWord, sizeOfWord);
+				else
+					cg.GenerateLoad(makereg(cpu.saved_regs[nn]), MakeIndexed(sizeOfWord*nn, regSP), sizeOfWord, sizeOfWord);
+			}
+			/*
 			if (save_mask->NumMember() == 1)
 				cg.GenerateLoad(makereg(cpu.saved_regs[0]), MakeIndirect(regSP), sizeOfWord, sizeOfWord);
 			else if (save_mask->NumMember() == 2) {
@@ -742,8 +757,9 @@ int Function::RestoreGPRegisterVars()
 			}
 			else {
 				sprintf_s(buf, sizeof(buf), "__load_s0s%d", save_mask->NumMember() - 1);
-				GenerateDiadic(op_bsr, 0, makereg(regLR + 1), MakeStringAsNameConst(buf, codeseg));
+				cg.GenerateMillicodeCall(MakeStringAsNameConst(buf, codeseg));
 			}
+			*/
 			/*
 			for (nn = save_mask->nextMember(); nn >= 0; nn = save_mask->nextMember()) {
 				cg.GenerateLoad(makereg(nn), MakeIndexed(cnt, regSP), sizeOfWord, sizeOfWord);

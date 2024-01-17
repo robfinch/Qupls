@@ -142,18 +142,18 @@ int NumTempRegs()
 void CPU::InitRegs()
 {
 #ifdef QUPLS
-	cpu.NumArgRegs = 11;
+	cpu.NumArgRegs = 8;
 	cpu.argregs[0] = 1;
 	cpu.argregs[1] = 2;
 	cpu.argregs[2] = 3;
-	cpu.argregs[3] = 40;
-	cpu.argregs[4] = 41;
-	cpu.argregs[5] = 42;
-	cpu.argregs[6] = 43;
-	cpu.argregs[7] = 44;
-	cpu.argregs[8] = 45;
-	cpu.argregs[9] = 46;
-	cpu.argregs[10] = 47;
+	cpu.argregs[3] = 4;
+	cpu.argregs[4] = 5;
+	cpu.argregs[5] = 6;
+	cpu.argregs[6] = 7;
+	cpu.argregs[7] = 8;
+	cpu.argregs[8] = 0;
+	cpu.argregs[9] = 0;
+	cpu.argregs[10] = 0;
 
 	cpu.NumvArgRegs = 10;
 	cpu.vargregs[0] = 1;
@@ -220,19 +220,19 @@ void CPU::InitRegs()
 #endif
 
 #ifdef QUPLS
-	cpu.NumTmpRegs = 12;
-	cpu.tmpregs[0] = 4;
-	cpu.tmpregs[1] = 5;
-	cpu.tmpregs[2] = 6;
-	cpu.tmpregs[3] = 7;
-	cpu.tmpregs[4] = 8;
-	cpu.tmpregs[5] = 9;
-	cpu.tmpregs[6] = 10;
-	cpu.tmpregs[7] = 11;
-	cpu.tmpregs[8] = 12;
-	cpu.tmpregs[9] = 13;
-	cpu.tmpregs[10] = 14;
-	cpu.tmpregs[11] = 15;
+	cpu.NumTmpRegs = 9;
+	cpu.tmpregs[0] = 9;
+	cpu.tmpregs[1] = 10;
+	cpu.tmpregs[2] = 11;
+	cpu.tmpregs[3] = 12;
+	cpu.tmpregs[4] = 13;
+	cpu.tmpregs[5] = 14;
+	cpu.tmpregs[6] = 15;
+	cpu.tmpregs[7] = 16;
+	cpu.tmpregs[8] = 17;
+	cpu.tmpregs[9] = 0;
+	cpu.tmpregs[10] = 0;
+	cpu.tmpregs[11] = 0;
 
 	cpu.NumvTmpRegs = 12;
 	cpu.vtmpregs[0] = 4;
@@ -304,23 +304,23 @@ void CPU::InitRegs()
 	cpu.ftmpregs[11] = 31 | rt_float;
 #endif
 #ifdef QUPLS
-	cpu.NumSavedRegs = 16;
-	cpu.saved_regs[0] = 16;
-	cpu.saved_regs[1] = 17;
-	cpu.saved_regs[2] = 18;
-	cpu.saved_regs[3] = 19;
-	cpu.saved_regs[4] = 20;
-	cpu.saved_regs[5] = 21;
-	cpu.saved_regs[6] = 22;
-	cpu.saved_regs[7] = 23;
-	cpu.saved_regs[8] = 24;
-	cpu.saved_regs[9] = 25;
-	cpu.saved_regs[10] = 26;
-	cpu.saved_regs[11] = 27;
-	cpu.saved_regs[12] = 28;
-	cpu.saved_regs[13] = 29;
-	cpu.saved_regs[14] = 30;
-	cpu.saved_regs[15] = 31;
+	cpu.NumSavedRegs = 8;
+	cpu.saved_regs[0] = 18;
+	cpu.saved_regs[1] = 19;
+	cpu.saved_regs[2] = 20;
+	cpu.saved_regs[3] = 21;
+	cpu.saved_regs[4] = 22;
+	cpu.saved_regs[5] = 23;
+	cpu.saved_regs[6] = 24;
+	cpu.saved_regs[7] = 25;
+	cpu.saved_regs[8] = 26;
+	cpu.saved_regs[9] = 0;
+	cpu.saved_regs[10] = 0;
+	cpu.saved_regs[11] = 0;
+	cpu.saved_regs[12] = 0;
+	cpu.saved_regs[13] = 0;
+	cpu.saved_regs[14] = 0;
+	cpu.saved_regs[15] = 0;
 
 	cpu.NumvSavedRegs = 16;
 	cpu.vsaved_regs[0] = 16;

@@ -1044,6 +1044,13 @@ void SaveRegisterVars(CSet *rmask)
 			cnt = 0;
 			//GenerateTriadic(op_sub, 0, makereg(regSP), makereg(regSP), cg.MakeImmediate(rmask->NumMember() * sizeOfWord));
 			rmask->resetPtr();
+			for (nn = 0; nn < rmask->NumMember(); nn++) {
+				if (nn == 0)
+					cg.GenerateStore(makereg(cpu.saved_regs[0]), cg.MakeIndirect(regSP), sizeOfWord);
+				else
+					cg.GenerateStore(makereg(cpu.saved_regs[nn]), cg.MakeIndexed(sizeOfWord*nn, regSP), sizeOfWord);
+			}
+			/*
 			if (rmask->NumMember() == 1) {
 				cg.GenerateStore(makereg(cpu.saved_regs[0]), cg.MakeIndirect(regSP), sizeOfWord);
 			}
@@ -1055,6 +1062,7 @@ void SaveRegisterVars(CSet *rmask)
 				sprintf_s(buf, sizeof(buf), "__store_s0s%d", rmask->NumMember() - 1);
 				cg.GenerateMillicodeCall(cg.MakeStringAsNameConst(buf, codeseg));
 			}
+			*/
 			/*
 			for (nn = rmask->lastMember(); nn >= 0; nn = rmask->prevMember()) {
 				// nn = nregs - 1 - regno

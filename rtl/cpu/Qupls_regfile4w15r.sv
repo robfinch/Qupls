@@ -41,8 +41,7 @@ module Qupls_regfile4w15r(rst, clk,
 	wr0, wr1, wr2, wr3, we0, we1, we2, we3,
 	wa0, wa1, wa2, wa3, i0, i1, i2, i3,
 	rclk, ra, o);
-parameter WID=128;
-parameter RPORTS = 16;
+parameter RPORTS = 17;
 input rst;
 input clk;
 input wr0;
@@ -129,7 +128,7 @@ reg [1:0] lvt [QuplsPkg::PREGS-1:0];
 always_ff @(posedge clk)
 if (rst) begin
 	for (n = 0; n < QuplsPkg::PREGS; n = n + 1)
-		lvt[n] <= 'd0;
+		lvt[n] <= 2'd0;
 end
 else begin
 	if (wr0) lvt[wa0] <= 2'd0;

@@ -431,9 +431,27 @@ begin
 		// Search for a preceding sync instruction. If there is one then do
 		// not issue.
 		if (flag) begin
-			if (!issued_alu0 && alu0_idle &&
-				((rob[heads[hd]].decbus.alu && !rob[heads[hd]].done[0]) || rob[heads[hd]].decbus.cpytgt) &&
-				!rob[heads[hd]].out[0]) begin
+			// Look for ALU pair instructions, issue to both ALUs when possible.
+			if (!issued_alu0 && !issued_alu1 && alu0_idle
+				&& rob[heads[hd]].decbus.alu_pair
+				&& !robentry_issue[heads[hd]]
+				&& !rob[heads[hd]].done[0]
+				&& !rob[heads[hd]].out[0])
+			begin
+		  	next_robentry_issue[heads[hd]] = 1'b1;
+		  	next_robentry_islot_o[heads[hd]] = 2'b00;
+		  	issued_alu0 = 1'b1;
+		  	issued_alu1 = 1'b1;
+		  	next_alu0_rndx = heads[hd];
+		  	next_alu0_rndxv = 1'b1;
+		  	next_alu1_rndx = heads[hd];
+		  	next_alu1_rndxv = 1'b1;
+			end
+			if (!issued_alu0 && alu0_idle
+				&& !robentry_issue[heads[hd]]
+				&& ((rob[heads[hd]].decbus.alu || rob[heads[hd]].decbus.cpytgt)
+				&& !rob[heads[hd]].done[0])
+				&& !rob[heads[hd]].out[0]) begin
 		  	next_robentry_issue[heads[hd]] = 1'b1;
 		  	next_robentry_islot_o[heads[hd]] = 2'b00;
 		  	issued_alu0 = 1'b1;
@@ -441,9 +459,12 @@ begin
 		  	next_alu0_rndxv = 1'b1;
 			end
 			if (NALU > 1) begin
-				if (!issued_alu1 && alu1_idle &&
-					((rob[heads[hd]].decbus.alu && !rob[heads[hd]].done[0]) || rob[heads[hd]].decbus.cpytgt) &&
-					!rob[heads[hd]].out[0] && !rob[heads[hd]].decbus.alu0) begin
+				if (!issued_alu1 && alu1_idle
+					&& !robentry_issue[heads[hd]]
+					&& ((rob[heads[hd]].decbus.alu || rob[heads[hd]].decbus.cpytgt)
+					&& !rob[heads[hd]].done[0])
+					&& !rob[heads[hd]].out[0]
+					&& !rob[heads[hd]].decbus.alu0) begin
 					if (!next_robentry_issue[heads[hd]]) begin	// Did ALU #0 already grab it?
 				  	next_robentry_issue[heads[hd]] = 1'b1;
 				  	next_robentry_islot_o[heads[hd]] = 2'b01;
@@ -554,11 +575,11 @@ end
 always_ff @(posedge clk)
 if (rst) begin
 	for (q = 0; q < ROB_ENTRIES; q = q + 1)
-		robentry_islot_o[q] <= 'd0;
-	robentry_issue <= 'd0;
-	robentry_fpu_issue <= 'd0;
-	robentry_fcu_issue <= 'd0;
-	robentry_agen_issue <= 'd0;
+		robentry_islot_o[q] <= 2'd0;
+	robentry_issue <= {$bits(rob_bitmask_t){1'd0}};
+	robentry_fpu_issue <= {$bits(rob_bitmask_t){1'd0}};
+	robentry_fcu_issue <= {$bits(rob_bitmask_t){1'd0}};
+	robentry_agen_issue <= {$bits(rob_bitmask_t){1'd0}};
 	alu0_rndx <= 5'd0;
 	alu1_rndx <= 5'd0;
 	fpu0_rndx <= 5'd0;
@@ -579,7 +600,7 @@ end
 else begin
 	robentry_islot_o <= next_robentry_islot_o;
 	robentry_issue <= next_robentry_issue;
-	robentry_fpu_issue <= 'd0;
+	robentry_fpu_issue <= 'd0;	// ToDo: FPU issue
 	robentry_fcu_issue <= next_robentry_fcu_issue;
 	robentry_agen_issue <= next_robentry_agen_issue;
 	alu0_rndx <= next_alu0_rndx;

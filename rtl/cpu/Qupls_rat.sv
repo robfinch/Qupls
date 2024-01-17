@@ -262,8 +262,8 @@ Qupls_checkpoint_valid_ram4 #(.NRDPORT(NPORT)) ucpr2
 );
 
 always_ff @(posedge clk)
-if (cpv_wr[6] && cpv_wa[6]==9'd135)
-	$display("Q+ CPV135=%d, wc[6]=%d, wc[6]=%d", cpv_i, cpv_wc[6], cpv_wc[6]);
+if (cpv_wr[6] && cpv_wa[6]==9'd263)
+	$display("Q+ CPV263=%d, wc[6]=%d, wc[6]=%d", cpv_i, cpv_wc[6], cpv_wc[6]);
 
 pregno_t prev_rn0;
 pregno_t prev_rn1;
@@ -422,8 +422,15 @@ generate begin : gRRN
 							vn[g] = cpv_i[4];
 						end
 						else begin
-							if (rrn[g]==9'd263)
-								$display("matched263: g=%d %d, rn_cp[g]=%d", g, cpv_o[g], rn_cp[g]);
+							if (rrn[g]==9'd263) begin
+								$display("matched263: g+=%d %d, rn_cp[g]=%d", g, cpv_o[g], rn_cp[g]);
+								$display("cpv_wa[0]=%d",cpv_wa[0]);
+								$display("cpv_wa[1]=%d",cpv_wa[1]);
+								$display("cpv_wa[2]=%d",cpv_wa[2]);
+								$display("cpv_wa[4]=%d",cpv_wa[4]);
+								$display("cpv_wa[5]=%d",cpv_wa[5]);
+								$display("cpv_wa[6]=%d",cpv_wa[6]);
+							end
 							vn[g] = cpv_o[g];
 						end
 					end
@@ -445,6 +452,12 @@ endgenerate
 
 always_ff @(posedge clk)
 begin
+	if (wrrc==10'd263) begin
+		$display("write w263 with %d", INV);
+	end
+	if (cmtcp==10'd263) begin
+		$display("write c263 with %d", VAL);
+	end
 	if (rn[0]==rn[2] && rn[0]==9'd68) begin
 		$display("Q+ RAT: r68/%d %d vn= %d %d", rrn[0], rrn[2], vn[0], vn[2]);
 	end

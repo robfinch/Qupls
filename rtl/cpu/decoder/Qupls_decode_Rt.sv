@@ -57,24 +57,28 @@ begin
 		FN_SUB:	fnRt = ir.aRt;
 		FN_MULU: fnRt = ir.aRt;
 		FN_DIVU:	fnRt = ir.aRt;
-		FN_MULH:	fnRt = ir.aRt;
+		FN_MULW:	fnRt = ir.aRt;
 		FN_MOD:	fnRt = ir.aRt;
-		FN_MULUH:	fnRt = ir.aRt;
+		FN_MULUW:	fnRt = ir.aRt;
 		FN_MODU:	fnRt = ir.aRt;
 		FN_AND:	fnRt = ir.aRt;
 		FN_OR:	fnRt = ir.aRt;
 		FN_EOR:	fnRt = ir.aRt;
-		FN_ANDC:	fnRt = ir.aRt;
 		FN_NAND:	fnRt = ir.aRt;
 		FN_NOR:	fnRt = ir.aRt;
 		FN_ENOR:	fnRt = ir.aRt;
-		FN_ORC:	fnRt = ir.aRt;
 		FN_SEQ:	fnRt = ir.aRt;
 		FN_SNE:	fnRt = ir.aRt;
 		FN_SLT:	fnRt = ir.aRt;
 		FN_SLE:	fnRt = ir.aRt;
 		FN_SLTU:	fnRt = ir.aRt;
 		FN_SLEU:	fnRt = ir.aRt;
+		FN_ZSEQ:	fnRt = ir.aRt;
+		FN_ZSNE:	fnRt = ir.aRt;
+		FN_ZSLT:	fnRt = ir.aRt;
+		FN_ZSLE:	fnRt = ir.aRt;
+		FN_ZSLTU:	fnRt = ir.aRt;
+		FN_ZSLEU:	fnRt = ir.aRt;
 		default:	fnRt = 9'd0;
 		endcase
 	OP_FLT3:

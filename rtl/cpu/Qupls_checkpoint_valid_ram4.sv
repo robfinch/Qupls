@@ -39,8 +39,9 @@ import QuplsPkg::*;
 module Qupls_checkpoint_valid_ram4(rst, clka, en, wr, wc, wa, awa, setall, i, clkb, rc, ra, o);
 parameter BANKS=1;
 parameter NPORT=8;
-parameter NRDPORT=24;
-localparam ABIT=$clog2(PREGS);
+parameter NRDPORT=17;
+parameter NPREGS=1024;
+localparam ABIT=$clog2(NPREGS);
 input rst;
 input clka;
 input en;
@@ -62,11 +63,12 @@ wire [NPORT-1:0] cda;
 reg [NPORT-1:0] cdar;
 reg [NPORT-1:0] wea;
 reg [ABIT-1:0] addra [0:NPORT-1];
-reg [ABIT:0] addrb [0:NPORT-1][0:2];
+reg [ABIT-1:0] addrb [0:NRDPORT-1][0:NPORT-1];
 wire [15:0] douta [0:NPORT-1];
-wire [127:0] doutb [0:NPORT-1][0:2];
+wire [15:0] doutb [0:NRDPORT-1][0:NPORT-1];
 reg [15:0] dina [0:NPORT-1];
 reg [2:0] lvt [0:PREGS-1];
+reg [15:0] slice;
 
 genvar g,q,r;
 
@@ -77,11 +79,16 @@ initial begin
 end
 
 always_comb
-for (p = 0; p < NPORT; p = p + 1) begin
-	addra[p] = wa[p];
+for (p = 0; p < NRDPORT; p = p + 1) begin
+	addra[p % NPORT] = wa[p % NPORT];
 	addrb[p][0] = ra[p];
-	addrb[p][1] = ra[p+8];
-	addrb[p][2] = ra[p+16];
+	addrb[p][1] = ra[p];
+	addrb[p][2] = ra[p];
+	addrb[p][3] = ra[p];
+	addrb[p][4] = ra[p];
+	addrb[p][5] = ra[p];
+	addrb[p][6] = ra[p];
+	addrb[p][7] = ra[p];
 end
 
 always_ff @(posedge clka)
@@ -106,14 +113,22 @@ for (g = 0; g < NPORT; g = g + 1) begin
 		always_comb
 			begin
 				dina[g][q] <= douta[g][q];
-				dina[g][wc1[q]] <= i1[q];
+				dina[g][wc1[g]] <= i1[g];
 			end
 	end
+	always_comb
+	if (addra[g]==10'd263) begin
+		$display("write addra=%h 263=%d douta=%h dina=%h i1=%d wc1=%d", addra[g], i1[g], douta[g], dina[g], i1[g], wc1[g]);
+	end
 
-	for (r = 0; r < 3; r = r + 1) begin
+	for (r = 0; r < 17; r = r + 1) begin
+		always_ff @(posedge clkb)
+		if (addrb[r][g]==10'd263) begin
+			$display("port=%d, read addrb=%h 263, doutb=%h", r[4:0], addrb[r][g], doutb[r][g]);
+		end
    xpm_memory_tdpram #(
       .ADDR_WIDTH_A(ABIT),           // DECIMAL
-      .ADDR_WIDTH_B(ABIT),           // DECIMAL
+      .ADDR_WIDTH_B(ABIT),          // DECIMAL
       .AUTO_SLEEP_TIME(0),            // DECIMAL
       .BYTE_WRITE_WIDTH_A(16),        // DECIMAL
       .BYTE_WRITE_WIDTH_B(16),       // DECIMAL
@@ -124,7 +139,7 @@ for (g = 0; g < NPORT; g = g + 1) begin
       .MEMORY_INIT_PARAM(""), // String
       .MEMORY_OPTIMIZATION("true"),   // String
       .MEMORY_PRIMITIVE("auto"),      // String
-      .MEMORY_SIZE(PREGS*16),          // DECIMAL
+      .MEMORY_SIZE(NPREGS*16),        // DECIMAL
       .MESSAGE_CONTROL(0),            // DECIMAL
       .READ_DATA_WIDTH_A(16),        // DECIMAL
       .READ_DATA_WIDTH_B(16),        // DECIMAL
@@ -153,7 +168,7 @@ for (g = 0; g < NPORT; g = g + 1) begin
                                        // on the data output of port A.
 
       .douta(douta[g]),                   // READ_DATA_WIDTH_A-bit output: Data output for port A read operations.
-      .doutb(doutb[g][r]),                   // READ_DATA_WIDTH_B-bit output: Data output for port B read operations.
+      .doutb(doutb[r][g]),                   // READ_DATA_WIDTH_B-bit output: Data output for port B read operations.
       .sbiterra(),             // 1-bit output: Status signal to indicate single bit error occurrence
                                        // on the data output of port A.
 
@@ -161,7 +176,7 @@ for (g = 0; g < NPORT; g = g + 1) begin
                                        // on the data output of port B.
 
       .addra(addra[g]),                   // ADDR_WIDTH_A-bit input: Address for port A write and read operations.
-      .addrb(addrb[g][r]),                   // ADDR_WIDTH_B-bit input: Address for port B write and read operations.
+      .addrb(addrb[r][g]),                   // ADDR_WIDTH_B-bit input: Address for port B write and read operations.
       .clka(clka),                     // 1-bit input: Clock signal for port A. Also clocks port B when
                                        // parameter CLOCKING_MODE is "common_clock".
 
@@ -170,7 +185,7 @@ for (g = 0; g < NPORT; g = g + 1) begin
                                        // "common_clock".
 
       .dina(dina[g]),                  // WRITE_DATA_WIDTH_A-bit input: Data input for port A write operations.
-      .dinb(16'd0),                     // WRITE_DATA_WIDTH_B-bit input: Data input for port B write operations.
+      .dinb(64'd0),                     // WRITE_DATA_WIDTH_B-bit input: Data input for port B write operations.
       .ena(1'b1),                      // 1-bit input: Memory enable signal for port A. Must be high on clock
                                        // cycles when read or write operations are initiated. Pipelined
                                        // internally.
@@ -232,17 +247,13 @@ end
 endgenerate
 			
 generate begin : gMem
-	for (g = 0; g < NRDPORT; g = g + 1) begin
+	for (g = 0; g < NRDPORT * NPORT; g = g + 1) begin
 		always_comb
 		if (rst)
-			o[g] <= 1'b1;
+			o[g] = 1'b1;
 		else begin
-			if (g < 8)
-				o[g] <= doutb[lvt[g]][0][rc[g]];
-			else if (g < 16)
-				o[g] <= doutb[lvt[g]][1][rc[g]];
-			else
-				o[g] <= doutb[lvt[g]][2][rc[g]];
+			slice = doutb[g[7:3]][lvt[g[2:0]]];
+			o[g[7:3]] = slice[rc[g[7:3]]];
 		end
 	end
 end

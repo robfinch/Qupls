@@ -135,6 +135,7 @@ value_t rfo_alu0_argC;
 value_t rfo_alu0_argT;
 value_t rfo_alu1_argA;
 value_t rfo_alu1_argB;
+value_t rfo_alu1_argC;
 value_t rfo_alu1_argT;
 value_t rfo_fpu0_argA;
 value_t rfo_fpu0_argB;
@@ -162,6 +163,7 @@ pregno_t alu0_argT_reg;
 
 pregno_t alu1_argA_reg;
 pregno_t alu1_argB_reg;
+pregno_t alu1_argC_reg;
 
 pregno_t fpu0_argA_reg;
 pregno_t fpu0_argB_reg;
@@ -336,6 +338,7 @@ wire div1_done,div1_dbz;
 reg alu1_ld;
 reg alu1_pred;
 reg alu1_predz;
+wire alu1_cpytgt;
 reg alu1_cptgt;
 reg [1:0] alu1_prc;
 
@@ -662,6 +665,7 @@ assign rf_reg[13] = agen1_argB_reg;
 assign rf_reg[14] = store_argC_pReg;
 
 assign rf_reg[15] = alu0_argT_reg;
+assign rf_reg[16] = alu1_argC_reg;
 
 assign rfo_alu0_argA = rfo[0];
 assign rfo_alu0_argB = rfo[1];
@@ -686,6 +690,7 @@ assign rfo_agen1_argB = rfo[13];
 assign rfo_store_argC = rfo[14];
 
 assign rfo_alu0_argT = rfo[15];
+assign rfo_alu1_argC = rfo[16];
 
 ICacheLine ic_line_hi, ic_line_lo;
 
@@ -1016,7 +1021,7 @@ begin
 //	if (!ihit3)
 		stomp_f = TRUE;
 	if (branchmiss_state < 3'd7) begin	// || bms
-//		if (misspc != pc0)
+		if (misspc != pc0)
 			stomp_f = TRUE;
 	end
 	else if (((do_bsr && !stomp_x) || do_bsr2) && !branchmiss && branchmiss_state==3'd7)
@@ -1753,6 +1758,7 @@ generate begin : gDecoders
 				.clk(clk),
 				.en(advance_pipeline),
 				.om(sr.om),
+				.ipl(sr.ipl),
 				.instr(instr[0]),
 				.regx(regx0),
 				.dbo(db0_r)
@@ -1766,6 +1772,7 @@ generate begin : gDecoders
 				.clk(clk),
 				.en(advance_pipeline),
 				.om(sr.om),
+				.ipl(sr.ipl),
 				.instr(instr[0]),
 				.regx(regx0),
 				.dbo(db0_r)
@@ -1777,6 +1784,7 @@ generate begin : gDecoders
 				.clk(clk),
 				.en(advance_pipeline),
 				.om(sr.om),
+				.ipl(sr.ipl),
 				.instr(instr[1]),
 				.regx(regx1),
 				.dbo(db1_r)
@@ -1790,6 +1798,7 @@ generate begin : gDecoders
 				.clk(clk),
 				.en(advance_pipeline),
 				.om(sr.om),
+				.ipl(sr.ipl),
 				.instr(instr[0]),
 				.regx(regx0),
 				.dbo(db0_r)
@@ -1801,6 +1810,7 @@ generate begin : gDecoders
 				.clk(clk),
 				.en(advance_pipeline),
 				.om(sr.om),
+				.ipl(sr.ipl),
 				.instr(instr[1]),
 				.regx(regx1),
 				.dbo(db1_r)
@@ -1812,6 +1822,7 @@ generate begin : gDecoders
 				.clk(clk),
 				.en(advance_pipeline),
 				.om(sr.om),
+				.ipl(sr.ipl),
 				.instr(instr[2]),
 				.regx(regx2),
 				.dbo(db2_r)
@@ -1825,6 +1836,7 @@ generate begin : gDecoders
 				.clk(clk),
 				.en(advance_pipeline),
 				.om(sr.om),
+				.ipl(sr.ipl),
 				.instr(instr[0]),
 				.regx(regx0),
 				.dbo(db0_r)
@@ -1836,6 +1848,7 @@ generate begin : gDecoders
 				.clk(clk),
 				.en(advance_pipeline),
 				.om(sr.om),
+				.ipl(sr.ipl),
 				.instr(instr[1]),
 				.regx(regx1),
 				.dbo(db1_r)
@@ -1847,6 +1860,7 @@ generate begin : gDecoders
 				.clk(clk),
 				.en(advance_pipeline),
 				.om(sr.om),
+				.ipl(sr.ipl),
 				.instr(instr[2]),
 				.regx(regx2),
 				.dbo(db2_r)
@@ -1858,6 +1872,7 @@ generate begin : gDecoders
 				.clk(clk),
 				.en(advance_pipeline),
 				.om(sr.om),
+				.ipl(sr.ipl),
 				.instr(instr[3]),
 				.regx(regx3),
 				.dbo(db3_r)
@@ -2002,10 +2017,10 @@ always_ff @(posedge clk) if (advance_pipeline) stomp0_q <= stomp0_r;
 always_ff @(posedge clk) if (advance_pipeline) stomp1_q <= stomp1_r;
 always_ff @(posedge clk) if (advance_pipeline) stomp2_q <= stomp2_r;
 always_ff @(posedge clk) if (advance_pipeline) stomp3_q <= stomp3_r;
-wire stomp0 = stomp0_q;
-wire stomp1 = stomp1_q;
-wire stomp2 = stomp2_q;
-wire stomp3 = stomp3_q;
+wire stomp0 = stomp0_q|stomp_q;
+wire stomp1 = stomp1_q|stomp_q;
+wire stomp2 = stomp2_q|stomp_q;
+wire stomp3 = stomp3_q|stomp_q;
 wire ornop1 = db0_q.bsr;
 wire ornop2 = db0_q.bsr || db1_q.bsr;
 wire ornop3 = db0_q.bsr || db1_q.bsr || db2_q.bsr;
@@ -2442,7 +2457,7 @@ assign wrport3_res = fpu0_res;
 assign wrport4_res = dram_bus1;
 assign wrport5_res = fpu1_res;
 
-Qupls_regfile4w15r urf1 (
+Qupls_regfile4w15r #(.RPORTS(17)) urf1 (
 	.rst(rst),
 	.clk(clk), 
 	.wr0(wrport0_v),
@@ -2469,6 +2484,7 @@ Qupls_regfile4w15r urf1 (
 always_ff @(posedge clk)
 begin
 	$display("wr0:%d Rt=%d/%d res=%x", wrport0_v, wrport0_aRt, wrport0_Rt, wrport0_res);
+	$display("wr1:%d Rt=%d/%d res=%x", wrport1_v, wrport1_aRt, wrport1_Rt, wrport1_res);
 	$display("wr2:%d Rt=%d/%d res=%x", wrport2_v, wrport2_aRt, wrport2_Rt, wrport2_res);
 end
 
@@ -2772,7 +2788,8 @@ Qupls_sched uscd1
 	.agen1_rndx(agen1_rndx),
 	.agen0_rndxv(agen0_rndxv),
 	.agen1_rndxv(agen1_rndxv),
-	.cpytgt0(alu0_cpytgt)
+	.cpytgt0(alu0_cpytgt),
+	.cpytgt1(alu1_cpytgt)
 );
 
 Qupls_mem_sched umems1
@@ -3646,7 +3663,6 @@ else begin
 		alu0_argI	<= rob[alu0_rndx].decbus.immb;
 		alu0_cs <= rob[alu0_rndx].decbus.Rcc;
 		alu0_Rt <= rob[alu0_rndx].nRt;
-		alu0_bank <= rob[alu0_rndx].om==2'd0 ? 1'b0 : 1'b1;
 		alu0_aRt <= rob[alu0_rndx].decbus.Rt;
 		alu0_aRtz <= rob[alu0_rndx].decbus.Rtz;
 		alu0_pred <= rob[alu0_rndx].decbus.pred;
@@ -3673,6 +3689,7 @@ if (rst) begin
 	alu1_argA <= 64'd0;
 	alu1_argB <= 64'd0;
 	alu1_argBI <= 64'd0;
+	alu1_argC <= 64'd0;
 	alu1_argI <= 64'd0;
 	alu1_argT <= 64'd0;
 	alu1_cs <= 1'b0;
@@ -3696,20 +3713,38 @@ else begin
 			alu1_argA <= rfo_alu1_argA;
 			alu1_argB <= rfo_alu1_argB;
 			alu1_argBI <= rob[alu1_rndx].decbus.immb | rfo_alu1_argB;
+			alu1_argC <= rfo_alu1_argC;
 			alu1_argI	<= rob[alu1_rndx].decbus.immb;
-			alu1_argT <= rfo_alu1_argT;
 			alu1_cs <= rob[alu1_rndx].decbus.Rcc;
-			alu1_Rt <= rob[alu1_rndx].nRt;
-			alu1_aRt <= rob[alu1_rndx].decbus.Rt;
-			alu1_aRtz <= rob[alu1_rndx].decbus.Rtz;
-			alu1_bank <= rob[alu1_rndx].om==2'd0 ? 1'b0 : 1'b1;
-			alu1_instr <= rob[alu1_rndx].op;
+			// Register C is the target register for pair instructions.
+			// Both ALUs see the same instruction.
+			if (rob[alu1_rndx].decbus.alu_pair) begin
+				alu1_argT <= rfo_alu1_argC;
+				alu1_Rt <= rob[alu1_rndx].pRc;
+				alu1_aRt <= rob[alu1_rndx].decbus.Rc;
+				alu1_aRtz <= ~|rob[alu1_rndx].decbus.Rc;
+			end
+			else begin
+				alu1_argT <= rfo_alu1_argT;
+				alu1_Rt <= rob[alu1_rndx].nRt;
+				alu1_aRt <= rob[alu1_rndx].decbus.Rt;
+				alu1_aRtz <= rob[alu1_rndx].decbus.Rtz;
+			end
 			alu1_div <= rob[alu1_rndx].decbus.div;
 			alu1_pc <= rob[alu1_rndx].pc;
 			alu1_cp <= rob[alu1_rndx].cndx;
 			alu1_pred <= rob[alu1_rndx].decbus.pred;
 			alu1_predz <= rob[alu1_rndx].decbus.predz;
+			alu1_cptgt <= alu1_cpytgt|rob[alu1_rndx].decbus.cpytgt;
 			alu1_prc <= rob[alu1_rndx].decbus.prc;
+			if (alu1_cpytgt|rob[alu1_rndx].decbus.cpytgt) begin
+				alu1_instr <= {33'd0,OP_NOP};
+				alu1_pred <= FALSE;
+				alu1_predz <= rob[alu1_rndx].decbus.cpytgt ? FALSE : rob[alu1_rndx].decbus.predz;
+				alu1_div <= FALSE;
+			end
+			else
+				alu1_instr <= rob[alu1_rndx].op;
 		end
 	end
 end
@@ -3851,7 +3886,7 @@ if (rst) begin
 end
 else begin
 	agen0_idle1 <= agen0_idle;
-	if (agen0_rndxv && agen0_idle1) begin
+	if (agen0_rndxv && agen0_idle) begin
 		agen0_id <= agen0_rndx;
 		agen0_argA <= rfo_agen0_argA;
 		agen0_argB <= rfo_agen0_argB;
@@ -3865,6 +3900,10 @@ else begin
 		agen0_aRt <= rob[agen0_rndx].decbus.Rt;
 		agen0_op <= rob[agen0_rndx].op;
 		agen0_cp <= rob[agen0_rndx].cndx;
+		store_argC_aReg <= rob[agen0_rndx].decbus.Rc;
+		store_argC_pReg <= rob[agen0_rndx].pRc;
+		store_argC_cndx <= rob[agen0_rndx].cndx;
+		store_argC_v <= rob[agen0_rndx].argC_v;
 	end
 end
 
@@ -4017,8 +4056,9 @@ else begin
 					// The register mapping will not have been updated in the RAT yet in
 					// time to be available for the source register.
 				if (db1_q.Ra==db0_q.Rt && db1_q.Ra!=9'd0) begin 
+					$display("Q+: 0) bypassed Ra to prev Rt");
 					rob[tail1].pRa <= Rt0_q;
-					rob[tail1].argA_v <= fnSourceAv(ins1_q) | db1_q.has_imma;
+					rob[tail1].argA_v <= fnSourceAv(ins1_q);
 					if (Rt0_q==11'd00) begin
 						$display("Enque1a: physical target register is zero.");
 					end
@@ -4086,9 +4126,9 @@ else begin
 				if (db3_q.Rb==db1_q.Rt && db3_q.Rb!=9'd0) begin rob[tail3].pRb <= Rt1_q; rob[tail3].argB_v <= fnSourceBv(ins3_q) | db3_q.has_immb | prnv[7]; end
 				if (db3_q.Rc==db1_q.Rt && db3_q.Rc!=9'd0) begin rob[tail3].pRc <= Rt1_q; rob[tail3].argC_v <= fnSourceCv(ins3_q) | db3_q.has_immc | prnv[7]; end
 				if (db3_q.Ra==db2_q.Rt && db3_q.Ra!=9'd0) begin
-					$display("Enque3: Ra bypassed to %d.", Rt2_q);
+					$display("Enque3: Ra bypassed to %d. v=", Rt2_q, fnSourceAv(ins3_q));
 					rob[tail3].pRa <= Rt2_q;
-					rob[tail3].argA_v <= fnSourceAv(ins3_q) | db3_q.has_imma;
+					rob[tail3].argA_v <= fnSourceAv(ins3_q);
 					if (Rt2_q==11'd00) begin
 						$display("Enque3a2: physical target register is zero.");
 					end
@@ -4158,7 +4198,7 @@ else begin
 
 	if (NALU > 1) begin
 		if (alu1_available && alu1_rndxv && alu1_idle) begin
-			alu1_idle <= !rob[alu1_rndx].decbus.multicycle;
+			alu1_idle <= rob[alu1_rndx].done[0];//!rob[alu1_rndx].decbus.multicycle;
 			alu1_idv <= VAL;
 			alu1_ld <= 1'b1;
 	    rob[alu1_rndx].out <= {VAL,VAL};
@@ -4193,13 +4233,9 @@ else begin
 		fcu_v <= VAL;
 	end
 
-	if (agen0_rndxv && agen0_idle1) begin
+	if (agen0_rndxv && agen0_idle) begin
 		agen0_idle <= FALSE;
 		agen0_idv <= VAL;
-		store_argC_aReg <= rob[agen0_rndx].decbus.Ra;
-		store_argC_pReg <= rob[agen0_rndx].pRc;
-		store_argC_cndx <= rob[agen0_rndx].cndx;
-		store_argC_v <= rob[agen0_rndx].argC_v;
 	  rob[agen0_rndx].out[0] <= VAL;
 	end
 
@@ -4207,7 +4243,7 @@ else begin
 		if (agen1_rndxv && agen1_idle) begin
 			agen1_idle <= FALSE;
 			agen1_idv <= VAL;
-			store_argC_aReg <= rob[agen1_rndx].decbus.Ra;
+			store_argC_aReg <= rob[agen1_rndx].decbus.Rc;
 			store_argC_pReg <= rob[agen1_rndx].pRc;
 			store_argC_cndx <= rob[agen1_rndx].cndx;
 			store_argC_v <= rob[agen1_rndx].argC_v;
@@ -4416,13 +4452,39 @@ else begin
 	end
 
 	if (NALU > 1 && rob[alu1_id].v && !rob[alu1_id].done[0] && alu1_idv) begin
-    alu1_idle <= TRUE;
-    alu1_idv <= INV;
     rob[ alu1_id ].exc <= alu1_exc;
     rob[ alu1_id ].excv <= |alu1_exc;
-    rob[ alu1_id ].done <= 2'b11;
-    rob[ alu1_id ].out <= {INV,INV};
- 		alu1_done <= TRUE;
+    rob[ alu1_id ].out[0] <= INV;
+    if (!rob[ alu1_id ].decbus.multicycle) begin
+	    alu1_idv <= INV;
+	    rob[ alu1_id ].done[0] <= VAL;
+	  end
+    if (!rob[ alu1_id ].decbus.fc) begin
+    	rob[ alu1_id ].done[1] <= TRUE;
+	    rob[ alu1_id ].out[1] <= INV;
+    	if (!rob[ alu1_id ].decbus.multicycle)
+	    	alu1_idle <= TRUE;
+    end
+    else
+    	alu1_idle <= TRUE;
+    if (!rob[ alu1_id ].decbus.multicycle) begin
+    	alu1_done <= TRUE;
+	    alu1_idle <= TRUE;
+	  end
+    if ((rob[ alu1_id ].decbus.mul || rob[ alu1_id ].decbus.mulu) && mul1_done) begin
+    	alu1_done <= TRUE;
+	    alu1_idle <= TRUE;
+	    alu1_idv <= INV;
+	    rob[ alu1_id ].done <= 2'b11;
+	    rob[ alu1_id ].out <= {INV,INV};
+  	end
+  	if (alu1_cptgt) begin
+    	alu1_done <= TRUE;
+	    alu1_idle <= TRUE;
+	    alu1_idv <= INV;
+	    rob[ alu1_id ].done <= 2'b11;
+	    rob[ alu1_id ].out <= {INV,INV};
+		end  		
 	end
 	
 	if (NFPU > 0 && !fpu0_idle && rob[fpu0_id].v && fpu0_idv) begin
@@ -5304,6 +5366,8 @@ always_ff @(posedge clk) begin: clock_n_debug
 	$display("Lengths: 0:%d  1:%d  2:%d  3:%d  4:%d  5:%d  6:%d  7:%d" , len0, len1, len2, len3, len4, len5, len6, len7);
 	$display("----- Instruction Extract ----- %s", stomp_x ? stompstr : no_stompstr);
 	$display("micro_ip: %h", micro_ip);
+	if (do_bsr && !stomp_x)
+		$display("BSR %h", bsr_tgt);
 	$display("pc 0: %h  1: %h  2: %h  3: %h  4: %h", pc0_x, pc1_x, pc2_x, pc3_x, pc4_x);
 	$display("line: %h", ic_line_x[511:0]);
 
@@ -5724,7 +5788,7 @@ begin
 	rob[tail].takb <= 1'b0;
 	rob[tail].exc <= FLT_NONE;
 	rob[tail].excv <= FALSE;
-	rob[tail].argA_v <= fnSourceAv(ins) | pRav | db.has_imma;
+	rob[tail].argA_v <= fnSourceAv(ins) | pRav;
 	rob[tail].argB_v <= fnSourceBv(ins) | pRbv | db.has_immb;
 	rob[tail].argC_v <= fnSourceCv(ins) | pRcv | db.has_immc;
 	rob[tail].argT_v <= fnSourceTv(ins) | pRtv;
@@ -6123,9 +6187,7 @@ reg [5:0] ino5;
 reg [63:0] disp;
 always_comb
 begin
-	ino = {2'd0,instr[26:25],instr[12:11]};
-	ino5 = {ino,2'd0} + ino;
-	disp = {{47{instr[39]}},instr[39:25],instr[12:11]};
+	disp = {{46{instr[39]}},instr[39:22]};
 	miss_mcip = 12'h1A0;
 
 	case (bts)
@@ -6155,7 +6217,7 @@ begin
 				tgtpc = {pc[$bits(pc_address_t)-1:6] + {{37{instr[39]}},instr[39:17]},ino5};
 			end
 			else
-				tgtpc = pc + {{37{instr[39]}},instr[39:13]};
+				tgtpc = pc + {{36{instr[39]}},instr[39:12]};
 		end
 	BTS_CALL:
 		begin
@@ -6164,11 +6226,11 @@ begin
 	// Must be tested before Ret
 	BTS_RTI:
 		begin
-			tgtpc = (instr[8:7]==2'd1 ? pc_stack[1] : pc_stack[0]) + instr[12:7];
+			tgtpc = (instr[8:7]==2'd1 ? pc_stack[1] : pc_stack[0]) + instr[11:7];
 		end
 	BTS_RET:
 		begin
-			tgtpc = argA + instr[10:7];
+			tgtpc = argA + instr[9:7];
 		end
 	default:
 		tgtpc = RSTPC;
@@ -6184,7 +6246,7 @@ begin
 	BTS_DISP:
 		begin
 			misspc = bt ? pc + 4'd5 : tgtpc;
-			miss_mcip = bt ? micro_ip + 3'd4 : instr[36:25];
+			miss_mcip = bt ? micro_ip + 3'd4 : instr[33:22];
 //			misspc = bt ? pc + 4'd5 : pc + {{47{instr[39]}},instr[39:25],instr[12:11]};
 		end
 	BTS_BSR:

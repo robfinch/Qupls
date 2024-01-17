@@ -120,7 +120,6 @@ begin
 			immb = {{43{ins[0].ins[39]}},ins[0].ins[39:19]};
 			has_immb = 1'b1;
 		end
-	OP_LDBIP,OP_LDBUIP,OP_LDWIP,OP_LDWUIP,OP_LDTIP,OP_LDTUIP,OP_LDOIP,
 	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_CACHE,
 	OP_STB,OP_STW,OP_STT,OP_STO:
 		begin

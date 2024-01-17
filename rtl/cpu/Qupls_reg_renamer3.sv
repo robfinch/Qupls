@@ -73,7 +73,7 @@ reg stalla0 = 1'b0;
 reg stalla1 = 1'b0;
 reg stalla2 = 1'b0;
 reg stalla3 = 1'b0;
-always_comb stall = 1'b0;//stalla0|stalla1|stalla2|stalla3;
+always_comb stall = stalla0|stalla1|stalla2|stalla3;
 
 always_comb stalla0 = ~avail[wo0];
 always_comb stalla1 = ~avail[wo1];

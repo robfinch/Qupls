@@ -44,7 +44,7 @@ function fnIsMuls;
 input instruction_t ir;
 begin
 	fnIsMuls = ir.any.opcode==OP_MULI ||
-		(ir.any.opcode==OP_R2 && (ir.r2.func==FN_MUL || ir.r2.func==FN_MULH))
+		(ir.any.opcode==OP_R2 && (ir.r2.func==FN_MUL || ir.r2.func==FN_MULW))
 		;
 end
 endfunction

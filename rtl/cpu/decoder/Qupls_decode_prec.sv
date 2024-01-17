@@ -38,9 +38,9 @@ import QuplsPkg::*;
 
 module Qupls_decode_prec(instr, prec);
 input instruction_t instr;
-output prec;
+output [1:0] prec;
 
-function fnPrec;
+function [1:0] fnPrec;
 input instruction_t ir;
 begin
 	case(ir.r2.opcode)

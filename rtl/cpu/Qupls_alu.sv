@@ -80,6 +80,7 @@ reg [WID-1:0] bus;
 reg [WID-1:0] blendo;
 reg [WID-1:0] immc6;
 reg [21:0] ii;
+reg [WID-1:0] sd;
 
 always_comb
 	ii = {{6{i[WID-1]}},i};
@@ -153,25 +154,102 @@ begin
 	case(ir.any.opcode)
 	OP_R2:
 		case(ir.r2.func)
-		FN_ADD:	bus = a + b + c;
+		FN_ADD:
+			case(ir[30:27])
+			4'd0:	bus = (a + b) & c;
+			4'd1:	bus = (a + b) & ~c;
+			4'd2: bus = (a + b) | c;
+			4'd3: bus = (a + b) | ~c;
+			4'd4: bus = (a + b) ^ c;
+			4'd5:	bus = (a + b) ^ ~c;
+			4'd8:	bus = (a + b) + c;
+			4'd9:	bus = (a + b) - c;
+			4'd10: bus = (a + b) + c + 2'd1;
+			4'd11: bus = (a + b) + c - 2'd1;
+			4'd12:
+				begin
+					sd = (a + b) + c;
+					bus = sd[WID-1] ? -sd : sd;
+				end
+			4'd13:
+				begin
+					sd = (a + b) - c;
+					bus = sd[WID-1] ? -sd : sd;
+				end
+			default:	bus = {WID{1'd0}};
+			endcase
 		FN_SUB:	bus = a - b - c;
 		FN_CMP,FN_CMPU:	bus = cmpo;
 		FN_MUL:	bus = prod[WID-1:0];
 		FN_MULU:	bus = produ[WID-1:0];
-		FN_MULH:	bus = prod[WID*2-1:WID];
-		FN_MULUH:	bus = produ[WID*2-1:WID];
+		FN_MULW:	bus = ALU0 ? prod[WID-1:0] : prod[WID*2-1:WID];
+		FN_MULUW:	bus = ALU0 ? produ[WID-1:0] : produ[WID*2-1:WID];
 		FN_DIV: bus = ALU0 ? div_q : zero;
 		FN_MOD: bus = ALU0 ? div_r : zero;
 		FN_DIVU: bus = ALU0 ? div_q : zero;
 		FN_MODU: bus = ALU0 ? div_r : zero;
-		FN_AND:	bus = a & b & ~c;
-		FN_OR:	bus = a | b | c;
-		FN_EOR:	bus = a ^ b ^ c;
-		FN_ANDC:	bus = a & ~b & ~c;
-		FN_NAND:	bus = ~(a & b & ~c);
-		FN_NOR:	bus = ~(a | b | c);
-		FN_ENOR:	bus = ~(a ^ b ^ c);
-		FN_ORC:	bus = a | ~b | c;
+		FN_AND:	
+			case(ir[30:27])
+			4'd0:	bus = (a & b) & c;
+			4'd1:	bus = (a & b) & ~c;
+			4'd2: bus = (a & b) | c;
+			4'd3: bus = (a & b) | ~c;
+			4'd4: bus = (a & b) ^ c;
+			4'd5:	bus = (a & b) ^ ~c;
+			default:	bus = {WID{1'd0}};
+			endcase
+		FN_OR:
+			case(ir[30:27])
+			4'd0:	bus = (a | b) & c;
+			4'd1:	bus = (a | b) & ~c;
+			4'd2: bus = (a | b) | c;
+			4'd3: bus = (a | b) | ~c;
+			4'd4: bus = (a | b) ^ c;
+			4'd5:	bus = (a | b) ^ ~c;
+			default:	bus = {WID{1'd0}};
+			endcase
+		FN_EOR:	
+			case(ir[30:27])
+			4'd0:	bus = (a ^ b) & c;
+			4'd1:	bus = (a ^ b) & ~c;
+			4'd2: bus = (a ^ b) | c;
+			4'd3: bus = (a ^ b) | ~c;
+			4'd4: bus = (a ^ b) ^ c;
+			4'd5:	bus = (a ^ b) ^ ~c;
+			default:	bus = {WID{1'd0}};
+			endcase
+		FN_CMOVZ: bus = a ? c : b;
+		FN_CMOVNZ:	bus = a ? b : c;
+		FN_NAND:
+			case(ir[30:27])
+			4'd0:	bus = ~((a & b) & c);
+			4'd1:	bus = ~((a & b) & ~c);
+			4'd2: bus = ~((a & b) | c);
+			4'd3: bus = ~((a & b) | ~c);
+			4'd4: bus = ~((a & b) ^ c);
+			4'd5:	bus = ~((a & b) ^ ~c);
+			default:	bus = {WID{1'd0}};
+			endcase
+		FN_NOR:
+			case(ir[30:27])
+			4'd0:	bus = ~((a | b) & c);
+			4'd1:	bus = ~((a | b) & ~c);
+			4'd2: bus = ~((a | b) | c);
+			4'd3: bus = ~((a | b) | ~c);
+			4'd4: bus = ~((a | b) ^ c);
+			4'd5:	bus = ~((a | b) ^ ~c);
+			default:	bus = {WID{1'd0}};
+			endcase
+		FN_ENOR:
+			case(ir[30:27])
+			4'd0:	bus = ~((a ^ b) & c);
+			4'd1:	bus = ~((a ^ b) & ~c);
+			4'd2: bus = ~((a ^ b) | c);
+			4'd3: bus = ~((a ^ b) | ~c);
+			4'd4: bus = ~((a ^ b) ^ c);
+			4'd5:	bus = ~((a ^ b) ^ ~c);
+			default:	bus = {WID{1'd0}};
+			endcase
 
 		FN_SEQ:	bus = a==b ? c : t;
 		FN_SNE:	bus = a!=b ? c : t;

@@ -817,32 +817,22 @@ static int is_reg(char *p, char **ep)
 	/* SP */
 	if ((p[n]=='s' || p[n]=='S') && (p[n+1]=='p' || p[n+1]=='P') && !ISIDCHAR((unsigned char)p[n+2])) {
 		*ep = &p[n+2];
-		return (63);
+		return (31);
 	}
 	/* FP */
 	if ((p[n]=='f' || p[n]=='F') && (p[n+1]=='p' || p[n+1]=='P') && !ISIDCHAR((unsigned char)p[n+2])) {
 		*ep = &p[n+2];
-		return (62);
+		return (30);
 	}
 	/* GP */
 	if ((p[n]=='g' || p[n]=='G') && (p[n+1]=='p' || p[n+1]=='P') && !ISIDCHAR((unsigned char)p[n+2])) {
 		*ep = &p[n+2];
-		return (61);
+		return (29);
 	}
 	/* GP0 */
 	if ((p[n]=='g' || p[n]=='G') && (p[n+1]=='p' || p[n+1]=='P') && p[n+2]=='0' && !ISIDCHAR((unsigned char)p[n+3])) {
 		*ep = &p[n+3];
-		return (61);
-	}
-	/* GP1 */
-	if ((p[n]=='g' || p[n]=='G') && (p[n+1]=='p' || p[n+1]=='P') && p[n+2]=='1' && !ISIDCHAR((unsigned char)p[n+3])) {
-		*ep = &p[n+3];
-		return (60);
-	}
-	/* GP2 */
-	if ((p[n]=='g' || p[n]=='G') && (p[n+1]=='p' || p[n+1]=='P') && p[n+2]=='2' && !ISIDCHAR((unsigned char)p[n+3])) {
-		*ep = &p[n+3];
-		return (51);
+		return (29);
 	}
 	/* Argument registers 0 to 9 */
 	if (p[n] == 'a' || p[n]=='A') {
@@ -1520,6 +1510,8 @@ static thuge calc_branch_disp(thuge val, taddr pc, int opt)
 {
 	uint64_t ino;
 	uint64_t pg_offs;
+	thuge pcx2;
+	thuge valx2;
 
 #ifdef BRANCH_PGREL        	
 	ino = (val.lo & 0x3fLL) >> 2LL;
@@ -1540,9 +1532,14 @@ static thuge calc_branch_disp(thuge val, taddr pc, int opt)
 	val.lo |= ino;
 #endif
 #ifdef BRANCH_PCREL
-	val = hsub(val,huge_from_int(pc));
+
+	valx2 = hmul(val,huge_from_int(2LL));
+	pcx2 = hmul(huge_from_int(pc),huge_from_int(2LL));
+	val = hsub(valx2,pcx2);
 	if (opt)
-		val = hdiv(val,huge_from_int(5));
+		val = hdiv(val,huge_from_int(9LL));
+	else
+		val = hdiv(val,huge_from_int(2LL));
 #endif
 	return (val);
 }
@@ -1554,6 +1551,7 @@ static thuge make_reloc(int reloctype,operand *op,section *sec,
   thuge val;
   thuge shl64;
 	uint64_t ino;
+	char pc_is_odd = pc & 1LL;
 
 	TRACE("M ");
 	*constexpr = 1;
@@ -1694,35 +1692,15 @@ static thuge make_reloc(int reloctype,operand *op,section *sec,
         case RIMV:
         case RTDI:
         	if (is_nbit(addend,21)) {
-			      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
-                           19,21,0,0x1fffffLL);
+		      	add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
+                          19,21,0,0x1fffffLL);
         	}	/* ToDo: fix for 31 bits and above */
-        	else if (is_nbit(addend,32)) {
-			      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
-                           8,32,5,0xffffffffLL);
-        	}
-        	else if (is_nbit(addend,64)) {
-			      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
-                           8,32,5,0xffffffffLL);
-            shl64 = hshl(addend,32LL);
-			      add_extnreloc_masked(reloclist,base,shl64.lo,reloctype,
-                           8,32,10,0xffffffffLL);
-        	}
-        	else {
-			      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
-                           8,32,5,0xffffffffLL);
-            shl64 = hshl(addend,32LL);
-			      add_extnreloc_masked(reloclist,base,shl64.lo,reloctype,
-                           8,32,10,0xffffffffLL);
-			      add_extnreloc_masked(reloclist,base,shl64.lo,reloctype,
-                           8,32,15,0xffffffff00000000LL);
-        	}
         	break;
 
         case DIRECT:
         	if (is_nbit(addend,21)) {
-			      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
-                           19,21,0,0x1fffffLL);
+		      	add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
+                          19,21,0,0x1fffffLL);
         	}
         	else {	// abits > 64
 	          goto illreloc;
@@ -1733,18 +1711,8 @@ static thuge make_reloc(int reloctype,operand *op,section *sec,
         	if (op->basereg==sdreg) {
         		reloctype = REL_SD;
 	        	if (is_nbit(addend,21)) {
-				      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
-	                           19,21,0,0x1fffffLL);
-	        	}
-	        	else {	// abits > 64
-		          goto illreloc;
-	        	}
-        	}
-        	else if (op->basereg==pcreg) {
-        		reloctype = REL_PC;
-	        	if (is_nbit(addend,21)) {
-				      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
-	                           19,21,0,0x1fffffLL);
+				      	add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
+                           19,21,0,0x1fffffLL);
 	        	}
 	        	else {	// abits > 64
 		          goto illreloc;
@@ -1752,8 +1720,8 @@ static thuge make_reloc(int reloctype,operand *op,section *sec,
         	}
         	else {
 	        	if (is_nbit(addend,21)) {
-				      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
-	                           19,21,0,0x1fffffLL);
+			      	add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
+                           19,21,0,0x1fffffLL);
 	        	}
 	        	else {	// abits > 64
 		          goto illreloc;
@@ -2350,7 +2318,10 @@ static size_t encode_immed (
 
 	val = hval;
 	if (constexpr) {
-		if (mnemo->ext.format==LDI) {
+		if (mnemo->ext.format==RI) {
+			isize = encode_immed_RI(insn, val, i, pc, sec, ip);
+		}
+		else if (mnemo->ext.format==LDI) {
 			isize = encode_immed_LDI(insn, val, i);
 		}
 		else if (mnemo->ext.format==SI) {
@@ -2738,9 +2709,7 @@ static size_t encode_branch_B(instruction_buf* insn, operand* op, int64_t val, i
 #ifdef BRANCH_PCREL		
 		case 2:
 	  	if (insn) {
-  			tgt = ((val & 3LL) << 11LL);
-  			insn->opcode |= tgt;
-  			tgt = (((val & 0x1ffffLL) >> 2LL) << 25LL);
+  			tgt = (((val & 0x3ffffLL)) << 22LL);
   			insn->opcode |= tgt;
   		}
 			break;
@@ -2761,19 +2730,10 @@ static void encode_branch_BL2(instruction_buf* insn, operand* op, int64_t val, i
 	if (op->type == OP_IMM) {
 		if (insn) {
 			switch(i) {
-#ifdef BRANCH_INO
 			case 1:
-  			tgt = ((val & 0xfLL) << 13LL);
-  			insn->opcode |= tgt;
-  			tgt = (((val & 0x7ffffffLL) >> 4LL) << 17LL);
+  			tgt = ((val & 0xfffffffLL) << 12LL);
   			insn->opcode |= tgt;
 		  	break;
-#else				
-			case 1:
-  			tgt = ((val & 0x7ffffffLL) << 13LL);
-  			insn->opcode |= tgt;
-		  	break;
-#endif		  	
 			}
 		}
 	}
@@ -3466,6 +3426,11 @@ static int will_fit_in_block(taddr pc, size_t sz)
 #endif
 }
 
+static int is_last_in_block(taddr pc)
+{
+	return ((pc & 0x3fLL) >= 59LL);
+}
+
 static void convert_opcode_to_r3(instruction_buf* insn, int64_t* pOpcode)
 {
 	int64_t op;
@@ -3705,6 +3670,7 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
 	static int icnt = 0;
 	static int grpcnt = 0;
 	static taddr prev_pc = 0;
+	static uint64_t prev_insn;
 	int will_fit = 1;
 	int has_imm = 0;
 	int pc_wrapped = 0;
@@ -3716,207 +3682,22 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
 	memset(&insn,0,sizeof(insn));
 	sz = encode_qupls_instruction(ip,sec,pc,&modifier1,&modifier2,&insn,NULL);
 	sz = sz + (modifier1 >> 48LL) + (modifier2 >> 48LL);
-#ifdef SUPPORT_PFX_IMM	
-	sz = sz + insn.pfxa.size + insn.pfxb.size + insn.pfxc.size;
-#endif
 
-//	if (sz != ip->ext.size)
-//		printf("sizediff2\n");
-	if (bundleWidth != 128) {
-		final_sz = 0;
-		for (pcd = pc, szd = sz; szd > 0; szd -= 5) {
-			if ((pcd & 15)==15) {
-				pcd++;
-				final_sz++;
-			}
-			pcd += 5;
-			final_sz += 5;
-		}
-	}
-	else {
-		final_sz = sz;
-	}
-#ifdef SUPPORT_PFX_IMM
-	final_sz = final_sz;
-#endif
-#ifdef SUPPORT_SI_IMM
-	if (insn.imm0)
-		final_sz += 5;
-	if (insn.imm1)
-		final_sz += 5;
-	if (insn.imm2)
-		final_sz += 5;
-	if (insn.imm3)
-		final_sz += 5;
-	has_imm = insn.imm0|insn.imm1|insn.imm2|insn.imm3;
-#endif
-
+	final_sz = sz;
   if (db) {
     uint8_t *d;
     unsigned char *d2;
     int i;
-#ifdef SUPPORT_IBH
-		// did the block change?
-		if ((prev_pc & 0xffffffffffffffc0LL) != (pc & 0xffffffffffffffc0LL))
-			block_changed = 1;
-		// If the instruction will fit into the block, things are easy and 
-		// straight-forward.    
-  	if (will_fit = (will_fit_in_block(pc, final_sz) || mnemo->ext.format==PADI)) {
-  		//if (block_changed)
- 			//	final_sz += pc - prev_pc + final_sz;
-			/*
-  		if ((pc & 0x3f) == 1LL) {
-  			final_sz += 4;
-  			pc_wrapped = 1;
-  			pc &= 0xffffffffffffffc0LL;
-  		}
-  		*/
-  		d = db->data = mymalloc(final_sz);
-  		/*
-  		if (block_changed) {
-  			while ((prev_pc & 0x3fLL) < 0x3cLL) {
-  				d = setval(0,d,1,0xffL);
-  				prev_pc++;
-  			}
-  			trailer = d;
-  			d += 4;
-  		}
-  		*/
-  		/*
-  		if (pc_wrapped) {
-  			trailer = d;
-  			d += 4;
-  		}
-  		*/
-	    db->size = final_sz;
-			memset(&insn,0,sizeof(insn));
-  		encode_qupls_instruction(ip,sec,pc,&modifier1,&modifier2,&insn,db);
-  		last_pc = pc;
-  	}
-  	// Won't fit?
-  	// Move instruction to the next block. This entails aligning the IP to the
-  	// block and re-encoding the instruction as the IP of it chanaged over what
-  	// was previously encoded.
-  	else {
-  		taddr apc;		// block aligned PC
-  		// Update the current trailer with offsets of instruction groups.
-  		last_pc = pc;
-  		npc = pc + final_sz;
-  		// Compute the bytes remaining in the block, not including the size of
-  		// the block header (trailer really).
-  		bytes_remaining = (64LL - (pc & 0x3fLL)) - 4LL;
-  		apc = (pc + 64LL) & ~0x3fLL;		// align IP
-			memset(&insn,0,sizeof(insn));
-  		encode_qupls_instruction(ip,sec,pc,&modifier1,&modifier2,&insn,db);
-  		pc = apc;
-  		if (bytes_remaining < 0) {
-  			printf("bad bytes remaining.\n");
-  			db->size = 0;
-  			return (db);
-  		}
-  		// Allocate the data block and pad the first part of it with NOPs for the
-  		// bytes remaining in the block. This is just a safety measure that allows
-  		// the CPU to execute the bytes including the block header, if something
-  		// goes awry.
-  		to_allocate = final_sz + bytes_remaining + 4LL;
-  		db->data = mymalloc(to_allocate);
-	    db->size = to_allocate;
-  		// NOP out bytes remaining in previous block.
-  		d = db->data;
-  		for (i = 0; i < bytes_remaining; i++)
-  			d[i] = 0xff;
-  		qupls_padding_bytes += bytes_remaining;	// statistics
-  		
-	    d = db->data + bytes_remaining + 4LL;		// Now point to instruction area.
-  		trailer = db->data + bytes_remaining;		// and get pointer to trailer
-  	}
-  	if (mnemo->ext.format==PADI) {
-  		trailer = d + db->size - 4;
-  	}
-#else
-#if SUPPORT_SI_IMM
-		if (will_fit_in_block(pc,final_sz)) {
-			d = db->data = mymalloc(final_sz);
-  	  db->size = final_sz;	
-		}
-		else {
-			final_sz += 4LL;	// add room for block trailer
-			d = db->data = mymalloc(final_sz);
-  	  db->size = final_sz;	
-		}
-#else
-		d = db->data = mymalloc(final_sz);
-    db->size = final_sz;
-#endif
+
+		d = db->data = mymalloc(5);
+		db->size = 5;
 		memset(&insn,0,sizeof(insn));
 		encode_qupls_instruction(ip,sec,pc,&modifier1,&modifier2,&insn,db);
-#endif
 		insn_sizes2[sz2ndx] = db->size;
-/*
-		if (modifier1 >> 48LL) {
-			if ((pc & 15)==15 && bundleWidth==120) {
-				pc++;
-		    d = setval(0,d,1,0xffL);
-		  }
-	    d = setval(0,d,5,modifier1 & 0xffffffffffLL);
-	    pc += 5;
-	    insn_count++;
-	  }
-		if (modifier2 >> 48LL) {
-			if ((pc & 15)==15 && bundleWidth==120) {
-				pc++;
-		    d = setval(0,d,1,0xffL);
-		  }
-	    d = setval(0,d,5,modifier2 & 0xffffffffffLL);
-	    pc += 5;
-	    insn_count++;
-	  }
-*/
-		if ((pc & 15)==15 && bundleWidth==120) {
-			pc++;
-	    d = setval(0,d,1,0xffL);
-	  }
-	  d2 = d;
-#ifdef SUPPORT_SI_IMM
-	  if (insn.imm0)
-			d = out_si_imm(pc, &pc, insn.imm0, d);
-	  if (insn.imm1)
-			d = out_si_imm(pc, &pc, insn.imm1, d);
-	 	if (insn.imm2)
-			d = out_si_imm(pc, &pc, insn.imm2, d);
-	  if (insn.imm3)
-			d = out_si_imm(pc, &pc, insn.imm3, d);
-	  if (has_imm) {
-	  	convert_opcode_to_r3(&insn, &insn.opcode);
-	  	//insn.opcode &= 0x3ffffLL;
-	  	//insn.opcode |= RC(51LL)|0x8000000000;
-	  }
-		d = out_si_imm(pc, &pc, insn.opcode, d);
-#else		
-		// Finally, output the code bytes.
-    d = setval(0,d,insn.size,insn.opcode);
-//    d = setval(0,d,5,insn.opcode);
-		pc += insn.size;	// should be 5
+
+		// Output the code bytes.
+    d = setval(0,d,db->size,insn.opcode);
    	qupls_insn_count++;
-#endif
-   	// We count postfixes as instructions. It helps make the code density
-   	// statistic look better, and they roughly correspond to additional
-   	// instructions, although they are processed as a unit with the 
-   	// preceding instruction.
-#ifdef SUPPORT_PFX_IMM
-    if (insn.pfxa.size) {
-    	d = encode_pfx(d, &insn.pfxa,0);
-   		pc += insn.pfxa.size;
-    }
-    if (insn.pfxb.size) {
-    	d = encode_pfx(d, &insn.pfxb,1);
-   		pc += insn.pfxb.size;
-    }
-    if (insn.pfxc.size) {
-    	d = encode_pfx(d, &insn.pfxc,2);
-   		pc += insn.pfxc.size;
-  	}
-#endif
 	  /* Debugging
 		while (db->size < insn_sizes1[sz2ndx]) {
 	    d = setval(0,d,5,0x9fLL);	// NOP
@@ -3928,31 +3709,8 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
 		/* Finally, output the trailer (header) once an instruction will not fit at
 		   the end of a block. The trailer is encoded as a debug breakpoint.
 		*/
-#ifdef SUPPORT_IBH
-		icnt++;
-		if (!will_fit || mnemo->ext.format==PADI) {
-			icnt = 0;
-			grpcnt = 0;
-			trailer_val = ((last_pc & 0x3fLL) << 16LL) | OPC(0LL) | (33LL << 7LL);
-			if (trailer)
-  			setval(0,trailer,4,trailer_val);
-  		trailer_val = 0;
-  		qupls_header_bytes += 4;	/* more stats */
-  	}
-  	// "Dead" code.
-		if (icnt==4) {
-			icnt = 0;
-			trailer_val = ((pc & 0x3fLL) << 8LL) | 0xffLL;
-/*			trailer_val = trailer_val | ((pc & 0x3fLL) << (6LL * grpcnt)); */
-			grpcnt++;
-			if (grpcnt > 5) {
-				grpcnt = 0;
-			}
-		}
-#endif		
     qupls_byte_count += db->size;	/* and more stats */
   }
-	prev_pc = pc;
   return (db);
 }
 

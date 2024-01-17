@@ -593,7 +593,7 @@ void PeepList::OptConstReg()
 	Operand *top;
 	int n;
 	int count = 0;
-
+	
 	for (n = 0; n < nregs; n++) {
 		if (regs[n].assigned && !regs[n].modified && regs[n].isConst && regs[n].offset != nullptr)
 			regs[n].sub = true;
@@ -609,9 +609,12 @@ void PeepList::OptConstReg()
 				if (ip->oper2->mode == am_reg) {
 					mr = &regs[ip->oper2->preg];
 					if (mr->assigned && !mr->modified && mr->isConst && mr->offset != nullptr) {
-						top = ip->oper2;
-						ip->oper2 = ip->oper3;
-						ip->oper3 = top;
+						// Leave large constants in registers.
+						if (mr->offset->i128.IsNBit(21)) {
+							top = ip->oper2;
+							ip->oper2 = ip->oper3;
+							ip->oper3 = top;
+						}
 					}
 				}
 			}

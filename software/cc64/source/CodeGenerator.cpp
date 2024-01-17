@@ -1379,7 +1379,21 @@ Operand* CodeGenerator::GenerateAssignAdd(ENODE* node, int flags, int size, int 
 	ap1 = GenerateExpression(node->p[0], am_all,/*Instruction::Get(op)->amclass1,*/ ssize, 0);	// must allow memory here
 	ap2 = GenerateExpression(node->p[1], Instruction::Get(op)->amclass3, size, 1);
 	if (ap1->mode == am_reg) {
+		// Check if an immediate value will fit into the 21-bit immediate field. If
+		// not it needs to be loaded into a register.
+		if (ap2->mode == am_imm) {
+			if (ap2->offset) {
+				if (!ap2->offset->i128.IsNBit(21)) {
+					ap3 = GetTempRegister();
+					cg.GenerateLoadConst(ap2, ap3);
+					GenerateTriadic(op, 0, ap1, ap1, ap3);
+					ReleaseTempRegister(ap3);
+					goto j1;
+				}
+			}
+		}
 		GenerateTriadic(op, 0, ap1, ap1, ap2);
+j1:
 		if (intreg) {
 			mr = &regs[ap1->preg];
 			if (mr->assigned)
@@ -1461,14 +1475,28 @@ Operand *CodeGenerator::GenerateAssignMultiply(ENODE *node,int flags, int size, 
     ap2 = GenerateExpression(node->p[1],am_reg | am_imm,size,1);
   }
 	if (ap1->mode==am_reg) {
-	    GenerateTriadic(op,0,ap1,ap1,ap2);
-			if (op == op_mulu || op == op_mul) {
-				mr = &regs[ap1->preg];
-				if (mr->assigned)
-					mr->modified = true;
-				mr->assigned = true;
-				mr->isConst = ap1->isConst && ap2->isConst;
+		// Check if an immediate value will fit into the 21-bit immediate field. If
+		// not it needs to be loaded into a register.
+		if (ap2->mode == am_imm) {
+			if (ap2->offset) {
+				if (!ap2->offset->i128.IsNBit(21)) {
+					ap3 = GetTempRegister();
+					cg.GenerateLoadConst(ap2, ap3);
+					GenerateTriadic(op, 0, ap1, ap1, ap3);
+					ReleaseTempRegister(ap3);
+					goto j1;
+				}
 			}
+		}
+		GenerateTriadic(op,0,ap1,ap1,ap2);
+j1:
+		if (op == op_mulu || op == op_mul) {
+			mr = &regs[ap1->preg];
+			if (mr->assigned)
+				mr->modified = true;
+			mr->assigned = true;
+			mr->isConst = ap1->isConst && ap2->isConst;
+		}
 	}
 	else if (ap1->tp->IsFloatType()) {
 		ap3 = GetTempRegister();
@@ -2812,9 +2840,6 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int64_t size,
 	case en_not:	
 		ap1 = (node->GenerateUnary(flags, sizeOfWord, op_not));
 		goto retpt;
-	case en_add:    ap1 = GenerateBinary(node, flags, size, op_add); goto retpt;
-	case en_sub:  ap1 = GenerateBinary(node, flags, size, op_sub); goto retpt;
-	case en_ptrdif:  ap1 = GenerateBinary(node, flags, size, op_ptrdif); goto retpt;
 	case en_i2p:
 		ap1 = GetTempFPRegister();
 		ap2 = GenerateExpression(node->p[0], am_reg, 8, rhs);
@@ -2944,6 +2969,9 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int64_t size,
 		goto retpt;
 
 	case en_isnullptr:	ap1 = node->GenerateUnary(flags, size, op_isnullptr); goto retpt;
+	case en_add:    ap1 = GenerateBinary(node, flags, size, op_add); goto retpt;
+	case en_sub:  ap1 = GenerateBinary(node, flags, size, op_sub); goto retpt;
+	case en_ptrdif:  ap1 = GenerateBinary(node, flags, size, op_ptrdif); goto retpt;
 	case en_and:    ap1 = GenerateBinary(node, flags, size, op_and); goto retpt;
   case en_or:     ap1 = GenerateBinary(node,flags,size,op_or); goto retpt;
 	case en_xor:	ap1 = GenerateBinary(node, flags,size,op_xor); goto retpt;
@@ -4232,7 +4260,7 @@ void CodeGenerator::GenerateReturn(Function* func, Statement* stmt)
 
 Operand* CodeGenerator::GenerateBinary(ENODE* node, int flags, int size, int op)
 {
-	Operand* ap1 = nullptr, * ap2 = nullptr, * ap3, * ap4;
+	Operand* ap1 = nullptr, * ap2 = nullptr, * ap3, * ap4, *ap5;
 	bool dup = false;
 
 	if (node->IsFloatType())
@@ -4305,18 +4333,27 @@ Operand* CodeGenerator::GenerateBinary(ENODE* node, int flags, int size, int op)
 			}
 			else {
 				if (ap2->mode == am_imm) {
+					// Check if an immediate value will fit into the 21-bit immediate field. If
+					// not it needs to be loaded into a register.
+					ap5 = nullptr;
+					if (ap2->offset) {
+						if (!ap2->offset->i128.IsNBit(21)) {
+							ap5 = GetTempRegister();
+							cg.GenerateLoadConst(ap2, ap5);
+						}
+					}
 					switch (op) {
 					case op_and:
-						GenerateTriadic(op, 0, ap3, ap1, MakeImmediate(ap2->offset->i));
+						GenerateTriadic(op, 0, ap3, ap1, ap5 ? ap5 : MakeImmediate(ap2->offset->i));
 						break;
 					case op_or:
-						GenerateTriadic(op, 0, ap3, ap1, MakeImmediate(ap2->offset->i));
+						GenerateTriadic(op, 0, ap3, ap1, ap5 ? ap5 : MakeImmediate(ap2->offset->i));
 						break;
 						// If there is a pointer plus a constant we really wanted an address calc.
 					case op_add:
 					case op_sub:
 						if (ap1->isPtr && ap2->isPtr)
-							GenerateTriadic(op, 0, ap3, ap1, ap2);
+							GenerateTriadic(op, 0, ap3, ap1, ap5 ? ap5 : ap2);
 						else if (ap2->isPtr) {
 							GenerateLoadAddress(ap3, op == op_sub ? compiler.of.MakeNegIndexed(ap2->offset, ap1->preg) : MakeIndexed(ap2->offset, ap1->preg));
 							//if (!compiler.os_code) {
@@ -4327,12 +4364,14 @@ Operand* CodeGenerator::GenerateBinary(ENODE* node, int flags, int size, int op)
 							//}
 						}
 						else {
-							GenerateTriadic(op, 0, ap3, ap1, ap2);
+							GenerateTriadic(op, 0, ap3, ap1, ap5 ? ap5 : ap2);
 						}
 						break;
 					default:
-						GenerateTriadic(op, 0, ap3, ap1, ap2);
+						GenerateTriadic(op, 0, ap3, ap1, ap5 ? ap5 : ap2);
 					}
+					if (ap5)
+						ReleaseTempRegister(ap5);
 				}
 				else
 					GenerateTriadic(op, 0, ap3, ap1, ap2);
