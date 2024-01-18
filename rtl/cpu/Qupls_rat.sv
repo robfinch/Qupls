@@ -132,7 +132,7 @@ output pregno_t freed;
 output reg [PREGS-1:0] free_bitlist;	// bit vector of registers to free on branch miss
 
 
-integer n,m,n1,n2,n3;
+integer n,m,n1,n2,n3,n4;
 reg cpram_we;
 localparam RAMWIDTH = AREGS*BANKS*RBIT+PREGS;
 checkpoint_t cpram_out;
@@ -243,6 +243,16 @@ always_comb cpv_i[4] = INV;
 always_comb cpv_i[5] = INV;
 always_comb cpv_i[6] = INV;
 always_comb cpv_i[7] = INV;
+
+// Setup for bypassing
+reg [13:0] prev_cpv [0:7];
+reg [7:0] prev_cpv_i;
+always_ff @(posedge clk)
+if (en)
+	for (n4 = 0; n4 < 8; n4 = n4 + 1) begin
+		prev_cpv[n4] <= {cpv_wa[n4],cpv_wc[n4]};
+		prev_cpv_i[n4] <= cpv_i[n4];
+	end
 
 Qupls_checkpoint_valid_ram4 #(.NRDPORT(NPORT)) ucpr2
 (
@@ -359,6 +369,22 @@ generate begin : gRRN
 							vn[g] = 1'b1;
 						else if (rrn[g]==10'd1023)
 							vn[g] = 1'b1;
+						else if ({rrn[g],rn_cp[g]}==prev_cpv[0])
+							vn[g] = prev_cpv_i[0];
+						else if ({rrn[g],rn_cp[g]}==prev_cpv[4])
+							vn[g] = prev_cpv_i[4];
+						else if ({rrn[g],rn_cp[g]}==prev_cpv[1])
+							vn[g] = prev_cpv_i[1];
+						else if ({rrn[g],rn_cp[g]}==prev_cpv[5])
+							vn[g] = prev_cpv_i[5];
+						else if ({rrn[g],rn_cp[g]}==prev_cpv[2])
+							vn[g] = prev_cpv_i[2];
+						else if ({rrn[g],rn_cp[g]}==prev_cpv[6])
+							vn[g] = prev_cpv_i[6];
+						else if ({rrn[g],rn_cp[g]}==prev_cpv[3])
+							vn[g] = prev_cpv_i[3];
+						else if ({rrn[g],rn_cp[g]}==prev_cpv[7])
+							vn[g] = prev_cpv_i[7];
 						else
 							vn[g] = cpv_o[g];
 					end
@@ -368,6 +394,22 @@ generate begin : gRRN
 						vn[g] = 1'b1;
 					else if (rrn[g]==10'd1023)
 						vn[g] = 1'b1;
+					else if ({rrn[g],rn_cp[g]}==prev_cpv[0])
+						vn[g] = prev_cpv_i[0];
+					else if ({rrn[g],rn_cp[g]}==prev_cpv[4])
+						vn[g] = prev_cpv_i[4];
+					else if ({rrn[g],rn_cp[g]}==prev_cpv[1])
+						vn[g] = prev_cpv_i[1];
+					else if ({rrn[g],rn_cp[g]}==prev_cpv[5])
+						vn[g] = prev_cpv_i[5];
+					else if ({rrn[g],rn_cp[g]}==prev_cpv[2])
+						vn[g] = prev_cpv_i[2];
+					else if ({rrn[g],rn_cp[g]}==prev_cpv[6])
+						vn[g] = prev_cpv_i[6];
+					else if ({rrn[g],rn_cp[g]}==prev_cpv[3])
+						vn[g] = prev_cpv_i[3];
+					else if ({rrn[g],rn_cp[g]}==prev_cpv[7])
+						vn[g] = prev_cpv_i[7];
 					else if (rrn[g]==cpv_wa[0] && cpv_wr[0] && cpv_wc[0]==rn_cp[g])
 						vn[g] = cpv_i[0];
 					else if (rrn[g]==cpv_wa[4] && cpv_wr[4] && cpv_wc[4]==rn_cp[g])
@@ -380,6 +422,22 @@ generate begin : gRRN
 						vn[g] = 1'b1;
 					else if (rrn[g]==10'd1023)
 						vn[g] = 1'b1;
+					else if ({rrn[g],rn_cp[g]}==prev_cpv[0])
+						vn[g] = prev_cpv_i[0];
+					else if ({rrn[g],rn_cp[g]}==prev_cpv[4])
+						vn[g] = prev_cpv_i[4];
+					else if ({rrn[g],rn_cp[g]}==prev_cpv[1])
+						vn[g] = prev_cpv_i[1];
+					else if ({rrn[g],rn_cp[g]}==prev_cpv[5])
+						vn[g] = prev_cpv_i[5];
+					else if ({rrn[g],rn_cp[g]}==prev_cpv[2])
+						vn[g] = prev_cpv_i[2];
+					else if ({rrn[g],rn_cp[g]}==prev_cpv[6])
+						vn[g] = prev_cpv_i[6];
+					else if ({rrn[g],rn_cp[g]}==prev_cpv[3])
+						vn[g] = prev_cpv_i[3];
+					else if ({rrn[g],rn_cp[g]}==prev_cpv[7])
+						vn[g] = prev_cpv_i[7];
 					else if (rrn[g]==cpv_wa[1] && cpv_wr[1] && cpv_wc[1]==rn_cp[g])
 						vn[g] = cpv_i[1];
 					else if (rrn[g]==cpv_wa[5] && cpv_wr[5] && cpv_wc[5]==rn_cp[g])
@@ -397,6 +455,22 @@ generate begin : gRRN
 							vn[g] = 1'b1;
 						else if (rrn[g]==10'd1023)
 							vn[g] = 1'b1;
+						else if ({rrn[g],rn_cp[g]}==prev_cpv[0])
+							vn[g] = prev_cpv_i[0];
+						else if ({rrn[g],rn_cp[g]}==prev_cpv[4])
+							vn[g] = prev_cpv_i[4];
+						else if ({rrn[g],rn_cp[g]}==prev_cpv[1])
+							vn[g] = prev_cpv_i[1];
+						else if ({rrn[g],rn_cp[g]}==prev_cpv[5])
+							vn[g] = prev_cpv_i[5];
+						else if ({rrn[g],rn_cp[g]}==prev_cpv[2])
+							vn[g] = prev_cpv_i[2];
+						else if ({rrn[g],rn_cp[g]}==prev_cpv[6])
+							vn[g] = prev_cpv_i[6];
+						else if ({rrn[g],rn_cp[g]}==prev_cpv[3])
+							vn[g] = prev_cpv_i[3];
+						else if ({rrn[g],rn_cp[g]}==prev_cpv[7])
+							vn[g] = prev_cpv_i[7];
 						else if (rrn[g]==cpv_wa[2] && cpv_wr[2] && cpv_wc[2]==rn_cp[g]) begin
 							$display("2matched:%d=%d",rrn[g],cpv_i[2]);
 							vn[g] = cpv_i[2];

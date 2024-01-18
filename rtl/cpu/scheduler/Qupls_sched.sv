@@ -351,7 +351,7 @@ always_ff @(posedge clk) could_issue[g] =
 													 rob[g].v
 //												&& !stomp_i[g]
 												&& !(&rob[g].done)
-												&& (args_valid[g]||rob[g].decbus.cpytgt)
+												&& (args_valid[g]||(rob[g].decbus.cpytgt && rob[g].argT_v))
 												&& !fnPriorFalsePred(g)
 												&& !fnPriorSync(g)
 												&& !robentry_issue[g]

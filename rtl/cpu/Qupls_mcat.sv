@@ -37,12 +37,15 @@
 //
 import QuplsPkg::*;
 
-module Qupls_mcat(ir, mip);
+module Qupls_mcat(stomp, ir, mip);
+input stomp;
 input ex_instruction_t ir;
 output mc_address_t mip;
 
 always_comb
-begin
+if (stomp)
+	mip = 12'h000;
+else begin
 	casez(ir.ins.any.opcode)
 	OP_SYS:		mip = 12'h130;
 	OP_ENTER:	mip = 12'h004;

@@ -68,6 +68,7 @@ Qupls_decode_imm udcimm
 Qupls_decode_Ra udcra
 (
 	.om(om),
+	.ipl(ipl),
 	.instr(ins),
 	.regx(regx[1]),
 	.has_imma(db.has_imma),
@@ -77,6 +78,7 @@ Qupls_decode_Ra udcra
 Qupls_decode_Rb udcrb
 (
 	.om(om),
+	.ipl(ipl),
 	.instr(ins),
 	.regx(regx[2]),
 	.has_immb(db.has_immb),
@@ -86,6 +88,7 @@ Qupls_decode_Rb udcrb
 Qupls_decode_Rc udcrc
 (
 	.om(om),
+	.ipl(ipl),
 	.instr(instr),
 	.regx(regx),
 	.has_immc(db.has_immc),
