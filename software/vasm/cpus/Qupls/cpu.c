@@ -24,6 +24,7 @@
 
 // Ordinary PC relative branches
 #define BRANCH_PCREL	1
+#define NREG	32
 
 #define TRACE(x)		/*printf(x)*/
 #define TRACE2(x,y)	/*printf((x),(y))*/
@@ -38,7 +39,7 @@ int bitsperbyte=8;
 int bytespertaddr=8;
 int abits=32;
 static int bundleWidth = 128;
-static taddr sdreg = 61;
+static taddr sdreg = 29;
 static taddr sd2reg = 60;
 static taddr sd3reg = 51;
 static taddr pcreg = 53;
@@ -53,9 +54,9 @@ static insn_sizes1[20000];
 static insn_sizes2[20000];
 static int sz1ndx = 0;
 static int sz2ndx = 0;
-static short int argregs[11] = {1,2,3,48,49,50,51,42,43,44,45};
-static short int tmpregs[12] = {4,5,6,7,8,9,10,11,12,13,14,15};
-static short int saved_regs[16] = {16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31};
+static short int argregs[11] = {1,2,3,4,5,6,7,8,0,0,0};
+static short int tmpregs[12] = {9,10,11,12,13,14,15,16,17,0,0,0};
+static short int saved_regs[16] = {18,19,20,21,22,23,24,25,26,0,0,0,0,0,0,0};
 
 static char *qualifiers[] =
 {
@@ -73,22 +74,14 @@ static int qualifiers_code[] =
 	0x84
 };
 
-static char *regnames[64] = {
-	"r0", "a0", "a1", "a2", "t0", "t1", "t2", "t3",
-	"t4", "t5", "t6", "t7", "t8", "t9", "t10", "t11",
-	"s0", "s1", "s2", "s3", "s4", "s5", "s6", "s7",
-	"s8",	"s9", "s10", "s11", "s12", "s13", "s14", "s15",
-	"m0", "m1", "m2", "m3", "m4", "m5", "m6", "m7",
-	"a3", "a4", "a5", "a6", "a7", "a8", "a9", "a10",
-	"mc0", "mc1", "mc2", "gp2", "ts", "pc", "cta", "lc",
-	"lr0", "lr1", "lr2", "lr3", "gp1", "gp0", "fp", "sp"
+static char *regnames[32] = {
+	"r0", "a0", "a1", "a2", "a3", "a4", "a5", "a6", 
+	"a7", "t0", "t1", "t2", "t3", "t4", "t5", "t6",
+	"t7", "t8", "s0", "s1", "s2", "s3", "s4", "s5",
+	"s6", "s7", "s8",	"lr0", "lr1", "gp", "fp", "sp"
 };
 
-static int regop[64] = {
-	OP_REG, OP_REG, OP_REG, OP_REG, OP_REG, OP_REG, OP_REG, OP_REG, 
-	OP_REG, OP_REG, OP_REG, OP_REG, OP_REG, OP_REG, OP_REG, OP_REG, 
-	OP_REG, OP_REG, OP_REG, OP_REG, OP_REG, OP_REG, OP_REG, OP_REG, 
-	OP_REG, OP_REG, OP_REG, OP_REG, OP_REG, OP_REG, OP_REG, OP_REG, 
+static int regop[32] = {
 	OP_REG, OP_REG, OP_REG, OP_REG, OP_REG, OP_REG, OP_REG, OP_REG, 
 	OP_REG, OP_REG, OP_REG, OP_REG, OP_REG, OP_REG, OP_REG, OP_REG, 
 	OP_REG, OP_REG, OP_REG, OP_REG, OP_REG, OP_REG, OP_REG, OP_REG, 
@@ -747,7 +740,7 @@ static int is_reg6(char *p, char **ep, int* typ)
 			n++;
 	}
 	
-	for (nn = 0; nn < 64; nn++) {
+	for (nn = 0; nn < NREG; nn++) {
 		if (p[n] == regnames[nn][0] && p[n+1]== regnames[nn][1]) {
 			if (!ISIDCHAR((unsigned char)p[n+2])) {
 				if (regnames[nn][2]=='\0') {
@@ -834,7 +827,7 @@ static int is_reg(char *p, char **ep)
 		*ep = &p[n+3];
 		return (29);
 	}
-	/* Argument registers 0 to 9 */
+	/* Argument registers 0 to 7 */
 	if (p[n] == 'a' || p[n]=='A') {
 		if (isdigit((unsigned char)p[n+1]) && !ISIDCHAR((unsigned char)p[n+2])) {
 			rg = p[n+1]-'0';
@@ -843,7 +836,7 @@ static int is_reg(char *p, char **ep)
 			return (rg+sgn);
 		}
 	}
-	/* Temporary registers 0 to 9 */
+	/* Temporary registers 0 to 8 */
 	if (p[n] == 't' || p[n]=='T') {
 		if (isdigit((unsigned char)p[n+1]) && !ISIDCHAR((unsigned char)p[n+2])) {
 			rg = p[n+1]-'0';
@@ -855,14 +848,14 @@ static int is_reg(char *p, char **ep)
 	if (p[n] == 't' || p[n]=='T') {
 		if (isdigit((unsigned char)p[n+1]) && isdigit((unsigned char)p[n+2]) && !ISIDCHAR((unsigned char)p[n+3])) {
 			rg = (p[n+1]-'0') * 10 + p[n+2]-'0';	
-			if (rg < 12) {
+			if (rg < 9) {
 				rg = tmpregs[rg];
 				*ep = &p[n+3];
 				return (rg);
 			}
 		}
 	}
-	/* Register vars 0 to 9 */
+	/* Register vars 0 to 8 */
 	if (p[n] == 's' || p[n]=='S') {
 		if (isdigit((unsigned char)p[n+1]) && !ISIDCHAR((unsigned char)p[n+2])) {
 			rg = p[n+1]-'0';	
@@ -874,7 +867,7 @@ static int is_reg(char *p, char **ep)
 	if (p[n] == 's' || p[n]=='S') {
 		if (isdigit((unsigned char)p[n+1]) && isdigit((unsigned char)p[n+2]) && !ISIDCHAR((unsigned char)p[n+3])) {
 			rg = (p[n+1]-'0') * 10 + p[n+2]-'0';	
-			if (rg < 16) {
+			if (rg < 9) {
 				rg = saved_regs[rg];
 				*ep = &p[n+3];
 				return (rg);
@@ -891,7 +884,7 @@ static int is_reg(char *p, char **ep)
 	}
 	if (isdigit((unsigned char)p[n+1]) && isdigit((unsigned char)p[n+2]) && !ISIDCHAR((unsigned char)p[n+3])) {
 		rg = (p[n+1]-'0')*10 + p[n+2]-'0';
-		if (rg < 64) {
+		if (rg < 32) {
 			*ep = &p[n+3];
 			return (rg);
 		}
@@ -925,7 +918,7 @@ static int is_vreg(char *p, char **ep)
 	}
 	if (isdigit((unsigned char)p[n+1]) && isdigit((unsigned char)p[n+2]) && !ISIDCHAR((unsigned char)p[n+3])) {
 		rg = (p[n+1]-'0')*10 + p[n+2]-'0';
-		if (rg < 64) {
+		if (rg < NREG) {
 			*ep = &p[n+3];
 			return (rg+sgn);
 		}
@@ -953,9 +946,9 @@ static int is_lkreg(char *p, char **ep)
 	}
 	if (isdigit((unsigned char)p[2]) && !ISIDCHAR((unsigned char)p[3])) {
 		rg = p[2]-'0';
-		if (rg < 4) {
+		if (rg < 2) {
 			*ep = &p[3];
-			return (rg);
+			return (rg+27);
 		}
 	}
 	return (-1);
@@ -1653,16 +1646,8 @@ static thuge make_reloc(int reloctype,operand *op,section *sec,
       		break;
       	case B2:
       	case BL2:
-#ifdef BRANCH_INO      		
-      		val = calc_branch_disp(addend, pc);
-	      	add_extnreloc_masked(reloclist,base,val.lo,REL_ABS,
-                         13,4,0,0xfLL);
-	      	add_extnreloc_masked(reloclist,base,val.lo,reloctype,
-                         17,23,0,0x7fffff0LL);
-#else
 	      	add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
-                         13,27,0,0x7ffffffLL);
-#endif                         
+                         12,28,0,0xfffffffLL);
           break;
       	/* Unconditional jump */
         case J2:
@@ -1680,11 +1665,11 @@ static thuge make_reloc(int reloctype,operand *op,section *sec,
           break;
         case RISM:
 		      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
-                         16,24,0,0xffffff00000LL);
+                         17,23,0,0x7ffffe00000LL);
           break;
         case RISH:
 		      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
-	                       16,24,0,0xfffff00000000000LL);
+	                       17,23,0,0x7ffff80000000000LL);
         	break;
         case RI:
         case RIV:
@@ -2090,14 +2075,25 @@ static size_t encode_immed_RI(instruction_buf* insn, thuge hval, int i, taddr pc
 	int minbits = (insn->opcode & 0x7f)==7LL ? 15 : 21;
 	int64_t sc;
 
-	if ((insn->opcode & 0x7f)==51LL || (insn->opcode & 0x7f)==59LL)
-		minbits = 128;
-
-	if ((insn->opcode & 0x3fLL)==OPC_ORS)
+	if (((insn->opcode & 0x7fLL)==OPC_ADDS)
+		|| ((insn->opcode & 0x7fLL)==OPC_ANDS)
+		|| ((insn->opcode & 0x7fLL)==OPC_ORS)
+		|| ((insn->opcode & 0x7fLL)==OPC_EORS)
+	)
 	{
+		minbits = 128;
 		eval_expr(ip->op[2]->value,&sc,sec,pc);
 		switch(sc) {
-		case 1:	hval = hshr(hval,20); break;
+		case 1:	
+			hval = hshr(hval,20);
+			if (((insn->opcode & 0x7fLL)==OPC_ADDS)
+				||((insn->opcode & 0x7fLL)==OPC_ORS)
+				||((insn->opcode & 0x7fLL)==OPC_EORS)
+			)
+				hval.lo &= -2LL;
+			else if ((insn->opcode & 0x7fLL)==OPC_ANDS)
+				hval.lo |= 1LL;
+			break;
 		case 2:	hval = hshr(hval,40); break;
 		}
 	}

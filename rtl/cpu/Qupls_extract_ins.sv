@@ -250,19 +250,19 @@ begin
 	do_bsr = FALSE;
 	bsr_tgt = pc4;
 	if (bsr0) begin
-		do_bsr = TRUE;
+//		do_bsr = TRUE;
 		bsr_tgt = bsr0_tgt;
 	end
 	else if (bsr1) begin
-		do_bsr = TRUE;
+//		do_bsr = TRUE;
 		bsr_tgt = bsr1_tgt;
 	end
 	else if (bsr2) begin
-		do_bsr = TRUE;
+//		do_bsr = TRUE;
 		bsr_tgt = bsr2_tgt;
 	end
 	else if (bsr3) begin
-		do_bsr = TRUE;
+//		do_bsr = TRUE;
 		bsr_tgt = bsr3_tgt;
 	end
 end

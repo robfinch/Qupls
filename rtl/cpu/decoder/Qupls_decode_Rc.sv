@@ -36,13 +36,13 @@
 
 import QuplsPkg::*;
 
-module Qupls_decode_Rc(om, ipl, instr, regx, has_immc, Rc, Rcc);
+module Qupls_decode_Rc(om, ipl, instr, has_immc, Rc, Rcz, Rcc);
 input operating_mode_t om;
 input [2:0] ipl;
 input ex_instruction_t [5:0] instr;
-input [3:0] regx;
 input has_immc;
 output aregno_t Rc;
+output reg Rcz;
 output reg [2:0] Rcc;
 
 always_comb
@@ -77,6 +77,7 @@ begin
 		else
 			Rc = 9'd40|om;
 	end
+	Rcz = ~|Rc;
 end
 
 endmodule

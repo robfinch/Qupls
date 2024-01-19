@@ -1888,16 +1888,20 @@ void QuplsCodeGenerator::GenerateLoadConst(Operand* ap1, Operand* ap2)
 			else {
 				if (ap1->offset) {
 					if (!ap1->offset->i128.IsNBit(21))
-						ip = GenerateDiadic(op_ldi, 0, ap2, MakeImmediate(ap1->offset->i128.low & 0xfffffLL));
+						ip = GenerateDiadic(op_ldi, 0, ap2, MakeImmediate(ap1->offset->i128.low & 0x1fffffLL));
 					else
 						ip = GenerateDiadic(op_ldi, 0, ap2, MakeImmediate(ap1->offset->i128.low & 0x1fffffLL));
-					if (!ap1->offset->i128.IsNBit(21))
-						GenerateDiadic(op_addm, 0, ap2, MakeImmediate((ap1->offset->i128.low >> 20LL) & 0xffffffLL));
-					if (!ap1->offset->i128.IsNBit(44)) {
-						if (ap1->offset->i128.low & 0x80000000000LL)
-							GenerateDiadic(op_addh, 0, ap2, MakeImmediate(((ap1->offset->i128.low >> 44LL) + 1) & 0xffffffLL));
+					if (!ap1->offset->i128.IsNBit(21)) {
+						if (ap1->offset->i128.low & 0x100000LL)
+							GenerateDiadic(op_addm, 0, ap2, MakeImmediate(ap1->offset->i128.low + 0x100000LL));
 						else
-							GenerateDiadic(op_addh, 0, ap2, MakeImmediate((ap1->offset->i128.low >> 44LL) & 0xffffffLL));
+							GenerateDiadic(op_addm, 0, ap2, MakeImmediate(ap1->offset->i128.low));
+					}
+					if (!ap1->offset->i128.IsNBit(44)) {
+						if (ap1->offset->i128.low & 0x40000000000LL)
+							GenerateDiadic(op_addh, 0, ap2, MakeImmediate(ap1->offset->i128.low + 0x40000000000LL));
+						else
+							GenerateDiadic(op_addh, 0, ap2, MakeImmediate(ap1->offset->i128.low));
 					}
 					// ToDo handle constant >64 bits
 					/*
@@ -1997,6 +2001,7 @@ void QuplsCodeGenerator::GenerateSmallDataRegDecl()
 	default:
 		ofs.printf("\t.sdreg\t%d\n", regGP);
 	}
+	/*
 	switch (syntax) {
 	case MOT:
 		ofs.printf("\tsd2reg\t%d\n", regGP1);
@@ -2011,6 +2016,7 @@ void QuplsCodeGenerator::GenerateSmallDataRegDecl()
 	default:
 		ofs.printf("\t.sd3reg\t%d\n", regGP2);
 	}
+	*/
 }
 
 void QuplsCodeGenerator::GenerateSignExtendByte(Operand* tgt, Operand* src)

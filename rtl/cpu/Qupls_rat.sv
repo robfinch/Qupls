@@ -716,37 +716,38 @@ else if (en) begin
 		
 	if (wr0) begin
 		cpram_in.regmap[wra] <= wrra;
-		$display("Qupls RAT: tgt reg %d replaced with %d.", cpram_out.regmap[wra], wrra);
+		$display("Qupls RAT: tgt %d reg %d replaced with %d.", wra, cpram_out.regmap[wra], wrra);
 	end
 	if (wr1 && XWID > 1) begin
 		cpram_in.regmap[wrb] <= wrrb;
-		$display("Qupls RAT: tgt reg %d replaced with %d.", cpram_out.regmap[wrb], wrrb);
+		$display("Qupls RAT: tgt %d reg %d replaced with %d.", wrb, cpram_out.regmap[wrb], wrrb);
 	end
 	if (wr2 && XWID > 2) begin
 		cpram_in.regmap[wrc] <= wrrc;
-		$display("Qupls RAT: tgt reg %d replaced with %d.", cpram_out.regmap[wrc], wrrc);
+		$display("Qupls RAT: tgt %d reg %d replaced with %d.", wrc, cpram_out.regmap[wrc], wrrc);
 	end
 	if (wr3 && XWID > 3) begin
 		cpram_in.regmap[wrd] <= wrrd;
-		$display("Qupls RAT: tgt reg %d replaced with %d.", cpram_out.regmap[wrd], wrrd);
+		$display("Qupls RAT: tgt %d reg %d replaced with %d.", wrd, cpram_out.regmap[wrd], wrrd);
 	end
+	/*
 	if (wr0a) begin
 		cpram_in.regmap[wra1] <= wrra1;
-		$display("Qupls RAT: tgt reg %d replaced with %d.", cpram_out.regmap[wra], wrra);
+		$display("Qupls RAT: tgt %d reg %d replaced with %d.", wra1, cpram_out.regmap[wra1], wrra1);
 	end
 	if (wr1a && XWID > 1) begin
 		cpram_in.regmap[wrb1] <= wrrb1;
-		$display("Qupls RAT: tgt reg %d replaced with %d.", cpram_out.regmap[wrb], wrrb);
+		$display("Qupls RAT: tgt %d reg %d replaced with %d.", wrb1, cpram_out.regmap[wrb1], wrrb1);
 	end
 	if (wr2a && XWID > 2) begin
 		cpram_in.regmap[wrc1] <= wrrc1;
-		$display("Qupls RAT: tgt reg %d replaced with %d.", cpram_out.regmap[wrc], wrrc);
+		$display("Qupls RAT: tgt %d reg %d replaced with %d.", wrc1, cpram_out.regmap[wrc1], wrrc1);
 	end
 	if (wr3a && XWID > 3) begin
 		cpram_in.regmap[wrd1] <= wrrd1;
-		$display("Qupls RAT: tgt reg %d replaced with %d.", cpram_out.regmap[wrd], wrrd);
+		$display("Qupls RAT: tgt %d reg %d replaced with %d.", wrd1, cpram_out.regmap[wrd1], wrrd1);
 	end
-
+	*/
 	if (wr0 && wrra==11'd0) begin
 		$display("RAT: writing zero register.");
 	end

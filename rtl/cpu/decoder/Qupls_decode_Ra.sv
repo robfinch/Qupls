@@ -36,13 +36,13 @@
 
 import QuplsPkg::*;
 
-module Qupls_decode_Ra(om, ipl, instr, regx, has_imma, Ra);
+module Qupls_decode_Ra(om, ipl, instr, has_imma, Ra, Raz);
 input operating_mode_t om;
 input [2:0] ipl;
 input ex_instruction_t instr;
-input regx;
 input has_imma;
 output aregno_t Ra;
+output reg Raz;
 
 function aregno_t fnRa;
 input ex_instruction_t ir;
@@ -78,6 +78,7 @@ begin
 		else
 			Ra = 9'd40|om;
 	end
+	Raz = ~|Ra;
 end
 
 endmodule

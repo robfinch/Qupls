@@ -193,15 +193,19 @@ begin
 						lsq[lsq_heads[row].row][0].agen
 					) begin
 						do_issue = 1'b1;
-						mem_ready = mem_ready + 2'd1;
-						next_memissue[ lsq[lsq_heads[row].row][0].rndx ] =	1'b1;
-						issued = 2'd1;
-						next_ndx0 = lsq_heads[row];
-						next_ndx0.col = col;
-						next_ndx0v = 1'b1;
-						if (lsq[lsq_heads[row].row][0].store)
-							stores = stores + 2'd1;
-						next_islot_o[{row,col[0]}] = 2'd0;
+						if (lsq[lsq_heads[row].row][col].store && fnHasPreviousFc(lsq[lsq_heads[row].row][col].rndx))
+							no_issue1 = 1'b1;
+						if (!no_issue1) begin
+							mem_ready = mem_ready + 2'd1;
+							next_memissue[ lsq[lsq_heads[row].row][0].rndx ] =	1'b1;
+							issued = 2'd1;
+							next_ndx0 = lsq_heads[row];
+							next_ndx0.col = col;
+							next_ndx0v = 1'b1;
+							if (lsq[lsq_heads[row].row][0].store)
+								stores = stores + 2'd1;
+							next_islot_o[{row,col[0]}] = 2'd0;
+						end
 					end
 				end
 				// no preceding instruction is ready to go

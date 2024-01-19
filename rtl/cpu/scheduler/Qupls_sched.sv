@@ -423,6 +423,7 @@ begin
 	next_agen0_rndxv = INV;
 	next_agen1_rndxv = INV;
 	next_cpytgt0 = INV;
+	next_cpytgt1 = INV;
 	flag = 1'b0;
 	for (h = 0; h < ROB_ENTRIES; h = h + 1)
 		next_robentry_islot_o[h] = robentry_islot_i[h];
@@ -449,8 +450,7 @@ begin
 			end
 			if (!issued_alu0 && alu0_idle
 				&& !robentry_issue[heads[hd]]
-				&& ((rob[heads[hd]].decbus.alu || rob[heads[hd]].decbus.cpytgt)
-				&& !rob[heads[hd]].done[0])
+				&& ((rob[heads[hd]].decbus.alu && !rob[heads[hd]].done[0]) || (rob[heads[hd]].decbus.cpytgt && rob[heads[hd]].done!=2'b11))
 				&& !rob[heads[hd]].out[0]) begin
 		  	next_robentry_issue[heads[hd]] = 1'b1;
 		  	next_robentry_islot_o[heads[hd]] = 2'b00;
@@ -461,8 +461,7 @@ begin
 			if (NALU > 1) begin
 				if (!issued_alu1 && alu1_idle
 					&& !robentry_issue[heads[hd]]
-					&& ((rob[heads[hd]].decbus.alu || rob[heads[hd]].decbus.cpytgt)
-					&& !rob[heads[hd]].done[0])
+					&& ((rob[heads[hd]].decbus.alu && !rob[heads[hd]].done[0]) || (rob[heads[hd]].decbus.cpytgt && rob[heads[hd]].done!=2'b11))
 					&& !rob[heads[hd]].out[0]
 					&& !rob[heads[hd]].decbus.alu0) begin
 					if (!next_robentry_issue[heads[hd]]) begin	// Did ALU #0 already grab it?

@@ -36,11 +36,10 @@
 
 import QuplsPkg::*;
 
-module Qupls_decode_Rt(om, ipl, instr, regx, Rt, Rtz);
+module Qupls_decode_Rt(om, ipl, instr, Rt, Rtz);
 input operating_mode_t om;
 input [2:0] ipl;
 input ex_instruction_t instr;
-input regx;
 output aregno_t Rt;
 output reg Rtz;
 

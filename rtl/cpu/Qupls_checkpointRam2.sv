@@ -37,57 +37,40 @@
 
 import QuplsPkg::SIM;
 
-module Qupls_checkpointRam(clka, ena, wea, addra, dina, clkb, enb, addrb, doutb);
+module Qupls_checkpointRam2(clka, ena, wea, addra, dina, clkb, enb, addrb, doutb);
+parameter NCHECK = 16;
 localparam RBIT=$clog2(PREGS);
-localparam QBIT=$bits(pregno_t);
-localparam WID=$bits(checkpoint_t);
 input clka;
 input ena;
 input wea;
-input [3:0] addra;
-input checkpoint_t dina;
+input [12:0] addra;
+input [RBIT-1:0] dina;
 input clkb;
 input enb;
-input [3:0] addrb;
-output checkpoint_t doutb;
+input [11:0] addrb;
+output [RBIT-1:0] doutb;
 
-checkpoint_t doutb1;
 genvar g;
 integer n;
 // The following outside of generate to make it easier to reference in SIM code.
 // It should be stripped out for synthesis as it would not be referenced.
 (* RAM_STYLE="distributed" *)
-checkpoint_t mem [0:NCHECK-1];
-reg [3:0] raddrb;
-reg ena1;
-reg wea1;
-checkpoint_t dina1;
-reg [3:0] addra1;
-
+reg [RBIT-1:0] mem [0:4095];
+reg [11:0] raddrb;
 initial begin
-	for (n = 0; n < NCHECK; n = n + 1)
-		mem[n] = {$bits(checkpoint_t){1'b0}};
+	for (n = 0; n < 4096; n = n + 1)
+		mem[n] = 0;
 end
-
-// Delay the write by a clock cycle to give a chance to read current map values
-// before they get updated.
-always_ff @(posedge clka) ena1 <= ena;
-always_ff @(posedge clka) wea1 <= wea;
-always_ff @(posedge clka) addra1 <= addra;
-always_ff @(posedge clka) dina1 <= dina;
 
 generate begin : gRegfileRam
 if (SIM) begin
 
-//	for (g = 0; g < AREGS; g = g + 1)
-		always_ff @(posedge clka)
-			if (ena & wea) mem[addra] <= dina;
-//			if (ena & wea[g]) mem[addra][g*QBIT+QBIT-1:g*QBIT] <= dina[g*QBIT+QBIT-1:g*QBIT];
+	always_ff @(posedge clka)
+		if (ena & wea) mem[addra] <= dina;
 
 	always_ff @(posedge clkb)
-		if (enb) raddrb <= addrb;
-//	assign doutb = (ena & wea) ? dina : mem[addrb];
-	assign doutb = mem[raddrb];
+		raddrb <= addrb;
+	assign doutb = mem[addrb];
 
 end
 else begin
@@ -112,11 +95,11 @@ else begin
 
    // xpm_memory_dpdistram: Dual Port Distributed RAM
    // Xilinx Parameterized Macro, version 2022.2
-
+/*
    xpm_memory_dpdistram #(
       .ADDR_WIDTH_A(4),               // DECIMAL
       .ADDR_WIDTH_B(4),               // DECIMAL
-      .BYTE_WRITE_WIDTH_A(WID),      		// DECIMAL
+      .BYTE_WRITE_WIDTH_A(RBIT),      // DECIMAL
       .CLOCKING_MODE("common_clock"), // String
       .MEMORY_INIT_FILE("none"),      // String
       .MEMORY_INIT_PARAM("0"),        // String
@@ -139,13 +122,13 @@ else begin
    )
    xpm_memory_dpdistram_inst (
       .douta(),   			// READ_DATA_WIDTH_A-bit output: Data output for port A read operations.
-      .doutb(doutb1),   // READ_DATA_WIDTH_B-bit output: Data output for port B read operations.
+      .doutb(doutb),   // READ_DATA_WIDTH_B-bit output: Data output for port B read operations.
       .addra(addra),   // ADDR_WIDTH_A-bit input: Address for port A write and read operations.
       .addrb(addrb),   // ADDR_WIDTH_B-bit input: Address for port B write and read operations.
       .clka(clka),     // 1-bit input: Clock signal for port A. Also clocks port B when parameter CLOCKING_MODE
                        // is "common_clock".
 
-      .clkb(clkb),     // 1-bit input: Clock signal for port B when parameter CLOCKING_MODE is
+      .clkb(clka),     // 1-bit input: Clock signal for port B when parameter CLOCKING_MODE is
                        // "independent_clock". Unused when parameter CLOCKING_MODE is "common_clock".
 
       .dina(dina),     // WRITE_DATA_WIDTH_A-bit input: Data input for port A write operations.
@@ -163,7 +146,7 @@ else begin
       .rstb(1'b0),     // 1-bit input: Reset signal for the final port B output register stage. Synchronously
                        // resets output port doutb to the value specified by parameter READ_RESET_VALUE_B.
 
-      .wea(wea)       // WRITE_DATA_WIDTH_A/BYTE_WRITE_WIDTH_A-bit input: Write enable vector for port A input
+      .wea(wea)        // WRITE_DATA_WIDTH_A/BYTE_WRITE_WIDTH_A-bit input: Write enable vector for port A input
                        // data port dina. 1 bit wide when word-wide writes are used. In byte-wide write
                        // configurations, each bit controls the writing one byte of dina to address addra. For
                        // example, to synchronously write only bits [15-8] of dina when WRITE_DATA_WIDTH_A is
@@ -172,11 +155,9 @@ else begin
    );
 
    // End of xpm_memory_dpdistram_inst instantiation
+*/
 
-//	assign doutb = (ena & wea) ? dina : doutb1;
-	assign doutb = doutb1;
 
-/*
 // XPM_MEMORY instantiation template for Simple Dual Port RAM configurations
 // Refer to the targeted device family architecture libraries guide for XPM_MEMORY documentation
 // =======================================================================================================================
@@ -186,8 +167,8 @@ else begin
    // Xilinx Parameterized Macro, version 2022.2
 
    xpm_memory_sdpram #(
-      .ADDR_WIDTH_A(6),               // DECIMAL
-      .ADDR_WIDTH_B(6),               // DECIMAL
+      .ADDR_WIDTH_A(12),               // DECIMAL
+      .ADDR_WIDTH_B(12),               // DECIMAL
       .AUTO_SLEEP_TIME(0),            // DECIMAL
       .BYTE_WRITE_WIDTH_A(RBIT),      // DECIMAL
       .CASCADE_HEIGHT(0),             // DECIMAL
@@ -197,9 +178,9 @@ else begin
       .MEMORY_INIT_PARAM("0"),        // String
       .MEMORY_OPTIMIZATION("true"),   // String
       .MEMORY_PRIMITIVE("auto"),      // String
-      .MEMORY_SIZE(64*WID),             // DECIMAL
+      .MEMORY_SIZE(4096*RBIT),        // DECIMAL
       .MESSAGE_CONTROL(0),            // DECIMAL
-      .READ_DATA_WIDTH_B(WID),         // DECIMAL
+      .READ_DATA_WIDTH_B(RBIT),         // DECIMAL
       .READ_LATENCY_B(1),             // DECIMAL
       .READ_RESET_VALUE_B("0"),       // String
       .RST_MODE_A("SYNC"),            // String
@@ -209,7 +190,7 @@ else begin
       .USE_MEM_INIT(1),               // DECIMAL
       .USE_MEM_INIT_MMI(0),           // DECIMAL
       .WAKEUP_TIME("disable_sleep"),  // String
-      .WRITE_DATA_WIDTH_A(WID),        // DECIMAL
+      .WRITE_DATA_WIDTH_A(RBIT),        // DECIMAL
       .WRITE_MODE_B("no_change"),     // String
       .WRITE_PROTECT(1)               // DECIMAL
    )
@@ -263,7 +244,7 @@ else begin
    );
 
    // End of xpm_memory_sdpram_inst instantiation
-*/				
+				
 						
 end
 end

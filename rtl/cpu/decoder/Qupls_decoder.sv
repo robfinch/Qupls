@@ -36,14 +36,13 @@
 
 import QuplsPkg::*;
 
-module Qupls_decoder(rst, clk, en, om, ipl, instr, regx, dbo);
+module Qupls_decoder(rst, clk, en, om, ipl, instr, dbo);
 input rst;
 input clk;
 input en;
 input operating_mode_t om;
 input [2:0] ipl;
 input ex_instruction_t [5:0] instr;
-input [3:0] regx;
 output decode_bus_t dbo;
 
 ex_instruction_t ins;
@@ -70,9 +69,9 @@ Qupls_decode_Ra udcra
 	.om(om),
 	.ipl(ipl),
 	.instr(ins),
-	.regx(regx[1]),
 	.has_imma(db.has_imma),
-	.Ra(db.Ra)
+	.Ra(db.Ra),
+	.Raz(db.Raz)
 );
 
 Qupls_decode_Rb udcrb
@@ -80,9 +79,9 @@ Qupls_decode_Rb udcrb
 	.om(om),
 	.ipl(ipl),
 	.instr(ins),
-	.regx(regx[2]),
 	.has_immb(db.has_immb),
-	.Rb(db.Rb)
+	.Rb(db.Rb),
+	.Rbz(db.Rbz)
 );
 
 Qupls_decode_Rc udcrc
@@ -90,9 +89,9 @@ Qupls_decode_Rc udcrc
 	.om(om),
 	.ipl(ipl),
 	.instr(instr),
-	.regx(regx),
 	.has_immc(db.has_immc),
 	.Rc(db.Rc),
+	.Rcz(db.Rcz),
 	.Rcc(db.Rcc)
 );
 
@@ -101,7 +100,6 @@ Qupls_decode_Rt udcrt
 	.om(om),
 	.ipl(ipl),
 	.instr(ins),
-	.regx(regx[0]),
 	.Rt(db.Rt),
 	.Rtz(db.Rtz)
 );

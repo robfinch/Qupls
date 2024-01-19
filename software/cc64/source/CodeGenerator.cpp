@@ -4429,6 +4429,7 @@ void CodeGenerator::GenerateSmallDataRegDecl()
 	default:
 		ofs.printf("\t.sdreg\t%d\n", regGP);
 	}
+	/*
 	switch (syntax) {
 	case MOT:
 		ofs.printf("\tsd2reg\t%d\n", regGP1);
@@ -4443,6 +4444,7 @@ void CodeGenerator::GenerateSmallDataRegDecl()
 	default:
 		ofs.printf("\t.sd3reg\t%d\n", regGP2);
 	}
+	*/
 }
 
 void CodeGenerator::GenerateSignExtendByte(Operand* tgt, Operand* src)

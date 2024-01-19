@@ -79,7 +79,7 @@ wire [WID-1:0] cmpo;
 reg [WID-1:0] bus;
 reg [WID-1:0] blendo;
 reg [WID-1:0] immc6;
-reg [21:0] ii;
+reg [22:0] ii;
 reg [WID-1:0] sd;
 
 always_comb
@@ -356,13 +356,13 @@ begin
 		bus = a ^ i;
 	OP_SLTI:	bus = $signed(a) < $signed(i);
 	OP_ADDSI,OP_VADDSI:
-		bus = a + ({{WID{ii[21]}},ii[21:0]} << (ir[15:13]*16));
+		bus = a + ({{WID{ii[22]}},ii[22:0]} << (ir[14:12]*20));
 	OP_ANDSI,OP_VANDSI:
-		bus = a & ({WID{1'b1}} & ~({{WID{1'b0}},22'h3fffff} << (ir[15:13]*16)) | ({{WID{ii[21]}},ii[21:0]} << (ir[15:13]*16)));
+		bus = a & ({WID{1'b1}} & ~({{WID{1'b0}},23'h7fffff} << (ir[14:12]*20)) | ({{WID{ii[22]}},ii[22:0]} << (ir[14:12]*20)));
 	OP_ORSI,OP_VORSI:
-		bus = a | (i << (ir[15:13]*16));
+		bus = a | (i << (ir[14:12]*20));
 	OP_EORSI,OP_VEORSI:
-		bus = a ^ (i << (ir[15:13]*16));
+		bus = a ^ (i << (ir[14:12]*20));
 	OP_SHIFT:
 		case(ir.shifti.func)
 		OP_ASL:	bus = shl[WID*2-1:WID];

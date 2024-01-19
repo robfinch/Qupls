@@ -143,7 +143,7 @@ begin
 		end
 	OP_Bcc,OP_BccU,OP_FBccH,OP_FBccS,OP_FBccD,OP_FBccQ:
 		begin
-			immc = {{47{ins[0].ins[39]}},ins[0].ins[39:25],ins[0].ins[12:11]};
+			immc = {{46{ins[0].ins[39]}},ins[0].ins[39:22]};
 			has_immc = 1'b1;
 		end
 	default:

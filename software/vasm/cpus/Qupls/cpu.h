@@ -47,7 +47,10 @@ typedef struct {
   uint64_t mask;
 } operand;
 
-#define OPC_ORS	51LL
+#define OPC_ADDS	49LL
+#define OPC_ANDS	50LL
+#define OPC_ORS		51LL
+#define OPC_EORS	59LL
 
 /* operand-types */
 #define OP_REG						0x00000001L
