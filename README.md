@@ -10,14 +10,16 @@ Qupls is the 2024 version of the Thor processor which has evolved over the years
 Work started on Qupls in November of 2023. Many years of work have gone into prior CPUs.
 
 ### Features Out-of-Order version
-Fixed length instruction set.
-40-bit instructions.
-64-bit datapath / support for 128-bit floats
-32 entry (or more) reorder entry buffer (ROB)
-32 general purpose registers, unified integer and float register file
-32 vector registers
-4-way Out-of-order execution of instructions
-128 entry, two way TLB for virtual memory support, shared between instruction and data
+*Fixed length instruction set.
+*40-bit instructions.
+*64-bit datapath / support for 128-bit floats
+*32 entry (or more) reorder entry buffer (ROB)
+*32 general purpose registers, unified integer and float register file
+*32 vector registers
+*Dual operation instructions: Rt = Ra <op> Rb <op> Rc
+*Conditional relative branch instructions with 19-bit displacements
+*4-way Out-of-order execution of instructions
+*128 entry, two way TLB for virtual memory support, shared between instruction and data
 
 ## Out-of-Order Version
 ### Status
@@ -26,14 +28,14 @@ been undergoing simulation runs. A long way to go yet. Some synthesis runs have 
 The most recent major change to the ISA was a reduction in the number of registers from 64 down to 32. This makes the hardware for the core considerably smaller, meaning more features can be added for the same footprint. There should not be a signficant effect on the performance caused by reducing the number of registers. For instance the ABI spec'd three global pointers for the 64-register version, but really only a single global pointer is needed.
 
 ### Register File
-The register file contains 128 architectural registers with support for 16 vector registers, and is unified, supporting integer and floating-point operations using the same set of registers. 
+The register file contains 168 architectural registers with support for 21 vector registers, and is unified, supporting integer and floating-point operations using the same set of registers. 
 There is a dedicated zero register, r0. There is no longer a register dedicated to refer to the stack canary or instruction pointer. Vector mask registers are also part of the general purpose register file and the same set of instructions may be applied to them as to other registers. A register is also dedicated to the stack pointer. The stack pointer is banked depending on processor operating mode. There are also separate stack pointers for each interrupt level (1 to 7).
 Five hidden registers are dedicated to micro-code use. They are only accessible from micro-code.
-Registers are renamed to remove dependencies. There are 384 physical registers available. 768 physical registers are needed to fully support vector operations.
+Registers are renamed to remove dependencies. There are 512 physical registers available. 768 physical registers are needed to fully support vector operations.
 
 ### Vector Register File
-The vector register file may contain up to 32 vector registers. Each vector register is made up of eight 64-bit elements or lanes, or a total of 512-bits. The vector register file is currently implemented in the same block RAM as the general purpose register file and shares renaming resources with the general purpose registers. Each vector element is renamed. The first six vector registers v0 to v5 are aliased with the general-purpose registers. v0 and r0 to r7 are the same.
-v1 and r8 to r15 are the same. And so on. That leaves 26 vector registers for general purpose use. The demo version running on an XC7A200T is only going to support 16 vector registers.
+The vector register file may contain up to 32 vector registers. Each vector register is made up of eight 64-bit elements, or a total of 512-bits. Each element may contain multiple lanes of execution. The vector register file is currently implemented in the same block RAM as the general purpose register file and shares renaming resources with the general purpose registers. Each vector element is renamed, but individual lanes are not. The first six vector registers v0 to v5 are aliased with the general-purpose registers. v0 and r0 to r7 are the same.
+v1 and r8 to r15 are the same. And so on. That leaves 26 vector registers for general purpose use. The demo version running on an XC7A200T is only going to support about 16 vector registers.
 
 ### Instruction Length
 The author has found that in an FPGA the decode of variable length instruction length was on the critical timing path, limiting the maximum clock frequency and performance. So, instructions are fixed length so that hardware decoders can be positioned at specific locations. Making the instruction length fixed 40-bits aids the hardware in determining the location of instructions and the update of the instruction pointer.
@@ -65,6 +67,10 @@ There are two branch predictors, A BTB, branch-target-buffer predictor used earl
 Interrupts and exceptions are precise. There is a separate exception vector table for each operating mode of the CPU. The exception vector table address is programmable and may contain a maximum of 512 vectors. At reset the vector table is placed high in memory, the first two vectors provide the initial stack pointer and initial instruction pointer values.
 An interrupt will cause the stack pointer to automatically switch to one dedicated for that interrupt level. There are seven interrupt levels supported.
 
+## Instruction Set
+### Dual Operation Instructions
+Many register-register operate instructions support dual operations on the registers. They are of the form: Rt = (Ra <op> Rb) <op> Rc. For instance, the AND_OR instruction performs an AND operation followed by an OR operation.
+
 ### Arithmetic Operations
 The ISA supports many arithmetic operations including add, sub, mulitply and divide. Multi-bit shifts and rotates are supported. And a full set of logic operations and their complements are supported. Many ALU operations support three source registers and one destination register.
 
@@ -78,7 +84,7 @@ Use of large constants is supported with immediate mode instructions that can sh
 
 ### Branches
 Conditional branches are a fused compare-and-branch instruction. Values of two registers are compared, then a branch is made depending on the relationship between the two.
-The branch displacement is seventeen bits, but it is in terms of instructions, so the range is +/- 320kB from the branch instruction.
+The branch displacement is seventeen bits, but it is in terms of instructions, effectively making it about 19 bits, so the range is +/- 320kB from the branch instruction.
 
 ### Loads and Stores
 Load and store operations are queued in a memory (load/store) queue. Once the operation is queued execution of other instructions continues. The core currently allows only strict ordering of memory operations. Load and store instructions are queued in program order.
