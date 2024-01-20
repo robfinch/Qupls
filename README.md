@@ -10,16 +10,16 @@ Qupls is the 2024 version of the Thor processor which has evolved over the years
 Work started on Qupls in November of 2023. Many years of work have gone into prior CPUs.
 
 ### Features Out-of-Order version
-*Fixed length instruction set.
-*40-bit instructions.
-*64-bit datapath / support for 128-bit floats
-*32 entry (or more) reorder entry buffer (ROB)
-*32 general purpose registers, unified integer and float register file
-*32 vector registers
-*Dual operation instructions: Rt = Ra <op> Rb <op> Rc
-*Conditional relative branch instructions with 19-bit displacements
-*4-way Out-of-order execution of instructions
-*128 entry, two way TLB for virtual memory support, shared between instruction and data
+* Fixed length instruction set.
+* 40-bit instructions.
+* 64-bit datapath / support for 128-bit floats
+* 32 entry (or more) reorder entry buffer (ROB)
+* 32 general purpose registers, unified integer and float register file
+* 32 vector registers
+* Dual operation instructions: Rt = Ra <op> Rb <op> Rc
+* Conditional relative branch instructions with 19-bit displacements
+* 4-way Out-of-order execution of instructions
+* 128 entry, two way TLB for virtual memory support, shared between instruction and data
 
 ## Out-of-Order Version
 ### Status
