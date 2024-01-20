@@ -53,7 +53,7 @@ parameter SIM = 1'b1;
 // Number of architectural registers there are in the core, including registers
 // not visible in the programming model. Each supported vector register counts
 // as eight registers.
-`define NREGS	160	// 330
+`define NREGS	168	// 330
 
 // Number of physical registers supporting the architectural ones and used in
 // register renaming. There must be significantly more physical registers than
@@ -221,7 +221,7 @@ typedef enum logic [1:0] {
 } dram_state_t;
 
 typedef logic [3:0] checkpt_ndx_t;
-typedef logic [4:0] rob_ndx_t;
+typedef logic [$clog2(ROB_ENTRIES)-1:0] rob_ndx_t;
 typedef struct packed
 {
 	logic [2:0] row;
@@ -1273,6 +1273,9 @@ typedef struct packed
 	aregno_t Rb;
 	aregno_t Rc;
 	aregno_t Rt;
+	logic Raz;
+	logic Rbz;
+	logic Rcz;
 	logic Rtz;
 	logic [2:0] Rcc;	// Rc complement status
 	logic has_imm;
@@ -1469,7 +1472,7 @@ typedef struct packed {
 	logic [1:0] out;					// 1=instruction is being executed
 	logic [1:0] done;					// 2'b11=instruction is finished executing
 	logic rstp;								// indicate physical register reset required
-	logic [7:0] pred_status;	// predicate status for the next eight instructions.
+	logic [63:0] pred_status;	// predicate status for the next eight instructions.
 	pc_address_t brtgt;
 	mc_address_t mcbrtgt;			// micro-code branch target
 	logic takb;								// 1=branch evaluated to taken
@@ -1508,7 +1511,7 @@ typedef struct packed {
 	logic load;						// 1=load
 	logic loadz;
 	logic store;
-	instruction_t op;
+	ex_instruction_t op;
 	pc_address_t pc;
 	memop_t func;					// operation to perform
 	logic [3:0] func2;		// more resolution to function

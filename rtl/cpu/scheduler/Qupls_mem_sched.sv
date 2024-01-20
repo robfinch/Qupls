@@ -69,8 +69,8 @@ reg [1:0] stores;
 
 lsq_ndx_t next_ndx0;
 lsq_ndx_t next_ndx1;
-lsq_ndx_t next_ndx0v;
-lsq_ndx_t next_ndx1v;
+reg next_ndx0v;
+reg next_ndx1v;
 lsq_ndx_t tmp_ndx;
 rob_bitmask_t next_memissue;
 reg [1:0] next_islot_o [0:LSQ_ENTRIES*2-1];
@@ -169,11 +169,7 @@ for (n10 = 0; n10 < ROB_ENTRIES; n10 = n10 + 1)
 
 always_comb
 begin
-	issued = 1'd0;
-	no_issue = 1'd0;
-	no_issue1 = 1'd0;
-	no_issue2 = 1'd0;
-	no_issue3 = 1'd0;
+	issued = 2'd0;
 	do_issue = 1'd0;
 	mem_ready = 1'd0;
 	next_memissue = 'd0;
@@ -183,26 +179,30 @@ begin
 	next_ndx1v = 1'd0;
 	tmp_ndx = 5'd0;
 	stores = 1'd0;
+	no_issue = 1'd0;
 	next_islot_o = islot_i;
 	for (row = 0; row < LSQ_WINDOW_SIZE; row = row + 1) begin
 		for (col = 0; col < 2; col = col + 1) begin
+			no_issue1 = 1'd0;
+			no_issue2 = 1'd0;
+			no_issue3 = 1'd0;
 			if (issued < NDATA_PORTS) begin
 				if (row==0) begin
-					if (memready[ lsq[lsq_heads[row].row][0].rndx ] &&
-						lsq[lsq_heads[row].row][0].v==VAL &&
-						lsq[lsq_heads[row].row][0].agen
+					if (memready[ lsq[lsq_heads[row].row][col].rndx ] &&
+						lsq[lsq_heads[row].row][col].v==VAL &&
+						lsq[lsq_heads[row].row][col].agen
 					) begin
 						do_issue = 1'b1;
 						if (lsq[lsq_heads[row].row][col].store && fnHasPreviousFc(lsq[lsq_heads[row].row][col].rndx))
 							no_issue1 = 1'b1;
 						if (!no_issue1) begin
 							mem_ready = mem_ready + 2'd1;
-							next_memissue[ lsq[lsq_heads[row].row][0].rndx ] =	1'b1;
+							next_memissue[ lsq[lsq_heads[row].row][col].rndx ] =	1'b1;
 							issued = 2'd1;
 							next_ndx0 = lsq_heads[row];
 							next_ndx0.col = col;
 							next_ndx0v = 1'b1;
-							if (lsq[lsq_heads[row].row][0].store)
+							if (lsq[lsq_heads[row].row][col].store)
 								stores = stores + 2'd1;
 							next_islot_o[{row,col[0]}] = 2'd0;
 						end

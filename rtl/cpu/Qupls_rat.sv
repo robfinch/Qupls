@@ -730,7 +730,7 @@ else if (en) begin
 		cpram_in.regmap[wrd] <= wrrd;
 		$display("Qupls RAT: tgt %d reg %d replaced with %d.", wrd, cpram_out.regmap[wrd], wrrd);
 	end
-	/*
+	
 	if (wr0a) begin
 		cpram_in.regmap[wra1] <= wrra1;
 		$display("Qupls RAT: tgt %d reg %d replaced with %d.", wra1, cpram_out.regmap[wra1], wrra1);
@@ -747,7 +747,7 @@ else if (en) begin
 		cpram_in.regmap[wrd1] <= wrrd1;
 		$display("Qupls RAT: tgt %d reg %d replaced with %d.", wrd1, cpram_out.regmap[wrd1], wrrd1);
 	end
-	*/
+	
 	if (wr0 && wrra==11'd0) begin
 		$display("RAT: writing zero register.");
 	end

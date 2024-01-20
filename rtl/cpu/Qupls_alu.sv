@@ -179,7 +179,11 @@ begin
 			default:	bus = {WID{1'd0}};
 			endcase
 		FN_SUB:	bus = a - b - c;
-		FN_CMP,FN_CMPU:	bus = cmpo;
+		FN_CMP,FN_CMPU:	
+			case(ir[30:27])
+			4'd1:			bus = cmpo | c;
+			default:	bus = cmpo;
+			endcase
 		FN_MUL:	bus = prod[WID-1:0];
 		FN_MULU:	bus = produ[WID-1:0];
 		FN_MULW:	bus = ALU0 ? prod[WID-1:0] : prod[WID*2-1:WID];

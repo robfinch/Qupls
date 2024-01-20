@@ -141,7 +141,7 @@ generate begin : gRFO
 	for (g = 0; g < RPORTS; g = g + 1) begin
 		always_comb
 			o[g] = 
-				ra[g]==9'd0 ? 64'd0 :
+				ra[g]==11'd0 ? 64'd0 :
 				(wr3 && (ra[g]==wa3)) ? i3 :
 				(wr2 && (ra[g]==wa2)) ? i2 :
 				(wr1 && (ra[g]==wa1)) ? i1 :

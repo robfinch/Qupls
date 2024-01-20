@@ -181,42 +181,42 @@ begin
 		if (rob[m1].v && rob[m1].sn < rob[ndx].sn && rob[m1].decbus.pred) begin
 			fnPriorFalsePred = TRUE;
 			if (rob[m1].done==2'b11)
-				fnPriorFalsePred = rob[m1].pred_status[0];
+				fnPriorFalsePred = rob[m1].pred_status[7:0]==8'h00;
 		end
 		else if (rob[m2].v && rob[m2].sn < rob[ndx].sn && rob[m2].decbus.pred) begin
 			fnPriorFalsePred = TRUE;
 			if (rob[m2].done==2'b11)
-				fnPriorFalsePred = rob[m2].pred_status[1];
+				fnPriorFalsePred = rob[m2].pred_status[15:8]==8'h00;
 		end
 		else if (rob[m3].v && rob[m3].sn < rob[ndx].sn && rob[m3].decbus.pred) begin
 			fnPriorFalsePred = TRUE;
 			if (rob[m3].done==2'b11)
-				fnPriorFalsePred = rob[m3].pred_status[2];
+				fnPriorFalsePred = rob[m3].pred_status[23:16]==8'h00;
 		end
 		else if (rob[m4].v && rob[m4].sn < rob[ndx].sn && rob[m4].decbus.pred) begin
 			fnPriorFalsePred = TRUE;
 			if (rob[m4].done==2'b11)
-				fnPriorFalsePred = rob[m4].pred_status[3];
+				fnPriorFalsePred = rob[m4].pred_status[31:24]==8'h00;
 		end
 		else if (rob[m5].v && rob[m5].sn < rob[ndx].sn && rob[m5].decbus.pred) begin
 			fnPriorFalsePred = TRUE;
 			if (rob[m5].done==2'b11)
-				fnPriorFalsePred = rob[m5].pred_status[4];
+				fnPriorFalsePred = rob[m5].pred_status[39:32]==8'h00;
 		end
 		else if (rob[m6].v && rob[m6].sn < rob[ndx].sn && rob[m6].decbus.pred) begin
 			fnPriorFalsePred = TRUE;
 			if (rob[m6].done==2'b11)
-				fnPriorFalsePred = rob[m6].pred_status[5];
+				fnPriorFalsePred = rob[m6].pred_status[47:40]==8'h00;
 		end
 		else if (rob[m7].v && rob[m7].sn < rob[ndx].sn && rob[m7].decbus.pred) begin
 			fnPriorFalsePred = TRUE;
 			if (rob[m7].done==2'b11)
-				fnPriorFalsePred = rob[m7].pred_status[6];
+				fnPriorFalsePred = rob[m7].pred_status[55:48]==8'h00;
 		end
 		else if (rob[m8].v && rob[m8].sn < rob[ndx].sn && rob[m8].decbus.pred) begin
 			fnPriorFalsePred = TRUE;
 			if (rob[m8].done==2'b11)
-				fnPriorFalsePred = rob[m8].pred_status[7];
+				fnPriorFalsePred = rob[m8].pred_status[63:56]==8'h00;
 		end
 	end
 end
@@ -248,35 +248,35 @@ begin
 		m7 = (ndx + ROB_ENTRIES - 7) % ROB_ENTRIES;
 		m8 = (ndx + ROB_ENTRIES - 8) % ROB_ENTRIES;
 		if (rob[m1].v && rob[m1].sn < rob[ndx].sn && rob[m1].decbus.pred) begin
-			if (rob[m1].done==2'b11 && rob[m1].pred_status[0]==FALSE)
+			if (rob[m1].done==2'b11 && rob[m1].pred_status[7:0]==8'h00)
 				fnPredFalse = TRUE;
 		end
 		else if (rob[m2].v && rob[m2].sn < rob[ndx].sn && rob[m2].decbus.pred) begin
-			if (rob[m2].done==2'b11 && rob[m2].pred_status[1]==FALSE)
+			if (rob[m2].done==2'b11 && rob[m2].pred_status[15:8]==8'h00)
 				fnPredFalse = TRUE;
 		end
 		else if (rob[m3].v && rob[m3].sn < rob[ndx].sn && rob[m3].decbus.pred) begin
-			if (rob[m3].done==2'b11 && rob[m3].pred_status[2]==FALSE)
+			if (rob[m3].done==2'b11 && rob[m3].pred_status[23:16]==8'h00)
 				fnPredFalse = TRUE;
 		end
 		else if (rob[m4].v && rob[m4].sn < rob[ndx].sn && rob[m4].decbus.pred) begin
-			if (rob[m4].done==2'b11 && rob[m4].pred_status[3]==FALSE)
+			if (rob[m4].done==2'b11 && rob[m4].pred_status[31:24]==8'h00)
 				fnPredFalse = TRUE;
 		end
 		else if (rob[m5].v && rob[m5].sn < rob[ndx].sn && rob[m5].decbus.pred) begin
-			if (rob[m5].done==2'b11 && rob[m5].pred_status[4]==FALSE)
+			if (rob[m5].done==2'b11 && rob[m5].pred_status[39:32]==8'h00)
 				fnPredFalse = TRUE;
 		end
 		else if (rob[m6].v && rob[m6].sn < rob[ndx].sn && rob[m6].decbus.pred) begin
-			if (rob[m6].done==2'b11 && rob[m6].pred_status[5]==FALSE)
+			if (rob[m6].done==2'b11 && rob[m6].pred_status[47:40]==8'h00)
 				fnPredFalse = TRUE;
 		end
 		else if (rob[m7].v && rob[m7].sn < rob[ndx].sn && rob[m7].decbus.pred) begin
-			if (rob[m7].done==2'b11 && rob[m7].pred_status[6]==FALSE)
+			if (rob[m7].done==2'b11 && rob[m7].pred_status[55:48]==8'h00)
 				fnPredFalse = TRUE;
 		end
 		else if (rob[m8].v && rob[m8].sn < rob[ndx].sn && rob[m8].decbus.pred) begin
-			if (rob[m8].done==2'b11 && rob[m8].pred_status[7]==FALSE)
+			if (rob[m8].done==2'b11 && rob[m8].pred_status[63:56]==8'h00)
 				fnPredFalse = TRUE;
 		end
 	end
