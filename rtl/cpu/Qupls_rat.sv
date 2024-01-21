@@ -640,24 +640,21 @@ if (rst) begin
 	new_chkpt1 <= 1'd0;
 end
 else begin
-	if (en)
-		new_chkpt <= 'd0;
+	new_chkpt <= 'd0;
 	if (restore) begin
 		cndx <= miss_cp;
 		$display("Restoring checkpint %d.", miss_cp);
 	end
 	else if (inc_chkpt) begin
 		new_chkpt <= 1'b1;
+		cndx <= (cndx + 1) % NCHECK;
 		$display("Setting checkpoint %d.", (cndx + 1) % NCHECK);
 	end
-	if (en & new_chkpt) begin
-		cndx <= (cndx + 1) % NCHECK;
-	end
-	if (en)
-		new_chkpt1 <= new_chkpt;
+	new_chkpt1 <= new_chkpt;
 end
 
 // Stall the enqueue of instructions if there are too many outstanding branches.
+// Also stall for a new checkpoint.
 always_comb
 if (rst)
 	stallq <= 'd0;
@@ -666,6 +663,8 @@ else begin
 	for (n3 = 0; n3 < AREGS; n3 = n3 + 1)
 		if (/*(rrn[n3]==8'd0 && rn[n3]!=7'd0) || */ qbr && nob==6'd15)
 			stallq <= 1'b0;	// ToDo: Fix
+	if (inc_chkpt|new_chkpt)
+		stallq <= 1'b1;
 end
 
 

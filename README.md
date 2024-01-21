@@ -16,7 +16,7 @@ Work started on Qupls in November of 2023. Many years of work have gone into pri
 * 32 entry (or more) reorder entry buffer (ROB)
 * 32 general purpose registers, unified integer and float register file
 * 32 vector registers
-* Dual operation instructions: Rt = Ra <op> Rb <op> Rc
+* Dual operation instructions: Rt = Ra op Rb op Rc
 * Conditional relative branch instructions with 19-bit displacements
 * 4-way Out-of-order execution of instructions
 * 128 entry, two way TLB for virtual memory support, shared between instruction and data
@@ -69,7 +69,7 @@ An interrupt will cause the stack pointer to automatically switch to one dedicat
 
 ## Instruction Set
 ### Dual Operation Instructions
-Many register-register operate instructions support dual operations on the registers. They are of the form: Rt = (Ra <op> Rb) <op> Rc. For instance, the AND_OR instruction performs an AND operation followed by an OR operation.
+Many register-register operate instructions support dual operations on the registers. They are of the form: Rt = (Ra op Rb) op Rc. For instance, the AND_OR instruction performs an AND operation followed by an OR operation.
 
 ### Arithmetic Operations
 The ISA supports many arithmetic operations including add, sub, mulitply and divide. Multi-bit shifts and rotates are supported. And a full set of logic operations and their complements are supported. Many ALU operations support three source registers and one destination register.

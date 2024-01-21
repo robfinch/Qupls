@@ -472,7 +472,7 @@ reg lsq1_idle = 1'b1;
 
 address_t tlb0_res, tlb1_res;
 
-reg [2:0] branchmiss_state;
+branch_state_t branch_state;
 reg [4:0] excid;
 pc_address_t excmisspc;
 reg [2:0] excmissgrp;
@@ -946,8 +946,8 @@ Qupls_btb ubtb1
 	.pc4(XWID==2 ? pc2:XWID==3 ? pc3:pc4),
 	.next_pc(next_pc),
 	.takb(ntakb),
-	.branchmiss(branchmiss_state == 3'd2),
-	.branchmiss_state(branchmiss_state),
+	.branchmiss(branch_state == BS_CHKPT_RESTORED),
+	.branch_state(branch_state),
 	.misspc(misspc),
 	.commit_pc0(commit_pc0),
 	.commit_brtgt0(commit_brtgt0),
@@ -1011,7 +1011,7 @@ if (rst) begin
 end
 else begin
 	if (advance_pipeline) begin
-		bms <= branchmiss_state < 3'd7;
+		bms <= branch_state != BS_IDLE;
 		bms2 <= bms;
 		ihit3 <= ihit2;
 		do_bsr2 <= do_bsr && !stomp_x;
@@ -1027,11 +1027,11 @@ begin
 	if (!ihit2)
 //	if (!ihit3)
 		stomp_f = TRUE;
-	if (branchmiss_state < 3'd7) begin	// || bms
+	if (branch_state != BS_IDLE) begin	// || bms
 //		if (misspc != pc0)
 			stomp_f = TRUE;
 	end
-	else if (((do_bsr && !stomp_x) || do_bsr2) && !branchmiss && branchmiss_state==3'd7)
+	else if (((do_bsr && !stomp_x) || do_bsr2) && !branchmiss && branch_state==BS_IDLE)
 		stomp_f = TRUE;
 	else begin
 		/*
@@ -1056,8 +1056,8 @@ if (rst)
 	stomp_d <= TRUE;
 else begin
 	if (advance_pipeline)
-		stomp_d <= (stomp_x && !mipv) || branchmiss || branchmiss_state==3'd1;
-	else if (branchmiss_state==3'd1)
+		stomp_d <= (stomp_x && !mipv) || branchmiss || branch_state==BS_CHKPT_RESTORE;
+	else if (branch_state==BS_CHKPT_RESTORE)
 		stomp_d <= TRUE;
 end
 
@@ -1066,8 +1066,8 @@ if (rst)
 	stomp_r <= TRUE;
 else begin
 	if (advance_pipeline)
-		stomp_r <= stomp_d || branchmiss || branchmiss_state==3'd1;
-	else if (branchmiss_state==3'd1)
+		stomp_r <= stomp_d || branchmiss || branch_state==BS_CHKPT_RESTORE;
+	else if (branch_state==BS_CHKPT_RESTORE)
 		stomp_r <= TRUE;
 end
 
@@ -1084,8 +1084,8 @@ if (rst)
 	stomp_qm <= FALSE;
 else begin
 	if (advance_pipeline)
-		stomp_qm <= branchmiss || branchmiss_state==3'd1;
-	else if (branchmiss_state==3'd1)
+		stomp_qm <= branchmiss || branch_state==BS_CHKPT_RESTORE;
+	else if (branch_state==BS_CHKPT_RESTORE)
 		stomp_qm <= TRUE;
 end	
 
@@ -1093,7 +1093,7 @@ end
 always_comb
 begin
 	qd = {XWID{1'd0}};
-	if ((branchmiss || branchmiss_state < 3'd4) && |robentry_stomp)
+	if ((branchmiss || branch_state < BS_CAPTURE_MISSPC) && |robentry_stomp)
 		;
 //	else if ((ihito || mipv || mipv2 || mipv3 || mipv4) && !stallq)
 	else if (advance_pipeline)
@@ -1314,7 +1314,7 @@ else begin
 	// Prevent hang when the pipeline cannot advance because there is no room 
 	// to queue, yet the PC needs to change to get out of the branch miss state.
 	else begin
-		if (branchmiss_state==3'd5)
+		if (branch_state==BS_DONE)
 			pc <= next_pc;
 	end
 end
@@ -1677,7 +1677,7 @@ Qupls_extract_ins uiext1
 	.ic_line_i(ic_line_x),
 	.grp_i(igrp2),
 	.misspc(misspc),
-	.branchmiss(branchmiss_state!=3'd7 && branchmiss_state > 3'd3),
+	.branchmiss(branch_state > BS_STATE3),
 	.pc0_i(pc0_x),
 	.pc1_i(pc1_x),
 	.pc2_i(pc2_x),
@@ -1907,46 +1907,57 @@ checkpt_ndx_t [16:0] rn_cp;
 wire [16:0] prnv;
 reg [16:0] prnvv;
 wire [0:0] arnbank [16:0];
+reg [2:0] cndxi;
 
-assign arn[0] = db0_q.Ra;
-assign arn[1] = db0_q.Rb;
-assign arn[2] = db0_q.Rc;
-assign arn[3] = db0_q.Rt;
+always_comb
+begin
+	arn[0] = db0_q.Ra;
+	arn[1] = db0_q.Rb;
+	arn[2] = db0_q.Rc;
+	arn[3] = db0_q.Rt;
+	
+	arn[4] = db1_q.Ra;
+	arn[5] = db1_q.Rb;
+	arn[6] = db1_q.Rc;
+	arn[7] = db1_q.Rt;
+	
+	arn[8] = db2_q.Ra;
+	arn[9] = db2_q.Rb;
+	arn[10] = db2_q.Rc;
+	arn[11] = db2_q.Rt;
+	
+	arn[12] = db3_q.Ra;
+	arn[13] = db3_q.Rb;
+	arn[14] = db3_q.Rc;
+	arn[15] = db3_q.Rt;
+	
+	arn[16] = store_argC_aReg;
+	
+	rn_cp[0] = cndx;
+	rn_cp[1] = cndx;
+	rn_cp[2] = cndx;
+	rn_cp[3] = cndx;
+	
+	cndxi = (db0_q.br && !stomp0);
+	rn_cp[4] = cndx + cndxi;
+	rn_cp[5] = cndx + cndxi;
+	rn_cp[6] = cndx + cndxi;
+	rn_cp[7] = cndx + cndxi;
+	
+	cndxi = (db0_q.br && !stomp0) + (db1_q.br && !stomp1);
+	rn_cp[8] = cndx + cndxi;
+	rn_cp[9] = cndx + cndxi;
+	rn_cp[10] = cndx + cndxi;
+	rn_cp[11] = cndx + cndxi;
+	
+	cndxi = (db0_q.br && !stomp0) + (db1_q.br && !stomp1) + (db2_q.br && !stomp2);
+	rn_cp[12] = cndx + cndxi;
+	rn_cp[13] = cndx + cndxi;
+	rn_cp[14] = cndx + cndxi;
+	rn_cp[15] = cndx + cndxi;
 
-assign arn[4] = db1_q.Ra;
-assign arn[5] = db1_q.Rb;
-assign arn[6] = db1_q.Rc;
-assign arn[7] = db1_q.Rt;
-
-assign arn[8] = db2_q.Ra;
-assign arn[9] = db2_q.Rb;
-assign arn[10] = db2_q.Rc;
-assign arn[11] = db2_q.Rt;
-
-assign arn[12] = db3_q.Ra;
-assign arn[13] = db3_q.Rb;
-assign arn[14] = db3_q.Rc;
-assign arn[15] = db3_q.Rt;
-
-assign arn[16] = store_argC_aReg;
-
-assign rn_cp[0] = cndx;
-assign rn_cp[1] = cndx;
-assign rn_cp[2] = cndx;
-assign rn_cp[3] = cndx;
-assign rn_cp[4] = cndx;
-assign rn_cp[5] = cndx;
-assign rn_cp[6] = cndx;
-assign rn_cp[7] = cndx;
-assign rn_cp[8] = cndx;
-assign rn_cp[9] = cndx;
-assign rn_cp[10] = cndx;
-assign rn_cp[11] = cndx;
-assign rn_cp[12] = cndx;
-assign rn_cp[13] = cndx;
-assign rn_cp[14] = cndx;
-assign rn_cp[15] = cndx;
-assign rn_cp[16] = store_argC_cndx;
+	rn_cp[16] = store_argC_cndx;
+end
 
 assign arnbank[0] = sr.om & {2{|db0_q.Ra}} & 0;
 assign arnbank[1] = sr.om & {2{|db0_q.Rb}} & 0;
@@ -2000,7 +2011,7 @@ end
 
 always_comb
 	room_for_que = enqueue_room > 3'd3;
-assign nq = !(branchmiss || branchmiss_state < 3'd4) && advance_pipeline && room_for_que && (!stomp_q || stomp_qm);
+assign nq = !(branchmiss || (branch_state!=BS_IDLE && branch_state < BS_CAPTURE_MISSPC)) && advance_pipeline && room_for_que && (!stomp_q || stomp_qm);
 
 assign stallq = !rstcnt[2] || rat_stallq || ren_stallq || !room_for_que;
 
@@ -2021,10 +2032,10 @@ reg stomp1_q;
 reg stomp2_q;
 reg stomp3_q;
 // Detect stomp on leading instructions due to a branch.
-wire stomp0b_r = branchmiss_state!=3'd7 && branchmiss_state > 3'd3 && misspc > pc0_r;
-wire stomp1b_r = branchmiss_state!=3'd7 && branchmiss_state > 3'd3 && misspc > pc1_r;
-wire stomp2b_r = branchmiss_state!=3'd7 && branchmiss_state > 3'd3 && misspc > pc2_r;
-wire stomp3b_r = branchmiss_state!=3'd7 && branchmiss_state > 3'd3 && misspc > pc3_r;
+wire stomp0b_r = branch_state > BS_STATE3 && misspc > pc0_r;
+wire stomp1b_r = branch_state > BS_STATE3 && misspc > pc1_r;
+wire stomp2b_r = branch_state > BS_STATE3 && misspc > pc2_r;
+wire stomp3b_r = branch_state > BS_STATE3 && misspc > pc3_r;
 wire stomp0_r = ~qd_r[0]||stomp_r||stomp0b_r;
 wire stomp1_r = ~qd_r[1]||stomp_r||stomp1b_r||pt0_r||XWID < 2;
 wire stomp2_r = ~qd_r[2]||stomp_r||stomp2b_r||pt0_r||pt1_r || XWID < 3;
@@ -2063,7 +2074,7 @@ assign arnv[15] = !stomp3;
 
 assign arnv[16] = 1'b1;
 
-wire restore_chkpt = branchmiss_state==3'd1;// && !fcu_cjb;
+wire restore_chkpt = branch_state==BS_CHKPT_RESTORE;// && !fcu_cjb;
 pregno_t freea;
 pregno_t freeb;
 pregno_t freec;
@@ -2164,6 +2175,10 @@ begin
 end
 */
 
+reg [3:0] miss_cp;
+always_comb
+	miss_cp = rob[missid].cndx;
+
 Qupls_rat urat1
 (	
 	.rst(rst),
@@ -2174,10 +2189,10 @@ Qupls_rat urat1
 	.stallq(rat_stallq),
 	.cndx_o(cndx),
 	.rob(rob),
-	.stomp(robentry_stomp),// & {32{branchmiss_state==3'd4}}),
+	.stomp(robentry_stomp),// & {32{branch_state==BS_CAPTURE_MISSPC}}),
 	.avail_i(avail_reg),
 	.restore(restore_chkpt),
-	.miss_cp(rob[missid].cndx),
+	.miss_cp(miss_cp),
 	.qbr0(db0_q.br),
 	.qbr1(db1_q.br),
 	.qbr2(db2_q.br),
@@ -2566,8 +2581,9 @@ end
 always_ff @(posedge clk)
 for (n4 = 0; n4 < ROB_ENTRIES; n4 = n4 + 1) begin
 	robentry_stomp[n4] <=
-		((branchmiss|(takb/*&~rob[fcu_id].bt)*/ && (fcu_v2|fcu_v3|fcu_v4))) || branchmiss_state==3'd1)
+		((branchmiss|(takb/*&~rob[fcu_id].bt)*/ && (fcu_v2|fcu_v3|fcu_v4))) || (branch_state<BS_DONE && branch_state!=BS_IDLE))
 		&& rob[n4].sn > rob[missid].sn
+		&& fcu_idv	// miss_idv
 		//&& rob[n4].v
 	;
 end
@@ -2595,33 +2611,7 @@ begin
 		end
 	end
 end
-/*
-pc_address_t tgtpc;
 
-always_ff @(posedge clk)
-	case(fcu_bts)
-	BTS_DISP:
-		begin
-			tgtpc = fcu_pc + {{47{fcu_instr[39]}},fcu_instr[39:25],fcu_instr[12:11]};
-		end
-	BTS_BSR:
-		begin
-			tgtpc = alu0_pc + {{33{alu0_instr[39]}},alu0_instr[39:9]};
-		end
-	BTS_CALL:
-		begin
-			tgtpc = alu0_argA + {alu0_argI};
-		end
-	BTS_RTI:
-		tgtpc = fcu_instr[8:7]==2'd1 ? pc_stack[1] : pc_stack[0];
-	BTS_RET:
-		begin
-			tgtpc = fcu_argA + fcu_instr[11:7];
-		end
-	default:
-		tgtpc = RSTPC;
-	endcase
-*/
 pc_address_t tpc;
 always_comb
 	tpc = fcu_pc + 4'd5;
@@ -2634,6 +2624,7 @@ modFcuMissPC umisspc1
 	.pc(fcu_pc),
 	.pc_stack(pc_stack),
 	.bt(fcu_bt),
+	.takb(takb),
 	.argA(fcu_argA),
 	.argB(fcu_argB),
 	.argI(fcu_argI),
@@ -2715,14 +2706,14 @@ end
 // a row cannot happen as the stomp signal is active by then.
 reg brtgtvr;
 always_comb
-	branchmiss_next = (excmiss | fcu_branchmiss | brtgtv);// & ~branchmiss;
+	branchmiss_next = (excmiss | fcu_branchmiss);// & ~branchmiss;
 always_comb	//ff @(posedge clk)
 	branchmiss = branchmiss_next;
 always_comb
-	missid = excmiss ? excid : fcu_branchmiss_id;
+	missid = excmiss ? excid : fcu_id;//fcu_branchmiss_id;
 /*
 always_ff @(posedge clk)
-	if (branchmiss_state==3'd1) begin
+	if (branch_state==BS_CHKPT_RESTORE) begin
 		for (n24 = 0; n24 < ROB_ENTRIES; n24 = n24 + 1)
 			missidb[n24] = (excmiss ? excid : fcu_id)==n24;
 	end
@@ -2745,7 +2736,7 @@ always_ff @(posedge clk)
 if (rst)
 	misspc <= RSTPC;
 else begin
-	if (branchmiss_state==3'd4)
+	if (branch_state==BS_CAPTURE_MISSPC)
 //		misspc = excmiss ? excmisspc : fcu_misspc;
 		misspc = excmiss ? excmisspc : brtgtvr ? brtgt : fcu_misspc;
 end
@@ -2753,21 +2744,21 @@ always_ff @(posedge clk)
 if (rst)
 	miss_mcip <= 12'h1A0;
 else begin
-	if (branchmiss_state==3'd4)
+	if (branch_state==BS_CAPTURE_MISSPC)
 		miss_mcip <= fcu_miss_mcip;
 end
 always_ff @(posedge clk)
 if (rst)
 	missgrp <= 4'd0;
 else begin
-	if (branchmiss_state==3'd1)
+	if (branch_state==BS_CHKPT_RESTORE)
 		missgrp = excmiss ? excmissgrp : fcu_missgrp;
 end
 always_ff @(posedge clk)
 if (rst)
 	missir <= {33'd0,OP_NOP};
 else begin
-	if (branchmiss_state==3'd1)
+	if (branch_state==BS_CHKPT_RESTORE)
 		missir = excmiss ? excir : fcu_missir;
 end
 
@@ -2781,29 +2772,31 @@ wire s5s7 = (pc==misspc && ihito && (rob[fcu_id].done==2'b11 || fcu_idle)) ||
 
 always_ff @(posedge clk)
 if (rst)
-	branchmiss_state <= 3'd7;
+	branch_state <= BS_IDLE;
 else begin
 	if (1 || advance_pipeline) begin
-		case(branchmiss_state)
-		3'd7:
+//		if (fcu_rndxv && fcu_idle && branch_state==BS_IDLE)
+//			branch_state <= 3'd0;
+		case(branch_state)
+		BS_IDLE:
 			if (branchmiss)
-				branchmiss_state <= 3'd1;
-		3'd1:
-			branchmiss_state <= 3'd2;
-		3'd2:
-			branchmiss_state <= 3'd3;
-		3'd3:
-			branchmiss_state <= 3'd4;
-		3'd4:
+				branch_state <= BS_CHKPT_RESTORE;
+		BS_CHKPT_RESTORE:
+			branch_state <= BS_CHKPT_RESTORED;
+		BS_CHKPT_RESTORED:
+			branch_state <= BS_STATE3;
+		BS_STATE3:
+			branch_state <= BS_CAPTURE_MISSPC;
+		BS_CAPTURE_MISSPC:
 			if (s4s7)
-				branchmiss_state <= 3'd7;
+				branch_state <= BS_IDLE;
 			else
-				branchmiss_state <= 3'd5;
-		3'd5:
+				branch_state <= BS_DONE;
+		BS_DONE:
 			if (s5s7)
-				branchmiss_state <= 3'd7;
+				branch_state <= BS_IDLE;
 		default:
-			branchmiss_state <= 3'd7;
+			branch_state <= BS_IDLE;
 		endcase
 	end
 end
@@ -3932,7 +3925,7 @@ if (rst) begin
 	fcu_cp <= 4'd0;
 end
 else begin
-	if (fcu_rndxv && fcu_idle && branchmiss_state==3'd7) begin
+	if (fcu_rndxv && fcu_idle && branch_state==BS_IDLE) begin
 		fcu_argA <= rfo_fcu_argA;
 		fcu_argB <= rfo_fcu_argB;
 		fcu_argBr <= rob[fcu_rndx].decbus.immb | rfo_fcu_argB;
@@ -4023,7 +4016,7 @@ end
 reg dram0_idv2;
 reg fcu_setflags;
 always_comb
-	fcu_setflags = fcu_v && rob[fcu_id].v && fcu_v3 && !robentry_stomp[fcu_id] && branchmiss_state==3'd7 && fcu_idv;
+	fcu_setflags = fcu_v && rob[fcu_id].v && fcu_v3 && !robentry_stomp[fcu_id] && branch_state==BS_IDLE && fcu_idv;
 
 always_comb
 for (n29 = 0; n29 < 17; n29 = n29 + 1)
@@ -4099,7 +4092,7 @@ else begin
 	// invalidated (state 2), quing new instructions can begin.
 	// Only reset the tail if something was stomped on. It could be that there
 	// are no valid instructions following the branch in the queue.
-	if (branchmiss || branchmiss_state < 3'd4) begin
+	if (branchmiss || (branch_state < BS_CAPTURE_MISSPC && branch_state != BS_IDLE)) begin
 		;
 //		if (|robentry_stomp)
 //			tail0 <= stail;		// computed above
@@ -4202,7 +4195,7 @@ else begin
 			if (XWID > 1) begin
 				tEnque(8'h81-XWID,db1_q,pc1_q,grp_q,ins1_q,pt1_q,tail1,
 					stomp1, ornop1, prn[4], prn[5], prn[6], prn[7], Rt1_q, prnvv[4], prnvv[5], prnvv[6], prnvv[7],
-					cndx, grplen1, last1);
+					cndx + (db0_q.br && !stomp0), grplen1, last1);
 				if (prn[4]==11'd0 && db1_q.Ra!=9'd0) begin
 					$display("Enque1: Ra mapped to zero.");
 				end
@@ -4301,7 +4294,8 @@ else begin
 			if (XWID > 2) begin
 				tEnque(8'h82-XWID,db2_q,pc2_q,grp_q,ins2_q,pt2_q,tail2,
 					stomp2, ornop2, prn[8], prn[9], prn[10], prn[11], Rt2_q, prnvv[8], prnvv[9], prnvv[10], prnvv[11],
-					cndx, grplen2, last3);
+					cndx + (db0_q.br && !stomp0) + (db1_q.br && !stomp1),
+					grplen2, last3);
 				if (prn[8]==11'd0 && db2_q.Ra!=9'd0) begin
 					$display("Enque2: Ra mapped to zero.");
 				end
@@ -4407,7 +4401,8 @@ else begin
 			if (XWID > 3) begin
 				tEnque(8'h83-XWID,db3_q,pc3_q,grp_q,ins3_q,pt3_q,tail3,
 					stomp3, ornop3, prn[12], prn[13], prn[14], prn[15], Rt3_q, prnvv[12], prnvv[13], prnvv[14], prnvv[15],
-					cndx,grplen3,last3);
+					cndx + (db0_q.br && !stomp0) + (db1_q.br && !stomp1) + (db2_q.br && !stomp2),
+					grplen3,last3);
 				if (prn[12]==11'd0 && !db3_q.Raz) begin
 					$display("Enque3: Ra mapped to zero.");
 				end
@@ -4603,7 +4598,7 @@ else begin
 		end
 	end
 
-	if (fcu_rndxv && fcu_idle && branchmiss_state==3'd7) begin
+	if (fcu_rndxv && fcu_idle && branch_state==BS_IDLE) begin
 		fcu_idle <= FALSE;
 		fcu_v <= VAL;
 		fcu_idv <= VAL;
@@ -4611,7 +4606,7 @@ else begin
 	  fcu_new <= TRUE;
 	end
 
-	if (brtgtv && branchmiss_state==3'd7) begin
+	if (brtgtv && branch_state==BS_IDLE) begin
 		fcu_v <= VAL;
 	end
 
@@ -5554,11 +5549,14 @@ else begin
 		fcu_idle <= TRUE;
 		fcu_idv <= INV;
 	end
+	// Redo instruction as copy target.
 	for (n3 = 0; n3 < ROB_ENTRIES; n3 = n3 + 1) begin
 		if (robentry_stomp[n3]) begin
 //			rob[n3].v <= INV;
 			rob[n3].decbus.cpytgt <= TRUE;
+			rob[n3].done <= {FALSE,FALSE};
 			rob[n3].out <= {FALSE,FALSE};
+			rob[n3].cndx <= miss_cp;
 			rob[n3].lsq <= 1'd0;
 			// Clear corresponding LSQ entries.
 			if (rob[n3].lsq)
@@ -6308,16 +6306,6 @@ begin
 end
 endtask
 
-always_ff @(posedge clk)
-if (rst)
-	scan <= 6'd0;
-else begin
-	if (branchmiss_state==3'd4)
-		scan <= 6'd0;
-	else if (branchmiss_state==3'd5)
-		scan <= scan + 6'd4;
-end
-
 // Queue to the load / store queue.
 
 task tEnqueLSE;
@@ -6638,13 +6626,14 @@ assign out = out1[63:1];
 
 endmodule
 
-module modFcuMissPC(instr, bts, pc, pc_stack, micro_ip, bt, argA, argB, argI, ibh, misspc, missgrp, miss_mcip, tgtpc);
+module modFcuMissPC(instr, bts, pc, pc_stack, micro_ip, bt, takb, argA, argB, argI, ibh, misspc, missgrp, miss_mcip, tgtpc);
 input ex_instruction_t instr;
 input bts_t bts;
 input pc_address_t pc;
 input mc_address_t micro_ip;
 input pc_address_t [8:0] pc_stack;
 input bt;
+input takb;
 input value_t argA;
 input value_t argB;
 input value_t argI;
@@ -6717,8 +6706,28 @@ begin
 	*/
 	BTS_DISP:
 		begin
-			misspc = bt ? pc + 4'd5 : tgtpc;
-			miss_mcip = bt ? micro_ip + 3'd4 : instr.ins[33:22];
+			case({bt,takb})
+			2'b00:
+				begin
+					misspc = tgtpc;
+					miss_mcip = instr.ins[33:22];
+				end
+			2'b01:
+				begin
+					misspc = tgtpc;
+					miss_mcip = instr.ins[33:22];
+				end
+			2'b10:
+				begin
+					misspc = pc + 4'd5;
+					miss_mcip = micro_ip + 3'd4;
+				end
+			2'b11:
+				begin
+					misspc = pc + 4'd5;
+					miss_mcip = micro_ip + 3'd4;
+				end
+			endcase
 //			misspc = bt ? pc + 4'd5 : pc + {{47{instr[39]}},instr[39:25],instr[12:11]};
 		end
 	BTS_BSR:

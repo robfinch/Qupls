@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2023-2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -38,7 +38,7 @@ import QuplsPkg::*;
 
 module Qupls_btb(rst, clk, en, rclk, block_header, igrp, length_byte,
 	pc, pc0, pc1, pc2, pc3, pc4, next_pc, takb, do_bsr, bsr_tgt,
-	branchmiss, branchmiss_state, misspc,
+	branchmiss, branch_state, misspc,
 	commit_pc0, commit_brtgt0, commit_takb0, commit_grp0,
 	commit_pc1, commit_brtgt1, commit_takb1, commit_grp1,
 	commit_pc2, commit_brtgt2, commit_takb2, commit_grp2,
@@ -63,7 +63,7 @@ output reg takb;
 input do_bsr;
 input pc_address_t bsr_tgt;
 input branchmiss;
-input [2:0] branchmiss_state;
+input branch_state_t branch_state;
 input pc_address_t misspc;
 input pc_address_t commit_pc0;
 input pc_address_t commit_brtgt0;
@@ -427,7 +427,7 @@ begin
 	// On a branch miss the misspc will have the correct block so the
 	// cache line can be fetched, but the group will not be valid yet.
 	// The group is loaded at state 1 below.
-	if (branchmiss_state==3'd5) begin
+	if (branch_state==BS_DONE) begin
 		next_pc <= misspc;
 		takb <= 1'b1;
 	end
