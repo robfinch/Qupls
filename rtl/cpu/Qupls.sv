@@ -1327,13 +1327,15 @@ if (rst) begin
 end
 else begin
   if (~hirq) begin
-  	if ((pe_allqd|allqd) && advance_pipeline)
+  	if ((pe_allqd||allqd||&next_cqd) && advance_pipeline)
 			micro_ip <= (mcbrtgtv & mipv) ? mcbrtgt : next_micro_ip;
 	end
-			 if (mip0v) begin micro_ip <= mip0; end
-	else if (mip1v) begin micro_ip <= mip1; end
-	else if (mip2v) begin micro_ip <= mip2; end
-	else if (mip3v) begin micro_ip <= mip3; end
+	if (micro_ip==12'h000) begin
+				 if (mip0v) begin micro_ip <= mip0; end
+		else if (mip1v) begin micro_ip <= mip1; end
+		else if (mip2v) begin micro_ip <= mip2; end
+		else if (mip3v) begin micro_ip <= mip3; end
+	end
 end
 
 always_comb
