@@ -36,9 +36,10 @@
 
 import QuplsPkg::*;
 
-module Qupls_btb(rst, clk, en, rclk, block_header, igrp, length_byte,
+module Qupls_btb(rst, clk, en, rclk, micro_code_active, block_header, igrp, length_byte,
 	pc, pc0, pc1, pc2, pc3, pc4, next_pc, takb, do_bsr, bsr_tgt,
 	branchmiss, branch_state, misspc,
+	mip0v, mip1v, mip2v, mip3v,
 	commit_pc0, commit_brtgt0, commit_takb0, commit_grp0,
 	commit_pc1, commit_brtgt1, commit_takb1, commit_grp1,
 	commit_pc2, commit_brtgt2, commit_takb2, commit_grp2,
@@ -50,6 +51,7 @@ input clk;
 input en;										// enable group to advance
 input rclk;
 input ibh_t block_header;
+input micro_code_active;
 output reg [2:0] igrp;
 input [7:0] length_byte;
 input pc_address_t pc;
@@ -60,6 +62,10 @@ input pc_address_t pc3;
 input pc_address_t pc4;
 output pc_address_t next_pc;
 output reg takb;
+input mip0v;
+input mip1v;
+input mip2v;
+input mip3v;
 input do_bsr;
 input pc_address_t bsr_tgt;
 input branchmiss;
@@ -493,7 +499,17 @@ begin
 			else
 				next_pc <= {pc[$bits(pc_address_t)-1:6],pc4[5:0]};
 			*/
-			next_pc <= pc + 5'd20;	// four instructions
+			if (micro_code_active)
+				next_pc <= pc;
+			else begin
+				case(1'b1)
+				mip0v:	next_pc <= pc + 5'd5;
+				mip1v:	next_pc <= pc + 5'd10;
+				mip2v:	next_pc <= pc + 5'd15;
+				mip3v:	next_pc <= pc + 5'd20;
+				default:	next_pc <= pc + 5'd20;	// four instructions
+				endcase
+			end
 		end
 		takb <= 1'b0;
 	end

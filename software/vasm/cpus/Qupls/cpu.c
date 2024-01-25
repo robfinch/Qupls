@@ -91,13 +91,15 @@ static int regop[32] = {
 mnemonic mnemonics[]={
 	"abs",	{OP_REG,OP_REG,0,0,0}, {R2,CPU_ALL,0,0x01000002LL,5},
 
-	"add", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(4LL)|OPC(2LL),5,SZ_UNSIZED,0},	
+	"add", {OP_VREG,OP_VREG,OP_VREG,0,0}, {R2,CPU_ALL,0,R2FUNC(4LL)|OP4(8LL)|OPC(38LL),5,SZ_UNSIZED,0},	
+	"add", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(4LL)|OP4(8LL)|OPC(2LL),5,SZ_UNSIZED,0},	
 	"add", {OP_REG,OP_IMM,OP_REG,0,0}, {RIA,CPU_ALL,0,R2FUNC(4LL)|OPC(2LL),5,SZ_UNSIZED,0},	
 	"add", {OP_REG,OP_REG,OP_IMM,0,0}, {RI,CPU_ALL,0,OPC(4LL),5,SZ_UNSIZED,0,0,OPC(2LL)|R2FUNC(4LL)},	
 	"addh",{OP_REG,OP_IMM,0,0,0}, {RISH,CPU_ALL,0,0x6000LL|OPC(49LL),5,SZ_UNSIZED,0,0},
 	"addm",{OP_REG,OP_IMM,0,0,0}, {RISM,CPU_ALL,0,0x2000LL|OPC(49LL),5,SZ_UNSIZED,0,0},
 	"adds",{OP_REG,OP_IMM,OP_IMM,0,0}, {RIS,CPU_ALL,0,OPC(49LL),5,SZ_UNSIZED,0,0},
 
+	"and", {OP_VREG,OP_VREG,OP_VREG,0,0}, {R2,CPU_ALL,0,R2FUNC(0)|OPC(38LL),5,SZ_UNSIZED,0},	
 	"and", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(0)|OPC(2LL),5,SZ_UNSIZED,0},	
 	"and", {OP_REG,OP_IMM,OP_REG,0,0}, {RIA,CPU_ALL,0,R2FUNC(0)|OPC(2LL),5,SZ_UNSIZED,0},	
 	"and", {OP_REG,OP_REG,OP_IMM,0,0}, {RI,CPU_ALL,0,OPC(8LL),5,SZ_UNSIZED,0,0},	
@@ -223,6 +225,7 @@ mnemonic mnemonics[]={
 
 	"enter", {OP_IMM,0,0,0,0}, {ENTER,CPU_ALL,0,OPC(52LL),5,SZ_UNSIZED,0},	
 
+	"eor", {OP_VREG,OP_VREG,OP_VREG,0,0}, {R2,CPU_ALL,0,R2FUNC(2LL)|OPC(38LL),5,SZ_UNSIZED,0},	
 	"eor", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(2LL)|OPC(2LL),5,SZ_UNSIZED,0},	
 	"eor", {OP_REG,OP_IMM,OP_REG,0,0}, {RIA,CPU_ALL,0,R2FUNC(2LL)|OPC(2LL),5,SZ_UNSIZED,0},	
 	"eor", {OP_REG,OP_REG,OP_IMM,0,0}, {RI,CPU_ALL,0,OPC(10LL),5,SZ_UNSIZED,0,0},	
@@ -288,7 +291,8 @@ mnemonic mnemonics[]={
 	"ldh",	{OP_REG,OP_REGIND,0,0}, {REGIND,CPU_ALL,0,OPC(72LL),5, SZ_UNSIZED, SZ_HEXI},	
 	"ldh",	{OP_REG,OP_SCNDX,0,0,0}, {SCNDX,CPU_ALL,0,LSFUNC(8LL)|OPC(79LL),5, SZ_UNSIZED, SZ_HEXI},	
 
-	"ldi", {OP_VREG|OP_REG,OP_NEXTREG,OP_IMM,0,0}, {RI,CPU_ALL,0,OPC(4LL),5,SZ_UNSIZED, 0},	
+	"ldi", {OP_VREG,OP_NEXT_VREG,OP_IMM,0,0}, {RI,CPU_ALL,0,OPC(28LL),5,SZ_UNSIZED, 0},	
+	"ldi", {OP_REG,OP_NEXTREG,OP_IMM,0,0}, {RI,CPU_ALL,0,OPC(4LL),5,SZ_UNSIZED, 0},	
 
 	"ldo",	{OP_REG,OP_IMM,0,0,0}, {DIRECT,CPU_ALL,0,OPC(70LL),5, SZ_UNSIZED, SZ_OCTA},	
 	"ldo",	{OP_REG,OP_REGIND,0,0}, {REGIND,CPU_ALL,0,OPC(70LL),5, SZ_UNSIZED, SZ_OCTA},	
@@ -378,6 +382,7 @@ mnemonic mnemonics[]={
 	"nor", {OP_REG,OP_REG,OP_REG,OP_REG,0}, {R2,CPU_ALL,0,R2FUNC(9LL)|OPC(2LL),5},	
 	"not", {OP_REG,OP_REG,0,0,0}, {R1,CPU_ALL,0,R1FUNC(7LL)|OPC(1),5},
 
+	"or", {OP_VREG,OP_VREG,OP_VREG,0,0}, {R2,CPU_ALL,0,R2FUNC(1LL)|OPC(38LL),5,SZ_UNSIZED,0},	
 	"or", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(1LL)|OPC(2LL),5,SZ_UNSIZED,0},	
 	"or", {OP_REG,OP_IMM,OP_REG,0,0}, {RIA,CPU_ALL,0,R2FUNC(1LL)|OPC(2LL),5,SZ_UNSIZED,0},	
 	"or", {OP_REG,OP_REG,OP_IMM,0,0}, {RI,CPU_ALL,0,OPC(9LL),5,SZ_UNSIZED,0,0},	
@@ -1222,6 +1227,12 @@ int parse_operand(char *p,int len,operand *op,int optype)
 	    op->value = number_expr((taddr)0);
 			return (PO_NEXT);
 		}
+		if (optype==OP_NEXT_VREG) {
+	    op->type = OP_VREG;
+	    op->basereg = 0;
+	    op->value = number_expr((taddr)0);
+			return (PO_NEXT);
+		}
 		if (optype==OP_NEXT) {
 	    op->value = number_expr((taddr)0);
 			return (PO_NEXT);
@@ -1954,11 +1965,11 @@ static void encode_vreg(uint64_t* insn, operand *op, mnemonic* mnemo, int i)
 		case R2:
 		case R2M:
 			if (i==0)
-				*insn = *insn| (RT(op->basereg)) | V(1);
+				*insn = *insn| (RT(op->basereg));
 			else if (i==1)
 				*insn = *insn| (RA(op->basereg));
 			else if (i==2)
-				*insn = *insn| (RB(op->basereg)) | VB(1);
+				*insn = *insn| (RB(op->basereg));
 			else if (i==3)
 				*insn = *insn| (RK(op->basereg));
 			break;
@@ -3334,7 +3345,7 @@ size_t encode_qupls_instruction(instruction *ip,section *sec,taddr pc,
     }
 
 		TRACE("Etho2:");
-		if (op.type==OP_REG) {
+		if (op.type==OP_REG || op.type==OP_VREG) {
 			encode_reg(insn, &op, mnemo, i);
 		}
 		else if (op.type==OP_REG6) {

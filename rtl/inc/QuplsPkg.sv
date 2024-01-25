@@ -53,7 +53,7 @@ parameter SIM = 1'b1;
 // Number of architectural registers there are in the core, including registers
 // not visible in the programming model. Each supported vector register counts
 // as eight registers.
-`define NREGS	168	// 330
+`define NREGS	192	// 330
 
 // Number of physical registers supporting the architectural ones and used in
 // register renaming. There must be significantly more physical registers than
@@ -230,6 +230,16 @@ typedef struct packed
 
 typedef logic [NREGS-1:1] reg_bitmask_t;
 typedef logic [5:0] ibh_offset_t;
+
+typedef enum logic [2:0] {
+	BS_IDLE = 3'd0,
+	BS_CHKPT_RESTORE = 3'd1,
+	BS_CHKPT_RESTORED = 3'd2,
+	BS_STATE3 = 3'd3,
+	BS_CAPTURE_MISSPC = 3'd4,
+	BS_DONE = 3'd5,
+	BS_DONE2 = 3'd6
+} branch_state_t;
 
 // The following enumeration not currently used.
 typedef enum logic [2:0] {
@@ -1291,6 +1301,8 @@ typedef struct packed
 	logic backbr;			// backwards target branch
 	bts_t bts;				// branch target source
 	logic r2;					// true if r1/r2 format instruction
+	logic macro;			// true if macro instruction
+	logic vec;				// true if vector instruction
 	logic alu;				// true if instruction must use alu (alu or mem)
 	logic alu0;				// true if instruction must use only alu #0
 	logic alu_pair;		// true if instruction requires pair of ALUs
@@ -1497,6 +1509,7 @@ typedef struct packed {
 	logic [3:0] cndx;					// checkpoint index
 	ex_instruction_t op;			// original instruction
 	pc_address_t pc;					// PC of instruction
+	mc_address_t mcip;				// Micro-code IP address
 	logic [2:0] grp;					// instruction group of PC
 } rob_entry_t;
 

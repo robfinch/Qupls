@@ -36,50 +36,70 @@
 
 import QuplsPkg::*;
 
-module Qupls_decode_Ra(om, ipl, instr, has_imma, Ra, Raz);
-input operating_mode_t om;
-input [2:0] ipl;
-input ex_instruction_t instr;
-input has_imma;
-output aregno_t Ra;
-output reg Raz;
+module Qupls_decode_macro(instr, macro);
+input instruction_t instr;
+output macro;
 
-function aregno_t fnRa;
-input ex_instruction_t ir;
-input has_imma;
+function fnIsMacro;
+input instruction_t ir;
 begin
-	if (has_imma)
-		fnRa = 9'd0;
-	else
-		case(ir.ins.any.opcode)
-		OP_RTD:
-			fnRa = ir.aRa;
-		OP_DBRA:
-			fnRa = 9'd55;
-		OP_FLT3:
-			fnRa = ir.aRa;
-		OP_VADDSI,OP_VANDSI,OP_VORSI,OP_VEORSI,
-		OP_ADDSI,OP_ANDSI,OP_ORSI,OP_EORSI:
-			fnRa = ir.aRt;
-		default:
-			if (fnImma(ir))
-				fnRa = 9'd0;
-			else
-				fnRa = ir.aRa;
+	case(ir.r2.opcode)
+	OP_R3V,OP_R3VS:
+		case(ir.r2.func)
+		FN_ADD:	fnIsMacro = 1'b1;
+		FN_CMP:	fnIsMacro = 1'b1;
+		FN_MUL:	fnIsMacro = 1'b1;
+		FN_MULW:	fnIsMacro = 1'b1;
+		FN_DIV:	fnIsMacro = 1'b1;
+		FN_SUB:	fnIsMacro = 1'b1;
+		FN_MULU: fnIsMacro = 1'b1;
+		FN_MULUW: fnIsMacro = 1'b1;
+		FN_DIVU: fnIsMacro = 1'b1;
+		FN_AND:	fnIsMacro = 1'b1;
+		FN_OR:	fnIsMacro = 1'b1;
+		FN_EOR:	fnIsMacro = 1'b1;
+		FN_NAND:	fnIsMacro = 1'b1;
+		FN_NOR:	fnIsMacro = 1'b1;
+		FN_ENOR:	fnIsMacro = 1'b1;
+		FN_SEQ:	fnIsMacro = 1'b1;
+		FN_SNE:	fnIsMacro = 1'b1;
+		FN_SLT:	fnIsMacro = 1'b1;
+		FN_SLE:	fnIsMacro = 1'b1;
+		FN_SLTU:	fnIsMacro = 1'b1;
+		FN_SLEU:	fnIsMacro = 1'b1;
+		FN_ZSEQ:	fnIsMacro = 1'b1;
+		FN_ZSNE:	fnIsMacro = 1'b1;
+		FN_ZSLT:	fnIsMacro = 1'b1;
+		FN_ZSLE:	fnIsMacro = 1'b1;
+		FN_ZSLTU:	fnIsMacro = 1'b1;
+		FN_ZSLEU:	fnIsMacro = 1'b1;
+		default:	fnIsMacro = 1'b0;
 		endcase
+	OP_VADDI:	
+		fnIsMacro = 1'b1;
+	OP_VCMPI:	
+		fnIsMacro = 1'b1;
+	OP_VMULI:	
+		fnIsMacro = 1'b1;
+	OP_VDIVI:	
+		fnIsMacro = 1'b1;
+	OP_VANDI:	
+		fnIsMacro = 1'b1;
+	OP_VORI:
+		fnIsMacro = 1'b1;
+	OP_VEORI:
+		fnIsMacro = 1'b1;
+	OP_VADDSI,OP_VORSI,OP_VANDSI,OP_VEORSI:
+						fnIsMacro = 1'b1;
+	OP_VSHIFT:
+		fnIsMacro = 1'b1;
+	OP_PUSH,OP_POP,OP_ENTER,OP_LEAVE:
+		fnIsMacro = 1'b1;
+	default:	fnIsMacro = 1'b0;
+	endcase
 end
 endfunction
 
-always_comb
-begin
-	Ra = fnRa(instr, has_imma);
-	if (Ra==9'd31) begin
-		if (om==2'd3)
-			Ra = 9'd32|ipl;
-		else
-			Ra = 9'd40|om;
-	end
-	Raz = ~|Ra;
-end
+assign macro = fnIsMacro(instr);
 
 endmodule

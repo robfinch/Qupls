@@ -57,7 +57,7 @@ begin
 		case(instr[0].ins.any.opcode)
 		OP_STB,OP_STW,OP_STT,OP_STO,OP_STH,OP_STX:
 			Rc = instr[0].aRt;
-		OP_SHIFT:
+		OP_SHIFT,OP_VSHIFT:
 			Rc = instr[0].aRc;
 		OP_R2:
 			Rc = instr[0].aRc;

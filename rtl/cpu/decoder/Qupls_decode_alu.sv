@@ -45,7 +45,7 @@ input instruction_t ir;
 begin
 	case(ir.r2.opcode)
 	OP_SYS:	fnIsAlu = 1'b0;
-	OP_R2:
+	OP_R2,OP_R3V,OP_R3VS:
 		case(ir.r2.func)
 		FN_ADD:	fnIsAlu = 1'b1;
 		FN_CMP:	fnIsAlu = 1'b1;
@@ -96,14 +96,14 @@ begin
 	OP_VADDSI,OP_VORSI,OP_VANDSI,OP_VEORSI,
 	OP_ADDSI,OP_ORSI,OP_ANDSI,OP_EORSI:
 						fnIsAlu = 1'b1;
-	OP_SHIFT:	fnIsAlu = 1'b1;
+	OP_SHIFT,OP_VSHIFT:
+		fnIsAlu = 1'b1;
 	OP_CSR:		fnIsAlu = 1'b1;
 	OP_MOV:		fnIsAlu = 1'b1;
 	OP_LDAX:	fnIsAlu = 1'b1;
 	OP_PFXA32,OP_PFXB32,OP_PFXC32,
 	OP_QFEXT,
 	OP_REGC,
-	OP_VEC,OP_VECZ,
 	OP_NOP,OP_PUSH,OP_POP,OP_ENTER,OP_LEAVE,OP_ATOM:
 		fnIsAlu = 1'b1;
 	OP_FENCE:

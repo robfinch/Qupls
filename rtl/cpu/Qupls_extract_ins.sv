@@ -45,12 +45,13 @@ import QuplsPkg::*;
 
 module Qupls_extract_ins(rst_i, clk_i, en_i, nop_i, nop_o, irq_i, hirq_i, vect_i,
 	branchmiss, misspc, mipv_i, mip_i, ic_line_i,reglist_active, grp_i, grp_o,
-	pc0_i, pc1_i, pc2_i, pc3_i, pc4_i, pc5_i, pc6_i, pc7_i, pc8_i,
-	ls_bmf_i, pack_regs_i, scale_regs_i, regcnt_i,
+	mc_offs, pc0_i, pc1_i, pc2_i, pc3_i, pc4_i, pc5_i, pc6_i, pc7_i, pc8_i,
+	ls_bmf_i, pack_regs_i, scale_regs_i, regcnt_i, mc_adr,
 	mc_ins0_i, mc_ins1_i, mc_ins2_i, mc_ins3_i, mc_ins4_i, mc_ins5_i, mc_ins6_i, mc_ins7_i, mc_ins8_i,
 	iRn0_i, iRn1_i, iRn2_i, iRn3_i,
 	ins0_o, ins1_o, ins2_o, ins3_o, ins4_o, ins5_o, ins6_o, ins7_o, ins8_o,
 	pc0_o, pc1_o, pc2_o, pc3_o, pc4_o, pc5_o, pc6_o, pc7_o, pc8_o,
+	mcip0_o, mcip1_o, mcip2_o, mcip3_o,
 	do_bsr, bsr_tgt);
 input rst_i;
 input clk_i;
@@ -65,9 +66,11 @@ input branchmiss;
 input pc_address_t misspc;
 input mipv_i;
 input [11:0] mip_i;
+input pc_address_t mc_adr;
 input [1023:0] ic_line_i;
 input [2:0] grp_i;
 output reg [2:0] grp_o;
+input pc_address_t mc_offs;
 input pc_address_t pc0_i;
 input pc_address_t pc1_i;
 input pc_address_t pc2_i;
@@ -112,6 +115,10 @@ output pc_address_t pc5_o;
 output pc_address_t pc6_o;
 output pc_address_t pc7_o;
 output pc_address_t pc8_o;
+output mc_address_t mcip0_o;
+output mc_address_t mcip1_o;
+output mc_address_t mcip2_o;
+output mc_address_t mcip3_o;
 output reg do_bsr;
 output pc_address_t bsr_tgt;
 
@@ -222,56 +229,56 @@ begin
 	ins3_.pred_btst = 6'd0;
 end
 
-// If there was a branch miss, one of the PCs must match the miss PC or an
-// illegal instruction address was targeted. Instructions before the miss PC
-// should not be executed.
-
+// If there was a branch miss, instructions before the miss PC should not be
+// executed.
 reg nop0,nop1,nop2,nop3;
+
 always_comb nop0 = nop_i || (branchmiss && misspc > pc0_i);
 always_comb nop1 = nop_i || (branchmiss && misspc > pc1_i);
 always_comb nop2 = nop_i || (branchmiss && misspc > pc2_i);
-always_comb nop3 = nop_i;
+always_comb nop3 = nop_i || (branchmiss && misspc > pc3_i);
+/*
+always_comb nop0 = FALSE;
+always_comb nop1 = FALSE;
+always_comb nop2 = FALSE;
+always_comb nop3 = FALSE;
+*/
 reg bsr0,bsr1,bsr2,bsr3;
 pc_address_t bsr0_tgt;
 pc_address_t bsr1_tgt;
 pc_address_t bsr2_tgt;
 pc_address_t bsr3_tgt;
 
-always_comb bsr0 = ins0_.ins.any.opcode==OP_BSR;
-always_comb bsr1 = ins1_.ins.any.opcode==OP_BSR;
-always_comb bsr2 = ins2_.ins.any.opcode==OP_BSR;
-always_comb bsr3 = ins3_.ins.any.opcode==OP_BSR;
-always_comb bsr0_tgt = pc0_i + {{36{ins0_.ins[39]}},ins0_.ins[39:12]};
-always_comb bsr1_tgt = pc1_i + {{36{ins1_.ins[39]}},ins1_.ins[39:12]};
-always_comb bsr2_tgt = pc2_i + {{36{ins2_.ins[39]}},ins2_.ins[39:12]};
-always_comb bsr3_tgt = pc3_i + {{36{ins3_.ins[39]}},ins3_.ins[39:12]};
+always_comb bsr0 = ins0.ins.any.opcode==OP_BSR;
+always_comb bsr1 = ins1.ins.any.opcode==OP_BSR;
+always_comb bsr2 = ins2.ins.any.opcode==OP_BSR;
+always_comb bsr3 = ins3.ins.any.opcode==OP_BSR;
+always_comb bsr0_tgt = pc0_o + {{36{ins0.ins[39]}},ins0.ins[39:12]};
+always_comb bsr1_tgt = pc1_o + {{36{ins1.ins[39]}},ins1.ins[39:12]};
+always_comb bsr2_tgt = pc2_o + {{36{ins2.ins[39]}},ins2.ins[39:12]};
+always_comb bsr3_tgt = pc3_o + {{36{ins3.ins[39]}},ins3.ins[39:12]};
 always_comb
 begin
 	do_bsr = FALSE;
-	bsr_tgt = pc4;
+	bsr_tgt = pc4_o;
 	if (bsr0) begin
-//		do_bsr = TRUE;
+		do_bsr = TRUE;
 		bsr_tgt = bsr0_tgt;
 	end
 	else if (bsr1) begin
-//		do_bsr = TRUE;
+		do_bsr = TRUE;
 		bsr_tgt = bsr1_tgt;
 	end
 	else if (bsr2) begin
-//		do_bsr = TRUE;
+		do_bsr = TRUE;
 		bsr_tgt = bsr2_tgt;
 	end
 	else if (bsr3) begin
-//		do_bsr = TRUE;
+		do_bsr = TRUE;
 		bsr_tgt = bsr3_tgt;
 	end
 end
 
-/*
-always_comb nop1 = nop_i || (branchmiss && misspc > pc1_i) || (pc1[5:0] >= ic_line2[501:496] && !mipv_i);
-always_comb nop2 = nop_i || (branchmiss && misspc > pc2_i) || (pc2[5:0] >= ic_line2[501:496] && !mipv_i);
-always_comb nop3 = nop_i || pc3[5:0] >= ic_line2[501:496] && !mipv_i;
-*/
 Qupls_ins_extract_mux umux0
 (
 	.rst(rst_i),
@@ -373,28 +380,28 @@ generate begin : gInsExt
 		always_ff @(posedge clk)
 		if (en)
 			ins4.ins <= hirq ? {'d0,FN_IRQ,1'b0,vect_i,5'd0,2'd0,irq_i,OP_SYS} : 
-				nop_i ? {33'd0,OP_NOP} :
-				mipv ? mc_ins4 : ic_line2 >> {pc4[5:0],3'd0};
+				mipv ? mc_ins4 : nop_i ? {33'd0,OP_NOP} :
+				ic_line2 >> {pc4[5:0],3'd0};
 		always_ff @(posedge clk)
 		if (en)
 			ins5.ins <= hirq ? {'d0,FN_IRQ,1'b0,vect_i,5'd0,2'd0,irq_i,OP_SYS} :
-				nop_i ? {33'd0,OP_NOP} :
-				mipv ? mc_ins5 : ic_line2 >> {pc5[5:0],3'd0};
+				mipv ? mc_ins5 : nop_i ? {33'd0,OP_NOP} :
+				ic_line2 >> {pc5[5:0],3'd0};
 		always_ff @(posedge clk)
 		if (en)
 			ins6.ins <= hirq ? {'d0,FN_IRQ,1'b0,vect_i,5'd0,2'd0,irq_i,OP_SYS} :
-				nop_i ? {33'd0,OP_NOP} :
-				mipv ? mc_ins6 : ic_line2 >> {pc6[5:0],3'd0};
+				mipv ? mc_ins6 : nop_i ? {33'd0,OP_NOP} :
+				ic_line2 >> {pc6[5:0],3'd0};
 		always_ff @(posedge clk)
 		if (en)
 			ins7.ins <= hirq ? {'d0,FN_IRQ,1'b0,vect_i,5'd0,2'd0,irq_i,OP_SYS} :
-				nop_i ? {33'd0,OP_NOP} :
-				mipv ? mc_ins7 : ic_line2 >> {pc7[5:0],3'd0};
+				mipv ? mc_ins7 : nop_i ? {33'd0,OP_NOP} :
+				ic_line2 >> {pc7[5:0],3'd0};
 		always_ff @(posedge clk)
 		if (en)
 			ins8.ins <= hirq ? {'d0,FN_IRQ,1'b0,vect_i,5'd0,2'd0,irq_i,OP_SYS} :
-				nop_i ? {33'd0,OP_NOP} :
-				mipv ? mc_ins8 : ic_line2 >> {pc8[5:0],3'd0};
+				mipv ? mc_ins8 : nop_i ? {33'd0,OP_NOP} :
+				ic_line2 >> {pc8[5:0],3'd0};
 	end
 	else begin
 		always_ff @(posedge clk) ins4 <= {$bits(ex_instruction_t){1'b0}};
@@ -428,5 +435,10 @@ always_ff @(posedge clk) if (en) pc6_o <= pc6;
 always_ff @(posedge clk) if (en) pc7_o <= pc7;
 always_ff @(posedge clk) if (en) pc8_o <= pc8;
 always_ff @(posedge clk) if (en) grp_o <= grp_i;
+
+always_ff @(posedge clk) if (en) mcip0_o <= mip_i;
+always_ff @(posedge clk) if (en) mcip1_o <= |mip_i ? mip_i | 12'h001 : 12'h000;
+always_ff @(posedge clk) if (en) mcip2_o <= |mip_i ? mip_i | 12'h002 : 12'h000;
+always_ff @(posedge clk) if (en) mcip3_o <= |mip_i ? mip_i | 12'h003 : 12'h000;
 
 endmodule

@@ -1633,7 +1633,7 @@ case(micro_ip)
 	end			// PC = Mem[FFFFFFF0]
 12'h1BB:	
 	begin
-		next_ip = 12'h000;
+		next_ip = 12'h1BC;
 		instr.ins = {21'h00000,2'd2,5'd0,5'd0,OP_JSR};
 		instr.aRa = MC0;
 		instr.aRt = 9'd0;
@@ -1986,7 +1986,7 @@ case(micro_ip)
 // -----------------------------------------------------------------------------
 12'h200:
 	begin
-		next_ip = 12'h204; 
+		next_ip = 12'h201; 
 		instr.aRa = {micro_ir.r3.Ra,3'd0};
 		instr.aRb = {micro_ir.r3.Rb,3'd0};
 		instr.aRc = {micro_ir.r3.Rc,3'd0};
@@ -1996,7 +1996,7 @@ case(micro_ip)
 	end
 12'h201:
 	begin
-		next_ip = 12'h204; 
+		next_ip = 12'h202; 
 		instr.aRa = {micro_ir.r3.Ra,3'd1};
 		instr.aRb = {micro_ir.r3.Rb,3'd1};
 		instr.aRc = {micro_ir.r3.Rc,3'd1};
@@ -2006,7 +2006,7 @@ case(micro_ip)
 	end
 12'h202:
 	begin
-		next_ip = 12'h204; 
+		next_ip = 12'h203; 
 		instr.aRa = {micro_ir.r3.Ra,3'd2};
 		instr.aRb = {micro_ir.r3.Rb,3'd2};
 		instr.aRc = {micro_ir.r3.Rc,3'd2};
@@ -2026,7 +2026,7 @@ case(micro_ip)
 	end
 12'h204:
 	begin
-		next_ip = 12'h000; 
+		next_ip = 12'h205; 
 		instr.aRa = {micro_ir.r3.Ra,3'd4};
 		instr.aRb = {micro_ir.r3.Rb,3'd4};
 		instr.aRc = {micro_ir.r3.Rc,3'd4};
@@ -2036,7 +2036,7 @@ case(micro_ip)
 	end
 12'h205:
 	begin
-		next_ip = 12'h000; 
+		next_ip = 12'h206; 
 		instr.aRa = {micro_ir.r3.Ra,3'd5};
 		instr.aRb = {micro_ir.r3.Rb,3'd5};
 		instr.aRc = {micro_ir.r3.Rc,3'd5};
@@ -2046,7 +2046,7 @@ case(micro_ip)
 	end
 12'h206:
 	begin
-		next_ip = 12'h000; 
+		next_ip = 12'h207; 
 		instr.aRa = {micro_ir.r3.Ra,3'd6};
 		instr.aRb = {micro_ir.r3.Rb,3'd6};
 		instr.aRc = {micro_ir.r3.Rc,3'd6};
@@ -2056,7 +2056,7 @@ case(micro_ip)
 	end
 12'h207:
 	begin
-		next_ip = 12'h000;
+		next_ip = 12'h208;
 		instr.aRa = {micro_ir.r3.Ra,3'd7};
 		instr.aRb = {micro_ir.r3.Rb,3'd7};
 		instr.aRc = {micro_ir.r3.Rc,3'd7};
@@ -2064,7 +2064,18 @@ case(micro_ip)
 		instr.ins = micro_ir;
 		instr.pred_btst = 6'd7;
 	end
-12'h208:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+
+12'h208:
+	begin
+		next_ip = 12'h209;
+		instr.ins = {28'h5,5'd0,OP_BSR};
+		instr.aRa = 9'd0;
+		instr.aRb = 9'd0;
+		instr.aRc = 9'd0;
+		instr.aRt = 9'd0;
+	end
+
+//12'h208:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
 12'h209:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
 12'h20A:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
 12'h20B:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
@@ -2153,7 +2164,7 @@ case(micro_ip)
 	end
 12'h217:
 	begin
-		next_ip = 12'h000; 
+		next_ip = 12'h218; 
 		instr.lane = 3'd7;
 		instr.aRa = {micro_ir.r3.Ra,3'd7};
 		instr.aRb = {3'd0,micro_ir.r3.Rb};
@@ -2162,7 +2173,18 @@ case(micro_ip)
 		instr.ins = micro_ir;
 		instr.pred_btst = 6'd7;
 	end
-12'h218:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+
+12'h218:
+	begin
+		next_ip = 12'h219;
+		instr.ins = {28'h5,5'd0,OP_BSR};
+		instr.aRa = 9'd0;
+		instr.aRb = 9'd0;
+		instr.aRc = 9'd0;
+		instr.aRt = 9'd0;
+	end
+
+//12'h218:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
 12'h219:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
 12'h21A:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
 12'h21B:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
@@ -2249,7 +2271,7 @@ case(micro_ip)
 	end
 12'h227:
 	begin
-		next_ip = 12'h000; 
+		next_ip = 12'h228; 
 		instr.lane = 3'd7;
 		instr.aRa = {micro_ir.r3.Ra,3'd7};
 		instr.aRb = 9'd0;
@@ -2258,7 +2280,18 @@ case(micro_ip)
 		instr.ins = micro_ir;
 		instr.pred_btst = 6'd7;
 	end
-12'h228:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+
+12'h228:
+	begin
+		next_ip = 12'h229;
+		instr.ins = {28'h5,5'd0,OP_BSR};
+		instr.aRa = 9'd0;
+		instr.aRb = 9'd0;
+		instr.aRc = 9'd0;
+		instr.aRt = 9'd0;
+	end
+
+//12'h228:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
 12'h229:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
 12'h22A:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
 12'h22B:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
@@ -2345,7 +2378,7 @@ case(micro_ip)
 	end
 12'h237:
 	begin
-		next_ip = 12'h000; 
+		next_ip = 12'h238; 
 		instr.lane = 3'd7;
 		instr.aRa = {micro_ir.r3.Rt,3'd7};
 		instr.aRb = 9'd0;
@@ -2354,7 +2387,18 @@ case(micro_ip)
 		instr.ins = micro_ir;
 		instr.pred_btst = 6'd7;
 	end
-12'h238:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
+
+12'h238:
+	begin
+		next_ip = 12'h239;
+		instr.ins = {28'h5,5'd0,OP_BSR};
+		instr.aRa = 9'd0;
+		instr.aRb = 9'd0;
+		instr.aRc = 9'd0;
+		instr.aRt = 9'd0;
+	end
+
+//12'h238:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
 12'h239:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
 12'h23A:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end
 12'h23B:	begin next_ip = 12'h000; instr.ins = {33'd0,OP_NOP};	end

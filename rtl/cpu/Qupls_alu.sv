@@ -81,18 +81,21 @@ reg [WID-1:0] blendo;
 reg [WID-1:0] immc6;
 reg [22:0] ii;
 reg [WID-1:0] sd;
+reg [WID-1:0] sum_ab;
 
 always_comb
 	ii = {{6{i[WID-1]}},i};
+always_comb
+	sum_ab = a + b;
 
 always_comb
-	immc6 = {{WID{ir[30]}},ir[30:25]};
+	immc6 = {{WID{ir[26]}},ir[27:22]};
 always_comb
-	shl = {b,ir[33] ? ~a : a} << (ir[32] ? ir[31:25] : c[5:0]);
+	shl = {b,ir[33] ? ~a : a} << (ir[32] ? ir[27:22] : c[5:0]);
 always_comb
-	shr = {ir[33] ? ~b : b,a} >> (ir[32] ? ir[31:25] : c[5:0]);
+	shr = {ir[33] ? ~b : b,a} >> (ir[32] ? ir[27:22] : c[5:0]);
 always_comb
-	asr = {{64{a[63]}},a,64'd0} >> (ir[32] ? ir[31:25] : c[5:0]);
+	asr = {{64{a[63]}},a,64'd0} >> (ir[32] ? ir[27:22] : c[5:0]);
 
 always_ff @(posedge clk)
 begin
@@ -152,7 +155,7 @@ always_comb
 begin
 	bus = {(WID/16){16'h0000}};
 	case(ir.any.opcode)
-	OP_R2:
+	OP_R2,OP_R3V,OP_R3VS:
 		case(ir.r2.func)
 		FN_ADD:
 			case(ir[30:27])
@@ -367,11 +370,17 @@ begin
 		bus = a | (i << (ir[14:12]*20));
 	OP_EORSI,OP_VEORSI:
 		bus = a ^ (i << (ir[14:12]*20));
-	OP_SHIFT:
+	OP_SHIFT,OP_VSHIFT:
 		case(ir.shifti.func)
 		OP_ASL:	bus = shl[WID*2-1:WID];
 		OP_LSR:	bus = shr[WID-1:0];
-		OP_ASR:	bus = asr[WID*2-1:WID];
+		OP_ASR:	
+			case(ir[31:30])
+			2'd0:	bus = asr[WID*2-1:WID];
+			2'd1: bus = asr[WID*2-1] ? asr[WID*2-1:WID] + asr[WID-1] : asr[WID*2-1:WID];
+			2'd2: bus = asr[WID*2-1:WID] + asr[WID-1];
+			default:	bus = asr[WID*2-1:WID];
+			endcase
 		default:	bus = {(WID/16){16'hDEAD}};
 		endcase
 	OP_MOV:		bus = a;
@@ -382,8 +391,6 @@ begin
 	OP_PFXA32:	bus = 0;
 	OP_PFXB32:	bus = 0;
 	OP_PFXC32:	bus = 0;
-	OP_VEC:	bus = 0;
-	OP_VECZ:	bus = 0;
 	// Write the next PC to the link register.
 	OP_BSR,OP_JSR:
 						bus = pc + 4'd5;

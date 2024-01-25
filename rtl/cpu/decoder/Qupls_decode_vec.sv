@@ -36,50 +36,69 @@
 
 import QuplsPkg::*;
 
-module Qupls_decode_Ra(om, ipl, instr, has_imma, Ra, Raz);
-input operating_mode_t om;
-input [2:0] ipl;
-input ex_instruction_t instr;
-input has_imma;
-output aregno_t Ra;
-output reg Raz;
+module Qupls_decode_vec(instr, vec);
+input instruction_t instr;
+output vec;
 
-function aregno_t fnRa;
-input ex_instruction_t ir;
-input has_imma;
+function fnIsVec;
+input instruction_t ir;
 begin
-	if (has_imma)
-		fnRa = 9'd0;
-	else
-		case(ir.ins.any.opcode)
-		OP_RTD:
-			fnRa = ir.aRa;
-		OP_DBRA:
-			fnRa = 9'd55;
-		OP_FLT3:
-			fnRa = ir.aRa;
-		OP_VADDSI,OP_VANDSI,OP_VORSI,OP_VEORSI,
-		OP_ADDSI,OP_ANDSI,OP_ORSI,OP_EORSI:
-			fnRa = ir.aRt;
-		default:
-			if (fnImma(ir))
-				fnRa = 9'd0;
-			else
-				fnRa = ir.aRa;
+	case(ir.r2.opcode)
+	OP_SYS:	fnIsVec = 1'b0;
+	OP_R3V,OP_R3VS:
+		case(ir.r2.func)
+		FN_ADD:	fnIsVec = 1'b1;
+		FN_CMP:	fnIsVec = 1'b1;
+		FN_MUL:	fnIsVec = 1'b1;
+		FN_MULW:	fnIsVec = 1'b1;
+		FN_DIV:	fnIsVec = 1'b1;
+		FN_SUB:	fnIsVec = 1'b1;
+		FN_MULU: fnIsVec = 1'b1;
+		FN_MULUW: fnIsVec = 1'b1;
+		FN_DIVU: fnIsVec = 1'b1;
+		FN_AND:	fnIsVec = 1'b1;
+		FN_OR:	fnIsVec = 1'b1;
+		FN_EOR:	fnIsVec = 1'b1;
+		FN_NAND:	fnIsVec = 1'b1;
+		FN_NOR:	fnIsVec = 1'b1;
+		FN_ENOR:	fnIsVec = 1'b1;
+		FN_SEQ:	fnIsVec = 1'b1;
+		FN_SNE:	fnIsVec = 1'b1;
+		FN_SLT:	fnIsVec = 1'b1;
+		FN_SLE:	fnIsVec = 1'b1;
+		FN_SLTU:	fnIsVec = 1'b1;
+		FN_SLEU:	fnIsVec = 1'b1;
+		FN_ZSEQ:	fnIsVec = 1'b1;
+		FN_ZSNE:	fnIsVec = 1'b1;
+		FN_ZSLT:	fnIsVec = 1'b1;
+		FN_ZSLE:	fnIsVec = 1'b1;
+		FN_ZSLTU:	fnIsVec = 1'b1;
+		FN_ZSLEU:	fnIsVec = 1'b1;
+		default:	fnIsVec = 1'b0;
 		endcase
+	OP_VADDI:	
+		fnIsVec = 1'b1;
+	OP_VCMPI:	
+		fnIsVec = 1'b1;
+	OP_VMULI:	
+		fnIsVec = 1'b1;
+	OP_VDIVI:	
+		fnIsVec = 1'b1;
+	OP_VANDI:	
+		fnIsVec = 1'b1;
+	OP_VORI:
+		fnIsVec = 1'b1;
+	OP_VEORI:
+		fnIsVec = 1'b1;
+	OP_VADDSI,OP_VORSI,OP_VANDSI,OP_VEORSI:
+						fnIsVec = 1'b1;
+	OP_VSHIFT:
+		fnIsVec = 1'b1;
+	default:	fnIsVec = 1'b0;
+	endcase
 end
 endfunction
 
-always_comb
-begin
-	Ra = fnRa(instr, has_imma);
-	if (Ra==9'd31) begin
-		if (om==2'd3)
-			Ra = 9'd32|ipl;
-		else
-			Ra = 9'd40|om;
-	end
-	Raz = ~|Ra;
-end
+assign vec = fnIsVec(instr);
 
 endmodule

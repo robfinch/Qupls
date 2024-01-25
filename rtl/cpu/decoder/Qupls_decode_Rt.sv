@@ -47,7 +47,7 @@ function aregno_t fnRt;
 input ex_instruction_t ir;
 begin
 	case(ir.ins.any.opcode)
-	OP_R2:
+	OP_R2,OP_R3V,OP_R3VS:
 		case(ir.ins.r2.func)
 		FN_ADD:	fnRt = ir.aRt;
 		FN_CMP:	fnRt = ir.aRt;
@@ -87,15 +87,19 @@ begin
 	OP_JSR:	fnRt = ir.aRt;
 	OP_RTD:	fnRt = 9'd31;
 	OP_DBRA: fnRt = 9'd55;
+	OP_VADDI,OP_VCMPI,
 	OP_ADDI,OP_SUBFI,OP_CMPI:
 		fnRt = ir.aRt;
+	OP_VMULI,OP_VDIVI,
 	OP_MULI,OP_DIVI:
 		fnRt = ir.aRt;
+	OP_VANDI,OP_VORI,OP_VEORI,
 	OP_SLTI,OP_MULUI,OP_DIVUI,OP_ANDI,OP_ORI,OP_EORI:
 		fnRt = ir.aRt;
+	OP_VADDSI,OP_VANDSI,OP_VORSI,OP_VEORSI,
 	OP_ADDSI,OP_ANDSI,OP_ORSI,OP_EORSI,OP_AIPSI:
 		fnRt = ir.aRt;
-	OP_SHIFT:
+	OP_SHIFT,OP_VSHIFT:
 		fnRt = ir.aRt;
 	OP_CSR:
 		fnRt = ir.aRt;

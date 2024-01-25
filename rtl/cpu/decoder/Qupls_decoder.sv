@@ -110,6 +110,18 @@ Qupls_decode_r2 ur2
 	.r2(db.r2)
 );
 
+Qupls_decode_vec uvec1
+(
+	.instr(ins.ins),
+	.vec(db.vec)
+);
+
+Qupls_decode_macro umacro1
+(
+	.instr(ins.ins),
+	.macro(db.macro)
+);
+
 Qupls_decode_has_imm uhi
 (
 	.instr(ins.ins),

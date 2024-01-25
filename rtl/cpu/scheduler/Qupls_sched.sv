@@ -618,6 +618,10 @@ else begin
 	agen1_rndxv <= next_agen1_rndxv;
 	cpytgt0 <= next_cpytgt0;
 	cpytgt1 <= next_cpytgt1;
+	if (next_cpytgt0==TRUE)
+		$finish;
+	if (next_cpytgt1==TRUE)
+		$finish;
 end
 
 endmodule

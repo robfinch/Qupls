@@ -54,7 +54,7 @@ typedef struct {
 
 /* operand-types */
 #define OP_REG						0x00000001L
-#define OP_IMM13					0x00000002L
+#define OP_NEXT_VREG			0x00000002L
 #define OP_IMM23					0x00000004L
 #define OP_IMM30					0x00000008L
 #define OP_IMM46					0x00000010L
@@ -84,7 +84,7 @@ typedef struct {
 #define OP_NEXTREG	0x10000000L
 
 /* supersets of other operands */
-#define OP_IMM			(OP_IMM7|OP_IMM13|OP_IMM23|OP_IMM30|OP_IMM46|OP_IMM64)
+#define OP_IMM			(OP_IMM7|OP_IMM23|OP_IMM30|OP_IMM46|OP_IMM64)
 #define OP_MEM      (OP_REGIND|OP_SCNDX)
 #define OP_ALL      0x0fffffffL
 
@@ -253,8 +253,9 @@ typedef struct {
 #define IM2(x)		(((x) & 3LL) << 25LL)
 #define S(x)			(((x) & 3LL) << 22LL)
 #define SC(x)			(((x) & 7LL) << 19LL)
-#define SHFUNC(x)	(((x) & 0xf) << 28LL)
-#define R1FUNC(x)	(((x) & 0x1f) << 17LL)
+#define SHFUNC(x)	(((x) & 0xfLL) << 28LL)
+#define R1FUNC(x)	(((x) & 0x1fLL) << 17LL)
+#define OP4(x)		(((x) & 0xfLL) << 27LL)
 #define R2FUNC(x)	(((x) & 0x3fLL) << 33LL)
 #define R3FUNC(x)	(((x) & 0x3fLL) << 33LL)
 #define LSFUNC(x)	(((x) & 0x1fLL) << 35LL)
