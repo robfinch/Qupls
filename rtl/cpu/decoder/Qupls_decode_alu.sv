@@ -110,6 +110,8 @@ begin
 		fnIsAlu = 1'b1;
 	OP_BSR,OP_JSR:
 		fnIsAlu = 1'b1;
+	OP_PRED:
+		fnIsAlu = 1'b1;
 	default:	fnIsAlu = 1'b0;
 	endcase
 end

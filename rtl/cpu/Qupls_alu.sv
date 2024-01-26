@@ -394,6 +394,7 @@ begin
 	// Write the next PC to the link register.
 	OP_BSR,OP_JSR:
 						bus = pc + 4'd5;
+	OP_PRED:	bus = a;
 	default:	bus = {(WID/16){16'hDEAD}};
 	endcase
 end

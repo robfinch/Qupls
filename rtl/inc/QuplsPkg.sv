@@ -1479,12 +1479,15 @@ typedef struct packed {
 	// The following fields may change state while an instruction is processed.
 	logic v;									// 1=entry is valid, in use
 	seqnum_t sn;							// sequence number, decrements when instructions que
+	seqnum_t msn;							// sequence number of originating macro-instruction
 	logic lsq;								// 1=instruction has associated LSQ entry
 	lsq_ndx_t lsqndx;					// index to LSQ entry
 	logic [1:0] out;					// 1=instruction is being executed
 	logic [1:0] done;					// 2'b11=instruction is finished executing
 	logic rstp;								// indicate physical register reset required
 	logic [63:0] pred_status;	// predicate status for the next eight instructions.
+	logic pred_bit;						// predicte bit for this instruction.
+	logic pred_bitv;					// 1=predicate bit is valid
 	pc_address_t brtgt;
 	mc_address_t mcbrtgt;			// micro-code branch target
 	logic takb;								// 1=branch evaluated to taken
@@ -1778,7 +1781,7 @@ input ex_instruction_t ir;
 begin
 	case(ir.ins.r2.opcode)
 	OP_SYS:	fnSourceAv = 1'b1;
-	OP_R2:
+	OP_R2,OP_R3V,OP_R3VS:
 		case(ir.ins.r2.func)
 		FN_ADD:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
 		FN_CMP:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
@@ -1811,21 +1814,21 @@ begin
 		endcase
 	OP_RTD:		fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
 	OP_JSR,
-	OP_ADDI:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
+	OP_ADDI,OP_VADDI:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
 	OP_SUBFI:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-	OP_CMPI:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-	OP_MULI:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-	OP_DIVI:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-	OP_ANDI:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-	OP_ORI:		fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-	OP_EORI:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
+	OP_CMPI,OP_VCMPI:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
+	OP_MULI,OP_VMULI:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
+	OP_DIVI,OP_VDIVI:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
+	OP_ANDI,OP_VANDI:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
+	OP_ORI,OP_VORI:		fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
+	OP_EORI,OP_VEORI:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
 	OP_SLTI:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
 	OP_AIPSI:	fnSourceAv = 1'b1;
-	OP_ADDSI:	fnSourceAv = fnConstReg(ir.aRt) || fnImma(ir);
-	OP_ANDSI:	fnSourceAv = fnConstReg(ir.aRt) || fnImma(ir);
-	OP_ORSI:	fnSourceAv = fnConstReg(ir.aRt) || fnImma(ir);
-	OP_EORSI:	fnSourceAv = fnConstReg(ir.aRt) || fnImma(ir);
-	OP_SHIFT:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
+	OP_ADDSI,OP_VADDSI:	fnSourceAv = fnConstReg(ir.aRt) || fnImma(ir);
+	OP_ANDSI,OP_VANDSI:	fnSourceAv = fnConstReg(ir.aRt) || fnImma(ir);
+	OP_ORSI,OP_VORSI:	fnSourceAv = fnConstReg(ir.aRt) || fnImma(ir);
+	OP_EORSI,OP_VEORSI:	fnSourceAv = fnConstReg(ir.aRt) || fnImma(ir);
+	OP_SHIFT,OP_VSHIFT:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
 	OP_MOV:		fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
 	OP_DBRA:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
 	OP_Bcc,OP_BccU,OP_FBccH,OP_FBccS,OP_FBccD,OP_FBccQ:
@@ -1838,6 +1841,8 @@ begin
 		fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
 	OP_STX:
 		fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
+	OP_PRED:
+		fnSourceAv = fnConstReg(ir.aRa);
 	default:	fnSourceAv = 1'b1;
 	endcase
 end
@@ -1848,7 +1853,7 @@ input ex_instruction_t ir;
 begin
 	case(ir.ins.r2.opcode)
 	OP_SYS:	fnSourceBv = 1'b1;
-	OP_R2:
+	OP_R2,OP_R3V,OP_R3VS:
 		case(ir.ins.r2.func)
 		FN_ADD:	fnSourceBv = fnConstReg(ir.aRb) || fnImmb(ir);
 		FN_CMP:	fnSourceBv = fnConstReg(ir.aRb) || fnImmb(ir);
@@ -1890,7 +1895,7 @@ begin
 	OP_ORI:		fnSourceBv = 1'b1;
 	OP_EORI:	fnSourceBv = 1'b1;
 	OP_SLTI:	fnSourceBv = 1'b1;
-	OP_SHIFT:
+	OP_SHIFT,OP_VSHIFT:
 		case(ir.ins.shifti.func[6])
 		1'b0:	fnSourceBv = fnConstReg(ir.aRb) || fnImmb(ir);
 		1'b1: fnSourceBv = 1'b1;
@@ -1934,7 +1939,7 @@ input ex_instruction_t ir;
 begin
 	casez(ir.ins.r2.opcode)
 	OP_SYS:	fnSourceTv = 1'b1;
-	OP_R2:
+	OP_R2,OP_R3V,OP_R3VS:
 		case(ir.ins.r2.func)
 		FN_ADD:	fnSourceTv = fnConstReg(ir.aRt);
 		FN_CMP:	fnSourceTv = fnConstReg(ir.aRt);
@@ -1955,30 +1960,32 @@ begin
 		FN_SNE:	fnSourceTv = fnConstReg(ir.aRt);
 		FN_SLT:	fnSourceTv = fnConstReg(ir.aRt);
 		FN_SLE:	fnSourceTv = fnConstReg(ir.aRt);
+		FN_SLEU:	fnSourceTv = fnConstReg(ir.aRt);
 		FN_SLTU:	fnSourceTv = fnConstReg(ir.aRt);
 		FN_ZSEQ:	fnSourceTv = fnConstReg(ir.aRt);
 		FN_ZSNE:	fnSourceTv = fnConstReg(ir.aRt);
 		FN_ZSLT:	fnSourceTv = fnConstReg(ir.aRt);
 		FN_ZSLE:	fnSourceTv = fnConstReg(ir.aRt);
+		FN_ZSLEU:	fnSourceTv = fnConstReg(ir.aRt);
 		FN_ZSLTU:	fnSourceTv = fnConstReg(ir.aRt);
 		default:	fnSourceTv = 1'b1;
 		endcase
 	OP_JSR,
-	OP_ADDI:	fnSourceTv = fnConstReg(ir.aRt);
+	OP_ADDI,OP_VADDI:	fnSourceTv = fnConstReg(ir.aRt);
 	OP_SUBFI:	fnSourceTv = fnConstReg(ir.aRt);
-	OP_CMPI:	fnSourceTv = fnConstReg(ir.aRt);
-	OP_MULI:	fnSourceTv = fnConstReg(ir.aRt);
-	OP_DIVI:	fnSourceTv = fnConstReg(ir.aRt);
-	OP_ANDI:	fnSourceTv = fnConstReg(ir.aRt);
-	OP_ORI:		fnSourceTv = fnConstReg(ir.aRt);
-	OP_EORI:	fnSourceTv = fnConstReg(ir.aRt);
+	OP_CMPI,OP_VCMPI:	fnSourceTv = fnConstReg(ir.aRt);
+	OP_MULI,OP_VMULI:	fnSourceTv = fnConstReg(ir.aRt);
+	OP_DIVI,OP_VDIVI:	fnSourceTv = fnConstReg(ir.aRt);
+	OP_ANDI,OP_VANDI:	fnSourceTv = fnConstReg(ir.aRt);
+	OP_ORI,OP_VORI:		fnSourceTv = fnConstReg(ir.aRt);
+	OP_EORI,OP_VEORI:	fnSourceTv = fnConstReg(ir.aRt);
 	OP_SLTI:	fnSourceTv = fnConstReg(ir.aRt);
 	OP_AIPSI:	fnSourceTv = fnConstReg(ir.aRt);
-	OP_ADDSI:	fnSourceTv = fnConstReg(ir.aRt);
-	OP_ANDSI:	fnSourceTv = fnConstReg(ir.aRt);
-	OP_ORSI:	fnSourceTv = fnConstReg(ir.aRt);
-	OP_EORSI:	fnSourceTv = fnConstReg(ir.aRt);
-	OP_SHIFT:	fnSourceTv = fnConstReg(ir.aRt);
+	OP_ADDSI,OP_VADDSI:	fnSourceTv = fnConstReg(ir.aRt);
+	OP_ANDSI,OP_VANDSI:	fnSourceTv = fnConstReg(ir.aRt);
+	OP_ORSI,OP_VORSI:	fnSourceTv = fnConstReg(ir.aRt);
+	OP_EORSI,OP_VEORSI:	fnSourceTv = fnConstReg(ir.aRt);
+	OP_SHIFT,OP_VSHIFT:	fnSourceTv = fnConstReg(ir.aRt);
 	OP_MOV:		fnSourceTv = fnConstReg(ir.aRt);
 	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDOU,OP_LDH:
 		fnSourceTv = fnConstReg(ir.aRt);
@@ -1988,6 +1995,8 @@ begin
 		fnSourceTv = 1'b1;
 	OP_DBRA: fnSourceTv = 1'b1;
 	8'b00101???:
+		fnSourceTv = 1'b1;
+	OP_PRED:
 		fnSourceTv = 1'b1;
 	default:
 		fnSourceTv = 1'b1;
@@ -2007,7 +2016,7 @@ begin
 	vecf = 1'b0;//ir.f2.pfx_opcode==OP_VEC || ir.f2.pfx_opcode==OP_VECZ;
 	casez(ir.ins.r2.opcode)
 	OP_SYS:	fnSourcePv = ~vec;
-	OP_R2:
+	OP_R2,OP_R3V,OP_R3VS:
 		case(ir.ins.r2.func)
 		FN_ADD:	fnSourcePv = ~vec;
 		FN_CMP:	fnSourcePv = ~vec;
@@ -2031,15 +2040,15 @@ begin
 		default:	fnSourcePv = 1'b1;
 		endcase
 	OP_JSR,
-	OP_ADDI:	fnSourcePv = ~veci;
-	OP_CMPI:	fnSourcePv = ~veci;
-	OP_MULI:	fnSourcePv = ~veci;
-	OP_DIVI:	fnSourcePv = ~veci;
-	OP_ANDI:	fnSourcePv = ~veci;
-	OP_ORI:		fnSourcePv = ~veci;
-	OP_EORI:	fnSourcePv = ~veci;
+	OP_ADDI,OP_VADDI:	fnSourcePv = ~veci;
+	OP_CMPI,OP_VCMPI:	fnSourcePv = ~veci;
+	OP_MULI,OP_VMULI:	fnSourcePv = ~veci;
+	OP_DIVI,OP_VDIVI:	fnSourcePv = ~veci;
+	OP_ANDI,OP_VANDI:	fnSourcePv = ~veci;
+	OP_ORI,OP_VORI:		fnSourcePv = ~veci;
+	OP_EORI,OP_VEORI:	fnSourcePv = ~veci;
 	OP_SLTI:	fnSourcePv = ~veci;
-	OP_SHIFT:	fnSourcePv = ~vec;
+	OP_SHIFT,OP_VSHIFT:	fnSourcePv = ~vec;
 	OP_FLT3:	fnSourcePv = ~vecf;	
 	OP_MOV:		fnSourcePv = ~vec;
 	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDOU,OP_LDH:
@@ -2145,6 +2154,7 @@ input instruction_t ir;
 begin
 	fnImmb = 1'b0;
 	case(ir.any.opcode)
+	OP_VADDI,OP_VCMPI,OP_VMULI,OP_VDIVI,
 	OP_ADDI,OP_CMPI,OP_MULI,OP_DIVI,OP_SUBFI,OP_SLTI:
 		fnImmb = 1'b1;
 	OP_RTD:

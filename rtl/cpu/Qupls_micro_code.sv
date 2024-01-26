@@ -2002,7 +2002,7 @@ case(micro_ip)
 		instr.aRc = {micro_ir.r3.Rc,3'd1};
 		instr.aRt = {micro_ir.r3.Rt,3'd1};
 		instr.ins = micro_ir;
-		instr.pred_btst = 6'd1;
+		instr.pred_btst = 6'd8;
 	end
 12'h202:
 	begin
@@ -2012,7 +2012,7 @@ case(micro_ip)
 		instr.aRc = {micro_ir.r3.Rc,3'd2};
 		instr.aRt = {micro_ir.r3.Rt,3'd2};
 		instr.ins = micro_ir;
-		instr.pred_btst = 6'd2;
+		instr.pred_btst = 6'd16;
 	end
 12'h203:
 	begin
@@ -2022,7 +2022,7 @@ case(micro_ip)
 		instr.aRc = {micro_ir.r3.Rc,3'd3};
 		instr.aRt = {micro_ir.r3.Rt,3'd3};
 		instr.ins = micro_ir;
-		instr.pred_btst = 6'd3;
+		instr.pred_btst = 6'd24;
 	end
 12'h204:
 	begin
@@ -2032,7 +2032,7 @@ case(micro_ip)
 		instr.aRc = {micro_ir.r3.Rc,3'd4};
 		instr.aRt = {micro_ir.r3.Rt,3'd4};
 		instr.ins = micro_ir;
-		instr.pred_btst = 6'd4;
+		instr.pred_btst = 6'd32;
 	end
 12'h205:
 	begin
@@ -2042,7 +2042,7 @@ case(micro_ip)
 		instr.aRc = {micro_ir.r3.Rc,3'd5};
 		instr.aRt = {micro_ir.r3.Rt,3'd5};
 		instr.ins = micro_ir;
-		instr.pred_btst = 6'd5;
+		instr.pred_btst = 6'd40;
 	end
 12'h206:
 	begin
@@ -2052,7 +2052,7 @@ case(micro_ip)
 		instr.aRc = {micro_ir.r3.Rc,3'd6};
 		instr.aRt = {micro_ir.r3.Rt,3'd6};
 		instr.ins = micro_ir;
-		instr.pred_btst = 6'd6;
+		instr.pred_btst = 6'd48;
 	end
 12'h207:
 	begin
@@ -2062,7 +2062,7 @@ case(micro_ip)
 		instr.aRc = {micro_ir.r3.Rc,3'd7};
 		instr.aRt = {micro_ir.r3.Rt,3'd7};
 		instr.ins = micro_ir;
-		instr.pred_btst = 6'd7;
+		instr.pred_btst = 6'd56;
 	end
 
 12'h208:
@@ -2105,7 +2105,7 @@ case(micro_ip)
 		instr.aRc = {micro_ir.r3.Rc,3'd1};
 		instr.aRt = {micro_ir.r3.Rt,3'd1};
 		instr.ins = micro_ir;
-		instr.pred_btst = 6'd1;
+		instr.pred_btst = 6'd8;
 	end
 12'h212:
 	begin
@@ -2116,7 +2116,7 @@ case(micro_ip)
 		instr.aRc = {micro_ir.r3.Rc,3'd2};
 		instr.aRt = {micro_ir.r3.Rt,3'd2};
 		instr.ins = micro_ir;
-		instr.pred_btst = 6'd2;
+		instr.pred_btst = 6'd16;
 	end
 12'h213:
 	begin
@@ -2127,7 +2127,7 @@ case(micro_ip)
 		instr.aRc = {micro_ir.r3.Rc,3'd3};
 		instr.aRt = {micro_ir.r3.Rt,3'd3};
 		instr.ins = micro_ir;
-		instr.pred_btst = 6'd3;
+		instr.pred_btst = 6'd24;
 	end
 12'h214:
 	begin
@@ -2138,7 +2138,7 @@ case(micro_ip)
 		instr.aRc = {micro_ir.r3.Rc,3'd4};
 		instr.aRt = {micro_ir.r3.Rt,3'd4};
 		instr.ins = micro_ir;
-		instr.pred_btst = 6'd4;
+		instr.pred_btst = 6'd32;
 	end
 12'h215:
 	begin
@@ -2149,7 +2149,7 @@ case(micro_ip)
 		instr.aRc = {micro_ir.r3.Rc,3'd5};
 		instr.aRt = {micro_ir.r3.Rt,3'd5};
 		instr.ins = micro_ir;
-		instr.pred_btst = 6'd5;
+		instr.pred_btst = 6'd40;
 	end
 12'h216:
 	begin
@@ -2160,7 +2160,7 @@ case(micro_ip)
 		instr.aRc = {micro_ir.r3.Rc,3'd6};
 		instr.aRt = {micro_ir.r3.Rt,3'd6};
 		instr.ins = micro_ir;
-		instr.pred_btst = 6'd6;
+		instr.pred_btst = 6'd48;
 	end
 12'h217:
 	begin
@@ -2171,7 +2171,7 @@ case(micro_ip)
 		instr.aRc = {micro_ir.r3.Rc,3'd7};
 		instr.aRt = {micro_ir.r3.Rt,3'd7};
 		instr.ins = micro_ir;
-		instr.pred_btst = 6'd7;
+		instr.pred_btst = 6'd56;
 	end
 
 12'h218:
@@ -2212,7 +2212,7 @@ case(micro_ip)
 		instr.aRc = 9'd0;
 		instr.aRt = {micro_ir.r3.Rt,3'd1};
 		instr.ins = micro_ir;
-		instr.pred_btst = 6'd1;
+		instr.pred_btst = 6'd8;
 	end
 12'h222:
 	begin
@@ -2223,7 +2223,7 @@ case(micro_ip)
 		instr.aRc = 9'd0;
 		instr.aRt = {micro_ir.r3.Rt,3'd2};
 		instr.ins = micro_ir;
-		instr.pred_btst = 6'd2;
+		instr.pred_btst = 6'd16;
 	end
 12'h223:
 	begin
@@ -2234,7 +2234,7 @@ case(micro_ip)
 		instr.aRc = 9'd0;
 		instr.aRt = {micro_ir.r3.Rt,3'd3};
 		instr.ins = micro_ir;
-		instr.pred_btst = 6'd3;
+		instr.pred_btst = 6'd24;
 	end
 12'h224:
 	begin
@@ -2245,7 +2245,7 @@ case(micro_ip)
 		instr.aRc = 9'd0;
 		instr.aRt = {micro_ir.r3.Rt,3'd4};
 		instr.ins = micro_ir;
-		instr.pred_btst = 6'd4;
+		instr.pred_btst = 6'd32;
 	end
 12'h225:
 	begin
@@ -2256,7 +2256,7 @@ case(micro_ip)
 		instr.aRc = 9'd0;
 		instr.aRt = {micro_ir.r3.Rt,3'd5};
 		instr.ins = micro_ir;
-		instr.pred_btst = 6'd5;
+		instr.pred_btst = 6'd40;
 	end
 12'h226:
 	begin
@@ -2267,7 +2267,7 @@ case(micro_ip)
 		instr.aRc = 9'd0;
 		instr.aRt = {micro_ir.r3.Rt,3'd6};
 		instr.ins = micro_ir;
-		instr.pred_btst = 6'd6;
+		instr.pred_btst = 6'd48;
 	end
 12'h227:
 	begin
@@ -2278,7 +2278,7 @@ case(micro_ip)
 		instr.aRc = 9'd0;
 		instr.aRt = {micro_ir.r3.Rt,3'd7};
 		instr.ins = micro_ir;
-		instr.pred_btst = 6'd7;
+		instr.pred_btst = 6'd56;
 	end
 
 12'h228:
@@ -2319,7 +2319,7 @@ case(micro_ip)
 		instr.aRc = 9'd0;
 		instr.aRt = {micro_ir.r3.Rt,3'd1};
 		instr.ins = micro_ir;
-		instr.pred_btst = 6'd1;
+		instr.pred_btst = 6'd8;
 	end
 12'h232:
 	begin
@@ -2330,7 +2330,7 @@ case(micro_ip)
 		instr.aRc = 9'd0;
 		instr.aRt = {micro_ir.r3.Rt,2'd3};
 		instr.ins = micro_ir;
-		instr.pred_btst = 6'd2;
+		instr.pred_btst = 6'd16;
 	end
 12'h233:
 	begin
@@ -2341,7 +2341,7 @@ case(micro_ip)
 		instr.aRc = 9'd0;
 		instr.aRt = {micro_ir.r3.Rt,3'd3};
 		instr.ins = micro_ir;
-		instr.pred_btst = 6'd3;
+		instr.pred_btst = 6'd24;
 	end
 12'h234:
 	begin
@@ -2352,7 +2352,7 @@ case(micro_ip)
 		instr.aRc = 9'd0;
 		instr.aRt = {micro_ir.r3.Rt,3'd4};
 		instr.ins = micro_ir;
-		instr.pred_btst = 6'd4;
+		instr.pred_btst = 6'd32;
 	end
 12'h235:
 	begin
@@ -2363,7 +2363,7 @@ case(micro_ip)
 		instr.aRc = 9'd0;
 		instr.aRt = {micro_ir.r3.Rt,3'd5};
 		instr.ins = micro_ir;
-		instr.pred_btst = 6'd5;
+		instr.pred_btst = 6'd40;
 	end
 12'h236:
 	begin
@@ -2374,7 +2374,7 @@ case(micro_ip)
 		instr.aRc = 9'd0;
 		instr.aRt = {micro_ir.r3.Rt,3'd6};
 		instr.ins = micro_ir;
-		instr.pred_btst = 6'd6;
+		instr.pred_btst = 6'd48;
 	end
 12'h237:
 	begin
@@ -2385,7 +2385,7 @@ case(micro_ip)
 		instr.aRc = 9'd0;
 		instr.aRt = {micro_ir.r3.Rt,3'd7};
 		instr.ins = micro_ir;
-		instr.pred_btst = 6'd7;
+		instr.pred_btst = 6'd56;
 	end
 
 12'h238:

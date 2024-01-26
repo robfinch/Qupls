@@ -417,6 +417,8 @@ mnemonic mnemonics[]={
 	"popq",	{OP_REG,OP_NEXTREG,OP_IMM,0,0},{R3RR,CPU_ALL,0,0x120000000007LL,6},	
 	"popq",	{OP_REG,OP_NEXTREG,OP_REG,0,0},{R3RR,CPU_ALL,0,0x120000000007LL,6},	
 
+	"pred",	{OP_NEXTREG,OP_REG,OP_PREDSTR,0,0}, {PRED,CPU_ALL,0,OPC(121LL),5, SZ_UNSIZED, 0},
+
 	"ptghash", {OP_REG,OP_REG,0,0,0}, {R1,CPU_ALL,0,0x5E000001,4},
 
 	"ptrdif",	{OP_REG,OP_REG,OP_REG,OP_IMM,0}, {R3RI,CPU_ALL,0,0x281000000002LL,6},
@@ -1041,20 +1043,22 @@ static int is_predstr(char *p, char **ep)
 		case '"':
 			if (ep)
 				*ep = &p[nn+1];
+			printf("predval=%x\n",val);
 			return (val);
 		case 'I':
 		case 'i':
 			break;
 		case 'T':
 		case 't':
-			val |= 1 << (nn-1)*2;
+			val |= (1 << ((nn-1)*2));
 			break;
 		case 'F':
 		case 'f':
-			val |= 2 << (nn-1)*2;
+			val |= (2 << ((nn-1)*2));
 			break;
 		}
 	}
+	printf("predval=%x\n",val);
 	return (val);	
 }
 
@@ -1778,7 +1782,7 @@ static void encode_reg(instruction_buf* insn, operand *op, mnemonic* mnemo, int 
 	if (insn) {
 		switch(mnemo->ext.format) {
 		case PRED:
-			insn->opcode = insn->opcode | RB(op->basereg);
+			insn->opcode = insn->opcode | RA(op->basereg);
 			break;
 		case RI:
 		case RII:
@@ -2635,7 +2639,8 @@ static int encode_pred(instruction_buf* insn, mnemonic* mnemo, operand* op, int6
 	TRACE("enpred ");
 	if (op->type==OP_PREDSTR) {
 		if (insn) {
-			insn->opcode |= ((val & 0x7ffLL) << 16LL) | (((val >> 11LL) & 0x1fLL) << 29LL);
+			printf("predval2=%I64x\n", val);
+			insn->opcode |= ((val & 0xffffLL) << 22LL);
 		}
 	}	
 	return (*isize);

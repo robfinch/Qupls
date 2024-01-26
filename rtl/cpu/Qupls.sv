@@ -5065,14 +5065,14 @@ else begin
   		alu0_idv <= INV;
 	    rob[ alu0_id ].done <= 2'b11;
 	    rob[ alu0_id ].out <= {INV,INV};
-	    rob[alu0_id].pred_status[ 7: 0] = fnPredStatus(alu0_instr[ 8: 7], alu0_argA[ 7: 0]);
-	    rob[alu0_id].pred_status[15: 8] = fnPredStatus(alu0_instr[10: 9], alu0_argA[15: 8]);
-	    rob[alu0_id].pred_status[23:16] = fnPredStatus(alu0_instr[12:11], alu0_argA[23:16]);
-	    rob[alu0_id].pred_status[31:24] = fnPredStatus(alu0_instr[26:25], alu0_argA[31:24]);
-	    rob[alu0_id].pred_status[39:32] = fnPredStatus(alu0_instr[28:27], alu0_argA[39:32]);
-	    rob[alu0_id].pred_status[47:40] = fnPredStatus(alu0_instr[30:29], alu0_argA[47:40]);
-	    rob[alu0_id].pred_status[55:48] = fnPredStatus(alu0_instr[32:31], alu0_argA[55:48]);
-	    rob[alu0_id].pred_status[63:56] = fnPredStatus(alu0_instr[34:33], alu0_argA[63:56]);
+	    rob[alu0_id].pred_status[ 7: 0] <= fnPredStatus(alu0_instr[23:22], alu0_argA[ 7: 0]);
+	    rob[alu0_id].pred_status[15: 8] <= fnPredStatus(alu0_instr[25:24], alu0_argA[15: 8]);
+	    rob[alu0_id].pred_status[23:16] <= fnPredStatus(alu0_instr[27:26], alu0_argA[23:16]);
+	    rob[alu0_id].pred_status[31:24] <= fnPredStatus(alu0_instr[29:28], alu0_argA[31:24]);
+	    rob[alu0_id].pred_status[39:32] <= fnPredStatus(alu0_instr[31:30], alu0_argA[39:32]);
+	    rob[alu0_id].pred_status[47:40] <= fnPredStatus(alu0_instr[33:32], alu0_argA[47:40]);
+	    rob[alu0_id].pred_status[55:48] <= fnPredStatus(alu0_instr[35:34], alu0_argA[55:48]);
+	    rob[alu0_id].pred_status[63:56] <= fnPredStatus(alu0_instr[37:36], alu0_argA[63:56]);
   	end
   	if (|alu0_cptgt) begin
     	alu0_done <= TRUE;
@@ -5768,6 +5768,28 @@ else begin
 			end
 		end
 	end
+	
+	// Set the predicate bit for an instruction. The instruction must be queued
+	// already.
+	begin
+		for (nn = 0; nn < ROB_ENTRIES; nn = nn + 1) begin
+			if (!rob[nn].pred_bitv && !fnHasPred(nn)) begin
+				rob[nn].pred_bitv <= TRUE;
+				rob[nn].pred_bit <= TRUE;
+ 			end
+			if (rob[nn].v && rob[nn].decbus.pred && rob[nn].done==2'b11) begin
+				for (mm = 0; mm < ROB_ENTRIES; mm = mm + 1) begin
+					if (rob[mm].v 
+					&& fnPredPCMatch(rob[nn].pc[7:0], rob[mm].pc[7:0])
+					&& !rob[mm].pred_bitv
+					&& !rob[mm].decbus.vec) begin
+						rob[mm].pred_bit <= rob[nn].pred_status[rob[mm].op.pred_btst];
+						rob[mm].pred_bitv <= TRUE;
+					end
+				end
+			end
+		end
+	end
 
 	// Detect a "stuck out" situation. This occurs when the out flags are set but
 	// there is no longer a functional unit associated with the ROB entry. This
@@ -6175,6 +6197,33 @@ endgenerate
 // Support functions and tasks
 // ============================================================================
 
+function fnPredPCMatch;
+input [7:0] pc1;
+input [7:0] pc2;
+begin
+	fnPredPCMatch = pc1==(pc2 - 8'd05);
+end
+endfunction
+
+// Detect if an instruction has a predicate. Done by checking the PC values.
+// A predicate will always have a PC value that is one to four instructions
+// prior to the predicated one.
+
+function fnHasPred;
+input rob_ndx_t ndx;
+integer n32;
+begin
+	fnHasPred = FALSE;
+	for (n32 = 0; n32 < ROB_ENTRIES; n32 = n32 + 1) begin
+		if (rob[n32].v && rob[n32].decbus.pred 
+		&& fnPredPCMatch(rob[n32].pc[7:0],rob[ndx].pc[7:0])
+		&& !rob[ndx].decbus.vec
+		&& rob[ndx].v)
+			return (TRUE);
+	end
+end
+endfunction
+
 // Convert a vector opcode to the equivalent scalar one.
 
 function opcode_t fnVec2ScalarOpcode;
@@ -6561,6 +6610,8 @@ integer n13;
 begin
 	// "dynamic" fields, these fields may change after enqueue
 	rob[tail].sn <= sn;
+	rob[tail].pred_bitv <= FALSE;
+	rob[tail].pred_bit <= FALSE;
 	// NOP type instructions appear in the queue but they do not get scheduled or
 	// execute. They are marked done immediately.
 	rob[tail].done <= {2{db.nop}};

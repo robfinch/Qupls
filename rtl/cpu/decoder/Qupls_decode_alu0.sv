@@ -58,6 +58,7 @@ begin
 	OP_BSR,OP_JSR:	fnIsAlu0 = 1'b1;
 	OP_MULI,OP_MULUI,
 	OP_DIVI,OP_DIVUI: 	fnIsAlu0 = 1'b1;
+	OP_PRED:	fnIsAlu0 = 1'b1;
 	default:	fnIsAlu0 = 1'b0;
 	endcase
 end

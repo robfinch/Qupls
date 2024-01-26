@@ -130,6 +130,16 @@ begin
 end
 endfunction
 
+function fnPriorPred;
+input rob_ndx_t ndx;
+begin
+	fnPriorPred = FALSE;
+	for (n = 0; n < ROB_ENTRIES; n = n + 1)
+		if (rob[n].v && rob[n].sn < rob[ndx].sn && rob[n].decbus.pred && rob[n].done!=2'b11)
+			fnPriorPred = TRUE;
+end
+endfunction
+
 // Search for a prior flow control op. This forces flow control op to be performed
 // in program order.
 
@@ -283,6 +293,13 @@ begin
 end
 endfunction
 
+function fnIsPred;
+input rob_ndx_t ndx;
+begin
+	fnIsPred = rob[ndx].v && rob[ndx].decbus.pred;
+end
+endfunction
+
 function fnPriorQFExt;
 input rob_ndx_t id;
 rob_ndx_t idm1;
@@ -352,8 +369,10 @@ always_ff @(posedge clk) could_issue[g] =
 //												&& !stomp_i[g]
 												&& !(&rob[g].done)
 												&& (args_valid[g]||(rob[g].decbus.cpytgt && rob[g].argT_v))
-												&& !fnPriorFalsePred(g)
+												//&& !fnPriorFalsePred(g)
 												&& !fnPriorSync(g)
+												&& rob[g].pred_bit==TRUE
+										    && rob[g].pred_bitv
 												&& !robentry_issue[g]
 												;
 always_ff @(posedge clk) could_issue_nm[g] = 
@@ -361,8 +380,10 @@ always_ff @(posedge clk) could_issue_nm[g] =
 												&& !(&rob[g].done)
 //												&& !stomp_i[g]
 												&& rob[g].argT_v 
-												&& fnPredFalse(g)
+												//&& fnPredFalse(g)
 												&& !robentry_issue[g]
+												&& rob[g].pred_bit==FALSE
+										    && rob[g].pred_bitv
 												&& SUPPORT_PRED
 												;
                         //&& ((rob[g].decbus.load|rob[g].decbus.store) ? !rob[g].agen : 1'b1);
@@ -618,10 +639,6 @@ else begin
 	agen1_rndxv <= next_agen1_rndxv;
 	cpytgt0 <= next_cpytgt0;
 	cpytgt1 <= next_cpytgt1;
-	if (next_cpytgt0==TRUE)
-		$finish;
-	if (next_cpytgt1==TRUE)
-		$finish;
 end
 
 endmodule
