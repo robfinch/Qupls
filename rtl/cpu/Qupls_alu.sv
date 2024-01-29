@@ -111,10 +111,14 @@ begin
 end
 
 always_ff @(posedge clk)
-begin
+if (rst) begin
+	mul_cnt <= 4'hF;
+	mul_done <= 1'b0;
+end
+else begin
 	mul_cnt <= {mul_cnt[2:0],1'b1};
 	if (ld)
-		mul_cnt <= 'd0;
+		mul_cnt <= 4'd0;
 	mul_done <= mul_cnt[3];
 end
 
@@ -340,6 +344,8 @@ begin
 				else
 					bus = c;
 			end
+		FN_MVVRM:	bus = a;
+		FN_MVVEX:	bus = a;
 		default:	bus = {4{32'hDEADBEEF}};
 		endcase
 	OP_CSR:		bus = csr;

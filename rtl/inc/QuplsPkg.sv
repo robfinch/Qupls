@@ -53,7 +53,7 @@ parameter SIM = 1'b1;
 // Number of architectural registers there are in the core, including registers
 // not visible in the programming model. Each supported vector register counts
 // as eight registers.
-`define NREGS	192	// 330
+`define NREGS	168	// 330
 
 // Number of physical registers supporting the architectural ones and used in
 // register renaming. There must be significantly more physical registers than
@@ -148,7 +148,7 @@ parameter SCHED_WINDOW_SIZE = 10;
 // recommended maximum. Fewer checkpoints may reduce core performance as stalls
 // will result if there are insufficient checkpoints for the number of
 // outstanding branches.
-parameter NCHECK = 16;			// number of checkpoints
+parameter NCHECK = 8;			// number of checkpoints
 
 parameter LOADQ_ENTRIES = 8;
 parameter STOREQ_ENTRIES = 8;
@@ -579,7 +579,9 @@ typedef enum logic [6:0] {
 	FN_ZSLTI		= 7'd122,
 	FN_ZSLEI		= 7'd123,
 	FN_ZSLTUI		= 7'd124,
-	FN_ZSLEUI		= 7'd125
+	FN_ZSLEUI		= 7'd125,
+	FN_MVVRM		= 7'd126,
+	FN_MVVEX		= 7'd127
 } r2func_t;
 
 typedef enum logic [4:0] {
@@ -1244,7 +1246,7 @@ typedef union packed
 } instruction_t;
 
 typedef struct packed {
-	logic [2:0] lane;
+	logic [2:0] element;
 	aregno_t aRa;
 	aregno_t aRb;
 	aregno_t aRc;
@@ -1303,6 +1305,9 @@ typedef struct packed
 	logic r2;					// true if r1/r2 format instruction
 	logic macro;			// true if macro instruction
 	logic vec;				// true if vector instruction
+	logic vec2;				// true if vector instruction
+	logic mvvrm;			// true if VRM move
+	logic mvvex;			// true if VEX move
 	logic alu;				// true if instruction must use alu (alu or mem)
 	logic alu0;				// true if instruction must use only alu #0
 	logic alu_pair;		// true if instruction requires pair of ALUs
@@ -1479,7 +1484,7 @@ typedef struct packed {
 	// The following fields may change state while an instruction is processed.
 	logic v;									// 1=entry is valid, in use
 	seqnum_t sn;							// sequence number, decrements when instructions que
-	seqnum_t msn;							// sequence number of originating macro-instruction
+	rob_ndx_t orid;						// ROB id of originating macro-instruction
 	logic lsq;								// 1=instruction has associated LSQ entry
 	lsq_ndx_t lsqndx;					// index to LSQ entry
 	logic [1:0] out;					// 1=instruction is being executed
@@ -1488,11 +1493,20 @@ typedef struct packed {
 	logic [63:0] pred_status;	// predicate status for the next eight instructions.
 	logic pred_bit;						// predicte bit for this instruction.
 	logic pred_bitv;					// 1=predicate bit is valid
+	logic [1:0] vn;						// vector index
 	pc_address_t brtgt;
 	mc_address_t mcbrtgt;			// micro-code branch target
 	logic takb;								// 1=branch evaluated to taken
 	cause_code_t exc;					// non-zero indicate exception
 	logic excv;								// 1=exception
+`ifdef IS_SIM
+	value_t argA;
+	value_t argB;
+	value_t argC;
+	value_t argI;
+	value_t argT;
+	value_t res;
+`endif
 	logic argA_v;							// 1=argument A valid
 	logic argB_v;
 	logic argC_v;
@@ -1810,6 +1824,8 @@ begin
 		FN_ZSLE:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
 		FN_ZSLTU:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
 		FN_ZSLEU:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
+		FN_MVVRM:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
+		FN_MVVEX:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
 		default:	fnSourceAv = 1'b1;
 		endcase
 	OP_RTD:		fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);

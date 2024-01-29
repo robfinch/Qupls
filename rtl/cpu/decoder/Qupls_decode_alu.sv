@@ -74,6 +74,8 @@ begin
 		FN_ZSLE:	fnIsAlu = 1'b1;
 		FN_ZSLTU:	fnIsAlu = 1'b1;
 		FN_ZSLEU:	fnIsAlu = 1'b1;
+		FN_MVVRM: fnIsAlu = 1'b1;
+		FN_MVVEX:	fnIsAlu = 1'b1;
 		default:	fnIsAlu = 1'b0;
 		endcase
 	OP_ADDI,OP_VADDI:	
@@ -82,6 +84,8 @@ begin
 	OP_CMPI,OP_VCMPI:	
 		fnIsAlu = 1'b1;
 	OP_MULI,OP_VMULI:	
+		fnIsAlu = 1'b1;
+	OP_MULUI,OP_DIVUI:
 		fnIsAlu = 1'b1;
 	OP_DIVI,OP_VDIVI:	
 		fnIsAlu = 1'b1;

@@ -194,6 +194,7 @@ lsq_ndx_t store_argC_id1;
 pregno_t [17:0] rf_reg;
 value_t [17:0] rfo;
 
+rob_ndx_t mc_orid;
 pc_address_t mc_adr;
 pc_address_t tgtpc;
 rob_entry_t [ROB_ENTRIES-1:0] rob;
@@ -621,6 +622,10 @@ reg micro_code_active_r;
 reg micro_code_active_q;
 wire [2:0] im = sr.ipl;
 reg [5:0] regset = 6'd0;
+reg [63:0] vgm;									// vector global mask
+reg [63:0] vrm [0:3];						// vector restart mask
+reg [63:0] vex [0:3];						// vector exception
+reg [1:0] vn;
 asid_t asid;
 asid_t ip_asid;
 pc_address_t [3:0] kvec;
@@ -839,7 +844,7 @@ begin
 		$finish;
 	end
 	if (PREGS < NREGS * 3) begin
-		$display("Q+: Warning: physical registere below threshold for good performance.");
+		$display("Q+: Warning: physical registers below threshold for good performance.");
 	end
 	if (PREGS < NREGS * 1.25) begin
 		$display("Q+: Error: not enough physical registers.");
@@ -895,6 +900,7 @@ else begin
 end
 
 
+reg stomp_x3;
 wire ftaim_full, ftadm_full;
 reg ihit_x, ihit_d, ihit_r, ihit_q;
 wire icnop;
@@ -959,13 +965,13 @@ Qupls_btb ubtb1
 (
 	.rst(rst),
 	.clk(clk),
-	.en(!hold_ins & advance_f),
+	.en(advance_f),
 	.rclk(~clk),
 	.micro_code_active(micro_code_active),
 	.block_header(ibh_t'(ic_line[511:480])),
 	.igrp(igrp),
 	.length_byte(length_byte),
-	.do_bsr(do_bsr & !stomp_x),
+	.do_bsr(do_bsr && !stomp_x3),
 	.bsr_tgt(bsr_tgt),
 	.mip0v(mip0v),
 	.mip1v(mip1v),
@@ -1027,16 +1033,22 @@ gselectPredictor ugsp1
 	.predict_taken3(pt3_d)
 );
 
-wire ne_mca, pe_mca;
+wire micro_code_active_v;
+wire ne_mca, pe_mca, ee_mca;
+reg ne_mca_f, ne_mca_x, pe_mca_x, ee_mca_x;
+reg pe_mca_f, ee_mca_f;
 edge_det ed4 (
 	.rst(rst),
 	.clk(clk),
-	.ce(advance_pipeline),
-	.i(micro_code_active),
+	.ce(1'b1),
+	.i(micro_code_active_v),
 	.pe(pe_mca),
 	.ne(ne_mca),
-	.ee()
+	.ee(ee_mca)
 );
+always_ff @(posedge clk) if (advance_pipeline) pe_mca_f <= pe_mca;
+always_ff @(posedge clk) if (advance_pipeline) ee_mca_f <= ee_mca;
+always_ff @(posedge clk) if (advance_pipeline) ee_mca_x <= ee_mca_f;
 
 always_ff @(posedge clk)
 if (rst)
@@ -1093,7 +1105,7 @@ else begin
 		bms <= branch_state != BS_IDLE;
 		bms2 <= bms;
 		ihit3 <= ihit_f;
-		do_bsr2 <= do_bsr && !stomp_x;
+		do_bsr2 <= do_bsr && !stomp_x3;
 		if (micro_code_active) begin
 			bms3 <= branch_state != BS_IDLE;
 			do_bsr3 <= do_bsr2;
@@ -1107,16 +1119,15 @@ else begin
 		do_bsr5 <= do_bsr4;
 		do_bsr6 <= do_bsr5;
 		do_bsr7 <= do_bsr6;
-		do_bsr_h <= ((do_bsr && !stomp_x) || do_bsr_h) && !ihit;
+		do_bsr_h <= ((do_bsr && !stomp_x3) || do_bsr_h) && !ihit;
 	end
 end
+
+// Instruction stomp waterfall.
 
 // On a cache miss, the fetch stage is stomped on, but not if micro-code is
 // active. Micro-code does not require the cache-line data.
 // Invalidate the fetch stage on an unconditional subroutine call.
-reg ne_mca_f, ne_mca_x;
-always_ff @(posedge clk) if (advance_f) ne_mca_f <= ne_mca;
-always_comb ne_mca_x <= ne_mca;
 always_comb
 begin
 	stomp_f = FALSE;
@@ -1124,12 +1135,14 @@ begin
 		stomp_f = TRUE;
 	else begin
 		if (branch_state != BS_IDLE) begin
-			if (misspc != pc0)
+//			if (misspc != pc0)
 				stomp_f = TRUE;
 		end
-		else if (((do_bsr && !stomp_x) || do_bsr2 || do_bsr3 || do_bsr4)
+		/*
+		else if (((do_bsr && !stomp_x) || do_bsr2 || do_bsr3 || do_bsr4 || do_bsr5)
 			&& !branchmiss && branch_state==BS_IDLE)
 			stomp_f = TRUE;
+		*/
 		else begin
 			/*
 			if (takb && rob[fcu_id].decbus.br) begin
@@ -1142,36 +1155,36 @@ begin
 end
 
 // Stomp on all pipeline stages rename and prior on a branch miss.
-
+assign micro_code_active_v = (micro_code_active_x || mip0v || mip1v || mip2v || mip3v) && mipv;
+wire stomp_x1 = !ihit_f && !micro_code_active_v;
+wire stomp_x2 = (stomp_f && !micro_code_active_v) || branchmiss || branch_state==BS_CHKPT_RESTORE;
 always_ff @(posedge clk)
 if (rst)
-	stomp_x <= TRUE;
+	stomp_x3 <= TRUE;
 else begin
-	if ((!ihit_x && !micro_code_active_x) || ne_mca_x)
-		stomp_x <= TRUE;
-	else begin
-		if (advance_pipeline)
-			stomp_x <= (stomp_f && !micro_code_active_x) || branchmiss || branch_state==BS_CHKPT_RESTORE;
-		else if (branch_state==BS_CHKPT_RESTORE)
-			stomp_x <= TRUE;
-		else
-			stomp_x <= FALSE;
+	if (advance_pipeline) begin
+		stomp_x3 <= FALSE;
+		if (stomp_x1|stomp_x2)
+			stomp_x3 <= TRUE;
 	end
 end
+always_comb
+	stomp_x = stomp_x3 | ne_mca;
 
+// If a micro-code instruction is decoded stomp on the next decode stage.
+// An instruction group following the micro-code was at the fetch stage and
+// would be propagated to decode before the micro-code becomes active.
+
+wire stomp_d1 = !ihit_x && !micro_code_active_d;
+wire stomp_d2 = stomp_x || branchmiss || branch_state==BS_CHKPT_RESTORE;
 always_ff @(posedge clk)
 if (rst)
 	stomp_d <= TRUE;
 else begin
-	if ((!ihit_d && !micro_code_active_d))
-		stomp_d <= TRUE;
-	else begin
-		if (advance_pipeline)
-			stomp_d <= stomp_x || branchmiss || branch_state==BS_CHKPT_RESTORE;
-		else if (branch_state==BS_CHKPT_RESTORE)
+	if (advance_pipeline) begin
+		stomp_d <= FALSE;
+		if (stomp_d1|stomp_d2)
 			stomp_d <= TRUE;
-		else
-			stomp_d <= FALSE;
 	end
 end
 
@@ -1179,15 +1192,11 @@ always_ff @(posedge clk)
 if (rst)
 	stomp_r <= TRUE;
 else begin
-	if ((!ihit_r && !micro_code_active_r))
-		stomp_r <= TRUE;
-	else begin
-		if (advance_pipeline)
-			stomp_r <= stomp_d || branchmiss || branch_state==BS_CHKPT_RESTORE;
-		else if (branch_state==BS_CHKPT_RESTORE)
+	if (advance_pipeline) begin
+		if ((!ihit_d && !micro_code_active_r))
 			stomp_r <= TRUE;
 		else
-			stomp_r <= FALSE;
+			stomp_r <= stomp_d || branchmiss || branch_state==BS_CHKPT_RESTORE || pe_mca;
 	end
 end
 
@@ -1207,14 +1216,12 @@ always_ff @(posedge clk)
 if (rst)
 	stomp_qm <= FALSE;
 else begin
-	if ((!ihit_q && !micro_code_active_q))
-		stomp_qm <= TRUE;
-	else if (advance_pipeline)
-		stomp_qm <= branchmiss || branch_state==BS_CHKPT_RESTORE;
-	else if (branch_state==BS_CHKPT_RESTORE)
-		stomp_qm <= TRUE;
-	else
-		stomp_qm <= FALSE;
+	if (advance_pipeline) begin
+		if ((!ihit_r && !micro_code_active_q))
+			stomp_qm <= TRUE;
+		else
+			stomp_qm <= stomp_r || branchmiss || branch_state==BS_CHKPT_RESTORE;
+	end
 end	
 
 // qd indicates which instructions will queue in a given cycle.
@@ -1412,7 +1419,7 @@ always_comb
 always_ff @(posedge clk)
 if (rst)
 	allqd <= 1'b1;
-else if(advance_f) begin
+else if(advance_pipeline) begin
 	if (pe_allqd & ~(ihito & ~hirq))
 		allqd <= 1'b1;
 	if (next_cqd=={XWID{1'b1}})
@@ -1425,7 +1432,10 @@ else if(advance_f) begin
 end
 
 // Instruction pointer (program counter)
-// Could use the lack of a PC change to fetch from an alternate path.
+// Could use the lack of a IP change to fetch from an alternate path.
+// The IP will not change while micro-code is running except when a branch
+// instruction is performed. The branch instruction is used to exit the
+// micro-code.
 
 always_ff @(posedge clk)
 if (rst)
@@ -1438,56 +1448,104 @@ else begin
 			else
 				pc <= next_pc;			// early PC predictor from BTB logic
 		end
+		else if (do_bsr && !stomp_x3)
+			pc <= next_pc;
 	end
 	// Prevent hang when the pipeline cannot advance because there is no room 
-	// to queue, yet the PC needs to change to get out of the branch miss state.
+	// to queue, yet the IP needs to change to get out of the branch miss state.
 	else begin
-		if (branch_state==BS_DONE)
+		if (branch_state==BS_DONE || (do_bsr && !stomp_x3))
 			pc <= next_pc;
 	end
 end
 
-// Micro instruction pointer
+// Micro instruction pointer.
+// Unless micro-code is running this pointer will be zero. It is set to a non-
+// zero value when a macro-instruction is decoded. The first macro instruction
+// encountered out of the group of four fetched instructions sets the micro
+// instruction pointer. If there is another macro instruction in the fetch
+// group then it will become the first instruction of a group once the micro
+// code for the previous instruction completes and branches back to the next
+// instruction address.
+// The next value of the micro instruction pointer is simply loaded from the
+// micro-code.
 
 always_ff @(posedge clk)
-if (rst) begin
+if (rst)
 	micro_ip <= 12'h1A0;
-	micro_code_active <= TRUE;
-	mc_adr <= RSTPC-5;
-end
 else begin
 	if (advance_pipeline) begin
 	  if (~hirq) begin
 	  	if ((pe_allqd||allqd||&next_cqd)) begin
 				micro_ip <= (mcbrtgtv & mipv) ? mcbrtgt : next_micro_ip;
-				if (((mcbrtgtv & mipv) ? mcbrtgt : next_micro_ip) == 12'h000) begin
-					micro_code_active <= FALSE;
-				end
 			end
 		end
 		if (micro_ip==12'h000) begin
-					 if (mip0v) begin micro_ip <= mip0; micro_code_active <= TRUE; mc_adr <= pc0_d; end
-			else if (mip1v) begin micro_ip <= mip1; micro_code_active <= TRUE; mc_adr <= pc1_d; end
-			else if (mip2v) begin micro_ip <= mip2; micro_code_active <= TRUE; mc_adr <= pc2_d; end
-			else if (mip3v) begin micro_ip <= mip3; micro_code_active <= TRUE; mc_adr <= pc3_d; end
+					 if (mip0v) micro_ip <= mip0;
+			else if (mip1v) micro_ip <= mip1;
+			else if (mip2v) micro_ip <= mip2;
+			else if (mip3v) micro_ip <= mip3;
 		end
 	end
 end
 
-// Micro instruction register
+// Micro code originating instruction address.
+// The micro-code for a vector instruction inherits the address of the vector
+// instruction.
+// The originating instruction address is used during predicate processing.
+// The pred instruction will always be the instruction immediately before the
+// vector instruction, so, the address is five less.
 
-reg [2:0] mip_sel;
+always_ff @(posedge clk)
+if (rst)
+	mc_adr <= RSTPC-5;
+else begin
+	if (advance_pipeline) begin
+		if (micro_ip==12'h000) begin
+					 if (mip0v) mc_adr <= pc0_d;
+			else if (mip1v) mc_adr <= pc1_d;
+			else if (mip2v) mc_adr <= pc2_d;
+			else if (mip3v) mc_adr <= pc3_d;
+		end
+	end
+end
+
+// Micro instruction register.
+// The micro-ir is loaded only when a macro-instruction is decoded.
+// Vector instructions are converted to the equivalent scalar instruction.
+
 always_ff @(posedge clk)
 if (rst)
 	micro_ir <= {33'd0,OP_NOP};
 else begin
 	if (advance_pipeline) begin
 		if (micro_ip==12'h000) begin
-			if (mip0v) begin mip_sel <= 3'd0; micro_ir <= ins0_d; micro_ir.ins.any.opcode <= fnVec2ScalarOpcode(ins0_d.ins.any.opcode); end
-			else if (mip1v) begin mip_sel <= 3'd1; micro_ir <= ins1_d; micro_ir.ins.any.opcode <= fnVec2ScalarOpcode(ins1_d.ins.any.opcode); end
-			else if (mip2v) begin mip_sel <= 3'd2; micro_ir <= ins2_d; micro_ir.ins.any.opcode <= fnVec2ScalarOpcode(ins2_d.ins.any.opcode); end
-			else if (mip3v) begin mip_sel <= 3'd3; micro_ir <= ins3_d; micro_ir.ins.any.opcode <= fnVec2ScalarOpcode(ins3_d.ins.any.opcode); end
-			else mip_sel <= 3'd4;
+			if (mip0v) begin micro_ir <= ins0_d; micro_ir.ins.any.opcode <= fnVec2ScalarOpcode(ins0_d.ins.any.opcode); end
+			else if (mip1v) begin micro_ir <= ins1_d; micro_ir.ins.any.opcode <= fnVec2ScalarOpcode(ins1_d.ins.any.opcode); end
+			else if (mip2v) begin micro_ir <= ins2_d; micro_ir.ins.any.opcode <= fnVec2ScalarOpcode(ins2_d.ins.any.opcode); end
+			else if (mip3v) begin micro_ir <= ins3_d; micro_ir.ins.any.opcode <= fnVec2ScalarOpcode(ins3_d.ins.any.opcode); end
+		end
+	end
+end
+
+// Micro-code active flag.
+// Micro-code becomes active when the micro-ip is set to a non-zero value and
+// inactive once the micro-ip is set to zero.
+
+always_ff @(posedge clk)
+if (rst)
+	micro_code_active <= TRUE;
+else begin
+	if (advance_pipeline) begin
+	  if (~hirq) begin
+	  	if ((pe_allqd||allqd||&next_cqd)) begin
+				if (((mcbrtgtv & mipv) ? mcbrtgt : next_micro_ip) == 12'h000)
+					micro_code_active <= FALSE;
+			end
+		end
+		if (micro_ip==12'h000) begin
+			if (mip0v|mip1v|mip2v|mip3v)
+				micro_code_active <= TRUE;
 		end
 	end
 end
@@ -1624,8 +1682,7 @@ generate begin : gMicroCode
 end
 endgenerate
 
-
-
+// No longer useful.
 always_comb mc_ins4.ins = {33'd0,OP_NOP};
 always_comb mc_ins5.ins = {33'd0,OP_NOP};
 always_comb mc_ins6.ins = {33'd0,OP_NOP};
@@ -1677,79 +1734,10 @@ pc_address_t pco;
 wire [4:0] len0, len1, len2, len3, len4, len5, len6, len7;
 wire [2:0] igrp2;
 
-/*
-// missblock is known right away.
-// miss group and instruction number are not known until after the lengths are
-// calculated.
-
-generate begin : gNormAddr
-	if (SUPPORT_IBH) begin
-		Qupls_norm_addr uan1
-		(
-			.misspc(misspc),
-			.ibh(ibh_t'(ic_line2[511:488])),
-			.len0(len0),
-			.len1(len1),
-			.len2(len2),
-			.missblock(missblock),
-			.missgrp(fcu_missgrp),
-			.missinsn(fcu_missino)
-		);
-	end
-end
-endgenerate
-*/
-
 // 3 cycle latency
 // If not supporting variable lengths the latency is reduced.
 generate begin : gInsLengths
-	if (FALSE && SUPPORT_VLI) begin
-		Qupls_ins_lengths_L0 uils1
-		(
-			.rst_i(rst),
-			.line_i(ic_line),
-			.line_o(ic_line2),
-			.hit_i(ihito),
-			.hit_o(ihit_f),
-			.pc_i(icpc),
-			.pc_o(pco),
-			.grp_i(igrp),
-			.grp_o(igrp2),
-			.len0_o(len0),
-			.len1_o(len1),
-			.len2_o(len2),
-			.len3_o(len3),
-			.len4_o(len4),
-			.len5_o(len5),
-			.len6_o(len6),
-			.len7_o(len7)
-		);
-	end
-	else if (FALSE && SUPPORT_IBH) begin
-		Qupls_ins_lengths uils1
-		(
-			.rst_i(rst),
-			.clk_i(clk),
-			.en_i(advance_pipeline),
-			.line_i(ic_line),
-			.line_o(ic_line2),
-			.hit_i(ihito),
-			.hit_o(ihit_f),
-			.pc_i(icpc),
-			.pc_o(pco),
-			.grp_i(igrp),
-			.grp_o(igrp2),
-			.len0_o(len0),
-			.len1_o(len1),
-			.len2_o(len2),
-			.len3_o(len3),
-			.len4_o(len4),
-			.len5_o(len5),
-			.len6_o(len6),
-			.len7_o(len7)
-		);
-	end
-	else begin
+	begin
 		assign ic_line2 = ic_line;
 		assign ihit_f = ihito;
 		assign pco = pc;
@@ -1782,13 +1770,6 @@ always_comb
 begin
 	pc4 = micro_code_active ? pc0 : pc3 + len3;
 end
-/*
-always_comb pc5 = pc4 + len4;
-always_comb pc6 = pc5 + len5;
-always_comb pc7 = pc6 + len6;
-always_comb pc8 = pc7 + len7;
-*/
-//always_comb pc7 = {pc6[43:12] + len6,12'h0};
 
 // -----------------------------------------------------------------------------
 // EXTRACT stage
@@ -1818,7 +1799,7 @@ Qupls_extract_ins uiext1
 	.rst_i(rst),
 	.clk_i(clk),
 	.en_i(advance_pipeline),
-	.nop_i(!ihit_x/*icnop||brtgtv||fetch_new_block_x*/),
+	.nop_i(stomp_x/*icnop||brtgtv||fetch_new_block_x*/),
 	.nop_o(exti_nop),
 	.irq_i(irq_i),
 	.hirq_i(hirq),
@@ -2057,6 +2038,11 @@ endgenerate
 // ----------------------------------------------------------------------------
 // RENAME stage
 // ----------------------------------------------------------------------------
+
+wire stomp0;
+wire stomp1;
+wire stomp2;
+wire stomp3;
 
 aregno_t [16:0] arn;
 wire [16:0] arnv;
@@ -2299,10 +2285,10 @@ always_ff @(posedge clk) if (advance_pipeline) stomp0_q <= stomp0_r;
 always_ff @(posedge clk) if (advance_pipeline) stomp1_q <= stomp1_r;
 always_ff @(posedge clk) if (advance_pipeline) stomp2_q <= stomp2_r;
 always_ff @(posedge clk) if (advance_pipeline) stomp3_q <= stomp3_r;
-wire stomp0 = (stomp0_q|stomp_q|stomp_qm);
-wire stomp1 = (stomp1_q|stomp_q|stomp_qm|db0_q.macro);
-wire stomp2 = (stomp2_q|stomp_q|stomp_qm|db0_q.macro|db1_q.macro);
-wire stomp3 = (stomp3_q|stomp_q|stomp_qm|db0_q.macro|db1_q.macro|db2_q.macro);
+assign stomp0 = (stomp0_q|stomp_q|stomp_qm);
+assign stomp1 = (stomp1_q|stomp_q|stomp_qm|db0_q.macro);
+assign stomp2 = (stomp2_q|stomp_q|stomp_qm|db0_q.macro|db1_q.macro);
+assign stomp3 = (stomp3_q|stomp_q|stomp_qm|db0_q.macro|db1_q.macro|db2_q.macro);
 wire ornop0 = 1'b0;
 wire ornop1 = db0_q.bsr;
 wire ornop2 = db0_q.bsr || db1_q.bsr;
@@ -2576,7 +2562,7 @@ if (rst)
 	micro_code_active_d <= FALSE;
 else begin
 	if (advance_pipeline)
-		micro_code_active_d <= micro_code_active_x;
+		micro_code_active_d <= micro_code_active_v;
 end
 always_ff @(posedge clk)
 if (rst)
@@ -2605,16 +2591,16 @@ else begin
 		pc0_x1 <= pc0_f;
 end
 
-always_comb pc0_x = micro_code_active ? mc_adr : pc0_x1;
-always_comb pc1_x = micro_code_active ? pc0_x : pc0_x + 4'd5;
-always_comb pc2_x = micro_code_active ? pc0_x : pc0_x + 4'd10;
-always_comb pc3_x = micro_code_active ? pc0_x : pc0_x + 4'd15;
-always_comb pc4_x = micro_code_active ? pc0_x : pc0_x + 4'd20;
+always_comb pc0_x = mip0v|mip1v|mip2v|mip3v | micro_code_active ? mc_adr : pc0_x1;
+always_comb pc1_x = mip0v|mip1v|mip2v|mip3v | micro_code_active ? pc0_x : pc0_x + 4'd5;
+always_comb pc2_x = mip0v|mip1v|mip2v|mip3v | micro_code_active ? pc0_x : pc0_x + 4'd10;
+always_comb pc3_x = mip0v|mip1v|mip2v|mip3v | micro_code_active ? pc0_x : pc0_x + 4'd15;
+always_comb pc4_x = mip0v|mip1v|mip2v|mip3v | micro_code_active ? pc0_x : pc0_x + 4'd20;
 
-always_comb pc5_x = micro_code_active ? pc0_x : pc0_x + 4'd25;
-always_comb pc6_x = micro_code_active ? pc0_x : pc0_x + 4'd30;
-always_comb pc7_x = micro_code_active ? pc0_x : pc0_x + 4'd35;
-always_comb pc8_x = micro_code_active ? pc0_x : pc0_x + 4'd40;
+always_comb pc5_x = mipv | micro_code_active ? pc0_x : pc0_x + 4'd25;
+always_comb pc6_x = mipv | micro_code_active ? pc0_x : pc0_x + 4'd30;
+always_comb pc7_x = mipv | micro_code_active ? pc0_x : pc0_x + 4'd35;
+always_comb pc8_x = mipv | micro_code_active ? pc0_x : pc0_x + 4'd40;
 
 always_ff @(posedge clk)
 if (advance_pipeline)
@@ -3066,30 +3052,31 @@ if (rst)
 else begin
 //		if (fcu_rndxv && fcu_idle && branch_state==BS_IDLE)
 //			branch_state <= 3'd0;
-	case(branch_state)
-	BS_IDLE:
-		if (branchmiss)
-			branch_state <= BS_CHKPT_RESTORE;
-	BS_CHKPT_RESTORE:
-		branch_state <= BS_CHKPT_RESTORED;
-	BS_CHKPT_RESTORED:
-		branch_state <= BS_STATE3;
-	BS_STATE3:
-		branch_state <= BS_CAPTURE_MISSPC;
-	BS_CAPTURE_MISSPC:
-		if (s4s7)
-			branch_state <= BS_DONE2;
-		else
-			branch_state <= BS_DONE;
-	BS_DONE:
-		if (s5s7)
-			branch_state <= BS_DONE2;
-	BS_DONE2:
-		if (advance_pipeline)
+	if (advance_pipeline) begin
+		case(branch_state)
+		BS_IDLE:
+			if (branchmiss)
+				branch_state <= BS_CHKPT_RESTORE;
+		BS_CHKPT_RESTORE:
+			branch_state <= BS_CHKPT_RESTORED;
+		BS_CHKPT_RESTORED:
+			branch_state <= BS_STATE3;
+		BS_STATE3:
+			branch_state <= BS_CAPTURE_MISSPC;
+		BS_CAPTURE_MISSPC:
+			if (s4s7)
+				branch_state <= BS_DONE2;
+			else
+				branch_state <= BS_DONE;
+		BS_DONE:
+			if (s5s7)
+				branch_state <= BS_DONE2;
+		BS_DONE2:
 			branch_state <= BS_IDLE;
-	default:
-		branch_state <= BS_IDLE;
-	endcase
+		default:
+			branch_state <= BS_IDLE;
+		endcase
+	end
 end
 
 // ----------------------------------------------------------------------------
@@ -4017,12 +4004,24 @@ else begin
 	if (alu0_available && alu0_rndxv && alu0_idle) begin
 		alu0_ld <= 1'd1;
 		alu0_id <= alu0_rndx;
-		alu0_argA <= rfo_alu0_argA;
+		if (rob[alu0_rndx].decbus.mvvrm)
+			alu0_argA <= vrm[rob[alu0_rndx].vn];
+		else if (rob[alu0_rndx].decbus.mvvex)
+			alu0_argA <= vex[rob[alu0_rndx].vn];
+		else
+			alu0_argA <= rfo_alu0_argA;
 		alu0_argB <= rfo_alu0_argB;
 		alu0_argBI <= rob[alu0_rndx].decbus.immb | rfo_alu0_argB;
 		alu0_argC <= rfo_alu0_argC;
 		alu0_argT <= rfo_alu0_argT;
 		alu0_argI	<= rob[alu0_rndx].decbus.immb;
+`ifdef IS_SIM
+		rob[alu0_rndx].argA <= rfo_alu0_argA;
+		rob[alu0_rndx].argB <= rfo_alu0_argB;
+		rob[alu0_rndx].argC <= rfo_alu0_argC;
+		rob[alu0_rndx].argI <= rob[alu0_rndx].decbus.immb;
+		rob[alu0_rndx].argT <= rfo_alu0_argT;
+`endif
 		alu0_cs <= rob[alu0_rndx].decbus.Rcc;
 		alu0_Rt <= rob[alu0_rndx].nRt;
 		alu0_aRt <= rob[alu0_rndx].decbus.Rt;
@@ -4075,7 +4074,12 @@ else begin
 		if (alu1_available && alu1_rndxv && alu1_idle) begin
 			alu1_ld <= 1'b1;
 			alu1_id <= alu1_rndx;
-			alu1_argA <= rfo_alu1_argA;
+			if (rob[alu1_rndx].decbus.mvvrm)
+				alu1_argA <= vrm[rob[alu1_rndx].vn];
+			else if (rob[alu1_rndx].decbus.mvvex)
+				alu1_argA <= vex[rob[alu1_rndx].vn];
+			else
+				alu1_argA <= rfo_alu1_argA;
 			alu1_argB <= rfo_alu1_argB;
 			alu1_argBI <= rob[alu1_rndx].decbus.immb | rfo_alu1_argB;
 			alu1_argC <= rfo_alu1_argC;
@@ -4085,16 +4089,28 @@ else begin
 			// Both ALUs see the same instruction.
 			if (rob[alu1_rndx].decbus.alu_pair) begin
 				alu1_argT <= rfo_alu1_argC;
+`ifdef IS_SIM
+				rob[alu1_rndx].argT <= rfo_alu1_argC;
+`endif				
 				alu1_Rt <= rob[alu1_rndx].pRc;
 				alu1_aRt <= rob[alu1_rndx].decbus.Rc;
 				alu1_aRtz <= ~|rob[alu1_rndx].decbus.Rc;
 			end
 			else begin
 				alu1_argT <= rfo_alu1_argT;
+`ifdef IS_SIM
+				rob[alu1_rndx].argT <= rfo_alu1_argT;
+`endif				
 				alu1_Rt <= rob[alu1_rndx].nRt;
 				alu1_aRt <= rob[alu1_rndx].decbus.Rt;
 				alu1_aRtz <= rob[alu1_rndx].decbus.Rtz;
 			end
+`ifdef IS_SIM
+			rob[alu1_rndx].argA <= rfo_alu1_argA;
+			rob[alu1_rndx].argB <= rfo_alu1_argB;
+			rob[alu1_rndx].argC <= rfo_alu1_argC;
+			rob[alu1_rndx].argI <= rob[alu1_rndx].decbus.immb;
+`endif
 			alu1_div <= rob[alu1_rndx].decbus.div;
 			alu1_pc <= rob[alu1_rndx].pc;
 			alu1_cp <= rob[alu1_rndx].cndx;
@@ -5044,6 +5060,9 @@ else begin
     if (!rob[ alu0_id ].decbus.multicycle) begin
     	alu0_done <= TRUE;
 	    alu0_idle <= TRUE;
+`ifdef IS_SIM	    
+	    rob[alu0_id].res <= alu0_res;
+`endif
 	  end
     if ((rob[ alu0_id ].decbus.mul || rob[ alu0_id ].decbus.mulu) && mul0_done) begin
     	alu0_done <= TRUE;
@@ -5051,6 +5070,9 @@ else begin
 	    alu0_idv <= INV;
 	    rob[ alu0_id ].done <= 2'b11;
 	    rob[ alu0_id ].out <= {INV,INV};
+`ifdef IS_SIM	    
+	    rob[alu0_id].res <= alu0_res;
+`endif
   	end
     if ((rob[ alu0_id ].decbus.div || rob[ alu0_id ].decbus.divu) && div0_done) begin
     	alu0_done <= TRUE;
@@ -5058,6 +5080,9 @@ else begin
 	    alu0_idv <= INV;
 	    rob[ alu0_id ].done <= 2'b11;
 	    rob[ alu0_id ].out <= {INV,INV};
+`ifdef IS_SIM	    
+	    rob[alu0_id].res <= alu0_res;
+`endif
   	end
   	if (alu0_pred) begin
   		alu0_done <= TRUE;
@@ -5080,7 +5105,11 @@ else begin
 	    alu0_idv <= INV;
 	    rob[ alu0_id ].done <= 2'b11;
 	    rob[ alu0_id ].out <= {INV,INV};
-		end  		
+		end
+		if (~|alu0_exc)
+			vrm[rob[alu0_id].vn] <= vrm[rob[alu0_id].vn] & ~(64'hFF << {rob[alu0_id].op.element,3'b0});
+		if (|alu0_exc)
+			vex[rob[alu0_id].vn] <= vex[rob[alu0_id].vn] | (alu0_exc << {rob[alu0_id].op.element,3'b0});
 	end
 
 	if (NALU > 1 && rob[alu1_id].v && alu1_idv && (!rob[alu1_id].done[0]||(|alu1_cptgt&&rob[alu1_id].done!=2'b11))) begin
@@ -5102,6 +5131,9 @@ else begin
     if (!rob[ alu1_id ].decbus.multicycle) begin
     	alu1_done <= TRUE;
 	    alu1_idle <= TRUE;
+`ifdef IS_SIM	    
+	    rob[alu1_id].res <= alu1_res;
+`endif
 	  end
     if ((rob[ alu1_id ].decbus.mul || rob[ alu1_id ].decbus.mulu) && mul1_done) begin
     	alu1_done <= TRUE;
@@ -5109,6 +5141,9 @@ else begin
 	    alu1_idv <= INV;
 	    rob[ alu1_id ].done <= 2'b11;
 	    rob[ alu1_id ].out <= {INV,INV};
+`ifdef IS_SIM	    
+	    rob[alu1_id].res <= alu1_res;
+`endif
   	end
   	if (|alu1_cptgt) begin
     	alu1_done <= TRUE;
@@ -5116,7 +5151,11 @@ else begin
 	    alu1_idv <= INV;
 	    rob[ alu1_id ].done <= 2'b11;
 	    rob[ alu1_id ].out <= {INV,INV};
-		end  		
+		end
+		if (~|alu1_exc)  		
+			vrm[rob[alu1_id].vn] <= vrm[rob[alu1_id].vn] & ~(64'hFF << {rob[alu1_id].op.element,3'b0});
+		if (|alu1_exc)
+			vex[rob[alu1_id].vn] <= vex[rob[alu1_id].vn] | (alu1_exc << {rob[alu1_id].op.element,3'b0});
 	end
 	
 	if (NFPU > 0 && !fpu0_idle && rob[fpu0_id].v && fpu0_idv) begin
@@ -5770,7 +5809,8 @@ else begin
 	end
 	
 	// Set the predicate bit for an instruction. The instruction must be queued
-	// already.
+	// already. An instruction is queued with its predicate bit set FALSE. If
+	// there is no prior predicate then the flag is automatically set TRUE.
 	begin
 		for (nn = 0; nn < ROB_ENTRIES; nn = nn + 1) begin
 			if (!rob[nn].pred_bitv && !fnHasPred(nn)) begin
@@ -5783,7 +5823,12 @@ else begin
 					&& fnPredPCMatch(rob[nn].pc[7:0], rob[mm].pc[7:0])
 					&& !rob[mm].pred_bitv
 					&& !rob[mm].decbus.vec) begin
-						rob[mm].pred_bit <= rob[nn].pred_status[rob[mm].op.pred_btst];
+						rob[mm].pred_bit <= 
+							rob[mm].decbus.vec2 ? 
+								rob[nn].pred_status[rob[mm].op.pred_btst]
+								& vgm[rob[mm].op.pred_btst] :
+								rob[nn].pred_status[rob[mm].op.pred_btst]
+							;
 						rob[mm].pred_bitv <= TRUE;
 					end
 				end
@@ -6069,7 +6114,7 @@ always_ff @(posedge clk) begin: clock_n_debug
 	$display("Lengths: 0:%d  1:%d  2:%d  3:%d  4:%d  5:%d  6:%d  7:%d" , len0, len1, len2, len3, len4, len5, len6, len7);
 	$display("----- Instruction Extract %c%c ----- %s", ihit_x ? "h":" ", micro_code_active_x ? "a": " ", stomp_x ? stompstr : no_stompstr);
 	$display("micro_ip: %h", micro_ip);
-	if (do_bsr && !stomp_x)
+	if (do_bsr && !stomp_x3)
 		$display("BSR %h  pc0_x=%h", bsr_tgt, pc0_x);
 	$display("pc 0: %h  1: %h  2: %h  3: %h  4: %h", pc0_x, pc1_x, pc2_x, pc3_x, pc4_x);
 	$display("line: %h", ic_line_x[511:0]);
@@ -6117,17 +6162,19 @@ always_ff @(posedge clk) begin: clock_n_debug
 	$display("insn 0: %x  1: %x  2: %x  3: %x", ins0_q, ins1_q, ins2_q, ins3_q);
 	$display("----- Queue %c%c ----- %h", ihit_q ? "h":" ", micro_code_active_q ? "a": " ", qd);
 	for (i = 0; i < ROB_ENTRIES; i = i + 1) begin
-    $display("%c%c%c sn:%h %d: %c%c%c%c%c%c %d %c%c %d %c %c%d Rt%d/%d %h Rs%d/%d %c Ra%d/%d %c Rb%d/%d %c Rc%d/%d %c %h.%h cp:%h ins=%h #",
+    $display("%c%c%c sn:%h %d: %c%c%c%c%c%c %d %c%c %d %c %c%d Rt%d/%d=%h %h Rs%d/%d %c Ra%d/%d=%h %c Rb%d/%d=%h %c Rc%d/%d=%h %c I=%h %h.%h cp:%h ins=%h #",
 			(i[4:0]==head0)?67:46, (i[4:0]==tail0)?81:46, rob[i].rstp ? "r" : " ", rob[i].sn, i[5:0],
 			rob[i].v?"v":"-", rob[i].done[0]?"d":"-", rob[i].done[1]?"d":"-", rob[i].out[0]?"o":"-", rob[i].out[1]?"o":"-", rob[i].bt?"t":"-", rob_memissue[i], rob[i].lsq?"q":"-", robentry_issue[i]?"i":"-",
 			robentry_islot[i], robentry_stomp[i]?"s":"-",
 			(rob[i].decbus.cpytgt ? "c" : rob[i].decbus.fc ? "b" : rob[i].decbus.mem ? "m" : "a"),
 			rob[i].op.ins.any.opcode, 
-			rob[i].decbus.Rt, rob[i].nRt, rob[i].exc,
+			rob[i].decbus.Rt, rob[i].nRt, rob[i].res, rob[i].exc,
 			rob[i].decbus.Rt, rob[i].pRt, rob[i].argT_v?"v":" ",
-			rob[i].decbus.Ra, rob[i].pRa, rob[i].argA_v?"v":" ",
-			rob[i].decbus.Rb, rob[i].pRb, rob[i].argB_v?"v":" ",
-			rob[i].decbus.Rc, rob[i].pRc, rob[i].argC_v?"v":" ", rob[i].pc, rob[i].mcip,
+			rob[i].decbus.Ra, rob[i].pRa, rob[i].argA, rob[i].argA_v?"v":" ",
+			rob[i].decbus.Rb, rob[i].pRb, rob[i].argB, rob[i].argB_v?"v":" ",
+			rob[i].decbus.Rc, rob[i].pRc, rob[i].argC, rob[i].argC_v?"v":" ",
+			rob[i].argI,
+			rob[i].pc, rob[i].mcip,
 			rob[i].cndx, rob[i].op[39:0]);
 	end
 	$display("----- LSQ -----");
@@ -6197,6 +6244,10 @@ endgenerate
 // Support functions and tasks
 // ============================================================================
 
+// Test if a predicate's IP is one instruction prior to an instruction. Only
+// the least significant eight bits of the IP is checked since there are only
+// a small number of instructions in the queue.
+
 function fnPredPCMatch;
 input [7:0] pc1;
 input [7:0] pc2;
@@ -6205,8 +6256,8 @@ begin
 end
 endfunction
 
-// Detect if an instruction has a predicate. Done by checking the PC values.
-// A predicate will always have a PC value that is one to four instructions
+// Detect if an instruction has a predicate. Done by checking the IP values.
+// A predicate will always have a IP value that is one instructions
 // prior to the predicated one.
 
 function fnHasPred;
@@ -6249,7 +6300,10 @@ begin
 end
 endfunction
 
-// Detect "stuck out" situation.
+// Detect "stuck out" situation. Stuck out occurs if an instruction is marked
+// out, but no-longer has a functional unit associated with it. Not sure why
+// this happens but it hangs the machine when it does. So, the situation is
+// detected and the machine set back to a prior to out state.
 
 function fnStuckOut;
 input rob_ndx_t n;
@@ -6269,8 +6323,8 @@ end
 endfunction
 
 // Set predicate status bits according to mask. Predicate status bits are set
-// in groups of eight, since there may be a maximum of eight elements in a 
-// register if the elements are byte sized.
+// in groups of eight, since there may be a maximum of eight lanes in a 
+// register if the lanes are byte sized.
 
 function [7:0] fnPredStatus;
 input [1:0] mask;
@@ -6575,6 +6629,13 @@ begin
 	no_stompstr <= "         ";
 	inc_chkpt <= FALSE;
 	store_argC_v <= INV;
+	vgm <= 64'hFFFFFFFFFFFFFFFF;
+	for (n14 = 0; n14 < 4; n14 = n14 + 1) begin
+		vrm[n14] <= 64'hFFFFFFFFFFFFFFFF;
+		vex[n14] <= 64'h0;
+	end
+	vn <= 2'd0;
+	mc_orid <= 5'd0;
 end
 endtask
 
@@ -6612,6 +6673,7 @@ begin
 	rob[tail].sn <= sn;
 	rob[tail].pred_bitv <= FALSE;
 	rob[tail].pred_bit <= FALSE;
+	rob[tail].orid <= mc_orid;
 	// NOP type instructions appear in the queue but they do not get scheduled or
 	// execute. They are marked done immediately.
 	rob[tail].done <= {2{db.nop}};
@@ -6667,9 +6729,9 @@ begin
 	// Vector instructions are treated as NOPs as they invoke micro-code which
 	// uses scalar instructions.
 	if (ornop|db.vec) begin
-		rob[tail].op = {33'd0,OP_NOP};
-		rob[tail].nRt = 11'd0;
-		rob[tail].pRt = 11'd0;
+		rob[tail].op <= {33'd0,OP_NOP};
+		rob[tail].nRt <= 11'd0;
+		rob[tail].pRt <= 11'd0;
 		rob[tail].argA_v <= VAL;
 		rob[tail].argB_v <= VAL;
 		rob[tail].argC_v <= VAL;
@@ -6681,6 +6743,14 @@ begin
 	// the instruction to be a NOP operation.
 	else if (stomp)
 		rob[tail].decbus.cpytgt <= TRUE;
+	if (db.vec) begin
+		vrm[vn] <= 64'hFFFFFFFFFFFFFFFF;
+		vex[vn] <= 64'h0;
+		vn <= vn + 2'd1;
+		rob[tail].vn <= vn;
+	end
+	if (!stomp && !ornop && db.vec)
+		mc_orid <= tail;
 end
 endtask
 
@@ -6989,18 +7059,6 @@ begin
 	end
 end
 endtask
-
-endmodule
-
-module decoder6 (num, out);
-input [5:0] num;
-output [63:1] out;
-
-reg [63:0] out1;
-always_comb
-	out1 = 64'd1 << num;
-
-assign out = out1[63:1];
 
 endmodule
 

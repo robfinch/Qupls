@@ -54,10 +54,10 @@ input alloc0;					// allocate target register 0
 input alloc1;
 input alloc2;
 input alloc3;
-output pregno_t wo0 = 10'd0;	// target register tag
-output pregno_t wo1 = 10'd0;
-output pregno_t wo2 = 10'd0;
-output pregno_t wo3 = 10'd0;
+output pregno_t wo0;	// target register tag
+output pregno_t wo1;
+output pregno_t wo2;
+output pregno_t wo3;
 output reg wv0 = 1'b0;
 output reg wv1 = 1'b0;
 output reg wv2 = 1'b0;

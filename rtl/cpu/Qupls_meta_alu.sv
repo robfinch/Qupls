@@ -65,11 +65,17 @@ input [2:0] cs;
 input pc_address_t pc;
 input [WID-1:0] csr;
 output reg [WID-1:0] o;
-output mul_done;
-output div_done;
+output reg mul_done;
+output reg div_done;
 output div_dbz;
 
 wire [WID-1:0] o16,o32,o64,o128;
+wire [WID/16-1:0] div_done16;
+wire [WID/16-1:0] mul_done16;
+wire [WID/32-1:0] div_done32;
+wire [WID/32-1:0] mul_done32;
+wire [WID/64-1:0] div_done64;
+wire [WID/64-1:0] mul_done64;
 integer n;
 genvar g;
 
@@ -97,8 +103,8 @@ generate begin : g16
 			.pc(pc),
 			.csr(csr),
 			.o(o16[g*16+15:g*16]),
-			.mul_done(),
-			.div_done(),
+			.mul_done(mul_done16[g]),
+			.div_done(div_done16[g]),
 			.div_dbz()
 		);
 end
@@ -128,8 +134,8 @@ generate begin : g32
 			.pc(pc),
 			.csr(csr),
 			.o(o32[g*32+31:g*32]),
-			.mul_done(),
-			.div_done(),
+			.mul_done(mul_done32[g]),
+			.div_done(div_done32[g]),
 			.div_dbz()
 		);
 end
@@ -159,8 +165,8 @@ generate begin : g64
 			.pc(pc),
 			.csr(csr),
 			.o(o64[g*64+63:g*64]),
-			.mul_done(),
-			.div_done(),
+			.mul_done(mul_done64[g]),
+			.div_done(div_done64[g]),
 			.div_dbz()
 		);
 end
@@ -238,5 +244,27 @@ begin
 	default:	;
 	endcase
 end
+
+always_comb
+	if (SUPPORT_PREC)
+		case(prc)
+		2'd0:	mul_done = &mul_done16;
+		2'd1:	mul_done = &mul_done32;
+		2'd2:	mul_done = &mul_done64;
+		default:	mul_done = 1'b1;
+		endcase
+	else
+		mul_done = &mul_done64;
+
+always_comb
+	if (SUPPORT_PREC)
+		case(prc)
+		2'd0:	div_done = &div_done16;
+		2'd1:	div_done = &div_done32;
+		2'd2:	div_done = &div_done64;
+		default:	div_done = 1'b1;
+		endcase
+	else
+		div_done = &div_done64;
 
 endmodule

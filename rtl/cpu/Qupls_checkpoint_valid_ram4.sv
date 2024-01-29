@@ -250,7 +250,7 @@ generate begin : gMem
 	for (g = 0; g < NRDPORT * NPORT; g = g + 1) begin
 		always_comb
 		if (rst)
-			o[g] = 1'b1;
+			o[g[7:3]] = 1'b1;
 		else begin
 			slice = doutb[g[7:3]][lvt[g[2:0]]];
 			o[g[7:3]] = slice[rc[g[7:3]]];
