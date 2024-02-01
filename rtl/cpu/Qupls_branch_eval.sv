@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2023-2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -71,6 +71,10 @@ always_comb
 		BS:	takb = a[b[5:0]];
 		BCI: takb = ~a[instr.br.Rb];
 		BSI: takb = a[instr.br.Rb];
+		NAND:	takb = ~|(a & b);
+		AND:	takb = |(a & b);
+		NOR:	takb = ~|(a | b);
+		OR:	takb = |(a | b);
 		default:	takb = 1'b0;
 		endcase	
 	OP_Bcc:	// integer signed branches
@@ -85,6 +89,10 @@ always_comb
 		BS:	takb = a[b[5:0]];
 		BCI: takb = ~a[instr.br.Rb];
 		BSI: takb = a[instr.br.Rb];
+		NAND:	takb = ~|(|a && |b);
+		AND:	takb = |(|a && |b);
+		NOR:	takb = ~|(|a || |b);
+		OR:	takb = |(|a || |b);
 		default:	takb = 1'b0;
 		endcase	
 	OP_FBccD:

@@ -244,6 +244,7 @@ always_comb nop2 = FALSE;
 always_comb nop3 = FALSE;
 */
 reg bsr0,bsr1,bsr2,bsr3;
+reg do_bsr1;
 pc_address_t bsr0_tgt;
 pc_address_t bsr1_tgt;
 pc_address_t bsr2_tgt;
@@ -258,25 +259,20 @@ always_comb bsr1_tgt = pc1_o + {{36{ins1.ins[39]}},ins1.ins[39:12]};
 always_comb bsr2_tgt = pc2_o + {{36{ins2.ins[39]}},ins2.ins[39:12]};
 always_comb bsr3_tgt = pc3_o + {{36{ins3.ins[39]}},ins3.ins[39:12]};
 always_comb
+	do_bsr = bsr0|bsr1|bsr2|bsr3;
+//edge_det ued1 (.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(do_bsr1), .pe(do_bsr), .ne(), .ee());
+always_comb
 begin
-	do_bsr = FALSE;
-	bsr_tgt = pc4_o;
-	if (bsr0) begin
-		do_bsr = TRUE;
+	if (bsr0)
 		bsr_tgt = bsr0_tgt;
-	end
-	else if (bsr1) begin
-		do_bsr = TRUE;
+	else if (bsr1)
 		bsr_tgt = bsr1_tgt;
-	end
-	else if (bsr2) begin
-		do_bsr = TRUE;
+	else if (bsr2)
 		bsr_tgt = bsr2_tgt;
-	end
-	else if (bsr3) begin
-		do_bsr = TRUE;
+	else if (bsr3)
 		bsr_tgt = bsr3_tgt;
-	end
+	else
+		bsr_tgt = pc4_o;
 end
 
 Qupls_ins_extract_mux umux0
@@ -379,27 +375,27 @@ generate begin : gInsExt
 	if (SUPPORT_POSTFIX) begin
 		always_ff @(posedge clk)
 		if (en)
-			ins4.ins <= hirq ? {'d0,FN_IRQ,1'b0,vect_i,5'd0,2'd0,irq_i,OP_SYS} : 
+			ins4.ins <= hirq ? {4'd0,1'b0,vect_i[7:0],5'd0,5'd0,5'd0,irq_i,2'b0,OP_CHK} : 
 				mipv ? mc_ins4 : nop_i ? {33'd0,OP_NOP} :
 				ic_line2 >> {pc4[5:0],3'd0};
 		always_ff @(posedge clk)
 		if (en)
-			ins5.ins <= hirq ? {'d0,FN_IRQ,1'b0,vect_i,5'd0,2'd0,irq_i,OP_SYS} :
+			ins5.ins <= hirq ? {4'd0,1'b0,vect_i[7:0],5'd0,5'd0,5'd0,irq_i,2'b0,OP_CHK} :
 				mipv ? mc_ins5 : nop_i ? {33'd0,OP_NOP} :
 				ic_line2 >> {pc5[5:0],3'd0};
 		always_ff @(posedge clk)
 		if (en)
-			ins6.ins <= hirq ? {'d0,FN_IRQ,1'b0,vect_i,5'd0,2'd0,irq_i,OP_SYS} :
+			ins6.ins <= hirq ? {4'd0,1'b0,vect_i[7:0],5'd0,5'd0,5'd0,irq_i,2'b0,OP_CHK} :
 				mipv ? mc_ins6 : nop_i ? {33'd0,OP_NOP} :
 				ic_line2 >> {pc6[5:0],3'd0};
 		always_ff @(posedge clk)
 		if (en)
-			ins7.ins <= hirq ? {'d0,FN_IRQ,1'b0,vect_i,5'd0,2'd0,irq_i,OP_SYS} :
+			ins7.ins <= hirq ? {4'd0,1'b0,vect_i[7:0],5'd0,5'd0,5'd0,irq_i,2'b0,OP_CHK} :
 				mipv ? mc_ins7 : nop_i ? {33'd0,OP_NOP} :
 				ic_line2 >> {pc7[5:0],3'd0};
 		always_ff @(posedge clk)
 		if (en)
-			ins8.ins <= hirq ? {'d0,FN_IRQ,1'b0,vect_i,5'd0,2'd0,irq_i,OP_SYS} :
+			ins8.ins <= hirq ? {4'd0,1'b0,vect_i[7:0],5'd0,5'd0,5'd0,irq_i,2'b0,OP_CHK} :
 				mipv ? mc_ins8 : nop_i ? {33'd0,OP_NOP} :
 				ic_line2 >> {pc8[5:0],3'd0};
 	end

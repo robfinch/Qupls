@@ -37,7 +37,7 @@
 
 import QuplsPkg::SIM;
 
-module Qupls_checkpointRam(clka, ena, wea, addra, dina, clkb, enb, addrb, doutb);
+module Qupls_checkpointRam(clka, ena, wea, addra, dina, douta, clkb, enb, addrb, doutb);
 localparam RBIT=$clog2(PREGS);
 localparam QBIT=$bits(pregno_t);
 localparam WID=$bits(checkpoint_t);
@@ -46,19 +46,20 @@ input ena;
 input wea;
 input [3:0] addra;
 input checkpoint_t dina;
+output checkpoint_t douta;
 input clkb;
 input enb;
 input [3:0] addrb;
 output checkpoint_t doutb;
 
 checkpoint_t doutb1;
+checkpoint_t douta1;
 genvar g;
 integer n;
 // The following outside of generate to make it easier to reference in SIM code.
 // It should be stripped out for synthesis as it would not be referenced.
 (* RAM_STYLE="distributed" *)
 checkpoint_t mem [0:NCHECK-1];
-reg [3:0] raddrb;
 reg ena1;
 reg wea1;
 checkpoint_t dina1;
@@ -84,10 +85,9 @@ if (SIM) begin
 			if (ena & wea) mem[addra] <= dina;
 //			if (ena & wea[g]) mem[addra][g*QBIT+QBIT-1:g*QBIT] <= dina[g*QBIT+QBIT-1:g*QBIT];
 
-	always_ff @(posedge clkb)
-		if (enb) raddrb <= addrb;
 //	assign doutb = (ena & wea) ? dina : mem[addrb];
-	assign doutb = mem[raddrb];
+	assign doutb = mem[addrb];
+	assign douta1 = mem[addra];
 
 end
 else begin
@@ -138,7 +138,7 @@ else begin
       .WRITE_DATA_WIDTH_A(WID)        // DECIMAL
    )
    xpm_memory_dpdistram_inst (
-      .douta(),   			// READ_DATA_WIDTH_A-bit output: Data output for port A read operations.
+      .douta(douta1), 	// READ_DATA_WIDTH_A-bit output: Data output for port A read operations.
       .doutb(doutb1),   // READ_DATA_WIDTH_B-bit output: Data output for port B read operations.
       .addra(addra),   // ADDR_WIDTH_A-bit input: Address for port A write and read operations.
       .addrb(addrb),   // ADDR_WIDTH_B-bit input: Address for port B write and read operations.
@@ -268,6 +268,10 @@ else begin
 end
 end
 endgenerate
+
+always_comb
+	douta = douta1;
+//	douta = ena && wea && addra==addrb ? dina : douta1;
 								
 endmodule
 

@@ -44,7 +44,7 @@ function fnIsAlu;
 input instruction_t ir;
 begin
 	case(ir.r2.opcode)
-	OP_SYS:	fnIsAlu = 1'b0;
+	OP_CHK:	fnIsAlu = 1'b1;
 	OP_R2,OP_R3V,OP_R3VS:
 		case(ir.r2.func)
 		FN_ADD:	fnIsAlu = 1'b1;
@@ -62,6 +62,8 @@ begin
 		FN_NAND:	fnIsAlu = 1'b1;
 		FN_NOR:	fnIsAlu = 1'b1;
 		FN_ENOR:	fnIsAlu = 1'b1;
+		FN_MINMAX:	fnIsAlu = 1'b1;
+		FN_BYTENDX:	fnIsAlu = 1'b1;
 		FN_SEQ:	fnIsAlu = 1'b1;
 		FN_SNE:	fnIsAlu = 1'b1;
 		FN_SLT:	fnIsAlu = 1'b1;
@@ -74,8 +76,7 @@ begin
 		FN_ZSLE:	fnIsAlu = 1'b1;
 		FN_ZSLTU:	fnIsAlu = 1'b1;
 		FN_ZSLEU:	fnIsAlu = 1'b1;
-		FN_MVVRM: fnIsAlu = 1'b1;
-		FN_MVVEX:	fnIsAlu = 1'b1;
+		FN_MVVR: 	fnIsAlu = 1'b1;
 		default:	fnIsAlu = 1'b0;
 		endcase
 	OP_ADDI,OP_VADDI:	
@@ -114,6 +115,8 @@ begin
 		fnIsAlu = 1'b1;
 	OP_BSR,OP_JSR:
 		fnIsAlu = 1'b1;
+	OP_Bcc,OP_BccU:
+		fnIsAlu = ir[11];
 	OP_PRED:
 		fnIsAlu = 1'b1;
 	default:	fnIsAlu = 1'b0;

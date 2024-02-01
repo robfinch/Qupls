@@ -45,7 +45,7 @@ input instruction_t ir;
 begin
 	fnIsFlowCtrl = 1'b0;
 	case(ir.any.opcode)
-	OP_SYS:	fnIsFlowCtrl = 1'b1;
+	OP_CHK:	fnIsFlowCtrl = 1'b1;
 	OP_JSR:
 		fnIsFlowCtrl = 1'b1;
 	OP_DBRA,

@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -46,7 +46,6 @@ function fnIsOddball;
 input instruction_t ir;
 begin
 	case(ir.any.opcode)
-	OP_SYS:	fnIsOddball = 1'b1;
 	OP_CSR:	fnIsOddball = 1'b1;
 	OP_RTD: fnIsOddball = ir[10:9]==2'd1; // RTI
 	OP_IRQ: fnIsOddball = ir[25:22]==4'h7;	// REX

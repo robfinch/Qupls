@@ -44,7 +44,7 @@ function [1:0] fnPrec;
 input instruction_t ir;
 begin
 	case(ir.r2.opcode)
-	OP_SYS:	fnPrec = 2'b11;
+	OP_CHK:	fnPrec = 2'b11;
 	OP_R2:	fnPrec = ir[32:31];
 	OP_ADDI,OP_VADDI:	
 		fnPrec = ir[20:19];

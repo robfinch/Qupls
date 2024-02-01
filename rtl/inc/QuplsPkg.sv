@@ -274,7 +274,7 @@ typedef enum logic [3:0] {
 } tlb_state_t;
 
 typedef enum logic [6:0] {
-	OP_SYS			= 7'd00,
+	OP_CHK			= 7'd00,
 	OP_R1				= 7'd01,
 	OP_R2				= 7'd02,
 	OP_SLTI			= 7'd03,
@@ -455,13 +455,11 @@ typedef enum logic [3:0] {
 	
 	BCI = 4'd8,
 	BSI = 4'd9,
-	LO = 4'd10,
-	LS = 4'd11,
-	HS = 4'd12,
-	HI = 4'd13,
+	NAND = 4'd10,
+	AND = 4'd11,
+	NOR = 4'd12,
+	OR = 4'd13
 	
-	RA = 4'd14,
-	SR = 4'd15
 } branch_fn_t;
 
 typedef enum logic [3:0] {
@@ -530,25 +528,21 @@ typedef enum logic [6:0] {
 	FN_ENOR			= 7'd10,
 	FN_CMOVZ		= 7'd11,
 	FN_CMOVNZ		= 7'd12,
-	FN_MID3			= 7'd13,
-	FN_MIDU3		= 7'd14,
 	FN_MUL			= 7'd16,
 	FN_DIV			= 7'd17,
-	FN_MIN3			= 7'd18,
+	FN_MINMAX		= 7'd18,
 	FN_MULU			= 7'd19,
 	FN_DIVU			= 7'd20,
 	FN_MULSU		= 7'd21,
 	FN_DIVSU		= 7'd22,
-	FN_MAX3			= 7'd23,
 	FN_MULW			= 7'd24,
 	FN_MOD			= 7'd25,
-	FN_MINU3		= 7'd26,
 	FN_MULUW		= 7'd27,
 	FN_MODU			= 7'd28,
 	FN_MULSUW		= 7'd29,
 	FN_MODSU		= 7'd30,
-	FN_MAXU3		= 7'd31,
 	FN_PTRDIF		= 7'd32,
+	FN_BYTENDX	= 7'd37,
 	NNA_MTWT		= 7'd40,
 	NNA_MTIN		= 7'd41,
 	NNA_MTBIAS	= 7'd42,
@@ -580,8 +574,7 @@ typedef enum logic [6:0] {
 	FN_ZSLEI		= 7'd123,
 	FN_ZSLTUI		= 7'd124,
 	FN_ZSLEUI		= 7'd125,
-	FN_MVVRM		= 7'd126,
-	FN_MVVEX		= 7'd127
+	FN_MVVR			= 7'd127
 } r2func_t;
 
 typedef enum logic [4:0] {
@@ -631,7 +624,8 @@ typedef enum logic [4:0] {
 	FN_LDOX = 5'd6,
 	FN_LDOUX = 5'd7,
 	FN_LDHX = 5'd8,
-	FN_LDAX = 5'd10
+	FN_LDAX = 5'd10,
+	FN_LDCTX = 5'd15
 } ldn_func_t;
 
 typedef enum logic [4:0] {
@@ -639,7 +633,8 @@ typedef enum logic [4:0] {
 	FN_STWX = 5'd1,
 	FN_STTX = 5'd2,
 	FN_STOX = 5'd3,
-	FN_STHX = 5'd4
+	FN_STHX = 5'd4,
+	FN_STCTX = 5'd7
 } stn_func_t;
 
 typedef union packed {
@@ -1306,8 +1301,7 @@ typedef struct packed
 	logic macro;			// true if macro instruction
 	logic vec;				// true if vector instruction
 	logic vec2;				// true if vector instruction
-	logic mvvrm;			// true if VRM move
-	logic mvvex;			// true if VEX move
+	logic mvvr;				// true if VR move (VEX / VRM)
 	logic alu;				// true if instruction must use alu (alu or mem)
 	logic alu0;				// true if instruction must use only alu #0
 	logic alu_pair;		// true if instruction requires pair of ALUs
@@ -1766,7 +1760,7 @@ input instruction_t ir;
 begin
 	fnIsFlowCtrl = 1'b0;
 	case(ir.any.opcode)
-	OP_SYS:	fnIsFlowCtrl = 1'b1;
+	OP_CHK:	fnIsFlowCtrl = 1'b1;
 	OP_JSR:
 		fnIsFlowCtrl = 1'b1;
 	OP_DBRA,
@@ -1794,7 +1788,7 @@ function fnSourceAv;
 input ex_instruction_t ir;
 begin
 	case(ir.ins.r2.opcode)
-	OP_SYS:	fnSourceAv = 1'b1;
+	OP_CHK:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
 	OP_R2,OP_R3V,OP_R3VS:
 		case(ir.ins.r2.func)
 		FN_ADD:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
@@ -1812,6 +1806,7 @@ begin
 		FN_NAND:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
 		FN_NOR:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
 		FN_ENOR:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
+		FN_MINMAX:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
 		FN_SEQ:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
 		FN_SNE:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
 		FN_SLT:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
@@ -1824,8 +1819,7 @@ begin
 		FN_ZSLE:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
 		FN_ZSLTU:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
 		FN_ZSLEU:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-		FN_MVVRM:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-		FN_MVVEX:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
+		FN_MVVR:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
 		default:	fnSourceAv = 1'b1;
 		endcase
 	OP_RTD:		fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
@@ -1868,7 +1862,7 @@ function fnSourceBv;
 input ex_instruction_t ir;
 begin
 	case(ir.ins.r2.opcode)
-	OP_SYS:	fnSourceBv = 1'b1;
+	OP_CHK:	fnSourceBv = fnConstReg(ir.aRb) || fnImmb(ir);
 	OP_R2,OP_R3V,OP_R3VS:
 		case(ir.ins.r2.func)
 		FN_ADD:	fnSourceBv = fnConstReg(ir.aRb) || fnImmb(ir);
@@ -1886,6 +1880,7 @@ begin
 		FN_NAND:	fnSourceBv = fnConstReg(ir.aRb) || fnImmb(ir);
 		FN_NOR:	fnSourceBv = fnConstReg(ir.aRb) || fnImmb(ir);
 		FN_ENOR:	fnSourceBv = fnConstReg(ir.aRb) || fnImmb(ir);
+		FN_MINMAX:	fnSourceBv = fnConstReg(ir.aRb) || fnImmb(ir);
 		FN_SEQ:	fnSourceBv = fnConstReg(ir.aRb) || fnImmb(ir);
 		FN_SNE:	fnSourceBv = fnConstReg(ir.aRb) || fnImmb(ir);
 		FN_SLT:	fnSourceBv = fnConstReg(ir.aRb) || fnImmb(ir);
@@ -1937,6 +1932,39 @@ function fnSourceCv;
 input ex_instruction_t ir;
 begin
 	case(ir.ins.r2.opcode)
+	OP_CHK:	fnSourceCv = fnConstReg(ir.aRc);
+	OP_R2,OP_R3V,OP_R3VS:
+		case(ir.ins.r2.func)
+		FN_ADD:	fnSourceCv = fnConstReg(ir.aRc);
+		FN_CMP:	fnSourceCv = fnConstReg(ir.aRc);
+		FN_MUL:	fnSourceCv = fnConstReg(ir.aRc);
+		FN_MULW:	fnSourceCv = fnConstReg(ir.aRc);
+		FN_DIV:	fnSourceCv = fnConstReg(ir.aRc);
+		FN_SUB:	fnSourceCv = fnConstReg(ir.aRc);
+		FN_MULU: fnSourceCv = fnConstReg(ir.aRc);
+		FN_MULUW: fnSourceCv = fnConstReg(ir.aRc);
+		FN_DIVU: fnSourceCv = fnConstReg(ir.aRc);
+		FN_AND:	fnSourceCv = fnConstReg(ir.aRc);
+		FN_OR:	fnSourceCv = fnConstReg(ir.aRc);
+		FN_EOR:	fnSourceCv = fnConstReg(ir.aRc);
+		FN_NAND:	fnSourceCv = fnConstReg(ir.aRc);
+		FN_NOR:	fnSourceCv = fnConstReg(ir.aRc);
+		FN_ENOR:	fnSourceCv = fnConstReg(ir.aRc);
+		FN_MINMAX:	fnSourceCv = fnConstReg(ir.aRc);
+		FN_SEQ:	fnSourceCv = fnConstReg(ir.aRc);
+		FN_SNE:	fnSourceCv = fnConstReg(ir.aRc);
+		FN_SLT:	fnSourceCv = fnConstReg(ir.aRc);
+		FN_SLE:	fnSourceCv = fnConstReg(ir.aRc);
+		FN_SLTU:	fnSourceCv = fnConstReg(ir.aRc);
+		FN_SLEU:	fnSourceCv = fnConstReg(ir.aRc);
+		FN_ZSEQ:	fnSourceCv = fnConstReg(ir.aRc);
+		FN_ZSNE:	fnSourceCv = fnConstReg(ir.aRc);
+		FN_ZSLT:	fnSourceCv = fnConstReg(ir.aRc);
+		FN_ZSLE:	fnSourceCv = fnConstReg(ir.aRc);
+		FN_ZSLTU:	fnSourceCv = fnConstReg(ir.aRc);
+		FN_ZSLEU:	fnSourceCv = fnConstReg(ir.aRc);
+		default:	fnSourceCv = 1'b1;
+		endcase
 	OP_STB,OP_STW,OP_STT,OP_STO,OP_STH,OP_STX:
 		fnSourceCv = fnConstReg(ir.ins[12:7]);
 	OP_DBRA,OP_JSR,OP_BSR,
@@ -1954,7 +1982,7 @@ function fnSourceTv;
 input ex_instruction_t ir;
 begin
 	casez(ir.ins.r2.opcode)
-	OP_SYS:	fnSourceTv = 1'b1;
+	OP_CHK:	fnSourceTv = 1'b1;
 	OP_R2,OP_R3V,OP_R3VS:
 		case(ir.ins.r2.func)
 		FN_ADD:	fnSourceTv = fnConstReg(ir.aRt);
@@ -1972,6 +2000,7 @@ begin
 		FN_NAND:	fnSourceTv = fnConstReg(ir.aRt);
 		FN_NOR:	fnSourceTv = fnConstReg(ir.aRt);
 		FN_ENOR:	fnSourceTv = fnConstReg(ir.aRt);
+		FN_MINMAX:	fnSourceTv = fnConstReg(ir.aRt);
 		FN_SEQ:	fnSourceTv = fnConstReg(ir.aRt);
 		FN_SNE:	fnSourceTv = fnConstReg(ir.aRt);
 		FN_SLT:	fnSourceTv = fnConstReg(ir.aRt);
@@ -2031,7 +2060,7 @@ begin
 	veci = 1'b0;//ir.ri.pfx_opcode==OP_VEC || ir.ri.pfx_opcode==OP_VECZ;
 	vecf = 1'b0;//ir.f2.pfx_opcode==OP_VEC || ir.f2.pfx_opcode==OP_VECZ;
 	casez(ir.ins.r2.opcode)
-	OP_SYS:	fnSourcePv = ~vec;
+	OP_CHK:	fnSourcePv = ~vec;
 	OP_R2,OP_R3V,OP_R3VS:
 		case(ir.ins.r2.func)
 		FN_ADD:	fnSourcePv = ~vec;
@@ -2047,12 +2076,19 @@ begin
 		FN_NAND:	fnSourcePv = ~vec;
 		FN_NOR:	fnSourcePv = ~vec;
 		FN_ENOR:	fnSourcePv = ~vec;
+		FN_MINMAX:	fnSourcePv = ~vec;
 		FN_SEQ:	fnSourcePv = ~vec;
 		FN_SNE:	fnSourcePv = ~vec;
 		FN_SLT:	fnSourcePv = ~vec;
 		FN_SLE:	fnSourcePv = ~vec;
 		FN_SLTU:	fnSourcePv = ~vec;
 		FN_SLEU:	fnSourcePv = ~vec;
+		FN_ZSEQ:	fnSourcePv = ~vec;
+		FN_ZSNE:	fnSourcePv = ~vec;
+		FN_ZSLT:	fnSourcePv = ~vec;
+		FN_ZSLE:	fnSourcePv = ~vec;
+		FN_ZSLTU:	fnSourcePv = ~vec;
+		FN_ZSLEU:	fnSourcePv = ~vec;
 		default:	fnSourcePv = 1'b1;
 		endcase
 	OP_JSR,
@@ -2100,7 +2136,7 @@ input instruction_t op;
 begin
 	case(op.any.opcode)
 	OP_LDX:
-		case(op.lsn.func)
+		case(op.lsn.func.ldn)
 		FN_LDBUX,FN_LDWUX,FN_LDTUX,FN_LDOUX:
 			fnIsLoadz = 1'b1;
 		default:
@@ -2234,7 +2270,7 @@ endfunction
 function fnIsIrq;
 input instruction_t ir;
 begin
-	fnIsIrq = ir.any.opcode==OP_SYS && ir.sys.func==FN_IRQ;
+	fnIsIrq = 1'b0;//ir.any.opcode==OP_CHK && ir.sys.func==FN_IRQ;
 end
 endfunction
 
@@ -2332,7 +2368,7 @@ begin
 	OP_LDH,OP_STH:
 		fnMemsz = hexi;
 	OP_LDX:
-		case(ir.lsn.func)
+		case(ir.lsn.func.ldn)
 		FN_LDBX,FN_LDBUX:
 			fnMemsz = byt;
 		FN_LDWX,FN_LDWUX:
@@ -2347,7 +2383,7 @@ begin
 			fnMemsz = octa;
 		endcase
 	OP_STX:
-		case(ir.lsn.func[4:0])
+		case(ir.lsn.func.stn)
 		FN_STBX:	fnMemsz = byt;
 		FN_STWX:	fnMemsz = wyde;
 		FN_STTX:	fnMemsz = tetra;
@@ -2376,7 +2412,7 @@ begin
 	OP_LDH,OP_STH:
 		fnSel = 16'hFFFF;
 	OP_LDX:
-		case(ir.lsn.func)
+		case(ir.lsn.func.ldn)
 		FN_LDBX,FN_LDBUX:
 			fnSel = 16'h0001;
 		FN_LDWX,FN_LDWUX:
@@ -2391,7 +2427,7 @@ begin
 			fnSel = 16'h00FF;
 		endcase
 	OP_STX:
-		case(ir.lsn.func)
+		case(ir.lsn.func.stn)
 		FN_STBX:	fnSel = 16'h0001;
 		FN_STWX:	fnSel = 16'h0003;
 		FN_STTX:	fnSel = 16'h000F;

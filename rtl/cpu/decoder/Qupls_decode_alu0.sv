@@ -48,6 +48,7 @@ begin
 	case(ir.any.opcode)
 	OP_R2:
 		case(ir.r2.func)
+		FN_BYTENDX,
 		FN_MUL,FN_MULU,FN_MULSU,FN_MULW,FN_MULUW,FN_MULSUW,
 		FN_DIV,FN_DIVU,FN_DIVSU,FN_MOD,FN_MODU,FN_MODSU:
 			fnIsAlu0 = 1'b1;

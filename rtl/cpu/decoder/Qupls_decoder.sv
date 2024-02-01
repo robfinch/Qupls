@@ -354,8 +354,7 @@ else begin
 		dbo.cpytgt <= 1'b0;
 		dbo.qfext <= ins.ins.any.opcode==OP_QFEXT;
 		dbo.vec2 <= db.vec;
-		dbo.mvvrm <= ins.ins.any.opcode==OP_R2 && ins.ins.r2.func==FN_MVVRM;
-		dbo.mvvex <= ins.ins.any.opcode==OP_R2 && ins.ins.r2.func==FN_MVVEX;
+		dbo.mvvr <= ins.ins.any.opcode==OP_R2 && ins.ins.r2.func==FN_MVVR;
 	end
 end
 

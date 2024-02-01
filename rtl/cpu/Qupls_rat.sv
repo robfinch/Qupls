@@ -134,8 +134,14 @@ output reg [PREGS-1:0] free_bitlist;	// bit vector of registers to free on branc
 
 integer n,m,n1,n2,n3,n4;
 reg cpram_we;
+reg cpram_en;
+reg cpram_en1;
+reg new_chkpt1;
+reg new_chkpt2;
+reg wr0a,wr1a,wr2a,wr3a;
 localparam RAMWIDTH = AREGS*BANKS*RBIT+PREGS;
 checkpoint_t cpram_out;
+checkpoint_t cpram_wout;
 checkpoint_t cpram_outr;
 checkpoint_t cpram_outrp;
 checkpoint_t cpram_in;
@@ -150,15 +156,21 @@ reg stomp_act;
 // There are four "extra" bits in the data to make the size work out evenly.
 // There is also an extra write bit. These are defaulted to prevent sim issues.
 
+always_comb
+	cpram_en = en|new_chkpt1;
+always_ff @(posedge clk)
+	cpram_en1 <= cpram_en;
+
 Qupls_checkpointRam cpram1
 (
 	.clka(clk),
-	.ena(en),
+	.ena(cpram_we),
 	.wea({1'b1,cpram_we}),
 	.addra(wndx),
 	.dina({4'd0,cpram_in}),
+	.douta(cpram_wout),
 	.clkb(clk),
-	.enb(en),
+	.enb(cpram_en),
 	.addrb(cndx),
 	.doutb(cpram_out)
 );
@@ -632,39 +644,47 @@ else
 // Set checkpoint index
 // Backup the checkpoint on a branch miss.
 // Increment checkpoint on a branch queue
-reg new_chkpt1;
 always_ff @(posedge clk)
 if (rst) begin
 	cndx <= 4'd0;
+	wndx <= 4'd0;
 	new_chkpt <= 1'd0;
 	new_chkpt1 <= 1'd0;
+	new_chkpt2 <= 1'd0;
 end
 else begin
-	new_chkpt <= 'd0;
+	new_chkpt2 <= new_chkpt1;
+	new_chkpt1 <= 1'd0;
 	if (restore) begin
 		cndx <= miss_cp;
 		$display("Restoring checkpint %d.", miss_cp);
 	end
 	else if (inc_chkpt) begin
 		new_chkpt <= 1'b1;
-		cndx <= (cndx + 1) % NCHECK;
-		$display("Setting checkpoint %d.", (cndx + 1) % NCHECK);
 	end
-	new_chkpt1 <= new_chkpt;
+	if (new_chkpt) begin
+		$display("Setting checkpoint %d.", (cndx + 1) % NCHECK);
+		new_chkpt <= 1'd0;
+		wndx <= (cndx + 1) % NCHECK;
+		new_chkpt1 <= new_chkpt;
+	end
+	if (new_chkpt2)
+		cndx <= (cndx + 1) % NCHECK;
 end
 
 // Stall the enqueue of instructions if there are too many outstanding branches.
 // Also stall for a new checkpoint.
 always_comb
 if (rst)
-	stallq <= 'd0;
+	stallq <= 1'd0;
 else begin
-	stallq <= 1'b0;
 	for (n3 = 0; n3 < AREGS; n3 = n3 + 1)
 		if (/*(rrn[n3]==8'd0 && rn[n3]!=7'd0) || */ qbr && nob==6'd15)
 			stallq <= 1'b0;	// ToDo: Fix
 	if (inc_chkpt|new_chkpt)
 		stallq <= 1'b1;
+	if (new_chkpt1)
+		stallq <= 1'b0;
 end
 
 
@@ -674,12 +694,10 @@ always_ff @(posedge clk)
 if (rst)
 	cpram_outrp <= {$bits(cpram_out){1'b1}};
 else begin
-	if (en)
-		if (new_chkpt)
-			cpram_outrp <= cpram_out;
+	if (new_chkpt)
+		cpram_outrp <= cpram_out;
 end
 
-reg wr0a,wr1a,wr2a,wr3a;
 pregno_t wrra1;
 pregno_t wrrb1;
 pregno_t wrrc1;
@@ -688,10 +706,10 @@ aregno_t wra1;
 aregno_t wrb1;
 aregno_t wrc1;
 aregno_t wrd1;
-always_ff @(posedge clk) if (en) wr0a <= wr0;
-always_ff @(posedge clk) if (en) wr1a <= wr1;
-always_ff @(posedge clk) if (en) wr2a <= wr2;
-always_ff @(posedge clk) if (en) wr3a <= wr3;
+always_ff @(posedge clk) if (wr0a) wr0a <= 1'b0; else if (en) wr0a <= wr0;
+always_ff @(posedge clk) if (wr1a) wr1a <= 1'b0; else if (en) wr1a <= wr1;
+always_ff @(posedge clk) if (wr2a) wr2a <= 1'b0; else if (en) wr2a <= wr2;
+always_ff @(posedge clk) if (wr3a) wr3a <= 1'b0; else if (en) wr3a <= wr3;
 always_ff @(posedge clk) if (en) wrra1 <= wrra;
 always_ff @(posedge clk) if (en) wrrb1 <= wrrb;
 always_ff @(posedge clk) if (en) wrrc1 <= wrrc;
@@ -704,46 +722,46 @@ always_ff @(posedge clk) if (en) wrd1 <= wrd;
 // Committing and queuing target physical register cannot be the same.
 // The target register established during queue is marked invalid. It will not
 // be valid until a value commits.
-always_ff @(posedge clk)
+always_comb
 if (rst)
-	cpram_in <= {$bits(cpram_in){1'b1}};
-else if (en) begin
-	cpram_in <= (new_chkpt|new_chkpt1) ? cpram_outrp : cpram_out;
-	if (new_chkpt|new_chkpt1) begin
-		cpram_in.avail <= avail_i;
+	cpram_in = {$bits(cpram_in){1'b1}};
+else begin
+	cpram_in = cpram_out;
+	if (new_chkpt1) begin
+		cpram_in.avail = avail_i;
 	end
 		
 	if (wr0) begin
-		cpram_in.regmap[wra] <= wrra;
+		cpram_in.regmap[wra] = wrra;
 		$display("Qupls RAT: tgt %d reg %d replaced with %d.", wra, cpram_out.regmap[wra], wrra);
 	end
 	if (wr1 && XWID > 1) begin
-		cpram_in.regmap[wrb] <= wrrb;
+		cpram_in.regmap[wrb] = wrrb;
 		$display("Qupls RAT: tgt %d reg %d replaced with %d.", wrb, cpram_out.regmap[wrb], wrrb);
 	end
 	if (wr2 && XWID > 2) begin
-		cpram_in.regmap[wrc] <= wrrc;
+		cpram_in.regmap[wrc] = wrrc;
 		$display("Qupls RAT: tgt %d reg %d replaced with %d.", wrc, cpram_out.regmap[wrc], wrrc);
 	end
 	if (wr3 && XWID > 3) begin
-		cpram_in.regmap[wrd] <= wrrd;
+		cpram_in.regmap[wrd] = wrrd;
 		$display("Qupls RAT: tgt %d reg %d replaced with %d.", wrd, cpram_out.regmap[wrd], wrrd);
 	end
 	
 	if (wr0a) begin
-		cpram_in.regmap[wra1] <= wrra1;
+		cpram_in.regmap[wra1] = wrra1;
 		$display("Qupls RAT: tgt %d reg %d replaced with %d.", wra1, cpram_out.regmap[wra1], wrra1);
 	end
 	if (wr1a && XWID > 1) begin
-		cpram_in.regmap[wrb1] <= wrrb1;
+		cpram_in.regmap[wrb1] = wrrb1;
 		$display("Qupls RAT: tgt %d reg %d replaced with %d.", wrb1, cpram_out.regmap[wrb1], wrrb1);
 	end
 	if (wr2a && XWID > 2) begin
-		cpram_in.regmap[wrc1] <= wrrc1;
+		cpram_in.regmap[wrc1] = wrrc1;
 		$display("Qupls RAT: tgt %d reg %d replaced with %d.", wrc1, cpram_out.regmap[wrc1], wrrc1);
 	end
 	if (wr3a && XWID > 3) begin
-		cpram_in.regmap[wrd1] <= wrrd1;
+		cpram_in.regmap[wrd1] = wrrd1;
 		$display("Qupls RAT: tgt %d reg %d replaced with %d.", wrd1, cpram_out.regmap[wrd1], wrrd1);
 	end
 	
@@ -790,21 +808,23 @@ end
 
 // Add registers to the checkpoint map.
 always_ff @(posedge clk)
-if (en) begin
- 	cpram_we <= wr0|wr1|wr2|wr3|new_chkpt;
+if (cpram_en) begin
+ 	cpram_we <= wr0|wr1|wr2|wr3|new_chkpt1;
 end
 
+/*
 always_ff @(posedge clk)
 if (rst)
 	wndx <= 6'd0;
 else begin
-	if (en) begin
-		if (new_chkpt)
+	if (cpram_en) begin
+		if (new_chkpt1)
 			wndx = (cndx + 1) % NCHECK;
 		else
 			wndx = cndx;
 	end
 end
+*/
 
 // Add registers allocated since the branch miss instruction to the list of
 // registers to be freed.

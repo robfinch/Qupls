@@ -47,19 +47,27 @@ if (stomp)
 	mip = 12'h000;
 else begin
 	casez(ir.ins.any.opcode)
-	OP_SYS:		mip = 12'h130;
+	OP_CHK:		mip = 12'h130;
 	OP_ENTER:	mip = 12'h004;
 	OP_LEAVE:	mip = 12'h1D0;
+	OP_LDX:
+		case(ir.ins.lsn.func.ldn)
+		FN_LDCTX:	mip = 12'h150;
+		default:	mip = 12'h000;
+		endcase
+	OP_STX:
+		case(ir.ins.lsn.func.stn)
+		FN_STCTX:	mip = 12'h100;
+		default:	mip = 12'h000;
+		endcase
 	OP_PUSH:
 		case(ir.ins[39:37])
-		3'd0:	mip = 12'h100;			// stctx
 		3'd6:	mip = 12'h260;			// pushv
 		3'd7:	mip = 12'h300;			// pusha
 		default:	mip = 12'h020;	// push	
 		endcase
 	OP_POP:
 		case(ir.ins[39:37])
-		3'd0:	mip = 12'h150;			// ldctx
 		3'd6:	mip = 12'h280;			// popv
 		3'd7: mip = 12'h360;			// popa
 		default:	mip = 12'h030;	// pop

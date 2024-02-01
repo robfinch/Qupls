@@ -64,17 +64,26 @@ fpCvt32To64 ucvt32x64C(finsC[39:8], imm32x64c);
 
 always_comb
 begin
-	flt = 'd0;
-	imma = 'd0;
-	immb = 'd0;
-	immc = 'd0;
+	flt = 1'd0;
+	imma = 64'd0;
+	immb = 64'd0;
+	immc = 64'd0;
 	has_imma = 1'b0;
 	has_immb = 1'b0;
 	has_immc = 1'b0;
-	finsA = 'd0;
-	finsB = 'd0;
-	finsC = 'd0;
+	finsA = 1'd0;
+	finsB = 1'd0;
+	finsC = 1'd0;
 	case(ins[0].ins.any.opcode)
+	OP_R2,OP_R3V,OP_R3VS:
+		case(ins[0].ins.r3.func)
+		FN_BYTENDX:
+			begin
+				immb = {{55{ins[0].ins[30]}},ins[0].ins[30:22]};
+				has_immb = 1'b1;
+			end
+		default:	immb = 64'd0;
+		endcase
 	OP_ADDI,OP_CMPI,OP_MULI,OP_DIVI,OP_SUBFI,OP_SLTI:
 		begin
 			immb = {{43{ins[0].ins[39]}},ins[0].ins[39:19]};
@@ -147,7 +156,7 @@ begin
 			has_immc = 1'b1;
 		end
 	default:
-		immb = 'd0;
+		immb = 64'd0;
 	endcase
 
 	ndx = 1;

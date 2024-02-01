@@ -70,7 +70,7 @@ if (rst)
 	ins <= {33'd0,OP_NOP};
 else begin
 	if (en)
-		ins <= hirq ? {'d0,FN_IRQ,1'b0,vect_i,5'd0,2'd0,irq_i,OP_SYS} :
+		ins <= hirq ? {4'd0,1'b0,vect_i[7:0],5'd0,5'd0,5'd0,irq_i,2'b0,OP_CHK} :
 			mipv ? mc_ins : nop ? {33'd0,OP_NOP} : insi;
 end
 

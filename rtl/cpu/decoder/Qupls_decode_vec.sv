@@ -44,7 +44,7 @@ function fnIsVec;
 input instruction_t ir;
 begin
 	case(ir.r2.opcode)
-	OP_SYS:	fnIsVec = 1'b0;
+	OP_CHK:	fnIsVec = 1'b0;
 	OP_R3V,OP_R3VS:
 		case(ir.r2.func)
 		FN_ADD:	fnIsVec = 1'b1;

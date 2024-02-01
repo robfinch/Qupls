@@ -36,8 +36,9 @@
 
 import QuplsPkg::*;
 
-module Qupls_btb(rst, clk, en, rclk, micro_code_active, block_header, igrp, length_byte,
-	pc, pc0, pc1, pc2, pc3, pc4, next_pc, takb, do_bsr, bsr_tgt,
+module Qupls_btb(rst, clk, en, clk_en, rclk, micro_code_active, block_header,
+	igrp, length_byte,
+	pc, pc0, pc1, pc2, pc3, pc4, next_pc, takb, do_bsr, bsr_tgt, pe_bsdone,
 	branchmiss, branch_state, misspc,
 	mip0v, mip1v, mip2v, mip3v,
 	commit_pc0, commit_brtgt0, commit_takb0, commit_grp0,
@@ -48,7 +49,8 @@ module Qupls_btb(rst, clk, en, rclk, micro_code_active, block_header, igrp, leng
 parameter DEP=1024;
 input rst;
 input clk;
-input en;										// enable group to advance
+input en;
+input clk_en;										// enable group to advance
 input rclk;
 input ibh_t block_header;
 input micro_code_active;
@@ -66,6 +68,7 @@ input mip0v;
 input mip1v;
 input mip2v;
 input mip3v;
+input pe_bsdone;
 input do_bsr;
 input pc_address_t bsr_tgt;
 input branchmiss;
@@ -441,19 +444,19 @@ begin
 		next_pc <= bsr_tgt;
 		takb <= 1'b1;
 	end
-	else if (pc0==doutb0.pc && doutb0.takb) begin
+	else if (en && pc0==doutb0.pc && doutb0.takb) begin
 		next_pc <= doutb0.tgt;
 		takb <= 1'b1;
 	end
-	else if (pc1==doutb1.pc && doutb1.takb) begin
+	else if (en && pc1==doutb1.pc && doutb1.takb) begin
 		next_pc <= doutb1.tgt;
 		takb <= 1'b1;
 	end
-	else if (pc2==doutb2.pc && doutb2.takb) begin
+	else if (en && pc2==doutb2.pc && doutb2.takb) begin
 		next_pc <= doutb2.tgt;
 		takb <= 1'b1;
 	end
-	else if (pc3==doutb3.pc && doutb3.takb) begin
+	else if (en && pc3==doutb3.pc && doutb3.takb) begin
 		next_pc <= doutb3.tgt;
 		takb <= 1'b1;
 	end
@@ -521,7 +524,7 @@ if (SUPPORT_IBH) begin
 	if (rst)
 		igrp <= 3'd0;
 	else begin
-		if (en) begin
+		if (clk_en) begin
 			/*
 			// Instruction block header should be valid again at this state.
 			if (branchmiss_state==3'd4) begin
@@ -558,8 +561,8 @@ endgenerate
 
 always_ff @(posedge clk)
 if (rst) begin
-	w <= 'd0;
-	addra <= 'd0;
+	w <= 1'd0;
+	addra <= 10'd0;
 	tmp0 <= 'd0;
 	tmp1 <= 'd0;
 	tmp2 <= 'd0;

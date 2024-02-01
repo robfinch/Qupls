@@ -41,7 +41,7 @@ import const_pkg::*;
 import QuplsPkg::*;
 
 module Qupls_meta_alu(rst, clk, clk2x, ld, lane, prc, ir, div, cptgt, z, a, b, bi,
-	c, i, t, qres, cs, pc, csr, o, mul_done, div_done, div_dbz);
+	c, i, t, qres, cs, pc, csr, cpl, canary, o, mul_done, div_done, div_dbz, exc);
 parameter ALU0 = 1'b0;
 parameter WID=64; 
 input rst;
@@ -63,13 +63,17 @@ input [WID-1:0] t;
 input [WID-1:0] qres;
 input [2:0] cs;
 input pc_address_t pc;
+input [7:0] cpl;
+input [WID-1:0] canary;
 input [WID-1:0] csr;
 output reg [WID-1:0] o;
 output reg mul_done;
 output reg div_done;
 output div_dbz;
+output reg [WID-1:0] exc;
 
 wire [WID-1:0] o16,o32,o64,o128;
+wire [WID-1:0] exc16,exc32,exc64,exc128;
 wire [WID/16-1:0] div_done16;
 wire [WID/16-1:0] mul_done16;
 wire [WID/32-1:0] div_done32;
@@ -102,10 +106,13 @@ generate begin : g16
 			.cs(cs),
 			.pc(pc),
 			.csr(csr),
+			.cpl(cpl),
+			.canary(canary),
 			.o(o16[g*16+15:g*16]),
 			.mul_done(mul_done16[g]),
 			.div_done(div_done16[g]),
-			.div_dbz()
+			.div_dbz(),
+			.exc(exc16[g*8+7:g*8])
 		);
 end
 endgenerate
@@ -133,10 +140,13 @@ generate begin : g32
 			.cs(cs),
 			.pc(pc),
 			.csr(csr),
+			.cpl(cpl),
+			.canary(canary),
 			.o(o32[g*32+31:g*32]),
 			.mul_done(mul_done32[g]),
 			.div_done(div_done32[g]),
-			.div_dbz()
+			.div_dbz(),
+			.exc(exc32[g*8+7:g*8])
 		);
 end
 endgenerate
@@ -164,10 +174,13 @@ generate begin : g64
 			.cs(cs),
 			.pc(pc),
 			.csr(csr),
+			.cpl(cpl),
+			.canary(canary),
 			.o(o64[g*64+63:g*64]),
 			.mul_done(mul_done64[g]),
 			.div_done(div_done64[g]),
-			.div_dbz()
+			.div_dbz(),
+			.exc(exc64[g*8+7:g*8])
 		);
 end
 endgenerate
@@ -266,5 +279,16 @@ always_comb
 		endcase
 	else
 		div_done = &div_done64;
+
+always_comb
+	if (SUPPORT_PREC)
+		case(prc)
+		2'd0:	exc = exc16;
+		2'd1:	exc = exc32;
+		2'd2:	exc = exc64;
+		default:	exc = FLT_NONE;
+		endcase
+	else
+		exc = exc64;
 
 endmodule

@@ -223,7 +223,7 @@ mnemonic mnemonics[]={
 	"enor", {OP_REG,OP_IMM,OP_REG,0,0}, {RIA,CPU_ALL,0,R2FUNC(2LL)|OPC(2LL),5,SZ_UNSIZED,0},	
 	"enor", {OP_REG,OP_REG,OP_IMM,0,0}, {RIB,CPU_ALL,0,R2FUNC(2LL)|OPC(2LL),5,SZ_UNSIZED,0},	
 
-	"enter", {OP_IMM,0,0,0,0}, {ENTER,CPU_ALL,0,OPC(52LL),5,SZ_UNSIZED,0},	
+	"enter", {OP_IMM,OP_IMM,0,0,0}, {ENTER,CPU_ALL,0,OPC(52LL),5,SZ_UNSIZED,0},	
 
 	"eor", {OP_VREG,OP_VREG,OP_VREG,0,0}, {R2,CPU_ALL,0,R2FUNC(2LL)|OPC(38LL),5,SZ_UNSIZED,0},	
 	"eor", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,R2FUNC(2LL)|OPC(2LL),5,SZ_UNSIZED,0},	
@@ -323,6 +323,8 @@ mnemonic mnemonics[]={
 	"ldwz",	{OP_REG,OP_IMM,0,0,0}, {DIRECT,CPU_ALL,0,OPC(67LL),5, SZ_UNSIZED, SZ_WYDE},	
 	"ldwz",	{OP_REG,OP_REGIND,0,0}, {REGIND,CPU_ALL,0,OPC(67LL),5, SZ_UNSIZED, SZ_WYDE},	
 	"ldwz",	{OP_REG,OP_SCNDX,0,0,0}, {SCNDX,CPU_ALL,0,LSFUNC(3LL)|OPC(79LL),5, SZ_UNSIZED, SZ_WYDE},	
+
+	"leave", {OP_IMM,OP_IMM,0,0,0}, {LEAVE,CPU_ALL,0,OPC(53LL),5,SZ_UNSIZED,0},	
 
 	"lsr", {OP_REG,OP_REG,OP_REG,0}, {SH,CPU_ALL,0,SHFUNC(0x01LL)|OPC(88LL),5,SZ_UNSIZED,0},	
 	"lsr", {OP_REG,OP_REG,OP_IMM,0}, {SI,CPU_ALL,0,SHFUNC(0x41LL)|OPC(88LL),5,SZ_UNSIZED,0},	
@@ -1540,7 +1542,7 @@ static thuge calc_branch_disp(thuge val, taddr pc, int opt)
 	val.lo |= ino;
 #endif
 #ifdef BRANCH_PCREL
-
+/*
 	valx2 = hmul(val,huge_from_int(2LL));
 	pcx2 = hmul(huge_from_int(pc),huge_from_int(2LL));
 	val = hsub(valx2,pcx2);
@@ -1548,6 +1550,10 @@ static thuge calc_branch_disp(thuge val, taddr pc, int opt)
 		val = hdiv(val,huge_from_int(9LL));
 	else
 		val = hdiv(val,huge_from_int(2LL));
+*/
+	val = hsub(val,huge_from_int(pc));
+	if (opt)
+		val = hdiv(val,huge_from_int(5LL));
 #endif
 	return (val);
 }
@@ -2429,12 +2435,28 @@ static size_t encode_immed (
 				insn->opcode = insn->opcode | (((val.lo) & 0xfLL) << 9LL) | ((((val.lo >> 4LL)) & 0xffffLL) << 19LL);
 		}
 		else if (mnemo->ext.format==ENTER) {
-			if (insn)
-				insn->opcode = insn->opcode | ((-val.lo & 0xffffffffLL) << 8LL);
+			if (insn) {
+				switch(i) {
+				case 0:
+					insn->opcode = insn->opcode | ((val.lo & 0xfLL) << 8LL);
+					break;
+				case 1:
+					insn->opcode = insn->opcode | (((-val.lo >> 3LL) & 0xffffffffLL) << 12LL);
+					break;
+				}
+			}
 		}
 		else if (mnemo->ext.format==LEAVE) {
-			if (insn)
-				insn->opcode = insn->opcode | ((val.lo & 0x7fffffLL) << 9LL);
+			if (insn) {
+				switch(i) {
+				case 0:
+					insn->opcode = insn->opcode | ((val.lo & 0xfLL) << 12LL);
+					break;
+				case 1:
+					insn->opcode = insn->opcode | (((val.lo >> 3LL) & 0xffffffLL) << 16LL);
+					break;
+				}
+			}
 		}
 		else if (mnemo->ext.format==RIS) {
 			if (insn) {
