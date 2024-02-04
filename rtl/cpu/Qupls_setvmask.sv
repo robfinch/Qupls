@@ -38,7 +38,7 @@ module Qupls_setvmask(max_ele_sz, numlanes, lanesz, mask);
 input [7:0] max_ele_sz;	// 8/16 bytes
 input [6:0] numlanes;		// 0 to 64
 input [5:0] lanesz;			// size of lane in bytes
-output [63:0] mask;
+output reg [63:0] mask;
 
 reg [64:0] mask1;
 reg [3:0] bits_per_element;

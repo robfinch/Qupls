@@ -4031,23 +4031,23 @@ case(micro_ip)
 12'h391:
 	begin
 		next_ip=12'h392;
-		instr.aRa={4'd0,micro_ir[16:12];
+		instr.aRa={4'd0,micro_ir[16:12]};
 		instr.aRb=9'd0;
 		instr.aRc={4'd0,micro_ir[11:7]};
 		instr.aRt=9'd0;
 		instr.ins = {21'd0,2'd2,micro_ir[16:12],micro_ir[11:7],OP_STO};
 		case(micro_ir[18:17])
-		2'd0:	instr.ins.opcode = OP_STW;
-		2'd1: instr.ins.opcode = OP_STT;
-		2'd2:	instr.ins.opcode = OP_STO;
-		2'd4:	instr.ins.opcode = OP_STB;
-		default:	instr.ins.opcode = OP_STO;
+		2'd0:	instr.ins.any.opcode = OP_STW;
+		2'd1: instr.ins.any.opcode = OP_STT;
+		2'd2:	instr.ins.any.opcode = OP_STO;
+		2'd4:	instr.ins.any.opcode = OP_STB;
+		default:	instr.ins.any.opcode = OP_STO;
 		endcase	
 	end
 12'h392:
 	begin
 		next_ip=12'h393;
-		instr.ins = {{{15{micro_ir[38]},micro_ir[38:33]}},2'd2,micro_ir[16:12],micro_ir[16:12],OP_ADDI};
+		instr.ins = {{{15{micro_ir[38]}},micro_ir[38:33]},2'd2,micro_ir[16:12],micro_ir[16:12],OP_ADDI};
 		instr.aRa={4'd0,micro_ir[16:12]};
 		instr.aRb=9'd0;
 		instr.aRc=9'd0;
@@ -4088,11 +4088,11 @@ case(micro_ip)
 		instr.aRc=9'd0;
 		instr.aRt=MC0;
 		case(micro_ir[9:7])
-		2'd0:	instr.ins.opcode = OP_LDW;
-		2'd1: instr.ins.opcode = OP_LDT;
-		2'd2:	instr.ins.opcode = OP_LDO;
-		2'd4:	instr.ins.opcode = OP_LDB;
-		default:	instr.ins.opcode = OP_LDO;
+		2'd0:	instr.ins.any.opcode = OP_LDW;
+		2'd1: instr.ins.any.opcode = OP_LDT;
+		2'd2:	instr.ins.any.opcode = OP_LDO;
+		2'd4:	instr.ins.any.opcode = OP_LDB;
+		default:	instr.ins.any.opcode = OP_LDO;
 		endcase	
 	end
 12'h3A2:
@@ -4104,17 +4104,17 @@ case(micro_ip)
 		instr.aRc=MC0;
 		instr.aRt=9'd0;
 		case(micro_ir[9:7])
-		2'd0:	instr.ins.opcode = OP_STW;
-		2'd1: instr.ins.opcode = OP_STT;
-		2'd2:	instr.ins.opcode = OP_STO;
-		2'd4:	instr.ins.opcode = OP_STB;
-		default:	instr.ins.opcode = OP_STO;
+		2'd0:	instr.ins.any.opcode = OP_STW;
+		2'd1: instr.ins.any.opcode = OP_STT;
+		2'd2:	instr.ins.any.opcode = OP_STO;
+		2'd4:	instr.ins.any.opcode = OP_STB;
+		default:	instr.ins.any.opcode = OP_STO;
 		endcase	
 	end
 12'h3A3:
 	begin
 		next_ip=12'h3A4;
-		instr.ins = {{{15{micro_ir[38]},micro_ir[38:33]}},2'd2,micro_ir[16:12],micro_ir[16:12],OP_ADDI};
+		instr.ins = {{{15{micro_ir[38]}},micro_ir[38:33]},2'd2,micro_ir[16:12],micro_ir[16:12],OP_ADDI};
 		instr.aRa={4'd0,micro_ir[16:12]};
 		instr.aRb=9'd0;
 		instr.aRc=9'd0;
@@ -4123,7 +4123,7 @@ case(micro_ip)
 12'h3A4:
 	begin
 		next_ip=12'h3A5;
-		instr.ins = {{{15{micro_ir[32]},micro_ir[32:27]}},2'd2,micro_ir[21:17],micro_ir[21:17],OP_ADDI};
+		instr.ins = {{{15{micro_ir[32]}},micro_ir[32:27]},2'd2,micro_ir[21:17],micro_ir[21:17],OP_ADDI};
 		instr.aRa={4'd0,micro_ir[21:17]};
 		instr.aRb=9'd0;
 		instr.aRc=9'd0;
@@ -4162,11 +4162,11 @@ case(micro_ip)
 		instr.aRc=9'd0;
 		instr.aRt=MC0;
 		case(micro_ir[9:7])
-		2'd0:	instr.ins.opcode = OP_LDW;
-		2'd1: instr.ins.opcode = OP_LDT;
-		2'd2:	instr.ins.opcode = OP_LDO;
-		2'd4:	instr.ins.opcode = OP_LDB;
-		default:	instr.ins.opcode = OP_LDO;
+		2'd0:	instr.ins.any.opcode = OP_LDW;
+		2'd1: instr.ins.any.opcode = OP_LDT;
+		2'd2:	instr.ins.any.opcode = OP_LDO;
+		2'd4:	instr.ins.any.opcode = OP_LDB;
+		default:	instr.ins.any.opcode = OP_LDO;
 		endcase	
 	end
 12'h3B2:
@@ -4178,11 +4178,11 @@ case(micro_ip)
 		instr.aRc=9'd0;
 		instr.aRt=MC1;
 		case(micro_ir[9:7])
-		2'd0:	instr.ins.opcode = OP_LDW;
-		2'd1: instr.ins.opcode = OP_LDT;
-		2'd2:	instr.ins.opcode = OP_LDO;
-		2'd4:	instr.ins.opcode = OP_LDB;
-		default:	instr.ins.opcode = OP_LDO;
+		2'd0:	instr.ins.any.opcode = OP_LDW;
+		2'd1: instr.ins.any.opcode = OP_LDT;
+		2'd2:	instr.ins.any.opcode = OP_LDO;
+		2'd4:	instr.ins.any.opcode = OP_LDB;
+		default:	instr.ins.any.opcode = OP_LDO;
 		endcase	
 	end
 12'h3B3:
@@ -4194,19 +4194,19 @@ case(micro_ip)
 		instr.aRt=9'd0;
 		instr.ins = {18'd5,micro_ir[21:17],micro_ir[16:12],1'b0,4'h0,OP_Bcc};
 		case({micro_ir[39],micro_ir[11:10]})
-		3'd0:	begin instr.ins.opcode = OP_Bcc; instr.ins.br.fn = EQ; end
-		3'd1:	begin instr.ins.opcode = OP_Bcc; instr.ins.br.fn = NE; end
-		3'd2:	begin instr.ins.opcode = OP_Bcc; instr.ins.br.fn = LT; end
-		3'd3:	begin instr.ins.opcode = OP_Bcc; instr.ins.br.fn = LE; end
-		3'd4:	begin instr.ins.opcode = OP_BccU; instr.ins.br.fn = LT; end
-		3'd5:	begin instr.ins.opcode = OP_BccU; instr.ins.br.fn = LE; end
-		default:	begin instr.ins.opcode = OP_Bcc; instr.ins.br.fn = EQ; end
+		3'd0:	begin instr.ins.any.opcode = OP_Bcc; instr.ins.br.fn = EQ; end
+		3'd1:	begin instr.ins.any.opcode = OP_Bcc; instr.ins.br.fn = NE; end
+		3'd2:	begin instr.ins.any.opcode = OP_Bcc; instr.ins.br.fn = LT; end
+		3'd3:	begin instr.ins.any.opcode = OP_Bcc; instr.ins.br.fn = LE; end
+		3'd4:	begin instr.ins.any.opcode = OP_BccU; instr.ins.br.fn = LT; end
+		3'd5:	begin instr.ins.any.opcode = OP_BccU; instr.ins.br.fn = LE; end
+		default:	begin instr.ins.any.opcode = OP_Bcc; instr.ins.br.fn = EQ; end
 		endcase	
 	end
 12'h3B4:
 	begin
 		next_ip=12'h3B5;
-		instr.ins = {{{15{micro_ir[38]},micro_ir[38:33]}},2'd2,micro_ir[16:12],micro_ir[16:12],OP_ADDI};
+		instr.ins = {{{15{micro_ir[38]}},micro_ir[38:33]},2'd2,micro_ir[16:12],micro_ir[16:12],OP_ADDI};
 		instr.aRa={4'd0,micro_ir[16:12]};
 		instr.aRb=9'd0;
 		instr.aRc=9'd0;
@@ -4215,7 +4215,7 @@ case(micro_ip)
 12'h3B5:
 	begin
 		next_ip=12'h3B6;
-		instr.ins = {{{15{micro_ir[32]},micro_ir[32:27]}},2'd2,micro_ir[21:17],micro_ir[21:17],OP_ADDI};
+		instr.ins = {{{15{micro_ir[32]}},micro_ir[32:27]},2'd2,micro_ir[21:17],micro_ir[21:17],OP_ADDI};
 		instr.aRa={4'd0,micro_ir[21:17]};
 		instr.aRb=9'd0;
 		instr.aRc=9'd0;
@@ -4253,11 +4253,11 @@ case(micro_ip)
 		instr.aRc=9'd0;
 		instr.aRt=MC0;
 		case(micro_ir[9:7])
-		2'd0:	instr.ins.opcode = OP_LDW;
-		2'd1: instr.ins.opcode = OP_LDT;
-		2'd2:	instr.ins.opcode = OP_LDO;
-		2'd4:	instr.ins.opcode = OP_LDB;
-		default:	instr.ins.opcode = OP_LDO;
+		2'd0:	instr.ins.any.opcode = OP_LDW;
+		2'd1: instr.ins.any.opcode = OP_LDT;
+		2'd2:	instr.ins.any.opcode = OP_LDO;
+		2'd4:	instr.ins.any.opcode = OP_LDB;
+		default:	instr.ins.any.opcode = OP_LDO;
 		endcase	
 	end
 12'h3C2:
@@ -4268,12 +4268,12 @@ case(micro_ip)
 		instr.aRb=MC0;
 		instr.aRc=9'd0;
 		instr.aRt=9'd0;
-		instr.ins.br.fn = micro_ir[36:33];
+		instr.ins.br.fn = branch_fn_t'(micro_ir[36:33]);
 	end
 12'h3C3:
 	begin
 		next_ip=12'h3C4;
-		instr.ins = {{{15{micro_ir[32]},micro_ir[32:27]}},2'd2,micro_ir[21:17],micro_ir[21:17],OP_ADDI};
+		instr.ins = {{{15{micro_ir[32]}},micro_ir[32:27]},2'd2,micro_ir[21:17],micro_ir[21:17],OP_ADDI};
 		instr.aRa={4'd0,micro_ir[21:17]};
 		instr.aRb=9'd0;
 		instr.aRc=9'd0;

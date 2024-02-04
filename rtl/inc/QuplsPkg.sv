@@ -2337,7 +2337,7 @@ OP_LDTU:
 OP_LDO:
   fnDati = dat;
 OP_JSRI:
-	case(ir[18:17)
+	case(ins[18:17])
 	2'd0:	fnDati = {pc[63:16],dat[15:0]};
 	2'd1:	fnDati = {pc[63:32],dat[31:0]};
 	2'd2:	fnDati = dat[63:0];

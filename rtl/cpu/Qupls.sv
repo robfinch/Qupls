@@ -1544,7 +1544,7 @@ if (rst)
 	mc_adr <= RSTPC-5;
 else begin
 	if (advance_pipeline) begin
-		if (exc_ret)
+		if (excret)
 			mc_adr <= exc_ret_pc;
 		else begin
 			if (micro_ip==12'h000) begin
@@ -1588,7 +1588,7 @@ if (rst)
 	micro_code_active <= TRUE;
 else begin
 	if (advance_pipeline) begin
-		if (exc_ret) begin
+		if (excret) begin
 			if (|exc_ret_mcip)
 				micro_code_active <= TRUE;
 		end
@@ -5966,11 +5966,11 @@ else begin
 		rob[dram1_id].done <= 2'b11;
 		rob[dram1_id].out <= 2'b00;
 	end
-	if (robentry_stomp[agen0_id] || !rob[agen0_id].v) begin
+	if (robentry_stomp[agen0_id]) begin// || !rob[agen0_id].v) begin
 		agen0_idle <= TRUE;
 		agen0_idv <= INV;
 	end
-	if (robentry_stomp[agen1_id] || !rob[agen1_id].v) begin
+	if (robentry_stomp[agen1_id]) begin// || !rob[agen1_id].v) begin
 		agen1_idle <= TRUE;
 		agen1_idv <= INV;
 	end
@@ -6773,7 +6773,7 @@ begin
 		|db.csr|db.lda|db.fence
 		|db.rex|db.oddball|db.pred|db.qfext
 		)) begin
-		rob[rail].exc <= FLT_UNIMP;
+		rob[tail].exc <= FLT_UNIMP;
 		rob[tail].excv <= TRUE;
 	end
 	else begin
@@ -7136,8 +7136,8 @@ begin
 	mc_stack[8].ir <= {33'd0,OP_NOP};
 	mc_stack[7].ip <= 12'h0;
 	mc_stack[8].ip <= 12'h0;
-	exc_ret_mcip <= two_up ? mc_stack[1].ip : mc_stack[0].ip;
-	exc_ret_mcir <= two_up ? mc_stack[1].ir : mc_stack[0].ir;
+	exc_ret_mcip <= twoup ? mc_stack[1].ip : mc_stack[0].ip;
+	exc_ret_mcir <= twoup ? mc_stack[1].ir : mc_stack[0].ir;
 end
 endtask
 
