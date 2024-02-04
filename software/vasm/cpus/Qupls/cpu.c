@@ -167,7 +167,7 @@ mnemonic mnemonics[]={
 	"brk",	{0,0,0,0,0}, {R1,CPU_ALL,0,0x00,5,SZ_UNSIZED,0},
 
 	"bsr",	{OP_IMM,0,0,0,0}, {B2,CPU_ALL,0,RT(56LL)|OPC(32LL),5,SZ_UNSIZED,0},
-	"bsr",	{OP_REG,OP_IMM,0,0,0}, {BL2,CPU_ALL,0,OPC(32LL),5,SZ_UNSIZED,0},
+	"bsr",	{OP_LK,OP_IMM,0,0,0}, {BL2,CPU_ALL,0,OPC(32LL),5,SZ_UNSIZED,0},
 
 	"bytndx", 	{OP_REG,OP_REG,OP_REG,0,0}, {R3,CPU_ALL,0,0xAA0000000002LL,6},	
 	"bytndx", 	{OP_REG,OP_REG,OP_IMM,0,0}, {RI,CPU_ALL,0,0x00000055LL,4},
@@ -259,6 +259,17 @@ mnemonic mnemonics[]={
 	"fsub", {OP_VREG|OP_REG,OP_VREG|OP_REG,OP_IMM,0}, {RI,CPU_ALL,0,OPC(20LL),5,SZ_FLTALL,SZ_DOUBLE, FLG_NEGIMM,FLG_FP},	
 	"ftoi", {OP_VREG|OP_REG,OP_VREG|OP_REG,0,0,0}, {R2,CPU_ALL,0,RB(2LL)|FUNC5(1LL)|OPC(12LL),5,SZ_FLTALL,SZ_DOUBLE,FLG_FP},	
 
+	"ibeq",	{OP_REG,OP_REG,OP_IMM,0,0}, {B,CPU_ALL,0,BFN(4LL)|0x800LL|OPC(40LL),5,SZ_UNSIZED,0},
+	"ibge",	{OP_REG,OP_REG,OP_IMM,0,0}, {B,CPU_ALL,0,BFN(4LL)|0x800LL|OPC(41LL),5,SZ_UNSIZED,0},
+	"ibgeu",	{OP_REG,OP_REG,OP_IMM,0,0}, {B,CPU_ALL,0,BFN(4LL)|0x800LL|OPC(40LL),5,SZ_UNSIZED,0},
+	"ibgt",	{OP_REG,OP_REG,OP_IMM,0,0}, {B,CPU_ALL,0,BFN(5LL)|0x800LL|OPC(41LL),5,SZ_UNSIZED,0},
+	"ibgtu",	{OP_REG,OP_REG,OP_IMM,0,0}, {B,CPU_ALL,0,BFN(5LL)|0x800LL|OPC(40LL),5,SZ_UNSIZED,0},
+	"ibne",	{OP_REG,OP_REG,OP_IMM,0,0}, {B,CPU_ALL,0,BFN(1LL)|0x800LL|OPC(40LL),5,SZ_UNSIZED,0},
+	"ible",	{OP_REG,OP_REG,OP_IMM,0,0}, {B,CPU_ALL,0,BFN(3LL)|0x800LL|OPC(41LL),5,SZ_UNSIZED,0},
+	"ibleu",	{OP_REG,OP_REG,OP_IMM,0,0}, {B,CPU_ALL,0,BFN(3LL)|0x800LL|OPC(40LL),5,SZ_UNSIZED,0},
+	"iblt",	{OP_REG,OP_REG,OP_IMM,0,0}, {B,CPU_ALL,0,BFN(2LL)|0x800LL|OPC(41LL),5,SZ_UNSIZED,0},
+	"ibltu",	{OP_REG,OP_REG,OP_IMM,0,0}, {B,CPU_ALL,0,BFN(2LL)|0x800LL|OPC(40LL),5,SZ_UNSIZED,0},
+
 	"int",	{OP_IMM,OP_IMM,0,0,0}, {INT,CPU_ALL,0,0xA6LL,4},
 
 	"itof", {OP_VREG|OP_REG,OP_VREG|OP_REG,0,0,0}, {R2,CPU_ALL,0,RB(3LL)|FUNC5(1LL)|OPC(12LL),5,SZ_FLTALL,SZ_DOUBLE,FLG_FP},	
@@ -267,9 +278,9 @@ mnemonic mnemonics[]={
 	"jmp",	{OP_REG,0,0,0,0}, {J2,CPU_ALL,0,OPC(36LL),6, SZ_UNSIZED,0},
 	"jmp",	{OP_IMM,0,0,0,0}, {J2,CPU_ALL,0,OPC(36LL),6, SZ_UNSIZED,0},
 	"jsr",	{OP_REGIND,0,0,0}, {J2,CPU_ALL,0,OPC(36LL),6, SZ_UNSIZED,0},
-	"jsr",	{OP_REG,OP_IND_SCNDX,0,0,0}, {JSCNDX,CPU_ALL,0,R2FUNC(24LL)|0x80000000L|OPC(2LL),6, SZ_UNSIZED,0},
-	"jsr",	{OP_REG,OP_REGIND,0,0,0}, {JL2,CPU_ALL,0,OPC(36LL),6, SZ_UNSIZED,0},
-	"jsr",	{OP_REG,OP_IMM,0,0,0}, {JL2,CPU_ALL,0,OPC(36LL),6, SZ_UNSIZED,0},
+	"jsr",	{OP_LK,OP_IND_SCNDX,0,0,0}, {JSCNDX,CPU_ALL,0,R2FUNC(24LL)|0x80000000L|OPC(2LL),6, SZ_UNSIZED,0},
+	"jsr",	{OP_LK,OP_REGIND,0,0,0}, {JL2,CPU_ALL,0,OPC(36LL),6, SZ_UNSIZED,0},
+	"jsr",	{OP_LK,OP_IMM,0,0,0}, {JL2,CPU_ALL,0,OPC(36LL),6, SZ_UNSIZED,0},
 	"jsr",	{OP_IMM,0,0,0,0}, {J2,CPU_ALL,0,OPC(36LL),6, SZ_UNSIZED,0},
 
 	"lda",	{OP_REG,OP_IMM,0,0,0}, {DIRECT,CPU_ALL,0,OPC(4LL),5, SZ_UNSIZED, 0},	
@@ -950,14 +961,14 @@ static int is_lkreg(char *p, char **ep)
 	if (*p != 'l' && *p != 'L') {
 		return (-1);
 	}
-	if (p[1] != 'k' && p[1] != 'K') {
+	if (p[1] != 'k' && p[1] != 'K' && p[1]!='r' && p[1]!='R') {
 		return (-1);
 	}
 	if (isdigit((unsigned char)p[2]) && !ISIDCHAR((unsigned char)p[3])) {
 		rg = p[2]-'0';
 		if (rg < 2) {
 			*ep = &p[3];
-			return (rg+27);
+			return (rg+4);
 		}
 	}
 	return (-1);
@@ -1690,7 +1701,7 @@ static thuge make_reloc(int reloctype,operand *op,section *sec,
           break;
         case RISH:
 		      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
-	                       17,23,0,0x7ffff80000000000LL);
+	                       17,23,0,0xfffffc0000000000LL);
         	break;
         case RI:
         case RIV:
@@ -2471,7 +2482,7 @@ static size_t encode_immed (
 		else if (mnemo->ext.format==RISM) {
 			if (insn) {
 				if (i==1) {
-					insn->opcode = insn->opcode | (((val.lo >> 20LL) & 0xffffffLL) << 16LL);
+					insn->opcode = insn->opcode | (((val.lo >> 21LL) & 0x7fffffLL) << 17LL);
 				}
 				else if (i==2) {
 					insn->opcode = insn->opcode | ((val.lo & 0x7LL) << 13LL);
@@ -2481,7 +2492,7 @@ static size_t encode_immed (
 		else if (mnemo->ext.format==RISH) {
 			if (insn) {
 				if (i==1) {
-					insn->opcode = insn->opcode | (((val.lo >> 44LL) & 0xffffffLL) << 16LL);
+					insn->opcode = insn->opcode | (((val.lo >> 42LL) & 0x7fffffLL) << 17LL);
 				}
 				else if (i==2) {
 					insn->opcode = insn->opcode | ((val.lo & 0x7LL) << 13LL);
@@ -2598,7 +2609,7 @@ static size_t encode_immed (
 		else if (mnemo->ext.format==RISM) {
 			if (insn) {
 				if (i==1) {
-					insn->opcode = insn->opcode | (((val.lo >> 20LL) & 0xffffffLL) << 16LL);
+					insn->opcode = insn->opcode | (((val.lo >> 21LL) & 0x7fffffLL) << 17LL);
 				}
 				else if (i==2) {
 					insn->opcode = insn->opcode | ((val.lo & 0x7LL) << 13LL);
@@ -2608,7 +2619,7 @@ static size_t encode_immed (
 		else if (mnemo->ext.format==RISH) {
 			if (insn) {
 				if (i==1) {
-					insn->opcode = insn->opcode | (((val.lo >> 44LL) & 0xffffffLL) << 16LL);
+					insn->opcode = insn->opcode | (((val.lo >> 42LL) & 0x7fffffLL) << 17LL);
 				}
 				else if (i==2) {
 					insn->opcode = insn->opcode | ((val.lo & 0x7LL) << 13LL);
@@ -2765,7 +2776,7 @@ static void encode_branch_BL2(instruction_buf* insn, operand* op, int64_t val, i
 		if (insn) {
 			switch(i) {
 			case 1:
-  			tgt = ((val & 0xfffffffLL) << 12LL);
+  			tgt = ((val & 0x3fffffffLL) << 10LL);
   			insn->opcode |= tgt;
 		  	break;
 			}
@@ -3381,12 +3392,17 @@ size_t encode_qupls_instruction(instruction *ip,section *sec,taddr pc,
 		else if (mnemo->operand_type[i]==OP_LK) {
 			if (insn) {
  				switch(mnemo->ext.format) {
- 				case JL2:
  				case JL3:
  				case BL:
  				case RTS:
  					if (i==0)
- 						insn->opcode = insn->opcode | RT(op.basereg);
+ 						insn->opcode = insn->opcode | RA(op.basereg);
+ 					break;
+ 				case JSCNDX:
+ 				case JL2:
+ 				case BL2:
+ 					if (i==0)
+ 						insn->opcode = insn->opcode | (((op.basereg) & 7LL) << 7LL);
  					break;
 				default:
  					cpu_error(18);
