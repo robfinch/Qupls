@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2022-2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2022-2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -79,8 +79,13 @@ typedef struct packed
 
 typedef struct packed
 {
+	logic [38:0] resv3;
+	logic [12:0] limit;	// root page table limit (# of entries)
 	logic [2:0] level;	// entry level of hierarchical page table
 	logic [1:0] al;			// replacement algorithm, 0=fixed,1=LRU,2=random
+	logic [1:0] resv2;
+	logic s;						// 1=software,0=hardware managed TLB
+	logic [1:0] resv1;
 	logic typ;					// 0=hierarchical,1=hash
 } pt_attr_t;
 

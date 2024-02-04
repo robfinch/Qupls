@@ -50,6 +50,11 @@ else begin
 	OP_CHK:		mip = 12'h130;
 	OP_ENTER:	mip = 12'h004;
 	OP_LEAVE:	mip = 12'h1D0;
+	OP_JSRI:	mip = 12'h128;
+	OP_BSET:	mip = 12'h390;
+	OP_BMOV:	mip = 12'h3A0;
+	OP_BCMP:	mip = 12'h3B0;
+	OP_BFND:	mip = 12'h3C0;
 	OP_LDX:
 		case(ir.ins.lsn.func.ldn)
 		FN_LDCTX:	mip = 12'h150;

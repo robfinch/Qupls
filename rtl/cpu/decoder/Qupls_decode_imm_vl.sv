@@ -75,6 +75,11 @@ begin
 	finsB = 1'd0;
 	finsC = 1'd0;
 	case(ins[0].ins.any.opcode)
+	OP_ZSxxI:
+		begin
+			immb = {{48{ins[0].ins[32]}},ins[0].ins[32:17]};
+			has_immb = 1'b1;
+		end
 	OP_R2,OP_R3V,OP_R3VS:
 		case(ins[0].ins.r3.func)
 		FN_BYTENDX:
@@ -84,7 +89,7 @@ begin
 			end
 		default:	immb = 64'd0;
 		endcase
-	OP_ADDI,OP_CMPI,OP_MULI,OP_DIVI,OP_SUBFI,OP_SLTI:
+	OP_ADDI,OP_CMPI,OP_MULI,OP_DIVI,OP_SUBFI:
 		begin
 			immb = {{43{ins[0].ins[39]}},ins[0].ins[39:19]};
 			has_immb = 1'b1;

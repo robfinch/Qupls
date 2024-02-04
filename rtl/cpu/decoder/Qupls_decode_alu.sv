@@ -44,9 +44,11 @@ function fnIsAlu;
 input instruction_t ir;
 begin
 	case(ir.r2.opcode)
+	OP_ZSxxI:	fnIsAlu = 1'b1;
 	OP_CHK:	fnIsAlu = 1'b1;
 	OP_R2,OP_R3V,OP_R3VS:
 		case(ir.r2.func)
+		FN_CPUID:	fnIsAlu = 1'b1;
 		FN_ADD:	fnIsAlu = 1'b1;
 		FN_CMP:	fnIsAlu = 1'b1;
 		FN_MUL:	fnIsAlu = 1'b1;
@@ -76,7 +78,20 @@ begin
 		FN_ZSLE:	fnIsAlu = 1'b1;
 		FN_ZSLTU:	fnIsAlu = 1'b1;
 		FN_ZSLEU:	fnIsAlu = 1'b1;
+		FN_SEQI8:	fnIsAlu = 1'b1;
+		FN_SNEI8:	fnIsAlu = 1'b1;
+		FN_SLTI8:	fnIsAlu = 1'b1;
+		FN_SLEI8:	fnIsAlu = 1'b1;
+		FN_SLTUI8:	fnIsAlu = 1'b1;
+		FN_SLEUI8:	fnIsAlu = 1'b1;
+		FN_ZSEQI8:	fnIsAlu = 1'b1;
+		FN_ZSNEI8:	fnIsAlu = 1'b1;
+		FN_ZSLTI8:	fnIsAlu = 1'b1;
+		FN_ZSLEI8:	fnIsAlu = 1'b1;
+		FN_ZSLTUI8:	fnIsAlu = 1'b1;
+		FN_ZSLEUI8:	fnIsAlu = 1'b1;
 		FN_MVVR: 	fnIsAlu = 1'b1;
+		FN_VSETMASK: fnIsAlu = 1'b1;
 		default:	fnIsAlu = 1'b0;
 		endcase
 	OP_ADDI,OP_VADDI:	
@@ -96,7 +111,6 @@ begin
 		fnIsAlu = 1'b1;
 	OP_EORI,OP_VEORI:
 		fnIsAlu = 1'b1;
-	OP_SLTI:	fnIsAlu = 1'b1;
 	OP_AIPSI:	fnIsAlu = 1'b1;
 	OP_VADDSI,OP_VORSI,OP_VANDSI,OP_VEORSI,
 	OP_ADDSI,OP_ORSI,OP_ANDSI,OP_EORSI:

@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2024  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -34,76 +34,56 @@
 //
 // ============================================================================
 
-import QuplsPkg::*;
+module Qupls_setvmask(max_ele_sz, numlanes, lanesz, mask);
+input [7:0] max_ele_sz;	// 8/16 bytes
+input [6:0] numlanes;		// 0 to 64
+input [5:0] lanesz;			// size of lane in bytes
+output [63:0] mask;
 
-module Qupls_decode_macro(instr, macro);
-input instruction_t instr;
-output macro;
+reg [64:0] mask1;
+reg [3:0] bits_per_element;
 
-function fnIsMacro;
-input instruction_t ir;
-begin
-	case(ir.r2.opcode)
-	OP_R3V,OP_R3VS:
-		case(ir.r2.func)
-		FN_ADD:	fnIsMacro = 1'b1;
-		FN_CMP:	fnIsMacro = 1'b1;
-		FN_MUL:	fnIsMacro = 1'b1;
-		FN_MULW:	fnIsMacro = 1'b1;
-		FN_DIV:	fnIsMacro = 1'b1;
-		FN_SUB:	fnIsMacro = 1'b1;
-		FN_MULU: fnIsMacro = 1'b1;
-		FN_MULUW: fnIsMacro = 1'b1;
-		FN_DIVU: fnIsMacro = 1'b1;
-		FN_AND:	fnIsMacro = 1'b1;
-		FN_OR:	fnIsMacro = 1'b1;
-		FN_EOR:	fnIsMacro = 1'b1;
-		FN_NAND:	fnIsMacro = 1'b1;
-		FN_NOR:	fnIsMacro = 1'b1;
-		FN_ENOR:	fnIsMacro = 1'b1;
-		FN_SEQ:	fnIsMacro = 1'b1;
-		FN_SNE:	fnIsMacro = 1'b1;
-		FN_SLT:	fnIsMacro = 1'b1;
-		FN_SLE:	fnIsMacro = 1'b1;
-		FN_SLTU:	fnIsMacro = 1'b1;
-		FN_SLEU:	fnIsMacro = 1'b1;
-		FN_ZSEQ:	fnIsMacro = 1'b1;
-		FN_ZSNE:	fnIsMacro = 1'b1;
-		FN_ZSLT:	fnIsMacro = 1'b1;
-		FN_ZSLE:	fnIsMacro = 1'b1;
-		FN_ZSLTU:	fnIsMacro = 1'b1;
-		FN_ZSLEU:	fnIsMacro = 1'b1;
-		default:	fnIsMacro = 1'b0;
-		endcase
-	OP_VADDI:	
-		fnIsMacro = 1'b1;
-	OP_VCMPI:	
-		fnIsMacro = 1'b1;
-	OP_VMULI:	
-		fnIsMacro = 1'b1;
-	OP_VDIVI:	
-		fnIsMacro = 1'b1;
-	OP_VANDI:	
-		fnIsMacro = 1'b1;
-	OP_VORI:
-		fnIsMacro = 1'b1;
-	OP_VEORI:
-		fnIsMacro = 1'b1;
-	OP_VADDSI,OP_VORSI,OP_VANDSI,OP_VEORSI:
-						fnIsMacro = 1'b1;
-	OP_VSHIFT:
-		fnIsMacro = 1'b1;
-	OP_PUSH,OP_POP,OP_ENTER,OP_LEAVE:
-		fnIsMacro = 1'b1;
-	OP_BSET,OP_BFND,OP_BMOV,OP_BCMP:
-		fnIsMacro = 1'b1;
-	OP_JSRI:
-		fnIsMacro = 1'b1;
-	default:	fnIsMacro = 1'b0;
+always_comb
+	bits_per_element = max_ele_sz >> $clog2(lanesz);
+
+// Bitmask according to lanes
+always_comb
+	mask1 = (65'd1 << numlanes) - 64'd1;
+
+always_comb
+	case(bits_per_element)
+	4'd1:	mask = {
+		7'd0,mask1[7],
+		7'd0,mask1[6],
+		7'd0,mask1[5],
+		7'd0,mask1[4],
+		7'd0,mask1[3],
+		7'd0,mask1[2],
+		7'd0,mask1[1],
+		7'd0,mask1[0]
+		};
+	4'd2:	mask = {
+		6'd0,mask[15:14],
+		6'd0,mask[13:12],
+		6'd0,mask[11:10],
+		6'd0,mask[9:8],
+		6'd0,mask[7:6],
+		6'd0,mask[5:4],
+		6'd0,mask[3:2],
+		6'd0,mask[1:0]
+		};
+	4'd4:	mask = {
+		4'd0,mask[31:28],
+		4'd0,mask[27:24],
+		4'd0,mask[23:20],
+		4'd0,mask[19:16],
+		4'd0,mask[15:12],
+		4'd0,mask[11:8],
+		4'd0,mask[7:4],
+		4'd0,mask[3:0]
+		};
+	default:	// 8
+		mask = mask1;		
 	endcase
-end
-endfunction
-
-assign macro = fnIsMacro(instr);
 
 endmodule

@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -44,7 +44,7 @@ function fnSwap;
 input instruction_t op;
 begin
 	case(op.any.opcode)
-	OP_ADDI,OP_CMPI,OP_MULI,OP_DIVI,OP_SUBFI,OP_SLTI:
+	OP_ADDI,OP_CMPI,OP_MULI,OP_DIVI,OP_SUBFI:
 		fnSwap = op[22];
 	OP_ANDI:	fnSwap = op[22];
 	OP_ORI,OP_EORI:

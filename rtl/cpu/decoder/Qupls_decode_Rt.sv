@@ -47,6 +47,7 @@ function aregno_t fnRt;
 input ex_instruction_t ir;
 begin
 	case(ir.ins.any.opcode)
+	OP_ZSxxI:	fnRt = ir.aRt;
 	OP_R2,OP_R3V,OP_R3VS:
 		case(ir.ins.r2.func)
 		FN_ADD:	fnRt = ir.aRt;
@@ -78,13 +79,25 @@ begin
 		FN_ZSLE:	fnRt = ir.aRt;
 		FN_ZSLTU:	fnRt = ir.aRt;
 		FN_ZSLEU:	fnRt = ir.aRt;
+		FN_SEQI8:	fnRt = ir.aRt;
+		FN_SNEI8:	fnRt = ir.aRt;
+		FN_SLTI8:	fnRt = ir.aRt;
+		FN_SLEI8:	fnRt = ir.aRt;
+		FN_SLTUI8:	fnRt = ir.aRt;
+		FN_SLEUI8:	fnRt = ir.aRt;
+		FN_ZSEQI8:	fnRt = ir.aRt;
+		FN_ZSNEI8:	fnRt = ir.aRt;
+		FN_ZSLTI8:	fnRt = ir.aRt;
+		FN_ZSLEI8:	fnRt = ir.aRt;
+		FN_ZSLTUI8:	fnRt = ir.aRt;
+		FN_ZSLEUI8:	fnRt = ir.aRt;
 		default:	fnRt = 9'd0;
 		endcase
 	OP_FLT3:
 		fnRt = ir.aRt;
 	OP_MCB:	fnRt = {ir.ins.mcb.lk ? 9'd59 : 9'd00};
-	OP_BSR:	fnRt = ir.aRt;
-	OP_JSR:	fnRt = ir.aRt;
+	OP_BSR:	fnRt = ir.aRt[2:0]<3'd4 ? 9'd0 : {6'b000101,ir.aRt[2:0]};
+	OP_JSR:	fnRt = ir.aRt[2:0]<3'd4 ? 9'd0 : {6'b000101,ir.aRt[2:0]};
 	OP_RTD:	fnRt = 9'd31;
 	OP_DBRA: fnRt = 9'd55;
 	OP_VADDI,OP_VCMPI,
@@ -94,7 +107,7 @@ begin
 	OP_MULI,OP_DIVI:
 		fnRt = ir.aRt;
 	OP_VANDI,OP_VORI,OP_VEORI,
-	OP_SLTI,OP_MULUI,OP_DIVUI,OP_ANDI,OP_ORI,OP_EORI:
+	OP_MULUI,OP_DIVUI,OP_ANDI,OP_ORI,OP_EORI:
 		fnRt = ir.aRt;
 	OP_VADDSI,OP_VANDSI,OP_VORSI,OP_VEORSI,
 	OP_ADDSI,OP_ANDSI,OP_ORSI,OP_EORSI,OP_AIPSI:

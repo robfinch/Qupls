@@ -61,7 +61,6 @@ begin
 		fnPrec = ir[20:19];
 	OP_EORI,OP_VEORI:
 		fnPrec = ir[20:19];
-	OP_SLTI:	fnPrec = ir[20:19];
 	OP_VADDSI,OP_VORSI,OP_VANDSI,OP_VEORSI,
 	OP_ADDSI,OP_ORSI,OP_ANDSI,OP_EORSI:
 						fnPrec = ir[17:16];

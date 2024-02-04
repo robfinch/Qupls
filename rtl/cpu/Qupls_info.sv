@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2024  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2023-2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -32,78 +32,36 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
+//
 // ============================================================================
 
+import const_pkg::*;
 import QuplsPkg::*;
 
-module Qupls_decode_macro(instr, macro);
-input instruction_t instr;
-output macro;
+module Qupls_info(ndx, coreno, o);
+input [4:0] ndx;
+output value_t o;
 
-function fnIsMacro;
-input instruction_t ir;
-begin
-	case(ir.r2.opcode)
-	OP_R3V,OP_R3VS:
-		case(ir.r2.func)
-		FN_ADD:	fnIsMacro = 1'b1;
-		FN_CMP:	fnIsMacro = 1'b1;
-		FN_MUL:	fnIsMacro = 1'b1;
-		FN_MULW:	fnIsMacro = 1'b1;
-		FN_DIV:	fnIsMacro = 1'b1;
-		FN_SUB:	fnIsMacro = 1'b1;
-		FN_MULU: fnIsMacro = 1'b1;
-		FN_MULUW: fnIsMacro = 1'b1;
-		FN_DIVU: fnIsMacro = 1'b1;
-		FN_AND:	fnIsMacro = 1'b1;
-		FN_OR:	fnIsMacro = 1'b1;
-		FN_EOR:	fnIsMacro = 1'b1;
-		FN_NAND:	fnIsMacro = 1'b1;
-		FN_NOR:	fnIsMacro = 1'b1;
-		FN_ENOR:	fnIsMacro = 1'b1;
-		FN_SEQ:	fnIsMacro = 1'b1;
-		FN_SNE:	fnIsMacro = 1'b1;
-		FN_SLT:	fnIsMacro = 1'b1;
-		FN_SLE:	fnIsMacro = 1'b1;
-		FN_SLTU:	fnIsMacro = 1'b1;
-		FN_SLEU:	fnIsMacro = 1'b1;
-		FN_ZSEQ:	fnIsMacro = 1'b1;
-		FN_ZSNE:	fnIsMacro = 1'b1;
-		FN_ZSLT:	fnIsMacro = 1'b1;
-		FN_ZSLE:	fnIsMacro = 1'b1;
-		FN_ZSLTU:	fnIsMacro = 1'b1;
-		FN_ZSLEU:	fnIsMacro = 1'b1;
-		default:	fnIsMacro = 1'b0;
-		endcase
-	OP_VADDI:	
-		fnIsMacro = 1'b1;
-	OP_VCMPI:	
-		fnIsMacro = 1'b1;
-	OP_VMULI:	
-		fnIsMacro = 1'b1;
-	OP_VDIVI:	
-		fnIsMacro = 1'b1;
-	OP_VANDI:	
-		fnIsMacro = 1'b1;
-	OP_VORI:
-		fnIsMacro = 1'b1;
-	OP_VEORI:
-		fnIsMacro = 1'b1;
-	OP_VADDSI,OP_VORSI,OP_VANDSI,OP_VEORSI:
-						fnIsMacro = 1'b1;
-	OP_VSHIFT:
-		fnIsMacro = 1'b1;
-	OP_PUSH,OP_POP,OP_ENTER,OP_LEAVE:
-		fnIsMacro = 1'b1;
-	OP_BSET,OP_BFND,OP_BMOV,OP_BCMP:
-		fnIsMacro = 1'b1;
-	OP_JSRI:
-		fnIsMacro = 1'b1;
-	default:	fnIsMacro = 1'b0;
+always_comb
+	case(ndx)
+	5'd0:	o = coreno;
+	5'd2:	o = "Finitron";
+	5'd3:	o = 64'd0;
+	5'd4:	o = "64BitSS ";
+	5'd5: o = 64'd0;
+	5'd6:	o = "Qupls";
+	5'd7:	o = 64'd0;
+	5'd8:	o = "M1";
+	5'd9:	o = 64'h1234;
+	5'd10:	o = 64'h0;
+	5'd11:	
+		begin
+			o[31:0] = 32'd32768;
+			o[63:32] = 32'd65536;
+		end
+	5'd12:	o = 64'd8;
+	5'd13:	o = 64'd64;
+	default:	o = 64'h0;
 	endcase
-end
-endfunction
-
-assign macro = fnIsMacro(instr);
-
+	
 endmodule

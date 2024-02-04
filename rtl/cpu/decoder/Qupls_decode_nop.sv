@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -44,6 +44,7 @@ function fnIsNop;
 input instruction_t ir;
 begin
 	case(ir.r2.opcode)
+	OP_JSRI,OP_BSET,OP_BMOV,OP_BFND,OP_BCMP,
 	OP_REGC,
 	OP_PFXA32,OP_PFXB32,OP_PFXC32,
 	OP_VEC,OP_VECZ,OP_NOP,OP_ENTER,OP_LEAVE,OP_PUSH,OP_POP,OP_ATOM:

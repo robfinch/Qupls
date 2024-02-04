@@ -40,7 +40,7 @@ import const_pkg::*;
 import QuplsPkg::*;
 
 module Qupls_alu(rst, clk, clk2x, ld, ir, div, cptgt, z, a, b, bi, c, i, t, qres,
-	cs, pc, csr, cpl, canary, o, mul_done, div_done, div_dbz, exc);
+	cs, pc, csr, cpl, coreno, canary, o, mul_done, div_done, div_dbz, exc);
 parameter ALU0 = 1'b0;
 parameter WID=16;
 parameter LANE=0;
@@ -63,6 +63,7 @@ input [2:0] cs;
 input pc_address_t pc;
 input [WID-1:0] csr;
 input [7:0] cpl;
+input [WID-1:0] coreno;
 input [WID-1:0] canary;
 output reg [WID-1:0] o;
 output reg mul_done;
@@ -90,6 +91,8 @@ reg [WID-1:0] sd;
 reg [WID-1:0] sum_ab;
 reg [WID-1:0] chndx;
 reg [WID-1:0] chrndxv;
+wire [WID-1:0] info;
+wire [WID-1:0] vmasko;
 
 always_comb
 	ii = {{6{i[WID-1]}},i};
@@ -147,11 +150,26 @@ Qupls_divider #(.WID(WID)) udiv0(
 	.idle()
 );
 
-generate begin : gBlend
+generate begin : gInfoBlend
 	if (WID != 64) begin
 		assign blendo = {WID{1'b0}};
+		assign info = {WID{1'b0}};
 	end
 	else begin
+		if (ALU0) begin
+			Qupls_info uinfo1 (
+				.ndx(a[4:0]+b[4:0]+ir[26:22]),
+				.coreno(coreno),
+				.o(info)
+			);
+			Qupls_setvmask usm1 (
+				.max_ele_sz($bits(value_t)),
+				.numlanes(a[6:0]),
+				.lanesz(b[5:0]|i[4:0]),
+				.mask(vmasko)
+			);
+		end
+
 		Qupls_blend ublend0
 		(
 			.a(c),
@@ -189,6 +207,30 @@ begin
 	exc = FLT_NONE;
 	bus = {(WID/16){16'h0000}};
 	case(ir.any.opcode)
+	OP_ZSxxI:
+		case(ir[39:35])
+		5'd0:	bus = a==i;
+		5'd1:	bus = a!=i;
+		5'd2:	bus = $signed(a) < $signed(i);
+		5'd3:	bus = $signed(a) <= $signed(i);
+		5'd4:	bus = a < i;
+		5'd5:	bus = a <= i;
+		5'd10: bus = $signed(a) > $signed(i);
+		5'd11: bus = $signed(a) >= $signed(i);
+		5'd12: bus = a > i;
+		5'd13: bus = a >= i;
+		5'd16:	bus = a==i ? 64'd1 : t;
+		5'd17:	bus = a!=i ? 64'd1 : t;
+		5'd18:	bus = $signed(a) < $signed(i) ? 64'd1 : t;
+		5'd19:	bus = $signed(a) <= $signed(i) ? 64'd1 : t;
+		5'd20:	bus = a < i ? 64'd1 : t;
+		5'd21:	bus = a <= i ? 64'd1 : t;
+		5'd26: bus = $signed(a) > $signed(i) ? 64'd1 : t;
+		5'd27: bus = $signed(a) >= $signed(i) ? 64'd1 : t;
+		5'd28: bus = a > i ? 64'd1 : t;
+		5'd29: bus = a >= i ? 64'd1 : t;
+		default:	bus = dead;
+		endcase
 	OP_CHK:
 		case(ir[39:36])
 		4'd0:	if (!(a >= b && a < c)) exc = cause_code_t'(ir[34:27]);
@@ -206,6 +248,7 @@ begin
 		endcase
 	OP_R2,OP_R3V,OP_R3VS:
 		case(ir.r2.func)
+		FN_CPUID:	bus = ALU0 ? info : 64'd0;
 		FN_ADD:
 			case(ir[30:27])
 			4'd0:	bus = (a + b) & c;
@@ -233,7 +276,12 @@ begin
 		FN_SUB:	bus = a - b - c;
 		FN_CMP,FN_CMPU:	
 			case(ir[30:27])
-			4'd1:			bus = cmpo | c;
+			4'd0:	bus = cmpo & c;
+			4'd1:	bus = cmpo & ~c;
+			4'd2:	bus = cmpo | c;
+			4'd3:	bus = cmpo | ~c;
+			4'd4:	bus = cmpo ^ c;
+			4'd5:	bus = cmpo ^ ~c;
 			default:	bus = cmpo;
 			endcase
 		FN_MUL:	bus = prod[WID-1:0];
@@ -318,12 +366,12 @@ begin
 		FN_SLTU:	bus = a < b ? c : t;
 		FN_SLEU: 	bus = a <= b ? c : t;
 
-		FN_SEQI:	bus = a == b ? immc8 : t;
-		FN_SNEI:	bus = a != b ? immc8 : t;
-		FN_SLTI:	bus = $signed(a) < $signed(b) ? immc8 : t;
-		FN_SLEI:	bus = $signed(a) <= $signed(b) ? immc8 : t;
-		FN_SLTUI:	bus = a < b ? immc8 : t;
-		FN_SLEUI:	bus = a <= b ? immc8 : t;
+		FN_SEQI8:	bus = a == b ? immc8 : t;
+		FN_SNEI8:	bus = a != b ? immc8 : t;
+		FN_SLTI8:	bus = $signed(a) < $signed(b) ? immc8 : t;
+		FN_SLEI8:	bus = $signed(a) <= $signed(b) ? immc8 : t;
+		FN_SLTUI8:	bus = a < b ? immc8 : t;
+		FN_SLEUI8:	bus = a <= b ? immc8 : t;
 
 		FN_ZSEQ:	bus = a==b ? c : zero;
 		FN_ZSNE:	bus = a!=b ? c : zero;
@@ -332,12 +380,12 @@ begin
 		FN_ZSLTU:	bus = a < b ? c : zero;
 		FN_ZSLEU:	bus = a <= b ? c : zero;
 
-		FN_ZSEQI: bus = a==b ? immc8 : zero;
-		FN_ZSNEI:	bus = a!=b ? immc8 : zero;
-		FN_ZSLTI:	bus = $signed(a) < $signed(b) ? immc8 : zero;
-		FN_ZSLEI:	bus = $signed(a) <= $signed(b) ? immc8 : zero;
-		FN_ZSLTUI:	bus = a < b ? immc8 : zero;
-		FN_ZSLEUI:	bus = a <= b ? immc8 : zero;
+		FN_ZSEQI8: bus = a==b ? immc8 : zero;
+		FN_ZSNEI8:	bus = a!=b ? immc8 : zero;
+		FN_ZSLTI8:	bus = $signed(a) < $signed(b) ? immc8 : zero;
+		FN_ZSLEI8:	bus = $signed(a) <= $signed(b) ? immc8 : zero;
+		FN_ZSLTUI8:	bus = a < b ? immc8 : zero;
+		FN_ZSLEUI8:	bus = a <= b ? immc8 : zero;
 
 		FN_MINMAX:
 			case(ir[30:27])
@@ -398,6 +446,7 @@ begin
 			default:	bus = {4{32'hDEADBEEF}};
 			endcase
 		FN_MVVR:	bus = a;
+		FN_VSETMASK:	bus = ALU0 ? vmasko : dead;
 		default:	bus = {4{32'hDEADBEEF}};
 		endcase
 	OP_CSR:		bus = csr;
@@ -423,15 +472,16 @@ begin
 		bus = a | i;
 	OP_EORI,OP_VEORI:
 		bus = a ^ i;
-	OP_SLTI:	bus = $signed(a) < $signed(i);
+	OP_AIPSI:
+		bus = pc + ({{WID{ii[22]}},ii[22:0]} << (ir[14:12]*21));
 	OP_ADDSI,OP_VADDSI:
-		bus = a + ({{WID{ii[22]}},ii[22:0]} << (ir[14:12]*20));
+		bus = a + ({{WID{ii[22]}},ii[22:0]} << (ir[14:12]*21));
 	OP_ANDSI,OP_VANDSI:
-		bus = a & ({WID{1'b1}} & ~({{WID{1'b0}},23'h7fffff} << (ir[14:12]*20)) | ({{WID{ii[22]}},ii[22:0]} << (ir[14:12]*20)));
+		bus = a & ({WID{1'b1}} & ~({{WID{1'b0}},23'h7fffff} << (ir[14:12]*20)) | ({{WID{ii[22]}},ii[22:0]} << (ir[14:12]*21)));
 	OP_ORSI,OP_VORSI:
-		bus = a | (i << (ir[14:12]*20));
+		bus = a | (i << (ir[14:12]*21));
 	OP_EORSI,OP_VEORSI:
-		bus = a ^ (i << (ir[14:12]*20));
+		bus = a ^ (i << (ir[14:12]*21));
 	OP_SHIFT,OP_VSHIFT:
 		case(ir.shifti.func)
 		OP_ASL:	bus = shl[WID*2-1:WID];

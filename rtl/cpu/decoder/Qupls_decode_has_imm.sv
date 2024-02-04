@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -45,8 +45,10 @@ input instruction_t op;
 begin
 	fnIsImm = 1'b0;
 	case(op.any.opcode)
+	OP_ZSxxI:
+		fnIsImm = 1'b1;
 	OP_ADDI,OP_CMPI,OP_MULI,OP_DIVI,OP_SUBFI,OP_DIVUI,OP_MULUI,
-	OP_ANDI,OP_ORI,OP_EORI,OP_SLTI:
+	OP_ANDI,OP_ORI,OP_EORI:
 		fnIsImm = 1'b1;
 	OP_RTD,OP_JSR:
 		fnIsImm = 1'b1;

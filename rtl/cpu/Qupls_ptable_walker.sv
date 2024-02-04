@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -106,7 +106,7 @@ output reg ptw_vv;
 input physical_address_t ptw_padr;
 input ptw_pv;
 
-integer nn,n1,n2,n3,n4;
+integer nn,n1,n2,n3,n4,n5;
 
 typedef enum logic [1:0] {
 	IDLE = 2'd0,
@@ -223,39 +223,46 @@ upci
 	.irq_en_o(irq_en)
 );
 
-always_ff @(posedge clk, posedge rst)
+always_ff @(posedge clk)
 if (rst) begin
-	ptbr <= 'd0;
-	pt_attr <= 'd0;
+	ptbr <= 64'hFFFFFFFFFFF80000;
+	pt_attr <= 64'h1FFF081;
 end
 else begin
 	if (cs_hwtw && sreq.we)
 		casez(sreq.padr[15:0])
-		16'hFF20:	ptbr <= sreq.data1[63:0];
+		16'hFF20:	
+			begin
+				ptbr <= sreq.data1[63:0];
+				$display("Q+ PTW: PTBR=%h",sreq.data1[63:0]);
+			end
 		16'hFF30: pt_attr <= sreq.data1[5:0];
 		default:	;
 		endcase
 end
 
-always_ff @(posedge clk, posedge rst)
+always_ff @(posedge clk)
 if (rst) begin
 	sresp <= 'd0;
 end
 else begin
+	sresp.dat <= 128'd0;
+	sresp.tid <= sreq.tid;
+	sresp.pri <= sreq.pri;
 	if (cs_config)
 		sresp.dat <= cfg_out;
 	else if (cs_hwtw) begin
-		sresp.dat <= 'd0;
+		sresp.dat <= 128'd0;
 		casez(sreq.padr[15:0])
 		16'hFF00:	sresp.dat[63: 0] <= fault_adr;
 		16'hFF10:	sresp.dat[63:48] <= fault_asid;
 		16'hFF20:	sresp.dat[63: 0] <= ptbr;
 		16'hFF30:	sresp.dat <= pt_attr;
-		default:	sresp.dat <= 'd0;
+		default:	sresp.dat <= 128'd0;
 		endcase
 	end
 	else
-		sresp.dat <= 'd0;
+		sresp.dat <= 128'd0;
 end
 
 // Find out if the tlb miss is already in the miss queue.
@@ -296,6 +303,21 @@ begin
 			(miss_queue[n3].id==commit3_id && commit3_idv)
 		)	
 			sel_qe = n3;
+end
+
+// Select a miss queue entry to remove.
+integer dump_qe;
+always_comb
+begin
+	dump_qe = -1;
+	for (n5 = 0; n5 < MISSQ_SIZE; n5 = n5 + 1)
+		if (miss_queue[n5].v && miss_queue[n5].bc && dump_qe < 0 &&
+			(miss_queue[n5].id==commit0_id && !commit0_idv) ||
+			(miss_queue[n5].id==commit1_id && !commit1_idv) ||
+			(miss_queue[n5].id==commit2_id && !commit2_idv) ||
+			(miss_queue[n5].id==commit3_id && !commit3_idv)
+		)	
+			dump_qe = n5;
 end
 
 integer sel_tran;
@@ -409,6 +431,11 @@ else begin
 				ptw_vadr <= {miss_queue[sel_qe].tadr[31:3],3'b0};
 				ptw_vv <= TRUE;
 				ptw_ppv <= FALSE;
+			end
+			if (dump_qe >= 0) begin
+				miss_queue[dump_qe].v <= 1'b0;
+				miss_queue[dump_qe].o <= 1'b0;
+				miss_queue[dump_qe].bc <= 1'b0;
 			end
 			if (ptw_pv & ~ptw_ppv) begin
 				$display("PTW: table walk triggered.");

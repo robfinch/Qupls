@@ -492,6 +492,8 @@ reg excret;
 pc_address_t exc_ret_pc;
 wire do_bsr;
 pc_address_t bsr_tgt;
+mc_address_t exc_ret_mcip;
+instruction_t exc_ret_mcir;
 
 wire dram_avail;
 dram_state_t dram0;	// state of the DRAM request
@@ -535,6 +537,7 @@ reg dram0_done;
 reg dram0_idv;
 reg [3:0] dram0_cp;
 value_t dram0_argT;
+pc_address_t dram0_pc;
 
 reg [639:0] dram1_data, dram1_datah;
 virtual_address_t dram1_vaddr, dram1_vaddrh;
@@ -563,6 +566,7 @@ reg dram1_done;
 reg dram1_idv;
 reg [3:0] dram1_cp;
 value_t dram1_argT;
+pc_address_t dram1_pc;
 
 reg [2:0] dramN [0:NDATA_PORTS-1];
 reg [511:0] dramN_data [0:NDATA_PORTS-1];
@@ -1510,16 +1514,20 @@ if (rst)
 	micro_ip <= 12'h1A0;
 else begin
 	if (advance_pipeline) begin
-	  if (~hirq) begin
-	  	if ((pe_allqd||allqd||&next_cqd)) begin
-				micro_ip <= (mcbrtgtv & mipv) ? mcbrtgt : next_micro_ip;
+		if (excret)
+			micro_ip <= exc_ret_mcip;
+		else begin
+		  if (~hirq) begin
+		  	if ((pe_allqd||allqd||&next_cqd)) begin
+					micro_ip <= (mcbrtgtv & mipv) ? mcbrtgt : next_micro_ip;
+				end
 			end
-		end
-		if (micro_ip==12'h000) begin
-					 if (mip0v) micro_ip <= mip0;
-			else if (mip1v) micro_ip <= mip1;
-			else if (mip2v) micro_ip <= mip2;
-			else if (mip3v) micro_ip <= mip3;
+			if (micro_ip==12'h000) begin
+						 if (mip0v) micro_ip <= mip0;
+				else if (mip1v) micro_ip <= mip1;
+				else if (mip2v) micro_ip <= mip2;
+				else if (mip3v) micro_ip <= mip3;
+			end
 		end
 	end
 end
@@ -1536,11 +1544,15 @@ if (rst)
 	mc_adr <= RSTPC-5;
 else begin
 	if (advance_pipeline) begin
-		if (micro_ip==12'h000) begin
-					 if (mip0v) mc_adr <= pc0_d;
-			else if (mip1v) mc_adr <= pc1_d;
-			else if (mip2v) mc_adr <= pc2_d;
-			else if (mip3v) mc_adr <= pc3_d;
+		if (exc_ret)
+			mc_adr <= exc_ret_pc;
+		else begin
+			if (micro_ip==12'h000) begin
+						 if (mip0v) mc_adr <= pc0_d;
+				else if (mip1v) mc_adr <= pc1_d;
+				else if (mip2v) mc_adr <= pc2_d;
+				else if (mip3v) mc_adr <= pc3_d;
+			end
 		end
 	end
 end
@@ -1554,11 +1566,15 @@ if (rst)
 	micro_ir <= {33'd0,OP_NOP};
 else begin
 	if (advance_pipeline) begin
-		if (micro_ip==12'h000) begin
-			if (mip0v) begin micro_ir <= ins0_d; micro_ir.ins.any.opcode <= fnVec2ScalarOpcode(ins0_d.ins.any.opcode); end
-			else if (mip1v) begin micro_ir <= ins1_d; micro_ir.ins.any.opcode <= fnVec2ScalarOpcode(ins1_d.ins.any.opcode); end
-			else if (mip2v) begin micro_ir <= ins2_d; micro_ir.ins.any.opcode <= fnVec2ScalarOpcode(ins2_d.ins.any.opcode); end
-			else if (mip3v) begin micro_ir <= ins3_d; micro_ir.ins.any.opcode <= fnVec2ScalarOpcode(ins3_d.ins.any.opcode); end
+		if (excret)
+			micro_ir <= exc_ret_mcir;
+		else begin
+			if (micro_ip==12'h000) begin
+				if (mip0v) begin micro_ir <= ins0_d; micro_ir.ins.any.opcode <= fnVec2ScalarOpcode(ins0_d.ins.any.opcode); end
+				else if (mip1v) begin micro_ir <= ins1_d; micro_ir.ins.any.opcode <= fnVec2ScalarOpcode(ins1_d.ins.any.opcode); end
+				else if (mip2v) begin micro_ir <= ins2_d; micro_ir.ins.any.opcode <= fnVec2ScalarOpcode(ins2_d.ins.any.opcode); end
+				else if (mip3v) begin micro_ir <= ins3_d; micro_ir.ins.any.opcode <= fnVec2ScalarOpcode(ins3_d.ins.any.opcode); end
+			end
 		end
 	end
 end
@@ -1572,15 +1588,21 @@ if (rst)
 	micro_code_active <= TRUE;
 else begin
 	if (advance_pipeline) begin
-	  if (~hirq) begin
-	  	if ((pe_allqd||allqd||&next_cqd)) begin
-				if (((mcbrtgtv & mipv) ? mcbrtgt : next_micro_ip) == 12'h000)
-					micro_code_active <= FALSE;
-			end
-		end
-		if (micro_ip==12'h000) begin
-			if (mip0v|mip1v|mip2v|mip3v)
+		if (exc_ret) begin
+			if (|exc_ret_mcip)
 				micro_code_active <= TRUE;
+		end
+		else begin
+		  if (~hirq) begin
+		  	if ((pe_allqd||allqd||&next_cqd)) begin
+					if (((mcbrtgtv & mipv) ? mcbrtgt : next_micro_ip) == 12'h000)
+						micro_code_active <= FALSE;
+				end
+			end
+			if (micro_ip==12'h000) begin
+				if (mip0v|mip1v|mip2v|mip3v)
+					micro_code_active <= TRUE;
+			end
 		end
 	end
 end
@@ -3409,10 +3431,6 @@ endgenerate
 // MEMORY stage
 // ----------------------------------------------------------------------------
 
-rob_ndx_t agen0_rndx1, agen1_rndx1;
-rob_ndx_t agen0_rndx2, agen1_rndx2;
-reg agen0_rndxv1, agen1_rndxv1;
-wire agen0_rndxv2, agen1_rndxv2;
 reg agen0_v, agen1_v;
 
 wire tlb_miss;
@@ -3628,10 +3646,6 @@ Qupls_agen uag1
 	.res(agen1_res)
 );
 
-always_ff @(posedge clk) agen0_rndx1 <= agen0_rndx;
-always_ff @(posedge clk) agen1_rndx1 <= agen1_rndx;
-always_ff @(posedge clk) agen0_rndxv1 <= agen0_rndxv;
-always_ff @(posedge clk) agen1_rndxv1 <= agen1_rndxv;
 // Make Agen valid sticky
 always_ff @(posedge clk) 
 if (rst)
@@ -3686,7 +3700,7 @@ Qupls_tlb utlb1
 	.op1(agen1_op),
 	.agen0_rndx_i(agen0_id),
 	.agen1_rndx_i(5'd0),
-	.agen0_rndx_o(agen0_rndx2),
+	.agen0_rndx_o(),
 	.agen1_rndx_o(),
 	.agen0_v(agen0_v),
 	.agen1_v(ptw_vv),
@@ -5535,7 +5549,7 @@ else begin
     dram_aRt0 <= dram0_aRt;
     dram_aRtz0 <= dram0_aRtz;
     dram_exc0 <= dram0_exc;
-  	dram_bus0 <= fnDati(1'b0,dram0_op,(cpu_resp_o[0].dat << dram0_shift)|dram_bus0);
+  	dram_bus0 <= fnDati(1'b0,dram0_op,(cpu_resp_o[0].dat << dram0_shift)|dram_bus0, dram0_pc);
     if (dram0_store) begin
     	dram0_store <= 1'd0;
     	dram0_sel <= 80'd0;
@@ -5553,7 +5567,7 @@ else begin
     dram_aRt0 <= dram0_aRt;
     dram_aRtz0 <= dram0_aRtz;
     dram_exc0 <= dram0_exc;
-  	dram_bus0 <= fnDati(dram0_more,dram0_op,cpu_resp_o[0].dat >> dram0_shift);
+  	dram_bus0 <= fnDati(dram0_more,dram0_op,cpu_resp_o[0].dat >> dram0_shift, dram0_pc);
     if (dram0_store) begin
     	dram0_store <= 1'd0;
     	dram0_sel <= 80'd0;
@@ -5573,7 +5587,7 @@ else begin
 	    dram_aRt1 <= dram1_aRt;
 	    dram_aRtz1 <= dram1_aRtz;
 	    dram_exc1 <= dram1_exc;
-    	dram_bus1 <= fnDati(1'b0,dram1_op,(cpu_resp_o[1].dat << dram1_shift)|dram_bus1);
+    	dram_bus1 <= fnDati(1'b0,dram1_op,(cpu_resp_o[1].dat << dram1_shift)|dram_bus1, dram1_pc);
 	    if (dram1_store) begin
 	    	dram1_store <= 1'b0;
 	    	dram1_sel <= 80'd0;
@@ -5591,7 +5605,7 @@ else begin
 	    dram_aRt1 <= dram1_aRt;
 	    dram_aRtz1 <= dram1_aRtz;
 	    dram_exc1 <= dram1_exc;
-    	dram_bus1 <= fnDati(dram1_more,dram1_op,cpu_resp_o[1].dat >> dram1_shift);
+    	dram_bus1 <= fnDati(dram1_more,dram1_op,cpu_resp_o[1].dat >> dram1_shift, dram1_pc);
 	    if (dram1_store) begin
 	    	dram1_store <= 1'b0;
 	    	dram1_sel <= 80'd0;
@@ -5613,7 +5627,7 @@ else begin
 	// dramN_addr var. We can tell when to use it by the setting of the more
 	// flag.
 	if (SUPPORT_LOAD_BYPASSING && lbndx0 > 0) begin
-		dram_bus0 <= fnDati(1'b0,dram0_op,lsq[lbndx0.row][lbndx0.col].res);
+		dram_bus0 <= fnDati(1'b0,dram0_op,lsq[lbndx0.row][lbndx0.col].res,dram0_pc);
 		dram_Rt0 <= lsq[lbndx0.row][lbndx0.col].Rt;
 		dram_v0 <= lsq[lbndx0.row][lbndx0.col].v;
 		lsq[lbndx0.row][lbndx0.col].v <= INV;
@@ -5625,6 +5639,7 @@ else begin
 		dram0_id <= lsq[mem0_lsndx.row][mem0_lsndx.col].rndx;
 		dram0_idv <= VAL;
 		dram0_op <= lsq[mem0_lsndx.row][mem0_lsndx.col].op;
+		dram0_pc <= lsq[mem0_lsndx.row][mem0_lsndx.col].pc;
 		dram0_load <= lsq[mem0_lsndx.row][mem0_lsndx.col].load;
 		dram0_loadz <= lsq[mem0_lsndx.row][mem0_lsndx.col].loadz;
 		dram0_store <= lsq[mem0_lsndx.row][mem0_lsndx.col].store;
@@ -5664,7 +5679,7 @@ else begin
 
   if (NDATA_PORTS > 1) begin
 		if (SUPPORT_LOAD_BYPASSING && lbndx1 > 0) begin
-			dram_bus1 <= fnDati(1'b0,dram1_op,lsq[lbndx1.row][lbndx1.col].res);
+			dram_bus1 <= fnDati(1'b0,dram1_op,lsq[lbndx1.row][lbndx1.col].res,dram1_pc);
 			dram_Rt1 <= lsq[lbndx1.row][lbndx1.col].Rt;
 			dram_v1 <= lsq[lbndx1.row][lbndx1.col].v;
 			lsq[lbndx1.row][lbndx1.col].v <= INV;
@@ -5676,6 +5691,7 @@ else begin
 			dram1_id <= lsq[mem1_lsndx.row][mem1_lsndx.col].rndx;
 			dram1_idv <= VAL;
 			dram1_op <= lsq[mem1_lsndx.row][mem1_lsndx.col].op;
+			dram1_pc <= lsq[mem1_lsndx.row][mem1_lsndx.col].pc;
 			dram1_load <= lsq[mem1_lsndx.row][mem1_lsndx.col].load;
 			dram1_loadz <= lsq[mem1_lsndx.row][mem1_lsndx.col].loadz;
 			dram1_store <= lsq[mem1_lsndx.row][mem1_lsndx.col].store;
@@ -6555,6 +6571,7 @@ begin
 	dram0_store <= 1'd0;
 	dram0_erc <= 1'd0;
 	dram0_op <= OP_NOP;
+	dram0_pc <= RSTPC;
 	dram0_Rt <= 8'd0;
 	dram0_tid <= 13'd0;
 	dram0_hi <= 1'd0;
@@ -6574,6 +6591,7 @@ begin
 	dram1_store <= 1'd0;
 	dram1_erc <= 1'd0;
 	dram1_op <= OP_NOP;
+	dram1_pc <= RSTPC;
 	dram1_Rt <= 8'd0;
 	dram1_tid <= 8'h08;
 	dram1_hi <= 1'd0;
@@ -6749,8 +6767,20 @@ begin
 	rob[tail].out <= {INV,INV};
 	rob[tail].lsq <= INV;
 	rob[tail].takb <= 1'b0;
-	rob[tail].exc <= FLT_NONE;
-	rob[tail].excv <= FALSE;
+
+	// Check for unimplemented instruction
+	if (!(db.nop|db.alu|db.fpu|db.fc|db.mem|db.macro
+		|db.csr|db.lda|db.fence
+		|db.rex|db.oddball|db.pred|db.qfext
+		)) begin
+		rob[rail].exc <= FLT_UNIMP;
+		rob[tail].excv <= TRUE;
+	end
+	else begin
+		rob[tail].exc <= FLT_NONE;
+		rob[tail].excv <= FALSE;
+	end
+
 	rob[tail].argA_v <= fnSourceAv(ins) | pRav;
 	rob[tail].argB_v <= fnSourceBv(ins) | pRbv | db.has_immb;
 	rob[tail].argC_v <= fnSourceCv(ins) | pRcv | db.has_immc;
@@ -7106,6 +7136,8 @@ begin
 	mc_stack[8].ir <= {33'd0,OP_NOP};
 	mc_stack[7].ip <= 12'h0;
 	mc_stack[8].ip <= 12'h0;
+	exc_ret_mcip <= two_up ? mc_stack[1].ip : mc_stack[0].ip;
+	exc_ret_mcir <= two_up ? mc_stack[1].ir : mc_stack[0].ir;
 end
 endtask
 
@@ -7181,7 +7213,7 @@ begin
 				tgtpc = {pc[$bits(pc_address_t)-1:6] + {{37{instr.ins[39]}},instr.ins[39:17]},ino5};
 			end
 			else
-				tgtpc = pc + {{36{instr.ins[39]}},instr.ins[39:12]};
+				tgtpc = pc + {{34{instr.ins[39]}},instr.ins[39:10]};
 		end
 	BTS_CALL:
 		begin

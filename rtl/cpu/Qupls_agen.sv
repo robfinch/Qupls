@@ -72,7 +72,7 @@ begin
 	OP_AMO:
 		res <= as + b;
 	default:
-		res <= 'd0;
+		res <= 64'd0;
 	endcase
 end
 

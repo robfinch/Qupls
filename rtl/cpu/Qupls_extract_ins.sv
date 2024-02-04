@@ -254,10 +254,10 @@ always_comb bsr0 = ins0.ins.any.opcode==OP_BSR;
 always_comb bsr1 = ins1.ins.any.opcode==OP_BSR;
 always_comb bsr2 = ins2.ins.any.opcode==OP_BSR;
 always_comb bsr3 = ins3.ins.any.opcode==OP_BSR;
-always_comb bsr0_tgt = pc0_o + {{36{ins0.ins[39]}},ins0.ins[39:12]};
-always_comb bsr1_tgt = pc1_o + {{36{ins1.ins[39]}},ins1.ins[39:12]};
-always_comb bsr2_tgt = pc2_o + {{36{ins2.ins[39]}},ins2.ins[39:12]};
-always_comb bsr3_tgt = pc3_o + {{36{ins3.ins[39]}},ins3.ins[39:12]};
+always_comb bsr0_tgt = pc0_o + {{34{ins0.ins[39]}},ins0.ins[39:10]};
+always_comb bsr1_tgt = pc1_o + {{34{ins1.ins[39]}},ins1.ins[39:10]};
+always_comb bsr2_tgt = pc2_o + {{34{ins2.ins[39]}},ins2.ins[39:10]};
+always_comb bsr3_tgt = pc3_o + {{34{ins3.ins[39]}},ins3.ins[39:10]};
 always_comb
 	do_bsr = bsr0|bsr1|bsr2|bsr3;
 //edge_det ued1 (.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(do_bsr1), .pe(do_bsr), .ne(), .ee());

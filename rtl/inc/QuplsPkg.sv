@@ -277,7 +277,7 @@ typedef enum logic [6:0] {
 	OP_CHK			= 7'd00,
 	OP_R1				= 7'd01,
 	OP_R2				= 7'd02,
-	OP_SLTI			= 7'd03,
+	OP_ZSxxI		= 7'd03,
 	OP_ADDI			= 7'd04,
 	OP_SUBFI		= 7'd05,
 	OP_MULI			= 7'd06,
@@ -305,6 +305,7 @@ typedef enum logic [6:0] {
 	OP_MCB			= 7'd34,
 	OP_RTD			= 7'd35,
 	OP_JSR			= 7'd36,
+	OP_JSRI			= 7'd37,
 	OP_R3V			= 7'd38,
 	OP_R3VS			= 7'd39,
 
@@ -376,6 +377,10 @@ typedef enum logic [6:0] {
 	OP_LDTIP		= 7'd100,
 	OP_LDTUIP		= 7'd101,
 	OP_LDOIP		= 7'd102,
+	OP_BFND			= 7'd108,
+	OP_BCMP			= 7'd109,
+	OP_BSET			= 7'd110,
+	OP_BMOV			= 7'd111,
 	OP_IRQ			= 7'd112,
 	OP_FENCE		= 7'd114,
 	OP_REGS			= 7'd117,
@@ -523,6 +528,7 @@ typedef enum logic [6:0] {
 	FN_ADD			= 7'd04,
 	FN_SUB			= 7'd05,
 	FN_CMPU			= 7'd06,
+	FN_CPUID		= 7'd07,
 	FN_NAND			= 7'd08,
 	FN_NOR			= 7'd09,
 	FN_ENOR			= 7'd10,
@@ -550,30 +556,31 @@ typedef enum logic [6:0] {
 	NNA_MTMC		= 7'd44,
 	NNA_MTBC		= 7'd45,
 	FN_V2BITS		= 7'd48,
+	FN_VSETMASK	= 7'd58,
 	FN_SEQ			= 7'd80,
 	FN_SNE			= 7'd81,
 	FN_SLT			= 7'd82,
 	FN_SLE			= 7'd83,
 	FN_SLTU			= 7'd84,
 	FN_SLEU			= 7'd85,
-	FN_SEQI			= 7'd96,
-	FN_SNEI			= 7'd97,
-	FN_SLTI			= 7'd98,
-	FN_SLEI			= 7'd99,
-	FN_SLTUI		= 7'd100,
-	FN_SLEUI		= 7'd101,
+	FN_SEQI8		= 7'd96,
+	FN_SNEI8		= 7'd97,
+	FN_SLTI8		= 7'd98,
+	FN_SLEI8		= 7'd99,
+	FN_SLTUI8		= 7'd100,
+	FN_SLEUI8		= 7'd101,
 	FN_ZSEQ			= 7'd112,
 	FN_ZSNE			= 7'd113,
 	FN_ZSLT			= 7'd114,
 	FN_ZSLE			= 7'd115,
 	FN_ZSLTU		= 7'd116,
 	FN_ZSLEU		= 7'd117,
-	FN_ZSEQI		= 7'd120,
-	FN_ZSNEI		= 7'd121,
-	FN_ZSLTI		= 7'd122,
-	FN_ZSLEI		= 7'd123,
-	FN_ZSLTUI		= 7'd124,
-	FN_ZSLEUI		= 7'd125,
+	FN_ZSEQI8		= 7'd120,
+	FN_ZSNEI8		= 7'd121,
+	FN_ZSLTI8		= 7'd122,
+	FN_ZSLEI8		= 7'd123,
+	FN_ZSLTUI8	= 7'd124,
+	FN_ZSLEUI8	= 7'd125,
 	FN_MVVR			= 7'd127
 } r2func_t;
 
@@ -816,6 +823,8 @@ typedef struct packed
 parameter CSR_SR		= 16'h?004;
 parameter CSR_CAUSE	= 16'h?006;
 parameter CSR_REPBUF = 16'h0008;
+parameter CSR_MAXVL	= 16'h0200;
+parameter CSR_MAXVLB= 16'h0201;
 parameter CSR_SEMA	= 16'h?00C;
 parameter CSR_PTBR	= 16'h1003;
 parameter CSR_HMASK	= 16'h1005;
@@ -1788,6 +1797,7 @@ function fnSourceAv;
 input ex_instruction_t ir;
 begin
 	case(ir.ins.r2.opcode)
+	OP_ZSxxI:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
 	OP_CHK:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
 	OP_R2,OP_R3V,OP_R3VS:
 		case(ir.ins.r2.func)
@@ -1832,7 +1842,6 @@ begin
 	OP_ANDI,OP_VANDI:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
 	OP_ORI,OP_VORI:		fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
 	OP_EORI,OP_VEORI:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-	OP_SLTI:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
 	OP_AIPSI:	fnSourceAv = 1'b1;
 	OP_ADDSI,OP_VADDSI:	fnSourceAv = fnConstReg(ir.aRt) || fnImma(ir);
 	OP_ANDSI,OP_VANDSI:	fnSourceAv = fnConstReg(ir.aRt) || fnImma(ir);
@@ -1905,7 +1914,6 @@ begin
 	OP_ANDI:	fnSourceBv = 1'b1;
 	OP_ORI:		fnSourceBv = 1'b1;
 	OP_EORI:	fnSourceBv = 1'b1;
-	OP_SLTI:	fnSourceBv = 1'b1;
 	OP_SHIFT,OP_VSHIFT:
 		case(ir.ins.shifti.func[6])
 		1'b0:	fnSourceBv = fnConstReg(ir.aRb) || fnImmb(ir);
@@ -1966,7 +1974,7 @@ begin
 		default:	fnSourceCv = 1'b1;
 		endcase
 	OP_STB,OP_STW,OP_STT,OP_STO,OP_STH,OP_STX:
-		fnSourceCv = fnConstReg(ir.ins[12:7]);
+		fnSourceCv = fnConstReg(ir.ins[11:7]);
 	OP_DBRA,OP_JSR,OP_BSR,
 	OP_Bcc,OP_BccU,OP_FBccH,OP_FBccS,OP_FBccD,OP_FBccQ:
 		fnSourceCv = 1'b1;	
@@ -1982,6 +1990,8 @@ function fnSourceTv;
 input ex_instruction_t ir;
 begin
 	casez(ir.ins.r2.opcode)
+	OP_ZSxxI:
+		fnSourceTv = ir.ins[39:35] < 5'd16 ? 1'b1 : fnConstReg(ir.aRt);
 	OP_CHK:	fnSourceTv = 1'b1;
 	OP_R2,OP_R3V,OP_R3VS:
 		case(ir.ins.r2.func)
@@ -2024,7 +2034,6 @@ begin
 	OP_ANDI,OP_VANDI:	fnSourceTv = fnConstReg(ir.aRt);
 	OP_ORI,OP_VORI:		fnSourceTv = fnConstReg(ir.aRt);
 	OP_EORI,OP_VEORI:	fnSourceTv = fnConstReg(ir.aRt);
-	OP_SLTI:	fnSourceTv = fnConstReg(ir.aRt);
 	OP_AIPSI:	fnSourceTv = fnConstReg(ir.aRt);
 	OP_ADDSI,OP_VADDSI:	fnSourceTv = fnConstReg(ir.aRt);
 	OP_ANDSI,OP_VANDSI:	fnSourceTv = fnConstReg(ir.aRt);
@@ -2099,7 +2108,6 @@ begin
 	OP_ANDI,OP_VANDI:	fnSourcePv = ~veci;
 	OP_ORI,OP_VORI:		fnSourcePv = ~veci;
 	OP_EORI,OP_VEORI:	fnSourcePv = ~veci;
-	OP_SLTI:	fnSourcePv = ~veci;
 	OP_SHIFT,OP_VSHIFT:	fnSourcePv = ~vec;
 	OP_FLT3:	fnSourcePv = ~vecf;	
 	OP_MOV:		fnSourcePv = ~vec;
@@ -2174,7 +2182,7 @@ reg [1:0] sz;
 begin
 	fnImm = 'd0;
 	case(ins[0].any.opcode)
-	OP_ADDI,OP_CMPI,OP_MULI,OP_DIVI,OP_SUBFI,OP_SLTI:
+	OP_ADDI,OP_CMPI,OP_MULI,OP_DIVI,OP_SUBFI:
 		fnImm = {{48{ins[0][34]}},ins[0][34:19]};
 	OP_ANDI:	fnImm = {48'hFFFFFFFFFFFF,ins[0][34:19]};
 	OP_ORI,OP_EORI:
@@ -2206,8 +2214,10 @@ input instruction_t ir;
 begin
 	fnImmb = 1'b0;
 	case(ir.any.opcode)
+	OP_ZSxxI:
+		fnImmb = 1'b1;
 	OP_VADDI,OP_VCMPI,OP_VMULI,OP_VDIVI,
-	OP_ADDI,OP_CMPI,OP_MULI,OP_DIVI,OP_SUBFI,OP_SLTI:
+	OP_ADDI,OP_CMPI,OP_MULI,OP_DIVI,OP_SUBFI:
 		fnImmb = 1'b1;
 	OP_RTD:
 		fnImmb = 1'b1;
@@ -2304,6 +2314,7 @@ function [63:0] fnDati;
 input more;
 input instruction_t ins;
 input value_t dat;
+input pc_address_t pc;
 case(ins.any.opcode)
 OP_LDB:
   fnDati = {{56{dat[7]}},dat[7:0]};
@@ -2325,6 +2336,13 @@ OP_LDTU:
 	fnDati = {{32{1'b0}},dat[31:0]};
 OP_LDO:
   fnDati = dat;
+OP_JSRI:
+	case(ir[18:17)
+	2'd0:	fnDati = {pc[63:16],dat[15:0]};
+	2'd1:	fnDati = {pc[63:32],dat[31:0]};
+	2'd2:	fnDati = dat[63:0];
+	default:	fnDati = dat[63:0];
+	endcase
 OP_LDX:
 	case(ins.lsn.func.ldn)
 	FN_LDBX:
@@ -2367,6 +2385,13 @@ begin
 		fnMemsz = octa;
 	OP_LDH,OP_STH:
 		fnMemsz = hexi;
+	OP_JSRI:
+		case(ir[18:17])
+		2'd0:	fnMemsz = wyde;
+		2'd1: fnMemsz = tetra;
+		2'd2:	fnMemsz = octa;
+		2'd3:	fnMemsz = hexi;
+		endcase
 	OP_LDX:
 		case(ir.lsn.func.ldn)
 		FN_LDBX,FN_LDBUX:
@@ -2407,10 +2432,17 @@ begin
 		fnSel = 16'h0003;
 	OP_LDT,OP_LDTU,OP_STT:
 		fnSel = 16'h000F;
-	OP_LDO,OP_LDOU,OP_STO:
+	OP_LDO,OP_LDOU,OP_STO,OP_JSRI:
 		fnSel = 16'h00FF;
 	OP_LDH,OP_STH:
 		fnSel = 16'hFFFF;
+	OP_JSRI:
+		case(ir[18:17])
+		2'd0:	fnSel = 16'h0003;
+		2'd1: fnSel = 16'h000F;
+		2'd2:	fnSel = 16'h00FF;
+		default:	fnSel = 16'hFFFF;
+		endcase
 	OP_LDX:
 		case(ir.lsn.func.ldn)
 		FN_LDBX,FN_LDBUX:

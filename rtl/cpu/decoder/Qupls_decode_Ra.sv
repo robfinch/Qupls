@@ -53,7 +53,7 @@ begin
 	else
 		case(ir.ins.any.opcode)
 		OP_RTD:
-			fnRa = ir.aRa;
+			fnRa = ir.aRa[2:0]<3'd4 ? 9'd0 : {6'b000101,ir.aRa[2:0]};
 		OP_DBRA:
 			fnRa = 9'd55;
 		OP_FLT3:
