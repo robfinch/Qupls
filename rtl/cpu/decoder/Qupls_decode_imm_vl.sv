@@ -75,74 +75,69 @@ begin
 	finsB = 1'd0;
 	finsC = 1'd0;
 	case(ins[0].ins.any.opcode)
-	OP_ZSxxI:
-		begin
-			immb = {{48{ins[0].ins[32]}},ins[0].ins[32:17]};
-			has_immb = 1'b1;
-		end
 	OP_R2,OP_R3V,OP_R3VS:
 		case(ins[0].ins.r3.func)
 		FN_BYTENDX:
 			begin
-				immb = {{55{ins[0].ins[30]}},ins[0].ins[30:22]};
+				immb = {{54{ins[0].ins[38]}},ins[0].ins[38:29]};
 				has_immb = 1'b1;
 			end
 		default:	immb = 64'd0;
 		endcase
 	OP_ADDI,OP_CMPI,OP_MULI,OP_DIVI,OP_SUBFI:
 		begin
-			immb = {{43{ins[0].ins[39]}},ins[0].ins[39:19]};
+			immb = {{40{ins[0].ins[47]}},ins[0].ins[47:24]};
 			has_immb = 1'b1;
 		end
 	OP_ANDI:
 		begin
-			immb = {64{1'b1}} & ins[0].ins[39:19];
+			immb = {64{1'b1}} & ins[0].ins[47:24];
 			has_immb = 1'b1;
 		end
 	OP_ORI,OP_EORI,OP_MULUI,OP_DIVUI:
 		begin
-			immb = {43'h0000,ins[0].ins[31:19]};
+			immb = {40'h0000,ins[0].ins[47:24]};
 			has_immb = 1'b1;
 		end
 	OP_ADDSI:
 		begin
-			immb = {{40{ins[0].ins[39]}},ins[0].ins[39:16]};
+			immb = {{36{ins[0].ins[47]}},ins[0].ins[47:20]};
 			has_immb = 1'b1;
 		end
 	OP_ANDSI:
 		begin
-			immb = {40'hFFFFFFFFFF,ins[0].ins[39:16]};
+			immb = {36'hFFFFFFFFF,ins[0].ins[47:20]};
 			has_immb = 1'b1;
 		end
 	OP_ORSI,OP_EORSI:
 		begin
-			immb = {40'h0,ins[0].ins[39:16]};
+			immb = {36'h0,ins[0].ins[47:20]};
 			has_immb = 1'b1;
 		end
 	OP_CSR:
 		begin
-			immb = {53'd0,ins[0].ins[29:19]};
+			immb = {50'd0,ins[0].ins[35:22]};
 			has_immb = 1'b1;
 		end
 	OP_RTD:
 		begin
-			immb = {{43{ins[0].ins[39]}},ins[0].ins[39:19]};
+			immb = {{40{ins[0].ins[47]}},ins[0].ins[47:24]};
 			has_immb = 1'b1;
 		end
 	OP_JSR:
 		begin
-			immb = {{43{ins[0].ins[39]}},ins[0].ins[39:19]};
+			immb = {{40{ins[0].ins[47]}},ins[0].ins[47:24]};
 			has_immb = 1'b1;
 		end
 	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_CACHE,
 	OP_STB,OP_STW,OP_STT,OP_STO:
 		begin
-			immb = {{43{ins[0].ins[39]}},ins[0].ins[39:19]};
+			immb = {{40{ins[0].ins[47]}},ins[0].ins[47:24]};
 			has_immb = 1'b1;
 		end
 	OP_LDAX:
 		begin
-			immb = {{56{ins[0].ins[34]}},ins[0].ins[34:27]};
+			immb = {{52{ins[0].ins[42]}},ins[0].ins[42:31]};
 			has_immb = 1'b1;
 		end
 	OP_FENCE:
@@ -150,14 +145,27 @@ begin
 			immb = {48'h0,ins[0].ins[23:8]};
 			has_immb = 1'b1;
 		end
-	OP_LDX,OP_STX:
+	OP_LDX:
 		begin
-			immb = {{53{ins[0].ins[34]}},ins[0].ins[34:24]};
+			case(ins[0].ins.lsn.func)
+			FN_LDCTX:	immb = {{53{ins[0].aRa[2]}},ins[0].aRa[2:0],ins[0].aRt[4:0],3'b0};
+			default:
+				immb = {{52{ins[0].ins[42]}},ins[0].ins[42:31]};
+			endcase
+			has_immb = 1'b1;
+		end
+	OP_STX:
+		begin
+			case(ins[0].ins.lsn.func)
+			FN_STCTX:	immb = {{53{ins[0].aRa[2]}},ins[0].aRa[2:0],ins[0].aRt[4:0],3'b0};
+			default:
+				immb = {{52{ins[0].ins[42]}},ins[0].ins[42:31]};
+			endcase
 			has_immb = 1'b1;
 		end
 	OP_Bcc,OP_BccU,OP_FBccH,OP_FBccS,OP_FBccD,OP_FBccQ:
 		begin
-			immc = {{46{ins[0].ins[39]}},ins[0].ins[39:22]};
+			immc = {{47{ins[0].ins[47]}},ins[0].ins[47:31]};
 			has_immc = 1'b1;
 		end
 	default:
@@ -166,7 +174,7 @@ begin
 
 	ndx = 1;
 	flt = ins[0].ins.any.opcode==OP_FLT3;
-	fltpr = ins[0].ins[26:25];
+	fltpr = ins[0].ins[40:39];
 	// Skip over vector qualifier.
 	if (ins[ndx].ins.any.opcode==OP_VEC || ins[ndx].ins.any.opcode==OP_VECZ)
 		ndx = ndx + 1;

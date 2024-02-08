@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -41,7 +41,7 @@ import QuplsPkg::*;
 import Qupls_cache_pkg::*;
 
 module Qupls_icache_ctrl(rst, clk, wbm_req, wbm_resp, ftam_full,
-	hit, tlb_v, miss_vadr, miss_padr, miss_asid,
+	hit, tlb_v, miss_vadr, miss_padr, miss_asid, port, port_o,
 	wr_ic, way, line_o, snoop_adr, snoop_v, snoop_cid);
 parameter WAYS = 4;
 parameter CORENO = 6'd1;
@@ -57,12 +57,14 @@ input tlb_v;
 input fta_address_t miss_vadr;
 input fta_address_t miss_padr;
 input QuplsPkg::asid_t miss_asid;
+input port;
 output wr_ic;
 output [LOG_WAYS-1:0] way;
 output ICacheLine line_o;
 input fta_address_t snoop_adr;
 input snoop_v;
 input [5:0] snoop_cid;
+output reg port_o;
 
 wire QuplsPkg::address_t [15:0] vtags;
 wire ack;

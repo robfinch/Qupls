@@ -46,15 +46,11 @@ begin
 	case(ir.r2.opcode)
 	OP_FLT3:
 		case(ir.f3.func)
-		FN_FLT2:	
-			case(ir.f2.func)
-			FN_FLT1:
-				case(ir.f1.func)
-				FN_FRES:	fnIsFpu0 = 1'b1;
-				FN_FSIN:	fnIsFpu0 = 1'b1;
-				FN_FCOS:	fnIsFpu0 = 1'b1;
-				default:	fnIsFpu0 = 1'b0;
-				endcase
+		FN_FLT1:
+			case(ir.f1.func)
+			FN_FRES:	fnIsFpu0 = 1'b1;
+			FN_FSIN:	fnIsFpu0 = 1'b1;
+			FN_FCOS:	fnIsFpu0 = 1'b1;
 			default:	fnIsFpu0 = 1'b0;
 			endcase
 		default:	fnIsFpu0 = 1'b0;

@@ -48,8 +48,8 @@ if (stomp)
 else begin
 	casez(ir.ins.any.opcode)
 	OP_CHK:		mip = 12'h130;
-	OP_ENTER:	mip = 12'h004;
-	OP_LEAVE:	mip = 12'h1D0;
+	OP_ENTER:	mip = 12'h01C;
+	OP_LEAVE:	mip = 12'h1E4;
 	OP_JSRI:	mip = 12'h128;
 	OP_BSET:	mip = 12'h390;
 	OP_BMOV:	mip = 12'h3A0;
@@ -67,41 +67,37 @@ else begin
 		endcase
 	OP_PUSH:
 		case(ir.ins[39:37])
-		3'd6:	mip = 12'h260;			// pushv
-		3'd7:	mip = 12'h300;			// pusha
-		default:	mip = 12'h020;	// push	
+		3'd7:	mip = 12'h260;			// pushv
+		3'd0:	mip = 12'h300;			// pusha
+		default:	mip = 12'h028;	// push	
 		endcase
 	OP_POP:
 		case(ir.ins[39:37])
-		3'd6:	mip = 12'h280;			// popv
-		3'd7: mip = 12'h360;			// popa
-		default:	mip = 12'h030;	// pop
+		3'd7:	mip = 12'h280;			// popv
+		3'd0: mip = 12'h360;			// popa
+		default:	mip = 12'h038;	// pop
 		endcase
 	OP_FLT3:
 		case(ir.ins.f3.func)
-		FN_FLT2:
-			case(ir.ins.f2.func)
-			FN_FLT1:
-				case(ir.ins.f1.func)
-				FN_FRES:
-					case(ir.ins[26:25])
-					2'd0: mip = 12'h0C0;
-					2'd1:	mip = 12'h0D0;
-					2'd2:	mip = 12'h0E0;
-					2'd3: mip = 12'h0E0;
-					endcase
-				FN_RSQRTE:
-					case(ir.ins[26:25])
-					2'd0:	mip = 12'h050;
-					2'd1:	mip = 12'h0A0;
-					2'd2:	mip = 12'h080;
-					2'd3: mip = 12'h070;
-					endcase
-				default:	mip = 12'h000;			
+		FN_FLT1:
+			case(ir.ins.f1.func)
+			FN_FRES:
+				case(ir.ins[26:25])
+				2'd0: mip = 12'h0C0;
+				2'd1:	mip = 12'h0D0;
+				2'd2:	mip = 12'h0E0;
+				2'd3: mip = 12'h0E0;
 				endcase
-			FN_FDIV:	mip = 12'h040;
-			default:	mip = 12'h000;
+			FN_RSQRTE:
+				case(ir.ins[26:25])
+				2'd0:	mip = 12'h050;
+				2'd1:	mip = 12'h0A0;
+				2'd2:	mip = 12'h080;
+				2'd3: mip = 12'h070;
+				endcase
+			default:	mip = 12'h000;			
 			endcase
+		FN_FDIV:	mip = 12'h040;
 		default:	mip = 12'h000;
 		endcase
 	OP_BFI:

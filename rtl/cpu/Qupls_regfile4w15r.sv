@@ -121,7 +121,7 @@ generate begin : gRF
 end
 endgenerate
 
-integer n;
+integer n,m;
 // Live value table
 reg [1:0] lvt [QuplsPkg::PREGS-1:0];
 

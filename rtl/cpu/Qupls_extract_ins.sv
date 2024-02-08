@@ -33,7 +33,7 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 //
-// Multiplex a hardware interrupt into the instruction stream.
+// Multiplex a hardware interrupt into the instruction stream.s
 // Multiplex micro-code instructions into the instruction stream.
 // Modify instructions for register bit lists.
 //
@@ -45,14 +45,14 @@ import QuplsPkg::*;
 
 module Qupls_extract_ins(rst_i, clk_i, en_i, nop_i, nop_o, irq_i, hirq_i, vect_i,
 	branchmiss, misspc, mipv_i, mip_i, ic_line_i,reglist_active, grp_i, grp_o,
-	mc_offs, pc0_i, pc1_i, pc2_i, pc3_i, pc4_i, pc5_i, pc6_i, pc7_i, pc8_i,
+	mc_offs, pc0_i, pc1_i, pc2_i, pc3_i, vl,
 	ls_bmf_i, pack_regs_i, scale_regs_i, regcnt_i, mc_adr,
-	mc_ins0_i, mc_ins1_i, mc_ins2_i, mc_ins3_i, mc_ins4_i, mc_ins5_i, mc_ins6_i, mc_ins7_i, mc_ins8_i,
+	mc_ins0_i, mc_ins1_i, mc_ins2_i, mc_ins3_i,
 	iRn0_i, iRn1_i, iRn2_i, iRn3_i,
-	ins0_o, ins1_o, ins2_o, ins3_o, ins4_o, ins5_o, ins6_o, ins7_o, ins8_o,
-	pc0_o, pc1_o, pc2_o, pc3_o, pc4_o, pc5_o, pc6_o, pc7_o, pc8_o,
+	ins0_o, ins1_o, ins2_o, ins3_o,
+	pc0_o, pc1_o, pc2_o, pc3_o,
 	mcip0_o, mcip1_o, mcip2_o, mcip3_o,
-	do_bsr, bsr_tgt);
+	do_bsr, bsr_tgt, get, stall);
 input rst_i;
 input clk_i;
 input en_i;
@@ -75,11 +75,7 @@ input pc_address_t pc0_i;
 input pc_address_t pc1_i;
 input pc_address_t pc2_i;
 input pc_address_t pc3_i;
-input pc_address_t pc4_i;
-input pc_address_t pc5_i;
-input pc_address_t pc6_i;
-input pc_address_t pc7_i;
-input pc_address_t pc8_i;
+input [4:0] vl;
 input ls_bmf_i;
 input pack_regs_i;
 input [2:0] scale_regs_i;
@@ -88,11 +84,6 @@ input ex_instruction_t mc_ins0_i;
 input ex_instruction_t mc_ins1_i;
 input ex_instruction_t mc_ins2_i;
 input ex_instruction_t mc_ins3_i;
-input ex_instruction_t mc_ins4_i;
-input ex_instruction_t mc_ins5_i;
-input ex_instruction_t mc_ins6_i;
-input ex_instruction_t mc_ins7_i;
-input ex_instruction_t mc_ins8_i;
 input [6:0] iRn0_i;
 input [6:0] iRn1_i;
 input [6:0] iRn2_i;
@@ -101,27 +92,22 @@ output ex_instruction_t ins0_o;
 output ex_instruction_t ins1_o;
 output ex_instruction_t ins2_o;
 output ex_instruction_t ins3_o;
-output ex_instruction_t ins4_o;
-output ex_instruction_t ins5_o;
-output ex_instruction_t ins6_o;
-output ex_instruction_t ins7_o;
-output ex_instruction_t ins8_o;
 output pc_address_t pc0_o;
 output pc_address_t pc1_o;
 output pc_address_t pc2_o;
 output pc_address_t pc3_o;
-output pc_address_t pc4_o;
-output pc_address_t pc5_o;
-output pc_address_t pc6_o;
-output pc_address_t pc7_o;
-output pc_address_t pc8_o;
 output mc_address_t mcip0_o;
 output mc_address_t mcip1_o;
 output mc_address_t mcip2_o;
 output mc_address_t mcip3_o;
 output reg do_bsr;
 output pc_address_t bsr_tgt;
+input get;
+output reg stall;
 
+integer nn,hh;
+wire [5:0] jj;
+reg [5:0] kk;
 wire clk = clk_i;
 wire en = en_i;
 wire mipv = mipv_i;
@@ -132,20 +118,14 @@ pc_address_t pc0;
 pc_address_t pc1;
 pc_address_t pc2;
 pc_address_t pc3;
-pc_address_t pc4;
-pc_address_t pc5;
-pc_address_t pc6;
-pc_address_t pc7;
-pc_address_t pc8;
+pc_address_t pc0d;
+pc_address_t pc1d;
+pc_address_t pc2d;
+pc_address_t pc3d;
 ex_instruction_t ins0;
 ex_instruction_t ins1;
 ex_instruction_t ins2;
 ex_instruction_t ins3;
-ex_instruction_t ins4;
-ex_instruction_t ins5;
-ex_instruction_t ins6;
-ex_instruction_t ins7;
-ex_instruction_t ins8;
 ex_instruction_t ins0_;
 ex_instruction_t ins1_;
 ex_instruction_t ins2_;
@@ -154,11 +134,6 @@ ex_instruction_t mc_ins0;
 ex_instruction_t mc_ins1;
 ex_instruction_t mc_ins2;
 ex_instruction_t mc_ins3;
-ex_instruction_t mc_ins4;
-ex_instruction_t mc_ins5;
-ex_instruction_t mc_ins6;
-ex_instruction_t mc_ins7;
-ex_instruction_t mc_ins8;
 wire [6:0] iRn0 = iRn0_i;
 wire [6:0] iRn1 = iRn1_i;
 wire [6:0] iRn2 = iRn2_i;
@@ -166,66 +141,67 @@ wire [6:0] iRn3 = iRn3_i;
 wire [1023:0] ic_line2 = ic_line_i;
 wire [11:0] mip = mip_i;
 reg [255:0] ic_line_aligned;
+mc_address_t mcip0;
+mc_address_t mcip1;
+mc_address_t mcip2;
+mc_address_t mcip3;
+reg ld;
 
 wire hirq = ~reglist_active && hirq_i && mip[11:8]!=4'h1;
+ex_instruction_t [31:0] expbuf;
+ex_instruction_t [31:0] expbuf2;
+pc_address_t [31:0] pcbuf;
+pc_address_t [31:0] pcbuf2;
+mc_address_t [31:0] mipbuf;
+mc_address_t [31:0] mipbuf2;
 
 always_comb regcnt = regcnt_i;
 always_comb pc0 = pc0_i;
 always_comb pc1 = pc1_i;
 always_comb pc2 = pc2_i;
 always_comb pc3 = pc3_i;
-always_comb pc4 = pc4_i;
-always_comb pc5 = pc5_i;
-always_comb pc6 = pc6_i;
-always_comb pc7 = pc7_i;
-always_comb pc8 = pc8_i;
 always_comb mc_ins0 = mc_ins0_i;
 always_comb mc_ins1 = mc_ins1_i;
 always_comb mc_ins2 = mc_ins2_i;
 always_comb mc_ins3 = mc_ins3_i;
-always_comb mc_ins4 = mc_ins4_i;
-always_comb mc_ins5 = mc_ins5_i;
-always_comb mc_ins6 = mc_ins6_i;
-always_comb mc_ins7 = mc_ins7_i;
-always_comb mc_ins8 = mc_ins8_i;
 
 always_comb 
 	ic_line_aligned = ic_line2 >> {pc0[5:0],3'd0};
 
 always_comb 
 begin
-	ins0_.ins = ic_line_aligned[39:0];
-	ins0_.aRa = {3'd0,ins0_.ins.r3.Ra};
-	ins0_.aRb = {3'd0,ins0_.ins.r3.Rb};
-	ins0_.aRc = {3'd0,ins0_.ins.r3.Rc};
-	ins0_.aRt = {3'd0,ins0_.ins.r3.Rt};
+	ins0_.ins = ic_line_aligned[47:0];
+	ins0_.aRa = {3'd0,ins0_.ins.r3.Ra.num};
+	ins0_.aRb = {3'd0,ins0_.ins.r3.Rb.num};
+	ins0_.aRc = {3'd0,ins0_.ins.r3.Rc.num};
+	ins0_.aRt = {3'd0,ins0_.ins.r3.Rt.num};
 	ins0_.pred_btst = 6'd0;
 end
 always_comb
 begin
-	ins1_.ins = ic_line_aligned[79:40];
-	ins1_.aRa = {3'd0,ins1_.ins.r3.Ra};
-	ins1_.aRb = {3'd0,ins1_.ins.r3.Rb};
-	ins1_.aRc = {3'd0,ins1_.ins.r3.Rc};
-	ins1_.aRt = {3'd0,ins1_.ins.r3.Rt};
+	ins1_.ins = ic_line_aligned[95:48];
+	ins1_.aRa = {3'd0,ins1_.ins.r3.Ra.num};
+	ins1_.aRb = {3'd0,ins1_.ins.r3.Rb.num};
+	ins1_.aRc = {3'd0,ins1_.ins.r3.Rc.num};
+	ins1_.aRt = {3'd0,ins1_.ins.r3.Rt.num};
 	ins1_.pred_btst = 6'd0;
 end
 always_comb
 begin
-	ins2_.ins = ic_line_aligned[119:80];
-	ins2_.aRa = {3'd0,ins2_.ins.r3.Ra};
-	ins2_.aRb = {3'd0,ins2_.ins.r3.Rb};
-	ins2_.aRc = {3'd0,ins2_.ins.r3.Rc};
-	ins2_.aRt = {3'd0,ins2_.ins.r3.Rt};
+	ins2_.ins = ic_line_aligned[143:96];
+	ins2_.aRa = {3'd0,ins2_.ins.r3.Ra.num};
+	ins2_.aRb = {3'd0,ins2_.ins.r3.Rb.num};
+	ins2_.aRc = {3'd0,ins2_.ins.r3.Rc.num};
+	ins2_.aRt = {3'd0,ins2_.ins.r3.Rt.num};
 	ins2_.pred_btst = 6'd0;
 end
 always_comb
 begin
-	ins3_.ins = ic_line_aligned[159:120];
-	ins3_.aRa = {3'd0,ins3_.ins.r3.Ra};
-	ins3_.aRb = {3'd0,ins3_.ins.r3.Rb};
-	ins3_.aRc = {3'd0,ins3_.ins.r3.Rc};
-	ins3_.aRt = {3'd0,ins3_.ins.r3.Rt};
+	ins3_.ins = ic_line_aligned[191:144];
+	ins3_.aRa = {3'd0,ins3_.ins.r3.Ra.num};
+	ins3_.aRb = {3'd0,ins3_.ins.r3.Rb.num};
+	ins3_.aRc = {3'd0,ins3_.ins.r3.Rc.num};
+	ins3_.aRt = {3'd0,ins3_.ins.r3.Rt.num};
 	ins3_.pred_btst = 6'd0;
 end
 
@@ -250,14 +226,30 @@ pc_address_t bsr1_tgt;
 pc_address_t bsr2_tgt;
 pc_address_t bsr3_tgt;
 
+always_ff @(posedge clk)
+if (rst_i) begin
+	pc0d <= RSTPC;
+	pc1d <= RSTPC;
+	pc2d <= RSTPC;
+	pc3d <= RSTPC;
+end
+else begin
+	if (en_i) begin
+		pc0d <= pc0;
+		pc1d <= pc1;
+		pc2d <= pc2;
+		pc3d <= pc3;
+	end
+end
+
 always_comb bsr0 = ins0.ins.any.opcode==OP_BSR;
 always_comb bsr1 = ins1.ins.any.opcode==OP_BSR;
 always_comb bsr2 = ins2.ins.any.opcode==OP_BSR;
 always_comb bsr3 = ins3.ins.any.opcode==OP_BSR;
-always_comb bsr0_tgt = pc0_o + {{34{ins0.ins[39]}},ins0.ins[39:10]};
-always_comb bsr1_tgt = pc1_o + {{34{ins1.ins[39]}},ins1.ins[39:10]};
-always_comb bsr2_tgt = pc2_o + {{34{ins2.ins[39]}},ins2.ins[39:10]};
-always_comb bsr3_tgt = pc3_o + {{34{ins3.ins[39]}},ins3.ins[39:10]};
+always_comb bsr0_tgt = pc0d + {{27{ins0.ins[47]}},ins0.ins[47:11]};
+always_comb bsr1_tgt = pc1d + {{27{ins1.ins[47]}},ins1.ins[47:11]};
+always_comb bsr2_tgt = pc2d + {{27{ins2.ins[47]}},ins2.ins[47:11]};
+always_comb bsr3_tgt = pc3d + {{27{ins3.ins[47]}},ins3.ins[47:11]};
 always_comb
 	do_bsr = bsr0|bsr1|bsr2|bsr3;
 //edge_det ued1 (.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(do_bsr1), .pe(do_bsr), .ne(), .ee());
@@ -272,7 +264,7 @@ begin
 	else if (bsr3)
 		bsr_tgt = bsr3_tgt;
 	else
-		bsr_tgt = pc4_o;
+		bsr_tgt = RSTPC;
 end
 
 Qupls_ins_extract_mux umux0
@@ -371,70 +363,168 @@ Qupls_ins_extract_mux umux3
 	.ins(ins3)
 );
 
-generate begin : gInsExt
-	if (SUPPORT_POSTFIX) begin
-		always_ff @(posedge clk)
-		if (en)
-			ins4.ins <= hirq ? {4'd0,1'b0,vect_i[7:0],5'd0,5'd0,5'd0,irq_i,2'b0,OP_CHK} : 
-				mipv ? mc_ins4 : nop_i ? {33'd0,OP_NOP} :
-				ic_line2 >> {pc4[5:0],3'd0};
-		always_ff @(posedge clk)
-		if (en)
-			ins5.ins <= hirq ? {4'd0,1'b0,vect_i[7:0],5'd0,5'd0,5'd0,irq_i,2'b0,OP_CHK} :
-				mipv ? mc_ins5 : nop_i ? {33'd0,OP_NOP} :
-				ic_line2 >> {pc5[5:0],3'd0};
-		always_ff @(posedge clk)
-		if (en)
-			ins6.ins <= hirq ? {4'd0,1'b0,vect_i[7:0],5'd0,5'd0,5'd0,irq_i,2'b0,OP_CHK} :
-				mipv ? mc_ins6 : nop_i ? {33'd0,OP_NOP} :
-				ic_line2 >> {pc6[5:0],3'd0};
-		always_ff @(posedge clk)
-		if (en)
-			ins7.ins <= hirq ? {4'd0,1'b0,vect_i[7:0],5'd0,5'd0,5'd0,irq_i,2'b0,OP_CHK} :
-				mipv ? mc_ins7 : nop_i ? {33'd0,OP_NOP} :
-				ic_line2 >> {pc7[5:0],3'd0};
-		always_ff @(posedge clk)
-		if (en)
-			ins8.ins <= hirq ? {4'd0,1'b0,vect_i[7:0],5'd0,5'd0,5'd0,irq_i,2'b0,OP_CHK} :
-				mipv ? mc_ins8 : nop_i ? {33'd0,OP_NOP} :
-				ic_line2 >> {pc8[5:0],3'd0};
-	end
-	else begin
-		always_ff @(posedge clk) ins4 <= {$bits(ex_instruction_t){1'b0}};
-		always_ff @(posedge clk) ins5 <= {$bits(ex_instruction_t){1'b0}};
-		always_ff @(posedge clk) ins6 <= {$bits(ex_instruction_t){1'b0}};
-		always_ff @(posedge clk) ins7 <= {$bits(ex_instruction_t){1'b0}};
-		always_ff @(posedge clk) ins8 <= {$bits(ex_instruction_t){1'b0}};
+Qupls_vec_expand uxvec1
+(
+	.rst(rst_i),
+	.clk(clk),
+	.en(en_i & ld),
+	.vl(vl),
+	.mip(mip_i),
+	.pc0(pc0d),
+	.pc1(pc1d),
+	.pc2(pc2d),
+	.pc3(pc3d),
+	.ins0(ins0),
+	.ins1(ins1),
+	.ins2(ins2),
+	.ins3(ins3),
+	.expbuf(expbuf),
+	.pcbuf(pcbuf),
+	.mipbuf(mipbuf),
+	.jj(jj)
+);
+
+always_ff @(posedge clk)
+if (rst_i) begin
+	kk <= 6'd0;
+	ins0_o.ins <= {41'hFA00,OP_NOP};
+	ins1_o.ins <= {41'hFA01,OP_NOP};
+	ins2_o.ins <= {41'hFA02,OP_NOP};
+	ins3_o.ins <= {41'hFA03,OP_NOP};
+	pc0_o <= RSTPC;
+	pc1_o <= RSTPC;
+	pc2_o <= RSTPC;
+	pc3_o <= RSTPC;
+	mcip0 <= 12'h1A0;
+	mcip1 <= 12'h1A1;
+	mcip2 <= 12'h1A2;
+	mcip3 <= 12'h1A3;
+	for (hh = 0; hh < 32; hh = hh + 1)
+		expbuf2[hh].ins <= {41'hFF00,OP_NOP};
+	pcbuf2 <= {32{RSTPC}};
+	mipbuf2 <= {32{12'h1A0}};
+end
+else begin
+	if (en||get) begin
+		if (get) begin
+			case(kk)
+			6'd0:
+				begin
+					ins0_o.ins <= {41'hFE00,OP_NOP};
+					ins1_o.ins <= {41'hFE01,OP_NOP};
+					ins2_o.ins <= {41'hFE02,OP_NOP};
+					ins3_o.ins <= {41'hFE03,OP_NOP};
+					pc0_o <= pcbuf2[0];
+					pc1_o <= pcbuf2[0];
+					pc2_o <= pcbuf2[0];
+					pc3_o <= pcbuf2[0];
+					mcip0 <= mipbuf2[0];
+					mcip1 <= mipbuf2[0];
+					mcip2 <= mipbuf2[0];
+					mcip3 <= mipbuf2[0];
+				end
+			6'd1:
+				begin
+					ins0_o <= expbuf2[0];
+					ins1_o.ins <= {41'hFD00,OP_NOP};
+					ins2_o.ins <= {41'hFD01,OP_NOP};
+					ins3_o.ins <= {41'hFD02,OP_NOP};
+					pc0_o <= pcbuf2[0];
+					pc1_o <= pcbuf2[0];
+					pc2_o <= pcbuf2[0];
+					pc3_o <= pcbuf2[0];
+					mcip0 <= mipbuf2[0];
+					mcip1 <= mipbuf2[0];
+					mcip2 <= mipbuf2[0];
+					mcip3 <= mipbuf2[0];
+				end
+			6'd2:
+				begin
+					ins0_o <= expbuf2[0];
+					ins1_o <= expbuf2[1];
+					ins2_o.ins <= {41'hFC00,OP_NOP};
+					ins3_o.ins <= {41'hFC01,OP_NOP};
+					pc0_o <= pcbuf2[0];
+					pc1_o <= pcbuf2[1];
+					pc2_o <= pcbuf2[1];
+					pc3_o <= pcbuf2[1];
+					mcip0 <= mipbuf2[0];
+					mcip1 <= mipbuf2[1];
+					mcip2 <= mipbuf2[1];
+					mcip3 <= mipbuf2[1];
+				end
+			6'd3:
+				begin
+					ins0_o <= expbuf2[0];
+					ins1_o <= expbuf2[1];
+					ins2_o <= expbuf2[2];
+					ins3_o.ins <= {41'hFB00,OP_NOP};
+					pc0_o <= pcbuf2[0];
+					pc1_o <= pcbuf2[1];
+					pc2_o <= pcbuf2[2];
+					pc3_o <= pcbuf2[2];
+					mcip0 <= mipbuf2[0];
+					mcip1 <= mipbuf2[1];
+					mcip2 <= mipbuf2[2];
+					mcip3 <= mipbuf2[2];
+				end
+			6'd4:
+				begin
+					ins0_o <= expbuf2[0];
+					ins1_o <= expbuf2[1];
+					ins2_o <= expbuf2[2];
+					ins2_o <= expbuf2[3];
+					pc0_o <= pcbuf2[0];
+					pc1_o <= pcbuf2[1];
+					pc2_o <= pcbuf2[2];
+					pc3_o <= pcbuf2[3];
+					mcip0 <= mipbuf2[0];
+					mcip1 <= mipbuf2[1];
+					mcip2 <= mipbuf2[2];
+					mcip3 <= mipbuf2[3];
+				end
+			default:
+				begin
+					ins0_o <= expbuf2[0];
+					ins1_o <= expbuf2[1];
+					ins2_o <= expbuf2[2];
+					ins3_o <= expbuf2[3];
+					pc0_o <= pcbuf2[0];
+					pc1_o <= pcbuf2[1];
+					pc2_o <= pcbuf2[2];
+					pc3_o <= pcbuf2[3];
+					mcip0 <= mipbuf2[0];
+					mcip1 <= mipbuf2[1];
+					mcip2 <= mipbuf2[2];
+					mcip3 <= mipbuf2[3];
+					for (hh = 0; hh < 28; hh = hh + 1) begin
+						expbuf2[hh] <= expbuf2[hh+4];
+						pcbuf2[hh] <= pcbuf2[hh+4];
+						mipbuf2[hh] <= mipbuf2[hh+4];
+					end
+					kk <= kk - 6'd4;
+				end
+			endcase
+		end
+		if (ld) begin
+			kk <= jj;
+			expbuf2 <= expbuf;
+			pcbuf2 <= pcbuf;
+			mipbuf2 <= mipbuf;
+		end
 	end
 end
-endgenerate
+
+always_comb
+	ld = kk <= 6'd4;
+always_comb
+	stall = !ld;
 
 always_ff @(posedge clk) if (en) nop_o <= nop_i;
 
-always_comb ins0_o = ins0;
-always_comb ins1_o = ins1;
-always_comb ins2_o = ins2;
-always_comb ins3_o = ins3;
-always_comb ins4_o = ins4;
-always_comb ins5_o = ins5;
-always_comb ins6_o = ins6;
-always_comb ins7_o = ins7;
-always_comb ins8_o = ins8;
-
-always_ff @(posedge clk) if (en) pc0_o <= pc0;
-always_ff @(posedge clk) if (en) pc1_o <= pc1;
-always_ff @(posedge clk) if (en) pc2_o <= pc2;
-always_ff @(posedge clk) if (en) pc3_o <= pc3;
-always_ff @(posedge clk) if (en) pc4_o <= pc4;
-always_ff @(posedge clk) if (en) pc5_o <= pc5;
-always_ff @(posedge clk) if (en) pc6_o <= pc6;
-always_ff @(posedge clk) if (en) pc7_o <= pc7;
-always_ff @(posedge clk) if (en) pc8_o <= pc8;
-always_ff @(posedge clk) if (en) grp_o <= grp_i;
-
-always_ff @(posedge clk) if (en) mcip0_o <= mip_i;
-always_ff @(posedge clk) if (en) mcip1_o <= |mip_i ? mip_i | 12'h001 : 12'h000;
-always_ff @(posedge clk) if (en) mcip2_o <= |mip_i ? mip_i | 12'h002 : 12'h000;
-always_ff @(posedge clk) if (en) mcip3_o <= |mip_i ? mip_i | 12'h003 : 12'h000;
+always_comb mcip0_o <= mcip0;
+always_comb mcip1_o <= |mcip0 ? mcip0 | 12'h001 : 12'h000;
+always_comb mcip2_o <= |mcip1 ? mcip1 | 12'h002 : 12'h000;
+always_comb mcip3_o <= |mcip2 ? mcip2 | 12'h003 : 12'h000;
 
 endmodule

@@ -61,22 +61,21 @@ begin
 			Rc = instr[0].aRc;
 		OP_R2:
 			Rc = instr[0].aRc;
+		OP_STX:
+			case(instr[0].ins.lsn.func)
+			FN_STCTX:
+				Rc = {1'b0,instr[0].aRa[2:0],instr[0].aRc[4:0]};
+			default:
+				Rc = instr[0].aRc;
+			endcase
 		default:
 			if (fnImmc(instr[0]))
 				Rc = 9'd0;
 			else
 				Rc = instr[0].aRc;
 		endcase
-	if (instr[1].ins.any.opcode==OP_REGC) begin
-		Rc = instr[1].aRt;		
-		Rcc = instr[1].ins[15:13];
-	end
-	if (Rc==9'd31) begin
-		if (om==2'd3)
-			Rc = 9'd32|ipl;
-		else
-			Rc = 9'd40|om;
-	end
+	if (Rc==9'd31)
+		Rc = 9'd32|om;
 	Rcz = ~|Rc;
 end
 

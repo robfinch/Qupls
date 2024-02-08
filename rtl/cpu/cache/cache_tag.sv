@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -40,7 +40,7 @@ import QuplsPkg::*;
 import Qupls_cache_pkg::*;
 
 module Qupls_cache_tag(rst, clk, wr, vadr_i, padr_i, way, rclk, ndx, tag,
-	sndx, ptag0, ptag1, ptag2, ptag3);
+	sndx, ptag);
 parameter LINES=64;
 parameter WAYS=4;
 parameter LOBIT=6;
@@ -56,77 +56,148 @@ input rclk;
 input [$clog2(LINES)-1:0] ndx;
 output cache_tag_t [WAYS-1:0] tag;
 input [$clog2(LINES)-1:0] sndx;
-output cache_tag_t ptag0;
-output cache_tag_t ptag1;
-output cache_tag_t ptag2;
-output cache_tag_t ptag3;
+output cache_tag_t [WAYS-1:0] ptag;
 
-(* ram_style="distributed" *)
-cache_tag_t ptags0 [0:LINES-1];	// physical tags
-(* ram_style="distributed" *)
-cache_tag_t ptags1 [0:LINES-1];
-(* ram_style="distributed" *)
-cache_tag_t ptags2 [0:LINES-1];
-(* ram_style="distributed" *)
-cache_tag_t ptags3 [0:LINES-1];
+genvar g;
+integer n,n1;
+
+cache_tag_t [WAYS-1:0] ptags;	// physical tags
 
 //typedef logic [$bits(code_address_t)-1:TAGBIT] tag_t;
 
-(* ram_style="distributed" *)
-cache_tag_t vtags0 [0:LINES-1];	// virtual tags
-(* ram_style="distributed" *)
-cache_tag_t vtags1 [0:LINES-1];
-(* ram_style="distributed" *)
-cache_tag_t vtags2 [0:LINES-1];
-(* ram_style="distributed" *)
-cache_tag_t vtags3 [0:LINES-1];
+cache_tag_t [WAYS-1:0] vtags;	// virtual tags
 
-integer g,g1;
-integer n,n1;
+generate begin : gCacheTag
+	for (g = 0; g < WAYS; g = g + 1) begin
 
-always_ff @(posedge clk)
-// Careful reset of tags. Must be done via the same addressing as is used while
-// active. The processor must output an incrementing address during reset to 
-// reset the tags.
-// Resetting all the tags will force implementation with FF's. Since tag values
-// do not matter to synthesis it is simply omitted.
-if (rst) begin
-	vtags0[vadr_i[HIBIT:LOBIT]] <= 'd1;
-	vtags1[vadr_i[HIBIT:LOBIT]] <= 'd1;
-	vtags2[vadr_i[HIBIT:LOBIT]] <= 'd1;
-	vtags3[vadr_i[HIBIT:LOBIT]] <= 'd1;
+
+
+   // xpm_memory_dpdistram: Dual Port Distributed RAM
+   // Xilinx Parameterized Macro, version 2022.2
+
+   xpm_memory_dpdistram #(
+      .ADDR_WIDTH_A($clog2(LINES)),               // DECIMAL
+      .ADDR_WIDTH_B($clog2(LINES)),               // DECIMAL
+      .BYTE_WRITE_WIDTH_A($bits(cache_tag_t)),        // DECIMAL
+      .CLOCKING_MODE("common_clock"), // String
+      .MEMORY_INIT_FILE("none"),      // String
+      .MEMORY_INIT_PARAM("1"),        // String
+      .MEMORY_OPTIMIZATION("true"),   // String
+      .MEMORY_SIZE($bits(cache_tag_t)*LINES),             // DECIMAL
+      .MESSAGE_CONTROL(0),            // DECIMAL
+      .READ_DATA_WIDTH_A($bits(cache_tag_t)),         // DECIMAL
+      .READ_DATA_WIDTH_B($bits(cache_tag_t)),         // DECIMAL
+      .READ_LATENCY_A(2),             // DECIMAL
+      .READ_LATENCY_B(0),             // DECIMAL
+      .READ_RESET_VALUE_A("0"),       // String
+      .READ_RESET_VALUE_B("0"),       // String
+      .RST_MODE_A("SYNC"),            // String
+      .RST_MODE_B("SYNC"),            // String
+      .SIM_ASSERT_CHK(0),             // DECIMAL; 0=disable simulation messages, 1=enable simulation messages
+      .USE_EMBEDDED_CONSTRAINT(0),    // DECIMAL
+      .USE_MEM_INIT(1),               // DECIMAL
+      .USE_MEM_INIT_MMI(0),           // DECIMAL
+      .WRITE_DATA_WIDTH_A($bits(cache_tag_t))         // DECIMAL
+   )
+   ptagram (
+      .douta(),   // READ_DATA_WIDTH_A-bit output: Data output for port A read operations.
+      .doutb(ptags[g]),   // READ_DATA_WIDTH_B-bit output: Data output for port B read operations.
+      .addra(vadr_i[HIBIT:LOBIT]),   // ADDR_WIDTH_A-bit input: Address for port A write and read operations.
+      .addrb(sndx),   // ADDR_WIDTH_B-bit input: Address for port B write and read operations.
+      .clka(clk),     // 1-bit input: Clock signal for port A. Also clocks port B when parameter CLOCKING_MODE
+                       // is "common_clock".
+
+      .clkb(clk),     // 1-bit input: Clock signal for port B when parameter CLOCKING_MODE is
+                       // "independent_clock". Unused when parameter CLOCKING_MODE is "common_clock".
+
+      .dina({padr_i[$bits(QuplsPkg::address_t)-1:TAGBIT]}),     // WRITE_DATA_WIDTH_A-bit input: Data input for port A write operations.
+      .ena(1'b1),       // 1-bit input: Memory enable signal for port A. Must be high on clock cycles when read
+                       // or write operations are initiated. Pipelined internally.
+
+      .enb(1'b1),       // 1-bit input: Memory enable signal for port B. Must be high on clock cycles when read
+                       // or write operations are initiated. Pipelined internally.
+
+      .regcea(1'b1), // 1-bit input: Clock Enable for the last register stage on the output data path.
+      .regceb(1'b1), // 1-bit input: Do not change from the provided value.
+      .rsta(1'b0),     // 1-bit input: Reset signal for the final port A output register stage. Synchronously
+                       // resets output port douta to the value specified by parameter READ_RESET_VALUE_A.
+
+      .rstb(1'b0),     // 1-bit input: Reset signal for the final port B output register stage. Synchronously
+                       // resets output port doutb to the value specified by parameter READ_RESET_VALUE_B.
+
+      .wea(wr && way==g)        // WRITE_DATA_WIDTH_A/BYTE_WRITE_WIDTH_A-bit input: Write enable vector for port A input
+                       // data port dina. 1 bit wide when word-wide writes are used. In byte-wide write
+                       // configurations, each bit controls the writing one byte of dina to address addra. For
+                       // example, to synchronously write only bits [15-8] of dina when WRITE_DATA_WIDTH_A is
+                       // 32, wea would be 4'b0010.
+
+   );
+
+   xpm_memory_dpdistram #(
+      .ADDR_WIDTH_A($clog2(LINES)),               // DECIMAL
+      .ADDR_WIDTH_B($clog2(LINES)),               // DECIMAL
+      .BYTE_WRITE_WIDTH_A($bits(cache_tag_t)),        // DECIMAL
+      .CLOCKING_MODE("common_clock"), // String
+      .MEMORY_INIT_FILE("none"),      // String
+      .MEMORY_INIT_PARAM("1"),        // String
+      .MEMORY_OPTIMIZATION("true"),   // String
+      .MEMORY_SIZE($bits(cache_tag_t)*LINES),             // DECIMAL
+      .MESSAGE_CONTROL(0),            // DECIMAL
+      .READ_DATA_WIDTH_A($bits(cache_tag_t)),         // DECIMAL
+      .READ_DATA_WIDTH_B($bits(cache_tag_t)),         // DECIMAL
+      .READ_LATENCY_A(2),             // DECIMAL
+      .READ_LATENCY_B(0),             // DECIMAL
+      .READ_RESET_VALUE_A("0"),       // String
+      .READ_RESET_VALUE_B("0"),       // String
+      .RST_MODE_A("SYNC"),            // String
+      .RST_MODE_B("SYNC"),            // String
+      .SIM_ASSERT_CHK(0),             // DECIMAL; 0=disable simulation messages, 1=enable simulation messages
+      .USE_EMBEDDED_CONSTRAINT(0),    // DECIMAL
+      .USE_MEM_INIT(1),               // DECIMAL
+      .USE_MEM_INIT_MMI(0),           // DECIMAL
+      .WRITE_DATA_WIDTH_A($bits(cache_tag_t))         // DECIMAL
+   )
+   vtagram (
+      .douta(),   // READ_DATA_WIDTH_A-bit output: Data output for port A read operations.
+      .doutb(vtags[g]),   // READ_DATA_WIDTH_B-bit output: Data output for port B read operations.
+      .addra(vadr_i[HIBIT:LOBIT]),   // ADDR_WIDTH_A-bit input: Address for port A write and read operations.
+      .addrb(ndx),   // ADDR_WIDTH_B-bit input: Address for port B write and read operations.
+      .clka(clk),     // 1-bit input: Clock signal for port A. Also clocks port B when parameter CLOCKING_MODE
+                       // is "common_clock".
+
+      .clkb(clk),     // 1-bit input: Clock signal for port B when parameter CLOCKING_MODE is
+                       // "independent_clock". Unused when parameter CLOCKING_MODE is "common_clock".
+
+      .dina({vadr_i[$bits(QuplsPkg::address_t)-1:TAGBIT]}),     // WRITE_DATA_WIDTH_A-bit input: Data input for port A write operations.
+      .ena(1'b1),       // 1-bit input: Memory enable signal for port A. Must be high on clock cycles when read
+                       // or write operations are initiated. Pipelined internally.
+
+      .enb(1'b1),       // 1-bit input: Memory enable signal for port B. Must be high on clock cycles when read
+                       // or write operations are initiated. Pipelined internally.
+
+      .regcea(1'b1), // 1-bit input: Clock Enable for the last register stage on the output data path.
+      .regceb(1'b1), // 1-bit input: Do not change from the provided value.
+      .rsta(1'b0),     // 1-bit input: Reset signal for the final port A output register stage. Synchronously
+                       // resets output port douta to the value specified by parameter READ_RESET_VALUE_A.
+
+      .rstb(1'b0),     // 1-bit input: Reset signal for the final port B output register stage. Synchronously
+                       // resets output port doutb to the value specified by parameter READ_RESET_VALUE_B.
+
+      .wea(wr && way==g)        // WRITE_DATA_WIDTH_A/BYTE_WRITE_WIDTH_A-bit input: Write enable vector for port A input
+                       // data port dina. 1 bit wide when word-wide writes are used. In byte-wide write
+                       // configurations, each bit controls the writing one byte of dina to address addra. For
+                       // example, to synchronously write only bits [15-8] of dina when WRITE_DATA_WIDTH_A is
+                       // 32, wea would be 4'b0010.
+
+   );
+   // End of xpm_memory_dpdistram_inst instantiation
+				
+				
+assign tag[g] = vtags[g];
+assign ptag[g] = ptags[g];
+
 end
-else
-begin
-	if (wr && way==2'd0) vtags0[vadr_i[HIBIT:LOBIT]] <= {vadr_i[$bits(QuplsPkg::address_t)-1:TAGBIT]};
-	if (wr && way==2'd1) vtags1[vadr_i[HIBIT:LOBIT]] <= {vadr_i[$bits(QuplsPkg::address_t)-1:TAGBIT]};
-	if (wr && way==2'd2) vtags2[vadr_i[HIBIT:LOBIT]] <= {vadr_i[$bits(QuplsPkg::address_t)-1:TAGBIT]};
-	if (wr && way==2'd3) vtags3[vadr_i[HIBIT:LOBIT]] <= {vadr_i[$bits(QuplsPkg::address_t)-1:TAGBIT]};
 end
-
-always_ff @(posedge clk)
-if (rst) begin
-	ptags0[vadr_i[HIBIT:LOBIT]] <= 'd1;
-	ptags1[vadr_i[HIBIT:LOBIT]] <= 'd1;
-	ptags2[vadr_i[HIBIT:LOBIT]] <= 'd1;
-	ptags3[vadr_i[HIBIT:LOBIT]] <= 'd1;
-end
-else
-begin
-	if (wr && way==2'd0) ptags0[vadr_i[HIBIT:LOBIT]] <= {padr_i[$bits(QuplsPkg::address_t)-1:TAGBIT]};
-	if (wr && way==2'd1) ptags1[vadr_i[HIBIT:LOBIT]] <= {padr_i[$bits(QuplsPkg::address_t)-1:TAGBIT]};
-	if (wr && way==2'd2) ptags2[vadr_i[HIBIT:LOBIT]] <= {padr_i[$bits(QuplsPkg::address_t)-1:TAGBIT]};
-	if (wr && way==2'd3) ptags3[vadr_i[HIBIT:LOBIT]] <= {padr_i[$bits(QuplsPkg::address_t)-1:TAGBIT]};
-end
-
-assign tag[0] = vtags0[ndx];
-assign tag[1] = vtags1[ndx];
-assign tag[2] = vtags2[ndx];
-assign tag[3] = vtags3[ndx];
-
-assign ptag0 = ptags0[sndx];
-assign ptag1 = ptags1[sndx];
-assign ptag2 = ptags2[sndx];
-assign ptag3 = ptags3[sndx];
+endgenerate
 
 endmodule

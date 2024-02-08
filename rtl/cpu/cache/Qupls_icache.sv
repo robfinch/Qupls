@@ -34,6 +34,8 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
+// 2700 LUTs / 650 FFs / 22.5 BRAMs
+//
 //  5624 LUTs / 11213 FFs / 8 BRAMs   16kB cache
 //  6136 LUTs / 11469 FFs / 15 BRAMs  32kB cache
 // 10373 LUTs / 21699 FFs / 15 BRAMs  64kB cache
@@ -48,7 +50,8 @@ import Qupls_cache_pkg::*;
 module Qupls_icache(rst,clk,ce,invce,snoop_adr,snoop_v,snoop_cid,invall,invline,
 	nop,nop_o,ip_asid,ip,ip_o,ihit_o,ihit,ic_line_hi_o,ic_line_lo_o,ic_valid,
 	miss_vadr,miss_asid,
-	ic_line_i,wway,wr_ic
+	ic_line_i,wway,wr_ic,
+	dp, dp_asid, dhit_o, dc_line_o, dc_valid, port, port_i
 	);
 parameter CORENO = 6'd1;
 parameter CID = 6'd0;
@@ -85,6 +88,13 @@ input [LOG_WAYS:0] wway;
 input wr_ic;
 input nop;
 output nop_o;
+input QuplsPkg::code_address_t dp;
+input QuplsPkg::asid_t dp_asid;
+output reg dhit_o;
+output ICacheLine dc_line_o;
+output reg dc_valid;
+output reg port;
+input port_i;
 
 integer n, m;
 integer g, j;
@@ -94,34 +104,36 @@ ICacheLine victim_line;
 
 reg icache_wre;
 reg icache_wro;
-ICacheLine ic_eline, ic_oline;
+reg icache_wrd;
+ICacheLine ic_eline, ic_oline, dc_line;
 reg [LOG_WAYS:0] ic_rwaye,ic_rwayo,wway;
-always_comb icache_wre = wr_ic && !ic_line_i.vtag[LOBIT-1];
-always_comb icache_wro = wr_ic &&  ic_line_i.vtag[LOBIT-1];
-QuplsPkg::code_address_t ip2;
+always_comb icache_wre = wr_ic && !ic_line_i.vtag[LOBIT-1] && !port_i;
+always_comb icache_wro = wr_ic &&  ic_line_i.vtag[LOBIT-1] && !port_i;
+always_comb icache_wrd = wr_ic && port_i;
+QuplsPkg::code_address_t ip2, dp2;
 cache_tag_t [WAYS-1:0] victage;
 cache_tag_t [WAYS-1:0] victago;
+cache_tag_t victagd;
 reg [LINES-1:0] valide [0:WAYS-1];
 reg [LINES-1:0] valido [0:WAYS-1];
+reg [LINES-1:0] validd [0:0];
 wire [1:0] snoop_waye, snoop_wayo;
-cache_tag_t ptags0e;
-cache_tag_t ptags1e;
-cache_tag_t ptags2e;
-cache_tag_t ptags3e;
-cache_tag_t ptags0o;
-cache_tag_t ptags1o;
-cache_tag_t ptags2o;
-cache_tag_t ptags3o;
+cache_tag_t [WAYS-1:0] ptagse;
+cache_tag_t [WAYS-1:0] ptagso;
+cache_tag_t ptagsd;
 reg [2:0] victim_count, vcne, vcno;
 ICacheLine [NVICTIM-1:0] victim_cache;
 ICacheLine victim_eline, victim_oline;
 ICacheLine victim_cache_eline, victim_cache_oline;
 reg icache_wre2;
+reg icache_wrd2;
 reg vce,vco;
 reg iel,iel2;		// increment even line
 
 wire ihit1e, ihit1o;
+wire dhit1;
 reg ihit2e, ihit2o;
+reg dhit2;
 wire ihit2;
 wire valid2e, valid2o;
 reg nop2;
@@ -133,6 +145,9 @@ assign nop_o = nop2;
 always_ff @(posedge clk)
 if (ce)
 	ip2 <= ip;
+always_ff @(posedge clk)
+if (ce)
+	dp2 <= dp;
 always_comb
 	ihit = ihit1e&ihit1o;
 always_ff @(posedge clk)
@@ -144,6 +159,21 @@ if (ce)
 always_ff @(posedge clk)
 if(ce)
 	ihit_o <= ihit;
+always_ff @(posedge clk)
+if (rst)
+	dhit2 <= 1'b0;
+else begin
+	if (ce)
+		dhit2 <= dhit1;
+end
+always_ff @(posedge clk)
+if (rst)
+	dhit_o <= 1'b0;
+else begin
+	if (ce)
+		dhit_o <= dhit1;
+end
+
 /*	
 always_comb
 	// *** The following causes the hit to tend to oscillate between hit
@@ -163,6 +193,10 @@ always_comb	//ff @(posedge clk)
 		ic_valid <= ip2[LOBIT-1] ? valid2o : valid2e;
 	else
 		ic_valid <= valid2o & valid2e;
+
+always_comb	//ff @(posedge clk)
+	// If cannot cross cache line can match on either odd or even.
+	dc_valid <= valid2d;
 
 generate begin : gCacheRam
 if (NVICTIM > 0) begin
@@ -228,12 +262,32 @@ uicmo
 	.i(ic_line_i.data),
 	.o(ic_oline.data)
 );
+
+sram_1r1w
+#(
+	.WID(Qupls_cache_pkg::ICacheLineWidth),
+	.DEP(LINES)
+)
+uicmd
+(
+	.rst(rst),
+	.clk(clk),
+	.ce(ce),
+	.wr(icache_wrd),
+	.wadr(ic_line_i.vtag[HIBIT-1:LOBIT-1]),
+	.radr(dp[HIBIT-1:LOBIT-1]),
+	.i(ic_line_i.data),
+	.o(dc_line.data)
+);
+
 end
 end
 endgenerate
 
 always_ff @(posedge clk)
 	icache_wre2 <= icache_wre;
+always_ff @(posedge clk)
+	icache_wrd2 <= icache_wrd;
 
 // Address of the victim line is the address of the update line.
 // Write the victim cache if updating the cache and the victim line is valid.
@@ -337,6 +391,13 @@ always_comb
 		end
 	endcase
 
+always_comb
+begin
+	dc_line_o.v = {4{dhit2}};
+	dc_line_o.vtag = {dp2[$bits(QuplsPkg::address_t)-1:LOBIT-1],{LOBIT-1{1'b0}}};
+	dc_line_o.data = dc_line.data;
+end
+
 Qupls_cache_tag
 #(
 	.LINES(LINES),
@@ -357,10 +418,7 @@ uictage
 	.ndx(ip[HIBIT:LOBIT]+ip[LOBIT-1]),	// virtual index (same bits as physical address)
 	.tag(victage),
 	.sndx(snoop_adr[HIBIT:LOBIT]),
-	.ptag0(ptags0e),
-	.ptag1(ptags1e),
-	.ptag2(ptags2e),
-	.ptag3(ptags3e)
+	.ptag(ptagse)
 );
 
 Qupls_cache_tag 
@@ -383,10 +441,30 @@ uictago
 	.ndx(ip[HIBIT:LOBIT]),		// virtual index (same bits as physical address)
 	.tag(victago),
 	.sndx(snoop_adr[HIBIT:LOBIT]),
-	.ptag0(ptags0o),
-	.ptag1(ptags1o),
-	.ptag2(ptags2o),
-	.ptag3(ptags3o)
+	.ptag(ptagso)
+);
+
+Qupls_cache_tag
+#(
+	.LINES(LINES),
+	.WAYS(1),
+	.TAGBIT(TAGBIT),
+	.HIBIT(HIBIT),
+	.LOBIT(LOBIT)
+)
+uictagd
+(
+	.rst(rst),
+	.clk(clk),
+	.wr(icache_wrd),
+	.vadr_i(ic_line_i.vtag),
+	.padr_i(ic_line_i.ptag),
+	.way(),
+	.rclk(clk),
+	.ndx(dp[HIBIT-1:LOBIT-1]),	// virtual index (same bits as physical address)
+	.tag(victagd),
+	.sndx(snoop_adr[HIBIT-1:LOBIT-1]),
+	.ptag(ptagsd)
 );
 
 Qupls_cache_hit
@@ -425,11 +503,30 @@ uichito
 	.cv(valid2o)
 );
 
+Qupls_cache_hit
+#(
+	.LINES(LINES),
+	.TAGBIT(TAGBIT),
+	.WAYS(1)
+)
+uichitd
+(
+	.clk(clk),
+	.adr(dp),
+	.ndx(dp[HIBIT-1:LOBIT-1]),
+	.tag(victagd),
+	.valid(validd),
+	.hit(dhit1),
+	.rway(),
+	.cv(valid2d)
+);
+
 initial begin
 for (m = 0; m < WAYS; m = m + 1) begin
   valide[m] = 'd0;
   valido[m] = 'd0;
 end
+validd[0] = 'd0;
 end
 
 always_ff @(posedge clk)
@@ -467,28 +564,41 @@ else begin
 				valido[g] <= 'd0;
 		end
 	end
+	if (icache_wrd)
+		validd[0][ic_line_i.vtag[HIBIT-1:LOBIT-1]] <= 1'b1;
+	else if (invce) begin
+		if (invline)
+			validd[0][ic_line_i.vtag[HIBIT-1:LOBIT-1]] <= 1'b0;
+		else if (invall)
+			validd[0] <= 'd0;
+	end
 	// Two different virtual addresses pointing to the same physical address will
 	// end up in the same set as long as the cache is smaller than a memory page
 	// in size. So, there is no need to compare every physical address, just every
 	// address in a set will do.
 	if (snoop_v && snoop_cid != CID) begin
-		if (snoop_adr[$bits(QuplsPkg::address_t)-1:TAGBIT]==ptags0e)
+		if (snoop_adr[$bits(QuplsPkg::address_t)-1:TAGBIT]==ptagse[0])
 			valide[0][snoop_adr[HIBIT:LOBIT]] <= 1'b0;
-		if (snoop_adr[$bits(QuplsPkg::address_t)-1:TAGBIT]==ptags1e)
+		if (snoop_adr[$bits(QuplsPkg::address_t)-1:TAGBIT]==ptagse[1])
 			valide[1][snoop_adr[HIBIT:LOBIT]] <= 1'b0;
-		if (snoop_adr[$bits(QuplsPkg::address_t)-1:TAGBIT]==ptags2e)
+		if (snoop_adr[$bits(QuplsPkg::address_t)-1:TAGBIT]==ptagse[2])
 			valide[2][snoop_adr[HIBIT:LOBIT]] <= 1'b0;
-		if (snoop_adr[$bits(QuplsPkg::address_t)-1:TAGBIT]==ptags3e)
+		if (snoop_adr[$bits(QuplsPkg::address_t)-1:TAGBIT]==ptagse[3])
 			valide[3][snoop_adr[HIBIT:LOBIT]] <= 1'b0;
 
-		if (snoop_adr[$bits(QuplsPkg::address_t)-1:TAGBIT]==ptags0o)
+		if (snoop_adr[$bits(QuplsPkg::address_t)-1:TAGBIT]==ptagso[0])
 			valido[0][snoop_adr[HIBIT:LOBIT]] <= 1'b0;
-		if (snoop_adr[$bits(QuplsPkg::address_t)-1:TAGBIT]==ptags1o)
+		if (snoop_adr[$bits(QuplsPkg::address_t)-1:TAGBIT]==ptagso[1])
 			valido[1][snoop_adr[HIBIT:LOBIT]] <= 1'b0;
-		if (snoop_adr[$bits(QuplsPkg::address_t)-1:TAGBIT]==ptags2o)
+		if (snoop_adr[$bits(QuplsPkg::address_t)-1:TAGBIT]==ptagso[2])
 			valido[2][snoop_adr[HIBIT:LOBIT]] <= 1'b0;
-		if (snoop_adr[$bits(QuplsPkg::address_t)-1:TAGBIT]==ptags3o)
+		if (snoop_adr[$bits(QuplsPkg::address_t)-1:TAGBIT]==ptagso[3])
 			valido[3][snoop_adr[HIBIT:LOBIT]] <= 1'b0;
+
+		/*
+		if (snoop_adr[$bits(QuplsPkg::address_t)-1:TAGBIT]==ptagsd)
+			validd[0][snoop_adr[HIBIT:LOBIT]] <= 1'b0;
+		*/
 	// Invalidate victim cache entries matching the snoop address
 		for (g = 0; g < NVICTIM; g = g + 1) begin
 			if (snoop_adr[$bits(QuplsPkg::address_t)-1:LOBIT]==victim_cache[g].ptag[$bits(QuplsPkg::address_t)-1:LOBIT])
@@ -504,6 +614,8 @@ always_comb
 		miss_asid = ip_asid;
 	else if (!ihit1o)
 		miss_asid = ip_asid;
+	else if (!dhit1)
+		miss_asid = dp_asid;
 	else
 		miss_asid = 'd0;
 
@@ -512,7 +624,19 @@ always_comb
 		miss_vadr = {ip[$bits(QuplsPkg::address_t)-1:LOBIT]+ip[LOBIT-1],1'b0,{LOBIT-1{1'b0}}};
 	else if (!ihit1o)
 		miss_vadr = {ip[$bits(QuplsPkg::address_t)-1:LOBIT],1'b1,{LOBIT-1{1'b0}}};
+//	else if (!dhit1)
+//		miss_vadr = {dp[$bits(QuplsPkg::address_t)-1:LOBIT-1],{LOBIT-1{1'b0}}};
 	else
 		miss_vadr = 32'hFFFD0000;
+
+always_comb
+	if (!ihit1e)
+		port = 1'b0;
+	else if (!ihit1o)
+		port = 1'b0;
+//	else if (!dhit1)
+//		port = 1'b1;
+	else
+		port = 1'b0;
 
 endmodule

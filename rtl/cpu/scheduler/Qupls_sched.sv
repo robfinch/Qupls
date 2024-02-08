@@ -364,7 +364,11 @@ for (g = 0; g < ROB_ENTRIES; g = g + 1) begin
 				    // could only happen when a new instruction happens to queue in the
 				    // slot just finished executing. The new instruction would be
 				    // incorrectly marked done, inheriting the status of the old one.
-always_ff @(posedge clk) could_issue[g] =
+always_ff @(posedge clk)
+if (rst)
+	could_issue = 'd0;
+else
+	could_issue[g] =
 													 rob[g].v
 //												&& !stomp_i[g]
 												&& !(&rob[g].done)
@@ -375,7 +379,11 @@ always_ff @(posedge clk) could_issue[g] =
 										    && rob[g].pred_bitv
 												&& !robentry_issue[g]
 												;
-always_ff @(posedge clk) could_issue_nm[g] = 
+always_ff @(posedge clk)
+if (rst)
+	could_issue_nm = 'd0;
+else 
+	could_issue_nm[g] = 
 													 rob[g].v
 												&& !(&rob[g].done)
 //												&& !stomp_i[g]
@@ -414,8 +422,40 @@ reg can_issue_agen1;
 reg flag;
 integer hd, synchd, shd, slot;
 
-always_comb
-begin
+always_ff @(negedge clk)
+if (rst) begin
+	issued_alu0 = 1'd0;
+	issued_alu1 = 1'd0;
+	issued_fpu0 = 1'd0;
+	issued_fpu1 = 1'd0;
+	issued_fcu = 1'd0;
+	issued_agen0 = 1'd0;
+	issued_agen1 = 1'd0;
+	no_issue = 1'd0;
+	no_issue_fc = 1'd0;
+	next_robentry_issue = {$bits(rob_bitmask_t){1'd0}};
+	next_robentry_fpu_issue = {$bits(rob_bitmask_t){1'd0}};
+	next_robentry_fcu_issue = {$bits(rob_bitmask_t){1'd0}};
+	next_robentry_agen_issue = {$bits(rob_bitmask_t){1'd0}};
+	next_alu0_rndx = 5'd0;
+	next_alu1_rndx = 5'd0;
+	next_fpu0_rndx = 5'd0;
+	next_fpu1_rndx = 5'd0;
+	next_fcu_rndx = 5'd0;
+	next_agen0_rndx = 5'd0;
+	next_agen1_rndx = 5'd0;
+	next_alu0_rndxv = INV;
+	next_alu1_rndxv = INV;
+	next_fpu0_rndxv = INV;
+	next_fpu1_rndxv = INV;
+	next_fcu_rndxv = INV;
+	next_agen0_rndxv = INV;
+	next_agen1_rndxv = INV;
+	next_cpytgt0 = INV;
+	next_cpytgt1 = INV;
+	flag = 1'b0;
+end
+else begin
 	issued_alu0 = 1'd0;
 	issued_alu1 = 1'd0;
 	issued_fpu0 = 1'd0;
@@ -546,6 +586,18 @@ begin
 				end
 
 				if (!issued_agen0 && agen0_idle && rob[heads[hd]].decbus.mem && !rob[heads[hd]].done[0] && !rob[heads[hd]].out[0]) begin
+					next_robentry_agen_issue[heads[hd]] = 1'b1;
+			  	next_robentry_islot_o[heads[hd]] = 2'b00;
+					issued_agen0 = 1'b1;
+					next_agen0_rndx = heads[hd];
+					next_agen0_rndxv = 1'b1;
+				end
+				// Schedule exception to MEM
+				if (!issued_agen0 && agen0_idle 
+					&& hd==5'd0	// must be at head
+					&& rob[heads[hd]].excv
+					&& rob[heads[hd]].done==2'b11
+					) begin
 					next_robentry_agen_issue[heads[hd]] = 1'b1;
 			  	next_robentry_islot_o[heads[hd]] = 2'b00;
 					issued_agen0 = 1'b1;

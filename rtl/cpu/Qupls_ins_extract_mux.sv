@@ -51,7 +51,7 @@ input nop;
 input hirq;
 input [1:0] rgi;
 input [2:0] irq_i;
-input [8:0] vect_i;
+input [7:0] vect_i;
 input mipv;
 input ex_instruction_t mc_ins;
 input ex_instruction_t mc_ins0;
@@ -67,11 +67,11 @@ output ex_instruction_t ins;
 
 always_ff @(posedge clk)
 if (rst)
-	ins <= {33'd0,OP_NOP};
+	ins <= {45'd0,OP_NOP};
 else begin
 	if (en)
-		ins <= hirq ? {4'd0,1'b0,vect_i[7:0],5'd0,5'd0,5'd0,irq_i,2'b0,OP_CHK} :
-			mipv ? mc_ins : nop ? {33'd0,OP_NOP} : insi;
+		ins <= hirq ? {4'd0,vect_i[7:0],2'b0,5'd0,2'b0,5'd0,2'b0,5'd0,irq_i,1'b0,3'b0,1'b0,OP_CHK} :
+			mipv ? mc_ins : nop ? {45'd0,OP_NOP} : insi;
 end
 
 endmodule

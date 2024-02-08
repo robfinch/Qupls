@@ -57,7 +57,11 @@ begin
 		OP_FLT3:
 			fnRb = ir.aRb;
 		default:
-			if (fnImmb(ir))
+			if (ir.ins.any.opcode==OP_LDX && ir.ins.lsn.func==FN_LDCTX)
+				fnRb = 9'd0;
+			else if (ir.ins.any.opcode==OP_STX && ir.ins.lsn.func==FN_STCTX)
+				fnRb = 9'd0;
+			else if (fnImmb(ir))
 				fnRb = 9'd0;
 			else
 				fnRb = ir.aRb;
@@ -68,12 +72,8 @@ endfunction
 always_comb
 begin
 	Rb = fnRb(instr, has_immb);
-	if (Rb==9'd31) begin
-		if (om==2'd3)
-			Rb = 9'd32|ipl;
-		else
-			Rb = 9'd40|om;
-	end
+	if (Rb==9'd31)
+		Rb = 9'd32|om;
 	Rbz = ~|Rb;
 end
 

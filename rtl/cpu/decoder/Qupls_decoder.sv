@@ -341,8 +341,10 @@ Qupls_decode_swap uswp1
 */
 
 always_ff @(posedge clk)
-if (rst)
+if (rst) begin
 	dbo <= {$bits(dbo){1'd0}};
+	dbo.nop = 1'b1;
+end
 else begin
 	if (en) begin
 		dbo <= {$bits(dbo){1'd0}};	// in case a signal was missed / unused.
@@ -350,11 +352,13 @@ else begin
 		dbo.mem <= db.load|db.store;
 		dbo.sync <= db.fence && ins[15:8]==8'hFF;
 		dbo.pred <= ins.ins.any.opcode==OP_PRED;
-		dbo.predz <= ins.ins[39];
+		dbo.predz <= ins.ins[47];
 		dbo.cpytgt <= 1'b0;
 		dbo.qfext <= ins.ins.any.opcode==OP_QFEXT;
 		dbo.vec2 <= db.vec;
 		dbo.mvvr <= ins.ins.any.opcode==OP_R2 && ins.ins.r2.func==FN_MVVR;
+		dbo.jsri <= ins.ins.any.opcode==OP_JSRI;
+		dbo.pushi <= ins.ins.any.opcode==OP_PUSHI;
 	end
 end
 

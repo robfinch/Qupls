@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2023-2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -279,48 +279,44 @@ begin
 	case(ir.any.opcode)
 	OP_FLT3:
 		case(ir.f3.func)
-		FN_FLT2:
-			case(ir.f2.func)
-			FN_FLT1:
-				case(ir.f1.func)
-				FN_FABS:	bus = {1'b0,a[$bits(value_t)-2:0]};
-				FN_FNEG:	bus = {a[$bits(value_t)-1]^1'b1,a[$bits(value_t)-2:0]};
-				FN_FTOI:	bus = f2io;
-				FN_ITOF:	bus = i2fo;
-				FN_FSIGN:	bus = signo;
-				FN_ISNAN:	bus = &a[62:52] && |a[51:0];
-				FN_FINITE:	bus = ~&a[62:52];
-				FN_FSIN:	bus = sino;
-				FN_FCOS:	bus = coso;
-	//			FN_FSQRT:	bus = sqrto;
-				FN_FRES:	bus = freso;
-				FN_FTRUNC:	bus = trunco;
-				FN_FCVTS2D:	bus = cvtS2Do;
-				default:	bus = 'd0;
-				endcase
-			FN_FSCALEB:
-				bus = scaleo;
-			FN_FADD,FN_FSUB,FN_FMUL:
-				bus = fmao;
-			/*
-			FN_FDIV:
-				bus = divo;
-			*/
-			FN_FSEQ:	bus = cmpo[0];
-			FN_FSNE:	bus = ~cmpo[0];
-			FN_FSLT:	bus = cmpo[1];
-			FN_FSLE:	bus = cmpo[2];
-			FN_FCMP:	bus = cmpo;
-			FN_SGNJ:	bus = {a[63],b[62:0]};
-			FN_SGNJN:	bus = {~a[63],b[62:0]};
-			FN_SGNJX:	bus = {a[63]^b[63],b[62:0]};
-			default:	bus = 64'd0;
+		FN_FLT1:
+			case(ir.f1.func)
+			FN_FABS:	bus = {1'b0,a[$bits(value_t)-2:0]};
+			FN_FNEG:	bus = {a[$bits(value_t)-1]^1'b1,a[$bits(value_t)-2:0]};
+			FN_FTOI:	bus = f2io;
+			FN_ITOF:	bus = i2fo;
+			FN_FSIGN:	bus = signo;
+			FN_ISNAN:	bus = &a[62:52] && |a[51:0];
+			FN_FINITE:	bus = ~&a[62:52];
+			FN_FSIN:	bus = sino;
+			FN_FCOS:	bus = coso;
+//			FN_FSQRT:	bus = sqrto;
+			FN_FRES:	bus = freso;
+			FN_FTRUNC:	bus = trunco;
+			FN_FCVTS2D:	bus = cvtS2Do;
+			default:	bus = 'd0;
 			endcase
-		FN_FMA,FN_FMS,FN_FNMA,FN_FNMS:
+		FN_FSCALEB:
+			bus = scaleo;
+		FN_FADD,FN_FSUB,FN_FMUL:
 			bus = fmao;
-		default:	bus = 'd0;
+		/*
+		FN_FDIV:
+			bus = divo;
+		*/
+		FN_FSEQ:	bus = cmpo[0];
+		FN_FSNE:	bus = ~cmpo[0];
+		FN_FSLT:	bus = cmpo[1];
+		FN_FSLE:	bus = cmpo[2];
+		FN_FCMP:	bus = cmpo;
+		FN_SGNJ:	bus = {a[63],b[62:0]};
+		FN_SGNJN:	bus = {~a[63],b[62:0]};
+		FN_SGNJX:	bus = {a[63]^b[63],b[62:0]};
+		default:	bus = 64'd0;
 		endcase
-	default: bus = 64'd0;
+	FN_FMA,FN_FMS,FN_FNMA,FN_FNMS:
+		bus = fmao;
+	default:	bus = 64'd0;
 	endcase
 end
 
@@ -329,33 +325,29 @@ if (!idle)
 	case(ir.any.opcode)
 	OP_FLT3:
 		case(ir.f3.func)
-		FN_FLT2:
-			case(ir.f2.func)
-			FN_FLT1:
-				case(ir.f1.func)
-				FN_FTOI: done = f2i_done;
-				FN_ITOF: done = i2f_done;
-				FN_FSIN:	done = sincos_done;
-				FN_FCOS:	done = sincos_done;
-	//			FN_FSQRT: done = sqrt_done;
-				FN_FRES:	done = fres_done;
-				FN_FTRUNC:	done = trunc_done;
-				default:	done = 1'b1;
-				endcase
-			FN_FSCALEB:
-				done = scale_done;
-			FN_FADD,FN_FSUB,FN_FMUL:
-				done = fma_done;
-			/*
-			FN_FDIV:
-				done = div_done;
-			*/
+		FN_FLT1:
+			case(ir.f1.func)
+			FN_FTOI: done = f2i_done;
+			FN_ITOF: done = i2f_done;
+			FN_FSIN:	done = sincos_done;
+			FN_FCOS:	done = sincos_done;
+//			FN_FSQRT: done = sqrt_done;
+			FN_FRES:	done = fres_done;
+			FN_FTRUNC:	done = trunc_done;
 			default:	done = 1'b1;
 			endcase
-		FN_FMA,FN_FMS,FN_FNMA,FN_FNMS:
+		FN_FSCALEB:
+			done = scale_done;
+		FN_FADD,FN_FSUB,FN_FMUL:
 			done = fma_done;
+		/*
+		FN_FDIV:
+			done = div_done;
+		*/
 		default:	done = 1'b1;
 		endcase
+	FN_FMA,FN_FMS,FN_FNMA,FN_FNMS:
+		done = fma_done;
 	default:	done = 1'b1;
 	endcase
 else

@@ -726,7 +726,7 @@ always_comb
 if (rst)
 	cpram_in = {$bits(cpram_in){1'b1}};
 else begin
-	cpram_in = cpram_out;
+	cpram_in = cpram_wout;
 	if (new_chkpt1) begin
 		cpram_in.avail = avail_i;
 	end
@@ -808,7 +808,7 @@ end
 
 // Add registers to the checkpoint map.
 always_ff @(posedge clk)
-if (cpram_en) begin
+begin
  	cpram_we <= wr0|wr1|wr2|wr3|new_chkpt1;
 end
 

@@ -1,11 +1,10 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2024  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//	Qupls_cache_hit.sv
 //
 // BSD 3-Clause License
 // Redistribution and use in source and binary forms, with or without
@@ -33,67 +32,58 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 356 LUTs / 22 FFs                                                                          
 // ============================================================================
 
-import QuplsPkg::*;
-import QuplsMmupkg::*;
-import Qupls_cache_pkg::*;
+module Qupls_setmask(max_ele_sz, numlanes, lanesz, mask);
+input [7:0] max_ele_sz;	// 8/16 bytes
+input [5:0] numlanes;
+input [2:0] lanesz;			// 0=1 byte, 1=2 bytes, 2=4 bytes, 3=8 bytes, 4=16 bytes
+output [63:0] mask;
 
-module Qupls_cache_hit(clk, adr, ndx, tag, valid, hit, rway, cv);
-parameter LINES=256;
-parameter WAYS=4;
-parameter AWID=32;
-parameter TAGBIT=14;
-input clk;
-input QuplsPkg::address_t adr;
-input [$clog2(LINES)-1:0] ndx;
-input cache_tag_t [3:0] tag;
-input [LINES-1:0] valid [0:WAYS-1];
-output reg hit;
-output [1:0] rway;
-output reg cv;
+reg [64:0] mask1;
+reg [3:0] bits_per_element;
 
-reg [1:0] prev_rway = 'd0;
-reg [WAYS-1:0] hit1, snoop_hit1;
-reg hit2;
-reg cv2, cv1;
-reg [1:0] rway1;
-
-integer k,ks;
-always_comb//ff @(posedge clk)
-begin
-	for (k = 0; k < WAYS; k = k + 1)
-	  hit1[k] = tag[k[1:0]]==adr[$bits(QuplsPkg::address_t)-1:TAGBIT] && 
-	  					valid[k][ndx]==1'b1;
-end
-
-integer k1;
 always_comb
-begin
-	cv2 = 1'b0;
-	for (k1 = 0; k1 < WAYS; k1 = k1 + 1)
-	  cv2 = cv2 | valid[k1][ndx]==1'b1;
-end
+	bits_per_element = max_ele_sz >> lanesz;
 
-integer n;
+// Bitmask according to lanes
 always_comb
-begin
-	rway1 = prev_rway;
-	for (n = 0; n < WAYS; n = n + 1)	
-		if (hit1[n]) rway1 = n;
-end
+	mask1 = (65'd2 << numlanes) - 64'd1;
 
-always_ff @(posedge clk)
-	prev_rway <= rway1;
-assign rway = rway1;
-
-always_comb//ff @(posedge clk)
-	hit = |hit1;
-
-always_ff @(posedge clk)
-	cv1 <= cv2;
-always_ff @(posedge clk)
-	cv <= cv1;	
+always_comb
+	case(bits_per_element)
+	4'd1:	mask = {
+		7'd0,mask1[7],
+		7'd0,mask1[6],
+		7'd0,mask1[5],
+		7'd0,mask1[4],
+		7'd0,mask1[3],
+		7'd0,mask1[2],
+		7'd0,mask1[1],
+		7'd0,mask1[0]
+		};
+	4'd2:	mask = {
+		6'd0,mask[15:14],
+		6'd0,mask[13:12],
+		6'd0,mask[11:10],
+		6'd0,mask[9:8],
+		6'd0,mask[7:6],
+		6'd0,mask[5:4],
+		6'd0,mask[3:2],
+		6'd0,mask[1:0]
+		};
+	4'd4:	mask = {
+		4'd0,mask[31:28],
+		4'd0,mask[27:24],
+		4'd0,mask[23:20],
+		4'd0,mask[19:16],
+		4'd0,mask[15:12],
+		4'd0,mask[11:8],
+		4'd0,mask[7:4],
+		4'd0,mask[3:0]
+		};
+	default:	// 8
+		mask = mask1;		
+	endcase
 
 endmodule

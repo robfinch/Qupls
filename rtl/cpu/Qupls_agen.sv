@@ -50,15 +50,9 @@ output value_t res;
 value_t as, bs;
 
 always_comb
-if (Ra==7'd53)
-	as = pc;
-else
 	as = a;
 
 always_comb
-if (Rb==7'd53)
-	bs = pc << ir.lsn.sc;
-else
 	bs = b << ir.lsn.sc;
 
 always_ff @(posedge clk)

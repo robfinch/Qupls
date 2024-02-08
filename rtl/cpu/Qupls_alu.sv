@@ -466,23 +466,23 @@ begin
 				exc = FLT_DBZ;
 		end
 	OP_DIVUI:	bus = ALU0 ? div_q : dead;
-	OP_ANDI,OP_VANDI:
+	OP_ANDI:
 		bus = a & i;
-	OP_ORI,OP_VORI:
+	OP_ORI:
 		bus = a | i;
-	OP_EORI,OP_VEORI:
+	OP_EORI:
 		bus = a ^ i;
 	OP_AIPSI:
 		bus = pc + ({{WID{ii[22]}},ii[22:0]} << (ir[14:12]*21));
 	OP_ADDSI,OP_VADDSI:
 		bus = a + ({{WID{ii[22]}},ii[22:0]} << (ir[14:12]*21));
-	OP_ANDSI,OP_VANDSI:
+	OP_ANDSI:
 		bus = a & ({WID{1'b1}} & ~({{WID{1'b0}},23'h7fffff} << (ir[14:12]*20)) | ({{WID{ii[22]}},ii[22:0]} << (ir[14:12]*21)));
-	OP_ORSI,OP_VORSI:
+	OP_ORSI:
 		bus = a | (i << (ir[14:12]*21));
-	OP_EORSI,OP_VEORSI:
+	OP_EORSI:
 		bus = a ^ (i << (ir[14:12]*21));
-	OP_SHIFT,OP_VSHIFT:
+	OP_SHIFT:
 		case(ir.shifti.func)
 		OP_ASL:	bus = shl[WID*2-1:WID];
 		OP_LSR:	bus = shr[WID-1:0];
@@ -497,6 +497,7 @@ begin
 		endcase
 	OP_MOV:		bus = a;
 	OP_LDAX:	bus = a + i + (b << ir[26:25]);
+	OP_PUSHI:	bus = a - 64'd8;
 	OP_BLEND:	bus = ALU0 ? blendo : dead;
 	OP_NOP:		bus = zero;
 	OP_QFEXT:	bus = qres;

@@ -149,14 +149,14 @@ else begin
                        // "independent_clock". Unused when parameter CLOCKING_MODE is "common_clock".
 
       .dina(dina),     // WRITE_DATA_WIDTH_A-bit input: Data input for port A write operations.
-      .ena(ena),       // 1-bit input: Memory enable signal for port A. Must be high on clock cycles when read
+      .ena(1'b1),       // 1-bit input: Memory enable signal for port A. Must be high on clock cycles when read
                        // or write operations are initiated. Pipelined internally.
 
-      .enb(enb),       // 1-bit input: Memory enable signal for port B. Must be high on clock cycles when read
+      .enb(1'b1),       // 1-bit input: Memory enable signal for port B. Must be high on clock cycles when read
                        // or write operations are initiated. Pipelined internally.
 
       .regcea(1'b1), // 1-bit input: Clock Enable for the last register stage on the output data path.
-      .regceb(1'b1), // 1-bit input: Do not change from the provided value.
+      .regceb(enb), // 1-bit input: Do not change from the provided value.
       .rsta(1'b0),     // 1-bit input: Reset signal for the final port A output register stage. Synchronously
                        // resets output port douta to the value specified by parameter READ_RESET_VALUE_A.
 

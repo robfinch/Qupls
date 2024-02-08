@@ -46,7 +46,7 @@ begin
 	case(ir.r2.opcode)
 	OP_ZSxxI:	fnIsAlu = 1'b1;
 	OP_CHK:	fnIsAlu = 1'b1;
-	OP_R2,OP_R3V,OP_R3VS:
+	OP_R2:
 		case(ir.r2.func)
 		FN_CPUID:	fnIsAlu = 1'b1;
 		FN_ADD:	fnIsAlu = 1'b1;
@@ -94,35 +94,32 @@ begin
 		FN_VSETMASK: fnIsAlu = 1'b1;
 		default:	fnIsAlu = 1'b0;
 		endcase
-	OP_ADDI,OP_VADDI:	
+	OP_ADDI:	
 		fnIsAlu = 1'b1;
 	OP_SUBFI:	fnIsAlu = 1'b1;
-	OP_CMPI,OP_VCMPI:	
+	OP_CMPI:	
 		fnIsAlu = 1'b1;
-	OP_MULI,OP_VMULI:	
+	OP_MULI:	
 		fnIsAlu = 1'b1;
-	OP_MULUI,OP_DIVUI:
+	OP_MULUI:
 		fnIsAlu = 1'b1;
-	OP_DIVI,OP_VDIVI:	
+	OP_DIVI:	
 		fnIsAlu = 1'b1;
-	OP_ANDI,OP_VANDI:	
+	OP_ANDI:	
 		fnIsAlu = 1'b1;
-	OP_ORI,OP_VORI:
+	OP_ORI:
 		fnIsAlu = 1'b1;
-	OP_EORI,OP_VEORI:
+	OP_EORI:
 		fnIsAlu = 1'b1;
 	OP_AIPSI:	fnIsAlu = 1'b1;
-	OP_VADDSI,OP_VORSI,OP_VANDSI,OP_VEORSI,
 	OP_ADDSI,OP_ORSI,OP_ANDSI,OP_EORSI:
 						fnIsAlu = 1'b1;
-	OP_SHIFT,OP_VSHIFT:
+	OP_SHIFT:
 		fnIsAlu = 1'b1;
 	OP_CSR:		fnIsAlu = 1'b1;
 	OP_MOV:		fnIsAlu = 1'b1;
 	OP_LDAX:	fnIsAlu = 1'b1;
-	OP_PFXA32,OP_PFXB32,OP_PFXC32,
 	OP_QFEXT,
-	OP_REGC,
 	OP_NOP,OP_PUSH,OP_POP,OP_ENTER,OP_LEAVE,OP_ATOM:
 		fnIsAlu = 1'b1;
 	OP_FENCE:
