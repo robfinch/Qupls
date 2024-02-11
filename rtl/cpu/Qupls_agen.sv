@@ -36,8 +36,9 @@
 
 import QuplsPkg::*;
 
-module Qupls_agen(clk, ir, a, b, i, Ra, Rb, pc, res);
+module Qupls_agen(clk, next, ir, a, b, i, Ra, Rb, pc, res);
 input clk;
+input next;								// calculate for next cache line
 input instruction_t ir;
 input value_t a;
 input value_t b;
@@ -48,6 +49,7 @@ input pc_address_t pc;
 output value_t res;
 
 value_t as, bs;
+value_t res1;
 
 always_comb
 	as = a;
@@ -60,14 +62,17 @@ begin
 	case(ir.any.opcode)
 	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,
 	OP_STB,OP_STW,OP_STT,OP_STO:
-		res <= as + i;
+		res1 <= as + i;
 	OP_LDX,OP_STX:
-		res <= as + bs + i;
+		res1 <= as + bs + i;
 	OP_AMO:
-		res <= as + b;
+		res1 <= as + b;
 	default:
-		res <= 64'd0;
+		res1 <= 64'd0;
 	endcase
 end
+
+always_comb
+	res = next ? {res1[$bits(value_t)-1:6] + 2'd1,6'd0} : res1;
 
 endmodule

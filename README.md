@@ -5,11 +5,12 @@ Qupls is an implementation of the Qupls instruction set architecture. The ISA is
 
 ### Versions
 Qupls is the 2024 version of the Thor processor which has evolved over the years. Different versions are completely incompatible with one another as the author has learned and gained more experience.
+QuplsSeq is a scalar version of the core.
 
 ### History
 Work started on Qupls in November of 2023. Many years of work have gone into prior CPUs.
 
-### Features Out-of-Order version
+### Features Superscalar Out-of-Order version (Qupls.sv)
 * Fixed length instruction set.
 * 48-bit instructions.
 * 64-bit datapath / support for 128-bit floats
@@ -26,6 +27,21 @@ Work started on Qupls in November of 2023. Many years of work have gone into pri
 * Bitfield operations.
 * Conditional relative branch instructions with 19-bit displacements
 * 4-way Out-of-order execution of instructions
+* 128 entry, two way TLB for virtual memory support, shared between instruction and data
+
+### Features Scalar In-Order version (QuplsSeq.sv)
+* Fixed length instruction set.
+* 48-bit instructions.
+* 64-bit datapath / support for 128-bit floats
+* 32 general purpose registers, unified integer and float register file
+* 24 vector registers
+* Independent control of vector or scalar type for each register spec.
+* Independent sign control for each register spec.
+* Dual operation instructions: Rt = Ra op Rb op Rc
+* Standard suite of ALU operations, add, subtract, compare, multiply and divide.
+* Pair shifting instructions. Arithmetic right shift with round.
+* Bitfield operations.
+* Conditional relative branch instructions with 19-bit displacements
 * 128 entry, two way TLB for virtual memory support, shared between instruction and data
 
 ## Out-of-Order Version

@@ -72,7 +72,7 @@ output div_dbz;
 output cause_code_t exc;
 
 genvar g;
-integer nn;
+integer nn,kk;
 value_t zero = {WID{1'b0}};
 value_t dead = {WID/16{16'hdead}};
 wire cd_args;
@@ -90,6 +90,7 @@ reg [22:0] ii;
 reg [WID-1:0] sd;
 reg [WID-1:0] sum_ab;
 reg [WID-1:0] chndx;
+reg [WID-1:0] chndx2;
 reg [WID-1:0] chrndxv;
 wire [WID-1:0] info;
 wire [WID-1:0] vmasko;
@@ -194,13 +195,15 @@ generate begin : gChrndx
 		always_comb
 		begin
 			if (g==WID/8-1)
-				chndx = {WID{1'b1}};	// -1
+				chndx[g] = 1'b0;
 			if (b[g*8+7:g*8]==chrndxv[g*8+7:g*8])
-				chndx = g[WID-1:0];
+				chndx[g] = 1'b1;
 		end
 	end
 end
 endgenerate
+
+flo96 uflo1 (.i({96'd0,chndx[WID/8-1:0]}), .o(chndx2[6:0]));
 
 always_comb
 begin
@@ -246,7 +249,7 @@ begin
 		4'd10:	if (!(a==canary)) exc = cause_code_t'(ir[34:27]);
 		default:	exc = FLT_UNIMP;
 		endcase
-	OP_R2,OP_R3V,OP_R3VS:
+	OP_R2:
 		case(ir.r2.func)
 		FN_CPUID:	bus = ALU0 ? info : 64'd0;
 		FN_ADD:
@@ -357,7 +360,7 @@ begin
 			default:	bus = {WID{1'd0}};
 			endcase
 			
-		FN_BYTENDX:	bus = ALU0 ? chndx : dead;
+		FN_BYTENDX:	bus = ALU0 ? chndx2 : dead;
 
 		FN_SEQ:	bus = a==b ? c : t;
 		FN_SNE:	bus = a!=b ? c : t;

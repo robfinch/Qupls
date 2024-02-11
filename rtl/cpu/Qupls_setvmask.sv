@@ -44,7 +44,7 @@ reg [64:0] mask1;
 reg [3:0] bits_per_element;
 
 always_comb
-	bits_per_element = max_ele_sz >> $clog2(lanesz);
+	bits_per_element = max_ele_sz / lanesz;
 
 // Bitmask according to lanes
 always_comb

@@ -57,11 +57,24 @@ output reg [WID-1:0] o;
 output reg done;
 
 wire [WID-1:0] o16, o32, o64, o128;
+wire [7:0] sr64, sr128;
 genvar g;
 
 generate begin : gPrec
 if (SUPPORT_PREC) begin
 for (g = 0; g < WID/16; g = g + 1)
+	QuplsSeqFPU2c #(.PREC("H")) ufpu1
+	(
+		.rst(rst),
+		.clk(clk),
+		.op(ir[47:41]),
+		.a(a[g*16+15:g*16]),
+		.b(b[g*16+15:g*16]),
+		.c(c[g*16+15:g*16]),
+		.o(o16[g*16+15:g*16]),
+		.sr()
+	);
+/*
 	Qupls_fpu16(
 		.rst(rst),
 		.clk(clk),
@@ -76,8 +89,21 @@ for (g = 0; g < WID/16; g = g + 1)
 		.p(p),
 		.o(o16[g*16+15:g*16]),
 		.done()
-);
+	);
+*/
 for (g = 0; g < WID/32; g = g + 1)
+	QuplsSeqFPU2c #(.PREC("S")) ufpu1
+	(
+		.rst(rst),
+		.clk(clk),
+		.op(ir[47:41]),
+		.a(a[g*32+31:g*32]),
+		.b(b[g*32+31:g*32]),
+		.c(c[g*32+31:g*32]),
+		.o(o32[g*32+31:g*32]),
+		.sr()
+	);
+/*
 	Qupls_fpu32(
 		.rst(rst),
 		.clk(clk),
@@ -92,9 +118,20 @@ for (g = 0; g < WID/32; g = g + 1)
 		.p(p),
 		.o(o32[g*32+31:g*32]),
 		.done()
-);
-end
+	);
+*/
 for (g = 0; g < WID/64; g = g + 1)
+	QuplsSeqFPU2c #(.PREC("D")) ufpu1
+	(
+		.rst(rst),
+		.clk(clk),
+		.a(a[g*64+63:g*64]),
+		.b(b[g*64+63:g*64]),
+		.c(c[g*64+63:g*64]),
+		.o(o64[g*64+63:g*64]),
+		.sr(sr64)
+	);
+/*
 	Qupls_fpu64 (
 		.rst(rst),
 		.clk(clk),
@@ -109,8 +146,20 @@ for (g = 0; g < WID/64; g = g + 1)
 		.p(p),
 		.o(o64[g*64+63:g*64]),
 		.done()
-);
+	);
+*/
 if (SUPPORT_QUAD_PRECISION)
+	QuplsSeqFPU2c #(.PREC("Q")) ufpu1
+	(
+		.rst(rst),
+		.clk(clk),
+		.a(a),
+		.b(b),
+		.c(c),
+		.o(o128),
+		.sr(sr128)
+	);
+/*		
 	Qupls_fpu128 (
 		.rst(rst),
 		.clk(clk),
@@ -125,7 +174,9 @@ if (SUPPORT_QUAD_PRECISION)
 		.p(p),
 		.o(o128),
 		.done()
-);
+	);
+*/
+end
 end
 endgenerate
 
@@ -139,5 +190,7 @@ if (SUPPORT_PREC)
 	endcase
 else
 	o = o64;
+always_comb
+	done = ~sr64[6];
 
 endmodule

@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2023-2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -43,6 +43,7 @@ import QuplsPkg::*;
 module Qupls_mpu(rst_i, clk_i, clk2x_i, ftam_req, ftam_resp, irq_bus,
 	clk0, gate0, out0, clk1, gate1, out1, clk2, gate2, out2, clk3, gate3, out3
 	);
+parameter CPU="SEQ";
 input rst_i;
 input clk_i;
 input clk2x_i;
@@ -223,25 +224,49 @@ begin
 	pic_resp.pri = wbm32_req.pri;
 end
 
-Qupls 
-#(
-	.CORENO(6'd1),
-	.CID(6'd1)
-)
-ucpu1
-(
-	.coreno_i(64'd1),
-	.rst_i(rst_i),
-	.clk_i(clk_i),
-	.clk2x_i(clk2x_i),
-	.irq_i(pic_irq[2:0]),
-	.vect_i({1'b0,pic_cause}),
-	.fta_req(ftam_req),
-	.fta_resp(wb128_resp),
-	.snoop_v(snoop_v),
-	.snoop_adr(snoop_adr),
-	.snoop_cid(snoop_cid)
-);
+generate begin : gCpu
+	if (CPU=="SEQ")
+		QuplsSeq
+		#(
+			.CORENO(6'd1),
+			.CID(6'd1)
+		)
+		ucpu1
+		(
+			.coreno_i(64'd1),
+			.rst_i(rst_i),
+			.clk_i(clk_i),
+			.clk2x_i(clk2x_i),
+			.irq_i(pic_irq[2:0]),
+			.vect_i({1'b0,pic_cause}),
+			.fta_req(ftam_req),
+			.fta_resp(wb128_resp),
+			.snoop_v(snoop_v),
+			.snoop_adr(snoop_adr),
+			.snoop_cid(snoop_cid)
+		);
+	else
+		Qupls
+		#(
+			.CORENO(6'd1),
+			.CID(6'd1)
+		)
+		ucpu1
+		(
+			.coreno_i(64'd1),
+			.rst_i(rst_i),
+			.clk_i(clk_i),
+			.clk2x_i(clk2x_i),
+			.irq_i(pic_irq[2:0]),
+			.vect_i({1'b0,pic_cause}),
+			.fta_req(ftam_req),
+			.fta_resp(wb128_resp),
+			.snoop_v(snoop_v),
+			.snoop_adr(snoop_adr),
+			.snoop_cid(snoop_cid)
+		);
+end
+endgenerate
 
 /*
 Qupls 
