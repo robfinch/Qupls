@@ -79,7 +79,7 @@ reg [5:0] rstcnt;
 reg [4:0] vele;
 pc_address_t pc,mc_adr,fpc;
 mc_address_t micro_ip,mip,next_micro_ip;
-ex_instruction_t ir;
+ex_instruction_t ir,ir2;
 ex_instruction_t micro_ir;
 status_reg_t sr;
 wire [2:0] im = sr.ipl;
@@ -228,7 +228,7 @@ value_t rfoT;
                                        // "common_clock".
 
       .dina(res),                     // WRITE_DATA_WIDTH_A-bit input: Data input for port A write operations.
-      .ena(rfwr),                       // 1-bit input: Memory enable signal for port A. Must be high on clock
+      .ena(1'b1),                       // 1-bit input: Memory enable signal for port A. Must be high on clock
                                        // cycles when write operations are initiated. Pipelined internally.
 
       .enb(1'b1),                       // 1-bit input: Memory enable signal for port B. Must be high on clock
@@ -305,7 +305,7 @@ value_t rfoT;
                                        // "common_clock".
 
       .dina(res),                     // WRITE_DATA_WIDTH_A-bit input: Data input for port A write operations.
-      .ena(rfwr),                       // 1-bit input: Memory enable signal for port A. Must be high on clock
+      .ena(1'b1),                       // 1-bit input: Memory enable signal for port A. Must be high on clock
                                        // cycles when write operations are initiated. Pipelined internally.
 
       .enb(1'b1),                       // 1-bit input: Memory enable signal for port B. Must be high on clock
@@ -382,7 +382,7 @@ value_t rfoT;
                                        // "common_clock".
 
       .dina(res),                     // WRITE_DATA_WIDTH_A-bit input: Data input for port A write operations.
-      .ena(rfwr),                       // 1-bit input: Memory enable signal for port A. Must be high on clock
+      .ena(1'b1),                       // 1-bit input: Memory enable signal for port A. Must be high on clock
                                        // cycles when write operations are initiated. Pipelined internally.
 
       .enb(1'b1),                       // 1-bit input: Memory enable signal for port B. Must be high on clock
@@ -459,7 +459,7 @@ value_t rfoT;
                                        // "common_clock".
 
       .dina(res),                     // WRITE_DATA_WIDTH_A-bit input: Data input for port A write operations.
-      .ena(rfwr),                       // 1-bit input: Memory enable signal for port A. Must be high on clock
+      .ena(1'b1),                       // 1-bit input: Memory enable signal for port A. Must be high on clock
                                        // cycles when write operations are initiated. Pipelined internally.
 
       .enb(1'b1),                       // 1-bit input: Memory enable signal for port B. Must be high on clock
@@ -595,7 +595,7 @@ Qupls_decoder udec1
 
 Qupls_branch_eval ube1
 (
-	.instr(ins[0]),
+	.instr(ir2),
 	.a(argA),
 	.b(argB|db.immb),
 	.takb(takb)
@@ -604,14 +604,16 @@ Qupls_branch_eval ube1
 typedef enum logic [4:0] {
 	IFETCH = 5'd1,
 	EXTRACT = 5'd2,
-	DECODE = 5'd3,
+	DECODE1 = 5'd3,
 	EXECUTE = 5'd4,
 	MEMORY = 5'd5,
 	MEMORY_ACK = 5'd6,
 	MEMORY2 = 5'd7,
 	MEMORY2_ACK = 5'd8,
 	WRITEBACK = 5'd9,
-	REGREAD = 5'd10
+	REGREAD1 = 5'd10,
+	REGREAD2 = 5'd11,
+	DECODE2 = 5'd12
 } e_state;
 
 e_state state;
@@ -643,7 +645,7 @@ Qupls_meta_alu #(.ALU0(1'b1)) ualu0
 	.clk2x(clk2x_i),
 	.ld(ld),
 	.prc(db.prc),
-	.ir(ins[0].ins),
+	.ir(ir2.ins),
 	.div(db.div),
 	.cptgt(cptgt),
 	.z(db.predz),
@@ -671,7 +673,7 @@ Qupls_meta_fpu ufpu1 (
 	.clk(clk2x_i),
 	.idle(),
 	.prc(2'd2),
-	.ir(ins[0].ins),
+	.ir(ir2.ins),
 	.rm(3'b0),
 	.a(argA),
 	.b(argB),
@@ -710,7 +712,7 @@ wire [1:0] pg_faultq;
 Qupls_agen uag0
 (
 	.clk(clk),
-	.ir(ins[0]),
+	.ir(ir2),
 	.Ra(Ra),
 	.Rb(Rb),
 	.pc(fpc),
@@ -967,16 +969,14 @@ IFETCH:
 	end
 EXTRACT:
 	begin
-		tGoto(DECODE);
+		tGoto(DECODE1);
 		if (!vector_active) begin
-			ins[0].aRa <= {3'd0,ins[0].ins.r3.Ra};
-			ins[0].aRb <= {3'd0,ins[0].ins.r3.Rb};
-			ins[0].aRc <= {3'd0,ins[0].ins.r3.Rc};
-			ins[0].aRt <= {3'd0,ins[0].ins.r3.Rt};
-			Ra <= {3'd0,ins[0].ins.r3.Ra};
-			Rb <= {3'd0,ins[0].ins.r3.Rb};
-			Rc <= {3'd0,ins[0].ins.r3.Rc};
-			Rt <= {3'd0,ins[0].ins.r3.Rt};
+			if (!micro_code_active) begin
+				ins[0].aRa <= {3'd0,ins[0].ins.r3.Ra};
+				ins[0].aRb <= {3'd0,ins[0].ins.r3.Rb};
+				ins[0].aRc <= {3'd0,ins[0].ins.r3.Rc};
+				ins[0].aRt <= {3'd0,ins[0].ins.r3.Rt};
+			end
 			ins[0].pred_btst = 6'd0;
 			// If a vector instruction is detected, record the ir set the vector fetch
 			// flag and go back to fetch.
@@ -988,14 +988,18 @@ EXTRACT:
 		end
 		else begin
 			vele <= vele + 2'd1;
-			ins[0].aRa <= ir.ins.r3.Ra.v ? {ir.ins.r3.Ra,vele[2:0]} : {3'd0,ir.ins.r3.Ra};
-			ins[0].aRb <= ir.ins.r3.Rb.v ? {ir.ins.r3.Rb,vele[2:0]} : {3'd0,ir.ins.r3.Rb};
-			ins[0].aRc <= ir.ins.r3.Rc.v ? {ir.ins.r3.Rc,vele[2:0]} : {3'd0,ir.ins.r3.Rc};
-			ins[0].aRt <= ir.ins.r3.Rt.v ? {ir.ins.r3.Rt,vele[2:0]} : {3'd0,ir.ins.r3.Rt};
-			Ra <= ir.ins.r3.Ra.v ? {ir.ins.r3.Ra,vele[2:0]} : {3'd0,ir.ins.r3.Ra};
-			Rb <= ir.ins.r3.Rb.v ? {ir.ins.r3.Rb,vele[2:0]} : {3'd0,ir.ins.r3.Rb};
-			Rc <= ir.ins.r3.Rc.v ? {ir.ins.r3.Rc,vele[2:0]} : {3'd0,ir.ins.r3.Rc};
-			Rt <= ir.ins.r3.Rt.v ? {ir.ins.r3.Rt,vele[2:0]} : {3'd0,ir.ins.r3.Rt};
+			if (micro_code_active) begin
+				ins[0].aRa <= ir.ins.r3.Ra.v ? {ir.aRa,vele[2:0]} : {3'd0,ir.aRa};
+				ins[0].aRb <= ir.ins.r3.Rb.v ? {ir.aRb,vele[2:0]} : {3'd0,ir.aRb};
+				ins[0].aRc <= ir.ins.r3.Rc.v ? {ir.aRc,vele[2:0]} : {3'd0,ir.aRc};
+				ins[0].aRt <= ir.ins.r3.Rt.v ? {ir.aRt,vele[2:0]} : {3'd0,ir.aRt};
+			end
+			else begin
+				ins[0].aRa <= ir.ins.r3.Ra.v ? {ir.ins.r3.Ra,vele[2:0]} : {3'd0,ir.ins.r3.Ra};
+				ins[0].aRb <= ir.ins.r3.Rb.v ? {ir.ins.r3.Rb,vele[2:0]} : {3'd0,ir.ins.r3.Rb};
+				ins[0].aRc <= ir.ins.r3.Rc.v ? {ir.ins.r3.Rc,vele[2:0]} : {3'd0,ir.ins.r3.Rc};
+				ins[0].aRt <= ir.ins.r3.Rt.v ? {ir.ins.r3.Rt,vele[2:0]} : {3'd0,ir.ins.r3.Rt};
+			end
 			ins[0].pred_btst = 6'd0;
 		end
 		if (~|micro_ip)
@@ -1006,13 +1010,21 @@ EXTRACT:
 			tGoto(IFETCH);
 		end
 	end
-DECODE:
+DECODE1:	tGoto(DECODE2);
+DECODE2:
 	begin
+		ir2 <= ins[0];
 		argI <= db.immb;
 		cptgt <= {8{db.cpytgt}};
-		tGoto(REGREAD);
+		Ra = db.Ra;
+		Rb = db.Rb;
+		Rc = db.Rc;
+		Rt = db.Rt;
+		tGoto(REGREAD1);
 	end
-REGREAD:
+REGREAD1:
+	tGoto(REGREAD2);
+REGREAD2:
 	begin
 		argA <= rfoA;
 		argB <= rfoB;
@@ -1234,6 +1246,8 @@ endtask
 
 task tReset;
 begin
+	ir <= {41'd0,OP_NOP};
+	micro_ir <= {41'd0,OP_NOP};
 	pc <= RSTPC;
 	micro_ip <= 12'h1A0;
 	micro_code_active <= TRUE;

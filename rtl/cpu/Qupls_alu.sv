@@ -476,15 +476,15 @@ begin
 	OP_EORI:
 		bus = a ^ i;
 	OP_AIPSI:
-		bus = pc + ({{WID{ii[22]}},ii[22:0]} << (ir[14:12]*21));
-	OP_ADDSI,OP_VADDSI:
-		bus = a + ({{WID{ii[22]}},ii[22:0]} << (ir[14:12]*21));
+		bus = pc + ({{WID{i[23]}},i[23:0]} << (ir[17:15]*24));
+	OP_ADDSI:
+		bus = a + ({{WID{i[23]}},i[23:0]} << (ir[17:15]*24));
 	OP_ANDSI:
-		bus = a & ({WID{1'b1}} & ~({{WID{1'b0}},23'h7fffff} << (ir[14:12]*20)) | ({{WID{ii[22]}},ii[22:0]} << (ir[14:12]*21)));
+		bus = a & ({WID{1'b1}} & ~({{WID{1'b0}},24'hffffff} << (ir[17:15]*24)) | ({{WID{i[23]}},i[23:0]} << (ir[17:15]*24)));
 	OP_ORSI:
-		bus = a | (i << (ir[14:12]*21));
+		bus = a | (i << (ir[17:15]*24));
 	OP_EORSI:
-		bus = a ^ (i << (ir[14:12]*21));
+		bus = a ^ (i << (ir[17:15]*24));
 	OP_SHIFT:
 		case(ir.shifti.func)
 		OP_ASL:	bus = shl[WID*2-1:WID];

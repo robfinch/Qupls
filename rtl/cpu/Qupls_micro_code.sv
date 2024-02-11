@@ -1646,170 +1646,146 @@ case(micro_ip)
 12'h1A0:	
 	begin
 		next_ip = 12'h1A1;
-		instr.ins = {24'h123456,2'd2,7'h40,7'h40,1'b1,OP_ADDI};
+		instr.ins = {24'h123456,2'd2,7'h00,7'h00,1'b0,OP_ADDI};
 		instr.aRt = MC0;
-		regx = 4'h1;
 	end
 12'h1A1:
 	begin
 		next_ip = 12'h1A2;
 		instr.ins = {24'h123456,2'd2,7'd0,7'd0,1'b0,OP_ADDI};
 		instr.aRt = MC0;
-		regx = 4'h1;
 	end
 12'h1A2:
 	begin
 		next_ip = 12'h1A3;
 		instr.ins = {24'h123456,2'd2,7'd0,7'd0,1'b0,OP_ADDI};
 		instr.aRt = MC0;
-		regx = 4'h1;
 	end
 12'h1A3:
 	begin
 		next_ip = 12'h1A4;
 		instr.ins = {24'h123456,2'd2,7'd0,7'd0,1'b0,OP_ADDI};
 		instr.aRt = MC0;
-		regx = 4'h1;
 	end
 12'h1A4:
 	begin
 		next_ip = 12'h1A5;
 		instr.ins = {24'h123456,2'd2,7'd0,7'd0,1'b0,OP_ADDI};
 		instr.aRt = MC0;
-		regx = 4'h1;
 	end
 12'h1A5:
 	begin
 		next_ip = 12'h1A6;
 		instr.ins = {24'h123456,2'd2,7'd0,7'd0,1'b0,OP_ADDI};
 		instr.aRt = MC0;
-		regx = 4'h1;
 	end
 12'h1A6:
 	begin
 		next_ip = 12'h1A7;
 		instr.ins = {24'h123456,2'd2,7'd0,7'd0,1'b0,OP_ADDI};
 		instr.aRt = MC0;
-		regx = 4'h1;
 	end
 12'h1A7:
 	begin
 		next_ip = 12'h1A8;
 		instr.ins = {24'h123456,2'd2,7'd0,7'd0,1'b0,OP_ADDI};
 		instr.aRt = MC0;
-		regx = 4'h1;
 	end
 12'h1A8:
 	begin
 		next_ip = 12'h1A9;
 		instr.ins = {24'h123456,2'd2,7'd0,7'd0,1'b0,OP_ADDI};
 		instr.aRt = MC0;
-		regx = 4'h1;
 	end
 12'h1A9:
 	begin
 		next_ip = 12'h1AA;
 		instr.ins = {24'h123456,2'd2,7'd0,7'd0,1'b0,OP_ADDI};
 		instr.aRt = MC0;
-		regx = 4'h1;
 	end
 12'h1AA:
 	begin
 		next_ip = 12'h1AB;
 		instr.ins = {24'h123456,2'd2,7'd0,7'd0,1'b0,OP_ADDI};
 		instr.aRt = MC0;
-		regx = 4'h1;
 	end
 12'h1AB:
 	begin
 		next_ip = 12'h1AC;
 		instr.ins = {24'h123456,2'd2,7'd0,7'd0,1'b0,OP_ADDI};
 		instr.aRt = MC0;
-		regx = 4'h1;
 	end
 12'h1AC:
 	begin
 		next_ip = 12'h1AD;
 		instr.ins = {24'h123456,2'd2,7'd0,7'd0,1'b0,OP_ADDI};
 		instr.aRt = MC0;
-		regx = 4'h1;
 	end
 12'h1AD:
 	begin
 		next_ip = 12'h1AE;
 		instr.ins = {24'h123456,2'd2,7'd0,7'd0,1'b0,OP_ADDI};
 		instr.aRt = MC0;
-		regx = 4'h1;
 	end
 12'h1AE:
 	begin
 		next_ip = 12'h1AF;
 		instr.ins = {24'h123456,2'd2,7'd0,7'd0,1'b0,OP_ADDI};
 		instr.aRt = MC0;
-		regx = 4'h1;
 	end
 12'h1AF:
 	begin
 		next_ip = 12'h1B0;
 		instr.ins = {24'h123456,2'd2,7'd0,7'd0,1'b0,OP_ADDI};
 		instr.aRt = MC0;
-		regx = 4'h1;
 	end
 12'h1B0:
 	begin
 		next_ip = 12'h1B1;
 		instr.ins = {24'h123456,2'd2,7'd0,7'd0,1'b0,OP_ADDI};
 		instr.aRt = MC0;
-		regx = 4'h1;
 	end
 12'h1B1:
 	begin
 		next_ip = 12'h1B2;
 		instr.ins = {24'h123456,2'd2,7'd0,7'd0,1'b0,OP_ADDI};
 		instr.aRt = MC0;
-		regx = 4'h1;
 	end
 12'h1B2:
 	begin
 		next_ip = 12'h1B3;
 		instr.ins = {24'h123456,2'd2,7'd0,7'd0,1'b0,OP_ADDI};
 		instr.aRt = MC0;
-		regx = 4'h1;
 	end
 12'h1B3:
 	begin
 		next_ip = 12'h1B4;
 		instr.ins = {24'h123456,2'd2,7'd0,7'd0,1'b0,OP_ADDI};
 		instr.aRt = MC0;
-		regx = 4'h1;
 	end
 12'h1B4:
 	begin
 		next_ip = 12'h1B5;
 		instr.ins = {24'h123456,2'd2,7'd0,7'd0,1'b0,OP_ADDI};
 		instr.aRt = MC0;
-		regx = 4'h1;
 	end
 12'h1B5:
 	begin
 		next_ip = 12'h1B6;
 		instr.ins = {24'h123456,2'd2,7'd0,7'd0,1'b0,OP_ADDI};
 		instr.aRt = MC0;
-		regx = 4'h1;
 	end
 12'h1B6:
 	begin
 		next_ip = 12'h1B7;
 		instr.ins = {24'h123456,2'd2,7'd0,7'd0,1'b0,OP_ADDI};
 		instr.aRt = MC0;
-		regx = 4'h1;
 	end
 12'h1B7:
 	begin
 		next_ip = 12'h1B8;
 		instr.ins = {24'h123456,2'd2,7'd0,7'd0,1'b0,OP_ADDI};
 		instr.aRt = MC0;
-		regx = 4'h1;
 	end
 12'h1B8:	
 	begin
@@ -1833,7 +1809,7 @@ case(micro_ip)
 12'h1B9:	
 	begin
 		next_ip = 12'h1BA;
-		instr.ins = {24'hFFFBC0,2'd2,7'd0,7'd0,1'b0,OP_JSR};
+		instr.ins = {24'hFFFD80,2'd2,7'd0,7'd0,1'b0,OP_JSR};
 		instr.aRa = 9'd0;
 		instr.aRt = 9'd0;
 	end
