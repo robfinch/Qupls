@@ -67,9 +67,9 @@ wire cs_config, cs_io;
 assign cs_config = ftam_req.padr[31:28]==4'hD;
 assign cs_io = ftam_req.padr[31:24]==8'hFE;
 
-wire snoop_v;
-QuplsPkg::address_t snoop_adr;
-wire [3:0] snoop_cid;
+wire snoop_v = 1'b0;
+QuplsPkg::address_t snoop_adr = 32'd0;
+wire [5:0] snoop_cid = 6'd0;
 reg [31:0] iirq;
 
 wire [7:0] pic_cause;

@@ -74,6 +74,7 @@ genvar g;
 reg [63:0] regfile [0:255];
 reg [7:0] Ra,Rb,Rc,Rt;
 value_t argA,argB,argC,argT,argI;
+value_t brdisp;
 
 reg [5:0] rstcnt;
 reg [4:0] vele;
@@ -172,6 +173,8 @@ reg [NDATA_PORTS-1:0] dramN_ack;
 reg [NDATA_PORTS-1:0] dramN_erc;
 fta_tranid_t dramN_tid [0:NDATA_PORTS-1];
 memsz_t dramN_memsz;
+reg dc_invline = 1'b0;
+reg dc_invall = 1'b0;
 
 reg rfwr;
 value_t rfoA;
@@ -713,6 +716,7 @@ Qupls_agen uag0
 (
 	.clk(clk),
 	.ir(ir2),
+	.next(agen_next),
 	.Ra(Ra),
 	.Rb(Rb),
 	.pc(fpc),
@@ -738,7 +742,7 @@ Qupls_tlb utlb1
 	.vadr0(vadr),
 	.vadr1(ptw_vadr),
 	.pc_vadr(ic_miss_adr),
-	.op0(ins[0]),
+	.op0(ir2),
 	.op1({41'd0,OP_NOP}),
 	.agen0_rndx_i(5'd0),
 	.agen1_rndx_i(5'd0),
@@ -942,6 +946,8 @@ else begin
 case(state)
 IFETCH:	
 	begin
+		$display("rfwr=%d Rt=%d res=%h", rfwr, Rt, res);
+		agen_next <= FALSE;
 		if (vector_active) begin
 			if (vele < vl) begin
 				ins[0] <= ir;
@@ -1026,10 +1032,27 @@ REGREAD1:
 	tGoto(REGREAD2);
 REGREAD2:
 	begin
-		argA <= rfoA;
-		argB <= rfoB;
-		argC <= rfoC;
+		case({db.Ran,db.bitwise})
+		2'b00:	argA <= rfoA;
+		2'b01:	argA <= rfoA;
+		2'b10:	argA <= -rfoA;
+		2'b11:	argA <= ~rfoA;
+		endcase
+		case({db.Rbn,db.bitwise})
+		2'b00:	argB <= rfoB;
+		2'b01:	argB <= rfoB;
+		2'b10:	argB <= -rfoB;
+		2'b11:	argB <= ~rfoB;
+		endcase
+		case({db.Rcn,db.bitwise})
+		2'b00:	argC <= rfoC;
+		2'b01:	argC <= rfoC;
+		2'b10:	argC <= -rfoC;
+		2'b11:	argC <= ~rfoC;
+		endcase
 		argT <= rfoT;
+		brdisp <= {{43{ins[0].ins.br.disp[16]}},ins[0].ins.br.disp,2'b0}
+						 + {{44{ins[0].ins.br.disp[16]}},ins[0].ins.br.disp,1'b0};
 		tGoto(EXECUTE);
 	end
 EXECUTE:
@@ -1037,9 +1060,9 @@ EXECUTE:
 		ld <= TRUE;
 		agen_v <= db.mem;
 		if (db.br & takb)
-			pc <= fpc + {ins[0].ins.br.disp,2'b0} + {ins[0].ins.br.disp,1'b0};
+			pc <= fpc + brdisp;
 		else if (db.bsr)
-			pc <= fpc + ins[0].ins.bsr.disp;
+			pc <= fpc + {{27{ins[0].ins.bsr.disp[36]}},ins[0].ins.bsr.disp};
 		else if (db.bts==BTS_RET)
 			pc <= argA + {ins[0].ins[10:8],2'd0} + {ins[0].ins[10:8],1'd0};
 		else if (db.cjb) begin
@@ -1053,7 +1076,7 @@ EXECUTE:
 	end
 MEMORY:
 	if (tlb0_v) begin
-		agen_v <= FALSE;
+		dram0 <= DRAMSLOT_READY;
 		dram0_exc <= FLT_NONE;
 		dram0_stomp <= 1'b0;
 		dram0_id <= 5'd0;
@@ -1084,11 +1107,15 @@ MEMORY:
 		dram0_tid.core <= CORENO;
 		dram0_tid.channel <= 3'd1;
 		dram0_tid.tranid <= dram0_tid.tranid + 2'd1;
+		if (dram0_tid.tranid==4'd15)
+			dram0_tid.tranid <= 4'd1;
     dram0_tocnt <= 12'd0;
     tGoto(MEMORY_ACK);
 	end
 MEMORY_ACK:
 	if (dram0_ack) begin
+		agen_v <= FALSE;
+		dram0 <= DRAMSLOT_AVAIL;
     dram_Rt0 <= dram0_Rt;
     dram_aRt0 <= dram0_aRt;
     dram_aRtz0 <= dram0_aRtz;
@@ -1108,18 +1135,23 @@ MEMORY_ACK:
 	end
 MEMORY2:
 	if (tlb0_v) begin
-		agen_v <= FALSE;
 		agen_next <= FALSE;
+		dram0 <= DRAMSLOT_READY;
 		dram0_hi <= 1'b1;
 		dram0_sel <= dram0_selh >> 8'd64;
 		dram0_vaddr <= {dram0_vaddrh[$bits(virtual_address_t)-1:6] + 2'd1,6'h0};
 		dram0_paddr <= {dram0_paddrh[$bits(physical_address_t)-1:6] + 2'd1,6'h0};
 		dram0_data <= dram0_datah >> 12'd512;
 		dram0_shift <= {7'd64-dram0_paddrh[5:0],3'b0};
+		dram0_tid.tranid <= dram0_tid.tranid + 2'd1;
+		if (&dram0_tid.tranid)
+			dram0_tid.tranid <= 4'd1;
 		tGoto(MEMORY2_ACK);
 	end
 MEMORY2_ACK:
 	if (dram0_ack) begin
+		agen_v <= FALSE;
+		dram0 <= DRAMSLOT_AVAIL;
 		dram0_hi <= 1'b0;
     dram_Rt0 <= dram0_Rt;
     dram_aRt0 <= dram0_aRt;
@@ -1135,11 +1167,21 @@ WRITEBACK:
 	begin
 		if (db.alu) begin
 			rfwr <= |Rt;
-			res <= alu_res;
+			case({db.Rtn,db.bitwise})
+			2'b00:	res <= alu_res;
+			2'b01:	res <= alu_res;
+			2'b10:	res <= -alu_res;
+			2'b11:	res <= ~alu_res;
+			endcase
 		end
 		else if (db.load) begin
 			rfwr <= |Rt;
-			res <= dram_bus0;
+			case({db.Rtn,db.bitwise})
+			2'b00:	res <= dram_bus0;
+			2'b01:	res <= dram_bus0;
+			2'b10:	res <= -dram_bus0;
+			2'b11:	res <= ~dram_bus0;
+			endcase
 		end
 		else if (db.bsr|db.cjb) begin
 			rfwr <= |Rt;
@@ -1147,7 +1189,12 @@ WRITEBACK:
 		end
 		else if (db.bts==BTS_RET) begin
 			rfwr <= |Rt;
-			res <= alu_res;
+			case({db.Rtn,db.bitwise})
+			2'b00:	res <= alu_res;
+			2'b01:	res <= alu_res;
+			2'b10:	res <= -alu_res;
+			2'b11:	res <= ~alu_res;
+			endcase
 		end
 		if (db.div) begin
 			if (div_done)
@@ -1161,13 +1208,66 @@ WRITEBACK:
 			if (fpu_done) begin
 				tGoto(IFETCH);
 				rfwr <= |Rt;
-				res <= fpu_res;
+				case({db.Rtn,db.bitwise})
+				2'b00:	res <= fpu_res;
+				2'b01:	res <= fpu_res;
+				2'b10:	res <= {~fpu_res[$bits(value_t)-1],fpu_res[$bits(value_t)-2:0]};
+				2'b11:	res <= ~fpu_res;
+				endcase
 			end
 		end
 		else
 			tGoto(IFETCH);
 	end
 endcase
+
+end
+function value_t fnArchRegVal;
+input [7:0] regno;
+begin
+	fnArchRegVal = regfileA.xpm_memory_base_inst.mem[regno];
+end
+endfunction
+
+always_ff @(posedge clk)
+begin
+	integer i;
+	integer j;
+
+	$display("\n\n\n\n\n\n\n\n");
+	$display("TIME %0d", $time);
+	$display("----- Fetch %c -----", ihito ? "h" : " ");
+	$display("i$ pc input:  %h #", pc);
+	$display("cache: %x", ic_line[511:0]);
+
+	$display("----- Architectural Registers -----");
+	for (i = 0; i < AREGS; i = i + 8)
+		if (i > 48)
+			$display("v%d -> %d: %h %d: %h %d: %h %d: %h %d: %h %d: %h %d: %h %d: %h #",
+			i[7:0] >> 3'd3,
+			8'd0, fnArchRegVal(i+0), 8'd1, fnArchRegVal(i+1), 8'd2, fnArchRegVal(i+2), 8'd3,  fnArchRegVal(i+3), 
+			8'd4, fnArchRegVal(i+4), 8'd5, fnArchRegVal(i+5), 8'd6, fnArchRegVal(i+6), 8'd7,  fnArchRegVal(i+7)
+			);
+		else
+			$display("v%d -> %d: %h %d: %h %d: %h %d: %h %d: %h %d: %h %d: %h %d: %h #",
+			i[7:0] >> 3'd3,
+			i[7:0]+8'd0, fnArchRegVal(i+0), i[7:0]+8'd1, fnArchRegVal(i+1), i[7:0]+8'd2, fnArchRegVal(i+2), i[7:0]+8'd3, fnArchRegVal(i+3), 
+			i[7:0]+8'd4, fnArchRegVal(i+4), i[7:0]+8'd5, fnArchRegVal(i+5), i[7:0]+8'd6, fnArchRegVal(i+6), i[7:0]+8'd7, fnArchRegVal(i+7)
+			);
+	$display("----- Memory -----");
+	$display("%d%c v%h p%h, %h %c%d #",
+	    dram0, dram0_ack?"A":" ", dram0_vaddr, dram0_paddr, dram0_data, ((dram0_load || dram0_store) ? 109 : 97), dram0_op);
+	$display("%h #", dram_bus0);
+
+	$display("----- FCU -----");
+	$display("eval:%c A=%h B=%h I=%h", takb?"T":"F", argA, argB, argI);
+
+	$display("----- ALU -----");
+	$display("I=%h T=%h A=%h B=%h C=%h %c%d pc:%h #",
+		argI, argT, argA, argB, argC,
+		 ((fnIsLoad(ir2) || fnIsStore(ir2)) ? 109 : 97),
+		ir2, pc);
+	$display("res:%h #", alu_res);
 
 end
 
@@ -1275,18 +1375,22 @@ begin
 	dram0_op <= OP_NOP;
 	dram0_pc <= RSTPC;
 	dram0_Rt <= 8'd0;
-	dram0_tid <= 13'd0;
+	dram0_tid.core <= CORENO;
+	dram0_tid.channel <= 4'd1;
+	dram0_tid.tranid <= 4'd1;
 	dram0_hi <= 1'd0;
 	dram0_shift <= 1'd0;
 	dram0_tocnt <= 12'd0;
 	dram0_cp <= 4'd0;
 	dram0_argT <= 64'd0;
+	dram0 <= DRAMSLOT_AVAIL;
 	argA <= 64'd0;
 	argB <= 64'd0;
 	argC <= 64'd0;
 	argT <= 64'd0;
 	argI <= 64'd0;
 	rfwr <= FALSE;
+	agen_next <= FALSE;
 	tGoto(IFETCH);
 end
 endtask

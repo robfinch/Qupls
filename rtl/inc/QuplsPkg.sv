@@ -1301,6 +1301,14 @@ typedef struct packed
 	aregno_t Rb;
 	aregno_t Rc;
 	aregno_t Rt;
+	logic Rav;
+	logic Rbv;
+	logic Rcv;
+	logic Rtv;
+	logic Ran;
+	logic Rbn;
+	logic Rcn;
+	logic Rtn;
 	logic Raz;
 	logic Rbz;
 	logic Rcz;
@@ -1333,6 +1341,7 @@ typedef struct packed
 	logic mulu;
 	logic div;
 	logic divu;
+	logic bitwise;		// true if a bitwise operator (and, or, eor)
 	logic multicycle;
 	logic mem;
 	logic load;
@@ -1486,7 +1495,7 @@ typedef struct packed
 } writeback_info_t;
 */
 
-const pc_address_t RSTPC	= 32'hFFFFFBC0;
+const pc_address_t RSTPC	= 32'hFFFFFD80;
 const address_t RSTSP = 32'hFFFF9000;
 
 typedef logic [6:0] seqnum_t;
@@ -2358,8 +2367,8 @@ OP_LDO:
   fnDati = dat;
 OP_JSRI:
 	case(ins[18:17])
-	2'd0:	fnDati = {pc[63:16],dat[15:0]};
-	2'd1:	fnDati = {pc[63:32],dat[31:0]};
+	2'd0:	fnDati = {pc[$bits(pc_address_t)-1:16],dat[15:0]};
+	2'd1:	fnDati = {dat[31:0]};
 	2'd2:	fnDati = dat[63:0];
 	default:	fnDati = dat[63:0];
 	endcase

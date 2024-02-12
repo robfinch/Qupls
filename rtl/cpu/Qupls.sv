@@ -208,7 +208,8 @@ reg [1:0] robentry_islot [0:ROB_ENTRIES-1];
 wire [1:0] next_robentry_islot [0:ROB_ENTRIES-1];
 reg [1:0] lsq_islot [0:LSQ_ENTRIES*2-1];
 rob_bitmask_t robentry_stomp;
-reg stomp_f, stomp_x, stomp_x2, stomp_x3, stomp_d, stomp_r, stomp_q, stomp_qm;
+reg stomp_f, stomp_x1, stomp_x2, stomp_x3, stomp_x4;
+reg stomp_d, stomp_r, stomp_q, stomp_qm;
 rob_bitmask_t robentry_issue;
 rob_bitmask_t robentry_fpu_issue;
 rob_bitmask_t robentry_fcu_issue;
@@ -917,7 +918,7 @@ end
 
 
 wire ic_port;
-reg stomp_x4;
+reg stomp_x1a;
 wire ftaim_full, ftadm_full;
 reg ihit_x, ihit_d, ihit_r, ihit_q;
 wire icnop;
@@ -934,7 +935,7 @@ uic1
 (
 	.rst(rst),
 	.clk(clk),
-	.ce(advance_f),
+	.ce(1'b1),
 	.invce(invce),
 	.snoop_adr(snoop_adr),
 	.snoop_v(snoop_v),
@@ -993,7 +994,7 @@ Qupls_btb ubtb1
 (
 	.rst(rst),
 	.clk(clk),
-	.clk_en(advance_f),
+	.clk_en(1'b1),
 	.en(1'b0),
 	.rclk(~clk),
 	.micro_code_active(micro_code_active),
@@ -1001,7 +1002,7 @@ Qupls_btb ubtb1
 	.igrp(igrp),
 	.length_byte(length_byte),
 	.pe_bsdone(pe_bsdone),
-	.do_bsr(do_bsr && !stomp_x4),
+	.do_bsr(do_bsr && !stomp_x1a),
 	.bsr_tgt(bsr_tgt),
 	.mip0v(mip0v),
 	.mip1v(mip1v),
@@ -1151,7 +1152,7 @@ else begin
 		bms2 <= bms;
 		bms3 <= bms2;
 		ihit3 <= ihit_f;
-		do_bsr2 <= do_bsr && !stomp_x4;
+		do_bsr2 <= do_bsr && !stomp_x1a;
 		if (micro_code_active) begin
 			do_bsr3 <= do_bsr2;
 		end
@@ -1163,7 +1164,7 @@ else begin
 		do_bsr5 <= do_bsr4;
 		do_bsr6 <= do_bsr5;
 		do_bsr7 <= do_bsr6;
-		do_bsr_h <= ((do_bsr && !stomp_x4) || do_bsr_h) && !ihit;
+		do_bsr_h <= ((do_bsr && !stomp_x1a) || do_bsr_h) && !ihit;
 	end
 end
 
@@ -1172,49 +1173,49 @@ end
 // On a cache miss, the fetch stage is stomped on, but not if micro-code is
 // active. Micro-code does not require the cache-line data.
 // Invalidate the fetch stage on an unconditional subroutine call.
-reg stomp_f1;
+reg stomp_f1a;
+always_ff @(posedge clk)
+	if (!advance_f)
+		stomp_f1a <= stomp_f;
+	else
+		stomp_f1a <= FALSE;
 always_comb
 begin
 	stomp_f = FALSE;
-	if ((!ihit_f && !micro_code_active)
-		|| branchmiss
-		|| (branch_state >= BS_CHKPT_RESTORE && branch_state <= BS_DONE2)
-		|| (do_bsr && !stomp_x4)
-		|| stomp_f1
+	if ((!ihit_f)// && !micro_code_active)
+//		|| branchmiss
+//		|| (branch_state >= BS_CHKPT_RESTORE && branch_state <= BS_DONE2)
+//		|| (do_bsr && !stomp_x1a)
+//		|| stomp_f1a
 		)
 		stomp_f = TRUE;
 end
-always_ff @(posedge clk)
-	if (!advance_f)
-		stomp_f1 <= stomp_f;
-	else
-		stomp_f1 <= FALSE;
 
 // Stomp on all pipeline stages rename and prior on a branch miss.
 assign micro_code_active_v = (micro_code_active_x || mip0v || mip1v || mip2v || mip3v) && mipv;
-wire stomp_x5 = stomp_f
+wire stomp_x1b = (stomp_f && !micro_code_active)
 								|| branchmiss
 								|| (branch_state >= BS_CHKPT_RESTORE && branch_state <= BS_DONE2)
-//								|| (do_bsr && !stomp_x4)
+//								|| (do_bsr && !stomp_x1a)
 //								|| do_bsr2
 								;
 always_ff @(posedge clk)
 if (rst)
-	stomp_x4 <= TRUE;
+	stomp_x1a <= TRUE;
 else begin
 	if (advance_pipeline) begin
-		stomp_x4 <= FALSE;
-		if (stomp_x5)
-			stomp_x4 <= TRUE;
+		stomp_x1a <= FALSE;
+		if (stomp_x1b)
+			stomp_x1a <= TRUE;
 	end
 end
 always_comb
-	stomp_x = stomp_x4;// || ne_mca;
+	stomp_x1 = stomp_x1a;// || ne_mca;
 
-wire stomp_x2a = stomp_x
+wire stomp_x2a = stomp_x1
 								|| branchmiss
 								|| (branch_state >= BS_CHKPT_RESTORE && branch_state <= BS_DONE2)
-//								|| (do_bsr && !stomp_x4)
+//								|| (do_bsr && !stomp_x1a)
 //								|| do_bsr2
 								;
 always_ff @(posedge clk)
@@ -1228,10 +1229,10 @@ else begin
 	end
 end
 
-wire stomp_x3a = stomp_x2a
+wire stomp_x3a = stomp_x2
 								|| branchmiss
 								|| (branch_state >= BS_CHKPT_RESTORE && branch_state <= BS_DONE2)
-//								|| (do_bsr && !stomp_x4)
+//								|| (do_bsr && !stomp_x1a)
 //								|| do_bsr2
 								;
 always_ff @(posedge clk)
@@ -1245,29 +1246,47 @@ else begin
 	end
 end
 
+/*
+wire stomp_x4a = stomp_x3
+								|| branchmiss
+								|| (branch_state >= BS_CHKPT_RESTORE && branch_state <= BS_DONE2)
+//								|| (do_bsr && !stomp_x1a)
+//								|| do_bsr2
+								;
+always_ff @(posedge clk)
+if (rst)
+	stomp_x4 <= TRUE;
+else begin
+	if (advance_pipeline) begin
+		stomp_x4 <= FALSE;
+		if (stomp_x4a)
+			stomp_x4 <= TRUE;
+	end
+end
+*/
 // If a micro-code instruction is decoded stomp on the next decode stage.
 // An instruction group following the micro-code was at the fetch stage and
 // would be propagated to decode before the micro-code becomes active.
 
-wire stomp_d2 = stomp_x3
+wire stomp_d1b = stomp_x3
 								|| branchmiss
 								|| (branch_state >= BS_CHKPT_RESTORE && branch_state <= BS_DONE2)
-//								|| (do_bsr && !stomp_x4)
+//								|| (do_bsr && !stomp_x1a)
 								;
-reg stomp_d3;
+reg stomp_d1a;
 always_ff @(posedge clk)
 if (rst)
-	stomp_d3 <= TRUE;
+	stomp_d1a <= TRUE;
 else begin
 	if (advance_pipeline) begin
-		stomp_d3 <= FALSE;
-		if (stomp_d2)
-			stomp_d3 <= TRUE;
+		stomp_d1a <= FALSE;
+		if (stomp_d1b)
+			stomp_d1a <= TRUE;
 	end
 end
 // pe_mca is delayed a cycle. A stomp is needed at decode stage.
 always_comb
-	stomp_d = stomp_d3;// && !micro_code_active_x;// || pe_mca;
+	stomp_d = stomp_d1a;// && !micro_code_active_x;// || pe_mca;
 
 wire stomp_r2 = stomp_d
 								|| branchmiss
@@ -1542,13 +1561,13 @@ else begin
 			else
 				pc <= next_pc;			// early PC predictor from BTB logic
 		end
-		else if (!pcf && (branch_state==BS_DONE || (do_bsr && !stomp_x4)))
+		else if (!pcf && (branch_state==BS_DONE || (do_bsr && !stomp_x1a)))
 			pc <= next_pc;
 	end
 	// Prevent hang when the pipeline cannot advance because there is no room 
 	// to queue, yet the IP needs to change to get out of the branch miss state.
 	else begin
-		if (pe_bsdone || (do_bsr && !stomp_x4)) begin
+		if (pe_bsdone || (do_bsr && !stomp_x1a)) begin
 			pc <= next_pc;
 			pcf <= TRUE;
 		end
@@ -1620,7 +1639,7 @@ end
 
 always_ff @(posedge clk)
 if (rst)
-	micro_ir <= {33'd0,OP_NOP};
+	micro_ir <= {41'd0,OP_NOP};
 else begin
 	if (advance_pipeline) begin
 		if (excret)
@@ -1797,11 +1816,11 @@ end
 endgenerate
 
 // No longer useful.
-always_comb mc_ins4.ins = {33'd0,OP_NOP};
-always_comb mc_ins5.ins = {33'd0,OP_NOP};
-always_comb mc_ins6.ins = {33'd0,OP_NOP};
-always_comb mc_ins7.ins = {33'd0,OP_NOP};
-always_comb mc_ins8.ins = {33'd0,OP_NOP};
+always_comb mc_ins4.ins = {41'd0,OP_NOP};
+always_comb mc_ins5.ins = {41'd0,OP_NOP};
+always_comb mc_ins6.ins = {41'd0,OP_NOP};
+always_comb mc_ins7.ins = {41'd0,OP_NOP};
+always_comb mc_ins8.ins = {41'd0,OP_NOP};
 
 always_ff @(posedge clk)
 if (rst)
@@ -1887,10 +1906,10 @@ always_comb
 	ic_line = {ic_line_hi.data,ic_line_lo.data};
 always_ff @(posedge clk)
 if (rst)
-	ic_line_x <= {26{33'd0,OP_NOP}};
+	ic_line_x <= {26{41'd0,OP_NOP}};
 else begin
 	if (!rstcnt[2])
-		ic_line_x <= {26{33'd0,OP_NOP}};
+		ic_line_x <= {26{41'd0,OP_NOP}};
 	else if (advance_f) 
 		ic_line_x <= ic_line2;
 end
@@ -1906,7 +1925,7 @@ Qupls_extract_ins uiext1
 	.rst_i(rst),
 	.clk_i(clk),
 	.en_i(advance_pipeline),
-	.nop_i(stomp_x/*icnop||brtgtv||fetch_new_block_x*/),
+	.nop_i(stomp_x1/*icnop||brtgtv||fetch_new_block_x*/),
 	.nop_o(exti_nop),
 	.irq_i(irq_i),
 	.hirq_i(hirq),
@@ -3156,7 +3175,7 @@ else begin
 end
 always_ff @(posedge clk)
 if (rst)
-	missir <= {33'd0,OP_NOP};
+	missir <= {41'd0,OP_NOP};
 else begin
 //	if (advance_pipeline)
 	if (branch_state==BS_CHKPT_RESTORE)
@@ -4127,7 +4146,7 @@ if (rst) begin
 	alu0_bank <= 1'b0;
 	alu0_aRt <= 9'd0;
 	alu0_aRtz <= TRUE;
-	alu0_instr <= {33'd0,OP_NOP};
+	alu0_instr <= {41'd0,OP_NOP};
 	alu0_div <= 1'b0;
 	alu0_cptgt <= 8'h00;
 	alu0_pc <= RSTPC;
@@ -4148,10 +4167,25 @@ else begin
 			default:	alu0_argA <= {2{32'hDEADBEEF}};
 			endcase
 		else
-			alu0_argA <= rfo_alu0_argA;
-		alu0_argB <= rfo_alu0_argB;
+			case({rob[alu0_rndx].decbus.bitwise,rob[alu0_rndx].decbus.Ran})
+			2'd0:	alu0_argA <= rfo_alu0_argA;
+			2'd1:	alu0_argA <= -rfo_alu0_argA;
+			2'd2:	alu0_argA <= rfo_alu0_argA;
+			2'd3:	alu0_argA <= ~rfo_alu0_argA;
+			endcase
+		case({rob[alu0_rndx].decbus.bitwise,rob[alu0_rndx].decbus.Rbn})
+		2'd0:	alu0_argB <= rfo_alu0_argA;
+		2'd1:	alu0_argB <= -rfo_alu0_argA;
+		2'd2:	alu0_argB <= rfo_alu0_argA;
+		2'd3:	alu0_argB <= ~rfo_alu0_argA;
+		endcase
 		alu0_argBI <= rob[alu0_rndx].decbus.immb | rfo_alu0_argB;
-		alu0_argC <= rfo_alu0_argC;
+		case({rob[alu0_rndx].decbus.bitwise,rob[alu0_rndx].decbus.Rcn})
+		2'd0:	alu0_argC <= rfo_alu0_argA;
+		2'd1:	alu0_argC <= -rfo_alu0_argA;
+		2'd2:	alu0_argC <= rfo_alu0_argA;
+		2'd3:	alu0_argC <= ~rfo_alu0_argA;
+		endcase
 		alu0_argT <= rfo_alu0_argT;
 		alu0_argI	<= rob[alu0_rndx].decbus.immb;
 `ifdef IS_SIM
@@ -4171,7 +4205,7 @@ else begin
 		alu0_cptgt <= {8{alu0_cpytgt|rob[alu0_rndx].decbus.cpytgt}};
 		alu0_prc <= rob[alu0_rndx].decbus.prc;
 		if (alu0_cpytgt|rob[alu0_rndx].decbus.cpytgt) begin
-			alu0_instr <= {33'd0,OP_NOP};
+			alu0_instr <= {41'd0,OP_NOP};
 			alu0_pred <= FALSE;
 			alu0_predz <= rob[alu0_rndx].decbus.cpytgt ? FALSE : rob[alu0_rndx].decbus.predz;
 			alu0_div <= FALSE;
@@ -4197,7 +4231,7 @@ if (rst) begin
 	alu1_bank <= 1'b0;
 	alu1_aRt <= 7'd0;
 	alu1_aRtz <= TRUE;
-	alu1_instr <= {33'd0,OP_NOP};
+	alu1_instr <= {41'd0,OP_NOP};
 	alu1_div <= 1'b0;
 	alu1_cptgt <= 8'h00;
 	alu1_pc <= RSTPC;
@@ -4220,10 +4254,26 @@ else begin
 				default:	alu1_argA <= {2{32'hDEADBEEF}};
 				endcase
 			else
+				case({rob[alu1_rndx].decbus.bitwise,rob[alu1_rndx].decbus.Ran})
+				2'd0:	alu1_argA <= rfo_alu1_argA;
+				2'd1:	alu1_argA <= -rfo_alu1_argA;
+				2'd2:	alu1_argA <= rfo_alu1_argA;
+				2'd3:	alu1_argA <= ~rfo_alu1_argA;
+				endcase
+			case({rob[alu1_rndx].decbus.bitwise,rob[alu1_rndx].decbus.Rbn})
+			2'd0:	alu1_argB <= rfo_alu1_argA;
+			2'd1:	alu1_argB <= -rfo_alu1_argA;
+			2'd2:	alu1_argB <= rfo_alu1_argA;
+			2'd3:	alu1_argB <= ~rfo_alu1_argA;
+			endcase
+			case({rob[alu1_rndx].decbus.bitwise,rob[alu1_rndx].decbus.Rcn})
+			2'd0:	alu1_argC <= rfo_alu1_argA;
+			2'd1:	alu1_argC <= -rfo_alu1_argA;
+			2'd2:	alu1_argC <= rfo_alu1_argA;
+			2'd3:	alu1_argC <= ~rfo_alu1_argA;
+			endcase
 				alu1_argA <= rfo_alu1_argA;
-			alu1_argB <= rfo_alu1_argB;
 			alu1_argBI <= rob[alu1_rndx].decbus.immb | rfo_alu1_argB;
-			alu1_argC <= rfo_alu1_argC;
 			alu1_argI	<= rob[alu1_rndx].decbus.immb;
 			alu1_cs <= rob[alu1_rndx].decbus.Rcc;
 			// Register C is the target register for pair instructions.
@@ -4260,7 +4310,7 @@ else begin
 			alu1_cptgt <= {8{alu1_cpytgt|rob[alu1_rndx].decbus.cpytgt}};
 			alu1_prc <= rob[alu1_rndx].decbus.prc;
 			if (alu1_cpytgt|rob[alu1_rndx].decbus.cpytgt) begin
-				alu1_instr <= {33'd0,OP_NOP};
+				alu1_instr <= {41'd0,OP_NOP};
 				alu1_pred <= FALSE;
 				alu1_predz <= rob[alu1_rndx].decbus.cpytgt ? FALSE : rob[alu1_rndx].decbus.predz;
 				alu1_div <= FALSE;
@@ -4287,7 +4337,7 @@ if (rst) begin
 	fpu0_aRtz1 <= TRUE;
 	fpu0_cs <= 1'b0;
 	fpu0_bank <= 1'b0;
-	fpu0_instr <= {33'd0,OP_NOP};
+	fpu0_instr <= {41'd0,OP_NOP};
 	fpu0_pc <= RSTPC;
 	fpu0_cp <= 4'd0;
 	fpu0_qfext <= FALSE;
@@ -4334,7 +4384,7 @@ if (rst) begin
 	fpu1_aRtz <= TRUE;
 	fpu1_cs <= 1'b0;
 	fpu1_bank <= 1'b0;
-	fpu1_instr <= {33'd0,OP_NOP};
+	fpu1_instr <= {41'd0,OP_NOP};
 	fpu1_pc <= RSTPC;
 	fpu1_cp <= 4'd0;
 end
@@ -4364,7 +4414,7 @@ if (rst) begin
 	fcu_argB <= 64'd0;
 	fcu_argBr <= 64'd0;
 	fcu_argI <= 64'd0;
-	fcu_instr <= {33'd0,OP_NOP};
+	fcu_instr <= {41'd0,OP_NOP};
 	fcu_pc <= RSTPC;
 	fcu_bt <= FALSE;
 	fcu_bts <= BTS_NONE;
@@ -4398,7 +4448,7 @@ if (rst) begin
 	agen0_aRa <= 9'd0;
 	agen0_aRb <= 9'd0;
 	agen0_pc <= RSTPC;
-	agen0_op <= {33'd0,OP_NOP};
+	agen0_op <= {41'd0,OP_NOP};
 	agen0_cp <= 4'd0;
 	agen0_aRt <= 9'd0;
 	agen0_Ra <= 11'd0;
@@ -4448,7 +4498,7 @@ if (rst) begin
 	agen1_aRa <= 9'd0;
 	agen1_aRb <= 9'd0;
 	agen1_pc <= RSTPC;
-	agen1_op <= {33'd0,OP_NOP};
+	agen1_op <= {41'd0,OP_NOP};
 	agen1_cp <= 4'd0;
 	agen1_aRt <= 9'd0;
 	agen1_Rt <= 11'd0;
@@ -6286,9 +6336,9 @@ always_ff @(posedge clk) begin: clock_n_debug
 	$display("i$ pc output: %h %s#", pc0_f, stomp_f ? stompstr:no_stompstr);
 	$display("cache: %x", ic_line[511:0]);
 	$display("Lengths: 0:%d  1:%d  2:%d  3:%d  4:%d  5:%d  6:%d  7:%d" , len0, len1, len2, len3, len4, len5, len6, len7);
-	$display("----- Instruction Extract %c%c ----- %s", ihit_x ? "h":" ", micro_code_active_x ? "a": " ", stomp_x ? stompstr : no_stompstr);
+	$display("----- Instruction Extract %c%c ----- %s", ihit_x ? "h":" ", micro_code_active_x ? "a": " ", stomp_x1 ? stompstr : no_stompstr);
 	$display("- - - - - - Extract 1 - - - - - -");
-	$display("stomp_x5=%d", stomp_x5);
+	$display("stomp_x1b=%d", stomp_x1b);
 	$display("micro_ip: %h", micro_ip);
 	if (do_bsr && !stomp_x3)
 		$display("BSR %h  pc0_x=%h", bsr_tgt, pc0_x);
@@ -6317,14 +6367,14 @@ always_ff @(posedge clk) begin: clock_n_debug
 			8'd4, fnArchRegVal(i+4), 8'd5, fnArchRegVal(i+5), 8'd6, fnArchRegVal(i+6), 8'd7,  fnArchRegVal(i+7)
 			);
 		else
-			$display("v%d -> %d/%d: %h %d: %h %d: %h %d/%d: %h %d: %h %d: %h %d: %h %d: %h #",
+			$display("v%d -> %d/%d: %h %d/%d: %h %d/%d: %h %d/%d: %h %d/%d: %h %d/%d: %h %d/%d: %h %d/%d: %h #",
 			i[7:0] >> 3'd3,
-			i[7:0]+8'd0, fnPreg(i+0), fnArchRegVal(i+0), i[7:0]+8'd1, fnArchRegVal(i+1), i[7:0]+8'd2, fnArchRegVal(i+2), i[7:0]+8'd3, fnPreg(i+3), fnArchRegVal(i+3), 
-			i[7:0]+8'd4, fnArchRegVal(i+4), i[7:0]+8'd5, fnArchRegVal(i+5), i[7:0]+8'd6, fnArchRegVal(i+6), i[7:0]+8'd7, fnArchRegVal(i+7)
+			i[7:0]+8'd0, fnPreg(i+0), fnArchRegVal(i+0), i[7:0]+8'd1, fnPreg(i+1), fnArchRegVal(i+1), i[7:0]+8'd2, fnPreg(i+2), fnArchRegVal(i+2), i[7:0]+8'd3, fnPreg(i+3), fnArchRegVal(i+3), 
+			i[7:0]+8'd4, fnPreg(i+4), fnArchRegVal(i+4), i[7:0]+8'd5, fnPreg(i+5), fnArchRegVal(i+5), i[7:0]+8'd6, fnPreg(i+6), fnArchRegVal(i+6), i[7:0]+8'd7, fnPreg(i+7), fnArchRegVal(i+7)
 			);
 		
 	$display("----- Decode %c%c ----- %s", ihit_d ? "h":" ", micro_code_active_d ? "a": " ", stomp_d ? stompstr : no_stompstr);
-	$display("stomp_d2=%d", stomp_d2);
+	$display("stomp_d1b=%d", stomp_d1b);
 	$display("pc0: %x.%x ins0: %x", pc0_d[23:0], mcip0_d, ins0_d.ins[47:0]);
 	$display("pc1: %x.%x ins1: %x", pc1_d[23:0], mcip1_d, ins1_d.ins[47:0]);
 	$display("pc2: %x.%x ins2: %x", pc2_d[23:0], mcip2_d, ins2_d.ins[47:0]);
@@ -6647,7 +6697,7 @@ begin
 		avec[n14] <= 32'hFFFFFC00;
 	end
 	err_mask <= 64'd0;
-	excir <= {33'd0,OP_NOP};
+	excir <= {41'd0,OP_NOP};
 	excmiss <= FALSE;
 	excmisspc <= 32'hFFFFFFC0;
 	excret <= FALSE;
@@ -6931,7 +6981,7 @@ begin
 	// Vector instructions are treated as NOPs as they invoke micro-code which
 	// uses scalar instructions.
 	if (ornop|db.vec) begin
-		rob[tail].op <= {33'd0,OP_NOP};
+		rob[tail].op <= {41'd0,OP_NOP};
 		rob[tail].nRt <= 11'd0;
 		rob[tail].pRt <= 11'd0;
 		rob[tail].argA_v <= VAL;

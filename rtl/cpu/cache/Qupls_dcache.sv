@@ -106,7 +106,6 @@ reg [WAYS-1:0] hits, mods;
 cache_tag_t [WAYS-1:0] ptags;	// physical tags associated with even cache line
 DCacheLine line;
 cache_line_t [WAYS-1:0] lines;
-reg [pL1DCacheWays-1:0] dcache_wr;
 localparam NSEL = Qupls_cache_pkg::DCacheLineWidth/8;
 reg [CACHE_LINE_WIDTH/8-1:0] sel;
 wire cdvndx,cdvndx1;

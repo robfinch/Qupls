@@ -253,14 +253,15 @@ begin
 		case(ir.r2.func)
 		FN_CPUID:	bus = ALU0 ? info : 64'd0;
 		FN_ADD:
-			case(ir[30:27])
-			4'd0:	bus = (a + b) & c;
-			4'd1:	bus = (a + b) & ~c;
-			4'd2: bus = (a + b) | c;
-			4'd3: bus = (a + b) | ~c;
-			4'd4: bus = (a + b) ^ c;
-			4'd5:	bus = (a + b) ^ ~c;
-			4'd8:	bus = (a + b) + c;
+			case(ir.r2.op2)
+			3'd0:	bus = (a + b) & c;
+			3'd1:	bus = (a + b) & ~c;
+			3'd2: bus = (a + b) | c;
+			3'd3: bus = (a + b) | ~c;
+			3'd4: bus = (a + b) ^ c;
+			3'd5:	bus = (a + b) ^ ~c;
+			3'd6:	bus = (a + b) + c;
+			/*
 			4'd9:	bus = (a + b) - c;
 			4'd10: bus = (a + b) + c + 2'd1;
 			4'd11: bus = (a + b) + c - 2'd1;
@@ -274,6 +275,7 @@ begin
 					sd = (a + b) - c;
 					bus = sd[WID-1] ? -sd : sd;
 				end
+			*/
 			default:	bus = {WID{1'd0}};
 			endcase
 		FN_SUB:	bus = a - b - c;
@@ -296,7 +298,7 @@ begin
 		FN_DIVU: bus = ALU0 ? div_q : dead;
 		FN_MODU: bus = ALU0 ? div_r : dead;
 		FN_AND:	
-			case(ir[30:27])
+			case(ir.r2.op2)
 			4'd0:	bus = (a & b) & c;
 			4'd1:	bus = (a & b) & ~c;
 			4'd2: bus = (a & b) | c;
@@ -306,7 +308,7 @@ begin
 			default:	bus = {WID{1'd0}};
 			endcase
 		FN_OR:
-			case(ir[30:27])
+			case(ir.r2.op2)
 			4'd0:	bus = (a | b) & c;
 			4'd1:	bus = (a | b) & ~c;
 			4'd2: bus = (a | b) | c;
@@ -317,7 +319,7 @@ begin
 			default:	bus = {WID{1'd0}};
 			endcase
 		FN_EOR:	
-			case(ir[30:27])
+			case(ir.r2.op2)
 			4'd0:	bus = (a ^ b) & c;
 			4'd1:	bus = (a ^ b) & ~c;
 			4'd2: bus = (a ^ b) | c;
@@ -330,7 +332,7 @@ begin
 		FN_CMOVZ: bus = a ? c : b;
 		FN_CMOVNZ:	bus = a ? b : c;
 		FN_NAND:
-			case(ir[30:27])
+			case(ir.r2.op2)
 			4'd0:	bus = ~(a & b) & c;
 			4'd1:	bus = ~(a & b) & ~c;
 			4'd2: bus = ~(a & b) | c;
@@ -340,7 +342,7 @@ begin
 			default:	bus = {WID{1'd0}};
 			endcase
 		FN_NOR:
-			case(ir[30:27])
+			case(ir.r2.op2)
 			4'd0:	bus = ~(a | b) & c;
 			4'd1:	bus = ~(a | b) & ~c;
 			4'd2: bus = ~(a | b) | c;
@@ -350,7 +352,7 @@ begin
 			default:	bus = {WID{1'd0}};
 			endcase
 		FN_ENOR:
-			case(ir[30:27])
+			case(ir.r2.op2)
 			4'd0:	bus = ~(a ^ b) & c;
 			4'd1:	bus = ~(a ^ b) & ~c;
 			4'd2: bus = ~(a ^ b) | c;
@@ -453,16 +455,16 @@ begin
 		default:	bus = {4{32'hDEADBEEF}};
 		endcase
 	OP_CSR:		bus = csr;
-	OP_ADDI,OP_VADDI:
+	OP_ADDI:
 		bus = a + i;
 	OP_SUBFI:	bus = i - a;
-	OP_CMPI,OP_VCMPI:
+	OP_CMPI:
 		bus = cmpo;
 	OP_CMPUI:	bus = cmpo;
-	OP_MULI,OP_VMULI:
+	OP_MULI:
 		bus = prod[WID-1:0];
 	OP_MULUI:	bus = produ[WID-1:0];
-	OP_DIVI,OP_VDIVI:
+	OP_DIVI:
 		begin
 			bus = ALU0 ? div_q : dead;
 			if (div_dbz)
@@ -500,7 +502,6 @@ begin
 		endcase
 	OP_MOV:		bus = a;
 	OP_LDAX:	bus = a + i + (b << ir[26:25]);
-	OP_PUSHI:	bus = a - 64'd8;
 	OP_BLEND:	bus = ALU0 ? blendo : dead;
 	OP_NOP:		bus = zero;
 	OP_QFEXT:	bus = qres;
@@ -511,7 +512,12 @@ begin
 	OP_BSR,OP_JSR:
 						bus = pc + 4'd5;
 	OP_Bcc,OP_BccU:
-						bus = a + 2'd1;
+		case(ir[13:12])
+		2'd0:	bus = a;
+		2'd1:	bus = a + 2'd1;
+		2'd3:	bus = a - 2'd1;
+		2'd2:	bus = a;
+		endcase
 	OP_PRED:	bus = a;
 	default:	bus = {(WID/16){16'hDEAD}};
 	endcase

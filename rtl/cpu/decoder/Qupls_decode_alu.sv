@@ -127,7 +127,7 @@ begin
 	OP_BSR,OP_JSR:
 		fnIsAlu = 1'b1;
 	OP_Bcc,OP_BccU:
-		fnIsAlu = ir[11];
+		fnIsAlu = |ir[13:12];
 	OP_PRED:
 		fnIsAlu = 1'b1;
 	default:	fnIsAlu = 1'b0;

@@ -118,11 +118,10 @@ reg [3:0] tid_cnt;
 wire [16:0] lfsr_o;
 reg [2:0] dump_cnt;
 reg [511:0] upd_dat;
-reg we_r;
+//reg we_r;
 reg [1:0] active_req;
 reg [1:0] queued_req;
 reg [1:0] tran_cnt [0:15];
-tran_state_t [15:0] tran_state;
 reg [7:0] completed_tran;
 req_queue_t cpu_req_queue [0:3];
 fta_cmd_response512_t tran_load_data [0:3];
@@ -215,7 +214,7 @@ begin
 	for (nn3 = 0; nn3 < 16; nn3 = nn3 + 1) begin
 		if (cpu_req_queue[nn3>>2].active[nn3[1:0]]
 			&& !cpu_req_queue[nn3>>2].out[nn3[1:0]] 
-			&& !cpu_req_queue[nn3>>2].done[nn3[1:0]] 
+			&& !cpu_req_queue[nn3>>2].done[nn3[1:0]]
 //			&& !tran_load_data[nn3>>2].ack
 			&& output_tran==5'd16)
 			output_tran = nn3;
@@ -257,6 +256,7 @@ begin
 		if (cpu_req_queue[nn8[3:2]].tran_req[nn8[1:0]].tid==ftam_resp.tid)
 			which_tran = nn8;
 end
+//			|| (cpu_req_queue[nn8[3:2]].active[nn8[1:0]] && !cpu_req_queue[nn8[3:2]].tran_req[nn8[1:0]].cyc)
 
 fta_tranid_t tmptid;
 always_comb
@@ -292,14 +292,16 @@ if (rst_i) begin
 		tran_load_data[nn] <= 'd0;
 		cpu_req_queue[nn] <= 'd0;
 	end
-	req_load <= 'd0;
-	loaded <= 'd0;
-	load_cnt <= 'd0;
-	wait_cnt <= 'd0;
-	wr_cnt <= 'd0;
+	req_load <= 1'd0;
+	loaded <= 1'd0;
+	load_cnt <= 3'd0;
+	wait_cnt <= 3'd0;
+	wr_cnt <= 3'd0;
 	cpu_request_queued <= 1'd1;
 	cpu_request_i2 <= 'd0;
 	last_out <= 5'd16;
+	iway <= 2'b00;
+	queued_req <= 2'd0;
 end
 else begin
 	dump_ack <= 1'd0;
@@ -322,12 +324,12 @@ else begin
 		begin
 			ftam_req.cmd <= fta_bus_pkg::CMD_DCACHE_LOAD;
 			ftam_req.sz  <= fta_bus_pkg::hexi;
-			ftam_req.blen <= 'd0;
+			ftam_req.blen <= 6'd0;
 			ftam_req.cid <= CID;					// CPU channel id
 			ftam_req.tid.core <= CORENO;
 			ftam_req.tid.channel <= CID;
 			ftam_req.tid.tranid <= 4'd0;		// transaction id
-			ftam_req.csr  <= 'd0;						// clear/set reservation
+			ftam_req.csr  <= 1'd0;						// clear/set reservation
 			ftam_req.pl	<= 8'd0;						// privilege level
 			ftam_req.pri	<= 4'h7;					// average priority (higher is better).
 			ftam_req.cache <= fta_bus_pkg::CACHEABLE;
@@ -397,8 +399,8 @@ else begin
 	LOAD1:
 		begin
 			if (load_cnt==3'd4) begin
-				wr_cnt <= 'd0;
-				load_cache <= 'd0;
+				wr_cnt <= 3'd0;
+				load_cache <= 1'd0;
 				req_state <= RW1;
 			end
 			else begin
@@ -483,7 +485,7 @@ else begin
 			2'd2:	begin tran_load_data[which_tran[3:2]].dat[383:256] <= ftam_resp.dat; end
 			2'd3:	begin tran_load_data[which_tran[3:2]].dat[511:384] <= ftam_resp.dat; end
 			endcase
-			we_r <= ftam_req.we;
+//			we_r <= ftam_req.we;
 			tran_load_data[which_tran[3:2]].rty <= 1'b0;
 			tran_load_data[which_tran[3:2]].err <= 1'b0;
 		end
@@ -491,10 +493,19 @@ else begin
 	// Retry or error (only if transaction active)
 	// Abort the memory request. Go back and try again.
 	else if ((ftam_resp.rty|ftam_resp.err) && ftam_resp.tid.tranid==last_out[3:0]) begin
-		tran_load_data[which_tran[3:2]].rty <= ftam_resp.rty;
-		tran_load_data[which_tran[3:2]].err <= ftam_resp.err;
-		tran_load_data[which_tran[3:2]].ack <= 1'b0;
-		cpu_req_queue[which_tran[3:2]].out[which_tran[3:2]] <= 1'b0;
+		if (which_tran < 5'd16) begin
+			tran_load_data[which_tran[3:2]].rty <= ftam_resp.rty;
+			tran_load_data[which_tran[3:2]].err <= ftam_resp.err;
+			tran_load_data[which_tran[3:2]].ack <= 1'b0;
+			cpu_req_queue[which_tran[3:2]].out[which_tran[3:2]] <= 1'b0;
+			// If the tran was not output, mark it done.
+			/*
+			if (!cpu_req_queue[which_tran[3:2]].tran_req[which_tran[1:0]].cyc) begin
+				cpu_req_queue[which_tran[3:2]].active[which_tran[1:0]] <= 1'b0;
+				cpu_req_queue[which_tran[3:2]].done[which_tran[1:0]] <= 1'b1;
+			end
+			*/
+		end
 	end
 	// Acknowledge completed transactions.
 	// Write allocate transactions must be done twice, once to load the cache
@@ -593,7 +604,12 @@ else begin
 				ftam_req <= cpu_req_queue[output_tran[3:2]].tran_req[output_tran[1:0]];
 				cpu_req_queue[output_tran[3:2]].tran_req[output_tran[1:0]].cyc <= 1'b0;
 			end
-			wait_cnt <= 'd0;
+			else begin
+				cpu_req_queue[output_tran[3:2]].active[output_tran[1:0]] <= 1'b0;
+				cpu_req_queue[output_tran[3:2]].out[output_tran[1:0]] <= 1'b0;
+				cpu_req_queue[output_tran[3:2]].done[output_tran[1:0]] <= 1'b1;
+			end
+			wait_cnt <= 3'd0;
 //			req_state <= RAND_DELAY;
 //		end
 	end
@@ -672,7 +688,7 @@ begin
 		cpu_req_queue[queued_req].tran_req[which].cmd <= wr ? fta_bus_pkg::CMD_STORE : 
 			cache ? fta_bus_pkg::CMD_DCACHE_LOAD : fta_bus_pkg::CMD_LOADZ;
 		cpu_req_queue[queued_req].tran_req[which].sz <= fta_bus_pkg::hexi;
-		cpu_req_queue[queued_req].tran_req[which].blen <= 'd0;
+		cpu_req_queue[queued_req].tran_req[which].blen <= 6'd0;
 		cpu_req_queue[queued_req].tran_req[which].cid <= cid;
 		cpu_req_queue[queued_req].tran_req[which].tid <= tid;
 		cpu_req_queue[queued_req].tran_req[which].bte <= fta_bus_pkg::LINEAR;

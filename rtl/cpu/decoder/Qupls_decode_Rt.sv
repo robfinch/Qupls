@@ -115,7 +115,7 @@ begin
 	OP_MOV:
 		fnRt = ir.aRt;
 	OP_Bcc,OP_BccU:
-		fnRt = ir.ins[11] ? ir.aRa : 9'd0;
+		fnRt = |ir.ins[13:12] ? ir.aRa : 9'd0;
 	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDOU,OP_LDH,
 	OP_LDX:
 		case(ir.ins.lsn.func)
@@ -124,8 +124,6 @@ begin
 		default:
 			fnRt = ir.aRt;
 		endcase
-	OP_PUSHI:
-		fnRt = 9'd31;
 	default:
 		fnRt = 9'd0;
 	endcase

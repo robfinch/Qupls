@@ -70,8 +70,6 @@ begin
 			FN_STCTX:	fnRa = 9'd40;	// CTX
 			default:	fnRa = ir.aRa;
 			endcase
-		OP_PUSHI:
-			fnRa = 9'd31;
 		default:
 			if (fnImma(ir))
 				fnRa = 9'd0;

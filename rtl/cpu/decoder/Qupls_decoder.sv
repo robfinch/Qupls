@@ -194,6 +194,12 @@ Qupls_decode_alu_pair udcalup0
 	.alu_pair(db.alu_pair)
 );
 
+Qupls_decode_bitwise udcbitwise
+(
+	.instr(ins.ins),
+	.bitwise(db.bitwise)
+);
+
 Qupls_decode_mul umul1
 (
 	.instr(ins.ins),
@@ -359,6 +365,14 @@ else begin
 		dbo.mvvr <= ins.ins.any.opcode==OP_R2 && ins.ins.r2.func==FN_MVVR;
 		dbo.jsri <= ins.ins.any.opcode==OP_JSRI;
 		dbo.pushi <= ins.ins.any.opcode==OP_PUSHI;
+		dbo.Ran <= ins.ins.r2.Ra.n;
+		dbo.Rbn <= ins.ins.r2.Ra.n;
+		dbo.Rcn <= ins.ins.r2.Ra.n;
+		dbo.Rtn <= ins.ins.r2.Ra.n;
+		dbo.Rav <= ins.ins.r2.Ra.v;
+		dbo.Rbv <= ins.ins.r2.Ra.v;
+		dbo.Rcv <= ins.ins.r2.Ra.v;
+		dbo.Rtv <= ins.ins.r2.Ra.v;
 	end
 end
 
