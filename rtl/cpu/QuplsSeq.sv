@@ -712,6 +712,9 @@ reg stall_tlb0 =1'd0, stall_tlb1=1'd0;
 wire [31:0] pg_fault;
 wire [1:0] pg_faultq;
 
+wire en_ptw;
+vtdl udly1 (.clk(clk), .ce(1'b1), .a(3), .d(state==MEMORY), .q(en_ptw));
+
 Qupls_agen uag0
 (
 	.clk(clk),
@@ -790,7 +793,7 @@ Qupls_ptable_walker #(.CID(3)) uptw1
 	.tlb_missqn(tlb_missqn),
 	.tlb_missid(5'd0),
 	.commit0_id(5'd0),
-	.commit0_idv(state==WRITEBACK),
+	.commit0_idv(en_ptw),
 	.commit1_id(8'd0),
 	.commit1_idv(FALSE),
 	.commit2_id(8'd0),
@@ -838,7 +841,8 @@ for (g = 0; g < NDATA_PORTS; g = g + 1) begin
 		cpu_request_i[g].om = fta_bus_pkg::MACHINE;
 		cpu_request_i[g].cmd = dramN_store[g] ? fta_bus_pkg::CMD_STORE : dramN_loadz[g] ? fta_bus_pkg::CMD_LOADZ : dramN_load[g] ? fta_bus_pkg::CMD_LOAD : fta_bus_pkg::CMD_NONE;
 		cpu_request_i[g].bte = fta_bus_pkg::LINEAR;
-		cpu_request_i[g].cti = (dramN_erc[g] || ERC) ? fta_bus_pkg::ERC : fta_bus_pkg::CLASSIC;
+//		cpu_request_i[g].cti = (dramN_erc[g] || ERC) ? fta_bus_pkg::ERC : fta_bus_pkg::CLASSIC;
+		cpu_request_i[g].cti = dramN_store[g] ? fta_bus_pkg::ERC : fta_bus_pkg::CLASSIC;
 		cpu_request_i[g].blen = 6'd0;
 		cpu_request_i[g].seg = fta_bus_pkg::DATA;
 		cpu_request_i[g].asid = asid;
@@ -862,7 +866,7 @@ for (g = 0; g < NDATA_PORTS; g = g + 1) begin
 	(
 		.rst(rst),
 		.clk(clk),
-		.dce(1'b1),
+		.dce(1'b0),
 		.snoop_adr(snoop_adr),
 		.snoop_v(snoop_v),
 		.snoop_cid(snoop_cid),
@@ -889,7 +893,7 @@ for (g = 0; g < NDATA_PORTS; g = g + 1) begin
 	(
 		.rst_i(rst),
 		.clk_i(clk),
-		.dce(1'b1),
+		.dce(1'b0),
 		.ftam_req(ftadm_req[g]),
 		.ftam_resp(ftadm_resp[g]),
 		.ftam_full(ftadm_resp[g].rty),
@@ -1087,7 +1091,7 @@ MEMORY:
 		dram0_load <= db.load;
 		dram0_loadz <= db.loadz;
 		dram0_store <= db.store;
-		dram0_erc <= db.erc;
+		dram0_erc <= TRUE;//db.erc;
 		dram0_Rt	<= Rt;
 		dram0_aRt	<= Rt;
 		dram0_aRtz <= ~|Rt;
@@ -1222,6 +1226,8 @@ WRITEBACK:
 endcase
 
 end
+
+`ifdef IS_SIM
 function value_t fnArchRegVal;
 input [7:0] regno;
 begin
@@ -1270,6 +1276,7 @@ begin
 	$display("res:%h #", alu_res);
 
 end
+`endif
 
 // External bus arbiter. Simple priority encoded.
 
@@ -1333,6 +1340,18 @@ urb1
 	.resp(resp_ch),
 	.resp_o(fta_resp1)
 );
+
+always_ff @(posedge clk)
+begin
+	if (fta_req.cyc) begin
+		if (fta_req.we) begin
+			$display("Q+: Bus Write: %h <= %h", fta_req.padr, fta_req.data1);
+		end
+	end
+	if (fta_resp.ack) begin
+		$display("Q+: Bus ack: %h = %h", fta_resp.adr, fta_resp.dat);
+	end
+end
 
 assign resp_ch[0] = fta_resp;
 assign resp_ch[1] = ptable_resp;

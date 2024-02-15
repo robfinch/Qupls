@@ -166,7 +166,7 @@ mnemonic mnemonics[]={
 
 	"brk",	{0,0,0,0,0}, {R1,CPU_ALL,0,0x00,6,SZ_UNSIZED,0},
 
-	"bsr",	{OP_IMM,0,0,0,0}, {B2,CPU_ALL,0,RT(56LL)|OPC(32LL),6,SZ_UNSIZED,0},
+	"bsr",	{OP_IMM,0,0,0,0}, {B2,CPU_ALL,0,RT(1LL)|OPC(32LL),6,SZ_UNSIZED,0},
 	"bsr",	{OP_LK,OP_IMM,0,0,0}, {BL2,CPU_ALL,0,OPC(32LL),6,SZ_UNSIZED,0},
 
 	"bytndx", 	{OP_REG,OP_REG,OP_REG,0,0}, {R3,CPU_ALL,0,0xAA0000000002LL,6},	
@@ -2115,6 +2115,7 @@ static size_t encode_immed_RI(instruction_buf* insn, thuge hval, int i, taddr pc
 	int minbits = (insn->opcode & 0x7f)==7LL ? 15 : 24;
 	int64_t sc;
 	int64_t reg = (insn->opcode >> 8LL) & 0x1fLL;
+	int is_s = 0;
 
 	if (((insn->opcode & 0x7fLL)==OPC_ADDS)
 		|| ((insn->opcode & 0x7fLL)==OPC_ANDS)
@@ -2122,12 +2123,14 @@ static size_t encode_immed_RI(instruction_buf* insn, thuge hval, int i, taddr pc
 		|| ((insn->opcode & 0x7fLL)==OPC_EORS)
 	)
 	{
+		is_s = 1;
 		minbits = 128;
 		eval_expr(ip->op[2]->value,&sc,sec,pc);
 		/*
 		switch(sc) {
 		case 1:	
-			hval = hshr(hval,16);
+			hval = hshr(hval,24);
+			
 			if (((insn->opcode & 0x7fLL)==OPC_ADDS)
 				||((insn->opcode & 0x7fLL)==OPC_ORS)
 				||((insn->opcode & 0x7fLL)==OPC_EORS)
@@ -2135,8 +2138,11 @@ static size_t encode_immed_RI(instruction_buf* insn, thuge hval, int i, taddr pc
 				hval.lo &= -2LL;
 			else if ((insn->opcode & 0x7fLL)==OPC_ANDS)
 				hval.lo |= 1LL;
+			
 			break;
-		case 2:	hval = hshr(hval,32); break;
+		case 2:
+			hval = hshr(hval,48);
+			break;
 		}
 		*/
 	}
@@ -2155,6 +2161,8 @@ static size_t encode_immed_RI(instruction_buf* insn, thuge hval, int i, taddr pc
 			insn->pfxb.size = 0;
 			//insn->opcode |= 0x400000LL;	// set swap bit
 			insn->opcode = insn->opcode | ((hval.lo & 0xffffffLL) << 24LL);
+			if (is_s)
+				insn->opcode = insn->opcode | SC(sc);
 			if (!is_nbit(hval,minbits)){//||(hval.lo&0x1FE00LL)==0x10000LL) {
 				insn->imm0 = OPC(9LL)|((hval.lo & 0xffffffLL) << 24LL)|RA(0)|RT(reg);	// ORI r51,r0,#imm21
 				insn->imm1 = OPC(51LL)|(((hval.lo >> 24LL) & 0xffffffLL)<< 20LL)|SC(1LL)|RT(reg);	// ORIM r51,#imm21<<16
@@ -2180,9 +2188,13 @@ static size_t encode_immed_RI(instruction_buf* insn, thuge hval, int i, taddr pc
 		if (insn) {
 			if ((insn->opcode & 0x7f)==7LL)	// CSR
 				insn->opcode = insn->opcode | ((hval.lo & 0x3fffLL) << 19LL);
-			else
-				insn->opcode = insn->opcode | ((hval.lo & 0xffffffLL) << 24LL);
+			else {
+				if (is_s)
+					insn->opcode = insn->opcode | SC(sc);
+				else
+					insn->opcode = insn->opcode | ((hval.lo & 0xffffffLL) << 24LL);
 //				insn->opcode = insn->opcode | ((hval.lo & 0x1fffffLL) << 19LL);
+			}
 		}
 		if (!is_nbit(hval,minbits)) {
 			if (insn) {
@@ -2460,10 +2472,10 @@ static size_t encode_immed (
 		else if (mnemo->ext.format==RIS) {
 			if (insn) {
 				if (i==1) {
-					insn->opcode = insn->opcode | ((val.lo & 0xffffffLL) << 16LL);
+					insn->opcode = insn->opcode | ((val.lo & 0xffffffLL) << 20LL);
 				}
 				else if (i==2) {
-					insn->opcode = insn->opcode | ((val.lo & 0x7LL) << 13LL);
+					insn->opcode = insn->opcode | SC(val.lo & 0x7LL);
 				}			
 			}
 		}
@@ -2587,10 +2599,10 @@ static size_t encode_immed (
 		else if (mnemo->ext.format==RIS) {
 			if (insn) {
 				if (i==1) {
-					insn->opcode = insn->opcode | ((val.lo & 0xffffffLL) << 16LL);
+					insn->opcode = insn->opcode | ((val.lo & 0xffffffLL) << 20LL);
 				}
 				else if (i==2) {
-					insn->opcode = insn->opcode | ((val.lo & 0x7LL) << 13LL);
+					insn->opcode = insn->opcode | SC(val.lo & 0x7LL);
 				}			
 			}
 		}
@@ -3806,7 +3818,7 @@ dblock *eval_data(operand *op,size_t bitsize,section *sec,taddr pc)
     }
   }
 
-  return db;
+  return (db);
 }
 
 /* To be inserted at the end of main() for debugging */

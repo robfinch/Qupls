@@ -44,7 +44,6 @@ function fnIsAlu;
 input instruction_t ir;
 begin
 	case(ir.r2.opcode)
-	OP_ZSxxI:	fnIsAlu = 1'b1;
 	OP_CHK:	fnIsAlu = 1'b1;
 	OP_R2:
 		case(ir.r2.func)
@@ -116,6 +115,26 @@ begin
 						fnIsAlu = 1'b1;
 	OP_SHIFT:
 		fnIsAlu = 1'b1;
+	OP_SEQI:	fnIsAlu = 1'b1;
+	OP_SNEI:	fnIsAlu = 1'b1;
+	OP_SLTI:	fnIsAlu = 1'b1;
+	OP_SLEI:	fnIsAlu = 1'b1;
+	OP_SGTI:	fnIsAlu = 1'b1;
+	OP_SGEI:	fnIsAlu = 1'b1;
+	OP_SLTUI:	fnIsAlu = 1'b1;
+	OP_SLEUI:	fnIsAlu = 1'b1;
+	OP_SGTUI:	fnIsAlu = 1'b1;
+	OP_SGEUI:	fnIsAlu = 1'b1;
+	OP_ZSEQI:	fnIsAlu = 1'b1;
+	OP_ZSNEI:	fnIsAlu = 1'b1;
+	OP_ZSLTI:	fnIsAlu = 1'b1;
+	OP_ZSLEI:	fnIsAlu = 1'b1;
+	OP_ZSGTI:	fnIsAlu = 1'b1;
+	OP_ZSGEI:	fnIsAlu = 1'b1;
+	OP_ZSLTUI:	fnIsAlu = 1'b1;
+	OP_ZSLEUI:	fnIsAlu = 1'b1;
+	OP_ZSGTUI:	fnIsAlu = 1'b1;
+	OP_ZSGEUI:	fnIsAlu = 1'b1;
 	OP_CSR:		fnIsAlu = 1'b1;
 	OP_MOV:		fnIsAlu = 1'b1;
 	OP_LDAX:	fnIsAlu = 1'b1;
@@ -127,7 +146,7 @@ begin
 	OP_BSR,OP_JSR:
 		fnIsAlu = 1'b1;
 	OP_Bcc,OP_BccU:
-		fnIsAlu = |ir[13:12];
+		fnIsAlu = |ir.br.inc;
 	OP_PRED:
 		fnIsAlu = 1'b1;
 	default:	fnIsAlu = 1'b0;

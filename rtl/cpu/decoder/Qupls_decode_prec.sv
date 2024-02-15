@@ -45,41 +45,39 @@ input instruction_t ir;
 begin
 	case(ir.r2.opcode)
 	OP_CHK:	fnPrec = 2'b11;
-	OP_R2:	fnPrec = ir[32:31];
-	OP_ADDI,OP_VADDI:	
-		fnPrec = ir[20:19];
-	OP_SUBFI:	fnPrec = ir[20:19];
-	OP_CMPI,OP_VCMPI:	
-		fnPrec = ir[20:19];
-	OP_MULI,OP_VMULI:	
-		fnPrec = ir[20:19];
-	OP_DIVI,OP_VDIVI:	
-		fnPrec = ir[20:19];
-	OP_ANDI,OP_VANDI:	
-		fnPrec = ir[20:19];
-	OP_ORI,OP_VORI:
-		fnPrec = ir[20:19];
-	OP_EORI,OP_VEORI:
-		fnPrec = ir[20:19];
-	OP_VADDSI,OP_VORSI,OP_VANDSI,OP_VEORSI,
+	OP_R2:	fnPrec = ir.r2.prc;
+	OP_ADDI:	
+		fnPrec = ir.ri.prc;
+	OP_SUBFI:	fnPrec = ir.ri.prc;
+	OP_CMPI:	
+		fnPrec = ir.ri.prc;
+	OP_MULI:	
+		fnPrec = ir.ri.prc;
+	OP_DIVI:	
+		fnPrec = ir.ri.prc;
+	OP_ANDI:	
+		fnPrec = ir.ri.prc;
+	OP_ORI:
+		fnPrec = ir.ri.prc;
+	OP_EORI:
+		fnPrec = ir.ri.prc;
 	OP_ADDSI,OP_ORSI,OP_ANDSI,OP_EORSI:
-						fnPrec = ir[17:16];
-	OP_SHIFT,OP_VSHIFT:
-		fnPrec = ir[35:34];
-	OP_FLT3:	fnPrec = ir[35:34];
-	OP_CSR:		fnPrec = 2'b11;
-	OP_MOV:		fnPrec = 2'b11;
-	OP_LDAX:	fnPrec = 2'b11;
-	OP_PFXA32,OP_PFXB32,OP_PFXC32,
+						fnPrec = ir[19:18];
+	OP_SHIFT:
+		fnPrec = ir[40:39];
+	OP_FLT3:	fnPrec = ir.f3.prc;
+	OP_CSR:		fnPrec = 2'b10;
+	OP_MOV:		fnPrec = 2'b10;
+	OP_LDAX:	fnPrec = 2'b10;
 	OP_QFEXT,
 	OP_VEC,OP_VECZ,
 	OP_NOP,OP_PUSH,OP_POP,OP_ENTER,OP_LEAVE,OP_ATOM:
-		fnPrec = 2'b11;
+		fnPrec = 2'b10;
 	OP_FENCE:
-		fnPrec = 2'b11;
+		fnPrec = 2'b10;
 	OP_BSR,OP_JSR:
-		fnPrec = 2'b11;
-	default:	fnPrec = 2'b11;
+		fnPrec = 2'b101;
+	default:	fnPrec = 2'b10;
 	endcase
 end
 endfunction

@@ -58,8 +58,6 @@ begin
 			fnRa = 9'd55;
 		OP_FLT3:
 			fnRa = ir.aRa;
-		OP_ADDSI,OP_ANDSI,OP_ORSI,OP_EORSI:
-			fnRa = ir.aRt;
 		OP_LDX:
 			case(ir.ins.lsn.func)
 			FN_LDCTX:	fnRa = 9'd40;	// CTX

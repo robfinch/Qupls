@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -44,8 +44,8 @@ function fnIsBranch;
 input instruction_t ir;
 begin
 	case(ir.any.opcode)
-	OP_Bcc,OP_BccU,OP_FBccH,OP_FBccS,OP_FBccD,OP_FBccQ:
-		fnIsBranch = ir[39:36]== 4'h8;
+	OP_Bcc,OP_BccU,OP_FBcc:
+		fnIsBranch = ir[47:44]== 4'h8;
 	default:
 		fnIsBranch = 1'b0;
 	endcase

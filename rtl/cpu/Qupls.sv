@@ -1646,10 +1646,10 @@ else begin
 			micro_ir <= exc_ret_mcir;
 		else begin
 			if (micro_ip==12'h000) begin
-				if (mip0v) begin micro_ir <= ins0_d; micro_ir.ins.any.opcode <= fnVec2ScalarOpcode(ins0_d.ins.any.opcode); end
-				else if (mip1v) begin micro_ir <= ins1_d; micro_ir.ins.any.opcode <= fnVec2ScalarOpcode(ins1_d.ins.any.opcode); end
-				else if (mip2v) begin micro_ir <= ins2_d; micro_ir.ins.any.opcode <= fnVec2ScalarOpcode(ins2_d.ins.any.opcode); end
-				else if (mip3v) begin micro_ir <= ins3_d; micro_ir.ins.any.opcode <= fnVec2ScalarOpcode(ins3_d.ins.any.opcode); end
+				if (mip0v) begin micro_ir <= ins0_d; end
+				else if (mip1v) begin micro_ir <= ins1_d; end
+				else if (mip2v) begin micro_ir <= ins2_d; end
+				else if (mip3v) begin micro_ir <= ins3_d; end
 			end
 		end
 	end
@@ -6511,7 +6511,7 @@ end
 endfunction
 
 // Convert a vector opcode to the equivalent scalar one.
-
+/*
 function opcode_t fnVec2ScalarOpcode;
 input opcode_t opc;
 begin
@@ -6534,6 +6534,7 @@ begin
 	endcase
 end
 endfunction
+*/
 
 // Detect "stuck out" situation. Stuck out occurs if an instruction is marked
 // out, but no-longer has a functional unit associated with it. Not sure why

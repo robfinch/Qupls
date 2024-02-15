@@ -44,8 +44,6 @@ function fnIsCls;
 input instruction_t op;
 begin
 	case(op.any.opcode)
-	OP_CLD,OP_CST:
-		fnIsCls = 1'b1;
 	default:
 		fnIsCls = 1'b0;
 	endcase

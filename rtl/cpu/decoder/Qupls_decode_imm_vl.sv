@@ -40,7 +40,6 @@
 import QuplsPkg::*;
 
 module Qupls_decode_imm(ins, imma, immb, immc, has_imma, has_immb, has_immc);
-parameter WID=32;
 input ex_instruction_t [5:0] ins;
 output reg [63:0] imma;
 output reg [63:0] immb;
@@ -152,7 +151,7 @@ begin
 			default:
 				immb = {{52{ins[0].ins[42]}},ins[0].ins[42:31]};
 			endcase
-			has_immb = 1'b1;
+			has_immb = 1'b0;
 		end
 	OP_STX:
 		begin
@@ -161,9 +160,9 @@ begin
 			default:
 				immb = {{52{ins[0].ins[42]}},ins[0].ins[42:31]};
 			endcase
-			has_immb = 1'b1;
+			has_immb = 1'b0;
 		end
-	OP_Bcc,OP_BccU,OP_FBccH,OP_FBccS,OP_FBccD,OP_FBccQ:
+	OP_Bcc,OP_BccU,OP_FBcc:
 		begin
 			immc = {{47{ins[0].ins[47]}},ins[0].ins[47:31]};
 			has_immc = 1'b1;

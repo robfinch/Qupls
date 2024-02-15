@@ -44,7 +44,7 @@ function fnIsBranch;
 input instruction_t ir;
 begin
 	case(ir.any.opcode)
-	OP_Bcc,OP_BccU,OP_FBccH,OP_FBccS,OP_FBccD,OP_FBccQ:
+	OP_Bcc,OP_BccU,OP_FBcc:
 		fnIsBranch = 1'b1;
 	default:
 		fnIsBranch = 1'b0;

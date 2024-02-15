@@ -59,6 +59,30 @@ output mc_address_t [31:0] mipbuf;
 output reg [5:0] jj;
 
 integer nn;
+wire ins0vec =
+	 ins0.ins.r3.Ra.v
+	|ins0.ins.r3.Rb.v
+	|ins0.ins.r3.Rc.v
+	|ins0.ins.r3.Rt.v
+	;
+wire ins1vec =
+	 ins1.ins.r3.Ra.v
+	|ins1.ins.r3.Rb.v
+	|ins1.ins.r3.Rc.v
+	|ins1.ins.r3.Rt.v
+	;
+wire ins2vec =
+	 ins2.ins.r3.Ra.v
+	|ins2.ins.r3.Rb.v
+	|ins2.ins.r3.Rc.v
+	|ins2.ins.r3.Rt.v
+	;
+wire ins3vec =
+	 ins3.ins.r3.Ra.v
+	|ins3.ins.r3.Rb.v
+	|ins3.ins.r3.Rc.v
+	|ins3.ins.r3.Rt.v
+	;
 
 always_ff @(posedge clk)
 if (rst) begin
@@ -72,7 +96,7 @@ end
 else begin
 	if (en) begin
 		jj = 6'd0;
-		case(ins0.ins.any.vec)
+		case(ins0vec)
 		2'd1,2'd2:
 			for (nn = 0; nn < 8; nn = nn + 1) begin
 				if (nn < vl) begin
@@ -98,7 +122,7 @@ else begin
 				jj = jj + 2'd1;
 			end
 		endcase
-		case(ins1.ins.any.vec)
+		case(ins1vec)
 		2'd1,2'd2:
 			for (nn = 0; nn < 8; nn = nn + 1) begin
 				if (nn < vl) begin
@@ -124,7 +148,7 @@ else begin
 				jj = jj + 2'd1;
 			end
 		endcase
-		case(ins2.ins.any.vec)
+		case(ins2vec)
 		2'd1,2'd2:
 			for (nn = 0; nn < 8; nn = nn + 1) begin
 				if (nn < vl) begin
@@ -150,7 +174,7 @@ else begin
 				jj = jj + 2'd1;
 			end
 		endcase
-		case(ins3.ins.any.vec)
+		case(ins3vec)
 		2'd1,2'd2:
 			for (nn = 0; nn < 8; nn = nn + 1) begin
 				if (nn < vl) begin

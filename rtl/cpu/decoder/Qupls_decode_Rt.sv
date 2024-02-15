@@ -47,7 +47,6 @@ function aregno_t fnRt;
 input ex_instruction_t ir;
 begin
 	case(ir.ins.any.opcode)
-	OP_ZSxxI:	fnRt = ir.aRt;
 	OP_R2:
 		case(ir.ins.r2.func)
 		FN_ADD:	fnRt = ir.aRt;

@@ -64,7 +64,7 @@ begin
 	OP_STB,OP_STW,OP_STT,OP_STO:
 		res1 <= as + i;
 	OP_LDX,OP_STX:
-		res1 <= as + bs + i;
+		res1 <= as + bs + {{53{ir.lsn.disp[11]}},ir.lsn.disp};
 	OP_AMO:
 		res1 <= as + b;
 	default:

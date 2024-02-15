@@ -44,7 +44,9 @@ import QuplsPkg::*;
 import Qupls_cache_pkg::*;
 
 module Qupls_dcache_ctrl(rst_i, clk_i, dce, ftam_req, ftam_resp, ftam_full, acr, hit, modified,
-	cache_load, cpu_request_i, cpu_request_i2, data_to_cache_o, response_from_cache_i, wr, uway, way,
+	cache_load, 
+	cpu_request_i, cpu_request_busy_o,
+	cpu_request_i2, data_to_cache_o, response_from_cache_i, wr, uway, way,
 	dump, dump_i, dump_ack, snoop_adr, snoop_v, snoop_cid);
 parameter CID = 3'd1;
 parameter CORENO = 6'd1;
@@ -63,6 +65,7 @@ input hit;
 input modified;
 output reg cache_load;
 input fta_cmd_request512_t cpu_request_i;
+output reg cpu_request_busy_o;
 output fta_cmd_request512_t cpu_request_i2;
 output fta_cmd_response512_t data_to_cache_o;
 input fta_cmd_response512_t response_from_cache_i;
@@ -77,15 +80,15 @@ input snoop_v;
 input [5:0] snoop_cid;
 
 genvar g;
-integer nn,nn1,nn2,nn3,output_tran,nn5,free_queue_entry,nn7,nn8,nn9;
+integer nn,nn1,cpu_req_select,nn3,output_tran,nn5,free_queue_entry,nn7,nn8,nn9;
 
 typedef enum logic [3:0] {
 	RESET = 0,
 	IDLE,
 	DUMP1,LOAD1,RW1,
-	STATE1,STATE3,STATE4,STATE5,RAND_DELAY
+	RWPOST,STATE3,STATE4,STATE5,RAND_DELAY
 } state_t;
-state_t req_state, resp_state;
+state_t req_state;
 
 typedef enum logic [2:0] {
 	NONE = 0,
@@ -123,6 +126,7 @@ reg [1:0] active_req;
 reg [1:0] queued_req;
 reg [1:0] tran_cnt [0:15];
 reg [7:0] completed_tran;
+reg previous_done;
 req_queue_t cpu_req_queue [0:3];
 fta_cmd_response512_t tran_load_data [0:3];
 fta_tranid_t [15:0] tranids;
@@ -132,7 +136,7 @@ reg [2:0] acc_cnt;
 reg [2:0] load_cnt;
 reg [5:0] wait_cnt;
 reg [1:0] wr_cnt;
-reg cpu_request_queued;
+reg cpu_trans_queued;
 fta_tranid_t lasttid, lasttid2;
 reg bus_busy;
 reg [3:0] tidcnt;
@@ -199,29 +203,38 @@ generate begin : gCacheLineUpdate
 end
 endgenerate				
 
+// Select a CPU request to work on.
 always_comb
 begin
-	nn2 = 3'd4;
+	cpu_req_select = 3'd4;
 	for (nn1 = 0; nn1 < 4; nn1 = nn1 + 1)
-		if (cpu_req_queue[nn1].v && cpu_request_queued)
-			nn2 = nn1;
+		if (cpu_req_queue[nn1].v
+			// The previous set must be done before a new one will be selected.
+			&& previous_done
+			&& req_state==IDLE
+		)
+			cpu_req_select = nn1;
 end
 
 // Select a transaction to output
 always_comb
 begin
 	output_tran = 5'd16;
-	for (nn3 = 0; nn3 < 16; nn3 = nn3 + 1) begin
-		if (cpu_req_queue[nn3>>2].active[nn3[1:0]]
-			&& !cpu_req_queue[nn3>>2].out[nn3[1:0]] 
-			&& !cpu_req_queue[nn3>>2].done[nn3[1:0]]
-//			&& !tran_load_data[nn3>>2].ack
-			&& output_tran==5'd16)
-			output_tran = nn3;
+	if (req_state==IDLE) begin
+		for (nn3 = 0; nn3 < 16; nn3 = nn3 + 1) begin
+			if (cpu_req_queue[nn3>>2].active[nn3[1:0]]
+				&& !cpu_req_queue[nn3>>2].out[nn3[1:0]] 
+				&& !cpu_req_queue[nn3>>2].done[nn3[1:0]]
+				&& cpu_req_queue[nn3>>2].tran_req[nn3 & 4'd3].cyc	// there must be a valid tran
+	//			&& !tran_load_data[nn3>>2].ack
+				&& output_tran==5'd16)
+				output_tran = nn3;
+		end
 	end
 end
 
-// Get index of completed transaction.
+// Get index of completed CPU transaction. The CPU transacation will be complete
+// only if all the bus transactions are complete.
 always_comb
 begin
 	completed_tran = 3'd4;
@@ -253,10 +266,14 @@ always_comb
 begin
 	which_tran = 5'd16;
 	for (nn8 = 0; nn8 < 16; nn8 = nn8 + 1)
-		if (cpu_req_queue[nn8[3:2]].tran_req[nn8[1:0]].tid==ftam_resp.tid)
+		if (cpu_req_queue[nn8[3:2]].tran_req[nn8[1:0]].tid==ftam_resp.tid
+			&& cpu_req_queue[nn8[3:2]].tran_req[nn8[1:0]].cmd!=CMD_NONE)
 			which_tran = nn8;
 end
 //			|| (cpu_req_queue[nn8[3:2]].active[nn8[1:0]] && !cpu_req_queue[nn8[3:2]].tran_req[nn8[1:0]].cyc)
+
+always_comb
+	cpu_request_busy_o = free_queue_entry >= 4;
 
 fta_tranid_t tmptid;
 always_comb
@@ -269,7 +286,6 @@ end
 always_ff @(posedge clk_i)
 if (rst_i) begin
 	req_state <= RESET;
-	resp_state <= RESET;
 	to_cnt <= 'd0;
 	tidcnt <= 4'd1;
 	tid_cnt <= 4'd0;
@@ -277,7 +293,7 @@ if (rst_i) begin
 	lasttid2 <= 4'd0;
 	dump_ack <= 1'd0;
 	wr <= 1'b0;
-	cache_load_data <= 'd0;
+	cache_load_data <= {$bits(fta_cmd_response512_t){1'd0}};
 	ftam_req <= 'd0;
 	dump_cnt <= 3'd0;
 	load_cnt <= 3'd0;
@@ -290,18 +306,19 @@ if (rst_i) begin
 	end
 	for (nn = 0; nn < 4; nn = nn + 1) begin
 		tran_load_data[nn] <= 'd0;
-		cpu_req_queue[nn] <= 'd0;
+		cpu_req_queue[nn] <= {$bits(req_queue_t){1'd0}};
 	end
 	req_load <= 1'd0;
 	loaded <= 1'd0;
 	load_cnt <= 3'd0;
 	wait_cnt <= 3'd0;
 	wr_cnt <= 3'd0;
-	cpu_request_queued <= 1'd1;
+	cpu_trans_queued <= 1'd0;
 	cpu_request_i2 <= 'd0;
 	last_out <= 5'd16;
 	iway <= 2'b00;
-	queued_req <= 2'd0;
+	queued_req <= 2'd3;
+	previous_done <= 1'd1;
 end
 else begin
 	dump_ack <= 1'd0;
@@ -319,6 +336,20 @@ else begin
 	// Ack pulses for only 1 clock.
 	for (nn = 0; nn < 4; nn = nn + 1)
 		tran_load_data[nn].ack <= 1'b0;
+
+	// Queue a CPU request in an empty slot. Does not block if there is no slot
+	// available. If there is no slot available eventually the memory op will
+	// time out on the CPU.
+	if (cpu_request_i.cyc && !in_que) begin
+		if (free_queue_entry < 3'd4) begin
+			cpu_req_queue[free_queue_entry[1:0]].v <= 1'b1;
+			cpu_req_queue[free_queue_entry[1:0]].done <= 4'b0000;
+			cpu_req_queue[free_queue_entry[1:0]].active <= 4'b0000;
+			cpu_req_queue[free_queue_entry[1:0]].out <= 4'b0000;
+			cpu_req_queue[free_queue_entry[1:0]].cpu_req <= cpu_request_i;
+		end
+	end
+
 	case(req_state)
 	RESET:
 		begin
@@ -342,7 +373,17 @@ else begin
 		end
 	IDLE:
 		begin
-			tBusClear();
+			// Select a CPU request to process.
+			if (cpu_req_select < 3'd4 && cpu_req_queue[cpu_req_select[1:0]].cpu_req.tid != lasttid2) begin
+				queued_req <= cpu_req_select[1:0];
+				cpu_request_i2 <= cpu_req_queue[cpu_req_select[1:0]].cpu_req;
+				lasttid2 <= cpu_req_queue[cpu_req_select[1:0]].cpu_req.tid;
+				cpu_req_queue[cpu_req_select[1:0]].active <= 4'b1111;
+				cpu_req_queue[cpu_req_select[1:0]].done <= 4'b0000;
+				previous_done <= FALSE;
+				lasttid <= lasttid2;
+			end
+			//tBusClear();
 			wr_cnt <= 2'd0;
 			acc_cnt <= 3'd0;
 			load_cnt <= 3'd0;
@@ -356,13 +397,15 @@ else begin
 						else
 							req_state <= LOAD1;
 					end
-					else
+					else if (!cpu_trans_queued)
 						req_state <= RW1;
 				end
-				else if (cpu_request_i2.we)
-					req_state <= RW1;
-				else if (non_cacheable || !dce)
-					req_state <= RW1;
+				else if (!cpu_trans_queued) begin
+					if (cpu_request_i2.we)
+						req_state <= RW1;
+					else if (non_cacheable || !dce)
+						req_state <= RW1;
+				end
 			end
 		end
 	DUMP1:
@@ -427,17 +470,24 @@ else begin
 					tidcnt <= 4'd1;
 			end
 		end
+	// This state splits the CPU read or write request into multiple separate
+	// transactions for the bus access.
 	RW1:
+		if (cpu_trans_queued)
+			req_state <= RWPOST;
+		// tAccess will set cpu_trans_queued once all transactions have been
+		// queued.
+		else begin
+			tAccess(tmptid);
+			tidcnt <= tidcnt + 2'd1;
+			if (&tidcnt)
+				tidcnt <= 4'd1;
+		end
+	RWPOST:
 		begin
-			//tBusClear();
-			if (cpu_request_queued)
-				req_state <= IDLE;
-			else begin
-				tAccess(tmptid);
-				tidcnt <= tidcnt + 2'd1;
-				if (&tidcnt)
-					tidcnt <= 4'd1;
-			end
+			cpu_trans_queued <= FALSE;
+			cpu_request_i2.cyc <= LOW;
+			req_state <= IDLE;
 		end
 	STATE5:
 		begin
@@ -473,6 +523,7 @@ else begin
 			cpu_req_queue[which_tran[3:2]].active[which_tran[1:0]] <= 1'b0;
 			cpu_req_queue[which_tran[3:2]].out[which_tran[1:0]] <= 1'b0;
 			cpu_req_queue[which_tran[3:2]].done[which_tran[1:0]] <= 1'b1;
+			cpu_req_queue[which_tran[3:2]].tran_req[which_tran[1:0]].cmd <= fta_bus_pkg::CMD_NONE;
 			tran_load_data[which_tran[3:2]].ack <= 1'b1;
 			//tran_req[ftam_resp.tid & 4'hF].cyc <= 1'b0;
 			tran_load_data[which_tran[3:2]].cid <= ftam_resp.cid;
@@ -497,7 +548,8 @@ else begin
 			tran_load_data[which_tran[3:2]].rty <= ftam_resp.rty;
 			tran_load_data[which_tran[3:2]].err <= ftam_resp.err;
 			tran_load_data[which_tran[3:2]].ack <= 1'b0;
-			cpu_req_queue[which_tran[3:2]].out[which_tran[3:2]] <= 1'b0;
+			//cpu_req_queue[which_tran[3:2]].out[which_tran[3:2]] <= 1'b0;
+			//cpu_req_queue[which_tran[3:2]].tran_req[output_tran[1:0]].cyc <= 1'b1;
 			// If the tran was not output, mark it done.
 			/*
 			if (!cpu_req_queue[which_tran[3:2]].tran_req[which_tran[1:0]].cyc) begin
@@ -542,21 +594,22 @@ else begin
 				cache_load_data.ack <= 1'b0;
 			end
 		end
+		// At the end of a completed CPU transaction, send back an ack.
+		// Copy the data from the tran buffer.
 		else begin
 			tran_load_data[completed_tran[1:0]].ack <= 1'b1;
 			cache_load_data <= tran_load_data[completed_tran[1:0]];
 			cache_load_data.ack <= 1'b1;
 			wr <= dce & allocate & ~non_cacheable;
-//				cache_load_data.ack <= 1'b1;
-//			cache_load_data.tid <= tranids[completed_tran];
 			cache_load_data.tid <= cpu_req_queue[completed_tran[1:0]].cpu_req.tid;
 			cpu_req_queue[completed_tran[1:0]].v <= INV;
-			cpu_req_queue[completed_tran[1:0]].cpu_req.tid <= 'd0;
+			//cpu_req_queue[completed_tran[1:0]].cpu_req.tid <= {$bits(fta_tranid_t){1'd0}};
 		end
 		cpu_req_queue[completed_tran[1:0]].done[2'd0] <= 1'b0;
 		cpu_req_queue[completed_tran[1:0]].done[2'd1] <= 1'b0;
 		cpu_req_queue[completed_tran[1:0]].done[2'd2] <= 1'b0;
 		cpu_req_queue[completed_tran[1:0]].done[2'd3] <= 1'b0;
+		previous_done <= 1'b1;
 		iway <= lfsr_o[LOG_WAYS:0];
 	end
 
@@ -591,25 +644,18 @@ else begin
 	// Look for outstanding transactions to execute.
 	if (output_tran < 5'd16) begin
 //		if (!ftam_full) begin
-			active_req <= output_tran[3:2];
-			last_out <= cpu_req_queue[output_tran[3:2]].tran_req[output_tran[1:0]].tid.tranid;
-			if (!cpu_req_queue[output_tran[3:2]].tran_req[output_tran[1:0]].we || cpu_req_queue[output_tran[3:2]].tran_req[output_tran[1:0]].cti==fta_bus_pkg::ERC)
-				cpu_req_queue[output_tran[3:2]].out[output_tran[1:0]] <= 1'b1;
-			else begin
-				cpu_req_queue[output_tran[3:2]].active[output_tran[1:0]] <= 1'b0;
-				cpu_req_queue[output_tran[3:2]].out[output_tran[1:0]] <= 1'b0;
-				cpu_req_queue[output_tran[3:2]].done[output_tran[1:0]] <= 1'b1;
-			end
-			if (cpu_req_queue[output_tran[3:2]].tran_req[output_tran[1:0]].cyc) begin
-				ftam_req <= cpu_req_queue[output_tran[3:2]].tran_req[output_tran[1:0]];
-				cpu_req_queue[output_tran[3:2]].tran_req[output_tran[1:0]].cyc <= 1'b0;
-			end
-			else begin
-				cpu_req_queue[output_tran[3:2]].active[output_tran[1:0]] <= 1'b0;
-				cpu_req_queue[output_tran[3:2]].out[output_tran[1:0]] <= 1'b0;
-				cpu_req_queue[output_tran[3:2]].done[output_tran[1:0]] <= 1'b1;
-			end
-			wait_cnt <= 3'd0;
+		active_req <= output_tran[3:2];
+		last_out <= cpu_req_queue[output_tran[3:2]].tran_req[output_tran[1:0]].tid.tranid;
+		if (!cpu_req_queue[output_tran[3:2]].tran_req[output_tran[1:0]].we || cpu_req_queue[output_tran[3:2]].tran_req[output_tran[1:0]].cti==fta_bus_pkg::ERC)
+			cpu_req_queue[output_tran[3:2]].out[output_tran[1:0]] <= 1'b1;
+		else begin
+			cpu_req_queue[output_tran[3:2]].active[output_tran[1:0]] <= 1'b0;
+			cpu_req_queue[output_tran[3:2]].out[output_tran[1:0]] <= 1'b0;
+			cpu_req_queue[output_tran[3:2]].done[output_tran[1:0]] <= 1'b1;
+		end
+		ftam_req <= cpu_req_queue[output_tran[3:2]].tran_req[output_tran[1:0]];
+		cpu_req_queue[output_tran[3:2]].tran_req[output_tran[1:0]].cyc <= 1'b0;
+//		wait_cnt <= 3'd0;
 //			req_state <= RAND_DELAY;
 //		end
 	end
@@ -637,24 +683,6 @@ else begin
 		end
 		*/
 		req_state <= IDLE;		
-		resp_state <= STATE1;	
-	end
-	if (nn2 < 3'd4 && cpu_req_queue[nn2[1:0]].cpu_req.tid != lasttid2) begin
-		queued_req <= nn2[1:0];
-		cpu_request_i2 <= cpu_req_queue[nn2[1:0]].cpu_req;
-		lasttid2 <= cpu_req_queue[nn2[1:0]].cpu_req.tid;
-		cpu_req_queue[nn2[1:0]].active <= 4'b1111;
-		lasttid <= lasttid2;
-		cpu_request_queued <= 1'b0;
-	end
-	if (cpu_request_i.cyc && !in_que) begin
-		if (free_queue_entry < 3'd4) begin
-			cpu_req_queue[free_queue_entry[1:0]].v <= 1'b1;
-			cpu_req_queue[free_queue_entry[1:0]].done <= 4'b0000;
-			cpu_req_queue[free_queue_entry[1:0]].active <= 4'b0000;
-			cpu_req_queue[free_queue_entry[1:0]].out <= 4'b0000;
-			cpu_req_queue[free_queue_entry[1:0]].cpu_req <= cpu_request_i;
-		end
 	end
 end
 
@@ -691,8 +719,8 @@ begin
 		cpu_req_queue[queued_req].tran_req[which].blen <= 6'd0;
 		cpu_req_queue[queued_req].tran_req[which].cid <= cid;
 		cpu_req_queue[queued_req].tran_req[which].tid <= tid;
-		cpu_req_queue[queued_req].tran_req[which].bte <= fta_bus_pkg::LINEAR;
-		cpu_req_queue[queued_req].tran_req[which].cti <= fta_bus_pkg::CLASSIC;
+		cpu_req_queue[queued_req].tran_req[which].bte <= cpu_request_i2.bte;
+		cpu_req_queue[queued_req].tran_req[which].cti <= cpu_request_i2.cti;
 		cpu_req_queue[queued_req].tran_req[which].cyc <= 1'b1;
 		cpu_req_queue[queued_req].tran_req[which].stb <= 1'b1;
 		cpu_req_queue[queued_req].tran_req[which].sel <= sel;
@@ -702,6 +730,7 @@ begin
 		cpu_req_queue[queued_req].tran_req[which].vadr <= vadr;
 		cpu_req_queue[queued_req].tran_req[which].padr <= padr;
 		cpu_req_queue[queued_req].tran_req[which].data1 <= data;
+		cpu_req_queue[queued_req].tran_req[which].csr <= 1'd0;
 		cpu_req_queue[queued_req].tran_req[which].pl <= 8'd0;
 		cpu_req_queue[queued_req].tran_req[which].pri <= 4'h7;
 		cpu_req_queue[queued_req].tran_req[which].cache <= cpu_request_i2.cache;//fta_bus_pkg::CACHEABLE;
@@ -711,7 +740,7 @@ begin
 //	tran_done[completed_tran] <= 1'b0;
 	tran_load_data[which].adr <= padr;
 	cpu_req_queue[queued_req].write_allocate <= wr & allocate;
-	if (wr & ~allocate)
+	if (wr && !allocate && cpu_request_i2.cti!=fta_bus_pkg::ERC)
 		cpu_req_queue[queued_req].done[which] <= 1'b1;
 	if (~|cpu_request_i2.sel[15:0])
 		cpu_req_queue[queued_req].done[2'd0] <= 1'b1;
@@ -729,7 +758,7 @@ input fta_tranid_t tid;
 fta_address_t ta;
 begin
 	if (wr_cnt == 2'd3) begin
-		cpu_request_queued <= 1'b1;
+		cpu_trans_queued <= 1'b1;
 		loaded <= 1'b0;
 		wr_cnt <= 2'd0;
 	end
@@ -799,7 +828,7 @@ begin
 					else begin
 						cpu_req_queue[queued_req].done[2'd2] <= 1'b1;
 						wr_cnt <= 2'd0;
-						cpu_request_queued <= 1'b1;
+						cpu_trans_queued <= 1'b1;
 						loaded <= 1'b0;
 						if (|cpu_request_i2.sel[63:48]) begin
 							tAddr(
@@ -867,7 +896,7 @@ begin
 				else begin
 					cpu_req_queue[queued_req].done[2'd2] <= 1'b1;
 					wr_cnt <= 2'd0;
-					cpu_request_queued <= 1'b1;
+					cpu_trans_queued <= 1'b1;
 					loaded <= 1'b0;
 					if (|cpu_request_i2.sel[63:48]) begin
 						tAddr(
@@ -914,7 +943,7 @@ begin
 			else begin
 				cpu_req_queue[queued_req].done[2'd2] <= 1'b1;
 				wr_cnt <= 2'd0;
-				cpu_request_queued <= 1'b1;
+				cpu_trans_queued <= 1'b1;
 				loaded <= 1'b0;
 				if (|cpu_request_i2.sel[63:48]) begin
 					tAddr(
@@ -940,7 +969,7 @@ begin
 	2'd3: 
 		begin
 			wr_cnt <= 2'd0;
-			cpu_request_queued <= 1'b1;
+			cpu_trans_queued <= 1'b1;
 			loaded <= 1'b0;
 			if (|cpu_request_i2.sel[63:48]) begin
 				tAddr(

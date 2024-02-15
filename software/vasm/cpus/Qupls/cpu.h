@@ -256,7 +256,7 @@ typedef struct {
 #define COND(x)	(((x) & 0xfLL) << 5LL)
 #define CND3(x)	(((x) & 0x7LL) << 9LL)
 #define IM2(x)		(((x) & 3LL) << 25LL)
-#define S(x)			(((x) & 3LL) << 24LL)
+#define S(x)			(((x) & 3LL) << 29LL)
 #define SC(x)			(((x) & 7LL) << 15LL)
 #define SHFUNC(x)	(((x) & 0xfLL) << 44LL)
 #define R1FUNC(x)	(((x) & 0x1fLL) << 19LL)
@@ -282,14 +282,14 @@ typedef struct {
 #define SK(x)			(((x) & 1LL) << 46LL)
 
 /* special data operand types: */
-#define OP_D8  0x40001001
-#define OP_D16 0x40001002
-#define OP_D32 0x40001003
-#define OP_D64 0x40001004
-#define OP_D128 0x40001005
-#define OP_F32 0x40001006
-#define OP_F64 0x40001007
-#define OP_F128 0x40001008
+#define OP_D8  0x1001
+#define OP_D16 0x1002
+#define OP_D32 0x1003
+#define OP_D64 0x1004
+#define OP_D128 0x1005
+#define OP_F32 0x1006
+#define OP_F64 0x1007
+#define OP_F128 0x1008
 
-#define OP_DATAM(t) (t >= OP_D8)
-#define OP_FLOAT(t) (t >= OP_F32)
+#define OP_DATAM(t) (t >= OP_D8 && t <= OP_F128)
+#define OP_FLOAT(t) (t >= OP_F32 && t <= OP_F128)

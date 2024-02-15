@@ -95,7 +95,7 @@ always_comb
 		OR:	takb = |(|a || |b);
 		default:	takb = 1'b0;
 		endcase	
-	OP_FBccD:
+	OP_FBcc:
 		case(instr.fbr.fn)
 		FEQ:	takb = fcmpo[0];
 		FNE:	takb = ~fcmpo[0];

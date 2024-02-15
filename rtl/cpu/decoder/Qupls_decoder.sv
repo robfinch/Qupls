@@ -366,13 +366,13 @@ else begin
 		dbo.jsri <= ins.ins.any.opcode==OP_JSRI;
 		dbo.pushi <= ins.ins.any.opcode==OP_PUSHI;
 		dbo.Ran <= ins.ins.r2.Ra.n;
-		dbo.Rbn <= ins.ins.r2.Ra.n;
-		dbo.Rcn <= ins.ins.r2.Ra.n;
-		dbo.Rtn <= ins.ins.r2.Ra.n;
+		dbo.Rbn <= ins.ins.r2.Rb.n;
+		dbo.Rcn <= ins.ins.r2.Rc.n;
+		dbo.Rtn <= ins.ins.r2.Rt.n;
 		dbo.Rav <= ins.ins.r2.Ra.v;
-		dbo.Rbv <= ins.ins.r2.Ra.v;
-		dbo.Rcv <= ins.ins.r2.Ra.v;
-		dbo.Rtv <= ins.ins.r2.Ra.v;
+		dbo.Rbv <= ins.ins.r2.Rb.v;
+		dbo.Rcv <= ins.ins.r2.Rc.v;
+		dbo.Rtv <= ins.ins.r2.Rt.v;
 	end
 end
 

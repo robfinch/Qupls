@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2023-2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -47,28 +47,12 @@ always_comb
 	OP_JSR:	len = 5'd5;
 	OP_BccU:	len = 5'd5;
 	OP_Bcc:	len = 5'd5;
-	OP_FBccH:	len = 5'd5;
-	OP_FBccS:	len = 5'd5;
-	OP_FBccD:	len = 5'd5;
-	OP_FBccQ:	len = 5'd5;
+	OP_FBcc:	len = 5'd5;
 	OP_CSR:		len = 5'd5;
 	OP_FLT3:	len = 5'd5;
-//	OP_PFXA,OP_PFXB,OP_PFXC:
-//					len = 5'd5;
-	OP_PFXA32:	len = 5'd5;
-	OP_PFXB32:	len = 5'd5;
-	OP_PFXC32:	len = 5'd5;
-	/*
-	OP_PFXA64:	len = 5'd10;
-	OP_PFXB64:	len = 5'd10;
-	OP_PFXC64:	len = 5'd10;
-	OP_PFXA128:	len = 5'd20;
-	OP_PFXB128:	len = 5'd20;
-	OP_PFXC128:	len = 5'd20;
-	*/
 	OP_RTD:
 					len = 5'd5;
-	OP_NOP,OP_LSCTX:
+	OP_NOP:
 					len = 5'd5;
 	default:	len = 5'd5;
 	endcase

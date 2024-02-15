@@ -210,32 +210,8 @@ begin
 	exc = FLT_NONE;
 	bus = {(WID/16){16'h0000}};
 	case(ir.any.opcode)
-	OP_ZSxxI:
-		case(ir[39:35])
-		5'd0:	bus = a==i;
-		5'd1:	bus = a!=i;
-		5'd2:	bus = $signed(a) < $signed(i);
-		5'd3:	bus = $signed(a) <= $signed(i);
-		5'd4:	bus = a < i;
-		5'd5:	bus = a <= i;
-		5'd10: bus = $signed(a) > $signed(i);
-		5'd11: bus = $signed(a) >= $signed(i);
-		5'd12: bus = a > i;
-		5'd13: bus = a >= i;
-		5'd16:	bus = a==i ? 64'd1 : t;
-		5'd17:	bus = a!=i ? 64'd1 : t;
-		5'd18:	bus = $signed(a) < $signed(i) ? 64'd1 : t;
-		5'd19:	bus = $signed(a) <= $signed(i) ? 64'd1 : t;
-		5'd20:	bus = a < i ? 64'd1 : t;
-		5'd21:	bus = a <= i ? 64'd1 : t;
-		5'd26: bus = $signed(a) > $signed(i) ? 64'd1 : t;
-		5'd27: bus = $signed(a) >= $signed(i) ? 64'd1 : t;
-		5'd28: bus = a > i ? 64'd1 : t;
-		5'd29: bus = a >= i ? 64'd1 : t;
-		default:	bus = dead;
-		endcase
 	OP_CHK:
-		case(ir[39:36])
+		case(ir[47:44])
 		4'd0:	if (!(a >= b && a < c)) exc = cause_code_t'(ir[34:27]);
 		4'd1: if (!(a >= b && a <= c)) exc = cause_code_t'(ir[34:27]);
 		4'd2: if (!(a > b && a < c)) exc = cause_code_t'(ir[34:27]);
@@ -255,12 +231,9 @@ begin
 		FN_ADD:
 			case(ir.r2.op2)
 			3'd0:	bus = (a + b) & c;
-			3'd1:	bus = (a + b) & ~c;
-			3'd2: bus = (a + b) | c;
-			3'd3: bus = (a + b) | ~c;
-			3'd4: bus = (a + b) ^ c;
-			3'd5:	bus = (a + b) ^ ~c;
-			3'd6:	bus = (a + b) + c;
+			3'd1: bus = (a + b) | c;
+			3'd2: bus = (a + b) ^ c;
+			3'd3:	bus = (a + b) + c;
 			/*
 			4'd9:	bus = (a + b) - c;
 			4'd10: bus = (a + b) + c + 2'd1;
@@ -280,13 +253,10 @@ begin
 			endcase
 		FN_SUB:	bus = a - b - c;
 		FN_CMP,FN_CMPU:	
-			case(ir[30:27])
-			4'd0:	bus = cmpo & c;
-			4'd1:	bus = cmpo & ~c;
-			4'd2:	bus = cmpo | c;
-			4'd3:	bus = cmpo | ~c;
-			4'd4:	bus = cmpo ^ c;
-			4'd5:	bus = cmpo ^ ~c;
+			case(ir.r2.op2)
+			3'd1:	bus = cmpo & c;
+			3'd2:	bus = cmpo | c;
+			3'd3:	bus = cmpo ^ c;
 			default:	bus = cmpo;
 			endcase
 		FN_MUL:	bus = prod[WID-1:0];
@@ -299,66 +269,48 @@ begin
 		FN_MODU: bus = ALU0 ? div_r : dead;
 		FN_AND:	
 			case(ir.r2.op2)
-			4'd0:	bus = (a & b) & c;
-			4'd1:	bus = (a & b) & ~c;
-			4'd2: bus = (a & b) | c;
-			4'd3: bus = (a & b) | ~c;
-			4'd4: bus = (a & b) ^ c;
-			4'd5:	bus = (a & b) ^ ~c;
+			3'd0:	bus = (a & b) & c;
+			3'd1: bus = (a & b) | c;
+			3'd2: bus = (a & b) ^ c;
 			default:	bus = {WID{1'd0}};
 			endcase
 		FN_OR:
 			case(ir.r2.op2)
-			4'd0:	bus = (a | b) & c;
-			4'd1:	bus = (a | b) & ~c;
-			4'd2: bus = (a | b) | c;
-			4'd3: bus = (a | b) | ~c;
-			4'd4: bus = (a | b) ^ c;
-			4'd5:	bus = (a | b) ^ ~c;
-			4'd15:	bus = (a & b) | (a & c) | (b & c);
+			3'd0:	bus = (a | b) & c;
+			3'd1: bus = (a | b) | c;
+			3'd2: bus = (a | b) ^ c;
+			3'd7:	bus = (a & b) | (a & c) | (b & c);
 			default:	bus = {WID{1'd0}};
 			endcase
 		FN_EOR:	
 			case(ir.r2.op2)
-			4'd0:	bus = (a ^ b) & c;
-			4'd1:	bus = (a ^ b) & ~c;
-			4'd2: bus = (a ^ b) | c;
-			4'd3: bus = (a ^ b) | ~c;
-			4'd4: bus = (a ^ b) ^ c;
-			4'd5:	bus = (a ^ b) ^ ~c;
-			4'd15:	bus = (^a) ^ (^b) ^ (^c);
+			3'd0:	bus = (a ^ b) & c;
+			3'd1: bus = (a ^ b) | c;
+			3'd2: bus = (a ^ b) ^ c;
+			3'd7:	bus = (^a) ^ (^b) ^ (^c);
 			default:	bus = {WID{1'd0}};
 			endcase
 		FN_CMOVZ: bus = a ? c : b;
 		FN_CMOVNZ:	bus = a ? b : c;
 		FN_NAND:
 			case(ir.r2.op2)
-			4'd0:	bus = ~(a & b) & c;
-			4'd1:	bus = ~(a & b) & ~c;
-			4'd2: bus = ~(a & b) | c;
-			4'd3: bus = ~(a & b) | ~c;
-			4'd4: bus = ~(a & b) ^ c;
-			4'd5:	bus = ~(a & b) ^ ~c;
+			3'd0:	bus = ~(a & b) & c;
+			3'd1: bus = ~(a & b) | c;
+			3'd2: bus = ~(a & b) ^ c;
 			default:	bus = {WID{1'd0}};
 			endcase
 		FN_NOR:
 			case(ir.r2.op2)
-			4'd0:	bus = ~(a | b) & c;
-			4'd1:	bus = ~(a | b) & ~c;
-			4'd2: bus = ~(a | b) | c;
-			4'd3: bus = ~(a | b) | ~c;
-			4'd4: bus = ~(a | b) ^ c;
-			4'd5:	bus = ~(a | b) ^ ~c;
+			3'd0:	bus = ~(a | b) & c;
+			3'd1: bus = ~(a | b) | c;
+			3'd2: bus = ~(a | b) ^ c;
 			default:	bus = {WID{1'd0}};
 			endcase
 		FN_ENOR:
 			case(ir.r2.op2)
-			4'd0:	bus = ~(a ^ b) & c;
-			4'd1:	bus = ~(a ^ b) & ~c;
-			4'd2: bus = ~(a ^ b) | c;
-			4'd3: bus = ~(a ^ b) | ~c;
-			4'd4: bus = ~(a ^ b) ^ c;
-			4'd5:	bus = ~(a ^ b) ^ ~c;
+			3'd0:	bus = ~(a ^ b) & c;
+			3'd1: bus = ~(a ^ b) | c;
+			3'd2: bus = ~(a ^ b) ^ c;
 			default:	bus = {WID{1'd0}};
 			endcase
 			
@@ -393,8 +345,8 @@ begin
 		FN_ZSLEUI8:	bus = a <= b ? immc8 : zero;
 
 		FN_MINMAX:
-			case(ir[30:27])
-			4'd0:	// MIN
+			case(ir.r3.op2)
+			3'd0:	// MIN
 				begin
 					if ($signed(a) < $signed(b) && $signed(a) < $signed(c))
 						bus = a;
@@ -403,7 +355,7 @@ begin
 					else
 						bus = c;
 				end
-			4'd1:	// MAX
+			3'd1:	// MAX
 				begin
 					if ($signed(a) > $signed(b) && $signed(a) > $signed(c))
 						bus = a;
@@ -412,7 +364,7 @@ begin
 					else
 						bus = c;
 				end
-			4'd2:	// MID
+			3'd2:	// MID
 				begin
 					if ($signed(a) > $signed(b) && $signed(a) < $signed(c))
 						bus = a;
@@ -421,7 +373,7 @@ begin
 					else
 						bus = c;
 				end
-			4'd4:	// MINU
+			3'd4:	// MINU
 				begin
 					if (a < b && a < c)
 						bus = a;
@@ -430,7 +382,7 @@ begin
 					else
 						bus = c;
 				end
-			4'd5:	// MAXU
+			3'd5:	// MAXU
 				begin
 					if (a > b && a > c)
 						bus = a;
@@ -439,7 +391,7 @@ begin
 					else
 						bus = c;
 				end
-			4'd6:	// MIDU
+			3'd6:	// MIDU
 				begin
 					if (a > b && a < c)
 						bus = a;
@@ -480,13 +432,13 @@ begin
 	OP_AIPSI:
 		bus = pc + ({{WID{i[23]}},i[23:0]} << (ir[17:15]*24));
 	OP_ADDSI:
-		bus = a + ({{WID{i[23]}},i[23:0]} << (ir[17:15]*24));
+		bus = t + ({{WID{i[23]}},i[23:0]} << (ir[17:15]*24));
 	OP_ANDSI:
-		bus = a & ({WID{1'b1}} & ~({{WID{1'b0}},24'hffffff} << (ir[17:15]*24)) | ({{WID{i[23]}},i[23:0]} << (ir[17:15]*24)));
+		bus = t & ({WID{1'b1}} & ~({{WID{1'b0}},24'hffffff} << (ir[17:15]*24)) | ({{WID{i[23]}},i[23:0]} << (ir[17:15]*24)));
 	OP_ORSI:
-		bus = a | (i << (ir[17:15]*24));
+		bus = t | (i << (ir[17:15]*24));
 	OP_EORSI:
-		bus = a ^ (i << (ir[17:15]*24));
+		bus = t ^ (i << (ir[17:15]*24));
 	OP_SHIFT:
 		case(ir.shifti.func)
 		OP_ASL:	bus = shl[WID*2-1:WID];
@@ -500,19 +452,38 @@ begin
 			endcase
 		default:	bus = {(WID/16){16'hDEAD}};
 		endcase
+
+	OP_ZSEQI:	bus = a==i;
+	OP_ZSNEI:	bus = a!=i;
+	OP_ZSLTI:	bus = $signed(a) < $signed(i);
+	OP_ZSLEI:	bus = $signed(a) <= $signed(i);
+	OP_ZSLTUI:	bus = a < i;
+	OP_ZSLEUI:	bus = a <= i;
+	OP_ZSGTI: bus = $signed(a) > $signed(i);
+	OP_ZSGEI: bus = $signed(a) >= $signed(i);
+	OP_ZSGTUI: bus = a > i;
+	OP_ZSGEUI: bus = a >= i;
+	OP_SEQI:	bus = a==i ? 64'd1 : t;
+	OP_SNEI:	bus = a!=i ? 64'd1 : t;
+	OP_SLTI:	bus = $signed(a) < $signed(i) ? 64'd1 : t;
+	OP_SLEI:	bus = $signed(a) <= $signed(i) ? 64'd1 : t;
+	OP_SLTUI:	bus = a < i ? 64'd1 : t;
+	OP_SLEUI:	bus = a <= i ? 64'd1 : t;
+	OP_SGTI: bus = $signed(a) > $signed(i) ? 64'd1 : t;
+	OP_SGEI: bus = $signed(a) >= $signed(i) ? 64'd1 : t;
+	OP_SGTUI: bus = a > i ? 64'd1 : t;
+	OP_SGEUI: bus = a >= i ? 64'd1 : t;
+
 	OP_MOV:		bus = a;
 	OP_LDAX:	bus = a + i + (b << ir[26:25]);
 	OP_BLEND:	bus = ALU0 ? blendo : dead;
 	OP_NOP:		bus = zero;
 	OP_QFEXT:	bus = qres;
-	OP_PFXA32:	bus = zero;
-	OP_PFXB32:	bus = zero;
-	OP_PFXC32:	bus = zero;
 	// Write the next PC to the link register.
 	OP_BSR,OP_JSR:
 						bus = pc + 4'd5;
 	OP_Bcc,OP_BccU:
-		case(ir[13:12])
+		case(ir.br.inc)
 		2'd0:	bus = a;
 		2'd1:	bus = a + 2'd1;
 		2'd3:	bus = a - 2'd1;
