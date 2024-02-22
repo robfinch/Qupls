@@ -40,7 +40,7 @@ import Qupls_cache_pkg::*;
 import QuplsMmupkg::*;
 import QuplsPkg::*;
 
-`define IS_SIM	1
+//`define IS_SIM	1
 `define ZERO		64'd0
 
 module QuplsSeq(coreno_i, rst_i, clk_i, clk2x_i, irq_i, vect_i,
@@ -89,7 +89,7 @@ reg vector_active;
 value_t res;
 
 pc_address_t icpc;
-address_t icdp;
+address_t icdp = 64'd0;
 wire ihito;
 wire ihit;
 reg [1023:0] ic_line, ic_line_x;
@@ -122,7 +122,7 @@ status_reg_t sr_stack [0:8];
 pc_address_t [8:0] pc_stack;
 mc_stack_t [8:0] mc_stack;			// micro-code exception stack
 cause_code_t [3:0] cause;
-reg paging_en = 1'b0;
+reg paging_en = 1'b1;
 
 wire pc_tlb_v;
 address_t pc_tlb_res;
@@ -179,7 +179,7 @@ memsz_t dramN_memsz;
 reg dc_invline = 1'b0;
 reg dc_invall = 1'b0;
 
-reg rfwr;
+wire rfwr;
 value_t rfoA;
 value_t rfoB;
 value_t rfoC;
@@ -607,23 +607,7 @@ Qupls_branch_eval ube1
 	.takb(takb)
 );
 
-typedef enum logic [4:0] {
-	RESET = 5'd0,
-	IFETCH = 5'd1,
-	EXTRACT = 5'd2,
-	DECODE1 = 5'd3,
-	EXECUTE = 5'd4,
-	MEMORY = 5'd5,
-	MEMORY_ACK = 5'd6,
-	MEMORY2 = 5'd7,
-	MEMORY2_ACK = 5'd8,
-	WRITEBACK = 5'd9,
-	REGREAD1 = 5'd10,
-	REGREAD2 = 5'd11,
-	DECODE2 = 5'd12
-} e_state;
-
-e_state state;
+e_seq_state state, wb_next_state;
 
 // ----------------------------------------------------------------------------
 // EXECUTE stage combo logic
@@ -943,366 +927,63 @@ begin
 end
 
 
+Qupls_seq_writeback uwb1
+(
+	.rst(rst),
+	.clk(clk),
+	.state(state),
+	.next_state(wb_next_state),
+	.db(db),
+	.alu_res(alu_res),
+	.fpu_res(fpu_res),
+	.dram_bus(dram_bus0),
+	.pc(fpc),
+	.fpu_done(fpu_done),
+	.div_done(div_done),
+	.mul_done(mul_done),
+	.rfwr(rfwr),
+	.res(res)
+);
+
 // ----------------------------------------------------------------------------
-// Registed logic.
+// Sequential CPU state machine.
 // ----------------------------------------------------------------------------
 
 always_ff @(posedge clk)
 if (rst)
 	tReset();
 else begin
-	ld <= FALSE;
-	rfwr <= FALSE;
+tOnce();
 case(state)
-RESET:	tReset();
-IFETCH:	
-	begin
-		$display("rfwr=%d Rt=%d res=%h", rfwr, Rt, res);
-		agen_next <= FALSE;
-		if (vector_active) begin
-			if (vele < vl) begin
-				ins[0] <= ir;
-				tGoto(EXTRACT);
-			end
-			else
-				vector_active <= FALSE;
-		end
-		else if (micro_code_active) begin
-			ins[0] <= mc_ins;
-			fmicro_ip <= micro_ip;
-			micro_ip <= next_micro_ip;
-			tGoto(EXTRACT);
-		end
-		else if (ihito) begin
-			vele <= 5'd0;
-			ins[0].ins <= ic_line >> {pc[5:0],3'b0};
-			fpc <= pc;
-			pc <= pc + 4'd6;
-			tGoto(EXTRACT);
-		end
-		ins[1].ins <= {41'd0,OP_NOP};
-		ins[2].ins <= {41'd0,OP_NOP};
-		ins[3].ins <= {41'd0,OP_NOP};
-		ins[4].ins <= {41'd0,OP_NOP};
-	end
-EXTRACT:
-	begin
-		tGoto(DECODE1);
-		if (!vector_active) begin
-			if (!micro_code_active) begin
-				ins[0].aRa <= {3'd0,ins[0].ins.r3.Ra.num};
-				ins[0].aRb <= {3'd0,ins[0].ins.r3.Rb.num};
-				ins[0].aRc <= {3'd0,ins[0].ins.r3.Rc.num};
-				ins[0].aRt <= {3'd0,ins[0].ins.r3.Rt.num};
-			end
-			ins[0].pred_btst = 6'd0;
-			// If a vector instruction is detected, record the ir set the vector fetch
-			// flag and go back to fetch.
-			if (ins[0].ins.any.vec) begin
-				vector_active <= TRUE;
-				ir <= ins[0];
-				tGoto(IFETCH);
-			end
-		end
-		else begin
-			vele <= vele + 2'd1;
-			if (micro_code_active) begin
-				ins[0].aRa <= ir.ins.r3.Ra.v ? {ir.aRa,vele[2:0]} : {3'd0,ir.aRa};
-				ins[0].aRb <= ir.ins.r3.Rb.v ? {ir.aRb,vele[2:0]} : {3'd0,ir.aRb};
-				ins[0].aRc <= ir.ins.r3.Rc.v ? {ir.aRc,vele[2:0]} : {3'd0,ir.aRc};
-				ins[0].aRt <= ir.ins.r3.Rt.v ? {ir.aRt,vele[2:0]} : {3'd0,ir.aRt};
-			end
-			else begin
-				ins[0].aRa <= ir.ins.r3.Ra.v ? {ir.ins.r3.Ra.num,vele[2:0]} : {3'd0,ir.ins.r3.Ra.num};
-				ins[0].aRb <= ir.ins.r3.Rb.v ? {ir.ins.r3.Rb.num,vele[2:0]} : {3'd0,ir.ins.r3.Rb.num};
-				ins[0].aRc <= ir.ins.r3.Rc.v ? {ir.ins.r3.Rc.num,vele[2:0]} : {3'd0,ir.ins.r3.Rc.num};
-				ins[0].aRt <= ir.ins.r3.Rt.v ? {ir.ins.r3.Rt.num,vele[2:0]} : {3'd0,ir.ins.r3.Rt.num};
-			end
-			ins[0].pred_btst = 6'd0;
-		end
-		if (~|micro_ip)
-			micro_code_active <= FALSE;
-		if (|mip) begin
-			micro_ir <= ins[0];
-			micro_code_active <= TRUE;
-			tGoto(IFETCH);
-		end
-	end
-DECODE1:	tGoto(DECODE2);
-DECODE2:
-	begin
-		ir2 <= ins[0];
-		argI <= db.immb;
-		cptgt <= {8{db.cpytgt}};
-		Ra = db.Ra;
-		Rb = db.Rb;
-		Rc = db.Rc;
-		Rt = db.Rt;
-		if (db.rti) begin
-			tProcessRti(ins[0].ins[12:11]==2'd2);
-			tGoto(IFETCH);
-		end
-		else
-			tGoto(REGREAD1);
-	end
-REGREAD1:
+QuplsPkg::RESET:	
+	tReset();
+QuplsPkg::IFETCH:
+	tFetch();	
+QuplsPkg::EXTRACT:
+	tExtract();
+QuplsPkg::DECODE1:
+	tGoto(DECODE2);
+QuplsPkg::DECODE2:
+	tDecode2();
+QuplsPkg::REGREAD1:
 	tGoto(REGREAD2);
-REGREAD2:
-	begin
-		case({db.Ran,db.bitwise})
-		2'b00:	argA <= rfoA;
-		2'b01:	argA <= rfoA;
-		2'b10:	argA <= db.fpu ? {~rfoA[$bits(value_t)-1],rfoA[$bits(value_t)-2:0]} : -rfoA;
-		2'b11:	argA <= ~rfoA;
-		endcase
-		case({db.Rbn,db.bitwise})
-		2'b00:	argB <= rfoB;
-		2'b01:	argB <= rfoB;
-		2'b10:	argB <= db.fpu ? {~rfoB[$bits(value_t)-1],rfoB[$bits(value_t)-2:0]} : -rfoB;
-		2'b11:	argB <= ~rfoB;
-		endcase
-		case({db.Rcn,db.bitwise})
-		2'b00:	argC <= rfoC;
-		2'b01:	argC <= rfoC;
-		2'b10:	argC <= db.fpu ? {~rfoC[$bits(value_t)-1],rfoC[$bits(value_t)-2:0]} : -rfoC;
-		2'b11:	argC <= ~rfoC;
-		endcase
-		argT <= rfoT;
-		brdisp <= {{43{ins[0].ins.br.disp[16]}},ins[0].ins.br.disp,2'b0}
-						 + {{44{ins[0].ins.br.disp[16]}},ins[0].ins.br.disp,1'b0};
-		tGoto(EXECUTE);
-	end
-EXECUTE:
-	begin
-		ld <= TRUE;
-		agen_v <= db.mem;
-		if (db.br & takb)
-			pc <= fpc + brdisp;
-		else if (db.bsr)
-			pc <= fpc + {{27{ins[0].ins.bsr.disp[36]}},ins[0].ins.bsr.disp};
-		else if (db.bts==BTS_RET)
-			pc <= argA + {ins[0].ins[10:8],2'd0} + {ins[0].ins[10:8],1'd0};
-		else if (db.cjb) begin
-			case(ins[0].ins[23:22])
-			2'd0:	pc = {pc[$bits(pc_address_t)-1:16],argA[15:0]+argI[15:0]};
-//			2'd1:	tgtpc = {pc[$bits(pc_address_t)-1:32],argA[31:0]+argI[31:0]};
-			default: pc = argA + argI;
-			endcase
-		end
-		tGoto(db.mem ? MEMORY : WRITEBACK);
-	end
-MEMORY:
-	if (paging_en) begin
-		if (tlb0_v) begin
-			dram0 <= DRAMSLOT_READY;
-			dram0_exc <= FLT_NONE;
-			dram0_stomp <= 1'b0;
-			dram0_id <= 5'd0;
-			dram0_idv <= VAL;
-			dram0_op <= ins[0];
-			dram0_ldip <= FALSE;
-			dram0_pc <= fpc;
-			dram0_load <= db.load;
-			dram0_loadz <= db.loadz;
-			dram0_store <= db.store;
-			dram0_erc <= TRUE;//db.erc;
-			dram0_Rt	<= Rt;
-			dram0_aRt	<= Rt;
-			dram0_aRtz <= ~|Rt;
-			dram0_bank <= 1'b0;
-			dram0_cp <= 4'd0;
-			dram0_hi <= 1'b0;
-			dram0_sel <= {64'h0,fnSel(ins[0])} << padr[5:0];
-			dram0_selh <= {64'h0,fnSel(ins[0])} << padr[5:0];
-			dram0_vaddr <= vadr;
-			dram0_paddr <= padr;
-			dram0_vaddrh <= vadr;
-			dram0_paddrh <= padr;
-			dram0_data <= {640'd0,argC} << {padr[5:0],3'b0};
-			dram0_datah <= {640'd0,argC} << {padr[5:0],3'b0};
-			dram0_shift <= {padr[5:0],3'd0};
-			dram0_memsz <= fnMemsz(ins[0]);
-			dram0_tid.core <= CORENO;
-			dram0_tid.channel <= 3'd1;
-			dram0_tid.tranid <= dram0_tid.tranid + 2'd1;
-			if (dram0_tid.tranid==4'd15)
-				dram0_tid.tranid <= 4'd1;
-	    dram0_tocnt <= 12'd0;
-	    tGoto(MEMORY_ACK);
-		end
-		else if (pe_fault_o) begin
-			tException(FLT_PAGE,fpc);
-			tGoto(IFETCH);
-		end
-	end
-	else begin
-		dram0 <= DRAMSLOT_READY;
-		dram0_exc <= FLT_NONE;
-		dram0_stomp <= 1'b0;
-		dram0_id <= 5'd0;
-		dram0_idv <= VAL;
-		dram0_op <= ins[0];
-		dram0_ldip <= FALSE;
-		dram0_pc <= fpc;
-		dram0_load <= db.load;
-		dram0_loadz <= db.loadz;
-		dram0_store <= db.store;
-		dram0_erc <= TRUE;//db.erc;
-		dram0_Rt	<= Rt;
-		dram0_aRt	<= Rt;
-		dram0_aRtz <= ~|Rt;
-		dram0_bank <= 1'b0;
-		dram0_cp <= 4'd0;
-		dram0_hi <= 1'b0;
-		dram0_sel <= {64'h0,fnSel(ins[0])} << vadr[5:0];
-		dram0_selh <= {64'h0,fnSel(ins[0])} << vadr[5:0];
-		dram0_vaddr <= vadr;
-		dram0_paddr <= vadr;
-		dram0_vaddrh <= vadr;
-		dram0_paddrh <= vadr;
-		dram0_data <= {640'd0,argC} << {vadr[5:0],3'b0};
-		dram0_datah <= {640'd0,argC} << {vadr[5:0],3'b0};
-		dram0_shift <= {vadr[5:0],3'd0};
-		dram0_memsz <= fnMemsz(ins[0]);
-		dram0_tid.core <= CORENO;
-		dram0_tid.channel <= 3'd1;
-		dram0_tid.tranid <= dram0_tid.tranid + 2'd1;
-		if (dram0_tid.tranid==4'd15)
-			dram0_tid.tranid <= 4'd1;
-    dram0_tocnt <= 12'd0;
-    tGoto(MEMORY_ACK);
-	end
-MEMORY_ACK:
-	if (dram0_ack) begin
-		agen_v <= FALSE;
-		dram0 <= DRAMSLOT_AVAIL;
-    dram_Rt0 <= dram0_Rt;
-    dram_aRt0 <= dram0_aRt;
-    dram_aRtz0 <= dram0_aRtz;
-  	dram_bus0 <= fnDati(dram0_more,dram0_op,cpu_resp_o[0].dat >> dram0_shift, dram0_pc);
-    if (dram0_store) begin
-    	dram0_store <= 1'd0;
-    	dram0_sel <= 80'd0;
-  	end
-		// If the data is spanning a cache line, run second bus cycle.
-		if (|dram0_selh[79:64]) begin
-			agen_v <= TRUE;
-			agen_next <= TRUE;
-			tGoto(MEMORY2);
-		end
-		else
-			tGoto(db.load ? WRITEBACK : IFETCH);
-	end
-MEMORY2:
-	if (paging_en) begin
-		if (tlb0_v) begin
-			agen_next <= FALSE;
-			dram0 <= DRAMSLOT_READY;
-			dram0_hi <= 1'b1;
-			dram0_sel <= dram0_selh >> 8'd64;
-			dram0_vaddr <= {dram0_vaddrh[$bits(virtual_address_t)-1:6] + 2'd1,6'h0};
-			dram0_paddr <= {dram0_paddrh[$bits(physical_address_t)-1:6] + 2'd1,6'h0};
-			dram0_data <= dram0_datah >> 12'd512;
-			dram0_shift <= {7'd64-dram0_paddrh[5:0],3'b0};
-			dram0_tid.tranid <= dram0_tid.tranid + 2'd1;
-			if (&dram0_tid.tranid)
-				dram0_tid.tranid <= 4'd1;
-			tGoto(MEMORY2_ACK);
-		end
-		else if (pe_fault_o) begin
-			tException(FLT_PAGE,fpc);
-			tGoto(IFETCH);
-		end
-	end
-	else begin
-		agen_next <= FALSE;
-		dram0 <= DRAMSLOT_READY;
-		dram0_hi <= 1'b1;
-		dram0_sel <= dram0_selh >> 8'd64;
-		dram0_vaddr <= {dram0_vaddrh[$bits(virtual_address_t)-1:6] + 2'd1,6'h0};
-		dram0_paddr <= {dram0_paddrh[$bits(physical_address_t)-1:6] + 2'd1,6'h0};
-		dram0_data <= dram0_datah >> 12'd512;
-		dram0_shift <= {7'd64-dram0_paddrh[5:0],3'b0};
-		dram0_tid.tranid <= dram0_tid.tranid + 2'd1;
-		if (&dram0_tid.tranid)
-			dram0_tid.tranid <= 4'd1;
-		tGoto(MEMORY2_ACK);
-	end
-MEMORY2_ACK:
-	if (dram0_ack) begin
-		agen_v <= FALSE;
-		dram0 <= DRAMSLOT_AVAIL;
-		dram0_hi <= 1'b0;
-    dram_Rt0 <= dram0_Rt;
-    dram_aRt0 <= dram0_aRt;
-    dram_aRtz0 <= dram0_aRtz;
-  	dram_bus0 <= fnDati(1'b0,dram0_op,(cpu_resp_o[0].dat << dram0_shift)|dram_bus0, dram0_pc);
-    if (dram0_store) begin
-    	dram0_store <= 1'd0;
-    	dram0_sel <= 80'd0;
-  	end
-		tGoto(db.load ? WRITEBACK : IFETCH);
-	end
-WRITEBACK:
-	begin
-		if (db.alu) begin
-			rfwr <= |Rt;
-			case({db.Rtn,db.bitwise})
-			2'b00:	res <= alu_res;
-			2'b01:	res <= alu_res;
-			2'b10:	res <= -alu_res;
-			2'b11:	res <= ~alu_res;
-			endcase
-		end
-		else if (db.load) begin
-			rfwr <= |Rt;
-			case({db.Rtn,db.bitwise})
-			2'b00:	res <= dram_bus0;
-			2'b01:	res <= dram_bus0;
-			2'b10:	res <= -dram_bus0;
-			2'b11:	res <= ~dram_bus0;
-			endcase
-		end
-		else if (db.cjb) begin
-			rfwr <= |Rt;
-			res <= fpc + 4'd6;
-		end
-		else if (db.bts==BTS_RET) begin
-			rfwr <= |Rt;
-			case({db.Rtn,db.bitwise})
-			2'b00:	res <= alu_res;
-			2'b01:	res <= alu_res;
-			2'b10:	res <= -alu_res;
-			2'b11:	res <= ~alu_res;
-			endcase
-		end
-		if (db.div) begin
-			if (div_done)
-				tGoto(IFETCH);
-		end
-		else if (db.mul) begin
-			if (mul_done)
-				tGoto(IFETCH);
-		end
-		else if(db.fpu) begin
-			if (fpu_done) begin
-				tGoto(IFETCH);
-				rfwr <= |Rt;
-				case({db.Rtn,db.bitwise})
-				2'b00:	res <= fpu_res;
-				2'b01:	res <= fpu_res;
-				2'b10:	res <= {~fpu_res[$bits(value_t)-1],fpu_res[$bits(value_t)-2:0]};
-				2'b11:	res <= ~fpu_res;
-				endcase
-			end
-		end
-		else
-			tGoto(IFETCH);
-	end
+QuplsPkg::REGREAD2:
+	tRegread2();
+QuplsPkg::EXECUTE:
+	tExecute();
+QuplsPkg::MEMORY:
+	tMemory1();
+QuplsPkg::MEMORY_ACK:
+	tMemoryAck(1'd0);
+QuplsPkg::MEMORY2:
+	tMemory2();
+QuplsPkg::MEMORY2_ACK:
+	tMemoryAck(1'd1);
+QuplsPkg::WRITEBACK:
+	tGoto(wb_next_state);
 default:
-	tGoto(RESET);
+	tGoto(QuplsPkg::RESET);
 endcase
-
 end
 
 `ifdef IS_SIM
@@ -1436,7 +1117,7 @@ assign resp_ch[0] = fta_resp;
 assign resp_ch[1] = ptable_resp;
 
 task tGoto;
-input e_state nst;
+input e_seq_state nst;
 begin
 	state <= nst;
 end
@@ -1446,6 +1127,11 @@ task tReset;
 begin
 	ir <= {41'd0,OP_NOP};
 	micro_ir <= {41'd0,OP_NOP};
+	ins[0].ins <= {41'd0,OP_NOP};
+	ins[1].ins <= {41'd0,OP_NOP};
+	ins[2].ins <= {41'd0,OP_NOP};
+	ins[3].ins <= {41'd0,OP_NOP};
+	ins[4].ins <= {41'd0,OP_NOP};
 	pc <= RSTPC;
 	micro_ip <= 12'h1A0;
 	micro_code_active <= TRUE;
@@ -1456,7 +1142,7 @@ begin
 	sr.pl <= 8'hFF;				// highest priority
 	sr.om <= OM_MACHINE;
 	sr.dbg <= TRUE;
-	sr.ipl <= 3'd0;				// non-maskable interrupts only
+	sr.ipl <= 3'd7;				// non-maskable interrupts only
 	ld <= FALSE;
 	agen_v <= FALSE;
 	agen_next <= FALSE;
@@ -1487,11 +1173,320 @@ begin
 	argC <= 64'd0;
 	argT <= 64'd0;
 	argI <= 64'd0;
-	rfwr <= FALSE;
 	agen_next <= FALSE;
-	tGoto(IFETCH);
+	tGoto(QuplsPkg::IFETCH);
 end
 endtask
+
+task tOnce();
+begin
+	ld <= FALSE;
+end
+endtask
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+task tFetch;
+begin
+	$display("rfwr=%d Rt=%d res=%h", rfwr, Rt, res);
+	agen_next <= FALSE;
+	if (irq_i > sr.ipl || &irq_i)
+		tException(&irq_i ? FLT_NMI : FLT_IRQ, pc);
+	else begin
+		if (vector_active) begin
+			if (vele < vl) begin
+				ins[0] <= ir;
+				tGoto(QuplsPkg::EXTRACT);
+			end
+			else
+				vector_active <= FALSE;
+		end
+		else if (micro_code_active) begin
+			ins[0] <= mc_ins;
+			fmicro_ip <= micro_ip;
+			micro_ip <= next_micro_ip;
+			tGoto(QuplsPkg::EXTRACT);
+		end
+		else if (ihito) begin
+			vele <= 5'd0;
+			ins[0].ins <= ic_line >> {pc[5:0],3'b0};
+			fpc <= pc;
+			pc <= pc + 4'd6;
+			tGoto(QuplsPkg::EXTRACT);
+		end
+		ins[1].ins <= {41'd0,OP_NOP};
+		ins[2].ins <= {41'd0,OP_NOP};
+		ins[3].ins <= {41'd0,OP_NOP};
+		ins[4].ins <= {41'd0,OP_NOP};
+	end
+end
+endtask
+
+task tExtract;
+begin
+	tGoto(DECODE1);
+	if (!vector_active) begin
+		if (!micro_code_active) begin
+			ins[0].aRa <= {3'd0,ins[0].ins.r3.Ra.num};
+			ins[0].aRb <= {3'd0,ins[0].ins.r3.Rb.num};
+			ins[0].aRc <= {3'd0,ins[0].ins.r3.Rc.num};
+			ins[0].aRt <= {3'd0,ins[0].ins.r3.Rt.num};
+		end
+		ins[0].pred_btst = 6'd0;
+		// If a vector instruction is detected, record the ir set the vector fetch
+		// flag and go back to fetch.
+		if (ins[0].ins.any.vec) begin
+			vector_active <= TRUE;
+			ir <= ins[0];
+			tGoto(QuplsPkg::IFETCH);
+		end
+	end
+	else begin
+		vele <= vele + 2'd1;
+		if (micro_code_active) begin
+			ins[0].aRa <= ir.ins.r3.Ra.v ? {ir.aRa,vele[2:0]} : {3'd0,ir.aRa};
+			ins[0].aRb <= ir.ins.r3.Rb.v ? {ir.aRb,vele[2:0]} : {3'd0,ir.aRb};
+			ins[0].aRc <= ir.ins.r3.Rc.v ? {ir.aRc,vele[2:0]} : {3'd0,ir.aRc};
+			ins[0].aRt <= ir.ins.r3.Rt.v ? {ir.aRt,vele[2:0]} : {3'd0,ir.aRt};
+		end
+		else begin
+			ins[0].aRa <= ir.ins.r3.Ra.v ? {ir.ins.r3.Ra.num,vele[2:0]} : {3'd0,ir.ins.r3.Ra.num};
+			ins[0].aRb <= ir.ins.r3.Rb.v ? {ir.ins.r3.Rb.num,vele[2:0]} : {3'd0,ir.ins.r3.Rb.num};
+			ins[0].aRc <= ir.ins.r3.Rc.v ? {ir.ins.r3.Rc.num,vele[2:0]} : {3'd0,ir.ins.r3.Rc.num};
+			ins[0].aRt <= ir.ins.r3.Rt.v ? {ir.ins.r3.Rt.num,vele[2:0]} : {3'd0,ir.ins.r3.Rt.num};
+		end
+		ins[0].pred_btst = 6'd0;
+	end
+	if (~|micro_ip)
+		micro_code_active <= FALSE;
+	if (|mip) begin
+		micro_ir <= ins[0];
+		micro_code_active <= TRUE;
+		tGoto(QuplsPkg::IFETCH);
+	end
+end
+endtask
+
+task tDecode2;
+begin
+	ir2 <= ins[0];
+	argI <= db.immb;
+	cptgt <= {8{db.cpytgt}};
+	Ra = db.Ra;
+	Rb = db.Rb;
+	Rc = db.Rc;
+	Rt = db.Rt;
+	if (db.rti) begin
+		tProcessRti(ins[0].ins[12:11]==2'd2);
+		tGoto(QuplsPkg::IFETCH);
+	end
+	else
+		tGoto(QuplsPkg::REGREAD1);
+end
+endtask
+
+task tArg;
+input Rn;
+input bitwise;
+input fpu;
+input value_t rfo;
+output value_t arg;
+begin
+	case({Rn,bitwise})
+	2'b00:	arg <= rfo;
+	2'b01:	arg <= rfo;
+	2'b10:	arg <= fpu ? {~rfo[$bits(value_t)-1],rfo[$bits(value_t)-2:0]} : -rfo;
+	2'b11:	arg <= ~rfo;
+	endcase
+end
+endtask
+
+task tRegread2;
+begin
+	tArg(db.Ran,db.bitwise,db.fpu,rfoA,argA);
+	tArg(db.Rbn,db.bitwise,db.fpu,rfoB,argB);
+	tArg(db.Rcn,db.bitwise,db.fpu,rfoC,argC);
+	argT <= rfoT;
+	brdisp <= {{45{ins[0].ins.br.disp[16]}},ins[0].ins.br.disp,2'b0}
+					 + {{46{ins[0].ins.br.disp[16]}},ins[0].ins.br.disp,1'b0};
+	tGoto(QuplsPkg::EXECUTE);
+end
+endtask
+
+task tExecute;
+begin
+	ld <= TRUE;
+	agen_v <= db.mem;
+	if (db.br & takb)
+		pc <= fpc + brdisp;
+	else if (db.bsr)
+		pc <= fpc + {{27{ins[0].ins.bsr.disp[36]}},ins[0].ins.bsr.disp};
+	else if (db.bts==BTS_RET)
+		pc <= argA + {ins[0].ins[10:8],2'd0} + {ins[0].ins[10:8],1'd0};
+	else if (db.cjb) begin
+		case(ins[0].ins[23:22])
+		2'd0:	pc = {pc[$bits(pc_address_t)-1:16],argA[15:0]+argI[15:0]};
+//			2'd1:	tgtpc = {pc[$bits(pc_address_t)-1:32],argA[31:0]+argI[31:0]};
+		default: pc = argA + argI;
+		endcase
+	end
+	tGoto(db.mem ? QuplsPkg::MEMORY : QuplsPkg::WRITEBACK);
+end
+endtask
+
+task tMemory1;
+begin
+	if (paging_en) begin
+		if (tlb0_v) begin
+			dram0 <= DRAMSLOT_READY;
+			dram0_exc <= FLT_NONE;
+			dram0_stomp <= 1'b0;
+			dram0_id <= 5'd0;
+			dram0_idv <= VAL;
+			dram0_op <= ins[0];
+			dram0_ldip <= FALSE;
+			dram0_pc <= fpc;
+			dram0_load <= db.load;
+			dram0_loadz <= db.loadz;
+			dram0_store <= db.store;
+			dram0_erc <= TRUE;//db.erc;
+			dram0_Rt	<= Rt;
+			dram0_aRt	<= Rt;
+			dram0_aRtz <= ~|Rt;
+			dram0_bank <= 1'b0;
+			dram0_cp <= 4'd0;
+			dram0_hi <= 1'b0;
+			dram0_sel <= {64'h0,fnSel(ins[0])} << padr[5:0];
+			dram0_selh <= {64'h0,fnSel(ins[0])} << padr[5:0];
+			dram0_vaddr <= vadr;
+			dram0_paddr <= padr;
+			dram0_vaddrh <= vadr;
+			dram0_paddrh <= padr;
+			dram0_data <= {640'd0,argC} << {padr[5:0],3'b0};
+			dram0_datah <= {640'd0,argC} << {padr[5:0],3'b0};
+			dram0_shift <= {padr[5:0],3'd0};
+			dram0_memsz <= fnMemsz(ins[0]);
+			dram0_tid.core <= CORENO;
+			dram0_tid.channel <= 3'd1;
+			dram0_tid.tranid <= dram0_tid.tranid + 2'd1;
+			if (dram0_tid.tranid==4'd15)
+				dram0_tid.tranid <= 4'd1;
+	    dram0_tocnt <= 12'd0;
+	    tGoto(QuplsPkg::MEMORY_ACK);
+		end
+		else if (pe_fault_o) begin
+			tException(FLT_PAGE,fpc);
+			tGoto(QuplsPkg::IFETCH);
+		end
+	end
+	else begin
+		dram0 <= DRAMSLOT_READY;
+		dram0_exc <= FLT_NONE;
+		dram0_stomp <= 1'b0;
+		dram0_id <= 5'd0;
+		dram0_idv <= VAL;
+		dram0_op <= ins[0];
+		dram0_ldip <= FALSE;
+		dram0_pc <= fpc;
+		dram0_load <= db.load;
+		dram0_loadz <= db.loadz;
+		dram0_store <= db.store;
+		dram0_erc <= TRUE;//db.erc;
+		dram0_Rt	<= Rt;
+		dram0_aRt	<= Rt;
+		dram0_aRtz <= ~|Rt;
+		dram0_bank <= 1'b0;
+		dram0_cp <= 4'd0;
+		dram0_hi <= 1'b0;
+		dram0_sel <= {64'h0,fnSel(ins[0])} << vadr[5:0];
+		dram0_selh <= {64'h0,fnSel(ins[0])} << vadr[5:0];
+		dram0_vaddr <= vadr;
+		dram0_paddr <= vadr;
+		dram0_vaddrh <= vadr;
+		dram0_paddrh <= vadr;
+		dram0_data <= {640'd0,argC} << {vadr[5:0],3'b0};
+		dram0_datah <= {640'd0,argC} << {vadr[5:0],3'b0};
+		dram0_shift <= {vadr[5:0],3'd0};
+		dram0_memsz <= fnMemsz(ins[0]);
+		dram0_tid.core <= CORENO;
+		dram0_tid.channel <= 3'd1;
+		dram0_tid.tranid <= dram0_tid.tranid + 2'd1;
+		if (dram0_tid.tranid==4'd15)
+			dram0_tid.tranid <= 4'd1;
+    dram0_tocnt <= 12'd0;
+    tGoto(QuplsPkg::MEMORY_ACK);
+	end
+end
+endtask
+
+task tMemory2;
+begin
+	if (paging_en) begin
+		if (tlb0_v) begin
+			agen_next <= FALSE;
+			dram0 <= DRAMSLOT_READY;
+			dram0_hi <= 1'b1;
+			dram0_sel <= dram0_selh >> 8'd64;
+			dram0_vaddr <= {dram0_vaddrh[$bits(virtual_address_t)-1:6] + 2'd1,6'h0};
+			dram0_paddr <= {dram0_paddrh[$bits(physical_address_t)-1:6] + 2'd1,6'h0};
+			dram0_data <= dram0_datah >> 12'd512;
+			dram0_shift <= {7'd64-dram0_paddrh[5:0],3'b0};
+			dram0_tid.tranid <= dram0_tid.tranid + 2'd1;
+			if (&dram0_tid.tranid)
+				dram0_tid.tranid <= 4'd1;
+			tGoto(QuplsPkg::MEMORY2_ACK);
+		end
+		else if (pe_fault_o) begin
+			tException(FLT_PAGE,fpc);
+			tGoto(QuplsPkg::IFETCH);
+		end
+	end
+	else begin
+		agen_next <= FALSE;
+		dram0 <= DRAMSLOT_READY;
+		dram0_hi <= 1'b1;
+		dram0_sel <= dram0_selh >> 8'd64;
+		dram0_vaddr <= {dram0_vaddrh[$bits(virtual_address_t)-1:6] + 2'd1,6'h0};
+		dram0_paddr <= {dram0_paddrh[$bits(physical_address_t)-1:6] + 2'd1,6'h0};
+		dram0_data <= dram0_datah >> 12'd512;
+		dram0_shift <= {7'd64-dram0_paddrh[5:0],3'b0};
+		dram0_tid.tranid <= dram0_tid.tranid + 2'd1;
+		if (&dram0_tid.tranid)
+			dram0_tid.tranid <= 4'd1;
+		tGoto(QuplsPkg::MEMORY2_ACK);
+	end
+end
+endtask
+
+task tMemoryAck;
+input which;
+begin
+	if (dram0_ack) begin
+		agen_v <= FALSE;
+		dram0 <= DRAMSLOT_AVAIL;
+		dram0_hi <= 1'b0;
+    dram_Rt0 <= dram0_Rt;
+    dram_aRt0 <= dram0_aRt;
+    dram_aRtz0 <= dram0_aRtz;
+    if (which==1'd0)
+  		dram_bus0 <= fnDati(dram0_more,dram0_op,cpu_resp_o[0].dat >> dram0_shift, dram0_pc);
+  	else
+	  	dram_bus0 <= fnDati(1'b0,dram0_op,(cpu_resp_o[0].dat << dram0_shift)|dram_bus0, dram0_pc);
+   	dram0_store <= 1'd0;
+   	dram0_sel <= 80'd0;
+		// If the data is spanning a cache line, run second bus cycle.
+		if (which==1'd0 && |dram0_selh[79:64]) begin
+			agen_v <= TRUE;
+			agen_next <= TRUE;
+			tGoto(QuplsPkg::MEMORY2);
+		end
+		else
+			tGoto(db.load ? QuplsPkg::WRITEBACK : QuplsPkg::IFETCH);
+	end
+end
+endtask
+
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Exception processing tasks.
@@ -1529,7 +1524,7 @@ endtask
 task tRex;
 input ex_instruction_t ir;
 begin
-	if (sr.om > ir.ins[9:8]) begin
+	if (sr.om > ir.ins[9:8] || sr.dbg) begin
 		sr.om <= operating_mode_t'(ir.ins[9:8]);
 		if (cause[3][7:0] < 8'd16)
 			pc <= {kvec[ir.ins[9:8]][$bits(pc_address_t)-1:4] + cause[3][3:0],4'h0};
