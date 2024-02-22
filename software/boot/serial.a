@@ -1,0 +1,411 @@
+/* =============================================================================
+	
+============================================================================= */
+
+#define XON		0x11
+#define XOFF	0x13
+#define ACIA	0xFED00000
+#define ACIA_RX		0
+#define ACIA_TX		0
+#define ACIA_STAT	1
+#define ACIA_CMD	2
+#define ACIA_CTRL	3
+
+
+extern byte* start_bss;
+
+const byte* nmeSerial = B"serial";
+
+void SerialPutChar(integer ch);
+extern int disable_int(integer);
+extern void restore_int(integer);
+
+private integer SerTailRcv;
+private integer SerHeadRcv;
+private integer SerTailXmit;
+private integer SerHeadXmit;
+private byte SerRcvXon;
+private byte SerRcvXoff;
+private byte* SerRcvBuf;
+
+/* -----------------------------------------------------------------------------
+----------------------------------------------------------------------------- */
+
+inline(0) void SerialTest(void)
+begin
+	forever begin SerialPutChar(nmeSerial[0]); end
+end
+
+/* -----------------------------------------------------------------------------
+	Initialize serial port.
+
+	Clear buffer indexes. Two bytes are used for the buffer index.
+	The port is initialized for 57600 baud, 1 stop bit and 8 bits data sent.
+	The internal baud rate generator is used.
+
+	Stack Space:
+		none
+	Parameters:
+		none
+	Modifies:
+		mc0
+	Returns:
+		none
+----------------------------------------------------------------------------- */
+
+void SerialInit(void)
+begin
+	short integer* pACIA = ACIA;
+	SerHeadRcv = 0;
+	SerTailRcv = 0;
+	SerHeadXmit = 0;
+	SerTailXmit = 0;
+	SerRcvXon = 0;
+	SerRcvXoff = 0;
+	pACIA[ACIA_CMD] = 0x09;				// dtr,rts active, rxint enabled (bit 1=0), no parity
+	pACIA[ACIA_CTRL] = 0x6001E;		// baud 9600, 1 stop bit, 8 bit, internal baud gen, no fifos
+end
+
+/* -----------------------------------------------------------------------------
+	Calculate number of character in input buffer. Must be called with interrupts
+	disabled.
+
+	Stack Space:
+		none
+	Parameters:
+		none
+	Modifies:
+		mc0,mc1
+	Returns:
+		a0 = number of bytes in buffer.
+----------------------------------------------------------------------------- */
+
+inline(0) integer SerialRcvCount(void)
+begin
+	integer count;
+	
+	count = SerTailRcv - SerHeadRcv;
+	if (count >=0)
+		return (count);
+	count = 0x1000 - SerHeadRcv;
+	count += SerTailRcv;
+	return (count);
+end
+
+/* -----------------------------------------------------------------------------
+	SerialGetChar
+
+	Check the serial port buffer to see if there's a char available. If there's
+	a char available then return it. If the buffer is almost empty then send an
+	XON.
+
+	Stack Space:
+		3 words
+	Parameters:
+		none
+	Modifies:
+		none
+	Returns:
+		character (0 to 255) or -1
+----------------------------------------------------------------------------- */
+
+integer SerialGetChar(void)
+begin
+	integer istat;
+	integer inb;
+	
+	istat = disable_int(8);		// bit 3=machine interrupt enable, mask off interrupts
+	__sync(0xFFFF);
+
+	// Check if there are too few characters in the receive buffer. If there are
+	// too few characters make sure XON is turned on.
+	if (SerialRcvCount() <= 8) then begin
+		if (!SerRcvXon) then begin
+			SerRcvXoff = 0;
+			SerRcvXon = XON;			// flag so we don't send multiple times
+			SerialPutChar(XON);
+		end
+	end
+	// Now check if anything in serial buffer.
+	if (SerHeadRcv!=SerTailRcv) then begin
+		inb = SerRcvBuf[SerHeadRcv];	// get byte from buffer
+		SerHeadRcv++;									// increment buffer pointer with wrap-around
+		SerHeadRcv &= 0xfff;
+		restore_int(istat);
+		return (inb);
+	end
+	restore_int(istat);
+	return (-1);
+end
+
+
+/* -----------------------------------------------------------------------------
+	SerialPeekChar
+
+	Check the serial port buffer to see if there's a char available. If there's
+	a char available then return it. But don't update the buffer indexes. No need
+	to send an XON here.
+
+	Stack Space:
+		none
+	Parameters:
+		none
+	Modifies:
+		mc0
+	Returns:
+		a0 = character or -1
+----------------------------------------------------------------------------- */
+
+integer SerialPeekChar(void)
+begin
+	integer istat;
+	integer inb;
+	
+	istat = disable_int(8);						// temporarily mask interrupts
+	__sync(0xffff);
+	if (SerHeadRcv != SerTailRcv) then begin		// anything in buffer?
+		inb = SerRcvBuf[SerHeadRcv];		// yes, get byte from buffer
+		restore_int(istat);
+		return (inb);
+	end
+	restore_int(istat);								// nothing in buffer, return -1
+	return (-1);
+end
+
+
+/* -----------------------------------------------------------------------------
+	SerialPeekCharDirect
+		Get a character directly from the I/O port. This bypasses the input
+	buffer.
+
+	Stack Space:
+		none
+	Parameters:
+		none
+	Modifies:
+		a0
+	Returns:
+		a0 = character or -1
+----------------------------------------------------------------------------- */
+
+integer SerialPeekCharDirect(void)
+begin
+	int istat;
+	int inb;
+	__int32* pACIA = ACIA;
+
+	istat = disable_int(8);						// temporarily mask interrupts
+	__sync(0xffff);
+
+	inb = pACIA[ACIA_STAT];
+
+	if (inb & 0x08) begin							// anything at ACIA? test bit 3
+		inb = pACIA[ACIA_RX] & 0xff;		// yes, get byte from port
+		restore_int(istat);
+		return (inb);
+	end
+	restore_int(istat);								// nothing at port, return -1
+	return (-1);
+end
+
+/* -----------------------------------------------------------------------------
+	SerialPutChar
+	  Put a character to the serial transmitter. This routine blocks until the
+	transmitter is empty. 
+
+	Stack Space
+		1 words
+	Parameters:
+		a1 = character to put
+	Modifies:
+		mc0
+----------------------------------------------------------------------------- */
+
+void SerialPutChar(int ch)
+begin
+	integer istat;
+	short integer* pACIA = ACIA;
+	integer inb;
+	
+	forever begin
+		// Between the status read and the transmit do not allow an
+		// intervening interrupt.
+		istat = disable_int(8);
+		inb = pACIA[ACIA_STAT];
+		if (inb & 0x10) begin			// branch if transmitter is not empty, bit #4 of the status reg
+			pACIA[ACIA_TX] = ch;
+			restore_int(istat);
+			return;
+		end
+		restore_int(istat);
+	end
+end
+
+/* -----------------------------------------------------------------------------
+	Serial IRQ routine
+
+	Keeps looping as long as it finds characters in the ACIA recieve buffer/fifo.
+	Received characters are buffered. If the buffer becomes full, new characters
+	will be lost.
+
+	Stack Space:
+		1 word
+	Parameters:
+		none
+	Modifies:
+		d,x
+	Returns:
+		none
+----------------------------------------------------------------------------- */
+
+void SerialIRQ(void)
+begin
+	short integer* pACIA = ACIA;
+	short integer tmp;
+	integer nextTail;
+	
+	forever begin
+		tmp = pACIA[ACIA_STAT];	// Look for IRQs
+		if (~(tmp & 0x80000000))						// quick test for any irqs, exit if no IRQ
+			break;
+		if (~(tmp & 0x08))						// bit 3 = rx full, exit if IRQ but not receive IRQ
+			break;
+		tmp = pACIA[ACIA_RX] & 0xff;	// Get data from RX port
+		nextTail = SerTailRcv + 1;
+		nextTail &= 0xfff;				// wrap around
+		if (nextTail==SerHeadRcv)	// ignore new byte if buffer full.
+			return;
+		SerRcvBuf[SerTailRcv] = tmp;
+		SerTailRcv = nextTail;
+		// If Xoff already sent
+		if (SerRcvXoff)
+			continue;
+		if (SerialRcvCount() < 4070)
+			continue;
+		SerRcvXon = 0;
+		SerRcvXoff = XOFF;				// set XOFF status
+		pACIA[ACIA_TX] = XOFF;		// and send
+	end
+	// Process other serial IRQs here	
+end
+
+/* -----------------------------------------------------------------------------
+	Put a string to the serial port.
+
+	Stack Space:
+		none
+	Parameters:
+		a0 = pointer to string
+	Modifies:
+		mc0,mc1,mc2,mc3
+	Returns:
+		none
+----------------------------------------------------------------------------- */
+
+void SerialPutString(byte *str)
+begin
+	short integer* pACIA = ACIA;
+	integer inb;
+	integer istat;
+
+	while (*str) begin						// NULL terminator encountered?
+		forever begin								// inline serial putchar
+			istat = disable_int(8);
+			inb = pACIA[ACIA_STAT];		// wait until the uart indicates tx empty
+			if (inb & 0x10)						// loop if transmitter is not empty, bit #4 of the status reg
+				break;
+			restore_int(istat);
+		end
+		pACIA[ACIA_TX] = *str;
+		restore_int(istat);
+		str++;
+	end
+end
+
+/* -----------------------------------------------------------------------------
+ Put a buffer to the serial port.
+
+ Stack Space:
+		none
+ Parameters:
+		a0 = pointer to buffer
+		a1 = number of bytes
+ Modifies:
+		mc0,mc1,mc2,mc3
+ Returns:
+		none
+----------------------------------------------------------------------------- */
+
+void SerialPutBuf(byte* pBuf, int n)
+begin
+	short integer* pACIA = ACIA;
+	integer inb;
+	integer istat;
+
+	for (; n != 0; n--) begin			// end encountered?
+		forever begin								// inline serial putchar
+			istat = disable_int(8);
+			inb = pACIA[ACIA_STAT];		// wait until the uart indicates tx empty
+			if (inb & 0x10)						// loop if transmitter is not empty, bit #4 of the status reg
+				break;
+			restore_int(istat);
+		end
+		pACIA[ACIA_TX] = *pBuf;
+		restore_int(istat);
+		pBuf++;
+	end
+end
+
+/* -----------------------------------------------------------------------------
+ Get a buffer directly from the serial port.
+
+ Stack Space:
+		none
+ Parameters:
+		a0 = pointer to buffer
+		a1 = number of bytes
+ Modifies:
+		mc0,mc1,mc2,mc3,t0
+ Returns:
+		none
+----------------------------------------------------------------------------- */
+
+void SerialGetBufDirect(byte* pBuf, integer n)
+begin
+	short integer* pACIA = ACIA;
+	integer inb;
+	integer istat;
+	integer* pTextScreen = 0xFEC00000;
+	integer tch;
+	integer ndx = 0;
+
+	for (; n != 0; n--) begin				// end encountered?
+		forever begin
+			istat = disable_int(8);
+			inb = pACIA[ACIA_STAT];
+			if (inb & 0x08)							// look for Rx not empty
+				break;
+			restore_int(8);
+		end
+		inb = pACIA[ACIA_RX] & 0xff;	// grab char from port
+		restore_int(8);
+		*pBuf = inb;
+		// Dump character to screen
+		tch = ((inb >> 4) & 15) + '0';
+		if (tch > '9')
+			tch += 7;
+		tch |= 0x43FFFFE0003F0000;
+		pTextScreen[ndx] = tch;
+		ndx++;
+		tch = (inb & 15) + '0';
+		if (tch > '9')
+			tch += 7;
+		tch |= 0x43FFFFE0003F0000;
+		pTextScreen[ndx] = tch;
+		ndx++;
+		tch = 0x43FFFFE0003F0020;	// space
+		pTextScreen[ndx] = tch;
+		ndx++;
+		pBuf++;
+	end
+end

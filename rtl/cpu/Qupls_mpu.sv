@@ -224,6 +224,26 @@ begin
 	pic_resp.pri = wbm32_req.pri;
 end
 
+QuplsSeq
+#(
+	.CORENO(6'd1),
+	.CID(6'd1)
+)
+ucpu1
+(
+	.coreno_i(64'd1),
+	.rst_i(rst_i),
+	.clk_i(clk_i),
+	.clk2x_i(clk2x_i),
+	.irq_i(pic_irq[2:0]),
+	.vect_i({1'b0,pic_cause}),
+	.fta_req(ftam_req),
+	.fta_resp(wb128_resp),
+	.snoop_v(snoop_v),
+	.snoop_adr(snoop_adr),
+	.snoop_cid(snoop_cid)
+);
+/*
 generate begin : gCpu
 	if (CPU=="SEQ")
 		QuplsSeq
@@ -267,7 +287,7 @@ generate begin : gCpu
 		);
 end
 endgenerate
-
+*/
 /*
 Qupls 
 #(

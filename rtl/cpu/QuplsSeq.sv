@@ -40,6 +40,7 @@ import Qupls_cache_pkg::*;
 import QuplsMmupkg::*;
 import QuplsPkg::*;
 
+`define IS_SIM	1
 `define ZERO		64'd0
 
 module QuplsSeq(coreno_i, rst_i, clk_i, clk2x_i, irq_i, vect_i,
@@ -79,9 +80,9 @@ value_t brdisp;
 reg [5:0] rstcnt;
 reg [4:0] vele;
 pc_address_t pc,mc_adr,fpc;
-mc_address_t micro_ip,mip,next_micro_ip;
+mc_address_t micro_ip,mip,next_micro_ip,fmicro_ip;
 ex_instruction_t ir,ir2;
-ex_instruction_t micro_ir;
+ex_instruction_t micro_ir, fmicro_ir;
 status_reg_t sr;
 wire [2:0] im = sr.ipl;
 reg vector_active;
@@ -120,6 +121,8 @@ value_t canary = 64'd0;
 status_reg_t sr_stack [0:8];
 pc_address_t [8:0] pc_stack;
 mc_stack_t [8:0] mc_stack;			// micro-code exception stack
+cause_code_t [3:0] cause;
+reg paging_en = 1'b0;
 
 wire pc_tlb_v;
 address_t pc_tlb_res;
@@ -535,10 +538,10 @@ always_comb
 	ic_line = {ic_line_hi.data,ic_line_lo.data};
 always_ff @(posedge clk)
 if (rst)
-	ic_line_x <= {26{33'd0,OP_NOP}};
+	ic_line_x <= {22{41'd0,OP_NOP}};
 else begin
 	if (!rstcnt[2])
-		ic_line_x <= {26{33'd0,OP_NOP}};
+		ic_line_x <= {22{41'd0,OP_NOP}};
 	else if (1'b1) 
 		ic_line_x <= ic_line;
 end
@@ -605,6 +608,7 @@ Qupls_branch_eval ube1
 );
 
 typedef enum logic [4:0] {
+	RESET = 5'd0,
 	IFETCH = 5'd1,
 	EXTRACT = 5'd2,
 	DECODE1 = 5'd3,
@@ -694,7 +698,7 @@ Qupls_meta_fpu ufpu1 (
 
 address_t agen_res;
 wire tlb_wr;
-wire tlb_way;
+wire [1:0] tlb_way;
 wire [6:0] tlb_entryno;
 tlb_entry_t tlb_entry0, tlb_entry1, tlb_entry;
 pc_address_t pc_tlb_res;
@@ -711,6 +715,7 @@ wire [1:0] tlb_missqn;
 reg stall_tlb0 =1'd0, stall_tlb1=1'd0;
 wire [31:0] pg_fault;
 wire [1:0] pg_faultq;
+wire pe_fault_o;
 
 wire en_ptw;
 vtdl udly1 (.clk(clk), .ce(1'b1), .a(3), .d(state==MEMORY), .q(en_ptw));
@@ -729,7 +734,7 @@ Qupls_agen uag0
 	.res(vadr)
 );
 
-Qupls_tlb utlb1
+Qupls_tlb4way utlb1
 (
 	.rst(rst),
 	.clk(clk),
@@ -783,7 +788,7 @@ Qupls_tlb utlb1
 	.missack(tlb_missack)
 );
 
-Qupls_ptable_walker #(.CID(3)) uptw1
+Qupls_ptable_walker #(.CID(3),.WAYS(4)) uptw1
 (
 	.rst(rst),
 	.clk(clk),
@@ -807,6 +812,7 @@ Qupls_ptable_walker #(.CID(3)) uptw1
 	.ftam_resp(ftatm_resp),
 	.fault_o(pg_fault),
 	.faultq_o(pg_faultq),
+	.pe_fault_o(pe_fault_o),
 	.tlb_wr(tlb_wr),
 	.tlb_way(tlb_way),
 	.tlb_entryno(tlb_entryno),
@@ -948,6 +954,7 @@ else begin
 	ld <= FALSE;
 	rfwr <= FALSE;
 case(state)
+RESET:	tReset();
 IFETCH:	
 	begin
 		$display("rfwr=%d Rt=%d res=%h", rfwr, Rt, res);
@@ -962,6 +969,7 @@ IFETCH:
 		end
 		else if (micro_code_active) begin
 			ins[0] <= mc_ins;
+			fmicro_ip <= micro_ip;
 			micro_ip <= next_micro_ip;
 			tGoto(EXTRACT);
 		end
@@ -982,10 +990,10 @@ EXTRACT:
 		tGoto(DECODE1);
 		if (!vector_active) begin
 			if (!micro_code_active) begin
-				ins[0].aRa <= {3'd0,ins[0].ins.r3.Ra};
-				ins[0].aRb <= {3'd0,ins[0].ins.r3.Rb};
-				ins[0].aRc <= {3'd0,ins[0].ins.r3.Rc};
-				ins[0].aRt <= {3'd0,ins[0].ins.r3.Rt};
+				ins[0].aRa <= {3'd0,ins[0].ins.r3.Ra.num};
+				ins[0].aRb <= {3'd0,ins[0].ins.r3.Rb.num};
+				ins[0].aRc <= {3'd0,ins[0].ins.r3.Rc.num};
+				ins[0].aRt <= {3'd0,ins[0].ins.r3.Rt.num};
 			end
 			ins[0].pred_btst = 6'd0;
 			// If a vector instruction is detected, record the ir set the vector fetch
@@ -1005,10 +1013,10 @@ EXTRACT:
 				ins[0].aRt <= ir.ins.r3.Rt.v ? {ir.aRt,vele[2:0]} : {3'd0,ir.aRt};
 			end
 			else begin
-				ins[0].aRa <= ir.ins.r3.Ra.v ? {ir.ins.r3.Ra,vele[2:0]} : {3'd0,ir.ins.r3.Ra};
-				ins[0].aRb <= ir.ins.r3.Rb.v ? {ir.ins.r3.Rb,vele[2:0]} : {3'd0,ir.ins.r3.Rb};
-				ins[0].aRc <= ir.ins.r3.Rc.v ? {ir.ins.r3.Rc,vele[2:0]} : {3'd0,ir.ins.r3.Rc};
-				ins[0].aRt <= ir.ins.r3.Rt.v ? {ir.ins.r3.Rt,vele[2:0]} : {3'd0,ir.ins.r3.Rt};
+				ins[0].aRa <= ir.ins.r3.Ra.v ? {ir.ins.r3.Ra.num,vele[2:0]} : {3'd0,ir.ins.r3.Ra.num};
+				ins[0].aRb <= ir.ins.r3.Rb.v ? {ir.ins.r3.Rb.num,vele[2:0]} : {3'd0,ir.ins.r3.Rb.num};
+				ins[0].aRc <= ir.ins.r3.Rc.v ? {ir.ins.r3.Rc.num,vele[2:0]} : {3'd0,ir.ins.r3.Rc.num};
+				ins[0].aRt <= ir.ins.r3.Rt.v ? {ir.ins.r3.Rt.num,vele[2:0]} : {3'd0,ir.ins.r3.Rt.num};
 			end
 			ins[0].pred_btst = 6'd0;
 		end
@@ -1030,7 +1038,12 @@ DECODE2:
 		Rb = db.Rb;
 		Rc = db.Rc;
 		Rt = db.Rt;
-		tGoto(REGREAD1);
+		if (db.rti) begin
+			tProcessRti(ins[0].ins[12:11]==2'd2);
+			tGoto(IFETCH);
+		end
+		else
+			tGoto(REGREAD1);
 	end
 REGREAD1:
 	tGoto(REGREAD2);
@@ -1039,19 +1052,19 @@ REGREAD2:
 		case({db.Ran,db.bitwise})
 		2'b00:	argA <= rfoA;
 		2'b01:	argA <= rfoA;
-		2'b10:	argA <= -rfoA;
+		2'b10:	argA <= db.fpu ? {~rfoA[$bits(value_t)-1],rfoA[$bits(value_t)-2:0]} : -rfoA;
 		2'b11:	argA <= ~rfoA;
 		endcase
 		case({db.Rbn,db.bitwise})
 		2'b00:	argB <= rfoB;
 		2'b01:	argB <= rfoB;
-		2'b10:	argB <= -rfoB;
+		2'b10:	argB <= db.fpu ? {~rfoB[$bits(value_t)-1],rfoB[$bits(value_t)-2:0]} : -rfoB;
 		2'b11:	argB <= ~rfoB;
 		endcase
 		case({db.Rcn,db.bitwise})
 		2'b00:	argC <= rfoC;
 		2'b01:	argC <= rfoC;
-		2'b10:	argC <= -rfoC;
+		2'b10:	argC <= db.fpu ? {~rfoC[$bits(value_t)-1],rfoC[$bits(value_t)-2:0]} : -rfoC;
 		2'b11:	argC <= ~rfoC;
 		endcase
 		argT <= rfoT;
@@ -1079,7 +1092,50 @@ EXECUTE:
 		tGoto(db.mem ? MEMORY : WRITEBACK);
 	end
 MEMORY:
-	if (tlb0_v) begin
+	if (paging_en) begin
+		if (tlb0_v) begin
+			dram0 <= DRAMSLOT_READY;
+			dram0_exc <= FLT_NONE;
+			dram0_stomp <= 1'b0;
+			dram0_id <= 5'd0;
+			dram0_idv <= VAL;
+			dram0_op <= ins[0];
+			dram0_ldip <= FALSE;
+			dram0_pc <= fpc;
+			dram0_load <= db.load;
+			dram0_loadz <= db.loadz;
+			dram0_store <= db.store;
+			dram0_erc <= TRUE;//db.erc;
+			dram0_Rt	<= Rt;
+			dram0_aRt	<= Rt;
+			dram0_aRtz <= ~|Rt;
+			dram0_bank <= 1'b0;
+			dram0_cp <= 4'd0;
+			dram0_hi <= 1'b0;
+			dram0_sel <= {64'h0,fnSel(ins[0])} << padr[5:0];
+			dram0_selh <= {64'h0,fnSel(ins[0])} << padr[5:0];
+			dram0_vaddr <= vadr;
+			dram0_paddr <= padr;
+			dram0_vaddrh <= vadr;
+			dram0_paddrh <= padr;
+			dram0_data <= {640'd0,argC} << {padr[5:0],3'b0};
+			dram0_datah <= {640'd0,argC} << {padr[5:0],3'b0};
+			dram0_shift <= {padr[5:0],3'd0};
+			dram0_memsz <= fnMemsz(ins[0]);
+			dram0_tid.core <= CORENO;
+			dram0_tid.channel <= 3'd1;
+			dram0_tid.tranid <= dram0_tid.tranid + 2'd1;
+			if (dram0_tid.tranid==4'd15)
+				dram0_tid.tranid <= 4'd1;
+	    dram0_tocnt <= 12'd0;
+	    tGoto(MEMORY_ACK);
+		end
+		else if (pe_fault_o) begin
+			tException(FLT_PAGE,fpc);
+			tGoto(IFETCH);
+		end
+	end
+	else begin
 		dram0 <= DRAMSLOT_READY;
 		dram0_exc <= FLT_NONE;
 		dram0_stomp <= 1'b0;
@@ -1098,15 +1154,15 @@ MEMORY:
 		dram0_bank <= 1'b0;
 		dram0_cp <= 4'd0;
 		dram0_hi <= 1'b0;
-		dram0_sel <= {64'h0,fnSel(ins[0])} << padr[5:0];
-		dram0_selh <= {64'h0,fnSel(ins[0])} << padr[5:0];
+		dram0_sel <= {64'h0,fnSel(ins[0])} << vadr[5:0];
+		dram0_selh <= {64'h0,fnSel(ins[0])} << vadr[5:0];
 		dram0_vaddr <= vadr;
-		dram0_paddr <= padr;
+		dram0_paddr <= vadr;
 		dram0_vaddrh <= vadr;
-		dram0_paddrh <= padr;
-		dram0_data <= {640'd0,argC} << {padr[5:0],3'b0};
-		dram0_datah <= {640'd0,argC} << {padr[5:0],3'b0};
-		dram0_shift <= {padr[5:0],3'd0};
+		dram0_paddrh <= vadr;
+		dram0_data <= {640'd0,argC} << {vadr[5:0],3'b0};
+		dram0_datah <= {640'd0,argC} << {vadr[5:0],3'b0};
+		dram0_shift <= {vadr[5:0],3'd0};
 		dram0_memsz <= fnMemsz(ins[0]);
 		dram0_tid.core <= CORENO;
 		dram0_tid.channel <= 3'd1;
@@ -1138,7 +1194,27 @@ MEMORY_ACK:
 			tGoto(db.load ? WRITEBACK : IFETCH);
 	end
 MEMORY2:
-	if (tlb0_v) begin
+	if (paging_en) begin
+		if (tlb0_v) begin
+			agen_next <= FALSE;
+			dram0 <= DRAMSLOT_READY;
+			dram0_hi <= 1'b1;
+			dram0_sel <= dram0_selh >> 8'd64;
+			dram0_vaddr <= {dram0_vaddrh[$bits(virtual_address_t)-1:6] + 2'd1,6'h0};
+			dram0_paddr <= {dram0_paddrh[$bits(physical_address_t)-1:6] + 2'd1,6'h0};
+			dram0_data <= dram0_datah >> 12'd512;
+			dram0_shift <= {7'd64-dram0_paddrh[5:0],3'b0};
+			dram0_tid.tranid <= dram0_tid.tranid + 2'd1;
+			if (&dram0_tid.tranid)
+				dram0_tid.tranid <= 4'd1;
+			tGoto(MEMORY2_ACK);
+		end
+		else if (pe_fault_o) begin
+			tException(FLT_PAGE,fpc);
+			tGoto(IFETCH);
+		end
+	end
+	else begin
 		agen_next <= FALSE;
 		dram0 <= DRAMSLOT_READY;
 		dram0_hi <= 1'b1;
@@ -1187,7 +1263,7 @@ WRITEBACK:
 			2'b11:	res <= ~dram_bus0;
 			endcase
 		end
-		else if (db.bsr|db.cjb) begin
+		else if (db.cjb) begin
 			rfwr <= |Rt;
 			res <= fpc + 4'd6;
 		end
@@ -1223,6 +1299,8 @@ WRITEBACK:
 		else
 			tGoto(IFETCH);
 	end
+default:
+	tGoto(RESET);
 endcase
 
 end
@@ -1244,6 +1322,7 @@ begin
 	$display("TIME %0d", $time);
 	$display("----- Fetch %c -----", ihito ? "h" : " ");
 	$display("i$ pc input:  %h #", pc);
+	$display("ir2: %h", ir2);
 	$display("cache: %x", ic_line[511:0]);
 
 	$display("----- Architectural Registers -----");
@@ -1411,6 +1490,83 @@ begin
 	rfwr <= FALSE;
 	agen_next <= FALSE;
 	tGoto(IFETCH);
+end
+endtask
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// Exception processing tasks.
+//
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+task tException;
+input cause_code_t cause;
+input pc_address_t retpc;
+integer nn;
+begin
+	//vecno = rob[id].imm ? rob[id].a0[8:0] : rob[id].a1[8:0];
+	//vecno <= rob[id].exc;
+	for (nn = 1; nn < 8; nn = nn + 1)
+		sr_stack[nn] <= sr_stack[nn-1];
+	sr_stack[0] <= sr;
+	for (nn = 1; nn < 8; nn = nn + 1)
+		pc_stack[nn] <= pc_stack[nn-1];
+	pc_stack[0] <= retpc;
+	for (nn = 1; nn < 8; nn = nn + 1)
+		mc_stack[nn] <= mc_stack[nn-1];
+	mc_stack[0].ir <= fmicro_ir;
+	mc_stack[0].ip <= fmicro_ip;
+	sr.ipl <= 3'd7;
+	sr.pl <= 8'hFF;
+	sr.mcip <= micro_ip;
+	if (cause < 8'd16)
+		pc <= {kvec[sr.dbg ? 4 : 3][$bits(pc_address_t)-1:4] + cause,4'h0};
+	else
+		pc <= {kvec[sr.dbg ? 4 : 3][$bits(pc_address_t)-1:4] + 4'd13,4'h0};
+//		excmisspc <= {avec[$bits(pc_address_t)-1:16] + vecno,3'h0};
+end
+endtask
+
+task tRex;
+input ex_instruction_t ir;
+begin
+	if (sr.om > ir.ins[9:8]) begin
+		sr.om <= operating_mode_t'(ir.ins[9:8]);
+		if (cause[3][7:0] < 8'd16)
+			pc <= {kvec[ir.ins[9:8]][$bits(pc_address_t)-1:4] + cause[3][3:0],4'h0};
+		else
+			pc <= {kvec[ir.ins[9:8]][$bits(pc_address_t)-1:4] + 4'd13,4'h0};
+	end
+end
+endtask
+
+task tProcessRti;
+input twoup;
+integer nn;
+begin
+//	err_mask <= 64'd0;
+	sr <= twoup ? sr_stack[1] : sr_stack[0];
+	for (nn = 0; nn < 7; nn = nn + 1)
+		sr_stack[nn] <= sr_stack[nn+1+twoup];
+	sr_stack[7].ipl <= 3'd7;
+	sr_stack[8].ipl <= 3'd7;
+	sr_stack[7].om <= OM_MACHINE;
+	sr_stack[8].om <= OM_MACHINE;
+	for (nn = 0; nn < 7; nn = nn + 1)
+		pc_stack[nn] <=	pc_stack[nn+1+twoup];
+	pc_stack[7] <= RSTPC;
+	pc_stack[8] <= RSTPC;
+	pc <= twoup ? pc_stack[1] : pc_stack[0];
+	// Unstack the micro-code instruction register
+//	micro_ir <= twoup ? mc_stack[1].ir : mc_stack[0].ir;
+//	exc_mcip <= twoup ? mc_stack[1].ip : mc_stack[0].ip;
+	for (nn = 0; nn < 7; nn = nn + 1)
+		mc_stack[nn] <=	mc_stack[nn+1+twoup];
+	mc_stack[7].ir <= {41'd0,OP_NOP};
+	mc_stack[8].ir <= {41'd0,OP_NOP};
+	mc_stack[7].ip <= 12'h0;
+	mc_stack[8].ip <= 12'h0;
+	micro_ip <= twoup ? mc_stack[1].ip : mc_stack[0].ip;
+	micro_ir <= twoup ? mc_stack[1].ir : mc_stack[0].ir;
 end
 endtask
 

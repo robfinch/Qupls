@@ -1,0 +1,15 @@
+
+integer Fibonacci(integer n)
+begin
+	integer x;
+	integer f0,f1,f2;
+	
+	f0 = 0;
+	f1 = 1;
+	for (x = 2; x < n; x++) begin
+		f2 = f0 + f1;
+		f0 = f1;
+		f1 = f2;
+	end
+	return (f0);
+end

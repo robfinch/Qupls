@@ -40,8 +40,8 @@ typedef struct {
   uint32_t type;
   unsigned char attr;   /* reloc attribute != REL_NONE when present */
   unsigned char format;
-  char basereg;
-  char ndxreg;
+  unsigned char basereg;
+  unsigned char ndxreg;
   char scale;
   expr *value;
   uint64_t mask;
@@ -247,10 +247,16 @@ typedef struct {
 
 #define OPC(x)	(((x) & 0x7fLL))
 #define RT(x)		(((x) & 0x7fLL) << 8LL)
+#define NRT(x)	(((x) & 1LL) << 14LL)
 #define RA(x)		(((x) & 0x7fLL) << 15LL)
+#define NRA(x)	(((x) & 1LL) << 21LL)
 #define RB(x)		(((x) & 0x7fLL) << 22LL)
+#define IPR(x)	(((x) & 3LL) << 22LL)
+#define NRB(x)	(((x) & 1LL) << 28LL)
 #define RC(x)		(((x) & 0x7fLL) << 29LL)
-#define LK(x)		(((x) & 1LL) << 8LL)
+#define NRC(x)	(((x) & 1LL) << 35LL)
+#define LKT(x)	(((x) & 7LL) << 8LL)
+#define LKS(x)	(((x) & 7LL) << 15LL)
 #define CM(x)		(((x) & 3LL) << 8LL)
 #define BFN(x)	(((x) & 15LL) << 8LL)
 #define COND(x)	(((x) & 0xfLL) << 5LL)

@@ -3,11 +3,11 @@ PATH = $PATH;F:\cores2023\Qupls\software\CC64\cc64\cc64\debug;"C:\Program Files 
 INC = F:\cores2023\Qupls\software\source\;F:\cores2023\Qupls\software\Femtiki\source\kernel\;F:\cores2023\Qupls\software\inc\
 INCLUDE = D:\cores2023\Qupls\software\source\;F:\cores2023\Qupls\software\Femtiki\source\kernel\;F:\cores2023\Qupls\software\inc\
 FPPINC  = D:\cores2023\Qupls\software\source\;F:\cores2023\Qupls\software\Femtiki\source\kernel\;F:\cores2023\Qupls\software\inc\
-CXX = cc64
+CXX = arpl
 #CXX = opt
 CFLAGS2 = -c99 -ID:\cores2023\Qupls\software\inc\ -O=31
 #CFLAGS = -w -S -fno-exceptions
-CFLAGS = -w -S -fno-exceptions -a21
+CFLAGS = -w -S -fno-exceptions -a21 -finline0
 
 
 #
@@ -15,11 +15,13 @@ CFLAGS = -w -S -fno-exceptions -a21
 BIOS:
 	del boot_rom.bin
 	del boot_rom.lst
-	cc64 $(CFLAGS) bootrom.c
-	cc64 $(CFLAGS) serial.c
-	cc64 $(CFLAGS) SIEVE.c
-	cc64 $(CFLAGS) printf_again.c
-#	cc64 $(CFLAGS) os_stub.c
+	arpl $(CFLAGS) bootrom.a
+	arpl $(CFLAGS) Fibonacci.a
+	arpl_riscv $(CFLAGS) Fibonacci.a
+	arpl $(CFLAGS) serial.a
+	arpl $(CFLAGS) SIEVE.a
+	arpl $(CFLAGS) printf_again.c
+#	arpl $(CFLAGS) os_stub.c
 
 	vasmQupls_std_win32.exe -Fvobj -Lbpl=5 -L bootrom.lst bootrom.asm -o bootrom.o
 	vasmQupls_std_win32.exe -Fvobj -Lbpl=5 -L serial.lst serial.asm -o serial.o

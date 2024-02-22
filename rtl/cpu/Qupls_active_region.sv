@@ -105,10 +105,11 @@ initial begin
 	pma_regions[6].pmt	 = 48'h00000300;
 	pma_regions[6].cta	= 48'h00000000;
 	pma_regions[6].at 	= 'h0;
-	pma_regions[6].at[0].rwx = 4'h6;
-	pma_regions[6].at[1].rwx = 4'h6;
-	pma_regions[6].at[2].rwx = 4'h6;
-	pma_regions[6].at[3].rwx = 4'h6;
+	pma_regions[6].at[0].rwx = 4'hE;
+	pma_regions[6].at[1].rwx = 4'hE;
+	pma_regions[6].at[2].rwx = 4'hE;
+	pma_regions[6].at[3].rwx = 4'hE;
+	pma_regions[6].at[3].cache = fta_bus_pkg::NC_NB;
 //	pma_regions[6].at = 20'h00206;		// io, (screen) byte address table, read-write
 	pma_regions[6].lock = "LOCK";
 

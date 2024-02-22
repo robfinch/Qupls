@@ -45,10 +45,12 @@ module Qupls_ptable_walker(rst, clk,
 	commit0_id, commit0_idv, commit1_id, commit1_idv, commit2_id, commit2_idv,
 	commit3_id, commit3_idv,
 	in_que, ftas_req, ftas_resp,
-	ftam_req, ftam_resp, fault_o, faultq_o, tlb_wr, tlb_way, tlb_entryno, tlb_entry,
+	ftam_req, ftam_resp, fault_o, faultq_o, pe_fault_o,
+	tlb_wr, tlb_way, tlb_entryno, tlb_entry,
 	ptw_vadr, ptw_vv, ptw_padr, ptw_pv);
 parameter CORENO = 6'd1;
 parameter CID = 3'd3;
+parameter WAYS = 4;
 
 parameter IO_ADDR = 32'hFFF40001;	//32'hFEFC0001;
 parameter IO_ADDR_MASK = 32'h00FF0000;
@@ -97,8 +99,9 @@ output fta_cmd_request128_t ftam_req;
 input fta_cmd_response128_t ftam_resp;
 output [31:0] fault_o;
 output reg [1:0] faultq_o;
+output reg pe_fault_o;
 output reg tlb_wr;
-output reg tlb_way;
+output reg [WAYS-1:0] tlb_way;
 output reg [6:0] tlb_entryno;
 output tlb_entry_t tlb_entry;
 output virtual_address_t ptw_vadr;
@@ -154,7 +157,7 @@ asid_t miss_asid;
 reg [63:0] stlb_adr;
 reg cs_config, cs_hwtw;
 
-reg way;
+reg [WAYS-1:0] way;
 spte_t pte;
 
 fta_cmd_request128_t sreq;
@@ -362,12 +365,13 @@ if (rst) begin
 		tranbuf[nn] <= {$bits(tran_buf_t){1'b0}};
 	way <= 'd0;
 	tlb_wr <= 1'b0;
-	tlb_way <= 1'b0;
+	tlb_way <= 'd0;
 	ptw_vv <= FALSE;
 	ptw_ppv <= FALSE;
 	ptw_vadr <= {$bits(virtual_address_t){1'b0}};
 	in_que <= FALSE;
 	fault <= 1'b0;
+	pe_fault_o <= 1'b0;
 	fault_asid <= {$bits(asid_t){1'b0}};
 	fault_adr <= {$bits(virtual_address_t){1'b0}};
 	miss_adr <= {$bits(virtual_address_t){1'b0}};
@@ -378,10 +382,11 @@ if (rst) begin
 end
 else begin
 
+	pe_fault_o <= 1'b0;
 	if (ptw_pv)
 		ptw_vv <= FALSE;
 	tlb_wr <= 1'b0;
-	way <= ~way;
+	way <= way + 2'd1;
 
 	in_que <= FALSE;
 	if (in_que1 && !in_que && tlbmiss)
@@ -424,7 +429,7 @@ else begin
 				tlb_way <= way;
 				tlb_entryno <= miss_adr[22:16];
 				tlb_entry.pte <= pte;
-				tlb_entry.vpn.vpn <= miss_adr[31:23];
+				tlb_entry.vpn.vpn <= {{11{miss_adr[31]}},miss_adr[31:23]};
 				tlb_entry.vpn.asid <= miss_asid;
 			end
 			if (sel_qe >= 0) begin
@@ -472,7 +477,7 @@ else begin
 	// Remain in fault state until cleared by accessing the table-walker register.
 	FAULT:
 		begin
-			fault <= 'd0;
+			fault <= 1'd0;
 			if (cs_hwtw && sreq.padr[15:0]==16'hFF00) begin
 				tlbmiss_ip <= 'd0;
 				req_state <= IDLE;		
@@ -485,8 +490,8 @@ else begin
 	// Capture responses.
 	if (ftam_resp.ack) begin
 		tranbuf[ftam_resp.tid & 15].dat <= ftam_resp.dat;
-		tranbuf[ftam_resp.tid & 15].pte <= ftam_resp.dat >> {ftam_resp.adr[3],6'b0};
-		tranbuf[ftam_resp.tid & 15].padr <= ftam_resp.adr;
+		tranbuf[ftam_resp.tid & 15].pte <= ftam_resp.dat >> {tranbuf[ftam_resp.tid & 15].padr[3],6'b0};
+//		tranbuf[ftam_resp.tid & 15].padr <= ftam_resp.adr;
 		tranbuf[ftam_resp.tid & 15].rdy <= 1'b1;
 		$display("PTW: bus ack.");
 	end
@@ -513,6 +518,7 @@ else begin
 			$display("PTW: page fault");
 			faultq_o <= miss_queue[tranbuf[sel_tran].stk].qn;
 			fault <= 1'b1;
+			pe_fault_o <= 1'b1;
 			fault_asid <= tranbuf[sel_tran].asid;
 			fault_adr <= tranbuf[sel_tran].vadr;
 			req_state <= FAULT;

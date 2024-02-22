@@ -36,12 +36,13 @@
 
 import QuplsPkg::*;
 
-module Qupls_decode_Rt(om, ipl, instr, Rt, Rtz);
+module Qupls_decode_Rt(om, ipl, instr, Rt, Rtz, Rtn);
 input operating_mode_t om;
 input [2:0] ipl;
 input ex_instruction_t instr;
 output aregno_t Rt;
 output reg Rtz;
+output reg Rtn;
 
 function aregno_t fnRt;
 input ex_instruction_t ir;
@@ -134,6 +135,10 @@ begin
 	Rt = fnRt(instr);
 	if (Rt==9'd31)
 		Rt = 9'd32|om;
+	if (instr.ins.any.opcode==OP_BSR)
+		Rtn = 1'b0;
+	else
+		Rtn = instr.ins.r3.Rt.n;
 end
 always_comb
 	Rtz = ~|Rt;

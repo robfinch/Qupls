@@ -17,11 +17,11 @@ MEMORY {
 }
 
 MEMORY {
-	BIOS_CODE : ORIGIN = 0xFFFC0000, LENGTH = 252K
+	BIOS_CODE : ORIGIN = 0xFFFC0000, LENGTH = 255K
 }
 
 MEMORY {
-	BIOS_RESET: ORIGIN = 0xFFFFF000, LENGTH=4k
+	BIOS_RESET: ORIGIN = 0xFFFFFC00, LENGTH=1k
 }
 
 PHDRS {
@@ -30,7 +30,7 @@ PHDRS {
 	bios_data PT_LOAD AT (0xFFFA0000);
 	bios_rodata PT_LOAD AT (0xFFFB0000);
 	bios_code PT_LOAD AT (0xFFFC0000);
-	bios_reset PT_LOAD AT (0xFFFFFFC0);
+	bios_reset PT_LOAD AT (0xFFFFFC00);
 }
 
 SECTIONS {
@@ -64,7 +64,7 @@ SECTIONS {
 	} >BIOS_CODE
 	.reset_vect: {
 		_start_reset_vect = .;
-		. = 0xffffffc0;
+		. = 0xfffffc00;
 		*(.reset_vect);
 		. = ALIGN(6);
 		_end_reset_vect = .;

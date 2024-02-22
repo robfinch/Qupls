@@ -71,7 +71,8 @@ Qupls_decode_Ra udcra
 	.instr(ins),
 	.has_imma(db.has_imma),
 	.Ra(db.Ra),
-	.Raz(db.Raz)
+	.Raz(db.Raz),
+	.Ran(db.Ran)
 );
 
 Qupls_decode_Rb udcrb
@@ -81,7 +82,8 @@ Qupls_decode_Rb udcrb
 	.instr(ins),
 	.has_immb(db.has_immb),
 	.Rb(db.Rb),
-	.Rbz(db.Rbz)
+	.Rbz(db.Rbz),
+	.Rbn(db.Rbn)
 );
 
 Qupls_decode_Rc udcrc
@@ -92,6 +94,7 @@ Qupls_decode_Rc udcrc
 	.has_immc(db.has_immc),
 	.Rc(db.Rc),
 	.Rcz(db.Rcz),
+	.Rcn(db.Rcn),
 	.Rcc(db.Rcc)
 );
 
@@ -101,7 +104,8 @@ Qupls_decode_Rt udcrt
 	.ipl(ipl),
 	.instr(ins),
 	.Rt(db.Rt),
-	.Rtz(db.Rtz)
+	.Rtz(db.Rtz),
+	.Rtn(db.Rtn)
 );
 
 Qupls_decode_r2 ur2
@@ -365,14 +369,15 @@ else begin
 		dbo.mvvr <= ins.ins.any.opcode==OP_R2 && ins.ins.r2.func==FN_MVVR;
 		dbo.jsri <= ins.ins.any.opcode==OP_JSRI;
 		dbo.pushi <= ins.ins.any.opcode==OP_PUSHI;
-		dbo.Ran <= ins.ins.r2.Ra.n;
-		dbo.Rbn <= ins.ins.r2.Rb.n;
-		dbo.Rcn <= ins.ins.r2.Rc.n;
-		dbo.Rtn <= ins.ins.r2.Rt.n;
+		if (db.bsr) begin
+			dbo.Rtv <= 1'b0;
+		end
+		else begin
+			dbo.Rtv <= ins.ins.r2.Rt.v;
+		end
 		dbo.Rav <= ins.ins.r2.Ra.v;
 		dbo.Rbv <= ins.ins.r2.Rb.v;
 		dbo.Rcv <= ins.ins.r2.Rc.v;
-		dbo.Rtv <= ins.ins.r2.Rt.v;
 	end
 end
 

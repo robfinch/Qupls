@@ -36,13 +36,14 @@
 
 import QuplsPkg::*;
 
-module Qupls_decode_Rb(om, ipl, instr, has_immb, Rb, Rbz);
+module Qupls_decode_Rb(om, ipl, instr, has_immb, Rb, Rbz, Rbn);
 input operating_mode_t om;
 input [2:0] ipl;
 input ex_instruction_t instr;
 input has_immb;
 output aregno_t Rb;
 output reg Rbz;
+output reg Rbn;
 
 function aregno_t fnRb;
 input ex_instruction_t ir;
@@ -74,6 +75,7 @@ begin
 	Rb = fnRb(instr, has_immb);
 	if (Rb==9'd31)
 		Rb = 9'd32|om;
+	Rbn = instr.ins.r3.Rb.n;
 	Rbz = ~|Rb;
 end
 

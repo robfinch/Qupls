@@ -5,7 +5,7 @@
 
 	.data
 	.space	10
-	.sdreg 60
+	.sdreg 29
 
 ;	.org	0xFFFFFFFFFFFD0000
 	.text
@@ -14,21 +14,19 @@
 
 start:
 ; set global pointers
-	lda gp,_start_data
-	orm gp,_start_data
-	lda gp1,_start_rodata
-	orm gp1,_start_rodata
+	ldi sp,0xFFFFFFFFFFFAFFF0
+	orm sp,0xFFFFFFFFFFFAFFF0
 	lda gp,_start_bss
 	orm gp,_start_bss
 	bra _bootrom
+.rept 16
 	nop
-	nop
-	nop
-	nop
+.endr
 ;	padi
 	.type	start,@function
 	.size	start,$-_start
 
+.include "Fibonacci.asm"
 .include "serial.asm"
 .include "bootrom.asm"
 

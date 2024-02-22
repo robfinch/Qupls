@@ -1,0 +1,58 @@
+extern void SerialInit(void);
+extern void SerialTest(void);
+
+static const int pte[26] = {
+	0x1EDF, 0x83000FFFFFFFFEDF,	/* LEDs */
+	0x1EC0, 0x83000FFFFFFFFEC0,	/* text mode screen */
+	0x1ED0,	0x83000FFFFFFFFED0,	/* Serial port */
+	0x1EDC, 0x83000FFFFFFFFEDC,	/* Keyboard */
+	0x1EE1, 0x83000FFFFFFFFEE1,	/* random number generator */
+	0x1FF8,	0x82000FFFFFFFFFF8,	/* BIOS RAM */
+	0x1FF9,	0x82000FFFFFFFFFF9,	/* BIOS RAM */
+	0x1FFA,	0x82000FFFFFFFFFFA,	/* BIOS RAM */
+	0x1FFB,	0x82000FFFFFFFFFFB,	/* BIOS RAM */
+	0x1FFC,	0x83800FFFFFFFFFFC,	/* BIOS ROM */
+	0x1FFD,	0x83800FFFFFFFFFFD,	/* BIOS ROM */
+	0x1FFE,	0x83800FFFFFFFFFFE,	/* BIOS ROM */
+	0x1FFF,	0x83800FFFFFFFFFFF	/* BIOS ROM */
+};
+
+integer another_var;
+
+/* Display blinking LEDs while delaying to show CPU is working.
+*/
+private inline(0) void Delay3s(void)
+begin
+	integer* leds = 0x0FFFFFFFFFEDFFF00;
+	integer cnt;
+	
+	for (cnt = 0; cnt < 300000; cnt++)
+		leds[0] = cnt >> 17;
+end
+
+public void bootrom(void)
+begin
+	integer* pgtbl = 0xfffffffffff80000;
+	integer* PTBR = 0xfffffffffff4ff20;
+	integer* leds = 0xffffffffFEDFFF00;
+	integer cnt, ndx;
+	short integer* pRand;
+
+	*PTBR = &pgtbl[0];
+	pRand = 0xFFFFFFFFFEE1FD00;
+	
+	__sync(0x0FFFF);
+	/* clear out page table */
+	for (cnt = 0; cnt < 16; cnt++)
+		pgtbl[cnt] = 0;
+	for (cnt = 0; cnt < 26; cnt+= 2)
+		pgtbl[pte[cnt]] = pte[cnt+1];
+	__sync(0x0FFFF);
+	leds[0] = -1;
+	pRand[1] = 0;						/* select random stream #0 */
+	pRand[2] = 0x99999999;	/* set random seed value */
+	pRand[3] = 0x99999999;
+	Delay3s();
+	SerialInit();
+	SerialTest();
+end

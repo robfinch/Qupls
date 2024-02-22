@@ -36,13 +36,14 @@
 
 import QuplsPkg::*;
 
-module Qupls_decode_Rc(om, ipl, instr, has_immc, Rc, Rcz, Rcc);
+module Qupls_decode_Rc(om, ipl, instr, has_immc, Rc, Rcz, Rcn, Rcc);
 input operating_mode_t om;
 input [2:0] ipl;
 input ex_instruction_t [5:0] instr;
 input has_immc;
 output aregno_t Rc;
 output reg Rcz;
+output reg Rcn;
 output reg [2:0] Rcc;
 
 always_comb
@@ -51,28 +52,48 @@ begin
 	Rcc = 3'd0;
 	if (has_immc) begin
 		Rc = 9'd0;
+		Rcn = 1'b0;
 		Rcc = 3'd0;
 	end
 	else
 		case(instr[0].ins.any.opcode)
 		OP_STB,OP_STW,OP_STT,OP_STO,OP_STH,OP_STX:
-			Rc = instr[0].aRt;
+			begin
+				Rc = instr[0].aRt;
+				Rcn = instr[0].ins.r3.Rt.n;
+			end
 		OP_SHIFT:
-			Rc = instr[0].aRc;
+			begin
+				Rc = instr[0].aRc;
+				Rcn = instr[0].ins.r3.Rc.n;
+			end
 		OP_R2:
-			Rc = instr[0].aRc;
+			begin
+				Rc = instr[0].aRc;
+				Rcn = instr[0].ins.r3.Rc.n;
+			end
 		OP_STX:
 			case(instr[0].ins.lsn.func)
 			FN_STCTX:
-				Rc = {1'b0,instr[0].aRa[2:0],instr[0].aRc[4:0]};
+				begin
+					Rc = {1'b0,instr[0].aRa[2:0],instr[0].aRc[4:0]};
+					Rcn = 1'b0;
+				end
 			default:
-				Rc = instr[0].aRc;
+				begin
+					Rc = instr[0].aRc;
+					Rcn = instr[0].ins.r3.Rc.n;
+				end
 			endcase
 		default:
-			if (fnImmc(instr[0]))
+			if (fnImmc(instr[0])) begin
 				Rc = 9'd0;
-			else
+				Rcn = 1'b0;
+			end
+			else begin
 				Rc = instr[0].aRc;
+				Rcn = instr[0].ins.r3.Rc.n;
+			end
 		endcase
 	if (Rc==9'd31)
 		Rc = 9'd32|om;

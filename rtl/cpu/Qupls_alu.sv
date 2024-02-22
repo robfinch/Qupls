@@ -481,7 +481,7 @@ begin
 	OP_QFEXT:	bus = qres;
 	// Write the next PC to the link register.
 	OP_BSR,OP_JSR:
-						bus = pc + 4'd5;
+						bus = pc + 4'd6;
 	OP_Bcc,OP_BccU:
 		case(ir.br.inc)
 		2'd0:	bus = a;
