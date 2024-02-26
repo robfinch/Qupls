@@ -78,7 +78,7 @@ else begin
 				if (miss_queue[sel_qe].lvl != 3'd7) begin
 					// Record outstanding transaction.
 					tranbuf[tid & 15].v <= 1'b1;
-					tranbuf[tid & 15].id <= tid;
+					tranbuf[tid & 15].tid <= tid;
 					tranbuf[tid & 15].rdy <= 1'b0;
 					tranbuf[tid & 15].asid <= miss_queue[sel_qe].asid;
 					tranbuf[tid & 15].vadr <= ptw_vadr;
@@ -95,11 +95,15 @@ else begin
 	endcase
 
 	// Capture responses.
-	if (ftam_resp.ack) begin
-		tranbuf[ftam_resp.tid & 15].dat <= ftam_resp.dat;
-		tranbuf[ftam_resp.tid & 15].pte <= ftam_resp.dat >> {tranbuf[ftam_resp.tid & 15].padr[3],6'b0};
+	// a tid of zero is not valid, and the tran should not be marked ready.
+	// The tran coming back should match the one in the tran buffer.
+	if (ftam_resp.ack & |(ftam_resp.tid & 15)) begin
+		if (ftam_resp.tid==tranbuf[ftam_resp.tid & 15].tid) begin
+			tranbuf[ftam_resp.tid & 15].dat <= ftam_resp.dat;
+			tranbuf[ftam_resp.tid & 15].pte <= ftam_resp.dat >> {tranbuf[ftam_resp.tid & 15].padr[3],6'b0};
 //		tranbuf[ftam_resp.tid & 15].padr <= ftam_resp.adr;
-		tranbuf[ftam_resp.tid & 15].rdy <= 1'b1;
+			tranbuf[ftam_resp.tid & 15].rdy <= 1'b1;
+		end
 	end
 
 	// Search for ready translations and update the TLB.

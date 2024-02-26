@@ -107,7 +107,7 @@ always_comb
 begin
 	sel_qe = 6'h3f;
 	for (n3 = 0; n3 < MISSQ_SIZE; n3 = n3 + 1)
-		if (miss_queue[n3].v && miss_queue[n3].bc && sel_qe[5] &&
+		if (miss_queue[n3].v && |miss_queue[n3].bc && sel_qe[5] &&
 			(miss_queue[n3].id==commit0_id && commit0_idv) ||
 			(miss_queue[n3].id==commit1_id && commit1_idv) ||
 			(miss_queue[n3].id==commit2_id && commit2_idv) ||
@@ -133,13 +133,13 @@ end
 // Computer page index for a given page level.
 
 always_comb
-if (sel_tran >= 0)
+if (~sel_tran[5])
 	lvla = miss_queue[tranbuf[sel_tran].stk].lvl+3'd1;
 else
 	lvla = 3'd0;
 
 always_comb
-if (sel_tran >= 0)
+if (~sel_tran[5])
 	pindex = miss_queue[tranbuf[sel_tran].stk].adr[31:16] >> (lvla * 4'd13);
 else
 	pindex = 13'd0;

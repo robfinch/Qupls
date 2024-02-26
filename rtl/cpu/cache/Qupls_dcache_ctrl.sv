@@ -135,7 +135,7 @@ reg req_load, loaded;
 reg [2:0] acc_cnt;
 reg [2:0] load_cnt;
 reg [5:0] wait_cnt;
-reg [1:0] wr_cnt;
+reg [3:0] wr_cnt;
 reg cpu_trans_queued;
 fta_tranid_t lasttid, lasttid2;
 reg bus_busy;
@@ -312,7 +312,7 @@ if (rst_i) begin
 	loaded <= 1'd0;
 	load_cnt <= 3'd0;
 	wait_cnt <= 3'd0;
-	wr_cnt <= 3'd0;
+	wr_cnt <= 4'd0;
 	cpu_trans_queued <= 1'd0;
 	cpu_request_i2 <= 'd0;
 	last_out <= 5'd16;
@@ -368,7 +368,7 @@ else begin
 			ftam_req.bte <= fta_bus_pkg::LINEAR;
 			ftam_req.cti <= fta_bus_pkg::CLASSIC;
 			tBusClear();
-			wr_cnt <= 2'd0;
+			wr_cnt <= 4'd0;
 			req_state <= IDLE;
 		end
 	IDLE:
@@ -384,7 +384,7 @@ else begin
 				lasttid <= lasttid2;
 			end
 			//tBusClear();
-			wr_cnt <= 2'd0;
+			wr_cnt <= 4'd0;
 			acc_cnt <= 3'd0;
 			load_cnt <= 3'd0;
 			dump_cnt <= 3'd0;
@@ -411,7 +411,7 @@ else begin
 	DUMP1:
 		begin
 			if (dump_cnt==3'd4) begin
-				wr_cnt <= 2'd0;
+				wr_cnt <= 4'd0;
 				cache_dump <= 1'b0;
 				req_state <= LOAD1;
 			end
@@ -442,7 +442,7 @@ else begin
 	LOAD1:
 		begin
 			if (load_cnt==3'd4) begin
-				wr_cnt <= 3'd0;
+				wr_cnt <= 4'd0;
 				load_cache <= 1'd0;
 				req_state <= RW1;
 			end
@@ -700,8 +700,8 @@ input fta_operating_mode_t om;
 input wr;
 input cache;
 input QuplsPkg::asid_t asid;
-input QuplsPkg::address_t vadr;
-input QuplsPkg::address_t padr;
+input QuplsPkg::virtual_address_t vadr;
+input QuplsPkg::physical_address_t padr;
 input [15:0] sel;
 input [127:0] data;
 input [3:0] cid;
@@ -757,17 +757,17 @@ task tAccess;
 input fta_tranid_t tid;
 fta_address_t ta;
 begin
-	if (wr_cnt == 2'd3) begin
+	if (wr_cnt == 4'd3) begin
 		cpu_trans_queued <= 1'b1;
 		loaded <= 1'b0;
-		wr_cnt <= 2'd0;
+		wr_cnt <= 4'd0;
 	end
 	// Access only the strip of memory requested. It could be an I/O device.
-	ta = {cpu_request_i2.vadr[$bits(fta_address_t)-1:Qupls_cache_pkg::DCacheTagLoBit],wr_cnt,{Qupls_cache_pkg::DCacheTagLoBit-2{1'h0}}};
-	case(wr_cnt)
+	ta = {cpu_request_i2.vadr[$bits(fta_address_t)-1:Qupls_cache_pkg::DCacheTagLoBit],wr_cnt[1:0],{Qupls_cache_pkg::DCacheTagLoBit-2{1'h0}}};
+	case(wr_cnt[1:0])
 	2'd0:	
 		begin
-			wr_cnt <= 2'd1;
+			wr_cnt <= 4'd1;
 			if (|cpu_request_i2.sel[15: 0]) begin
 				tAddr(
 					cpu_request_i2.om,
@@ -779,7 +779,7 @@ begin
 					cpu_request_i2.sel[15:0],
 					cpu_request_i2.dat[127:0],
 					CID,
-					tid,
+					{tmptid.core,tmptid.channel,4'd1},
 					2'd0,
 					cpu_request_i2.cti==fta_bus_pkg::ERC || !cpu_request_i2.we
 				);
@@ -787,7 +787,7 @@ begin
 			end
 			else begin
 				cpu_req_queue[queued_req].done[2'd0] <= 1'b1;
-				wr_cnt <= 2'd2;
+				wr_cnt <= 4'd2;
 				if (|cpu_request_i2.sel[31:16]) begin
 					tAddr(
 						cpu_request_i2.om,
@@ -799,7 +799,7 @@ begin
 						cpu_request_i2.sel[31:16],
 						cpu_request_i2.dat[255:128],
 						CID,
-						tid,
+						{tmptid.core,tmptid.channel,4'd2},
 						2'd1,
 						cpu_request_i2.cti==fta_bus_pkg::ERC || !cpu_request_i2.we
 					);
@@ -807,7 +807,7 @@ begin
 				end
 				else begin
 					cpu_req_queue[queued_req].done[2'd1] <= 1'b1;
-					wr_cnt <= 2'd3;
+					wr_cnt <= 4'd3;
 					if (|cpu_request_i2.sel[47:32]) begin
 						tAddr(
 							cpu_request_i2.om,
@@ -819,7 +819,7 @@ begin
 							cpu_request_i2.sel[47:32],
 							cpu_request_i2.dat[383:256],
 							CID,
-							tid,
+							{tmptid.core,tmptid.channel,4'd3},
 							2'd2,
 							cpu_request_i2.cti==fta_bus_pkg::ERC || !cpu_request_i2.we
 						);
@@ -827,7 +827,7 @@ begin
 					end
 					else begin
 						cpu_req_queue[queued_req].done[2'd2] <= 1'b1;
-						wr_cnt <= 2'd0;
+						wr_cnt <= 4'd0;
 						cpu_trans_queued <= 1'b1;
 						loaded <= 1'b0;
 						if (|cpu_request_i2.sel[63:48]) begin
@@ -841,7 +841,7 @@ begin
 								cpu_request_i2.sel[63:48],
 								cpu_request_i2.dat[511:384],
 								CID,
-								tid,
+								{tmptid.core,tmptid.channel,4'd4},
 								2'd3,
 								cpu_request_i2.cti==fta_bus_pkg::ERC || !cpu_request_i2.we
 							);
@@ -855,7 +855,7 @@ begin
 		end
 	2'd1:	
 		begin
-			wr_cnt <= 2'd2;
+			wr_cnt <= 4'd2;
 			if (|cpu_request_i2.sel[31:16]) begin
 				tAddr(
 					cpu_request_i2.om,
@@ -867,7 +867,7 @@ begin
 					cpu_request_i2.sel[31:16],
 					cpu_request_i2.dat[255:128],
 					CID,
-					tid,
+					{tmptid.core,tmptid.channel,4'd5},
 					2'd1,
 					cpu_request_i2.cti==fta_bus_pkg::ERC || !cpu_request_i2.we
 				);
@@ -875,7 +875,7 @@ begin
 			end
 			else begin
 				cpu_req_queue[queued_req].done[2'd1] <= 1'b1;
-				wr_cnt <= 2'd3;
+				wr_cnt <= 4'd3;
 				if (|cpu_request_i2.sel[47:32]) begin
 					tAddr(
 						cpu_request_i2.om,
@@ -887,7 +887,7 @@ begin
 						cpu_request_i2.sel[47:32],
 						cpu_request_i2.dat[383:256],
 						CID,
-						tid,
+						{tmptid.core,tmptid.channel,4'd6},
 						2'd2,
 						cpu_request_i2.cti==fta_bus_pkg::ERC || !cpu_request_i2.we
 					);
@@ -895,7 +895,7 @@ begin
 				end
 				else begin
 					cpu_req_queue[queued_req].done[2'd2] <= 1'b1;
-					wr_cnt <= 2'd0;
+					wr_cnt <= 4'd0;
 					cpu_trans_queued <= 1'b1;
 					loaded <= 1'b0;
 					if (|cpu_request_i2.sel[63:48]) begin
@@ -909,7 +909,7 @@ begin
 							cpu_request_i2.sel[63:48],
 							cpu_request_i2.dat[511:384],
 							CID,
-							tid,
+							{tmptid.core,tmptid.channel,4'd7},
 							2'd3,
 							cpu_request_i2.cti==fta_bus_pkg::ERC || !cpu_request_i2.we
 						);
@@ -922,7 +922,7 @@ begin
 		end
 	2'd2:
 		begin
-			wr_cnt <= 2'd3;
+			wr_cnt <= 4'd3;
 			if (|cpu_request_i2.sel[47:32]) begin
 				tAddr(
 					cpu_request_i2.om,
@@ -934,7 +934,7 @@ begin
 					cpu_request_i2.sel[47:32],
 					cpu_request_i2.dat[383:256],
 					CID,
-					tid,
+					{tmptid.core,tmptid.channel,4'd8},
 					2'd2,
 					cpu_request_i2.cti==fta_bus_pkg::ERC || !cpu_request_i2.we
 				);
@@ -942,7 +942,7 @@ begin
 			end
 			else begin
 				cpu_req_queue[queued_req].done[2'd2] <= 1'b1;
-				wr_cnt <= 2'd0;
+				wr_cnt <= 4'd0;
 				cpu_trans_queued <= 1'b1;
 				loaded <= 1'b0;
 				if (|cpu_request_i2.sel[63:48]) begin
@@ -956,7 +956,7 @@ begin
 						cpu_request_i2.sel[63:48],
 						cpu_request_i2.dat[511:384],
 						CID,
-						tid,
+						{tmptid.core,tmptid.channel,4'd9},
 						2'd3,
 						cpu_request_i2.cti==fta_bus_pkg::ERC || !cpu_request_i2.we
 					);
@@ -968,7 +968,7 @@ begin
 		end
 	2'd3: 
 		begin
-			wr_cnt <= 2'd0;
+			wr_cnt <= 4'd0;
 			cpu_trans_queued <= 1'b1;
 			loaded <= 1'b0;
 			if (|cpu_request_i2.sel[63:48]) begin
@@ -982,7 +982,7 @@ begin
 					cpu_request_i2.sel[63:48],
 					cpu_request_i2.dat[511:384],
 					CID,
-					tid,
+					{tmptid.core,tmptid.channel,4'd10},
 					2'd3,
 					cpu_request_i2.cti==fta_bus_pkg::ERC || !cpu_request_i2.we
 				);

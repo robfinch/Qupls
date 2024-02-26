@@ -90,7 +90,7 @@ begin
 		end
 	OP_ANDI:
 		begin
-			immb = {64{1'b1}} & ins[0].ins[47:24];
+			immb = {{40{1'b1}},ins[0].ins[47:24]};
 			has_immb = 1'b1;
 		end
 	OP_ORI,OP_EORI,OP_MULUI,OP_DIVUI:

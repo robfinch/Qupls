@@ -47,7 +47,7 @@ module Qupls_tlb4way(rst, clk, ftas_req, ftas_resp,
 	tlb0_v, tlb1_v, pc_tlb_v, op0, op1, tlb0_op, tlb1_op, tlb0_res, tlb1_res, pc_tlb_res,
 	load0_i, load1_i, store0_i, store1_i, load0_o, load1_o, store0_o, store1_o,
 	stall_tlb0, stall_tlb1,
-	agen0_rndx_i, agen1_rndx_i, agen0_rndx_o, agen1_rndx_o, agen0_v, agen1_v);
+	agen0_rndx_i, agen1_rndx_i, agen0_rndx_o, agen1_rndx_o, agen0_v, agen1_v, pc_valid);
 parameter TLB_ENTRIES = 128;
 parameter MISSQ_ENTRIES = 16;
 input rst;
@@ -103,6 +103,7 @@ output rob_ndx_t agen0_rndx_o;
 output rob_ndx_t agen1_rndx_o;
 input agen0_v;
 input agen1_v;
+input pc_valid;
 
 reg [6:0] entryno, entryno_rst;
 tlb_entry_t entryi, entryi_rst;
@@ -876,15 +877,15 @@ change_det #(.WID($bits(virtual_address_t))) ucd3 (.rst(rst), .clk(clk), .ce(1'b
 
 always_comb
 	begin
-		pc_tlb_v1 = FALSE;
+		pc_tlb_v1 = !pc_valid;
 		if (t2a.vpn.vpn[8:0]==pc_vadr[31:23] && t2a.vpn.asid==pc_asid)
-			pc_tlb_v1 = 1'd1;
+			pc_tlb_v1 = 1'b1;
 		else if (t2b.vpn.vpn[8:0]==pc_vadr[31:23] && t2b.vpn.asid==pc_asid)
-			pc_tlb_v1 = 1'd1;
+			pc_tlb_v1 = 1'b1;
 		else if (t2c.vpn.vpn[8:0]==pc_vadr[31:23] && t2c.vpn.asid==pc_asid)
-			pc_tlb_v1 = 1'd1;
+			pc_tlb_v1 = 1'b1;
 		else if (t2d.vpn.vpn[8:0]==pc_vadr[31:23] && t2d.vpn.asid==pc_asid)
-			pc_tlb_v1 = 1'd1;
+			pc_tlb_v1 = 1'b1;
 	end
 	
 always_comb
@@ -959,7 +960,7 @@ begin
 	else if (t2d.vpn.vpn[8:0]==pc_vadr[31:23] && t2d.vpn.asid==pc_asid) begin
 	end
 	else
-		pc_miss = !pc_inq;
+		pc_miss = !pc_inq && pc_valid;
 end
 
 always_ff @(posedge clk)
@@ -999,7 +1000,7 @@ else begin
 	miss_o <= 1'b0;
 	tlb_v0a <= 1'd0;
 	tlb_v1a <= 1'd0;
-	pc_tlb_v2 <= 1'd0;
+	pc_tlb_v2 <= !pc_valid;
 	if (!stall_tlb0) begin
 		if (t0a.vpn.vpn[8:0]==vadr0[31:23] && t0a.vpn.asid==asid0) begin
 			entry0 <= t0a;

@@ -59,7 +59,7 @@ typedef struct packed {
 typedef struct packed {
 	logic v;
 	logic rdy;
-	fta_bus_pkg::fta_tranid_t id;
+	fta_bus_pkg::fta_tranid_t tid;
 	logic [3:0] stk;
 	QuplsPkg::asid_t asid;
 	QuplsPkg::address_t vadr;

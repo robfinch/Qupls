@@ -111,19 +111,26 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic vm;
-	logic n;
-	logic pm;
-	logic [3:0] cache;
+	logic vm;						// 
+	logic n;						// 1 = conforming executable page
+	logic pm;						//page modified 1=modified
+	logic [6:0] resv2;
+	logic [1:0] content;	// 0=data,2=stack,3=executable
+	logic compressed;
 	logic e;						// 1= encrypted
 	logic [1:0] al;
-	logic compressed;
-	logic [20:0] resv;
-	logic [7:0] pl;
-	logic [23:0] key;
-	logic [31:0] access_count;
+	
+	logic [3:0] resv;
+	logic [2:0] mrwx;
+	logic [2:0] hrwx;
+	logic [2:0] srwx;
+	logic [2:0] urwx;
+
 	logic [15:0] acl;
 	logic [15:0] share_count;
+	logic [31:0] access_count;
+	logic [7:0] pl;
+	logic [23:0] key;
 } PMTE;	// 128 bits
 
 // Page Table Entry

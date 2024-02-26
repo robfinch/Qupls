@@ -103,11 +103,11 @@ always_comb
 always_comb
 	immc8 = {{WID{ir[29]}},ir[29:22]};
 always_comb
-	shl = {b,ir[33] ? ~a : a} << (ir[32] ? ir[27:22] : c[5:0]);
+	shl = {b,ir[38] ? ~a : a} << (ir[37] ? ir[34:29] : c[5:0]);
 always_comb
-	shr = {ir[33] ? ~b : b,a} >> (ir[32] ? ir[27:22] : c[5:0]);
+	shr = {ir[38] ? ~b : b,a} >> (ir[37] ? ir[34:29] : c[5:0]);
 always_comb
-	asr = {{64{a[63]}},a,64'd0} >> (ir[32] ? ir[27:22] : c[5:0]);
+	asr = {{64{a[63]}},a,64'd0} >> (ir[37] ? ir[34:29] : c[5:0]);
 
 always_ff @(posedge clk)
 begin
@@ -444,7 +444,7 @@ begin
 		OP_ASL:	bus = shl[WID*2-1:WID];
 		OP_LSR:	bus = shr[WID-1:0];
 		OP_ASR:	
-			case(ir[31:30])
+			case(ir[42:41])
 			2'd0:	bus = asr[WID*2-1:WID];
 			2'd1: bus = asr[WID*2-1] ? asr[WID*2-1:WID] + asr[WID-1] : asr[WID*2-1:WID];
 			2'd2: bus = asr[WID*2-1:WID] + asr[WID-1];

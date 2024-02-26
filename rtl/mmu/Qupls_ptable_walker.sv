@@ -41,7 +41,7 @@ import QuplsMmupkg::*;
 import QuplsPkg::*;
 import Qupls_ptable_walker_pkg::*;
 
-module Qupls_ptable_walker(rst, clk, 
+module Qupls_ptable_walker(rst, clk, paging_en,
 	tlbmiss, tlb_missadr, tlb_missasid, tlb_missid, tlb_missqn,
 	commit0_id, commit0_idv, commit1_id, commit1_idv, commit2_id, commit2_idv,
 	commit3_id, commit3_idv,
@@ -78,6 +78,7 @@ localparam CFG_HEADER_TYPE = 8'h00;			// 00 = a general device
 
 input rst;
 input clk;
+input paging_en;
 input tlbmiss;
 input address_t tlb_missadr;
 input asid_t tlb_missasid;
@@ -262,7 +263,7 @@ Qupls_ptw_miss_queue umsq1
 	.commit2_idv(commit2_idv),
 	.commit3_id(commit3_id),
 	.commit3_idv(commit3_idv),
-	.tlb_miss(tlbmiss),
+	.tlb_miss(tlbmiss & paging_en),
 	.tlb_missadr(tlb_missadr),
 	.tlb_missasid(tlb_missasid),
 	.tlb_missid(tlb_missid),
@@ -308,6 +309,7 @@ if (rst) begin
 	tlb_way <= 'd0;
 	ptw_vadr <= {$bits(virtual_address_t){1'b0}};
 	fault <= 1'b0;
+	faultq_o <= 'd0;
 	pe_fault_o <= 1'b0;
 	fault_asid <= {$bits(asid_t){1'b0}};
 	fault_adr <= {$bits(virtual_address_t){1'b0}};
@@ -316,6 +318,8 @@ if (rst) begin
 	pte <= {$bits(spte_t){1'b0}};
 	tlb_entryno <= 7'd0;
 	tlb_entry <= {$bits(tlb_entry_t){1'b0}};
+	ptw_vv <= FALSE;
+	ptw_ppv <= TRUE;
 end
 else begin
 
@@ -347,11 +351,11 @@ else begin
 			if (~sel_qe[5]) begin
 				ptw_vadr <= {miss_queue[sel_qe].tadr[31:3],3'b0};
 				ptw_vv <= TRUE;
-				ptw_ppv <= FALSE;
-			end
-			if (ptw_pv & ~ptw_ppv & ~sel_qe[5]) begin
-				$display("PTW: table walk triggered.");
 				ptw_ppv <= TRUE;
+			end
+			if (ptw_pv & ptw_ppv & ~sel_qe[5]) begin
+				$display("PTW: table walk triggered.");
+				ptw_ppv <= FALSE;
 				if (miss_queue[sel_qe].lvl != 3'd7) begin
 					$display("PTW: walk level=%d", miss_queue[sel_qe].lvl);
 					ftam_req <= 'd0;		// clear all fields.
