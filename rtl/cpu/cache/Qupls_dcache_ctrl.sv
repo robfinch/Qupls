@@ -356,7 +356,7 @@ else begin
 			ftam_req.cmd <= fta_bus_pkg::CMD_DCACHE_LOAD;
 			ftam_req.sz  <= fta_bus_pkg::hexi;
 			ftam_req.blen <= 6'd0;
-			ftam_req.cid <= CID;					// CPU channel id
+//			ftam_req.cid <= CID;					// CPU channel id
 			ftam_req.tid.core <= CORENO;
 			ftam_req.tid.channel <= CID;
 			ftam_req.tid.tranid <= 4'd0;		// transaction id
@@ -526,7 +526,7 @@ else begin
 			cpu_req_queue[which_tran[3:2]].tran_req[which_tran[1:0]].cmd <= fta_bus_pkg::CMD_NONE;
 			tran_load_data[which_tran[3:2]].ack <= 1'b1;
 			//tran_req[ftam_resp.tid & 4'hF].cyc <= 1'b0;
-			tran_load_data[which_tran[3:2]].cid <= ftam_resp.cid;
+//			tran_load_data[which_tran[3:2]].cid <= ftam_resp.cid;
 			tran_load_data[which_tran[3:2]].tid <= cpu_req_queue[which_tran[3:2]].cpu_req.tid;
 			tran_load_data[which_tran[3:2]].pri <= ftam_resp.pri;
 			tran_load_data[which_tran[3:2]].adr <= {ftam_resp.adr[$bits(fta_address_t)-1:6],6'd0};
@@ -538,7 +538,7 @@ else begin
 			endcase
 //			we_r <= ftam_req.we;
 			tran_load_data[which_tran[3:2]].rty <= 1'b0;
-			tran_load_data[which_tran[3:2]].err <= 1'b0;
+			tran_load_data[which_tran[3:2]].err <= fta_bus_pkg::OKAY;
 		end
 	end
 	// Retry or error (only if transaction active)
@@ -717,7 +717,7 @@ begin
 			cache ? fta_bus_pkg::CMD_DCACHE_LOAD : fta_bus_pkg::CMD_LOADZ;
 		cpu_req_queue[queued_req].tran_req[which].sz <= fta_bus_pkg::hexi;
 		cpu_req_queue[queued_req].tran_req[which].blen <= 6'd0;
-		cpu_req_queue[queued_req].tran_req[which].cid <= cid;
+//		cpu_req_queue[queued_req].tran_req[which].cid <= cid;
 		cpu_req_queue[queued_req].tran_req[which].tid <= tid;
 		cpu_req_queue[queued_req].tran_req[which].bte <= cpu_request_i2.bte;
 		cpu_req_queue[queued_req].tran_req[which].cti <= cpu_request_i2.cti;

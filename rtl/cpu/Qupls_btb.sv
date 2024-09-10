@@ -506,11 +506,11 @@ begin
 				next_pc <= pc;
 			else begin
 				case(1'b1)
-				mip0v:	next_pc <= pc + 5'd5;
-				mip1v:	next_pc <= pc + 5'd10;
-				mip2v:	next_pc <= pc + 5'd15;
-				mip3v:	next_pc <= pc + 5'd20;
-				default:	next_pc <= pc + 5'd20;	// four instructions
+				mip0v:	next_pc <= pc + 5'd6;
+				mip1v:	next_pc <= pc + 5'd12;
+				mip2v:	next_pc <= pc + 5'd18;
+				mip3v:	next_pc <= pc + 5'd24;
+				default:	next_pc <= pc + 5'd24;	// four instructions
 				endcase
 			end
 		end

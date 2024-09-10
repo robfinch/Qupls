@@ -101,6 +101,7 @@ instr.aRb = ir.r3.Rb;
 instr.aRc = ir.r3.Rc;
 instr.aRt = ir.r3.Rt;
 instr.pred_btst = 6'd0;
+instr.mcip = micro_ip;
 case(micro_ip)
 12'h000:	begin next_ip = 12'h000; instr.ins = {'d0,OP_NOP};	end
 12'h001:	begin next_ip = 12'h000; instr.ins = {'d0,OP_NOP};	end

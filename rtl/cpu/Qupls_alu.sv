@@ -432,13 +432,13 @@ begin
 	OP_AIPSI:
 		bus = pc + ({{WID{i[23]}},i[23:0]} << (ir[17:15]*24));
 	OP_ADDSI:
-		bus = t + ({{WID{i[23]}},i[23:0]} << (ir[17:15]*24));
+		bus = c + ({{WID{i[23]}},i[23:0]} << (ir[17:15]*24));
 	OP_ANDSI:
-		bus = t & ({WID{1'b1}} & ~({{WID{1'b0}},24'hffffff} << (ir[17:15]*24)) | ({{WID{i[23]}},i[23:0]} << (ir[17:15]*24)));
+		bus = c & ({WID{1'b1}} & ~({{WID{1'b0}},24'hffffff} << (ir[17:15]*24)) | ({{WID{i[23]}},i[23:0]} << (ir[17:15]*24)));
 	OP_ORSI:
-		bus = t | (i << (ir[17:15]*24));
+		bus = c | (i << (ir[17:15]*24));
 	OP_EORSI:
-		bus = t ^ (i << (ir[17:15]*24));
+		bus = c ^ (i << (ir[17:15]*24));
 	OP_SHIFT:
 		case(ir.shifti.func)
 		OP_ASL:	bus = shl[WID*2-1:WID];

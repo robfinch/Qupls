@@ -42,7 +42,7 @@
 import QuplsPkg::*;
 
 module Qupls_ins_extract_mux(rst, clk, en, nop, rgi, hirq, irq_i, vect_i, mipv, 
-	mc_ins0, mc_ins, ins0, insi, reglist_active, iRn, ls_bmf, scale_regs_i, pack_regs,
+	mc_ins0, mc_ins, ins0, insi, reglist_active, ls_bmf, scale_regs_i, pack_regs,
 	regcnt, ins);
 input rst;
 input clk;
@@ -58,7 +58,6 @@ input ex_instruction_t mc_ins0;
 input ex_instruction_t ins0;
 input ex_instruction_t insi;
 input reglist_active;
-input aregno_t iRn;
 input ls_bmf;
 input [2:0] scale_regs_i;
 input pack_regs;
@@ -72,6 +71,8 @@ else begin
 	if (en)
 		ins <= hirq ? {4'd0,vect_i[7:0],2'b0,5'd0,2'b0,5'd0,2'b0,5'd0,irq_i,1'b0,3'b0,1'b0,OP_CHK} :
 			mipv ? mc_ins : nop ? {41'd0,OP_NOP} : insi;
+	else
+		ins <= {41'd0,OP_NOP};
 end
 
 endmodule

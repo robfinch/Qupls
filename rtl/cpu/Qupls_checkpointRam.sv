@@ -125,7 +125,7 @@ else begin
       .MESSAGE_CONTROL(0),            // DECIMAL
       .READ_DATA_WIDTH_A(WID),        // DECIMAL
       .READ_DATA_WIDTH_B(WID),        // DECIMAL
-      .READ_LATENCY_A(1),             // DECIMAL
+      .READ_LATENCY_A(0),             // DECIMAL
       .READ_LATENCY_B(0),             // DECIMAL
       .READ_RESET_VALUE_A("0"),       // String
       .READ_RESET_VALUE_B("0"),       // String

@@ -138,6 +138,7 @@ fta_cmd_response128_t sresp;
 wire irq_en;
 wire cs_tw;
 wire [127:0] cfg_out;
+reg erc;
 
 always_ff @(posedge clk)
 	sreq <= ftas_req;
@@ -156,8 +157,11 @@ always_ff @(posedge clk)
 
 always_comb
 	cs_hwtw <= cs_tw && sreq.cyc && sreq.stb;
+always_comb
+	erc <= sreq.cti==fta_bus_pkg::ERC;
 
-vtdl #(.WID(1), .DEP(16)) urdyd1 (.clk(clk), .ce(1'b1), .a(4'd1), .d(cs_hwtw|cs_config), .q(sack));
+vtdl #(.WID(1), .DEP(16)) urdyd1 (.clk(clk), .ce(1'b1), .a(4'd1),
+	.d(sreq.we?(erc?cs_hwtw|cs_config : 1'b0): cs_hwtw|cs_config), .q(sack));
 
 pci128_config #(
 	.CFG_BUS(CFG_BUS),
@@ -283,7 +287,6 @@ Qupls_ptw_tran_buffer utrbf1
 	.rst(rst),
 	.clk(clk),
 	.state(req_state),
-	.ptw_vv(ptw_vv),
 	.ptw_pv(ptw_pv),
 	.ptw_ppv(ptw_ppv),
 	.tranbuf(tranbuf),
@@ -300,7 +303,7 @@ always_ff @(posedge clk)
 if (rst) begin
 	tlbmiss_ip <= 'd0;
 	ftam_req <= 'd0;
-	ftam_req.cid <= CID;
+//	ftam_req.cid <= CID;
 	ftam_req.bte <= fta_bus_pkg::LINEAR;
 	ftam_req.cti <= fta_bus_pkg::CLASSIC;
 	upd_req <= 'd0;
@@ -367,7 +370,7 @@ else begin
 					ftam_req.vadr <= ptw_vadr;
 					ftam_req.padr <= ptw_padr;
 					ftam_req.tid <= tid;
-					ftam_req.cid <= CID;
+//					ftam_req.cid <= CID;
 				end
 			end
 		end

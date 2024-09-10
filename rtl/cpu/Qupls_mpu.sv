@@ -40,13 +40,14 @@ import fta_bus_pkg::*;
 import const_pkg::*;
 import QuplsPkg::*;
 
-module Qupls_mpu(rst_i, clk_i, clk2x_i, ftam_req, ftam_resp, irq_bus,
+module Qupls_mpu(rst_i, clk_i, clk2x_i, clk5x_i, ftam_req, ftam_resp, irq_bus,
 	clk0, gate0, out0, clk1, gate1, out1, clk2, gate2, out2, clk3, gate3, out3
 	);
 parameter CPU="SEQ";
 input rst_i;
 input clk_i;
 input clk2x_i;
+input clk5x_i;
 output fta_cmd_request128_t ftam_req;
 input fta_cmd_response128_t ftam_resp;
 input [31:0] irq_bus;
@@ -132,10 +133,9 @@ Qupls_pit utmr1
 
 always_comb
 begin
-	pit_resp.cid = wbm64_req.cid;
 	pit_resp.tid = wbm64_req.tid;
 	pit_resp.ack = pit_ack;
-	pit_resp.err = 1'b0;
+	pit_resp.err = fta_bus_pkg::OKAY;
 	pit_resp.rty = 1'b0;
 	pit_resp.stall = 1'b0;
 	pit_resp.next = 1'b0;
@@ -212,10 +212,9 @@ Qupls_pic upic1
 
 always_comb
 begin
-	pic_resp.cid = wbm32_req.cid;
 	pic_resp.tid = wbm32_req.tid;
 	pic_resp.ack = pic_ack;
-	pic_resp.err = 1'b0;
+	pic_resp.err = fta_bus_pkg::OKAY;
 	pic_resp.rty = 1'b0;
 	pic_resp.stall = 1'b0;
 	pic_resp.next = 1'b0;
@@ -224,7 +223,7 @@ begin
 	pic_resp.pri = wbm32_req.pri;
 end
 
-QuplsSeq
+Qupls
 #(
 	.CORENO(6'd1),
 	.CID(6'd1)
@@ -235,6 +234,7 @@ ucpu1
 	.rst_i(rst_i),
 	.clk_i(clk_i),
 	.clk2x_i(clk2x_i),
+	.clk5x_i(clk5x_i),
 	.irq_i(pic_irq[2:0]),
 	.vect_i({1'b0,pic_cause}),
 	.fta_req(ftam_req),
@@ -312,7 +312,7 @@ ucpu2
 );
 */
 
-fta_respbuf #(.CHANNELS(4))
+fta_respbuf128 #(.CHANNELS(4))
 urb1
 (
 	.rst(rst_i),

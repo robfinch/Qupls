@@ -329,7 +329,7 @@ begin
 			end
 		default:
 			begin
-				cpu_resp_o.cid = update_data_i.cid;
+//				cpu_resp_o.cid = update_data_i.cid;
 				cpu_resp_o.tid = update_data_i.tid;
 				cpu_resp_o.ack = update_data_i.ack;
 				cpu_resp_o.adr = update_data_i.adr;

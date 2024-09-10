@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -101,7 +101,7 @@ else begin
 			wbm_req.cmd <= fta_bus_pkg::CMD_ICACHE_LOAD;
 			wbm_req.sz  <= fta_bus_pkg::hexi;
 			wbm_req.blen <= 'd0;
-			wbm_req.cid <= 3'd7;					// CPU channel id
+//			wbm_req.cid <= 3'd7;					// CPU channel id
 			wbm_req.tid <= 'd0;
 			wbm_req.csr  <= 'd0;					// clear/set reservation
 			wbm_req.pl	<= 'd0;						// privilege level
@@ -234,6 +234,8 @@ else begin
 	WAIT_UPD2:
 		begin
 			tid <= tid + 2'd1;
+			if (&tid)
+				tid <= 2'd1;
 			req_state <= WAIT4MISS;
 		end
 	default:

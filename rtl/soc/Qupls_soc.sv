@@ -1,7 +1,7 @@
 `timescale 1ns / 10ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2023-2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -42,6 +42,7 @@ import QuplsPkg::SIM;
 
 //`define USE_GATED_CLOCK	1'b1
 //`define HAS_MMU 1'b1
+//`define HAS_FRAME_BUFFER 1'b1
 
 module Qupls_soc(cpu_resetn, xclk, led, sw, btnl, btnr, btnc, btnd, btnu, 
   kclk, kd, uart_txd, uart_rxd,
@@ -145,9 +146,11 @@ wire xrst = ~cpu_resetn;
 wire locked;
 wire clk10, clk20, clk25, clk33, clk40, clk50, clk67, clk100, clk200;
 wire xclk_bufg;
-wire node_clk = clk40;
+wire node_clk = clk33;
 fta_cmd_request128_t cpu_req;
 fta_cmd_response128_t cpu_resp;
+fta_cmd_request128_t rom_req;
+fta_cmd_response128_t rom_resp;
 fta_cmd_request128_t ch7req;
 fta_cmd_request128_t ch7dreq;	// DRAM request
 fta_cmd_request128_t ch7_areq;	// DRAM request
@@ -196,6 +199,7 @@ wire [3:0] br1_cido;
 wire [7:0] br1_tido;
 fta_cmd_request128_t br3_req;
 fta_cmd_response128_t br3_resp;
+fta_cmd_response128_t br3_resp_o;
 fta_cmd_request64_t br3_mreq;
 wire br3_cyc;
 wire br3_stb;
@@ -380,7 +384,7 @@ assign io_gate_en = ch7req.padr[31:20]==12'hFEC
 								 || ch7req.padr[31:20]==12'hFEF
 								 ;
 
-
+`ifdef HAS_FRAME_BUFFER
 rfFrameBuffer_fta64 uframebuf1
 (
 	.rst_i(rst),
@@ -408,6 +412,57 @@ rfFrameBuffer_fta64 uframebuf1
 	.fctr_o(),
 	.vblank_o()
 );
+`else
+parameter phSyncOn  = 40;		//   40 front porch
+parameter phSyncOff = 168;		//  128 sync
+parameter phBlankOff = 252;	//256	//   88 back porch
+//parameter phBorderOff = 336;	//   80 border
+parameter phBorderOff = 256;	//   80 border
+//parameter phBorderOn = 976;		//  640 display
+parameter phBorderOn = 1056;		//  800 display
+parameter phBlankOn = 1052;		//   4 border
+parameter phTotal = 1056;		// 1056 total clocks
+parameter pvSyncOn  = 1;		//    1 front porch
+parameter pvSyncOff = 5;		//    4 vertical sync
+parameter pvBlankOff = 28;		//   23 back porch
+parameter pvBorderOff = 28;		//   44 border	0
+//parameter pvBorderOff = 72;		//   44 border	0
+parameter pvBorderOn = 628;		//  600 display
+//parameter pvBorderOn = 584;		//  512 display
+parameter pvBlankOn = 628;  	//   44 border	0
+parameter pvTotal = 628;		//  628 total scan lines
+
+VGASyncGen usg1
+(
+	.rst(rst),
+	.clk(clk40),
+	.eol(),
+	.eof(),
+	.hSync(hSync),
+	.vSync(vSync),
+	.hCtr(),
+	.vCtr(),
+  .blank(blank),
+  .vblank(),
+  .vbl_int(),
+  .border(border),
+  .hTotal_i(phTotal),
+  .vTotal_i(pvTotal),
+  .hSyncOn_i(phSyncOn),
+  .hSyncOff_i(phSyncOff),
+  .vSyncOn_i(pvSyncOn),
+  .vSyncOff_i(pvSyncOff),
+  .hBlankOn_i(phBlankOn),
+  .hBlankOff_i(phBlankOff),
+  .vBlankOn_i(pvBlankOn),
+  .vBlankOff_i(pvBlankOff),
+  .hBorderOn_i(phBorderOn),
+  .hBorderOff_i(phBorderOff),
+  .vBorderOn_i(pvBorderOn),
+  .vBorderOff_i(pvBorderOff)
+);
+assign fb_req = {$bits(fb_req){1'b0}};
+`endif
 
 VideoTPG uvtpg1
 (
@@ -483,7 +538,6 @@ PS2kbd_fta32 #(.pClkFreq(33333333)) ukbd1
 	.req(br4_mreq),
 	.resp(br4_chresp[0]),
 	//-------------
-	.irq_o(kbd_irq),	// interrupt request (active high)
 	.kclk_i(kclk),	// keyboard clock from keyboard
 	.kclk_en(kclk_en),	// 1 = drive clock low
 	.kdat_i(kd),	// keyboard data
@@ -518,7 +572,7 @@ random urnd1
 	.dat_o(rand_dato)
 );
 */
-uart6551pci_fta32 #(.pClkFreq(20), .pClkDiv(24'd130)) uuart
+uart6551pci_fta32 #(.pClkFreq(33), .pClkDiv(24'd217)) uuart
 (
 	.rst_i(rst),
 	.clk_i(node_clk),
@@ -571,7 +625,7 @@ i2c_master_top_pci32 ui2cm1
 assign rtc_clk = rtc_clkoen ? 'bz : rtc_clko;
 assign rtc_data = rtc_dataoen ? 'bz : rtc_datao;
 
-
+/*
 always_comb
 begin
 	br3_req = ch7req;
@@ -579,6 +633,23 @@ begin
 	br3_req.stb = ch7req.stb & io_gate_en;
 	br3_req.we = ch7req.we & io_gate_en;
 end
+*/
+mem_gate #(
+	.SIZE(64),
+	.FUNC(2),
+	.IO_ADDR_MASK(32'hFFFFFFC0),
+	.IO_ADDR(32'hFEFFFF80)
+) umemg1
+(
+	.rst(rst),
+	.clk(node_clk),
+	.age(1'b0),
+	.cs(br3_req.padr[31:22]==10'b1111_1110_11),
+	.fta_req_i(cpu_req),
+	.fta_resp_o(br3_resp_o),
+	.fta_req_o(br3_req),
+	.fta_resp_i(br3_resp)
+);
 
 IOBridge128to64fta ubridge3
 (
@@ -788,7 +859,7 @@ fta_asynch2sync128 usas7
 	.resp_i(ch7_aresp)
 );
 
-fta_cmd_response128_t [6:0] resps;
+fta_cmd_response128_t [7:0] resps;
 
 binary_semamem_pci32 usema1
 (
@@ -806,23 +877,40 @@ binary_semamem_pci32 usema1
 	.dat_o(sema_dato)
 );
 
+mem_gate #(
+	.SIZE(8),
+	.FUNC(1),
+	.IO_ADDR_MASK(32'hFFFFFFF0),
+	.IO_ADDR(32'hFEFFFFF0)
+) umemg2
+(
+	.rst(rst),
+	.clk(node_clk),
+	.age(1'b0),
+	.cs(cpu_req.padr[31:20]==12'hFFF),
+	.fta_req_i(cpu_req),
+	.fta_resp_o(resps[4]),
+	.fta_req_o(rom_req),
+	.fta_resp_i(rom_resp)
+);
+
 scratchmem128pci_fta
 #(
-	.IO_ADDR(32'hFFFC0001),
+	.IO_ADDR(32'hFFF80001),
 	.CFG_FUNC(3'd0)
 )
 uscr1
 (
 	.rst_i(rst),
-	.cs_config_i(cs_config),
-	.cs_ram_i(cpu_req.padr[31:24]==8'hFF),
+	.cs_config_i(rom_req.padr[31:28]==4'hD),
+	.cs_ram_i(rom_req.padr[31:24]==8'hFF),
 	.clk_i(node_clk),
-	.req(cpu_req),
-	.resp(resps[4]),
+	.req(rom_req),
+	.resp(rom_resp),
 	.ip('d0),
 	.sp('d0)
 );
-
+/*
 scratchmem128pci_fta
 #(
 	.IO_ADDR(32'hFFF80001),
@@ -839,7 +927,7 @@ uscr2
 	.ip('d0),
 	.sp('d0)
 );
-
+*/
 /*
 io_bitmap uiob1
 (
@@ -1053,7 +1141,7 @@ config_timout_ctr ucfgtoctr1
 	.o(config_to)
 );
 
-fta_respbuf #(.CHANNELS(7)) urspbuf1
+fta_respbuf128 #(.CHANNELS(8)) urspbuf1
 (
 	.rst(rst),
 	.clk(node_clk),
@@ -1063,14 +1151,14 @@ fta_respbuf #(.CHANNELS(7)) urspbuf1
 
 assign resps[0] = fta_cmd_response128_t'(ch7resp);
 assign resps[1] = br1_resp;
-assign resps[2] = br3_resp;
-assign resps[3].cid = cpu_cid;
+assign resps[2] = br3_resp_o;
 assign resps[3].tid = cpu_tid;
 assign resps[3].ack = sema_ack;
 assign resps[3].next = 1'b0;
 assign resps[3].dat = {4{sema_dato}};
 assign resps[3].adr = cpu_adr;
 assign resps[5] = br4_resp;
+assign resps[7] = 'd0;
 
 //assign ch7req.sel = ch7req.we ? sel << {ch7req.padr[3:2],2'b0} : 16'hFFFF;
 //assign ch7req.data1 = {4{dato}};
@@ -1132,7 +1220,8 @@ Qupls_mpu umpu1
 (
 	.rst_i(rst),
 	.clk_i(node_clk),
-	.clk2x_i(clk50),
+	.clk2x_i(clk100),
+	.clk5x_i(clk200),
 	.ftam_req(cpu_req),
 	.ftam_resp(cpu_resp),
 	.irq_bus(irq_bus),
@@ -1152,7 +1241,6 @@ Qupls_mpu umpu1
 
 assign cpu_blen = cpu_req.blen;
 assign cpu_cti = cpu_req.cti;
-assign cpu_cid = cpu_req.cid;
 assign cpu_tid = cpu_req.tid;
 assign cpu_cyc = cpu_req.cyc;
 assign cpu_stb = cpu_req.stb;
@@ -1162,6 +1250,17 @@ assign asid = cpu_req.asid;
 assign cpu_adr = cpu_req.padr;
 assign cpu_dato = cpu_req.data1;
 
+/*
+ila_0 uila1 (
+	.clk(clk100), // input wire clk
+	.probe0(umpu1.ucpu1.pc), // input wire [31:0]  probe0  
+	.probe1(umpu1.ucpu1.ir2), // input wire [47:0]  probe1 
+	.probe2(umpu1.ucpu1.fta_req.padr),		// 32
+	.probe3(umpu1.ucpu1.state),	// 8
+	.probe4(umpu1.ucpu1.fta_req.data1),		// 32
+	.probe5(umpu1.ucpu1.fta_resp.dat)							// 8
+);
+*/
 /*
 assign cpu_resp.tid = tidi;
 assign cpu_resp.cid = cidi;

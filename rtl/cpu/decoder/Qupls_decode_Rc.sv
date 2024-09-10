@@ -57,6 +57,11 @@ begin
 	end
 	else
 		case(instr[0].ins.any.opcode)
+		OP_ORSI,OP_ANDSI,OP_EORSI,OP_ADDSI:
+			begin
+				Rc = instr[0].aRt;
+				Rcn = instr[0].ins.r3.Rt.n;
+			end
 		OP_STB,OP_STW,OP_STT,OP_STO,OP_STH,OP_STX:
 			begin
 				Rc = instr[0].aRt;

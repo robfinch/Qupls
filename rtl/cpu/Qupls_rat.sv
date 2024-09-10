@@ -359,10 +359,17 @@ generate begin : gRRN
 			if ((g % 4)==3) begin
 				if (rn[g]==9'd0)
 					vn[g] = 1'b1;
-				/*
+				// If an incoming target register is being marked invalid and it matches
+				// the target register the valid status is begin fetched for, then 
+				// return an invalid status. Bypass order is important.
 				else if (rn[g]==wrd && wr3)
-					vn[g] = cpv_i[7];
-				*/
+					vn[g] = INV;//cpv_i[7];
+				else if (rn[g]==wrc && wr2)
+					vn[g] = INV;
+				else if (rn[g]==wrb && wr1)
+					vn[g] = INV;
+				else if (rn[g]==wra && wr0)
+					vn[g] = INV;
 				else if (rrn[g]==10'd1023)
 					vn[g] = 1'b1;
 				else
@@ -373,6 +380,18 @@ generate begin : gRRN
 			// target register in the same group of instructions.
 			begin
 				
+				// If an incoming target register is being marked invalid and it matches
+				// the register the valid status is begin fetched for, then 
+				// return an invalid status.
+				if (rn[g]==wrd && wr3)
+					vn[g] = INV;//cpv_i[7];
+				else if (rn[g]==wrc && wr2)
+					vn[g] = INV;
+				else if (rn[g]==wrb && wr1)
+					vn[g] = INV;
+				else if (rn[g]==wra && wr0)
+					vn[g] = INV;
+				else
 				case(g)
 				// First instruction of group, no bypass needed.
 				4'd0,4'd1,4'd2,5'd16:
@@ -404,6 +423,8 @@ generate begin : gRRN
 				4'd4,4'd5,4'd6:
 					if (rn[g]==9'd0)
 						vn[g] = 1'b1;
+					else if (rn[g]==rn[3] && rnv[3])
+						vn[g] = INV;
 					else if (rrn[g]==10'd1023)
 						vn[g] = 1'b1;
 					else if ({rrn[g],rn_cp[g]}==prev_cpv[0])
@@ -432,6 +453,10 @@ generate begin : gRRN
 				4'd8,4'd9,4'd10:
 					if (rn[g]==9'd0)
 						vn[g] = 1'b1;
+					else if (rn[g]==rn[3] && rnv[3])
+						vn[g] = INV;
+					else if (rn[g]==rn[7] && rnv[7])
+						vn[g] = INV;
 					else if (rrn[g]==10'd1023)
 						vn[g] = 1'b1;
 					else if ({rrn[g],rn_cp[g]}==prev_cpv[0])
@@ -465,6 +490,12 @@ generate begin : gRRN
 					begin
 						if (rn[g]==9'd0)
 							vn[g] = 1'b1;
+						else if (rn[g]==rn[3] && rnv[3])
+							vn[g] = INV;
+						else if (rn[g]==rn[7] && rnv[7])
+							vn[g] = INV;
+						else if (rn[g]==rn[11] && rnv[11])
+							vn[g] = INV;
 						else if (rrn[g]==10'd1023)
 							vn[g] = 1'b1;
 						else if ({rrn[g],rn_cp[g]}==prev_cpv[0])
@@ -733,38 +764,39 @@ else begin
 		
 	if (wr0) begin
 		cpram_in.regmap[wra] = wrra;
-		$display("Qupls RAT: tgt %d reg %d replaced with %d.", wra, cpram_out.regmap[wra], wrra);
+		$display("Qupls RAT: tgta %d reg %d replaced with %d.", wra, cpram_out.regmap[wra], wrra);
 	end
 	if (wr1 && XWID > 1) begin
 		cpram_in.regmap[wrb] = wrrb;
-		$display("Qupls RAT: tgt %d reg %d replaced with %d.", wrb, cpram_out.regmap[wrb], wrrb);
+		$display("Qupls RAT: tgtb %d reg %d replaced with %d.", wrb, cpram_out.regmap[wrb], wrrb);
 	end
 	if (wr2 && XWID > 2) begin
 		cpram_in.regmap[wrc] = wrrc;
-		$display("Qupls RAT: tgt %d reg %d replaced with %d.", wrc, cpram_out.regmap[wrc], wrrc);
+		$display("Qupls RAT: tgtc %d reg %d replaced with %d.", wrc, cpram_out.regmap[wrc], wrrc);
 	end
 	if (wr3 && XWID > 3) begin
 		cpram_in.regmap[wrd] = wrrd;
-		$display("Qupls RAT: tgt %d reg %d replaced with %d.", wrd, cpram_out.regmap[wrd], wrrd);
+		$display("Qupls RAT: tgtd %d reg %d replaced with %d.", wrd, cpram_out.regmap[wrd], wrrd);
 	end
 	
+	/*
 	if (wr0a) begin
 		cpram_in.regmap[wra1] = wrra1;
-		$display("Qupls RAT: tgt %d reg %d replaced with %d.", wra1, cpram_out.regmap[wra1], wrra1);
+		$display("Qupls RAT: tgta %d reg %d replaced with %d.", wra1, cpram_out.regmap[wra1], wrra1);
 	end
 	if (wr1a && XWID > 1) begin
 		cpram_in.regmap[wrb1] = wrrb1;
-		$display("Qupls RAT: tgt %d reg %d replaced with %d.", wrb1, cpram_out.regmap[wrb1], wrrb1);
+		$display("Qupls RAT: tgta %d reg %d replaced with %d.", wrb1, cpram_out.regmap[wrb1], wrrb1);
 	end
 	if (wr2a && XWID > 2) begin
 		cpram_in.regmap[wrc1] = wrrc1;
-		$display("Qupls RAT: tgt %d reg %d replaced with %d.", wrc1, cpram_out.regmap[wrc1], wrrc1);
+		$display("Qupls RAT: tgta %d reg %d replaced with %d.", wrc1, cpram_out.regmap[wrc1], wrrc1);
 	end
 	if (wr3a && XWID > 3) begin
 		cpram_in.regmap[wrd1] = wrrd1;
-		$display("Qupls RAT: tgt %d reg %d replaced with %d.", wrd1, cpram_out.regmap[wrd1], wrrd1);
+		$display("Qupls RAT: tgta %d reg %d replaced with %d.", wrd1, cpram_out.regmap[wrd1], wrrd1);
 	end
-	
+	*/
 	if (wr0 && wrra==11'd0) begin
 		$display("RAT: writing zero register.");
 	end

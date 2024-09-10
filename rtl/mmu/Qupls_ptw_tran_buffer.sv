@@ -40,14 +40,13 @@ import QuplsMmupkg::*;
 import QuplsPkg::*;
 import Qupls_ptable_walker_pkg::*;
 
-module Qupls_ptw_tran_buffer(rst, clk, state, ptw_vv, ptw_pv, ptw_ppv, tranbuf,
+module Qupls_ptw_tran_buffer(rst, clk, state, ptw_pv, ptw_ppv, tranbuf,
 	miss_queue, sel_tran, sel_qe, ftam_resp, tid, ptw_vadr, ptw_padr);
 parameter CORENO = 6'd1;
 parameter CID = 3'd3;
 input rst;
 input clk;
 input Qupls_ptable_walker_pkg::ptw_state_t state;
-input ptw_vv;
 input ptw_pv;
 input ptw_ppv;
 output ptw_tran_buf_t [15:0] tranbuf;

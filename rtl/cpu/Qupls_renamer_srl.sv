@@ -58,12 +58,12 @@ if (rst)
 	o <= {8'b0,N[1:0],{SIZE{1'd0}}};
 else begin
 	if (rot & en) begin
-		for (mm = 0; mm < PREGS/4-1; mm = mm + 1)
+		for (mm = 1; mm < PREGS/4-2; mm = mm + 1)
 			mem[mm] <= mem[mm+1];
-		mem[PREGS/4-1] <= mem[0];
+		mem[PREGS/4-2] <= mem[1];
 	end
 	if (rot & en)
-		o <= {8'b0,N[1:0],mem[0]};
+		o <= {8'b0,N[1:0],mem[1]};
 end
 
 endmodule

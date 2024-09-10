@@ -34,11 +34,15 @@
 //
 // ============================================================================
 
+import const_pkg::*;
 import QuplsPkg::*;
 
-module Qupls_agen(clk, next, ir, a, b, i, Ra, Rb, pc, res);
+module Qupls_agen(rst, clk, next, out, tlb_v, ir, a, b, i, Ra, Rb, pc, res, resv);
+input rst;
 input clk;
 input next;								// calculate for next cache line
+input out;
+input tlb_v;
 input instruction_t ir;
 input value_t a;
 input value_t b;
@@ -47,6 +51,7 @@ input aregno_t Ra;
 input aregno_t Rb;
 input pc_address_t pc;
 output value_t res;
+output reg resv;
 
 value_t as, bs;
 value_t res1;
@@ -57,7 +62,7 @@ always_comb
 always_comb
 	bs = b << ir.lsn.sc;
 
-always_ff @(posedge clk)
+always_comb
 begin
 	case(ir.any.opcode)
 	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,
@@ -72,7 +77,26 @@ begin
 	endcase
 end
 
-always_comb
+always_ff @(posedge clk)
 	res = next ? {res1[$bits(value_t)-1:6] + 2'd1,6'd0} : res1;
+
+// Make Agen valid sticky
+// The agen takes a clock cycle to compute after the out signal is valid.
+reg resv1;
+always_ff @(posedge clk) 
+if (rst) begin
+	resv <= INV;
+	resv1 <= INV;
+end
+else begin
+	if (out)
+		resv1 <= VAL;
+	resv <= resv1;
+	if (tlb_v) begin
+		resv1 <= INV;
+		resv <= INV;
+	end
+end
+
 
 endmodule

@@ -41,11 +41,12 @@
 //
 import QuplsPkg::*;
 
-module Qupls_reg_renamer3(rst,clk,en,list2free,tags2free,freevals,
+module Qupls_reg_renamer3(rst,clk,clk5x,en,list2free,tags2free,freevals,
 	alloc0,alloc1,alloc2,alloc3,wo0,wo1,wo2,wo3,wv0,wv1,wv2,wv3,avail,stall);
 parameter NFTAGS = 4;
 input rst;
 input clk;
+input clk5x;
 input en;
 input [PREGS-1:0] list2free;
 input pregno_t [NFTAGS-1:0] tags2free;		// register tags to free
@@ -65,6 +66,10 @@ output reg wv3 = 1'b0;
 output reg [PREGS-1:0] avail = {{PREGS-1{1'b1}},1'b0};				// recorded in ROB
 output reg stall;			// stall enqueue while waiting for register availability
 
+wire pe_alloc0;
+wire pe_alloc1;
+wire pe_alloc2;
+wire pe_alloc3;
 reg rot0 = 1'b0;
 reg rot1 = 1'b0;
 reg rot2 = 1'b0;
@@ -73,6 +78,7 @@ reg stalla0 = 1'b0;
 reg stalla1 = 1'b0;
 reg stalla2 = 1'b0;
 reg stalla3 = 1'b0;
+reg [PREGS-1:0] next_avail;
 always_comb stall = stalla0|stalla1|stalla2|stalla3;
 
 always_comb stalla0 = ~avail[wo0];
@@ -84,10 +90,15 @@ always_comb wv1 = avail[wo1];
 always_comb wv2 = avail[wo2];
 always_comb wv3 = avail[wo3];
 
-always_comb rot0 = alloc0|~avail[wo0];
-always_comb rot1 = alloc1|~avail[wo1];
-always_comb rot2 = alloc2|~avail[wo2];
-always_comb rot3 = alloc3|~avail[wo3];
+always_comb rot0 = alloc0;
+always_comb rot1 = alloc1;
+always_comb rot2 = alloc2;
+always_comb rot3 = alloc3;
+
+edge_det ued0 (.rst(rst), .clk(clk5x), .ce(1'b1), .i(alloc0&clk&en), .pe(pe_alloc0), .ne(), .ee());
+edge_det ued1 (.rst(rst), .clk(clk5x), .ce(1'b1), .i(alloc1&clk&en), .pe(pe_alloc1), .ne(), .ee());
+edge_det ued2 (.rst(rst), .clk(clk5x), .ce(1'b1), .i(alloc2&clk&en), .pe(pe_alloc2), .ne(), .ee());
+edge_det ued3 (.rst(rst), .clk(clk5x), .ce(1'b1), .i(alloc3&clk&en), .pe(pe_alloc3), .ne(), .ee());
 
 Qupls_renamer_srl #(0) usrl0 (
 	.rst(rst),
@@ -121,35 +132,75 @@ Qupls_renamer_srl #(3) usrl3 (
 	.o(wo3)
 );
 
+always_comb
+begin
+	if (wo0==wo1 || wo0==wo2 || wo0==wo3) begin
+		$display("Q+: matching rename registers");
+		$finish;
+	end
+	if (wo1==wo2 || wo1==wo3) begin
+		$display("Q+: matching rename registers");
+		$finish;
+	end
+	if (wo2==wo3) begin
+		$display("Q+: matching rename registers");
+		$finish;
+	end
+end
+
+always_comb
+if (rst) begin
+	next_avail = {{PREGS-1{1'b1}},1'b0};
+	next_avail[1023] = 1'b0;
+	next_avail[767] = 1'b0;
+	next_avail[511] = 1'b0;
+	next_avail[255] = 1'b0;
+	next_avail[0] = 1'b0;
+	next_avail[256] = 1'b0;
+	next_avail[512] = 1'b0;
+	next_avail[768] = 1'b0;
+end
+else begin
+	
+	next_avail = avail;
+
+	if (alloc0 & avail[wo0])
+		next_avail[wo0] = 1'b0;
+	if (freevals[0])
+		next_avail[tags2free[0]] = 1'b1;
+	
+	if (alloc1 & avail[wo1])
+		next_avail[wo1] = 1'b0;
+	if (freevals[1])
+		next_avail[tags2free[1]] = 1'b1;
+
+	if (alloc2 & avail[wo2])
+		next_avail[wo2] = 1'b0;
+	if (freevals[2])
+		next_avail[tags2free[2]] = 1'b1;
+
+	if (alloc3 & avail[wo3])
+		next_avail[wo3] = 1'b0;
+	if (freevals[3])
+		next_avail[tags2free[3]] = 1'b1;
+
+	next_avail = next_avail | list2free;
+	next_avail[1023] = 1'b0;
+	next_avail[767] = 1'b0;
+	next_avail[511] = 1'b0;
+	next_avail[255] = 1'b0;
+	next_avail[0] = 1'b0;
+	next_avail[256] = 1'b0;
+	next_avail[512] = 1'b0;
+	next_avail[768] = 1'b0;
+end
+
 always_ff @(posedge clk)
 if (rst)
-	avail <= {{PREGS-1{1'b1}},1'b0};
+	avail <= next_avail;
 else begin
-	if (en) begin
-
-		if (alloc0 & avail[wo0])
-			avail[wo0] <= 1'b0;
-		if (freevals[0])
-			avail[tags2free[0]] <= 1'b1;
-		
-		if (alloc1 & avail[wo1])
-			avail[wo1] <= 1'b0;
-		if (freevals[1])
-			avail[tags2free[1]] <= 1'b1;
-
-		if (alloc2 & avail[wo2])
-			avail[wo2] <= 1'b0;
-		if (freevals[2])
-			avail[tags2free[2]] <= 1'b1;
-
-		if (alloc3 & avail[wo3])
-			avail[wo3] <= 1'b0;
-		if (freevals[3])
-			avail[tags2free[3]] <= 1'b1;
-			
-		avail <= avail | list2free;
-		avail[0] <= 1'b0;
-	end
+	if (en)
+		avail <= next_avail;
 end
 
 endmodule
