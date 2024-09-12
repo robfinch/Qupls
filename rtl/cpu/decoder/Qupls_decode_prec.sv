@@ -38,46 +38,53 @@ import QuplsPkg::*;
 
 module Qupls_decode_prec(instr, prec);
 input instruction_t instr;
-output [1:0] prec;
+output memsz_t prec;
 
-function [1:0] fnPrec;
+function memsz_t fnPrec;
 input instruction_t ir;
 begin
 	case(ir.r2.opcode)
-	OP_CHK:	fnPrec = 2'b11;
-	OP_R2:	fnPrec = ir.r2.prc;
+	OP_CHK:	fnPrec = QuplsPkg::hexi;
+	OP_R2:	fnPrec = QuplsPkg::hexi;
 	OP_ADDI:	
-		fnPrec = ir.ri.prc;
-	OP_SUBFI:	fnPrec = ir.ri.prc;
+		fnPrec = QuplsPkg::hexi;
+	OP_SUBFI:	fnPrec = QuplsPkg::hexi;
 	OP_CMPI:	
-		fnPrec = ir.ri.prc;
+		fnPrec = QuplsPkg::hexi;
 	OP_MULI:	
-		fnPrec = ir.ri.prc;
+		fnPrec = QuplsPkg::hexi;
 	OP_DIVI:	
-		fnPrec = ir.ri.prc;
+		fnPrec = QuplsPkg::hexi;
 	OP_ANDI:	
-		fnPrec = ir.ri.prc;
+		fnPrec = QuplsPkg::hexi;
 	OP_ORI:
-		fnPrec = ir.ri.prc;
+		fnPrec = QuplsPkg::hexi;
 	OP_EORI:
-		fnPrec = ir.ri.prc;
+		fnPrec = QuplsPkg::hexi;
 	OP_ADDSI,OP_ORSI,OP_ANDSI,OP_EORSI:
-						fnPrec = ir[19:18];
+						fnPrec = QuplsPkg::hexi;
 	OP_SHIFT:
-		fnPrec = ir[40:39];
-	OP_FLT3:	fnPrec = ir.f3.prc;
-	OP_CSR:		fnPrec = 2'b10;
-	OP_MOV:		fnPrec = 2'b10;
-	OP_LDAX:	fnPrec = 2'b10;
+		case(ir[43:41])
+		3'd0:	fnPrec = QuplsPkg::byt;
+		3'd1:	fnPrec = QuplsPkg::wyde;
+		3'd2:	fnPrec = QuplsPkg::tetra;
+		3'd3:	fnPrec = QuplsPkg::octa;
+		3'd4: fnPrec = QuplsPkg::hexi;
+		default:	fnPrec = QuplsPkg::hexi;
+		endcase
+	OP_FLT3:	fnPrec = QuplsPkg::octa;
+	OP_CSR:		fnPrec = QuplsPkg::octa;
+	OP_MOV:		fnPrec = QuplsPkg::hexi;
+	OP_LDAX:	fnPrec = QuplsPkg::octa;
 	OP_QFEXT,
 	OP_VEC,OP_VECZ,
 	OP_NOP,OP_PUSH,OP_POP,OP_ENTER,OP_LEAVE,OP_ATOM:
-		fnPrec = 2'b10;
+		fnPrec = QuplsPkg::hexi;
 	OP_FENCE:
-		fnPrec = 2'b10;
+		fnPrec = QuplsPkg::hexi;
 	OP_BSR,OP_JSR:
-		fnPrec = 2'b101;
-	default:	fnPrec = 2'b10;
+		fnPrec = QuplsPkg::octa;
+	default:	fnPrec = QuplsPkg::hexi;
 	endcase
 end
 endfunction

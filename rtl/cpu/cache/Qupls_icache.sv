@@ -68,28 +68,28 @@ input rst;
 input clk;
 input ce;
 input invce;
-input QuplsPkg::address_t snoop_adr;
+input cpu_types_pkg::address_t snoop_adr;
 input snoop_v;
 input [5:0] snoop_cid;
 input invall;
 input invline;
-input QuplsPkg::asid_t ip_asid;
-input QuplsPkg::code_address_t ip;
-output QuplsPkg::code_address_t ip_o;
+input cpu_types_pkg::asid_t ip_asid;
+input cpu_types_pkg::code_address_t ip;
+output cpu_types_pkg::code_address_t ip_o;
 output reg ihit_o;
 output reg ihit;
 output ICacheLine ic_line_hi_o;
 output ICacheLine ic_line_lo_o;
 output reg ic_valid;
-output QuplsPkg::asid_t miss_asid;
-output QuplsPkg::code_address_t miss_vadr;
+output cpu_types_pkg::asid_t miss_asid;
+output cpu_types_pkg::code_address_t miss_vadr;
 input ICacheLine ic_line_i;
 input [LOG_WAYS:0] wway;
 input wr_ic;
 input nop;
 output nop_o;
-input QuplsPkg::code_address_t dp;
-input QuplsPkg::asid_t dp_asid;
+input cpu_types_pkg::code_address_t dp;
+input cpu_types_pkg::asid_t dp_asid;
 output reg dhit_o;
 output ICacheLine dc_line_o;
 output reg dc_valid;
@@ -110,7 +110,7 @@ reg [LOG_WAYS:0] ic_rwaye,ic_rwayo,wway;
 always_comb icache_wre = wr_ic && !ic_line_i.vtag[LOBIT-1] && !port_i;
 always_comb icache_wro = wr_ic &&  ic_line_i.vtag[LOBIT-1] && !port_i;
 always_comb icache_wrd = wr_ic && port_i;
-QuplsPkg::code_address_t ip2, dp2;
+cpu_types_pkg::code_address_t ip2, dp2;
 cache_tag_t [WAYS-1:0] victage;
 cache_tag_t [WAYS-1:0] victago;
 cache_tag_t victagd;
@@ -135,7 +135,7 @@ wire dhit1;
 reg ihit2e, ihit2o;
 reg dhit2;
 wire ihit2;
-wire valid2e, valid2o;
+wire valid2e, valid2o, valid2d;
 reg nop2;
 
 always_ff @(posedge clk)
@@ -322,9 +322,9 @@ begin
 	vcne = NVICTIM;
 	vcno = NVICTIM;
 	for (n = 0; n < NVICTIM; n = n + 1) begin
-		if (victim_cache[n].vtag[$bits(QuplsPkg::address_t)-1:LOBIT-1]=={ip[$bits(QuplsPkg::address_t)-1:LOBIT]+ip[LOBIT-1],1'b0} && victim_cache[n].v==4'hF)
+		if (victim_cache[n].vtag[$bits(cpu_types_pkg::address_t)-1:LOBIT-1]=={ip[$bits(cpu_types_pkg::address_t)-1:LOBIT]+ip[LOBIT-1],1'b0} && victim_cache[n].v==4'hF)
 			vcne = n;
-		if (victim_cache[n].vtag[$bits(QuplsPkg::address_t)-1:LOBIT-1]=={ip[$bits(QuplsPkg::address_t)-1:LOBIT],1'b1} && victim_cache[n].v==4'hF)
+		if (victim_cache[n].vtag[$bits(cpu_types_pkg::address_t)-1:LOBIT-1]=={ip[$bits(cpu_types_pkg::address_t)-1:LOBIT],1'b1} && victim_cache[n].v==4'hF)
 			vcno = n;
 	end
 end
@@ -352,7 +352,7 @@ always_comb
 			else begin
 				ic_line_hi_o = 'd0;
 				ic_line_hi_o.v = {4{ihit2o}};
-				ic_line_hi_o.vtag = {ip2[$bits(QuplsPkg::address_t)-1:LOBIT],1'b1,{LOBIT-1{1'b0}}};
+				ic_line_hi_o.vtag = {ip2[$bits(cpu_types_pkg::address_t)-1:LOBIT],1'b1,{LOBIT-1{1'b0}}};
 				ic_line_hi_o.data = ic_oline.data;
 			end
 			if (vce) begin
@@ -362,7 +362,7 @@ always_comb
 			else begin
 				ic_line_lo_o = 'd0;
 				ic_line_lo_o.v = {4{ihit2e}};
-				ic_line_lo_o.vtag = {ip2[$bits(QuplsPkg::address_t)-1:LOBIT],{LOBIT{1'b0}}};
+				ic_line_lo_o.vtag = {ip2[$bits(cpu_types_pkg::address_t)-1:LOBIT],{LOBIT{1'b0}}};
 				ic_line_lo_o.data = ic_eline.data;
 			end
 		end
@@ -375,7 +375,7 @@ always_comb
 			else begin
 				ic_line_hi_o = 'd0;
 				ic_line_hi_o.v = {4{ihit2e}};
-				ic_line_hi_o.vtag = {ip2[$bits(QuplsPkg::address_t)-1:LOBIT]+1'b1,{LOBIT{1'b0}}};
+				ic_line_hi_o.vtag = {ip2[$bits(cpu_types_pkg::address_t)-1:LOBIT]+1'b1,{LOBIT{1'b0}}};
 				ic_line_hi_o.data = ic_eline.data;
 			end
 			if (vco) begin
@@ -385,7 +385,7 @@ always_comb
 			else begin
 				ic_line_lo_o = 'd0;
 				ic_line_lo_o.v = {4{ihit2o}};
-				ic_line_lo_o.vtag = {ip2[$bits(QuplsPkg::address_t)-1:LOBIT],1'b1,{LOBIT-1{1'b0}}};
+				ic_line_lo_o.vtag = {ip2[$bits(cpu_types_pkg::address_t)-1:LOBIT],1'b1,{LOBIT-1{1'b0}}};
 				ic_line_lo_o.data = ic_oline.data;
 			end
 		end
@@ -394,7 +394,7 @@ always_comb
 always_comb
 begin
 	dc_line_o.v = {4{dhit2}};
-	dc_line_o.vtag = {dp2[$bits(QuplsPkg::address_t)-1:LOBIT-1],{LOBIT-1{1'b0}}};
+	dc_line_o.vtag = {dp2[$bits(cpu_types_pkg::address_t)-1:LOBIT-1],{LOBIT-1{1'b0}}};
 	dc_line_o.data = dc_line.data;
 end
 
@@ -577,31 +577,31 @@ else begin
 	// in size. So, there is no need to compare every physical address, just every
 	// address in a set will do.
 	if (snoop_v && snoop_cid != CID) begin
-		if (snoop_adr[$bits(QuplsPkg::address_t)-1:TAGBIT]==ptagse[0])
+		if (snoop_adr[$bits(cpu_types_pkg::address_t)-1:TAGBIT]==ptagse[0])
 			valide[0][snoop_adr[HIBIT:LOBIT]] <= 1'b0;
-		if (snoop_adr[$bits(QuplsPkg::address_t)-1:TAGBIT]==ptagse[1])
+		if (snoop_adr[$bits(cpu_types_pkg::address_t)-1:TAGBIT]==ptagse[1])
 			valide[1][snoop_adr[HIBIT:LOBIT]] <= 1'b0;
-		if (snoop_adr[$bits(QuplsPkg::address_t)-1:TAGBIT]==ptagse[2])
+		if (snoop_adr[$bits(cpu_types_pkg::address_t)-1:TAGBIT]==ptagse[2])
 			valide[2][snoop_adr[HIBIT:LOBIT]] <= 1'b0;
-		if (snoop_adr[$bits(QuplsPkg::address_t)-1:TAGBIT]==ptagse[3])
+		if (snoop_adr[$bits(cpu_types_pkg::address_t)-1:TAGBIT]==ptagse[3])
 			valide[3][snoop_adr[HIBIT:LOBIT]] <= 1'b0;
 
-		if (snoop_adr[$bits(QuplsPkg::address_t)-1:TAGBIT]==ptagso[0])
+		if (snoop_adr[$bits(cpu_types_pkg::address_t)-1:TAGBIT]==ptagso[0])
 			valido[0][snoop_adr[HIBIT:LOBIT]] <= 1'b0;
-		if (snoop_adr[$bits(QuplsPkg::address_t)-1:TAGBIT]==ptagso[1])
+		if (snoop_adr[$bits(cpu_types_pkg::address_t)-1:TAGBIT]==ptagso[1])
 			valido[1][snoop_adr[HIBIT:LOBIT]] <= 1'b0;
-		if (snoop_adr[$bits(QuplsPkg::address_t)-1:TAGBIT]==ptagso[2])
+		if (snoop_adr[$bits(cpu_types_pkg::address_t)-1:TAGBIT]==ptagso[2])
 			valido[2][snoop_adr[HIBIT:LOBIT]] <= 1'b0;
-		if (snoop_adr[$bits(QuplsPkg::address_t)-1:TAGBIT]==ptagso[3])
+		if (snoop_adr[$bits(cpu_types_pkg::address_t)-1:TAGBIT]==ptagso[3])
 			valido[3][snoop_adr[HIBIT:LOBIT]] <= 1'b0;
 
 		/*
-		if (snoop_adr[$bits(QuplsPkg::address_t)-1:TAGBIT]==ptagsd)
+		if (snoop_adr[$bits(cpu_types_pkg::address_t)-1:TAGBIT]==ptagsd)
 			validd[0][snoop_adr[HIBIT:LOBIT]] <= 1'b0;
 		*/
 	// Invalidate victim cache entries matching the snoop address
 		for (g = 0; g < NVICTIM; g = g + 1) begin
-			if (snoop_adr[$bits(QuplsPkg::address_t)-1:LOBIT]==victim_cache[g].ptag[$bits(QuplsPkg::address_t)-1:LOBIT])
+			if (snoop_adr[$bits(cpu_types_pkg::address_t)-1:LOBIT]==victim_cache[g].ptag[$bits(cpu_types_pkg::address_t)-1:LOBIT])
 				victim_cache[g].v <= 4'h0;
 		end
 	end
@@ -621,11 +621,11 @@ always_comb
 
 always_comb
 	if (!ihit1e)
-		miss_vadr = {ip[$bits(QuplsPkg::address_t)-1:LOBIT]+ip[LOBIT-1],1'b0,{LOBIT-1{1'b0}}};
+		miss_vadr = {ip[$bits(cpu_types_pkg::address_t)-1:LOBIT]+ip[LOBIT-1],1'b0,{LOBIT-1{1'b0}}};
 	else if (!ihit1o)
-		miss_vadr = {ip[$bits(QuplsPkg::address_t)-1:LOBIT],1'b1,{LOBIT-1{1'b0}}};
+		miss_vadr = {ip[$bits(cpu_types_pkg::address_t)-1:LOBIT],1'b1,{LOBIT-1{1'b0}}};
 //	else if (!dhit1)
-//		miss_vadr = {dp[$bits(QuplsPkg::address_t)-1:LOBIT-1],{LOBIT-1{1'b0}}};
+//		miss_vadr = {dp[$bits(cpu_types_pkg::address_t)-1:LOBIT-1],{LOBIT-1{1'b0}}};
 	else
 		miss_vadr = 32'hFFFD0000;
 

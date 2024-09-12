@@ -47,13 +47,13 @@ input clka;
 input en;
 input [NPORT-1:0] wr;
 input checkpt_ndx_t [NPORT-1:0] wc;
-input pregno_t [NPORT-1:0] wa;
-input aregno_t [NPORT-1:0] awa;		// debugging
+input cpu_types_pkg::pregno_t [NPORT-1:0] wa;
+input cpu_types_pkg::aregno_t [NPORT-1:0] awa;		// debugging
 input setall;
 input [NPORT-1:0] i;
 input clkb;
 input checkpt_ndx_t [NRDPORT-1:0] rc;
-input pregno_t [NRDPORT-1:0] ra;
+input cpu_types_pkg::pregno_t [NRDPORT-1:0] ra;
 output reg [NRDPORT-1:0] o;
 
 reg [NPORT-1:0] wr1;
@@ -112,8 +112,10 @@ for (g = 0; g < NPORT; g = g + 1) begin
 	for (q = 0; q < 16; q = q + 1) begin
 		always_comb
 			begin
-				dina[g][q] <= douta[g][q];
-				dina[g][wc1[g]] <= i1[g];
+				if (q==wc1[g])
+					dina[g][q] <= i1[g];
+				else
+					dina[g][q] <= douta[g][q];
 			end
 	end
 	always_comb

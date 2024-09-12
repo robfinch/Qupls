@@ -51,10 +51,10 @@ input hit;
 input tlb_v;
 input fta_address_t miss_vadr;
 input fta_address_t miss_padr;
-input QuplsPkg::asid_t miss_asid;
+input cpu_types_pkg::asid_t miss_asid;
 output fta_cmd_request128_t wbm_req;
 input full;
-output QuplsPkg::address_t [15:0] vtags;
+output cpu_types_pkg::address_t [15:0] vtags;
 input snoop_v;
 input fta_address_t snoop_adr;
 input [5:0] snoop_cid;
@@ -67,7 +67,7 @@ typedef enum logic [3:0] {
 } state_t;
 state_t req_state;
 
-QuplsPkg::address_t madr, vadr, padr;
+cpu_types_pkg::address_t madr, vadr, padr;
 reg [7:0] lfsr_cnt;
 reg [3:0] tid_cnt;
 wire [16:0] lfsr_o;

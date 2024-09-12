@@ -41,12 +41,14 @@
 // 800 LUTs
 // ============================================================================
 
+import QuplsPkg::*;
+
 module Qupls_micro_code(om, ipl, micro_ip, micro_ir, next_ip, instr, regx);
 input operating_mode_t om;
 input [2:0] ipl;
-input mc_address_t micro_ip;
+input cpu_types_pkg::mc_address_t micro_ip;
 input ex_instruction_t micro_ir;
-output mc_address_t next_ip;
+output cpu_types_pkg::mc_address_t next_ip;
 output ex_instruction_t instr;
 output reg [3:0] regx;
 parameter R0 = 5'd0;
@@ -116,7 +118,7 @@ case(micro_ip)
 12'h004:
 	begin
 		next_ip=12'h005;
-		instr.ins={20'h1FFFE0,2'd2,SP,SP,1'b0,OP_ADDI};
+		instr.ins={24'hFFFFC0,2'd2,2'b0,SP,2'b0,SP,1'b0,OP_ADDI};
 		case(om)
 		2'd0: begin instr.aRa=SUSP; instr.aRt=SUSP; end
 		2'd1: begin instr.aRa=SSSP; instr.aRt=SSSP; end
@@ -4118,7 +4120,7 @@ case(micro_ip)
 		2'd0:	instr.ins.any.opcode = OP_STW;
 		2'd1: instr.ins.any.opcode = OP_STT;
 		2'd2:	instr.ins.any.opcode = OP_STO;
-		2'd4:	instr.ins.any.opcode = OP_STB;
+		2'd3:	instr.ins.any.opcode = OP_STB;
 		default:	instr.ins.any.opcode = OP_STO;
 		endcase	
 	end
@@ -4169,7 +4171,7 @@ case(micro_ip)
 		2'd0:	instr.ins.any.opcode = OP_LDW;
 		2'd1: instr.ins.any.opcode = OP_LDT;
 		2'd2:	instr.ins.any.opcode = OP_LDO;
-		2'd4:	instr.ins.any.opcode = OP_LDB;
+		2'd3:	instr.ins.any.opcode = OP_LDB;
 		default:	instr.ins.any.opcode = OP_LDO;
 		endcase	
 	end
@@ -4185,7 +4187,7 @@ case(micro_ip)
 		2'd0:	instr.ins.any.opcode = OP_STW;
 		2'd1: instr.ins.any.opcode = OP_STT;
 		2'd2:	instr.ins.any.opcode = OP_STO;
-		2'd4:	instr.ins.any.opcode = OP_STB;
+		2'd3:	instr.ins.any.opcode = OP_STB;
 		default:	instr.ins.any.opcode = OP_STO;
 		endcase	
 	end
@@ -4243,7 +4245,7 @@ case(micro_ip)
 		2'd0:	instr.ins.any.opcode = OP_LDW;
 		2'd1: instr.ins.any.opcode = OP_LDT;
 		2'd2:	instr.ins.any.opcode = OP_LDO;
-		2'd4:	instr.ins.any.opcode = OP_LDB;
+		2'd3:	instr.ins.any.opcode = OP_LDB;
 		default:	instr.ins.any.opcode = OP_LDO;
 		endcase	
 	end
@@ -4259,7 +4261,7 @@ case(micro_ip)
 		2'd0:	instr.ins.any.opcode = OP_LDW;
 		2'd1: instr.ins.any.opcode = OP_LDT;
 		2'd2:	instr.ins.any.opcode = OP_LDO;
-		2'd4:	instr.ins.any.opcode = OP_LDB;
+		2'd3:	instr.ins.any.opcode = OP_LDB;
 		default:	instr.ins.any.opcode = OP_LDO;
 		endcase	
 	end
@@ -4334,7 +4336,7 @@ case(micro_ip)
 		2'd0:	instr.ins.any.opcode = OP_LDW;
 		2'd1: instr.ins.any.opcode = OP_LDT;
 		2'd2:	instr.ins.any.opcode = OP_LDO;
-		2'd4:	instr.ins.any.opcode = OP_LDB;
+		2'd3:	instr.ins.any.opcode = OP_LDB;
 		default:	instr.ins.any.opcode = OP_LDO;
 		endcase	
 	end

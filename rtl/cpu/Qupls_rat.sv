@@ -90,14 +90,14 @@ input [BBIT:0] wrbanka;
 input [BBIT:0] wrbankb;
 input [BBIT:0] wrbankc;
 input [BBIT:0] wrbankd;
-input aregno_t wra;	// architectural register
-input aregno_t wrb;
-input aregno_t wrc;
-input aregno_t wrd;
-input pregno_t wrra;	// physical register
-input pregno_t wrrb;
-input pregno_t wrrc;
-input pregno_t wrrd;
+input cpu_types_pkg::aregno_t wra;	// architectural register
+input cpu_types_pkg::aregno_t wrb;
+input cpu_types_pkg::aregno_t wrc;
+input cpu_types_pkg::aregno_t wrd;
+input cpu_types_pkg::pregno_t wrra;	// physical register
+input cpu_types_pkg::pregno_t wrrb;
+input cpu_types_pkg::pregno_t wrrc;
+input cpu_types_pkg::pregno_t wrrd;
 input cmtav;							// commit valid
 input cmtbv;
 input cmtcv;
@@ -110,25 +110,25 @@ input [BBIT:0] cmtbanka;
 input [BBIT:0] cmtbankb;
 input [BBIT:0] cmtbankc;
 input [BBIT:0] cmtbankd;
-input aregno_t cmtaa;				// architectural register being committed
-input aregno_t cmtba;
-input aregno_t cmtca;
-input aregno_t cmtda;
-input pregno_t cmtap;				// physical register to commit
-input pregno_t cmtbp;
-input pregno_t cmtcp;
-input pregno_t cmtdp;
+input cpu_types_pkg::aregno_t cmtaa;				// architectural register being committed
+input cpu_types_pkg::aregno_t cmtba;
+input cpu_types_pkg::aregno_t cmtca;
+input cpu_types_pkg::aregno_t cmtda;
+input cpu_types_pkg::pregno_t cmtap;				// physical register to commit
+input cpu_types_pkg::pregno_t cmtbp;
+input cpu_types_pkg::pregno_t cmtcp;
+input cpu_types_pkg::pregno_t cmtdp;
 input cmtbr;								// comitting a branch
 input [BBIT:0] rnbank [NPORT-1:0];
-input aregno_t [NPORT-1:0] rn;		// architectural register
+input cpu_types_pkg::aregno_t [NPORT-1:0] rn;		// architectural register
 input [NPORT-1:0] rnv;
 input checkpt_ndx_t [NPORT-1:0] rn_cp;
-output pregno_t [NPORT-1:0] rrn;	// physical register
+output cpu_types_pkg::pregno_t [NPORT-1:0] rrn;	// physical register
 output reg [NPORT-1:0] vn;			// register valid
-output pregno_t freea;	// previous register to free
-output pregno_t freeb;
-output pregno_t freec;
-output pregno_t freed;
+output cpu_types_pkg::pregno_t freea;	// previous register to free
+output cpu_types_pkg::pregno_t freeb;
+output cpu_types_pkg::pregno_t freec;
+output cpu_types_pkg::pregno_t freed;
 output reg [PREGS-1:0] free_bitlist;	// bit vector of registers to free on branch miss
 
 
@@ -157,7 +157,7 @@ reg stomp_act;
 // There is also an extra write bit. These are defaulted to prevent sim issues.
 
 always_comb
-	cpram_en = en|new_chkpt1;
+	cpram_en = en|new_chkpt1|cpram_we;
 always_ff @(posedge clk)
 	cpram_en1 <= cpram_en;
 
@@ -165,7 +165,7 @@ Qupls_checkpointRam cpram1
 (
 	.clka(clk),
 	.ena(cpram_we),
-	.wea({1'b1,cpram_we}),
+	.wea(cpram_we),
 	.addra(wndx),
 	.dina({4'd0,cpram_in}),
 	.douta(cpram_wout),
@@ -177,8 +177,8 @@ Qupls_checkpointRam cpram1
 
 reg [7:0] cpv_wr;
 checkpt_ndx_t [7:0] cpv_wc;
-pregno_t [7:0] cpv_wa;
-aregno_t [7:0] cpv_awa;
+cpu_types_pkg::pregno_t [7:0] cpv_wa;
+cpu_types_pkg::aregno_t [7:0] cpv_awa;
 reg [7:0] cpv_i;
 wire [NPORT-1:0] cpv_o;
 /*
@@ -287,10 +287,10 @@ always_ff @(posedge clk)
 if (cpv_wr[6] && cpv_wa[6]==9'd263)
 	$display("Q+ CPV263=%d, wc[6]=%d, wc[6]=%d", cpv_i, cpv_wc[6], cpv_wc[6]);
 
-pregno_t prev_rn0;
-pregno_t prev_rn1;
-pregno_t prev_rn2;
-pregno_t prev_rn3;
+cpu_types_pkg::pregno_t prev_rn0;
+cpu_types_pkg::pregno_t prev_rn1;
+cpu_types_pkg::pregno_t prev_rn2;
+cpu_types_pkg::pregno_t prev_rn3;
 reg prev_vn0;
 reg prev_vn1;
 reg prev_vn2;
@@ -333,7 +333,7 @@ generate begin : gRRN
 	for (g = 0; g < NPORT; g = g + 1) begin
 		always_comb
 			// Bypass target registers only.
-			if ((g % 4)==3) begin
+			if ((g % 4)==3 && g < 17) begin
 				if (rn[g]==9'd0)
 					rrn[g] = 11'd0;
 				/* bypass all or none
@@ -356,7 +356,7 @@ generate begin : gRRN
 		// Unless it us a target register, we want the old unbypassed value.
 		always_comb
 			
-			if ((g % 4)==3) begin
+			if ((g % 4)==3 && g < 17) begin
 				if (rn[g]==9'd0)
 					vn[g] = 1'b1;
 				// If an incoming target register is being marked invalid and it matches
@@ -394,7 +394,7 @@ generate begin : gRRN
 				else
 				case(g)
 				// First instruction of group, no bypass needed.
-				4'd0,4'd1,4'd2,5'd16:
+				4'd0,4'd1,4'd2,5'd16,5'd17:
 					begin
 						if (rn[g]==9'd0)
 							vn[g] = 1'b1;
@@ -420,7 +420,7 @@ generate begin : gRRN
 							vn[g] = cpv_o[g];
 					end
 				// Second instruction of group, bypass only if first instruction target is same.
-				4'd4,4'd5,4'd6:
+				4'd4,4'd5,4'd6,5'd18:
 					if (rn[g]==9'd0)
 						vn[g] = 1'b1;
 					else if (rn[g]==rn[3] && rnv[3])
@@ -450,7 +450,7 @@ generate begin : gRRN
 					else
 						vn[g] = cpv_o[g];
 				// Third instruction, check two previous ones.
-				4'd8,4'd9,4'd10:
+				4'd8,4'd9,4'd10,5'd19:
 					if (rn[g]==9'd0)
 						vn[g] = 1'b1;
 					else if (rn[g]==rn[3] && rnv[3])
@@ -486,7 +486,7 @@ generate begin : gRRN
 					else
 						vn[g] = cpv_o[g];
 				// Fourth instruction, check three previous ones.						
-				4'd12,4'd13,4'd14:
+				4'd12,4'd13,4'd14,5'd20:
 					begin
 						if (rn[g]==9'd0)
 							vn[g] = 1'b1;
@@ -729,14 +729,14 @@ else begin
 		cpram_outrp <= cpram_out;
 end
 
-pregno_t wrra1;
-pregno_t wrrb1;
-pregno_t wrrc1;
-pregno_t wrrd1;
-aregno_t wra1;
-aregno_t wrb1;
-aregno_t wrc1;
-aregno_t wrd1;
+cpu_types_pkg::pregno_t wrra1;
+cpu_types_pkg::pregno_t wrrb1;
+cpu_types_pkg::pregno_t wrrc1;
+cpu_types_pkg::pregno_t wrrd1;
+cpu_types_pkg::aregno_t wra1;
+cpu_types_pkg::aregno_t wrb1;
+cpu_types_pkg::aregno_t wrc1;
+cpu_types_pkg::aregno_t wrd1;
 always_ff @(posedge clk) if (wr0a) wr0a <= 1'b0; else if (en) wr0a <= wr0;
 always_ff @(posedge clk) if (wr1a) wr1a <= 1'b0; else if (en) wr1a <= wr1;
 always_ff @(posedge clk) if (wr2a) wr2a <= 1'b0; else if (en) wr2a <= wr2;
@@ -757,26 +757,52 @@ always_comb
 if (rst)
 	cpram_in = {$bits(cpram_in){1'b1}};
 else begin
-	cpram_in = cpram_wout;
 	if (new_chkpt1) begin
+		cpram_in = cpram_out;
 		cpram_in.avail = avail_i;
 	end
-		
+	else begin
+		cpram_in = cpram_wout;
+		if (wr0) begin
+			cpram_in.regmap[wra] = wrra;
+			$display("Qupls RAT: tgta %d reg %d replaced with %d.", wra, cpram_out.regmap[wra], wrra);
+		end
+		if (wr1 && XWID > 1) begin
+			cpram_in.regmap[wrb] = wrrb;
+			$display("Qupls RAT: tgtb %d reg %d replaced with %d.", wrb, cpram_out.regmap[wrb], wrrb);
+		end
+		if (wr2 && XWID > 2) begin
+			cpram_in.regmap[wrc] = wrrc;
+			$display("Qupls RAT: tgtc %d reg %d replaced with %d.", wrc, cpram_out.regmap[wrc], wrrc);
+		end
+		if (wr3 && XWID > 3) begin
+			cpram_in.regmap[wrd] = wrrd;
+			$display("Qupls RAT: tgtd %d reg %d replaced with %d.", wrd, cpram_out.regmap[wrd], wrrd);
+		end
+	end
 	if (wr0) begin
-		cpram_in.regmap[wra] = wrra;
-		$display("Qupls RAT: tgta %d reg %d replaced with %d.", wra, cpram_out.regmap[wra], wrra);
+		if (wrra==10'd0 && wra != 8'd0) begin
+			$display("Q+ RAT: mapping register to r0");
+			$finish;
+		end
 	end
-	if (wr1 && XWID > 1) begin
-		cpram_in.regmap[wrb] = wrrb;
-		$display("Qupls RAT: tgtb %d reg %d replaced with %d.", wrb, cpram_out.regmap[wrb], wrrb);
+	if (wr1) begin
+		if (wrrb==10'd0 && wrb != 8'd0) begin
+			$display("Q+ RAT: mapping register to r0");
+			$finish;
+		end
 	end
-	if (wr2 && XWID > 2) begin
-		cpram_in.regmap[wrc] = wrrc;
-		$display("Qupls RAT: tgtc %d reg %d replaced with %d.", wrc, cpram_out.regmap[wrc], wrrc);
+	if (wr2) begin
+		if (wrrc==10'd0 && wrc != 8'd0) begin
+			$display("Q+ RAT: mapping register to r0");
+			$finish;
+		end
 	end
-	if (wr3 && XWID > 3) begin
-		cpram_in.regmap[wrd] = wrrd;
-		$display("Qupls RAT: tgtd %d reg %d replaced with %d.", wrd, cpram_out.regmap[wrd], wrrd);
+	if (wr3) begin
+		if (wrrd==10'd0 && wrd != 8'd0) begin
+			$display("Q+ RAT: mapping register to r0");
+			$finish;
+		end
 	end
 	
 	/*

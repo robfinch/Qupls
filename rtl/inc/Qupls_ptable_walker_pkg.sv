@@ -51,9 +51,9 @@ typedef struct packed {
 	logic bc;					// 1=bus cycle complete
 	logic [1:0] qn;
 	QuplsPkg::rob_ndx_t id;
-	QuplsPkg::asid_t asid;
-	QuplsPkg::address_t adr;		// address to translate
-	QuplsPkg::address_t tadr;		// temporary address
+	cpu_types_pkg::asid_t asid;
+	cpu_types_pkg::address_t adr;		// address to translate
+	cpu_types_pkg::address_t tadr;		// temporary address
 } ptw_miss_queue_t;
 
 typedef struct packed {
@@ -61,9 +61,9 @@ typedef struct packed {
 	logic rdy;
 	fta_bus_pkg::fta_tranid_t tid;
 	logic [3:0] stk;
-	QuplsPkg::asid_t asid;
-	QuplsPkg::address_t vadr;
-	QuplsPkg::address_t padr;
+	cpu_types_pkg::asid_t asid;
+	cpu_types_pkg::address_t vadr;
+	cpu_types_pkg::address_t padr;
 	QuplsMmupkg::spte_t pte;
 	logic [127:0] dat;
 } ptw_tran_buf_t;

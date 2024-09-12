@@ -39,24 +39,24 @@ import QuplsPkg::SIM;
 import QuplsPkg::PREGS;
 
 module Qupls_regfileRam(clka, ena, wea, addra, dina, clkb, enb, addrb, doutb);
-parameter WID=$bits(value_t);
+parameter WID=$bits(cpu_types_pkg::value_t);
 parameter DEP=PREGS;
 localparam RBIT=$clog2(DEP)-1;
 input clka;
 input ena;
 input wea;
 input [RBIT:0] addra;
-input value_t dina;
+input cpu_types_pkg::value_t dina;
 input clkb;
 input enb;
 input [RBIT:0] addrb;
-output value_t doutb;
+output cpu_types_pkg::value_t doutb;
 
 integer n;
 // The following outside of generate to make it easier to reference in SIM code.
 // It should be stripped out for synthesis as it would not be referenced.
 (* RAM_STYLE="distributed" *)
-value_t mem [0:DEP-1];
+cpu_types_pkg::value_t mem [0:DEP-1];
 reg [RBIT:0] raddrb;
 initial begin
 	for (n = 0; n < DEP; n = n + 1)
@@ -83,7 +83,7 @@ else begin
       .AUTO_SLEEP_TIME(0),            // DECIMAL
       .BYTE_WRITE_WIDTH_A(WID),       // DECIMAL
       .CASCADE_HEIGHT(0),             // DECIMAL
-      .CLOCKING_MODE("common_clock"), // String
+      .CLOCKING_MODE("independent_clock"), // String
       .ECC_MODE("no_ecc"),            // String
       .MEMORY_INIT_FILE("none"),      // String
       .MEMORY_INIT_PARAM("0"),        // String

@@ -49,16 +49,16 @@ input clk;
 input clk5x;
 input en;
 input [PREGS-1:0] list2free;
-input pregno_t [NFTAGS-1:0] tags2free;		// register tags to free
+input cpu_types_pkg::pregno_t [NFTAGS-1:0] tags2free;		// register tags to free
 input [NFTAGS-1:0] freevals;					// bitmnask indicating which tags to free
 input alloc0;					// allocate target register 0
 input alloc1;
 input alloc2;
 input alloc3;
-output pregno_t wo0;	// target register tag
-output pregno_t wo1;
-output pregno_t wo2;
-output pregno_t wo3;
+output cpu_types_pkg::pregno_t wo0;	// target register tag
+output cpu_types_pkg::pregno_t wo1;
+output cpu_types_pkg::pregno_t wo2;
+output cpu_types_pkg::pregno_t wo3;
 output reg wv0 = 1'b0;
 output reg wv1 = 1'b0;
 output reg wv2 = 1'b0;
@@ -151,14 +151,14 @@ end
 always_comb
 if (rst) begin
 	next_avail = {{PREGS-1{1'b1}},1'b0};
-	next_avail[1023] = 1'b0;
-	next_avail[767] = 1'b0;
-	next_avail[511] = 1'b0;
-	next_avail[255] = 1'b0;
+	next_avail[PREGS-1] = 1'b0;
+	next_avail[PREGS*3/4-1] = 1'b0;
+	next_avail[PREGS/2-1] = 1'b0;
+	next_avail[PREGS/4-1] = 1'b0;
 	next_avail[0] = 1'b0;
-	next_avail[256] = 1'b0;
-	next_avail[512] = 1'b0;
-	next_avail[768] = 1'b0;
+	next_avail[PREGS/4] = 1'b0;
+	next_avail[PREGS/2] = 1'b0;
+	next_avail[PREGS*3/4] = 1'b0;
 end
 else begin
 	
@@ -185,14 +185,14 @@ else begin
 		next_avail[tags2free[3]] = 1'b1;
 
 	next_avail = next_avail | list2free;
-	next_avail[1023] = 1'b0;
-	next_avail[767] = 1'b0;
-	next_avail[511] = 1'b0;
-	next_avail[255] = 1'b0;
+	next_avail[PREGS-1] = 1'b0;
+	next_avail[PREGS*3/4-1] = 1'b0;
+	next_avail[PREGS/2-1] = 1'b0;
+	next_avail[PREGS/4-1] = 1'b0;
 	next_avail[0] = 1'b0;
-	next_avail[256] = 1'b0;
-	next_avail[512] = 1'b0;
-	next_avail[768] = 1'b0;
+	next_avail[PREGS/4] = 1'b0;
+	next_avail[PREGS/2] = 1'b0;
+	next_avail[PREGS*3/4] = 1'b0;
 end
 
 always_ff @(posedge clk)

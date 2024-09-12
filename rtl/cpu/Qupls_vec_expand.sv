@@ -39,29 +39,45 @@
 
 import QuplsPkg::*;
 
-module Qupls_vec_expand(rst, clk, en, vl, mip, pc0, pc1, pc2, pc3,
+module Qupls_vec_expand(rst, clk, en, stomp_vec, mip, pc0, pc1, pc2, pc3,
 	ins0, ins1, ins2, ins3, expbuf, pcbuf, mipbuf, vim, ndxs);
 input rst;
 input clk;
 input en;
-input [4:0] vl;
-input QuplsPkg::mc_address_t mip;
-input QuplsPkg::pc_address_t pc0;
-input QuplsPkg::pc_address_t pc1;
-input QuplsPkg::pc_address_t pc2;
-input QuplsPkg::pc_address_t pc3;
+input stomp_vec;
+input cpu_types_pkg::mc_address_t mip;
+input cpu_types_pkg::pc_address_t pc0;
+input cpu_types_pkg::pc_address_t pc1;
+input cpu_types_pkg::pc_address_t pc2;
+input cpu_types_pkg::pc_address_t pc3;
 input ex_instruction_t ins0;
 input ex_instruction_t ins1;
 input ex_instruction_t ins2;
 input ex_instruction_t ins3;
 output ex_instruction_t [31:0] expbuf;
-output QuplsPkg::pc_address_t [31:0] pcbuf;
-output QuplsPkg::mc_address_t [31:0] mipbuf;
+output cpu_types_pkg::pc_address_t [31:0] pcbuf;
+output cpu_types_pkg::mc_address_t [31:0] mipbuf;
 output reg [31:0] vim;		// valid instruction mask
 output reg [4:0] ndxs [0:31];
 
-integer nn, jj, kk;
+integer nn, jj;
+genvar g;
 ex_instruction_t nopi;
+
+// Define a NOP instruction.
+always_comb
+begin
+	nopi.pc = RSTPC;
+	nopi.mcip = 12'h1A0;
+	nopi.len = 4'd6;
+	nopi.ins = {41'd0,OP_NOP};
+	nopi.pred_btst = 6'd0;
+	nopi.element = 'd0;
+	nopi.aRa = 8'd0;
+	nopi.aRb = 8'd0;
+	nopi.aRc = 8'd0;
+	nopi.aRt = 8'd0;
+end
 
 // Detect a vector instruction.
 wire ins0vec = ins0.ins.r3.vec;
@@ -76,15 +92,6 @@ wire [15:0] i3pfx =	{4'h0,ins3.ins.r3.Rc.v,ins3.ins.r3.Rb.v,ins3.ins.r3.Ra.v,ins
 	
 always_ff @(posedge clk)
 if (rst) begin
-	nopi.pc = RSTPC;
-	nopi.mcip = 12'h1A0;
-	nopi.ins[7:0] = OP_NOP;
-	nopi.aRa = 'd0;
-	nopi.aRb = 'd0;
-	nopi.aRc = 'd0;
-	nopi.aRt = 'd0;
-	nopi.element = 'd0;
-	nopi.len = 8'd1;
 	vim = 32'd0;
 	for (nn = 0; nn < 32; nn = nn + 1) begin
 		pcbuf[nn] = RSTPC;
@@ -94,101 +101,105 @@ if (rst) begin
 	end	
 end
 else begin
+	jj = 0;
 	if (en) begin
-		// Are there any vector instructions present?
-		if (!ins0vec && !ins1vec && !ins2vec && !ins3vec) begin
-			mipbuf[0] = mip;
-			pcbuf[0] = pc0;
-			expbuf[0] = ins0;
-			vim[0] = 1'b1;
-			mipbuf[1] = mip|2'd1;
-			pcbuf[1] = pc1;
-			expbuf[1] = ins1;
-			vim[1] = 1'b1;
-			mipbuf[2] = mip|2'd2;
-			pcbuf[2] = pc2;
-			expbuf[2] = ins2;
-			vim[2] = 1'b1;
-			mipbuf[3] = mip|2'd3;
-			pcbuf[3] = pc3;
-			expbuf[3] = ins3;
-			vim[3] = 1'b1;
-			for (nn = 0; nn < 32; nn = nn + 1)
+		if (stomp_vec) begin
+			for (nn = 0; nn < 4; nn = nn + 1) begin
+				pcbuf[nn] = RSTPC;
+				expbuf[nn] = nopi;
+				mipbuf[nn] = 12'h1A0;
 				ndxs[nn] = nn;
-			vim[31:4] = 28'd0;
+			end
+			vim = 32'h0F;
 		end
 		else begin
-			if(ins0vec) begin
-				for (nn = 0; nn < QuplsPkg::VEC_ELEMENTS; nn = nn + 1) begin
-					if (nn < vl) begin
-						tExpand(nn,pc0,mip,ins0,i0pfx);
-						vim[nn] = 1'b1;
-						ndxs[nn] = nn;
-					end
-				end
-				jj = vl;
-			end
-			else begin
+			// Are there any vector instructions present?
+			if (!ins0vec && !ins1vec && !ins2vec && !ins3vec) begin
 				mipbuf[0] = mip;
 				pcbuf[0] = pc0;
 				expbuf[0] = ins0;
 				vim[0] = 1'b1;
-				ndxs[0] = 5'd0;
-				jj = 1;
+				mipbuf[1] = mip|2'd1;
+				pcbuf[1] = pc1;
+				expbuf[1] = ins1;
+				vim[1] = 1'b1;
+				mipbuf[2] = mip|2'd2;
+				pcbuf[2] = pc2;
+				expbuf[2] = ins2;
+				vim[2] = 1'b1;
+				mipbuf[3] = mip|2'd3;
+				pcbuf[3] = pc3;
+				expbuf[3] = ins3;
+				vim[3] = 1'b1;
+				for (nn = 0; nn < 32; nn = nn + 1)
+					ndxs[nn] = nn;
+				vim[31:4] = 28'd0;
 			end
-			if (ins1vec) begin
-				for (nn = 0; nn < QuplsPkg::VEC_ELEMENTS; nn = nn + 1) begin
-					if (nn < vl) begin
+			else begin
+				if(ins0vec) begin
+					for (nn = 0; nn < QuplsPkg::VEC_ELEMENTS; nn = nn + 1) begin
+						tExpand(nn,pc0,mip,ins0,i0pfx);
+						vim[nn] = 1'b1;
+						ndxs[jj] = nn;
+					end
+					jj = jj + QuplsPkg::VEC_ELEMENTS;
+				end
+				else begin
+					mipbuf[0] = mip;
+					pcbuf[0] = pc0;
+					expbuf[0] = ins0;
+					vim[0] = 1'b1;
+					ndxs[0] = 5'd0;
+					jj = 1;
+				end
+				if (ins1vec) begin
+					for (nn = 0; nn < QuplsPkg::VEC_ELEMENTS; nn = nn + 1) begin
 						tExpand(nn+8,pc1,mip|2'd1,ins1,i1pfx);
 						vim[nn+8] = 1'b1;
 						ndxs[nn+jj] = nn+8+jj;
 					end
+					jj = jj + QuplsPkg::VEC_ELEMENTS;
 				end
-				jj = jj + vl;
-			end
-			else begin
-				mipbuf[8] = mip|2'd1;
-				pcbuf[8] = pc1;
-				expbuf[8] = ins1;
-				vim[8] = 1'b1;
-				ndxs[jj] = 5'd8;
-				jj = jj + 1;
-			end
-			if (ins2vec) begin
-				for (nn = 0; nn < QuplsPkg::VEC_ELEMENTS; nn = nn + 1) begin
-					if (nn < vl) begin
+				else begin
+					mipbuf[8] = mip|2'd1;
+					pcbuf[8] = pc1;
+					expbuf[8] = ins1;
+					vim[8] = 1'b1;
+					ndxs[jj] = 5'd8;
+					jj = jj + 1;
+				end
+				if (ins2vec) begin
+					for (nn = 0; nn < QuplsPkg::VEC_ELEMENTS; nn = nn + 1) begin
 						tExpand(nn+16,pc2,mip|2'd2,ins2,i2pfx);
 						vim[nn+16] = 1'b1;
 						ndxs[nn+jj] = nn+16+jj;
 					end
+					jj = jj + QuplsPkg::VEC_ELEMENTS;
 				end
-				jj = jj + vl;
-			end
-	 		else begin
-				mipbuf[16] = mip|2'd2;
-				pcbuf[16] = pc2;
-				expbuf[16] = ins2;
-				vim[16] = 1'b1;
-				ndxs[jj] = 5'd16;
-				jj = jj + 1;
-			end
-			if (ins3vec) begin
-				for (nn = 0; nn < QuplsPkg::VEC_ELEMENTS; nn = nn + 1) begin
-					if (nn < vl) begin
+		 		else begin
+					mipbuf[16] = mip|2'd2;
+					pcbuf[16] = pc2;
+					expbuf[16] = ins2;
+					vim[16] = 1'b1;
+					ndxs[jj] = 5'd16;
+					jj = jj + 1;
+				end
+				if (ins3vec) begin
+					for (nn = 0; nn < QuplsPkg::VEC_ELEMENTS; nn = nn + 1) begin
 						tExpand(nn+24,pc3,mip|2'd3,ins3,i3pfx);
 						vim[nn+24] = 1'b1;
 						ndxs[nn+jj] = nn+24+jj;
 					end
+					jj = jj + QuplsPkg::VEC_ELEMENTS;
+				end 
+				else begin
+					mipbuf[24] = mip|2'd3;
+					pcbuf[24] = pc3;
+					expbuf[24] = ins3;
+					vim[24] = 1'b1;
+					ndxs[jj] = 5'd24;
+					jj = jj + 1;
 				end
-				jj = jj + vl;
-			end 
-			else begin
-				mipbuf[24] = mip|2'd3;
-				pcbuf[24] = pc3;
-				expbuf[24] = ins3;
-				vim[24] = 1'b1;
-				ndxs[jj] = 5'd24;
-				jj = jj + 1;
 			end
 		end
 	end
@@ -196,14 +207,14 @@ end
 
 task tExpand;
 input [5:0] nn;
-input QuplsPkg::pc_address_t pc;
-input QuplsPkg::mc_address_t mip;
+input cpu_types_pkg::pc_address_t pc;
+input cpu_types_pkg::mc_address_t mip;
 input ex_instruction_t ins;
 input [15:0] pfx;
 begin
 	mipbuf[nn] = mip;
 	pcbuf[nn] = pc;
-	expbuf[nn] = ins0;
+	expbuf[nn] = ins;
 	if (pfx[8])
 		expbuf[nn].aRt = {ins.aRt,nn[2:0]};
 	if (pfx[9])

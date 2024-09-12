@@ -61,18 +61,35 @@ input reglist_active;
 input ls_bmf;
 input [2:0] scale_regs_i;
 input pack_regs;
-input aregno_t regcnt;
+input cpu_types_pkg::aregno_t regcnt;
 output ex_instruction_t ins;
+
+ex_instruction_t nopi;
+
+// Define a NOP instruction.
+always_comb
+begin
+	nopi.pc = 32'h0;
+	nopi.mcip = 12'h000;
+	nopi.len = 4'd6;
+	nopi.ins = {41'd0,OP_NOP};
+	nopi.pred_btst = 6'd0;
+	nopi.element = 'd0;
+	nopi.aRa = 8'd0;
+	nopi.aRb = 8'd0;
+	nopi.aRc = 8'd0;
+	nopi.aRt = 8'd0;
+end
 
 always_ff @(posedge clk)
 if (rst)
-	ins <= {41'd0,OP_NOP};
+	ins <= nopi;
 else begin
 	if (en)
 		ins <= hirq ? {4'd0,vect_i[7:0],2'b0,5'd0,2'b0,5'd0,2'b0,5'd0,irq_i,1'b0,3'b0,1'b0,OP_CHK} :
-			mipv ? mc_ins : nop ? {41'd0,OP_NOP} : insi;
-	else
-		ins <= {41'd0,OP_NOP};
+			mipv ? mc_ins : nop ? nopi : insi;
+//	else
+//		ins <= {41'd0,OP_NOP};
 end
 
 endmodule

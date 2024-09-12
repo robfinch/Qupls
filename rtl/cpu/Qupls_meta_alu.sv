@@ -43,7 +43,7 @@ import QuplsPkg::*;
 module Qupls_meta_alu(rst, clk, clk2x, ld, lane, prc, ir, div, cptgt, z, a, b, bi,
 	c, i, t, qres, cs, pc, csr, cpl, canary, o, mul_done, div_done, div_dbz, exc);
 parameter ALU0 = 1'b0;
-parameter WID=64; 
+parameter WID=$bits(cpu_types_pkg::value_t); 
 input rst;
 input clk;
 input clk2x;
@@ -62,7 +62,7 @@ input [WID-1:0] i;
 input [WID-1:0] t;
 input [WID-1:0] qres;
 input [2:0] cs;
-input pc_address_t pc;
+input cpu_types_pkg::pc_address_t pc;
 input [7:0] cpl;
 input [WID-1:0] canary;
 input [WID-1:0] csr;
@@ -80,6 +80,8 @@ wire [WID/32-1:0] div_done32;
 wire [WID/32-1:0] mul_done32;
 wire [WID/64-1:0] div_done64;
 wire [WID/64-1:0] mul_done64;
+wire [WID/128-1:0] div_done128;
+wire [WID/128-1:0] mul_done128;
 integer n;
 genvar g;
 
@@ -151,8 +153,8 @@ generate begin : g32
 end
 endgenerate
 
-// Always supported.
 generate begin : g64
+	if (SUPPORT_PREC)
 	for (g = 0; g < WID/64; g = g + 1)
 		Qupls_alu #(.WID(64), .ALU0(ALU0)) ualu64
 		(
@@ -181,6 +183,40 @@ generate begin : g64
 			.div_done(div_done64[g]),
 			.div_dbz(),
 			.exc(exc64[g*8+7:g*8])
+		);
+end
+endgenerate
+
+// Always supported.
+generate begin : g128
+	for (g = 0; g < WID/128; g = g + 1)
+		Qupls_alu #(.WID(128), .ALU0(ALU0)) ualu128
+		(
+			.rst(rst),
+			.clk(clk),
+			.clk2x(clk2x),
+			.ld(ld),
+			.ir(ir),
+			.div(div),
+			.cptgt(cptgt[g]),
+			.z(z),
+			.a(a[g*128+127:g*128]),
+			.b(b[g*128+127:g*128]),
+			.bi(bi[g*128+127:g*128]),
+			.c(c[g*128+127:g*128]),
+			.i(i),
+			.t(t[g*128+127:g*128]),
+			.qres(qres[g*128+127:g*128]),
+			.cs(cs),
+			.pc(pc),
+			.csr(csr),
+			.cpl(cpl),
+			.canary(canary),
+			.o(o128[g*128+127:g*128]),
+			.mul_done(mul_done128[g]),
+			.div_done(div_done128[g]),
+			.div_dbz(),
+			.exc(exc128[g*8+7:g*8])
 		);
 end
 endgenerate
@@ -219,10 +255,10 @@ begin
 		2'd0:	o = o16;
 		2'd1:	o = o32;
 		2'd2:	o = o64;
-		2'd3:	o = {WID{1'b0}};
+		2'd3:	o = o128;
 		endcase
 	else
-		o = o64;
+		o = o128;
 	case(ir.any.opcode)
 	OP_R2:
 		case(ir.r3.func)
@@ -264,7 +300,7 @@ always_comb
 		2'd0:	mul_done = &mul_done16;
 		2'd1:	mul_done = &mul_done32;
 		2'd2:	mul_done = &mul_done64;
-		default:	mul_done = 1'b1;
+		2'd3:	mul_done = &mul_done128;
 		endcase
 	else
 		mul_done = &mul_done64;
@@ -275,7 +311,7 @@ always_comb
 		2'd0:	div_done = &div_done16;
 		2'd1:	div_done = &div_done32;
 		2'd2:	div_done = &div_done64;
-		default:	div_done = 1'b1;
+		2'd3:	div_done = &div_done128;
 		endcase
 	else
 		div_done = &div_done64;
@@ -286,9 +322,9 @@ always_comb
 		2'd0:	exc = exc16;
 		2'd1:	exc = exc32;
 		2'd2:	exc = exc64;
-		default:	exc = FLT_NONE;
+		2'd3:	exc = exc128;
 		endcase
 	else
-		exc = exc64;
+		exc = exc128;
 
 endmodule

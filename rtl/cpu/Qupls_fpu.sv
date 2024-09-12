@@ -42,22 +42,22 @@ input clk;
 input idle;
 input instruction_t ir;
 input [2:0] rm;
-input value_t a;
-input value_t b;
-input value_t c;
-input value_t t;
-input value_t i;
-input value_t p;
-output value_t o;
+input cpu_types_pkg::value_t a;
+input cpu_types_pkg::value_t b;
+input cpu_types_pkg::value_t c;
+input cpu_types_pkg::value_t t;
+input cpu_types_pkg::value_t i;
+input cpu_types_pkg::value_t p;
+output cpu_types_pkg::value_t o;
 output reg done;
 
 reg [11:0] cnt;
 reg sincos_done, scale_done, f2i_done, i2f_done, sqrt_done, fres_done, trunc_done;
 wire div_done;
-value_t bus;
-value_t fmao1, fmao2, fmao3, fmao4, fmao5, fmao6, fmao7;
-value_t scaleo, f2io, i2fo, signo, cmpo, divo, sqrto, freso, trunco;
-value_t cvtS2Do;
+cpu_types_pkg::value_t bus;
+cpu_types_pkg::value_t fmao1, fmao2, fmao3, fmao4, fmao5, fmao6, fmao7;
+cpu_types_pkg::value_t scaleo, f2io, i2fo, signo, cmpo, divo, sqrto, freso, trunco;
+cpu_types_pkg::value_t cvtS2Do;
 wire ce = 1'b1;
 wire cd_args;
 
@@ -79,7 +79,7 @@ fpScaleb64 uscal1
 	.o(scaleo)
 );
 
-value_t sino, coso;
+cpu_types_pkg::value_t sino, coso;
 
 fpSincos64 usincos1
 (
@@ -93,9 +93,9 @@ fpSincos64 usincos1
 );
 
 reg fmaop, fma_done;
-value_t fmac;
-value_t fmab;
-value_t fmao;
+cpu_types_pkg::value_t fmac;
+cpu_types_pkg::value_t fmab;
+cpu_types_pkg::value_t fmao;
 
 always_comb
 	if (ir.f3.func==FN_FMS || ir.f3.func==FN_FNMS)
@@ -281,8 +281,8 @@ begin
 		case(ir.f3.func)
 		FN_FLT1:
 			case(ir.f1.func)
-			FN_FABS:	bus = {1'b0,a[$bits(value_t)-2:0]};
-			FN_FNEG:	bus = {a[$bits(value_t)-1]^1'b1,a[$bits(value_t)-2:0]};
+			FN_FABS:	bus = {1'b0,a[$bits(cpu_types_pkg::value_t)-2:0]};
+			FN_FNEG:	bus = {a[$bits(cpu_types_pkg::value_t)-1]^1'b1,a[$bits(cpu_types_pkg::value_t)-2:0]};
 			FN_FTOI:	bus = f2io;
 			FN_ITOF:	bus = i2fo;
 			FN_FSIGN:	bus = signo;

@@ -39,7 +39,7 @@ import QuplsPkg::*;
 
 module Qupls_stomp(rst, clk, ihit, advance_pipeline, advance_pipeline_seg2, 
 	micro_code_active, branchmiss, branch_state, 
-	stomp_f, stomp_x1, stomp_x2, stomp_x3, stomp_d, stomp_r, stomp_q, stomp_qm
+	stomp_fet, stomp_mux, stomp_vec, stomp_pck, stomp_dec, stomp_ren, stomp_que, stomp_quem
 	);
 input rst;
 input clk;
@@ -49,14 +49,14 @@ input advance_pipeline_seg2;
 input micro_code_active;
 input branchmiss;
 input branch_state_t branch_state;
-output reg stomp_f;
-output reg stomp_x1;
-output reg stomp_x2;
-output reg stomp_x3;
-output reg stomp_d;
-output reg stomp_r;
-output reg stomp_q;
-output reg stomp_qm;
+output reg stomp_fet;
+output reg stomp_mux;			// IRQ / micro-code Mux stage
+output reg stomp_vec;			// Vector expand stage
+output reg stomp_pck;			// instruction Pack stage.
+output reg stomp_dec;
+output reg stomp_ren;
+output reg stomp_que;
+output reg stomp_quem;
 
 // Instruction stomp waterfall.
 
@@ -66,88 +66,85 @@ output reg stomp_qm;
 
 always_comb
 begin
-	stomp_f = FALSE;
+	stomp_fet = FALSE;
 	if ((!ihit)// && !micro_code_active)
 //		|| branchmiss
 //		|| (branch_state >= BS_CHKPT_RESTORE && branch_state <= BS_DONE2)
-//		|| (do_bsr && !stomp_x1)
-//		|| stomp_f1a
+//		|| (do_bsr && !stomp_mux)
+//		|| stomp_fet1a
 		)
-		stomp_f = TRUE;
+		stomp_fet = TRUE;
 end
 
-wire next_stomp_x1 = (stomp_f && !micro_code_active)
+wire next_stomp_mux = (stomp_fet && !micro_code_active)
 								|| branchmiss
 								|| (branch_state >= BS_CHKPT_RESTORE && branch_state <= BS_DONE2)
-//								|| (do_bsr && !stomp_x1)
+//								|| (do_bsr && !stomp_mux)
 //								|| do_bsr2
 								;
 always_ff @(posedge clk)
 if (rst)
-	stomp_x1 <= TRUE;
+	stomp_mux <= TRUE;
 else begin
 	if (advance_pipeline)
-		stomp_x1 <= next_stomp_x1;
+		stomp_mux <= next_stomp_mux;
 end
 
-wire next_stomp_x2 = stomp_x1
+wire next_stomp_vec = stomp_mux
 								|| branchmiss
 								|| (branch_state >= BS_CHKPT_RESTORE && branch_state <= BS_DONE2)
-//								|| (do_bsr && !stomp_x1)
+//								|| (do_bsr && !stomp_mux)
 //								|| do_bsr2
 								;
 always_ff @(posedge clk)
 if (rst)
-	stomp_x2 <= TRUE;
+	stomp_vec <= TRUE;
 else begin
 	if (advance_pipeline)
-		stomp_x2 <= next_stomp_x2;
+		stomp_vec <= next_stomp_vec;
 end
 
-wire next_stomp_x3 = stomp_x2
+wire next_stomp_pck = stomp_vec
 								|| branchmiss
 								|| (branch_state >= BS_CHKPT_RESTORE && branch_state <= BS_DONE2)
-//								|| (do_bsr && !stomp_x1)
+//								|| (do_bsr && !stomp_mux)
 //								|| do_bsr2
 								;
 always_ff @(posedge clk)
 if (rst)
-	stomp_x3 <= TRUE;
+	stomp_pck <= TRUE;
 else begin
 	if (advance_pipeline)
-		stomp_x3 <= next_stomp_x3;
+		stomp_pck <= next_stomp_pck;
 end
 
 // If a micro-code instruction is decoded stomp on the next decode stage.
 // An instruction group following the micro-code was at the fetch stage and
 // would be propagated to decode before the micro-code becomes active.
 
-wire next_stomp_d = stomp_x3
+wire next_stomp_dec = stomp_pck
 								|| branchmiss
 								|| (branch_state >= BS_CHKPT_RESTORE && branch_state <= BS_DONE2)
-//								|| (do_bsr && !stomp_x1)
+//								|| (do_bsr && !stomp_mux)
 								;
 always_ff @(posedge clk)
 if (rst)
-	stomp_d <= TRUE;
+	stomp_dec <= TRUE;
 else begin
 	if (advance_pipeline)
-		stomp_d <= next_stomp_d;
+		stomp_dec <= next_stomp_dec;
 end
-// pe_mca is delayed a cycle. A stomp is needed at decode stage.
-always_comb
-	stomp_d = stomp_d;// && !micro_code_active_x;// || pe_mca;
 
-wire next_stomp_r = stomp_d
+wire next_stomp_ren = stomp_dec
 								|| branchmiss
 								|| (branch_state >= BS_CHKPT_RESTORE && branch_state <= BS_DONE2)
 								;
 always_ff @(posedge clk)
 if (rst)
-	stomp_r <= TRUE;
+	stomp_ren <= TRUE;
 else begin
 	if (advance_pipeline_seg2)
-		stomp_r <= next_stomp_r;
+		stomp_ren <= next_stomp_ren;
 end
 
 // Q cannot be stomped on in the same manner as the other stages as rename
@@ -158,21 +155,21 @@ end
 
 always_ff @(posedge clk)
 if (rst)
-	stomp_q <= TRUE;
+	stomp_que <= TRUE;
 else begin
 	if (advance_pipeline_seg2)
-		stomp_q <= stomp_r;
+		stomp_que <= stomp_ren;
 end	
 
-wire next_stomp_qm = 	 branchmiss
+wire next_stomp_quem = 	 branchmiss
 								|| (branch_state >= BS_CHKPT_RESTORE && branch_state <= BS_DONE2)
 								;
 always_ff @(posedge clk)
 if (rst)
-	stomp_qm <= TRUE;
+	stomp_quem <= TRUE;
 else begin
 	if (advance_pipeline_seg2)
-		stomp_qm <= next_stomp_qm;
+		stomp_quem <= next_stomp_quem;
 end	
 
 

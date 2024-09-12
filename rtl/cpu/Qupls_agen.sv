@@ -43,30 +43,71 @@ input clk;
 input next;								// calculate for next cache line
 input out;
 input tlb_v;
-input instruction_t ir;
-input value_t a;
-input value_t b;
-input value_t i;
-input aregno_t Ra;
-input aregno_t Rb;
-input pc_address_t pc;
-output value_t res;
+input ex_instruction_t ir;
+input cpu_types_pkg::value_t a;
+input cpu_types_pkg::value_t b;
+input cpu_types_pkg::value_t i;
+input cpu_types_pkg::aregno_t Ra;
+input cpu_types_pkg::aregno_t Rb;
+input cpu_types_pkg::pc_address_t pc;
+output cpu_types_pkg::value_t res;
 output reg resv;
 
-value_t as, bs;
-value_t res1;
+cpu_types_pkg::value_t as, bs;
+cpu_types_pkg::value_t res1;
 
 always_comb
+if (ir.ins.any.vec) begin
+	case(ir.ins.any.opcode)
+	OP_LDB,OP_LDBU,OP_STB:
+		begin
+			if (ir.ins.r3.Rt.n)
+				as = a + ir.aRa[2:0];	// unpacked
+			else
+				as = a + ir.eno[2:0];	// packed
+		end
+	OP_LDW,OP_LDWU,OP_STW:
+		begin
+			if (ir.ins.r3.Rt.n)
+				as = a + {ir.aRa[2:0],1'b0};	// unpacked
+			else
+				as = a + {ir.eno[2:0],1'b0};	// packed
+		end
+	OP_LDT,OP_LDTU,OP_STT:
+		begin
+			if (ir.ins.r3.Rt.n)
+				as = a + {ir.aRa[2:0],2'b0};	// unpacked
+			else
+				as = a + {ir.eno[2:0],2'b0};	// packed
+		end
+	OP_LDO,OP_LDOU,OP_STO:
+		begin
+			if (ir.ins.r3.Rt.n)
+				as = a + {ir.aRa[2:0],3'b0};	// unpacked
+			else
+				as = a + {ir.eno[2:0],3'b0};	// packed
+		end
+	OP_LDH,OP_STH,OP_CLOAD,OP_CSTORE:
+		begin
+			if (ir.ins.r3.Rt.n)
+				as = a + {ir.aRa[2:0],4'h0};	// unpacked
+			else
+				as = a + {ir.eno[2:0],4'h0};	// packed
+		end
+	endcase
+end
+else
 	as = a;
 
 always_comb
-	bs = b << ir.lsn.sc;
+	bs = b << ir.ins.lsn.sc;
 
 always_comb
 begin
-	case(ir.any.opcode)
-	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,
-	OP_STB,OP_STW,OP_STT,OP_STO:
+	case(ir.ins.any.opcode)
+	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,
+	OP_LDO,OP_LDH,OP_CLOAD,
+	OP_STB,OP_STW,OP_STT,OP_STO,OP_STH,OP_CSTORE:
 		res1 <= as + i;
 	OP_LDX,OP_STX:
 		res1 <= as + bs + {{53{ir.lsn.disp[11]}},ir.lsn.disp};
@@ -78,7 +119,7 @@ begin
 end
 
 always_ff @(posedge clk)
-	res = next ? {res1[$bits(value_t)-1:6] + 2'd1,6'd0} : res1;
+	res = next ? {res1[$bits(cpu_types_pkg::value_t)-1:6] + 2'd1,6'd0} : res1;
 
 // Make Agen valid sticky
 // The agen takes a clock cycle to compute after the out signal is valid.

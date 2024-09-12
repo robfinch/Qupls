@@ -42,20 +42,20 @@ input clk;
 input en;
 input operating_mode_t om;
 input [2:0] ipl;
-input ex_instruction_t [5:0] instr;
+input ex_instruction_t instr;
 output decode_bus_t dbo;
 
 ex_instruction_t ins;
 decode_bus_t db;
 
 always_comb
-	ins = instr[0];
+	ins = instr;
 
 assign db.v = 1'b1;
 
 Qupls_decode_imm udcimm
 (
-	.ins(instr),
+	.ins(ins),
 	.imma(db.imma),
 	.immb(db.immb),
 	.immc(db.immc),
@@ -90,7 +90,7 @@ Qupls_decode_Rc udcrc
 (
 	.om(om),
 	.ipl(ipl),
-	.instr(instr),
+	.instr(ins),
 	.has_immc(db.has_immc),
 	.Rc(db.Rc),
 	.Rcz(db.Rcz),
@@ -106,6 +106,12 @@ Qupls_decode_Rt udcrt
 	.Rt(db.Rt),
 	.Rtz(db.Rtz),
 	.Rtn(db.Rtn)
+);
+
+Qupls_decode_Rm udcrm
+(
+	.instr(ins),
+	.Rm(db.Rm)
 );
 
 Qupls_decode_r2 ur2
@@ -353,7 +359,7 @@ Qupls_decode_swap uswp1
 always_ff @(posedge clk)
 if (rst) begin
 	dbo <= {$bits(dbo){1'd0}};
-	dbo.nop = 1'b1;
+	dbo.nop <= 1'b1;
 end
 else begin
 	if (en) begin

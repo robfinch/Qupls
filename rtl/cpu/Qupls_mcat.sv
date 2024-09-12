@@ -40,7 +40,7 @@ import QuplsPkg::*;
 module Qupls_mcat(stomp, ir, mip);
 input stomp;
 input ex_instruction_t ir;
-output mc_address_t mip;
+output cpu_types_pkg::mc_address_t mip;
 
 always_comb
 if (stomp)

@@ -43,7 +43,8 @@
 import const_pkg::*;
 import QuplsPkg::*;
 
-module Qupls_extract_ins(rst_i, clk_i, en_i, nop_i, nop_o, irq_i, hirq_i, vect_i,
+module Qupls_extract_ins(rst_i, clk_i, en_i, nop_i, stomp_vec, stomp_pac, nop_o, 
+	irq_i, hirq_i, vect_i,
 	branchmiss, misspc, mipv_i, mip_i, ic_line_i,reglist_active, grp_i, grp_o,
 	mc_offs, pc0_i, pc1_i, pc2_i, pc3_i, vl,
 	ls_bmf_i, pack_regs_i, scale_regs_i, regcnt_i, mc_adr,
@@ -57,29 +58,31 @@ input rst_i;
 input clk_i;
 input en_i;
 input nop_i;
+input stomp_vec;
+input stomp_pac;
 output reg nop_o;
 input [2:0] irq_i;
 input hirq_i;
-input [8:0] vect_i;
+input [7:0] vect_i;
 input reglist_active;
 input branchmiss;
-input pc_address_t misspc;
+input cpu_types_pkg::pc_address_t misspc;
 input mipv_i;
 input [11:0] mip_i;
-input pc_address_t mc_adr;
+input cpu_types_pkg::pc_address_t mc_adr;
 input [1023:0] ic_line_i;
 input [2:0] grp_i;
 output reg [2:0] grp_o;
-input pc_address_t mc_offs;
-input pc_address_t pc0_i;
-input pc_address_t pc1_i;
-input pc_address_t pc2_i;
-input pc_address_t pc3_i;
+input cpu_types_pkg::pc_address_t mc_offs;
+input cpu_types_pkg::pc_address_t pc0_i;
+input cpu_types_pkg::pc_address_t pc1_i;
+input cpu_types_pkg::pc_address_t pc2_i;
+input cpu_types_pkg::pc_address_t pc3_i;
 input [4:0] vl;
 input ls_bmf_i;
 input pack_regs_i;
 input [2:0] scale_regs_i;
-input aregno_t regcnt_i;
+input cpu_types_pkg::aregno_t regcnt_i;
 input ex_instruction_t mc_ins0_i;
 input ex_instruction_t mc_ins1_i;
 input ex_instruction_t mc_ins2_i;
@@ -92,16 +95,16 @@ output ex_instruction_t ins0_o;
 output ex_instruction_t ins1_o;
 output ex_instruction_t ins2_o;
 output ex_instruction_t ins3_o;
-output pc_address_t pc0_o;
-output pc_address_t pc1_o;
-output pc_address_t pc2_o;
-output pc_address_t pc3_o;
-output mc_address_t mcip0_o;
-output mc_address_t mcip1_o;
-output mc_address_t mcip2_o;
-output mc_address_t mcip3_o;
+output cpu_types_pkg::pc_address_t pc0_o;
+output cpu_types_pkg::pc_address_t pc1_o;
+output cpu_types_pkg::pc_address_t pc2_o;
+output cpu_types_pkg::pc_address_t pc3_o;
+output cpu_types_pkg::mc_address_t mcip0_o;
+output cpu_types_pkg::mc_address_t mcip1_o;
+output cpu_types_pkg::mc_address_t mcip2_o;
+output cpu_types_pkg::mc_address_t mcip3_o;
 output reg do_bsr;
-output pc_address_t bsr_tgt;
+output cpu_types_pkg::pc_address_t bsr_tgt;
 input get;
 output reg stall;
 
@@ -113,15 +116,15 @@ wire en = en_i;
 wire mipv = mipv_i;
 wire ls_bmf = ls_bmf_i;
 wire pack_regs = pack_regs_i;
-aregno_t regcnt;
-pc_address_t pc0;
-pc_address_t pc1;
-pc_address_t pc2;
-pc_address_t pc3;
-pc_address_t pc0d;
-pc_address_t pc1d;
-pc_address_t pc2d;
-pc_address_t pc3d;
+cpu_types_pkg::aregno_t regcnt;
+cpu_types_pkg::pc_address_t pc0;
+cpu_types_pkg::pc_address_t pc1;
+cpu_types_pkg::pc_address_t pc2;
+cpu_types_pkg::pc_address_t pc3;
+cpu_types_pkg::pc_address_t pc0d;
+cpu_types_pkg::pc_address_t pc1d;
+cpu_types_pkg::pc_address_t pc2d;
+cpu_types_pkg::pc_address_t pc3d;
 ex_instruction_t ins0;
 ex_instruction_t ins1;
 ex_instruction_t ins2;
@@ -136,19 +139,35 @@ ex_instruction_t mc_ins2;
 ex_instruction_t mc_ins3;
 wire [11:0] mip = mip_i;
 reg [255:0] ic_line_aligned;
-mc_address_t mcip0;
-mc_address_t mcip1;
-mc_address_t mcip2;
-mc_address_t mcip3;
+cpu_types_pkg::mc_address_t mcip0;
+cpu_types_pkg::mc_address_t mcip1;
+cpu_types_pkg::mc_address_t mcip2;
+cpu_types_pkg::mc_address_t mcip3;
 reg ld;
 
 wire hirq = ~reglist_active && hirq_i && mip[11:8]!=4'h1;
 ex_instruction_t [31:0] expbuf;
 ex_instruction_t [31:0] expbuf2;
-pc_address_t [31:0] pcbuf;
-pc_address_t [31:0] pcbuf2;
-mc_address_t [31:0] mipbuf;
-mc_address_t [31:0] mipbuf2;
+cpu_types_pkg::pc_address_t [31:0] pcbuf;
+cpu_types_pkg::pc_address_t [31:0] pcbuf2;
+cpu_types_pkg::mc_address_t [31:0] mipbuf;
+cpu_types_pkg::mc_address_t [31:0] mipbuf2;
+ex_instruction_t nopi;
+
+// Define a NOP instruction.
+always_comb
+begin
+	nopi.pc = RSTPC;
+	nopi.mcip = 12'h1A0;
+	nopi.len = 4'd6;
+	nopi.ins = {41'd0,OP_NOP};
+	nopi.pred_btst = 6'd0;
+	nopi.element = 'd0;
+	nopi.aRa = 8'd0;
+	nopi.aRb = 8'd0;
+	nopi.aRc = 8'd0;
+	nopi.aRt = 8'd0;
+end
 
 always_comb regcnt = regcnt_i;
 always_comb pc0 = pc0_i;
@@ -232,10 +251,10 @@ always_comb nop3 = FALSE;
 */
 reg bsr0,bsr1,bsr2,bsr3;
 reg do_bsr1;
-pc_address_t bsr0_tgt;
-pc_address_t bsr1_tgt;
-pc_address_t bsr2_tgt;
-pc_address_t bsr3_tgt;
+cpu_types_pkg::pc_address_t bsr0_tgt;
+cpu_types_pkg::pc_address_t bsr1_tgt;
+cpu_types_pkg::pc_address_t bsr2_tgt;
+cpu_types_pkg::pc_address_t bsr3_tgt;
 
 always_ff @(posedge clk)
 if (rst_i) begin
@@ -380,7 +399,7 @@ Qupls_vec_expand uxvec1
 	.rst(rst_i),
 	.clk(clk),
 	.en(en_i & ld),
-	.vl(vl),
+	.stomp_vec(stomp_vec),
 	.mip(mip_i),
 	.pc0(pc0d),
 	.pc1(pc1d),
@@ -400,10 +419,15 @@ Qupls_vec_expand uxvec1
 always_ff @(posedge clk)
 if (rst_i) begin
 	kk <= 6'd0;
-	ins0_o.ins <= {41'hFA00,OP_NOP};
-	ins1_o.ins <= {41'hFA01,OP_NOP};
-	ins2_o.ins <= {41'hFA02,OP_NOP};
-	ins3_o.ins <= {41'hFA03,OP_NOP};
+	kkmask <= 32'd0;
+	ins0_o <= nopi;
+	ins1_o <= nopi;
+	ins2_o <= nopi;
+	ins3_o <= nopi;
+	ins0_o.ins <= {41'hFA000,OP_NOP};
+	ins1_o.ins <= {41'hFA010,OP_NOP};
+	ins2_o.ins <= {41'hFA020,OP_NOP};
+	ins3_o.ins <= {41'hFA030,OP_NOP};
 	pc0_o <= RSTPC;
 	pc1_o <= RSTPC;
 	pc2_o <= RSTPC;
@@ -420,20 +444,47 @@ if (rst_i) begin
 	mipbuf2 <= {32{12'h1A0}};
 end
 else begin
+	ins0_o.pc <= RSTPC;
+	ins1_o.pc <= RSTPC;
+	ins2_o.pc <= RSTPC;
+	ins3_o.pc <= RSTPC;
 	if (en||get) begin
 		if (get) begin
-			ins0_o <= expbuf2[ndxs[0]];
-			ins1_o <= expbuf2[ndxs[1]];
-			ins2_o <= expbuf2[ndxs[2]];
-			ins3_o <= expbuf2[ndxs[3]];
-			pc0_o <= expbuf2[ndxs[0]].pc;
-			pc1_o <= expbuf2[ndxs[1]].pc;
-			pc2_o <= expbuf2[ndxs[2]].pc;
-			pc3_o <= expbuf2[ndxs[3]].pc;
-			mcip0 <= expbuf2[ndxs[0]].mcip;
-			mcip1 <= expbuf2[ndxs[1]].mcip;
-			mcip2 <= expbuf2[ndxs[2]].mcip;
-			mcip3 <= expbuf2[ndxs[3]].mcip;
+			if (stomp_pac) begin
+				ins0_o <= nopi;
+				ins1_o <= nopi;
+				ins2_o <= nopi;
+				ins3_o <= nopi;
+				pc0_o <= RSTPC;
+				pc1_o <= RSTPC;
+				pc2_o <= RSTPC;
+				pc3_o <= RSTPC;
+				mcip0 <= 12'h1A0;
+				mcip1 <= 12'h1A0;
+				mcip2 <= 12'h1A0;
+				mcip3 <= 12'h1A0;
+				kkmask <= 32'h0;
+			end
+			else begin
+				ins0_o <= expbuf2[ndxs[0]];
+				ins1_o <= expbuf2[ndxs[1]];
+				ins2_o <= expbuf2[ndxs[2]];
+				ins3_o <= expbuf2[ndxs[3]];
+				/*
+				pc0_o <= expbuf2[ndxs[0]].pc;
+				pc1_o <= expbuf2[ndxs[1]].pc;
+				pc2_o <= expbuf2[ndxs[2]].pc;
+				pc3_o <= expbuf2[ndxs[3]].pc;
+				*/
+				pc0_o <= pcbuf2[ndxs[0]];
+				pc1_o <= pcbuf2[ndxs[1]];
+				pc2_o <= pcbuf2[ndxs[2]];
+				pc3_o <= pcbuf2[ndxs[3]];
+				mcip0 <= expbuf2[ndxs[0]].mcip;
+				mcip1 <= expbuf2[ndxs[1]].mcip;
+				mcip2 <= expbuf2[ndxs[2]].mcip;
+				mcip3 <= expbuf2[ndxs[3]].mcip;
+			end
 			for (hh = 0; hh < 28; hh = hh + 1)
 				ndxs[hh] <= ndxs[hh+4];
 			kkmask <= kkmask >> 4'd4;
@@ -446,6 +497,10 @@ else begin
 			mipbuf2 <= mipbuf;
 		end
 	end
+	ins0_o.len <= 4'd6;
+	ins1_o.len <= 4'd6;
+	ins2_o.len <= 4'd6;
+	ins3_o.len <= 4'd6;
 end
 
 always_comb

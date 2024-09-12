@@ -41,7 +41,7 @@ import QuplsPkg::*;
 module Qupls_info(ndx, coreno, o);
 input [63:0] coreno;
 input [4:0] ndx;
-output value_t o;
+output cpu_types_pkg::value_t o;
 
 always_comb
 	case(ndx)

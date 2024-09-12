@@ -59,7 +59,7 @@ localparam LOG_WAYS = $clog2(WAYS)-1;
 input rst;
 input clk;
 input dce;										// 1= data cache enabled
-input QuplsPkg::address_t snoop_adr;
+input cpu_types_pkg::address_t snoop_adr;
 input snoop_v;								// 1= valid snoop taking place
 input [5:0] snoop_cid;
 input cache_load;							// 1= load operation, 0=update
@@ -82,13 +82,13 @@ input dc_invall;
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 // Data Cache
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-typedef logic [$bits(QuplsPkg::address_t)-1:T6] cache_tag_t;
+typedef logic [$bits(cpu_types_pkg::address_t)-1:T6] cache_tag_t;
 typedef struct packed
 {
 	logic resv;			// make struct a multiple of eight
 	logic v;
 	logic m;
-	QuplsPkg::asid_t asid;
+	cpu_types_pkg::asid_t asid;
 	cache_tag_t tag;
 	logic [Qupls_cache_pkg::DCacheLineWidth-1:0] data;
 } cache_line_t;
@@ -173,7 +173,7 @@ begin
 	cline_in.v <= 1'b1;					// Whether updating the line or loading a new one, always valid.
 	cline_in.m <= ~cache_load;	// It is not modified if it is a fresh load.
 	cline_in.asid <= cpu_req_i.asid;
-	cline_in.tag <= cpu_req_i.vadr[$bits(QuplsPkg::address_t)-1:T6];
+	cline_in.tag <= cpu_req_i.vadr[32-1:T6];
 	if (cache_load)
 		cline_in.data <= update_data_i.dat;
 	else
@@ -216,7 +216,7 @@ for (g = 0; g < WAYS; g = g + 1) begin : gFor
 		.wr(wr && way==g && cache_load),
 		.wadr(vndx),
 		.radr(snoop_adr[HIBIT:LOBIT]),
-		.i(update_data_i.adr[$bits(QuplsPkg::address_t)-1:T6]),
+		.i(update_data_i.adr[32-1:T6]),
 		.o(ptags[g])
 	);
 
@@ -381,12 +381,12 @@ end
 always_comb
 begin
 	for (j = 0; j < WAYS; j = j + 1) begin
-	  hits[j] = lines[j[LOG_WAYS:0]].tag[$bits(QuplsPkg::address_t)-1:T15]==
-	  						cpu_req_i.vadr[$bits(QuplsPkg::address_t)-1:T15] && 
+	  hits[j] = lines[j[LOG_WAYS:0]].tag[32-1:T15]==
+	  						cpu_req_i.vadr[32-1:T15] && 
 	  					lines[j[LOG_WAYS:0]].asid==cpu_req_i.asid &&
 	  					lines[j[LOG_WAYS:0]].v==1'b1;
-	  mods[j] = lines[j[LOG_WAYS:0]].tag[$bits(QuplsPkg::address_t)-1:T15]==
-	  						cpu_req_i.vadr[$bits(QuplsPkg::address_t)-1:T15] && 
+	  mods[j] = lines[j[LOG_WAYS:0]].tag[32-1:T15]==
+	  						cpu_req_i.vadr[32-1:T15] && 
 	  					lines[j[LOG_WAYS:0]].asid==cpu_req_i.asid &&
 	  					lines[j[LOG_WAYS:0]].m==1'b1;
 	end
@@ -431,7 +431,7 @@ else begin
 	// snoop.
 	if (snoop_v && snoop_cid!=CID) begin
 		for (k = 0; k < WAYS; k = k + 1) begin
-			if (snoop_adr[$bits(QuplsPkg::address_t)-1:T15]==ptags[k][$bits(QuplsPkg::address_t)-1:T15])
+			if (snoop_adr[$bits(cpu_types_pkg::address_t)-1:T15]==ptags[k][$bits(cpu_types_pkg::address_t)-1:T15])
 				validr[k][snoop_adr[HIBIT:LOBIT]] <= 1'b0;
 		end
 	end

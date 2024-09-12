@@ -60,7 +60,7 @@ input [WID-1:0] i;
 input [WID-1:0] t;
 input [WID-1:0] qres;
 input [2:0] cs;
-input pc_address_t pc;
+input cpu_types_pkg::pc_address_t pc;
 input [WID-1:0] csr;
 input [7:0] cpl;
 input [WID-1:0] coreno;

@@ -49,8 +49,8 @@ parameter TAGBIT=HIBIT+2;	// +1 more for odd/even lines
 input rst;
 input clk;
 input wr;
-input QuplsPkg::address_t vadr_i;
-input QuplsPkg::address_t padr_i;
+input cpu_types_pkg::address_t vadr_i;
+input cpu_types_pkg::address_t padr_i;
 input [1:0] way;
 input rclk;
 input [$clog2(LINES)-1:0] ndx;
@@ -110,7 +110,7 @@ generate begin : gCacheTag
       .clkb(clk),     // 1-bit input: Clock signal for port B when parameter CLOCKING_MODE is
                        // "independent_clock". Unused when parameter CLOCKING_MODE is "common_clock".
 
-      .dina({padr_i[$bits(QuplsPkg::address_t)-1:TAGBIT]}),     // WRITE_DATA_WIDTH_A-bit input: Data input for port A write operations.
+      .dina({padr_i[$bits(cpu_types_pkg::address_t)-1:TAGBIT]}),     // WRITE_DATA_WIDTH_A-bit input: Data input for port A write operations.
       .ena(1'b1),       // 1-bit input: Memory enable signal for port A. Must be high on clock cycles when read
                        // or write operations are initiated. Pipelined internally.
 
@@ -168,7 +168,7 @@ generate begin : gCacheTag
       .clkb(clk),     // 1-bit input: Clock signal for port B when parameter CLOCKING_MODE is
                        // "independent_clock". Unused when parameter CLOCKING_MODE is "common_clock".
 
-      .dina({vadr_i[$bits(QuplsPkg::address_t)-1:TAGBIT]}),     // WRITE_DATA_WIDTH_A-bit input: Data input for port A write operations.
+      .dina({vadr_i[$bits(cpu_types_pkg::address_t)-1:TAGBIT]}),     // WRITE_DATA_WIDTH_A-bit input: Data input for port A write operations.
       .ena(1'b1),       // 1-bit input: Memory enable signal for port A. Must be high on clock cycles when read
                        // or write operations are initiated. Pipelined internally.
 

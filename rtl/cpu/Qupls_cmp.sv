@@ -88,6 +88,8 @@ begin
 			o[4] = a >= b;
 			o[5] = a > b;
 		end
+	default:
+		o = 'd0;
 	endcase
 end
 

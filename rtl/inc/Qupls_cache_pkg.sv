@@ -44,18 +44,18 @@ parameter ICacheBundleWidth = 128;
 parameter ICacheLineWidth = ICacheBundleWidth*4;
 localparam ICacheTagLoBit = $clog2((ICacheLineWidth/8));
 
-`define TAG_ASID $bits(QuplsPkg::asid_t) + $bits(QuplsPkg::address_t)-ITAG_BIT-1:$bits(QuplsPkg::address_t)-ITAG_BIT
+`define TAG_ASID $bits(cpu_types_pkg::asid_t) + $bits(cpu_types_pkg::address_t)-ITAG_BIT-1:$bits(cpu_types_pkg::address_t)-ITAG_BIT
 
 //typedef logic [$bits(QuplsPkg::asid_t) + $bits(QuplsPkg::address_t)-ITAG_BIT-1:0] cache_tag_t;
-typedef logic [$bits(QuplsPkg::address_t)-1:ITAG_BIT] cache_tag_t;
+typedef logic [$bits(cpu_types_pkg::address_t)-1:ITAG_BIT] cache_tag_t;
 
 typedef struct packed
 {
 	logic v;		// valid indicator
 	logic m;		// modified indicator
-	QuplsPkg::asid_t asid;
-	logic [$bits(QuplsPkg::address_t)-1:0] vtag;	// virtual tag
-	logic [$bits(QuplsPkg::address_t)-1:0] ptag;	// physical tag
+	cpu_types_pkg::asid_t asid;
+	logic [$bits(cpu_types_pkg::address_t)-1:0] vtag;	// virtual tag
+	logic [$bits(cpu_types_pkg::address_t)-1:0] ptag;	// physical tag
 	logic [DCacheLineWidth-1:0] data;
 } DCacheLine;
 
@@ -63,9 +63,9 @@ typedef struct packed
 {
 	logic [ICacheLineWidth/ICacheBundleWidth-1:0] v;	// 1 valid bit per 128 bits data
 	logic m;		// modified indicator
-	QuplsPkg::asid_t asid;
-	logic [$bits(QuplsPkg::address_t)-1:0] vtag;	// virtual tag
-	logic [$bits(QuplsPkg::address_t)-1:0] ptag;	// physical tag
+	cpu_types_pkg::asid_t asid;
+	logic [$bits(cpu_types_pkg::address_t)-1:0] vtag;	// virtual tag
+	logic [$bits(cpu_types_pkg::address_t)-1:0] ptag;	// physical tag
 	logic [ICacheLineWidth-1:0] data;
 } ICacheLine;
 

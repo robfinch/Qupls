@@ -48,7 +48,7 @@ input clk;
 input fta_cmd_response128_t wbm_resp;
 output reg wr_ic;
 output ICacheLine line_o;
-input QuplsPkg::address_t [15:0] vtags;
+input cpu_types_pkg::address_t [15:0] vtags;
 output reg [LOG_WAYS-1:0] way;
 
 integer n;
@@ -91,7 +91,7 @@ else begin
 				v[wbm_resp.tid.tranid[3:2]][0] <= 1'b1;
 				tran_line[wbm_resp.tid.tranid[3:2]].v[0] <= 1'b1;
 				tran_line[wbm_resp.tid.tranid[3:2]].vtag <= vtags[wbm_resp.tid.tranid] & ~64'h30;
-				tran_line[wbm_resp.tid.tranid[3:2]].ptag <= wbm_resp.adr[$bits(QuplsPkg::address_t)-1:0] & ~64'h30;
+				tran_line[wbm_resp.tid.tranid[3:2]].ptag <= wbm_resp.adr[$bits(cpu_types_pkg::address_t)-1:0] & ~64'h30;
 				tran_line[wbm_resp.tid.tranid[3:2]].data[ICacheBundleWidth*1-1:ICacheBundleWidth*0] <= wbm_resp.dat[ICacheBundleWidth-1:0];
 			end
 		2'b01:
@@ -99,7 +99,7 @@ else begin
 				v[wbm_resp.tid.tranid[3:2]][1] <= 1'b1;
 				tran_line[wbm_resp.tid.tranid[3:2]].v[1] <= 1'b1;
 				tran_line[wbm_resp.tid.tranid[3:2]].vtag <= vtags[wbm_resp.tid.tranid] & ~64'h30;
-				tran_line[wbm_resp.tid.tranid[3:2]].ptag <= wbm_resp.adr[$bits(QuplsPkg::address_t)-1:0] & ~64'h30;
+				tran_line[wbm_resp.tid.tranid[3:2]].ptag <= wbm_resp.adr[$bits(cpu_types_pkg::address_t)-1:0] & ~64'h30;
 				tran_line[wbm_resp.tid.tranid[3:2]].data[ICacheBundleWidth*2-1:ICacheBundleWidth*1] <= wbm_resp.dat[ICacheBundleWidth-1:0];
 			end
 		2'b10:
@@ -107,7 +107,7 @@ else begin
 				v[wbm_resp.tid.tranid[3:2]][2] <= 1'b1;
 				tran_line[wbm_resp.tid.tranid[3:2]].v[2] <= 1'b1;
 				tran_line[wbm_resp.tid.tranid[3:2]].vtag <= vtags[wbm_resp.tid.tranid] & ~64'h30;
-				tran_line[wbm_resp.tid.tranid[3:2]].ptag <= wbm_resp.adr[$bits(QuplsPkg::address_t)-1:0] & ~64'h30;
+				tran_line[wbm_resp.tid.tranid[3:2]].ptag <= wbm_resp.adr[$bits(cpu_types_pkg::address_t)-1:0] & ~64'h30;
 				tran_line[wbm_resp.tid.tranid[3:2]].data[ICacheBundleWidth*3-1:ICacheBundleWidth*2] <= wbm_resp.dat[ICacheBundleWidth-1:0];
 			end
 		2'b11:
@@ -115,7 +115,7 @@ else begin
 				v[wbm_resp.tid.tranid[3:2]][3] <= 1'b1;
 				tran_line[wbm_resp.tid.tranid[3:2]].v[3] <= 1'b1;
 				tran_line[wbm_resp.tid.tranid[3:2]].vtag <= vtags[wbm_resp.tid.tranid] & ~64'h30;
-				tran_line[wbm_resp.tid.tranid[3:2]].ptag <= wbm_resp.adr[$bits(QuplsPkg::address_t)-1:0] & ~64'h30;
+				tran_line[wbm_resp.tid.tranid[3:2]].ptag <= wbm_resp.adr[$bits(cpu_types_pkg::address_t)-1:0] & ~64'h30;
 				tran_line[wbm_resp.tid.tranid[3:2]].data[ICacheBundleWidth*4-1:ICacheBundleWidth*3] <= wbm_resp.dat[ICacheBundleWidth-1:0];
 			end
 		endcase

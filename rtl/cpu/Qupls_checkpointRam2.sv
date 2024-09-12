@@ -233,7 +233,7 @@ else begin
                                        // Synchronously resets output port doutb to the value specified by
                                        // parameter READ_RESET_VALUE_B.
 
-      .sleep(sleep),                   // 1-bit input: sleep signal to enable the dynamic power saving feature.
+      .sleep(1'b0),                   // 1-bit input: sleep signal to enable the dynamic power saving feature.
       .wea(wea)                        // WRITE_DATA_WIDTH_A/BYTE_WRITE_WIDTH_A-bit input: Write enable vector
                                        // for port A input data port dina. 1 bit wide when word-wide writes are
                                        // used. In byte-wide write configurations, each bit controls the

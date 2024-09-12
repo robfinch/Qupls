@@ -50,31 +50,23 @@ input rst;
 input clk;
 input ce;
 input wr;
-input QuplsPkg::address_t vadr_i;
-input QuplsPkg::address_t padr_i;
+input cpu_types_pkg::address_t vadr_i;
+input cpu_types_pkg::address_t padr_i;
 input [1:0] way;
 input rclk;
 input [$clog2(LINES)-1:0] ndx;
 output cache_tag_t [WAYS-1:0] tag;
-(* ram_style="distributed" *)
 output cache_tag_t ptags0 [0:LINES-1];	// physical tags
-(* ram_style="distributed" *)
 output cache_tag_t ptags1 [0:LINES-1];
-(* ram_style="distributed" *)
 output cache_tag_t ptags2 [0:LINES-1];
-(* ram_style="distributed" *)
 output cache_tag_t ptags3 [0:LINES-1];
 
 
 //typedef logic [$bits(code_address_t)-1:TAGBIT] tag_t;
 
-(* ram_style="distributed" *)
 cache_tag_t vtags0 [0:LINES-1];	// virtual tags
-(* ram_style="distributed" *)
 cache_tag_t vtags1 [0:LINES-1];
-(* ram_style="distributed" *)
 cache_tag_t vtags2 [0:LINES-1];
-(* ram_style="distributed" *)
 cache_tag_t vtags3 [0:LINES-1];
 
 integer g,g1;
@@ -108,18 +100,18 @@ end
 else
 `endif
 if (ce) begin
-	if (wr && way==2'd0) vtags0[vadr_i[HIBIT:LOBIT]] <= {vadr_i[$bits(QuplsPkg::address_t)-1:TAGBIT]};
-	if (wr && way==2'd1) vtags1[vadr_i[HIBIT:LOBIT]] <= {vadr_i[$bits(QuplsPkg::address_t)-1:TAGBIT]};
-	if (wr && way==2'd2) vtags2[vadr_i[HIBIT:LOBIT]] <= {vadr_i[$bits(QuplsPkg::address_t)-1:TAGBIT]};
-	if (wr && way==2'd3) vtags3[vadr_i[HIBIT:LOBIT]] <= {vadr_i[$bits(QuplsPkg::address_t)-1:TAGBIT]};
+	if (wr && way==2'd0) vtags0[vadr_i[HIBIT:LOBIT]] <= {vadr_i[$bits(cpu_types_pkg::address_t)-1:TAGBIT]};
+	if (wr && way==2'd1) vtags1[vadr_i[HIBIT:LOBIT]] <= {vadr_i[$bits(cpu_types_pkg::address_t)-1:TAGBIT]};
+	if (wr && way==2'd2) vtags2[vadr_i[HIBIT:LOBIT]] <= {vadr_i[$bits(cpu_types_pkg::address_t)-1:TAGBIT]};
+	if (wr && way==2'd3) vtags3[vadr_i[HIBIT:LOBIT]] <= {vadr_i[$bits(cpu_types_pkg::address_t)-1:TAGBIT]};
 end
 
 always_ff @(posedge clk)
 if (ce) begin
-	if (wr && way==2'd0) ptags0[vadr_i[HIBIT:LOBIT]] <= {padr_i[$bits(QuplsPkg::address_t)-1:TAGBIT]};
-	if (wr && way==2'd1) ptags1[vadr_i[HIBIT:LOBIT]] <= {padr_i[$bits(QuplsPkg::address_t)-1:TAGBIT]};
-	if (wr && way==2'd2) ptags2[vadr_i[HIBIT:LOBIT]] <= {padr_i[$bits(QuplsPkg::address_t)-1:TAGBIT]};
-	if (wr && way==2'd3) ptags3[vadr_i[HIBIT:LOBIT]] <= {padr_i[$bits(QuplsPkg::address_t)-1:TAGBIT]};
+	if (wr && way==2'd0) ptags0[vadr_i[HIBIT:LOBIT]] <= {padr_i[$bits(cpu_types_pkg::address_t)-1:TAGBIT]};
+	if (wr && way==2'd1) ptags1[vadr_i[HIBIT:LOBIT]] <= {padr_i[$bits(cpu_types_pkg::address_t)-1:TAGBIT]};
+	if (wr && way==2'd2) ptags2[vadr_i[HIBIT:LOBIT]] <= {padr_i[$bits(cpu_types_pkg::address_t)-1:TAGBIT]};
+	if (wr && way==2'd3) ptags3[vadr_i[HIBIT:LOBIT]] <= {padr_i[$bits(cpu_types_pkg::address_t)-1:TAGBIT]};
 end
 
 assign tag[0] = vtags0[ndx];

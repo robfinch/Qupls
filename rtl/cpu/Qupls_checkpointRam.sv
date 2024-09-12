@@ -39,8 +39,9 @@ import QuplsPkg::SIM;
 
 module Qupls_checkpointRam(clka, ena, wea, addra, dina, douta, clkb, enb, addrb, doutb);
 localparam RBIT=$clog2(PREGS);
-localparam QBIT=$bits(pregno_t);
+localparam QBIT=$bits(cpu_types_pkg::pregno_t);
 localparam WID=$bits(checkpoint_t);
+localparam AWID=$clog2(NCHECK);
 input clka;
 input ena;
 input wea;
@@ -114,8 +115,8 @@ else begin
    // Xilinx Parameterized Macro, version 2022.2
 
    xpm_memory_dpdistram #(
-      .ADDR_WIDTH_A(4),               // DECIMAL
-      .ADDR_WIDTH_B(4),               // DECIMAL
+      .ADDR_WIDTH_A(AWID),            // DECIMAL
+      .ADDR_WIDTH_B(AWID),            // DECIMAL
       .BYTE_WRITE_WIDTH_A(WID),      		// DECIMAL
       .CLOCKING_MODE("common_clock"), // String
       .MEMORY_INIT_FILE("none"),      // String

@@ -37,7 +37,7 @@
 // ============================================================================
 
 import QuplsPkg::*;
-import QuplsMmupkg::*;
+import mmu_pkg::*;
 import Qupls_cache_pkg::*;
 
 module Qupls_cache_hit(clk, adr, ndx, tag, valid, hit, rway, cv);
@@ -46,7 +46,7 @@ parameter WAYS=4;
 parameter AWID=32;
 parameter TAGBIT=14;
 input clk;
-input QuplsPkg::address_t adr;
+input cpu_types_pkg::address_t adr;
 input [$clog2(LINES)-1:0] ndx;
 input cache_tag_t [3:0] tag;
 input [LINES-1:0] valid [0:WAYS-1];
@@ -64,7 +64,7 @@ integer k,ks;
 always_comb//ff @(posedge clk)
 begin
 	for (k = 0; k < WAYS; k = k + 1)
-	  hit1[k] = tag[k[1:0]]==adr[$bits(QuplsPkg::address_t)-1:TAGBIT] && 
+	  hit1[k] = tag[k[1:0]]==adr[$bits(cpu_types_pkg::address_t)-1:TAGBIT] && 
 	  					valid[k][ndx]==1'b1;
 end
 

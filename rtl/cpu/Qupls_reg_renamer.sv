@@ -48,16 +48,16 @@ input rst;
 input clk;
 input en;
 input [PREGS-1:0] list2free;
-input pregno_t [NFTAGS-1:0] tags2free;		// register tags to free
+input cpu_types_pkg::pregno_t [NFTAGS-1:0] tags2free;		// register tags to free
 input [NFTAGS-1:0] freevals;					// bitmnask indicating which tags to free
 input alloc0;					// allocate target register 0
 input alloc1;
 input alloc2;
 input alloc3;
-output pregno_t wo0;	// target register tag
-output pregno_t wo1;
-output pregno_t wo2;
-output pregno_t wo3;
+output cpu_types_pkg::pregno_t wo0;	// target register tag
+output cpu_types_pkg::pregno_t wo1;
+output cpu_types_pkg::pregno_t wo2;
+output cpu_types_pkg::pregno_t wo3;
 output reg [PREGS-1:0] avail;				// recorded in ROB
 
 integer n;
