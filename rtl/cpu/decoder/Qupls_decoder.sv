@@ -237,7 +237,8 @@ Qupls_decode_divu udivu1
 Qupls_decode_load udecld1
 (
 	.instr(ins.ins),
-	.load(db.load)
+	.load(db.load),
+	.cload(db.cload)
 );
 
 Qupls_decode_loadz udecldz1
@@ -249,7 +250,8 @@ Qupls_decode_loadz udecldz1
 Qupls_decode_store udecst1
 (
 	.instr(ins.ins),
-	.store(db.store)
+	.store(db.store),
+	.cstore(db.cstore)
 );
 
 Qupls_decode_lda udeclda1
@@ -365,7 +367,7 @@ else begin
 	if (en) begin
 		dbo <= {$bits(dbo){1'd0}};	// in case a signal was missed / unused.
 		dbo <= db;
-		dbo.mem <= db.load|db.store;
+		dbo.mem <= db.load|db.store|db.cstore|db.cload;
 		dbo.sync <= db.fence && ins[15:8]==8'hFF;
 		dbo.pred <= ins.ins.any.opcode==OP_PRED;
 		dbo.predz <= ins.ins[47];

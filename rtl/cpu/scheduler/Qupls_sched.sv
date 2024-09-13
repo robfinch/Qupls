@@ -326,7 +326,8 @@ endfunction
 
 generate begin : issue_logic
 for (g = 0; g < ROB_ENTRIES; g = g + 1) begin
-	assign args_valid[g] = (rob[g].argA_v
+	assign args_valid[g] =
+	 					(rob[g].argA_v
 						// Or forwarded
 						/*
 				    || (rob[g].decbus.Ra == alu0_Rt && alu0_v)
@@ -356,6 +357,8 @@ for (g = 0; g < ROB_ENTRIES; g = g + 1) begin
 				    || (rob[g].decbus.Rc == load_Rt && load_v)
 				    */
 				    || (rob[g].decbus.mem))// & ~rob[g].agen))
+				    // Vector instructions need the mask valid.
+				    && (rob[g].decbus.vec ? rob[g].argM_v : 1'b1)
 				    ;
 				    // If the predicate is known to be false, we do not care what the
 				    // argument registers are, other than Rt. If the predicate is known
@@ -366,7 +369,7 @@ for (g = 0; g < ROB_ENTRIES; g = g + 1) begin
 				    // incorrectly marked done, inheriting the status of the old one.
 always_ff @(posedge clk)
 if (rst)
-	could_issue = 'd0;
+	could_issue[g] = 'd0;
 else
 	could_issue[g] =
 													 rob[g].v
@@ -381,7 +384,7 @@ else
 												;
 always_ff @(posedge clk)
 if (rst)
-	could_issue_nm = 'd0;
+	could_issue_nm[g] = 'd0;
 else 
 	could_issue_nm[g] = 
 													 rob[g].v
@@ -585,7 +588,10 @@ else begin
 			  	next_fcu_rndxv = 1'b1;
 				end
 
-				if (!issued_agen0 && agen0_idle && rob[heads[hd]].decbus.mem && !rob[heads[hd]].done[0] && !rob[heads[hd]].out[0]) begin
+				if (!issued_agen0 && agen0_idle &&
+					!robentry_agen_issue[heads[hd]] &&
+					 rob[heads[hd]].decbus.mem &&
+					!rob[heads[hd]].done[0] && !rob[heads[hd]].out[0]) begin
 					next_robentry_agen_issue[heads[hd]] = 1'b1;
 			  	next_robentry_islot_o[heads[hd]] = 2'b00;
 					issued_agen0 = 1'b1;
@@ -605,7 +611,10 @@ else begin
 					next_agen0_rndxv = 1'b1;
 				end
 				if (NAGEN > 1) begin
-					if (!issued_agen1 && agen1_idle && rob[heads[hd]].decbus.mem && !rob[heads[hd]].done[0] && !rob[heads[hd]].out[0]) begin
+					if (!issued_agen1 && agen1_idle &&
+						!robentry_agen_issue[heads[hd]] &&
+						 rob[heads[hd]].decbus.mem &&
+						!rob[heads[hd]].done[0] && !rob[heads[hd]].out[0]) begin
 						if (!next_robentry_agen_issue[heads[hd]]) begin
 							next_robentry_agen_issue[heads[hd]] = 1'b1;
 					  	next_robentry_islot_o[heads[hd]] = 2'b01;
@@ -671,6 +680,10 @@ if (rst) begin
 end
 else begin
 	robentry_islot_o <= next_robentry_islot_o;
+	robentry_issue <= next_robentry_issue;
+	robentry_fpu_issue <= 'd0;	// ToDo: FPU issue
+	robentry_fcu_issue <= next_robentry_fcu_issue;
+	robentry_agen_issue <= next_robentry_agen_issue;
 	robentry_issue <= next_robentry_issue;
 	robentry_fpu_issue <= 'd0;	// ToDo: FPU issue
 	robentry_fcu_issue <= next_robentry_fcu_issue;

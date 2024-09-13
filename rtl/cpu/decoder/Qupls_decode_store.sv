@@ -36,9 +36,10 @@
 
 import QuplsPkg::*;
 
-module Qupls_decode_store(instr, store);
+module Qupls_decode_store(instr, store, cstore);
 input instruction_t instr;
 output store;
+output cstore;
 
 function fnIsStore;
 input instruction_t op;
@@ -53,6 +54,21 @@ begin
 end
 endfunction
 
+function fnIsCStore;
+input instruction_t op;
+begin
+	case(op.any.opcode)
+	OP_CSTORE:
+		fnIsCStore = 1'b1;
+	OP_STX:
+		fnIsCStore = op.lsn.func==FN_CSTOREX;
+	default:
+		fnIsCStore = 1'b0;
+	endcase
+end
+endfunction
+
 assign store = fnIsStore(instr);
+assign cstore = fnIsCStore(instr);
 
 endmodule

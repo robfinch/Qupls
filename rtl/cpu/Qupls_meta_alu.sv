@@ -49,10 +49,10 @@ input clk;
 input clk2x;
 input ld;
 input [2:0] lane;
-input [1:0] prc;
+input memsz_t prc;
 input instruction_t ir;
 input div;
-input [7:0] cptgt;
+input [15:0] cptgt;
 input z;
 input [WID-1:0] a;
 input [WID-1:0] b;
@@ -73,7 +73,9 @@ output div_dbz;
 output reg [WID-1:0] exc;
 
 wire [WID-1:0] o16,o32,o64,o128;
+reg [WID-1:0] o1;
 wire [WID-1:0] exc16,exc32,exc64,exc128;
+reg [WID-1:0] exc1;
 wire [WID/16-1:0] div_done16;
 wire [WID/16-1:0] mul_done16;
 wire [WID/32-1:0] div_done32;
@@ -83,7 +85,7 @@ wire [WID/64-1:0] mul_done64;
 wire [WID/128-1:0] div_done128;
 wire [WID/128-1:0] mul_done128;
 integer n;
-genvar g;
+genvar g,mm,xx;
 
 generate begin : g16
 	if (SUPPORT_PREC)
@@ -96,8 +98,6 @@ generate begin : g16
 			.ld(ld),
 			.ir(ir),
 			.div(div),
-			.cptgt(cptgt[g]),
-			.z(z),
 			.a(a[g*16+15:g*16]),
 			.b(b[g*16+15:g*16]),
 			.bi(bi[g*16+15:g*16]),
@@ -130,8 +130,6 @@ generate begin : g32
 			.ld(ld),
 			.ir(ir),
 			.div(div),
-			.cptgt(cptgt[g]),
-			.z(z),
 			.a(a[g*32+31:g*32]),
 			.b(b[g*32+31:g*32]),
 			.bi(bi[g*32+31:g*32]),
@@ -164,8 +162,6 @@ generate begin : g64
 			.ld(ld),
 			.ir(ir),
 			.div(div),
-			.cptgt(cptgt[g]),
-			.z(z),
 			.a(a[g*64+63:g*64]),
 			.b(b[g*64+63:g*64]),
 			.bi(bi[g*64+63:g*64]),
@@ -198,8 +194,6 @@ generate begin : g128
 			.ld(ld),
 			.ir(ir),
 			.div(div),
-			.cptgt(cptgt[g]),
-			.z(z),
 			.a(a[g*128+127:g*128]),
 			.b(b[g*128+127:g*128]),
 			.bi(bi[g*128+127:g*128]),
@@ -252,41 +246,42 @@ always_comb
 begin
 	if (SUPPORT_PREC)
 		case(prc)
-		2'd0:	o = o16;
-		2'd1:	o = o32;
-		2'd2:	o = o64;
-		2'd3:	o = o128;
+		QuplsPkg::wyde:		o1 = o16;
+		QuplsPkg::tetra:	o1 = o32;
+		QuplsPkg::octa:		o1 = o64;
+		QuplsPkg::hexi:		o1 = o128;
+		default:o1 = o128;
 		endcase
 	else
-		o = o128;
+		o1 = o128;
 	case(ir.any.opcode)
 	OP_R2:
 		case(ir.r3.func)
 		FN_V2BITS:
 			begin
-				o = lane==3'd0 ? {WID{1'b0}} : t;
+				o1 = lane==3'd0 ? {WID{1'b0}} : t;
 				if (SUPPORT_PREC)
 					case(prc)
-					2'd0:	
+					QuplsPkg::wyde:	
 						begin
-							o[{lane,2'd0}] = a[bi[3:0]+ 0];
-							o[{lane,2'd1}] = a[bi[3:0]+16];
-							o[{lane,2'd2}] = a[bi[3:0]+32];
-							o[{lane,2'd3}] = a[bi[3:0]+48];
+							o1[{lane,2'd0}] = a[bi[3:0]+ 0];
+							o1[{lane,2'd1}] = a[bi[3:0]+16];
+							o1[{lane,2'd2}] = a[bi[3:0]+32];
+							o1[{lane,2'd3}] = a[bi[3:0]+48];
 						end
-					2'd1:
+					QuplsPkg::tetra:
 						begin
-							o[{lane,2'd0}] = a[bi[4:0]+ 0];
-							o[{lane,2'd1}] = a[bi[4:0]+32];
+							o1[{lane,2'd0}] = a[bi[4:0]+ 0];
+							o1[{lane,2'd1}] = a[bi[4:0]+32];
 						end
-					2'd2:
+					QuplsPkg::octa:
 						begin
-							o[lane] = a[bi[5:0]];
+							o1[lane] = a[bi[5:0]];
 						end
 					default:	;
 					endcase
 				else
-					o[lane] = a[bi[5:0]];
+					o1[lane] = a[bi[5:0]];
 			end
 		default:	;
 		endcase
@@ -294,13 +289,27 @@ begin
 	endcase
 end
 
+// Copy only the lanes specified in the mask to the target.
+
+generate begin : gCptgt
+	for (mm = 0; mm < WID/8; mm = mm + 1) begin
+        always_comb
+            if (cptgt[mm])
+                o[mm*8+7:mm*8] = z ? 8'h00 : t[mm*8+7:mm*8];
+            else
+                o[mm*8+7:mm*8] = o1[mm*8+7:mm*8];
+    end
+end
+endgenerate
+
 always_comb
 	if (SUPPORT_PREC)
 		case(prc)
-		2'd0:	mul_done = &mul_done16;
-		2'd1:	mul_done = &mul_done32;
-		2'd2:	mul_done = &mul_done64;
-		2'd3:	mul_done = &mul_done128;
+		QuplsPkg::wyde:		mul_done = &mul_done16;
+		QuplsPkg::tetra:	mul_done = &mul_done32;
+		QuplsPkg::octa:		mul_done = &mul_done64;
+		QuplsPkg::hexi:		mul_done = &mul_done128;
+		default:mul_done = &mul_done128;
 		endcase
 	else
 		mul_done = &mul_done64;
@@ -308,10 +317,11 @@ always_comb
 always_comb
 	if (SUPPORT_PREC)
 		case(prc)
-		2'd0:	div_done = &div_done16;
-		2'd1:	div_done = &div_done32;
-		2'd2:	div_done = &div_done64;
-		2'd3:	div_done = &div_done128;
+		QuplsPkg::wyde:		div_done = &div_done16;
+		QuplsPkg::tetra:	div_done = &div_done32;
+		QuplsPkg::octa:		div_done = &div_done64;
+		QuplsPkg::hexi:		div_done = &div_done128;
+		default:div_done = &div_done128;
 		endcase
 	else
 		div_done = &div_done64;
@@ -319,12 +329,25 @@ always_comb
 always_comb
 	if (SUPPORT_PREC)
 		case(prc)
-		2'd0:	exc = exc16;
-		2'd1:	exc = exc32;
-		2'd2:	exc = exc64;
-		2'd3:	exc = exc128;
+		QuplsPkg::wyde:		exc1 = exc16;
+		QuplsPkg::tetra:	exc1 = exc32;
+		QuplsPkg::octa:		exc1 = exc64;
+		QuplsPkg::hexi:		exc1 = exc128;
+		default:exc1 = exc128;
 		endcase
 	else
-		exc = exc128;
+		exc1 = exc128;
+
+// Exceptions are squashed for lanes that are not supposed to modify the target.
+
+generate begin : gExc
+	for (xx = 0; xx < WID/8; xx = xx + 1)
+	    always_comb
+            if (cptgt[xx])
+                exc[xx*8+7:xx*8] = FLT_NONE;
+            else
+                exc[xx*8+7:xx*8] = exc1[xx*8+7:xx*8];
+end
+endgenerate
 
 endmodule

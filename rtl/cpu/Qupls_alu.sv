@@ -39,7 +39,7 @@
 import const_pkg::*;
 import QuplsPkg::*;
 
-module Qupls_alu(rst, clk, clk2x, ld, ir, div, cptgt, z, a, b, bi, c, i, t, qres,
+module Qupls_alu(rst, clk, clk2x, ld, ir, div, a, b, bi, c, i, t, qres,
 	cs, pc, csr, cpl, coreno, canary, o, mul_done, div_done, div_dbz, exc);
 parameter ALU0 = 1'b0;
 parameter WID=16;
@@ -50,8 +50,6 @@ input clk2x;
 input ld;
 input instruction_t ir;
 input div;
-input cptgt;
-input z;
 input [WID-1:0] a;
 input [WID-1:0] b;
 input [WID-1:0] bi;
@@ -495,6 +493,6 @@ begin
 end
 
 always_comb
-	o = cptgt ? (z ? zero : t) : bus;
+	o = bus;
 
 endmodule

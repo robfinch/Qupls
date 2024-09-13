@@ -38,7 +38,8 @@ import QuplsPkg::*;
 
 module Qupls_btb(rst, clk, en, clk_en, rclk, micro_code_active, block_header,
 	igrp, length_byte,
-	pc, pc0, pc1, pc2, pc3, pc4, next_pc, takb, do_bsr, bsr_tgt, pe_bsdone,
+	pc, pc0, pc1, pc2, pc3, pc4, next_pc, alt_next_pc,
+	takb, do_bsr, bsr_tgt, pe_bsdone,
 	branchmiss, branch_state, misspc,
 	mip0v, mip1v, mip2v, mip3v,
 	commit_pc0, commit_brtgt0, commit_takb0, commit_grp0,
@@ -63,6 +64,7 @@ input cpu_types_pkg::pc_address_t pc2;
 input cpu_types_pkg::pc_address_t pc3;
 input cpu_types_pkg::pc_address_t pc4;
 output cpu_types_pkg::pc_address_t next_pc;
+output cpu_types_pkg::pc_address_t alt_next_pc;
 output reg takb;
 input mip0v;
 input mip1v;
@@ -438,26 +440,32 @@ begin
 	// The group is loaded at state 1 below.
 	if (branch_state==BS_DONE) begin
 		next_pc <= misspc;
+		alt_next_pc <= misspc;
 		takb <= 1'b1;
 	end
 	else if (do_bsr) begin
 		next_pc <= bsr_tgt;
+		alt_next_pc <= bsr_tgt;
 		takb <= 1'b1;
 	end
 	else if (en && pc0==doutb0.pc && doutb0.takb) begin
 		next_pc <= doutb0.tgt;
+		alt_next_pc <= pc + 5'd24;
 		takb <= 1'b1;
 	end
 	else if (en && pc1==doutb1.pc && doutb1.takb) begin
 		next_pc <= doutb1.tgt;
+		alt_next_pc <= pc + 5'd24;
 		takb <= 1'b1;
 	end
 	else if (en && pc2==doutb2.pc && doutb2.takb) begin
 		next_pc <= doutb2.tgt;
+		alt_next_pc <= pc + 5'd24;
 		takb <= 1'b1;
 	end
 	else if (en && pc3==doutb3.pc && doutb3.takb) begin
 		next_pc <= doutb3.tgt;
+		alt_next_pc <= pc + 5'd24;
 		takb <= 1'b1;
 	end
 	else begin
@@ -502,15 +510,17 @@ begin
 			else
 				next_pc <= {pc[$bits(pc_address_t)-1:6],pc4[5:0]};
 			*/
-			if (micro_code_active)
+			if (micro_code_active) begin
 				next_pc <= pc;
+				alt_next_pc <= pc;
+			end
 			else begin
 				case(1'b1)
-				mip0v:	next_pc <= pc + 5'd6;
-				mip1v:	next_pc <= pc + 5'd12;
-				mip2v:	next_pc <= pc + 5'd18;
-				mip3v:	next_pc <= pc + 5'd24;
-				default:	next_pc <= pc + 5'd24;	// four instructions
+				mip0v:	begin next_pc <= pc + 5'd6; alt_next_pc <= pc + 5'd6; end
+				mip1v:	begin next_pc <= pc + 5'd12; alt_next_pc <= pc + 5'd12; end
+				mip2v:	begin next_pc <= pc + 5'd18; alt_next_pc <= pc + 5'd18; end
+				mip3v:	begin next_pc <= pc + 5'd24; alt_next_pc <= pc + 5'd24; end
+				default:	begin next_pc <= pc + 5'd24;	alt_next_pc <= pc + 5'd24; end	// four instructions
 				endcase
 			end
 		end

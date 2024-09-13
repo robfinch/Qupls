@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -36,9 +36,10 @@
 
 import QuplsPkg::*;
 
-module Qupls_decode_load(instr, load);
+module Qupls_decode_load(instr, load, cload);
 input instruction_t instr;
 output load;
+output cload;
 
 function fnIsLoad;
 input instruction_t op;
@@ -58,6 +59,24 @@ begin
 end
 endfunction
 
+function fnIsCLoad;
+input instruction_t op;
+begin
+	case(op.any.opcode)
+	OP_CLOAD:	fnIsCLoad = 1'b1;
+	OP_LDX:
+		case(op.lsn.func)
+		FN_CLOADX:	fnIsCLoad = 1'b1;
+		default:
+			fnIsCLoad = 1'b0;
+		endcase
+	default:
+		fnIsCLoad = 1'b0;
+	endcase
+end
+endfunction
+
 assign load = fnIsLoad(instr);
+assign cload = fnIsCLoad(instr);
 
 endmodule

@@ -157,16 +157,16 @@ end
 
 generate begin : gRF
 	for (g = 0; g < RPORTS; g = g + 1) begin
-		Qupls_regfileRam #(.WID(WID)) urf0 (
+		Qupls_regfileRam #(.WID(WID+1)) urf0 (
 		  .clka(clk5x),
 		  .ena(wr),
 		  .wea(we),
 		  .addra(wa),
-		  .dina(i),
+		  .dina({ti,i}),
 		  .clkb(~clk),
 		  .enb(1'b1),
 		  .addrb(ra[g]),
-		  .doutb(o0[g])
+		  .doutb({to0[g],o0[g]})
 		);
 		/*
 		Qupls_regfileRam #(.WID(1)) utrf0 (

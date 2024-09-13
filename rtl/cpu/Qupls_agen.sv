@@ -32,6 +32,7 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
+// 250 LUTs / 40 FFs
 // ============================================================================
 
 import const_pkg::*;
@@ -44,17 +45,17 @@ input next;								// calculate for next cache line
 input out;
 input tlb_v;
 input ex_instruction_t ir;
-input cpu_types_pkg::value_t a;
-input cpu_types_pkg::value_t b;
-input cpu_types_pkg::value_t i;
+input cpu_types_pkg::address_t a;
+input cpu_types_pkg::address_t b;
+input cpu_types_pkg::address_t i;
 input cpu_types_pkg::aregno_t Ra;
 input cpu_types_pkg::aregno_t Rb;
 input cpu_types_pkg::pc_address_t pc;
-output cpu_types_pkg::value_t res;
+output cpu_types_pkg::address_t res;
 output reg resv;
 
-cpu_types_pkg::value_t as, bs;
-cpu_types_pkg::value_t res1;
+cpu_types_pkg::address_t as, bs;
+cpu_types_pkg::address_t res1;
 
 always_comb
 if (ir.ins.any.vec) begin
@@ -110,7 +111,7 @@ begin
 	OP_STB,OP_STW,OP_STT,OP_STO,OP_STH,OP_CSTORE:
 		res1 <= as + i;
 	OP_LDX,OP_STX:
-		res1 <= as + bs + {{53{ir.lsn.disp[11]}},ir.lsn.disp};
+		res1 <= as + bs + {{54{ir.ins.lsn.dispHi[2]}},ir.ins.lsn.dispHi,ir.ins.lsn.dispLo};
 	OP_AMO:
 		res1 <= as + b;
 	default:
@@ -119,7 +120,7 @@ begin
 end
 
 always_ff @(posedge clk)
-	res = next ? {res1[$bits(cpu_types_pkg::value_t)-1:6] + 2'd1,6'd0} : res1;
+	res = next ? {res1[$bits(cpu_types_pkg::address_t)-1:6] + 2'd1,6'd0} : res1;
 
 // Make Agen valid sticky
 // The agen takes a clock cycle to compute after the out signal is valid.
