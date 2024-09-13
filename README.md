@@ -10,10 +10,13 @@ QuplsSeq is a scalar version of the core.
 ### History
 Work started on Qupls in November of 2023. Many years of work have gone into prior CPUs.
 
+### Recent Additions
+Provision for capabilities instructions were added to the instruction set. The capabilities version of the core requires 128-bit registers as a 64-bit capability is part of the register. This increases the size of the core considerably and turns Qupls into a 128-bit machine.
+
 ### Features Superscalar Out-of-Order version (Qupls.sv)
 * Fixed length instruction set.
 * 48-bit instructions.
-* 64-bit datapath / support for 128-bit floats
+* 64-bit datapath / support for 128-bit floats (128-bit datapath for capabilities)
 * 16 entry (or more) reorder entry buffer (ROB)
 * 32 general purpose registers, unified integer and float register file
 * 24 vector registers
@@ -27,7 +30,7 @@ Work started on Qupls in November of 2023. Many years of work have gone into pri
 * Bitfield operations.
 * Conditional relative branch instructions with 19-bit displacements
 * 4-way Out-of-order execution of instructions
-* 128 entry, two way TLB for virtual memory support, shared between instruction and data
+* 1024 entry, three way TLB for virtual memory support, shared between instruction and data
 
 ### Features Scalar In-Order version (QuplsSeq.sv)
 * Fixed length instruction set.
@@ -66,20 +69,20 @@ The author has found that in an FPGA the decode of variable length instruction l
 The instruction length decode is done within a single clock cycle so it may be used to update the instruction pointer in time to fetch the next block of instructions.
 
 ### Instruction alignment
-Instructions are aligned on five byte boundaries within a subroutine. Conditional branch displacements are in terms of instructions since the branch occurs within a subroutine where all instructions are six bytes. Conditional branches have effectively a 19+ bit range, +/-384kB. For software compatibility a critical 18 bits range was needed.
-Subroutines may be aligned on any byte boundary, allowing position independent code placement. Unconditional branch and jump displacements are in terms of bytes to accomodate the location of subroutines.
+Instructions are aligned on six byte boundaries within a subroutine. Conditional branch displacements are in terms of instructions since the branch occurs within a subroutine where all instructions are six bytes. Conditional branches have effectively a 19+ bit range, +/-384kB. For software compatibility a critical 18 bits range was needed.
+Subroutines may be aligned on any wyde boundary, allowing position independent code placement. Unconditional branch and jump displacements are in terms of bytes to accomodate the location of subroutines.
 
 ### Position Independant Code
-Code is relocatable at any byte boundary; however, within a subroutine or function the instructions should be contiguous, every six bytes, so that conditional branches will work.
+Code is relocatable at any wyde boundary; however, within a subroutine or function the instructions should be contiguous, every six bytes, so that conditional branches will work.
 
 ### Pipeline
 Yikes!
-There are roughly nine stages in the pipeline, fetch, align, extract (parse), decode, rename, queue, issue, execute and writeback.
-The first step for an instruction is instruction fetch. At instruction fetch four instructions are fetched from the instruction cache. The fetched instructions are right aligned as a block then extracted from the cache line.
-If there is a hardware interrupt, a special interrupt instruction overrides the fetched instructions and the PC increment is disabled until the interrupt is recognized. At the extract stage vector instructions are expanded into multiple scalar instructions for execution. The extract stage has a latency of three clock cycles to deal with extraction and expansion.
+There are roughly ten stages in the pipeline, fetch, align, extract (parse) and pack, decode, rename, queue, issue, execute and writeback.
+The first step for an instruction is instruction fetch. At instruction fetch four instructions are fetched from the instruction cache. The fetched instructions are right aligned as a block then extracted from the cache line. Two cache lines worth of instructions are fetched in case an instruction crosses a cache-line boundary. That means 21 instructions are fetched, but only four are processed further.
+If there is a hardware interrupt, a special interrupt instruction overrides the fetched instructions and the PC increment is disabled until the interrupt is recognized. At the extract stage vector instructions are expanded into multiple scalar instructions for execution. The extract stage has a latency of three clock cycles to deal with extraction and expansion. Expanding vector instructions into scalar ones may result in extra NOPs being inserted. The pack stage of extract removes these NOPs.
 After instruction fetch and extract the instructions are decoded. Decoded architectural registers are then renamed to physical registers and register values are fetched. The instruction decodes are placed in the reorder buffer / queued.
 Once instructions are queued in the ROB they may be scheduled for execution. The scheduler has a fixed sized window of instructions it examines to find executable instructions. The window is from the far end of the ROB, the head point, backwards towards recently queued instructions. Only the oldest instructions in the queue are looked at as they are more likely to be ready to execute.
-The next stage is execution. Note that the execute stage waits until all the instruction arguments are valid before trying to execute the instruction. (This is checked by the scheduler).
+The next stage is execution. Note that the execute stage waits until all the instruction arguments are valid before trying to execute the instruction. (This is checked by the scheduler). For vector instructions, the selected mask register must be valid. This is not needed for scalar instructions.
 Instruction arguments are made valid by the execution or writeback of prior instructions. Note that while the instruction may not be able to execute, decode and execute are *not* stalled. Other instructions are decoded and executed while waiting for an instruction missing arguments. This is the out-of-order feature of the processor. Execution of instructions can be multi-cycle as for loads, stores, multiplies and divides.
 At the end of instruction execution the result is placed into the register file. There may be a maximum of four instruction being executed at the same time. An alu, an fpu a memory and one flow control. Support to execute up to seven instructions is partially coded (2 ALU, 2 FPU, 2 Mem, 1 FCU).
 The last stage, writeback, reorders instructions into program order reading the oldest instructions from the ROB. The core may writeback or commit four instructions per clock cycle. Exceptions and several other oddball instructions like CSR updates are also processed at the commit stage.
@@ -88,10 +91,14 @@ The last stage, writeback, reorders instructions into program order reading the 
 There are two branch predictors, A BTB, branch-target-buffer predictor used early in the pipeline, and a gselect predictor used later. The BTB has 1024 entries. The gselect predictor is a (2,2) correlating predictor with a 512 entry history table. Even if the branch is correctly predicted a number of instructions may end up being stomped on the ROB.
 
 ### Interrupts and Exceptions
-Interrupts and exceptions are precise. There is a separate exception vector table for each operating mode of the CPU. The exception vector table address is programmable and may contain a maximum of 512 vectors. At reset the vector table is placed high in memory, the first two vectors provide the initial stack pointer and initial instruction pointer values.
+Interrupts and exceptions are precise. There is a separate exception vector table for each operating mode of the CPU. The exception vector table address is programmable and may contain a maximum of 256 vectors. At reset the vector table is placed high in memory, the first two vectors provide the initial stack pointer and initial instruction pointer values.
 An interrupt will cause the stack pointer to automatically switch to one dedicated for that interrupt level. There are seven interrupt levels supported.
 
 ## Instruction Set
+
+### Sign Control
+Each instruction operand has a sign-control bit associated with it. The sign of the operand may be negated or complemented when this bit is set. This is a simple enhancement of the instruction set which allows many more instructions without adding opcodes. For instance, a NAND operation is just and AND operation with the target register complement bit set.
+
 ### Dual Operation Instructions
 Many register-register operate instructions support dual operations on the registers. They are of the form: Rt = (Ra op Rb) op Rc. For instance, the AND_OR instruction performs an AND operation followed by an OR operation.
 
@@ -120,10 +127,10 @@ There are bits in control register zero assigned for future use to indicate more
 The eventual goal is to support SIMD style vector instructions. The ISA is setup to support these. A large FPGA will be required to support the vector instructions with a full vector ALU. Vector operations mimic the scalar ones. There are no vector branches however. The current implementation implements vector instructions using micro-coded customized scalar instructions. <- This has been switched to expanding vector instructions in the extract stage, which improves performance of the vector operations. This allows the vector instruction set to execute on the scalar engine. Having more functional units, for instance, multiple ALUs will improve the vector performance.
 
 ## Memory Management
-The core uses virtual addresses which are translated by a TLB. The MMU is internal to the core. The MMU page size is 64kB. This is quite large and was chosen to reduce the number of block RAMs required to implement a hashed page table. It was also based on the recommendation that the page size be at least 16kB to improve memory efficiency and performance. The large page size also means that the address space of the test system can be mapped using only a single level of tables. Many small apps <512MB can be managed using just a single MMU page.
+The core uses virtual addresses which are translated by a TLB. The MMU is internal to the core. The default MMU page size is 8kB. The page size may be set by MMU registers between 64B and 2MB. It was based on the recommendation that the page size be at least 16kB to improve memory efficiency and performance. The large page size also means that the address space of the test system can be mapped using only a single level of tables. Many small apps <8MB can be managed using just a single MMU page.
 
 ### TLB
-The TLB is two-way associative with 128 entries per way. Instructions and data both use the same TLB and it is always enabled. The TLB is automatically loaded with translations allowing access to the system ROM at reset. One of the first tasks of the BIOS is to setup access to I/O devices so that something as simple as a LED display may happen.
+The TLB is two-level. The first level is eight entries that are fully associative and can translate an address within a clock cycle. The second level is three-way associative with 1024 entries per way. Instructions and data both use the same TLB and it is always enabled. The TLB is automatically loaded with translations allowing access to the system ROM at reset. One of the first tasks of the BIOS is to setup access to I/O devices so that something as simple as a LED display may happen.
 TLB updates due to a TLB miss are deferred until the instruction commits to mitigate Spectre attacks.
 If the TLB miss processor runs into an invalid page table entry then a page table fault occurs.
 
