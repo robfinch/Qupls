@@ -67,8 +67,14 @@ checkpoint_t dina1;
 reg [3:0] addra1;
 
 initial begin
-	for (n = 0; n < NCHECK; n = n + 1)
+	for (n = 0; n < NCHECK; n = n + 1) begin
 		mem[n] = {$bits(checkpoint_t){1'b0}};
+		mem[n].avail = {PREGS{1'b1}};
+		mem[n].avail[0] = 1'b0;
+		mem[n].avail[PREGS/4] = 1'b0;
+		mem[n].avail[PREGS/2] = 1'b0;
+		mem[n].avail[PREGS*3/4] = 1'b0;
+	end
 end
 
 // Delay the write by a clock cycle to give a chance to read current map values

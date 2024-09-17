@@ -33,16 +33,20 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 // 3600 LUTs / 1100 FFs	ALU0
-// 3100 LUTs / 700 FFs	
+// 3100 LUTs / 700 FFs
+// 13.5k LUTs	/ 710 FFs ALU0 with capabilities
+//  7.5 kLUTs / 710 FFs ALU0 without capabilities
+// 14.5k LUTs / 1420 FFs ALU0 128-bit without capabilities
 // ============================================================================
 
 import const_pkg::*;
+import cpu_types_pkg::*;
 import QuplsPkg::*;
 
 module Qupls_alu(rst, clk, clk2x, ld, ir, div, a, b, bi, c, i, t, qres,
-	cs, pc, csr, cpl, coreno, canary, o, mul_done, div_done, div_dbz, exc);
-parameter ALU0 = 1'b0;
-parameter WID=16;
+	cs, pc, pcc, csr, cpl, coreno, canary, o, mul_done, div_done, div_dbz, exc_o);
+parameter ALU0 = 1'b1;
+parameter WID=64;
 parameter LANE=0;
 input rst;
 input clk;
@@ -59,6 +63,7 @@ input [WID-1:0] t;
 input [WID-1:0] qres;
 input [2:0] cs;
 input cpu_types_pkg::pc_address_t pc;
+input capability32_t pcc;
 input [WID-1:0] csr;
 input [7:0] cpl;
 input [WID-1:0] coreno;
@@ -67,10 +72,11 @@ output reg [WID-1:0] o;
 output reg mul_done;
 output div_done;
 output div_dbz;
-output cause_code_t exc;
+output cause_code_t exc_o;
 
 genvar g;
 integer nn,kk;
+cause_code_t exc;
 value_t zero = {WID{1'b0}};
 value_t dead = {WID/16{16'hdead}};
 wire cd_args;
@@ -82,6 +88,7 @@ reg [WID*2-1:0] shl, shr, asr;
 wire [WID-1:0] div_q, div_r;
 wire [WID-1:0] cmpo;
 reg [WID-1:0] bus;
+reg [WID-1:0] busx;
 reg [WID-1:0] blendo;
 reg [WID-1:0] immc8;
 reg [22:0] ii;
@@ -132,7 +139,7 @@ else begin
 	mul_done <= mul_cnt[3];
 end
 
-Qupls_cmp #(.WID(WID)) ualu_cmp(ir, a, b, cmpo);
+Qupls_cmp #(.WID(WID)) ualu_cmp(ir, a, b, i, cmpo);
 
 Qupls_divider #(.WID(WID)) udiv0(
 	.rst(rst),
@@ -208,6 +215,17 @@ begin
 	exc = FLT_NONE;
 	bus = {(WID/16){16'h0000}};
 	case(ir.any.opcode)
+	OP_FLT3:
+		case(ir.f3.func)
+		FN_FCMP:	bus = cmpo;
+		FN_FLT1:
+			case(ir.f1.func)
+			FN_FABS:	bus = {1'b0,a[WID-2:0]};
+			FN_FNEG:	bus = {a[WID-1]^1'b1,a[WID-2:0]};
+			default:	bus = {WID{1'd0}};
+			endcase
+		default:	bus = {WID{1'd0}};
+		endcase
 	OP_CHK:
 		case(ir[47:44])
 		4'd0:	if (!(a >= b && a < c)) exc = cause_code_t'(ir[34:27]);
@@ -405,8 +423,12 @@ begin
 		default:	bus = {4{32'hDEADBEEF}};
 		endcase
 	OP_CSR:		bus = csr;
+
 	OP_ADDI:
-		bus = a + i;
+		begin
+			bus = a + i;
+		end
+
 	OP_SUBFI:	bus = i - a;
 	OP_CMPI:
 		bus = cmpo;
@@ -428,14 +450,29 @@ begin
 	OP_EORI:
 		bus = a ^ i;
 	OP_AIPSI:
-		bus = pc + ({{WID{i[23]}},i[23:0]} << (ir[17:15]*24));
+	   if (WID >= 32)
+		  bus = pc + ({{WID{i[23]}},i[23:0]} << (ir[17:15]*24));
+	   else
+	       bus = 'd0;
 	OP_ADDSI:
-		bus = c + ({{WID{i[23]}},i[23:0]} << (ir[17:15]*24));
+	   if (WID < 24)
+	       bus = 'd0;
+	   else
+		  bus = c + ({{WID{i[23]}},i[23:0]} << (ir[17:15]*24));
 	OP_ANDSI:
+	   if (WID < 24)
+	       bus = 'd0;
+	   else
 		bus = c & ({WID{1'b1}} & ~({{WID{1'b0}},24'hffffff} << (ir[17:15]*24)) | ({{WID{i[23]}},i[23:0]} << (ir[17:15]*24)));
 	OP_ORSI:
-		bus = c | (i << (ir[17:15]*24));
+	   if (WID < 24)
+	       bus = 'd0;
+	   else
+    		bus = c | (i << (ir[17:15]*24));
 	OP_EORSI:
+	   if (WID < 24)
+	       bus = 'd0;
+	   else
 		bus = c ^ (i << (ir[17:15]*24));
 	OP_SHIFT:
 		case(ir.shifti.func)
@@ -479,7 +516,47 @@ begin
 	OP_QFEXT:	bus = qres;
 	// Write the next PC to the link register.
 	OP_BSR,OP_JSR:
-						bus = pc + 4'd6;
+		begin
+		/*
+			if (SUPPORT_CAPABILITIES) begin
+				tCapGetBaseTop(pcc, base, top);
+				obase = base;
+				otop = top;
+				tCapEncodeBaseTop(pcc.a + 4'd6, base, top, Lmsb, Ct);
+				Ct.perms = pcc.perms;
+				Ct.flags = pcc.flags;
+				tCapGetBaseTop(Ct, base, top);
+				// new base, top matches old, and not sealed.
+				if (base == obase && top == otop && pcc.otype!=4'hE)
+					otag = atag;
+				Ct.otype = 4'hE;	// seal
+				bus = Ct;
+			end
+			else
+		*/
+				bus = pc + 4'd6;
+		end
+	OP_RTD:
+		begin
+		/*
+			if (SUPPORT_CAPABILITIES) begin
+				tCapGetBaseTop(Cb, base, top);
+				obase = base;
+				otop = top;
+				tCapEncodeBaseTop(Cb.a + i, base, top, Lmsb, Ct);
+				Ct.perms = Cb.perms;
+				Ct.flags = Cb.flags;
+				tCapGetBaseTop(Ct, base, top);
+				// new base, top matches old, and not sealed.
+				if (base == obase && top == otop)
+					otag = atag;
+				Ct.otype = 4'hF;	// unseal
+				bus = Ct;
+			end
+			else
+		*/
+				bus = b + i;
+		end
 	OP_Bcc,OP_BccU:
 		case(ir.br.inc)
 		2'd0:	bus = a;
@@ -488,11 +565,14 @@ begin
 		2'd2:	bus = a;
 		endcase
 	OP_PRED:	bus = a;
+
 	default:	bus = {(WID/16){16'hDEAD}};
 	endcase
 end
 
-always_comb
+always_ff @(posedge clk)
 	o = bus;
+always_ff @(posedge clk)
+	exc_o = exc;
 
 endmodule

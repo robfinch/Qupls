@@ -38,7 +38,7 @@ import QuplsPkg::*;
 
 module Qupls_btb(rst, clk, en, clk_en, rclk, micro_code_active, block_header,
 	igrp, length_byte,
-	pc, pc0, pc1, pc2, pc3, pc4, next_pc, alt_next_pc,
+	pc, pc0, pc1, pc2, pc3, pc4, next_pc, alt_pc, alt_next_pc,
 	takb, do_bsr, bsr_tgt, pe_bsdone,
 	branchmiss, branch_state, misspc,
 	mip0v, mip1v, mip2v, mip3v,
@@ -64,6 +64,7 @@ input cpu_types_pkg::pc_address_t pc2;
 input cpu_types_pkg::pc_address_t pc3;
 input cpu_types_pkg::pc_address_t pc4;
 output cpu_types_pkg::pc_address_t next_pc;
+input cpu_types_pkg::pc_address_t alt_pc;
 output cpu_types_pkg::pc_address_t alt_next_pc;
 output reg takb;
 input mip0v;
@@ -450,22 +451,22 @@ begin
 	end
 	else if (en && pc0==doutb0.pc && doutb0.takb) begin
 		next_pc <= doutb0.tgt;
-		alt_next_pc <= pc + 5'd24;
+		alt_next_pc <= pc0 + 5'd6;
 		takb <= 1'b1;
 	end
 	else if (en && pc1==doutb1.pc && doutb1.takb) begin
 		next_pc <= doutb1.tgt;
-		alt_next_pc <= pc + 5'd24;
+		alt_next_pc <= pc1 + 5'd6;
 		takb <= 1'b1;
 	end
 	else if (en && pc2==doutb2.pc && doutb2.takb) begin
 		next_pc <= doutb2.tgt;
-		alt_next_pc <= pc + 5'd24;
+		alt_next_pc <= pc2 + 5'd6;
 		takb <= 1'b1;
 	end
 	else if (en && pc3==doutb3.pc && doutb3.takb) begin
 		next_pc <= doutb3.tgt;
-		alt_next_pc <= pc + 5'd24;
+		alt_next_pc <= pc3 + 5'd6;
 		takb <= 1'b1;
 	end
 	else begin
@@ -520,7 +521,7 @@ begin
 				mip1v:	begin next_pc <= pc + 5'd12; alt_next_pc <= pc + 5'd12; end
 				mip2v:	begin next_pc <= pc + 5'd18; alt_next_pc <= pc + 5'd18; end
 				mip3v:	begin next_pc <= pc + 5'd24; alt_next_pc <= pc + 5'd24; end
-				default:	begin next_pc <= pc + 5'd24;	alt_next_pc <= pc + 5'd24; end	// four instructions
+				default:	begin next_pc <= pc + 5'd24;	alt_next_pc <= alt_pc + 5'd24; end	// four instructions
 				endcase
 			end
 		end

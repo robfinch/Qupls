@@ -44,25 +44,25 @@ function memsz_t fnPrec;
 input instruction_t ir;
 begin
 	case(ir.r2.opcode)
-	OP_CHK:	fnPrec = QuplsPkg::hexi;
-	OP_R2:	fnPrec = QuplsPkg::hexi;
+	OP_CHK:	fnPrec = QuplsPkg::octa;
+	OP_R2:	fnPrec = QuplsPkg::octa;
 	OP_ADDI:	
 		fnPrec = QuplsPkg::hexi;
-	OP_SUBFI:	fnPrec = QuplsPkg::hexi;
+	OP_SUBFI:	fnPrec = QuplsPkg::octa;
 	OP_CMPI:	
-		fnPrec = QuplsPkg::hexi;
+		fnPrec = QuplsPkg::octa;
 	OP_MULI:	
-		fnPrec = QuplsPkg::hexi;
+		fnPrec = QuplsPkg::octa;
 	OP_DIVI:	
-		fnPrec = QuplsPkg::hexi;
+		fnPrec = QuplsPkg::octa;
 	OP_ANDI:	
-		fnPrec = QuplsPkg::hexi;
+		fnPrec = QuplsPkg::octa;
 	OP_ORI:
-		fnPrec = QuplsPkg::hexi;
+		fnPrec = QuplsPkg::octa;
 	OP_EORI:
-		fnPrec = QuplsPkg::hexi;
+		fnPrec = QuplsPkg::octa;
 	OP_ADDSI,OP_ORSI,OP_ANDSI,OP_EORSI:
-						fnPrec = QuplsPkg::hexi;
+						fnPrec = QuplsPkg::octa;
 	OP_SHIFT:
 		case(ir[43:41])
 		3'd0:	fnPrec = QuplsPkg::byt;
@@ -70,21 +70,21 @@ begin
 		3'd2:	fnPrec = QuplsPkg::tetra;
 		3'd3:	fnPrec = QuplsPkg::octa;
 		3'd4: fnPrec = QuplsPkg::hexi;
-		default:	fnPrec = QuplsPkg::hexi;
+		default:	fnPrec = QuplsPkg::octa;
 		endcase
 	OP_FLT3:	fnPrec = QuplsPkg::octa;
 	OP_CSR:		fnPrec = QuplsPkg::octa;
-	OP_MOV:		fnPrec = QuplsPkg::hexi;
+	OP_MOV:		fnPrec = QuplsPkg::octa;
 	OP_LDAX:	fnPrec = QuplsPkg::octa;
 	OP_QFEXT,
 	OP_VEC,OP_VECZ,
 	OP_NOP,OP_PUSH,OP_POP,OP_ENTER,OP_LEAVE,OP_ATOM:
-		fnPrec = QuplsPkg::hexi;
+		fnPrec = QuplsPkg::octa;
 	OP_FENCE:
-		fnPrec = QuplsPkg::hexi;
+		fnPrec = QuplsPkg::octa;
 	OP_BSR,OP_JSR:
 		fnPrec = QuplsPkg::octa;
-	default:	fnPrec = QuplsPkg::hexi;
+	default:	fnPrec = QuplsPkg::octa;
 	endcase
 end
 endfunction

@@ -44,7 +44,7 @@ function fnIsR2;
 input instruction_t op;
 begin
 	case(op.any.opcode)
-	OP_R1,OP_R2,OP_R3V,OP_R3VS:
+	OP_R2,OP_R3V,OP_R3VS:
 		fnIsR2 = 1'b1;
 	default:
 		fnIsR2 = 1'b0;

@@ -36,10 +36,11 @@
 
 import QuplsPkg::*;
 
-module Qupls_decode_load(instr, load, cload);
+module Qupls_decode_load(instr, load, cload, cload_tags);
 input instruction_t instr;
 output load;
 output cload;
+output cload_tags;
 
 function fnIsLoad;
 input instruction_t op;
@@ -76,7 +77,23 @@ begin
 end
 endfunction
 
+function fnIsCLoadTags;
+input instruction_t op;
+begin
+	case(op.any.opcode)
+	OP_CAP:
+		case(op.cap.func)
+		FN_CLOADTAGS:	fnIsCLoadTags = 1'b1;
+		default:	fnIsCLoadTags = 1'b0;
+		endcase
+	default:
+		fnIsCLoadTags = 1'b0;
+	endcase
+end
+endfunction
+
 assign load = fnIsLoad(instr);
 assign cload = fnIsCLoad(instr);
+assign cload_tags = fnIsCLoad(instr);
 
 endmodule

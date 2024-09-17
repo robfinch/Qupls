@@ -41,14 +41,15 @@
 //
 import QuplsPkg::*;
 
-module Qupls_reg_renamer3(rst,clk,clk5x,en,list2free,tags2free,freevals,
+module Qupls_reg_renamer3(rst,clk,clk5x,en,restore,restore_list,tags2free,freevals,
 	alloc0,alloc1,alloc2,alloc3,wo0,wo1,wo2,wo3,wv0,wv1,wv2,wv3,avail,stall);
 parameter NFTAGS = 4;
 input rst;
 input clk;
 input clk5x;
 input en;
-input [PREGS-1:0] list2free;
+input restore;
+input [PREGS-1:0] restore_list;
 input cpu_types_pkg::pregno_t [NFTAGS-1:0] tags2free;		// register tags to free
 input [NFTAGS-1:0] freevals;					// bitmnask indicating which tags to free
 input alloc0;					// allocate target register 0
@@ -151,10 +152,6 @@ end
 always_comb
 if (rst) begin
 	next_avail = {{PREGS-1{1'b1}},1'b0};
-	next_avail[PREGS-1] = 1'b0;
-	next_avail[PREGS*3/4-1] = 1'b0;
-	next_avail[PREGS/2-1] = 1'b0;
-	next_avail[PREGS/4-1] = 1'b0;
 	next_avail[0] = 1'b0;
 	next_avail[PREGS/4] = 1'b0;
 	next_avail[PREGS/2] = 1'b0;
@@ -184,11 +181,8 @@ else begin
 	if (freevals[3])
 		next_avail[tags2free[3]] = 1'b1;
 
-	next_avail = next_avail | list2free;
-	next_avail[PREGS-1] = 1'b0;
-	next_avail[PREGS*3/4-1] = 1'b0;
-	next_avail[PREGS/2-1] = 1'b0;
-	next_avail[PREGS/4-1] = 1'b0;
+	if (restore)
+		next_avail = restore_list;
 	next_avail[0] = 1'b0;
 	next_avail[PREGS/4] = 1'b0;
 	next_avail[PREGS/2] = 1'b0;

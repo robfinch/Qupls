@@ -188,10 +188,18 @@ begin
 	ins0_.mcip = mip_i;
 	ins0_.len = len0_i;
 	ins0_.ins = ic_line_aligned[47:0];
-	ins0_.aRa = {3'd0,ins0_.ins.r3.Ra.num};
-	ins0_.aRb = {3'd0,ins0_.ins.r3.Rb.num};
-	ins0_.aRc = {3'd0,ins0_.ins.r3.Rc.num};
-	ins0_.aRt = {3'd0,ins0_.ins.r3.Rt.num};
+	if (ins0_.ins.any.opcode==OP_QFEXT) begin
+		ins0_.aRa = {ins0_.ins[41:39],ins0_.ins.r3.Ra.num};
+		ins0_.aRb = {ins0_.ins[44:42],ins0_.ins.r3.Rb.num};
+		ins0_.aRc = {ins0_.ins[47:45],ins0_.ins.r3.Rc.num};
+		ins0_.aRt = {ins0_.ins[38:36],ins0_.ins.r3.Rt.num};
+	end
+	else begin
+		ins0_.aRa = {3'd0,ins0_.ins.r3.Ra.num};
+		ins0_.aRb = {3'd0,ins0_.ins.r3.Rb.num};
+		ins0_.aRc = {3'd0,ins0_.ins.r3.Rc.num};
+		ins0_.aRt = {3'd0,ins0_.ins.r3.Rt.num};
+	end
 	ins0_.pred_btst = 6'd0;
 	ins0_.element = 'd0;
 end
@@ -201,10 +209,18 @@ begin
 	ins1_.mcip = mip_i|2'd1;
 	ins1_.len = len1_i;
 	ins1_.ins = ic_line_aligned[95:48];
-	ins1_.aRa = {3'd0,ins1_.ins.r3.Ra.num};
-	ins1_.aRb = {3'd0,ins1_.ins.r3.Rb.num};
-	ins1_.aRc = {3'd0,ins1_.ins.r3.Rc.num};
-	ins1_.aRt = {3'd0,ins1_.ins.r3.Rt.num};
+	if (ins1_.ins.any.opcode==OP_QFEXT) begin
+		ins1_.aRa = {ins1_.ins[41:39],ins1_.ins.r3.Ra.num};
+		ins1_.aRb = {ins1_.ins[44:42],ins1_.ins.r3.Rb.num};
+		ins1_.aRc = {ins1_.ins[47:45],ins1_.ins.r3.Rc.num};
+		ins1_.aRt = {ins1_.ins[38:36],ins1_.ins.r3.Rt.num};
+	end
+	else begin
+		ins1_.aRa = {3'd0,ins1_.ins.r3.Ra.num};
+		ins1_.aRb = {3'd0,ins1_.ins.r3.Rb.num};
+		ins1_.aRc = {3'd0,ins1_.ins.r3.Rc.num};
+		ins1_.aRt = {3'd0,ins1_.ins.r3.Rt.num};
+	end
 	ins1_.pred_btst = 6'd0;
 	ins1_.element = 'd0;
 end
@@ -214,10 +230,18 @@ begin
 	ins2_.mcip = mip_i|2'd2;
 	ins2_.len = len2_i;
 	ins2_.ins = ic_line_aligned[143:96];
-	ins2_.aRa = {3'd0,ins2_.ins.r3.Ra.num};
-	ins2_.aRb = {3'd0,ins2_.ins.r3.Rb.num};
-	ins2_.aRc = {3'd0,ins2_.ins.r3.Rc.num};
-	ins2_.aRt = {3'd0,ins2_.ins.r3.Rt.num};
+	if (ins2_.ins.any.opcode==OP_QFEXT) begin
+		ins2_.aRa = {ins2_.ins[41:39],ins2_.ins.r3.Ra.num};
+		ins2_.aRb = {ins2_.ins[44:42],ins2_.ins.r3.Rb.num};
+		ins2_.aRc = {ins2_.ins[47:45],ins2_.ins.r3.Rc.num};
+		ins2_.aRt = {ins2_.ins[38:36],ins2_.ins.r3.Rt.num};
+	end
+	else begin
+		ins2_.aRa = {3'd0,ins2_.ins.r3.Ra.num};
+		ins2_.aRb = {3'd0,ins2_.ins.r3.Rb.num};
+		ins2_.aRc = {3'd0,ins2_.ins.r3.Rc.num};
+		ins2_.aRt = {3'd0,ins2_.ins.r3.Rt.num};
+	end
 	ins2_.pred_btst = 6'd0;
 	ins2_.element = 'd0;
 end
@@ -227,10 +251,18 @@ begin
 	ins3_.mcip = mip_i|2'd3;
 	ins3_.len = len3_i;
 	ins3_.ins = ic_line_aligned[191:144];
-	ins3_.aRa = {3'd0,ins3_.ins.r3.Ra.num};
-	ins3_.aRb = {3'd0,ins3_.ins.r3.Rb.num};
-	ins3_.aRc = {3'd0,ins3_.ins.r3.Rc.num};
-	ins3_.aRt = {3'd0,ins3_.ins.r3.Rt.num};
+	if (ins3_.ins.any.opcode==OP_QFEXT) begin
+		ins3_.aRa = {ins3_.ins[41:39],ins3_.ins.r3.Ra.num};
+		ins3_.aRb = {ins3_.ins[44:42],ins3_.ins.r3.Rb.num};
+		ins3_.aRc = {ins3_.ins[47:45],ins3_.ins.r3.Rc.num};
+		ins3_.aRt = {ins3_.ins[38:36],ins3_.ins.r3.Rt.num};
+	end
+	else begin
+		ins3_.aRa = {3'd0,ins3_.ins.r3.Ra.num};
+		ins3_.aRb = {3'd0,ins3_.ins.r3.Rb.num};
+		ins3_.aRc = {3'd0,ins3_.ins.r3.Rc.num};
+		ins3_.aRt = {3'd0,ins3_.ins.r3.Rt.num};
+	end
 	ins3_.pred_btst = 6'd0;
 	ins3_.element = 'd0;
 end

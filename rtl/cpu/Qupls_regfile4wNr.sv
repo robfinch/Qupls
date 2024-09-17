@@ -90,6 +90,10 @@ reg [RPORTS/4-1:0] mto0;
 reg wr;
 reg we;
 reg [RBIT:0] wa;
+cpu_types_pkg::value_t i0a;
+cpu_types_pkg::value_t i1a;
+cpu_types_pkg::value_t i2a;
+cpu_types_pkg::value_t i3a;
 cpu_types_pkg::value_t i;
 reg wt;
 reg ti;
@@ -98,8 +102,9 @@ genvar g;
 integer nn,mm,qq;
 
 cpu_types_pkg::pregno_t [RPORTS/4-1:0] mra;
+reg ph4d;
 reg [1:0] cnt, cntd, cntd2;
-reg [2:0] wcnt;
+reg [2:0] wcnt,wcntd;
 
 always_ff @(posedge clk5x)
 if (rst) begin
@@ -118,12 +123,14 @@ end
 always_ff @(posedge clk5x)
 if (rst) begin
 	wcnt <= 3'd0;
+	wcntd <= 3'd0;
 end
 else begin
 	if (ph4)
 		wcnt <= 3'd0;
 	else if (wcnt < 3'd4)
 		wcnt <= wcnt + 2'd1;
+	wcntd <= wcnt;
 end
 
 always_ff @(posedge clk5x)
@@ -142,14 +149,20 @@ begin
 end
 */
 
+always_ff @(posedge clk5x) ph4d <= ph4;
+always_ff @(posedge clk5x) if (ph4d) i0a <= i0;
+always_ff @(posedge clk5x) if (ph4d) i1a <= i1;
+always_ff @(posedge clk5x) if (ph4d) i2a <= i2;
+always_ff @(posedge clk5x) if (ph4d) i3a <= i3;
+
 always_ff @(posedge clk5x)
 begin
 	for (mm = 0; mm < 4; mm = mm + 1) begin
-		case(wcnt)
-		3'd0:	begin wr <= wr0; we <= we0 && wa0!=10'd0; wa <= wa0; i <= i0; wt <= wt0; ti <= ti0; end
-		3'd1:	begin wr <= wr1; we <= we1 && wa1!=10'd0; wa <= wa1; i <= i1; wt <= wt1; ti <= ti1;  end
-		3'd2: begin wr <= wr2; we <= we2 && wa2!=10'd0; wa <= wa2; i <= i2; wt <= wt2; ti <= ti2;  end
-		3'd3:	begin wr <= wr3; we <= we3 && wa3!=10'd0; wa <= wa3; i <= i3; wt <= wt3; ti <= ti3;  end
+		case(wcntd)
+		3'd0:	begin wr <= wr0; we <= we0 && wa0!=10'd0; wa <= wa0; i <= i0a; wt <= wt0; ti <= ti0; end
+		3'd1:	begin wr <= wr1; we <= we1 && wa1!=10'd0; wa <= wa1; i <= i1a; wt <= wt1; ti <= ti1;  end
+		3'd2: begin wr <= wr2; we <= we2 && wa2!=10'd0; wa <= wa2; i <= i2a; wt <= wt2; ti <= ti2;  end
+		3'd3:	begin wr <= wr3; we <= we3 && wa3!=10'd0; wa <= wa3; i <= i3a; wt <= wt3; ti <= ti3;  end
 		default:	begin wr <= 1'b1; we <= 1'b1; wa <= {RBIT+1{1'd0}}; i <= {WID{1'b0}}; wt <= 1'b1; ti <= 1'b0; end
 		endcase
 	end

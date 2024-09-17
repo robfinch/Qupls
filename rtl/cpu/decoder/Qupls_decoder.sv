@@ -238,7 +238,8 @@ Qupls_decode_load udecld1
 (
 	.instr(ins.ins),
 	.load(db.load),
-	.cload(db.cload)
+	.cload(db.cload),
+	.cload_tags(db.cload_tags)
 );
 
 Qupls_decode_loadz udecldz1
@@ -373,7 +374,15 @@ else begin
 		dbo.predz <= ins.ins[47];
 		dbo.cpytgt <= 1'b0;
 		dbo.qfext <= ins.ins.any.opcode==OP_QFEXT;
+		if (ins.ins.any.opcode==OP_QFEXT) begin
+			if ((db.Ra > 8'd28 && db.Ra < 8'd56) ||
+					(db.Rb > 8'd28 && db.Rb < 8'd56) ||
+					(db.Rc > 8'd28 && db.Rc < 8'd56) ||
+					(db.Rt > 8'd28 && db.Rt < 8'd56))
+					dbo.regexc <= 1'b1;
+		end
 		dbo.vec2 <= db.vec;
+		dbo.cap <= ins.ins.any.opcode==OP_CAP;
 		dbo.mvvr <= ins.ins.any.opcode==OP_R2 && ins.ins.r2.func==FN_MVVR;
 		dbo.jsri <= ins.ins.any.opcode==OP_JSRI;
 		dbo.pushi <= ins.ins.any.opcode==OP_PUSHI;

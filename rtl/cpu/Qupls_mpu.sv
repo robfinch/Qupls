@@ -317,6 +317,7 @@ urb1
 (
 	.rst(rst_i),
 	.clk(clk_i),
+	.clk5x(clk5x_i),
 	.resp(resp_ch),
 	.resp_o(wb128_resp)
 );

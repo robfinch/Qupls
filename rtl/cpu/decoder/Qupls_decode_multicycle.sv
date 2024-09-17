@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2023-2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -44,6 +44,26 @@ function fnIsMC;
 input instruction_t ir;
 begin
 	case(ir.any.opcode)
+	OP_FLT3:
+		case(ir.f3.func)
+		FN_FLT1:
+			case(ir.f1.func)
+			FN_FTOI: fnIsMC = 1'b1;
+			FN_ITOF: fnIsMC = 1'b1;
+			FN_FSIN:	fnIsMC = 1'b1;
+			FN_FCOS:	fnIsMC = 1'b1;
+//			FN_FSQRT: done = sqrt_done;
+			FN_FRES:	fnIsMC = 1'b1;
+			FN_FTRUNC:	fnIsMC = 1'b1;
+			default:	fnIsMC = 1'b0;
+			endcase
+		FN_FSCALEB: fnIsMC = 1'b1;
+		FN_FADD,FN_FSUB,FN_FMUL:
+			fnIsMC = 1'b1;
+		default:	fnIsMC = 1'b0;
+		endcase
+	FN_FMA,FN_FMS,FN_FNMA,FN_FNMS:
+		fnIsMC = 1'b1;
 	OP_R2:
 		case(ir.r2.func)
 		FN_MUL,FN_MULU,FN_MULSU,FN_MULW,FN_MULUW,FN_MULSUW,

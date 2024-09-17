@@ -62,6 +62,8 @@ wire [WID-1:0] scaleo, f2io, i2fo, signo, cmpo, divo, sqrto, freso, trunco;
 wire ce = 1'b1;
 wire cd_args;
 
+Qupls_cmp #(.WID(WID)) ualu_cmp(ir, a, b, i, cmpo);
+
 // A change in arguments is used to load the divider.
 change_det #(.WID(32)) uargcd0 (
 	.rst(rst),
@@ -321,12 +323,101 @@ begin
 		endcase
 	FN_FMA,FN_FMS,FN_FNMA,FN_FNMS:
 		bus = fmao;
+	OP_R2:
+		case(ir.r2.func)
+		FN_ADD:
+			case(ir.r2.op2)
+			3'd0:	bus = (a + b) & c;
+			3'd1: bus = (a + b) | c;
+			3'd2: bus = (a + b) ^ c;
+			3'd3:	bus = (a + b) + c;
+			/*
+			4'd9:	bus = (a + b) - c;
+			4'd10: bus = (a + b) + c + 2'd1;
+			4'd11: bus = (a + b) + c - 2'd1;
+			4'd12:
+				begin
+					sd = (a + b) + c;
+					bus = sd[WID-1] ? -sd : sd;
+				end
+			4'd13:
+				begin
+					sd = (a + b) - c;
+					bus = sd[WID-1] ? -sd : sd;
+				end
+			*/
+			default:	bus = {WID{1'd0}};
+			endcase
+		FN_SUB:	bus = a - b - c;
+		FN_CMP,FN_CMPU:	
+			case(ir.r2.op2)
+			3'd1:	bus = cmpo & c;
+			3'd2:	bus = cmpo | c;
+			3'd3:	bus = cmpo ^ c;
+			default:	bus = cmpo;
+			endcase
+		FN_AND:	
+			case(ir.r2.op2)
+			3'd0:	bus = (a & b) & c;
+			3'd1: bus = (a & b) | c;
+			3'd2: bus = (a & b) ^ c;
+			default:	bus = {WID{1'd0}};
+			endcase
+		FN_OR:
+			case(ir.r2.op2)
+			3'd0:	bus = (a | b) & c;
+			3'd1: bus = (a | b) | c;
+			3'd2: bus = (a | b) ^ c;
+			3'd7:	bus = (a & b) | (a & c) | (b & c);
+			default:	bus = {WID{1'd0}};
+			endcase
+		FN_EOR:	
+			case(ir.r2.op2)
+			3'd0:	bus = (a ^ b) & c;
+			3'd1: bus = (a ^ b) | c;
+			3'd2: bus = (a ^ b) ^ c;
+			3'd7:	bus = (^a) ^ (^b) ^ (^c);
+			default:	bus = {WID{1'd0}};
+			endcase
+		FN_CMOVZ: bus = a ? c : b;
+		FN_CMOVNZ:	bus = a ? b : c;
+		FN_NAND:
+			case(ir.r2.op2)
+			3'd0:	bus = ~(a & b) & c;
+			3'd1: bus = ~(a & b) | c;
+			3'd2: bus = ~(a & b) ^ c;
+			default:	bus = {WID{1'd0}};
+			endcase
+		FN_NOR:
+			case(ir.r2.op2)
+			3'd0:	bus = ~(a | b) & c;
+			3'd1: bus = ~(a | b) | c;
+			3'd2: bus = ~(a | b) ^ c;
+			default:	bus = {WID{1'd0}};
+			endcase
+		FN_ENOR:
+			case(ir.r2.op2)
+			3'd0:	bus = ~(a ^ b) & c;
+			3'd1: bus = ~(a ^ b) | c;
+			3'd2: bus = ~(a ^ b) ^ c;
+			default:	bus = {WID{1'd0}};
+			endcase
+		FN_MVVR:	bus = a;
+		default:	bus = {4{32'hDEADBEEF}};
+		endcase
+	OP_ADDI:	bus = a + i;
+	OP_CMPI:	bus = cmpo;
+	OP_CMPUI:	bus = cmpo;
+	OP_ANDI:	bus = a & i;
+	OP_ORI:		bus = a | i;
+	OP_EORI:	bus = a ^ i;
+	OP_MOV:		bus = a;
+	OP_NOP:		bus = 16'd0;
 	default:	bus = 16'd0;
 	endcase
 end
 
 always_comb
-if (!idle)
 	case(ir.any.opcode)
 	OP_FLT3:
 		case(ir.f2.func)
@@ -353,10 +444,17 @@ if (!idle)
 		endcase
 	FN_FMA,FN_FMS,FN_FNMA,FN_FNMS:
 		done = fma_done;
+	OP_R2:		done = 1'b1;
+	OP_ADDI:	done = 1'b1;
+	OP_CMPI:	done = 1'b1;
+	OP_CMPUI:	done = 1'b1;
+	OP_ANDI:	done = 1'b1;
+	OP_ORI:		done = 1'b1;
+	OP_EORI:	done = 1'b1;
+	OP_MOV:		done = 1'b1;
+	OP_NOP:		done = 1'b1;
 	default:	done = 1'b1;
 	endcase
-else
-	done = 1'b0;
 
 always_comb
 	o = bus;

@@ -44,6 +44,7 @@ function fnIsFpu0;
 input instruction_t ir;
 begin
 	case(ir.r2.opcode)
+	OP_CAP:	fnIsFpu0 = 1'b1;
 	OP_FLT3:
 		case(ir.f3.func)
 		FN_FLT1:

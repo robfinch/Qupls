@@ -40,10 +40,10 @@ import cpu_types_pkg::*;
 import QuplsPkg::*;
 
 module Qupls_alu_station(rst, clk, available, idle, issue, rndx, rndxv, rob,
-	rfo_argA, rfo_argB, rfo_argC, rfo_argT, rfo_argM, vrm, vex,
-	ld, id, 
-	argA, argB, argBI, argC, argI, argT, argM, cpytgt,
-	cs, aRtz, aRt, nRt, bank, instr, div, cptgt, pc, cp,
+	rfo_argA, rfo_argB, rfo_argC, rfo_argT, rfo_argM, rfo_argA_ctag, rfo_argB_ctag,
+	vrm, vex, ld, id, 
+	argA, argB, argBI, argC, argI, argT, argM, argA_ctag, argB_ctag, cpytgt,
+	cs, aRtz, aRt, nRt, bank, instr, div, cap, cptgt, pc, cp,
 	pred, predz, prc
 );
 input rst;
@@ -59,6 +59,8 @@ input value_t rfo_argB;
 input value_t rfo_argC;
 input value_t rfo_argT;
 input value_t rfo_argM;
+input rfo_argA_ctag;
+input rfo_argB_ctag;
 input cpytgt;
 input value_t vrm [0:3];						// vector restart mask
 input value_t vex [0:3];						// vector exception
@@ -71,6 +73,8 @@ output value_t argC;
 output value_t argI;
 output value_t argT;
 output value_t argM;
+output reg argA_ctag;
+output reg argB_ctag;
 output reg cs;
 output reg aRtz;
 output aregno_t aRt;
@@ -78,6 +82,7 @@ output pregno_t nRt;
 output reg bank;
 output ex_instruction_t instr;
 output reg div;
+output reg cap;
 output reg [15:0] cptgt;
 output pc_address_t pc;
 output checkpt_ndx_t cp;
@@ -96,6 +101,8 @@ if (rst) begin
 	argI <= value_zero;
 	argT <= value_zero;
 	argM <= value_zero;
+	argA_ctag = 1'b0;
+	argB_ctag = 1'b0;
 	cs <= 1'b0;
 	nRt <= 11'd0;
 	bank <= 1'b0;
@@ -144,6 +151,8 @@ else begin
 		argT <= rfo_argT;
 		argM <= rfo_argM;
 		argI	<= rob.decbus.immb;
+		argA_ctag <= rfo_argA_ctag;
+		argB_ctag <= rfo_argB_ctag;
 		cs <= rob.decbus.Rcc;
 		nRt <= rob.nRt;
 		aRt <= rob.decbus.Rt;
@@ -151,6 +160,7 @@ else begin
 		pred <= rob.decbus.pred;
 		predz <= rob.decbus.predz;
 		div <= rob.decbus.div;
+		cap <= rob.decbus.cap;
 		// For a vector instruction we got the entire mask register, only the bits
 		// relevant to the current element are needed. So, they are extracted.
 		if (rob.decbus.vec)

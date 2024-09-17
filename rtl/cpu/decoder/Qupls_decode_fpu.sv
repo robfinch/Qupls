@@ -44,8 +44,34 @@ function fnIsFpu;
 input instruction_t ir;
 begin
 	case(ir.r2.opcode)
-	OP_FLT3:
+	OP_CAP:	fnIsFpu = 1'b1;
+	OP_FLT3:	fnIsFpu = 1'b1;
+	FN_FMA,FN_FMS,FN_FNMA,FN_FNMS:
 		fnIsFpu = 1'b1;
+	OP_R2:
+		case(ir.r2.func)
+		FN_ADD:	fnIsFpu = 1'b1;
+		FN_SUB:	fnIsFpu = 1'b1;
+		FN_CMP,FN_CMPU:		fnIsFpu = 1'b1;
+		FN_AND:		fnIsFpu = 1'b1;
+		FN_OR:	fnIsFpu = 1'b1;
+		FN_EOR:		fnIsFpu = 1'b1;
+		FN_CMOVZ: 	fnIsFpu = 1'b1;
+		FN_CMOVNZ:		fnIsFpu = 1'b1;
+		FN_NAND:	fnIsFpu = 1'b1;
+		FN_NOR:	fnIsFpu = 1'b1;
+		FN_ENOR:	fnIsFpu = 1'b1;
+		FN_MVVR:		fnIsFpu = 1'b1;
+		default:		fnIsFpu = 1'b0;
+		endcase
+	OP_ADDI:	fnIsFpu = 1'b1;
+	OP_CMPI:	fnIsFpu = 1'b1;
+	OP_CMPUI:	fnIsFpu = 1'b1;
+	OP_ANDI:	fnIsFpu = 1'b1;
+	OP_ORI:	fnIsFpu = 1'b1;
+	OP_EORI:	fnIsFpu = 1'b1;
+	OP_MOV:	fnIsFpu = 1'b1;
+	OP_NOP:	fnIsFpu = 1'b1;
 	default:	fnIsFpu = 1'b0;
 	endcase
 end

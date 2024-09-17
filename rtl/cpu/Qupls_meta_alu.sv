@@ -35,13 +35,15 @@
 // 41000 LUTs / 2000 FFs / 239 DSPs	-	ALU0 (128-bit)
 // 15300 LUTs / 570 FFs / 56 DSPs (64-bit)
 // 5800 LUTs / 360 FFs / 32 DSPs (64-bit, no precision support)
+// 6600 LUTs / 400 FFs / 32 DSPs (64-bit, no precision support - with caps.)
 // ============================================================================
 
 import const_pkg::*;
 import QuplsPkg::*;
 
 module Qupls_meta_alu(rst, clk, clk2x, ld, lane, prc, ir, div, cptgt, z, a, b, bi,
-	c, i, t, qres, cs, pc, csr, cpl, canary, o, mul_done, div_done, div_dbz, exc);
+	c, i, t, qres, cs, pc, csr, cpl, canary, o,
+	mul_done, div_done, div_dbz, exc);
 parameter ALU0 = 1'b0;
 parameter WID=$bits(cpu_types_pkg::value_t); 
 input rst;
@@ -73,7 +75,9 @@ output div_dbz;
 output reg [WID-1:0] exc;
 
 wire [WID-1:0] o16,o32,o64,o128;
+wire o64_tag, o128_tag;
 reg [WID-1:0] o1;
+reg o1_tag;
 wire [WID-1:0] exc16,exc32,exc64,exc128;
 reg [WID-1:0] exc1;
 wire [WID/16-1:0] div_done16;
@@ -114,7 +118,7 @@ generate begin : g16
 			.mul_done(mul_done16[g]),
 			.div_done(div_done16[g]),
 			.div_dbz(),
-			.exc(exc16[g*8+7:g*8])
+			.exc_o(exc16[g*8+7:g*8])
 		);
 end
 endgenerate
@@ -146,13 +150,13 @@ generate begin : g32
 			.mul_done(mul_done32[g]),
 			.div_done(div_done32[g]),
 			.div_dbz(),
-			.exc(exc32[g*8+7:g*8])
+			.exc_o(exc32[g*8+7:g*8])
 		);
 end
 endgenerate
 
 generate begin : g64
-	if (SUPPORT_PREC)
+	if (SUPPORT_PREC || WID==64)
 	for (g = 0; g < WID/64; g = g + 1)
 		Qupls_alu #(.WID(64), .ALU0(ALU0)) ualu64
 		(
@@ -178,13 +182,14 @@ generate begin : g64
 			.mul_done(mul_done64[g]),
 			.div_done(div_done64[g]),
 			.div_dbz(),
-			.exc(exc64[g*8+7:g*8])
+			.exc_o(exc64[g*8+7:g*8])
 		);
 end
 endgenerate
 
 // Always supported.
 generate begin : g128
+	if (WID==128)
 	for (g = 0; g < WID/128; g = g + 1)
 		Qupls_alu #(.WID(128), .ALU0(ALU0)) ualu128
 		(
@@ -210,7 +215,7 @@ generate begin : g128
 			.mul_done(mul_done128[g]),
 			.div_done(div_done128[g]),
 			.div_dbz(),
-			.exc(exc128[g*8+7:g*8])
+			.exc_o(exc128[g*8+7:g*8])
 		);
 end
 endgenerate
@@ -246,14 +251,20 @@ always_comb
 begin
 	if (SUPPORT_PREC)
 		case(prc)
-		QuplsPkg::wyde:		o1 = o16;
-		QuplsPkg::tetra:	o1 = o32;
-		QuplsPkg::octa:		o1 = o64;
-		QuplsPkg::hexi:		o1 = o128;
-		default:o1 = o128;
+		QuplsPkg::wyde:		begin o1 = o16; end
+		QuplsPkg::tetra:	begin o1 = o32; end
+		QuplsPkg::octa:		begin o1 = o64; end
+		QuplsPkg::hexi:		begin o1 = o128; end
+		default:	begin o1 = o128; end
 		endcase
-	else
-		o1 = o128;
+	else begin
+		if (WID==64) begin
+			o1 = o64;
+		end
+		else begin
+			o1 = o128;
+		end
+	end
 	case(ir.any.opcode)
 	OP_R2:
 		case(ir.r3.func)
@@ -333,10 +344,10 @@ always_comb
 		QuplsPkg::tetra:	exc1 = exc32;
 		QuplsPkg::octa:		exc1 = exc64;
 		QuplsPkg::hexi:		exc1 = exc128;
-		default:exc1 = exc128;
+		default:exc1 = exc64;
 		endcase
 	else
-		exc1 = exc128;
+		exc1 = exc64;
 
 // Exceptions are squashed for lanes that are not supposed to modify the target.
 

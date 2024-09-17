@@ -46,17 +46,17 @@
 import const_pkg::*;
 import QuplsPkg::*;
 
-module Qupls_rat(rst, clk, en, nq, stallq, cndx_o, avail_i, restore, rob,
+module Qupls_rat(rst, clk, clk6x, ph4, en, nq, stallq, cndx_o, avail_i, restore, rob,
 	stomp, miss_cp, wr0, wr1, wr2, wr3, inc_chkpt,
 	wra_cp, wrb_cp, wrc_cp, wrd_cp, qbr0, qbr1, qbr2, qbr3,
-	rn, rnv,
+	rn, rng, rnt, rnv,
 	rrn, rn_cp,
 	vn, 
 	wrbanka, wrbankb, wrbankc, wrbankd, cmtbanka, cmtbankb, cmtbankc, cmtbankd, rnbank,
 	wra, wrra, wrb, wrrb, wrc, wrrc, wrd, wrrd, cmtav, cmtbv, cmtcv, cmtdv,
 	cmta_cp, cmtb_cp, cmtc_cp, cmtd_cp,
 	cmtaa, cmtba, cmtca, cmtda, cmtap, cmtbp, cmtcp, cmtdp, cmtbr,
-	freea, freeb, freec, freed, free_bitlist);
+	restore_list, restored);
 parameter XWID = 4;
 parameter NPORT = 17;
 parameter BANKS = 1;
@@ -64,6 +64,8 @@ localparam RBIT=$clog2(PREGS);
 localparam BBIT=0;//$clog2(BANKS)-1;
 input rst;
 input clk;
+input clk6x;
+input ph4;
 input en;
 input nq;			// enqueue instruction
 input inc_chkpt;
@@ -121,15 +123,14 @@ input cpu_types_pkg::pregno_t cmtdp;
 input cmtbr;								// comitting a branch
 input [BBIT:0] rnbank [NPORT-1:0];
 input cpu_types_pkg::aregno_t [NPORT-1:0] rn;		// architectural register
+input [2:0] rng [0:NPORT-1];
+input [NPORT-1:0] rnt;
 input [NPORT-1:0] rnv;
 input checkpt_ndx_t [NPORT-1:0] rn_cp;
 output cpu_types_pkg::pregno_t [NPORT-1:0] rrn;	// physical register
 output reg [NPORT-1:0] vn;			// register valid
-output cpu_types_pkg::pregno_t freea;	// previous register to free
-output cpu_types_pkg::pregno_t freeb;
-output cpu_types_pkg::pregno_t freec;
-output cpu_types_pkg::pregno_t freed;
-output reg [PREGS-1:0] free_bitlist;	// bit vector of registers to free on branch miss
+output reg [PREGS-1:0] restore_list;	// bit vector of registers to free on branch miss
+output reg restored;
 
 
 integer n,m,n1,n2,n3,n4;
@@ -247,6 +248,8 @@ always_comb cpv_awa[4] = wra;
 always_comb cpv_awa[5] = wrb;
 always_comb cpv_awa[6] = wrc;
 always_comb cpv_awa[7] = wrd;
+// Commit: write VAL for register
+// Assign Tgt: write INV for register
 always_comb cpv_i[0] = VAL;
 always_comb cpv_i[1] = VAL;
 always_comb cpv_i[2] = VAL;
@@ -269,6 +272,8 @@ if (en)
 Qupls_checkpoint_valid_ram4 #(.NRDPORT(NPORT)) ucpr2
 (
 	.rst(rst),
+	.ph4(ph4),
+	.clk6x(clk6x),
 	.clka(clk),
 	.en(en),
 	.wr(cpv_wr),
@@ -333,9 +338,9 @@ generate begin : gRRN
 	for (g = 0; g < NPORT; g = g + 1) begin
 		always_comb
 			// Bypass target registers only.
-			if ((g % 4)==3 && g < 17) begin
+			if (rnt[g]) begin
 				if (rn[g]==9'd0)
-					rrn[g] = 11'd0;
+					rrn[g] = 10'd0;
 				/* bypass all or none
 				else if (rn[g]==wrd && wr3)
 					rrn[g] = wrrd;
@@ -356,7 +361,7 @@ generate begin : gRRN
 		// Unless it us a target register, we want the old unbypassed value.
 		always_comb
 			
-			if ((g % 4)==3 && g < 17) begin
+			if (rnt[g]) begin
 				if (rn[g]==9'd0)
 					vn[g] = 1'b1;
 				// If an incoming target register is being marked invalid and it matches
@@ -392,13 +397,11 @@ generate begin : gRRN
 				else if (rn[g]==wra && wr0)
 					vn[g] = INV;
 				else
-				case(g)
+				case(rng[g])
 				// First instruction of group, no bypass needed.
-				4'd0,4'd1,4'd2,5'd16,5'd17:
+				3'd0:
 					begin
 						if (rn[g]==9'd0)
-							vn[g] = 1'b1;
-						else if (rrn[g]==10'd1023)
 							vn[g] = 1'b1;
 						else if ({rrn[g],rn_cp[g]}==prev_cpv[0])
 							vn[g] = prev_cpv_i[0];
@@ -420,13 +423,11 @@ generate begin : gRRN
 							vn[g] = cpv_o[g];
 					end
 				// Second instruction of group, bypass only if first instruction target is same.
-				4'd4,4'd5,4'd6,5'd18:
+				3'd1:
 					if (rn[g]==9'd0)
 						vn[g] = 1'b1;
 					else if (rn[g]==rn[3] && rnv[3])
 						vn[g] = INV;
-					else if (rrn[g]==10'd1023)
-						vn[g] = 1'b1;
 					else if ({rrn[g],rn_cp[g]}==prev_cpv[0])
 						vn[g] = prev_cpv_i[0];
 					else if ({rrn[g],rn_cp[g]}==prev_cpv[4])
@@ -450,15 +451,13 @@ generate begin : gRRN
 					else
 						vn[g] = cpv_o[g];
 				// Third instruction, check two previous ones.
-				4'd8,4'd9,4'd10,5'd19:
+				3'd2:
 					if (rn[g]==9'd0)
 						vn[g] = 1'b1;
 					else if (rn[g]==rn[3] && rnv[3])
 						vn[g] = INV;
 					else if (rn[g]==rn[7] && rnv[7])
 						vn[g] = INV;
-					else if (rrn[g]==10'd1023)
-						vn[g] = 1'b1;
 					else if ({rrn[g],rn_cp[g]}==prev_cpv[0])
 						vn[g] = prev_cpv_i[0];
 					else if ({rrn[g],rn_cp[g]}==prev_cpv[4])
@@ -486,7 +485,7 @@ generate begin : gRRN
 					else
 						vn[g] = cpv_o[g];
 				// Fourth instruction, check three previous ones.						
-				4'd12,4'd13,4'd14,5'd20:
+				3'd3:
 					begin
 						if (rn[g]==9'd0)
 							vn[g] = 1'b1;
@@ -496,8 +495,6 @@ generate begin : gRRN
 							vn[g] = INV;
 						else if (rn[g]==rn[11] && rnv[11])
 							vn[g] = INV;
-						else if (rrn[g]==10'd1023)
-							vn[g] = 1'b1;
 						else if ({rrn[g],rn_cp[g]}==prev_cpv[0])
 							vn[g] = prev_cpv_i[0];
 						else if ({rrn[g],rn_cp[g]}==prev_cpv[4])
@@ -593,75 +590,6 @@ begin
 end
 */
 
-// If committing register, free previously mapped one, else if discarding the
-// register add it to the free list.
-/* Dead code
-always_ff @(posedge clk)
-if (rst)
-	freea <= 'd0;
-else begin
-	if (cmtav) begin
-		if (BANKS < 2)
-			freea <= cpram_out.regmap[cmtaa].pregs[0].rg;// >> (cmtaa * RBIT);
-		else
-			freea <= cpram_out.regmap[cmtaa].pregs[cmtbanka].rg;// >> {(cmtaa * RBIT),cmtbanka};
-	end
-	else
-	 	freea <= cmtap;
-end
-*/
-
-// If committing register, free previously mapped one, else if discarding the
-// register add it to the free list.
-/*
-always_ff @(posedge clk)
-if (rst)
-	freeb <= 'd0;
-else begin
-	if (cmtbv) begin
-		if (BANKS < 2)
-			freeb <= cpram_out.regmap[cmtba].pregs[0].rg;// >> (cmtaa * RBIT);
-		else
-			freeb <= cpram_out.regmap[cmtba].pregs[cmtbankb].rg;// >> {(cmtaa * RBIT),cmtbanka};
-	end
-	else
-	 	freeb <= cmtbp;
-end
-*/
-// If committing register, free previously mapped one, else if discarding the
-// register add it to the free list.
-/*
-always_ff @(posedge clk)
-if (rst)
-	freec <= 'd0;
-else begin
-	if (cmtcv) begin
-		if (BANKS < 2)
-			freec <= cpram_out.regmap[cmtca].pregs[0].rg;// >> (cmtaa * RBIT);
-		else
-			freec <= cpram_out.regmap[cmtca].pregs[cmtbankc].rg;// >> {(cmtaa * RBIT),cmtbanka};
-	end
-	else
-	 	freec <= cmtcp;
-end
-*/
-// If committing register, free previously mapped one, else if discarding the
-// register add it to the free list.
-/*
-always_ff @(posedge clk)
-if (rst)
-	freed <= 'd0;
-else begin
-	if (cmtav) begin
-		if (BANKS < 2)
-			freed <= cpram_out.regmap[cmtda].pregs[0].rg;// >> (cmtaa * RBIT);
-		else
-			freed <= cpram_out.regmap[cmtda].pregs[cmtbankd].rg;// >> {(cmtaa * RBIT),cmtbanka};
-	end
-	else
-	 	freed <= cmtdp;
-end
-*/
 // Adjust the checkpoint index. The index decreases by the number of committed
 // branches. The index increases if a branch is queued. Only one branch is
 // allowed to queue per cycle.
@@ -671,6 +599,9 @@ if (rst)
 	nob <= 'd0;
 else
 	nob <= nob + qbr_ok - cmtbr;
+
+always_ff @(posedge clk)
+	restored <= restore;
 
 // Set checkpoint index
 // Backup the checkpoint on a branch miss.
@@ -889,10 +820,10 @@ end
 always_comb
 begin
 	// But not the registers allocated up to the branch miss
-	if (restore)
-		free_bitlist = cpram_outr.avail;
+	if (restored)
+		restore_list = cpram_outr.avail;
 	else
-		free_bitlist = {PREGS{1'b0}};
+		restore_list = {PREGS{1'b0}};
 end
 
 endmodule

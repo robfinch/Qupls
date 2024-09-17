@@ -90,6 +90,12 @@ rob_bitmask_t next_robentry_issue;
 rob_bitmask_t next_robentry_fpu_issue;
 rob_bitmask_t next_robentry_fcu_issue;
 rob_bitmask_t next_robentry_agen_issue;
+rob_bitmask_t next_multicycle_issue;
+rob_bitmask_t multicycle_issue;
+rob_bitmask_t next_prev_issue;
+rob_bitmask_t prev_issue;
+rob_bitmask_t prev_issue2;
+
 rob_ndx_t next_alu0_rndx;
 rob_ndx_t next_alu1_rndx;
 rob_ndx_t next_fpu0_rndx;
@@ -440,6 +446,8 @@ if (rst) begin
 	next_robentry_fpu_issue = {$bits(rob_bitmask_t){1'd0}};
 	next_robentry_fcu_issue = {$bits(rob_bitmask_t){1'd0}};
 	next_robentry_agen_issue = {$bits(rob_bitmask_t){1'd0}};
+	next_multicycle_issue = {$bits(rob_bitmask_t){1'd0}};
+	next_prev_issue = {$bits(rob_bitmask_t){1'd0}};
 	next_alu0_rndx = 5'd0;
 	next_alu1_rndx = 5'd0;
 	next_fpu0_rndx = 5'd0;
@@ -472,6 +480,8 @@ else begin
 	next_robentry_fpu_issue = {$bits(rob_bitmask_t){1'd0}};
 	next_robentry_fcu_issue = {$bits(rob_bitmask_t){1'd0}};
 	next_robentry_agen_issue = {$bits(rob_bitmask_t){1'd0}};
+	next_multicycle_issue = {$bits(rob_bitmask_t){1'd0}};
+	next_prev_issue = prev_issue;
 	next_alu0_rndx = 5'd0;
 	next_alu1_rndx = 5'd0;
 	next_fpu0_rndx = 5'd0;
@@ -498,7 +508,9 @@ else begin
 		if (flag) begin
 			// Look for ALU pair instructions, issue to both ALUs when possible.
 			if (!issued_alu0 && !issued_alu1 && alu0_idle
-				&& rob[heads[hd]].decbus.alu_pair
+				&& !prev_issue[heads[hd]]
+				&& !prev_issue2[heads[hd]]
+				&&  rob[heads[hd]].decbus.alu_pair
 				&& !robentry_issue[heads[hd]]
 				&& !rob[heads[hd]].done[0]
 				&& !rob[heads[hd]].out[0])
@@ -513,6 +525,8 @@ else begin
 		  	next_alu1_rndxv = 1'b1;
 			end
 			if (!issued_alu0 && alu0_idle
+				&& !prev_issue[heads[hd]]
+				&& !prev_issue2[heads[hd]]
 				&& !robentry_issue[heads[hd]]
 				&& ((rob[heads[hd]].decbus.alu && !rob[heads[hd]].done[0]) || (rob[heads[hd]].decbus.cpytgt && rob[heads[hd]].done!=2'b11))
 				&& !rob[heads[hd]].out[0]) begin
@@ -524,6 +538,8 @@ else begin
 			end
 			if (NALU > 1) begin
 				if (!issued_alu1 && alu1_idle
+					&& !prev_issue[heads[hd]]
+					&& !prev_issue2[heads[hd]]
 					&& !robentry_issue[heads[hd]]
 					&& ((rob[heads[hd]].decbus.alu && !rob[heads[hd]].done[0]) || (rob[heads[hd]].decbus.cpytgt && rob[heads[hd]].done!=2'b11))
 					&& !rob[heads[hd]].out[0]
@@ -539,8 +555,11 @@ else begin
 			end
 			if (!rob[heads[hd]].decbus.cpytgt) begin
 				if (NFPU > 0) begin
-					if (!issued_fpu0 && fpu0_idle && rob[heads[hd]].decbus.fpu && rob[heads[hd]].out[0]==2'b00) begin
-						if (rob[heads[hd]].decbus.prc==2'd3 && SUPPORT_QUAD_PRECISION) begin
+					if (!issued_fpu0 && fpu0_idle && rob[heads[hd]].decbus.fpu && rob[heads[hd]].out[0]==2'b00
+					&& !prev_issue[heads[hd]]
+					&& !prev_issue2[heads[hd]]
+					) begin
+						if (rob[heads[hd]].decbus.prc==QuplsPkg::hexi && SUPPORT_QUAD_PRECISION) begin
 							if (fnPriorQFExtOut(heads[hd])) begin
 						  	next_robentry_fpu_issue[heads[hd]] = 1'b1;
 						  	next_robentry_islot_o[heads[hd]] = 2'b00;
@@ -559,7 +578,9 @@ else begin
 						  	next_fpu0_rndxv = 1'b1;
 							end
 						end
-						else begin
+						// Might be an ALU type op that could be issued on the FPU or ALU. 
+						// Check that it was not issued on the ALU.
+						else if (!next_robentry_issue[heads[hd]]) begin
 					  	next_robentry_fpu_issue[heads[hd]] = 1'b1;
 					  	next_robentry_islot_o[heads[hd]] = 2'b00;
 					  	issued_fpu0 = 1'b1;
@@ -569,8 +590,12 @@ else begin
 					end
 				end
 				if (NFPU > 1) begin
-					if (!issued_fpu1 && fpu1_idle && rob[heads[hd]].decbus.fpu && rob[heads[hd]].out[0]==2'b00 && !rob[heads[hd]].decbus.fpu0) begin
-						if (!next_robentry_fpu_issue[heads[hd]]) begin
+					if (!issued_fpu1 && fpu1_idle && rob[heads[hd]].decbus.fpu && rob[heads[hd]].out[0]==2'b00
+					&& !prev_issue[heads[hd]]
+					&& !prev_issue2[heads[hd]]
+					&& !rob[heads[hd]].decbus.fpu0) begin
+						if (!next_robentry_fpu_issue[heads[hd]]&&!next_robentry_issue[heads[hd]]
+						) begin
 					  	next_robentry_fpu_issue[heads[hd]] = 1'b1;
 					  	next_robentry_islot_o[heads[hd]] = 2'b01;
 					  	issued_fpu1 = 1'b1;
@@ -580,8 +605,10 @@ else begin
 					end
 				end
 				// Issue flow controls in order, one at a time
-				if (!issued_fcu && fcu_idle && rob[heads[hd]].decbus.fc && !rob[heads[hd]].done[1] && !rob[heads[hd]].out[1] &&
-				 (SUPPORT_OOOFC ? 1'b1 : !fnPriorFC(heads[hd]))) begin
+				if (!issued_fcu && fcu_idle && rob[heads[hd]].decbus.fc && !rob[heads[hd]].done[1] && !rob[heads[hd]].out[1]
+					&& !prev_issue[heads[hd]]
+					&& !prev_issue2[heads[hd]]
+					&& (SUPPORT_OOOFC ? 1'b1 : !fnPriorFC(heads[hd]))) begin
 			  	next_robentry_fcu_issue[heads[hd]] = 1'b1;
 			  	issued_fcu = 1'b1;
 			  	next_fcu_rndx = heads[hd];
@@ -589,6 +616,8 @@ else begin
 				end
 
 				if (!issued_agen0 && agen0_idle &&
+					!prev_issue[heads[hd]] &&
+					!prev_issue2[heads[hd]] &&
 					!robentry_agen_issue[heads[hd]] &&
 					 rob[heads[hd]].decbus.mem &&
 					!rob[heads[hd]].done[0] && !rob[heads[hd]].out[0]) begin
@@ -612,6 +641,8 @@ else begin
 				end
 				if (NAGEN > 1) begin
 					if (!issued_agen1 && agen1_idle &&
+						!prev_issue[heads[hd]] &&
+						!prev_issue2[heads[hd]] &&
 						!robentry_agen_issue[heads[hd]] &&
 						 rob[heads[hd]].decbus.mem &&
 						!rob[heads[hd]].done[0] && !rob[heads[hd]].out[0]) begin
@@ -661,6 +692,9 @@ if (rst) begin
 	robentry_fpu_issue <= {$bits(rob_bitmask_t){1'd0}};
 	robentry_fcu_issue <= {$bits(rob_bitmask_t){1'd0}};
 	robentry_agen_issue <= {$bits(rob_bitmask_t){1'd0}};
+	multicycle_issue <= {$bits(rob_bitmask_t){1'd0}};
+	prev_issue <= {$bits(rob_bitmask_t){1'd0}};
+	prev_issue2 <= {$bits(rob_bitmask_t){1'd0}};
 	alu0_rndx <= 5'd0;
 	alu1_rndx <= 5'd0;
 	fpu0_rndx <= 5'd0;
@@ -681,13 +715,14 @@ end
 else begin
 	robentry_islot_o <= next_robentry_islot_o;
 	robentry_issue <= next_robentry_issue;
-	robentry_fpu_issue <= 'd0;	// ToDo: FPU issue
+	robentry_fpu_issue <= next_robentry_fpu_issue;
 	robentry_fcu_issue <= next_robentry_fcu_issue;
 	robentry_agen_issue <= next_robentry_agen_issue;
-	robentry_issue <= next_robentry_issue;
-	robentry_fpu_issue <= 'd0;	// ToDo: FPU issue
-	robentry_fcu_issue <= next_robentry_fcu_issue;
-	robentry_agen_issue <= next_robentry_agen_issue;
+	multicycle_issue <= next_multicycle_issue;
+	prev_issue <= (next_prev_issue & ~prev_issue2) |
+		next_robentry_issue | next_robentry_fpu_issue | next_robentry_fcu_issue |
+		next_robentry_agen_issue;
+	prev_issue2 <= prev_issue;
 	alu0_rndx <= next_alu0_rndx;
 	alu1_rndx <= next_alu1_rndx;
 	fpu0_rndx <= next_fpu0_rndx;

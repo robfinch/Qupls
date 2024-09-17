@@ -46,6 +46,7 @@ function fnIsAlu0;
 input instruction_t ir;
 begin
 	case(ir.any.opcode)
+	OP_CAP:	fnIsAlu0 = 1'b1;
 	OP_R2,OP_R3V,OP_R3VS:
 		case(ir.r2.func)
 		FN_CPUID,

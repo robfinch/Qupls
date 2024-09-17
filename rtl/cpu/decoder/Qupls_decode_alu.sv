@@ -44,6 +44,18 @@ function fnIsAlu;
 input instruction_t ir;
 begin
 	case(ir.r2.opcode)
+	OP_FLT3:
+		case(ir.f3.opcode)
+		FN_FCMP:	fnIsAlu = 1'b1;
+		FN_FLT1:
+			case(ir.f1.func)
+			FN_FABS:	fnIsAlu = 1'b1;
+			FN_FNEG:	fnIsAlu = 1'b1;
+			default:	fnIsAlu = 1'b0;
+			endcase
+		default:	fnIsAlu = 1'b0;
+		endcase
+	OP_CAP:	fnIsAlu = 1'b1;
 	OP_CHK:	fnIsAlu = 1'b1;
 	OP_R2:
 		case(ir.r2.func)

@@ -32,17 +32,21 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
+// 23.5k LUTs / 1700 FFs / 80 BRAMs
+// 5100 LUTs / 650 FFs / 20 BRAMs	(6x write clock)
 // ============================================================================
 
 import QuplsPkg::*;
 
-module Qupls_checkpoint_valid_ram4(rst, clka, en, wr, wc, wa, awa, setall, i, clkb, rc, ra, o);
+module Qupls_checkpoint_valid_ram4(rst, clk6x, ph4, clka, en, wr, wc, wa, awa, setall, i, clkb, rc, ra, o);
 parameter BANKS=1;
 parameter NPORT=8;
-parameter NRDPORT=17;
-parameter NPREGS=1024;
+parameter NRDPORT=20;
+parameter NPREGS=PREGS;
 localparam ABIT=$clog2(NPREGS);
 input rst;
+input clk6x;
+input ph4;
 input clka;
 input en;
 input [NPORT-1:0] wr;
@@ -56,74 +60,92 @@ input checkpt_ndx_t [NRDPORT-1:0] rc;
 input cpu_types_pkg::pregno_t [NRDPORT-1:0] ra;
 output reg [NRDPORT-1:0] o;
 
-reg [NPORT-1:0] wr1;
-reg [NPORT-1:0] i1;
-checkpt_ndx_t [NPORT-1:0] wc1;
-wire [NPORT-1:0] cda;
-reg [NPORT-1:0] cdar;
-reg [NPORT-1:0] wea;
-reg [ABIT-1:0] addra [0:NPORT-1];
-reg [ABIT-1:0] addrb [0:NRDPORT-1][0:NPORT-1];
-wire [15:0] douta [0:NPORT-1];
-wire [15:0] doutb [0:NRDPORT-1][0:NPORT-1];
-reg [15:0] dina [0:NPORT-1];
-reg [2:0] lvt [0:PREGS-1];
-reg [15:0] slice;
+
+cpu_types_pkg::pregno_t [NPORT/4-1:0] wam;
+reg [NPORT/4-1:0] wr1,wrm;
+reg [NPORT/4-1:0] i1,im;
+checkpt_ndx_t [NPORT/4-1:0] wc1,wcm;
+wire [NPORT/4-1:0] cda;
+reg [NPORT/4-1:0] cdar;
+reg [NPORT/4-1:0] wea;
+reg [ABIT-1:0] addra [0:NPORT/4-1];
+reg [ABIT-1:0] addrb [0:NRDPORT-1][0:NPORT/4-1];
+wire [NCHECK-1:0] douta [0:NRDPORT-1][0:NPORT/4-1];
+wire [NCHECK-1:0] doutb [0:NRDPORT-1][0:NPORT/4-1];
+reg [NCHECK-1:0] dina [0:NRDPORT-1][0:NPORT/4-1];
+reg [$clog2(NPORT/4):0] lvt [0:PREGS-1];
+reg [NCHECK-1:0] slice;
+reg [2:0] wcnt;
+
+always_ff @(posedge clk6x)
+if (rst) begin
+	wcnt <= 3'd0;
+end
+else begin
+	if (ph4)
+		wcnt <= 3'd0;
+	else if (wcnt < 3'd4)
+		wcnt <= wcnt + 2'd1;
+end
 
 genvar g,q,r;
 
-integer n,m,p;
+integer n,m,p,jj,kk;
 initial begin
 	for (m = 0; m < PREGS; m = m + 1)
 		lvt[m] = 3'd0;
 end
 
-always_comb
-for (p = 0; p < NRDPORT; p = p + 1) begin
-	addra[p % NPORT] = wa[p % NPORT];
-	addrb[p][0] = ra[p];
-	addrb[p][1] = ra[p];
-	addrb[p][2] = ra[p];
-	addrb[p][3] = ra[p];
-	addrb[p][4] = ra[p];
-	addrb[p][5] = ra[p];
-	addrb[p][6] = ra[p];
-	addrb[p][7] = ra[p];
+always_ff @(posedge clk6x)
+begin
+	for (jj = 0; jj < NPORT/4; jj = jj + 1) begin
+		addra[jj] = wa[wcnt*(NPORT/4)+jj];
+		wcm[jj] = wc[wcnt*(NPORT/4)+jj];
+		im[jj] = i[wcnt*(NPORT/4)+jj];
+		wrm[jj] = wr[wcnt*(NPORT/4)+jj];
+	end
 end
 
-always_ff @(posedge clka)
-for (n = 0; n < NPORT; n = n + 1)
+always_comb
+for (p = 0; p < NRDPORT; p = p + 1) begin
+	for (kk = 0; kk < NPORT/4; kk = kk + 1) begin
+		addrb[p][kk] = ra[p];
+	end
+end
+
+always_ff @(posedge clk6x)
+for (n = 0; n < NPORT/4; n = n + 1)
 begin
-	if (wr[n])
-		lvt[wa[n]] <= n;
+	if (wrm[n])
+		lvt[addra[n]] <= n;
 end
 
 generate begin : gChkptRAM
 	
    // xpm_memory_tdpram: True Dual Port RAM
    // Xilinx Parameterized Macro, version 2022.2
-for (g = 0; g < NPORT; g = g + 1) begin
-	change_det #(.WID($bits(addra[g]))) ucd (.rst(rst), .clk(clka), .ce(1'b1), .i(addra[g]), .cd(cda[g]));
+for (g = 0; g < NPORT/4; g = g + 1) begin
+	change_det #(.WID($bits(addra[g]))) ucd (.rst(rst), .clk(clk6x), .ce(1'b1), .i(addra[g]), .cd(cda[g]));
 	always_ff @(posedge clka) cdar[g] <= cda[g];
-	always_ff @(posedge clka) wc1[g] <= wc[g];
-	always_ff @(posedge clka) i1[g] <= i[g];
-	always_ff @(posedge clka) wr1[g] <= wr[g];
+	always_ff @(posedge clka) wc1[g] <= wcm[g];
+	always_ff @(posedge clka) i1[g] <= im[g];
+	always_ff @(posedge clka) wr1[g] <= wrm[g];
 	always_comb wea[g] <= wr1[g] & cdar[g];
-	for (q = 0; q < 16; q = q + 1) begin
-		always_comb
-			begin
-				if (q==wc1[g])
-					dina[g][q] <= i1[g];
-				else
-					dina[g][q] <= douta[g][q];
-			end
-	end
 	always_comb
 	if (addra[g]==10'd263) begin
 		$display("write addra=%h 263=%d douta=%h dina=%h i1=%d wc1=%d", addra[g], i1[g], douta[g], dina[g], i1[g], wc1[g]);
 	end
 
-	for (r = 0; r < 17; r = r + 1) begin
+	for (r = 0; r < NRDPORT; r = r + 1) begin
+		for (q = 0; q < NCHECK; q = q + 1) begin
+			always_comb
+				begin
+					if (q==wc1[g])
+						dina[r][g][q] <= i1[g];
+					else
+						dina[r][g][q] <= douta[r][g][q];
+				end
+		end
 		always_ff @(posedge clkb)
 		if (addrb[r][g]==10'd263) begin
 			$display("port=%d, read addrb=%h 263, doutb=%h", r[4:0], addrb[r][g], doutb[r][g]);
@@ -169,7 +191,7 @@ for (g = 0; g < NPORT; g = g + 1) begin
       .dbiterrb(),             // 1-bit output: Status signal to indicate double bit error occurrence
                                        // on the data output of port A.
 
-      .douta(douta[g]),                   // READ_DATA_WIDTH_A-bit output: Data output for port A read operations.
+      .douta(douta[r][g]),                   // READ_DATA_WIDTH_A-bit output: Data output for port A read operations.
       .doutb(doutb[r][g]),                   // READ_DATA_WIDTH_B-bit output: Data output for port B read operations.
       .sbiterra(),             // 1-bit output: Status signal to indicate single bit error occurrence
                                        // on the data output of port A.
@@ -179,14 +201,14 @@ for (g = 0; g < NPORT; g = g + 1) begin
 
       .addra(addra[g]),                   // ADDR_WIDTH_A-bit input: Address for port A write and read operations.
       .addrb(addrb[r][g]),                   // ADDR_WIDTH_B-bit input: Address for port B write and read operations.
-      .clka(clka),                     // 1-bit input: Clock signal for port A. Also clocks port B when
+      .clka(clk6x),                     // 1-bit input: Clock signal for port A. Also clocks port B when
                                        // parameter CLOCKING_MODE is "common_clock".
 
       .clkb(clkb),                     // 1-bit input: Clock signal for port B when parameter CLOCKING_MODE is
                                        // "independent_clock". Unused when parameter CLOCKING_MODE is
                                        // "common_clock".
 
-      .dina(dina[g]),                  // WRITE_DATA_WIDTH_A-bit input: Data input for port A write operations.
+      .dina(dina[r][g]),                // WRITE_DATA_WIDTH_A-bit input: Data input for port A write operations.
       .dinb(64'd0),                     // WRITE_DATA_WIDTH_B-bit input: Data input for port B write operations.
       .ena(1'b1),                      // 1-bit input: Memory enable signal for port A. Must be high on clock
                                        // cycles when read or write operations are initiated. Pipelined
@@ -249,13 +271,13 @@ end
 endgenerate
 			
 generate begin : gMem
-	for (g = 0; g < NRDPORT * NPORT; g = g + 1) begin
+	for (g = 0; g < NRDPORT; g = g + 1) begin
 		always_comb
 		if (rst)
-			o[g[7:3]] = 1'b1;
+			o[g] = 1'b1;
 		else begin
-			slice = doutb[g[7:3]][lvt[g[2:0]]];
-			o[g[7:3]] = slice[rc[g[7:3]]];
+//			slice = doutb[g[7:3]][lvt[g[2:0]]];
+			o[g] = doutb[g][lvt[ra[g]]][rc[g]];
 		end
 	end
 end
