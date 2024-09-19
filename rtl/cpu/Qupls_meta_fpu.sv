@@ -39,11 +39,12 @@
 import const_pkg::*;
 import QuplsPkg::*;
 
-module Qupls_meta_fpu(rst, clk, idle, prc, ir, rm, a, b, c, t, i, p,
+module Qupls_meta_fpu(rst, clk, clk3x, idle, prc, ir, rm, a, b, c, t, i, p,
 	atag, btag, z, cptgt, o, otag, done, exc);
 parameter WID=SUPPORT_QUAD_PRECISION|SUPPORT_CAPABILITIES ? 128 : 64;
 input rst;
 input clk;
+input clk3x;
 input idle;
 input [1:0] prc;
 input instruction_t ir;
@@ -199,6 +200,7 @@ if (NFPU > 0 && !(SUPPORT_QUAD_PRECISION|SUPPORT_CAPABILITIES))
 	Qupls_fpu64 ufpu64 (
 		.rst(rst),
 		.clk(clk),
+		.clk3x(clk3x),
 		.idle(idle),
 		.ir(ir),
 		.rm(),

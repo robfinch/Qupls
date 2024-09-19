@@ -164,7 +164,7 @@ begin
 		end
 	OP_Bcc,OP_BccU,OP_FBcc:
 		begin
-			immc = {{111{ins.ins[47]}},ins.ins[47:31]};
+			immc = {{108{ins.ins[47]}},ins.ins[47:31],ins.ins[27],ins.ins[20],ins.ins[14]};
 			has_immc = 1'b1;
 		end
 	default:

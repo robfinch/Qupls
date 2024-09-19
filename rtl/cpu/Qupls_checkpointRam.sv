@@ -124,7 +124,7 @@ else begin
       .ADDR_WIDTH_A(AWID),            // DECIMAL
       .ADDR_WIDTH_B(AWID),            // DECIMAL
       .BYTE_WRITE_WIDTH_A(WID),      		// DECIMAL
-      .CLOCKING_MODE("common_clock"), // String
+      .CLOCKING_MODE("independent_clock"), // String
       .MEMORY_INIT_FILE("none"),      // String
       .MEMORY_INIT_PARAM("0"),        // String
       .MEMORY_OPTIMIZATION("true"),   // String

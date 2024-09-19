@@ -37,10 +37,11 @@
 import QuplsPkg::*;
 //import fp64Pkg::*;
 
-module Qupls_fpu64(rst, clk, idle, ir, rm, a, b, c, t, i, p, o, done);
+module Qupls_fpu64(rst, clk, clk3x, idle, ir, rm, a, b, c, t, i, p, o, done);
 parameter WID=64;
 input rst;
 input clk;
+input clk3x;
 input idle;
 input instruction_t ir;
 input [2:0] rm;
@@ -119,6 +120,24 @@ always_comb
 	else
 		fmac = c;
 
+fpFMA64nrL8 ufma1
+(
+	.clk(clk),
+	.ce(ce),
+	.op(fmaop),
+	.rm(rm),
+	.a(a),
+	.b(fmab),
+	.c(fmac),
+	.o(fmao),
+	.inf(),
+	.zero(),
+	.overflow(),
+	.underflow(),
+	.inexact()
+);
+
+/*
 fpFMA64nrCombo ufma1
 (
 	.op(fmaop),
@@ -154,6 +173,7 @@ else if (ce) begin
 	fmao7 <= fmao6;
 	fmao <= fmao7;
 end
+*/
 
 /*
 fpDivide64nr udiv1
@@ -203,6 +223,7 @@ fpSign64 usign1
 	.o(signo)
 );
 
+/*
 fpCompare64 ucmp1
 (
 	.a(a),
@@ -212,6 +233,7 @@ fpCompare64 ucmp1
 	.nan(),
 	.snan()
 );
+*/
 
 fpSqrt64nr usqrt1
 (

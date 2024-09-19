@@ -40,13 +40,15 @@ import fta_bus_pkg::*;
 import const_pkg::*;
 import QuplsPkg::*;
 
-module Qupls_mpu(rst_i, clk_i, clk2x_i, clk5x_i, ftam_req, ftam_resp, irq_bus,
+module Qupls_mpu(rst_i, clk_i, clk2x_i, clk3x_i, clk5x_i, ftam_req, ftam_resp,
+	irq_bus,
 	clk0, gate0, out0, clk1, gate1, out1, clk2, gate2, out2, clk3, gate3, out3
 	);
 parameter CPU="SEQ";
 input rst_i;
 input clk_i;
 input clk2x_i;
+input clk3x_i;
 input clk5x_i;
 output fta_cmd_request128_t ftam_req;
 input fta_cmd_response128_t ftam_resp;
@@ -234,6 +236,7 @@ ucpu1
 	.rst_i(rst_i),
 	.clk_i(clk_i),
 	.clk2x_i(clk2x_i),
+	.clk3x_i(clk3x_i),
 	.clk5x_i(clk5x_i),
 	.irq_i(pic_irq[2:0]),
 	.vect_i({1'b0,pic_cause}),

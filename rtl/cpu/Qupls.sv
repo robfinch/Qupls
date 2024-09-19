@@ -65,7 +65,7 @@ import QuplsPkg::*;
 `define PANIC_BADTARGETID	4'd12
 `define PANIC_COMMIT 4'd13
 
-module Qupls(coreno_i, rst_i, clk_i, clk2x_i, clk5x_i, irq_i, vect_i,
+module Qupls(coreno_i, rst_i, clk_i, clk2x_i, clk3x_i, clk5x_i, irq_i, vect_i,
 	fta_req, fta_resp, snoop_adr, snoop_v, snoop_cid);
 parameter CORENO = 6'd1;
 parameter CID = 6'd1;
@@ -73,6 +73,7 @@ input [63:0] coreno_i;
 input rst_i;
 input clk_i;
 input clk2x_i;
+input clk3x_i;
 input clk5x_i;
 input [2:0] irq_i;
 input [7:0] vect_i;
@@ -104,7 +105,8 @@ reg [127:0] message;
 reg [9*8-1:0] stompstr, no_stompstr;
 wire rst;
 wire clk;
-wire clk2x;
+wire clk2x, clk3x;
+assign clk3x = clk3x_i;
 wire clk5x = clk5x_i;
 reg [5:0] ph4;
 assign rst = rst_i;
@@ -2442,7 +2444,7 @@ always_comb
 		enqueue_room > 3'd3;
 assign nq = !(branchmiss || (branch_state!=BS_IDLE && branch_state < BS_CAPTURE_MISSPC)) && advance_pipeline_seg2 && room_for_que && (!stomp_que || stomp_quem);
 
-assign stallq = !rstcnt[2] || rat_stallq || ren_stallq || !room_for_que;
+assign stallq = !rstcnt[2] || rat_stallq || ren_stallq || !room_for_que || branch_state != BS_IDLE;
 
 
 reg signed [$clog2(ROB_ENTRIES):0] cmtlen;			// Will always be >= 0
@@ -3008,20 +3010,21 @@ reg wrport5_aRtz;
 // There are some pipeline delays to account for.
 pregno_t alu0_Rt1, alu0_Rt2, fpu0_Rt3;
 aregno_t alu0_aRt1, alu0_aRt2, fpu0_aRt3;
-value_t alu0_res2;
+value_t alu0_res2, fpu0_res3;
 reg alu0_aRtz1, alu0_aRtz2, fpu0_aRtz3;
 vtdl #($bits(pregno_t)) udlyal1 (.clk(clk), .ce(1'b1), .a(4'd1), .d(alu0_Rt), .q(alu0_Rt2) );
 vtdl #($bits(aregno_t)) udlyal2 (.clk(clk), .ce(1'b1), .a(4'd1), .d(alu0_aRt), .q(alu0_aRt2) );
 vtdl #(1) 							udlyal3 (.clk(clk), .ce(1'b1), .a(4'd1), .d(alu0_aRtz), .q(alu0_aRtz2) );
 vtdl #($bits(value_t))  udlyal4 (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu0_res), .q(alu0_res2) );
-vtdl #($bits(pregno_t)) udlyfp1 (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu0_Rt), .q(fpu0_Rt3) );
-vtdl #($bits(aregno_t)) udlyfp2 (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu0_aRt), .q(fpu0_aRt3) );
-vtdl #(1) 							udlyfp3 (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu0_aRtz), .q(fpu0_aRtz3) );
+vtdl #($bits(pregno_t)) udlyfp1 (.clk(clk), .ce(1'b1), .a(4'd1), .d(fpu0_Rt), .q(fpu0_Rt3) );
+vtdl #($bits(aregno_t)) udlyfp2 (.clk(clk), .ce(1'b1), .a(4'd1), .d(fpu0_aRt), .q(fpu0_aRt3) );
+vtdl #(1) 							udlyfp3 (.clk(clk), .ce(1'b1), .a(4'd1), .d(fpu0_aRtz), .q(fpu0_aRtz3) );
+vtdl #($bits(value_t))  udlyfp4 (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu0_res), .q(fpu0_res3) );
 
 always_comb wrport0_aRtz = alu0_aRtz2;
 always_comb wrport1_aRtz = alu1_aRtz;
 always_comb wrport2_aRtz = dram_aRtz0;
-always_comb wrport3_aRtz = fpu0_aRtz;
+always_comb wrport3_aRtz = fpu0_aRtz3;
 always_comb wrport4_aRtz = dram_aRtz1;
 always_comb wrport5_aRtz = fpu1_aRtz;
 always_comb wrport0_v = alu0_done && !alu0_aRtz2;
@@ -3048,9 +3051,9 @@ assign wrport5_aRt = NFPU > 1 ? fpu1_aRt : 7'd0;
 assign wrport0_res = alu0_res2;
 assign wrport1_res = NALU > 1 ? alu1_res : value_zero;
 assign wrport2_res = dram_bus0;
-assign wrport3_res = NFPU > 0 ? fpu0_res : value_zero;
-assign wrport4_res = dram_bus1;
-assign wrport5_res = fpu1_res;
+assign wrport3_res = NFPU > 0 ? fpu0_res3 : value_zero;
+assign wrport4_res = NDATA_PORTS > 1 ? dram_bus1 : value_zero;
+assign wrport5_res = NFPU > 1 ? fpu1_res : value_zero;
 
 Qupls_regfile4wNr #(.RPORTS(24)) urf1 (
 	.rst(rst),
@@ -3576,6 +3579,7 @@ if (NFPU > 0) begin
 		(
 			.rst(rst),
 			.clk(clk),
+			.clk3x(clk3x),
 			.idle(fpu0_idle),
 			.ir(fpu0_instr.ins),
 			.rm(3'd0),
@@ -3600,6 +3604,7 @@ if (NFPU > 0) begin
 		(
 			.rst(rst),
 			.clk(clk),
+			.clk3x(clk3x),
 			.idle(fpu0_idle),
 			.ir(fpu0_instr.ins),
 			.rm(3'd0),
@@ -3624,6 +3629,7 @@ if (NFPU > 1) begin
 	(
 		.rst(rst),
 		.clk(clk),
+		.clk3x(clk3x),
 		.idle(fpu1_idle),
 		.ir(fpu1_instr.ins),
 		.rm(3'd0),
@@ -4452,110 +4458,100 @@ endgenerate
 
 always_ff @(posedge clk) alu1_ldd <= alu1_ld;
 
-always_ff @(posedge clk)
-if (rst) begin
-	fpu0_id <= 5'd0;
-	fpu0_argA <= value_zero;
-	fpu0_argB <= value_zero;
-	fpu0_argC <= value_zero;
-	fpu0_argT <= value_zero;
-	fpu0_argM <= value_zero;
-	fpu0_argI <= value_zero;
-	fpu0_Rt <= 11'd0;
-	fpu0_Rt1 <= 11'd0;
-	fpu0_aRt <= 7'd0;
-	fpu0_aRtz <= TRUE;
-	fpu0_aRt1 <= 7'd0;
-	fpu0_aRtz1 <= TRUE;
-	fpu0_argA_tag <= 1'b0;
-	fpu0_argB_tag <= 1'b0;
-	fpu0_cs <= 1'b0;
-	fpu0_bank <= 1'b0;
-	fpu0_instr <= {41'd0,OP_NOP};
-	fpu0_pc <= RSTPC;
-	fpu0_cp <= 4'd0;
-	fpu0_qfext <= FALSE;
-	fpu0_cptgt <= 16'h0;
-end
-else begin
-	if (NFPU > 0) begin
-		if (fpu0_available && fpu0_rndxv && fpu0_idle) begin
-			fpu0_id <= fpu0_rndx;
-			fpu0_argA <= rfo_fpu0_argA;
-			fpu0_argB <= rfo_fpu0_argB;
-			fpu0_argC <= rfo_fpu0_argC;
-			fpu0_argT <= rfo_fpu0_argT;
-			fpu0_argM <= rfo_fpu0_argM;
-			fpu0_argA_tag <= rfo_fpu0_argA_ctag;
-			fpu0_argB_tag <= rfo_fpu0_argB_ctag;
-			if (rob[fpu0_rndx].decbus.qfext) begin
-				fpu0_qfext <= TRUE;
-				fpu0_Rt1 <= rob[fpu0_rndx].nRt;
-				fpu0_aRt1 <= rob[fpu0_rndx].decbus.Rt;
-				fpu0_aRtz1 <= rob[fpu0_rndx].decbus.Rtz;
-			end
-			else begin
-				fpu0_qfext <= FALSE;
-			end
-			
-			// For a vector instruction we got the entire mask register, only the bits
-			// relevant to the current element are needed. So, they are extracted.
-			if (rob[fpu0_rndx].decbus.vec)
-				fpu0_cptgt <= {16{rob[fpu0_rndx].decbus.cpytgt}} | ~(rfo_fpu0_argM >> {rob[fpu0_rndx].decbus.Ra[2:0],4'h0});
-			else
-				fpu0_cptgt <= {16{rob[fpu0_rndx].decbus.cpytgt}};
-			
-			fpu0_argI	<= rob[fpu0_rndx].decbus.immb;
-			fpu0_Rt <= rob[fpu0_rndx].nRt;
-			fpu0_aRt <= rob[fpu0_rndx].decbus.Rt;
-			fpu0_aRtz <= rob[fpu0_rndx].decbus.Rtz;
-			fpu0_cs <= rob[fpu0_rndx].decbus.Rcc;
-			fpu0_bank <= rob[fpu0_rndx].om==2'd0 ? 1'b0 : 1'b1;
-			fpu0_instr <= rob[fpu0_rndx].op;
-			fpu0_pc <= rob[fpu0_rndx].pc;
-			fpu0_cp <= rob[fpu0_rndx].cndx;
-		end
-	end
-end
+genvar gNFPU;
 
-always_ff @(posedge clk)
-if (rst) begin
-	fpu1_id <= 5'd0;
-	fpu1_argA <= 64'd0;
-	fpu1_argB <= 64'd0;
-	fpu1_argC <= 64'd0;
-	fpu1_argI <= 64'd0;
-	fpu1_argT <= 64'd0;
-	fpu1_argM <= 64'd0;
-	fpu1_Rt <= 8'd0;
-	fpu1_aRt <= 7'd0;
-	fpu1_aRtz <= TRUE;
-	fpu1_cs <= 1'b0;
-	fpu1_bank <= 1'b0;
-	fpu1_instr <= {41'd0,OP_NOP};
-	fpu1_pc <= RSTPC;
-	fpu1_cp <= 4'd0;
-end
-else begin
-	if (NFPU > 1) begin
-		if (fpu1_available && fpu1_rndxv && fpu1_idle) begin
-			fpu1_id <= fpu1_rndx;
-			fpu1_argA <= rfo_fpu1_argA;
-			fpu1_argB <= rfo_fpu1_argB;
-			fpu1_argC <= rfo_fpu1_argC;
-			fpu1_argM <= rfo_fpu1_argM;
-			fpu1_argI	<= rob[fpu1_rndx].decbus.immb;
-			fpu1_Rt <= rob[fpu1_rndx].nRt;
-			fpu1_aRt <= rob[fpu1_rndx].decbus.Rt;
-			fpu1_aRtz <= rob[fpu1_rndx].decbus.Rtz;
-			fpu1_cs <= rob[fpu1_rndx].decbus.Rcc;
-			fpu1_bank <= rob[fpu1_rndx].om==2'd0 ? 1'b0 : 1'b1;
-			fpu1_instr <= rob[fpu1_rndx].op;
-			fpu1_pc <= rob[fpu1_rndx].pc;
-			fpu1_cp <= rob[fpu1_rndx].cndx;
-		end
+generate begin : gFpuStat
+	for (gNFPU = 0; gNFPU < NFPU; gNFPU = gNFPU + 1) begin
+		case (gNFPU)
+		0:
+			Qupls_fpu_station ufpustat0
+			(
+				.rst(rst),
+				.clk(clk),
+				// outputs
+				.id(fpu0_id),
+				.argA(fpu0_argA),
+				.argB(fpu0_argB),
+				.argC(fpu0_argC),
+				.argT(fpu0_argT),
+				.argM(fpu0_argM),
+				.argI(fpu0_argI),
+				.Rt(fpu0_Rt),
+				.Rt1(fpu0_Rt1),
+				.aRt(fpu0_aRt),
+				.aRtz(fpu0_aRtz),
+				.aRt1(fpu0_aRt1),
+				.aRtz1(fpu0_aRtz1),
+				.argA_tag(fpu0_argA_tag),
+				.argB_tag(fpu0_argB_tag),
+				.cs(fpu0_cs),
+				.bank(fpu0_bank),
+				.instr(fpu0_instr),
+				.pc(fpu0_pc),
+				.cp(fpu0_cp),
+				.qfext(fpu0_qfext),
+				.cptgt(fpu0_cptgt),
+				// inputs
+				.available(fpu0_available),
+				.rndx(fpu0_rndx),
+				.rndxv(fpu0_rndxv),
+				.idle(fpu0_idle),
+				.rfo_argA(rfo_fpu0_argA),
+				.rfo_argB(rfo_fpu0_argB),
+				.rfo_argC(rfo_fpu0_argC),
+				.rfo_argT(rfo_fpu0_argT),
+				.rfo_argM(rfo_fpu0_argM),
+				.rfo_argA_ctag(rfo_fpu0_argA_ctag),
+				.rfo_argB_ctag(rfo_fpu0_argB_ctag),
+				.rob(rob[fpu0_rndx])
+			);
+
+		1:
+			Qupls_fpu_station ufpustat1
+			(
+				.rst(rst),
+				.clk(clk),
+				// outputs
+				.id(fpu1_id),
+				.argA(fpu1_argA),
+				.argB(fpu1_argB),
+				.argC(fpu1_argC),
+				.argT(fpu1_argT),
+				.argM(fpu1_argM),
+				.argI(fpu1_argI),
+				.Rt(fpu1_Rt),
+				.Rt1(fpu1_Rt1),
+				.aRt(fpu1_aRt),
+				.aRtz(fpu1_aRtz),
+				.aRt1(fpu1_aRt1),
+				.aRtz1(fpu1_aRtz1),
+				.argA_tag(fpu1_argA_tag),
+				.argB_tag(fpu1_argB_tag),
+				.cs(fpu1_cs),
+				.bank(fpu1_bank),
+				.instr(fpu1_instr),
+				.pc(fpu1_pc),
+				.cp(fpu1_cp),
+				.qfext(fpu1_qfext),
+				.cptgt(fpu1_cptgt),
+				// inputs
+				.available(fpu1_available),
+				.rndx(fpu1_rndx),
+				.rndxv(fpu1_rndxv),
+				.idle(fpu1_idle),
+				.rfo_argA(rfo_fpu1_argA),
+				.rfo_argB(rfo_fpu1_argB),
+				.rfo_argC(rfo_fpu1_argC),
+				.rfo_argT(rfo_fpu1_argT),
+				.rfo_argM(rfo_fpu1_argM),
+				.rfo_argA_ctag(rfo_fpu1_argA_ctag),
+				.rfo_argB_ctag(rfo_fpu1_argB_ctag),
+				.rob(rob[fpu1_rndx])
+			);
+		endcase
 	end
 end
+endgenerate
 
 always_ff @(posedge clk)
 if (rst) begin
@@ -7715,7 +7711,7 @@ reg [5:0] ino5;
 reg [63:0] disp;
 always_comb
 begin
-	disp = {{47{instr.ins[47]}},instr.ins[47:31]};
+	disp = {{44{instr.ins[47]}},instr.ins[47:31],instr.ins[27],instr.ins[20],instr.ins[14]};
 	miss_mcip = 12'h1A0;
 
 	case (bts)

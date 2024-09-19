@@ -159,7 +159,7 @@ for (g = 0; g < NPORT/4; g = g + 1) begin
       .CASCADE_HEIGHT(0),             // DECIMAL
       .CLOCKING_MODE("independent_clock"), // String
       .ECC_MODE("no_ecc"),            // String
-      .MEMORY_INIT_FILE("Qupls_checkpoint_valid_ram_init.mem"),      // String
+      .MEMORY_INIT_FILE("Qupls_checkpoint_valid_ram_init.mem"),   // All ones   // String
       .MEMORY_INIT_PARAM(""), // String
       .MEMORY_OPTIMIZATION("true"),   // String
       .MEMORY_PRIMITIVE("auto"),      // String

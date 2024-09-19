@@ -386,7 +386,7 @@ else
 												&& !fnPriorSync(g)
 												&& rob[g].pred_bit==TRUE
 										    && rob[g].pred_bitv
-												&& !robentry_issue[g]
+//												&& !robentry_issue[g]
 												;
 always_ff @(posedge clk)
 if (rst)
@@ -509,7 +509,7 @@ else begin
 			// Look for ALU pair instructions, issue to both ALUs when possible.
 			if (!issued_alu0 && !issued_alu1 && alu0_idle
 				&& !prev_issue[heads[hd]]
-				&& !prev_issue2[heads[hd]]
+//				&& !prev_issue2[heads[hd]]
 				&&  rob[heads[hd]].decbus.alu_pair
 				&& !robentry_issue[heads[hd]]
 				&& !rob[heads[hd]].done[0]
@@ -526,7 +526,7 @@ else begin
 			end
 			if (!issued_alu0 && alu0_idle
 				&& !prev_issue[heads[hd]]
-				&& !prev_issue2[heads[hd]]
+//				&& !prev_issue2[heads[hd]]
 				&& !robentry_issue[heads[hd]]
 				&& ((rob[heads[hd]].decbus.alu && !rob[heads[hd]].done[0]) || (rob[heads[hd]].decbus.cpytgt && rob[heads[hd]].done!=2'b11))
 				&& !rob[heads[hd]].out[0]) begin
@@ -539,7 +539,7 @@ else begin
 			if (NALU > 1) begin
 				if (!issued_alu1 && alu1_idle
 					&& !prev_issue[heads[hd]]
-					&& !prev_issue2[heads[hd]]
+//					&& !prev_issue2[heads[hd]]
 					&& !robentry_issue[heads[hd]]
 					&& ((rob[heads[hd]].decbus.alu && !rob[heads[hd]].done[0]) || (rob[heads[hd]].decbus.cpytgt && rob[heads[hd]].done!=2'b11))
 					&& !rob[heads[hd]].out[0]
@@ -557,7 +557,7 @@ else begin
 				if (NFPU > 0) begin
 					if (!issued_fpu0 && fpu0_idle && rob[heads[hd]].decbus.fpu && rob[heads[hd]].out[0]==2'b00
 					&& !prev_issue[heads[hd]]
-					&& !prev_issue2[heads[hd]]
+//					&& !prev_issue2[heads[hd]]
 					) begin
 						if (rob[heads[hd]].decbus.prc==QuplsPkg::hexi && SUPPORT_QUAD_PRECISION) begin
 							if (fnPriorQFExtOut(heads[hd])) begin
@@ -592,7 +592,7 @@ else begin
 				if (NFPU > 1) begin
 					if (!issued_fpu1 && fpu1_idle && rob[heads[hd]].decbus.fpu && rob[heads[hd]].out[0]==2'b00
 					&& !prev_issue[heads[hd]]
-					&& !prev_issue2[heads[hd]]
+//					&& !prev_issue2[heads[hd]]
 					&& !rob[heads[hd]].decbus.fpu0) begin
 						if (!next_robentry_fpu_issue[heads[hd]]&&!next_robentry_issue[heads[hd]]
 						) begin
@@ -607,7 +607,7 @@ else begin
 				// Issue flow controls in order, one at a time
 				if (!issued_fcu && fcu_idle && rob[heads[hd]].decbus.fc && !rob[heads[hd]].done[1] && !rob[heads[hd]].out[1]
 					&& !prev_issue[heads[hd]]
-					&& !prev_issue2[heads[hd]]
+//					&& !prev_issue2[heads[hd]]
 					&& (SUPPORT_OOOFC ? 1'b1 : !fnPriorFC(heads[hd]))) begin
 			  	next_robentry_fcu_issue[heads[hd]] = 1'b1;
 			  	issued_fcu = 1'b1;
@@ -617,7 +617,7 @@ else begin
 
 				if (!issued_agen0 && agen0_idle &&
 					!prev_issue[heads[hd]] &&
-					!prev_issue2[heads[hd]] &&
+//					!prev_issue2[heads[hd]] &&
 					!robentry_agen_issue[heads[hd]] &&
 					 rob[heads[hd]].decbus.mem &&
 					!rob[heads[hd]].done[0] && !rob[heads[hd]].out[0]) begin
@@ -642,7 +642,7 @@ else begin
 				if (NAGEN > 1) begin
 					if (!issued_agen1 && agen1_idle &&
 						!prev_issue[heads[hd]] &&
-						!prev_issue2[heads[hd]] &&
+//						!prev_issue2[heads[hd]] &&
 						!robentry_agen_issue[heads[hd]] &&
 						 rob[heads[hd]].decbus.mem &&
 						!rob[heads[hd]].done[0] && !rob[heads[hd]].out[0]) begin

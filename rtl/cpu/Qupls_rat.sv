@@ -41,6 +41,7 @@
 //
 // 7700 LUTs / 1800 FFs / 1 BRAM	for 1*69/256 (one bank of 69 arch. regs).
 // 18500 LUTs / 3900 FFs / 12 BRAM for (128 arch. 384 phys. regs 16 checkpoints)
+// 24k LUTs /1.4k FFs / 17 BRAMs (184 a regs 512 phys 8 checkpoints)
 // ============================================================================
 //
 import const_pkg::*;
@@ -58,7 +59,7 @@ module Qupls_rat(rst, clk, clk6x, ph4, en, nq, stallq, cndx_o, avail_i, restore,
 	cmtaa, cmtba, cmtca, cmtda, cmtap, cmtbp, cmtcp, cmtdp, cmtbr,
 	restore_list, restored);
 parameter XWID = 4;
-parameter NPORT = 17;
+parameter NPORT = 20;
 parameter BANKS = 1;
 localparam RBIT=$clog2(PREGS);
 localparam BBIT=0;//$clog2(BANKS)-1;
@@ -220,10 +221,10 @@ always_comb cpv_wr[0] = cmtav;
 always_comb cpv_wr[1] = cmtbv;
 always_comb cpv_wr[2] = cmtcv;
 always_comb cpv_wr[3] = cmtdv;
-always_comb cpv_wr[4] = wra != 9'd0 && wr0;
-always_comb cpv_wr[5] = wrb != 9'd0 && wr1;
-always_comb cpv_wr[6] = wrc != 9'd0 && wr2;
-always_comb cpv_wr[7] = wrd != 9'd0 && wr3;
+always_comb cpv_wr[4] = wr0;
+always_comb cpv_wr[5] = wr1;
+always_comb cpv_wr[6] = wr2;
+always_comb cpv_wr[7] = wr3;
 always_comb cpv_wc[0] = cmta_cp;
 always_comb cpv_wc[1] = cmtb_cp;
 always_comb cpv_wc[2] = cmtc_cp;
@@ -254,10 +255,10 @@ always_comb cpv_i[0] = VAL;
 always_comb cpv_i[1] = VAL;
 always_comb cpv_i[2] = VAL;
 always_comb cpv_i[3] = VAL;
-always_comb cpv_i[4] = INV;
-always_comb cpv_i[5] = INV;
-always_comb cpv_i[6] = INV;
-always_comb cpv_i[7] = INV;
+always_comb cpv_i[4] = wra==8'd0;	// Usually works out to INV
+always_comb cpv_i[5] = wrb==8'd0;
+always_comb cpv_i[6] = wrc==8'd0;
+always_comb cpv_i[7] = wrd==8'd0;
 
 // Setup for bypassing
 reg [13:0] prev_cpv [0:7];
@@ -268,6 +269,7 @@ if (en)
 		prev_cpv[n4] <= {cpv_wa[n4],cpv_wc[n4]};
 		prev_cpv_i[n4] <= cpv_i[n4];
 	end
+
 
 Qupls_checkpoint_valid_ram4 #(.NRDPORT(NPORT)) ucpr2
 (
@@ -287,6 +289,7 @@ Qupls_checkpoint_valid_ram4 #(.NRDPORT(NPORT)) ucpr2
 	.ra(rrn),
 	.o(cpv_o)
 );
+
 
 always_ff @(posedge clk)
 if (cpv_wr[6] && cpv_wa[6]==9'd263)
@@ -339,35 +342,35 @@ generate begin : gRRN
 		always_comb
 			// Bypass target registers only.
 			if (rnt[g]) begin
-				if (rn[g]==9'd0)
+				/*
+				if (rn[g]==8'd0)
 					rrn[g] = 10'd0;
+				*/
 				/* bypass all or none
 				else if (rn[g]==wrd && wr3)
 					rrn[g] = wrrd;
 				*/
-				else
+				//else
 					rrn[g] = cpram_out.regmap[rn[g]];
 			end
 			else
-				rrn[g] = (rn[g]==9'd0 ? 11'd0 :
+				rrn[g] = //(rn[g]==8'd0 ? 10'd0 :
 							/*
 							 wr0 && rn[g]==wra ? wrra :
 							 wr1 && rn[g]==wrb ? wrrb :
 							 wr2 && rn[g]==wrc ? wrrc :
 							 wr3 && rn[g]==wrd ? wrrd :
 							 */
-							 	cpram_out.regmap[rn[g]]);
+							 	cpram_out.regmap[rn[g]];
 
 		// Unless it us a target register, we want the old unbypassed value.
 		always_comb
 			
 			if (rnt[g]) begin
-				if (rn[g]==9'd0)
-					vn[g] = 1'b1;
 				// If an incoming target register is being marked invalid and it matches
 				// the target register the valid status is begin fetched for, then 
 				// return an invalid status. Bypass order is important.
-				else if (rn[g]==wrd && wr3)
+				if (rn[g]==wrd && wr3)
 					vn[g] = INV;//cpv_i[7];
 				else if (rn[g]==wrc && wr2)
 					vn[g] = INV;
@@ -375,8 +378,6 @@ generate begin : gRRN
 					vn[g] = INV;
 				else if (rn[g]==wra && wr0)
 					vn[g] = INV;
-				else if (rrn[g]==10'd1023)
-					vn[g] = 1'b1;
 				else
 					vn[g] = cpv_o[g];//valid[0][cndx][rrn[g]];//cpram_out.regmap[rn[g]].pregs[0].v;
 			end
@@ -401,9 +402,8 @@ generate begin : gRRN
 				// First instruction of group, no bypass needed.
 				3'd0:
 					begin
-						if (rn[g]==9'd0)
-							vn[g] = 1'b1;
-						else if ({rrn[g],rn_cp[g]}==prev_cpv[0])
+						/*
+						if ({rrn[g],rn_cp[g]}==prev_cpv[0])
 							vn[g] = prev_cpv_i[0];
 						else if ({rrn[g],rn_cp[g]}==prev_cpv[4])
 							vn[g] = prev_cpv_i[4];
@@ -420,14 +420,14 @@ generate begin : gRRN
 						else if ({rrn[g],rn_cp[g]}==prev_cpv[7])
 							vn[g] = prev_cpv_i[7];
 						else
+						*/
 							vn[g] = cpv_o[g];
 					end
 				// Second instruction of group, bypass only if first instruction target is same.
 				3'd1:
-					if (rn[g]==9'd0)
-						vn[g] = 1'b1;
-					else if (rn[g]==rn[3] && rnv[3])
+					if (rn[g]==rn[3] && rnv[3])
 						vn[g] = INV;
+					/*
 					else if ({rrn[g],rn_cp[g]}==prev_cpv[0])
 						vn[g] = prev_cpv_i[0];
 					else if ({rrn[g],rn_cp[g]}==prev_cpv[4])
@@ -448,16 +448,16 @@ generate begin : gRRN
 						vn[g] = cpv_i[0];
 					else if (rrn[g]==cpv_wa[4] && cpv_wr[4] && cpv_wc[4]==rn_cp[g])
 						vn[g] = cpv_i[4];
+					*/
 					else
 						vn[g] = cpv_o[g];
 				// Third instruction, check two previous ones.
 				3'd2:
-					if (rn[g]==9'd0)
-						vn[g] = 1'b1;
-					else if (rn[g]==rn[3] && rnv[3])
+					if (rn[g]==rn[3] && rnv[3])
 						vn[g] = INV;
 					else if (rn[g]==rn[7] && rnv[7])
 						vn[g] = INV;
+					/*
 					else if ({rrn[g],rn_cp[g]}==prev_cpv[0])
 						vn[g] = prev_cpv_i[0];
 					else if ({rrn[g],rn_cp[g]}==prev_cpv[4])
@@ -482,19 +482,19 @@ generate begin : gRRN
 						vn[g] = cpv_i[0];
 					else if (rrn[g]==cpv_wa[4] && cpv_wr[4] && cpv_wc[4]==rn_cp[g])
 						vn[g] = cpv_i[4];
+					*/
 					else
 						vn[g] = cpv_o[g];
 				// Fourth instruction, check three previous ones.						
 				3'd3:
 					begin
-						if (rn[g]==9'd0)
-							vn[g] = 1'b1;
-						else if (rn[g]==rn[3] && rnv[3])
+						if (rn[g]==rn[3] && rnv[3])
 							vn[g] = INV;
 						else if (rn[g]==rn[7] && rnv[7])
 							vn[g] = INV;
 						else if (rn[g]==rn[11] && rnv[11])
 							vn[g] = INV;
+						/*
 						else if ({rrn[g],rn_cp[g]}==prev_cpv[0])
 							vn[g] = prev_cpv_i[0];
 						else if ({rrn[g],rn_cp[g]}==prev_cpv[4])
@@ -535,16 +535,8 @@ generate begin : gRRN
 							$display("4matched:%d=%d",rrn[g],cpv_i[4]);
 							vn[g] = cpv_i[4];
 						end
+						*/
 						else begin
-							if (rrn[g]==9'd263) begin
-								$display("matched263: g+=%d %d, rn_cp[g]=%d", g, cpv_o[g], rn_cp[g]);
-								$display("cpv_wa[0]=%d",cpv_wa[0]);
-								$display("cpv_wa[1]=%d",cpv_wa[1]);
-								$display("cpv_wa[2]=%d",cpv_wa[2]);
-								$display("cpv_wa[4]=%d",cpv_wa[4]);
-								$display("cpv_wa[5]=%d",cpv_wa[5]);
-								$display("cpv_wa[6]=%d",cpv_wa[6]);
-							end
 							vn[g] = cpv_o[g];
 						end
 					end
@@ -660,14 +652,65 @@ else begin
 		cpram_outrp <= cpram_out;
 end
 
-cpu_types_pkg::pregno_t wrra1;
-cpu_types_pkg::pregno_t wrrb1;
-cpu_types_pkg::pregno_t wrrc1;
-cpu_types_pkg::pregno_t wrrd1;
-cpu_types_pkg::aregno_t wra1;
-cpu_types_pkg::aregno_t wrb1;
-cpu_types_pkg::aregno_t wrc1;
-cpu_types_pkg::aregno_t wrd1;
+/*
+reg [2:0] wcnt;
+always_ff @(posedge clk6x)
+if (rst)
+	wcnt <= 3'd0;
+else begin
+	if (ph4)
+		wcnt <= 3'd0;
+	else if (wcnt < 3'd3)
+		wcnt <= wcnt + 2'd1;
+end
+*/
+
+cpu_types_pkg::pregno_t wrra1, pregno0;
+cpu_types_pkg::pregno_t wrrb1, pregno1;
+cpu_types_pkg::pregno_t wrrc1, pregno2;
+cpu_types_pkg::pregno_t wrrd1, pregno3;
+cpu_types_pkg::aregno_t wra1, aregno0;
+cpu_types_pkg::aregno_t wrb1, aregno1;
+cpu_types_pkg::aregno_t wrc1, aregno2;
+cpu_types_pkg::aregno_t wrd1, aregno3;
+cpu_types_pkg::aregno_t aregno;
+cpu_types_pkg::pregno_t pregno;
+reg wr;
+/*
+always_ff @(posedge clk6x)
+case(wcnt)
+3'd0:	wr <= wr0;
+3'd1:	wr <= wr1;
+3'd2:	wr <= wr2;
+3'd3:	wr <= wr3;
+default:	wr <= 1'b0;
+endcase
+always_ff @(posedge clk6x)
+case(wcnt)
+3'd0:	aregno <= wra;
+3'd1:	aregno <= wrb;
+3'd2:	aregno <= wrc;
+3'd3:	aregno <= wrd;
+default:	aregno <= 8'd0;
+endcase
+always_ff @(posedge clk6x)
+case(wcnt)
+3'd0:	pregno <= wrra;
+3'd1:	pregno <= wrrb;
+3'd2:	pregno <= wrrc;
+3'd3:	pregno <= wrrd;
+default:	pregno <= 10'd0;
+endcase
+*/
+always_comb pregno0 = wrra;
+always_comb pregno1 = wrrb;
+always_comb pregno2 = wrrc;
+always_comb pregno3 = wrrd;
+always_comb aregno0 = wra;
+always_comb aregno1 = wrb;
+always_comb aregno2 = wrc;
+always_comb aregno3 = wrd;
+
 always_ff @(posedge clk) if (wr0a) wr0a <= 1'b0; else if (en) wr0a <= wr0;
 always_ff @(posedge clk) if (wr1a) wr1a <= 1'b0; else if (en) wr1a <= wr1;
 always_ff @(posedge clk) if (wr2a) wr2a <= 1'b0; else if (en) wr2a <= wr2;
@@ -695,77 +738,47 @@ else begin
 	else begin
 		cpram_in = cpram_wout;
 		if (wr0) begin
-			cpram_in.regmap[wra] = wrra;
-			$display("Qupls RAT: tgta %d reg %d replaced with %d.", wra, cpram_out.regmap[wra], wrra);
+			cpram_in.regmap[aregno0] = pregno0;
+			//cpram_in.val[pregno0] = INV;
+			$display("Qupls RAT: tgta %d reg %d replaced with %d.", wra, cpram_out.regmap[aregno0], pregno0);
 		end
-		if (wr1 && XWID > 1) begin
-			cpram_in.regmap[wrb] = wrrb;
-			$display("Qupls RAT: tgtb %d reg %d replaced with %d.", wrb, cpram_out.regmap[wrb], wrrb);
+		if (wr1) begin
+			cpram_in.regmap[aregno1] = pregno1;
+			//cpram_in.val[pregno1] = INV;
+			$display("Qupls RAT: tgta %d reg %d replaced with %d.", wrb, cpram_out.regmap[aregno1], pregno1);
 		end
-		if (wr2 && XWID > 2) begin
-			cpram_in.regmap[wrc] = wrrc;
-			$display("Qupls RAT: tgtc %d reg %d replaced with %d.", wrc, cpram_out.regmap[wrc], wrrc);
+		if (wr2) begin
+			cpram_in.regmap[aregno2] = pregno2;
+			//cpram_in.val[pregno2] = INV;
+			$display("Qupls RAT: tgta %d reg %d replaced with %d.", wrc, cpram_out.regmap[aregno2], pregno2);
 		end
-		if (wr3 && XWID > 3) begin
-			cpram_in.regmap[wrd] = wrrd;
-			$display("Qupls RAT: tgtd %d reg %d replaced with %d.", wrd, cpram_out.regmap[wrd], wrrd);
+		if (wr3) begin
+			cpram_in.regmap[aregno3] = pregno3;
+			//cpram_in.val[pregno3] = INV;
+			$display("Qupls RAT: tgta %d reg %d replaced with %d.", wrd, cpram_out.regmap[aregno3], pregno3);
 		end
+		/*
+		if (cmtav)
+			cpram_in.val[cmtap] = VAL;
+		if (cmtbv)
+			cpram_in.val[cmtbp] = VAL;
+		if (cmtcv)
+			cpram_in.val[cmtcp] = VAL;
+		if (cmtdv)
+			cpram_in.val[cmtdp] = VAL;
+		*/
 	end
-	if (wr0) begin
-		if (wrra==10'd0 && wra != 8'd0) begin
-			$display("Q+ RAT: mapping register to r0");
-			$finish;
-		end
-	end
-	if (wr1) begin
-		if (wrrb==10'd0 && wrb != 8'd0) begin
-			$display("Q+ RAT: mapping register to r0");
-			$finish;
-		end
-	end
-	if (wr2) begin
-		if (wrrc==10'd0 && wrc != 8'd0) begin
-			$display("Q+ RAT: mapping register to r0");
-			$finish;
-		end
-	end
-	if (wr3) begin
-		if (wrrd==10'd0 && wrd != 8'd0) begin
-			$display("Q+ RAT: mapping register to r0");
-			$finish;
-		end
-	end
-	
 	/*
-	if (wr0a) begin
-		cpram_in.regmap[wra1] = wrra1;
-		$display("Qupls RAT: tgta %d reg %d replaced with %d.", wra1, cpram_out.regmap[wra1], wrra1);
+	if (wr) begin
+		if (pregno==10'd0 && aregno != 8'd0) begin
+			$display("Q+ RAT: mapping register to r0");
+			$finish;
+		end
 	end
-	if (wr1a && XWID > 1) begin
-		cpram_in.regmap[wrb1] = wrrb1;
-		$display("Qupls RAT: tgta %d reg %d replaced with %d.", wrb1, cpram_out.regmap[wrb1], wrrb1);
-	end
-	if (wr2a && XWID > 2) begin
-		cpram_in.regmap[wrc1] = wrrc1;
-		$display("Qupls RAT: tgta %d reg %d replaced with %d.", wrc1, cpram_out.regmap[wrc1], wrrc1);
-	end
-	if (wr3a && XWID > 3) begin
-		cpram_in.regmap[wrd1] = wrrd1;
-		$display("Qupls RAT: tgta %d reg %d replaced with %d.", wrd1, cpram_out.regmap[wrd1], wrrd1);
+	if (wr && pregno==10'd0) begin
+		$display("RAT: writing zero register.");
 	end
 	*/
-	if (wr0 && wrra==11'd0) begin
-		$display("RAT: writing zero register.");
-	end
-	if (wr1 && wrrb==11'd0) begin
-		$display("RAT: writing zero register.");
-	end
-	if (wr2 && wrrc==11'd0) begin
-		$display("RAT: writing zero register.");
-	end
-	if (wr3 && wrrd==11'd0) begin
-		$display("RAT: writing zero register.");
-	end
 
 end
 
@@ -796,24 +809,12 @@ else begin
 end
 
 // Add registers to the checkpoint map.
-always_ff @(posedge clk)
+always_comb
 begin
- 	cpram_we <= wr0|wr1|wr2|wr3|new_chkpt1;
+ 	cpram_we <= wr0|wr1|wr2|wr3|
+ 							cmtav|cmtbv|cmtcv|cmtdv|
+ 							new_chkpt1;
 end
-
-/*
-always_ff @(posedge clk)
-if (rst)
-	wndx <= 6'd0;
-else begin
-	if (cpram_en) begin
-		if (new_chkpt1)
-			wndx = (cndx + 1) % NCHECK;
-		else
-			wndx = cndx;
-	end
-end
-*/
 
 // Add registers allocated since the branch miss instruction to the list of
 // registers to be freed.

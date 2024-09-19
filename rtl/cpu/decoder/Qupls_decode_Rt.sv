@@ -133,8 +133,8 @@ endfunction
 always_comb
 begin
 	Rt = fnRt(instr);
-	if (Rt==9'd31)
-		Rt = 9'd32|om;
+	if (Rt==8'd31 && instr.ins.any.opcode!=OP_MOV)
+		Rt = 8'd32|om;
 	if (instr.ins.any.opcode==OP_BSR)
 		Rtn = 1'b0;
 	else
