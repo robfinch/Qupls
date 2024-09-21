@@ -46,7 +46,10 @@ module Qupls_sched(rst, clk, alu0_idle, alu1_idle, fpu0_idle ,fpu1_idle, fcu_idl
 	robentry_agen_issue,
 	alu0_rndx, alu1_rndx, alu0_rndxv, alu1_rndxv,
 	fpu0_rndx, fpu0_rndxv, fpu1_rndx, fpu1_rndxv, fcu_rndx, fcu_rndxv,
-	agen0_rndx, agen1_rndx, cpytgt0, cpytgt1, agen0_rndxv, agen1_rndxv);
+	agen0_rndx, agen1_rndx, cpytgt0, cpytgt1, agen0_rndxv, agen1_rndxv,
+	ratv0_rndxv, ratv1_rndxv, ratv2_rndxv, ratv3_rndxv, 
+	ratv0_rndx, ratv1_rndx, ratv2_rndx, ratv3_rndx 
+);
 parameter WINDOW_SIZE = SCHED_WINDOW_SIZE;
 input rst;
 input clk;
@@ -84,6 +87,14 @@ output reg fpu1_rndxv;
 output reg fcu_rndxv;
 output reg agen0_rndxv;
 output reg agen1_rndxv;
+output rob_ndx_t ratv0_rndx;
+output rob_ndx_t ratv1_rndx;
+output rob_ndx_t ratv2_rndx;
+output rob_ndx_t ratv3_rndx;
+output reg ratv0_rndxv;
+output reg ratv1_rndxv;
+output reg ratv2_rndxv;
+output reg ratv3_rndxv;
 
 reg [1:0] next_robentry_islot_o [0:ROB_ENTRIES-1];
 rob_bitmask_t next_robentry_issue;
@@ -95,6 +106,9 @@ rob_bitmask_t multicycle_issue;
 rob_bitmask_t next_prev_issue;
 rob_bitmask_t prev_issue;
 rob_bitmask_t prev_issue2;
+rob_bitmask_t next_ratv_issue;
+rob_bitmask_t ratv_issue;
+rob_bitmask_t ratv_issue2;
 
 rob_ndx_t next_alu0_rndx;
 rob_ndx_t next_alu1_rndx;
@@ -110,6 +124,14 @@ reg next_fpu1_rndxv;
 reg next_fcu_rndxv;
 reg next_agen0_rndxv;
 reg next_agen1_rndxv;
+rob_ndx_t next_ratv0_rndx;
+rob_ndx_t next_ratv1_rndx;
+rob_ndx_t next_ratv2_rndx;
+rob_ndx_t next_ratv3_rndx;
+reg next_ratv0_rndxv;
+reg next_ratv1_rndxv;
+reg next_ratv2_rndxv;
+reg next_ratv3_rndxv;
 reg next_cpytgt0;
 reg next_cpytgt1;
 rob_bitmask_t args_valid;
@@ -154,7 +176,7 @@ input rob_ndx_t ndx;
 begin
 	fnPriorFC = FALSE;
 	for (n = 0; n < ROB_ENTRIES; n = n + 1)
-		if (rob[n].v && rob[n].sn < rob[ndx].sn && rob[n].decbus.fc && !rob[n].done[1])
+		if (rob[n].v && rob[n].sn < rob[ndx].sn && rob[n].decbus.fc && !(&rob[n].done))
 			fnPriorFC = TRUE;
 end
 endfunction
@@ -384,7 +406,7 @@ else
 												&& (args_valid[g]||(rob[g].decbus.cpytgt && rob[g].argT_v))
 												//&& !fnPriorFalsePred(g)
 												&& !fnPriorSync(g)
-												&& rob[g].pred_bit==TRUE
+												&& |rob[g].pred_bits
 										    && rob[g].pred_bitv
 //												&& !robentry_issue[g]
 												;
@@ -399,7 +421,7 @@ else
 												&& rob[g].argT_v 
 												//&& fnPredFalse(g)
 												&& !robentry_issue[g]
-												&& rob[g].pred_bit==FALSE
+												&& ~|rob[g].pred_bits
 										    && rob[g].pred_bitv
 												&& SUPPORT_PRED
 												;
@@ -429,7 +451,7 @@ reg can_issue_fcu;
 reg can_issue_agen0;
 reg can_issue_agen1;
 reg flag;
-integer hd, synchd, shd, slot;
+integer hd, hd1, synchd, shd, slot;
 
 always_ff @(negedge clk)
 if (rst) begin
@@ -529,6 +551,7 @@ else begin
 //				&& !prev_issue2[heads[hd]]
 				&& !robentry_issue[heads[hd]]
 				&& ((rob[heads[hd]].decbus.alu && !rob[heads[hd]].done[0]) || (rob[heads[hd]].decbus.cpytgt && rob[heads[hd]].done!=2'b11))
+//				&& (rob[heads[hd]].decbus.fc ? next_robentry_fcu_issue[heads[hd]] || robentry_fcu_issue[heads[hd]] || |rob[heads[hd]].out : 1'b1)
 				&& !rob[heads[hd]].out[0]) begin
 		  	next_robentry_issue[heads[hd]] = 1'b1;
 		  	next_robentry_islot_o[heads[hd]] = 2'b00;
@@ -542,6 +565,7 @@ else begin
 //					&& !prev_issue2[heads[hd]]
 					&& !robentry_issue[heads[hd]]
 					&& ((rob[heads[hd]].decbus.alu && !rob[heads[hd]].done[0]) || (rob[heads[hd]].decbus.cpytgt && rob[heads[hd]].done!=2'b11))
+//					&& (rob[heads[hd]].decbus.fc ? next_robentry_fcu_issue[heads[hd]] || robentry_fcu_issue[heads[hd]] || |rob[heads[hd]].out : 1'b1)
 					&& !rob[heads[hd]].out[0]
 					&& !rob[heads[hd]].decbus.alu0) begin
 					if (!next_robentry_issue[heads[hd]]) begin	// Did ALU #0 already grab it?
@@ -607,6 +631,8 @@ else begin
 				// Issue flow controls in order, one at a time
 				if (!issued_fcu && fcu_idle && rob[heads[hd]].decbus.fc && !rob[heads[hd]].done[1] && !rob[heads[hd]].out[1]
 					&& !prev_issue[heads[hd]]
+					&& !(|robentry_fcu_issue)
+					&& !(|next_robentry_fcu_issue)
 //					&& !prev_issue2[heads[hd]]
 					&& (SUPPORT_OOOFC ? 1'b1 : !fnPriorFC(heads[hd]))) begin
 			  	next_robentry_fcu_issue[heads[hd]] = 1'b1;
@@ -739,6 +765,85 @@ else begin
 	agen1_rndxv <= next_agen1_rndxv;
 	cpytgt0 <= next_cpytgt0;
 	cpytgt1 <= next_cpytgt1;
+end
+
+always_ff @(negedge clk)
+if (rst) begin
+	next_ratv0_rndx = 5'd0;
+	next_ratv1_rndx = 5'd0;
+	next_ratv2_rndx = 5'd0;
+	next_ratv3_rndx = 5'd0;
+	next_ratv0_rndxv = INV;
+	next_ratv1_rndxv = INV;
+	next_ratv2_rndxv = INV;
+	next_ratv3_rndxv = INV;
+	next_ratv_issue <= {$bits(rob_bitmask_t){1'd0}};
+end
+else begin
+	next_ratv0_rndx = 5'd0;
+	next_ratv1_rndx = 5'd0;
+	next_ratv2_rndx = 5'd0;
+	next_ratv3_rndx = 5'd0;
+	next_ratv0_rndxv = INV;
+	next_ratv1_rndxv = INV;
+	next_ratv2_rndxv = INV;
+	next_ratv3_rndxv = INV;
+	next_ratv_issue <= {$bits(rob_bitmask_t){1'd0}};
+	for (hd1 = 0; hd1 < WINDOW_SIZE; hd1 = hd1 + 1) begin
+		if (rob[heads[hd1]].v && !rob[heads[hd1]].rat_v &&
+			!ratv_issue[heads[hd1]]) begin
+			next_ratv0_rndxv = 1'b1;
+			next_ratv0_rndx = heads[hd1];
+			next_ratv_issue[heads[hd1]] = 1'b1;
+		end
+		if (rob[heads[hd1]].v && !rob[heads[hd1]].rat_v && 
+			!ratv_issue[heads[hd1]] && 
+			!next_ratv_issue[heads[hd1]]) begin
+			next_ratv1_rndxv = 1'b1;
+			next_ratv1_rndx = heads[hd1];
+			next_ratv_issue[heads[hd1]] = 1'b1;
+		end
+		if (rob[heads[hd1]].v && !rob[heads[hd1]].rat_v &&
+		 !ratv_issue[heads[hd1]] &&
+		 !next_ratv_issue[heads[hd1]]) begin
+			next_ratv2_rndxv = 1'b1;
+			next_ratv2_rndx = heads[hd1];
+			next_ratv_issue[heads[hd1]] = 1'b1;
+		end
+		if (rob[heads[hd1]].v && !rob[heads[hd1]].rat_v &&
+		 !ratv_issue[heads[hd1]] &&
+		 !next_ratv_issue[heads[hd1]]) begin
+			next_ratv3_rndxv = 1'b1;
+			next_ratv3_rndx = heads[hd1];
+			next_ratv_issue[heads[hd1]] = 1'b1;
+		end
+	end
+end
+
+always_ff @(posedge clk)
+if (rst) begin
+	ratv0_rndx = 5'd0;
+	ratv1_rndx = 5'd0;
+	ratv2_rndx = 5'd0;
+	ratv3_rndx = 5'd0;
+	ratv0_rndxv = INV;
+	ratv1_rndxv = INV;
+	ratv2_rndxv = INV;
+	ratv3_rndxv = INV;
+	ratv_issue <= {$bits(rob_bitmask_t){1'd0}};
+	ratv_issue2 <= {$bits(rob_bitmask_t){1'd0}};
+end
+else begin
+	ratv0_rndxv <= next_ratv0_rndxv;
+	ratv1_rndxv <= next_ratv1_rndxv;
+	ratv2_rndxv <= next_ratv2_rndxv;
+	ratv3_rndxv <= next_ratv3_rndxv;
+	ratv0_rndx <= next_ratv0_rndx;
+	ratv1_rndx <= next_ratv1_rndx;
+	ratv2_rndx <= next_ratv2_rndx;
+	ratv3_rndx <= next_ratv3_rndx;
+	ratv_issue <= next_ratv_issue & ~ratv_issue2;
+	ratv_issue2 <= ratv_issue;
 end
 
 endmodule

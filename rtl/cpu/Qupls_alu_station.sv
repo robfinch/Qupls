@@ -44,7 +44,7 @@ module Qupls_alu_station(rst, clk, available, idle, issue, rndx, rndxv, rob,
 	vrm, vex, ld, id, 
 	argA, argB, argBI, argC, argI, argT, argM, argA_ctag, argB_ctag, cpytgt,
 	cs, aRtz, aRt, nRt, bank, instr, div, cap, cptgt, pc, cp,
-	pred, predz, prc
+	pred, predz, prc, sc_done, idle_false
 );
 input rst;
 input clk;
@@ -83,12 +83,23 @@ output reg bank;
 output ex_instruction_t instr;
 output reg div;
 output reg cap;
-output reg [15:0] cptgt;
+output reg [7:0] cptgt;
 output pc_address_t pc;
 output checkpt_ndx_t cp;
 output reg pred;
 output reg predz;
 output memsz_t prc;
+output reg sc_done;
+output reg idle_false;
+
+// For a vector instruction we got the entire mask register, only the bits
+// relevant to the current element are needed. So, they are extracted.
+reg [7:0] next_cptgt;
+always_comb
+	if (rob.decbus.vec)
+		next_cptgt <= {8{cpytgt|rob.decbus.cpytgt}} | ~(rfo_argM >> {rob.decbus.Ra[2:0],3'h0});
+	else
+		next_cptgt <= {8{cpytgt|rob.decbus.cpytgt}} | ~rob.pred_bits;
 
 always_ff @(posedge clk)
 if (rst) begin
@@ -110,15 +121,19 @@ if (rst) begin
 	aRtz <= TRUE;
 	instr <= {41'd0,OP_NOP};
 	div <= 1'b0;
-	cptgt <= 16'h0000;
+	cptgt <= 8'h00;
 	pc <= RSTPC;
 	cp <= 4'd0;
 	pred <= FALSE;
 	predz <= FALSE;
-	prc <= QuplsPkg::hexi;
+	prc <= QuplsPkg::octa;
+	sc_done <= FALSE;
+	idle_false <= FALSE;
 end
 else begin
 	ld <= 1'd0;
+	sc_done <= FALSE;
+	idle_false <= FALSE;
 	if (available && issue && rndxv && idle) begin
 		ld <= 1'd1;
 		id <= rndx;
@@ -161,12 +176,7 @@ else begin
 		predz <= rob.decbus.predz;
 		div <= rob.decbus.div;
 		cap <= rob.decbus.cap;
-		// For a vector instruction we got the entire mask register, only the bits
-		// relevant to the current element are needed. So, they are extracted.
-		if (rob.decbus.vec)
-			cptgt <= {16{cpytgt|rob.decbus.cpytgt}} | ~(rfo_argM >> {rob.decbus.Ra[2:0],4'h0});
-		else
-			cptgt <= {16{cpytgt|rob.decbus.cpytgt}};
+		cptgt <= next_cptgt;
 		prc <= rob.decbus.prc;
 		if (cpytgt|rob.decbus.cpytgt) begin
 			instr.ins <= {41'd0,OP_NOP};
@@ -178,6 +188,11 @@ else begin
 			instr <= rob.op;
 		pc <= rob.pc;
 		cp <= rob.cndx;
+		// Done even if multi-cycle if it is just a copy-target.
+		if (!rob.decbus.multicycle || (&next_cptgt))
+			sc_done <= TRUE;
+		else
+			idle_false <= TRUE;
 	end
 end
 

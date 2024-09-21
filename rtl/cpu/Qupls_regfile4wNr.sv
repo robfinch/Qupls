@@ -52,7 +52,7 @@ parameter RPORTS = 20;
 input rst;
 input clk;
 input clk5x;
-input ph4;
+input [4:0] ph4;
 input wr0;
 input wr1;
 input wr2;
@@ -126,7 +126,7 @@ if (rst) begin
 	wcntd <= 3'd0;
 end
 else begin
-	if (ph4)
+	if (ph4[4])
 		wcnt <= 3'd0;
 	else if (wcnt < 3'd4)
 		wcnt <= wcnt + 2'd1;
@@ -157,15 +157,13 @@ always_ff @(posedge clk5x) if (ph4d) i3a <= i3;
 
 always_ff @(posedge clk5x)
 begin
-	for (mm = 0; mm < 4; mm = mm + 1) begin
-		case(wcntd)
-		3'd0:	begin wr <= wr0; we <= we0 && wa0!=10'd0; wa <= wa0; i <= i0a; wt <= wt0; ti <= ti0; end
-		3'd1:	begin wr <= wr1; we <= we1 && wa1!=10'd0; wa <= wa1; i <= i1a; wt <= wt1; ti <= ti1;  end
-		3'd2: begin wr <= wr2; we <= we2 && wa2!=10'd0; wa <= wa2; i <= i2a; wt <= wt2; ti <= ti2;  end
-		3'd3:	begin wr <= wr3; we <= we3 && wa3!=10'd0; wa <= wa3; i <= i3a; wt <= wt3; ti <= ti3;  end
-		default:	begin wr <= 1'b1; we <= 1'b1; wa <= {RBIT+1{1'd0}}; i <= {WID{1'b0}}; wt <= 1'b1; ti <= 1'b0; end
-		endcase
-	end
+	case(wcnt)
+	3'd0:	begin wr <= wr0; we <= we0 && wa0!=10'd0; wa <= wa0; i <= i0; wt <= wt0; ti <= ti0; end
+	3'd1:	begin wr <= wr1; we <= we1 && wa1!=10'd0; wa <= wa1; i <= i1; wt <= wt1; ti <= ti1;  end
+	3'd2: begin wr <= wr2; we <= we2 && wa2!=10'd0; wa <= wa2; i <= i2; wt <= wt2; ti <= ti2;  end
+	3'd3:	begin wr <= wr3; we <= we3 && wa3!=10'd0; wa <= wa3; i <= i3; wt <= wt3; ti <= ti3;  end
+	default:	begin wr <= 1'b1; we <= 1'b1; wa <= {RBIT+1{1'd0}}; i <= {WID{1'b0}}; wt <= 1'b1; ti <= 1'b0; end
+	endcase
 end
 
 generate begin : gRF

@@ -45,6 +45,17 @@ input instruction_t ir;
 begin
 	fnIsFlowCtrl = 1'b0;
 	case(ir.any.opcode)
+	OP_R2:
+		case(ir.r2.func)
+		FN_R1:
+			case(ir.r2.Rb)
+			OP_REX:	fnIsFlowCtrl = 1'b1;
+			default:
+				fnIsFlowCtrl = 1'b0;
+			endcase
+		default:
+			fnIsFlowCtrl = 1'b0;
+		endcase
 	OP_CHK:	fnIsFlowCtrl = 1'b1;
 	OP_JSR,OP_JSRI:
 		fnIsFlowCtrl = 1'b1;

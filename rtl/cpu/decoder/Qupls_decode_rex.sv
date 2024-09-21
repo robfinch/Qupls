@@ -45,8 +45,17 @@ input instruction_t ir;
 begin
 	fnIsRex = 1'b0;
 	case(ir.any.opcode)
-	OP_REX:
-		fnIsRex = 1'b1;	
+	OP_R2:
+		case(ir.r2.func)
+		FN_R1:
+			case(ir.r3.Rb)
+			OP_REX: fnIsRex = 1'b1;	
+			default:
+				fnIsRex = 1'b0;
+			endcase
+		default:
+			fnIsRex = 1'b0;
+		endcase
 	default:
 		fnIsRex = 1'b0;
 	endcase

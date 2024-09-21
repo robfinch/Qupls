@@ -79,17 +79,22 @@ reg stalla0 = 1'b0;
 reg stalla1 = 1'b0;
 reg stalla2 = 1'b0;
 reg stalla3 = 1'b0;
+reg alloc0d;
+reg alloc1d;
+reg alloc2d;
+reg alloc3d;
 reg [PREGS-1:0] next_avail;
 always_comb stall = stalla0|stalla1|stalla2|stalla3;
 
-always_comb stalla0 = ~avail[wo0];
-always_comb stalla1 = ~avail[wo1];
-always_comb stalla2 = ~avail[wo2];
-always_comb stalla3 = ~avail[wo3];
-always_comb wv0 = avail[wo0];
-always_comb wv1 = avail[wo1];
-always_comb wv2 = avail[wo2];
-always_comb wv3 = avail[wo3];
+// Not a stall if not allocating.
+always_comb stalla0 = ~avail[wo0] & alloc0;
+always_comb stalla1 = ~avail[wo1] & alloc1;
+always_comb stalla2 = ~avail[wo2] & alloc2;
+always_comb stalla3 = ~avail[wo3] & alloc3;
+always_comb wv0 = avail[wo0] & alloc0 & en;
+always_comb wv1 = avail[wo1] & alloc1 & en;
+always_comb wv2 = avail[wo2] & alloc2 & en;
+always_comb wv3 = avail[wo3] & alloc3 & en;
 
 always_comb rot0 = alloc0;
 always_comb rot1 = alloc1;
@@ -188,6 +193,11 @@ else begin
 	next_avail[PREGS/2] = 1'b0;
 	next_avail[PREGS*3/4] = 1'b0;
 end
+
+always_ff @(posedge clk) if (rst) alloc0d <= 1'b0; else if(en) alloc0d <= alloc0;
+always_ff @(posedge clk) if (rst) alloc1d <= 1'b0; else if(en) alloc1d <= alloc1;
+always_ff @(posedge clk) if (rst) alloc2d <= 1'b0; else if(en) alloc2d <= alloc2;
+always_ff @(posedge clk) if (rst) alloc3d <= 1'b0; else if(en) alloc3d <= alloc3;
 
 always_ff @(posedge clk)
 if (rst)

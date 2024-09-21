@@ -38,14 +38,14 @@
 
 import QuplsPkg::*;
 
-module Qupls_checkpoint_valid_ram4(rst, clk6x, ph4, clka, en, wr, wc, wa, awa, setall, i, clkb, rc, ra, o);
+module Qupls_checkpoint_valid_ram4(rst, clk5x, ph4, clka, en, wr, wc, wa, awa, setall, i, clkb, rc, ra, o);
 parameter BANKS=1;
 parameter NPORT=8;
 parameter NRDPORT=20;
 parameter NPREGS=PREGS;
 localparam ABIT=$clog2(NPREGS);
 input rst;
-input clk6x;
+input clk5x;
 input ph4;
 input clka;
 input en;
@@ -77,7 +77,7 @@ reg [$clog2(NPORT/4):0] lvt [0:PREGS-1];
 reg [NCHECK-1:0] slice;
 reg [2:0] wcnt;
 
-always_ff @(posedge clk6x)
+always_ff @(posedge clk5x)
 if (rst) begin
 	wcnt <= 3'd0;
 end
@@ -96,7 +96,7 @@ initial begin
 		lvt[m] = 3'd0;
 end
 
-always_ff @(posedge clk6x)
+always_ff @(posedge clk5x)
 begin
 	for (jj = 0; jj < NPORT/4; jj = jj + 1) begin
 		addra[jj] = wa[wcnt*(NPORT/4)+jj];
@@ -113,7 +113,7 @@ for (p = 0; p < NRDPORT; p = p + 1) begin
 	end
 end
 
-always_ff @(posedge clk6x)
+always_ff @(posedge clk5x)
 for (n = 0; n < NPORT/4; n = n + 1)
 begin
 	if (wrm[n])
@@ -125,7 +125,7 @@ generate begin : gChkptRAM
    // xpm_memory_tdpram: True Dual Port RAM
    // Xilinx Parameterized Macro, version 2022.2
 for (g = 0; g < NPORT/4; g = g + 1) begin
-	change_det #(.WID($bits(addra[g]))) ucd (.rst(rst), .clk(clk6x), .ce(1'b1), .i(addra[g]), .cd(cda[g]));
+	change_det #(.WID($bits(addra[g]))) ucd (.rst(rst), .clk(clk5x), .ce(1'b1), .i(addra[g]), .cd(cda[g]));
 	always_ff @(posedge clka) cdar[g] <= cda[g];
 	always_ff @(posedge clka) wc1[g] <= wcm[g];
 	always_ff @(posedge clka) i1[g] <= im[g];
@@ -201,7 +201,7 @@ for (g = 0; g < NPORT/4; g = g + 1) begin
 
       .addra(addra[g]),                   // ADDR_WIDTH_A-bit input: Address for port A write and read operations.
       .addrb(addrb[r][g]),                   // ADDR_WIDTH_B-bit input: Address for port B write and read operations.
-      .clka(clk6x),                     // 1-bit input: Clock signal for port A. Also clocks port B when
+      .clka(clk5x),                     // 1-bit input: Clock signal for port A. Also clocks port B when
                                        // parameter CLOCKING_MODE is "common_clock".
 
       .clkb(clkb),                     // 1-bit input: Clock signal for port B when parameter CLOCKING_MODE is

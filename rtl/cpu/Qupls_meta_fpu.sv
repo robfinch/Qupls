@@ -64,7 +64,7 @@ output reg otag;
 output reg done;
 output cause_code_t exc;
 
-cause_code_t exc128;
+cause_code_t exc128,exc64;
 reg [WID-1:0] o1;
 wire [WID-1:0] o16, o32, o64, o128;
 wire [7:0] sr64, sr128;
@@ -211,7 +211,8 @@ if (NFPU > 0 && !(SUPPORT_QUAD_PRECISION|SUPPORT_CAPABILITIES))
 		.i(i),
 		.p(p),
 		.o(o64[g*64+63:g*64]),
-		.done(done64)
+		.done(done64),
+		.exc(exc64)
 	);
 
 endgenerate
@@ -256,6 +257,6 @@ else
 	done = done64;
 //	done = ~sr64[6];
 always_comb
-	exc = exc128;
+	exc = exc64;
 
 endmodule

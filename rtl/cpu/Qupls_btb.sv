@@ -439,14 +439,14 @@ begin
 	// On a branch miss the misspc will have the correct block so the
 	// cache line can be fetched, but the group will not be valid yet.
 	// The group is loaded at state 1 below.
-	if (branch_state==BS_DONE) begin
-		next_pc <= misspc;
-		alt_next_pc <= misspc;
-		takb <= 1'b1;
-	end
-	else if (do_bsr) begin
+	if (do_bsr) begin
 		next_pc <= bsr_tgt;
 		alt_next_pc <= bsr_tgt;
+		takb <= 1'b1;
+	end
+	else if (branch_state==BS_DONE) begin
+		next_pc <= misspc;
+		alt_next_pc <= misspc;
 		takb <= 1'b1;
 	end
 	else if (en && pc0==doutb0.pc && doutb0.takb) begin

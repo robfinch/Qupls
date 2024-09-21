@@ -81,7 +81,7 @@ endfunction
 always_comb
 begin
 	Ra = fnRa(instr, has_imma);
-	if (Ra==8'd31 && instr.ins.any.opcode!=OP_MOV)
+	if (Ra==8'd31 && !(instr.ins.any.opcode==OP_MOV && instr.ins[47]))
 		Ra = 8'd32|om;
 	Ran = instr.ins.r2.Ra.n;
 	Raz = ~|Ra;

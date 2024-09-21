@@ -43,7 +43,7 @@ module Qupls_fpu_station(rst, clk, id, argA, argB, argC, argT, argM, argI,
 	Rt, Rt1, aRt, aRtz, aRt1, aRtz1, argA_tag, argB_tag, cs, bank,
 	instr, pc, cp, qfext, cptgt,
 	available, rndx, rndxv, idle, rfo_argA, rfo_argB, rfo_argC, rfo_argT,
-	rfo_argM, rfo_argA_ctag, rfo_argB_ctag, rob);
+	rfo_argM, rfo_argA_ctag, rfo_argB_ctag, rob, sc_done);
 input rst;
 input clk;
 output rob_ndx_t id;
@@ -67,7 +67,7 @@ output instruction_t instr;
 output pc_address_t pc;
 output checkpt_ndx_t cp;
 output reg qfext;
-output reg [15:0] cptgt;
+output reg [7:0] cptgt;
 input available;
 input rob_ndx_t rndx;
 input rndxv;
@@ -80,6 +80,17 @@ input value_t rfo_argM;
 input rfo_argA_ctag;
 input rfo_argB_ctag;
 input rob_entry_t rob;
+output reg sc_done;
+
+// For a vector instruction we got the entire mask register, only the bits
+// relevant to the current element are needed. So, they are extracted.
+reg [7:0] next_cptgt;
+always_comb
+	if (rob.decbus.vec)
+		next_cptgt <= {8{rob.decbus.cpytgt}} | ~(rfo_argM >> {rob.decbus.Ra[2:0],3'h0});
+	else
+		next_cptgt <= {8{rob.decbus.cpytgt}};
+		
 
 always_ff @(posedge clk)
 if (rst) begin
@@ -105,8 +116,10 @@ if (rst) begin
 	cp <= 4'd0;
 	qfext <= FALSE;
 	cptgt <= 16'h0;
+	sc_done <= FALSE;
 end
 else begin
+	sc_done <= FALSE;
 	if (available && rndxv && idle) begin
 		id <= rndx;
 		argA <= rfo_argA;
@@ -125,15 +138,8 @@ else begin
 		else begin
 			qfext <= FALSE;
 		end
-		
-		// For a vector instruction we got the entire mask register, only the bits
-		// relevant to the current element are needed. So, they are extracted.
-		if (rob.decbus.vec)
-			cptgt <= {16{rob.decbus.cpytgt}} | ~(rfo_argM >> {rob.decbus.Ra[2:0],3'h0});
-		else
-			cptgt <= {16{rob.decbus.cpytgt}};
-		
-		argI	<= rob.decbus.immb;
+		cptgt <= next_cptgt;
+		argI <= rob.decbus.immb;
 		Rt <= rob.nRt;
 		aRt <= rob.decbus.Rt;
 		aRtz <= rob.decbus.Rtz;
@@ -142,6 +148,8 @@ else begin
 		instr <= rob.op;
 		pc <= rob.pc;
 		cp <= rob.cndx;
+		if (!rob.decbus.multicycle || (&next_cptgt))
+			sc_done <= TRUE;
 	end
 end
 

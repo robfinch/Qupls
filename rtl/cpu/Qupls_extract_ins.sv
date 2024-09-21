@@ -37,10 +37,11 @@
 // Multiplex micro-code instructions into the instruction stream.
 // Modify instructions for register bit lists.
 //
-// 8200 LUTs / 11k FFs
+// 5900 LUTs / 4900 FFs
 // ============================================================================
 
 import const_pkg::*;
+import cpu_types_pkg::*;
 import QuplsPkg::*;
 
 module Qupls_extract_ins(rst_i, clk_i, en_i, nop_i, stomp_vec, stomp_pac, nop_o, 
@@ -182,90 +183,10 @@ always_comb mc_ins3 = mc_ins3_i;
 always_comb 
 	ic_line_aligned = ic_line_i >> {pc0[5:1],4'd0};
 
-always_comb 
-begin
-	ins0_.pc = pc0;
-	ins0_.mcip = mip_i;
-	ins0_.len = len0_i;
-	ins0_.ins = ic_line_aligned[47:0];
-	if (ins0_.ins.any.opcode==OP_QFEXT) begin
-		ins0_.aRa = {ins0_.ins[41:39],ins0_.ins.r3.Ra.num};
-		ins0_.aRb = {ins0_.ins[44:42],ins0_.ins.r3.Rb.num};
-		ins0_.aRc = {ins0_.ins[47:45],ins0_.ins.r3.Rc.num};
-		ins0_.aRt = {ins0_.ins[38:36],ins0_.ins.r3.Rt.num};
-	end
-	else begin
-		ins0_.aRa = {3'd0,ins0_.ins.r3.Ra.num};
-		ins0_.aRb = {3'd0,ins0_.ins.r3.Rb.num};
-		ins0_.aRc = {3'd0,ins0_.ins.r3.Rc.num};
-		ins0_.aRt = {3'd0,ins0_.ins.r3.Rt.num};
-	end
-	ins0_.pred_btst = 6'd0;
-	ins0_.element = 'd0;
-end
-always_comb
-begin
-	ins1_.pc = pc1;
-	ins1_.mcip = mip_i|2'd1;
-	ins1_.len = len1_i;
-	ins1_.ins = ic_line_aligned[95:48];
-	if (ins1_.ins.any.opcode==OP_QFEXT) begin
-		ins1_.aRa = {ins1_.ins[41:39],ins1_.ins.r3.Ra.num};
-		ins1_.aRb = {ins1_.ins[44:42],ins1_.ins.r3.Rb.num};
-		ins1_.aRc = {ins1_.ins[47:45],ins1_.ins.r3.Rc.num};
-		ins1_.aRt = {ins1_.ins[38:36],ins1_.ins.r3.Rt.num};
-	end
-	else begin
-		ins1_.aRa = {3'd0,ins1_.ins.r3.Ra.num};
-		ins1_.aRb = {3'd0,ins1_.ins.r3.Rb.num};
-		ins1_.aRc = {3'd0,ins1_.ins.r3.Rc.num};
-		ins1_.aRt = {3'd0,ins1_.ins.r3.Rt.num};
-	end
-	ins1_.pred_btst = 6'd0;
-	ins1_.element = 'd0;
-end
-always_comb
-begin
-	ins2_.pc = pc2;
-	ins2_.mcip = mip_i|2'd2;
-	ins2_.len = len2_i;
-	ins2_.ins = ic_line_aligned[143:96];
-	if (ins2_.ins.any.opcode==OP_QFEXT) begin
-		ins2_.aRa = {ins2_.ins[41:39],ins2_.ins.r3.Ra.num};
-		ins2_.aRb = {ins2_.ins[44:42],ins2_.ins.r3.Rb.num};
-		ins2_.aRc = {ins2_.ins[47:45],ins2_.ins.r3.Rc.num};
-		ins2_.aRt = {ins2_.ins[38:36],ins2_.ins.r3.Rt.num};
-	end
-	else begin
-		ins2_.aRa = {3'd0,ins2_.ins.r3.Ra.num};
-		ins2_.aRb = {3'd0,ins2_.ins.r3.Rb.num};
-		ins2_.aRc = {3'd0,ins2_.ins.r3.Rc.num};
-		ins2_.aRt = {3'd0,ins2_.ins.r3.Rt.num};
-	end
-	ins2_.pred_btst = 6'd0;
-	ins2_.element = 'd0;
-end
-always_comb
-begin
-	ins3_.pc = pc3;
-	ins3_.mcip = mip_i|2'd3;
-	ins3_.len = len3_i;
-	ins3_.ins = ic_line_aligned[191:144];
-	if (ins3_.ins.any.opcode==OP_QFEXT) begin
-		ins3_.aRa = {ins3_.ins[41:39],ins3_.ins.r3.Ra.num};
-		ins3_.aRb = {ins3_.ins[44:42],ins3_.ins.r3.Rb.num};
-		ins3_.aRc = {ins3_.ins[47:45],ins3_.ins.r3.Rc.num};
-		ins3_.aRt = {ins3_.ins[38:36],ins3_.ins.r3.Rt.num};
-	end
-	else begin
-		ins3_.aRa = {3'd0,ins3_.ins.r3.Ra.num};
-		ins3_.aRb = {3'd0,ins3_.ins.r3.Rb.num};
-		ins3_.aRc = {3'd0,ins3_.ins.r3.Rc.num};
-		ins3_.aRt = {3'd0,ins3_.ins.r3.Rt.num};
-	end
-	ins3_.pred_btst = 6'd0;
-	ins3_.element = 'd0;
-end
+always_comb tExtractIns(pc0, mip_i|2'd0, len0_i, ic_line_aligned[ 47:  0], ins0_);
+always_comb tExtractIns(pc1, mip_i|2'd1, len1_i, ic_line_aligned[ 95: 48], ins1_);
+always_comb tExtractIns(pc2, mip_i|2'd2, len2_i, ic_line_aligned[143: 96], ins2_);
+always_comb tExtractIns(pc3, mip_i|2'd3, len3_i, ic_line_aligned[191:144], ins3_);
 
 // If there was a branch miss, instructions before the miss PC should not be
 // executed.
@@ -502,16 +423,17 @@ else begin
 				ins1_o <= expbuf2[ndxs[1]];
 				ins2_o <= expbuf2[ndxs[2]];
 				ins3_o <= expbuf2[ndxs[3]];
-				/*
+				
 				pc0_o <= expbuf2[ndxs[0]].pc;
 				pc1_o <= expbuf2[ndxs[1]].pc;
 				pc2_o <= expbuf2[ndxs[2]].pc;
 				pc3_o <= expbuf2[ndxs[3]].pc;
-				*/
+				/*
 				pc0_o <= pcbuf2[ndxs[0]];
 				pc1_o <= pcbuf2[ndxs[1]];
 				pc2_o <= pcbuf2[ndxs[2]];
 				pc3_o <= pcbuf2[ndxs[3]];
+				*/
 				mcip0 <= expbuf2[ndxs[0]].mcip;
 				mcip1 <= expbuf2[ndxs[1]].mcip;
 				mcip2 <= expbuf2[ndxs[2]].mcip;
@@ -547,5 +469,33 @@ always_comb mcip0_o <= mcip0;
 always_comb mcip1_o <= |mcip0 ? mcip0 | 12'h001 : 12'h000;
 always_comb mcip2_o <= |mcip1 ? mcip1 | 12'h002 : 12'h000;
 always_comb mcip3_o <= |mcip2 ? mcip2 | 12'h003 : 12'h000;
+
+task tExtractIns;
+input pc_address_t pc;
+input mc_address_t mcip;
+input [3:0] len;
+input instruction_t ins_i;
+output ex_instruction_t ins_o;
+begin
+	ins_o.pc = pc;
+	ins_o.mcip = mcip;
+	ins_o.len = len;
+	ins_o.ins = ins_i;
+	if (ins_o.ins.any.opcode==OP_QFEXT) begin
+		ins_o.aRa = {ins_o.ins[41:39],ins_o.ins.r3.Ra.num};
+		ins_o.aRb = {ins_o.ins[44:42],ins_o.ins.r3.Rb.num};
+		ins_o.aRc = {ins_o.ins[47:45],ins_o.ins.r3.Rc.num};
+		ins_o.aRt = {ins_o.ins[38:36],ins_o.ins.r3.Rt.num};
+	end
+	else begin
+		ins_o.aRa = {3'd0,ins_o.ins.r3.Ra.num};
+		ins_o.aRb = {3'd0,ins_o.ins.r3.Rb.num};
+		ins_o.aRc = {3'd0,ins_o.ins.r3.Rc.num};
+		ins_o.aRt = {3'd0,ins_o.ins.r3.Rt.num};
+	end
+	ins_o.pred_btst = 6'd0;
+	ins_o.element = 'd0;
+end
+endtask
 
 endmodule

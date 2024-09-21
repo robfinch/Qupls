@@ -37,7 +37,7 @@
 import QuplsPkg::*;
 //import fp64Pkg::*;
 
-module Qupls_fpu64(rst, clk, clk3x, idle, ir, rm, a, b, c, t, i, p, o, done);
+module Qupls_fpu64(rst, clk, clk3x, idle, ir, rm, a, b, c, t, i, p, o, done, exc);
 parameter WID=64;
 input rst;
 input clk;
@@ -53,6 +53,7 @@ input [WID-1:0] i;
 input [WID-1:0] p;
 output reg [WID-1:0] o;
 output reg done;
+output cause_code_t exc;
 
 reg [11:0] cnt;
 reg sincos_done, scale_done, f2i_done, i2f_done, sqrt_done, fres_done, trunc_done;
@@ -484,4 +485,7 @@ always_ff @(posedge clk)
 	else
 		o = t;
 	*/
+always_comb
+	exc = FLT_NONE;
+
 endmodule
