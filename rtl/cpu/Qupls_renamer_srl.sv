@@ -55,7 +55,7 @@ end
 
 always_ff @(posedge clk)
 if (rst)
-	o <= {8'b0,N[1:0],{SIZE{1'd0}}};
+	o <= {8'b0,N[1:0],{SIZE-1{1'd0}},1'b1};
 else begin
 	if (rot & en) begin
 		for (mm = 1; mm < PREGS/4-1; mm = mm + 1)

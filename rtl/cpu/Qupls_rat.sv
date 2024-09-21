@@ -256,11 +256,20 @@ wire qbr_ok = nq && qbr && nob < 6'd15;
 generate begin : gRRN
 	for (g = 0; g < NPORT; g = g + 1) begin
 		always_comb
-			prn[g] = rn[g]==wrd && wr3 ? wrrd :
-							rn[g]==wrc && wr2 ? wrrc :
-							rn[g]==wrb && wr1 ? wrrb :
-							rn[g]==wra && wr0 ? wrra :
-							cpram_out.regmap[rn[g]];
+			// Bypass only for previous instruction in same group
+			case(rng[g])
+			3'd0:	prn[g] = 	cpram_out.regmap[rn[g]];		// No bypasses needed here
+			3'd1: prn[g] = 	rn[g]==wra && wr0 ? wrra :	// One previous target
+											cpram_out.regmap[rn[g]];
+			3'd2: prn[g] = 	rn[g]==wrb && wr1 ? wrrb :	// Two previous target
+											rn[g]==wra && wr0 ? wrra : 
+										 	cpram_out.regmap[rn[g]];
+			3'd3: prn[g] = 	rn[g]==wrc && wr2 ? wrrc :	// Three previous target
+											rn[g]==wrb && wr1 ? wrrb :
+											rn[g]==wra && wr0 ? wrra : 
+										 	cpram_out.regmap[rn[g]];
+			default: prn[g] = cpram_out.regmap[rn[g]];
+			endcase
 
 		// Unless it us a target register, we want the old unbypassed value.
 		always_comb

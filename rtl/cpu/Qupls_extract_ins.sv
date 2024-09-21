@@ -203,6 +203,7 @@ always_comb nop2 = FALSE;
 always_comb nop3 = FALSE;
 */
 reg bsr0,bsr1,bsr2,bsr3;
+reg jsr0,jsr1,jsr2,jsr3;
 reg do_bsr1;
 cpu_types_pkg::pc_address_t bsr0_tgt;
 cpu_types_pkg::pc_address_t bsr1_tgt;
@@ -229,22 +230,26 @@ always_comb bsr0 = ins0.ins.any.opcode==OP_BSR;
 always_comb bsr1 = ins1.ins.any.opcode==OP_BSR;
 always_comb bsr2 = ins2.ins.any.opcode==OP_BSR;
 always_comb bsr3 = ins3.ins.any.opcode==OP_BSR;
-always_comb bsr0_tgt = pc0d + {{27{ins0.ins[47]}},ins0.ins[47:11]};
-always_comb bsr1_tgt = pc1d + {{27{ins1.ins[47]}},ins1.ins[47:11]};
-always_comb bsr2_tgt = pc2d + {{27{ins2.ins[47]}},ins2.ins[47:11]};
-always_comb bsr3_tgt = pc3d + {{27{ins3.ins[47]}},ins3.ins[47:11]};
+always_comb jsr0 = ins0.ins.any.opcode==OP_JSR;
+always_comb jsr1 = ins1.ins.any.opcode==OP_JSR;
+always_comb jsr2 = ins2.ins.any.opcode==OP_JSR;
+always_comb jsr3 = ins3.ins.any.opcode==OP_JSR;
+always_comb bsr0_tgt = jsr0 ? {{27{ins0.ins[47]}},ins0.ins[47:11]} : pc0d + {{27{ins0.ins[47]}},ins0.ins[47:11]};
+always_comb bsr1_tgt = jsr1 ? {{27{ins1.ins[47]}},ins1.ins[47:11]} : pc1d + {{27{ins1.ins[47]}},ins1.ins[47:11]};
+always_comb bsr2_tgt = jsr2 ? {{27{ins2.ins[47]}},ins2.ins[47:11]} : pc2d + {{27{ins2.ins[47]}},ins2.ins[47:11]};
+always_comb bsr3_tgt = jsr3 ? {{27{ins3.ins[47]}},ins3.ins[47:11]} : pc3d + {{27{ins3.ins[47]}},ins3.ins[47:11]};
 always_comb
-	do_bsr = bsr0|bsr1|bsr2|bsr3;
+	do_bsr = bsr0|bsr1|bsr2|bsr3|jsr0|jsr1|jsr2|jsr3;
 //edge_det ued1 (.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(do_bsr1), .pe(do_bsr), .ne(), .ee());
 always_comb
 begin
-	if (bsr0)
+	if (bsr0|jsr0)
 		bsr_tgt = bsr0_tgt;
-	else if (bsr1)
+	else if (bsr1|jsr1)
 		bsr_tgt = bsr1_tgt;
-	else if (bsr2)
+	else if (bsr2|jsr2)
 		bsr_tgt = bsr2_tgt;
-	else if (bsr3)
+	else if (bsr3|jsr3)
 		bsr_tgt = bsr3_tgt;
 	else
 		bsr_tgt = RSTPC;

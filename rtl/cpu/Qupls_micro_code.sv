@@ -1812,7 +1812,7 @@ case(micro_ip)
 12'h1B9:	
 	begin
 		next_ip = 12'h1BA;
-		instr.ins = {24'hFFFD80,2'd2,7'd0,7'd0,1'b0,OP_JSR};
+		instr.ins = {37'h1FFFFFFD80,3'b0,1'b0,OP_JSR};
 		instr.aRa = 9'd0;
 		instr.aRt = 9'd0;
 	end

@@ -2510,6 +2510,7 @@ wire ornop1 = db0_q.bsr;
 wire ornop2 = db0_q.bsr || db1_q.bsr;
 wire ornop3 = db0_q.bsr || db1_q.bsr || db2_q.bsr;
 
+/*
 assign arnv[0] = !stomp0;
 assign arnv[1] = !stomp0;
 assign arnv[2] = !stomp0;
@@ -2535,6 +2536,8 @@ assign arnv[15] = !stomp3;
 assign arnv[20] = !stomp3;
 
 assign arnv[16] = 1'b1;
+*/
+assign arnv = 24'hFFFFFF;
 
 wire restore_chkpt = branch_state==BS_CHKPT_RESTORE;// && !fcu_cjb;
 wire restored;	// restore_chkpt delayed one clock.
@@ -3244,7 +3247,7 @@ else begin
 		case(fcu_bts)
 		BTS_REG,BTS_DISP:
 			fcu_branchmiss <= ((takb && !fcu_bt) || (!takb && fcu_bt));
-		BTS_BSR,BTS_CALL,BTS_RET:
+		BTS_JSR,BTS_BSR,BTS_CALL,BTS_RET:
 			fcu_branchmiss <= TRUE;//((takb && ~fcu_bt) || (!takb && fcu_bt));
 		default:
 			fcu_branchmiss <= FALSE;		
@@ -3348,7 +3351,9 @@ wire s4s7 = (pc==misspc && ihito && brtgtvr) ||
 	;
 wire s5s7 = (next_pc==misspc && ihito && (rob[fcu_id].done==2'b11 || fcu_idle)) ||
 //wire s5s7 = (next_pc==misspc && get_next_pc && ihito && (rob[fcu_id].done==2'b11 || fcu_idle)) ||
-	(robentry_stomp[fcu_id] || (rob[fcu_id].out[1] && !rob[fcu_id].v))
+	(robentry_stomp[fcu_id] || 
+	(!rob[fcu_id].v))
+//	(rob[fcu_id].out[1] && !rob[fcu_id].v))
 	;
 
 always_ff @(posedge clk)
@@ -6081,7 +6086,7 @@ else begin
 	// Redo instruction as copy target.
 	for (n3 = 0; n3 < ROB_ENTRIES; n3 = n3 + 1) begin
 		if (robentry_stomp[n3]) begin
-			rob[n3].v <= INV;
+//			rob[n3].v <= INV;
 			rob[n3].excv <= INV;
 			rob[n3].decbus.cpytgt <= TRUE;
 			rob[n3].done <= {FALSE,FALSE};
@@ -7114,16 +7119,26 @@ begin
 		inc_chkpt <= TRUE;
 	// Vector instructions are treated as NOPs as they expand into scalar ops.
 	// Should not see any vector instructions at queue time.
+	// If the instruction enqueues it must have been through the renamer.
+	// Propagate the target register to the new target by turning the instruction
+	// into a copy-target.
 	if (ornop|db.vec) begin
+		rob[tail].decbus.cpytgt <= TRUE;
+		rob[tail].decbus.alu <= TRUE;
+		rob[tail].decbus.fpu <= FALSE;
+		rob[tail].decbus.fc <= FALSE;
+		rob[tail].decbus.load <= FALSE;
+		rob[tail].decbus.store <= FALSE;
+		rob[tail].decbus.mem <= FALSE;
 		rob[tail].op <= {41'd0,OP_NOP};
-		rob[tail].nRt <= 11'd0;
-		rob[tail].pRt <= 11'd0;
+//		rob[tail].nRt <= 11'd0;
+//		rob[tail].pRt <= 11'd0;
 		rob[tail].argA_v <= VAL;
 		rob[tail].argB_v <= VAL;
 		rob[tail].argC_v <= VAL;
 		rob[tail].argT_v <= VAL;
 		rob[tail].argM_v <= VAL;
-		rob[tail].done <= {TRUE,TRUE};
+//		rob[tail].done <= {TRUE,TRUE};
 	end
 	// In the shadow of a BSR a target register may be assigned by the renamer.
 	// There is not an easy way to undo this assignment, so we keep it and modify
@@ -7131,8 +7146,8 @@ begin
 	else if (stomp)
 		rob[tail].decbus.cpytgt <= TRUE;
 	if (db.vec) begin
-		vrm[vn] <= 128'hFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF;
-		vex[vn] <= 128'h0;
+		vrm[vn] <= 64'hFFFFFFFFFFFFFFFF;
+		vex[vn] <= 64'h0;
 		vn <= vn + 2'd1;
 		rob[tail].vn <= vn;
 	end
@@ -7513,6 +7528,7 @@ begin
 			else
 				tgtpc = pc + {{27{instr.ins[47]}},instr.ins[47:11]};
 		end
+	BTS_JSR:	tgtpc = {{27{instr.ins[47]}},instr.ins[47:11]};
 	BTS_CALL:
 		begin
 			case(instr[23:22])
@@ -7567,7 +7583,7 @@ begin
 			endcase
 //			misspc = bt ? pc + 4'd5 : pc + {{47{instr[39]}},instr[39:25],instr[12:11]};
 		end
-	BTS_BSR:
+	BTS_JSR,BTS_BSR:
 		begin
 			misspc = tgtpc;
 		end
