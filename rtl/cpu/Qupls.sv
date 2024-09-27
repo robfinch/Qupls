@@ -2115,10 +2115,10 @@ Qupls_extract_ins uiext1
 	.branchmiss(branch_state > BS_STATE3),
 	.mc_offs(32'd0),//mc_offs),
 	.mc_adr(mc_adr),
-	.pc0_i(pc0_fet),
-	.pc1_i(pc1_fet),
-	.pc2_i(pc2_fet),
-	.pc3_i(pc3_fet),
+	.pc0_i(pc0_f),
+	.pc1_i(pc0_f + 5'd8),
+	.pc2_i(pc0_f + 5'd16),
+	.pc3_i(pc0_f + 5'd24),
 	.mcip0_i(mcip0_mux),
 	.mcip1_i(mcip1_mux),
 	.mcip2_i(mcip2_mux),
@@ -2666,12 +2666,12 @@ pregno_t Rt1_ren;
 pregno_t Rt2_ren;
 pregno_t Rt3_ren;
 
-Qupls_reg_renamer3 utrn1
+Qupls_reg_renamer4 utrn1
 (
 	.rst(rst_i),		// rst_i here not irst!
 	.clk(clk),
-	.clk5x(clk5x),
-	.ph4(ph4),
+//	.clk5x(clk5x),
+//	.ph4(ph4),
 	.en(advance_pipeline_seg2),
 	.restore(restored),
 	.restore_list(restore_list),
@@ -2690,9 +2690,10 @@ Qupls_reg_renamer3 utrn1
 	.wv2(Rt2_renv),
 	.wv3(Rt3_renv),
 	.avail(avail_reg),
-	.stall(ren_stallq)
+	.stall(ren_stallq),
+	.rst_busy(ren_rst_busy)
 );
-assign ren_rst_busy = 1'b0;
+//assign ren_rst_busy = 1'b0;
 
 /*
 always_ff @(posedge clk)
@@ -2984,7 +2985,7 @@ if (irst)
 	pc0_f <= RSTPC;
 else begin
 	if (advance_f)
-		pc0_f <= pc0;
+		pc0_f <= icpc;//pc0;
 end
 always_comb mcip0_mux = micro_ip;
 always_comb mcip1_mux = micro_ip|4'd1;
@@ -3301,7 +3302,7 @@ always_comb wrport3_aRtz = fpu0_aRtz2;
 always_comb wrport4_aRtz = dram_aRtz1;
 always_comb wrport5_aRtz = fpu1_aRtz;
 always_comb wrport0_v = (alu0_sc_done2|alu0_done) && !alu0_aRtz2;
-always_comb wrport1_v = (alu1_sc_done1|alu1_done) && !alu1_aRtz && NALU > 1;
+always_comb wrport1_v = (alu1_sc_done2|alu1_done) && !alu1_aRtz2 && NALU > 1;
 always_comb wrport2_v = dram_v0 && !dram_aRtz0;
 always_comb wrport3_v = (fpu0_sc_done2|fpu0_done1) && !fpu0_aRtz2 && NFPU > 0;
 always_comb wrport4_v = dram_v1 && !dram_aRtz1 && NDATA_PORTS > 1;
@@ -3365,7 +3366,7 @@ Qupls_regfile4wNr #(.RPORTS(24)) urf1 (
 always_ff @(posedge clk)
 begin
 	$display("wr0:%d Rt=%d/%d res=%x sc_done=%d Rtz2=%d", wrport0_v, wrport0_aRt, wrport0_Rt, wrport0_res, alu0_sc_done2, alu0_aRtz2);
-	$display("wr1:%d Rt=%d/%d res=%x", wrport1_v, wrport1_aRt, wrport1_Rt, wrport1_res);
+	$display("wr1:%d Rt=%d/%d res=%x sc_done=%d Rtz2=%d", wrport1_v, wrport1_aRt, wrport1_Rt, wrport1_res, alu1_sc_done2, alu1_aRtz2);
 	$display("wr2:%d Rt=%d/%d res=%x", wrport2_v, wrport2_aRt, wrport2_Rt, wrport2_res);
 	$display("wr3:%d Rt=%d/%d res=%x", wrport3_v, wrport3_aRt, wrport3_Rt, wrport3_res);
 end
@@ -7931,12 +7932,12 @@ begin
 				end
 			2'b10:
 				begin
-					misspc = pc + 4'd5;
+					misspc = pc + 4'd8;
 					miss_mcip = micro_ip + 3'd4;
 				end
 			2'b11:
 				begin
-					misspc = pc + 4'd5;
+					misspc = pc + 4'd8;
 					miss_mcip = micro_ip + 3'd4;
 				end
 			endcase
