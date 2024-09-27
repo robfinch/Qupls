@@ -39,14 +39,16 @@
 // 3700 LUTs / 600 FFs
 // ============================================================================
 //
+import cpu_types_pkg::*;
 import QuplsPkg::*;
 
-module Qupls_reg_renamer3(rst,clk,clk5x,en,restore,restore_list,tags2free,freevals,
+module Qupls_reg_renamer3(rst,clk,clk5x,ph4,en,restore,restore_list,tags2free,freevals,
 	alloc0,alloc1,alloc2,alloc3,wo0,wo1,wo2,wo3,wv0,wv1,wv2,wv3,avail,stall);
 parameter NFTAGS = 4;
 input rst;
 input clk;
 input clk5x;
+input [4:0] ph4;
 input en;
 input restore;
 input [PREGS-1:0] restore_list;
@@ -83,59 +85,69 @@ reg alloc0d;
 reg alloc1d;
 reg alloc2d;
 reg alloc3d;
+reg wv0r;
+reg wv1r;
+reg wv2r;
+reg wv3r;
 reg [PREGS-1:0] next_avail;
+pregno_t wo0r;
+pregno_t wo1r;
+pregno_t wo2r;
+pregno_t wo3r;
 always_comb stall = stalla0|stalla1|stalla2|stalla3;
 
 // Not a stall if not allocating.
-always_comb stalla0 = ~avail[wo0] & alloc0;
-always_comb stalla1 = ~avail[wo1] & alloc1;
-always_comb stalla2 = ~avail[wo2] & alloc2;
-always_comb stalla3 = ~avail[wo3] & alloc3;
-always_comb wv0 = avail[wo0] & alloc0 & en;
-always_comb wv1 = avail[wo1] & alloc1 & en;
-always_comb wv2 = avail[wo2] & alloc2 & en;
-always_comb wv3 = avail[wo3] & alloc3 & en;
+always_comb stalla0 = ~avail[wo0r] & alloc0;
+always_comb stalla1 = ~avail[wo1r] & alloc1;
+always_comb stalla2 = ~avail[wo2r] & alloc2;
+always_comb stalla3 = ~avail[wo3r] & alloc3;
+always_comb wv0r = avail[wo0r] & alloc0;
+always_comb wv1r = avail[wo1r] & alloc1;
+always_comb wv2r = avail[wo2r] & alloc2;
+always_comb wv3r = avail[wo3r] & alloc3;
 
 always_comb rot0 = alloc0;
 always_comb rot1 = alloc1;
 always_comb rot2 = alloc2;
 always_comb rot3 = alloc3;
 
-edge_det ued0 (.rst(rst), .clk(clk5x), .ce(1'b1), .i(alloc0&clk&en), .pe(pe_alloc0), .ne(), .ee());
-edge_det ued1 (.rst(rst), .clk(clk5x), .ce(1'b1), .i(alloc1&clk&en), .pe(pe_alloc1), .ne(), .ee());
-edge_det ued2 (.rst(rst), .clk(clk5x), .ce(1'b1), .i(alloc2&clk&en), .pe(pe_alloc2), .ne(), .ee());
-edge_det ued3 (.rst(rst), .clk(clk5x), .ce(1'b1), .i(alloc3&clk&en), .pe(pe_alloc3), .ne(), .ee());
+wire en1 = en | stall;
+
+edge_det ued0 (.rst(rst), .clk(clk5x), .ce(1'b1), .i(alloc0&ph4[4]&en), .pe(pe_alloc0), .ne(), .ee());
+edge_det ued1 (.rst(rst), .clk(clk5x), .ce(1'b1), .i(alloc1&ph4[4]&en), .pe(pe_alloc1), .ne(), .ee());
+edge_det ued2 (.rst(rst), .clk(clk5x), .ce(1'b1), .i(alloc2&ph4[4]&en), .pe(pe_alloc2), .ne(), .ee());
+edge_det ued3 (.rst(rst), .clk(clk5x), .ce(1'b1), .i(alloc3&ph4[4]&en), .pe(pe_alloc3), .ne(), .ee());
 
 Qupls_renamer_srl #(0) usrl0 (
 	.rst(rst),
-	.clk(clk),
-	.en(en),
+	.clk(clk5x),
+	.en(pe_alloc0|stalla0),
 	.rot(rot0), 
-	.o(wo0)
+	.o(wo0r)
 );
 
 Qupls_renamer_srl #(1) usrl1 (
 	.rst(rst),
-	.clk(clk),
-	.en(en),
+	.clk(clk5x),
+	.en(pe_alloc1|stalla1),
 	.rot(rot1), 
-	.o(wo1)
+	.o(wo1r)
 );
 
 Qupls_renamer_srl #(2) usrl2 (
 	.rst(rst),
-	.clk(clk),
-	.en(en),
+	.clk(clk5x),
+	.en(pe_alloc2|stalla2),
 	.rot(rot2), 
-	.o(wo2)
+	.o(wo2r)
 );
 
 Qupls_renamer_srl #(3) usrl3 (
 	.rst(rst),
-	.clk(clk),
-	.en(en),
+	.clk(clk5x),
+	.en(pe_alloc3|stalla3),
 	.rot(rot3), 
-	.o(wo3)
+	.o(wo3r)
 );
 
 always_comb
@@ -203,8 +215,66 @@ always_ff @(posedge clk)
 if (rst)
 	avail <= next_avail;
 else begin
-	if (en)
+	if (en1)
 		avail <= next_avail;
+end
+
+always_ff @(posedge clk)
+if (rst)
+	wo0 <= 9'h001;
+else begin
+	if (en)
+		wo0 <= wo0r;
+end
+always_ff @(posedge clk)
+if (rst)
+	wo1 <= 9'h081;
+else begin
+	if (en)
+		wo1 <= wo1r;
+end
+always_ff @(posedge clk)
+if (rst)
+	wo2 <= 9'h100;
+else begin
+	if (en)
+		wo2 <= wo2r;
+end
+always_ff @(posedge clk)
+if (rst)
+	wo3 <= 9'h180;
+else begin
+	if (en)
+		wo3 <= wo3r;
+end
+
+always_ff @(posedge clk)
+if (rst)
+	wv0 <= 1'd0;
+else begin
+	if (en)
+		wv0 <= wv0r;
+end
+always_ff @(posedge clk)
+if (rst)
+	wv1 <= 1'd0;
+else begin
+	if (en)
+		wv1 <= wv1r;
+end
+always_ff @(posedge clk)
+if (rst)
+	wv2 <= 1'd0;
+else begin
+	if (en)
+		wv2 <= wv2r;
+end
+always_ff @(posedge clk)
+if (rst)
+	wv3 <= 1'd0;
+else begin
+	if (en)
+		wv3 <= wv3r;
 end
 
 endmodule

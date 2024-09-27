@@ -142,10 +142,10 @@ else begin
 		argI <= rob.decbus.immb;
 		Rt <= rob.nRt;
 		aRt <= rob.decbus.Rt;
-		aRtz <= rob.decbus.Rtz;
+		aRtz <= rob.decbus.Rt==8'd0;//rob.decbus.Rtz;
 		cs <= rob.decbus.Rcc;
 		bank <= rob.om==2'd0 ? 1'b0 : 1'b1;
-		instr <= rob.op;
+		instr <= rob.op.ins;
 		pc <= rob.pc;
 		cp <= rob.cndx;
 		if (!rob.decbus.multicycle || (&next_cptgt))

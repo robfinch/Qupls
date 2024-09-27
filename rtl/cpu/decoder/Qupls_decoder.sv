@@ -363,6 +363,8 @@ always_ff @(posedge clk)
 if (rst) begin
 	dbo <= {$bits(dbo){1'd0}};
 	dbo.nop <= 1'b1;
+	dbo.Rtz <= 1'b1;
+	dbo.alu <= 1'b1;
 end
 else begin
 	if (en) begin
@@ -374,6 +376,7 @@ else begin
 		dbo.predz <= ins.ins[47];
 		dbo.cpytgt <= 1'b0;
 		dbo.qfext <= ins.ins.any.opcode==OP_QFEXT;
+		dbo.regexc <= 1'b0;
 		if (ins.ins.any.opcode==OP_QFEXT) begin
 			if ((db.Ra > 8'd28 && db.Ra < 8'd56) ||
 					(db.Rb > 8'd28 && db.Rb < 8'd56) ||
@@ -385,7 +388,9 @@ else begin
 		dbo.cap <= ins.ins.any.opcode==OP_CAP;
 		dbo.mvvr <= ins.ins.any.opcode==OP_R2 && ins.ins.r2.func==FN_MVVR;
 		dbo.jsri <= ins.ins.any.opcode==OP_JSRI;
+		dbo.ret <= ins.ins.any.opcode==OP_RTD;
 		dbo.pushi <= ins.ins.any.opcode==OP_PUSHI;
+		dbo.bstore <= ins.ins.any.opcode==OP_BSTORE;
 		if (db.bsr) begin
 			dbo.Rtv <= 1'b0;
 		end

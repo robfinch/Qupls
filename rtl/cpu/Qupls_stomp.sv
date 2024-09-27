@@ -38,8 +38,8 @@ import const_pkg::*;
 import QuplsPkg::*;
 
 module Qupls_stomp(rst, clk, ihit, advance_pipeline, advance_pipeline_seg2, 
-	micro_code_active, branchmiss, branch_state, 
-	stomp_fet, stomp_mux, stomp_vec, stomp_pck, stomp_dec, stomp_ren, stomp_que, stomp_quem
+	micro_code_active, branchmiss, branch_state, do_bsr,
+	stomp_fet, stomp_mux, stomp_dec, stomp_ren, stomp_que, stomp_quem
 	);
 input rst;
 input clk;
@@ -49,10 +49,9 @@ input advance_pipeline_seg2;
 input micro_code_active;
 input branchmiss;
 input branch_state_t branch_state;
+input do_bsr;
 output reg stomp_fet;
 output reg stomp_mux;			// IRQ / micro-code Mux stage
-output reg stomp_vec;			// Vector expand stage
-output reg stomp_pck;			// instruction Pack stage.
 output reg stomp_dec;
 output reg stomp_ren;
 output reg stomp_que;
@@ -73,10 +72,11 @@ begin
 //		|| (do_bsr && !stomp_mux)
 //		|| stomp_fet1a
 		)
-		stomp_fet = TRUE;
+		stomp_fet = FALSE;
 end
 
 wire next_stomp_mux = (stomp_fet && !micro_code_active)
+								|| do_bsr
 								|| branchmiss
 								|| (branch_state >= BS_CHKPT_RESTORE && branch_state <= BS_DONE2)
 //								|| (do_bsr && !stomp_mux)
@@ -90,39 +90,11 @@ else begin
 		stomp_mux <= next_stomp_mux;
 end
 
-wire next_stomp_vec = stomp_mux
-								|| branchmiss
-								|| (branch_state >= BS_CHKPT_RESTORE && branch_state <= BS_DONE2)
-//								|| (do_bsr && !stomp_mux)
-//								|| do_bsr2
-								;
-always_ff @(posedge clk)
-if (rst)
-	stomp_vec <= TRUE;
-else begin
-	if (advance_pipeline)
-		stomp_vec <= next_stomp_vec;
-end
-
-wire next_stomp_pck = stomp_vec
-								|| branchmiss
-								|| (branch_state >= BS_CHKPT_RESTORE && branch_state <= BS_DONE2)
-//								|| (do_bsr && !stomp_mux)
-//								|| do_bsr2
-								;
-always_ff @(posedge clk)
-if (rst)
-	stomp_pck <= TRUE;
-else begin
-	if (advance_pipeline)
-		stomp_pck <= next_stomp_pck;
-end
-
 // If a micro-code instruction is decoded stomp on the next decode stage.
 // An instruction group following the micro-code was at the fetch stage and
 // would be propagated to decode before the micro-code becomes active.
 
-wire next_stomp_dec = stomp_pck
+wire next_stomp_dec = stomp_mux
 								|| branchmiss
 								|| (branch_state >= BS_CHKPT_RESTORE && branch_state <= BS_DONE2)
 //								|| (do_bsr && !stomp_mux)
@@ -143,7 +115,9 @@ always_ff @(posedge clk)
 if (rst)
 	stomp_ren <= TRUE;
 else begin
-	if (advance_pipeline_seg2)
+	if (advance_pipeline_seg2 && !advance_pipeline)
+		stomp_ren <= TRUE;
+	else if (advance_pipeline_seg2)
 		stomp_ren <= next_stomp_ren;
 end
 

@@ -45,7 +45,7 @@ input en;
 input rot;
 output reg [9:0] o = 10'd0;
 
-reg [TOPBIT:0] mem [0:PREGS/4-1];
+reg [7:0] mem [0:PREGS/4-1];
 integer nn,mm;
 
 initial begin
@@ -54,16 +54,18 @@ initial begin
 end
 
 always_ff @(posedge clk)
-if (rst)
-	o <= {8'b0,N[1:0],{SIZE-1{1'd0}},1'b1};
+if (rst) begin
+	o <= {1'b0,N[1:0],7'd0} | {{SIZE-1{1'd0}},1'b1};
+end
 else begin
 	if (rot & en) begin
 		for (mm = 1; mm < PREGS/4-1; mm = mm + 1)
 			mem[mm] <= mem[mm+1];
 		mem[PREGS/4-1] <= mem[1];
 	end
-	if (rot & en)
-		o <= {8'b0,N[1:0],mem[1]};
+	if (rot & en) begin
+		o <= {1'b0,N[1:0],7'd0} | mem[1];
+	end
 end
 
 endmodule

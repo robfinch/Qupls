@@ -157,6 +157,8 @@ begin
 		fnIsAlu = 1'b1;
 	OP_BSR,OP_JSR:
 		fnIsAlu = 1'b1;
+	OP_RTD:
+		fnIsAlu = 1'b1;
 	OP_Bcc,OP_BccU:
 		fnIsAlu = |ir.br.inc;
 	OP_PRED:

@@ -53,25 +53,27 @@ input [1:0] rgi;
 input [2:0] irq_i;
 input [7:0] vect_i;
 input mipv;
-input ex_instruction_t mc_ins;
-input ex_instruction_t mc_ins0;
-input ex_instruction_t ins0;
-input ex_instruction_t insi;
+input pipeline_reg_t mc_ins;
+input pipeline_reg_t mc_ins0;
+input pipeline_reg_t ins0;
+input pipeline_reg_t insi;
 input reglist_active;
 input ls_bmf;
 input [2:0] scale_regs_i;
 input pack_regs;
 input cpu_types_pkg::aregno_t regcnt;
-output ex_instruction_t ins;
+output pipeline_reg_t ins;
 
-ex_instruction_t nopi;
+pipeline_reg_t nopi;
 
 // Define a NOP instruction.
 always_comb
 begin
-	nopi.pc = 32'h0;
+	nopi = {$bits(pipeline_reg_t){1'b0}};
+	nopi.v = 1'b1;
+	nopi.pc = insi.pc;
 	nopi.mcip = 12'h000;
-	nopi.len = 4'd6;
+	nopi.len = 4'd8;
 	nopi.ins = {41'd0,OP_NOP};
 	nopi.pred_btst = 6'd0;
 	nopi.element = 'd0;
@@ -79,6 +81,9 @@ begin
 	nopi.aRb = 8'd0;
 	nopi.aRc = 8'd0;
 	nopi.aRt = 8'd0;
+	nopi.decbus.Rtz = 1'b1;
+	nopi.decbus.nop = 1'b1;
+	nopi.decbus.alu = 1'b1;
 end
 
 always_ff @(posedge clk)

@@ -47,7 +47,7 @@
 import const_pkg::*;
 import QuplsPkg::*;
 
-module Qupls_rat(rst, clk, clk5x, ph4, en, nq, stallq, cndx_o, avail_i, restore, rob,
+module Qupls_rat(rst, clk, clk5x, ph4, en, en2, nq, stallq, cndx_o, avail_i, restore, rob,
 	stomp, miss_cp, wr0, wr1, wr2, wr3, inc_chkpt,
 	wra_cp, wrb_cp, wrc_cp, wrd_cp, qbr0, qbr1, qbr2, qbr3,
 	rn, rng, rnt, rnv,
@@ -68,6 +68,7 @@ input clk;
 input clk5x;
 input [4:0] ph4;
 input en;
+input en2;
 input nq;			// enqueue instruction
 input inc_chkpt;
 output reg stallq;
@@ -134,6 +135,23 @@ output reg [PREGS-1:0] restore_list;	// bit vector of registers to free on branc
 output reg restored;
 
 
+reg pwr0;
+reg pwr1;
+reg pwr2;
+reg pwr3;
+aregno_t pwra;
+aregno_t pwrb;
+aregno_t pwrc;
+aregno_t pwrd;
+pregno_t pwrra;
+pregno_t pwrrb;
+pregno_t pwrrc;
+pregno_t pwrrd;
+checkpt_ndx_t pwra_cp;
+checkpt_ndx_t pwrb_cp;
+checkpt_ndx_t pwrc_cp;
+checkpt_ndx_t pwrd_cp;
+
 integer n,m,n1,n2,n3,n4;
 reg cpram_we;
 reg cpram_en;
@@ -142,6 +160,7 @@ reg new_chkpt1;
 reg new_chkpt2;
 localparam RAMWIDTH = AREGS*BANKS*RBIT+PREGS;
 checkpoint_t cpram_out;
+checkpoint_t cpram_out1;
 checkpoint_t cpram_wout;
 checkpoint_t cpram_outr;
 checkpoint_t cpram_in;
@@ -154,12 +173,13 @@ reg [PREGS-1:0] valid [0:BANKS-1][0:NCHECK-1];
 // There is also an extra write bit. These are defaulted to prevent sim issues.
 
 always_comb
-	cpram_en = en|new_chkpt1|cpram_we;
+	cpram_en = en2|new_chkpt1|cpram_we;
 always_ff @(posedge clk)
 	cpram_en1 <= cpram_en;
 
 Qupls_checkpointRam cpram1
 (
+	.rst(rst),
 	.clka(clk),
 	.ena(cpram_we),
 	.wea(cpram_we),
@@ -229,7 +249,7 @@ Qupls_checkpoint_valid_ram4 #(.NRDPORT(NPORT)) ucpr2
 	.ph4(ph4),
 	.clk5x(clk5x),
 	.clka(clk),
-	.en(en),
+	.en(en2),
 	.wr(cpv_wr),
 	.wc(cpv_wc),
 	.wa(cpv_wa),
@@ -255,86 +275,183 @@ wire qbr_ok = nq && qbr && nob < 6'd15;
 // Bypass new register mappings if reg selected.
 generate begin : gRRN
 	for (g = 0; g < NPORT; g = g + 1) begin
-		always_comb
-			// Bypass only for previous instruction in same group
-			case(rng[g])
-			3'd0:	prn[g] = 	cpram_out.regmap[rn[g]];		// No bypasses needed here
-			3'd1: prn[g] = 	rn[g]==wra && wr0 ? wrra :	// One previous target
-											cpram_out.regmap[rn[g]];
-			3'd2: prn[g] = 	rn[g]==wrb && wr1 ? wrrb :	// Two previous target
-											rn[g]==wra && wr0 ? wrra : 
-										 	cpram_out.regmap[rn[g]];
-			3'd3: prn[g] = 	rn[g]==wrc && wr2 ? wrrc :	// Three previous target
-											rn[g]==wrb && wr1 ? wrrb :
-											rn[g]==wra && wr0 ? wrra : 
-										 	cpram_out.regmap[rn[g]];
-			default: prn[g] = cpram_out.regmap[rn[g]];
-			endcase
+		always_ff @(posedge clk)
+			if (rst)
+				prn[g] <= 10'd0;
+			// If there is a pipeline bubble.
+			else begin
+				if (en2) begin
+					// Bypass only for previous instruction in same group
+					case(rng[g])
+					3'd0:	prn[g] <= 	/*
+													rn[g]==pwrd && pwr3 && rn_cp[g]==pwrd_cp ? pwrrd :
+													rn[g]==pwrc && pwr2 && rn_cp[g]==pwrc_cp ? pwrrc :
+													rn[g]==pwrb && pwr1 && rn_cp[g]==pwrb_cp ? pwrrb :
+													rn[g]==pwra && pwr0 && rn_cp[g]==pwra_cp ? pwrra :
+													*/
+													cpram_out.regmap[rn[g]];		// No bypasses needed here
+					3'd1: prn[g] <= 	/*
+													rn[g]==pwrd && pwr3 && rn_cp[g]==pwrd_cp ? pwrrd :
+													rn[g]==pwrc && pwr2 && rn_cp[g]==pwrc_cp ? pwrrc :
+													rn[g]==pwrb && pwr1 && rn_cp[g]==pwrb_cp ? pwrrb :
+													rn[g]==pwra && pwr0 && rn_cp[g]==pwra_cp ? pwrra :
+													*/
+													//rn[g]==wra && wr0 ? wrra :	// One previous target
+													cpram_out.regmap[rn[g]];
+					3'd2: prn[g] <=  /*
+													rn[g]==pwrd && pwr3 && rn_cp[g]==pwrd_cp ? pwrrd :
+													rn[g]==pwrc && pwr2 && rn_cp[g]==pwrc_cp ? pwrrc :
+													rn[g]==pwrb && pwr1 && rn_cp[g]==pwrb_cp ? pwrrb :
+													rn[g]==pwra && pwr0 && rn_cp[g]==pwra_cp ? pwrra :
+													*/
+												 	//rn[g]==wrb && wr1 ? wrrb :	// Two previous target
+													//rn[g]==wra && wr0 ? wrra :
+												 	cpram_out.regmap[rn[g]];
+					3'd3: prn[g] <=  /*
+													rn[g]==pwrd && pwr3 && rn_cp[g]==pwrd_cp ? pwrrd :
+													rn[g]==pwrc && pwr2 && rn_cp[g]==pwrc_cp ? pwrrc :
+													rn[g]==pwrb && pwr1 && rn_cp[g]==pwrb_cp ? pwrrb :
+													rn[g]==pwra && pwr0 && rn_cp[g]==pwra_cp ? pwrra :
+													*/
+												 	//rn[g]==wrc && wr2 ? wrrc :	// Three previous target
+													//rn[g]==wrb && wr1 ? wrrb :
+													//rn[g]==wra && wr0 ? wrra :
+												 	cpram_out.regmap[rn[g]];
+					default: prn[g] <= cpram_out.regmap[rn[g]];
+					endcase
+					/*
+						if (prn[g]==10'd0 && rn[g]!=8'd0 && !rnt[g] && rnv[g])
+							$finish;
+					*/
+				end
+			end
 
 		// Unless it us a target register, we want the old unbypassed value.
-		always_comb
-			
-			if (rnt[g]) begin
-				// If an incoming target register is being marked invalid and it matches
-				// the target register the valid status is begin fetched for, then 
-				// return an invalid status. Bypass order is important.
-				if (rn[g]==wrd && wr3)
-					prv[g] = INV;//cpv_i[7];
-				else if (rn[g]==wrc && wr2)
-					prv[g] = INV;
-				else if (rn[g]==wrb && wr1)
-					prv[g] = INV;
-				else if (rn[g]==wra && wr0)
-					prv[g] = INV;
-				else
-					prv[g] = cpv_o[g];
-			end
+		always_ff @(posedge clk)
+			if (rst)
+				prv[g] = INV;
+			// If there is a pipeline bubble. The instruction will be a NOP. Mark all
+			// register ports as valid.
 			else begin
-			// Need to bypass if the source register is the same as the previous
-			// target register in the same group of instructions.
-				
-				// If an incoming target register is being marked invalid and it matches
-				// the register the valid status is begin fetched for, then 
-				// return an invalid status.
-				if (rn[g]==wrd && wr3)
-					prv[g] = INV;
-				else if (rn[g]==wrc && wr2)
-					prv[g] = INV;
-				else if (rn[g]==wrb && wr1)
-					prv[g] = INV;
-				else if (rn[g]==wra && wr0)
-					prv[g] = INV;
-				else
-				case(rng[g])
-				// First instruction of group, no bypass needed.
-				3'd0:	prv[g] = cpv_o[g];
-				// Second instruction of group, bypass only if first instruction target is same.
-				3'd1:
-					if (rn[g]==rn[3] && rnv[3])
-						prv[g] = INV;
-					else
-						prv[g] = cpv_o[g];
-				// Third instruction, check two previous ones.
-				3'd2:
-					if (rn[g]==rn[3] && rnv[3])
-						prv[g] = INV;
-					else if (rn[g]==rn[7] && rnv[7])
-						prv[g] = INV;
-					else
-						prv[g] = cpv_o[g];
-				// Fourth instruction, check three previous ones.						
-				3'd3:
-					begin
-						if (rn[g]==rn[3] && rnv[3])
+				if (en2) begin			
+					if (!rnv[g])
+						prv[g] = VAL;
+					else if (rnt[g]) begin
+						// If an incoming target register is being marked invalid and it matches
+						// the target register the valid status is begin fetched for, then 
+						// return an invalid status. Bypass order is important.
+						
+						if (rn[g]==wrd && wr3)
+							prv[g] = INV;//cpv_i[7];
+						else if (rn[g]==wrc && wr2)
 							prv[g] = INV;
-						else if (rn[g]==rn[7] && rnv[7])
+						else if (rn[g]==wrb && wr1)
 							prv[g] = INV;
-						else if (rn[g]==rn[11] && rnv[11])
+						else if (rn[g]==wra && wr0)
 							prv[g] = INV;
 						else
+						
 							prv[g] = cpv_o[g];
 					end
-				endcase
+					else begin
+					// Need to bypass if the source register is the same as the previous
+					// target register in the same group of instructions.
+						
+						// If an incoming target register is being marked invalid and it matches
+						// the register the valid status is begin fetched for, then 
+						// return an invalid status.
+						
+						if (prn[g]==wrrd && wr3 && rn_cp[g]==wrd_cp)
+							prv[g] = INV;
+						else if (prn[g]==wrrc && wr2 && rn_cp[g]==wrc_cp)
+							prv[g] = INV;
+						else if (prn[g]==wrrb && wr1 && rn_cp[g]==wrb_cp)
+							prv[g] = INV;
+						else if (prn[g]==wrra && wr0 && rn_cp[g]==wra_cp)
+							prv[g] = INV;
+						else
+						
+						case(rng[g])
+						// First instruction of group, no bypass needed.
+						3'd0:	
+							
+							if (rn[g]==cmtda && cmtdv && rn_cp[g]==cmtd_cp)
+								prv[g] = VAL;
+							else if (rn[g]==cmtca && cmtcv && rn_cp[g]==cmtc_cp)
+								prv[g] = VAL;
+							else if (rn[g]==cmtba && cmtbv && rn_cp[g]==cmtb_cp)
+								prv[g] = VAL;
+							else if (rn[g]==cmtaa && cmtav && rn_cp[g]==cmta_cp)
+								prv[g] = VAL;
+							else
+						
+								prv[g] = cpv_o[g];
+						// Second instruction of group, bypass only if first instruction target is same.
+						3'd1:
+							
+							if (prn[g]==prn[3] && rnv[3])
+								prv[g] = INV;
+							else
+							
+							
+							if (rn[g]==cmtda && cmtdv && rn_cp[g]==cmtd_cp)
+								prv[g] = VAL;
+							else if (rn[g]==cmtca && cmtcv && rn_cp[g]==cmtc_cp)
+								prv[g] = VAL;
+							else if (rn[g]==cmtba && cmtbv && rn_cp[g]==cmtb_cp)
+								prv[g] = VAL;
+							else if (rn[g]==cmtaa && cmtav && rn_cp[g]==cmta_cp)
+								prv[g] = VAL;
+							else
+							
+								prv[g] = cpv_o[g];
+						// Third instruction, check two previous ones.
+						3'd2:
+							
+							if (prn[g]==prn[3] && rnv[3])
+								prv[g] = INV;
+							else if (prn[g]==prn[7] && rnv[7])
+								prv[g] = INV;
+							else
+							
+							
+							if (rn[g]==cmtda && cmtdv && rn_cp[g]==cmtd_cp)
+								prv[g] = VAL;
+							else if (rn[g]==cmtca && cmtcv && rn_cp[g]==cmtc_cp)
+								prv[g] = VAL;
+							else if (rn[g]==cmtba && cmtbv && rn_cp[g]==cmtb_cp)
+								prv[g] = VAL;
+							else if (rn[g]==cmtaa && cmtav && rn_cp[g]==cmta_cp)
+								prv[g] = VAL;
+							else
+							
+								prv[g] = cpv_o[g];
+						// Fourth instruction, check three previous ones.						
+						3'd3:
+							
+							if (prn[g]==prn[3] && rnv[3])
+								prv[g] = INV;
+							else if (prn[g]==prn[7] && rnv[7])
+								prv[g] = INV;
+							else if (prn[g]==prn[11] && rnv[11])
+								prv[g] = INV;
+							else 
+							
+							
+							if (rn[g]==cmtda && cmtdv && rn_cp[g]==cmtd_cp)
+								prv[g] = VAL;
+							else if (rn[g]==cmtca && cmtcv && rn_cp[g]==cmtc_cp)
+								prv[g] = VAL;
+							else if (rn[g]==cmtba && cmtbv && rn_cp[g]==cmtb_cp)
+								prv[g] = VAL;
+							else if (rn[g]==cmtaa && cmtav && rn_cp[g]==cmta_cp)
+								prv[g] = VAL;
+							else
+							
+								prv[g] = cpv_o[g];
+						endcase
+					end
+				end
 			end
 	end
 end
@@ -421,29 +538,30 @@ reg wr;
 
 always_comb
 case(wcnt)
-3'd0:	wr <= wr0;
-3'd1:	wr <= wr1;
-3'd2:	wr <= wr2;
-3'd3:	wr <= wr3;
-default:	wr <= 1'b0;
+3'd0:	wr = wr0;
+3'd1:	wr = wr1;
+3'd2:	wr = wr2;
+3'd3:	wr = wr3;
+default:	wr = 1'b0;
 endcase
 always_comb
 case(wcnt)
-3'd0:	aregno <= wra;
-3'd1:	aregno <= wrb;
-3'd2:	aregno <= wrc;
-3'd3:	aregno <= wrd;
-default:	aregno <= 8'd0;
+3'd0:	aregno = wra;
+3'd1:	aregno = wrb;
+3'd2:	aregno = wrc;
+3'd3:	aregno = wrd;
+default:	aregno = 8'd0;
 endcase
 always_comb
 case(wcnt)
-3'd0:	pregno <= wrra;
-3'd1:	pregno <= wrrb;
-3'd2:	pregno <= wrrc;
-3'd3:	pregno <= wrrd;
-default:	pregno <= 10'd0;
+3'd0:	pregno = wrra;
+3'd1:	pregno = wrrb;
+3'd2:	pregno = wrrc;
+3'd3:	pregno = wrrd;
+default:	pregno = 10'd0;
 endcase
 
+/*
 always_ff @(posedge clk5x)
 if (rst) begin
 	cpram_in.avail = {{PREGS-1{1'b1}},1'b0};
@@ -461,11 +579,13 @@ else begin
 			cpram_in = cpram_wout;
 		if (wr) begin
 			cpram_in.regmap[aregno] = pregno;
-			$display("Qupls RAT: tgta %d reg %d replaced with %d.", wra, cpram_out.regmap[aregno], pregno);
+			$display("Qupls RAT: tgta %d reg %d replaced with %d.", aregno, cpram_out.regmap[aregno], pregno);
 		end
 	end
 	
 	if (wr) begin
+		if (aregno==8'd41)
+			$finish;
 		if (pregno==10'd0 && aregno != 8'd0) begin
 			$display("Q+ RAT: mapping register to r0");
 			$finish;
@@ -477,9 +597,224 @@ else begin
 	end
 
 end
+*/
+always_ff @(posedge clk)
+if (rst) begin
+	cpram_in.avail <= {{PREGS-1{1'b1}},1'b0};
+	cpram_in.regmap <= {AREGS*10{1'b0}};
+end
+else begin
+	if (new_chkpt1) begin
+		cpram_in <= cpram_out;
+		cpram_in.avail <= avail_i;
+	end
+	else begin
+		cpram_in <= cpram_wout;
+		if (wr0) begin
+			cpram_in.regmap[wra] <= wrra;
+			$display("Qupls RAT: tgta %d reg %d replaced with %d.", wra, cpram_out.regmap[wra], wrra);
+		end
+		if (wr1) begin
+			cpram_in.regmap[wrb] <= wrrb;
+			$display("Qupls RAT: tgtb %d reg %d replaced with %d.", wrb, cpram_out.regmap[wrb], wrrb);
+		end
+		if (wr2) begin
+			cpram_in.regmap[wrc] <= wrrc;
+			$display("Qupls RAT: tgtc %d reg %d replaced with %d.", wrc, cpram_out.regmap[wrc], wrrc);
+		end
+		if (wr3) begin
+			cpram_in.regmap[wrd] <= wrrd;
+			$display("Qupls RAT: tgtd %d reg %d replaced with %d.", wrd, cpram_out.regmap[wrd], wrrd);
+		end
+	end
+	if (wr0 && wra==8'd0) begin
+		$display("RAT: writing zero register.");
+		$finish;
+	end
+	if (wr1 && wrb==8'd0) begin
+		$display("RAT: writing zero register.");
+		$finish;
+	end
+	if (wr2 && wrc==8'd0) begin
+		$display("RAT: writing zero register.");
+		$finish;
+	end
+	if (wr3 && wrd==8'd0) begin
+		$display("RAT: writing zero register.");
+		$finish;
+	end
+
+end
+
+always_ff @(posedge clk)
+	if (en2) cpram_out1 <= cpram_out;
+
+always_ff @(posedge clk) 
+if (rst) begin
+	pwr0 <= 1'b0;
+end
+else begin
+	if (en2 && !en)
+		pwr0 <= 1'b0;
+	else if (en2)
+		pwr0 <= wr0;
+end
+always_ff @(posedge clk) 
+if (rst) begin
+	pwr1 <= 1'b0;
+end
+else begin
+	if (en2 && !en)
+		pwr1 <= 1'b0;
+	else if (en2)
+		pwr1 <= wr1;
+end
+always_ff @(posedge clk) 
+if (rst) begin
+	pwr2 <= 1'b0;
+end
+else begin
+	if (en2 && !en)
+		pwr2 <= 1'b0;
+	else if (en2)
+		pwr2 <= wr2;
+end
+always_ff @(posedge clk) 
+if (rst) begin
+	pwr3 <= 1'b0;
+end
+else begin
+	if (en2 && !en)
+		pwr3 <= 1'b0;
+	else if (en2)
+		pwr3 <= wr3;
+end
+
+always_ff @(posedge clk) 
+if (rst) begin
+	pwra <= 8'b0;
+end
+else begin
+	if (en2 && !en)
+		pwra <= 8'b0;
+	else if (en2)
+		pwra <= wra;
+end
+always_ff @(posedge clk) 
+if (rst) begin
+	pwrb <= 8'b0;
+end
+else begin
+	if (en2 && !en)
+		pwrb <= 8'b0;
+	else if (en2)
+		pwrb <= wrb;
+end
+always_ff @(posedge clk) 
+if (rst) begin
+	pwrc <= 8'b0;
+end
+else begin
+	if (en2 && !en)
+		pwrc <= 8'b0;
+	else if (en2)
+		pwrc <= wrc;
+end
+always_ff @(posedge clk) 
+if (rst) begin
+	pwrd <= 8'b0;
+end
+else begin
+	if (en2 && !en)
+		pwrd <= 8'b0;
+	else if (en2)
+		pwrd <= wrd;
+end
+
+always_ff @(posedge clk) 
+if (rst) begin
+	pwrra <= 10'b0;
+end
+else begin
+	if (en2 && !en)
+		pwrra <= 10'b0;
+	else if (en2)
+		pwrra <= wrra;
+end
+always_ff @(posedge clk) 
+if (rst) begin
+	pwrrb <= 10'b0;
+end
+else begin
+	if (en2 && !en)
+		pwrrb <= 10'b0;
+	else if (en2)
+		pwrrb <= wrrb;
+end
+always_ff @(posedge clk) 
+if (rst) begin
+	pwrrc <= 10'b0;
+end
+else begin
+	if (en2 && !en)
+		pwrrc <= 10'b0;
+	else if (en2)
+		pwrrc <= wrrc;
+end
+always_ff @(posedge clk) 
+if (rst) begin
+	pwrrd <= 10'b0;
+end
+else begin
+	if (en2 && !en)
+		pwrrd <= 10'b0;
+	else if (en2)
+		pwrrd <= wrrd;
+end
+
+always_ff @(posedge clk) 
+if (rst) begin
+	pwra_cp <= 4'b0;
+end
+else begin
+	if (en2 && !en)
+		pwra_cp <= 4'b0;
+	else if (en2)
+		pwra_cp <= wra_cp;
+end
+always_ff @(posedge clk) 
+if (rst) begin
+	pwrb_cp <= 4'b0;
+end
+else begin
+	if (en2 && !en)
+		pwrb_cp <= 4'b0;
+	else if (en2)
+		pwrb_cp <= wrb_cp;
+end
+always_ff @(posedge clk) 
+if (rst) begin
+	pwrc_cp <= 4'b0;
+end
+else begin
+	if (en2 && !en)
+		pwrc_cp <= 4'b0;
+	else if (en2)
+		pwrc_cp <= wrc_cp;
+end
+always_ff @(posedge clk) 
+if (rst) begin
+	pwrd_cp <= 4'b0;
+end
+else begin
+	if (en2 && !en)
+		pwrd_cp <= 4'b0;
+	else if (en2)
+		pwrd_cp <= wrd_cp;
+end
 
 // RAM gets updated if any port writes, or there is a new checkpoint.
-always_comb
+always_ff @(posedge clk)
  	cpram_we <= wr0|wr1|wr2|wr3|new_chkpt1;
 
 // Add registers allocated since the branch miss instruction to the list of

@@ -534,7 +534,7 @@ begin
 			end
 			else
 		*/
-				bus = pc + 4'd6;
+				bus = pc + 4'd8;
 		end
 	OP_RTD:
 		begin

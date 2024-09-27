@@ -37,11 +37,12 @@
 
 import QuplsPkg::SIM;
 
-module Qupls_checkpointRam(clka, ena, wea, addra, dina, douta, clkb, enb, addrb, doutb);
+module Qupls_checkpointRam(rst, clka, ena, wea, addra, dina, douta, clkb, enb, addrb, doutb);
 localparam RBIT=$clog2(PREGS);
 localparam QBIT=$bits(cpu_types_pkg::pregno_t);
 localparam WID=$bits(checkpoint_t);
 localparam AWID=$clog2(NCHECK);
+input rst;
 input clka;
 input ena;
 input wea;
@@ -93,7 +94,7 @@ if (SIM) begin
 //			if (ena & wea[g]) mem[addra][g*QBIT+QBIT-1:g*QBIT] <= dina[g*QBIT+QBIT-1:g*QBIT];
 
 //	assign doutb = (ena & wea) ? dina : mem[addrb];
-	assign doutb = mem[addrb];
+	assign doutb1 = mem[addrb];
 	assign douta1 = mem[addra];
 
 end
@@ -124,7 +125,7 @@ else begin
       .ADDR_WIDTH_A(AWID),            // DECIMAL
       .ADDR_WIDTH_B(AWID),            // DECIMAL
       .BYTE_WRITE_WIDTH_A(WID),      		// DECIMAL
-      .CLOCKING_MODE("independent_clock"), // String
+      .CLOCKING_MODE("common_clock"), // String
       .MEMORY_INIT_FILE("none"),      // String
       .MEMORY_INIT_PARAM("0"),        // String
       .MEMORY_OPTIMIZATION("true"),   // String
@@ -156,18 +157,18 @@ else begin
                        // "independent_clock". Unused when parameter CLOCKING_MODE is "common_clock".
 
       .dina(dina),     // WRITE_DATA_WIDTH_A-bit input: Data input for port A write operations.
-      .ena(1'b1),       // 1-bit input: Memory enable signal for port A. Must be high on clock cycles when read
+      .ena(ena),       // 1-bit input: Memory enable signal for port A. Must be high on clock cycles when read
                        // or write operations are initiated. Pipelined internally.
 
-      .enb(1'b1),       // 1-bit input: Memory enable signal for port B. Must be high on clock cycles when read
+      .enb(enb),       // 1-bit input: Memory enable signal for port B. Must be high on clock cycles when read
                        // or write operations are initiated. Pipelined internally.
 
-      .regcea(1'b1), // 1-bit input: Clock Enable for the last register stage on the output data path.
+      .regcea(ena), // 1-bit input: Clock Enable for the last register stage on the output data path.
       .regceb(enb), // 1-bit input: Do not change from the provided value.
-      .rsta(1'b0),     // 1-bit input: Reset signal for the final port A output register stage. Synchronously
+      .rsta(rst),     // 1-bit input: Reset signal for the final port A output register stage. Synchronously
                        // resets output port douta to the value specified by parameter READ_RESET_VALUE_A.
 
-      .rstb(1'b0),     // 1-bit input: Reset signal for the final port B output register stage. Synchronously
+      .rstb(rst),     // 1-bit input: Reset signal for the final port B output register stage. Synchronously
                        // resets output port doutb to the value specified by parameter READ_RESET_VALUE_B.
 
       .wea(wea)       // WRITE_DATA_WIDTH_A/BYTE_WRITE_WIDTH_A-bit input: Write enable vector for port A input
@@ -181,7 +182,6 @@ else begin
    // End of xpm_memory_dpdistram_inst instantiation
 
 //	assign doutb = (ena & wea) ? dina : doutb1;
-	assign doutb = doutb1;
 
 /*
 // XPM_MEMORY instantiation template for Simple Dual Port RAM configurations
@@ -279,6 +279,8 @@ endgenerate
 always_comb
 	douta = douta1;
 //	douta = ena && wea && addra==addrb ? dina : douta1;
+always_comb
+	doutb = doutb1;
 								
 endmodule
 

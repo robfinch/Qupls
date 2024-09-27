@@ -80,7 +80,7 @@ output reg aRtz;
 output aregno_t aRt;
 output pregno_t nRt;
 output reg bank;
-output ex_instruction_t instr;
+output pipeline_reg_t instr;
 output reg div;
 output reg cap;
 output reg [7:0] cptgt;
@@ -171,7 +171,7 @@ else begin
 		cs <= rob.decbus.Rcc;
 		nRt <= rob.nRt;
 		aRt <= rob.decbus.Rt;
-		aRtz <= rob.decbus.Rtz;
+		aRtz <= rob.decbus.Rt==8'd00;//rob.decbus.Rtz; <- this did not work
 		pred <= rob.decbus.pred;
 		predz <= rob.decbus.predz;
 		div <= rob.decbus.div;

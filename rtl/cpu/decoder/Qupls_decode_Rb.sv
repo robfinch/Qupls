@@ -50,24 +50,23 @@ function aregno_t fnRb;
 input ex_instruction_t ir;
 input has_immb;
 begin
-	if (has_immb)
-		fnRb = 9'd0;
-	else
-		case(ir.ins.any.opcode)
-		OP_RTD:
-			fnRb = 9'd31;
-		OP_FLT3:
+	case(ir.ins.any.opcode)
+	OP_RTD:
+		fnRb = 9'd31;
+	OP_FLT3:
+		fnRb = ir.aRb;
+	default:
+		if (has_immb)
+			fnRb = 9'd0;
+		else if (ir.ins.any.opcode==OP_LDX && ir.ins.lsn.func==FN_LDCTX)
+			fnRb = 9'd0;
+		else if (ir.ins.any.opcode==OP_STX && ir.ins.lsn.func==FN_STCTX)
+			fnRb = 9'd0;
+		else if (fnImmb(ir))
+			fnRb = 9'd0;
+		else
 			fnRb = ir.aRb;
-		default:
-			if (ir.ins.any.opcode==OP_LDX && ir.ins.lsn.func==FN_LDCTX)
-				fnRb = 9'd0;
-			else if (ir.ins.any.opcode==OP_STX && ir.ins.lsn.func==FN_STCTX)
-				fnRb = 9'd0;
-			else if (fnImmb(ir))
-				fnRb = 9'd0;
-			else
-				fnRb = ir.aRb;
-		endcase
+	endcase
 end
 endfunction
 

@@ -440,92 +440,92 @@ begin
 	// cache line can be fetched, but the group will not be valid yet.
 	// The group is loaded at state 1 below.
 	if (do_bsr) begin
-		next_pc <= bsr_tgt;
-		alt_next_pc <= bsr_tgt;
-		takb <= 1'b1;
+		next_pc = bsr_tgt;
+		alt_next_pc = bsr_tgt;
+		takb = 1'b1;
 	end
 	else if (branch_state==BS_DONE) begin
-		next_pc <= misspc;
-		alt_next_pc <= misspc;
-		takb <= 1'b1;
+		next_pc = misspc;
+		alt_next_pc = misspc;
+		takb = 1'b1;
 	end
 	else if (en && pc0==doutb0.pc && doutb0.takb) begin
-		next_pc <= doutb0.tgt;
-		alt_next_pc <= pc0 + 5'd6;
-		takb <= 1'b1;
+		next_pc = doutb0.tgt;
+		alt_next_pc = pc0 + 5'd8;
+		takb = 1'b1;
 	end
 	else if (en && pc1==doutb1.pc && doutb1.takb) begin
-		next_pc <= doutb1.tgt;
-		alt_next_pc <= pc1 + 5'd6;
-		takb <= 1'b1;
+		next_pc = doutb1.tgt;
+		alt_next_pc = pc1 + 5'd8;
+		takb = 1'b1;
 	end
 	else if (en && pc2==doutb2.pc && doutb2.takb) begin
-		next_pc <= doutb2.tgt;
-		alt_next_pc <= pc2 + 5'd6;
-		takb <= 1'b1;
+		next_pc = doutb2.tgt;
+		alt_next_pc = pc2 + 5'd8;
+		takb = 1'b1;
 	end
 	else if (en && pc3==doutb3.pc && doutb3.takb) begin
-		next_pc <= doutb3.tgt;
-		alt_next_pc <= pc3 + 5'd6;
-		takb <= 1'b1;
+		next_pc = doutb3.tgt;
+		alt_next_pc = pc3 + 5'd8;
+		takb = 1'b1;
 	end
 	else begin
 		if (SUPPORT_IBH) begin
 			// Advance to the next group? We know the address of the start of the
 			// group, it is always the same, offset 0.
 			if (igrp >= 3'd3/* || block_header.offs[igrp]=='d0*/)
-				next_pc <= {pc[$bits(pc_address_t)-1:6]+2'd1,6'd0};
+				next_pc = {pc[$bits(pc_address_t)-1:6]+2'd1,6'd0};
 			else
-				next_pc <= {pc[$bits(pc_address_t)-1:6],block_header[21:16]};
+				next_pc = {pc[$bits(pc_address_t)-1:6],block_header[21:16]};
 		end
 		else if (SUPPORT_VLI) begin
 			if (SUPPORT_VLIB)
-				next_pc <= pc + length_byte;
+				next_pc = pc + length_byte;
 			else begin
 				if (pc0[5:0] >= block_header[21:16])
-					next_pc <= {pc[$bits(pc_address_t)-1:6]+2'd1,6'd0};
+					next_pc = {pc[$bits(pc_address_t)-1:6]+2'd1,6'd0};
 				else if (pc1[5:0] >= block_header[21:16])
-					next_pc <= {pc[$bits(pc_address_t)-1:6]+2'd1,6'd0};
+					next_pc = {pc[$bits(pc_address_t)-1:6]+2'd1,6'd0};
 				else if (pc2[5:0] >= block_header[21:16])
-					next_pc <= {pc[$bits(pc_address_t)-1:6]+2'd1,6'd0};
+					next_pc = {pc[$bits(pc_address_t)-1:6]+2'd1,6'd0};
 				else if (pc3[5:0] >= block_header[21:16])
-					next_pc <= {pc[$bits(pc_address_t)-1:6]+2'd1,6'd0};
+					next_pc = {pc[$bits(pc_address_t)-1:6]+2'd1,6'd0};
 				else if (pc4[5:0] >= block_header[21:16]|| pc4[7:6]!=pc[7:6])
-					next_pc <= {pc[$bits(pc_address_t)-1:6]+2'd1,6'd0};
+					next_pc = {pc[$bits(pc_address_t)-1:6]+2'd1,6'd0};
 				else
-					next_pc <= {pc[$bits(pc_address_t)-1:6],pc4[5:0]};
+					next_pc = {pc[$bits(pc_address_t)-1:6],pc4[5:0]};
 			end
 		end
 		else begin
 			/*
 			if (pc0[5:0] >= block_header[21:16])
-				next_pc <= {pc[$bits(pc_address_t)-1:6]+2'd1,6'd0};
+				next_pc = {pc[$bits(pc_address_t)-1:6]+2'd1,6'd0};
 			else if (pc1[5:0] >= block_header[21:16])
-				next_pc <= {pc[$bits(pc_address_t)-1:6]+2'd1,6'd0};
+				next_pc = {pc[$bits(pc_address_t)-1:6]+2'd1,6'd0};
 			else if (pc2[5:0] >= block_header[21:16])
-				next_pc <= {pc[$bits(pc_address_t)-1:6]+2'd1,6'd0};
+				next_pc = {pc[$bits(pc_address_t)-1:6]+2'd1,6'd0};
 			else if (pc3[5:0] >= block_header[21:16])
-				next_pc <= {pc[$bits(pc_address_t)-1:6]+2'd1,6'd0};
+				next_pc = {pc[$bits(pc_address_t)-1:6]+2'd1,6'd0};
 			else if (pc4[5:0] >= block_header[21:16]|| pc4[7:6]!=pc[7:6])
-				next_pc <= {pc[$bits(pc_address_t)-1:6]+2'd1,6'd0};
+				next_pc = {pc[$bits(pc_address_t)-1:6]+2'd1,6'd0};
 			else
-				next_pc <= {pc[$bits(pc_address_t)-1:6],pc4[5:0]};
+				next_pc = {pc[$bits(pc_address_t)-1:6],pc4[5:0]};
 			*/
 			if (micro_code_active) begin
-				next_pc <= pc;
-				alt_next_pc <= pc;
+				next_pc = pc;
+				alt_next_pc = pc;
 			end
 			else begin
 				case(1'b1)
-				mip0v:	begin next_pc <= pc + 5'd6; alt_next_pc <= pc + 5'd6; end
-				mip1v:	begin next_pc <= pc + 5'd12; alt_next_pc <= pc + 5'd12; end
-				mip2v:	begin next_pc <= pc + 5'd18; alt_next_pc <= pc + 5'd18; end
-				mip3v:	begin next_pc <= pc + 5'd24; alt_next_pc <= pc + 5'd24; end
-				default:	begin next_pc <= pc + 5'd24;	alt_next_pc <= alt_pc + 5'd24; end	// four instructions
+				mip0v:	begin next_pc = pc + 5'd8; alt_next_pc = pc + 5'd8; end
+				mip1v:	begin next_pc = pc + 5'd16; alt_next_pc = pc + 5'd16; end
+				mip2v:	begin next_pc = pc + 5'd24; alt_next_pc = pc + 5'd24; end
+				mip3v:	begin next_pc = pc + 6'd32; alt_next_pc = pc + 6'd32; end
+				default:	begin next_pc = pc + 6'd32;	alt_next_pc = alt_pc + 6'd32; end	// four instructions
 				endcase
 			end
 		end
-		takb <= 1'b0;
+		takb = 1'b0;
 	end
 end
 
