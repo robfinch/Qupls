@@ -283,7 +283,7 @@ generate begin : gRRN
 				next_prn[g] <= 10'd0;
 			// If there is a pipeline bubble.
 			else begin
-				if (rnt[g]) begin
+				if (rnt[g] & 0) begin
 					// Bypass only for previous instruction in same group
 					case(rng[g])
 					3'd0:	next_prn[g] <= 
@@ -308,36 +308,36 @@ generate begin : gRRN
 				else begin
 					// Bypass only for previous instruction in same group
 					case(rng[g])
-					3'd0:	next_prn[g] <= 	/*
+					3'd0:	next_prn[g] <= 	
 													rn[g]==pwrd && pwr3 && rn_cp[g]==pwrd_cp ? pwrrd :
 													rn[g]==pwrc && pwr2 && rn_cp[g]==pwrc_cp ? pwrrc :
 													rn[g]==pwrb && pwr1 && rn_cp[g]==pwrb_cp ? pwrrb :
 													rn[g]==pwra && pwr0 && rn_cp[g]==pwra_cp ? pwrra :
-													*/
+													
 													cpram_out.regmap[rn[g]];		// No bypasses needed here
-					3'd1: next_prn[g] <= 	/*
+					3'd1: next_prn[g] <= 	
 													rn[g]==pwrd && pwr3 && rn_cp[g]==pwrd_cp ? pwrrd :
 													rn[g]==pwrc && pwr2 && rn_cp[g]==pwrc_cp ? pwrrc :
 													rn[g]==pwrb && pwr1 && rn_cp[g]==pwrb_cp ? pwrrb :
 													rn[g]==pwra && pwr0 && rn_cp[g]==pwra_cp ? pwrra :
-													*/
+													
 													//rn[g]==wra && wr0 ? wrra :	// One previous target
 													cpram_out.regmap[rn[g]];
-					3'd2: next_prn[g] <=  /*
+					3'd2: next_prn[g] <= 
 													rn[g]==pwrd && pwr3 && rn_cp[g]==pwrd_cp ? pwrrd :
 													rn[g]==pwrc && pwr2 && rn_cp[g]==pwrc_cp ? pwrrc :
 													rn[g]==pwrb && pwr1 && rn_cp[g]==pwrb_cp ? pwrrb :
 													rn[g]==pwra && pwr0 && rn_cp[g]==pwra_cp ? pwrra :
-													*/
+													
 												 	//rn[g]==wrb && wr1 ? wrrb :	// Two previous target
 													//rn[g]==wra && wr0 ? wrra :
 												 	cpram_out.regmap[rn[g]];
-					3'd3: next_prn[g] <=  /*
+					3'd3: next_prn[g] <= 
 													rn[g]==pwrd && pwr3 && rn_cp[g]==pwrd_cp ? pwrrd :
 													rn[g]==pwrc && pwr2 && rn_cp[g]==pwrc_cp ? pwrrc :
 													rn[g]==pwrb && pwr1 && rn_cp[g]==pwrb_cp ? pwrrb :
 													rn[g]==pwra && pwr0 && rn_cp[g]==pwra_cp ? pwrra :
-													*/
+													
 												 	//rn[g]==wrc && wr2 ? wrrc :	// Three previous target
 													//rn[g]==wrb && wr1 ? wrrb :
 													//rn[g]==wra && wr0 ? wrra :
@@ -409,8 +409,15 @@ generate begin : gRRN
 						case(rng[g])
 						// First instruction of group, no bypass needed.
 						3'd0:	
-							
-							if (next_prn[g]==wrra && wr0 && rn_cp[g]==wra_cp)
+							if (rn[g]==pwrd && pwr3 && rn_cp[g]==pwrd_cp)
+								prv[g] = INV;
+							else if (rn[g]==pwrc && pwr2 && rn_cp[g]==pwrc_cp)
+								prv[g] = INV;
+							else if (rn[g]==pwrb && pwr1 && rn_cp[g]==pwrb_cp)
+								prv[g] = INV;
+							else if (rn[g]==pwra && pwr0 && rn_cp[g]==pwra_cp)
+								prv[g] = INV;
+							else if (next_prn[g]==wrra && wr0 && rn_cp[g]==wra_cp)
 								prv[g] = INV;
 							else if (next_prn[g]==cmtdp && cmtdv && rn_cp[g]==cmtd_cp)
 								prv[g] = VAL;
@@ -426,7 +433,15 @@ generate begin : gRRN
 						// Second instruction of group, bypass only if first instruction target is same.
 						3'd1:
 							
-							if (next_prn[g]==wrrb && wr1 && rn_cp[g]==wrb_cp)
+							if (rn[g]==pwrd && pwr3 && rn_cp[g]==pwrd_cp)
+								prv[g] = INV;
+							else if (rn[g]==pwrc && pwr2 && rn_cp[g]==pwrc_cp)
+								prv[g] = INV;
+							else if (rn[g]==pwrb && pwr1 && rn_cp[g]==pwrb_cp)
+								prv[g] = INV;
+							else if (rn[g]==pwra && pwr0 && rn_cp[g]==pwra_cp)
+								prv[g] = INV;
+							else if (next_prn[g]==wrrb && wr1 && rn_cp[g]==wrb_cp)
 								prv[g] = INV;
 							else if (next_prn[g]==wrra && wr0 && rn_cp[g]==wra_cp)
 								prv[g] = INV;
@@ -450,7 +465,15 @@ generate begin : gRRN
 						// Third instruction, check two previous ones.
 						3'd2:
 
-							if (next_prn[g]==wrrc && wr2 && rn_cp[g]==wrc_cp)
+							if (rn[g]==pwrd && pwr3 && rn_cp[g]==pwrd_cp)
+								prv[g] = INV;
+							else if (rn[g]==pwrc && pwr2 && rn_cp[g]==pwrc_cp)
+								prv[g] = INV;
+							else if (rn[g]==pwrb && pwr1 && rn_cp[g]==pwrb_cp)
+								prv[g] = INV;
+							else if (rn[g]==pwra && pwr0 && rn_cp[g]==pwra_cp)
+								prv[g] = INV;
+							else if (next_prn[g]==wrrc && wr2 && rn_cp[g]==wrc_cp)
 								prv[g] = INV;
 							else if (next_prn[g]==wrrb && wr1 && rn_cp[g]==wrb_cp)
 								prv[g] = INV;
@@ -478,7 +501,15 @@ generate begin : gRRN
 						// Fourth instruction, check three previous ones.						
 						3'd3:
 							
-							if (next_prn[g]==wrrd && wr3 && rn_cp[g]==wrd_cp)
+							if (rn[g]==pwrd && pwr3 && rn_cp[g]==pwrd_cp)
+								prv[g] = INV;
+							else if (rn[g]==pwrc && pwr2 && rn_cp[g]==pwrc_cp)
+								prv[g] = INV;
+							else if (rn[g]==pwrb && pwr1 && rn_cp[g]==pwrb_cp)
+								prv[g] = INV;
+							else if (rn[g]==pwra && pwr0 && rn_cp[g]==pwra_cp)
+								prv[g] = INV;
+							else if (next_prn[g]==wrrd && wr3 && rn_cp[g]==wrd_cp)
 								prv[g] = INV;
 							else if (next_prn[g]==wrrc && wr2 && rn_cp[g]==wrc_cp)
 								prv[g] = INV;

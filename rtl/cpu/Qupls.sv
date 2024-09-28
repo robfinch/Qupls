@@ -5044,6 +5044,15 @@ else begin
 			rob[alu1_rndx].argA <= rfo_alu1_argA;
 			rob[alu1_rndx].argB <= rfo_alu1_argB;
 			rob[alu1_rndx].argC <= rfo_alu1_argC;
+			rob[alu1_rndx].argT <= rfo_alu1_argT;
+		end
+	end
+	if (NFPU > 0) begin
+		if (fpu0_available && fpu0_rndxv && fpu0_idle) begin
+			rob[fpu0_rndx].argA <= rfo_fpu0_argA;
+			rob[fpu0_rndx].argB <= rfo_fpu0_argB;
+			rob[fpu0_rndx].argC <= rfo_fpu0_argC;
+			rob[fpu0_rndx].argT <= rfo_fpu0_argT;
 		end
 	end
 	if (agen0_rndxv && agen0_idle) begin
@@ -6757,7 +6766,7 @@ always_ff @(posedge clk) begin: clock_n_debug
 			rob[i].decbus.Rc, rob[i].pRc, rob[i].argC, rob[i].argC_v?"v":" ",
 			rob[i].argI,
 			rob[i].pc, rob[i].mcip,
-			rob[i].cndx, rob[i].op.ins[47:0]);
+			rob[i].cndx, rob[i].op.ins[63:0]);
 	end
 	$display("----- LSQ -----");
 	for (i = 0; i < LSQ_ENTRIES; i = i + 1) begin
@@ -7066,10 +7075,8 @@ begin
     rob[nn].argB_vp <= VAL;
 	if (/*rob[nn].argC_v == INV &&*/ rob[nn].pRc == Rt && rob[nn].v == VAL && v == VAL)
     rob[nn].argC_vp <= VAL;
-  if (SUPPORT_PRED) begin
-		if (/*rob[nn].argT_v == INV &&*/ rob[nn].pRt == Rt && rob[nn].v == VAL && v == VAL)
-	    rob[nn].argT_vp <= VAL;
-  end
+	if (/*rob[nn].argT_v == INV &&*/ rob[nn].pRt == Rt && rob[nn].v == VAL && v == VAL)
+    rob[nn].argT_vp <= VAL;
 	if (/*rob[nn].argM_v == INV &&*/ rob[nn].pRm == Rt && rob[nn].v == VAL && v == VAL)
     rob[nn].argM_vp <= VAL;
 end
