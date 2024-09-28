@@ -512,7 +512,7 @@ begin
 	OP_MOV:		bus = a;
 	OP_LDAX:	bus = a + i + (b << ir[26:25]);
 	OP_BLEND:	bus = ALU0 ? blendo : dead;
-	OP_NOP:		bus = zero;
+	OP_NOP:		bus = t;	// in case of copy target
 	OP_QFEXT:	bus = qres;
 	// Write the next PC to the link register.
 	OP_BSR,OP_JSR:

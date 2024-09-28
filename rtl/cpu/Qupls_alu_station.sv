@@ -173,7 +173,7 @@ else begin
 		aRt <= rob.decbus.Rt;
 		aRtz <= rob.decbus.Rt==8'd00;//rob.decbus.Rtz; <- this did not work
 		pred <= rob.decbus.pred;
-		predz <= rob.decbus.predz;
+		predz <= rob.decbus.pred ? rob.decbus.predz : 1'b0;
 		div <= rob.decbus.div;
 		cap <= rob.decbus.cap;
 		cptgt <= next_cptgt;

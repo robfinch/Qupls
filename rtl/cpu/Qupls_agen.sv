@@ -44,7 +44,7 @@ input clk;
 input next;								// calculate for next cache line
 input out;
 input tlb_v;
-input ex_instruction_t ir;
+input pipeline_reg_t ir;
 input cpu_types_pkg::address_t a;
 input cpu_types_pkg::address_t b;
 input cpu_types_pkg::address_t i;
@@ -58,6 +58,7 @@ cpu_types_pkg::address_t as, bs;
 cpu_types_pkg::address_t res1;
 
 always_comb
+/*
 if (ir.ins.any.vec) begin
 	case(ir.ins.any.opcode)
 	OP_LDB,OP_LDBU,OP_STB:
@@ -98,6 +99,7 @@ if (ir.ins.any.vec) begin
 	endcase
 end
 else
+*/
 	as = a;
 
 always_comb

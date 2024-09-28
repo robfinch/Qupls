@@ -209,7 +209,7 @@ Qupls_renamer_fifo #(3) ufifo3 (
 );
 
 always_comb
-begin
+if (0) begin
 	if (wo0==wo1 || wo0==wo2 || wo0==wo3) begin
 		$display("Q+: matching rename registers");
 		$finish;

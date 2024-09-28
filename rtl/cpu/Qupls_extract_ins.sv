@@ -274,10 +274,10 @@ begin
 	pr1_mux = nopi;
 	pr2_mux = nopi;
 	pr3_mux = nopi;
-	pr0_mux.ins = ic_line_aligned[ 47:  0];
-	pr1_mux.ins = ic_line_aligned[111: 64];
-	pr2_mux.ins = ic_line_aligned[175:128];
-	pr3_mux.ins = ic_line_aligned[239:192];
+	pr0_mux.ins = ic_line_aligned[ 63:  0];
+	pr1_mux.ins = ic_line_aligned[127: 64];
+	pr2_mux.ins = ic_line_aligned[191:128];
+	pr3_mux.ins = ic_line_aligned[255:192];
 end
 
 always_comb tExtractIns(pc0, mip_i|2'd0, len0_i, pr0_mux, ins0_);
@@ -346,10 +346,10 @@ always_comb jsr0 = ins0.ins.any.opcode==OP_JSR;
 always_comb jsr1 = ins1.ins.any.opcode==OP_JSR;
 always_comb jsr2 = ins2.ins.any.opcode==OP_JSR;
 always_comb jsr3 = ins3.ins.any.opcode==OP_JSR;
-always_comb bsr0_tgt = jsr0 ? {{27{ins0.ins[47]}},ins0.ins[47:11]} : ins0.pc + {{27{ins0.ins[47]}},ins0.ins[47:11]};
-always_comb bsr1_tgt = jsr1 ? {{27{ins1.ins[47]}},ins1.ins[47:11]} : ins1.pc + {{27{ins1.ins[47]}},ins1.ins[47:11]};
-always_comb bsr2_tgt = jsr2 ? {{27{ins2.ins[47]}},ins2.ins[47:11]} : ins2.pc + {{27{ins2.ins[47]}},ins2.ins[47:11]};
-always_comb bsr3_tgt = jsr3 ? {{27{ins3.ins[47]}},ins3.ins[47:11]} : ins3.pc + {{27{ins3.ins[47]}},ins3.ins[47:11]};
+always_comb bsr0_tgt = jsr0 ? {{10{ins0.ins[63]}},ins0.ins[63:10]} : ins0.pc + {{10{ins0.ins[63]}},ins0.ins[63:10]};
+always_comb bsr1_tgt = jsr1 ? {{10{ins1.ins[63]}},ins1.ins[63:10]} : ins1.pc + {{10{ins1.ins[63]}},ins1.ins[63:10]};
+always_comb bsr2_tgt = jsr2 ? {{10{ins2.ins[63]}},ins2.ins[63:10]} : ins2.pc + {{10{ins2.ins[63]}},ins2.ins[63:10]};
+always_comb bsr3_tgt = jsr3 ? {{10{ins3.ins[63]}},ins3.ins[63:10]} : ins3.pc + {{10{ins3.ins[63]}},ins3.ins[63:10]};
 always_comb
 	do_bsr = bsr0|bsr1|bsr2|bsr3|jsr0|jsr1|jsr2|jsr3;
 //edge_det ued1 (.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(do_bsr1), .pe(do_bsr), .ne(), .ee());

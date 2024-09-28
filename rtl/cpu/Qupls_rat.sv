@@ -57,7 +57,7 @@ module Qupls_rat(rst, clk, clk5x, ph4, en, en2, nq, stallq, cndx_o, avail_i, res
 	wra, wrra, wrb, wrrb, wrc, wrrc, wrd, wrrd, cmtav, cmtbv, cmtcv, cmtdv,
 	cmta_cp, cmtb_cp, cmtc_cp, cmtd_cp,
 	cmtaa, cmtba, cmtca, cmtda, cmtap, cmtbp, cmtcp, cmtdp, cmtbr,
-	restore_list, restored);
+	restore_list, restored, tags2free, freevals);
 parameter XWID = 4;
 parameter NPORT = 20;
 parameter BANKS = 1;
@@ -133,8 +133,11 @@ output cpu_types_pkg::pregno_t [NPORT-1:0] prn;	// physical register name
 output reg [NPORT-1:0] prv;										// physical register valid
 output reg [PREGS-1:0] restore_list;	// bit vector of registers to free on branch miss
 output reg restored;
+output pregno_t [3:0] tags2free;
+output reg [3:0] freevals;
 
 
+cpu_types_pkg::pregno_t [NPORT-1:0] next_prn;	// physical register name
 reg pwr0;
 reg pwr1;
 reg pwr2;
@@ -275,22 +278,44 @@ wire qbr_ok = nq && qbr && nob < 6'd15;
 // Bypass new register mappings if reg selected.
 generate begin : gRRN
 	for (g = 0; g < NPORT; g = g + 1) begin
-		always_ff @(posedge clk)
+		always_comb
 			if (rst)
-				prn[g] <= 10'd0;
+				next_prn[g] <= 10'd0;
 			// If there is a pipeline bubble.
 			else begin
-				if (en2) begin
+				if (rnt[g]) begin
 					// Bypass only for previous instruction in same group
 					case(rng[g])
-					3'd0:	prn[g] <= 	/*
+					3'd0:	next_prn[g] <= 
+//														rn[g]==wra && wr0 && rn_cp[g]==wra_cp ? wrra :
+													cpram_out.regmap[rn[g]];		// No bypasses needed here
+					3'd1: next_prn[g] <=
+//														rn[g]==wrb && wr1 ? wrrb :	// One previous target
+													cpram_out.regmap[rn[g]];
+					3'd2: next_prn[g] <=
+//														rn[g]==wrc && wr2 ? wrrc :
+												 	cpram_out.regmap[rn[g]];
+					3'd3: next_prn[g] <=
+//														rn[g]==wrd && wr3 ? wrrd :
+												 	cpram_out.regmap[rn[g]];
+					default: next_prn[g] <= cpram_out.regmap[rn[g]];
+					endcase
+					/*
+						if (prn[g]==10'd0 && rn[g]!=8'd0 && !rnt[g] && rnv[g])
+							$finish;
+					*/
+				end
+				else begin
+					// Bypass only for previous instruction in same group
+					case(rng[g])
+					3'd0:	next_prn[g] <= 	/*
 													rn[g]==pwrd && pwr3 && rn_cp[g]==pwrd_cp ? pwrrd :
 													rn[g]==pwrc && pwr2 && rn_cp[g]==pwrc_cp ? pwrrc :
 													rn[g]==pwrb && pwr1 && rn_cp[g]==pwrb_cp ? pwrrb :
 													rn[g]==pwra && pwr0 && rn_cp[g]==pwra_cp ? pwrra :
 													*/
 													cpram_out.regmap[rn[g]];		// No bypasses needed here
-					3'd1: prn[g] <= 	/*
+					3'd1: next_prn[g] <= 	/*
 													rn[g]==pwrd && pwr3 && rn_cp[g]==pwrd_cp ? pwrrd :
 													rn[g]==pwrc && pwr2 && rn_cp[g]==pwrc_cp ? pwrrc :
 													rn[g]==pwrb && pwr1 && rn_cp[g]==pwrb_cp ? pwrrb :
@@ -298,7 +323,7 @@ generate begin : gRRN
 													*/
 													//rn[g]==wra && wr0 ? wrra :	// One previous target
 													cpram_out.regmap[rn[g]];
-					3'd2: prn[g] <=  /*
+					3'd2: next_prn[g] <=  /*
 													rn[g]==pwrd && pwr3 && rn_cp[g]==pwrd_cp ? pwrrd :
 													rn[g]==pwrc && pwr2 && rn_cp[g]==pwrc_cp ? pwrrc :
 													rn[g]==pwrb && pwr1 && rn_cp[g]==pwrb_cp ? pwrrb :
@@ -307,7 +332,7 @@ generate begin : gRRN
 												 	//rn[g]==wrb && wr1 ? wrrb :	// Two previous target
 													//rn[g]==wra && wr0 ? wrra :
 												 	cpram_out.regmap[rn[g]];
-					3'd3: prn[g] <=  /*
+					3'd3: next_prn[g] <=  /*
 													rn[g]==pwrd && pwr3 && rn_cp[g]==pwrd_cp ? pwrrd :
 													rn[g]==pwrc && pwr2 && rn_cp[g]==pwrc_cp ? pwrrc :
 													rn[g]==pwrb && pwr1 && rn_cp[g]==pwrb_cp ? pwrrb :
@@ -317,12 +342,22 @@ generate begin : gRRN
 													//rn[g]==wrb && wr1 ? wrrb :
 													//rn[g]==wra && wr0 ? wrra :
 												 	cpram_out.regmap[rn[g]];
-					default: prn[g] <= cpram_out.regmap[rn[g]];
+					default: next_prn[g] <= cpram_out.regmap[rn[g]];
 					endcase
 					/*
 						if (prn[g]==10'd0 && rn[g]!=8'd0 && !rnt[g] && rnv[g])
 							$finish;
 					*/
+				end
+			end
+
+		always_ff @(posedge clk)
+			if (rst)
+				prn[g] <= 10'd0;
+			// If there is a pipeline bubble.
+			else begin
+				if (en2) begin
+					prn[g] <= next_prn[g];
 				end
 			end
 
@@ -340,7 +375,7 @@ generate begin : gRRN
 						// If an incoming target register is being marked invalid and it matches
 						// the target register the valid status is begin fetched for, then 
 						// return an invalid status. Bypass order is important.
-						
+						/*
 						if (rn[g]==wrd && wr3)
 							prv[g] = INV;//cpv_i[7];
 						else if (rn[g]==wrc && wr2)
@@ -350,7 +385,7 @@ generate begin : gRRN
 						else if (rn[g]==wra && wr0)
 							prv[g] = INV;
 						else
-						
+						*/
 							prv[g] = cpv_o[g];
 					end
 					else begin
@@ -360,7 +395,7 @@ generate begin : gRRN
 						// If an incoming target register is being marked invalid and it matches
 						// the register the valid status is begin fetched for, then 
 						// return an invalid status.
-						
+						/*
 						if (prn[g]==wrrd && wr3 && rn_cp[g]==wrd_cp)
 							prv[g] = INV;
 						else if (prn[g]==wrrc && wr2 && rn_cp[g]==wrc_cp)
@@ -370,18 +405,20 @@ generate begin : gRRN
 						else if (prn[g]==wrra && wr0 && rn_cp[g]==wra_cp)
 							prv[g] = INV;
 						else
-						
+						*/
 						case(rng[g])
 						// First instruction of group, no bypass needed.
 						3'd0:	
 							
-							if (rn[g]==cmtda && cmtdv && rn_cp[g]==cmtd_cp)
+							if (next_prn[g]==wrra && wr0 && rn_cp[g]==wra_cp)
+								prv[g] = INV;
+							else if (next_prn[g]==cmtdp && cmtdv && rn_cp[g]==cmtd_cp)
 								prv[g] = VAL;
-							else if (rn[g]==cmtca && cmtcv && rn_cp[g]==cmtc_cp)
+							else if (next_prn[g]==cmtcp && cmtcv && rn_cp[g]==cmtc_cp)
 								prv[g] = VAL;
-							else if (rn[g]==cmtba && cmtbv && rn_cp[g]==cmtb_cp)
+							else if (next_prn[g]==cmtbp && cmtbv && rn_cp[g]==cmtb_cp)
 								prv[g] = VAL;
-							else if (rn[g]==cmtaa && cmtav && rn_cp[g]==cmta_cp)
+							else if (next_prn[g]==cmtap && cmtav && rn_cp[g]==cmta_cp)
 								prv[g] = VAL;
 							else
 						
@@ -389,39 +426,51 @@ generate begin : gRRN
 						// Second instruction of group, bypass only if first instruction target is same.
 						3'd1:
 							
+							if (next_prn[g]==wrrb && wr1 && rn_cp[g]==wrb_cp)
+								prv[g] = INV;
+							else if (next_prn[g]==wrra && wr0 && rn_cp[g]==wra_cp)
+								prv[g] = INV;
+							/*
 							if (prn[g]==prn[3] && rnv[3])
 								prv[g] = INV;
 							else
+							*/
 							
-							
-							if (rn[g]==cmtda && cmtdv && rn_cp[g]==cmtd_cp)
+							else if (next_prn[g]==cmtdp && cmtdv && rn_cp[g]==cmtd_cp)
 								prv[g] = VAL;
-							else if (rn[g]==cmtca && cmtcv && rn_cp[g]==cmtc_cp)
+							else if (next_prn[g]==cmtcp && cmtcv && rn_cp[g]==cmtc_cp)
 								prv[g] = VAL;
-							else if (rn[g]==cmtba && cmtbv && rn_cp[g]==cmtb_cp)
+							else if (next_prn[g]==cmtbp && cmtbv && rn_cp[g]==cmtb_cp)
 								prv[g] = VAL;
-							else if (rn[g]==cmtaa && cmtav && rn_cp[g]==cmta_cp)
+							else if (next_prn[g]==cmtap && cmtav && rn_cp[g]==cmta_cp)
 								prv[g] = VAL;
 							else
 							
 								prv[g] = cpv_o[g];
 						// Third instruction, check two previous ones.
 						3'd2:
-							
+
+							if (next_prn[g]==wrrc && wr2 && rn_cp[g]==wrc_cp)
+								prv[g] = INV;
+							else if (next_prn[g]==wrrb && wr1 && rn_cp[g]==wrb_cp)
+								prv[g] = INV;
+							else if (next_prn[g]==wrra && wr0 && rn_cp[g]==wra_cp)
+								prv[g] = INV;
+							/*
 							if (prn[g]==prn[3] && rnv[3])
 								prv[g] = INV;
 							else if (prn[g]==prn[7] && rnv[7])
 								prv[g] = INV;
 							else
+							*/
 							
-							
-							if (rn[g]==cmtda && cmtdv && rn_cp[g]==cmtd_cp)
+							else if (next_prn[g]==cmtdp && cmtdv && rn_cp[g]==cmtd_cp)
 								prv[g] = VAL;
-							else if (rn[g]==cmtca && cmtcv && rn_cp[g]==cmtc_cp)
+							else if (next_prn[g]==cmtcp && cmtcv && rn_cp[g]==cmtc_cp)
 								prv[g] = VAL;
-							else if (rn[g]==cmtba && cmtbv && rn_cp[g]==cmtb_cp)
+							else if (next_prn[g]==cmtbp && cmtbv && rn_cp[g]==cmtb_cp)
 								prv[g] = VAL;
-							else if (rn[g]==cmtaa && cmtav && rn_cp[g]==cmta_cp)
+							else if (next_prn[g]==cmtap && cmtav && rn_cp[g]==cmta_cp)
 								prv[g] = VAL;
 							else
 							
@@ -429,6 +478,16 @@ generate begin : gRRN
 						// Fourth instruction, check three previous ones.						
 						3'd3:
 							
+							if (next_prn[g]==wrrd && wr3 && rn_cp[g]==wrd_cp)
+								prv[g] = INV;
+							else if (next_prn[g]==wrrc && wr2 && rn_cp[g]==wrc_cp)
+								prv[g] = INV;
+							else if (next_prn[g]==wrrb && wr1 && rn_cp[g]==wrb_cp)
+								prv[g] = INV;
+							else if (next_prn[g]==wrra && wr0 && rn_cp[g]==wra_cp)
+								prv[g] = INV;
+								
+							/*
 							if (prn[g]==prn[3] && rnv[3])
 								prv[g] = INV;
 							else if (prn[g]==prn[7] && rnv[7])
@@ -436,15 +495,15 @@ generate begin : gRRN
 							else if (prn[g]==prn[11] && rnv[11])
 								prv[g] = INV;
 							else 
+							*/
 							
-							
-							if (rn[g]==cmtda && cmtdv && rn_cp[g]==cmtd_cp)
+							else if (next_prn[g]==cmtdp && cmtdv && rn_cp[g]==cmtd_cp)
 								prv[g] = VAL;
-							else if (rn[g]==cmtca && cmtcv && rn_cp[g]==cmtc_cp)
+							else if (next_prn[g]==cmtcp && cmtcv && rn_cp[g]==cmtc_cp)
 								prv[g] = VAL;
-							else if (rn[g]==cmtba && cmtbv && rn_cp[g]==cmtb_cp)
+							else if (next_prn[g]==cmtbp && cmtbv && rn_cp[g]==cmtb_cp)
 								prv[g] = VAL;
-							else if (rn[g]==cmtaa && cmtav && rn_cp[g]==cmta_cp)
+							else if (next_prn[g]==cmtap && cmtav && rn_cp[g]==cmta_cp)
 								prv[g] = VAL;
 							else
 							
@@ -602,8 +661,14 @@ always_ff @(posedge clk)
 if (rst) begin
 	cpram_in.avail <= {{PREGS-1{1'b1}},1'b0};
 	cpram_in.regmap <= {AREGS*10{1'b0}};
+	freevals <= 4'd0;
+	tags2free[0] <= 9'd0;
+	tags2free[1] <= 9'd0;
+	tags2free[2] <= 9'd0;
+	tags2free[3] <= 9'd0;
 end
 else begin
+	freevals <= 4'd0;
 	if (new_chkpt1) begin
 		cpram_in <= cpram_out;
 		cpram_in.avail <= avail_i;
@@ -627,6 +692,28 @@ else begin
 			$display("Qupls RAT: tgtd %d reg %d replaced with %d.", wrd, cpram_out.regmap[wrd], wrrd);
 		end
 	end
+	
+	if (cmtav) begin
+		freevals[0] <= 1'b1;
+		tags2free[0] <= cpram_in.pregmap[cmtaa];
+		cpram_in.pregmap[cmtaa] <= cpram_in.regmap[cmtaa];
+	end
+	if (cmtbv) begin
+		freevals[1] <= 1'b1;
+		tags2free[1] <= cpram_in.pregmap[cmtba];
+		cpram_in.pregmap[cmtba] <= cpram_in.regmap[cmtba];
+	end
+	if (cmtcv) begin
+		freevals[2] <= 1'b1;
+		tags2free[2] <= cpram_in.pregmap[cmtca];
+		cpram_in.pregmap[cmtca] <= cpram_in.regmap[cmtca];
+	end
+	if (cmtdv) begin
+		freevals[3] <= 1'b1;
+		tags2free[3] <= cpram_in.pregmap[cmtda];
+		cpram_in.pregmap[cmtda] <= cpram_in.regmap[cmtda];
+	end
+
 	if (wr0 && wra==8'd0) begin
 		$display("RAT: writing zero register.");
 		$finish;

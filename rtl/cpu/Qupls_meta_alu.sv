@@ -54,7 +54,7 @@ input [2:0] lane;
 input memsz_t prc;
 input instruction_t ir;
 input div;
-input [15:0] cptgt;
+input [7:0] cptgt;
 input z;
 input [WID-1:0] a;
 input [WID-1:0] b;
@@ -74,6 +74,9 @@ output reg div_done;
 output div_dbz;
 output reg [WID-1:0] exc;
 
+reg [WID-1:0] t1;
+reg z1;
+reg [7:0] cptgt1;
 wire [WID-1:0] o16,o32,o64,o128;
 wire o64_tag, o128_tag;
 reg [WID-1:0] o1;
@@ -301,12 +304,17 @@ begin
 end
 
 // Copy only the lanes specified in the mask to the target.
-
+always_ff @(posedge clk)
+	t1 <= t;
+always_ff @(posedge clk)
+	z1 <= z;
+always_ff @(posedge clk)
+	cptgt1 <= cptgt;
 generate begin : gCptgt
 	for (mm = 0; mm < WID/8; mm = mm + 1) begin
         always_comb
-            if (cptgt[mm])
-                o[mm*8+7:mm*8] = z ? 8'h00 : t[mm*8+7:mm*8];
+            if (cptgt1[mm])
+                o[mm*8+7:mm*8] = z1 ? 8'h00 : t1[mm*8+7:mm*8];
             else
                 o[mm*8+7:mm*8] = o1[mm*8+7:mm*8];
     end

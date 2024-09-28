@@ -1651,151 +1651,151 @@ case(micro_ip)
 12'h1A0:	
 	begin
 		next_ip = 12'h1A1;
-		instr.ins = {24'h12,2'd2,7'h00,7'h10,1'b0,OP_ADDI};
+		instr.ins = {32'h12,1'd0,6'h0,1'b0,8'h00,1'b0,8'h10,OP_ADDI};
 		instr.aRt = MC0;
 	end
 12'h1A1:
 	begin
 		next_ip = 12'h1A2;
-		instr.ins = {24'h34,2'd2,7'd0,7'd16,1'b0,OP_ADDI};
+		instr.ins = {32'h32,1'd0,6'h0,1'b0,8'h00,1'b0,8'h10,OP_ADDI};
 		instr.aRt = MC0;
 	end
 12'h1A2:
 	begin
 		next_ip = 12'h1A3;
-		instr.ins = {24'h56,2'd2,7'd0,7'd16,1'b0,OP_ADDI};
+		instr.ins = {32'h56,1'd0,6'h0,1'b0,8'h00,1'b0,8'h10,OP_ADDI};
 		instr.aRt = MC0;
 	end
 12'h1A3:
 	begin
 		next_ip = 12'h1A4;
-		instr.ins = {24'h78,2'd2,7'd0,7'd16,1'b0,OP_ADDI};
+		instr.ins = {32'h78,1'd0,6'h0,1'b0,8'h00,1'b0,8'h10,OP_ADDI};
 		instr.aRt = MC0;
 	end
 12'h1A4:
 	begin
 		next_ip = 12'h1A5;
-		instr.ins = {24'h90,2'd2,7'd0,7'd16,1'b0,OP_ADDI};
+		instr.ins = {32'h90,1'd0,6'h0,1'b0,8'h00,1'b0,8'h10,OP_ADDI};
 		instr.aRt = MC0;
 	end
 12'h1A5:
 	begin
 		next_ip = 12'h1A6;
-		instr.ins = {24'h11,2'd2,7'd0,7'd16,1'b0,OP_ADDI};
+		instr.ins = {32'h11,1'd0,6'h0,1'b0,8'h00,1'b0,8'h10,OP_ADDI};
 		instr.aRt = MC0;
 	end
 12'h1A6:
 	begin
 		next_ip = 12'h1A7;
-		instr.ins = {24'h22,2'd2,7'd0,7'd16,1'b0,OP_ADDI};
+		instr.ins = {32'h22,1'd0,6'h0,1'b0,8'h00,1'b0,8'h10,OP_ADDI};
 		instr.aRt = MC0;
 	end
 12'h1A7:
 	begin
 		next_ip = 12'h1A8;
-		instr.ins = {24'h33,2'd2,7'd0,7'd16,1'b0,OP_ADDI};
+		instr.ins = {32'h33,1'd0,6'h0,1'b0,8'h00,1'b0,8'h10,OP_ADDI};
 		instr.aRt = MC0;
 	end
 12'h1A8:
 	begin
 		next_ip = 12'h1A9;
-		instr.ins = {24'h44,2'd2,7'd0,7'd16,1'b0,OP_ADDI};
+		instr.ins = {32'h44,1'd0,6'h0,1'b0,8'h00,1'b0,8'h10,OP_ADDI};
 		instr.aRt = MC0;
 	end
 12'h1A9:
 	begin
 		next_ip = 12'h1AA;
-		instr.ins = {24'h55,2'd2,7'd0,7'd16,1'b0,OP_ADDI};
+		instr.ins = {32'h55,1'd0,6'h0,1'b0,8'h00,1'b0,8'h10,OP_ADDI};
 		instr.aRt = MC0;
 	end
 12'h1AA:
 	begin
 		next_ip = 12'h1AB;
-		instr.ins = {24'h66,2'd2,7'd0,7'd16,1'b0,OP_ADDI};
+		instr.ins = {32'h66,1'd0,6'h0,1'b0,8'h00,1'b0,8'h10,OP_ADDI};
 		instr.aRt = MC0;
 	end
 12'h1AB:
 	begin
 		next_ip = 12'h1AC;
-		instr.ins = {24'h77,2'd2,7'd0,7'd16,1'b0,OP_ADDI};
+		instr.ins = {32'h77,1'd0,6'h0,1'b0,8'h00,1'b0,8'h10,OP_ADDI};
 		instr.aRt = MC0;
 	end
 12'h1AC:
 	begin
 		next_ip = 12'h1AD;
-		instr.ins = {24'h88,2'd2,7'd0,7'd16,1'b0,OP_ADDI};
+		instr.ins = {32'h88,1'd0,6'h0,1'b0,8'h00,1'b0,8'h10,OP_ADDI};
 		instr.aRt = MC0;
 	end
 12'h1AD:
 	begin
 		next_ip = 12'h1AE;
-		instr.ins = {24'h99,2'd2,7'd0,7'd16,1'b0,OP_ADDI};
+		instr.ins = {32'h99,1'd0,6'h0,1'b0,8'h00,1'b0,8'h10,OP_ADDI};
 		instr.aRt = MC0;
 	end
 12'h1AE:
 	begin
 		next_ip = 12'h1AF;
-		instr.ins = {24'h100,2'd2,7'd0,7'd16,1'b0,OP_ADDI};
+		instr.ins = {32'h100,1'd0,6'h0,1'b0,8'h00,1'b0,8'h10,OP_ADDI};
 		instr.aRt = MC0;
 	end
 12'h1AF:
 	begin
 		next_ip = 12'h1B0;
-		instr.ins = {24'h110,2'd2,7'd0,7'd16,1'b0,OP_ADDI};
+		instr.ins = {32'h110,1'd0,6'h0,1'b0,8'h00,1'b0,8'h10,OP_ADDI};
 		instr.aRt = MC0;
 	end
 12'h1B0:
 	begin
 		next_ip = 12'h1B1;
-		instr.ins = {24'h120,2'd2,7'd0,7'd16,1'b0,OP_ADDI};
+		instr.ins = {32'h120,1'd0,6'h0,1'b0,8'h00,1'b0,8'h10,OP_ADDI};
 		instr.aRt = MC0;
 	end
 12'h1B1:
 	begin
 		next_ip = 12'h1B2;
-		instr.ins = {24'h130,2'd2,7'd0,7'd16,1'b0,OP_ADDI};
+		instr.ins = {32'h130,1'd0,6'h0,1'b0,8'h00,1'b0,8'h10,OP_ADDI};
 		instr.aRt = MC0;
 	end
 12'h1B2:
 	begin
 		next_ip = 12'h1B3;
-		instr.ins = {24'h140,2'd2,7'd0,7'd16,1'b0,OP_ADDI};
+		instr.ins = {32'h140,1'd0,6'h0,1'b0,8'h00,1'b0,8'h10,OP_ADDI};
 		instr.aRt = MC0;
 	end
 12'h1B3:
 	begin
 		next_ip = 12'h1B4;
-		instr.ins = {24'h150,2'd2,7'd0,7'd16,1'b0,OP_ADDI};
+		instr.ins = {32'h150,1'd0,6'h0,1'b0,8'h00,1'b0,8'h10,OP_ADDI};
 		instr.aRt = MC0;
 	end
 12'h1B4:
 	begin
 		next_ip = 12'h1B5;
-		instr.ins = {24'h160,2'd2,7'd0,7'd16,1'b0,OP_ADDI};
+		instr.ins = {32'h160,1'd0,6'h0,1'b0,8'h00,1'b0,8'h10,OP_ADDI};
 		instr.aRt = MC0;
 	end
 12'h1B5:
 	begin
 		next_ip = 12'h1B6;
-		instr.ins = {24'h170,2'd2,7'd0,7'd16,1'b0,OP_ADDI};
+		instr.ins = {32'h170,1'd0,6'h0,1'b0,8'h00,1'b0,8'h10,OP_ADDI};
 		instr.aRt = MC0;
 	end
 12'h1B6:
 	begin
 		next_ip = 12'h1B7;
-		instr.ins = {24'h180,2'd2,7'd0,7'd16,1'b0,OP_ADDI};
+		instr.ins = {32'h180,1'd0,6'h0,1'b0,8'h00,1'b0,8'h10,OP_ADDI};
 		instr.aRt = MC0;
 	end
 12'h1B7:
 	begin
 		next_ip = 12'h1B8;
-		instr.ins = {24'h190,2'd2,7'd0,7'd16,1'b0,OP_ADDI};
+		instr.ins = {32'h190,1'd0,6'h0,1'b0,8'h00,1'b0,8'h10,OP_ADDI};
 		instr.aRt = MC0;
 	end
 12'h1B8:	
 	begin
 		next_ip = 12'h1B9;
-		instr.ins = {41'd0,OP_NOP};
+		instr.ins = {57'd0,OP_NOP};
 	end
 /*
 12'h1B9:	
@@ -1814,39 +1814,39 @@ case(micro_ip)
 12'h1B9:	
 	begin
 		next_ip = 12'h1BA;
-		instr.ins = {37'h1FFFFFFD80,3'b0,1'b0,OP_JSR};
+		instr.ins = {54'h3FFFFFFFFFFD80,3'b0,OP_JSR};
 		instr.aRa = 9'd0;
 		instr.aRt = 9'd0;
 	end
 12'h1BA:	
 	begin
 		next_ip = 12'h1BB;
-		instr.ins = {41'd0,OP_NOP};
+		instr.ins = {57'd0,OP_NOP};
 	end
 12'h1BB:	
 	begin
 		next_ip = 12'h1BC;
-		instr.ins = {41'd0,OP_NOP};
+		instr.ins = {57'd0,OP_NOP};
 	end
 12'h1BC:	
 	begin
 		next_ip = 12'h000;
-		instr.ins = {41'd0,OP_NOP};
+		instr.ins = {57'd0,OP_NOP};
 	end
 12'h1BD:	
 	begin
 		next_ip = 12'h000;
-		instr.ins = {41'd0,OP_NOP};
+		instr.ins = {57'd0,OP_NOP};
 	end
 12'h1BE:	
 	begin
 		next_ip = 12'h000;
-		instr.ins = {41'd0,OP_NOP};
+		instr.ins = {57'd0,OP_NOP};
 	end
 12'h1BF:	
 	begin
 		next_ip = 12'h000;
-		instr.ins = {41'd0,OP_NOP};
+		instr.ins = {57'd0,OP_NOP};
 	end
 
 // -----------------------------------------------------------------------------
