@@ -1371,7 +1371,7 @@ typedef union packed
 } instruction_t;
 
 typedef struct packed {
-	cpu_types_pkg::pc_address_t pc;
+	cpu_types_pkg::pc_address_ex_t pc;
 	cpu_types_pkg::mc_address_t mcip;
 	logic [3:0] len;
 	logic [2:0] element;
@@ -1540,7 +1540,7 @@ typedef struct packed
 	cpu_types_pkg::pregno_t pRm;							// current Rt value
 	logic [3:0] cndx;					// checkpoint index
 	// The following matches the ex_instruction_t
-	cpu_types_pkg::pc_address_t pc;					// PC of instruction
+	cpu_types_pkg::pc_address_ex_t pc;			// PC of instruction
 	cpu_types_pkg::mc_address_t mcip;				// Micro-code IP address
 	logic [3:0] len;
 	logic [2:0] element;
@@ -1721,7 +1721,7 @@ typedef struct packed {
 	cpu_types_pkg::pregno_t pRm;							// current Rt value
 	logic [3:0] cndx;					// checkpoint index
 	pipeline_reg_t op;			// original instruction
-	cpu_types_pkg::pc_address_t pc;					// PC of instruction
+	cpu_types_pkg::pc_address_ex_t pc;			// PC of instruction
 	cpu_types_pkg::mc_address_t mcip;				// Micro-code IP address
 	logic [2:0] grp;					// instruction group of PC
 } rob_entry_t;
@@ -1744,7 +1744,7 @@ typedef struct packed {
 	logic argC_v;
 	logic [3:0] cndx;					// checkpoint index
 	ex_instruction_t op;			// original instruction
-	cpu_types_pkg::pc_address_t pc;					// PC of instruction
+	cpu_types_pkg::pc_address_ex_t pc;			// PC of instruction
 	cpu_types_pkg::mc_address_t mcip;				// Micro-code IP address
 } beb_entry_t;
 
@@ -1763,7 +1763,7 @@ typedef struct packed {
 	logic store;
 	logic cstore;
 	ex_instruction_t op;
-	cpu_types_pkg::pc_address_t pc;
+	cpu_types_pkg::pc_address_ex_t pc;
 	memop_t func;					// operation to perform
 	logic [3:0] func2;		// more resolution to function
 	cause_code_t cause;

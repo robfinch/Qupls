@@ -63,15 +63,62 @@ typedef logic [9:0] pregno_t;
 typedef logic [7:0] aregno_t;
 //typedef logic [63:0] segment_reg_t;
 
-typedef logic [127:0] value_t;
 typedef struct packed {
-	value_t H;
-	value_t L;
+	logic [4:0] bno_t;				// true branch number
+	logic [4:0] bno_f;				// false branch number
+	pc_address_t pc;
+} pc_address_ex_t;
+
+typedef logic [63:0] value_t;
+typedef struct packed {
+	value_t V1;
+	value_t V0;
 } double_value_t;
-typedef logic [63:0] half_value_t;
-typedef logic [511:0] quad_value_t;
-typedef logic [1023:0] octa_value_t;
+typedef logic [31:0] half_value_t;
+typedef struct packed {
+	value_t V3;
+	value_t V2;
+	value_t V1;
+	value_t V0;
+} quad_value_t;
+typedef struct packed {
+	value_t V7;
+	value_t V6;
+	value_t V5;
+	value_t V4;
+	value_t V3;
+	value_t V2;
+	value_t V1;
+	value_t V0;
+} octa_value_t;
 
 parameter value_zero = {$bits(value_t){1'b0}};
+
+typedef struct packed
+{
+	logic [11:0] perms;
+	logic flags;
+	logic [3:0] otype;
+	logic Ie;
+	logic [2:0] T;
+	logic [2:0] Te;
+	logic [4:0] B;
+	logic [2:0] Be;
+	logic [31:0] a;
+} capability32_t;
+
+typedef struct packed
+{
+	logic [15:0] perms;
+	logic flags;
+	logic [1:0] resv;
+	logic [17:0] otype;
+	logic Ie;
+	logic [8:0] T;
+	logic [2:0] Te;
+	logic [10:0] B;
+	logic [2:0] Be;
+	logic [63:0] a;
+} capability64_t;
 
 endpackage
