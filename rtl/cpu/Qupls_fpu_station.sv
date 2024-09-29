@@ -64,7 +64,7 @@ output reg argB_tag;
 output reg cs;
 output reg bank;
 output instruction_t instr;
-output pc_address_t pc;
+output pc_address_ex_t pc;
 output checkpt_ndx_t cp;
 output reg qfext;
 output reg [7:0] cptgt;

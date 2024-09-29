@@ -44,7 +44,7 @@ import const_pkg::*;
 import cpu_types_pkg::*;
 import QuplsPkg::*;
 
-module Qupls_extract_ins(rst_i, clk_i, rstcnt, advance_fet, ihit, en_i, nop_i, nop_o, 
+module Qupls_pipeline_seg1(rst_i, clk_i, rstcnt, advance_fet, ihit, en_i, nop_i, nop_o, 
 	irq_i, hirq_i, vect_i, sr,
 	branchmiss, misspc, mipv_i, mip_i, ic_line_i,reglist_active, grp_i, grp_o,
 	mc_offs, pc0_i, pc1_i, pc2_i, pc3_i, vl,
@@ -79,10 +79,10 @@ input [1023:0] ic_line_i;
 input [2:0] grp_i;
 output reg [2:0] grp_o;
 input cpu_types_pkg::pc_address_t mc_offs;
-input cpu_types_pkg::pc_address_t pc0_i;
-input cpu_types_pkg::pc_address_t pc1_i;
-input cpu_types_pkg::pc_address_t pc2_i;
-input cpu_types_pkg::pc_address_t pc3_i;
+input cpu_types_pkg::pc_address_ex_t pc0_i;
+input cpu_types_pkg::pc_address_ex_t pc1_i;
+input cpu_types_pkg::pc_address_ex_t pc2_i;
+input cpu_types_pkg::pc_address_ex_t pc3_i;
 input cpu_types_pkg::mc_address_t mcip0_i;
 input cpu_types_pkg::mc_address_t mcip1_i;
 input cpu_types_pkg::mc_address_t mcip2_i;
@@ -108,21 +108,21 @@ output pipeline_reg_t ins0_dec_o;
 output pipeline_reg_t ins1_dec_o;
 output pipeline_reg_t ins2_dec_o;
 output pipeline_reg_t ins3_dec_o;
-output cpu_types_pkg::pc_address_t pc0_o;
-output cpu_types_pkg::pc_address_t pc1_o;
-output cpu_types_pkg::pc_address_t pc2_o;
-output cpu_types_pkg::pc_address_t pc3_o;
+output cpu_types_pkg::pc_address_ex_t pc0_o;
+output cpu_types_pkg::pc_address_ex_t pc1_o;
+output cpu_types_pkg::pc_address_ex_t pc2_o;
+output cpu_types_pkg::pc_address_ex_t pc3_o;
 output cpu_types_pkg::mc_address_t mcip0_o;
 output cpu_types_pkg::mc_address_t mcip1_o;
 output cpu_types_pkg::mc_address_t mcip2_o;
 output cpu_types_pkg::mc_address_t mcip3_o;
 output reg do_bsr;
-output cpu_types_pkg::pc_address_t bsr_tgt;
+output cpu_types_pkg::pc_address_ex_t bsr_tgt;
 input get;
 output reg stall;
 
 integer nn,hh;
-input [1023:0] ic_line_fet;
+reg [1023:0] ic_line_fet;
 wire [5:0] jj;
 reg [5:0] kk;
 wire clk = clk_i;
@@ -131,18 +131,18 @@ wire mipv = mipv_i;
 wire ls_bmf = ls_bmf_i;
 wire pack_regs = pack_regs_i;
 cpu_types_pkg::aregno_t regcnt;
-cpu_types_pkg::pc_address_t pc0;
-cpu_types_pkg::pc_address_t pc1;
-cpu_types_pkg::pc_address_t pc2;
-cpu_types_pkg::pc_address_t pc3;
-cpu_types_pkg::pc_address_t pc0d;
-cpu_types_pkg::pc_address_t pc1d;
-cpu_types_pkg::pc_address_t pc2d;
-cpu_types_pkg::pc_address_t pc3d;
-cpu_types_pkg::pc_address_t pc0dd;
-cpu_types_pkg::pc_address_t pc1dd;
-cpu_types_pkg::pc_address_t pc2dd;
-cpu_types_pkg::pc_address_t pc3dd;
+cpu_types_pkg::pc_address_ex_t pc0;
+cpu_types_pkg::pc_address_ex_t pc1;
+cpu_types_pkg::pc_address_ex_t pc2;
+cpu_types_pkg::pc_address_ex_t pc3;
+cpu_types_pkg::pc_address_ex_t pc0d;
+cpu_types_pkg::pc_address_ex_t pc1d;
+cpu_types_pkg::pc_address_ex_t pc2d;
+cpu_types_pkg::pc_address_ex_t pc3d;
+cpu_types_pkg::pc_address_ex_t pc0dd;
+cpu_types_pkg::pc_address_ex_t pc1dd;
+cpu_types_pkg::pc_address_ex_t pc2dd;
+cpu_types_pkg::pc_address_ex_t pc3dd;
 ex_instruction_t ins0;
 ex_instruction_t ins1;
 ex_instruction_t ins2;
@@ -188,7 +188,7 @@ pipeline_reg_t nopi;
 always_comb
 begin
 	nopi = {$bits(pipeline_reg_t){1'b0}};
-	nopi.pc = RSTPC;
+	nopi.pc.pc = RSTPC;
 	nopi.mcip = 12'h1A0;
 	nopi.len = 4'd8;
 	nopi.ins = {41'd0,OP_NOP};
@@ -280,7 +280,7 @@ else begin
 end
 
 always_comb 
-	ic_line_aligned = {{64{1'b1,OP_NOP}},ic_line_fet} >> {pc0_i[5:3],6'd0};
+	ic_line_aligned = {{64{1'b1,OP_NOP}},ic_line_fet} >> {pc0_i.pc[5:3],6'd0};
 	
 pipeline_reg_t pr0_mux;
 pipeline_reg_t pr1_mux;
@@ -320,17 +320,25 @@ always_comb nop3 = FALSE;
 reg bsr0,bsr1,bsr2,bsr3;
 reg jsr0,jsr1,jsr2,jsr3;
 reg do_bsr1;
-cpu_types_pkg::pc_address_t bsr0_tgt;
-cpu_types_pkg::pc_address_t bsr1_tgt;
-cpu_types_pkg::pc_address_t bsr2_tgt;
-cpu_types_pkg::pc_address_t bsr3_tgt;
+cpu_types_pkg::pc_address_ex_t bsr0_tgt;
+cpu_types_pkg::pc_address_ex_t bsr1_tgt;
+cpu_types_pkg::pc_address_ex_t bsr2_tgt;
+cpu_types_pkg::pc_address_ex_t bsr3_tgt;
 
 always_ff @(posedge clk)
 if (rst_i) begin
-	pc0d <= RSTPC;
-	pc1d <= RSTPC;
-	pc2d <= RSTPC;
-	pc3d <= RSTPC;
+	pc0d.pc <= RSTPC;
+	pc1d.pc <= RSTPC;
+	pc2d.pc <= RSTPC;
+	pc3d.pc <= RSTPC;
+	pc0d.bno_t <= 6'd0;
+	pc1d.bno_t <= 6'd0;
+	pc2d.bno_t <= 6'd0;
+	pc3d.bno_t <= 6'd0;
+	pc0d.bno_f <= 6'd0;
+	pc1d.bno_f <= 6'd0;
+	pc2d.bno_f <= 6'd0;
+	pc3d.bno_f <= 6'd0;
 end
 else begin
 	if (en_i) begin
@@ -364,10 +372,26 @@ always_comb jsr0 = ins0.ins.any.opcode==OP_JSR;
 always_comb jsr1 = ins1.ins.any.opcode==OP_JSR;
 always_comb jsr2 = ins2.ins.any.opcode==OP_JSR;
 always_comb jsr3 = ins3.ins.any.opcode==OP_JSR;
-always_comb bsr0_tgt = jsr0 ? {{10{ins0.ins[63]}},ins0.ins[63:10]} : ins0.pc + {{10{ins0.ins[63]}},ins0.ins[63:10]};
-always_comb bsr1_tgt = jsr1 ? {{10{ins1.ins[63]}},ins1.ins[63:10]} : ins1.pc + {{10{ins1.ins[63]}},ins1.ins[63:10]};
-always_comb bsr2_tgt = jsr2 ? {{10{ins2.ins[63]}},ins2.ins[63:10]} : ins2.pc + {{10{ins2.ins[63]}},ins2.ins[63:10]};
-always_comb bsr3_tgt = jsr3 ? {{10{ins3.ins[63]}},ins3.ins[63:10]} : ins3.pc + {{10{ins3.ins[63]}},ins3.ins[63:10]};
+always_comb 
+begin
+	bsr0_tgt = ins0.pc;
+	bsr0_tgt.pc = jsr0 ? {{10{ins0.ins[63]}},ins0.ins[63:10]} : ins0.pc.pc + {{10{ins0.ins[63]}},ins0.ins[63:10]};
+end
+always_comb 
+begin
+	bsr1_tgt = ins1.pc;
+	bsr1_tgt.pc = jsr1 ? {{10{ins1.ins[63]}},ins1.ins[63:10]} : ins1.pc.pc + {{10{ins1.ins[63]}},ins1.ins[63:10]};
+end
+always_comb
+begin
+	bsr2_tgt = ins2.pc;
+	bsr2_tgt.pc = jsr2 ? {{10{ins2.ins[63]}},ins2.ins[63:10]} : ins2.pc.pc + {{10{ins2.ins[63]}},ins2.ins[63:10]};
+end
+always_comb
+begin
+	bsr3_tgt = ins3.pc;
+	bsr3_tgt.pc = jsr3 ? {{10{ins3.ins[63]}},ins3.ins[63:10]} : ins3.pc.pc + {{10{ins3.ins[63]}},ins3.ins[63:10]};
+end
 always_comb
 	do_bsr = bsr0|bsr1|bsr2|bsr3|jsr0|jsr1|jsr2|jsr3;
 //edge_det ued1 (.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(do_bsr1), .pe(do_bsr), .ne(), .ee());
@@ -383,7 +407,7 @@ begin
 	else if (bsr3|jsr3)
 		bsr_tgt = bsr3_tgt;
 	else
-		bsr_tgt = RSTPC;
+		bsr_tgt.pc = RSTPC;
 end
 
 Qupls_ins_extract_mux umux0
@@ -667,7 +691,7 @@ always_comb mcip2_o <= |mcip1 ? mcip1 | 12'h002 : 12'h000;
 always_comb mcip3_o <= |mcip2 ? mcip2 | 12'h003 : 12'h000;
 
 task tExtractIns;
-input pc_address_t pc;
+input pc_address_ex_t pc;
 input mc_address_t mcip;
 input [3:0] len;
 input pipeline_reg_t ins_i;

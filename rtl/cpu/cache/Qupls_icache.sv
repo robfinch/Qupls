@@ -48,7 +48,8 @@ import QuplsPkg::*;
 import Qupls_cache_pkg::*;
 
 module Qupls_icache(rst,clk,ce,invce,snoop_adr,snoop_v,snoop_cid,invall,invline,
-	nop,nop_o,ip_asid,ip,ip_o,ihit_o,ihit,ic_line_hi_o,ic_line_lo_o,ic_valid,
+	nop,nop_o,ip_asid,fetch_alt,
+	ip,ip_o,ihit_o,ihit,alt_ihit_o,ic_line_hi_o,ic_line_lo_o,ic_valid,
 	miss_vadr,miss_asid,
 	ic_line_i,wway,wr_ic,
 	dp, dp_asid, dhit_o, dc_line_o, dc_valid, port, port_i
@@ -74,10 +75,12 @@ input [5:0] snoop_cid;
 input invall;
 input invline;
 input cpu_types_pkg::asid_t ip_asid;
-input cpu_types_pkg::code_address_t ip;
-output cpu_types_pkg::code_address_t ip_o;
+input cpu_types_pkg::pc_address_ex_t ip;
+output cpu_types_pkg::pc_address_ex_t ip_o;
 output reg ihit_o;
 output reg ihit;
+input fetch_alt;
+output reg alt_ihit_o;
 output ICacheLine ic_line_hi_o;
 output ICacheLine ic_line_lo_o;
 output reg ic_valid;
@@ -110,7 +113,8 @@ reg [LOG_WAYS:0] ic_rwaye,ic_rwayo,wway;
 always_comb icache_wre = wr_ic && !ic_line_i.vtag[LOBIT-1] && !port_i;
 always_comb icache_wro = wr_ic &&  ic_line_i.vtag[LOBIT-1] && !port_i;
 always_comb icache_wrd = wr_ic && port_i;
-cpu_types_pkg::code_address_t ip2, dp2;
+cpu_types_pkg::pc_address_ex_t ip2;
+cpu_types_pkg::code_address_t dp2;
 cache_tag_t [WAYS-1:0] victage;
 cache_tag_t [WAYS-1:0] victago;
 cache_tag_t victagd;
@@ -160,6 +164,9 @@ always_ff @(posedge clk)
 if(ce)
 	ihit_o <= ihit;
 always_ff @(posedge clk)
+if(ce)
+	alt_ihit_o <= ihit & fetch_alt;
+always_ff @(posedge clk)
 if (rst)
 	dhit2 <= 1'b0;
 else begin
@@ -189,8 +196,8 @@ assign ip_o = ip2;
 
 always_comb	//ff @(posedge clk)
 	// If cannot cross cache line can match on either odd or even.
-	if (FALSE && ip2[5:0] < 6'd54)
-		ic_valid <= ip2[LOBIT-1] ? valid2o : valid2e;
+	if (FALSE && ip2.pc[5:0] < 6'd54)
+		ic_valid <= ip2.pc[LOBIT-1] ? valid2o : valid2e;
 	else
 		ic_valid <= valid2o & valid2e;
 
@@ -208,7 +215,7 @@ sram_512x256_1rw1r uicme
 	.ce(ce),
 	.wr(icache_wre),
 	.wadr({wway,ic_line_i.vadr[HIBIT:LOBIT]}),
-	.radr({ic_rwaye,ip[HIBIT:LOBIT]+ip[LOBIT-1]}),
+	.radr({ic_rwaye,ip.pc[HIBIT:LOBIT]+ip.pc[LOBIT-1]}),
 	.i(ic_line_i.data),
 	.o(ic_eline.data),
 	.wo(victim_eline.data)
@@ -221,7 +228,7 @@ sram_512x256_1rw1r uicmo
 	.ce(ce),
 	.wr(icache_wro),
 	.wadr({wway,ic_line_i.vadr[HIBIT:LOBIT]}),
-	.radr({ic_rwayo,ip[HIBIT:LOBIT]}),
+	.radr({ic_rwayo,ip.pc[HIBIT:LOBIT]}),
 	.i(ic_line_i.data),
 	.o(ic_oline.data),
 	.wo(victim_oline.data)
@@ -241,7 +248,7 @@ uicme
 	.ce(ce),
 	.wr(icache_wre),
 	.wadr({wway,ic_line_i.vtag[HIBIT:LOBIT]}),
-	.radr({ic_rwaye,ip[HIBIT:LOBIT]+ip[LOBIT-1]}),
+	.radr({ic_rwaye,ip.pc[HIBIT:LOBIT]+ip.pc[LOBIT-1]}),
 	.i(ic_line_i.data),
 	.o(ic_eline.data)
 );
@@ -258,7 +265,7 @@ uicmo
 	.ce(ce),
 	.wr(icache_wro),
 	.wadr({wway,ic_line_i.vtag[HIBIT:LOBIT]}),
-	.radr({ic_rwayo,ip[HIBIT:LOBIT]}),
+	.radr({ic_rwayo,ip.pc[HIBIT:LOBIT]}),
 	.i(ic_line_i.data),
 	.o(ic_oline.data)
 );
@@ -415,7 +422,7 @@ uictage
 	.padr_i(ic_line_i.ptag),
 	.way(wway),
 	.rclk(clk),
-	.ndx(ip[HIBIT:LOBIT]+ip[LOBIT-1]),	// virtual index (same bits as physical address)
+	.ndx(ip.pc[HIBIT:LOBIT]+ip.pc[LOBIT-1]),	// virtual index (same bits as physical address)
 	.tag(victage),
 	.sndx(snoop_adr[HIBIT:LOBIT]),
 	.ptag(ptagse)
@@ -438,7 +445,7 @@ uictago
 	.padr_i(ic_line_i.ptag),
 	.way(wway),
 	.rclk(clk),
-	.ndx(ip[HIBIT:LOBIT]),		// virtual index (same bits as physical address)
+	.ndx(ip.pc[HIBIT:LOBIT]),		// virtual index (same bits as physical address)
 	.tag(victago),
 	.sndx(snoop_adr[HIBIT:LOBIT]),
 	.ptag(ptagso)
@@ -476,8 +483,8 @@ Qupls_cache_hit
 uichite
 (
 	.clk(clk),
-	.adr(ip),
-	.ndx(ip[HIBIT:LOBIT]+ip[LOBIT-1]),
+	.adr(ip.pc),
+	.ndx(ip.pc[HIBIT:LOBIT]+ip.pc[LOBIT-1]),
 	.tag(victage),
 	.valid(valide),
 	.hit(ihit1e),
@@ -494,8 +501,8 @@ Qupls_cache_hit
 uichito
 (
 	.clk(clk),
-	.adr(ip),
-	.ndx(ip[HIBIT:LOBIT]),
+	.adr(ip.pc),
+	.ndx(ip.pc[HIBIT:LOBIT]),
 	.tag(victago),
 	.valid(valido),
 	.hit(ihit1o),
@@ -621,9 +628,9 @@ always_comb
 
 always_comb
 	if (!ihit1e)
-		miss_vadr = {ip[$bits(cpu_types_pkg::address_t)-1:LOBIT]+ip[LOBIT-1],1'b0,{LOBIT-1{1'b0}}};
+		miss_vadr = {ip.pc[$bits(cpu_types_pkg::address_t)-1:LOBIT]+ip.pc[LOBIT-1],1'b0,{LOBIT-1{1'b0}}};
 	else if (!ihit1o)
-		miss_vadr = {ip[$bits(cpu_types_pkg::address_t)-1:LOBIT],1'b1,{LOBIT-1{1'b0}}};
+		miss_vadr = {ip.pc[$bits(cpu_types_pkg::address_t)-1:LOBIT],1'b1,{LOBIT-1{1'b0}}};
 //	else if (!dhit1)
 //		miss_vadr = {dp[$bits(cpu_types_pkg::address_t)-1:LOBIT-1],{LOBIT-1{1'b0}}};
 	else

@@ -84,7 +84,7 @@ output pipeline_reg_t instr;
 output reg div;
 output reg cap;
 output reg [7:0] cptgt;
-output pc_address_t pc;
+output pc_address_ex_t pc;
 output checkpt_ndx_t cp;
 output reg pred;
 output reg predz;

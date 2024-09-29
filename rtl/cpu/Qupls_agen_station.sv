@@ -79,7 +79,7 @@ output pregno_t pRa;
 output pregno_t pRb;
 output pregno_t pRc;
 output pregno_t pRt;
-output pc_address_t pc;
+output pc_address_ex_t pc;
 output pipeline_reg_t op;
 output checkpt_ndx_t cp;
 output reg excv;

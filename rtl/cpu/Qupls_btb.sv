@@ -38,14 +38,15 @@ import QuplsPkg::*;
 
 module Qupls_btb(rst, clk, en, clk_en, rclk, micro_code_active, block_header,
 	igrp, length_byte,
-	pc, pc0, pc1, pc2, pc3, pc4, next_pc, alt_pc, alt_next_pc,
+	pc, pc0, pc1, pc2, pc3, pc4, next_pc,
 	takb, do_bsr, bsr_tgt, pe_bsdone,
 	branchmiss, branch_state, misspc,
 	mip0v, mip1v, mip2v, mip3v,
 	commit_pc0, commit_brtgt0, commit_takb0, commit_grp0,
 	commit_pc1, commit_brtgt1, commit_takb1, commit_grp1,
 	commit_pc2, commit_brtgt2, commit_takb2, commit_grp2,
-	commit_pc3, commit_brtgt3, commit_takb3, commit_grp3
+	commit_pc3, commit_brtgt3, commit_takb3, commit_grp3,
+	bno_bitmap, act_bno
 	);
 parameter DEP=1024;
 input rst;
@@ -57,15 +58,13 @@ input ibh_t block_header;
 input micro_code_active;
 output reg [2:0] igrp;
 input [7:0] length_byte;
-input cpu_types_pkg::pc_address_t pc;
-input cpu_types_pkg::pc_address_t pc0;
-input cpu_types_pkg::pc_address_t pc1;
-input cpu_types_pkg::pc_address_t pc2;
-input cpu_types_pkg::pc_address_t pc3;
-input cpu_types_pkg::pc_address_t pc4;
-output cpu_types_pkg::pc_address_t next_pc;
-input cpu_types_pkg::pc_address_t alt_pc;
-output cpu_types_pkg::pc_address_t alt_next_pc;
+input cpu_types_pkg::pc_address_ex_t pc;
+input cpu_types_pkg::pc_address_ex_t pc0;
+input cpu_types_pkg::pc_address_ex_t pc1;
+input cpu_types_pkg::pc_address_ex_t pc2;
+input cpu_types_pkg::pc_address_ex_t pc3;
+input cpu_types_pkg::pc_address_ex_t pc4;
+output cpu_types_pkg::pc_address_ex_t next_pc;
 output reg takb;
 input mip0v;
 input mip1v;
@@ -73,10 +72,10 @@ input mip2v;
 input mip3v;
 input pe_bsdone;
 input do_bsr;
-input cpu_types_pkg::pc_address_t bsr_tgt;
+input cpu_types_pkg::pc_address_ex_t bsr_tgt;
 input branchmiss;
 input branch_state_t branch_state;
-input cpu_types_pkg::pc_address_t misspc;
+input cpu_types_pkg::pc_address_ex_t misspc;
 input cpu_types_pkg::pc_address_t commit_pc0;
 input cpu_types_pkg::pc_address_t commit_brtgt0;
 input commit_takb0;
@@ -93,6 +92,8 @@ input cpu_types_pkg::pc_address_t commit_pc3;
 input cpu_types_pkg::pc_address_t commit_brtgt3;
 input commit_takb3;
 input [2:0] commit_grp3;
+output reg [31:0] bno_bitmap;
+output reg [4:0] act_bno;
 
 typedef struct packed {
 	logic takb;
@@ -101,7 +102,14 @@ typedef struct packed {
 	cpu_types_pkg::pc_address_t tgt;
 } btb_entry_t;
 
-
+pc_address_ex_t [31:0] next_pcs;
+reg [4:0] next_act_bno;
+reg [4:0] next_alt_bno;
+reg [63:0] next_bno_bitmap;
+reg [4:0] alt_bno;
+reg [4:0] prev_act_bno;
+reg next_is_alt;
+reg is_alt;
 reg [9:0] addrb0;
 reg [9:0] addra;
 btb_entry_t doutb0;
@@ -110,6 +118,11 @@ btb_entry_t doutb2;
 btb_entry_t doutb3;
 reg w;
 btb_entry_t tmp0, tmp1, tmp2, tmp3;
+integer nn;
+
+wire [5:0] ffz0,ffz1;
+ffz48 uffz0 (.i({16'hFFFF,bno_bitmap}), .o(ffz0));
+ffz48 uffz1 (.i({16'hFFFF,bno_bitmap & ~(32'd1 << ffz0)}), .o(ffz1));
 
    // xpm_memory_sdpram: Simple Dual Port RAM
    // Xilinx Parameterized Macro, version 2022.2
@@ -432,53 +445,103 @@ btb_entry_t tmp0, tmp1, tmp2, tmp3;
    );
 
 always_ff @(posedge clk)
-	addrb0 <= pc0[21:12];
+	addrb0 <= pc0.pc[12:3];
 
 always_comb
-begin
+if (rst) begin
+	next_bno_bitmap = 32'h1;
+	next_act_bno = ffz0;
+	next_alt_bno = ffz1;
+	next_is_alt = 1'b0;
+	for (nn = 0; nn < 32; nn = nn + 1) begin
+		next_pcs[nn].bno_t = 6'd0;
+		next_pcs[nn].bno_f = 6'd0;
+		next_pcs[nn].pc = RSTPC;
+	end
+end
+else begin
+	next_act_bno = is_alt ? prev_act_bno : act_bno;
+	next_alt_bno = alt_bno;
+	next_bno_bitmap = bno_bitmap;
+	next_bno_bitmap[0] = 1'b1;
+	next_is_alt = 1'b0;
 	// On a branch miss the misspc will have the correct block so the
 	// cache line can be fetched, but the group will not be valid yet.
 	// The group is loaded at state 1 below.
 	if (do_bsr) begin
-		next_pc = bsr_tgt;
-		alt_next_pc = bsr_tgt;
+		next_pcs[bsr_tgt.bno_t].pc = bsr_tgt.pc;
 		takb = 1'b1;
 	end
 	else if (branch_state==BS_DONE) begin
-		next_pc = misspc;
-		alt_next_pc = misspc;
+		next_act_bno = misspc.bno_t;
+		next_alt_bno = 6'd0;
+		next_pcs[next_act_bno].pc = misspc;
+		next_pcs[next_act_bno].bno_t = next_act_bno;
+		next_pcs[next_act_bno].bno_f = 6'd0;
+		// The branch resolved, so free up alternate PC stream
+		next_bno_bitmap[misspc.bno_f] = 1'b0;
 		takb = 1'b1;
 	end
-	else if (en && pc0==doutb0.pc && doutb0.takb) begin
-		next_pc = doutb0.tgt;
-		alt_next_pc = pc0 + 5'd8;
+	else if (en && pc0.pc==doutb0.pc && doutb0.takb) begin
+		next_act_bno = ffz0;
+		next_alt_bno = ffz1;
+		next_pcs[next_act_bno].pc = doutb0.tgt;
+		next_pcs[next_act_bno].bno_t = next_act_bno;
+		next_pcs[next_act_bno].bno_f = ffz1;
+		// Alocate two streams, one for true, one for false
+		next_bno_bitmap[ffz0] = 1'b1;
+		next_bno_bitmap[ffz1] = 1'b1;
+		next_pcs[ffz1].pc = pc0 + 5'd8;
+		next_pcs[ffz1].bno_t = ffz1;
+		next_pcs[ffz1].bno_f = 6'd0;
 		takb = 1'b1;
 	end
-	else if (en && pc1==doutb1.pc && doutb1.takb) begin
-		next_pc = doutb1.tgt;
-		alt_next_pc = pc1 + 5'd8;
+	else if (en && pc1.pc==doutb1.pc && doutb1.takb) begin
+		next_act_bno = ffz0;
+		next_alt_bno = ffz1;
+		next_pcs[next_act_bno].pc = doutb1.tgt;
+		next_pcs[next_act_bno].bno_t = next_act_bno;
+		next_pcs[next_act_bno].bno_f = ffz1;
+		next_bno_bitmap[ffz0] = 1'b1;
+		next_bno_bitmap[ffz1] = 1'b1;
+		next_pcs[ffz1].pc = pc1 + 5'd8;
+		next_pcs[ffz1].bno_t = ffz1;
+		next_pcs[ffz1].bno_f = 6'd0;
 		takb = 1'b1;
 	end
-	else if (en && pc2==doutb2.pc && doutb2.takb) begin
-		next_pc = doutb2.tgt;
-		alt_next_pc = pc2 + 5'd8;
+	else if (en && pc2.pc==doutb2.pc && doutb2.takb) begin
+		next_act_bno = ffz0;
+		next_alt_bno = ffz1;
+		next_pcs[next_act_bno].pc = doutb2.tgt;
+		next_pcs[next_act_bno].bno_t = next_act_bno;
+		next_pcs[next_act_bno].bno_f = ffz1;
+		next_bno_bitmap[ffz0] = 1'b1;
+		next_bno_bitmap[ffz1] = 1'b1;
+		next_pcs[ffz1].pc = pc2 + 5'd8;
+		next_pcs[ffz1].bno_t = ffz1;
+		next_pcs[ffz1].bno_f = 6'd0;
 		takb = 1'b1;
 	end
-	else if (en && pc3==doutb3.pc && doutb3.takb) begin
-		next_pc = doutb3.tgt;
-		alt_next_pc = pc3 + 5'd8;
+	else if (en && pc3.pc==doutb3.pc && doutb3.takb) begin
+		next_act_bno = ffz0;
+		next_alt_bno = ffz1;
+		next_pcs[next_act_bno].pc = doutb3.tgt;
+		next_pcs[next_act_bno].bno_t = next_act_bno;
+		next_pcs[next_act_bno].bno_f = ffz1;
+		next_bno_bitmap[ffz0] = 1'b1;
+		next_bno_bitmap[ffz1] = 1'b1;
+		next_pcs[ffz1].pc = pc3 + 5'd8;
+		next_pcs[ffz1].bno_t = ffz1;
+		next_pcs[ffz1].bno_f = 6'd0;
 		takb = 1'b1;
 	end
 	else begin
 		if (SUPPORT_IBH) begin
-			// Advance to the next group? We know the address of the start of the
-			// group, it is always the same, offset 0.
-			if (igrp >= 3'd3/* || block_header.offs[igrp]=='d0*/)
-				next_pc = {pc[$bits(pc_address_t)-1:6]+2'd1,6'd0};
-			else
-				next_pc = {pc[$bits(pc_address_t)-1:6],block_header[21:16]};
+			/*
+			*/
 		end
 		else if (SUPPORT_VLI) begin
+			/*
 			if (SUPPORT_VLIB)
 				next_pc = pc + length_byte;
 			else begin
@@ -495,6 +558,7 @@ begin
 				else
 					next_pc = {pc[$bits(pc_address_t)-1:6],pc4[5:0]};
 			end
+			*/
 		end
 		else begin
 			/*
@@ -512,22 +576,56 @@ begin
 				next_pc = {pc[$bits(pc_address_t)-1:6],pc4[5:0]};
 			*/
 			if (micro_code_active) begin
-				next_pc = pc;
-				alt_next_pc = pc;
+				next_pcs[next_act_bno].pc = pc;
 			end
 			else begin
 				case(1'b1)
-				mip0v:	begin next_pc = pc + 5'd8; alt_next_pc = pc + 5'd8; end
-				mip1v:	begin next_pc = pc + 5'd16; alt_next_pc = pc + 5'd16; end
-				mip2v:	begin next_pc = pc + 5'd24; alt_next_pc = pc + 5'd24; end
-				mip3v:	begin next_pc = pc + 6'd32; alt_next_pc = pc + 6'd32; end
-				default:	begin next_pc = pc + 6'd32;	alt_next_pc = alt_pc + 6'd32; end	// four instructions
+				mip0v:	begin next_pcs[next_act_bno].pc = pc + 5'd8; end
+				mip1v:	begin next_pcs[next_act_bno].pc = pc + 5'd16; end
+				mip2v:	begin next_pcs[next_act_bno].pc = pc + 5'd24; end
+				mip3v:	begin next_pcs[next_act_bno].pc = pc + 6'd32; end
+				default:	begin next_pcs[next_act_bno].pc = pc + 6'd32; end	// four instructions
 				endcase
 			end
 		end
 		takb = 1'b0;
+		// If stuck on the same PC, fetch alternate path
+		if (next_pcs[next_act_bno]==pc) begin
+			next_is_alt = 1'b1;
+			next_act_bno = alt_bno;
+		end
 	end
 end
+
+always_ff @(posedge clk)
+if (rst) begin
+	prev_act_bno <= 6'd0;
+	act_bno <= 6'd0;
+	alt_bno <= 6'd0;
+end
+else begin
+	if (clk_en) begin
+		prev_act_bno <= act_bno;
+		act_bno <= next_act_bno;
+		alt_bno <= next_alt_bno;
+	end
+end
+
+always_ff @(posedge clk)
+if (rst) is_alt = 1'b0;
+else begin
+	if (clk_en)
+		is_alt <= next_is_alt;
+end
+always_ff @(posedge clk)
+if (rst)
+	bno_bitmap <= 64'h1;
+else begin
+	if (clk_en)
+		bno_bitmap <= next_bno_bitmap;
+end
+
+assign next_pc = next_pcs[act_bno];
 
 generate begin : giGrp
 if (SUPPORT_IBH) begin
@@ -596,7 +694,7 @@ else begin
 	tmp3.takb <= commit_takb3;
 	tmp3.tgt <= commit_brtgt3;
 	tmp3.grp <= commit_grp3;
-	addra <= commit_pc0[21:12];
+	addra <= commit_pc0[12:3];
 	w <= commit_takb0|commit_takb1|commit_takb2|commit_takb3;
 end
 
