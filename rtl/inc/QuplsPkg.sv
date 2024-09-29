@@ -42,8 +42,8 @@ import  cpu_types_pkg::*;
 package QuplsPkg;
 
 `undef IS_SIM
-parameter SIM = 1'b0;
-//`define IS_SIM	1
+parameter SIM = 1'b1;
+`define IS_SIM	1
 
 // Comment out to remove the sigmoid approximate function
 //`define SIGMOID	1
@@ -56,15 +56,18 @@ parameter SIM = 1'b0;
 
 // Number of architectural registers there are in the core, including registers
 // not visible in the programming model. Each supported vector register counts
-// as eight registers.
-`define NREGS	168	// 330
+// as eight registers. This number should be <= 256 and >= 64.
+`define NREGS	256
 
 // Number of physical registers supporting the architectural ones and used in
 // register renaming. There must be significantly more physical registers than
-// architectural ones, or performance will suffer due to stalls. 
-parameter PREGS = 512;	// 1024
+// architectural ones, or performance will suffer due to stalls.
+// Must be a multiple of four. If it is not 512 then the renamer logic will
+// need to be modified.
+parameter PREGS = 512;	// 512
 
-// Number of elements per vector.
+// Number of elements per vector. Changing this requires changing logic in the
+// core specific to vector register numbers.
 parameter VEC_ELEMENTS = 8;
 
 `define L1CacheLines	1024
@@ -76,6 +79,8 @@ parameter VEC_ELEMENTS = 8;
 
 `define L1DCacheWays 4
 
+// Not fully implemented yet. The following parameter controls the width of the
+// core in terms of number of instructions. The only working value is 4.
 parameter XWID = 4;
 
 // Select building for performance or size.
@@ -93,16 +98,12 @@ parameter BRANCH_PREDICTOR = 0;
 // the code density.
 parameter SUPPORT_POSTFIX = 0;
 
-// The following indicate to queue two instructions at a time if possible.
-// This parameter should be set to one as queueing only single instructions
-// does not work yet. Queuing only a single instruction would result in a
-// smaller core if it worked.
-parameter SUPPORT_Q2 = 1'b1;
 // The following allows the core to process flow control ops in any order
 // to reduce the size of the core. Set to zero to restrict flow control ops
 // to be processed in order. If processed out of order a branch may 
 // speculate incorrectly leading to lower performance.
 parameter SUPPORT_OOOFC = 1'b0;
+
 // Allowing unaligned memory access increases the size of the core.
 parameter SUPPORT_UNALIGNED_MEMORY = 1'b0;
 parameter SUPPORT_BUS_TO = 1'b0;
@@ -124,6 +125,10 @@ parameter REP_BIT = 31;
 // This parameter indicates if to support vector instructions.
 parameter SUPPORT_VEC = 1'b1;
 
+// This parameter adds support for capabilities. Increases the size of the core.
+// An FPU must also be enabled.
+parameter SUPPORT_CAPABILITIES = 1'b0;
+
 // This parameter indicates to support the PRED modifier and predicates.
 parameter SUPPORT_PRED = 1'b1;
 
@@ -144,6 +149,8 @@ parameter SUPPORT_LOAD_BYPASSING = 1'b0;
 // Setting ROB_ENTRIES below 12 may not work. Setting the number of entries over
 // 63 may require changing the sequence number type.
 parameter ROB_ENTRIES = 16;
+
+parameter BEB_ENTRIES = 4;
 
 // The following is the number of ROB entries that are examined by the 
 // scheduler when determining what to issue. The schedule window is
@@ -192,10 +199,11 @@ parameter INSN_LEN = 8'd6;
 parameter NDATA_PORTS = 1;
 parameter NAGEN = 1;
 // Increasing the number of ALUs will increase performance of vector operations.
-parameter NALU = 1;
-parameter NFPU = 0;
+// Note that adding an FPU may also increase integer performance.
+parameter NALU = 2;
+parameter NFPU = 1;
 parameter NLSQ_PORTS = 1;
-// Number of banks of registers.
+// Number of banks of registers (not implemented).)
 parameter BANKS = 1;
 
 parameter RAS_DEPTH	= 4;
@@ -249,6 +257,7 @@ typedef enum logic [1:0] {
 
 typedef logic [3:0] checkpt_ndx_t;
 typedef logic [$clog2(ROB_ENTRIES)-1:0] rob_ndx_t;
+typedef logic [$clog2(BEB_ENTRIES)-1:0] beb_ndx_t;
 typedef struct packed
 {
 	logic [2:0] row;
@@ -302,7 +311,7 @@ typedef enum logic [3:0] {
 
 typedef enum logic [6:0] {
 	OP_CHK			= 7'd00,
-	OP_R1				= 7'd01,
+	OP_CAP			= 7'd01,
 	OP_R2				= 7'd02,
 	OP_BFI			= 7'd03,
 	OP_ADDI			= 7'd04,
@@ -332,18 +341,23 @@ typedef enum logic [6:0] {
 	OP_SGEUI		= 7'd31,
 
 	OP_BSR			= 7'd32,
-	OP_DBRA			= 7'd33,
-	OP_MCB			= 7'd34,
+	OP_JSR			= 7'd33,
+	OP_CJSR			= 7'd34,
 	OP_RTD			= 7'd35,
-	OP_JSR			= 7'd36,
-	OP_JSRI			= 7'd37,
-	OP_R3V			= 7'd38,
-	OP_R3VS			= 7'd39,
+	OP_JSRI			= 7'd36,
+	OP_CJSRI		= 7'd37,
+	OP_JSRR			= 7'd38,
+	OP_CJSRR		= 7'd39,
+
+	OP_R3V			= 7'd77,
+	OP_R3VS			= 7'd78,
 
 	OP_BccU			= 7'd40,
 	OP_Bcc			= 7'd41,
 	OP_DFBcc		= 7'd43,
 	OP_FBcc			= 7'd44,
+	OP_DBRA			= 7'd45,
+	OP_MCB			= 7'd46,
 /*
 	OP_BEQ			= 7'd38,
 	OP_BNE			= 7'd39,
@@ -409,7 +423,7 @@ typedef enum logic [6:0] {
 	OP_ZSGEUI		= 7'd103,
 	OP_BFND			= 7'd108,
 	OP_BCMP			= 7'd109,
-	OP_BSET			= 7'd110,
+	OP_BSTORE		= 7'd110,
 	OP_BMOV			= 7'd111,
 	OP_IRQ			= 7'd112,
 	OP_FENCE		= 7'd114,
@@ -492,8 +506,8 @@ typedef enum logic [3:0] {
 	NAND = 4'd10,
 	AND = 4'd11,
 	NOR = 4'd12,
-	OR = 4'd13
-	
+	OR = 4'd13,
+	OV = 4'd15		// overflow
 } branch_fn_t;
 
 typedef enum logic [3:0] {
@@ -531,9 +545,10 @@ typedef enum logic [2:0] {
 	BTS_DISP = 3'd1,
 	BTS_REG = 3'd2,
 	BTS_BSR = 3'd3,
-	BTS_CALL = 3'd4,
-	BTS_RET = 3'd5,
-	BTS_RTI = 3'd6
+	BTS_JSR = 3'd4,
+	BTS_CALL = 3'd5,
+	BTS_RET = 3'd6,
+	BTS_RTI = 3'd7
 } bts_t;
 
 /*
@@ -572,6 +587,7 @@ typedef enum logic [6:0] {
 	FN_DIVSU		= 7'd22,
 	FN_MULW			= 7'd24,
 	FN_MOD			= 7'd25,
+	FN_R1				= 7'd26,
 	FN_MULUW		= 7'd27,
 	FN_MODU			= 7'd28,
 	FN_MULSUW		= 7'd29,
@@ -650,27 +666,29 @@ typedef enum logic [2:0] {
 	RND_FL = 3'd7			// round according to flags register
 } fround_t;
 
-typedef enum logic [4:0] {
-	FN_LDBX = 5'd0,
-	FN_LDBUX = 5'd1,
-	FN_LDWX = 5'd2,
-	FN_LDWUX = 5'd3,
-	FN_LDTX = 5'd4,
-	FN_LDTUX = 5'd5,
-	FN_LDOX = 5'd6,
-	FN_LDOUX = 5'd7,
-	FN_LDHX = 5'd8,
-	FN_LDAX = 5'd10,
-	FN_LDCTX = 5'd15
+typedef enum logic [3:0] {
+	FN_LDBX = 4'd0,
+	FN_LDBUX = 4'd1,
+	FN_LDWX = 4'd2,
+	FN_LDWUX = 4'd3,
+	FN_LDTX = 4'd4,
+	FN_LDTUX = 4'd5,
+	FN_LDOX = 4'd6,
+	FN_LDOUX = 4'd7,
+	FN_LDHX = 4'd8,
+	FN_CLOADX = 4'd9,
+	FN_LDAX = 4'd10,
+	FN_LDCTX = 4'd15
 } ldn_func_t;
 
-typedef enum logic [4:0] {
-	FN_STBX = 5'd0,
-	FN_STWX = 5'd1,
-	FN_STTX = 5'd2,
-	FN_STOX = 5'd3,
-	FN_STHX = 5'd4,
-	FN_STCTX = 5'd7
+typedef enum logic [3:0] {
+	FN_STBX = 4'd0,
+	FN_STWX = 4'd1,
+	FN_STTX = 4'd2,
+	FN_STOX = 4'd3,
+	FN_STHX = 4'd4,
+	FN_CSTOREX = 4'd5,
+	FN_STCTX = 4'd7
 } stn_func_t;
 
 typedef union packed {
@@ -688,27 +706,27 @@ typedef enum logic [6:0]
 } sys_func_t;
 
 // R1 ops
-typedef enum logic [5:0] {
-	NNA_TRIG 		=	6'd8,
-	NNA_STAT 		= 6'd9,
-	NNA_MFACT 	= 6'd10,
-	OP_RTI			= 6'h19,
-	OP_REX			= 6'h1A,
-	OP_FFINITE 	= 6'h20,
-	OP_FNEG			= 6'h23,
-	OP_FRSQRTE	= 6'h24,
-	OP_FRES			= 6'h25,
-	OP_FSIGMOID	= 6'h26,
-	OP_I2F			= 6'h28,
-	OP_F2I			= 6'h29,
-	OP_FABS			= 6'h2A,
-	OP_FNABS		= 6'h2B,
-	OP_FCLASS		= 6'h2C,
-	OP_FMAN			= 6'h2D,
-	OP_FSIGN		= 6'h2E,
-	OP_FTRUNC		= 6'h2F,
-	OP_SEXTB		= 6'h38,
-	OP_SEXTW		= 6'h39
+typedef enum logic [7:0] {
+	NNA_TRIG 		=	8'd8,
+	NNA_STAT 		= 8'd9,
+	NNA_MFACT 	= 8'd10,
+	OP_RTI			= 8'h19,
+	OP_REX			= 8'h1A,
+	OP_FFINITE 	= 8'h20,
+	OP_FNEG			= 8'h23,
+	OP_FRSQRTE	= 8'h24,
+	OP_FRES			= 8'h25,
+	OP_FSIGMOID	= 8'h26,
+	OP_I2F			= 8'h28,
+	OP_F2I			= 8'h29,
+	OP_FABS			= 8'h2A,
+	OP_FNABS		= 8'h2B,
+	OP_FCLASS		= 8'h2C,
+	OP_FMAN			= 8'h2D,
+	OP_FSIGN		= 8'h2E,
+	OP_FTRUNC		= 8'h2F,
+	OP_SEXTB		= 8'h38,
+	OP_SEXTW		= 8'h39
 } r1func_t;
 
 typedef enum logic [6:0] {
@@ -775,6 +793,54 @@ typedef enum logic [3:0] {
 	OP_ROLI	= 4'd11,
 	OP_RORI	= 4'd12
 } shift_t;
+
+typedef enum logic [6:0] {
+	FN_CRETD = 7'd8,
+	FN_CANDPERMS = 7'd32,
+	FN_CBUILDCAP = 7'd33,
+	FN_CCOPYTYPE = 7'd34,
+	FN_CINCOFFS = 7'd35,
+	FN_CSEAL = 7'd36,
+	FN_CSETADDR = 7'd37,
+	FN_CSETBOUNDS = 7'd38,
+	FN_CSETFLAGS = 7'd39,
+	FN_CSETHIGH = 7'd40,
+	FN_CSETOFFS = 7'd41,
+	FN_CSPECIALRW = 7'd42,
+	FN_CUNSEAL = 7'd43,
+	FN_CCMP = 7'd44,
+	FN_CINCOFFSIMM = 7'd45,
+	FN_CSETBOUNDSEXACT = 7'd46,
+	FN_CCLEARTAG = 7'd64,
+	FN_CGETFLAGS = 7'd65,
+	FN_CGETHIGH = 7'd66,
+	FN_CGETLEN = 7'd67,
+	FN_CGETOFFS = 7'd68,
+	FN_CGETPERMS = 7'd69,
+	FN_CGETTAG = 7'd70,
+	FN_CGETTOP = 7'd71,
+	FN_CGETTYPE = 7'd72,
+	FN_CLOADTAGS = 7'd73,
+	FN_CALIGNMSK = 7'd74,
+	FN_CROUNDLEN = 7'd75,
+	FN_CSEALENTRY = 7'd76,
+	FN_CGETBASE = 7'd77,
+	FN_CMOVE = 7'd78,
+	FN_CINVOKE = 7'd124
+} cap_func_t;
+
+parameter GLOBAL 					= 14'b00000000000001;
+parameter PERMIT_EXECUTE 	= 14'b00000000000010;
+parameter PERMIT_LOAD 		= 14'b00000000000100;
+parameter PERMIT_STORE		= 14'b00000000001000;
+parameter PERMIT_LOAD_CAP = 14'b00000000010000;
+parameter PERMIT_STORE_CAP= 14'b00000000100000;
+parameter PERMIT_STORE_LOCAL_CAP= 14'b00000001000000;
+parameter PERMIT_SEAL			= 14'b00000010000000;
+parameter PERMIT_INVOKE		= 14'b00000100000000;
+parameter PERMIT_UNSEAL		= 14'b00001000000000;
+parameter PERMIT_ACCESS_SYSREGS = 14'b00010000000000;
+parameter PERMIT_SET_CID	= 14'b00100000000000;
 
 typedef enum logic [2:0] {
 	PRC8 = 3'd0,
@@ -946,6 +1012,12 @@ typedef enum logic [7:0] {
 	FLT_RTI		= 8'hED,
 */
 	FLT_DBZ		= 8'h10,
+	FLT_BADREG = 8'hDF,
+	FLT_CAPTAG = 8'hE0,
+	FLT_CAPOTYPE = 8'hE1,
+	FLT_CAPPERMS = 8'hE2,
+	FLT_CAPBOUNDS = 8'hE4,
+	FLT_CAPSEALED = 8'hE5,
 	FLT_NONE 	= 8'hFF
 } cause_code_t;
 
@@ -994,8 +1066,7 @@ typedef logic [127:0] regs_bitmap_t;
 typedef struct packed
 {
 	logic n;
-	logic v;
-	logic [4:0] num;
+	logic [7:0] num;
 } regspec_t;
 
 typedef logic [3:0] rndx_t;			// ROB index
@@ -1032,16 +1103,14 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [39:0] imm;
-	logic vec;
+	logic [56:0] imm;
 	opcode_t opcode;
 } postfix_t;
 
 
 typedef struct packed
 {
-	logic [39:0] payload;
-	logic vec;
+	logic [56:0] payload;
 	opcode_t opcode;
 } anyinst_t;
 
@@ -1049,210 +1118,228 @@ typedef struct packed
 typedef struct packed
 {
 	f3func_t func;			// 7 bits
-	logic [1:0] prc;		// 2
+	logic [5:0] Pr;			// 6
 	fround_t rmd;				// 3 bits
-	regspec_t Rc;
-	regspec_t Rb;
-	regspec_t Ra;
-	regspec_t Rt;
-	logic vec;
-	opcode_t opcode;
-} f3inst_t;
+	logic [4:0] resv;		// 5
+	regspec_t Rc;				// 9
+	regspec_t Rb;				// 9
+	regspec_t Ra;				// 9
+	regspec_t Rt;				// 9
+	opcode_t opcode;		// 7
+} f3inst_t;						// 64
 
 typedef struct packed
 {
 	f3func_t func;			// 7 bits
-	logic [1:0] prc;
+	logic [5:0] Pr;			// 6
 	fround_t rmd;				// 3 bits
+	logic [4:0] resv;		// 5
 	regspec_t Rc;
 	regspec_t Rb;
 	regspec_t Ra;
 	regspec_t Rt;
-	logic vec;
 	opcode_t opcode;
 } f2inst_t;
 
 typedef struct packed
 {
 	f3func_t func;			// 7 bits
-	logic [1:0] prc;
+	logic [5:0] Pr;			// 6
 	fround_t rmd;				// 3 bits
+	logic [4:0] resv;		// 5
 	regspec_t Rc;
 	regspec_t Rb;
 	regspec_t Ra;
 	regspec_t Rt;
-	logic vec;
 	opcode_t opcode;
 } f1inst_t;
 
 typedef struct packed
 {
 	r3func_t func;			// 7 bits
-	logic [1:0] prc;
-	logic [2:0] op2;
+	logic [5:0] Pr;			// 6
+	logic [3:0] resv;		// 4
+	logic [3:0] op4;		// 4
+	regspec_t Rc;				// 9
+	regspec_t Rb;				// 9
+	regspec_t Ra;				// 9
+	regspec_t Rt;				// 9
+	opcode_t opcode;		// 7
+} r3inst_t;						// 64
+
+typedef struct packed
+{
+	cap_func_t func;		// 7 bits
+	logic [5:0] Pr;
+	logic [3:0] resv;		// 4
+	logic [3:0] op4;
 	regspec_t Rc;
 	regspec_t Rb;
 	regspec_t Ra;
 	regspec_t Rt;
-	logic vec;
 	opcode_t opcode;
-} r3inst_t;
+} cap_inst_t;
 
 typedef struct packed
 {
 	r3func_t func;			// 7 bits
-	logic [1:0] prc;		// 2
-	logic [2:0] op2;		// 3
-	regspec_t Rc;				// 7
-	regspec_t Rb;				// 7
-	regspec_t Ra;				// 7
-	regspec_t Rt;				// 7
-	logic vec;					// 1
+	logic [5:0] Pr;			// 6
+	logic [3:0] resv;		// 4
+	logic [3:0] op2;		// 4
+	regspec_t Rc;				// 9
+	regspec_t Rb;				// 9
+	regspec_t Ra;				// 9
+	regspec_t Rt;				// 9
 	opcode_t opcode;		// 7
-} r2inst_t;						// 48
+} r2inst_t;						// 64
 
 typedef struct packed
 {
 	r3func_t r3func;		// 7 bits
-	logic [1:0] prc;		// 2
-	logic [2:0] op2;		// 3
+	logic [5:0] Pr;			// 6
+	logic [3:0] resv2;	// 4
+	logic [3:0] op2;		// 3
 	logic resv;					// 1
-	r1func_t func;			// 6
-	regspec_t Rb;				// 7
-	regspec_t Ra;				// 7
-	regspec_t Rt;				// 7
-	logic vec;					// 1
+	r1func_t func;			// 8
+	regspec_t Rb;				// 9
+	regspec_t Ra;				// 9
+	regspec_t Rt;				// 9
 	opcode_t opcode;		// 7
-} r1inst_t;						// 48
+} r1inst_t;						// 64
 
 typedef struct packed
 {
 	logic [3:0] func;		// 4
+	logic [2:0] resv;		// 3
+	logic [5:0] Pr;			// 6
 	cause_code_t cause;	// 8
-	regspec_t Rc;				// 7	
-	regspec_t Rb;				// 7
-	regspec_t Ra;				// 7
+	regspec_t Rc;				// 9	
+	regspec_t Rb;				// 9
+	regspec_t Ra;				// 9
 	logic [2:0] ipl;		// 3
 	logic s;						// 1
-	logic [2:0] offs;		// 3
-	logic vec;					// 1
+	logic [4:0] offs;		// 5
 	opcode_t opcode;		// 7
-} chk_inst_t;					// 48
+} chk_inst_t;					// 64
 
 typedef struct packed
 {
-	logic [23:0] imm;		// 24
-	logic [1:0] prc;		// 2
-	regspec_t Ra;				// 7
-	regspec_t Rt;				// 7
-	logic vec;					// 1
+	logic [31:0] imm;		// 32
+	logic prc;					// 1
+	logic [5:0] Pr;			// 6
+	regspec_t Ra;				// 9
+	regspec_t Rt;				// 9
 	opcode_t opcode;		// 7
-} imminst_t;					// 48
+} imminst_t;					// 64
 
 typedef struct packed
 {
 	shift_t func;				// 4
-	logic [2:0] resv;		// 10
-	logic [1:0] prc;		// 2
+	logic [2:0] prc;		// 3
+	logic [5:0] Pr;			// 6
+	logic [2:0] Rm;			// 3
 	logic c;						// 1
 	logic i;						// 1
-	logic [1:0] resv2;	// 2
+	logic [5:0] resv2;	// 6
 	logic [5:0] imm;		// 6
-	regspec_t Rb;				// 7
-	regspec_t Ra;				// 7
-	regspec_t Rt;				// 7
-	logic vec;					// 1
+	regspec_t Rb;				// 9
+	regspec_t Ra;				// 9
+	regspec_t Rt;				// 9
 	opcode_t opcode;		// 7
-} shiftiinst_t;				// 48
+} shiftiinst_t;				// 64
 
 typedef struct packed
 {
 	logic [2:0] op;			// 3
-	logic [8:0] resv;		// 9
+	logic [3:0] resv2;	// 4
+	logic [5:0] Pr;			// 6
+	logic [11:0] resv;	// 12
 	logic [13:0] regno;	// 14
-	regspec_t Ra;				// 7
-	regspec_t Rt;				// 7
-	logic vec;					// 1
+	regspec_t Ra;				// 9
+	regspec_t Rt;				// 9
 	opcode_t opcode;		// 7
-} csrinst_t;					// 48
+} csrinst_t;					// 64
 
 typedef struct packed
 {
-	logic [23:0] disp;	// 24
-	logic [1:0] prc;		// 2
-	regspec_t Ra;				// 7
-	regspec_t Rt;				// 7
-	logic vec;					// 1
+	logic [31:0] disp;	// 32
+	logic prc;					// 1
+	logic [5:0] Pr;			// 6
+	regspec_t Ra;				// 9
+	regspec_t Rt;				// 9
 	opcode_t opcode;		// 7
-} lsinst_t;						// 48
+} lsinst_t;						// 64
 
 typedef struct packed
 {
-	lsn_func_t func;			// 5
-	logic [11:0] disp;		// 12
-	logic [1:0] sc;				// 2
-	regspec_t Rb;					// 7
-	regspec_t Ra;					// 7
-	regspec_t Rt;					// 7
-	logic vec;						// 1
+	lsn_func_t func;			// 4
+	logic [2:0] dispHi;		// 3
+	logic [5:0] Pr;				// 6
+	logic [13:0] dispLo;	// 14
+	logic [2:0] sc;				// 3
+	regspec_t Rb;					// 9
+	regspec_t Ra;					// 9
+	regspec_t Rt;					// 9
 	opcode_t opcode;			// 7
-} lsninst_t;						// 48
+} lsninst_t;						// 64
 
 typedef struct packed
 {
-	logic [16:0] disp;		// 17
-	logic [1:0] prc;			// 2
-	regspec_t Rb;					// 7
-	regspec_t	Ra;					// 7
-	logic resv;						// 1
+	logic [19:0] disp;		// 20
+	prec_t prc;						// 3
+	logic [5:0] Pr;				// 6
+	logic i;							// 1
+	regspec_t Rb;					// 9
+	regspec_t	Ra;					// 9
+	logic [2:0] resv;			// 3
 	logic [1:0] inc;			// 2
 	branch_fn_t fn;				// 4
-	logic vec;						// 1
 	opcode_t opcode;			// 7
-} brinst_t;							// 48
+} brinst_t;							// 64
 
 typedef struct packed
 {
-	logic [16:0] disp;		// 17
-	logic [1:0] prc;			// 2
-	regspec_t Rb;					// 7
-	regspec_t	Ra;					// 7
-	logic resv;						// 1
+	logic [19:0] disp;		// 20
+	prec_t prc;						// 3
+	logic [5:0] Pr;				// 6
+	logic i;							// 1
+	regspec_t Rb;					// 9
+	regspec_t	Ra;					// 9
+	logic [2:0] resv;			// 3
 	logic [1:0] inc;			// 2
 	fbranch_fn_t fn;			// 4
-	logic vec;						// 1
 	opcode_t opcode;			// 7
-} fbrinst_t;						// 48
+} fbrinst_t;						// 64
 
 typedef struct packed
 {
-	logic [4:0] resv2;		// 5
-	logic [11:0] tgt;			// 12
-	logic [1:0] prc;			// 2
-	regspec_t Rb;					// 7
-	regspec_t	Ra;					// 7
+	logic [19:0] disp;		// 20
+	prec_t prc;						// 3
+	logic [5:0] Pr;				// 6
+	logic i;							// 1
+	regspec_t Rb;					// 9
+	regspec_t	Ra;					// 9
+	logic [1:0] resv;			// 2
 	logic lk;							// 1
 	logic [1:0] inc;			// 2
 	logic [3:0] fn;				// 4
-	logic vec;						// 1
 	opcode_t opcode;			// 7
-} mcb_inst_t;						// 48
+} mcb_inst_t;						// 64
 
 typedef struct packed
 {
-	logic [23:0] immhi;		// 24
-	logic [1:0] prc;			// 2
-	regspec_t Ra;					// 7
-	regspec_t Rt;					// 7
-	logic vec;						// 1
+	logic [31:0] imm;		// 32
+	logic prc;					// 1
+	logic [5:0] Pr;			// 6
+	regspec_t Ra;					// 9
+	regspec_t Rt;					// 9
 	opcode_t opcode;			// 7
-} jsrinst_t;						// 48
+} jsrinst_t;						// 64
 
 typedef struct packed
 {
-	logic [36:0] disp;		// 37
+	logic [53:0] disp;		// 54
 	logic [2:0] Rt;				// 3
-	logic vec;						// 1
 	opcode_t opcode;			// 7
 } bsrinst_t;						// 48
 
@@ -1266,6 +1353,7 @@ typedef union packed
 	r1inst_t	r1;
 	r2inst_t	r2;
 	r2inst_t	r3;
+	cap_inst_t	cap;
 	brinst_t	br;
 	fbrinst_t	fbr;
 	mcb_inst_t mcb;
@@ -1340,6 +1428,7 @@ typedef struct packed
 	logic Rcz;
 	logic Rtz;
 	logic [2:0] Rcc;	// Rc complement status
+	logic regexc;			// reg exception - illegal register selection
 	logic has_imm;
 	logic has_imma;
 	logic has_immb;
@@ -1367,12 +1456,17 @@ typedef struct packed
 	logic mulu;
 	logic div;
 	logic divu;
+	logic cap;
 	logic bitwise;		// true if a bitwise operator (and, or, eor)
 	logic multicycle;
 	logic mem;
 	logic load;
 	logic loadz;
+	logic cload;
+	logic cload_tags;
 	logic store;
+	logic cstore;
+	logic bstore;
 	logic pushi;
 	logic cls;
 	logic lda;
@@ -1383,6 +1477,7 @@ typedef struct packed
 	logic cjb;					// call, jmp, or bra
 	logic bsr;					// bra or bsr
 	logic jsri;					// indirect subroutine call
+	logic ret;
 	logic brk;
 	logic irq;
 	logic rti;
@@ -1397,6 +1492,7 @@ typedef struct packed
 	logic qfext;				// true if QFEXT modifier
 } decode_bus_t;
 
+/*
 typedef struct packed
 {
 	logic v;
@@ -1421,6 +1517,42 @@ typedef struct packed
 	cpu_types_pkg::value_t mask;
 	cpu_types_pkg::quad_value_t res;
 } pipeline_reg_t;
+*/
+typedef struct packed
+{
+	// The following fields may change state while an instruction is processed.
+	logic v;									// 1=entry is valid, in use
+	logic rstp;								// indicate physical register reset required
+	cpu_types_pkg::pc_address_t brtgt;
+	cpu_types_pkg::mc_address_t mcbrtgt;			// micro-code branch target
+	logic takb;								// 1=branch evaluated to taken
+	cause_code_t exc;					// non-zero indicate exception
+	logic excv;								// 1=exception
+	// The following fields are loaded at enqueue time, but otherwise do not change.
+	logic bt;									// branch to be taken as predicted
+	operating_mode_t om;			// operating mode
+	decode_bus_t decbus;			// decoded instruction
+	cpu_types_pkg::pregno_t pRa;							// physical registers (see decode bus for arch. regs)
+	cpu_types_pkg::pregno_t pRb;
+	cpu_types_pkg::pregno_t pRc;
+	cpu_types_pkg::pregno_t pRt;							// current Rt value
+	cpu_types_pkg::pregno_t nRt;							// new Rt
+	cpu_types_pkg::pregno_t pRm;							// current Rt value
+	logic [3:0] cndx;					// checkpoint index
+	// The following matches the ex_instruction_t
+	cpu_types_pkg::pc_address_t pc;					// PC of instruction
+	cpu_types_pkg::mc_address_t mcip;				// Micro-code IP address
+	logic [3:0] len;
+	logic [2:0] element;
+	logic [2:0] eno;
+	cpu_types_pkg::aregno_t aRa;
+	cpu_types_pkg::aregno_t aRb;
+	cpu_types_pkg::aregno_t aRc;
+	cpu_types_pkg::aregno_t aRt;
+	logic [5:0] pred_btst;
+	instruction_t ins;				// original instruction
+} pipeline_reg_t;
+
 
 typedef struct packed {
 	logic [4:0] imiss;
@@ -1529,6 +1661,7 @@ typedef logic [6:0] seqnum_t;
 typedef struct packed
 {
 	logic [PREGS-1:0] avail;	// available registers at time of queue (for rollback)
+	cpu_types_pkg::pregno_t [AREGS-1:0] pregmap;
 	cpu_types_pkg::pregno_t [AREGS-1:0] regmap;
 } checkpoint_t;
 
@@ -1536,6 +1669,8 @@ typedef struct packed {
 	// The following fields may change state while an instruction is processed.
 	logic v;									// 1=entry is valid, in use
 	seqnum_t sn;							// sequence number, decrements when instructions que
+	logic [3:0] predino;			// predicated instruction number (1 to 8)
+	rob_ndx_t predrndx;				// ROB index of associate PRED instruction
 	rob_ndx_t orid;						// ROB id of originating macro-instruction
 	logic lsq;								// 1=instruction has associated LSQ entry
 	lsq_ndx_t lsqndx;					// index to LSQ entry
@@ -1543,7 +1678,7 @@ typedef struct packed {
 	logic [1:0] done;					// 2'b11=instruction is finished executing
 	logic rstp;								// indicate physical register reset required
 	logic [63:0] pred_status;	// predicate status for the next eight instructions.
-	logic pred_bit;						// predicte bit for this instruction.
+	logic [7:0] pred_bits;		// predicte bits for this instruction.
 	logic pred_bitv;					// 1=predicate bit is valid
 	logic [1:0] vn;						// vector index
 	cpu_types_pkg::pc_address_t brtgt;
@@ -1570,6 +1705,7 @@ typedef struct packed {
 	logic argC_v;
 	logic argT_v;
 	logic argM_v;
+	logic rat_v;							// 1=checked with RAT for valid reg arg.
 	cpu_types_pkg::value_t arg;							// argument value for CSR instruction
 	// The following fields are loaded at enqueue time, but otherwise do not change.
 	logic last;								// 1=last instruction in group (not used)
@@ -1584,11 +1720,33 @@ typedef struct packed {
 	cpu_types_pkg::pregno_t nRt;							// new Rt
 	cpu_types_pkg::pregno_t pRm;							// current Rt value
 	logic [3:0] cndx;					// checkpoint index
-	ex_instruction_t op;			// original instruction
+	pipeline_reg_t op;			// original instruction
 	cpu_types_pkg::pc_address_t pc;					// PC of instruction
 	cpu_types_pkg::mc_address_t mcip;				// Micro-code IP address
 	logic [2:0] grp;					// instruction group of PC
 } rob_entry_t;
+
+typedef struct packed {
+	logic v;
+	logic excv;								// 1=exception
+	logic [1:0] nstate;				// number of states
+	logic [1:0] state;				// current state
+	decode_bus_t decbus;			// decoded instruction
+	logic done;
+	cpu_types_pkg::value_t argA;
+	cpu_types_pkg::value_t argB;
+	cpu_types_pkg::value_t argC;
+	cpu_types_pkg::value_t argI;
+	cpu_types_pkg::value_t argT;
+	cpu_types_pkg::value_t argM;
+	cpu_types_pkg::value_t res;
+	cpu_types_pkg::pregno_t pRc;
+	logic argC_v;
+	logic [3:0] cndx;					// checkpoint index
+	ex_instruction_t op;			// original instruction
+	cpu_types_pkg::pc_address_t pc;					// PC of instruction
+	cpu_types_pkg::mc_address_t mcip;				// Micro-code IP address
+} beb_entry_t;
 
 typedef struct packed {
 	logic v;
@@ -1600,7 +1758,10 @@ typedef struct packed {
 	operating_mode_t omode;	// operating mode
 	logic load;						// 1=load
 	logic loadz;
+	logic cload;					// 1=cload
+	logic cload_tags;
 	logic store;
+	logic cstore;
 	ex_instruction_t op;
 	cpu_types_pkg::pc_address_t pc;
 	memop_t func;					// operation to perform
@@ -1620,6 +1781,7 @@ typedef struct packed {
 	cpu_types_pkg::pregno_t pRc;					// 'C' register for store
 	logic [3:0] cndx;
 	operating_mode_t om;	// operating mode
+	logic ctag;						// capabilities tag
 	logic datav;					// store data is valid
 	logic [511:0] res;		// stores unaligned data as well (must be last field)
 } lsq_entry_t;
@@ -1654,7 +1816,7 @@ begin
 		fnTargetIP = {ip[$bits(cpu_types_pkg::pc_address_t)-1:6]+tgt[$bits(cpu_types_pkg::value_t)-1:4],lo};
 	end
 	else
-		fnTargetIP = ip+{tgt,2'b0}+{tgt,1'b0};	// tgt*6
+		fnTargetIP = ip+{tgt,3'b0};	// tgt*8
 end
 endfunction
 
@@ -1747,9 +1909,9 @@ input instruction_t ir;
 begin
 	case(ir.any.opcode)
 	OP_BSR,OP_DBRA:
-		fnBranchDispSign = ir[39];
+		fnBranchDispSign = ir[63];
 	OP_Bcc,OP_BccU,OP_FBcc:
-		fnBranchDispSign = ir[39] && |ir[38:36];
+		fnBranchDispSign = ir[63];
 	default:	fnBranchDispSign = 1'b0;
 	endcase	
 end
@@ -1761,10 +1923,17 @@ begin
 	case(ir.any.opcode)
 	OP_DBRA,
 	OP_Bcc,OP_BccU,OP_FBcc:
-		fnBranchDisp = {{47{ir[39]}},ir[39:25],ir[12:11]};
-	OP_BSR:	fnBranchDisp = {{33{ir[39]}},ir[39:9]};
+		fnBranchDisp = {{41{ir[63]}},ir[63:44]};
+	OP_BSR:	fnBranchDisp = {{11{ir[63]}},ir[63:11]};
 	default:	fnBranchDisp = 'd0;
 	endcase
+end
+endfunction
+
+function fnIsJsr;
+input instruction_t ir;
+begin
+	fnIsJsr = ir.any.opcode==OP_JSR;
 end
 endfunction
 
@@ -1785,9 +1954,9 @@ endfunction
 function fnIsCallType;
 input instruction_t ir;
 begin
-	if (ir.any.opcode==OP_JSR && ir.jsr.Rt!=6'd0)
+	if (ir.any.opcode==OP_JSR && ir.jsr.Rt.num!=8'd0)
 		fnIsCallType = 1'b1;
-	else if (ir.any.opcode==OP_BSR && ir.bsr.Rt!=6'd0)
+	else if (ir.any.opcode==OP_BSR && ir.bsr.Rt!=3'd0)
 		fnIsCallType = 1'b1;
 	else
 		fnIsCallType = 1'b0;
@@ -1800,7 +1969,7 @@ begin
 	fnIsRet = 1'b0;
 	case(ir.any.opcode)
 	OP_RTD:
-		fnIsRet = ir[12:11]==2'd0;
+		fnIsRet = ir[11:10]==2'd0;
 	default:
 		fnIsRet = 1'b0;
 	endcase
@@ -1813,7 +1982,7 @@ begin
 	fnIsRti = 1'b0;
 	case(ir.any.opcode)
 	OP_RTD:
-		fnIsRti = ir[12:11]==3'd1 || ir[12:11]==3'd2;	
+		fnIsRti = ir[11:10]==3'd1 || ir[11:10]==3'd2;	
 	default:
 		fnIsRti = 1'b0;
 	endcase
@@ -1847,9 +2016,9 @@ end
 endfunction
 
 function fnConstReg;
-input [8:0] Rn;
+input [7:0] Rn;
 begin
-	fnConstReg = Rn==9'd0;	// reg zero
+	fnConstReg = Rn==8'd0;	// reg zero
 end
 endfunction
 
@@ -2153,16 +2322,7 @@ endfunction
 function fnSourceMv;
 input ex_instruction_t ir;
 begin
-	if (ir.ins.any.vec==1'b0)
-		fnSourceMv = 1'b1;
-	else
-		case(ir.ins.any.opcode)
-		OP_DBRA,OP_JSR,OP_BSR,
-		OP_Bcc,OP_BccU,OP_FBcc:
-			fnSourceMv = 1'b1;
-		default:
-			fnSourceMv = 1'b0;		
-		endcase
+	fnSourceMv = 1'b1;
 end
 endfunction
 
@@ -2491,11 +2651,9 @@ begin
 	OP_LDH,OP_STH:
 		fnMemsz = hexi;
 	OP_JSRI:
-		case(ir[18:17])
-		2'd0:	fnMemsz = wyde;
-		2'd1: fnMemsz = tetra;
-		2'd2:	fnMemsz = octa;
-		2'd3:	fnMemsz = hexi;
+		case(ir[31])
+		1'd0: fnMemsz = tetra;
+		1'd1:	fnMemsz = octa;
 		endcase
 	OP_LDX:
 		case(ir.lsn.func.ldn)
@@ -2542,11 +2700,10 @@ begin
 	OP_LDH,OP_STH:
 		fnSel = 16'hFFFF;
 	OP_JSRI:
-		case(ir[18:17])
-		2'd0:	fnSel = 16'h0003;
-		2'd1: fnSel = 16'h000F;
-		2'd2:	fnSel = 16'h00FF;
-		default:	fnSel = 16'hFFFF;
+		case(ir[31])
+		1'd0: fnSel = 16'h000F;
+		1'd1:	fnSel = 16'h00FF;
+		default:	fnSel = 16'h00FF;
 		endcase
 	OP_LDX:
 		case(ir.lsn.func.ldn)
@@ -2609,7 +2766,7 @@ begin
 		endcase
 	end
 	else begin
-		fnPCInc = pc + 4'h5;
+		fnPCInc = pc + 4'h8;
 	end
 end
 endfunction

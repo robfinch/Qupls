@@ -170,7 +170,9 @@ value_t rfo_agen0_argA;
 value_t rfo_agen1_argA;
 value_t rfo_agen0_argM;
 value_t rfo_agen0_argB;
+value_t rfo_agen0_argC;
 value_t rfo_agen1_argB;
+value_t rfo_agen1_argC;
 value_t rfo_agen1_argM;
 value_t rfo_store_argC;
 wire rfo_alu0_argA_ctag;
@@ -218,10 +220,12 @@ pregno_t fcu_argB_reg;
 
 pregno_t agen0_argA_reg;
 pregno_t agen0_argB_reg;
+pregno_t agen0_argC_reg;
 pregno_t agen0_argM_reg;
 
 pregno_t agen1_argA_reg;
 pregno_t agen1_argB_reg;
+pregno_t agen1_argC_reg;
 pregno_t agen1_argM_reg;
 
 checkpt_ndx_t store_argC_cndx;
@@ -850,6 +854,7 @@ assign rf_reg[18] = alu0_argM_reg;
 assign rf_reg[19] = agen0_argM_reg;
 assign rf_reg[20] = fpu0_argM_reg;
 assign rf_reg[21] = fpu0_argT_reg;
+assign rf_reg[22] = agen0_argC_reg;
 
 assign rfo_alu0_argA = rfo[0];
 assign rfo_alu0_argA_ctag = rfo_ctag[0];
@@ -878,6 +883,7 @@ assign rfo_agen0_argA = rfo[10];
 assign rfo_agen0_argA_ctag = rfo_ctag[10];
 assign rfo_agen0_argB = rfo[11];
 assign rfo_agen0_argB_ctag = rfo_ctag[11];
+assign rfo_agen0_argC = rfo[22];
 assign rfo_agen0_argM = rfo[19];
 
 assign rfo_agen1_argA = rfo[12];
@@ -2741,10 +2747,10 @@ else begin
 		Rt3_ren <= Rt3_decv ? Rt3_dec : 10'd0;
 end
 
-always_ff @(posedge clk) if (advance_pipeline_seg2) Rt0_renv <= Rt0_decv;
-always_ff @(posedge clk) if (advance_pipeline_seg2) Rt1_renv <= Rt1_decv;
-always_ff @(posedge clk) if (advance_pipeline_seg2) Rt2_renv <= Rt2_decv;
-always_ff @(posedge clk) if (advance_pipeline_seg2) Rt3_renv <= Rt3_decv;
+always_ff @(posedge clk) if (irst) Rt0_renv <= 1'b0; else if (advance_pipeline_seg2) Rt0_renv <= Rt0_decv;
+always_ff @(posedge clk) if (irst) Rt1_renv <= 1'b0; else if (advance_pipeline_seg2) Rt1_renv <= Rt1_decv;
+always_ff @(posedge clk) if (irst) Rt2_renv <= 1'b0; else if (advance_pipeline_seg2) Rt2_renv <= Rt2_decv;
+always_ff @(posedge clk) if (irst) Rt3_renv <= 1'b0; else if (advance_pipeline_seg2) Rt3_renv <= Rt3_decv;
 
 always_comb Rt0_q1 = Rt0_ren;// & {10{~ins0_ren.decbus.Rtz & ~stomp0}};
 always_comb Rt1_q1 = Rt1_ren;// & {10{~ins1_ren.decbus.Rtz & ~stomp1}};
@@ -3327,8 +3333,8 @@ assign wrport1_Rt = NALU > 1 ? alu1_Rt2 : 9'd0;
 assign wrport1_aRt = NALU > 1 ? alu1_aRt2 : 7'd0;
 assign wrport2_Rt = dram_Rt0;
 assign wrport2_aRt = dram_aRt0;
-assign wrport3_Rt = NFPU > 0 ? fpu0_Rt3 : 11'd0;
-assign wrport3_aRt = NFPU > 0 ? fpu0_aRt3 : 9'd0;
+assign wrport3_Rt = NFPU > 0 ? fpu0_Rt3 : 9'd0;
+assign wrport3_aRt = NFPU > 0 ? fpu0_aRt3 : 7'd0;
 assign wrport4_Rt = NDATA_PORTS > 1 ? dram_Rt1 : 9'd0;
 assign wrport4_aRt = NDATA_PORTS > 1 ? dram_aRt1 : 7'd0;
 assign wrport5_Rt = NFPU > 1 ? fpu1_Rt : 9'd0;
@@ -4040,8 +4046,14 @@ for (g = 0; g < NDATA_PORTS; g = g + 1) begin
 		cpu_request_i[g].sel = dramN_sel[g];
 		cpu_request_i[g].pl = 8'h00;
 		cpu_request_i[g].pri = 4'd7;
-		cpu_request_i[g].cache = fta_bus_pkg::WT_NO_ALLOCATE;
-		dramN_ack[g] = cpu_resp_o[g].ack;
+		if (dramN_load[g]|dramN_cload[g]|dramN_cload_tags) begin
+			cpu_request_i[g].cache = fta_bus_pkg::WT_READ_ALLOCATE;
+			dramN_ack[g] = cpu_resp_o[g].ack & ~cpu_resp_o[g].rty;
+		end
+		else begin
+			cpu_request_i[g].cache = fta_bus_pkg::WT_NO_ALLOCATE;
+			dramN_ack[g] = cpu_resp_o[g].ack;
+		end
 	end
 
 	Qupls_dcache
@@ -4055,7 +4067,7 @@ for (g = 0; g < NDATA_PORTS; g = g + 1) begin
 		.snoop_v(snoop_v),
 		.snoop_cid(snoop_cid),
 		.cache_load(dcache_load[g]),
-		.hit(dhit[g]),
+		.hit(dhit2[g]),
 		.modified(modified[g]),
 		.uway(uway[g]),
 		.cpu_req_i(cpu_request_i2[g]),
@@ -4082,7 +4094,7 @@ for (g = 0; g < NDATA_PORTS; g = g + 1) begin
 		.ftam_resp(ftadm_resp[g]),
 		.ftam_full(ftadm_resp[g].rty),
 		.acr(),
-		.hit(dhit[g]),
+		.hit(dhit2[g]),
 		.modified(modified[g]),
 		.cache_load(dcache_load[g]),
 		.cpu_request_i(cpu_request_i[g]),
@@ -4394,11 +4406,12 @@ if (irst)
 	dram0_done <= FALSE;
 else begin
 	dram0_done <= FALSE;
-	if (!(dram0_store|dram0_cstore|dram0_load|dram0_cload))
+	if (!(dram0_store|dram0_cstore|dram0_load|dram0_cload) && dram0_idv)
 		dram0_done <= TRUE;
-	else if (dram0_store|dram0_cstore ? !robentry_stomp[dram0_id] :
+	else if ((dram0_store|dram0_cstore) ? !robentry_stomp[dram0_id] && dram0_idv :
 		(dram0 == DRAMSLOT_ACTIVE && dram0_ack &&
-			(dram0_hi ? ((dram0_load|dram0_cload) & ~dram0_stomp) : ((dram0_load|dram0_cload|dram0_cload_tags) & ~dram0_more & ~dram0_stomp)))
+			(dram0_hi ? ((dram0_load|dram0_cload) & ~dram0_stomp) :
+			((dram0_load|dram0_cload|dram0_cload_tags) & ~dram0_more & ~dram0_stomp)))
 		)
 		dram0_done <= TRUE;
 end
@@ -4411,7 +4424,7 @@ else begin
 	if (NDATA_PORTS > 1) begin
 		if (!(dram1_store|dram1_cstore|dram1_load|dram1_cload))
 			dram1_done <= TRUE;
-		else if (dram1_store ? !robentry_stomp[dram1_id] :
+		else if (dram1_store ? !robentry_stomp[dram1_id] && dram1_idv :
 			(dram1 == DRAMSLOT_ACTIVE && dram1_ack &&
 				(dram1_hi ? ((dram1_load|dram1_cload) & ~dram1_stomp) : ((dram1_load|dram1_cload|dram1_cload_tags) & ~dram1_more & ~dram1_stomp)))
 			)
@@ -4919,19 +4932,24 @@ Qupls_agen_station uagen0stn
 	.rob(rob[agen0_rndx]),
 	.rfo_argA(rfo_agen0_argA),
 	.rfo_argB(rfo_agen0_argB),
+	.rfo_argC(rfo_agen0_argC),
 	.rfo_argM(rfo_agen0_argM),
 	.argA_reg(agen0_argA_reg),
 	.argB_reg(agen0_argB_reg),
+	.argC_reg(agen0_argC_reg),
 	.id(agen0_id),
 	.argA(agen0_argA),
 	.argB(agen0_argB),
+	.argC(agen0_argC),
 	.argI(agen0_argI),
 	.argM(agen0_argM),
 	.aRa(agen0_aRa),
 	.aRb(agen0_aRb),
+	.aRc(agen0_aRc),
 	.aRt(agen0_aRt),
 	.pRa(agen0_Ra),
 	.pRb(agen0_Rb),
+	.pRc(agen0_Rc),
 	.pRt(agen0_Rt),
 	.pc(agen0_pc),
 	.op(agen0_op),
@@ -4960,19 +4978,24 @@ Qupls_agen_station uagen1stn
 	.rob(rob[agen1_rndx]),
 	.rfo_argA(rfo_agen1_argA),
 	.rfo_argB(rfo_agen1_argB),
+	.rfo_argC('d0),
 	.rfo_argM(rfo_agen1_argM),
 	.argA_reg(agen1_argA_reg),
 	.argB_reg(agen1_argB_reg),
+	.argC_reg('d0),
 	.id(agen1_id),
 	.argA(agen1_argA),
 	.argB(agen1_argB),
+	.argC(),
 	.argI(agen1_argI),
 	.argM(agen1_argM),
 	.aRa(agen1_aRa),
 	.aRb(agen1_aRb),
+	.aRc(),
 	.aRt(agen1_aRt),
 	.pRa(agen1_Ra),
 	.pRb(agen1_Rb),
+	.pRc(),
 	.pRt(agen1_Rt),
 	.pc(agen1_pc),
 	.op(agen1_op),
@@ -5058,6 +5081,7 @@ else begin
 	if (agen0_rndxv && agen0_idle) begin
 		rob[agen0_rndx].argA <= rfo_agen0_argA;
 		rob[agen0_rndx].argB <= rfo_agen0_argB;
+		rob[agen0_rndx].argC <= rfo_agen0_argC;
 	end
 	if (NAGEN > 1) begin
 		if (agen1_rndxv && agen1_idle) begin
@@ -5330,18 +5354,19 @@ else begin
 	// It takes a clock cycle for the register to be read once it is known to be
 	// valid. A flag, load_lsq_argc, is set to delay by a clock. This flag pulses
 	// for only a single clock cycle.
-	/*
+	
 	if (lsq[store_argC_id1.row][store_argC_id1.col].v==VAL && lsq[store_argC_id1.row][store_argC_id1.col].store && lsq[store_argC_id1.row][store_argC_id1.col].datav==INV) begin
-		if (prnvv[16]|store_argC_v)
+		if (prnvv[16])//|store_argC_v)
 			load_lsq_argc <= TRUE;
 	end
-	*/
+	
 	if (lsq[store_argC_id1.row][store_argC_id1.col].v==VAL && lsq[store_argC_id1.row][store_argC_id1.col].store && lsq[store_argC_id1.row][store_argC_id1.col].datav==INV) begin
-//	if (load_lsq_argc) begin
+	if (load_lsq_argc) begin
 		$display("Q+ CPU: LSQ Rc=%h from r%d/%d", rfo_store_argC, store_argC_aReg, store_argC_pReg);
 		lsq[store_argC_id1.row][store_argC_id1.col].res <= rfo_store_argC;
 		lsq[store_argC_id1.row][store_argC_id1.col].ctag <= rfo_store_argC_ctag;
 		lsq[store_argC_id1.row][store_argC_id1.col].datav <= VAL;
+	end
 	end
 
 /*
@@ -5865,29 +5890,28 @@ else begin
 	for (nn = 0; nn < ROB_ENTRIES; nn = nn + 1) begin
 		
 		// ALU0
-		tValidateArg(nn, wrport0_Rt, wrport0_v);
+		tValidateArg(nn, wrport0_Rt, wrport0_v, wrport0_res);
 	    
 		// ALU1
 		if (NALU > 1)
-			tValidateArg(nn, wrport1_Rt, wrport1_v);
+			tValidateArg(nn, wrport1_Rt, wrport1_v, wrport1_res);
 
 		// DRAM0
-		tValidateArg(nn, wrport2_Rt, wrport2_v);
+		tValidateArg(nn, wrport2_Rt, wrport2_v, wrport2_res);
 
 		// FPU0
 		if (NFPU > 0)
-			tValidateArg(nn, wrport3_Rt, wrport3_v);
+			tValidateArg(nn, wrport3_Rt, wrport3_v, wrport3_res);
 
 		// DRAM1
 		if (NDATA_PORTS > 1)
-			tValidateArg(nn, wrport4_Rt, wrport4_v);
+			tValidateArg(nn, wrport4_Rt, wrport4_v, wrport4_res);
 
 		// FPU1
 		if (NFPU > 1)
-			tValidateArg(nn, wrport5_Rt, wrport5_v);
-	  
+			tValidateArg(nn, wrport5_Rt, wrport5_v, wrport5_res);
 	end
-
+	
 	// Move pending to real.	
 	for (nn = 0; nn < ROB_ENTRIES; nn = nn + 1) begin
 		if (rob[nn].argA_vp) begin rob[nn].argA_v <= VAL; rob[nn].argA_vp <= INV; end
@@ -7068,6 +7092,7 @@ task tValidateArg;
 input rob_ndx_t nn;
 input pregno_t Rt;
 input v;
+input value_t val;
 begin
 	if (/*rob[nn].argA_v == INV &&*/ rob[nn].pRa == Rt && rob[nn].v == VAL && v == VAL)
     rob[nn].argA_vp <= VAL;
@@ -7079,6 +7104,18 @@ begin
     rob[nn].argT_vp <= VAL;
 	if (/*rob[nn].argM_v == INV &&*/ rob[nn].pRm == Rt && rob[nn].v == VAL && v == VAL)
     rob[nn].argM_vp <= VAL;
+`ifdef IS_SIM
+	if (/*rob[nn].argA_v == INV &&*/ rob[nn].pRa == Rt && rob[nn].v == VAL && v == VAL)
+    rob[nn].argA <= val;
+	if (/*rob[nn].argB_v == INV &&*/ rob[nn].pRb == Rt && rob[nn].v == VAL && v == VAL)
+    rob[nn].argB <= val;
+	if (/*rob[nn].argC_v == INV &&*/ rob[nn].pRc == Rt && rob[nn].v == VAL && v == VAL)
+    rob[nn].argC <= val;
+	if (/*rob[nn].argT_v == INV &&*/ rob[nn].pRt == Rt && rob[nn].v == VAL && v == VAL)
+    rob[nn].argT <= val;
+	if (/*rob[nn].argM_v == INV &&*/ rob[nn].pRm == Rt && rob[nn].v == VAL && v == VAL)
+    rob[nn].argM <= val;
+`endif    
 end
 endtask	    
 
@@ -7367,6 +7404,7 @@ begin
 	predino = 4'd0;
 	predrndx = 5'd0;
 	store_argC_aReg <= 8'd0;
+	store_argC_cndx <= 4'd0;
 end
 endtask
 

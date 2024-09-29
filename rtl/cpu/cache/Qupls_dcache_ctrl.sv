@@ -57,8 +57,8 @@ localparam LOG_WAYS = $clog2(WAYS)-1;
 input rst_i;
 input clk_i;
 input dce;
-output fta_cmd_request128_t ftam_req;
-input fta_cmd_response128_t ftam_resp;
+output fta_cmd_request256_t ftam_req;
+input fta_cmd_response256_t ftam_resp;
 input ftam_full;
 input [3:0] acr;
 input hit;
@@ -103,13 +103,13 @@ typedef struct packed
 	logic v;
 	logic is_load;
 	logic is_dump;
-	logic [3:0] active;
-	logic [3:0] done;
-	logic [3:0] out;
-	logic [3:0] loaded;
+	logic [1:0] active;
+	logic [1:0] done;
+	logic [1:0] out;
+	logic [1:0] loaded;
 	logic write_allocate;
 	fta_cmd_request512_t cpu_req;
-	fta_cmd_request128_t [3:0] tran_req;
+	fta_cmd_request256_t [1:0] tran_req;
 } req_queue_t;
 
 reg [LOG_WAYS:0] iway;
@@ -219,15 +219,15 @@ end
 // Select a transaction to output
 always_comb
 begin
-	output_tran = 5'd16;
+	output_tran = 5'd8;
 	if (req_state==IDLE) begin
-		for (nn3 = 0; nn3 < 16; nn3 = nn3 + 1) begin
-			if (cpu_req_queue[nn3>>2].active[nn3[1:0]]
-				&& !cpu_req_queue[nn3>>2].out[nn3[1:0]] 
-				&& !cpu_req_queue[nn3>>2].done[nn3[1:0]]
-				&& cpu_req_queue[nn3>>2].tran_req[nn3 & 4'd3].cyc	// there must be a valid tran
+		for (nn3 = 0; nn3 < 8; nn3 = nn3 + 1) begin
+			if (cpu_req_queue[nn3>>1].active[nn3[0]]
+				&& !cpu_req_queue[nn3>>1].out[nn3[0]] 
+				&& !cpu_req_queue[nn3>>1].done[nn3[0]]
+				&& cpu_req_queue[nn3>>1].tran_req[nn3 & 2'd1].cyc	// there must be a valid tran
 	//			&& !tran_load_data[nn3>>2].ack
-				&& output_tran==5'd16)
+				&& output_tran==5'd8)
 				output_tran = nn3;
 		end
 	end
@@ -239,7 +239,7 @@ always_comb
 begin
 	completed_tran = 3'd4;
 	for (nn5 = 0; nn5 < 4; nn5 = nn5 + 1)
-		if (cpu_req_queue[nn5].done==4'b1111)
+		if (cpu_req_queue[nn5].done[1:0]==2'b11)
 			completed_tran = nn5;
 end
 
@@ -264,10 +264,10 @@ end
 
 always_comb
 begin
-	which_tran = 5'd16;
-	for (nn8 = 0; nn8 < 16; nn8 = nn8 + 1)
-		if (cpu_req_queue[nn8[3:2]].tran_req[nn8[1:0]].tid==ftam_resp.tid
-			&& cpu_req_queue[nn8[3:2]].tran_req[nn8[1:0]].cmd!=CMD_NONE)
+	which_tran = 5'd8;
+	for (nn8 = 0; nn8 < 8; nn8 = nn8 + 1)
+		if (cpu_req_queue[nn8[2:1]].tran_req[nn8[0]].tid==ftam_resp.tid
+			&& cpu_req_queue[nn8[2:1]].tran_req[nn8[0]].cmd!=CMD_NONE)
 			which_tran = nn8;
 end
 //			|| (cpu_req_queue[nn8[3:2]].active[nn8[1:0]] && !cpu_req_queue[nn8[3:2]].tran_req[nn8[1:0]].cyc)
@@ -300,7 +300,7 @@ if (rst_i) begin
 	cache_load <= 'd0;
 	load_cache <= 'd0;
 	cache_dump <= 'd0;
-	for (nn = 0; nn < 16; nn = nn + 1) begin
+	for (nn = 0; nn < 8; nn = nn + 1) begin
 		tran_cnt[nn] <= 'd0;
 		tranids[nn] <= 'd0;
 	end
@@ -343,9 +343,9 @@ else begin
 	if (cpu_request_i.cyc && !in_que) begin
 		if (free_queue_entry < 3'd4) begin
 			cpu_req_queue[free_queue_entry[1:0]].v <= 1'b1;
-			cpu_req_queue[free_queue_entry[1:0]].done <= 4'b0000;
-			cpu_req_queue[free_queue_entry[1:0]].active <= 4'b0000;
-			cpu_req_queue[free_queue_entry[1:0]].out <= 4'b0000;
+			cpu_req_queue[free_queue_entry[1:0]].done <= 2'b00;
+			cpu_req_queue[free_queue_entry[1:0]].active <= 2'b00;
+			cpu_req_queue[free_queue_entry[1:0]].out <= 2'b00;
 			cpu_req_queue[free_queue_entry[1:0]].cpu_req <= cpu_request_i;
 		end
 	end
@@ -354,7 +354,7 @@ else begin
 	RESET:
 		begin
 			ftam_req.cmd <= fta_bus_pkg::CMD_DCACHE_LOAD;
-			ftam_req.sz  <= fta_bus_pkg::hexi;
+			ftam_req.sz  <= fta_bus_pkg::dhexi;
 			ftam_req.blen <= 6'd0;
 //			ftam_req.cid <= CID;					// CPU channel id
 			ftam_req.tid.core <= CORENO;
@@ -378,8 +378,8 @@ else begin
 				queued_req <= cpu_req_select[1:0];
 				cpu_request_i2 <= cpu_req_queue[cpu_req_select[1:0]].cpu_req;
 				lasttid2 <= cpu_req_queue[cpu_req_select[1:0]].cpu_req.tid;
-				cpu_req_queue[cpu_req_select[1:0]].active <= 4'b1111;
-				cpu_req_queue[cpu_req_select[1:0]].done <= 4'b0000;
+				cpu_req_queue[cpu_req_select[1:0]].active <= 2'b11;
+				cpu_req_queue[cpu_req_select[1:0]].done <= 2'b00;
 				previous_done <= FALSE;
 				lasttid <= lasttid2;
 			end
@@ -410,7 +410,7 @@ else begin
 		end
 	DUMP1:
 		begin
-			if (dump_cnt==3'd4) begin
+			if (dump_cnt==3'd2) begin
 				wr_cnt <= 4'd0;
 				cache_dump <= 1'b0;
 				req_state <= LOAD1;
@@ -424,13 +424,13 @@ else begin
 					1'b1,
 					!non_cacheable,
 					dump_i.asid,
-					{dump_i.vtag[$bits(fta_address_t)-1:Qupls_cache_pkg::DCacheTagLoBit],dump_cnt[1:0],{Qupls_cache_pkg::DCacheTagLoBit-2{1'h0}}},
-					{dump_i.ptag[$bits(fta_address_t)-1:Qupls_cache_pkg::DCacheTagLoBit],dump_cnt[1:0],{Qupls_cache_pkg::DCacheTagLoBit-2{1'h0}}},
-					16'hFFFF,
-					dump_i.data >> {dump_cnt,7'd0},
+					{dump_i.vtag[$bits(fta_address_t)-1:Qupls_cache_pkg::DCacheTagLoBit],dump_cnt[0],{Qupls_cache_pkg::DCacheTagLoBit-1{1'h0}}},
+					{dump_i.ptag[$bits(fta_address_t)-1:Qupls_cache_pkg::DCacheTagLoBit],dump_cnt[0],{Qupls_cache_pkg::DCacheTagLoBit-1{1'h0}}},
+					32'hFFFFFFFF,
+					dump_i.data >> {dump_cnt,8'd0},
 					CID,
 					tmptid,
-					dump_cnt[1:0],
+					dump_cnt[0],
 					1'b0
 				);
 				dump_cnt <= dump_cnt + 2'd1;
@@ -441,7 +441,7 @@ else begin
 		end
 	LOAD1:
 		begin
-			if (load_cnt==3'd4) begin
+			if (load_cnt==3'd2) begin
 				wr_cnt <= 4'd0;
 				load_cache <= 1'd0;
 				req_state <= RW1;
@@ -455,13 +455,13 @@ else begin
 					1'b0,
 					!non_cacheable,
 					cpu_request_i2.asid,
-					{cpu_request_i2.vadr[$bits(fta_address_t)-1:Qupls_cache_pkg::DCacheTagLoBit],load_cnt[1:0],{Qupls_cache_pkg::DCacheTagLoBit-2{1'h0}}},
-					{cpu_request_i2.padr[$bits(fta_address_t)-1:Qupls_cache_pkg::DCacheTagLoBit],load_cnt[1:0],{Qupls_cache_pkg::DCacheTagLoBit-2{1'h0}}},
-					16'hFFFF,
-					'd0,
+					{cpu_request_i2.vadr[$bits(fta_address_t)-1:Qupls_cache_pkg::DCacheTagLoBit],load_cnt[0],{Qupls_cache_pkg::DCacheTagLoBit-1{1'h0}}},
+					{cpu_request_i2.padr[$bits(fta_address_t)-1:Qupls_cache_pkg::DCacheTagLoBit],load_cnt[0],{Qupls_cache_pkg::DCacheTagLoBit-1{1'h0}}},
+					32'hFFFFFFFF,
+					1'd0,
 					CID,
 					tmptid,
-					load_cnt[1:0],
+					load_cnt[0],
 					1'b1
 				);
 				load_cnt <= load_cnt + 2'd1;
@@ -518,36 +518,34 @@ else begin
 	// Process responses.
 	// Could have a string of ack's coming back due to a string of requests.
 	if (ftam_resp.ack) begin
-		if (which_tran < 5'd16) begin
+		if (which_tran < 5'd8) begin
 			// Got an ack back so the tran no longer needs to be performed.
-			cpu_req_queue[which_tran[3:2]].active[which_tran[1:0]] <= 1'b0;
-			cpu_req_queue[which_tran[3:2]].out[which_tran[1:0]] <= 1'b0;
-			cpu_req_queue[which_tran[3:2]].done[which_tran[1:0]] <= 1'b1;
-			cpu_req_queue[which_tran[3:2]].tran_req[which_tran[1:0]].cmd <= fta_bus_pkg::CMD_NONE;
-			tran_load_data[which_tran[3:2]].ack <= 1'b1;
+			cpu_req_queue[which_tran[2:1]].active[which_tran[0]] <= 1'b0;
+			cpu_req_queue[which_tran[2:1]].out[which_tran[0]] <= 1'b0;
+			cpu_req_queue[which_tran[2:1]].done[which_tran[0]] <= 1'b1;
+			cpu_req_queue[which_tran[2:1]].tran_req[which_tran[0]].cmd <= fta_bus_pkg::CMD_NONE;
+			tran_load_data[which_tran[2:1]].ack <= 1'b1;
 			//tran_req[ftam_resp.tid & 4'hF].cyc <= 1'b0;
 //			tran_load_data[which_tran[3:2]].cid <= ftam_resp.cid;
-			tran_load_data[which_tran[3:2]].tid <= cpu_req_queue[which_tran[3:2]].cpu_req.tid;
-			tran_load_data[which_tran[3:2]].pri <= ftam_resp.pri;
-			tran_load_data[which_tran[3:2]].adr <= {ftam_resp.adr[$bits(fta_address_t)-1:6],6'd0};
-			case(ftam_resp.adr[5:4])
-			2'd0: begin tran_load_data[which_tran[3:2]].dat[127:  0] <= ftam_resp.dat; end
-			2'd1:	begin tran_load_data[which_tran[3:2]].dat[255:128] <= ftam_resp.dat; end
-			2'd2:	begin tran_load_data[which_tran[3:2]].dat[383:256] <= ftam_resp.dat; end
-			2'd3:	begin tran_load_data[which_tran[3:2]].dat[511:384] <= ftam_resp.dat; end
+			tran_load_data[which_tran[2:1]].tid <= cpu_req_queue[which_tran[2:1]].cpu_req.tid;
+			tran_load_data[which_tran[2:1]].pri <= ftam_resp.pri;
+			tran_load_data[which_tran[2:1]].adr <= {ftam_resp.adr[$bits(fta_address_t)-1:6],6'd0};
+			case(ftam_resp.adr[5])
+			1'd0: begin tran_load_data[which_tran[2:1]].dat[255:  0] <= ftam_resp.dat; end
+			1'd1:	begin tran_load_data[which_tran[2:1]].dat[511:256] <= ftam_resp.dat; end
 			endcase
 //			we_r <= ftam_req.we;
-			tran_load_data[which_tran[3:2]].rty <= 1'b0;
-			tran_load_data[which_tran[3:2]].err <= fta_bus_pkg::OKAY;
+			tran_load_data[which_tran[2:1]].rty <= 1'b0;
+			tran_load_data[which_tran[2:1]].err <= fta_bus_pkg::OKAY;
 		end
 	end
 	// Retry or error (only if transaction active)
 	// Abort the memory request. Go back and try again.
 	else if ((ftam_resp.rty|ftam_resp.err) && ftam_resp.tid.tranid==last_out[3:0]) begin
-		if (which_tran < 5'd16) begin
-			tran_load_data[which_tran[3:2]].rty <= ftam_resp.rty;
-			tran_load_data[which_tran[3:2]].err <= ftam_resp.err;
-			tran_load_data[which_tran[3:2]].ack <= 1'b0;
+		if (which_tran < 5'd8) begin
+			tran_load_data[which_tran[2:1]].rty <= ftam_resp.rty;
+			tran_load_data[which_tran[2:1]].err <= ftam_resp.err;
+			tran_load_data[which_tran[2:1]].ack <= 1'b0;
 			//cpu_req_queue[which_tran[3:2]].out[which_tran[3:2]] <= 1'b0;
 			//cpu_req_queue[which_tran[3:2]].tran_req[output_tran[1:0]].cyc <= 1'b1;
 			// If the tran was not output, mark it done.
@@ -566,10 +564,8 @@ else begin
 	if (completed_tran < 3'd4) begin
 		active_req <= completed_tran[1:0];
 		if (cpu_req_queue[completed_tran[1:0]].is_dump) begin
-			cpu_req_queue[completed_tran[1:0]].active[2'd0] <= 1'b1;
-			cpu_req_queue[completed_tran[1:0]].active[2'd1] <= 1'b1;
-			cpu_req_queue[completed_tran[1:0]].active[2'd2] <= 1'b1;
-			cpu_req_queue[completed_tran[1:0]].active[2'd3] <= 1'b1;
+			cpu_req_queue[completed_tran[1:0]].active[1'd0] <= 1'b1;
+			cpu_req_queue[completed_tran[1:0]].active[1'd1] <= 1'b1;
 			cpu_req_queue[completed_tran[1:0]].is_dump <= 1'b0;
 			dump_ack <= 1'b1;
 		end
@@ -587,10 +583,8 @@ else begin
 				cpu_req_queue[completed_tran[1:0]].cpu_req.tid <= 'd0;
 			end
 			else begin
-				cpu_req_queue[completed_tran[1:0]].active[2'd0] <= 1'b1;
-				cpu_req_queue[completed_tran[1:0]].active[2'd1] <= 1'b1;
-				cpu_req_queue[completed_tran[1:0]].active[2'd2] <= 1'b1;
-				cpu_req_queue[completed_tran[1:0]].active[2'd3] <= 1'b1;
+				cpu_req_queue[completed_tran[1:0]].active[1'd0] <= 1'b1;
+				cpu_req_queue[completed_tran[1:0]].active[1'd1] <= 1'b1;
 				cache_load_data.ack <= 1'b0;
 			end
 		end
@@ -605,10 +599,8 @@ else begin
 			cpu_req_queue[completed_tran[1:0]].v <= INV;
 			//cpu_req_queue[completed_tran[1:0]].cpu_req.tid <= {$bits(fta_tranid_t){1'd0}};
 		end
-		cpu_req_queue[completed_tran[1:0]].done[2'd0] <= 1'b0;
-		cpu_req_queue[completed_tran[1:0]].done[2'd1] <= 1'b0;
-		cpu_req_queue[completed_tran[1:0]].done[2'd2] <= 1'b0;
-		cpu_req_queue[completed_tran[1:0]].done[2'd3] <= 1'b0;
+		cpu_req_queue[completed_tran[1:0]].done[1'd0] <= 1'b0;
+		cpu_req_queue[completed_tran[1:0]].done[1'd1] <= 1'b0;
 		previous_done <= 1'b1;
 		iway <= lfsr_o[LOG_WAYS:0];
 	end
@@ -642,19 +634,19 @@ else begin
 	*/
 
 	// Look for outstanding transactions to execute.
-	if (output_tran < 5'd16) begin
+	if (output_tran < 5'd8) begin
 //		if (!ftam_full) begin
-		active_req <= output_tran[3:2];
-		last_out <= cpu_req_queue[output_tran[3:2]].tran_req[output_tran[1:0]].tid.tranid;
-		if (!cpu_req_queue[output_tran[3:2]].tran_req[output_tran[1:0]].we || cpu_req_queue[output_tran[3:2]].tran_req[output_tran[1:0]].cti==fta_bus_pkg::ERC)
-			cpu_req_queue[output_tran[3:2]].out[output_tran[1:0]] <= 1'b1;
+		active_req <= output_tran[2:1];
+		last_out <= cpu_req_queue[output_tran[2:1]].tran_req[output_tran[0]].tid.tranid;
+		if (!cpu_req_queue[output_tran[2:1]].tran_req[output_tran[0]].we || cpu_req_queue[output_tran[2:1]].tran_req[output_tran[0]].cti==fta_bus_pkg::ERC)
+			cpu_req_queue[output_tran[2:1]].out[output_tran[0]] <= 1'b1;
 		else begin
-			cpu_req_queue[output_tran[3:2]].active[output_tran[1:0]] <= 1'b0;
-			cpu_req_queue[output_tran[3:2]].out[output_tran[1:0]] <= 1'b0;
-			cpu_req_queue[output_tran[3:2]].done[output_tran[1:0]] <= 1'b1;
+			cpu_req_queue[output_tran[2:1]].active[output_tran[0]] <= 1'b0;
+			cpu_req_queue[output_tran[2:1]].out[output_tran[0]] <= 1'b0;
+			cpu_req_queue[output_tran[2:1]].done[output_tran[0]] <= 1'b1;
 		end
-		ftam_req <= cpu_req_queue[output_tran[3:2]].tran_req[output_tran[1:0]];
-		cpu_req_queue[output_tran[3:2]].tran_req[output_tran[1:0]].cyc <= 1'b0;
+		ftam_req <= cpu_req_queue[output_tran[2:1]].tran_req[output_tran[0]];
+		cpu_req_queue[output_tran[2:1]].tran_req[output_tran[0]].cyc <= 1'b0;
 //		wait_cnt <= 3'd0;
 //			req_state <= RAND_DELAY;
 //		end
@@ -690,7 +682,7 @@ task tBusClear;
 begin
 	ftam_req.cyc <= 1'b0;
 	ftam_req.stb <= 1'b0;
-	ftam_req.sel <= 16'h0000;
+	ftam_req.sel <= 32'h00000000;
 	ftam_req.we <= 1'b0;
 end
 endtask
@@ -702,11 +694,11 @@ input cache;
 input cpu_types_pkg::asid_t asid;
 input cpu_types_pkg::virtual_address_t vadr;
 input cpu_types_pkg::physical_address_t padr;
-input [15:0] sel;
-input [127:0] data;
+input [31:0] sel;
+input [255:0] data;
 input [3:0] cid;
 input fta_tranid_t tid;
-input [1:0] which;
+input [0:0] which;
 input ack;
 begin
 	tranids[which] <= tid;
@@ -715,7 +707,7 @@ begin
 		cpu_req_queue[queued_req].tran_req[which].om <= om;
 		cpu_req_queue[queued_req].tran_req[which].cmd <= wr ? fta_bus_pkg::CMD_STORE : 
 			cache ? fta_bus_pkg::CMD_DCACHE_LOAD : fta_bus_pkg::CMD_LOADZ;
-		cpu_req_queue[queued_req].tran_req[which].sz <= fta_bus_pkg::hexi;
+		cpu_req_queue[queued_req].tran_req[which].sz <= fta_bus_pkg::dhexi;
 		cpu_req_queue[queued_req].tran_req[which].blen <= 6'd0;
 //		cpu_req_queue[queued_req].tran_req[which].cid <= cid;
 		cpu_req_queue[queued_req].tran_req[which].tid <= tid;
@@ -740,16 +732,19 @@ begin
 //	tran_done[completed_tran] <= 1'b0;
 	tran_load_data[which].adr <= padr;
 	cpu_req_queue[queued_req].write_allocate <= wr & allocate;
-	if (wr && !allocate && cpu_request_i2.cti!=fta_bus_pkg::ERC)
+	if (wr && !allocate && cpu_request_i2.cti!=fta_bus_pkg::ERC) begin
 		cpu_req_queue[queued_req].done[which] <= 1'b1;
-	if (~|cpu_request_i2.sel[15:0])
-		cpu_req_queue[queued_req].done[2'd0] <= 1'b1;
-	if (~|cpu_request_i2.sel[31:16])
-		cpu_req_queue[queued_req].done[2'd1] <= 1'b1;
+	end
+	if (~|cpu_request_i2.sel[31:0])
+		cpu_req_queue[queued_req].done[0] <= 1'b1;
+	if (~|cpu_request_i2.sel[63:32])
+		cpu_req_queue[queued_req].done[1] <= 1'b1;
+	/*
 	if (~|cpu_request_i2.sel[47:32])
 		cpu_req_queue[queued_req].done[2'd2] <= 1'b1;
 	if (~|cpu_request_i2.sel[63:48])
 		cpu_req_queue[queued_req].done[2'd3] <= 1'b1;
+	*/
 end
 endtask
 
@@ -757,54 +752,57 @@ task tAccess;
 input fta_tranid_t tid;
 fta_address_t ta;
 begin
-	if (wr_cnt == 4'd3) begin
+	if (wr_cnt == 4'd1) begin
 		cpu_trans_queued <= 1'b1;
 		loaded <= 1'b0;
 		wr_cnt <= 4'd0;
 	end
 	// Access only the strip of memory requested. It could be an I/O device.
-	ta = {cpu_request_i2.vadr[$bits(fta_address_t)-1:Qupls_cache_pkg::DCacheTagLoBit],wr_cnt[1:0],{Qupls_cache_pkg::DCacheTagLoBit-2{1'h0}}};
+	ta = {cpu_request_i2.vadr[$bits(fta_address_t)-1:Qupls_cache_pkg::DCacheTagLoBit],wr_cnt[0],{Qupls_cache_pkg::DCacheTagLoBit-1{1'h0}}};
 	case(wr_cnt[1:0])
 	2'd0:	
 		begin
 			wr_cnt <= 4'd1;
-			if (|cpu_request_i2.sel[15: 0]) begin
+			if (|cpu_request_i2.sel[31: 0]) begin
 				tAddr(
 					cpu_request_i2.om,
 					cpu_request_i2.we,
 					!non_cacheable,
 					cpu_request_i2.asid,
-					{cpu_request_i2.vadr[$bits(fta_address_t)-1:6],2'd0,4'h0},
-					{cpu_request_i2.padr[$bits(fta_address_t)-1:6],2'd0,4'h0},
-					cpu_request_i2.sel[15:0],
-					cpu_request_i2.dat[127:0],
+					{cpu_request_i2.vadr[$bits(fta_address_t)-1:6],1'd0,5'h0},
+					{cpu_request_i2.padr[$bits(fta_address_t)-1:6],1'd0,5'h0},
+					cpu_request_i2.sel[31:0],
+					cpu_request_i2.dat[255:0],
 					CID,
 					{tmptid.core,tmptid.channel,4'd1},
-					2'd0,
+					1'd0,
 					cpu_request_i2.cti==fta_bus_pkg::ERC || !cpu_request_i2.we
 				);
 //				req_state <= RAND_DELAY;
 			end
 			else begin
-				cpu_req_queue[queued_req].done[2'd0] <= 1'b1;
-				wr_cnt <= 4'd2;
-				if (|cpu_request_i2.sel[31:16]) begin
+				cpu_req_queue[queued_req].done[0] <= 1'b1;
+				wr_cnt <= 4'd0;
+				cpu_trans_queued <= 1'b1;
+				loaded <= 1'b0;
+				if (|cpu_request_i2.sel[63:32]) begin
 					tAddr(
 						cpu_request_i2.om,
 						cpu_request_i2.we,
 						!non_cacheable,
 						cpu_request_i2.asid,
-						{cpu_request_i2.vadr[$bits(fta_address_t)-1:6],2'd1,4'h0},
-						{cpu_request_i2.padr[$bits(fta_address_t)-1:6],2'd1,4'h0},
-						cpu_request_i2.sel[31:16],
-						cpu_request_i2.dat[255:128],
+						{cpu_request_i2.vadr[$bits(fta_address_t)-1:6],1'd1,5'h0},
+						{cpu_request_i2.padr[$bits(fta_address_t)-1:6],1'd1,5'h0},
+						cpu_request_i2.sel[63:32],
+						cpu_request_i2.dat[511:256],
 						CID,
 						{tmptid.core,tmptid.channel,4'd2},
-						2'd1,
+						1'd1,
 						cpu_request_i2.cti==fta_bus_pkg::ERC || !cpu_request_i2.we
 					);
 //					req_state <= RAND_DELAY;
 				end
+				/*
 				else begin
 					cpu_req_queue[queued_req].done[2'd1] <= 1'b1;
 					wr_cnt <= 4'd3;
@@ -851,28 +849,30 @@ begin
 							cpu_req_queue[queued_req].done[2'd3] <= 1'b1;
 					end
 				end
+				*/
 			end
 		end
 	2'd1:	
 		begin
-			wr_cnt <= 4'd2;
-			if (|cpu_request_i2.sel[31:16]) begin
+			wr_cnt <= 4'd0;
+			if (|cpu_request_i2.sel[63:32]) begin
 				tAddr(
 					cpu_request_i2.om,
 					cpu_request_i2.we,
 					!non_cacheable,
 					cpu_request_i2.asid,
-					{cpu_request_i2.vadr[$bits(fta_address_t)-1:6],2'd1,4'h0},
-					{cpu_request_i2.padr[$bits(fta_address_t)-1:6],2'd1,4'h0},
-					cpu_request_i2.sel[31:16],
-					cpu_request_i2.dat[255:128],
+					{cpu_request_i2.vadr[$bits(fta_address_t)-1:6],1'd1,5'h0},
+					{cpu_request_i2.padr[$bits(fta_address_t)-1:6],1'd1,5'h0},
+					cpu_request_i2.sel[63:32],
+					cpu_request_i2.dat[511:256],
 					CID,
 					{tmptid.core,tmptid.channel,4'd5},
-					2'd1,
+					1'd1,
 					cpu_request_i2.cti==fta_bus_pkg::ERC || !cpu_request_i2.we
 				);
 //				req_state <= RAND_DELAY;
 			end
+			/*
 			else begin
 				cpu_req_queue[queued_req].done[2'd1] <= 1'b1;
 				wr_cnt <= 4'd3;
@@ -919,7 +919,9 @@ begin
 						cpu_req_queue[queued_req].done[2'd3] <= 1'b1;
 				end
 			end
+			*/
 		end
+	/*
 	2'd2:
 		begin
 			wr_cnt <= 4'd3;
@@ -991,6 +993,7 @@ begin
 			else
 				cpu_req_queue[queued_req].done[2'd3] <= 1'b1;
 		end
+	*/
 	endcase
 end
 endtask

@@ -933,6 +933,7 @@ end
 
 // RAM gets updated if any port writes, or there is a new checkpoint.
 always_ff @(posedge clk)
+if (en2)
  	cpram_we <= wr0|wr1|wr2|wr3|new_chkpt1;
 
 // Add registers allocated since the branch miss instruction to the list of

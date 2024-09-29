@@ -154,8 +154,8 @@ for (g = 0; g < NPORT/4; g = g + 1) begin
       .ADDR_WIDTH_A(ABIT),           // DECIMAL
       .ADDR_WIDTH_B(ABIT),          // DECIMAL
       .AUTO_SLEEP_TIME(0),            // DECIMAL
-      .BYTE_WRITE_WIDTH_A(16),        // DECIMAL
-      .BYTE_WRITE_WIDTH_B(16),       // DECIMAL
+      .BYTE_WRITE_WIDTH_A(NCHECK),        // DECIMAL
+      .BYTE_WRITE_WIDTH_B(NCHECK),       // DECIMAL
       .CASCADE_HEIGHT(0),             // DECIMAL
       .CLOCKING_MODE("independent_clock"), // String
       .ECC_MODE("no_ecc"),            // String
@@ -163,10 +163,10 @@ for (g = 0; g < NPORT/4; g = g + 1) begin
       .MEMORY_INIT_PARAM(""), // String
       .MEMORY_OPTIMIZATION("true"),   // String
       .MEMORY_PRIMITIVE("auto"),      // String
-      .MEMORY_SIZE(NPREGS*16),        // DECIMAL
+      .MEMORY_SIZE(NPREGS*NCHECK),        // DECIMAL
       .MESSAGE_CONTROL(0),            // DECIMAL
-      .READ_DATA_WIDTH_A(16),        // DECIMAL
-      .READ_DATA_WIDTH_B(16),        // DECIMAL
+      .READ_DATA_WIDTH_A(NCHECK),        // DECIMAL
+      .READ_DATA_WIDTH_B(NCHECK),        // DECIMAL
       .READ_LATENCY_A(1),             // DECIMAL
       .READ_LATENCY_B(1),             // DECIMAL
       .READ_RESET_VALUE_A("0"),       // String
@@ -178,8 +178,8 @@ for (g = 0; g < NPORT/4; g = g + 1) begin
       .USE_MEM_INIT(1),               // DECIMAL
       .USE_MEM_INIT_MMI(0),           // DECIMAL
       .WAKEUP_TIME("disable_sleep"),  // String
-      .WRITE_DATA_WIDTH_A(16),        // DECIMAL
-      .WRITE_DATA_WIDTH_B(16),       // DECIMAL
+      .WRITE_DATA_WIDTH_A(NCHECK),        // DECIMAL
+      .WRITE_DATA_WIDTH_B(NCHECK),       // DECIMAL
       .WRITE_MODE_A("no_change"),     // String
       .WRITE_MODE_B("no_change"),     // String
       .WRITE_PROTECT(1)               // DECIMAL

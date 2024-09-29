@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2022-2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2022-2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -40,8 +40,8 @@ package Qupls_cache_pkg;
 parameter ITAG_BIT = 14;
 parameter DCacheLineWidth = 512;
 localparam DCacheTagLoBit = $clog2((DCacheLineWidth/8));
-parameter ICacheBundleWidth = 128;
-parameter ICacheLineWidth = ICacheBundleWidth*4;
+parameter ICacheBundleWidth = 256;
+parameter ICacheLineWidth = ICacheBundleWidth*2;
 localparam ICacheTagLoBit = $clog2((ICacheLineWidth/8));
 
 `define TAG_ASID $bits(cpu_types_pkg::asid_t) + $bits(cpu_types_pkg::address_t)-ITAG_BIT-1:$bits(cpu_types_pkg::address_t)-ITAG_BIT
