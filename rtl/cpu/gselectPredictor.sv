@@ -80,19 +80,19 @@ initial begin
 	for (n = 0; n < 512; n = n + 1)
 		branch_history_table[n] = 3;
 end
-wire [8:0] bht_wa = {pc[6:0],gbl_branch_hist[2:1]};		// write address
+wire [8:0] bht_wa = {pc[9:3],gbl_branch_hist[2:1]};		// write address
 wire [1:0] bht_xbits = branch_history_table[bht_wa];
 reg [8:0] bht_ra0, bht_ra1, bht_ra2, bht_ra3;
 reg [1:0] bht_ibits0, bht_ibits1, bht_ibits2, bht_ibits3;
 always_comb
 begin
-	bht_ra0 = {ip0[6:0],gbl_branch_hist[2:1]};	// read address (IF stage)
+	bht_ra0 = {ip0[9:3],gbl_branch_hist[2:1]};	// read address (IF stage)
 	bht_ibits0 = branch_history_table[bht_ra0];
-	bht_ra1 = {ip1[6:0],gbl_branch_hist[2:1]};	// read address (IF stage)
+	bht_ra1 = {ip1[9:3],gbl_branch_hist[2:1]};	// read address (IF stage)
 	bht_ibits1 = branch_history_table[bht_ra1];
-	bht_ra2 = {ip2[6:0],gbl_branch_hist[2:1]};	// read address (IF stage)
+	bht_ra2 = {ip2[9:3],gbl_branch_hist[2:1]};	// read address (IF stage)
 	bht_ibits2 = branch_history_table[bht_ra2];
-	bht_ra3 = {ip3[6:0],gbl_branch_hist[2:1]};	// read address (IF stage)
+	bht_ra3 = {ip3[9:3],gbl_branch_hist[2:1]};	// read address (IF stage)
 	bht_ibits3 = branch_history_table[bht_ra3];
 end
 

@@ -48,7 +48,8 @@ module Qupls_sched(rst, clk, alu0_idle, alu1_idle, fpu0_idle ,fpu1_idle, fcu_idl
 	fpu0_rndx, fpu0_rndxv, fpu1_rndx, fpu1_rndxv, fcu_rndx, fcu_rndxv,
 	agen0_rndx, agen1_rndx, cpytgt0, cpytgt1, agen0_rndxv, agen1_rndxv,
 	ratv0_rndxv, ratv1_rndxv, ratv2_rndxv, ratv3_rndxv, 
-	ratv0_rndx, ratv1_rndx, ratv2_rndx, ratv3_rndx 
+	ratv0_rndx, ratv1_rndx, ratv2_rndx, ratv3_rndx,
+	beb, beb_issue, beb_ndx 
 );
 parameter WINDOW_SIZE = SCHED_WINDOW_SIZE;
 input rst;
@@ -95,6 +96,9 @@ output reg ratv0_rndxv;
 output reg ratv1_rndxv;
 output reg ratv2_rndxv;
 output reg ratv3_rndxv;
+input beb_entry_t [BEB_ENTRIES-1:0] beb;
+output [3:0] beb_issue;
+output beb_ndx_t beb_ndx;
 
 reg [1:0] next_robentry_islot_o [0:ROB_ENTRIES-1];
 rob_bitmask_t next_robentry_issue;
@@ -109,6 +113,8 @@ rob_bitmask_t prev_issue2;
 rob_bitmask_t next_ratv_issue;
 rob_bitmask_t ratv_issue;
 rob_bitmask_t ratv_issue2;
+reg [3:0] beb_issue;
+reg [3:0] next_beb_issue;
 
 rob_ndx_t next_alu0_rndx;
 rob_ndx_t next_alu1_rndx;
@@ -136,6 +142,8 @@ reg next_cpytgt0;
 reg next_cpytgt1;
 rob_bitmask_t args_valid;
 rob_bitmask_t could_issue, could_issue_nm;	//nm = no match
+rob_bitmask_t next_could_issue;
+beb_ndx_t next_beb_ndx;
 
 genvar g;
 integer m,n,h,q;
@@ -395,12 +403,8 @@ for (g = 0; g < ROB_ENTRIES; g = g + 1) begin
 				    // could only happen when a new instruction happens to queue in the
 				    // slot just finished executing. The new instruction would be
 				    // incorrectly marked done, inheriting the status of the old one.
-always_ff @(posedge clk)
-if (rst)
-	could_issue[g] = 'd0;
-else
-	could_issue[g] =
-													 rob[g].v
+always_comb
+	next_could_issue[g] = rob[g].v
 //												&& !stomp_i[g]
 												&& !(&rob[g].done)
 												&& (args_valid[g]||(rob[g].decbus.cpytgt && rob[g].argT_v))
@@ -410,6 +414,13 @@ else
 										    && rob[g].pred_bitv
 //												&& !robentry_issue[g]
 												;
+				    
+always_ff @(posedge clk)
+if (rst)
+	could_issue[g] = 'd0;
+else
+	could_issue[g] = next_could_issue[g];
+
 always_ff @(posedge clk)
 if (rst)
 	could_issue_nm[g] = 'd0;
@@ -440,6 +451,7 @@ endgenerate
 // ToDo: fix the memory synchronization, see fp_issue below
 
 reg issued_alu0, issued_alu1, issued_fpu0, issued_fpu1, issued_fcu, no_issue;
+reg issued_beb;
 reg no_issue_fc;
 reg issued_agen0, issued_agen1;
 reg issued_lsq0, issued_lsq1;
@@ -486,6 +498,11 @@ if (rst) begin
 	next_agen1_rndxv = INV;
 	next_cpytgt0 = INV;
 	next_cpytgt1 = INV;
+	issued_beb = 1'b0;
+	next_beb_issue = 4'd0;
+	next_beb_ndx = 2'd0;
+	for (h = 0; h < ROB_ENTRIES; h = h + 1)
+		next_robentry_islot_o[h] = 2'd0;
 	flag = 1'b0;
 end
 else begin
@@ -496,6 +513,7 @@ else begin
 	issued_fcu = 1'd0;
 	issued_agen0 = 1'd0;
 	issued_agen1 = 1'd0;
+	issued_beb = 1'b0;
 	no_issue = 1'd0;
 	no_issue_fc = 1'd0;
 	next_robentry_issue = {$bits(rob_bitmask_t){1'd0}};
@@ -504,6 +522,8 @@ else begin
 	next_robentry_agen_issue = {$bits(rob_bitmask_t){1'd0}};
 	next_multicycle_issue = {$bits(rob_bitmask_t){1'd0}};
 	next_prev_issue = prev_issue;
+	next_beb_issue = 4'd0;
+	next_beb_ndx = 2'd0;
 	next_alu0_rndx = 5'd0;
 	next_alu1_rndx = 5'd0;
 	next_fpu0_rndx = 5'd0;
@@ -520,11 +540,13 @@ else begin
 	next_agen1_rndxv = INV;
 	next_cpytgt0 = INV;
 	next_cpytgt1 = INV;
+	for (h = 0; h < ROB_ENTRIES; h = h + 1)
+		next_robentry_islot_o[h] = 2'd0;
 	flag = 1'b0;
 	for (h = 0; h < ROB_ENTRIES; h = h + 1)
 		next_robentry_islot_o[h] = robentry_islot_i[h];
 	for (hd = 0; hd < WINDOW_SIZE; hd = hd + 1) begin
-		flag = could_issue[heads[hd]];
+		flag = could_issue[heads[hd]] & next_could_issue[heads[hd]];
 		// Search for a preceding sync instruction. If there is one then do
 		// not issue.
 		if (flag) begin
@@ -641,7 +663,7 @@ else begin
 			  	next_fcu_rndxv = 1'b1;
 				end
 
-				if (!issued_agen0 && agen0_idle &&
+				if (!issued_agen0 && !issued_beb && agen0_idle &&
 					!prev_issue[heads[hd]] &&
 //					!prev_issue2[heads[hd]] &&
 					!robentry_agen_issue[heads[hd]] &&
@@ -678,6 +700,16 @@ else begin
 							issued_agen1 = 1'b1;
 							next_agen1_rndx = heads[hd];
 							next_agen1_rndxv = 1'b1;
+						end
+					end
+				end
+				// Background execution buffer issue
+				if (!issued_beb && !issued_agen0 && agen0_idle) begin
+					if (!beb_issue[hd % BEB_ENTRIES]) begin
+						if (!beb[hd % BEB_ENTRIES].done && beb[hd % BEB_ENTRIES].v) begin
+							issued_beb = 1'b1;
+							next_beb_issue[hd] = 1'b1;
+							next_beb_ndx = hd;
 						end
 					end
 				end

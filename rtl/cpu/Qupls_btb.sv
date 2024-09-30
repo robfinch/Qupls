@@ -31,15 +31,16 @@
 // CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-//                                                                          
+//
+// 6500 LUTs / 350 FFs / 8 BRAMs                                                                          
 // ============================================================================
 
 import QuplsPkg::*;
 
 module Qupls_btb(rst, clk, en, clk_en, rclk, micro_code_active, block_header,
 	igrp, length_byte,
-	pc, pc0, pc1, pc2, pc3, pc4, next_pc,
-	takb, do_bsr, bsr_tgt, pe_bsdone,
+	pc, pc0, pc1, pc2, pc3, pc4, next_pc, p_override, po_bno,
+	takb0, takb1, takb2, takb3, do_bsr, bsr_tgt, pe_bsdone,
 	branchmiss, branch_state, misspc,
 	mip0v, mip1v, mip2v, mip3v,
 	commit_pc0, commit_brtgt0, commit_takb0, commit_grp0,
@@ -65,7 +66,12 @@ input cpu_types_pkg::pc_address_ex_t pc2;
 input cpu_types_pkg::pc_address_ex_t pc3;
 input cpu_types_pkg::pc_address_ex_t pc4;
 output cpu_types_pkg::pc_address_ex_t next_pc;
-output reg takb;
+input [3:0] p_override;
+input [4:0] po_bno [0:3];
+output reg takb0;
+output reg takb1;
+output reg takb2;
+output reg takb3;
 input mip0v;
 input mip1v;
 input mip2v;
@@ -458,6 +464,10 @@ if (rst) begin
 		next_pcs[nn].bno_f = 6'd0;
 		next_pcs[nn].pc = RSTPC;
 	end
+	takb0 = 1'b0;
+	takb1 = 1'b0;
+	takb2 = 1'b0;
+	takb3 = 1'b0;
 end
 else begin
 	next_act_bno = is_alt ? prev_act_bno : act_bno;
@@ -465,12 +475,25 @@ else begin
 	next_bno_bitmap = bno_bitmap;
 	next_bno_bitmap[0] = 1'b1;
 	next_is_alt = 1'b0;
+	takb0 = 1'b0;
+	takb1 = 1'b0;
+	takb2 = 1'b0;
+	takb3 = 1'b0;
+	/* Under construction
+	if (p_override[0])
+		next_bno_bitmap[po_bno[0]] = 1'b0;
+	if (p_override[1])
+		next_bno_bitmap[po_bno[1]] = 1'b0;
+	if (p_override[2])
+		next_bno_bitmap[po_bno[2]] = 1'b0;
+	if (p_override[3])
+		next_bno_bitmap[po_bno[3]] = 1'b0;
+	*/
 	// On a branch miss the misspc will have the correct block so the
 	// cache line can be fetched, but the group will not be valid yet.
 	// The group is loaded at state 1 below.
 	if (do_bsr) begin
 		next_pcs[bsr_tgt.bno_t].pc = bsr_tgt.pc;
-		takb = 1'b1;
 	end
 	else if (branch_state==BS_DONE) begin
 		next_act_bno = misspc.bno_t;
@@ -480,7 +503,6 @@ else begin
 		next_pcs[next_act_bno].bno_f = 6'd0;
 		// The branch resolved, so free up alternate PC stream
 		next_bno_bitmap[misspc.bno_f] = 1'b0;
-		takb = 1'b1;
 	end
 	else if (en && pc0.pc==doutb0.pc && doutb0.takb) begin
 		next_act_bno = ffz0;
@@ -494,7 +516,7 @@ else begin
 		next_pcs[ffz1].pc = pc0 + 5'd8;
 		next_pcs[ffz1].bno_t = ffz1;
 		next_pcs[ffz1].bno_f = 6'd0;
-		takb = 1'b1;
+		takb0 = 1'b1;
 	end
 	else if (en && pc1.pc==doutb1.pc && doutb1.takb) begin
 		next_act_bno = ffz0;
@@ -507,7 +529,7 @@ else begin
 		next_pcs[ffz1].pc = pc1 + 5'd8;
 		next_pcs[ffz1].bno_t = ffz1;
 		next_pcs[ffz1].bno_f = 6'd0;
-		takb = 1'b1;
+		takb1 = 1'b1;
 	end
 	else if (en && pc2.pc==doutb2.pc && doutb2.takb) begin
 		next_act_bno = ffz0;
@@ -520,7 +542,7 @@ else begin
 		next_pcs[ffz1].pc = pc2 + 5'd8;
 		next_pcs[ffz1].bno_t = ffz1;
 		next_pcs[ffz1].bno_f = 6'd0;
-		takb = 1'b1;
+		takb2 = 1'b1;
 	end
 	else if (en && pc3.pc==doutb3.pc && doutb3.takb) begin
 		next_act_bno = ffz0;
@@ -533,7 +555,7 @@ else begin
 		next_pcs[ffz1].pc = pc3 + 5'd8;
 		next_pcs[ffz1].bno_t = ffz1;
 		next_pcs[ffz1].bno_f = 6'd0;
-		takb = 1'b1;
+		takb3 = 1'b1;
 	end
 	else begin
 		if (SUPPORT_IBH) begin
@@ -588,7 +610,6 @@ else begin
 				endcase
 			end
 		end
-		takb = 1'b0;
 		// If stuck on the same PC, fetch alternate path
 		if (next_pcs[next_act_bno]==pc) begin
 			next_is_alt = 1'b1;

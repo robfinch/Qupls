@@ -44,7 +44,7 @@ import QuplsPkg::*;
 import Qupls_cache_pkg::*;
 
 module Qupls_dcache_ctrl(rst_i, clk_i, dce, ftam_req, ftam_resp, ftam_full, acr, hit, modified,
-	cache_load, 
+	cache_load, cpu_request_cancel, cpu_request_rndx,
 	cpu_request_i, cpu_request_busy_o,
 	cpu_request_i2, data_to_cache_o, response_from_cache_i, wr, uway, way,
 	dump, dump_i, dump_ack, snoop_adr, snoop_v, snoop_cid);
@@ -64,6 +64,8 @@ input [3:0] acr;
 input hit;
 input modified;
 output reg cache_load;
+input rob_bitmask_t cpu_request_cancel;
+input rob_ndx_t cpu_request_rndx;
 input fta_cmd_request512_t cpu_request_i;
 output reg cpu_request_busy_o;
 output fta_cmd_request512_t cpu_request_i2;
@@ -80,7 +82,7 @@ input snoop_v;
 input [5:0] snoop_cid;
 
 genvar g;
-integer nn,nn1,cpu_req_select,nn3,output_tran,nn5,free_queue_entry,nn7,nn8,nn9;
+integer nn,nn1,cpu_req_select,nn3,output_tran,nn5,free_queue_entry,nn7,nn8,nn9,nn10,nn11;
 
 typedef enum logic [3:0] {
 	RESET = 0,
@@ -108,6 +110,7 @@ typedef struct packed
 	logic [1:0] out;
 	logic [1:0] loaded;
 	logic write_allocate;
+	rob_ndx_t rndx;
 	fta_cmd_request512_t cpu_req;
 	fta_cmd_request256_t [1:0] tran_req;
 } req_queue_t;
@@ -347,6 +350,22 @@ else begin
 			cpu_req_queue[free_queue_entry[1:0]].active <= 2'b00;
 			cpu_req_queue[free_queue_entry[1:0]].out <= 2'b00;
 			cpu_req_queue[free_queue_entry[1:0]].cpu_req <= cpu_request_i;
+			cpu_req_queue[free_queue_entry[1:0]].rndx <= cpu_request_rndx;
+		end
+	end
+
+	if (|cpu_request_cancel) begin
+		for (nn10 = 0; nn10 < ROB_ENTRIES; nn10 = nn10 + 1) begin
+			if (cpu_request_cancel[nn10]) begin
+				for (nn11 = 0; nn11 < 3'd4; nn11 = nn11 + 1) begin
+					if (cpu_req_queue[nn11].rndx==nn10) begin
+						cpu_req_queue[nn11].v <= INV;
+						cpu_req_queue[nn11].done <= 2'b11;
+						cpu_req_queue[nn11].out <= 2'b00;
+						cpu_req_queue[nn11].active <= 2'b00;
+					end
+				end
+			end
 		end
 	end
 
@@ -373,15 +392,17 @@ else begin
 		end
 	IDLE:
 		begin
-			// Select a CPU request to process.
-			if (cpu_req_select < 3'd4 && cpu_req_queue[cpu_req_select[1:0]].cpu_req.tid != lasttid2) begin
-				queued_req <= cpu_req_select[1:0];
-				cpu_request_i2 <= cpu_req_queue[cpu_req_select[1:0]].cpu_req;
-				lasttid2 <= cpu_req_queue[cpu_req_select[1:0]].cpu_req.tid;
-				cpu_req_queue[cpu_req_select[1:0]].active <= 2'b11;
-				cpu_req_queue[cpu_req_select[1:0]].done <= 2'b00;
-				previous_done <= FALSE;
-				lasttid <= lasttid2;
+			if (~|cpu_request_cancel) begin
+				// Select a CPU request to process.
+				if (cpu_req_select < 3'd4 && cpu_req_queue[cpu_req_select[1:0]].cpu_req.tid != lasttid2) begin
+					queued_req <= cpu_req_select[1:0];
+					cpu_request_i2 <= cpu_req_queue[cpu_req_select[1:0]].cpu_req;
+					lasttid2 <= cpu_req_queue[cpu_req_select[1:0]].cpu_req.tid;
+					cpu_req_queue[cpu_req_select[1:0]].active <= 2'b11;
+					cpu_req_queue[cpu_req_select[1:0]].done <= 2'b00;
+					previous_done <= FALSE;
+					lasttid <= lasttid2;
+				end
 			end
 			//tBusClear();
 			wr_cnt <= 4'd0;

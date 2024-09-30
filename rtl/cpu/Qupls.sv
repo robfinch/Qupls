@@ -710,6 +710,7 @@ memsz_t dramN_memsz;
 reg [NDATA_PORTS-1:0] dramN_ctago;
 wire [NDATA_PORTS-1:0] dramN_ctagi;
 wire [15:0] dramN_tagsi [0:NDATA_PORTS-1];
+rob_ndx_t [NDATA_PORTS-1:0] dramN_id;
 
 reg [2:0] cmtcnt;
 pc_address_t commit_pc0, commit_pc1, commit_pc2, commit_pc3;
@@ -919,7 +920,8 @@ mc_address_t mcip0_mux, mcip1_mux,mcip2_mux,mcip3_mux;
 mc_address_t mcip0_ren, mcip1_ren,mcip2_ren,mcip3_ren;
 mc_address_t mcip0_que, mcip1_que,mcip2_que,mcip3_que;
 reg [2:0] grp_d, grp_q, grp_r;
-wire ntakb,ptakb;
+wire [3:0] ntakb;
+wire ptakb;
 reg invce = 1'b0;
 reg dc_invline = 1'b0;
 reg dc_invall = 1'b0;
@@ -958,6 +960,10 @@ wire pt0_dec, pt1_dec, pt2_dec, pt3_dec;		// predict taken branches
 reg pt0_r, pt1_r, pt2_r, pt3_r;
 reg pt0_q, pt1_q, pt2_q, pt3_q;
 reg regs;
+wire [3:0] ntakb;
+reg [3:0] takb_pc;
+reg [3:0] takb_f;
+reg [3:0] takb_fet;
 
 reg branchmiss, branchmiss_next;
 reg branchmiss_h;
@@ -1162,6 +1168,9 @@ address_t ic_miss_adrd;
 always_ff @(posedge clk)
 	ic_miss_adrd <= ic_miss_adr;
 
+wire [3:0] p_override;
+wire [4:0] po_bno [0:3];
+
 Qupls_icache_ctrl
 #(.CORENO(CORENO),.CID(0))
 icctrl1
@@ -1209,7 +1218,12 @@ Qupls_btb ubtb1
 	.pc3(pc3),
 	.pc4(XWID==2 ? pc2:XWID==3 ? pc3:pc4),
 	.next_pc(next_pc),
-	.takb(ntakb),
+	.p_override(p_override),
+	.po_bno(po_bno),
+	.takb0(ntakb[0]),
+	.takb1(ntakb[1]),
+	.takb2(ntakb[2]),
+	.takb3(ntakb[3]),
 	.branchmiss(branch_state == BS_CHKPT_RESTORED),
 	.branch_state(branch_state),
 	.misspc(misspc),
@@ -1250,14 +1264,14 @@ gselectPredictor ugsp1
 	.takb1(commit_takb1),
 	.takb2(commit_takb2),
 	.takb3(commit_takb3),
-	.ip0(pc0_fet),
-	.predict_taken0(pt0_dec),
-	.ip1(pc1_fet),
-	.predict_taken1(pt1_dec),
-	.ip2(pc2_fet),
-	.predict_taken2(pt2_dec),
-	.ip3(pc3_fet),
-	.predict_taken3(pt3_dec)
+	.ip0(pc0_f),
+	.predict_taken0(pt0_mux),
+	.ip1(pc1_f1),
+	.predict_taken1(pt1_mux),
+	.ip2(pc2_f2),
+	.predict_taken2(pt2_mux),
+	.ip3(pc3_f3),
+	.predict_taken3(pt3_mux)
 );
 
 wire micro_code_active_v;
@@ -2076,6 +2090,15 @@ begin
 	pc0_f3.pc = pc0_f.pc + 6'd24;
 end
 
+always_ff @(posedge clk)
+	takb_pc = ntakb;
+always_ff @(posedge clk)
+if (advance_pipeline)
+	takb_f <= takb_pc;
+always_ff @(posedge clk)
+if (advance_pipeline)
+	takb_fet <= takb_f;
+	
 // Latency of one.
 // pt0_dec, etc. should be in line with ins0_dec, etc
 Qupls_pipeline_seg1 uiext1
@@ -2101,6 +2124,10 @@ Qupls_pipeline_seg1 uiext1
 	.branchmiss(branch_state > BS_STATE3),
 	.mc_offs(32'd0),//mc_offs),
 	.mc_adr(mc_adr),
+	.takb_fet(takb_fet),
+	.pt_mux(pt_mux),
+	.p_override(p_override),
+	.po_bno(po_bno),
 	.pc0_i(pc0_f),
 	.pc1_i(pc0_f1),
 	.pc2_i(pc0_f2),
@@ -2596,11 +2623,23 @@ wire stomp1b_r = branch_state > BS_STATE3 && misspc > pc1_r;
 wire stomp2b_r = branch_state > BS_STATE3 && misspc > pc2_r;
 wire stomp3b_r = branch_state > BS_STATE3 && misspc > pc3_r;
 wire stomp0_r = /*~qd_r[0]||stomp_ren||stomp0b_r*/FALSE;
-wire stomp1_r = /*~qd_r[1]||stomp_ren||stomp1b_r||*/pt0_r||XWID < 2;
-wire stomp2_r = /*~qd_r[2]||stomp_ren||stomp2b_r||*/pt0_r||pt1_r||XWID < 3;
-wire stomp3_r = /*~qd_r[3]||stomp_ren||stomp3b_r||*/pt0_r||pt1_r||pt2_r||XWID < 4;
-always_ff @(posedge clk) if (advance_pipeline_seg2) stomp0_q <= stomp0_r;
-always_ff @(posedge clk) if (advance_pipeline_seg2) stomp1_q <= stomp1_r;
+wire stomp1_r = /*~qd_r[1]||stomp_ren||stomp1b_r||*/FALSE;//pt0_r||XWID < 2;
+wire stomp2_r = /*~qd_r[2]||stomp_ren||stomp2b_r||*/FALSE;//pt0_r||pt1_r||XWID < 3;
+wire stomp3_r = /*~qd_r[3]||stomp_ren||stomp3b_r||*/FALSE;//pt0_r||pt1_r||pt2_r||XWID < 4;
+always_ff @(posedge clk)
+if (irst)
+	stomp0_q <= FALSE;
+else begin
+	if (advance_pipeline_seg2)
+		stomp0_q <= stomp0_r;
+end
+always_ff @(posedge clk)
+if (irst)
+	stomp1_q <= FALSE;
+else begin
+	if (advance_pipeline_seg2)
+		stomp1_q <= stomp1_r;
+end
 always_ff @(posedge clk) if (advance_pipeline_seg2) stomp2_q <= stomp2_r;
 always_ff @(posedge clk) if (advance_pipeline_seg2) stomp3_q <= stomp3_r;
 assign stomp0 = (stomp0_q|stomp_que|stomp_quem);
@@ -2917,26 +2956,26 @@ Qupls_rat #(.NPORT(24)) urat1
 	.wrb_cp(cndx),
 	.wrc_cp(cndx),
 	.wrd_cp(cndx),
-	.cmtbanka(alu0_bank),
-	.cmtbankb(alu1_bank),
-	.cmtbankc(dram0_bank),
-	.cmtbankd(fpu0_bank),
-	.cmtav(alu0_done|alu0_stomp),
-	.cmtbv(alu1_done|alu1_stomp),
-	.cmtcv(dram0_done|dram0_stomp),
-	.cmtdv(fpu0_done1|fpu0_stomp),
-	.cmtaa(alu0_aRt),
-	.cmtba(alu1_aRt),
-	.cmtca(dram0_aRt),
-	.cmtda(fpu0_aRt),
-	.cmtap(alu0_Rt),
-	.cmtbp(alu1_Rt),
-	.cmtcp(dram0_Rt),
-	.cmtdp(fpu0_Rt),
-	.cmta_cp(alu0_cp),
-	.cmtb_cp(alu1_cp),
-	.cmtc_cp(dram0_cp),
-	.cmtd_cp(fpu0_cp),
+	.cmtbanka(1'b0),
+	.cmtbankb(1'b0),
+	.cmtbankc(1'b0),
+	.cmtbankd(1'b0),
+	.cmtav(do_commit),
+	.cmtbv(do_commit && cmtcnt > 3'd1),
+	.cmtcv(do_commit && cmtcnt > 3'd2),
+	.cmtdv(do_commit && cmtcnt > 3'd3),
+	.cmtaa(rob[head0].op.aRt),
+	.cmtba(rob[head1].op.aRt),
+	.cmtca(rob[head2].op.aRt),
+	.cmtda(rob[head3].op.aRt),
+	.cmtap(rob[head0].pRt),
+	.cmtbp(rob[head1].pRt),
+	.cmtcp(rob[head2].pRt),
+	.cmtdp(rob[head3].pRt),
+	.cmta_cp(rob[head0].cndx),
+	.cmtb_cp(rob[head1].cndx),
+	.cmtc_cp(rob[head2].cndx),
+	.cmtd_cp(rob[head3].cndx),
 	.cmtbr(cmtbr),
 	.restore_list(restore_list),
 	.restored(restored),
@@ -3729,6 +3768,7 @@ Qupls_mem_sched umems1
 	.clk(clk),
 	.head(head0),
 	.lsq_head(lsq_head),
+	.cancel(cpu_request_cancel),
 	.robentry_stomp(robentry_stomp),
 	.rob(rob),
 	.lsq(lsq),
@@ -4004,6 +4044,9 @@ fta_cmd_request512_t [NDATA_PORTS-1:0] cpu_request_i;
 fta_cmd_request512_t [NDATA_PORTS-1:0] cpu_request_i2;
 fta_cmd_response512_t [NDATA_PORTS-1:0] cpu_resp_o;
 fta_cmd_response512_t [NDATA_PORTS-1:0] update_data_i;
+rob_ndx_t [NDATA_PORTS-1:0] cpu_request_rndx;
+rob_bitmask_t cpu_request_cancel;
+
 wire [NDATA_PORTS-1:0] dump;
 wire DCacheLine dump_o[0:NDATA_PORTS-1];
 wire [NDATA_PORTS-1:0] dump_ack;
@@ -4026,6 +4069,7 @@ for (g = 0; g < NDATA_PORTS; g = g + 1) begin
 	always_comb
 	begin
 //		cpu_request_i[g].cid = g + 1;
+		cpu_request_rndx[g] = dramN_id[g];
 		cpu_request_i[g].tid = dramN_tid[g];
 		cpu_request_i[g].om = fta_bus_pkg::MACHINE;
 		cpu_request_i[g].cmd = dramN_store[g] ? fta_bus_pkg::CMD_STORE : dramN_loadz[g] ? fta_bus_pkg::CMD_LOADZ :
@@ -4096,6 +4140,8 @@ for (g = 0; g < NDATA_PORTS; g = g + 1) begin
 		.hit(dhit2[g]),
 		.modified(modified[g]),
 		.cache_load(dcache_load[g]),
+		.cpu_request_cancel(cpu_request_cancel),
+		.cpu_request_rndx(cpu_request_rndx[g]),
 		.cpu_request_i(cpu_request_i[g]),
 		.cpu_request_i2(cpu_request_i2[g]),
 		.data_to_cache_o(update_data_i[g]),
@@ -4133,6 +4179,7 @@ endgenerate
 always_comb
 begin
 	dramN[0] = dram0;
+	dramN_id[0] = dram0_id;
 	dramN_paddr[0] = dram0_paddr;
 	dramN_vaddr[0] = dram0_vaddr;
 	dramN_data[0] = dram0_data[511:0];
@@ -4152,6 +4199,7 @@ begin
 
 	if (NDATA_PORTS > 1) begin
 		dramN[1] = dram1;
+		dramN_id[1] = dram1_id;
 		dramN_vaddr[1] = dram1_vaddr;
 		dramN_paddr[1] = dram1_paddr;
 		dramN_data[1] = dram1_data[511:0];
@@ -5098,6 +5146,8 @@ else begin
 
 	if (!rstcnt[2])
 		rstcnt <= rstcnt + 1;
+
+	cpu_request_cancel <= {ROB_ENTRIES{1'b0}};
 	alu0_done <= FALSE;
 	alu1_done <= FALSE;
 	if (fpu0_done1)
@@ -5970,6 +6020,18 @@ else begin
 // -----------------------------------------------------------------------------
 // update the memory queues and put data out on bus if appropriate
 //
+	if (dram0_done) begin
+		dram0_load <= FALSE;
+		dram0_loadz <= FALSE;
+		dram0_cload <= FALSE;
+	end
+	if (NDATA_PORTS > 1) begin
+		if (dram1_done) begin
+			dram1_load <= FALSE;
+			dram1_loadz <= FALSE;
+			dram1_cload <= FALSE;
+		end
+	end
 
 	// Bus timeout logic.
 	// If the memory access has taken too long, then it is retried. This applies
@@ -6238,8 +6300,18 @@ else begin
   for (n3 = 0; n3 < ROB_ENTRIES; n3 = n3 + 1) begin
 		if (robentry_stomp[n3] && rob[n3].lsqndx==mem0_lsndx && lsq[mem0_lsndx.row][mem0_lsndx.col].v)
 			dram0_stomp <= 1'b1;
-		if (robentry_stomp[n3] && rob[n3].lsqndx==mem1_lsndx && lsq[mem1_lsndx.row][mem1_lsndx.col].v)
-			dram1_stomp <= 1'b1;
+		if (!rob[n3].lsq && dram0_id==n3 && dram0_idv) begin
+			dram0_stomp <= TRUE;
+			dram0_idv <= INV;
+		end
+		if (NDATA_PORTS > 1) begin
+			if (robentry_stomp[n3] && rob[n3].lsqndx==mem1_lsndx && lsq[mem1_lsndx.row][mem1_lsndx.col].v)
+				dram1_stomp <= 1'b1;
+			if (!rob[n3].lsq && dram1_id==n3 && dram1_idv) begin
+				dram1_stomp <= TRUE;
+				dram1_idv <= INV;
+			end
+		end
 	end
 
 // ----------------------------------------------------------------------------
@@ -6461,10 +6533,16 @@ else begin
 	if (robentry_stomp[agen0_id]) begin// || !rob[agen0_id].v) begin
 		agen0_idle <= TRUE;
 		agen0_idv <= INV;
+		if (dram0_id==agen0_id)
+			dram0_stomp <= TRUE;
 	end
-	if (robentry_stomp[agen1_id]) begin// || !rob[agen1_id].v) begin
-		agen1_idle <= TRUE;
-		agen1_idv <= INV;
+	if (NDATA_PORTS > 1) begin
+		if (robentry_stomp[agen1_id]) begin// || !rob[agen1_id].v) begin
+			agen1_idle <= TRUE;
+			agen1_idv <= INV;
+			if (dram1_id==agen1_id)
+				dram1_stomp <= TRUE;
+		end
 	end
 	// Terminate FCU operation on stomp.
 	if (robentry_stomp[fcu_id] & fcu_idv) begin
@@ -6717,7 +6795,7 @@ always_ff @(posedge clk) begin: clock_n_debug
 	$display("\n\n\n\n\n\n\n\n");
 	$display("TIME %0d", $time);
 	$display("----- Fetch %c -----", ihit_f ? "h" : " ");
-	$display("i$ pc input:  [%h]%h #", pc.bno_t,pc.pc);
+	$display("i$ pc input:  %h.%h #", pc.bno_t,pc.pc);
 	$display("cacheL: %x", ic_line[511:0]);
 	$display("cacheH: %x", ic_line[1023:512]);
 	$display("i$ pc output: %h %s#", pc0_f, stomp_fet ? stompstr:no_stompstr);
@@ -6779,7 +6857,7 @@ always_ff @(posedge clk) begin: clock_n_debug
 	$display("pc 3: %x.%x ins=%x", ins0_que.pc.pc, ins3_que.mcip, ins3_que.ins[47:0]);
 	$display("----- Queue %c%c ----- %h", ihit_q ? "h":" ", micro_code_active_q ? "a": " ", qd);
 	for (i = 0; i < ROB_ENTRIES; i = i + 1) begin
-    $display("%c%c%c sn:%h %d: %c%c%c%c%c%c %c %c%c %d %c %c%d Rt%d/%d=%h %h Rs%d/%d %h%c Ra%d/%d=%h %c Rb%d/%d=%h %c Rc%d/%d=%h %c I=%h [%h]%h.%h cp:%h ins=%h #",
+    $display("%c%c%c sn:%h %d: %c%c%c%c%c%c %c %c%c %d %c %c%d Rt%d/%d=%h %h Rs%d/%d %h%c Ra%d/%d=%h %c Rb%d/%d=%h %c Rc%d/%d=%h %c I=%h %h.%h.%h cp:%h ins=%h #",
 			(i[4:0]==head0)?67:46, (i[4:0]==tail0)?81:46, rob[i].rstp ? "r" : " ", rob[i].sn, i[5:0],
 			rob[i].v?"v":"-", rob[i].done[0]?"d":"-", rob[i].done[1]?"d":"-", rob[i].out[0]?"o":"-", rob[i].out[1]?"o":"-", rob[i].bt?"t":"-", rob_memissue[i]?"i":"-", rob[i].lsq?"q":"-", (robentry_issue[i]|robentry_agen_issue[i])?"i":"-",
 			robentry_islot[i], robentry_stomp[i]?"s":"-",
@@ -7174,6 +7252,17 @@ begin
 				lsq[n18r][n18c].datav <= INV;
 				lsq[n18r][n18c].store <= FALSE;
 				lsq[n18r][n18c].load <= FALSE;
+				if (agen0_id==lsq[n18r][n18c].rndx)
+					agen0_idle <= TRUE;
+				if (NAGEN > 1 && agen1_id==lsq[n18r][n18c].rndx)
+					agen1_idle <= TRUE;
+				// It is possible that a load operation already in progress got
+				// cancelled.
+				if (dram0_id==lsq[n18r][n18c].rndx)
+					dram0_stomp <= TRUE;
+				if (NDATA_PORTS > 1 && dram0_id==lsq[n18r][n18c].rndx)
+					dram1_stomp <= TRUE;
+				cpu_request_cancel[lsq[n18r][n18c].rndx] <= 1'b1;
 			end
 		end
 	end
@@ -7407,6 +7496,7 @@ begin
 	predrndx = 5'd0;
 	store_argC_aReg <= 8'd0;
 	store_argC_cndx <= 4'd0;
+	cpu_request_cancel <= {ROB_ENTRIES{1'b0}};
 end
 endtask
 

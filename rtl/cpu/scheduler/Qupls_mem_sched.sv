@@ -38,8 +38,8 @@
 import const_pkg::*;
 import QuplsPkg::*;
 
-module Qupls_mem_sched(rst, clk, head, lsq_head, robentry_stomp, rob, lsq, memissue,
-	ndx0, ndx1, ndx0v, ndx1v, islot_i, islot_o);
+module Qupls_mem_sched(rst, clk, head, lsq_head, cancel, robentry_stomp, rob, lsq,
+	memissue, ndx0, ndx1, ndx0v, ndx1v, islot_i, islot_o);
 parameter WINDOW_SIZE = LSQ_ENTRIES;
 parameter LSQ_WINDOW_SIZE = LSQ_ENTRIES;
 input rst;
@@ -47,6 +47,7 @@ input clk;
 input rob_ndx_t head;
 input lsq_ndx_t lsq_head;
 input rob_bitmask_t robentry_stomp;
+input rob_bitmask_t cancel;
 input rob_entry_t [ROB_ENTRIES-1:0] rob;
 input lsq_entry_t [1:0] lsq [0:LSQ_ENTRIES-1];
 input [1:0] islot_i [0:LSQ_ENTRIES*2-1];
@@ -164,6 +165,7 @@ for (n10 = 0; n10 < ROB_ENTRIES; n10 = n10 + 1)
   		&& (rob[n10].done==2'b01) 
 //  		& ~rob[n10].out
   		&&  rob[n10].lsq
+  		&& !cancel[n10]
   		&& !robentry_stomp[n10])
   		;
 

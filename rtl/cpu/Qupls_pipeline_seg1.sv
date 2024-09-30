@@ -45,9 +45,9 @@ import cpu_types_pkg::*;
 import QuplsPkg::*;
 
 module Qupls_pipeline_seg1(rst_i, clk_i, rstcnt, advance_fet, ihit, en_i, nop_i, nop_o, 
-	irq_i, hirq_i, vect_i, sr,
+	irq_i, hirq_i, vect_i, sr, pt_mux, p_override, po_bno,
 	branchmiss, misspc, mipv_i, mip_i, ic_line_i,reglist_active, grp_i, grp_o,
-	mc_offs, pc0_i, pc1_i, pc2_i, pc3_i, vl,
+	takb_fet, mc_offs, pc0_i, pc1_i, pc2_i, pc3_i, vl,
 	ls_bmf_i, pack_regs_i, scale_regs_i, regcnt_i, mc_adr,
 	mc_ins0_i, mc_ins1_i, mc_ins2_i, mc_ins3_i,
 	len0_i, len1_i, len2_i, len3_i,
@@ -78,6 +78,10 @@ input cpu_types_pkg::pc_address_t mc_adr;
 input [1023:0] ic_line_i;
 input [2:0] grp_i;
 output reg [2:0] grp_o;
+input [3:0] takb_fet;
+input [3:0] pt_mux;
+output reg [3:0] p_override;
+output reg [4:0] po_bno [0:3];
 input cpu_types_pkg::pc_address_t mc_offs;
 input cpu_types_pkg::pc_address_ex_t pc0_i;
 input cpu_types_pkg::pc_address_ex_t pc1_i;
@@ -298,10 +302,29 @@ begin
 	pr3_mux.ins = ic_line_aligned[255:192];
 end
 
-always_comb tExtractIns(pc0, mip_i|2'd0, len0_i, pr0_mux, ins0_);
-always_comb tExtractIns(pc1, mip_i|2'd1, len1_i, pr1_mux, ins1_);
-always_comb tExtractIns(pc2, mip_i|2'd2, len2_i, pr2_mux, ins2_);
-always_comb tExtractIns(pc3, mip_i|2'd3, len3_i, pr3_mux, ins3_);
+/* Under construction
+reg [3:0] p_override1, p_override2;
+reg [4:0] po_bno1 [0:3];
+reg [4:0] po_bno2 [0:3];
+*/
+
+always_comb tExtractIns(pc0, pt_mux[0], takb_fet[0], mip_i|2'd0, len0_i, pr0_mux, ins0_, p_override[0], po_bno[0]);
+always_comb tExtractIns(pc1, pt_mux[1], takb_fet[1], mip_i|2'd1, len1_i, pr1_mux, ins1_, p_override[1], po_bno[1]);
+always_comb tExtractIns(pc2, pt_mux[2], takb_fet[2], mip_i|2'd2, len2_i, pr2_mux, ins2_, p_override[2], po_bno[2]);
+always_comb tExtractIns(pc3, pt_mux[3], takb_fet[3], mip_i|2'd3, len3_i, pr3_mux, ins3_, p_override[3], po_bno[3]);
+
+/* under construction
+always_ff @(posedge clk_i)
+if (rst_i)
+else begin
+	if (en_i) begin
+		p_override1 <= p_override && ;
+		p_override2 <= p_override1;
+		po_bno1 <= po_bno;
+		po_bno2 <= po_bno1;
+	end
+end
+*/
 
 // If there was a branch miss, instructions before the miss PC should not be
 // executed.
@@ -692,13 +715,19 @@ always_comb mcip3_o <= |mcip2 ? mcip2 | 12'h003 : 12'h000;
 
 task tExtractIns;
 input pc_address_ex_t pc;
+input pt_mux;
+input takb;
 input mc_address_t mcip;
 input [3:0] len;
 input pipeline_reg_t ins_i;
 output pipeline_reg_t ins_o;
+output p_override;
+output [4:0] bno;
 begin
+	p_override = 1'b0;
 	ins_o = ins_i;
 	ins_o.pc = pc;
+	ins_o.bt = takb;
 	ins_o.mcip = mcip;
 	ins_o.len = len;
 	if (ins_o.ins.any.opcode==OP_QFEXT) begin
@@ -716,6 +745,17 @@ begin
 //	ins_o.decbus.Rtz = ins_o.aRt==8'd0;
 	ins_o.pred_btst = 6'd0;
 	ins_o.element = 'd0;
+	// Under construction
+	// If BTB did not match next predictor, invalidate instruction.
+	/*
+	if (pt_mux != takb) begin
+		ins_o.v = 1'b0;
+		ins_o.aRt = 8'd0;
+		ins_o.ins.any.opcode = OP_NOP;
+		p_override = 1'b1;
+	end
+	*/
+	bno = takb ? ins_o.pc.bno_t : ins_o.pc.bno_f;
 end
 endtask
 
