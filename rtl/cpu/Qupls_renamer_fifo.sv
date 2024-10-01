@@ -55,7 +55,7 @@ pregno_t dout;
 pregno_t din;
 reg rd_en1,wr_en1;
 wire rd_en,wr_en;
-pregno_t cnt;
+reg [2:0] cnt;
 wire wr_clk;
 assign wr_clk = clk;
 assign rd_en = rd_en1 & ~rd_rst_busy;
@@ -65,28 +65,32 @@ assign o = dout;
 // Use counter to load up the fifo with valid register specs on reset.
 always_ff @(posedge clk)
 if (rst|wr_rst_busy|rd_rst_busy)
-	cnt <= 9'd0;
+	cnt <= 3'd0;
 else begin
-	if (!cnt[7])
+	if (!cnt[2])
 		cnt <= cnt + 2'd1;
 end
 always_ff @(posedge clk)
 if (rst|wr_rst_busy|rd_rst_busy)
 	wr_en1 <= 1'b0;
 else begin
+	/*
 	if (!cnt[7])
 		wr_en1 <= 1'b1;
 	else
-		wr_en1 <= push && i!=9'd0;
+	*/
+		wr_en1 <= push && i!=9'd0 && i!=9'd511;
 end
 
 always_ff @(posedge clk)
 if (rst|wr_rst_busy|rd_rst_busy)
 	din <= 9'b0;
 else begin
+	/*
 	if (!cnt[7])
 		din <= (N[1:0] * PREGS/4) + cnt;
 	else
+	*/
 		din <= i;
 end
 always_ff @(posedge clk)
@@ -94,16 +98,16 @@ if (rst|rd_rst_busy)
 	rd_en1 <= 1'b0;
 else begin
 	rd_en1 <= 1'b0;
-	if (cnt[7])
+	if (cnt[2])
 		rd_en1 <= pop;
-	else if (cnt > 8'd124 && !cnt[7])
+	else if (cnt > 8'd3 && !cnt[2])
 		rd_en1 <= 1'b1;
 end
 always_ff @(posedge clk)
 if (rst|wr_rst_busy|rd_rst_busy)
 	rst_busy <= 1'b1;
 else
-	rst_busy <= !cnt[7];
+	rst_busy <= !cnt[2];
 
 
 // XPM_FIFO instantiation template for Synchronous FIFO configurations

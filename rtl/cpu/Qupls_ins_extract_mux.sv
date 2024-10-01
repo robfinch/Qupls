@@ -74,7 +74,7 @@ begin
 	nopi.pc.pc = insi.pc;
 	nopi.mcip = 12'h000;
 	nopi.len = 4'd8;
-	nopi.ins = {41'd0,OP_NOP};
+	nopi.ins = {57'd0,OP_NOP};
 	nopi.pred_btst = 6'd0;
 	nopi.element = 'd0;
 	nopi.aRa = 8'd0;

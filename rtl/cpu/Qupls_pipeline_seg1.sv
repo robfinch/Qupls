@@ -44,10 +44,11 @@ import const_pkg::*;
 import cpu_types_pkg::*;
 import QuplsPkg::*;
 
-module Qupls_pipeline_seg1(rst_i, clk_i, rstcnt, advance_fet, ihit, en_i, nop_i, nop_o, 
+module Qupls_pipeline_seg1(rst_i, clk_i, rstcnt, advance_fet, ihit, en_i,
+	stomp_fet, stomp_mux, stomp_dec, nop_o, 
 	irq_i, hirq_i, vect_i, sr, pt_mux, p_override, po_bno,
 	branchmiss, misspc, mipv_i, mip_i, ic_line_i,reglist_active, grp_i, grp_o,
-	takb_fet, mc_offs, pc0_i, pc1_i, pc2_i, pc3_i, vl,
+	takb_fet, mc_offs, pc_i, vl,
 	ls_bmf_i, pack_regs_i, scale_regs_i, regcnt_i, mc_adr,
 	mc_ins0_i, mc_ins1_i, mc_ins2_i, mc_ins3_i,
 	len0_i, len1_i, len2_i, len3_i,
@@ -63,7 +64,9 @@ input [2:0] rstcnt;
 input advance_fet;
 input ihit;
 input en_i;
-input nop_i;
+input stomp_fet;
+input stomp_mux;
+input stomp_dec;
 output reg nop_o;
 input [2:0] irq_i;
 input hirq_i;
@@ -83,10 +86,7 @@ input [3:0] pt_mux;
 output reg [3:0] p_override;
 output reg [4:0] po_bno [0:3];
 input cpu_types_pkg::pc_address_t mc_offs;
-input cpu_types_pkg::pc_address_ex_t pc0_i;
-input cpu_types_pkg::pc_address_ex_t pc1_i;
-input cpu_types_pkg::pc_address_ex_t pc2_i;
-input cpu_types_pkg::pc_address_ex_t pc3_i;
+input cpu_types_pkg::pc_address_ex_t pc_i;
 input cpu_types_pkg::mc_address_t mcip0_i;
 input cpu_types_pkg::mc_address_t mcip1_i;
 input cpu_types_pkg::mc_address_t mcip2_i;
@@ -134,11 +134,12 @@ wire en = en_i;
 wire mipv = mipv_i;
 wire ls_bmf = ls_bmf_i;
 wire pack_regs = pack_regs_i;
+cpu_types_pkg::pc_address_t misspc_fet;
 cpu_types_pkg::aregno_t regcnt;
-cpu_types_pkg::pc_address_ex_t pc0;
-cpu_types_pkg::pc_address_ex_t pc1;
-cpu_types_pkg::pc_address_ex_t pc2;
-cpu_types_pkg::pc_address_ex_t pc3;
+cpu_types_pkg::pc_address_ex_t pc0_fet;
+cpu_types_pkg::pc_address_ex_t pc1_fet;
+cpu_types_pkg::pc_address_ex_t pc2_fet;
+cpu_types_pkg::pc_address_ex_t pc3_fet;
 cpu_types_pkg::pc_address_ex_t pc0d;
 cpu_types_pkg::pc_address_ex_t pc1d;
 cpu_types_pkg::pc_address_ex_t pc2d;
@@ -147,18 +148,18 @@ cpu_types_pkg::pc_address_ex_t pc0dd;
 cpu_types_pkg::pc_address_ex_t pc1dd;
 cpu_types_pkg::pc_address_ex_t pc2dd;
 cpu_types_pkg::pc_address_ex_t pc3dd;
-ex_instruction_t ins0;
-ex_instruction_t ins1;
-ex_instruction_t ins2;
-ex_instruction_t ins3;
+ex_instruction_t ins0_mux;
+ex_instruction_t ins1_mux;
+ex_instruction_t ins2_mux;
+ex_instruction_t ins3_mux;
 ex_instruction_t ins0d;
 ex_instruction_t ins1d;
 ex_instruction_t ins2d;
 ex_instruction_t ins3d;
-pipeline_reg_t ins0_;
-pipeline_reg_t ins1_;
-pipeline_reg_t ins2_;
-pipeline_reg_t ins3_;
+pipeline_reg_t ins0_fet;
+pipeline_reg_t ins1_fet;
+pipeline_reg_t ins2_fet;
+pipeline_reg_t ins3_fet;
 pipeline_reg_t mc_ins0;
 pipeline_reg_t mc_ins1;
 pipeline_reg_t mc_ins2;
@@ -209,10 +210,57 @@ begin
 end
 
 always_comb regcnt = regcnt_i;
-always_comb pc0 = pc0_i;
-always_comb pc1 = pc1_i;
-always_comb pc2 = pc2_i;
-always_comb pc3 = pc3_i;
+
+always_ff @(posedge clk_i)
+if (rst_i) begin
+	pc0_fet.bno_t <= 6'd0;
+	pc0_fet.bno_f <= 6'd0;
+	pc0_fet.pc <= RSTPC;
+end
+else begin
+	if (advance_fet)
+		pc0_fet <= pc_i;
+end
+always_ff @(posedge clk_i)
+if (rst_i) begin
+	pc1_fet.bno_t <= 6'd0;
+	pc1_fet.bno_f <= 6'd0;
+	pc1_fet.pc <= RSTPC + 6'd8;
+end
+else begin
+	if (advance_fet)
+		pc1_fet <= pc_i + 6'd8;
+end
+always_ff @(posedge clk_i)
+if (rst_i) begin
+	pc2_fet.bno_t <= 6'd0;
+	pc2_fet.bno_f <= 6'd0;
+	pc2_fet.pc <= RSTPC + 6'd16;
+end
+else begin
+	if (advance_fet)
+		pc2_fet <= pc_i + 6'd16;
+end
+always_ff @(posedge clk_i)
+if (rst_i) begin
+	pc3_fet.bno_t <= 6'd0;
+	pc3_fet.bno_f <= 6'd0;
+	pc3_fet.pc <= RSTPC + 6'd24;
+end
+else begin
+	if (advance_fet)
+		pc3_fet <= pc_i + 6'd24;
+end
+always_ff @(posedge clk_i)
+if (rst_i) begin
+	misspc_fet <= RSTPC;
+end
+else begin
+	if (en_i)
+		misspc_fet <= misspc;
+end
+
+
 always_comb 
 begin
 	mc_ins0 = mc_ins0_i;
@@ -223,10 +271,10 @@ begin
 	mc_ins1.v = 1'b1;
 	mc_ins2.v = 1'b1;
 	mc_ins3.v = 1'b1;
-	mc_ins0.pc = pc0_i;
-	mc_ins1.pc = pc1_i;
-	mc_ins2.pc = pc2_i;
-	mc_ins3.pc = pc3_i;
+	mc_ins0.pc = pc_i;
+	mc_ins1.pc = pc_i;
+	mc_ins2.pc = pc_i;
+	mc_ins3.pc = pc_i;
 	mc_ins0.mcip = mcip0_i;
 	mc_ins1.mcip = mcip1_i;
 	mc_ins2.mcip = mcip2_i;
@@ -276,7 +324,7 @@ else begin
 	if (!rstcnt[2])
 		ic_line_fet <= {128{1'd1,OP_NOP}};
 	else if (advance_fet) begin 
-		if (!ihit)
+		if (!ihit | stomp_fet)
 			ic_line_fet <= {128{1'd1,OP_NOP}};
 		else
 			ic_line_fet <= ic_line_i;
@@ -284,7 +332,7 @@ else begin
 end
 
 always_comb 
-	ic_line_aligned = {{64{1'b1,OP_NOP}},ic_line_fet} >> {pc0_i.pc[5:3],6'd0};
+	ic_line_aligned = {{64{1'b1,OP_NOP}},ic_line_fet} >> {pc0_fet.pc[5:3],6'd0};
 	
 pipeline_reg_t pr0_mux;
 pipeline_reg_t pr1_mux;
@@ -308,10 +356,10 @@ reg [4:0] po_bno1 [0:3];
 reg [4:0] po_bno2 [0:3];
 */
 
-always_comb tExtractIns(pc0, pt_mux[0], takb_fet[0], mip_i|2'd0, len0_i, pr0_mux, ins0_, p_override[0], po_bno[0]);
-always_comb tExtractIns(pc1, pt_mux[1], takb_fet[1], mip_i|2'd1, len1_i, pr1_mux, ins1_, p_override[1], po_bno[1]);
-always_comb tExtractIns(pc2, pt_mux[2], takb_fet[2], mip_i|2'd2, len2_i, pr2_mux, ins2_, p_override[2], po_bno[2]);
-always_comb tExtractIns(pc3, pt_mux[3], takb_fet[3], mip_i|2'd3, len3_i, pr3_mux, ins3_, p_override[3], po_bno[3]);
+always_comb tExtractIns(pc0_fet, pt_mux[0], takb_fet[0], mip_i|2'd0, len0_i, pr0_mux, ins0_fet, p_override[0], po_bno[0]);
+always_comb tExtractIns(pc1_fet, pt_mux[1], takb_fet[1], mip_i|2'd1, len1_i, pr1_mux, ins1_fet, p_override[1], po_bno[1]);
+always_comb tExtractIns(pc2_fet, pt_mux[2], takb_fet[2], mip_i|2'd2, len2_i, pr2_mux, ins2_fet, p_override[2], po_bno[2]);
+always_comb tExtractIns(pc3_fet, pt_mux[3], takb_fet[3], mip_i|2'd3, len3_i, pr3_mux, ins3_fet, p_override[3], po_bno[3]);
 
 /* under construction
 always_ff @(posedge clk_i)
@@ -330,10 +378,10 @@ end
 // executed.
 reg nop0,nop1,nop2,nop3;
 
-always_comb nop0 = nop_i || (branchmiss && misspc > pc0_i);
-always_comb nop1 = nop_i || (branchmiss && misspc > pc1_i);
-always_comb nop2 = nop_i || (branchmiss && misspc > pc2_i);
-always_comb nop3 = nop_i || (branchmiss && misspc > pc3_i);
+always_comb nop0 = stomp_mux || (branchmiss && misspc_fet > pc0_fet);
+always_comb nop1 = stomp_mux || (branchmiss && misspc_fet > pc1_fet);
+always_comb nop2 = stomp_mux || (branchmiss && misspc_fet > pc2_fet);
+always_comb nop3 = stomp_mux || (branchmiss && misspc_fet > pc3_fet);
 /*
 always_comb nop0 = FALSE;
 always_comb nop1 = FALSE;
@@ -365,10 +413,10 @@ if (rst_i) begin
 end
 else begin
 	if (en_i) begin
-		pc0d <= pc0;
-		pc1d <= pc1;
-		pc2d <= pc2;
-		pc3d <= pc3;
+		pc0d <= pc0_fet;
+		pc1d <= pc1_fet;
+		pc2d <= pc2_fet;
+		pc3d <= pc3_fet;
 	end
 end
 always_ff @(posedge clk)
@@ -387,33 +435,33 @@ else begin
 	end
 end
 
-always_comb bsr0 = ins0.ins.any.opcode==OP_BSR;
-always_comb bsr1 = ins1.ins.any.opcode==OP_BSR;
-always_comb bsr2 = ins2.ins.any.opcode==OP_BSR;
-always_comb bsr3 = ins3.ins.any.opcode==OP_BSR;
-always_comb jsr0 = ins0.ins.any.opcode==OP_JSR;
-always_comb jsr1 = ins1.ins.any.opcode==OP_JSR;
-always_comb jsr2 = ins2.ins.any.opcode==OP_JSR;
-always_comb jsr3 = ins3.ins.any.opcode==OP_JSR;
+always_comb bsr0 = ins0_mux.ins.any.opcode==OP_BSR;
+always_comb bsr1 = ins1_mux.ins.any.opcode==OP_BSR;
+always_comb bsr2 = ins2_mux.ins.any.opcode==OP_BSR;
+always_comb bsr3 = ins3_mux.ins.any.opcode==OP_BSR;
+always_comb jsr0 = ins0_mux.ins.any.opcode==OP_JSR;
+always_comb jsr1 = ins1_mux.ins.any.opcode==OP_JSR;
+always_comb jsr2 = ins2_mux.ins.any.opcode==OP_JSR;
+always_comb jsr3 = ins3_mux.ins.any.opcode==OP_JSR;
 always_comb 
 begin
-	bsr0_tgt = ins0.pc;
-	bsr0_tgt.pc = jsr0 ? {{10{ins0.ins[63]}},ins0.ins[63:10]} : ins0.pc.pc + {{10{ins0.ins[63]}},ins0.ins[63:10]};
+	bsr0_tgt = ins0_mux.pc;
+	bsr0_tgt.pc = jsr0 ? {{10{ins0_mux.ins[63]}},ins0_mux.ins[63:10]} : ins0_mux.pc.pc + {{10{ins0_mux.ins[63]}},ins0_mux.ins[63:10]};
 end
 always_comb 
 begin
-	bsr1_tgt = ins1.pc;
-	bsr1_tgt.pc = jsr1 ? {{10{ins1.ins[63]}},ins1.ins[63:10]} : ins1.pc.pc + {{10{ins1.ins[63]}},ins1.ins[63:10]};
+	bsr1_tgt = ins1_mux.pc;
+	bsr1_tgt.pc = jsr1 ? {{10{ins1_mux.ins[63]}},ins1_mux.ins[63:10]} : ins1_mux.pc.pc + {{10{ins1_mux.ins[63]}},ins1_mux.ins[63:10]};
 end
 always_comb
 begin
-	bsr2_tgt = ins2.pc;
-	bsr2_tgt.pc = jsr2 ? {{10{ins2.ins[63]}},ins2.ins[63:10]} : ins2.pc.pc + {{10{ins2.ins[63]}},ins2.ins[63:10]};
+	bsr2_tgt = ins2_mux.pc;
+	bsr2_tgt.pc = jsr2 ? {{10{ins2_mux.ins[63]}},ins2_mux.ins[63:10]} : ins2_mux.pc.pc + {{10{ins2_mux.ins[63]}},ins2_mux.ins[63:10]};
 end
 always_comb
 begin
-	bsr3_tgt = ins3.pc;
-	bsr3_tgt.pc = jsr3 ? {{10{ins3.ins[63]}},ins3.ins[63:10]} : ins3.pc.pc + {{10{ins3.ins[63]}},ins3.ins[63:10]};
+	bsr3_tgt = ins3_mux.pc;
+	bsr3_tgt.pc = jsr3 ? {{10{ins3_mux.ins[63]}},ins3_mux.ins[63:10]} : ins3_mux.pc.pc + {{10{ins3_mux.ins[63]}},ins3_mux.ins[63:10]};
 end
 always_comb
 	do_bsr = bsr0|bsr1|bsr2|bsr3|jsr0|jsr1|jsr2|jsr3;
@@ -447,13 +495,13 @@ Qupls_ins_extract_mux umux0
 	.mipv(mipv_i),
 	.mc_ins0(mc_ins0),
 	.mc_ins(mc_ins0),
-	.ins0(ins0_),
-	.insi(ins0_),
+	.ins0(ins0_fet),
+	.insi(ins0_fet),
 	.reglist_active(reglist_active),
 	.ls_bmf(ls_bmf_i),
 	.scale_regs_i(scale_regs_i),
 	.pack_regs(pack_regs_i),
-	.ins(ins0)
+	.ins(ins0_mux)
 );
 
 Qupls_ins_extract_mux umux1
@@ -470,13 +518,13 @@ Qupls_ins_extract_mux umux1
 	.mipv(mipv_i),
 	.mc_ins0(mc_ins0),
 	.mc_ins(mc_ins1),
-	.ins0(ins0_),
-	.insi(ins1_),
+	.ins0(ins0_fet),
+	.insi(ins1_fet),
 	.reglist_active(reglist_active),
 	.ls_bmf(ls_bmf_i),
 	.scale_regs_i(scale_regs_i),
 	.pack_regs(pack_regs_i),
-	.ins(ins1)
+	.ins(ins1_mux)
 );
 
 Qupls_ins_extract_mux umux2
@@ -493,13 +541,13 @@ Qupls_ins_extract_mux umux2
 	.mipv(mipv_i),
 	.mc_ins0(mc_ins0),
 	.mc_ins(mc_ins2),
-	.ins0(ins0_),
-	.insi(ins2_),
+	.ins0(ins0_fet),
+	.insi(ins2_fet),
 	.reglist_active(reglist_active),
 	.ls_bmf(ls_bmf_i),
 	.scale_regs_i(scale_regs_i),
 	.pack_regs(pack_regs_i),
-	.ins(ins2)
+	.ins(ins2_mux)
 );
 
 Qupls_ins_extract_mux umux3
@@ -516,13 +564,13 @@ Qupls_ins_extract_mux umux3
 	.mipv(mipv_i),
 	.mc_ins0(mc_ins0),
 	.mc_ins(mc_ins3),
-	.ins0(ins0_),
-	.insi(ins3_),
+	.ins0(ins0_fet),
+	.insi(ins3_fet),
 	.reglist_active(reglist_active),
 	.ls_bmf(ls_bmf_i),
 	.scale_regs_i(scale_regs_i),
 	.pack_regs(pack_regs_i),
-	.ins(ins3)
+	.ins(ins3_mux)
 );
 
 decode_bus_t dec0,dec1,dec2,dec3;
@@ -534,7 +582,7 @@ Qupls_decoder udeci0
 	.en(en_i),
 	.om(sr.om),
 	.ipl(sr.ipl),
-	.instr(ins0),
+	.instr(ins0_mux),
 	.dbo(dec0)
 );
 
@@ -545,7 +593,7 @@ Qupls_decoder udeci1
 	.en(en_i),
 	.om(sr.om),
 	.ipl(sr.ipl),
-	.instr(ins1),
+	.instr(ins1_mux),
 	.dbo(dec1)
 );
 
@@ -556,7 +604,7 @@ Qupls_decoder udeci2
 	.en(en_i),
 	.om(sr.om),
 	.ipl(sr.ipl),
-	.instr(ins2),
+	.instr(ins2_mux),
 	.dbo(dec2)
 );
 
@@ -567,7 +615,7 @@ Qupls_decoder udeci3
 	.en(en_i),
 	.om(sr.om),
 	.ipl(sr.ipl),
-	.instr(ins3),
+	.instr(ins3_mux),
 	.dbo(dec3)
 );
 
@@ -577,7 +625,7 @@ if (rst_i) begin
 end
 else begin
 	if (en_i)
-		ins0d <= ins0;
+		ins0d <= stomp_dec ? nopi : ins0_mux;
 end
 always_ff @(posedge clk)
 if (rst_i) begin
@@ -585,7 +633,7 @@ if (rst_i) begin
 end
 else begin
 	if (en_i)
-		ins1d <= ins1;
+		ins1d <= stomp_dec ? nopi : ins1_mux;
 end
 always_ff @(posedge clk)
 if (rst_i) begin
@@ -593,7 +641,7 @@ if (rst_i) begin
 end
 else begin
 	if (en_i)
-		ins2d <= ins2;
+		ins2d <= stomp_dec ? nopi : ins2_mux;
 end
 always_ff @(posedge clk)
 if (rst_i) begin
@@ -601,7 +649,7 @@ if (rst_i) begin
 end
 else begin
 	if (en_i)
-		ins3d <= ins3;
+		ins3d <= stomp_dec ? nopi : ins3_mux;
 end
 always_ff @(posedge clk) if (en_i) pc0dd <= pc0d;
 always_ff @(posedge clk) if (en_i) pc1dd <= pc1d;
@@ -706,7 +754,7 @@ begin
 end
 		
 
-always_ff @(posedge clk) if (en) nop_o <= nop_i;
+always_ff @(posedge clk) if (en) nop_o <= stomp_mux;
 
 always_comb mcip0_o <= mcip0;
 always_comb mcip1_o <= |mcip0 ? mcip0 | 12'h001 : 12'h000;

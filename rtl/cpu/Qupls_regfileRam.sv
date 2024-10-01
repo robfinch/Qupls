@@ -85,7 +85,7 @@ else begin
       .CASCADE_HEIGHT(0),             // DECIMAL
       .CLOCKING_MODE("independent_clock"), // String
       .ECC_MODE("no_ecc"),            // String
-      .MEMORY_INIT_FILE("none"),      // String
+      .MEMORY_INIT_FILE("regfile_init.mem"),      // String
       .MEMORY_INIT_PARAM("0"),        // String
       .MEMORY_OPTIMIZATION("true"),   // String
       .MEMORY_PRIMITIVE("block"),     // String

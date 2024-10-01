@@ -147,25 +147,38 @@ if (ce)
 	nop2 <= nop;
 assign nop_o = nop2;
 always_ff @(posedge clk)
-if (ce)
-	ip2 <= ip;
+if (rst)
+	ip2 <= RSTPC;
+else begin
+	if (ce)
+		ip2 <= ip;
+end
 always_ff @(posedge clk)
 if (ce)
 	dp2 <= dp;
 always_comb
 	ihit = ihit1e&ihit1o;
 always_ff @(posedge clk)
-if (ce)
-	ihit2e <= ihit1e;
+if (rst)
+	ihit2e <= 1'b0;
+else begin
+	if (ce)
+		ihit2e <= ihit1e;
+end
 always_ff @(posedge clk)
-if (ce)
-	ihit2o <= ihit1o;
+if (rst)
+	ihit2o <= 1'b0;
+else begin
+	if (ce)
+		ihit2o <= ihit1o;
+end
 always_ff @(posedge clk)
-if(ce)
-	ihit_o <= ihit;
-always_ff @(posedge clk)
-if(ce)
-	alt_ihit_o <= ihit & fetch_alt;
+if (rst)
+	ihit_o <= 1'b0;
+else begin
+	if(ce)
+		ihit_o <= ihit;
+end
 always_ff @(posedge clk)
 if (rst)
 	dhit2 <= 1'b0;
@@ -349,6 +362,15 @@ always_comb//ff @(posedge clk)
 	iel2 <= iel;
 
 always_comb
+if (rst) begin
+	ic_line_hi_o.data = {128{1'b0,OP_NOP}};
+	ic_line_hi_o.v = 4'hF;
+	ic_line_hi_o.vtag = RSTPC;
+	ic_line_lo_o.data = {128{1'b0,OP_NOP}};
+	ic_line_lo_o.v = 4'hF;
+	ic_line_lo_o.vtag = RSTPC;
+end
+else
 	case(iel2)
 	1'b0:	
 		begin

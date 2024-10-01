@@ -36,6 +36,7 @@
 // 5100 LUTs / 650 FFs / 20 BRAMs	(6x write clock)
 // ============================================================================
 
+import const_pkg::*;
 import QuplsPkg::*;
 
 module Qupls_checkpoint_valid_ram4(rst, clk5x, ph4, clka, en, wr, wc, wa, awa, setall, i, clkb, rc, ra, o);
@@ -64,7 +65,8 @@ output reg [NRDPORT-1:0] o;
 cpu_types_pkg::pregno_t [NPORT/4-1:0] wam;
 reg [NPORT/4-1:0] wr1,wrm;
 reg [NPORT/4-1:0] i1,im;
-checkpt_ndx_t [NPORT/4-1:0] wc1,wcm;
+checkpt_ndx_t [NPORT/4-1:0] wc1;
+checkpt_ndx_t [NPORT/4-1:0] wcm;
 wire [NPORT/4-1:0] cda;
 reg [NPORT/4-1:0] cdar;
 reg [NPORT/4-1:0] wea;
@@ -97,7 +99,15 @@ initial begin
 end
 
 always_ff @(posedge clk5x)
-begin
+if (rst) begin
+	for (jj = 0; jj < NPORT/4; jj = jj + 1) begin
+		addra[jj] = 10'd0;
+		wcm[jj] = 4'd0;
+		im[jj] = 1'b0;
+		wrm[jj] = 1'b0;
+	end	
+end
+else begin
 	for (jj = 0; jj < NPORT/4; jj = jj + 1) begin
 		addra[jj] = wa[wcnt*(NPORT/4)+jj];
 		wcm[jj] = wc[wcnt*(NPORT/4)+jj];
@@ -126,11 +136,11 @@ generate begin : gChkptRAM
    // Xilinx Parameterized Macro, version 2022.2
 for (g = 0; g < NPORT/4; g = g + 1) begin
 	change_det #(.WID($bits(addra[g]))) ucd (.rst(rst), .clk(clk5x), .ce(1'b1), .i(addra[g]), .cd(cda[g]));
-	always_ff @(posedge clka) cdar[g] <= cda[g];
-	always_ff @(posedge clka) wc1[g] <= wcm[g];
-	always_ff @(posedge clka) i1[g] <= im[g];
-	always_ff @(posedge clka) wr1[g] <= wrm[g];
-	always_comb wea[g] <= wr1[g] & cdar[g];
+	always_ff @(posedge clk5x) if (rst) cdar[g] <= 1'b0; else cdar[g] <= cda[g];
+	always_ff @(posedge clk5x) if (rst) wc1[g] <= 4'd0; else wc1[g] <= wcm[g];
+	always_ff @(posedge clk5x) if (rst) i1[g] <= 1'b1; else i1[g] <= im[g];
+	always_ff @(posedge clk5x) if (rst) wr1[g] <= 1'b0; else wr1[g] <= wrm[g];
+	always_comb wea[g] <= wr1[g];// & cdar[g];
 	always_comb
 	if (addra[g]==10'd263) begin
 		$display("write addra=%h 263=%d douta=%h dina=%h i1=%d wc1=%d", addra[g], i1[g], douta[g], dina[g], i1[g], wc1[g]);

@@ -363,6 +363,18 @@ else begin
 						cpu_req_queue[nn11].done <= 2'b11;
 						cpu_req_queue[nn11].out <= 2'b00;
 						cpu_req_queue[nn11].active <= 2'b00;
+						if (cpu_req_queue[nn11].tran_req[0].tid==tmptid && req_state==RW1) begin
+						  cpu_trans_queued <= 1'b1;
+						  cpu_req_queue[nn11].tran_req[0].cyc <= 1'b0;
+							lasttid2 <= 4'd0;
+							previous_done <= 1'b1;
+						end
+						if (cpu_req_queue[nn11].tran_req[1].tid==tmptid && req_state==RW1) begin
+						  cpu_trans_queued <= 1'b1;
+						  cpu_req_queue[nn11].tran_req[1].cyc <= 1'b0;
+							lasttid2 <= 4'd0;
+							previous_done <= 1'b1;
+						end
 					end
 				end
 			end

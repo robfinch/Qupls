@@ -57,6 +57,15 @@ output reg stomp_ren;
 output reg stomp_que;
 output reg stomp_quem;
 
+reg do_bsr1;
+always_ff @(posedge clk)
+if (rst)
+	do_bsr1 <= FALSE;
+else begin
+	if (advance_pipeline)
+		do_bsr1 <= do_bsr;
+end
+
 // Instruction stomp waterfall.
 
 // On a cache miss, the fetch stage is stomped on, but not if micro-code is
@@ -72,7 +81,7 @@ begin
 //		|| (do_bsr && !stomp_mux)
 //		|| stomp_fet1a
 		)
-		stomp_fet = FALSE;
+		stomp_fet = do_bsr|do_bsr1;
 end
 
 wire next_stomp_mux = (stomp_fet && !micro_code_active)

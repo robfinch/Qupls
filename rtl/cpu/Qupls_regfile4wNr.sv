@@ -41,9 +41,10 @@
 import QuplsPkg::*;
 
 module Qupls_regfile4wNr(rst, clk, clk5x, ph4,
-	wr0, wr1, wr2, wr3, we0, we1, we2, we3,
-	wa0, wa1, wa2, wa3, i0, i1, i2, i3, 
-	wt0, wt1, wt2, wt3, ti0, ti1, ti2, ti3,
+	wr0, wr1, wr2, wr3, wr4, we0, we1, we2, we3, we4,
+	wa0, wa1, wa2, wa3, wa4,
+	i0, i1, i2, i3, i4,
+	wt0, wt1, wt2, wt3, wt4, ti0, ti1, ti2, ti3, ti4,
 	ra, o, to);
 parameter WID = $bits(cpu_types_pkg::value_t);
 parameter DEP = PREGS;
@@ -57,26 +58,32 @@ input wr0;
 input wr1;
 input wr2;
 input wr3;
+input wr4;
 input we0;
 input we1;
 input we2;
 input we3;
+input we4;
 input [RBIT:0] wa0;
 input [RBIT:0] wa1;
 input [RBIT:0] wa2;
 input [RBIT:0] wa3;
+input [RBIT:0] wa4;
 input cpu_types_pkg::value_t i0;
 input cpu_types_pkg::value_t i1;
 input cpu_types_pkg::value_t i2;
 input cpu_types_pkg::value_t i3;
+input cpu_types_pkg::value_t i4;
 input wt0;
 input wt1;
 input wt2;
 input wt3;
+input wt4;
 input ti0;
 input ti1;
 input ti2;
 input ti3;
+input ti4;
 input cpu_types_pkg::pregno_t [RPORTS-1:0] ra;
 output cpu_types_pkg::value_t [RPORTS-1:0] o;
 output reg [RPORTS-1:0] to;
@@ -158,10 +165,11 @@ always_ff @(posedge clk5x) if (ph4d) i3a <= i3;
 always_ff @(posedge clk5x)
 begin
 	case(wcnt)
-	3'd0:	begin wr <= wr0; we <= we0 && wa0!=10'd0; wa <= wa0; i <= i0; wt <= wt0; ti <= ti0; end
-	3'd1:	begin wr <= wr1; we <= we1 && wa1!=10'd0; wa <= wa1; i <= i1; wt <= wt1; ti <= ti1;  end
-	3'd2: begin wr <= wr2; we <= we2 && wa2!=10'd0; wa <= wa2; i <= i2; wt <= wt2; ti <= ti2;  end
-	3'd3:	begin wr <= wr3; we <= we3 && wa3!=10'd0; wa <= wa3; i <= i3; wt <= wt3; ti <= ti3;  end
+	3'd0:	begin wr <= wr0; we <= we0 && wa0!=10'd0 && wa0!=10'h3FF; wa <= wa0; i <= i0; wt <= wt0; ti <= ti0; end
+	3'd1:	begin wr <= wr1; we <= we1 && wa1!=10'd0 && wa1!=10'h3FF; wa <= wa1; i <= i1; wt <= wt1; ti <= ti1;  end
+	3'd2: begin wr <= wr2; we <= we2 && wa2!=10'd0 && wa2!=10'h3FF; wa <= wa2; i <= i2; wt <= wt2; ti <= ti2;  end
+	3'd3:	begin wr <= wr3; we <= we3 && wa3!=10'd0 && wa3!=10'h3FF; wa <= wa3; i <= i3; wt <= wt3; ti <= ti3;  end
+	3'd4:	begin wr <= wr4; we <= we4 && wa4!=10'd0 && wa4!=10'h3FF; wa <= wa4; i <= i4; wt <= wt4; ti <= ti4;  end
 	default:	begin wr <= 1'b1; we <= 1'b1; wa <= {RBIT+1{1'd0}}; i <= {WID{1'b0}}; wt <= 1'b1; ti <= 1'b0; end
 	endcase
 end
@@ -202,16 +210,19 @@ generate begin : gRFO
 	for (g = 0; g < RPORTS; g = g + 1) begin
 		always_comb
 			o[g] =
-				(wr3 && we3 && wa3 != 10'd0 && (ra[g]==wa3)) ? i3 :
-				(wr2 && we2 && wa2 != 10'd0 && (ra[g]==wa2)) ? i2 :
-				(wr1 && we1 && wa1 != 10'd0 && (ra[g]==wa1)) ? i1 :
-				(wr0 && we0 && wa0 != 10'd0 && (ra[g]==wa0)) ? i0 :
+				(wr4 && we4 && wa4 != 10'd0 && wa4 != 10'h3FF && (ra[g]==wa4)) ? i4 :
+				(wr3 && we3 && wa3 != 10'd0 && wa3 != 10'h3FF && (ra[g]==wa3)) ? i3 :
+				(wr2 && we2 && wa2 != 10'd0 && wa2 != 10'h3FF && (ra[g]==wa2)) ? i2 :
+				(wr1 && we1 && wa1 != 10'd0 && wa1 != 10'h3FF && (ra[g]==wa1)) ? i1 :
+				(wr0 && we0 && wa0 != 10'd0 && wa0 != 10'h3FF && (ra[g]==wa0)) ? i0 :
 					o0[g];
 		always_comb
-			to[g] = (wt3 && we3 && wa3 != 10'd0 && (ra[g]==wa3)) ? ti3 :
-							(wt2 && we2 && wa2 != 10'd0 && (ra[g]==wa2)) ? ti2 :
-							(wt1 && we1 && wa1 != 10'd0 && (ra[g]==wa1)) ? ti1 :
-							(wt0 && we0 && wa0 != 10'd0 && (ra[g]==wa0)) ? ti0 :
+			to[g] =
+							(wt4 && we4 && wa4 != 10'd0 && wa4 != 10'h3FF && (ra[g]==wa4)) ? ti4 :
+							(wt3 && we3 && wa3 != 10'd0 && wa3 != 10'h3FF && (ra[g]==wa3)) ? ti3 :
+							(wt2 && we2 && wa2 != 10'd0 && wa2 != 10'h3FF && (ra[g]==wa2)) ? ti2 :
+							(wt1 && we1 && wa1 != 10'd0 && wa1 != 10'h3FF && (ra[g]==wa1)) ? ti1 :
+							(wt0 && we0 && wa0 != 10'd0 && wa0 != 10'h3FF && (ra[g]==wa0)) ? ti0 :
 					to0[g];
 		always_ff @(posedge clk)
 			if (o[g] != cpu_types_pkg::value_zero && ra[g]==10'd0) begin

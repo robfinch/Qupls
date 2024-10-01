@@ -36,7 +36,7 @@
 // event of a pipeline flush. Normally up to four register values will be
 // committed to the register file.
 //
-// 8500 LUTs / 800 FFs / 2 BRAMs
+// 7150 LUTs / 1300 FFs / 2 BRAMs
 // ============================================================================
 //
 import QuplsPkg::*;
@@ -71,10 +71,6 @@ reg pop0 = 1'b0;
 reg pop1 = 1'b0;
 reg pop2 = 1'b0;
 reg pop3 = 1'b0;
-reg push0 = 1'b0;
-reg push1 = 1'b0;
-reg push2 = 1'b0;
-reg push3 = 1'b0;
 reg stalla0 = 1'b0;
 reg stalla1 = 1'b0;
 reg stalla2 = 1'b0;
@@ -109,58 +105,62 @@ always_comb wv1 = avail[wo1] & alloc1;
 always_comb wv2 = avail[wo2] & alloc2;
 always_comb wv3 = avail[wo3] & alloc3;
 
-always_comb pop0 = alloc0 & en;
-always_comb pop1 = alloc1 & en;
-always_comb pop2 = alloc2 & en;
-always_comb pop3 = alloc3 & en;
+always_comb pop0 = (alloc0 & en) | stalla0;
+always_comb pop1 = (alloc1 & en) | stalla1;
+always_comb pop2 = (alloc2 & en) | stalla2;
+always_comb pop3 = (alloc3 & en) | stalla3;
 
 reg [1:0] fifo_order;
+reg [8:0] freeCnt;
+reg [PREGS-1:0] next_toFreeList;
+reg [PREGS-1:0] toFreeList;
+reg [3:0] ffree;
 
 always_comb
 case(fifo_order)
 2'd0:
 	begin
-		fpush[0] = freevals[0] & en;
-		fpush[1] = freevals[1] & en;
-		fpush[2] = freevals[2] & en;
-		fpush[3] = freevals[3] & en;
-		tags[0] = tags2free[0];
-		tags[1] = tags2free[1];
-		tags[2] = tags2free[2];
-		tags[3] = tags2free[3];
+		fpush[0] = (freevals[0] & en) | ffree[0];
+		fpush[1] = (freevals[1] & en) | ffree[1];
+		fpush[2] = (freevals[2] & en) | ffree[2];
+		fpush[3] = (freevals[3] & en) | ffree[3];
+		tags[0] = (freevals[0] & en) ? tags2free[0] : freeCnt + 3'd0;
+		tags[1] = (freevals[1] & en) ? tags2free[1] : freeCnt + 3'd1;
+		tags[2] = (freevals[2] & en) ? tags2free[2] : freeCnt + 3'd2;
+		tags[3] = (freevals[3] & en) ? tags2free[3] : freeCnt + 3'd3;
 	end
 2'd1:
 	begin
-		fpush[0] = freevals[1] & en;
-		fpush[1] = freevals[2] & en;
-		fpush[2] = freevals[3] & en;
-		fpush[3] = freevals[0] & en;
-		tags[0] = tags2free[1];
-		tags[1] = tags2free[2];
-		tags[2] = tags2free[3];
-		tags[3] = tags2free[0];
+		fpush[0] = (freevals[1] & en) | ffree[1];
+		fpush[1] = (freevals[2] & en) | ffree[2];
+		fpush[2] = (freevals[3] & en) | ffree[3];
+		fpush[3] = (freevals[0] & en) | ffree[0];
+		tags[0] = (freevals[1] & en) ? tags2free[1] : freeCnt + 3'd1;
+		tags[1] = (freevals[2] & en) ? tags2free[2] : freeCnt + 3'd2;
+		tags[2] = (freevals[3] & en) ? tags2free[3] : freeCnt + 3'd3;
+		tags[3] = (freevals[0] & en) ? tags2free[0] : freeCnt + 3'd0;
 	end
 2'd2:
 	begin
-		fpush[0] = freevals[2] & en;
-		fpush[1] = freevals[3] & en;
-		fpush[2] = freevals[0] & en;
-		fpush[3] = freevals[1] & en;
-		tags[0] = tags2free[2];
-		tags[1] = tags2free[3];
-		tags[2] = tags2free[0];
-		tags[3] = tags2free[1];
+		fpush[0] = (freevals[2] & en) | ffree[2];
+		fpush[1] = (freevals[3] & en) | ffree[3];
+		fpush[2] = (freevals[0] & en) | ffree[0];
+		fpush[3] = (freevals[1] & en) | ffree[1];
+		tags[0] = (freevals[2] & en) ? tags2free[2] : freeCnt + 3'd2;
+		tags[1] = (freevals[3] & en) ? tags2free[3] : freeCnt + 3'd3;
+		tags[2] = (freevals[0] & en) ? tags2free[0] : freeCnt + 3'd0;
+		tags[3] = (freevals[1] & en) ? tags2free[1] : freeCnt + 3'd1;
 	end
 2'd3:
 	begin
-		fpush[0] = freevals[3] & en;
-		fpush[1] = freevals[0] & en;
-		fpush[2] = freevals[1] & en;
-		fpush[3] = freevals[2] & en;
-		tags[0] = tags2free[3];
-		tags[1] = tags2free[0];
-		tags[2] = tags2free[1];
-		tags[3] = tags2free[2];
+		fpush[0] = (freevals[3] & en) | ffree[3];
+		fpush[1] = (freevals[0] & en) | ffree[0];
+		fpush[2] = (freevals[1] & en) | ffree[1];
+		fpush[3] = (freevals[2] & en) | ffree[2];
+		tags[0] = (freevals[3] & en) ? tags2free[3] : freeCnt + 3'd3;
+		tags[1] = (freevals[0] & en) ? tags2free[0] : freeCnt + 3'd0;
+		tags[2] = (freevals[1] & en) ? tags2free[1] : freeCnt + 3'd1;
+		tags[3] = (freevals[2] & en) ? tags2free[2] : freeCnt + 3'd2;
 	end
 endcase
 
@@ -226,7 +226,7 @@ end
 
 always_comb
 if (rst) begin
-	next_avail = {{PREGS-1{1'b1}},1'b0};
+	next_avail = {{PREGS-1{1'b0}},1'b0};
 	next_avail[0] = 1'b0;
 	next_avail[PREGS/4] = 1'b0;
 	next_avail[PREGS/2] = 1'b0;
@@ -256,8 +256,11 @@ else begin
 	if (freevals[3])
 		next_avail[tags2free[3]] = 1'b1;
 
-	if (restore)
-		next_avail = restore_list;
+	if (ffree[0]) next_avail = next_avail | (512'd1 << ((freeCnt + 3'd0) % 512));
+	if (ffree[1]) next_avail = next_avail | (512'd1 << ((freeCnt + 3'd1) % 512));
+	if (ffree[2]) next_avail = next_avail | (512'd1 << ((freeCnt + 3'd2) % 512));
+	if (ffree[3]) next_avail = next_avail | (512'd1 << ((freeCnt + 3'd3) % 512));
+
 	next_avail[0] = 1'b0;
 	next_avail[PREGS/4] = 1'b0;
 	next_avail[PREGS/2] = 1'b0;
@@ -268,12 +271,71 @@ always_ff @(posedge clk)
 if (rst)
 	fifo_order <= 2'd0;
 else
-	fifo_order <= fifo_order + push0 + push1 + push2 + push3;
+	fifo_order <= fifo_order + fpush[0] + fpush[1] + fpush[2] + fpush[3];
 
 always_ff @(posedge clk) if (rst) alloc0d <= 1'b0; else if(en) alloc0d <= alloc0;
 always_ff @(posedge clk) if (rst) alloc1d <= 1'b0; else if(en) alloc1d <= alloc1;
 always_ff @(posedge clk) if (rst) alloc2d <= 1'b0; else if(en) alloc2d <= alloc2;
 always_ff @(posedge clk) if (rst) alloc3d <= 1'b0; else if(en) alloc3d <= alloc3;
+
+reg [2:0] pushCnt, nFree;
+always_comb
+	pushCnt = fpush[0] + fpush[1] + fpush[2] + fpush[3];
+
+always_comb
+casez(
+{toFreeList[freeCnt+4'd0],
+toFreeList[freeCnt+4'd1],
+toFreeList[freeCnt+4'd2],
+toFreeList[freeCnt+4'd3],
+toFreeList[freeCnt+4'd4],
+toFreeList[freeCnt+4'd5],
+toFreeList[freeCnt+4'd6],
+toFreeList[freeCnt+4'd7]
+})
+8'b00000000:	nFree = 4'd8;
+8'b00000001:	nFree = 4'd7;
+8'b0000001?:	nFree = 4'd6;
+8'b000001??:	nFree = 4'd5;
+8'b00001???:	nFree = 4'd4;
+default:	nFree = 3'd4 - pushCnt;
+endcase	
+
+always_ff @(posedge clk)
+if (rst) begin
+	freeCnt <= 9'd0;
+	ffree[0] <= 1'b0;
+	ffree[1] <= 1'b0;
+	ffree[2] <= 1'b0;
+	ffree[3] <= 1'b0;
+end
+else begin
+	freeCnt <= freeCnt + nFree;
+	ffree[0] <= toFreeList[freeCnt+4'd0];
+	ffree[1] <= toFreeList[freeCnt+4'd1];
+	ffree[2] <= toFreeList[freeCnt+4'd2];
+	ffree[3] <= toFreeList[freeCnt+4'd3];
+end
+
+always_comb
+begin
+	next_toFreeList = toFreeList;
+	if (restore)
+		next_toFreeList = next_toFreeList | (avail ^ restore_list);
+	if (fpush[0])	next_toFreeList = next_toFreeList & ~(512'd1 << tags[0]);
+ 	if (fpush[1])	next_toFreeList = next_toFreeList & ~(512'd1 << tags[1]);
+ 	if (fpush[2])	next_toFreeList = next_toFreeList & ~(512'd1 << tags[2]);
+ 	if (fpush[3])	next_toFreeList = next_toFreeList & ~(512'd1 << tags[3]);
+end
+
+always_ff @(posedge clk)
+if (rst) begin
+	toFreeList <= {PREGS{1'b1}};
+	toFreeList[0] <= 1'b0;
+	toFreeList[511] <= 1'b0;
+end
+else
+	toFreeList <= next_toFreeList;
 
 always_ff @(posedge clk)
 if (rst)
