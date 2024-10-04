@@ -71,7 +71,7 @@ always_comb
 begin
 	nopi = {$bits(pipeline_reg_t){1'b0}};
 	nopi.v = 1'b1;
-	nopi.pc.pc = insi.pc;
+	nopi.pc = insi.pc;
 	nopi.mcip = 12'h000;
 	nopi.len = 4'd8;
 	nopi.ins = {57'd0,OP_NOP};

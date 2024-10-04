@@ -96,8 +96,8 @@ begin
 	OP_FLT3:
 		fnRt = ir.aRt;
 	OP_MCB:	fnRt = {ir.ins.mcb.lk ? 9'd59 : 9'd00};
-	OP_BSR:	fnRt = ir.aRt[2:0]<3'd1 ? 9'd0 : {6'b000101,ir.aRt[2:0]};
-	OP_JSR:	fnRt = ir.aRt[2:0]<3'd1 ? 9'd0 : {6'b000101,ir.aRt[2:0]};
+	OP_BSR:	fnRt = ir.aRt[2:0]<3'd1 ? 8'd0 : {5'b00101,ir.aRt[2:0]};
+	OP_JSR:	fnRt = ir.aRt[2:0]<3'd1 ? 8'd0 : {5'b00101,ir.aRt[2:0]};
 	OP_RTD:	fnRt = 9'd31;
 	OP_DBRA: fnRt = 9'd55;
 	OP_ADDI,OP_SUBFI,OP_CMPI:
@@ -115,15 +115,9 @@ begin
 	OP_MOV:
 		fnRt = ir.aRt;
 	OP_Bcc,OP_BccU:
-		fnRt = |ir.ins[13:12] ? ir.aRa : 9'd0;
-	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDOU,OP_LDH,
-	OP_LDX:
-		case(ir.ins.lsn.func)
-		FN_LDCTX:
-			fnRt = {1'b0,ir.aRa[2:0],ir.aRt[4:0]};
-		default:
-			fnRt = ir.aRt;
-		endcase
+		fnRt = |ir.ins.br.inc ? ir.aRa : 8'd0;
+	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDOU,OP_LDH:
+		fnRt = ir.aRt;
 	default:
 		fnRt = 9'd0;
 	endcase
@@ -133,7 +127,7 @@ endfunction
 always_comb
 begin
 	Rt = fnRt(instr);
-	if (Rt==8'd31 && !(instr.ins.any.opcode==OP_MOV && instr.ins[47]))
+	if (Rt==8'd31 && !(instr.ins.any.opcode==OP_MOV && instr.ins[63]))
 		Rt = 8'd32|om;
 	if (instr.ins.any.opcode==OP_BSR)
 		Rtn = 1'b0;

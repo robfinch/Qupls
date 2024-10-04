@@ -61,7 +61,10 @@ Qupls_decode_imm udcimm
 	.immc(db.immc),
 	.has_imma(db.has_imma),
 	.has_immb(db.has_immb),
-	.has_immc(db.has_immc)
+	.has_immc(db.has_immc),
+	.pfxa(db.pfxa),
+	.pfxb(db.pfxb),
+	.pfxc(db.pfxc)
 );
 
 Qupls_decode_Ra udcra
@@ -384,7 +387,7 @@ else begin
 					(db.Rt > 8'd28 && db.Rt < 8'd56))
 					dbo.regexc <= 1'b1;
 		end
-		dbo.vec2 <= db.vec;
+		dbo.vec2 <= 1'b0;
 		dbo.cap <= ins.ins.any.opcode==OP_CAP;
 		dbo.mvvr <= ins.ins.any.opcode==OP_R2 && ins.ins.r2.func==FN_MVVR;
 		dbo.jsri <= ins.ins.any.opcode==OP_JSRI;
@@ -395,11 +398,11 @@ else begin
 			dbo.Rtv <= 1'b0;
 		end
 		else begin
-			dbo.Rtv <= ins.ins.r2.Rt.v;
+			dbo.Rtv <= 1'b0;
 		end
-		dbo.Rav <= ins.ins.r2.Ra.v;
-		dbo.Rbv <= ins.ins.r2.Rb.v;
-		dbo.Rcv <= ins.ins.r2.Rc.v;
+		dbo.Rav <= 1'b0;
+		dbo.Rbv <= 1'b0;
+		dbo.Rcv <= 1'b0;
 	end
 end
 

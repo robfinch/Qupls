@@ -45,8 +45,7 @@ function fnIsStore;
 input instruction_t op;
 begin
 	case(op.any.opcode)
-	OP_STB,OP_STW,OP_STT,OP_STO,OP_STH,
-	OP_STX:
+	OP_STB,OP_STW,OP_STT,OP_STO,OP_STH:
 		fnIsStore = 1'b1;
 	default:
 		fnIsStore = 1'b0;
@@ -60,8 +59,6 @@ begin
 	case(op.any.opcode)
 	OP_CSTORE:
 		fnIsCStore = 1'b1;
-	OP_STX:
-		fnIsCStore = op.lsn.func==FN_CSTOREX;
 	default:
 		fnIsCStore = 1'b0;
 	endcase

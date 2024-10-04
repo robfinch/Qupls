@@ -58,10 +58,6 @@ begin
 	default:
 		if (has_immb)
 			fnRb = 9'd0;
-		else if (ir.ins.any.opcode==OP_LDX && ir.ins.lsn.func==FN_LDCTX)
-			fnRb = 9'd0;
-		else if (ir.ins.any.opcode==OP_STX && ir.ins.lsn.func==FN_STCTX)
-			fnRb = 9'd0;
 		else if (fnImmb(ir))
 			fnRb = 9'd0;
 		else

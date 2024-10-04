@@ -44,12 +44,7 @@ function fnIsLda;
 input instruction_t op;
 begin
 	case(op.any.opcode)
-	OP_LDAX:	fnIsLda = 1'b1;
-	OP_LDX:
-		case(op.lsn.func)
-		FN_LDAX: fnIsLda = 1'b1;
-		default: fnIsLda = 1'b0;
-		endcase
+	OP_LDA:	fnIsLda = 1'b1;
 	default:
 		fnIsLda = 1'b0;
 	endcase

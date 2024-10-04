@@ -41,7 +41,7 @@ import QuplsPkg::*;
 
 module Qupls_alu_station(rst, clk, available, idle, issue, rndx, rndxv, rob,
 	rfo_argA, rfo_argB, rfo_argC, rfo_argT, rfo_argM, rfo_argA_ctag, rfo_argB_ctag,
-	vrm, vex, ld, id, 
+	wrport0_v, wrport0_Rt, wrport0_res, vrm, vex, ld, id, 
 	argA, argB, argBI, argC, argI, argT, argM, argA_ctag, argB_ctag, cpytgt,
 	cs, aRtz, aRt, nRt, bank, instr, div, cap, cptgt, pc, cp,
 	pred, predz, prc, sc_done, idle_false
@@ -64,6 +64,9 @@ input rfo_argB_ctag;
 input cpytgt;
 input value_t vrm [0:3];						// vector restart mask
 input value_t vex [0:3];						// vector exception
+input wrport0_v;
+input pregno_t wrport0_Rt;
+input value_t wrport0_res;
 output reg ld;
 output rob_ndx_t id;
 output value_t argA;
@@ -123,6 +126,8 @@ if (rst) begin
 	div <= 1'b0;
 	cptgt <= 8'h00;
 	pc <= RSTPC;
+	pc.bno_t <= 6'd1;
+	pc.bno_f <= 6'd1;
 	cp <= 4'd0;
 	pred <= FALSE;
 	predz <= FALSE;
@@ -144,11 +149,24 @@ else begin
 			default:	argA <= {2{32'hDEADBEEF}};
 			endcase
 		else
+			// Could bypass all the register args to improve performance as
+			// follows:
 			case({rob.decbus.bitwise,rob.decbus.Ran})
-			2'd0:	argA <= rfo_argA;
-			2'd1:	argA <= -rfo_argA;
-			2'd2:	argA <= rfo_argA;
-			2'd3:	argA <= ~rfo_argA;
+			2'd0,2'd2:
+				if (PERFORMANCE && wrport0_v && wrport0_Rt==rob.pRa)
+					argA <= wrport0_res;
+				else
+					argA <= rfo_argA;
+			2'd1:
+				if (PERFORMANCE && wrport0_v && wrport0_Rt==rob.pRa)
+					argA <= -wrport0_res;
+				else
+					argA <= -rfo_argA;
+			2'd3:
+				if (PERFORMANCE && wrport0_v && wrport0_Rt==rob.pRa)
+					argA <= ~wrport0_res;
+				else
+					argA <= ~rfo_argA;
 			endcase
 		case({rob.decbus.bitwise,rob.decbus.Rbn})
 		2'd0:	argB <= rfo_argB;

@@ -77,8 +77,8 @@ output cause_code_t exc_o;
 genvar g;
 integer nn,kk;
 cause_code_t exc;
-value_t zero = {WID{1'b0}};
-value_t dead = {WID/16{16'hdead}};
+wire [WID-1:0] zero = {WID{1'b0}};
+wire [WID-1:0] dead = {WID/16{16'hdead}};
 wire cd_args;
 value_t cc;
 reg [3:0] mul_cnt;
@@ -106,13 +106,13 @@ always_comb
 	sum_ab = a + b;
 
 always_comb
-	immc8 = {{WID{ir[29]}},ir[29:22]};
+	immc8 = {{WID{ir[41]}},ir[41:34]};
 always_comb
-	shl = {b,ir[38] ? ~a : a} << (ir[37] ? ir[34:29] : c[5:0]);
+	shl = {b,a} << (ir.shifti.i ? ir.shifti.imm : c[5:0]);
 always_comb
-	shr = {ir[38] ? ~b : b,a} >> (ir[37] ? ir[34:29] : c[5:0]);
+	shr = {b,a} >> (ir.shifti.i ? ir.shifti.imm : c[5:0]);
 always_comb
-	asr = {{64{a[63]}},a,64'd0} >> (ir[37] ? ir[34:29] : c[5:0]);
+	asr = {{64{a[63]}},a,64'd0} >> (ir.shifti.i ? ir.shifti.imm : c[5:0]);
 
 always_ff @(posedge clk)
 begin
@@ -450,39 +450,39 @@ begin
 	OP_EORI:
 		bus = a ^ i;
 	OP_AIPSI:
-	   if (WID >= 32)
-		  bus = pc + ({{WID{i[23]}},i[23:0]} << (ir[17:15]*24));
-	   else
-	       bus = 'd0;
+		if (WID >= 32)
+		 	bus = pc + ({{WID{i[36]}},i[36:0]} << (ir[23:22]*32));
+		else
+			bus = zero;
 	OP_ADDSI:
-	   if (WID < 24)
-	       bus = 'd0;
-	   else
-		  bus = c + ({{WID{i[23]}},i[23:0]} << (ir[17:15]*24));
+		if (WID < 32)
+			bus = zero;
+		else
+			bus = c + ({{WID{i[36]}},i[36:0]} << (ir[23:22]*32));
 	OP_ANDSI:
-	   if (WID < 24)
-	       bus = 'd0;
-	   else
-		bus = c & ({WID{1'b1}} & ~({{WID{1'b0}},24'hffffff} << (ir[17:15]*24)) | ({{WID{i[23]}},i[23:0]} << (ir[17:15]*24)));
+		if (WID < 32)
+			bus = zero;
+		else
+			bus = c & ({WID{1'b1}} & ~({{WID{1'b0}},37'h1fffffffff} << (ir[23:22]*32)) | ({{WID{i[36]}},i[36:0]} << (ir[23:22]*32)));
 	OP_ORSI:
-	   if (WID < 24)
-	       bus = 'd0;
-	   else
-    		bus = c | (i << (ir[17:15]*24));
+		if (WID < 32)
+			bus = zero;
+		else
+			bus = c | (i << (ir[23:22]*32));
 	OP_EORSI:
-	   if (WID < 24)
-	       bus = 'd0;
-	   else
-		bus = c ^ (i << (ir[17:15]*24));
+		if (WID < 32)
+			bus = zero;
+		else
+			bus = c ^ (i << (ir[23:22]*32));
 	OP_SHIFT:
 		case(ir.shifti.func)
 		OP_ASL:	bus = shl[WID*2-1:WID];
 		OP_LSR:	bus = shr[WID-1:0];
 		OP_ASR:	
-			case(ir[42:41])
-			2'd0:	bus = asr[WID*2-1:WID];
-			2'd1: bus = asr[WID*2-1] ? asr[WID*2-1:WID] + asr[WID-1] : asr[WID*2-1:WID];
-			2'd2: bus = asr[WID*2-1:WID] + asr[WID-1];
+			case(ir[46:44])
+			3'd2:	bus = asr[WID*2-1:WID];
+			3'd3: bus = asr[WID*2-1] ? asr[WID*2-1:WID] + asr[WID-1] : asr[WID*2-1:WID];
+			3'd4: bus = asr[WID*2-1:WID] + asr[WID-1];
 			default:	bus = asr[WID*2-1:WID];
 			endcase
 		default:	bus = {(WID/16){16'hDEAD}};
@@ -510,8 +510,9 @@ begin
 	OP_SGEUI: bus = a >= i ? 64'd1 : t;
 
 	OP_MOV:		bus = a;
-	OP_LDAX:	bus = a + i + (b << ir[26:25]);
+	OP_LDA:		bus = a + i + (b << ir[31:29]);
 	OP_BLEND:	bus = ALU0 ? blendo : dead;
+	OP_PFXAB,OP_PFXC:	bus = zero;
 	OP_NOP:		bus = t;	// in case of copy target
 	OP_QFEXT:	bus = qres;
 	// Write the next PC to the link register.

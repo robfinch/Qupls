@@ -48,13 +48,6 @@ begin
 		fnIsLoadz = 1'b1;
 	OP_JSRI:
 		fnIsLoadz = 1'b1;
-	OP_LDX:
-		case(op.lsn.func)
-		FN_LDBUX,FN_LDWUX,FN_LDTUX:
-			fnIsLoadz = 1'b1;
-		default:
-			fnIsLoadz = 1'b0;
-		endcase
 	default:
 		fnIsLoadz = 1'b0;
 	endcase

@@ -75,7 +75,7 @@ begin
 	OP_FLT3:	fnPrec = QuplsPkg::octa;
 	OP_CSR:		fnPrec = QuplsPkg::octa;
 	OP_MOV:		fnPrec = QuplsPkg::octa;
-	OP_LDAX:	fnPrec = QuplsPkg::octa;
+	OP_LDA:	fnPrec = QuplsPkg::octa;
 	OP_QFEXT,
 	OP_VEC,OP_VECZ,
 	OP_NOP,OP_PUSH,OP_POP,OP_ENTER,OP_LEAVE,OP_ATOM:

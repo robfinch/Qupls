@@ -113,6 +113,8 @@ if (rst) begin
 	bank <= 1'b0;
 	instr <= {41'd0,OP_NOP};
 	pc <= RSTPC;
+	pc.bno_t <= 6'd1;
+	pc.bno_f <= 6'd1;
 	cp <= 4'd0;
 	qfext <= FALSE;
 	cptgt <= 16'h0;

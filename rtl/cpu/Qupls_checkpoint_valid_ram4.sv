@@ -47,7 +47,7 @@ parameter NPREGS=PREGS;
 localparam ABIT=$clog2(NPREGS);
 input rst;
 input clk5x;
-input ph4;
+input [4:0] ph4;
 input clka;
 input en;
 input [NPORT-1:0] wr;
@@ -84,7 +84,7 @@ if (rst) begin
 	wcnt <= 3'd0;
 end
 else begin
-	if (ph4)
+	if (ph4[4])
 		wcnt <= 3'd0;
 	else if (wcnt < 3'd4)
 		wcnt <= wcnt + 2'd1;
@@ -140,7 +140,7 @@ for (g = 0; g < NPORT/4; g = g + 1) begin
 	always_ff @(posedge clk5x) if (rst) wc1[g] <= 4'd0; else wc1[g] <= wcm[g];
 	always_ff @(posedge clk5x) if (rst) i1[g] <= 1'b1; else i1[g] <= im[g];
 	always_ff @(posedge clk5x) if (rst) wr1[g] <= 1'b0; else wr1[g] <= wrm[g];
-	always_comb wea[g] <= wr1[g];// & cdar[g];
+	always_comb wea[g] <= wr1[g] & cdar[g];
 	always_comb
 	if (addra[g]==10'd263) begin
 		$display("write addra=%h 263=%d douta=%h dina=%h i1=%d wc1=%d", addra[g], i1[g], douta[g], dina[g], i1[g], wc1[g]);
@@ -224,7 +224,7 @@ for (g = 0; g < NPORT/4; g = g + 1) begin
                                        // cycles when read or write operations are initiated. Pipelined
                                        // internally.
 
-      .enb(1'b1),                      // 1-bit input: Memory enable signal for port B. Must be high on clock
+      .enb(en),                      // 1-bit input: Memory enable signal for port B. Must be high on clock
                                        // cycles when read or write operations are initiated. Pipelined
                                        // internally.
 

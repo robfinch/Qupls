@@ -47,13 +47,8 @@ input instruction_t op;
 begin
 	case(op.any.opcode)
 	OP_JSRI,
-	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDOU,OP_LDH,
-	OP_LDX:
-		case(op.lsn.func)
-		FN_LDAX:	fnIsLoad = 1'b0;
-		default:
-			fnIsLoad = 1'b1;
-		endcase
+	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDOU,OP_LDH:
+		fnIsLoad = 1'b1;
 	default:
 		fnIsLoad = 1'b0;
 	endcase
@@ -65,12 +60,6 @@ input instruction_t op;
 begin
 	case(op.any.opcode)
 	OP_CLOAD:	fnIsCLoad = 1'b1;
-	OP_LDX:
-		case(op.lsn.func)
-		FN_CLOADX:	fnIsCLoad = 1'b1;
-		default:
-			fnIsCLoad = 1'b0;
-		endcase
 	default:
 		fnIsCLoad = 1'b0;
 	endcase

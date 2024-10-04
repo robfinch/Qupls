@@ -59,16 +59,8 @@ begin
 			fnRa = 9'd55;
 		OP_FLT3:
 			fnRa = ir.aRa;
-		OP_LDX:
-			case(ir.ins.lsn.func)
-			FN_LDCTX:	fnRa = 9'd40;	// CTX
-			default:	fnRa = ir.aRa;
-			endcase
-		OP_STX:
-			case(ir.ins.lsn.func)
-			FN_STCTX:	fnRa = 9'd40;	// CTX
-			default:	fnRa = ir.aRa;
-			endcase
+		OP_ADDSI,OP_ANDSI,OP_ORSI,OP_EORSI:
+			fnRa = ir.aRt;
 		default:
 			if (fnImma(ir))
 				fnRa = 9'd0;
@@ -81,7 +73,7 @@ endfunction
 always_comb
 begin
 	Ra = fnRa(instr, has_imma);
-	if (Ra==8'd31 && !(instr.ins.any.opcode==OP_MOV && instr.ins[47]))
+	if (Ra==8'd31 && !(instr.ins.any.opcode==OP_MOV && instr.ins[63]))
 		Ra = 8'd32|om;
 	Ran = instr.ins.r2.Ra.n;
 	Raz = ~|Ra;

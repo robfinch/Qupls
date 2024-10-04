@@ -77,19 +77,6 @@ begin
 				Rc = instr.aRc;
 				Rcn = instr.ins.r3.Rc.n;
 			end
-		OP_STX:
-			case(instr.ins.lsn.func)
-			FN_STCTX:
-				begin
-					Rc = {1'b0,instr.aRa[2:0],instr.aRc[4:0]};
-					Rcn = 1'b0;
-				end
-			default:
-				begin
-					Rc = instr.aRc;
-					Rcn = instr.ins.r3.Rc.n;
-				end
-			endcase
 		default:
 			if (fnImmc(instr)) begin
 				Rc = 9'd0;

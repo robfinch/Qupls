@@ -117,6 +117,7 @@ reg [PREGS-1:0] toFreeList;
 reg [3:0] ffree;
 
 always_comb
+begin
 case(fifo_order)
 2'd0:
 	begin
@@ -163,6 +164,7 @@ case(fifo_order)
 		tags[3] = (freevals[2] & en) ? tags2free[2] : freeCnt + 3'd2;
 	end
 endcase
+end
 
 Qupls_renamer_fifo #(0) ufifo0 (
 	.rst(rst),

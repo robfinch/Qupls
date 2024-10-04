@@ -39,7 +39,7 @@ import QuplsPkg::*;
 
 module Qupls_mcat(stomp, ir, mip);
 input stomp;
-input ex_instruction_t ir;
+input pipeline_reg_t ir;
 output cpu_types_pkg::mc_address_t mip;
 
 always_comb
@@ -51,20 +51,10 @@ else begin
 	OP_ENTER:	mip = 12'h01C;
 	OP_LEAVE:	mip = 12'h1E4;
 	OP_JSRI:	mip = 12'h128;
-	OP_BSET:	mip = 12'h390;
+//	OP_BSTORE:	mip = 12'h390;
 	OP_BMOV:	mip = 12'h3A0;
 	OP_BCMP:	mip = 12'h3B0;
 	OP_BFND:	mip = 12'h3C0;
-	OP_LDX:
-		case(ir.ins.lsn.func.ldn)
-		FN_LDCTX:	mip = 12'h150;
-		default:	mip = 12'h000;
-		endcase
-	OP_STX:
-		case(ir.ins.lsn.func.stn)
-		FN_STCTX:	mip = 12'h100;
-		default:	mip = 12'h000;
-		endcase
 	OP_PUSH:
 		case(ir.ins[39:37])
 		3'd7:	mip = 12'h260;			// pushv

@@ -39,7 +39,8 @@
 
 import QuplsPkg::*;
 
-module Qupls_decode_imm(ins, imma, immb, immc, has_imma, has_immb, has_immc);
+module Qupls_decode_imm(ins, imma, immb, immc, has_imma, has_immb, has_immc,
+	pfxa, pfxb, pfxc);
 input ex_instruction_t ins;
 output cpu_types_pkg::value_t imma;
 output cpu_types_pkg::value_t immb;
@@ -47,6 +48,9 @@ output cpu_types_pkg::value_t immc;
 output reg has_imma;
 output reg has_immb;
 output reg has_immc;
+output reg pfxa;
+output reg pfxb;
+output reg pfxc;
 
 instruction_t insf;
 wire [63:0] imm32x64a;
@@ -70,6 +74,9 @@ begin
 	has_imma = 1'b0;
 	has_immb = 1'b0;
 	has_immc = 1'b0;
+	pfxa = 1'b0;
+	pfxb = 1'b0;
+	pfxc = 1'b0;
 	finsA = 1'd0;
 	finsB = 1'd0;
 	finsC = 1'd0;
@@ -85,58 +92,59 @@ begin
 		endcase
 	OP_ADDI,OP_CMPI,OP_MULI,OP_DIVI,OP_SUBFI:
 		begin
-			immb = {{104{ins.ins[47]}},ins.ins[47:24]};
+			immb = {{32{ins.ins[63]}},ins.ins[63:32]};
 			has_immb = 1'b1;
 		end
 	OP_ANDI:
 		begin
-			immb = {{104{1'b1}},ins.ins[47:24]};
+			immb = {{32{1'b1}},ins.ins[63:32]};
 			has_immb = 1'b1;
 		end
 	OP_ORI,OP_EORI,OP_MULUI,OP_DIVUI:
 		begin
-			immb = {104'h0000,ins.ins[47:24]};
+			immb = {32'h0000,ins.ins[63:32]};
 			has_immb = 1'b1;
 		end
-	OP_ADDSI:
+	OP_AIPSI,OP_ADDSI:
 		begin
-			immb = {{100{ins.ins[47]}},ins.ins[47:20]};
+			immb = {{27{ins.ins[63]}},ins.ins[63:27]};
 			has_immb = 1'b1;
 		end
 	OP_ANDSI:
 		begin
-			immb = {100'hFFFFFFFFFFFFFFFFFFFFFFFFF,ins.ins[47:20]};
+			immb = {27'h7FFFFFF,ins.ins[63:27]};
 			has_immb = 1'b1;
 		end
 	OP_ORSI,OP_EORSI:
 		begin
-			immb = {100'h0,ins.ins[47:20]};
+			immb = {27'h0,ins.ins[63:27]};
 			has_immb = 1'b1;
+		end
+	OP_SHIFT:
+		begin
+			immc = ins.ins.shifti.imm;
+			has_immc = ins.ins.shifti.i;
 		end
 	OP_CSR:
 		begin
+			// ToDo: fix
 			immb = {114'd0,ins.ins[35:22]};
 			has_immb = 1'b1;
 		end
 	OP_RTD:
 		begin
-			immb = {{104{ins.ins[47]}},ins.ins[47:24]};
+			immb = {{32{ins.ins[63]}},ins.ins[63:32]};
 			has_immb = 1'b1;
 		end
 	OP_JSR:
 		begin
-			immb = {{104{ins.ins[47]}},ins.ins[47:24]};
+			immb = {{32{ins.ins[63]}},ins.ins[63:32]};
 			has_immb = 1'b1;
 		end
-	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_CACHE,
+	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDA,OP_CACHE,
 	OP_STB,OP_STW,OP_STT,OP_STO:
 		begin
-			immb = {{104{ins.ins[47]}},ins.ins[47:24]};
-			has_immb = 1'b1;
-		end
-	OP_LDAX:
-		begin
-			immb = {{116{ins.ins[42]}},ins.ins[42:31]};
+			immb = {{43{ins.ins.ls.dispHi[6]}},ins.ins.ls.dispHi,ins.ins.ls.dispLo};
 			has_immb = 1'b1;
 		end
 	OP_FENCE:
@@ -144,28 +152,29 @@ begin
 			immb = {112'h0,ins.ins[23:8]};
 			has_immb = 1'b1;
 		end
-	OP_LDX:
-		begin
-			case(ins.ins.lsn.func)
-			FN_LDCTX:	immb = {{53{ins.aRa[2]}},ins.aRa[2:0],ins.aRt[4:0],3'b0};
-			default:
-				immb = {{116{ins.ins[42]}},ins.ins[42:31]};
-			endcase
-			has_immb = 1'b0;
-		end
-	OP_STX:
-		begin
-			case(ins.ins.lsn.func)
-			FN_STCTX:	immb = {{53{ins.aRa[2]}},ins.aRa[2:0],ins.aRt[4:0],3'b0};
-			default:
-				immb = {{116{ins.ins[42]}},ins.ins[42:31]};
-			endcase
-			has_immb = 1'b0;
-		end
 	OP_Bcc,OP_BccU,OP_FBcc:
 		begin
-			immc = {{108{ins.ins[47]}},ins.ins[47:31],ins.ins[27],ins.ins[20],ins.ins[14]};
+			immc = {{44{ins.ins[63]}},ins.ins[63:44]};
 			has_immc = 1'b1;
+		end
+	OP_PFXAB:
+		begin
+			if (ins.ins.pfx.sw) begin
+				immb = {ins.ins.pfx.imm,8'h00};
+				has_immb = 1'b1;
+				pfxb = 1'b1;
+			end
+			else begin
+				imma = {ins.ins.pfx.imm,8'h00};
+				has_imma = 1'b1;
+				pfxa = 1'b1;
+			end
+		end
+	OP_PFXC:
+		begin
+				immc = {ins.ins.pfx.imm,8'h00};
+				has_immc = 1'b1;
+				pfxc = 1'b1;
 		end
 	default:
 		immb = cpu_types_pkg::value_zero;

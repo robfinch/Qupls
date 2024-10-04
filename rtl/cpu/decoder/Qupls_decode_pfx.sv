@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -44,7 +44,7 @@ function fnIsPfx;
 input instruction_t op;
 begin
 	case(op.any.opcode)
-	OP_PFXA32,OP_PFXB32,OP_PFXC32,
+	OP_PFXAB,OP_PFXC,
 	OP_VEC,OP_VECZ:
 		fnIsPfx = 1'b1;
 	default:

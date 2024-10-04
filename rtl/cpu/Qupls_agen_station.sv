@@ -40,9 +40,9 @@ import cpu_types_pkg::*;
 import QuplsPkg::*;
 
 module Qupls_agen_station(rst, clk, idle_i, issue, rndx, rndxv, rob,
-	rfo_argA, rfo_argB, rfo_argC, rfo_argM, argA_reg, argB_reg, argC_reg,
-	beb_issue, bndx, beb,
-	id, argA, argB, argC, argI, argM,
+	rfo_argA, rfo_argB, rfo_argC, rfo_argM, rfo_argC_ctag,
+	argC_v, beb_issue, bndx, beb,
+	id, argA, argB, argC, argI, argM, argC_ctag,
 	aRa, aRb, aRc, aRt, pRa, pRb, pRc, pRt,
 	pc, op, cp, excv, ldip, idle_o, store_argC_v, store_argI,
 	store_argC_aReg,  store_argC_pReg, store_argC_cndx
@@ -58,9 +58,7 @@ input value_t rfo_argA;
 input value_t rfo_argB;
 input value_t rfo_argC;
 input value_t rfo_argM;
-input pregno_t argA_reg;
-input pregno_t argB_reg;
-input pregno_t argC_reg;
+input rfo_argC_ctag;
 input beb_issue;
 input beb_ndx_t bndx;
 input beb_entry_t beb;
@@ -69,6 +67,8 @@ output rob_ndx_t id;
 output address_t argA;
 output address_t argB;
 output value_t argC;
+output reg argC_ctag;
+output reg argC_v;
 output address_t argI;
 output value_t argM;
 output aregno_t aRa;
@@ -99,10 +99,13 @@ if (rst) begin
 	argC <= {$bits(value_t){1'b0}};
 	argI <= {$bits(address_t){1'b0}};
 	argM <= 64'd0;
+	argC_ctag <= 1'b0;
 	aRa <= 8'd0;
 	aRb <= 8'd0;
 	aRc <= 8'd0;
 	pc <= RSTPC;
+	pc.bno_t <= 6'd1;
+	pc.bno_f <= 6'd1;
 	op <= {41'd0,OP_NOP};
 	cp <= 4'd0;
 	aRt <= 9'd0;
@@ -139,6 +142,7 @@ else begin
 		1'd0:	argC <= rfo_argC;
 		1'd1:	argC <= -rfo_argC;
 		endcase
+		argC_ctag <= rfo_argC_ctag;
 		argI <= address_t'(rob.decbus.immb);
 		argM <= rfo_argM;
 		pRt <= rob.nRt;
@@ -148,9 +152,10 @@ else begin
 		aRa <= rob.decbus.Ra;
 		aRb <= rob.decbus.Rb;
 		aRc <= rob.decbus.Rc;
-		pRa <= argA_reg;
-		pRb <= argB_reg;
-		pRc <= argC_reg;
+		pRa <= rob.pRa;
+		pRb <= rob.pRb;
+		pRc <= rob.pRc;
+		argC_v <= rob.argC_v;
 		cp <= rob.cndx;
 		excv <= rob.excv;
 		store_argC_aReg <= rob.decbus.Rc;

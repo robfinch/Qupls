@@ -82,20 +82,20 @@ input cpu_types_pkg::pc_address_ex_t bsr_tgt;
 input branchmiss;
 input branch_state_t branch_state;
 input cpu_types_pkg::pc_address_ex_t misspc;
-input cpu_types_pkg::pc_address_t commit_pc0;
-input cpu_types_pkg::pc_address_t commit_brtgt0;
+input cpu_types_pkg::pc_address_ex_t commit_pc0;
+input cpu_types_pkg::pc_address_ex_t commit_brtgt0;
 input commit_takb0;
 input [2:0] commit_grp0;
-input cpu_types_pkg::pc_address_t commit_pc1;
-input cpu_types_pkg::pc_address_t commit_brtgt1;
+input cpu_types_pkg::pc_address_ex_t commit_pc1;
+input cpu_types_pkg::pc_address_ex_t commit_brtgt1;
 input commit_takb1;
 input [2:0] commit_grp1;
-input cpu_types_pkg::pc_address_t commit_pc2;
-input cpu_types_pkg::pc_address_t commit_brtgt2;
+input cpu_types_pkg::pc_address_ex_t commit_pc2;
+input cpu_types_pkg::pc_address_ex_t commit_brtgt2;
 input commit_takb2;
 input [2:0] commit_grp2;
-input cpu_types_pkg::pc_address_t commit_pc3;
-input cpu_types_pkg::pc_address_t commit_brtgt3;
+input cpu_types_pkg::pc_address_ex_t commit_pc3;
+input cpu_types_pkg::pc_address_ex_t commit_brtgt3;
 input commit_takb3;
 input [2:0] commit_grp3;
 output reg [31:0] bno_bitmap;
@@ -108,6 +108,7 @@ typedef struct packed {
 	cpu_types_pkg::pc_address_t tgt;
 } btb_entry_t;
 
+pc_address_ex_t [31:0] pcs;
 pc_address_ex_t [31:0] next_pcs;
 reg [4:0] next_act_bno;
 reg [4:0] next_alt_bno;
@@ -122,9 +123,10 @@ btb_entry_t doutb0;
 btb_entry_t doutb1;
 btb_entry_t doutb2;
 btb_entry_t doutb3;
-reg w;
+reg w0,w1,w2,w3;
 btb_entry_t tmp0, tmp1, tmp2, tmp3;
-integer nn;
+integer nn,mm;
+genvar g;
 
 wire [5:0] ffz0,ffz1;
 ffz48 uffz0 (.i({16'hFFFF,bno_bitmap}), .o(ffz0));
@@ -201,7 +203,7 @@ ffz48 uffz1 (.i({16'hFFFF,bno_bitmap & ~(32'd1 << ffz0)}), .o(ffz1));
                                        // parameter READ_RESET_VALUE_B.
 
       .sleep(1'b0),                   // 1-bit input: sleep signal to enable the dynamic power saving feature.
-      .wea(w)                        // WRITE_DATA_WIDTH_A/BYTE_WRITE_WIDTH_A-bit input: Write enable vector
+      .wea(w0)                        // WRITE_DATA_WIDTH_A/BYTE_WRITE_WIDTH_A-bit input: Write enable vector
                                        // for port A input data port dina. 1 bit wide when word-wide writes are
                                        // used. In byte-wide write configurations, each bit controls the
                                        // writing one byte of dina to address addra. For example, to
@@ -281,7 +283,7 @@ ffz48 uffz1 (.i({16'hFFFF,bno_bitmap & ~(32'd1 << ffz0)}), .o(ffz1));
                                        // parameter READ_RESET_VALUE_B.
 
       .sleep(1'b0),                   // 1-bit input: sleep signal to enable the dynamic power saving feature.
-      .wea(w)                        // WRITE_DATA_WIDTH_A/BYTE_WRITE_WIDTH_A-bit input: Write enable vector
+      .wea(w1)                        // WRITE_DATA_WIDTH_A/BYTE_WRITE_WIDTH_A-bit input: Write enable vector
                                        // for port A input data port dina. 1 bit wide when word-wide writes are
                                        // used. In byte-wide write configurations, each bit controls the
                                        // writing one byte of dina to address addra. For example, to
@@ -361,7 +363,7 @@ ffz48 uffz1 (.i({16'hFFFF,bno_bitmap & ~(32'd1 << ffz0)}), .o(ffz1));
                                        // parameter READ_RESET_VALUE_B.
 
       .sleep(1'b0),                   // 1-bit input: sleep signal to enable the dynamic power saving feature.
-      .wea(w)                        // WRITE_DATA_WIDTH_A/BYTE_WRITE_WIDTH_A-bit input: Write enable vector
+      .wea(w2)                        // WRITE_DATA_WIDTH_A/BYTE_WRITE_WIDTH_A-bit input: Write enable vector
                                        // for port A input data port dina. 1 bit wide when word-wide writes are
                                        // used. In byte-wide write configurations, each bit controls the
                                        // writing one byte of dina to address addra. For example, to
@@ -441,7 +443,7 @@ ffz48 uffz1 (.i({16'hFFFF,bno_bitmap & ~(32'd1 << ffz0)}), .o(ffz1));
                                        // parameter READ_RESET_VALUE_B.
 
       .sleep(1'b0),                   // 1-bit input: sleep signal to enable the dynamic power saving feature.
-      .wea(w)                        // WRITE_DATA_WIDTH_A/BYTE_WRITE_WIDTH_A-bit input: Write enable vector
+      .wea(w3)                        // WRITE_DATA_WIDTH_A/BYTE_WRITE_WIDTH_A-bit input: Write enable vector
                                        // for port A input data port dina. 1 bit wide when word-wide writes are
                                        // used. In byte-wide write configurations, each bit controls the
                                        // writing one byte of dina to address addra. For example, to
@@ -452,16 +454,28 @@ ffz48 uffz1 (.i({16'hFFFF,bno_bitmap & ~(32'd1 << ffz0)}), .o(ffz1));
 
 always_ff @(posedge clk)
 	addrb0 <= pc0.pc[12:3];
-
+	
+// Make BS_DONE sticky
+reg bs_done;
+always_ff @(posedge clk)
+if (rst)
+	bs_done <= FALSE;
+else begin
+	if (bs_done)
+		bs_done <= TRUE;
+	else if (clk_en)
+		bs_done <= FALSE;
+end
+	
 always_comb
 if (rst) begin
-	next_bno_bitmap = 32'h1;
+	next_bno_bitmap = 32'h3;
 	next_act_bno = ffz0;
 	next_alt_bno = ffz1;
 	next_is_alt = 1'b0;
 	for (nn = 0; nn < 32; nn = nn + 1) begin
-		next_pcs[nn].bno_t = 6'd0;
-		next_pcs[nn].bno_f = 6'd0;
+		next_pcs[nn].bno_t = 6'd1;
+		next_pcs[nn].bno_f = 6'd1;
 		next_pcs[nn].pc = RSTPC;
 	end
 	takb0 = 1'b0;
@@ -470,7 +484,8 @@ if (rst) begin
 	takb3 = 1'b0;
 end
 else begin
-	next_act_bno = is_alt ? prev_act_bno : act_bno;
+//	next_act_bno = is_alt ? prev_act_bno : act_bno;
+	next_act_bno = 5'd1;//act_bno;
 	next_alt_bno = alt_bno;
 	next_bno_bitmap = bno_bitmap;
 	next_bno_bitmap[0] = 1'b1;
@@ -479,6 +494,8 @@ else begin
 	takb1 = 1'b0;
 	takb2 = 1'b0;
 	takb3 = 1'b0;
+	for (nn = 0; nn < 32; nn = nn + 1)
+		next_pcs[nn] = pcs[nn];
 	/* Under construction
 	if (p_override[0])
 		next_bno_bitmap[po_bno[0]] = 1'b0;
@@ -493,9 +510,9 @@ else begin
 	// cache line can be fetched, but the group will not be valid yet.
 	// The group is loaded at state 1 below.
 	if (do_bsr) begin
-		next_pcs[bsr_tgt.bno_t].pc = bsr_tgt.pc;
+		next_pcs[bsr_tgt.bno_t] = bsr_tgt;
 	end
-	else if (branch_state==BS_DONE) begin
+	else if (branch_state==BS_DONE||bs_done) begin
 		next_act_bno = misspc.bno_t;
 		next_alt_bno = 6'd0;
 		next_pcs[next_act_bno].pc = misspc;
@@ -505,56 +522,64 @@ else begin
 		next_bno_bitmap[misspc.bno_f] = 1'b0;
 	end
 	else if (en && pc0.pc==doutb0.pc && doutb0.takb) begin
-		next_act_bno = ffz0;
-		next_alt_bno = ffz1;
+		next_act_bno = 5'd1;//pc0.bno_t;//ffz1;
+		next_alt_bno = ffz0;
 		next_pcs[next_act_bno].pc = doutb0.tgt;
 		next_pcs[next_act_bno].bno_t = next_act_bno;
-		next_pcs[next_act_bno].bno_f = ffz1;
+		next_pcs[next_act_bno].bno_f = ffz0;
 		// Alocate two streams, one for true, one for false
+		next_bno_bitmap[pc0.bno_t] = 1'b1;
+		/*
 		next_bno_bitmap[ffz0] = 1'b1;
-		next_bno_bitmap[ffz1] = 1'b1;
-		next_pcs[ffz1].pc = pc0 + 5'd8;
-		next_pcs[ffz1].bno_t = ffz1;
-		next_pcs[ffz1].bno_f = 6'd0;
+		next_pcs[ffz0].pc = pc0.pc + 5'd8;
+		next_pcs[ffz0].bno_t = ffz0;
+		next_pcs[ffz0].bno_f = 6'd0;
+		*/
 		takb0 = 1'b1;
 	end
 	else if (en && pc1.pc==doutb1.pc && doutb1.takb) begin
-		next_act_bno = ffz0;
-		next_alt_bno = ffz1;
+		next_act_bno = 5'd1;//pc1.bno_t;//ffz0;
+		next_alt_bno = ffz0;
 		next_pcs[next_act_bno].pc = doutb1.tgt;
 		next_pcs[next_act_bno].bno_t = next_act_bno;
-		next_pcs[next_act_bno].bno_f = ffz1;
+		next_pcs[next_act_bno].bno_f = ffz0;
+		next_bno_bitmap[pc1.bno_t] = 1'b1;
+		/*
 		next_bno_bitmap[ffz0] = 1'b1;
-		next_bno_bitmap[ffz1] = 1'b1;
-		next_pcs[ffz1].pc = pc1 + 5'd8;
-		next_pcs[ffz1].bno_t = ffz1;
-		next_pcs[ffz1].bno_f = 6'd0;
+		next_pcs[ffz0].pc = pc1.pc + 5'd8;
+		next_pcs[ffz0].bno_t = ffz1;
+		next_pcs[ffz0].bno_f = 6'd0;
+		*/
 		takb1 = 1'b1;
 	end
 	else if (en && pc2.pc==doutb2.pc && doutb2.takb) begin
-		next_act_bno = ffz0;
-		next_alt_bno = ffz1;
+		next_act_bno = 5'd1;//pc2.bno_t;//ffz0;
+		next_alt_bno = ffz0;
 		next_pcs[next_act_bno].pc = doutb2.tgt;
 		next_pcs[next_act_bno].bno_t = next_act_bno;
-		next_pcs[next_act_bno].bno_f = ffz1;
+		next_pcs[next_act_bno].bno_f = ffz0;
+		next_bno_bitmap[pc2.bno_t] = 1'b1;
+		/*
 		next_bno_bitmap[ffz0] = 1'b1;
-		next_bno_bitmap[ffz1] = 1'b1;
-		next_pcs[ffz1].pc = pc2 + 5'd8;
-		next_pcs[ffz1].bno_t = ffz1;
-		next_pcs[ffz1].bno_f = 6'd0;
+		next_pcs[ffz0].pc = pc2.pc + 5'd8;
+		next_pcs[ffz0].bno_t = ffz0;
+		next_pcs[ffz0].bno_f = 6'd0;
+		*/
 		takb2 = 1'b1;
 	end
 	else if (en && pc3.pc==doutb3.pc && doutb3.takb) begin
-		next_act_bno = ffz0;
-		next_alt_bno = ffz1;
+		next_act_bno = 5'd1;//pc3.bno_t;//ffz0;
+		next_alt_bno = ffz0;
 		next_pcs[next_act_bno].pc = doutb3.tgt;
 		next_pcs[next_act_bno].bno_t = next_act_bno;
-		next_pcs[next_act_bno].bno_f = ffz1;
+		next_pcs[next_act_bno].bno_f = ffz0;
+		next_bno_bitmap[pc3.bno_t] = 1'b1;
+		/*
 		next_bno_bitmap[ffz0] = 1'b1;
-		next_bno_bitmap[ffz1] = 1'b1;
-		next_pcs[ffz1].pc = pc3 + 5'd8;
-		next_pcs[ffz1].bno_t = ffz1;
-		next_pcs[ffz1].bno_f = 6'd0;
+		next_pcs[ffz0].pc = pc3.pc + 5'd8;
+		next_pcs[ffz0].bno_t = ffz0;
+		next_pcs[ffz0].bno_f = 6'd0;
+		*/
 		takb3 = 1'b1;
 	end
 	else begin
@@ -598,31 +623,45 @@ else begin
 				next_pc = {pc[$bits(pc_address_t)-1:6],pc4[5:0]};
 			*/
 			if (micro_code_active) begin
-				next_pcs[next_act_bno].pc = pc;
+				next_pcs[next_act_bno] = pc;
 			end
 			else begin
 				case(1'b1)
-				mip0v:	begin next_pcs[next_act_bno].pc = pc + 5'd8; end
-				mip1v:	begin next_pcs[next_act_bno].pc = pc + 5'd16; end
-				mip2v:	begin next_pcs[next_act_bno].pc = pc + 5'd24; end
-				mip3v:	begin next_pcs[next_act_bno].pc = pc + 6'd32; end
-				default:	begin next_pcs[next_act_bno].pc = pc + 6'd32; end	// four instructions
+				mip0v:	begin next_pcs[next_act_bno] = pc; next_pcs[next_act_bno].pc = pc.pc + 5'd8; end
+				mip1v:	begin next_pcs[next_act_bno] = pc; next_pcs[next_act_bno].pc = pc.pc + 5'd16; end
+				mip2v:	begin next_pcs[next_act_bno] = pc; next_pcs[next_act_bno].pc = pc.pc + 5'd24; end
+				mip3v:	begin next_pcs[next_act_bno] = pc; next_pcs[next_act_bno].pc = pc.pc + 6'd32; end
+				default:	begin next_pcs[next_act_bno] = pc; next_pcs[next_act_bno].pc = pc.pc + 6'd32; end	// four instructions
 				endcase
 			end
 		end
 		// If stuck on the same PC, fetch alternate path
-		if (next_pcs[next_act_bno]==pc) begin
-			next_is_alt = 1'b1;
-			next_act_bno = alt_bno;
+		if (next_pcs[next_act_bno].pc==pc.pc) begin
+//			next_is_alt = 1'b1;
+//			next_act_bno = alt_bno;
 		end
 	end
 end
 
+generate begin : gPCs
+	for (g = 0; g < 32; g = g + 1) begin
+		always_ff @(posedge clk)
+		if (rst) begin
+			pcs[g].bno_t <= 6'd1;
+			pcs[g].bno_f <= 6'd1;
+			pcs[g].pc <= RSTPC;
+		end
+		else
+			pcs[g] <= next_pcs[g];
+	end
+end
+endgenerate
+
 always_ff @(posedge clk)
 if (rst) begin
-	prev_act_bno <= 6'd0;
-	act_bno <= 6'd0;
-	alt_bno <= 6'd0;
+	prev_act_bno <= 6'd1;
+	act_bno <= 6'd1;
+	alt_bno <= 6'd1;
 end
 else begin
 	if (clk_en) begin
@@ -640,13 +679,13 @@ else begin
 end
 always_ff @(posedge clk)
 if (rst)
-	bno_bitmap <= 64'h1;
+	bno_bitmap <= 64'h3;
 else begin
 	if (clk_en)
 		bno_bitmap <= next_bno_bitmap;
 end
 
-assign next_pc = next_pcs[act_bno];
+assign next_pc = next_pcs[next_act_bno];
 
 generate begin : giGrp
 if (SUPPORT_IBH) begin
@@ -691,7 +730,10 @@ endgenerate
 
 always_ff @(posedge clk)
 if (rst) begin
-	w <= 1'd0;
+	w0 <= 1'd0;
+	w1 <= 1'd0;
+	w2 <= 1'd0;
+	w3 <= 1'd0;
 	addra <= 10'd0;
 	tmp0 <= 'd0;
 	tmp1 <= 'd0;
@@ -699,24 +741,28 @@ if (rst) begin
 	tmp3 <= 'd0;
 end
 else begin
-	tmp0.pc <= commit_pc0;
+	tmp0.pc <= commit_pc0.pc;
 	tmp0.takb <= commit_takb0;
-	tmp0.tgt <= commit_brtgt0;
+	tmp0.tgt <= commit_brtgt0.pc;
 	tmp0.grp <= commit_grp0;
-	tmp1.pc <= commit_pc1;
+	tmp1.pc <= commit_pc1.pc;
 	tmp1.takb <= commit_takb1;
-	tmp1.tgt <= commit_brtgt1;
+	tmp1.tgt <= commit_brtgt1.pc;
 	tmp1.grp <= commit_grp1;
-	tmp2.pc <= commit_pc2;
+	tmp2.pc <= commit_pc2.pc;
 	tmp2.takb <= commit_takb2;
-	tmp2.tgt <= commit_brtgt2;
+	tmp2.tgt <= commit_brtgt2.pc;
 	tmp2.grp <= commit_grp2;
-	tmp3.pc <= commit_pc3;
+	tmp3.pc <= commit_pc3.pc;
 	tmp3.takb <= commit_takb3;
-	tmp3.tgt <= commit_brtgt3;
+	tmp3.tgt <= commit_brtgt3.pc;
 	tmp3.grp <= commit_grp3;
-	addra <= commit_pc0[12:3];
-	w <= commit_takb0|commit_takb1|commit_takb2|commit_takb3;
+	addra <= commit_pc0.pc[12:3];
+	w0 <= commit_takb0;
+	w1 <= commit_takb1;
+	w2 <= commit_takb2;
+	w3 <= commit_takb3;
+//	w <= commit_takb0|commit_takb1|commit_takb2|commit_takb3;
 end
 
 endmodule

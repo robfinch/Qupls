@@ -43,6 +43,7 @@
 //  7720 LUTs / 14511 FFs / 29 BRAMs  32kB cache + victim cache
 // ============================================================================
 
+import const_pkg::*;
 import fta_bus_pkg::*;
 import QuplsPkg::*;
 import Qupls_cache_pkg::*;
@@ -147,8 +148,11 @@ if (ce)
 	nop2 <= nop;
 assign nop_o = nop2;
 always_ff @(posedge clk)
-if (rst)
-	ip2 <= RSTPC;
+if (rst) begin
+	ip2.bno_t <= 6'd1;
+	ip2.bno_f <= 6'd1;
+	ip2.pc <= RSTPC;
+end
 else begin
 	if (ce)
 		ip2 <= ip;
@@ -157,7 +161,14 @@ always_ff @(posedge clk)
 if (ce)
 	dp2 <= dp;
 always_comb
-	ihit = ihit1e&ihit1o;
+begin
+	if (ip[9]==1'b0 && ip[8:0] < {3'd5,6'd0} && ihit1e && PERFORMANCE)
+		ihit = TRUE;
+	else if (ip[9]==1'b1 && ip[8:0] < {3'd5,6'd0} && ihit1o && PERFORMANCE)
+		ihit = TRUE;
+	else
+		ihit = ihit1e&ihit1o;
+end
 always_ff @(posedge clk)
 if (rst)
 	ihit2e <= 1'b0;

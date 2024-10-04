@@ -101,7 +101,7 @@ wire [1:0] cap_tag_hit;
 real IPC,PIPC;
 integer nn,mm,n2,n3,n4,m4,n5,n6,n7,n8,n9,n10,n11,n12,n13,n14,n15,n17;
 integer n16r, n16c, n12r, n12c, n14r, n14c, n17r, n17c, n18r, n18c;
-integer n19,n20,n21,n22,n23,n24,n25,n26,n27,n28,n29,i;
+integer n19,n20,n21,n22,n23,n24,n25,n26,n27,n28,n29,i,n30;
 genvar g,h,gvg;
 rndx_t alu0_re;
 reg [127:0] message;
@@ -183,6 +183,7 @@ wire rfo_fpu0_argA_ctag;
 wire rfo_fpu0_argB_ctag;
 wire rfo_agen0_argA_ctag;
 wire rfo_agen0_argB_ctag;
+wire rfo_agen0_argC_ctag;
 wire rfo_agen1_argA_ctag;
 wire rfo_agen1_argB_ctag;
 wire rfo_store_argC_ctag;
@@ -222,6 +223,7 @@ pregno_t agen0_argA_reg;
 pregno_t agen0_argB_reg;
 pregno_t agen0_argC_reg;
 pregno_t agen0_argM_reg;
+wire agen0_argC_ctag;
 
 pregno_t agen1_argA_reg;
 pregno_t agen1_argB_reg;
@@ -253,6 +255,7 @@ reg [1:0] robentry_islot [0:ROB_ENTRIES-1];
 wire [1:0] next_robentry_islot [0:ROB_ENTRIES-1];
 reg [1:0] lsq_islot [0:LSQ_ENTRIES*2-1];
 rob_bitmask_t robentry_stomp;
+wire [4:0] stomp_bno;
 wire stomp_fet, stomp_mux, stomp_x4;
 wire stomp_dec, stomp_ren, stomp_que, stomp_quem;
 reg stomp_fet1,stomp_mux1,stomp_mux2;
@@ -558,6 +561,7 @@ aregno_t agen0_aRb;
 aregno_t agen0_aRt;
 pregno_t agen0_Ra;
 pregno_t agen0_Rb;
+pregno_t agen0_Rc;
 pregno_t agen0_Rt;
 pregno_t agen0_pRc;
 checkpt_ndx_t agen0_cp;
@@ -597,7 +601,7 @@ reg [2:0] excmissgrp;
 reg excmiss;
 ex_instruction_t excir;
 reg excret;
-pc_address_t exc_ret_pc;
+pc_address_ex_t exc_ret_pc;
 wire do_bsr;
 pc_address_ex_t bsr_tgt;
 mc_address_t exc_ret_mcip;
@@ -713,11 +717,11 @@ wire [15:0] dramN_tagsi [0:NDATA_PORTS-1];
 rob_ndx_t [NDATA_PORTS-1:0] dramN_id;
 
 reg [2:0] cmtcnt;
-pc_address_t commit_pc0, commit_pc1, commit_pc2, commit_pc3;
-pc_address_t commit_brtgt0;
-pc_address_t commit_brtgt1;
-pc_address_t commit_brtgt2;
-pc_address_t commit_brtgt3;
+pc_address_ex_t commit_pc0, commit_pc1, commit_pc2, commit_pc3;
+pc_address_ex_t commit_brtgt0;
+pc_address_ex_t commit_brtgt1;
+pc_address_ex_t commit_brtgt2;
+pc_address_ex_t commit_brtgt3;
 reg commit_br0;
 reg commit_br1;
 reg commit_br2;
@@ -786,6 +790,8 @@ always_comb
 begin
 	nopi = {$bits(pipeline_reg_t){1'b0}};
 	nopi.pc = RSTPC;
+	nopi.pc.bno_t = 6'd1;
+	nopi.pc.bno_f = 6'd1;
 	nopi.mcip = 12'h1A0;
 	nopi.len = 4'd6;
 	nopi.ins = {41'd0,OP_NOP};
@@ -887,6 +893,7 @@ assign rfo_agen0_argA_ctag = rfo_ctag[10];
 assign rfo_agen0_argB = rfo[11];
 assign rfo_agen0_argB_ctag = rfo_ctag[11];
 assign rfo_agen0_argC = rfo[22];
+assign rfo_agen0_argC_ctag = rfo_ctag[22];
 assign rfo_agen0_argM = rfo[19];
 
 assign rfo_agen1_argA = rfo[12];
@@ -958,7 +965,6 @@ wire pt0_dec, pt1_dec, pt2_dec, pt3_dec;		// predict taken branches
 reg pt0_r, pt1_r, pt2_r, pt3_r;
 reg pt0_q, pt1_q, pt2_q, pt3_q;
 reg regs;
-wire [3:0] ntakb;
 reg [3:0] takb_pc;
 reg [3:0] takb_f;
 reg [3:0] takb_fet;
@@ -1195,7 +1201,7 @@ Qupls_btb ubtb1
 (
 	.rst(irst),
 	.clk(clk),
-	.clk_en(advance_pipeline),
+	.clk_en(advance_f),
 	.en(1'b1),
 	.rclk(~clk),
 	.micro_code_active(micro_code_active),
@@ -1203,7 +1209,7 @@ Qupls_btb ubtb1
 	.igrp(igrp),
 	.length_byte(length_byte),
 	.pe_bsdone(pe_bsdone),
-	.do_bsr(do_bsr && !(stomp_mux|stomp_mux1|stomp_mux2)),
+	.do_bsr(do_bsr),
 	.bsr_tgt(bsr_tgt),
 	.mip0v(mip0v),
 	.mip1v(mip1v),
@@ -1254,10 +1260,10 @@ gselectPredictor ugsp1
 	.xbr1(commit_br1),
 	.xbr2(commit_br2),
 	.xbr3(commit_br3),
-	.xip0(commit_pc0), 
-	.xip1(commit_pc1),
-	.xip2(commit_pc2),
-	.xip3(commit_pc3),
+	.xip0(commit_pc0.pc), 
+	.xip1(commit_pc1.pc),
+	.xip2(commit_pc2.pc),
+	.xip3(commit_pc3.pc),
 	.takb0(commit_takb0),
 	.takb1(commit_takb1),
 	.takb2(commit_takb2),
@@ -1368,7 +1374,7 @@ else begin
 		bms2 <= bms;
 		bms3 <= bms2;
 		ihit3 <= ihit_f;
-		do_bsr2 <= do_bsr && !(stomp_mux|stomp_mux1|stomp_mux2);
+		do_bsr2 <= do_bsr;
 		if (micro_code_active) begin
 			do_bsr3 <= do_bsr2;
 		end
@@ -1380,7 +1386,7 @@ else begin
 		do_bsr5 <= do_bsr4;
 		do_bsr6 <= do_bsr5;
 		do_bsr7 <= do_bsr6;
-		do_bsr_h <= ((do_bsr && !(stomp_mux|stomp_mux1|stomp_mux2)) || do_bsr_h) && !ihit;
+		do_bsr_h <= ((do_bsr) || do_bsr_h) && !ihit;
 	end
 end
 
@@ -1622,8 +1628,8 @@ end
 
 always_ff @(posedge clk)
 if (irst) begin
-	pc.bno_t <= 6'd0;
-	pc.bno_f <= 6'd0;
+	pc.bno_t <= 6'd1;
+	pc.bno_f <= 6'd1;
 	pc.pc <= RSTPC;
 	pcf <= FALSE;
 	stomp_fet1 = FALSE;
@@ -1634,8 +1640,6 @@ if (irst) begin
 	ins3_d_inv = FALSE;
 end
 else begin
-	if (alt_ihit)
-		fetch_alt <= FALSE;
 	if (advance_f) begin
 		pcf <= FALSE;
 		if (get_next_pc) begin
@@ -1644,13 +1648,13 @@ else begin
 			else
 				pc <= next_pc;			// early PC predictor from BTB logic
 		end
-		else if (!pcf && (branch_state==BS_DONE || (do_bsr && !(stomp_mux|stomp_mux1|stomp_mux2))))
+		else if (!pcf && (branch_state==BS_DONE || do_bsr))
 			pc <= next_pc;
 	end
 	// Prevent hang when the pipeline cannot advance because there is no room 
 	// to queue, yet the IP needs to change to get out of the branch miss state.
 	else begin
-		if (pe_bsdone || (do_bsr && !(stomp_mux|stomp_mux1|stomp_mux2))) begin
+		if (pe_bsdone || do_bsr) begin
 			pc <= next_pc;
 			pcf <= TRUE;
 		end
@@ -1749,8 +1753,8 @@ end
 
 always_ff @(posedge clk)
 if (irst) begin
-	mc_adr.bno_t <= 6'd0;
-	mc_adr.bno_f <= 6'd0;
+	mc_adr.bno_t <= 6'd1;
+	mc_adr.bno_f <= 6'd1;
 	mc_adr.pc <= RSTPC;
 end
 else begin
@@ -1759,10 +1763,10 @@ else begin
 			mc_adr <= exc_ret_pc;
 		else begin
 			if (micro_ip==12'h000) begin
-						 if (mip0v) mc_adr <= pc0_d;
-				else if (mip1v) mc_adr <= pc1_d;
-				else if (mip2v) mc_adr <= pc2_d;
-				else if (mip3v) mc_adr <= pc3_d;
+						 if (mip0v) mc_adr <= ins0_dec.pc;//pc0_d;
+				else if (mip1v) mc_adr <= ins1_dec.pc;//pc1_d;
+				else if (mip2v) mc_adr <= ins2_dec.pc;//pc2_d;
+				else if (mip3v) mc_adr <= ins3_dec.pc;//pc3_d;
 			end
 		end
 	end
@@ -2115,6 +2119,7 @@ Qupls_pipeline_seg1 uiext1
 	.en_i(advance_pipeline),
 	.ihit(ihito),
 	.sr(sr),
+	.stomp_bno(stomp_bno),
 	.stomp_fet(stomp_fet),
 	.stomp_mux(stomp_mux|stomp_mux1|stomp_mux2/*icnop||brtgtv||fetch_new_block_x*/),
 	.stomp_dec(stomp_dec),
@@ -2377,7 +2382,6 @@ wire [23:0] arnv;
 pregno_t [23:0] prn;
 checkpt_ndx_t [23:0] rn_cp;
 wire [23:0] prnv;
-reg [23:0] prnvv;
 wire [0:0] arnbank [23:0];
 reg [2:0] cndxi;
 
@@ -2411,7 +2415,7 @@ begin
 	arn[20] = ins3_dec.decbus.Rm; arnt[20] = 1'b0; arng[20] = 3'd3;
  	arn[21] = 8'h00; arnt[21] = 1'b0; arng[21] = 3'd4;
  	arn[22] = 8'h00; arnt[22] = 1'b0; arng[22] = 3'd4;
- 	arn[23] = 8'h00; arnt[23] = 1'b0; arng[23] = 3'd4;
+ 	arn[23] = 8'h00; arnt[23] = 1'b0; arng[23] = 3'd0;
  	
 	rn_cp[0] = cndx;
 	rn_cp[1] = cndx;
@@ -2442,10 +2446,10 @@ begin
 	rn_cp[20] = cndx + cndxi;
 
 
-	rn_cp[16] = store_argC_cndx;
+	rn_cp[16] = 4'd0;
 	rn_cp[21] = 4'd0;
 	rn_cp[22] = 4'd0;
-	rn_cp[23] = 4'd0;
+	rn_cp[23] = store_argC_cndx;
 
 end
 
@@ -2658,14 +2662,14 @@ reg stomp1_q;
 reg stomp2_q;
 reg stomp3_q;
 // Detect stomp on leading instructions due to a branch.
-wire stomp0b_r = branch_state > BS_STATE3 && misspc > pc0_r;
-wire stomp1b_r = branch_state > BS_STATE3 && misspc > pc1_r;
-wire stomp2b_r = branch_state > BS_STATE3 && misspc > pc2_r;
-wire stomp3b_r = branch_state > BS_STATE3 && misspc > pc3_r;
-wire stomp0_r = /*~qd_r[0]||stomp_ren||stomp0b_r*/FALSE;
-wire stomp1_r = /*~qd_r[1]||stomp_ren||stomp1b_r||*/FALSE;//pt0_r||XWID < 2;
-wire stomp2_r = /*~qd_r[2]||stomp_ren||stomp2b_r||*/FALSE;//pt0_r||pt1_r||XWID < 3;
-wire stomp3_r = /*~qd_r[3]||stomp_ren||stomp3b_r||*/FALSE;//pt0_r||pt1_r||pt2_r||XWID < 4;
+wire stomp0b_r = branch_state > BS_STATE3 && misspc.pc > pc0_r.pc;
+wire stomp1b_r = branch_state > BS_STATE3 && misspc.pc > pc1_r.pc;
+wire stomp2b_r = branch_state > BS_STATE3 && misspc.pc > pc2_r.pc;
+wire stomp3b_r = branch_state > BS_STATE3 && misspc.pc > pc3_r.pc;
+wire stomp0_r = /*~qd_r[0]||stomp_ren||stomp0b_r*/stomp_ren && pc0_r.bno_t==stomp_bno;
+wire stomp1_r = /*~qd_r[1]||stomp_ren||stomp1b_r||*/stomp_ren && pc1_r.bno_t==stomp_bno;//pt0_r||XWID < 2;
+wire stomp2_r = /*~qd_r[2]||stomp_ren||stomp2b_r||*/stomp_ren && pc2_r.bno_t==stomp_bno;//pt0_r||pt1_r||XWID < 3;
+wire stomp3_r = /*~qd_r[3]||stomp_ren||stomp3b_r||*/stomp_ren && pc3_r.bno_t==stomp_bno;//pt0_r||pt1_r||pt2_r||XWID < 4;
 always_ff @(posedge clk)
 if (irst)
 	stomp0_q <= FALSE;
@@ -2680,12 +2684,12 @@ else begin
 	if (advance_pipeline_seg2)
 		stomp1_q <= stomp1_r;
 end
-always_ff @(posedge clk) if (advance_pipeline_seg2) stomp2_q <= stomp2_r;
-always_ff @(posedge clk) if (advance_pipeline_seg2) stomp3_q <= stomp3_r;
-assign stomp0 = (stomp0_q|stomp_que|stomp_quem);
-assign stomp1 = (stomp1_q|stomp_que|stomp_quem|ins0_que.decbus.macro);
-assign stomp2 = (stomp2_q|stomp_que|stomp_quem|ins0_que.decbus.macro|ins1_que.decbus.macro);
-assign stomp3 = (stomp3_q|stomp_que|stomp_quem|ins0_que.decbus.macro|ins1_que.decbus.macro|ins2_que.decbus.macro);
+always_ff @(posedge clk) if (advance_pipeline) stomp2_q <= stomp2_r;
+always_ff @(posedge clk) if (advance_pipeline) stomp3_q <= stomp3_r;
+assign stomp0 = (stomp0_q|stomp_que|stomp_quem) && ins0_que.pc.bno_t==stomp_bno;
+assign stomp1 = (stomp1_q|stomp_que|stomp_quem|ins0_que.decbus.macro) && ins1_que.pc.bno_t==stomp_bno;
+assign stomp2 = (stomp2_q|stomp_que|stomp_quem|ins0_que.decbus.macro|ins1_que.decbus.macro) && ins2_que.pc.bno_t==stomp_bno;
+assign stomp3 = (stomp3_q|stomp_que|stomp_quem|ins0_que.decbus.macro|ins1_que.decbus.macro|ins2_que.decbus.macro) && ins3_que.pc.bno_t==stomp_bno;
 wire ornop0 = 1'b0;
 wire ornop1 = ins0_que.decbus.bsr;
 wire ornop2 = ins0_que.decbus.bsr || ins1_que.decbus.bsr;
@@ -2974,16 +2978,17 @@ Qupls_rat #(.NPORT(24)) urat1
 	.rnt(arnt),
 	.rnv(arnv),
 	.rn_cp(rn_cp),
+	.st_prn(store_argC_pReg),
 	.prn(prn),
 	.prv(prnv),
 	.wrbanka(sr.om==2'd0 ? 1'b0 : 1'b0),	// For now, only 1 bank
 	.wrbankb(sr.om==2'd0 ? 1'b0 : 1'b0),
 	.wrbankc(sr.om==2'd0 ? 1'b0 : 1'b0),
 	.wrbankd(sr.om==2'd0 ? 1'b0 : 1'b0),
-	.wr0(Rt0_decv && ins0_dec.aRt!=8'd0),// && !stomp0 && ~ins0_ren.decbus.Rtz),
-	.wr1(Rt1_decv && ins1_dec.aRt!=8'd0),// && !stomp1 && ~ins1_ren.decbus.Rtz),
-	.wr2(Rt2_decv && ins2_dec.aRt!=8'd0),// && !stomp2 && ~ins2_ren.decbus.Rtz),
-	.wr3(Rt3_decv && ins3_dec.aRt!=8'd0),// && !stomp3 && ~ins3_ren.decbus.Rtz),
+	.wr0(Rt0_decv && ins0_dec.aRt!=8'd0 && !ren_stallq),// && !stomp0 && ~ins0_ren.decbus.Rtz),
+	.wr1(Rt1_decv && ins1_dec.aRt!=8'd0 && !ren_stallq),// && !stomp1 && ~ins1_ren.decbus.Rtz),
+	.wr2(Rt2_decv && ins2_dec.aRt!=8'd0 && !ren_stallq),// && !stomp2 && ~ins2_ren.decbus.Rtz),
+	.wr3(Rt3_decv && ins3_dec.aRt!=8'd0 && !ren_stallq),// && !stomp3 && ~ins3_ren.decbus.Rtz),
 	.wra(ins0_dec.aRt),
 	.wrb(ins1_dec.aRt),
 	.wrc(ins2_dec.aRt),
@@ -3057,8 +3062,8 @@ always_ff @(posedge clk) if (advance_pipeline_seg2) mcip3_que <= mcip3_ren;
 
 always_ff @(posedge clk)
 if (irst) begin
-	pc0_f.bno_t <= 6'd0;
-	pc0_f.bno_f <= 6'd0;
+	pc0_f.bno_t <= 6'd1;
+	pc0_f.bno_f <= 6'd1;
 	pc0_f.pc <= RSTPC;
 end
 else begin
@@ -3117,8 +3122,8 @@ end
 pc_address_ex_t pc0_x1;
 always_ff @(posedge clk)
 if (irst) begin
-	pc0_x1.bno_t <= 6'd0;
-	pc0_x1.bno_f <= 6'd0;
+	pc0_x1.bno_t <= 6'd1;
+	pc0_x1.bno_f <= 6'd1;
 	pc0_x1.pc <= RSTPC;
 end
 else begin
@@ -3161,17 +3166,17 @@ if (advance_pipeline_seg2)
 
 // Register fetch/rename stage inputs
 always_ff @(posedge clk)
-if (advance_pipeline_seg2)
-	pc0_r <= pc0_d;
+if (advance_pipeline)
+	pc0_r <= ins0_dec.pc;//pc0_d;
 always_ff @(posedge clk)
-if (advance_pipeline_seg2)
-	pc1_r <= pc1_d;
+if (advance_pipeline)
+	pc1_r <= ins1_dec.pc;//pc1_d;
 always_ff @(posedge clk)
-if (advance_pipeline_seg2)
-	pc2_r <= pc2_d;
+if (advance_pipeline)
+	pc2_r <= ins2_dec.pc;//pc2_d;
 always_ff @(posedge clk)
-if (advance_pipeline_seg2)
-	pc3_r <= pc3_d;
+if (advance_pipeline)
+	pc3_r <= ins3_dec.pc;//pc3_d;
 
 always_ff @(posedge clk)
 if (irst)
@@ -3211,30 +3216,30 @@ else begin
 end
 
 always_ff @(posedge clk)
-if (advance_pipeline_seg2)
+if (advance_pipeline)
 	pt0_r <= pt0_dec;
 always_ff @(posedge clk)
-if (advance_pipeline_seg2)
+if (advance_pipeline)
 	pt1_r <= pt1_dec;
 always_ff @(posedge clk)
-if (advance_pipeline_seg2)
+if (advance_pipeline)
 	pt2_r <= pt2_dec;
 always_ff @(posedge clk)
-if (advance_pipeline_seg2)
+if (advance_pipeline)
 	pt3_r <= pt3_dec;
 
 // Instruction queue inputs
 always_ff @(posedge clk)
-if (advance_pipeline_seg2)
+if (advance_pipeline)
 	pc0_q <= pc0_r;
 always_ff @(posedge clk)
-if (advance_pipeline_seg2)
+if (advance_pipeline)
 	pc1_q <= pc1_r;
 always_ff @(posedge clk)
-if (advance_pipeline_seg2)
+if (advance_pipeline)
 	pc2_q <= pc2_r;
 always_ff @(posedge clk)
-if (advance_pipeline_seg2)
+if (advance_pipeline)
 	pc3_q <= pc3_r;
 /*
 always_ff @(posedge clk)
@@ -3493,7 +3498,8 @@ modFcuMissPC umisspc1
 	.misspc(fcu_misspc1),
 	.missgrp(fcu_missgrp),
 	.miss_mcip(fcu_miss_mcip1),
-	.tgtpc(tgtpc)
+	.tgtpc(tgtpc),
+	.stomp_bno(stomp_bno)
 );
 
 always_comb
@@ -3599,8 +3605,8 @@ always_ff @(posedge clk)
 */
 always_ff @(posedge clk)
 if (irst) begin
-	fcu_misspc.bno_t <= 6'd0;
-	fcu_misspc.bno_f <= 6'd0;
+	fcu_misspc.bno_t <= 6'd1;
+	fcu_misspc.bno_f <= 6'd1;
 	fcu_misspc.pc <= next_pc;
 end
 else begin
@@ -3618,8 +3624,8 @@ else begin
 end
 always_ff @(posedge clk)
 if (irst) begin
-	misspc.bno_t <= 6'd0;
-	misspc.bno_f <= 6'd0;
+	misspc.bno_t <= 6'd1;
+	misspc.bno_f <= 6'd1;
 	misspc.pc <= RSTPC;
 end
 else begin
@@ -3818,6 +3824,7 @@ assign fcu_argB_reg = rob[fcu_rndx].pRb;
 
 assign agen0_argA_reg = rob[agen0_rndx].pRa;
 assign agen0_argB_reg = rob[agen0_rndx].pRb;
+assign agen0_argC_reg = rob[agen0_rndx].pRc;
 assign agen0_argM_reg = rob[agen0_rndx].pRm;
 
 assign agen1_argA_reg = rob[agen1_rndx].pRa;
@@ -4737,6 +4744,16 @@ if (irst)
 else
 	vec_stall2 <= pe_vec_stall;
 
+reg anyout0;
+always_comb
+begin
+	anyout0 = 1'b0;
+	for (n30 = 0; n30 < ROB_ENTRIES; n30 = n30 + 1) begin
+		if (rob[n30].out[0])
+			anyout0 = 1'b1;
+	end
+end
+
 // =============================================================================
 // =============================================================================
 // Registered Logic
@@ -4764,6 +4781,9 @@ Qupls_alu_station ualust0
 	.rfo_argB_ctag(rfo_alu0_argB_ctag),
 	.vrm(vrm),
 	.vex(vex),
+	.wrport0_v(wrport0_v),
+	.wrport0_Rt(wrport0_Rt),
+	.wrport0_res(wrport0_res),
 	.ld(alu0_ld),
 	.id(alu0_id), 
 	.argA(alu0_argA),
@@ -4817,6 +4837,9 @@ generate begin : gAluStation
 			.rfo_argB_ctag(rfo_alu1_argB_ctag),
 			.vrm(vrm),
 			.vex(vex),
+			.wrport0_v(wrport0_v),
+			.wrport0_Rt(wrport0_Rt),
+			.wrport0_res(wrport0_res),
 			.ld(alu1_ld),
 			.id(alu1_id), 
 			.argA(alu1_argA),
@@ -4956,8 +4979,8 @@ if (irst) begin
 	fcu_argBr <= 64'd0;
 	fcu_argI <= 64'd0;
 	fcu_instr <= nopi;
-	fcu_pc.bno_t <= 6'd0;
-	fcu_pc.bno_f <= 6'd0;
+	fcu_pc.bno_t <= 6'd1;
+	fcu_pc.bno_f <= 6'd1;
 	fcu_pc.pc <= RSTPC;
 	fcu_bt <= FALSE;
 	fcu_bts <= BTS_NONE;
@@ -4995,15 +5018,15 @@ Qupls_agen_station uagen0stn
 	.rfo_argB(rfo_agen0_argB),
 	.rfo_argC(rfo_agen0_argC),
 	.rfo_argM(rfo_agen0_argM),
-	.argA_reg(agen0_argA_reg),
-	.argB_reg(agen0_argB_reg),
-	.argC_reg(agen0_argC_reg),
+	.rfo_argC_ctag(rfo_agen0_argC_ctag),
+	.argC_v(agen0_argC_v),
 	.id(agen0_id),
 	.argA(agen0_argA),
 	.argB(agen0_argB),
 	.argC(agen0_argC),
 	.argI(agen0_argI),
 	.argM(agen0_argM),
+	.argC_ctag(agen0_argC_ctag),
 	.aRa(agen0_aRa),
 	.aRb(agen0_aRb),
 	.aRc(agen0_aRc),
@@ -5041,15 +5064,15 @@ Qupls_agen_station uagen1stn
 	.rfo_argB(rfo_agen1_argB),
 	.rfo_argC('d0),
 	.rfo_argM(rfo_agen1_argM),
-	.argA_reg(agen1_argA_reg),
-	.argB_reg(agen1_argB_reg),
-	.argC_reg('d0),
+	.rfo_argC_ctag(1'b0),
 	.id(agen1_id),
 	.argA(agen1_argA),
 	.argB(agen1_argB),
 	.argC(),
 	.argI(agen1_argI),
 	.argM(agen1_argM),
+	.argC_ctag(),
+	.argC_v(),
 	.aRa(agen1_aRa),
 	.aRb(agen1_aRb),
 	.aRc(),
@@ -5088,18 +5111,6 @@ always_comb
 //		&& (!stomp_que || stomp_quem)
 		;
 
-always_comb
-for (n29 = 0; n29 < 24; n29 = n29 + 1)
-	prnvv[n29] = prnv[n29];
-	/*
-		|| (prn[n29]==wrport0_Rt && wrport0_v)
-		|| (NALU > 1 && prn[n29]==wrport1_Rt && wrport1_v)
-		|| (prn[n29]==wrport2_Rt && wrport2_v)
-		|| (NFPU > 0 && prn[n29]==wrport3_Rt && wrport3_v)
-		|| (NDATA_PORTS > 1 && prn[n29]==wrport4_Rt && wrport4_v)
-		|| (NFPU > 1 && prn[n29]==wrport5_Rt && wrport5_v)
-		;
-	*/
 // ----------------------------------------------------------------------------
 // fet/mux/dec/vec/pac/ren/que
 // fet/mux/vec/pac/dec/ren/que
@@ -5140,7 +5151,7 @@ else begin
 			rob[fpu0_rndx].argT <= rfo_fpu0_argT;
 		end
 	end
-	if (agen0_rndxv && agen0_idle) begin
+	if (agen0_rndxv && agen0_idle && robentry_agen_issue[agen0_rndx]) begin
 		rob[agen0_rndx].argA <= rfo_agen0_argA;
 		rob[agen0_rndx].argB <= rfo_agen0_argB;
 		rob[agen0_rndx].argC <= rfo_agen0_argC;
@@ -5235,7 +5246,7 @@ else begin
 			tEnque(8'h80-XWID,predino,predrndx,grp_q,ins0_ren,pt0_q,tail0,
 				stomp0, ornop0,
 				prn[0], prn[1], prn[2], prn[3], Rt0_ren, prn[17],
-				prnvv[0], prnvv[1], prnvv[2], prnvv[3], prnvv[17],
+				prnv[0], prnv[1], prnv[2], prnv[3], prnv[17],
 				cndx, grplen0, last0);
 			if (ins0_ren.decbus.pred) begin
 				predino = 3'd1;
@@ -5263,7 +5274,7 @@ else begin
 			if (XWID > 1) begin
 				tEnque(8'h81-XWID,predino,predrndx,grp_q,ins1_ren,pt1_q,tail1,
 					stomp1, ornop1, prn[4], prn[5], prn[6], prn[7], Rt1_ren, prn[18],
-					prnvv[4], prnvv[5], prnvv[6], prnvv[7], prnvv[18],
+					prnv[4], prnv[5], prnv[6], prnv[7], prnv[18],
 					cndx + (ins0_ren.decbus.br && !stomp0), grplen1, last1);
 				if (ins1_ren.decbus.pred) begin
 					predino = 3'd1;
@@ -5297,7 +5308,7 @@ else begin
 			if (XWID > 2) begin
 				tEnque(8'h82-XWID,predino,predrndx,grp_q,ins2_ren,pt2_q,tail2,
 					stomp2, ornop2, prn[8], prn[9], prn[10], prn[11], Rt2_ren, prn[19],
-					prnvv[8], prnvv[9], prnvv[10], prnvv[11], prnvv[19],
+					prnv[8], prnv[9], prnv[10], prnv[11], prnv[19],
 					cndx + (ins0_ren.decbus.br && !stomp0) + (ins1_ren.decbus.br && !stomp1),
 					grplen2, last3);
 				if (ins2_ren.decbus.pred) begin
@@ -5329,7 +5340,7 @@ else begin
 			if (XWID > 3) begin
 				tEnque(8'h83-XWID,predino,predrndx,grp_q,ins3_ren,pt3_q,tail3,
 					stomp3, ornop3, prn[12], prn[13], prn[14], prn[15], Rt3_ren, prn[20],
-					prnvv[12], prnvv[13], prnvv[14], prnvv[15], prnvv[20],
+					prnv[12], prnv[13], prnv[14], prnv[15], prnv[20],
 					cndx + (ins0_ren.decbus.br && !stomp0) + (ins1_ren.decbus.br && !stomp1) + (ins2_ren.decbus.br && !stomp2),
 					grplen3,last3);
 				if (ins3_ren.decbus.pred) begin
@@ -5420,7 +5431,7 @@ else begin
 	// for only a single clock cycle.
 	
 	if (lsq[store_argC_id1.row][store_argC_id1.col].v==VAL && lsq[store_argC_id1.row][store_argC_id1.col].store && lsq[store_argC_id1.row][store_argC_id1.col].datav==INV) begin
-		if (prnvv[16])//|store_argC_v)
+		if (prnv[23])//|store_argC_v)
 			load_lsq_argc <= TRUE;
 	end
 	
@@ -5796,6 +5807,10 @@ else begin
 	// Store TLB translation in LSQ
 	// If there is a TLB miss it could be a number of cycles before output
 	// becomes valid.
+	if (tlb0_v && agen0_idv)
+		agen0_idle <= TRUE;
+	if (tlb1_v && agen1_idv)
+		agen0_idle <= TRUE;
 	if (tlb0_v && rob[agen0_id].v && !rob[agen0_id].done[0] && rob[agen0_id].decbus.mem && agen0_idv) begin
 		if (|pg_fault && pg_faultq==2'd1) begin
 			agen0_idle <= TRUE;
@@ -5990,39 +6005,51 @@ else begin
   for (n3 = 0; n3 < LSQ_ENTRIES; n3 = n3 + 1) begin
   	for (n12 = 0; n12 < NDATA_PORTS; n12 = n12 + 1) begin
 	  	if (lsq[n3][n12].v==VAL && lsq[n3][n12].datav==INV && lsq[n3][n12].store) begin
-	  		if (lsq[n3][n12].pRc==wrport0_Rt && wrport0_v==VAL) begin
-	  			$display("Q+ CPU: LSQ bypass from ALU0=%h r%d", alu0_res, wrport0_Rt);
+	  		/*
+	  		if (prnv[23]==VAL) begin
+	  			$display("Q+ CPU: LSQ bypass from regfile=%h r%d", rfo_store_argC, store_argC_pReg);
 	  			lsq[n3][n12].datav <= VAL;
-	  			lsq[n3][n12].res <= alu0_res;
-	  			lsq[n3][n12].ctag <= 1'b0;
+	  			lsq[n3][n12].res <= rfo_store_argC;
+	  			lsq[n3][n12].ctag <= rfo_store_argC_ctag;
 	  		end
-	  		if (NALU > 1 && lsq[n3][n12].pRc==wrport1_Rt && wrport1_v==VAL) begin
-	  			$display("Q+ CPU: LSQ bypass from ALU1=%h r%d", alu1_res, wrport1_Rt);
-	  			lsq[n3][n12].datav <= VAL;
-	  			lsq[n3][n12].res <= alu1_res;
-	  			lsq[n3][n12].ctag <= 1'b0;
-	  		end
-	  		if (lsq[n3][n12].pRc==wrport2_Rt && wrport2_v==VAL) begin
-	  			$display("Q+ CPU: LSQ bypass from MEM0=%h r%d", dram_bus0, wrport2_Rt);
-	  			lsq[n3][n12].datav <= VAL;
-	  			lsq[n3][n12].res <= dram_bus0;
-	  			lsq[n3][n12].ctag <= dram_ctag0;
-	  		end
-	  		if (NFPU > 0 && lsq[n3][n12].pRc==wrport3_Rt && wrport3_v==VAL) begin
-	  			$display("Q+ CPU: LSQ bypass from FPU0=%h r%d", fpu0_res, wrport3_Rt);
-	  			lsq[n3][n12].datav <= VAL;
-	  			lsq[n3][n12].res <= fpu0_res;
-	  			lsq[n3][n12].ctag <= fpu0_ctag;
-	  		end
-	  		if (NDATA_PORTS > 1 && lsq[n3][n12].pRc==wrport4_Rt && wrport4_v==VAL) begin
-	  			lsq[n3][n12].datav <= VAL;
-	  			lsq[n3][n12].res <= dram_bus1;
-	  			lsq[n3][n12].ctag <= dram_ctag1;
-	  		end
-	  		if (NFPU > 1 && lsq[n3][n12].pRc==wrport5_Rt && wrport5_v==VAL) begin
-	  			lsq[n3][n12].datav <= VAL;
-	  			lsq[n3][n12].res <= fpu1_res;
-	  			lsq[n3][n12].ctag <= 1'b0;
+	  		*/
+	  		// Make the store data value available one cycle earlier than can be 
+	  		// read from the register file.
+	  		if (PERFORMANCE) begin
+		  		if (lsq[n3][n12].pRc==wrport0_Rt && wrport0_v==VAL) begin
+		  			$display("Q+ CPU: LSQ bypass from ALU0=%h r%d", alu0_res, wrport0_Rt);
+		  			lsq[n3][n12].datav <= VAL;
+		  			lsq[n3][n12].res <= alu0_res;
+		  			lsq[n3][n12].ctag <= 1'b0;
+		  		end
+		  		if (NALU > 1 && lsq[n3][n12].pRc==wrport1_Rt && wrport1_v==VAL) begin
+		  			$display("Q+ CPU: LSQ bypass from ALU1=%h r%d", alu1_res, wrport1_Rt);
+		  			lsq[n3][n12].datav <= VAL;
+		  			lsq[n3][n12].res <= alu1_res;
+		  			lsq[n3][n12].ctag <= 1'b0;
+		  		end
+		  		if (lsq[n3][n12].pRc==wrport2_Rt && wrport2_v==VAL) begin
+		  			$display("Q+ CPU: LSQ bypass from MEM0=%h r%d", dram_bus0, wrport2_Rt);
+		  			lsq[n3][n12].datav <= VAL;
+		  			lsq[n3][n12].res <= dram_bus0;
+		  			lsq[n3][n12].ctag <= dram_ctag0;
+		  		end
+		  		if (NFPU > 0 && lsq[n3][n12].pRc==wrport3_Rt && wrport3_v==VAL) begin
+		  			$display("Q+ CPU: LSQ bypass from FPU0=%h r%d", fpu0_res, wrport3_Rt);
+		  			lsq[n3][n12].datav <= VAL;
+		  			lsq[n3][n12].res <= fpu0_res;
+		  			lsq[n3][n12].ctag <= fpu0_ctag;
+		  		end
+		  		if (NDATA_PORTS > 1 && lsq[n3][n12].pRc==wrport4_Rt && wrport4_v==VAL) begin
+		  			lsq[n3][n12].datav <= VAL;
+		  			lsq[n3][n12].res <= dram_bus1;
+		  			lsq[n3][n12].ctag <= dram_ctag1;
+		  		end
+		  		if (NFPU > 1 && lsq[n3][n12].pRc==wrport5_Rt && wrport5_v==VAL) begin
+		  			lsq[n3][n12].datav <= VAL;
+		  			lsq[n3][n12].res <= fpu1_res;
+		  			lsq[n3][n12].ctag <= 1'b0;
+		  		end
 	  		end
 	  	end
   	end
@@ -6347,18 +6374,18 @@ else begin
 		commit3_idv <= cmttlb3;
 	end
 	if (do_commit) begin
-		commit_pc0 <= rob[head0].pc.pc;
-		commit_pc1 <= rob[head1].pc.pc;
-		commit_pc2 <= rob[head2].pc.pc;
-		commit_pc3 <= rob[head3].pc.pc;
+		commit_pc0 <= rob[head0].pc;
+		commit_pc1 <= rob[head1].pc;
+		commit_pc2 <= rob[head2].pc;
+		commit_pc3 <= rob[head3].pc;
 		commit_brtgt0 <= rob[head0].brtgt;
 		commit_brtgt1 <= rob[head1].brtgt;
 		commit_brtgt2 <= rob[head2].brtgt;
 		commit_brtgt3 <= rob[head3].brtgt;
-		commit_takb0 <= rob[head0].takb;
-		commit_takb1 <= rob[head1].takb;
-		commit_takb2 <= rob[head2].takb;
-		commit_takb3 <= rob[head3].takb;
+		commit_takb0 <= rob[head0].takb & rob[head0].decbus.br;
+		commit_takb1 <= rob[head1].takb & rob[head1].decbus.br;
+		commit_takb2 <= rob[head2].takb & rob[head2].decbus.br;
+		commit_takb3 <= rob[head3].takb & rob[head3].decbus.br;
 		commit_br0 <= rob[head0].decbus.br;
 		commit_br1 <= rob[head1].decbus.br && cmtcnt > 3'd1;
 		commit_br2 <= rob[head2].decbus.br && cmtcnt > 3'd2;
@@ -6488,6 +6515,24 @@ else begin
 		end
 	end
 
+	// For some reason, agen_idle gets stuck FALSE. It should only be false if
+	// there is a memory operation 'out'.	If there are no 'out' rob entries then
+	// agen_idle should be true.
+	/*
+	if (!anyout0) begin
+		agen0_idle <= TRUE;
+		agen0_idv <= INV;
+		if (dram0_id==agen0_id)
+			dram0_stomp <= TRUE;
+		if (NDATA_PORTS > 1) begin
+			agen1_idle <= TRUE;
+			agen1_idv <= INV;
+			if (dram1_id==agen1_id)
+				dram1_stomp <= TRUE;
+		end
+	end
+	*/
+
 	// Unstick:
 	// If the same physical register is valid in a later instruction, then it should
 	// be valid for the earlier one. Sometimes the core is not marking a register valid
@@ -6543,6 +6588,7 @@ else begin
 		rob[dram1_id].done <= 2'b11;
 		rob[dram1_id].out <= 2'b00;
 	end
+	/*
 	if (robentry_stomp[agen0_id]) begin// || !rob[agen0_id].v) begin
 		agen0_idle <= TRUE;
 		agen0_idv <= INV;
@@ -6557,6 +6603,7 @@ else begin
 				dram1_stomp <= TRUE;
 		end
 	end
+	*/
 	// Terminate FCU operation on stomp.
 	if (robentry_stomp[fcu_id] & fcu_idv) begin
 		fcu_v <= INV;
@@ -6568,7 +6615,7 @@ else begin
 	// Redo instruction as copy target.
 	// Invalidate false paths.
 	for (n3 = 0; n3 < ROB_ENTRIES; n3 = n3 + 1) begin
-		if (robentry_stomp[n3] || bno_bitmap[rob[n3].pc.bno_t]==1'b0) begin
+		if (robentry_stomp[n3]) begin// || bno_bitmap[rob[n3].pc.bno_t]==1'b0 /*|| rob[n3].pc.bno_t==stomp_bno*/) begin
 //			rob[n3].v <= INV;
 			rob[n3].excv <= INV;
 			rob[n3].decbus.cpytgt <= TRUE;
@@ -6584,9 +6631,23 @@ else begin
 			// Clear corresponding LSQ entries.
 			if (rob[n3].lsq)
 				tInvalidateLSQ(n3,TRUE);
+			if (n3==agen0_id) begin
+				agen0_idle <= TRUE;
+				agen0_idv <= INV;
+				if (dram0_id==agen0_id)
+					dram0_stomp <= TRUE;
+			end
+			if (NDATA_PORTS > 1) begin
+				if (n3==agen1_id) begin
+					agen1_idle <= TRUE;
+					agen1_idv <= INV;
+					if (dram1_id==agen1_id)
+						dram1_stomp <= TRUE;
+				end
+			end
 		end
 	end
-	
+
 end
 
 // External bus arbiter. Simple priority encoded.
@@ -6809,7 +6870,7 @@ always_ff @(posedge clk) begin: clock_n_debug
 	$display("TIME %0d", $time);
 	$display("----- Fetch -----");
 	$display("i$ pc input:  %h.%h #", pc.bno_t,pc.pc);
-	$display("i$ pc output: %h %s #", icpc, ihito ? "ihit" : "    ");
+	$display("i$ pc output: %h %s #", icpc.pc, ihito ? "ihit" : "    ");
 	$display("cacheL: %x", ic_line[511:0]);
 	$display("cacheH: %x", ic_line[1023:512]);
 	$display("----- Instruction Extract %c%c ----- %s", ihit_fet ? "h":" ", micro_code_active_x ? "a": " ", stomp_fet ? stompstr : no_stompstr);
@@ -6871,10 +6932,10 @@ always_ff @(posedge clk) begin: clock_n_debug
 	$display("pc3: %x.%x ins3: %x  Rt: %d->%d%c  Rs: %d->%d  Ra: %d->%d  Rb: %d->%d  Rc: %d->%d", ins3_ren.pc.pc[23:0], ins3_ren.mcip, ins3_ren.ins[47:0],
 		ins3_ren.aRt, Rt3_ren, Rt3_renv?"v":" ", ins3_ren.aRt, prn[15], ins3_ren.aRa, prn[12], ins3_ren.aRb, prn[13], ins3_ren.aRc, prn[14]);
 	$display("----- Queue Time ----- %s", (stomp_que && !stomp_quem) ? stompstr : no_stompstr);
-	$display("pc 0: %x.%x ins=%x", ins0_que.pc.pc, ins0_que.mcip, ins0_que.ins[47:0]);
-	$display("pc 1: %x.%x ins=%x", ins0_que.pc.pc, ins1_que.mcip, ins1_que.ins[47:0]);
-	$display("pc 2: %x.%x ins=%x", ins0_que.pc.pc, ins2_que.mcip, ins2_que.ins[47:0]);
-	$display("pc 3: %x.%x ins=%x", ins0_que.pc.pc, ins3_que.mcip, ins3_que.ins[47:0]);
+	$display("pc 0: %x.%x ins=%x", ins0_que.pc.pc, ins0_que.mcip, ins0_que.ins[63:0]);
+	$display("pc 1: %x.%x ins=%x", ins0_que.pc.pc, ins1_que.mcip, ins1_que.ins[63:0]);
+	$display("pc 2: %x.%x ins=%x", ins0_que.pc.pc, ins2_que.mcip, ins2_que.ins[63:0]);
+	$display("pc 3: %x.%x ins=%x", ins0_que.pc.pc, ins3_que.mcip, ins3_que.ins[63:0]);
 	$display("----- Queue %c%c ----- %h", ihit_que ? "h":" ", micro_code_active_q ? "a": " ", qd);
 	for (i = 0; i < ROB_ENTRIES; i = i + 1) begin
     $display("%c%c%c sn:%h %d: %c%c%c%c%c%c %c %c%c %d %c %c%d Rt%d/%d=%h %h Rs%d/%d %h%c Ra%d/%d=%h %c Rb%d/%d=%h %c Rc%d/%d=%h %c I=%h %h.%h.%h cp:%h ins=%h #",
@@ -6930,8 +6991,8 @@ always_ff @(posedge clk) begin: clock_n_debug
 	$display("----- FCU -----");
 	$display("eval:%c A=%h B=%h BI=%h I=%h", takb?"T":"F", fcu_argA, fcu_argB, fcu_argBr, fcu_argI);
 	$display("bt:%c pc=%h id=%d bts:%d", fcu_bt ? "T":"F", fcu_pc, fcu_id, fcu_bts);
-	$display("miss: %c misspc=%h instr=%h disp=%h", (takb&~fcu_bt)|(~takb&fcu_bt)?"T":"F",fcu_misspc1, fcu_instr.ins[47:0],
-		{{46{fcu_instr.ins[39]}},fcu_instr.ins[39:22]}
+	$display("miss: %c misspc=%h.%h instr=%h disp=%h", (takb&~fcu_bt)|(~takb&fcu_bt)?"T":"F",fcu_misspc1.bno_t,fcu_misspc1.pc, fcu_instr.ins[63:0],
+		{{37{fcu_instr.ins[63]}},fcu_instr.ins[63:44],3'd0}
 	);
 
 	$display("----- ALU -----");
@@ -6981,7 +7042,7 @@ function fnPredPCMatch;
 input [7:0] pc1;
 input [7:0] pc2;
 begin
-	fnPredPCMatch = pc1==(pc2 - 8'd06);
+	fnPredPCMatch = pc1==(pc2 - 8'd08);
 end
 endfunction
 
@@ -7327,9 +7388,13 @@ begin
 	err_mask <= 64'd0;
 	excir <= {41'd0,OP_NOP};
 	excmiss <= FALSE;
+	excmisspc.bno_t <= 6'd1;
+	excmisspc.bno_f <= 6'd1;
 	excmisspc.pc <= 32'hFFFFFFC0;
 	excret <= FALSE;
 	exc_ret_pc <= 32'hFFFFFFC0;
+	exc_ret_pc.bno_t <= 6'd1;
+	exc_ret_pc.bno_f <= 6'd1;
 	sr <= 64'd0;
 	sr.pl <= 8'hFF;				// highest priority
 	sr.om <= OM_MACHINE;
@@ -7563,8 +7628,14 @@ begin
 	// NOP type instructions appear in the queue but they do not get scheduled or
 	// execute. They are marked done immediately.
 	rob[tail].done <= {2{db.nop}};
-	if (db.bsr)
-		rob[tail].done <= {VAL,INV};
+	// Unconditional branches and jumps are done already in the mux stage.
+	// Unconditional subroutine calls only need the target register updated.
+	if (db.bsr) begin
+		if (db.Rtz)
+			rob[tail].done <= {VAL,VAL};
+		else
+			rob[tail].done <= {VAL,INV};
+	end
 	rob[tail].out <= {INV,INV};
 	rob[tail].lsq <= INV;
 	rob[tail].takb <= 1'b0;
@@ -7605,7 +7676,9 @@ begin
 	// "static" fields, these fields remain constant after enqueue
 	rob[tail].predino <= predino;
 	rob[tail].predrndx <= predrndx;
-	rob[tail].brtgt <= fnTargetIP(pc.pc,db.immc);
+	rob[tail].brtgt <= fnTargetIP(ins.pc,db.immc);
+	if (fnTargetIP(ins.pc,db.immc)==32'hFFF80060 && ins.pc!=32'hFFF80060 && db.br)
+		$finish;
 	rob[tail].mcbrtgt <= db.immc[11:0];
 	rob[tail].om <= sr.om;
 `ifdef IS_SIM
@@ -7617,7 +7690,7 @@ begin
 	rob[tail].mcip <= ins.mcip;
 	if (SUPPORT_IBH)
 		rob[tail].grp <= grp;
-	rob[tail].bt <= pt;
+	rob[tail].bt <= ins.bt;//pt;
 	rob[tail].cndx <= cndx;
 	rob[tail].decbus <= db;
 	if (db.Ra==9'd0) rob[tail].op.aRa <= 9'd0;
@@ -7695,6 +7768,7 @@ input rob_ndx_t id;
 input rob_entry_t rob;
 input [1:0] n;
 begin
+	lsq[ndx.row][ndx.col] <= {$bits(lsq_entry_t){1'b0}};
 	lsq[ndx.row][ndx.col].rndx <= id;
 	lsq[ndx.row][ndx.col].v <= VAL;
 	lsq[ndx.row][ndx.col].agen <= FALSE;
@@ -7721,6 +7795,14 @@ begin
 		for (n12c = 0; n12c < 2; n12c = n12c + 1)
 			lsq[n12r][n12c].sn <= lsq[n12r][n12c].sn - n;
 	lsq[ndx.row][ndx.col].sn <= sn;
+	if (PERFORMANCE) begin
+		/* This seems not to work */
+		if (agen0_argC_v) begin
+			lsq[ndx.row][ndx.col].res <= agen0_argC;
+			lsq[ndx.row][ndx.col].ctag <= agen0_argC_ctag;
+			lsq[ndx.row][ndx.col].datav <= VAL;
+		end
+	end
 end
 endtask
 
@@ -8002,7 +8084,7 @@ endtask
 
 endmodule
 
-module modFcuMissPC(instr, bts, pc, pc_stack, micro_ip, bt, takb, argA, argB, argI, ibh, misspc, missgrp, miss_mcip, tgtpc);
+module modFcuMissPC(instr, bts, pc, pc_stack, micro_ip, bt, takb, argA, argB, argI, ibh, misspc, missgrp, miss_mcip, tgtpc, stomp_bno);
 input pipeline_reg_t instr;
 input bts_t bts;
 input pc_address_ex_t pc;
@@ -8018,6 +8100,7 @@ output pc_address_ex_t misspc;
 output reg [2:0] missgrp;
 output mc_address_t miss_mcip;
 output pc_address_ex_t tgtpc;
+output reg [4:0] stomp_bno;
 
 reg [5:0] ino;
 reg [5:0] ino5;
@@ -8026,8 +8109,11 @@ always_comb
 begin
 	disp = {{44{instr.ins[63]}},instr.ins[63:44]};
 	miss_mcip = 12'h1A0;
-	misspc = RSTPC;
+	misspc.pc = RSTPC;
+	misspc.bno_t = 6'd1;
+	misspc.bno_f = 6'd1;
 	tgtpc = pc;
+	stomp_bno = 6'd0;
 
 	case (bts)
 	BTS_DISP:
@@ -8094,21 +8180,25 @@ begin
 				begin
 					misspc = tgtpc;
 					miss_mcip = instr.ins[35:24];
+					stomp_bno = pc.bno_t;
 				end
 			2'b01:
 				begin
 					misspc = tgtpc;
 					miss_mcip = instr.ins[35:24];
+					stomp_bno = pc.bno_t;
 				end
 			2'b10:
 				begin
 					misspc = pc + 4'd8;
 					miss_mcip = micro_ip + 3'd4;
+					stomp_bno = tgtpc.bno_t;
 				end
 			2'b11:
 				begin
 					misspc = pc + 4'd8;
 					miss_mcip = micro_ip + 3'd4;
+					stomp_bno = tgtpc.bno_t;
 				end
 			endcase
 //			misspc = bt ? pc + 4'd5 : pc + {{47{instr[39]}},instr[39:25],instr[12:11]};
@@ -8116,19 +8206,23 @@ begin
 	BTS_JSR,BTS_BSR:
 		begin
 			misspc = tgtpc;
+			stomp_bno = tgtpc.bno_t;
 		end
 	BTS_CALL:
 		begin
 			misspc = tgtpc;
+			stomp_bno = tgtpc.bno_t;
 		end
 	// Must be tested before Ret
 	BTS_RTI:
 		begin
 			misspc = tgtpc;
+			stomp_bno = tgtpc.bno_t;
 		end
 	BTS_RET:
 		begin
 			misspc = tgtpc;
+			stomp_bno = tgtpc.bno_t;
 		end
 	default:
 		misspc = tgtpc;
