@@ -39,7 +39,8 @@
 import const_pkg::*;
 import QuplsPkg::*;
 
-module Qupls_checkpoint_valid_ram4(rst, clk5x, ph4, clka, en, wr, wc, wa, awa, setall, i, clkb, rc, ra, o);
+module Qupls_checkpoint_valid_ram4(rst, clk5x, ph4, clka, wen, wr, wc, wa, awa, 
+	setall, i, clkb, ren, rc, ra, o);
 parameter BANKS=1;
 parameter NPORT=8;
 parameter NRDPORT=20;
@@ -49,7 +50,7 @@ input rst;
 input clk5x;
 input [4:0] ph4;
 input clka;
-input en;
+input wen;
 input [NPORT-1:0] wr;
 input checkpt_ndx_t [NPORT-1:0] wc;
 input cpu_types_pkg::pregno_t [NPORT-1:0] wa;
@@ -57,6 +58,7 @@ input cpu_types_pkg::aregno_t [NPORT-1:0] awa;		// debugging
 input setall;
 input [NPORT-1:0] i;
 input clkb;
+input ren;
 input checkpt_ndx_t [NRDPORT-1:0] rc;
 input cpu_types_pkg::pregno_t [NRDPORT-1:0] ra;
 output reg [NRDPORT-1:0] o;
@@ -86,7 +88,7 @@ end
 else begin
 	if (ph4[4])
 		wcnt <= 3'd0;
-	else if (wcnt < 3'd4)
+	else if (wcnt < 3'd3)
 		wcnt <= wcnt + 2'd1;
 end
 
@@ -220,11 +222,11 @@ for (g = 0; g < NPORT/4; g = g + 1) begin
 
       .dina(dina[r][g]),                // WRITE_DATA_WIDTH_A-bit input: Data input for port A write operations.
       .dinb(64'd0),                     // WRITE_DATA_WIDTH_B-bit input: Data input for port B write operations.
-      .ena(1'b1),                      // 1-bit input: Memory enable signal for port A. Must be high on clock
+      .ena(wen),                      // 1-bit input: Memory enable signal for port A. Must be high on clock
                                        // cycles when read or write operations are initiated. Pipelined
                                        // internally.
 
-      .enb(en),                      // 1-bit input: Memory enable signal for port B. Must be high on clock
+      .enb(ren),                      // 1-bit input: Memory enable signal for port B. Must be high on clock
                                        // cycles when read or write operations are initiated. Pipelined
                                        // internally.
 
@@ -250,11 +252,11 @@ for (g = 0; g < NPORT/4; g = g + 1) begin
       .regceb(1'b1),                 // 1-bit input: Clock Enable for the last register stage on the output
                                        // data path.
 
-      .rsta(1'b0),                     // 1-bit input: Reset signal for the final port A output register stage.
+      .rsta(rst),                     // 1-bit input: Reset signal for the final port A output register stage.
                                        // Synchronously resets output port douta to the value specified by
                                        // parameter READ_RESET_VALUE_A.
 
-      .rstb(1'b0),                     // 1-bit input: Reset signal for the final port B output register stage.
+      .rstb(rst),                     // 1-bit input: Reset signal for the final port B output register stage.
                                        // Synchronously resets output port doutb to the value specified by
                                        // parameter READ_RESET_VALUE_B.
 

@@ -189,6 +189,16 @@ begin
 end
 endfunction
 
+function fnPriorMem;
+input rob_ndx_t ndx;
+begin
+	fnPriorMem = FALSE;
+	for (n = 0; n < ROB_ENTRIES; n = n + 1)
+		if (rob[n].v && rob[n].sn < rob[ndx].sn && rob[n].decbus.mem && !(&rob[n].done))
+			fnPriorMem = TRUE;
+end
+endfunction
+
 function fnPriorSync;
 input rob_ndx_t ndx;
 begin
@@ -405,7 +415,7 @@ for (g = 0; g < ROB_ENTRIES; g = g + 1) begin
 				    // incorrectly marked done, inheriting the status of the old one.
 always_comb
 	next_could_issue[g] = rob[g].v
-//												&& !stomp_i[g]
+												&& !stomp_i[g]
 												&& !(&rob[g].done)
 												&& (args_valid[g]||(rob[g].decbus.cpytgt && rob[g].argT_v))
 												//&& !fnPriorFalsePred(g)
@@ -664,6 +674,7 @@ else begin
 				end
 
 				if (!issued_agen0 && !issued_beb && agen0_idle &&
+					!fnPriorMem(heads[hd]) &&
 					!prev_issue[heads[hd]] &&
 //					!prev_issue2[heads[hd]] &&
 					!robentry_agen_issue[heads[hd]] &&
@@ -689,6 +700,7 @@ else begin
 				end
 				if (NAGEN > 1) begin
 					if (!issued_agen1 && agen1_idle &&
+						!fnPriorMem(heads[hd]) &&
 						!prev_issue[heads[hd]] &&
 //						!prev_issue2[heads[hd]] &&
 						!robentry_agen_issue[heads[hd]] &&

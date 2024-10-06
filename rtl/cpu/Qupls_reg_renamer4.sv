@@ -100,68 +100,79 @@ always_comb stalla0 = ~avail[wo0] & alloc0;
 always_comb stalla1 = ~avail[wo1] & alloc1;
 always_comb stalla2 = ~avail[wo2] & alloc2;
 always_comb stalla3 = ~avail[wo3] & alloc3;
-always_comb wv0 = avail[wo0] & alloc0;
-always_comb wv1 = avail[wo1] & alloc1;
-always_comb wv2 = avail[wo2] & alloc2;
-always_comb wv3 = avail[wo3] & alloc3;
+always_comb wv0 = avail[wo0] & alloc0 & ~empty0;
+always_comb wv1 = avail[wo1] & alloc1 & ~empty1;
+always_comb wv2 = avail[wo2] & alloc2 & ~empty2;
+always_comb wv3 = avail[wo3] & alloc3 & ~empty3;
 
-always_comb pop0 = (alloc0 & en) | stalla0;
-always_comb pop1 = (alloc1 & en) | stalla1;
-always_comb pop2 = (alloc2 & en) | stalla2;
-always_comb pop3 = (alloc3 & en) | stalla3;
+// Do not do a pop if stalling on another slot.
+always_comb pop0 = (alloc0 & en & ~stall) | (stalla0|empty0);
+always_comb pop1 = (alloc1 & en & ~stall) | (stalla1|empty1);
+always_comb pop2 = (alloc2 & en & ~stall) | (stalla2|empty2);
+always_comb pop3 = (alloc3 & en & ~stall) | (stalla3|empty3);
 
+reg [3:0] freevals1;
 reg [1:0] fifo_order;
-reg [8:0] freeCnt;
+reg [$clog2(PREGS)-1:0] freeCnt;
+reg [2:0] ffreeCnt;
 reg [PREGS-1:0] next_toFreeList;
 reg [PREGS-1:0] toFreeList;
 reg [3:0] ffree;
 
 always_comb
 begin
+	freevals1[0] = tags2free[0]==8'd0 ? 1'b0 : freevals[0];
+	freevals1[1] = tags2free[1]==8'd0 ? 1'b0 : freevals[1];
+	freevals1[2] = tags2free[2]==8'd0 ? 1'b0 : freevals[2];
+	freevals1[3] = tags2free[3]==8'd0 ? 1'b0 : freevals[3];
+end
+
+always_comb
+begin
 case(fifo_order)
 2'd0:
 	begin
-		fpush[0] = (freevals[0] & en) | ffree[0];
-		fpush[1] = (freevals[1] & en) | ffree[1];
-		fpush[2] = (freevals[2] & en) | ffree[2];
-		fpush[3] = (freevals[3] & en) | ffree[3];
-		tags[0] = (freevals[0] & en) ? tags2free[0] : freeCnt + 3'd0;
-		tags[1] = (freevals[1] & en) ? tags2free[1] : freeCnt + 3'd1;
-		tags[2] = (freevals[2] & en) ? tags2free[2] : freeCnt + 3'd2;
-		tags[3] = (freevals[3] & en) ? tags2free[3] : freeCnt + 3'd3;
+		fpush[0] = (freevals1[0] & en) | ffree[0];
+		fpush[1] = (freevals1[1] & en) | ffree[1];
+		fpush[2] = (freevals1[2] & en) | ffree[2];
+		fpush[3] = (freevals1[3] & en) | ffree[3];
+		tags[0] = (freevals1[0] & en) ? tags2free[0] : freeCnt + 3'd0;
+		tags[1] = (freevals1[1] & en) ? tags2free[1] : freeCnt + 3'd1;
+		tags[2] = (freevals1[2] & en) ? tags2free[2] : freeCnt + 3'd2;
+		tags[3] = (freevals1[3] & en) ? tags2free[3] : freeCnt + 3'd3;
 	end
 2'd1:
 	begin
-		fpush[0] = (freevals[1] & en) | ffree[1];
-		fpush[1] = (freevals[2] & en) | ffree[2];
-		fpush[2] = (freevals[3] & en) | ffree[3];
-		fpush[3] = (freevals[0] & en) | ffree[0];
-		tags[0] = (freevals[1] & en) ? tags2free[1] : freeCnt + 3'd1;
-		tags[1] = (freevals[2] & en) ? tags2free[2] : freeCnt + 3'd2;
-		tags[2] = (freevals[3] & en) ? tags2free[3] : freeCnt + 3'd3;
-		tags[3] = (freevals[0] & en) ? tags2free[0] : freeCnt + 3'd0;
+		fpush[0] = (freevals1[1] & en) | ffree[1];
+		fpush[1] = (freevals1[2] & en) | ffree[2];
+		fpush[2] = (freevals1[3] & en) | ffree[3];
+		fpush[3] = (freevals1[0] & en) | ffree[0];
+		tags[0] = (freevals1[1] & en) ? tags2free[1] : freeCnt + 3'd1;
+		tags[1] = (freevals1[2] & en) ? tags2free[2] : freeCnt + 3'd2;
+		tags[2] = (freevals1[3] & en) ? tags2free[3] : freeCnt + 3'd3;
+		tags[3] = (freevals1[0] & en) ? tags2free[0] : freeCnt + 3'd0;
 	end
 2'd2:
 	begin
-		fpush[0] = (freevals[2] & en) | ffree[2];
-		fpush[1] = (freevals[3] & en) | ffree[3];
-		fpush[2] = (freevals[0] & en) | ffree[0];
-		fpush[3] = (freevals[1] & en) | ffree[1];
-		tags[0] = (freevals[2] & en) ? tags2free[2] : freeCnt + 3'd2;
-		tags[1] = (freevals[3] & en) ? tags2free[3] : freeCnt + 3'd3;
-		tags[2] = (freevals[0] & en) ? tags2free[0] : freeCnt + 3'd0;
-		tags[3] = (freevals[1] & en) ? tags2free[1] : freeCnt + 3'd1;
+		fpush[0] = (freevals1[2] & en) | ffree[2];
+		fpush[1] = (freevals1[3] & en) | ffree[3];
+		fpush[2] = (freevals1[0] & en) | ffree[0];
+		fpush[3] = (freevals1[1] & en) | ffree[1];
+		tags[0] = (freevals1[2] & en) ? tags2free[2] : freeCnt + 3'd2;
+		tags[1] = (freevals1[3] & en) ? tags2free[3] : freeCnt + 3'd3;
+		tags[2] = (freevals1[0] & en) ? tags2free[0] : freeCnt + 3'd0;
+		tags[3] = (freevals1[1] & en) ? tags2free[1] : freeCnt + 3'd1;
 	end
 2'd3:
 	begin
-		fpush[0] = (freevals[3] & en) | ffree[3];
-		fpush[1] = (freevals[0] & en) | ffree[0];
-		fpush[2] = (freevals[1] & en) | ffree[1];
-		fpush[3] = (freevals[2] & en) | ffree[2];
-		tags[0] = (freevals[3] & en) ? tags2free[3] : freeCnt + 3'd3;
-		tags[1] = (freevals[0] & en) ? tags2free[0] : freeCnt + 3'd0;
-		tags[2] = (freevals[1] & en) ? tags2free[1] : freeCnt + 3'd1;
-		tags[3] = (freevals[2] & en) ? tags2free[2] : freeCnt + 3'd2;
+		fpush[0] = (freevals1[3] & en) | ffree[3];
+		fpush[1] = (freevals1[0] & en) | ffree[0];
+		fpush[2] = (freevals1[1] & en) | ffree[1];
+		fpush[3] = (freevals1[2] & en) | ffree[2];
+		tags[0] = (freevals1[3] & en) ? tags2free[3] : freeCnt + 3'd3;
+		tags[1] = (freevals1[0] & en) ? tags2free[0] : freeCnt + 3'd0;
+		tags[2] = (freevals1[1] & en) ? tags2free[1] : freeCnt + 3'd1;
+		tags[3] = (freevals1[2] & en) ? tags2free[2] : freeCnt + 3'd2;
 	end
 endcase
 end
@@ -230,59 +241,51 @@ always_comb
 if (rst) begin
 	next_avail = {{PREGS-1{1'b0}},1'b0};
 	next_avail[0] = 1'b0;
-	next_avail[PREGS/4] = 1'b0;
-	next_avail[PREGS/2] = 1'b0;
-	next_avail[PREGS*3/4] = 1'b0;
+	next_avail[PREGS-1] = 1'b0;
 end
 else begin
 	
 	next_avail = avail;
 
-	if (alloc0 & avail[wo0])
-		next_avail[wo0] = 1'b0;
-	if (freevals[0])
-		next_avail[tags2free[0]] = 1'b1;
-	
-	if (alloc1 & avail[wo1])
-		next_avail[wo1] = 1'b0;
-	if (freevals[1])
-		next_avail[tags2free[1]] = 1'b1;
+	if (wv0 & en) next_avail[wo0] = 1'b0;
+	if (wv1 & en) next_avail[wo1] = 1'b0;
+	if (wv2 & en) next_avail[wo2] = 1'b0;
+	if (wv3 & en) next_avail[wo3] = 1'b0;
 
-	if (alloc2 & avail[wo2])
-		next_avail[wo2] = 1'b0;
-	if (freevals[2])
-		next_avail[tags2free[2]] = 1'b1;
-
-	if (alloc3 & avail[wo3])
-		next_avail[wo3] = 1'b0;
-	if (freevals[3])
-		next_avail[tags2free[3]] = 1'b1;
-
-	if (ffree[0]) next_avail = next_avail | (512'd1 << ((freeCnt + 3'd0) % 512));
-	if (ffree[1]) next_avail = next_avail | (512'd1 << ((freeCnt + 3'd1) % 512));
-	if (ffree[2]) next_avail = next_avail | (512'd1 << ((freeCnt + 3'd2) % 512));
-	if (ffree[3]) next_avail = next_avail | (512'd1 << ((freeCnt + 3'd3) % 512));
+	if (fpush[0]) next_avail[tags[0]] = 1'b1;// | (512'd1 << tags[0]);//((freeCnt + 3'd0) % 512));
+	if (fpush[1]) next_avail[tags[1]] = 1'b1;// | (512'd1 << tags[1]);//((freeCnt + 3'd1) % 512));
+	if (fpush[2]) next_avail[tags[2]] = 1'b1;// | (512'd1 << tags[2]);//((freeCnt + 3'd2) % 512));
+	if (fpush[3]) next_avail[tags[3]] = 1'b1;// | (512'd1 << tags[3]);//((freeCnt + 3'd3) % 512));
 
 	next_avail[0] = 1'b0;
-	next_avail[PREGS/4] = 1'b0;
-	next_avail[PREGS/2] = 1'b0;
-	next_avail[PREGS*3/4] = 1'b0;
 end
+
+always_ff @(posedge clk)
+if (rst)
+	avail <= next_avail;
+else
+	avail <= next_avail;
+
+reg [2:0] pushCnt, nFree;
+always_comb
+	pushCnt = fpush[0] + fpush[1] + fpush[2] + fpush[3];
+always_comb
+	ffreeCnt = (ffree[0] & ~(freevals1[0] & en)) +
+						 (ffree[1] & ~(freevals1[1] & en)) +
+						 (ffree[2] & ~(freevals1[2] & en)) +
+						 (ffree[3] & ~(freevals1[3] & en))
+						 ;
 
 always_ff @(posedge clk)
 if (rst)
 	fifo_order <= 2'd0;
 else
-	fifo_order <= fifo_order + fpush[0] + fpush[1] + fpush[2] + fpush[3];
+	fifo_order <= fifo_order + pushCnt;
 
 always_ff @(posedge clk) if (rst) alloc0d <= 1'b0; else if(en) alloc0d <= alloc0;
 always_ff @(posedge clk) if (rst) alloc1d <= 1'b0; else if(en) alloc1d <= alloc1;
 always_ff @(posedge clk) if (rst) alloc2d <= 1'b0; else if(en) alloc2d <= alloc2;
 always_ff @(posedge clk) if (rst) alloc3d <= 1'b0; else if(en) alloc3d <= alloc3;
-
-reg [2:0] pushCnt, nFree;
-always_comb
-	pushCnt = fpush[0] + fpush[1] + fpush[2] + fpush[3];
 
 always_comb
 casez(
@@ -300,23 +303,27 @@ toFreeList[freeCnt+4'd7]
 8'b0000001?:	nFree = 4'd6;
 8'b000001??:	nFree = 4'd5;
 8'b00001???:	nFree = 4'd4;
-default:	nFree = 3'd4 - pushCnt;
+default:	nFree = 3'd4 - ffreeCnt;
 endcase	
 
 always_ff @(posedge clk)
+if (rst)
+	freeCnt <= 9'd1;
+else
+	freeCnt <= freeCnt + nFree;
+
+always_ff @(posedge clk)
 if (rst) begin
-	freeCnt <= 9'd0;
 	ffree[0] <= 1'b0;
 	ffree[1] <= 1'b0;
 	ffree[2] <= 1'b0;
 	ffree[3] <= 1'b0;
 end
 else begin
-	freeCnt <= freeCnt + nFree;
-	ffree[0] <= toFreeList[freeCnt+4'd0];
-	ffree[1] <= toFreeList[freeCnt+4'd1];
-	ffree[2] <= toFreeList[freeCnt+4'd2];
-	ffree[3] <= toFreeList[freeCnt+4'd3];
+	ffree[0] <= freeCnt+4'd0!=8'd0 ? toFreeList[freeCnt+4'd0] : 1'b0;
+	ffree[1] <= freeCnt+4'd1!=8'd0 ? toFreeList[freeCnt+4'd1] : 1'b0;
+	ffree[2] <= freeCnt+4'd2!=8'd0 ? toFreeList[freeCnt+4'd2] : 1'b0;
+	ffree[3] <= freeCnt+4'd3!=8'd0 ? toFreeList[freeCnt+4'd3] : 1'b0;
 end
 
 always_comb
@@ -324,27 +331,19 @@ begin
 	next_toFreeList = toFreeList;
 	if (restore)
 		next_toFreeList = next_toFreeList | (avail ^ restore_list);
-	if (fpush[0])	next_toFreeList = next_toFreeList & ~(512'd1 << tags[0]);
- 	if (fpush[1])	next_toFreeList = next_toFreeList & ~(512'd1 << tags[1]);
- 	if (fpush[2])	next_toFreeList = next_toFreeList & ~(512'd1 << tags[2]);
- 	if (fpush[3])	next_toFreeList = next_toFreeList & ~(512'd1 << tags[3]);
+	if (fpush[0])	next_toFreeList[tags[0]] = 1'b0;// = next_toFreeList & ~(512'd1 << tags[0]);
+ 	if (fpush[1])	next_toFreeList[tags[1]] = 1'b0;// = next_toFreeList & ~(512'd1 << tags[1]);
+ 	if (fpush[2])	next_toFreeList[tags[2]] = 1'b0;// = next_toFreeList & ~(512'd1 << tags[2]);
+ 	if (fpush[3])	next_toFreeList[tags[3]] = 1'b0;// = next_toFreeList & ~(512'd1 << tags[3]);
 end
 
 always_ff @(posedge clk)
 if (rst) begin
 	toFreeList <= {PREGS{1'b1}};
 	toFreeList[0] <= 1'b0;
-	toFreeList[511] <= 1'b0;
+	toFreeList[PREGS-1] <= 1'b0;
 end
 else
 	toFreeList <= next_toFreeList;
-
-always_ff @(posedge clk)
-if (rst)
-	avail <= next_avail;
-else begin
-	if (en)
-		avail <= next_avail;
-end
 
 endmodule
