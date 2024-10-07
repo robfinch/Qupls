@@ -156,7 +156,7 @@ parameter BEB_ENTRIES = 4;
 // scheduler when determining what to issue. The schedule window is
 // between the head of the queue and WINDOW_SIZE entries backwards.
 // Decreasing the window size may reduce hardware but will cost performance.
-parameter SCHED_WINDOW_SIZE = 8;
+parameter SCHED_WINDOW_SIZE = 10;
 
 // The following is the number of branch checkpoints to support. 16 is the
 // recommended maximum. Fewer checkpoints may reduce core performance as stalls
@@ -209,6 +209,13 @@ parameter BANKS = 1;
 parameter RAS_DEPTH	= 4;
 
 parameter SUPPORT_RSB = 0;
+
+// Register name supplier
+// 3 = SRL based circular list, smaller less performant
+// 4 = FIFO based, larger, does not work correctly yet
+// 			(sometimes supplies the same register twice)
+// 6 = FFO / Bitmap, a find-first-ones approach with a bitmap
+parameter RENAMER = 6;
 
 //
 // define PANIC types
@@ -1065,7 +1072,8 @@ typedef logic [127:0] regs_bitmap_t;
 typedef struct packed
 {
 	logic n;
-	logic [7:0] num;
+	logic resv;
+	logic [6:0] num;
 } regspec_t;
 
 typedef logic [3:0] rndx_t;			// ROB index
@@ -2033,7 +2041,7 @@ endfunction
 function fnConstReg;
 input [7:0] Rn;
 begin
-	fnConstReg = Rn==8'd0;	// reg zero
+	fnConstReg = Rn==8'd0 || Rn==8'd255;	// reg zero
 end
 endfunction
 
@@ -2324,8 +2332,8 @@ begin
 	OP_STB,OP_STW,OP_STT,OP_STO,OP_STH,OP_STX:
 		fnSourceTv = 1'b1;
 	OP_DBRA: fnSourceTv = 1'b1;
-	8'b00101???:
-		fnSourceTv = 1'b1;
+	OP_Bcc,OP_BccU,OP_FBcc:
+		fnSourceTv = fnConstReg(ir.aRt);//ir.ins.br.inc==2'b00||ir.ins.br.inc==2'd2;
 	OP_PRED:
 		fnSourceTv = 1'b1;
 	default:

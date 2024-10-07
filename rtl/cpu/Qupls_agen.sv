@@ -113,7 +113,7 @@ begin
 	OP_STB,OP_STW,OP_STT,OP_STO,OP_STH,OP_CSTORE:
 		res1 <= as + i;
 	OP_LDX,OP_STX:
-		res1 <= as + bs + {{54{ir.ins.lsn.dispHi[2]}},ir.ins.lsn.dispHi,ir.ins.lsn.dispLo};
+		res1 <= as + bs + {{54{ir.ins.lsn.dispHi[6]}},ir.ins.lsn.dispHi,ir.ins.lsn.dispLo};
 	OP_AMO:
 		res1 <= as + b;
 	default:

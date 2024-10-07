@@ -417,7 +417,8 @@ always_comb
 	next_could_issue[g] = rob[g].v
 												&& !stomp_i[g]
 												&& !(&rob[g].done)
-												&& (args_valid[g]||(rob[g].decbus.cpytgt && rob[g].argT_v))
+												&& (rob[g].decbus.cpytgt ? rob[g].argT_v : args_valid[g])
+												&& (!(fnPriorFC(g) && !(&rob[g].done)))
 												//&& !fnPriorFalsePred(g)
 												&& !fnPriorSync(g)
 												&& |rob[g].pred_bits

@@ -36,12 +36,14 @@
 // event of a pipeline flush. Normally up to four register values will be
 // committed to the register file.
 //
-// 7150 LUTs / 1300 FFs / 2 BRAMs
+// 3200 LUTs / 1040 FFs / 0 BRAMs
 // ============================================================================
 //
+import const_pkg::*;
+import cpu_types_pkg::*;
 import QuplsPkg::*;
 
-module Qupls_reg_renamer4(rst,clk,en,restore,restore_list,tags2free,freevals,
+module Qupls_reg_renamer6(rst,clk,en,restore,restore_list,tags2free,freevals,
 	alloc0,alloc1,alloc2,alloc3,wo0,wo1,wo2,wo3,wv0,wv1,wv2,wv3,avail,stall,rst_busy);
 parameter NFTAGS = 4;
 input rst;
@@ -100,16 +102,16 @@ reg stallwo1;
 reg stallwo2;
 reg stallwo3;
 
-always_comb rst_busy = rst_busy0|rst_busy1|rst_busy2|rst_busy3;
 always_comb stall = stalla0|stalla1|stalla2|stalla3;
+always_comb rst_busy = 1'b0;
 
 always_comb
 begin
 	// Not a stall if not allocating.
-	stalla0 = ~avail[wo0] | (empty0 & alloc0);
-	stalla1 = ~avail[wo1] | (empty1 & alloc1);
-	stalla2 = ~avail[wo2] | (empty2 & alloc2);
-	stalla3 = ~avail[wo3] | (empty3 & alloc3);
+	stalla0 = ~avail[wo0];
+	stalla1 = ~avail[wo1];
+	stalla2 = ~avail[wo2];
+	stalla3 = ~avail[wo3];
 	wv0 = (avail[wo0] & alloc0) | wv0r;// & ~empty0;
 	wv1 = (avail[wo1] & alloc1) | wv1r;// & ~empty1;
 	wv2 = (avail[wo2] & alloc2) | wv2r;// & ~empty2;
@@ -206,100 +208,20 @@ begin
 	fpush[3] = avail[tags[3]] ? 1'b0 : freevals1[3] | ffree[3];
 end
 
+wire [7:0] ffo0;
+wire [7:0] ffo1;
+wire [7:0] ffo2;
+wire [7:0] ffo3;
 
-always_comb
-begin
-case(fifo_order)
-2'd0:
-	begin
-		tags[0] = (freevals1[0]) ? tags2free[0] : freeCnt + 3'd0;
-		tags[1] = (freevals1[1]) ? tags2free[1] : freeCnt + 3'd1;
-		tags[2] = (freevals1[2]) ? tags2free[2] : freeCnt + 3'd2;
-		tags[3] = (freevals1[3]) ? tags2free[3] : freeCnt + 3'd3;
-		fpush[0] = avail[tags[0]] ? 1'b0 : (freevals1[0]) | ffree[0];
-		fpush[1] = avail[tags[1]] ? 1'b0 : (freevals1[1]) | ffree[1];
-		fpush[2] = avail[tags[2]] ? 1'b0 : (freevals1[2]) | ffree[2];
-		fpush[3] = avail[tags[3]] ? 1'b0 : (freevals1[3]) | ffree[3];
-	end
-2'd1:
-	begin
-		tags[0] = (freevals1[1]) ? tags2free[1] : freeCnt + 3'd1;
-		tags[1] = (freevals1[2]) ? tags2free[2] : freeCnt + 3'd2;
-		tags[2] = (freevals1[3]) ? tags2free[3] : freeCnt + 3'd3;
-		tags[3] = (freevals1[0]) ? tags2free[0] : freeCnt + 3'd0;
-		fpush[0] = avail[tags[1]] ? 1'b0 : (freevals1[1]) | ffree[1];
-		fpush[1] = avail[tags[2]] ? 1'b0 : (freevals1[2]) | ffree[2];
-		fpush[2] = avail[tags[3]] ? 1'b0 : (freevals1[3]) | ffree[3];
-		fpush[3] = avail[tags[0]] ? 1'b0 : (freevals1[0]) | ffree[0];
-	end
-2'd2:
-	begin
-		tags[0] = (freevals1[2]) ? tags2free[2] : freeCnt + 3'd2;
-		tags[1] = (freevals1[3]) ? tags2free[3] : freeCnt + 3'd3;
-		tags[2] = (freevals1[0]) ? tags2free[0] : freeCnt + 3'd0;
-		tags[3] = (freevals1[1]) ? tags2free[1] : freeCnt + 3'd1;
-		fpush[0] = avail[tags[2]] ? 1'b0 : (freevals1[2]) | ffree[2];
-		fpush[1] = avail[tags[3]] ? 1'b0 : (freevals1[3]) | ffree[3];
-		fpush[2] = avail[tags[0]] ? 1'b0 : (freevals1[0]) | ffree[0];
-		fpush[3] = avail[tags[1]] ? 1'b0 : (freevals1[1]) | ffree[1];
-	end
-2'd3:
-	begin
-		tags[0] = (freevals1[3]) ? tags2free[3] : freeCnt + 3'd3;
-		tags[1] = (freevals1[0]) ? tags2free[0] : freeCnt + 3'd0;
-		tags[2] = (freevals1[1]) ? tags2free[1] : freeCnt + 3'd1;
-		tags[3] = (freevals1[2]) ? tags2free[2] : freeCnt + 3'd2;
-		fpush[0] = avail[tags[3]] ? 1'b0 : (freevals1[3]) | ffree[3];
-		fpush[1] = avail[tags[0]] ? 1'b0 : (freevals1[0]) | ffree[0];
-		fpush[2] = avail[tags[1]] ? 1'b0 : (freevals1[1]) | ffree[1];
-		fpush[3] = avail[tags[2]] ? 1'b0 : (freevals1[2]) | ffree[2];
-	end
-endcase
-end
+ffo144 uffo0 (.i({16'd0,avail[127:  0]}), .o(ffo0));
+ffo144 uffo1 (.i({16'd0,avail[255:128]}), .o(ffo1));
+ffo144 uffo2 (.i({16'd0,avail[383:256]}), .o(ffo2));
+ffo144 uffo3 (.i({16'd0,avail[511:384]}), .o(ffo3));
 
-Qupls_renamer_fifo #(0) ufifo0 (
-	.rst(rst),
-	.clk(clk),
-	.push(fpush[0]), 
-	.pop(pop0),
-	.o(wo0),
-	.i(tags[0]),
-	.empty(empty0),
-	.rst_busy(rst_busy0)
-);
-
-Qupls_renamer_fifo #(1) ufifo1 (
-	.rst(rst),
-	.clk(clk),
-	.push(fpush[1]), 
-	.pop(pop1),
-	.i(tags[1]),
-	.o(wo1),
-	.empty(empty1),
-	.rst_busy(rst_busy1)
-);
-
-Qupls_renamer_fifo #(2) ufifo2 (
-	.rst(rst),
-	.clk(clk),
-	.push(fpush[2]), 
-	.pop(pop2),
-	.i(tags[2]),
-	.o(wo2),
-	.empty(empty2),
-	.rst_busy(rst_busy2)
-);
-
-Qupls_renamer_fifo #(3) ufifo3 (
-	.rst(rst),
-	.clk(clk),
-	.push(fpush[3]), 
-	.pop(pop3),
-	.i(tags[3]),
-	.o(wo3),
-	.empty(empty3),
-	.rst_busy(rst_busy3)
-);
+always_comb wo0 = {2'd0,ffo0[6:0]};
+always_comb wo1 = {2'd1,ffo1[6:0]};
+always_comb wo2 = {2'd2,ffo2[6:0]};
+always_comb wo3 = {2'd3,ffo3[6:0]};
 
 
 always_comb

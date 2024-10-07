@@ -33,15 +33,15 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 33.3k LUTs / 2048 FFs (8 checkpoints, 128 regs)
+// 8400 LUTs / 520 FFs
 // ============================================================================
 
 import QuplsPkg::SIM;
 
 module Qupls_checkpoint_valid_ram6(rst,
-	clka, ena, wea, cpa, prega, dina,
-	clkb, enb, cpb, pregb, doutb,
-	ncp, ncp_ra, ncp_wa);
+	clka, ena, wea, prega, dina,
+	clkb, enb, pregb, doutb);
+//	ncp, ncp_ra);
 parameter NWRPORTS = 8;
 parameter NRDPORTS = 24;
 localparam RBIT=$clog2(PREGS);
@@ -52,53 +52,58 @@ input rst;
 input clka;
 input ena;
 input [NWRPORTS-1:0] wea;
-input checkpt_ndx_t [NWRPORTS-1:0] cpa;
-input pregno_t prega;
+//input checkpt_ndx_t [NWRPORTS-1:0] cpa;
+input pregno_t [NWRPORTS-1:0] prega;
 input [NWRPORTS-1:0] dina;
 input clkb;
 input enb;
-input checkpt_ndx_t [NRDPORTS-1:0] cpb;
-input pregno_t pregb;
+//input checkpt_ndx_t [NRDPORTS-1:0] cpb;
+input pregno_t [NRDPORTS-1:0] pregb;
 output reg [NRDPORTS-1:0] doutb;
-input ncp;
-input [AWID-1:0] ncp_ra;
-input [AWID-1:0] ncp_wa;
+//input ncp;
+//input [AWID-1:0] ncp_ra;
 
-integer n,nr;
+integer n,nr,nw;
 (* RAM_STYLE="distributed" *)
-reg [PREGS-1:0] mem [0:NCHECK-1];
+//reg [PREGS-1:0] mem [0:NCHECK-1];
+reg [PREGS-1:0] mem;
 reg [NRDPORTS-1:0] doutb1;
 
 always_ff @(posedge clka)
 // At reset, all regs are valid.
 if (rst) begin
-	for (n = 0; n < NCHECK; n = n + 1)
-		mem[n] <= {PREGS{1'b1}};
+	mem <= {PREGS{1'b1}};
 end
 else begin
 	// For a new checkpoint, copy all bits across.
-	if (ncp)
-		mem[ncp_wa] <= mem[ncp_ra];
+//	if (ncp)
+//		mem[(ncp_ra + 2'd1) % NCHECK] <= mem[ncp_ra];
 	// Otherwise, update individual bits
-	else begin
+	begin
 		for (n = 0; n < NWRPORTS; n = n + 1)
-			if (ena & wea[n])
-				mem[cpa[n]][prega] <= dina[n];
+			if (ena & wea[n]) begin
+				mem[prega[n]] <= dina[n];
+			end
+//				mem[cpa[n]][prega] <= dina[n];
 	end
 end
 
 always_comb
 begin
-	for (nr = 0; nr <= NRDPORTS; nr = nr + 1) begin
-		doutb1[nr] = pregb==9'd0 ? 1'b1 : 
-			mem[cpb[nr]][pregb];
+	for (nw = 0; nw < NWRPORTS; nw = nw + 1) begin
+	for (nr = 0; nr < NRDPORTS; nr = nr + 1) begin
+		doutb1[nr] = (pregb[nr]==9'd0 || pregb[nr]==PREGS-1) ? 1'b1 : 
+			pregb[nr]==prega[nw] ? dina[nw] :
+			mem[pregb[nr]];
+//			mem[cpb[nr]][pregb];
+	end
 	end
 end
 always_ff @(posedge clkb)
 if (rst)
 	doutb <= {NRDPORTS{1'b0}};
 else begin
-	if (enb)
+//	if (enb)
 		doutb <= doutb1;
 end
 

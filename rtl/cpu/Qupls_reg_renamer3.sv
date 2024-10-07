@@ -66,7 +66,7 @@ output reg wv0 = 1'b0;
 output reg wv1 = 1'b0;
 output reg wv2 = 1'b0;
 output reg wv3 = 1'b0;
-output reg [PREGS-1:0] avail = {{PREGS-1{1'b1}},1'b0};				// recorded in ROB
+output reg [PREGS-1:0] avail = {1'b0,{PREGS-2{1'b1}},1'b0};				// recorded in ROB
 output reg stall;			// stall enqueue while waiting for register availability
 
 wire pe_alloc0;
@@ -168,11 +168,9 @@ end
 
 always_comb
 if (rst) begin
-	next_avail = {{PREGS-1{1'b1}},1'b0};
+	next_avail = {1'b0,{PREGS-2{1'b1}},1'b0};
 	next_avail[0] = 1'b0;
-	next_avail[PREGS/4] = 1'b0;
-	next_avail[PREGS/2] = 1'b0;
-	next_avail[PREGS*3/4] = 1'b0;
+	next_avail[PREGS-1] = 1'b0;
 end
 else begin
 	

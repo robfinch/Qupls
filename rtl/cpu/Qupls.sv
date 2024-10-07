@@ -2664,21 +2664,30 @@ wire stomp1b_r = branch_state > BS_STATE3 && misspc.pc > pc1_r.pc;
 wire stomp2b_r = branch_state > BS_STATE3 && misspc.pc > pc2_r.pc;
 wire stomp3b_r = branch_state > BS_STATE3 && misspc.pc > pc3_r.pc;
 wire stomp0_r = /*~qd_r[0]||stomp_ren||stomp0b_r*/stomp_ren && pc0_r.bno_t==stomp_bno;
-wire stomp1_r = /*~qd_r[1]||stomp_ren||stomp1b_r||*/stomp_ren && pc1_r.bno_t==stomp_bno;//pt0_r||XWID < 2;
-wire stomp2_r = /*~qd_r[2]||stomp_ren||stomp2b_r||*/stomp_ren && pc2_r.bno_t==stomp_bno;//pt0_r||pt1_r||XWID < 3;
-wire stomp3_r = /*~qd_r[3]||stomp_ren||stomp3b_r||*/stomp_ren && pc3_r.bno_t==stomp_bno;//pt0_r||pt1_r||pt2_r||XWID < 4;
+wire stomp1_r = /*~qd_r[1]||stomp_ren||stomp1b_r||*/(stomp_ren && pc1_r.bno_t==stomp_bno);// ||
+//							 (ins0_ren.decbus.br && ins0_ren.bt);//pt0_r||XWID < 2;
+wire stomp2_r = /*~qd_r[2]||stomp_ren||stomp2b_r||*/(stomp_ren && pc2_r.bno_t==stomp_bno);// ||
+//							 (ins0_ren.decbus.br && ins0_ren.bt) ||
+//							 (ins1_ren.decbus.br && ins1_ren.bt)
+//;//pt0_r||pt1_r||XWID < 3;
+wire stomp3_r = /*~qd_r[3]||stomp_ren||stomp3b_r||*/(stomp_ren && pc3_r.bno_t==stomp_bno);// ||
+//							 (ins0_ren.decbus.br && ins0_ren.bt) ||
+//							 (ins1_ren.decbus.br && ins1_ren.bt) ||
+//							 (ins2_ren.decbus.br && ins2_ren.bt)
+//							 ;
+//;//pt0_r||pt1_r||pt2_r||XWID < 4;
 always_ff @(posedge clk)
 if (irst)
 	stomp0_q <= FALSE;
 else begin
-	if (advance_pipeline_seg2)
+	if (advance_pipeline)
 		stomp0_q <= stomp0_r;
 end
 always_ff @(posedge clk)
 if (irst)
 	stomp1_q <= FALSE;
 else begin
-	if (advance_pipeline_seg2)
+	if (advance_pipeline)
 		stomp1_q <= stomp1_r;
 end
 always_ff @(posedge clk) if (advance_pipeline) stomp2_q <= stomp2_r;
@@ -2736,6 +2745,37 @@ reg Rt1_renv;
 reg Rt2_renv;
 reg Rt3_renv;
 
+generate begin : gRenamer
+	if (RENAMER==3) begin
+Qupls_reg_renamer3 utrn2
+(
+	.rst(rst_i),		// rst_i here not irst!
+	.clk(clk),
+	.clk5x(clk5x),
+	.ph4(ph4),
+	.en(advance_pipeline),
+	.restore(restored),
+	.restore_list(restore_list),
+	.tags2free(tags2free),
+	.freevals(freevals),
+	.alloc0(ins0_dec.aRt!=8'd0 && ins0_dec.v),// & ~stomp0),
+	.alloc1(ins1_dec.aRt!=8'd0 && ins1_dec.v),// & ~stomp1),
+	.alloc2(ins2_dec.aRt!=8'd0 && ins2_dec.v),// & ~stomp2),
+	.alloc3(ins3_dec.aRt!=8'd0 && ins3_dec.v),// & ~stomp3),
+	.wo0(Rt0_dec),
+	.wo1(Rt1_dec),
+	.wo2(Rt2_dec),
+	.wo3(Rt3_dec),
+	.wv0(Rt0_decv),
+	.wv1(Rt1_decv),
+	.wv2(Rt2_decv),
+	.wv3(Rt3_decv),
+	.avail(avail_reg),
+	.stall(ren_stallq)
+);
+assign ren_rst_busy = FALSE;
+end
+else if (RENAMER==4)
 Qupls_reg_renamer4 utrn1
 (
 	.rst(rst_i),		// rst_i here not irst!
@@ -2763,8 +2803,37 @@ Qupls_reg_renamer4 utrn1
 	.stall(ren_stallq),
 	.rst_busy(ren_rst_busy)
 );
+else
+Qupls_reg_renamer6 utrn1
+(
+	.rst(rst_i),		// rst_i here not irst!
+	.clk(clk),
+//	.clk5x(clk5x),
+//	.ph4(ph4),
+	.en(advance_pipeline),
+	.restore(restored),
+	.restore_list(restore_list),
+	.tags2free(tags2free),
+	.freevals(freevals),
+	.alloc0(ins0_dec.aRt!=8'd0 && ins0_dec.v),// & ~stomp0),
+	.alloc1(ins1_dec.aRt!=8'd0 && ins1_dec.v),// & ~stomp1),
+	.alloc2(ins2_dec.aRt!=8'd0 && ins2_dec.v),// & ~stomp2),
+	.alloc3(ins3_dec.aRt!=8'd0 && ins3_dec.v),// & ~stomp3),
+	.wo0(Rt0_dec),
+	.wo1(Rt1_dec),
+	.wo2(Rt2_dec),
+	.wo3(Rt3_dec),
+	.wv0(Rt0_decv),
+	.wv1(Rt1_decv),
+	.wv2(Rt2_decv),
+	.wv3(Rt3_decv),
+	.avail(avail_reg),
+	.stall(ren_stallq),
+	.rst_busy(ren_rst_busy)
+);
 //assign ren_rst_busy = 1'b0;
-
+end
+endgenerate
 
 always_ff @(posedge clk)
 if (irst)
@@ -5446,14 +5515,14 @@ else begin
 	// It takes a clock cycle for the register to be read once it is known to be
 	// valid. A flag, load_lsq_argc, is set to delay by a clock. This flag pulses
 	// for only a single clock cycle.
-	
+/*
 	if (lsq[store_argC_id1.row][store_argC_id1.col].v==VAL && lsq[store_argC_id1.row][store_argC_id1.col].store && lsq[store_argC_id1.row][store_argC_id1.col].datav==INV) begin
 		if (prnv[23])//|store_argC_v)
 			load_lsq_argc <= TRUE;
 	end
-	
+*/
 	if (lsq[store_argC_id1.row][store_argC_id1.col].v==VAL && lsq[store_argC_id1.row][store_argC_id1.col].store && lsq[store_argC_id1.row][store_argC_id1.col].datav==INV) begin
-	if (load_lsq_argc) begin
+	if (prnv[23]) begin
 		$display("Q+ CPU: LSQ Rc=%h from r%d/%d", rfo_store_argC, store_argC_aReg, store_argC_pReg);
 		lsq[store_argC_id1.row][store_argC_id1.col].res <= rfo_store_argC;
 		lsq[store_argC_id1.row][store_argC_id1.col].ctag <= rfo_store_argC_ctag;
@@ -6869,18 +6938,16 @@ end
 endfunction
 
 function fnPregv;
-input checkpt_ndx_t ndx;
 input pregno_t regno;
 begin
-	fnPregv = urat1.ucpvram1.mem[ndx][regno];
+	fnPregv = urat1.ucpvram1.mem[regno];
 end
 endfunction
 
 function value_t fnArchRegV;
-input checkpt_ndx_t ndx;
 input aregno_t regno;
 begin
-	fnArchRegV = fnPregv(ndx,fnPreg(regno));
+	fnArchRegV = fnPregv(fnPreg(regno));
 end
 endfunction
 
@@ -6956,14 +7023,14 @@ always_ff @(posedge clk) begin: clock_n_debug
 		*/
 			$display("v%d -> %d/%d: %h%c %d/%d: %h%c %d/%d: %h%c %d/%d: %h%c %d/%d: %h%c %d/%d: %h%c %d/%d: %h%c %d/%d: %h%c #",
 			i[7:0] >> 3'd3,
-			i[7:0]+8'd0, fnPreg(i+0), fnArchRegVal(i+0), fnArchRegV(cndx0,i+0)?"v":" ",
-			i[7:0]+8'd1, fnPreg(i+1), fnArchRegVal(i+1), fnArchRegV(cndx0,i+1)?"v":" ",
-			i[7:0]+8'd2, fnPreg(i+2), fnArchRegVal(i+2), fnArchRegV(cndx0,i+2)?"v":" ",
-			i[7:0]+8'd3, fnPreg(i+3), fnArchRegVal(i+3), fnArchRegV(cndx0,i+3)?"v":" ",
-			i[7:0]+8'd4, fnPreg(i+4), fnArchRegVal(i+4), fnArchRegV(cndx0,i+4)?"v":" ",
-			i[7:0]+8'd5, fnPreg(i+5), fnArchRegVal(i+5), fnArchRegV(cndx0,i+5)?"v":" ",
-			i[7:0]+8'd6, fnPreg(i+6), fnArchRegVal(i+6), fnArchRegV(cndx0,i+6)?"v":" ",
-			i[7:0]+8'd7, fnPreg(i+7), fnArchRegVal(i+7), fnArchRegV(cndx0,i+7)?"v":" "
+			i[7:0]+8'd0, fnPreg(i+0), fnArchRegVal(i+0), fnArchRegV(i+0)?"v":" ",
+			i[7:0]+8'd1, fnPreg(i+1), fnArchRegVal(i+1), fnArchRegV(i+1)?"v":" ",
+			i[7:0]+8'd2, fnPreg(i+2), fnArchRegVal(i+2), fnArchRegV(i+2)?"v":" ",
+			i[7:0]+8'd3, fnPreg(i+3), fnArchRegVal(i+3), fnArchRegV(i+3)?"v":" ",
+			i[7:0]+8'd4, fnPreg(i+4), fnArchRegVal(i+4), fnArchRegV(i+4)?"v":" ",
+			i[7:0]+8'd5, fnPreg(i+5), fnArchRegVal(i+5), fnArchRegV(i+5)?"v":" ",
+			i[7:0]+8'd6, fnPreg(i+6), fnArchRegVal(i+6), fnArchRegV(i+6)?"v":" ",
+			i[7:0]+8'd7, fnPreg(i+7), fnArchRegVal(i+7), fnArchRegV(i+7)?"v":" "
 			);
 
 	$display("----- Rename %c%c ----- %s", ihit_ren ? "h":" ", micro_code_active_r ? "a": " ", stomp_ren ? stompstr : no_stompstr);
@@ -7100,7 +7167,8 @@ input rob_ndx_t ndx;
 input rob_ndx_t dndx;
 begin
 	if (rob[dndx].sn > rob[ndx].sn) begin
-		if (rob[dndx].pRt==rob[ndx].nRt) begin
+		if (rob[dndx].pRt==rob[ndx].nRt && 
+			rob[dndx].pRt!=9'd0 && rob[dndx].pRt!=PREGS-1) begin
 			rob[dndx].argT_v <= INV;
 		end
 	end
@@ -7808,7 +7876,7 @@ begin
 		rob[tail].decbus.load <= FALSE;
 		rob[tail].decbus.store <= FALSE;
 		rob[tail].decbus.mem <= FALSE;
-		rob[tail].op <= {41'd0,OP_NOP};
+		rob[tail].op <= {57'd0,OP_NOP};
 //		rob[tail].nRt <= 11'd0;
 //		rob[tail].pRt <= 11'd0;
 		rob[tail].argA_v <= VAL;

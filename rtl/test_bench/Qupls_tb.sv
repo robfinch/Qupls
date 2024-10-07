@@ -4,23 +4,27 @@ module Qupls_tb();
 
 reg rst;
 reg clk;
+reg [7:0] rstcnt = 8'd0;
 wire [6:0] state;
 wire [7:0] led;
 
 initial begin
 	clk = 1'b0;
-	rst = 1'b0;
-	#10 rst = 1'b1;
-	#500 rst = 1'b0;
 end
-
 always
  #5 clk = ~clk;
+ 
+always_ff @(posedge clk)
+if (!rstcnt[6])
+	rstcnt <= rstcnt + 2'd1;
+always_comb
+	rst = rstcnt < 8'd64;
 
 Qupls_soc usoc1
 (
-	.cpu_resetn(~rst),
-	.xclk(clk),
+	.cpu_reset_n(~rst),
+	.sysclk_p(clk),
+	.sysclk_n(~clk),
 	.led(led),
 	.sw(8'h00),
 	.btnl(1'b0),
@@ -28,14 +32,15 @@ Qupls_soc usoc1
 	.btnc(1'b0),
 	.btnd(1'b0),
 	.btnu(1'b0), 
-  .kclk(),
-  .kd(),
-  .uart_txd(),
-  .uart_rxd(1'b0),
-  .TMDS_OUT_clk_p(),
-  .TMDS_OUT_clk_n(),
-  .TMDS_OUT_data_p(),
-  .TMDS_OUT_data_n(),
+  .ps2_clk(),
+  .ps2_data(),
+  .uart_tx_in(1'b0),
+  .uart_rx_out(),
+	.hdmi_tx_clk_p(),
+	.hdmi_tx_clk_n(),
+	.hdmi_tx_p(),
+	.hdmi_tx_n(),
+  /*
   .ac_mclk(),
 	.ac_adc_sdata(),
 	.ac_dac_sdata(),
@@ -52,6 +57,7 @@ Qupls_soc usoc1
   .sd_clk(),
   .sd_cd(),
   .sd_reset(),
+  
   .pti_clk(),
   .pti_rxf(),
   .pti_txe(),
@@ -61,6 +67,7 @@ Qupls_soc usoc1
   .pti_oe(),
   .pti_dat(),
   .spien(),
+  */
   .oled_sdin(),
   .oled_sclk(),
   .oled_dc(),
