@@ -35,9 +35,12 @@
 //
 // ============================================================================
 
+import const_pkg::*;
 import QuplsPkg::SIM;
 
-module Qupls_checkpointRam(rst, clka, ena, wea, addra, dina, douta, clkb, enb, addrb, doutb);
+module Qupls_checkpointRam(rst, clka, ena, wea, addra, dina, douta, 
+	clkb, enb, addrb, doutb);
+parameter NRDPORTS = 4; 
 localparam RBIT=$clog2(PREGS);
 localparam QBIT=$bits(cpu_types_pkg::pregno_t);
 localparam WID=$bits(checkpoint_t);
@@ -46,15 +49,15 @@ input rst;
 input clka;
 input ena;
 input wea;
-input [3:0] addra;
+input checkpt_ndx_t addra;
 input checkpoint_t dina;
 output checkpoint_t douta;
 input clkb;
 input enb;
-input [3:0] addrb;
-output checkpoint_t doutb;
+input checkpt_ndx_t [NRDPORTS-1:0] addrb;
+output checkpoint_t [NRDPORTS-1:0] doutb;
 
-checkpoint_t doutb1;
+checkpoint_t [NRDPORTS-1:0] doutb1;
 checkpoint_t douta1;
 genvar g;
 integer n;
@@ -86,7 +89,7 @@ always_ff @(posedge clka) addra1 <= addra;
 always_ff @(posedge clka) dina1 <= dina;
 
 generate begin : gRegfileRam
-if (SIM) begin
+begin
 
 //	for (g = 0; g < AREGS; g = g + 1)
 		always_ff @(posedge clka)
@@ -94,11 +97,14 @@ if (SIM) begin
 //			if (ena & wea[g]) mem[addra][g*QBIT+QBIT-1:g*QBIT] <= dina[g*QBIT+QBIT-1:g*QBIT];
 
 //	assign doutb = (ena & wea) ? dina : mem[addrb];
-	assign doutb1 = mem[addrb];
+	assign doutb1[0] = mem[addrb[0]];
+	assign doutb1[1] = mem[addrb[1]];
+	assign doutb1[2] = mem[addrb[2]];
+	assign doutb1[3] = mem[addrb[3]];
 	assign douta1 = mem[addra];
 
 end
-else begin
+if (FALSE) begin
 
 
 // XPM_MEMORY instantiation template for Dual Port Distributed RAM configurations

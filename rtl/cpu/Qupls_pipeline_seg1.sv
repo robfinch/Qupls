@@ -124,7 +124,7 @@ output cpu_types_pkg::mc_address_t mcip3_o;
 output reg do_bsr;
 output cpu_types_pkg::pc_address_ex_t bsr_tgt;
 input get;
-output reg stall;
+output stall;
 
 integer nn,hh;
 reg [1023:0] ic_line_fet;
@@ -192,10 +192,11 @@ pipeline_reg_t nopi;
 always_comb
 begin
 	nopi = {$bits(pipeline_reg_t){1'b0}};
+	nopi.exc = FLT_NONE;
 	nopi.pc.pc = RSTPC;
 	nopi.mcip = 12'h1A0;
 	nopi.len = 4'd8;
-	nopi.ins = {41'd0,OP_NOP};
+	nopi.ins = {57'd0,OP_NOP};
 	nopi.pred_btst = 6'd0;
 	nopi.element = 'd0;
 	nopi.aRa = 8'd0;
@@ -227,8 +228,10 @@ if (rst_i) begin
 	pc1_fet.pc <= RSTPC + 6'd8;
 end
 else begin
-	if (advance_fet)
-		pc1_fet <= pc_i + 6'd8;
+	if (advance_fet) begin
+		pc1_fet <= pc_i;
+		pc1_fet.pc <= pc_i.pc + 6'd8;
+	end
 end
 always_ff @(posedge clk_i)
 if (rst_i) begin
@@ -237,8 +240,10 @@ if (rst_i) begin
 	pc2_fet.pc <= RSTPC + 6'd16;
 end
 else begin
-	if (advance_fet)
-		pc2_fet <= pc_i + 6'd16;
+	if (advance_fet) begin
+		pc2_fet <= pc_i;
+		pc2_fet.pc <= pc_i.pc + 6'd16;
+	end
 end
 always_ff @(posedge clk_i)
 if (rst_i) begin
@@ -247,8 +252,10 @@ if (rst_i) begin
 	pc3_fet.pc <= RSTPC + 6'd24;
 end
 else begin
-	if (advance_fet)
-		pc3_fet <= pc_i + 6'd24;
+	if (advance_fet) begin
+		pc3_fet <= pc_i;
+		pc3_fet.pc <= pc_i.pc + 6'd24;
+	end
 end
 always_ff @(posedge clk_i)
 if (rst_i) begin
@@ -258,7 +265,7 @@ if (rst_i) begin
 end
 else begin
 	if (advance_fet)
-		pc4_fet <= pc_i + 6'd32;
+		pc4_fet.pc <= pc_i.pc + 6'd32;
 end
 
 always_ff @(posedge clk_i)
@@ -336,7 +343,7 @@ else begin
 	if (!rstcnt[2])
 		ic_line_fet <= {128{1'd1,OP_NOP}};
 	else if (advance_fet) begin 
-		if (!ihit || (stomp_fet && pc_i.bno_t==stomp_bno))
+		if (!ihit || (stomp_fet && pc_i.bno_t!=stomp_bno))
 			ic_line_fet <= {128{1'd1,OP_NOP}};
 		else
 			ic_line_fet <= ic_line_i;
@@ -396,10 +403,10 @@ end
 // executed.
 reg nop0,nop1,nop2,nop3;
 
-always_comb nop0 = (stomp_mux /*&& (ins0_fet.bt && branchmiss ? pc0_fet.bno_t==stomp_bno : pc0_fet.bno_f==stomp_bno)*/) || (branchmiss && misspc_fet.pc > pc0_fet.pc);
-always_comb nop1 = (stomp_mux /*&& ((ins0_fet.bt|ins1_fet.bt) && branchmiss ? pc1_fet.bno_t==stomp_bno : pc1_fet.bno_f==stomp_bno)*/) || (branchmiss && misspc_fet.pc > pc1_fet.pc);
-always_comb nop2 = (stomp_mux /*&& ((ins0_fet.bt|ins1_fet.bt|ins2_fet.bt) && branchmiss ? pc2_fet.bno_t==stomp_bno : pc2_fet.bno_f==stomp_bno)*/) || (branchmiss && misspc_fet.pc > pc2_fet.pc);
-always_comb nop3 = (stomp_mux /*&& ((ins0_fet.bt|ins1_fet.bt|ins2_fet.bt|ins3_fet.bt) && branchmiss ? pc3_fet.bno_t==stomp_bno : pc3_fet.bno_f==stomp_bno)*/) || (branchmiss && misspc_fet.pc > pc3_fet.pc);
+always_comb nop0 = (stomp_mux && pc0_fet.bno_t!=stomp_bno) || (branchmiss && misspc_fet.pc > pc0_fet.pc);
+always_comb nop1 = (stomp_mux && pc1_fet.bno_t!=stomp_bno) || (branchmiss && misspc_fet.pc > pc1_fet.pc);
+always_comb nop2 = (stomp_mux && pc2_fet.bno_t!=stomp_bno) || (branchmiss && misspc_fet.pc > pc2_fet.pc);
+always_comb nop3 = (stomp_mux && pc3_fet.bno_t!=stomp_bno) || (branchmiss && misspc_fet.pc > pc3_fet.pc);
 /*
 always_comb nop0 = FALSE;
 always_comb nop1 = FALSE;
@@ -676,34 +683,76 @@ if (rst_i) begin
 	ins0d <= {$bits(pipeline_reg_t){1'b0}};
 end
 else begin
-	if (en_i)
-		ins0d <= (stomp_dec /* && (ins0_mux.bt && branchmiss ? ins0_mux.pc.bno_t==stomp_bno : ins0_mux.pc.bno_f==stomp_bno )*/) ? nopi : ins0_mux;
+	if (en_i) begin
+		ins0d <= ins0_mux;
+		if (stomp_dec) begin
+			if (ins0_mux.pc.bno_t!=stomp_bno) begin
+				ins0d <= nopi;
+				ins0d.pc.bno_t = ins0_mux.pc.bno_t;
+			end
+		end
+	end
 end
+
 always_ff @(posedge clk)
 if (rst_i) begin
 	ins1d <= {$bits(pipeline_reg_t){1'b0}};
 end
 else begin
-	if (en_i)
-		ins1d <= (stomp_dec /*&& ((ins0_mux.bt|ins1_mux.bt) && branchmiss ? ins1_mux.pc.bno_t==stomp_bno : ins1_mux.pc.bno_f==stomp_bno )*/) ? nopi : ins1_mux;
+	if (en_i) begin
+		ins1d <= ins1_mux;
+		if (stomp_dec) begin
+			if (ins1_mux.pc.bno_t!=stomp_bno) begin
+				ins1d <= nopi;
+				ins1d.pc.bno_t = ins1_mux.pc.bno_t;
+			end
+		end
+	end
 end
+
 always_ff @(posedge clk)
 if (rst_i) begin
 	ins2d <= {$bits(pipeline_reg_t){1'b0}};
 end
 else begin
-	if (en_i)
-//		ins1d <= (stomp_dec && ((ins0_mux.bt|ins1_mux.bt|ins2_mux.bt) && branchmiss ? ins1_mux.pc.bno_t==stomp_bno : ins1_mux.pc.bno_f==stomp_bno )) ? nopi : ins1_mux;
-		ins2d <= (stomp_dec /*&& ins2_mux.pc.bno_t==stomp_bno*/) ? nopi : ins2_mux;
+	if (en_i) begin
+		ins2d <= ins2_mux;
+		if (stomp_dec) begin
+			if (ins2_mux.pc.bno_t!=stomp_bno) begin
+				ins2d <= nopi;
+				ins2d.pc.bno_t = ins2_mux.pc.bno_t;
+			end
+		end
+	end
 end
+
+always_ff @(posedge clk)
+if (rst_i) begin
+	ins3d <= {$bits(pipeline_reg_t){1'b0}};
+end
+else begin
+	if (en_i) begin
+		ins3d <= ins3_mux;
+		if (stomp_dec) begin
+			if (ins3_mux.pc.bno_t!=stomp_bno) begin
+				ins3d <= nopi;
+				ins3d.pc.bno_t = ins3_mux.pc.bno_t;
+			end
+		end
+	end
+end
+
+/*
 always_ff @(posedge clk)
 if (rst_i) begin
 	ins3d <= {$bits(pipeline_reg_t){1'b0}};
 end
 else begin
 	if (en_i)
-		ins3d <= (stomp_dec && ins3_mux.pc.bno_t==stomp_bno) ? nopi : ins3_mux;
+		ins2d <= (stomp_dec && ((ins0_mux.bt|ins1_mux.bt|ins2_mux.bt|ins3_mux.bt) && branchmiss ? ins3_mux.pc.bno_t==stomp_bno : ins3_mux.pc.bno_f==stomp_bno )) ? nopi : ins3_mux;
+//		ins3d <= (stomp_dec && ins3_mux.pc.bno_t==stomp_bno) ? nopi : ins3_mux;
 end
+*/
 always_ff @(posedge clk) if (en_i) pc0dd <= pc0d;
 always_ff @(posedge clk) if (en_i) pc1dd <= pc1d;
 always_ff @(posedge clk) if (en_i) pc2dd <= pc2d;
@@ -773,14 +822,36 @@ begin
 	pr_dec3.len = 4'd8;
 end
 
-always_comb ins0_dec_o = pr_dec0;
-always_comb ins1_dec_o = pr_dec1;
-always_comb ins2_dec_o = pr_dec2;
-always_comb ins3_dec_o = pr_dec3;
-always_comb pc0_o = pr_dec0.pc;
-always_comb pc1_o = pr_dec1.pc;
-always_comb pc2_o = pr_dec2.pc;
-always_comb pc3_o = pr_dec3.pc;
+pipeline_reg_t [3:0] prd, inso;
+always_comb prd[0] = pr_dec0;
+always_comb prd[1] = pr_dec1;
+always_comb prd[2] = pr_dec2;
+always_comb prd[3] = pr_dec3;
+
+always_comb inso = prd;
+
+/* under construction
+Qupls_space_branches uspb1
+(
+	.rst(rst_i),
+	.clk(clk),
+	.en(en_i),
+	.get(get),
+	.ins_i(prd),
+	.ins_o(inso),
+	.stall(stall)
+);
+*/
+assign stall = 1'b0;
+
+always_comb ins0_dec_o = inso[0];
+always_comb ins1_dec_o = inso[1];
+always_comb ins2_dec_o = inso[2];
+always_comb ins3_dec_o = inso[3];
+always_comb pc0_o = inso[0].pc;
+always_comb pc1_o = inso[1].pc;
+always_comb pc2_o = inso[2].pc;
+always_comb pc3_o = inso[3].pc;
 
 always_comb
 begin
@@ -795,9 +866,6 @@ begin
 		$finish;
 */
 end
-
-always_comb
-	stall = 1'b0;
 
 always_comb
 begin

@@ -39,10 +39,10 @@
 import QuplsPkg::SIM;
 
 module Qupls_checkpoint_valid_ram6(rst,
-	clka, ena, wea, prega, dina,
-	clkb, enb, pregb, doutb);
+	clka, ena, wea, cpa, prega, dina,
+	clkb, enb, cpb, pregb, doutb, ncp, ncp_ra, ncp_wa);
 //	ncp, ncp_ra);
-parameter NWRPORTS = 8;
+parameter NWRPORTS = 9;
 parameter NRDPORTS = 24;
 localparam RBIT=$clog2(PREGS);
 localparam QBIT=$bits(cpu_types_pkg::pregno_t);
@@ -52,39 +52,39 @@ input rst;
 input clka;
 input ena;
 input [NWRPORTS-1:0] wea;
-//input checkpt_ndx_t [NWRPORTS-1:0] cpa;
+input checkpt_ndx_t [NWRPORTS-1:0] cpa;
 input pregno_t [NWRPORTS-1:0] prega;
 input [NWRPORTS-1:0] dina;
 input clkb;
 input enb;
-//input checkpt_ndx_t [NRDPORTS-1:0] cpb;
+input checkpt_ndx_t [NRDPORTS-1:0] cpb;
 input pregno_t [NRDPORTS-1:0] pregb;
 output reg [NRDPORTS-1:0] doutb;
-//input ncp;
-//input [AWID-1:0] ncp_ra;
+input ncp;
+input [AWID-1:0] ncp_ra;
+input [AWID-1:0] ncp_wa;
 
 integer n,nr,nw;
 (* RAM_STYLE="distributed" *)
-//reg [PREGS-1:0] mem [0:NCHECK-1];
-reg [PREGS-1:0] mem;
+reg [PREGS-1:0] mem [0:NCHECK-1];
 reg [NRDPORTS-1:0] doutb1;
 
 always_ff @(posedge clka)
 // At reset, all regs are valid.
 if (rst) begin
-	mem <= {PREGS{1'b1}};
+	for (n = 0; n < NCHECK; n = n + 1)
+		mem[n] <= {PREGS{1'b1}};
 end
 else begin
 	// For a new checkpoint, copy all bits across.
-//	if (ncp)
-//		mem[(ncp_ra + 2'd1) % NCHECK] <= mem[ncp_ra];
+	if (ncp)
+		mem[ncp_wa] <= mem[ncp_ra];
 	// Otherwise, update individual bits
-	begin
+	else begin
 		for (n = 0; n < NWRPORTS; n = n + 1)
 			if (ena & wea[n]) begin
-				mem[prega[n]] <= dina[n];
+				mem[cpa[n]][prega[n]] <= dina[n];
 			end
-//				mem[cpa[n]][prega] <= dina[n];
 	end
 end
 
@@ -93,13 +93,12 @@ begin
 	for (nw = 0; nw < NWRPORTS; nw = nw + 1) begin
 	for (nr = 0; nr < NRDPORTS; nr = nr + 1) begin
 		doutb1[nr] = (pregb[nr]==9'd0 || pregb[nr]==PREGS-1) ? 1'b1 : 
-			pregb[nr]==prega[nw] ? dina[nw] :
-			mem[pregb[nr]];
-//			mem[cpb[nr]][pregb];
+//			pregb[nr]==prega[nw] && cpb[nr]==cpa[nw] ? dina[nw] :
+			mem[cpb[nr]][pregb[nr]];
 	end
 	end
 end
-always_ff @(posedge clkb)
+always_comb//ff @(posedge clkb)
 if (rst)
 	doutb <= {NRDPORTS{1'b0}};
 else begin

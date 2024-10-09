@@ -147,7 +147,8 @@ parameter SUPPORT_LOAD_BYPASSING = 1'b0;
 
 // The following controls the size of the reordering buffer.
 // Setting ROB_ENTRIES below 12 may not work. Setting the number of entries over
-// 63 may require changing the sequence number type.
+// 63 may require changing the sequence number type. For ideal construction 
+// should be a multiple of four.
 parameter ROB_ENTRIES = 16;
 
 parameter BEB_ENTRIES = 4;
@@ -156,7 +157,7 @@ parameter BEB_ENTRIES = 4;
 // scheduler when determining what to issue. The schedule window is
 // between the head of the queue and WINDOW_SIZE entries backwards.
 // Decreasing the window size may reduce hardware but will cost performance.
-parameter SCHED_WINDOW_SIZE = 10;
+parameter SCHED_WINDOW_SIZE = 8;
 
 // The following is the number of branch checkpoints to support. 16 is the
 // recommended maximum. Fewer checkpoints may reduce core performance as stalls
@@ -1746,7 +1747,7 @@ typedef struct packed {
 	pipeline_reg_t op;			// original instruction
 	cpu_types_pkg::pc_address_ex_t pc;			// PC of instruction
 	cpu_types_pkg::mc_address_t mcip;				// Micro-code IP address
-	logic [2:0] grp;					// instruction group of PC
+	seqnum_t grp;							// instruction group
 } rob_entry_t;
 
 typedef struct packed {
@@ -2177,7 +2178,7 @@ begin
 	OP_ORI:		fnSourceBv = 1'b1;
 	OP_EORI:	fnSourceBv = 1'b1;
 	OP_SHIFT,OP_VSHIFT:
-		case(ir.ins.shifti.func[6])
+		case(ir.ins.shifti.func[3])
 		1'b0:	fnSourceBv = fnConstReg(ir.aRb) || fnImmb(ir);
 		1'b1: fnSourceBv = 1'b1;
 		endcase

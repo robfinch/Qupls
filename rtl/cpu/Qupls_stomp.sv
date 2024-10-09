@@ -128,7 +128,8 @@ always_ff @(posedge clk)
 if (rst)
 	stomp_renr <= TRUE;
 else begin
-	if (advance_pipeline)
+	if (advance_pipeline_seg2 ||
+		advance_pipeline)
 		stomp_renr <= next_stomp_ren;
 end
 always_comb
@@ -144,7 +145,7 @@ always_ff @(posedge clk)
 if (rst)
 	stomp_que <= TRUE;
 else begin
-	if (advance_pipeline)
+	if (advance_pipeline||advance_pipeline_seg2)
 		stomp_que <= stomp_ren;
 end	
 
@@ -152,7 +153,7 @@ always_ff @(posedge clk)
 if (rst)
 	stomp_quemr <= TRUE;
 else begin
-	if (advance_pipeline)
+	if (advance_pipeline||advance_pipeline_seg2)
 		stomp_quemr <= next_stomp_quem;
 end	
 always_comb

@@ -26,7 +26,7 @@ clk100_NexysVideoClkgen \
 clk20_NexysVideoClkgen \
 } \
 -group { \
-clk33_NexysVideoClkgen \
+clk17_NexysVideoClkgen \
 } \
 -group { \
 clk40_NexysVideoClkgen \
@@ -34,6 +34,24 @@ clk40_NexysVideoClkgen \
 -group { \
 clk50_NexysVideoClkgen \
 clk67_NexysVideoClkgen \
+} \
+-group { \
+clk100_cpuClkgen_1 \
+} \
+-group { \
+clk40_cpuClkgen_1 \
+} \
+-group { \
+clk20_cpuClkgen_1 \
+} \
+-group { \
+clk100_cpuClkgen \
+} \
+-group { \
+clk40_cpuClkgen \
+} \
+-group { \
+clk20_cpuClkgen \
 }
 
 #set_clock_groups -asynchronous \
@@ -87,7 +105,9 @@ clk67_NexysVideoClkgen \
 #et_false_path -from [get_clocks clk_pll_i] -to [get_clocks ucg1/clk40]
 #et_false_path -from [get_clocks ucg1/clk40] -to [get_clocks clk_pll_i]
 
-#set_false_path -from [get_clocks clk20_NexysVideoClkgen] -to [get_clocks ucg1/clk40]
+set_false_path -from [get_clocks clk40_NexysVideoClkgen] -to [get_clocks clk25_cpuClkgen]
+set_false_path -from [get_clocks clk25_cpuClkgen] -to [get_clocks clk40_NexysVideoClkgen]
+
 #set_false_path -from [get_clocks ucg1/clk40] -to [get_clocks clk20_NexysVideoClkgen]
 
 #set_false_path -from [All_clocks] -to [All_clocks]

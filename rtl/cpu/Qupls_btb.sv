@@ -130,7 +130,7 @@ genvar g;
 
 wire [5:0] ffz0,ffz1;
 ffz48 uffz0 (.i({16'hFFFF,bno_bitmap}), .o(ffz0));
-ffz48 uffz1 (.i({16'hFFFF,bno_bitmap & ~(32'd1 << ffz0)}), .o(ffz1));
+ffz48 uffz1 (.i({16'hFFFF,bno_bitmap | (32'd1 << ffz0)}), .o(ffz1));
 
    // xpm_memory_sdpram: Simple Dual Port RAM
    // Xilinx Parameterized Macro, version 2022.2
@@ -506,6 +506,31 @@ else begin
 	if (p_override[3])
 		next_bno_bitmap[po_bno[3]] = 1'b0;
 	*/
+
+	// Assign alternate branch path if not already assigned.
+	/* under construction
+	if (pr0.decbus.br && pr0.pc.bno_f==5'd0) begin
+		dec_pc0 = pr.pc;
+		dec_pc0.bno_f = ffz0a;
+		next_bno_bitmap[ffz0a] = 1'b0;
+	end
+	if (pr1.decbus.br && pr1.pc.bno_f==5'd0) begin
+		dec_pc1 = pr.pc;
+		dec_pc1.bno_f = ffz0b;
+		next_bno_bitmap[ffz0b] = 1'b0;
+	end
+	if (pr2.decbus.br && pr2.pc.bno_f==5'd0) begin
+		dec_pc2 = pr.pc;
+		dec_pc2.bno_f = ffz0c;
+		next_bno_bitmap[ffz0c] = 1'b0;
+	end
+	if (pr3.decbus.br && pr3.pc.bno_f==5'd0) begin
+		dec_pc3 = pr.pc;
+		dec_pc3.bno_f = ffz0d;
+		next_bno_bitmap[ffz0d] = 1'b0;
+	end
+	*/
+
 	// On a branch miss the misspc will have the correct block so the
 	// cache line can be fetched, but the group will not be valid yet.
 	// The group is loaded at state 1 below.
@@ -522,13 +547,13 @@ else begin
 		next_bno_bitmap[misspc.bno_f] = 1'b0;
 	end
 	else if (en && pc0.pc==doutb0.pc && doutb0.takb) begin
-		next_act_bno = 5'd1;//pc0.bno_t;//ffz1;
+		next_act_bno = pc0.bno_t;//ffz1;
 		next_alt_bno = ffz0;
 		next_pcs[next_act_bno].pc = doutb0.tgt;
 		next_pcs[next_act_bno].bno_t = next_act_bno;
 		next_pcs[next_act_bno].bno_f = ffz0;
 		// Alocate two streams, one for true, one for false
-		next_bno_bitmap[pc0.bno_t] = 1'b1;
+		next_bno_bitmap[ffz0] = 1'b1;
 		/*
 		next_bno_bitmap[ffz0] = 1'b1;
 		next_pcs[ffz0].pc = pc0.pc + 5'd8;
@@ -538,12 +563,12 @@ else begin
 		takb0 = 1'b1;
 	end
 	else if (en && pc1.pc==doutb1.pc && doutb1.takb) begin
-		next_act_bno = 5'd1;//pc1.bno_t;//ffz0;
+		next_act_bno = pc1.bno_t;//ffz0;
 		next_alt_bno = ffz0;
 		next_pcs[next_act_bno].pc = doutb1.tgt;
 		next_pcs[next_act_bno].bno_t = next_act_bno;
 		next_pcs[next_act_bno].bno_f = ffz0;
-		next_bno_bitmap[pc1.bno_t] = 1'b1;
+		next_bno_bitmap[ffz0] = 1'b1;
 		/*
 		next_bno_bitmap[ffz0] = 1'b1;
 		next_pcs[ffz0].pc = pc1.pc + 5'd8;
@@ -553,12 +578,12 @@ else begin
 		takb1 = 1'b1;
 	end
 	else if (en && pc2.pc==doutb2.pc && doutb2.takb) begin
-		next_act_bno = 5'd1;//pc2.bno_t;//ffz0;
+		next_act_bno = pc2.bno_t;//ffz0;
 		next_alt_bno = ffz0;
 		next_pcs[next_act_bno].pc = doutb2.tgt;
 		next_pcs[next_act_bno].bno_t = next_act_bno;
 		next_pcs[next_act_bno].bno_f = ffz0;
-		next_bno_bitmap[pc2.bno_t] = 1'b1;
+		next_bno_bitmap[ffz0] = 1'b1;
 		/*
 		next_bno_bitmap[ffz0] = 1'b1;
 		next_pcs[ffz0].pc = pc2.pc + 5'd8;
@@ -568,12 +593,12 @@ else begin
 		takb2 = 1'b1;
 	end
 	else if (en && pc3.pc==doutb3.pc && doutb3.takb) begin
-		next_act_bno = 5'd1;//pc3.bno_t;//ffz0;
+		next_act_bno = pc3.bno_t;//ffz0;
 		next_alt_bno = ffz0;
 		next_pcs[next_act_bno].pc = doutb3.tgt;
 		next_pcs[next_act_bno].bno_t = next_act_bno;
 		next_pcs[next_act_bno].bno_f = ffz0;
-		next_bno_bitmap[pc3.bno_t] = 1'b1;
+		next_bno_bitmap[ffz0] = 1'b1;
 		/*
 		next_bno_bitmap[ffz0] = 1'b1;
 		next_pcs[ffz0].pc = pc3.pc + 5'd8;
