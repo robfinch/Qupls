@@ -101,7 +101,7 @@ wire [1:0] cap_tag_hit;
 real IPC,PIPC;
 integer nn,mm,n2,n3,n4,m4,n5,n6,n7,n8,n9,n10,n11,n12,n13,n14,n15,n17;
 integer n16r, n16c, n12r, n12c, n14r, n14c, n17r, n17c, n18r, n18c;
-integer n19,n20,n21,n22,n23,n24,n25,n26,n27,n28,n29,i,n30,n31;
+integer n19,n20,n21,n22,n23,n24,n25,n26,n27,n28,n29,i,n30,n31,n32,n33;
 genvar g,h,gvg;
 rndx_t alu0_re;
 reg [127:0] message;
@@ -2203,7 +2203,7 @@ pregno_t Rt0_q1, Rt1_q1, Rt2_q1, Rt3_q1;
 pregno_t [3:0] tags2free;
 wire [3:0] freevals;
 wire [PREGS-1:0] avail_reg;						// available registers
-wire [3:0] cndx0,cndx1,cndx2,cndx3;		// checkpoint index for each queue slot
+checkpt_ndx_t cndx0,cndx1,cndx2,cndx3;		// checkpoint index for each queue slot
 
 
 // ----------------------------------------------------------------------------
@@ -2911,9 +2911,12 @@ end
 
 reg free_chkpt;
 checkpt_ndx_t fchkpt;
-reg [3:0] miss_cp;
+checkpt_ndx_t miss_cp;
 always_comb
 	miss_cp = rob[missid].cndx;
+assign cndx1 = cndx0;
+assign cndx2 = cndx0;
+assign cndx3 = cndx0;
 
 Qupls_rat #(.NPORT(24)) urat1
 (	
@@ -2927,10 +2930,8 @@ Qupls_rat #(.NPORT(24)) urat1
 	.inc_chkpt(inc_chkpt),
 	.chkpt_inc_amt(chkpt_inc_amt),
 	.stallq(rat_stallq),
-	.cndx0_o(cndx0),
-	.cndx1_o(cndx1),
-	.cndx2_o(cndx2),
-	.cndx3_o(cndx3),
+	.cndx_o(cndx0),
+	.pcndx_o(),
 	.rob(rob),
 	.stomp(robentry_stomp),// & {32{branch_state==BS_CAPTURE_MISSPC}}),
 	.avail_i(avail_reg),
@@ -3436,7 +3437,6 @@ end
 // required.
 always_ff @(posedge clk)
 for (n4 = 0; n4 < ROB_ENTRIES; n4 = n4 + 1) begin
-	backout <= FALSE;
 	robentry_stomp[n4] <= //(bno_bitmap[rob[n4].pc.bno_t]==1'b0) ||
 	(
 		((branchmiss/*||((takb&~rob[fcu_id].bt) && (fcu_v2|fcu_v3|fcu_v4))*/) || (branch_state<BS_DONE2 && branch_state!=BS_IDLE))
@@ -3450,9 +3450,22 @@ for (n4 = 0; n4 < ROB_ENTRIES; n4 = n4 + 1) begin
 	if (fcu_idv && rob[fcu_id].decbus.br && takb) begin
  		if (rob[n4].grp==rob[fcu_id].grp && rob[n4].sn > rob[fcu_id].sn) begin
  			robentry_stomp[n4] <= TRUE;
- 			backout <= TRUE;
  		end
 	end
+end
+
+always_ff @(posedge clk)
+for (n32 = 0; n32 < ROB_ENTRIES; n32 = n32 + 1) begin
+	backout <= FALSE;
+	if (fcu_idv && rob[fcu_id].decbus.br && takb) begin
+ 		if (rob[n32].grp==rob[fcu_id].grp && rob[n32].sn > rob[fcu_id].sn) begin
+ 			if (!(branchmiss || branch_state != BS_IDLE))
+ 				backout <= TRUE;
+ 		end
+	end
+	// Always do a backout on a branch miss.
+	if (branch_state==BS_CHKPT_RESTORED)
+		backout <= TRUE;
 end
 
 // Reset the ROB tail pointer, if there is a head <-> tail collision move the
@@ -3548,17 +3561,13 @@ always_ff @(posedge clk)
 if (irst) begin
 	fcu_branchmiss <= FALSE;
 	fcu_branchmiss_id <= 5'd0;
-	free_chkpt <= FALSE;
 end
 else begin
-	free_chkpt <= FALSE;
 	if (fcu_v2) begin
 		fcu_branchmiss_id <= fcu_id;
 		case(fcu_bts)
 		BTS_REG,BTS_DISP:
 			begin
-				free_chkpt <= TRUE;
-				fchkpt <= rob[fcu_id].cndx;
 				fcu_branchmiss <= ((takb && !fcu_bt) || (!takb && fcu_bt));
 			end
 		BTS_CALL,BTS_RET:
@@ -3572,6 +3581,38 @@ else begin
 	if (fcu_v3)
 		fcu_branchmiss <= FALSE;
 end
+
+// Search for instructions groups that are done or invalid. If there are any
+// branches in the group, then free the checkpoint. All the branches must have
+// resolved if all instructions are done or invalid.
+// Take care not to free the checkpoint more than once.
+
+seqnum_t lfg;
+always_ff @(posedge clk)
+if (irst) begin
+	free_chkpt <= FALSE;
+	fchkpt <= 4'd0;
+	lfg <= {$bits(seqnum_t){1'b0}};	// last freed group
+end
+else begin
+	free_chkpt <= FALSE;
+	for (n33 = 0; n33 < ROB_ENTRIES; n33 = n33 + 4) begin
+		if (rob[n33].grp != lfg &&
+			(&rob[n33+0].done || !rob[n33+0].v) &&
+			(&rob[n33+1].done || !rob[n33+1].v) &&
+			(&rob[n33+2].done || !rob[n33+2].v) &&
+			(&rob[n33+3].done || !rob[n33+3].v))
+			if (rob[n33+0].decbus.br || 
+					rob[n33+1].decbus.br ||
+					rob[n33+2].decbus.br ||
+					rob[n33+3].decbus.br) begin
+				free_chkpt <= TRUE;
+				fchkpt <= rob[n33].cndx;
+				lfg <= rob[n33].grp;
+			end
+	end
+end
+
 
 // Registering the branch miss signals may allow a second miss directly after
 // the first one to occur. We want to process only the first miss. Three in

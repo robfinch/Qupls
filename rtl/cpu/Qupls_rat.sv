@@ -46,7 +46,7 @@ import const_pkg::*;
 import QuplsPkg::*;
 
 module Qupls_rat(rst, clk, clk5x, ph4, en, en2, nq, stallq,
-	cndx_o, cndx0_o, cndx1_o, cndx2_o, cndx3_o, avail_i, restore, rob,
+	cndx_o, pcndx_o, avail_i, restore, rob,
 	stomp, miss_cp, wr0, wr1, wr2, wr3, inc_chkpt, chkpt_inc_amt,
 	wra_cp, wrb_cp, wrc_cp, wrd_cp, qbr0, qbr1, qbr2, qbr3,
 	rn, rng, rnt, rnv, st_prn,
@@ -80,10 +80,7 @@ input qbr1;
 input qbr2;
 input qbr3;
 output checkpt_ndx_t cndx_o;			// current checkpoint index
-output checkpt_ndx_t cndx0_o;			// current checkpoint index
-output checkpt_ndx_t cndx1_o;			// current checkpoint index
-output checkpt_ndx_t cndx2_o;			// current checkpoint index
-output checkpt_ndx_t cndx3_o;			// current checkpoint index
+output checkpt_ndx_t pcndx_o;			// previous checkpoint index
 input [PREGS-1:0] avail_i;	// list of available registers from renamer
 input restore;						// checkpoint restore
 input [3:0] miss_cp;			// checkpoint map index of branch miss
@@ -209,7 +206,7 @@ always_ff @(posedge clk)
 	cpram_en1 <= cpram_en;
 
 Qupls_checkpointRam 
-# (.NRDPORTS(4))
+# (.NRDPORTS(1))
 cpram1
 (
 	.rst(rst),
@@ -385,7 +382,7 @@ generate begin : gRRN
 													rn[g]==p2wrb && p2wr1 && rn_cp[g]==p2wrb_cp ? p2wrrb :
 													rn[g]==p2wra && p2wr0 && rn_cp[g]==p2wra_cp ? p2wrra :
 													*/
-													cpram_out.regmap[rn[g]];		// No bypasses needed here
+													cpram_out1.regmap[rn[g]];		// No bypasses needed here
 						end
 					3'd1: next_prn[g] = 
 													(rn[g]==wra && wr0 /*&& rn_cp[g]==wra_cp*/) ? wrra :
@@ -866,6 +863,53 @@ if (rst)
 else
 	nob <= nob + qbr_ok - cmtbr;
 
+reg qbr0_ren;
+reg qbr1_ren;
+reg qbr2_ren;
+reg qbr3_ren;
+always_ff @(posedge clk)
+if (rst)
+	qbr0_ren <= 1'b0;
+else begin
+	if (en2)
+		qbr0_ren <= qbr0;
+end
+always_ff @(posedge clk)
+if (rst)
+	qbr1_ren <= 1'b0;
+else begin
+	if (en2)
+		qbr1_ren <= qbr1;
+end
+always_ff @(posedge clk)
+if (rst)
+	qbr2_ren <= 1'b0;
+else begin
+	if (en2)
+		qbr2_ren <= qbr2;
+end
+always_ff @(posedge clk)
+if (rst)
+	qbr3_ren <= 1'b0;
+else begin
+	if (en2)
+		qbr3_ren <= qbr3;
+end
+
+wire pe_qbr0;
+wire pe_qbr1;
+wire pe_qbr2;
+wire pe_qbr3;
+edge_det uqbr0 (.rst(rst), .clk(clk), .ce(1'b1), .i(qbr0), .pe(pe_qbr0), .ne(), .ee());
+edge_det uqbr1 (.rst(rst), .clk(clk), .ce(1'b1), .i(qbr1), .pe(pe_qbr1), .ne(), .ee());
+edge_det uqbr2 (.rst(rst), .clk(clk), .ce(1'b1), .i(qbr2), .pe(pe_qbr2), .ne(), .ee());
+edge_det uqbr3 (.rst(rst), .clk(clk), .ce(1'b1), .i(qbr3), .pe(pe_qbr3), .ne(), .ee());
+
+assign pe_inc_chkpt = pe_qbr0|pe_qbr1|pe_qbr2|pe_qbr3|
+											(qbr0 & qbr0_ren) | (qbr1 & qbr1_ren) |
+											(qbr2 & qbr2_ren) | (qbr3 & qbr3_ren)
+											;
+
 // Checkpoint allocator / deallocator
 // A bitmap is used indicating which checkpoints are available. When a branch
 // is detected at decode stage a checkpoint is allocated for it. When the
@@ -875,14 +919,13 @@ else
 // machine stalls while allocating checkpoints.
 
 wire [4:0] avail_chkpt;
-reg [NCHECK-1:0] avail_chkpts;
-ffo24 uffo1 (.i({24'd0,avail_chkpts}), .o(avail_chkpt));
+flo24 uffo1 (.i({24'd0,avail_chkpts}), .o(avail_chkpt));
 
 always_ff @(posedge clk)
 if (rst)
-	avail_chkpts <= {NCHECK{1'b1}};
+	avail_chkpts <= {{NCHECK-1{1'b1}},1'b0};
 else begin
-	if (pe_inc_chkpt||inc_amt > 3'd0)
+	if (pe_inc_chkpt)
 		avail_chkpts[avail_chkpt] <= 1'b0;
 	else if (free_chkpt_i)
 		avail_chkpts[fchkpt_i] <= 1'b1;
@@ -893,22 +936,25 @@ always_comb chkpt_stall = avail_chkpt==5'd31;
 // Set checkpoint index
 // Backup the checkpoint on a branch miss.
 // Increment checkpoint on a branch queue
-edge_det uedichk1 (.rst(rst), .clk(clk), .ce(1'b1), .i(inc_chkpt), .pe(pe_inc_chkpt), .ne(), .ee());
-reg [2:0] inc_amt;
+//edge_det uedichk1 (.rst(rst), .clk(clk), .ce(1'b1), .i(inc_chkpt), .pe(pe_inc_chkpt), .ne(), .ee());
 
 // This is really just a two-bit ring counter.
 always_ff @(posedge clk)
 if (rst) begin
 	new_chkpt <= 1'd0;
 	new_chkpt1 <= 1'd0;
+	new_chkpt2 <= 1'd0;
 end
 else begin
 	new_chkpt <= 1'd0;
 	new_chkpt1 <= 1'b0;
-	if (pe_inc_chkpt||inc_amt>3'd0)
+	new_chkpt2 <= 1'd0;
+	if (pe_inc_chkpt)
 		new_chkpt <= 1'b1;
 	if (new_chkpt)
 		new_chkpt1 <= 1'b1;
+	if (new_chkpt1)
+		new_chkpt2 <= 1'b1;
 end
 
 // Some diags.
@@ -917,85 +963,59 @@ begin
 	if (restore)
 		$display("Restoring checkpint %d.", miss_cp);
 	if (new_chkpt)
-		$display("Setting checkpoint %d.", cndx);
+		$display("Setting checkpoint %d.", cndx_o);
 end
 
-// Maybe queing up to four branches in a row. Each one needs a checkpoint.
-// Set the inc_amt on detection of a new checkpoint request. Then decrement
-// it every clock while copying checkpoint data. The incoming increment will
-// always be at least one.
+// Maybe queing up to four branches in a row. There is only one checkpoint
+// allowed per instruction group.
+
+reg [4:0] chkpt_rc;
 always_ff @(posedge clk)
 if (rst)
-	inc_amt <= 3'd0;
+	chkpt_rc <= 5'd0;
 else begin
-	if (pe_inc_chkpt && inc_amt==3'd0)	// Check if finished block.
-		inc_amt <= chkpt_inc_amt - 2'd1;
-	else if (inc_amt > 3'd0 && !chkpt_stall)
-		inc_amt <= inc_amt - 2'd1;
+	if (restore)
+		chkpt_rc <= 5'b00000;
+	else if (pe_inc_chkpt)
+		chkpt_rc <= 5'b00001;
+	else if (!chkpt_stall)
+		chkpt_rc <= {chkpt_rc[3:0],1'b0};
 end
 
-// Checkpoint index. Increments with a new conditional branch. Future
+// Checkpoint index. Allocates with a new conditional branch. Future
 // instructions will read from the checkpoint files at cndx.
 // Checkpoints are allocated in succession to wndx. cndx follows wndx.
+// This is the index used to read the checkpoint RAMs.
 always_ff @(posedge clk)
 if (rst)
 	cndx <= 4'd0;
 else begin
-	if (new_chkpt)
-		cndx <= wndx;
-	else if (restore)
+	if (restore)
 		cndx <= miss_cp;
+	else if (pe_inc_chkpt)
+		cndx <= wndx;
+end
+always_comb cndx_o = cndx;
+
+always_ff @(posedge clk)
+if (rst)
+	pcndx_o <= 4'd0;
+else begin
+	if (restore)
+		pcndx_o <= cndx_o;
+	else if (pe_inc_chkpt)
+		pcndx_o <= cndx_o;
 end
 
-task tIncChkpt;
-input qbr;
-input checkpt_ndx_t cndx;
-input checkpt_ndx_t cndx_i;
-output checkpt_ndx_t cndx_o;
-input [2:0] iamt_i;
-output [2:0] iamt_o;
-input ncpdone_i;
-output ncpdone_o;
-begin
-	iamt_o = iamt_i;
- 	cndx_o = cndx_i;
- 	ncpdone_o = ncpdone_i;
-	if (qbr) begin
-		if (ncpdone_i & (|iamt_i))
-			cndx_o = (cndx_i + 3'd1) % NCHECK;
-		else if (!ncpdone_i & (|iamt_i)) begin
-			cndx_o = (new_chkpt && !new_chkpt1) ? (cndx + 1) % NCHECK : cndx;
-			ncpdone_o = TRUE;
-		end
-		iamt_o = iamt_i - 3'd1;
-	end
-end
-endtask
+// Set checkpoint for each instruction in the group. The machine will stall
+// for checkpoint assignments.
 
-reg [2:0] iamt;
-reg ncpdone;
-always_comb
-begin
-	iamt = chkpt_inc_amt;
-	ncpdone = FALSE;
-	cndx_o = cndx;
-
-	if (qbr0) begin
-		cndx0_o = (new_chkpt && !new_chkpt1) ? (cndx + 1) % NCHECK : cndx;
-		ncpdone = TRUE;
-		iamt = iamt - 3'd1;
-	end
-	else
-	 	cndx0_o = cndx;
-
-	tIncChkpt (qbr1, cndx, cndx0_o, cndx1_o, iamt, iamt, ncpdone, ncpdone);
-	tIncChkpt (qbr2, cndx, cndx1_o, cndx2_o, iamt, iamt, ncpdone, ncpdone);
-	tIncChkpt (qbr3, cndx, cndx2_o, cndx3_o, iamt, iamt, ncpdone, ncpdone);
-end
 
 // Backout state machine. For backing out RAT changes when a mispredict
 // occurs. We go backwards to the mispredicted branch, updating the RAT with
 // the old register mappings which are stored in the ROB.
+// Note if a branch mispredict occurs and the checkpoint is being restored
+// to an earlier one anyway, then this backout is cancelled.
 
 reg [1:0] backout_state;
 rob_ndx_t backout_id;
@@ -1013,8 +1033,10 @@ else begin
 				backout_state <= 2'd1;
 			end
 		end
-	2'd1: 
-		if (backout_id != fcu_id)
+	2'd1:
+		if (restore)
+			backout_state <= 2'd0;
+		else if (backout_id != fcu_id)
 			backout_id <= backout_id - 2'd1;
 		else
 			backout_state <= 2'd0;
@@ -1025,37 +1047,44 @@ end
 
 always_comb backout_stall = backout || backout_state != 2'd0;
 
-// Checkpoint file write index. Increments with a new conditional branch.
+// Checkpoint file write index. Allocates with a new conditional branch.
 // The checkpoint file is read from cndx and written to wndx. The read
 // data take a cycle to appear, so is timed with wndx.
 always_ff @(posedge clk)
 if (rst) begin
 	wndx <= 4'd0;
+end
+else begin
+	if (restore)
+		wndx <= miss_cp;
+	else if (pe_inc_chkpt)
+		wndx <= avail_chkpt;
+	else if (backout_state==2'd1)
+		wndx <= rob[backout_id].cndx;
+//	else
+//		wndx <= cndx;
+end
+
+always_ff @(posedge clk)
+if (rst) begin
 	bo_wr <= FALSE;
 	bo_areg <= {$bits(aregno_t){1'b0}};
 	bo_preg <= {$bits(pregno_t){1'b0}};
 end
 else begin
 	bo_wr <= FALSE;
-	if (pe_inc_chkpt||inc_amt > 3'd0)
-		wndx <= avail_chkpt;
-	else if (restore)
-		wndx <= miss_cp;
-	else if (backout_state==2'd1) begin
-		wndx <= rob[backout_id].cndx;
+	if (!restore && backout_state==2'd1) begin
 		bo_wr <= TRUE;
 		bo_areg <= rob[backout_id].op.aRt;
 		bo_preg <= rob[backout_id].pRt;
 	end
-	else
-		wndx <= cndx;
 end
 
 // Stall the enqueue of instructions if there are too many outstanding branches.
 // Also stall for a new checkpoint or a lack of available checkpoints.
 // Stall the CPU pipeline for amt+1 cycles to allow checkpoint copying.
 always_comb
-	stallq = pe_inc_chkpt||new_chkpt||chkpt_stall||backout_stall||(qbr && nob==NCHECK-1);
+	stallq = pe_inc_chkpt||new_chkpt||new_chkpt1||chkpt_stall||backout_stall||(qbr && nob==NCHECK-1);
 
 
 // Committing and queuing target physical register cannot be the same.
@@ -1160,10 +1189,10 @@ wire cd_cmtdv;
 
 // If the same value is going to the same register in two consecutive clock cycles,
 // only do one update. Prevents a register from being released for use too soon.
-change_det #($bits(aregno_t)+$bits(value_t)+1) ucmta1 (.rst(rst), .clk(clk), .ce(1'b1), .i({cmtav,amtaa,cmtaval}), .cd(cd_cmtav));
-change_det #($bits(aregno_t)+$bits(value_t)+1) ucmtb1 (.rst(rst), .clk(clk), .ce(1'b1), .i({cmtbv,amtba,cmtbval}), .cd(cd_cmtbv));
-change_det #($bits(aregno_t)+$bits(value_t)+1) ucmtc1 (.rst(rst), .clk(clk), .ce(1'b1), .i({cmtcv,amtca,cmtcval}), .cd(cd_cmtcv));
-change_det #($bits(aregno_t)+$bits(value_t)+1) ucmtd1 (.rst(rst), .clk(clk), .ce(1'b1), .i({cmtdv,amtda,cmtdval}), .cd(cd_cmtdv));
+change_det #($bits(aregno_t)+$bits(value_t)+1) ucmta1 (.rst(rst), .clk(clk), .ce(1'b1), .i({cmtav,cmtaa,cmtaval}), .cd(cd_cmtav));
+change_det #($bits(aregno_t)+$bits(value_t)+1) ucmtb1 (.rst(rst), .clk(clk), .ce(1'b1), .i({cmtbv,cmtba,cmtbval}), .cd(cd_cmtbv));
+change_det #($bits(aregno_t)+$bits(value_t)+1) ucmtc1 (.rst(rst), .clk(clk), .ce(1'b1), .i({cmtcv,cmtca,cmtcval}), .cd(cd_cmtcv));
+change_det #($bits(aregno_t)+$bits(value_t)+1) ucmtd1 (.rst(rst), .clk(clk), .ce(1'b1), .i({cmtdv,cmtda,cmtdval}), .cd(cd_cmtdv));
 
 // Make the write inputs sticky until en2 occurs.
 reg wr0r;
@@ -1367,62 +1396,79 @@ else begin
 	freevals[3] <= cd_cmtdv & cmtdv;
 end
 
+wire cdwr0 = cd_wr0 & wr0;
+wire cdwr1 = cd_wr1 & wr1;
+wire cdwr2 = cd_wr2 & wr2;
+wire cdwr3 = cd_wr3 & wr3;
+
 // Set the checkpoint RAM input.
 // For checkpoint establishment the current read value is desired.
 // For normal operation the write output port is used.
+checkpoint_t cpram_in1;
+checkpt_ndx_t wndx1;
 always_ff @(posedge clk)
 if (rst) begin
+	cpram_in1 = {$bits(checkpoint_t){1'b0}};
 	cpram_in.avail = {1'b0,{PREGS-2{1'b1}},1'b0};
 	cpram_in.regmap = {AREGS*$bits(pregno_t){1'b0}};
+	wndx1 = {$bits(checkpt_ndx_t){1'b0}};
 end
 else begin
 	if (pe_inc_chkpt||new_chkpt) begin
 		cpram_in = cpram_out;
 		cpram_in.avail = avail_i;
 	end
-	if (en2 && (!(pe_inc_chkpt||new_chkpt) || backout_state==2'd1))
-		cpram_in = cpram_wout;
+	if (((!(pe_inc_chkpt||new_chkpt)) || backout_state==2'd1))
+		cpram_in = wndx==wndx1 ? cpram_in1 : cpram_wout;
 
-	// Backout update.
-	if (bo_wr)
-		cpram_in.regmap[bo_areg] = bo_preg;
+	if (!(pe_inc_chkpt||new_chkpt)) begin
+		// Backout update.
+		if (bo_wr)
+			cpram_in.regmap[bo_areg] = bo_preg;
 
-	// The branch instruction itself might need to update the checkpoint info.
-	if (cd_wr0 & wr0)
-		cpram_in.regmap[wra] = wrra;
-	if (cd_wr1 & wr1)
-		cpram_in.regmap[wrb] = wrrb;
-	if (cd_wr2 & wr2)
-		cpram_in.regmap[wrc] = wrrc;
-	if (cd_wr3 & wr3)
-		cpram_in.regmap[wrd] = wrrd;
+		// The branch instruction itself might need to update the checkpoint info.
+		if (cdwr0)
+			cpram_in.regmap[wra] = wrra;
+		if (cdwr1)
+			cpram_in.regmap[wrb] = wrrb;
+		if (cdwr2)
+			cpram_in.regmap[wrc] = wrrc;
+		if (cdwr3)
+			cpram_in.regmap[wrd] = wrrd;
 
-	// Shift the physical register into a second spot.
-	if (cd_cmtav & cmtav)
-		cpram_in.pregmap[cmtaa] = cpram_out.regmap[cmtaa];
-	if (cd_cmtbv & cmtbv)
-		cpram_in.pregmap[cmtba] = cpram_out.regmap[cmtba];
-	if (cd_cmtcv & cmtcv)
-		cpram_in.pregmap[cmtca] = cpram_out.regmap[cmtca];
-	if (cd_cmtdv & cmtdv)
-		cpram_in.pregmap[cmtda] = cpram_out.regmap[cmtda];
+		// Shift the physical register into a second spot.
+		if (cd_cmtav & cmtav)
+			cpram_in.pregmap[cmtaa] = cpram_out.regmap[cmtaa];
+		if (cd_cmtbv & cmtbv)
+			cpram_in.pregmap[cmtba] = cpram_out.regmap[cmtba];
+		if (cd_cmtcv & cmtcv)
+			cpram_in.pregmap[cmtca] = cpram_out.regmap[cmtca];
+		if (cd_cmtdv & cmtdv)
+			cpram_in.pregmap[cmtda] = cpram_out.regmap[cmtda];
+			
+		cpram_in1 = cpram_in;
+		wndx1 = wndx;
+	end
 end
 
 // Diags.
 always_ff @(posedge clk)
 if (SIM) begin
 	if (TRUE||en2) begin
+		if (bo_wr)
+			$display("Q+ RAT: backout %d restored to %d", cpram_wout.regmap[bo_areg], bo_preg);
+
 		if (cd_wr0 & wr0) begin
-			$display("Qupls RAT: tgta %d reg %d replaced with %d.", wra, cpram_out.regmap[wra], wrra);
+			$display("Q+ RAT: tgta %d reg %d replaced with %d.", wra, cpram_out.regmap[wra], wrra);
 		end
 		if (cd_wr1 & wr1) begin
-			$display("Qupls RAT: tgtb %d reg %d replaced with %d.", wrb, cpram_out.regmap[wrb], wrrb);
+			$display("Q+ RAT: tgtb %d reg %d replaced with %d.", wrb, cpram_out.regmap[wrb], wrrb);
 		end
 		if (cd_wr2 & wr2) begin
-			$display("Qupls RAT: tgtc %d reg %d replaced with %d.", wrc, cpram_out.regmap[wrc], wrrc);
+			$display("Q+ RAT: tgtc %d reg %d replaced with %d.", wrc, cpram_out.regmap[wrc], wrrc);
 		end
 		if (cd_wr3 & wr3) begin
-			$display("Qupls RAT: tgtd %d reg %d replaced with %d.", wrd, cpram_out.regmap[wrd], wrrd);
+			$display("Q+ RAT: tgtd %d reg %d replaced with %d.", wrd, cpram_out.regmap[wrd], wrrd);
 		end
 	end
 	
@@ -1764,11 +1810,12 @@ end
 // RAM gets updated if any port writes, or there is a new checkpoint.
 always_ff @(posedge clk)
 begin
-	cpram_we <= 1'b0;
-	if (pe_inc_chkpt||new_chkpt)
-		cpram_we <= 1'b1;
-	else if (en2)
-	 	cpram_we <= wr0|wr1|wr2|wr3;
+	cpram_we = 1'b0;
+	if (pe_inc_chkpt||new_chkpt||bo_wr)
+		cpram_we = 1'b1;
+	else //if (en2)
+	 	cpram_we =  cdwr0 | cdwr1 | cdwr2 | cdwr3 |
+	 							(cd_cmtav & cmtav)|(cd_cmtbv & cmtbv)|(cd_cmtcv & cmtcv)|(cd_cmtdv & cmtdv);
 end
 
 // Add registers allocated since the branch miss instruction to the list of
