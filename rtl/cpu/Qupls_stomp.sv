@@ -38,7 +38,8 @@ import const_pkg::*;
 import QuplsPkg::*;
 
 module Qupls_stomp(rst, clk, ihit, advance_pipeline, advance_pipeline_seg2, 
-	micro_code_active, branchmiss, branch_state, do_bsr,
+	micro_code_active, branchmiss, branch_state, do_bsr, misspc,
+	pc_fet, pc_mux, pc_dec, pc_ren,
 	stomp_fet, stomp_mux, stomp_dec, stomp_ren, stomp_que, stomp_quem
 	);
 input rst;
@@ -50,6 +51,11 @@ input micro_code_active;
 input branchmiss;
 input branch_state_t branch_state;
 input do_bsr;
+input pc_address_ex_t misspc;
+input pc_address_ex_t pc_fet;
+input pc_address_ex_t pc_mux;
+input pc_address_ex_t pc_dec;
+input pc_address_ex_t pc_ren;
 output reg stomp_fet;
 output reg stomp_mux;			// IRQ / micro-code Mux stage
 output reg stomp_dec;
@@ -57,10 +63,18 @@ output reg stomp_ren;
 output reg stomp_que;
 output reg stomp_quem;
 
+pc_address_ex_t misspcr;
 reg stomp_muxr;
 reg stomp_decr;
 reg stomp_renr;
+reg stomp_quer;
+reg stomp_rrr;
 reg stomp_quemr;
+reg do_bsr_mux;
+reg do_bsr_dec;
+reg do_bsr_ren;
+reg do_bsr_que;
+reg do_bsr_rrr;
 
 reg stomp_pipeline;
 wire pe_stomp_pipeline;
@@ -75,6 +89,17 @@ wire next_stomp_ren = (stomp_dec && !micro_code_active) || stomp_pipeline;
 wire next_stomp_quem = (stomp_ren && !micro_code_active) || stomp_pipeline;
 
 edge_det ued1 (.rst(rst), .clk(clk), .ce(advance_pipeline), .i(stomp_pipeline), .pe(pe_stomp_pipeline), .ne(), .ee());	
+
+always_ff @(posedge clk)
+if (rst) begin
+	misspcr.bno_t <= 5'd1;
+	misspcr.bno_f <= 5'd0;
+	misspcr.pc <= RSTPC;
+end
+else begin
+	if (pe_stomp_pipeline)
+		misspcr <= misspc;
+end
 
 reg do_bsr1;
 always_ff @(posedge clk)
@@ -91,21 +116,29 @@ end
 // active. Micro-code does not require the cache-line data.
 // Invalidate the fetch stage on an unconditional subroutine call.
 
-always_comb
-begin
-	stomp_fet = FALSE;
-	if (stomp_pipeline)
-//		|| do_bsr
-//		||do_bsr1
-		stomp_fet = TRUE;
+always_ff @(posedge clk)
+if (rst)
+	stomp_fet <= FALSE;
+else begin
+	if (advance_pipeline|pe_stomp_pipeline) begin
+		if (stomp_pipeline)
+			stomp_fet <= TRUE;//pc_fet.pc != misspc.pc;
+		else
+			stomp_fet <= FALSE;
+	end
 end
 
 always_ff @(posedge clk)
 if (rst)
 	stomp_muxr <= TRUE;
 else begin
-	if (advance_pipeline)
-		stomp_muxr <= next_stomp_mux;
+	if (advance_pipeline|pe_stomp_pipeline) begin
+		do_bsr_mux <= do_bsr;
+		if (next_stomp_mux)
+			stomp_muxr <= TRUE;
+		else
+			stomp_muxr <= stomp_fet;
+	end
 end
 always_comb
 	stomp_mux = pe_stomp_pipeline || stomp_muxr;
@@ -118,8 +151,13 @@ always_ff @(posedge clk)
 if (rst)
 	stomp_decr <= TRUE;
 else begin
-	if (advance_pipeline)
-		stomp_decr <= next_stomp_dec;
+	if (advance_pipeline|pe_stomp_pipeline) begin
+		do_bsr_dec <= do_bsr_mux;
+		if (next_stomp_dec)
+			stomp_decr <= TRUE;
+		else
+			stomp_decr <= stomp_mux;
+	end
 end
 always_comb
 	stomp_dec = pe_stomp_pipeline || stomp_decr;
@@ -128,9 +166,13 @@ always_ff @(posedge clk)
 if (rst)
 	stomp_renr <= TRUE;
 else begin
-	if (advance_pipeline_seg2 ||
-		advance_pipeline)
-		stomp_renr <= next_stomp_ren;
+	if (advance_pipeline_seg2|pe_stomp_pipeline) begin
+		do_bsr_ren <= do_bsr_dec;
+		if (next_stomp_ren)
+			stomp_renr <= TRUE;
+		else
+			stomp_renr <= stomp_dec;
+	end
 end
 always_comb
 	stomp_ren = pe_stomp_pipeline || stomp_renr;
@@ -143,21 +185,44 @@ always_comb
 
 always_ff @(posedge clk)
 if (rst)
-	stomp_que <= TRUE;
+	stomp_quer <= TRUE;
 else begin
-	if (advance_pipeline||advance_pipeline_seg2)
-		stomp_que <= stomp_ren;
+	if (advance_pipeline_seg2|pe_stomp_pipeline) begin
+		do_bsr_que <= do_bsr_ren;
+		if (stomp_ren)
+			stomp_quer <= TRUE;
+		else
+			stomp_quer <= stomp_ren;
+	end
 end	
 
 always_ff @(posedge clk)
 if (rst)
 	stomp_quemr <= TRUE;
 else begin
-	if (advance_pipeline||advance_pipeline_seg2)
-		stomp_quemr <= next_stomp_quem;
+	if (advance_pipeline_seg2|pe_stomp_pipeline) begin
+		if (next_stomp_quem)
+			stomp_quemr <= TRUE;
+		else
+			stomp_quemr <= stomp_ren;
+	end
 end	
 always_comb
 	stomp_quem = pe_stomp_pipeline || stomp_quemr;
 
+always_ff @(posedge clk)
+if (rst)
+	stomp_rrr <= TRUE;
+else begin
+	if (advance_pipeline_seg2|pe_stomp_pipeline) begin
+		do_bsr_rrr <= do_bsr_que;
+		if (stomp_que)
+			stomp_rrr <= TRUE;
+		else
+			stomp_rrr <= stomp_que;
+	end
+end
+
+always_comb stomp_que = do_bsr_rrr ? stomp_quer | stomp_rrr : stomp_quer;
 
 endmodule

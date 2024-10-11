@@ -183,7 +183,7 @@ else begin
 		endcase
 		argT <= rfo_argT;
 		argM <= rfo_argM;
-		argI	<= rob.decbus.immb;
+		argI <= rob.decbus.has_immb ? rob.decbus.immb : rob.decbus.immc;
 		argA_ctag <= rfo_argA_ctag;
 		argB_ctag <= rfo_argB_ctag;
 		cs <= rob.decbus.Rcc;

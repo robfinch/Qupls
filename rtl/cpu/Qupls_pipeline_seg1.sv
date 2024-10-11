@@ -53,6 +53,7 @@ module Qupls_pipeline_seg1(rst_i, clk_i, rstcnt, advance_fet, ihit, en_i,
 	mc_ins0_i, mc_ins1_i, mc_ins2_i, mc_ins3_i,
 	len0_i, len1_i, len2_i, len3_i,
 	ins0_d_inv,ins1_d_inv,ins2_d_inv,ins3_d_inv,
+	ins0_mux_o, ins1_mux_o, ins2_mux_o, ins3_mux_o,
 	ins0_dec_o, ins1_dec_o, ins2_dec_o, ins3_dec_o,
 	pc0_o, pc1_o, pc2_o, pc3_o,
 	mcip0_i, mcip1_i, mcip2_i, mcip3_i,
@@ -109,6 +110,10 @@ input ins0_d_inv;
 input ins1_d_inv;
 input ins2_d_inv;
 input ins3_d_inv;
+output pipeline_reg_t ins0_mux_o;
+output pipeline_reg_t ins1_mux_o;
+output pipeline_reg_t ins2_mux_o;
+output pipeline_reg_t ins3_mux_o;
 output pipeline_reg_t ins0_dec_o;
 output pipeline_reg_t ins1_dec_o;
 output pipeline_reg_t ins2_dec_o;
@@ -844,6 +849,10 @@ Qupls_space_branches uspb1
 */
 assign stall = 1'b0;
 
+always_comb ins0_mux_o = ins0_mux;
+always_comb ins1_mux_o = ins1_mux;
+always_comb ins2_mux_o = ins2_mux;
+always_comb ins3_mux_o = ins3_mux;
 always_comb ins0_dec_o = inso[0];
 always_comb ins1_dec_o = inso[1];
 always_comb ins2_dec_o = inso[2];

@@ -2335,6 +2335,7 @@ begin
 	OP_DBRA: fnSourceTv = 1'b1;
 	OP_Bcc,OP_BccU,OP_FBcc:
 		fnSourceTv = fnConstReg(ir.aRt);//ir.ins.br.inc==2'b00||ir.ins.br.inc==2'd2;
+	OP_RTD:	fnSourceTv = 1'b0;
 	OP_PRED:
 		fnSourceTv = 1'b1;
 	default:

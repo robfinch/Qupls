@@ -325,9 +325,14 @@ ex_instruction_t [7:0] ex_ins;
 
 decode_bus_t db0_r, db1_r, db2_r, db3_r;				// Regfetch/rename stage inputs
 decode_bus_t db0_pq, db1_pq, db2_pq, db3_pq;		// Post Queue stage inputs
+pipeline_reg_t ins0_mux, ins1_mux, ins2_mux, ins3_mux;
 pipeline_reg_t ins0_dec, ins1_dec, ins2_dec, ins3_dec, ins4_d, ins5_d, ins6_d, ins7_d, ins8_d;
 pipeline_reg_t ins0_ren, ins1_ren, ins2_ren, ins3_ren;
 pipeline_reg_t ins0_que, ins1_que, ins2_que, ins3_que;
+
+wire bo_wr;
+aregno_t bo_areg;
+pregno_t bo_preg;
 
 reg [3:0] predino;
 rob_ndx_t predrndx;
@@ -1409,6 +1414,11 @@ Qupls_stomp ustmp1
 	.branchmiss(branchmiss),
 	.branch_state(branch_state), 
 	.do_bsr(do_bsr),
+	.misspc(misspc),
+	.pc_fet(pc0_fet),
+	.pc_mux(ins0_mux.pc),
+	.pc_dec(ins0_dec.pc),
+	.pc_ren(ins0_ren.pc),
 	.stomp_fet(stomp_fet),
 	.stomp_mux(stomp_mux),
 	.stomp_dec(stomp_dec),
@@ -2164,6 +2174,10 @@ Qupls_pipeline_seg1 uiext1
 	.ins1_d_inv(ins1_d_inv),
 	.ins2_d_inv(ins2_d_inv),
 	.ins3_d_inv(ins3_d_inv),
+	.ins0_mux_o(ins0_mux),
+	.ins1_mux_o(ins1_mux),
+	.ins2_mux_o(ins2_mux),
+	.ins3_mux_o(ins3_mux),
 	.ins0_dec_o(ins0_dec),
 	.ins1_dec_o(ins1_dec),
 	.ins2_dec_o(ins2_dec),
@@ -2287,17 +2301,17 @@ begin
 	arn[13] = ins3_dec.aRb; arnt[13] = 1'b0; arng[13] = 3'd3;
 	arn[14] = ins3_dec.aRc; arnt[14] = 1'b0; arng[14] = 3'd3;
 	arn[15] = ins3_dec.aRt; arnt[15] = 1'b1; arng[15] = 3'd3;
-	
-	arn[16] = store_argC_aReg; arnt[16] = 1'b0; arng[16] = 3'd0;
 
+ 	arn[16] = 8'h00; arnt[16] = 1'b0; arng[16] = 3'd0;
+	
 	arn[17] = ins0_dec.decbus.Rm; arnt[17] = 1'b0; arng[17] = 3'd0;
 	arn[18] = ins1_dec.decbus.Rm; arnt[18] = 1'b0; arng[18] = 3'd1;
 	arn[19] = ins2_dec.decbus.Rm; arnt[19] = 1'b0; arng[19] = 3'd2;
 	arn[20] = ins3_dec.decbus.Rm; arnt[20] = 1'b0; arng[20] = 3'd3;
  	arn[21] = 8'h00; arnt[21] = 1'b0; arng[21] = 3'd4;
  	arn[22] = 8'h00; arnt[22] = 1'b0; arng[22] = 3'd4;
- 	arn[23] = 8'h00; arnt[23] = 1'b0; arng[23] = 3'd0;
- 	
+	arn[23] = store_argC_aReg; arnt[23] = 1'b0; arng[23] = 3'd0;
+
 	rn_cp[0] = cndx0;
 	rn_cp[1] = cndx0;
 	rn_cp[2] = cndx0;
@@ -2382,9 +2396,9 @@ end
 else begin
 	if (advance_pipeline_seg2) begin
 		cndx_ren[0] <= cndx0;
-		cndx_ren[1] <= cndx1;
-		cndx_ren[2] <= cndx2;
-		cndx_ren[3] <= cndx3;
+		cndx_ren[1] <= cndx0;
+		cndx_ren[2] <= cndx0;
+		cndx_ren[3] <= cndx0;
 	end
 end
 
@@ -2932,6 +2946,7 @@ Qupls_rat #(.NPORT(24)) urat1
 	.stallq(rat_stallq),
 	.cndx_o(cndx0),
 	.pcndx_o(),
+	.tail(tail0),
 	.rob(rob),
 	.stomp(robentry_stomp),// & {32{branch_state==BS_CAPTURE_MISSPC}}),
 	.avail_i(avail_reg),
@@ -2967,9 +2982,9 @@ Qupls_rat #(.NPORT(24)) urat1
 	.wrrc(Rt2_dec),
 	.wrrd(Rt3_dec),
 	.wra_cp(cndx0),
-	.wrb_cp(cndx1),
-	.wrc_cp(cndx2),
-	.wrd_cp(cndx3),
+	.wrb_cp(cndx0),
+	.wrc_cp(cndx0),
+	.wrd_cp(cndx0),
 	.cmtbanka(1'b0),
 	.cmtbankb(1'b0),
 	.cmtbankc(1'b0),
@@ -3002,7 +3017,10 @@ Qupls_rat #(.NPORT(24)) urat1
 	.free_chkpt_i(free_chkpt),
 	.fchkpt_i(fchkpt),
 	.backout(backout),
-	.fcu_id(fcu_id)	
+	.fcu_id(fcu_id),
+	.bo_wr(bo_wr),
+	.bo_areg(bo_areg),
+	.bo_preg(bo_preg)	
 );
 /*
 always_ff @(posedge clk)
@@ -3161,8 +3179,21 @@ if (irst)
 else begin
 	if (advance_pipeline_seg2 && !advance_pipeline)
 		ins0_ren <= nopi;
-	else if (advance_pipeline_seg2)
+	else if (advance_pipeline_seg2) begin
 		ins0_ren <= ins0_dec;
+	end
+	/*
+	if (bo_wr) begin
+		if (ins0_dec.aRa==bo_areg)
+			ins0_ren.pRa <= bo_preg;
+		if (ins0_dec.aRb==bo_areg)
+			ins0_ren.pRb <= bo_preg;
+		if (ins0_dec.aRc==bo_areg)
+			ins0_ren.pRc <= bo_preg;
+		if (ins0_dec.aRt==bo_areg)
+			ins0_ren.pRt <= bo_preg;
+	end
+	*/
 end
 always_ff @(posedge clk)
 if (irst)
@@ -3437,7 +3468,7 @@ end
 // required.
 always_ff @(posedge clk)
 for (n4 = 0; n4 < ROB_ENTRIES; n4 = n4 + 1) begin
-	robentry_stomp[n4] <= //(bno_bitmap[rob[n4].pc.bno_t]==1'b0) ||
+	robentry_stomp[n4] = //(bno_bitmap[rob[n4].pc.bno_t]==1'b0) ||
 	(
 		((branchmiss/*||((takb&~rob[fcu_id].bt) && (fcu_v2|fcu_v3|fcu_v4))*/) || (branch_state<BS_DONE2 && branch_state!=BS_IDLE))
 		&& rob[n4].sn > rob[missid].sn
@@ -3446,12 +3477,27 @@ for (n4 = 0; n4 < ROB_ENTRIES; n4 = n4 + 1) begin
 		//&& rob[n4].v
 		)
 	;
-	robentry_cpytgt[n4] <= FALSE;
 	if (fcu_idv && rob[fcu_id].decbus.br && takb) begin
  		if (rob[n4].grp==rob[fcu_id].grp && rob[n4].sn > rob[fcu_id].sn) begin
- 			robentry_stomp[n4] <= TRUE;
+ 			robentry_stomp[n4] = TRUE;
  		end
 	end
+	// The first three groups of instructions after miss needs to be stomped on 
+	// with no target copies. After that copy targets are in effect.
+	if (robentry_stomp[n4]) begin
+		/*
+		if (
+			(rob[n4].grp != (rob[missid].grp+0) % 64) &&
+			(rob[n4].grp != (rob[missid].grp+1) % 64) &&
+			(rob[n4].grp != (rob[missid].grp+2) % 64) &&
+			(rob[n4].grp != (rob[missid].grp+3) % 64))
+		*/
+			robentry_cpytgt[n4] = TRUE;
+//		else
+//			robentry_cpytgt[n4] = FALSE;
+	end
+	else
+		robentry_cpytgt[n4] = FALSE;
 end
 
 always_ff @(posedge clk)
@@ -3655,7 +3701,7 @@ always_ff @(posedge clk)
 if (irst) begin
 	fcu_misspc.bno_t <= 6'd1;
 	fcu_misspc.bno_f <= 6'd1;
-	fcu_misspc.pc <= next_pc;
+	fcu_misspc.pc <= next_pc.pc;
 end
 else begin
 	if (do_bsr)
@@ -6995,35 +7041,31 @@ always_ff @(posedge clk) begin: clock_n_debug
 
 	$display("----- Rename %c%c ----- %s", ihit_ren ? "h":" ", micro_code_active_r ? "a": " ", stomp_ren ? stompstr : no_stompstr);
 	$display("pc0: %x.%x ins0: %x  Rt: %d->%d%c  Rs: %d->%d%c  Ra: %d->%d%c  Rb: %d->%d%c  Rc: %d->%d%c",
-		ins0_ren.pc.pc[23:0], ins0_ren.mcip, ins0_ren.ins[47:0],
+		ins0_ren.pc.pc[23:0], ins0_ren.mcip, ins0_ren.ins[63:0],
 		ins0_ren.nRt, Rt0_ren, Rt0_renv?"v":" ",
 		ins0_ren.aRt, prn[3], prnv[3]?"v":" ",
 		ins0_ren.aRa, prn[0], prnv[0]?"v": " ",
 		ins0_ren.aRb, prn[1], prnv[1]?"v":" ",
 		ins0_ren.aRc, prn[2], prnv[2]?"v":" ");
-	$display("pc1: %x.%x ins1: %x  Rt: %d->%d%c  Rs: %d->%d%c  Ra: %d->%d%c  Rb: %d->%d%c  Rc: %d->%d%c", ins1_ren.pc.pc[23:0], ins1_ren.mcip, ins1_ren.ins[47:0], 
+	$display("pc1: %x.%x ins1: %x  Rt: %d->%d%c  Rs: %d->%d%c  Ra: %d->%d%c  Rb: %d->%d%c  Rc: %d->%d%c", ins1_ren.pc.pc[23:0], ins1_ren.mcip, ins1_ren.ins[63:0], 
 		ins1_ren.nRt, Rt1_ren, Rt1_renv?"v":" ",
 		ins1_ren.aRt, prn[7], prnv[7]?"v":" ",
 		ins1_ren.aRa, prn[4], prnv[4]?"v":" ",
 		ins1_ren.aRb, prn[5], prnv[5]?"v":" ",
 		ins1_ren.aRc, prn[6], prnv[6]?"v":" ");
-	$display("pc2: %x.%x ins2: %x  Rt: %d->%d%c  Rs: %d->%d%c  Ra: %d->%d%c  Rb: %d->%d%c  Rc: %d->%d%c", ins2_ren.pc.pc[23:0], ins2_ren.mcip, ins2_ren.ins[47:0],
+	$display("pc2: %x.%x ins2: %x  Rt: %d->%d%c  Rs: %d->%d%c  Ra: %d->%d%c  Rb: %d->%d%c  Rc: %d->%d%c", ins2_ren.pc.pc[23:0], ins2_ren.mcip, ins2_ren.ins[63:0],
 		ins2_ren.nRt, Rt2_ren, Rt2_renv?"v":" ",
 		ins2_ren.aRt, prn[11], prnv[11]?"v":" ",
 		ins2_ren.aRa, prn[8], prnv[8]?"v":" ",
 		ins2_ren.aRb, prn[9], prnv[9]?"v":" ",
 		ins2_ren.aRc, prn[10], prnv[10]?"v":" ");
-	$display("pc3: %x.%x ins3: %x  Rt: %d->%d%c  Rs: %d->%d%c  Ra: %d->%d%c  Rb: %d->%d%c  Rc: %d->%d%c", ins3_ren.pc.pc[23:0], ins3_ren.mcip, ins3_ren.ins[47:0],
+	$display("pc3: %x.%x ins3: %x  Rt: %d->%d%c  Rs: %d->%d%c  Ra: %d->%d%c  Rb: %d->%d%c  Rc: %d->%d%c", ins3_ren.pc.pc[23:0], ins3_ren.mcip, ins3_ren.ins[63:0],
 		ins3_ren.nRt, Rt3_ren, Rt3_renv?"v":" ",
 		ins3_ren.aRt, prn[15], prnv[15]?"v":" ",
 		ins3_ren.aRa, prn[12], prnv[12]?"v":" ",
 		ins3_ren.aRb, prn[13], prnv[13]?"v":" ",
 		ins3_ren.aRc, prn[14], prnv[14]?"v":" ");
-	$display("----- Queue Time ----- %s", (stomp_que && !stomp_quem) ? stompstr : no_stompstr);
-	$display("pc 0: %x.%x ins=%x", ins0_que.pc.pc, ins0_que.mcip, ins0_que.ins[63:0]);
-	$display("pc 1: %x.%x ins=%x", ins0_que.pc.pc, ins1_que.mcip, ins1_que.ins[63:0]);
-	$display("pc 2: %x.%x ins=%x", ins0_que.pc.pc, ins2_que.mcip, ins2_que.ins[63:0]);
-	$display("pc 3: %x.%x ins=%x", ins0_que.pc.pc, ins3_que.mcip, ins3_que.ins[63:0]);
+//	$display("----- Queue Time ----- %s", (stomp_que && !stomp_quem) ? stompstr : no_stompstr);
 	$display("----- Queue %c%c ----- %h", ihit_que ? "h":" ", micro_code_active_q ? "a": " ", qd);
 	for (i = 0; i < ROB_ENTRIES; i = i + 1) begin
     $display("%c%c%c sn:%h %d: %c%c%c%c%c%c %c %c%c %d %c %c%d Rt%d/%d=%h %h Rs%d/%d %h%c Ra%d/%d=%h %c Rb%d/%d=%h %c Rc%d/%d=%h %c I=%h %h.%h.%h cp:%h ins=%h #",
@@ -7874,8 +7916,6 @@ begin
 	rob[tail].predino <= predino;
 	rob[tail].predrndx <= predrndx;
 	rob[tail].brtgt <= fnTargetIP(ins.pc,db.immc);
-	if (fnTargetIP(ins.pc,db.immc)==32'hFFF80060 && ins.pc!=32'hFFF80060 && db.br)
-		$finish;
 	rob[tail].mcbrtgt <= db.immc[11:0];
 	rob[tail].om <= sr.om;
 `ifdef IS_SIM
@@ -7935,15 +7975,15 @@ begin
 		rob[tail].argA_v <= VAL;
 		rob[tail].argB_v <= VAL;
 		rob[tail].argC_v <= VAL;
-		rob[tail].argT_v <= VAL;
-		rob[tail].argM_v <= VAL;
+//		rob[tail].argT_v <= VAL;
+//		rob[tail].argM_v <= VAL;
 //		rob[tail].done <= {TRUE,TRUE};
 	end
 	// In the shadow of a BSR a target register may be assigned by the renamer.
 	// There is not an easy way to undo this assignment, so we keep it and modify
 	// the instruction to be a NOP operation.
-	else if (stomp)
-		rob[tail].decbus.cpytgt <= TRUE;
+//	else if (stomp)
+//		rob[tail].decbus.cpytgt <= TRUE;
 	if (db.vec) begin
 		vrm[vn] <= 64'hFFFFFFFFFFFFFFFF;
 		vex[vn] <= 64'h0;

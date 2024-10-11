@@ -65,7 +65,7 @@ output reg wv0 = 1'b0;
 output reg wv1 = 1'b0;
 output reg wv2 = 1'b0;
 output reg wv3 = 1'b0;
-output reg [PREGS-1:0] avail = {1'b0,{PREGS-2{1'b1}},1'b0};				// recorded in ROB
+output reg [PREGS-1:0] avail = {{PREGS-1{1'b1}},1'b0};				// recorded in ROB
 output reg stall;			// stall enqueue while waiting for register availability
 output reg rst_busy;
 
@@ -87,20 +87,13 @@ wire rst_busy0;
 wire rst_busy1;
 wire rst_busy2;
 wire rst_busy3;
-wire empty0;
-wire empty1;
-wire empty2;
-wire empty3;
 pregno_t [3:0] tags;
 reg [3:0] fpush;
 reg wv0r;
 reg wv1r;
 reg wv2r;
 reg wv3r;
-reg stallwo0;
-reg stallwo1;
-reg stallwo2;
-reg stallwo3;
+reg oe;
 
 always_comb stall = stalla0|stalla1|stalla2|stalla3;
 always_comb rst_busy = 1'b0;
@@ -125,10 +118,10 @@ begin
 end
 
 // Do not do a pop if stalling on another slot.
-always_comb pop0 = (alloc0 & en & ~stall) | (stalla0|empty0);
-always_comb pop1 = (alloc1 & en & ~stall) | (stalla1|empty1);
-always_comb pop2 = (alloc2 & en & ~stall) | (stalla2|empty2);
-always_comb pop3 = (alloc3 & en & ~stall) | (stalla3|empty3);
+always_comb pop0 = (alloc0 & en & ~stall) | stalla0;
+always_comb pop1 = (alloc1 & en & ~stall) | stalla1;
+always_comb pop2 = (alloc2 & en & ~stall) | stalla2;
+always_comb pop3 = (alloc3 & en & ~stall) | stalla3;
 
 reg [3:0] freevals1;
 reg [1:0] fifo_order;
@@ -137,6 +130,14 @@ reg [2:0] ffreeCnt;
 reg [PREGS-1:0] next_toFreeList;
 reg [PREGS-1:0] toFreeList;
 reg [3:0] ffree;
+
+always_ff @(posedge clk)
+if (rst)
+	oe <= 1'b0;
+else begin
+	if (en)
+		oe <= ~oe;
+end
 
 always_ff @(posedge clk)
 begin
@@ -214,14 +215,22 @@ wire [7:0] ffo0;
 wire [7:0] ffo1;
 wire [7:0] ffo2;
 wire [7:0] ffo3;
+wire [7:0] flo0;
+wire [7:0] flo1;
+wire [7:0] flo2;
+wire [7:0] flo3;
 ffo144 uffo0 (.i({16'd0,avail[127:  0]}), .o(ffo0));
 ffo144 uffo1 (.i({16'd0,avail[255:128]}), .o(ffo1));
 ffo144 uffo2 (.i({16'd0,avail[383:256]}), .o(ffo2));
 ffo144 uffo3 (.i({16'd0,avail[511:384]}), .o(ffo3));
-always_comb wo0 = {2'd0,ffo0[6:0]};
-always_comb wo1 = {2'd1,ffo1[6:0]};
-always_comb wo2 = {2'd2,ffo2[6:0]};
-always_comb wo3 = {2'd3,ffo3[6:0]};
+flo144 uffo4 (.i({16'd0,avail[127:  0]}), .o(flo0));
+flo144 uffo5 (.i({16'd0,avail[255:128]}), .o(flo1));
+flo144 uffo6 (.i({16'd0,avail[383:256]}), .o(flo2));
+flo144 uffo7 (.i({16'd0,avail[511:384]}), .o(flo3));
+always_comb wo0 = oe ? {2'd0,flo0[6:0]} : {2'd0,ffo0[6:0]};
+always_comb wo1 = oe ? {2'd1,flo1[6:0]} : {2'd1,ffo1[6:0]};
+always_comb wo2 = oe ? {2'd2,flo2[6:0]} : {2'd2,ffo2[6:0]};
+always_comb wo3 = oe ? {2'd3,flo3[6:0]} : {2'd3,ffo3[6:0]};
 	end
 	else if (PREGS==256) begin
 always_comb
@@ -303,12 +312,11 @@ end
 
 always_comb
 if (rst) begin
-	next_avail = {{PREGS-1{1'b0}},1'b0};
+	next_avail = {{PREGS-1{1'b1}},1'b0};
 	next_avail[0] = 1'b0;
-	next_avail[PREGS-1] = 1'b0;
 end
 else begin
-	
+
 	next_avail = avail;
 
 	if (wv0 & en) next_avail[wo0] = 1'b0;
@@ -404,7 +412,7 @@ end
 
 always_ff @(posedge clk)
 if (rst) begin
-	toFreeList <= {PREGS{1'b1}};
+	toFreeList <= {PREGS{1'b0}};
 	toFreeList[0] <= 1'b0;
 	toFreeList[PREGS-1] <= 1'b0;
 end

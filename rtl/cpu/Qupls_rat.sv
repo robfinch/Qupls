@@ -46,7 +46,7 @@ import const_pkg::*;
 import QuplsPkg::*;
 
 module Qupls_rat(rst, clk, clk5x, ph4, en, en2, nq, stallq,
-	cndx_o, pcndx_o, avail_i, restore, rob,
+	cndx_o, pcndx_o, avail_i, restore, tail, rob,
 	stomp, miss_cp, wr0, wr1, wr2, wr3, inc_chkpt, chkpt_inc_amt,
 	wra_cp, wrb_cp, wrc_cp, wrd_cp, qbr0, qbr1, qbr2, qbr3,
 	rn, rng, rnt, rnv, st_prn,
@@ -57,7 +57,8 @@ module Qupls_rat(rst, clk, clk5x, ph4, en, en2, nq, stallq,
 	cmta_cp, cmtb_cp, cmtc_cp, cmtd_cp,
 	cmtaa, cmtba, cmtca, cmtda, cmtap, cmtbp, cmtcp, cmtdp, cmtbr,
 	cmtaval, cmtbval, cmtcval, cmtdval,
-	restore_list, restored, tags2free, freevals, free_chkpt_i, fchkpt_i, backout, fcu_id);
+	restore_list, restored, tags2free, freevals, free_chkpt_i, fchkpt_i, backout, fcu_id,
+	bo_wr, bo_areg, bo_preg);
 parameter XWID = 4;
 parameter NPORT = 20;
 parameter BANKS = 1;
@@ -73,6 +74,7 @@ input nq;			// enqueue instruction
 input inc_chkpt;
 input [2:0] chkpt_inc_amt;
 output reg stallq;
+input rob_ndx_t tail;
 input rob_entry_t [ROB_ENTRIES-1:0] rob;
 input rob_bitmask_t stomp;
 input qbr0;		// enqueue branch, slot 0
@@ -147,14 +149,15 @@ input free_chkpt_i;
 input checkpt_ndx_t fchkpt_i;
 input backout;
 input rob_ndx_t fcu_id;
+output reg bo_wr;
+output aregno_t bo_areg;
+output pregno_t bo_preg;
 
 
 reg [NCHECK-1:0] avail_chkpts;
 reg chkpt_stall;
 reg backout_stall;
-reg bo_wr;
-aregno_t bo_areg;
-pregno_t bo_preg;
+reg pbackout, pbackout2;
 cpu_types_pkg::pregno_t [NPORT-1:0] next_prn;	// physical register name
 cpu_types_pkg::pregno_t [NPORT-1:0] prnd;			// delayed physical register name
 reg pwr0,p2wr0;
@@ -183,6 +186,7 @@ reg new_chkpt2;
 localparam RAMWIDTH = AREGS*BANKS*RBIT+PREGS;
 checkpoint_t cpram_out;
 checkpoint_t cpram_out1;
+checkpoint_t cpram_out2;
 checkpoint_t cpram_wout;
 checkpoint_t cpram_outr;
 checkpoint_t cpram_in;
@@ -228,15 +232,23 @@ cpu_types_pkg::pregno_t [8:0] cpv_wa;
 cpu_types_pkg::aregno_t [8:0] cpv_awa;
 reg [8:0] cpv_i;
 wire [NPORT-1:0] cpv_o;
+wire cdwr0;
+wire cdwr1;
+wire cdwr2;
+wire cdwr3;
+wire cdcmtav;
+wire cdcmtbv;
+wire cdcmtcv;
+wire cdcmtdv;
 
-always_comb cpv_wr[0] = cmtav;
-always_comb cpv_wr[1] = cmtbv;
-always_comb cpv_wr[2] = cmtcv;
-always_comb cpv_wr[3] = cmtdv;
-always_comb cpv_wr[4] = wr0;
-always_comb cpv_wr[5] = wr1;
-always_comb cpv_wr[6] = wr2;
-always_comb cpv_wr[7] = wr3;
+always_comb cpv_wr[0] = cdcmtav;
+always_comb cpv_wr[1] = cdcmtbv;
+always_comb cpv_wr[2] = cdcmtcv;
+always_comb cpv_wr[3] = cdcmtdv;
+always_comb cpv_wr[4] = cdwr0;
+always_comb cpv_wr[5] = cdwr1;
+always_comb cpv_wr[6] = cdwr2;
+always_comb cpv_wr[7] = cdwr3;
 always_comb cpv_wr[8] = bo_wr;
 always_comb cpv_wc[0] = cmta_cp;
 always_comb cpv_wc[1] = cmtb_cp;
@@ -334,6 +346,11 @@ wire qbr = qbr0|qbr1|qbr2|qbr3;
 // number of outstanding branches
 reg [5:0] nob;
 wire qbr_ok = nq && qbr && nob < 6'd15;
+wire bypass_en = !pbackout;
+reg bypass_pwrra0;
+reg bypass_pwrrb0;
+reg bypass_pwrrc0;
+reg bypass_pwrrd0;
 
 // Read register names from current checkpoint.
 // Bypass new register mappings if reg selected.
@@ -367,15 +384,22 @@ generate begin : gRRN
 					*/
 				end
 				else begin
+					// Do we need the checkpoint to match?
+					bypass_pwrra0 = rn[g]==pwra && pwr0 && rn_cp[g]==pwra_cp;
+					bypass_pwrrb0 = rn[g]==pwrb && pwr1 && rn_cp[g]==pwrb_cp;
+					bypass_pwrrc0 = rn[g]==pwrc && pwr2 && rn_cp[g]==pwrc_cp;
+					bypass_pwrrd0 = rn[g]==pwrd && pwr3 && rn_cp[g]==pwrd_cp;
+					
 					// Bypass only for previous instruction in same group
 					case(rng[g])
 					3'd0:	
 						begin
-							next_prn[g] = 	// Do we need the checkpoint to match?
-													(rn[g]==pwrd && pwr3 /*&& rn_cp[g]==pwrd_cp*/) ? pwrrd :
-													(rn[g]==pwrc && pwr2 /*&& rn_cp[g]==pwrc_cp*/) ? pwrrc :
-													(rn[g]==pwrb && pwr1 /*&& rn_cp[g]==pwrb_cp*/) ? pwrrb :
-													(rn[g]==pwra && pwr0 /*&& rn_cp[g]==pwra_cp*/) ? pwrra :
+							next_prn[g] = 	
+													(bypass_pwrrd0 && bypass_en) ? pwrrd :
+													(bypass_pwrrc0 && bypass_en) ? pwrrc :
+													(bypass_pwrrb0 && bypass_en) ? pwrrb :
+													(bypass_pwrra0 && bypass_en) ? pwrra :
+													
 													/*
 													rn[g]==p2wrd && p2wr3 && rn_cp[g]==p2wrd_cp ? p2wrrd :
 													rn[g]==p2wrc && p2wr2 && rn_cp[g]==p2wrc_cp ? p2wrrc :
@@ -385,11 +409,13 @@ generate begin : gRRN
 													cpram_out1.regmap[rn[g]];		// No bypasses needed here
 						end
 					3'd1: next_prn[g] = 
-													(rn[g]==wra && wr0 /*&& rn_cp[g]==wra_cp*/) ? wrra :
-													(rn[g]==pwrd && pwr3 /*&& rn_cp[g]==pwrd_cp*/) ? pwrrd :
-													(rn[g]==pwrc && pwr2 /*&& rn_cp[g]==pwrc_cp*/) ? pwrrc :
-													(rn[g]==pwrb && pwr1 /*&& rn_cp[g]==pwrb_cp*/) ? pwrrb :
-													(rn[g]==pwra && pwr0 /*&& rn_cp[g]==pwra_cp*/) ? pwrra :
+													(rn[g]==wra && wr0 && rn_cp[g]==wra_cp) ? wrra :
+													
+													(bypass_pwrrd0 && bypass_en) ? pwrrd :
+													(bypass_pwrrc0 && bypass_en) ? pwrrc :
+													(bypass_pwrrb0 && bypass_en) ? pwrrb :
+													(bypass_pwrra0 && bypass_en) ? pwrra :
+													
 													/*
 													rn[g]==p2wrd && p2wr3 && rn_cp[g]==p2wrd_cp ? p2wrrd :
 													rn[g]==p2wrc && p2wr2 && rn_cp[g]==p2wrc_cp ? p2wrrc :
@@ -398,14 +424,16 @@ generate begin : gRRN
 													*/
 													//rn[g]==wra && wr0 ? wrra :	// One previous target
 													qbr0 ? cpram_out1.regmap[rn[g]] :
-													cpram_out.regmap[rn[g]];
+													cpram_out1.regmap[rn[g]];
 					3'd2: next_prn[g] = 
-													(rn[g]==wrb && wr1 /*&& rn_cp[g]==wrb_cp*/) ? wrrb :
-													(rn[g]==wra && wr0 /*&& rn_cp[g]==wra_cp*/) ? wrra :
-													(rn[g]==pwrd && pwr3 /*&& rn_cp[g]==pwrd_cp*/) ? pwrrd :
-													(rn[g]==pwrc && pwr2 /*&& rn_cp[g]==pwrc_cp*/) ? pwrrc :
-													(rn[g]==pwrb && pwr1 /*&& rn_cp[g]==pwrb_cp*/) ? pwrrb :
-													(rn[g]==pwra && pwr0 /*&& rn_cp[g]==pwra_cp*/) ? pwrra :
+													(rn[g]==wrb && wr1 && rn_cp[g]==wrb_cp) ? wrrb :
+													(rn[g]==wra && wr0 && rn_cp[g]==wra_cp) ? wrra :
+													
+													(bypass_pwrrd0 && bypass_en) ? pwrrd :
+													(bypass_pwrrc0 && bypass_en) ? pwrrc :
+													(bypass_pwrrb0 && bypass_en) ? pwrrb :
+													(bypass_pwrra0 && bypass_en) ? pwrra :
+													
 													/*
 													rn[g]==p2wrd && p2wr3 && rn_cp[g]==p2wrd_cp ? p2wrrd :
 													rn[g]==p2wrc && p2wr2 && rn_cp[g]==p2wrc_cp ? p2wrrc :
@@ -415,15 +443,18 @@ generate begin : gRRN
 												 	//rn[g]==wrb && wr1 ? wrrb :	// Two previous target
 													//rn[g]==wra && wr0 ? wrra :
 													qbr0|qbr1 ? cpram_out1.regmap[rn[g]] :
-												 	cpram_out.regmap[rn[g]];
+												 	cpram_out1.regmap[rn[g]];
 					3'd3: next_prn[g] = 
-													(rn[g]==wrc && wr2 /*&& rn_cp[g]==wrc_cp*/) ? wrrc :
-													(rn[g]==wrb && wr1 /*&& rn_cp[g]==wrb_cp*/) ? wrrb :
-													(rn[g]==wra && wr0 /*&& rn_cp[g]==wra_cp*/) ? wrra :
-													(rn[g]==pwrd && pwr3 /*&& rn_cp[g]==pwrd_cp*/) ? pwrrd :
-													(rn[g]==pwrc && pwr2 /*&& rn_cp[g]==pwrc_cp*/) ? pwrrc :
-													(rn[g]==pwrb && pwr1 /*&& rn_cp[g]==pwrb_cp*/) ? pwrrb :
-													(rn[g]==pwra && pwr0 /*&& rn_cp[g]==pwra_cp*/) ? pwrra :
+													
+													(rn[g]==wrc && wr2 && rn_cp[g]==wrc_cp) ? wrrc :
+													(rn[g]==wrb && wr1 && rn_cp[g]==wrb_cp) ? wrrb :
+													(rn[g]==wra && wr0 && rn_cp[g]==wra_cp) ? wrra :
+													
+													(bypass_pwrrd0 && bypass_en) ? pwrrd :
+													(bypass_pwrrc0 && bypass_en) ? pwrrc :
+													(bypass_pwrrb0 && bypass_en) ? pwrrb :
+													(bypass_pwrra0 && bypass_en) ? pwrra :
+													
 													/*
 													rn[g]==p2wrd && p2wr3 && rn_cp[g]==p2wrd_cp ? p2wrrd :
 													rn[g]==p2wrc && p2wr2 && rn_cp[g]==p2wrc_cp ? p2wrrc :
@@ -434,8 +465,8 @@ generate begin : gRRN
 													//rn[g]==wrb && wr1 ? wrrb :
 													//rn[g]==wra && wr0 ? wrra :
 													qbr0|qbr1|qbr2 ? cpram_out1.regmap[rn[g]] :
-												 	cpram_out.regmap[rn[g]];
-					default: next_prn[g] = cpram_out.regmap[rn[g]];
+												 	cpram_out1.regmap[rn[g]];
+					default: next_prn[g] = cpram_out1.regmap[rn[g]];
 					endcase
 					/*
 						if (prn[g]==10'd0 && rn[g]!=8'd0 && !rnt[g] && rnv[g])
@@ -513,7 +544,7 @@ generate begin : gRRN
 						// First instruction of group, no bypass needed.
 						3'd0:	
 						
-							if (prn[g]==9'd0 || prn[g]==PREGS-1)
+							if (prn[g]==9'd0)
 								prv[g] = VAL;
 							else if (prn[g]==cmtdp && cmtdv)
 								prv[g] = VAL;
@@ -579,7 +610,7 @@ generate begin : gRRN
 						// Second instruction of group, bypass only if first instruction target is same.
 						3'd1:
 						begin							
-							if (prn[g]==9'd0 || prn[g]==PREGS-1)
+							if (prn[g]==9'd0)
 								prv[g] = VAL;
 							else if (prn[g]==wrra && wr0)
 								prv[g] = INV;
@@ -656,7 +687,7 @@ generate begin : gRRN
 						// Third instruction, check two previous ones.
 						3'd2:
 						begin
-							if (prn[g]==9'd0 || prn[g]==PREGS-1)
+							if (prn[g]==9'd0)
 								prv[g] = VAL;
 							else if (prn[g]==wrrb && wr1)
 								prv[g] = INV;
@@ -727,7 +758,7 @@ generate begin : gRRN
 					// Fourth instruction, check three previous ones.						
 						3'd3:
 							begin
-							if (prn[g]==9'd0 || prn[g]==PREGS-1)
+							if (prn[g]==9'd0)
 								prv[g] = VAL;
 							else if (prn[g]==wrrc && wr2)
 								prv[g] = INV;
@@ -816,9 +847,18 @@ generate begin : gRRN
 
 	always_comb
 		prn[NPORT-1] <= st_prn;
-	always_ff @(posedge clk)
-		if (prn[NPORT-1]==9'd0 || prn[NPORT-1]==PREGS-1)
+	always_comb//ff @(posedge clk)
+		if (prn[NPORT-1]==9'd0)
 			prv[NPORT-1] = VAL;
+		else if (prn[NPORT-1]==cmtdp && cmtdv)
+			prv[NPORT-1] = VAL;
+		else if (prn[NPORT-1]==cmtcp && cmtcv)
+			prv[NPORT-1] = VAL;
+		else if (prn[NPORT-1]==cmtbp && cmtbv)
+			prv[NPORT-1] = VAL;
+		else if (prn[NPORT-1]==cmtap && cmtav)
+			prv[NPORT-1] = VAL;
+		
 		/*
 		else if (prnd[NPORT-1]==wrrc && wr2)
 			prv[NPORT-1] = INV;
@@ -905,11 +945,12 @@ edge_det uqbr1 (.rst(rst), .clk(clk), .ce(1'b1), .i(qbr1), .pe(pe_qbr1), .ne(), 
 edge_det uqbr2 (.rst(rst), .clk(clk), .ce(1'b1), .i(qbr2), .pe(pe_qbr2), .ne(), .ee());
 edge_det uqbr3 (.rst(rst), .clk(clk), .ce(1'b1), .i(qbr3), .pe(pe_qbr3), .ne(), .ee());
 
-assign pe_inc_chkpt = pe_qbr0|pe_qbr1|pe_qbr2|pe_qbr3|
+assign pe_inc_chkpt = pe_qbr0|pe_qbr1|pe_qbr2|pe_qbr3;
+/*
 											(qbr0 & qbr0_ren) | (qbr1 & qbr1_ren) |
 											(qbr2 & qbr2_ren) | (qbr3 & qbr3_ren)
 											;
-
+*/
 // Checkpoint allocator / deallocator
 // A bitmap is used indicating which checkpoints are available. When a branch
 // is detected at decode stage a checkpoint is allocated for it. When the
@@ -992,7 +1033,7 @@ if (rst)
 else begin
 	if (restore)
 		cndx <= miss_cp;
-	else if (pe_inc_chkpt)
+	else if (chkpt_rc[0])
 		cndx <= wndx;
 end
 always_comb cndx_o = cndx;
@@ -1002,9 +1043,9 @@ if (rst)
 	pcndx_o <= 4'd0;
 else begin
 	if (restore)
-		pcndx_o <= cndx_o;
-	else if (pe_inc_chkpt)
-		pcndx_o <= cndx_o;
+		pcndx_o <= cndx;
+	else if (chkpt_rc[0])
+		pcndx_o <= cndx;
 end
 
 // Set checkpoint for each instruction in the group. The machine will stall
@@ -1028,8 +1069,9 @@ else begin
 	2'd0:
 		if (backout) begin
 			if (fcu_id[1:0]!=2'b11) begin
-				backout_id <= fcu_id;
-				backout_id[1:0] <= 2'b11;
+//				backout_id <= fcu_id;
+//				backout_id[1:0] <= 2'b11;
+				backout_id <= (tail - 2'd1) % ROB_ENTRIES;
 				backout_state <= 2'd1;
 			end
 		end
@@ -1396,10 +1438,14 @@ else begin
 	freevals[3] <= cd_cmtdv & cmtdv;
 end
 
-wire cdwr0 = cd_wr0 & wr0;
-wire cdwr1 = cd_wr1 & wr1;
-wire cdwr2 = cd_wr2 & wr2;
-wire cdwr3 = cd_wr3 & wr3;
+assign cdwr0 = cd_wr0 & wr0;
+assign cdwr1 = cd_wr1 & wr1;
+assign cdwr2 = cd_wr2 & wr2;
+assign cdwr3 = cd_wr3 & wr3;
+assign cdcmtav = cd_cmtav & cmtav;
+assign cdcmtbv = cd_cmtbv & cmtbv;
+assign cdcmtcv = cd_cmtcv & cmtcv;
+assign cdcmtdv = cd_cmtdv & cmtdv;
 
 // Set the checkpoint RAM input.
 // For checkpoint establishment the current read value is desired.
@@ -1437,13 +1483,13 @@ else begin
 			cpram_in.regmap[wrd] = wrrd;
 
 		// Shift the physical register into a second spot.
-		if (cd_cmtav & cmtav)
+		if (cdcmtav)
 			cpram_in.pregmap[cmtaa] = cpram_out.regmap[cmtaa];
-		if (cd_cmtbv & cmtbv)
+		if (cdcmtbv)
 			cpram_in.pregmap[cmtba] = cpram_out.regmap[cmtba];
-		if (cd_cmtcv & cmtcv)
+		if (cdcmtcv)
 			cpram_in.pregmap[cmtca] = cpram_out.regmap[cmtca];
-		if (cd_cmtdv & cmtdv)
+		if (cdcmtdv)
 			cpram_in.pregmap[cmtda] = cpram_out.regmap[cmtda];
 			
 		cpram_in1 = cpram_in;
@@ -1508,7 +1554,21 @@ if (SIM) begin
 end
 
 always_ff @(posedge clk)
-	if (en2) cpram_out1 <= cpram_out;
+	if (en2) cpram_out2 <= cpram_out;
+always_comb
+	cpram_out1 <= pbackout && FALSE ? cpram_out : cpram_out2;
+
+always_ff @(posedge clk) 
+if (rst) begin
+	pbackout <= FALSE;
+	pbackout2 <= FALSE;
+end
+else begin
+	begin
+		pbackout2 <= backout_stall;
+		pbackout <= backout_stall | pbackout2;
+	end
+end
 
 always_ff @(posedge clk) 
 if (rst) begin
@@ -1516,7 +1576,7 @@ if (rst) begin
 end
 else begin
 	if (en2)
-		pwr0 <= wr0;
+		pwr0 <= wr0 && !pbackout;
 end
 always_ff @(posedge clk) 
 if (rst) begin
@@ -1524,7 +1584,7 @@ if (rst) begin
 end
 else begin
 	if (en2)
-		pwr1 <= wr1;
+		pwr1 <= wr1 && !pbackout;
 end
 always_ff @(posedge clk) 
 if (rst) begin
@@ -1532,7 +1592,7 @@ if (rst) begin
 end
 else begin
 	if (en2)
-		pwr2 <= wr2;
+		pwr2 <= wr2 && !pbackout;
 end
 always_ff @(posedge clk) 
 if (rst) begin
@@ -1540,7 +1600,7 @@ if (rst) begin
 end
 else begin
 	if (en2)
-		pwr3 <= wr3;
+		pwr3 <= wr3 && !pbackout;
 end
 
 always_ff @(posedge clk) 

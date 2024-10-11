@@ -80,12 +80,10 @@ else begin
 	if (ncp)
 		mem[ncp_wa] <= mem[ncp_ra];
 	// Otherwise, update individual bits
-	else begin
-		for (n = 0; n < NWRPORTS; n = n + 1)
-			if (ena & wea[n]) begin
-				mem[cpa[n]][prega[n]] <= dina[n];
-			end
-	end
+	for (n = 0; n < NWRPORTS; n = n + 1)
+		if (ena & wea[n]) begin
+			mem[cpa[n]][prega[n]] <= dina[n];
+		end
 end
 
 always_comb
