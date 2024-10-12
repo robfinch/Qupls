@@ -54,10 +54,10 @@ input checkpoint_t dina;
 output checkpoint_t douta;
 input clkb;
 input enb;
-input checkpt_ndx_t [NRDPORTS-1:0] addrb;
-output checkpoint_t [NRDPORTS-1:0] doutb;
+input checkpt_ndx_t addrb;
+output checkpoint_t doutb;
 
-checkpoint_t [NRDPORTS-1:0] doutb1;
+checkpoint_t doutb1;
 checkpoint_t douta1;
 genvar g;
 integer n;
@@ -75,9 +75,6 @@ initial begin
 		mem[n] = {$bits(checkpoint_t){1'b0}};
 		mem[n].avail = {PREGS{1'b1}};
 		mem[n].avail[0] = 1'b0;
-		mem[n].avail[PREGS/4] = 1'b0;
-		mem[n].avail[PREGS/2] = 1'b0;
-		mem[n].avail[PREGS*3/4] = 1'b0;
 	end
 end
 
@@ -89,7 +86,7 @@ always_ff @(posedge clka) addra1 <= addra;
 always_ff @(posedge clka) dina1 <= dina;
 
 generate begin : gRegfileRam
-begin
+if (SIM) begin
 
 //	for (g = 0; g < AREGS; g = g + 1)
 		always_ff @(posedge clka)
@@ -97,14 +94,13 @@ begin
 //			if (ena & wea[g]) mem[addra][g*QBIT+QBIT-1:g*QBIT] <= dina[g*QBIT+QBIT-1:g*QBIT];
 
 //	assign doutb = (ena & wea) ? dina : mem[addrb];
-	assign doutb1[0] = mem[addrb[0]];
-	assign doutb1[1] = mem[addrb[1]];
-	assign doutb1[2] = mem[addrb[2]];
-	assign doutb1[3] = mem[addrb[3]];
+		always_comb//ff @(posedge clka)
+//			if (enb)
+				doutb1 <= mem[addrb];
 	assign douta1 = mem[addra];
 
 end
-if (FALSE) begin
+else begin
 
 
 // XPM_MEMORY instantiation template for Dual Port Distributed RAM configurations

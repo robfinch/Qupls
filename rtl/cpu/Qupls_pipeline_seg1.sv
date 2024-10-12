@@ -315,6 +315,14 @@ begin
 	mc_ins1.decbus.alu = 1'b1;
 	mc_ins2.decbus.alu = 1'b1;
 	mc_ins3.decbus.alu = 1'b1;
+	mc_ins0.decbus.mem = 1'b0;
+	mc_ins1.decbus.mem = 1'b0;
+	mc_ins2.decbus.mem = 1'b0;
+	mc_ins3.decbus.mem = 1'b0;
+	mc_ins0.decbus.fpu = 1'b0;
+	mc_ins1.decbus.fpu = 1'b0;
+	mc_ins2.decbus.fpu = 1'b0;
+	mc_ins3.decbus.fpu = 1'b0;
 	mc_ins0.element = 4'd0;
 	mc_ins1.element = 4'd0;
 	mc_ins2.element = 4'd0;

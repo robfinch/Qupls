@@ -124,7 +124,7 @@ else begin
 		if (stomp_pipeline)
 			stomp_fet <= TRUE;//pc_fet.pc != misspc.pc;
 		else
-			stomp_fet <= FALSE;
+			stomp_fet <= do_bsr;
 	end
 end
 

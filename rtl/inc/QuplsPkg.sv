@@ -2238,7 +2238,7 @@ begin
 		endcase
 	OP_ADDSI,OP_ANDSI,OP_ORSI,OP_EORSI:
 		fnSourceCv = fnConstReg(ir.aRc);
-	OP_STB,OP_STW,OP_STT,OP_STO,OP_STH,OP_STX:
+	OP_STB,OP_STW,OP_STT,OP_STO,OP_STH:
 		fnSourceCv = fnConstReg(ir.aRc);
 	OP_DBRA,OP_JSR,OP_BSR,
 	OP_Bcc,OP_BccU,OP_FBcc:

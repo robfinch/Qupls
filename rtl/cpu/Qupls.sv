@@ -123,6 +123,8 @@ wire [$bits(pc_address_t)-1:6] missblock;
 reg [2:0] missgrp;
 wire [2:0] missino;
 reg backout;
+reg backout_en = 1'b1;
+reg restore_en = 1'b1;
 
 ex_instruction_t missir;
 mc_address_t next_micro_ip, next_mip;
@@ -803,7 +805,7 @@ begin
 	nopi.pc.bno_f = 6'd1;
 	nopi.mcip = 12'h1A0;
 	nopi.len = 4'd6;
-	nopi.ins = {41'd0,OP_NOP};
+	nopi.ins = {57'd0,OP_NOP};
 	nopi.pred_btst = 6'd0;
 	nopi.element = 'd0;
 	nopi.aRa = 8'd0;
@@ -1794,7 +1796,7 @@ end
 
 always_ff @(posedge clk)
 if (irst)
-	micro_ir.ins <= {41'd0,OP_NOP};
+	micro_ir.ins <= {57'd0,OP_NOP};
 else begin
 	if (advance_pipeline) begin
 		if (excret)
@@ -1971,11 +1973,11 @@ end
 endgenerate
 
 // No longer useful.
-always_comb mc_ins4.ins = {41'd0,OP_NOP};
-always_comb mc_ins5.ins = {41'd0,OP_NOP};
-always_comb mc_ins6.ins = {41'd0,OP_NOP};
-always_comb mc_ins7.ins = {41'd0,OP_NOP};
-always_comb mc_ins8.ins = {41'd0,OP_NOP};
+always_comb mc_ins4.ins = {57'd0,OP_NOP};
+always_comb mc_ins5.ins = {57'd0,OP_NOP};
+always_comb mc_ins6.ins = {57'd0,OP_NOP};
+always_comb mc_ins7.ins = {57'd0,OP_NOP};
+always_comb mc_ins8.ins = {57'd0,OP_NOP};
 
 always_ff @(posedge clk)
 if (irst)
@@ -2543,10 +2545,10 @@ begin
 end
 
 always_comb
-	room_for_que = ins0_que.decbus.vec ? enqueue_room > 4'd8 :
-		ins1_que.decbus.vec ? enqueue_room > 4'd9 :
-		ins2_que.decbus.vec ? enqueue_room > 4'd10 :
-		ins3_que.decbus.vec ? enqueue_room > 4'd11 :
+	room_for_que = ins0_ren.decbus.vec ? enqueue_room > 4'd8 :
+		ins1_ren.decbus.vec ? enqueue_room > 4'd9 :
+		ins2_ren.decbus.vec ? enqueue_room > 4'd10 :
+		ins3_ren.decbus.vec ? enqueue_room > 4'd11 :
 		enqueue_room > 3'd3;
 assign nq = !(branchmiss || (branch_state!=BS_IDLE && branch_state < BS_CAPTURE_MISSPC)) && advance_pipeline && room_for_que && (!stomp_que || stomp_quem);
 
@@ -2607,9 +2609,9 @@ assign stomp1 = (stomp1_q|stomp_que|stomp_quem|ins0_que.decbus.macro) && ins1_qu
 assign stomp2 = (stomp2_q|stomp_que|stomp_quem|ins0_que.decbus.macro|ins1_que.decbus.macro) && ins2_que.pc.bno_t!=stomp_bno;
 assign stomp3 = (stomp3_q|stomp_que|stomp_quem|ins0_que.decbus.macro|ins1_que.decbus.macro|ins2_que.decbus.macro) && ins3_que.pc.bno_t!=stomp_bno;
 wire ornop0 = 1'b0;
-wire ornop1 = ins0_que.decbus.bsr;
-wire ornop2 = ins0_que.decbus.bsr || ins1_que.decbus.bsr;
-wire ornop3 = ins0_que.decbus.bsr || ins1_que.decbus.bsr || ins2_que.decbus.bsr;
+wire ornop1 = ins0_ren.decbus.bsr;
+wire ornop2 = ins0_ren.decbus.bsr || ins1_ren.decbus.bsr;
+wire ornop3 = ins0_ren.decbus.bsr || ins1_ren.decbus.bsr || ins2_ren.decbus.bsr;
 
 /*
 assign arnv[0] = !stomp0;
@@ -2640,7 +2642,7 @@ assign arnv[16] = 1'b1;
 */
 assign arnv = 24'hFFFFFF;
 
-wire restore_chkpt = branch_state==BS_CHKPT_RESTORE;// && !fcu_cjb;
+wire restore_chkpt = branch_state==BS_CHKPT_RESTORE && restore_en;// && !fcu_cjb;
 wire restored;	// restore_chkpt delayed one clock.
 wire Rt0_decv;
 wire Rt1_decv;
@@ -2725,10 +2727,10 @@ Qupls_reg_renamer6 utrn1
 	.restore_list(restore_list),
 	.tags2free(tags2free),
 	.freevals(freevals),
-	.alloc0(ins0_dec.aRt!=8'd0 && ins0_dec.v),// & ~stomp0),
-	.alloc1(ins1_dec.aRt!=8'd0 && ins1_dec.v),// & ~stomp1),
-	.alloc2(ins2_dec.aRt!=8'd0 && ins2_dec.v),// & ~stomp2),
-	.alloc3(ins3_dec.aRt!=8'd0 && ins3_dec.v),// & ~stomp3),
+	.alloc0(ins0_dec.aRt!=8'd0 && ins0_dec.v && !ins3_ren.decbus.bsr),// & ~stomp0),
+	.alloc1(ins1_dec.aRt!=8'd0 && ins1_dec.v && !ins3_ren.decbus.bsr&& !ins0_dec.decbus.bsr),// & ~stomp1),
+	.alloc2(ins2_dec.aRt!=8'd0 && ins2_dec.v && !ins3_ren.decbus.bsr&& !ins0_dec.decbus.bsr && !ins1_dec.decbus.bsr),// & ~stomp2),
+	.alloc3(ins3_dec.aRt!=8'd0 && ins3_dec.v && !ins3_ren.decbus.bsr&& !ins0_dec.decbus.bsr && !ins1_dec.decbus.bsr && !ins2_dec.decbus.bsr),// & ~stomp3),
 	.wo0(Rt0_dec),
 	.wo1(Rt1_dec),
 	.wo2(Rt2_dec),
@@ -3181,6 +3183,8 @@ else begin
 		ins0_ren <= nopi;
 	else if (advance_pipeline_seg2) begin
 		ins0_ren <= ins0_dec;
+		if (ins3_ren.decbus.bsr)
+			ins0_ren.v <= INV;
 	end
 	/*
 	if (bo_wr) begin
@@ -3201,8 +3205,13 @@ if (irst)
 else begin
 	if (advance_pipeline_seg2 && !advance_pipeline)
 		ins1_ren <= nopi;
-	else if (advance_pipeline_seg2)
+	else if (advance_pipeline_seg2) begin
 		ins1_ren <= ins1_dec;
+		if (ins0_dec.decbus.bsr)
+			ins1_ren.v <= INV;
+		if (ins3_ren.decbus.bsr)
+			ins1_ren.v <= INV;
+	end
 end
 always_ff @(posedge clk)
 if (irst)
@@ -3210,8 +3219,13 @@ if (irst)
 else begin
 	if (advance_pipeline_seg2 && !advance_pipeline)
 		ins2_ren <= nopi;
-	else if (advance_pipeline_seg2)
+	else if (advance_pipeline_seg2) begin
 		ins2_ren <= ins2_dec;
+		if (ins0_dec.decbus.bsr || ins1_dec.decbus.bsr)
+			ins2_ren.v <= INV;
+		if (ins3_ren.decbus.bsr)
+			ins2_ren.v <= INV;
+	end
 end
 always_ff @(posedge clk)
 if (irst)
@@ -3219,8 +3233,13 @@ if (irst)
 else begin
 	if (advance_pipeline_seg2 && !advance_pipeline)
 		ins3_ren <= nopi;
-	else if (advance_pipeline_seg2)
+	else if (advance_pipeline_seg2) begin
 		ins3_ren <= ins3_dec;
+		if (ins0_dec.decbus.bsr || ins1_dec.decbus.bsr || ins2_dec.decbus.bsr)
+			ins3_ren.v <= INV;
+		if (ins3_ren.decbus.bsr)
+			ins3_ren.v <= INV;
+	end
 end
 
 always_ff @(posedge clk)
@@ -3492,7 +3511,7 @@ for (n4 = 0; n4 < ROB_ENTRIES; n4 = n4 + 1) begin
 			(rob[n4].grp != (rob[missid].grp+2) % 64) &&
 			(rob[n4].grp != (rob[missid].grp+3) % 64))
 		*/
-			robentry_cpytgt[n4] = TRUE;
+			robentry_cpytgt[n4] = FALSE;//TRUE;
 //		else
 //			robentry_cpytgt[n4] = FALSE;
 	end
@@ -3506,12 +3525,12 @@ for (n32 = 0; n32 < ROB_ENTRIES; n32 = n32 + 1) begin
 	if (fcu_idv && rob[fcu_id].decbus.br && takb) begin
  		if (rob[n32].grp==rob[fcu_id].grp && rob[n32].sn > rob[fcu_id].sn) begin
  			if (!(branchmiss || branch_state != BS_IDLE))
- 				backout <= TRUE;
+ 				backout <= backout_en;
  		end
 	end
 	// Always do a backout on a branch miss.
 	if (branch_state==BS_CHKPT_RESTORED)
-		backout <= TRUE;
+		backout <= backout_en;
 end
 
 // Reset the ROB tail pointer, if there is a head <-> tail collision move the
@@ -3530,7 +3549,8 @@ begin
 		else
 			n6 = n5 - 1;
 		if (robentry_stomp[n5] && !robentry_stomp[n6] && !n7) begin
-			stail = n5;
+			stail = (n5 + 3) % ROB_ENTRIES;
+			stail[1:0] = 2'b00;
 //			if (fnColls(head0, n5))
 //				shead = (head0 + ROB_ENTRIES - 4) % ROB_ENTRIES;
 			n7 = 1'b1;
@@ -3746,7 +3766,7 @@ else begin
 end
 always_ff @(posedge clk)
 if (irst)
-	missir <= {41'd0,OP_NOP};
+	missir <= {57'd0,OP_NOP};
 else begin
 //	if (advance_pipeline)
 	if (branch_state==BS_CHKPT_RESTORE)
@@ -3756,7 +3776,7 @@ end
 wire s4s7 = (pc.pc==misspc.pc && ihito && brtgtvr) ||
 	(robentry_stomp[fcu_id] || (rob[fcu_id].out[1] && !rob[fcu_id].v))
 	;
-wire s5s7 = (next_pc.pc==misspc.pc && ihito && (rob[fcu_id].done==2'b11 || fcu_idle)) ||
+wire s5s7 = (next_pc.pc==misspc.pc && ihit && (rob[fcu_id].done==2'b11 || fcu_idle)) ||
 //wire s5s7 = (next_pc==misspc && get_next_pc && ihito && (rob[fcu_id].done==2'b11 || fcu_idle)) ||
 	(robentry_stomp[fcu_id] || 
 	(!rob[fcu_id].v))
@@ -5341,8 +5361,8 @@ else begin
 	// are no valid instructions following the branch in the queue.
 	if (branchmiss || (branch_state < BS_CAPTURE_MISSPC && branch_state != BS_IDLE)) begin
 		;
-//		if (|robentry_stomp)
-//			tail0 <= stail;		// computed above
+		if (|robentry_stomp)
+			tail0 <= stail;		// computed above
 	end
 	else if (advance_pipeline_seg2) begin
 		if (room_for_que && (!stomp_que || stomp_quem)) begin
@@ -7943,7 +7963,7 @@ begin
 	rob[tail].nRt <= nRt;//db.Rtz ? 10'd0 : nRt;
 	rob[tail].group_len <= grplen;
 	rob[tail].last <= last;
-	rob[tail].v <= VAL;
+	rob[tail].v <= ins.v;
 	if (!stomp && db.v && !brtgtv) begin
 		if (db.br & pt) begin
 			brtgt <= fnTargetIP(pc,db.immc);
@@ -7961,6 +7981,18 @@ begin
 	// If the instruction enqueues it must have been through the renamer.
 	// Propagate the target register to the new target by turning the instruction
 	// into a copy-target.
+	if (ins.ins.any.opcode==OP_NOP) begin
+		rob[tail].decbus.alu <= TRUE;
+		rob[tail].decbus.fpu <= FALSE;
+		rob[tail].decbus.fc <= FALSE;
+		rob[tail].decbus.load <= FALSE;
+		rob[tail].decbus.store <= FALSE;
+		rob[tail].decbus.mem <= FALSE;
+		rob[tail].op <= nopi;
+		rob[tail].argA_v <= VAL;
+		rob[tail].argB_v <= VAL;
+		rob[tail].argC_v <= VAL;
+	end
 	if (ornop|db.vec) begin
 		rob[tail].decbus.cpytgt <= TRUE;
 		rob[tail].decbus.alu <= TRUE;
@@ -7969,7 +8001,7 @@ begin
 		rob[tail].decbus.load <= FALSE;
 		rob[tail].decbus.store <= FALSE;
 		rob[tail].decbus.mem <= FALSE;
-		rob[tail].op <= {57'd0,OP_NOP};
+		rob[tail].op <= nopi;//{57'd0,OP_NOP};
 //		rob[tail].nRt <= 11'd0;
 //		rob[tail].pRt <= 11'd0;
 		rob[tail].argA_v <= VAL;
@@ -8310,8 +8342,8 @@ begin
 //	exc_mcip <= twoup ? mc_stack[1].ip : mc_stack[0].ip;
 	for (nn = 0; nn < 7; nn = nn + 1)
 		mc_stack[nn] <=	mc_stack[nn+1+twoup];
-	mc_stack[7].ir <= {41'd0,OP_NOP};
-	mc_stack[8].ir <= {41'd0,OP_NOP};
+	mc_stack[7].ir <= {57'd0,OP_NOP};
+	mc_stack[8].ir <= {57'd0,OP_NOP};
 	mc_stack[7].ip <= 12'h0;
 	mc_stack[8].ip <= 12'h0;
 	exc_ret_mcip <= twoup ? mc_stack[1].ip : mc_stack[0].ip;
