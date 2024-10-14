@@ -94,6 +94,7 @@ reg [WID-1:0] immc8;
 reg [22:0] ii;
 reg [WID-1:0] sd;
 reg [WID-1:0] sum_ab;
+reg [WID:0] sum_gc;
 reg [WID-1:0] chndx;
 reg [WID-1:0] chndx2;
 reg [WID-1:0] chrndxv;
@@ -104,6 +105,8 @@ always_comb
 	ii = {{6{i[WID-1]}},i};
 always_comb
 	sum_ab = a + b;
+always_comb
+	sum_gc = a + b + c;
 
 always_comb
 	immc8 = {{WID{ir[41]}},ir[41:34]};
@@ -245,31 +248,36 @@ begin
 		case(ir.r2.func)
 		FN_CPUID:	bus = ALU0 ? info : 64'd0;
 		FN_ADD:
-			case(ir.r2.op2)
-			3'd0:	bus = (a + b) & c;
-			3'd1: bus = (a + b) | c;
-			3'd2: bus = (a + b) ^ c;
-			3'd3:	bus = (a + b) + c;
-			/*
-			4'd9:	bus = (a + b) - c;
-			4'd10: bus = (a + b) + c + 2'd1;
-			4'd11: bus = (a + b) + c - 2'd1;
-			4'd12:
-				begin
-					sd = (a + b) + c;
-					bus = sd[WID-1] ? -sd : sd;
-				end
-			4'd13:
-				begin
-					sd = (a + b) - c;
-					bus = sd[WID-1] ? -sd : sd;
-				end
-			*/
+			case(ir.r2.op3)
+			OP3_ADD:
+				case(ir.r2.op4)
+				3'd0:	bus = (a + b) & c;
+				3'd1: bus = (a + b) | c;
+				3'd2: bus = (a + b) ^ c;
+				3'd3:	bus = (a + b) + c;
+				/*
+				4'd9:	bus = (a + b) - c;
+				4'd10: bus = (a + b) + c + 2'd1;
+				4'd11: bus = (a + b) + c - 2'd1;
+				4'd12:
+					begin
+						sd = (a + b) + c;
+						bus = sd[WID-1] ? -sd : sd;
+					end
+				4'd13:
+					begin
+						sd = (a + b) - c;
+						bus = sd[WID-1] ? -sd : sd;
+					end
+				*/
+				default:	bus = {WID{1'd0}};
+				endcase
+			OP3_ADDGC: bus = {{WID-1{1'b0}},sum_gc[WID]};
 			default:	bus = {WID{1'd0}};
 			endcase
 		FN_SUB:	bus = a - b - c;
 		FN_CMP,FN_CMPU:	
-			case(ir.r2.op2)
+			case(ir.r2.op4)
 			3'd1:	bus = cmpo & c;
 			3'd2:	bus = cmpo | c;
 			3'd3:	bus = cmpo ^ c;
@@ -284,14 +292,14 @@ begin
 		FN_DIVU: bus = ALU0 ? div_q : dead;
 		FN_MODU: bus = ALU0 ? div_r : dead;
 		FN_AND:	
-			case(ir.r2.op2)
+			case(ir.r2.op4)
 			3'd0:	bus = (a & b) & c;
 			3'd1: bus = (a & b) | c;
 			3'd2: bus = (a & b) ^ c;
 			default:	bus = {WID{1'd0}};
 			endcase
 		FN_OR:
-			case(ir.r2.op2)
+			case(ir.r2.op4)
 			3'd0:	bus = (a | b) & c;
 			3'd1: bus = (a | b) | c;
 			3'd2: bus = (a | b) ^ c;
@@ -299,7 +307,7 @@ begin
 			default:	bus = {WID{1'd0}};
 			endcase
 		FN_EOR:	
-			case(ir.r2.op2)
+			case(ir.r2.op4)
 			3'd0:	bus = (a ^ b) & c;
 			3'd1: bus = (a ^ b) | c;
 			3'd2: bus = (a ^ b) ^ c;
@@ -309,21 +317,21 @@ begin
 		FN_CMOVZ: bus = a ? c : b;
 		FN_CMOVNZ:	bus = a ? b : c;
 		FN_NAND:
-			case(ir.r2.op2)
+			case(ir.r2.op4)
 			3'd0:	bus = ~(a & b) & c;
 			3'd1: bus = ~(a & b) | c;
 			3'd2: bus = ~(a & b) ^ c;
 			default:	bus = {WID{1'd0}};
 			endcase
 		FN_NOR:
-			case(ir.r2.op2)
+			case(ir.r2.op4)
 			3'd0:	bus = ~(a | b) & c;
 			3'd1: bus = ~(a | b) | c;
 			3'd2: bus = ~(a | b) ^ c;
 			default:	bus = {WID{1'd0}};
 			endcase
 		FN_ENOR:
-			case(ir.r2.op2)
+			case(ir.r2.op4)
 			3'd0:	bus = ~(a ^ b) & c;
 			3'd1: bus = ~(a ^ b) | c;
 			3'd2: bus = ~(a ^ b) ^ c;
@@ -361,7 +369,7 @@ begin
 		FN_ZSLEUI8:	bus = a <= b ? immc8 : zero;
 
 		FN_MINMAX:
-			case(ir.r3.op2)
+			case(ir.r3.op4)
 			3'd0:	// MIN
 				begin
 					if ($signed(a) < $signed(b) && $signed(a) < $signed(c))

@@ -46,7 +46,7 @@ import QuplsPkg::*;
 
 module Qupls_pipeline_seg1(rst_i, clk_i, rstcnt, advance_fet, ihit, en_i,
 	stomp_bno, stomp_fet, stomp_mux, stomp_dec, nop_o, 
-	irq_i, hirq_i, vect_i, sr, pt_mux, p_override, po_bno,
+	nmi, irq, irq_i, hirq_i, vect_i, sr, pt_mux, p_override, po_bno,
 	branchmiss, misspc, mipv_i, mip_i, ic_line_i,reglist_active, grp_i, grp_o,
 	takb_fet, mc_offs, pc_i, vl,
 	ls_bmf_i, pack_regs_i, scale_regs_i, regcnt_i, mc_adr,
@@ -70,6 +70,8 @@ input stomp_fet;
 input stomp_mux;
 input stomp_dec;
 output reg nop_o;
+input nmi;
+input irq;
 input [2:0] irq_i;
 input hirq_i;
 input [7:0] vect_i;
@@ -176,6 +178,7 @@ pipeline_reg_t mc_ins2;
 pipeline_reg_t mc_ins3;
 wire [11:0] mip = mip_i;
 reg [319:0] ic_line_aligned;
+reg [319:0] prev_ic_line_aligned;
 cpu_types_pkg::mc_address_t mcip0;
 cpu_types_pkg::mc_address_t mcip1;
 cpu_types_pkg::mc_address_t mcip2;
@@ -365,7 +368,22 @@ end
 
 always_comb 
 	ic_line_aligned = {{64{1'b1,OP_NOP}},ic_line_fet} >> {pc0_fet.pc[5:3],6'd0};
-	
+
+pc_address_ex_t prev_pc0_fet;
+always_ff @(posedge clk_i)
+if (rst_i) begin
+	prev_ic_line_aligned <= 320'd0;
+	prev_pc0_fet <= {$bits(pc_address_ex_t){1'b0}};
+end
+else begin
+	if (advance_fet) begin
+		prev_ic_line_aligned <= ic_line_aligned;
+		prev_pc0_fet <= pc0_fet;
+	end
+end
+
+wire redundant_group = {prev_pc0_fet,prev_ic_line_aligned}=={pc0_fet,ic_line_aligned};
+
 pipeline_reg_t pr0_mux;
 pipeline_reg_t pr1_mux;
 pipeline_reg_t pr2_mux;
@@ -378,11 +396,27 @@ begin
 	pr2_mux = nopi;
 	pr3_mux = nopi;
 	pr4_mux = nopi;
-	pr0_mux.ins = ic_line_aligned[ 63:  0];
-	pr1_mux.ins = ic_line_aligned[127: 64];
-	pr2_mux.ins = ic_line_aligned[191:128];
-	pr3_mux.ins = ic_line_aligned[255:192];
-	pr4_mux.ins = ic_line_aligned[319:256];
+	if (!redundant_group) begin
+		pr0_mux.ins = ic_line_aligned[ 63:  0];
+		pr1_mux.ins = ic_line_aligned[127: 64];
+		pr2_mux.ins = ic_line_aligned[191:128];
+		pr3_mux.ins = ic_line_aligned[255:192];
+		pr4_mux.ins = ic_line_aligned[319:256];
+	end
+	pr0_mux.hwi_level = irq_i;
+	pr1_mux.hwi_level = irq_i;
+	pr2_mux.hwi_level = irq_i;
+	pr3_mux.hwi_level = irq_i;
+	// If an NMI or IRQ is happening, invalidate instruction. Once the NMI or
+	// IRQ routine is entered, instructions will be marked valid.
+	pr0_mux.v = !nmi & !irq;
+	pr1_mux.v = !nmi & !irq;
+	pr2_mux.v = !nmi & !irq;
+	pr3_mux.v = !nmi & !irq;
+	pr0_mux.hwi = nmi | irq;
+	pr1_mux.hwi = nmi | irq;
+	pr2_mux.hwi = nmi | irq;
+	pr3_mux.hwi = nmi | irq;
 end
 
 /* Under construction
@@ -416,10 +450,10 @@ end
 // executed.
 reg nop0,nop1,nop2,nop3;
 
-always_comb nop0 = (stomp_mux && pc0_fet.bno_t!=stomp_bno) || (branchmiss && misspc_fet.pc > pc0_fet.pc);
-always_comb nop1 = (stomp_mux && pc1_fet.bno_t!=stomp_bno) || (branchmiss && misspc_fet.pc > pc1_fet.pc);
-always_comb nop2 = (stomp_mux && pc2_fet.bno_t!=stomp_bno) || (branchmiss && misspc_fet.pc > pc2_fet.pc);
-always_comb nop3 = (stomp_mux && pc3_fet.bno_t!=stomp_bno) || (branchmiss && misspc_fet.pc > pc3_fet.pc);
+always_comb nop0 = (stomp_fet && pc0_fet.bno_t!=stomp_bno) || (branchmiss && misspc_fet.pc > pc0_fet.pc);
+always_comb nop1 = (stomp_fet && pc1_fet.bno_t!=stomp_bno) || (branchmiss && misspc_fet.pc > pc1_fet.pc);
+always_comb nop2 = (stomp_fet && pc2_fet.bno_t!=stomp_bno) || (branchmiss && misspc_fet.pc > pc2_fet.pc);
+always_comb nop3 = (stomp_fet && pc3_fet.bno_t!=stomp_bno) || (branchmiss && misspc_fet.pc > pc3_fet.pc);
 /*
 always_comb nop0 = FALSE;
 always_comb nop1 = FALSE;
@@ -698,10 +732,10 @@ end
 else begin
 	if (en_i) begin
 		ins0d <= ins0_mux;
-		if (stomp_dec) begin
+		if (stomp_mux) begin
 			if (ins0_mux.pc.bno_t!=stomp_bno) begin
 				ins0d <= nopi;
-				ins0d.pc.bno_t = ins0_mux.pc.bno_t;
+				ins0d.pc.bno_t <= ins0_mux.pc.bno_t;
 			end
 		end
 	end
@@ -714,10 +748,10 @@ end
 else begin
 	if (en_i) begin
 		ins1d <= ins1_mux;
-		if (stomp_dec) begin
+		if (stomp_mux) begin
 			if (ins1_mux.pc.bno_t!=stomp_bno) begin
 				ins1d <= nopi;
-				ins1d.pc.bno_t = ins1_mux.pc.bno_t;
+				ins1d.pc.bno_t <= ins1_mux.pc.bno_t;
 			end
 		end
 	end
@@ -730,10 +764,10 @@ end
 else begin
 	if (en_i) begin
 		ins2d <= ins2_mux;
-		if (stomp_dec) begin
+		if (stomp_mux) begin
 			if (ins2_mux.pc.bno_t!=stomp_bno) begin
 				ins2d <= nopi;
-				ins2d.pc.bno_t = ins2_mux.pc.bno_t;
+				ins2d.pc.bno_t <= ins2_mux.pc.bno_t;
 			end
 		end
 	end
@@ -746,10 +780,10 @@ end
 else begin
 	if (en_i) begin
 		ins3d <= ins3_mux;
-		if (stomp_dec) begin
+		if (stomp_mux) begin
 			if (ins3_mux.pc.bno_t!=stomp_bno) begin
 				ins3d <= nopi;
-				ins3d.pc.bno_t = ins3_mux.pc.bno_t;
+				ins3d.pc.bno_t <= ins3_mux.pc.bno_t;
 			end
 		end
 	end

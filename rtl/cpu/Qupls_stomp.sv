@@ -39,7 +39,7 @@ import QuplsPkg::*;
 
 module Qupls_stomp(rst, clk, ihit, advance_pipeline, advance_pipeline_seg2, 
 	micro_code_active, branchmiss, branch_state, do_bsr, misspc,
-	pc_fet, pc_mux, pc_dec, pc_ren,
+	pc, pc_f, pc_fet, pc_mux, pc_dec, pc_ren,
 	stomp_fet, stomp_mux, stomp_dec, stomp_ren, stomp_que, stomp_quem
 	);
 input rst;
@@ -52,6 +52,8 @@ input branchmiss;
 input branch_state_t branch_state;
 input do_bsr;
 input pc_address_ex_t misspc;
+input pc_address_ex_t pc;
+input pc_address_ex_t pc_f;
 input pc_address_ex_t pc_fet;
 input pc_address_ex_t pc_mux;
 input pc_address_ex_t pc_dec;
@@ -64,6 +66,9 @@ output reg stomp_que;
 output reg stomp_quem;
 
 pc_address_ex_t misspcr;
+reg stomp_aln;
+reg stomp_alnr;
+reg stomp_fetr;
 reg stomp_muxr;
 reg stomp_decr;
 reg stomp_renr;
@@ -77,6 +82,7 @@ reg do_bsr_que;
 reg do_bsr_rrr;
 
 reg stomp_pipeline;
+reg [3:0] spl;
 wire pe_stomp_pipeline;
 always_comb
 	stomp_pipeline = 
@@ -88,7 +94,11 @@ wire next_stomp_dec = (stomp_mux && !micro_code_active) || stomp_pipeline;
 wire next_stomp_ren = (stomp_dec && !micro_code_active) || stomp_pipeline;
 wire next_stomp_quem = (stomp_ren && !micro_code_active) || stomp_pipeline;
 
+reg [2:0] bsi;
+wire pe_bsidle;
+edge_det uedbsi1 (.rst(irst), .clk(clk), .ce(1'b1), .i(branch_state==BS_IDLE), .pe(pe_bsidle), .ne(), .ee());
 edge_det ued1 (.rst(rst), .clk(clk), .ce(advance_pipeline), .i(stomp_pipeline), .pe(pe_stomp_pipeline), .ne(), .ee());	
+always_ff @(posedge clk) if (advance_pipeline_seg2) bsi <= {bsi[1:0],pe_bsidle};
 
 always_ff @(posedge clk)
 if (rst) begin
@@ -101,10 +111,19 @@ else begin
 		misspcr <= misspc;
 end
 
+always_ff @(posedge clk)
+if (rst)
+	spl <= 4'b0000;
+else begin
+	spl <= {spl[2:0],stomp_pipeline};
+//	if (advance_pipeline)
+//		spl <= 4'b0000;
+end
+
 reg do_bsr1;
 always_ff @(posedge clk)
 if (rst)
-	do_bsr1 <= FALSE;
+	do_bsr1 <= 3'b000;
 else begin
 	if (advance_pipeline)
 		do_bsr1 <= do_bsr;
@@ -112,70 +131,92 @@ end
 
 // Instruction stomp waterfall.
 
+always_comb
+	stomp_aln = (stomp_alnr || pe_stomp_pipeline) && (pc.pc != misspcr.pc);
+always_comb
+	stomp_fet = (stomp_fetr || pe_stomp_pipeline) && (pc_f.pc != misspcr.pc);
+always_comb
+	stomp_mux = (pe_stomp_pipeline || stomp_muxr) && (pc_fet.pc != misspcr.pc);
+always_comb
+	stomp_dec = (pe_stomp_pipeline || stomp_decr) && (pc_mux.pc != misspcr.pc);
+always_comb
+	stomp_ren = (pe_stomp_pipeline || stomp_renr) && (pc_dec.pc != misspcr.pc);
+
 // On a cache miss, the fetch stage is stomped on, but not if micro-code is
 // active. Micro-code does not require the cache-line data.
 // Invalidate the fetch stage on an unconditional subroutine call.
 
+reg ff1;
+pc_address_ex_t prev_pc;
 always_ff @(posedge clk)
-if (rst)
-	stomp_fet <= FALSE;
-else begin
-	if (advance_pipeline|pe_stomp_pipeline) begin
-		if (stomp_pipeline)
-			stomp_fet <= TRUE;//pc_fet.pc != misspc.pc;
-		else
-			stomp_fet <= do_bsr;
-	end
-end
-
-always_ff @(posedge clk)
-if (rst)
+if (rst) begin
+	stomp_alnr <= FALSE;
+	stomp_fetr <= TRUE;
 	stomp_muxr <= TRUE;
+	stomp_decr <= TRUE;
+	stomp_renr <= TRUE;
+	ff1 <= FALSE;
+end
 else begin
+	
+	if (advance_pipeline|pe_stomp_pipeline) begin
+		if (pe_stomp_pipeline) begin
+			stomp_alnr <= TRUE;
+			ff1 <= TRUE;
+		end
+		else if (pc.pc == misspcr.pc)
+			stomp_alnr <= FALSE;
+		else if (!ff1)
+			stomp_alnr <= do_bsr;
+	end
+
+	if (advance_pipeline|pe_stomp_pipeline) begin
+		if (pe_stomp_pipeline)
+			stomp_fetr <= TRUE;
+		else if (pc_f.pc == misspcr.pc)
+			stomp_fetr <= FALSE;
+		else if (!ff1)
+			stomp_fetr <= stomp_aln;
+	end
+
 	if (advance_pipeline|pe_stomp_pipeline) begin
 		do_bsr_mux <= do_bsr;
-		if (next_stomp_mux)
+		if (pe_stomp_pipeline)
 			stomp_muxr <= TRUE;
-		else
+		else if (pc_fet.pc == misspcr.pc) // (next_stomp_mux)
+			stomp_muxr <= FALSE;
+//		else
+//			stomp_muxr <= stomp_fet;
+		if (!ff1)
 			stomp_muxr <= stomp_fet;
 	end
-end
-always_comb
-	stomp_mux = pe_stomp_pipeline || stomp_muxr;
 
 // If a micro-code instruction is decoded stomp on the next decode stage.
 // An instruction group following the micro-code was at the fetch stage and
 // would be propagated to decode before the micro-code becomes active.
 
-always_ff @(posedge clk)
-if (rst)
-	stomp_decr <= TRUE;
-else begin
 	if (advance_pipeline|pe_stomp_pipeline) begin
 		do_bsr_dec <= do_bsr_mux;
-		if (next_stomp_dec)
+		if (pe_stomp_pipeline)
 			stomp_decr <= TRUE;
-		else
+		else if (pc_mux.pc == misspcr.pc)
+			stomp_decr <= FALSE;
+		if (!ff1)
 			stomp_decr <= stomp_mux;
 	end
-end
-always_comb
-	stomp_dec = pe_stomp_pipeline || stomp_decr;
 
-always_ff @(posedge clk)
-if (rst)
-	stomp_renr <= TRUE;
-else begin
 	if (advance_pipeline_seg2|pe_stomp_pipeline) begin
 		do_bsr_ren <= do_bsr_dec;
-		if (next_stomp_ren)
+		if (pe_stomp_pipeline)
 			stomp_renr <= TRUE;
-		else
+		else if (pc_dec.pc == misspcr.pc) begin
+			stomp_renr <= FALSE;
+			ff1 <= FALSE;
+		end
+		if (!ff1)
 			stomp_renr <= stomp_dec;
 	end
 end
-always_comb
-	stomp_ren = pe_stomp_pipeline || stomp_renr;
 
 // Q cannot be stomped on in the same manner as the other stages as rename
 // has already taken place. Instead the instructions must be allowed to 

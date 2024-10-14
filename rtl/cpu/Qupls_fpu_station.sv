@@ -133,7 +133,7 @@ else begin
 		argB_tag <= rfo_argB_ctag;
 		if (rob.decbus.qfext) begin
 			qfext <= TRUE;
-			Rt1 <= rob.nRt;
+			Rt1 <= rob.op.nRt;
 			aRt1 <= rob.decbus.Rt;
 			aRtz1 <= rob.decbus.Rtz;
 		end
@@ -142,7 +142,7 @@ else begin
 		end
 		cptgt <= next_cptgt;
 		argI <= rob.decbus.immb;
-		Rt <= rob.nRt;
+		Rt <= rob.op.nRt;
 		aRt <= rob.decbus.Rt;
 		aRtz <= rob.decbus.Rt==8'd0;//rob.decbus.Rtz;
 		cs <= rob.decbus.Rcc;

@@ -419,6 +419,7 @@ always_comb
 												&& !(&rob[g].done)
 												&& (rob[g].decbus.cpytgt ? rob[g].argT_v : args_valid[g])
 												&& (!(fnPriorFC(g) && !(&rob[g].done)))
+												&& (SERIALIZE ? (rob[(g+ROB_ENTRIES-1)%ROB_ENTRIES].done==2'b11 || rob[(g+ROB_ENTRIES-1)%ROB_ENTRIES].v==INV) : 1'b1)
 												//&& !fnPriorFalsePred(g)
 												&& !fnPriorSync(g)
 												&& |rob[g].pred_bits

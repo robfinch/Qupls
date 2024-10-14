@@ -326,7 +326,7 @@ begin
 	OP_R2:
 		case(ir.r2.func)
 		FN_ADD:
-			case(ir.r2.op2)
+			case(ir.r2.op4)
 			3'd0:	bus = (a + b) & c;
 			3'd1: bus = (a + b) | c;
 			3'd2: bus = (a + b) ^ c;
@@ -350,21 +350,21 @@ begin
 			endcase
 		FN_SUB:	bus = a - b - c;
 		FN_CMP,FN_CMPU:	
-			case(ir.r2.op2)
+			case(ir.r2.op4)
 			3'd1:	bus = cmpo & c;
 			3'd2:	bus = cmpo | c;
 			3'd3:	bus = cmpo ^ c;
 			default:	bus = cmpo;
 			endcase
 		FN_AND:	
-			case(ir.r2.op2)
+			case(ir.r2.op4)
 			3'd0:	bus = (a & b) & c;
 			3'd1: bus = (a & b) | c;
 			3'd2: bus = (a & b) ^ c;
 			default:	bus = {WID{1'd0}};
 			endcase
 		FN_OR:
-			case(ir.r2.op2)
+			case(ir.r2.op4)
 			3'd0:	bus = (a | b) & c;
 			3'd1: bus = (a | b) | c;
 			3'd2: bus = (a | b) ^ c;
@@ -372,7 +372,7 @@ begin
 			default:	bus = {WID{1'd0}};
 			endcase
 		FN_EOR:	
-			case(ir.r2.op2)
+			case(ir.r2.op4)
 			3'd0:	bus = (a ^ b) & c;
 			3'd1: bus = (a ^ b) | c;
 			3'd2: bus = (a ^ b) ^ c;
@@ -382,21 +382,21 @@ begin
 		FN_CMOVZ: bus = a ? c : b;
 		FN_CMOVNZ:	bus = a ? b : c;
 		FN_NAND:
-			case(ir.r2.op2)
+			case(ir.r2.op4)
 			3'd0:	bus = ~(a & b) & c;
 			3'd1: bus = ~(a & b) | c;
 			3'd2: bus = ~(a & b) ^ c;
 			default:	bus = {WID{1'd0}};
 			endcase
 		FN_NOR:
-			case(ir.r2.op2)
+			case(ir.r2.op4)
 			3'd0:	bus = ~(a | b) & c;
 			3'd1: bus = ~(a | b) | c;
 			3'd2: bus = ~(a | b) ^ c;
 			default:	bus = {WID{1'd0}};
 			endcase
 		FN_ENOR:
-			case(ir.r2.op2)
+			case(ir.r2.op4)
 			3'd0:	bus = ~(a ^ b) & c;
 			3'd1: bus = ~(a ^ b) | c;
 			3'd2: bus = ~(a ^ b) ^ c;

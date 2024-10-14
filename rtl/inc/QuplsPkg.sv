@@ -83,6 +83,10 @@ parameter VEC_ELEMENTS = 8;
 // core in terms of number of instructions. The only working value is 4.
 parameter XWID = 4;
 
+// Set the following parameter to one to serialize operation of the CPU.
+// Meant for debugging purposes.
+parameter SERIALIZE = 0;
+
 // Select building for performance or size.
 // If this is set to one extra logic will be included to improve performance.
 parameter PERFORMANCE = 1'b0;
@@ -97,6 +101,9 @@ parameter BRANCH_PREDICTOR = 0;
 // Supporting postfix instructions increases the size of the core and reduces
 // the code density.
 parameter SUPPORT_POSTFIX = 0;
+
+// Enables register renaming to remove false dependencies.
+parameter SUPPORT_RAT = 0;
 
 // The following allows the core to process flow control ops in any order
 // to reduce the size of the core. Set to zero to restrict flow control ops
@@ -836,6 +843,11 @@ typedef enum logic [6:0] {
 	FN_CINVOKE = 7'd124
 } cap_func_t;
 
+typedef enum logic [2:0] {
+	OP3_ADD = 3'd0,
+	OP3_ADDGC = 3'd1
+} add_op3_t;
+
 parameter GLOBAL 					= 14'b00000000000001;
 parameter PERMIT_EXECUTE 	= 14'b00000000000010;
 parameter PERMIT_LOAD 		= 14'b00000000000100;
@@ -1055,6 +1067,12 @@ typedef enum logic [1:0] {
 	memi = 2'd3
 } addr_upd_t;
 
+typedef enum logic [1:0] {
+	AMD_REL = 0,
+	AMD_ABS = 1,
+	AMD_REG = 3
+} br_amode_t;
+
 typedef logic [ROB_ENTRIES-1:0] rob_bitmask_t;
 typedef logic [LSQ_ENTRIES-1:0] lsq_bitmask_t;
 typedef logic [TidMSB:0] Tid;
@@ -1173,7 +1191,8 @@ typedef struct packed
 {
 	r3func_t func;			// 7 bits
 	logic [3:0] Pr;			// 4
-	logic [5:0] resv;		// 6
+	logic [2:0] resv;		// 3
+	logic [2:0] op3;		// 3
 	logic [3:0] op4;		// 4
 	regspec_t Rc;				// 9
 	regspec_t Rb;				// 9
@@ -1199,8 +1218,9 @@ typedef struct packed
 {
 	r3func_t func;			// 7 bits
 	logic [3:0] Pr;			// 4
-	logic [5:0] resv;		// 6
-	logic [3:0] op2;		// 4
+	logic [2:0] resv;		// 3
+	logic [2:0] op3;		// 3
+	logic [3:0] op4;		// 4
 	regspec_t Rc;				// 9
 	regspec_t Rb;				// 9
 	regspec_t Ra;				// 9
@@ -1303,13 +1323,15 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [21:0] disp;		// 22
+	logic [3:0] dispHi;		// 4
 	prec_t prc;						// 3
-	logic [3:0] Pr;				// 4
-	logic i;							// 1
+	logic [2:0] Pr;				// 3
+	logic resv2;					// 1
+	logic [18:0] dispLo;	// 19
 	regspec_t Rb;					// 9
 	regspec_t	Ra;					// 9
-	logic [2:0] resv;			// 3
+	logic resv;						// 1
+	br_amode_t md;				// 2
 	logic [1:0] inc;			// 2
 	branch_fn_t fn;				// 4
 	opcode_t opcode;			// 7
@@ -1317,13 +1339,15 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [21:0] disp;		// 22
+	logic [3:0] dispHi;		// 4
 	prec_t prc;						// 3
-	logic [3:0] Pr;				// 4
-	logic i;							// 1
+	logic [2:0] Pr;				// 3
+	logic resv2;					// 1
+	logic [18:0] dispLo;	// 19
 	regspec_t Rb;					// 9
 	regspec_t	Ra;					// 9
-	logic [2:0] resv;			// 3
+	logic resv;						// 1
+	br_amode_t md;				// 2
 	logic [1:0] inc;			// 2
 	fbranch_fn_t fn;			// 4
 	opcode_t opcode;			// 7
@@ -1550,6 +1574,9 @@ typedef struct packed
 	cpu_types_pkg::pc_address_t brtgt;
 	cpu_types_pkg::mc_address_t mcbrtgt;			// micro-code branch target
 	logic takb;								// 1=branch evaluated to taken
+	logic hwi;								// hardware interrupt occured during fetch
+	logic [2:0] hwi_level;		// the level of the hardware interrupt
+	logic [2:0] irq_mask;			// irq mask from sr.ipl or atom
 	cause_code_t exc;					// non-zero indicate exception
 	logic excv;								// 1=exception
 	// The following fields are loaded at enqueue time, but otherwise do not change.
@@ -1737,12 +1764,6 @@ typedef struct packed {
 	logic bt;									// branch to be taken as predicted
 	operating_mode_t om;			// operating mode
 	decode_bus_t decbus;			// decoded instruction
-	cpu_types_pkg::pregno_t pRa;							// physical registers (see decode bus for arch. regs)
-	cpu_types_pkg::pregno_t pRb;
-	cpu_types_pkg::pregno_t pRc;
-	cpu_types_pkg::pregno_t pRt;							// current Rt value
-	cpu_types_pkg::pregno_t nRt;							// new Rt
-	cpu_types_pkg::pregno_t pRm;							// current Rt value
 	logic [3:0] cndx;					// checkpoint index
 	pipeline_reg_t op;			// original instruction
 	cpu_types_pkg::pc_address_ex_t pc;			// PC of instruction

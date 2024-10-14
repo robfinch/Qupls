@@ -37,7 +37,8 @@
 
 import QuplsPkg::*;
 
-module Qupls_btb(rst, clk, en, clk_en, rclk, micro_code_active, block_header,
+module Qupls_btb(rst, clk, en, clk_en, nmi, nmi_addr, irq, irq_addr,
+	rclk, micro_code_active, block_header,
 	igrp, length_byte,
 	pc, pc0, pc1, pc2, pc3, pc4, next_pc, p_override, po_bno,
 	takb0, takb1, takb2, takb3, do_bsr, bsr_tgt, pe_bsdone,
@@ -54,6 +55,10 @@ input rst;
 input clk;
 input en;
 input clk_en;										// enable group to advance
+input nmi;											// non-maskable interrupt
+input pc_address_t nmi_addr;
+input irq;
+input pc_address_t irq_addr;
 input rclk;
 input ibh_t block_header;
 input micro_code_active;
@@ -534,6 +539,15 @@ else begin
 	// On a branch miss the misspc will have the correct block so the
 	// cache line can be fetched, but the group will not be valid yet.
 	// The group is loaded at state 1 below.
+	/*
+	if (nmi) begin
+		next_pcs[pc.bno_t] = nmi_addr;
+	end
+	else if (irq) begin
+		next_pcs[pc.bno_t] = irq_addr;
+	end
+	else
+	*/
 	if (do_bsr) begin
 		next_pcs[bsr_tgt.bno_t] = bsr_tgt;
 	end

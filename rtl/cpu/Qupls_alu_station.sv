@@ -153,17 +153,17 @@ else begin
 			// follows:
 			case({rob.decbus.bitwise,rob.decbus.Ran})
 			2'd0,2'd2:
-				if (PERFORMANCE && wrport0_v && wrport0_Rt==rob.pRa)
+				if (PERFORMANCE && wrport0_v && wrport0_Rt==rob.op.pRa)
 					argA <= wrport0_res;
 				else
 					argA <= rfo_argA;
 			2'd1:
-				if (PERFORMANCE && wrport0_v && wrport0_Rt==rob.pRa)
+				if (PERFORMANCE && wrport0_v && wrport0_Rt==rob.op.pRa)
 					argA <= -wrport0_res;
 				else
 					argA <= -rfo_argA;
 			2'd3:
-				if (PERFORMANCE && wrport0_v && wrport0_Rt==rob.pRa)
+				if (PERFORMANCE && wrport0_v && wrport0_Rt==rob.op.pRa)
 					argA <= ~wrport0_res;
 				else
 					argA <= ~rfo_argA;
@@ -187,7 +187,7 @@ else begin
 		argA_ctag <= rfo_argA_ctag;
 		argB_ctag <= rfo_argB_ctag;
 		cs <= rob.decbus.Rcc;
-		nRt <= rob.nRt;
+		nRt <= rob.op.nRt;
 		aRt <= rob.decbus.Rt;
 		aRtz <= rob.decbus.Rt==8'd00;//rob.decbus.Rtz; <- this did not work
 		pred <= rob.decbus.pred;

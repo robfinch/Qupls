@@ -133,8 +133,8 @@ begin
 		end
 	OP_RTD:
 		begin
-			immb = {{32{ins.ins[63]}},ins.ins[63:32]};
-			has_immb = 1'b1;
+			immc = {{32{ins.ins[63]}},ins.ins[63:32]};
+			has_immc = 1'b1;
 		end
 	OP_JSR:
 		begin
@@ -154,7 +154,8 @@ begin
 		end
 	OP_Bcc,OP_BccU,OP_FBcc:
 		begin
-			immc = {{44{ins.ins[63]}},ins.ins[63:44]};
+			immc = {{38{ins.ins.br.dispHi[3]}},ins.ins.br.dispHi,ins.ins.br.dispLo};
+//			immc = {{44{ins.ins[63]}},ins.ins[63:44]};
 			has_immc = 1'b1;
 		end
 	OP_PFXAB:

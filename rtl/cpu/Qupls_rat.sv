@@ -497,7 +497,7 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 				end
 			end
 
-		always_ff @(posedge clk)
+		always_ff @(negedge clk)
 			if (rst)
 				prn[g] <= 9'd0;
 			// If there is a pipeline bubble.
