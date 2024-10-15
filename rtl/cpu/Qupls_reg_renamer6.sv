@@ -312,6 +312,9 @@ begin
 	next_avail[0] = 1'b0;
 end
 
+wire cd_avail;
+change_det #(512) ucdavail1 (.rst(rst), .clk(clk), .ce(1'b1), .i(avail), .cd(cd_avail));
+
 always_ff @(posedge clk)
 if (rst) begin
 	avail = {{PREGS-1{1'b1}},1'b0};
@@ -325,14 +328,14 @@ if (rst) begin
 	pavail = {{PREGS-1{1'b1}},1'b0};
 	pavail[0] = 1'b0;
 end
-else if (en)
+else if (cd_avail)
 	pavail <= avail;
 always_ff @(posedge clk)
 if (rst) begin
 	pavail2 = {{PREGS-1{1'b1}},1'b0};
 	pavail2[0] = 1'b0;
 end
-else if (en)
+else if (cd_avail)
 	pavail2 <= pavail;
 
 

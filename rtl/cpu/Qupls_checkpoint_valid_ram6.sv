@@ -64,7 +64,7 @@ input ncp;
 input [AWID-1:0] ncp_ra;
 input [AWID-1:0] ncp_wa;
 
-integer n,nr,nw;
+integer n,nr;
 (* RAM_STYLE="distributed" *)
 reg [PREGS-1:0] mem [0:NCHECK-1];
 reg [NRDPORTS-1:0] doutb1;
@@ -88,13 +88,13 @@ end
 
 always_comb
 begin
-	for (nw = 0; nw < NWRPORTS; nw = nw + 1) begin
+//	for (nw = 0; nw < NWRPORTS; nw = nw + 1) begin
 	for (nr = 0; nr < NRDPORTS; nr = nr + 1) begin
-		doutb1[nr] = (pregb[nr]==9'd0 || pregb[nr]==PREGS-1) ? 1'b1 : 
+		doutb1[nr] = (pregb[nr]==9'd0) ? 1'b1 : 
 //			pregb[nr]==prega[nw] && cpb[nr]==cpa[nw] ? dina[nw] :
 			mem[cpb[nr]][pregb[nr]];
 	end
-	end
+//	end
 end
 always_comb//ff @(posedge clkb)
 if (rst)

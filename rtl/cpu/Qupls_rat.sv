@@ -319,17 +319,8 @@ Qupls_checkpoint_valid_ram4 #(.NRDPORT(NPORT)) ucpr2
 	.o(cpv_o)
 );
 */
-always_comb
-begin
-	if ((cpv_wa[4]==9'd85 && cpv_awa[4]==8'd35) ||
-		(cpv_wa[5]==9'd85 && cpv_awa[5]==8'd35) ||
-		(cpv_wa[6]==9'd85 && cpv_awa[6]==8'd35) ||
-		(cpv_wa[7]==9'd85 && cpv_awa[7]==8'd35)
-		)
-		$finish;
-end
 
-Qupls_checkpoint_valid_ram6 #(.NWRPORTS(8), .NRDPORTS(NPORT)) ucpvram1
+Qupls_checkpoint_valid_ram6 #(.NWRPORTS(9), .NRDPORTS(NPORT)) ucpvram1
 (
 	.rst(rst),
 	.clka(clk),
@@ -338,9 +329,9 @@ Qupls_checkpoint_valid_ram6 #(.NWRPORTS(8), .NRDPORTS(NPORT)) ucpvram1
 	.cpa(cpv_wc),
 	.prega(cpv_wa),
 	.dina(cpv_i),
-	.clkb(~clk),
+	.clkb(clk),
 	.enb(1'b1),
-	.pregb(prn),
+	.pregb(next_prn),
 	.cpb(rn_cp),
 	.doutb(cpv_o),
 	.ncp(new_chkpt),
@@ -431,7 +422,9 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 													cpram_out.regmap[rn[g]];		// No bypasses needed here
 						end
 					3'd1: next_prn[g] = 
+													/*
 													(rn[g]==wra && wr0 && rn_cp[g]==wra_cp) ? wrra :
+													*/
 													/*
 													(bypass_pwrrd0[g] && bypass_en) ? pwrrd :
 													(bypass_pwrrc0[g] && bypass_en) ? pwrrc :
@@ -448,8 +441,10 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 													//qbr0 ? cpram_out1.regmap[rn[g]] :
 													cpram_out.regmap[rn[g]];
 					3'd2: next_prn[g] = 
+													/*
 													(rn[g]==wrb && wr1 && rn_cp[g]==wrb_cp) ? wrrb :
 													(rn[g]==wra && wr0 && rn_cp[g]==wra_cp) ? wrra :
+													*/
 													/*
 													(bypass_pwrrd0[g] && bypass_en) ? pwrrd :
 													(bypass_pwrrc0[g] && bypass_en) ? pwrrc :
@@ -467,10 +462,11 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 													//qbr0|qbr1 ? cpram_out1.regmap[rn[g]] :
 												 	cpram_out.regmap[rn[g]];
 					3'd3: next_prn[g] = 
-													
+													/*													
 													(rn[g]==wrc && wr2 && rn_cp[g]==wrc_cp) ? wrrc :
 													(rn[g]==wrb && wr1 && rn_cp[g]==wrb_cp) ? wrrb :
 													(rn[g]==wra && wr0 && rn_cp[g]==wra_cp) ? wrra :
+													*/
 												  /*
 													(bypass_pwrrd0[g] && bypass_en) ? pwrrd :
 													(bypass_pwrrc0[g] && bypass_en) ? pwrrc :
@@ -1187,7 +1183,7 @@ else begin
 	if (!restore && backout_state==2'd1) begin
 		bo_wr <= TRUE;
 		bo_areg <= rob[backout_id].op.aRt;
-		bo_preg <= rob[backout_id].pRt;
+		bo_preg <= rob[backout_id].op.pRt;
 	end
 end
 
@@ -1999,7 +1995,7 @@ begin
 	else begin
 		if (cdcmtav | cdcmtbv | cdcmtcv | cdcmtdv)
 			cpram_we = TRUE;
-		if (en2d & (wr0 | wr1 | wr2 | wr3))
+		if (en2d & (cdwr0 | cdwr1 | cdwr2 | cdwr3))
 			cpram_we = TRUE;
 	end
 end
