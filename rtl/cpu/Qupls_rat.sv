@@ -227,11 +227,11 @@ cpram1
 	.doutb(cpram_out)
 );
 
-reg [8:0] cpv_wr;
-checkpt_ndx_t [8:0] cpv_wc;
-cpu_types_pkg::pregno_t [8:0] cpv_wa;
-cpu_types_pkg::aregno_t [8:0] cpv_awa;
-reg [8:0] cpv_i;
+reg [9:0] cpv_wr;
+checkpt_ndx_t [9:0] cpv_wc;
+cpu_types_pkg::pregno_t [9:0] cpv_wa;
+cpu_types_pkg::aregno_t [9:0] cpv_awa;
+reg [9:0] cpv_i;
 wire [NPORT-1:0] cpv_o;
 wire cdwr0;
 wire cdwr1;
@@ -259,6 +259,7 @@ always_comb cpv_wr[5] = cdwr1;
 always_comb cpv_wr[6] = cdwr2;
 always_comb cpv_wr[7] = cdwr3;
 always_comb cpv_wr[8] = bo_wr;
+always_comb cpv_wr[9] = 1'b0;
 always_comb cpv_wc[0] = cmta_cp;
 always_comb cpv_wc[1] = cmtb_cp;
 always_comb cpv_wc[2] = cmtc_cp;
@@ -268,6 +269,7 @@ always_comb cpv_wc[5] = wrb_cp;
 always_comb cpv_wc[6] = wrc_cp;
 always_comb cpv_wc[7] = wrd_cp;
 always_comb cpv_wc[8] = wndx;
+always_comb cpv_wc[9] = wndx;
 always_comb cpv_wa[0] = cmtap;
 always_comb cpv_wa[1] = cmtbp;
 always_comb cpv_wa[2] = cmtcp;
@@ -277,6 +279,7 @@ always_comb cpv_wa[5] = wrrb;
 always_comb cpv_wa[6] = wrrc;
 always_comb cpv_wa[7] = wrrd;
 always_comb cpv_wa[8] = bo_preg;
+always_comb cpv_wa[9] = bo_preg;
 always_comb cpv_awa[0] = cmtaa;
 always_comb cpv_awa[1] = cmtba;
 always_comb cpv_awa[2] = cmtca;
@@ -286,6 +289,7 @@ always_comb cpv_awa[5] = wrb;
 always_comb cpv_awa[6] = wrc;
 always_comb cpv_awa[7] = wrd;
 always_comb cpv_awa[8] = bo_areg;
+always_comb cpv_awa[9] = bo_areg;
 // Commit: write VAL for register
 // Assign Tgt: write INV for register
 always_comb cpv_i[0] = VAL;
@@ -297,6 +301,7 @@ always_comb cpv_i[5] = INV;//wrb==8'd0;
 always_comb cpv_i[6] = INV;//wrc==8'd0;
 always_comb cpv_i[7] = INV;//wrd==8'd0;
 always_comb cpv_i[8] = VAL;
+always_comb cpv_i[9] = VAL;
 
 /*
 Qupls_checkpoint_valid_ram4 #(.NRDPORT(NPORT)) ucpr2
@@ -320,9 +325,11 @@ Qupls_checkpoint_valid_ram4 #(.NRDPORT(NPORT)) ucpr2
 );
 */
 
-Qupls_checkpoint_valid_ram6 #(.NWRPORTS(9), .NRDPORTS(NPORT)) ucpvram1
+Qupls_checkpoint_valid_ram7 #(.NWRPORTS(10), .NRDPORTS(NPORT)) ucpvram1
 (
 	.rst(rst),
+	.clk5x(clk5x),
+	.ph4(ph4),
 	.clka(clk),
 	.ena(1'b1),
 	.wea(cpv_wr),

@@ -38,156 +38,180 @@ import const_pkg::*;
 import cpu_types_pkg::*;
 import QuplsPkg::*;
 
-module Qupls_pipeline_ren(rst, clk, clk5x, ph4, restore, );
+module Qupls_pipeline_ren(
+	rst, clk, clk5x, ph4, en, nq, restore, restored, restore_list, miss_cp,
+	new_chkpt, chkpt_amt, tail0, rob, robentry_stomp, avail_reg, sr,
+	stomp_bno, branch_state,
+	arn, arng, arnt, arnv, rn_cp, store_argC_pReg, prn, prnv,
+	Rt0_dec, Rt1_dec, Rt2_dec, Rt3_dec, Rt0_decv, Rt1_decv, Rt2_decv, Rt3_decv, 
+	Rt0_ren, Rt1_ren, Rt2_ren, Rt3_ren, Rt0_renv, Rt1_renv, Rt2_renv, Rt3_renv, 
+	ins0_dec, ins1_dec, ins2_dec, ins3_dec, 
+	ins0_ren, ins1_ren, ins2_ren, ins3_ren, 
+
+	wrport0_v, wrport1_v, wrport2_v, wrport3_v, 
+	wrport0_aRt, wrport1_aRt, wrport2_aRt, wrport3_aRt, 
+	wrport0_Rt, wrport1_Rt, wrport2_Rt, wrport3_Rt, 
+	wrport0_res, wrport1_res, wrport2_res, wrport3_res, 
+	wrport0_cp, wrport1_cp, wrport2_cp, wrport3_cp, 
+
+	cmtbr,
+	tags2free, freevals, free_chkpt, fchkpt, backout, fcu_id,
+	bo_wr, bo_areg, bo_preg,
+	cndx,
+	rat_stallq,
+	micro_code_active_dec, micro_code_active_ren
+);
 input rst;
 input clk;
 input clk5x;
 input [4:0] ph4;
+input en;
+input nq;
 input restore;
+output restored;
+output [PREGS-1:0] restore_list;
+input checkpt_ndx_t miss_cp;
+input new_chkpt;
+input [2:0] chkpt_amt;
+input rob_ndx_t tail0;
+input rob_entry_t [ROB_ENTRIES-1:0] rob;
+input [ROB_ENTRIES-1:0] robentry_stomp;
+input [PREGS-1:0] avail_reg;
+input status_reg_t sr;
+input [4:0] stomp_bno;
+input branch_state_t branch_state;
+input aregno_t [23:0] arn;
+input [2:0] arng [0:23];
+input [23:0] arnt;
+input [23:0] arnv;
+input checkpt_ndx_t [23:0] rn_cp;
+output pregno_t [23:0] prn;
+output [23:0] prnv;
+input pregno_t store_argC_pReg;
+input pregno_t Rt0_dec;
+input pregno_t Rt1_dec;
+input pregno_t Rt2_dec;
+input pregno_t Rt3_dec;
+input Rt0_decv;
+input Rt1_decv;
+input Rt2_decv;
+input Rt3_decv;
+input pipeline_reg_t ins0_dec;
+input pipeline_reg_t ins1_dec;
+input pipeline_reg_t ins2_dec;
+input pipeline_reg_t ins3_dec;
+output pipeline_reg_t ins0_ren;
+output pipeline_reg_t ins1_ren;
+output pipeline_reg_t ins2_ren;
+output pipeline_reg_t ins3_ren;
+output pregno_t Rt0_ren;
+output pregno_t Rt1_ren;
+output pregno_t Rt2_ren;
+output pregno_t Rt3_ren;
+output reg Rt0_renv;
+output reg Rt1_renv;
+output reg Rt2_renv;
+output reg Rt3_renv;
+input wrport0_v;
+input wrport1_v;
+input wrport2_v;
+input wrport3_v;
+input aregno_t wrport0_aRt;
+input aregno_t wrport1_aRt;
+input aregno_t wrport2_aRt;
+input aregno_t wrport3_aRt;
+input pregno_t wrport0_Rt;
+input pregno_t wrport1_Rt;
+input pregno_t wrport2_Rt;
+input pregno_t wrport3_Rt;
+input value_t wrport0_res;
+input value_t wrport1_res;
+input value_t wrport2_res;
+input value_t wrport3_res;
+input checkpt_ndx_t wrport0_cp;
+input checkpt_ndx_t wrport1_cp;
+input checkpt_ndx_t wrport2_cp;
+input checkpt_ndx_t wrport3_cp;
+input cmtbr;
+output pregno_t [3:0] tags2free;
+output [3:0] freevals;
+input free_chkpt;
+input [4:0] fchkpt;
+output backout;
+input rob_ndx_t fcu_id;
+output bo_wr;
+output aregno_t bo_areg;
+output pregno_t bo_preg;
+output checkpt_ndx_t cndx;
+output rat_stallq;
+input micro_code_active_dec;
+output reg micro_code_active_ren;
 
-wire restored;
-wire [PREGS-1:0] restore_list;
-pregno_t [3:0] tags2free;
-wire [3:0] freevals;
+integer jj;
+reg [0:0] arnbank [23:0];
+initial begin
+	for (jj = 0; jj < 24; jj = jj + 1)
+		arnbank[jj] = 1'b0;
+end
 
-generate begin : gRenamer
-	if (SUPPORT_RENAMER) begin
-	if (RENAMER==3) begin
-Qupls_reg_renamer3 utrn2
-(
-	.rst(rst_i),		// rst_i here not irst!
-	.clk(clk),
-	.clk5x(clk5x),
-	.ph4(ph4),
-	.en(advance_pipeline_seg2),
-	.restore(restored),
-	.restore_list(restore_list),
-	.tags2free(tags2free),
-	.freevals(freevals),
-	.alloc0(ins0_dec.aRt!=8'd0 && ins0_dec.v),// & ~stomp0),
-	.alloc1(ins1_dec.aRt!=8'd0 && ins1_dec.v),// & ~stomp1),
-	.alloc2(ins2_dec.aRt!=8'd0 && ins2_dec.v),// & ~stomp2),
-	.alloc3(ins3_dec.aRt!=8'd0 && ins3_dec.v),// & ~stomp3),
-	.wo0(Rt0_dec),
-	.wo1(Rt1_dec),
-	.wo2(Rt2_dec),
-	.wo3(Rt3_dec),
-	.wv0(Rt0_decv),
-	.wv1(Rt1_decv),
-	.wv2(Rt2_decv),
-	.wv3(Rt3_decv),
-	.avail(avail_reg),
-	.stall(ren_stallq)
-);
-assign ren_rst_busy = FALSE;
+pipeline_reg_t nopi;
+
+// Define a NOP instruction.
+always_comb
+begin
+	nopi = {$bits(pipeline_reg_t){1'b0}};
+	nopi.pc = RSTPC;
+	nopi.pc.bno_t = 6'd1;
+	nopi.pc.bno_f = 6'd1;
+	nopi.mcip = 12'h1A0;
+	nopi.len = 4'd6;
+	nopi.ins = {57'd0,OP_NOP};
+	nopi.pred_btst = 6'd0;
+	nopi.element = 'd0;
+	nopi.aRa = 8'd0;
+	nopi.aRb = 8'd0;
+	nopi.aRc = 8'd0;
+	nopi.aRt = 8'd0;
+	nopi.decbus.Rtz = 1'b1;
+	nopi.decbus.nop = 1'b1;
+	nopi.decbus.alu = 1'b1;
 end
-else if (RENAMER==4)
-Qupls_reg_renamer4 utrn1
-(
-	.rst(rst_i),		// rst_i here not irst!
-	.clk(clk),
-//	.clk5x(clk5x),
-//	.ph4(ph4),
-	.en(advance_pipeline_seg2),
-	.restore(restored),
-	.restore_list(restore_list),
-	.tags2free(tags2free),
-	.freevals(freevals),
-	.alloc0(ins0_dec.aRt!=8'd0 && ins0_dec.v),// & ~stomp0),
-	.alloc1(ins1_dec.aRt!=8'd0 && ins1_dec.v),// & ~stomp1),
-	.alloc2(ins2_dec.aRt!=8'd0 && ins2_dec.v),// & ~stomp2),
-	.alloc3(ins3_dec.aRt!=8'd0 && ins3_dec.v),// & ~stomp3),
-	.wo0(Rt0_dec),
-	.wo1(Rt1_dec),
-	.wo2(Rt2_dec),
-	.wo3(Rt3_dec),
-	.wv0(Rt0_decv),
-	.wv1(Rt1_decv),
-	.wv2(Rt2_decv),
-	.wv3(Rt3_decv),
-	.avail(avail_reg),
-	.stall(ren_stallq),
-	.rst_busy(ren_rst_busy)
-);
-else
-Qupls_reg_renamer6 utrn1
-(
-	.rst(rst_i),		// rst_i here not irst!
-	.clk(clk),
-//	.clk5x(clk5x),
-//	.ph4(ph4),
-	.en(advance_pipeline_seg2),
-	.restore(restored),
-	.restore_list(restore_list),
-	.tags2free(tags2free),
-	.freevals(freevals),
-	.alloc0(ins0_dec.aRt!=8'd0 && ins0_dec.v && !ins3_ren.decbus.bsr),// & ~stomp0),
-	.alloc1(ins1_dec.aRt!=8'd0 && ins1_dec.v && !ins3_ren.decbus.bsr&& !ins0_dec.decbus.bsr),// & ~stomp1),
-	.alloc2(ins2_dec.aRt!=8'd0 && ins2_dec.v && !ins3_ren.decbus.bsr&& !ins0_dec.decbus.bsr && !ins1_dec.decbus.bsr),// & ~stomp2),
-	.alloc3(ins3_dec.aRt!=8'd0 && ins3_dec.v && !ins3_ren.decbus.bsr&& !ins0_dec.decbus.bsr && !ins1_dec.decbus.bsr && !ins2_dec.decbus.bsr),// & ~stomp3),
-	.wo0(Rt0_dec),
-	.wo1(Rt1_dec),
-	.wo2(Rt2_dec),
-	.wo3(Rt3_dec),
-	.wv0(Rt0_decv),
-	.wv1(Rt1_decv),
-	.wv2(Rt2_decv),
-	.wv3(Rt3_decv),
-	.avail(avail_reg),
-	.stall(ren_stallq),
-	.rst_busy(ren_rst_busy)
-);
-end
-else begin
-	assign Rt0_dec = ins0_dec.aRt;
-	assign Rt1_dec = ins1_dec.aRt;
-	assign Rt2_dec = ins2_dec.aRt;
-	assign Rt3_dec = ins3_dec.aRt;
-	assign Rt0_decv = TRUE;
-	assign Rt1_decv = TRUE;
-	assign Rt2_decv = TRUE;
-	assign Rt3_decv = TRUE;
-	assign ren_stallq = FALSE;
-	assign ren_rst_busy = FALSE;
-end
-//assign ren_rst_busy = 1'b0;
-end
-endgenerate
 
 always_ff @(posedge clk)
-if (irst)
+if (rst)
 	Rt0_ren <= 9'd0;
 else begin
-	if (advance_pipeline_seg2) 
+	if (en) 
 		Rt0_ren <= Rt0_decv ? Rt0_dec : 9'd0;
 end
 always_ff @(posedge clk)
-if (irst)
+if (rst)
 	Rt1_ren <= 10'd0;
 else begin
-	if (advance_pipeline_seg2) 
+	if (en) 
 		Rt1_ren <= Rt1_decv ? Rt1_dec : 9'd0;
 end
 always_ff @(posedge clk)
-if (irst)
+if (rst)
 	Rt2_ren <= 10'd0;
 else begin
-	if (advance_pipeline_seg2) 
+	if (en) 
 		Rt2_ren <= Rt2_decv ? Rt2_dec : 9'd0;
 end
 always_ff @(posedge clk)
-if (irst)
+if (rst)
 	Rt3_ren <= 10'd0;
 else begin
-	if (advance_pipeline_seg2) 
+	if (en) 
 		Rt3_ren <= Rt3_decv ? Rt3_dec : 9'd0;
 end
 
-always_ff @(posedge clk) if (irst) Rt0_renv <= 1'b0; else if (advance_pipeline_seg2) Rt0_renv <= Rt0_decv;
-always_ff @(posedge clk) if (irst) Rt1_renv <= 1'b0; else if (advance_pipeline_seg2) Rt1_renv <= Rt1_decv;
-always_ff @(posedge clk) if (irst) Rt2_renv <= 1'b0; else if (advance_pipeline_seg2) Rt2_renv <= Rt2_decv;
-always_ff @(posedge clk) if (irst) Rt3_renv <= 1'b0; else if (advance_pipeline_seg2) Rt3_renv <= Rt3_decv;
+always_ff @(posedge clk) if (rst) Rt0_renv <= 1'b0; else if (en) Rt0_renv <= Rt0_decv;
+always_ff @(posedge clk) if (rst) Rt1_renv <= 1'b0; else if (en) Rt1_renv <= Rt1_decv;
+always_ff @(posedge clk) if (rst) Rt2_renv <= 1'b0; else if (en) Rt2_renv <= Rt2_decv;
+always_ff @(posedge clk) if (rst) Rt3_renv <= 1'b0; else if (en) Rt3_renv <= Rt3_decv;
 
+/*
 always_comb Rt0_q1 = Rt0_ren;// & {10{~ins0_ren.decbus.Rtz & ~stomp0}};
 always_comb Rt1_q1 = Rt1_ren;// & {10{~ins1_ren.decbus.Rtz & ~stomp1}};
 always_comb Rt2_q1 = Rt2_ren;// & {10{~ins2_ren.decbus.Rtz & ~stomp2}};
@@ -196,94 +220,95 @@ always_comb Rt0_que = Rt0_ren;
 always_comb Rt1_que = Rt1_ren;
 always_comb Rt2_que = Rt2_ren;
 always_comb Rt3_que = Rt3_ren;
+*/
 /*
 always_ff @(posedge clk)
-if (irst)
+if (rst)
 	Rt0_que <= 8'd0;
 else begin
 	if (advance_pipeline_seg2)
 		Rt0_que <= Rt0_ren;
 end
 always_ff @(posedge clk)
-if (irst)
+if (rst)
 	Rt1_que <= 8'd0;
 else begin
 	if (advance_pipeline_seg2)
 		Rt1_que <= Rt1_ren;
 end
 always_ff @(posedge clk)
-if (irst)
+if (rst)
 	Rt2_que <= 8'd0;
 else begin
 	if (advance_pipeline_seg2)
 		Rt2_que <= Rt2_ren;
 end
 always_ff @(posedge clk)
-if (irst)
+if (rst)
 	Rt3_que <= 8'd0;
 else begin
 	if (advance_pipeline_seg2)
 		Rt3_que <= Rt3_ren;
 end
 always_ff @(posedge clk)
-if (irst)
+if (rst)
 	Rt0_q1 <= 8'd0;
 else begin
 	if (advance_pipeline_seg2)
 		Rt0_q1 <= Rt0_ren;
 end
 always_ff @(posedge clk)
-if (irst)
+if (rst)
 	Rt1_q1 <= 8'd0;
 else begin
 	if (advance_pipeline_seg2)
 		Rt1_q1 <= Rt1_ren;
 end
 always_ff @(posedge clk)
-if (irst)
+if (rst)
 	Rt2_q1 <= 8'd0;
 else begin
 	if (advance_pipeline_seg2)
 		Rt2_q1 <= Rt2_ren;
 end
 always_ff @(posedge clk)
-if (irst)
+if (rst)
 	Rt3_q1 <= 8'd0;
 else begin
 	if (advance_pipeline_seg2)
 		Rt3_q1 <= Rt3_ren;
 end
 */
-
+/*
 always_ff @(posedge clk)
-if (irst)
+if (rst)
 	Rt0_pq <= 11'd0;
 else begin
 	if (advance_pipeline_seg2)
 		Rt0_pq <= Rt0_ren;
 end
 always_ff @(posedge clk)
-if (irst)
+if (rst)
 	Rt1_pq <= 11'd0;
 else begin
 	if (advance_pipeline_seg2)
 		Rt1_pq <= Rt1_ren;
 end
 always_ff @(posedge clk)
-if (irst)
+if (rst)
 	Rt2_pq <= 11'd0;
 else begin
 	if (advance_pipeline_seg2)
 		Rt2_pq <= Rt2_ren;
 end
 always_ff @(posedge clk)
-if (irst)
+if (rst)
 	Rt3_pq <= 11'd0;
 else begin
 	if (advance_pipeline_seg2)
 		Rt3_pq <= Rt3_ren;
 end
-
+*/
 /*
 always_ff @(posedge clk)
 if (advance_pipeline) begin
@@ -319,36 +344,31 @@ begin
 			$finish;
 end
 */
-
-reg free_chkpt;
-checkpt_ndx_t fchkpt;
-checkpt_ndx_t miss_cp;
-always_comb
-	miss_cp = rob[missid].cndx;
-assign cndx1 = cndx0;
-assign cndx2 = cndx0;
-assign cndx3 = cndx0;
+wire cndx1, cndx2, cndx3;
+assign cndx1 = cndx;
+assign cndx2 = cndx;
+assign cndx3 = cndx;
 
 `ifdef SUPPORT_RAT
 Qupls_rat #(.NPORT(24)) urat1
 (	
-	.rst(irst),
+	.rst(rst),
 	.clk(clk),
 	.clk5x(clk5x),
 	.ph4(ph4),
-	.en(advance_pipeline),
-	.en2(advance_pipeline_seg2),
+	.en(en),
+	.en2(en),
 	.nq(nq),
-	.inc_chkpt(inc_chkpt),
-	.chkpt_inc_amt(chkpt_inc_amt),
+	.inc_chkpt(new_chkpt),
+	.chkpt_inc_amt(chkpt_amt),
 	.stallq(rat_stallq),
-	.cndx_o(cndx0),
+	.cndx_o(cndx),
 	.pcndx_o(),
 	.tail(tail0),
 	.rob(rob),
 	.stomp(robentry_stomp),// & {32{branch_state==BS_CAPTURE_MISSPC}}),
 	.avail_i(avail_reg),
-	.restore(restore_chkpt),
+	.restore(restore),
 	.miss_cp(miss_cp),
 	.qbr0(ins0_dec.decbus.br),
 	.qbr1(ins1_dec.decbus.br),
@@ -379,10 +399,10 @@ Qupls_rat #(.NPORT(24)) urat1
 	.wrrb(Rt1_dec),
 	.wrrc(Rt2_dec),
 	.wrrd(Rt3_dec),
-	.wra_cp(cndx0),
-	.wrb_cp(cndx0),
-	.wrc_cp(cndx0),
-	.wrd_cp(cndx0),
+	.wra_cp(cndx),
+	.wrb_cp(cndx),
+	.wrc_cp(cndx),
+	.wrd_cp(cndx),
 	.cmtbanka(1'b0),
 	.cmtbankb(1'b0),
 	.cmtbankc(1'b0),
@@ -428,7 +448,7 @@ Qupls_rat #(.NPORT(24)) urat1
 	assign bo_preg = 9'd0;
 	assign prnv = 24'hFFFFFF;
 	always_ff @(posedge clk)
-	if (irst) begin
+	if (rst) begin
 		for (n5 = 0; n5 < 24; n5 = n5 + 1)
 			prn[n5] <= 9'd0;
 	end
@@ -441,7 +461,7 @@ Qupls_rat #(.NPORT(24)) urat1
 	end
 	/*
 	always_comb
-	if (irst) begin
+	if (rst) begin
 		for (n6 = 0; n6 < 24; n6 = n6 + 1)
 			prn[n6] = 9'd0;
 	end
@@ -479,6 +499,7 @@ always_ff @(posedge clk) begin
 		db3r.v <= FALSE;
 end
 */
+/*
 always_ff @(posedge clk) if (advance_pipeline_seg2) mcip0_ren <= mcip0_dec;
 always_ff @(posedge clk) if (advance_pipeline_seg2) mcip1_ren <= mcip1_dec;
 always_ff @(posedge clk) if (advance_pipeline_seg2) mcip2_ren <= mcip2_dec;
@@ -487,9 +508,10 @@ always_ff @(posedge clk) if (advance_pipeline_seg2) mcip0_que <= mcip0_ren;
 always_ff @(posedge clk) if (advance_pipeline_seg2) mcip1_que <= mcip1_ren;
 always_ff @(posedge clk) if (advance_pipeline_seg2) mcip2_que <= mcip2_ren;
 always_ff @(posedge clk) if (advance_pipeline_seg2) mcip3_que <= mcip3_ren;
-
+*/
+/*
 always_ff @(posedge clk)
-if (irst) begin
+if (rst) begin
 	pc0_f.bno_t <= 6'd1;
 	pc0_f.bno_f <= 6'd1;
 	pc0_f.pc <= RSTPC;
@@ -502,54 +524,51 @@ always_comb mcip0_mux = micro_ip;
 always_comb mcip1_mux = micro_ip|4'd1;
 always_comb mcip2_mux = micro_ip|4'd2;
 always_comb mcip3_mux = micro_ip|4'd3;
-
+*/
 /*
 always_ff @(posedge clk)
-if (irst)
+if (rst)
 	micro_code_active_f <= TRUE;
 else begin
 	if (advance_pipeline)
 		micro_code_active_f <= micro_code_active;
 end
 */
+/*
 always_ff @(posedge clk)
-if (irst)
+if (rst)
 	micro_code_active_x <= FALSE;
 else begin
 	if (advance_pipeline)
 		micro_code_active_x <= micro_code_active;
 end
+*/
 /*
 always_comb
 	micro_code_active_x = micro_code_active;
 */
 always_ff @(posedge clk)
-if (irst)
-	micro_code_active_d <= FALSE;
+if (rst)
+	micro_code_active_ren <= FALSE;
 else begin
-	if (advance_pipeline)
-		micro_code_active_d <= micro_code_active_x;
+	if (en)
+		micro_code_active_ren <= micro_code_active_dec;
 end
+/*
 always_ff @(posedge clk)
-if (irst)
-	micro_code_active_r <= FALSE;
-else begin
-	if (advance_pipeline_seg2)
-		micro_code_active_r <= micro_code_active_d;
-end
-always_ff @(posedge clk)
-if (irst)
+if (rst)
 	micro_code_active_q <= FALSE;
 else begin
 	if (advance_pipeline_seg2)
 		micro_code_active_q <= micro_code_active_r;
 end
-
+*/
 // The cycle after the length is calculated
 // instruction extract inputs
+/*
 pc_address_ex_t pc0_x1;
 always_ff @(posedge clk)
-if (irst) begin
+if (rst) begin
 	pc0_x1.bno_t <= 6'd1;
 	pc0_x1.bno_f <= 6'd1;
 	pc0_x1.pc <= RSTPC;
@@ -578,7 +597,8 @@ begin
 	pc3_fet = pc0_fet;
 	pc3_fet.pc = micro_code_active ? pc0_fet.pc : pc0_fet.pc + 6'd24;
 end
-
+*/
+/*
 always_ff @(posedge clk)
 if (advance_pipeline)
 	qd_x <= qd;
@@ -591,8 +611,9 @@ if (advance_pipeline_seg2)
 always_ff @(posedge clk)
 if (advance_pipeline_seg2)
 	qd_q <= qd_r;
-
+*/
 // Register fetch/rename stage inputs
+/*
 always_ff @(posedge clk)
 if (advance_pipeline_seg2)
 	pc0_r <= ins0_dec.pc;//pc0_d;
@@ -605,16 +626,16 @@ if (advance_pipeline_seg2)
 always_ff @(posedge clk)
 if (advance_pipeline_seg2)
 	pc3_r <= ins3_dec.pc;//pc3_d;
-
+*/
 always_ff @(posedge clk)
-if (irst) begin
+if (rst) begin
 	ins0_ren <= nopi;
 	ins1_ren <= nopi;
 	ins2_ren <= nopi;
 	ins3_ren <= nopi;
 end
 else begin
-	if (advance_pipeline_seg2) begin
+	if (en) begin
 		if (ins0_dec.v) begin
 			ins0_ren <= ins0_dec;
 			ins0_ren.nRt <= Rt0_dec;
@@ -623,13 +644,13 @@ else begin
 		end
 		else begin
 			ins0_ren <= nopi;
+			ins0_ren.v <= INV;
 			ins0_ren.decbus.Rt <= ins0_ren.decbus.Rt;
 			ins0_ren.decbus.Rtn <= ins0_ren.decbus.Rtn;
 			ins0_ren.decbus.Rtz <= ins0_ren.decbus.Rtz;
 			ins0_ren.aRt <= ins0_ren.aRt;
 			ins0_ren.nRt <= ins0_ren.nRt;
 		end
-	end
 	/*
 	if (bo_wr) begin
 		if (ins0_dec.aRa==bo_areg)
@@ -642,7 +663,6 @@ else begin
 			ins0_ren.pRt <= bo_preg;
 	end
 	*/
-	if (advance_pipeline_seg2) begin
 		if (ins1_dec.v) begin
 			ins1_ren <= ins1_dec;
 			ins1_ren.nRt <= Rt1_dec;
@@ -653,14 +673,13 @@ else begin
 		end
 		else begin
 			ins1_ren <= nopi;
+			ins1_ren.v <= INV;
 			ins1_ren.decbus.Rt <= ins1_ren.decbus.Rt;
 			ins1_ren.decbus.Rtn <= ins1_ren.decbus.Rtn;
 			ins1_ren.decbus.Rtz <= ins1_ren.decbus.Rtz;
 			ins1_ren.aRt <= ins1_ren.aRt;
 			ins1_ren.nRt <= ins1_ren.nRt;
 		end
-	end
-	if (advance_pipeline_seg2) begin
 		if (ins2_dec.v) begin
 			ins2_ren <= ins2_dec;
 			ins2_ren.nRt <= Rt2_dec;
@@ -671,14 +690,13 @@ else begin
 		end
 		else begin
 			ins2_ren <= nopi;
+			ins2_ren.v <= INV;
 			ins2_ren.decbus.Rt <= ins2_ren.decbus.Rt;
 			ins2_ren.decbus.Rtn <= ins2_ren.decbus.Rtn;
 			ins2_ren.decbus.Rtz <= ins2_ren.decbus.Rtz;
 			ins2_ren.aRt <= ins2_ren.aRt;
 			ins2_ren.nRt <= ins2_ren.nRt;
 		end
-	end
-	if (advance_pipeline_seg2) begin
 		if (ins3_dec.v) begin
 			ins3_ren <= ins3_dec;
 			ins3_ren.nRt <= Rt3_dec;
@@ -699,6 +717,50 @@ else begin
 	if (branch_state==BS_DONE)
 		tInvalidateRen(stomp_bno);//misspc.bno_t);
 end
+
+// fet/mux/dec stages can be invalidated by turning the instruction in the
+// pipeline into a NOP operation. That is handled in the pipeline_seg1
+// module.
+// Rename stage needs its own invalidation as registers have been renamed
+// already, instructions must be turned into copy targets.
+
+task tInvalidateRen;
+input [4:0] bno;
+begin
+	if (ins0_ren.pc.bno_t!=bno) begin
+		ins0_ren.excv <= INV;
+		ins0_ren.decbus.cpytgt <= TRUE;
+		ins0_ren.decbus.alu <= TRUE;
+		ins0_ren.decbus.fpu <= FALSE;
+		ins0_ren.decbus.fc <= FALSE;
+		ins0_ren.decbus.mem <= FALSE;
+	end
+	if (ins1_ren.pc.bno_t!=bno) begin
+		ins1_ren.excv <= INV;
+		ins1_ren.decbus.cpytgt <= TRUE;
+		ins1_ren.decbus.alu <= TRUE;
+		ins1_ren.decbus.fpu <= FALSE;
+		ins1_ren.decbus.fc <= FALSE;
+		ins1_ren.decbus.mem <= FALSE;
+	end
+	if (ins2_ren.pc.bno_t!=bno) begin
+		ins2_ren.excv <= INV;
+		ins2_ren.decbus.cpytgt <= TRUE;
+		ins2_ren.decbus.alu <= TRUE;
+		ins2_ren.decbus.fpu <= FALSE;
+		ins2_ren.decbus.fc <= FALSE;
+		ins2_ren.decbus.mem <= FALSE;
+	end
+	if (ins3_ren.pc.bno_t!=bno) begin
+		ins3_ren.excv <= INV;
+		ins3_ren.decbus.cpytgt <= TRUE;
+		ins3_ren.decbus.alu <= TRUE;
+		ins3_ren.decbus.fpu <= FALSE;
+		ins3_ren.decbus.fc <= FALSE;
+		ins3_ren.decbus.mem <= FALSE;
+	end
+end
+endtask
 
 endmodule
 

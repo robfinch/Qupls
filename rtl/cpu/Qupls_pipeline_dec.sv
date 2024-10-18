@@ -43,11 +43,11 @@ module Qupls_pipeline_dec(rst_i, rst, clk, en, clk5x, ph4,
 	restore, restored, restore_list, sr,
 	tags2free, freevals,
 	ins0_dec_inv, ins1_dec_inv, ins2_dec_inv, ins3_dec_inv,
-	stomp_mux, stomp_bno, ins0_mux, ins1_mux, ins2_mux, ins3_mux,
+	stomp_mux, stomp_bno, ins0_mux, ins1_mux, ins2_mux, ins3_mux, ins4_mux,
 	Rt0_dec, Rt1_dec, Rt2_dec, Rt3_dec, Rt0_decv, Rt1_decv, Rt2_decv, Rt3_decv,
 	micro_code_active_mux, micro_code_active_dec,
 	ins0_dec, ins1_dec, ins2_dec, ins3_dec, pc0_dec, pc1_dec, pc2_dec, pc3_dec,
-	ren_stallq, ren_rst_busy
+	ren_stallq, ren_rst_busy, avail_reg
 );
 input rst_i;
 input rst;
@@ -65,6 +65,7 @@ input pipeline_reg_t ins0_mux;
 input pipeline_reg_t ins1_mux;
 input pipeline_reg_t ins2_mux;
 input pipeline_reg_t ins3_mux;
+input pipeline_reg_t ins4_mux;
 input pregno_t [3:0] tags2free;
 input [3:0] freevals;
 input ins0_dec_inv;
@@ -91,6 +92,7 @@ output ren_stallq;
 output ren_rst_busy;
 input micro_code_active_mux;
 output reg micro_code_active_dec;
+output [PREGS-1:0] avail_reg;
 
 pipeline_reg_t ins0d;
 pipeline_reg_t ins1d;
@@ -484,8 +486,6 @@ Qupls_space_branches uspb1
 	.stall(stall)
 );
 */
-assign stall = 1'b0;
-
 always_comb ins0_dec = inso[0];
 always_comb ins1_dec = inso[1];
 always_comb ins2_dec = inso[2];

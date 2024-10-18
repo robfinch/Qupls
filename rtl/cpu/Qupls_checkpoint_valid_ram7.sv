@@ -33,22 +33,24 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 88k LUTs / 4k FFs		(512 phys. regs)
+// 41.8k LUTs / 4.1k FFs	(512 phys. regs.)
 // ============================================================================
 
 import QuplsPkg::SIM;
 
-module Qupls_checkpoint_valid_ram6(rst,
+module Qupls_checkpoint_valid_ram7(rst, clk5x, ph4,
 	clka, ena, wea, cpa, prega, dina,
 	clkb, enb, cpb, pregb, doutb, ncp, ncp_ra, ncp_wa);
 //	ncp, ncp_ra);
-parameter NWRPORTS = 9;
+parameter NWRPORTS = 10;	// must be a multiple of five
 parameter NRDPORTS = 24;
 localparam RBIT=$clog2(PREGS);
 localparam QBIT=$bits(cpu_types_pkg::pregno_t);
 localparam WID=$bits(checkpoint_t);
 localparam AWID=$clog2(NCHECK);
 input rst;
+input clk5x;
+input [4:0] ph4;
 input clka;
 input ena;
 input [NWRPORTS-1:0] wea;
@@ -64,12 +66,46 @@ input ncp;
 input [AWID-1:0] ncp_ra;
 input [AWID-1:0] ncp_wa;
 
-integer n,nr;
+integer n,nr,jj;
 (* RAM_STYLE="distributed" *)
 reg [PREGS-1:0] mem [0:NCHECK-1];
 reg [NRDPORTS-1:0] doutb1;
+reg [2:0] wndx;
 
-always_ff @(posedge clka)
+reg [NWRPORTS/5-1:0] mwea;
+checkpt_ndx_t [NWRPORTS/5-1:0] mcpa;
+pregno_t [NWRPORTS/5-1:0] mprega;
+reg [NWRPORTS/5-1:0] mdina;
+
+always_comb
+begin
+	if ((NWRPORTS % 5)!=0) begin
+		$display("Q+: checkpoint valid RAM: number of write ports must be a multiple of five.");
+		$finish;
+	end
+end
+
+always_ff @(posedge clk5x)
+if (rst)
+	wndx <= 3'd0;
+else begin
+	if (ph4[4])
+		wndx <= 3'd0;
+	else if (wndx < 3'd4)
+		wndx <= wndx + 2'd1;
+end
+
+always_comb
+begin
+	for (jj = 0; jj < NWRPORTS/5; jj = jj + 1) begin
+		mwea[jj] <= wea[jj * 5 + wndx];
+		mcpa[jj] <= cpa[jj * 5 + wndx];
+		mprega[jj] <= prega[jj * 5 + wndx];
+		mdina[jj] <= dina[jj * 5 + wndx];
+	end
+end
+
+always_ff @(posedge clk5x)
 // At reset, all regs are valid.
 if (rst) begin
 	for (n = 0; n < NCHECK; n = n + 1)
@@ -80,9 +116,9 @@ else begin
 	if (ncp)
 		mem[ncp_wa] <= mem[ncp_ra];
 	// Otherwise, update individual bits
-	for (n = 0; n < NWRPORTS; n = n + 1)
-		if (ena & wea[n]) begin
-			mem[cpa[n]][prega[n]] <= dina[n];
+	for (n = 0; n < NWRPORTS/5; n = n + 1)
+		if (ena & mwea[n]) begin
+			mem[mcpa[n]][mprega[n]] <= mdina[n];
 		end
 end
 

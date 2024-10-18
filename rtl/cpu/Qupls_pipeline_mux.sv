@@ -37,24 +37,24 @@
 // Multiplex micro-code instructions into the instruction stream.
 // Modify instructions for register bit lists.
 //
-// 4000 LUTs / 3550 FFs
+// 1800 LUTs / 1200 FFs
 // ============================================================================
 
 import const_pkg::*;
 import cpu_types_pkg::*;
 import QuplsPkg::*;
 
-module Qupls_pipeline_seg1(rst_i, clk_i, rstcnt, advance_fet, ihit, en_i,
+module Qupls_pipeline_mux(rst_i, clk_i, rstcnt, advance_fet, ihit, en_i,
 	stomp_bno, stomp_mux, nop_o, 
-	nmi, irq, irq_i, hirq_i, vect_i, sr, pt_mux, p_override, po_bno,
-	branchmiss, misspc, misspc_fet,
+	nmi_i, irq_fet, irqf_fet, hirq_i, vect_i, sr, pt_mux, p_override, po_bno,
+	branchmiss, misspc_fet,
 	mipv_i, mip_i, ic_line_fet, reglist_active, grp_i, grp_o,
 	takb_fet, mc_offs, pc_i, vl,
-	pc0_fet, pc1_fet, pc2_fet, pc3_fet, 
+	pc0_fet, pc1_fet, pc2_fet, pc3_fet, pc4_fet,
 	ls_bmf_i, pack_regs_i, scale_regs_i, regcnt_i, mc_adr,
 	mc_ins0_i, mc_ins1_i, mc_ins2_i, mc_ins3_i,
 	len0_i, len1_i, len2_i, len3_i,
-	ins0_mux_o, ins1_mux_o, ins2_mux_o, ins3_mux_o,
+	ins0_mux_o, ins1_mux_o, ins2_mux_o, ins3_mux_o, ins4_mux_o,
 	mcip0_i, mcip1_i, mcip2_i, mcip3_i,
 //	mcip0_o, mcip1_o, mcip2_o, mcip3_o,
 	do_bsr, bsr_tgt, get, stall);
@@ -67,15 +67,14 @@ input en_i;
 input [4:0] stomp_bno;
 input stomp_mux;
 output reg nop_o;
-input nmi;
-input irq;
-input [2:0] irq_i;
+input nmi_i;
+input [2:0] irq_fet;
+input irqf_fet;
 input hirq_i;
 input [7:0] vect_i;
 input status_reg_t sr;
 input reglist_active;
 input branchmiss;
-input cpu_types_pkg::pc_address_ex_t misspc;
 input cpu_types_pkg::pc_address_ex_t misspc_fet;
 input mipv_i;
 input [11:0] mip_i;
@@ -115,6 +114,7 @@ output pipeline_reg_t ins0_mux_o;
 output pipeline_reg_t ins1_mux_o;
 output pipeline_reg_t ins2_mux_o;
 output pipeline_reg_t ins3_mux_o;
+output pipeline_reg_t ins4_mux_o;
 /*
 output cpu_types_pkg::mc_address_t mcip0_o;
 output cpu_types_pkg::mc_address_t mcip1_o;
@@ -135,21 +135,7 @@ wire en = en_i;
 wire mipv = mipv_i;
 wire ls_bmf = ls_bmf_i;
 wire pack_regs = pack_regs_i;
-cpu_types_pkg::pc_address_ex_t misspc_fet;
 cpu_types_pkg::aregno_t regcnt;
-cpu_types_pkg::pc_address_ex_t pc0_fet;
-cpu_types_pkg::pc_address_ex_t pc1_fet;
-cpu_types_pkg::pc_address_ex_t pc2_fet;
-cpu_types_pkg::pc_address_ex_t pc3_fet;
-cpu_types_pkg::pc_address_ex_t pc4_fet;
-cpu_types_pkg::pc_address_ex_t pc0d;
-cpu_types_pkg::pc_address_ex_t pc1d;
-cpu_types_pkg::pc_address_ex_t pc2d;
-cpu_types_pkg::pc_address_ex_t pc3d;
-cpu_types_pkg::pc_address_ex_t pc0dd;
-cpu_types_pkg::pc_address_ex_t pc1dd;
-cpu_types_pkg::pc_address_ex_t pc2dd;
-cpu_types_pkg::pc_address_ex_t pc3dd;
 pipeline_reg_t ins0_mux;
 pipeline_reg_t ins1_mux;
 pipeline_reg_t ins2_mux;
@@ -171,14 +157,6 @@ cpu_types_pkg::mc_address_t mcip0;
 cpu_types_pkg::mc_address_t mcip1;
 cpu_types_pkg::mc_address_t mcip2;
 cpu_types_pkg::mc_address_t mcip3;
-cpu_types_pkg::mc_address_t mcip0d;
-cpu_types_pkg::mc_address_t mcip1d;
-cpu_types_pkg::mc_address_t mcip2d;
-cpu_types_pkg::mc_address_t mcip3d;
-cpu_types_pkg::mc_address_t mcip0dd;
-cpu_types_pkg::mc_address_t mcip1dd;
-cpu_types_pkg::mc_address_t mcip2dd;
-cpu_types_pkg::mc_address_t mcip3dd;
 reg ld;
 
 wire hirq = ~reglist_active && hirq_i && mip[11:8]!=4'h1;
@@ -253,14 +231,14 @@ begin
 	mc_ins1.takb = 1'b0;
 	mc_ins2.takb = 1'b0;
 	mc_ins3.takb = 1'b0;
-	mc_ins0.excv <= 1'b0;
-	mc_ins1.excv <= 1'b0;
-	mc_ins2.excv <= 1'b0;
-	mc_ins3.excv <= 1'b0;
-	mc_ins0.exc <= FLT_NONE;
-	mc_ins1.exc <= FLT_NONE;
-	mc_ins2.exc <= FLT_NONE;
-	mc_ins3.exc <= FLT_NONE;
+	mc_ins0.excv = 1'b0;
+	mc_ins1.excv = 1'b0;
+	mc_ins2.excv = 1'b0;
+	mc_ins3.excv = 1'b0;
+	mc_ins0.exc = FLT_NONE;
+	mc_ins1.exc = FLT_NONE;
+	mc_ins2.exc = FLT_NONE;
+	mc_ins3.exc = FLT_NONE;
 	mc_ins0.bt = 1'b0;
 	mc_ins1.bt = 1'b0;
 	mc_ins2.bt = 1'b0;
@@ -308,20 +286,20 @@ begin
 		pr3_mux.ins = ic_line_aligned[255:192];
 		pr4_mux.ins = ic_line_aligned[319:256];
 	end
-	pr0_mux.hwi_level = irq_i;
-	pr1_mux.hwi_level = irq_i;
-	pr2_mux.hwi_level = irq_i;
-	pr3_mux.hwi_level = irq_i;
-	// If an NMI or IRQ is happening, invalidate instruction. Once the NMI or
-	// IRQ routine is entered, instructions will be marked valid.
-	pr0_mux.v = !nmi & !irq;
-	pr1_mux.v = !nmi & !irq;
-	pr2_mux.v = !nmi & !irq;
-	pr3_mux.v = !nmi & !irq;
-	pr0_mux.hwi = nmi | irq;
-	pr1_mux.hwi = nmi | irq;
-	pr2_mux.hwi = nmi | irq;
-	pr3_mux.hwi = nmi | irq;
+	pr0_mux.hwi_level = irq_fet;
+	pr1_mux.hwi_level = irq_fet;
+	pr2_mux.hwi_level = irq_fet;
+	pr3_mux.hwi_level = irq_fet;
+	// If an NMI or IRQ is happening, invalidate instruction and mark as
+	// interrupted by external hardware.
+	pr0_mux.v = !(nmi_i || irqf_fet);
+	pr1_mux.v = !(nmi_i || irqf_fet);
+	pr2_mux.v = !(nmi_i || irqf_fet);
+	pr3_mux.v = !(nmi_i || irqf_fet);
+	pr0_mux.hwi = nmi_i||irqf_fet;
+	pr1_mux.hwi = nmi_i||irqf_fet;
+	pr2_mux.hwi = nmi_i||irqf_fet;
+	pr3_mux.hwi = nmi_i||irqf_fet;
 end
 
 /* Under construction
@@ -354,11 +332,16 @@ end
 // If there was a branch miss, instructions before the miss PC should not be
 // executed.
 reg nop0,nop1,nop2,nop3;
-
+/*
 always_comb nop0 = (stomp_fet && pc0_fet.bno_t!=stomp_bno) || (branchmiss && misspc_fet.pc > pc0_fet.pc);
 always_comb nop1 = (stomp_fet && pc1_fet.bno_t!=stomp_bno) || (branchmiss && misspc_fet.pc > pc1_fet.pc);
 always_comb nop2 = (stomp_fet && pc2_fet.bno_t!=stomp_bno) || (branchmiss && misspc_fet.pc > pc2_fet.pc);
 always_comb nop3 = (stomp_fet && pc3_fet.bno_t!=stomp_bno) || (branchmiss && misspc_fet.pc > pc3_fet.pc);
+*/
+always_comb nop0 = (branchmiss && misspc_fet.pc > pc0_fet.pc);
+always_comb nop1 = (branchmiss && misspc_fet.pc > pc1_fet.pc);
+always_comb nop2 = (branchmiss && misspc_fet.pc > pc2_fet.pc);
+always_comb nop3 = (branchmiss && misspc_fet.pc > pc3_fet.pc);
 /*
 always_comb nop0 = FALSE;
 always_comb nop1 = FALSE;
@@ -372,45 +355,6 @@ cpu_types_pkg::pc_address_ex_t bsr0_tgt;
 cpu_types_pkg::pc_address_ex_t bsr1_tgt;
 cpu_types_pkg::pc_address_ex_t bsr2_tgt;
 cpu_types_pkg::pc_address_ex_t bsr3_tgt;
-
-always_ff @(posedge clk)
-if (rst_i) begin
-	pc0d.pc <= RSTPC;
-	pc1d.pc <= RSTPC;
-	pc2d.pc <= RSTPC;
-	pc3d.pc <= RSTPC;
-	pc0d.bno_t <= 6'd1;
-	pc1d.bno_t <= 6'd1;
-	pc2d.bno_t <= 6'd1;
-	pc3d.bno_t <= 6'd1;
-	pc0d.bno_f <= 6'd1;
-	pc1d.bno_f <= 6'd1;
-	pc2d.bno_f <= 6'd1;
-	pc3d.bno_f <= 6'd1;
-end
-else begin
-	if (en_i) begin
-		pc0d <= pc0_fet;
-		pc1d <= pc1_fet;
-		pc2d <= pc2_fet;
-		pc3d <= pc3_fet;
-	end
-end
-always_ff @(posedge clk)
-if (rst_i) begin
-	mcip0d <= 12'h1A0;
-	mcip1d <= 12'h1A1;
-	mcip2d <= 12'h1A2;
-	mcip3d <= 12'h1A3;
-end
-else begin
-	if (en_i) begin
-		mcip0d <= mcip0_i;
-		mcip1d <= mcip1_i;
-		mcip2d <= mcip2_i;
-		mcip3d <= mcip3_i;
-	end
-end
 
 always_comb bsr0 = ins0_mux.ins.any.opcode==OP_BSR;
 always_comb bsr1 = ins1_mux.ins.any.opcode==OP_BSR;
@@ -467,7 +411,7 @@ Qupls_ins_extract_mux umux0
 	.rgi(2'd0),
 	.regcnt(regcnt_i),
 	.hirq(hirq),
-	.irq_i(irq_i),
+	.irq_i(irq_fet),
 	.vect_i(vect_i),
 	.mipv(mipv_i),
 	.mc_ins0(mc_ins0),
@@ -573,21 +517,13 @@ Qupls_ins_extract_mux umux4
 	.ins(ins4_mux)
 );
 
-always_ff @(posedge clk) if (en_i) pc0dd <= pc0d;
-always_ff @(posedge clk) if (en_i) pc1dd <= pc1d;
-always_ff @(posedge clk) if (en_i) pc2dd <= pc2d;
-always_ff @(posedge clk) if (en_i) pc3dd <= pc3d;
-always_ff @(posedge clk) if (en_i) mcip0dd <= mcip0d;
-always_ff @(posedge clk) if (en_i) mcip1dd <= mcip1d;
-always_ff @(posedge clk) if (en_i) mcip2dd <= mcip2d;
-always_ff @(posedge clk) if (en_i) mcip3dd <= mcip3d;
-
 assign stall = 1'b0;
 
 always_comb ins0_mux_o = ins0_mux;
 always_comb ins1_mux_o = ins1_mux;
 always_comb ins2_mux_o = ins2_mux;
 always_comb ins3_mux_o = ins3_mux;
+always_comb ins4_mux_o = ins4_mux;
 
 always_ff @(posedge clk) if (en) nop_o <= stomp_mux;
 /*
