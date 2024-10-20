@@ -4931,7 +4931,7 @@ else begin
 //		if (|robentry_stomp)
 //			tail0 <= stail;		// computed above
 	end
-	else if (advance_pipeline_seg2) begin
+	else if (advance_pipeline) begin
 		//if (!stomp_que || stomp_quem) 
 		begin
 			// On a predicted taken branch the front end will continue to send
@@ -4956,12 +4956,12 @@ else begin
 				if (predino==4'd9)
 					predino = 4'd0;
 			end
-		
+			/*
 			tBypassRegnames(tail0, ins0_ren, ins0_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
 			tBypassRegnames(tail0, ins0_ren, ins1_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
 			tBypassRegnames(tail0, ins0_ren, ins2_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
 			tBypassRegnames(tail0, ins0_ren, ins3_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
-			
+			*/
 			/*
 			if (prn[0]==11'd0 && ins0_ren.decbus.Ra!=9'd0) begin
 				$display("Enque0: Ra mapped to zero.");
@@ -4994,12 +4994,12 @@ else begin
 					// register, use the register mapping of the previous target register.
 					// The register mapping will not have been updated in the RAT yet in
 					// time to be available for the source register.
-				
+				/*
 				tBypassRegnames(tail1, ins1_ren, ins0_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
 				tBypassRegnames(tail1, ins1_ren, ins1_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
 				tBypassRegnames(tail1, ins1_ren, ins2_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
 				tBypassRegnames(tail1, ins1_ren, ins3_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
-				
+				*/
 				tBypassRegnames(tail1, ins1_ren, ins0_ren, 1'b0, ins1_ren.decbus.has_immb | prnv[3], ins1_ren.decbus.has_immc | prnv[3], prnv[3], prnv[3]);
 				
 				atom_mask <= atom_mask[32:6];
@@ -5026,12 +5026,12 @@ else begin
 					$finish;
 				end
 				*/
-				
+				/*
 				tBypassRegnames(tail2, ins2_ren, ins0_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
 				tBypassRegnames(tail2, ins2_ren, ins1_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
 				tBypassRegnames(tail2, ins2_ren, ins2_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
 				tBypassRegnames(tail2, ins2_ren, ins3_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
-				
+				*/
 				tBypassRegnames(tail2, ins2_ren, ins0_ren, ins2_que.decbus.has_imma, ins2_ren.decbus.has_immb | prnv[3], ins2_ren.decbus.has_immc | prnv[3], prnv[3], prnv[3]);
 				tBypassRegnames(tail2, ins2_ren, ins1_ren, ins2_que.decbus.has_imma, ins2_ren.decbus.has_immb | prnv[7], ins2_ren.decbus.has_immc | prnv[7], prnv[7], prnv[7]);
 				
@@ -5059,12 +5059,12 @@ else begin
 					$finish;
 				end
 				*/
-				
+				/*
 				tBypassRegnames(tail3, ins3_ren, ins0_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
 				tBypassRegnames(tail3, ins3_ren, ins1_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
 				tBypassRegnames(tail3, ins3_ren, ins2_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
 				tBypassRegnames(tail3, ins3_ren, ins3_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
-				
+				*/
 				tBypassRegnames(tail3, ins3_ren, ins0_ren, ins3_ren.decbus.has_imma, ins3_ren.decbus.has_immb | prnv[3], ins3_ren.decbus.has_immc | prnv[3], prnv[3], prnv[3]);
 				tBypassRegnames(tail3, ins3_ren, ins1_ren, ins3_ren.decbus.has_imma, ins3_ren.decbus.has_immb | prnv[7], ins3_ren.decbus.has_immc | prnv[7], prnv[7], prnv[7]);
         tBypassRegnames(tail3, ins3_ren, ins2_ren, ins3_ren.decbus.has_imma, ins3_ren.decbus.has_immb | prnv[11], ins3_ren.decbus.has_immc | prnv[11], prnv[11], prnv[11]);

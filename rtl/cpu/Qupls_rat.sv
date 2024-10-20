@@ -428,7 +428,7 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 													(bypass_p2wrrb0[g] && bypass_en) ? p2wrrb :
 													(bypass_p2wrra0[g] && bypass_en) ? p2wrra :
 													*/
-													cpram_out.regmap[rn[g]];		// No bypasses needed here
+													currentMap.regmap[rn[g]];		// No bypasses needed here
 						end
 					3'd1: next_prn[g] = 
 													/*
@@ -448,7 +448,7 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 													*/
 													//rn[g]==wra && wr0 ? wrra :	// One previous target
 													//qbr0 ? cpram_out1.regmap[rn[g]] :
-													cpram_out.regmap[rn[g]];
+													currentMap.regmap[rn[g]];
 					3'd2: next_prn[g] = 
 													/*
 													(rn[g]==wrb && wr1 && rn_cp[g]==wrb_cp) ? wrrb :
@@ -469,7 +469,7 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 												 	//rn[g]==wrb && wr1 ? wrrb :	// Two previous target
 													//rn[g]==wra && wr0 ? wrra :
 													//qbr0|qbr1 ? cpram_out1.regmap[rn[g]] :
-												 	cpram_out.regmap[rn[g]];
+												 	currentMap.regmap[rn[g]];
 					3'd3: next_prn[g] = 
 													/*													
 													(rn[g]==wrc && wr2 && rn_cp[g]==wrc_cp) ? wrrc :
@@ -492,8 +492,8 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 													//rn[g]==wrb && wr1 ? wrrb :
 													//rn[g]==wra && wr0 ? wrra :
 													//qbr0|qbr1|qbr2 ? cpram_out1.regmap[rn[g]] :
-												 	cpram_out.regmap[rn[g]];
-					default: next_prn[g] = cpram_out.regmap[rn[g]];
+												 	currentMap.regmap[rn[g]];
+					default: next_prn[g] = currentMap.regmap[rn[g]];
 					endcase
 					/*
 						if (prn[g]==10'd0 && rn[g]!=8'd0 && !rnt[g] && rnv[g])
@@ -502,7 +502,7 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 				end
 			end
 
-		always_ff @(negedge clk)
+		always_ff @(posedge clk)
 			if (rst)
 				prn[g] <= 9'd0;
 			// If there is a pipeline bubble.
@@ -876,6 +876,8 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 			prnd[NPORT-1] <= prn[NPORT-1];
 		end
 
+	always_comb
+		next_prn[NPORT-1] = st_prn;
 	always_comb
 		prn[NPORT-1] <= st_prn;
 	always_comb//ff @(posedge clk)
@@ -1537,7 +1539,7 @@ assign cdcmtdv = cd_cmtdv & cmtdv;
 // For checkpoint establishment the current read value is desired.
 // For normal operation the write output port is used.
 
-always_ff @(posedge clk5x)
+always_ff @(posedge clk)
 if (rst) begin
 	currentMap = {$bits(checkpoint_t){1'b0}};
 	currentMap.avail = {{PREGS-1{1'b1}},1'b0};
@@ -1555,13 +1557,25 @@ else begin
 
 		// The branch instruction itself might need to update the checkpoint info.
 		if (en2d) begin
-			if (wr)
-				currentMap.regmap[aregno] = pregno;
+			if (wr0)
+				currentMap.regmap[wra] = wrra;
+			if (wr1)
+				currentMap.regmap[wrb] = wrrb;
+			if (wr2)
+				currentMap.regmap[wrc] = wrrc;
+			if (wr3)
+				currentMap.regmap[wrd] = wrrd;
 		end
 
 		// Shift the physical register into a second spot.
-		if (cdcmtv)
-			currentMap.pregmap[cmtareg] = currentMap.regmap[cmtareg];
+		if (cdcmtav)
+			currentMap.pregmap[cmtaa] = currentMap.regmap[cmtaa];
+		if (cdcmtbv)
+			currentMap.pregmap[cmtba] = currentMap.regmap[cmtba];
+		if (cdcmtcv)
+			currentMap.pregmap[cmtca] = currentMap.regmap[cmtca];
+		if (cdcmtdv)
+			currentMap.pregmap[cmtda] = currentMap.regmap[cmtda];
 			
 	end
 end
