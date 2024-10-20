@@ -59,7 +59,7 @@ module Qupls_pipeline_ren(
 	cmtbr,
 	tags2free, freevals, free_chkpt, fchkpt, backout, fcu_id,
 	bo_wr, bo_areg, bo_preg,
-	cndx,
+	cndx, pcndx,
 	rat_stallq,
 	micro_code_active_dec, micro_code_active_ren
 );
@@ -145,6 +145,7 @@ output bo_wr;
 output aregno_t bo_areg;
 output pregno_t bo_preg;
 output checkpt_ndx_t cndx;
+output checkpt_ndx_t pcndx;
 output rat_stallq;
 input micro_code_active_dec;
 output reg micro_code_active_ren;
@@ -366,7 +367,7 @@ Qupls_rat #(.NPORT(24)) urat1
 	.chkpt_inc_amt(chkpt_amt),
 	.stallq(rat_stallq),
 	.cndx_o(cndx),
-	.pcndx_o(),
+	.pcndx_o(pcndx),
 	.tail(tail0),
 	.rob(rob),
 	.stomp(robentry_stomp),// & {32{branch_state==BS_CAPTURE_MISSPC}}),

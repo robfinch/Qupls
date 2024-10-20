@@ -2327,7 +2327,7 @@ pregno_t Rt0_dec, Rt1_dec, Rt2_dec, Rt3_dec;
 pregno_t [3:0] tags2free;
 wire [3:0] freevals;
 wire [PREGS-1:0] avail_reg;						// available registers
-checkpt_ndx_t cndx0,cndx1,cndx2,cndx3;		// checkpoint index for each queue slot
+checkpt_ndx_t cndx0,cndx1,cndx2,cndx3,pcndx;		// checkpoint index for each queue slot
 wire restore_chkpt = branch_state==BS_CHKPT_RESTORE && restore_en;// && !fcu_cjb;
 wire restored;	// restore_chkpt delayed one clock.
 wire Rt0_decv;
@@ -2343,7 +2343,6 @@ Qupls_pipeline_dec udecstg1
 	.en(advance_pipeline),
 	.clk5x(clk5x),
 	.ph4(ph4),
-	.restore(restore),
 	.restored(restored),
 	.restore_list(restore_list),
 	.sr(sr),
@@ -2439,6 +2438,7 @@ wire [23:0] prnv;
 wire [0:0] arnbank [23:0];
 reg [2:0] cndxi;
 checkpt_ndx_t [3:0] cndx_ren;
+checkpt_ndx_t pcndx_ren;
 
 always_comb
 begin
@@ -2551,13 +2551,15 @@ if (rst_i) begin
 	cndx_ren[1] <= {$bits(checkpt_ndx_t){1'b0}};
 	cndx_ren[2] <= {$bits(checkpt_ndx_t){1'b0}};
 	cndx_ren[3] <= {$bits(checkpt_ndx_t){1'b0}};
+	pcndx_ren <= {$bits(checkpt_ndx_t){1'b0}};
 end
 else begin
-	if (advance_pipeline_seg2) begin
+	if (advance_pipeline) begin
 		cndx_ren[0] <= cndx0;
 		cndx_ren[1] <= cndx0;
 		cndx_ren[2] <= cndx0;
 		cndx_ren[3] <= cndx0;
+		pcndx_ren <= pcndx;
 	end
 end
 
@@ -2790,6 +2792,7 @@ Qupls_pipeline_ren uren1
 	.bo_areg(bo_areg),
 	.bo_preg(bo_preg),
 	.cndx(cndx0),
+	.pcndx(pcndx),
 	.rat_stallq(rat_stallq),
 	.micro_code_active_dec(micro_code_active_d),
 	.micro_code_active_ren(micro_code_active_r)
@@ -4946,7 +4949,7 @@ else begin
 				stomp0, ornop0,
 				prn[0], prn[1], prn[2], prn[3], Rt0_ren, prn[17],
 				prnv[0], prnv[1], prnv[2], prnv[3], prnv[17],
-				cndx_ren[0], grplen0, last0);
+				cndx_ren[0], pcndx_ren, grplen0, last0);
 			if (ins0_ren.decbus.pred) begin
 				predino = 3'd1;
 				predrndx = tail0;
@@ -4974,7 +4977,7 @@ else begin
 				tEnque(8'h81-XWID,groupno,predino,predrndx,ins1_ren,pt1_q,tail1,
 					stomp1, ornop1, prn[4], prn[5], prn[6], prn[7], Rt1_ren, prn[18],
 					prnv[4], prnv[5], prnv[6], prnv[7], prnv[18],
-					cndx_ren[1], grplen1, last1);
+					cndx_ren[1], pcndx_ren, grplen1, last1);
 				if (ins1_ren.decbus.pred) begin
 					predino = 3'd1;
 					predrndx = tail1;
@@ -5009,7 +5012,7 @@ else begin
 				tEnque(8'h82-XWID,groupno,predino,predrndx,ins2_ren,pt2_q,tail2,
 					stomp2, ornop2, prn[8], prn[9], prn[10], prn[11], Rt2_ren, prn[19],
 					prnv[8], prnv[9], prnv[10], prnv[11], prnv[19],
-					cndx_ren[2],
+					cndx_ren[2], pcndx_ren,
 					grplen2, last3);
 				if (ins2_ren.decbus.pred) begin
 					predino = 3'd1;
@@ -5042,7 +5045,7 @@ else begin
 				tEnque(8'h83-XWID,groupno,predino,predrndx,ins3_ren,pt3_q,tail3,
 					stomp3, ornop3, prn[12], prn[13], prn[14], prn[15], Rt3_ren, prn[20],
 					prnv[12], prnv[13], prnv[14], prnv[15], prnv[20],
-					cndx_ren[3],
+					cndx_ren[3], pcndx_ren,
 					grplen3,last3);
 				if (ins3_ren.decbus.pred) begin
 					predino = 3'd1;
@@ -6572,6 +6575,7 @@ begin
 end
 endfunction
 
+
 generate begin : gDisplay
 begin
 always_ff @(posedge clk) begin: clock_n_debug
@@ -7407,6 +7411,7 @@ input pRcv;
 input pRtv;
 input pRmv;
 input checkpt_ndx_t cndx;
+input checkpt_ndx_t pndx;
 input rob_ndx_t grplen;
 input last;
 integer n12;
@@ -7461,11 +7466,11 @@ begin
 	rob[tail].argT_v <= fnSourceTv(ins) | pRtv;
 	rob[tail].argM_v <= fnSourceMv(ins) | pRmv;
 `ifdef IS_SIM
-	rob[tail].argA <= fnArchRegVal(db.Ra);
-	rob[tail].argB <= fnArchRegVal(db.Rb);
-	rob[tail].argC <= fnArchRegVal(db.Rc);
-	rob[tail].argT <= fnArchRegVal(db.Rt);
-	rob[tail].argM <= fnArchRegVal(db.Rm);
+	rob[tail].argA <= fnRegVal(pRa);
+	rob[tail].argB <= fnRegVal(pRb);
+	rob[tail].argC <= fnRegVal(pRc);
+	rob[tail].argT <= fnRegVal(pRt);
+	rob[tail].argM <= fnRegVal(pRm);
 `endif
 	// "static" fields, these fields remain constant after enqueue
 	rob[tail].grp <= grp;
@@ -7482,7 +7487,7 @@ begin
 	rob[tail].pc <= ins.pc;
 	rob[tail].mcip <= ins.mcip;
 	rob[tail].bt <= ins.bt;//pt;
-	rob[tail].cndx <= cndx;
+	rob[tail].cndx <= db.br ? pcndx : cndx;
 	rob[tail].decbus <= db;
 	if (db.Ra==9'd0) rob[tail].op.aRa <= 9'd0;
 	if (db.Rb==9'd0) rob[tail].op.aRb <= 9'd0;
@@ -7537,9 +7542,8 @@ begin
 		rob[tail].decbus.load <= FALSE;
 		rob[tail].decbus.store <= FALSE;
 		rob[tail].decbus.mem <= FALSE;
-		rob[tail].op <= nopi;//{57'd0,OP_NOP};
-//		rob[tail].nRt <= 11'd0;
-//		rob[tail].pRt <= 11'd0;
+		rob[tail].op.pred_btst <= 6'd0;
+		rob[tail].op.ins = {57'd0,OP_MOV};
 		rob[tail].argA_v <= VAL;
 		rob[tail].argB_v <= VAL;
 		rob[tail].argC_v <= VAL;

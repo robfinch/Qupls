@@ -219,7 +219,7 @@ cpram1
 	.rst(rst),
 	.clka(clk),
 	.ena(1'b1),
-	.wea(cpram_we),
+	.wea(pe_alloc_chkpt),
 	.addra(cndx),
 	.dina({4'd0,currentMap}),
 	.douta(),
@@ -1113,6 +1113,8 @@ if (rst)
 	pcndx_o <= 4'd0;
 else begin
 	if (restore)
+		pcndx_o <= cndx;
+	else if (pe_alloc_chkpt)
 		pcndx_o <= cndx;
 end
 

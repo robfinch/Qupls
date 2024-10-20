@@ -168,6 +168,7 @@ else begin
 			stomp_alnr <= FALSE;
 		else if (!ff1)
 			stomp_alnr <= do_bsr;
+		stomp_alnr <= FALSE;
 	end
 
 	if (advance_pipeline|pe_stomp_pipeline) begin

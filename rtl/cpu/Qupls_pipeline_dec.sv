@@ -40,7 +40,7 @@ import cpu_types_pkg::*;
 import QuplsPkg::*;
 
 module Qupls_pipeline_dec(rst_i, rst, clk, en, clk5x, ph4,
-	restore, restored, restore_list, sr,
+	restored, restore_list, sr,
 	tags2free, freevals,
 	ins0_dec_inv, ins1_dec_inv, ins2_dec_inv, ins3_dec_inv,
 	stomp_mux, stomp_bno, ins0_mux, ins1_mux, ins2_mux, ins3_mux, ins4_mux,
@@ -55,7 +55,6 @@ input clk;
 input en;
 input clk5x;
 input [4:0] ph4;
-input restore;
 input restored;
 input [PREGS-1:0] restore_list;
 input status_reg_t sr;
