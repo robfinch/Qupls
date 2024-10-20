@@ -85,10 +85,6 @@ reg alloc2d;
 reg alloc3d;
 reg [PREGS-1:0] next_avail;
 
-wire rst_busy0;
-wire rst_busy1;
-wire rst_busy2;
-wire rst_busy3;
 pregno_t [3:0] tags;
 reg [3:0] fpush;
 reg wv0r;
@@ -125,7 +121,6 @@ always_comb pop2 = (alloc2 & en & ~stall) | stalla2;
 always_comb pop3 = (alloc3 & en & ~stall) | stalla3;
 
 reg [3:0] freevals1;
-reg [1:0] fifo_order;
 reg [$clog2(PREGS)-3:0] freeCnt;
 reg [2:0] ffreeCnt;
 reg [PREGS-1:0] next_toFreeList;
@@ -266,10 +261,10 @@ wire [6:0] ffo0;
 wire [6:0] ffo1;
 wire [6:0] ffo2;
 wire [6:0] ffo3;
-ffo96 uffo0 (.i({16'd0,avail[ 63:  0]}), .o(ffo0));
-ffo96 uffo1 (.i({16'd0,avail[127: 64]}), .o(ffo1));
-ffo96 uffo2 (.i({16'd0,avail[191:128]}), .o(ffo2));
-ffo96 uffo3 (.i({16'd0,avail[255:192]}), .o(ffo3));
+ffo96 uffo0 (.i({32'd0,avail[ 63:  0]}), .o(ffo0));
+ffo96 uffo1 (.i({32'd0,avail[127: 64]}), .o(ffo1));
+ffo96 uffo2 (.i({32'd0,avail[191:128]}), .o(ffo2));
+ffo96 uffo3 (.i({32'd0,avail[255:192]}), .o(ffo3));
 always_comb wo0 = {2'd0,ffo0[5:0]};
 always_comb wo1 = {2'd1,ffo1[5:0]};
 always_comb wo2 = {2'd2,ffo2[5:0]};
@@ -313,7 +308,7 @@ begin
 end
 
 wire cd_avail;
-change_det #(512) ucdavail1 (.rst(rst), .clk(clk), .ce(1'b1), .i(avail), .cd(cd_avail));
+change_det #(PREGS) ucdavail1 (.rst(rst), .clk(clk), .ce(1'b1), .i(avail), .cd(cd_avail));
 
 always_ff @(posedge clk)
 if (rst) begin

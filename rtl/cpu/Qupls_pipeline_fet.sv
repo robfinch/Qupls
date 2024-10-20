@@ -41,7 +41,8 @@ import QuplsPkg::*;
 
 module Qupls_pipeline_fet(rst, clk, rstcnt, ihit, en, pc_i, misspc, misspc_fet,
 	pc0_fet, pc1_fet, pc2_fet, pc3_fet, pc4_fet, stomp_fet, stomp_bno,
-	ic_line_i, ic_line_fet, nmi_i, irq_i, irq_fet, irqf_i, irqf_fet
+	ic_line_i, ic_line_fet, nmi_i, irq_i, irq_fet, irqf_i, irqf_fet,
+	micro_code_active, mc_adr
 );
 input rst;
 input clk;
@@ -65,6 +66,39 @@ input [2:0] irq_i;
 output reg [2:0] irq_fet;
 input irqf_i;
 output reg irqf_fet;
+input micro_code_active;
+input pc_address_ex_t mc_adr;
+
+pc_address_ex_t pc0_f;
+pc_address_ex_t pc1_f;
+pc_address_ex_t pc2_f;
+pc_address_ex_t pc3_f;
+pc_address_ex_t pc4_f;
+
+always_comb
+begin
+ 	pc0_f = micro_code_active ? mc_adr : pc_i;
+end
+always_comb 
+begin
+	pc1_f = pc0_f;
+	pc1_f.pc = micro_code_active ? pc0_f.pc : pc0_f.pc + 6'd8;
+end
+always_comb
+begin
+	pc2_f = pc0_f;
+	pc2_f.pc = micro_code_active ? pc0_f.pc : pc0_f.pc + 6'd16;
+end
+always_comb
+begin
+	pc3_f = pc0_f;
+	pc3_f.pc = micro_code_active ? pc0_f.pc : pc0_f.pc + 6'd24;
+end
+always_comb
+begin
+	pc4_f = pc0_f;
+	pc4_f.pc = micro_code_active ? pc0_f.pc : pc0_f.pc + 6'd32;
+end
 
 always_ff @(posedge clk)
 if (rst) begin
@@ -74,7 +108,7 @@ if (rst) begin
 end
 else begin
 	if (en)
-		pc0_fet <= pc_i;
+		pc0_fet <= pc0_f;
 end
 always_ff @(posedge clk)
 if (rst) begin
@@ -85,7 +119,7 @@ end
 else begin
 	if (en) begin
 		pc1_fet <= pc_i;
-		pc1_fet.pc <= pc_i.pc + 6'd8;
+		pc1_fet.pc <= pc1_f;
 	end
 end
 always_ff @(posedge clk)
@@ -97,7 +131,7 @@ end
 else begin
 	if (en) begin
 		pc2_fet <= pc_i;
-		pc2_fet.pc <= pc_i.pc + 6'd16;
+		pc2_fet.pc <= pc2_f;
 	end
 end
 always_ff @(posedge clk)
@@ -109,7 +143,7 @@ end
 else begin
 	if (en) begin
 		pc3_fet <= pc_i;
-		pc3_fet.pc <= pc_i.pc + 6'd24;
+		pc3_fet.pc <= pc3_f;
 	end
 end
 always_ff @(posedge clk)
@@ -120,7 +154,7 @@ if (rst) begin
 end
 else begin
 	if (en)
-		pc4_fet.pc <= pc_i.pc + 6'd32;
+		pc4_fet.pc <= pc4_f;
 end
 
 always_ff @(posedge clk)

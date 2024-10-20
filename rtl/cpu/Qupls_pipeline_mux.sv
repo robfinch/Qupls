@@ -265,7 +265,13 @@ else begin
 	end
 end
 
-wire redundant_group = {prev_pc0_fet,prev_ic_line_aligned}=={pc0_fet,ic_line_aligned};
+reg redundant_group;
+always_comb
+if (prev_pc0_fet==pc0_fet && prev_ic_line_aligned==ic_line_aligned)
+	redundant_group = TRUE;
+else
+	redundant_group = FALSE;
+//wire redundant_group = {prev_pc0_fet,prev_ic_line_aligned}=={pc0_fet,ic_line_aligned};
 
 pipeline_reg_t pr0_mux;
 pipeline_reg_t pr1_mux;
@@ -290,16 +296,19 @@ begin
 	pr1_mux.hwi_level = irq_fet;
 	pr2_mux.hwi_level = irq_fet;
 	pr3_mux.hwi_level = irq_fet;
+	pr4_mux.hwi_level = irq_fet;
 	// If an NMI or IRQ is happening, invalidate instruction and mark as
 	// interrupted by external hardware.
 	pr0_mux.v = !(nmi_i || irqf_fet);
 	pr1_mux.v = !(nmi_i || irqf_fet);
 	pr2_mux.v = !(nmi_i || irqf_fet);
 	pr3_mux.v = !(nmi_i || irqf_fet);
+	pr4_mux.v = !(nmi_i || irqf_fet);
 	pr0_mux.hwi = nmi_i||irqf_fet;
 	pr1_mux.hwi = nmi_i||irqf_fet;
 	pr2_mux.hwi = nmi_i||irqf_fet;
 	pr3_mux.hwi = nmi_i||irqf_fet;
+	pr4_mux.hwi = nmi_i||irqf_fet;
 end
 
 /* Under construction

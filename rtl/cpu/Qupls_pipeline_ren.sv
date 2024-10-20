@@ -38,6 +38,8 @@ import const_pkg::*;
 import cpu_types_pkg::*;
 import QuplsPkg::*;
 
+`define SUPPORT_RAT	1
+
 module Qupls_pipeline_ren(
 	rst, clk, clk5x, ph4, en, nq, restore, restored, restore_list, miss_cp,
 	new_chkpt, chkpt_amt, tail0, rob, robentry_stomp, avail_reg, sr,
@@ -137,7 +139,7 @@ output pregno_t [3:0] tags2free;
 output [3:0] freevals;
 input free_chkpt;
 input [4:0] fchkpt;
-output backout;
+input backout;
 input rob_ndx_t fcu_id;
 output bo_wr;
 output aregno_t bo_areg;
@@ -147,7 +149,8 @@ output rat_stallq;
 input micro_code_active_dec;
 output reg micro_code_active_ren;
 
-integer jj;
+integer jj,n5;
+
 reg [0:0] arnbank [23:0];
 initial begin
 	for (jj = 0; jj < 24; jj = jj + 1)
@@ -359,7 +362,7 @@ Qupls_rat #(.NPORT(24)) urat1
 	.en(en),
 	.en2(en),
 	.nq(nq),
-	.inc_chkpt(new_chkpt),
+	.alloc_chkpt(new_chkpt),
 	.chkpt_inc_amt(chkpt_amt),
 	.stallq(rat_stallq),
 	.cndx_o(cndx),
@@ -453,7 +456,7 @@ Qupls_rat #(.NPORT(24)) urat1
 			prn[n5] <= 9'd0;
 	end
 	else begin
-		if (advance_pipeline_seg2)
+		if (en)
 		begin
 			for (n5 = 0; n5 < 24; n5 = n5 + 1)
 				prn[n5] <= {1'b0,arn[n5]};

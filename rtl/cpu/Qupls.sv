@@ -2206,7 +2206,9 @@ Qupls_pipeline_fet ufet1
 	.irq_i(ic_irq),
 	.irq_fet(irq_fet),
 	.irqf_i(ic_irqf),
-	.irqf_fet(irqf_fet)
+	.irqf_fet(irqf_fet),
+	.micro_code_active(micro_code_active),
+	.mc_adr(mc_adr)
 );
 
 // -----------------------------------------------------------------------------
@@ -2862,26 +2864,6 @@ end
 else begin
 	if (advance_pipeline)
 		pc0_x1 <= pc0_f;
-end
-
-always_comb
-begin
- 	pc0_fet = micro_code_active ? mc_adr : pc0_x1;
-end
-always_comb 
-begin
-	pc1_fet = pc0_fet;
-	pc1_fet.pc = micro_code_active ? pc0_fet.pc : pc0_fet.pc + 6'd8;
-end
-always_comb
-begin
-	pc2_fet = pc0_fet;
-	pc2_fet.pc = micro_code_active ? pc0_fet.pc : pc0_fet.pc + 6'd16;
-end
-always_comb
-begin
-	pc3_fet = pc0_fet;
-	pc3_fet.pc = micro_code_active ? pc0_fet.pc : pc0_fet.pc + 6'd24;
 end
 
 always_ff @(posedge clk)
@@ -6558,7 +6540,7 @@ endfunction
 function pregno_t fnPreg;
 input aregno_t regno;
 begin
-	fnPreg = uren1.urat1.cpram_out.regmap[regno];
+	fnPreg = uren1.urat1.currentMap.regmap[regno];
 end
 endfunction
 `else
@@ -7396,7 +7378,6 @@ begin
 	store_argC_cndx <= 4'd0;
 	cpu_request_cancel <= {ROB_ENTRIES{1'b0}};
 	groupno <= {$bits(seqnum_t){1'b0}};
-	backout <= FALSE;
 end
 endtask
 
