@@ -103,7 +103,6 @@ integer nn,mm,n2,n3,n4,m4,n5,n6,n8,n9,n10,n11,n12,n13,n14,n15,n17;
 integer n16r, n16c, n12r, n12c, n14r, n14c, n17r, n17c, n18r, n18c;
 integer n19,n20,n21,n22,n23,n24,n25,n26,n27,n28,n29,i,n30,n31,n32,n33;
 genvar g,h,gvg;
-rndx_t alu0_re;
 reg [127:0] message;
 reg [9*8-1:0] stompstr, no_stompstr;
 wire clk;
@@ -146,9 +145,9 @@ wire [PREGS-1:0] restore_list;
 rob_ndx_t agen0_rndx, agen1_rndx;
 reg [7:0] scan;
 
-op_src_t alu0_argA_src;
-op_src_t alu0_argB_src;
-op_src_t alu0_argC_src;
+//op_src_t alu0_argA_src;
+//op_src_t alu0_argB_src;
+//op_src_t alu0_argC_src;
 
 value_t rfo_alu0_argA;
 value_t rfo_alu0_argB;
@@ -238,7 +237,6 @@ pregno_t agen1_argM_reg;
 checkpt_ndx_t store_argC_cndx;
 aregno_t store_argC_aReg;
 pregno_t store_argC_pReg;
-pregno_t cpytgt0_argT_reg;
 
 lsq_ndx_t store_argC_id;
 lsq_ndx_t store_argC_id1;
@@ -363,10 +361,6 @@ wire [3:0] mc_regx0;
 wire [3:0] mc_regx1;
 wire [3:0] mc_regx2;
 wire [3:0] mc_regx3;
-rob_ndx_t alu0_sndx;
-rob_ndx_t alu1_sndx;
-wire alu0_sv;
-wire alu1_sv;
 
 // ALU done and idle are almost the same, but idle is sticky and set
 // if the ALU is not busy, whereas done pulses at the end of an ALU
@@ -447,8 +441,6 @@ value_t alu1_argC;
 value_t alu1_argT;
 value_t alu1_argI;
 value_t alu1_argM;
-reg alu1_argA_tag;
-reg alu1_argB_tag;
 reg [2:0] alu1_cs;
 pregno_t alu1_Rt;
 aregno_t alu1_aRt;
@@ -456,7 +448,6 @@ reg alu1_aRtz;
 checkpt_ndx_t alu1_cp;
 reg alu1_bank;
 value_t alu1_cmpo;
-bts_t alu1_bts;
 pc_address_ex_t alu1_pc;
 value_t alu1_res;
 rob_ndx_t alu1_id;
@@ -574,7 +565,6 @@ reg [2:0] fcu_missgrp;
 reg [2:0] fcu_missino;
 reg [3:0] fcu_cp;
 reg takb;
-reg fcu_done;
 rob_ndx_t fcu_rndx;
 reg fcu_new;						// new FCU operation is taking place
 wire pe_bsidle;
@@ -2436,7 +2426,6 @@ pregno_t [23:0] prn1;
 checkpt_ndx_t [23:0] rn_cp;
 wire [23:0] prnv;
 wire [0:0] arnbank [23:0];
-reg [2:0] cndxi;
 checkpt_ndx_t [3:0] cndx_ren;
 checkpt_ndx_t pcndx_ren;
 
@@ -2719,6 +2708,7 @@ Qupls_pipeline_ren uren1
 	.nq(nq),
 	.restore(restore_chkpt),
 	.restored(restored),
+	.restore_list(restore_list),
 	.miss_cp(miss_cp),
 	.new_chkpt(inc_chkpt),
 	.chkpt_amt(chkpt_inc_amt),
@@ -2938,11 +2928,11 @@ if (advance_pipeline_seg2)
 // register zero to zero.
 
 // There are some pipeline delays to account for.
-pregno_t alu0_Rt1, alu0_Rt2, fpu0_Rt3;
-aregno_t alu0_aRt1, alu0_aRt2, fpu0_aRt3;
-pregno_t alu1_Rt1, alu1_Rt2;
-aregno_t alu1_aRt1, alu1_aRt2;
-value_t alu0_res2, fpu0_res3;
+pregno_t alu0_Rt2, fpu0_Rt3;
+aregno_t alu0_aRt2, fpu0_aRt3;
+pregno_t alu1_Rt2;
+aregno_t alu1_aRt2;
+value_t fpu0_res3;
 checkpt_ndx_t alu0_cp2, alu1_cp2, fpu0_cp2;
 wire alu0_aRtz1, alu0_aRtz2, alu1_aRtz1, alu1_aRtz2, fpu0_aRtz2;
 rob_ndx_t alu0_id2, alu1_id2, fpu0_id2;
@@ -3069,6 +3059,9 @@ end
 // required.
 always_ff @(posedge clk)
 for (n4 = 0; n4 < ROB_ENTRIES; n4 = n4 + 1) begin
+	robentry_cpytgt[n4] = FALSE;
+	// The first three groups of instructions after miss needs to be stomped on 
+	// with no target copies. After that copy targets are in effect.
 	robentry_stomp[n4] = //(bno_bitmap[rob[n4].pc.bno_t]==1'b0) ||
 	(
 		((branchmiss/*||((takb&~rob[fcu_id].bt) && (fcu_v2|fcu_v3|fcu_v4))*/) || (branch_state<BS_DONE2 && branch_state!=BS_IDLE))
@@ -3081,35 +3074,25 @@ for (n4 = 0; n4 < ROB_ENTRIES; n4 = n4 + 1) begin
 	if (fcu_idv && rob[fcu_id].decbus.br && takb) begin
  		if (rob[n4].grp==rob[fcu_id].grp && rob[n4].sn > rob[fcu_id].sn) begin
  			robentry_stomp[n4] = TRUE;
+			robentry_cpytgt[n4] = TRUE;
  		end
 	end
-	// The first three groups of instructions after miss needs to be stomped on 
-	// with no target copies. After that copy targets are in effect.
-	if (robentry_stomp[n4]) begin
-		/*
-		if (
-			(rob[n4].grp != (rob[missid].grp+0) % 64) &&
-			(rob[n4].grp != (rob[missid].grp+1) % 64) &&
-			(rob[n4].grp != (rob[missid].grp+2) % 64) &&
-			(rob[n4].grp != (rob[missid].grp+3) % 64))
-		*/
-			robentry_cpytgt[n4] = FALSE;//TRUE;
-//		else
-//			robentry_cpytgt[n4] = FALSE;
-	end
-	else
-		robentry_cpytgt[n4] = FALSE;
 end
 
+// Backout on a branch miss.
+
 always_ff @(posedge clk)
-for (n32 = 0; n32 < ROB_ENTRIES; n32 = n32 + 1) begin
+for (n32 = 0; n32 < ROB_ENTRIES; n32 = n32 + 1)
+begin
 	backout <= FALSE;
+	/*
 	if (fcu_idv && rob[fcu_id].decbus.br && takb) begin
  		if (rob[n32].grp==rob[fcu_id].grp && rob[n32].sn > rob[fcu_id].sn) begin
  			if (!(branchmiss || branch_state != BS_IDLE))
  				backout <= backout_en;
  		end
 	end
+	*/
 	// Always do a backout on a branch miss.
 	if (branch_state==BS_CHKPT_RESTORED)
 		backout <= backout_en;
@@ -4812,8 +4795,7 @@ always_comb
 edge_det uedbsi1 (.rst(irst), .clk(clk), .ce(1'b1), .i(branch_state==BS_IDLE), .pe(pe_bsidle), .ne(), .ee());
 
 // ----------------------------------------------------------------------------
-// fet/mux/dec/vec/pac/ren/que
-// fet/mux/vec/pac/dec/ren/que
+// fet/mux/dec/ren/que
 // ----------------------------------------------------------------------------
 // =============================================================================
 // =============================================================================
@@ -5014,6 +4996,9 @@ else begin
 					prnv[8], prnv[9], prnv[10], prnv[11], prnv[19],
 					cndx_ren[2], pcndx_ren,
 					grplen2, last3);
+				if (prn[11]==8'd129) begin
+					$finish;
+				end
 				if (ins2_ren.decbus.pred) begin
 					predino = 3'd1;
 					predrndx = tail2;
@@ -5136,13 +5121,13 @@ else begin
 	// valid. A flag, load_lsq_argc, is set to delay by a clock. This flag pulses
 	// for only a single clock cycle.
 	if (lsq[store_argC_id1.row][store_argC_id1.col].v==VAL && lsq[store_argC_id1.row][store_argC_id1.col].store && lsq[store_argC_id1.row][store_argC_id1.col].datav==INV) begin
-		if (prnv[23])//|store_argC_v)
+		if (prnv[23]|rob[lsq[store_argC_id1.row][store_argC_id1.col].rndx].argC_v)//|store_argC_v)
 			load_lsq_argc <= TRUE;
 	end
 	if (lsq[store_argC_id1.row][store_argC_id1.col].v==VAL && lsq[store_argC_id1.row][store_argC_id1.col].store && lsq[store_argC_id1.row][store_argC_id1.col].datav==INV) begin
 	if (load_lsq_argc) begin//prnv[23]) begin
 		$display("Q+ CPU: LSQ Rc=%h from r%d/%d", rfo_store_argC, store_argC_aReg, store_argC_pReg);
-		lsq[store_argC_id1.row][store_argC_id1.col].res <= rfo_store_argC;
+		lsq[store_argC_id1.row][store_argC_id1.col].res <= prnv[23] ? rfo_store_argC : rob[lsq[store_argC_id1.row][store_argC_id1.col].rndx].argC;
 		lsq[store_argC_id1.row][store_argC_id1.col].ctag <= rfo_store_argC_ctag;
 		lsq[store_argC_id1.row][store_argC_id1.col].datav <= VAL;
 	end
@@ -6537,7 +6522,7 @@ endfunction
 function fnPregv;
 input pregno_t regno;
 begin
-	fnPregv = uren1.urat1.ucpvram1.mem[cndx0][regno];
+	fnPregv = uren1.urat1.currentRegvalid[regno];
 end
 endfunction
 function pregno_t fnPreg;
@@ -7067,7 +7052,7 @@ begin
 	end
 	for (nn = 0; nn < ROB_ENTRIES; nn = nn + 1) begin
 		if (robentry_stomp[nn] && rob[nn].sn < rob[ndx].sn && rob[nn].op.nRt==rob[ndx].op.pRt) begin
-			if (rob[ndx].op.pRt!=9'd0 && rob[ndx].op.pRt!=PREGS-1)
+			if (rob[ndx].op.pRt!=9'd0)
 				rob[ndx].argT_v <= INV;
 		end
 	end
@@ -7544,7 +7529,7 @@ begin
 		rob[tail].decbus.mem <= FALSE;
 		rob[tail].op.pred_btst <= 6'd0;
 		rob[tail].op.ins = {57'd0,OP_MOV};
-		rob[tail].argA_v <= VAL;
+//		rob[tail].argA_v <= VAL;
 		rob[tail].argB_v <= VAL;
 		rob[tail].argC_v <= VAL;
 //		rob[tail].argT_v <= VAL;

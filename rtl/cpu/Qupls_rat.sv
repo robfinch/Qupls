@@ -39,8 +39,8 @@
 // There are a max of 32 regs to update (32 entries in ROB). While stomping
 // is occurring other updates are not allowed.
 //
-// 71k LUTs / 10.1k FFs / 0 BRAMs (256 regs, 8 checkpoints)
-// 37k LUTs / 5.4k FFs / 0 BRAMS (128 regs, 8 checkpoints)
+// 35k LUTs / 4k FFs / 0 BRAMS (128 regs, 8 checkpoints)
+// 57k LUTs / 7k FFs / 0 BRAMS (256 regs, 16 checkpoints)
 // ============================================================================
 //
 import const_pkg::*;
@@ -61,7 +61,7 @@ module Qupls_rat(rst, clk, clk5x, ph4, en, en2, nq, stallq,
 	restore_list, restored, tags2free, freevals, free_chkpt_i, fchkpt_i, backout, fcu_id,
 	bo_wr, bo_areg, bo_preg);
 parameter XWID = 4;
-parameter NPORT = 20;
+parameter NPORT = 24;
 parameter BANKS = 1;
 localparam RBIT=$clog2(PREGS);
 localparam BBIT=0;//$clog2(BANKS)-1;
@@ -193,6 +193,8 @@ checkpoint_t cpram_out1;
 checkpoint_t cpram_out2;
 checkpoint_t cpram_outr;
 checkpoint_t cpram_in;
+reg [PREGS-1:0] currentRegvalid;
+wire [PREGS-1:0] regvalid_ram_o;
 
 reg cpvram_we;
 reg [PREGS-1:0] cpvram_in;
@@ -305,47 +307,77 @@ always_comb cpv_i[7] = INV;//wrd==8'd0;
 always_comb cpv_i[8] = VAL;
 always_comb cpv_i[9] = VAL;
 
-/*
-Qupls_checkpoint_valid_ram4 #(.NRDPORT(NPORT)) ucpr2
-(
-	.rst(rst),
-	.ph4(ph4),
-	.clk5x(clk5x),
-	.clka(clk),
-	.wen(1'b1),
-	.wr(cpv_wr),
-	.wc(cpv_wc),
-	.wa(cpv_wa),
-	.awa(cpv_awa),
-	.setall(1'b0),
-	.i(cpv_i),
-	.clkb(clk),
-	.ren(en2),
-	.rc(rn_cp),
-	.ra(prn),
-	.o(cpv_o)
-);
-*/
+reg stall_same_reg;
+always_comb
+if (
+	(cmtap==wrra && cmtav && wr0 && en2) ||
+	(cmtap==wrrb && cmtav && wr1 && en2) ||
+	(cmtap==wrrc && cmtav && wr2 && en2) ||
+	(cmtap==wrrd && cmtav && wr3 && en2) ||
+	(cmtbp==wrra && cmtbv && wr0 && en2) ||
+	(cmtbp==wrrb && cmtbv && wr1 && en2) ||
+	(cmtbp==wrrc && cmtbv && wr2 && en2) ||
+	(cmtbp==wrrd && cmtbv && wr3 && en2) ||
+	(cmtcp==wrra && cmtcv && wr0 && en2) ||
+	(cmtcp==wrrb && cmtcv && wr1 && en2) ||
+	(cmtcp==wrrc && cmtcv && wr2 && en2) ||
+	(cmtcp==wrrd && cmtcv && wr3 && en2) ||
+	(cmtdp==wrra && cmtdv && wr0 && en2) ||
+	(cmtdp==wrrb && cmtdv && wr1 && en2) ||
+	(cmtdp==wrrc && cmtdv && wr2 && en2) ||
+	(cmtdp==wrrd && cmtdv && wr3 && en2)
+	)
+begin
+	$display("Q+ rat: register marked valid and invalid at same time");
+	$finish;
+	stall_same_reg <= 1'b0;
+end
+else
+	stall_same_reg <= 1'b0;
 
-Qupls_checkpoint_valid_ram7 #(.NWRPORTS(10), .NRDPORTS(NPORT)) ucpvram1
+always_ff @(posedge clk)
+if (rst)
+	currentRegvalid <= {PREGS{1'b1}};
+else begin
+	if (restore)
+		currentRegvalid <= regvalid_ram_o;
+	else begin
+		if (bo_wr) begin
+			currentRegvalid[bo_preg] <= VAL;
+			currentRegvalid[currentMap.regmap[bo_areg]] <= VAL;
+		end
+		if (cmtav)
+			currentRegvalid[cmtap] <= VAL;
+		if (cmtbv)
+			currentRegvalid[cmtbp] <= VAL;
+		if (cmtcv)
+			currentRegvalid[cmtcp] <= VAL;
+		if (cmtdv)
+			currentRegvalid[cmtdp] <= VAL;
+		if (en2 & ~stall_same_reg) begin
+			if (wr0)
+				currentRegvalid[wrra] <= INV;
+			if (wr1)
+				currentRegvalid[wrrb] <= INV;
+			if (wr2)
+				currentRegvalid[wrrc] <= INV;
+			if (wr3)
+				currentRegvalid[wrrd] <= INV;
+		end
+	end
+end
+
+Qupls_regvalid_ram urvram1
 (
 	.rst(rst),
-	.clk5x(clk5x),
-	.ph4(ph4),
-	.clka(clk),
+	.clk(clk),
 	.ena(1'b1),
-	.wea(cpv_wr),
-	.cpa(cpv_wc),
-	.prega(cpv_wa),
-	.dina(cpv_i),
-	.clkb(clk),
+	.wea(pe_alloc_chkpt),
+	.addra(cndx),
+	.dina(currentRegvalid),
 	.enb(1'b1),
-	.pregb(next_prn),
-	.cpb(rn_cp),
-	.doutb(cpv_o),
-	.ncp(pe_alloc_chkpt),
-	.ncp_ra(cndx),
-	.ncp_wa(avail_chkpt)
+	.addrb(miss_cp),
+	.doutb(regvalid_ram_o)
 );
 
 genvar g;
@@ -575,6 +607,7 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 						
 							if (prn[g]==9'd0)
 								prv[g] = VAL;
+							
 							else if (prn[g]==cmtdp && cmtdv)
 								prv[g] = VAL;
 							else if (prn[g]==cmtcp && cmtcv)
@@ -583,7 +616,7 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 								prv[g] = VAL;
 							else if (prn[g]==cmtap && cmtav)
 								prv[g] = VAL;
-							
+							/*
 							else if (prn[g]==pwrrd && pwr3)
 								prv[g] = INV;
 							else if (prn[g]==pwrrc && pwr2)
@@ -592,7 +625,7 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 								prv[g] = INV;
 							else if (prn[g]==pwrra && pwr0)
 								prv[g] = INV;
-							
+							*/
 							/*
 							else if (prn[g]==p2wrrd && p2wr3 && rn_cp[g]==p2wrd_cp)
 								prv[g] = INV;
@@ -635,7 +668,7 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 							*/	
 							else
 														
-								prv[g] = cpv_o[g];
+								prv[g] = currentRegvalid[prn[g]];//cpv_o[g];
 						// Second instruction of group, bypass only if first instruction target is same.
 						3'd1:
 						begin							
@@ -643,7 +676,7 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 								prv[g] = VAL;
 							else if (prn[g]==wrra && wr0)
 								prv[g] = INV;
-								
+															
 							else if (prn[g]==cmtdp && cmtdv)
 								prv[g] = VAL;
 							else if (prn[g]==cmtcp && cmtcv)
@@ -653,7 +686,7 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 							else if (prn[g]==cmtap && cmtav)
 								prv[g] = VAL;
 
-							
+							/*
 							else if (prn[g]==pwrrd && pwr3)
 								prv[g] = INV;
 							else if (prn[g]==pwrrc && pwr2)
@@ -662,7 +695,7 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 								prv[g] = INV;
 							else if (prn[g]==pwrra && pwr0)
 								prv[g] = INV;
-							
+							*/
 							/*
 							else if (prn[g]==p2wrrd && p2wr3 && rn_cp[g]==p2wrd_cp)
 								prv[g] = INV;
@@ -711,7 +744,8 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 							else
 							
 //								prv[g] = valid[cndx][prn[g]];
-								prv[g] = cpv_o[g];
+//								prv[g] = cpv_o[g];
+								prv[g] = currentRegvalid[prn[g]];//cpv_o[g];
 						end
 						// Third instruction, check two previous ones.
 						3'd2:
@@ -731,7 +765,7 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 								prv[g] = VAL;
 							else if (prn[g]==cmtap && cmtav)
 								prv[g] = VAL;
-							
+							/*
 							else if (prn[g]==pwrrd && pwr3 && rn_cp[g]==pwrd_cp)
 								prv[g] = INV;
 							else if (prn[g]==pwrrc && pwr2 && rn_cp[g]==pwrc_cp)
@@ -740,7 +774,7 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 								prv[g] = INV;
 							else if (prn[g]==pwrra && pwr0 && rn_cp[g]==pwra_cp)
 								prv[g] = INV;
-							
+							*/
 							/*
 							else if (rn[g]==p2wrd && p2wr3 && rn_cp[g]==p2wrd_cp)
 								prv[g] = INV;
@@ -781,7 +815,8 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 							*/
 							else
 							
-								prv[g] = cpv_o[g];
+								prv[g] = currentRegvalid[prn[g]];//cpv_o[g];
+//								prv[g] = cpv_o[g];
 //								prv[g] = valid[cndx][prn[g]];
 						end
 					// Fourth instruction, check three previous ones.						
@@ -795,7 +830,7 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 								prv[g] = INV;
 							else if (prn[g]==wrra && wr0)
 								prv[g] = INV;
-								
+							
 							else if (prn[g]==cmtdp && cmtdv)
 								prv[g] = VAL;
 							else if (prn[g]==cmtcp && cmtcv)
@@ -805,7 +840,7 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 							else if (prn[g]==cmtap && cmtav)
 								prv[g] = VAL;
 
-							
+							/*
 							else if (prn[g]==pwrrd && pwr3 && rn_cp[g]==pwrd_cp)
 								prv[g] = INV;
 							else if (prn[g]==pwrrc && pwr2 && rn_cp[g]==pwrc_cp)
@@ -814,7 +849,7 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 								prv[g] = INV;
 							else if (prn[g]==pwrra && pwr0 && rn_cp[g]==pwra_cp)
 								prv[g] = INV;
-							
+							*/
 							/*
 							else if (prn[g]==p2wrrd && p2wr3 && rn_cp[g]==p2wrd_cp)
 								prv[g] = INV;
@@ -857,7 +892,8 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 							*/	
 							else
 							
-								prv[g] = cpv_o[g];
+								prv[g] = currentRegvalid[prn[g]];//cpv_o[g];
+//								prv[g] = cpv_o[g];
 //								prv[g] = valid[cndx][next_prn[g]];
 							end
 						default:
@@ -921,7 +957,8 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 		else
 		*/
 		else
-			prv[NPORT-1] = cpv_o[NPORT-1];
+			prv[NPORT-1] = currentRegvalid[prn[NPORT-1]];//cpv_o[g];
+//			prv[NPORT-1] = cpv_o[NPORT-1];
 end
 endgenerate
 
@@ -1106,7 +1143,14 @@ else begin
 	else if (pe_alloc_chkpt)
 		cndx <= avail_chkpt;
 end
-always_comb cndx_o = cndx;
+// Want the checkpoint to take effect for the next group of instructions.
+always_ff @(posedge clk)
+if (rst)
+	cndx_o <= 4'd0;
+else begin
+	if (en2)
+		cndx_o <= cndx;
+end
 
 always_ff @(posedge clk)
 if (rst)
@@ -1158,7 +1202,7 @@ else begin
 		if (restore)
 			backout_state <= 2'd0;
 		else if (backout_id != fcu_id)
-			backout_id <= backout_id - 2'd1;
+			backout_id <= (backout_id + ROB_ENTRIES - 1) % ROB_ENTRIES;
 		else
 			backout_state <= 2'd0;
 	default:
@@ -1187,7 +1231,7 @@ end
 // Also stall for a new checkpoint or a lack of available checkpoints.
 // Stall the CPU pipeline for amt+1 cycles to allow checkpoint copying.
 always_comb
-	stallq = pe_alloc_chkpt||new_chkpt||new_chkpt1||chkpt_stall||backout_stall||(qbr && nob==NCHECK-1);
+	stallq = pe_alloc_chkpt||new_chkpt||new_chkpt1||chkpt_stall||backout_stall||stall_same_reg;//||(qbr && nob==NCHECK-1);
 
 
 // Committing and queuing target physical register cannot be the same.
@@ -1495,7 +1539,17 @@ end
 
 // Free tags come from the end of a two-entry shift register containing the
 // physical register number.
-
+// A backed out register mapping should be made available.
+// Delay the tag free a few clock cycles.
+pregno_t tags2free1 [0:3];
+reg [3:0] freevals1;
+/*
+vtdl #(.WID($bits(pregno_t)),.DEP(16)) uvtdl0 (.clk(clk), .ce(1'b1), .a(4'd1), .d(tags2free1[0]), .q(tags2free[0]));
+vtdl #(.WID($bits(pregno_t)),.DEP(16)) uvtdl1 (.clk(clk), .ce(1'b1), .a(4'd1), .d(tags2free1[1]), .q(tags2free[1]));
+vtdl #(.WID($bits(pregno_t)),.DEP(16)) uvtdl2 (.clk(clk), .ce(1'b1), .a(4'd1), .d(tags2free1[2]), .q(tags2free[2]));
+vtdl #(.WID($bits(pregno_t)),.DEP(16)) uvtdl3 (.clk(clk), .ce(1'b1), .a(4'd1), .d(tags2free1[3]), .q(tags2free[3]));
+vtdl #(.WID(4),.DEP(16)) uvtdl4 (.clk(clk), .ce(1'b1), .a(4'd1), .d(freevals1), .q(freevals));
+*/
 always_ff @(posedge clk)
 if (rst) begin
 	tags2free[0] = 9'd0;
@@ -1508,6 +1562,8 @@ else begin
 	tags2free[1] = 9'd0;
 	tags2free[2] = 9'd0;
 	tags2free[3] = 9'd0;
+	if (bo_wr)
+		tags2free[0] = currentMap.regmap[bo_areg];
 	if (cdcmtav)
 		tags2free[0] = currentMap.pregmap[cmtaa];
 	if (cdcmtbv)
@@ -1522,7 +1578,7 @@ always_ff @(posedge clk)
 if (rst)
 	freevals <= 4'd0;
 else begin
-	freevals[0] <= cdcmtav;
+	freevals[0] <= cdcmtav|bo_wr;
 	freevals[1] <= cdcmtbv;
 	freevals[2] <= cdcmtcv;
 	freevals[3] <= cdcmtdv;
@@ -2010,7 +2066,7 @@ begin
 	// But not the registers allocated up to the branch miss
 	if (restored) begin
 		restore_list = currentMap.avail;
-		restore_list = {PREGS{1'b0}};
+//		restore_list = {PREGS{1'b0}};
 	end
 	else
 		restore_list = {PREGS{1'b0}};

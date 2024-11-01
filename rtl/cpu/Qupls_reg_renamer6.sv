@@ -219,6 +219,11 @@ begin
 	tags[1] = 8'd0;
 	tags[2] = 8'd0;
 	tags[3] = 8'd0;
+	if (freevals1[0]) tags[0] = tags2free[0];
+	if (freevals1[1]) tags[1] = tags2free[1];
+	if (freevals1[2]) tags[2] = tags2free[2];
+	if (freevals1[3]) tags[3] = tags2free[3];
+/*
 	if (freevals1[0]) begin
 		if (tags2free[0][7:6]==2'd0) tags[0] = tags2free[0];
 		if (tags2free[0][7:6]==2'd1) tags[1] = tags2free[0];
@@ -243,6 +248,7 @@ begin
 		if (tags2free[3][7:6]==2'd2) tags[2] = tags2free[3];
 		if (tags2free[3][7:6]==2'd3) tags[3] = tags2free[3];
 	end
+*/
 	if (tags[0]==8'd0)
 		tags[0] = freeCnt + 000;
 	if (tags[1]==8'd0)
@@ -323,16 +329,25 @@ if (rst) begin
 	pavail = {{PREGS-1{1'b1}},1'b0};
 	pavail[0] = 1'b0;
 end
-else if (cd_avail)
+else if (cd_avail) begin
 	pavail <= avail;
+	if (wv0 & en) pavail[wo0] <= 1'b0;
+	if (wv1 & en) pavail[wo1] <= 1'b0;
+	if (wv2 & en) pavail[wo2] <= 1'b0;
+	if (wv3 & en) pavail[wo3] <= 1'b0;
+end
 always_ff @(posedge clk)
 if (rst) begin
 	pavail2 = {{PREGS-1{1'b1}},1'b0};
 	pavail2[0] = 1'b0;
 end
-else if (cd_avail)
+else if (cd_avail) begin
 	pavail2 <= pavail;
-
+	if (wv0 & en) pavail2[wo0] <= 1'b0;
+	if (wv1 & en) pavail2[wo1] <= 1'b0;
+	if (wv2 & en) pavail2[wo2] <= 1'b0;
+	if (wv3 & en) pavail2[wo3] <= 1'b0;
+end
 
 reg [2:0] pushCnt, nFree;
 always_comb
@@ -389,7 +404,7 @@ if (rst) begin
 	ffree[3] <= 1'b0;
 end
 else begin
-	ffree[0] <= 9'd000 + freeCnt!=9'd0 ? toFreeList[9'd000+freeCnt] : 1'b0;
+	ffree[0] <= 9'd000 + freeCnt!=7'd0 ? toFreeList[9'd000+freeCnt] : 1'b0;
 	ffree[1] <= toFreeList[PREGS/4+freeCnt];
 	ffree[2] <= toFreeList[PREGS/2+freeCnt];
 	ffree[3] <= toFreeList[PREGS*3/4+freeCnt];
