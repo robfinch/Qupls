@@ -58,7 +58,7 @@ module Qupls_pipeline_ren(
 
 	cmtbr,
 	tags2free, freevals, free_chkpt, fchkpt, backout, fcu_id,
-	bo_wr, bo_areg, bo_preg,
+	bo_wr, bo_areg, bo_preg, bo_nreg,
 	cndx, pcndx,
 	rat_stallq,
 	micro_code_active_dec, micro_code_active_ren
@@ -144,6 +144,7 @@ input rob_ndx_t fcu_id;
 output bo_wr;
 output aregno_t bo_areg;
 output pregno_t bo_preg;
+output pregno_t bo_nreg;
 output checkpt_ndx_t cndx;
 output checkpt_ndx_t pcndx;
 output rat_stallq;
@@ -442,7 +443,8 @@ Qupls_rat #(.NPORT(24)) urat1
 	.fcu_id(fcu_id),
 	.bo_wr(bo_wr),
 	.bo_areg(bo_areg),
-	.bo_preg(bo_preg)	
+	.bo_preg(bo_preg),
+	.bo_nreg(bo_nreg)	
 );
 `else
 	assign rat_stallq = FALSE;

@@ -414,7 +414,7 @@ always_comb
 begin
 	next_toFreeList = toFreeList;
 	if (restore)
-		next_toFreeList = next_toFreeList | (avail ^ restore_list);
+		next_toFreeList = next_toFreeList | (restore_list & ~avail);
 	if (fpush[0])	next_toFreeList[tags[0]] = 1'b0;
  	if (fpush[1])	next_toFreeList[tags[1]] = 1'b0;
  	if (fpush[2])	next_toFreeList[tags[2]] = 1'b0;

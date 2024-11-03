@@ -435,19 +435,34 @@ begin
 	pr_dec3.aRt = dec3.Rt;
 	pr_dec0.decbus = dec0;
 	if (dec1.pfxa) begin pr_dec0.decbus.imma = {dec1.imma[63:8],dec0.Ra}; pr_dec0.decbus.has_imma = 1'b1; end
-	if (dec1.pfxb) begin pr_dec0.decbus.immb = {dec1.immb[63:8],dec0.Rb}; pr_dec0.decbus.has_immb = 1'b1; end
+	if (dec1.pfxb) begin 
+		pr_dec0.decbus.immb = dec0.mem ? {dec1.immb[63:8],dec0.immb[7:0]} : {dec1.immb[63:8],dec0.Rb};
+		pr_dec0.decbus.has_immb = 1'b1;
+	end
 	if (dec1.pfxc) begin pr_dec0.decbus.immc = {dec1.immc[63:8],dec0.Rc}; pr_dec0.decbus.has_immc = 1'b1; end
 	pr_dec1.decbus = dec1;
-	if (dec2.pfxa) begin pr_dec1.decbus.imma = {dec2.imma[63:8],dec1.Ra}; pr_dec1.decbus.has_imma = 1'b1; end
-	if (dec2.pfxb) begin pr_dec1.decbus.immb = {dec2.immb[63:8],dec1.Rb}; pr_dec1.decbus.has_immb = 1'b1; end
+	if (dec2.pfxa) begin 
+		pr_dec1.decbus.imma = {dec2.imma[63:8],dec1.Ra};
+		pr_dec1.decbus.has_imma = 1'b1;
+	end
+	if (dec2.pfxb) begin
+		pr_dec1.decbus.immb = dec1.mem ? {dec2.immb[63:8],dec1.immb[7:0]} : {dec2.immb[63:8],dec1.Rb};
+		pr_dec1.decbus.has_immb = 1'b1;
+	end
 	if (dec2.pfxc) begin pr_dec1.decbus.immc = {dec2.immc[63:8],dec1.Rc}; pr_dec1.decbus.has_immc = 1'b1; end
 	pr_dec2.decbus = dec2;
 	if (dec3.pfxa) begin pr_dec2.decbus.imma = {dec3.imma[63:8],dec2.Ra}; pr_dec2.decbus.has_imma = 1'b1; end
-	if (dec3.pfxb) begin pr_dec2.decbus.immb = {dec3.immb[63:8],dec2.Rb}; pr_dec2.decbus.has_immb = 1'b1; end
+	if (dec3.pfxb) begin 
+		pr_dec2.decbus.immb = dec2.mem ? {dec3.immb[63:8],dec2.immb[7:0]} : {dec3.immb[63:8],dec2.Rb};
+		pr_dec2.decbus.has_immb = 1'b1;
+	end
 	if (dec3.pfxc) begin pr_dec2.decbus.immc = {dec3.immc[63:8],dec2.Rc}; pr_dec2.decbus.has_immc = 1'b1; end
 	pr_dec3.decbus = dec3;
 	if (dec4.pfxa) begin pr_dec3.decbus.imma = {dec4.imma[63:8],dec3.Ra}; pr_dec3.decbus.has_imma = 1'b1; end
-	if (dec4.pfxb) begin pr_dec3.decbus.immb = {dec4.immb[63:8],dec3.Rb}; pr_dec3.decbus.has_immb = 1'b1; end
+	if (dec4.pfxb) begin
+		pr_dec3.decbus.immb = dec3.mem ? {dec4.immb[63:8],dec3.immb[7:0]} : {dec4.immb[63:8],dec3.Rb};
+		pr_dec3.decbus.has_immb = 1'b1;
+	end
 	if (dec4.pfxc) begin pr_dec3.decbus.immc = {dec4.immc[63:8],dec3.Rc}; pr_dec3.decbus.has_immc = 1'b1; end
 	pr_dec0.mcip = ins0d.mcip;
 	pr_dec1.mcip = ins1d.mcip;

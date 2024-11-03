@@ -350,6 +350,7 @@ pipeline_reg_t ins0_que, ins1_que, ins2_que, ins3_que;
 wire bo_wr;
 aregno_t bo_areg;
 pregno_t bo_preg;
+pregno_t bo_nreg;
 
 reg [3:0] predino;
 rob_ndx_t predrndx;
@@ -2781,6 +2782,7 @@ Qupls_pipeline_ren uren1
 	.bo_wr(bo_wr),
 	.bo_areg(bo_areg),
 	.bo_preg(bo_preg),
+	.bo_nreg(bo_nreg),
 	.cndx(cndx0),
 	.pcndx(pcndx),
 	.rat_stallq(rat_stallq),
@@ -4814,14 +4816,12 @@ else begin
 	if (alu0_available && alu0_rndxv && alu0_idle) begin
 		rob[alu0_rndx].argA <= rfo_alu0_argA;
 		rob[alu0_rndx].argB <= rfo_alu0_argB;
-		rob[alu0_rndx].argC <= rfo_alu0_argC;
 		rob[alu0_rndx].argT <= rfo_alu0_argT;
 	end
 	if (NALU > 1) begin
 		if (alu1_available && alu1_rndxv && alu1_idle) begin
 			rob[alu1_rndx].argA <= rfo_alu1_argA;
 			rob[alu1_rndx].argB <= rfo_alu1_argB;
-			rob[alu1_rndx].argC <= rfo_alu1_argC;
 			rob[alu1_rndx].argT <= rfo_alu1_argT;
 		end
 	end
@@ -4829,14 +4829,12 @@ else begin
 		if (fpu0_available && fpu0_rndxv && fpu0_idle) begin
 			rob[fpu0_rndx].argA <= rfo_fpu0_argA;
 			rob[fpu0_rndx].argB <= rfo_fpu0_argB;
-			rob[fpu0_rndx].argC <= rfo_fpu0_argC;
 			rob[fpu0_rndx].argT <= rfo_fpu0_argT;
 		end
 	end
 	if (agen0_rndxv && agen0_idle && robentry_agen_issue[agen0_rndx]) begin
 		rob[agen0_rndx].argA <= rfo_agen0_argA;
 		rob[agen0_rndx].argB <= rfo_agen0_argB;
-		rob[agen0_rndx].argC <= rfo_agen0_argC;
 	end
 	if (NAGEN > 1) begin
 		if (agen1_rndxv && agen1_idle) begin
@@ -4849,6 +4847,22 @@ else begin
 		rob[fcu_rndx].argB <= rfo_fcu_argB;
 	end
 `endif
+	if (alu0_available && alu0_rndxv && alu0_idle) begin
+		rob[alu0_rndx].argC <= rfo_alu0_argC;
+	end
+	if (NALU > 1) begin
+		if (alu1_available && alu1_rndxv && alu1_idle) begin
+			rob[alu1_rndx].argC <= rfo_alu1_argC;
+		end
+	end
+	if (NFPU > 0) begin
+		if (fpu0_available && fpu0_rndxv && fpu0_idle) begin
+			rob[fpu0_rndx].argC <= rfo_fpu0_argC;
+		end
+	end
+	if (agen0_rndxv && agen0_idle && robentry_agen_issue[agen0_rndx]) begin
+		rob[agen0_rndx].argC <= rfo_agen0_argC;
+	end
 
 	if (!rstcnt[2])
 		rstcnt <= rstcnt + 1;
@@ -4986,6 +5000,7 @@ else begin
 				tBypassRegnames(tail1, ins1_ren, ins3_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
 				*/
 				tBypassRegnames(tail1, ins1_ren, ins0_ren, 1'b0, ins1_ren.decbus.has_immb | prnv[3], ins1_ren.decbus.has_immc | prnv[3], prnv[3], prnv[3]);
+				tBypassValid(tail1, ins1_ren, ins0_ren);
 				
 				atom_mask <= atom_mask[32:6];
 			end
@@ -5022,6 +5037,8 @@ else begin
 				*/
 				tBypassRegnames(tail2, ins2_ren, ins0_ren, ins2_que.decbus.has_imma, ins2_ren.decbus.has_immb | prnv[3], ins2_ren.decbus.has_immc | prnv[3], prnv[3], prnv[3]);
 				tBypassRegnames(tail2, ins2_ren, ins1_ren, ins2_que.decbus.has_imma, ins2_ren.decbus.has_immb | prnv[7], ins2_ren.decbus.has_immc | prnv[7], prnv[7], prnv[7]);
+				tBypassValid(tail2, ins2_ren, ins0_ren);
+				tBypassValid(tail2, ins2_ren, ins1_ren);
 				
 				atom_mask <= atom_mask[32:9];
 			end
@@ -5056,6 +5073,9 @@ else begin
 				tBypassRegnames(tail3, ins3_ren, ins0_ren, ins3_ren.decbus.has_imma, ins3_ren.decbus.has_immb | prnv[3], ins3_ren.decbus.has_immc | prnv[3], prnv[3], prnv[3]);
 				tBypassRegnames(tail3, ins3_ren, ins1_ren, ins3_ren.decbus.has_imma, ins3_ren.decbus.has_immb | prnv[7], ins3_ren.decbus.has_immc | prnv[7], prnv[7], prnv[7]);
         tBypassRegnames(tail3, ins3_ren, ins2_ren, ins3_ren.decbus.has_imma, ins3_ren.decbus.has_immb | prnv[11], ins3_ren.decbus.has_immc | prnv[11], prnv[11], prnv[11]);
+				tBypassValid(tail2, ins3_ren, ins0_ren);
+				tBypassValid(tail2, ins3_ren, ins1_ren);
+				tBypassValid(tail2, ins3_ren, ins2_ren);
 				
 				atom_mask <= atom_mask[32:12];
 			end
@@ -6955,6 +6975,24 @@ begin
 end
 endtask
 
+task tBypassValid;
+input rob_ndx_t ndx;
+input pipeline_reg_t db;
+input pipeline_reg_t db2;
+begin
+	if (db.decbus.Ra == db2.decbus.Rt && !db.decbus.Raz)
+		rob[ndx].argA_v <= FALSE;
+	if (db.decbus.Rb == db2.decbus.Rt && !db.decbus.Rbz)
+		rob[ndx].argB_v <= FALSE;
+	if (db.decbus.Rc == db2.decbus.Rt && !db.decbus.Rcz)
+		rob[ndx].argC_v <= FALSE;
+	if (db.decbus.Rt == db2.decbus.Rt && !db.decbus.Rtz)
+		rob[ndx].argT_v <= FALSE;
+	if (db.decbus.Rm == db2.decbus.Rt)
+		rob[ndx].argM_v <= FALSE;
+end
+endtask
+
 // Get the predicate bitmask for the instruction.
 // For scalar instructions this comes from the predicate modifier associated
 // with the instruction.
@@ -7004,13 +7042,13 @@ begin
     rob[nn].argA <= val;
 	if (rob[nn].argB_v == INV && rob[nn].op.pRb == Rt && rob[nn].v == VAL && v == VAL)
     rob[nn].argB <= val;
-	if (rob[nn].argC_v == INV && rob[nn].op.pRc == Rt && rob[nn].v == VAL && v == VAL)
-    rob[nn].argC <= val;
 	if (rob[nn].argT_v == INV && rob[nn].op.pRt == Rt && rob[nn].v == VAL && v == VAL)
     rob[nn].argT <= val;
 	if (rob[nn].argM_v == INV && rob[nn].op.pRm == Rt && rob[nn].v == VAL && v == VAL)
     rob[nn].argM <= val;
 `endif    
+	if (rob[nn].argC_v == INV && rob[nn].op.pRc == Rt && rob[nn].v == VAL && v == VAL)
+    rob[nn].argC <= val;
 end
 endtask	    
 
@@ -7528,7 +7566,7 @@ begin
 		rob[tail].decbus.store <= FALSE;
 		rob[tail].decbus.mem <= FALSE;
 		rob[tail].op.pred_btst <= 6'd0;
-		rob[tail].op.ins = {57'd0,OP_MOV};
+		rob[tail].op.ins <= {57'd0,OP_MOV};
 //		rob[tail].argA_v <= VAL;
 		rob[tail].argB_v <= VAL;
 		rob[tail].argC_v <= VAL;

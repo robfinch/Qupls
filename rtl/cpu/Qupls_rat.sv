@@ -59,7 +59,7 @@ module Qupls_rat(rst, clk, clk5x, ph4, en, en2, nq, stallq,
 	cmtaa, cmtba, cmtca, cmtda, cmtap, cmtbp, cmtcp, cmtdp, cmtbr,
 	cmtaval, cmtbval, cmtcval, cmtdval,
 	restore_list, restored, tags2free, freevals, free_chkpt_i, fchkpt_i, backout, fcu_id,
-	bo_wr, bo_areg, bo_preg);
+	bo_wr, bo_areg, bo_preg, bo_nreg);
 parameter XWID = 4;
 parameter NPORT = 24;
 parameter BANKS = 1;
@@ -150,9 +150,10 @@ input free_chkpt_i;
 input checkpt_ndx_t fchkpt_i;
 input backout;
 input rob_ndx_t fcu_id;
-output reg bo_wr;
+output bo_wr;
 output aregno_t bo_areg;
 output pregno_t bo_preg;
+output pregno_t bo_nreg;
 
 
 reg en2d;
@@ -163,6 +164,7 @@ reg backout_stall;
 reg pbackout, pbackout2;
 cpu_types_pkg::pregno_t [NPORT-1:0] next_prn;	// physical register name
 cpu_types_pkg::pregno_t [NPORT-1:0] prnd;			// delayed physical register name
+cpu_types_pkg::aregno_t [NPORT-1:0] prev_rn;
 reg pwr0,p2wr0;
 reg pwr1,p2wr1;
 reg pwr2,p2wr2;
@@ -343,8 +345,9 @@ else begin
 		currentRegvalid <= regvalid_ram_o;
 	else begin
 		if (bo_wr) begin
-			currentRegvalid[bo_preg] <= VAL;
-			currentRegvalid[currentMap.regmap[bo_areg]] <= VAL;
+//			currentRegvalid[bo_preg] <= VAL;
+			currentRegvalid[bo_nreg] <= VAL;
+//			currentRegvalid[currentMap.regmap[bo_areg]] <= VAL;
 		end
 		if (cmtav)
 			currentRegvalid[cmtap] <= VAL;
@@ -535,14 +538,17 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 			end
 
 		always_ff @(posedge clk)
-			if (rst)
+			if (rst) begin
 				prn[g] <= 9'd0;
+				prev_rn[g] <= 8'd0;
+			end
 			// If there is a pipeline bubble.
 			else begin
 //				if (cdrn[g] || cpram_we) 
 				if (en2)
 				begin
 					prn[g] <= next_prn[g];
+					prev_rn[g] <= rn[g];
 				end
 			end
 
@@ -607,7 +613,7 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 						
 							if (prn[g]==9'd0)
 								prv[g] = VAL;
-							
+							/*
 							else if (prn[g]==cmtdp && cmtdv)
 								prv[g] = VAL;
 							else if (prn[g]==cmtcp && cmtcv)
@@ -616,6 +622,7 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 								prv[g] = VAL;
 							else if (prn[g]==cmtap && cmtav)
 								prv[g] = VAL;
+							*/
 							/*
 							else if (prn[g]==pwrrd && pwr3)
 								prv[g] = INV;
@@ -674,9 +681,7 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 						begin							
 							if (prn[g]==9'd0)
 								prv[g] = VAL;
-							else if (prn[g]==wrra && wr0)
-								prv[g] = INV;
-															
+							/*								
 							else if (prn[g]==cmtdp && cmtdv)
 								prv[g] = VAL;
 							else if (prn[g]==cmtcp && cmtcv)
@@ -685,7 +690,7 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 								prv[g] = VAL;
 							else if (prn[g]==cmtap && cmtav)
 								prv[g] = VAL;
-
+							*/
 							/*
 							else if (prn[g]==pwrrd && pwr3)
 								prv[g] = INV;
@@ -752,11 +757,7 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 						begin
 							if (prn[g]==9'd0)
 								prv[g] = VAL;
-							else if (prn[g]==wrrb && wr1)
-								prv[g] = INV;
-							else if (prn[g]==wrra && wr0)
-								prv[g] = INV;
-								
+							/*	
 							else if (prn[g]==cmtdp && cmtdv)
 								prv[g] = VAL;
 							else if (prn[g]==cmtcp && cmtcv)
@@ -765,6 +766,7 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 								prv[g] = VAL;
 							else if (prn[g]==cmtap && cmtav)
 								prv[g] = VAL;
+							*/
 							/*
 							else if (prn[g]==pwrrd && pwr3 && rn_cp[g]==pwrd_cp)
 								prv[g] = INV;
@@ -824,13 +826,7 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 							begin
 							if (prn[g]==9'd0)
 								prv[g] = VAL;
-							else if (prn[g]==wrrc && wr2)
-								prv[g] = INV;
-							else if (prn[g]==wrrb && wr1)
-								prv[g] = INV;
-							else if (prn[g]==wrra && wr0)
-								prv[g] = INV;
-							
+							/*
 							else if (prn[g]==cmtdp && cmtdv)
 								prv[g] = VAL;
 							else if (prn[g]==cmtcp && cmtcv)
@@ -839,7 +835,7 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 								prv[g] = VAL;
 							else if (prn[g]==cmtap && cmtav)
 								prv[g] = VAL;
-
+							*/
 							/*
 							else if (prn[g]==pwrrd && pwr3 && rn_cp[g]==pwrd_cp)
 								prv[g] = INV;
@@ -1052,10 +1048,9 @@ always_comb chkpt_stall = avail_chkpt==5'd31;
 // Free all the branch checkpoints coming after a restore.
 
 rob_ndx_t rndx;
-reg [1:0] backout_st2;
+wire [1:0] backout_st2;
 always_ff @(posedge clk)
 if (rst) begin
-	backout_st2 <= 2'd0;
 	rndx <= {$bits(checkpt_ndx_t){1'b0}};
 	free_chkpt2 <= FALSE;
 end
@@ -1065,7 +1060,6 @@ else begin
 	2'd0:
 		if (restore) begin
 			rndx <= (fcu_id + 3'd4) % ROB_ENTRIES;
-			backout_st2 <= 2'd1;
 		end
 	2'd1:
 		begin
@@ -1074,8 +1068,6 @@ else begin
 				fchkpt2 <= rob[rndx].cndx;
 			end 
 			rndx <= (rndx + 3'd4) % ROB_ENTRIES;
-			if (rob[rndx].sn <= rob[fcu_id].sn)
-				backout_st2 <= 2'd0;
 		end
 	endcase
 end
@@ -1172,60 +1164,25 @@ end
 // Note if a branch mispredict occurs and the checkpoint is being restored
 // to an earlier one anyway, then this backout is cancelled.
 
-reg [1:0] backout_state;
-rob_ndx_t backout_id;
+wire [1:0] backout_state;
 
-always_ff @(posedge clk)
-if (rst) begin
-	backout_id <= {$bits(rob_ndx_t){1'b0}};
-	backout_state <= 2'd0;
-end
-else begin
-	case(backout_state)
-	2'd0:
-		if (backout) begin
-			if (rob[(fcu_id+3)%ROB_ENTRIES].grp==rob[fcu_id].grp) begin
-				backout_id <= (fcu_id + 3) % ROB_ENTRIES;
-				backout_state <= 2'd1;
-			end
-			else if (rob[(fcu_id+2)%ROB_ENTRIES].grp==rob[fcu_id].grp) begin
-				backout_id <= (fcu_id + 2) % ROB_ENTRIES;
-				backout_state <= 2'd1;
-			end
-			else if (rob[(fcu_id+1)%ROB_ENTRIES].grp==rob[fcu_id].grp) begin
-				backout_id <= (fcu_id + 1) % ROB_ENTRIES;
-				backout_state <= 2'd1;
-			end
-//		else  nothing to backout
-		end
-	2'd1:
-		if (restore)
-			backout_state <= 2'd0;
-		else if (backout_id != fcu_id)
-			backout_id <= (backout_id + ROB_ENTRIES - 1) % ROB_ENTRIES;
-		else
-			backout_state <= 2'd0;
-	default:
-		backout_state <= 2'd0;
-	endcase
-end
-
-always_comb backout_stall = backout || backout_state != 2'd0 || backout_st2 != 2'd0;
-
-always_ff @(posedge clk)
-if (rst) begin
-	bo_wr <= FALSE;
-	bo_areg <= {$bits(aregno_t){1'b0}};
-	bo_preg <= {$bits(pregno_t){1'b0}};
-end
-else begin
-	bo_wr <= FALSE;
-	if (!restore && backout_state==2'd1) begin
-		bo_wr <= TRUE;
-		bo_areg <= rob[backout_id].op.aRt;
-		bo_preg <= rob[backout_id].op.pRt;
-	end
-end
+Qupls_backout_machine ubomac1
+(
+	.rst(rst),
+	.clk(clk),
+	.backout(backout),
+	.fcu_id(fcu_id),
+	.rob(rob),
+	.restore(restore),
+	.restore_ndx(rndx),
+	.backout_state(backout_state),
+	.backout_st2(backout_st2),
+	.bo_wr(bo_wr),
+	.bo_areg(bo_areg),
+	.bo_preg(bo_preg),
+	.bo_nreg(bo_nreg),
+	.stall(backout_stall)
+);
 
 // Stall the enqueue of instructions if there are too many outstanding branches.
 // Also stall for a new checkpoint or a lack of available checkpoints.
@@ -1563,7 +1520,7 @@ else begin
 	tags2free[2] = 9'd0;
 	tags2free[3] = 9'd0;
 	if (bo_wr)
-		tags2free[0] = currentMap.regmap[bo_areg];
+		tags2free[0] = bo_nreg;//currentMap.regmap[bo_areg];
 	if (cdcmtav)
 		tags2free[0] = currentMap.pregmap[cmtaa];
 	if (cdcmtbv)
@@ -1609,9 +1566,12 @@ else begin
 
 	// Backout is not subject to pipeline enable.
 	if (!pe_alloc_chkpt) begin
+		currentMap.avail = avail_i;
+
 		// Backout update.
-		if (bo_wr)
+		if (bo_wr) begin
 			currentMap.regmap[bo_areg] = bo_preg;
+		end
 
 		// The branch instruction itself might need to update the checkpoint info.
 		if (en2d) begin

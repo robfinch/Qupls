@@ -94,7 +94,7 @@ reg [WID-1:0] immc8;
 reg [22:0] ii;
 reg [WID-1:0] sd;
 reg [WID-1:0] sum_ab;
-reg [WID:0] sum_gc;
+reg [WID+1:0] sum_gc;
 reg [WID-1:0] chndx;
 reg [WID-1:0] chndx2;
 reg [WID-1:0] chrndxv;
@@ -272,7 +272,7 @@ begin
 				*/
 				default:	bus = {WID{1'd0}};
 				endcase
-			OP3_ADDGC: bus = {{WID-1{1'b0}},sum_gc[WID]};
+			OP3_ADDGC: bus = {{WID-2{1'b0}},sum_gc[WID+1:WID]};
 			default:	bus = {WID{1'd0}};
 			endcase
 		FN_SUB:	bus = a - b - c;
