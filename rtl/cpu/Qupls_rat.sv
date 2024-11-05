@@ -341,9 +341,12 @@ always_ff @(posedge clk)
 if (rst)
 	currentRegvalid <= {PREGS{1'b1}};
 else begin
+/*
 	if (restore)
 		currentRegvalid <= regvalid_ram_o;
-	else begin
+	else
+*/
+	begin
 		if (bo_wr) begin
 //			currentRegvalid[bo_preg] <= VAL;
 			currentRegvalid[bo_nreg] <= VAL;
@@ -358,14 +361,14 @@ else begin
 		if (cmtdv)
 			currentRegvalid[cmtdp] <= VAL;
 		if (en2 & ~stall_same_reg) begin
-			if (wr0)
-				currentRegvalid[wrra] <= INV;
-			if (wr1)
-				currentRegvalid[wrrb] <= INV;
-			if (wr2)
-				currentRegvalid[wrrc] <= INV;
-			if (wr3)
-				currentRegvalid[wrrd] <= INV;
+			if (pwr0)
+				currentRegvalid[pwrra] <= INV;
+			if (pwr1)
+				currentRegvalid[pwrrb] <= INV;
+			if (pwr2)
+				currentRegvalid[pwrrc] <= INV;
+			if (pwr3)
+				currentRegvalid[pwrrd] <= INV;
 		end
 	end
 end
@@ -1173,6 +1176,7 @@ Qupls_backout_machine ubomac1
 	.backout(backout),
 	.fcu_id(fcu_id),
 	.rob(rob),
+	.tail(tail),
 	.restore(restore),
 	.restore_ndx(rndx),
 	.backout_state(backout_state),
@@ -1519,16 +1523,16 @@ else begin
 	tags2free[1] = 9'd0;
 	tags2free[2] = 9'd0;
 	tags2free[3] = 9'd0;
-	if (bo_wr)
-		tags2free[0] = bo_nreg;//currentMap.regmap[bo_areg];
+//	if (bo_wr)
+//		tags2free[0] = bo_nreg;//currentMap.regmap[bo_areg];
 	if (cdcmtav)
-		tags2free[0] = currentMap.pregmap[cmtaa];
+		tags2free[0] = currentMap.p2regmap[cmtaa];
 	if (cdcmtbv)
-		tags2free[1] = currentMap.pregmap[cmtba];
+		tags2free[1] = currentMap.p2regmap[cmtba];
 	if (cdcmtcv)
-		tags2free[2] = currentMap.pregmap[cmtca];
+		tags2free[2] = currentMap.p2regmap[cmtca];
 	if (cdcmtdv)
-		tags2free[3] = currentMap.pregmap[cmtda];
+		tags2free[3] = currentMap.p2regmap[cmtda];
 end
 
 always_ff @(posedge clk)
@@ -1550,50 +1554,68 @@ assign cdcmtbv = cd_cmtbv & cmtbv;
 assign cdcmtcv = cd_cmtcv & cmtcv;
 assign cdcmtdv = cd_cmtdv & cmtdv;
 
+wire pe_bk, ne_bk;
+edge_det uedbckout1 (.rst(rst), .clk(clk), .ce(1'b1), .i(backout_state==2'd1), .pe(pe_bk), .ne(ne_bk), .ee());
+reg [PREGS-1:0] unavail;
+
 // Set the checkpoint RAM input.
 // For checkpoint establishment the current read value is desired.
 // For normal operation the write output port is used.
 
 always_ff @(posedge clk)
 if (rst) begin
-	currentMap = {$bits(checkpoint_t){1'b0}};
-	currentMap.avail = {{PREGS-1{1'b1}},1'b0};
+	currentMap <= {$bits(checkpoint_t){1'b0}};
+	currentMap.avail <= {{PREGS-1{1'b1}},1'b0};
+	unavail <= {PREGS{1'b0}};
 end
 else begin
 
 	if (restore)
-		currentMap = cpram_out;
+		currentMap <= cpram_out;
+
+	if (pe_bk)
+		unavail <= {PREGS{1'b0}};
 
 	// Backout is not subject to pipeline enable.
 	if (!pe_alloc_chkpt) begin
-		currentMap.avail = avail_i;
-
+		currentMap.avail <= avail_i;
+		
 		// Backout update.
 		if (bo_wr) begin
-			currentMap.regmap[bo_areg] = bo_preg;
+			currentMap.regmap[bo_areg] <= bo_preg;
+			unavail[bo_preg] <= 1'b0;
 		end
 
 		// The branch instruction itself might need to update the checkpoint info.
-		if (en2d) begin
+		if (en2) 
+		begin
 			if (wr0)
-				currentMap.regmap[wra] = wrra;
+				currentMap.regmap[wra] <= wrra;
 			if (wr1)
-				currentMap.regmap[wrb] = wrrb;
+				currentMap.regmap[wrb] <= wrrb;
 			if (wr2)
-				currentMap.regmap[wrc] = wrrc;
+				currentMap.regmap[wrc] <= wrrc;
 			if (wr3)
-				currentMap.regmap[wrd] = wrrd;
+				currentMap.regmap[wrd] <= wrrd;
 		end
 
 		// Shift the physical register into a second spot.
-		if (cdcmtav)
-			currentMap.pregmap[cmtaa] = currentMap.regmap[cmtaa];
-		if (cdcmtbv)
-			currentMap.pregmap[cmtba] = currentMap.regmap[cmtba];
-		if (cdcmtcv)
-			currentMap.pregmap[cmtca] = currentMap.regmap[cmtca];
-		if (cdcmtdv)
-			currentMap.pregmap[cmtda] = currentMap.regmap[cmtda];
+		if (cdcmtav) begin
+			currentMap.p2regmap[cmtaa] <= currentMap.pregmap[cmtaa];
+			currentMap.pregmap[cmtaa] <= cmtap;
+		end
+		if (cdcmtbv) begin
+			currentMap.p2regmap[cmtba] <= currentMap.pregmap[cmtba];
+			currentMap.pregmap[cmtba] <= cmtbp;
+		end
+		if (cdcmtcv) begin
+			currentMap.p2regmap[cmtca] <= currentMap.pregmap[cmtca];
+			currentMap.pregmap[cmtca] <= cmtcp;
+		end
+		if (cdcmtdv) begin
+			currentMap.p2regmap[cmtda] <= currentMap.pregmap[cmtda];
+			currentMap.pregmap[cmtda] <= cmtdp;
+		end
 			
 	end
 end
@@ -2018,14 +2040,14 @@ end
 // Add registers allocated since the branch miss instruction to the list of
 // registers to be freed.
 
-always_ff @(posedge clk)
-	restored <= restore;
+always_comb//ff @(posedge clk)
+	restored <= ne_bk;//restore;
 
 always_comb
 begin
 	// But not the registers allocated up to the branch miss
-	if (restored) begin
-		restore_list = currentMap.avail;
+	if (ne_bk) begin	//(restored) begin
+		restore_list = currentMap.avail & ~unavail;
 //		restore_list = {PREGS{1'b0}};
 	end
 	else

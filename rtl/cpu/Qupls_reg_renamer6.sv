@@ -44,7 +44,9 @@ import cpu_types_pkg::*;
 import QuplsPkg::*;
 
 module Qupls_reg_renamer6(rst,clk,en,restore,restore_list,tags2free,freevals,
-	alloc0,alloc1,alloc2,alloc3,wo0,wo1,wo2,wo3,wv0,wv1,wv2,wv3,avail,stall,rst_busy);
+	bo_wr, bo_preg,
+	alloc0,alloc1,alloc2,alloc3,wo0,wo1,wo2,wo3,wv0,wv1,wv2,wv3,avail,stall,rst_busy
+);
 parameter NFTAGS = 4;
 input rst;
 input clk;
@@ -53,6 +55,8 @@ input restore;
 input [PREGS-1:0] restore_list;
 input cpu_types_pkg::pregno_t [NFTAGS-1:0] tags2free;		// register tags to free
 input [NFTAGS-1:0] freevals;					// bitmnask indicating which tags to free
+input bo_wr;
+input pregno_t bo_preg;
 input alloc0;					// allocate target register 0
 input alloc1;
 input alloc2;
@@ -148,9 +152,9 @@ end
 always_comb
 begin
 	freevals1[0] = tags2free[0]==9'd0 ? 1'b0 : freevals[0];
-	freevals1[1] = freevals[1];
-	freevals1[2] = freevals[2];
-	freevals1[3] = freevals[3];
+	freevals1[1] = tags2free[1]==9'd0 ? 1'b0 : freevals[1];
+	freevals1[2] = tags2free[2]==9'd0 ? 1'b0 : freevals[2];
+	freevals1[3] = tags2free[3]==9'd0 ? 1'b0 : freevals[3];
 end
 
 generate begin : gAvail
@@ -193,10 +197,10 @@ begin
 		tags[2] = freeCnt + PREGS/2;
 	if (tags[3]==9'd0)
 		tags[3] = freeCnt + PREGS*3/4;
-	fpush[0] = avail[tags[0]] ? 1'b0 : freevals1[0] | ffree[0];
-	fpush[1] = avail[tags[1]] ? 1'b0 : freevals1[1] | ffree[1];
-	fpush[2] = avail[tags[2]] ? 1'b0 : freevals1[2] | ffree[2];
-	fpush[3] = avail[tags[3]] ? 1'b0 : freevals1[3] | ffree[3];
+	fpush[0] = avail[tags[0]] ? 1'b0 : tags[0]==9'd0 ? 1'b0 : freevals1[0] | ffree[0];
+	fpush[1] = avail[tags[1]] ? 1'b0 : tags[1]==9'd0 ? 1'b0 : freevals1[1] | ffree[1];
+	fpush[2] = avail[tags[2]] ? 1'b0 : tags[2]==9'd0 ? 1'b0 : freevals1[2] | ffree[2];
+	fpush[3] = avail[tags[3]] ? 1'b0 : tags[3]==9'd0 ? 1'b0 : freevals1[3] | ffree[3];
 end
 
 wire [7:0] ffo0;
@@ -257,10 +261,10 @@ begin
 		tags[2] = freeCnt + PREGS/2;
 	if (tags[3]==8'd0)
 		tags[3] = freeCnt + PREGS*3/4;
-	fpush[0] = avail[tags[0]] ? 1'b0 : freevals1[0] | ffree[0];
-	fpush[1] = avail[tags[1]] ? 1'b0 : freevals1[1] | ffree[1];
-	fpush[2] = avail[tags[2]] ? 1'b0 : freevals1[2] | ffree[2];
-	fpush[3] = avail[tags[3]] ? 1'b0 : freevals1[3] | ffree[3];
+	fpush[0] = avail[tags[0]] ? 1'b0 : tags[0]==8'd0 ? 1'b0 : (freevals1[0] | ffree[0]);
+	fpush[1] = avail[tags[1]] ? 1'b0 : tags[1]==8'd0 ? 1'b0 : (freevals1[1] | ffree[1]);
+	fpush[2] = avail[tags[2]] ? 1'b0 : tags[2]==8'd0 ? 1'b0 : (freevals1[2] | ffree[2]);
+	fpush[3] = avail[tags[3]] ? 1'b0 : tags[3]==8'd0 ? 1'b0 : (freevals1[3] | ffree[3]);
 end
 
 wire [6:0] ffo0;
@@ -310,6 +314,8 @@ begin
 	if (fpush[2]) next_avail[tags[2]] = 1'b1;// | (512'd1 << tags[2]);//((freeCnt + 3'd2) % 512));
 	if (fpush[3]) next_avail[tags[3]] = 1'b1;// | (512'd1 << tags[3]);//((freeCnt + 3'd3) % 512));
 
+	if (bo_wr) next_avail[bo_preg] = 1'b0;
+
 	next_avail[0] = 1'b0;
 end
 
@@ -317,10 +323,8 @@ wire cd_avail;
 change_det #(PREGS) ucdavail1 (.rst(rst), .clk(clk), .ce(1'b1), .i(avail), .cd(cd_avail));
 
 always_ff @(posedge clk)
-if (rst) begin
+if (rst)
 	avail = {{PREGS-1{1'b1}},1'b0};
-	avail[0] = 1'b0;
-end
 else
 	avail <= next_avail;
 
@@ -404,7 +408,7 @@ if (rst) begin
 	ffree[3] <= 1'b0;
 end
 else begin
-	ffree[0] <= 9'd000 + freeCnt!=7'd0 ? toFreeList[9'd000+freeCnt] : 1'b0;
+	ffree[0] <= (freeCnt!=7'd0) ? toFreeList[freeCnt] : 1'b0;
 	ffree[1] <= toFreeList[PREGS/4+freeCnt];
 	ffree[2] <= toFreeList[PREGS/2+freeCnt];
 	ffree[3] <= toFreeList[PREGS*3/4+freeCnt];
@@ -419,6 +423,7 @@ begin
  	if (fpush[1])	next_toFreeList[tags[1]] = 1'b0;
  	if (fpush[2])	next_toFreeList[tags[2]] = 1'b0;
  	if (fpush[3])	next_toFreeList[tags[3]] = 1'b0;
+ 	next_toFreeList[0] = 1'b0;
 end
 
 always_ff @(posedge clk)

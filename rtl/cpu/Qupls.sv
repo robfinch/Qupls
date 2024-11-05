@@ -2339,6 +2339,8 @@ Qupls_pipeline_dec udecstg1
 	.sr(sr),
 	.tags2free(tags2free),
 	.freevals(freevals),
+	.bo_wr(bo_wr),
+	.bo_preg(bo_preg),
 	.stomp_mux(stomp_mux),
 	.stomp_bno(stomp_bno),
 	.ins0_mux(ins0_mux), 
@@ -4810,6 +4812,10 @@ if (irst) begin
 	tReset();
 end
 else begin
+	// Check if all instruciton arguments are valid.
+	for (n3 = 0; n3 < ROB_ENTRIES; n3 = n3 + 1)
+		tAllArgsValid(n3, INV, INV, INV, INV, INV);
+
 	// The reorder buffer is not updated with the argument values. This is done
 	// just for debugging in SIM. All values come from the register file.
 `ifdef IS_SIM
@@ -5073,9 +5079,9 @@ else begin
 				tBypassRegnames(tail3, ins3_ren, ins0_ren, ins3_ren.decbus.has_imma, ins3_ren.decbus.has_immb | prnv[3], ins3_ren.decbus.has_immc | prnv[3], prnv[3], prnv[3]);
 				tBypassRegnames(tail3, ins3_ren, ins1_ren, ins3_ren.decbus.has_imma, ins3_ren.decbus.has_immb | prnv[7], ins3_ren.decbus.has_immc | prnv[7], prnv[7], prnv[7]);
         tBypassRegnames(tail3, ins3_ren, ins2_ren, ins3_ren.decbus.has_imma, ins3_ren.decbus.has_immb | prnv[11], ins3_ren.decbus.has_immc | prnv[11], prnv[11], prnv[11]);
-				tBypassValid(tail2, ins3_ren, ins0_ren);
-				tBypassValid(tail2, ins3_ren, ins1_ren);
-				tBypassValid(tail2, ins3_ren, ins2_ren);
+				tBypassValid(tail3, ins3_ren, ins0_ren);
+				tBypassValid(tail3, ins3_ren, ins1_ren);
+				tBypassValid(tail3, ins3_ren, ins2_ren);
 				
 				atom_mask <= atom_mask[32:12];
 			end
@@ -5704,11 +5710,31 @@ else begin
 	
 	// Move pending to real.	
 	for (nn = 0; nn < ROB_ENTRIES; nn = nn + 1) begin
-		if (rob[nn].argA_vp) begin if (!robentry_stomp[nn]) rob[nn].argA_v <= VAL; rob[nn].argA_vp <= INV; end
-		if (rob[nn].argB_vp) begin if (!robentry_stomp[nn]) rob[nn].argB_v <= VAL; rob[nn].argB_vp <= INV; end
-		if (rob[nn].argC_vp) begin if (!robentry_stomp[nn]) rob[nn].argC_v <= VAL; rob[nn].argC_vp <= INV; end
-		if (rob[nn].argT_vp) begin if (!robentry_stomp[nn]) rob[nn].argT_v <= VAL; rob[nn].argT_vp <= INV; end
-		if (rob[nn].argM_vp) begin if (!robentry_stomp[nn]) rob[nn].argM_v <= VAL; rob[nn].argM_vp <= INV; end
+		if (rob[nn].argA_vp) begin
+			rob[nn].argA_v <= VAL;
+			tAllArgsValid(nn, VAL, INV, INV, INV, INV);
+			rob[nn].argA_vp <= INV;
+		end
+		if (rob[nn].argB_vp) begin
+			rob[nn].argB_v <= VAL;
+			tAllArgsValid(nn, INV, VAL, INV, INV, INV);
+			rob[nn].argB_vp <= INV;
+		end
+		if (rob[nn].argC_vp) begin
+			rob[nn].argC_v <= VAL;
+			tAllArgsValid(nn, INV, INV, VAL, INV, INV);
+			rob[nn].argC_vp <= INV;
+		end
+		if (rob[nn].argT_vp) begin
+			rob[nn].argT_v <= VAL;
+			tAllArgsValid(nn, INV, INV, INV, VAL, INV);
+			rob[nn].argT_vp <= INV;
+		end
+		if (rob[nn].argM_vp) begin
+			rob[nn].argM_v <= VAL;
+			tAllArgsValid(nn, INV, INV, INV, INV, VAL);
+			rob[nn].argM_vp <= INV;
+		end
 	end
 	
 	// Set LSQ register C, it may be waiting for data
@@ -6169,19 +6195,38 @@ else begin
 			if (rob[head0].v) begin
 				if (!rob[head0].argA_v && !fnFindSource(head0, rob[head0].decbus.Ra)) begin
 					rob[head0].argA_v <= VAL;
+					tAllArgsValid(head0, VAL, INV, INV, INV, INV);
 					$display("Q+: rob[%d]: argument A not possible to validate.", head0);
 				end		
 				if (!rob[head0].argB_v && !fnFindSource(head0, rob[head0].decbus.Rb)) begin
 					$display("Q+: rob[%d]: argument B not possible to validate.", head0);
 					rob[head0].argB_v <= VAL;
+					tAllArgsValid(head0, INV, VAL, INV, INV, INV);
 				end		
 				if (!rob[head0].argC_v && !fnFindSource(head0, rob[head0].decbus.Rc)) begin
 					$display("Q+: rob[%d]: argument C not possible to validate.", head0);
 					rob[head0].argC_v <= VAL;
+					tAllArgsValid(head0, INV, INV, VAL, INV, INV);
 				end		
-				if (!rob[head0].argT_v && !fnFindSource(head0, rob[head0].decbus.Rt)) begin
-					$display("Q+: rob[%d]: argument T not possible to validate.", head0);
+				if (!rob[head0].argT_v) begin
+					if (!fnFindSource(head0, rob[head0].decbus.Rt)) begin
+						$display("Q+: rob[%d]: argument T not possible to validate.", head0);
+						rob[head0].argT_v <= VAL;
+						tAllArgsValid(head0, INV, INV, INV, VAL, INV);
+					end
+					/*
+					else begin
+						if (fnSourceValid(head0, rob[head0].decbus.Rt) begin
+							rob[head0].argT_v <= VAL;
+							tAllArgsValid(head0, INV, INV, INV, VAL, INV);
+						end
+					end
+					*/
+				end
+				if (!rob[head0].argM_v && !fnFindSource(head0, rob[head0].decbus.Rm)) begin
+					$display("Q+: rob[%d]: argument M not possible to validate.", head0);
 					rob[head0].argT_v <= VAL;
+					tAllArgsValid(head0, INV, INV, INV, INV, VAL);
 				end		
 			end
 		end
@@ -6953,23 +6998,33 @@ begin
 	if (pdb.v) begin
 		if (db.decbus.Ra == pdb.decbus.Rt && !db.decbus.Raz) begin
 			rob[ndx].op.pRa <= pdb.nRt;
-			rob[ndx].argA_v <= fnSourceAv(db) | db.decbus.has_imma | Av;
+			if (fnSourceAv(db) | db.decbus.has_imma | Av)
+				rob[ndx].argA_v <= VAL;
+			tAllArgsValid(ndx, fnSourceAv(db) | db.decbus.has_imma | Av, 1'b0, 1'b0, 1'b0, 1'b0);
 		end
 		if (db.decbus.Rb == pdb.decbus.Rt && !db.decbus.Rbz) begin
 			rob[ndx].op.pRb <= pdb.nRt;
-			rob[ndx].argB_v <= fnSourceBv(db) | db.decbus.has_immb | Bv;
+			if (fnSourceBv(db) | db.decbus.has_immb | Bv)
+				rob[ndx].argB_v <= VAL;
+			tAllArgsValid(ndx, 1'b0, fnSourceBv(db) | db.decbus.has_immb | Bv, 1'b0, 1'b0, 1'b0);
 		end
 		if (db.decbus.Rc == pdb.decbus.Rt && !db.decbus.Rcz) begin
 			rob[ndx].op.pRc <= pdb.nRt;
-			rob[ndx].argC_v <= fnSourceCv(db) | db.decbus.has_immc | Cv;
+			if (fnSourceCv(db) | db.decbus.has_immc | Cv)
+				rob[ndx].argC_v <= VAL;
+			tAllArgsValid(ndx, 1'b0, 1'b0, fnSourceCv(db) | db.decbus.has_immc | Cv, 1'b0, 1'b0);
 		end
 		if (db.decbus.Rt == pdb.decbus.Rt && !db.decbus.Rtz) begin
 			rob[ndx].op.pRt <= pdb.nRt;
-			rob[ndx].argT_v <= fnSourceTv(db) | Tv;
+			if (fnSourceTv(db) | Tv)
+				rob[ndx].argT_v <= VAL;
+			tAllArgsValid(ndx, 1'b0, 1'b0, 1'b0, fnSourceTv(db) | Tv, 1'b0);
 		end
 		if (db.decbus.Rm == pdb.decbus.Rt) begin
 			rob[ndx].op.pRm <= pdb.nRt;
-			rob[ndx].argM_v <= fnSourceMv(db) | Mv;
+			if (fnSourceMv(db) | Mv)
+				rob[ndx].argM_v <= VAL;
+			tAllArgsValid(ndx, 1'b0, 1'b0, 1'b0, 1'b0, fnSourceMv(db) | Mv);
 		end
 	end
 end
@@ -6980,16 +7035,26 @@ input rob_ndx_t ndx;
 input pipeline_reg_t db;
 input pipeline_reg_t db2;
 begin
-	if (db.decbus.Ra == db2.decbus.Rt && !db.decbus.Raz)
-		rob[ndx].argA_v <= FALSE;
-	if (db.decbus.Rb == db2.decbus.Rt && !db.decbus.Rbz)
-		rob[ndx].argB_v <= FALSE;
-	if (db.decbus.Rc == db2.decbus.Rt && !db.decbus.Rcz)
-		rob[ndx].argC_v <= FALSE;
-	if (db.decbus.Rt == db2.decbus.Rt && !db.decbus.Rtz)
-		rob[ndx].argT_v <= FALSE;
-	if (db.decbus.Rm == db2.decbus.Rt)
-		rob[ndx].argM_v <= FALSE;
+	if (db.decbus.Ra == db2.decbus.Rt && !db.decbus.Raz) begin
+		rob[ndx].argA_v <= INV;
+		rob[ndx].all_args_valid <= INV;
+	end
+	if (db.decbus.Rb == db2.decbus.Rt && !db.decbus.Rbz) begin
+		rob[ndx].argB_v <= INV;
+		rob[ndx].all_args_valid <= INV;
+	end
+	if (db.decbus.Rc == db2.decbus.Rt && !db.decbus.Rcz) begin
+		rob[ndx].argC_v <= INV;
+		rob[ndx].all_args_valid <= INV;
+	end
+	if (db.decbus.Rt == db2.decbus.Rt && !db.decbus.Rtz) begin
+		rob[ndx].argT_v <= INV;
+		rob[ndx].all_args_valid <= INV;
+	end
+	if (db.decbus.Rm == db2.decbus.Rt) begin
+		rob[ndx].argM_v <= INV;
+		rob[ndx].all_args_valid <= INV;
+	end
 end
 endtask
 
@@ -7066,6 +7131,7 @@ begin
 	rob[ndx].decbus.fpu <= FALSE;
 	rob[ndx].decbus.fc <= FALSE;
 	rob[ndx].decbus.mem <= FALSE;
+	rob[ndx].op.ins <= {57'd0,OP_NOP};
 	//rob[n3].decbus.Rtz <= TRUE;
 	rob[ndx].done <= {FALSE,FALSE};
 	rob[ndx].out <= {FALSE,FALSE};
@@ -7482,12 +7548,18 @@ begin
 		rob[tail].exc <= FLT_NONE;
 		rob[tail].excv <= FALSE;
 	end
-
 	rob[tail].argA_v <= fnSourceAv(ins) | pRav | db.has_imma;
 	rob[tail].argB_v <= fnSourceBv(ins) | pRbv | db.has_immb;
 	rob[tail].argC_v <= fnSourceCv(ins) | pRcv | db.has_immc;
 	rob[tail].argT_v <= fnSourceTv(ins) | pRtv;
 	rob[tail].argM_v <= fnSourceMv(ins) | pRmv;
+	rob[tail].all_args_valid <= 
+		(fnSourceAv(ins) | pRav | db.has_imma) &&
+		(fnSourceBv(ins) | pRbv | db.has_immb) &&
+		(fnSourceCv(ins) | pRcv | db.has_immc) &&
+		(fnSourceTv(ins) | pRtv) &&
+		(fnSourceMv(ins) | pRmv)
+		;
 `ifdef IS_SIM
 	rob[tail].argA <= fnRegVal(pRa);
 	rob[tail].argB <= fnRegVal(pRb);
@@ -7557,7 +7629,8 @@ begin
 		rob[tail].argB_v <= VAL;
 		rob[tail].argC_v <= VAL;
 	end
-	if (ornop|db.vec|stomp) begin
+	
+	if (ornop|stomp) begin
 		rob[tail].decbus.cpytgt <= TRUE;
 		rob[tail].decbus.alu <= TRUE;
 		rob[tail].decbus.fpu <= FALSE;
@@ -7566,7 +7639,7 @@ begin
 		rob[tail].decbus.store <= FALSE;
 		rob[tail].decbus.mem <= FALSE;
 		rob[tail].op.pred_btst <= 6'd0;
-		rob[tail].op.ins <= {57'd0,OP_MOV};
+		rob[tail].op.ins <= {57'd0,OP_NOP};
 //		rob[tail].argA_v <= VAL;
 		rob[tail].argB_v <= VAL;
 		rob[tail].argC_v <= VAL;
@@ -7574,6 +7647,7 @@ begin
 //		rob[tail].argM_v <= VAL;
 //		rob[tail].done <= {TRUE,TRUE};
 	end
+	
 	// In the shadow of a BSR a target register may be assigned by the renamer.
 	// There is not an easy way to undo this assignment, so we keep it and modify
 	// the instruction to be a NOP operation.
@@ -7588,6 +7662,31 @@ begin
 	if (!stomp && !ornop && db.vec)
 		mc_orid <= tail;
 	rob[tail].rat_v <= INV;
+end
+endtask
+
+task tAllArgsValid;
+input rob_ndx_t ndx;
+input Av;
+input Bv;
+input Cv;
+input Tv;
+input Mv;
+begin
+	
+	if (Av) rob[ndx].argA_v <= VAL;
+	if (Bv) rob[ndx].argB_v <= VAL;
+	if (Cv) rob[ndx].argC_v <= VAL;
+	if (Tv) rob[ndx].argT_v <= VAL;
+	if (Mv) rob[ndx].argM_v <= VAL;
+	rob[ndx].all_args_valid <=
+		(rob[ndx].argA_v | Av) &&
+		(rob[ndx].argB_v | Bv) &&
+		(rob[ndx].argC_v | Cv) &&
+		(rob[ndx].argT_v | Tv) &&
+		(rob[ndx].argM_v | Mv)
+	;
+	
 end
 endtask
 

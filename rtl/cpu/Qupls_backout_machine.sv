@@ -37,7 +37,7 @@
 import const_pkg::*;
 import QuplsPkg::*;
 
-module Qupls_backout_machine(rst, clk, backout, fcu_id, rob,
+module Qupls_backout_machine(rst, clk, backout, fcu_id, rob, tail,
 	restore, restore_ndx,
 	backout_state, backout_st2,
 	bo_wr, bo_areg, bo_preg, bo_nreg, stall);
@@ -46,6 +46,7 @@ input clk;
 input backout;
 input rob_ndx_t fcu_id;
 input rob_entry_t [ROB_ENTRIES-1:0] rob;
+input rob_ndx_t tail;
 input restore;
 input rob_ndx_t restore_ndx;
 output reg [1:0] backout_state;
@@ -73,6 +74,11 @@ else begin
 	case(backout_state)
 	2'd0:
 		if (backout) begin
+			
+			backout_id <= (tail + ROB_ENTRIES - 1) % ROB_ENTRIES;
+			if (((tail + ROB_ENTRIES - 1) % ROB_ENTRIES) != fcu_id)
+				backout_state <= 2'd1;
+			/*
 			if (rob[(fcu_id+3)%ROB_ENTRIES].grp==rob[fcu_id].grp) begin
 				backout_id <= (fcu_id + 3) % ROB_ENTRIES;
 				backout_state <= 2'd1;
@@ -85,6 +91,7 @@ else begin
 				backout_id <= (fcu_id + 1) % ROB_ENTRIES;
 				backout_state <= 2'd1;
 			end
+			*/
 //		else  nothing to backout
 		end
 	2'd1:

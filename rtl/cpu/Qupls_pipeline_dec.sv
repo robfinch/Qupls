@@ -41,7 +41,7 @@ import QuplsPkg::*;
 
 module Qupls_pipeline_dec(rst_i, rst, clk, en, clk5x, ph4,
 	restored, restore_list, sr,
-	tags2free, freevals,
+	tags2free, freevals, bo_wr, bo_preg,
 	ins0_dec_inv, ins1_dec_inv, ins2_dec_inv, ins3_dec_inv,
 	stomp_mux, stomp_bno, ins0_mux, ins1_mux, ins2_mux, ins3_mux, ins4_mux,
 	Rt0_dec, Rt1_dec, Rt2_dec, Rt3_dec, Rt0_decv, Rt1_decv, Rt2_decv, Rt3_decv,
@@ -67,6 +67,8 @@ input pipeline_reg_t ins3_mux;
 input pipeline_reg_t ins4_mux;
 input pregno_t [3:0] tags2free;
 input [3:0] freevals;
+input bo_wr;
+input pregno_t bo_preg;
 input ins0_dec_inv;
 input ins1_dec_inv;
 input ins2_dec_inv;
@@ -93,15 +95,16 @@ input micro_code_active_mux;
 output reg micro_code_active_dec;
 output [PREGS-1:0] avail_reg;
 
-pipeline_reg_t ins0d;
-pipeline_reg_t ins1d;
-pipeline_reg_t ins2d;
-pipeline_reg_t ins3d;
+pipeline_reg_t ins0m;
+pipeline_reg_t ins1m;
+pipeline_reg_t ins2m;
+pipeline_reg_t ins3m;
 pipeline_reg_t ins4d;
 pipeline_reg_t nopi;
 decode_bus_t dec0,dec1,dec2,dec3,dec4;
 pipeline_reg_t pr_dec0,pr_dec1,pr_dec2,pr_dec3;
 pipeline_reg_t [3:0] prd, inso;
+reg stomp_dec;
 
 // Define a NOP instruction.
 always_comb
@@ -195,6 +198,8 @@ Qupls_reg_renamer6 utrn1
 	.restore_list(restore_list),
 	.tags2free(tags2free),
 	.freevals(freevals),
+	.bo_wr(bo_wr),
+	.bo_preg(bo_preg),
 	.alloc0(ins0_dec.aRt!=8'd0 && ins0_dec.v && !ins3_dec.decbus.bsr),// & ~stomp0),
 	.alloc1(ins1_dec.aRt!=8'd0 && ins1_dec.v && !ins3_dec.decbus.bsr&& !ins0_dec.decbus.bsr),// & ~stomp1),
 	.alloc2(ins2_dec.aRt!=8'd0 && ins2_dec.v && !ins3_dec.decbus.bsr&& !ins0_dec.decbus.bsr && !ins1_dec.decbus.bsr),// & ~stomp2),
@@ -276,6 +281,82 @@ else begin
 		micro_code_active_dec <= micro_code_active_mux;
 end
 
+always_ff @(posedge clk)
+if (rst)
+	stomp_dec <= FALSE;
+else begin
+	if (en)
+		stomp_dec <= stomp_mux;
+end
+
+always_ff @(posedge clk)
+if (rst) begin
+	ins0m <= {$bits(pipeline_reg_t){1'b0}};
+end
+else begin
+	if (en)
+	begin
+		ins0m <= ins0_mux;
+		if (stomp_mux && FALSE) begin
+			if (ins0_mux.pc.bno_t!=stomp_bno) begin
+				ins0m <= nopi;
+				ins0m.pc.bno_t <= ins0_mux.pc.bno_t;
+			end
+		end
+	end
+end
+
+always_ff @(posedge clk)
+if (rst) begin
+	ins1m <= {$bits(pipeline_reg_t){1'b0}};
+end
+else begin
+	if (en)
+	begin
+		ins1m <= ins1_mux;
+		if (stomp_mux && FALSE) begin
+			if (ins1_mux.pc.bno_t!=stomp_bno) begin
+				ins1m <= nopi;
+				ins1m.pc.bno_t <= ins1_mux.pc.bno_t;
+			end
+		end
+	end
+end
+
+always_ff @(posedge clk)
+if (rst) begin
+	ins2m <= {$bits(pipeline_reg_t){1'b0}};
+end
+else begin
+	if (en)
+	begin
+		ins2m <= ins2_mux;
+		if (stomp_mux && FALSE) begin
+			if (ins2_mux.pc.bno_t!=stomp_bno) begin
+				ins2m <= nopi;
+				ins2m.pc.bno_t <= ins2_mux.pc.bno_t;
+			end
+		end
+	end
+end
+
+always_ff @(posedge clk)
+if (rst) begin
+	ins3m <= {$bits(pipeline_reg_t){1'b0}};
+end
+else begin
+	if (en)
+	begin
+		ins3m <= ins3_mux;
+		if (stomp_mux && FALSE) begin
+			if (ins3_mux.pc.bno_t!=stomp_bno) begin
+				ins3m <= nopi;
+				ins3m.pc.bno_t <= ins3_mux.pc.bno_t;
+			end
+		end
+	end
+end
+
 Qupls_decoder udeci0
 (
 	.rst(rst),
@@ -330,109 +411,74 @@ Qupls_decoder udeci4
 	.instr(ins4_mux),
 	.dbo(dec4)
 );
-
-always_ff @(posedge clk)
-if (rst) begin
-	ins0d <= {$bits(pipeline_reg_t){1'b0}};
-end
-else begin
-	if (en) begin
-		ins0d <= ins0_mux;
-		if (stomp_mux) begin
-			if (ins0_mux.pc.bno_t!=stomp_bno) begin
-				ins0d <= nopi;
-				ins0d.pc.bno_t <= ins0_mux.pc.bno_t;
-			end
-		end
-	end
-end
-
-always_ff @(posedge clk)
-if (rst) begin
-	ins1d <= {$bits(pipeline_reg_t){1'b0}};
-end
-else begin
-	if (en) begin
-		ins1d <= ins1_mux;
-		if (stomp_mux) begin
-			if (ins1_mux.pc.bno_t!=stomp_bno) begin
-				ins1d <= nopi;
-				ins1d.pc.bno_t <= ins1_mux.pc.bno_t;
-			end
-		end
-	end
-end
-
-always_ff @(posedge clk)
-if (rst) begin
-	ins2d <= {$bits(pipeline_reg_t){1'b0}};
-end
-else begin
-	if (en) begin
-		ins2d <= ins2_mux;
-		if (stomp_mux) begin
-			if (ins2_mux.pc.bno_t!=stomp_bno) begin
-				ins2d <= nopi;
-				ins2d.pc.bno_t <= ins2_mux.pc.bno_t;
-			end
-		end
-	end
-end
-
-always_ff @(posedge clk)
-if (rst) begin
-	ins3d <= {$bits(pipeline_reg_t){1'b0}};
-end
-else begin
-	if (en) begin
-		ins3d <= ins3_mux;
-		if (stomp_mux) begin
-			if (ins3_mux.pc.bno_t!=stomp_bno) begin
-				ins3d <= nopi;
-				ins3d.pc.bno_t <= ins3_mux.pc.bno_t;
-			end
-		end
-	end
-end
-
 /*
 always_ff @(posedge clk)
 if (rst_i) begin
-	ins3d <= {$bits(pipeline_reg_t){1'b0}};
+	ins3m <= {$bits(pipeline_reg_t){1'b0}};
 end
 else begin
 	if (en_i)
-		ins2d <= (stomp_dec && ((ins0_mux.bt|ins1_mux.bt|ins2_mux.bt|ins3_mux.bt) && branchmiss ? ins3_mux.pc.bno_t==stomp_bno : ins3_mux.pc.bno_f==stomp_bno )) ? nopi : ins3_mux;
-//		ins3d <= (stomp_dec && ins3_mux.pc.bno_t==stomp_bno) ? nopi : ins3_mux;
+		ins2m <= (stomp_dec && ((ins0_mux.bt|ins1_mux.bt|ins2_mux.bt|ins3_mux.bt) && branchmiss ? ins3_mux.pc.bno_t==stomp_bno : ins3_mux.pc.bno_f==stomp_bno )) ? nopi : ins3_mux;
+//		ins3m <= (stomp_dec && ins3_mux.pc.bno_t==stomp_bno) ? nopi : ins3_mux;
 end
 */
 
 always_comb
 begin
-	pr_dec0 = ins0d;
-	pr_dec1 = ins1d;
-	pr_dec2 = ins2d;
-	pr_dec3 = ins3d;
+	
+	pr_dec0 = ins0m;
+	pr_dec1 = ins1m;
+	pr_dec2 = ins2m;
+	pr_dec3 = ins3m;
+	
 	pr_dec0.v = TRUE;
 	pr_dec1.v = TRUE;
 	pr_dec2.v = TRUE;
 	pr_dec3.v = TRUE;
-	pr_dec0.aRa = dec0.Ra;
-	pr_dec0.aRb = dec0.Rb;
-	pr_dec0.aRc = dec0.Rc;
-	pr_dec0.aRt = dec0.Rt;
-	pr_dec1.aRa = dec1.Ra;
-	pr_dec1.aRb = dec1.Rb;
-	pr_dec1.aRc = dec1.Rc;
-	pr_dec1.aRt = dec1.Rt;
-	pr_dec2.aRa = dec2.Ra;
-	pr_dec2.aRb = dec2.Rb;
-	pr_dec2.aRc = dec2.Rc;
-	pr_dec2.aRt = dec2.Rt;
-	pr_dec3.aRa = dec3.Ra;
-	pr_dec3.aRb = dec3.Rb;
-	pr_dec3.aRc = dec3.Rc;
-	pr_dec3.aRt = dec3.Rt;
+	if (stomp_dec) begin
+		pr_dec0.aRa = dec0.Ra;
+		pr_dec0.aRb = dec0.Rb;
+		pr_dec0.aRc = dec0.Rc;
+		pr_dec0.aRt = dec0.Rt;
+		pr_dec0.aRm = dec0.Rm;
+		pr_dec1.aRa = dec1.Ra;
+		pr_dec1.aRb = dec1.Rb;
+		pr_dec1.aRc = dec1.Rc;
+		pr_dec1.aRt = dec1.Rt;
+		pr_dec1.aRm = dec1.Rm;
+		pr_dec2.aRa = dec2.Ra;
+		pr_dec2.aRb = dec2.Rb;
+		pr_dec2.aRc = dec2.Rc;
+		pr_dec2.aRt = dec2.Rt;
+		pr_dec2.aRm = dec2.Rm;
+		pr_dec3.aRa = dec3.Ra;
+		pr_dec3.aRb = dec3.Rb;
+		pr_dec3.aRc = dec3.Rc;
+		pr_dec3.aRt = dec3.Rt;
+		pr_dec3.aRm = dec3.Rm;
+	end
+	else begin
+		pr_dec0.aRa = dec0.Ra;
+		pr_dec0.aRb = dec0.Rb;
+		pr_dec0.aRc = dec0.Rc;
+		pr_dec0.aRt = dec0.Rt;
+		pr_dec0.aRm = dec0.Rm;
+		pr_dec1.aRa = dec1.Ra;
+		pr_dec1.aRb = dec1.Rb;
+		pr_dec1.aRc = dec1.Rc;
+		pr_dec1.aRt = dec1.Rt;
+		pr_dec1.aRm = dec1.Rm;
+		pr_dec2.aRa = dec2.Ra;
+		pr_dec2.aRb = dec2.Rb;
+		pr_dec2.aRc = dec2.Rc;
+		pr_dec2.aRt = dec2.Rt;
+		pr_dec2.aRm = dec2.Rm;
+		pr_dec3.aRa = dec3.Ra;
+		pr_dec3.aRb = dec3.Rb;
+		pr_dec3.aRc = dec3.Rc;
+		pr_dec3.aRt = dec3.Rt;
+		pr_dec3.aRm = dec3.Rm;
+	end
 	pr_dec0.decbus = dec0;
 	if (dec1.pfxa) begin pr_dec0.decbus.imma = {dec1.imma[63:8],dec0.Ra}; pr_dec0.decbus.has_imma = 1'b1; end
 	if (dec1.pfxb) begin 
@@ -464,10 +510,12 @@ begin
 		pr_dec3.decbus.has_immb = 1'b1;
 	end
 	if (dec4.pfxc) begin pr_dec3.decbus.immc = {dec4.immc[63:8],dec3.Rc}; pr_dec3.decbus.has_immc = 1'b1; end
-	pr_dec0.mcip = ins0d.mcip;
-	pr_dec1.mcip = ins1d.mcip;
-	pr_dec2.mcip = ins2d.mcip;
-	pr_dec3.mcip = ins3d.mcip;
+	
+	pr_dec0.mcip = ins0m.mcip;
+	pr_dec1.mcip = ins1m.mcip;
+	pr_dec2.mcip = ins2m.mcip;
+	pr_dec3.mcip = ins3m.mcip;
+	
 	if (ins1_dec_inv) pr_dec1.v = FALSE;
 	if (ins2_dec_inv) pr_dec2.v = FALSE;
 	if (ins3_dec_inv) pr_dec3.v = FALSE;

@@ -1948,13 +1948,13 @@ static void encode_reg(instruction_buf* insn, operand *op, mnemonic* mnemo, int 
 		case RI6:
 			if (i==0) {
 				insn->opcode |= (RT(op->basereg));
-				insn->opcode |= (PREDF(15LL));
+				insn->opcode |= (PREDF(7LL));
 			}
 			else if (i==1) {
 				insn->opcode |= (RA(op->basereg));
 			}
 			else if (i==4) {
-				insn->opcode &= ~(PREDF(15LL));
+				insn->opcode &= ~(PREDF(7LL));
 				insn->opcode |= (PREDI(op->basereg));
 			}
 			break;
@@ -1967,7 +1967,7 @@ static void encode_reg(instruction_buf* insn, operand *op, mnemonic* mnemo, int 
 		case SH:
 			if (i==0) {
 				insn->opcode = insn->opcode | (RT(op->basereg));
-				insn->opcode |= (PREDF(15LL));
+				insn->opcode |= (PREDF(7LL));
 			}
 			else if (i==1)
 				insn->opcode = insn->opcode | (RA(op->basereg));
@@ -1976,7 +1976,7 @@ static void encode_reg(instruction_buf* insn, operand *op, mnemonic* mnemo, int 
 			else if (i==3)
 				insn->opcode = insn->opcode | (RC(op->basereg));
 			else if (i==4) {
-				insn->opcode &= ~(PREDF(15LL));
+				insn->opcode &= ~(PREDF(7LL));
 				insn->opcode |= (PREDF(op->basereg));
 			}
 			break;
@@ -1985,13 +1985,13 @@ static void encode_reg(instruction_buf* insn, operand *op, mnemonic* mnemo, int 
 			printf("MV: %d\r\n",op->basereg);
 			if (i==0) {
 				insn->opcode = insn->opcode | (RT(op->basereg));
-				insn->opcode |= (PREDF(15LL));
+				insn->opcode |= (PREDF(7LL));
 			}
 			else if (i==1) {
 				insn->opcode = insn->opcode | (RA(op->basereg));
 			}
 			else if (i==2) {
-				insn->opcode &= ~(PREDF(15LL));
+				insn->opcode &= ~(PREDF(7LL));
 				insn->opcode |= (PREDF(op->basereg));
 			}
 			break;
@@ -1999,7 +1999,7 @@ static void encode_reg(instruction_buf* insn, operand *op, mnemonic* mnemo, int 
 		case RTDR:
 			if (i==0) {
 				insn->opcode = insn->opcode| (RT(op->basereg));
-				insn->opcode |= (PREDI(15LL));
+				insn->opcode |= (PREDI(7LL));
 			}
 			else if (i==1)
 				insn->opcode = insn->opcode| (RA(op->basereg));
@@ -2017,7 +2017,7 @@ static void encode_reg(instruction_buf* insn, operand *op, mnemonic* mnemo, int 
 		case R3RR:
 			if (i==0) {
 				insn->opcode |= (RT(op->basereg));
-				insn->opcode |= (PREDF(15LL));
+				insn->opcode |= (PREDF(7LL));
 			}
 			else if (i==1)
 				insn->opcode |= (RA(op->basereg));
@@ -2026,7 +2026,7 @@ static void encode_reg(instruction_buf* insn, operand *op, mnemonic* mnemo, int 
 			else if (i==3)
 				insn->opcode |= (RC(op->basereg));
 			else if (i==4) {
-				insn->opcode &= ~(PREDF(15LL));
+				insn->opcode &= ~(PREDF(7LL));
 				insn->opcode |= ~(PREDF(op->basereg));
 			}
 			break;
@@ -2035,12 +2035,12 @@ static void encode_reg(instruction_buf* insn, operand *op, mnemonic* mnemo, int 
 		case BI:
 			if (i==0) {
 				insn->opcode |= (RA(op->basereg));
-				insn->opcode |= (PREDF(15LL));
+				insn->opcode |= (PREDF(7LL));
 			}
 			else if (i==1)
 				insn->opcode |= (RB(op->basereg));
 			else if (i==3) {
-				insn->opcode &= ~(PREDF(15LL));
+				insn->opcode &= ~(PREDF(7LL));
 				insn->opcode |= ~(PREDF(op->basereg));
 			}
 			break;			
@@ -2053,10 +2053,10 @@ static void encode_reg(instruction_buf* insn, operand *op, mnemonic* mnemo, int 
 		case BL2:
 			if (i==0) {
 				insn->opcode |= (LKT(op->basereg));
-				insn->opcode |= (PREDF(15LL));
+				insn->opcode |= (PREDF(7LL));
 			}
 			else if (i==2) {
-				insn->opcode &= ~(PREDF(15LL));
+				insn->opcode &= ~(PREDF(7LL));
 				insn->opcode |= ~(PREDF(op->basereg));
 			}
 			break;			
@@ -2082,12 +2082,12 @@ static void encode_reg(instruction_buf* insn, operand *op, mnemonic* mnemo, int 
 		case REGIND:
 			if (i==0) {
 				insn->opcode |= (RT(op->basereg));
-				insn->opcode |= (PREDF(15LL));
+				insn->opcode |= (PREDF(7LL));
 			}
 			else if (i==1)
 				insn->opcode = insn->opcode | (RA(op->basereg));
 			else if (i==2) {
-				insn->opcode &= ~(PREDF(15LL));
+				insn->opcode &= ~(PREDF(7LL));
 				insn->opcode |= ~(PREDF(op->basereg));
 			}
 			break;
@@ -2095,14 +2095,14 @@ static void encode_reg(instruction_buf* insn, operand *op, mnemonic* mnemo, int 
 		case SCNDX:
 			if (i==0) {
 				insn->opcode |= (RT(op->basereg));
-				insn->opcode |= (PREDF(15LL));
+				insn->opcode |= (PREDF(7LL));
 			}
 			else if (i==1) {
 				insn->opcode = insn->opcode | (RA(op->basereg));
 				insn->opcode = insn->opcode | (RB(op->ndxreg));
 			}
 			else if (i==2) {
-				insn->opcode &= ~(PREDF(15LL));
+				insn->opcode &= ~(PREDF(7LL));
 				insn->opcode |= ~(PREDF(op->basereg));
 			}
 			/*
@@ -2114,7 +2114,7 @@ static void encode_reg(instruction_buf* insn, operand *op, mnemonic* mnemo, int 
 		case JSCNDX:
 			if (i==0) {
 				insn->opcode |= (RT(op->basereg));
-				insn->opcode |= (PREDF(15LL));
+				insn->opcode |= (PREDF(7LL));
 			}
 			else if (i==1) {
 				insn->opcode = insn->opcode | (RB(op->basereg));
@@ -2125,10 +2125,10 @@ static void encode_reg(instruction_buf* insn, operand *op, mnemonic* mnemo, int 
 		case DIRECT:
 			if (i==0) {
 				insn->opcode |= (RT(op->basereg));
-				insn->opcode |= (PREDF(15LL));
+				insn->opcode |= (PREDF(7LL));
 			}
 			else if (i==2) {
-				insn->opcode &= ~(PREDF(15LL));
+				insn->opcode &= ~(PREDF(7LL));
 				insn->opcode |= ~(PREDF(op->basereg));
 			}
 			break;

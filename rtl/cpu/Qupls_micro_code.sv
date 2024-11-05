@@ -51,33 +51,33 @@ input pipeline_reg_t micro_ir;
 output cpu_types_pkg::mc_address_t next_ip;
 output ex_instruction_t instr;
 output reg [3:0] regx;
-parameter R0 = 5'd0;
-parameter S0 = 5'd18;
-parameter S1 = 5'd19;
-parameter S2 = 5'd20;
-parameter S3 = 5'd21;
-parameter S4 = 5'd22;
-parameter S5 = 5'd23;
-parameter S6 = 5'd24;
-parameter S7 = 5'd25;
-parameter S8 = 5'd26;
-parameter SP = 5'd31;
-parameter FP = 5'd30;
-parameter SUSP = 9'd32;
-parameter SSSP = 9'd33;
-parameter SHSP = 9'd34;
-parameter MSP = 9'd33;
+parameter R0 = 8'd0;
+parameter S0 = 8'd18;
+parameter S1 = 8'd19;
+parameter S2 = 8'd20;
+parameter S3 = 8'd21;
+parameter S4 = 8'd22;
+parameter S5 = 8'd23;
+parameter S6 = 8'd24;
+parameter S7 = 8'd25;
+parameter S8 = 8'd26;
+parameter SP = 8'd31;
+parameter FP = 8'd30;
+parameter SUSP = 8'd32;
+parameter SSSP = 8'd33;
+parameter SHSP = 8'd34;
+parameter MSP = 8'd35;
 parameter LR0 = SSSP;
 parameter LR1 = SHSP;
 // Do not use 6'd0 as some logic will detect this as a zero.
 // 1 to 4 are the stack pointers.
-parameter MC0 = 6'd48;
-parameter MC1 = 6'd49;
-parameter MC2 = 6'd50;
-parameter MC3 = 6'd51;
-parameter LC = 9'd28;
-parameter VRM = 9'd54;
-parameter VERR = 9'd55;
+parameter MC0 = 8'd48;
+parameter MC1 = 8'd49;
+parameter MC2 = 8'd50;
+parameter MC3 = 8'd51;
+parameter LC = 8'd28;
+parameter VRM = 8'd54;
+parameter VERR = 8'd55;
 
 instruction_t ir;
 always_comb ir = micro_ir.ins;
@@ -1651,49 +1651,49 @@ case(micro_ip)
 12'h1A0:	
 	begin
 		next_ip = 12'h1A1;
-		instr.ins = {32'h12,1'd0,6'h0,1'b0,8'h00,1'b0,8'h10,OP_ADDI};
+		instr.ins = {32'h12,1'd0,6'h0,1'b0,8'h00,1'b0,MC0,OP_ADDI};
 		instr.aRt = MC0;
 	end
 12'h1A1:
 	begin
 		next_ip = 12'h1A2;
-		instr.ins = {32'h32,1'd0,6'h0,1'b0,8'h00,1'b0,8'h10,OP_ADDI};
+		instr.ins = {32'h32,1'd0,6'h0,1'b0,8'h00,1'b0,MC0,OP_ADDI};
 		instr.aRt = MC0;
 	end
 12'h1A2:
 	begin
 		next_ip = 12'h1A3;
-		instr.ins = {32'h56,1'd0,6'h0,1'b0,8'h00,1'b0,8'h10,OP_ADDI};
+		instr.ins = {32'h56,1'd0,6'h0,1'b0,8'h00,1'b0,MC0,OP_ADDI};
 		instr.aRt = MC0;
 	end
 12'h1A3:
 	begin
 		next_ip = 12'h1A4;
-		instr.ins = {32'h78,1'd0,6'h0,1'b0,8'h00,1'b0,8'h10,OP_ADDI};
+		instr.ins = {32'h78,1'd0,6'h0,1'b0,8'h00,1'b0,MC0,OP_ADDI};
 		instr.aRt = MC0;
 	end
 12'h1A4:
 	begin
 		next_ip = 12'h1A5;
-		instr.ins = {32'h90,1'd0,6'h0,1'b0,8'h00,1'b0,8'h10,OP_ADDI};
+		instr.ins = {32'h90,1'd0,6'h0,1'b0,8'h00,1'b0,MC0,OP_ADDI};
 		instr.aRt = MC0;
 	end
 12'h1A5:
 	begin
 		next_ip = 12'h1A6;
-		instr.ins = {32'h11,1'd0,6'h0,1'b0,8'h00,1'b0,8'h10,OP_ADDI};
+		instr.ins = {32'h11,1'd0,6'h0,1'b0,8'h00,1'b0,MC0,OP_ADDI};
 		instr.aRt = MC0;
 	end
 12'h1A6:
 	begin
 		next_ip = 12'h1A7;
-		instr.ins = {32'h22,1'd0,6'h0,1'b0,8'h00,1'b0,8'h10,OP_ADDI};
+		instr.ins = {32'h22,1'd0,6'h0,1'b0,8'h00,1'b0,MC0,OP_ADDI};
 		instr.aRt = MC0;
 	end
 12'h1A7:
 	begin
 		next_ip = 12'h1A8;
-		instr.ins = {32'h33,1'd0,6'h0,1'b0,8'h00,1'b0,8'h10,OP_ADDI};
+		instr.ins = {32'h33,1'd0,6'h0,1'b0,8'h00,1'b0,MC0,OP_ADDI};
 		instr.aRt = MC0;
 	end
 12'h1A8:

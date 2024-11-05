@@ -349,7 +349,7 @@ begin
 			$finish;
 end
 */
-wire cndx1, cndx2, cndx3;
+checkpt_ndx_t cndx1, cndx2, cndx3;
 assign cndx1 = cndx;
 assign cndx2 = cndx;
 assign cndx3 = cndx;
@@ -642,6 +642,7 @@ if (rst) begin
 end
 else begin
 	if (en) begin
+		ins0_ren.cndx <= cndx;
 		if (ins0_dec.v) begin
 			ins0_ren <= ins0_dec;
 			ins0_ren.nRt <= Rt0_dec;
@@ -669,6 +670,7 @@ else begin
 			ins0_ren.pRt <= bo_preg;
 	end
 	*/
+		ins1_ren.cndx <= cndx;
 		if (ins1_dec.v) begin
 			ins1_ren <= ins1_dec;
 			ins1_ren.nRt <= Rt1_dec;
@@ -686,6 +688,7 @@ else begin
 			ins1_ren.aRt <= ins1_ren.aRt;
 			ins1_ren.nRt <= ins1_ren.nRt;
 		end
+		ins2_ren.cndx <= cndx;
 		if (ins2_dec.v) begin
 			ins2_ren <= ins2_dec;
 			ins2_ren.nRt <= Rt2_dec;
@@ -703,6 +706,7 @@ else begin
 			ins2_ren.aRt <= ins2_ren.aRt;
 			ins2_ren.nRt <= ins2_ren.nRt;
 		end
+		ins3_ren.cndx <= cndx;
 		if (ins3_dec.v) begin
 			ins3_ren <= ins3_dec;
 			ins3_ren.nRt <= Rt3_dec;
