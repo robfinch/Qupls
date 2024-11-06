@@ -103,7 +103,7 @@ cache_line_t cline_in;
 reg [LINES-1:0] validr [0:WAYS-1];
 reg [WAYS-1:0] valid;
 reg [WAYS-1:0] hits, mods;
-cache_tag_t [WAYS-1:0] ptags;	// physical tags associated with even cache line
+cache_tag_t [WAYS-1:0] ptags, snoop_ptags;	// physical tags associated with even cache line
 DCacheLine line;
 cache_line_t [WAYS-1:0] lines;
 localparam NSEL = Qupls_cache_pkg::DCacheLineWidth/8;
@@ -159,7 +159,7 @@ genvar g;
 // the input is coming from an update hit.
 
 always_comb
-	vndx <= {cpu_req_i.vadr[HIBIT:LOBIT],{LOBIT{1'b0}}};
+	vndx <= {cpu_req_i.vadr[HIBIT:LOBIT]};//,{LOBIT{1'b0}}};
 
 always_comb
 	if (cache_load)
@@ -208,7 +208,7 @@ for (g = 0; g < WAYS; g = g + 1) begin : gFor
 		.WID($bits(cache_tag_t)),
 		.DEP(LINES)
 	)
-	udcte
+	udcte_snoop
 	(
 		.rst(rst),
 		.clk(clk),
@@ -217,8 +217,25 @@ for (g = 0; g < WAYS; g = g + 1) begin : gFor
 		.wadr(vndx),
 		.radr(snoop_adr[HIBIT:LOBIT]),
 		.i(update_data_i.adr[32-1:T6]),
-		.o(ptags[g])
+		.o(snoop_ptags[g])
 	);
+
+	sram_1r1w 
+		#(
+			.WID($bits(cache_tag_t)),
+			.DEP(LINES)
+		)
+		udcte
+		(
+			.rst(rst),
+			.clk(clk),
+			.ce(1'b1),
+			.wr(wr && way==g && cache_load),
+			.wadr(vndx),
+			.radr(vndx),
+			.i(update_data_i.adr[32-1:T6]),
+			.o(ptags[g])
+		);
 
 end
 end
@@ -297,7 +314,7 @@ end
 
 always_ff @(posedge clk)
 begin
-	cpu_resp_o = 'd0;
+	cpu_resp_o = {$bits(fta_cmd_response512_t){1'd0}};
 	if (non_cacheable|~read_allocate|~dce)
 		cpu_resp_o = update_data_i;
 	else
@@ -305,33 +322,33 @@ begin
 
 		4'b1???:
 			begin
-				cpu_resp_o.ack = cpu_req_i.cyc;
-				cpu_resp_o.adr = {ptags[3],vndx,{LOBIT{1'b0}}};
+				cpu_resp_o.ack = cpu_req_i.cyc && (|cpu_req_i.tid);
+				cpu_resp_o.adr = {ptags[3]/*,vndx(*/,{LOBIT{1'b0}}};
 				cpu_resp_o.dat = lines[3].data;
 			end
 		4'b01??:
 			begin
-				cpu_resp_o.ack = cpu_req_i.cyc;
-				cpu_resp_o.adr = {ptags[2],vndx,{LOBIT{1'b0}}};
+				cpu_resp_o.ack = cpu_req_i.cyc && (|cpu_req_i.tid);
+				cpu_resp_o.adr = {ptags[2]/*,vndx*/,{LOBIT{1'b0}}};
 				cpu_resp_o.dat = lines[2].data;
 			end
 		4'b001?:
 			begin
-				cpu_resp_o.ack = cpu_req_i.cyc;
-				cpu_resp_o.adr = {ptags[1],vndx,{LOBIT{1'b0}}};
+				cpu_resp_o.ack = cpu_req_i.cyc && (|cpu_req_i.tid);
+				cpu_resp_o.adr = {ptags[1]/*,vndx*/,{LOBIT{1'b0}}};
 				cpu_resp_o.dat = lines[1].data;
 			end
 		4'b0001:
 			begin
-				cpu_resp_o.ack = cpu_req_i.cyc;
-				cpu_resp_o.adr = {ptags[0],vndx,{LOBIT{1'b0}}};
+				cpu_resp_o.ack = cpu_req_i.cyc && (|cpu_req_i.tid);
+				cpu_resp_o.adr = {ptags[0]/*,vndx*/,{LOBIT{1'b0}}};
 				cpu_resp_o.dat = lines[0].data;
 			end
 		default:
 			begin
 //				cpu_resp_o.cid = update_data_i.cid;
 				cpu_resp_o.tid = update_data_i.tid;
-				cpu_resp_o.ack = update_data_i.ack;
+				cpu_resp_o.ack = update_data_i.ack && (|update_data_i.tid);
 				cpu_resp_o.adr = update_data_i.adr;
 				cpu_resp_o.dat = update_data_i.dat;
 			end
@@ -431,7 +448,7 @@ else begin
 	// snoop.
 	if (snoop_v && snoop_cid!=CID) begin
 		for (k = 0; k < WAYS; k = k + 1) begin
-			if (snoop_adr[$bits(cpu_types_pkg::address_t)-1:T15]==ptags[k][$bits(cpu_types_pkg::address_t)-1:T15])
+			if (snoop_adr[$bits(cpu_types_pkg::address_t)-1:T15]==snoop_ptags[k][$bits(cpu_types_pkg::address_t)-1:T15])
 				validr[k][snoop_adr[HIBIT:LOBIT]] <= 1'b0;
 		end
 	end

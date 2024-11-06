@@ -2709,7 +2709,7 @@ Qupls_pipeline_ren uren1
 	.ph4(ph4),
 	.en(advance_pipeline),
 	.nq(nq),
-	.restore(restore_chkpt),
+	.restore(1'b0),//restore_chkpt),
 	.restored(restored),
 	.restore_list(restore_list),
 	.miss_cp(miss_cp),
@@ -2779,7 +2779,7 @@ Qupls_pipeline_ren uren1
 	.freevals(freevals),
 	.free_chkpt(free_chkpt),
 	.fchkpt(fchkpt),
-	.backout(backout),
+	.backout(1'b0),//backout),
 	.fcu_id(fcu_id),
 	.bo_wr(bo_wr),
 	.bo_areg(bo_areg),
@@ -3081,6 +3081,7 @@ for (n4 = 0; n4 < ROB_ENTRIES; n4 = n4 + 1) begin
 			robentry_cpytgt[n4] = TRUE;
  		end
 	end
+	robentry_cpytgt[n4] = robentry_stomp[n4];
 end
 
 // Backout on a branch miss.
@@ -3280,7 +3281,7 @@ end
 else begin
 	if (do_bsr)
 		fcu_misspc <= bsr_tgt;
-	else if (fcu_v6)
+	else// if (fcu_v6)
 		fcu_misspc <= fcu_misspc1;
 end		
 always_ff @(posedge clk)
@@ -3351,6 +3352,7 @@ else begin
 		BS_CHKPT_RESTORE:
 			branch_state <= BS_CHKPT_RESTORED;
 		BS_CHKPT_RESTORED:
+		// if (restored)
 			branch_state <= BS_STATE3;
 		BS_STATE3:
 			branch_state <= BS_CAPTURE_MISSPC;
