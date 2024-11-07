@@ -173,8 +173,8 @@ else begin
 //			stomp_alnr <= TRUE;
 			ff1 <= TRUE;
 		end
-//		else if (pc.pc == misspcr[0].pc)
-//			stomp_alnr <= FALSE;
+		else if (pc.pc == misspcr[0].pc)
+			stomp_alnr <= FALSE;
 		else if (!ff1)
 			stomp_alnr <= do_bsr;
 	end
@@ -182,7 +182,7 @@ else begin
 	if (advance_pipeline|pe_stomp_pipeline) begin
 		if (pe_stomp_pipeline)
 			stomp_fetr <= TRUE;
-		else if (pc.pc == misspcr[1].pc)
+		else if (pc.pc == misspcr[1].pc || !stomp_aln)
 			stomp_fetr <= FALSE;
 		else if (!ff1)
 			stomp_fetr <= stomp_aln;
@@ -192,7 +192,7 @@ else begin
 		do_bsr_mux <= do_bsr;
 		if (pe_stomp_pipeline)
 			stomp_muxr <= TRUE;
-		else if (pc_f.pc == misspcr[2].pc) // (next_stomp_mux)
+		else if (pc_f.pc == misspcr[2].pc || !stomp_fet) // (next_stomp_mux)
 			stomp_muxr <= FALSE;
 //		else
 //			stomp_muxr <= stomp_fet;
@@ -208,7 +208,7 @@ else begin
 		do_bsr_dec <= do_bsr_mux;
 		if (pe_stomp_pipeline)
 			stomp_decr <= TRUE;
-		else if (pc_fet.pc == misspcr[3].pc)
+		else if (pc_fet.pc == misspcr[3].pc || !stomp_mux)
 			stomp_decr <= FALSE;
 		if (!ff1)
 			stomp_decr <= stomp_mux;
@@ -218,7 +218,7 @@ else begin
 		do_bsr_ren <= do_bsr_dec;
 		if (pe_stomp_pipeline)
 			stomp_renr <= TRUE;
-		else if (pc_mux.pc == misspcr[4].pc) begin
+		else if (pc_mux.pc == misspcr[4].pc || !stomp_dec) begin
 			stomp_renr <= FALSE;
 			ff1 <= FALSE;
 		end

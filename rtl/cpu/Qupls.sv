@@ -3078,7 +3078,7 @@ for (n4 = 0; n4 < ROB_ENTRIES; n4 = n4 + 1) begin
 	robentry_cpytgt[n4] = robentry_stomp[n4];
 	if (fcu_idv && rob[fcu_id].decbus.br && takb) begin
  		if (rob[n4].grp==rob[fcu_id].grp && rob[n4].sn > rob[fcu_id].sn) begin
- 			robentry_stomp[n4] = TRUE;
+ 			//robentry_stomp[n4] = TRUE;
 			robentry_cpytgt[n4] = TRUE;
  		end
 	end
