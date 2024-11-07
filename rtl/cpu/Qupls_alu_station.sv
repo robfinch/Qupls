@@ -197,7 +197,7 @@ else begin
 		cptgt <= next_cptgt;
 		prc <= rob.decbus.prc;
 		if (cpytgt|rob.decbus.cpytgt) begin
-			instr.ins <= {41'd0,OP_NOP};
+			instr.ins <= {57'd0,OP_NOP};
 			pred <= FALSE;
 			predz <= rob.decbus.cpytgt ? FALSE : rob.decbus.predz;
 			div <= FALSE;

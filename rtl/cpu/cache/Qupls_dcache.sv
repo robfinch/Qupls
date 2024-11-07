@@ -323,25 +323,25 @@ begin
 		4'b1???:
 			begin
 				cpu_resp_o.ack = cpu_req_i.cyc && (|cpu_req_i.tid);
-				cpu_resp_o.adr = {ptags[3]/*,vndx(*/,{LOBIT{1'b0}}};
+				cpu_resp_o.adr = {lines[3].tag[31:T15],vndx,{LOBIT{1'b0}}};
 				cpu_resp_o.dat = lines[3].data;
 			end
 		4'b01??:
 			begin
 				cpu_resp_o.ack = cpu_req_i.cyc && (|cpu_req_i.tid);
-				cpu_resp_o.adr = {ptags[2]/*,vndx*/,{LOBIT{1'b0}}};
+				cpu_resp_o.adr = {lines[2].tag[31:T15],vndx,{LOBIT{1'b0}}};
 				cpu_resp_o.dat = lines[2].data;
 			end
 		4'b001?:
 			begin
 				cpu_resp_o.ack = cpu_req_i.cyc && (|cpu_req_i.tid);
-				cpu_resp_o.adr = {ptags[1]/*,vndx*/,{LOBIT{1'b0}}};
+				cpu_resp_o.adr = {lines[1].tag[31:T15],vndx,{LOBIT{1'b0}}};
 				cpu_resp_o.dat = lines[1].data;
 			end
 		4'b0001:
 			begin
 				cpu_resp_o.ack = cpu_req_i.cyc && (|cpu_req_i.tid);
-				cpu_resp_o.adr = {ptags[0]/*,vndx*/,{LOBIT{1'b0}}};
+				cpu_resp_o.adr = {lines[0].tag[31:T15],vndx,{LOBIT{1'b0}}};
 				cpu_resp_o.dat = lines[0].data;
 			end
 		default:

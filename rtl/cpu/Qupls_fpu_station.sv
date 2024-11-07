@@ -147,10 +147,16 @@ else begin
 		aRtz <= rob.decbus.Rt==8'd0;//rob.decbus.Rtz;
 		cs <= rob.decbus.Rcc;
 		bank <= rob.om==2'd0 ? 1'b0 : 1'b1;
-		instr <= rob.op.ins;
+		if (rob.decbus.cpytgt) begin
+			instr <= {57'd0,OP_NOP};
+//			pred <= FALSE;
+//			predz <= rob.decbus.cpytgt ? FALSE : rob.decbus.predz;
+		end
+		else
+			instr <= rob.op.ins;
 		pc <= rob.pc;
 		cp <= rob.cndx;
-		if (!rob.decbus.multicycle || (&next_cptgt))
+		if (!rob.decbus.multicycle || (&next_cptgt) || rob.decbus.cpytgt)
 			sc_done <= TRUE;
 	end
 end

@@ -2620,9 +2620,9 @@ else begin
 	if (advance_pipeline_seg2)
 		stomp1_q <= stomp1_r;
 end
-always_ff @(posedge clk) if (advance_pipeline_seg2) bsi <= {bsi[1:0],pe_bsidle};
-always_ff @(posedge clk) if (advance_pipeline_seg2) stomp2_q <= stomp2_r;
-always_ff @(posedge clk) if (advance_pipeline_seg2) stomp3_q <= stomp3_r;
+always_ff @(posedge clk) if (advance_pipeline) bsi <= {bsi[1:0],pe_bsidle};
+always_ff @(posedge clk) if (advance_pipeline) stomp2_q <= stomp2_r;
+always_ff @(posedge clk) if (advance_pipeline) stomp3_q <= stomp3_r;
 assign stomp0 = ((stomp0_r|stomp_ren) /*&& ins0_ren.pc.bno_t!=stomp_bno*/);
 assign stomp1 = ((stomp1_r|stomp_ren|ins0_ren.decbus.macro) /*&& ins1_ren.pc.bno_t!=stomp_bno*/);
 assign stomp2 = ((stomp2_r|stomp_ren|ins0_ren.decbus.macro|ins1_ren.decbus.macro) /*&& ins2_ren.pc.bno_t!=stomp_bno*/);
@@ -2709,7 +2709,7 @@ Qupls_pipeline_ren uren1
 	.ph4(ph4),
 	.en(advance_pipeline),
 	.nq(nq),
-	.restore(1'b0),//restore_chkpt),
+	.restore(SUPPORT_BACKOUT ? restore_chkpt : 1'b0),
 	.restored(restored),
 	.restore_list(restore_list),
 	.miss_cp(miss_cp),
@@ -2779,7 +2779,7 @@ Qupls_pipeline_ren uren1
 	.freevals(freevals),
 	.free_chkpt(free_chkpt),
 	.fchkpt(fchkpt),
-	.backout(1'b0),//backout),
+	.backout(SUPPORT_BACKOUT ? backout : 1'b0),
 	.fcu_id(fcu_id),
 	.bo_wr(bo_wr),
 	.bo_areg(bo_areg),
@@ -3075,13 +3075,19 @@ for (n4 = 0; n4 < ROB_ENTRIES; n4 = n4 + 1) begin
 		//&& rob[n4].v
 		)
 	;
+	robentry_cpytgt[n4] = robentry_stomp[n4];
 	if (fcu_idv && rob[fcu_id].decbus.br && takb) begin
  		if (rob[n4].grp==rob[fcu_id].grp && rob[n4].sn > rob[fcu_id].sn) begin
  			robentry_stomp[n4] = TRUE;
 			robentry_cpytgt[n4] = TRUE;
  		end
 	end
-	robentry_cpytgt[n4] = robentry_stomp[n4];
+	if (fcu_idv && rob[fcu_id].decbus.br && !takb) begin
+ 		if (rob[n4].grp==rob[fcu_id].grp && rob[n4].sn > rob[fcu_id].sn) begin
+ 			robentry_stomp[n4] = FALSE;
+			robentry_cpytgt[n4] = FALSE;
+ 		end
+	end
 end
 
 // Backout on a branch miss.
@@ -7641,7 +7647,7 @@ begin
 		rob[tail].decbus.store <= FALSE;
 		rob[tail].decbus.mem <= FALSE;
 		rob[tail].op.pred_btst <= 6'd0;
-		rob[tail].op.ins <= {57'd0,OP_NOP};
+//		rob[tail].op.ins <= {57'd0,OP_NOP};
 //		rob[tail].argA_v <= VAL;
 		rob[tail].argB_v <= VAL;
 		rob[tail].argC_v <= VAL;
