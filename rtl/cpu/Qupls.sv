@@ -121,8 +121,6 @@ mc_address_t miss_mcip, mcbrtgt;
 wire [$bits(pc_address_t)-1:6] missblock;
 reg [2:0] missgrp;
 wire [2:0] missino;
-reg backout;
-reg backout_en = 1'b1;
 reg restore_en = 1'b1;
 
 ex_instruction_t missir;
@@ -347,6 +345,7 @@ pipeline_reg_t ins0_dec, ins1_dec, ins2_dec, ins3_dec, ins4_d, ins5_d, ins6_d, i
 pipeline_reg_t ins0_ren, ins1_ren, ins2_ren, ins3_ren;
 pipeline_reg_t ins0_que, ins1_que, ins2_que, ins3_que;
 
+reg backout;
 wire bo_wr;
 aregno_t bo_areg;
 pregno_t bo_preg;
@@ -1072,8 +1071,8 @@ begin
 		$finish;
 `endif
 	end
-	if (NCHECK > 16) begin
-		$display("Q+: Error: more than 16 checkpoints configured.");
+	if (NCHECK > 32) begin
+		$display("Q+: Error: more than 32 checkpoints configured.");
 		$finish;
 	end
 	if (NCHECK < 3) begin
@@ -2319,7 +2318,7 @@ pregno_t [3:0] tags2free;
 wire [3:0] freevals;
 wire [PREGS-1:0] avail_reg;						// available registers
 checkpt_ndx_t cndx0,cndx1,cndx2,cndx3,pcndx;		// checkpoint index for each queue slot
-wire restore_chkpt = branch_state==BS_CHKPT_RESTORE && restore_en;// && !fcu_cjb;
+reg restore;		// = branch_state==BS_CHKPT_RESTORE && restore_en;// && !fcu_cjb;
 wire restored;	// restore_chkpt delayed one clock.
 wire Rt0_decv;
 wire Rt1_decv;
@@ -2341,6 +2340,7 @@ Qupls_pipeline_dec udecstg1
 	.freevals(freevals),
 	.bo_wr(bo_wr),
 	.bo_preg(bo_preg),
+	.stomp_dec(stomp_dec),
 	.stomp_mux(stomp_mux),
 	.stomp_bno(stomp_bno),
 	.ins0_mux(ins0_mux), 
@@ -2538,7 +2538,7 @@ always_comb nq2 = pc2[5:0] <= ibh.lastip;
 always_comb nq3 = pc3[5:0] <= ibh.lastip;
 
 always_ff @(posedge clk)
-if (rst_i) begin
+if (irst) begin
 	cndx_ren[0] <= {$bits(checkpt_ndx_t){1'b0}};
 	cndx_ren[1] <= {$bits(checkpt_ndx_t){1'b0}};
 	cndx_ren[2] <= {$bits(checkpt_ndx_t){1'b0}};
@@ -2709,7 +2709,7 @@ Qupls_pipeline_ren uren1
 	.ph4(ph4),
 	.en(advance_pipeline),
 	.nq(nq),
-	.restore(SUPPORT_BACKOUT ? restore_chkpt : 1'b0),
+	.restore(restore),
 	.restored(restored),
 	.restore_list(restore_list),
 	.miss_cp(miss_cp),
@@ -2718,6 +2718,7 @@ Qupls_pipeline_ren uren1
 	.tail0(tail0),
 	.rob(rob),
 	.robentry_stomp(robentry_stomp),
+	.stomp_ren(stomp_ren),
 	.stomp_bno(stomp_bno),
 	.branch_state(branch_state),
 	.avail_reg(avail_reg),
@@ -2754,6 +2755,7 @@ Qupls_pipeline_ren uren1
 	.ins1_ren(ins1_ren),
 	.ins2_ren(ins2_ren),
 	.ins3_ren(ins3_ren),
+	
 	.wrport0_v(wrport0_v),
 	.wrport1_v(wrport1_v),
 	.wrport2_v(wrport2_v),
@@ -2774,13 +2776,31 @@ Qupls_pipeline_ren uren1
 	.wrport1_cp(wrport1_cp),
 	.wrport2_cp(wrport2_cp),
 	.wrport3_cp(wrport3_cp),
+	
+	.cmtav(do_commit && cmtcnt > 0),
+	.cmtbv(do_commit && cmtcnt > 1),
+	.cmtcv(do_commit && cmtcnt > 2),
+	.cmtdv(do_commit && cmtcnt > 3),
+	.cmtaa(rob[head0].op.aRt),
+	.cmtba(rob[head1].op.aRt),
+	.cmtca(rob[head2].op.aRt),
+	.cmtda(rob[head3].op.aRt),
+	.cmtap(rob[head0].op.nRt),
+	.cmtbp(rob[head1].op.nRt),
+	.cmtcp(rob[head2].op.nRt),
+	.cmtdp(rob[head3].op.nRt),
+	.cmta_cp(rob[head0].cndx),
+	.cmtb_cp(rob[head1].cndx),
+	.cmtc_cp(rob[head2].cndx),
+	.cmtd_cp(rob[head3].cndx),
+
 	.cmtbr(cmtbr),
 	.tags2free(tags2free),
 	.freevals(freevals),
 	.free_chkpt(free_chkpt),
 	.fchkpt(fchkpt),
-	.backout(SUPPORT_BACKOUT ? backout : 1'b0),
 	.fcu_id(fcu_id),
+	.backout(backout),
 	.bo_wr(bo_wr),
 	.bo_areg(bo_areg),
 	.bo_preg(bo_preg),
@@ -3075,38 +3095,24 @@ for (n4 = 0; n4 < ROB_ENTRIES; n4 = n4 + 1) begin
 		//&& rob[n4].v
 		)
 	;
-	robentry_cpytgt[n4] = robentry_stomp[n4];
-	if (fcu_idv && rob[fcu_id].decbus.br && takb) begin
- 		if (rob[n4].grp==rob[fcu_id].grp && rob[n4].sn > rob[fcu_id].sn) begin
- 			//robentry_stomp[n4] = TRUE;
-			robentry_cpytgt[n4] = TRUE;
- 		end
+	
+	if (!SUPPORT_BACKOUT)
+		robentry_cpytgt[n4] = robentry_stomp[n4];
+	if (!SUPPORT_BACKOUT) begin
+		if (fcu_idv && rob[fcu_id].decbus.br && takb) begin
+	 		if (rob[n4].grp==rob[fcu_id].grp && rob[n4].sn > rob[fcu_id].sn) begin
+	 			//robentry_stomp[n4] = TRUE;
+				robentry_cpytgt[n4] = TRUE;
+	 		end
+		end
+		if (fcu_idv && rob[fcu_id].decbus.br && !takb) begin
+	 		if (rob[n4].grp==rob[fcu_id].grp && rob[n4].sn > rob[fcu_id].sn) begin
+	 			robentry_stomp[n4] = FALSE;
+				robentry_cpytgt[n4] = FALSE;
+	 		end
+		end
 	end
-	if (fcu_idv && rob[fcu_id].decbus.br && !takb) begin
- 		if (rob[n4].grp==rob[fcu_id].grp && rob[n4].sn > rob[fcu_id].sn) begin
- 			robentry_stomp[n4] = FALSE;
-			robentry_cpytgt[n4] = FALSE;
- 		end
-	end
-end
-
-// Backout on a branch miss.
-
-always_ff @(posedge clk)
-for (n32 = 0; n32 < ROB_ENTRIES; n32 = n32 + 1)
-begin
-	backout <= FALSE;
-	/*
-	if (fcu_idv && rob[fcu_id].decbus.br && takb) begin
- 		if (rob[n32].grp==rob[fcu_id].grp && rob[n32].sn > rob[fcu_id].sn) begin
- 			if (!(branchmiss || branch_state != BS_IDLE))
- 				backout <= backout_en;
- 		end
-	end
-	*/
-	// Always do a backout on a branch miss.
-	if (branch_state==BS_CHKPT_RESTORED)
-		backout <= backout_en;
+	
 end
 
 // Calc the location of the ROB tail pointer after a stomp.
@@ -3194,13 +3200,11 @@ else begin
 		fcu_branchmiss_id <= fcu_id;
 		case(fcu_bts)
 		BTS_REG,BTS_DISP:
-			begin
-				fcu_branchmiss <= ((takb && !fcu_bt) || (!takb && fcu_bt));
-			end
+			fcu_branchmiss <= ((takb && !fcu_bt) || (!takb && fcu_bt));
 		BTS_CALL,BTS_RET:
 			fcu_branchmiss <= TRUE;//((takb && ~fcu_bt) || (!takb && fcu_bt));
 		default:
-			fcu_branchmiss <= FALSE;		
+			fcu_branchmiss <= FALSE;
 		endcase
 	end
 	else
@@ -3209,22 +3213,69 @@ else begin
 		fcu_branchmiss <= FALSE;
 end
 
+// Backout flag
+// If taking a branch, any following register mappings in the same group need
+// to be backed out. This is regardless of whether a prediction was true or not.
+// If there is a branch incorrectly predicted as taken, then the register
+// mappings also need to be backed out.
+
+always_ff @(posedge clk)
+if (irst)
+	backout <= FALSE;
+else begin
+	backout <= FALSE;
+	if (fcu_v2) begin
+		case(fcu_bts)
+		BTS_REG,BTS_DISP:
+			// backout when !fcu_bt will be handled below, triggerred by restore
+			if (takb && fcu_bt)
+				backout <= TRUE;
+		BTS_CALL,BTS_RET:
+			backout <= TRUE;
+		default:
+			;		
+		endcase
+	end
+end
+
+// Restore flag.
+// A restore will trigger a backout.
+// Almost the same as backout except a restore is not needed for correctly
+// predicated branches.
+
+always_ff @(posedge clk)
+if (irst)
+	restore <= FALSE;
+else begin
+	restore <= FALSE;
+	if (fcu_v2) begin
+		case(fcu_bts)
+		BTS_REG,BTS_DISP:
+			if ((takb && !fcu_bt) || (!takb && fcu_bt))
+				restore <= TRUE;
+		default:
+			;		
+		endcase
+	end
+end
+
 // Search for instructions groups that are done or invalid. If there are any
 // branches in the group, then free the checkpoint. All the branches must have
 // resolved if all instructions are done or invalid.
 // Take care not to free the checkpoint more than once.
 
-seqnum_t lfg;
+//seqnum_t lfg;
 always_ff @(posedge clk)
 if (irst) begin
 	free_chkpt <= FALSE;
 	fchkpt <= 4'd0;
-	lfg <= {$bits(seqnum_t){1'b0}};	// last freed group
+//	lfg <= {$bits(seqnum_t){1'b0}};	// last freed group
 end
 else begin
 	free_chkpt <= FALSE;
 	for (n33 = 0; n33 < ROB_ENTRIES; n33 = n33 + 4) begin
-		if (rob[n33].grp != lfg &&
+		if (//rob[n33].grp != lfg &&
+			!rob[n33+0].chkpt_freed &&
 			(&rob[n33+0].done || !rob[n33+0].v) &&
 			(&rob[n33+1].done || !rob[n33+1].v) &&
 			(&rob[n33+2].done || !rob[n33+2].v) &&
@@ -3234,8 +3285,8 @@ else begin
 					rob[n33+2].decbus.br ||
 					rob[n33+3].decbus.br) begin
 				free_chkpt <= TRUE;
-				fchkpt <= rob[n33].cndx;
-				lfg <= rob[n33].grp;
+				fchkpt <= rob[(n33+4)%ROB_ENTRIES].cndx;
+//				lfg <= rob[n33].grp;
 			end
 	end
 end
@@ -5025,9 +5076,6 @@ else begin
 					prnv[8], prnv[9], prnv[10], prnv[11], prnv[19],
 					cndx_ren[2], pcndx_ren,
 					grplen2, last3);
-				if (prn[11]==8'd129) begin
-					$finish;
-				end
 				if (ins2_ren.decbus.pred) begin
 					predino = 3'd1;
 					predrndx = tail2;
@@ -6381,6 +6429,9 @@ else begin
 	// Redo instruction as copy target.
 	// Invalidate false paths.
 	for (n3 = 0; n3 < ROB_ENTRIES; n3 = n3 + 1) begin
+		if (free_chkpt)
+			if (rob[n3].cndx==fchkpt)
+				rob[n3].chkpt_freed <= TRUE;
 		if (robentry_stomp[n3])	// || bno_bitmap[rob[n3].pc.bno_t]==1'b0)
 			tBranchInvalidate(n3,robentry_cpytgt[n3]);
 	end
@@ -7132,18 +7183,35 @@ input rob_ndx_t ndx;
 input cpytgt;
 integer nn;
 begin
-	rob[ndx].v <= cpytgt;
-	rob[ndx].excv <= INV;
-	rob[ndx].decbus.cpytgt <= cpytgt;
-	rob[ndx].decbus.alu <= TRUE;
-	rob[ndx].decbus.fpu <= FALSE;
-	rob[ndx].decbus.fc <= FALSE;
-	rob[ndx].decbus.mem <= FALSE;
-	rob[ndx].op.ins <= {57'd0,OP_NOP};
-	//rob[n3].decbus.Rtz <= TRUE;
-	rob[ndx].done <= {FALSE,FALSE};
-	rob[ndx].out <= {FALSE,FALSE};
-	rob[ndx].cndx <= miss_cp;
+	if (SUPPORT_BACKOUT) begin
+		rob[ndx].v <= INV;
+		rob[ndx].excv <= INV;
+		/*
+		rob[ndx].decbus.cpytgt <= TRUE;
+		rob[ndx].decbus.alu <= TRUE;
+		rob[ndx].decbus.fpu <= FALSE;
+		rob[ndx].decbus.fc <= FALSE;
+		rob[ndx].decbus.mem <= FALSE;
+		//rob[n3].decbus.Rtz <= TRUE;
+		rob[ndx].cndx <= miss_cp;
+		*/
+		rob[ndx].done <= {TRUE,TRUE};
+		rob[ndx].out <= {FALSE,FALSE};
+	end
+	else begin
+		rob[ndx].v <= cpytgt;
+		rob[ndx].excv <= INV;
+		rob[ndx].decbus.cpytgt <= cpytgt;
+		rob[ndx].decbus.alu <= TRUE;
+		rob[ndx].decbus.fpu <= FALSE;
+		rob[ndx].decbus.fc <= FALSE;
+		rob[ndx].decbus.mem <= FALSE;
+		rob[ndx].op.ins <= {57'd0,OP_NOP};
+		//rob[n3].decbus.Rtz <= TRUE;
+		rob[ndx].done <= {FALSE,FALSE};
+		rob[ndx].out <= {FALSE,FALSE};
+//		rob[ndx].cndx <= miss_cp;
+	end
 	rob[ndx].lsq <= INV;
 	// Clear corresponding LSQ entries.
 	if (rob[ndx].lsq)
@@ -7507,8 +7575,8 @@ input pRbv;
 input pRcv;
 input pRtv;
 input pRmv;
-input checkpt_ndx_t cndx;
-input checkpt_ndx_t pndx;
+input checkpt_ndx_t cndxq;
+input checkpt_ndx_t pndxq;
 input rob_ndx_t grplen;
 input last;
 integer n12;
@@ -7521,6 +7589,8 @@ begin
 	rob[tail].pred_bitv <= FALSE;
 	rob[tail].pred_bits <= 8'h00;
 	rob[tail].orid <= mc_orid;
+	rob[tail].chkpt_freed <= FALSE;
+	rob[tail].br_cndx <= cndxq;
 	// NOP type instructions appear in the queue but they do not get scheduled or
 	// execute. They are marked done immediately.
 	rob[tail].done <= {2{db.nop}};
@@ -7590,7 +7660,7 @@ begin
 	rob[tail].pc <= ins.pc;
 	rob[tail].mcip <= ins.mcip;
 	rob[tail].bt <= ins.bt;//pt;
-	rob[tail].cndx <= db.br ? pcndx : cndx;
+	rob[tail].cndx <= db.br ? pndxq : cndxq;
 	rob[tail].decbus <= db;
 	if (db.Ra==9'd0) rob[tail].op.aRa <= 9'd0;
 	if (db.Rb==9'd0) rob[tail].op.aRb <= 9'd0;
@@ -7607,7 +7677,7 @@ begin
 //	rob[tail].op.nRt <= nRt;//db.Rtz ? 10'd0 : nRt;
 	rob[tail].group_len <= grplen;
 	rob[tail].last <= last;
-	rob[tail].v <= ins.v;
+	rob[tail].v <= SUPPORT_BACKOUT ? ins.v : ins.v & ~stomp;
 	if (!stomp && db.v && !brtgtv) begin
 		if (db.br & pt) begin
 			brtgt <= fnTargetIP(pc,db.immc);
@@ -7638,7 +7708,7 @@ begin
 		rob[tail].argC_v <= VAL;
 	end
 	
-	if (ornop|stomp) begin
+	if (ornop|(SUPPORT_BACKOUT ? 1'b0 : stomp)) begin
 		rob[tail].decbus.cpytgt <= TRUE;
 		rob[tail].decbus.alu <= TRUE;
 		rob[tail].decbus.fpu <= FALSE;

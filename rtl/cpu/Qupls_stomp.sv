@@ -112,7 +112,7 @@ end
 else begin
 	if (pe_stomp_pipeline)
 		misspcr[0] <= misspc;
-	if (advance_pipeline) begin
+	if (advance_pipeline|pe_stomp_pipeline) begin
 		misspcr[1] <= misspcr[0];
 		misspcr[2] <= misspcr[1];
 		misspcr[3] <= misspcr[2];
@@ -143,13 +143,13 @@ end
 always_comb
 	stomp_aln = (stomp_alnr || pe_stomp_pipeline) && (pc.pc != misspcr[0].pc);
 always_comb
-	stomp_fet = (stomp_fetr || pe_stomp_pipeline) && (pc.pc != misspcr[1].pc);
+	stomp_fet = (stomp_fetr || pe_stomp_pipeline) && (pc_f.pc != misspcr[1].pc);
 always_comb
-	stomp_mux = (pe_stomp_pipeline || stomp_muxr) && (pc_f.pc != misspcr[2].pc);
+	stomp_mux = (pe_stomp_pipeline || stomp_muxr) && (pc_fet.pc != misspcr[2].pc);
 always_comb
-	stomp_dec = (pe_stomp_pipeline || stomp_decr) && (pc_fet.pc != misspcr[3].pc);
+	stomp_dec = (pe_stomp_pipeline || stomp_decr) && (pc_mux.pc != misspcr[3].pc);
 always_comb
-	stomp_ren = (pe_stomp_pipeline || stomp_renr) && (pc_mux.pc != misspcr[4].pc);
+	stomp_ren = (pe_stomp_pipeline || stomp_renr) && (pc_dec.pc != misspcr[4].pc);
 
 // On a cache miss, the fetch stage is stomped on, but not if micro-code is
 // active. Micro-code does not require the cache-line data.
@@ -182,7 +182,7 @@ else begin
 	if (advance_pipeline|pe_stomp_pipeline) begin
 		if (pe_stomp_pipeline)
 			stomp_fetr <= TRUE;
-		else if (pc.pc == misspcr[1].pc || !stomp_aln)
+		else if (pc_f.pc == misspcr[1].pc || !stomp_aln)
 			stomp_fetr <= FALSE;
 		else if (!ff1)
 			stomp_fetr <= stomp_aln;
@@ -192,7 +192,7 @@ else begin
 		do_bsr_mux <= do_bsr;
 		if (pe_stomp_pipeline)
 			stomp_muxr <= TRUE;
-		else if (pc_f.pc == misspcr[2].pc || !stomp_fet) // (next_stomp_mux)
+		else if (pc_fet.pc == misspcr[2].pc || !stomp_fet) // (next_stomp_mux)
 			stomp_muxr <= FALSE;
 //		else
 //			stomp_muxr <= stomp_fet;
@@ -208,7 +208,7 @@ else begin
 		do_bsr_dec <= do_bsr_mux;
 		if (pe_stomp_pipeline)
 			stomp_decr <= TRUE;
-		else if (pc_fet.pc == misspcr[3].pc || !stomp_mux)
+		else if (pc_mux.pc == misspcr[3].pc || !stomp_mux)
 			stomp_decr <= FALSE;
 		if (!ff1)
 			stomp_decr <= stomp_mux;
@@ -218,7 +218,7 @@ else begin
 		do_bsr_ren <= do_bsr_dec;
 		if (pe_stomp_pipeline)
 			stomp_renr <= TRUE;
-		else if (pc_mux.pc == misspcr[4].pc || !stomp_dec) begin
+		else if (pc_dec.pc == misspcr[4].pc || !stomp_dec) begin
 			stomp_renr <= FALSE;
 			ff1 <= FALSE;
 		end

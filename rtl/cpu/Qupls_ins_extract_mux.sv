@@ -69,9 +69,12 @@ pipeline_reg_t nopi;
 // Define a NOP instruction.
 always_comb
 begin
-	nopi = {$bits(pipeline_reg_t){1'b0}};
+//	nopi = {$bits(pipeline_reg_t){1'b0}};
+	nopi = insi;
+	nopi.v = INV;
 	nopi.exc = FLT_NONE;
-	nopi.v = 1'b1;
+//	nopi.v = 1'b1;
+/*
 	nopi.pc = insi.pc;
 	nopi.mcip = 12'h000;
 	nopi.len = 4'd8;
@@ -85,6 +88,7 @@ begin
 	nopi.decbus.Rtz = 1'b1;
 	nopi.decbus.nop = 1'b1;
 	nopi.decbus.alu = 1'b1;
+*/
 end
 
 always_ff @(posedge clk)

@@ -43,7 +43,7 @@ import QuplsPkg::*;
 module Qupls_pipeline_ren(
 	rst, clk, clk5x, ph4, en, nq, restore, restored, restore_list, miss_cp,
 	new_chkpt, chkpt_amt, tail0, rob, robentry_stomp, avail_reg, sr,
-	stomp_bno, branch_state,
+	stomp_ren, stomp_bno, branch_state,
 	arn, arng, arnt, arnv, rn_cp, store_argC_pReg, prn, prnv,
 	Rt0_dec, Rt1_dec, Rt2_dec, Rt3_dec, Rt0_decv, Rt1_decv, Rt2_decv, Rt3_decv, 
 	Rt0_ren, Rt1_ren, Rt2_ren, Rt3_ren, Rt0_renv, Rt1_renv, Rt2_renv, Rt3_renv, 
@@ -55,6 +55,9 @@ module Qupls_pipeline_ren(
 	wrport0_Rt, wrport1_Rt, wrport2_Rt, wrport3_Rt, 
 	wrport0_res, wrport1_res, wrport2_res, wrport3_res, 
 	wrport0_cp, wrport1_cp, wrport2_cp, wrport3_cp, 
+
+	cmtav, cmtbv, cmtcv, cmtdv, cmtaa, cmtba, cmtca, cmtda,
+	cmtap, cmtbp, cmtcp, cmtdp, cmta_cp, cmtb_cp, cmtc_cp, cmtd_cp,
 
 	cmtbr,
 	tags2free, freevals, free_chkpt, fchkpt, backout, fcu_id,
@@ -80,6 +83,7 @@ input rob_entry_t [ROB_ENTRIES-1:0] rob;
 input [ROB_ENTRIES-1:0] robentry_stomp;
 input [PREGS-1:0] avail_reg;
 input status_reg_t sr;
+input stomp_ren;
 input [4:0] stomp_bno;
 input branch_state_t branch_state;
 input aregno_t [23:0] arn;
@@ -134,6 +138,22 @@ input checkpt_ndx_t wrport0_cp;
 input checkpt_ndx_t wrport1_cp;
 input checkpt_ndx_t wrport2_cp;
 input checkpt_ndx_t wrport3_cp;
+input cmtav;
+input cmtbv;
+input cmtcv;
+input cmtdv;
+input aregno_t cmtaa;
+input aregno_t cmtba;
+input aregno_t cmtca;
+input aregno_t cmtda;
+input pregno_t cmtap;
+input pregno_t cmtbp;
+input pregno_t cmtcp;
+input pregno_t cmtdp;
+input checkpt_ndx_t cmta_cp;
+input checkpt_ndx_t cmtb_cp;
+input checkpt_ndx_t cmtc_cp;
+input checkpt_ndx_t cmtd_cp;
 input cmtbr;
 output pregno_t [3:0] tags2free;
 output [3:0] freevals;
@@ -412,26 +432,42 @@ Qupls_rat #(.NPORT(24)) urat1
 	.cmtbankb(1'b0),
 	.cmtbankc(1'b0),
 	.cmtbankd(1'b0),
-	.cmtav(wrport0_v),
-	.cmtbv(wrport1_v),
-	.cmtcv(wrport2_v),
-	.cmtdv(wrport3_v),
-	.cmtaa(wrport0_aRt),
-	.cmtba(wrport1_aRt),
-	.cmtca(wrport2_aRt),
-	.cmtda(wrport3_aRt),
-	.cmtap(wrport0_Rt),
-	.cmtbp(wrport1_Rt),
-	.cmtcp(wrport2_Rt),
-	.cmtdp(wrport3_Rt),
-	.cmtaval(wrport0_res),
-	.cmtbval(wrport1_res),
-	.cmtcval(wrport2_res),
-	.cmtdval(wrport3_res),
-	.cmta_cp(wrport0_cp),
-	.cmtb_cp(wrport1_cp),
-	.cmtc_cp(wrport2_cp),
-	.cmtd_cp(wrport3_cp),
+	.wrport0_v(wrport0_v),
+	.wrport1_v(wrport1_v),
+	.wrport2_v(wrport2_v),
+	.wrport3_v(wrport3_v),
+	.wrport0_aRt(wrport0_aRt),
+	.wrport1_aRt(wrport1_aRt),
+	.wrport2_aRt(wrport2_aRt),
+	.wrport3_aRt(wrport3_aRt),
+	.wrport0_Rt(wrport0_Rt),
+	.wrport1_Rt(wrport1_Rt),
+	.wrport2_Rt(wrport2_Rt),
+	.wrport3_Rt(wrport3_Rt),
+	.wrport0_cp(wrport0_cp),
+	.wrport1_cp(wrport1_cp),
+	.wrport2_cp(wrport2_cp),
+	.wrport3_cp(wrport3_cp),
+	.cmtav(cmtav),
+	.cmtbv(cmtbv),
+	.cmtcv(cmtcv),
+	.cmtdv(cmtdv),
+	.cmtaa(cmtaa),
+	.cmtba(cmtba),
+	.cmtca(cmtca),
+	.cmtda(cmtda),
+	.cmtap(cmtap),
+	.cmtbp(cmtbp),
+	.cmtcp(cmtcp),
+	.cmtdp(cmtdp),
+	.cmtaval(64'd0),
+	.cmtbval(64'd0),
+	.cmtcval(64'd0),
+	.cmtdval(64'd0),
+	.cmta_cp(cmta_cp),
+	.cmtb_cp(cmtb_cp),
+	.cmtc_cp(cmtc_cp),
+	.cmtd_cp(cmtd_cp),
 	.cmtbr(cmtbr),
 	.restore_list(restore_list),
 	.restored(restored),
@@ -643,20 +679,23 @@ end
 else begin
 	if (en) begin
 		ins0_ren.cndx <= cndx;
-		if (ins0_dec.v) begin
-			ins0_ren <= ins0_dec;
+		ins0_ren <= ins0_dec;
+		if (ins0_dec.v & ~stomp_ren) begin
 			ins0_ren.nRt <= Rt0_dec;
 			if (ins3_ren.decbus.bsr)
 				ins0_ren.v <= INV;
 		end
 		else begin
-			ins0_ren <= nopi;
+//			ins0_ren <= nopi;
 			ins0_ren.v <= INV;
-			ins0_ren.decbus.Rt <= ins0_ren.decbus.Rt;
-			ins0_ren.decbus.Rtn <= ins0_ren.decbus.Rtn;
-			ins0_ren.decbus.Rtz <= ins0_ren.decbus.Rtz;
-			ins0_ren.aRt <= ins0_ren.aRt;
-			ins0_ren.nRt <= ins0_ren.nRt;
+//			ins0_ren.decbus.Rt <= ins0_ren.decbus.Rt;
+//			ins0_ren.decbus.Rtn <= ins0_ren.decbus.Rtn;
+//			ins0_ren.decbus.Rtz <= ins0_ren.decbus.Rtz;
+//			ins0_ren.aRt <= ins0_ren.aRt;
+			if (SUPPORT_BACKOUT)
+				ins0_ren.nRt <= 9'd0;//ins0_ren.nRt;
+			else
+				ins0_ren.nRt <= Rt0_dec;
 		end
 	/*
 	if (bo_wr) begin
@@ -671,8 +710,8 @@ else begin
 	end
 	*/
 		ins1_ren.cndx <= cndx;
-		if (ins1_dec.v) begin
-			ins1_ren <= ins1_dec;
+		ins1_ren <= ins1_dec;
+		if (ins1_dec.v & ~stomp_ren) begin
 			ins1_ren.nRt <= Rt1_dec;
 			if (ins0_dec.decbus.bsr)
 				ins1_ren.v <= INV;
@@ -680,17 +719,20 @@ else begin
 				ins1_ren.v <= INV;
 		end
 		else begin
-			ins1_ren <= nopi;
+//			ins1_ren <= nopi;
 			ins1_ren.v <= INV;
-			ins1_ren.decbus.Rt <= ins1_ren.decbus.Rt;
-			ins1_ren.decbus.Rtn <= ins1_ren.decbus.Rtn;
-			ins1_ren.decbus.Rtz <= ins1_ren.decbus.Rtz;
-			ins1_ren.aRt <= ins1_ren.aRt;
-			ins1_ren.nRt <= ins1_ren.nRt;
+//			ins1_ren.decbus.Rt <= ins1_ren.decbus.Rt;
+//			ins1_ren.decbus.Rtn <= ins1_ren.decbus.Rtn;
+//			ins1_ren.decbus.Rtz <= ins1_ren.decbus.Rtz;
+//			ins1_ren.aRt <= ins1_ren.aRt;
+			if (SUPPORT_BACKOUT)
+				ins1_ren.nRt <= 9'd0;//ins1_ren.nRt;
+			else
+				ins1_ren.nRt <= Rt1_dec;
 		end
 		ins2_ren.cndx <= cndx;
-		if (ins2_dec.v) begin
-			ins2_ren <= ins2_dec;
+		ins2_ren <= ins2_dec;
+		if (ins2_dec.v & ~stomp_ren) begin
 			ins2_ren.nRt <= Rt2_dec;
 			if (ins0_dec.decbus.bsr || ins1_dec.decbus.bsr)
 				ins2_ren.v <= INV;
@@ -698,17 +740,20 @@ else begin
 				ins2_ren.v <= INV;
 		end
 		else begin
-			ins2_ren <= nopi;
+//			ins2_ren <= nopi;
 			ins2_ren.v <= INV;
-			ins2_ren.decbus.Rt <= ins2_ren.decbus.Rt;
-			ins2_ren.decbus.Rtn <= ins2_ren.decbus.Rtn;
-			ins2_ren.decbus.Rtz <= ins2_ren.decbus.Rtz;
-			ins2_ren.aRt <= ins2_ren.aRt;
-			ins2_ren.nRt <= ins2_ren.nRt;
+//			ins2_ren.decbus.Rt <= ins2_ren.decbus.Rt;
+//			ins2_ren.decbus.Rtn <= ins2_ren.decbus.Rtn;
+//			ins2_ren.decbus.Rtz <= ins2_ren.decbus.Rtz;
+//			ins2_ren.aRt <= ins2_ren.aRt;
+			if (SUPPORT_BACKOUT)
+				ins2_ren.nRt <= 9'd0;//ins2_ren.nRt;
+			else
+				ins2_ren.nRt <= Rt2_dec;
 		end
 		ins3_ren.cndx <= cndx;
-		if (ins3_dec.v) begin
-			ins3_ren <= ins3_dec;
+		ins3_ren <= ins3_dec;
+		if (ins3_dec.v & ~stomp_ren) begin
 			ins3_ren.nRt <= Rt3_dec;
 			if (ins0_dec.decbus.bsr || ins1_dec.decbus.bsr || ins2_dec.decbus.bsr)
 				ins3_ren.v <= INV;
@@ -716,12 +761,16 @@ else begin
 				ins3_ren.v <= INV;
 		end
 		else begin
-			ins3_ren <= nopi;
-			ins3_ren.decbus.Rt <= ins3_ren.decbus.Rt;
-			ins3_ren.decbus.Rtn <= ins3_ren.decbus.Rtn;
-			ins3_ren.decbus.Rtz <= ins3_ren.decbus.Rtz;
-			ins3_ren.aRt <= ins3_ren.aRt;
-			ins3_ren.nRt <= ins3_ren.nRt;
+//			ins3_ren <= nopi;
+			ins3_ren.v <= INV;
+//			ins3_ren.decbus.Rt <= ins3_ren.decbus.Rt;
+//			ins3_ren.decbus.Rtn <= ins3_ren.decbus.Rtn;
+//			ins3_ren.decbus.Rtz <= ins3_ren.decbus.Rtz;
+//			ins3_ren.aRt <= ins3_ren.aRt;
+			if (SUPPORT_BACKOUT)
+				ins3_ren.nRt <= 9'd0;//ins3_ren.nRt;
+			else
+				ins3_ren.nRt <= Rt3_dec;
 		end
 	end
 	if (branch_state==BS_DONE)
@@ -739,35 +788,51 @@ input [4:0] bno;
 begin
 	if (ins0_ren.pc.bno_t!=bno) begin
 		ins0_ren.excv <= INV;
-		ins0_ren.decbus.cpytgt <= TRUE;
-		ins0_ren.decbus.alu <= TRUE;
-		ins0_ren.decbus.fpu <= FALSE;
-		ins0_ren.decbus.fc <= FALSE;
-		ins0_ren.decbus.mem <= FALSE;
+		if (SUPPORT_BACKOUT)
+			ins0_ren.v <= INV;
+		else begin
+			ins0_ren.decbus.cpytgt <= TRUE;
+			ins0_ren.decbus.alu <= TRUE;
+			ins0_ren.decbus.fpu <= FALSE;
+			ins0_ren.decbus.fc <= FALSE;
+			ins0_ren.decbus.mem <= FALSE;
+		end
 	end
 	if (ins1_ren.pc.bno_t!=bno) begin
-		ins1_ren.excv <= INV;
-		ins1_ren.decbus.cpytgt <= TRUE;
-		ins1_ren.decbus.alu <= TRUE;
-		ins1_ren.decbus.fpu <= FALSE;
-		ins1_ren.decbus.fc <= FALSE;
-		ins1_ren.decbus.mem <= FALSE;
+		ins1_ren.v <= INV;
+		if (SUPPORT_BACKOUT)
+			ins1_ren.excv <= INV;
+		else begin
+			ins1_ren.decbus.cpytgt <= TRUE;
+			ins1_ren.decbus.alu <= TRUE;
+			ins1_ren.decbus.fpu <= FALSE;
+			ins1_ren.decbus.fc <= FALSE;
+			ins1_ren.decbus.mem <= FALSE;
+		end
 	end
 	if (ins2_ren.pc.bno_t!=bno) begin
 		ins2_ren.excv <= INV;
-		ins2_ren.decbus.cpytgt <= TRUE;
-		ins2_ren.decbus.alu <= TRUE;
-		ins2_ren.decbus.fpu <= FALSE;
-		ins2_ren.decbus.fc <= FALSE;
-		ins2_ren.decbus.mem <= FALSE;
+		if (SUPPORT_BACKOUT)
+			ins2_ren.v <= INV;
+		else begin
+			ins2_ren.decbus.cpytgt <= TRUE;
+			ins2_ren.decbus.alu <= TRUE;
+			ins2_ren.decbus.fpu <= FALSE;
+			ins2_ren.decbus.fc <= FALSE;
+			ins2_ren.decbus.mem <= FALSE;
+		end
 	end
 	if (ins3_ren.pc.bno_t!=bno) begin
 		ins3_ren.excv <= INV;
-		ins3_ren.decbus.cpytgt <= TRUE;
-		ins3_ren.decbus.alu <= TRUE;
-		ins3_ren.decbus.fpu <= FALSE;
-		ins3_ren.decbus.fc <= FALSE;
-		ins3_ren.decbus.mem <= FALSE;
+		if (SUPPORT_BACKOUT)
+			ins3_ren.v <= INV;
+		else begin
+			ins3_ren.decbus.cpytgt <= TRUE;
+			ins3_ren.decbus.alu <= TRUE;
+			ins3_ren.decbus.fpu <= FALSE;
+			ins3_ren.decbus.fc <= FALSE;
+			ins3_ren.decbus.mem <= FALSE;
+		end
 	end
 end
 endtask

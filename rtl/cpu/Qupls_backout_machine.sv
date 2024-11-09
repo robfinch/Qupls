@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2014-2024  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -57,9 +57,20 @@ output pregno_t bo_preg;
 output pregno_t bo_nreg;
 output reg stall;
 
+// A backout is automatically triggered one cycle after a restore.
+reg restored;
+always_ff @(posedge clk)
+if (rst)
+	restored <= FALSE;
+else
+	restored <= restore;
+
 // Backout state machine. For backing out RAT changes when a mispredict
-// occurs. We go backwards to the mispredicted branch, updating the RAT with
-// the old register mappings which are stored in the ROB.
+// occurs. The backout needs to happen only for the instructions following the
+// branch instruction in the same instruction group. The checkpoint restore
+// will handle the other register backouts.
+// We go backwards (staying in the same group) to the mispredicted branch,
+// updating the RAT with the old register mappings which are stored in the ROB.
 // Note if a branch mispredict occurs and the checkpoint is being restored
 // to an earlier one anyway, then this backout is cancelled.
 
@@ -73,12 +84,13 @@ end
 else begin
 	case(backout_state)
 	2'd0:
-		if (backout) begin
-			
+		if (backout|restored) begin
+			/*			
 			backout_id <= (tail + ROB_ENTRIES - 1) % ROB_ENTRIES;
 			if (((tail + ROB_ENTRIES - 1) % ROB_ENTRIES) != fcu_id)
 				backout_state <= 2'd1;
-			/*
+			*/
+			
 			if (rob[(fcu_id+3)%ROB_ENTRIES].grp==rob[fcu_id].grp) begin
 				backout_id <= (fcu_id + 3) % ROB_ENTRIES;
 				backout_state <= 2'd1;
@@ -91,13 +103,16 @@ else begin
 				backout_id <= (fcu_id + 1) % ROB_ENTRIES;
 				backout_state <= 2'd1;
 			end
-			*/
+
 //		else  nothing to backout
 		end
 	2'd1:
+		/*
 		if (restore)
 			backout_state <= 2'd0;
-		else if (backout_id != fcu_id)
+		else
+		*/
+		if (rob[(backout_id + ROB_ENTRIES - 1) % ROB_ENTRIES].grp == rob[fcu_id].grp)
 			backout_id <= (backout_id + ROB_ENTRIES - 1) % ROB_ENTRIES;
 		else
 			backout_state <= 2'd0;
@@ -133,10 +148,17 @@ end
 else begin
 	bo_wr <= FALSE;
 	if (!restore && backout_state==2'd1) begin
-		bo_wr <= backout_id != fcu_id;
-		bo_areg <= rob[backout_id].op.aRt;
-		bo_preg <= rob[backout_id].op.pRt;
-		bo_nreg <= rob[backout_id].op.nRt;
+		bo_wr <= TRUE;//backout_id != fcu_id;
+		if (rob[backout_id].sn > rob[fcu_id].sn) begin
+			bo_areg <= rob[backout_id].op.aRt;
+			bo_preg <= rob[backout_id].op.pRt;
+			bo_nreg <= rob[backout_id].op.nRt;
+		end
+		else begin
+			bo_areg <= rob[backout_id].op.aRt;
+			bo_preg <= rob[backout_id].op.nRt;
+			bo_nreg <= rob[backout_id].op.pRt;
+		end
 	end
 end
 

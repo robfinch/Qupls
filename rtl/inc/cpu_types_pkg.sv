@@ -59,7 +59,7 @@ typedef logic [31:0] virtual_address_t;
 typedef logic [31:0] physical_address_t;
 `endif
 typedef logic [11:0] mc_address_t;
-typedef logic [9:0] pregno_t;
+typedef logic [8:0] pregno_t;
 typedef logic [7:0] aregno_t;
 //typedef logic [63:0] segment_reg_t;
 

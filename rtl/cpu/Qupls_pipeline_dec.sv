@@ -43,7 +43,7 @@ module Qupls_pipeline_dec(rst_i, rst, clk, en, clk5x, ph4,
 	restored, restore_list, sr,
 	tags2free, freevals, bo_wr, bo_preg,
 	ins0_dec_inv, ins1_dec_inv, ins2_dec_inv, ins3_dec_inv,
-	stomp_mux, stomp_bno, ins0_mux, ins1_mux, ins2_mux, ins3_mux, ins4_mux,
+	stomp_dec, stomp_mux, stomp_bno, ins0_mux, ins1_mux, ins2_mux, ins3_mux, ins4_mux,
 	Rt0_dec, Rt1_dec, Rt2_dec, Rt3_dec, Rt0_decv, Rt1_decv, Rt2_decv, Rt3_decv,
 	micro_code_active_mux, micro_code_active_dec,
 	ins0_dec, ins1_dec, ins2_dec, ins3_dec, pc0_dec, pc1_dec, pc2_dec, pc3_dec,
@@ -58,6 +58,7 @@ input [4:0] ph4;
 input restored;
 input [PREGS-1:0] restore_list;
 input status_reg_t sr;
+input stomp_dec;
 input stomp_mux;
 input [4:0] stomp_bno;
 input pipeline_reg_t ins0_mux;
@@ -104,7 +105,7 @@ pipeline_reg_t nopi;
 decode_bus_t dec0,dec1,dec2,dec3,dec4;
 pipeline_reg_t pr_dec0,pr_dec1,pr_dec2,pr_dec3;
 pipeline_reg_t [3:0] prd, inso;
-reg stomp_dec;
+//reg stomp_dec;
 
 // Define a NOP instruction.
 always_comb
@@ -281,6 +282,7 @@ else begin
 		micro_code_active_dec <= micro_code_active_mux;
 end
 
+/*
 always_ff @(posedge clk)
 if (rst)
 	stomp_dec <= FALSE;
@@ -288,6 +290,7 @@ else begin
 	if (en)
 		stomp_dec <= stomp_mux;
 end
+*/
 
 always_ff @(posedge clk)
 if (rst) begin
@@ -431,10 +434,10 @@ begin
 	pr_dec2 = ins2m;
 	pr_dec3 = ins3m;
 	
-	pr_dec0.v = TRUE;
-	pr_dec1.v = TRUE;
-	pr_dec2.v = TRUE;
-	pr_dec3.v = TRUE;
+	pr_dec0.v = !stomp_dec;
+	pr_dec1.v = !stomp_dec;
+	pr_dec2.v = !stomp_dec;
+	pr_dec3.v = !stomp_dec;
 	if (stomp_dec) begin
 		pr_dec0.aRa = dec0.Ra;
 		pr_dec0.aRb = dec0.Rb;

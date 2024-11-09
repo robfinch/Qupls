@@ -73,6 +73,7 @@ output reg [PREGS-1:0] avail = {{PREGS-1{1'b1}},1'b0};				// recorded in ROB
 output reg stall;			// stall enqueue while waiting for register availability
 output reg rst_busy;
 
+reg [PREGS-1:0] avail1 = {{PREGS-1{1'b1}},1'b0};
 reg [PREGS-1:0] pavail = {{PREGS-1{1'b1}},1'b0};				// recorded in ROB
 reg [PREGS-1:0] pavail2 = {{PREGS-1{1'b1}},1'b0};				// recorded in ROB
 reg pop0 = 1'b0;
@@ -102,14 +103,14 @@ always_comb rst_busy = 1'b0;
 always_comb
 begin
 	// Not a stall if not allocating.
-	stalla0 = ~avail[wo0];
-	stalla1 = ~avail[wo1];
-	stalla2 = ~avail[wo2];
-	stalla3 = ~avail[wo3];
-	wv0 = (avail[wo0] & alloc0) | wv0r;// & ~empty0;
-	wv1 = (avail[wo1] & alloc1) | wv1r;// & ~empty1;
-	wv2 = (avail[wo2] & alloc2) | wv2r;// & ~empty2;
-	wv3 = (avail[wo3] & alloc3) | wv3r;// & ~empty3;
+	stalla0 = ~avail1[wo0] & alloc0;
+	stalla1 = ~avail1[wo1] & alloc1;
+	stalla2 = ~avail1[wo2] & alloc2;
+	stalla3 = ~avail1[wo3] & alloc3;
+	wv0 = (avail1[wo0] & alloc0) | (wv0r & ~en);// & ~empty0;
+	wv1 = (avail1[wo1] & alloc1) | (wv1r & ~en);// & ~empty1;
+	wv2 = (avail1[wo2] & alloc2) | (wv2r & ~en);// & ~empty2;
+	wv3 = (avail1[wo3] & alloc3) | (wv3r & ~en);// & ~empty3;
 	if (wo0==wo1) begin stalla1 = TRUE; wv1 = FALSE; end
 	if (wo0==wo2) begin stalla2 = TRUE; wv2 = FALSE; end
 	if (wo0==wo3) begin stalla3 = TRUE; wv3 = FALSE; end
@@ -119,17 +120,21 @@ begin
 end
 
 // Do not do a pop if stalling on another slot.
-always_comb pop0 = (alloc0 & en & ~stall) | stalla0;
-always_comb pop1 = (alloc1 & en & ~stall) | stalla1;
-always_comb pop2 = (alloc2 & en & ~stall) | stalla2;
-always_comb pop3 = (alloc3 & en & ~stall) | stalla3;
+// Do a pop only if allocating
+always_comb pop0 = (alloc0 & en & ~stall) | (alloc0 & stalla0);
+always_comb pop1 = (alloc1 & en & ~stall) | (alloc1 & stalla1);
+always_comb pop2 = (alloc2 & en & ~stall) | (alloc2 & stalla2);
+always_comb pop3 = (alloc3 & en & ~stall) | (alloc3 & stalla3);
 
 reg [3:0] freevals1;
+reg [$clog2(PREGS)-3:0] rotcnt [0:3];
 reg [$clog2(PREGS)-3:0] freeCnt;
 reg [2:0] ffreeCnt;
 reg [PREGS-1:0] next_toFreeList;
 reg [PREGS-1:0] toFreeList;
 reg [3:0] ffree;
+always_comb
+	avail1 = restore ? restore_list : avail;
 
 always_ff @(posedge clk)
 begin
@@ -197,10 +202,6 @@ begin
 		tags[2] = freeCnt + PREGS/2;
 	if (tags[3]==9'd0)
 		tags[3] = freeCnt + PREGS*3/4;
-	fpush[0] = avail[tags[0]] ? 1'b0 : tags[0]==9'd0 ? 1'b0 : freevals1[0] | ffree[0];
-	fpush[1] = avail[tags[1]] ? 1'b0 : tags[1]==9'd0 ? 1'b0 : freevals1[1] | ffree[1];
-	fpush[2] = avail[tags[2]] ? 1'b0 : tags[2]==9'd0 ? 1'b0 : freevals1[2] | ffree[2];
-	fpush[3] = avail[tags[3]] ? 1'b0 : tags[3]==9'd0 ? 1'b0 : freevals1[3] | ffree[3];
 end
 
 wire [7:0] ffo0;
@@ -261,24 +262,39 @@ begin
 		tags[2] = freeCnt + PREGS/2;
 	if (tags[3]==8'd0)
 		tags[3] = freeCnt + PREGS*3/4;
-	fpush[0] = avail[tags[0]] ? 1'b0 : tags[0]==8'd0 ? 1'b0 : (freevals1[0] | ffree[0]);
-	fpush[1] = avail[tags[1]] ? 1'b0 : tags[1]==8'd0 ? 1'b0 : (freevals1[1] | ffree[1]);
-	fpush[2] = avail[tags[2]] ? 1'b0 : tags[2]==8'd0 ? 1'b0 : (freevals1[2] | ffree[2]);
-	fpush[3] = avail[tags[3]] ? 1'b0 : tags[3]==8'd0 ? 1'b0 : (freevals1[3] | ffree[3]);
 end
+always_comb
+begin
+	fpush[0] = avail[tags[0]] ? 1'b0 : |tags[0];//(freevals1[0] | ffree[0]);
+	fpush[1] = avail[tags[1]] ? 1'b0 : |tags[1];//(freevals1[1] | ffree[1]);
+	fpush[2] = avail[tags[2]] ? 1'b0 : |tags[2];//(freevals1[2] | ffree[2]);
+	fpush[3] = avail[tags[3]] ? 1'b0 : |tags[3];//(freevals1[3] | ffree[3]);
+end
+
+reg [255:0] avail_rot;
+always_comb avail_rot[ 63:  0] = (avail[ 63:  0] << rotcnt[0]) | (avail[ 63:  0] >> (64-rotcnt[0]));
+always_comb avail_rot[127: 64] = (avail[127: 64] << rotcnt[1]) | (avail[127: 64] >> (64-rotcnt[1]));
+always_comb avail_rot[191:128] = (avail[191:128] << rotcnt[2]) | (avail[191:128] >> (64-rotcnt[2]));
+always_comb avail_rot[255:192] = (avail[255:192] << rotcnt[3]) | (avail[255:192] >> (64-rotcnt[3]));
 
 wire [6:0] ffo0;
 wire [6:0] ffo1;
 wire [6:0] ffo2;
 wire [6:0] ffo3;
+ffo96 uffo0 (.i({32'd0,avail_rot[ 63:  0]}), .o(ffo0));
+ffo96 uffo1 (.i({32'd0,avail_rot[127: 64]}), .o(ffo1));
+ffo96 uffo2 (.i({32'd0,avail_rot[191:128]}), .o(ffo2));
+ffo96 uffo3 (.i({32'd0,avail_rot[255:192]}), .o(ffo3));
+/*
 ffo96 uffo0 (.i({32'd0,avail[ 63:  0]&pavail[ 63:  0]&pavail2[ 63:  0]}), .o(ffo0));
 ffo96 uffo1 (.i({32'd0,avail[127: 64]&pavail[127: 64]&pavail2[127: 64]}), .o(ffo1));
 ffo96 uffo2 (.i({32'd0,avail[191:128]&pavail[191:128]&pavail2[191:128]}), .o(ffo2));
 ffo96 uffo3 (.i({32'd0,avail[255:192]&pavail[255:192]&pavail2[255:192]}), .o(ffo3));
-always_comb wo0 = {2'd0,ffo0[5:0]};
-always_comb wo1 = {2'd1,ffo1[5:0]};
-always_comb wo2 = {2'd2,ffo2[5:0]};
-always_comb wo3 = {2'd3,ffo3[5:0]};
+*/
+always_comb wo0 = {2'd0,ffo0[5:0] + rotcnt[0][5:0]};
+always_comb wo1 = {2'd1,ffo1[5:0] + rotcnt[1][5:0]};
+always_comb wo2 = {2'd2,ffo2[5:0] + rotcnt[2][5:0]};
+always_comb wo3 = {2'd3,ffo3[5:0] + rotcnt[3][5:0]};
 	end
 end
 endgenerate
@@ -302,7 +318,10 @@ end
 
 always_comb
 begin
-	next_avail = avail;
+	if (restore)
+		next_avail = restore_list;
+	else
+		next_avail = avail;
 
 	if (wv0 & en) next_avail[wo0] = 1'b0;
 	if (wv1 & en) next_avail[wo1] = 1'b0;
@@ -322,6 +341,24 @@ end
 wire cd_avail;
 change_det #(PREGS) ucdavail1 (.rst(rst), .clk(clk), .ce(1'b1), .i(avail), .cd(cd_avail));
 
+always_ff @(posedge clk)
+if (rst) begin
+	rotcnt[0] <= 6'd0;
+	rotcnt[1] <= 6'd0;
+	rotcnt[2] <= 6'd0;
+	rotcnt[3] <= 6'd0;
+end
+else begin
+		
+	begin
+		rotcnt[0] <= rotcnt[0] + pop0;
+		rotcnt[1] <= rotcnt[1] + pop1;
+		rotcnt[2] <= rotcnt[2] + pop2;
+		rotcnt[3] <= rotcnt[3] + pop3;
+	end
+	
+end
+	
 always_ff @(posedge clk)
 if (rst)
 	avail = {{PREGS-1{1'b1}},1'b0};
@@ -418,7 +455,7 @@ always_comb
 begin
 	next_toFreeList = toFreeList;
 	if (restore)
-		next_toFreeList = next_toFreeList | (restore_list & ~avail);
+		next_toFreeList = next_toFreeList;// | (restore_list & ~avail);
 	if (fpush[0])	next_toFreeList[tags[0]] = 1'b0;
  	if (fpush[1])	next_toFreeList[tags[1]] = 1'b0;
  	if (fpush[2])	next_toFreeList[tags[2]] = 1'b0;

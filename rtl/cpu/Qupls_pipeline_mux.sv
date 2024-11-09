@@ -299,11 +299,11 @@ begin
 	pr4_mux.hwi_level = irq_fet;
 	// If an NMI or IRQ is happening, invalidate instruction and mark as
 	// interrupted by external hardware.
-	pr0_mux.v = !(nmi_i || irqf_fet);
-	pr1_mux.v = !(nmi_i || irqf_fet);
-	pr2_mux.v = !(nmi_i || irqf_fet);
-	pr3_mux.v = !(nmi_i || irqf_fet);
-	pr4_mux.v = !(nmi_i || irqf_fet);
+	pr0_mux.v = !(nmi_i || irqf_fet) && !stomp_mux;
+	pr1_mux.v = !(nmi_i || irqf_fet) && !stomp_mux;
+	pr2_mux.v = !(nmi_i || irqf_fet) && !stomp_mux;
+	pr3_mux.v = !(nmi_i || irqf_fet) && !stomp_mux;
+	pr4_mux.v = !(nmi_i || irqf_fet) && !stomp_mux;
 	pr0_mux.hwi = nmi_i||irqf_fet;
 	pr1_mux.hwi = nmi_i||irqf_fet;
 	pr2_mux.hwi = nmi_i||irqf_fet;

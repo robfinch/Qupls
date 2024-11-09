@@ -55,16 +55,15 @@ parameter SIM = 1'b1;
 `define NTHREADS	4
 
 // Number of architectural registers there are in the core, including registers
-// not visible in the programming model. Each supported vector register counts
-// as eight registers. This number should be <= 256 and >= 64.
-`define NREGS	256
+// not visible in the programming model. This number should be <= 256 and >= 64.
+`define NREGS	128
 
 // Number of physical registers supporting the architectural ones and used in
 // register renaming. There must be significantly more physical registers than
 // architectural ones, or performance will suffer due to stalls.
-// Must be a multiple of four. If it is not 512 then the renamer logic will
+// Must be a multiple of four. If it is not 512 or 256 then the renamer logic will
 // need to be modified.
-parameter PREGS = 512;	// 512
+parameter PREGS = 256;	// 512
 
 // Number of elements per vector. Changing this requires changing logic in the
 // core specific to vector register numbers.
@@ -83,9 +82,33 @@ parameter VEC_ELEMENTS = 8;
 // core in terms of number of instructions. The only working value is 4.
 parameter XWID = 4;
 
+// =============================================================================
+// Debugging Options
+// =============================================================================
 // Set the following parameter to one to serialize operation of the CPU.
 // Meant for debugging purposes.
-parameter SERIALIZE = 0;
+parameter SERIALIZE = 1;
+
+// Enables register renaming to remove false dependencies.
+parameter SUPPORT_RENAMER = 1;
+
+// Register name supplier
+// 3 = SRL based circular list, smaller less performant
+// 4 = FIFO based, larger, does not work correctly yet
+// 			(sometimes supplies the same register twice)
+// 6 = FFO / Bitmap, a find-first-ones approach with a bitmap
+parameter RENAMER = 6;
+
+// Comment out the following to remove the RAT
+`define SUPPORT_RAT 1;
+
+// =============================================================================
+// =============================================================================
+
+// Set the following to one to support backout and restore branch handling.
+// backout / restore is not 100% working yet. Supporting backout / restore
+// makes the core larger.
+parameter SUPPORT_BACKOUT = 1'b1;
 
 // Select building for performance or size.
 // If this is set to one extra logic will be included to improve performance.
@@ -101,9 +124,6 @@ parameter BRANCH_PREDICTOR = 0;
 // Supporting postfix instructions increases the size of the core and reduces
 // the code density.
 parameter SUPPORT_POSTFIX = 0;
-
-// Enables register renaming to remove false dependencies.
-parameter SUPPORT_RAT = 0;
 
 // The following allows the core to process flow control ops in any order
 // to reduce the size of the core. Set to zero to restrict flow control ops
@@ -129,7 +149,7 @@ parameter SUPPORT_PGREL	= 1'b0;	// Page relative branching, must be zero
 parameter SUPPORT_REP = 1'b0;
 parameter REP_BIT = 31;
 
-// This parameter indicates if to support vector instructions.
+// (Dead) This parameter indicates if to support vector instructions.
 parameter SUPPORT_VEC = 1'b1;
 
 // This parameter adds support for capabilities. Increases the size of the core.
@@ -145,7 +165,7 @@ parameter SUPPORT_PRED = 1'b1;
 // support for 4x16, or 2x32 bit ops.
 parameter SUPPORT_PREC = 1'b0;
 
-// This parameter enables support for quad precision operations.
+// This parameter enables support for quad (128-bit) precision operations.
 parameter SUPPORT_QUAD_PRECISION = 1'b0;
 
 // Supporting load bypassing may improve performance, but will also increase the
@@ -169,8 +189,9 @@ parameter SCHED_WINDOW_SIZE = 8;
 // The following is the number of branch checkpoints to support. 16 is the
 // recommended maximum. Fewer checkpoints may reduce core performance as stalls
 // will result if there are insufficient checkpoints for the number of
-// outstanding branches.
-parameter NCHECK = 8;			// number of checkpoints
+// outstanding branches. More checkpoints will only consume resources without
+// improving performance significantly.
+parameter NCHECK = 16;			// number of checkpoints
 
 parameter LOADQ_ENTRIES = 8;
 parameter STOREQ_ENTRIES = 8;
@@ -200,7 +221,7 @@ parameter TidMSB = $clog2(`NTHREADS)-1;
 
 parameter AREGS = `NREGS;
 parameter REGFILE_LATENCY = 2;
-parameter INSN_LEN = 8'd6;
+parameter INSN_LEN = 8'd8;
 
 // Number of data ports should be 1 or 2. 2 ports will allow two simulataneous
 // reads, but still only a single write.
@@ -208,8 +229,8 @@ parameter NDATA_PORTS = 1;
 parameter NAGEN = 1;
 // Increasing the number of ALUs will increase performance of vector operations.
 // Note that adding an FPU may also increase integer performance.
-parameter NALU = 2;
-parameter NFPU = 1;
+parameter NALU = 2;			// 1 or 2
+parameter NFPU = 1;			// 0, 1, or 2
 parameter NLSQ_PORTS = 1;
 // Number of banks of registers (not implemented).)
 parameter BANKS = 1;
@@ -217,13 +238,6 @@ parameter BANKS = 1;
 parameter RAS_DEPTH	= 4;
 
 parameter SUPPORT_RSB = 0;
-
-// Register name supplier
-// 3 = SRL based circular list, smaller less performant
-// 4 = FIFO based, larger, does not work correctly yet
-// 			(sometimes supplies the same register twice)
-// 6 = FFO / Bitmap, a find-first-ones approach with a bitmap
-parameter RENAMER = 6;
 
 //
 // define PANIC types
@@ -1151,7 +1165,8 @@ typedef struct packed
 typedef struct packed
 {
 	f3func_t func;			// 7 bits
-	logic [3:0] Pr;			// 4
+	logic [2:0] Pr;			// 3
+	logic resv2;
 	fround_t rmd;				// 3 bits
 	logic [6:0] resv;		// 7
 	regspec_t Rc;				// 9
@@ -1164,7 +1179,8 @@ typedef struct packed
 typedef struct packed
 {
 	f3func_t func;			// 7 bits
-	logic [3:0] Pr;			// 4
+	logic [2:0] Pr;			// 3
+	logic resv2;
 	fround_t rmd;				// 3 bits
 	logic [6:0] resv;		// 7
 	regspec_t Rc;
@@ -1177,7 +1193,8 @@ typedef struct packed
 typedef struct packed
 {
 	f3func_t func;			// 7 bits
-	logic [3:0] Pr;			// 4
+	logic [2:0] Pr;			// 3
+	logic resv2;
 	fround_t rmd;				// 3 bits
 	logic [6:0] resv;		// 7
 	regspec_t Rc;
@@ -1190,8 +1207,8 @@ typedef struct packed
 typedef struct packed
 {
 	r3func_t func;			// 7 bits
-	logic [3:0] Pr;			// 4
-	logic [2:0] resv;		// 3
+	logic [2:0] Pr;			// 4
+	logic [3:0] resv;		// 3
 	logic [2:0] op3;		// 3
 	logic [3:0] op4;		// 4
 	regspec_t Rc;				// 9
@@ -1204,8 +1221,8 @@ typedef struct packed
 typedef struct packed
 {
 	cap_func_t func;		// 7 bits
-	logic [3:0] Pr;			// 4
-	logic [5:0] resv;		// 6
+	logic [2:0] Pr;			// 4
+	logic [6:0] resv;		// 6
 	logic [3:0] op4;
 	regspec_t Rc;
 	regspec_t Rb;
@@ -1217,8 +1234,8 @@ typedef struct packed
 typedef struct packed
 {
 	r3func_t func;			// 7 bits
-	logic [3:0] Pr;			// 4
-	logic [2:0] resv;		// 3
+	logic [2:0] Pr;			// 4
+	logic [3:0] resv;		// 3
 	logic [2:0] op3;		// 3
 	logic [3:0] op4;		// 4
 	regspec_t Rc;				// 9
@@ -1231,8 +1248,8 @@ typedef struct packed
 typedef struct packed
 {
 	r3func_t r3func;		// 7 bits
-	logic [3:0] Pr;			// 4
-	logic [5:0] resv2;	// 6
+	logic [2:0] Pr;			// 4
+	logic [6:0] resv2;	// 6
 	logic [3:0] op2;		// 4
 	logic resv;					// 1
 	r1func_t func;			// 8
@@ -1246,8 +1263,8 @@ typedef struct packed
 {
 	logic [3:0] func;		// 4
 	logic [2:0] resv2;	// 3
-	logic [3:0] Pr;			// 4
-	logic [1:0] resv;		// 2
+	logic [2:0] Pr;			// 3
+	logic [2:0] resv;		// 3
 	cause_code_t cause;	// 8
 	regspec_t Rc;				// 9	
 	regspec_t Rb;				// 9
@@ -1262,7 +1279,8 @@ typedef struct packed
 {
 	logic [31:0] imm;		// 32
 	prec_t prc;					// 3
-	logic [3:0] Pr;			// 4
+	logic resv;					// 1
+	logic [2:0] Pr;			// 3
 	regspec_t Ra;				// 9
 	regspec_t Rt;				// 9
 	opcode_t opcode;		// 7
@@ -1270,10 +1288,21 @@ typedef struct packed
 
 typedef struct packed
 {
+	logic [38:0] imm;		// 39
+	prec_t prc;					// 3
+	logic [1:0] sc;			// 2
+	logic resv;					// 1
+	logic [2:0] Pr;			// 3
+	regspec_t Rt;				// 9
+	opcode_t opcode;		// 7
+} simminst_t;					// 64
+
+typedef struct packed
+{
 	shift_t func;				// 4
 	prec_t prc;					// 3
-	logic [3:0] Pr;			// 4
-	logic [5:0] resv;		// 6
+	logic [2:0] Pr;			// 3
+	logic [6:0] resv;		// 7
 	logic [2:0] Rm;			// 3
 	logic i;						// 1
 	logic [2:0] resv2;	// 3
@@ -1288,8 +1317,8 @@ typedef struct packed
 {
 	logic [2:0] op;			// 3
 	logic [3:0] resv3;	// 4
-	logic [3:0] Pr;			// 4
-	logic [4:0] resv2;	// 5
+	logic [2:0] Pr;			// 3
+	logic [5:0] resv2;	// 6
 	logic [13:0] regno;	// 14
 	logic [8:0] resv1;	// 9
 	regspec_t Ra;				// 9
@@ -1300,7 +1329,8 @@ typedef struct packed
 typedef struct packed
 {
 	logic [6:0] dispHi;		// 7
-	logic [3:0] Pr;				// 6
+	logic [2:0] Pr;				// 3
+	logic resv;						// 1
 	logic [15:0] dispLo;	// 14
 	logic [2:0] sc;				// 3
 	regspec_t Rb;					// 9
@@ -1312,7 +1342,8 @@ typedef struct packed
 typedef struct packed
 {
 	logic [6:0] dispHi;		// 7
-	logic [3:0] Pr;				// 4
+	logic [2:0] Pr;				// 3
+	logic resv;						// 1
 	logic [15:0] dispLo;	// 16
 	logic [2:0] sc;				// 3
 	regspec_t Rb;					// 9
@@ -1357,7 +1388,8 @@ typedef struct packed
 {
 	logic [21:0] disp;		// 22
 	prec_t prc;						// 3
-	logic [3:0] Pr;				// 4
+	logic [2:0] Pr;				// 3
+	logic resv2;					// 1
 	logic i;							// 1
 	regspec_t Rb;					// 9
 	regspec_t	Ra;					// 9
@@ -1371,7 +1403,8 @@ typedef struct packed
 typedef struct packed
 {
 	logic [6:0] dispHi;		// 7
-	logic [3:0] Pr;				// 4
+	logic [2:0] Pr;				// 3
+	logic resv;						// 1
 	logic [15:0] dispLo;	//16
 	logic [2:0] Sc;				// 3
 	regspec_t Rb;					// 9
@@ -1383,10 +1416,23 @@ typedef struct packed
 typedef struct packed
 {
 	logic [49:0] disp;		// 50
-	logic [3:0] Pr;				// 4
+	logic resv;						// 1
+	logic [2:0] Pr;				// 3
 	logic [2:0] Rt;				// 3
 	opcode_t opcode;			// 7
 } bsrinst_t;						// 64
+
+typedef struct packed
+{
+	logic [31:0] cnst;		// 32
+	logic [3:0] resv3;		// 4
+	logic [2:0] Pr;				// 3
+	logic [5:0] resv2;		// 6
+	logic [2:0] lk;				// 3
+	logic [5:0] resv;			// 6
+	logic [2:0] offs;			// 3
+	opcode_t opcode;			// 7
+} rtdinst_t;						// 64
 
 typedef union packed
 {
@@ -1405,8 +1451,10 @@ typedef union packed
 	jsrinst_t	jsr;
 	jsrinst_t	jmp;
 	bsrinst_t bsr;
+	rtdinst_t rtd;
 	imminst_t	imm;
 	imminst_t	ri;
+	simminst_t ris;
 	shiftiinst_t shifti;
 	csrinst_t	csr;
 	lsinst_t	ls;
@@ -1425,6 +1473,7 @@ typedef struct packed {
 	cpu_types_pkg::aregno_t aRb;
 	cpu_types_pkg::aregno_t aRc;
 	cpu_types_pkg::aregno_t aRt;
+	cpu_types_pkg::aregno_t aRm;
 	logic [5:0] pred_btst;
 	instruction_t ins;
 } ex_instruction_t;
@@ -1589,7 +1638,7 @@ typedef struct packed
 	cpu_types_pkg::pregno_t pRt;							// current Rt value
 	cpu_types_pkg::pregno_t nRt;							// new Rt
 	cpu_types_pkg::pregno_t pRm;							// current Rt value
-	logic [3:0] cndx;					// checkpoint index
+	checkpt_ndx_t cndx;					// checkpoint index
 	// The following matches the ex_instruction_t
 	cpu_types_pkg::pc_address_ex_t pc;			// PC of instruction
 	cpu_types_pkg::mc_address_t mcip;				// Micro-code IP address
@@ -1600,6 +1649,7 @@ typedef struct packed
 	cpu_types_pkg::aregno_t aRb;
 	cpu_types_pkg::aregno_t aRc;
 	cpu_types_pkg::aregno_t aRt;
+	cpu_types_pkg::aregno_t aRm;
 	logic [5:0] pred_btst;
 	instruction_t ins;				// original instruction
 } pipeline_reg_t;
@@ -1712,6 +1762,7 @@ typedef logic [6:0] seqnum_t;
 typedef struct packed
 {
 	logic [PREGS-1:0] avail;	// available registers at time of queue (for rollback)
+	cpu_types_pkg::pregno_t [AREGS-1:0] p2regmap;
 	cpu_types_pkg::pregno_t [AREGS-1:0] pregmap;
 	cpu_types_pkg::pregno_t [AREGS-1:0] regmap;
 } checkpoint_t;
@@ -1732,20 +1783,22 @@ typedef struct packed {
 	logic [7:0] pred_bits;		// predicte bits for this instruction.
 	logic pred_bitv;					// 1=predicate bit is valid
 	logic [1:0] vn;						// vector index
+	logic chkpt_freed;
 	cpu_types_pkg::pc_address_t brtgt;
 	cpu_types_pkg::mc_address_t mcbrtgt;			// micro-code branch target
 	logic takb;								// 1=branch evaluated to taken
 	cause_code_t exc;					// non-zero indicate exception
 	logic excv;								// 1=exception
+	cpu_types_pkg::value_t argC;	// for stores
 `ifdef IS_SIM
 	cpu_types_pkg::value_t argA;
 	cpu_types_pkg::value_t argB;
-	cpu_types_pkg::value_t argC;
 	cpu_types_pkg::value_t argI;
 	cpu_types_pkg::value_t argT;
 	cpu_types_pkg::value_t argM;
 	cpu_types_pkg::value_t res;
 `endif
+	logic all_args_valid;			// 1 if all args are valid
 	logic argA_vp;						// 1=argument A valid pending
 	logic argB_vp;
 	logic argC_vp;
@@ -1764,7 +1817,8 @@ typedef struct packed {
 	logic bt;									// branch to be taken as predicted
 	operating_mode_t om;			// operating mode
 	decode_bus_t decbus;			// decoded instruction
-	logic [3:0] cndx;					// checkpoint index
+	checkpt_ndx_t cndx;				// checkpoint index
+	checkpt_ndx_t br_cndx;		// checkpoint index branch owns
 	pipeline_reg_t op;			// original instruction
 	cpu_types_pkg::pc_address_ex_t pc;			// PC of instruction
 	cpu_types_pkg::mc_address_t mcip;				// Micro-code IP address
@@ -2136,6 +2190,7 @@ begin
 	OP_DBRA:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
 	OP_Bcc,OP_BccU,OP_FBcc:
 		fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
+	OP_LDA,
 	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDOU,OP_LDH:
 		fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
 	OP_LDX:
@@ -2207,12 +2262,11 @@ begin
 	OP_DBRA,
 	OP_Bcc,OP_BccU,OP_FBcc:
 		fnSourceBv = fnConstReg(ir.aRb) || fnImmb(ir);
+	OP_LDA,
 	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDOU,OP_LDH:
-		fnSourceBv = 1'b1;
-	OP_LDX:
-		fnSourceBv = fnConstReg(ir.aRb) || fnImmb(ir);
+		fnSourceBv = fnConstReg(ir.aRb);
 	OP_STB,OP_STW,OP_STT,OP_STO:
-		fnSourceBv = 1'b1;
+		fnSourceBv = fnConstReg(ir.aRb);
 	OP_STX:
 		fnSourceBv = fnConstReg(ir.aRb) || fnImmb(ir);
 	default:	fnSourceBv = 1'b1;
@@ -2347,6 +2401,7 @@ begin
 	OP_ZSGEUI:	fnSourceTv = fnConstReg(ir.aRt);
 
 	OP_MOV:		fnSourceTv = fnConstReg(ir.aRt);
+	OP_LDA,
 	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDOU,OP_LDH:
 		fnSourceTv = fnConstReg(ir.aRt);
 	OP_LDX:

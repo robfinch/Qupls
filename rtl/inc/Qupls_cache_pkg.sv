@@ -69,4 +69,19 @@ typedef struct packed
 	logic [ICacheLineWidth-1:0] data;
 } ICacheLine;
 
+typedef struct packed
+{
+	logic v;
+	logic is_load;
+	logic is_dump;
+	logic [1:0] active;
+	logic [1:0] done;
+	logic [1:0] out;
+	logic [1:0] loaded;
+	logic write_allocate;
+	QuplsPkg::rob_ndx_t rndx;
+	fta_bus_pkg::fta_cmd_request512_t cpu_req;
+	fta_bus_pkg::fta_cmd_request256_t [1:0] tran_req;
+} dcache_req_queue_t;
+
 endpackage
