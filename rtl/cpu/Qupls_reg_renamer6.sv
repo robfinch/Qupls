@@ -164,113 +164,25 @@ end
 
 generate begin : gAvail
 	if (PREGS==512) begin
-always_comb
-begin
-	tags[0] = 9'd0;
-	tags[1] = 9'd0;
-	tags[2] = 9'd0;
-	tags[3] = 9'd0;
-	if (freevals1[0]) begin
-		if (tags2free[0][8:7]==2'd0) tags[0] = tags2free[0];
-		if (tags2free[0][8:7]==2'd1) tags[1] = tags2free[0];
-		if (tags2free[0][8:7]==2'd2) tags[2] = tags2free[0];
-		if (tags2free[0][8:7]==2'd3) tags[3] = tags2free[0];
-	end
-	if (freevals1[1]) begin
-		if (tags2free[1][8:7]==2'd0) tags[0] = tags2free[1];
-		if (tags2free[1][8:7]==2'd1) tags[1] = tags2free[1];
-		if (tags2free[1][8:7]==2'd2) tags[2] = tags2free[1];
-		if (tags2free[1][8:7]==2'd3) tags[3] = tags2free[1];
-	end
-	if (freevals1[2]) begin
-		if (tags2free[2][8:7]==2'd0) tags[0] = tags2free[2];
-		if (tags2free[2][8:7]==2'd1) tags[1] = tags2free[2];
-		if (tags2free[2][8:7]==2'd2) tags[2] = tags2free[2];
-		if (tags2free[2][8:7]==2'd3) tags[3] = tags2free[2];
-	end
-	if (freevals1[3]) begin
-		if (tags2free[3][8:7]==2'd0) tags[0] = tags2free[3];
-		if (tags2free[3][8:7]==2'd1) tags[1] = tags2free[3];
-		if (tags2free[3][8:7]==2'd2) tags[2] = tags2free[3];
-		if (tags2free[3][8:7]==2'd3) tags[3] = tags2free[3];
-	end
-	if (tags[0]==9'd0)
-		tags[0] = freeCnt + 000;
-	if (tags[1]==9'd0)
-		tags[1] = freeCnt + PREGS/4;
-	if (tags[2]==9'd0)
-		tags[2] = freeCnt + PREGS/2;
-	if (tags[3]==9'd0)
-		tags[3] = freeCnt + PREGS*3/4;
-end
-
+reg [511:0] avail_rot;
+always_comb avail_rot[127:  0] = (avail[127:  0] << rotcnt[0]) | (avail[127:  0] >> (128-rotcnt[0]));
+always_comb avail_rot[255:128] = (avail[255:128] << rotcnt[1]) | (avail[255:128] >> (128-rotcnt[1]));
+always_comb avail_rot[383:356] = (avail[383:256] << rotcnt[2]) | (avail[383:256] >> (128-rotcnt[2]));
+always_comb avail_rot[511:384] = (avail[511:384] << rotcnt[3]) | (avail[511:384] >> (128-rotcnt[3]));
 wire [7:0] ffo0;
 wire [7:0] ffo1;
 wire [7:0] ffo2;
 wire [7:0] ffo3;
-ffo144 uffo0 (.i({16'd0,avail[127:  0]&pavail[127:  0]&pavail2[127:  0]}), .o(ffo0));
-ffo144 uffo1 (.i({16'd0,avail[255:128]&pavail[255:128]&pavail2[255:128]}), .o(ffo1));
-ffo144 uffo2 (.i({16'd0,avail[383:256]&pavail[383:256]&pavail2[383:256]}), .o(ffo2));
-ffo144 uffo3 (.i({16'd0,avail[511:384]&pavail[511:384]&pavail2[511:384]}), .o(ffo3));
-always_comb wo0 = {2'd0,ffo0[6:0]};
-always_comb wo1 = {2'd1,ffo1[6:0]};
-always_comb wo2 = {2'd2,ffo2[6:0]};
-always_comb wo3 = {2'd3,ffo3[6:0]};
+ffo144 uffo0 (.i({16'd0,avail_rot[127:  0]}), .o(ffo0));
+ffo144 uffo1 (.i({16'd0,avail_rot[255:128]}), .o(ffo1));
+ffo144 uffo2 (.i({16'd0,avail_rot[383:256]}), .o(ffo2));
+ffo144 uffo3 (.i({16'd0,avail_rot[511:384]}), .o(ffo3));
+always_comb wo0 = {2'd0,ffo0[6:0]+rotcnt[0][6:0]};
+always_comb wo1 = {2'd1,ffo1[6:0]+rotcnt[1][6:0]};
+always_comb wo2 = {2'd2,ffo2[6:0]+rotcnt[2][6:0]};
+always_comb wo3 = {2'd3,ffo3[6:0]+rotcnt[3][6:0]};
 	end
 	else if (PREGS==256) begin
-always_comb
-begin
-	tags[0] = 8'd0;
-	tags[1] = 8'd0;
-	tags[2] = 8'd0;
-	tags[3] = 8'd0;
-	if (freevals1[0]) tags[0] = tags2free[0];
-	if (freevals1[1]) tags[1] = tags2free[1];
-	if (freevals1[2]) tags[2] = tags2free[2];
-	if (freevals1[3]) tags[3] = tags2free[3];
-/*
-	if (freevals1[0]) begin
-		if (tags2free[0][7:6]==2'd0) tags[0] = tags2free[0];
-		if (tags2free[0][7:6]==2'd1) tags[1] = tags2free[0];
-		if (tags2free[0][7:6]==2'd2) tags[2] = tags2free[0];
-		if (tags2free[0][7:6]==2'd3) tags[3] = tags2free[0];
-	end
-	if (freevals1[1]) begin
-		if (tags2free[1][7:6]==2'd0) tags[0] = tags2free[1];
-		if (tags2free[1][7:6]==2'd1) tags[1] = tags2free[1];
-		if (tags2free[1][7:6]==2'd2) tags[2] = tags2free[1];
-		if (tags2free[1][7:6]==2'd3) tags[3] = tags2free[1];
-	end
-	if (freevals1[2]) begin
-		if (tags2free[2][7:6]==2'd0) tags[0] = tags2free[2];
-		if (tags2free[2][7:6]==2'd1) tags[1] = tags2free[2];
-		if (tags2free[2][7:6]==2'd2) tags[2] = tags2free[2];
-		if (tags2free[2][7:6]==2'd3) tags[3] = tags2free[2];
-	end
-	if (freevals1[3]) begin
-		if (tags2free[3][7:6]==2'd0) tags[0] = tags2free[3];
-		if (tags2free[3][7:6]==2'd1) tags[1] = tags2free[3];
-		if (tags2free[3][7:6]==2'd2) tags[2] = tags2free[3];
-		if (tags2free[3][7:6]==2'd3) tags[3] = tags2free[3];
-	end
-*/
-	if (tags[0]==8'd0)
-		tags[0] = freeCnt + 000;
-	if (tags[1]==8'd0)
-		tags[1] = freeCnt + PREGS/4;
-	if (tags[2]==8'd0)
-		tags[2] = freeCnt + PREGS/2;
-	if (tags[3]==8'd0)
-		tags[3] = freeCnt + PREGS*3/4;
-end
-always_comb
-begin
-	fpush[0] = avail[tags[0]] ? 1'b0 : |tags[0];//(freevals1[0] | ffree[0]);
-	fpush[1] = avail[tags[1]] ? 1'b0 : |tags[1];//(freevals1[1] | ffree[1]);
-	fpush[2] = avail[tags[2]] ? 1'b0 : |tags[2];//(freevals1[2] | ffree[2]);
-	fpush[3] = avail[tags[3]] ? 1'b0 : |tags[3];//(freevals1[3] | ffree[3]);
-end
-
 reg [255:0] avail_rot;
 always_comb avail_rot[ 63:  0] = (avail[ 63:  0] << rotcnt[0]) | (avail[ 63:  0] >> (64-rotcnt[0]));
 always_comb avail_rot[127: 64] = (avail[127: 64] << rotcnt[1]) | (avail[127: 64] >> (64-rotcnt[1]));
@@ -299,6 +211,33 @@ always_comb wo3 = {2'd3,ffo3[5:0] + rotcnt[3][5:0]};
 end
 endgenerate
 
+always_comb
+begin
+	tags[0] = 9'd0;
+	tags[1] = 9'd0;
+	tags[2] = 9'd0;
+	tags[3] = 9'd0;
+	if (freevals1[0]) tags[0] = tags2free[0];
+	if (freevals1[1]) tags[1] = tags2free[1];
+	if (freevals1[2]) tags[2] = tags2free[2];
+	if (freevals1[3]) tags[3] = tags2free[3];
+	if (tags[0]==9'd0 && ffree[0])
+		tags[0] = freeCnt;
+	if (tags[1]==9'd0 && ffree[1])
+		tags[1] = freeCnt + PREGS/4;
+	if (tags[2]==9'd0 && ffree[2])
+		tags[2] = freeCnt + PREGS/2;
+	if (tags[3]==9'd0 && ffree[3])
+		tags[3] = freeCnt + PREGS*3/4;
+end
+
+always_comb
+begin
+	fpush[0] = avail[tags[0]] ? 1'b0 : |tags[0];//(freevals1[0] | ffree[0]);
+	fpush[1] = avail[tags[1]] ? 1'b0 : |tags[1];//(freevals1[1] | ffree[1]);
+	fpush[2] = avail[tags[2]] ? 1'b0 : |tags[2];//(freevals1[2] | ffree[2]);
+	fpush[3] = avail[tags[3]] ? 1'b0 : |tags[3];//(freevals1[3] | ffree[3]);
+end
 
 always_comb
 if (0) begin

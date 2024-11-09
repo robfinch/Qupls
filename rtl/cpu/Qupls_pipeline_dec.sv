@@ -105,6 +105,11 @@ pipeline_reg_t nopi;
 decode_bus_t dec0,dec1,dec2,dec3,dec4;
 pipeline_reg_t pr_dec0,pr_dec1,pr_dec2,pr_dec3;
 pipeline_reg_t [3:0] prd, inso;
+pregno_t Rt0_dec1;
+pregno_t Rt1_dec1;
+pregno_t Rt2_dec1;
+pregno_t Rt3_dec1;
+
 //reg stomp_dec;
 
 // Define a NOP instruction.
@@ -205,10 +210,10 @@ Qupls_reg_renamer6 utrn1
 	.alloc1(ins1_dec.aRt!=8'd0 && ins1_dec.v /*&& !ins3_dec.decbus.bsr*/&& !ins0_dec.decbus.bsr),// & ~stomp1),
 	.alloc2(ins2_dec.aRt!=8'd0 && ins2_dec.v /*&& !ins3_dec.decbus.bsr*/&& !ins0_dec.decbus.bsr && !ins1_dec.decbus.bsr),// & ~stomp2),
 	.alloc3(ins3_dec.aRt!=8'd0 && ins3_dec.v /*&& !ins3_dec.decbus.bsr*/&& !ins0_dec.decbus.bsr && !ins1_dec.decbus.bsr && !ins2_dec.decbus.bsr),// & ~stomp3),
-	.wo0(Rt0_dec),
-	.wo1(Rt1_dec),
-	.wo2(Rt2_dec),
-	.wo3(Rt3_dec),
+	.wo0(Rt0_dec1),
+	.wo1(Rt1_dec1),
+	.wo2(Rt2_dec1),
+	.wo3(Rt3_dec1),
 	.wv0(Rt0_decv),
 	.wv1(Rt1_decv),
 	.wv2(Rt2_decv),
@@ -217,6 +222,10 @@ Qupls_reg_renamer6 utrn1
 	.stall(ren_stallq),
 	.rst_busy(ren_rst_busy)
 );
+assign Rt0_dec = ins0_dec.aRt==8'd0 ? 9'd0 : Rt0_dec1;
+assign Rt1_dec = ins1_dec.aRt==8'd0 ? 9'd0 : Rt1_dec1;
+assign Rt2_dec = ins2_dec.aRt==8'd0 ? 9'd0 : Rt2_dec1;
+assign Rt3_dec = ins3_dec.aRt==8'd0 ? 9'd0 : Rt3_dec1;
 end
 else begin
 	assign Rt0_dec = ins0_dec.aRt;

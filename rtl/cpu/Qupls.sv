@@ -284,7 +284,7 @@ reg [2:0] next_pending_ipl;
 wire stallq, rat_stallq, ren_stallq;
 
 rob_ndx_t tail0, tail1, tail2, tail3, tail4, tail5, tail6, tail7, tail8, tail9, tail10, tail11;
-rob_ndx_t head0, head1, head2, head3;
+rob_ndx_t head0, head1, head2, head3, head4, head5;
 rob_ndx_t [11:0] tails;
 rob_ndx_t stail;
 always_comb tails[0] = tail0;
@@ -336,6 +336,8 @@ always_comb tail11 = (tail0 + 11) % ROB_ENTRIES;
 always_comb head1 = (head0 + 1) % ROB_ENTRIES;
 always_comb head2 = (head0 + 2) % ROB_ENTRIES;
 always_comb head3 = (head0 + 3) % ROB_ENTRIES;
+always_comb head4 = (head0 + 4) % ROB_ENTRIES;
+always_comb head5 = (head0 + 5) % ROB_ENTRIES;
 
 ex_instruction_t [7:0] ex_ins;
 
@@ -2577,7 +2579,7 @@ reg signed [$clog2(ROB_ENTRIES):0] cmtlen;			// Will always be >= 0
 reg signed [$clog2(ROB_ENTRIES):0] group_len;		// Commit group length
 
 reg do_commit;
-reg cmt0,cmt1,cmt2,cmt3;
+reg cmt0,cmt1,cmt2,cmt3,cmt4,cmt5;
 reg cmttlb0, cmttlb1,cmttlb2,cmttlb3;
 reg htcolls;		// head <-> tail collision
 reg cmtbr;
@@ -2777,10 +2779,14 @@ Qupls_pipeline_ren uren1
 	.wrport2_cp(wrport2_cp),
 	.wrport3_cp(wrport3_cp),
 	
-	.cmtav(do_commit && cmtcnt > 0),
-	.cmtbv(do_commit && cmtcnt > 1),
-	.cmtcv(do_commit && cmtcnt > 2),
-	.cmtdv(do_commit && cmtcnt > 3),
+	.cmtav(do_commit && rob[head0].v && cmtcnt > 0),
+	.cmtbv(do_commit && rob[head1].v && cmtcnt > 1),
+	.cmtcv(do_commit && rob[head2].v && cmtcnt > 2),
+	.cmtdv(do_commit && rob[head3].v && cmtcnt > 3),
+	.cmtaiv(do_commit && !rob[head0].v && cmtcnt > 0),
+	.cmtbiv(do_commit && !rob[head1].v && cmtcnt > 1),
+	.cmtciv(do_commit && !rob[head2].v && cmtcnt > 2),
+	.cmtdiv(do_commit && !rob[head3].v && cmtcnt > 3),
 	.cmtaa(rob[head0].op.aRt),
 	.cmtba(rob[head1].op.aRt),
 	.cmtca(rob[head2].op.aRt),
@@ -4350,6 +4356,8 @@ always_comb cmt3 = XWID > 3 && ((rob[head3].v && &rob[head3].done) || (!rob[head
 										!rob[head0].decbus.oddball && !rob[head1].decbus.oddball && !rob[head2].decbus.oddball &&
 										!rob[head0].excv && !rob[head1].excv && !rob[head2].excv
 										;
+always_comb	cmt4 = !rob[head4].v && (head0 != tail0 && head0 != tail1 && head0 != tail2 && head0 != tail3 && head0 != tail4);
+always_comb	cmt5 = !rob[head5].v && (head0 != tail0 && head0 != tail1 && head0 != tail2 && head0 != tail3 && head0 != tail4 && head0 != tail5);
 
 // Figure out how many instructions can be committed.
 // If there is an oddball instruction (eg. CSR, RTE) then only commit up until
@@ -4405,6 +4413,9 @@ always_comb cmttlb1 = XWID > 1 && (rob[head1].v && rob[head1].lsq && !lsq[rob[he
 always_comb cmttlb2 = XWID > 2 && (rob[head2].v && rob[head2].lsq && !lsq[rob[head2].lsqndx.row][rob[head2].lsqndx.col].agen);
 always_comb cmttlb3 = XWID > 3 && (rob[head3].v && rob[head3].lsq && !lsq[rob[head3].lsqndx.row][rob[head3].lsqndx.col].agen);
 
+// Commit only by instructions with the same checkpoint index. The RAT can
+// currently handle only one checkpoint index spec for update.
+
 always_comb//ff @(posedge clk)
 if (irst) begin
 	cmtcnt = 3'd0;
@@ -4413,11 +4424,18 @@ end
 else begin
 	cmtcnt = 3'd0;
 	if (!htcolls) begin
-		casez({cmt0,cmt1,cmt2,cmt3})
-		4'b1111:	cmtcnt = 3'd4;
-		4'b1110:	cmtcnt = 3'd3;
-		4'b110?:	cmtcnt = 3'd2;
-		4'b10??:	cmtcnt = 3'd1;
+		casez({cmt0,
+			cmt1 && rob[head1].cndx==rob[head0].cndx,
+			cmt2 && rob[head2].cndx==rob[head0].cndx,
+			cmt3 && rob[head3].cndx==rob[head0].cndx,
+			cmt4 && rob[head4].cndx==rob[head0].cndx,
+			cmt5 && rob[head5].cndx==rob[head0].cndx})
+		6'b111111:	cmtcnt = 3'd6;
+		6'b111110:	cmtcnt = 3'd5;
+		6'b11110?:	cmtcnt = 3'd4;
+		6'b1110??:	cmtcnt = 3'd3;
+		6'b110???:	cmtcnt = 3'd2;
+		6'b10????:	cmtcnt = 3'd1;
 		default:	cmtcnt = 3'd0;
 		endcase
 		do_commit = cmt0;
@@ -6202,6 +6220,14 @@ else begin
 		if (cmtcnt > 3'd3) begin
 			tInvalidateQE(head3);
 			group_len <= group_len - 4;
+		end
+		if (cmtcnt > 3'd4) begin
+			tInvalidateQE(head4);
+			group_len <= group_len - 5;
+		end
+		if (cmtcnt > 3'd5) begin
+			tInvalidateQE(head5);
+			group_len <= group_len - 6;
 		end
 		head0 <= (head0 + cmtcnt) % ROB_ENTRIES;	
 //		head0 <= (head0 + 3'd4) % ROB_ENTRIES;	

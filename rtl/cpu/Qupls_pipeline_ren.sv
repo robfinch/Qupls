@@ -58,6 +58,7 @@ module Qupls_pipeline_ren(
 
 	cmtav, cmtbv, cmtcv, cmtdv, cmtaa, cmtba, cmtca, cmtda,
 	cmtap, cmtbp, cmtcp, cmtdp, cmta_cp, cmtb_cp, cmtc_cp, cmtd_cp,
+	cmtaiv, cmtbiv, cmtciv, cmtdiv,
 
 	cmtbr,
 	tags2free, freevals, free_chkpt, fchkpt, backout, fcu_id,
@@ -142,6 +143,10 @@ input cmtav;
 input cmtbv;
 input cmtcv;
 input cmtdv;
+input cmtaiv;
+input cmtbiv;
+input cmtciv;
+input cmtdiv;
 input aregno_t cmtaa;
 input aregno_t cmtba;
 input aregno_t cmtca;
@@ -452,6 +457,10 @@ Qupls_rat #(.NPORT(24)) urat1
 	.cmtbv(cmtbv),
 	.cmtcv(cmtcv),
 	.cmtdv(cmtdv),
+	.cmtaiv(cmtaiv),
+	.cmtbiv(cmtbiv),
+	.cmtciv(cmtciv),
+	.cmtdiv(cmtdiv),
 	.cmtaa(cmtaa),
 	.cmtba(cmtba),
 	.cmtca(cmtca),

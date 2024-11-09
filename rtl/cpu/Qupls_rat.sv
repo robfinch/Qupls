@@ -59,6 +59,7 @@ module Qupls_rat(rst, clk, clk5x, ph4, en, en2, nq, stallq,
 	wrport0_Rt, wrport1_Rt, wrport2_Rt, wrport3_Rt, wrport0_cp, wrport1_cp, wrport2_cp, wrport3_cp,
 	wrport0_res, wrport1_res, wrport2_res, wrport3_res,
 	cmtav, cmtbv, cmtcv, cmtdv,
+	cmtaiv, cmtbiv, cmtciv, cmtdiv,
 	cmta_cp, cmtb_cp, cmtc_cp, cmtd_cp,
 	cmtaa, cmtba, cmtca, cmtda, cmtap, cmtbp, cmtcp, cmtdp, cmtbr,
 	cmtaval, cmtbval, cmtcval, cmtdval,
@@ -135,6 +136,10 @@ input cmtav;							// commit valid
 input cmtbv;
 input cmtcv;
 input cmtdv;
+input cmtaiv;							// commit invalid instruction
+input cmtbiv;
+input cmtciv;
+input cmtdiv;
 input checkpt_ndx_t cmta_cp;
 input checkpt_ndx_t cmtb_cp;
 input checkpt_ndx_t cmtc_cp;
@@ -1565,6 +1570,9 @@ end
 // physical register number.
 // A backed out register mapping should be made available.
 // Delay the tag free a few clock cycles.
+// For invalid instructions at commit time, the register must also be freed.
+// This does not require any more ports as the instruction cannot be valid and
+// invalid at the same time.
 pregno_t [3:0] tags2free1;
 reg [3:0] freevals1;
 /*
@@ -1599,22 +1607,27 @@ else begin
 		tags2free1[3] = 9'd0;
 	end
 	else begin
+		// For invalid frees we do not want to push the free pipeline.
 		if (cdcmtav) begin
 			tags2free[0] = currentMap.pregmap[cmtaa];
-//			tags2free[0] = tags2free1[0];
 		end
+		else if (cmtaiv) 
+			tags2free[0] = cmtap;
 		if (cdcmtbv) begin
 			tags2free[1] = currentMap.pregmap[cmtba];
-//			tags2free[1] = tags2free1[1];
 		end
+		else if (cmtbiv)
+			tags2free[1] = cmtbp;
 		if (cdcmtcv) begin
 			tags2free[2] = currentMap.pregmap[cmtca];
-//			tags2free[2] = tags2free1[2];
 		end
+		else if (cmtciv)
+			tags2free[2] = cmtcp;
 		if (cdcmtdv) begin
 			tags2free[3] = currentMap.pregmap[cmtda];
-//			tags2free[3] = tags2free1[3];
 		end
+		else if (cmtdiv)
+			tags2free[3] = cmtdp;
 	end
 end
 
@@ -1625,10 +1638,10 @@ else begin
 	if (restore)
 		freevals <= 4'd0;
 	else begin
-		freevals[0] <= cdcmtav|bo_wr;
-		freevals[1] <= cdcmtbv;
-		freevals[2] <= cdcmtcv;
-		freevals[3] <= cdcmtdv;
+		freevals[0] <= cdcmtav|cmtaiv|bo_wr;
+		freevals[1] <= cdcmtbv|cmtbiv;
+		freevals[2] <= cdcmtcv|cmtciv;
+		freevals[3] <= cdcmtdv|cmtdiv;
 	end
 end
 
