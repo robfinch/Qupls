@@ -555,12 +555,11 @@ value_t fcu_argB;
 value_t fcu_argBr;
 value_t fcu_argI;	// only used by BEQ
 pc_address_ex_t fcu_pc;
-value_t fcu_res;
 rob_ndx_t fcu_id;
 reg fcu_idv;
 cause_code_t fcu_exc;
 reg fcu_v, fcu_v2, fcu_v3, fcu_v4, fcu_v5, fcu_v6;
-reg fcu_branchmiss;
+wire fcu_branchmiss;
 pc_address_ex_t fcu_misspc, fcu_misspc1;
 mc_address_t fcu_miss_mcip, fcu_miss_mcip1;
 reg [2:0] fcu_missgrp;
@@ -751,7 +750,7 @@ wire [NDATA_PORTS-1:0] dramN_ctagi;
 wire [15:0] dramN_tagsi [0:NDATA_PORTS-1];
 rob_ndx_t [NDATA_PORTS-1:0] dramN_id;
 
-reg [2:0] cmtcnt;
+wire [2:0] cmtcnt;
 pc_address_ex_t commit_pc0, commit_pc1, commit_pc2, commit_pc3;
 pc_address_ex_t commit_brtgt0;
 pc_address_ex_t commit_brtgt1;
@@ -2578,8 +2577,7 @@ assign stallq = !rstcnt[2] || rat_stallq || ren_stallq || !room_for_que || branc
 reg signed [$clog2(ROB_ENTRIES):0] cmtlen;			// Will always be >= 0
 reg signed [$clog2(ROB_ENTRIES):0] group_len;		// Commit group length
 
-reg do_commit;
-reg cmt0,cmt1,cmt2,cmt3,cmt4,cmt5;
+wire do_commit;
 reg cmttlb0, cmttlb1,cmttlb2,cmttlb3;
 reg htcolls;		// head <-> tail collision
 reg cmtbr;
@@ -3174,18 +3172,6 @@ always_ff @(posedge clk) takbr1 <= takb;
 always_ff @(posedge clk) if (fcu_new) takbr <= takb;
 
 always_comb
-	case(fcu_bts)
-	BTS_RET:
-		fcu_res = fcu_argA;
-	/* Under construction.
-	else if (fcu_instr.any.opcode==OP_DBRA)
-		fcu_bus = fcu_argA - 2'd1;
-	*/
-	default:
-		fcu_res = tpc;
-	endcase
-
-always_comb
 begin
 	fcu_exc = FLT_NONE;
 	// ToDo: fix check
@@ -3195,29 +3181,21 @@ begin
 	end
 end
 
-rob_ndx_t fcu_branchmiss_id;
-always_ff @(posedge clk)
-if (irst) begin
-	fcu_branchmiss <= FALSE;
-	fcu_branchmiss_id <= 5'd0;
-end
-else begin
-	if (fcu_v2) begin
-		fcu_branchmiss_id <= fcu_id;
-		case(fcu_bts)
-		BTS_REG,BTS_DISP:
-			fcu_branchmiss <= ((takb && !fcu_bt) || (!takb && fcu_bt));
-		BTS_CALL,BTS_RET:
-			fcu_branchmiss <= TRUE;//((takb && ~fcu_bt) || (!takb && fcu_bt));
-		default:
-			fcu_branchmiss <= FALSE;
-		endcase
-	end
-	else
-		fcu_branchmiss <= FALSE;
-	if (fcu_v3)
-		fcu_branchmiss <= FALSE;
-end
+reg branchmiss_det;
+always_comb
+	branchmiss_det = ((takb && !fcu_bt) || (!takb && fcu_bt));
+
+// Branchmiss flag
+
+Qupls_branchmiss_flag ubmf1
+(
+	.rst(irst),
+	.clk(clk),
+	.bts(fcu_bts),
+	.trig(fcu_v2),
+	.miss_det(branchmiss_det),
+	.miss_flag(fcu_branchmiss)
+);
 
 // Backout flag
 // If taking a branch, any following register mappings in the same group need
@@ -3257,7 +3235,7 @@ else begin
 	if (fcu_v2) begin
 		case(fcu_bts)
 		BTS_REG,BTS_DISP:
-			if ((takb && !fcu_bt) || (!takb && fcu_bt))
+			if (branchmiss_det)
 				restore <= TRUE;
 		default:
 			;		
@@ -3265,38 +3243,14 @@ else begin
 	end
 end
 
-// Search for instructions groups that are done or invalid. If there are any
-// branches in the group, then free the checkpoint. All the branches must have
-// resolved if all instructions are done or invalid.
-// Take care not to free the checkpoint more than once.
-
-//seqnum_t lfg;
-always_ff @(posedge clk)
-if (irst) begin
-	free_chkpt <= FALSE;
-	fchkpt <= 4'd0;
-//	lfg <= {$bits(seqnum_t){1'b0}};	// last freed group
-end
-else begin
-	free_chkpt <= FALSE;
-	for (n33 = 0; n33 < ROB_ENTRIES; n33 = n33 + 4) begin
-		if (//rob[n33].grp != lfg &&
-			!rob[n33+0].chkpt_freed &&
-			(&rob[n33+0].done || !rob[n33+0].v) &&
-			(&rob[n33+1].done || !rob[n33+1].v) &&
-			(&rob[n33+2].done || !rob[n33+2].v) &&
-			(&rob[n33+3].done || !rob[n33+3].v))
-			if (rob[n33+0].decbus.br || 
-					rob[n33+1].decbus.br ||
-					rob[n33+2].decbus.br ||
-					rob[n33+3].decbus.br) begin
-				free_chkpt <= TRUE;
-				fchkpt <= rob[(n33+4)%ROB_ENTRIES].cndx;
-//				lfg <= rob[n33].grp;
-			end
-	end
-end
-
+Qupls_checkpoint_freer uchkptfree1
+(
+	.rst(irst),
+	.clk(clk),
+	.rob(rob),
+	.free(free_chkpt),
+	.chkpt(fchkpt)
+);
 
 // Registering the branch miss signals may allow a second miss directly after
 // the first one to occur. We want to process only the first miss. Three in
@@ -3326,7 +3280,7 @@ if (irst)
 	missid <= 5'd0;
 else begin
 //	if (advance_pipeline)
-		missid <= excmiss ? excid : fcu_id;//fcu_branchmiss_id;
+		missid <= excmiss ? excid : fcu_id;
 end
 /*
 always_ff @(posedge clk)
@@ -4053,95 +4007,7 @@ begin
 			cantlsq1 = 1'b1;
 	end
 end
-/*
-Qupls_tlb utlb1
-(
-	.rst(irst),
-	.clk(clk),
-	.ftas_req(fta_req),
-	.ftas_resp(),
-	.wr(tlb_wr),
-	.way(tlb_way),
-	.entry_no(tlb_entryno),
-	.entry_i(tlb_entry),
-	.entry_o(),
-	.stall_tlb0(stall_tlb0),
-	.stall_tlb1(stall_tlb1),
-	.vadr0(agen0_res),
-	.vadr1(ptw_vadr),
-	.pc_vadr(ic_miss_adr),
-	.op0(agen0_op.ins),
-	.op1(agen1_op.ins),
-	.agen0_rndx_i(agen0_id),
-	.agen1_rndx_i(5'd0),
-	.agen0_rndx_o(),
-	.agen1_rndx_o(),
-	.agen0_v(agen0_v),
-	.agen1_v(ptw_vv),
-	.load0_i(),
-	.load1_i(),
-	.store0_i(),
-	.store1_i(),
-	.asid0(asid),
-	.asid1(12'h0),
-	.pc_asid(ic_miss_asid),
-	.entry0_o(tlb_entry0),
-	.entry1_o(tlb_entry1),
-	.pc_entry_o(tlb_pc_entry),
-	.tlb0_v(tlb0_v),
-	.tlb1_v(ptw_pv),
-	.pc_tlb_v(pc_tlb_v),
-	.tlb0_res(tlb0_res),
-	.tlb1_res(ptw_padr),
-	.pc_tlb_res(pc_tlb_res),
-	.tlb0_op(tlb0_op.ins),
-	.tlb1_op(tlb1_op.ins),
-	.load0_o(tlb0_load),
-	.load1_o(tlb1_load),
-	.store0_o(tlb0_store),
-	.store1_o(tlb1_store),
-	.miss_o(tlb_miss),
-	.missadr_o(tlb_missadr),
-	.missasid_o(tlb_missasid),
-	.missid_o(tlb_missid),
-	.missqn_o(tlb_missqn),
-	.missack(tlb_missack)
-);
 
-Qupls_ptable_walker #(.CID(3)) uptw1
-(
-	.rst(irst),
-	.clk(clk),
-	.tlbmiss(tlb_miss),
-	.tlb_missadr(tlb_missadr),
-	.tlb_missasid(tlb_missasid),
-	.tlb_missqn(tlb_missqn),
-	.tlb_missid(tlb_missid),
-	.commit0_id(commit0_id),
-	.commit0_idv(commit0_idv),
-	.commit1_id(commit1_id),
-	.commit1_idv(commit1_idv),
-	.commit2_id(commit2_id),
-	.commit2_idv(commit2_idv),
-	.commit3_id(commit3_id),
-	.commit3_idv(commit3_idv),
-	.in_que(tlb_missack),
-	.ftas_req(ftadm_req),
-	.ftas_resp(ptable_resp),
-	.ftam_req(ftatm_req),
-	.ftam_resp(ftatm_resp),
-	.fault_o(pg_fault),
-	.faultq_o(pg_faultq),
-	.tlb_wr(tlb_wr),
-	.tlb_way(tlb_way),
-	.tlb_entryno(tlb_entryno),
-	.tlb_entry(tlb_entry),
-	.ptw_vadr(ptw_vadr),
-	.ptw_vv(ptw_vv),
-	.ptw_padr(ptw_padr),
-	.ptw_pv(ptw_pv)
-);
-*/
 mmu #(.CID(3)) ummu1
 (
 	.rst(irst),
@@ -4344,21 +4210,6 @@ Qupls_mem_more ummore1
 // Commit stage combo logic
 // -----------------------------------------------------------------------------
 
-always_comb cmt0 = (rob[head0].v && &rob[head0].done) || (!rob[head0].v && ((head0 != tail0) || &next_cqd));
-always_comb cmt1 = XWID > 1 && ((rob[head1].v && &rob[head1].done) || (!rob[head1].v && head0 != tail0 && head0 != tail1)) &&
-										!rob[head0].decbus.oddball && !rob[head0].excv
-										;
-always_comb cmt2 = XWID > 2 && ((rob[head2].v && &rob[head2].done) || (!rob[head2].v && head0 != tail0 && head0 != tail1 && head0 != tail2)) &&
-										!rob[head0].decbus.oddball && !rob[head1].decbus.oddball &&
-										!rob[head0].excv && !rob[head1].excv
-										;
-always_comb cmt3 = XWID > 3 && ((rob[head3].v && &rob[head3].done) || (!rob[head3].v && head0 != tail0 && head0 != tail1 && head0 != tail2 && head0 != tail3)) &&
-										!rob[head0].decbus.oddball && !rob[head1].decbus.oddball && !rob[head2].decbus.oddball &&
-										!rob[head0].excv && !rob[head1].excv && !rob[head2].excv
-										;
-always_comb	cmt4 = !rob[head4].v && (head0 != tail0 && head0 != tail1 && head0 != tail2 && head0 != tail3 && head0 != tail4);
-always_comb	cmt5 = !rob[head5].v && (head0 != tail0 && head0 != tail1 && head0 != tail2 && head0 != tail3 && head0 != tail4 && head0 != tail5);
-
 // Figure out how many instructions can be committed.
 // If there is an oddball instruction (eg. CSR, RTE) then only commit up until
 // the oddball. Also, if there is an exception, commit only up until the 
@@ -4371,38 +4222,6 @@ always_comb
 	else
 		cmtlen = ROB_ENTRIES+head0-tail0;
 
-function fnColls;
-input rob_ndx_t head;
-input rob_ndx_t tail;
-begin
-	case(XWID)
-	1:
-		if (head >= tail)
-			fnColls = head - tail > (ROB_ENTRIES-2);
-		else
-			fnColls = ROB_ENTRIES + head - tail > (ROB_ENTRIES-2);
-	2:
-		if (head >= tail)
-			fnColls = head - tail > (ROB_ENTRIES-3);
-		else
-			fnColls = ROB_ENTRIES + head - tail > (ROB_ENTRIES-3);
-	3:
-		if (head >= tail)
-			fnColls = head - tail > (ROB_ENTRIES-4);
-		else
-			fnColls = ROB_ENTRIES + head - tail > (ROB_ENTRIES-4);
-	4:
-		if (head >= tail)
-			fnColls = head - tail > (ROB_ENTRIES-5);
-		else
-			fnColls = ROB_ENTRIES + head - tail > (ROB_ENTRIES-5);
-	default:
-			fnColls = FALSE;
-	endcase
-end
-endfunction
-
-always_comb htcolls = fnColls(head0, tail0);
 /*
 										(
 											head0 == tail0 || head0 == tail1 || head0 == tail2 || head0 == tail3 ||
@@ -4413,36 +4232,28 @@ always_comb cmttlb1 = XWID > 1 && (rob[head1].v && rob[head1].lsq && !lsq[rob[he
 always_comb cmttlb2 = XWID > 2 && (rob[head2].v && rob[head2].lsq && !lsq[rob[head2].lsqndx.row][rob[head2].lsqndx.col].agen);
 always_comb cmttlb3 = XWID > 3 && (rob[head3].v && rob[head3].lsq && !lsq[rob[head3].lsqndx.row][rob[head3].lsqndx.col].agen);
 
-// Commit only by instructions with the same checkpoint index. The RAT can
-// currently handle only one checkpoint index spec for update.
-
-always_comb//ff @(posedge clk)
-if (irst) begin
-	cmtcnt = 3'd0;
-	do_commit = FALSE;
-end
-else begin
-	cmtcnt = 3'd0;
-	if (!htcolls) begin
-		casez({cmt0,
-			cmt1 && rob[head1].cndx==rob[head0].cndx,
-			cmt2 && rob[head2].cndx==rob[head0].cndx,
-			cmt3 && rob[head3].cndx==rob[head0].cndx,
-			cmt4 && rob[head4].cndx==rob[head0].cndx,
-			cmt5 && rob[head5].cndx==rob[head0].cndx})
-		6'b111111:	cmtcnt = 3'd6;
-		6'b111110:	cmtcnt = 3'd5;
-		6'b11110?:	cmtcnt = 3'd4;
-		6'b1110??:	cmtcnt = 3'd3;
-		6'b110???:	cmtcnt = 3'd2;
-		6'b10????:	cmtcnt = 3'd1;
-		default:	cmtcnt = 3'd0;
-		endcase
-		do_commit = cmt0;
-	end
-	else
-		do_commit = FALSE;
-end
+Qupls_commit_count
+#(.XWID(XWID))
+ucmtcnt1
+(
+	.rst(irst),
+	.next_cqd(next_cqd),
+	.rob(rob),
+	.head0(head0),
+	.head1(head1),
+	.head2(head2),
+	.head3(head3),
+	.head4(head4),
+	.head5(head5),
+	.tail0(tail0),
+	.tail1(tail1),
+	.tail2(tail2),
+	.tail3(tail3),
+	.tail4(tail4),
+	.tail5(tail5),
+	.cmtcnt(cmtcnt),
+	.do_commit(do_commit)
+);
 
 always_comb
 cmtbr = (
@@ -4736,8 +4547,26 @@ if (irst) begin
 end
 else begin
 	if (robentry_fcu_issue[fcu_rndx] && fcu_rndxv && fcu_idle && branch_state==BS_IDLE) begin
-		fcu_argA <= rfo_fcu_argA;
-		fcu_argB <= rfo_fcu_argB;
+		if (rob[fcu_rndx].op.ins.any.opcode==OP_BccU) begin
+			if (rob[fcu_rndx].decbus.Ran)
+				fcu_argA <= rob[fcu_rndx].decbus.Ra;
+			else
+				fcu_argA <= rfo_fcu_argA;
+			if (rob[fcu_rndx].decbus.Rbn)
+				fcu_argB <= rob[fcu_rndx].decbus.Rb;
+			else
+				fcu_argB <= rfo_fcu_argB;
+		end
+		else begin
+			if (rob[fcu_rndx].decbus.Ran)
+				fcu_argA <= {{56{rob[fcu_rndx].decbus.Ra[7]}},rob[fcu_rndx].decbus.Ra};
+			else
+				fcu_argA <= rfo_fcu_argA;
+			if (rob[fcu_rndx].decbus.Rbn)
+				fcu_argB <= {{56{rob[fcu_rndx].decbus.Rb[7]}},rob[fcu_rndx].decbus.Rb};
+			else
+				fcu_argB <= rfo_fcu_argB;
+		end
 		fcu_argBr <= rob[fcu_rndx].decbus.immb | rfo_fcu_argB;
 		fcu_argI <= rob[fcu_rndx].decbus.immb;
 		fcu_instr <= rob[fcu_rndx].op;

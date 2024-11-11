@@ -353,10 +353,10 @@ reg stall_same_reg;
 always_comb
 if (
 	(wrport0_Rt==wrra && wrport0_v && wr0 && en2) ||
+	(wrport0_Rt==wrrb && wrport0_v && wr1 && en2) ||
+	(wrport0_Rt==wrrc && wrport0_v && wr2 && en2) ||
+	(wrport0_Rt==wrrd && wrport0_v && wr3 && en2) ||
 	// ToDo: fix the following checks
-	(cmtap==wrrb && cmtav && wr1 && en2) ||
-	(cmtap==wrrc && cmtav && wr2 && en2) ||
-	(cmtap==wrrd && cmtav && wr3 && en2) ||
 	(cmtbp==wrra && cmtbv && wr0 && en2) ||
 	(cmtbp==wrrb && cmtbv && wr1 && en2) ||
 	(cmtbp==wrrc && cmtbv && wr2 && en2) ||
@@ -382,36 +382,44 @@ always_ff @(posedge clk)
 if (rst)
 	currentRegvalid <= {PREGS{1'b1}};
 else begin
-/*
+
 	if (restore)
-		currentRegvalid <= regvalid_ram_o;
-	else
-*/
+		currentRegvalid = regvalid_ram_o;
+//	else
 	begin
 		if (bo_wr) begin
 //			currentRegvalid[bo_preg] <= VAL;
-			currentRegvalid[bo_nreg] <= VAL;
+			currentRegvalid[bo_nreg] = VAL;
 //			currentRegvalid[currentMap.regmap[bo_areg]] <= VAL;
 		end
 		if (wrport0_v)
-			currentRegvalid[wrport0_Rt] <= VAL;
+			currentRegvalid[wrport0_Rt] = VAL;
 		if (wrport1_v)
-			currentRegvalid[wrport1_Rt] <= VAL;
+			currentRegvalid[wrport1_Rt] = VAL;
 		if (wrport2_v)
-			currentRegvalid[wrport2_Rt] <= VAL;
+			currentRegvalid[wrport2_Rt] = VAL;
 		if (wrport3_v)
-			currentRegvalid[wrport3_Rt] <= VAL;
+			currentRegvalid[wrport3_Rt] = VAL;
 
 		if (en2 & ~stall_same_reg) begin
 			if (pwr0)
-				currentRegvalid[pwrra] <= INV;
+				currentRegvalid[pwrra] = INV;
 			if (pwr1)
-				currentRegvalid[pwrrb] <= INV;
+				currentRegvalid[pwrrb] = INV;
 			if (pwr2)
-				currentRegvalid[pwrrc] <= INV;
+				currentRegvalid[pwrrc] = INV;
 			if (pwr3)
-				currentRegvalid[pwrrd] <= INV;
+				currentRegvalid[pwrrd] = INV;
 		end
+		
+		if (cmtaiv)
+			currentRegvalid[cmtap] = VAL;
+		if (cmtbiv)
+			currentRegvalid[cmtbp] = VAL;
+		if (cmtciv)
+			currentRegvalid[cmtcp] = VAL;
+		if (cmtdiv)
+			currentRegvalid[cmtdp] = VAL;
 	end
 end
 
@@ -1051,7 +1059,8 @@ wire pe_qbr0;
 wire pe_qbr1;
 wire pe_qbr2;
 wire pe_qbr3;
-edge_det uqbr0 (.rst(rst), .clk(clk), .ce(1'b1), .i((qbr0|qbr1|qbr2|qbr3) && !chkpt_stall), .pe(pe_alloc_chkpt1), .ne(), .ee());
+reg stallq2;
+edge_det uqbr0 (.rst(rst), .clk(clk), .ce(1'b1), .i((qbr0|qbr1|qbr2|qbr3) && !stallq2), .pe(pe_alloc_chkpt1), .ne(), .ee());
 always_comb//ff @(posedge clk)
 	pe_alloc_chkpt <= pe_alloc_chkpt1;
 
@@ -1272,6 +1281,8 @@ Qupls_backout_machine ubomac1
 // Stall the CPU pipeline for amt+1 cycles to allow checkpoint copying.
 always_comb
 	stallq = pe_alloc_chkpt||new_chkpt||new_chkpt1||chkpt_stall||backout_stall||stall_same_reg;//||(qbr && nob==NCHECK-1);
+always_comb
+	stallq2 = chkpt_stall;
 
 
 // Committing and queuing target physical register cannot be the same.
@@ -1689,19 +1700,19 @@ else begin
 
 		// Shift the physical register into a second spot.
 		if (cdcmtav) begin
-			currentMap.p2regmap[cmtaa] <= currentMap.pregmap[cmtaa];
+//			currentMap.p2regmap[cmtaa] <= currentMap.pregmap[cmtaa];
 			currentMap.pregmap[cmtaa] <= cmtap;
 		end
 		if (cdcmtbv) begin
-			currentMap.p2regmap[cmtba] <= currentMap.pregmap[cmtba];
+//			currentMap.p2regmap[cmtba] <= currentMap.pregmap[cmtba];
 			currentMap.pregmap[cmtba] <= cmtbp;
 		end
 		if (cdcmtcv) begin
-			currentMap.p2regmap[cmtca] <= currentMap.pregmap[cmtca];
+//			currentMap.p2regmap[cmtca] <= currentMap.pregmap[cmtca];
 			currentMap.pregmap[cmtca] <= cmtcp;
 		end
 		if (cdcmtdv) begin
-			currentMap.p2regmap[cmtda] <= currentMap.pregmap[cmtda];
+//			currentMap.p2regmap[cmtda] <= currentMap.pregmap[cmtda];
 			currentMap.pregmap[cmtda] <= cmtdp;
 		end
 			

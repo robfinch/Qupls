@@ -163,7 +163,7 @@ input cmtbr;
 output pregno_t [3:0] tags2free;
 output [3:0] freevals;
 input free_chkpt;
-input [4:0] fchkpt;
+input checkpt_ndx_t fchkpt;
 input backout;
 input rob_ndx_t fcu_id;
 output bo_wr;
@@ -378,6 +378,16 @@ checkpt_ndx_t cndx1, cndx2, cndx3;
 assign cndx1 = cndx;
 assign cndx2 = cndx;
 assign cndx3 = cndx;
+wire [3:0] free_chkpts;
+assign free_chkpts[0] = free_chkpt;
+assign free_chkpts[1] = free_chkpt;
+assign free_chkpts[2] = free_chkpt;
+assign free_chkpts[3] = free_chkpt;
+checkpt_ndx_t [3:0] fchkpts;
+assign fchkpts[0] = fchkpt;
+assign fchkpts[1] = fchkpt;
+assign fchkpts[2] = fchkpt;
+assign fchkpts[3] = fchkpt;
 
 `ifdef SUPPORT_RAT
 Qupls_rat #(.NPORT(24)) urat1
@@ -482,8 +492,8 @@ Qupls_rat #(.NPORT(24)) urat1
 	.restored(restored),
 	.tags2free(tags2free),
 	.freevals(freevals),
-	.free_chkpt_i(free_chkpt),
-	.fchkpt_i(fchkpt),
+	.free_chkpt_i(free_chkpts),
+	.fchkpt_i(fchkpts),
 	.backout(backout),
 	.fcu_id(fcu_id),
 	.bo_wr(bo_wr),
