@@ -107,9 +107,9 @@ begin
 			fnColls = ROB_ENTRIES + head - tail > (ROB_ENTRIES-4);
 	4:
 		if (head > tail)
-			fnColls = head - tail > (ROB_ENTRIES-5);
+			fnColls = head - tail > (ROB_ENTRIES-7);
 		else
-			fnColls = ROB_ENTRIES + head - tail > (ROB_ENTRIES-5);
+			fnColls = ROB_ENTRIES + head - tail > (ROB_ENTRIES-7);
 	default:
 			fnColls = FALSE;
 	endcase

@@ -193,7 +193,7 @@ Qupls_reg_renamer4 utrn1
 	.rst_busy(ren_rst_busy)
 );
 else
-Qupls_reg_renamer6 utrn1
+Qupls_reg_name_supplier utrn1
 (
 	.rst(rst_i),		// rst_i here not irst!
 	.clk(clk),
@@ -210,14 +210,14 @@ Qupls_reg_renamer6 utrn1
 	.alloc1(ins1_dec.aRt!=8'd0 && ins1_dec.v /*&& !ins3_dec.decbus.bsr*/&& !ins0_dec.decbus.bsr),// & ~stomp1),
 	.alloc2(ins2_dec.aRt!=8'd0 && ins2_dec.v /*&& !ins3_dec.decbus.bsr*/&& !ins0_dec.decbus.bsr && !ins1_dec.decbus.bsr),// & ~stomp2),
 	.alloc3(ins3_dec.aRt!=8'd0 && ins3_dec.v /*&& !ins3_dec.decbus.bsr*/&& !ins0_dec.decbus.bsr && !ins1_dec.decbus.bsr && !ins2_dec.decbus.bsr),// & ~stomp3),
-	.wo0(Rt0_dec1),
-	.wo1(Rt1_dec1),
-	.wo2(Rt2_dec1),
-	.wo3(Rt3_dec1),
-	.wv0(Rt0_decv),
-	.wv1(Rt1_decv),
-	.wv2(Rt2_decv),
-	.wv3(Rt3_decv),
+	.o0(Rt0_dec1),
+	.o1(Rt1_dec1),
+	.o2(Rt2_dec1),
+	.o3(Rt3_dec1),
+	.ov0(Rt0_decv),
+	.ov1(Rt1_decv),
+	.ov2(Rt2_decv),
+	.ov3(Rt3_decv),
 	.avail(avail_reg),
 	.stall(ren_stallq),
 	.rst_busy(ren_rst_busy)
@@ -448,6 +448,18 @@ begin
 	pr_dec2.v = !stomp_dec;
 	pr_dec3.v = !stomp_dec;
 	if (stomp_dec) begin
+		// Clear the branch flags so that a new checkpoint is not assigned and
+		// the checkpoint will not be freed.
+		
+		pr_dec0.decbus.br = FALSE;
+		pr_dec0.decbus.cjb = FALSE;
+		pr_dec1.decbus.br = FALSE;
+		pr_dec1.decbus.cjb = FALSE;
+		pr_dec2.decbus.br = FALSE;
+		pr_dec2.decbus.cjb = FALSE;
+		pr_dec3.decbus.br = FALSE;
+		pr_dec3.decbus.cjb = FALSE;
+		
 		pr_dec0.aRa = dec0.Ra;
 		pr_dec0.aRb = dec0.Rb;
 		pr_dec0.aRc = dec0.Rc;

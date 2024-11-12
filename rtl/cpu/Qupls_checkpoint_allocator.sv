@@ -54,8 +54,8 @@ input [3:0] free_chkpt2;
 input checkpt_ndx_t [3:0] fchkpt2;
 output reg stall;
 
-reg [15:0] avail_chkpts [0:3];
-reg [4:0] avail_chkpt [0:3];
+reg [NCHECK-1:0] avail_chkpts [0:3];
+reg [$clog2(NCHECK):0] avail_chkpt [0:3];
 reg [2:0] wcnt;
 checkpt_ndx_t head_chkpt;
 
@@ -76,7 +76,14 @@ end
 // executes at a time so only a single checkpoint needs to be freed per clock.
 // Multiple branches may be decoded in the same instruction group.
 
+generate begin : gAvail
+if (NCHECK==16)
 flo24 uflo0 (.i({8'd0,avail_chkpts[0]}), .o(avail_chkpt[0]));
+else if (NCHECK==32)
+flo48 uflo0 (.i({16'd0,avail_chkpts[0]}), .o(avail_chkpt[0]));
+end
+endgenerate
+
 always_comb
 begin
 	avail_chkpts[1] = avail_chkpts[0];
@@ -100,7 +107,7 @@ generate begin : gAlloc
 if (GROUP_ALLOC) begin
 	always_ff @(posedge clk)
 	if (rst) begin
-		avail_chkpts[0] <= 16'hFFFE;
+		avail_chkpts[0] <= {{NCHECK-1{1'b1}},1'b0};
 		head_chkpt <= 4'd1;
 		chkptn[0] <= 4'd0;
 		chkptn[1] <= 4'd0;
@@ -172,7 +179,7 @@ else begin
 	always_comb chkptn[1] = avail_chkpt[1];
 	always_comb chkptn[2] = avail_chkpt[2];
 	always_comb chkptn[3] = avail_chkpt[3];
-	always_comb stall = avail_chkpt[3]==5'd31;
+	always_comb stall = &avail_chkpt[3];
 end
 end
 endgenerate

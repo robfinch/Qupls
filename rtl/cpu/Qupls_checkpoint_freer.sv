@@ -62,10 +62,10 @@ begin
 			(&rob[n3+1].done || !rob[n3+1].v) &&
 			(&rob[n3+2].done || !rob[n3+2].v) &&
 			(&rob[n3+3].done || !rob[n3+3].v) &&
-			(rob[n3+0].decbus.br || 
-			rob[n3+1].decbus.br ||
-			rob[n3+2].decbus.br ||
-			rob[n3+3].decbus.br)
+			(rob[n3+0].decbus.br || rob[n3+0].decbus.cjb ||
+			rob[n3+1].decbus.br || rob[n3+1].decbus.cjb ||
+			rob[n3+2].decbus.br || rob[n3+2].decbus.cjb ||
+			rob[n3+3].decbus.br || rob[n3+3].decbus.cjb)
 			;
 end
 endfunction

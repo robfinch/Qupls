@@ -89,9 +89,9 @@ input qbr2;
 input qbr3;
 output checkpt_ndx_t cndx_o;			// current checkpoint index
 output checkpt_ndx_t pcndx_o;			// previous checkpoint index
-input [PREGS-1:0] avail_i;	// list of available registers from renamer
-input restore;						// checkpoint restore
-input [3:0] miss_cp;			// checkpoint map index of branch miss
+input [PREGS-1:0] avail_i;				// list of available registers from renamer
+input restore;										// checkpoint restore
+input checkpt_ndx_t miss_cp;			// checkpoint map index of branch miss
 input wr0;
 input wr1;
 input wr2;
@@ -1060,9 +1060,9 @@ wire pe_qbr1;
 wire pe_qbr2;
 wire pe_qbr3;
 reg stallq2;
-edge_det uqbr0 (.rst(rst), .clk(clk), .ce(1'b1), .i((qbr0|qbr1|qbr2|qbr3) && !stallq2), .pe(pe_alloc_chkpt1), .ne(), .ee());
+edge_det uqbr0 (.rst(rst), .clk(clk), .ce(1'b1), .i((qbr0|qbr1|qbr2|qbr3) && !stallq), .pe(pe_alloc_chkpt1), .ne(), .ee());
 always_comb//ff @(posedge clk)
-	pe_alloc_chkpt <= pe_alloc_chkpt1;
+	pe_alloc_chkpt = pe_alloc_chkpt1 & en2d;
 
 //edge_det uqbr1 (.rst(rst), .clk(clk), .ce(1'b1), .i(qbr1), .pe(pe_qbr1), .ne(), .ee());
 //edge_det uqbr2 (.rst(rst), .clk(clk), .ce(1'b1), .i(qbr2), .pe(pe_qbr2), .ne(), .ee());
@@ -1226,16 +1226,7 @@ else begin
 		cndx <= avail_chkpt[0];
 end
 
-// Want the checkpoint to take effect for the next group of instructions.
-always_ff @(posedge clk)
-if (rst)
-	cndx_o <= 4'd0;
-else begin
-	if (en2)
-		cndx_o <= cndx;
-end
-
-always_ff @(posedge clk)
+always_comb//ff @(posedge clk)
 if (rst)
 	pcndx_o <= 4'd0;
 else begin
@@ -1243,6 +1234,15 @@ else begin
 		pcndx_o <= cndx;
 	else if (alloc_chkpt2)
 		pcndx_o <= cndx;
+end
+
+// Want the checkpoint to take effect for the next group of instructions.
+always_ff @(posedge clk)
+if (rst)
+	cndx_o <= 4'd0;
+else begin
+	if (en2)
+		cndx_o <= cndx;
 end
 
 // Set checkpoint for each instruction in the group. The machine will stall
@@ -1280,7 +1280,7 @@ Qupls_backout_machine ubomac1
 // Also stall for a new checkpoint or a lack of available checkpoints.
 // Stall the CPU pipeline for amt+1 cycles to allow checkpoint copying.
 always_comb
-	stallq = pe_alloc_chkpt||new_chkpt||new_chkpt1||chkpt_stall||backout_stall||stall_same_reg;//||(qbr && nob==NCHECK-1);
+	stallq = /*pe_alloc_chkpt||*/new_chkpt||new_chkpt1||chkpt_stall||backout_stall||stall_same_reg;//||(qbr && nob==NCHECK-1);
 always_comb
 	stallq2 = chkpt_stall;
 
@@ -2188,12 +2188,12 @@ end
 // registers to be freed.
 
 always_comb//ff @(posedge clk)
-	restored <= ne_bk;//restore;
+	restored <= restore;
 
 always_comb
 begin
 	// But not the registers allocated up to the branch miss
-	if (ne_bk) begin	//(restored) begin
+	if (restored) begin	//(restored) begin
 		restore_list = currentMap.avail;// & ~unavail;
 //		restore_list = {PREGS{1'b0}};
 	end

@@ -71,6 +71,8 @@ else
 // will handle the other register backouts.
 // We go backwards (staying in the same group) to the mispredicted branch,
 // updating the RAT with the old register mappings which are stored in the ROB.
+// The we go forwards from the first instruction in the group to the
+// mispredicted branch updating the RAT with the register mappings.
 // Note if a branch mispredict occurs and the checkpoint is being restored
 // to an earlier one anyway, then this backout is cancelled.
 
@@ -84,13 +86,16 @@ end
 else begin
 	case(backout_state)
 	2'd0:
+		// If taking the branch, there is nothing to back-out
+		// If not-taking the branch, the instructions following the branch will
+		// be turned into copy-targets, so again there is nothing to back-out.
 		if (backout|restored) begin
 			/*			
 			backout_id <= (tail + ROB_ENTRIES - 1) % ROB_ENTRIES;
 			if (((tail + ROB_ENTRIES - 1) % ROB_ENTRIES) != fcu_id)
 				backout_state <= 2'd1;
 			*/
-			
+			/*
 			if (rob[(fcu_id+3)%ROB_ENTRIES].grp==rob[fcu_id].grp) begin
 				backout_id <= (fcu_id + 3) % ROB_ENTRIES;
 				backout_state <= 2'd1;
@@ -103,17 +108,46 @@ else begin
 				backout_id <= (fcu_id + 1) % ROB_ENTRIES;
 				backout_state <= 2'd1;
 			end
+			else
+			*/
+			begin
+				backout_id <= fcu_id;
+				backout_state <= 2'd1;
+			end
 
 //		else  nothing to backout
 		end
+	// State 1: iterate backwards until the mispredicted branch.
 	2'd1:
 		/*
 		if (restore)
 			backout_state <= 2'd0;
 		else
 		*/
-		if (rob[(backout_id + ROB_ENTRIES - 1) % ROB_ENTRIES].grp == rob[fcu_id].grp)
+		if (backout_id != fcu_id)
 			backout_id <= (backout_id + ROB_ENTRIES - 1) % ROB_ENTRIES;
+		else begin
+			if (rob[(fcu_id + ROB_ENTRIES - 3) % ROB_ENTRIES].grp==rob[fcu_id].grp) begin
+				backout_id <= (fcu_id + ROB_ENTRIES - 3) % ROB_ENTRIES;
+				backout_state <= 2'd2;
+			end
+			else if (rob[(fcu_id + ROB_ENTRIES - 2) % ROB_ENTRIES].grp==rob[fcu_id].grp) begin
+				backout_id <= (fcu_id + ROB_ENTRIES - 2) % ROB_ENTRIES;
+				backout_state <= 2'd2;
+			end
+			else if (rob[(fcu_id + ROB_ENTRIES - 1) % ROB_ENTRIES].grp==rob[fcu_id].grp) begin
+				backout_id <= (fcu_id + ROB_ENTRIES - 1) % ROB_ENTRIES;
+				backout_state <= 2'd2;
+			end
+			else begin
+				backout_id <= fcu_id;
+				backout_state <= 2'd2;
+			end
+		end
+	// State 2: iterate forwards to the mispredicted branch.
+	2'd2:
+		if (backout_id != fcu_id)
+			backout_id <= (backout_id + 1) % ROB_ENTRIES;
 		else
 			backout_state <= 2'd0;
 	default:
@@ -147,7 +181,7 @@ if (rst) begin
 end
 else begin
 	bo_wr <= FALSE;
-	if (!restore && backout_state==2'd1) begin
+	if (!restore && (|backout_state)) begin
 		bo_wr <= TRUE;//backout_id != fcu_id;
 		if (rob[backout_id].sn > rob[fcu_id].sn) begin
 			bo_areg <= rob[backout_id].op.aRt;
@@ -164,12 +198,18 @@ end
 
 always_ff @(posedge clk)
 begin
-	if (backout_state==2'd1) begin
+	if (|backout_state) begin
 		$display("-  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -");
-		$display("Q+ RAT backout: %d -> %d/%d freed: %d", 
-			rob[backout_id].op.aRt,
-			rob[backout_id].op.aRt, rob[backout_id].op.pRt,
-			rob[backout_id].op.nRt);
+		if (rob[backout_id].sn > rob[fcu_id].sn)
+			$display("Q+ RAT backout: %d -> %d/%d freed: %d", 
+				rob[backout_id].op.aRt,
+				rob[backout_id].op.aRt, rob[backout_id].op.pRt,
+				rob[backout_id].op.nRt);
+		else
+			$display("Q+ RAT forward: %d -> %d/%d freed: %d", 
+				rob[backout_id].op.aRt,
+				rob[backout_id].op.aRt, rob[backout_id].op.nRt,
+				rob[backout_id].op.pRt);
 		$display("-  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -");
 	end
 end

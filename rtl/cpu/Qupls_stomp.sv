@@ -32,6 +32,9 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
+// Compute stomps
+// 1) figure stomps in the front end pipeline
+// 2) figure stomps in the re-order buffer
 // ============================================================================
 
 import const_pkg::*;
@@ -40,7 +43,8 @@ import QuplsPkg::*;
 module Qupls_stomp(rst, clk, ihit, advance_pipeline, advance_pipeline_seg2, 
 	micro_code_active, branchmiss, branch_state, do_bsr, misspc,
 	pc, pc_f, pc_fet, pc_mux, pc_dec, pc_ren,
-	stomp_fet, stomp_mux, stomp_dec, stomp_ren, stomp_que, stomp_quem
+	stomp_fet, stomp_mux, stomp_dec, stomp_ren, stomp_que, stomp_quem,
+	fcu_idv, fcu_id, missid, stomp_bno, takb, rob, robentry_stomp
 	);
 input rst;
 input clk;
@@ -64,8 +68,15 @@ output reg stomp_dec;
 output reg stomp_ren;
 output reg stomp_que;
 output reg stomp_quem;
+input fcu_idv;
+input rob_ndx_t fcu_id;
+input rob_ndx_t missid;
+input [4:0] stomp_bno;
+input takb;
+input rob_entry_t [ROB_ENTRIES-1:0] rob;
+output reg [ROB_ENTRIES-1:0] robentry_stomp;
 
-integer nn;
+integer nn, n4;
 pc_address_ex_t [4:0] misspcr;
 reg stomp_aln;
 reg stomp_alnr;
@@ -274,5 +285,50 @@ else begin
 end
 
 always_comb stomp_que = do_bsr_rrr ? stomp_quer | stomp_rrr : stomp_quer;
+
+// 
+// additional logic for handling a branch miss (STOMP logic)
+//
+// stomp drives a lot of logic, so it's registered.
+// The bitmap is fed to the RAT among other things.
+
+// If the instruction is in the same group as the one with a branch, and 
+// it comes after it, stomp on it. This is always done for a taken branch
+// even if it is a branch hit. The instructions will have been fetched as
+// a group and are not at the target of the branch.
+// Somewhat complicated as backout of the target register mappings is
+// required.
+always_ff @(posedge clk)
+for (n4 = 0; n4 < ROB_ENTRIES; n4 = n4 + 1) begin
+	// The first three groups of instructions after miss needs to be stomped on 
+	// with no target copies. After that copy targets are in effect.
+	robentry_stomp[n4] = //(bno_bitmap[rob[n4].pc.bno_t]==1'b0) ||
+	(
+		((branchmiss/*||((takb&~rob[fcu_id].bt) && (fcu_v2|fcu_v3|fcu_v4))*/) || (branch_state<BS_DONE2 && branch_state!=BS_IDLE))
+		&& rob[n4].sn > rob[missid].sn
+		&& fcu_idv	// miss_idv
+		&& rob[n4].pc.bno_t!=stomp_bno
+		//&& rob[n4].v
+		)
+	;
+	
+	if (SUPPORT_BACKOUT) begin
+		// These (3) instructions must be turned into copy-targets because even if
+		// they should not execute, following instructions from the target address
+		// may have registers depending on the mappings.
+		if (fcu_idv && (rob[fcu_id].decbus.br || rob[fcu_id].decbus.cjb)) begin
+	 		if (rob[n4].grp==rob[fcu_id].grp && rob[n4].sn > rob[fcu_id].sn)
+	 			robentry_stomp[n4] = FALSE;
+		end
+	end
+	else begin
+		if (fcu_idv && rob[fcu_id].decbus.br && !takb) begin
+	 		if (rob[n4].grp==rob[fcu_id].grp && rob[n4].sn > rob[fcu_id].sn)
+	 			robentry_stomp[n4] = FALSE;
+		end
+	end
+	
+end
+
 
 endmodule

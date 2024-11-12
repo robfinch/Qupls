@@ -564,7 +564,7 @@ pc_address_ex_t fcu_misspc, fcu_misspc1;
 mc_address_t fcu_miss_mcip, fcu_miss_mcip1;
 reg [2:0] fcu_missgrp;
 reg [2:0] fcu_missino;
-reg [3:0] fcu_cp;
+checkpt_ndx_t fcu_cp;
 reg takb;
 rob_ndx_t fcu_rndx;
 reg fcu_new;						// new FCU operation is taking place
@@ -1523,7 +1523,14 @@ Qupls_stomp ustmp1
 	.stomp_dec(stomp_dec),
 	.stomp_ren(stomp_ren),
 	.stomp_que(stomp_que),
-	.stomp_quem(stomp_quem)
+	.stomp_quem(stomp_quem),
+	.fcu_idv(fcu_idv),
+	.fcu_id(fcu_id),
+	.missid(missid),
+	.stomp_bno(stomp_bno),
+	.takb(takb),
+	.rob(rob),
+	.robentry_stomp(robentry_stomp)
 );
 
 // Stomp on all pipeline stages rename and prior on a branch miss.
@@ -3073,50 +3080,35 @@ begin
 end
 
 
-// 
+// Copy-targets for when backout is not supported.
 // additional logic for handling a branch miss (STOMP logic)
 //
-// stomp drives a lot of logic, so it's registered.
-// The bitmap is fed to the RAT among other things.
-
-// If the instruction is in the same group as the one with a branch, and 
-// it comes after it, stomp on it. This is always done for a taken branch
-// even if it is a branch hit. The instructions will have been fetched as
-// a group and are not at the target of the branch.
-// Somewhat complicated as backout of the target register mappings is
-// required.
 always_ff @(posedge clk)
 for (n4 = 0; n4 < ROB_ENTRIES; n4 = n4 + 1) begin
 	robentry_cpytgt[n4] = FALSE;
-	// The first three groups of instructions after miss needs to be stomped on 
-	// with no target copies. After that copy targets are in effect.
-	robentry_stomp[n4] = //(bno_bitmap[rob[n4].pc.bno_t]==1'b0) ||
-	(
-		((branchmiss/*||((takb&~rob[fcu_id].bt) && (fcu_v2|fcu_v3|fcu_v4))*/) || (branch_state<BS_DONE2 && branch_state!=BS_IDLE))
-		&& rob[n4].sn > rob[missid].sn
-		&& fcu_idv	// miss_idv
-		&& rob[n4].pc.bno_t!=stomp_bno
-		//&& rob[n4].v
-		)
-	;
-	
 	if (!SUPPORT_BACKOUT)
 		robentry_cpytgt[n4] = robentry_stomp[n4];
-	if (!SUPPORT_BACKOUT) begin
-		if (fcu_idv && rob[fcu_id].decbus.br && takb) begin
+
+	if (SUPPORT_BACKOUT) begin
+		if (fcu_idv && ((rob[fcu_id].decbus.br && takb) || rob[fcu_id].decbus.cjb)) begin
 	 		if (rob[n4].grp==rob[fcu_id].grp && rob[n4].sn > rob[fcu_id].sn) begin
-	 			//robentry_stomp[n4] = TRUE;
+				robentry_cpytgt[n4] = TRUE;
+	 		end
+		end
+	end
+
+	if (!SUPPORT_BACKOUT) begin
+		if (fcu_idv && ((rob[fcu_id].decbus.br && takb))) begin
+	 		if (rob[n4].grp==rob[fcu_id].grp && rob[n4].sn > rob[fcu_id].sn) begin
 				robentry_cpytgt[n4] = TRUE;
 	 		end
 		end
 		if (fcu_idv && rob[fcu_id].decbus.br && !takb) begin
 	 		if (rob[n4].grp==rob[fcu_id].grp && rob[n4].sn > rob[fcu_id].sn) begin
-	 			robentry_stomp[n4] = FALSE;
 				robentry_cpytgt[n4] = FALSE;
 	 		end
 		end
 	end
-	
 end
 
 // Calc the location of the ROB tail pointer after a stomp.
@@ -6287,7 +6279,7 @@ else begin
 		if (free_chkpt)
 			if (rob[n3].cndx==fchkpt)
 				rob[n3].chkpt_freed <= TRUE;
-		if (robentry_stomp[n3])	// || bno_bitmap[rob[n3].pc.bno_t]==1'b0)
+		if (robentry_stomp[n3]|robentry_cpytgt[n3])	// || bno_bitmap[rob[n3].pc.bno_t]==1'b0)
 			tBranchInvalidate(n3,robentry_cpytgt[n3]);
 	end
 
@@ -7038,25 +7030,10 @@ input rob_ndx_t ndx;
 input cpytgt;
 integer nn;
 begin
-	if (SUPPORT_BACKOUT) begin
-		rob[ndx].v <= INV;
-		rob[ndx].excv <= INV;
-		/*
-		rob[ndx].decbus.cpytgt <= TRUE;
-		rob[ndx].decbus.alu <= TRUE;
-		rob[ndx].decbus.fpu <= FALSE;
-		rob[ndx].decbus.fc <= FALSE;
-		rob[ndx].decbus.mem <= FALSE;
-		//rob[n3].decbus.Rtz <= TRUE;
-		rob[ndx].cndx <= miss_cp;
-		*/
-		rob[ndx].done <= {TRUE,TRUE};
-		rob[ndx].out <= {FALSE,FALSE};
-	end
-	else begin
-		rob[ndx].v <= cpytgt;
-		rob[ndx].excv <= INV;
-		rob[ndx].decbus.cpytgt <= cpytgt;
+	rob[ndx].v <= cpytgt;
+	rob[ndx].excv <= INV;
+	rob[ndx].decbus.cpytgt <= cpytgt;
+	if (cpytgt) begin
 		rob[ndx].decbus.alu <= TRUE;
 		rob[ndx].decbus.fpu <= FALSE;
 		rob[ndx].decbus.fc <= FALSE;
@@ -7065,8 +7042,12 @@ begin
 		//rob[n3].decbus.Rtz <= TRUE;
 		rob[ndx].done <= {FALSE,FALSE};
 		rob[ndx].out <= {FALSE,FALSE};
-//		rob[ndx].cndx <= miss_cp;
 	end
+	else begin
+		rob[ndx].done <= {TRUE,TRUE};
+		rob[ndx].out <= {FALSE,FALSE};
+	end
+//		rob[ndx].cndx <= miss_cp;
 	rob[ndx].lsq <= INV;
 	// Clear corresponding LSQ entries.
 	if (rob[ndx].lsq)
@@ -7515,7 +7496,7 @@ begin
 	rob[tail].pc <= ins.pc;
 	rob[tail].mcip <= ins.mcip;
 	rob[tail].bt <= ins.bt;//pt;
-	rob[tail].cndx <= db.br ? pndxq : cndxq;
+	rob[tail].cndx <= cndxq;//db.br ? pndxq : cndxq;
 	rob[tail].decbus <= db;
 	if (db.Ra==9'd0) rob[tail].op.aRa <= 9'd0;
 	if (db.Rb==9'd0) rob[tail].op.aRb <= 9'd0;
