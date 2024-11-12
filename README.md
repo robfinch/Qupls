@@ -46,8 +46,7 @@ Provision for capabilities instructions were added to the instruction set. The c
 
 ## Out-of-Order Version
 ### Status
-The Qupls OoO machine is currently in development. The base machine has
-been undergoing simulation runs. A long way to go yet. Some synthesis runs have been performed to get a general idea of the timing. The goal is 40 MHz operation.
+The Qupls OoO machine is currently in development. The base machine has been undergoing simulation runs. A long way to go yet. Some synthesis runs have been performed to get a general idea of the timing. The goal is 40 MHz operation.
 The Qupls core is undergoing a major change from vector register support to just a massive number (256) of GP registers. The size of instructions is increasing to 64-bits to accomodate larger register specs.
 ### Historic Changes
 The most recent major change to the ISA was a switch from 40 to 48 bits instructions. This was done to accomodate an increase in the size of a register specification while not losing any functionality.
@@ -57,6 +56,8 @@ The next most recent change was a reduction in the number of registers from 64 d
 The register file contains 256 architectural registers, and is unified, supporting integer and floating-point operations using the same set of registers. 
 There is a dedicated zero register, r0. There is no longer a register dedicated to refer to the stack canary or instruction pointer. Vector mask registers are repurposed as predicate register, and also part of the general purpose register file and the same set of instructions may be applied to them as to other registers. A register is also dedicated to the stack pointer. The stack pointer is banked depending on processor operating mode.
 Five hidden registers are dedicated to micro-code use. They are only accessible from micro-code.
+The register file is 20r5w (20 read ports and 5 write ports).
+The register file is organized with five read ports for each instruction (four simulatneous instructions). Three read ports are for source operands A, B, and C. One port is for the target operand T which also needs to be readable. The final read port is for the predicating register P.
 Registers are renamed to remove dependencies. There are 512 physical registers available.
 
 ### Vector Register File (this is repurposed now for 256 registers)
@@ -76,20 +77,28 @@ Code is relocatable at any octabyte boundary; however, within a subroutine or fu
 ### Pipeline
 Yikes!
 There are roughly nine stages in the pipeline, fetch, extract (parse), decode, rename, queue, issue, execute and writeback. The first few stages (up to que) are in-order stages.
-The first step for an instruction is instruction fetch. At instruction fetch four instructions are fetched from the instruction cache. The fetched instructions are right aligned as a block then extracted from the cache line. Two cache lines worth of instructions are fetched to allow the group to cross a cache-line boundary. That means 16 instructions are fetched, but only four are processed further.
+#### Fetch / Extract Stages
+The first step for an instruction is instruction fetch. At instruction fetch two instruction cache lines are fetched to accomodate instructions spanning cache lines. That means 16 instructions are fetched, but only five are processed further. Five instructions are extracted from the cache lines. The fetched instructions are right aligned as a block. The fifth instruction is processed only if it is an immediate postfix. 
 If there is a hardware interrupt, a special interrupt instruction overrides the fetched instructions and the PC increment is disabled until the interrupt is recognized.
-After instruction fetch and extract the instructions are decoded. Decoded architectural registers are then renamed to physical registers and register values are fetched. The instruction decodes are placed in the reorder buffer / queued.
+#### Decode Stage
+After instruction fetch and extract the instructions are decoded. Target logical registers are assigned names from a name supplier component which can supply up to four names per clock cycle. Target name mappings are stored in the RAT. Decoded architectural registers are renamed to physical registers and register values are fetched. The instruction decodes are placed in the reorder buffer / queued.
+#### Queue Stage
+#### Issue Stage
 Once instructions are queued in the ROB they may be scheduled for execution. The scheduler has a fixed sized window of instructions it examines to find executable instructions. The window is from the far end of the ROB, the head point, backwards towards recently queued instructions. Only the oldest instructions in the queue are looked at as they are more likely to be ready to execute.
+#### Execute Stage
 The next stage is execution. Note that the execute stage waits until all the instruction arguments are valid before trying to execute the instruction. (This is checked by the scheduler). The predicate register must be valid.
-Instruction arguments are made valid by the execution or writeback of prior instructions. Note that while the instruction may not be able to execute, decode and execute are *not* stalled. Other instructions are decoded and executed while waiting for an instruction missing arguments. This is the out-of-order feature of the processor. Execution of instructions can be multi-cycle as for loads, stores, multiplies and divides.
-At the end of instruction execution the result is placed into the register file. There may be a maximum of four instruction being executed at the same time. An alu, an fpu a memory and one flow control. Support to execute up to seven instructions is partially coded (2 ALU, 2 FPU, 2 Mem, 1 FCU).
-The last stage, writeback, reorders instructions into program order reading the oldest instructions from the ROB. The core may writeback or commit four instructions per clock cycle. Exceptions and several other oddball instructions like CSR updates are also processed at the commit stage.
+Instruction arguments are made valid by the execution or writeback of prior instructions. Note that while the instruction may not be able to execute, issue and execute are *not* stalled. Other instructions are issued and executed while waiting for an instruction missing arguments. This is the out-of-order feature of the processor. Execution of instructions can be multi-cycle as for loads, stores, multiplies and divides.
+#### Writeback / Commit Stage
+At the end of instruction execution the result is placed into the register file. There may be a maximum of five instruction being executed at the same time. Two alu, an fpu a memory and one flow control. Support to execute up to seven instructions is partially coded (2 ALU, 2 FPU, 2 Mem, 1 FCU).
+The register file makes use of a five times CPU clock and time domain multiplexing to provide five available write ports in a CPU clock cycle.
+Writeback reorders instructions into program order reading the oldest instructions from the ROB. The core may writeback or commit six instructions per clock cycle. Exceptions and several other oddball instructions like CSR updates are also processed at the commit stage.
+The commit stage will only commit instructions within the same checkpoint in any given clock cycle as the RAT is restricted to processing within only a single checkpoint at a time. Up to six instructions may be committed in a clock cycle. Four instructions of any type followed by up to two invalid instructions. 
 
 ### Branch Prediction
-There are two branch predictors, A BTB, branch-target-buffer predictor used early in the pipeline, and a gselect predictor used later. The BTB has 1024 entries. The gselect predictor is a (2,2) correlating predictor with a 512 entry history table. Even if the branch is correctly predicted a number of instructions may end up being stomped on the ROB. Currently branch prediction is disabled while work is being done on other aspects of the core.
+There are two branch predictors, A BTB, branch-target-buffer predictor used early in the pipeline, and a gselect predictor used later. The BTB has 1024 entries. The gselect predictor is a (2,2) correlating predictor with a 512 entry history table. Even if the branch is correctly predicted a number of instructions may end up being stomped on the ROB. Currently the gselect branch prediction is disabled while work is being done on other aspects of the core.
 
 ### Interrupts and Exceptions
-Interrupts and exceptions are precise. There is a separate exception vector table for each operating mode of the CPU. The exception vector table address is programmable and may contain a maximum of 256 vectors. At reset the vector table is placed high in memory.
+Interrupts and exceptions are precise. There is a separate exception vector table for each operating mode of the CPU. The exception vector table address is programmable and may contain a maximum of 16 vectors. At reset the vector table is placed high in memory.
 An interrupt will cause the stack pointer to automatically switch to one dedicated for the operating mode (4 operating modes). There are seven interrupt levels supported.
 
 ## Instruction Set
@@ -110,11 +119,12 @@ Quad precision operations are supported using register pairs and the quad precis
 The FPU can also perform many of the simpler ALU operations, this increases the number of instructions that can be handled in parallel.
 
 ### Large Constants
-Use of large constants is supported with immediate mode instructions that can shift the immediate constant by multiples of 24-bits. ADD, AND, OR, and EOR all have shifted immediate mode instructions. This is sufficient to allow most calculations using large constants to be perfomed using a minimum of instructions. A 64-bit constant may be loaded into a register using only three instructions.
+There are two means supporting large constants. The first uses a postfix instruction to specify the upper 56 bits of a 64-bit constant. The lower eight bits of the constant are supplied by the register spec field. Any of the three source registers may be turned into a constant by specifying a postfix. Only one postfix is allowed per instruction. The second means large constants are supported is with the use of immediate mode instructions that can shift the immediate constant by multiples of 32-bits. ADD, AND, OR, and EOR all have shifted immediate mode instructions. This is sufficient to allow most calculations using large constants to be perfomed using a minimum of instructions. A 64-bit constant may be loaded into a register using only two instructions.
 
 ### Branches
 Conditional branches are a fused compare-and-branch instruction. Values of two registers are compared, then a branch is made depending on the relationship between the two.
 The branch displacement is over 20 bits, but it is in terms of instructions, effectively making it about 22 bits. Branches are currently being modified for 64-bit instructions and the branch range will likely increase.
+Branches may optionally increment or decrement a register during the branch operation. This is useful for counted loops.
 
 ### Loads and Stores
 Load and store operations are queued in a memory (load/store) queue. Once the operation is queued execution of other instructions continues. The core currently allows only strict ordering of memory operations. Load and store instructions are queued in program order.
@@ -148,8 +158,8 @@ The data cache is 64kB in size. The ISA and core implementation supports unalign
 Qupls will use vasm and vlink to assemble and link programs. vlink is used 'out of the box'. A Qupls backend is being written for vasm. The Arpl compiler may be used for high-level work and compiles to vasm compatible source code.
 
 # Core Size
-The minimum core size including only basic integer instructions the core is about 100,000 LUTs or 160,000 LC's in size. The minimum size does not allow for much parallelism. Better performance may be had using a pipelined in-order processor which is much smaller.
-A larger core including 2 ALUs and FPU allowing more parallelism is about 175k LUTs in size.
+The minimum core size including only basic integer instructions the core is about 100,000 LUTs or 160,000 LCs in size. The minimum size does not allow for much parallelism. Better performance may be had using a pipelined in-order processor which is much smaller.
+A larger core including 2 ALUs and FPU allowing more parallelism is about 175k LUTs (280 LCs) in size.
 *The core size seems to be constantly increasing as updates occur.
 
 # Performance
