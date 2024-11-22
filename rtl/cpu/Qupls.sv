@@ -116,6 +116,7 @@ reg int_commit;		// IRQ committed
 // hirq squashes the pc increment if there's an irq.
 // Normally atom_mask is zero.
 reg hirq;
+pc_address_t ret_pc;
 pc_address_ex_t misspc;
 mc_address_t miss_mcip, mcbrtgt;
 wire [$bits(pc_address_t)-1:6] missblock;
@@ -247,7 +248,8 @@ rob_ndx_t mc_orid;
 pc_address_ex_t mc_adr;
 pc_address_ex_t tgtpc;
 rob_entry_t [ROB_ENTRIES-1:0] rob;
-beb_entry_t [BEB_ENTRIES-1:0] beb;
+beb_entry_t beb_buf;
+reg [1:0] beb_status [0:63];
 
 ex_instruction_t [3:0] macro_ins_bus;
 reg macro_queued;
@@ -469,6 +471,7 @@ memsz_t alu1_prc;
 wire alu1_ctag;
 
 reg fpu0_idle;
+wire fpu0_iq_prog_full;
 wire fpu0_done;
 wire fpu0_sc_done;		// single-cycle done
 wire fpu0_sc_done2;		// pipeline delayed version of above
@@ -629,6 +632,8 @@ address_t tlb0_res, tlb1_res;
 
 pc_address_t icdp;
 branch_state_t branch_state;
+reg bs_done_oh;
+reg bs_idle_oh;
 reg [4:0] excid;
 pc_address_ex_t excmisspc;
 reg [2:0] excmissgrp;
@@ -636,7 +641,7 @@ reg excmiss;
 ex_instruction_t excir;
 reg excret;
 pc_address_ex_t exc_ret_pc;
-wire do_bsr;
+wire do_bsr, do_ret, do_call;
 pc_address_ex_t bsr_tgt;
 mc_address_t exc_ret_mcip;
 instruction_t exc_ret_mcir;
@@ -820,6 +825,8 @@ assign clk = clk_i;				// convenience
 assign clk2x = clk2x_i;
 
 pipeline_reg_t nopi;
+reg [5:0] sync_no;
+reg [5:0] fc_no;
 
 // Define a NOP instruction.
 always_comb
@@ -1308,7 +1315,7 @@ Qupls_btb ubtb1
 	.clk(clk),
 	.clk_en(advance_f),
 	.en(1'b1),
-	.rclk(~clk),
+	.rclk(clk),
 	.nmi(pe_nmi),
 	.nmi_addr(nmi_addr),
 	.irq(irq),
@@ -1318,7 +1325,11 @@ Qupls_btb ubtb1
 	.igrp(igrp),
 	.length_byte(length_byte),
 	.pe_bsdone(pe_bsdone),
+	.bs_done_oh(bs_done_oh),
 	.do_bsr(do_bsr),
+	.do_ret(do_ret),
+	.do_call(do_call),
+	.ret_pc(ret_pc),
 	.bsr_tgt(bsr_tgt),
 	.mip0v(mip0v),
 	.mip1v(mip1v),
@@ -1338,7 +1349,6 @@ Qupls_btb ubtb1
 	.takb2(ntakb[2]),
 	.takb3(ntakb[3]),
 	.branchmiss(branch_state == BS_CHKPT_RESTORED),
-	.branch_state(branch_state),
 	.misspc(misspc),
 	.commit_pc0(commit_pc0),
 	.commit_brtgt0(commit_brtgt0),
@@ -1444,7 +1454,7 @@ edge_det ued3 (
 	.rst(irst),
 	.clk(clk),
 	.ce(1'b1),
-	.i(branch_state==BS_DONE),
+	.i(bs_done_oh),
 	.pe(pe_bsdone),
 	.ne(),
 	.ee()
@@ -1482,7 +1492,7 @@ else begin
 		bms2 <= bms;
 		bms3 <= bms2;
 		ihit3 <= ihit_f;
-		do_bsr2 <= do_bsr;
+		do_bsr2 <= do_bsr|do_ret;
 		if (micro_code_active) begin
 			do_bsr3 <= do_bsr2;
 		end
@@ -1494,7 +1504,7 @@ else begin
 		do_bsr5 <= do_bsr4;
 		do_bsr6 <= do_bsr5;
 		do_bsr7 <= do_bsr6;
-		do_bsr_h <= ((do_bsr) || do_bsr_h) && !ihit;
+		do_bsr_h <= ((do_bsr|do_ret) || do_bsr_h) && !ihit;
 	end
 end
 
@@ -1510,7 +1520,7 @@ Qupls_stomp ustmp1
 	.micro_code_active(micro_code_active),
 	.branchmiss(branchmiss),
 	.branch_state(branch_state), 
-	.do_bsr(do_bsr),
+	.do_bsr(do_bsr|do_ret),
 	.misspc(misspc),
 	.pc(pc),
 	.pc_f(pc0_f),
@@ -1770,13 +1780,13 @@ else begin
 			else
 				pc <= next_pc;			// early PC predictor from BTB logic
 		end
-		else if (!pcf && (branch_state==BS_DONE || do_bsr))
+		else if (!pcf && (bs_done_oh || do_bsr || do_ret))
 			pc <= next_pc;
 	end
 	// Prevent hang when the pipeline cannot advance because there is no room 
 	// to queue, yet the IP needs to change to get out of the branch miss state.
 	else begin
-		if (pe_bsdone || do_bsr) begin
+		if (pe_bsdone || do_bsr || do_ret) begin
 			pc <= next_pc;
 			pcf <= TRUE;
 		end
@@ -2311,6 +2321,8 @@ Qupls_pipeline_mux uiext1
 	.len3_i(len3),
 	.grp_o(grp_d),
 	.do_bsr(do_bsr),
+	.do_ret(do_ret),
+	.do_call(do_call),
 	.bsr_tgt(bsr_tgt),
 	.stall(ext_stall),
 	.get(dc_get)
@@ -2576,9 +2588,9 @@ Qupls_queue_room uqroom1
 
 always_comb
 	room_for_que = enqueue_room > 4'd3;
-assign nq = !(branchmiss || (branch_state!=BS_IDLE && branch_state < BS_CAPTURE_MISSPC)) && advance_pipeline && room_for_que && (!stomp_que || stomp_quem);
+assign nq = !(branchmiss || (!bs_idle_oh && branch_state < BS_CAPTURE_MISSPC)) && advance_pipeline && room_for_que && (!stomp_que || stomp_quem);
 
-assign stallq = !rstcnt[2] || rat_stallq || ren_stallq || !room_for_que || branch_state != BS_IDLE;
+assign stallq = !rstcnt[2] || rat_stallq || ren_stallq || !room_for_que || !bs_idle_oh;
 
 
 reg signed [$clog2(ROB_ENTRIES):0] cmtlen;			// Will always be >= 0
@@ -2699,9 +2711,10 @@ if (advance_pipeline) begin
 end
 */
 
-reg free_chkpt;
+wire free_chkpt;
 checkpt_ndx_t fchkpt;
 checkpt_ndx_t miss_cp;
+rob_ndx_t chkpt_rndx;
 always_comb
 	miss_cp = rob[missid].cndx;
 assign cndx1 = cndx0;
@@ -3031,41 +3044,47 @@ assign wrport1_cp = alu1_cp2;
 assign wrport2_cp = dram0_cp;
 assign wrport3_cp = fpu0_cp2;
 
-Qupls_regfile4wNr #(.RPORTS(24)) urf1 (
+Qupls_regfile6wNr #(.RPORTS(24)) urf1 (
 	.rst(irst),
 	.clk(clk), 
-	.clk5x(clk5x),
-	.ph4(ph4),
+//	.clk5x(clk5x),
+//	.ph4(ph4),
 	.wr0(wrport0_v),
 	.wr1(wrport1_v),
 	.wr2(wrport2_v),
 	.wr3(wrport3_v),
 	.wr4(wrport4_v),
+	.wr5(wrport5_v),
 	.we0(1'b1),
 	.we1(1'b1),
 	.we2(1'b1),
 	.we3(1'b1),
 	.we4(1'b1),
+	.we5(1'b1),
 	.wt0(wt0),
 	.wt1(1'b0),
 	.wt2(wt2),
 	.wt3(wt3),
 	.wt4(wt4),
+	.wt5(1'b0),
 	.wa0(wrport0_Rt),
 	.wa1(wrport1_Rt),
 	.wa2(wrport2_Rt),
 	.wa3(wrport3_Rt),
 	.wa4(wrport4_Rt),
+	.wa5(wrport5_Rt),
 	.i0(wrport0_res),
 	.i1(wrport1_res),
 	.i2(wrport2_res),
 	.i3(wrport3_res),
 	.i4(wrport4_res),
+	.i5(wrport5_res),
 	.ti0(alu0_ctag),
 	.ti1(1'b0),
 	.ti2(dram0_cload ? dram_ctag0 : 1'b0),
 	.ti3(fpu0_ctag),
 	.ti4(dram1_cload ? dram_ctag1 : 1'b0),
+	.ti5(1'b0),
 	.ra(rf_reg),
 	.o(rfo),
 	.to(rfo_ctag)
@@ -3241,7 +3260,8 @@ Qupls_checkpoint_freer uchkptfree1
 	.clk(clk),
 	.rob(rob),
 	.free(free_chkpt),
-	.chkpt(fchkpt)
+	.chkpt(fchkpt),
+	.chkpt_rndx(chkpt_rndx)
 );
 
 // Registering the branch miss signals may allow a second miss directly after
@@ -3381,6 +3401,36 @@ else begin
 	end
 end
 
+always_ff @(posedge clk)
+if (irst)
+	bs_idle_oh <= TRUE;
+else begin
+	case(branch_state)
+	BS_IDLE:
+		if (branchmiss)
+			bs_idle_oh <= FALSE;
+	BS_DONE2:
+		bs_idle_oh <= TRUE;
+	default:	
+		bs_idle_oh <= TRUE;
+	endcase
+end
+
+always_ff @(posedge clk)
+if (irst)
+	bs_done_oh <= FALSE;
+else begin
+	case(branch_state)
+	BS_CAPTURE_MISSPC:
+		bs_done_oh <= TRUE;
+	BS_DONE:
+		if (s5s7)
+			bs_done_oh <= FALSE;
+	default:	;
+	endcase
+end
+
+
 // ----------------------------------------------------------------------------
 // ISSUE stage combo logic
 // ----------------------------------------------------------------------------
@@ -3413,7 +3463,7 @@ Qupls_sched uscd1
 	.clk(clk),
 	.alu0_idle(alu0_idle),
 	.alu1_idle(NALU > 1 ? alu1_idle : 1'd0),
-	.fpu0_idle(NFPU > 0 ? fpu0_idle : 1'd0),
+	.fpu0_idle(NFPU > 0 ? !fpu0_iq_prog_full : 1'd0),
 	.fpu1_idle(NFPU > 1 ? fpu1_idle : 1'd0),
 	.fcu_idle(fcu_idle),
 	.agen0_idle(agen0_idle1),
@@ -3453,10 +3503,8 @@ Qupls_sched uscd1
 	.ratv3_rndxv(ratv3_rndxv),
 	.cpytgt0(alu0_cpytgt),
 	.cpytgt1(alu1_cpytgt),
-	.beb(beb),
-	.beb_issue(beb_issue),
-	.beb_ndx(beb_ndx)
-	
+	.beb_buf(beb_buf),
+	.beb_issue(beb_issue)
 );
 
 rob_bitmask_t cpu_request_cancel;
@@ -4425,11 +4473,18 @@ endgenerate
 always_ff @(posedge clk) alu1_ldd <= alu1_ld;
 
 genvar gNFPU;
+wire fpu0_iq_rd_rst_busy, fpu0_iq_wr_rst_busy;
+wire fpu0_iq_data_valid;
+wire fpu0_iq_underflow;
+wire fpu0_iq_wr_en = fpu0_rndxv;
+wire fpu0_iq_rd_en = fpu0_idle;
+fpu_iq_t fpu0_iq_i, fpu0_iq_o;
 
 generate begin : gFpuStat
 	for (gNFPU = 0; gNFPU < NFPU; gNFPU = gNFPU + 1) begin
 		case (gNFPU)
 		0:
+			begin
 			Qupls_fpu_station ufpustat0
 			(
 				.rst(irst),
@@ -4460,19 +4515,121 @@ generate begin : gFpuStat
 				.sc_done(fpu0_sc_done),
 				// inputs
 				.available(fpu0_available),
-				.rndx(fpu0_rndx),
-				.rndxv(fpu0_rndxv),
+				.rndx(fpu0_iq_o.rndx),
+				.rndxv(fpu0_iq_data_valid & ~fpu0_iq_underflow),
 				.idle(fpu0_idle),
-				.rfo_argA(rfo_fpu0_argA),
-				.rfo_argB(rfo_fpu0_argB),
-				.rfo_argC(rfo_fpu0_argC),
-				.rfo_argT(rfo_fpu0_argT),
-				.rfo_argM(rfo_fpu0_argM),
-				.rfo_argA_ctag(rfo_fpu0_argA_ctag),
-				.rfo_argB_ctag(rfo_fpu0_argB_ctag),
-				.rob(rob[fpu0_rndx])
+				.rfo_argA(fpu0_iq_o.argA),
+				.rfo_argB(fpu0_iq_o.argB),
+				.rfo_argC(fpu0_iq_o.argC),
+				.rfo_argT(fpu0_iq_o.argT),
+				.rfo_argM(fpu0_iq_o.argM),
+				.rfo_argA_ctag(fpu0_iq_o.argA_ctag),
+				.rfo_argB_ctag(fpu0_iq_o.argB_ctag),
+				.rob(fpu0_iq_o.rob)
 			);
 
+			assign fpu0_iq_i.rndx = fpu0_rndx;
+			assign fpu0_iq_i.rob = rob[fpu0_rndx];
+			assign fpu0_iq_i.argA = rfo_fpu0_argA;
+			assign fpu0_iq_i.argB = rfo_fpu0_argB;
+			assign fpu0_iq_i.argC = rfo_fpu0_argC;
+			assign fpu0_iq_i.argT = rfo_fpu0_argT;
+			assign fpu0_iq_i.argM = rfo_fpu0_argM;
+			assign fpu0_iq_i.argA_ctag = rfo_fpu0_argA_ctag;
+			assign fpu0_iq_i.argB_ctag = rfo_fpu0_argB_ctag;
+
+	   // xpm_fifo_sync: Synchronous FIFO
+	   // Xilinx Parameterized Macro, version 2024.1
+
+	   xpm_fifo_sync #(
+	      .CASCADE_HEIGHT(0),            // DECIMAL
+	      .DOUT_RESET_VALUE("0"),        // String
+	      .ECC_MODE("no_ecc"),           // String
+	      .EN_SIM_ASSERT_ERR("warning"), // String
+	      .FIFO_MEMORY_TYPE("distributed"),	// String
+	      .FIFO_READ_LATENCY(0),         // DECIMAL
+	      .FIFO_WRITE_DEPTH(FPU0_IQ_DEPTH),	// DECIMAL
+	      .FULL_RESET_VALUE(0),          // DECIMAL
+	      .PROG_EMPTY_THRESH(5),         // DECIMAL
+	      .PROG_FULL_THRESH(FPU0_IQ_DEPTH-5),	// DECIMAL
+	      .RD_DATA_COUNT_WIDTH($clog2(FPU0_IQ_DEPTH)+1),	// DECIMAL
+	      .READ_DATA_WIDTH($bits(fpu_iq_t)),          // DECIMAL
+	      .READ_MODE("fwft"),            // String
+	      .SIM_ASSERT_CHK(0),            // DECIMAL; 0=disable simulation messages, 1=enable simulation messages
+	      .USE_ADV_FEATURES("1707"),     // String
+	      .WAKEUP_TIME(0),               // DECIMAL
+	      .WRITE_DATA_WIDTH($bits(fpu_iq_t)),	// DECIMAL
+	      .WR_DATA_COUNT_WIDTH($clog2(FPU0_IQ_DEPTH)+1)	// DECIMAL
+	   )
+	   fpu0_iq1 (
+	      .almost_empty(),
+	      .almost_full(),
+
+	      // 1-bit output: Read Data Valid: When asserted, this signal indicates
+				// that valid data is available on the output bus (dout).
+	      .data_valid(fpu0_iq_data_valid),
+
+	      .dbiterr(1'b0),
+
+	      // READ_DATA_WIDTH-bit output: Read Data: The output data bus is driven
+	      // when reading the FIFO.
+	      .dout(fpu0_iq_o),
+
+	      .empty(),
+	      .full(),
+	      .overflow(),
+	      .prog_empty(),
+
+	      // 1-bit output: Programmable Full: This signal is asserted when the
+				// number of words in the FIFO is greater than or equal to the
+				// programmable full threshold value. It is de-asserted when the number of
+				// words in the FIFO is less than the programmable full threshold value.
+	      .prog_full(fpu0_iq_prog_full),
+
+	      .rd_data_count(),
+	      .rd_rst_busy(fpu0_iq_rd_rst_busy),	// 1-bit output: Read Reset Busy: Active-High indicator that the FIFO read
+	                                     			// domain is currently in a reset state.
+
+	      .sbiterr(),
+	      // 1-bit output: Underflow: Indicates that the read request (rd_en) during
+				// the previous clock cycle was rejected because the FIFO is empty. Under
+				// flowing the FIFO is not destructive to the FIFO.
+	      .underflow(fpu0_iq_underflow),
+
+	      .wr_ack(),
+	      .wr_data_count(),
+
+	      .wr_rst_busy(fpu0_iq_wr_rst_busy),    // 1-bit output: Write Reset Busy: Active-High indicator that the FIFO
+	                           				          // write domain is currently in a reset state.
+
+	      .din(fpu0_iq_i),	             // WRITE_DATA_WIDTH-bit input: Write Data: The input data bus used when
+	                                     // writing the FIFO.
+
+	      .injectdbiterr(1'b0),
+	      .injectsbiterr(1'b0),
+
+				// 1-bit input: Read Enable: If the FIFO is not empty, asserting this
+				// signal causes data (on dout) to be read from the FIFO. Must be held
+				// active-low when rd_rst_busy is active high.
+	      .rd_en(fpu0_iq_rd_en & ~fpu0_iq_rd_rst_busy),
+
+	      .rst(irst),                    // 1-bit input: Reset: Must be synchronous to wr_clk. The clock(s) can be
+	                                     // unstable at the time of applying reset, but reset must be released only
+	                                     // after the clock(s) is/are stable.
+
+	      .sleep(1'b0),
+	      .wr_clk(clk),               		// 1-bit input: Write clock: Used for write operation. wr_clk must be a
+	                                     // free running clock.
+
+				// 1-bit input: Write Enable: If the FIFO is not full, asserting this
+				// signal causes data (on din) to be written to the FIFO Must be held
+				// active-low when rst or wr_rst_busy or rd_rst_busy is active high
+	      .wr_en(fpu0_iq_wr_en & ~fpu0_wr_rst_busy & ~fpu0_rd_rst_busy & ~irst)
+	   );
+
+	   // End of xpm_fifo_sync_inst instantiation
+				
+			end
 		1:
 			Qupls_fpu_station ufpustat1
 			(
@@ -4538,7 +4695,7 @@ if (irst) begin
 	fcu_cp <= 4'd0;
 end
 else begin
-	if (robentry_fcu_issue[fcu_rndx] && fcu_rndxv && fcu_idle && branch_state==BS_IDLE) begin
+	if (robentry_fcu_issue[fcu_rndx] && fcu_rndxv && fcu_idle && bs_idle_oh) begin
 		if (rob[fcu_rndx].op.ins.any.opcode==OP_BccU) begin
 			if (rob[fcu_rndx].decbus.Ran)
 				fcu_argA <= rob[fcu_rndx].decbus.Ra;
@@ -4613,9 +4770,9 @@ Qupls_agen_station uagen0stn
 	.store_argC_aReg(),
 	.store_argC_pReg(agen0_pRc),
 	.store_argC_cndx(),
-	.beb_issue(beb_issue[beb_ndx]),
+	.beb_issue(beb_issue),
 	.bndx(beb_ndx),
-	.beb(beb[beb_ndx])
+	.beb(beb_buf)
 );
 
 Qupls_agen_station uagen1stn
@@ -4669,10 +4826,10 @@ reg dram0_idv2;
 reg fcu_setflags;
 always_comb
 	fcu_setflags = fcu_v && rob[fcu_id].v && fcu_v3 && !robentry_stomp[fcu_id] 
-		&& (branch_state==BS_IDLE||branch_state==BS_DONE||branch_state==BS_DONE2) && fcu_idv;
+		&& (bs_idle_oh||bs_done_oh||branch_state==BS_DONE2) && fcu_idv;
  	
 always_comb
-	dc_get = !(branchmiss || (branch_state < BS_CAPTURE_MISSPC && branch_state != BS_IDLE))
+	dc_get = !(branchmiss || (branch_state < BS_CAPTURE_MISSPC && !bs_idle_oh))
 //		&& advance_pipeline
 		&& room_for_que
 //		&& (!stomp_que || stomp_quem)
@@ -4694,8 +4851,9 @@ always_comb
 		(ins3_dec.decbus.br && !stomp3) 
 		;
 
-edge_det uedbsi1 (.rst(irst), .clk(clk), .ce(1'b1), .i(branch_state==BS_IDLE), .pe(pe_bsidle), .ne(), .ee());
+edge_det uedbsi1 (.rst(irst), .clk(clk), .ce(1'b1), .i(bs_idle_oh), .pe(pe_bsidle), .ne(), .ee());
 
+			
 // ----------------------------------------------------------------------------
 // fet/mux/dec/ren/que
 // ----------------------------------------------------------------------------
@@ -4829,7 +4987,7 @@ else begin
 	// invalidated (state 2), quing new instructions can begin.
 	// Only reset the tail if something was stomped on. It could be that there
 	// are no valid instructions following the branch in the queue.
-	if (branchmiss || (branch_state < BS_CAPTURE_MISSPC && branch_state != BS_IDLE)) begin
+	if (branchmiss || (branch_state < BS_CAPTURE_MISSPC && !bs_idle_oh)) begin
 		;
 //		if (|robentry_stomp)
 //			tail0 <= stail;		// computed above
@@ -5433,6 +5591,7 @@ else begin
 			agen0_idv <= INV;
 		end
 		if (rob[agen0_id].decbus.bstore) begin
+			/*
 			beb[1] <= beb[0];
 			beb[2] <= beb[1];
 			beb[3] <= beb[2];
@@ -5451,6 +5610,7 @@ else begin
 			beb[0].argC_v <= rob[agen0_id].argC_v;
 			beb[0].cndx <= rob[agen0_id].cndx;
 			beb[0].done <= FALSE;
+			*/
 			agen0_idle <= TRUE;
 			rob[agen0_id].done <= {VAL,VAL};
 			rob[agen0_id].out[0] <= {INV,INV};
@@ -5465,23 +5625,27 @@ else begin
 		end
 	end
 
+	/*
 	if (beb_issue[beb_ndx]) begin
-		if (beb[beb_ndx].argC==64'd0) begin
-			beb[beb_ndx].done <= TRUE;
-			beb[beb_ndx].v <= INV;
+		if (beb_buf.argC==64'd0) begin
+			beb_buf.done <= TRUE;
+			beb_buf.v <= INV;
+			beb_status[beb_buf.handle][0] <= 1'b0;
+			beb_status[beb_buf.handle][1] <= 1'b0;
 		end
-		if (beb[beb_ndx].state==beb[beb_ndx].nstate) begin
-			beb[beb_ndx].argC <= beb[beb_ndx].argC - 2'd1;
-			beb[beb_ndx].argA <= beb[beb_ndx].argA + {{58{beb[beb_ndx].op.ins[41]}},beb[beb_ndx].op.ins[41:36]};
-			if (!beb[beb_ndx].decbus.bstore)
-				beb[beb_ndx].argB <= beb[beb_ndx].argB + {{58{beb[beb_ndx].op.ins[47]}},beb[beb_ndx].op.ins[47:42]};
+		if (beb_buf.state==beb_buf.nstate) begin
+			beb_buf.argC <= beb_buf.argC - 2'd1;
+			beb_buf.argA <= beb_buf.argA + {{57{beb_buf.op.ins[41]}},beb_buf.op.ins[63:57]};
+			if (!beb_buf.decbus.bstore)
+				beb_buf.argB <= beb_buf.argB + {{57{beb_buf.op.ins[47]}},beb_buf.op.ins[63:57]};
 		end
-		if (beb[beb_ndx].nstate > 2'd0) begin
-			beb[beb_ndx].state <= beb[beb_ndx].state + 2'd1;
-			if (beb[beb_ndx].state==beb[beb_ndx].nstate-1)
-				beb[beb_ndx].state <= 2'd0;
+		if (beb_buf.nstate > 2'd0) begin
+			beb_buf.state <= beb_buf.state + 2'd1;
+			if (beb_buf.state==beb_buf.nstate-1)
+				beb_buf.state <= 2'd0;
 		end
 	end
+	*/
 
 	if (NAGEN > 1) begin
 		if (tlb1_v && !agen1_idle) begin
@@ -5543,7 +5707,7 @@ else begin
 	end
 
 	fcu_idle <= TRUE;
-	if (robentry_fcu_issue[fcu_rndx] && fcu_rndxv && fcu_idle && branch_state==BS_IDLE) begin
+	if (robentry_fcu_issue[fcu_rndx] && fcu_rndxv && fcu_idle && bs_idle_oh) begin
 		fcu_idle <= FALSE;
 		fcu_v <= VAL;
 		fcu_idv <= VAL;
@@ -5551,7 +5715,7 @@ else begin
 	  fcu_new <= TRUE;
 	end
 
-	if (brtgtv && branch_state==BS_IDLE) begin
+	if (brtgtv && bs_idle_oh) begin
 		fcu_v <= VAL;
 	end
 
@@ -6074,6 +6238,27 @@ else begin
 			tProcessExc(head2,rob[head2].pc,FALSE,FALSE);
 		else if (rob[head3].excv && cmtcnt > 3'd3 && rob[head3].v)
 			tProcessExc(head3,rob[head3].pc,FALSE,FALSE);
+
+		/*
+		if (FALSE) begin
+			if (rob[head0].decbus.sync)
+				tZeroSyncDep(rob[head0].sync_no);
+			if (rob[head1].decbus.sync)
+				tZeroSyncDep(rob[head1].sync_no);
+			if (rob[head2].decbus.sync)
+				tZeroSyncDep(rob[head2].sync_no);
+			if (rob[head3].decbus.sync)
+				tZeroSyncDep(rob[head3].sync_no);
+			if (rob[head0].decbus.fc)
+				tZeroFcDep(rob[head0].fc_no);
+			if (rob[head1].decbus.fc)
+				tZeroFcDep(rob[head1].fc_no);
+			if (rob[head2].decbus.fc)
+				tZeroFcDep(rob[head2].fc_no);
+			if (rob[head3].decbus.fc)
+				tZeroFcDep(rob[head3].fc_no);
+		end
+		*/
 	end
 	// ToDo: fix LSQ head update.
 	if (lsq[lsq_head.row][lsq_head.col].v==INV && lsq_head != lsq_tail)
@@ -6085,7 +6270,7 @@ else begin
 		tCheckQFExtDone(head2);	
 		tCheckQFExtDone(head3);	
 	end
-
+	
 	// There is a bypassing issue in the RAT, where a register is being marked
 	// valid at the same time an instruction is queuing that uses the register.
 	// The fact the register is going to be valid gets missed, then the
@@ -6128,7 +6313,7 @@ else begin
 				end
 				if (!rob[head0].argM_v && !fnFindSource(head0, rob[head0].decbus.Rm)) begin
 					$display("Q+: rob[%d]: argument M not possible to validate.", head0);
-					rob[head0].argT_v <= VAL;
+					rob[head0].argM_v <= VAL;
 					tAllArgsValid(head0, INV, INV, INV, INV, VAL);
 				end		
 			end
@@ -6275,12 +6460,54 @@ else begin
 
 	// Redo instruction as copy target.
 	// Invalidate false paths.
+	if (free_chkpt)
+		rob[chkpt_rndx].chkpt_freed <= TRUE;
 	for (n3 = 0; n3 < ROB_ENTRIES; n3 = n3 + 1) begin
-		if (free_chkpt)
-			if (rob[n3].cndx==fchkpt)
-				rob[n3].chkpt_freed <= TRUE;
 		if (robentry_stomp[n3]|robentry_cpytgt[n3])	// || bno_bitmap[rob[n3].pc.bno_t]==1'b0)
 			tBranchInvalidate(n3,robentry_cpytgt[n3]);
+	end
+
+	// This bit to aid the scheduler. There are a lot of bits that must be true
+	// before an instruction can issue. These are pre-computed here to reduce the
+	// logic levels in the scheduler. It does add a cycle or two of latency, but 
+	// is likely done before the instruction comes into consideration by the
+	// scheduler. The latency is hidden.
+	begin : gSchedPrecalc
+		for (n3 = 0; n3 < ROB_ENTRIES; n3 = n3 + 1) begin
+			if (rob[n3].v) begin
+				if (!fnPriorSync(n3))
+					rob[n3].prior_sync <= FALSE; 
+				if (!fnPriorFC(n3))
+					rob[n3].prior_fc <= FALSE;
+			end
+		end
+
+		for (n3 = 0; n3 < ROB_ENTRIES; n3 = n3 + 1) begin
+			rob[n3].could_issue <=
+					rob[n3].v
+				&& !robentry_stomp[n3]
+				&& !(&rob[n3].done)
+				&& (rob[n3].decbus.cpytgt ? (rob[n3].argT_v /*|| rob[g].op.nRt==9'd0*/) : rob[n3].all_args_valid)
+				&& (rob[n3].decbus.mem ? !rob[n3].prior_fc : 1'b1)
+				&& (SERIALIZE ? (rob[(n3+ROB_ENTRIES-1)%ROB_ENTRIES].done==2'b11 || rob[(n3+ROB_ENTRIES-1)%ROB_ENTRIES].v==INV) : 1'b1)
+				//&& !fnPriorFalsePred(g)
+				&& !rob[n3].prior_sync
+	//			&& |rob[n3].pred_bits
+				&& rob[n3].pred_bitv
+				;
+
+			rob[n3].could_issue_nm <= 
+					 rob[n3].v
+				&& !(&rob[n3].done)
+	//												&& !stomp_i[g]
+				&& rob[n3].argT_v 
+				//&& fnPredFalse(g)
+				&& !robentry_issue[n3]
+				&& ~|rob[n3].pred_bits
+		    && rob[n3].pred_bitv
+				&& SUPPORT_PRED
+				;
+		end
 	end
 
 end
@@ -6726,6 +6953,64 @@ endgenerate
 // Support functions and tasks
 // ============================================================================
 
+// Search for a prior flow control op. This forces flow control op to be performed
+// in program order.
+
+function fnPriorFC;
+input rob_ndx_t ndx;
+integer n;
+begin
+	fnPriorFC = FALSE;
+	for (n = 0; n < ROB_ENTRIES; n = n + 1)
+		if (rob[n].v && rob[n].sn < rob[ndx].sn && rob[n].decbus.fc && !(&rob[n].done))
+			fnPriorFC = TRUE;
+end
+endfunction
+
+function fnPriorMem;
+input rob_ndx_t ndx;
+integer n;
+begin
+	fnPriorMem = FALSE;
+	for (n = 0; n < ROB_ENTRIES; n = n + 1)
+		if (rob[n].v && rob[n].sn < rob[ndx].sn && rob[n].decbus.mem && !(&rob[n].done))
+			fnPriorMem = TRUE;
+end
+endfunction
+
+function fnPriorSync;
+input rob_ndx_t ndx;
+integer n;
+begin
+	fnPriorSync = FALSE;
+	for (n = 0; n < ROB_ENTRIES; n = n + 1)
+		if (rob[n].v && rob[n].sn < rob[ndx].sn && rob[n].decbus.sync)
+			fnPriorSync = TRUE;
+end
+endfunction
+
+/*
+task tZeroSyncDep;
+input [5:0] syncno;
+integer n3;
+begin
+	for (n3 = 0; n3 < ROB_ENTRIES; n3 = n3 + 1)
+		if (rob[n3].sync_no==syncno)
+			rob[n3].sync_no <= 6'd0;
+end
+endtask
+
+task tZeroFcDep;
+input [5:0] fcno;
+integer n3;
+begin
+	for (n3 = 0; n3 < ROB_ENTRIES; n3 = n3 + 1)
+		if (rob[n3].fc_no==fcno)
+			rob[n3].fc_no <= 6'd0;
+end
+endtask
+*/
+
 task tInvalidateDependents;
 input rob_ndx_t ndx;
 input rob_ndx_t dndx;
@@ -6772,32 +7057,6 @@ begin
 	*/
 end
 endfunction
-
-// Convert a vector opcode to the equivalent scalar one.
-/*
-function opcode_t fnVec2ScalarOpcode;
-input opcode_t opc;
-begin
-	case(opc)
-	OP_R3V:	fnVec2ScalarOpcode = OP_R2;
-	OP_R3VS:	fnVec2ScalarOpcode = OP_R2;
-	OP_VADDI:	fnVec2ScalarOpcode = OP_ADDI;
-	OP_VCMPI:	fnVec2ScalarOpcode = OP_CMPI;
-	OP_VANDI:		fnVec2ScalarOpcode = OP_ANDI;
-	OP_VORI:		fnVec2ScalarOpcode = OP_ORI;
-	OP_VEORI:		fnVec2ScalarOpcode = OP_EORI;
-	OP_VMULI:	fnVec2ScalarOpcode = OP_MULI;
-	OP_VDIVI:	fnVec2ScalarOpcode = OP_DIVI;
-	OP_VSHIFT:	fnVec2ScalarOpcode = OP_SHIFT;
-	OP_VADDSI:	fnVec2ScalarOpcode = OP_ADDSI;
-	OP_VANDSI:	fnVec2ScalarOpcode = OP_ANDSI;
-	OP_VORSI:	fnVec2ScalarOpcode = OP_ORSI;
-	OP_VEORSI:	fnVec2ScalarOpcode = OP_EORSI;
-	default:	fnVec2ScalarOpcode = opc;
-	endcase
-end
-endfunction
-*/
 
 // Detect "stuck out" situation. Stuck out occurs if an instruction is marked
 // out, but no-longer has a functional unit associated with it. Not sure why
@@ -6910,7 +7169,7 @@ begin
 		end
 		if (db.decbus.Rb == pdb.decbus.Rt && !db.decbus.Rbz) begin
 			rob[ndx].op.pRb <= pdb.nRt;
-			if (fnSourceBv(db) | db.decbus.has_immb | Bv)
+			if (fnSourceBv(db) | (db.decbus.has_Rb ? 1'b0 : db.decbus.has_immb) | Bv)
 				rob[ndx].argB_v <= VAL;
 			tAllArgsValid(ndx, 1'b0, fnSourceBv(db) | db.decbus.has_immb | Bv, 1'b0, 1'b0, 1'b0);
 		end
@@ -7272,9 +7531,11 @@ begin
 			lsq[n14r][n14c] <= {$bits(lsq_entry_t){1'd0}};
 		end
 	end
+	/*
 	for (n14 = 0; n14 < BEB_ENTRIES; n14 = n14 + 1) begin
 		beb[n14] <= {$bits(beb_entry_t){1'd0}};
 	end
+	*/
 	alu0_available <= 1;
 	alu0_dataready <= 0;
 	alu1_available <= 1;
@@ -7383,6 +7644,8 @@ begin
 	store_argC_cndx <= 4'd0;
 	cpu_request_cancel <= {ROB_ENTRIES{1'b0}};
 	groupno <= {$bits(seqnum_t){1'b0}};
+	sync_no <= 6'd0;
+	fc_no <= 6'd0;
 end
 endtask
 
@@ -7418,8 +7681,32 @@ input last;
 integer n12;
 integer n13;
 decode_bus_t db;
+reg [5:0] next_sync_no;
+reg [5:0] next_fc_no;
 begin
 	db = ins.decbus;
+
+	/*
+	if (FALSE) begin
+		next_sync_no = sync_no + 2'd1;
+		if (next_sync_no==6'd0)
+			next_sync_no = 6'd1;
+		if (db.sync)
+			sync_no <= next_sync_no;
+
+		next_fc_no = fc_no + 2'd1;
+		if (next_fc_no==6'd0)
+			next_fc_no = 6'd1;
+		if (db.fc)
+			fc_no <= next_fc_no;
+
+		rob[tail].sync_no <= db.sync ? next_sync_no : 6'd0;
+		rob[tail].sync_dep <= sync_no;
+		rob[tail].fc_no <= db.fc ? next_fc_no : 6'd0;
+		rob[tail].fc_dep <= fc_no;
+	end
+	*/
+
 	// "dynamic" fields, these fields may change after enqueue
 	rob[tail].sn <= sn;
 	rob[tail].pred_bitv <= FALSE;
@@ -7427,6 +7714,7 @@ begin
 	rob[tail].orid <= mc_orid;
 	rob[tail].chkpt_freed <= FALSE;
 	rob[tail].br_cndx <= cndxq;
+
 	// NOP type instructions appear in the queue but they do not get scheduled or
 	// execute. They are marked done immediately.
 	rob[tail].done <= {2{db.nop}};
@@ -7463,17 +7751,19 @@ begin
 		rob[tail].excv <= FALSE;
 	end
 	rob[tail].argA_v <= fnSourceAv(ins) | pRav | db.has_imma;
-	rob[tail].argB_v <= fnSourceBv(ins) | pRbv | db.has_immb;
+	rob[tail].argB_v <= fnSourceBv(ins) | pRbv | (db.has_Rb ? 1'b0 : db.has_immb);
 	rob[tail].argC_v <= fnSourceCv(ins) | pRcv | db.has_immc;
 	rob[tail].argT_v <= fnSourceTv(ins) | pRtv;
 	rob[tail].argM_v <= fnSourceMv(ins) | pRmv;
 	rob[tail].all_args_valid <= 
 		(fnSourceAv(ins) | pRav | db.has_imma) &&
-		(fnSourceBv(ins) | pRbv | db.has_immb) &&
+		(fnSourceBv(ins) | pRbv | (db.has_Rb ? 1'b0 : db.has_immb)) &&
 		(fnSourceCv(ins) | pRcv | db.has_immc) &&
 		(fnSourceTv(ins) | pRtv) &&
 		(fnSourceMv(ins) | pRmv)
 		;
+	rob[tail].could_issue <= FALSE;
+	rob[tail].could_issue_nm <= FALSE;
 `ifdef IS_SIM
 	rob[tail].argA <= fnRegVal(pRa);
 	rob[tail].argB <= fnRegVal(pRb);
@@ -7481,6 +7771,9 @@ begin
 	rob[tail].argT <= fnRegVal(pRt);
 	rob[tail].argM <= fnRegVal(pRm);
 `endif
+	// Assume these two are TRUE. They will be set FALSE later.
+	rob[tail].prior_sync <= TRUE;
+	rob[tail].prior_fc <= TRUE;
 	// "static" fields, these fields remain constant after enqueue
 	rob[tail].grp <= grp;
 	rob[tail].predino <= predino;

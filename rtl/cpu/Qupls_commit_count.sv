@@ -76,8 +76,8 @@ always_comb cmt3 = XWID > 3 && ((rob[head3].v && &rob[head3].done) || (!rob[head
 										!rob[head0].decbus.oddball && !rob[head1].decbus.oddball && !rob[head2].decbus.oddball &&
 										!rob[head0].excv && !rob[head1].excv && !rob[head2].excv
 										;
-always_comb	cmt4 = !rob[head4].v && (head0 != tail0 && head0 != tail1 && head0 != tail2 && head0 != tail3 && head0 != tail4);
-always_comb	cmt5 = !rob[head5].v && (head0 != tail0 && head0 != tail1 && head0 != tail2 && head0 != tail3 && head0 != tail4 && head0 != tail5);
+always_comb	cmt4 = FALSE;//!rob[head4].v && (head0 != tail0 && head0 != tail1 && head0 != tail2 && head0 != tail3 && head0 != tail4);
+always_comb	cmt5 = FALSE;//!rob[head5].v && (head0 != tail0 && head0 != tail1 && head0 != tail2 && head0 != tail3 && head0 != tail4 && head0 != tail5);
 
 // Figure out how many instructions can be committed.
 // If there is an oddball instruction (eg. CSR, RTE) then only commit up until
@@ -107,9 +107,9 @@ begin
 			fnColls = ROB_ENTRIES + head - tail > (ROB_ENTRIES-4);
 	4:
 		if (head > tail)
-			fnColls = head - tail > (ROB_ENTRIES-7);
+			fnColls = head - tail > (ROB_ENTRIES-5);	// ToDo: change 5 to 7 if committing six
 		else
-			fnColls = ROB_ENTRIES + head - tail > (ROB_ENTRIES-7);
+			fnColls = ROB_ENTRIES + head - tail > (ROB_ENTRIES-5);
 	default:
 			fnColls = FALSE;
 	endcase

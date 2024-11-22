@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2013-2024  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -34,7 +34,7 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // 
 // 6kLUTs / 3kFFs / 23 BRAMs (4w20r)
-// The register file is time multiplexed and accessed four times using a six
+// The register file is time multiplexed and accessed four times using a five
 // times CPU clock.
 // ============================================================================
 //

@@ -57,7 +57,7 @@ module Qupls_pipeline_mux(rst_i, clk_i, rstcnt, advance_fet, ihit, en_i,
 	ins0_mux_o, ins1_mux_o, ins2_mux_o, ins3_mux_o, ins4_mux_o,
 	mcip0_i, mcip1_i, mcip2_i, mcip3_i,
 //	mcip0_o, mcip1_o, mcip2_o, mcip3_o,
-	do_bsr, bsr_tgt, get, stall);
+	do_bsr, bsr_tgt, do_ret, ret_pc, do_call, get, stall);
 input rst_i;
 input clk_i;
 input [2:0] rstcnt;
@@ -123,6 +123,9 @@ output cpu_types_pkg::mc_address_t mcip3_o;
 */
 output reg do_bsr;
 output cpu_types_pkg::pc_address_ex_t bsr_tgt;
+output reg do_ret;
+output pc_address_t ret_pc;
+output reg do_call;
 input get;
 output stall;
 
@@ -359,57 +362,130 @@ always_comb nop3 = FALSE;
 */
 reg bsr0,bsr1,bsr2,bsr3;
 reg jsr0,jsr1,jsr2,jsr3;
+reg bra0,bra1,bra2,bra3;
+reg jmp0,jmp1,jmp2,jmp3;
 reg do_bsr1;
 cpu_types_pkg::pc_address_ex_t bsr0_tgt;
 cpu_types_pkg::pc_address_ex_t bsr1_tgt;
 cpu_types_pkg::pc_address_ex_t bsr2_tgt;
 cpu_types_pkg::pc_address_ex_t bsr3_tgt;
 
-always_comb bsr0 = ins0_mux.ins.any.opcode==OP_BSR;
-always_comb bsr1 = ins1_mux.ins.any.opcode==OP_BSR;
-always_comb bsr2 = ins2_mux.ins.any.opcode==OP_BSR;
-always_comb bsr3 = ins3_mux.ins.any.opcode==OP_BSR;
-always_comb jsr0 = ins0_mux.ins.any.opcode==OP_JSR;
-always_comb jsr1 = ins1_mux.ins.any.opcode==OP_JSR;
-always_comb jsr2 = ins2_mux.ins.any.opcode==OP_JSR;
-always_comb jsr3 = ins3_mux.ins.any.opcode==OP_JSR;
+always_comb bsr0 = ins0_mux.ins.any.opcode==OP_BSR && ins0_mux.ins.bsr.Rt!=3'd0;
+always_comb bsr1 = ins1_mux.ins.any.opcode==OP_BSR && ins1_mux.ins.bsr.Rt!=3'd0;
+always_comb bsr2 = ins2_mux.ins.any.opcode==OP_BSR && ins2_mux.ins.bsr.Rt!=3'd0;
+always_comb bsr3 = ins3_mux.ins.any.opcode==OP_BSR && ins3_mux.ins.bsr.Rt!=3'd0;
+always_comb bra0 = ins0_mux.ins.any.opcode==OP_BSR && ins0_mux.ins.bsr.Rt==3'd0;
+always_comb bra1 = ins1_mux.ins.any.opcode==OP_BSR && ins1_mux.ins.bsr.Rt==3'd0;
+always_comb bra2 = ins2_mux.ins.any.opcode==OP_BSR && ins2_mux.ins.bsr.Rt==3'd0;
+always_comb bra3 = ins3_mux.ins.any.opcode==OP_BSR && ins3_mux.ins.bsr.Rt==3'd0;
+always_comb jmp0 = ins0_mux.ins.any.opcode==OP_JSR && ins0_mux.ins.jsr.Rt==8'd0;
+always_comb jmp1 = ins1_mux.ins.any.opcode==OP_JSR && ins1_mux.ins.jsr.Rt==8'd0;
+always_comb jmp2 = ins2_mux.ins.any.opcode==OP_JSR && ins2_mux.ins.jsr.Rt==8'd0;
+always_comb jmp3 = ins3_mux.ins.any.opcode==OP_JSR && ins3_mux.ins.jsr.Rt==8'd0;
+always_comb jsr0 = ins0_mux.ins.any.opcode==OP_JSR && ins0_mux.ins.jsr.Rt!=8'd0;
+always_comb jsr1 = ins1_mux.ins.any.opcode==OP_JSR && ins1_mux.ins.jsr.Rt!=8'd0;
+always_comb jsr2 = ins2_mux.ins.any.opcode==OP_JSR && ins2_mux.ins.jsr.Rt!=8'd0;
+always_comb jsr3 = ins3_mux.ins.any.opcode==OP_JSR && ins3_mux.ins.jsr.Rt!=8'd0;
+always_comb rtd0 = ins0_mux.ins.any.opcode==OP_RTD && ins0_mux.ins.rtd.typ==2'd0;
+always_comb rtd1 = ins1_mux.ins.any.opcode==OP_RTD && ins1_mux.ins.rtd.typ==2'd0;
+always_comb rtd2 = ins2_mux.ins.any.opcode==OP_RTD && ins2_mux.ins.rtd.typ==2'd0;
+always_comb rtd3 = ins3_mux.ins.any.opcode==OP_RTD && ins3_mux.ins.rtd.typ==2'd0;
 always_comb 
 begin
 	bsr0_tgt = ins0_mux.pc;
-	bsr0_tgt.pc = jsr0 ? {{10{ins0_mux.ins[63]}},ins0_mux.ins[63:10]} : ins0_mux.pc.pc + {{10{ins0_mux.ins[63]}},ins0_mux.ins[63:10]};
+	bsr0_tgt.pc = ins0_mux.ins.bsr.a ? {{10{ins0_mux.ins[63]}},ins0_mux.ins[63:10]} : ins0_mux.pc.pc + {{10{ins0_mux.ins[63]}},ins0_mux.ins[63:10]};
 end
 always_comb 
 begin
 	bsr1_tgt = ins1_mux.pc;
-	bsr1_tgt.pc = jsr1 ? {{10{ins1_mux.ins[63]}},ins1_mux.ins[63:10]} : ins1_mux.pc.pc + {{10{ins1_mux.ins[63]}},ins1_mux.ins[63:10]};
+	bsr1_tgt.pc = ins1_mux.ins.bsr.a ? {{10{ins1_mux.ins[63]}},ins1_mux.ins[63:10]} : ins1_mux.pc.pc + {{10{ins1_mux.ins[63]}},ins1_mux.ins[63:10]};
 end
 always_comb
 begin
 	bsr2_tgt = ins2_mux.pc;
-	bsr2_tgt.pc = jsr2 ? {{10{ins2_mux.ins[63]}},ins2_mux.ins[63:10]} : ins2_mux.pc.pc + {{10{ins2_mux.ins[63]}},ins2_mux.ins[63:10]};
+	bsr2_tgt.pc = ins2_mux.ins.bsr.a ? {{10{ins2_mux.ins[63]}},ins2_mux.ins[63:10]} : ins2_mux.pc.pc + {{10{ins2_mux.ins[63]}},ins2_mux.ins[63:10]};
 end
 always_comb
 begin
 	bsr3_tgt = ins3_mux.pc;
-	bsr3_tgt.pc = jsr3 ? {{10{ins3_mux.ins[63]}},ins3_mux.ins[63:10]} : ins3_mux.pc.pc + {{10{ins3_mux.ins[63]}},ins3_mux.ins[63:10]};
+	bsr3_tgt.pc = ins3_mux.ins.bsr.a ? {{10{ins3_mux.ins[63]}},ins3_mux.ins[63:10]} : ins3_mux.pc.pc + {{10{ins3_mux.ins[63]}},ins3_mux.ins[63:10]};
 end
-always_comb
-	do_bsr = (bsr0|bsr1|bsr2|bsr3|jsr0|jsr1|jsr2|jsr3) & ~stomp_mux;
-//edge_det ued1 (.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(do_bsr1), .pe(do_bsr), .ne(), .ee());
+
+// Figure whether a subroutine call, or return is being performed. Note
+// precedence. Only the first one to be performed is detected.
 
 always_comb
 begin
-	if (bsr0|jsr0)
+	do_bsr = FALSE;
+	do_ret = FALSE;
+	do_call = FALSE;
+	if (~stomp_mux) begin
+		if (bsr0|bra0) begin
+			do_bsr = TRUE;
+			if (bsr0)
+				do_call = TRUE;
+		end
+		else if (jsr0)
+			do_call = TRUE;
+		else if (rtd0)
+			do_ret = TRUE;
+		else if (bsr1|bra1) begin
+			do_bsr = TRUE;
+			if (bsr1)
+				do_call = TRUE;
+		end
+		else if (jsr1)
+			do_call = TRUE;
+		else if (rtd1)
+			do_ret = TRUE;
+		else if (bsr2|bra2) begin
+			do_bsr = TRUE;
+			if (bsr2)
+				do_call = TRUE;
+		end
+		else if (jsr2)
+			do_call = TRUE;
+		else if (rtd2)
+			do_ret = TRUE;
+		else if (bsr3|bra3) begin
+			do_bsr = TRUE;
+			if (bsr3)
+				do_call = TRUE;
+		end
+		else if (jsr3)
+			do_call = TRUE;
+		else if (rtd3)
+			do_ret = TRUE;
+	end
+end
+
+// Compute target PC for subroutine call or jump.
+always_comb
+begin
+	if (bsr0|bra0)
 		bsr_tgt = bsr0_tgt;
-	else if (bsr1|jsr1)
+	else if (bsr1|bra1)
 		bsr_tgt = bsr1_tgt;
-	else if (bsr2|jsr2)
+	else if (bsr2|bra2)
 		bsr_tgt = bsr2_tgt;
-	else if (bsr3|jsr3)
+	else if (bsr3|bra3)
 		bsr_tgt = bsr3_tgt;
 	else
 		bsr_tgt.pc = RSTPC;
 end
+
+// Compute return PC for subroutine call.
+always_comb
+	if (bsr0|jsr0)
+		ret_pc = ins0_mux.pc.pc + 4'd8;
+	else if (bsr1|jsr1)
+		ret_pc = ins1_mux.pc.pc + 4'd8;
+	else if (bsr2|jsr2)
+		ret_pc = ins2_mux.pc.pc + 4'd8;
+	else if (bsr3|jsr3)
+		ret_pc = ins3_mux.pc.pc + 4'd8;
+	else
+		ret_pc = RSTPC;
 
 Qupls_ins_extract_mux umux0
 (

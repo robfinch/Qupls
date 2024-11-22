@@ -42,8 +42,8 @@ import  cpu_types_pkg::*;
 package QuplsPkg;
 
 `undef IS_SIM
-parameter SIM = 1'b1;
-`define IS_SIM	1
+parameter SIM = 1'b0;
+//`define IS_SIM	1
 
 // Comment out to remove the sigmoid approximate function
 //`define SIGMOID	1
@@ -191,7 +191,7 @@ parameter SCHED_WINDOW_SIZE = 8;
 // will result if there are insufficient checkpoints for the number of
 // outstanding branches. More checkpoints will only consume resources without
 // improving performance significantly.
-parameter NCHECK = 16;			// number of checkpoints
+parameter NCHECK = 32;			// number of checkpoints
 
 parameter LOADQ_ENTRIES = 8;
 parameter STOREQ_ENTRIES = 8;
@@ -231,6 +231,8 @@ parameter NAGEN = 1;
 // Note that adding an FPU may also increase integer performance.
 parameter NALU = 2;			// 1 or 2
 parameter NFPU = 1;			// 0, 1, or 2
+parameter FPU0_IQ_DEPTH = 32;
+parameter FPU1_IQ_DEPTH = 32;
 parameter NLSQ_PORTS = 1;
 // Number of banks of registers (not implemented).)
 parameter BANKS = 1;
@@ -284,7 +286,7 @@ typedef enum logic [1:0] {
 	DRAMSLOT_DELAY = 2'd3
 } dram_state_t;
 
-typedef logic [3:0] checkpt_ndx_t;
+typedef logic [$clog2(NCHECK)-1:0] checkpt_ndx_t;
 typedef logic [$clog2(ROB_ENTRIES)-1:0] rob_ndx_t;
 typedef logic [$clog2(BEB_ENTRIES)-1:0] beb_ndx_t;
 typedef struct packed
@@ -452,8 +454,8 @@ typedef enum logic [6:0] {
 	OP_ZSGEUI		= 7'd103,
 	OP_BFND			= 7'd108,
 	OP_BCMP			= 7'd109,
-	OP_BSTORE		= 7'd110,
-	OP_BMOV			= 7'd111,
+//	OP_BSTORE		= 7'd110,
+	OP_BLOCK		= 7'd111,
 	OP_IRQ			= 7'd112,
 	OP_FENCE		= 7'd114,
 	OP_REGS			= 7'd117,
@@ -466,6 +468,14 @@ typedef enum logic [6:0] {
 	OP_PFXC			= 7'd125,
 	OP_NOP			= 7'd127
 } opcode_t;
+
+typedef enum logic [3:0] {
+	BLK_STAT = 4'd0,
+	BLK_COUNT = 4'd1,
+	BLK_CANCEL = 4'd2,
+	BLK_STORE = 4'd3,
+	BLK_MOVE = 4'd4
+} block_t;
 /*
 typedef enum logic [2:0] {
 	OP_CLR = 3'd0,
@@ -488,7 +498,7 @@ typedef enum logic [3:0] {
 	OP_CMP_LTU	= 4'd10,
 	OP_CMP_LEU	= 4'd11,
 	OP_CMP_GEU	= 4'd12,
-	OP_CMP_GTU= 4'd13
+	OP_CMP_GTU = 4'd13
 } cmp_t;
 
 typedef enum logic [1:0] {
@@ -1416,7 +1426,7 @@ typedef struct packed
 typedef struct packed
 {
 	logic [49:0] disp;		// 50
-	logic resv;						// 1
+	logic a;							// 1
 	logic [2:0] Pr;				// 3
 	logic [2:0] Rt;				// 3
 	opcode_t opcode;			// 7
@@ -1429,10 +1439,27 @@ typedef struct packed
 	logic [2:0] Pr;				// 3
 	logic [5:0] resv2;		// 6
 	logic [2:0] lk;				// 3
-	logic [5:0] resv;			// 6
+	logic resv4;					// 1
+	logic [1:0] typ;			// 2
+	logic [2:0] resv;			// 6
 	logic [2:0] offs;			// 3
 	opcode_t opcode;			// 7
 } rtdinst_t;						// 64
+
+typedef struct packed
+{
+	logic [6:0] amt;		// 7 bits
+	logic [2:0] Pr;			// 3
+	logic [1:0] resv;		// 2
+	prec_t prc;					// 3
+	logic [1:0] id;			// 2
+	logic [3:0] op;			// 4
+	regspec_t Rc;				// 9
+	regspec_t Rb;				// 9
+	regspec_t Ra;				// 9
+	regspec_t Rt;				// 9
+	opcode_t opcode;		// 7
+} block_inst_t;				// 64
 
 typedef union packed
 {
@@ -1459,6 +1486,7 @@ typedef union packed
 	csrinst_t	csr;
 	lsinst_t	ls;
 	lsninst_t	lsn;
+	block_inst_t block;
 	postfix_t	pfx;
 	anyinst_t any;
 } instruction_t;
@@ -1523,6 +1551,7 @@ typedef struct packed
 	logic Rtz;
 	logic [2:0] Rcc;	// Rc complement status
 	logic regexc;			// reg exception - illegal register selection
+	logic has_Rb;
 	logic has_imm;
 	logic has_imma;
 	logic has_immb;
@@ -1762,15 +1791,32 @@ typedef logic [6:0] seqnum_t;
 typedef struct packed
 {
 	logic [PREGS-1:0] avail;	// available registers at time of queue (for rollback)
-	cpu_types_pkg::pregno_t [AREGS-1:0] p2regmap;
+//	cpu_types_pkg::pregno_t [AREGS-1:0] p2regmap;
 	cpu_types_pkg::pregno_t [AREGS-1:0] pregmap;
 	cpu_types_pkg::pregno_t [AREGS-1:0] regmap;
 } checkpoint_t;
+
+typedef struct packed
+{
+	rob_ndx_t rndx;
+	rob_entry_t rob;
+	value_t argA;
+	value_t argB;
+	value_t argC;
+	value_t argT;
+	value_t argM;
+	logic argA_ctag;
+	logic argB_ctag;
+} fpu_iq_t;
 
 typedef struct packed {
 	// The following fields may change state while an instruction is processed.
 	logic v;									// 1=entry is valid, in use
 	seqnum_t sn;							// sequence number, decrements when instructions que
+//	logic [5:0] sync_dep;			// sync instruction dependency
+//	logic [5:0] fc_dep;				// flow control dependency
+//	logic [5:0] sync_no;
+//	logic [5:0] fc_no;
 	logic [3:0] predino;			// predicated instruction number (1 to 8)
 	rob_ndx_t predrndx;				// ROB index of associate PRED instruction
 	rob_ndx_t orid;						// ROB id of originating macro-instruction
@@ -1799,6 +1845,10 @@ typedef struct packed {
 	cpu_types_pkg::value_t res;
 `endif
 	logic all_args_valid;			// 1 if all args are valid
+	logic could_issue;				// 1 if instruction ready to issue
+	logic could_issue_nm;			// 1 if instruction ready to issue NOP
+	logic prior_sync;					// 1 if instruction has sync prior to it
+	logic prior_fc;						// 1 if instruction has fc prior to it
 	logic argA_vp;						// 1=argument A valid pending
 	logic argB_vp;
 	logic argC_vp;
@@ -1825,9 +1875,18 @@ typedef struct packed {
 	seqnum_t grp;							// instruction group
 } rob_entry_t;
 
+typedef struct packed
+{
+	checkpt_ndx_t cndx;				// checkpoint index
+	cpu_types_pkg::pc_address_ex_t pc;			// PC of instruction
+	cpu_types_pkg::mc_address_t mcip;				// Micro-code IP address
+	seqnum_t grp;							// instruction group
+} rob_row_entry_t;
+
 typedef struct packed {
 	logic v;
 	logic excv;								// 1=exception
+	logic [5:0] handle;
 	logic [1:0] nstate;				// number of states
 	logic [1:0] state;				// current state
 	decode_bus_t decbus;			// decoded instruction
@@ -1841,7 +1900,7 @@ typedef struct packed {
 	cpu_types_pkg::value_t res;
 	cpu_types_pkg::pregno_t pRc;
 	logic argC_v;
-	logic [3:0] cndx;					// checkpoint index
+	checkpt_ndx_t cndx;				// checkpoint index
 	ex_instruction_t op;			// original instruction
 	cpu_types_pkg::pc_address_ex_t pc;			// PC of instruction
 	cpu_types_pkg::mc_address_t mcip;				// Micro-code IP address
@@ -1878,7 +1937,7 @@ typedef struct packed {
 	logic aRtz;
 	cpu_types_pkg::aregno_t aRc;
 	cpu_types_pkg::pregno_t pRc;					// 'C' register for store
-	logic [3:0] cndx;
+	checkpt_ndx_t cndx;
 	operating_mode_t om;	// operating mode
 	logic ctag;						// capabilities tag
 	logic datav;					// store data is valid
@@ -1890,6 +1949,10 @@ typedef struct packed {
 	logic [7:0] pl;
 	cpu_types_pkg::pc_address_t pc;
 } mvec_entry_t;
+
+// =============================================================================
+// Support Functionss
+// =============================================================================
 
 function cpu_types_pkg::pc_address_t fnTargetIP;
 input cpu_types_pkg::pc_address_t ip;

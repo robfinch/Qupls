@@ -41,8 +41,9 @@ module Qupls_btb(rst, clk, en, clk_en, nmi, nmi_addr, irq, irq_addr,
 	rclk, micro_code_active, block_header,
 	igrp, length_byte,
 	pc, pc0, pc1, pc2, pc3, pc4, next_pc, p_override, po_bno,
-	takb0, takb1, takb2, takb3, do_bsr, bsr_tgt, pe_bsdone,
-	branchmiss, branch_state, misspc,
+	takb0, takb1, takb2, takb3, do_bsr, bsr_tgt, pe_bsdone, do_ret, ret_pc,
+	do_call,
+	branchmiss, bs_done_oh, misspc,
 	mip0v, mip1v, mip2v, mip3v,
 	commit_pc0, commit_brtgt0, commit_takb0, commit_grp0,
 	commit_pc1, commit_brtgt1, commit_takb1, commit_grp1,
@@ -83,9 +84,12 @@ input mip2v;
 input mip3v;
 input pe_bsdone;
 input do_bsr;
+input do_ret;
+input do_call;
+input pc_address_t ret_pc;
 input cpu_types_pkg::pc_address_ex_t bsr_tgt;
 input branchmiss;
-input branch_state_t branch_state;
+input bs_done_oh;
 input cpu_types_pkg::pc_address_ex_t misspc;
 input cpu_types_pkg::pc_address_ex_t commit_pc0;
 input cpu_types_pkg::pc_address_ex_t commit_brtgt0;
@@ -113,6 +117,9 @@ typedef struct packed {
 	cpu_types_pkg::pc_address_t tgt;
 } btb_entry_t;
 
+pc_address_t [31:0] ras;
+reg [4:0] ras_sp;
+
 pc_address_ex_t [31:0] pcs;
 pc_address_ex_t [31:0] next_pcs;
 reg [4:0] next_act_bno;
@@ -130,7 +137,7 @@ btb_entry_t doutb2;
 btb_entry_t doutb3;
 reg w0,w1,w2,w3;
 btb_entry_t tmp0, tmp1, tmp2, tmp3;
-integer nn,mm;
+integer nn,mm,jj;
 genvar g;
 
 wire [5:0] ffz0,ffz1;
@@ -146,7 +153,7 @@ ffz48 uffz1 (.i({16'hFFFF,bno_bitmap | (32'd1 << ffz0)}), .o(ffz1));
       .AUTO_SLEEP_TIME(0),            // DECIMAL
       .BYTE_WRITE_WIDTH_A($bits(btb_entry_t)),        // DECIMAL
       .CASCADE_HEIGHT(0),             // DECIMAL
-      .CLOCKING_MODE("independent_clock"), // String
+      .CLOCKING_MODE("common_clock"), // String
       .ECC_MODE("no_ecc"),            // String
       .MEMORY_INIT_FILE("none"),      // String
       .MEMORY_INIT_PARAM("0"),        // String
@@ -182,7 +189,7 @@ ffz48 uffz1 (.i({16'hFFFF,bno_bitmap | (32'd1 << ffz0)}), .o(ffz1));
                                        // parameter CLOCKING_MODE is "common_clock".
 
       .clkb(rclk),                     // 1-bit input: Clock signal for port B when parameter CLOCKING_MODE is
-                                       // "independent_clock". Unused when parameter CLOCKING_MODE is
+                                       // "common_clock". Unused when parameter CLOCKING_MODE is
                                        // "common_clock".
 
       .dina(tmp0),                     // WRITE_DATA_WIDTH_A-bit input: Data input for port A write operations.
@@ -226,7 +233,7 @@ ffz48 uffz1 (.i({16'hFFFF,bno_bitmap | (32'd1 << ffz0)}), .o(ffz1));
       .AUTO_SLEEP_TIME(0),            // DECIMAL
       .BYTE_WRITE_WIDTH_A($bits(btb_entry_t)),        // DECIMAL
       .CASCADE_HEIGHT(0),             // DECIMAL
-      .CLOCKING_MODE("independent_clock"), // String
+      .CLOCKING_MODE("common_clock"), // String
       .ECC_MODE("no_ecc"),            // String
       .MEMORY_INIT_FILE("none"),      // String
       .MEMORY_INIT_PARAM("0"),        // String
@@ -262,7 +269,7 @@ ffz48 uffz1 (.i({16'hFFFF,bno_bitmap | (32'd1 << ffz0)}), .o(ffz1));
                                        // parameter CLOCKING_MODE is "common_clock".
 
       .clkb(rclk),                     // 1-bit input: Clock signal for port B when parameter CLOCKING_MODE is
-                                       // "independent_clock". Unused when parameter CLOCKING_MODE is
+                                       // "common_clock". Unused when parameter CLOCKING_MODE is
                                        // "common_clock".
 
       .dina(tmp1),                     // WRITE_DATA_WIDTH_A-bit input: Data input for port A write operations.
@@ -306,7 +313,7 @@ ffz48 uffz1 (.i({16'hFFFF,bno_bitmap | (32'd1 << ffz0)}), .o(ffz1));
       .AUTO_SLEEP_TIME(0),            // DECIMAL
       .BYTE_WRITE_WIDTH_A($bits(btb_entry_t)),        // DECIMAL
       .CASCADE_HEIGHT(0),             // DECIMAL
-      .CLOCKING_MODE("independent_clock"), // String
+      .CLOCKING_MODE("common_clock"), // String
       .ECC_MODE("no_ecc"),            // String
       .MEMORY_INIT_FILE("none"),      // String
       .MEMORY_INIT_PARAM("0"),        // String
@@ -342,7 +349,7 @@ ffz48 uffz1 (.i({16'hFFFF,bno_bitmap | (32'd1 << ffz0)}), .o(ffz1));
                                        // parameter CLOCKING_MODE is "common_clock".
 
       .clkb(rclk),                     // 1-bit input: Clock signal for port B when parameter CLOCKING_MODE is
-                                       // "independent_clock". Unused when parameter CLOCKING_MODE is
+                                       // "common_clock". Unused when parameter CLOCKING_MODE is
                                        // "common_clock".
 
       .dina(tmp2),                     // WRITE_DATA_WIDTH_A-bit input: Data input for port A write operations.
@@ -386,7 +393,7 @@ ffz48 uffz1 (.i({16'hFFFF,bno_bitmap | (32'd1 << ffz0)}), .o(ffz1));
       .AUTO_SLEEP_TIME(0),            // DECIMAL
       .BYTE_WRITE_WIDTH_A($bits(btb_entry_t)),        // DECIMAL
       .CASCADE_HEIGHT(0),             // DECIMAL
-      .CLOCKING_MODE("independent_clock"), // String
+      .CLOCKING_MODE("common_clock"), // String
       .ECC_MODE("no_ecc"),            // String
       .MEMORY_INIT_FILE("none"),      // String
       .MEMORY_INIT_PARAM("0"),        // String
@@ -422,7 +429,7 @@ ffz48 uffz1 (.i({16'hFFFF,bno_bitmap | (32'd1 << ffz0)}), .o(ffz1));
                                        // parameter CLOCKING_MODE is "common_clock".
 
       .clkb(rclk),                     // 1-bit input: Clock signal for port B when parameter CLOCKING_MODE is
-                                       // "independent_clock". Unused when parameter CLOCKING_MODE is
+                                       // "common_clock". Unused when parameter CLOCKING_MODE is
                                        // "common_clock".
 
       .dina(tmp3),                     // WRITE_DATA_WIDTH_A-bit input: Data input for port A write operations.
@@ -457,21 +464,23 @@ ffz48 uffz1 (.i({16'hFFFF,bno_bitmap | (32'd1 << ffz0)}), .o(ffz1));
 
    );
 
-always_ff @(posedge clk)
-	addrb0 <= pc0.pc[12:3];
+always_comb//ff @(posedge clk)
+	addrb0 = pc0.pc[12:3];
 	
 // Make BS_DONE sticky
-reg bs_done;
+reg bs_done1, bs_done;
 always_ff @(posedge clk)
 if (rst)
-	bs_done <= FALSE;
+	bs_done1 <= FALSE;
 else begin
-	if (bs_done)
-		bs_done <= TRUE;
+	if (pe_bsdone)
+		bs_done1 <= TRUE;
 	else if (clk_en)
-		bs_done <= FALSE;
+		bs_done1 <= FALSE;
 end
-	
+always_comb
+	bs_done = pe_bsdone|bs_done1;
+
 always_comb
 if (rst) begin
 	next_bno_bitmap = 32'h3;
@@ -548,10 +557,17 @@ else begin
 	end
 	else
 	*/
-	if (do_bsr) begin
+	// Under construction: RAS
+	if (do_ret) begin
+		next_act_bno = act_bno;
+		next_pcs[next_act_bno].pc = ras[ras_sp];
+		next_pcs[next_act_bno].bno_t = act_bno;
+		next_pcs[next_act_bno].bno_f = 6'd0;
+	end
+	else if (do_bsr) begin
 		next_pcs[bsr_tgt.bno_t] = bsr_tgt;
 	end
-	else if (branch_state==BS_DONE||bs_done) begin
+	else if (bs_done_oh||bs_done) begin
 		next_act_bno = misspc.bno_t;
 		next_alt_bno = 6'd0;
 		next_pcs[next_act_bno].pc = misspc;
@@ -708,6 +724,26 @@ else begin
 		act_bno <= next_act_bno;
 		alt_bno <= next_alt_bno;
 	end
+end
+
+always_ff @(posedge clk)
+if (rst)
+	ras_sp <= 5'd0;
+else begin
+	if (do_ret)
+		ras_sp <= ras_sp + 2'd1;
+	else if (do_call)
+		ras_sp <= ras_sp - 2'd1;
+end
+
+always_ff @(posedge clk)
+if (rst) begin
+	for (jj = 0; jj < 32; jj = jj + 1)
+		ras[jj] <= `RSTPC;
+end
+else begin
+	if (do_call)
+		ras[ras_sp - 2'd1] <= ret_pc;
 end
 
 always_ff @(posedge clk)

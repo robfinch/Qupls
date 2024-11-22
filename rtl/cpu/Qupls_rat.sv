@@ -224,7 +224,7 @@ reg new_chkpt1;
 reg new_chkpt2;
 localparam RAMWIDTH = AREGS*BANKS*RBIT+PREGS;
 checkpoint_t currentMap;
-checkpoint_t currentMapIn;
+checkpoint_t nextCurrentMap;
 checkpoint_t currentMap0;
 checkpoint_t currentMap1;
 checkpoint_t currentMap2;
@@ -265,7 +265,7 @@ cpram1
 	.ena(1'b1),
 	.wea(pe_alloc_chkpt),
 	.addra(cndx),
-	.dina({4'd0,currentMapIn}),
+	.dina({4'd0,nextCurrentMap}),
 	.douta(),
 	.clkb(clk),
 	.enb(1'b1),
@@ -356,11 +356,11 @@ if (
 	(wrport0_Rt==wrrb && wrport0_v && wr1 && en2) ||
 	(wrport0_Rt==wrrc && wrport0_v && wr2 && en2) ||
 	(wrport0_Rt==wrrd && wrport0_v && wr3 && en2) ||
+	(wrport1_Rt==wrra && wrport1_v && wr0 && en2) ||
+	(wrport1_Rt==wrrb && wrport1_v && wr1 && en2) ||
+	(wrport1_Rt==wrrc && wrport1_v && wr2 && en2) ||
+	(wrport1_Rt==wrrd && wrport1_v && wr3 && en2) ||
 	// ToDo: fix the following checks
-	(cmtbp==wrra && cmtbv && wr0 && en2) ||
-	(cmtbp==wrrb && cmtbv && wr1 && en2) ||
-	(cmtbp==wrrc && cmtbv && wr2 && en2) ||
-	(cmtbp==wrrd && cmtbv && wr3 && en2) ||
 	(cmtcp==wrra && cmtcv && wr0 && en2) ||
 	(cmtcp==wrrb && cmtcv && wr1 && en2) ||
 	(cmtcp==wrrc && cmtcv && wr2 && en2) ||
@@ -1086,15 +1086,15 @@ else begin
 end
 
 reg [3:0] free_chkpt_is;
-always_comb free_chkpt_is[0] = free_chkpt_i;
-always_comb free_chkpt_is[1] = free_chkpt_i;
-always_comb free_chkpt_is[2] = free_chkpt_i;
-always_comb free_chkpt_is[3] = free_chkpt_i;
+always_comb free_chkpt_is[0] = free_chkpt_i[0];
+always_comb free_chkpt_is[1] = free_chkpt_i[1];
+always_comb free_chkpt_is[2] = free_chkpt_i[2];
+always_comb free_chkpt_is[3] = free_chkpt_i[3];
 checkpt_ndx_t [3:0] fchkpt_is;
-always_comb fchkpt_is[0] = fchkpt_i;
-always_comb fchkpt_is[1] = fchkpt_i;
-always_comb fchkpt_is[2] = fchkpt_i;
-always_comb fchkpt_is[3] = fchkpt_i;
+always_comb fchkpt_is[0] = fchkpt_i[0];
+always_comb fchkpt_is[1] = fchkpt_i[1];
+always_comb fchkpt_is[2] = fchkpt_i[2];
+always_comb fchkpt_is[3] = fchkpt_i[3];
 reg free_chkpt2;
 reg [3:0] free_chkpt2s;
 always_comb free_chkpt2s[0] = free_chkpt2;
@@ -1210,11 +1210,17 @@ end
 // Checkpoints are allocated in succession to wndx. cndx follows wndx.
 // This is the index used to read the checkpoint RAMs.
 reg alloc_chkpt2;
+reg alloc_chkpt3;
 always_ff @(posedge clk)
 if (rst)
 	alloc_chkpt2 <= 1'b0;
 else
 	alloc_chkpt2 <= pe_alloc_chkpt;
+always_ff @(posedge clk)
+if (rst)
+	alloc_chkpt3 <= 1'b0;
+else
+	alloc_chkpt3 <= alloc_chkpt2;
 
 always_ff @(posedge clk)
 if (rst)
@@ -1241,7 +1247,7 @@ always_ff @(posedge clk)
 if (rst)
 	cndx_o <= 4'd0;
 else begin
-	if (en2)
+	if (en2|alloc_chkpt3)
 		cndx_o <= cndx;
 end
 
@@ -1584,76 +1590,49 @@ end
 // For invalid instructions at commit time, the register must also be freed.
 // This does not require any more ports as the instruction cannot be valid and
 // invalid at the same time.
-pregno_t [3:0] tags2free1;
-reg [3:0] freevals1;
-/*
-vtdl #(.WID($bits(pregno_t)),.DEP(16)) uvtdl0 (.clk(clk), .ce(1'b1), .a(4'd1), .d(tags2free1[0]), .q(tags2free[0]));
-vtdl #(.WID($bits(pregno_t)),.DEP(16)) uvtdl1 (.clk(clk), .ce(1'b1), .a(4'd1), .d(tags2free1[1]), .q(tags2free[1]));
-vtdl #(.WID($bits(pregno_t)),.DEP(16)) uvtdl2 (.clk(clk), .ce(1'b1), .a(4'd1), .d(tags2free1[2]), .q(tags2free[2]));
-vtdl #(.WID($bits(pregno_t)),.DEP(16)) uvtdl3 (.clk(clk), .ce(1'b1), .a(4'd1), .d(tags2free1[3]), .q(tags2free[3]));
-vtdl #(.WID(4),.DEP(16)) uvtdl4 (.clk(clk), .ce(1'b1), .a(4'd1), .d(freevals1), .q(freevals));
-*/
+
 always_ff @(posedge clk)
 if (rst) begin
 	tags2free[0] = 9'd0;
 	tags2free[1] = 9'd0;
 	tags2free[2] = 9'd0;
 	tags2free[3] = 9'd0;
-	tags2free1[0] = 9'd0;
-	tags2free1[1] = 9'd0;
-	tags2free1[2] = 9'd0;
-	tags2free1[3] = 9'd0;
 end
 else begin
 	tags2free[0] = 9'd0;
 	tags2free[1] = 9'd0;
 	tags2free[2] = 9'd0;
 	tags2free[3] = 9'd0;
-//	if (bo_wr)
-//		tags2free[0] = bo_nreg;//currentMap.regmap[bo_areg];
-	if (restore) begin
-		tags2free1[0] = 9'd0;
-		tags2free1[1] = 9'd0;
-		tags2free1[2] = 9'd0;
-		tags2free1[3] = 9'd0;
-	end
-	else begin
-		// For invalid frees we do not want to push the free pipeline.
-		if (cdcmtav) begin
-			tags2free[0] = currentMap.pregmap[cmtaa];
-		end
-		else if (cmtaiv) 
-			tags2free[0] = cmtap;
-		if (cdcmtbv) begin
-			tags2free[1] = currentMap.pregmap[cmtba];
-		end
-		else if (cmtbiv)
-			tags2free[1] = cmtbp;
-		if (cdcmtcv) begin
-			tags2free[2] = currentMap.pregmap[cmtca];
-		end
-		else if (cmtciv)
-			tags2free[2] = cmtcp;
-		if (cdcmtdv) begin
-			tags2free[3] = currentMap.pregmap[cmtda];
-		end
-		else if (cmtdiv)
-			tags2free[3] = cmtdp;
-	end
+	
+	// For invalid frees we do not want to push the free pipeline.
+	if (bo_wr)
+		tags2free[0] = bo_nreg;
+	else if (cdcmtav)
+		tags2free[0] = currentMap.pregmap[cmtaa];
+	else if (cmtaiv) 
+		tags2free[0] = cmtap;
+	if (cdcmtbv)
+		tags2free[1] = currentMap.pregmap[cmtba];
+	else if (cmtbiv)
+		tags2free[1] = cmtbp;
+	if (cdcmtcv)
+		tags2free[2] = currentMap.pregmap[cmtca];
+	else if (cmtciv)
+		tags2free[2] = cmtcp;
+	if (cdcmtdv)
+		tags2free[3] = currentMap.pregmap[cmtda];
+	else if (cmtdiv)
+		tags2free[3] = cmtdp;
 end
 
 always_ff @(posedge clk)
 if (rst)
 	freevals <= 4'd0;
 else begin
-	if (restore)
-		freevals <= 4'd0;
-	else begin
-		freevals[0] <= cdcmtav|cmtaiv|bo_wr;
-		freevals[1] <= cdcmtbv|cmtbiv;
-		freevals[2] <= cdcmtcv|cmtciv;
-		freevals[3] <= cdcmtdv|cmtdiv;
-	end
+	freevals[0] <= cdcmtav|cmtaiv|bo_wr;
+	freevals[1] <= cdcmtbv|cmtbiv;
+	freevals[2] <= cdcmtcv|cmtciv;
+	freevals[3] <= cdcmtdv|cmtdiv;
 end
 
 assign cdwr0 = cd_wr0 & wr0;
@@ -1673,98 +1652,70 @@ reg [PREGS-1:0] unavail;
 // For checkpoint establishment the current read value is desired.
 // For normal operation the write output port is used.
 
-always_ff @(posedge clk)
+// For input to the checkpoint ram the updated map before the end of the clock
+// cycle is needed.
+
+always_comb
 if (rst) begin
-	currentMap <= {$bits(checkpoint_t){1'b0}};
-	currentMap.avail <= {{PREGS-1{1'b1}},1'b0};
-	unavail <= {PREGS{1'b0}};
+	nextCurrentMap = {$bits(checkpoint_t){1'b0}};
+	nextCurrentMap.avail = {{PREGS-1{1'b1}},1'b0};
 end
 else begin
+	nextCurrentMap = currentMap;
 
-	if (restore) begin
-		currentMap <= cpram_out;
+	// The branch instruction itself might need to update the checkpoint info.
+	// Even if a checkpoint is being allocated, we want to record new maps.
+	if (en2) begin
+		if (wr0)
+			nextCurrentMap.regmap[wra] = wrra;
+		if (wr1)
+			nextCurrentMap.regmap[wrb] = wrrb;
+		if (wr2)
+			nextCurrentMap.regmap[wrc] = wrrc;
+		if (wr3)
+			nextCurrentMap.regmap[wrd] = wrrd;
 	end
+
+	// Shift the physical register into a second spot.
+	// Note that .regmap[] ahould be the same as the physical register at commit.
+	// It is a little less logic just to use the physical register at commit,
+	// rather than referencing .regmap[]
+	if (cdcmtav)
+		nextCurrentMap.pregmap[cmtaa] = cmtap;
+	if (cdcmtbv)
+		nextCurrentMap.pregmap[cmtba] = cmtbp;
+	if (cdcmtcv)
+		nextCurrentMap.pregmap[cmtca] = cmtcp;
+	if (cdcmtdv)
+		nextCurrentMap.pregmap[cmtda] = cmtdp;
+
+	// Available registers are recorded in the checkpoint as supplied by the
+	// name supplier.
+//	if (!pe_alloc_chkpt1)
+	nextCurrentMap.avail <= avail_i;
+end
+
+always_ff @(posedge clk)
+begin
+	if (restore)
+		currentMap <= cpram_out;
+	else
+		currentMap <= nextCurrentMap;
+end
+
+always_ff @(posedge clk)
+if (rst)
+	unavail <= {PREGS{1'b0}};
+else begin
 
 	if (pe_bk)
 		unavail <= {PREGS{1'b0}};
 
-	// Backout is not subject to pipeline enable.
-	if (!pe_alloc_chkpt1) begin
-		currentMap.avail <= avail_i;
-		
-		// Backout update.
-		if (bo_wr) begin
-			currentMap.regmap[bo_areg] <= bo_preg;
-			unavail[bo_preg] <= 1'b1;
-		end
-
-		// Shift the physical register into a second spot.
-		if (cdcmtav) begin
-//			currentMap.p2regmap[cmtaa] <= currentMap.pregmap[cmtaa];
-			currentMap.pregmap[cmtaa] <= cmtap;
-		end
-		if (cdcmtbv) begin
-//			currentMap.p2regmap[cmtba] <= currentMap.pregmap[cmtba];
-			currentMap.pregmap[cmtba] <= cmtbp;
-		end
-		if (cdcmtcv) begin
-//			currentMap.p2regmap[cmtca] <= currentMap.pregmap[cmtca];
-			currentMap.pregmap[cmtca] <= cmtcp;
-		end
-		if (cdcmtdv) begin
-//			currentMap.p2regmap[cmtda] <= currentMap.pregmap[cmtda];
-			currentMap.pregmap[cmtda] <= cmtdp;
-		end
-			
+	// Backout update.
+	if (bo_wr) begin
+//	currentMap.regmap[bo_areg] <= bo_preg;
+//	unavail[bo_preg] <= 1'b1;
 	end
-
-	// The branch instruction itself might need to update the checkpoint info.
-	// Even if a checkpoint is being allocated, we want to record new maps.
-	if (en2) 
-	begin
-		if (wr0)
-			currentMap.regmap[wra] <= wrra;
-		if (wr1)
-			currentMap.regmap[wrb] <= wrrb;
-		if (wr2)
-			currentMap.regmap[wrc] <= wrrc;
-		if (wr3)
-			currentMap.regmap[wrd] <= wrrd;
-	end
-
-end
-
-always_comb
-begin
-	currentMapIn = currentMap;
-	if (en2) begin
-		if (wr0)
-			currentMapIn.regmap[wra] = wrra;
-		if (wr1)
-			currentMapIn.regmap[wrb] = wrrb;
-		if (wr2)
-			currentMapIn.regmap[wrc] = wrrc;
-		if (wr3)
-			currentMapIn.regmap[wrd] = wrrd;
-	end
-/*
-	if (cdcmtav) begin
-		currentMapIn.p2regmap[cmtaa] = currentMap.pregmap[cmtaa];
-		currentMapIn.pregmap[cmtaa] = cmtap;
-	end
-	if (cdcmtbv) begin
-		currentMapIn.p2regmap[cmtba] = currentMap.pregmap[cmtba];
-		currentMapIn.pregmap[cmtba] = cmtbp;
-	end
-	if (cdcmtcv) begin
-		currentMapIn.p2regmap[cmtca] = currentMap.pregmap[cmtca];
-		currentMapIn.pregmap[cmtca] = cmtcp;
-	end
-	if (cdcmtdv) begin
-		currentMapIn.p2regmap[cmtda] = currentMap.pregmap[cmtda];
-		currentMapIn.pregmap[cmtda] = cmtdp;
-	end
-*/		
 end
 
 // Diags.
@@ -2188,13 +2139,13 @@ end
 // registers to be freed.
 
 always_comb//ff @(posedge clk)
-	restored <= restore;
+	restored = restore;
 
 always_comb
 begin
 	// But not the registers allocated up to the branch miss
 	if (restored) begin	//(restored) begin
-		restore_list = currentMap.avail;// & ~unavail;
+		restore_list = cpram_out.avail;// & ~unavail;
 //		restore_list = {PREGS{1'b0}};
 	end
 	else

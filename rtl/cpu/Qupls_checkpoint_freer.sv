@@ -37,14 +37,15 @@
 import const_pkg::*;
 import QuplsPkg::*;
 
-module Qupls_checkpoint_freer(rst, clk, rob, free, chkpt);
+module Qupls_checkpoint_freer(rst, clk, rob, free, chkpt, chkpt_rndx);
 input rst;
 input clk;
 input rob_entry_t [ROB_ENTRIES-1:0] rob;
 output reg free;
 output checkpt_ndx_t chkpt;
+output rob_ndx_t chkpt_rndx;
 
-integer n3,n33;
+integer n3,n33,n333;
 reg cond;
 
 // Search for instructions groups that are done or invalid. If there are any
@@ -83,11 +84,21 @@ end
 
 always_ff @(posedge clk)
 if (rst)
-	chkpt <= 4'd0;
+	chkpt <= 5'd0;
 else begin
 	for (n33 = 0; n33 < ROB_ENTRIES; n33 = n33 + 4) begin
 		if (fnCond(n33,rob))
 			chkpt <= rob[(n33+4)%ROB_ENTRIES].cndx;
+	end
+end
+
+always_ff @(posedge clk)
+if (rst)
+	chkpt_rndx <= 6'd0;
+else begin
+	for (n333 = 0; n333 < ROB_ENTRIES; n333 = n333 + 4) begin
+		if (fnCond(n333,rob))
+			chkpt_rndx <= n333;
 	end
 end
 

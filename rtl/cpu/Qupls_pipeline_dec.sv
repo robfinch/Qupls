@@ -193,6 +193,7 @@ Qupls_reg_renamer4 utrn1
 	.rst_busy(ren_rst_busy)
 );
 else
+
 Qupls_reg_name_supplier utrn1
 (
 	.rst(rst_i),		// rst_i here not irst!
@@ -206,10 +207,10 @@ Qupls_reg_name_supplier utrn1
 	.freevals(freevals),
 	.bo_wr(bo_wr),
 	.bo_preg(bo_preg),
-	.alloc0(ins0_dec.aRt!=8'd0 && ins0_dec.v /*&& !ins3_dec.decbus.bsr*/),// & ~stomp0),
-	.alloc1(ins1_dec.aRt!=8'd0 && ins1_dec.v /*&& !ins3_dec.decbus.bsr*/&& !ins0_dec.decbus.bsr),// & ~stomp1),
-	.alloc2(ins2_dec.aRt!=8'd0 && ins2_dec.v /*&& !ins3_dec.decbus.bsr*/&& !ins0_dec.decbus.bsr && !ins1_dec.decbus.bsr),// & ~stomp2),
-	.alloc3(ins3_dec.aRt!=8'd0 && ins3_dec.v /*&& !ins3_dec.decbus.bsr*/&& !ins0_dec.decbus.bsr && !ins1_dec.decbus.bsr && !ins2_dec.decbus.bsr),// & ~stomp3),
+	.alloc0(ins0_dec.aRt!=8'd0 && ins0_dec.v ),// & ~stomp0),
+	.alloc1(ins1_dec.aRt!=8'd0 && ins1_dec.v && !ins0_dec.decbus.bsr),// & ~stomp1),
+	.alloc2(ins2_dec.aRt!=8'd0 && ins2_dec.v && !ins0_dec.decbus.bsr && !ins1_dec.decbus.bsr),// & ~stomp2),
+	.alloc3(ins3_dec.aRt!=8'd0 && ins3_dec.v && !ins0_dec.decbus.bsr && !ins1_dec.decbus.bsr && !ins2_dec.decbus.bsr),// & ~stomp3),
 	.o0(Rt0_dec1),
 	.o1(Rt1_dec1),
 	.o2(Rt2_dec1),
