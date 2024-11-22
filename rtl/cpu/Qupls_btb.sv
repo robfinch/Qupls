@@ -739,7 +739,7 @@ end
 always_ff @(posedge clk)
 if (rst) begin
 	for (jj = 0; jj < 32; jj = jj + 1)
-		ras[jj] <= `RSTPC;
+		ras[jj] <= RSTPC;
 end
 else begin
 	if (do_call)

@@ -2323,6 +2323,7 @@ Qupls_pipeline_mux uiext1
 	.do_bsr(do_bsr),
 	.do_ret(do_ret),
 	.do_call(do_call),
+	.ret_pc(ret_pc),
 	.bsr_tgt(bsr_tgt),
 	.stall(ext_stall),
 	.get(dc_get)
@@ -4569,7 +4570,7 @@ generate begin : gFpuStat
 				// that valid data is available on the output bus (dout).
 	      .data_valid(fpu0_iq_data_valid),
 
-	      .dbiterr(1'b0),
+	      .dbiterr(),
 
 	      // READ_DATA_WIDTH-bit output: Read Data: The output data bus is driven
 	      // when reading the FIFO.
@@ -8303,9 +8304,9 @@ begin
 				tgtpc.pc = {pc[$bits(pc_address_t)-1:6] + {{37{instr.ins[39]}},instr.ins[39:17]},ino5};
 			end
 			else
-				tgtpc.pc = pc.pc + {{10{instr.ins[63]}},instr.ins[63:10]};
+				tgtpc.pc = pc.pc + {{11{instr.ins.bsr.disp[49]}},instr.ins.bsr.disp,3'd0};
 		end
-	BTS_JSR:	tgtpc.pc = {{10{instr.ins[63]}},instr.ins[63:10]};
+	BTS_JSR:	tgtpc.pc = {{11{instr.ins.bsr.disp[49]}},instr.ins.bsr.disp,3'd0};
 	BTS_CALL:
 		begin
 			case(instr[23:22])

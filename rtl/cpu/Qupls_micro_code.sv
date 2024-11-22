@@ -1814,7 +1814,7 @@ case(micro_ip)
 12'h1B9:	
 	begin
 		next_ip = 12'h1BA;
-		instr.ins = {54'h3FFFFFFFFFFD80,3'b0,OP_JSR};
+		instr.ins = {50'h3FFFFFFFFFFB0,1'b0,3'b0,3'b0,OP_JSR};
 		instr.aRa = 9'd0;
 		instr.aRt = 9'd0;
 	end

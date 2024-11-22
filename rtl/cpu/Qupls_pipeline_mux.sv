@@ -362,8 +362,13 @@ always_comb nop3 = FALSE;
 */
 reg bsr0,bsr1,bsr2,bsr3;
 reg jsr0,jsr1,jsr2,jsr3;
+reg jsrr0,jsrr1,jsrr2,jsrr3;
+reg jsri0,jsri1,jsri2,jsri3;
 reg bra0,bra1,bra2,bra3;
 reg jmp0,jmp1,jmp2,jmp3;
+reg jmpr0,jmpr1,jmpr2,jmpr3;
+reg jmpi0,jmpi1,jmpi2,jmpi3;
+reg rtd0,rtd1,rtd2,rtd3;
 reg do_bsr1;
 cpu_types_pkg::pc_address_ex_t bsr0_tgt;
 cpu_types_pkg::pc_address_ex_t bsr1_tgt;
@@ -378,37 +383,53 @@ always_comb bra0 = ins0_mux.ins.any.opcode==OP_BSR && ins0_mux.ins.bsr.Rt==3'd0;
 always_comb bra1 = ins1_mux.ins.any.opcode==OP_BSR && ins1_mux.ins.bsr.Rt==3'd0;
 always_comb bra2 = ins2_mux.ins.any.opcode==OP_BSR && ins2_mux.ins.bsr.Rt==3'd0;
 always_comb bra3 = ins3_mux.ins.any.opcode==OP_BSR && ins3_mux.ins.bsr.Rt==3'd0;
-always_comb jmp0 = ins0_mux.ins.any.opcode==OP_JSR && ins0_mux.ins.jsr.Rt==8'd0;
-always_comb jmp1 = ins1_mux.ins.any.opcode==OP_JSR && ins1_mux.ins.jsr.Rt==8'd0;
-always_comb jmp2 = ins2_mux.ins.any.opcode==OP_JSR && ins2_mux.ins.jsr.Rt==8'd0;
-always_comb jmp3 = ins3_mux.ins.any.opcode==OP_JSR && ins3_mux.ins.jsr.Rt==8'd0;
-always_comb jsr0 = ins0_mux.ins.any.opcode==OP_JSR && ins0_mux.ins.jsr.Rt!=8'd0;
-always_comb jsr1 = ins1_mux.ins.any.opcode==OP_JSR && ins1_mux.ins.jsr.Rt!=8'd0;
-always_comb jsr2 = ins2_mux.ins.any.opcode==OP_JSR && ins2_mux.ins.jsr.Rt!=8'd0;
-always_comb jsr3 = ins3_mux.ins.any.opcode==OP_JSR && ins3_mux.ins.jsr.Rt!=8'd0;
+always_comb jmp0 = ins0_mux.ins.any.opcode==OP_JSR && ins0_mux.ins.bsr.Rt==3'd0;
+always_comb jmp1 = ins1_mux.ins.any.opcode==OP_JSR && ins1_mux.ins.bsr.Rt==3'd0;
+always_comb jmp2 = ins2_mux.ins.any.opcode==OP_JSR && ins2_mux.ins.bsr.Rt==3'd0;
+always_comb jmp3 = ins3_mux.ins.any.opcode==OP_JSR && ins3_mux.ins.bsr.Rt==3'd0;
+always_comb jsr0 = ins0_mux.ins.any.opcode==OP_JSR && ins0_mux.ins.bsr.Rt!=3'd0;
+always_comb jsr1 = ins1_mux.ins.any.opcode==OP_JSR && ins1_mux.ins.bsr.Rt!=3'd0;
+always_comb jsr2 = ins2_mux.ins.any.opcode==OP_JSR && ins2_mux.ins.bsr.Rt!=3'd0;
+always_comb jsr3 = ins3_mux.ins.any.opcode==OP_JSR && ins3_mux.ins.bsr.Rt!=3'd0;
 always_comb rtd0 = ins0_mux.ins.any.opcode==OP_RTD && ins0_mux.ins.rtd.typ==2'd0;
 always_comb rtd1 = ins1_mux.ins.any.opcode==OP_RTD && ins1_mux.ins.rtd.typ==2'd0;
 always_comb rtd2 = ins2_mux.ins.any.opcode==OP_RTD && ins2_mux.ins.rtd.typ==2'd0;
 always_comb rtd3 = ins3_mux.ins.any.opcode==OP_RTD && ins3_mux.ins.rtd.typ==2'd0;
+always_comb jmpr0 = ins0_mux.ins.any.opcode==OP_JSRR && ins0_mux.ins.bsr.Rt==3'd0;
+always_comb jmpr1 = ins1_mux.ins.any.opcode==OP_JSRR && ins1_mux.ins.bsr.Rt==3'd0;
+always_comb jmpr2 = ins2_mux.ins.any.opcode==OP_JSRR && ins2_mux.ins.bsr.Rt==3'd0;
+always_comb jmpr3 = ins3_mux.ins.any.opcode==OP_JSRR && ins3_mux.ins.bsr.Rt==3'd0;
+always_comb jsrr0 = ins0_mux.ins.any.opcode==OP_JSRR && ins0_mux.ins.bsr.Rt!=3'd0;
+always_comb jsrr1 = ins1_mux.ins.any.opcode==OP_JSRR && ins1_mux.ins.bsr.Rt!=3'd0;
+always_comb jsrr2 = ins2_mux.ins.any.opcode==OP_JSRR && ins2_mux.ins.bsr.Rt!=3'd0;
+always_comb jsrr3 = ins3_mux.ins.any.opcode==OP_JSRR && ins3_mux.ins.bsr.Rt!=3'd0;
+always_comb jmpi0 = ins0_mux.ins.any.opcode==OP_JSRI && ins0_mux.ins.bsr.Rt==3'd0;
+always_comb jmpi1 = ins1_mux.ins.any.opcode==OP_JSRI && ins1_mux.ins.bsr.Rt==3'd0;
+always_comb jmpi2 = ins2_mux.ins.any.opcode==OP_JSRI && ins2_mux.ins.bsr.Rt==3'd0;
+always_comb jmpi3 = ins3_mux.ins.any.opcode==OP_JSRI && ins3_mux.ins.bsr.Rt==3'd0;
+always_comb jsri0 = ins0_mux.ins.any.opcode==OP_JSRI && ins0_mux.ins.bsr.Rt!=3'd0;
+always_comb jsri1 = ins1_mux.ins.any.opcode==OP_JSRI && ins1_mux.ins.bsr.Rt!=3'd0;
+always_comb jsri2 = ins2_mux.ins.any.opcode==OP_JSRI && ins2_mux.ins.bsr.Rt!=3'd0;
+always_comb jsri3 = ins3_mux.ins.any.opcode==OP_JSRI && ins3_mux.ins.bsr.Rt!=3'd0;
 always_comb 
 begin
 	bsr0_tgt = ins0_mux.pc;
-	bsr0_tgt.pc = ins0_mux.ins.bsr.a ? {{10{ins0_mux.ins[63]}},ins0_mux.ins[63:10]} : ins0_mux.pc.pc + {{10{ins0_mux.ins[63]}},ins0_mux.ins[63:10]};
+	bsr0_tgt.pc = (jsr0|jmp0) ? {{11{ins0_mux.ins.bsr.disp[49]}},ins0_mux.ins.bsr.disp,3'd0} : (ins0_mux.pc.pc + {{11{ins0_mux.ins.bsr.disp[49]}},ins0_mux.ins.bsr.disp,3'd0});
 end
 always_comb 
 begin
 	bsr1_tgt = ins1_mux.pc;
-	bsr1_tgt.pc = ins1_mux.ins.bsr.a ? {{10{ins1_mux.ins[63]}},ins1_mux.ins[63:10]} : ins1_mux.pc.pc + {{10{ins1_mux.ins[63]}},ins1_mux.ins[63:10]};
+	bsr1_tgt.pc = (jsr1|jmp1) ? {{11{ins1_mux.ins.bsr.disp[49]}},ins1_mux.ins.bsr.disp,3'd0} : (ins1_mux.pc.pc + {{11{ins1_mux.ins.bsr.disp[49]}},ins1_mux.ins.bsr.disp,3'd0});
 end
 always_comb
 begin
 	bsr2_tgt = ins2_mux.pc;
-	bsr2_tgt.pc = ins2_mux.ins.bsr.a ? {{10{ins2_mux.ins[63]}},ins2_mux.ins[63:10]} : ins2_mux.pc.pc + {{10{ins2_mux.ins[63]}},ins2_mux.ins[63:10]};
+	bsr2_tgt.pc = (jsr2|jmp2) ? {{10{ins2_mux.ins.bsr.disp[49]}},ins2_mux.ins.bsr.disp,3'd0} : (ins2_mux.pc.pc + {{11{ins2_mux.ins.bsr.disp[49]}},ins2_mux.ins.bsr.disp,3'd0});
 end
 always_comb
 begin
 	bsr3_tgt = ins3_mux.pc;
-	bsr3_tgt.pc = ins3_mux.ins.bsr.a ? {{10{ins3_mux.ins[63]}},ins3_mux.ins[63:10]} : ins3_mux.pc.pc + {{10{ins3_mux.ins[63]}},ins3_mux.ins[63:10]};
+	bsr3_tgt.pc = (jsr3|jmp3) ? {{10{ins3_mux.ins.bsr.disp[49]}},ins3_mux.ins.bsr.disp,3'd0} : (ins3_mux.pc.pc + {{11{ins3_mux.ins.bsr.disp[49]}},ins3_mux.ins.bsr.disp,3'd0});
 end
 
 // Figure whether a subroutine call, or return is being performed. Note
@@ -420,39 +441,42 @@ begin
 	do_ret = FALSE;
 	do_call = FALSE;
 	if (~stomp_mux) begin
-		if (bsr0|bra0) begin
+		if (bsr0|bra0|jsr0|jmp0) begin
 			do_bsr = TRUE;
-			if (bsr0)
+			if (bsr0|jsr0)
 				do_call = TRUE;
 		end
-		else if (jsr0)
+		else if (jsr0|jsrr0|jsri0)
 			do_call = TRUE;
 		else if (rtd0)
 			do_ret = TRUE;
-		else if (bsr1|bra1) begin
+
+		else if (bsr1|bra1|jsr1|jmp1) begin
 			do_bsr = TRUE;
-			if (bsr1)
+			if (bsr1|jsr1)
 				do_call = TRUE;
 		end
-		else if (jsr1)
+		else if (jsr1|jsrr1|jsri1)
 			do_call = TRUE;
 		else if (rtd1)
 			do_ret = TRUE;
-		else if (bsr2|bra2) begin
+
+		else if (bsr2|bra2|jsr2|jmp2) begin
 			do_bsr = TRUE;
-			if (bsr2)
+			if (bsr2|jsr2)
 				do_call = TRUE;
 		end
-		else if (jsr2)
+		else if (jsr2|jsrr2|jsri2)
 			do_call = TRUE;
 		else if (rtd2)
 			do_ret = TRUE;
-		else if (bsr3|bra3) begin
+
+		else if (bsr3|bra3|jsr3|jmp3) begin
 			do_bsr = TRUE;
-			if (bsr3)
+			if (bsr3|jsr3)
 				do_call = TRUE;
 		end
-		else if (jsr3)
+		else if (jsr3|jsrr3|jsri3)
 			do_call = TRUE;
 		else if (rtd3)
 			do_ret = TRUE;
@@ -462,13 +486,13 @@ end
 // Compute target PC for subroutine call or jump.
 always_comb
 begin
-	if (bsr0|bra0)
+	if (bsr0|bra0|jsr0|jmp0)
 		bsr_tgt = bsr0_tgt;
-	else if (bsr1|bra1)
+	else if (bsr1|bra1|jsr1|jmp1)
 		bsr_tgt = bsr1_tgt;
-	else if (bsr2|bra2)
+	else if (bsr2|bra2|jsr2|jmp2)
 		bsr_tgt = bsr2_tgt;
-	else if (bsr3|bra3)
+	else if (bsr3|bra3|jsr3|jmp3)
 		bsr_tgt = bsr3_tgt;
 	else
 		bsr_tgt.pc = RSTPC;
@@ -476,13 +500,13 @@ end
 
 // Compute return PC for subroutine call.
 always_comb
-	if (bsr0|jsr0)
+	if (bsr0|jsr0|jsrr0|jsri0)
 		ret_pc = ins0_mux.pc.pc + 4'd8;
-	else if (bsr1|jsr1)
+	else if (bsr1|jsr1|jsrr1|jsri1)
 		ret_pc = ins1_mux.pc.pc + 4'd8;
-	else if (bsr2|jsr2)
+	else if (bsr2|jsr2|jsrr2|jsri2)
 		ret_pc = ins2_mux.pc.pc + 4'd8;
-	else if (bsr3|jsr3)
+	else if (bsr3|jsr3|jsrr3|jsri3)
 		ret_pc = ins3_mux.pc.pc + 4'd8;
 	else
 		ret_pc = RSTPC;

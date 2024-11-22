@@ -1756,7 +1756,7 @@ static thuge make_reloc(int reloctype,operand *op,section *sec,
       	case B2:
       	case BL2:
 	      	add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
-                         10,54,0,0x3fffffffffffffLL);
+                         14,50,0,0x1ffffffffffff8LL);
           break;
       	/* Unconditional jump */
         case J2:
@@ -1768,7 +1768,7 @@ static thuge make_reloc(int reloctype,operand *op,section *sec,
         case J4:
         case JL4:
 		      add_extnreloc_masked(reloclist,base,val.lo,reloctype,
-                           10,54,0,0x3fffffffffffffLL);
+                           14,50,0,0x1ffffffffffff8LL);
           break;
 				/* Short conditional jump */
       	case J3:
@@ -2949,7 +2949,6 @@ static size_t encode_branch_B(instruction_buf* insn, operand* op, int64_t val, i
 }
 
 /* Encode uncondional branch, has wider target field. 
-	 The incoming value is cooked to the proper format.
 */
 
 static void encode_branch_BL2(instruction_buf* insn, operand* op, int64_t val, int i)
@@ -2960,7 +2959,7 @@ static void encode_branch_BL2(instruction_buf* insn, operand* op, int64_t val, i
 		if (insn) {
 			switch(i) {
 			case 1:
-  			tgt = ((val & 0x3fffffffffffffLL) << 10LL);
+  			tgt = (((val & 0x7ffffffffffffLL) >> 3LL) << 14LL);
   			insn->opcode |= tgt;
 		  	break;
 			}
@@ -2978,7 +2977,7 @@ static int encode_J2(instruction_buf* insn, operand* op, int64_t val, int i, int
   		uint64_t tgt;
   		//*insn |= CA(mnemo->ext.format==B2 ? 0x7 : 0x0);
     	//tgt = ((val & 0xffffffLL) << 24LL) | (2LL << 22LL);
- 			tgt = ((val & 0x3fffffffffffffLL) << 10LL);
+ 			tgt = ((val & 0x1ffffffffffff8LL) << 11LL);
   		insn->opcode |= tgt;
   	}
   	if (!is_nbit(hg,29LL)) {
@@ -3061,7 +3060,7 @@ static int encode_branch(instruction_buf* insn, mnemonic* mnemo, operand* op, in
   	if (op->type==OP_IMM) {
 	  	if (insn) {
     		uint64_t tgt;
-    		tgt = ((val & 0x1fffffffffffffLL) << 10LL);
+    		tgt = ((val & 0x1ffffffffffff8LL) << 11LL);
     		insn->opcode |= tgt;
 	  	}
 	  	return (1);
