@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2024  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2024-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -33,9 +33,7 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // 
-// 6kLUTs / 3kFFs / 23 BRAMs (4w20r)
-// The register file is time multiplexed and accessed four times using a five
-// times CPU clock.
+// 13600kLUTs / 800FFs / 120 BRAMs (6w20r)
 // ============================================================================
 //
 import QuplsPkg::*;
@@ -237,6 +235,9 @@ generate begin : gRFO
 	for (g = 0; g < RPORTS; g = g + 1) begin
 		always_comb
 			o[g] =
+				// Physical register zero is zero, unless it is a predicate register
+				// spec, in which case it is -1.
+				ra[g]==10'd0 ? ((g==17||g==18||g==19||g==20)?64'hFFFFFFFFFFFFFFFF:64'h0) :
 				(wr5 && we5 && wa5 != 10'd0 && (ra[g]==wa5)) ? i5 :
 				(wr4 && we4 && wa4 != 10'd0 && (ra[g]==wa4)) ? i4 :
 				(wr3 && we3 && wa3 != 10'd0 && (ra[g]==wa3)) ? i3 :
@@ -251,6 +252,7 @@ generate begin : gRFO
 					o0[5][g];
 		always_comb
 			to[g] =
+				ra[g]==10'd0 ? 1'h0 :
 				(wt5 && we5 && wa5 != 10'd0 && (ra[g]==wa5)) ? ti5 :
 				(wt4 && we4 && wa4 != 10'd0 && (ra[g]==wa4)) ? ti4 :
 				(wt3 && we3 && wa3 != 10'd0 && (ra[g]==wa3)) ? ti3 :
