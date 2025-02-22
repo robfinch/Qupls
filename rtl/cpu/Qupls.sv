@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023-2024  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2023-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -135,6 +135,7 @@ reg_bitmask_t [ROB_ENTRIES-1:0] rob_livetarget;
 reg_bitmask_t [ROB_ENTRIES-1:0] rob_latestID;
 reg_bitmask_t [ROB_ENTRIES-1:0] rob_cumulative;
 reg_bitmask_t [ROB_ENTRIES-1:0] rob_out;
+reg [PREGS-1:0] unavail_list;			// list of registers made unavailable via copy-targets
 
 reg [ROB_ENTRIES-1:0] missidb;
 
@@ -2356,6 +2357,7 @@ Qupls_pipeline_dec udecstg1
 	.ph4(ph4),
 	.restored(restored),
 	.restore_list(restore_list),
+	.unavail_list(unavail_list),
 	.sr(sr),
 	.tags2free(tags2free),
 	.freevals(freevals),
@@ -3104,6 +3106,8 @@ end
 // additional logic for handling a branch miss (STOMP logic)
 //
 always_ff @(posedge clk)
+begin
+	unavail_list = {PREGS{1'b0}};
 for (n4 = 0; n4 < ROB_ENTRIES; n4 = n4 + 1) begin
 	robentry_cpytgt[n4] = FALSE;
 	if (!SUPPORT_BACKOUT)
@@ -3113,6 +3117,7 @@ for (n4 = 0; n4 < ROB_ENTRIES; n4 = n4 + 1) begin
 		if (fcu_idv && ((rob[fcu_id].decbus.br && takb) || rob[fcu_id].decbus.cjb)) begin
 	 		if (rob[n4].grp==rob[fcu_id].grp && rob[n4].sn > rob[fcu_id].sn) begin
 				robentry_cpytgt[n4] = TRUE;
+				unavail_list[rob[n4].op.nRt] = TRUE;
 	 		end
 		end
 	end
@@ -3129,6 +3134,7 @@ for (n4 = 0; n4 < ROB_ENTRIES; n4 = n4 + 1) begin
 	 		end
 		end
 	end
+end
 end
 
 // Calc the location of the ROB tail pointer after a stomp.
@@ -5397,14 +5403,14 @@ else begin
 		  		alu0_idv <= INV;
 			    rob[ alu0_id ].done <= 2'b11;
 			    rob[ alu0_id ].out <= {INV,INV};
-			    rob[alu0_id].pred_status[ 7: 0] <= fnPredStatus(alu0_instr[23:22], alu0_argA[ 7: 0]);
-			    rob[alu0_id].pred_status[15: 8] <= fnPredStatus(alu0_instr[25:24], alu0_argA[15: 8]);
-			    rob[alu0_id].pred_status[23:16] <= fnPredStatus(alu0_instr[27:26], alu0_argA[23:16]);
-			    rob[alu0_id].pred_status[31:24] <= fnPredStatus(alu0_instr[29:28], alu0_argA[31:24]);
-			    rob[alu0_id].pred_status[39:32] <= fnPredStatus(alu0_instr[31:30], alu0_argA[39:32]);
-			    rob[alu0_id].pred_status[47:40] <= fnPredStatus(alu0_instr[33:32], alu0_argA[47:40]);
-			    rob[alu0_id].pred_status[55:48] <= fnPredStatus(alu0_instr[35:34], alu0_argA[55:48]);
-			    rob[alu0_id].pred_status[63:56] <= fnPredStatus(alu0_instr[37:36], alu0_argA[63:56]);
+			    rob[alu0_id].pred_status[ 7: 0] <= fnPredStatus(alu0_instr[45:44], alu0_argA[ 7: 0], alu0_argB[ 7: 0], alu0_argC[ 7: 0]);
+			    rob[alu0_id].pred_status[15: 8] <= fnPredStatus(alu0_instr[47:46], alu0_argA[15: 8], alu0_argB[15: 8], alu0_argC[15: 8]);
+			    rob[alu0_id].pred_status[23:16] <= fnPredStatus(alu0_instr[49:48], alu0_argA[23:16], alu0_argB[23:16], alu0_argC[23:16]);
+			    rob[alu0_id].pred_status[31:24] <= fnPredStatus(alu0_instr[51:50], alu0_argA[31:24], alu0_argB[31:24], alu0_argC[31:24]);
+			    rob[alu0_id].pred_status[39:32] <= fnPredStatus(alu0_instr[53:52], alu0_argA[39:32], alu0_argB[39:32], alu0_argC[39:32]);
+			    rob[alu0_id].pred_status[47:40] <= fnPredStatus(alu0_instr[55:54], alu0_argA[47:40], alu0_argB[47:40], alu0_argC[47:40]);
+			    rob[alu0_id].pred_status[55:48] <= fnPredStatus(alu0_instr[57:56], alu0_argA[55:48], alu0_argB[55:48], alu0_argC[55:48]);
+			    rob[alu0_id].pred_status[63:56] <= fnPredStatus(alu0_instr[59:58], alu0_argA[63:56], alu0_argB[63:56], alu0_argC[63:56]);
 		  	end
 	  	end
 	  	if (&alu0_cptgt) begin
@@ -7069,15 +7075,17 @@ input rob_ndx_t n;
 begin
 	fnStuckOut = FALSE;
 	if (|rob[n].out && rob[n].done==2'b00 && rob[n].v && 
-		!(n==alu0_id
-			|| n==alu1_id
-			|| n==fpu0_id
-			|| n==fpu1_id
+		!((n==alu0_id && !alu0_idle)
+			|| (n==alu1_id && !alu1_idle)
+			|| (n==fpu0_id && !fpu0_idle)
+			|| (n==fpu1_id && !fpu1_idle)
 			|| n==agen0_id
 			|| n==agen1_id
 			|| n==fcu_id
 			))
 	fnStuckOut = TRUE;
+	if ((&rob[n].out) && (&rob[n].done) && rob[n].v)
+		fnStuckOut = TRUE;
 end
 endfunction
 
@@ -7087,14 +7095,17 @@ endfunction
 
 function [7:0] fnPredStatus;
 input [1:0] mask;
-input [7:0] arg;
+input [7:0] argA;
+input [7:0] argB;
+input [7:0] argC;
 integer n30;
 begin
 	for (n30 = 0; n30 < 8; n30 = n30 + 1)
 		case(mask)
-		2'd1:	fnPredStatus[n30] =  arg[n30];
-		2'd2:	fnPredStatus[n30] = ~arg[n30];
-		default:	fnPredStatus[n30] = 1'b1;
+		2'd0:	fnPredStatus[n30] = 1'b1;
+		2'd1:	fnPredStatus[n30] = argA[n30];
+		2'd2:	fnPredStatus[n30] = argB[n30];
+		2'd3:	fnPredStatus[n30] = argC[n30];
 		endcase
 end
 endfunction

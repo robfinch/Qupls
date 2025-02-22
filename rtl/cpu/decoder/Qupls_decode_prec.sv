@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2024  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -40,38 +40,30 @@ module Qupls_decode_prec(instr, prec);
 input instruction_t instr;
 output memsz_t prec;
 
+function memsz_t fnPrec2;
+input [2:0] cd;
+	case(cd)
+	QuplsPkg::PRC8:		fnPrec2 = QuplsPkg::byt;
+	QuplsPkg::PRC16:	fnPrec2 = QuplsPkg::wyde;
+	QuplsPkg::PRC32:	fnPrec2 = QuplsPkg::tetra;
+	QuplsPkg::PRC64:	fnPrec2 = QuplsPkg::octa;
+	QuplsPkg::PRC128: fnPrec2 = QuplsPkg::hexi;
+	default:	fnPrec2 = QuplsPkg::octa;
+	endcase
+endfunction
+
 function memsz_t fnPrec;
 input instruction_t ir;
 begin
 	case(ir.r2.opcode)
 	OP_CHK:	fnPrec = QuplsPkg::octa;
 	OP_R2:	fnPrec = QuplsPkg::octa;
-	OP_ADDI:	
-		fnPrec = QuplsPkg::hexi;
-	OP_SUBFI:	fnPrec = QuplsPkg::octa;
-	OP_CMPI:	
-		fnPrec = QuplsPkg::octa;
-	OP_MULI:	
-		fnPrec = QuplsPkg::octa;
-	OP_DIVI:	
-		fnPrec = QuplsPkg::octa;
-	OP_ANDI:	
-		fnPrec = QuplsPkg::octa;
-	OP_ORI:
-		fnPrec = QuplsPkg::octa;
-	OP_EORI:
-		fnPrec = QuplsPkg::octa;
+	OP_ADDI,OP_SUBFI,OP_CMPI,
+	OP_MULI,OP_MULUI,OP_DIVI,OP_DIVUI,
+	OP_ANDI,OP_ORI,OP_EORI:	fnPrec = fnPrec2(ir.ri.prc);
 	OP_ADDSI,OP_ORSI,OP_ANDSI,OP_EORSI:
-						fnPrec = QuplsPkg::octa;
-	OP_SHIFT:
-		case(ir[43:41])
-		3'd0:	fnPrec = QuplsPkg::byt;
-		3'd1:	fnPrec = QuplsPkg::wyde;
-		3'd2:	fnPrec = QuplsPkg::tetra;
-		3'd3:	fnPrec = QuplsPkg::octa;
-		3'd4: fnPrec = QuplsPkg::hexi;
-		default:	fnPrec = QuplsPkg::octa;
-		endcase
+		fnPrec = fnPrec2(ir.ris.prc);
+	OP_SHIFT:	fnPrec = fnPrec2(ir.shifti.prc);
 	OP_FLT3:	fnPrec = QuplsPkg::octa;
 	OP_CSR:		fnPrec = QuplsPkg::octa;
 	OP_MOV:		fnPrec = QuplsPkg::octa;

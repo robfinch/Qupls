@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2024  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -96,8 +96,8 @@ begin
 	OP_FLT3:
 		fnRt = ir.aRt;
 	OP_MCB:	fnRt = {ir.ins.mcb.lk ? 9'd59 : 9'd00};
-	OP_BSR:	fnRt = ir.aRt[2:0]<3'd1 ? 8'd0 : {5'b00101,ir.aRt[2:0]};
-	OP_JSR:	fnRt = ir.aRt[2:0]<3'd1 ? 8'd0 : {5'b00101,ir.aRt[2:0]};
+	OP_BSR:	fnRt = ir.aRt;
+	OP_JSR:	fnRt = ir.aRt;
 	OP_RTD:	fnRt = 9'd31;
 	OP_DBRA: fnRt = 9'd55;
 	OP_ADDI,OP_SUBFI,OP_CMPI:
@@ -116,6 +116,7 @@ begin
 		fnRt = ir.aRt;
 	OP_Bcc,OP_BccU:
 		fnRt = |ir.ins.br.inc ? ir.aRa : 8'd0;
+	OP_LDA,
 	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDOU,OP_LDH:
 		fnRt = ir.aRt;
 	default:

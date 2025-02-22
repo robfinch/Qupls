@@ -1,7 +1,7 @@
 `timescale 1ns / 10ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023-2024  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2023-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -1338,10 +1338,9 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [6:0] dispHi;		// 7
-	logic [2:0] Pr;				// 3
+	logic [23:0] disp;		// 24
 	logic resv;						// 1
-	logic [15:0] dispLo;	// 14
+	logic [1:0] ty				// 2
 	logic [2:0] sc;				// 3
 	regspec_t Rb;					// 9
 	regspec_t Ra;					// 9
@@ -1351,10 +1350,9 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [6:0] dispHi;		// 7
-	logic [2:0] Pr;				// 3
+	logic [23:0] disp;		// 24
 	logic resv;						// 1
-	logic [15:0] dispLo;	// 16
+	logic [1:0] ty				// 2
 	logic [2:0] sc;				// 3
 	regspec_t Rb;					// 9
 	regspec_t Ra;					// 9
@@ -1364,9 +1362,8 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [3:0] dispHi;		// 4
+	logic [6:0] dispHi;		// 7
 	prec_t prc;						// 3
-	logic [2:0] Pr;				// 3
 	logic resv2;					// 1
 	logic [18:0] dispLo;	// 19
 	regspec_t Rb;					// 9
@@ -1380,9 +1377,8 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [3:0] dispHi;		// 4
+	logic [6:0] dispHi;		// 7
 	prec_t prc;						// 3
-	logic [2:0] Pr;				// 3
 	logic resv2;					// 1
 	logic [18:0] dispLo;	// 19
 	regspec_t Rb;					// 9
@@ -1412,8 +1408,7 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [6:0] dispHi;		// 7
-	logic [2:0] Pr;				// 3
+	logic [9:0] dispHi;		// 10
 	logic resv;						// 1
 	logic [15:0] dispLo;	//16
 	logic [2:0] Sc;				// 3
@@ -1425,10 +1420,8 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [49:0] disp;		// 50
-	logic a;							// 1
-	logic [2:0] Pr;				// 3
-	logic [2:0] Rt;				// 3
+	logic [47:0] disp;		// 48
+	regspec_t Rt;					// 9
 	opcode_t opcode;			// 7
 } bsrinst_t;						// 64
 
@@ -1796,19 +1789,6 @@ typedef struct packed
 	cpu_types_pkg::pregno_t [AREGS-1:0] regmap;
 } checkpoint_t;
 
-typedef struct packed
-{
-	rob_ndx_t rndx;
-	rob_entry_t rob;
-	value_t argA;
-	value_t argB;
-	value_t argC;
-	value_t argT;
-	value_t argM;
-	logic argA_ctag;
-	logic argB_ctag;
-} fpu_iq_t;
-
 typedef struct packed {
 	// The following fields may change state while an instruction is processed.
 	logic v;									// 1=entry is valid, in use
@@ -1882,6 +1862,19 @@ typedef struct packed
 	cpu_types_pkg::mc_address_t mcip;				// Micro-code IP address
 	seqnum_t grp;							// instruction group
 } rob_row_entry_t;
+
+typedef struct packed
+{
+	rob_ndx_t rndx;
+	rob_entry_t rob;
+	cpu_types_pkg::value_t argA;
+	cpu_types_pkg::value_t argB;
+	cpu_types_pkg::value_t argC;
+	cpu_types_pkg::value_t argT;
+	cpu_types_pkg::value_t argM;
+	logic argA_ctag;
+	logic argB_ctag;
+} fpu_iq_t;
 
 typedef struct packed {
 	logic v;
@@ -2086,7 +2079,7 @@ begin
 	OP_DBRA,
 	OP_Bcc,OP_BccU,OP_FBcc:
 		fnBranchDisp = {{41{ir[63]}},ir[63:44]};
-	OP_BSR:	fnBranchDisp = {{11{ir[63]}},ir[63:11]};
+	OP_BSR:	fnBranchDisp = {{11{ir.bsr.disp[49]}},ir.bsr.disp};
 	default:	fnBranchDisp = 'd0;
 	endcase
 end
