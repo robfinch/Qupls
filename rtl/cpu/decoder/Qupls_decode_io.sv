@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -44,11 +44,10 @@ function [2:0] fnCa;
 input instruction_t ir;
 begin
 	case(ir.any.opcode)
-	OP_STB,OP_STW,OP_STT,OP_STO,
-	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO:
+	OP_STx,
+	OP_LDx,
+	OP_LDxU:
 		fnCa = {1'b0,ir.ls.ca};
-	OP_LDX,OP_STX:
-		fnCa = {1'b0,ir.lsn.ca};
 	default:
 		fnCa = 3'd4;
 	endcase

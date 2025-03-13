@@ -34,6 +34,7 @@
 //
 // ============================================================================
 
+import cpu_types_pkg::*;
 import QuplsPkg::*;
 
 module Qupls_decode_Rt(om, ipl, instr, Rt, Rtz, Rtn);
@@ -117,7 +118,7 @@ begin
 	OP_Bcc,OP_BccU:
 		fnRt = |ir.ins.br.inc ? ir.aRa : 8'd0;
 	OP_LDA,
-	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDOU,OP_LDH:
+	OP_LDx,OP_LDxU,OP_FLDx,OP_DFLDx,OP_PLDx,OP_CACHE:
 		fnRt = ir.aRt;
 	default:
 		fnRt = 9'd0;

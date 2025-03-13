@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2024  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -34,6 +34,7 @@
 //
 // ============================================================================
 
+import cpu_types_pkg::*;
 import QuplsPkg::*;
 
 module Qupls_decode_Ra(om, ipl, instr, has_imma, Ra, Raz, Ran);

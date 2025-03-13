@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2024  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2024-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -58,7 +58,7 @@ output ptw_tran_buf_t [15:0] tranbuf;
 input ptw_miss_queue_t [MISSQ_SIZE-1:0] miss_queue;
 input [5:0] sel_tran;
 input [5:0] sel_qe;
-input fta_cmd_response128_t ftam_resp;
+input fta_cmd_response256_t ftam_resp;
 output fta_tranid_t tid;
 input virtual_address_t ptw_vadr;
 input physical_address_t ptw_padr;
@@ -84,7 +84,7 @@ else begin
 			tAssignTranbuf(16'd0);
 	TLB_PTE_FETCH:
 		if (~sel_qe[5] & ptw_pv & ptw_ppv) begin
-			if (miss_queue[sel_qe].lvl != 3'd7)
+			if (miss_queue[sel_qe].lvl != 3'd0)
 				tAssignTranbuf(miss_queue[sel_qe].asid);
 		end
 	/*
@@ -111,9 +111,9 @@ else begin
 				;
 			TLB_PTE_FETCH:
 				case(ptattr.pte_size)
-				_4:	tranbuf[ftam_resp.tid & 15].pte <= ftam_resp.dat >> {tranbuf[ftam_resp.tid & 15].padr[3:2],5'b0};
-				_8:	tranbuf[ftam_resp.tid & 15].pte <= ftam_resp.dat >> {tranbuf[ftam_resp.tid & 15].padr[3],6'b0};
-				_16:	tranbuf[ftam_resp.tid & 15].pte <= ftam_resp.dat;
+				_4B_PTE:	tranbuf[ftam_resp.tid & 15].pte <= ftam_resp.dat >> {tranbuf[ftam_resp.tid & 15].padr[4:2],5'b0};
+				_8B_PTE:	tranbuf[ftam_resp.tid & 15].pte <= ftam_resp.dat >> {tranbuf[ftam_resp.tid & 15].padr[4:3],6'b0};
+				_16B_PTE:	tranbuf[ftam_resp.tid & 15].pte <= ftam_resp.dat >> {tranbuf[ftam_resp.tid & 15].padr[4],7'b0};
 				default:	;
 				endcase
 //			TLB_PMT_FETCH:

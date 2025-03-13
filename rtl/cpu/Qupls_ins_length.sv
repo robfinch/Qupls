@@ -1,7 +1,6 @@
-`timescale 1ns / 10ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2024-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2023-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -33,51 +32,22 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
+// 10 LUTs
 // ============================================================================
 
-package ptable_walker_pkg;
+import QuplsPkg::*;
 
-parameter MISSQ_SIZE = 8;
+module Qupls_ins_length(op, len);
+input opcode_t op;
+output reg [4:0] len;					// length in bytes
 
-typedef enum logic [1:0] {
-	IDLE = 2'd0,
-	FAULT = 2'd1,
-	WAIT = 2'd2
-} ptw_state_t;
+always_comb
+	casez(op)
+	8'd72,8'd73,8'd74,8'd75,8'd76,8'd77,8'd78,8'd79:
+		len = 5'd4;
+	8'd91,8'd118,8'd119:
+		len = 5'd4;
+	default:	len = 5'd8;
+	endcase
 
-typedef enum logic [3:0] {
-	INACTIVE = 4'd0,
-	SEG_BASE_FETCH = 4'd1,
-	SEG_LIMIT_FETCH = 4'd2,
-	SEG_FETCH_DONE = 4'd3,
-	TLB_PTE_FETCH = 4'd4,
-	TLB_PTE_FETCH_DONE = 4'd5,
-	VIRT_ADR_XLAT = 4'd6
-} ptw_access_state_t;
-
-typedef struct packed {
-	logic v;					// valid
-	logic [2:0] lvl;	// level begin processed
-	logic o;					// out
-	logic [1:0] bc;		// 1=bus cycle complete
-	logic [1:0] qn;
-	QuplsPkg::rob_ndx_t id;
-	cpu_types_pkg::asid_t asid;
-	cpu_types_pkg::virtual_address_t adr;		// address to translate
-	cpu_types_pkg::virtual_address_t tadr;	// temporary address
-} ptw_miss_queue_t;
-
-typedef struct packed {
-	logic v;
-	ptw_access_state_t access_state;
-	logic rdy;
-	fta_bus_pkg::fta_tranid_t tid;
-	logic [3:0] stk;
-	cpu_types_pkg::asid_t asid;
-	cpu_types_pkg::virtual_address_t vadr;
-	cpu_types_pkg::physical_address_t padr;
-	mmu_pkg::pte_t pte;
-	logic [255:0] dat;
-} ptw_tran_buf_t;
-
-endpackage
+endmodule

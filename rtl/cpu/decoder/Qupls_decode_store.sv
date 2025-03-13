@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2024  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -45,7 +45,7 @@ function fnIsStore;
 input instruction_t op;
 begin
 	case(op.any.opcode)
-	OP_STB,OP_STW,OP_STT,OP_STO,OP_STH:
+	OP_STx,OP_FSTx,OP_DFSTx,OP_PSTx:
 		fnIsStore = 1'b1;
 	default:
 		fnIsStore = 1'b0;
@@ -57,7 +57,7 @@ function fnIsCStore;
 input instruction_t op;
 begin
 	case(op.any.opcode)
-	OP_CSTORE:
+	OP_CSTOREx:
 		fnIsCStore = 1'b1;
 	default:
 		fnIsCStore = 1'b0;

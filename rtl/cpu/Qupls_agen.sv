@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023-2024  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2023-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -108,9 +108,8 @@ always_comb
 always_comb
 begin
 	case(ir.ins.any.opcode)
-	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,
-	OP_LDO,OP_LDH,OP_CLOAD,
-	OP_STB,OP_STW,OP_STT,OP_STO,OP_STH,OP_CSTORE:
+	OP_LDx,OP_LDxU,OP_FLDx,OP_DFLDx,OP_PLDx,OP_CLOADx,
+	OP_STx,OP_FSTx,OP_DFSTx,OP_PSTx,OP_CSTOREx:
 		res1 <= as + bs + {{41{ir.ins.lsn.dispHi[6]}},ir.ins.lsn.dispHi,ir.ins.lsn.dispLo};
 	OP_AMO:
 		res1 <= as + b;

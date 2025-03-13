@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2024  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -47,7 +47,7 @@ input instruction_t op;
 begin
 	case(op.any.opcode)
 	OP_JSRI,
-	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDOU,OP_LDH:
+	OP_LDx,OP_FLDx,OP_DFLDx,OP_PLDx,OP_LDxU:
 		fnIsLoad = 1'b1;
 	default:
 		fnIsLoad = 1'b0;
@@ -59,7 +59,7 @@ function fnIsCLoad;
 input instruction_t op;
 begin
 	case(op.any.opcode)
-	OP_CLOAD:	fnIsCLoad = 1'b1;
+	OP_CLOADx:	fnIsCLoad = 1'b1;
 	default:
 		fnIsCLoad = 1'b0;
 	endcase

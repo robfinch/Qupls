@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2024  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -37,11 +37,12 @@
 import cpu_types_pkg::*;
 import QuplsPkg::*;
 
-module Qupls_decode_Rb(om, ipl, instr, has_immb, Rb, Rbz, Rbn);
+module Qupls_decode_Rb(om, ipl, instr, has_immb, has_Rb, Rb, Rbz, Rbn);
 input operating_mode_t om;
 input [2:0] ipl;
 input ex_instruction_t instr;
 input has_immb;
+output reg has_Rb;
 output cpu_types_pkg::aregno_t Rb;
 output reg Rbz;
 output reg Rbn;
@@ -55,6 +56,10 @@ begin
 		fnRb = 9'd31;
 	OP_FLT3:
 		fnRb = ir.aRb;
+	// Loads and stores have has_immb=TRUE but also have an Rb.
+	OP_LDx,OP_LDxU,OP_FLDx,OP_DFLDx,OP_PLDx,OP_CACHE,
+	OP_STx,OP_FSTx,OP_DFSTx,OP_PSTx:
+		fnRb = ir.aRb;
 	default:
 		if (has_immb)
 			fnRb = 9'd0;
@@ -66,9 +71,33 @@ begin
 end
 endfunction
 
+function fnHasRb;
+input ex_instruction_t ir;
+input has_immb;
+begin
+	fnHasRb = 1'b0;
+	case(ir.ins.any.opcode)
+	OP_RTD:	fnHasRb = 1'b1;
+	OP_FLT3:	fnHasRb = 1'b1;
+	// Loads and stores have has_immb=TRUE but also have an Rb.
+	OP_LDx,OP_LDxU,OP_FLDx,OP_DFLDx,OP_PLDx,OP_CACHE,
+	OP_STx,OP_FSTx,OP_DFSTx,OP_PSTx:
+		fnHasRb = 1'b1;
+	default:
+		if (has_immb)
+			fnHasRb = 1'd0;
+		else if (fnImmb(ir))
+			fnHasRb = 1'd0;
+		else
+			fnHasRb = 1'b1;
+	endcase
+end
+endfunction
+
 always_comb
 begin
 	Rb = fnRb(instr, has_immb);
+	has_Rb = fnHasRb(instr, has_immb);
 	if (Rb==9'd31)
 		Rb = 9'd32|om;
 	Rbn = instr.ins.r3.Rb.n;

@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2022-2024  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2022-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -40,6 +40,10 @@ import fta_bus_pkg::*;
 import cpu_types_pkg::*;
 
 `define SMALL_MMU 1'b1
+//`define MMU_SUPPORT_4k_PAGES	1'b1
+`define MMU_SUPPORT_8k_PAGES	1'b1
+//`define MMU_SUPPORT_16k_PAGES	1'b1
+//`define MMU_SUPPORT_64k_PAGES	1'b1
 
 package mmu_pkg;
 
@@ -70,9 +74,9 @@ typedef logic [5:0] tlb_count_t;
 typedef logic [2:0] rwx_t;
 
 typedef enum logic [1:0] {
-    _4,
-    _8,
-    _16
+    _4B_PTE,
+    _8B_PTE,
+    _16B_PTE
 } e_pte_size;
 
 typedef enum logic [2:0] {
@@ -120,7 +124,7 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [63:3] adr;		// page table address, bits 6 to 63
+	logic [63:3] adr;		// page table address, bits 3 to 63
 	logic [2:0] level;	// entry level of hierarchical page table
 } ptbr_t;
 
@@ -221,87 +225,111 @@ typedef struct packed
 	logic t;									// 0=PTE, 1=PTP
 	logic [2:0] avl;					// available for software
 	logic [53:0] ppn;					// physical page number
-} bpte_t;										// 128-bit
+} hpte_t;										// 128-bit
 
-// Page table entry. Physical memory <= 2^59B.
+// Page table entry. Physical memory <= 2^57B.
+`ifdef BIG_MMU
 typedef struct packed
 {
-	logic [2:0] resv;					// reserved
-	logic [1:0] cache;				// cache location
-	logic [45:0] ppn;					// 48 bit address space
-	logic [2:0] lvl;
-	logic [1:0] avl;					// available for OS use
-	logic m;
-	logic a;
-	logic g;									// 1=global page
+	logic v;									// 1=valid
+	logic [2:0] lvl;					//
+	logic s;									// 1=shortcut
+	logic [2:0] rgn;					// memory region
+	logic m;									// 1=modified
+	logic a;									// 1=accessed
+	logic [2:0] avl;					// available for OS use
+	logic [2:0] cache;				// cache location
 	logic u;									// 1=user page
-	logic [2:0] rwx;					// user read-write-execute
-	logic v;
+	logic [2:0] rwx;					// read-write-execute
+	logic [43:0] ppn;					// 57 bit address space (44 bit page number)
 } pte_t;										// 64 bits
 
-// Small page table entry. Physical memory <= 2^40B.
-typedef struct packed
-{
-	logic [1:0] cache;				// cache location
-	logic [26:0] ppn;					// 40 bit address space
-	logic [2:0] lvl;
-	logic [1:0] avl;					// available for OS use
-	logic m;
-	logic a;
-	logic g;									// 1=global page
-	logic u;									// 1=user page
-	logic [2:0] rwx;					// user read-write-execute
-	logic v;
-} spte_t;										// 42 bits
-
-// Big VPN, Virtual memory <= 2^88B
+// Big VPN, Virtual memory <= 2^64B
 typedef struct packed
 {
 	cpu_types_pkg::asid_t asid;	// 16 bits
-	logic [55:0] vpn;						// bits 26 to 81 of address
-} bvpn_t;											// 72 bits
+	logic [50:0] vpn;						// bits 13 to 63 of address
+} vpn_t;											// 67 bits
 
+`endif
+
+// Small page table entry. Physical memory <= 2^35B.
+typedef struct packed
+{
+	logic v;									// 1=valid
+	logic [1:0] lvl;					// valid
+	logic s;									// 1=shortcut
+	logic [2:0] rgn;					// memory region
+	logic m;									// 1=modified
+	logic a;									// 1=accessed
+	logic [2:0] avl;					// available for OS use
+	logic [1:0] cache;				// cache location (none,L1,L2,LLC)
+	logic u;									// 1=user page
+	logic [2:0] rwx;					// read-write-execute
+	logic [21:0] ppn;					// 35 bit address space (22 bit page number)
+} spte_lvl1_t;							// 40 bits
+
+// Small page table entry. Physical memory <= 2^35B.
+typedef struct packed
+{
+	logic v;									// 1=valid
+	logic [1:0] lvl;					// valid
+	logic s;									// 1=shortcut
+	logic [2:0] rgn;					// memory region
+	logic m;									// 1=modified
+	logic a;									// 1=accessed
+	logic [2:0] avl;					// available for OS use
+	logic [1:0] cache;				// cache location (none,L1,L2,LLC)
+	logic u;									// 1=user page
+	logic [2:0] rwx;					// read-write-execute
+	logic [11:0] ppn;					// 35 bit address space (22 bit page number)
+	logic [9:0] limit;
+} spte_lvl2_t;							// 40 bits
+
+`ifdef SMALL_MMU
+typedef union packed {
+	spte_lvl1_t l1;
+	spte_lvl2_t l2;
+} pte_t;
 // Small VPN, Virtual memory <= 2^40B
 typedef struct packed
 {
 	cpu_types_pkg::asid_t asid;	// 16 bits
 	logic [26:0] vpn;						// bits 13 to 39 of address
-} svpn_t;											// 43 bits
+} vpn_t;											// 43 bits
+`endif
 
+// Tiny page table entry. Physical memory <= 2^23B.
+`ifdef TINY_MMU
+typedef struct packed
+{
+	logic v;									// 1=valid
+	logic lvl;								//
+	logic [2:0] rgn;					// memory region
+	logic m;									// 1=modified
+	logic a;									// 1=accessed
+	logic [1:0] avl;					// available for OS use
+	logic cache;							// cache location (none,L1)
+	logic u;									// 1=user page
+	logic [2:0] rwx;					// read-write-execute
+	logic [9:0] ppn;					// 26 bit address space (10 bit page number)
+} pte_t;										// 24 bits
 // Tiny VPN, Virtual memory <= 2^32B
 typedef struct packed
 {
 	cpu_types_pkg::asid_t asid;	// 16 bits
 	logic [18:0] vpn;						// bits 13 to 31 of address
-} tvpn_t;										// 35 bits
+} vpn_t;											// 35 bits
 
-`ifdef TINY_MMU
-typedef struct packed
-{
-	tlb_count_t count;		// 6 bits
-	logic nru;						// 1
-	pte_t pte;						// 64
-	tvpn_t vpn;						// 35
-} tlb_entry_t;					// 106 bits
 `endif
-`ifdef SMALL_MMU
-typedef struct packed
-{
-	tlb_count_t count;		// 6 bits
-	logic nru;						// 1
-	spte_t pte;						// 42
-	svpn_t vpn;						// 43
-} tlb_entry_t;					// 92 bits
-`endif
-`ifdef BIG_MMU
+
 typedef struct packed
 {
 	tlb_count_t count;		// 6
 	logic nru;						// 1
 	pte_t pte;						// 128
-	bvpn_t vpn;						// 64
+	vpn_t vpn;						// 64
 } tlb_entry_t;					// 199 bits
-`endif
 
 // Hash Page Table Entry
 typedef struct packed
@@ -318,7 +346,7 @@ typedef struct packed
 	logic g;
 	logic c;
 	logic [2:0] rwx;
-} hpte_t;	// 128 bits
+} hshpte_t;	// 128 bits
 
 /*
 typedef struct packed

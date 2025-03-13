@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2024  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -84,6 +84,7 @@ Qupls_decode_Rb udcrb
 	.ipl(ipl),
 	.instr(ins),
 	.has_immb(db.has_immb),
+	.has_Rb(db.has_Rb),
 	.Rb(db.Rb),
 	.Rbz(db.Rbz),
 	.Rbn(db.Rbn)
@@ -111,11 +112,7 @@ Qupls_decode_Rt udcrt
 	.Rtn(db.Rtn)
 );
 
-Qupls_decode_Rm udcrm
-(
-	.instr(ins),
-	.Rm(db.Rm)
-);
+assign db.Rm = 8'd48;
 
 Qupls_decode_r2 ur2
 (
@@ -393,7 +390,7 @@ else begin
 		dbo.jsri <= ins.ins.any.opcode==OP_JSRI;
 		dbo.ret <= ins.ins.any.opcode==OP_RTD;
 		dbo.pushi <= ins.ins.any.opcode==OP_PUSHI;
-		dbo.bstore <= ins.ins.any.opcode==OP_BSTORE;
+		dbo.bstore <= ins.ins.any.opcode==OP_BLOCK && ins.ins.block.op==BLK_STORE;
 		if (db.bsr) begin
 			dbo.Rtv <= 1'b0;
 		end

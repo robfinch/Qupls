@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2024  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -256,7 +256,7 @@ begin
 	which_tran = 5'd8;
 	for (nn8 = 0; nn8 < 8; nn8 = nn8 + 1)
 		if (cpu_req_queue[nn8[2:1]].tran_req[nn8[0]].tid==ftam_resp.tid
-			&& cpu_req_queue[nn8[2:1]].tran_req[nn8[0]].cmd!=CMD_NONE)
+			&& cpu_req_queue[nn8[2:1]].tran_req[nn8[0]].cmd!=fta_bus_pkg::CMD_NONE)
 			which_tran = nn8;
 end
 //			|| (cpu_req_queue[nn8[3:2]].active[nn8[1:0]] && !cpu_req_queue[nn8[3:2]].tran_req[nn8[1:0]].cyc)

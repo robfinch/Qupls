@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2024  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -32,7 +32,7 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 4800 LUTs / 3100 FFs / 30 BRAMs   
+// 9800 LUTs / 5900 FFs / 30 BRAMs
 // ============================================================================
 
 import const_pkg::*;
@@ -45,13 +45,14 @@ import ptable_walker_pkg::*;
 //`define SEGMENTATION 1'b1
 `define VADR_LBITS 	12:0
 // These bits are used to select the TLB entry
-`define VADR_MBITS	22:13
-`define VADR_HBITS	31:16
+`define VADR_MBITS		22:13
+`define VADR_L2_MBITS	29:23
+`define VADR_HBITS		31:16
 
 module mmu(rst, clk, paging_en,
 	tlb_pmt_base,	ic_miss_adr, ic_miss_asid,
-	vadr_ir, vadr, vadr_v, vadr_asid,
-	vadr2_ir, vadr2, vadr2_v, vadr2_asid,
+	vadr_ir, vadr, vadr_v, vadr_asid, vadr_id,
+	vadr2_ir, vadr2, vadr2_v, vadr2_asid, vadr2_id,
 	padr, padr2,
 	tlb_entry0, tlb_pc_entry, tlb0_v, pc_padr_v, pc_padr,
 	commit0_id, commit0_idv, commit1_id, commit1_idv, commit2_id, commit2_idv,
@@ -61,7 +62,7 @@ module mmu(rst, clk, paging_en,
 	tlb_wr, tlb_way, tlb_entryno, tlb_entry
 );
 parameter CORENO = 6'd1;
-parameter CID = 3'd4;
+parameter CID = 3'd3;
 parameter WAYS = 3;
 
 parameter IO_ADDR = 32'hFFF40001;	//32'hFEFC0001;
@@ -101,12 +102,14 @@ input instruction_t vadr_ir;
 input physical_address_t vadr;
 input asid_t vadr_asid;
 input vadr_v;
+input rob_ndx_t vadr_id;
 output physical_address_t padr;
 
 input instruction_t vadr2_ir;
 input physical_address_t vadr2;
 input asid_t vadr2_asid;
 input vadr2_v;
+input rob_ndx_t vadr2_id;
 output physical_address_t padr2;
 
 output tlb_entry_t tlb_entry0;
@@ -122,10 +125,10 @@ input commit2_idv;
 input rob_ndx_t commit3_id;
 input commit3_idv;
 
-input fta_cmd_request128_t ftas_req;
-output fta_cmd_response128_t ftas_resp;
-output fta_cmd_request128_t ftam_req;
-input fta_cmd_response128_t ftam_resp;
+input fta_cmd_request256_t ftas_req;
+output fta_cmd_response256_t ftas_resp;
+output fta_cmd_request256_t ftam_req;
+input fta_cmd_response256_t ftam_resp;
 
 output [31:0] fault_o;
 output reg [1:0] faultq_o;
@@ -140,7 +143,7 @@ virtual_address_t ptw_vadr;
 reg ptw_vv;
 physical_address_t ptw_padr, tmp_padr, sadr;
 wire ptw_pv;
-wire tlbmiss;
+wire tlb_miss;
 address_t tlb_missadr;
 address_t tlb_pmtadr;
 asid_t tlb_missasid;
@@ -179,14 +182,14 @@ reg [63:0] virt_adr;
 reg [63:0] phys_adr;
 reg phys_adr_v;
 reg [WAYS-1:0] way;
-spte_t pte;
+pte_t pte;
 pmte_t pmt;
 reg pte_v;
 reg [4:0] rty_wait;
 
 integer nn,n4;
-fta_cmd_request128_t sreq;
-fta_cmd_response128_t sresp;
+fta_cmd_request256_t sreq;
+fta_cmd_response256_t sresp;
 wire irq_en;
 wire cs_tw;
 wire [127:0] cfg_out;
@@ -216,7 +219,7 @@ always_comb
 
 vtdl #(.WID(1), .DEP(16)) urdyd1 (.clk(clk), .ce(1'b1), .a(4'd1), .d(cs_hwtw|cs_config), .q(sack));
 
-ddbb128_config #(
+ddbb256_config #(
 	.CFG_BUS(CFG_BUS),
 	.CFG_DEVICE(CFG_DEVICE),
 	.CFG_FUNC(CFG_FUNC),
@@ -270,9 +273,9 @@ always_ff @(posedge clk)
 if (rst) begin
 	ptbr <= 64'hFFFFFFFFFFF80000;
 	ptattr <= 64'h1FFF081;
-	ptattr.limit = 16'h1fff;
-	ptattr.level = 3'd1;
-	ptattr.pte_size <= _8;	// 8B per PTE
+	ptattr.limit <= 16'h1fff;
+	ptattr.level <= 3'd1;
+	ptattr.pte_size <= _8B_PTE;	// 8B per PTE
 	ptattr.pgsz <= 4'd7;		// 8kB pages
 	ptattr.typ <= NAT_HIERARCHIAL;
 	virt_adr <= 64'h0;
@@ -280,50 +283,47 @@ end
 else begin
 	if (cs_hwtw && sreq.we)
 		casez(sreq.padr[15:0])
-		16'hFF40:	
+		16'b1111_1111_010?_????:	
 			begin
 				ptbr <= sreq.data1[63:0];
+				ptattr <= sreq.data1[191:128];
 				$display("Q+ PTW: PTBR=%h",sreq.data1[63:0]);
 			end
-		16'hFF50: ptattr <= sreq.data1[63:0];
-		16'hFF80:	virt_adr <= sreq.data1[63:0];
+		16'b1111_1111_100?_????:	virt_adr <= sreq.data1[63:0];
 		default:	;
 		endcase
 end
 
 always_ff @(posedge clk)
 if (rst) begin
-	sresp <= 'd0;
+	sresp <= 256'd0;
 end
 else begin
-	sresp.dat <= 128'd0;
+	sresp.dat <= 256'd0;
 	sresp.tid <= sreq.tid;
 	sresp.pri <= sreq.pri;
 	if (cs_config)
 		sresp.dat <= cfg_out;
 	else if (cs_hwtw) begin
-		sresp.dat <= 128'd0;
+		sresp.dat <= 256'd0;
 		casez(sreq.padr[15:0])
-		16'hFF00:	sresp.dat <= {64'd0,fault_adr};
-		16'hFF10:	sresp.dat <= fault_seg;
-		16'hFF20:	sresp.dat <= {64'd0,fault_asid,48'd0};
-		16'hFF40:	sresp.dat <= {64'd0,ptbr};
-		16'hFF50:
+		16'b1111_1111_000?_????:	sresp.dat <= {fault_seg,64'd0,fault_adr};
+		16'b1111_1111_001?_????:	sresp.dat <= {64'd0,fault_asid,48'd0};
+		16'b1111_1111_010?_????:	
 		  begin	
-    		  sresp.dat <= ptattr;
+		  		sresp.dat <= {ptattr,64'd0,ptbr};
     		  case(ptattr.typ)
-    		  I386:   pte_size <= _4;
-    		  default:    pte_size <= _8;
+    		  I386:   pte_size <= _4B_PTE;
+    		  default:    pte_size <= _8B_PTE;
     		  endcase
 		  end
-		16'hFF80:	sresp.dat <= virt_adr;
-		16'hFF90:	sresp.dat <= phys_adr;
-		16'hFFA0:   sresp.dat <= phys_adr_v;
-		default:	sresp.dat <= 128'd0;
+		16'b1111_1111_100?_????:	sresp.dat <= {{2{phys_adr}},{2{virt_adr}}};
+		16'b1111_1111_101?_????:	sresp.dat <= {4{63'd0,phys_adr_v}};
+		default:	sresp.dat <= 256'd0;
 		endcase
 	end
 	else
-		sresp.dat <= 128'd0;
+		sresp.dat <= 256'd0;
 end
 
 always_comb
@@ -349,7 +349,7 @@ ptw_miss_queue umsq1
 	.commit2_idv(commit2_idv),
 	.commit3_id(commit3_id),
 	.commit3_idv(commit3_idv),
-	.tlb_miss(tlbmiss & paging_en),
+	.tlb_miss(tlb_miss & paging_en),
 	.tlb_missadr(tlb_missadr),
 	.tlb_missasid(tlb_missasid),
 	.tlb_missid(tlb_missid),
@@ -388,6 +388,7 @@ tlb3way utlb1
 (
 	.rst(rst),
 	.clk(clk),
+	.paging_en(paging_en),
 	.wr(tlb_wr),
 	.way(tlb_way),
 	.entry_no(tlb_entryno),
@@ -396,13 +397,13 @@ tlb3way utlb1
 	.stall_tlb0(1'b0),
 	.stall_tlb1(1'b0),
 	.vadr0(vadr),
-	.vadr1(vadr2),
+	.vadr1(ptw_vv ? ptw_vadr : vadr2),
 	.pc_ladr(ic_miss_adr),
 	.pc_asid(ic_miss_asid),
 	.op0(vadr_ir),
 	.op1(vadr2_ir),
-	.agen0_rndx_i(5'd0),
-	.agen1_rndx_i(5'd0),
+	.agen0_rndx_i(vadr_id),
+	.agen1_rndx_i(vadr2_id),
 	.agen0_rndx_o(),
 	.agen1_rndx_o(),
 	.agen0_v(vadr_v),
@@ -415,10 +416,11 @@ tlb3way utlb1
 	.asid1(16'h0),
 	.entry0_o(tlb_entry0),
 	.entry1_o(tlb_entry1),
+	.pc_tlb_entry_o(tlb_pc_entry),
 	.padr0_v(tlb0_v),
-	.tlb1_v(ptw_pv),
 	.padr0(padr),
-	.tlb1_res(ptw_padr),
+	.padr1(ptw_padr),
+	.padr1_v(ptw_pv),
 	.pc_padr(pc_padr),
 	.pc_padr_v(pc_padr_v),
 	.tlb0_op(),
@@ -430,7 +432,7 @@ tlb3way utlb1
 	.miss_o(tlb_miss),
 	.missadr_o(tlb_missadr),
 	.missasid_o(tlb_missasid),
-	.missid_o(),
+	.missid_o(tlb_missid),
 	.missqn_o(tlb_missqn),
 	.missack(tlb_missack)
 );
@@ -458,9 +460,9 @@ if (rst) begin
 	fault_seg <= {64{1'b0}};
 	miss_adr <= {$bits(virtual_address_t){1'b0}};
 	miss_asid <= {$bits(asid_t){1'b0}};
-	pte <= {$bits(spte_t){1'b0}};
+	pte <= {$bits(pte_t){1'b0}};
 	pte_v <= FALSE;
-	tlb_entryno <= 7'd0;
+	tlb_entryno <= 10'd0;
 	tlb_entry <= {$bits(tlb_entry_t){1'b0}};
 	ptw_vv <= FALSE;
 	ptw_ppv <= TRUE;
@@ -495,7 +497,10 @@ else begin
 		upd_req2 <= 1'b1;
 		tlb_wr <= 1'b1;
 		tlb_way <= way;
-		tlb_entryno <= miss_adr[`VADR_MBITS];
+		if (pte.l2.lvl==3'd2 && SUPPORT_TLBLVL2)
+			tlb_entryno <= {3'd0,miss_adr[`VADR_L2_MBITS]};
+		else
+			tlb_entryno <= miss_adr[`VADR_MBITS];
 		tlb_entry.pte <= pte;
 		tlb_entry.vpn.vpn <= {{48{miss_adr[31]}},miss_adr[`VADR_HBITS]};
 		tlb_entry.vpn.asid <= miss_asid;
@@ -557,7 +562,7 @@ else begin
 	TLB_PTE_FETCH:
 		if (~sel_qe[5] & ptw_pv & ptw_ppv) begin
 			$display("PTW: table walk triggered.");
-			if (miss_queue[sel_qe].lvl != 3'd7) begin
+			if (miss_queue[sel_qe].lvl != 3'd0) begin
 				$display("PTW: walk level=%d", miss_queue[sel_qe].lvl);
 				ptw_ppv <= FALSE;
 				ftam_req <= 'd0;		// clear all fields.
@@ -569,9 +574,10 @@ else begin
 				ftam_req.stb <= 1'b1;
 				ftam_req.we <= 1'b0;
 				case(pte_size)
-				_4:	ftam_req.sel <= 16'h000F << {ptw_padr[3:2],2'd0};//{miss_queue[sel_qe].tadr[3:2],2'd0};
-				_8: ftam_req.sel <= 16'h00FF << {ptw_padr[3],3'd0};
-				default: ftam_req.sel <= 16'hFFFF;
+				_4B_PTE:	ftam_req.sel <= 32'h000F << {ptw_vadr[4:2],2'd0};//{miss_queue[sel_qe].tadr[3:2],2'd0};
+				_8B_PTE:	ftam_req.sel <= 32'h00FF << {ptw_vadr[4:3],3'd0};
+				_16B_PTE:	ftam_req.sel <= 32'hFFFF;
+				default: ftam_req.sel <= 32'h00FF << {ptw_vadr[4:3],3'd0};
 				endcase
 				ftam_req.asid <= miss_queue[sel_qe].asid;
 				ftam_req.vadr <= ptw_vadr;
@@ -658,7 +664,7 @@ else begin
 				pte <= tranbuf[sel_tran].pte;
 				pte_v <= TRUE;
 				// If translation is not valid, cause a page fault.
-				if (~tranbuf[sel_tran].pte.v) begin
+				if (~tranbuf[sel_tran].pte.l1.v) begin
 					$display("PTW: page fault");
 					faultq_o <= miss_queue[tranbuf[sel_tran].stk].qn;
 					fault <= 1'b1;
@@ -667,8 +673,9 @@ else begin
 					fault_adr <= tranbuf[sel_tran].vadr;
 					req_state <= ptable_walker_pkg::FAULT;
 				end
-				// Otherwise translation was valid, update it in the TLB.
-				else if (miss_queue[tranbuf[sel_tran].stk].lvl==3'd7) begin
+				// Otherwise translation was valid, update it in the TLB
+				// when level zero reached, or a shortcut page.
+				else if (miss_queue[tranbuf[sel_tran].stk].lvl==3'd0 || (tranbuf[sel_tran].pte.l2.s==1'b1 && SUPPORT_TLBLVL2)) begin
 					upd_req <= 1'b1;
 					$display("PTW: TLB update request triggered.");
 				end
@@ -685,7 +692,7 @@ begin
 	ftam_req.cti <= fta_bus_pkg::CLASSIC;
 	ftam_req.cyc <= 1'b0;
 	ftam_req.stb <= 1'b0;
-	ftam_req.sel <= 16'h0000;
+	ftam_req.sel <= 32'h0000;
 	ftam_req.we <= 1'b0;
 end
 endtask

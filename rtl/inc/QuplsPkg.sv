@@ -82,6 +82,11 @@ parameter VEC_ELEMENTS = 8;
 // core in terms of number of instructions. The only working value is 4.
 parameter XWID = 4;
 
+parameter SUPPORT_4B_PTE = 1'b0;
+parameter SUPPORT_8B_PTE = 1'b1;
+parameter SUPPORT_16B_PTE = 1'b0;
+parameter SUPPORT_TLBLVL2	= 1'b0;
+
 // =============================================================================
 // Debugging Options
 // =============================================================================
@@ -416,27 +421,19 @@ typedef enum logic [6:0] {
 	OP_VORSI		= 7'd60,
 	OP_VEORSI		= 7'd61,
 	OP_PUSHI		= 7'd62,
-	OP_LDB			= 7'd64,
-	OP_LDBU			= 7'd65,
-	OP_LDW			= 7'd66,
-	OP_LDWU			= 7'd67,
-	OP_LDT			= 7'd68,
-	OP_LDTU			= 7'd69,
-	OP_LDO			= 7'd70,
-	OP_LDOU			= 7'd71,
-	OP_LDH			= 7'd72,
-	OP_CLOAD		= 7'd73,
-	OP_CACHE		= 7'd75,
-	OP_CLD			= 7'd74,
-	OP_LDX			= 7'd79,	
-	OP_STB			= 7'd80,
-	OP_STW			= 7'd81,
-	OP_STT			= 7'd82,
-	OP_STO			= 7'd83,
-	OP_STH			= 7'd84,
-	OP_CSTORE	  = 7'd85,
+	OP_LDx			= 7'd64,
+	OP_FLDx			= 7'd65,
+	OP_DFLDx		= 7'd66,
+	OP_PLDx			= 7'd67,
+	OP_CLOADx		= 7'd68,
+	OP_LDxU			= 7'd69,
+	OP_CACHE		= 7'd70,
+	OP_STx			= 7'd80,
+	OP_FSTx			= 7'd81,
+	OP_DFSTx		= 7'd82,
+	OP_PSTx			= 7'd83,
+	OP_CSTOREx	= 7'd84,
 	OP_STPTR		= 7'd86,
-	OP_STX			= 7'd87,
 	OP_SHIFT		= 7'd88,
 	OP_BLEND		= 7'd89,
 	OP_VSHIFT		= 7'd90,
@@ -1340,7 +1337,7 @@ typedef struct packed
 {
 	logic [23:0] disp;		// 24
 	logic resv;						// 1
-	logic [1:0] ty				// 2
+	logic [1:0] prc;			// 2
 	logic [2:0] sc;				// 3
 	regspec_t Rb;					// 9
 	regspec_t Ra;					// 9
@@ -1352,7 +1349,7 @@ typedef struct packed
 {
 	logic [23:0] disp;		// 24
 	logic resv;						// 1
-	logic [1:0] ty				// 2
+	logic [1:0] prc;			// 2
 	logic [2:0] sc;				// 3
 	regspec_t Rb;					// 9
 	regspec_t Ra;					// 9
@@ -2247,13 +2244,9 @@ begin
 	OP_Bcc,OP_BccU,OP_FBcc:
 		fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
 	OP_LDA,
-	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDOU,OP_LDH:
+	OP_LDx,OP_FLDx,OP_DFLDx,OP_PLDx,OP_LDxU:
 		fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-	OP_LDX:
-		fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-	OP_STB,OP_STW,OP_STT,OP_STO:
-		fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-	OP_STX:
+	OP_STx,OP_FSTx,OP_DFSTx,OP_PSTx:
 		fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
 	OP_PRED:
 		fnSourceAv = fnConstReg(ir.aRa);
@@ -2319,12 +2312,10 @@ begin
 	OP_Bcc,OP_BccU,OP_FBcc:
 		fnSourceBv = fnConstReg(ir.aRb) || fnImmb(ir);
 	OP_LDA,
-	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDOU,OP_LDH:
+	OP_LDx,OP_FLDx,OP_DFLDx,OP_PLDx,OP_LDxU:
 		fnSourceBv = fnConstReg(ir.aRb);
-	OP_STB,OP_STW,OP_STT,OP_STO:
+	OP_STx,OP_FSTx,OP_DFSTx,OP_PSTx:
 		fnSourceBv = fnConstReg(ir.aRb);
-	OP_STX:
-		fnSourceBv = fnConstReg(ir.aRb) || fnImmb(ir);
 	default:	fnSourceBv = 1'b1;
 	endcase
 end
@@ -2369,7 +2360,7 @@ begin
 		endcase
 	OP_ADDSI,OP_ANDSI,OP_ORSI,OP_EORSI:
 		fnSourceCv = fnConstReg(ir.aRc);
-	OP_STB,OP_STW,OP_STT,OP_STO,OP_STH:
+	OP_STx,OP_FSTx,OP_DFSTx,OP_PSTx:
 		fnSourceCv = fnConstReg(ir.aRc);
 	OP_DBRA,OP_JSR,OP_BSR,
 	OP_Bcc,OP_BccU,OP_FBcc:
@@ -2458,11 +2449,9 @@ begin
 
 	OP_MOV:		fnSourceTv = fnConstReg(ir.aRt);
 	OP_LDA,
-	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDOU,OP_LDH:
+	OP_LDx,OP_FLDx,OP_DFLDx,OP_PLDx,OP_LDxU:
 		fnSourceTv = fnConstReg(ir.aRt);
-	OP_LDX:
-		fnSourceTv = fnConstReg(ir.aRt);
-	OP_STB,OP_STW,OP_STT,OP_STO,OP_STH,OP_STX:
+	OP_STx,OP_FSTx,OP_DFSTx,OP_PSTx:
 		fnSourceTv = 1'b1;
 	OP_DBRA: fnSourceTv = 1'b1;
 	OP_Bcc,OP_BccU,OP_FBcc:
@@ -2536,11 +2525,9 @@ begin
 	OP_SHIFT:	fnSourcePv = ~vec;
 	OP_FLT3:	fnSourcePv = ~vecf;	
 	OP_MOV:		fnSourcePv = ~vec;
-	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDOU,OP_LDH:
+	OP_LDx,OP_FLDx,OP_DFLDx,OP_PLDx,OP_LDxU:
 		fnSourcePv = ~veci;
-	OP_LDX:
-		fnSourcePv = ~veci;
-	OP_STB,OP_STW,OP_STT,OP_STO,OP_STH,OP_STX:
+	OP_STx,OP_FSTx,OP_DFSTx,OP_PSTx:
 		fnSourcePv = ~veci;
 	OP_DBRA,
 	8'b00101???:
@@ -2555,8 +2542,7 @@ function fnIsLoad;
 input instruction_t op;
 begin
 	case(op.any.opcode)
-	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDOU,OP_LDH,
-	OP_LDX:
+	OP_LDx,OP_FLDx,OP_DFLDx,OP_PLDx,OP_LDxU:
 		fnIsLoad = 1'b1;
 	default:
 		fnIsLoad = 1'b0;
@@ -2568,7 +2554,7 @@ function fnIsLoadz;
 input instruction_t op;
 begin
 	case(op.any.opcode)
-	OP_LDBU,OP_LDWU,OP_LDTU:
+	OP_LDxU:
 		fnIsLoadz = 1'b1;
 	default:
 		fnIsLoadz = 1'b0;
@@ -2580,8 +2566,7 @@ function fnIsStore;
 input instruction_t op;
 begin
 	case(op.any.opcode)
-	OP_STB,OP_STW,OP_STT,OP_STO,OP_STH,
-	OP_STX:
+	OP_STx,OP_FSTx,OP_DFSTx,OP_PSTx:
 		fnIsStore = 1'b1;
 	default:
 		fnIsStore = 1'b0;
@@ -2638,8 +2623,8 @@ begin
 		fnImmb = 1'b1;
 	OP_RTD:
 		fnImmb = 1'b1;
-	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDOU,OP_LDH,OP_CACHE,
-	OP_STB,OP_STW,OP_STT,OP_STO,OP_STH:
+	OP_LDx,OP_FLDx,OP_DFLDx,OP_PLDx,OP_LDxU,OP_CACHE,
+	OP_STx,OP_FSTx,OP_DFSTx,OP_PSTx:
 		fnImmb = 1'b1;
 //	OP_LDX,OP_STX:
 //		fnImmb = &ir.ins.lsn.Rb;
@@ -2652,12 +2637,6 @@ function fnImmc;
 input ex_instruction_t ir;
 begin
 	fnImmc = 1'b0;
-	case(ir.ins.any.opcode)
-	OP_LDX,OP_STX:
-		fnImmc = 1'b0;
-	default:
-		fnImmc = 1'b0;
-	endcase
 end
 endfunction
 
@@ -2731,26 +2710,28 @@ input instruction_t ins;
 input cpu_types_pkg::value_t dat;
 input cpu_types_pkg::pc_address_t pc;
 case(ins.any.opcode)
-OP_LDB:
-  fnDati = {{56{dat[7]}},dat[7:0]};
-OP_LDBU:
-  fnDati = {{56{1'b0}},dat[7:0]};
-OP_LDW:
-	if (more)
-		fnDati = {48'd0,dat[15:0]};
-	else
-  	fnDati = {{48{dat[15]}},dat[15:0]};
-OP_LDWU:
-  fnDati = {{48{1'b0}},dat[15:0]};
-OP_LDT:
-	if (more)
-		fnDati = {32'd0,dat[31:0]};
-	else
-		fnDati = {{32{dat[31]}},dat[31:0]};
-OP_LDTU:
-	fnDati = {{32{1'b0}},dat[31:0]};
-OP_LDO:
-  fnDati = dat;
+OP_LDx,OP_FLDx,OP_DFLDx,OP_PLDx,OP_LDxU:
+	case(ins.lsinst.prc)
+	2'd0:	fnDati = {{56{dat[7]}},dat[7:0]};
+	2'd1:
+		if (more)
+			fnDati = {48'd0,dat[15:0]};
+		else
+	  	fnDati = {{48{dat[15]}},dat[15:0]};
+	2'd2:
+		if (more)
+			fnDati = {32'd0,dat[31:0]};
+		else
+			fnDati = {{32{dat[31]}},dat[31:0]};
+	2'd3:	fnDati = dat[63:0];
+	endcase
+OP_LDxU:
+	case(ins.lsinst.prc)
+	2'd0:	fnDati = {{56{1'b0}},dat[7:0]};
+	2'd1:	fnDati = {{48{1'b0}},dat[15:0]};
+	2'd2: fnDati = {{32{1'b0}},dat[31:0]};
+	2'd3: fnDati = dat[63:0];
+	endcase
 OP_JSRI:
 	case(ins[18:17])
 	2'd0:	fnDati = {pc[$bits(cpu_types_pkg::pc_address_t)-1:16],dat[15:0]};
@@ -2766,16 +2747,34 @@ function memsz_t fnMemsz;
 input instruction_t ir;
 begin
 	case(ir.any.opcode)
-	OP_LDB,OP_LDBU,OP_STB:
-		fnMemsz = byt;
-	OP_LDW,OP_LDWU,OP_STW:
-		fnMemsz = wyde;
-	OP_LDT,OP_LDTU,OP_STT:
-		fnMemsz = tetra;
-	OP_LDO,OP_LDOU,OP_STO:
-		fnMemsz = octa;
-	OP_LDH,OP_STH:
-		fnMemsz = hexi;
+	OP_LDx,OP_LDxU,OP_STx:
+		case(ir.lsinst.prc)
+		2'd0:	fnMemsz = byt;
+		2'd1:	fnMemsz = wyde;
+		2'd2:	fnMemsz = tetra;
+		2'd3: fnMemsz = octa;
+		endcase
+	OP_FLDx,OP_FSTx:
+		case(ir.lsinst.prc)
+		2'd0:	fnMemsz = hexi;
+		2'd1:	fnMemsz = wyde;
+		2'd2:	fnMemsz = tetra;
+		2'd3: fnMemsz = octa;
+		endcase
+	OP_DFLDx,OP_DFSTx:
+		case(ir.lsinst.prc)
+		2'd0:	fnMemsz = hexi;
+		2'd1:	fnMemsz = hexi;
+		2'd2:	fnMemsz = hexi;
+		2'd3: fnMemsz = octa;
+		endcase
+	OP_PLDx,OP_PSTx:
+		case(ir.lsinst.prc)
+		2'd0:	fnMemsz = hexi;
+		2'd1:	fnMemsz = wyde;
+		2'd2:	fnMemsz = tetra;
+		2'd3: fnMemsz = octa;
+		endcase
 	OP_JSRI:
 		case(ir[31])
 		1'd0: fnMemsz = tetra;
@@ -2791,16 +2790,34 @@ function [15:0] fnSel;
 input instruction_t ir;
 begin
 	case(ir.any.opcode)
-	OP_LDB,OP_LDBU,OP_STB:
-		fnSel = 16'h0001;
-	OP_LDW,OP_LDWU,OP_STW:
-		fnSel = 16'h0003;
-	OP_LDT,OP_LDTU,OP_STT:
-		fnSel = 16'h000F;
-	OP_LDO,OP_LDOU,OP_STO,OP_JSRI:
-		fnSel = 16'h00FF;
-	OP_LDH,OP_STH:
-		fnSel = 16'hFFFF;
+	OP_LDx,OP_LDxU,OP_STx:
+		case(ir.lsinst.prc)
+		2'd0:	fnSel = 16'h0001;
+		2'd1:	fnSel = 16'h0003;
+		2'd2:	fnSel = 16'h000F;
+		2'd3: fnSel = 16'h00FF;
+		endcase
+	OP_FLDx,OP_FSTx:
+		case(ir.lsinst.prc)
+		2'd0:	fnSel = 16'hFFFF;
+		2'd1:	fnSel = 16'h0003;
+		2'd2:	fnSel = 16'h000F;
+		2'd3: fnSel = 16'h00FF;
+		endcase
+	OP_DFLDx,OP_DFSTx:
+		case(ir.lsinst.prc)
+		2'd0:	fnSel = 16'hFFFF;
+		2'd1:	fnSel = 16'hFFFF;
+		2'd2:	fnSel = 16'hFFFF;
+		2'd3: fnSel = 16'h00FF;
+		endcase
+	OP_PLDx,OP_PSTx:
+		case(ir.lsinst.prc)
+		2'd0:	fnSel = 16'h0001;
+		2'd1:	fnSel = 16'h0003;
+		2'd2:	fnSel = 16'h000F;
+		2'd3: fnSel = 16'h00FF;
+		endcase
 	OP_JSRI:
 		case(ir[31])
 		1'd0: fnSel = 16'h000F;

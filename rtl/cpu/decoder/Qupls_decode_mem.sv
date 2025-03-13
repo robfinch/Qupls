@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -44,8 +44,7 @@ function fnIsLoad;
 input instruction_t op;
 begin
 	case(op.any.opcode)
-	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDOU,OP_LDH,
-	OP_LDX:
+	OP_LDx,OP_FLDx,OP_DFLDx,OP_PLDx,OP_LDxU:
 		fnIsLoad = 1'b1;
 	default:
 		fnIsLoad = 1'b0;
@@ -57,8 +56,7 @@ function fnIsStore;
 input instruction_t op;
 begin
 	case(op.any.opcode)
-	OP_STB,OP_STW,OP_STT,OP_STO,OP_STH,
-	OP_STX:
+	OP_STx,OP_FSTx,OP_DFSTx,OP_PSTx:
 		fnIsStore = 1'b1;
 	default:
 		fnIsStore = 1'b0;

@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2024  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -50,8 +50,8 @@ begin
 	OP_ORI,OP_EORI:
 		fnSwap = op[22];
 	OP_JSR: fnSwap = op[22];
-	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_CACHE,
-	OP_STB,OP_STW,OP_STT,OP_STO:
+	OP_LDx,OP_LDxU,OP_FLDx,OP_DFLDx,OP_PLDx,OP_CACHE,
+	OP_STx,OP_FSTx,OP_DFSTx,OP_PSTx:
 		fnSwap = op[22];
 	default:
 		fnSwap = 1'b0;

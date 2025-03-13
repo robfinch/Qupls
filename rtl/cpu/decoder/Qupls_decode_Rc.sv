@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2024  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -34,6 +34,7 @@
 //
 // ============================================================================
 
+import cpu_types_pkg::*;
 import QuplsPkg::*;
 
 module Qupls_decode_Rc(om, ipl, instr, has_immc, Rc, Rcz, Rcn, Rcc);
@@ -62,7 +63,7 @@ begin
 				Rc = instr.aRt;
 				Rcn = instr.ins.r3.Rt.n;
 			end
-		OP_STB,OP_STW,OP_STT,OP_STO,OP_STH:
+		OP_STx,OP_FSTx,OP_DFSTx,OP_PSTx:
 			begin
 				Rc = instr.aRt;
 				Rcn = instr.ins.r3.Rt.n;

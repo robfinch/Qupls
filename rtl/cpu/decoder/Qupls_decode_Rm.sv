@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2024  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -34,6 +34,7 @@
 //
 // ============================================================================
 
+import cpu_types_pkg::*;
 import QuplsPkg::*;
 
 module Qupls_decode_Rm(instr, Rm);
@@ -46,19 +47,32 @@ begin
 	case(instr.ins.any.opcode)
 	OP_ADDI,OP_CMPI,OP_MULI,OP_DIVI,OP_SUBFI,
 	OP_ANDI,
-	OP_ORI,OP_EORI,OP_MULUI,OP_DIVUI,
-	OP_ORSI,OP_ANDSI,OP_EORSI,OP_ADDSI:
+	OP_ORI,OP_EORI,OP_MULUI,OP_DIVUI:
 		begin
-			Rm = 8'd48 | instr.ins[23:22];
+			Rm = 8'd48 | instr.ins.imm.Pr;
 		end
 	OP_SHIFT:
 		begin
-			Rm = instr.ins[40:39];
+			Rm = 8'd48 | instr.ins.shifti.Pr;
 		end
 	OP_R2:
 		begin
-			Rm = instr.ins[40:39];
+			Rm = 8'd48 | instr.ins.r2.Pr;
 		end
+	OP_LDx,OP_LDxU,OP_FLDx,OP_DFLDx,OP_PLDx,OP_CACHE,
+	OP_STx,OP_FSTx,OP_DFSTx,OP_PSTx:
+		Rm = 8'd48 | instr.ins.lsn.Pr;
+	OP_FLT3:
+		Rm = 8'd48 | instr.ins.f3.Pr;
+	OP_MCB:	Rm = 8'd48;
+	OP_BSR:	Rm = 8'd48 | instr.ins.bsr.Pr;
+	OP_JSR:	Rm = 8'd48 | instr.ins.jsr.Pr;
+	OP_RTD:	Rm = 8'd48 | instr.ins.rtd.Pr;
+	OP_ADDSI,OP_ANDSI,OP_ORSI,OP_EORSI,OP_AIPSI:
+		Rm = 8'd48 | instr.ins.ris.Pr;
+	OP_CSR:	Rm = 8'd48 | instr.ins.csr.Pr;
+	OP_MOV:	Rm = 8'd48 | instr.ins.r2.Pr;
+	OP_Bcc,OP_BccU:	Rm = 8'd48 | instr.ins.br.Pr;
 	default:
 		Rm = 8'd48;
 	endcase

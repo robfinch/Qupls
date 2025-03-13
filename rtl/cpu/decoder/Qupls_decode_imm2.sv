@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023-2024  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2023-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -133,18 +133,19 @@ begin
 		end
 	OP_RTD:
 		begin
-			immc = {{32{ins.ins[63]}},ins.ins[63:32]};
-			has_immc = 1'b1;
+			immb = {{32{ins.ins[63]}},ins.ins[63:32]};
+			has_immb = 1'b1;
 		end
-	OP_JSR:
+	OP_JSRR,OP_JSRI:
 		begin
 			immb = {{32{ins.ins[63]}},ins.ins[63:32]};
 			has_immb = 1'b1;
 		end
-	OP_LDB,OP_LDBU,OP_LDW,OP_LDWU,OP_LDT,OP_LDTU,OP_LDO,OP_LDA,OP_CACHE,
-	OP_STB,OP_STW,OP_STT,OP_STO:
+	OP_LDA,
+	OP_LDx,OP_FLDx,OP_DFLDx,OP_PLDx,OP_LDxU,OP_CACHE,
+	OP_STx,OP_FSTx,OP_DFSTx,OP_PSTx:
 		begin
-			immb = {{43{ins.ins.ls.dispHi[6]}},ins.ins.ls.dispHi,ins.ins.ls.dispLo};
+			immb = {{40{ins.ins.ls.disp[23]}},ins.ins.ls.disp};
 			has_immb = 1'b1;
 		end
 	OP_FENCE:
