@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2024  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2024-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -45,18 +45,18 @@ package cpu_types_pkg;
 
 typedef logic [15:0] asid_t;
 `ifdef TINY_MMU
-typedef logic [31:0] address_t;
-typedef logic [31:0] code_address_t;
-typedef logic [31:0] pc_address_t;
-typedef logic [31:0] virtual_address_t;
-typedef logic [31:0] physical_address_t;
+typedef logic [39:0] address_t;
+typedef logic [39:0] code_address_t;
+typedef logic [39:0] pc_address_t;
+typedef logic [39:0] virtual_address_t;
+typedef logic [39:0] physical_address_t;
 `endif
 `ifdef SMALL_MMU
-typedef logic [31:0] address_t;
-typedef logic [31:0] code_address_t;
-typedef logic [31:0] pc_address_t;
-typedef logic [31:0] virtual_address_t;
-typedef logic [31:0] physical_address_t;
+typedef logic [39:0] address_t;
+typedef logic [39:0] code_address_t;
+typedef logic [39:0] pc_address_t;
+typedef logic [39:0] virtual_address_t;
+typedef logic [39:0] physical_address_t;
 `endif
 typedef logic [11:0] mc_address_t;
 typedef logic [8:0] pregno_t;

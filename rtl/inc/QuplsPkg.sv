@@ -1130,7 +1130,7 @@ typedef struct packed
 	logic [19:0] resv4;	// padding to 64-bits
 	logic [11:0] mcip;	// micro-code instruction pointer
 	logic [7:0] pl;			// privilege level
-	logic [6:0] resv3;
+	logic [3:0] resv3;
 	logic mprv;					// memory access priv indicator	
 	logic dbg;					// debug mode indicator
 	logic resv2;
@@ -1138,7 +1138,7 @@ typedef struct packed
 	operating_mode_t om;	// operating mode
 	logic trace_en;			// instruction trace enable
 	logic ssm;					// single step mode
-	logic [2:0] ipl;		// interrupt privilege level
+	logic [5:0] ipl;		// interrupt privilege level
 	logic die;					// debug interrupt enable
 	logic mie;					// machine interrupt enable
 	logic hie;					// hypervisor interrupt enable
@@ -2711,7 +2711,7 @@ input cpu_types_pkg::value_t dat;
 input cpu_types_pkg::pc_address_t pc;
 case(ins.any.opcode)
 OP_LDx,OP_FLDx,OP_DFLDx,OP_PLDx,OP_LDxU:
-	case(ins.lsinst.prc)
+	case(ins.ls.prc)
 	2'd0:	fnDati = {{56{dat[7]}},dat[7:0]};
 	2'd1:
 		if (more)
@@ -2726,7 +2726,7 @@ OP_LDx,OP_FLDx,OP_DFLDx,OP_PLDx,OP_LDxU:
 	2'd3:	fnDati = dat[63:0];
 	endcase
 OP_LDxU:
-	case(ins.lsinst.prc)
+	case(ins.ls.prc)
 	2'd0:	fnDati = {{56{1'b0}},dat[7:0]};
 	2'd1:	fnDati = {{48{1'b0}},dat[15:0]};
 	2'd2: fnDati = {{32{1'b0}},dat[31:0]};
@@ -2748,28 +2748,28 @@ input instruction_t ir;
 begin
 	case(ir.any.opcode)
 	OP_LDx,OP_LDxU,OP_STx:
-		case(ir.lsinst.prc)
+		case(ir.ls.prc)
 		2'd0:	fnMemsz = byt;
 		2'd1:	fnMemsz = wyde;
 		2'd2:	fnMemsz = tetra;
 		2'd3: fnMemsz = octa;
 		endcase
 	OP_FLDx,OP_FSTx:
-		case(ir.lsinst.prc)
+		case(ir.ls.prc)
 		2'd0:	fnMemsz = hexi;
 		2'd1:	fnMemsz = wyde;
 		2'd2:	fnMemsz = tetra;
 		2'd3: fnMemsz = octa;
 		endcase
 	OP_DFLDx,OP_DFSTx:
-		case(ir.lsinst.prc)
+		case(ir.ls.prc)
 		2'd0:	fnMemsz = hexi;
 		2'd1:	fnMemsz = hexi;
 		2'd2:	fnMemsz = hexi;
 		2'd3: fnMemsz = octa;
 		endcase
 	OP_PLDx,OP_PSTx:
-		case(ir.lsinst.prc)
+		case(ir.ls.prc)
 		2'd0:	fnMemsz = hexi;
 		2'd1:	fnMemsz = wyde;
 		2'd2:	fnMemsz = tetra;
@@ -2791,28 +2791,28 @@ input instruction_t ir;
 begin
 	case(ir.any.opcode)
 	OP_LDx,OP_LDxU,OP_STx:
-		case(ir.lsinst.prc)
+		case(ir.ls.prc)
 		2'd0:	fnSel = 16'h0001;
 		2'd1:	fnSel = 16'h0003;
 		2'd2:	fnSel = 16'h000F;
 		2'd3: fnSel = 16'h00FF;
 		endcase
 	OP_FLDx,OP_FSTx:
-		case(ir.lsinst.prc)
+		case(ir.ls.prc)
 		2'd0:	fnSel = 16'hFFFF;
 		2'd1:	fnSel = 16'h0003;
 		2'd2:	fnSel = 16'h000F;
 		2'd3: fnSel = 16'h00FF;
 		endcase
 	OP_DFLDx,OP_DFSTx:
-		case(ir.lsinst.prc)
+		case(ir.ls.prc)
 		2'd0:	fnSel = 16'hFFFF;
 		2'd1:	fnSel = 16'hFFFF;
 		2'd2:	fnSel = 16'hFFFF;
 		2'd3: fnSel = 16'h00FF;
 		endcase
 	OP_PLDx,OP_PSTx:
-		case(ir.lsinst.prc)
+		case(ir.ls.prc)
 		2'd0:	fnSel = 16'h0001;
 		2'd1:	fnSel = 16'h0003;
 		2'd2:	fnSel = 16'h000F;
