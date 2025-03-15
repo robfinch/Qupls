@@ -110,7 +110,7 @@ begin
 	case(ir.ins.any.opcode)
 	OP_LDx,OP_LDxU,OP_FLDx,OP_DFLDx,OP_PLDx,OP_CLOADx,
 	OP_STx,OP_FSTx,OP_DFSTx,OP_PSTx,OP_CSTOREx:
-		res1 <= as + bs + {{41{ir.ins.lsn.dispHi[6]}},ir.ins.lsn.dispHi,ir.ins.lsn.dispLo};
+		res1 <= as + bs + {{41{ir.ins.lsn.disp[23]}},ir.ins.lsn.disp};
 	OP_AMO:
 		res1 <= as + b;
 	default:

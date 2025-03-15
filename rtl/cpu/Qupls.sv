@@ -65,7 +65,7 @@ import QuplsPkg::*;
 `define PANIC_BADTARGETID	4'd12
 `define PANIC_COMMIT 4'd13
 
-module Qupls(coreno_i, rst_i, clk_i, clk2x_i, clk3x_i, clk5x_i, irq_i, vect_i,
+module Qupls(coreno_i, rst_i, clk_i, clk2x_i, clk3x_i, clk5x_i, ipl, irq, irq_ack, irq_i, ivect_i,
 	fta_req, fta_resp, snoop_adr, snoop_v, snoop_cid);
 parameter CORENO = 6'd1;
 parameter CID = 6'd1;
@@ -75,8 +75,11 @@ input clk_i;
 input clk2x_i;
 input clk3x_i;
 input clk5x_i;
-input [2:0] irq_i;
-input [7:0] vect_i;
+output reg [5:0] ipl;
+input irq;
+output reg irq_ack;
+input [5:0] irq_i;
+input [31:0] ivect_i;
 output fta_cmd_request256_t fta_req;
 input fta_cmd_response256_t fta_resp;
 input cpu_types_pkg::address_t snoop_adr;
@@ -800,8 +803,10 @@ reg micro_code_active_x;
 wire micro_code_active_d;
 wire micro_code_active_r;
 wire micro_code_active_q;
-reg [2:0] pending_ipl;				// pending interrupt level.
-wire [2:0] im = sr.ipl;
+reg [5:0] pending_ipl;				// pending interrupt level.
+wire [5:0] im = sr.ipl;
+always_comb
+	ipl = sr.ipl;
 reg [5:0] regset = 6'd0;
 reg [63:0] vgm;									// vector global mask
 value_t vrm [0:3];						// vector restart mask
@@ -1130,7 +1135,8 @@ end
 // ----------------------------------------------------------------------------
 
 pc_address_t nmi_addr, irq_addr;
-reg nmi, ic_irq, ic_nmi, nmi_fet;
+reg nmi, ic_nmi, nmi_fet;
+reg [5:0] ic_irq;
 reg irq_trig;
 wire pe_nmi;
 reg exe_nmi, exe_irq;
@@ -1173,9 +1179,9 @@ else begin
 end
 
 always_comb
-	nmi = irq_i==3'd7;
+	nmi = irq_i==6'd63;
 always_comb
-	irq_addr = {kvec[sr.dbg ? 4 : 3][$bits(pc_address_t)-1:8] + 4'd10,8'h0};
+	irq_addr = irq ? ivect_i  : {kvec[sr.dbg ? 4 : 3][$bits(pc_address_t)-1:8] + 4'd10,8'h0};
 always_comb
 	nmi_addr = {kvec[sr.dbg ? 4 : 3][$bits(pc_address_t)-1:8] + 4'd11,8'h0};
 
@@ -1196,7 +1202,7 @@ else begin
 end
 always_ff @(posedge clk)
 if (irst)
-	ic_irq <= 3'd0;
+	ic_irq <= 6'd0;
 else begin
 	if (advance_pipeline)
 		ic_irq <= irq_i;
@@ -1965,10 +1971,10 @@ always_ff @(posedge clk) if (irst) mip2v_q <= FALSE; else if (advance_pipeline_s
 always_ff @(posedge clk) if (irst) mip3v_q <= FALSE; else if (advance_pipeline_seg2) mip3v_q <= mip3v_r;
 
 always_comb
-if ((fnIsAtom(ins0_dec.ins) || fnIsAtom(ins1_dec.ins) || fnIsAtom(ins2_dec.ins) || fnIsAtom(ins3_dec.ins)) && irq_i != 3'd7)
+if ((fnIsAtom(ins0_dec.ins) || fnIsAtom(ins1_dec.ins) || fnIsAtom(ins2_dec.ins) || fnIsAtom(ins3_dec.ins)) && irq_i != 6'd63)
 	hirq = 1'd0;
 else
-	hirq = (irq_i > sr.ipl) && !int_commit && (irq_i > atom_mask[2:0]);
+	hirq = irq && !int_commit && (irq_i > atom_mask[5:0]);
 
 /* ToDo: fix micro-code for XWID other than four */
 generate begin : gMicroCode
@@ -7468,7 +7474,7 @@ begin
 	sr.pl <= 8'hFF;				// highest priority
 	sr.om <= OM_MACHINE;
 	sr.dbg <= TRUE;
-	sr.ipl <= 3'd0;				// non-maskable interrupts only
+	sr.ipl <= 6'd0;				// non-maskable interrupts only
 	asid <= 16'd0;
 	ip_asid <= 16'd0;
 	atom_mask <= 32'd0;
@@ -8181,7 +8187,7 @@ begin
 		mc_stack[nn] <= mc_stack[nn-1];
 	mc_stack[0].ir <= micro_ir;
 	mc_stack[0].ip <= micro_ip;
-	sr.ipl <= 3'd7;
+	sr.ipl <= 6'd63;
 	sr.pl <= 8'hFF;
 	sr.mcip <= micro_ip;
 	excir <= rob[id].op;

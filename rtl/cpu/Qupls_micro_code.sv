@@ -3818,7 +3818,7 @@ case(micro_ip)
 		instr.aRb=9'd0;
 		instr.aRc=9'd0;
 		instr.aRt=MC0;
-		instr.any.opcode = OP_LDx;
+		instr.ins.any.opcode = OP_LDx;
 		instr.ins.ls.prc = ir[9:7];
 	end
 12'h3A2:
@@ -3829,7 +3829,7 @@ case(micro_ip)
 		instr.aRb=9'd0;
 		instr.aRc=MC0;
 		instr.aRt=9'd0;
-		instr.any.opcode = OP_STx;
+		instr.ins.any.opcode = OP_STx;
 		instr.ins.ls.prc = ir[9:7];
 	end
 12'h3A3:
@@ -3882,7 +3882,7 @@ case(micro_ip)
 		instr.aRb=9'd0;
 		instr.aRc=9'd0;
 		instr.aRt=MC0;
-		instr.any.opcode = OP_LDx;
+		instr.ins.any.opcode = OP_LDx;
 		instr.ins.ls.prc = ir[9:7];
 	end
 12'h3B2:
@@ -3893,7 +3893,7 @@ case(micro_ip)
 		instr.aRb=9'd0;
 		instr.aRc=9'd0;
 		instr.aRt=MC1;
-		instr.any.opcode = OP_LDx;
+		instr.ins.any.opcode = OP_LDx;
 		instr.ins.ls.prc = ir[9:7];
 	end
 12'h3B3:
@@ -3963,7 +3963,7 @@ case(micro_ip)
 		instr.aRb=9'd0;
 		instr.aRc=9'd0;
 		instr.aRt=MC0;
-		instr.any.opcode = OP_LDx;
+		instr.ins.any.opcode = OP_LDx;
 		instr.ins.ls.prc = ir[9:7];
 	end
 12'h3C2:
