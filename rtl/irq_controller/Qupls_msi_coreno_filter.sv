@@ -1,8 +1,16 @@
+// There could be multiple cores that are able to process the interrupt. The
+// core running at the lowest priority level is selected.
+
+// 7 core = 50 LUTs
+// 15 cores = 129 LUTs
+// 31 cores = 330 LUTs
+// 63 cores = 1444 LUTs
+
 module Qupls_msi_coreno_filter(ack,ipl,sel);
-parameter NCORES = 8;
-input [NCORES-1:1] ack;
-input [5:0] ipl [NCORES-1:1];
-output reg [NCORES-1:0] sel;
+parameter NCORES = 64;
+input [NCORES-1:1] ack;				// From the CPU, indicating it could process the IRQ
+input [5:0] ipl [NCORES-1:1];	// From the CPU, its current interrupt level
+output reg [NCORES-1:0] sel;	// To the CPU, select for IRQ processing.
 
 integer jj;
 reg [5:0] ipl_min;

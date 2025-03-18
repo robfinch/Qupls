@@ -32,39 +32,20 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //                                                                          
 //
-// 7700 LUTs / 8000 FFs / 6/11 BRAMs	(63 priority levels)
-// 1900 LUTs / 2200 FFs / 6/11 BRAMS (7 priority levels)
+// 7050 LUTs / 8400 FFs / 8/11 BRAMs	(63 priority levels)
+// 2300 LUTs / 2550 FFs / 8/11 BRAMS (7 priority levels)
 // ============================================================================
 //
 import const_pkg::*;
 import fta_bus_pkg::*;
 import QuplsPkg::*;
+import msi_pkg::*;
 
 typedef struct packed
 {
 	logic [23:0] timestamp;
 	fta_imessage_t msg;
 } irq_hist_t;
-
-typedef struct packed
-{
-	logic [5:0] resv;
-	logic [5:0] cpu_coreno;
-	logic [2:0] swstk;
-	logic mask;					// 1=interrupt masked
-	logic [31:0] dat;		// data for ISR
-	logic [39:0] adr;		// ISR address
-} msi_svec_t;					// 88 bits
-
-typedef struct packed
-{
-	logic [21:0] resv;
-	logic [5:0] cpu_coreno;
-	logic [2:0] swstk;
-	logic mask;					// 1=interrupt masked
-	logic [31:0] dat;		// data for ISR
-	logic [63:0] adr;		// ISR address
-} msi_vec_t;
 
 module Qupls_msi_controller(coreno, rst, clk, cs_config_i, req, resp,
 	ipl, irq_resp_i, irq, ivect_o, ipri, swstk, irq_ack);
@@ -78,14 +59,18 @@ output fta_cmd_response64_t resp;
 input [5:0] ipl;
 input fta_cmd_response256_t irq_resp_i;
 output reg [63:0] irq;
-output reg [39:0] ivect_o;
+output reg [96:0] ivect_o;
 output reg [5:0] ipri;
 output reg [2:0] swstk;
 input irq_ack;
 
 parameter NQUES = 7;
-parameter PIC_ADDR = 32'hFEE20001;
-parameter PIC_ADDR_MASK = 32'hFFFF0000;
+parameter NVEC = 512;
+localparam LOG_NVEC = $clog2(NVEC);
+parameter QIC_ADDR = 32'hFEE20001;
+parameter QIC_ADDR_MASK = 32'hFFFFE000;
+parameter QIC_VTADDR = 32'hFECC0001;
+parameter QIC_VTADDR_MASK = 32'hFFFE0000;
 
 parameter CFG_BUS = 8'd0;
 parameter CFG_DEVICE = 5'd6;
@@ -108,7 +93,7 @@ parameter CFG_IRQ_LINE = 8'hFF;
 localparam CFG_HEADER_TYPE = 8'h00;			// 00 = a general device
 
 
-integer nn,jj,n0,n1,n2,n3;
+integer nn,jj,n0,n1,n2,n3,n4,n5;
 
 reg erc;
 reg [63:0] uvtbl_base_adr;			// user mode vector table
@@ -116,8 +101,8 @@ reg [63:0] svtbl_base_adr;			// supervisor mode
 reg [63:0] hvtbl_base_adr;			// hypervisor mode
 reg [63:0] mvtbl_base_adr;			// machine mode
 reg [63:0] vtbl_limit;
-fta_imessage_t que_dout;
-fta_imessage_t imsg,imsg2;
+fta_imessage_t que_dout, que_doutd;
+fta_imessage_t imsg,imsg2,imsg_pending;
 reg que_full;
 reg stuck, stuck_ack;
 wire wr_clk = clk;
@@ -125,9 +110,9 @@ wire clka = clk;
 wire clkb = clk;
 reg ena,enb;
 reg [8:0] wea,web;
-reg [10:0] addra, addrb;
-msi_svec_t douta, doutb;
-msi_svec_t dina, dinb;
+reg [10:0] addra, addrb, addrbd;
+msi_vec_t douta, doutb;
+msi_vec_t dina, dinb;
 reg irq1,irq2;
 reg [5:0] ipri2;
 wire [NQUES:1] rd_rst_busy;
@@ -156,20 +141,29 @@ reg invert_pri;
 reg rdy1;
 reg [63:0] dat_o;
 // Register inputs
-fta_cmd_request64_t reqd;
+fta_cmd_request64_t reqd,reqh,reqvt;
 fta_cmd_response64_t cfg_resp;
 reg cs_config, cs_io;
-wire respack;
+wire cs_ivt;
+reg cs_ivtd;
+wire respack,respackd;
 wire [12:0] resptid;
 reg [1:0] oma;
 (* ram_style="distributed" *)
-reg [63:0] coreset [0:63];
+reg [63:0] coreset [0:255];
+reg [63:0] irq_pending [0:127];		// interrupt pending
+reg [63:0] irq_enable [0:127];		// interrupt enable
+reg global_enable;
+reg [63:0] irq_threshold;
+reg wr_ip, wr_ipp;
 
 always_comb
 	imsg = {irq_resp_i.adr[39:0],irq_resp_i.dat[31:0]};
 
 always_ff @(posedge clk)
 	reqd <= req;
+always_ff @(posedge clk)
+	reqvt <= reqd;
 
 always_ff @(posedge clk)
 	cs_config <= cs_config_i;
@@ -177,11 +171,14 @@ always_ff @(posedge clk)
 wire cs_pic;
 always_comb
 	cs_io = cs_pic;
+always_ff @(posedge clk)
+	cs_ivtd <= cs_ivt;
 
 always_ff @(posedge clk_i)
 	erc <= req.cti==fta_bus_pkg::ERC;
 
 vtdl #(.WID(1), .DEP(16)) urdyd2 (.clk(clk_i), .ce(1'b1), .a(4'd0), .d((cs_io)&(erc|~reqd.we)), .q(respack));
+vtdl #(.WID(1), .DEP(16)) urdyd3 (.clk(clk_i), .ce(1'b1), .a(4'd1), .d((cs_ivt)&(erc|~reqd.we)), .q(respackd));
 always_ff @(posedge clk)
 if (rst)
 	resp <= {$bits(fta_cmd_response64_t){1'b0}};
@@ -199,6 +196,17 @@ else begin
 		resp.adr <= respack ? reqd.padr : 40'd0;
 		resp.dat <= respack ? dat_o : 64'd0;
 	end
+	else if (cs_ivtd) begin
+		resp.ack <= respackd ? reqvt.cyc : 1'b0;
+		resp.tid <= respackd ? reqvt.tid : 13'd0;
+		resp.next <= 1'b0;
+		resp.stall <= 1'b0;
+		resp.err <= fta_bus_pkg::OKAY;
+		resp.rty <= 1'b0;
+		resp.pri <= 4'd5;
+		resp.adr <= respackd ? reqvt.padr : 40'd0;
+		resp.dat <= respackd ? dat_o : 64'd0;
+	end
 end
 
 
@@ -208,8 +216,10 @@ ddbb64_config #(
 	.CFG_FUNC(CFG_FUNC),
 	.CFG_VENDOR_ID(CFG_VENDOR_ID),
 	.CFG_DEVICE_ID(CFG_DEVICE_ID),
-	.CFG_BAR0(PIC_ADDR),
-	.CFG_BAR0_MASK(PIC_ADDR_MASK),
+	.CFG_BAR0(QIC_ADDR),
+	.CFG_BAR0_MASK(QIC_ADDR_MASK),
+	.CFG_BAR1(QIC_VTADDR),
+	.CFG_BAR1_MASK(QIC_VTADDR_MASK),
 	.CFG_SUBSYSTEM_VENDOR_ID(CFG_SUBSYSTEM_VENDOR_ID),
 	.CFG_SUBSYSTEM_ID(CFG_SUBSYSTEM_ID),
 	.CFG_ROM_ADDR(CFG_ROM_ADDR),
@@ -231,40 +241,49 @@ ucfg1
 	.req_i(reqd),
 	.resp_o(cfg_resp),
 	.cs_bar0_o(cs_pic),
-	.cs_bar1_o(),
+	.cs_bar1_o(cs_ivt),
 	.cs_bar2_o()
 );
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+// Register interface
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 
 // register read path
 always_ff @(posedge clk)
 if (cs_io) begin
-	if (reqd.padr[15:14]==2'd3)
-		casez(reqd.padr[9:3])
-		7'd0:	dat_o <= uvtbl_base_adr;
-		7'd1:	dat_o <= svtbl_base_adr;
-		7'd2:	dat_o <= hvtbl_base_adr;
-		7'd3:	dat_o <= mvtbl_base_adr;
-		7'd4:	dat_o <= vtbl_limit;
-		7'd5:	
-			begin
-				dat_o[0] <= que_full;
-				dat_o[1] <= stuck;
-				dat_o[62:2] <= 61'd0;
-				dat_o[63] <= irq;
-			end
-		7'd6:	dat_o <= que_dout[31:0];
-		7'd7:	dat_o <= que_dout[39:32];
-		7'd8:	dat_o <= empty;
-		7'd9:	dat_o <= overflow;
-		7'b1??????:	dat_o <= coreset[reqd.padr[8:3]];
-		default:	dat_o <= 64'd0;
-		endcase
-	else
-		case(reqd.padr[3])
-		1'd0:	dat_o <= {{24{&douta.adr[39:38]}},douta.adr};
-		1'd1:	dat_o <= {31'd0,douta.mask,douta.dat};
-		endcase
+	casez(reqd.padr[12:3])
+	10'h0:	dat_o <= uvtbl_base_adr;
+	10'h1:	dat_o <= svtbl_base_adr;
+	10'h2:	dat_o <= hvtbl_base_adr;
+	10'h3:	dat_o <= mvtbl_base_adr;
+	10'h4:	dat_o <= vtbl_limit;
+	10'h5:	
+		begin
+			dat_o[0] <= que_full;
+			dat_o[1] <= stuck;
+			dat_o[62:2] <= 61'd0;
+			dat_o[63] <= irq;
+		end
+	10'h6:	dat_o <= que_dout[31:0];
+	10'h7:	dat_o <= que_dout[39:32];
+	10'h8:	dat_o <= {empty,1'b0};
+	10'h9:	dat_o <= {overflow,1'b0};
+	10'h70:	dat_o <= {63'd0,global_enable};
+	10'h72:	dat_o <= {58'd0,irq_threshold};
+	10'b01????????:	dat_o <= coreset[reqd.padr[9:3]];
+	// 0x80 tp 0xBF = interrupt pending bits
+	10'b100???????:	dat_o <= irq_pending[reqd.padr[9:3]];
+	// 0xC0 to 0xFF = interrupt endable bits
+	10'b101???????:	dat_o <= irq_enable[reqd.padr[9:3]];
+	default:	dat_o <= 64'd0;
+	endcase
 end
+else if (cs_ivtd)
+	case(reqvt.padr[3])
+	1'd0:	dat_o <= douta[ 63: 0];
+	1'd1:	dat_o <= douta[127:64];
+	endcase
 else
 	dat_o <= 64'd0;
 	
@@ -286,26 +305,68 @@ if (rst) begin
 	hvtbl_base_adr <= 64'd0;
 	mvtbl_base_adr <= 64'd0;
 	que_full <= 1'b0;
+	for (n5 = 0; n5 < 128; n5 = n5 + 1)
+		irq_enable[n5] <= 64'd0;
 end
 else begin
 	if (|full)
 		que_full <= 1'b1;
 	if (cs_io & reqd.we)
-		casez(reqd.padr[9:3])
-		7'd0:	uvtbl_base_adr <= reqd.dat[63:0];
-		7'd1:	svtbl_base_adr <= reqd.dat[63:0];
-		7'd2:	hvtbl_base_adr <= reqd.dat[63:0];
-		7'd3:	mvtbl_base_adr <= reqd.dat[63:0];
-		7'd4:	vtbl_limit <= {53'd0,reqd.dat[10:0]};
-		7'd5:
+		casez(reqd.padr[12:3])
+		10'd0:	uvtbl_base_adr <= reqd.dat[63:0];
+		10'd1:	svtbl_base_adr <= reqd.dat[63:0];
+		10'd2:	hvtbl_base_adr <= reqd.dat[63:0];
+		10'd3:	mvtbl_base_adr <= reqd.dat[63:0];
+		10'd4:	vtbl_limit <= {53'd0,reqd.dat[10:0]};
+		10'd5:
 			begin
 				if (reqd.dat[0]==1'b0)
 					que_full <= 1'b0;
 			end
-		7'b1??????:	coreset[reqd.padr[8:3]] <= reqd.dat[63:0];
+		10'h70:	global_enable <= reqd.dat[0];
+		10'h72:	irq_threshold <= reqd.dat[5:0];
+		10'b01????????:	coreset[reqd.padr[9:3]] <= reqd.dat[63:0];
+		10'b100???????:	irq_enable[reqd.padr[9:3]] <= reqd.dat;
 		default:	;
 		endcase
 end
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+
+always_comb
+	imsg_pending = irq_resp_i.err==fta_bus_pkg::IRQ && imsg.irq_coreno==coreno;
+
+// Writing to the pending bit register array clears the selected bit and
+// triggers that interrupt if the MSB is set.
+// The ISR should clear the pending bit without triggering an interrupt.
+
+always_ff @(posedge clk)
+if (rst) begin
+	reqh <= {$bits(fta_cmd_response64_t){1'b0}};
+	wr_ipp <= 1'b0;
+	for (n4 = 0; n4 < 128; n4 = n4 + 1)
+		irq_pending[n4] <= 64'd0;
+end
+else begin
+	if (wr_ip)
+		wr_ipp <= 1'b0;
+	if (cs_io & reqd.we) begin
+		if (reqd.padr[12:10]==3'b101) begin
+			irq_pending[reqd.padr[9:3]] <= irq_pending[reqd.padr[9:3]] & ~({63'd0,reqd.dat[63]} << reqd.dat[5:0]);
+			reqh <= reqd;
+			wr_ipp <= 1'b1;
+		end
+	end
+	if (imsg_pending)
+		irq_pending[{imsg.om,imsg.vecno[10:6]}] <= irq_pending[{imsg.om,imsg.vecno[10:6]}] | (64'd1 << imsg.vecno[5:0]);
+	// Clear pending bit for ocurring IRQ
+//	if (irq)
+//		irq_pending[{que_doutd.om,addrb[10:6]}][addrb[5:0]] <= 1'b0;
+end
+
+always_comb
+	wr_ip = ~irq2 & wr_ipp;
 
 always_comb
 	case(que_dout.om)
@@ -317,21 +378,23 @@ always_comb
 always_comb
 	addra = reqd.padr[14:4];
 always_comb
-	addrb = {oma,9'd0} + que_dout.vecno[10:0];
+	addrb = wr_ip ? {reqh.padr[9:8],{LOG_NVEC{1'b0}}} + {reqh.padr[7:3],reqh.dat[5:0]} : {oma,{LOG_NVEC{1'b0}}} + que_dout.vecno[10:0];
+always_ff @(posedge clk)
+	addrbd <= addrb;
 always_comb
-	dina = reqd.padr[3] ? {reqd.dat[47:0],40'd0} : {48'h0,reqd.dat[39:0]};
+	dina = reqd.padr[3] ? {reqd.dat[63:0],64'd0} : {64'h0,reqd.dat[63:0]};
 always_comb
-	dinb = 88'd0;
+	dinb = {8'h00,que_dout.resv2,112'd0};
 always_comb
-	ena = cs_io && reqd.padr[15]==1'b0;
+	ena = cs_ivt;
 always_comb
 	enb = 1'b1;
 always_comb
-	wea = {11{reqd.we}} & {reqd.padr[3] ? {reqd.sel[5:0],5'h0} : {6'h0,reqd.sel[4:0]}};
+	wea = {16{reqd.we}} & {reqd.padr[3] ? {reqd.sel[7:0],8'h0} : {8'h0,reqd.sel[7:0]}};
 always_comb
-	web = 9'b0;
+	web = wr_ip ? 16'b0 : irq2 ? 16'h4000 : 16'd0;
 always_comb
-	ivect_o = doutb.adr;
+	ivect_o = {doutb.ai,doutb.adrins};
 
 always_ff @(posedge clk)
 if (rst)
@@ -357,13 +420,19 @@ always_comb
 	qsel <= invert_pri ? 7'd64-que_sel : que_sel;
 
 always_ff @(posedge clk)
-	que_dout <= (que_sel==7'd127) ? 80'd0 : fifo_dout[qsel];
+	que_dout <= (que_sel==7'd127) ? 88'd0 : fifo_dout[qsel];
 always_ff @(posedge clk)
-	irq2 <= ~&empty && (que_sel != 7'd127) && (qsel > ipl || qsel==6'd63);
+	que_doutd <= que_dout;
+always_ff @(posedge clk)
+	irq2 <= ~&empty && (que_sel != 7'd127) && (qsel > irq_threshold || qsel==6'd63);
 always_ff @(posedge clk)
 	irq1 <= irq2;
 always_comb
-	irq = {64{irq1 & ~doutb.mask}} & coreset[doutb.cpu_coreno];
+	irq = {64{irq1						// There must be an irq signal active
+					& doutb.ie				// and it must be enabled in the vector table
+					& global_enable		// and it must be globaly enabled
+					& irq_enable[addrbd[10:3]][addrbd[2:0]]	// finally, enabled in IRQ enable flags
+				}} & coreset[doutb.cpu_affinity_group];
 always_comb
 	swstk = doutb.swstk;
 always_ff @(posedge clk)
@@ -375,7 +444,7 @@ always_ff @(posedge clk)
 always_ff @(posedge clk)
 	for (nn = 1; nn <= NQUES; nn = nn + 1)
 		if (irq_resp_i.pri==nn)
-			wr_en1[nn] <= irq_resp_i.err==fta_bus_pkg::IRQ && imsg.irq_coreno==coreno;
+			wr_en1[nn] <= imsg_pending;
 		else
 			wr_en1[nn] <= 1'b0;
 
@@ -436,8 +505,8 @@ genvar g;
 generate begin : gQues
 	for (g = 1; g <= NQUES; g = g + 1) begin
 		// Always reading the queue output until an IRQ is detected.
-		assign rd_en[g] = ~(irq & ~irq_ack) & ~rd_rst_busy[g];
-		assign wr_en[g] = wr_en1[g] & ~rd_rst_busy[g] & ~wr_rst_busy[g] & ~rst;
+		assign rd_en[g] = ~(irq & ~irq_ack);
+		assign wr_en[g] = wr_en1[g] & ~rst;
 		always_ff @(posedge clk)
 			fifo_din[g] <= imsg;
 
@@ -462,13 +531,13 @@ endgenerate
 ivtbl_ram ivtram1 (
   .clka(clka),    // input wire clka
   .ena(ena),      // input wire ena
-  .wea(wea),      // input wire [9 : 0] wea
+  .wea(wea),      // input wire [15 : 0] wea
   .addra(addra),  // input wire [10 : 0] addra
   .dina(dina),    // input wire [79 : 0] dina
   .douta(douta),  // output wire [79 : 0] douta
   .clkb(clkb),    // input wire clkb
   .enb(enb),      // input wire enb
-  .web(web),      // input wire [9 : 0] web
+  .web(web),      // input wire [15 : 0] web
   .addrb(addrb),  // input wire [10 : 0] addrb
   .dinb(dinb),    // input wire [79 : 0] dinb
   .doutb(doutb)  // output wire [79 : 0] doutb
