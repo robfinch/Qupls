@@ -6,7 +6,7 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//	- programmable interval timer
+//	- Qupls interval timer
 //
 //
 // BSD 3-Clause License
@@ -79,25 +79,16 @@
 // ============================================================================
 //
 
-module Qupls_pit(rst_i, clk_i, cs_config_i, cs_io_i,
-	cyc_i, stb_i, ack_o, sel_i, we_i, adr_i, dat_i, dat_o,
-	clk0, gate0, out0, clk1, gate1, out1, clk2, gate2, out2, clk3, gate3, out3,
-	irq_o
-	);
+module Qupls_qit(rst_i, clk_i, cs_config_i, sreq, sresp,
+	clk0, gate0, out0, clk1, gate1, out1, clk2, gate2, out2, clk3, gate3, out3
+);
 parameter NTIMER=8;
 parameter BITS=48;
 input rst_i;
 input clk_i;
 input cs_config_i;
-input cs_io_i;
-input cyc_i;
-input stb_i;
-output ack_o;
-input [7:0] sel_i;
-input we_i;
-input [31:0] adr_i;
-input [63:0] dat_i;
-output reg [63:0] dat_o;
+input fta_cmd_request64_t sreq;
+output fta_cmd_response64_t sresp;
 input clk0;
 input gate0;
 output out0;
@@ -110,10 +101,9 @@ output out2;
 input clk3;
 input gate3;
 output out3;
-output [31:0] irq_o;
 
-parameter PIT_ADDR = 32'hFEE40001;
-parameter PIT_ADDR_MASK = 32'h00FF0000;
+parameter QIT_ADDR = 32'hFEE40001;
+parameter QIT_ADDR_MASK = 32'hFFFF0000;
 
 parameter CFG_BUS = 8'd0;
 parameter CFG_DEVICE = 5'd4;
@@ -139,9 +129,20 @@ parameter MSIX = 1'b0;
 
 integer n,n1;
 wire irq;
-wire cs_pit;
-wire [63:0] cfg_out;
-wire irq_en;
+wire cs_io;
+fta_cmd_response64_t cfg_resp;
+reg erc;
+reg cs_config;
+wire respack;
+reg [63:0] dat_o;
+reg [5:0] irq_coreno;
+reg [2:0] irq_channel;
+reg [5:0] irq_pri;
+reg [1:0] irq_swstk;
+reg [1:0] irq_om;
+reg [11:0] irq_vecno;
+reg [15:0] irq_data;
+
 reg [BITS-1:0] maxcounth [0:NTIMER-1];
 reg [BITS-1:0] maxcount [0:NTIMER-1];
 reg [BITS-1:0] count [0:NTIMER-1];
@@ -167,18 +168,49 @@ reg [NTIMER-1:0] underflow;
 reg [NTIMER-1:0] tmp;
 reg [NTIMER-1:0] irqf;
 
-wire cs_config = cyc_i & stb_i & cs_config_i &&
-	adr_i[27:20]==CFG_BUS &&
-	adr_i[19:15]==CFG_DEVICE &&
-	adr_i[14:12]==CFG_FUNC
-	;
-wire cs_io = cyc_i & stb_i & cs_io_i && cs_pit;
-reg rdy;
-always @(posedge clk_i)
-	rdy <= cs_config|cs_io;
-assign ack_o = (cs_config|cs_io) ? (we_i ? 1'b1 : rdy) : 1'b0;
+wire cs_qit = reqd.cyc && cs_io;
 
-pci64_config #(
+always_ff @(posedge clk)
+	reqd <= sreq;
+
+always_ff @(posedge clk)
+	cs_config <= cs_config_i;
+
+always_ff @(posedge clk_i)
+	erc <= sreq.cti==fta_bus_pkg::ERC;
+
+vtdl #(.WID(1), .DEP(16)) urdyd2 (.clk(clk_i), .ce(1'b1), .a(4'd0), .d((cs_qit)&(erc|~reqd.we)), .q(respack));
+always_ff @(posedge clk)
+if (rst)
+	sresp <= {$bits(fta_cmd_response64_t){1'b0}};
+else begin
+	if (cfg_resp.ack)
+		sresp <= cfg_resp;
+	else if (respack) begin
+		sresp.ack <= respack ? reqd.cyc : 1'b0;
+		sresp.tid <= respack ? reqd.tid : 13'd0;
+		sresp.next <= 1'b0;
+		sresp.stall <= 1'b0;
+		sresp.err <= fta_bus_pkg::OKAY;
+		sresp.rty <= 1'b0;
+		sresp.pri <= 4'd5;
+		sresp.adr <= respack ? reqd.padr : 40'd0;
+		sresp.dat <= respack ? dat_o : 64'd0;
+	end
+	else if (irqo) begin
+		sresp.ack <= 1'b1;
+		sresp.tid <= {irq_coreno,irq_channel,4'd0};
+		sresp.next <= 1'b0;
+		sresp.stall <= 1'b0;
+		sresp.err <= fta_bus_pkg::IRQ;
+		sresp.rty <= 1'b0;
+		sresp.pri <= 4'd5;
+		sresp.adr <= {irq_pri,irq_swstk,16'h0,CFG_BUS,CFG_DEVICE,CFG_FUNC};
+		sresp.dat <= {2{irq_data,irq_om,2'b00,irq_vecno}};
+	end
+end
+
+ddbb64_config #(
 	.CFG_BUS(CFG_BUS),
 	.CFG_DEVICE(CFG_DEVICE),
 	.CFG_FUNC(CFG_FUNC),
@@ -200,20 +232,15 @@ pci64_config #(
 )
 ucfg1
 (
-	.rst_i(rst_i),
-	.clk_i(clk_i),
-	.irq_i(irq),
-	.irq_o(irq_o),
-	.cs_config_i(cs_config), 
-	.we_i(we_i),
-	.sel_i(sel_i),
-	.adr_i(adr_i),
-	.dat_i(dat_i),
-	.dat_o(cfg_out),
-	.cs_bar0_o(cs_pit),
+	.rst_i(rst),
+	.clk_i(clk),
+	.irq_i(2'b0),
+	.cs_i(cs_config), 
+	.req_i(reqd),
+	.resp_o(cfg_resp),
+	.cs_bar0_o(cs_io),
 	.cs_bar1_o(),
-	.cs_bar2_o(),
-	.irq_en_o(irq_en)
+	.cs_bar2_o()
 );
 
 assign out0 = out[0];
@@ -286,34 +313,34 @@ end
 else begin
 	for (n1 = 0; n1 < NTIMER; n1 = n1 + 1) begin
 		ld[n1] <= 1'b0;
-		if (cs_io && we_i && adr_i[11:5]==n1)
-		case(adr_i[4:3])
+		if (cs_qit && reqd.we && reqd.padr[11:5]==n1)
+		case(reqd.padr[4:3])
 		2'd1:
 			begin
-				if (|sel_i[3:0])	
-					maxcounth[n1][31:0] <= dat_i[31:0];
-				if (|sel_i[7:4])	
-					maxcounth[n1][47:32] <= dat_i[47:32];
+				if (|reqd.sel[3:0])	
+					maxcounth[n1][31:0] <= reqd.dat[31:0];
+				if (|reqd.sel[7:4])	
+					maxcounth[n1][47:32] <= reqd.dat[47:32];
 			end
 		2'd2:
 			begin
-				if (|sel_i[3:0])
-					onth[n1][31:0] <= dat_i[31:0];
-				if (|sel_i[7:4])
-					onth[n1][47:32] <= dat_i[47:32];
+				if (|reqd.sel[3:0])
+					onth[n1][31:0] <= reqd.dat[31:0];
+				if (|reqd.sel[7:4])
+					onth[n1][47:32] <= reqd.dat[47:32];
 			end
 		2'd3:	begin
-						ldh[n1] <= dat_i[0];
-						ceh[n1] <= dat_i[1];
-						arh[n1] <= dat_i[2];
-						xch[n1] <= dat_i[3];
-						geh[n1] <= dat_i[4];
-						if (dat_i[7]) begin
-							ld[n1] <= dat_i[0];
-							ce[n1] <= dat_i[1];
-							ar[n1] <= dat_i[2];
-							xc[n1] <= dat_i[3];
-							ge[n1] <= dat_i[4];
+						ldh[n1] <= reqd.dat[0];
+						ceh[n1] <= reqd.dat[1];
+						arh[n1] <= reqd.dat[2];
+						xch[n1] <= reqd.dat[3];
+						geh[n1] <= reqd.dat[4];
+						if (reqd.dat[7]) begin
+							ld[n1] <= reqd.dat[0];
+							ce[n1] <= reqd.dat[1];
+							ar[n1] <= reqd.dat[2];
+							xc[n1] <= reqd.dat[3];
+							ge[n1] <= reqd.dat[4];
 							maxcount[n1] <= maxcounth[n1];
 							ont[n1] <= onth[n1];
 						end
@@ -325,8 +352,8 @@ else begin
 		// Interrupt processing should read the underflow register to determine
 		// which timers underflowed, then write back the value to the underflow
 		// register.
-		if (cs_io && we_i && adr_i[11:3]==9'h100) begin
-			if (dat_i[n1]) begin
+		if (cs_qit && reqd.we && reqd.padr[11:3]==9'h100) begin
+			if (reqd.dat[n1]) begin
 				ie[n1] <= 1'b0;
 				underflow[n1] <= 1'b0;
 				irqf[n1] <= 1'b0;
@@ -334,8 +361,8 @@ else begin
 		end
 		// The timer synchronization register indicates which timer's registers to
 		// update. All timers may have their registers updated synchronously.
-		if (cs_io && we_i && adr_i[11:3]==9'h101)
-			if (dat_i[n1]) begin
+		if (cs_qit && reqd.we && reqd.padr[11:3]==9'h101)
+			if (reqd.dat[n1]) begin
 				ld[n1] <= ldh[n1];
 				ce[n1] <= ceh[n1];
 				ar[n1] <= arh[n1];
@@ -345,19 +372,19 @@ else begin
 				maxcount[n1] <= maxcounth[n1];
 				ont[n1] <= onth[n1];
 			end
-		if (cs_io & we_i)
-			case(adr_i[11:3])
-			9'h102:	ie <= dat_i;
-			9'h103:	tmp <= dat_i;
-			9'h105:	igate <= dat_i;
-			9'h106:	igate <= igate | dat_i;
-			9'h107:	igate <= igate & ~dat_i;
+		if (cs_qit & reqd.we)
+			case(reqd.padr[11:3])
+			9'h102:	ie <= reqd.dat;
+			9'h103:	tmp <= reqd.dat;
+			9'h105:	igate <= reqd.dat;
+			9'h106:	igate <= igate | reqd.dat;
+			9'h107:	igate <= igate & ~reqd.dat;
 			default:	;
 			endcase
 		if (cs_config)
-			dat_o <= cfg_out;
-		else if (cs_io) begin
-			case(adr_i[11:3])
+			dat_o <= cfg_resp.dat;
+		else if (cs_qit) begin
+			case(reqd.padr[11:3])
 			9'h100:	dat_o <= underflow;
 			9'h101:	dat_o <= 'd0;
 			9'h102:	dat_o <= ie;
@@ -367,8 +394,8 @@ else begin
 			9'h106:	dat_o <= 'd0;
 			9'h107:	dat_o <= 'd0;
 			default:
-				if (adr_i[11:5]==n1)
-					case(adr_i[4:3])
+				if (reqd.padr[11:5]==n1)
+					case(reqd.padr[4:3])
 					2'd0:	dat_o <= count[n1];
 					2'd1:	dat_o <= maxcount[n1];
 					2'd2:	dat_o <= ont[n1];

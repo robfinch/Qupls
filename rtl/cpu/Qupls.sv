@@ -65,7 +65,7 @@ import QuplsPkg::*;
 `define PANIC_BADTARGETID	4'd12
 `define PANIC_COMMIT 4'd13
 
-module Qupls(coreno_i, rst_i, clk_i, clk2x_i, clk3x_i, clk5x_i, ipl, irq, irq_ack, irq_i, ivect_i,
+module Qupls(coreno_i, rst_i, clk_i, clk2x_i, clk3x_i, clk5x_i, ipl, irq, irq_ack, irq_i, ivect_i, swstk_i,
 	fta_req, fta_resp, snoop_adr, snoop_v, snoop_cid);
 parameter CORENO = 6'd1;
 parameter CID = 6'd1;
@@ -79,7 +79,8 @@ output reg [5:0] ipl;
 input irq;
 output reg irq_ack;
 input [5:0] irq_i;
-input [31:0] ivect_i;
+input [96:0] ivect_i;
+input [2:0] swstk_i;
 output fta_cmd_request256_t fta_req;
 input fta_cmd_response256_t fta_resp;
 input cpu_types_pkg::address_t snoop_adr;
@@ -121,7 +122,7 @@ reg int_commit;		// IRQ committed
 reg hirq;
 pc_address_t ret_pc;
 pc_address_ex_t misspc;
-mc_address_t miss_mcip, mcbrtgt;
+mc_address_t miss_mcip, mcbrtgt, excmiss_mcip;
 wire [$bits(pc_address_t)-1:6] missblock;
 reg [2:0] missgrp;
 wire [2:0] missino;
@@ -795,6 +796,7 @@ reg [39:0] stomped_insn;
 cause_code_t [3:0] cause;
 status_reg_t sr_stack [0:8];
 status_reg_t sr;
+wire [2:0] swstk = sr.swstk;
 pc_address_t [8:0] pc_stack;
 mc_stack_t [8:0] mc_stack;			// micro-code exception stack
 reg micro_code_active;
@@ -1134,7 +1136,147 @@ end
 // cac stage
 // ----------------------------------------------------------------------------
 
-pc_address_t nmi_addr, irq_addr;
+// IRQ fifo signals
+wire irq_wr_clk = clk_i;
+wire irq_rd_rst;
+wire irq_wr_rst;
+reg irq_rd_en, irq_rd_en2;
+reg irq_wr_en, irq_wr_en2;
+wire irq_empty;
+reg [5:0] irq2_i;
+reg [96:0] irq2_vect_i;
+reg [2:0] irq2_swstk_i;
+wire [105:0] irq2_dout;
+reg [105:0] irq2_din;
+
+always_comb
+begin
+	{irq2_swstk_i,irq2_i,irq2_vect_i} = irq2_dout;
+end
+always_comb
+	irq_rd_en2 = irq_rd_en & ~irst & ~irq_rd_rst;
+always_comb
+	irq_wr_en2 = irq_wr_en & ~irst & ~irq_rd_rst & ~irq_wr_rst;
+
+	// This fifo to record IRQs that got disabled after already being fetched.
+
+   // xpm_fifo_sync: Synchronous FIFO
+   // Xilinx Parameterized Macro, version 2024.1
+
+   xpm_fifo_sync #(
+      .CASCADE_HEIGHT(0),            // DECIMAL
+      .DOUT_RESET_VALUE("0"),        // String
+      .ECC_MODE("no_ecc"),           // String
+      .EN_SIM_ASSERT_ERR("warning"), // String
+      .FIFO_MEMORY_TYPE("distributed"),     // String
+      .FIFO_READ_LATENCY(0),         // DECIMAL
+      .FIFO_WRITE_DEPTH(32),       // DECIMAL
+      .FULL_RESET_VALUE(0),          // DECIMAL
+      .PROG_EMPTY_THRESH(10),        // DECIMAL
+      .PROG_FULL_THRESH(10),         // DECIMAL
+      .RD_DATA_COUNT_WIDTH(5),       // DECIMAL
+      .READ_DATA_WIDTH(106),          // DECIMAL
+      .READ_MODE("fwft"),             // String
+      .SIM_ASSERT_CHK(0),            // DECIMAL; 0=disable simulation messages, 1=enable simulation messages
+      .USE_ADV_FEATURES("0707"),     // String
+      .WAKEUP_TIME(0),               // DECIMAL
+      .WRITE_DATA_WIDTH(106),         // DECIMAL
+      .WR_DATA_COUNT_WIDTH(5)        // DECIMAL
+   )
+   xpm_irq_fifo_sync_inst (
+      .almost_empty(),   // 1-bit output: Almost Empty : When asserted, this signal indicates that
+                                     // only one more read can be performed before the FIFO goes to empty.
+
+      .almost_full(),     // 1-bit output: Almost Full: When asserted, this signal indicates that
+                                     // only one more write can be performed before the FIFO is full.
+
+      .data_valid(),       // 1-bit output: Read Data Valid: When asserted, this signal indicates
+                                     // that valid data is available on the output bus (dout).
+
+      .dbiterr(),             // 1-bit output: Double Bit Error: Indicates that the ECC decoder detected
+                                     // a double-bit error and data in the FIFO core is corrupted.
+
+      .dout(irq_dout),            // READ_DATA_WIDTH-bit output: Read Data: The output data bus is driven
+                                     // when reading the FIFO.
+
+      .empty(irq_empty),             // 1-bit output: Empty Flag: When asserted, this signal indicates that the
+                                     // FIFO is empty. Read requests are ignored when the FIFO is empty,
+                                     // initiating a read while empty is not destructive to the FIFO.
+
+      .full(),                   // 1-bit output: Full Flag: When asserted, this signal indicates that the
+                                     // FIFO is full. Write requests are ignored when the FIFO is full,
+                                     // initiating a write when the FIFO is full is not destructive to the
+                                     // contents of the FIFO.
+
+      .overflow(),           // 1-bit output: Overflow: This signal indicates that a write request
+                                     // (wren) during the prior clock cycle was rejected, because the FIFO is
+                                     // full. Overflowing the FIFO is not destructive to the contents of the
+                                     // FIFO.
+
+      .prog_empty(),       // 1-bit output: Programmable Empty: This signal is asserted when the
+                                     // number of words in the FIFO is less than or equal to the programmable
+                                     // empty threshold value. It is de-asserted when the number of words in
+                                     // the FIFO exceeds the programmable empty threshold value.
+
+      .prog_full(),         // 1-bit output: Programmable Full: This signal is asserted when the
+                                     // number of words in the FIFO is greater than or equal to the
+                                     // programmable full threshold value. It is de-asserted when the number of
+                                     // words in the FIFO is less than the programmable full threshold value.
+
+      .rd_data_count(), // RD_DATA_COUNT_WIDTH-bit output: Read Data Count: This bus indicates the
+                                     // number of words read from the FIFO.
+
+      .rd_rst_busy(irq_rd_rst),     // 1-bit output: Read Reset Busy: Active-High indicator that the FIFO read
+                                     // domain is currently in a reset state.
+
+      .sbiterr(),             // 1-bit output: Single Bit Error: Indicates that the ECC decoder detected
+                                     // and fixed a single-bit error.
+
+      .underflow(),         // 1-bit output: Underflow: Indicates that the read request (rd_en) during
+                                     // the previous clock cycle was rejected because the FIFO is empty. Under
+                                     // flowing the FIFO is not destructive to the FIFO.
+
+      .wr_ack(),               // 1-bit output: Write Acknowledge: This signal indicates that a write
+                                     // request (wr_en) during the prior clock cycle is succeeded.
+
+      .wr_data_count(), // WR_DATA_COUNT_WIDTH-bit output: Write Data Count: This bus indicates
+                                     // the number of words written into the FIFO.
+
+      .wr_rst_busy(irq_wr_rst),     // 1-bit output: Write Reset Busy: Active-High indicator that the FIFO
+                                     // write domain is currently in a reset state.
+
+      .din(irq_din),                     // WRITE_DATA_WIDTH-bit input: Write Data: The input data bus used when
+                                     // writing the FIFO.
+
+      .injectdbiterr(), // 1-bit input: Double Bit Error Injection: Injects a double bit error if
+                                     // the ECC feature is used on block RAMs or UltraRAM macros.
+
+      .injectsbiterr(), // 1-bit input: Single Bit Error Injection: Injects a single bit error if
+                                     // the ECC feature is used on block RAMs or UltraRAM macros.
+
+      .rd_en(irq_rd_en2),                 // 1-bit input: Read Enable: If the FIFO is not empty, asserting this
+                                     // signal causes data (on dout) to be read from the FIFO. Must be held
+                                     // active-low when rd_rst_busy is active high.
+
+      .rst(irst),                     // 1-bit input: Reset: Must be synchronous to wr_clk. The clock(s) can be
+                                     // unstable at the time of applying reset, but reset must be released only
+                                     // after the clock(s) is/are stable.
+
+      .sleep(1'b0),                 // 1-bit input: Dynamic power saving- If sleep is High, the memory/fifo
+                                     // block is in power saving mode.
+
+      .wr_clk(irq_wr_clk),               // 1-bit input: Write clock: Used for write operation. wr_clk must be a
+                                     // free running clock.
+
+      .wr_en(irq_wr_en2)                  // 1-bit input: Write Enable: If the FIFO is not full, asserting this
+                                     // signal causes data (on din) to be written to the FIFO Must be held
+                                     // active-low when rst or wr_rst_busy or rd_rst_busy is active high
+
+   );
+
+	
+
+pc_address_t nmi_addr, irq_addr, next_hwipc, hwipc;
 reg nmi, ic_nmi, nmi_fet;
 reg [5:0] ic_irq;
 reg irq_trig;
@@ -1197,26 +1339,53 @@ always_ff @(posedge clk)
 if (irst)
 	ic_irqf <= FALSE;
 else begin
-	if (advance_pipeline)
-		ic_irqf <= irq_i > pending_ipl;
+	if (advance_pipeline) begin
+		if (!irq_empty)
+			ic_irqf <= irq2_i > pending_ipl && sr.mie;
+		else
+			ic_irqf <= irq_i > pending_ipl && sr.mie;
+	end
 end
 always_ff @(posedge clk)
 if (irst)
 	ic_irq <= 6'd0;
 else begin
-	if (advance_pipeline)
-		ic_irq <= irq_i;
+	if (advance_pipeline) begin
+		if (!irq_empty)
+			ic_irq <= irq2_i;
+		else
+			ic_irq <= irq_i;
+	end
 end
+
+// Set pending IPL to IPL of hardware interrupt.
 always_ff @(posedge clk)
 if (irst)
-	pending_ipl <= 3'd7;
+	pending_ipl <= 6'd63;
 else begin
 	if (set_pending_ipl)
 		pending_ipl <= next_pending_ipl;
 	if (advance_pipeline) begin
-		if (irq_i > pending_ipl)
+		if (irq2_i > pending_ipl && sr.mie && !irq_empty)
+			pending_ipl <= irq2_i;
+		else if (irq_i > pending_ipl && sr.mie)
 			pending_ipl <= irq_i;
 	end
+end
+
+// Read from the outstanding IRQ fifo first.
+always_ff @(posedge clk)
+if (irst) begin
+	irq_ack <= FALSE;
+	irq_rd_en <= FALSE;
+end
+else begin
+	irq_ack <= FALSE;
+	irq_rd_en <= FALSE;
+	if (irq2_i > pending_ipl && irq2_swstk_i==swstk && sr.mie && !irq_empty)
+		irq_rd_en <= TRUE;
+	else if (irq_i > pending_ipl && swstk_i==swstk && sr.mie)
+		irq_ack <= TRUE;
 end
 
 wire ic_port;
@@ -1327,6 +1496,7 @@ Qupls_btb ubtb1
 	.nmi_addr(nmi_addr),
 	.irq(irq),
 	.irq_addr(irq_addr),
+	.next_hwipc(next_hwipc),
 	.micro_code_active(micro_code_active),
 	.block_header(ibh_t'(ic_line[511:480])),
 	.igrp(igrp),
@@ -1784,17 +1954,22 @@ else begin
 		if (get_next_pc) begin
 			if (excret)
 				pc.pc <= exc_ret_pc;
-			else
+			else begin
 				pc <= next_pc;			// early PC predictor from BTB logic
+				hwipc <= next_hwipc;
+			end
 		end
-		else if (!pcf && (bs_done_oh || do_bsr || do_ret))
+		else if (!pcf && (bs_done_oh || do_bsr || do_ret)) begin
 			pc <= next_pc;
+			hwipc <= next_hwipc;
+		end
 	end
 	// Prevent hang when the pipeline cannot advance because there is no room 
 	// to queue, yet the IP needs to change to get out of the branch miss state.
 	else begin
 		if (pe_bsdone || do_bsr || do_ret) begin
 			pc <= next_pc;
+			hwipc <= next_hwipc;
 			pcf <= TRUE;
 		end
 	end
@@ -2193,6 +2368,10 @@ wire [2:0] irq_fet;
 wire irqf_fet;
 pc_address_ex_t misspc_fet;
 wire [1023:0] ic_line_fet;
+pc_address_t ic_hwipc, hwipc_fet;
+
+always_ff @(posedge clk)
+	ic_hwipc <= hwipc;
 
 pregno_t pred_reg;
 always_comb
@@ -2208,6 +2387,8 @@ Qupls_pipeline_fet ufet1
 	.pc_i(icpc),
 	.misspc(misspc),
 	.misspc_fet(misspc_fet),
+	.hwipc(ic_hwipc),
+	.hwipc_fet(hwipc_fet),
 	.pc0_fet(pc0_fet),
 	.pc1_fet(pc1_fet),
 	.pc2_fet(pc2_fet),
@@ -2296,6 +2477,7 @@ Qupls_pipeline_mux uiext1
 	.pc2_fet(pc2_fet),
 	.pc3_fet(pc3_fet),
 	.pc4_fet(pc4_fet),
+	.hwipc_fet(hwipc_fet),
 	.branchmiss(branch_state > BS_STATE3),
 	.mc_offs(32'd0),//mc_offs),
 	.mc_adr(mc_adr),
@@ -3351,7 +3533,7 @@ if (irst)
 else begin
 //	if (advance_pipeline)
 	if (branch_state==BS_CAPTURE_MISSPC)
-		miss_mcip <= fcu_miss_mcip;
+		miss_mcip <= excmiss ? excmiss_mcip : fcu_miss_mcip;
 end
 always_ff @(posedge clk)
 if (irst)
@@ -4881,6 +5063,8 @@ if (irst) begin
 	tReset();
 end
 else begin
+	irq_wr_en <= FALSE;
+
 	// Check if all instruciton arguments are valid.
 	for (n3 = 0; n3 < ROB_ENTRIES; n3 = n3 + 1)
 		tAllArgsValid(n3, INV, INV, INV, INV, INV);
@@ -7459,13 +7643,14 @@ begin
 		kvec[n14] <= 32'hFFFFFC00;
 		avec[n14] <= 32'hFFFFFC00;
 	end
-	next_pending_ipl <= 3'd7;
+	next_pending_ipl <= 6'd63;
 	err_mask <= 64'd0;
 	excir <= {41'd0,OP_NOP};
 	excmiss <= FALSE;
 	excmisspc.bno_t <= 6'd1;
 	excmisspc.bno_f <= 6'd1;
 	excmisspc.pc <= 32'hFFFFFFC0;
+	excmiss_mcip <= 12'h0;
 	excret <= FALSE;
 	exc_ret_pc <= 32'hFFFFFFC0;
 	exc_ret_pc.bno_t <= 6'd1;
@@ -7664,6 +7849,7 @@ begin
 	groupno <= {$bits(seqnum_t){1'b0}};
 	sync_no <= 6'd0;
 	fc_no <= 6'd0;
+	irq_wr_en <= FALSE;
 end
 endtask
 
@@ -7973,11 +8159,11 @@ begin
 	if (v) begin
 		if (!rob[head].decbus.cpytgt) begin
 			if (rob[head].decbus.csr)
-				case(rob[head].op[39:38])
+				case(rob[head].op.csr.op[1:0])
 				2'd0:	;	// readCSR
-				2'd1:	tWriteCSR(rob[head].arg,{2'b0,rob[head].op[32:19]});
-				2'd2:	tSetbitCSR(rob[head].arg,{2'b0,rob[head].op[32:19]});
-				2'd3:	tClrbitCSR(rob[head].arg,{2'b0,rob[head].op[32:19]});
+				2'd1:	tWriteCSR(rob[head].arg,{2'b0,rob[head].op.csr.regno});
+				2'd2:	tSetbitCSR(rob[head].arg,{2'b0,rob[head].op.csr.regno});
+				2'd3:	tClrbitCSR(rob[head].arg,{2'b0,rob[head].op.csr.regno});
 				endcase
 			else if (rob[head].decbus.irq)
 				;
@@ -7989,10 +8175,20 @@ begin
 				tRex(head,rob[head].op);
 		end
 	end
-	else if (rob[head].op.hwi && rob[head].op.hwi_level == 3'd7)
+	else if (rob[head].op.hwi && rob[head].op.hwi_level == 6'd63)	// NMI
 		tProcessExc(head,rob[head].pc,FALSE,TRUE);
-	else if (rob[head].op.hwi && rob[head].op.hwi_level > sr.ipl)
+	else if (rob[head].op.hwi && rob[head].op.hwi_level > sr.ipl && sr.mie)
 		tProcessExc(head,rob[head].pc,TRUE,FALSE);
+	// If interrupt turned out to be disabled, treat like a branch miss. The
+	// pipeline needs to be flushed, and instructions fetched from the 
+	// original stream.
+	else if (rob[head].op.hwi) begin
+		irq_wr_en <= TRUE;
+		irq2_din <= {rob[head].hwi_swstk,rob[head].hwi_level,33'd0,rob[head].pc};
+		excmisspc <= rob[head].hwipc;
+		excmiss_mcip <= rob[head].hwi_mcip;
+		excmiss <= TRUE;
+	end
 end
 endtask
 
@@ -8201,10 +8397,12 @@ begin
 		;// excmisspc.pc <= {kvec[sr.dbg ? 4 : 3][$bits(pc_address_t)-1:8] + 4'd10,8'h0};
 	else if (vecno < 8'd16) begin
 		excmisspc.pc <= {kvec[sr.dbg ? 4 : 3][$bits(pc_address_t)-1:8] + vecno,8'h0};
+		excmiss_mcip <= 12'h0;
 		excmiss <= TRUE;
 	end
 	else begin
 		excmisspc.pc <= {kvec[sr.dbg ? 4 : 3][$bits(pc_address_t)-1:8] + 4'd13,8'h0};
+		excmiss_mcip <= 12'h0;
 		excmiss <= TRUE;
 	end
 //		excmisspc <= {avec[$bits(pc_address_t)-1:16] + vecno,3'h0};
@@ -8224,6 +8422,7 @@ begin
 		else
 			excmisspc.pc <= {kvec[ir.ins[9:8]][$bits(pc_address_t)-1:4] + 4'd13,4'h0};
 	end
+	excmiss_mcip <= 12'h0;
 end
 endtask
 
@@ -8236,8 +8435,8 @@ begin
 	sr <= twoup ? sr_stack[1] : sr_stack[0];
 	for (nn = 0; nn < 7; nn = nn + 1)
 		sr_stack[nn] <= sr_stack[nn+1+twoup];
-	sr_stack[7].ipl <= 3'd7;
-	sr_stack[8].ipl <= 3'd7;
+	sr_stack[7].ipl <= 6'd63;
+	sr_stack[8].ipl <= 6'd63;
 	sr_stack[7].om <= OM_MACHINE;
 	sr_stack[8].om <= OM_MACHINE;
 	set_pending_ipl <= TRUE;

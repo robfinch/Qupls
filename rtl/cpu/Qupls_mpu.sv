@@ -77,7 +77,8 @@ reg [31:0] iirq;
 
 wire [5:0] ipl;
 wire [31:0] ivect;
-wire irq;
+wire [63:0] irq;
+wire [2:0] swstk;
 wire irq_ack;
 wire [7:0] pic_cause;
 wire [5:0] pic_core;
@@ -191,6 +192,7 @@ Qupls_msi_controller umsi
 	.irq_resp_i(wb256_resp),
 	.irq(irq),
 	.irq_ack(irq_ack),
+	.swstk(swstk),
 	.ivect_o(ivect),
 	.ipri(ipri)
 );
@@ -280,10 +282,11 @@ ucpu1
 	.clk3x_i(clk3x_i),
 	.clk5x_i(clk5x_i),
 	.ipl(ipl),
-	.irq(irq),
+	.irq(irq[1]),
 	.irq_ack(irq_ack),
 	.irq_i(ipri),
 	.ivect_i(ivect),
+	.swstk_i(swstk),
 //	.irq_i(pic_irq[2:0]),
 //	.vect_i({1'b0,pic_cause}),
 	.fta_req(ftam_req),
