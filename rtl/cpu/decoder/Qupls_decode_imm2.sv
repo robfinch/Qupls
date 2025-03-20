@@ -85,29 +85,40 @@ begin
 		case(ins.ins.r3.func)
 		FN_BYTENDX:
 			begin
-				immb = {{118{ins.ins[38]}},ins.ins[38:29]};
+				immb = {{56{ins.ins[37]}},ins.ins[37:30]};
 				has_immb = 1'b1;
 			end
 		default:	immb = 64'd0;
 		endcase
-	OP_ADDI,OP_CMPI,OP_MULI,OP_DIVI,OP_SUBFI:
+	OP_ADDI,OP_CMPI,OP_MULI,OP_DIVI,OP_SUBFI,
+	OP_AIPUI,OP_RTD:
 		begin
-			immb = {{32{ins.ins[63]}},ins.ins[63:32]};
+			case(ins.ins.any.sz)
+			2'd0:	immb = {{59{ins.ins[23]}},ins.ins[23:19]};
+			2'd1:	immb = {{41{ins.ins.ins.ri.imm[22]}},ins.ins.ri.imm[22:0]};
+			2'd2:	immb = {{17{ins.ins.ins.ri.imm[46]}},ins.ins.ri.imm[46:0]};
+			2'd3:	immb = ins.ins.ri.imm[63:0];
+			endcase
 			has_immb = 1'b1;
 		end
 	OP_ANDI:
 		begin
-			immb = {{32{1'b1}},ins.ins[63:32]};
+			case(ins.ins.any.sz)
+			2'd0:	immb = {{59{1'b1}},ins.ins[23:19]};
+			2'd1:	immb = {{41{1'b1}},ins.ins.ri.imm[22:0]};
+			2'd2:	immb = {{17{1'b1}},ins.ins.ri.imm[46:0]};
+			2'd3:	immb = ins.ins.ri.imm[63:0];
+			endcase
 			has_immb = 1'b1;
 		end
 	OP_ORI,OP_EORI,OP_MULUI,OP_DIVUI:
 		begin
-			immb = {32'h0000,ins.ins[63:32]};
-			has_immb = 1'b1;
-		end
-	OP_AIPUI:
-		begin
-			immb = {{27{ins.ins[63]}},ins.ins[63:27]};
+			case(ins.ins.any.sz)
+			2'd0:	immb = {{59{1'b0}},ins.ins[23:19]};
+			2'd1:	immb = {{41{1'b0}},ins.ins.ri.imm[22:0]};
+			2'd2:	immb = {{17{1'b0}},ins.ins.ri.imm[46:0]};
+			2'd3:	immb = ins.ins.ri.imm[63:0];
+			endcase
 			has_immb = 1'b1;
 		end
 	OP_SHIFTB,OP_SHIFTW,OP_SHIFTT,OP_SHIFTO:
@@ -118,24 +129,29 @@ begin
 	OP_CSR:
 		begin
 			// ToDo: fix
-			immb = {114'd0,ins.ins[35:22]};
-			has_immb = 1'b1;
-		end
-	OP_RTD:
-		begin
-			immb = {{32{ins.ins[63]}},ins.ins[63:32]};
+			immb = {57'd0,ins.ins[22:16]};
 			has_immb = 1'b1;
 		end
 	OP_JSRR,OP_JSRI:
 		begin
-			immb = {{32{ins.ins[63]}},ins.ins[63:32]};
+			case(ins.ins.any.sz)
+			2'd0:	immb = {{59{ins.ins[23]}},ins.ins[23:19]};
+			2'd1:	immb = {{48{ins.ins.ins.jsr.disp[15]}},ins.ins.jsr.disp[15:0]};
+			2'd2:	immb = {{24{ins.ins.ins.jsr.disp[39]}},ins.ins.jsr.disp[39:0]};
+			2'd3:	immb = ins.ins.jsr.disp[63:0];
+			endcase
 			has_immb = 1'b1;
 		end
 	OP_LDA,
 	OP_LDx,OP_FLDx,OP_DFLDx,OP_PLDx,OP_LDxU,OP_CACHE,
 	OP_STx,OP_FSTx,OP_DFSTx,OP_PSTx:
 		begin
-			immb = {{40{ins.ins.ls.disp[23]}},ins.ins.ls.disp};
+			case(ins.ins.any.sz)
+			2'd0:	immb = {{59{ins.ins[23]}},ins.ins[23:19]};
+			2'd1:	immb = {{48{ins.ins.ins.ls.disp[15]}},ins.ins.ls.disp[15:0]};
+			2'd2:	immb = {{24{ins.ins.ins.ls.disp[39]}},ins.ins.ls.disp[39:0]};
+			2'd3:	immb = ins.ins.ls.disp[63:0];
+			endcase
 			has_immb = 1'b1;
 		end
 	OP_FENCE:
@@ -143,10 +159,14 @@ begin
 			immb = {112'h0,ins.ins[23:8]};
 			has_immb = 1'b1;
 		end
-	OP_Bcc,OP_BccU,OP_FBcc:
+	OP_Bcc,OP_BccU,OP_FBcc,OP_DFBcc,OP_PBcc:OP_IBcc,OP_DBcc:
 		begin
-			immc = {{38{ins.ins.br.dispHi[3]}},ins.ins.br.dispHi,ins.ins.br.dispLo};
-//			immc = {{44{ins.ins[63]}},ins.ins[63:44]};
+			case(ins.ins.any.sz)
+			2'd0:	immc = {{59{ins.ins[23]}},ins.ins[23:19]};
+			2'd1:	immc = {{43{ins.ins.ins.ls.dispLo[20]}},ins.ins.br.dispLo};
+			2'd2:	immc = {{20{ins.ins.ins.br.dispHi[23]}},ins.ins.br.dispHi,ins.ins.br.dispLo};
+			2'd3:	immc = {ins.ins.br.dispHi,ins.ins.br.dispLo};
+			endcase
 			has_immc = 1'b1;
 		end
 	OP_PFX:
@@ -154,19 +174,34 @@ begin
 			case(ins.ins.pfx.sw)
 			2'b00:
 				begin
-					imma = {ins.ins.pfx.imm,6'h00};
+					case(ins.ins.any.sz)
+					2'd0:	imma = {{46{ins.ins.pfx.imm[12]}},ins.ins.pfx.imm[12:0],5'd0};
+					2'd1:	imma = {{22{ins.ins.pfx.imm[36]}},ins.ins.pfx.imm[36:0],5'd0};
+					2'd2:	imma = {ins.ins.pfx.imm[60:0],5'd0};
+					2'd3:	imma = {ins.ins.pfx.imm,5'd0};
+					endcase
 					has_imma = 1'b1;
 					pfxa = 1'b1;
 				end
 			2'b01:
 				begin
-					immb = {ins.ins.pfx.imm,6'h00};
+					case(ins.ins.any.sz)
+					2'd0:	immb = {{46{ins.ins.pfx.imm[12]}},ins.ins.pfx.imm[12:0],5'd0};
+					2'd1:	immb = {{22{ins.ins.pfx.imm[36]}},ins.ins.pfx.imm[36:0],5'd0};
+					2'd2:	immb = {ins.ins.pfx.imm[60:0],5'd0};
+					2'd3:	immb = {ins.ins.pfx.imm,5'd0};
+					endcase
 					has_immb = 1'b1;
 					pfxb = 1'b1;
 				end
 			2'b10:
 				begin
-					immc = {ins.ins.pfx.imm,6'h00};
+					case(ins.ins.any.sz)
+					2'd0:	immc = {{46{ins.ins.pfx.imm[12]}},ins.ins.pfx.imm[12:0],5'd0};
+					2'd1:	immc = {{22{ins.ins.pfx.imm[36]}},ins.ins.pfx.imm[36:0],5'd0};
+					2'd2:	immc = {ins.ins.pfx.imm[60:0],5'd0};
+					2'd3:	immc = {ins.ins.pfx.imm,5'd0};
+					endcase
 					has_immc = 1'b1;
 					pfxc = 1'b1;
 				end
