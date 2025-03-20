@@ -1,4 +1,4 @@
-/* (c) in 2021-2025 by Robert Finch */
+/* (c) in 2021-2023 by Robert Finch */
 #define BITSPERBYTE 8
 #define FLOAT_PARSER 1
 #include "hugeint.h"
@@ -45,7 +45,6 @@ typedef struct {
   char scale;
   expr *value;
   uint64_t mask;
-  size_t isize;
 } operand;
 
 #define OPC_ADDS	49LL
@@ -57,7 +56,7 @@ typedef struct {
 #define OP_REG						0x00000001L
 #define OP_NEXT_VREG			0x00000002L
 #define OP_IMM23					0x00000004L
-#define OP_IMM5						0x00000008L
+#define OP_IMM30					0x00000008L
 #define OP_IMM46					0x00000010L
 #define OP_IMM64					0x00000020L
 #define OP_VMSTR					0x00000040L
@@ -85,7 +84,7 @@ typedef struct {
 #define OP_NEXTREG	0x10000000L
 
 /* supersets of other operands */
-#define OP_IMM			(OP_IMM7|OP_IMM23|OP_IMM5|OP_IMM46|OP_IMM64)
+#define OP_IMM			(OP_IMM7|OP_IMM23|OP_IMM30|OP_IMM46|OP_IMM64)
 #define OP_MEM      (OP_REGIND|OP_SCNDX)
 #define OP_ALL      0x0fffffffL
 
@@ -119,7 +118,6 @@ typedef struct {
 
 typedef struct {
 	uint8_t size;
-  uint32_t opcodeH;
 	uint64_t opcode;
 	uint8_t opcode_size;
 	thuge val;
@@ -128,7 +126,6 @@ typedef struct {
 typedef struct {
 	uint8_t size;
 	uint8_t opcode_size;
-  uint32_t opcodeH;
 	uint64_t opcode;
   uint64_t short_opcode;
 	thuge val;
@@ -145,7 +142,6 @@ typedef struct {
 	unsigned int format;
   unsigned int available;
   uint64_t prefix;
-  uint32_t opcodeH;
   uint64_t opcode;
   size_t len;
   uint8_t size;
@@ -250,17 +246,15 @@ typedef struct {
 #define R5			74
 #define J4			75
 #define JL4			76
-#define REGIND_DISP	77
 
-#define LN(x)		((x) & 3LL)
-#define OPC(x)	(((x) & 0x7fLL) << 2LL)
-#define RT(x)		(((x) & 0xffLL) << 9LL)
+#define OPC(x)	(((x) & 0x7fLL))
+#define RT(x)		(((x) & 0xffLL) << 7LL)
 #define INCDEC(x)	(((x) & 3LL) << 11LL)
 #define NRT(x)	(((x) & 1LL) << 15LL)
 #define RA(x)		(((x) & 0xffLL) << 16LL)
 #define NRA(x)	(((x) & 1LL) << 24LL)
 #define RB(x)		(((x) & 0xffLL) << 25LL)
-#define IPR(x)	(((x) & 3LL) << 33LL)
+#define IPR(x)	(((x) & 3LL) << 22LL)
 #define NRB(x)	(((x) & 1LL) << 33LL)
 #define BRDISPL(x)	(((x) & 0x7ffffLL) << 34LL)
 #define BRDISPH(x)	((((x) >> 19LL) & 0xFLL) << 60LL)
@@ -273,7 +267,7 @@ typedef struct {
 #define COND(x)	(((x) & 0xfLL) << 5LL)
 #define CND3(x)	(((x) & 0x7LL) << 9LL)
 #define IM2(x)		(((x) & 3LL) << 25LL)
-#define S(x)			(((x) & 7LL) << 27LL)
+#define S(x)			(((x) & 7LL) << 34LL)
 #define SC(x)			(((x) & 3LL) << 22LL)
 #define PREDF(x)		(((x) & 0x7LL) << 54LL)
 #define PREDI(x)		(((x) & 0x7LL) << 25LL)
@@ -282,12 +276,9 @@ typedef struct {
 #define SHFUNC(x)	(((x) & 0xfLL) << 60LL)
 #define R1FUNC(x)	(((x) & 0xffLL) << 32LL)
 #define OP3(x)		(((x) & 0xfLL) << 43LL)
-#define R2FUNC(x)	(((x) & 0x7fLL) << 41LL)
-#define R3FUNC(x)	(((x) & 0x7fLL) << 41LL)
+#define R2FUNC(x)	(((x) & 0x7fLL) << 57LL)
+#define R3FUNC(x)	(((x) & 0x7fLL) << 57LL)
 #define LSFUNC(x)	(((x) & 0xfLL) << 60LL)
-#define LSTYPE(x)	(((x) & 3LL) << 37LL)
-#define LSDISP(x)	(((x) & 0xffffffLL) << 40LL)
-#define LSSIZE(x)	(((x) & 3LL) << 30LL)
 #define FMT2(x)		(((x) & 3LL) << 38LL)
 #define FMT3(x)		(((x) & 7LL) << 37LL)
 #define FUNC2(x)	(((x) & 0x7LL) << 37LL)
