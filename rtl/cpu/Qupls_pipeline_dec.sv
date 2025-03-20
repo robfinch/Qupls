@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2024  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2024-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -40,7 +40,7 @@ import cpu_types_pkg::*;
 import QuplsPkg::*;
 
 module Qupls_pipeline_dec(rst_i, rst, clk, en, clk5x, ph4,
-	restored, restore_list, sr,
+	restored, restore_list, unavail_list, sr,
 	tags2free, freevals, bo_wr, bo_preg,
 	ins0_dec_inv, ins1_dec_inv, ins2_dec_inv, ins3_dec_inv,
 	stomp_dec, stomp_mux, stomp_bno, ins0_mux, ins1_mux, ins2_mux, ins3_mux, ins4_mux,
@@ -57,6 +57,7 @@ input clk5x;
 input [4:0] ph4;
 input restored;
 input [PREGS-1:0] restore_list;
+input [PREGS-1:0] unavail_list;
 input status_reg_t sr;
 input stomp_dec;
 input stomp_mux;
@@ -144,7 +145,7 @@ Qupls_reg_renamer3 utrn2
 	.ph4(ph4),
 	.en(en),
 	.restore(restored),
-	.restore_list(restore_list),
+	.restore_list(restore_list & ~unavail_list),
 	.tags2free(tags2free),
 	.freevals(freevals),
 	.alloc0(ins0_dec.aRt!=8'd0 && ins0_dec.v),// & ~stomp0),
@@ -173,7 +174,7 @@ Qupls_reg_renamer4 utrn1
 //	.ph4(ph4),
 	.en(en),
 	.restore(restored),
-	.restore_list(restore_list),
+	.restore_list(restore_list & ~unavail_list),
 	.tags2free(tags2free),
 	.freevals(freevals),
 	.alloc0(ins0_dec.aRt!=8'd0 && ins0_dec.v),// & ~stomp0),
@@ -194,7 +195,7 @@ Qupls_reg_renamer4 utrn1
 );
 else
 
-Qupls_reg_name_supplier utrn1
+Qupls_reg_name_supplier2 utrn1
 (
 	.rst(rst_i),		// rst_i here not irst!
 	.clk(clk),
@@ -202,7 +203,7 @@ Qupls_reg_name_supplier utrn1
 //	.ph4(ph4),
 	.en(en),
 	.restore(restored),
-	.restore_list(restore_list),
+	.restore_list(restore_list & ~unavail_list),
 	.tags2free(tags2free),
 	.freevals(freevals),
 	.bo_wr(bo_wr),
@@ -505,36 +506,36 @@ begin
 		pr_dec3.aRm = dec3.Rm;
 	end
 	pr_dec0.decbus = dec0;
-	if (dec1.pfxa) begin pr_dec0.decbus.imma = {dec1.imma[63:8],dec0.Ra}; pr_dec0.decbus.has_imma = 1'b1; end
+	if (dec1.pfxa) begin pr_dec0.decbus.imma = {dec1.imma[63:5],dec0.Ra[4:0]}; pr_dec0.decbus.has_imma = 1'b1; end
 	if (dec1.pfxb) begin 
-		pr_dec0.decbus.immb = dec0.mem ? {dec1.immb[63:8],dec0.immb[7:0]} : {dec1.immb[63:8],dec0.Rb};
+		pr_dec0.decbus.immb = dec0.mem ? {dec1.immb[63:5],dec0.immb[4:0]} : {dec1.immb[63:5],dec0.Rb[4:0]};
 		pr_dec0.decbus.has_immb = 1'b1;
 	end
-	if (dec1.pfxc) begin pr_dec0.decbus.immc = {dec1.immc[63:8],dec0.Rc}; pr_dec0.decbus.has_immc = 1'b1; end
+	if (dec1.pfxc) begin pr_dec0.decbus.immc = {dec1.immc[63:5],dec0.Rc[4:0]}; pr_dec0.decbus.has_immc = 1'b1; end
 	pr_dec1.decbus = dec1;
 	if (dec2.pfxa) begin 
-		pr_dec1.decbus.imma = {dec2.imma[63:8],dec1.Ra};
+		pr_dec1.decbus.imma = {dec2.imma[63:5],dec1.Ra[4:0]};
 		pr_dec1.decbus.has_imma = 1'b1;
 	end
 	if (dec2.pfxb) begin
-		pr_dec1.decbus.immb = dec1.mem ? {dec2.immb[63:8],dec1.immb[7:0]} : {dec2.immb[63:8],dec1.Rb};
+		pr_dec1.decbus.immb = dec1.mem ? {dec2.immb[63:5],dec1.immb[4:0]} : {dec2.immb[63:5],dec1.Rb[4:0]};
 		pr_dec1.decbus.has_immb = 1'b1;
 	end
-	if (dec2.pfxc) begin pr_dec1.decbus.immc = {dec2.immc[63:8],dec1.Rc}; pr_dec1.decbus.has_immc = 1'b1; end
+	if (dec2.pfxc) begin pr_dec1.decbus.immc = {dec2.immc[63:5],dec1.Rc[4:0]}; pr_dec1.decbus.has_immc = 1'b1; end
 	pr_dec2.decbus = dec2;
-	if (dec3.pfxa) begin pr_dec2.decbus.imma = {dec3.imma[63:8],dec2.Ra}; pr_dec2.decbus.has_imma = 1'b1; end
+	if (dec3.pfxa) begin pr_dec2.decbus.imma = {dec3.imma[63:5],dec2.Ra[4:0]}; pr_dec2.decbus.has_imma = 1'b1; end
 	if (dec3.pfxb) begin 
-		pr_dec2.decbus.immb = dec2.mem ? {dec3.immb[63:8],dec2.immb[7:0]} : {dec3.immb[63:8],dec2.Rb};
+		pr_dec2.decbus.immb = dec2.mem ? {dec3.immb[63:5],dec2.immb[4:0]} : {dec3.immb[63:5],dec2.Rb[4:0]};
 		pr_dec2.decbus.has_immb = 1'b1;
 	end
-	if (dec3.pfxc) begin pr_dec2.decbus.immc = {dec3.immc[63:8],dec2.Rc}; pr_dec2.decbus.has_immc = 1'b1; end
+	if (dec3.pfxc) begin pr_dec2.decbus.immc = {dec3.immc[63:5],dec2.Rc[4:0]}; pr_dec2.decbus.has_immc = 1'b1; end
 	pr_dec3.decbus = dec3;
-	if (dec4.pfxa) begin pr_dec3.decbus.imma = {dec4.imma[63:8],dec3.Ra}; pr_dec3.decbus.has_imma = 1'b1; end
+	if (dec4.pfxa) begin pr_dec3.decbus.imma = {dec4.imma[63:5],dec3.Ra[4:0]}; pr_dec3.decbus.has_imma = 1'b1; end
 	if (dec4.pfxb) begin
-		pr_dec3.decbus.immb = dec3.mem ? {dec4.immb[63:8],dec3.immb[7:0]} : {dec4.immb[63:8],dec3.Rb};
+		pr_dec3.decbus.immb = dec3.mem ? {dec4.immb[63:5],dec3.immb[4:0]} : {dec4.immb[63:5],dec3.Rb[4:0]};
 		pr_dec3.decbus.has_immb = 1'b1;
 	end
-	if (dec4.pfxc) begin pr_dec3.decbus.immc = {dec4.immc[63:8],dec3.Rc}; pr_dec3.decbus.has_immc = 1'b1; end
+	if (dec4.pfxc) begin pr_dec3.decbus.immc = {dec4.immc[63:5],dec3.Rc[4:0]}; pr_dec3.decbus.has_immc = 1'b1; end
 	
 	pr_dec0.mcip = ins0m.mcip;
 	pr_dec1.mcip = ins1m.mcip;
