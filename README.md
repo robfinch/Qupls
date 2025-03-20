@@ -66,10 +66,10 @@ The author has found that in an FPGA the decode of variable length instruction l
 
 ### Instruction alignment
 Instructions are aligned on byte boundaries within a subroutine. Conditional branch displacements are in terms of instructions since the branch occurs within a subroutine where all instructions are multiples of three bytes. Conditional branches have effectively a 21+ bit range. For software compatibility a critical 18 bits range was needed.
-Subroutines may be aligned on any octabyte boundary, allowing position independent code placement. Unconditional branch and jump displacements are in terms of bytes to accomodate the location of subroutines.
+Subroutines may be aligned on any byte boundary, allowing position independent code placement. Unconditional branch and jump displacements are in terms of bytes to accomodate the location of subroutines.
 
 ### Position Independant Code
-Code is relocatable at any octabyte boundary; however, within a subroutine or function the instructions should be contiguous, every six bytes, so that conditional branches will work.
+Code is relocatable at any byte boundary; however, within a subroutine or function the instructions should be contiguous, a multiple of every three bytes, so that conditional branches will work.
 
 ### Pipeline
 Yikes!
