@@ -53,20 +53,36 @@ input has_immb;
 begin
 	case(ir.ins.any.opcode)
 	OP_RTD:
-		fnRb = 9'd31;
-	OP_FLT3:
-		fnRb = ir.aRb;
+		fnRb = 6'd31;
+	OP_FLT3H,OP_FLT3S,OP_FLT3D,OP_FLT3Q:
+		fnRb = ir.ins.f3.Rb.num;
+	OP_R3B,OP_R3W,OP_R3T,OP_R3O,OP_MOV:
+		fnRb = ir.ins.r3.Rb.num;
+	OP_CSR:
+		fnRb = 6'd0;
+	OP_ADDI,OP_SUBFI,OP_CMPI,OP_CMPUI,
+	OP_ANDI,OP_ORI,OP_EORI,
+	OP_MULI,OP_MULUI,OP_DIVI,OP_DIVUI,
+	OP_SEQI,OP_SNEI,OP_SLTI,OP_SLEI,OP_SGTI,OP_SGEI,OP_SLTUI,OP_SLEUI,OP_SGTUI,OP_SGEUI,
+	OP_ADD2UI,OP_ADD4UI,OP_ADD8UI,OP_ADD16UI,
+	OP_SHIFTB,OP_SHIFTW,OP_SHIFTT,OP_SHIFTO,
+	OP_ZSEQI,OP_ZSNEI,OP_ZSLTI,OP_ZSLEI,OP_ZSGTI,OP_ZSGEI,OP_ZSLTUI,OP_ZSLEUI,OP_ZSGTUI,OP_ZSGEUI:
+		fnRb = 6'd0;
+	OP_JSR,OP_CJSR:
+		fnRb = 6'd0;
+	OP_JSRI,OP_JSRR,OP_CJSRI,OP_CJSRR:
+		fnRb = ir.ins.jsr.Ra.num;
+	OP_Bcc,OP_BccU,OP_FBcc,OP_DFBcc,OP_PBcc,OP_IBcc,OP_DBcc,
+	OP_BccR,OP_BccUR,OP_FBccR,OP_DFBccR,OP_PBccR,OP_IBccR,OP_DBccR:
+		fnRb = ir.ins.br.Rb.num;
 	// Loads and stores have has_immb=TRUE but also have an Rb.
-	OP_LDx,OP_LDxU,OP_FLDx,OP_DFLDx,OP_PLDx,OP_CACHE,
-	OP_STx,OP_FSTx,OP_DFSTx,OP_PSTx:
-		fnRb = ir.aRb;
+	OP_LDxU,OP_LDx,OP_FLDx,OP_DFLDx,OP_PLDx,OP_LDCAPx,OP_CACHE,OP_LDA,OP_AMO,OP_CAS,
+	OP_STx,OP_STIx,OP_FSTx,OP_DFSTx,OP_PSTx,OP_STCAPx,OP_STPTR:
+		fnRb = ir.ins.ls.Rb.num;
+	OP_ENTER,OP_LEAVE,OP_PUSH,OP_POP:
+		fnRb = 6'd0;
 	default:
-		if (has_immb)
-			fnRb = 9'd0;
-		else if (fnImmb(ir))
-			fnRb = 9'd0;
-		else
-			fnRb = ir.aRb;
+		fnRb = 6'd0;
 	endcase
 end
 endfunction
@@ -78,7 +94,8 @@ begin
 	fnHasRb = 1'b0;
 	case(ir.ins.any.opcode)
 	OP_RTD:	fnHasRb = 1'b1;
-	OP_FLT3:	fnHasRb = 1'b1;
+	OP_FLT3H,OP_FLT3S,OP_FLT3D,OP_FLT3Q:
+		fnHasRb = 1'b1;
 	// Loads and stores have has_immb=TRUE but also have an Rb.
 	OP_LDx,OP_LDxU,OP_FLDx,OP_DFLDx,OP_PLDx,OP_CACHE,
 	OP_STx,OP_FSTx,OP_DFSTx,OP_PSTx:
@@ -98,9 +115,33 @@ always_comb
 begin
 	Rb = fnRb(instr, has_immb);
 	has_Rb = fnHasRb(instr, has_immb);
-	if (Rb==9'd31)
-		Rb = 9'd32|om;
-	Rbn = instr.ins.r3.Rb.n;
+	if (Rb==6'd31)
+		Rb = 6'd32|om;
+	case(instr.ins.any.opcode)
+	OP_FLT3H,OP_FLT3S,OP_FLT3D,OP_FLT3Q:
+		Rbn = instr.ins.f3.Rb.n;
+	OP_R3B,OP_R3W,OP_R3T,OP_R3O,OP_MOV:
+		Rbn = instr.ins.r3.Rb.n;
+	OP_CSR:
+		Rbn = 1'b0;
+	OP_ADDI,OP_SUBFI,OP_CMPI,OP_CMPUI,
+	OP_ANDI,OP_ORI,OP_EORI,
+	OP_MULI,OP_MULUI,OP_DIVI,OP_DIVUI,
+	OP_SEQI,OP_SNEI,OP_SLTI,OP_SLEI,OP_SGTI,OP_SGEI,OP_SLTUI,OP_SLEUI,OP_SGTUI,OP_SGEUI,
+	OP_ADD2UI,OP_ADD4UI,OP_ADD8UI,OP_ADD16UI,
+	OP_SHIFTB,OP_SHIFTW,OP_SHIFTT,OP_SHIFTO,
+	OP_ZSEQI,OP_ZSNEI,OP_ZSLTI,OP_ZSLEI,OP_ZSGTI,OP_ZSGEI,OP_ZSLTUI,OP_ZSLEUI,OP_ZSGTUI,OP_ZSGEUI:
+		Rbn = 1'b0;
+	OP_JSR,OP_JSRI,OP_JSRR,OP_CJSR,OP_CJSRI,OP_CJSRR:
+		Rbn = 1'b0;
+	OP_Bcc,OP_BccU,OP_FBcc,OP_DFBcc,OP_PBcc,OP_IBcc,OP_DBcc,
+	OP_BccR,OP_BccUR,OP_FBccR,OP_DFBccR,OP_PBccR,OP_IBccR,OP_DBccR:
+		Rbn = 1'b0;
+	OP_LDxU,OP_LDx,OP_FLDx,OP_DFLDx,OP_PLDx,OP_LDCAPx,OP_CACHE,OP_LDA,OP_AMO,OP_CAS,
+	OP_STx,OP_STIx,OP_FSTx,OP_DFSTx,OP_PSTx,OP_STCAPx,OP_STPTR:
+		Rbn = 1'b0;
+	default:	Rbn = 1'b0;
+	endcase
 	Rbz = ~|Rb;
 end
 

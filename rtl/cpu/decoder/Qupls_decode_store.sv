@@ -57,7 +57,7 @@ function fnIsCStore;
 input instruction_t op;
 begin
 	case(op.any.opcode)
-	OP_CSTOREx:
+	OP_STCAPx:
 		fnIsCStore = 1'b1;
 	default:
 		fnIsCStore = 1'b0;

@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2024  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2024-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -43,9 +43,9 @@ output bitwise;
 function fnIsBitwise;
 input instruction_t ir;
 begin
-	case(ir.r2.opcode)
-	OP_R2:
-		case(ir.r2.func)
+	case(ir.r3.opcode)
+	OP_R3B,OP_R3W,OP_R3T,OP_R3O:
+		case(ir.r3.func)
 		FN_CPUID:	fnIsBitwise = 1'b1;
 		FN_AND:	fnIsBitwise = 1'b1;
 		FN_OR:	fnIsBitwise = 1'b1;
@@ -61,8 +61,6 @@ begin
 		fnIsBitwise = 1'b1;
 	OP_EORI:
 		fnIsBitwise = 1'b1;
-	OP_ORSI,OP_ANDSI,OP_EORSI:
-						fnIsBitwise = 1'b1;
 	default:	fnIsBitwise = 1'b0;
 	endcase
 end

@@ -49,6 +49,38 @@ function aregno_t fnRt;
 input ex_instruction_t ir;
 begin
 	case(ir.ins.any.opcode)
+	OP_RTD:
+		fnRt = 6'd31;
+	OP_FLT3H,OP_FLT3S,OP_FLT3D,OP_FLT3Q:
+		fnRt = ir.ins.f3.Rt.num;
+	OP_R3B,OP_R3W,OP_R3T,OP_R3O,OP_MOV:
+		fnRt = ir.ins.r3.Rt.num;
+	OP_CSR:
+		fnRt = ir.ins.csr.Rt.num;
+	OP_ADDI,OP_SUBFI,OP_CMPI,OP_CMPUI,
+	OP_ANDI,OP_ORI,OP_EORI,
+	OP_MULI,OP_MULUI,OP_DIVI,OP_DIVUI,
+	OP_SEQI,OP_SNEI,OP_SLTI,OP_SLEI,OP_SGTI,OP_SGEI,OP_SLTUI,OP_SLEUI,OP_SGTUI,OP_SGEUI,
+	OP_ADD2UI,OP_ADD4UI,OP_ADD8UI,OP_ADD16UI,
+	OP_SHIFTB,OP_SHIFTW,OP_SHIFTT,OP_SHIFTO,
+	OP_ZSEQI,OP_ZSNEI,OP_ZSLTI,OP_ZSLEI,OP_ZSGTI,OP_ZSGEI,OP_ZSLTUI,OP_ZSLEUI,OP_ZSGTUI,OP_ZSGEUI:
+		fnRt = ir.ins.ri.Rt.num;
+	OP_JSR,OP_CJSR:
+		fnRt = ir.ins.jsr.Rt.num;
+	OP_JSRI,OP_JSRR,OP_CJSRI,OP_CJSRR:
+		fnRt = ir.ins.jsr.Rt.num;
+	OP_Bcc,OP_BccU,OP_FBcc,OP_DFBcc,OP_PBcc,
+	OP_BccR,OP_BccUR,OP_FBccR,OP_DFBccR,OP_PBccR:
+		fnRt = 6'd0;
+	OP_IBcc,OP_DBcc,OP_IBccR,OP_DBccR:
+		fnRt = ir.ins.br.Ra.num;
+	OP_LDxU,OP_LDx,OP_FLDx,OP_DFLDx,OP_PLDx,OP_LDCAPx,OP_CACHE,OP_LDA,OP_AMO,OP_CAS:
+		fnRt = ir.ins.ls.Rt.num;
+	OP_STx,OP_STIx,OP_FSTx,OP_DFSTx,OP_PSTx,OP_STCAPx,OP_STPTR:
+		fnRt = 6'd0;
+	OP_ENTER,OP_LEAVE,OP_PUSH,OP_POP:
+		fnRt = 6'd0;
+/*
 	OP_R2:
 		case(ir.ins.r2.func)
 		FN_ADD:	fnRt = ir.aRt;
@@ -94,34 +126,10 @@ begin
 		FN_ZSLEUI8:	fnRt = ir.aRt;
 		default:	fnRt = 9'd0;
 		endcase
-	OP_FLT3:
-		fnRt = ir.aRt;
-	OP_MCB:	fnRt = {ir.ins.mcb.lk ? 9'd59 : 9'd00};
-	OP_BSR:	fnRt = ir.aRt;
-	OP_JSR:	fnRt = ir.aRt;
-	OP_RTD:	fnRt = 9'd31;
-	OP_DBRA: fnRt = 9'd55;
-	OP_ADDI,OP_SUBFI,OP_CMPI:
-		fnRt = ir.aRt;
-	OP_MULI,OP_DIVI:
-		fnRt = ir.aRt;
-	OP_MULUI,OP_DIVUI,OP_ANDI,OP_ORI,OP_EORI:
-		fnRt = ir.aRt;
-	OP_ADDSI,OP_ANDSI,OP_ORSI,OP_EORSI,OP_AIPSI:
-		fnRt = ir.aRt;
-	OP_SHIFT:
-		fnRt = ir.aRt;
-	OP_CSR:
-		fnRt = ir.aRt;
-	OP_MOV:
-		fnRt = ir.aRt;
-	OP_Bcc,OP_BccU:
-		fnRt = |ir.ins.br.inc ? ir.aRa : 8'd0;
-	OP_LDA,
-	OP_LDx,OP_LDxU,OP_FLDx,OP_DFLDx,OP_PLDx,OP_CACHE:
-		fnRt = ir.aRt;
+*/
+	OP_BSR:	fnRt = ir.ins.bsr.Rt==2'b00 ? 6'd0 : 6'd40 + ir.ins.bsr.Rt;
 	default:
-		fnRt = 9'd0;
+		fnRt = 6'd0;
 	endcase
 end
 endfunction
@@ -129,14 +137,36 @@ endfunction
 always_comb
 begin
 	Rt = fnRt(instr);
-	if (Rt==8'd31 && !(instr.ins.any.opcode==OP_MOV && instr.ins[63]))
-		Rt = 8'd32|om;
-	if (instr.ins.any.opcode==OP_BSR)
-		Rtn = 1'b0;
-	else
+	if (Rt==6'd31 && !(instr.ins.any.opcode==OP_MOV && instr.ins[63]))
+		Rt = 6'd32|om;
+	case(instr.ins.any.opcode)
+	OP_FLT3H,OP_FLT3S,OP_FLT3D,OP_FLT3Q:
+		Rtn = instr.ins.f3.Rt.n;
+	OP_R3B,OP_R3W,OP_R3T,OP_R3O,OP_MOV:
 		Rtn = instr.ins.r3.Rt.n;
-	Rtz = Rt==8'd0;
+	OP_CSR:
+		Rtn = instr.ins.csr.Rt.n;
+	OP_ADDI,OP_SUBFI,OP_CMPI,OP_CMPUI,
+	OP_ANDI,OP_ORI,OP_EORI,
+	OP_MULI,OP_MULUI,OP_DIVI,OP_DIVUI,
+	OP_SEQI,OP_SNEI,OP_SLTI,OP_SLEI,OP_SGTI,OP_SGEI,OP_SLTUI,OP_SLEUI,OP_SGTUI,OP_SGEUI,
+	OP_ADD2UI,OP_ADD4UI,OP_ADD8UI,OP_ADD16UI,
+	OP_SHIFTB,OP_SHIFTW,OP_SHIFTT,OP_SHIFTO,
+	OP_ZSEQI,OP_ZSNEI,OP_ZSLTI,OP_ZSLEI,OP_ZSGTI,OP_ZSGEI,OP_ZSLTUI,OP_ZSLEUI,OP_ZSGTUI,OP_ZSGEUI:
+		Rtn = instr.ins.ri.Rt.n;
+	OP_JSR,OP_JSRI,OP_JSRR,OP_CJSR,OP_CJSRI,OP_CJSRR:
+		Rtn = 1'b0;
+	OP_Bcc,OP_BccU,OP_FBcc,OP_DFBcc,OP_PBcc,OP_IBcc,OP_DBcc,
+	OP_BccR,OP_BccUR,OP_FBccR,OP_DFBccR,OP_PBccR,OP_IBccR,OP_DBccR:
+		Rtn = 1'b0;
+	OP_LDxU,OP_LDx,OP_FLDx,OP_DFLDx,OP_PLDx,OP_LDCAPx,OP_CACHE,OP_LDA,OP_AMO,OP_CAS,
+	OP_STx,OP_STIx,OP_FSTx,OP_DFSTx,OP_PSTx,OP_STCAPx,OP_STPTR:
+		Rtn = 1'b0;
+	OP_BSR:
+		Rtn = 1'b0;
+	default:	Rtn = 1'b0;
+	endcase
+	Rtz = Rt==6'd0;
 end
 
 endmodule
-

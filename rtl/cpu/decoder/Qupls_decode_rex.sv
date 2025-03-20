@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -45,8 +45,8 @@ input instruction_t ir;
 begin
 	fnIsRex = 1'b0;
 	case(ir.any.opcode)
-	OP_R2:
-		case(ir.r2.func)
+	OP_R3B,OP_R3W,OP_R3T,OP_R3O:
+		case(ir.r3.func)
 		FN_R1:
 			case(ir.r3.Rb)
 			OP_REX: fnIsRex = 1'b1;	

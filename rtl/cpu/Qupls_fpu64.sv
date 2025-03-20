@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023-2024  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2023-2025 Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -344,7 +344,7 @@ begin
 		endcase
 	FN_FMA,FN_FMS,FN_FNMA,FN_FNMS:
 		bus = fmao;
-	OP_R2:
+	OP_R3B,OP_R3W,OP_R3T,OP_R3O:
 		case(ir.r2.func)
 		FN_ADD:
 			case(ir.r2.op4)
@@ -465,7 +465,10 @@ always_ff @(posedge clk)
 		endcase
 	FN_FMA,FN_FMS,FN_FNMA,FN_FNMS:
 		done = fma_done;
-	OP_R2:		done = 1'b1;
+	OP_R3B:		done = 1'b1;
+	OP_R3W:		done = 1'b1;
+	OP_R3T:		done = 1'b1;
+	OP_R3O:		done = 1'b1;
 	OP_ADDI:	done = 1'b1;
 	OP_CMPI:	done = 1'b1;
 	OP_CMPUI:	done = 1'b1;

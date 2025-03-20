@@ -108,9 +108,14 @@ always_comb
 always_comb
 begin
 	case(ir.ins.any.opcode)
-	OP_LDx,OP_LDxU,OP_FLDx,OP_DFLDx,OP_PLDx,OP_CLOADx,
-	OP_STx,OP_FSTx,OP_DFSTx,OP_PSTx,OP_CSTOREx:
-		res1 <= as + bs + {{41{ir.ins.lsn.disp[23]}},ir.ins.lsn.disp};
+	OP_LDx,OP_LDxU,OP_FLDx,OP_DFLDx,OP_PLDx,OP_LDCAPx,
+	OP_STx,OP_FSTx,OP_DFSTx,OP_PSTx,OP_STCAPx:
+	   case(ir.ins.ls.sz)
+	   2'd0:   res1 <= as + {{56{ir.ins[23]}},ir.ins[23:19],3'd0};
+	   2'd1:   res1 <= as + bs + {{48{ir.ins.lsn.disp[15]}},ir.ins.lsn.disp};
+	   2'd2:   res1 <= as + bs + {{24{ir.ins.lsn.disp[39]}},ir.ins.lsn.disp};
+	   2'd3:   res1 <= as + bs + ir.ins.lsn.disp;
+	   endcase
 	OP_AMO:
 		res1 <= as + b;
 	default:

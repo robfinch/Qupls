@@ -81,7 +81,7 @@ begin
 	finsB = 1'd0;
 	finsC = 1'd0;
 	case(ins.ins.any.opcode)
-	OP_R2,OP_R3V,OP_R3VS:
+	OP_R3B,OP_R3W,OP_R3T,OP_R3O:
 		case(ins.ins.r3.func)
 		FN_BYTENDX:
 			begin
@@ -105,25 +105,15 @@ begin
 			immb = {32'h0000,ins.ins[63:32]};
 			has_immb = 1'b1;
 		end
-	OP_AIPSI,OP_ADDSI:
+	OP_AIPUI:
 		begin
 			immb = {{27{ins.ins[63]}},ins.ins[63:27]};
 			has_immb = 1'b1;
 		end
-	OP_ANDSI:
+	OP_SHIFTB,OP_SHIFTW,OP_SHIFTT,OP_SHIFTO:
 		begin
-			immb = {27'h7FFFFFF,ins.ins[63:27]};
-			has_immb = 1'b1;
-		end
-	OP_ORSI,OP_EORSI:
-		begin
-			immb = {27'h0,ins.ins[63:27]};
-			has_immb = 1'b1;
-		end
-	OP_SHIFT:
-		begin
-			immc = ins.ins.shifti.imm;
-			has_immc = ins.ins.shifti.i;
+			immc = ins.ins.lshifti.imm;
+			has_immc = ins.ins.lshifti.func[3];
 		end
 	OP_CSR:
 		begin
@@ -159,31 +149,41 @@ begin
 //			immc = {{44{ins.ins[63]}},ins.ins[63:44]};
 			has_immc = 1'b1;
 		end
-	OP_PFXAB:
+	OP_PFX:
 		begin
-			if (ins.ins.pfx.sw) begin
-				immb = {ins.ins.pfx.imm,8'h00};
-				has_immb = 1'b1;
-				pfxb = 1'b1;
-			end
-			else begin
-				imma = {ins.ins.pfx.imm,8'h00};
-				has_imma = 1'b1;
-				pfxa = 1'b1;
-			end
-		end
-	OP_PFXC:
-		begin
-				immc = {ins.ins.pfx.imm,8'h00};
-				has_immc = 1'b1;
-				pfxc = 1'b1;
+			case(ins.ins.pfx.sw)
+			2'b00:
+				begin
+					imma = {ins.ins.pfx.imm,6'h00};
+					has_imma = 1'b1;
+					pfxa = 1'b1;
+				end
+			2'b01:
+				begin
+					immb = {ins.ins.pfx.imm,6'h00};
+					has_immb = 1'b1;
+					pfxb = 1'b1;
+				end
+			2'b10:
+				begin
+					immc = {ins.ins.pfx.imm,6'h00};
+					has_immc = 1'b1;
+					pfxc = 1'b1;
+				end
+			default:
+				begin
+				end
+			endcase
 		end
 	default:
 		immb = cpu_types_pkg::value_zero;
 	endcase
 
 	ndx = 1;
-	flt = ins.ins.any.opcode==OP_FLT3;
+	flt = ins.ins.any.opcode==OP_FLT3H
+	   || ins.ins.any.opcode==OP_FLT3S
+	   || ins.ins.any.opcode==OP_FLT3D
+	   || ins.ins.any.opcode==OP_FLT3Q;
 	fltpr = ins.ins[40:39];
 
 end

@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2024  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -44,8 +44,8 @@ function fnIsNop;
 input instruction_t ir;
 begin
 	case(ir.r2.opcode)
-	OP_JSRI,OP_BSTORE,OP_BMOV,OP_BFND,OP_BCMP,
-	OP_PFXAB,OP_PFXC,
+	OP_JSRI,OP_BLOCK,OP_BFND,OP_BCMP,
+	OP_PFX,
 	OP_VEC,OP_VECZ,OP_NOP,OP_ENTER,OP_LEAVE,OP_PUSH,OP_POP,OP_ATOM:
 		fnIsNop = 1'b1;
 	default:	fnIsNop = 1'b0;

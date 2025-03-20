@@ -37,10 +37,10 @@
 import cpu_types_pkg::*;
 import QuplsPkg::*;
 
-module Qupls_decode_Rc(om, ipl, instr, has_immc, Rc, Rcz, Rcn, Rcc);
+module Qupls_decode_Rc(om, ipl, ir, has_immc, Rc, Rcz, Rcn, Rcc);
 input operating_mode_t om;
 input [2:0] ipl;
-input ex_instruction_t instr;
+input ex_instruction_t ir;
 input has_immc;
 output aregno_t Rc;
 output reg Rcz;
@@ -49,7 +49,7 @@ output reg [2:0] Rcc;
 
 always_comb
 begin
-	Rc = 9'd0;
+	Rc = 6'd0;
 	Rcc = 3'd0;
 	if (has_immc) begin
 		Rc = 9'd0;
@@ -57,39 +57,78 @@ begin
 		Rcc = 3'd0;
 	end
 	else
-		case(instr.ins.any.opcode)
-		OP_ORSI,OP_ANDSI,OP_EORSI,OP_ADDSI:
+		case(ir.ins.any.opcode)
+		OP_RTD:
 			begin
-				Rc = instr.aRt;
-				Rcn = instr.ins.r3.Rt.n;
-			end
-		OP_STx,OP_FSTx,OP_DFSTx,OP_PSTx:
-			begin
-				Rc = instr.aRt;
-				Rcn = instr.ins.r3.Rt.n;
-			end
-		OP_SHIFT:
-			begin
-				Rc = instr.aRc;
-				Rcn = instr.ins.r3.Rc.n;
-			end
-		OP_R2:
-			begin
-				Rc = instr.aRc;
-				Rcn = instr.ins.r3.Rc.n;
-			end
-		default:
-			if (fnImmc(instr)) begin
-				Rc = 9'd0;
+				Rc = 6'd0;
 				Rcn = 1'b0;
 			end
-			else begin
-				Rc = instr.aRc;
-				Rcn = instr.ins.r3.Rc.n;
+		OP_FLT3H,OP_FLT3S,OP_FLT3D,OP_FLT3Q:
+			begin
+				Rc = ir.ins.f3.Rc.num;
+				Rcn = ir.ins.f3.Rc.n;
+			end
+		OP_R3B,OP_R3W,OP_R3T,OP_R3O,OP_MOV:
+			begin
+				Rc = ir.ins.r3.Rc.num;
+				Rcn = ir.ins.r3.Rc.n;
+			end
+		OP_CSR:
+			begin
+				Rc = 6'd0;
+				Rcn = 1'b0;
+			end
+		OP_ADDI,OP_SUBFI,OP_CMPI,OP_CMPUI,
+		OP_ANDI,OP_ORI,OP_EORI,
+		OP_MULI,OP_MULUI,OP_DIVI,OP_DIVUI,
+		OP_SEQI,OP_SNEI,OP_SLTI,OP_SLEI,OP_SGTI,OP_SGEI,OP_SLTUI,OP_SLEUI,OP_SGTUI,OP_SGEUI,
+		OP_ADD2UI,OP_ADD4UI,OP_ADD8UI,OP_ADD16UI,
+		OP_SHIFTB,OP_SHIFTW,OP_SHIFTT,OP_SHIFTO,
+		OP_ZSEQI,OP_ZSNEI,OP_ZSLTI,OP_ZSLEI,OP_ZSGTI,OP_ZSGEI,OP_ZSLTUI,OP_ZSLEUI,OP_ZSGTUI,OP_ZSGEUI:
+			begin
+				Rc = 6'd0;
+				Rcn = 1'b0;
+			end
+		OP_JSR,OP_CJSR:
+			begin
+				Rc = 6'd0;
+				Rcn = 1'b0;
+			end
+		OP_JSRI,OP_JSRR,OP_CJSRI,OP_CJSRR:
+			begin
+				Rc = 6'd0;
+				Rcn = 1'b0;
+			end
+		OP_Bcc,OP_BccU,OP_FBcc,OP_DFBcc,OP_PBcc,OP_IBcc,OP_DBcc,
+		OP_BccR,OP_BccUR,OP_FBccR,OP_DFBccR,OP_PBccR,OP_CBccR,OP_IBccR,OP_DBccR:
+			begin
+				Rc = 6'd0;
+				Rcn = 1'b0;
+			end
+		OP_LDxU,OP_LDx,OP_FLDx,OP_DFLDx,OP_PLDx,OP_LDCAPx,OP_CACHE,OP_LDA,OP_AMO,OP_CAS:
+			begin
+				Rc = 6'd0;
+				Rcn = 1'b0;
+			end
+		// Stores use Rc to read store data, but it is encoded in Rt field.
+		OP_STx,OP_STIx,OP_FSTx,OP_DFSTx,OP_PSTx,OP_STCAPx,OP_STPTR:
+			begin
+				Rc = ir.ins.ls.Rt.num;
+				Rcn = 1'b0;
+			end
+		OP_ENTER,OP_LEAVE,OP_PUSH,OP_POP:
+			begin
+				Rc = 6'd0;
+				Rcn = 1'b0;
+			end
+		default:
+			begin
+				Rc = 6'd0;
+				Rcn = 1'b0;
 			end
 		endcase
-	if (Rc==9'd31)
-		Rc = 9'd32|om;
+	if (Rc==6'd31)
+		Rc = 6'd32|om;
 	Rcz = ~|Rc;
 end
 

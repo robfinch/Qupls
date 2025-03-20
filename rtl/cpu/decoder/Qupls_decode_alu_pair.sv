@@ -43,9 +43,9 @@ output alu_pair;
 function fnIsAluPair;
 input instruction_t ir;
 begin
-	case(ir.r2.opcode)
-	OP_R2:
-		case(ir.r2.func)
+	case(ir.r3.opcode)
+	OP_R3B,OP_R3W,OP_R3T,OP_R3O:
+		case(ir.r3.func)
 		FN_MULW:	fnIsAluPair = 1'b1;
 		FN_MULUW: fnIsAluPair = 1'b1;
 		default:	fnIsAluPair = 1'b0;

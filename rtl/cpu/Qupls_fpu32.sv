@@ -323,8 +323,8 @@ begin
 		endcase
 	FN_FMA,FN_FMS,FN_FNMA,FN_FNMS:
 		bus = fmao;
-	OP_R2:
-		case(ir.r2.func)
+	OP_R3B,OP_R3W,OP_R3T,OP_R3O:
+		case(ir.r3.func)
 		FN_ADD:
 			case(ir.r2.op4)
 			3'd0:	bus = (a + b) & c;
@@ -444,7 +444,10 @@ always_comb
 		endcase
 	FN_FMA,FN_FMS,FN_FNMA,FN_FNMS:
 		done = fma_done;
-	OP_R2:		done = 1'b1;
+	OP_R3B:		done = 1'b1;
+	OP_R3W:		done = 1'b1;
+	OP_R3T:		done = 1'b1;
+	OP_R3O:		done = 1'b1;
 	OP_ADDI:	done = 1'b1;
 	OP_CMPI:	done = 1'b1;
 	OP_CMPUI:	done = 1'b1;

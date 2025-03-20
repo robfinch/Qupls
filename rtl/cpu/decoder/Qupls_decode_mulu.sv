@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -44,7 +44,7 @@ function fnIsMulu;
 input instruction_t ir;
 begin
 	fnIsMulu = ir.any.opcode==OP_MULUI ||
-		(ir.any.opcode==OP_R2 && (ir.r2.func==FN_MULU || ir.r2.func==FN_MULUW))
+		((ir.any.opcode==OP_R3B ||ir.any.opcode==OP_R3W || ir.any.opcode==OP_R3T || ir.any.opcode==OP_R3O) && (ir.r3.func==FN_MULU || ir.r3.func==FN_MULUW))
 		;
 end
 endfunction

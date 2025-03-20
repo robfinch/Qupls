@@ -117,6 +117,8 @@ reg [4:0] ph4;
 reg [3:0] rstcnt;
 reg [3:0] panic;
 reg int_commit;		// IRQ committed
+reg next_step;		// do next step for single stepping
+reg ssm_flag;
 // hirq squashes the pc increment if there's an irq.
 // Normally atom_mask is zero.
 reg hirq;
@@ -1183,7 +1185,7 @@ always_comb
       .WRITE_DATA_WIDTH(106),         // DECIMAL
       .WR_DATA_COUNT_WIDTH(5)        // DECIMAL
    )
-   xpm_irq_fifo_sync_inst (
+   irq_victim_fifo (
       .almost_empty(),   // 1-bit output: Almost Empty : When asserted, this signal indicates that
                                      // only one more read can be performed before the FIFO goes to empty.
 
@@ -2369,6 +2371,7 @@ wire irqf_fet;
 pc_address_ex_t misspc_fet;
 wire [1023:0] ic_line_fet;
 pc_address_t ic_hwipc, hwipc_fet;
+wire micro_code_active_fet;
 
 always_ff @(posedge clk)
 	ic_hwipc <= hwipc;
@@ -2390,10 +2393,6 @@ Qupls_pipeline_fet ufet1
 	.hwipc(ic_hwipc),
 	.hwipc_fet(hwipc_fet),
 	.pc0_fet(pc0_fet),
-	.pc1_fet(pc1_fet),
-	.pc2_fet(pc2_fet),
-	.pc3_fet(pc3_fet),
-	.pc4_fet(pc4_fet),
 	.stomp_fet(stomp_fet),
 	.stomp_bno(stomp_bno),
 	.ic_line_i(ic_line),
@@ -2404,6 +2403,7 @@ Qupls_pipeline_fet ufet1
 	.irqf_i(ic_irqf),
 	.irqf_fet(irqf_fet),
 	.micro_code_active(micro_code_active),
+	.micro_code_active_fet(micro_code_active_fet),
 	.mc_adr(mc_adr)
 );
 
@@ -2456,6 +2456,7 @@ Qupls_pipeline_mux uiext1
 	.rstcnt(rstcnt[2:0]),
 	.advance_fet(advance_f),
 	.en_i(advance_pipeline),
+	.ssm_flag(ssm_flag),
 	.ihit(ihito),
 	.sr(sr),
 	.stomp_bno(stomp_bno),
@@ -2473,11 +2474,8 @@ Qupls_pipeline_mux uiext1
 	.grp_i(igrp2),
 	.misspc_fet(misspc_fet),
 	.pc0_fet(pc0_fet),
-	.pc1_fet(pc1_fet),
-	.pc2_fet(pc2_fet),
-	.pc3_fet(pc3_fet),
-	.pc4_fet(pc4_fet),
 	.hwipc_fet(hwipc_fet),
+	.micro_code_active(micro_code_active_fet),
 	.branchmiss(branch_state > BS_STATE3),
 	.mc_offs(32'd0),//mc_offs),
 	.mc_adr(mc_adr),
@@ -5064,6 +5062,8 @@ if (irst) begin
 end
 else begin
 	irq_wr_en <= FALSE;
+	if (sr.ssm & advance_pipeline)
+		ssm_flag <= TRUE;
 
 	// Check if all instruciton arguments are valid.
 	for (n3 = 0; n3 < ROB_ENTRIES; n3 = n3 + 1)
@@ -6435,6 +6435,9 @@ else begin
 			tProcessExc(head2,rob[head2].pc,FALSE,FALSE);
 		else if (rob[head3].excv && cmtcnt > 3'd3 && rob[head3].v)
 			tProcessExc(head3,rob[head3].pc,FALSE,FALSE);
+			
+		if (rob[head0].op.ssm)
+			tProcessExc(head0,SSM_DEBUG ? rob[head0].pc : rob[head0].op.hwipc,FALSE,FALSE);
 
 		/*
 		if (FALSE) begin
@@ -7850,6 +7853,7 @@ begin
 	sync_no <= 6'd0;
 	fc_no <= 6'd0;
 	irq_wr_en <= FALSE;
+	ssm_flag <= FALSE;
 end
 endtask
 
@@ -8159,18 +8163,18 @@ begin
 	if (v) begin
 		if (!rob[head].decbus.cpytgt) begin
 			if (rob[head].decbus.csr)
-				case(rob[head].op.csr.op[1:0])
+				case(rob[head].op.ins.csr.op[1:0])
 				2'd0:	;	// readCSR
-				2'd1:	tWriteCSR(rob[head].arg,{2'b0,rob[head].op.csr.regno});
-				2'd2:	tSetbitCSR(rob[head].arg,{2'b0,rob[head].op.csr.regno});
-				2'd3:	tClrbitCSR(rob[head].arg,{2'b0,rob[head].op.csr.regno});
+				2'd1:	tWriteCSR(rob[head].arg,{2'b0,rob[head].op.ins.csr.regno});
+				2'd2:	tSetbitCSR(rob[head].arg,{2'b0,rob[head].op.ins.csr.regno});
+				2'd3:	tClrbitCSR(rob[head].arg,{2'b0,rob[head].op.ins.csr.regno});
 				endcase
 			else if (rob[head].decbus.irq)
 				;
 			else if (rob[head].decbus.brk)
 				tProcessExc(head,fnPCInc(rob[head].pc),FALSE,FALSE);
 			else if (rob[head].decbus.rti)
-				tProcessRti(rob[head].op[15:13]==3'd2);
+				tProcessRti(rob[head].op[22:19]==5'd2,rob[head].op[23]==1'b1);
 			else if (rob[head].decbus.rex)
 				tRex(head,rob[head].op);
 		end
@@ -8184,9 +8188,9 @@ begin
 	// original stream.
 	else if (rob[head].op.hwi) begin
 		irq_wr_en <= TRUE;
-		irq2_din <= {rob[head].hwi_swstk,rob[head].hwi_level,33'd0,rob[head].pc};
-		excmisspc <= rob[head].hwipc;
-		excmiss_mcip <= rob[head].hwi_mcip;
+		irq2_din <= {rob[head].op.hwi_swstk,rob[head].op.hwi_level,33'd0,rob[head].pc};
+		excmisspc <= rob[head].op.hwipc;
+		excmiss_mcip <= rob[head].op.hwi_mcip;
 		excmiss <= TRUE;
 	end
 end
@@ -8383,7 +8387,6 @@ begin
 		mc_stack[nn] <= mc_stack[nn-1];
 	mc_stack[0].ir <= micro_ir;
 	mc_stack[0].ip <= micro_ip;
-	sr.ipl <= 6'd63;
 	sr.pl <= 8'hFF;
 	sr.mcip <= micro_ip;
 	excir <= rob[id].op;
@@ -8391,10 +8394,25 @@ begin
 	excmiss <= FALSE;
 	// Hardware interrupts automatically vector at the next_pc stage. There is no
 	// need to vector here.
-	if (nmi)
-		;//	excmisspc.pc <= {kvec[sr.dbg ? 4 : 3][$bits(pc_address_t)-1:8] + 4'd11,8'h0};
-	else if (irq)
-		;// excmisspc.pc <= {kvec[sr.dbg ? 4 : 3][$bits(pc_address_t)-1:8] + 4'd10,8'h0};
+	if (nmi) begin
+		sr.ipl <= 6'd63;
+		sr.ssm <= FALSE;
+		ssm_flag <= FALSE;
+	end
+		//	excmisspc.pc <= {kvec[sr.dbg ? 4 : 3][$bits(pc_address_t)-1:8] + 4'd11,8'h0};
+	else if (irq) begin
+		sr.ipl <= 6'd63;
+		sr.ssm <= FALSE;
+		ssm_flag <= FALSE;
+	end
+		// excmisspc.pc <= {kvec[sr.dbg ? 4 : 3][$bits(pc_address_t)-1:8] + 4'd10,8'h0};
+	else if (rob[id].op.ssm) begin
+		sr.ssm <= FALSE;
+		ssm_flag <= FALSE;
+		excmisspc.pc <= {kvec[sr.dbg ? 4 : 3][$bits(pc_address_t)-1:8] + 4'd1,8'h0};
+		excmiss_mcip <= 12'h0;
+		excmiss <= TRUE;
+	end
 	else if (vecno < 8'd16) begin
 		excmisspc.pc <= {kvec[sr.dbg ? 4 : 3][$bits(pc_address_t)-1:8] + vecno,8'h0};
 		excmiss_mcip <= 12'h0;
@@ -8428,11 +8446,14 @@ endtask
 
 task tProcessRti;
 input twoup;
+input restore_ssm;
 integer nn;
 begin
 	excret <= TRUE;
 	err_mask <= 64'd0;
 	sr <= twoup ? sr_stack[1] : sr_stack[0];
+	if (!restore_ssm)
+		sr.ssm <= 1'b0;
 	for (nn = 0; nn < 7; nn = nn + 1)
 		sr_stack[nn] <= sr_stack[nn+1+twoup];
 	sr_stack[7].ipl <= 6'd63;
@@ -8451,8 +8472,8 @@ begin
 //	exc_mcip <= twoup ? mc_stack[1].ip : mc_stack[0].ip;
 	for (nn = 0; nn < 7; nn = nn + 1)
 		mc_stack[nn] <=	mc_stack[nn+1+twoup];
-	mc_stack[7].ir <= {57'd0,OP_NOP};
-	mc_stack[8].ir <= {57'd0,OP_NOP};
+	mc_stack[7].ir <= {87'd0,OP_NOP,2'b00};
+	mc_stack[8].ir <= {87'd0,OP_NOP,2'b00};
 	mc_stack[7].ip <= 12'h0;
 	mc_stack[8].ip <= 12'h0;
 	exc_ret_mcip <= twoup ? mc_stack[1].ip : mc_stack[0].ip;

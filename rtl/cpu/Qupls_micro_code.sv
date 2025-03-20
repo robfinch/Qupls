@@ -183,7 +183,7 @@ case(micro_ip)
 12'h009:
 	begin
 		next_ip=12'h00A;
-		instr.ins={FN_OR,2'd2,4'd0,5'd0,5'd0,SP,FP,OP_R2};
+		instr.ins={FN_OR,2'd2,4'd0,5'd0,5'd0,SP,FP,OP_R3O};
 		case(om)
 		2'd0: instr.aRa=SUSP;
 		2'd1: instr.aRa=SSSP;
@@ -388,7 +388,7 @@ case(micro_ip)
 12'h015:
 	begin
 		next_ip=12'h016;
-		instr.ins={16'd0,ir[39:33],2'd2,3'd1,SP,OP_ADDSI};
+		instr.ins={16'd0,ir[39:33],2'd2,3'd1,SP,OP_NOP};
 		case(om)
 		2'd0: begin instr.aRa=SUSP; instr.aRt=SUSP; end
 		2'd1: begin instr.aRa=SSSP; instr.aRt=SSSP; end
@@ -697,14 +697,14 @@ case(micro_ip)
 // {
 //   float xhalf = 0.5f*x;
 //   int i = *(int*)&x; // represent float as an integer  ()
-//	 i = 0x5f375a86 – (i >> 1);// integer division by two and change in sign
+//	 i = 0x5f375a86 ï¿½ (i >> 1);// integer division by two and change in sign
 //	 float y = *(float*)&i; // represent integer as a float  ()
 //
 // initial approximation 0
-//   y = y*(1.5f – xhalf *y*y); // first NR iteration			9.16 bits accurate
-//	 y = y*(1.5f – xhalf *y*y); // second NR iteration	 17.69 bits accurate
-//	 y = y*(1.5f – xhalf *y*y); // third NR iteration	   35 bits accurate
-//   y = y*(1.5f – xhalf *y*y); // fourth NR iteration	 70 bits accurate
+//   y = y*(1.5f ï¿½ xhalf *y*y); // first NR iteration			9.16 bits accurate
+//	 y = y*(1.5f ï¿½ xhalf *y*y); // second NR iteration	 17.69 bits accurate
+//	 y = y*(1.5f ï¿½ xhalf *y*y); // third NR iteration	   35 bits accurate
+//   y = y*(1.5f ï¿½ xhalf *y*y); // fourth NR iteration	 70 bits accurate
 //	 return y;
 // }
 //64-bit magic used:
@@ -716,7 +716,7 @@ case(micro_ip)
 12'h052:	begin next_ip = 12'h054; instr.ins = {3'd0,12'h06C,MC0,ir[18:13],3'd0,2'd0,1'b0,OP_MCB}; regx = 4'h4; end			// if = infinity
 12'h053:	begin next_ip = 12'h054; instr.ins = {'d0,FN_FLT1,4'b0,FN_FCONST,6'd0,MC0,OP_FLT3};  regx = 4'h1; end	// MC0 = 0.5
 12'h054:	begin next_ip = 12'h058; instr.ins = {'d0,FN_MUL,4'b0,MC0,ir[18:13],MC1,OP_FLT3}; regx = 4'h5; end	// MC1 = x * MC0
-12'h055:	begin next_ip = 12'h058; instr.ins = {'d0,1'b0,1'b1,OP_LSR,7'd1,ir[18:13],MC2,OP_SHIFT}; regx = 4'h1; end	// MC2 = i>>1
+12'h055:	begin next_ip = 12'h058; instr.ins = {'d0,1'b0,1'b1,OP_LSR,7'd1,ir[18:13],MC2,OP_SHIFTO}; regx = 4'h1; end	// MC2 = i>>1
 12'h056:	begin next_ip = 12'h058; instr.ins = {'d0,FN_FLT1,4'b0,FN_FCONST,6'd4,MC0,OP_FLT3}; regx = 4'h1; end			// MC0 = MAGIC
 12'h057:	begin next_ip = 12'h058; instr.ins = {'d0,FN_SUB,4'b00,MC2,MC0,MC2,OP_FLT3}; regx = 4'h7; end							// MC2 = MAGIC - MC2
 12'h058:	begin next_ip = 12'h05C; instr.ins = {'d0,FN_MUL,4'b0,MC2,MC2,MC3,OP_FLT3}; regx = 4'h7; end							// MC3 = MC2 * MC2
@@ -751,7 +751,7 @@ case(micro_ip)
 12'h072:	begin next_ip = 12'h074; instr.ins = {3'd0,12'h06C,MC0,ir[18:13],3'd0,2'd0,1'b0,OP_MCB}; regx = 4'h4; end			// if = infinity
 12'h073:	begin next_ip = 12'h074; instr.ins = {'d0,FN_FLT1,4'b0,FN_FCONST,6'd0,MC0,OP_FLT3}; regx = 4'h1; end	// MC0 = 0.5
 12'h074:	begin next_ip = 12'h078; instr.ins = {'d0,FN_MUL,4'b0,MC0,ir[18:13],MC1,OP_FLT3}; regx = 4'h5; end	// MC1 = x * MC0
-12'h075:	begin next_ip = 12'h078; instr.ins = {'d0,1'b0,1'b1,OP_LSR,7'd1,ir[18:13],MC2,OP_SHIFT}; regx = 4'h1; end	// MC2 = i>>1
+12'h075:	begin next_ip = 12'h078; instr.ins = {'d0,1'b0,1'b1,OP_LSR,7'd1,ir[18:13],MC2,OP_SHIFTO}; regx = 4'h1; end	// MC2 = i>>1
 12'h076:	begin next_ip = 12'h078; instr.ins = {'d0,FN_FLT1,4'b0,FN_FCONST,6'd4,MC0,OP_FLT3}; regx = 4'h1; end			// MC0 = MAGIC
 12'h077:	begin next_ip = 12'h078; instr.ins = {'d0,FN_SUB,4'b00,MC2,MC0,MC2,OP_FLT3}; regx = 4'h7; end							// MC2 = MAGIC - MC2
 12'h078:	begin next_ip = 12'h000; instr.ins = {'d0,FN_MUL,4'b0,MC2,MC2,MC3,OP_FLT3}; regx = 4'h7; end							// MC3 = MC2 * MC2
@@ -770,7 +770,7 @@ case(micro_ip)
 12'h082:	begin next_ip = 12'h084; instr.ins = {3'd0,12'h06C,MC0,ir[18:13],3'd0,2'd0,1'b0,OP_MCB}; regx = 4'h4; end			// if = infinity
 12'h083:	begin next_ip = 12'h084; instr.ins = {'d0,FN_FLT1,4'b0,FN_FCONST,6'd0,MC0,OP_FLT3}; regx = 4'h1; end	// MC0 = 0.5
 12'h084:	begin next_ip = 12'h088; instr.ins = {'d0,FN_MUL,4'b0,MC0,ir[18:13],MC1,OP_FLT3}; regx = 4'h5; end	// MC1 = x * MC0
-12'h085:	begin next_ip = 12'h088; instr.ins = {'d0,1'b0,1'b1,OP_LSR,7'd1,ir[18:13],MC2,OP_SHIFT}; regx = 4'h1; end	// MC2 = i>>1
+12'h085:	begin next_ip = 12'h088; instr.ins = {'d0,1'b0,1'b1,OP_LSR,7'd1,ir[18:13],MC2,OP_SHIFTO}; regx = 4'h1; end	// MC2 = i>>1
 12'h086:	begin next_ip = 12'h088; instr.ins = {'d0,FN_FLT1,4'b0,FN_FCONST,6'd4,MC0,OP_FLT3}; regx = 4'h1; end			// MC0 = MAGIC
 12'h087:	begin next_ip = 12'h088; instr.ins = {'d0,FN_SUB,4'b00,MC2,MC0,MC2,OP_FLT3}; regx = 4'h7; end							// MC2 = MAGIC - MC2
 12'h088:	begin next_ip = 12'h08C; instr.ins = {'d0,FN_MUL,4'b0,MC2,MC2,MC3,OP_FLT3}; regx = 4'h7; end							// MC3 = MC2 * MC2
@@ -789,7 +789,7 @@ case(micro_ip)
 12'h0A2:	begin next_ip = 12'h0A4; instr.ins = {3'd0,12'h06C,MC0,ir[18:13],3'd0,2'd0,1'b0,OP_MCB}; regx = 4'h4; end			// if = infinity
 12'h0A3:	begin next_ip = 12'h0A4; instr.ins = {'d0,FN_FLT1,4'b0,FN_FCONST,6'd0,MC0,OP_FLT3}; regx = 4'h1; end	// MC0 = 0.5
 12'h0A4:	begin next_ip = 12'h0A8; instr.ins = {'d0,FN_MUL,4'b0,MC0,ir[18:13],MC1,OP_FLT3}; regx = 4'h5; end	// MC1 = x * MC0
-12'h0A5:	begin next_ip = 12'h0A8; instr.ins = {'d0,1'b0,1'b1,OP_LSR,7'd1,ir[18:13],MC2,OP_SHIFT}; regx = 4'h1; end	// MC2 = i>>1
+12'h0A5:	begin next_ip = 12'h0A8; instr.ins = {'d0,1'b0,1'b1,OP_LSR,7'd1,ir[18:13],MC2,OP_SHIFTO}; regx = 4'h1; end	// MC2 = i>>1
 12'h0A6:	begin next_ip = 12'h0A8; instr.ins = {'d0,FN_FLT1,4'b0,FN_FCONST,6'd4,MC0,OP_FLT3}; regx = 4'h1; end			// MC0 = MAGIC
 12'h0A7:	begin next_ip = 12'h0A8; instr.ins = {'d0,FN_SUB,4'b00,MC2,MC0,MC2,OP_FLT3}; regx = 4'h7; end							// MC2 = MAGIC - MC2
 12'h0A8:	begin next_ip = 12'h0AC; instr.ins = {'d0,FN_MUL,4'b0,MC2,MC2,MC3,OP_FLT3}; regx = 4'h7; end							// MC3 = MC2 * MC2
@@ -814,9 +814,9 @@ case(micro_ip)
 12'h0C3:	begin next_ip = 12'h0C4; instr.ins = {'d0,FN_FLT1,4'b0,FN_FCONST,6'd2,MC0,OP_FLT3}; regx = 4'h1; end
 12'h0C4:	begin next_ip = 12'h000; instr.ins = {'d0,FN_FNMS,MC0,ir[18:13],ir[12:7],MC1,OP_FLT3}; regx = 4'h9; end
 12'h0C5:	begin next_ip = 12'h000; instr.ins = {'d0,FN_FMA,6'd0,MC1,ir[12:7],ir[12:7],OP_FLT3}; regx = 4'h4; end
-12'h0C6:	begin next_ip = 12'h000; instr.ins = {'d0,FN_OR,1'b0,6'd0,ir[18:13],ir[12:7],OP_R2}; end		// Rt = Ra = NaN
+12'h0C6:	begin next_ip = 12'h000; instr.ins = {'d0,FN_OR,1'b0,6'd0,ir[18:13],ir[12:7],OP_R3O}; end		// Rt = Ra = NaN
 12'h0C7:	begin next_ip = 12'h000; instr.ins = {'d0,OP_NOP};	end
-12'h0C8:	begin next_ip = 12'h000; instr.ins = {'d0,FN_OR,1'b0,6'd0,ir[18:13],ir[12:7],OP_R2}; end		// Rt = Ra = NaN
+12'h0C8:	begin next_ip = 12'h000; instr.ins = {'d0,FN_OR,1'b0,6'd0,ir[18:13],ir[12:7],OP_R3O}; end		// Rt = Ra = NaN
 12'h0C9:	begin next_ip = 12'h000; instr.ins = {'d0,OP_NOP};	end
 12'h0CA:	begin next_ip = 12'h000; instr.ins = {'d0,OP_NOP};	end
 12'h0CB:	begin next_ip = 12'h000; instr.ins = {'d0,OP_NOP};	end
@@ -2141,7 +2141,7 @@ case(micro_ip)
 12'h1E0:	// add sp,sp,constant23
 	begin 
 		next_ip = 12'h1E1;
-		instr.ins = {21'd0,ir[39:38],2'd3,3'd1,SP,OP_ADDSI};
+		instr.ins = {21'd0,ir[39:38],2'd3,3'd1,SP,OP_NOP};
 		case(om)
 		2'd0:	instr.aRa = SUSP;
 		2'd1:	instr.aRa = SSSP;
@@ -2269,7 +2269,7 @@ case(micro_ip)
 		instr.aRb = 9'd0;
 		instr.aRc = 9'd0;
 		instr.aRt = VERR;
-		instr.ins = {FN_MVVR,2'd2,4'd0,5'd0,5'd0,5'd0,OP_R2};
+		instr.ins = {FN_MVVR,2'd2,4'd0,5'd0,5'd0,5'd0,OP_R3O};
 		instr.pred_btst = 6'd0;
 	end
 12'h209:
@@ -2279,7 +2279,7 @@ case(micro_ip)
 		instr.aRb = 9'd0;
 		instr.aRc = 9'd0;
 		instr.aRt = VRM;
-		instr.ins = {FN_MVVR,2'd2,4'd0,5'd0,5'd0,5'd0,OP_R2};
+		instr.ins = {FN_MVVR,2'd2,4'd0,5'd0,5'd0,5'd0,OP_R3O};
 		instr.pred_btst = 6'd0;
 	end
 12'h20A:
@@ -3261,7 +3261,7 @@ case(micro_ip)
 		instr.aRb=9'd0;
 		instr.aRc=9'd0;
 		instr.aRt=MC0;
-		instr.ins={{{10{ir[39]}},ir[39:27]},2'd2,3'd1,5'd1,OP_ADDSI};
+		instr.ins={{{10{ir[39]}},ir[39:27]},2'd2,3'd1,5'd1,OP_NOP};
 	end
 12'h337:
 	begin

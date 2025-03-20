@@ -58,8 +58,7 @@ fpCompare64 ufpcmp1
 
 always_comb
 	case(instr.any.opcode)
-	OP_DBRA:	takb = a!='d0;
-	OP_BccU:	// integer unsigned branches
+	OP_BccU,OP_BccUR:	// integer unsigned branches
 		case(instr.br.fn)
 		EQ:	takb = a==b;
 		NE:	takb = a!=b;
@@ -77,7 +76,8 @@ always_comb
 		OR:	takb = |(a | b);
 		default:	takb = 1'b0;
 		endcase	
-	OP_Bcc:	// integer signed branches
+	OP_IBccR,OP_DBccR,OP_BccR,
+	OP_IBcc,OP_DBcc,OP_Bcc:	// integer signed branches
 		case(instr.br.fn)
 		EQ:	takb = a==b;
 		NE:	takb = a!=b;
@@ -95,7 +95,7 @@ always_comb
 		OR:	takb = |(|a || |b);
 		default:	takb = 1'b0;
 		endcase	
-	OP_FBcc:
+	OP_FBcc,OP_FBccR:
 		case(instr.fbr.fn)
 		FEQ:	takb = fcmpo[0];
 		FNE:	takb = ~fcmpo[0];

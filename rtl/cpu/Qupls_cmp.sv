@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023-2024  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2023-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -61,7 +61,7 @@ always_comb
 begin
 	o = {WID{1'd0}};
 	case(ir.any.opcode)
-	OP_FLT3:
+	OP_FLT3H,OP_FLT3S,OP_FLT3D,OP_FLT3Q:
 		case(ir.f3.func)
 		FN_FCMP:
 			begin
@@ -84,8 +84,8 @@ begin
 			end
 		default:	o = {WID{1'd0}};
 		endcase
-	OP_R2:
-		case(ir.r2.func)
+	OP_R3B,OP_R3W,OP_R3T,OP_R3O:
+		case(ir.r3.func)
 		FN_CMP:
 			begin
 				o[0] = a == b;

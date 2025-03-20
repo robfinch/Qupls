@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2024  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -43,13 +43,14 @@ output fpu;
 function fnIsFpu;
 input instruction_t ir;
 begin
-	case(ir.r2.opcode)
+	case(ir.r3.opcode)
 	OP_CAP:	fnIsFpu = 1'b1;
-	OP_FLT3:	fnIsFpu = 1'b1;
+	OP_FLT3H,OP_FLT3S,OP_FLT3D,OP_FLT3Q:
+		fnIsFpu = 1'b1;
 	FN_FMA,FN_FMS,FN_FNMA,FN_FNMS:
 		fnIsFpu = 1'b1;
-	OP_R2:
-		case(ir.r2.func)
+	OP_R3B,OP_R3W,OP_R3T,OP_R3O:
+		case(ir.r3.func)
 		FN_ADD:	fnIsFpu = 1'b1;
 		FN_SUB:	fnIsFpu = 1'b1;
 		FN_CMP,FN_CMPU:		fnIsFpu = 1'b1;

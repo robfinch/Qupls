@@ -47,8 +47,8 @@ input instruction_t ir;
 begin
 	case(ir.any.opcode)
 	OP_CAP:	fnIsAlu0 = 1'b1;
-	OP_R2,OP_R3V,OP_R3VS:
-		case(ir.r2.func)
+	OP_R3B,OP_R3W,OP_R3T,OP_R3O:
+		case(ir.r3.func)
 		FN_CPUID,
 		FN_BYTENDX,
 		FN_MUL,FN_MULU,FN_MULSU,FN_MULW,FN_MULUW,FN_MULSUW,

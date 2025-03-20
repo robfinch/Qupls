@@ -59,7 +59,7 @@ function fnIsCLoad;
 input instruction_t op;
 begin
 	case(op.any.opcode)
-	OP_CLOADx:	fnIsCLoad = 1'b1;
+	OP_LDCAPx:	fnIsCLoad = 1'b1;
 	default:
 		fnIsCLoad = 1'b0;
 	endcase

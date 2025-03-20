@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-20235  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -44,7 +44,7 @@ function fnIsDivu;
 input instruction_t ir;
 begin
 	fnIsDivu = ir.any.opcode==OP_DIVUI ||
-		(ir.any.opcode==OP_R2 && (ir.r2.func==FN_DIVU || ir.r2.func==FN_MODU))
+		((ir.any.opcode==OP_R3B||ir.any.opcode==OP_R3W||ir.any.opcode==OP_R3T||ir.any.opcode==OP_R3O) && (ir.r2.func==FN_DIVU || ir.r2.func==FN_MODU))
 		;
 end
 endfunction

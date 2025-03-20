@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2024  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -44,7 +44,7 @@ function fnIsR2;
 input instruction_t op;
 begin
 	case(op.any.opcode)
-	OP_R2,OP_R3V,OP_R3VS:
+	OP_R3B,OP_R3W,OP_R3T,OP_R3O:
 		fnIsR2 = 1'b1;
 	default:
 		fnIsR2 = 1'b0;

@@ -158,7 +158,7 @@ reg [63:0] irq_threshold;
 reg wr_ip, wr_ipp;
 
 always_comb
-	imsg = {irq_resp_i.adr[39:0],irq_resp_i.dat[31:0]};
+	imsg = {irq_resp_i.adr[31:0],irq_resp_i.dat[31:0]};
 
 always_ff @(posedge clk)
 	reqd <= req;
@@ -335,7 +335,9 @@ end
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 
 always_comb
-	imsg_pending = irq_resp_i.err==fta_bus_pkg::IRQ && imsg.irq_coreno==coreno;
+	imsg_pending = irq_resp_i.err==fta_bus_pkg::IRQ		// IRQ message
+		&& irq_resp_i.tid.core==coreno									// and it is for this core
+		;
 
 // Writing to the pending bit register array clears the selected bit and
 // triggers that interrupt if the MSB is set.
@@ -384,7 +386,7 @@ always_ff @(posedge clk)
 always_comb
 	dina = reqd.padr[3] ? {reqd.dat[63:0],64'd0} : {64'h0,reqd.dat[63:0]};
 always_comb
-	dinb = {8'h00,que_dout.resv2,112'd0};
+	dinb = {que_dout.data,112'd0};
 always_comb
 	ena = cs_ivt;
 always_comb
@@ -392,7 +394,7 @@ always_comb
 always_comb
 	wea = {16{reqd.we}} & {reqd.padr[3] ? {reqd.sel[7:0],8'h0} : {8'h0,reqd.sel[7:0]}};
 always_comb
-	web = wr_ip ? 16'b0 : irq2 ? 16'h4000 : 16'd0;
+	web = wr_ip ? 16'b0 : irq2 ? 16'hC000 : 16'd0;
 always_comb
 	ivect_o = {doutb.ai,doutb.adrins};
 

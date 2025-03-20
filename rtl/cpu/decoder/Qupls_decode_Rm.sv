@@ -51,11 +51,11 @@ begin
 		begin
 			Rm = 8'd48 | instr.ins.imm.Pr;
 		end
-	OP_SHIFT:
+	OP_SHIFTB,OP_SHIFTW,OP_SHIFTT,OP_SHIFTO:
 		begin
 			Rm = 8'd48 | instr.ins.shifti.Pr;
 		end
-	OP_R2:
+	OP_R3B,OP_R3W,OP_R3T,OP_R3O:
 		begin
 			Rm = 8'd48 | instr.ins.r2.Pr;
 		end
@@ -68,7 +68,7 @@ begin
 	OP_BSR:	Rm = 8'd48 | instr.ins.bsr.Pr;
 	OP_JSR:	Rm = 8'd48 | instr.ins.jsr.Pr;
 	OP_RTD:	Rm = 8'd48 | instr.ins.rtd.Pr;
-	OP_ADDSI,OP_ANDSI,OP_ORSI,OP_EORSI,OP_AIPSI:
+	OP_AIPUI:
 		Rm = 8'd48 | instr.ins.ris.Pr;
 	OP_CSR:	Rm = 8'd48 | instr.ins.csr.Pr;
 	OP_MOV:	Rm = 8'd48 | instr.ins.r2.Pr;

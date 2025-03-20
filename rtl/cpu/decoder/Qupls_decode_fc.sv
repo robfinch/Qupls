@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2024  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -45,10 +45,10 @@ input instruction_t ir;
 begin
 	fnIsFlowCtrl = 1'b0;
 	case(ir.any.opcode)
-	OP_R2:
-		case(ir.r2.func)
+	OP_R3B,OP_R3W,OP_R3T,OP_R3O:
+		case(ir.r3.func)
 		FN_R1:
-			case(ir.r2.Rb)
+			case(ir.r3.Rb)
 			OP_REX:	fnIsFlowCtrl = 1'b1;
 			default:
 				fnIsFlowCtrl = 1'b0;
@@ -59,8 +59,8 @@ begin
 	OP_CHK:	fnIsFlowCtrl = 1'b1;
 	OP_JSR,OP_JSRI:
 		fnIsFlowCtrl = 1'b1;
-	OP_DBRA,
-	OP_Bcc,OP_BccU,OP_FBcc:
+	OP_Bcc,OP_BccU,OP_FBcc,OP_DFBcc,OP_PBcc,OP_IBcc,OP_DBcc,
+	OP_BccR,OP_BccUR,OP_FBccR,OP_DFBccR,OP_PBccR,OP_IBccR,OP_DBccR:
 		fnIsFlowCtrl = 1'b1;	
 	OP_BSR,OP_RTD:
 		fnIsFlowCtrl = 1'b1;	

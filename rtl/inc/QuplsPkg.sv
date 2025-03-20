@@ -94,6 +94,10 @@ parameter SUPPORT_TLBLVL2	= 1'b0;
 // Meant for debugging purposes.
 parameter SERIALIZE = 1;
 
+// Set the following parameter to disable invocation of the single step
+// routine. Meant for debugging purposes.
+parameter SSM_DEBUG = 1;
+
 // Enables register renaming to remove false dependencies.
 parameter SUPPORT_RENAMER = 1;
 
@@ -348,7 +352,7 @@ typedef enum logic [3:0] {
 typedef enum logic [6:0] {
 	OP_CHK			= 7'd00,
 	OP_CAP			= 7'd01,
-	OP_R2				= 7'd02,
+	OP_R3H			= 7'd02,
 	OP_BFI			= 7'd03,
 	OP_ADDI			= 7'd04,
 	OP_SUBFI		= 7'd05,
@@ -385,58 +389,58 @@ typedef enum logic [6:0] {
 	OP_JSRR			= 7'd38,
 	OP_CJSRR		= 7'd39,
 
-	OP_R3V			= 7'd77,
-	OP_R3VS			= 7'd78,
-
 	OP_BccU			= 7'd40,
 	OP_Bcc			= 7'd41,
+	OP_FBcc			= 7'd42,
 	OP_DFBcc		= 7'd43,
-	OP_FBcc			= 7'd44,
-	OP_DBRA			= 7'd45,
-	OP_MCB			= 7'd46,
-/*
-	OP_BEQ			= 7'd38,
-	OP_BNE			= 7'd39,
-	OP_BLT			= 7'd40,
-	OP_BGE			= 7'd41,
-	OP_BLE			= 7'd42,
-	OP_BGT			= 7'd43,
-	OP_BBC			= 7'd44,
-	OP_BBS			= 7'd45,
-	OP_BBCI			= 7'd46,
-	OP_BBSI			= 7'd47,
-*/
-	OP_VADDSI		= 7'd48,
-	OP_ADDSI		= 7'd49,
-	OP_ANDSI		= 7'd50,
-	OP_ORSI			= 7'd51,
-	OP_ENTER		= 7'd52,
-	OP_LEAVE		= 7'd53,
-	OP_PUSH			= 7'd54,
-	OP_POP			= 7'd55,
+	OP_PBcc			= 7'd44,
+	OP_MCB			= 7'd45,
+	OP_IBcc			= 7'd46,
+	OP_DBcc			= 7'd47,
+
+	OP_BccUR		= 7'd48,
+	OP_BccR			= 7'd49,
+	OP_FBccR		= 7'd50,
+	OP_DFBccR		= 7'd51,
+	OP_PBccR		= 7'd52,
+	OP_CBccR		= 7'd53,
+	OP_IBccR		= 7'd54,
+	OP_DBccR		= 7'd55,
+
 	OP_VANDSI		= 7'd56,
-	OP_LDA			= 7'd57,
-	OP_AIPSI		= 7'd58,
-	OP_EORSI		= 7'd59,
-	OP_VORSI		= 7'd60,
-	OP_VEORSI		= 7'd61,
-	OP_PUSHI		= 7'd62,
-	OP_LDx			= 7'd64,
-	OP_FLDx			= 7'd65,
-	OP_DFLDx		= 7'd66,
-	OP_PLDx			= 7'd67,
-	OP_CLOADx		= 7'd68,
-	OP_LDxU			= 7'd69,
+	OP_FLT3H		= 7'd57,
+	OP_FLT3S		= 7'd58,
+	OP_FLT3D		= 7'd59,
+	OP_ADD2UI		= 7'd60,
+	OP_ADD4UI		= 7'd61,
+	OP_ADD8UI		= 7'd62,
+	OP_ADD16UI	= 7'd63,
+	OP_LDxU			= 7'd64,
+	OP_LDx			= 7'd65,
+	OP_FLDx			= 7'd66,
+	OP_DFLDx		= 7'd67,
+	OP_PLDx			= 7'd68,
+	OP_LDCAPx		= 7'd69,
 	OP_CACHE		= 7'd70,
-	OP_STx			= 7'd80,
-	OP_FSTx			= 7'd81,
-	OP_DFSTx		= 7'd82,
-	OP_PSTx			= 7'd83,
-	OP_CSTOREx	= 7'd84,
-	OP_STPTR		= 7'd86,
-	OP_SHIFT		= 7'd88,
+	OP_STx			= 7'd72,
+	OP_STIx			= 7'd73,
+	OP_FSTx			= 7'd74,
+	OP_DFSTx		= 7'd75,
+	OP_PSTx			= 7'd76,
+	OP_STCAPx		= 7'd77,
+	OP_STPTR		= 7'd78,
+	OP_SHIFTB		= 7'd80,
+	OP_SHIFTW		= 7'd81,
+	OP_SHIFTT		= 7'd82,
+	OP_SHIFTO		= 7'd83,
+	OP_ENTER		= 7'd84,
+	OP_LEAVE		= 7'd85,
+	OP_PUSH			= 7'd86,
+	OP_POP			= 7'd87,
+	OP_LDA			= 7'd88,
 	OP_BLEND		= 7'd89,
-	OP_VSHIFT		= 7'd90,
+	OP_FLT3Q		= 7'd90,
+	OP_AIPUI		= 7'd91,
 	OP_AMO			= 7'd92,
 	OP_CAS			= 7'd93,
 	OP_ZSEQI		= 7'd94,
@@ -449,6 +453,10 @@ typedef enum logic [6:0] {
 	OP_ZSLEUI		= 7'd101,
 	OP_ZSGTUI		= 7'd102,
 	OP_ZSGEUI		= 7'd103,
+	OP_R3B			= 7'd104,
+	OP_R3W			= 7'd105,
+	OP_R3T			= 7'd106,
+	OP_R3O			= 7'd107,
 	OP_BFND			= 7'd108,
 	OP_BCMP			= 7'd109,
 //	OP_BSTORE		= 7'd110,
@@ -461,8 +469,7 @@ typedef enum logic [6:0] {
 	OP_QFEXT		= 7'd120,
 	OP_PRED			= 7'd121,
 	OP_ATOM			= 7'd122,
-	OP_PFXAB		= 7'd124,
-	OP_PFXC			= 7'd125,
+	OP_PFX			= 7'd124,
 	OP_NOP			= 7'd127
 } opcode_t;
 
@@ -741,27 +748,27 @@ typedef enum logic [6:0]
 } sys_func_t;
 
 // R1 ops
-typedef enum logic [7:0] {
-	NNA_TRIG 		=	8'd8,
-	NNA_STAT 		= 8'd9,
-	NNA_MFACT 	= 8'd10,
-	OP_RTI			= 8'h19,
-	OP_REX			= 8'h1A,
-	OP_FFINITE 	= 8'h20,
-	OP_FNEG			= 8'h23,
-	OP_FRSQRTE	= 8'h24,
-	OP_FRES			= 8'h25,
-	OP_FSIGMOID	= 8'h26,
-	OP_I2F			= 8'h28,
-	OP_F2I			= 8'h29,
-	OP_FABS			= 8'h2A,
-	OP_FNABS		= 8'h2B,
-	OP_FCLASS		= 8'h2C,
-	OP_FMAN			= 8'h2D,
-	OP_FSIGN		= 8'h2E,
-	OP_FTRUNC		= 8'h2F,
-	OP_SEXTB		= 8'h38,
-	OP_SEXTW		= 8'h39
+typedef enum logic [6:0] {
+	NNA_TRIG 		=	7'd8,
+	NNA_STAT 		= 7'd9,
+	NNA_MFACT 	= 7'd10,
+	OP_RTI			= 7'h19,
+	OP_REX			= 7'h1A,
+	OP_FFINITE 	= 7'h20,
+	OP_FNEG			= 7'h23,
+	OP_FRSQRTE	= 7'h24,
+	OP_FRES			= 7'h25,
+	OP_FSIGMOID	= 7'h26,
+	OP_I2F			= 7'h28,
+	OP_F2I			= 7'h29,
+	OP_FABS			= 7'h2A,
+	OP_FNABS		= 7'h2B,
+	OP_FCLASS		= 7'h2C,
+	OP_FMAN			= 7'h2D,
+	OP_FSIGN		= 7'h2E,
+	OP_FTRUNC		= 7'h2F,
+	OP_SEXTB		= 7'h38,
+	OP_SEXTW		= 7'h39
 } r1func_t;
 
 typedef enum logic [6:0] {
@@ -1112,9 +1119,13 @@ typedef logic [127:0] regs_bitmap_t;
 typedef struct packed
 {
 	logic n;
-	logic resv;
-	logic [6:0] num;
+	logic [5:0] num;
 } regspec_t;
+
+typedef struct packed
+{
+	logic [5:0] num;
+} sregspec_t;
 
 typedef logic [3:0] rndx_t;			// ROB index
 typedef logic [9:0] tregno_t;
@@ -1130,7 +1141,8 @@ typedef struct packed
 	logic [19:0] resv4;	// padding to 64-bits
 	logic [11:0] mcip;	// micro-code instruction pointer
 	logic [7:0] pl;			// privilege level
-	logic [3:0] resv3;
+	logic resv3;
+	logic swstk;				// software stack
 	logic mprv;					// memory access priv indicator	
 	logic dbg;					// debug mode indicator
 	logic resv2;
@@ -1150,306 +1162,294 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [55:0] imm;
-	logic sw;
+	logic [84:0] imm;
+	logic [1:0] sw;
 	opcode_t opcode;
+	logic [1:0] sz;
 } postfix_t;
 
 typedef struct packed
 {
-	logic [55:0] imm;
-	logic sw;
+	logic [84:0] imm;
+	logic [1:0] sw;
 	opcode_t opcode;
+	logic [1:0] sz;
 } prefix_t;
 
 typedef struct packed
 {
-	logic [56:0] payload;
+	logic [86:0] payload;
 	opcode_t opcode;
+	logic [1:0] sz;
 } anyinst_t;
 
 
 typedef struct packed
 {
+	logic [47:0] resv4;	// 48
 	f3func_t func;			// 7 bits
-	logic [2:0] Pr;			// 3
-	logic resv2;
+	logic resv2;				// 1
 	fround_t rmd;				// 3 bits
-	logic [6:0] resv;		// 7
-	regspec_t Rc;				// 9
-	regspec_t Rb;				// 9
-	regspec_t Ra;				// 9
-	regspec_t Rt;				// 9
+	regspec_t Rc;				// 7
+	regspec_t Rb;				// 7
+	regspec_t Ra;				// 7
+	regspec_t Rt;				// 7
 	opcode_t opcode;		// 7
-} f3inst_t;						// 64
+	logic [1:0] sz;			// 2
+} f3inst_t;						// 96
 
 typedef struct packed
 {
+	logic [47:0] resv4;	// 48
 	f3func_t func;			// 7 bits
-	logic [2:0] Pr;			// 3
 	logic resv2;
 	fround_t rmd;				// 3 bits
-	logic [6:0] resv;		// 7
 	regspec_t Rc;
 	regspec_t Rb;
 	regspec_t Ra;
 	regspec_t Rt;
 	opcode_t opcode;
+	logic [1:0] sz;
 } f2inst_t;
 
 typedef struct packed
 {
+	logic [47:0] resv4;
 	f3func_t func;			// 7 bits
-	logic [2:0] Pr;			// 3
-	logic resv2;
+	logic resv2;				// 1
 	fround_t rmd;				// 3 bits
-	logic [6:0] resv;		// 7
-	regspec_t Rc;
-	regspec_t Rb;
-	regspec_t Ra;
-	regspec_t Rt;
-	opcode_t opcode;
-} f1inst_t;
-
-typedef struct packed
-{
-	r3func_t func;			// 7 bits
-	logic [2:0] Pr;			// 4
-	logic [3:0] resv;		// 3
-	logic [2:0] op3;		// 3
-	logic [3:0] op4;		// 4
-	regspec_t Rc;				// 9
-	regspec_t Rb;				// 9
-	regspec_t Ra;				// 9
-	regspec_t Rt;				// 9
+	regspec_t Rc;				// 7
+	regspec_t Rb;				// 7
+	regspec_t Ra;				// 7
+	regspec_t Rt;				// 7
 	opcode_t opcode;		// 7
-} r3inst_t;						// 64
+	logic [1:0] sz;			// 2
+} f1inst_t;						// 96
 
 typedef struct packed
 {
+	logic [47:0] resv4;	// 48
+	r3func_t func;			// 7 bits
+	logic [3:0] op4;		// 4
+	regspec_t Rc;				// 7
+	regspec_t Rb;				// 7
+	regspec_t Ra;				// 7
+	regspec_t Rt;				// 7
+	opcode_t opcode;		// 7
+	logic [1:0] sz;			// 2
+} r3inst_t;						// 96
+
+typedef struct packed
+{
+	logic [47:0] resv4;
 	cap_func_t func;		// 7 bits
-	logic [2:0] Pr;			// 4
-	logic [6:0] resv;		// 6
 	logic [3:0] op4;
 	regspec_t Rc;
 	regspec_t Rb;
 	regspec_t Ra;
 	regspec_t Rt;
 	opcode_t opcode;
+	logic [1:0] sz;
 } cap_inst_t;
 
 typedef struct packed
 {
+	logic [47:0] resv4;	// 48
 	r3func_t func;			// 7 bits
-	logic [2:0] Pr;			// 4
-	logic [3:0] resv;		// 3
-	logic [2:0] op3;		// 3
 	logic [3:0] op4;		// 4
-	regspec_t Rc;				// 9
-	regspec_t Rb;				// 9
-	regspec_t Ra;				// 9
-	regspec_t Rt;				// 9
+	regspec_t Rc;				// 7
+	regspec_t Rb;				// 7
+	regspec_t Ra;				// 7
+	regspec_t Rt;				// 7
 	opcode_t opcode;		// 7
+	logic [1:0] sz;			// 2
 } r2inst_t;						// 64
 
 typedef struct packed
 {
+	logic [47:0] resv4;	// 48
 	r3func_t r3func;		// 7 bits
-	logic [2:0] Pr;			// 4
-	logic [6:0] resv2;	// 6
 	logic [3:0] op2;		// 4
-	logic resv;					// 1
-	r1func_t func;			// 8
-	regspec_t Rb;				// 9
-	regspec_t Ra;				// 9
-	regspec_t Rt;				// 9
+	r1func_t func;			// 7
+	regspec_t Rb;				// 7
+	regspec_t Ra;				// 7
+	regspec_t Rt;				// 7
 	opcode_t opcode;		// 7
-} r1inst_t;						// 64
+	logic [1:0] sz;			// 2
+} r1inst_t;						// 96
 
 typedef struct packed
 {
+	logic [47:0] resv4;	// 48
 	logic [3:0] func;		// 4
-	logic [2:0] resv2;	// 3
-	logic [2:0] Pr;			// 3
-	logic [2:0] resv;		// 3
-	cause_code_t cause;	// 8
-	regspec_t Rc;				// 9	
-	regspec_t Rb;				// 9
-	regspec_t Ra;				// 9
-	logic [2:0] ipl;		// 3
-	logic s;						// 1
-	logic [4:0] offs;		// 5
-	opcode_t opcode;		// 7
-} chk_inst_t;					// 64
-
-typedef struct packed
-{
-	logic [31:0] imm;		// 32
-	prec_t prc;					// 3
-	logic resv;					// 1
-	logic [2:0] Pr;			// 3
-	regspec_t Ra;				// 9
-	regspec_t Rt;				// 9
-	opcode_t opcode;		// 7
-} imminst_t;					// 64
-
-typedef struct packed
-{
-	logic [38:0] imm;		// 39
-	prec_t prc;					// 3
-	logic [1:0] sc;			// 2
-	logic resv;					// 1
-	logic [2:0] Pr;			// 3
-	regspec_t Rt;				// 9
-	opcode_t opcode;		// 7
-} simminst_t;					// 64
-
-typedef struct packed
-{
-	shift_t func;				// 4
-	prec_t prc;					// 3
-	logic [2:0] Pr;			// 3
 	logic [6:0] resv;		// 7
-	logic [2:0] Rm;			// 3
-	logic i;						// 1
-	logic [2:0] resv2;	// 3
-	logic [5:0] imm;		// 6
-	regspec_t Rb;				// 9
-	regspec_t Ra;				// 9
-	regspec_t Rt;				// 9
+	regspec_t Rc;				// 7	
+	regspec_t Rb;				// 7
+	regspec_t Ra;				// 7
+	logic s;						// 1
+	logic [5:0] offs;		// 6
 	opcode_t opcode;		// 7
-} shiftiinst_t;				// 64
+	logic [1:0] sz;			// 2
+} chk_inst_t;					// 96
 
 typedef struct packed
 {
-	logic [2:0] op;			// 3
-	logic [3:0] resv3;	// 4
-	logic [2:0] Pr;			// 3
+	logic [70:0] imm;		// 71
+	logic [1:0] prc;		// 2
+	regspec_t Ra;				// 7
+	regspec_t Rt;				// 7
+	opcode_t opcode;		// 7
+	logic [1:0] sz;			// 2
+} imminst_t;					// 96
+
+typedef struct packed
+{
+	logic [47:0] resv4;	// 48
+	shift_t func;				// 4
+	logic h;						// 1
 	logic [5:0] resv2;	// 6
-	logic [13:0] regno;	// 14
-	logic [8:0] resv1;	// 9
-	regspec_t Ra;				// 9
-	regspec_t Rt;				// 9
+	logic [6:0] imm;		// 7
+	regspec_t Rb;				// 7
+	regspec_t Ra;				// 7
+	regspec_t Rt;				// 7
 	opcode_t opcode;		// 7
-} csrinst_t;					// 64
+	logic [1:0] sz;			// 2
+} lshiftiinst_t;			// 96
 
 typedef struct packed
 {
-	logic [23:0] disp;		// 24
-	logic resv;						// 1
+	logic [47:0] resv4;	// 48
+	shift_t func;				// 4
+	logic [6:0] me;			// 7
+	logic [6:0] mb;			// 7
+	regspec_t Rb;				// 7
+	regspec_t Ra;				// 7
+	regspec_t Rt;				// 7
+	opcode_t opcode;		// 7
+	logic [1:0] sz;			// 2
+} rshiftiinst_t;			// 96
+
+typedef struct packed
+{
+	logic [47:0] resv4;	// 48
+	logic [2:0] op;			// 3
+	logic [7:0] resv2;	// 8
+	logic [13:0] regno;	// 14
+	regspec_t Ra;				// 7
+	regspec_t Rt;				// 7
+	opcode_t opcode;		// 7
+	logic [1:0] sz;			// 2
+} csrinst_t;					// 96
+
+typedef struct packed
+{
+	logic [63:0] disp;		// 64
 	logic [1:0] prc;			// 2
 	logic [2:0] sc;				// 3
-	regspec_t Rb;					// 9
-	regspec_t Ra;					// 9
-	regspec_t Rt;					// 9
+	sregspec_t Rb;				// 6
+	sregspec_t Ra;				// 6
+	sregspec_t Rt;				// 6
 	opcode_t opcode;			// 7
-} lsinst_t;							// 64
+	logic [1:0] sz;				// 2
+} lsinst_t;							// 96
 
 typedef struct packed
 {
-	logic [23:0] disp;		// 24
-	logic resv;						// 1
+	logic [63:0] disp;		// 64
 	logic [1:0] prc;			// 2
 	logic [2:0] sc;				// 3
-	regspec_t Rb;					// 9
-	regspec_t Ra;					// 9
-	regspec_t Rt;					// 9
+	sregspec_t Rb;				// 6
+	sregspec_t Ra;				// 6
+	sregspec_t Rt;				// 6
 	opcode_t opcode;			// 7
-} lsninst_t;						// 64
+	logic [1:0] sz;				// 2
+} lsninst_t;						// 96
 
 typedef struct packed
 {
-	logic [6:0] dispHi;		// 7
-	prec_t prc;						// 3
-	logic resv2;					// 1
-	logic [18:0] dispLo;	// 19
-	regspec_t Rb;					// 9
-	regspec_t	Ra;					// 9
-	logic resv;						// 1
-	br_amode_t md;				// 2
-	logic [1:0] inc;			// 2
+	logic [47:0] dispHi;	// 48
+	logic [1:0] prc;			// 2
+	logic [20:0] dispLo;	// 21
+	sregspec_t Rb;				// 6
+	sregspec_t Ra;				// 6
 	branch_fn_t fn;				// 4
 	opcode_t opcode;			// 7
-} brinst_t;							// 64
+	logic [1:0] sz;				// 2
+} brinst_t;							// 96
 
 typedef struct packed
 {
-	logic [6:0] dispHi;		// 7
-	prec_t prc;						// 3
-	logic resv2;					// 1
-	logic [18:0] dispLo;	// 19
-	regspec_t Rb;					// 9
-	regspec_t	Ra;					// 9
-	logic resv;						// 1
-	br_amode_t md;				// 2
-	logic [1:0] inc;			// 2
+	logic [47:0] dispHi;	// 48
+	logic [1:0] prc;			// 2
+	logic [20:0] dispLo;	// 21
+	sregspec_t Rb;				// 6
+	sregspec_t Ra;				// 6
 	fbranch_fn_t fn;			// 4
 	opcode_t opcode;			// 7
-} fbrinst_t;						// 64
+	logic [1:0] sz;				// 2
+} fbrinst_t;						// 96
 
 typedef struct packed
 {
-	logic [21:0] disp;		// 22
-	prec_t prc;						// 3
-	logic [2:0] Pr;				// 3
-	logic resv2;					// 1
-	logic i;							// 1
-	regspec_t Rb;					// 9
-	regspec_t	Ra;					// 9
-	logic [1:0] resv;			// 2
-	logic lk;							// 1
-	logic [1:0] inc;			// 2
+	logic [47:0] dispHi;	// 58
+	logic [1:0] prc;			// 2
+	logic [11:0] disp;		// 12
+	logic [8:0] resv;			// 9
+	sregspec_t Rb;				// 6
+	sregspec_t Ra;				// 6
 	logic [3:0] fn;				// 4
 	opcode_t opcode;			// 7
-} mcb_inst_t;						// 64
+	logic [1:0] sz;				// 2
+} mcb_inst_t;						// 96
 
 typedef struct packed
 {
-	logic [9:0] dispHi;		// 10
-	logic resv;						// 1
-	logic [15:0] dispLo;	//16
+	logic [63:0] disp;		// 64
+	logic [1:0] resv;			// 2
 	logic [2:0] Sc;				// 3
-	regspec_t Rb;					// 9
-	regspec_t Ra;					// 9
-	regspec_t Rt;					// 9
+	sregspec_t Rb;				// 6
+	sregspec_t Ra;				// 6
+	sregspec_t Rt;				// 6
 	opcode_t opcode;			// 7
-} jsrinst_t;						// 64
+	logic [1:0] sz;				// 2
+} jsrinst_t;						// 96
 
 typedef struct packed
 {
-	logic [47:0] disp;		// 48
-	regspec_t Rt;					// 9
+	logic [84:0] disp;		// 85
+	logic [1:0] Rt;				// 2
 	opcode_t opcode;			// 7
-} bsrinst_t;						// 64
+	logic [1:0] sz;				// 2
+} bsrinst_t;						// 96
 
 typedef struct packed
 {
-	logic [31:0] cnst;		// 32
-	logic [3:0] resv3;		// 4
-	logic [2:0] Pr;				// 3
-	logic [5:0] resv2;		// 6
-	logic [2:0] lk;				// 3
+	logic [70:0] cnst;		// 71
+	logic [1:0] resv2;		// 2
+	regspec_t Ra;					// 7
 	logic resv4;					// 1
 	logic [1:0] typ;			// 2
-	logic [2:0] resv;			// 6
-	logic [2:0] offs;			// 3
+	logic [3:0] offs;			// 4
 	opcode_t opcode;			// 7
-} rtdinst_t;						// 64
+	logic [1:0] sz;				// 2
+} rtdinst_t;						// 96
 
 typedef struct packed
 {
+	logic [37:0] resv4;	// 38
 	logic [6:0] amt;		// 7 bits
 	logic [2:0] Pr;			// 3
 	logic [1:0] resv;		// 2
 	prec_t prc;					// 3
 	logic [1:0] id;			// 2
 	logic [3:0] op;			// 4
-	regspec_t Rc;				// 9
-	regspec_t Rb;				// 9
-	regspec_t Ra;				// 9
-	regspec_t Rt;				// 9
+	regspec_t Rc;				// 7
+	regspec_t Rb;				// 7
+	regspec_t Ra;				// 7
+	regspec_t Rt;				// 7
 	opcode_t opcode;		// 7
-} block_inst_t;				// 64
+	logic [1:0] sz;			// 2
+} block_inst_t;				// 96
 
 typedef union packed
 {
@@ -1471,8 +1471,8 @@ typedef union packed
 	rtdinst_t rtd;
 	imminst_t	imm;
 	imminst_t	ri;
-	simminst_t ris;
-	shiftiinst_t shifti;
+	lshiftiinst_t lshifti;
+	rshiftiinst_t rshifti;
 	csrinst_t	csr;
 	lsinst_t	ls;
 	lsninst_t	lsn;
@@ -1642,9 +1642,11 @@ typedef struct packed
 	cpu_types_pkg::pc_address_t brtgt;
 	cpu_types_pkg::mc_address_t mcbrtgt;			// micro-code branch target
 	logic takb;								// 1=branch evaluated to taken
+	logic ssm;								// 1=single step mode active
 	logic hwi;								// hardware interrupt occured during fetch
-	logic [2:0] hwi_level;		// the level of the hardware interrupt
-	logic [2:0] irq_mask;			// irq mask from sr.ipl or atom
+	logic [5:0] hwi_level;		// the level of the hardware interrupt
+	logic [5:0] irq_mask;			// irq mask from sr.ipl or atom
+	logic [2:0] hwi_swstk;		// software stack
 	cause_code_t exc;					// non-zero indicate exception
 	logic excv;								// 1=exception
 	// The following fields are loaded at enqueue time, but otherwise do not change.
@@ -1661,6 +1663,8 @@ typedef struct packed
 	// The following matches the ex_instruction_t
 	cpu_types_pkg::pc_address_ex_t pc;			// PC of instruction
 	cpu_types_pkg::mc_address_t mcip;				// Micro-code IP address
+	cpu_types_pkg::pc_address_ex_t hwipc;		// PC of instruction
+	cpu_types_pkg::mc_address_t hwi_mcip;		// Micro-code IP address
 	logic [3:0] len;
 	logic [2:0] element;
 	logic [2:0] eno;
@@ -2040,8 +2044,7 @@ function fnIsBranch;
 input instruction_t ir;
 begin
 	case(ir.any.opcode)
-	OP_DBRA,
-	OP_Bcc,OP_BccU,OP_FBcc:
+	OP_Bcc,OP_BccU,OP_FBcc,OP_IBcc,OP_DBcc:
 		fnIsBranch = 1'b1;
 	default:
 		fnIsBranch = 1'b0;
@@ -2060,9 +2063,9 @@ function fnBranchDispSign;
 input instruction_t ir;
 begin
 	case(ir.any.opcode)
-	OP_BSR,OP_DBRA:
+	OP_BSR:
 		fnBranchDispSign = ir[63];
-	OP_Bcc,OP_BccU,OP_FBcc:
+	OP_Bcc,OP_BccU,OP_FBcc,OP_IBcc,OP_DBcc:
 		fnBranchDispSign = ir[63];
 	default:	fnBranchDispSign = 1'b0;
 	endcase	
@@ -2073,8 +2076,7 @@ function [63:0] fnBranchDisp;
 input instruction_t ir;
 begin
 	case(ir.any.opcode)
-	OP_DBRA,
-	OP_Bcc,OP_BccU,OP_FBcc:
+	OP_Bcc,OP_BccU,OP_FBcc,OP_IBcc,OP_DBcc:
 		fnBranchDisp = {{41{ir[63]}},ir[63:44]};
 	OP_BSR:	fnBranchDisp = {{11{ir.bsr.disp[49]}},ir.bsr.disp};
 	default:	fnBranchDisp = 'd0;
@@ -2156,8 +2158,7 @@ begin
 	OP_CHK:	fnIsFlowCtrl = 1'b1;
 	OP_JSR:
 		fnIsFlowCtrl = 1'b1;
-	OP_DBRA,
-	OP_Bcc,OP_BccU,OP_FBcc:
+	OP_Bcc,OP_BccU,OP_FBcc,OP_IBcc,OP_DBcc:
 		fnIsFlowCtrl = 1'b1;	
 	OP_BSR,OP_RTD:
 		fnIsFlowCtrl = 1'b1;	
@@ -2181,75 +2182,73 @@ function fnSourceAv;
 input ex_instruction_t ir;
 begin
 	case(ir.ins.r2.opcode)
-	OP_CHK:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-	OP_R2,OP_R3V,OP_R3VS:
-		case(ir.ins.r2.func)
-		FN_ADD:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-		FN_CMP:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-		FN_MUL:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-		FN_MULW:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-		FN_DIV:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-		FN_SUB:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-		FN_MULU: fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-		FN_MULUW: fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-		FN_DIVU:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-		FN_AND:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-		FN_OR:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-		FN_EOR:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-		FN_NAND:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-		FN_NOR:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-		FN_ENOR:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-		FN_MINMAX:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-		FN_MVVR:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
+	OP_CHK:	fnSourceAv = fnConstReg(ir.ins.r3.Ra.num) || fnImma(ir);
+	OP_R3B,OP_R3W,OP_R3T,OP_R3O:
+		case(ir.ins.r3.func)
+		FN_ADD:	fnSourceAv = fnConstReg(ir.ins.r3.Ra.num) || fnImma(ir);
+		FN_CMP:	fnSourceAv = fnConstReg(ir.ins.r3.Ra.num) || fnImma(ir);
+		FN_MUL:	fnSourceAv = fnConstReg(ir.ins.r3.Ra.num) || fnImma(ir);
+		FN_MULW:	fnSourceAv = fnConstReg(ir.ins.r3.Ra.num) || fnImma(ir);
+		FN_DIV:	fnSourceAv = fnConstReg(ir.ins.r3.Ra.num) || fnImma(ir);
+		FN_SUB:	fnSourceAv = fnConstReg(ir.ins.r3.Ra.num) || fnImma(ir);
+		FN_MULU: fnSourceAv = fnConstReg(ir.ins.r3.Ra.num) || fnImma(ir);
+		FN_MULUW: fnSourceAv = fnConstReg(ir.ins.r3.Ra.num) || fnImma(ir);
+		FN_DIVU:	fnSourceAv = fnConstReg(ir.ins.r3.Ra.num) || fnImma(ir);
+		FN_AND:	fnSourceAv = fnConstReg(ir.ins.r3.Ra.num) || fnImma(ir);
+		FN_OR:	fnSourceAv = fnConstReg(ir.ins.r3.Ra.num) || fnImma(ir);
+		FN_EOR:	fnSourceAv = fnConstReg(ir.ins.r3.Ra.num) || fnImma(ir);
+		FN_NAND:	fnSourceAv = fnConstReg(ir.ins.r3.Ra.num) || fnImma(ir);
+		FN_NOR:	fnSourceAv = fnConstReg(ir.ins.r3.Ra.num) || fnImma(ir);
+		FN_ENOR:	fnSourceAv = fnConstReg(ir.ins.r3.Ra.num) || fnImma(ir);
+		FN_MINMAX:	fnSourceAv = fnConstReg(ir.ins.r3.Ra.num) || fnImma(ir);
+		FN_MVVR:	fnSourceAv = fnConstReg(ir.ins.r3.Ra.num) || fnImma(ir);
 		default:	fnSourceAv = 1'b1;
 		endcase
-	OP_RTD:		fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-	OP_JSR,
-	OP_ADDI:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-	OP_SUBFI:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-	OP_CMPI:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-	OP_MULI:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-	OP_DIVI:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-	OP_ANDI:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-	OP_ORI:		fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-	OP_EORI:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-	OP_AIPSI:	fnSourceAv = 1'b1;
-	OP_ADDSI:	fnSourceAv = fnConstReg(ir.aRt) || fnImma(ir);
-	OP_ANDSI:	fnSourceAv = fnConstReg(ir.aRt) || fnImma(ir);
-	OP_ORSI:	fnSourceAv = fnConstReg(ir.aRt) || fnImma(ir);
-	OP_EORSI:	fnSourceAv = fnConstReg(ir.aRt) || fnImma(ir);
-	OP_SHIFT:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-	OP_SEQI:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-	OP_SNEI:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-	OP_SLTI:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-	OP_SLEI:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-	OP_SGTI:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-	OP_SGEI:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-	OP_SLTUI:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-	OP_SLEUI:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-	OP_SGTUI:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-	OP_SGEUI:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-	OP_ZSEQI:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-	OP_ZSNEI:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-	OP_ZSLTI:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-	OP_ZSLEI:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-	OP_ZSGTI:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-	OP_ZSGEI:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-	OP_ZSLTUI:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-	OP_ZSLEUI:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-	OP_ZSGTUI:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-	OP_ZSGEUI:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-	OP_MOV:		fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-	OP_DBRA:	fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
-	OP_Bcc,OP_BccU,OP_FBcc:
-		fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
+	OP_RTD:		fnSourceAv = fnConstReg(ir.ins.rtd.Ra.num) || fnImma(ir);
+	OP_JSR:		fnSourceAv = fnConstReg(ir.ins.jsr.Ra.num) || fnImma(ir);
+	OP_ADDI:	fnSourceAv = fnConstReg(ir.ins.ri.Ra.num) || fnImma(ir);
+	OP_SUBFI:	fnSourceAv = fnConstReg(ir.ins.ri.Ra.num) || fnImma(ir);
+	OP_CMPI:	fnSourceAv = fnConstReg(ir.ins.ri.Ra.num) || fnImma(ir);
+	OP_MULI:	fnSourceAv = fnConstReg(ir.ins.ri.Ra.num) || fnImma(ir);
+	OP_DIVI:	fnSourceAv = fnConstReg(ir.ins.ri.Ra.num) || fnImma(ir);
+	OP_ANDI:	fnSourceAv = fnConstReg(ir.ins.ri.Ra.num) || fnImma(ir);
+	OP_ORI:		fnSourceAv = fnConstReg(ir.ins.ri.Ra.num) || fnImma(ir);
+	OP_EORI:	fnSourceAv = fnConstReg(ir.ins.ri.Ra.num) || fnImma(ir);
+	OP_AIPUI:	fnSourceAv = 1'b1;
+	OP_SHIFTB:	fnSourceAv = fnConstReg(ir.ins.lshifti.Ra.num) || fnImma(ir);
+	OP_SHIFTW:	fnSourceAv = fnConstReg(ir.ins.lshifti.Ra.num) || fnImma(ir);
+	OP_SHIFTT:	fnSourceAv = fnConstReg(ir.ins.lshifti.Ra.num) || fnImma(ir);
+	OP_SHIFTO:	fnSourceAv = fnConstReg(ir.ins.lshifti.Ra.num) || fnImma(ir);
+	OP_SEQI:	fnSourceAv = fnConstReg(ir.ins.ri.Ra.num) || fnImma(ir);
+	OP_SNEI:	fnSourceAv = fnConstReg(ir.ins.ri.Ra.num) || fnImma(ir);
+	OP_SLTI:	fnSourceAv = fnConstReg(ir.ins.ri.Ra.num) || fnImma(ir);
+	OP_SLEI:	fnSourceAv = fnConstReg(ir.ins.ri.Ra.num) || fnImma(ir);
+	OP_SGTI:	fnSourceAv = fnConstReg(ir.ins.ri.Ra.num) || fnImma(ir);
+	OP_SGEI:	fnSourceAv = fnConstReg(ir.ins.ri.Ra.num) || fnImma(ir);
+	OP_SLTUI:	fnSourceAv = fnConstReg(ir.ins.ri.Ra.num) || fnImma(ir);
+	OP_SLEUI:	fnSourceAv = fnConstReg(ir.ins.ri.Ra.num) || fnImma(ir);
+	OP_SGTUI:	fnSourceAv = fnConstReg(ir.ins.ri.Ra.num) || fnImma(ir);
+	OP_SGEUI:	fnSourceAv = fnConstReg(ir.ins.ri.Ra.num) || fnImma(ir);
+	OP_ZSEQI:	fnSourceAv = fnConstReg(ir.ins.ri.Ra.num) || fnImma(ir);
+	OP_ZSNEI:	fnSourceAv = fnConstReg(ir.ins.ri.Ra.num) || fnImma(ir);
+	OP_ZSLTI:	fnSourceAv = fnConstReg(ir.ins.ri.Ra.num) || fnImma(ir);
+	OP_ZSLEI:	fnSourceAv = fnConstReg(ir.ins.ri.Ra.num) || fnImma(ir);
+	OP_ZSGTI:	fnSourceAv = fnConstReg(ir.ins.ri.Ra.num) || fnImma(ir);
+	OP_ZSGEI:	fnSourceAv = fnConstReg(ir.ins.ri.Ra.num) || fnImma(ir);
+	OP_ZSLTUI:	fnSourceAv = fnConstReg(ir.ins.ri.Ra.num) || fnImma(ir);
+	OP_ZSLEUI:	fnSourceAv = fnConstReg(ir.ins.ri.Ra.num) || fnImma(ir);
+	OP_ZSGTUI:	fnSourceAv = fnConstReg(ir.ins.ri.Ra.num) || fnImma(ir);
+	OP_ZSGEUI:	fnSourceAv = fnConstReg(ir.ins.ri.Ra.num) || fnImma(ir);
+	OP_MOV:		fnSourceAv = fnConstReg(ir.ins.r3.Ra.num) || fnImma(ir);
+	OP_Bcc,OP_BccU,OP_FBcc,OP_IBcc,OP_DBcc:
+		fnSourceAv = fnConstReg(ir.ins.br.Ra.num) || fnImma(ir);
 	OP_LDA,
 	OP_LDx,OP_FLDx,OP_DFLDx,OP_PLDx,OP_LDxU:
-		fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
+		fnSourceAv = fnConstReg(ir.ins.ls.Ra.num) || fnImma(ir);
 	OP_STx,OP_FSTx,OP_DFSTx,OP_PSTx:
-		fnSourceAv = fnConstReg(ir.aRa) || fnImma(ir);
+		fnSourceAv = fnConstReg(ir.ins.ls.Ra.num) || fnImma(ir);
 	OP_PRED:
-		fnSourceAv = fnConstReg(ir.aRa);
+		fnSourceAv = fnConstReg(ir.ins.r3.Ra.num);
 	default:	fnSourceAv = 1'b1;
 	endcase
 end
@@ -2260,36 +2259,36 @@ input ex_instruction_t ir;
 begin
 	case(ir.ins.r2.opcode)
 	OP_CHK:	fnSourceBv = fnConstReg(ir.aRb) || fnImmb(ir);
-	OP_R2,OP_R3V,OP_R3VS:
-		case(ir.ins.r2.func)
-		FN_ADD:	fnSourceBv = fnConstReg(ir.aRb) || fnImmb(ir);
-		FN_CMP:	fnSourceBv = fnConstReg(ir.aRb) || fnImmb(ir);
-		FN_MUL:	fnSourceBv = fnConstReg(ir.aRb) || fnImmb(ir);
-		FN_MULW:	fnSourceBv = fnConstReg(ir.aRb) || fnImmb(ir);
-		FN_DIV:	fnSourceBv = fnConstReg(ir.aRb) || fnImmb(ir);
-		FN_SUB:	fnSourceBv = fnConstReg(ir.aRb) || fnImmb(ir);
-		FN_MULU: fnSourceBv = fnConstReg(ir.aRb) || fnImmb(ir);
-		FN_MULUW: fnSourceBv = fnConstReg(ir.aRb) || fnImmb(ir);
-		FN_DIVU: fnSourceBv = fnConstReg(ir.aRb) || fnImmb(ir);
-		FN_AND:	fnSourceBv = fnConstReg(ir.aRb) || fnImmb(ir);
-		FN_OR:	fnSourceBv = fnConstReg(ir.aRb) || fnImmb(ir);
-		FN_EOR:	fnSourceBv = fnConstReg(ir.aRb) || fnImmb(ir);
-		FN_NAND:	fnSourceBv = fnConstReg(ir.aRb) || fnImmb(ir);
-		FN_NOR:	fnSourceBv = fnConstReg(ir.aRb) || fnImmb(ir);
-		FN_ENOR:	fnSourceBv = fnConstReg(ir.aRb) || fnImmb(ir);
-		FN_MINMAX:	fnSourceBv = fnConstReg(ir.aRb) || fnImmb(ir);
-		FN_SEQ:	fnSourceBv = fnConstReg(ir.aRb) || fnImmb(ir);
-		FN_SNE:	fnSourceBv = fnConstReg(ir.aRb) || fnImmb(ir);
-		FN_SLT:	fnSourceBv = fnConstReg(ir.aRb) || fnImmb(ir);
-		FN_SLE:	fnSourceBv = fnConstReg(ir.aRb) || fnImmb(ir);
-		FN_SLTU:	fnSourceBv = fnConstReg(ir.aRb) || fnImmb(ir);
-		FN_SLEU:	fnSourceBv = fnConstReg(ir.aRb) || fnImmb(ir);
-		FN_ZSEQ:	fnSourceBv = fnConstReg(ir.aRb) || fnImmb(ir);
-		FN_ZSNE:	fnSourceBv = fnConstReg(ir.aRb) || fnImmb(ir);
-		FN_ZSLT:	fnSourceBv = fnConstReg(ir.aRb) || fnImmb(ir);
-		FN_ZSLE:	fnSourceBv = fnConstReg(ir.aRb) || fnImmb(ir);
-		FN_ZSLTU:	fnSourceBv = fnConstReg(ir.aRb) || fnImmb(ir);
-		FN_ZSLEU:	fnSourceBv = fnConstReg(ir.aRb) || fnImmb(ir);
+	OP_R3B,OP_R3W,OP_R3T,OP_R3O:
+		case(ir.ins.r3.func)
+		FN_ADD:	fnSourceBv = fnConstReg(ir.ins.r3.Rb.num) || fnImmb(ir);
+		FN_CMP:	fnSourceBv = fnConstReg(ir.ins.r3.Rb.num) || fnImmb(ir);
+		FN_MUL:	fnSourceBv = fnConstReg(ir.ins.r3.Rb.num) || fnImmb(ir);
+		FN_MULW:	fnSourceBv = fnConstReg(ir.ins.r3.Rb.num) || fnImmb(ir);
+		FN_DIV:	fnSourceBv = fnConstReg(ir.ins.r3.Rb.num) || fnImmb(ir);
+		FN_SUB:	fnSourceBv = fnConstReg(ir.ins.r3.Rb.num) || fnImmb(ir);
+		FN_MULU: fnSourceBv = fnConstReg(ir.ins.r3.Rb.num) || fnImmb(ir);
+		FN_MULUW: fnSourceBv = fnConstReg(ir.ins.r3.Rb.num) || fnImmb(ir);
+		FN_DIVU: fnSourceBv = fnConstReg(ir.ins.r3.Rb.num) || fnImmb(ir);
+		FN_AND:	fnSourceBv = fnConstReg(ir.ins.r3.Rb.num) || fnImmb(ir);
+		FN_OR:	fnSourceBv = fnConstReg(ir.ins.r3.Rb.num) || fnImmb(ir);
+		FN_EOR:	fnSourceBv = fnConstReg(ir.ins.r3.Rb.num) || fnImmb(ir);
+		FN_NAND:	fnSourceBv = fnConstReg(ir.ins.r3.Rb.num) || fnImmb(ir);
+		FN_NOR:	fnSourceBv = fnConstReg(ir.ins.r3.Rb.num) || fnImmb(ir);
+		FN_ENOR:	fnSourceBv = fnConstReg(ir.ins.r3.Rb.num) || fnImmb(ir);
+		FN_MINMAX:	fnSourceBv = fnConstReg(ir.ins.r3.Rb.num) || fnImmb(ir);
+		FN_SEQ:	fnSourceBv = fnConstReg(ir.ins.r3.Rb.num) || fnImmb(ir);
+		FN_SNE:	fnSourceBv = fnConstReg(ir.ins.r3.Rb.num) || fnImmb(ir);
+		FN_SLT:	fnSourceBv = fnConstReg(ir.ins.r3.Rb.num) || fnImmb(ir);
+		FN_SLE:	fnSourceBv = fnConstReg(ir.ins.r3.Rb.num) || fnImmb(ir);
+		FN_SLTU:	fnSourceBv = fnConstReg(ir.ins.r3.Rb.num) || fnImmb(ir);
+		FN_SLEU:	fnSourceBv = fnConstReg(ir.ins.r3.Rb.num) || fnImmb(ir);
+		FN_ZSEQ:	fnSourceBv = fnConstReg(ir.ins.r3.Rb.num) || fnImmb(ir);
+		FN_ZSNE:	fnSourceBv = fnConstReg(ir.ins.r3.Rb.num) || fnImmb(ir);
+		FN_ZSLT:	fnSourceBv = fnConstReg(ir.ins.r3.Rb.num) || fnImmb(ir);
+		FN_ZSLE:	fnSourceBv = fnConstReg(ir.ins.r3.Rb.num) || fnImmb(ir);
+		FN_ZSLTU:	fnSourceBv = fnConstReg(ir.ins.r3.Rb.num) || fnImmb(ir);
+		FN_ZSLEU:	fnSourceBv = fnConstReg(ir.ins.r3.Rb.num) || fnImmb(ir);
 		default:	fnSourceBv = 1'b1;
 		endcase
 	OP_RTD:		fnSourceBv = 1'b0;
@@ -2302,20 +2301,18 @@ begin
 	OP_ANDI:	fnSourceBv = 1'b1;
 	OP_ORI:		fnSourceBv = 1'b1;
 	OP_EORI:	fnSourceBv = 1'b1;
-	OP_SHIFT,OP_VSHIFT:
-		case(ir.ins.shifti.func[3])
-		1'b0:	fnSourceBv = fnConstReg(ir.aRb) || fnImmb(ir);
+	OP_SHIFTB,OP_SHIFTW,OP_SHIFTT,OP_SHIFTO:
+		case(ir.ins.lshifti.func[3])
+		1'b0:	fnSourceBv = fnConstReg(ir.ins.lshifti.Rb.num) || fnImmb(ir);
 		1'b1: fnSourceBv = 1'b1;
 		endcase
-	OP_DBRA:	fnSourceBv = fnConstReg(ir.aRb) || fnImmb(ir);
-	OP_DBRA,
-	OP_Bcc,OP_BccU,OP_FBcc:
-		fnSourceBv = fnConstReg(ir.aRb) || fnImmb(ir);
+	OP_Bcc,OP_BccU,OP_FBcc,OP_IBcc,OP_DBcc:
+		fnSourceBv = fnConstReg(ir.ins.br.Rb.num) || fnImmb(ir);
 	OP_LDA,
 	OP_LDx,OP_FLDx,OP_DFLDx,OP_PLDx,OP_LDxU:
-		fnSourceBv = fnConstReg(ir.aRb);
+		fnSourceBv = fnConstReg(ir.ins.ls.Rb.num);
 	OP_STx,OP_FSTx,OP_DFSTx,OP_PSTx:
-		fnSourceBv = fnConstReg(ir.aRb);
+		fnSourceBv = fnConstReg(ir.ins.ls.Rb.num);
 	default:	fnSourceBv = 1'b1;
 	endcase
 end
@@ -2326,44 +2323,42 @@ input ex_instruction_t ir;
 begin
 	case(ir.ins.r2.opcode)
 	OP_CHK:	fnSourceCv = fnConstReg(ir.aRc);
-	OP_R2,OP_R3V,OP_R3VS:
-		case(ir.ins.r2.func)
-		FN_ADD:	fnSourceCv = fnConstReg(ir.aRc);
-		FN_CMP:	fnSourceCv = fnConstReg(ir.aRc);
-		FN_MUL:	fnSourceCv = fnConstReg(ir.aRc);
-		FN_MULW:	fnSourceCv = fnConstReg(ir.aRc);
-		FN_DIV:	fnSourceCv = fnConstReg(ir.aRc);
-		FN_SUB:	fnSourceCv = fnConstReg(ir.aRc);
-		FN_MULU: fnSourceCv = fnConstReg(ir.aRc);
-		FN_MULUW: fnSourceCv = fnConstReg(ir.aRc);
-		FN_DIVU: fnSourceCv = fnConstReg(ir.aRc);
-		FN_AND:	fnSourceCv = fnConstReg(ir.aRc);
-		FN_OR:	fnSourceCv = fnConstReg(ir.aRc);
-		FN_EOR:	fnSourceCv = fnConstReg(ir.aRc);
-		FN_NAND:	fnSourceCv = fnConstReg(ir.aRc);
-		FN_NOR:	fnSourceCv = fnConstReg(ir.aRc);
-		FN_ENOR:	fnSourceCv = fnConstReg(ir.aRc);
-		FN_MINMAX:	fnSourceCv = fnConstReg(ir.aRc);
-		FN_SEQ:	fnSourceCv = fnConstReg(ir.aRc);
-		FN_SNE:	fnSourceCv = fnConstReg(ir.aRc);
-		FN_SLT:	fnSourceCv = fnConstReg(ir.aRc);
-		FN_SLE:	fnSourceCv = fnConstReg(ir.aRc);
-		FN_SLTU:	fnSourceCv = fnConstReg(ir.aRc);
-		FN_SLEU:	fnSourceCv = fnConstReg(ir.aRc);
-		FN_ZSEQ:	fnSourceCv = fnConstReg(ir.aRc);
-		FN_ZSNE:	fnSourceCv = fnConstReg(ir.aRc);
-		FN_ZSLT:	fnSourceCv = fnConstReg(ir.aRc);
-		FN_ZSLE:	fnSourceCv = fnConstReg(ir.aRc);
-		FN_ZSLTU:	fnSourceCv = fnConstReg(ir.aRc);
-		FN_ZSLEU:	fnSourceCv = fnConstReg(ir.aRc);
+	OP_R3B,OP_R3W,OP_R3T,OP_R3O:
+		case(ir.ins.r3.func)
+		FN_ADD:	fnSourceCv = fnConstReg(ir.ins.r3.Rc.num);
+		FN_CMP:	fnSourceCv = fnConstReg(ir.ins.r3.Rc.num);
+		FN_MUL:	fnSourceCv = fnConstReg(ir.ins.r3.Rc.num);
+		FN_MULW:	fnSourceCv = fnConstReg(ir.ins.r3.Rc.num);
+		FN_DIV:	fnSourceCv = fnConstReg(ir.ins.r3.Rc.num);
+		FN_SUB:	fnSourceCv = fnConstReg(ir.ins.r3.Rc.num);
+		FN_MULU: fnSourceCv = fnConstReg(ir.ins.r3.Rc.num);
+		FN_MULUW: fnSourceCv = fnConstReg(ir.ins.r3.Rc.num);
+		FN_DIVU: fnSourceCv = fnConstReg(ir.ins.r3.Rc.num);
+		FN_AND:	fnSourceCv = fnConstReg(ir.ins.r3.Rc.num);
+		FN_OR:	fnSourceCv = fnConstReg(ir.ins.r3.Rc.num);
+		FN_EOR:	fnSourceCv = fnConstReg(ir.ins.r3.Rc.num);
+		FN_NAND:	fnSourceCv = fnConstReg(ir.ins.r3.Rc.num);
+		FN_NOR:	fnSourceCv = fnConstReg(ir.ins.r3.Rc.num);
+		FN_ENOR:	fnSourceCv = fnConstReg(ir.ins.r3.Rc.num);
+		FN_MINMAX:	fnSourceCv = fnConstReg(ir.ins.r3.Rc.num);
+		FN_SEQ:	fnSourceCv = fnConstReg(ir.ins.r3.Rc.num);
+		FN_SNE:	fnSourceCv = fnConstReg(ir.ins.r3.Rc.num);
+		FN_SLT:	fnSourceCv = fnConstReg(ir.ins.r3.Rc.num);
+		FN_SLE:	fnSourceCv = fnConstReg(ir.ins.r3.Rc.num);
+		FN_SLTU:	fnSourceCv = fnConstReg(ir.ins.r3.Rc.num);
+		FN_SLEU:	fnSourceCv = fnConstReg(ir.ins.r3.Rc.num);
+		FN_ZSEQ:	fnSourceCv = fnConstReg(ir.ins.r3.Rc.num);
+		FN_ZSNE:	fnSourceCv = fnConstReg(ir.ins.r3.Rc.num);
+		FN_ZSLT:	fnSourceCv = fnConstReg(ir.ins.r3.Rc.num);
+		FN_ZSLE:	fnSourceCv = fnConstReg(ir.ins.r3.Rc.num);
+		FN_ZSLTU:	fnSourceCv = fnConstReg(ir.ins.r3.Rc.num);
+		FN_ZSLEU:	fnSourceCv = fnConstReg(ir.ins.r3.Rc.num);
 		default:	fnSourceCv = 1'b1;
 		endcase
-	OP_ADDSI,OP_ANDSI,OP_ORSI,OP_EORSI:
-		fnSourceCv = fnConstReg(ir.aRc);
 	OP_STx,OP_FSTx,OP_DFSTx,OP_PSTx:
-		fnSourceCv = fnConstReg(ir.aRc);
-	OP_DBRA,OP_JSR,OP_BSR,
-	OP_Bcc,OP_BccU,OP_FBcc:
+		fnSourceCv = fnConstReg(ir.ins.ls.Rt);
+	OP_JSR,OP_BSR,
+	OP_Bcc,OP_BccU,OP_FBcc,OP_IBcc,OP_DBcc:
 		fnSourceCv = 1'b1;	
 	OP_RTD:
 		fnSourceCv = 1'd0;
@@ -2376,86 +2371,86 @@ endfunction
 function fnSourceTv;
 input ex_instruction_t ir;
 begin
-	casez(ir.ins.r2.opcode)
+	casez(ir.ins.any.opcode)
 	OP_CHK:	fnSourceTv = 1'b1;
-	OP_R2,OP_R3V,OP_R3VS:
-		case(ir.ins.r2.func)
-		FN_ADD:	fnSourceTv = fnConstReg(ir.aRt);
-		FN_CMP:	fnSourceTv = fnConstReg(ir.aRt);
-		FN_MUL:	fnSourceTv = fnConstReg(ir.aRt);
-		FN_MULW:	fnSourceTv = fnConstReg(ir.aRt);
-		FN_DIV:	fnSourceTv = fnConstReg(ir.aRt);
-		FN_SUB:	fnSourceTv = fnConstReg(ir.aRt);
-		FN_MULU: fnSourceTv = fnConstReg(ir.aRt);
-		FN_MULUW: fnSourceTv = fnConstReg(ir.aRt);
-		FN_DIVU: fnSourceTv = fnConstReg(ir.aRt);
-		FN_AND:	fnSourceTv = fnConstReg(ir.aRt);
-		FN_OR:	fnSourceTv = fnConstReg(ir.aRt);
-		FN_EOR:	fnSourceTv = fnConstReg(ir.aRt);
-		FN_NAND:	fnSourceTv = fnConstReg(ir.aRt);
-		FN_NOR:	fnSourceTv = fnConstReg(ir.aRt);
-		FN_ENOR:	fnSourceTv = fnConstReg(ir.aRt);
-		FN_MINMAX:	fnSourceTv = fnConstReg(ir.aRt);
-		FN_SEQ:	fnSourceTv = fnConstReg(ir.aRt);
-		FN_SNE:	fnSourceTv = fnConstReg(ir.aRt);
-		FN_SLT:	fnSourceTv = fnConstReg(ir.aRt);
-		FN_SLE:	fnSourceTv = fnConstReg(ir.aRt);
-		FN_SLEU:	fnSourceTv = fnConstReg(ir.aRt);
-		FN_SLTU:	fnSourceTv = fnConstReg(ir.aRt);
-		FN_ZSEQ:	fnSourceTv = fnConstReg(ir.aRt);
-		FN_ZSNE:	fnSourceTv = fnConstReg(ir.aRt);
-		FN_ZSLT:	fnSourceTv = fnConstReg(ir.aRt);
-		FN_ZSLE:	fnSourceTv = fnConstReg(ir.aRt);
-		FN_ZSLEU:	fnSourceTv = fnConstReg(ir.aRt);
-		FN_ZSLTU:	fnSourceTv = fnConstReg(ir.aRt);
+	OP_R3B,OP_R3W,OP_R3T,OP_R3O:
+		case(ir.ins.r3.func)
+		FN_ADD:	fnSourceTv = fnConstReg(ir.ins.r3.Rt.num);
+		FN_CMP:	fnSourceTv = fnConstReg(ir.ins.r3.Rt.num);
+		FN_MUL:	fnSourceTv = fnConstReg(ir.ins.r3.Rt.num);
+		FN_MULW:	fnSourceTv = fnConstReg(ir.ins.r3.Rt.num);
+		FN_DIV:	fnSourceTv = fnConstReg(ir.ins.r3.Rt.num);
+		FN_SUB:	fnSourceTv = fnConstReg(ir.ins.r3.Rt.num);
+		FN_MULU: fnSourceTv = fnConstReg(ir.ins.r3.Rt.num);
+		FN_MULUW: fnSourceTv = fnConstReg(ir.ins.r3.Rt.num);
+		FN_DIVU: fnSourceTv = fnConstReg(ir.ins.r3.Rt.num);
+		FN_AND:	fnSourceTv = fnConstReg(ir.ins.r3.Rt.num);
+		FN_OR:	fnSourceTv = fnConstReg(ir.ins.r3.Rt.num);
+		FN_EOR:	fnSourceTv = fnConstReg(ir.ins.r3.Rt.num);
+		FN_NAND:	fnSourceTv = fnConstReg(ir.ins.r3.Rt.num);
+		FN_NOR:	fnSourceTv = fnConstReg(ir.ins.r3.Rt.num);
+		FN_ENOR:	fnSourceTv = fnConstReg(ir.ins.r3.Rt.num);
+		FN_MINMAX:	fnSourceTv = fnConstReg(ir.ins.r3.Rt.num);
+		FN_SEQ:	fnSourceTv = fnConstReg(ir.ins.r3.Rt.num);
+		FN_SNE:	fnSourceTv = fnConstReg(ir.ins.r3.Rt.num);
+		FN_SLT:	fnSourceTv = fnConstReg(ir.ins.r3.Rt.num);
+		FN_SLE:	fnSourceTv = fnConstReg(ir.ins.r3.Rt.num);
+		FN_SLEU:	fnSourceTv = fnConstReg(ir.ins.r3.Rt.num);
+		FN_SLTU:	fnSourceTv = fnConstReg(ir.ins.r3.Rt.num);
+		FN_ZSEQ:	fnSourceTv = fnConstReg(ir.ins.r3.Rt.num);
+		FN_ZSNE:	fnSourceTv = fnConstReg(ir.ins.r3.Rt.num);
+		FN_ZSLT:	fnSourceTv = fnConstReg(ir.ins.r3.Rt.num);
+		FN_ZSLE:	fnSourceTv = fnConstReg(ir.ins.r3.Rt.num);
+		FN_ZSLEU:	fnSourceTv = fnConstReg(ir.ins.r3.Rt.num);
+		FN_ZSLTU:	fnSourceTv = fnConstReg(ir.ins.r3.Rt.num);
 		default:	fnSourceTv = 1'b1;
 		endcase
-	OP_JSR,
-	OP_ADDI:	fnSourceTv = fnConstReg(ir.aRt);
-	OP_SUBFI:	fnSourceTv = fnConstReg(ir.aRt);
-	OP_CMPI:	fnSourceTv = fnConstReg(ir.aRt);
-	OP_MULI:	fnSourceTv = fnConstReg(ir.aRt);
-	OP_DIVI:	fnSourceTv = fnConstReg(ir.aRt);
-	OP_ANDI:	fnSourceTv = fnConstReg(ir.aRt);
-	OP_ORI:		fnSourceTv = fnConstReg(ir.aRt);
-	OP_EORI:	fnSourceTv = fnConstReg(ir.aRt);
-	OP_AIPSI:	fnSourceTv = fnConstReg(ir.aRt);
-	OP_ADDSI:	fnSourceTv = fnConstReg(ir.aRt);
-	OP_ANDSI:	fnSourceTv = fnConstReg(ir.aRt);
-	OP_ORSI:	fnSourceTv = fnConstReg(ir.aRt);
-	OP_EORSI:	fnSourceTv = fnConstReg(ir.aRt);
-	OP_SHIFT:	fnSourceTv = fnConstReg(ir.aRt);
+	OP_JSR:		fnSourceTv = fnConstReg(ir.ins.jsr.Rt.num);
+	OP_ADDI:	fnSourceTv = fnConstReg(ir.ins.ri.Rt.num);
+	OP_SUBFI:	fnSourceTv = fnConstReg(ir.ins.ri.Rt.num);
+	OP_CMPI:	fnSourceTv = fnConstReg(ir.ins.ri.Rt.num);
+	OP_MULI:	fnSourceTv = fnConstReg(ir.ins.ri.Rt.num);
+	OP_DIVI:	fnSourceTv = fnConstReg(ir.ins.ri.Rt.num);
+	OP_ANDI:	fnSourceTv = fnConstReg(ir.ins.ri.Rt.num);
+	OP_ORI:		fnSourceTv = fnConstReg(ir.ins.ri.Rt.num);
+	OP_EORI:	fnSourceTv = fnConstReg(ir.ins.ri.Rt.num);
+	OP_AIPUI:	fnSourceTv = fnConstReg(ir.ins.ri.Rt.num);
+	OP_SHIFTB:	fnSourceTv = fnConstReg(ir.ins.lshifti.Rt.num);
+	OP_SHIFTW:	fnSourceTv = fnConstReg(ir.ins.lshifti.Rt.num);
+	OP_SHIFTT:	fnSourceTv = fnConstReg(ir.ins.lshifti.Rt.num);
+	OP_SHIFTO:	fnSourceTv = fnConstReg(ir.ins.lshifti.Rt.num);
 
 	OP_SEQI:	fnSourceTv = fnConstReg(ir.aRa);
 	OP_SNEI:	fnSourceTv = fnConstReg(ir.aRa);
-	OP_SLTI:	fnSourceTv = fnConstReg(ir.aRt);
-	OP_SLEI:	fnSourceTv = fnConstReg(ir.aRt);
-	OP_SGTI:	fnSourceTv = fnConstReg(ir.aRt);
-	OP_SGEI:	fnSourceTv = fnConstReg(ir.aRt);
-	OP_SLTUI:	fnSourceTv = fnConstReg(ir.aRt);
-	OP_SLEUI:	fnSourceTv = fnConstReg(ir.aRt);
-	OP_SGTUI:	fnSourceTv = fnConstReg(ir.aRt);
-	OP_SGEUI:	fnSourceTv = fnConstReg(ir.aRt);
-	OP_ZSEQI:	fnSourceTv = fnConstReg(ir.aRt);
-	OP_ZSNEI:	fnSourceTv = fnConstReg(ir.aRt);
-	OP_ZSLTI:	fnSourceTv = fnConstReg(ir.aRt);
-	OP_ZSLEI:	fnSourceTv = fnConstReg(ir.aRt);
-	OP_ZSGTI:	fnSourceTv = fnConstReg(ir.aRt);
-	OP_ZSGEI:	fnSourceTv = fnConstReg(ir.aRt);
-	OP_ZSLTUI:	fnSourceTv = fnConstReg(ir.aRt);
-	OP_ZSLEUI:	fnSourceTv = fnConstReg(ir.aRt);
-	OP_ZSGTUI:	fnSourceTv = fnConstReg(ir.aRt);
-	OP_ZSGEUI:	fnSourceTv = fnConstReg(ir.aRt);
+	OP_SLTI:	fnSourceTv = fnConstReg(ir.ins.ri.Rt.num);
+	OP_SLEI:	fnSourceTv = fnConstReg(ir.ins.ri.Rt.num);
+	OP_SGTI:	fnSourceTv = fnConstReg(ir.ins.ri.Rt.num);
+	OP_SGEI:	fnSourceTv = fnConstReg(ir.ins.ri.Rt.num);
+	OP_SLTUI:	fnSourceTv = fnConstReg(ir.ins.ri.Rt.num);
+	OP_SLEUI:	fnSourceTv = fnConstReg(ir.ins.ri.Rt.num);
+	OP_SGTUI:	fnSourceTv = fnConstReg(ir.ins.ri.Rt.num);
+	OP_SGEUI:	fnSourceTv = fnConstReg(ir.ins.ri.Rt.num);
+	OP_ZSEQI:	fnSourceTv = fnConstReg(ir.ins.ri.Rt.num);
+	OP_ZSNEI:	fnSourceTv = fnConstReg(ir.ins.ri.Rt.num);
+	OP_ZSLTI:	fnSourceTv = fnConstReg(ir.ins.ri.Rt.num);
+	OP_ZSLEI:	fnSourceTv = fnConstReg(ir.ins.ri.Rt.num);
+	OP_ZSGTI:	fnSourceTv = fnConstReg(ir.ins.ri.Rt.num);
+	OP_ZSGEI:	fnSourceTv = fnConstReg(ir.ins.ri.Rt.num);
+	OP_ZSLTUI:	fnSourceTv = fnConstReg(ir.ins.ri.Rt.num);
+	OP_ZSLEUI:	fnSourceTv = fnConstReg(ir.ins.ri.Rt.num);
+	OP_ZSGTUI:	fnSourceTv = fnConstReg(ir.ins.ri.Rt.num);
+	OP_ZSGEUI:	fnSourceTv = fnConstReg(ir.ins.ri.Rt.num);
 
-	OP_MOV:		fnSourceTv = fnConstReg(ir.aRt);
+	OP_MOV:		fnSourceTv = fnConstReg(ir.ins.r3.Rt.num);
 	OP_LDA,
 	OP_LDx,OP_FLDx,OP_DFLDx,OP_PLDx,OP_LDxU:
-		fnSourceTv = fnConstReg(ir.aRt);
+		fnSourceTv = fnConstReg(ir.ins.ls.Rt.num);
 	OP_STx,OP_FSTx,OP_DFSTx,OP_PSTx:
 		fnSourceTv = 1'b1;
-	OP_DBRA: fnSourceTv = 1'b1;
-	OP_Bcc,OP_BccU,OP_FBcc:
-		fnSourceTv = fnConstReg(ir.aRt);//ir.ins.br.inc==2'b00||ir.ins.br.inc==2'd2;
+	OP_IBcc,OP_DBcc:
+		fnSourceTv = fnConstReg(ir.ins.br.Ra.num);//ir.ins.br.inc==2'b00||ir.ins.br.inc==2'd2;
+	OP_Bcc,OP_BccU,OP_FBcc,OP_DFBcc,OP_PBcc:
+		fnSourceTv = 1'b1;//ir.ins.br.inc==2'b00||ir.ins.br.inc==2'd2;
 	OP_RTD:	fnSourceTv = 1'b0;
 	OP_PRED:
 		fnSourceTv = 1'b1;
@@ -2482,10 +2477,10 @@ begin
 	vec = 1'b0;//ir.r2.pfx_opcode==OP_VEC || ir.r2.pfx_opcode==OP_VECZ;
 	veci = 1'b0;//ir.ri.pfx_opcode==OP_VEC || ir.ri.pfx_opcode==OP_VECZ;
 	vecf = 1'b0;//ir.f2.pfx_opcode==OP_VEC || ir.f2.pfx_opcode==OP_VECZ;
-	casez(ir.ins.r2.opcode)
+	casez(ir.ins.any.opcode)
 	OP_CHK:	fnSourcePv = ~vec;
-	OP_R2,OP_R3V,OP_R3VS:
-		case(ir.ins.r2.func)
+	OP_R3B,OP_R3W,OP_R3T,OP_R3O:
+		case(ir.ins.r3.func)
 		FN_ADD:	fnSourcePv = ~vec;
 		FN_CMP:	fnSourcePv = ~vec;
 		FN_MUL:	fnSourcePv = ~vec;
@@ -2522,14 +2517,16 @@ begin
 	OP_ANDI:	fnSourcePv = ~veci;
 	OP_ORI:		fnSourcePv = ~veci;
 	OP_EORI:	fnSourcePv = ~veci;
-	OP_SHIFT:	fnSourcePv = ~vec;
+	OP_SHIFTB:	fnSourcePv = ~vec;
+	OP_SHIFTW:	fnSourcePv = ~vec;
+	OP_SHIFTT:	fnSourcePv = ~vec;
+	OP_SHIFTO:	fnSourcePv = ~vec;
 	OP_FLT3:	fnSourcePv = ~vecf;	
 	OP_MOV:		fnSourcePv = ~vec;
 	OP_LDx,OP_FLDx,OP_DFLDx,OP_PLDx,OP_LDxU:
 		fnSourcePv = ~veci;
 	OP_STx,OP_FSTx,OP_DFSTx,OP_PSTx:
 		fnSourcePv = ~veci;
-	OP_DBRA,
 	8'b00101???:
 		fnSourcePv = 1'b1;
 	default:
@@ -2651,8 +2648,7 @@ function fnIsNop;
 input instruction_t ir;
 begin
 	fnIsNop = ir.any.opcode==OP_NOP ||
-		ir.any.opcode==OP_PFXAB ||
-		ir.any.opcode==OP_PFXC
+		ir.any.opcode==OP_PFX
 		;
 		/*
 		ir.any.opcode==OP_PFXA ||
@@ -2697,8 +2693,7 @@ function fnIsPostfix;
 input instruction_t ir;
 begin
 	fnIsPostfix = //ir.any.opcode==OP_PFXA || ir.any.opcode==OP_PFXB || ir.any.opcode==OP_PFXC;
-		ir.any.opcode==OP_PFXAB ||
-		ir.any.opcode==OP_PFXC;
+		ir.any.opcode==OP_PFX;
 		;
 end
 endfunction

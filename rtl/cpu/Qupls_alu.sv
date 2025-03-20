@@ -111,11 +111,11 @@ always_comb
 always_comb
 	immc8 = {{WID{ir[41]}},ir[41:34]};
 always_comb
-	shl = {b,a} << (ir.shifti.i ? ir.shifti.imm : c[5:0]);
+	shl = {b,a} << (ir.lshifti.func[3] ? ir.lshifti.imm : c[5:0]);
 always_comb
-	shr = {b,a} >> (ir.shifti.i ? ir.shifti.imm : c[5:0]);
+	shr = {b,a} >> (ir.rshifti.func[3] ? ir.rshifti.mb : c[5:0]);
 always_comb
-	asr = {{64{a[63]}},a,64'd0} >> (ir.shifti.i ? ir.shifti.imm : c[5:0]);
+	asr = {{64{a[63]}},a,64'd0} >> (ir.rshifti.func[3] ? ir.rshifti.mb : c[5:0]);
 
 always_ff @(posedge clk)
 begin
@@ -435,36 +435,31 @@ begin
 		4'd10:	if (!(a==canary)) exc = cause_code_t'(ir[34:27]);
 		default:	exc = FLT_UNIMP;
 		endcase
-	OP_R2:
+	OP_R3B,OP_R3W,OP_R3T,OP_R3O:
 		case(ir.r2.func)
 		FN_CPUID:	bus = ALU0 ? info : 64'd0;
 		FN_ADD:
-			case(ir.r2.op3)
-			OP3_ADD:
-				case(ir.r2.op4)
-				3'd0:	bus = (a + b) & c;
-				3'd1: bus = (a + b) | c;
-				3'd2: bus = (a + b) ^ c;
-				3'd3:	bus = (a + b) + c;
-				/*
-				4'd9:	bus = (a + b) - c;
-				4'd10: bus = (a + b) + c + 2'd1;
-				4'd11: bus = (a + b) + c - 2'd1;
-				4'd12:
-					begin
-						sd = (a + b) + c;
-						bus = sd[WID-1] ? -sd : sd;
-					end
-				4'd13:
-					begin
-						sd = (a + b) - c;
-						bus = sd[WID-1] ? -sd : sd;
-					end
-				*/
-				default:	bus = {WID{1'd0}};
-				endcase
-			OP3_ADDGC: bus = {{WID-2{1'b0}},sum_gc[WID+1:WID]};
-			default:	bus = {WID{1'd0}};
+			case(ir.r2.op4)
+			3'd0:	bus = (a + b) & c;
+			3'd1: bus = (a + b) | c;
+			3'd2: bus = (a + b) ^ c;
+			3'd3:	bus = (a + b) + c;
+			/*
+			4'd9:	bus = (a + b) - c;
+			4'd10: bus = (a + b) + c + 2'd1;
+			4'd11: bus = (a + b) + c - 2'd1;
+			4'd12:
+				begin
+					sd = (a + b) + c;
+					bus = sd[WID-1] ? -sd : sd;
+				end
+			4'd13:
+				begin
+					sd = (a + b) - c;
+					bus = sd[WID-1] ? -sd : sd;
+				end
+			*/
+			default:	bus = zero;
 			endcase
 		FN_SUB:	bus = a - b - c;
 		FN_CMP,FN_CMPU:	
@@ -648,33 +643,13 @@ begin
 		bus = a | i;
 	OP_EORI:
 		bus = a ^ i;
-	OP_AIPSI:
+	OP_AIPUI:
 		if (WID >= 32)
 		 	bus = pc + ({{WID{i[36]}},i[36:0]} << (ir[23:22]*32));
 		else
 			bus = zero;
-	OP_ADDSI:
-		if (WID < 32)
-			bus = zero;
-		else
-			bus = c + ({{WID{i[36]}},i[36:0]} << (ir[23:22]*32));
-	OP_ANDSI:
-		if (WID < 32)
-			bus = zero;
-		else
-			bus = c & ({WID{1'b1}} & ~({{WID{1'b0}},37'h1fffffffff} << (ir[23:22]*32)) | ({{WID{i[36]}},i[36:0]} << (ir[23:22]*32)));
-	OP_ORSI:
-		if (WID < 32)
-			bus = zero;
-		else
-			bus = c | (i << (ir[23:22]*32));
-	OP_EORSI:
-		if (WID < 32)
-			bus = zero;
-		else
-			bus = c ^ (i << (ir[23:22]*32));
-	OP_SHIFT:
-		case(ir.shifti.func)
+	OP_SHIFTB,OP_SHIFTW,OP_SHIFTT,OP_SHIFTO:
+		case(ir.lshifti.func)
 		OP_ASL:	bus = shl[WID*2-1:WID];
 		OP_LSR:	bus = shr[WID-1:0];
 		OP_ASR:	
@@ -711,7 +686,7 @@ begin
 	OP_MOV:		bus = a;
 	OP_LDA:		bus = a + i + (b << ir[31:29]);
 	OP_BLEND:	bus = ALU0 ? blendo : dead;
-	OP_PFXAB,OP_PFXC:	bus = zero;
+	OP_PFX:		bus = zero;
 	OP_NOP:		bus = t;	// in case of copy target
 	OP_QFEXT:	bus = qres;
 	// Write the next PC to the link register.
@@ -757,13 +732,8 @@ begin
 		*/
 				bus = b + i;
 		end
-	OP_Bcc,OP_BccU:
-		case(ir.br.inc)
-		2'd0:	bus = a;
-		2'd1:	bus = a + 2'd1;
-		2'd3:	bus = a - 2'd1;
-		2'd2:	bus = a;
-		endcase
+	OP_IBcc,OP_IBccR:	bus = a + 2'd1;
+	OP_DBcc,OP_DBccR:	bus = a - 2'd1;
 
 	OP_BFND, OP_BCMP:
 		bus = (bebfifo_overflow & ld2) ? 64'd0 : {58'd0,bebfifo_din.handle};

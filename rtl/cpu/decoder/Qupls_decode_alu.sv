@@ -57,8 +57,8 @@ begin
 		endcase
 	OP_CAP:	fnIsAlu = 1'b1;
 	OP_CHK:	fnIsAlu = 1'b1;
-	OP_R2:
-		case(ir.r2.func)
+	OP_R3B,OP_R3W,OP_R3T,OP_R3O:
+		case(ir.r3.func)
 		FN_CPUID:	fnIsAlu = 1'b1;
 		FN_ADD:	fnIsAlu = 1'b1;
 		FN_CMP:	fnIsAlu = 1'b1;
@@ -122,10 +122,8 @@ begin
 		fnIsAlu = 1'b1;
 	OP_EORI:
 		fnIsAlu = 1'b1;
-	OP_AIPSI:	fnIsAlu = 1'b1;
-	OP_ADDSI,OP_ORSI,OP_ANDSI,OP_EORSI:
-						fnIsAlu = 1'b1;
-	OP_SHIFT:
+	OP_AIPUI:	fnIsAlu = 1'b1;
+	OP_SHIFTB,OP_SHIFTW,OP_SHIFTT,OP_SHIFTO:
 		fnIsAlu = 1'b1;
 	OP_SEQI:	fnIsAlu = 1'b1;
 	OP_SNEI:	fnIsAlu = 1'b1;
@@ -150,7 +148,7 @@ begin
 	OP_CSR:		fnIsAlu = 1'b1;
 	OP_MOV:		fnIsAlu = 1'b1;
 	OP_LDA:	fnIsAlu = 1'b1;
-	OP_QFEXT,OP_PFXAB,OP_PFXC,
+	OP_QFEXT,OP_PFX,
 	OP_NOP,OP_PUSH,OP_POP,OP_ENTER,OP_LEAVE,OP_ATOM:
 		fnIsAlu = 1'b1;
 	OP_FENCE:
@@ -159,8 +157,8 @@ begin
 		fnIsAlu = 1'b1;
 	OP_RTD:
 		fnIsAlu = 1'b1;
-	OP_Bcc,OP_BccU:
-		fnIsAlu = |ir.br.inc;
+	OP_IBcc,OP_DBcc:
+		fnIsAlu = 1'b1;
 	OP_PRED:
 		fnIsAlu = 1'b1;
 	default:	fnIsAlu = 1'b0;

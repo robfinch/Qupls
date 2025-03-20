@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2024  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2024-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -67,7 +67,7 @@ else begin
 		3'd0: mip = 12'h360;			// popa
 		default:	mip = 12'h038;	// pop
 		endcase
-	OP_FLT3:
+	OP_FLT3H,OP_FLT3S,OP_FLT3D,OP_FLT3Q:
 		case(ir.ins.f3.func)
 		FN_FLT1:
 			case(ir.ins.f1.func)
@@ -95,11 +95,7 @@ else begin
 			mip = 12'h220;
 		else
 			mip = 12'h000;
-	OP_R3V:		mip = 12'h200;
-	OP_R3VS:	mip = 12'h210;
 	7'b11???:	mip = 12'h220;
-	OP_VADDSI,OP_VANDSI,OP_VORSI,OP_VEORSI:
-						mip = 12'h230;
 	default:	mip = 12'h000;
 	endcase
 end

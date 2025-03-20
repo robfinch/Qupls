@@ -94,7 +94,7 @@ Qupls_decode_Rc udcrc
 (
 	.om(om),
 	.ipl(ipl),
-	.instr(ins),
+	.ir(ins),
 	.has_immc(db.has_immc),
 	.Rc(db.Rc),
 	.Rcz(db.Rcz),
@@ -386,10 +386,10 @@ else begin
 		end
 		dbo.vec2 <= 1'b0;
 		dbo.cap <= ins.ins.any.opcode==OP_CAP;
-		dbo.mvvr <= ins.ins.any.opcode==OP_R2 && ins.ins.r2.func==FN_MVVR;
+		dbo.mvvr <= (ins.ins.any.opcode==OP_R3B||ins.ins.any.opcode==OP_R3W||ins.ins.any.opcode==OP_R3T||ins.ins.any.opcode==OP_R3O) && ins.ins.r2.func==FN_MVVR;
 		dbo.jsri <= ins.ins.any.opcode==OP_JSRI;
 		dbo.ret <= ins.ins.any.opcode==OP_RTD;
-		dbo.pushi <= ins.ins.any.opcode==OP_PUSHI;
+		dbo.pushi <= 1'b0;
 		dbo.bstore <= ins.ins.any.opcode==OP_BLOCK && ins.ins.block.op==BLK_STORE;
 		if (db.bsr) begin
 			dbo.Rtv <= 1'b0;

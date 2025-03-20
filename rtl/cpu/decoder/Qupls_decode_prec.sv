@@ -57,14 +57,21 @@ input instruction_t ir;
 begin
 	case(ir.r2.opcode)
 	OP_CHK:	fnPrec = QuplsPkg::octa;
-	OP_R2:	fnPrec = QuplsPkg::octa;
+	OP_R3B:	fnPrec = QuplsPkg::byt;
+	OP_R3W:	fnPrec = QuplsPkg::wyde;
+	OP_R3T:	fnPrec = QuplsPkg::tetra;
+	OP_R3O:	fnPrec = QuplsPkg::octa;
 	OP_ADDI,OP_SUBFI,OP_CMPI,
 	OP_MULI,OP_MULUI,OP_DIVI,OP_DIVUI,
 	OP_ANDI,OP_ORI,OP_EORI:	fnPrec = fnPrec2(ir.ri.prc);
-	OP_ADDSI,OP_ORSI,OP_ANDSI,OP_EORSI:
-		fnPrec = fnPrec2(ir.ris.prc);
-	OP_SHIFT:	fnPrec = fnPrec2(ir.shifti.prc);
-	OP_FLT3:	fnPrec = QuplsPkg::octa;
+	OP_SHIFTB:	fnPrec = QuplsPkg::byt;
+	OP_SHIFTW:	fnPrec = QuplsPkg::wyde;
+	OP_SHIFTT:	fnPrec = QuplsPkg::tetra;
+	OP_SHIFTO:	fnPrec = QuplsPkg::octa;
+	OP_FLT3H:	fnPrec = QuplsPkg::wyde;
+	OP_FLT3S:	fnPrec = QuplsPkg::tetra;
+	OP_FLT3D:	fnPrec = QuplsPkg::octa;
+	OP_FLT3Q:	fnPrec = QuplsPkg::hexi;
 	OP_CSR:		fnPrec = QuplsPkg::octa;
 	OP_MOV:		fnPrec = QuplsPkg::octa;
 	OP_LDA:	fnPrec = QuplsPkg::octa;

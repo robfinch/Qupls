@@ -51,22 +51,39 @@ input ex_instruction_t ir;
 input has_imma;
 begin
 	if (has_imma)
-		fnRa = 9'd0;
+		fnRa = 6'd0;
 	else
 		case(ir.ins.any.opcode)
 		OP_RTD:
-			fnRa = ir.aRa[2:0]<3'd1 ? 9'd0 : {6'b000101,ir.aRa[2:0]};
-		OP_DBRA:
-			fnRa = 9'd55;
-		OP_FLT3:
-			fnRa = ir.aRa;
-		OP_ADDSI,OP_ANDSI,OP_ORSI,OP_EORSI:
-			fnRa = ir.aRt;
+			fnRa = ir.ins.rtd.Ra;
+		OP_FLT3H,OP_FLT3S,OP_FLT3D,OP_FLT3Q:
+			fnRa = ir.ins.f3.Ra.num;
+		OP_R3B,OP_R3W,OP_R3T,OP_R3O,OP_MOV:
+			fnRa = ir.ins.r3.Ra.num;
+		OP_CSR:
+			fnRa = ir.ins.csr.Ra.num;
+		OP_ADDI,OP_SUBFI,OP_CMPI,OP_CMPUI,
+		OP_ANDI,OP_ORI,OP_EORI,
+		OP_MULI,OP_MULUI,OP_DIVI,OP_DIVUI,
+		OP_SEQI,OP_SNEI,OP_SLTI,OP_SLEI,OP_SGTI,OP_SGEI,OP_SLTUI,OP_SLEUI,OP_SGTUI,OP_SGEUI,
+		OP_ADD2UI,OP_ADD4UI,OP_ADD8UI,OP_ADD16UI,
+		OP_SHIFTB,OP_SHIFTW,OP_SHIFTT,OP_SHIFTO,
+		OP_ZSEQI,OP_ZSNEI,OP_ZSLTI,OP_ZSLEI,OP_ZSGTI,OP_ZSGEI,OP_ZSLTUI,OP_ZSLEUI,OP_ZSGTUI,OP_ZSGEUI:
+			fnRa = ir.ins.ri.Ra.num;
+		OP_JSR,OP_CJSR:
+			fnRa = 6'd0;
+		OP_JSRI,OP_JSRR,OP_CJSRI,OP_CJSRR:
+			fnRa = ir.ins.jsr.Ra.num;
+		OP_Bcc,OP_BccU,OP_FBcc,OP_DFBcc,OP_PBcc,OP_IBcc,OP_DBcc,
+    	OP_BccR,OP_BccUR,OP_FBccR,OP_DFBccR,OP_PBccR,OP_IBccR,OP_DBccR:
+			fnRa = ir.ins.br.Ra.num;
+		OP_LDxU,OP_LDx,OP_FLDx,OP_DFLDx,OP_PLDx,OP_LDCAPx,OP_CACHE,OP_LDA,OP_AMO,OP_CAS,
+		OP_STx,OP_STIx,OP_FSTx,OP_DFSTx,OP_PSTx,OP_STCAPx,OP_STPTR:
+			fnRa = ir.ins.ls.Ra.num;
+		OP_ENTER,OP_LEAVE,OP_PUSH,OP_POP:
+			fnRa = 6'd0;
 		default:
-			if (fnImma(ir))
-				fnRa = 9'd0;
-			else
-				fnRa = ir.aRa;
+			fnRa = 6'd0;
 		endcase
 end
 endfunction
@@ -74,9 +91,33 @@ endfunction
 always_comb
 begin
 	Ra = fnRa(instr, has_imma);
-	if (Ra==8'd31 && !(instr.ins.any.opcode==OP_MOV && instr.ins[63]))
-		Ra = 8'd32|om;
-	Ran = instr.ins.r2.Ra.n;
+	if (Ra==6'd31 && !(instr.ins.any.opcode==OP_MOV && instr.ins[23]))
+		Ra = 6'd32|om;
+	case(instr.ins.any.opcode)
+	OP_FLT3H,OP_FLT3S,OP_FLT3D,OP_FLT3Q:
+		Ran = instr.ins.f3.Ra.n;
+	OP_R3B,OP_R3W,OP_R3T,OP_R3O,OP_MOV:
+		Ran = instr.ins.r3.Ra.n;
+	OP_CSR:
+		Ran = instr.ins.csr.Ra.n;
+	OP_ADDI,OP_SUBFI,OP_CMPI,OP_CMPUI,
+	OP_ANDI,OP_ORI,OP_EORI,
+	OP_MULI,OP_MULUI,OP_DIVI,OP_DIVUI,
+	OP_SEQI,OP_SNEI,OP_SLTI,OP_SLEI,OP_SGTI,OP_SGEI,OP_SLTUI,OP_SLEUI,OP_SGTUI,OP_SGEUI,
+	OP_ADD2UI,OP_ADD4UI,OP_ADD8UI,OP_ADD16UI,
+	OP_SHIFTB,OP_SHIFTW,OP_SHIFTT,OP_SHIFTO,
+	OP_ZSEQI,OP_ZSNEI,OP_ZSLTI,OP_ZSLEI,OP_ZSGTI,OP_ZSGEI,OP_ZSLTUI,OP_ZSLEUI,OP_ZSGTUI,OP_ZSGEUI:
+		Ran = instr.ins.ri.Ra.n;
+	OP_JSR,OP_JSRI,OP_JSRR,OP_CJSR,OP_CJSRI,OP_CJSRR:
+		Ran = 1'b0;
+	OP_Bcc,OP_BccU,OP_FBcc,OP_DFBcc,OP_PBcc,OP_IBcc,OP_DBcc,
+	OP_BccR,OP_BccUR,OP_FBccR,OP_DFBccR,OP_PBccR,OP_IBccR,OP_DBccR:
+		Ran = 1'b0;
+	OP_LDxU,OP_LDx,OP_FLDx,OP_DFLDx,OP_PLDx,OP_LDCAPx,OP_CACHE,OP_LDA,OP_AMO,OP_CAS,
+	OP_STx,OP_STIx,OP_FSTx,OP_DFSTx,OP_PSTx,OP_STCAPx,OP_STPTR:
+		Ran = 1'b0;
+	default:	Ran = 1'b0;
+	endcase
 	Raz = ~|Ra;
 end
 

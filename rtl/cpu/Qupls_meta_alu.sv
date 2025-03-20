@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023-2024  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2023-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -269,7 +269,7 @@ begin
 		end
 	end
 	case(ir.any.opcode)
-	OP_R2:
+	OP_R3B,OP_R3W,OP_R3T,OP_R3O:
 		case(ir.r3.func)
 		FN_V2BITS:
 			begin

@@ -44,7 +44,7 @@ function fnIsMC;
 input instruction_t ir;
 begin
 	case(ir.any.opcode)
-	OP_FLT3:
+	OP_FLT3H,OP_FLT3S,OP_FLT3D,OP_FLT3Q:
 		case(ir.f3.func)
 		FN_FLT1:
 			case(ir.f1.func)
@@ -64,8 +64,8 @@ begin
 		endcase
 	FN_FMA,FN_FMS,FN_FNMA,FN_FNMS:
 		fnIsMC = 1'b1;
-	OP_R2:
-		case(ir.r2.func)
+	OP_R3B,OP_R3W,OP_R3T,OP_R3O:
+		case(ir.r3.func)
 		FN_MUL,FN_MULU,FN_MULSU,FN_MULW,FN_MULUW,FN_MULSUW,
 		FN_DIV,FN_DIVU,FN_DIVSU,FN_MOD,FN_MODU,FN_MODSU:
 			fnIsMC = 1'b1;

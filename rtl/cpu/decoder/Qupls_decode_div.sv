@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -44,7 +44,7 @@ function fnIsDivs;
 input instruction_t ir;
 begin
 	fnIsDivs = ir.any.opcode==OP_DIVI ||
-		(ir.any.opcode==OP_R2 && (ir.r2.func==FN_DIV || ir.r2.func==FN_MOD))
+		((ir.any.opcode==OP_R3B||ir.any.opcode==OP_R3W||ir.any.opcode==OP_R3T||ir.any.opcode==OP_R3O) && (ir.r2.func==FN_DIV || ir.r2.func==FN_MOD))
 		;
 end
 endfunction
