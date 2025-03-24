@@ -56,7 +56,7 @@ typedef struct {
 /* operand-types */
 #define OP_REG						0x00000001L
 #define OP_NEXT_VREG			0x00000002L
-#define OP_IMM23					0x00000004L
+#define OP_IMM						0x00000004L
 #define OP_IMM5						0x00000008L
 #define OP_IMM46					0x00000010L
 #define OP_IMM64					0x00000020L
@@ -85,7 +85,7 @@ typedef struct {
 #define OP_NEXTREG	0x10000000L
 
 /* supersets of other operands */
-#define OP_IMM			(OP_IMM7|OP_IMM23|OP_IMM5|OP_IMM46|OP_IMM64)
+//#define OP_IMM			(OP_IMM7|OP_IMM23|OP_IMM5|OP_IMM46|OP_IMM64)
 #define OP_MEM      (OP_REGIND|OP_SCNDX)
 #define OP_ALL      0x0fffffffL
 
@@ -135,10 +135,6 @@ typedef struct {
 	postfix_buf pfxa;
 	postfix_buf pfxb;
 	postfix_buf pfxc;
-	uint64_t imm0;
-	uint64_t imm1;
-	uint64_t imm2;
-	uint64_t imm3;
 } instruction_buf;
 
 typedef struct {
@@ -166,6 +162,9 @@ typedef struct {
 #define FLG_FP			2
 #define FLG_MASK		4
 #define FLG_UI6			8
+#define FLG_LSDISP	16	/* the constant is a load/store displacement */
+#define FLG_REGIND	32	/* displacement can be compressed to 5 bits */
+#define FLG_BZ			64	/* BEQZ / BNEZ shortcut */
 
 #define EXI8	0x46
 #define EXI24	0x48
@@ -251,16 +250,20 @@ typedef struct {
 #define J4			75
 #define JL4			76
 #define REGIND_DISP	77
+#define R2S			78
 
 #define LN(x)		((x) & 3LL)
 #define OPC(x)	(((x) & 0x7fLL) << 2LL)
 #define RT(x)		(((x) & 0xffLL) << 9LL)
+#define RTSR(x)	(((x) & 0x1fLL) << 9LL)
 #define INCDEC(x)	(((x) & 3LL) << 11LL)
 #define NRT(x)	(((x) & 1LL) << 15LL)
 #define RA(x)		(((x) & 0xffLL) << 16LL)
+#define RAS(x)	(((x) & 0x1fLL) << 14LL)
 #define NRA(x)	(((x) & 1LL) << 24LL)
 #define RB(x)		(((x) & 0xffLL) << 25LL)
-#define IPR(x)	(((x) & 3LL) << 33LL)
+#define RBS(x)	(((x) & 0x1fLL) << 19LL)
+#define IPR(x)	(((x) & 3LL) << 23LL)
 #define NRB(x)	(((x) & 1LL) << 33LL)
 #define BRDISPL(x)	(((x) & 0x7ffffLL) << 34LL)
 #define BRDISPH(x)	((((x) >> 19LL) & 0xFLL) << 60LL)
@@ -282,6 +285,7 @@ typedef struct {
 #define SHFUNC(x)	(((x) & 0xfLL) << 60LL)
 #define R1FUNC(x)	(((x) & 0xffLL) << 32LL)
 #define OP3(x)		(((x) & 0xfLL) << 43LL)
+#define OP4(x)		(((x) & 0xfLL) << 37LL)
 #define R2FUNC(x)	(((x) & 0x7fLL) << 41LL)
 #define R3FUNC(x)	(((x) & 0x7fLL) << 41LL)
 #define LSFUNC(x)	(((x) & 0xfLL) << 60LL)
