@@ -35,19 +35,19 @@
 # ============================================================================
 
 include "d:\cores2022\rf6809\software\fmtk\config.a09"
-include "d:\cores2022\rf6809\software\fmtk\const.a09"
+include "..\..\inc\const.qpa"
 include "..\..\inc\types.qpa"
 ;OPT include "d:\cores2022\rf6809\software\boot\io_equates.a09"
 include "d:\cores2022\rf6809\software\fmtk\source\kernel\Femtiki_vars.a09"
 
-IRQFlag			EQU		$FFC012
+.set IRQFlag,0xFFFC0012
 
 #------------------------------------------------------------------------------
 # Operating system call dispatcher.
 # On entry, the task state has been saved including the system stack pointer,
 # in the task control block.
 #------------------------------------------------------------------------------
-	org		0xFFFFF9000
+	.org		0xFFFFF9000
 OSCall:
 	push cr0
 	cmpa cr0,a0,OSCallTableLimit	# check if we have a valid function number
@@ -89,7 +89,7 @@ OSCall:
 	# call the OS function (eg written in C)
 	# we carefully did not modify any registers, so the arguments in registers
 	# should still be correct.
-	blrl br1									
+	blrl br1	
   # Stuff the error response return value into the right stack position so
   # they it is popped into the a0 register for return
   store a0,488[sp]					# a0 should be here
@@ -309,10 +309,11 @@ FMTK_GetCurrentTid:
   bge .0001
 	load a1,RunningID
 	store a1,[a0]
-	b	FMTK_RetOK
+	loadi a0,E_Ok
+	blr
 .0001:
 	loadi a0,E_Arg
-	b FMTK_RetErr
+	blr
 
 # Parameters:
 # 	a0 = virtual address
@@ -363,7 +364,8 @@ GetIRQFlag:
 
 SetIRQFlag:
   stb a1,IRQFlag
-  b FMTK_RetOK
+  loadi a0,E_Ok
+  blr
 
 # Accessors
 # Parameters:
@@ -385,11 +387,12 @@ FMTK_GetTaskAppId:
 	ldbz a1,TCBappid[a0]
 	store a1,[a3]
 	move br1,br2
-	b FMTK_RetOK
+	loadi a0,E_Ok
+	blr
 .0001:
 	move br1,br2
 	loadi a0,E_Arg
-	b FMTK_RetErr
+	blr
 
 # Parameters:
 #		D = task id
@@ -401,7 +404,8 @@ FMTK_SetTaskAppId:
 	# compare to zero?
 	move br1,br2
 	stb a1,TCBappid[a0]
-	b FMTK_RetOK
+	loadi a0,E_Ok
+	blr
 
 # Parameters
 #		a1 = app id
@@ -427,46 +431,70 @@ FMTK_GetAppTaskId:
 	ldwz a1,ACBTask[a0]
 	store a1,[a4]
 	move br1,br2
-	b FMTK_RetOK
+	loadi a0,E_Ok
+	blr
 .0001:
 	move br1,br2
 	loadi a0,E_Arg
-	b FMTK_RetErr
+	blr
 
 # The following only really needed by startup code, otherwise the task id
 # is completely managed by the OS.
+
 FMTK_SetTaskId:
   # Should get the id and see if it s currently zero (unset).
   # but this would be more code bloat.
-  ldb		2,s
-  stb		RunningID
-  bra		FMTK_RetOK
+  stw a1,RunningID
+  loadi a0,E_Ok
+  blr
 
 FMTK_GetCurrentMid:
-	ldb		RunningID
-	bsr		TCBHandleToPointer
-	tfr		d,x
-	ldb		TCBappid,x
-	clra
-	bsr		ACBHandleToPointer
-	tfr		d,y
-	ldb		ACBmid,y
-	clra
-	bra		FMTK_RetOKD
+	move br2,br1
+  # convert virtual address to physical address
+  move a0,a1
+  bl ConvertVirtualToPhysical
+  # Validate physical address makes sense
+  # The address should be somewhere in the app space (lowest 768MB)
+  cmpa cr0,a0,0x30000000
+  bge .0001
+  move a3,a0
+	ldwz a0,RunningID
+	bl TCBHandleToPointer
+	ldbz a0,TCBappid[a0]
+	bl ACBHandleToPointer
+	ldbz a2,ACBmid[a0]
+	store a2,[a3]
+	loadi a0,E_Ok
+	blr br2
+.0001:
+	loadi a0,E_Arg
+	blr br2
 
-; Parameters:
-;		B = task id
-;
+# Parameters:
+#		a1 = task id
+#		a2 = address to put mid in
+
 FMTK_GetMid:
-	pshs	x
-	bsr		TCBHandleToPointer
-	tfr		d,x
-	ldb		TCBappid,x
-	clra
-	bsr		ACBHandleToPointer
-	tfr		d,x
-	ldb		ACBmid,x
-	puls	x,pc
+	move br2,br1
+  # convert virtual address to physical address
+  move a0,a2
+  bl ConvertVirtualToPhysical
+  # Validate physical address makes sense
+  # The address should be somewhere in the app space (lowest 768MB)
+  cmpa cr0,a0,0x30000000
+  bge .0001
+  move a3,a0
+	ldwz a0,a1
+	bl TCBHandleToPointer
+	ldbz a0,TCBappid[a0]
+	bl ACBHandleToPointer
+	ldbz a2,ACBmid[a0]
+	store a2,[a3]
+	loadi a0,E_Ok
+	blr br2
+.0001:
+	loadi a0,E_Arg
+	blr br2
 	
 #------------------------------------------------------------------------------
 # Get a pointer to the TCB for the currently running task.
@@ -481,6 +509,24 @@ GetRunningTCBPtr:
 	load a0,RunningID
 	# fall through into conversion code
 
+FMTK_GetRunningTCBPointer:
+	move br2,br1
+  # convert virtual address to physical address
+  move a0,a1
+  bl ConvertVirtualToPhysical
+  # Validate physical address makes sense
+  # The address should be somewhere in the app space (lowest 768MB)
+  cmpa cr0,a0,0x30000000
+  bge .0001
+  move a1,a0
+	bl GetRunningTCBPtr
+	store a0,[a1]
+	loadi a0,E_Ok
+	blr br2
+.0001:
+	loadi a0,E_Arg
+	blr br2
+
 #------------------------------------------------------------------------------
 # Convert a TCB handle into a pointer to the corresponding TCB.
 # The handle is just the page number for the TCB
@@ -491,15 +537,6 @@ TCBHandleToPointer:
 	sll a0,a0,10
 	add a0,a0,tcbs
 	blr
-
-FMTK_GetRunningTCBPointer:
-	sub sp,sp,8
-	move a0,br1
-	store a0,[sp]
-	bl GetRunningTCBPtr
-	popm br1
-	store a0,TCBa0[a0]
-	b FMTK_RetOKD
 
 #------------------------------------------------------------------------------
 # Convert an ACB handle into a pointer to the corresponding ACB.
@@ -562,9 +599,11 @@ SchedulerIRQa:
 	ldbz a1,TCBPriorty[a0]
 	cmpa cr0,a1,63						# highest priority: refuse to task switch or even
 	bge cr0,.0001							# decrement timeout
-	loadi a1,TS_PREEMPT
+	atom 63,"MMM"
+	ldbz a1,TCBStatus[a0]
+	or a1,a1,TS_PREEMPT
 	stb a1,TCBStatus[a0]
-#	bl DecrementTimeout
+	bl DecrementTimeout
 	ldbz a1,TCBPriority[a0]
 	cmpa cr0,a1,60
 	bge cr0,.0002
@@ -607,11 +646,18 @@ SchedulerIRQb:
 	move br1,br3
 	blr
 
+# Femtiki Timer IRQ
+# The only thing manipulating the TCB ready list must be the timer IRQ. This
+# is to prevent deadlocks from ocurring. Since only the timer IRQ manipulates
+# the list, there is no need to protect it with a semaphore.
+
 FemtikiTimerIRQ:
 	push 0xfe,0									# push a0 to a6
 	push cr0
 	push 0x7e,9									# push br1 to br6
 	ldwz a0,RunningID
+	amoswap. r0,a0,InTimerISR
+	bne cr0,.0004
 	stw a0,PrevRunningID				# Keep track of previous Running TCB
 	move a4,a0									
 	bl TCBHandleToPointer
@@ -637,19 +683,26 @@ FemtikiTimerIRQ:
 	pop 0x7e,9								# get back br1 to br6
 	pop cr0
 	pop 0xfe,0								# get back a0 to a6
+	# We need the rfi to execute without an interrupt between the store and rfi
+	atom 63,"MM"
+	store r0,InTimerISR
 	rfi
+	# Return, but do not flag as ISR complete. We are returning to the ISR.
+.0004:
+	load a0,missed_ticks
+	add a0,a0,1
+	store a0,missed_ticks
+	pop 0x7e,9								# get back br1 to br6
+	pop cr0
+	pop 0xfe,0								# get back a0 to a6
+	rfi
+
 	# Here a different task was selected, save and restore contexts
 	# Going in:
 	# 	a4 = old task
 	#		a5 = new task
 .0002:
 	pop 0x7e,9								# get back br1 to br6
-	csrrw r0,SCRATCH,a5
-	# spinlock on TCB 
-.0003:
-	amoswap. a5,a5,OSSEMA
-	csrrd a5,SCRATCH
-	beq cr0,.0003
 	pop cr0
 	pop 0xfe,0								# get back a0 to a6
 
@@ -938,41 +991,60 @@ SwitchTask:
 	csrrw r0,EPC0,a1
 	load a1,TCBxA1[a0]
 	load a0,TCBxA0[a0]
+	atom 63,"MM"
+	store r0,InTimerISR
 	rfi
 
 
 #------------------------------------------------------------------------------
+#	Parameters
+#		a1 = pointer to place to put return value in
 #------------------------------------------------------------------------------
 
 FMTK_Sleep:
-  bsr		ISleep
-  bra		FMTK_RetOKD
+	move br2,br1
+  # convert virtual address to physical address
+  move a0,a1
+  bl ConvertVirtualToPhysical
+  # Validate physical address makes sense
+  # The address should be somewhere in the app space (lowest 768MB)
+  cmpa cr0,a0,0x30000000
+  bge .0001
+  move a1,a0
+  bl ISleep
+  store a0,[a1]
+  loadi a0,E_Ok
+  blr br2
+.0001:
+	loadi a0,E_Arg
+	blr br2
 
 FMTK_StartTask:
 ;  bsr  IStartTask
   bra  	FMTK_RetOK
 
-;------------------------------------------------------------------------------
-; Exit the current task.
-;
-; Parameters:
-;		none
-; Modifies:
-;		a1 = task id
-;------------------------------------------------------------------------------
+#------------------------------------------------------------------------------
+# Exit the current task.
+#
+# Parameters:
+#		none
+# Modifies:
+#		a1 = task id
+#------------------------------------------------------------------------------
 
 FMTK_ExitTask:
-	ldb		RunningID
-	; fall through to KillTask
+	ldwz a0,RunningID
+	# fall through to KillTask
 	
-;------------------------------------------------------------------------------
-; Parameters:
-;		B = tid of task to kill
-;------------------------------------------------------------------------------
+#------------------------------------------------------------------------------
+# Parameters:
+#		B = tid of task to kill
+#------------------------------------------------------------------------------
 
 FMTK_KillTask:
-;  bsr  	IKillTask
-	bra		FMTK_RetOK
+#  bl IKillTask
+	loadi a0,E_Ok
+	blr
 
 # ----------------------------------------------------------------------------
 # Select a task to run. Relatively easy as task selection is handled by
@@ -992,426 +1064,397 @@ SelectTaskToRun:
 	# be guarenteed to be popped within 32 tries (the number of attempts for
 	# all queues to be tested). The following limit is in case something is
 	# broken.
-sttr0004:
+.0004:
 	loadi a0,128
-sttr0001:						# keep popping tasks from the readyQ until a valid one
+.0001:							#	keep popping tasks from the readyQ until a valid one
 	add. a0,a0,-1			# is found. If none valid for a long time default to
-	beq	cr0,sttr0002	# the OS task
+	beq	cr0,.0002			# the OS task
 	load. a1,RDYQ
-	beq cr0,sttr0001
+	beq cr0,.0001
 	# Here we got a valid task id. If the task is still supposed to be
 	# running, push it back onto the ready queue. Otherwise go get the
 	# next task.
 	move a0,a1
 	bl TCBHandleToPointer
 	ldbz a1,TCBStatus[a0]
-	cmp cr0,a1,TS_RUNNING
-	bne	cr0,sttr0004
+	and. r0,a1,TS_FREE				# was the TCB "freed"	
+	bne cr0,.0003			# should use a predicate here
+	bl IFreeTCB
+	b .0004
+.0003:
+	and. r0,a1,TS_RUNNING
+	bne	cr0,.0004
 	bl InsertIntoReadyQueue
 	add sp,sp,8				# Do not pop a0, it is being returned
 	pop 0x4,0
 	pop br1
 	blr
 	# Nothing in queues? There is supposed to be. Add the OS task to the queue.
-sttr0002:
+.0002:
 	loadi a0,1
 	bl InsertIntoReadyQueue
-	add sp,sp,8
+	add sp,sp,8			# Do not pop a0, it is being returned
 	pop 0x4,0
 	pop br1
 	blr
 
-;// ----------------------------------------------------------------------------
-;// Sleep for a number of clock ticks.
-;// ----------------------------------------------------------------------------
-;
-;int FMTK_Sleep(int timeout)
-;{
-;  hTCB ht;
-;  int tick1, tick2;
-;
-;	while (timeout > 0) {
-;		tick1 = GetTick();
-;    if (LockSysSemaphore(100000)) {
-;      ht = GetRunningTCB();
-;      RemoveFromReadyList(ht);
-;      InsertIntoTimeoutList(ht, timeout);
-;      UnlockSysSemaphore();
-;			FMTK_Reschedule();
-;      break;
-;    }
-;		else {
-;			tick2 = GetTick();
-;			timeout -= (tick2-tick1);
-;		}
-;	}
-;  return (E_Ok);
-;}
+#// ----------------------------------------------------------------------------
+#// Sleep for a number of clock ticks.
+#// ----------------------------------------------------------------------------
+#
+#int FMTK_Sleep(int timeout)
+#{
+#  hTCB ht;
+#  int tick1, tick2;
+#
+#	while (timeout > 0) {
+#		tick1 = GetTick();
+#    if (LockSysSemaphore(100000)) {
+#      ht = GetRunningTCB();
+#      RemoveFromReadyList(ht);
+#      InsertIntoTimeoutList(ht, timeout);
+#      UnlockSysSemaphore();
+#			FMTK_Reschedule();
+#      break;
+#    }
+#		else {
+#			tick2 = GetTick();
+#			timeout -= (tick2-tick1);
+#		}
+#;	}
+#  return (E_Ok);
+#}
 
 ISleep:
-	puls	u
-FMTK_Sleep2:
-	tst		1,s
-	bmi		0001f
-	bsr		IGetTick
-	pshs	w											; push tick1
-	pshs	d
-	ldd		#100000								; try a bunch of times to lock semaphore
-	bsr		LockSysSemaphore
-	beq		FMTK_Sleep1
-	leas	4,s										; remove tick1 from stack
-	ldb		RunningID							; D = running TID
-	clra
-	bsr		RemoveFromReadyQueue
-	tfr		d,x
-	ldd		1,s
-	ldw		3,s
-	bsr		InsertIntoReadyQueue
-	bsr		UnlockSysSemaphore
-	swi2
-	fcb		OSF_FMTK_Reschedule
-0001:
-	ldx		#E_Ok
-	stx		7,s
-	jmp		,u
-FMTK_Sleep1:
-	bsr		IGetTick							; D,W = tick2
-	exg		d,w
-	subd	2,s										; subtract: tick2 - tick1
-	exg		d,w
-	sbcd	,s
-	pshs	w											; push dif = tick2 - tick1
-	pshs	d
-	ldd		9,s										; D,W = timeout
-	ldw		11,s
-	exg		d,w
-	subd	2,s										; D,W = timeout - diff
-	exg		d,w
-	sbcd	,s
-	stw		11,s									; timeout = timeout - tickdif
-	std		9,s
-	leas	8,s										; get rid of tick1, tick2
-	bra		FMTK_Sleep2
+	move br2,br1
+.0003:
+	cmp cr0,a1,0
+	blt cr0,.0001
+	bl IGetTick
+	move a2,a0
+	loadi a0,100000							# try a bunch of times to lock semaphore
+	bl LockSysSemaphore
+	beq	cr0,.0002	
+	ldwz a0,RunningID						# D = running TID
+	bl RemoveFromReadyQueue
+	bl InsertIntoTimeoutList
+	store r0,OSSEMA
+	loadi a0,OSF_FMTK_Reschedule
+	sys
+.0001:
+	loadi a0,E_Ok
+	blr br2
+.0002:
+	bl IGetTick								# a0 = tick2
+	sub a0,a0,a2							# subtract: a0 (dif) = tick2 - tick1
+	sub a1,a1,a0							# a1 (timeout) = timeout - dif
+	b .0003
 
-;------------------------------------------------------------------------------
-; Start a task.
-;
-; Parameters:
-;		B = app id
-;		A = priority
-;		X = start address
-;		Y = start parameter
-;		E = affinity
-;------------------------------------------------------------------------------
+#------------------------------------------------------------------------------
+# Start a task.
+#
+# Parameters:
+#		a1 = app id
+#		a2 = priority
+#		a3 = start address
+#		a4 = start parameter
+#		a5 = affinity
+#------------------------------------------------------------------------------
 
 IStartTask:
-	lbsr	GetRunningTCBPtr
-	tfr		d,x
-	lbsr	IAllocTcb
-	tstb
-	beq		0002f
-	pshs	d
-	lbsr	TCBHandleToPointer
-	tfr		d,y
-	lda		TCBxAcca,x
-	sta		TCBPriority,y
-	lda		TCBxAcce,x
-	sta		TCBAffinity,y
-	ldb		TCBxAccb,x
-	stb		TCBappid,y
-	clra
-	lbsr	ACBHandleToPointer
-	tfr		d,u
-	ldb		ACBTaskList,u
-	stb		TCBAcbNext,y
-	ldd		,s
-	stb		ACBTaskList,u
-	ldd		TCBxYR,x						; place start parameter in D register
-	std		TCBxAcca,y
-	swi
-	fcb		MF_IncreaseStackSize
-	tstd
-	beq		0003f
-	addd	#PGSZ
-	std		TCBxSP,y
-	ldd		TCBxXR,x
-	clr		TCBxPC,y						; set start address
-	std		TCBxPC+1,y
-	puls	d
-	lbsr	InsertIntoReadyQueue
-	ldx		#E_Ok
-	rts
+	move br2,br1
+	load t0,RunningID
+	bl GetRunningTCBPtr
+	move a6,a0
+	bl IAllocTCB
+	move t1,a0								# t1 = handle for new task
+	cmp cr0,a0,0
+	beq	cr0,.0002
+	bl TCBHandleToPointer
+	stb a1,TCBappid[a0]
+	stb a2,TCBPriority[a0]
+	stw a5,TCBAffinity[a0]		# todo check size
+	move a0,a1
+	bl ACBHandleToPointer
+	ldwz a1,ACBTaskList[a0]
+	stw a1,TCBAcbNext[a6]
+	stw t0,ACBTaskList[a0]
+	store a4,TCBxA0[a6]				# place start parameter in a0 register
+	loadi a0,MF_IncreaseStackSize
+	sys
+	cmp cr0,a0,0
+	beq cr0,.0003
+	add a0,a0,PGSZ
+#	addd	#PGSZ
+	store a0,TCBxSP[a6]
+	store a3,TCBxPC[a6]				# set start address
+	move a0,t1
+	bl InsertIntoReadyQueue
+	loadi a0,E_Ok
+	blr br2
 0002:
-	ldx		#E_NoMoreTCBs	
-	rts
+	loadi a0,E_NoMoreTCBs	
+	blr br2
 0003:
-	ldx		#E_NoMem
-	leas	2,s
-	rts
+	loadi a0,E_NoMem
+	blr br2
 
 FMTK_StartTask:
-0001:
-	ldd		#-1
-	lbsr	LockSysSemaphore
-	beq		0001b
-	bsr		IStartTask
-	lbsr	UnlockSysSemaphore
+	move br3,br1
+.0001:
+	loadi a0,-1			# maximum timeout	
+	bl LockSysSemaphore
+	beq	cr0,.0001
+	bl IStartTask
+	store r0,OSSEMA
+	
 	lbra	FMTK_RetXD
 
-;------------------------------------------------------------------------------
-;------------------------------------------------------------------------------
+#------------------------------------------------------------------------------
+#------------------------------------------------------------------------------
 
 FMTK_ExitTask:
 
-;------------------------------------------------------------------------------
-;------------------------------------------------------------------------------
+#------------------------------------------------------------------------------
+# ToDo: finish this routine
+#------------------------------------------------------------------------------
 
 FMTK_KillTask:
-0001:
-	ldd		#-1
-	lbsr	LockSysSemaphore
-	beq		0001b
-	lbsr	GetRunningTCBPtr
-	tfr		d,x
-	ldd		TCBxAcca,x
-	lbsr	RemoveFromReadyQueue
-	lbsr	RemoveFromTimeoutList
-	lbsr	TCBHandleToPointer
-	tfr		d,y
-	ldd		TCBhMailboxes,y
-	lbsr	IFreeMBX
-	ldd		TCBhMailboxes+2,y
-	lbsr	IFreeMBX
-	ldd		TCBhMailboxes+4,y
-	lbsr	IFreeMBX
-	ldd		TCBhMailboxes+6,y
-	lbsr	IFreeMBX
-	; Remove from list of tasks ACB has
-	ldb		TCBappid,y
-	lbsr	ACBHandleToPointer
-	tfr		d,u
-	lde		ACBTaskList,u
+	move br2,br1
+.0001:
+	loadi a0,-1
+	bl LockSysSemaphore
+	beq cr0,.0001
+	bl GetRunningTCBPtr
+	move a0,a1
+	bl RemoveFromReadyQueue
+	bl RemoveFromTimeoutList
+	bl TCBHandleToPointer
+	ldwz a2,TCBhMailboxes[a0]
+	bl IFreeMBX
+	ldwz a2,TCBhMailboxes+2[a0]
+	bl IFreeMBX
+	ldwz a2,TCBhMailboxes+4[a0]
+	bl IFreeMBX
+	ldwz a2,TCBhMailboxes+6[a0]
+	bl IFreeMBX
+	# Remove from list of tasks ACB has
+	ldbz a0,TCBappid[a0]
+	bl ACBHandleToPointer
+	ldwz a2,ACBTaskList[a0]
+
+	# Mark the TCB as free, it will be freed by SelectTaskToRun
+#	atom 63,"MMM"
+#	ldbz a2,TCBStatus[]
+#	or a2,a2,TS_FREE
+#	stb a2,TCBStatus[]
+		
+#	cmpe	TCBxAccb,x
+#	beq		0002f
+#	tfr		e,b
+#	clra
+#	lbsr	TCBHandleToPointer
+#	tfr		d,u
+#	ldf		TCBAcbNext,u
+#	cmpf	TCBxAccb,x
+#	beq		0003f
 	
-	cmpe	TCBxAccb,x
-	beq		0002f
-	tfr		e,b
-	clra
-	lbsr	TCBHandleToPointer
-	tfr		d,u
-	ldf		TCBAcbNext,u
-	cmpf	TCBxAccb,x
-	beq		0003f
 	
-	
-;------------------------------------------------------------------------------
-; Lock the system semaphore.
-;
-; Parameters:
-;		D = number of retry attempts
-;	Returns:
-;		D = 1 if lock successful, 0 otherwise
-;------------------------------------------------------------------------------
+#------------------------------------------------------------------------------
+# Lock the system semaphore.
+#
+# Parameters:
+#		a0 = number of retry attempts
+#	Returns:
+#		a0 = 1 if lock successful, 0 otherwise
+#------------------------------------------------------------------------------
 
 LockSysSemaphore:
-LockSysSema2:
-	decd
-	beq		LockSysSema1
-	lda		OSSEMA+1
-	beq		LockSysSema2
-	ldd		#1
-	rts
-LockSysSema1:
-	clrd
-	rts
+	push a1
+	ldwz a1,RunningID
+.0002:
+	add. a0,a0,-1
+	beq	cr0,.0001
+	amoswap. r0,a1,OSSEMA
+	beq	cr0,.0002
+	pop a1
+	loadi. a0,1
+	blr
+.0001:
+	pop a1
+	loadi. a0,0		# set cr0
+	blr
 
-;------------------------------------------------------------------------------
-; Unlock system semaphore.
-;
-; Parameters:
-;		none
-; Returns:
-;		none
-;------------------------------------------------------------------------------
+#------------------------------------------------------------------------------
+# Unlock system semaphore.
+#
+# Parameters:
+#		none
+# Returns:
+#		none
+#------------------------------------------------------------------------------
 
-UnlockSysSemaphore:
-	clr		OSSEMA+1
-	rts
+#UnlockSysSemaphore:
+#	store r0,OSSEMA
+#	blr
 
-;------------------------------------------------------------------------------
-; Get the system tick (milliseconds).
-;
-; Trickery involved in guarenteeing that the tick was read without an
-; intervening interrupt updating it.
-;
-; Parameters:
-;		none
-; Returns:
-;		D,W = tick value
-;------------------------------------------------------------------------------
+#------------------------------------------------------------------------------
+# Get the system tick (milliseconds).
+#
+# Trickery involved in guarenteeing that the tick was read without an
+# intervening interrupt updating it.
+#
+# Parameters:
+#		none
+# Returns:
+#		D,W = tick value
+#------------------------------------------------------------------------------
 
 IGetTick:
-0001:
-	ldd		milliseconds
-	ldw		milliseconds+2
-	cmpd	milliseconds
-	bne		0001b						; this branch should be false almost always
-	rts
+	load milliseconds
+	blr
 
-;------------------------------------------------------------------------------
-; Link each message to the next in the free list.
-;------------------------------------------------------------------------------
+#------------------------------------------------------------------------------
+# Link each message to the next in the free list.
+#------------------------------------------------------------------------------
 
 InitFreeMessageList:
-	ldd		#1
-	std		FreeMSG					; set start of free message list to first message
-	ldx		#messages+OBJ_SIZE
-	incd
-0003:
-	std		MSG_LINK,x			; update link
-	incd									; increment to next index value
-	leax	MSG_SIZE,x			; increment to next message
-	cmpx	#messages_end		; done all messages?
-	blo		0003b
-	rts
+	loadi a0,1
+	store a0,FreeMSG			# set start of free message list to first message
+	loadi a1,messages+OBJ_SIZE
+	add a0,a0,1
+.0003:
+	store a0,MSG_LINK[a1]	# update link
+	add a0,a0,1						# increment to next index value
+	add a1,a1,MSG_SIZE		# increment to next message
+	cmpa cr0,a1,messages_end	# done all messages?
+	blt cr0,.0003
+	blr
 
-;------------------------------------------------------------------------------
-; Link each mailbox to the next in the free list.
-;------------------------------------------------------------------------------
+#------------------------------------------------------------------------------
+# Link each mailbox to the next in the free list.
+#------------------------------------------------------------------------------
 
 InitFreeMailboxList:
-	ldd		#1
-	std		FreeMBX					; set start of free mailbox list to first mailbox
-	ldx		#mailboxes+OBJ_SIZE
-	incd
-0003:
-	std		MBX_LINK,x			; update link
-	incd									; increment to next index value
-	leax	MBX_SIZE,x			; increment to next mailbox
-	cmpx	#mailboxes_end	; done all mailboxes?
-	blo		0003b
-	rts
+	loadi a0,1
+	store a0,FreeMBX			# set start of free mailbox list to first mailbox
+	loadi a1,mailboxes+OBJ_SIZE
+	add a0,a0,1
+.0003:
+	store a0,MBX_LINK[a1]	# update link
+	add a0,a0,1						# increment to next index value
+	add a1,a1,MBX_SIZE		# increment to next mailbox
+	cmpa cr0,a1,mailboxes_end		3 done all mailboxes?
+	blt cr0,.0003
+	blr
 
-;------------------------------------------------------------------------------
-; Link each TCB to the next in the free list.
-;------------------------------------------------------------------------------
+#------------------------------------------------------------------------------
+# Link each TCB to the next in the free list.
+#------------------------------------------------------------------------------
 
 InitFreeTCBList:
-	ldb		#1
-	stb		FreeTCB
-	ldx		#tcbs+OBJ_SIZE
-0001:
-	stb		TBCNext,x
-	incb
-	leas	TCB_SIZE,x
-	cmpx	#tcb_ends
-	blo		0001b
-	rts
+	loadi a0,1
+	stw	a0,FreeTCB
+	loadi a1,tcbs+OBJ_SIZE
+.0001:
+	stw a0,TBCNext[a1]
+	add a0,a0,1
+	add a1,a1,TCB_SIZE
+	cmpa cr0,a1,tcb_ends
+	blt cr0,.0001
+	blr
 
-;------------------------------------------------------------------------------
-; Initialize Femtiki
-;------------------------------------------------------------------------------
+#------------------------------------------------------------------------------
+# Initialize Femtiki
+#------------------------------------------------------------------------------
 
 FMTK_Init:
+	move br2,br1
+	# Clear out variable area
+	loadi a1,FemtikiVars
+.0001:
+	store r0,[a1]
+	add a1,a1,4
+	cmpa cr0,a1,FemtikiVars_end
+	blt cr0,.0001
+	loadi a0,1
+	store a0,OSActive
+	stw a0,RunningAID
+	stw a0,RunningID		# reset this
 
-	ldb		#$C00				; select the system memory map
-	stb		MMU_OKEY		; set in operate key
+	# Set stack bottoms for all the memory maps
+	loadi a1,0
+	loadi a0,MAXVPG
+.0003:
+	stw MidStackBottoms[a1]
+	add a1,a1,1
+	cmp cr0,a1,32
+	blt cr0,.0003
 
-	; Clear out variable area
-	ldx		#FemtikiVars
-	clrd
-0001:
-	std		,x++
-	cmpx	#FemtikiVars_end
-	blo		0001b
-	lda		#1
-	sta		OSActive
-	sta		RunningAID
-	sta		RunningID		; reset this
+	bl InitFreeMessageList
+	bl InitFreeMailboxList
+	bl InitFreeTCBList
 
-	; Set stack bottoms for all the memory maps
-	ldx		#0
-	ldb		#MAXVPG
-0003:
-	stb		MidStackBottoms,x
-	inx
-	cmpx	#32
-	blo		0003b
-
-	bsr		InitFreeMessageList
-	bsr		InitFreeMailboxList
-	bsr		InitFreeTCBList
-
-	clr		startQNdx
+	stw r0,startQNdx
 	
-	bsr		InitAppOne
-	bsr		InitTaskOne
+	bl InitAppOne
+	bl InitTaskOne
 
-	; Map ACB into virtual address space at $600000
-	ldd		#$094F00
-	std		MMU+$600
-	inca
-	std		MMU+$602
-	rts
+	# Map ACB into virtual address space at $600000
+#	ldd		#$094F00
+#	std		MMU+$600
+#	inca
+#	std		MMU+$602
+	blr br2
 
-;------------------------------------------------------------------------------
-;------------------------------------------------------------------------------
+#------------------------------------------------------------------------------
+#------------------------------------------------------------------------------
 
 InitAppOne:
-	ldb		#1
-	bsr		ACBHandleToPointer
-	tfr		d,x
-	clrd
-	tfr		d,y
-	pshs	x
-0001:
-	std		,x++
-	leay	2,y
-	cmpy	#ACB_SIZE
-	blo		0001b
-	puls	x
-	ldd		#('A' << 16) | ('C' << 8) | 'B'
-	std		ACBObject+OBJMagic,x
-	clr		ACBmid,x			; system uses map #0
+	loadi a0,1
+	bl ACBHandleToPointer
+	loadi a1,0
+.0001:
+	store r0,[a0+a1*]
+	add a1,a1,4
+	cmp	cr0,a1,ACB_SIZE
+	blt cr0,.0001
+	loadi a1,('A' << 16) | ('C' << 8) | 'B'
+	store a1,ACBObject+OBJMagic[a0]
+	store r0,ACBmid[a0]			# system uses map #0
 	ldd		#$E00000
-	std		ACBpVidMem,x
-	lda		#64
-	sta		ACBVideoCols,x
-	lda		#32
-	sta		ACBVideoRows,x
-	clr		ACBCursorCol,x
-	clr		ACBCursorRow,x
-	lda		#$CE
-	sta		ACBNormAttr,x
-	lda		#1
-	sta		ACBHasFocus,x
-	sta		ACBTaskList,x
-	rts
+	std		ACBpVidMem[a0]
+	stbi	64,ACBVideoCols[a0]
+	stbi	32,ACBVideoRows[a0]
+	stb 	r0,ACBCursorCol[a0]
+	stb		r0,ACBCursorRow[a0]
+	storei	0xCE,ACBNormAttr[a0]
+	loadi a1,1
+	stb		a1,ACBHasFocus[a0]
+	stb		a1,ACBTaskList[a0]
+	blr
 
-;------------------------------------------------------------------------------
-; When called, the context for the task has already been stored in the TCB.
-; Do not zero out the TCB!
-;------------------------------------------------------------------------------
+#------------------------------------------------------------------------------
+# When called, the context for the task has already been stored in the TCB.
+# Do not zero out the TCB!
+#------------------------------------------------------------------------------
 
 InitTaskOne:
-	ldb		#1
-	bsr		TCBHandleToPointer
-	tfr		d,x
-	clrd
-	std		TCBxDPR,x
-	inca							; appid 1 is system app
-	sta		TCBappid,x
-	sta		TCBtid,x
-	sta		TCBNext,x
-	sta		TCBPrev,x
-	sta		TCBHasFocus,x
-	lda		#TS_RUNNING
-	sta		TCBStatus,x
-	lda		#3
-	sta		TCBPriority,x
-	ldb		#1
-	lbsr	InsertIntoReadyQueue
-	rts
+	move br2,br1
+	loadi a0,1
+	bl TCBHandleToPointer
+	loadi a1,1				# appid 1 is system app
+	stb a1,TCBappid[a0]
+	stw	a1,TCBtid[a0]
+	stw	a1,TCBNext[a0]
+	stw	a1,TCBPrev[a0]
+	stw	a1,TCBHasFocus,x
+	stbi TS_RUNNING,TCBStatus[a0]
+	stbi 31,TCBPriority,x
+	move a0,a1
+	bl InsertIntoReadyQueue
+	blr br2
 
 
-include "d:\cores2022\rf6809\software\fmtk\source\kernel\tcb.a09"
-include "d:\cores2022\rf6809\software\fmtk\msg.a09"
+include "tcb.qpa"
+include "msg.qpa"

@@ -44,33 +44,33 @@
 .set TS_FREE,64
 .set TS_RUNNING,128
 
-; error codes
-E_Ok		EQU		$00
-E_Arg		EQU		$01
-E_Func  EQU    $02
-E_BadMbx	EQU		$04
-E_QueFull	EQU		$05
-E_NoThread	EQU		$06
-E_NotAlloc	EQU		$09
-E_NoMsg		EQU		$0b
-E_Timeout	EQU		$10
-E_BadAlarm	EQU		$11
-E_NotOwner	EQU		$12
-E_QueStrategy EQU		$13
-E_DCBInUse	EQU		$19
-; Device driver errors
-E_BadDevNum	EQU		$20
-E_NoDev		EQU		$21
-E_BadDevOp	EQU		$22
-E_ReadError	EQU		$23
-E_WriteError EQU		$24
-E_BadBlockNum	EQU	$25
-E_TooManyBlocks	EQU	$26
+# error codes
+.set E_Ok,00
+.set E_Arg,01
+.set E_Func,02
+.set E_BadMbx,4
+.set E_QueFull,5
+.set E_NoThread,6
+.set E_NotAlloc,7
+.set E_NoMsg,8
+.set E_Timeout,10
+.set E_BadAlarm,11
+.set E_NotOwner,12
+.set E_QueStrategy,13
+.set E_DCBInUse,19
+# Device driver errors
+.set E_BadDevNum,20
+.set E_NoDev,21
+.set E_BadDevOp,22
+.set E_ReadError,23
+.set E_WriteError,24
+.set E_BadBlockNum,25
+.set E_TooManyBlocks,26
 
-; resource errors
-E_NoMoreMbx	EQU		$40
-E_NoMoreMsgBlks	EQU	$41
-E_NoMoreAlarmBlks	EQU $44
-E_NoMoreTCBs	EQU	$45
-E_NoMem		EQU 12
+# resource errors
+.set E_NoMoreMbx,40
+.set E_NoMoreMsgBlks,41
+.set E_NoMoreAlarmBlks,44
+.set E_NoMoreTCBs,45
+.set E_NoMem,46
 
