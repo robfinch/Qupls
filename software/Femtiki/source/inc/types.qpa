@@ -1,0 +1,267 @@
+# ============================================================================
+#        __
+#   \\__/ o\    (C) 2020-2025  Robert Finch, Stratford
+#    \  __ /    All rights reserved.
+#     \/_//     robfinch<remove>@finitron.ca
+#       ||
+#  
+#
+# BSD 3-Clause License
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+# 1. Redistributions of source code must retain the above copyright notice, this
+#    list of conditions and the following disclaimer.
+#
+# 2. Redistributions in binary form must reproduce the above copyright notice,
+#    this list of conditions and the following disclaimer in the documentation
+#    and/or other materials provided with the distribution.
+#
+# 3. Neither the name of the copyright holder nor the names of its
+#    contributors may be used to endorse or promote products derived from
+#    this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
+# ============================================================================
+
+.set OBJMagic,0
+.set OBJSize,8
+.set OBJTypenum,16
+.set OBJID,24
+.set OBJStat,32    		# WHITE, GREY, BLACK
+.set OBJScavcnt,40    # scavange count
+.set OBJOwningMap,48
+.set OBJCollectionIndex,56
+.set OBJUsedInMap,64  # used in map
+.set OBJFWAddr,72    	# forwarding address
+.set OBJFinalizer,80
+.set OBJ_SIZE,96
+
+# Task Control Block
+.set TCBIntRegs,000    # integer register set storage area
+# Condition Registers
+.set TCBxCR0,4
+.set TCBxCR1,5
+.set TCBxCR2,6
+.set TCBxCR3,7
+.set TCBxCR4,8
+.set TCBxCR5,9
+.set TCBxCR6,10
+.set TCBxCR7,11
+# Branch Registers
+.set TCBxBR1,16
+.set TCBxBR2,24
+.set TCBxBR3,32
+.set TCBxBR4,40
+.set TCBxBR5,48
+.set TCBxBR6,56
+# Fixed point registers
+.set TCBxA0,64
+.set TCBxA1,72
+.set TCBxA2,80
+.set TCBxA3,88
+.set TCBxA4,96
+.set TCBxA5,104
+.set TCBxA6,112
+.set TCBxA7,120
+.set TCBxT0,128
+.set TCBxT1,136
+.set TCBxT2,144
+.set TCBxT3,152
+.set TCBxT4,160
+.set TCBxT5,168
+.set TCBxT6,176
+.set TCBxT7,184
+.set TCBxT8,192
+.set TCBxT9,200
+.set TCBxS0,208
+.set TCBxS1,216
+.set TCBxS2,224
+.set TCBxS3,232
+.set TCBxS4,240
+.set TCBxS5,248
+.set TCBxS6,256
+.set TCBxS7,264
+.set TCBxS8,272
+.set TCBxS9,280
+.set TCBxGP,288
+.set TCBxFP,296
+# Stack pointers
+.set TCBxUSP,304
+.set TCBxSSP,312
+.set TCBxHSP,320
+# Loop Counter
+.set TCBxLC,328
+# Floating-point registers
+.set TCBxF0,336
+.set TCBxF1,344
+.set TCBxF2,352
+.set TCBxF3,360
+.set TCBxF4,368
+.set TCBxF5,376
+.set TCBxF6,384
+.set TCBxF7,392
+.set TCBxF8,400
+.set TCBxF9,408
+.set TCBxF10,416
+.set TCBxF11,424
+.set TCBxF12,432
+.set TCBxF13,440
+.set TCBxF14,448
+.set TCBxF15,456
+.set TCBxF16,464
+.set TCBxF17,472
+.set TCBxF18,480
+.set TCBxF19,488
+.set TCBxF20,496
+.set TCBxF21,504
+.set TCBxF22,512
+.set TCBxF23,520
+.set TCBxF24,528
+.set TCBxF25,536
+.set TCBxF26,544
+.set TCBxF27,552
+.set TCBxF28,560
+.set TCBxF29,568
+.set TCBxF30,576
+.set TCBxF31,584
+.set TCBxPC,592
+# Program base and limit (pebble) registers
+.set TCBxPBL0,600
+.set TCBxPBL1,608
+.set TCBxPBL2,616
+.set TCBxPBL3,624
+.set TCBxPBL4,632
+.set TCBxPBL5,640
+.set TCBxPBL6,648
+.set TCBxPBL7,656
+# Status registers
+.set TCBxSR,664
+.set TCBxFPSR,672
+# OS
+.set TCBStatus,700
+.set TCBPriority,701
+.set TCBWaitMbx,702
+.set TCBHasFocus,704
+.set TCBStackBot,708
+.set TCBMsgD1,716
+.set TCBMsgD2,724
+.set TCBMsgD3,732
+.set TCBStartTick,740
+.set TCBEndTick,748
+.set TCBTicks,756
+.set TCBException,764
+.set TCBNext,772
+.set TCBPrev,780
+.set TCBAffinity,788
+.set TCBTimeout,796
+.set TCBtid,804
+.set TCBmid,808
+.set TCBappid,812
+.set TCBOpMode,816
+.set TCBMbxNext,824
+.set TCBMbxPrev,832
+.set TCBTaskNum,840
+.set TCBAcbNext,848
+.set TCBAcbPrev,852
+.set TCBhMailboxes,860	# room for 10 mailbox handles
+.set TCBName,900				# room for 32 16-bit characters
+.set TCB_SIZE,1024
+
+; Application Control Block
+ACBObject     EQU   0
+ACBNumTask		EQU		66
+ACBStackSize	EQU		68
+ACBpData      EQU   70
+ACBDataSize   EQU   72
+ACBpUIData    EQU   80
+ACBUIDataSize EQU   88
+ACBGCRoots    EQU   96
+ACBGCRootCnt  EQU   104
+ACBGCNdx      EQU   112
+ACBGCMarkingQue EQU   120
+ACBGCMarkingQueFull   EQU   128
+ACBGCMarkingQueEmpty  EQU   129
+ACBGCOverflow EQU   130
+ACBpCode      EQU   134
+ACBObjectList EQU   144
+ACBGarbageList  EQU   152
+ACBHeap       EQU   160   ; 640+ bytes for heap object info
+ACBiofNext    EQU   824
+ACBiofPrev    EQU   832
+ACBUserName   EQU   840   ; 2 byte index of string in string area
+ACBPath       EQU   842   ; 2 byte index of string in string area
+ACBExitRunFile  EQU   844 ; 2 byte index of string in string area
+ACBCommandLine  EQU   846 ; 2 byte index of string in string area
+ACBpVidMem    EQU   848
+ACBpVirtVidMem  EQU 856
+ACBVideoRows  EQU   864
+ACBVideoCols  EQU   865
+ACBCursorRow  EQU   866
+ACBCursorCol  EQU   867
+ACBNormAttr   EQU   868
+ACBKeyState1  EQU   872
+ACBKeyState2  EQU   874
+ACBKeybdWaitFlag  EQU   876
+ACBKeybdHead  EQU   878
+ACBKeybdTail  EQU   879
+ACBKeybdBuffer  EQU   880
+ACBnumber     EQU   944
+ACBNext       EQU   952
+ACBTaskList   EQU   960
+ACBHasFocus   EQU   962
+ACBmid        EQU   964
+ACBStatus     EQU   966
+ACBTemplates  EQU   968   ; 256 * 8 bytes reserved for template pointers
+ACBPad        EQU   3016
+ACBStrings    EQU   3072  ; start of 1kB string area
+ACBVTextScreen	EQU		6144	; 2kB Text screen
+ACBVColorMem		EQU		14336	; Color memory must be 8192 bytes higher than text screen
+ACBEnd        EQU   16384
+ACB_SIZE			EQU		16384
+
+; Application startup record
+ASRPageSize   EQU   0
+ASRPriority   EQU   1
+ASRRegset     EQU   2
+ASRmid        EQU   3
+ASRAffinity   EQU   4
+ASRCodeSize   EQU   6
+ASRDataSize   EQU   8
+ASRUIDataSize EQU   10
+ASRHeapSize   EQU   12
+ASRStackSize  EQU   14
+ASRpCode      EQU   16
+ASRpData      EQU   18
+ASRpUIData    EQU   20
+ASR_SIZE      EQU   32
+
+.set MBX_OWNER,0	# tid of owning task
+#MBX_WTIDS			equ		4		; tasks waiting at mailbox
+.set MBX_LINK,8
+.set MBX_TQHEAD,16	# link field for free list shared with task queue head
+.set MBX_TQTAIL,24
+.set MBX_MQHEAD,32
+.set MBX_MQTAIL,40
+.set MBX_SIZE,48
+
+.set MSG_LINK,0
+.set MSG_RETADR,8
+.set MSG_TGTADR,16
+.set MSG_TYPE,24
+.set MSG_D1,32
+.set MSG_D2,40
+.set MSG_D3,48
+.MSG_SIZE,64
+
+

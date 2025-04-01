@@ -1,0 +1,275 @@
+; ============================================================================
+;        __
+;   \\__/ o\    (C) 2020-2022  Robert Finch, Waterloo
+;    \  __ /    All rights reserved.
+;     \/_//     robfinch<remove>@finitron.ca
+;       ||
+;  
+;
+; BSD 3-Clause License
+; Redistribution and use in source and binary forms, with or without
+; modification, are permitted provided that the following conditions are met:
+;
+; 1. Redistributions of source code must retain the above copyright notice, this
+;    list of conditions and the following disclaimer.
+;
+; 2. Redistributions in binary form must reproduce the above copyright notice,
+;    this list of conditions and the following disclaimer in the documentation
+;    and/or other materials provided with the distribution.
+;
+; 3. Neither the name of the copyright holder nor the names of its
+;    contributors may be used to endorse or promote products derived from
+;    this software without specific prior written permission.
+;
+; THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+; AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+; IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+; DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+; FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+; DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+; SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+; CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+; OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+; OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+;
+; ============================================================================
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+IAllocTCB:
+	pshs	f,x
+	ldb		FreeTCB
+	beq		0001f
+	tfr		b,f
+	lbsr	TCBHandleToPointer
+	tfr		d,x
+	ldb		TCBNext,x
+	stb		FreeTCB
+	tfr		f,b
+0001:
+	clra
+	puls	f,x,pc
+
+AllocTCB:
+0002:
+	ldd		#-1
+	lbsr	LockSysSemaphore
+	beq		0002b
+	bsr		IAllocTCB
+	lbsr	UnlockSysSemaphore
+	lbra	FMTK_RetOKD
+	
+#------------------------------------------------------------------------------
+#------------------------------------------------------------------------------
+
+IFreeTCB:
+	move a3,a0
+	push br1
+	bl TCBHandleToPointer
+	pop br1
+	ldwz a1,FreeTCB
+	stw a1,TCBNext[a0]
+	stb	a3,FreeTCB
+	blr
+
+FreeTCB:
+	cmp cr0,a0,0
+	ble cr0,.0001
+	move br2,br1
+	bl TCBHandleToPointer
+	move br1,br2
+	loadi a1,TS_FREE
+	stb a1,TCBStatus[a0]
+	loadi a0,E_Ok
+	blr
+	
+#------------------------------------------------------------------------------
+# Push task into ready queue. The ready queue is a hardware component on the
+# bus.
+#
+# Stack Space:
+#		1 words
+# Modifies:
+#		none
+# Parameters:
+#		a0 = task id to insert
+#------------------------------------------------------------------------------
+
+InsertIntoReadyQueue:
+	cmp cr0,a0,0
+	ble cr0,.0001
+	push br1
+	move a3,a0
+	bl TCBHandleToPointer
+	ldbz a1,TCBPriority[a0]
+	loadi a2,TS_RUNNING
+	stb a2,TCBStatus[a0]
+	and a1,a1,7								# safety
+	and a3,a3,0xffff					# safety
+	sll a1,a1,16
+	or a3,a3,a1
+	store a3,RDYQ
+	pop br1
+.0001:
+	blr
+
+#------------------------------------------------------------------------------
+# Remove task from ready queue. Accomplished by clearing the ready / running
+# status. The next time the queue is popped, the task will be discarded as
+# a choice for running.
+#
+# Parameters:
+#		a0 = task id to remove
+#------------------------------------------------------------------------------
+
+RemoveFromReadyQueue:
+	cmp cr0,a0,0							# sanity check
+	ble cr0,.0001
+	push br1
+	bl TCBHandleToPointer
+	ldbz a1,TCBStatus[a0]
+	and a1,a1,~(TS_RUNNING|TS_READY)
+	stb a1,TCBStatus[a0]
+	pop br1
+0001:
+	blr
+	
+;------------------------------------------------------------------------------
+; Remove a task from the timeout list.
+; Called when a mailbox is freed and a task is waiting at the
+; mailbox.
+;
+; Parameters:
+;		B = task id to remove
+; Modifies:
+;		none
+; Returns:
+;		none
+;------------------------------------------------------------------------------
+
+RemoveFromTimeoutList:
+	pshs	d,w,x,y,u
+	cmpb	TimeoutList			; head of list?
+	beq		0001f
+	lbsr	TCBHandleToPointer
+	tfr		d,x
+	ldb		TCBNext,x
+	clra
+	tfr		d,u
+	ldf		TCBPrev,x
+	lbsr	TCBHandleToPointer
+	tfr		d,y
+	stf		TCBPrev,y
+	tfr		f,b
+	clra
+	lbsr	TCBHandleToPointer
+	tfr		d,y
+	tfr		u,d
+	stb		TCBNext,y
+	bra		0002f
+	; Removing from head of timeout list
+0001:
+	lbsr	TCBHandleToPointer
+	tfr		d,x
+	ldb		TCBNext,x
+	stb		TimeoutList		; set new head of list
+	clra
+	lbsr	TCBHandleToPointer
+	tfr		d,y
+	clrb
+	stb		TCBPrev,y			; next->prev = NULL
+0002:
+	clrd
+	std		TCBNext,x			; next = NULL
+	std		TCBPrev,x			; prev = NULL
+	puls	d,w,x,y,u,pc
+	
+;// ----------------------------------------------------------------------------
+;// Pop the top entry from the timeout list.
+;// ----------------------------------------------------------------------------
+;
+;hTCB PopTimeoutList()
+;{
+;    TCB *p;
+;    hTCB h;
+;
+;    h = TimeoutList;
+;    if (TimeoutList > 0 && TimeoutList < NR_TCB) {
+;        TimeoutList = tcbs[TimeoutList].next;
+;        if (TimeoutList >= 0 && TimeoutList < NR_TCB) {
+;            tcbs[TimeoutList].prev = h->prev;
+;            h->prev->next = TimeoutList;
+;        }
+;    }
+;    return h;
+;}
+;
+; Returns:
+;		B = task at top of list
+;
+
+PopTimeoutList:
+	pshs	w,x,y
+	ldb		TimeoutList
+	pshs	b
+	beq		0001f
+	cmpb	#NR_TCB
+	bhs		0001f
+	bsr		TCBHandleToPointer
+	tfr		d,x
+	ldb		TCBNext,x
+	tfr		b,f
+	lde		TCBPrev,x
+	stb		TimeoutList
+	beq		0001f
+	cmpb	#NR_TCB
+	bhs		0001f
+	bsr		TCBHandleToPointer
+	tfr		d,y
+	ste		TCBPrev,y
+	tfr		e,b
+	bsr		TCBHandleToPointer
+	tfr		d,y
+	stf		TCBNext,y
+	clr		TCBPrev,x
+	clr		TCBNext,x
+0001:
+	puls	b
+	puls	x,y,w,pc
+
+; ----------------------------------------------------------------------------
+; ----------------------------------------------------------------------------
+DispTwoSpace:
+	bsr	DispSpace
+DispSpace:
+	ldb		#' '
+	swi
+	fcb		MF_OUTCH
+	rts
+
+DumpTCBs:
+	swi
+	fcb		MF_CRLF
+	ldb		#1
+0002:
+	lbsr	TCBHandleToPointer
+	tfr		d,x
+	ldb		TCBtid,x
+	swi
+	fcb		MF_DisplayByteAsHex
+	bsr		DispSpace
+	ldb		TCBStatus,x
+	swi
+	fcb		MF_DisplayByteAsHex
+	bsr		DispTwoSpace
+	swi
+	fcb		MF_CRLF
+	ldb		TCBNext,x
+	beq		0001f
+	bra		0002b
+0001:
+	rts
+	
+fcb	"TID Stat"
+
