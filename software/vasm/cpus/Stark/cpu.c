@@ -60,6 +60,9 @@ static int regop[93] = {
 	OPER_GPR, OPER_GPR, OPER_CB, OPER_MPC, OPER_GPR
 };
 
+static char* condstr[7] = {
+	"eq  ", "nand", "nor ", "lt  ", "le  ", "ca  ", "so  "
+};
 
 uint8_t value_bucketno;
 value_bucket_t value_bucket[32];
@@ -68,7 +71,7 @@ uint8_t instrno;
 
 static int is_reg(char *p, char **ep, int* typ)
 {
-	int nn;
+	int nn, jj, rr = -1;
 	int sgn = 0;
 	int n = 0;
 
@@ -80,51 +83,30 @@ static int is_reg(char *p, char **ep, int* typ)
 	if (p[n]=='%')
 	n++;
 	
-	if (p[n]=='r') {
-		if (isdigit(p[n+1]) && isdigit(p[n+2]) && !ISIDCHAR(p[n+3])) {
-			nn = (p[n+1]-'0')*10 + (p[n+2]-'0');
-			if (ep)
-				*ep = &p[n+3];
-			*typ = OPER_GPR;
-			return (nn);
-		}
-		else if (isdigit(p[n+1]) && !ISIDCHAR(p[n+2])) {
-			nn = (p[n+1]-'0');
-			if (ep)
-				*ep = &p[n+2];
-			*typ = OPER_GPR;
-			return (nn);
-		}
-	}
-	
-	for (nn = 0; nn < NREG; nn++) {
-		// Look for longest match first
-		/*
-		if (p[n] == regnamestr[nn][0] && p[n+1] == regnamestr[nn][1] && p[n+2] == regnamestr[nn][2]) {
-			if (!ISIDCHAR((unsigned char)p[n+3])) {
-				if (regnamestr[nn][3]=='\0') {
-					*typ = regop[nn];
-					if (ep)
-						*ep = &p[n+3];
-					return (nn);
-				}
-				return (-1);
+	do {
+		if (p[n]=='r') {
+			if (isdigit(p[n+1]) && isdigit(p[n+2]) && !ISIDCHAR(p[n+3])) {
+				nn = (p[n+1]-'0')*10 + (p[n+2]-'0');
+				if (ep)
+					*ep = &p[n+3];
+				*typ = OPER_GPR;
+				rr = 1;
+				goto j1;
+			}
+			else if (isdigit(p[n+1]) && !ISIDCHAR(p[n+2])) {
+				nn = (p[n+1]-'0');
+				if (ep)
+					*ep = &p[n+2];
+				*typ = OPER_GPR;
+				rr = 1;
+				goto j1;
 			}
 		}
-		*/
-		if (p[n] == regnamestr[nn][0] && p[n+1] == regnamestr[nn][1]) {
-			if (!ISIDCHAR((unsigned char)p[n+2])) {
-				if (regnamestr[nn][2]=='\0') {
-					if (ep)
-						*ep = &p[n+2];
-					*typ = regop[nn];
-					return (nn);
-				}
-				return (-1);
-			}
-//			if (regnamestr[nn][2]=='\0')
-//				return (-1);
-			if (regnamestr[nn][2]==p[n+2]) {
+		
+		for (nn = 0; nn < NREG; nn++) {
+			// Look for longest match first
+			/*
+			if (p[n] == regnamestr[nn][0] && p[n+1] == regnamestr[nn][1] && p[n+2] == regnamestr[nn][2]) {
 				if (!ISIDCHAR((unsigned char)p[n+3])) {
 					if (regnamestr[nn][3]=='\0') {
 						*typ = regop[nn];
@@ -134,21 +116,72 @@ static int is_reg(char *p, char **ep, int* typ)
 					}
 					return (-1);
 				}
-//				if (regnamestr[nn][3]=='\0')
-//					return (-1);
-				if (regnamestr[nn][3]==p[n+3]) {
-					if (!ISIDCHAR((unsigned char)p[n+4])) {
-						if (regnamestr[nn][4]=='\0') {
-							if (ep)
-								*ep = &p[n+4];
+			}
+			*/
+			if (p[n] == regnamestr[nn][0] && p[n+1] == regnamestr[nn][1]) {
+				if (!ISIDCHAR((unsigned char)p[n+2])) {
+					if (regnamestr[nn][2]=='\0') {
+						if (ep)
+							*ep = &p[n+2];
+						*typ = regop[nn];
+						rr = 1;
+						goto j1;
+					}
+					return (-1);
+				}
+	//			if (regnamestr[nn][2]=='\0')
+	//				return (-1);
+				if (regnamestr[nn][2]==p[n+2]) {
+					if (!ISIDCHAR((unsigned char)p[n+3])) {
+						if (regnamestr[nn][3]=='\0') {
 							*typ = regop[nn];
-							return (nn);
+							if (ep)
+								*ep = &p[n+3];
+							rr = 1;
+							goto j1;
 						}
 						return (-1);
+					}
+	//				if (regnamestr[nn][3]=='\0')
+	//					return (-1);
+					if (regnamestr[nn][3]==p[n+3]) {
+						if (!ISIDCHAR((unsigned char)p[n+4])) {
+							if (regnamestr[nn][4]=='\0') {
+								if (ep)
+									*ep = &p[n+4];
+								*typ = regop[nn];
+								rr = 1;
+								goto j1;
+							}
+							return (-1);
+						}
 					}
 				}
 			}
 		}
+	} while (0);
+j1:
+	// Look for a suffix, place suffix index in bits 8 to 10 of return value.
+	if (rr > 0) {
+		p = *ep;
+		if (*p=='?') {
+			p++;
+			for (jj = 0; jj < 7; jj++) {
+				if (p[0]==condstr[jj][0] && p[1]==condstr[jj][1] && p[2]==condstr[jj][2] && p[3]==condstr[jj][3] && !ISIDCHAR(p[4])) {
+					if (ep) *ep = &p[4];
+					return (nn | (jj << 8));
+				}
+				if (p[0]==condstr[jj][0] && p[1]==condstr[jj][1] && p[2]==condstr[jj][2] && !ISIDCHAR(p[3])) {
+					if (ep) *ep = &p[3];
+					return (nn | (jj << 8));
+				}
+				if (p[0]==condstr[jj][0] && p[1]==condstr[jj][1] && !ISIDCHAR(p[2])) {
+					if (ep) *ep = &p[2];
+					return (nn | (jj << 8));
+				}
+			}
+		}
+		return (nn);
 	}
 	return (-1);	
 }
@@ -326,6 +359,9 @@ int parse_operand(char *p,int len,operand *op,int optype)
   regpat = 0;
 
   p = skip(p);
+  /* This first chunk of code parses a register list, which may include
+  	only a single register.
+  */
   while(1) {
   	pregno = regno;
   	regno = is_reg(p, &p, &regtype);
@@ -372,6 +408,8 @@ int parse_operand(char *p,int len,operand *op,int optype)
   		return (PO_MATCH);
 		return (PO_NOMATCH);
 	}
+
+	/* With register detection out of the way, we look for other operands. */
   if (*p=='$') {
   	isnum = 1;
   	p++;
@@ -1218,7 +1256,7 @@ void cpu_reloc_write(FILE *f,rlist *rl)
 
 static void define_regnames(void)
 {
-  char r[5];
+  char r[10];
   int i;
 
   for (i=0; i<32; i++) {
@@ -1238,12 +1276,24 @@ static void define_regnames(void)
     sprintf(r,"br%d",i);
     set_internal_abs(r,i);
   }
+  /*
   for (i=0; i<8; i++) {
+    sprintf(r,"%%cr%d.eq",i);
+    set_internal_abs(r,i|(0<<8));
+    sprintf(r,"%%cr%d.lt",i);
+    set_internal_abs(r,i|(3<<8));
+    sprintf(r,"%%cr%d.le",i);
+    set_internal_abs(r,i|(4<<8));
+    sprintf(r,"%%cr%d.ca",i);
+    set_internal_abs(r,i|(5 << 8));
+    sprintf(r,"%%cr%d.so",i);
+    set_internal_abs(r,i|(6 << 8));
     sprintf(r,"%%cr%d",i);
     set_internal_abs(r,i);
     sprintf(r,"cr%d",i);
     set_internal_abs(r,i);
   }
+  */
   set_internal_abs("vrsave",256);
   set_internal_abs("lt",0);
   set_internal_abs("gt",1);

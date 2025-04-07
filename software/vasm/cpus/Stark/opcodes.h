@@ -990,19 +990,10 @@
   "ics",          { 0 }                 ,{PWRCOM, XL(19,150)},
 
   "crclr",        { BT, BAT, BBA }      ,{PPCCOM, XL(19,193)},
-  "crxor",        { BT, BA, BB }        ,{COM,    XL(19,193)},
-
-  "crnand",       { BT, BA, BB }        ,{COM,    XL(19,225)},
-
-  "crand",        { BT, BA, BB }        ,{COM,    XL(19,257)},
 
   "crset",        { BT, BAT, BBA }      ,{PPCCOM, XL(19,289)},
-  "creqv",        { BT, BA, BB }        ,{COM,    XL(19,289)},
-
-  "crorc",        { BT, BA, BB }        ,{COM,    XL(19,417)},
 
   "crmove",       { BT, BA, BBA }       ,{PPCCOM, XL(19,449)},
-  "cror",         { BT, BA, BB }        ,{COM,    XL(19,449)},
 
   "bctr",         { 0 }                 ,{COM,    XLO(19,BOU,528,0)},
   "bctrl",        { 0 }                 ,{COM,    XLO(19,BOU,528,1)},
@@ -1798,6 +1789,8 @@
   "amoand.",      { RT, RA, DX }     		,{STARK,  XRC(59,0,0)|0x81C10000L},
   "amoandb",      { RT, RA, DX }     		,{STARK,  XRC(59,0,0)|0x81000000L},
   "amoandb.",     { RT, RA, DX }     		,{STARK,  XRC(59,0,0)|0x81010000L},
+  "amoclear",     { RT, RA, DX }     		,{STARK,  XRC(59,0,0)|0x8FC00000L},
+  "amoclear.",    { RT, RA, DX }     		,{STARK,  XRC(59,0,0)|0x8FC10000L},
   "amoor",        { RT, RA, DX }     		,{STARK,  XRC(59,0,0)|0x82C00000L},
   "amoor.",       { RT, RA, DX }     		,{STARK,  XRC(59,0,0)|0x82C10000L},
   "amoorb",       { RT, RA, DX }     		,{STARK,  XRC(59,0,0)|0x82000000L},
@@ -1816,6 +1809,7 @@
   "bgt",          { CRS, BD }            ,{STARK,  BBOCB(24,BOF,CBLE,0,0)},
   "b",          	{ LI }                ,{STARK,  B(26,0,0)},
   "beq",          { CRS, BD }           ,{STARK,  BBOCB(24,BOT,CBEQ,0,0)},
+  "beq",          { BD }           			,{STARK,  BBOCB(24,BOT,CBEQ,0,0)},
   "bl",          	{ LI }                ,{STARK,  B(26,0,0)|0x0040LL},
   "ble",          { CRS, BD }            ,{STARK,  BBOCB(24,BOT,CBLE,0,0)},
   "ble",          { BD }            		,{STARK,  BBOCB(24,BOT,CBLE,0,0)|0x100000L},
@@ -1833,6 +1827,10 @@
   "cmpai",        { BF, RA, UI }       	,{STARK, X(3,0)|0x0200L},
   "cntlo",        { RT, RA }        		,{STARK,  XO(0,0,0,0)|0x80000000L},
   "cntlo.",       { RT, RA }        		,{STARK,  XO(0,0,0,1)|0x80000000L},
+  "crand",        { BT, BA, BB }        ,{STARK,  XL(11,0)},
+  "crandc",       { BT, BA, BB }        ,{STARK,  XL(11,3)},
+  "cror",         { BT, BA, BB }        ,{STARK,  XL(11,1)},
+  "crorc",        { BT, BA, BB }        ,{STARK,  XL(11,7)},
   "csrrd",        { RT, UI }        		,{STARK,  XO(7,0,0,0)|0x00000000L},
   "csrrd.",       { RT, UI }        		,{STARK,  XO(7,0,0,0)|0x00010000L},
   "csrrw",        { RT, UI, RA }     		,{STARK,  XO(7,0,0,0)|0x00000000L},
@@ -1899,6 +1897,15 @@
   "ori.",         { RT, RA, UI }        ,{STARK,  XO(9,0,0,1)},
   "or",           { RT, RA, RB }        ,{STARK,  XO(9,0,0,0)|0x80000000L},
   "or.",          { RT, RA, RB }        ,{STARK,  XO(9,0,0,1)|0x80000000L},
+  "pge",          { CRS, BD }            ,{STARK,  BBOCB(24,BOT,CBLT,0,0)|0xE0L},
+  "pgt",          { CRS, BD }            ,{STARK,  BBOCB(24,BOT,CBLE,0,0)|0xE0L},
+  "peq",          { CRS, BD }           ,{STARK,  BBOCB(24,BOF,CBEQ,0,0)|0xE0L},
+  "peq",          { BD }           			,{STARK,  BBOCB(24,BOF,CBEQ,0,0)|0xE0L},
+  "ple",          { CRS, BD }            ,{STARK,  BBOCB(24,BOF,CBLE,0,0)|0xE0L},
+  "ple",          { BD }            		,{STARK,  BBOCB(24,BOF,CBLE,0,0)|0x1000E0L},
+  "plt",          { CRS, BD }            ,{STARK,  BBOCB(24,BOF,CBLT,0,0)|0xE0L},
+  "plt",          { BD }            		,{STARK,  BBOCB(24,BOF,CBLT,0,0)|0x1000E0L},
+  "pne",          { CRS, BD }            ,{STARK,  BBOCB(24,BOT,CBEQ,0,0)|0xE0L},
   "pop",         	{ RL }        				,{STARK,  XO(31,0,0,0)|0x40000000L},
   "push",         { RL }        				,{STARK,  XO(30,0,0,0)|0x40000000L},
   "stb",          { RS, SI }         		,{STARK,  OP(40)},

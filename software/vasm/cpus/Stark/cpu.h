@@ -220,7 +220,7 @@ typedef struct {
 #define XTLB(op, xop, sh) (X ((op), (xop)) | ((((uint32_t)(sh)) & 0x1f) << 11))
 #define XFL(op, xop, rc) \
   (OP (op) | ((((uint32_t)(xop)) & 0x3ff) << 1) | (((uint32_t)(rc)) & 1))
-#define XL(op, xop) (OP (op) | ((((uint32_t)(xop)) & 0x3ff) << 1))
+#define XL(op, xop) (OP (op) | ((((uint32_t)(xop)) & 0xf) << 25))
 #define XLLK(op, xop, lk) (XL ((op), (xop)) | ((lk) & 1))
 #define XLO(op, bo, xop, lk) \
   (XLLK ((op), (xop), (lk)) | ((((uint32_t)(bo)) & 0x1f) << 21))

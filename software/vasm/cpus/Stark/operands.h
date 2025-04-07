@@ -40,7 +40,7 @@ struct powerpc_operand
 enum {
   UNUSED,BA,BAT,BB,BBA,BD,BS,BDA,BDM,BDMA,BDP,BDPA,BF,OBF,BFA,BI,BO,BOE,CRS,
   BT,CR,D,DS,DX,E,FL1,FL2,FLM,FRA,FRB,FRC,FRS,FXM,L,LEV,LI,LIA,MB,ME,XH,BR,RL,
-  MBE,MBE_,MB6,NB,NSI,RA,RAL,RAM,RAS,RB,RBS,RS,SH,SH6,SI,SISIGNOPT,
+  MBE,MBE_,MB6,NB,NSI,RA,RAL,RAM,RAS,RB,RBS,RS,SH,SH6,SI,SISIGNOPT,PM,
   SPR,SPRBAT,SPRG,SR,SV,TBR,TO,U,UI,VA,VB,VC,VD,SIMM,UIMM,SHB,SCNDX,
   SLWI,SRWI,EXTLWI,EXTRWI,EXTWIB,INSLWI,INSRWI,ROTRWI,CLRRWI,CLRLSL,
   STRM,AT,LS,RSOPT,RAOPT,RBOPT,CT,SHO,CRFS,EVUIMM_2,EVUIMM_4,EVUIMM_8,
@@ -552,6 +552,34 @@ static uint32_t insert_crs(uint32_t insn,int32_t value,const char **errmsg)
   return insn | ((value&3)<<20);
 }
 
+static uint32_t insert_bt(uint32_t insn,int32_t value,const char **errmsg)
+{
+  return insn | ((value&7)<<9) | (((value >> 8) & 7) << 6);
+}
+
+static uint32_t insert_ba(uint32_t insn,int32_t value,const char **errmsg)
+{
+  return insn | ((value&7)<<15) | (((value >> 8) & 7) << 12);
+}
+
+static uint32_t insert_bb(uint32_t insn,int32_t value,const char **errmsg)
+{
+  return insn | ((value&7)<<21) | (((value >> 8) & 7) << 18);
+}
+
+static uint32_t insert_pm(uint32_t insn,int32_t value,const char **errmsg)
+{
+	int i;
+	
+	if (value < 0) {
+		*errmsg = "predicate window must be after predicate instruction";
+		i = 0;
+	}
+	else
+		i = (1 << (value >> 2)) -1;
+	return (insert_bd(insn,i,errmsg));
+}
+
 
 /* The operands table.
    The fields are: bits, shift, insert, flags. */
@@ -562,13 +590,13 @@ const struct powerpc_operand powerpc_operands[] =
   { 0, 0, 0, 0 },
 
   /* BA */
-  { 5, 16, 0, OPER_CR|OPER_REG },
+  { 11, 12, insert_ba, OPER_CR|OPER_REG },
 
   /* BAT */
   { 5, 16, insert_bat, OPER_FAKE },
 
   /* BB */
-  { 5, 11, 0, OPER_CR|OPER_REG },
+  { 11, 18, insert_bb, OPER_CR|OPER_REG },
 
   /* BBA */
   { 5, 11, insert_bba, OPER_FAKE },
@@ -616,7 +644,7 @@ const struct powerpc_operand powerpc_operands[] =
   { 7, 20, insert_crs, OPER_CR|OPER_REG },
 
   /* BT */
-  { 5, 21, 0, OPER_CR|OPER_REG },
+  { 11, 6, insert_bt, OPER_CR|OPER_REG },
 
   /* CR */
   { 3, 18, 0, OPER_CR|OPER_REG | OPER_OPTIONAL },
@@ -730,6 +758,9 @@ const struct powerpc_operand powerpc_operands[] =
 
   /* SISIGNOPT */
   { 16, 0, 0, OPER_SIGNED | OPER_SIGNOPT },
+
+  /* PM */
+  { 31, 0, insert_pm, OPER_SIGNED },
 
   /* SPR */
   { 10, 11, insert_spr, 0 },
