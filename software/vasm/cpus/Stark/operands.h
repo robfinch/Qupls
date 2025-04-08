@@ -40,7 +40,7 @@ struct powerpc_operand
 enum {
   UNUSED,BA,BAT,BB,BBA,BD,BS,BDA,BDM,BDMA,BDP,BDPA,BF,OBF,BFA,BI,BO,BOE,CRS,
   BT,CR,D,DS,DX,E,FL1,FL2,FLM,FRA,FRB,FRC,FRS,FXM,L,LEV,LI,LIA,MB,ME,XH,BR,RL,
-  MBE,MBE_,MB6,NB,NSI,RA,RAL,RAM,RAS,RB,RBS,RS,SH,SH6,SI,SISIGNOPT,PM,
+  MBE,MBE_,MB6,NB,NSI,RA,RAL,RAM,RAS,RB,RBS,RS,SH,SH6,SI,SISIGNOPT,PM,BLR,
   SPR,SPRBAT,SPRG,SR,SV,TBR,TO,U,UI,VA,VB,VC,VD,SIMM,UIMM,SHB,SCNDX,
   SLWI,SRWI,EXTLWI,EXTRWI,EXTWIB,INSLWI,INSRWI,ROTRWI,CLRRWI,CLRLSL,
   STRM,AT,LS,RSOPT,RAOPT,RBOPT,CT,SHO,CRFS,EVUIMM_2,EVUIMM_4,EVUIMM_8,
@@ -134,17 +134,52 @@ static uint32_t insert_ui(uint32_t insn,int32_t value,const char ** errmsg)
 	insn |= 0xA0000000L;
 	for (i = 0; i < value_bucketno; i++) {
 		if (value_bucket[i].value == value) {
-			insn |= ((i & 0xf) << 18);
+			insn |= ((i & 0x7) << 18);
 			return (insn);
 		}
 	}	
 	value_bucket[value_bucketno].insn = insn;
 	value_bucket[value_bucketno].value = value;
 	value_bucket[value_bucketno].size = 32;
-	insn |= ((value_bucketno & 0xf) << 18);
+	insn |= ((value_bucketno & 0x7) << 18);
 	totsz += 4;
 	value_bucketno++;
-	if (totsz > 23*4)
+	if (totsz > 7*4)
+    *errmsg = "too many value encountered";
+  return (insn);
+}
+
+static uint32_t insert_blr(uint32_t insn,int32_t value,const char ** errmsg)
+{
+	int i;
+
+	/*
+	if (is_int16(value)) {
+		insn |= 0xA0000000L;
+		value_bucket[value_bucketno].insn = insn;
+		value_bucket[value_bucketno].value = value;
+		value_bucket[value_bucketno].size = 16;
+		totsz += 2;
+		value_bucketno++;
+		if (totsz > 23*4)
+	    *errmsg = "too many value encountered";
+	  return (insn);
+	}
+	*/
+	insn |= 0x20000000L;
+	for (i = 0; i < value_bucketno; i++) {
+		if (value_bucket[i].value == value) {
+			insn |= ((i & 0x7) << 10);
+			return (insn);
+		}
+	}	
+	value_bucket[value_bucketno].insn = insn;
+	value_bucket[value_bucketno].value = value;
+	value_bucket[value_bucketno].size = 32;
+	insn |= ((value_bucketno & 0x7) << 10);
+	totsz += 4;
+	value_bucketno++;
+	if (totsz > 7*4)
     *errmsg = "too many value encountered";
   return (insn);
 }
@@ -173,17 +208,17 @@ static uint32_t insert_si(uint32_t insn,int32_t value,const char ** errmsg)
 	insn |= 0xA0000000L;
 	for (i = 0; i < value_bucketno; i++) {
 		if (value_bucket[i].value == value) {
-			insn |= ((i & 0xf) << 18);
+			insn |= ((i & 0x7) << 18);
 			return (insn);
 		}
 	}	
 	value_bucket[value_bucketno].insn = insn;
 	value_bucket[value_bucketno].value = value;
 	value_bucket[value_bucketno].size = 32;
-	insn |= ((value_bucketno & 0xf) << 18);
+	insn |= ((value_bucketno & 0x7) << 18);
 	totsz += 4;
 	value_bucketno++;
-	if (totsz > 23*4)
+	if (totsz > 7*4)
     *errmsg = "too many value encountered";
   return (insn);
 }
@@ -192,10 +227,13 @@ static uint32_t insert_xsi(uint32_t insn,int32_t value,const char ** errmsg)
 {
 	int i;
 
-	insn |= 0xA0000000L;
+	insn |= 0x80000000L;
+	if (value != 0)
+		*errmsg = "AMO ops cannot have a displacement";
+	/*
 	for (i = 0; i < value_bucketno; i++) {
 		if (value_bucket[i].value == value) {
-			insn |= ((value_bucketno & 0xf) << 18);
+			insn |= ((value_bucketno & 0x7) << 18);
 			return (insn);
 		}
 	}	
@@ -206,6 +244,7 @@ static uint32_t insert_xsi(uint32_t insn,int32_t value,const char ** errmsg)
 	value_bucketno++;
 	if (totsz > 23*4)
     *errmsg = "too many value encountered";
+   */
   return (insn);
 }
 
@@ -232,17 +271,17 @@ static uint32_t insert_bd(uint32_t insn,int32_t value,const char **errmsg)
 	insn |= 0xA0000000L;
 	for (i = 0; i < value_bucketno; i++) {
 		if (value_bucket[i].value == value) {
-			insn |= ((i & 0xf) << 10);
+			insn |= ((i & 0x7) << 10);
 			return (insn);
 		}
 	}	
 	value_bucket[value_bucketno].insn = insn;
 	value_bucket[value_bucketno].value = value;
 	value_bucket[value_bucketno].size = 32;
-	insn |= ((value_bucketno & 0xf) << 10);
+	insn |= ((value_bucketno & 0x7) << 10);
 	totsz += 4;
 	value_bucketno++;
-	if (totsz > 23*4)
+	if (totsz > 7*4)
     *errmsg = "too many value encountered";
   return (insn);
 }
@@ -523,9 +562,10 @@ static uint32_t insert_scndx(uint32_t insn, int32_t value, const char** errmsg)
 	value_bucket[value_bucketno].insn = insn;
 	value_bucket[value_bucketno].value = value;
 	value_bucket[value_bucketno].size = 32;
+	insn |= ((value_bucketno & 0x7) << 24);
 	totsz += 4;
 	value_bucketno++;
-	if (totsz > 23*4)
+	if (totsz > 7*4)
     *errmsg = "too many value encountered";
   return (insn);
 }
@@ -754,13 +794,16 @@ const struct powerpc_operand powerpc_operands[] =
   { 6, 17, insert_sh6, 0 },
 
   /* SI */
-  { 14, 17, insert_si, OPER_S14 | OPER_SIGNED },
+  { 14, 17, insert_si, OPER_SIGNED | OPER_S14 },
 
   /* SISIGNOPT */
   { 16, 0, 0, OPER_SIGNED | OPER_SIGNOPT },
 
   /* PM */
   { 31, 0, insert_pm, OPER_SIGNED },
+
+  /* BLR */
+  { 31, 0, insert_blr, OPER_SIGNED },
 
   /* SPR */
   { 10, 11, insert_spr, 0 },

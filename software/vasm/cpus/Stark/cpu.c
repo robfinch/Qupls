@@ -1,5 +1,6 @@
 /*
-** cpu.c PowerPC cpu-description file
+** cpu.c StarkCPU cpu-description file
+** (c) 2025 Robert Finch
 ** (c) in 2002-2019,2024 by Frank Wille
 */
 
@@ -14,7 +15,7 @@ mnemonic mnemonics[] = {
 
 const int mnemonic_cnt=sizeof(mnemonics)/sizeof(mnemonics[0]);
 
-const char *cpu_copyright="vasm StarkCPU backend 0.l (c) 2025 Robert Finch derived from:\nPowerPC cpu backend 3.2 (c) 2002-2019,2024 Frank Wille";
+const char *cpu_copyright="vasm StarkCPU backend 0.03 (c) 2025 Robert Finch\nderived from: PowerPC cpu backend 3.2 (c) 2002-2019,2024 Frank Wille";
 const char *cpuname = "StarkCPU";
 int bytespertaddr = 4;
 int ppc_endianess = 1;
@@ -64,10 +65,13 @@ static char* condstr[7] = {
 	"eq  ", "nand", "nor ", "lt  ", "le  ", "ca  ", "so  "
 };
 
-uint8_t value_bucketno;
-value_bucket_t value_bucket[32];
-uint32_t instr[32];
-uint8_t instrno;
+static uint8_t value_bucketno;
+static value_bucket_t value_bucket[32];
+static uint32_t instr[32];
+static uint8_t instrno;
+static uint32_t greatest_bucket_number;
+static uint32_t insn_count;
+static instruction* lastip;
 
 static int is_reg(char *p, char **ep, int* typ)
 {
@@ -78,8 +82,8 @@ static int is_reg(char *p, char **ep, int* typ)
 	TRACE("is_reg ");
 	if (ep)	
 		*ep = p;
-//	if (p[n]!='%')
-//		return(-1);
+	if (p[n]!='%')
+		return(-1);
 	if (p[n]=='%')
 	n++;
 	
@@ -104,20 +108,6 @@ static int is_reg(char *p, char **ep, int* typ)
 		}
 		
 		for (nn = 0; nn < NREG; nn++) {
-			// Look for longest match first
-			/*
-			if (p[n] == regnamestr[nn][0] && p[n+1] == regnamestr[nn][1] && p[n+2] == regnamestr[nn][2]) {
-				if (!ISIDCHAR((unsigned char)p[n+3])) {
-					if (regnamestr[nn][3]=='\0') {
-						*typ = regop[nn];
-						if (ep)
-							*ep = &p[n+3];
-						return (nn);
-					}
-					return (-1);
-				}
-			}
-			*/
 			if (p[n] == regnamestr[nn][0] && p[n+1] == regnamestr[nn][1]) {
 				if (!ISIDCHAR((unsigned char)p[n+2])) {
 					if (regnamestr[nn][2]=='\0') {
@@ -129,8 +119,6 @@ static int is_reg(char *p, char **ep, int* typ)
 					}
 					return (-1);
 				}
-	//			if (regnamestr[nn][2]=='\0')
-	//				return (-1);
 				if (regnamestr[nn][2]==p[n+2]) {
 					if (!ISIDCHAR((unsigned char)p[n+3])) {
 						if (regnamestr[nn][3]=='\0') {
@@ -142,8 +130,6 @@ static int is_reg(char *p, char **ep, int* typ)
 						}
 						return (-1);
 					}
-	//				if (regnamestr[nn][3]=='\0')
-	//					return (-1);
 					if (regnamestr[nn][3]==p[n+3]) {
 						if (!ISIDCHAR((unsigned char)p[n+4])) {
 							if (regnamestr[nn][4]=='\0') {
@@ -161,10 +147,10 @@ static int is_reg(char *p, char **ep, int* typ)
 		}
 	} while (0);
 j1:
-	// Look for a suffix, place suffix index in bits 8 to 10 of return value.
+	/* Look for a suffix, place suffix index in bits 8 to 10 of return value. */
 	if (rr > 0) {
 		p = *ep;
-		if (*p=='?') {
+		if (*p=='.') {
 			p++;
 			for (jj = 0; jj < 7; jj++) {
 				if (p[0]==condstr[jj][0] && p[1]==condstr[jj][1] && p[2]==condstr[jj][2] && p[3]==condstr[jj][3] && !ISIDCHAR(p[4])) {
@@ -422,15 +408,20 @@ int parse_operand(char *p,int len,operand *op,int optype)
 	}
   if (op->value->type==NUM) {
   	if (powerpc_operands[optype].flags & OPER_U14) {
-			if (!is_uint14(op->value->c.val))
+			if (!is_uint14(op->value->c.val)) {
 				op->attr = REL_CLRIMM;
+				//op->mode = OPM_CLR;
+			}
   	}
 		else if (!is_int14(op->value->c.val)) {
 			op->attr = REL_CLRIMM;
+			//op->mode = OPM_CLR;
 		}
   }
-  else if (op->value->type==SYM && !(powerpc_operands[optype].flags & OPER_RELATIVE))
+  else if (op->value->type==SYM && !(powerpc_operands[optype].flags & OPER_RELATIVE)) {
   	op->attr = REL_CLRIMM;
+		op->mode = OPM_CLR;
+  }
 //  if (powerpc_operands[optype].flags & OPER_REG) {
 //  	return (PO_NOMATCH);
 //  }
@@ -567,7 +558,7 @@ static int get_reloc_type(operand *op)
   else {  /* handle instruction relocs */
     const struct powerpc_operand *ppcop = &powerpc_operands[op->type];
 
-    if (ppcop->shift == 0 || (ppcop->shift==17 && ppcop->bits==14) || op->type==BD) {
+    if (ppcop->shift == 0 || (ppcop->shift==17 && ppcop->bits==14) || op->type==BD || op->type==SI || op->type==UI || op->type==NSI) {
       if (ppcop->bits == 16 || ppcop->bits == 26 || ppcop->bits==14 || op->type==BD) {
 
         if (ppcop->flags & OPER_RELATIVE) {  /* a relative branch */
@@ -721,7 +712,7 @@ static taddr make_reloc(int reloctype,operand *op,section *sec,
       else {  /* instruction operand */
         const struct powerpc_operand *ppcop = &powerpc_operands[op->type];
 
-        if (ppcop->flags & (OPER_RELATIVE|OPER_ABSOLUTE)) {
+        if (ppcop->flags & (OPER_RELATIVE|OPER_ABSOLUTE) && (op->type == BD || op->type==LI)) {
           addend = (btype == BASE_PCREL) ? val + offset : val;
           /* branch instruction */
           if (ppcop->bits == 25) {
@@ -732,6 +723,14 @@ static taddr make_reloc(int reloctype,operand *op,section *sec,
             mask = 0x1fffff8LL;
           }
           else {
+						if (!is_int13(val)) {
+
+   						TRACE("add_4");
+							add_extnreloc_masked(reloclist,base,0,REL_CLRIMM,
+							                     10,3,0,0x7L);
+							value_bucket[value_bucketno].relocs = reloclist;
+							return (val);
+						}
 			      add_extnreloc_masked(reloclist,base,addend,reloctype,
                            0,1,0,4L);
 			      add_extnreloc_masked(reloclist,base,addend,reloctype,
@@ -747,37 +746,55 @@ static taddr make_reloc(int reloctype,operand *op,section *sec,
           offset = 2;
           addend = (btype == BASE_PCREL) ? val + offset : val;
           switch (op->mode) {
-            case OPM_LO:
-              mask = 0xffff;
-              break;
-            case OPM_HI:
-              mask = 0xffff0000;
-              break;
-            case OPM_HA:
-              add_extnreloc_masked(reloclist,base,addend,reloctype,
-                                   pos,size,offset,0x8000);
-              mask = 0xffff0000;
-              break;
             case OPM_CLR:
-							if (!is_int14(val)) {
+            	switch(op->type) {
+            	case NSI:
+            	case SI:
+								if (!is_int14(val)) {
 
-     						TRACE("add_4");
-								add_extnreloc_masked(reloclist,base,0,REL_CLRIMM,
-								                     17,5,0,0x1fL);
-								value_bucket[value_bucketno].relocs = reloclist;
-								return (val);
-							}
-              mask = -1;
+	     						TRACE("add_4");
+									add_extnreloc_masked(reloclist,base,0,REL_CLRIMM,
+									                     17,3,0,0x7L);
+									value_bucket[value_bucketno].relocs = reloclist;
+									return (val);
+								}
+								pos = 17;
+								size = 14;
+								offset = 0;
+								mask = 0x3fffL;
+								break;
+            	case UI:
+								if (!is_uint14(val)) {
+
+	     						TRACE("add_4");
+									add_extnreloc_masked(reloclist,base,0,REL_CLRIMM,
+									                     17,3,0,0x7L);
+									value_bucket[value_bucketno].relocs = reloclist;
+									return (val);
+								}
+								pos = 17;
+								size = 14;
+								offset = 0;
+								mask = 0x3fffL;
+								break;
+							case SCNDX:
+								if (!is_int5(val)) {
+
+	     						TRACE("add_4");
+									add_extnreloc_masked(reloclist,base,0,REL_CLRIMM,
+									                     24,3,0,0x7L);
+									value_bucket[value_bucketno].relocs = reloclist;
+									return (val);
+								}
+								pos = 24;
+								size = 5;
+								offset = 0;
+								mask = 0x1fL;
+								break;
+            	}
             	break;
             default:
-							if (!is_int14(val)) {
-
-     						TRACE("add_3");
-								add_extnreloc_masked(reloclist,base,0,REL_CLRIMM,
-								                     17,5,0,0x1fL);
-								value_bucket[value_bucketno].relocs = reloclist;
-								return (val);
-							}
+				      general_error(38);  /* illegal relocation */
               mask = -1;
               break;
           }
@@ -968,13 +985,10 @@ size_t eval_operands(instruction *ip,section *sec,taddr pc,
     if (op.mode) {
       switch (op.mode) {
         case OPM_LO:
-          val &= 0xffff;
           break;
         case OPM_HI:
-          val = (val>>16) & 0xffff;
           break;
         case OPM_HA:
-          val = ((val>>16) + ((val & 0x8000) ? 1 : 0) & 0xffff);
           break;
         case OPM_CLR:
         	value_bucket[value_bucketno].value = val;
@@ -1075,24 +1089,41 @@ size_t eval_operands(instruction *ip,section *sec,taddr pc,
   return isize;
 }
 
-int will_fit(taddr pc)
+/* Determine if an instruction is able to fit into the space remaining on the 
+  cache line. A little tricky as it is possible that the last instruction needs
+  a constant.
+*/
+int will_not_fit(taddr pc, instruction* ip)
 {
+	int i;
+	int hasCLC = 0;
 	uint32_t ndx = pc & 0x3f;
 	
-	return (ndx < 64-totsz);
+  for (i=0; i<MAX_OPERANDS && ip->op[i]!=NULL; i++) {
+  	if (ip->op[i]->mode==OPM_CLR) {
+  		hasCLC = 1;
+  		break;
+  	}
+  }
+  /* cause a buffer flush at the end of source code */
+  if (lastip==ip)
+  	return (1);
+  if (hasCLC)
+		return (ndx < 56-totsz) ? 0 : 2;
+	else
+		return (ndx < 64-totsz) ? 0 : 1;
 }
 
 
 size_t instruction_size(instruction *ip,section *sec,taddr pc)
 /* Calculate the size of the current instruction; must be identical
-   to the data created by eval_instruction. */
+   to the data created by eval_instruction. Instructions will 
+   always be four byes in size unless there are postfixes. */
 {
-  /* determine optimized size, when needed */
-  if (opt_branch)
-    return eval_operands(ip,sec,pc,NULL,NULL);
+	lastip = ip;
 
-  /* otherwise an instruction is always 4 bytes */
-  return 4;
+	uint32_t isize = eval_operands(ip,sec,pc,NULL,NULL);
+  return (isize);
 }
 
 
@@ -1102,12 +1133,14 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
 {
   dblock *db = new_dblock();
   uint32_t insn[2];
+  int iit;
 
 	TRACE("eval_instruction");
 	uint32_t isize = eval_operands(ip,sec,pc,insn,db);
 
 	/* start of cache line? */
-	if (!will_fit(pc+isize)) {
+	iit=will_not_fit(pc+isize, ip);
+	if (iit != 0) {
 		int space;
 		
 		space = (64 - totsz - ((pc+isize) & 0x3fL));
@@ -1118,26 +1151,27 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
 			int pos;
 			rlist* p;
 
-			// Fixup the reloc entries
+			/* Fixup the reloc entries */
 			pos = 64 - totsz;
 			for (i=0; i < value_bucketno; i++) {
 				if (value_bucket[i].relocs) {
 					for (p = *value_bucket[i].relocs; p; p = p->next) {
 						if (p->type == REL_CLRIMM) {
 							p->type = REL_ABS;
-							((nreloc*)p->reloc)->addend = pos;
+							((nreloc*)p->reloc)->addend = pos>>2;
 						}
 					}
 				}
 			}
-			// Copy last instructions to fit on cache line to output	
+			/* Copy last instructions to fit on cache line to output	*/
 	    for (i=0; i<isize/4; i++)
   		  d = setval(0,d,4,insn[i]);
-  		// Copy zeros to output for the space between the last instruction
-  		// and the constant values.
-	    for (i=0; i<space; i++)
-  		  d = setval(0,d,1,0);
-  		// Copy the constant values to output
+	    insn_count += isize/4;
+  		/* Copy NOPs to output for the space between the last instruction
+  		   and the constant values. */
+	    for (i=0; i<space/4; i++)
+  		  d = setval(0,d,4,63);
+  		/* Copy the constant values to output */
 			for (i=0; i < value_bucketno; i++) {
 				switch(value_bucket[i].size) {
 				case 16:	d = setval(0,d,2,value_bucket[i].value);	break;
@@ -1145,8 +1179,10 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
 				}
 			}
 		}
-		// Reset value buckets
+		/* Reset value buckets */
 		totsz = 0;
+		if (value_bucketno > greatest_bucket_number)
+			greatest_bucket_number = value_bucketno;
 		value_bucketno = 0;
 		return (db);
 	}
@@ -1156,6 +1192,7 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
 
     for (i=0; i<db->size/4; i++)
       d = setval(0,d,4,insn[i]);
+    insn_count += db->size/4;
   }
 
   return (db);
@@ -1254,123 +1291,35 @@ void cpu_reloc_write(FILE *f,rlist *rl)
 }
 
 
+static void at_end(void)
+{
+	printf("Number of instructions: %d\n", insn_count);
+	printf("Largest number of constants: %d\n", greatest_bucket_number);
+}
+
 static void define_regnames(void)
 {
   char r[10];
   int i;
 
-  for (i=0; i<32; i++) {
-    sprintf(r,"%%r%d",i);
-  	if (i > 0)
-	    set_internal_abs(r,i);
-    r[1] = 'f';
-    set_internal_abs(r,i);
-    r[1] = 'v';
-    set_internal_abs(r,i);
-    sprintf(r,"r%d",i);
-    set_internal_abs(r,i);
-  }
-  for (i=0; i<8; i++) {
-    sprintf(r,"%%br%d",i);
-    set_internal_abs(r,i);
-    sprintf(r,"br%d",i);
-    set_internal_abs(r,i);
-  }
-  /*
-  for (i=0; i<8; i++) {
-    sprintf(r,"%%cr%d.eq",i);
-    set_internal_abs(r,i|(0<<8));
-    sprintf(r,"%%cr%d.lt",i);
-    set_internal_abs(r,i|(3<<8));
-    sprintf(r,"%%cr%d.le",i);
-    set_internal_abs(r,i|(4<<8));
-    sprintf(r,"%%cr%d.ca",i);
-    set_internal_abs(r,i|(5 << 8));
-    sprintf(r,"%%cr%d.so",i);
-    set_internal_abs(r,i|(6 << 8));
-    sprintf(r,"%%cr%d",i);
-    set_internal_abs(r,i);
-    sprintf(r,"cr%d",i);
-    set_internal_abs(r,i);
-  }
-  */
   set_internal_abs("vrsave",256);
   set_internal_abs("lt",0);
   set_internal_abs("gt",1);
   set_internal_abs("eq",2);
   set_internal_abs("so",3);
   set_internal_abs("un",3);
-  set_internal_abs("%%sp",31);
-  set_internal_abs("sp",31);
   set_internal_abs("rtoc",2);
+/*  
   set_internal_abs("%%fp",30);
   set_internal_abs("%%fpscr",0);
   set_internal_abs("%%xer",1);
   set_internal_abs("%%br0",8);
   set_internal_abs("%%ctr",9);
-  set_internal_abs("%%a0",1);
-  set_internal_abs("%%a1",2);
-  set_internal_abs("%%a2",3);
-  set_internal_abs("%%a3",4);
-  set_internal_abs("%%a4",5);
-  set_internal_abs("%%a5",6);
-  set_internal_abs("%%a6",7);
-  set_internal_abs("%%a7",8);
-  set_internal_abs("%%t0",9);
-  set_internal_abs("%%t1",10);
-  set_internal_abs("%%t2",11);
-  set_internal_abs("%%t3",12);
-  set_internal_abs("%%t4",13);
-  set_internal_abs("%%t5",14);
-  set_internal_abs("%%t6",15);
-  set_internal_abs("%%t7",16);
-  set_internal_abs("%%t8",17);
-  set_internal_abs("%%t9",18);
-  set_internal_abs("%%s0",19);
-  set_internal_abs("%%s1",20);
-  set_internal_abs("%%s2",21);
-  set_internal_abs("%%s3",22);
-  set_internal_abs("%%s4",23);
-  set_internal_abs("%%s5",24);
-  set_internal_abs("%%s6",25);
-  set_internal_abs("%%s7",26);
-  set_internal_abs("%%s8",27);
-  set_internal_abs("%%s9",28);
-  set_internal_abs("%%gp",29);
-  set_internal_abs("fp",30);
   set_internal_abs("fpscr",0);
   set_internal_abs("xer",1);
   set_internal_abs("br0",8);
   set_internal_abs("ctr",9);
-  set_internal_abs("a0",1);
-  set_internal_abs("a1",2);
-  set_internal_abs("a2",3);
-  set_internal_abs("a3",4);
-  set_internal_abs("a4",5);
-  set_internal_abs("a5",6);
-  set_internal_abs("a6",7);
-  set_internal_abs("a7",8);
-  set_internal_abs("t0",9);
-  set_internal_abs("t1",10);
-  set_internal_abs("t2",11);
-  set_internal_abs("t3",12);
-  set_internal_abs("t4",13);
-  set_internal_abs("t5",14);
-  set_internal_abs("t6",15);
-  set_internal_abs("t7",16);
-  set_internal_abs("t8",17);
-  set_internal_abs("t9",18);
-  set_internal_abs("s0",19);
-  set_internal_abs("s1",20);
-  set_internal_abs("s2",21);
-  set_internal_abs("s3",22);
-  set_internal_abs("s4",23);
-  set_internal_abs("s5",24);
-  set_internal_abs("s6",25);
-  set_internal_abs("s7",26);
-  set_internal_abs("s8",27);
-  set_internal_abs("s9",28);
-  set_internal_abs("gp",29);
+*/
 }
 
 
@@ -1378,7 +1327,10 @@ int init_cpu(void)
 {
   if (regnames)
     define_regnames();
+  insn_count = 0;
   value_bucketno = 0;
+  greatest_bucket_number = 0;
+  atexit(at_end);
   return 1;
 }
 
@@ -1389,39 +1341,7 @@ int cpu_args(char *p)
 
   if (!strncmp(p,"-m",2)) {
     p += 2;
-    if (!strcmp(p,"pwrx") || !strcmp(p,"pwr2"))
-      cpu_type = CPU_TYPE_POWER | CPU_TYPE_POWER2 | CPU_TYPE_32;
-    else if (!strcmp(p,"pwr"))
-      cpu_type = CPU_TYPE_POWER | CPU_TYPE_32;
-    else if (!strcmp(p,"601"))
-      cpu_type = CPU_TYPE_601 | CPU_TYPE_PPC | CPU_TYPE_32;
-    else if (!strcmp(p,"ppc") || !strcmp(p,"ppc32") || !strncmp(p,"60",2) ||
-             !strncmp(p,"75",2) || !strncmp(p,"85",2))
-      cpu_type = CPU_TYPE_PPC | CPU_TYPE_32;
-    else if (!strcmp(p,"ppc64") || !strcmp(p,"620"))
-      cpu_type = CPU_TYPE_PPC | CPU_TYPE_64;
-    else if (!strcmp(p,"7450"))
-      cpu_type = CPU_TYPE_PPC | CPU_TYPE_7450 | CPU_TYPE_32 | CPU_TYPE_ALTIVEC;
-    else if (!strncmp(p,"74",2) || !strcmp(p,"avec") || !strcmp(p,"altivec"))
-      cpu_type = CPU_TYPE_PPC | CPU_TYPE_32 | CPU_TYPE_ALTIVEC;
-    else if (!strcmp(p,"403"))
-      cpu_type = CPU_TYPE_PPC | CPU_TYPE_403 | CPU_TYPE_32;
-    else if (!strcmp(p,"405"))
-      cpu_type = CPU_TYPE_PPC | CPU_TYPE_403 | CPU_TYPE_405 | CPU_TYPE_32;
-    else if (!strncmp(p,"44",2) || !strncmp(p,"46",2))
-      cpu_type = CPU_TYPE_PPC | CPU_TYPE_440 | CPU_TYPE_BOOKE | CPU_TYPE_ISEL
-                 | CPU_TYPE_RFMCI | CPU_TYPE_32;
-    else if (!strcmp(p,"821") || !strcmp(p,"850") || !strcmp(p,"860"))
-      cpu_type = CPU_TYPE_PPC | CPU_TYPE_860 | CPU_TYPE_32;
-    else if (!strcmp(p,"e300"))
-      cpu_type = CPU_TYPE_PPC | CPU_TYPE_E300 | CPU_TYPE_32;
-    else if (!strcmp(p,"e500"))
-      cpu_type = CPU_TYPE_PPC | CPU_TYPE_E500 | CPU_TYPE_BOOKE | CPU_TYPE_ISEL
-                 | CPU_TYPE_SPE | CPU_TYPE_EFS | CPU_TYPE_PMR | CPU_TYPE_RFMCI
-                 | CPU_TYPE_32;
-    else if (!strcmp(p,"booke"))
-      cpu_type = CPU_TYPE_PPC | CPU_TYPE_BOOKE;
-    else if (!strcmp(p,"com"))
+    if (!strcmp(p,"com"))
       cpu_type = CPU_TYPE_COMMON | CPU_TYPE_32;
     else if (!strcmp(p,"any"))
       cpu_type |= CPU_TYPE_ANY;
