@@ -15,7 +15,7 @@ mnemonic mnemonics[] = {
 
 const int mnemonic_cnt=sizeof(mnemonics)/sizeof(mnemonics[0]);
 
-const char *cpu_copyright="vasm StarkCPU backend 0.03 (c) 2025 Robert Finch\nderived from: PowerPC cpu backend 3.2 (c) 2002-2019,2024 Frank Wille";
+const char *cpu_copyright="vasm StarkCPU backend 0.04 (c) 2025 Robert Finch\nderived from: PowerPC cpu backend 3.2 (c) 2002-2019,2024 Frank Wille";
 const char *cpuname = "StarkCPU";
 int bytespertaddr = 4;
 int ppc_endianess = 1;
@@ -70,6 +70,7 @@ static value_bucket_t value_bucket[32];
 static uint32_t instr[32];
 static uint8_t instrno;
 static uint32_t greatest_bucket_number;
+static uint32_t count64, count32;
 static uint32_t insn_count;
 static instruction* lastip;
 
@@ -418,7 +419,7 @@ int parse_operand(char *p,int len,operand *op,int optype)
 			//op->mode = OPM_CLR;
 		}
   }
-  else if (op->value->type==SYM && !(powerpc_operands[optype].flags & OPER_RELATIVE)) {
+  else if (op->value->type==SYM && !(powerpc_operands[optype].flags & OPER_RELATIVE) && optype != CSRNO/*&& optype != JA*/) {
   	op->attr = REL_CLRIMM;
 		op->mode = OPM_CLR;
   }
@@ -436,13 +437,16 @@ int parse_operand(char *p,int len,operand *op,int optype)
         p++;
         q = p;
         op->bsereg = is_reg(p, &p, &regtype);
-			  if (op->bsereg < 0 || regtype != OPER_GPR) {
+			  if (op->bsereg < 0 || (regtype != OPER_GPR && !(regtype == OPER_BR && optype==DBRS))) {
 			  	TRACE("no base reg in []\n");
 	        cpu_error(4);  /* illegal operand type */
   	      rc = PO_CORRUPT;
     	    goto leave;
 			  }
-        op->basereg = number_expr(op->bsereg);
+			  if (optype==DBRS)
+	        op->basereg = number_expr(op->bsereg & 7);
+		  	else
+	        op->basereg = number_expr(op->bsereg);
 			  regtype = OPER_PARENS;
 //			  q++;
         p = skip(p);
@@ -558,8 +562,11 @@ static int get_reloc_type(operand *op)
   else {  /* handle instruction relocs */
     const struct powerpc_operand *ppcop = &powerpc_operands[op->type];
 
-    if (ppcop->shift == 0 || (ppcop->shift==17 && ppcop->bits==14) || op->type==BD || op->type==SI || op->type==UI || op->type==NSI) {
-      if (ppcop->bits == 16 || ppcop->bits == 26 || ppcop->bits==14 || op->type==BD) {
+    if (ppcop->shift == 0 || (ppcop->shift==17 && ppcop->bits==14) ||
+    	op->type==BD || op->type==SI || op->type==UI || op->type==NSI ||
+    	op->type==DBRS
+    	) {
+      if (ppcop->bits == 16 || ppcop->bits == 26 || ppcop->bits==14 || op->type==BD || op->type==DBRS) {
 
         if (ppcop->flags & OPER_RELATIVE) {  /* a relative branch */
           switch (op->attr) {
@@ -794,8 +801,27 @@ static taddr make_reloc(int reloctype,operand *op,section *sec,
             	}
             	break;
             default:
-				      general_error(38);  /* illegal relocation */
-              mask = -1;
+            	switch(op->type) {
+#if 0            		
+            	case JA:
+					      add_extnreloc_masked(reloclist,base,addend,reloctype,
+                           0,1,0,4);
+            		pos = 9;
+            		size = 22;
+            		offset = 0;
+            		mask = 0x1fffff8L;
+            		break;
+            	case JAB:
+            		pos = 14;
+            		size = 18;
+            		offset = 0;
+            		mask = 0x7fffe000000LL;
+            		break;
+#endif            		
+            	default:
+					      general_error(38);  /* illegal relocation */
+  	            mask = -1;
+            	}
               break;
           }
         }
@@ -910,12 +936,12 @@ static uint32_t insertcode(uint32_t i,taddr val,
   if (o->insert) {
     const char *errmsg = NULL;
 
-    i = (o->insert)(i,(int32_t)val,&errmsg);
+    i = (o->insert)(i,(int64_t)val,&errmsg);
     if (errmsg)
       cpu_error(0,errmsg);
   }
   else
-    i |= ((int32_t)val & ((1<<o->bits)-1)) << o->shift;
+    i |= ((int64_t)val & ((1<<o->bits)-1)) << o->shift;
 
   return i;
 }
@@ -976,7 +1002,7 @@ size_t eval_operands(instruction *ip,section *sec,taddr pc,
     else {
       if (!eval_expr(op.value,&val,sec,pc))
         if (insn != NULL) {
-        	TRACE("error 2 1");
+        	TRACE("error 2 1\n");
           cpu_error(2);  /* constant integer expression required */
         }
     }
@@ -1046,7 +1072,11 @@ size_t eval_operands(instruction *ip,section *sec,taddr pc,
         }
 
         /* move to next operand type to handle base register */
-        op.type = RA;//mnemo->operand_type[++i];
+        switch(op.type) {
+        case DBRS:	op.type = BRS; break;
+        default:
+	        op.type = RA;//mnemo->operand_type[++i];
+        }
         ppcop = &powerpc_operands[op.type];
         op.attr = REL_NONE;
         op.mode = OPM_NONE;
@@ -1070,6 +1100,26 @@ size_t eval_operands(instruction *ip,section *sec,taddr pc,
       range_check(val,ppcop,db);
       *insn = insertcode(*insn,val,ppcop);
     }
+#if 0
+		switch(op.type) {
+			case JA:
+//				*insn = insertcode(*insn,val,&powerpc_operands[JA]);
+				if (insn != NULL) {
+					insn++;
+					*insn = insertcode(*insn,val,&powerpc_operands[JAB]);
+				}
+				isize = 8;
+				break;
+			case JOM:
+				if (insn != NULL)
+				*insn = insertcode(*insn,val,&powerpc_operands[JOM]);
+				break;
+			case JSWS:
+				if (insn != NULL)
+				*insn = insertcode(*insn,val,&powerpc_operands[JSWS]);
+				break;
+			}
+#endif
     /* move to next operand type to handle base register */
     
   	if (op.ndxreg) {
@@ -1176,6 +1226,7 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
 				switch(value_bucket[i].size) {
 				case 16:	d = setval(0,d,2,value_bucket[i].value);	break;
 				case 32:	d = setval(0,d,4,value_bucket[i].value);	break;
+				case 64:	d = setval(0,d,8,value_bucket[i].value);	break;
 				}
 			}
 		}
@@ -1295,6 +1346,8 @@ static void at_end(void)
 {
 	printf("Number of instructions: %d\n", insn_count);
 	printf("Largest number of constants: %d\n", greatest_bucket_number);
+	printf("Number of 64-bit constants: %d\n", count64);
+	printf("Number of 32-bit constants: %d\n", count32);
 }
 
 static void define_regnames(void)
@@ -1328,6 +1381,8 @@ int init_cpu(void)
   if (regnames)
     define_regnames();
   insn_count = 0;
+  count32 = 0;
+  count64 = 0;
   value_bucketno = 0;
   greatest_bucket_number = 0;
   atexit(at_end);

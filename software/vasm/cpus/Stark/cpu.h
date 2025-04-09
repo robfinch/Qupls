@@ -69,7 +69,7 @@ static uint16_t totsz;	// size in bytes of value cache
 
 typedef struct {
 	int8_t size;
-	int32_t value;
+	int64_t value;
 	uint32_t insn;
 	rlist **relocs;
 } value_bucket_t;
