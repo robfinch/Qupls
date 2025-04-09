@@ -989,7 +989,7 @@ typedef struct packed
 	logic erc;
 	logic fence;
 	logic mcb;					// micro-code branch
-	logic br;						// conditional branch
+	logic bcc;					// conditional branch
 	logic cjb;					// call, jmp, or bra
 	logic bsr;					// bra or bsr
 	logic jsri;					// indirect subroutine call
@@ -1088,12 +1088,12 @@ input instruction_t ins;
 begin
 	fnConstPos = 8'd0;
 	if (fnHasExConst(ins))					// does instruction have an extendable constant?
-	if (ins[31]!=1'b0)							// and is the constant extended on the cache line?
+	if (ins[31]!=1'b1)							// and is the constant extended on the cache line?
 	if (ins[30:29]!=2'b00) begin		// and it is not a register spec
 		if (fnIsBccCsr(ins))
-			fnConstPos[3:0] = {1'b1,ins[13:11]};
+			fnConstPos[3:0] = {1'b1,ins[14:12]};
 		else
-			fnConstPos[3:0] = {1'b1,ins[19:17]};
+			fnConstPos[3:0] = {1'b1,ins[20:18]};
 	end
 	if (fnIsStimm(ins))
 		fnConstPos[7:4] = {1'b1,ins[8:6]};
@@ -1107,7 +1107,7 @@ input instruction_t ins;
 begin
 	fnConstSize = 4'd0;
 	if (fnHasExConst(ins))					// does instruction have an extendable constant?
-	if (ins[31]!=1'b0)							// and is the constant extended on the cache line?
+	if (ins[31]!=1'b1)							// and is the constant extended on the cache line?
 		fnConstSize[1:0] = ins[30:29];
 	if (fnIsStimm(ins))
 		fnConstSize[3:2] = 2'b01;
