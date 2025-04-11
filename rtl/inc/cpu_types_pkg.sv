@@ -36,6 +36,7 @@
 //                                                                          
 // ============================================================================
 
+`define STARK_CPU		1'b1
 `define CPU_TYPES_PKG	1'b1
 //`define TINY_MMU	1'b1
 `define SMALL_MMU	1'b1
@@ -59,8 +60,17 @@ typedef logic [31:0] virtual_address_t;
 typedef logic [31:0] physical_address_t;
 `endif
 typedef logic [11:0] mc_address_t;
+`ifdef STARK_CPU
+typedef logic [7:0] pregno_t;
+typedef logic [6:0] aregno_t;
+typedef logic [63:0] value_t;
+typedef logic [31:0] half_value_t;
+`else
 typedef logic [8:0] pregno_t;
 typedef logic [7:0] aregno_t;
+typedef logic [63:0] value_t;
+typedef logic [31:0] half_value_t;
+`endif
 //typedef logic [63:0] segment_reg_t;
 
 typedef struct packed {
@@ -69,12 +79,10 @@ typedef struct packed {
 	pc_address_t pc;
 } pc_address_ex_t;
 
-typedef logic [63:0] value_t;
 typedef struct packed {
 	value_t V1;
 	value_t V0;
 } double_value_t;
-typedef logic [31:0] half_value_t;
 typedef struct packed {
 	value_t V3;
 	value_t V2;

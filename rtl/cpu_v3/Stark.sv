@@ -402,6 +402,7 @@ value_t alu0_argT;
 value_t alu0_argM;
 pregno_t alu0_Rt;
 aregno_t alu0_aRt;
+operating_mode_t alu0_om;
 reg alu0_argA_ctag;
 reg alu0_argB_ctag;
 reg alu0_aRtz;
@@ -455,6 +456,7 @@ value_t alu1_argM;
 reg [2:0] alu1_cs;
 pregno_t alu1_Rt;
 aregno_t alu1_aRt;
+operating_mode_t alu1_om;
 reg alu1_aRtz;
 checkpt_ndx_t alu1_cp;
 reg alu1_bank;
@@ -487,6 +489,7 @@ reg fpu0_stomp = 1'b0;
 reg fpu0_available;
 ex_instruction_t fpu0_instr;
 reg [2:0] fpu0_rmd;
+operating_mode_t fpu0_om;
 value_t fpu0_argA;
 value_t fpu0_argB;
 value_t fpu0_argC;
@@ -527,6 +530,7 @@ reg fpu1_available;
 reg fpu1_dataready;
 ex_instruction_t fpu1_instr;
 reg [2:0] fpu1_rmd;
+operating_mode_t fpu1_om;
 value_t fpu1_argA;
 value_t fpu1_argB;
 value_t fpu1_argC;
@@ -690,6 +694,7 @@ reg dram0_store;
 reg dram0_cstore;
 pregno_t dram0_Rt, dram_Rt0;
 aregno_t dram0_aRt, dram_aRt0;
+operating_mode_t dram0_om, dram_om0;
 reg dram0_aRtz, dram_aRtz0;
 reg dram0_bank;
 cause_code_t dram0_exc;
@@ -725,6 +730,7 @@ reg dram1_store;
 reg dram1_cstore;
 pregno_t dram1_Rt, dram_Rt1;
 aregno_t dram1_aRt, dram_aRt1;
+operating_mode_t dram1_om, dram_om1;
 reg dram1_aRtz, dram_aRtz1;
 reg dram1_bank;
 cause_code_t dram1_exc;
@@ -2501,11 +2507,18 @@ reg wrport2_v;
 reg wrport3_v;
 reg wrport4_v;
 reg wrport5_v;
+reg [8:0] weport0;
+reg [8:0] weport1;
+reg [8:0] weport2;
+reg [8:0] weport3;
+reg [8:0] weport4;
+reg [8:0] weport5;
 reg wt0;
 reg wt1;
 reg wt2;
 reg wt3;
 reg wt4;
+reg wt5;
 value_t wrport0_res;
 value_t wrport1_res;
 value_t wrport2_res;
@@ -3076,34 +3089,45 @@ if (advance_pipeline_seg2)
 // register zero to zero.
 
 // There are some pipeline delays to account for.
-pregno_t alu0_Rt2, fpu0_Rt3;
-aregno_t alu0_aRt2, fpu0_aRt3;
+pregno_t alu0_Rt2, fpu0_Rt3, fpu1_Rt3;
+aregno_t alu0_aRt2, fpu0_aRt3, fpu1_aRt3;
 pregno_t alu1_Rt2;
 aregno_t alu1_aRt2;
 value_t fpu0_res3;
 checkpt_ndx_t alu0_cp2, alu1_cp2, fpu0_cp2;
 wire alu0_aRtz1, alu0_aRtz2, alu1_aRtz1, alu1_aRtz2, fpu0_aRtz2;
 rob_ndx_t alu0_id2, alu1_id2, fpu0_id2;
+operating_mode_t alu0_om2, alu1_om2, fpu0_om2, fpu1_om2, dram0_om2, dram1_om2;
+// ALU #0 signals
 vtdl #($bits(pregno_t)) udlyal1 (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu0_Rt), .q(alu0_Rt2) );
 vtdl #($bits(aregno_t)) udlyal2 (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu0_aRt), .q(alu0_aRt2) );
 vtdl #(1) 							udlyal3 (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu0_aRtz), .q(alu0_aRtz2) );
 vtdl #(1) 							udlyal5 (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu0_sc_done), .q(alu0_sc_done2) );
 vtdl #($bits(rob_ndx_t))	udlyal6 (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu0_id), .q(alu0_id2) );
 vtdl #($bits(checkpt_ndx_t)) udlyal7 (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu0_cp), .q(alu0_cp2) );
+vtdl #($bits(operating_mode_t))	udlyal8 (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu0_om), .q(alu0_om2) );
+// ALU #1 signals
 vtdl #($bits(pregno_t)) udlyal1b (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu1_Rt), .q(alu1_Rt2) );
 vtdl #($bits(aregno_t)) udlyal2b (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu1_aRt), .q(alu1_aRt2) );
 vtdl #(1) 							udlyal3b (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu1_aRtz), .q(alu1_aRtz2) );
 vtdl #(1) 							udlyal5b (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu1_sc_done), .q(alu1_sc_done2) );
 vtdl #($bits(rob_ndx_t))	udlyal6b (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu1_id), .q(alu1_id2) );
 vtdl #($bits(checkpt_ndx_t)) udlyal7b (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu1_cp), .q(alu1_cp2) );
+vtdl #($bits(operating_mode_t))	udlyal8b (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu1_om), .q(alu1_om2) );
 //vtdl #($bits(value_t))  udlyal4 (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu0_res), .q(alu0_res2) );
+// FPU #0 signals
 vtdl #($bits(pregno_t)) udlyfp1 (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu0_Rt), .q(fpu0_Rt3) );
 vtdl #($bits(aregno_t)) udlyfp2 (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu0_aRt), .q(fpu0_aRt3) );
 vtdl #(1) 							udlyfp3 (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu0_aRtz), .q(fpu0_aRtz2) );
 vtdl #(1) 							udlyfp5 (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu0_sc_done), .q(fpu0_sc_done2) );
 vtdl #($bits(rob_ndx_t))	udlyfp6 (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu0_id), .q(fpu0_id2) );
 vtdl #($bits(checkpt_ndx_t)) udlyfp7b (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu0_cp), .q(fpu0_cp2) );
+vtdl #($bits(operating_mode_t)) udlyfp8 (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu0_om), .q(fpu0_om2) );
 //vtdl #($bits(value_t))  udlyfp4 (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu0_res), .q(fpu0_res3) );
+// FPU #1 signals
+vtdl #($bits(pregno_t)) udlyfp1a (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu1_Rt), .q(fpu1_Rt3) );
+vtdl #($bits(aregno_t)) udlyfp2a (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu1_aRt), .q(fpu1_aRt3) );
+vtdl #($bits(operating_mode_t)) udlyfp8a (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu1_om), .q(fpu1_om2) );
 
 always_comb wrport0_aRtz = alu0_aRtz2;
 always_comb wrport1_aRtz = alu1_aRtz;
@@ -3117,6 +3141,13 @@ always_comb wrport2_v = dram_v0 && !dram_aRtz0;
 always_comb wrport3_v = (fpu0_sc_done2|fpu0_done1) && !fpu0_aRtz2 && NFPU > 0;
 always_comb wrport4_v = dram_v1 && !dram_aRtz1 && NDATA_PORTS > 1;
 always_comb wrport5_v = (fpu1_sc_done|fpu1_done1) && !fpu1_aRtz && NFPU > 1;
+// always write all bytes, unless a condition register.
+always_comb weport0 = (alu0_aRt2 >= 7'd80 && alu0_aRt2 <= 7'd87) ? (alu0_om2==OM_SECURE ? 9'h0FF : alu0_om2==OM_HYPERVISOR ? 9'h0F : alu0_om2==OM_SUPERVISOR ? 9'h03 : 9'h01) : {wt0,8'hFF};
+always_comb weport1 = (alu1_aRt2 >= 7'd80 && alu1_aRt2 <= 7'd87) ? (alu1_om2==OM_SECURE ? 9'h0FF : alu1_om2==OM_HYPERVISOR ? 9'h0F : alu1_om2==OM_SUPERVISOR ? 9'h03 : 9'h01) : {wt1,8'hFF};
+always_comb weport2 = (dram_aRt0 >= 7'd80 && dram_aRt0 <= 7'd87) ? (dram_om0==OM_SECURE ? 9'h0FF : dram_om0==OM_HYPERVISOR ? 9'h0F : dram_om0==OM_SUPERVISOR ? 9'h03 : 9'h01) : {wt2,8'hFF};
+always_comb weport3 = (fpu0_aRt3 >= 7'd80 && fpu0_aRt3 <= 7'd87) ? (fpu0_om2==OM_SECURE ? 9'h0FF : fpu0_om2==OM_HYPERVISOR ? 9'h0F : fpu0_om2==OM_SUPERVISOR ? 9'h03 : 9'h01) : {wt3,8'hFF};
+always_comb weport4 = (dram_aRt1 >= 7'd80 && dram_aRt1 <= 7'd87) ? (dram_om1==OM_SECURE ? 9'h0FF : dram_om1==OM_HYPERVISOR ? 9'h0F : dram_om1==OM_SUPERVISOR ? 9'h03 : 9'h01) : {wt4,8'hFF};
+always_comb weport5 = (fpu1_aRt3 >= 7'd80 && fpu1_aRt3 <= 7'd87) ? (fpu1_om2==OM_SECURE ? 9'h0FF : fpu1_om2==OM_HYPERVISOR ? 9'h0F : fpu1_om2==OM_SUPERVISOR ? 9'h03 : 9'h01) : {wt5,8'hFF};
 always_comb wt0 = (alu0_sc_done|alu0_done) && !alu0_aRtz2 && alu0_cap;
 always_comb wt2 = dram_v0 && !dram_aRtz0;
 always_comb wt3 = fpu0_done && !fpu0_aRtz && !fpu0_idle && NFPU > 0;
@@ -3155,18 +3186,12 @@ Stark_regfile6wNr #(.RPORTS(24)) urf1 (
 	.wr3(wrport3_v),
 	.wr4(wrport4_v),
 	.wr5(wrport5_v),
-	.we0(1'b1),
-	.we1(1'b1),
-	.we2(1'b1),
-	.we3(1'b1),
-	.we4(1'b1),
-	.we5(1'b1),
-	.wt0(wt0),
-	.wt1(1'b0),
-	.wt2(wt2),
-	.wt3(wt3),
-	.wt4(wt4),
-	.wt5(1'b0),
+	.we0(weport0),
+	.we1(weport1),
+	.we2(weport2),
+	.we3(weport3),
+	.we4(weport4),
+	.we5(weport5),
 	.wa0(wrport0_Rt),
 	.wa1(wrport1_Rt),
 	.wa2(wrport2_Rt),
@@ -4496,6 +4521,7 @@ Stark_alu_station ualust0
 	.aRtz(alu0_aRtz),
 	.aRt(alu0_aRt),
 	.nRt(alu0_Rt),
+	.om(alu0_om),
 	.bank(alu0_bank),
 	.instr(alu0_instr),
 	.div(alu0_div),
@@ -4552,6 +4578,7 @@ generate begin : gAluStation
 			.aRtz(alu1_aRtz),
 			.aRt(alu1_aRt),
 			.nRt(alu1_Rt),
+			.om(alu1_om),
 			.bank(alu1_bank),
 			.instr(alu1_instr),
 			.div(alu1_div),
@@ -4602,6 +4629,7 @@ generate begin : gFpuStat
 				.aRtz(fpu0_aRtz),
 				.aRt1(fpu0_aRt1),
 				.aRtz1(fpu0_aRtz1),
+				.om(fpu0_om),
 				.argA_tag(fpu0_argA_tag),
 				.argB_tag(fpu0_argB_tag),
 				.cs(fpu0_cs),
@@ -4748,6 +4776,7 @@ generate begin : gFpuStat
 				.aRtz(fpu1_aRtz),
 				.aRt1(fpu1_aRt1),
 				.aRtz1(fpu1_aRtz1),
+				.om(fpu1_om),
 				.argA_tag(fpu1_argA_ctag),
 				.argB_tag(fpu1_argB_ctag),
 				.cs(fpu1_cs),
@@ -6034,6 +6063,7 @@ else begin
     dram_Rt0 <= dram0_Rt;
     dram_aRt0 <= dram0_aRt;
     dram_aRtz0 <= dram0_aRtz;
+    dram_om0 <= dram0_om;
     dram_exc0 <= dram0_exc;
   	dram_bus0 <= fnDati(1'b0,dram0_op,(cpu_resp_o[0].dat << dram0_shift)|dram_bus0, dram0_pc);
   	dram_ctag0 <= dram0_ctag;
@@ -6057,6 +6087,7 @@ else begin
     dram_Rt0 <= dram0_Rt;
     dram_aRt0 <= dram0_aRt;
     dram_aRtz0 <= dram0_aRtz;
+    dram_om0 <= dram0_om;
     dram_exc0 <= dram0_exc;
   	dram_bus0 <= fnDati(dram0_more,dram0_op,cpu_resp_o[0].dat >> dram0_shift, dram0_pc);
     if (dram0_store) begin
@@ -6081,6 +6112,7 @@ else begin
 	    dram_Rt1 <= dram1_Rt;
 	    dram_aRt1 <= dram1_aRt;
 	    dram_aRtz1 <= dram1_aRtz;
+	    dram_om1 <= dram1_om;
 	    dram_exc1 <= dram1_exc;
     	dram_bus1 <= fnDati(1'b0,dram1_op,(cpu_resp_o[1].dat << dram1_shift)|dram_bus1, dram1_pc);
     	dram_ctag1 <= dram1_ctag;
@@ -6100,6 +6132,7 @@ else begin
 	    dram_Rt1 <= dram1_Rt;
 	    dram_aRt1 <= dram1_aRt;
 	    dram_aRtz1 <= dram1_aRtz;
+	    dram_om1 <= dram1_om;
 	    dram_exc1 <= dram1_exc;
     	dram_bus1 <= fnDati(dram1_more,dram1_op,cpu_resp_o[1].dat >> dram1_shift, dram1_pc);
 	    if (dram1_store) begin
@@ -6123,10 +6156,12 @@ else begin
 	// dramN_addr var. We can tell when to use it by the setting of the more
 	// flag.
 	if (SUPPORT_LOAD_BYPASSING && lbndx0 > 0) begin
+		// ??? dram0_bus???
 		dram_bus0 <= fnDati(1'b0,dram0_op,lsq[lbndx0.row][lbndx0.col].res,dram0_pc);
 		dram_ctag0 <= lsq[lbndx0.row][lbndx0.col].ctag;
 		dram_Rt0 <= lsq[lbndx0.row][lbndx0.col].Rt;
 		dram_v0 <= lsq[lbndx0.row][lbndx0.col].v;
+		dram_om0	<= lsq[lbndx0.row][lbndx0.col].om;
 		lsq[lbndx0.row][lbndx0.col].v <= INV;
 		rob[lsq[lbndx0.row][lbndx0.col].rndx].done <= 2'b11;
 	end
@@ -6148,6 +6183,7 @@ else begin
 		dram0_Rt	<= lsq[mem0_lsndx.row][mem0_lsndx.col].Rt;
 		dram0_aRt	<= lsq[mem0_lsndx.row][mem0_lsndx.col].aRt;
 		dram0_aRtz <= lsq[mem0_lsndx.row][mem0_lsndx.col].aRtz;
+		dram0_om <= lsq[mem0_lsndx.row][mem0_lsndx.col].om;
 		dram0_bank <= lsq[mem0_lsndx.row][mem0_lsndx.col].om==2'd0 ? 1'b0 : 1'b1;
 		dram0_cp <= rob[lsq[mem0_lsndx.row][mem0_lsndx.col].rndx].cndx;
 		if (dram0_more && SUPPORT_UNALIGNED_MEMORY) begin
@@ -6184,6 +6220,7 @@ else begin
 			dram_bus1 <= fnDati(1'b0,dram1_op,lsq[lbndx1.row][lbndx1.col].res,dram1_pc);
 			dram_Rt1 <= lsq[lbndx1.row][lbndx1.col].Rt;
 			dram_v1 <= lsq[lbndx1.row][lbndx1.col].v;
+			dram_om1	<= lsq[lbndx1.row][lbndx1.col].om;
 			lsq[lbndx1.row][lbndx1.col].v <= INV;
 			rob[lsq[lbndx1.row][lbndx1.col].rndx].done <= 2'b11;
 		end
@@ -6204,6 +6241,7 @@ else begin
 			dram1_Rt <= lsq[mem1_lsndx.row][mem1_lsndx.col].Rt;
 			dram1_aRt	<= lsq[mem1_lsndx.row][mem1_lsndx.col].aRt;
 			dram1_aRtz <= lsq[mem1_lsndx.row][mem1_lsndx.col].aRtz;
+			dram1_om	<= lsq[mem1_lsndx.row][mem1_lsndx.col].om;
 			dram1_bank <= lsq[mem1_lsndx.row][mem1_lsndx.col].om==2'd0 ? 1'b0 : 1'b1;
 			dram1_cp <= rob[lsq[mem1_lsndx.row][mem1_lsndx.col].rndx].cndx;
 			if (dram1_more && SUPPORT_UNALIGNED_MEMORY) begin
@@ -7565,10 +7603,18 @@ begin
 	exc_ret_pc.bno_t <= 6'd1;
 	exc_ret_pc.bno_f <= 6'd1;
 	sr <= 64'd0;
-	sr.pl <= 8'hFF;				// highest priority
-	sr.om <= OM_MACHINE;
+	sr.pl <= 8'hFF;					// highest priority
+	sr.om <= OM_SECURE;
 	sr.dbg <= TRUE;
-	sr.ipl <= 6'd0;				// non-maskable interrupts only
+	sr.ipl <= 6'd63;				// non-maskable interrupts only
+	/* This must be setup by software
+	sr_stack[0] <= 64'd0;
+	sr_stack[0].pl <= 8'hFF;
+	sr_stack[0].om <= OM_SECURE;
+	sr_stack[0].dbg <= FALSE;
+	sr_stack[0].ipl <= 6'd63;
+	pc_stack[0] <= 
+	*/
 	asid <= 16'd0;
 	ip_asid <= 16'd0;
 	atom_mask <= 32'd0;

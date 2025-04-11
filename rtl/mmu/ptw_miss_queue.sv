@@ -45,7 +45,7 @@ import ptable_walker_pkg::*;
 module ptw_miss_queue(rst, clk, state, ptbr, ptattr,
 	commit0_id, commit0_idv, commit1_id, commit1_idv, commit2_id, commit2_idv,
 	commit3_id, commit3_idv,
-	tlb_miss, tlb_missadr, tlb_missasid, tlb_missid, tlb_missqn,
+	tlb_miss, tlb_missadr, tlb_miss_oadr, tlb_missasid, tlb_missid, tlb_missqn,
 	in_que, ptw_vv, ptw_pv, ptw_ppv, tranbuf, miss_queue, sel_tran, sel_qe, walk_level);
 
 input rst;
@@ -63,6 +63,7 @@ input rob_ndx_t commit3_id;
 input commit3_idv;
 input tlb_miss;
 input address_t tlb_missadr;
+input address_t tlb_miss_oadr;
 input asid_t tlb_missasid;
 input rob_ndx_t tlb_missid;
 input [1:0] tlb_missqn;
@@ -189,7 +190,7 @@ else
 always_ff @(posedge clk)
 if (rst) begin
 	for (nn = 0; nn < MISSQ_SIZE; nn = nn + 1)
-		miss_queue[nn] <= 'd0;
+		miss_queue[nn] <= {$bits(ptw_miss_queue_t){1'd0}};
 	in_que <= FALSE;
 end
 else begin
@@ -208,6 +209,7 @@ else begin
 			miss_queue[empty_qe].lvl <= ptbr.level;
 			miss_queue[empty_qe].asid <= tlb_missasid;
 			miss_queue[empty_qe].id <= tlb_missid;
+			miss_queue[empty_qe].adr <= tlb_miss_oadr;
 			miss_queue[empty_qe].adr <= tlb_missadr;
 			miss_queue[empty_qe].qn <= tlb_missqn;
 
@@ -391,15 +393,15 @@ else begin
 `ifdef MMU_SUPPORT_64k_PAGES
 			4'd10:	// 64k
 				case(ptattr.pte_size)
-				_4B_PTE:	miss_queue[tranbuf[sel_tran].stk].tadr <= {tranbuf[sel_tran].pte.l1.ppn,pindex[13:0],2'b0} | (miss_queue[tranbuf[sel_tran].stk].tadr & {$bits({tranbuf[sel_tran].pte.l1.ppn,pindex[13:0],2'b0}){1'b0}});;
-				_8B_PTE:	miss_queue[tranbuf[sel_tran].stk].tadr <= {tranbuf[sel_tran].pte.l1.ppn,pindex[12:0],3'b0} | (miss_queue[tranbuf[sel_tran].stk].tadr & {$bits({tranbuf[sel_tran].pte.l1.ppn,pindex[12:0],3'b0}){1'b0}});;
-				_16B_PTE:	miss_queue[tranbuf[sel_tran].stk].tadr <= {tranbuf[sel_tran].pte.l1.ppn,pindex[11:0],4'b0} | (miss_queue[tranbuf[sel_tran].stk].tadr & {$bits({tranbuf[sel_tran].pte.l1.ppn,pindex[11:0],4'b0}){1'b0}});;
+				_4B_PTE:	miss_queue[tranbuf[sel_tran].stk].tadr <= {tranbuf[sel_tran].pte.l1.ppn,pindex[13:0],2'b0} | (miss_queue[tranbuf[sel_tran].stk].tadr & {$bits({tranbuf[sel_tran].pte.l1.ppn,pindex[13:0],2'b0}){1'b0}});
+				_8B_PTE:	miss_queue[tranbuf[sel_tran].stk].tadr <= {tranbuf[sel_tran].pte.l1.ppn,pindex[12:0],3'b0} | (miss_queue[tranbuf[sel_tran].stk].tadr & {$bits({tranbuf[sel_tran].pte.l1.ppn,pindex[12:0],3'b0}){1'b0}});
+				_16B_PTE:	miss_queue[tranbuf[sel_tran].stk].tadr <= {tranbuf[sel_tran].pte.l1.ppn,pindex[11:0],4'b0} | (miss_queue[tranbuf[sel_tran].stk].tadr & {$bits({tranbuf[sel_tran].pte.l1.ppn,pindex[11:0],4'b0}){1'b0}});
 				default:	;
 				endcase
 `endif				
 			// 8k pages, 8B pte
 			default:
-				miss_queue[tranbuf[sel_tran].stk].tadr <= {tranbuf[sel_tran].pte.l1.ppn,pindex[9:0],3'b0} | (miss_queue[tranbuf[sel_tran].stk].tadr & {$bits({tranbuf[sel_tran].pte.l1.ppn,pindex[9:0],3'b0}){1'b0}});;
+				miss_queue[tranbuf[sel_tran].stk].tadr <= {tranbuf[sel_tran].pte.l1.ppn,pindex[9:0],3'b0} | (miss_queue[tranbuf[sel_tran].stk].tadr & {$bits({tranbuf[sel_tran].pte.l1.ppn,pindex[9:0],3'b0}){1'b0}});
 			endcase
 		end
 		else begin

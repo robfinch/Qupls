@@ -57,7 +57,7 @@ parameter SIM = 1'b0;
 // architectural ones, or performance will suffer due to stalls.
 // Must be a multiple of four. If it is not 512 or 256 then the renamer logic will
 // need to be modified.
-parameter PREGS = 256;
+parameter PREGS = 512;
 
 `define L1CacheLines	1024
 `define L1CacheLineSize		256
@@ -450,7 +450,7 @@ typedef struct packed
 typedef struct packed
 {
 	logic zero;
-	logic [1:0] zero;
+	logic [1:0] zero1a;
 	logic [4:0] disp;
 	logic [1:0] sc;
 	logic [4:0] Rs2;
@@ -572,7 +572,7 @@ typedef struct packed
 	logic [2:0] cl;
 	logic resv;
 	logic cr;
-	logic [1:0] resv;
+	logic [1:0] resv1b;
 	logic [2:0] Br;
 	logic [4:0] Rd;
 	logic [5:0] opcode;
@@ -878,7 +878,7 @@ typedef union packed
 	blrlcl_inst_t blrlcl;
 	bccld_inst_t bccld;
 	bcclr_inst_t bcclr;
-	bcclcl_inst_t; bcclcl;
+	bcclcl_inst_t bcclcl;
 	pcc_inst_t pcc;
 	atom_inst_t atom;
 	lsd_inst_t lsd;
@@ -1039,6 +1039,72 @@ typedef struct packed
 	instruction_t ins;
 	decode_bus_t db;
 } pipeline_reg_t;
+
+typedef struct packed {
+	// The following fields may change state while an instruction is processed.
+	logic v;									// 1=entry is valid, in use
+	seqnum_t sn;							// sequence number, decrements when instructions que
+//	logic [5:0] sync_dep;			// sync instruction dependency
+//	logic [5:0] fc_dep;				// flow control dependency
+//	logic [5:0] sync_no;
+//	logic [5:0] fc_no;
+	logic [3:0] predino;			// predicated instruction number (1 to 8)
+	rob_ndx_t predrndx;				// ROB index of associate PRED instruction
+	rob_ndx_t orid;						// ROB id of originating macro-instruction
+	logic lsq;								// 1=instruction has associated LSQ entry
+	lsq_ndx_t lsqndx;					// index to LSQ entry
+	logic [1:0] out;					// 1=instruction is being executed
+	logic [1:0] done;					// 2'b11=instruction is finished executing
+	logic rstp;								// indicate physical register reset required
+	logic [63:0] pred_status;	// predicate status for the next eight instructions.
+	logic [7:0] pred_bits;		// predicte bits for this instruction.
+	logic pred_bitv;					// 1=predicate bit is valid
+	logic [1:0] vn;						// vector index
+	logic chkpt_freed;
+	cpu_types_pkg::pc_address_t brtgt;
+	cpu_types_pkg::mc_address_t mcbrtgt;			// micro-code branch target
+	logic takb;								// 1=branch evaluated to taken
+	cause_code_t exc;					// non-zero indicate exception
+	logic excv;								// 1=exception
+	cpu_types_pkg::value_t argC;	// for stores
+`ifdef IS_SIM
+	cpu_types_pkg::value_t argA;
+	cpu_types_pkg::value_t argB;
+	cpu_types_pkg::value_t argI;
+	cpu_types_pkg::value_t argT;
+	cpu_types_pkg::value_t argM;
+	cpu_types_pkg::value_t res;
+`endif
+	logic all_args_valid;			// 1 if all args are valid
+	logic could_issue;				// 1 if instruction ready to issue
+	logic could_issue_nm;			// 1 if instruction ready to issue NOP
+	logic prior_sync;					// 1 if instruction has sync prior to it
+	logic prior_fc;						// 1 if instruction has fc prior to it
+	logic argA_vp;						// 1=argument A valid pending
+	logic argB_vp;
+	logic argC_vp;
+	logic argT_vp;
+	logic argM_vp;
+	logic argA_v;							// 1=argument A valid
+	logic argB_v;
+	logic argC_v;
+	logic argT_v;
+	logic argM_v;
+	logic rat_v;							// 1=checked with RAT for valid reg arg.
+	cpu_types_pkg::value_t arg;							// argument value for CSR instruction
+	// The following fields are loaded at enqueue time, but otherwise do not change.
+	logic last;								// 1=last instruction in group (not used)
+	rob_ndx_t group_len;			// length of instruction group (not used)
+	logic bt;									// branch to be taken as predicted
+	operating_mode_t om;			// operating mode
+	decode_bus_t decbus;			// decoded instruction
+	checkpt_ndx_t cndx;				// checkpoint index
+	checkpt_ndx_t br_cndx;		// checkpoint index branch owns
+	pipeline_reg_t op;			// original instruction
+	cpu_types_pkg::pc_address_ex_t pc;			// PC of instruction
+	cpu_types_pkg::mc_address_t mcip;				// Micro-code IP address
+	seqnum_t grp;							// instruction group
+} rob_entry_t;
 
 // ============================================================================
 // Support Functions

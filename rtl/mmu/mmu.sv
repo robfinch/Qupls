@@ -32,7 +32,7 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 9800 LUTs / 5900 FFs / 30 BRAMs
+// 10100 LUTs / 7800 FFs / 24 BRAMs
 // ============================================================================
 
 import const_pkg::*;
@@ -54,19 +54,19 @@ module mmu(rst, clk, paging_en,
 	vadr_ir, vadr, vadr_v, vadr_asid, vadr_id,
 	vadr2_ir, vadr2, vadr2_v, vadr2_asid, vadr2_id,
 	padr, padr2,
-	tlb_entry0, tlb_pc_entry, tlb0_v, pc_padr_v, pc_padr,
+	tlb_pc_entry, tlb0_v, pc_padr_v, pc_padr,
 	commit0_id, commit0_idv, commit1_id, commit1_idv, commit2_id, commit2_idv,
 	commit3_id, commit3_idv,
 	ftas_req, ftas_resp,
-	ftam_req, ftam_resp, fault_o, faultq_o, pe_fault_o,
-	tlb_wr, tlb_way, tlb_entryno, tlb_entry
+	ftam_req, ftam_resp, fault_o, faultq_o, pe_fault_o
 );
 parameter CORENO = 6'd1;
 parameter CID = 3'd3;
 parameter WAYS = 3;
+parameter BUS_WIDTH = 256;
 
 parameter IO_ADDR = 32'hFFF40001;	//32'hFEFC0001;
-parameter IO_ADDR_MASK = 32'h00FF0000;
+parameter IO_ADDR_MASK = 32'hFFFF0000;
 
 parameter CFG_BUS = 8'd0;
 parameter CFG_DEVICE = 5'd14;
@@ -112,7 +112,6 @@ input vadr2_v;
 input rob_ndx_t vadr2_id;
 output physical_address_t padr2;
 
-output tlb_entry_t tlb_entry0;
 output tlb_entry_t tlb_pc_entry;
 output tlb0_v;
 
@@ -134,22 +133,42 @@ output [31:0] fault_o;
 output reg [1:0] faultq_o;
 output reg pe_fault_o;
 
-output reg tlb_wr;
-output reg [WAYS-1:0] tlb_way;
-output reg [9:0] tlb_entryno;
-output tlb_entry_t tlb_entry;
+tlb_entry_t tlb_entry0;
+reg tlb_wr;
+reg [WAYS-1:0] tlb_way;
+reg [9:0] tlb_entryno;
+tlb_entry_t tlb_entry;
 
 virtual_address_t ptw_vadr;
 reg ptw_vv;
 physical_address_t ptw_padr, tmp_padr, sadr;
 wire ptw_pv;
 wire tlb_miss;
+
+wire [4:0] pbl_regset;
+pebble_t pbl_outa;
+pebble_t pbl_outb;
+
+reg tlb_miss_r;
+reg tlb_missadr_r;
+asid_t tlb_missasid_r;
+rob_ndx_t tlb_missid_r;
+reg [1:0] tlb_missqn_r;
+
 address_t tlb_missadr;
 address_t tlb_pmtadr;
 asid_t tlb_missasid;
 rob_ndx_t tlb_missid;
 wire [1:0] tlb_missqn;
 wire tlb_missack;
+reg bound_exc;
+address_t tlb_miss_badr;
+always_comb
+	tlb_miss_badr = tlb_missadr_r + {pbl_outb.base,14'd0};
+//	tlb_miss_badr = tlb_missadr + (pbl[tlb_missadr[31:28]].base << (5'd6 + ptattr.pgsz));
+always_comb
+	bound_exc = tlb_missadr_r > {pbl_outb.limit,14'h3fff};
+//	bound_exc = tlb_missadr > {pbl[tlb_missadr[31:28]].limit,{(5'd6 + ptattr.pgsz){1'h1}}};
 
 reg seg_base_v, pc_seg_base_v;
 reg seg_limit_v, pc_seg_limit_v;
@@ -171,7 +190,7 @@ ptw_miss_queue_t [MISSQ_SIZE-1:0] miss_queue;
 reg [31:0] miss_adr;
 asid_t miss_asid;
 reg [63:0] stlb_adr;
-reg cs_config, cs_hwtw;
+reg cs_config, cs_configd, cs_hwtw, cs_hwtwd;
 reg ptw_ppv;
 reg [5:0] sel_tran;
 wire [5:0] sel_qe;
@@ -188,7 +207,7 @@ reg pte_v;
 reg [4:0] rty_wait;
 
 integer nn,n4;
-fta_cmd_request256_t sreq;
+fta_cmd_request256_t sreq, sreqd;
 fta_cmd_response256_t sresp;
 wire irq_en;
 wire cs_tw;
@@ -202,22 +221,28 @@ always_comb
 always_ff @(posedge clk)
 	sreq <= ftas_req;
 always_ff @(posedge clk)
+	sreqd <= sreq;
+always_ff @(posedge clk)
 begin
 	ftas_resp <= sresp;
 	ftas_resp.ack <= sack|sack_desc;
 end
 
 always_ff @(posedge clk)
-	cs_config <= ftas_req.cyc && ftas_req.stb &&
-		ftas_req.padr[31:28]==4'hD &&
-		ftas_req.padr[27:20]==CFG_BUS &&
-		ftas_req.padr[19:15]==CFG_DEVICE &&
-		ftas_req.padr[14:12]==CFG_FUNC;
+	cs_config <= ftas_req.cyc &&
+		ftas_req.adr[31:30]==2'b10 &&
+		ftas_req.adr[29:22]==CFG_BUS &&
+		ftas_req.adr[21:17]==CFG_DEVICE &&
+		ftas_req.adr[16:14]==CFG_FUNC;
 
 always_comb
-	cs_hwtw <= cs_tw && sreq.cyc && sreq.stb;
+	cs_hwtw <= cs_tw && sreq.cyc;
+always_ff @(posedge clk)
+	cs_hwtwd <= cs_hwtw;
+always_ff @(posedge clk)
+	cs_configd <= cs_config;
 
-vtdl #(.WID(1), .DEP(16)) urdyd1 (.clk(clk), .ce(1'b1), .a(4'd1), .d(cs_hwtw|cs_config), .q(sack));
+vtdl #(.WID(1), .DEP(16)) urdyd1 (.clk(clk), .ce(1'b1), .a(4'd2), .d(cs_hwtw|cs_config), .q(sack));
 
 ddbb256_config #(
 	.CFG_BUS(CFG_BUS),
@@ -245,11 +270,11 @@ upci
 	.clk_i(clk),
 	.irq_i(fault & irq_en),
 	.irq_o(fault_o),
-	.cs_config_i(cs_config),
-	.we_i(sreq.we),
-	.sel_i(sreq.sel),
-	.adr_i(sreq.padr),
-	.dat_i(sreq.data1),
+	.cs_config_i(cs_configd),
+	.we_i(sreqd.we),
+	.sel_i(sreqd.sel),
+	.adr_i(sreqd.adr),
+	.dat_i(sreqd.data1),
 	.dat_o(cfg_out),
 	.cs_bar0_o(cs_tw),
 	.cs_bar1_o(cs_desc),
@@ -257,8 +282,93 @@ upci
 	.irq_en_o(irq_en)
 );
 
+wire [26:0] lfsr_o;
+lfsr27 #(.WID(27)) ulfsr1(rst, clk, 1'b1, 1'b0, lfsr_o);
+
 assign selector_cd = 1'b0;
 assign pc_selector_cd = 1'b0;
+
+// Pipelined signals to match BRAM access
+always_ff @(posedge clk)
+	tlb_miss_r <= tlb_miss;
+always_ff @(posedge clk)
+	tlb_missadr_r <= tlb_missadr;
+always_ff @(posedge clk)
+	tlb_missasid_r <= tlb_missasid;
+always_ff @(posedge clk)
+	tlb_missid_r <= tlb_missid;
+always_ff @(posedge clk)
+	tlb_missqn_r <= tlb_missqn;
+
+
+ // xpm_memory_tdpram: True Dual Port RAM
+ // Xilinx Parameterized Macro, version 2024.1
+
+ xpm_memory_tdpram #(
+    .ADDR_WIDTH_A(9),               // DECIMAL
+    .ADDR_WIDTH_B(9),               // DECIMAL
+    .AUTO_SLEEP_TIME(0),            // DECIMAL
+    .BYTE_WRITE_WIDTH_A(8),        // DECIMAL
+    .BYTE_WRITE_WIDTH_B(8),        // DECIMAL
+    .CASCADE_HEIGHT(0),             // DECIMAL
+    .CLOCKING_MODE("common_clock"), // String
+    .ECC_BIT_RANGE("7:0"),          // String
+    .ECC_MODE("no_ecc"),            // String
+    .ECC_TYPE("none"),              // String
+    .IGNORE_INIT_SYNTH(0),          // DECIMAL
+    .MEMORY_INIT_FILE("pbl_init.mem"),      // String
+    .MEMORY_INIT_PARAM("0"),        // String
+    .MEMORY_OPTIMIZATION("true"),   // String
+    .MEMORY_PRIMITIVE("block"),     // String
+    .MEMORY_SIZE(64*512),           // DECIMAL
+    .MESSAGE_CONTROL(0),            // DECIMAL
+    .RAM_DECOMP("auto"),            // String
+    .READ_DATA_WIDTH_A(64),         // DECIMAL
+    .READ_DATA_WIDTH_B(64),         // DECIMAL
+    .READ_LATENCY_A(1),             // DECIMAL
+    .READ_LATENCY_B(1),             // DECIMAL
+    .READ_RESET_VALUE_A("FFFFFFFF00000000"),       // String
+    .READ_RESET_VALUE_B("FFFFFFFF00000000"),	// String
+    .RST_MODE_A("SYNC"),            // String
+    .RST_MODE_B("SYNC"),            // String
+    .SIM_ASSERT_CHK(0),             // DECIMAL; 0=disable simulation messages, 1=enable simulation messages
+    .USE_EMBEDDED_CONSTRAINT(0),    // DECIMAL
+    .USE_MEM_INIT(1),               // DECIMAL
+    .USE_MEM_INIT_MMI(0),           // DECIMAL
+    .WAKEUP_TIME("disable_sleep"),  // String
+    .WRITE_DATA_WIDTH_A(64),        // DECIMAL
+    .WRITE_DATA_WIDTH_B(64),        // DECIMAL
+    .WRITE_MODE_A("no_change"),     // String
+    .WRITE_MODE_B("no_change"),     // String
+    .WRITE_PROTECT(1)               // DECIMAL
+ )
+ ubndregs (
+    .dbiterra(),             // 1-bit output: Status signal to indicate double bit error occurrence
+    .dbiterrb(),             // 1-bit output: Status signal to indicate double bit error occurrence
+    .douta(pbl_outa),                   // READ_DATA_WIDTH_A-bit output: Data output for port A read operations.
+    .doutb(pbl_outb),                   // READ_DATA_WIDTH_B-bit output: Data output for port B read operations.
+    .sbiterra(),             // 1-bit output: Status signal to indicate single bit error occurrence
+    .sbiterrb(),             // 1-bit output: Status signal to indicate single bit error occurrence
+    .addra(sreq.adr[10:3]),          // ADDR_WIDTH_A-bit input: Address for port A write and read operations.
+    .addrb({pbl_regset,tlb_missadr[31:28]}),    // ADDR_WIDTH_B-bit input: Address for port B write and read operations.
+    .clka(clk),                     // 1-bit input: Clock signal for port A. Also clocks port B when
+    .clkb(clk),                     // 1-bit input: Clock signal for port B when parameter CLOCKING_MODE is
+    .dina(sreq.data1 >> {sreq.adr[4:3],6'b0}),	// WRITE_DATA_WIDTH_A-bit input: Data input for port A write operations.
+    .dinb(64'd0),                     // WRITE_DATA_WIDTH_B-bit input: Data input for port B write operations.
+    .ena(sreq.adr[13:11]==3'b0 && cs_hwtw),  // 1-bit input: Memory enable signal for port A. Must be high on clock
+    .enb(1'b1),                       // 1-bit input: Memory enable signal for port B. Must be high on clock
+    .injectdbiterra(1'b0), // 1-bit input: Controls double bit error injection on input data when
+    .injectdbiterrb(1'b0), // 1-bit input: Controls double bit error injection on input data when
+    .injectsbiterra(1'b0), // 1-bit input: Controls single bit error injection on input data when
+    .injectsbiterrb(1'b0), // 1-bit input: Controls single bit error injection on input data when
+    .regcea(1'b1),                 // 1-bit input: Clock Enable for the last register stage on the output
+    .regceb(1'b1),                 // 1-bit input: Clock Enable for the last register stage on the output
+    .rsta(rst),                     // 1-bit input: Reset signal for the final port A output register stage.
+    .rstb(rst),                     // 1-bit input: Reset signal for the final port B output register stage.
+    .sleep(1'b0),                   // 1-bit input: sleep signal to enable the dynamic power saving feature.
+    .wea({8{sreq.we}} & (sreq.sel >> {sreq.adr[4:3],3'b0}) ),
+    .web(1'b0)                        // WRITE_DATA_WIDTH_B/BYTE_WRITE_WIDTH_B-bit input: Write enable vector
+ );
 
 change_det #(.WID(64)) cd3
 (
@@ -269,62 +379,39 @@ change_det #(.WID(64)) cd3
 	.cd(virt_adr_cd)
 );
 
-always_ff @(posedge clk)
-if (rst) begin
-	ptbr <= 64'hFFFFFFFFFFF80000;
-	ptattr <= 64'h1FFF081;
-	ptattr.limit <= 16'h1fff;
-	ptattr.level <= 3'd1;
-	ptattr.pte_size <= _8B_PTE;	// 8B per PTE
-	ptattr.pgsz <= 4'd7;		// 8kB pages
-	ptattr.typ <= NAT_HIERARCHIAL;
-	virt_adr <= 64'h0;
-end
-else begin
-	if (cs_hwtw && sreq.we)
-		casez(sreq.padr[15:0])
-		16'b1111_1111_010?_????:	
-			begin
-				ptbr <= sreq.data1[63:0];
-				ptattr <= sreq.data1[191:128];
-				$display("Q+ PTW: PTBR=%h",sreq.data1[63:0]);
-			end
-		16'b1111_1111_100?_????:	virt_adr <= sreq.data1[63:0];
-		default:	;
-		endcase
-end
+mmu_reg_write ummurwr
+(
+	.rst(rst),
+	.clk(clk),
+	.cs_hwtw(cs_hwtw),
+	.sreq(sreq),
+	.ptbr(ptbr),
+	.ptattr(ptattr),
+	.virt_adr(virt_addr),
+	.pbl_regset(pbl_regset)
+);
 
-always_ff @(posedge clk)
-if (rst) begin
-	sresp <= 256'd0;
-end
-else begin
-	sresp.dat <= 256'd0;
-	sresp.tid <= sreq.tid;
-	sresp.pri <= sreq.pri;
-	if (cs_config)
-		sresp.dat <= cfg_out;
-	else if (cs_hwtw) begin
-		sresp.dat <= 256'd0;
-		casez(sreq.padr[15:0])
-		16'b1111_1111_000?_????:	sresp.dat <= {fault_seg,64'd0,fault_adr};
-		16'b1111_1111_001?_????:	sresp.dat <= {64'd0,fault_asid,48'd0};
-		16'b1111_1111_010?_????:	
-		  begin	
-		  		sresp.dat <= {ptattr,64'd0,ptbr};
-    		  case(ptattr.typ)
-    		  I386:   pte_size <= _4B_PTE;
-    		  default:    pte_size <= _8B_PTE;
-    		  endcase
-		  end
-		16'b1111_1111_100?_????:	sresp.dat <= {{2{phys_adr}},{2{virt_adr}}};
-		16'b1111_1111_101?_????:	sresp.dat <= {4{63'd0,phys_adr_v}};
-		default:	sresp.dat <= 256'd0;
-		endcase
-	end
-	else
-		sresp.dat <= 256'd0;
-end
+mmu_read_reg ummurdrg
+(
+	.rst(rst),
+	.clk(clk),
+	.cs_config(cs_configd),
+	.cs_regs(cs_hwtwd),
+	.sreq(sreqd),
+	.sresp(sresp),
+	.cfg_out(cfg_out),
+	.fault_adr(fault_adr),
+	.fault_seg(fault_seg),
+	.fault_asid(fault_asid),
+	.ptbr(ptbr),
+	.ptattr(ptattr),
+	.virt_adr(virt_adr),
+	.phys_adr(phys_adr),
+	.phys_adr_v(phys_adr_v),
+	.pbl(pbl_outa),
+	.pte_size(pte_size),
+	.pbl_regset(pbl_regset)
+);
 
 always_comb
 begin
@@ -349,11 +436,12 @@ ptw_miss_queue umsq1
 	.commit2_idv(commit2_idv),
 	.commit3_id(commit3_id),
 	.commit3_idv(commit3_idv),
-	.tlb_miss(tlb_miss & paging_en),
-	.tlb_missadr(tlb_missadr),
-	.tlb_missasid(tlb_missasid),
-	.tlb_missid(tlb_missid),
-	.tlb_missqn(tlb_missqn),
+	.tlb_miss(tlb_miss_r & paging_en),
+	.tlb_missadr(tlb_miss_badr),
+	.tlb_miss_oadr(tlb_missadr_r),
+	.tlb_missasid(tlb_missasid_r),
+	.tlb_missid(tlb_missid_r),
+	.tlb_missqn(tlb_missqn_r),
 	.in_que(tlb_missack),
 	.ptw_vv(ptw_vv),
 	.ptw_pv(ptw_pv),
@@ -441,10 +529,7 @@ always_ff @(posedge clk)
 if (rst) begin
 	tlbmiss_ip <= 'd0;
 	ftam_req <= 'd0;
-	ftam_req.cmd <= fta_bus_pkg::CMD_NONE;
-	ftam_req.blen <= 6'd0;
-	ftam_req.bte <= fta_bus_pkg::LINEAR;
-	ftam_req.cti <= fta_bus_pkg::CLASSIC;
+	tBusClear();
 	upd_req <= 'd0;
 	upd_req2 <= 1'b0;
 	upd_req3 <= 1'b0;
@@ -540,7 +625,7 @@ else begin
 	FAULT:
 		begin
 			fault <= 1'd0;
-			if (cs_hwtw && sreq.padr[15:0]==16'hFF00) begin
+			if (cs_hwtw && sreq.adr[13:0]==14'h3F00) begin
 				tlbmiss_ip <= 'd0;
 				req_state <= ptable_walker_pkg::IDLE;		
 			end
@@ -565,23 +650,17 @@ else begin
 			if (miss_queue[sel_qe].lvl != 3'd0) begin
 				$display("PTW: walk level=%d", miss_queue[sel_qe].lvl);
 				ptw_ppv <= FALSE;
-				ftam_req <= 'd0;		// clear all fields.
+				ftam_req <= {$bits(fta_cmd_request256_t){1'd0}};		// clear all fields.
 				ftam_req.cmd <= fta_bus_pkg::CMD_LOAD;
 				ftam_req.blen <= 6'd0;
 				ftam_req.bte <= fta_bus_pkg::LINEAR;
 				ftam_req.cti <= fta_bus_pkg::CLASSIC;
 				ftam_req.cyc <= 1'b1;
-				ftam_req.stb <= 1'b1;
 				ftam_req.we <= 1'b0;
-				case(pte_size)
-				_4B_PTE:	ftam_req.sel <= 32'h000F << {ptw_vadr[4:2],2'd0};//{miss_queue[sel_qe].tadr[3:2],2'd0};
-				_8B_PTE:	ftam_req.sel <= 32'h00FF << {ptw_vadr[4:3],3'd0};
-				_16B_PTE:	ftam_req.sel <= 32'hFFFF;
-				default: ftam_req.sel <= 32'h00FF << {ptw_vadr[4:3],3'd0};
-				endcase
-				ftam_req.asid <= miss_queue[sel_qe].asid;
-				ftam_req.vadr <= ptw_vadr;
-				ftam_req.padr <= ptw_padr;
+				tSetSel(ptw_padr);
+//				ftam_req.asid <= miss_queue[sel_qe].asid;
+				ftam_req.pv <= 1'b0;
+				ftam_req.adr <= ptw_padr;
 				ftam_req.tid <= tid;
 				rty_wait <= 5'd0;
 				access_state <= ptable_walker_pkg::TLB_PTE_FETCH_DONE;
@@ -639,15 +718,15 @@ else begin
 		end
 		else begin
 			rty_wait <= rty_wait + 2'd1;
-			if (rty_wait == 5'd31) begin
+			if (rty_wait == lfsr_o[4:0]) begin
 				$display("PTW: walk level retry");
 				ftam_req.cmd <= fta_bus_pkg::CMD_LOAD;
 				ftam_req.blen <= 6'd0;
 				ftam_req.bte <= fta_bus_pkg::LINEAR;
 				ftam_req.cti <= fta_bus_pkg::CLASSIC;
 				ftam_req.cyc <= 1'b1;
-				ftam_req.stb <= 1'b1;
 				ftam_req.we <= 1'b0;
+				tSetSel(ptw_padr);
 			end
 		end
 	endcase
@@ -655,18 +734,18 @@ else begin
 	// Search for ready transfers and update the TLB.
 	if (~sel_tran[5]) begin
 		$display("PTW: selected tran:%d", sel_tran[4:0]);
-		case(tranbuf[sel_tran[4:0]].access_state)
+		case(tranbuf[sel_tran].access_state)
 		ptable_walker_pkg::INACTIVE:	;
 		ptable_walker_pkg::TLB_PTE_FETCH:
 			begin
-				miss_asid <= miss_queue[tranbuf[sel_tran].stk].asid;
-				miss_adr <= miss_queue[tranbuf[sel_tran].stk].adr;
+				miss_asid <= miss_queue[tranbuf[sel_tran].mqndx].asid;
+				miss_adr <= miss_queue[tranbuf[sel_tran].mqndx].oadr;
 				pte <= tranbuf[sel_tran].pte;
 				pte_v <= TRUE;
 				// If translation is not valid, cause a page fault.
 				if (~tranbuf[sel_tran].pte.l1.v) begin
 					$display("PTW: page fault");
-					faultq_o <= miss_queue[tranbuf[sel_tran].stk].qn;
+					faultq_o <= miss_queue[tranbuf[sel_tran].mqndx].qn;
 					fault <= 1'b1;
 					pe_fault_o <= 1'b1;
 					fault_asid <= tranbuf[sel_tran].asid;
@@ -675,11 +754,13 @@ else begin
 				end
 				// Otherwise translation was valid, update it in the TLB
 				// when level zero reached, or a shortcut page.
-				else if (miss_queue[tranbuf[sel_tran].stk].lvl==3'd0 || (tranbuf[sel_tran].pte.l2.s==1'b1 && SUPPORT_TLBLVL2)) begin
+				else if (miss_queue[tranbuf[sel_tran].mqndx].lvl==3'd0 ||
+					(tranbuf[sel_tran].pte.l2.s==1'b1 && SUPPORT_TLBLVL2)) begin
 					upd_req <= 1'b1;
 					$display("PTW: TLB update request triggered.");
 				end
 			end
+		default:	;
 		endcase
 	end
 end
@@ -691,9 +772,48 @@ begin
 	ftam_req.bte <= fta_bus_pkg::LINEAR;
 	ftam_req.cti <= fta_bus_pkg::CLASSIC;
 	ftam_req.cyc <= 1'b0;
-	ftam_req.stb <= 1'b0;
 	ftam_req.sel <= 32'h0000;
 	ftam_req.we <= 1'b0;
+end
+endtask
+
+task tSetSel;
+input physical_address_t adr;
+begin
+	case (BUS_WIDTH)
+	32:
+		case(pte_size)
+		_4B_PTE:	ftam_req.sel <= 4'hF;
+		default: ftam_req.sel <= 4'hF;
+		endcase
+	64:
+		case(pte_size)
+		_4B_PTE:	ftam_req.sel <= 8'h000F << {adr[2],2'd0};
+		_8B_PTE:	ftam_req.sel <= 8'h00FF;
+		default: ftam_req.sel <= 8'h00FF;
+		endcase
+	128:
+		case(pte_size)
+		_4B_PTE:	ftam_req.sel <= 16'h000F << {adr[3:2],2'd0};//{miss_queue[sel_qe].tadr[3:2],2'd0};
+		_8B_PTE:	ftam_req.sel <= 16'h00FF << {adr[3],3'd0};
+		_16B_PTE:	ftam_req.sel <= 16'hFFFF;
+		default: ftam_req.sel <= 16'h00FF << {adr[3],3'd0};
+		endcase
+	256:
+		case(pte_size)
+		_4B_PTE:	ftam_req.sel <= 32'h000F << {adr[4:2],2'd0};
+		_8B_PTE:	ftam_req.sel <= 32'h00FF << {adr[4:3],3'd0};
+		_16B_PTE:	ftam_req.sel <= 32'hFFFF << {adr[4],4'd0};
+		default: ftam_req.sel <= 32'h00FF << {adr[4:3],3'd0};
+		endcase
+	512:
+		case(pte_size)
+		_4B_PTE:	ftam_req.sel <= 64'h000F << {adr[5:2],2'd0};
+		_8B_PTE:	ftam_req.sel <= 64'h00FF << {adr[5:3],3'd0};
+		_16B_PTE:	ftam_req.sel <= 64'hFFFF << {adr[5:4],4'd0};
+		default: ftam_req.sel <= 64'h00FF << {adr[5:3],3'd0};
+		endcase
+	endcase
 end
 endtask
 

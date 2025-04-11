@@ -1,0 +1,860 @@
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2024  Robert Finch, Waterloo
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+//
+// BSD 3-Clause License
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are met:
+//
+// 1. Redistributions of source code must retain the above copyright notice, this
+//    list of conditions and the following disclaimer.
+//
+// 2. Redistributions in binary form must reproduce the above copyright notice,
+//    this list of conditions and the following disclaimer in the documentation
+//    and/or other materials provided with the distribution.
+//
+// 3. Neither the name of the copyright holder nor the names of its
+//    contributors may be used to endorse or promote products derived from
+//    this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+// FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+// DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+// SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+// CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+// OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+// ============================================================================
+
+import const_pkg::*;
+import cpu_types_pkg::*;
+import Stark_pkg::*;
+
+`define SUPPORT_RAT	1
+
+module Stark_pipeline_ren(
+	rst, clk, clk5x, ph4, en, nq, restore, restored, restore_list, miss_cp,
+	new_chkpt, chkpt_amt, tail0, rob, robentry_stomp, avail_reg, sr,
+	stomp_ren, stomp_bno, branch_state,
+	arn, arng, arnt, arnv, rn_cp, store_argC_pReg, prn, prnv,
+	Rt0_dec, Rt1_dec, Rt2_dec, Rt3_dec, Rt0_decv, Rt1_decv, Rt2_decv, Rt3_decv, 
+	Rt0_ren, Rt1_ren, Rt2_ren, Rt3_ren, Rt0_renv, Rt1_renv, Rt2_renv, Rt3_renv, 
+	ins0_dec, ins1_dec, ins2_dec, ins3_dec, 
+	ins0_ren, ins1_ren, ins2_ren, ins3_ren, 
+
+	wrport0_v, wrport1_v, wrport2_v, wrport3_v, 
+	wrport0_aRt, wrport1_aRt, wrport2_aRt, wrport3_aRt, 
+	wrport0_Rt, wrport1_Rt, wrport2_Rt, wrport3_Rt, 
+	wrport0_res, wrport1_res, wrport2_res, wrport3_res, 
+	wrport0_cp, wrport1_cp, wrport2_cp, wrport3_cp, 
+
+	cmtav, cmtbv, cmtcv, cmtdv, cmtaa, cmtba, cmtca, cmtda,
+	cmtap, cmtbp, cmtcp, cmtdp, cmta_cp, cmtb_cp, cmtc_cp, cmtd_cp,
+	cmtaiv, cmtbiv, cmtciv, cmtdiv,
+
+	cmtbr,
+	tags2free, freevals, free_chkpt, fchkpt, backout, fcu_id,
+	bo_wr, bo_areg, bo_preg, bo_nreg,
+	cndx, pcndx,
+	rat_stallq,
+	micro_code_active_dec, micro_code_active_ren
+);
+input rst;
+input clk;
+input clk5x;
+input [4:0] ph4;
+input en;
+input nq;
+input restore;
+output restored;
+output [PREGS-1:0] restore_list;
+input checkpt_ndx_t miss_cp;
+input new_chkpt;
+input [2:0] chkpt_amt;
+input rob_ndx_t tail0;
+input rob_entry_t [ROB_ENTRIES-1:0] rob;
+input [ROB_ENTRIES-1:0] robentry_stomp;
+input [PREGS-1:0] avail_reg;
+input status_reg_t sr;
+input stomp_ren;
+input [4:0] stomp_bno;
+input branch_state_t branch_state;
+input aregno_t [23:0] arn;
+input [2:0] arng [0:23];
+input [23:0] arnt;
+input [23:0] arnv;
+input checkpt_ndx_t [23:0] rn_cp;
+output pregno_t [23:0] prn;
+output [23:0] prnv;
+input pregno_t store_argC_pReg;
+input pregno_t Rt0_dec;
+input pregno_t Rt1_dec;
+input pregno_t Rt2_dec;
+input pregno_t Rt3_dec;
+input Rt0_decv;
+input Rt1_decv;
+input Rt2_decv;
+input Rt3_decv;
+input pipeline_reg_t ins0_dec;
+input pipeline_reg_t ins1_dec;
+input pipeline_reg_t ins2_dec;
+input pipeline_reg_t ins3_dec;
+output pipeline_reg_t ins0_ren;
+output pipeline_reg_t ins1_ren;
+output pipeline_reg_t ins2_ren;
+output pipeline_reg_t ins3_ren;
+output pregno_t Rt0_ren;
+output pregno_t Rt1_ren;
+output pregno_t Rt2_ren;
+output pregno_t Rt3_ren;
+output reg Rt0_renv;
+output reg Rt1_renv;
+output reg Rt2_renv;
+output reg Rt3_renv;
+input wrport0_v;
+input wrport1_v;
+input wrport2_v;
+input wrport3_v;
+input aregno_t wrport0_aRt;
+input aregno_t wrport1_aRt;
+input aregno_t wrport2_aRt;
+input aregno_t wrport3_aRt;
+input pregno_t wrport0_Rt;
+input pregno_t wrport1_Rt;
+input pregno_t wrport2_Rt;
+input pregno_t wrport3_Rt;
+input value_t wrport0_res;
+input value_t wrport1_res;
+input value_t wrport2_res;
+input value_t wrport3_res;
+input checkpt_ndx_t wrport0_cp;
+input checkpt_ndx_t wrport1_cp;
+input checkpt_ndx_t wrport2_cp;
+input checkpt_ndx_t wrport3_cp;
+input cmtav;
+input cmtbv;
+input cmtcv;
+input cmtdv;
+input cmtaiv;
+input cmtbiv;
+input cmtciv;
+input cmtdiv;
+input aregno_t cmtaa;
+input aregno_t cmtba;
+input aregno_t cmtca;
+input aregno_t cmtda;
+input pregno_t cmtap;
+input pregno_t cmtbp;
+input pregno_t cmtcp;
+input pregno_t cmtdp;
+input checkpt_ndx_t cmta_cp;
+input checkpt_ndx_t cmtb_cp;
+input checkpt_ndx_t cmtc_cp;
+input checkpt_ndx_t cmtd_cp;
+input cmtbr;
+output pregno_t [3:0] tags2free;
+output [3:0] freevals;
+input free_chkpt;
+input checkpt_ndx_t fchkpt;
+input backout;
+input rob_ndx_t fcu_id;
+output bo_wr;
+output aregno_t bo_areg;
+output pregno_t bo_preg;
+output pregno_t bo_nreg;
+output checkpt_ndx_t cndx;
+output checkpt_ndx_t pcndx;
+output rat_stallq;
+input micro_code_active_dec;
+output reg micro_code_active_ren;
+
+integer jj,n5;
+
+reg [0:0] arnbank [23:0];
+initial begin
+	for (jj = 0; jj < 24; jj = jj + 1)
+		arnbank[jj] = 1'b0;
+end
+
+pipeline_reg_t nopi;
+
+// Define a NOP instruction.
+always_comb
+begin
+	nopi = {$bits(pipeline_reg_t){1'b0}};
+	nopi.pc = RSTPC;
+	nopi.pc.bno_t = 6'd1;
+	nopi.pc.bno_f = 6'd1;
+	nopi.mcip = 12'h1A0;
+	nopi.len = 4'd6;
+	nopi.ins = {57'd0,OP_NOP};
+	nopi.pred_btst = 6'd0;
+	nopi.element = 'd0;
+	nopi.aRa = 8'd0;
+	nopi.aRb = 8'd0;
+	nopi.aRc = 8'd0;
+	nopi.aRt = 8'd0;
+	nopi.decbus.Rtz = 1'b1;
+	nopi.decbus.nop = 1'b1;
+	nopi.decbus.alu = 1'b1;
+end
+
+always_ff @(posedge clk)
+if (rst)
+	Rt0_ren <= 9'd0;
+else begin
+	if (en) 
+		Rt0_ren <= Rt0_decv ? Rt0_dec : 9'd0;
+end
+always_ff @(posedge clk)
+if (rst)
+	Rt1_ren <= 10'd0;
+else begin
+	if (en) 
+		Rt1_ren <= Rt1_decv ? Rt1_dec : 9'd0;
+end
+always_ff @(posedge clk)
+if (rst)
+	Rt2_ren <= 10'd0;
+else begin
+	if (en) 
+		Rt2_ren <= Rt2_decv ? Rt2_dec : 9'd0;
+end
+always_ff @(posedge clk)
+if (rst)
+	Rt3_ren <= 10'd0;
+else begin
+	if (en) 
+		Rt3_ren <= Rt3_decv ? Rt3_dec : 9'd0;
+end
+
+always_ff @(posedge clk) if (rst) Rt0_renv <= 1'b0; else if (en) Rt0_renv <= Rt0_decv;
+always_ff @(posedge clk) if (rst) Rt1_renv <= 1'b0; else if (en) Rt1_renv <= Rt1_decv;
+always_ff @(posedge clk) if (rst) Rt2_renv <= 1'b0; else if (en) Rt2_renv <= Rt2_decv;
+always_ff @(posedge clk) if (rst) Rt3_renv <= 1'b0; else if (en) Rt3_renv <= Rt3_decv;
+
+/*
+always_comb Rt0_q1 = Rt0_ren;// & {10{~ins0_ren.decbus.Rtz & ~stomp0}};
+always_comb Rt1_q1 = Rt1_ren;// & {10{~ins1_ren.decbus.Rtz & ~stomp1}};
+always_comb Rt2_q1 = Rt2_ren;// & {10{~ins2_ren.decbus.Rtz & ~stomp2}};
+always_comb Rt3_q1 = Rt3_ren;// & {10{~ins3_ren.decbus.Rtz & ~stomp3}};
+always_comb Rt0_que = Rt0_ren;
+always_comb Rt1_que = Rt1_ren;
+always_comb Rt2_que = Rt2_ren;
+always_comb Rt3_que = Rt3_ren;
+*/
+/*
+always_ff @(posedge clk)
+if (rst)
+	Rt0_que <= 8'd0;
+else begin
+	if (advance_pipeline_seg2)
+		Rt0_que <= Rt0_ren;
+end
+always_ff @(posedge clk)
+if (rst)
+	Rt1_que <= 8'd0;
+else begin
+	if (advance_pipeline_seg2)
+		Rt1_que <= Rt1_ren;
+end
+always_ff @(posedge clk)
+if (rst)
+	Rt2_que <= 8'd0;
+else begin
+	if (advance_pipeline_seg2)
+		Rt2_que <= Rt2_ren;
+end
+always_ff @(posedge clk)
+if (rst)
+	Rt3_que <= 8'd0;
+else begin
+	if (advance_pipeline_seg2)
+		Rt3_que <= Rt3_ren;
+end
+always_ff @(posedge clk)
+if (rst)
+	Rt0_q1 <= 8'd0;
+else begin
+	if (advance_pipeline_seg2)
+		Rt0_q1 <= Rt0_ren;
+end
+always_ff @(posedge clk)
+if (rst)
+	Rt1_q1 <= 8'd0;
+else begin
+	if (advance_pipeline_seg2)
+		Rt1_q1 <= Rt1_ren;
+end
+always_ff @(posedge clk)
+if (rst)
+	Rt2_q1 <= 8'd0;
+else begin
+	if (advance_pipeline_seg2)
+		Rt2_q1 <= Rt2_ren;
+end
+always_ff @(posedge clk)
+if (rst)
+	Rt3_q1 <= 8'd0;
+else begin
+	if (advance_pipeline_seg2)
+		Rt3_q1 <= Rt3_ren;
+end
+*/
+/*
+always_ff @(posedge clk)
+if (rst)
+	Rt0_pq <= 11'd0;
+else begin
+	if (advance_pipeline_seg2)
+		Rt0_pq <= Rt0_ren;
+end
+always_ff @(posedge clk)
+if (rst)
+	Rt1_pq <= 11'd0;
+else begin
+	if (advance_pipeline_seg2)
+		Rt1_pq <= Rt1_ren;
+end
+always_ff @(posedge clk)
+if (rst)
+	Rt2_pq <= 11'd0;
+else begin
+	if (advance_pipeline_seg2)
+		Rt2_pq <= Rt2_ren;
+end
+always_ff @(posedge clk)
+if (rst)
+	Rt3_pq <= 11'd0;
+else begin
+	if (advance_pipeline_seg2)
+		Rt3_pq <= Rt3_ren;
+end
+*/
+/*
+always_ff @(posedge clk)
+if (advance_pipeline) begin
+	if (alloc0 && ins0_ren.decbus.Rt==0) begin
+		$display("alloced r0");
+		$finish;
+	end
+	if (alloc1 && ins1_ren.decbus.Rt==0) begin
+		$display("alloced r0");
+		$finish;
+	end
+	if (alloc2 && ins2_ren.decbus.Rt==0) begin
+		$display("alloced r0");
+		$finish;
+	end
+	if (alloc3 && ins3_ren.decbus.Rt==0) begin
+		$display("alloced r0");
+		$finish;
+	end
+end
+*/
+/*
+always_ff @(posedge clk)
+begin
+	if (!stallq && (ins0_ren.decbus.Rt==7'd63 ||
+		ins1_ren.decbus.Rt==7'd63 ||
+		ins2_ren.decbus.Rt==7'd63 ||
+		ins3_ren.decbus.Rt==7'd63
+	))
+		$finish;
+	for (n19 = 0; n19 < 16; n19 = n19 + 1)
+		if (arn[n19]==7'd63)
+			$finish;
+end
+*/
+checkpt_ndx_t cndx1, cndx2, cndx3;
+assign cndx1 = cndx;
+assign cndx2 = cndx;
+assign cndx3 = cndx;
+wire [3:0] free_chkpts;
+assign free_chkpts[0] = free_chkpt;
+assign free_chkpts[1] = free_chkpt;
+assign free_chkpts[2] = free_chkpt;
+assign free_chkpts[3] = free_chkpt;
+checkpt_ndx_t [3:0] fchkpts;
+assign fchkpts[0] = fchkpt;
+assign fchkpts[1] = fchkpt;
+assign fchkpts[2] = fchkpt;
+assign fchkpts[3] = fchkpt;
+
+`ifdef SUPPORT_RAT
+Stark_rat #(.NPORT(24)) urat1
+(	
+	.rst(rst),
+	.clk(clk),
+	.clk5x(clk5x),
+	.ph4(ph4),
+	.en(en),
+	.en2(en),
+	.nq(nq),
+	.alloc_chkpt(new_chkpt),
+	.chkpt_inc_amt(chkpt_amt),
+	.stallq(rat_stallq),
+	.cndx_o(cndx),
+	.pcndx_o(pcndx),
+	.tail(tail0),
+	.rob(rob),
+	.stomp(robentry_stomp),// & {32{branch_state==BS_CAPTURE_MISSPC}}),
+	.avail_i(avail_reg),
+	.restore(restore),
+	.miss_cp(miss_cp),
+	.qbr0(ins0_dec.decbus.br|ins0_dec.decbus.cjb),
+	.qbr1(ins1_dec.decbus.br|ins1_dec.decbus.cjb),
+	.qbr2(ins2_dec.decbus.br|ins2_dec.decbus.cjb),
+	.qbr3(ins3_dec.decbus.br|ins3_dec.decbus.cjb),
+	.rnbank(arnbank),
+	.rn(arn),
+	.rng(arng),
+	.rnt(arnt),
+	.rnv(arnv),
+	.rn_cp(rn_cp),
+	.st_prn(store_argC_pReg),
+	.prn(prn),
+	.prv(prnv),
+	.wrbanka(sr.om==2'd0 ? 1'b0 : 1'b0),	// For now, only 1 bank
+	.wrbankb(sr.om==2'd0 ? 1'b0 : 1'b0),
+	.wrbankc(sr.om==2'd0 ? 1'b0 : 1'b0),
+	.wrbankd(sr.om==2'd0 ? 1'b0 : 1'b0),
+	.wr0(Rt0_decv && ins0_dec.aRt!=8'd0),// && !stomp0 && ~ins0_ren.decbus.Rtz),
+	.wr1(Rt1_decv && ins1_dec.aRt!=8'd0),// && !stomp1 && ~ins1_ren.decbus.Rtz),
+	.wr2(Rt2_decv && ins2_dec.aRt!=8'd0),// && !stomp2 && ~ins2_ren.decbus.Rtz),
+	.wr3(Rt3_decv && ins3_dec.aRt!=8'd0),// && !stomp3 && ~ins3_ren.decbus.Rtz),
+	.wra(ins0_dec.aRt),
+	.wrb(ins1_dec.aRt),
+	.wrc(ins2_dec.aRt),
+	.wrd(ins3_dec.aRt),
+	.wrra(Rt0_dec),
+	.wrrb(Rt1_dec),
+	.wrrc(Rt2_dec),
+	.wrrd(Rt3_dec),
+	.wra_cp(cndx),
+	.wrb_cp(cndx),
+	.wrc_cp(cndx),
+	.wrd_cp(cndx),
+	.cmtbanka(1'b0),
+	.cmtbankb(1'b0),
+	.cmtbankc(1'b0),
+	.cmtbankd(1'b0),
+	.wrport0_v(wrport0_v),
+	.wrport1_v(wrport1_v),
+	.wrport2_v(wrport2_v),
+	.wrport3_v(wrport3_v),
+	.wrport0_aRt(wrport0_aRt),
+	.wrport1_aRt(wrport1_aRt),
+	.wrport2_aRt(wrport2_aRt),
+	.wrport3_aRt(wrport3_aRt),
+	.wrport0_Rt(wrport0_Rt),
+	.wrport1_Rt(wrport1_Rt),
+	.wrport2_Rt(wrport2_Rt),
+	.wrport3_Rt(wrport3_Rt),
+	.wrport0_cp(wrport0_cp),
+	.wrport1_cp(wrport1_cp),
+	.wrport2_cp(wrport2_cp),
+	.wrport3_cp(wrport3_cp),
+	.cmtav(cmtav),
+	.cmtbv(cmtbv),
+	.cmtcv(cmtcv),
+	.cmtdv(cmtdv),
+	.cmtaiv(cmtaiv),
+	.cmtbiv(cmtbiv),
+	.cmtciv(cmtciv),
+	.cmtdiv(cmtdiv),
+	.cmtaa(cmtaa),
+	.cmtba(cmtba),
+	.cmtca(cmtca),
+	.cmtda(cmtda),
+	.cmtap(cmtap),
+	.cmtbp(cmtbp),
+	.cmtcp(cmtcp),
+	.cmtdp(cmtdp),
+	.cmtaval(64'd0),
+	.cmtbval(64'd0),
+	.cmtcval(64'd0),
+	.cmtdval(64'd0),
+	.cmta_cp(cmta_cp),
+	.cmtb_cp(cmtb_cp),
+	.cmtc_cp(cmtc_cp),
+	.cmtd_cp(cmtd_cp),
+	.cmtbr(cmtbr),
+	.restore_list(restore_list),
+	.restored(restored),
+	.tags2free(tags2free),
+	.freevals(freevals),
+	.free_chkpt_i(free_chkpts),
+	.fchkpt_i(fchkpts),
+	.backout(backout),
+	.fcu_id(fcu_id),
+	.bo_wr(bo_wr),
+	.bo_areg(bo_areg),
+	.bo_preg(bo_preg),
+	.bo_nreg(bo_nreg)	
+);
+`else
+	assign rat_stallq = FALSE;
+	assign cndx0 = 4'd0;
+	assign bo_wr = FALSE;
+	assign bo_areg = 8'd0;
+	assign bo_preg = 9'd0;
+	assign prnv = 24'hFFFFFF;
+	always_ff @(posedge clk)
+	if (rst) begin
+		for (n5 = 0; n5 < 24; n5 = n5 + 1)
+			prn[n5] <= 9'd0;
+	end
+	else begin
+		if (en)
+		begin
+			for (n5 = 0; n5 < 24; n5 = n5 + 1)
+				prn[n5] <= {1'b0,arn[n5]};
+		end
+	end
+	/*
+	always_comb
+	if (rst) begin
+		for (n6 = 0; n6 < 24; n6 = n6 + 1)
+			prn[n6] = 9'd0;
+	end
+	else begin
+		//if (advance_pipeline_seg2)
+		begin
+			for (n6 = 0; n6 < 24; n6 = n6 + 1)
+				prn[n6] = prn1[n6];
+		end
+	end
+	*/
+`endif
+
+/*
+always_ff @(posedge clk)
+begin
+	db0r <= db0;
+	if (brtgtv)
+		db0r.v <= FALSE;
+end
+always_ff @(posedge clk)
+begin
+	db1r <= db1;
+	if (brtgtv)
+		db1r.v <= FALSE;
+end
+always_ff @(posedge clk) begin
+	db2r <= db2;
+	if (brtgtv)
+		db2r.v <= FALSE;
+end
+always_ff @(posedge clk) begin
+	db3r <= db3;
+	if (brtgtv)
+		db3r.v <= FALSE;
+end
+*/
+/*
+always_ff @(posedge clk) if (advance_pipeline_seg2) mcip0_ren <= mcip0_dec;
+always_ff @(posedge clk) if (advance_pipeline_seg2) mcip1_ren <= mcip1_dec;
+always_ff @(posedge clk) if (advance_pipeline_seg2) mcip2_ren <= mcip2_dec;
+always_ff @(posedge clk) if (advance_pipeline_seg2) mcip3_ren <= mcip3_dec;
+always_ff @(posedge clk) if (advance_pipeline_seg2) mcip0_que <= mcip0_ren;
+always_ff @(posedge clk) if (advance_pipeline_seg2) mcip1_que <= mcip1_ren;
+always_ff @(posedge clk) if (advance_pipeline_seg2) mcip2_que <= mcip2_ren;
+always_ff @(posedge clk) if (advance_pipeline_seg2) mcip3_que <= mcip3_ren;
+*/
+/*
+always_ff @(posedge clk)
+if (rst) begin
+	pc0_f.bno_t <= 6'd1;
+	pc0_f.bno_f <= 6'd1;
+	pc0_f.pc <= RSTPC;
+end
+else begin
+//	if (advance_f)
+	pc0_f <= icpc;//pc0;
+end
+always_comb mcip0_mux = micro_ip;
+always_comb mcip1_mux = micro_ip|4'd1;
+always_comb mcip2_mux = micro_ip|4'd2;
+always_comb mcip3_mux = micro_ip|4'd3;
+*/
+/*
+always_ff @(posedge clk)
+if (rst)
+	micro_code_active_f <= TRUE;
+else begin
+	if (advance_pipeline)
+		micro_code_active_f <= micro_code_active;
+end
+*/
+/*
+always_ff @(posedge clk)
+if (rst)
+	micro_code_active_x <= FALSE;
+else begin
+	if (advance_pipeline)
+		micro_code_active_x <= micro_code_active;
+end
+*/
+/*
+always_comb
+	micro_code_active_x = micro_code_active;
+*/
+always_ff @(posedge clk)
+if (rst)
+	micro_code_active_ren <= FALSE;
+else begin
+	if (en)
+		micro_code_active_ren <= micro_code_active_dec;
+end
+/*
+always_ff @(posedge clk)
+if (rst)
+	micro_code_active_q <= FALSE;
+else begin
+	if (advance_pipeline_seg2)
+		micro_code_active_q <= micro_code_active_r;
+end
+*/
+// The cycle after the length is calculated
+// instruction extract inputs
+/*
+pc_address_ex_t pc0_x1;
+always_ff @(posedge clk)
+if (rst) begin
+	pc0_x1.bno_t <= 6'd1;
+	pc0_x1.bno_f <= 6'd1;
+	pc0_x1.pc <= RSTPC;
+end
+else begin
+	if (advance_pipeline)
+		pc0_x1 <= pc0_f;
+end
+
+always_comb
+begin
+ 	pc0_fet = micro_code_active ? mc_adr : pc0_x1;
+end
+always_comb 
+begin
+	pc1_fet = pc0_fet;
+	pc1_fet.pc = micro_code_active ? pc0_fet.pc : pc0_fet.pc + 6'd8;
+end
+always_comb
+begin
+	pc2_fet = pc0_fet;
+	pc2_fet.pc = micro_code_active ? pc0_fet.pc : pc0_fet.pc + 6'd16;
+end
+always_comb
+begin
+	pc3_fet = pc0_fet;
+	pc3_fet.pc = micro_code_active ? pc0_fet.pc : pc0_fet.pc + 6'd24;
+end
+*/
+/*
+always_ff @(posedge clk)
+if (advance_pipeline)
+	qd_x <= qd;
+always_ff @(posedge clk)
+if (advance_pipeline)
+	qd_d <= qd_x;
+always_ff @(posedge clk)
+if (advance_pipeline_seg2)
+	qd_r <= qd_d;
+always_ff @(posedge clk)
+if (advance_pipeline_seg2)
+	qd_q <= qd_r;
+*/
+// Register fetch/rename stage inputs
+/*
+always_ff @(posedge clk)
+if (advance_pipeline_seg2)
+	pc0_r <= ins0_dec.pc;//pc0_d;
+always_ff @(posedge clk)
+if (advance_pipeline_seg2)
+	pc1_r <= ins1_dec.pc;//pc1_d;
+always_ff @(posedge clk)
+if (advance_pipeline_seg2)
+	pc2_r <= ins2_dec.pc;//pc2_d;
+always_ff @(posedge clk)
+if (advance_pipeline_seg2)
+	pc3_r <= ins3_dec.pc;//pc3_d;
+*/
+always_ff @(posedge clk)
+if (rst) begin
+	ins0_ren <= nopi;
+	ins1_ren <= nopi;
+	ins2_ren <= nopi;
+	ins3_ren <= nopi;
+end
+else begin
+	if (en) begin
+		ins0_ren.cndx <= cndx;
+		ins0_ren <= ins0_dec;
+		if (ins0_dec.v & ~stomp_ren) begin
+			ins0_ren.nRt <= Rt0_dec;
+			if (ins3_ren.decbus.bsr)
+				ins0_ren.v <= INV;
+		end
+		else begin
+//			ins0_ren <= nopi;
+			ins0_ren.v <= INV;
+//			ins0_ren.decbus.Rt <= ins0_ren.decbus.Rt;
+//			ins0_ren.decbus.Rtn <= ins0_ren.decbus.Rtn;
+//			ins0_ren.decbus.Rtz <= ins0_ren.decbus.Rtz;
+//			ins0_ren.aRt <= ins0_ren.aRt;
+			if (SUPPORT_BACKOUT)
+				ins0_ren.nRt <= 9'd0;//ins0_ren.nRt;
+			else
+				ins0_ren.nRt <= Rt0_dec;
+		end
+	/*
+	if (bo_wr) begin
+		if (ins0_dec.aRa==bo_areg)
+			ins0_ren.pRa <= bo_preg;
+		if (ins0_dec.aRb==bo_areg)
+			ins0_ren.pRb <= bo_preg;
+		if (ins0_dec.aRc==bo_areg)
+			ins0_ren.pRc <= bo_preg;
+		if (ins0_dec.aRt==bo_areg)
+			ins0_ren.pRt <= bo_preg;
+	end
+	*/
+		ins1_ren.cndx <= cndx;
+		ins1_ren <= ins1_dec;
+		if (ins1_dec.v & ~stomp_ren) begin
+			ins1_ren.nRt <= Rt1_dec;
+			if (ins0_dec.decbus.bsr)
+				ins1_ren.v <= INV;
+			if (ins3_ren.decbus.bsr)
+				ins1_ren.v <= INV;
+		end
+		else begin
+//			ins1_ren <= nopi;
+			ins1_ren.v <= INV;
+//			ins1_ren.decbus.Rt <= ins1_ren.decbus.Rt;
+//			ins1_ren.decbus.Rtn <= ins1_ren.decbus.Rtn;
+//			ins1_ren.decbus.Rtz <= ins1_ren.decbus.Rtz;
+//			ins1_ren.aRt <= ins1_ren.aRt;
+			if (SUPPORT_BACKOUT)
+				ins1_ren.nRt <= 9'd0;//ins1_ren.nRt;
+			else
+				ins1_ren.nRt <= Rt1_dec;
+		end
+		ins2_ren.cndx <= cndx;
+		ins2_ren <= ins2_dec;
+		if (ins2_dec.v & ~stomp_ren) begin
+			ins2_ren.nRt <= Rt2_dec;
+			if (ins0_dec.decbus.bsr || ins1_dec.decbus.bsr)
+				ins2_ren.v <= INV;
+			if (ins3_ren.decbus.bsr)
+				ins2_ren.v <= INV;
+		end
+		else begin
+//			ins2_ren <= nopi;
+			ins2_ren.v <= INV;
+//			ins2_ren.decbus.Rt <= ins2_ren.decbus.Rt;
+//			ins2_ren.decbus.Rtn <= ins2_ren.decbus.Rtn;
+//			ins2_ren.decbus.Rtz <= ins2_ren.decbus.Rtz;
+//			ins2_ren.aRt <= ins2_ren.aRt;
+			if (SUPPORT_BACKOUT)
+				ins2_ren.nRt <= 9'd0;//ins2_ren.nRt;
+			else
+				ins2_ren.nRt <= Rt2_dec;
+		end
+		ins3_ren.cndx <= cndx;
+		ins3_ren <= ins3_dec;
+		if (ins3_dec.v & ~stomp_ren) begin
+			ins3_ren.nRt <= Rt3_dec;
+			if (ins0_dec.decbus.bsr || ins1_dec.decbus.bsr || ins2_dec.decbus.bsr)
+				ins3_ren.v <= INV;
+			if (ins3_ren.decbus.bsr)
+				ins3_ren.v <= INV;
+		end
+		else begin
+//			ins3_ren <= nopi;
+			ins3_ren.v <= INV;
+//			ins3_ren.decbus.Rt <= ins3_ren.decbus.Rt;
+//			ins3_ren.decbus.Rtn <= ins3_ren.decbus.Rtn;
+//			ins3_ren.decbus.Rtz <= ins3_ren.decbus.Rtz;
+//			ins3_ren.aRt <= ins3_ren.aRt;
+			if (SUPPORT_BACKOUT)
+				ins3_ren.nRt <= 9'd0;//ins3_ren.nRt;
+			else
+				ins3_ren.nRt <= Rt3_dec;
+		end
+	end
+	if (branch_state==BS_DONE)
+		tInvalidateRen(stomp_bno);//misspc.bno_t);
+end
+
+// fet/mux/dec stages can be invalidated by turning the instruction in the
+// pipeline into a NOP operation. That is handled in the pipeline_seg1
+// module.
+// Rename stage needs its own invalidation as registers have been renamed
+// already, instructions must be turned into copy targets.
+
+task tInvalidateRen;
+input [4:0] bno;
+begin
+	if (ins0_ren.pc.bno_t!=bno) begin
+		ins0_ren.excv <= INV;
+		if (SUPPORT_BACKOUT)
+			ins0_ren.v <= INV;
+		else begin
+			ins0_ren.decbus.cpytgt <= TRUE;
+			ins0_ren.decbus.alu <= TRUE;
+			ins0_ren.decbus.fpu <= FALSE;
+			ins0_ren.decbus.fc <= FALSE;
+			ins0_ren.decbus.mem <= FALSE;
+		end
+	end
+	if (ins1_ren.pc.bno_t!=bno) begin
+		ins1_ren.v <= INV;
+		if (SUPPORT_BACKOUT)
+			ins1_ren.excv <= INV;
+		else begin
+			ins1_ren.decbus.cpytgt <= TRUE;
+			ins1_ren.decbus.alu <= TRUE;
+			ins1_ren.decbus.fpu <= FALSE;
+			ins1_ren.decbus.fc <= FALSE;
+			ins1_ren.decbus.mem <= FALSE;
+		end
+	end
+	if (ins2_ren.pc.bno_t!=bno) begin
+		ins2_ren.excv <= INV;
+		if (SUPPORT_BACKOUT)
+			ins2_ren.v <= INV;
+		else begin
+			ins2_ren.decbus.cpytgt <= TRUE;
+			ins2_ren.decbus.alu <= TRUE;
+			ins2_ren.decbus.fpu <= FALSE;
+			ins2_ren.decbus.fc <= FALSE;
+			ins2_ren.decbus.mem <= FALSE;
+		end
+	end
+	if (ins3_ren.pc.bno_t!=bno) begin
+		ins3_ren.excv <= INV;
+		if (SUPPORT_BACKOUT)
+			ins3_ren.v <= INV;
+		else begin
+			ins3_ren.decbus.cpytgt <= TRUE;
+			ins3_ren.decbus.alu <= TRUE;
+			ins3_ren.decbus.fpu <= FALSE;
+			ins3_ren.decbus.fc <= FALSE;
+			ins3_ren.decbus.mem <= FALSE;
+		end
+	end
+end
+endtask
+
+endmodule
+

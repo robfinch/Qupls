@@ -174,10 +174,8 @@ typedef struct packed
 	logic [1:0] al;
 	
 	logic [3:0] cache;
-	logic [2:0] mrwx;		// w=1 = conforming executable page when x=1
-	logic [2:0] hrwx;
-	logic [2:0] srwx;
-	logic [2:0] urwx;
+	logic [7:0] resv2;
+	logic [3:0] urwx;	// w=1 = conforming executable page when x=1
 
 	logic [9:0] resv1;
 	logic [1:0] content;	// 0=data,2=stack,3=executable
@@ -257,7 +255,7 @@ typedef struct packed
 typedef struct packed
 {
 	logic v;									// 1=valid
-	logic [1:0] lvl;					// valid
+	logic [1:0] lvl;					// level
 	logic s;									// 1=shortcut
 	logic [2:0] rgn;					// memory region
 	logic m;									// 1=modified
@@ -287,6 +285,7 @@ typedef struct packed
 } spte_lvl2_t;							// 40 bits
 
 `ifdef SMALL_MMU
+
 typedef union packed {
 	spte_lvl1_t l1;
 	spte_lvl2_t l2;
@@ -347,6 +346,13 @@ typedef struct packed
 	logic c;
 	logic [2:0] rwx;
 } hshpte_t;	// 128 bits
+
+// Program base and limit
+typedef struct packed
+{
+	logic [31:0] limit;
+	logic [31:0] base;
+} pebble_t;
 
 /*
 typedef struct packed

@@ -63,7 +63,8 @@ typedef struct packed {
 	logic [1:0] qn;
 	QuplsPkg::rob_ndx_t id;
 	cpu_types_pkg::asid_t asid;
-	cpu_types_pkg::virtual_address_t adr;		// address to translate
+	cpu_types_pkg::virtual_address_t oadr;	// original address to translate
+	cpu_types_pkg::virtual_address_t adr;		// linear address to translate
 	cpu_types_pkg::virtual_address_t tadr;	// temporary address
 } ptw_miss_queue_t;
 
@@ -72,7 +73,7 @@ typedef struct packed {
 	ptw_access_state_t access_state;
 	logic rdy;
 	fta_bus_pkg::fta_tranid_t tid;
-	logic [3:0] stk;
+	logic [4:0] mqndx;											// index of associated miss queue
 	cpu_types_pkg::asid_t asid;
 	cpu_types_pkg::virtual_address_t vadr;
 	cpu_types_pkg::physical_address_t padr;

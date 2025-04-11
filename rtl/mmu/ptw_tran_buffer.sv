@@ -78,14 +78,14 @@ else begin
 	case(access_state)
 	INACTIVE:	;
 	SEG_BASE_FETCH:
-		tAssignTranbuf(16'd0);
+		tAssignTranbuf(5'd16,16'd0);
 	SEG_LIMIT_FETCH:
 		if (!ftam_resp.rty)
-			tAssignTranbuf(16'd0);
+			tAssignTranbuf(5'd16,16'd0);
 	TLB_PTE_FETCH:
 		if (~sel_qe[5] & ptw_pv & ptw_ppv) begin
 			if (miss_queue[sel_qe].lvl != 3'd0)
-				tAssignTranbuf(miss_queue[sel_qe].asid);
+				tAssignTranbuf(sel_qe[4:0], miss_queue[sel_qe].asid);
 		end
 	/*
 	TLB_PMT_FETCH:
@@ -130,8 +130,10 @@ else begin
 end
 
 task tAssignTranbuf;
+input [4:0] mqndx;
 input asid_t asid;
 begin
+	tranbuf[tid & 15].mqndx <= mqndx;
 	tranbuf[tid & 15].v <= 1'b1;
 	tranbuf[tid & 15].tid <= tid;
 	tranbuf[tid & 15].rdy <= 1'b0;
