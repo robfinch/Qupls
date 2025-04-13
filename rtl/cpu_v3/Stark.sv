@@ -44,7 +44,7 @@ import fta_bus_pkg::*;
 import cpu_types_pkg::*;
 import Stark_cache_pkg::*;
 import mmu_pkg::*;
-import StarkPkg::*;
+import Stark_pkg::*;
 
 `define ZERO		64'd0
 
@@ -106,6 +106,8 @@ real IPC,PIPC;
 integer nn,mm,n2,n3,n4,m4,n5,n6,n8,n9,n10,n11,n12,n13,n14,n15,n17;
 integer n16r, n16c, n12r, n12c, n14r, n14c, n17r, n17c, n18r, n18c;
 integer n19,n20,n21,n22,n23,n24,n25,n26,n27,n28,n29,i,n30,n31,n32,n33;
+integer n34;
+
 genvar g,h,gvg;
 reg [127:0] message;
 reg [9*8-1:0] stompstr, no_stompstr;
@@ -293,7 +295,7 @@ reg [2:0] next_pending_ipl;
 wire stallq, rat_stallq, ren_stallq;
 
 rob_ndx_t tail0, tail1, tail2, tail3, tail4, tail5, tail6, tail7, tail8, tail9, tail10, tail11;
-rob_ndx_t head0, head1, head2, head3, head4, head5;
+rob_ndx_t head0, head1, head2, head3, head4, head5, head6, head7;
 rob_ndx_t [11:0] tails;
 rob_ndx_t stail;
 always_comb tails[0] = tail0;
@@ -347,6 +349,8 @@ always_comb head2 = (head0 + 2) % ROB_ENTRIES;
 always_comb head3 = (head0 + 3) % ROB_ENTRIES;
 always_comb head4 = (head0 + 4) % ROB_ENTRIES;
 always_comb head5 = (head0 + 5) % ROB_ENTRIES;
+always_comb head6 = (head0 + 6) % ROB_ENTRIES;
+always_comb head7 = (head0 + 7) % ROB_ENTRIES;
 
 ex_instruction_t [7:0] ex_ins;
 
@@ -591,6 +595,8 @@ reg agen0_idle;
 wire agen0_idle1;
 ex_instruction_t agen0_op;
 rob_ndx_t agen0_id;
+operating_mode_t agen0_om;
+wire agen0_we;
 value_t agen0_argA;
 value_t agen0_argB;
 value_t agen0_argC;
@@ -617,6 +623,8 @@ reg agen1_idle = 1'b1;
 wire agen1_idle1;
 ex_instruction_t agen1_op;
 rob_ndx_t agen1_id;
+operating_mode_t agen1_om;
+wire agen1_we;
 value_t agen1_argA;
 value_t agen1_argB;
 value_t agen1_argI;
@@ -2834,6 +2842,7 @@ assign cndx1 = cndx0;
 assign cndx2 = cndx0;
 assign cndx3 = cndx0;
 
+
 Stark_pipeline_ren uren1
 (
 	.rst(irst),
@@ -3174,6 +3183,303 @@ assign wrport0_cp = alu0_cp2;
 assign wrport1_cp = alu1_cp2;
 assign wrport2_cp = dram0_cp;
 assign wrport3_cp = fpu0_cp2;
+
+wire [4:0] upd1a,upd2a,upd2a,upd4a,upd5a,upd6a;
+reg [4:0] upd1, upd2, upd3, upd4, upd5, upd6;
+reg [4:0] fuq_rot;
+
+reg [17:0] fuq_empty, fuq_empty_rot;
+always_comb
+	fuq_empty_rot = ({fuq_empty,fuq_empty} << fuq_rot) >> 5'd18;
+
+ffo24 uffov1 (.i({6'd0,fuq_empty_rot}), .o(upd1a));
+ffo24 uffov2 (.i({6'd0,fuq_empty_rot} & ~(24'd1 << upd1a)), .o(upd2a));
+ffo24 uffov3 (.i({6'd0,fuq_empty_rot} & ~(24'd1 << upd1a) & ~(24'd1 << upd2a)), .o(upd3a));
+ffo24 uffov4 (.i({6'd0,fuq_empty_rot} & ~(24'd1 << upd1a) & ~(24'd1 << upd2a) & ~(24'd1 << upd3a)), .o(upd4a));
+ffo24 uffov5 (.i({6'd0,fuq_empty_rot} & ~(24'd1 << upd1a) & ~(24'd1 << upd2a) & ~(24'd1 << upd3a) & ~(24'd1 << upd4a)), .o(upd5a));
+ffo24 uffov6 (.i({6'd0,fuq_empty_rot} & ~(24'd1 << upd1a) & ~(24'd1 << upd2a) & ~(24'd1 << upd3a) & ~(24'd1 << upd4a) & ~(24'd1 << upd5a)), .o(upd6a));
+
+always_comb upd1 = upd1a - fuq_rot;
+always_comb upd2 = upd2a - fuq_rot;
+always_comb upd3 = upd3a - fuq_rot;
+always_comb upd4 = upd4a - fuq_rot;
+always_comb upd5 = upd5a - fuq_rot;
+always_comb upd6 = upd6a - fuq_rot;
+// mod 18 counter
+always_ff @(posedge clk)
+if (rst)
+	fuq_rot <= 5'd0;
+else begin
+	fuq_rot <= fuq_rot + 2'd1;
+	if (fuq_rot == 5'd17)
+		fuq_rot <= 5'd0;
+end
+
+always_ff @(posedge clk)
+if (rst)
+	fuq_rd <= 18'd0;
+else begin
+	fuq_rd <= 18'b0;
+	
+	fuq_rd[upd1] <= 1'b1;
+	fuq_rd[upd2] <= 1'b1;
+	fuq_rd[upd3] <= 1'b1;
+	fuq_rd[upd4] <= 1'b1;
+	fuq_rd[upd5] <= 1'b1;
+	fuq_rd[upd6] <= 1'b1;
+end
+
+Stark_FuncResultQueue ufrq1
+(
+	.rst_i(rst),
+	.clk_i(clk),
+	.rd_i(fuq_rd[0]),
+	.we_i(alu0_weA),
+	.pRt_i(alu0_pRtA),
+	.aRt_i(alu0_aRtA),
+	.tag_i({7'd0,alu0_ctag}),
+	.res_i(alu0_resA),
+	.we_o(fuq_we[0]),
+	.pRt_o(fuq_pRt[0]),
+	.aRt_o(fuq_aRt[0]),
+	.tag_o(fuq_tag[0]),
+	.res_o(fuq_res[0]),
+	.empty(fuq_empty[0])
+);
+
+Stark_FuncResultQueue ufrq2
+(
+	.rst_i(rst),
+	.clk_i(clk),
+	.rd_i(fuq_rd[1]),
+	.we_i(alu0_weB),
+	.pRt_i(alu0_pRtB),
+	.aRt_i(alu0_aRtB),
+	.tag_i({7'd0,alu0_ctag}),
+	.res_i(alu0_resB),
+	.we_o(fuq_we[1]),
+	.pRt_o(fuq_pRt[1]),
+	.aRt_o(fuq_aRt[1]),
+	.tag_o(fuq_tag[1]),
+	.res_o(fuq_res[1]),
+	.empty(fuq_empty[1])
+);
+
+Stark_FuncResultQueue ufrq3
+(
+	.rst_i(rst),
+	.clk_i(clk),
+	.rd_i(fuq_rd[2]),
+	.we_i(alu0_weC),
+	.pRt_i(alu0_pRtC),
+	.aRt_i(alu0_aRtC),
+	.tag_i({7'd0,alu0_ctag}),
+	.res_i(alu0_resC),
+	.we_o(fuq_we[2]),
+	.pRt_o(fuq_pRt[2]),
+	.aRt_o(fuq_aRt[2]),
+	.tag_o(fuq_tag[2]),
+	.res_o(fuq_res[2]),
+	.empty(fuq_empty[2])
+);
+
+Stark_FuncResultQueue ufrq4
+(
+	.rst_i(rst),
+	.clk_i(clk),
+	.rd_i(fuq_rd[3]),
+	.we_i(alu1_weA),
+	.pRt_i(alu1_pRtA),
+	.aRt_i(alu1_aRtA),
+	.tag_i({7'd0,alu1_ctag}),
+	.res_i(alu1_resA),
+	.we_o(fuq_we[3]),
+	.pRt_o(fuq_pRt[3]),
+	.aRt_o(fuq_aRt[3]),
+	.tag_o(fuq_tag[3]),
+	.res_o(fuq_res[3]),
+	.empty(fuq_empty[3])
+);
+
+Stark_FuncResultQueue ufrq5
+(
+	.rst_i(rst),
+	.clk_i(clk),
+	.rd_i(fuq_rd[4]),
+	.we_i(alu1_weB),
+	.pRt_i(alu1_pRtB),
+	.aRt_i(alu1_aRtB),
+	.tag_i({7'd0,alu1_ctag}),
+	.res_i(alu1_resB),
+	.we_o(fuq_we[4]),
+	.pRt_o(fuq_pRt[4]),
+	.aRt_o(fuq_aRt[4]),
+	.tag_o(fuq_tag[4]),
+	.res_o(fuq_res[4]),
+	.empty(fuq_empty[4])
+);
+
+Stark_FuncResultQueue ufrq6
+(
+	.rst_i(rst),
+	.clk_i(clk),
+	.rd_i(fuq_rd[5]),
+	.we_i(alu1_weC),
+	.pRt_i(alu1_pRtC),
+	.aRt_i(alu1_aRtC),
+	.tag_i({7'd0,alu1_ctag}),
+	.res_i(alu1_resC),
+	.we_o(fuq_we[5]),
+	.pRt_o(fuq_pRt[5]),
+	.aRt_o(fuq_aRt[5]),
+	.tag_o(fuq_tag[5]),
+	.res_o(fuq_res[5]),
+	.empty(fuq_empty[5])
+);
+
+Stark_FuncResultQueue ufrq7
+(
+	.rst_i(rst),
+	.clk_i(clk),
+	.rd_i(fuq_rd[6]),
+	.we_i(fpu0_weA),
+	.pRt_i(fpu0_pRtA),
+	.aRt_i(fpu0_aRtA),
+	.tag_i({7'd0,fpu0_ctag}),
+	.res_i(fpu0_resA),
+	.we_o(fuq_we[6]),
+	.pRt_o(fuq_pRt[6]),
+	.aRt_o(fuq_aRt[6]),
+	.tag_o(fuq_tag[6]),
+	.res_o(fuq_res[6]),
+	.empty(fuq_empty[6])
+);
+
+Stark_FuncResultQueue ufrq8
+(
+	.rst_i(rst),
+	.clk_i(clk),
+	.rd_i(fuq_rd[7]),
+	.we_i(fpu0_weB),
+	.pRt_i(fpu0_pRtB),
+	.aRt_i(fpu0_aRtB),
+	.tag_i({7'd0,fpu0_ctag}),
+	.res_i(fpu0_resB),
+	.we_o(fuq_we[7]),
+	.pRt_o(fuq_pRt[7]),
+	.aRt_o(fuq_aRt[7]),
+	.tag_o(fuq_tag[7]),
+	.res_o(fuq_res[7]),
+	.empty(fuq_empty[7])
+);
+
+Stark_FuncResultQueue ufrq9
+(
+	.rst_i(rst),
+	.clk_i(clk),
+	.rd_i(fuq_rd[8]),
+	.we_i(fpu0_weC),
+	.pRt_i(fpu0_pRtC),
+	.aRt_i(fpu0_aRtC),
+	.tag_i({7'd0,fpu0_ctag}),
+	.res_i(fpu0_resC),
+	.we_o(fuq_we[8]),
+	.pRt_o(fuq_pRt[8]),
+	.aRt_o(fuq_aRt[8]),
+	.tag_o(fuq_tag[8]),
+	.res_o(fuq_res[8]),
+	.empty(fuq_empty[8])
+);
+
+Stark_FuncResultQueue ufrq10
+(
+	.rst_i(rst),
+	.clk_i(clk),
+	.rd_i(fuq_rd[9]),
+	.we_i(fpu1_weA),
+	.pRt_i(fpu1_pRtA),
+	.aRt_i(fpu1_aRtA),
+	.tag_i({7'd0,fpu1_ctag}),
+	.res_i(fpu1_resA),
+	.we_o(fuq_we[9]),
+	.pRt_o(fuq_pRt[9]),
+	.aRt_o(fuq_aRt[9]),
+	.tag_o(fuq_tag[9]),
+	.res_o(fuq_res[9]),
+	.empty(fuq_empty[9])
+);
+
+Stark_FuncResultQueue ufrq11
+(
+	.rst_i(rst),
+	.clk_i(clk),
+	.rd_i(fuq_rd[10]),
+	.we_i(fpu1_weB),
+	.pRt_i(fpu1_pRtB),
+	.aRt_i(fpu1_aRtB),
+	.tag_i({7'd0,fpu1_ctag}),
+	.res_i(fpu1_resB),
+	.we_o(fuq_we[10]),
+	.pRt_o(fuq_pRt[10]),
+	.aRt_o(fuq_aRt[10]),
+	.tag_o(fuq_tag[10]),
+	.res_o(fuq_res[10]),
+	.empty(fuq_empty[10])
+);
+
+Stark_FuncResultQueue ufrq12
+(
+	.rst_i(rst),
+	.clk_i(clk),
+	.rd_i(fuq_rd[11]),
+	.we_i(fpu1_weC),
+	.pRt_i(fpu1_pRtC),
+	.aRt_i(fpu1_aRtC),
+	.tag_i({7'd0,fpu1_ctag}),
+	.res_i(fpu1_resC),
+	.we_o(fuq_we[11]),
+	.pRt_o(fuq_pRt[11]),
+	.aRt_o(fuq_aRt[11]),
+	.tag_o(fuq_tag[11]),
+	.res_o(fuq_res[11]),
+	.empty(fuq_empty[11])
+);
+
+always_comb wrport0_v = !fuq_empty[upd1];
+always_comb wrport0_we = fuq_we[upd1]; 
+always_comb wrport0_Rt = fuq_pRt[upd1]; 
+always_comb wrport0_aRt = fuq_aRt[upd1]; 
+always_comb wrport0_res = fuq_res[upd1]; 
+
+always_comb wrport1_v = !fuq_empty[upd2];
+always_comb wrport1_we = fuq_we[upd2]; 
+always_comb wrport1_Rt = fuq_pRt[upd2]; 
+always_comb wrport1_aRt = fuq_aRt[upd2]; 
+always_comb wrport1_res = fuq_res[upd2]; 
+
+always_comb wrport2_v = !fuq_empty[upd3];
+always_comb wrport2_we = fuq_we[upd3]; 
+always_comb wrport2_Rt = fuq_pRt[upd3]; 
+always_comb wrport2_aRt = fuq_aRt[upd3]; 
+always_comb wrport2_res = fuq_res[upd3]; 
+
+always_comb wrport3_v = !fuq_empty[upd4];
+always_comb wrport3_we = fuq_we[upd4]; 
+always_comb wrport3_Rt = fuq_pRt[upd4]; 
+always_comb wrport3_aRt = fuq_aRt[upd4]; 
+always_comb wrport3_res = fuq_res[upd4]; 
+
+always_comb wrport4_v = !fuq_empty[upd5];
+always_comb wrport4_we = fuq_we[upd5]; 
+always_comb wrport4_Rt = fuq_pRt[upd5];
+always_comb wrport4_aRt = fuq_aRt[upd5]; 
+always_comb wrport4_res = fuq_res[upd5]; 
+
+always_comb wrport5_v = !fuq_empty[upd6];
+always_comb wrport5_we = fuq_we[upd6]; 
+always_comb wrport5_Rt = fuq_pRt[upd6];
+always_comb wrport5_aRt = fuq_aRt[upd6]; 
+always_comb wrport5_res = fuq_res[upd6]; 
 
 Stark_regfile6wNr #(.RPORTS(24)) urf1 (
 	.rst(irst),
@@ -4185,16 +4491,21 @@ mmu #(.CID(3)) ummu1
 	.tlb_pmt_base(32'hFFF80000),
 	.ic_miss_adr(ic_miss_adr),
 	.ic_miss_asid(ic_miss_asid),
+	.ic_om(ic_miss_om),
 	.vadr_ir(agen0_op.ins),
 	.vadr(agen0_res),
 	.vadr_v(agen0_v),
 	.vadr_asid(asid),
 	.vadr_id(agen0_id),
+	.vadr_om(agen0_om),
+	.vadr_we(agen0_we),
 	.vadr2_ir(agen1_op.ins),
 	.vadr2(agen1_res),
 	.vadr2_v(agen1_v),
 	.vadr2_asid(asid),
 	.vadr2_id(agen1_id),
+	.vadr2_om(agen1_om),
+	.vadr2_we(agen1_we),
 	.padr(tlb0_res),
 	.padr2(),
 	.tlb_pc_entry(tlb_pc_entry),
@@ -4873,6 +5184,8 @@ Stark_agen_station uagen0stn
 	.rfo_argC_ctag(rfo_agen0_argC_ctag),
 	.argC_v(agen0_argC_v),
 	.id(agen0_id),
+	.om(agen0_om),
+	.we(agen0_we),
 	.argA(agen0_argA),
 	.argB(agen0_argB),
 	.argC(agen0_argC),
@@ -4918,6 +5231,8 @@ Stark_agen_station uagen1stn
 	.rfo_argM(rfo_agen1_argM),
 	.rfo_argC_ctag(1'b0),
 	.id(agen1_id),
+	.om(agen1_om),
+	.we(agen1_we),
 	.argA(agen1_argA),
 	.argB(agen1_argB),
 	.argC(),
@@ -6290,6 +6605,124 @@ else begin
 			end
 		end
 	end
+
+// ----------------------------------------------------------------------------
+// Register file update - four write ports
+// Update the register file and mark the update invalid.
+// ----------------------------------------------------------------------------
+	wrport0_wr <= 1'b0;
+	wrport1_wr <= 1'b0;
+	wrport2_wr <= 1'b0;
+	wrport3_wr <= 1'b0;
+
+	case(upd1[1:0])
+	2'b00:
+		begin
+			rob[(head0+upd1[4:2])%ROB_ENTRIES].updAv <= INV;
+			wrport0_Rt <= rob[(head0+upd1[4:2])%ROB_ENTRIES].updARt;
+			wrport0_aRt <= rob[(head0+upd1[4:2])%ROB_ENTRIES].updAaRt;
+			wrport0_wr <= 1'b1;
+			wrport0_res <= rob[(head0+upd1[4:2])%ROB_ENTRIES].updA;
+		end
+	2'b01: 
+		begin
+			rob[(head0+upd1[4:2])%ROB_ENTRIES].updBv <= INV;
+			wrport0_Rt <= rob[(head0+upd1[4:2])%ROB_ENTRIES].updBRt;
+			wrport0_aRt <= rob[(head0+upd1[4:2])%ROB_ENTRIES].updBaRt;
+			wrport0_wr <= 1'b1;
+			wrport0_res <= rob[(head0+upd1[4:2])%ROB_ENTRIES].updB;
+		end
+	2'b10: 
+		begin
+			rob[(head0+upd1[4:2])%ROB_ENTRIES].updCv <= INV;
+			wrport0_Rt <= rob[(head0+upd1[4:2])%ROB_ENTRIES].updCRt;
+			wrport0_aRt <= rob[(head0+upd1[4:2])%ROB_ENTRIES].updCaRt;
+			wrport0_wr <= 1'b1;
+			wrport0_res <= rob[(head0+upd1[4:2])%ROB_ENTRIES].updC;
+		end
+	default:	;
+	endcase
+	case(upd2[1:0])
+	2'b00:
+		begin
+			rob[(head0+upd2[4:2])%ROB_ENTRIES].updAv <= INV;
+			wrport1_Rt <= rob[(head0+upd2[4:2])%ROB_ENTRIES].updARt;
+			wrport1_aRt <= rob[(head0+upd2[4:2])%ROB_ENTRIES].updAaRt;
+			wrport1_wr <= 1'b1;
+			wrport1_res <= rob[(head0+upd2[4:2])%ROB_ENTRIES].updA;
+		end
+	2'b01: 
+		begin
+			rob[(head0+upd2[4:2])%ROB_ENTRIES].updBv <= INV;
+			wrport1_Rt <= rob[(head0+upd2[4:2])%ROB_ENTRIES].updBRt;
+			wrport1_aRt <= rob[(head0+upd2[4:2])%ROB_ENTRIES].updBaRt;
+			wrport1_wr <= 1'b1;
+			wrport1_res <= rob[(head0+upd2[4:2])%ROB_ENTRIES].updB;
+		end
+	2'b10: 
+		begin
+			rob[(head0+upd2[4:2])%ROB_ENTRIES].updCv <= INV;
+			wrport1_Rt <= rob[(head0+upd2[4:2])%ROB_ENTRIES].updCRt;
+			wrport1_aRt <= rob[(head0+upd2[4:2])%ROB_ENTRIES].updCaRt;
+			wrport1_wr <= 1'b1;
+			wrport1_res <= rob[(head0+upd2[4:2])%ROB_ENTRIES].updC;
+		end
+	default:	;
+	endcase
+	case(upd3[1:0])
+	2'b00:
+		begin
+			rob[(head0+upd3[4:2])%ROB_ENTRIES].updAv <= INV;
+			wrport2_Rt <= rob[(head0+upd3[4:2])%ROB_ENTRIES].updARt;
+			wrport2_aRt <= rob[(head0+upd3[4:2])%ROB_ENTRIES].updAaRt;
+			wrport2_wr <= 1'b1;
+			wrport2_res <= rob[(head0+upd3[4:2])%ROB_ENTRIES].updA;
+		end
+	2'b01: 
+		begin
+			rob[(head0+upd3[4:2])%ROB_ENTRIES].updBv <= INV;
+			wrport2_Rt <= rob[(head0+upd3[4:2])%ROB_ENTRIES].updBRt;
+			wrport2_aRt <= rob[(head0+upd3[4:2])%ROB_ENTRIES].updBaRt;
+			wrport2_wr <= 1'b1;
+			wrport2_res <= rob[(head0+upd3[4:2])%ROB_ENTRIES].updB;
+		end
+	2'b10: 
+		begin
+			rob[(head0+upd3[4:2])%ROB_ENTRIES].updCv <= INV;
+			wrport2_Rt <= rob[(head0+upd3[4:2])%ROB_ENTRIES].updCRt;
+			wrport2_aRt <= rob[(head0+upd3[4:2])%ROB_ENTRIES].updCaRt;
+			wrport2_wr <= 1'b1;
+			wrport2_res <= rob[(head0+upd3[4:2])%ROB_ENTRIES].updC;
+		end
+	default:	;
+	endcase
+	case(upd4[1:0])
+	2'b00:
+		begin
+			rob[(head0+upd4[4:2])%ROB_ENTRIES].updAv <= INV;
+			wrport3_Rt <= rob[(head0+upd4[4:2])%ROB_ENTRIES].updARt;
+			wrport3_aRt <= rob[(head0+upd4[4:2])%ROB_ENTRIES].updAaRt;
+			wrport3_wr <= 1'b1;
+			wrport3_res <= rob[(head0+upd4[4:2])%ROB_ENTRIES].updA;
+		end
+	2'b01: 
+		begin
+			rob[(head0+upd4[4:2])%ROB_ENTRIES].updBv <= INV;
+			wrport3_Rt <= rob[(head0+upd4[4:2])%ROB_ENTRIES].updBRt;
+			wrport3_aRt <= rob[(head0+upd4[4:2])%ROB_ENTRIES].updBaRt;
+			wrport3_wr <= 1'b1;
+			wrport3_res <= rob[(head0+upd4[4:2])%ROB_ENTRIES].updB;
+		end
+	2'b10: 
+		begin
+			rob[(head0+upd4[4:2])%ROB_ENTRIES].updCv <= INV;
+			wrport3_Rt <= rob[(head0+upd4[4:2])%ROB_ENTRIES].updCRt;
+			wrport3_aRt <= rob[(head0+upd4[4:2])%ROB_ENTRIES].updCaRt;
+			wrport3_wr <= 1'b1;
+			wrport3_res <= rob[(head0+upd4[4:2])%ROB_ENTRIES].updC;
+		end
+	default:	;
+	endcase
 
 // ----------------------------------------------------------------------------
 // COMMIT

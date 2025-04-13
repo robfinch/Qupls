@@ -4,7 +4,7 @@ import fta_bus_pkg::*;
 
 module mmu_read_reg(rst, clk, cs_config, cs_regs, sreq, sresp, cfg_out,
 	fault_adr, fault_seg, fault_asid, ptbr, ptattr,
-	virt_adr, phys_adr, phys_adr_v, pbl_regset, pbl, pte_size
+	virt_adr, phys_adr, phys_adr_v, pbl_regset, pbl, pte_size, region_dat
 );
 input rst;
 input clk;
@@ -24,6 +24,7 @@ input phys_adr_v;
 input [4:0] pbl_regset;
 input pebble_t [15:0] pbl;
 output reg [1:0] pte_size;
+input [255:0] region_dat;
 
 always_ff @(posedge clk)
 if (rst) begin
@@ -75,6 +76,10 @@ else begin
 		14'b11_1011_0???_????:
 			begin
 				sresp.dat <= {4{pbl[6:3]}};
+			end
+		14'b11_1100_00??_????:
+			begin
+				sresp.dat <= region_dat;
 			end
 		default:	sresp.dat <= 256'd0;
 		endcase

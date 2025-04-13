@@ -64,12 +64,12 @@ module tlb3way(rst, clk, paging_en,
 	wr, way, entry_no, entry_i, entry_o, vadr0, vadr1,
 	omd0, omd1, pc_omd,
 	asid0, asid1, pc_asid, entry0_o, entry1_o,
-	miss_o, missadr_o, missasid_o, missid_o, missqn_o, missack,
-	padr0_v, padr1_v, op0, op1, tlb0_op, tlb1_op, padr0, padr1, 
+	miss_o, missadr_o, missasid_o, missid_o, missqn_o, missack, missswt_o,
+	padr0_v, padr1_v, pswt_v, op0, op1, tlb0_op, tlb1_op, padr0, padr1, 
 	pc_ladr, pc_padr, pc_padr_v, pc_tlb_entry_o,
 	load0_i, load1_i, store0_i, store1_i, load0_o, load1_o, store0_o, store1_o,
-	stall_tlb0, stall_tlb1,
-	agen0_rndx_i, agen1_rndx_i, agen0_rndx_o, agen1_rndx_o, agen0_v, agen1_v);
+	stall_tlb0, stall_tlb1, swt_i, swt_o,
+	agen0_rndx_i, agen1_rndx_i, agen0_rndx_o, agen1_rndx_o, agen0_v, agen1_v, swt_v);
 parameter WAYS=3;
 parameter TLB_ENTRIES = 1024;
 parameter TLB_L2_ENTRIES = 128;
@@ -104,9 +104,11 @@ output address_t missadr_o;
 output asid_t missasid_o;
 output rob_ndx_t missid_o;
 output reg [1:0] missqn_o;
+output reg missswt_o;
 input missack;
 output reg padr0_v;
 output reg padr1_v;
+output reg pswt_v;
 input instruction_t op0;
 input instruction_t op1;
 output instruction_t tlb0_op;
@@ -127,10 +129,13 @@ input stall_tlb0;
 input stall_tlb1;
 input rob_ndx_t agen0_rndx_i;
 input rob_ndx_t agen1_rndx_i;
+input swt_i;
 output rob_ndx_t agen0_rndx_o;
 output rob_ndx_t agen1_rndx_o;
+output reg swt_o;
 input agen0_v;
 input agen1_v;
+input swt_v;
 
 reg [2:0] wway;
 address_t vadr0r;
@@ -150,6 +155,7 @@ tlb_entry_t t1aL2, t1bL2, t1cL2, t1dL2, t1awL2, t1bwL2, t1cwL2;
 tlb_entry_t t2aL2, t2bL2, t2cL2, t2dL2, t2awL2, t2bwL2, t2cwL2;
 tlb_entry_t entry_oa, entry_ob, entry_oc, entry_od;
 reg [3:0] head, tail;
+reg [MISSQ_ENTRIES-1:0] missswt;
 address_t [MISSQ_ENTRIES-1:0] missadr;
 asid_t [MISSQ_ENTRIES-1:0] missasid;
 reg [1:0] missqn [0:MISSQ_ENTRIES-1];
@@ -2537,6 +2543,7 @@ if (rst) begin
 	
 	agen0_rndx_o <= 'd0;
 	agen1_rndx_o <= 'd0;
+	swt_o <= 1'b0;
 	
 	head <= 4'd0;
 	tail <= 4'd0;
@@ -2546,6 +2553,7 @@ if (rst) begin
 		missasid[m] <= {$bits(asid_t){1'b0}};
 	end
 	wway <= 3'd0;
+	pswt_v <= 1'b0;
 end
 else begin
 	wway <= wway + 2'd1;
@@ -2561,11 +2569,13 @@ else begin
 			padr0 <= {L1tlb[ndx0].pte.l2.ppn,vadr0[`VADR_PBITS_LVL2]};
 		else
 			padr0 <= {L1tlb[ndx0].pte.l1.ppn,vadr0[`VADR_PBITS_LVL1]};
-		padr0_v <= L1hit0;
+		padr0_v <= L1hit0 & agen0_v;
+		pswt_v <= L1hit0 & swt_v;
 	end
 	else begin
 		padr0 <= vadr0;
 		padr0_v <= agen0_v;
+		pswt_v <= swt_v;
 	end
 
 	// Allow the address to change only on a hit.
@@ -2663,6 +2673,7 @@ else begin
 			load1_o <= load1_i;
 			store1_o <= store1_i;
 			agen1_rndx_o <= agen1_rndx_i;
+			swt_o <= swt_i;
 			tlb_v1a <= agen1_v;
 			omd1a <= omd1;
 		end
@@ -2673,6 +2684,7 @@ else begin
 			load1_o <= load1_i;
 			store1_o <= store1_i;
 			agen1_rndx_o <= agen1_rndx_i;
+			swt_o <= swt_i;
 			tlb_v1a <= agen1_v;
 			omd1a <= omd1;
 		end
@@ -2683,6 +2695,7 @@ else begin
 			load1_o <= load1_i;
 			store1_o <= store1_i;
 			agen1_rndx_o <= agen1_rndx_i;
+			swt_o <= swt_i;
 			tlb_v1a <= agen1_v;
 			omd1a <= omd1;
 		end
@@ -2693,6 +2706,7 @@ else begin
 			load1_o <= load1_i;
 			store1_o <= store1_i;
 			agen1_rndx_o <= agen1_rndx_i;
+			swt_o <= swt_i;
 			tlb_v1a <= agen1_v;
 			omd1a <= omd1;
 		end
@@ -2703,6 +2717,7 @@ else begin
 			load1_o <= load1_i;
 			store1_o <= store1_i;
 			agen1_rndx_o <= agen1_rndx_i;
+			swt_o <= swt_i;
 			tlb_v1a <= agen1_v;
 			omd1a <= omd1;
 		end
@@ -2713,6 +2728,7 @@ else begin
 			load1_o <= load1_i;
 			store1_o <= store1_i;
 			agen1_rndx_o <= agen1_rndx_i;
+			swt_o <= swt_i;
 			tlb_v1a <= agen1_v;
 			omd1a <= omd1;
 		end
@@ -2787,6 +2803,7 @@ else begin
 				missadr[tail] <= vadr1;
 				missasid[tail] <= asid1;
 				missid[tail] <= agen1_rndx_i;
+				missswt[tail] <= swt_i;
 				tail <= (tail + 1) % MISSQ_ENTRIES;
 			end
 		3'b101:
@@ -2798,6 +2815,7 @@ else begin
 				missadr[(tail+1) % MISSQ_ENTRIES] <= vadr1;
 				missasid[(tail+1) % MISSQ_ENTRIES] <= asid1;
 				missid[(tail+1) % MISSQ_ENTRIES] <= agen1_rndx_i;
+				missswt[(tail+1) % MISSQ_ENTRIES] <= swt_i;
 				tail <= (tail + 2) % MISSQ_ENTRIES;
 			end
 		3'b110:
@@ -2810,6 +2828,7 @@ else begin
 				missadr[(tail+1) % MISSQ_ENTRIES] <= vadr1;
 				missasid[(tail+1) % MISSQ_ENTRIES] <= asid1;
 				missid[(tail+1) % MISSQ_ENTRIES] <= agen1_rndx_i;
+				missswt[(tail+1) % MISSQ_ENTRIES] <= swt_i;
 				tail <= (tail + 2) % MISSQ_ENTRIES;
 			end
 		3'b111:
@@ -2825,6 +2844,7 @@ else begin
 				missadr[(tail+2) % MISSQ_ENTRIES] <= vadr1;
 				missasid[(tail+2) % MISSQ_ENTRIES] <= asid1;
 				missid[(tail+2) % MISSQ_ENTRIES] <= agen1_rndx_i;
+				missswt[(tail+2) % MISSQ_ENTRIES] <= swt_i;
 				tail <= (tail + 3) % MISSQ_ENTRIES;
 			end
 		endcase
@@ -2836,6 +2856,7 @@ else begin
 		missadr_o <= missadr[head];
 		missasid_o <= missasid[head];
 		missid_o <= missid[head];
+		missswt_o <= missswt[head];
 		miss_o <= 1'b1;
 	end
 end

@@ -32,7 +32,7 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 10100 LUTs / 7800 FFs / 24 BRAMs
+// 9200 LUTs / 8300 FFs / 28 BRAMs
 // ============================================================================
 
 import const_pkg::*;
@@ -49,10 +49,10 @@ import ptable_walker_pkg::*;
 `define VADR_L2_MBITS	29:23
 `define VADR_HBITS		31:16
 
-module mmu(rst, clk, paging_en,
-	tlb_pmt_base,	ic_miss_adr, ic_miss_asid,
-	vadr_ir, vadr, vadr_v, vadr_asid, vadr_id,
-	vadr2_ir, vadr2, vadr2_v, vadr2_asid, vadr2_id,
+module mmu(rst, clk, paging_en, cpl,
+	tlb_pmt_base,	ic_miss_adr, ic_miss_asid, ic_miss_om,
+	vadr_ir, vadr, vadr_v, vadr_asid, vadr_id, vadr_om, vadr_we,
+	vadr2_ir, vadr2, vadr2_v, vadr2_asid, vadr2_id, vadr2_om, vadr2_we,
 	padr, padr2,
 	tlb_pc_entry, tlb0_v, pc_padr_v, pc_padr,
 	commit0_id, commit0_idv, commit1_id, commit1_idv, commit2_id, commit2_idv,
@@ -67,6 +67,8 @@ parameter BUS_WIDTH = 256;
 
 parameter IO_ADDR = 32'hFFF40001;	//32'hFEFC0001;
 parameter IO_ADDR_MASK = 32'hFFFF0000;
+parameter RGN_ADDR = 32'hFFF403C1;	//32'hFEFC0001;
+parameter RGN_ADDR_MASK = 32'hFFFFFC00;
 
 parameter CFG_BUS = 8'd0;
 parameter CFG_DEVICE = 5'd14;
@@ -91,16 +93,20 @@ localparam CFG_HEADER_TYPE = 8'h00;			// 00 = a general device
 input rst;
 input clk;
 input paging_en;
+input [7:0] cpl;
 input physical_address_t tlb_pmt_base;
 
 input pc_address_t ic_miss_adr;
 input asid_t ic_miss_asid;
+input operating_mode_t ic_miss_om;
 output pc_padr_v;
 output physical_address_t pc_padr;
 
 input instruction_t vadr_ir;
 input physical_address_t vadr;
 input asid_t vadr_asid;
+input operating_mode_t vadr_om;
+input vadr_we;
 input vadr_v;
 input rob_ndx_t vadr_id;
 output physical_address_t padr;
@@ -108,6 +114,8 @@ output physical_address_t padr;
 input instruction_t vadr2_ir;
 input physical_address_t vadr2;
 input asid_t vadr2_asid;
+input operating_mode_t vadr2_om;
+input vadr2_we;
 input vadr2_v;
 input rob_ndx_t vadr2_id;
 output physical_address_t padr2;
@@ -139,15 +147,16 @@ reg [WAYS-1:0] tlb_way;
 reg [9:0] tlb_entryno;
 tlb_entry_t tlb_entry;
 
-virtual_address_t ptw_vadr;
+virtual_address_t ptw_vadr, swt_vadr;
 reg ptw_vv;
-physical_address_t ptw_padr, tmp_padr, sadr;
+physical_address_t tmp_padr, sadr;
 wire ptw_pv;
 wire tlb_miss;
 
 wire [4:0] pbl_regset;
 pebble_t pbl_outa;
 pebble_t pbl_outb;
+pebble_t pbl_outc;
 
 reg tlb_miss_r;
 reg tlb_missadr_r;
@@ -195,9 +204,10 @@ reg ptw_ppv;
 reg [5:0] sel_tran;
 wire [5:0] sel_qe;
 wire virt_adr_cd;
+reg virt_adr_cdd;
 wire [127:0] region_dat;
 reg [31:16] pmtadr;
-reg [63:0] virt_adr;
+reg [63:0] virt_adr, virt_adrd;
 reg [63:0] phys_adr;
 reg phys_adr_v;
 reg [WAYS-1:0] way;
@@ -205,6 +215,14 @@ pte_t pte;
 pmte_t pmt;
 reg pte_v;
 reg [4:0] rty_wait;
+reg swt;			// software translation request
+wire pswt_v;	// physical software translation valid
+wire cs_rgn;
+wire [255:0] region_dat;
+REGION region0, region1, region2;
+wire [7:0] rgn_sel0, rgn_sel1, rgn_sel2;
+reg priv_err0, priv_err1,priv_err2;
+operating_mode_t om;
 
 integer nn,n4;
 fta_cmd_request256_t sreq, sreqd;
@@ -252,6 +270,8 @@ ddbb256_config #(
 	.CFG_DEVICE_ID(CFG_DEVICE_ID),
 	.CFG_BAR0(IO_ADDR),
 	.CFG_BAR0_MASK(IO_ADDR_MASK),
+	.CFG_BAR1(RGN_ADDR),
+	.CFG_BAR1_MASK(RGN_ADDR_MASK),
 	.CFG_SUBSYSTEM_VENDOR_ID(CFG_SUBSYSTEM_VENDOR_ID),
 	.CFG_SUBSYSTEM_ID(CFG_SUBSYSTEM_ID),
 	.CFG_ROM_ADDR(CFG_ROM_ADDR),
@@ -268,7 +288,7 @@ upci
 (
 	.rst_i(rst),
 	.clk_i(clk),
-	.irq_i(fault & irq_en),
+	.irq_i({priv_err0|priv_err1|prive_err2,fault} & {2{irq_en}}),
 	.irq_o(fault_o),
 	.cs_config_i(cs_configd),
 	.we_i(sreqd.we),
@@ -277,7 +297,7 @@ upci
 	.dat_i(sreqd.data1),
 	.dat_o(cfg_out),
 	.cs_bar0_o(cs_tw),
-	.cs_bar1_o(cs_desc),
+	.cs_bar1_o(cs_rgn),
 	.cs_bar2_o(cs_lot),
 	.irq_en_o(irq_en)
 );
@@ -370,6 +390,63 @@ always_ff @(posedge clk)
     .web(1'b0)                        // WRITE_DATA_WIDTH_B/BYTE_WRITE_WIDTH_B-bit input: Write enable vector
  );
 
+
+
+   // xpm_memory_sdpram: Simple Dual Port RAM
+   // Xilinx Parameterized Macro, version 2024.1
+
+xpm_memory_sdpram #(
+  .ADDR_WIDTH_A(9),               // DECIMAL
+  .ADDR_WIDTH_B(9),               // DECIMAL
+  .AUTO_SLEEP_TIME(0),            // DECIMAL
+  .BYTE_WRITE_WIDTH_A(8),        // DECIMAL
+  .CASCADE_HEIGHT(0),             // DECIMAL
+  .CLOCKING_MODE("common_clock"), // String
+  .ECC_BIT_RANGE("7:0"),          // String
+  .ECC_MODE("no_ecc"),            // String
+  .ECC_TYPE("none"),              // String
+  .IGNORE_INIT_SYNTH(0),          // DECIMAL
+  .MEMORY_INIT_FILE("pbl_init.mem"), // String
+  .MEMORY_INIT_PARAM("0"),        // String
+  .MEMORY_OPTIMIZATION("true"),   // String
+  .MEMORY_PRIMITIVE("block"),     // String
+  .MEMORY_SIZE(64*512),           // DECIMAL
+  .MESSAGE_CONTROL(0),            // DECIMAL
+  .RAM_DECOMP("auto"),            // String
+  .READ_DATA_WIDTH_B(64),         // DECIMAL
+  .READ_LATENCY_B(1),             // DECIMAL
+  .READ_RESET_VALUE_B("0"),       // String
+  .RST_MODE_A("SYNC"),            // String
+  .RST_MODE_B("SYNC"),            // String
+  .SIM_ASSERT_CHK(0),             // DECIMAL; 0=disable simulation messages, 1=enable simulation messages
+  .USE_EMBEDDED_CONSTRAINT(0),    // DECIMAL
+  .USE_MEM_INIT(1),               // DECIMAL
+  .USE_MEM_INIT_MMI(0),           // DECIMAL
+  .WAKEUP_TIME("disable_sleep"),  // String
+  .WRITE_DATA_WIDTH_A(64),        // DECIMAL
+  .WRITE_MODE_B("no_change"),     // String
+  .WRITE_PROTECT(1)               // DECIMAL
+)
+upbl2 (
+  .dbiterrb(),             // 1-bit output: Status signal to indicate double bit error occurrence
+  .doutb(pbl_outc),              // READ_DATA_WIDTH_B-bit output: Data output for port B read operations.
+  .sbiterrb(),             // 1-bit output: Status signal to indicate single bit error occurrence
+  .addra(sreq.adr[10:3]),          // ADDR_WIDTH_A-bit input: Address for port A write operations.
+  .addrb({pbl_regset,virt_adr[31:28]}), // ADDR_WIDTH_B-bit input: Address for port B read operations.
+  .clka(clk),                     // 1-bit input: Clock signal for port A. Also clocks port B when
+  .clkb(clk),                     // 1-bit input: Clock signal for port B when parameter CLOCKING_MODE is
+  .dina(sreq.data1 >> {sreq.adr[4:3],6'b0}),	// WRITE_DATA_WIDTH_A-bit input: Data input for port A write operations.
+  .ena(sreq.adr[13:11]==3'b0 && cs_hwtw), // 1-bit input: Memory enable signal for port A. Must be high on clock
+  .enb(1'b1),                       // 1-bit input: Memory enable signal for port B. Must be high on clock
+  .injectdbiterra(1'b0), // 1-bit input: Controls double bit error injection on input data when
+  .injectsbiterra(1'b0), // 1-bit input: Controls single bit error injection on input data when
+  .regceb(1'b1),                 // 1-bit input: Clock Enable for the last register stage on the output
+  .rstb(rst),                     // 1-bit input: Reset signal for the final port B output register stage.
+  .sleep(1'b0),                   // 1-bit input: sleep signal to enable the dynamic power saving feature.
+  .wea({8{sreq.we}} & (sreq.sel >> {sreq.adr[4:3],3'b0}) ) 	// WRITE_DATA_WIDTH_A/BYTE_WRITE_WIDTH_A-bit input: Write enable vector
+);
+
+				
 change_det #(.WID(64)) cd3
 (
 	.rst(rst),
@@ -378,6 +455,11 @@ change_det #(.WID(64)) cd3
 	.i(virt_adr),
 	.cd(virt_adr_cd)
 );
+
+always_ff @(posedge clk)
+	virt_adr_cdd <= virt_adr_cd;
+always_ff @(posedge clk)
+	virt_adrd <= virt_adr;
 
 mmu_reg_write ummurwr
 (
@@ -410,7 +492,8 @@ mmu_read_reg ummurdrg
 	.phys_adr_v(phys_adr_v),
 	.pbl(pbl_outa),
 	.pte_size(pte_size),
-	.pbl_regset(pbl_regset)
+	.pbl_regset(pbl_regset),
+	.region_dat(region_dat)
 );
 
 always_comb
@@ -420,6 +503,63 @@ begin
 		if (tranbuf[n4].rdy)
 			sel_tran = n4;
 end
+
+region_tbl urgnt1
+(
+	.rst(rst),
+	.clk(clk),
+	.cs_rgn(cs_rgn),
+	.rgn0(tlb_entry0.pte.l1.rgn),
+	.rgn1(tlb_entry1.pte.l1.rgn),
+	.rgn2(tlb_pc_entry.pte.l1.rgn),
+	.ftas_req(sreqd),
+	.region_dat(region_dat),
+	.region_num(),
+	.region0(region0),
+	.region1(region1),
+	.region2(region2),
+	.sel0(rgn_sel0),
+	.sel1(rgn_sel1),
+	.sel2(rgn_sel2),
+	.err0(),
+	.err1(),
+	.err2()
+);
+
+//`ifdef 0
+mmu_attr_check ummatd1
+(
+	.id(1'b0),
+	.cpl(cpl),
+	.tlb_entry(tlb_entry0),
+	.om(om),				// fix these inputs
+	.we(vadr_we),		// fix these inputs
+	.region(region0),
+	.priv_err(priv_err0)
+);
+
+mmu_attr_check ummatd2
+(
+	.id(1'b0),
+	.cpl(cpl),
+	.tlb_entry(tlb_entry1),
+	.om(om),
+	.we(vadr2_we),
+	.region(region1),
+	.priv_err(priv_err1)
+);
+
+mmu_attr_check ummati1
+(
+	.id(1'b1),
+	.cpl(cpl),
+	.tlb_entry(tlb_pc_entry),
+	.om(om),
+	.we(1'b0),
+	.region(region2),
+	.priv_err(priv_err2)
+);
+//`endif
 
 ptw_miss_queue umsq1
 (
@@ -469,8 +609,11 @@ ptw_tran_buffer #(.CID(CID)) utrbf1
 	.ftam_resp(ftam_resp),
 	.tid(tid),
 	.ptw_vadr(ptw_vadr),
-	.ptw_padr(ptw_padr)
+	.ptw_padr(padr2)
 );
+
+wire padr0_v;
+assign tlb0_v = padr0_v & ~pswt_v;
 
 tlb3way utlb1
 (
@@ -484,8 +627,10 @@ tlb3way utlb1
 	.entry_o(tlb_replaced_entry),
 	.stall_tlb0(1'b0),
 	.stall_tlb1(1'b0),
-	.vadr0(vadr),
+	.vadr0(vadr_v ? vadr : swt_vadr),
 	.vadr1(ptw_vv ? ptw_vadr : vadr2),
+	.swt_i(swt & ~vadr_v),
+	.swt_o(),
 	.pc_ladr(ic_miss_adr),
 	.pc_asid(ic_miss_asid),
 	.op0(vadr_ir),
@@ -496,6 +641,7 @@ tlb3way utlb1
 	.agen1_rndx_o(),
 	.agen0_v(vadr_v),
 	.agen1_v(ptw_vv),
+	.swt_v(swt & ~vadr_v),
 	.load0_i(),
 	.load1_i(),
 	.store0_i(),
@@ -505,10 +651,11 @@ tlb3way utlb1
 	.entry0_o(tlb_entry0),
 	.entry1_o(tlb_entry1),
 	.pc_tlb_entry_o(tlb_pc_entry),
-	.padr0_v(tlb0_v),
+	.padr0_v(padr0_v),
 	.padr0(padr),
-	.padr1(ptw_padr),
+	.padr1(padr2),
 	.padr1_v(ptw_pv),
+	.pswt_v(pswt_v),
 	.pc_padr(pc_padr),
 	.pc_padr_v(pc_padr_v),
 	.tlb0_op(),
@@ -556,6 +703,7 @@ if (rst) begin
 	phys_adr_v <= FALSE;
 	pmtadr <= 16'h0;
 	rty_wait <= 5'd0;
+	swt <= FALSE;
 end
 else begin
 
@@ -566,12 +714,21 @@ else begin
 	way <= way + 2'd1;
 	if (way >= WAYS-1)
 		way <= 2'd0;
+		
+	// If swt is valid copy translation to phys_adr reg and flag as valid.
+//	if (padr_v & swt) begin
+//		phys_adr <= padr;
+//		phys_adr_v <= TRUE;
+//		swt <= FALSE;
+//	end
 
 	// Grab the bus for only 1 clock.
 	if (ftam_req.cyc && !ftam_resp.rty)
 		tBusClear();
 
-	if (virt_adr_cd)
+	// If the virtual address register changed, the physical address is no longer
+	// valid.
+	if (virt_adr_cdd)
 		phys_adr_v <= FALSE;
 
 	// Check for update to TLB.
@@ -604,14 +761,16 @@ else begin
 //				access_state <= TLB_PMT_STORE;
 				req_state <= ptable_walker_pkg::WAIT;
 			end
-			else if (!phys_adr_v && access_state==INACTIVE) begin
-				ptw_vadr <= virt_adr;
-				ptw_vv <= TRUE;
+			// If the physical address register is invalid, make it match corresponding
+			// to the virtual address. It is a software translation request.
+			// Stay in the idle state to handle subsequent requests.
+			else if (!phys_adr_v && !swt) begin
+				swt_vadr <= virt_adr;
+				ptw_vv <= TRUE;		// causes the address to be fed to the TLB
 				ptw_ppv <= TRUE;
-				access_state <= VIRT_ADR_XLAT;
-				req_state <= ptable_walker_pkg::WAIT;
+				swt <= TRUE;			// Trigger swt and prevent repeat
 			end
-			else if (~sel_qe[5] && access_state==INACTIVE) begin
+			else if (~sel_qe[5] && access_state==INACTIVE && !swt) begin
 				ptw_vadr <= miss_queue[sel_qe].tadr[31:0];
 				ptw_vv <= TRUE;
 				ptw_ppv <= TRUE;
@@ -639,7 +798,7 @@ else begin
 	VIRT_ADR_XLAT:
 		if (ptw_pv & ptw_ppv) begin
 			ptw_ppv <= FALSE;
-			phys_adr <= ptw_padr;
+			phys_adr <= padr2;
 			phys_adr_v <= TRUE;
 			access_state <= ptable_walker_pkg::INACTIVE;
 			req_state <= ptable_walker_pkg::IDLE;
@@ -657,10 +816,10 @@ else begin
 				ftam_req.cti <= fta_bus_pkg::CLASSIC;
 				ftam_req.cyc <= 1'b1;
 				ftam_req.we <= 1'b0;
-				tSetSel(ptw_padr);
+				tSetSel(padr2);
 //				ftam_req.asid <= miss_queue[sel_qe].asid;
 				ftam_req.pv <= 1'b0;
-				ftam_req.adr <= ptw_padr;
+				ftam_req.adr <= padr2;
 				ftam_req.tid <= tid;
 				rty_wait <= 5'd0;
 				access_state <= ptable_walker_pkg::TLB_PTE_FETCH_DONE;
@@ -726,7 +885,7 @@ else begin
 				ftam_req.cti <= fta_bus_pkg::CLASSIC;
 				ftam_req.cyc <= 1'b1;
 				ftam_req.we <= 1'b0;
-				tSetSel(ptw_padr);
+				tSetSel(padr2);
 			end
 		end
 	endcase
