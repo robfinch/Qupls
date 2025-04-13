@@ -2515,18 +2515,12 @@ reg wrport2_v;
 reg wrport3_v;
 reg wrport4_v;
 reg wrport5_v;
-reg [8:0] weport0;
-reg [8:0] weport1;
-reg [8:0] weport2;
-reg [8:0] weport3;
-reg [8:0] weport4;
-reg [8:0] weport5;
-reg wt0;
-reg wt1;
-reg wt2;
-reg wt3;
-reg wt4;
-reg wt5;
+reg [8:0] wrport0_we;
+reg [8:0] wrport1_we;
+reg [8:0] wrport2_we;
+reg [8:0] wrport3_we;
+reg [8:0] wrport4_we;
+reg [8:0] wrport5_we;
 value_t wrport0_res;
 value_t wrport1_res;
 value_t wrport2_res;
@@ -2545,12 +2539,6 @@ aregno_t wrport2_aRt;
 aregno_t wrport3_aRt;
 aregno_t wrport4_aRt;
 aregno_t wrport5_aRt;
-reg wrport0_aRtz;
-reg wrport1_aRtz;
-reg wrport2_aRtz;
-reg wrport3_aRtz;
-reg wrport4_aRtz;
-reg wrport5_aRtz;
 checkpt_ndx_t wrport0_cp;
 checkpt_ndx_t wrport1_cp;
 checkpt_ndx_t wrport2_cp;
@@ -3092,6 +3080,21 @@ always_ff @(posedge clk)
 if (advance_pipeline_seg2)
 	grp_r <= grp_d;
 
+reg alu0_wrA;
+reg alu1_wrA;
+reg fpu0_wrA;
+reg fpu1_wrA;
+reg dram0_wrA;
+reg dram1_wrA;
+reg fcu_wrA;
+reg wt0A, wt0B, wt0C;
+reg wt1A, wt1B, wt1C;
+reg wt2A, wt2B, wt2C;
+reg wt3A, wt3B, wt3C;
+reg wt4A, wt4B;
+reg wt5A, wt5B;
+reg wt6A, wt6B;
+
 // Do not update the register file if the architectural register is zero.
 // A dud rename register is used for architectural register zero, and it
 // should not be updated. The register file bypasses physical 
@@ -3107,78 +3110,155 @@ checkpt_ndx_t alu0_cp2, alu1_cp2, fpu0_cp2;
 wire alu0_aRtz1, alu0_aRtz2, alu1_aRtz1, alu1_aRtz2, fpu0_aRtz2;
 rob_ndx_t alu0_id2, alu1_id2, fpu0_id2;
 operating_mode_t alu0_om2, alu1_om2, fpu0_om2, fpu1_om2, dram0_om2, dram1_om2;
+
 // ALU #0 signals
-vtdl #($bits(pregno_t)) udlyal1 (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu0_Rt), .q(alu0_Rt2) );
-vtdl #($bits(aregno_t)) udlyal2 (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu0_aRt), .q(alu0_aRt2) );
-vtdl #(1) 							udlyal3 (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu0_aRtz), .q(alu0_aRtz2) );
+vtdl #($bits(pregno_t)) udlyal1A (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu0_RtA), .q(alu0_pRtA2) );
+vtdl #($bits(pregno_t)) udlyal1B (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu0_RtB), .q(alu0_pRtB2) );
+vtdl #($bits(pregno_t)) udlyal1C (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu0_RtC), .q(alu0_pRtC2) );
+
+vtdl #($bits(aregno_t)) udlyal2A (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu0_aRtA), .q(alu0_aRtA2) );
+vtdl #($bits(aregno_t)) udlyal2B (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu0_aRtB), .q(alu0_aRtB2) );
+vtdl #($bits(aregno_t)) udlyal2C (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu0_aRtC), .q(alu0_aRtC2) );
+
+vtdl #(1) 							udlyal3A (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu0_aRtzA), .q(alu0_aRtzA2) );
+vtdl #(1) 							udlyal3B (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu0_aRtzB), .q(alu0_aRtzB2) );
+vtdl #(1) 							udlyal3C (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu0_aRtzC), .q(alu0_aRtzC2) );
+
+vtdl #($bits(value_t)) udlyal1vA (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu0_resA), .q(alu0_resA2) );
+vtdl #($bits(value_t)) udlyal1vB (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu0_resB), .q(alu0_resB2) );
+vtdl #($bits(value_t)) udlyal1vC (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu0_resC), .q(alu0_resC2) );
+
 vtdl #(1) 							udlyal5 (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu0_sc_done), .q(alu0_sc_done2) );
 vtdl #($bits(rob_ndx_t))	udlyal6 (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu0_id), .q(alu0_id2) );
 vtdl #($bits(checkpt_ndx_t)) udlyal7 (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu0_cp), .q(alu0_cp2) );
 vtdl #($bits(operating_mode_t))	udlyal8 (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu0_om), .q(alu0_om2) );
+
 // ALU #1 signals
-vtdl #($bits(pregno_t)) udlyal1b (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu1_Rt), .q(alu1_Rt2) );
-vtdl #($bits(aregno_t)) udlyal2b (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu1_aRt), .q(alu1_aRt2) );
-vtdl #(1) 							udlyal3b (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu1_aRtz), .q(alu1_aRtz2) );
-vtdl #(1) 							udlyal5b (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu1_sc_done), .q(alu1_sc_done2) );
-vtdl #($bits(rob_ndx_t))	udlyal6b (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu1_id), .q(alu1_id2) );
-vtdl #($bits(checkpt_ndx_t)) udlyal7b (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu1_cp), .q(alu1_cp2) );
-vtdl #($bits(operating_mode_t))	udlyal8b (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu1_om), .q(alu1_om2) );
+vtdl #($bits(pregno_t)) udlyal11A (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu1_RtA), .q(alu1_pRtA2) );
+vtdl #($bits(pregno_t)) udlyal11B (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu1_RtB), .q(alu1_pRtB2) );
+vtdl #($bits(pregno_t)) udlyal11C (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu1_RtC), .q(alu1_pRtC2) );
+
+vtdl #($bits(aregno_t)) udlyal12A (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu1_aRtA), .q(alu1_aRtA2) );
+vtdl #($bits(aregno_t)) udlyal12B (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu1_aRtB), .q(alu1_aRtB2) );
+vtdl #($bits(aregno_t)) udlyal12C (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu1_aRtC), .q(alu1_aRtC2) );
+
+vtdl #(1) 							udlyal13A (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu1_aRtzA), .q(alu1_aRtzA2) );
+vtdl #(1) 							udlyal13B (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu1_aRtzB), .q(alu1_aRtzB2) );
+vtdl #(1) 							udlyal13C (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu1_aRtzC), .q(alu1_aRtzC2) );
+
+vtdl #($bits(value_t)) udlyal11vA (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu1_resA), .q(alu1_resA2) );
+vtdl #($bits(value_t)) udlyal11vB (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu1_resB), .q(alu1_resB2) );
+vtdl #($bits(value_t)) udlyal11vC (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu1_resC), .q(alu1_resC2) );
+
+vtdl #(1) 							udlyal15 (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu1_sc_done), .q(alu1_sc_done2) );
+vtdl #($bits(rob_ndx_t))	udlyal16 (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu1_id), .q(alu1_id2) );
+vtdl #($bits(checkpt_ndx_t)) udlyal17 (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu1_cp), .q(alu1_cp2) );
+vtdl #($bits(operating_mode_t))	udlyal18 (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu1_om), .q(alu1_om2) );
+
 //vtdl #($bits(value_t))  udlyal4 (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu0_res), .q(alu0_res2) );
 // FPU #0 signals
-vtdl #($bits(pregno_t)) udlyfp1 (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu0_Rt), .q(fpu0_Rt3) );
-vtdl #($bits(aregno_t)) udlyfp2 (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu0_aRt), .q(fpu0_aRt3) );
-vtdl #(1) 							udlyfp3 (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu0_aRtz), .q(fpu0_aRtz2) );
+vtdl #($bits(pregno_t)) udlyfp1A (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu0_RtA), .q(fpu0_pRtA2) );
+vtdl #($bits(pregno_t)) udlyfp1B (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu0_RtB), .q(fpu0_pRtB2) );
+vtdl #($bits(pregno_t)) udlyfp1C (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu0_RtC), .q(fpu0_pRtC2) );
+
+vtdl #($bits(aregno_t)) udlyfp2A (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu0_aRtA), .q(fpu0_aRtA2) );
+vtdl #($bits(aregno_t)) udlyfp2B (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu0_aRtB), .q(fpu0_aRtB2) );
+vtdl #($bits(aregno_t)) udlyfp2C (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu0_aRtC), .q(fpu0_aRtC2) );
+
+vtdl #(1) 							udlyfp3A (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu0_aRtzA), .q(fpu0_aRtzA2) );
+vtdl #(1) 							udlyfp3B (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu0_aRtzB), .q(fpu0_aRtzB2) );
+vtdl #(1) 							udlyfp3C (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu0_aRtzC), .q(fpu0_aRtzC2) );
+
+vtdl #($bits(value_t)) udlyfp1vA (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu0_resA), .q(fpu0_resA2) );
+vtdl #($bits(value_t)) udlyfp1vB (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu0_resB), .q(fpu0_resB2) );
+vtdl #($bits(value_t)) udlyfp1vC (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu0_resC), .q(fpu0_resC2) );
+
 vtdl #(1) 							udlyfp5 (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu0_sc_done), .q(fpu0_sc_done2) );
 vtdl #($bits(rob_ndx_t))	udlyfp6 (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu0_id), .q(fpu0_id2) );
-vtdl #($bits(checkpt_ndx_t)) udlyfp7b (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu0_cp), .q(fpu0_cp2) );
-vtdl #($bits(operating_mode_t)) udlyfp8 (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu0_om), .q(fpu0_om2) );
-//vtdl #($bits(value_t))  udlyfp4 (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu0_res), .q(fpu0_res3) );
-// FPU #1 signals
-vtdl #($bits(pregno_t)) udlyfp1a (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu1_Rt), .q(fpu1_Rt3) );
-vtdl #($bits(aregno_t)) udlyfp2a (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu1_aRt), .q(fpu1_aRt3) );
-vtdl #($bits(operating_mode_t)) udlyfp8a (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu1_om), .q(fpu1_om2) );
+vtdl #($bits(checkpt_ndx_t)) udlyfp7 (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu0_cp), .q(fpu0_cp2) );
+vtdl #($bits(operating_mode_t))	udlyfp8 (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu0_om), .q(fpu0_om2) );
 
-always_comb wrport0_aRtz = alu0_aRtz2;
-always_comb wrport1_aRtz = alu1_aRtz;
-always_comb wrport2_aRtz = dram_aRtz0;
-always_comb wrport3_aRtz = fpu0_aRtz2;
-always_comb wrport4_aRtz = dram_aRtz1;
-always_comb wrport5_aRtz = fpu1_aRtz;
-always_comb wrport0_v = (alu0_sc_done2|alu0_done) && !alu0_aRtz2;
-always_comb wrport1_v = (alu1_sc_done2|alu1_done) && !alu1_aRtz2 && NALU > 1;
-always_comb wrport2_v = dram_v0 && !dram_aRtz0;
-always_comb wrport3_v = (fpu0_sc_done2|fpu0_done1) && !fpu0_aRtz2 && NFPU > 0;
-always_comb wrport4_v = dram_v1 && !dram_aRtz1 && NDATA_PORTS > 1;
-always_comb wrport5_v = (fpu1_sc_done|fpu1_done1) && !fpu1_aRtz && NFPU > 1;
-// always write all bytes, unless a condition register.
-always_comb weport0 = (alu0_aRt2 >= 7'd80 && alu0_aRt2 <= 7'd87) ? (alu0_om2==OM_SECURE ? 9'h0FF : alu0_om2==OM_HYPERVISOR ? 9'h0F : alu0_om2==OM_SUPERVISOR ? 9'h03 : 9'h01) : {wt0,8'hFF};
-always_comb weport1 = (alu1_aRt2 >= 7'd80 && alu1_aRt2 <= 7'd87) ? (alu1_om2==OM_SECURE ? 9'h0FF : alu1_om2==OM_HYPERVISOR ? 9'h0F : alu1_om2==OM_SUPERVISOR ? 9'h03 : 9'h01) : {wt1,8'hFF};
-always_comb weport2 = (dram_aRt0 >= 7'd80 && dram_aRt0 <= 7'd87) ? (dram_om0==OM_SECURE ? 9'h0FF : dram_om0==OM_HYPERVISOR ? 9'h0F : dram_om0==OM_SUPERVISOR ? 9'h03 : 9'h01) : {wt2,8'hFF};
-always_comb weport3 = (fpu0_aRt3 >= 7'd80 && fpu0_aRt3 <= 7'd87) ? (fpu0_om2==OM_SECURE ? 9'h0FF : fpu0_om2==OM_HYPERVISOR ? 9'h0F : fpu0_om2==OM_SUPERVISOR ? 9'h03 : 9'h01) : {wt3,8'hFF};
-always_comb weport4 = (dram_aRt1 >= 7'd80 && dram_aRt1 <= 7'd87) ? (dram_om1==OM_SECURE ? 9'h0FF : dram_om1==OM_HYPERVISOR ? 9'h0F : dram_om1==OM_SUPERVISOR ? 9'h03 : 9'h01) : {wt4,8'hFF};
-always_comb weport5 = (fpu1_aRt3 >= 7'd80 && fpu1_aRt3 <= 7'd87) ? (fpu1_om2==OM_SECURE ? 9'h0FF : fpu1_om2==OM_HYPERVISOR ? 9'h0F : fpu1_om2==OM_SUPERVISOR ? 9'h03 : 9'h01) : {wt5,8'hFF};
-always_comb wt0 = (alu0_sc_done|alu0_done) && !alu0_aRtz2 && alu0_cap;
-always_comb wt2 = dram_v0 && !dram_aRtz0;
-always_comb wt3 = fpu0_done && !fpu0_aRtz && !fpu0_idle && NFPU > 0;
-always_comb wt4 = dram_v1 && !dram_aRtz1 && NDATA_PORTS > 1;
-assign wrport0_Rt = alu0_Rt2;
-assign wrport0_aRt = alu0_aRt2;
-assign wrport1_Rt = NALU > 1 ? alu1_Rt2 : 9'd0;
-assign wrport1_aRt = NALU > 1 ? alu1_aRt2 : 7'd0;
-assign wrport2_Rt = dram_Rt0;
-assign wrport2_aRt = dram_aRt0;
-assign wrport3_Rt = NFPU > 0 ? fpu0_Rt3 : 9'd0;
-assign wrport3_aRt = NFPU > 0 ? fpu0_aRt3 : 7'd0;
-assign wrport4_Rt = NDATA_PORTS > 1 ? dram_Rt1 : 9'd0;
-assign wrport4_aRt = NDATA_PORTS > 1 ? dram_aRt1 : 7'd0;
-assign wrport5_Rt = NFPU > 1 ? fpu1_Rt : 9'd0;
-assign wrport5_aRt = NFPU > 1 ? fpu1_aRt : 7'd0;
-assign wrport0_res = alu0_res;
-assign wrport1_res = NALU > 1 ? alu1_res : value_zero;
-assign wrport2_res = dram_bus0;
-assign wrport3_res = NFPU > 0 ? fpu0_res : value_zero;
-assign wrport4_res = NDATA_PORTS > 1 ? dram_bus1 : value_zero;
-assign wrport5_res = NFPU > 1 ? fpu1_res : value_zero;
+// FPU #1 signals
+vtdl #($bits(pregno_t)) udlyfp11A (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu1_RtA), .q(fpu1_pRtA2) );
+vtdl #($bits(pregno_t)) udlyfp11B (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu1_RtB), .q(fpu1_pRtB2) );
+vtdl #($bits(pregno_t)) udlyfp11C (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu1_RtC), .q(fpu1_pRtC2) );
+
+vtdl #($bits(aregno_t)) udlyfp21A (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu1_aRtA), .q(fpu1_aRtA2) );
+vtdl #($bits(aregno_t)) udlyfp21B (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu1_aRtB), .q(fpu1_aRtB2) );
+vtdl #($bits(aregno_t)) udlyfp21C (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu1_aRtC), .q(fpu1_aRtC2) );
+
+vtdl #(1) 							udlyfp31A (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu1_aRtzA), .q(fpu1_aRtzA2) );
+vtdl #(1) 							udlyfp31B (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu1_aRtzB), .q(fpu1_aRtzB2) );
+vtdl #(1) 							udlyfp31C (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu1_aRtzC), .q(fpu1_aRtzC2) );
+
+vtdl #($bits(value_t)) udlyfp1v1A (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu1_resA), .q(fpu1_resA2) );
+vtdl #($bits(value_t)) udlyfp1v1B (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu1_resB), .q(fpu1_resB2) );
+vtdl #($bits(value_t)) udlyfp1v1C (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu1_resC), .q(fpu1_resC2) );
+
+vtdl #(1) 							udlyfp51 (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu1_sc_done), .q(fpu1_sc_done2) );
+vtdl #($bits(rob_ndx_t))	udlyfp61 (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu1_id), .q(fpu1_id2) );
+vtdl #($bits(checkpt_ndx_t)) udlyfp71 (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu1_cp), .q(fpu1_cp2) );
+vtdl #($bits(operating_mode_t))	udlyfp81 (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu1_om), .q(fpu1_om2) );
+
+// Compute write enable.
+// When the unit is finished, and it is not architectural register zero.
+always_comb alu0_wrA = (alu0_sc_done2|alu0_done) && !alu0_aRtzA2;
+always_comb alu0_wrB = (alu0_sc_done2|alu0_done) && !alu0_aRtzB2;
+always_comb alu0_wrC = (alu0_sc_done2|alu0_done) && !alu0_aRtzC2;
+always_comb alu1_wrA = (alu1_sc_done2|alu1_done) && !alu1_aRtzA2 && NALU > 1;
+always_comb alu1_wrB = (alu1_sc_done2|alu1_done) && !alu1_aRtzB2 && NALU > 1;
+always_comb alu1_wrC = (alu1_sc_done2|alu1_done) && !alu1_aRtzC2 && NALU > 1;
+always_comb fpu0_wrA = (fpu0_sc_done2|fpu0_done1) && !fpu0_aRtzA2 && NFPU > 0;
+always_comb fpu0_wrB = (fpu0_sc_done2|fpu0_done1) && !fpu0_aRtzB2 && NFPU > 0;
+always_comb fpu0_wrC = (fpu0_sc_done2|fpu0_done1) && !fpu0_aRtzC2 && NFPU > 0;
+always_comb fpu1_wrA = (fpu1_sc_done|fpu1_done1) && !fpu1_aRtzA && NFPU > 1;
+always_comb fpu1_wrB = (fpu1_sc_done|fpu1_done1) && !fpu1_aRtzB && NFPU > 1;
+always_comb fpu1_wrC = (fpu1_sc_done|fpu1_done1) && !fpu1_aRtzC && NFPU > 1;
+always_comb dram0_wrA = dram_v0 && !dram_aRtzA0;
+always_comb dram0_wrB = dram_v0 && !dram_aRtzB0;
+always_comb dram1_wrA = dram_v1 && !dram_aRtzA1 && NDATA_PORTS > 1;
+always_comb dram1_wrB = dram_v1 && !dram_aRtzB1 && NDATA_PORTS > 1;
+always_comb fcu_wrA = 1'b0;
+
+// Always write all bytes, unless a condition register.
+always_ff @(posedge clk) alu0_weA = ((alu0_aRt2A >= 7'd80 && alu0_aRt2A <= 7'd87) ? (alu0_om2A==OM_SECURE ? 9'h0FF : alu0_om2A==OM_HYPERVISOR ? 9'h0F : alu0_om2A==OM_SUPERVISOR ? 9'h03 : 9'h01)) & {9{alu0_wrA}} : {wt0A,8'hFF} & {9{alu0_wrA}};
+always_ff @(posedge clk) alu0_weB = ((alu0_aRt2B >= 7'd80 && alu0_aRt2B <= 7'd87) ? (alu0_om2B==OM_SECURE ? 9'h0FF : alu0_om2B==OM_HYPERVISOR ? 9'h0F : alu0_om2B==OM_SUPERVISOR ? 9'h03 : 9'h01)) & {9{alu0_wrB}} : {wt0B,8'hFF} & {9{alu0_wrB}};
+always_ff @(posedge clk) alu0_weC = ((alu0_aRt2C >= 7'd80 && alu0_aRt2C <= 7'd87) ? (alu0_om2C==OM_SECURE ? 9'h0FF : alu0_om2C==OM_HYPERVISOR ? 9'h0F : alu0_om2C==OM_SUPERVISOR ? 9'h03 : 9'h01)) & {9{alu0_wrC}} : {wt0C,8'hFF} & {9{alu0_wrC}};
+always_ff @(posedge clk) alu1_weA = (((alu1_aRt2A >= 7'd80 && alu1_aRt2A <= 7'd87) ? (alu1_om2A==OM_SECURE ? 9'h0FF : alu1_om2A==OM_HYPERVISOR ? 9'h0F : alu1_om2A==OM_SUPERVISOR ? 9'h03 : 9'h01)) & {9{alu1_wrA}} : {wt1A,8'hFF} & {9{alu1_wrA}}) & {9{NALU > 1}};
+always_ff @(posedge clk) alu1_weB = (((alu1_aRt2B >= 7'd80 && alu1_aRt2B <= 7'd87) ? (alu1_om2B==OM_SECURE ? 9'h0FF : alu1_om2B==OM_HYPERVISOR ? 9'h0F : alu1_om2B==OM_SUPERVISOR ? 9'h03 : 9'h01)) & {9{alu1_wrB}} : {wt1B,8'hFF} & {9{alu1_wrB}}) & {9{NALU > 1}};
+always_ff @(posedge clk) alu1_weC = (((alu1_aRt2C >= 7'd80 && alu1_aRt2C <= 7'd87) ? (alu1_om2C==OM_SECURE ? 9'h0FF : alu1_om2C==OM_HYPERVISOR ? 9'h0F : alu1_om2C==OM_SUPERVISOR ? 9'h03 : 9'h01)) & {9{alu1_wrC}} : {wt1C,8'hFF} & {9{alu1_wrC}}) & {9{NALU > 1}};
+always_ff @(posedge clk) fpu0_weA = (((fpu0_aRt2A >= 7'd80 && fpu0_aRt2A <= 7'd87) ? (fpu0_om2A==OM_SECURE ? 9'h0FF : fpu0_om2A==OM_HYPERVISOR ? 9'h0F : fpu0_om2A==OM_SUPERVISOR ? 9'h03 : 9'h01)) & {9{fpu0_wrA}} : {wt2A,8'hFF} & {9{fpu0_wrA}}) & {9{NFPU > 0}};
+always_ff @(posedge clk) fpu0_weB = (((fpu0_aRt2B >= 7'd80 && fpu0_aRt2B <= 7'd87) ? (fpu0_om2B==OM_SECURE ? 9'h0FF : fpu0_om2B==OM_HYPERVISOR ? 9'h0F : fpu0_om2B==OM_SUPERVISOR ? 9'h03 : 9'h01)) & {9{fpu0_wrB}} : {wt2B,8'hFF} & {9{fpu0_wrB}}) & {9{NFPU > 0}};
+always_ff @(posedge clk) fpu0_weC = (((fpu0_aRt2C >= 7'd80 && fpu0_aRt2C <= 7'd87) ? (fpu0_om2C==OM_SECURE ? 9'h0FF : fpu0_om2C==OM_HYPERVISOR ? 9'h0F : fpu0_om2C==OM_SUPERVISOR ? 9'h03 : 9'h01)) & {9{fpu0_wrC}} : {wt2C,8'hFF} & {9{fpu0_wrC}}) & {9{NFPU > 0}};
+always_ff @(posedge clk) fpu1_weA = (((fpu1_aRt2A >= 7'd80 && fpu1_aRt2A <= 7'd87) ? (fpu1_om2A==OM_SECURE ? 9'h0FF : fpu1_om2A==OM_HYPERVISOR ? 9'h0F : fpu1_om2A==OM_SUPERVISOR ? 9'h03 : 9'h01)) & {9{fpu1_wrA}} : {wt3A,8'hFF} & {9{fpu1_wrA}}) & {9{NFPU > 1}};
+always_ff @(posedge clk) fpu1_weB = (((fpu1_aRt2B >= 7'd80 && fpu1_aRt2B <= 7'd87) ? (fpu1_om2B==OM_SECURE ? 9'h0FF : fpu1_om2B==OM_HYPERVISOR ? 9'h0F : fpu1_om2B==OM_SUPERVISOR ? 9'h03 : 9'h01)) & {9{fpu1_wrB}} : {wt3B,8'hFF} & {9{fpu1_wrB}}) & {9{NFPU > 1}};
+always_ff @(posedge clk) fpu1_weC = (((fpu1_aRt2C >= 7'd80 && fpu1_aRt2C <= 7'd87) ? (fpu1_om2C==OM_SECURE ? 9'h0FF : fpu1_om2C==OM_HYPERVISOR ? 9'h0F : fpu1_om2C==OM_SUPERVISOR ? 9'h03 : 9'h01)) & {9{fpu1_wrC}} : {wt3C,8'hFF} & {9{fpu1_wrC}}) & {9{NFPU > 1}};
+always_ff @(posedge clk) dram0_weA = ((dram0_aRt2A >= 7'd80 && dram0_aRt2A <= 7'd87) ? (dram0_om2A==OM_SECURE ? 9'h0FF : dram0_om2A==OM_HYPERVISOR ? 9'h0F : dram0_om2A==OM_SUPERVISOR ? 9'h03 : 9'h01)) & {9{dram0_wrA}} : {wt4A,8'hFF} & {9{dram0_wrA}};
+always_ff @(posedge clk) dram0_weB = ((dram0_aRt2B >= 7'd80 && dram0_aRt2B <= 7'd87) ? (dram0_om2B==OM_SECURE ? 9'h0FF : dram0_om2B==OM_HYPERVISOR ? 9'h0F : dram0_om2B==OM_SUPERVISOR ? 9'h03 : 9'h01)) & {9{dram0_wrB}} : {wt4B,8'hFF} & {9{dram0_wrB}};
+always_ff @(posedge clk) dram1_weA = (((dram1_aRt2A >= 7'd80 && dram1_aRt2A <= 7'd87) ? (dram1_om2A==OM_SECURE ? 9'h0FF : dram1_om2A==OM_HYPERVISOR ? 9'h0F : dram1_om2A==OM_SUPERVISOR ? 9'h03 : 9'h01)) & {9{dram1_wrA}} : {wt5A,8'hFF} & {9{dram1_wrA}}) & {9{NDATA_PORTS > 1}};
+always_ff @(posedge clk) dram1_weB = (((dram1_aRt2B >= 7'd80 && dram1_aRt2B <= 7'd87) ? (dram1_om2B==OM_SECURE ? 9'h0FF : dram1_om2B==OM_HYPERVISOR ? 9'h0F : dram1_om2B==OM_SUPERVISOR ? 9'h03 : 9'h01)) & {9{dram1_wrB}} : {wt5B,8'hFF} & {9{dram1_wrB}}) & {9{NDATA_PORTS > 1}};
+always_ff @(posedge clk) fcu_weA = ((fcu_aRt2A >= 7'd80 && fcu_aRt2A <= 7'd87) ? (fcu_om2A==OM_SECURE ? 9'h0FF : fcu_om2A==OM_HYPERVISOR ? 9'h0F : fcu_om2A==OM_SUPERVISOR ? 9'h03 : 9'h01)) & {9{fcu_wrA}} : {wt6A,8'hFF} & {9{fcu_wrA}};
+always_ff @(posedge clk) fcu_weB = ((fcu_aRt2B >= 7'd80 && fcu_aRt2B <= 7'd87) ? (fcu_om2B==OM_SECURE ? 9'h0FF : fcu_om2B==OM_HYPERVISOR ? 9'h0F : fcu_om2B==OM_SUPERVISOR ? 9'h03 : 9'h01)) & {9{fcu_wrB}} : {wt6B,8'hFF} & {9{fcu_wrB}};
+
+always_comb wt0A = (alu0_sc_done|alu0_done) && !alu0_aRtzA2 && alu0_capA;
+always_comb wt0B = (alu0_sc_done|alu0_done) && !alu0_aRtzB2 && alu0_capB;
+always_comb wt0C = (alu0_sc_done|alu0_done) && !alu0_aRtzC2 && alu0_capC;
+always_comb wt1A = (alu1_sc_done|alu1_done) && !alu1_aRtzA2 && alu1_capA && NALU > 1;
+always_comb wt1B = (alu1_sc_done|alu1_done) && !alu1_aRtzB2 && alu1_capB && NALU > 1;
+always_comb wt1C = (alu1_sc_done|alu1_done) && !alu1_aRtzC2 && alu1_capC && NALU > 1;
+always_comb wt2A = fpu0_done && !fpu0_aRtzA && !fpu0_idle && NFPU > 0;
+always_comb wt2B = fpu0_done && !fpu0_aRtzB && !fpu0_idle && NFPU > 0;
+always_comb wt2C = fpu0_done && !fpu0_aRtzC && !fpu0_idle && NFPU > 0;
+always_comb wt3A = fpu1_done && !fpu1_aRtzA && !fpu1_idle && NFPU > 1;
+always_comb wt3B = fpu1_done && !fpu1_aRtzB && !fpu1_idle && NFPU > 1;
+always_comb wt3C = fpu1_done && !fpu1_aRtzC && !fpu1_idle && NFPU > 1;
+always_comb wt4A = dram_v0 && !dram_aRtz0A;
+always_comb wt4B = dram_v0 && !dram_aRtz0B;
+always_comb wt5A = dram_v1 && !dram_aRtz1A && NDATA_PORTS > 1;
+always_comb wt5B = dram_v1 && !dram_aRtz1B && NDATA_PORTS > 1;
+always_comb wt6A = fcu_done && !fcu_aRtzA;
+always_comb wt6B = fcu_done && !fcu_aRtzB;
+
 assign wrport0_cp = alu0_cp2;
 assign wrport1_cp = alu1_cp2;
 assign wrport2_cp = dram0_cp;
@@ -3188,24 +3268,19 @@ wire [4:0] upd1a,upd2a,upd2a,upd4a,upd5a,upd6a;
 reg [4:0] upd1, upd2, upd3, upd4, upd5, upd6;
 reg [4:0] fuq_rot;
 
+// Look for queues containing values, and select from a queue using a rotating selector.
 reg [17:0] fuq_empty, fuq_empty_rot;
 always_comb
 	fuq_empty_rot = ({fuq_empty,fuq_empty} << fuq_rot) >> 5'd18;
 
-ffo24 uffov1 (.i({6'd0,fuq_empty_rot}), .o(upd1a));
-ffo24 uffov2 (.i({6'd0,fuq_empty_rot} & ~(24'd1 << upd1a)), .o(upd2a));
-ffo24 uffov3 (.i({6'd0,fuq_empty_rot} & ~(24'd1 << upd1a) & ~(24'd1 << upd2a)), .o(upd3a));
-ffo24 uffov4 (.i({6'd0,fuq_empty_rot} & ~(24'd1 << upd1a) & ~(24'd1 << upd2a) & ~(24'd1 << upd3a)), .o(upd4a));
-ffo24 uffov5 (.i({6'd0,fuq_empty_rot} & ~(24'd1 << upd1a) & ~(24'd1 << upd2a) & ~(24'd1 << upd3a) & ~(24'd1 << upd4a)), .o(upd5a));
-ffo24 uffov6 (.i({6'd0,fuq_empty_rot} & ~(24'd1 << upd1a) & ~(24'd1 << upd2a) & ~(24'd1 << upd3a) & ~(24'd1 << upd4a) & ~(24'd1 << upd5a)), .o(upd6a));
+ffo24 uffov1 (.i({6'd0,~fuq_empty_rot}), .o(upd1a));
+ffo24 uffov2 (.i({6'd0,~fuq_empty_rot} & ~(24'd1 << upd1a)), .o(upd2a));
+ffo24 uffov3 (.i({6'd0,~fuq_empty_rot} & ~(24'd1 << upd1a) & ~(24'd1 << upd2a)), .o(upd3a));
+ffo24 uffov4 (.i({6'd0,~fuq_empty_rot} & ~(24'd1 << upd1a) & ~(24'd1 << upd2a) & ~(24'd1 << upd3a)), .o(upd4a));
+ffo24 uffov5 (.i({6'd0,~fuq_empty_rot} & ~(24'd1 << upd1a) & ~(24'd1 << upd2a) & ~(24'd1 << upd3a) & ~(24'd1 << upd4a)), .o(upd5a));
+ffo24 uffov6 (.i({6'd0,~fuq_empty_rot} & ~(24'd1 << upd1a) & ~(24'd1 << upd2a) & ~(24'd1 << upd3a) & ~(24'd1 << upd4a) & ~(24'd1 << upd5a)), .o(upd6a));
 
-always_comb upd1 = upd1a - fuq_rot;
-always_comb upd2 = upd2a - fuq_rot;
-always_comb upd3 = upd3a - fuq_rot;
-always_comb upd4 = upd4a - fuq_rot;
-always_comb upd5 = upd5a - fuq_rot;
-always_comb upd6 = upd6a - fuq_rot;
-// mod 18 counter
+// mod 18 counter - rotate the queue selection
 always_ff @(posedge clk)
 if (rst)
 	fuq_rot <= 5'd0;
@@ -3215,30 +3290,40 @@ else begin
 		fuq_rot <= 5'd0;
 end
 
+// If upd1a did not find anything to update, then neither will any of the subsequest ones.
+always_ff @(posedge clk) upd1 = upd1a==5'd31 ? 5'd31 : fuq_rot > upd1a ? 6'd18 + upd1a - fuq_rot : upd1a - fuq_rot;
+always_ff @(posedge clk) upd2 = upd2a==5'd31 ? 5'd31 : fuq_rot > upd2a ? 6'd18 + upd2a - fuq_rot : upd2a - fuq_rot;
+always_ff @(posedge clk) upd3 = upd3a==5'd31 ? 5'd31 : fuq_rot > upd3a ? 6'd18 + upd3a - fuq_rot : upd3a - fuq_rot;
+always_ff @(posedge clk) upd4 = upd4a==5'd31 ? 5'd31 : fuq_rot > upd4a ? 6'd18 + upd4a - fuq_rot : upd4a - fuq_rot;
+always_ff @(posedge clk) upd5 = upd5a==5'd31 ? 5'd31 : fuq_rot > upd5a ? 6'd18 + upd5a - fuq_rot : upd5a - fuq_rot;
+always_ff @(posedge clk) upd6 = upd6a==5'd31 ? 5'd31 : fuq_rot > upd6a ? 6'd18 + upd6a - fuq_rot : upd6a - fuq_rot;
+
+// Read the next queue entry for the queue jsut used to update the register file.
 always_ff @(posedge clk)
 if (rst)
 	fuq_rd <= 18'd0;
 else begin
 	fuq_rd <= 18'b0;
 	
-	fuq_rd[upd1] <= 1'b1;
-	fuq_rd[upd2] <= 1'b1;
-	fuq_rd[upd3] <= 1'b1;
-	fuq_rd[upd4] <= 1'b1;
-	fuq_rd[upd5] <= 1'b1;
-	fuq_rd[upd6] <= 1'b1;
+	fuq_rd[upd1] <= upd1!=5'd31;
+	fuq_rd[upd2] <= upd2!=5'd31;
+	fuq_rd[upd3] <= upd3!=5'd31;
+	fuq_rd[upd4] <= upd4!=5'd31;
+	fuq_rd[upd5] <= upd5!=5'd31;
+	fuq_rd[upd6] <= upd6!=5'd31;
 end
 
+// Queue the outputs of the functional units.
 Stark_FuncResultQueue ufrq1
 (
 	.rst_i(rst),
 	.clk_i(clk),
 	.rd_i(fuq_rd[0]),
 	.we_i(alu0_weA),
-	.pRt_i(alu0_pRtA),
-	.aRt_i(alu0_aRtA),
-	.tag_i({7'd0,alu0_ctag}),
-	.res_i(alu0_resA),
+	.pRt_i(alu0_pRtA2),
+	.aRt_i(alu0_aRtA2),
+	.tag_i({7'd0,alu0_ctagA2}),
+	.res_i(alu0_resA2),
 	.we_o(fuq_we[0]),
 	.pRt_o(fuq_pRt[0]),
 	.aRt_o(fuq_aRt[0]),
@@ -3253,10 +3338,10 @@ Stark_FuncResultQueue ufrq2
 	.clk_i(clk),
 	.rd_i(fuq_rd[1]),
 	.we_i(alu0_weB),
-	.pRt_i(alu0_pRtB),
-	.aRt_i(alu0_aRtB),
-	.tag_i({7'd0,alu0_ctag}),
-	.res_i(alu0_resB),
+	.pRt_i(alu0_pRtB2),
+	.aRt_i(alu0_aRtB2),
+	.tag_i({7'd0,alu0_ctagB2}),
+	.res_i(alu0_resB2),
 	.we_o(fuq_we[1]),
 	.pRt_o(fuq_pRt[1]),
 	.aRt_o(fuq_aRt[1]),
@@ -3271,10 +3356,10 @@ Stark_FuncResultQueue ufrq3
 	.clk_i(clk),
 	.rd_i(fuq_rd[2]),
 	.we_i(alu0_weC),
-	.pRt_i(alu0_pRtC),
-	.aRt_i(alu0_aRtC),
-	.tag_i({7'd0,alu0_ctag}),
-	.res_i(alu0_resC),
+	.pRt_i(alu0_pRtC2),
+	.aRt_i(alu0_aRtC2),
+	.tag_i({7'd0,alu0_ctagC2}),
+	.res_i(alu0_resC2),
 	.we_o(fuq_we[2]),
 	.pRt_o(fuq_pRt[2]),
 	.aRt_o(fuq_aRt[2]),
@@ -3283,16 +3368,18 @@ Stark_FuncResultQueue ufrq3
 	.empty(fuq_empty[2])
 );
 
+generate begin : gALU1q
+	if (NALU > 1) begin
 Stark_FuncResultQueue ufrq4
 (
 	.rst_i(rst),
 	.clk_i(clk),
 	.rd_i(fuq_rd[3]),
 	.we_i(alu1_weA),
-	.pRt_i(alu1_pRtA),
-	.aRt_i(alu1_aRtA),
-	.tag_i({7'd0,alu1_ctag}),
-	.res_i(alu1_resA),
+	.pRt_i(alu1_pRtA2),
+	.aRt_i(alu1_aRtA2),
+	.tag_i({7'd0,alu1_ctagA2}),
+	.res_i(alu1_resA2),
 	.we_o(fuq_we[3]),
 	.pRt_o(fuq_pRt[3]),
 	.aRt_o(fuq_aRt[3]),
@@ -3307,10 +3394,10 @@ Stark_FuncResultQueue ufrq5
 	.clk_i(clk),
 	.rd_i(fuq_rd[4]),
 	.we_i(alu1_weB),
-	.pRt_i(alu1_pRtB),
-	.aRt_i(alu1_aRtB),
-	.tag_i({7'd0,alu1_ctag}),
-	.res_i(alu1_resB),
+	.pRt_i(alu1_pRtB2),
+	.aRt_i(alu1_aRtB2),
+	.tag_i({7'd0,alu1_ctagB2}),
+	.res_i(alu1_resB2),
 	.we_o(fuq_we[4]),
 	.pRt_o(fuq_pRt[4]),
 	.aRt_o(fuq_aRt[4]),
@@ -3325,10 +3412,10 @@ Stark_FuncResultQueue ufrq6
 	.clk_i(clk),
 	.rd_i(fuq_rd[5]),
 	.we_i(alu1_weC),
-	.pRt_i(alu1_pRtC),
-	.aRt_i(alu1_aRtC),
-	.tag_i({7'd0,alu1_ctag}),
-	.res_i(alu1_resC),
+	.pRt_i(alu1_pRtC2),
+	.aRt_i(alu1_aRtC2),
+	.tag_i({7'd0,alu1_ctagC2}),
+	.res_i(alu1_resC2),
 	.we_o(fuq_we[5]),
 	.pRt_o(fuq_pRt[5]),
 	.aRt_o(fuq_aRt[5]),
@@ -3336,17 +3423,42 @@ Stark_FuncResultQueue ufrq6
 	.res_o(fuq_res[5]),
 	.empty(fuq_empty[5])
 );
+end
+else begin
+	fuq_we[3] = 9'd0;
+	fuq_pRt[3] = 8'd0;
+	fuq_aRt[3] = 7'd0;
+	fuq_tag[3] = 8'b0;
+	fuq_res[3] = 64'd0;
+	fuq_empty[3] = 1'b1;
+	fuq_we[4] = 9'd0;
+	fuq_pRt[4] = 8'd0;
+	fuq_aRt[4] = 7'd0;
+	fuq_tag[4] = 8'b0;
+	fuq_res[4] = 64'd0;
+	fuq_empty[4] = 1'b1;
+	fuq_we[5] = 9'd0;
+	fuq_pRt[5] = 8'd0;
+	fuq_aRt[5] = 7'd0;
+	fuq_tag[5] = 8'b0;
+	fuq_res[5] = 64'd0;
+	fuq_empty[5] = 1'b1;
+end
+end
+endgenerate
 
+generate begin : gFPU0q
+	if (NFPU > 0) begin
 Stark_FuncResultQueue ufrq7
 (
 	.rst_i(rst),
 	.clk_i(clk),
 	.rd_i(fuq_rd[6]),
 	.we_i(fpu0_weA),
-	.pRt_i(fpu0_pRtA),
-	.aRt_i(fpu0_aRtA),
-	.tag_i({7'd0,fpu0_ctag}),
-	.res_i(fpu0_resA),
+	.pRt_i(fpu0_pRtA2),
+	.aRt_i(fpu0_aRtA2),
+	.tag_i({7'd0,fpu0_ctagA2}),
+	.res_i(fpu0_resA2),
 	.we_o(fuq_we[6]),
 	.pRt_o(fuq_pRt[6]),
 	.aRt_o(fuq_aRt[6]),
@@ -3361,10 +3473,10 @@ Stark_FuncResultQueue ufrq8
 	.clk_i(clk),
 	.rd_i(fuq_rd[7]),
 	.we_i(fpu0_weB),
-	.pRt_i(fpu0_pRtB),
-	.aRt_i(fpu0_aRtB),
-	.tag_i({7'd0,fpu0_ctag}),
-	.res_i(fpu0_resB),
+	.pRt_i(fpu0_pRtB2),
+	.aRt_i(fpu0_aRtB2),
+	.tag_i({7'd0,fpu0_ctagB2}),
+	.res_i(fpu0_resB2),
 	.we_o(fuq_we[7]),
 	.pRt_o(fuq_pRt[7]),
 	.aRt_o(fuq_aRt[7]),
@@ -3379,10 +3491,10 @@ Stark_FuncResultQueue ufrq9
 	.clk_i(clk),
 	.rd_i(fuq_rd[8]),
 	.we_i(fpu0_weC),
-	.pRt_i(fpu0_pRtC),
-	.aRt_i(fpu0_aRtC),
-	.tag_i({7'd0,fpu0_ctag}),
-	.res_i(fpu0_resC),
+	.pRt_i(fpu0_pRtC2),
+	.aRt_i(fpu0_aRtC2),
+	.tag_i({7'd0,fpu0_ctagC2}),
+	.res_i(fpu0_resC2),
 	.we_o(fuq_we[8]),
 	.pRt_o(fuq_pRt[8]),
 	.aRt_o(fuq_aRt[8]),
@@ -3390,17 +3502,42 @@ Stark_FuncResultQueue ufrq9
 	.res_o(fuq_res[8]),
 	.empty(fuq_empty[8])
 );
+end
+else begin
+	fuq_we[6] = 9'd0;
+	fuq_pRt[6] = 8'd0;
+	fuq_aRt[6] = 7'd0;
+	fuq_tag[6] = 8'b0;
+	fuq_res[6] = 64'd0;
+	fuq_empty[6] = 1'b1;
+	fuq_we[7] = 9'd0;
+	fuq_pRt[7] = 8'd0;
+	fuq_aRt[7] = 7'd0;
+	fuq_tag[7] = 8'b0;
+	fuq_res[7] = 64'd0;
+	fuq_empty[7] = 1'b1;
+	fuq_we[8] = 9'd0;
+	fuq_pRt[8] = 8'd0;
+	fuq_aRt[8] = 7'd0;
+	fuq_tag[8] = 8'b0;
+	fuq_res[8] = 64'd0;
+	fuq_empty[8] = 1'b1;
+end
+end
+endgenerate
 
+generate begin : gFPU1q
+	if (NFPU > 1) begin
 Stark_FuncResultQueue ufrq10
 (
 	.rst_i(rst),
 	.clk_i(clk),
 	.rd_i(fuq_rd[9]),
 	.we_i(fpu1_weA),
-	.pRt_i(fpu1_pRtA),
-	.aRt_i(fpu1_aRtA),
-	.tag_i({7'd0,fpu1_ctag}),
-	.res_i(fpu1_resA),
+	.pRt_i(fpu1_pRtA2),
+	.aRt_i(fpu1_aRtA2),
+	.tag_i({7'd0,fpu1_ctagA2}),
+	.res_i(fpu1_resA2),
 	.we_o(fuq_we[9]),
 	.pRt_o(fuq_pRt[9]),
 	.aRt_o(fuq_aRt[9]),
@@ -3415,10 +3552,10 @@ Stark_FuncResultQueue ufrq11
 	.clk_i(clk),
 	.rd_i(fuq_rd[10]),
 	.we_i(fpu1_weB),
-	.pRt_i(fpu1_pRtB),
-	.aRt_i(fpu1_aRtB),
-	.tag_i({7'd0,fpu1_ctag}),
-	.res_i(fpu1_resB),
+	.pRt_i(fpu1_pRtB2),
+	.aRt_i(fpu1_aRtB2),
+	.tag_i({7'd0,fpu1_ctagB2}),
+	.res_i(fpu1_resB2),
 	.we_o(fuq_we[10]),
 	.pRt_o(fuq_pRt[10]),
 	.aRt_o(fuq_aRt[10]),
@@ -3433,10 +3570,10 @@ Stark_FuncResultQueue ufrq12
 	.clk_i(clk),
 	.rd_i(fuq_rd[11]),
 	.we_i(fpu1_weC),
-	.pRt_i(fpu1_pRtC),
-	.aRt_i(fpu1_aRtC),
-	.tag_i({7'd0,fpu1_ctag}),
-	.res_i(fpu1_resC),
+	.pRt_i(fpu1_pRtC2),
+	.aRt_i(fpu1_aRtC2),
+	.tag_i({7'd0,fpu1_ctagC2}),
+	.res_i(fpu1_resC2),
 	.we_o(fuq_we[11]),
 	.pRt_o(fuq_pRt[11]),
 	.aRt_o(fuq_aRt[11]),
@@ -3444,42 +3581,199 @@ Stark_FuncResultQueue ufrq12
 	.res_o(fuq_res[11]),
 	.empty(fuq_empty[11])
 );
+end
+else begin
+	fuq_we[9] = 9'd0;
+	fuq_pRt[9] = 8'd0;
+	fuq_aRt[9] = 7'd0;
+	fuq_tag[9] = 8'b0;
+	fuq_res[9] = 64'd0;
+	fuq_empty[9] = 1'b1;
+	fuq_we[10] = 9'd0;
+	fuq_pRt[10] = 8'd0;
+	fuq_aRt[10] = 7'd0;
+	fuq_tag[10] = 8'b0;
+	fuq_res[10] = 64'd0;
+	fuq_empty[10] = 1'b1;
+	fuq_we[11] = 9'd0;
+	fuq_pRt[11] = 8'd0;
+	fuq_aRt[11] = 7'd0;
+	fuq_tag[11] = 8'b0;
+	fuq_res[11] = 64'd0;
+	fuq_empty[11] = 1'b1;
+end
+end
+endgenerate
 
-always_comb wrport0_v = !fuq_empty[upd1];
-always_comb wrport0_we = fuq_we[upd1]; 
-always_comb wrport0_Rt = fuq_pRt[upd1]; 
-always_comb wrport0_aRt = fuq_aRt[upd1]; 
-always_comb wrport0_res = fuq_res[upd1]; 
+Stark_FuncResultQueue ufrq13
+(
+	.rst_i(rst),
+	.clk_i(clk),
+	.rd_i(fuq_rd[12]),
+	.we_i(dram0_weA),
+	.pRt_i(dram0_pRtA2),
+	.aRt_i(dram0_aRtA2),
+	.tag_i({7'd0,dram0_ctagA2}),
+	.res_i(dram0_resA2),
+	.we_o(fuq_we[12]),
+	.pRt_o(fuq_pRt[12]),
+	.aRt_o(fuq_aRt[12]),
+	.tag_o(fuq_tag[12]),
+	.res_o(fuq_res[12]),
+	.empty(fuq_empty[12])
+);
 
-always_comb wrport1_v = !fuq_empty[upd2];
-always_comb wrport1_we = fuq_we[upd2]; 
-always_comb wrport1_Rt = fuq_pRt[upd2]; 
-always_comb wrport1_aRt = fuq_aRt[upd2]; 
-always_comb wrport1_res = fuq_res[upd2]; 
+Stark_FuncResultQueue ufrq14
+(
+	.rst_i(rst),
+	.clk_i(clk),
+	.rd_i(fuq_rd[13]),
+	.we_i(dram0_weB),
+	.pRt_i(dram0_pRtB2),
+	.aRt_i(dram0_aRtB2),
+	.tag_i({7'd0,dram0_ctagB2}),
+	.res_i(dram0_resB2),
+	.we_o(fuq_we[13]),
+	.pRt_o(fuq_pRt[13]),
+	.aRt_o(fuq_aRt[13]),
+	.tag_o(fuq_tag[13]),
+	.res_o(fuq_res[13]),
+	.empty(fuq_empty[13])
+);
 
-always_comb wrport2_v = !fuq_empty[upd3];
-always_comb wrport2_we = fuq_we[upd3]; 
-always_comb wrport2_Rt = fuq_pRt[upd3]; 
-always_comb wrport2_aRt = fuq_aRt[upd3]; 
-always_comb wrport2_res = fuq_res[upd3]; 
+generate begin : gDRAM1q
+	if (NDATA_PORTS > 1) begin
+Stark_FuncResultQueue ufrq15
+(
+	.rst_i(rst),
+	.clk_i(clk),
+	.rd_i(fuq_rd[14]),
+	.we_i(dram1_weA),
+	.pRt_i(dram1_pRtA2),
+	.aRt_i(dram1_aRtA2),
+	.tag_i({7'd0,dram1_ctagA2}),
+	.res_i(dram1_resA2),
+	.we_o(fuq_we[14]),
+	.pRt_o(fuq_pRt[14]),
+	.aRt_o(fuq_aRt[14]),
+	.tag_o(fuq_tag[14]),
+	.res_o(fuq_res[14]),
+	.empty(fuq_empty[14])
+);
 
-always_comb wrport3_v = !fuq_empty[upd4];
-always_comb wrport3_we = fuq_we[upd4]; 
-always_comb wrport3_Rt = fuq_pRt[upd4]; 
-always_comb wrport3_aRt = fuq_aRt[upd4]; 
-always_comb wrport3_res = fuq_res[upd4]; 
+Stark_FuncResultQueue ufrq16
+(
+	.rst_i(rst),
+	.clk_i(clk),
+	.rd_i(fuq_rd[15]),
+	.we_i(dram1_weB),
+	.pRt_i(dram1_pRtB2),
+	.aRt_i(dram1_aRtB2),
+	.tag_i({7'd0,dram1_ctagB2}),
+	.res_i(dram1_resB2),
+	.we_o(fuq_we[15]),
+	.pRt_o(fuq_pRt[15]),
+	.aRt_o(fuq_aRt[15]),
+	.tag_o(fuq_tag[15]),
+	.res_o(fuq_res[15]),
+	.empty(fuq_empty[15])
+);
+end
+else begin
+	fuq_we[14] = 9'd0;
+	fuq_pRt[14] = 8'd0;
+	fuq_aRt[14] = 7'd0;
+	fuq_tag[14] = 8'b0;
+	fuq_res[14] = 64'd0;
+	fuq_empty[14] = 1'b1;
+	fuq_we[15] = 9'd0;
+	fuq_pRt[15] = 8'd0;
+	fuq_aRt[15] = 7'd0;
+	fuq_tag[15] = 8'b0;
+	fuq_res[15] = 64'd0;
+	fuq_empty[15] = 1'b1;
+end
+end
+endgenerate
 
-always_comb wrport4_v = !fuq_empty[upd5];
-always_comb wrport4_we = fuq_we[upd5]; 
-always_comb wrport4_Rt = fuq_pRt[upd5];
-always_comb wrport4_aRt = fuq_aRt[upd5]; 
-always_comb wrport4_res = fuq_res[upd5]; 
+Stark_FuncResultQueue ufrq17
+(
+	.rst_i(rst),
+	.clk_i(clk),
+	.rd_i(fuq_rd[16]),
+	.we_i(fcu_weA),
+	.pRt_i(fcu_pRtA2),
+	.aRt_i(fcu_aRtA2),
+	.tag_i({7'd0,fcu_ctagA2}),
+	.res_i(fcu_resA2),
+	.we_o(fuq_we[16]),
+	.pRt_o(fuq_pRt[16]),
+	.aRt_o(fuq_aRt[16]),
+	.tag_o(fuq_tag[16]),
+	.res_o(fuq_res[16]),
+	.empty(fuq_empty[16])
+);
 
-always_comb wrport5_v = !fuq_empty[upd6];
-always_comb wrport5_we = fuq_we[upd6]; 
-always_comb wrport5_Rt = fuq_pRt[upd6];
-always_comb wrport5_aRt = fuq_aRt[upd6]; 
-always_comb wrport5_res = fuq_res[upd6]; 
+Stark_FuncResultQueue ufrq18
+(
+	.rst_i(rst),
+	.clk_i(clk),
+	.rd_i(fuq_rd[17]),
+	.we_i(fcu_weB),
+	.pRt_i(fcu_pRtB2),
+	.aRt_i(fcu_aRtB2),
+	.tag_i({7'd0,fcu_ctagB2}),
+	.res_i(fcu_resB2),
+	.we_o(fuq_we[17]),
+	.pRt_o(fuq_pRt[17]),
+	.aRt_o(fuq_aRt[17]),
+	.tag_o(fuq_tag[17]),
+	.res_o(fuq_res[17]),
+	.empty(fuq_empty[17])
+);
+
+// Mux the queue outputs onto the register file inputs.
+always_ff @(posedge clk) wrport0_v <= !fuq_empty[upd1];
+always_ff @(posedge clk) wrport0_we <= fuq_we[upd1]; 
+always_ff @(posedge clk) wrport0_Rt <= fuq_pRt[upd1]; 
+always_ff @(posedge clk) wrport0_aRt <= fuq_aRt[upd1]; 
+always_ff @(posedge clk) wrport0_res <= fuq_res[upd1]; 
+always_ff @(posedge clk) wrport0_tag <= fuq_tag[upd1]; 
+
+always_ff @(posedge clk) wrport1_v <= !fuq_empty[upd2];
+always_ff @(posedge clk) wrport1_we <= fuq_we[upd2]; 
+always_ff @(posedge clk) wrport1_Rt <= fuq_pRt[upd2]; 
+always_ff @(posedge clk) wrport1_aRt <= fuq_aRt[upd2]; 
+always_ff @(posedge clk) wrport1_res <= fuq_res[upd2]; 
+always_ff @(posedge clk) wrport1_tag <= fuq_tag[upd2]; 
+
+always_ff @(posedge clk) wrport2_v <= !fuq_empty[upd3];
+always_ff @(posedge clk) wrport2_we <= fuq_we[upd3]; 
+always_ff @(posedge clk) wrport2_Rt <= fuq_pRt[upd3]; 
+always_ff @(posedge clk) wrport2_aRt <= fuq_aRt[upd3]; 
+always_ff @(posedge clk) wrport2_res <= fuq_res[upd3]; 
+always_ff @(posedge clk) wrport2_tag <= fuq_tag[upd3]; 
+
+always_ff @(posedge clk) wrport3_v <= !fuq_empty[upd4];
+always_ff @(posedge clk) wrport3_we <= fuq_we[upd4]; 
+always_ff @(posedge clk) wrport3_Rt <= fuq_pRt[upd4]; 
+always_ff @(posedge clk) wrport3_aRt <= fuq_aRt[upd4]; 
+always_ff @(posedge clk) wrport3_res <= fuq_res[upd4]; 
+always_ff @(posedge clk) wrport3_tag <= fuq_tag[upd4]; 
+
+always_ff @(posedge clk) wrport4_v <= !fuq_empty[upd5];
+always_ff @(posedge clk) wrport4_we <= fuq_we[upd5]; 
+always_ff @(posedge clk) wrport4_Rt <= fuq_pRt[upd5];
+always_ff @(posedge clk) wrport4_aRt <= fuq_aRt[upd5]; 
+always_ff @(posedge clk) wrport4_res <= fuq_res[upd5]; 
+always_ff @(posedge clk) wrport4_tag <= fuq_tag[upd5]; 
+
+always_ff @(posedge clk) wrport5_v <= !fuq_empty[upd6];
+always_ff @(posedge clk) wrport5_we <= fuq_we[upd6]; 
+always_ff @(posedge clk) wrport5_Rt <= fuq_pRt[upd6];
+always_ff @(posedge clk) wrport5_aRt <= fuq_aRt[upd6]; 
+always_ff @(posedge clk) wrport5_res <= fuq_res[upd6]; 
+always_ff @(posedge clk) wrport5_tag <= fuq_tag[upd6]; 
 
 Stark_regfile6wNr #(.RPORTS(24)) urf1 (
 	.rst(irst),
@@ -3492,12 +3786,12 @@ Stark_regfile6wNr #(.RPORTS(24)) urf1 (
 	.wr3(wrport3_v),
 	.wr4(wrport4_v),
 	.wr5(wrport5_v),
-	.we0(weport0),
-	.we1(weport1),
-	.we2(weport2),
-	.we3(weport3),
-	.we4(weport4),
-	.we5(weport5),
+	.we0(wrport0_we),
+	.we1(wrport1_we),
+	.we2(wrport2_we),
+	.we3(wrport3_we),
+	.we4(wrport4_we),
+	.we5(wrport5_we),
 	.wa0(wrport0_Rt),
 	.wa1(wrport1_Rt),
 	.wa2(wrport2_Rt),
@@ -3510,12 +3804,15 @@ Stark_regfile6wNr #(.RPORTS(24)) urf1 (
 	.i3(wrport3_res),
 	.i4(wrport4_res),
 	.i5(wrport5_res),
-	.ti0(alu0_ctag),
-	.ti1(1'b0),
-	.ti2(dram0_cload ? dram_ctag0 : 1'b0),
-	.ti3(fpu0_ctag),
-	.ti4(dram1_cload ? dram_ctag1 : 1'b0),
-	.ti5(1'b0),
+	.ti0(wrport0_tag),
+	.ti1(wrport1_tag),
+	.ti2(wrport2_tag),
+	.ti3(wrport3_tag),
+	.ti4(wrport4_tag),
+	.ti5(wrport5_tag),
+//	.ti2(dram0_cload ? dram_ctag0 : 1'b0),
+//	.ti3(fpu0_ctag),
+//	.ti4(dram1_cload ? dram_ctag1 : 1'b0),
 	.ra(rf_reg),
 	.o(rfo),
 	.to(rfo_ctag)
