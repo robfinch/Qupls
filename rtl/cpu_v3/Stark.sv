@@ -42,7 +42,7 @@
 import const_pkg::*;
 import fta_bus_pkg::*;
 import cpu_types_pkg::*;
-import Stark_cache_pkg::*;
+import cache_pkg::*;
 import mmu_pkg::*;
 import Stark_pkg::*;
 
@@ -138,18 +138,18 @@ mc_address_t next_micro_ip, next_mip;
 reg [39:0] I;		// Committed instructions
 reg [39:0] IV;	// Valid committed instructions
 
-reg_bitmask_t livetarget;
-reg_bitmask_t [ROB_ENTRIES-1:0] rob_livetarget;
-reg_bitmask_t [ROB_ENTRIES-1:0] rob_latestID;
-reg_bitmask_t [ROB_ENTRIES-1:0] rob_cumulative;
-reg_bitmask_t [ROB_ENTRIES-1:0] rob_out;
-reg [PREGS-1:0] unavail_list;			// list of registers made unavailable via copy-targets
+Stark_pkg::reg_bitmask_t livetarget;
+Stark_pkg::reg_bitmask_t [Stark_pkg::ROB_ENTRIES-1:0] rob_livetarget;
+Stark_pkg::reg_bitmask_t [Stark_pkg::ROB_ENTRIES-1:0] rob_latestID;
+Stark_pkg::reg_bitmask_t [Stark_pkg::ROB_ENTRIES-1:0] rob_cumulative;
+Stark_pkg::reg_bitmask_t [Stark_pkg::ROB_ENTRIES-1:0] rob_out;
+reg [Stark_pkg::PREGS-1:0] unavail_list;			// list of registers made unavailable via copy-targets
 
-reg [ROB_ENTRIES-1:0] missidb;
+reg [Stark_pkg::ROB_ENTRIES-1:0] missidb;
 
 mvec_entry_t [255:0] mvec_tbl;
 
-wire [PREGS-1:0] restore_list;
+wire [Stark_pkg::PREGS-1:0] restore_list;
 rob_ndx_t agen0_rndx, agen1_rndx;
 reg [7:0] scan;
 
@@ -256,28 +256,28 @@ wire [23:0] rfo_ctag;
 rob_ndx_t mc_orid;
 pc_address_ex_t mc_adr;
 pc_address_ex_t tgtpc;
-rob_entry_t [ROB_ENTRIES-1:0] rob;
+Stark_pkg::rob_entry_t [Stark_pkg::ROB_ENTRIES-1:0] rob;
 beb_entry_t beb_buf;
 reg [1:0] beb_status [0:63];
 
-ex_instruction_t [3:0] macro_ins_bus;
+Stark_pkg::ex_instruction_t [3:0] macro_ins_bus;
 reg macro_queued;
 
-reg [1:0] robentry_islot [0:ROB_ENTRIES-1];
-wire [1:0] next_robentry_islot [0:ROB_ENTRIES-1];
-reg [1:0] lsq_islot [0:LSQ_ENTRIES*2-1];
-rob_bitmask_t robentry_stomp;
-rob_bitmask_t robentry_cpytgt;
+reg [1:0] robentry_islot [0:Stark_pkg::ROB_ENTRIES-1];
+wire [1:0] next_robentry_islot [0:Stark_pkg::ROB_ENTRIES-1];
+reg [1:0] lsq_islot [0:Stark_pkg::LSQ_ENTRIES*2-1];
+Stark_pkg::rob_bitmask_t robentry_stomp;
+Stark_pkg::rob_bitmask_t robentry_cpytgt;
 wire [4:0] stomp_bno;
 wire stomp_fet, stomp_mux, stomp_x4;
 wire stomp_dec, stomp_ren, stomp_que, stomp_quem;
 reg stomp_fet1,stomp_mux1,stomp_mux2;
-rob_bitmask_t robentry_issue;
-rob_bitmask_t robentry_fpu_issue;
-rob_bitmask_t robentry_fcu_issue;
-rob_bitmask_t robentry_agen_issue;
-lsq_entry_t [1:0] lsq [0:7];
-lsq_ndx_t lq_tail, lq_head;
+Stark_pkg::rob_bitmask_t robentry_issue;
+Stark_pkg::rob_bitmask_t robentry_fpu_issue;
+Stark_pkg::rob_bitmask_t robentry_fcu_issue;
+Stark_pkg::rob_bitmask_t robentry_agen_issue;
+Stark_pkg::lsq_entry_t [1:0] lsq [0:7];
+Stark_pkg::lsq_ndx_t lq_tail, lq_head;
 wire nq;
 reg [3:0] wnq;
 
@@ -291,7 +291,7 @@ reg inc_chkpt;
 reg [2:0] chkpt_inc_amt;
 reg do_bsr_h;
 reg set_pending_ipl;
-reg [2:0] next_pending_ipl;
+reg [5:0] next_pending_ipl;
 wire stallq, rat_stallq, ren_stallq;
 
 rob_ndx_t tail0, tail1, tail2, tail3, tail4, tail5, tail6, tail7, tail8, tail9, tail10, tail11;
@@ -310,11 +310,11 @@ always_comb tails[8] = tail8;
 always_comb tails[9] = tail9;
 always_comb tails[10] = tail10;
 always_comb tails[11] = tail11;
-reg_bitmask_t reg_bitmask;
-reg_bitmask_t Ra_bitmask;
-reg_bitmask_t Rt_bitmask;
+Stark_pkg::reg_bitmask_t reg_bitmask;
+Stark_pkg::reg_bitmask_t Ra_bitmask;
+Stark_pkg::reg_bitmask_t Rt_bitmask;
 reg ls_bmf;		// load or store bitmask flag
-ex_instruction_t hold_ir;
+Stark_pkg::ex_instruction_t hold_ir;
 reg hold_ins;
 reg pack_regs;
 reg [2:0] scale_regs;
@@ -327,11 +327,11 @@ reg last1;
 reg last2;
 reg last3;
 
-pipeline_reg_t pr_fet0,pr_fet1,pr_fet2,pr_fet3;
-pipeline_reg_t pr_mux0,pr_mux1,pr_mux2,pr_mux3;
-pipeline_reg_t pr_dec0,pr_dec1,pr_dec2,pr_dec3;
-pipeline_reg_t pr_ren0,pr_ren1,pr_ren2,pr_ren3;
-pipeline_reg_t pr_que0,pr_que1,pr_que2,pr_que3;
+Stark_pkg::pipeline_reg_t pr_fet0,pr_fet1,pr_fet2,pr_fet3;
+Stark_pkg::pipeline_reg_t pr_mux0,pr_mux1,pr_mux2,pr_mux3;
+Stark_pkg::pipeline_reg_t pr_dec0,pr_dec1,pr_dec2,pr_dec3;
+Stark_pkg::pipeline_reg_t pr_ren0,pr_ren1,pr_ren2,pr_ren3;
+Stark_pkg::pipeline_reg_t pr_que0,pr_que1,pr_que2,pr_que3;
 
 always_comb tail1 = (tail0 + 1) % ROB_ENTRIES;
 always_comb tail2 = (tail0 + 2) % ROB_ENTRIES;
@@ -352,13 +352,13 @@ always_comb head5 = (head0 + 5) % ROB_ENTRIES;
 always_comb head6 = (head0 + 6) % ROB_ENTRIES;
 always_comb head7 = (head0 + 7) % ROB_ENTRIES;
 
-ex_instruction_t [7:0] ex_ins;
+Stark_pkg::ex_instruction_t [7:0] ex_ins;
 
-decode_bus_t db0_r, db1_r, db2_r, db3_r;				// Regfetch/rename stage inputs
-pipeline_reg_t ins0_mux, ins1_mux, ins2_mux, ins3_mux, ins4_mux;
-pipeline_reg_t ins0_dec, ins1_dec, ins2_dec, ins3_dec, ins4_d, ins5_d, ins6_d, ins7_d, ins8_d;
-pipeline_reg_t ins0_ren, ins1_ren, ins2_ren, ins3_ren;
-pipeline_reg_t ins0_que, ins1_que, ins2_que, ins3_que;
+Stark_pkg::decode_bus_t db0_r, db1_r, db2_r, db3_r;				// Regfetch/rename stage inputs
+Stark_pkg::pipeline_reg_t ins0_mux, ins1_mux, ins2_mux, ins3_mux, ins4_mux;
+Stark_pkg::pipeline_reg_t ins0_dec, ins1_dec, ins2_dec, ins3_dec, ins4_d, ins5_d, ins6_d, ins7_d, ins8_d;
+Stark_pkg::pipeline_reg_t ins0_ren, ins1_ren, ins2_ren, ins3_ren;
+Stark_pkg::pipeline_reg_t ins0_que, ins1_que, ins2_que, ins3_que;
 
 reg backout;
 wire bo_wr;
@@ -429,7 +429,7 @@ wire alu0_pred;
 wire alu0_predz;
 wire alu0_cpytgt;
 wire [7:0] alu0_cptgt;
-memsz_t alu0_prc;
+Stark_pkg::memsz_t alu0_prc;
 wire alu0_ctag;
 
 reg alu1_idle;
@@ -448,7 +448,7 @@ always_ff @(posedge clk) alu1_sc_done1 <= alu1_sc_done;
 reg alu1_stomp;
 reg alu1_available;
 reg alu1_dataready;
-ex_instruction_t alu1_instr;
+Stark_pkg::ex_instruction_t alu1_instr;
 wire alu1_div;
 value_t alu1_argA;
 value_t alu1_argB;
@@ -480,7 +480,7 @@ wire alu1_pred;
 wire alu1_predz;
 wire alu1_cpytgt;
 wire [7:0] alu1_cptgt;
-memsz_t alu1_prc;
+Stark_pkg::memsz_t alu1_prc;
 wire alu1_ctag;
 
 reg fpu0_idle;
@@ -516,7 +516,7 @@ pc_address_ex_t fpu0_pc;
 value_t fpu0_res, fpu0_resH;
 double_value_t qdfpu0_res;
 rob_ndx_t fpu0_id;
-cause_code_t fpu0_exc;
+Stark_pkg::cause_code_t fpu0_exc;
 reg fpu0_out;
 wire fpu_done1;
 reg fpu0_idv;
@@ -532,7 +532,7 @@ reg fpu1_done1;
 reg fpu1_stomp;
 reg fpu1_available;
 reg fpu1_dataready;
-ex_instruction_t fpu1_instr;
+Stark_pkg::ex_instruction_t fpu1_instr;
 reg [2:0] fpu1_rmd;
 operating_mode_t fpu1_om;
 value_t fpu1_argA;
@@ -554,7 +554,7 @@ reg fpu1_bank;
 pc_address_ex_t fpu1_pc;
 value_t fpu1_res;
 rob_ndx_t fpu1_id;
-cause_code_t fpu1_exc = FLT_NONE;
+Stark_pkg::cause_code_t fpu1_exc = FLT_NONE;
 wire        fpu1_v;
 reg fpu1_idv;
 wire fpu1_qfext;
@@ -562,8 +562,8 @@ reg [15:0] fpu1_cptgt;
 
 reg fcu_idle;
 reg fcu_available;
-pipeline_reg_t fcu_instr;
-pipeline_reg_t fcu_missir;
+Stark_pkg::pipeline_reg_t fcu_instr;
+Stark_pkg::pipeline_reg_t fcu_missir;
 reg fcu_bt;
 reg fcu_cjb;
 reg fcu_bsr;
@@ -575,7 +575,7 @@ value_t fcu_argI;	// only used by BEQ
 pc_address_ex_t fcu_pc;
 rob_ndx_t fcu_id;
 reg fcu_idv;
-cause_code_t fcu_exc;
+Stark_pkg::cause_code_t fcu_exc;
 reg fcu_v, fcu_v2, fcu_v3, fcu_v4, fcu_v5, fcu_v6;
 wire fcu_branchmiss;
 pc_address_ex_t fcu_misspc, fcu_misspc1;
@@ -593,7 +593,7 @@ wire tlb0_v, tlb1_v;
 
 reg agen0_idle;
 wire agen0_idle1;
-ex_instruction_t agen0_op;
+Stark_pkg::ex_instruction_t agen0_op;
 rob_ndx_t agen0_id;
 operating_mode_t agen0_om;
 wire agen0_we;
@@ -614,14 +614,14 @@ pregno_t agen0_Rc;
 pregno_t agen0_Rt;
 pregno_t agen0_pRc;
 checkpt_ndx_t agen0_cp;
-cause_code_t agen0_exc;
+Stark_pkg::cause_code_t agen0_exc;
 wire agen0_excv;
 reg agen0_idv;
 wire agen0_ldip;
 
 reg agen1_idle = 1'b1;
 wire agen1_idle1;
-ex_instruction_t agen1_op;
+Stark_pkg::ex_instruction_t agen1_op;
 rob_ndx_t agen1_id;
 operating_mode_t agen1_om;
 wire agen1_we;
@@ -637,7 +637,7 @@ pregno_t agen1_Ra;
 pregno_t agen1_Rb;
 pregno_t agen1_Rt;
 checkpt_ndx_t agen1_cp;
-cause_code_t agen1_exc;
+Stark_pkg::cause_code_t agen1_exc;
 wire agen1_excv;
 reg agen1_idv;
 wire agen1_ldip;
@@ -657,13 +657,13 @@ reg [4:0] excid;
 pc_address_ex_t excmisspc;
 reg [2:0] excmissgrp;
 reg excmiss;
-ex_instruction_t excir;
+Stark_pkg::ex_instruction_t excir;
 reg excret;
 pc_address_ex_t exc_ret_pc;
 wire do_bsr, do_ret, do_call;
 pc_address_ex_t bsr_tgt;
 mc_address_t exc_ret_mcip;
-instruction_t exc_ret_mcir;
+Stark_pkg::instruction_t exc_ret_mcir;
 reg dc_get;
 wire [31:0] bno_bitmap;
 
@@ -673,15 +673,15 @@ dram_state_t dram1;	// state of the DRAM request
 
 value_t dram_bus0;
 reg dram_ctag0;
-regspec_t dram_tgt0;
+Stark_pkg::regspec_t dram_tgt0;
 reg  [4:0] dram_id0;
-cause_code_t dram_exc0;
+Stark_pkg::cause_code_t dram_exc0;
 reg        dram_v0;
 value_t dram_bus1;
 reg dram_ctag1;
-regspec_t dram_tgt1;
+Stark_pkg::regspec_t dram_tgt1;
 reg  [4:0] dram_id1;
-cause_code_t dram_exc1;
+Stark_pkg::cause_code_t dram_exc1;
 reg        dram_v1;
 
 reg [639:0] dram0_data, dram0_datah;
@@ -690,8 +690,8 @@ reg dram0_ctago;
 virtual_address_t dram0_vaddr, dram0_vaddrh;
 physical_address_t dram0_paddr, dram0_paddrh;
 reg [79:0] dram0_sel, dram0_selh;
-ex_instruction_t dram0_op;
-memsz_t dram0_memsz;
+Stark_pkg::ex_instruction_t dram0_op;
+Stark_pkg::memsz_t dram0_memsz;
 rob_ndx_t dram0_id;
 reg dram0_stomp;
 reg dram0_load;
@@ -705,7 +705,7 @@ aregno_t dram0_aRt, dram_aRt0;
 operating_mode_t dram0_om, dram_om0;
 reg dram0_aRtz, dram_aRtz0;
 reg dram0_bank;
-cause_code_t dram0_exc;
+Stark_pkg::cause_code_t dram0_exc;
 reg dram0_ack;
 fta_tranid_t dram0_tid;
 wire dram0_more;
@@ -726,8 +726,8 @@ reg dram1_ctago;
 virtual_address_t dram1_vaddr, dram1_vaddrh;
 physical_address_t dram1_paddr, dram1_paddrh;
 reg [79:0] dram1_sel, dram1_selh;
-ex_instruction_t dram1_op;
-memsz_t dram1_memsz;
+Stark_pkg::ex_instruction_t dram1_op;
+Stark_pkg::memsz_t dram1_memsz;
 rob_ndx_t dram1_id;
 reg dram1_stomp;
 reg dram1_load;
@@ -741,7 +741,7 @@ aregno_t dram1_aRt, dram_aRt1;
 operating_mode_t dram1_om, dram_om1;
 reg dram1_aRtz, dram_aRtz1;
 reg dram1_bank;
-cause_code_t dram1_exc;
+Stark_pkg::cause_code_t dram1_exc;
 reg dram1_ack;
 fta_tranid_t dram1_tid;
 wire dram1_more;
@@ -770,7 +770,7 @@ reg [NDATA_PORTS-1:0] dramN_cstore;
 reg [NDATA_PORTS-1:0] dramN_ack;
 reg [NDATA_PORTS-1:0] dramN_erc;
 fta_tranid_t dramN_tid [0:NDATA_PORTS-1];
-memsz_t dramN_memsz;
+Stark_pkg::memsz_t dramN_memsz;
 reg [NDATA_PORTS-1:0] dramN_ctago;
 wire [NDATA_PORTS-1:0] dramN_ctagi;
 wire [15:0] dramN_tagsi [0:NDATA_PORTS-1];
@@ -809,12 +809,11 @@ reg [63:0] canary;
 reg [39:0] ren_stalls, rat_stalls;
 reg [39:0] cpytgts;
 reg [39:0] stomped_insn;
-cause_code_t [3:0] cause;
-status_reg_t sr_stack [0:8];
-status_reg_t sr;
+Stark_pkg::cause_code_t [3:0] cause;
+Stark_pkg::status_reg_t sr_stack [0:8];
+Stark_pkg::status_reg_t sr;
 wire [2:0] swstk = sr.swstk;
 pc_address_t [8:0] pc_stack;
-mc_stack_t [8:0] mc_stack;			// micro-code exception stack
 reg micro_code_active;
 reg micro_code_active_f;
 reg micro_code_active_x;
@@ -843,25 +842,25 @@ wire alt_ihit;
 wire pe_bsdone;
 reg [4:0] vl;
 
-reg [32:0] atom_mask;
+reg [11:0] atom_mask;
 
 assign clk = clk_i;				// convenience
 assign clk2x = clk2x_i;
 
-pipeline_reg_t nopi;
+Stark_pkg::pipeline_reg_t nopi;
 reg [5:0] sync_no;
 reg [5:0] fc_no;
 
 // Define a NOP instruction.
 always_comb
 begin
-	nopi = {$bits(pipeline_reg_t){1'b0}};
+	nopi = {$bits(Stark_pkg::pipeline_reg_t){1'b0}};
 	nopi.pc = RSTPC;
 	nopi.pc.bno_t = 6'd1;
 	nopi.pc.bno_f = 6'd1;
 	nopi.mcip = 12'h1A0;
 	nopi.len = 4'd6;
-	nopi.ins = {57'd0,OP_NOP};
+	nopi.ins = {26'd0,OP_NOP};
 	nopi.pred_btst = 6'd0;
 	nopi.element = 'd0;
 	nopi.aRa = 8'd0;
@@ -1058,16 +1057,16 @@ reg mip3v_q;
 reg nmip;
 reg mipv, mipv2, mipv3, mipv4;
 
-pipeline_reg_t micro_ir;
-ex_instruction_t mc_ins0;
-ex_instruction_t mc_ins1;
-ex_instruction_t mc_ins2;
-ex_instruction_t mc_ins3;
-ex_instruction_t mc_ins4;
-ex_instruction_t mc_ins5;
-ex_instruction_t mc_ins6;
-ex_instruction_t mc_ins7;
-ex_instruction_t mc_ins8;
+Stark_pkg::pipeline_reg_t micro_ir;
+Stark_pkg::ex_instruction_t mc_ins0;
+Stark_pkg::ex_instruction_t mc_ins1;
+Stark_pkg::ex_instruction_t mc_ins2;
+Stark_pkg::ex_instruction_t mc_ins3;
+Stark_pkg::ex_instruction_t mc_ins4;
+Stark_pkg::ex_instruction_t mc_ins5;
+Stark_pkg::ex_instruction_t mc_ins6;
+Stark_pkg::ex_instruction_t mc_ins7;
+Stark_pkg::ex_instruction_t mc_ins8;
 
 wire mc_last0;
 wire mc_last1;
@@ -1191,7 +1190,7 @@ always_comb
       .READ_DATA_WIDTH(106),          // DECIMAL
       .READ_MODE("fwft"),             // String
       .SIM_ASSERT_CHK(0),            // DECIMAL; 0=disable simulation messages, 1=enable simulation messages
-      .USE_ADV_FEATURES("0707"),     // String
+      .USE_ADV_FEATURES("0000"),     // String
       .WAKEUP_TIME(0),               // DECIMAL
       .WRITE_DATA_WIDTH(106),         // DECIMAL
       .WR_DATA_COUNT_WIDTH(5)        // DECIMAL
@@ -1413,7 +1412,7 @@ reg [63:0] vec_dat;
 always_comb length_byte = ic_line >> {icpc.pc[4:0],3'd0};
 always_comb vec_dat = ic_dline >> {icdp[4:0],3'd0};
 
-Stark_icache
+icache
 #(.CORENO(CORENO),.CID(0))
 uic1
 (
@@ -1463,7 +1462,7 @@ always_ff @(posedge clk)
 wire [3:0] p_override;
 wire [4:0] po_bno [0:3];
 
-Stark_icache_ctrl
+icache_ctrl
 #(.CORENO(CORENO),.CID(0))
 icctrl1
 (
@@ -1743,80 +1742,6 @@ begin
 		;
 //	else if ((ihito || mipv || mipv2 || mipv3 || mipv4) && !stallq)
 	else if (advance_pipeline_seg2)
-		if (XWID==2)
-			case (~cqd[1:0])
-
-	    2'b00: ; // do nothing
-
-	    2'b01:
-	    	panic <= PANIC_INVALIDIQSTATE;
-	    // Queued on zero in previous cycle, but not on one.
-	    2'b10:	
-	    	if (rob[tail1].v==INV)
-	    		qd = 2'b10;
-	    2'b11:
-	    	if (rob[tail0].v==INV) begin
-	    		qd = 2'b01;
-	    		if (!pt0_q && !mip0v && !ins0_ren.decbus.regs) begin
-	    			if (rob[tail1].v==INV)
-	    				qd = 2'b11;
-	    		end
-	    	end
-	    endcase
-	  // ToDo: fix 3-wide
-	  else if (XWID==3)
-			case (~cqd)
-
-	    3'b000: ; // do nothing
-
-	    3'b001:	
-	    	if (rob[tail0].v==INV)
-	    		qd = qd | 3'b001;
-	    3'b010:	
-	    	if (rob[tail0].v==INV)
-	    		qd = qd | 3'b010;
-	    3'b011:
-	    	if (rob[tail0].v==INV) begin
-	    		qd = qd | 3'b010;
-	    		if (!pt2_q && !mip2v && !ins2_ren.decbus.regs) begin
-	    			if (rob[tail1].v==INV)
-	    				qd = qd | 3'b001;
-	    		end
-	    	end
-	    3'b100:	
-	    	if (rob[tail0].v==INV)
-	    		qd = qd | 3'b100;
-	    3'b101:
-	    	if (rob[tail0].v==INV) begin
-	    		qd = qd | 3'b100;
-	    		if (!pt1_q && !mip1v && !ins1_ren.decbus.regs) begin
-	    			if (rob[tail1].v==INV)
-		    			qd = qd | 3'b001;
-		    	end
-	    	end
-	    3'b110:
-	    	if (rob[tail0].v==INV) begin
-	    		qd = qd | 3'b100;
-	    		if (!pt1_q && !mip1v && !ins1_ren.decbus.regs) begin
-	    			if (rob[tail1].v==INV)
-	    				qd = qd | 3'b10;
-	    		end
-	    	end
-	    3'b111:
-	    	if (rob[tail0].v==INV) begin
-	    		qd = qd | 3'b100;
-	    		if (!pt1_q && !mip1v && !ins1_ren.decbus.regs) begin
-		    		if (rob[tail1].v==INV) begin
-		    			qd = qd  | 3'b010;
-		    			if (!pt2_q && !mip2v && !ins2_ren.decbus.regs) begin
-		    				if (rob[tail2].v==INV)
-			    				qd = qd  | 3'b001;
-			    		end
-			    	end
-	    		end
-	    	end
-	    endcase
-		else
 		case (~cqd)
 
 //    4'b0000: ; // do nothing
@@ -2054,7 +1979,7 @@ if (irst)
 else begin
 	if (advance_pipeline) begin
 		begin
-		  if (~hirq) begin
+		  begin
 		  	if ((pe_allqd||allqd||&next_cqd)) begin
 					micro_ip <= (mcbrtgtv & mipv) ? mcbrtgt : next_micro_ip;
 				end
@@ -2073,8 +1998,6 @@ end
 // The micro-code for a vector instruction inherits the address of the vector
 // instruction.
 // The originating instruction address is used during predicate processing.
-// The pred instruction will always be the instruction immediately before the
-// vector instruction, so, the address is five less.
 
 always_ff @(posedge clk)
 if (irst) begin
@@ -2095,7 +2018,6 @@ end
 
 // Micro instruction register.
 // The micro-ir is loaded only when a macro-instruction is decoded.
-// Vector instructions are converted to the equivalent scalar instruction.
 
 always_ff @(posedge clk)
 if (irst)
@@ -2120,7 +2042,7 @@ if (irst)
 	micro_code_active <= TRUE;
 else begin
 	if (advance_pipeline) begin
-	  if (~hirq) begin
+	  begin
 	  	if ((pe_allqd||allqd||&next_cqd)) begin
 				if (((mcbrtgtv & mipv) ? mcbrtgt : next_micro_ip) == 12'h000)
 					micro_code_active <= FALSE;
@@ -2143,57 +2065,51 @@ always_ff @(posedge clk) if (irst) mip2v_q <= FALSE; else if (advance_pipeline_s
 always_ff @(posedge clk) if (irst) mip3v_q <= FALSE; else if (advance_pipeline_seg2) mip3v_q <= mip3v_r;
 
 always_comb
-if ((fnIsAtom(ins0_dec.ins) || fnIsAtom(ins1_dec.ins) || fnIsAtom(ins2_dec.ins) || fnIsAtom(ins3_dec.ins)) && irq_i != 6'd63)
+if ((fnIsAtom(ins0_ren.ins) || fnIsAtom(ins1_ren.ins) || fnIsAtom(ins2_ren.ins) || fnIsAtom(ins3_ren.ins)) && irq_i != 6'd63)
 	hirq = 1'd0;
 else
-	hirq = irq && !int_commit && (irq_i > atom_mask[5:0]);
+	hirq = irq && !int_commit && (irq_i > (atom_mask[0] ? 6'd62 : sr.ipl));	// NMI (63) is always recognized.
 
-/* ToDo: fix micro-code for XWID other than four */
-generate begin : gMicroCode
-begin
-	Stark_micro_code umc0 (
-		.om(sr.om),
-		.ipl(sr.ipl),
-		.micro_ip({micro_ip[11:2],2'd0}),
-		.micro_ir(micro_ir),
-		.next_ip(),
-		.instr(mc_ins0),
-		.regx(mc_regx0)
-	);
+Stark_micro_code umc0 (
+	.om(sr.om),
+	.ipl(sr.ipl),
+	.micro_ip({micro_ip[11:2],2'd0}),
+	.micro_ir(micro_ir),
+	.next_ip(),
+	.instr(mc_ins0),
+	.regx(mc_regx0)
+);
 
-	Stark_micro_code umc1 (
-		.om(sr.om),
-		.ipl(sr.ipl),
-		.micro_ip({micro_ip[11:2],2'd1}),
-		.micro_ir(micro_ir),
-		.next_ip(),
-		.instr(mc_ins1),
-		.regx(mc_regx1)
-	);
+Stark_micro_code umc1 (
+	.om(sr.om),
+	.ipl(sr.ipl),
+	.micro_ip({micro_ip[11:2],2'd1}),
+	.micro_ir(micro_ir),
+	.next_ip(),
+	.instr(mc_ins1),
+	.regx(mc_regx1)
+);
 
-	Stark_micro_code umc2 (
-		.om(sr.om),
-		.ipl(sr.ipl),
-		.micro_ip({micro_ip[11:2],2'd2}),
-		.micro_ir(micro_ir),
-		.next_ip(),
-		.instr(mc_ins2),
-		.regx(mc_regx2)
-	);
+Stark_micro_code umc2 (
+	.om(sr.om),
+	.ipl(sr.ipl),
+	.micro_ip({micro_ip[11:2],2'd2}),
+	.micro_ir(micro_ir),
+	.next_ip(),
+	.instr(mc_ins2),
+	.regx(mc_regx2)
+);
 
-	Stark_micro_code umc3 (
-		.om(sr.om),
-		.ipl(sr.ipl),
-		.micro_ip({micro_ip[11:2],2'd3}),
-		.micro_ir(micro_ir),
-		.next_ip(next_mip),
-		.instr(mc_ins3),
-		.regx(mc_regx3)
-	);
-	always_comb next_micro_ip = next_mip & 12'hffc;
-end
-end
-endgenerate
+Stark_micro_code umc3 (
+	.om(sr.om),
+	.ipl(sr.ipl),
+	.micro_ip({micro_ip[11:2],2'd3}),
+	.micro_ir(micro_ir),
+	.next_ip(next_mip),
+	.instr(mc_ins3),
+	.regx(mc_regx3)
+);
+always_comb next_micro_ip = next_mip & 12'hffc;
 
 // No longer useful.
 always_comb mc_ins4.ins = {26'd0,OP_NOP};
@@ -2445,7 +2361,7 @@ Stark_pipeline_mux uiext1
 // DECODE stage
 // ----------------------------------------------------------------------------
 
-ex_instruction_t [3:0] instr;
+Stark_pkg::ex_instruction_t [3:0] instr;
 pregno_t Rt0_dec, Rt1_dec, Rt2_dec, Rt3_dec;
 pregno_t [3:0] tags2free;
 wire [3:0] freevals;
@@ -5661,6 +5577,7 @@ edge_det uedbsi1 (.rst(irst), .clk(clk), .ce(1'b1), .i(bs_idle_oh), .pe(pe_bsidl
 // =============================================================================
 // =============================================================================
 // Clocked logic
+// A lot of ROB updates in this logic.
 // =============================================================================
 // =============================================================================
 
@@ -5767,16 +5684,6 @@ else begin
 	dram0_idv2 <= dram0_idv;
 //	inc_chkpt <= FALSE;
 
-	// Set atom mask
-	if (fnIsAtom(ins0_dec))
-		atom_mask <= ins0_dec.ins[40:8];
-	if (fnIsAtom(ins1_dec))
-		atom_mask <= ins1_dec.ins[40:8];
-	if (fnIsAtom(ins2_dec))
-		atom_mask <= ins2_dec.ins[40:8];
-	if (fnIsAtom(ins3_dec))
-		atom_mask <= ins3_dec.ins[40:8];
-
 	// This test in sync with PC update
 	if (!branchmiss && ihito && !hirq && ((pe_allqd|allqd) && !hold_ins && advance_pipeline_seg2))
 		brtgtv <= FALSE;	// PC has been updated
@@ -5834,115 +5741,105 @@ else begin
 				$finish;
 			end
 			*/
-			atom_mask <= atom_mask[32:3];
 			
-			if (XWID > 1) begin
-				tEnque(8'h81-XWID,groupno,predino,predrndx,ins1_ren,pt1_q,tail1,
-					stomp1, ornop1, prn[4], prn[5], prn[6], prn[7], Rt1_ren, prn[18],
-					prnv[4], prnv[5], prnv[6], prnv[7], prnv[18],
-					cndx_ren[1], pcndx_ren, grplen1, last1);
-				if (ins1_ren.decbus.pred) begin
-					predino = 3'd1;
-					predrndx = tail1;
-				end
-				else if (predino > 4'd0) begin
-					predino = predino + 2'd1;
-					if (predino==4'd9)
-						predino = 4'd0;
-				end
-				/*
-				if (prn[4]==11'd0 && ins1_ren.decbus.Ra!=9'd0) begin
-					$display("Enque1: Ra mapped to zero.");
-					$finish;
-				end
-				*/
-					// If the instruction's source register is the same as a previous target
-					// register, use the register mapping of the previous target register.
-					// The register mapping will not have been updated in the RAT yet in
-					// time to be available for the source register.
-				/*
-				tBypassRegnames(tail1, ins1_ren, ins0_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
-				tBypassRegnames(tail1, ins1_ren, ins1_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
-				tBypassRegnames(tail1, ins1_ren, ins2_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
-				tBypassRegnames(tail1, ins1_ren, ins3_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
-				*/
-				tBypassRegnames(tail1, ins1_ren, ins0_ren, 1'b0, ins1_ren.decbus.has_immb | prnv[3], ins1_ren.decbus.has_immc | prnv[3], prnv[3], prnv[3]);
-				tBypassValid(tail1, ins1_ren, ins0_ren);
-				
-				atom_mask <= atom_mask[32:6];
+			tEnque(8'h81-XWID,groupno,predino,predrndx,ins1_ren,pt1_q,tail1,
+				stomp1, ornop1, prn[4], prn[5], prn[6], prn[7], Rt1_ren, prn[18],
+				prnv[4], prnv[5], prnv[6], prnv[7], prnv[18],
+				cndx_ren[1], pcndx_ren, grplen1, last1);
+			if (ins1_ren.decbus.pred) begin
+				predino = 3'd1;
+				predrndx = tail1;
 			end
+			else if (predino > 4'd0) begin
+				predino = predino + 2'd1;
+				if (predino==4'd9)
+					predino = 4'd0;
+			end
+			/*
+			if (prn[4]==11'd0 && ins1_ren.decbus.Ra!=9'd0) begin
+				$display("Enque1: Ra mapped to zero.");
+				$finish;
+			end
+			*/
+				// If the instruction's source register is the same as a previous target
+				// register, use the register mapping of the previous target register.
+				// The register mapping will not have been updated in the RAT yet in
+				// time to be available for the source register.
+			/*
+			tBypassRegnames(tail1, ins1_ren, ins0_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
+			tBypassRegnames(tail1, ins1_ren, ins1_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
+			tBypassRegnames(tail1, ins1_ren, ins2_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
+			tBypassRegnames(tail1, ins1_ren, ins3_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
+			*/
+			tBypassRegnames(tail1, ins1_ren, ins0_ren, 1'b0, ins1_ren.decbus.has_immb | prnv[3], ins1_ren.decbus.has_immc | prnv[3], prnv[3], prnv[3]);
+			tBypassValid(tail1, ins1_ren, ins0_ren);
 			
-			if (XWID > 2) begin
-				tEnque(8'h82-XWID,groupno,predino,predrndx,ins2_ren,pt2_q,tail2,
-					stomp2, ornop2, prn[8], prn[9], prn[10], prn[11], Rt2_ren, prn[19],
-					prnv[8], prnv[9], prnv[10], prnv[11], prnv[19],
-					cndx_ren[2], pcndx_ren,
-					grplen2, last3);
-				if (ins2_ren.decbus.pred) begin
-					predino = 3'd1;
-					predrndx = tail2;
-				end
-				else if (predino > 4'd0) begin
-					predino = predino + 2'd1;
-					if (predino==4'd9)
-						predino = 4'd0;
-				end
-				/*
-				if (prn[8]==11'd0 && ins2_ren.decbus.Ra!=9'd0) begin
-					$display("Enque2: Ra mapped to zero.");
-					$finish;
-				end
-				*/
-				/*
-				tBypassRegnames(tail2, ins2_ren, ins0_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
-				tBypassRegnames(tail2, ins2_ren, ins1_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
-				tBypassRegnames(tail2, ins2_ren, ins2_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
-				tBypassRegnames(tail2, ins2_ren, ins3_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
-				*/
-				tBypassRegnames(tail2, ins2_ren, ins0_ren, ins2_que.decbus.has_imma, ins2_ren.decbus.has_immb | prnv[3], ins2_ren.decbus.has_immc | prnv[3], prnv[3], prnv[3]);
-				tBypassRegnames(tail2, ins2_ren, ins1_ren, ins2_que.decbus.has_imma, ins2_ren.decbus.has_immb | prnv[7], ins2_ren.decbus.has_immc | prnv[7], prnv[7], prnv[7]);
-				tBypassValid(tail2, ins2_ren, ins0_ren);
-				tBypassValid(tail2, ins2_ren, ins1_ren);
-				
-				atom_mask <= atom_mask[32:9];
+			tEnque(8'h82-XWID,groupno,predino,predrndx,ins2_ren,pt2_q,tail2,
+				stomp2, ornop2, prn[8], prn[9], prn[10], prn[11], Rt2_ren, prn[19],
+				prnv[8], prnv[9], prnv[10], prnv[11], prnv[19],
+				cndx_ren[2], pcndx_ren,
+				grplen2, last3);
+			if (ins2_ren.decbus.pred) begin
+				predino = 3'd1;
+				predrndx = tail2;
 			end
+			else if (predino > 4'd0) begin
+				predino = predino + 2'd1;
+				if (predino==4'd9)
+					predino = 4'd0;
+			end
+			/*
+			if (prn[8]==11'd0 && ins2_ren.decbus.Ra!=9'd0) begin
+				$display("Enque2: Ra mapped to zero.");
+				$finish;
+			end
+			*/
+			/*
+			tBypassRegnames(tail2, ins2_ren, ins0_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
+			tBypassRegnames(tail2, ins2_ren, ins1_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
+			tBypassRegnames(tail2, ins2_ren, ins2_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
+			tBypassRegnames(tail2, ins2_ren, ins3_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
+			*/
+			tBypassRegnames(tail2, ins2_ren, ins0_ren, ins2_que.decbus.has_imma, ins2_ren.decbus.has_immb | prnv[3], ins2_ren.decbus.has_immc | prnv[3], prnv[3], prnv[3]);
+			tBypassRegnames(tail2, ins2_ren, ins1_ren, ins2_que.decbus.has_imma, ins2_ren.decbus.has_immb | prnv[7], ins2_ren.decbus.has_immc | prnv[7], prnv[7], prnv[7]);
+			tBypassValid(tail2, ins2_ren, ins0_ren);
+			tBypassValid(tail2, ins2_ren, ins1_ren);
+			
+			tEnque(8'h83-XWID,groupno,predino,predrndx,ins3_ren,pt3_q,tail3,
+				stomp3, ornop3, prn[12], prn[13], prn[14], prn[15], Rt3_ren, prn[20],
+				prnv[12], prnv[13], prnv[14], prnv[15], prnv[20],
+				cndx_ren[3], pcndx_ren,
+				grplen3,last3);
+			if (ins3_ren.decbus.pred) begin
+				predino = 3'd1;
+				predrndx = tail3;
+			end
+			else if (predino > 4'd0) begin
+				predino = predino + 2'd1;
+				if (predino==4'd9)
+					predino = 4'd0;
+			end
+			/*
+			if (prn[12]==11'd0 && !ins3_ren.decbus.Raz) begin
+				$display("Enque3: Ra mapped to zero.");
+				$finish;
+			end
+			*/
+			/*
+			tBypassRegnames(tail3, ins3_ren, ins0_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
+			tBypassRegnames(tail3, ins3_ren, ins1_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
+			tBypassRegnames(tail3, ins3_ren, ins2_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
+			tBypassRegnames(tail3, ins3_ren, ins3_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
+			*/
+			tBypassRegnames(tail3, ins3_ren, ins0_ren, ins3_ren.decbus.has_imma, ins3_ren.decbus.has_immb | prnv[3], ins3_ren.decbus.has_immc | prnv[3], prnv[3], prnv[3]);
+			tBypassRegnames(tail3, ins3_ren, ins1_ren, ins3_ren.decbus.has_imma, ins3_ren.decbus.has_immb | prnv[7], ins3_ren.decbus.has_immc | prnv[7], prnv[7], prnv[7]);
+      tBypassRegnames(tail3, ins3_ren, ins2_ren, ins3_ren.decbus.has_imma, ins3_ren.decbus.has_immb | prnv[11], ins3_ren.decbus.has_immc | prnv[11], prnv[11], prnv[11]);
+			tBypassValid(tail3, ins3_ren, ins0_ren);
+			tBypassValid(tail3, ins3_ren, ins1_ren);
+			tBypassValid(tail3, ins3_ren, ins2_ren);
+			
+			atom_mask <= {4'b0,atom_mask[11:4]};
 
-			if (XWID > 3) begin
-				tEnque(8'h83-XWID,groupno,predino,predrndx,ins3_ren,pt3_q,tail3,
-					stomp3, ornop3, prn[12], prn[13], prn[14], prn[15], Rt3_ren, prn[20],
-					prnv[12], prnv[13], prnv[14], prnv[15], prnv[20],
-					cndx_ren[3], pcndx_ren,
-					grplen3,last3);
-				if (ins3_ren.decbus.pred) begin
-					predino = 3'd1;
-					predrndx = tail3;
-				end
-				else if (predino > 4'd0) begin
-					predino = predino + 2'd1;
-					if (predino==4'd9)
-						predino = 4'd0;
-				end
-				/*
-				if (prn[12]==11'd0 && !ins3_ren.decbus.Raz) begin
-					$display("Enque3: Ra mapped to zero.");
-					$finish;
-				end
-				*/
-				/*
-				tBypassRegnames(tail3, ins3_ren, ins0_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
-				tBypassRegnames(tail3, ins3_ren, ins1_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
-				tBypassRegnames(tail3, ins3_ren, ins2_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
-				tBypassRegnames(tail3, ins3_ren, ins3_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
-				*/
-				tBypassRegnames(tail3, ins3_ren, ins0_ren, ins3_ren.decbus.has_imma, ins3_ren.decbus.has_immb | prnv[3], ins3_ren.decbus.has_immc | prnv[3], prnv[3], prnv[3]);
-				tBypassRegnames(tail3, ins3_ren, ins1_ren, ins3_ren.decbus.has_imma, ins3_ren.decbus.has_immb | prnv[7], ins3_ren.decbus.has_immc | prnv[7], prnv[7], prnv[7]);
-        tBypassRegnames(tail3, ins3_ren, ins2_ren, ins3_ren.decbus.has_imma, ins3_ren.decbus.has_immb | prnv[11], ins3_ren.decbus.has_immc | prnv[11], prnv[11], prnv[11]);
-				tBypassValid(tail3, ins3_ren, ins0_ren);
-				tBypassValid(tail3, ins3_ren, ins1_ren);
-				tBypassValid(tail3, ins3_ren, ins2_ren);
-				
-				atom_mask <= atom_mask[32:12];
-			end
 			tail0 <= (tail0 + 3'd4) % ROB_ENTRIES;
 			groupno <= groupno + 2'd1;
 		end
@@ -5983,6 +5880,21 @@ else begin
 				end
 			end
 		end
+	end
+
+	// Set atom mask
+	// Must be after ENQUE
+	if (fnIsAtom(ins0_ren) & advance_pipeline) begin
+		atom_mask <= {ins0_ren.ins[19:9],ins0_ren.ins[0]};
+	end
+	if (fnIsAtom(ins1_ren) & advance_pipeline) begin
+		atom_mask <= {ins1_ren.ins[19:9],ins1_ren.ins[0]};
+	end
+	if (fnIsAtom(ins2_ren) & advance_pipeline) begin
+		atom_mask <= {ins2_ren.ins[19:9],ins2_ren.ins[0]};
+	end
+	if (fnIsAtom(ins3_ren) & advance_pipeline) begin
+		atom_mask <= {ins3_ren.ins[19:9],ins3_ren.ins[0]};
 	end
 
 // ----------------------------------------------------------------------------
@@ -6366,7 +6278,7 @@ else begin
     rob[ dram0_id ].out <= {INV,INV};
     rob[ dram0_id ].done <= 2'b11;
 		dram0_idv <= INV;
-		$display("Q+ set dram0_idv=INV at done");
+		$display("StarkCPU set dram0_idv=INV at done");
     tInvalidateLSQ(dram0_id,FALSE);
 	end
 	if (NDATA_PORTS > 1) begin
@@ -6964,123 +6876,6 @@ else begin
 		end
 	end
 
-// ----------------------------------------------------------------------------
-// Register file update - four write ports
-// Update the register file and mark the update invalid.
-// ----------------------------------------------------------------------------
-	wrport0_wr <= 1'b0;
-	wrport1_wr <= 1'b0;
-	wrport2_wr <= 1'b0;
-	wrport3_wr <= 1'b0;
-
-	case(upd1[1:0])
-	2'b00:
-		begin
-			rob[(head0+upd1[4:2])%ROB_ENTRIES].updAv <= INV;
-			wrport0_Rt <= rob[(head0+upd1[4:2])%ROB_ENTRIES].updARt;
-			wrport0_aRt <= rob[(head0+upd1[4:2])%ROB_ENTRIES].updAaRt;
-			wrport0_wr <= 1'b1;
-			wrport0_res <= rob[(head0+upd1[4:2])%ROB_ENTRIES].updA;
-		end
-	2'b01: 
-		begin
-			rob[(head0+upd1[4:2])%ROB_ENTRIES].updBv <= INV;
-			wrport0_Rt <= rob[(head0+upd1[4:2])%ROB_ENTRIES].updBRt;
-			wrport0_aRt <= rob[(head0+upd1[4:2])%ROB_ENTRIES].updBaRt;
-			wrport0_wr <= 1'b1;
-			wrport0_res <= rob[(head0+upd1[4:2])%ROB_ENTRIES].updB;
-		end
-	2'b10: 
-		begin
-			rob[(head0+upd1[4:2])%ROB_ENTRIES].updCv <= INV;
-			wrport0_Rt <= rob[(head0+upd1[4:2])%ROB_ENTRIES].updCRt;
-			wrport0_aRt <= rob[(head0+upd1[4:2])%ROB_ENTRIES].updCaRt;
-			wrport0_wr <= 1'b1;
-			wrport0_res <= rob[(head0+upd1[4:2])%ROB_ENTRIES].updC;
-		end
-	default:	;
-	endcase
-	case(upd2[1:0])
-	2'b00:
-		begin
-			rob[(head0+upd2[4:2])%ROB_ENTRIES].updAv <= INV;
-			wrport1_Rt <= rob[(head0+upd2[4:2])%ROB_ENTRIES].updARt;
-			wrport1_aRt <= rob[(head0+upd2[4:2])%ROB_ENTRIES].updAaRt;
-			wrport1_wr <= 1'b1;
-			wrport1_res <= rob[(head0+upd2[4:2])%ROB_ENTRIES].updA;
-		end
-	2'b01: 
-		begin
-			rob[(head0+upd2[4:2])%ROB_ENTRIES].updBv <= INV;
-			wrport1_Rt <= rob[(head0+upd2[4:2])%ROB_ENTRIES].updBRt;
-			wrport1_aRt <= rob[(head0+upd2[4:2])%ROB_ENTRIES].updBaRt;
-			wrport1_wr <= 1'b1;
-			wrport1_res <= rob[(head0+upd2[4:2])%ROB_ENTRIES].updB;
-		end
-	2'b10: 
-		begin
-			rob[(head0+upd2[4:2])%ROB_ENTRIES].updCv <= INV;
-			wrport1_Rt <= rob[(head0+upd2[4:2])%ROB_ENTRIES].updCRt;
-			wrport1_aRt <= rob[(head0+upd2[4:2])%ROB_ENTRIES].updCaRt;
-			wrport1_wr <= 1'b1;
-			wrport1_res <= rob[(head0+upd2[4:2])%ROB_ENTRIES].updC;
-		end
-	default:	;
-	endcase
-	case(upd3[1:0])
-	2'b00:
-		begin
-			rob[(head0+upd3[4:2])%ROB_ENTRIES].updAv <= INV;
-			wrport2_Rt <= rob[(head0+upd3[4:2])%ROB_ENTRIES].updARt;
-			wrport2_aRt <= rob[(head0+upd3[4:2])%ROB_ENTRIES].updAaRt;
-			wrport2_wr <= 1'b1;
-			wrport2_res <= rob[(head0+upd3[4:2])%ROB_ENTRIES].updA;
-		end
-	2'b01: 
-		begin
-			rob[(head0+upd3[4:2])%ROB_ENTRIES].updBv <= INV;
-			wrport2_Rt <= rob[(head0+upd3[4:2])%ROB_ENTRIES].updBRt;
-			wrport2_aRt <= rob[(head0+upd3[4:2])%ROB_ENTRIES].updBaRt;
-			wrport2_wr <= 1'b1;
-			wrport2_res <= rob[(head0+upd3[4:2])%ROB_ENTRIES].updB;
-		end
-	2'b10: 
-		begin
-			rob[(head0+upd3[4:2])%ROB_ENTRIES].updCv <= INV;
-			wrport2_Rt <= rob[(head0+upd3[4:2])%ROB_ENTRIES].updCRt;
-			wrport2_aRt <= rob[(head0+upd3[4:2])%ROB_ENTRIES].updCaRt;
-			wrport2_wr <= 1'b1;
-			wrport2_res <= rob[(head0+upd3[4:2])%ROB_ENTRIES].updC;
-		end
-	default:	;
-	endcase
-	case(upd4[1:0])
-	2'b00:
-		begin
-			rob[(head0+upd4[4:2])%ROB_ENTRIES].updAv <= INV;
-			wrport3_Rt <= rob[(head0+upd4[4:2])%ROB_ENTRIES].updARt;
-			wrport3_aRt <= rob[(head0+upd4[4:2])%ROB_ENTRIES].updAaRt;
-			wrport3_wr <= 1'b1;
-			wrport3_res <= rob[(head0+upd4[4:2])%ROB_ENTRIES].updA;
-		end
-	2'b01: 
-		begin
-			rob[(head0+upd4[4:2])%ROB_ENTRIES].updBv <= INV;
-			wrport3_Rt <= rob[(head0+upd4[4:2])%ROB_ENTRIES].updBRt;
-			wrport3_aRt <= rob[(head0+upd4[4:2])%ROB_ENTRIES].updBaRt;
-			wrport3_wr <= 1'b1;
-			wrport3_res <= rob[(head0+upd4[4:2])%ROB_ENTRIES].updB;
-		end
-	2'b10: 
-		begin
-			rob[(head0+upd4[4:2])%ROB_ENTRIES].updCv <= INV;
-			wrport3_Rt <= rob[(head0+upd4[4:2])%ROB_ENTRIES].updCRt;
-			wrport3_aRt <= rob[(head0+upd4[4:2])%ROB_ENTRIES].updCaRt;
-			wrport3_wr <= 1'b1;
-			wrport3_res <= rob[(head0+upd4[4:2])%ROB_ENTRIES].updC;
-		end
-	default:	;
-	endcase
 
 // ----------------------------------------------------------------------------
 // COMMIT
@@ -7118,12 +6913,6 @@ else begin
 		commit_br1 <= rob[head1].decbus.br && cmtcnt > 3'd1;
 		commit_br2 <= rob[head2].decbus.br && cmtcnt > 3'd2;
 		commit_br3 <= rob[head3].decbus.br && cmtcnt > 3'd3;
-		if (SUPPORT_IBH) begin
-			commit_grp0 <= rob[head0].grp;
-			commit_grp1 <= rob[head1].grp;
-			commit_grp2 <= rob[head2].grp;
-			commit_grp3 <= rob[head3].grp;
-		end
 		group_len <= group_len - 1;
 		tInvalidateQE(head0);
 		if (cmtcnt > 3'd1) begin
@@ -8092,8 +7881,8 @@ endfunction
 
 task tBypassRegnames;
 input rob_ndx_t ndx;
-input pipeline_reg_t db;
-input pipeline_reg_t pdb;
+input Stark_pkg::pipeline_reg_t db;
+input Stark_pkg::pipeline_reg_t pdb;
 input Av;
 input Bv;
 input Cv;
@@ -8137,8 +7926,8 @@ endtask
 
 task tBypassValid;
 input rob_ndx_t ndx;
-input pipeline_reg_t db;
-input pipeline_reg_t db2;
+input Stark_pkg::pipeline_reg_t db;
+input Stark_pkg::pipeline_reg_t db2;
 begin
 	if (db.decbus.Ra == db2.decbus.Rt && !db.decbus.Raz) begin
 		rob[ndx].argA_v <= INV;
@@ -8170,8 +7959,8 @@ endtask
 function [7:0] fnPredSet;
 input [3:0] btst;
 input vec;
-input rob_entry_t pred_rob;
-input rob_entry_t rob;
+input Stark_pkg::rob_entry_t pred_rob;
+input Stark_pkg::rob_entry_t rob;
 integer jj;
 reg [3:0] btstm1;
 begin
@@ -8472,7 +8261,7 @@ begin
 	dram1_argT <= 64'd0;
 	panic <= `PANIC_NONE;
 	for (n14 = 0; n14 < ROB_ENTRIES; n14 = n14 + 1) begin
-		rob[n14] <= {$bits(rob_entry_t){1'd0}};
+		rob[n14] <= {$bits(Stark_pkg::rob_entry_t){1'd0}};
 		rob[n14].sn <= 8'd0;
 	end
 	for (n14r = 0; n14r < LSQ_ENTRIES; n14r = n14r + 1) begin
@@ -8609,7 +8398,7 @@ input seqnum_t sn;
 input seqnum_t grp;
 input [2:0] predino;
 input rob_ndx_t predrndx;
-input pipeline_reg_t ins;
+input Stark_pkg::pipeline_reg_t ins;
 input pt;
 input rob_ndx_t tail;
 input stomp;
@@ -8854,7 +8643,7 @@ task tEnqueLSE;
 input seqnum_t sn;
 input lsq_ndx_t ndx;
 input rob_ndx_t id;
-input rob_entry_t rob;
+input Stark_pkg::rob_entry_t rob;
 input [1:0] n;
 begin
 	lsq[ndx.row][ndx.col] <= {$bits(lsq_entry_t){1'b0}};
@@ -9186,7 +8975,7 @@ endtask
 endmodule
 
 module modFcuMissPC(instr, bts, pc, pc_stack, micro_ip, bt, takb, argA, argB, argI, ibh, misspc, missgrp, miss_mcip, tgtpc, stomp_bno);
-input pipeline_reg_t instr;
+input Stark_pkg::pipeline_reg_t instr;
 input bts_t bts;
 input pc_address_ex_t pc;
 input mc_address_t micro_ip;

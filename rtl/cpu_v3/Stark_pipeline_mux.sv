@@ -102,19 +102,19 @@ input ls_bmf_i;
 input pack_regs_i;
 input [2:0] scale_regs_i;
 input cpu_types_pkg::aregno_t regcnt_i;
-input ex_instruction_t mc_ins0_i;
-input ex_instruction_t mc_ins1_i;
-input ex_instruction_t mc_ins2_i;
-input ex_instruction_t mc_ins3_i;
+input Stark_pkg::ex_instruction_t mc_ins0_i;
+input Stark_pkg::ex_instruction_t mc_ins1_i;
+input Stark_pkg::ex_instruction_t mc_ins2_i;
+input Stark_pkg::ex_instruction_t mc_ins3_i;
 input [4:0] len0_i;
 input [4:0] len1_i;
 input [4:0] len2_i;
 input [4:0] len3_i;
-output pipeline_reg_t ins0_mux_o;
-output pipeline_reg_t ins1_mux_o;
-output pipeline_reg_t ins2_mux_o;
-output pipeline_reg_t ins3_mux_o;
-output pipeline_reg_t ins4_mux_o;
+output Stark_pkg::pipeline_reg_t ins0_mux_o;
+output Stark_pkg::pipeline_reg_t ins1_mux_o;
+output Stark_pkg::pipeline_reg_t ins2_mux_o;
+output Stark_pkg::pipeline_reg_t ins3_mux_o;
+output Stark_pkg::pipeline_reg_t ins4_mux_o;
 /*
 output cpu_types_pkg::mc_address_t mcip0_o;
 output cpu_types_pkg::mc_address_t mcip1_o;
@@ -139,20 +139,20 @@ wire mipv = mipv_i;
 wire ls_bmf = ls_bmf_i;
 wire pack_regs = pack_regs_i;
 cpu_types_pkg::aregno_t regcnt;
-pipeline_reg_t ins0_mux;
-pipeline_reg_t ins1_mux;
-pipeline_reg_t ins2_mux;
-pipeline_reg_t ins3_mux;
-pipeline_reg_t ins4_mux;
-pipeline_reg_t ins0_fet;
-pipeline_reg_t ins1_fet;
-pipeline_reg_t ins2_fet;
-pipeline_reg_t ins3_fet;
-pipeline_reg_t ins4_fet;
-pipeline_reg_t mc_ins0;
-pipeline_reg_t mc_ins1;
-pipeline_reg_t mc_ins2;
-pipeline_reg_t mc_ins3;
+Stark_pkg::pipeline_reg_t ins0_mux;
+Stark_pkg::pipeline_reg_t ins1_mux;
+Stark_pkg::pipeline_reg_t ins2_mux;
+Stark_pkg::pipeline_reg_t ins3_mux;
+Stark_pkg::pipeline_reg_t ins4_mux;
+Stark_pkg::pipeline_reg_t ins0_fet;
+Stark_pkg::pipeline_reg_t ins1_fet;
+Stark_pkg::pipeline_reg_t ins2_fet;
+Stark_pkg::pipeline_reg_t ins3_fet;
+Stark_pkg::pipeline_reg_t ins4_fet;
+Stark_pkg::pipeline_reg_t mc_ins0;
+Stark_pkg::pipeline_reg_t mc_ins1;
+Stark_pkg::pipeline_reg_t mc_ins2;
+Stark_pkg::pipeline_reg_t mc_ins3;
 wire [11:0] mip = mip_i;
 reg [319:0] ic_line_aligned;
 reg [319:0] prev_ic_line_aligned;
@@ -163,7 +163,7 @@ cpu_types_pkg::mc_address_t mcip3;
 reg ld;
 
 wire hirq = ~reglist_active && hirq_i && mip[11:8]!=4'h1;
-pipeline_reg_t nopi;
+Stark_pkg::pipeline_reg_t nopi;
 
 // Define a NOP instruction.
 always_comb
@@ -172,8 +172,8 @@ begin
 	nopi.exc = FLT_NONE;
 	nopi.pc.pc = RSTPC;
 	nopi.mcip = 12'h1A0;
-	nopi.len = 4'd8;
-	nopi.ins = {57'd0,OP_NOP};
+	nopi.len = 4'd4;
+	nopi.ins = {26'd0,OP_NOP};
 	nopi.pred_btst = 6'd0;
 	nopi.element = 'd0;
 	nopi.aRa = 8'd0;
@@ -253,7 +253,7 @@ begin
 end
 
 always_comb 
-	ic_line_aligned = {{64{1'b1,OP_NOP}},ic_line_fet} >> {pc0_fet.pc[5:2],5'd0};
+	ic_line_aligned = {{64{2'd3,OP_NOP}},ic_line_fet} >> {pc0_fet.pc[5:2],5'd0};
 
 pc_address_ex_t prev_pc0_fet;
 always_ff @(posedge clk_i)
@@ -276,11 +276,11 @@ else
 	redundant_group = FALSE;
 //wire redundant_group = {prev_pc0_fet,prev_ic_line_aligned}=={pc0_fet,ic_line_aligned};
 
-pipeline_reg_t pr0_mux;
-pipeline_reg_t pr1_mux;
-pipeline_reg_t pr2_mux;
-pipeline_reg_t pr3_mux;
-pipeline_reg_t pr4_mux;
+Stark_pkg::pipeline_reg_t pr0_mux;
+Stark_pkg::pipeline_reg_t pr1_mux;
+Stark_pkg::pipeline_reg_t pr2_mux;
+Stark_pkg::pipeline_reg_t pr3_mux;
+Stark_pkg::pipeline_reg_t pr4_mux;
 always_comb
 begin
 	pr0_mux = nopi;
@@ -511,7 +511,7 @@ always_comb
 	else
 		ret_pc = RSTPC;
 
-Qupls_ins_extract_mux umux0
+Stark_ins_extract_mux umux0
 (
 	.rst(rst_i),
 	.clk(clk_i),
@@ -534,7 +534,7 @@ Qupls_ins_extract_mux umux0
 	.ins(ins0_mux)
 );
 
-Qupls_ins_extract_mux umux1
+Stark_ins_extract_mux umux1
 (
 	.rst(rst_i),
 	.clk(clk_i),
@@ -557,7 +557,7 @@ Qupls_ins_extract_mux umux1
 	.ins(ins1_mux)
 );
 
-Qupls_ins_extract_mux umux2
+Stark_ins_extract_mux umux2
 (
 	.rst(rst_i),
 	.clk(clk_i),
@@ -580,7 +580,7 @@ Qupls_ins_extract_mux umux2
 	.ins(ins2_mux)
 );
 
-Qupls_ins_extract_mux umux3
+Stark_ins_extract_mux umux3
 (
 	.rst(rst_i),
 	.clk(clk_i),
@@ -603,7 +603,7 @@ Qupls_ins_extract_mux umux3
 	.ins(ins3_mux)
 );
 
-Qupls_ins_extract_mux umux4
+Stark_ins_extract_mux umux4
 (
 	.rst(rst_i),
 	.clk(clk_i),
@@ -647,8 +647,8 @@ input pt_mux;
 input takb;
 input mc_address_t mcip;
 input [3:0] len;
-input pipeline_reg_t ins_i;
-output pipeline_reg_t ins_o;
+input Stark_pkg::pipeline_reg_t ins_i;
+output Stark_pkg::pipeline_reg_t ins_o;
 output p_override;
 output [4:0] bno;
 begin
