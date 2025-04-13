@@ -2,7 +2,7 @@
 
 import Stark_pkg::*;
 
-module Stark_FuncResultQueue(rst_i, clk_i, rd_i, we_i, pRt_i, aRt_i, tag_i, res_i, we_o, pRt_o, aRt_o, tag_o, res_o, empty);
+module Stark_FuncResultQueue(rst_i, clk_i, rd_i, we_i, pRt_i, aRt_i, tag_i, res_i, cp_i, we_o, pRt_o, aRt_o, tag_o, res_o, cp_o, empty);
 input rst_i;
 input clk_i;
 input rd_i;
@@ -11,11 +11,13 @@ input cpu_types_pkg::pregno_t pRt_i;
 input cpu_types_pkg::aregno_t aRt_i;
 input [7:0] tag_i;
 input [63:0] res_i;
+input cpu_types_pkg::checkpt_ndx_t cp_i;
 output reg [8:0] we_o;
 output cpu_types_pkg::pregno_t pRt_o;
 output cpu_types_pkg::aregno_t aRt_o;
 output reg [7:0] tag_o;
 output reg [71:0] res_o;
+output cpu_types_pkg::checkpt_ndx_t cp_o;
 output empty;
 
 wire full;
@@ -30,7 +32,8 @@ wire [95:0] din = {
 	pRt_i,
 	aRt_i,
 	tag_i,
-	res_i
+	res_i,
+	cp_i
 };
 wire [95:0] dout;
 
@@ -38,7 +41,7 @@ reg wr_en1, wr_en;
 reg rd_en;
 
 always_comb
-	{we_o,pRt_o,aRt_o,tag_o,res_o} = dout;
+	{we_o,pRt_o,aRt_o,tag_o,res_o,cp_o} = dout;
 always_comb
 	rd_en = rd_i & ~rd_rst_busy;
 always_comb
@@ -56,17 +59,17 @@ xpm_fifo_sync #(
   .EN_SIM_ASSERT_ERR("warning"), // String
   .FIFO_MEMORY_TYPE("distributed"),     // String
   .FIFO_READ_LATENCY(0),         // DECIMAL
-  .FIFO_WRITE_DEPTH(32),       // DECIMAL
+  .FIFO_WRITE_DEPTH(32),  	     // DECIMAL
   .FULL_RESET_VALUE(0),          // DECIMAL
   .PROG_EMPTY_THRESH(10),        // DECIMAL
   .PROG_FULL_THRESH(10),         // DECIMAL
   .RD_DATA_COUNT_WIDTH(5),       // DECIMAL
-  .READ_DATA_WIDTH(96),          // DECIMAL
-  .READ_MODE("fwft"),             // String
+  .READ_DATA_WIDTH(100),         // DECIMAL
+  .READ_MODE("fwft"),            // String
   .SIM_ASSERT_CHK(0),            // DECIMAL; 0=disable simulation messages, 1=enable simulation messages
   .USE_ADV_FEATURES("0000"),     // String
   .WAKEUP_TIME(0),               // DECIMAL
-  .WRITE_DATA_WIDTH(96),         // DECIMAL
+  .WRITE_DATA_WIDTH(100),        // DECIMAL
   .WR_DATA_COUNT_WIDTH(5)        // DECIMAL
 )
 xpm_fifo_sync_inst (

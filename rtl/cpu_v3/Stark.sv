@@ -3106,7 +3106,7 @@ aregno_t alu0_aRt2, fpu0_aRt3, fpu1_aRt3;
 pregno_t alu1_Rt2;
 aregno_t alu1_aRt2;
 value_t fpu0_res3;
-checkpt_ndx_t alu0_cp2, alu1_cp2, fpu0_cp2;
+checkpt_ndx_t alu0_cp2, alu1_cp2, fpu0_cp2, fpu1_cp2;
 wire alu0_aRtz1, alu0_aRtz2, alu1_aRtz1, alu1_aRtz2, fpu0_aRtz2;
 rob_ndx_t alu0_id2, alu1_id2, fpu0_id2;
 operating_mode_t alu0_om2, alu1_om2, fpu0_om2, fpu1_om2, dram0_om2, dram1_om2;
@@ -3200,6 +3200,25 @@ vtdl #($bits(rob_ndx_t))	udlyfp61 (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu1_id), 
 vtdl #($bits(checkpt_ndx_t)) udlyfp71 (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu1_cp), .q(fpu1_cp2) );
 vtdl #($bits(operating_mode_t))	udlyfp81 (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu1_om), .q(fpu1_om2) );
 
+// FCU signals
+vtdl #($bits(pregno_t)) udlyfc1A (.clk(clk), .ce(1'b1), .a(4'd0), .d(fcu_RtA), .q(fcu_pRtA2) );
+vtdl #($bits(pregno_t)) udlyfc1B (.clk(clk), .ce(1'b1), .a(4'd0), .d(fcu_RtB), .q(fcu_pRtB2) );
+
+vtdl #($bits(aregno_t)) udlyfc2A (.clk(clk), .ce(1'b1), .a(4'd0), .d(fcu_aRtA), .q(fcu_aRtA2) );
+vtdl #($bits(aregno_t)) udlyfc2B (.clk(clk), .ce(1'b1), .a(4'd0), .d(fcu_aRtB), .q(fcu_aRtB2) );
+
+vtdl #(1) 							udlyfc3A (.clk(clk), .ce(1'b1), .a(4'd0), .d(fcu_aRtzA), .q(fcu_aRtzA2) );
+vtdl #(1) 							udlyfc3B (.clk(clk), .ce(1'b1), .a(4'd0), .d(fcu_aRtzB), .q(fcu_aRtzB2) );
+
+vtdl #($bits(value_t)) udlyfc1vA (.clk(clk), .ce(1'b1), .a(4'd0), .d(fcu_resA), .q(fcu_resA2) );
+vtdl #($bits(value_t)) udlyfc1vB (.clk(clk), .ce(1'b1), .a(4'd0), .d(fcu_resB), .q(fcu_resB2) );
+
+vtdl #(1) 							udlyfc5 (.clk(clk), .ce(1'b1), .a(4'd0), .d(fcu_sc_done), .q(fcu_sc_done2) );
+vtdl #($bits(rob_ndx_t))	udlyfc6 (.clk(clk), .ce(1'b1), .a(4'd0), .d(fcu_id), .q(fcu_id2) );
+vtdl #($bits(checkpt_ndx_t)) udlyfc7 (.clk(clk), .ce(1'b1), .a(4'd0), .d(fcu_cp), .q(fcu_cp2) );
+vtdl #($bits(operating_mode_t))	udlyfc8 (.clk(clk), .ce(1'b1), .a(4'd0), .d(fcu_om), .q(fcu_om2) );
+
+
 // Compute write enable.
 // When the unit is finished, and it is not architectural register zero.
 always_comb alu0_wrA = (alu0_sc_done2|alu0_done) && !alu0_aRtzA2;
@@ -3259,11 +3278,6 @@ always_comb wt5B = dram_v1 && !dram_aRtz1B && NDATA_PORTS > 1;
 always_comb wt6A = fcu_done && !fcu_aRtzA;
 always_comb wt6B = fcu_done && !fcu_aRtzB;
 
-assign wrport0_cp = alu0_cp2;
-assign wrport1_cp = alu1_cp2;
-assign wrport2_cp = dram0_cp;
-assign wrport3_cp = fpu0_cp2;
-
 wire [4:0] upd1a,upd2a,upd2a,upd4a,upd5a,upd6a;
 reg [4:0] upd1, upd2, upd3, upd4, upd5, upd6;
 reg [4:0] fuq_rot;
@@ -3277,8 +3291,10 @@ ffo24 uffov1 (.i({6'd0,~fuq_empty_rot}), .o(upd1a));
 ffo24 uffov2 (.i({6'd0,~fuq_empty_rot} & ~(24'd1 << upd1a)), .o(upd2a));
 ffo24 uffov3 (.i({6'd0,~fuq_empty_rot} & ~(24'd1 << upd1a) & ~(24'd1 << upd2a)), .o(upd3a));
 ffo24 uffov4 (.i({6'd0,~fuq_empty_rot} & ~(24'd1 << upd1a) & ~(24'd1 << upd2a) & ~(24'd1 << upd3a)), .o(upd4a));
+`ifdef SIXPORT_FILE
 ffo24 uffov5 (.i({6'd0,~fuq_empty_rot} & ~(24'd1 << upd1a) & ~(24'd1 << upd2a) & ~(24'd1 << upd3a) & ~(24'd1 << upd4a)), .o(upd5a));
 ffo24 uffov6 (.i({6'd0,~fuq_empty_rot} & ~(24'd1 << upd1a) & ~(24'd1 << upd2a) & ~(24'd1 << upd3a) & ~(24'd1 << upd4a) & ~(24'd1 << upd5a)), .o(upd6a));
+`endif
 
 // mod 18 counter - rotate the queue selection
 always_ff @(posedge clk)
@@ -3295,8 +3311,10 @@ always_ff @(posedge clk) upd1 = upd1a==5'd31 ? 5'd31 : fuq_rot > upd1a ? 6'd18 +
 always_ff @(posedge clk) upd2 = upd2a==5'd31 ? 5'd31 : fuq_rot > upd2a ? 6'd18 + upd2a - fuq_rot : upd2a - fuq_rot;
 always_ff @(posedge clk) upd3 = upd3a==5'd31 ? 5'd31 : fuq_rot > upd3a ? 6'd18 + upd3a - fuq_rot : upd3a - fuq_rot;
 always_ff @(posedge clk) upd4 = upd4a==5'd31 ? 5'd31 : fuq_rot > upd4a ? 6'd18 + upd4a - fuq_rot : upd4a - fuq_rot;
+`ifdef SIXPORT_FILE
 always_ff @(posedge clk) upd5 = upd5a==5'd31 ? 5'd31 : fuq_rot > upd5a ? 6'd18 + upd5a - fuq_rot : upd5a - fuq_rot;
 always_ff @(posedge clk) upd6 = upd6a==5'd31 ? 5'd31 : fuq_rot > upd6a ? 6'd18 + upd6a - fuq_rot : upd6a - fuq_rot;
+`endif
 
 // Read the next queue entry for the queue jsut used to update the register file.
 always_ff @(posedge clk)
@@ -3309,8 +3327,8 @@ else begin
 	fuq_rd[upd2] <= upd2!=5'd31;
 	fuq_rd[upd3] <= upd3!=5'd31;
 	fuq_rd[upd4] <= upd4!=5'd31;
-	fuq_rd[upd5] <= upd5!=5'd31;
-	fuq_rd[upd6] <= upd6!=5'd31;
+//	fuq_rd[upd5] <= upd5!=5'd31;
+//	fuq_rd[upd6] <= upd6!=5'd31;
 end
 
 // Queue the outputs of the functional units.
@@ -3324,11 +3342,13 @@ Stark_FuncResultQueue ufrq1
 	.aRt_i(alu0_aRtA2),
 	.tag_i({7'd0,alu0_ctagA2}),
 	.res_i(alu0_resA2),
+	.cp_i(alu0_cp2),
 	.we_o(fuq_we[0]),
 	.pRt_o(fuq_pRt[0]),
 	.aRt_o(fuq_aRt[0]),
 	.tag_o(fuq_tag[0]),
 	.res_o(fuq_res[0]),
+	.cp_o(fuq_cp[0]),
 	.empty(fuq_empty[0])
 );
 
@@ -3342,11 +3362,13 @@ Stark_FuncResultQueue ufrq2
 	.aRt_i(alu0_aRtB2),
 	.tag_i({7'd0,alu0_ctagB2}),
 	.res_i(alu0_resB2),
+	.cp_i(alu0_cp2),
 	.we_o(fuq_we[1]),
 	.pRt_o(fuq_pRt[1]),
 	.aRt_o(fuq_aRt[1]),
 	.tag_o(fuq_tag[1]),
 	.res_o(fuq_res[1]),
+	.cp_o(fuq_cp[1]),
 	.empty(fuq_empty[1])
 );
 
@@ -3360,11 +3382,13 @@ Stark_FuncResultQueue ufrq3
 	.aRt_i(alu0_aRtC2),
 	.tag_i({7'd0,alu0_ctagC2}),
 	.res_i(alu0_resC2),
+	.cp_i(alu0_cp2),
 	.we_o(fuq_we[2]),
 	.pRt_o(fuq_pRt[2]),
 	.aRt_o(fuq_aRt[2]),
 	.tag_o(fuq_tag[2]),
 	.res_o(fuq_res[2]),
+	.cp_o(fuq_cp[2]),
 	.empty(fuq_empty[2])
 );
 
@@ -3380,11 +3404,13 @@ Stark_FuncResultQueue ufrq4
 	.aRt_i(alu1_aRtA2),
 	.tag_i({7'd0,alu1_ctagA2}),
 	.res_i(alu1_resA2),
+	.cp_i(alu1_cp2),
 	.we_o(fuq_we[3]),
 	.pRt_o(fuq_pRt[3]),
 	.aRt_o(fuq_aRt[3]),
 	.tag_o(fuq_tag[3]),
 	.res_o(fuq_res[3]),
+	.cp_o(fuq_cp[3]),
 	.empty(fuq_empty[3])
 );
 
@@ -3398,11 +3424,13 @@ Stark_FuncResultQueue ufrq5
 	.aRt_i(alu1_aRtB2),
 	.tag_i({7'd0,alu1_ctagB2}),
 	.res_i(alu1_resB2),
+	.cp_i(alu1_cp2),
 	.we_o(fuq_we[4]),
 	.pRt_o(fuq_pRt[4]),
 	.aRt_o(fuq_aRt[4]),
 	.tag_o(fuq_tag[4]),
 	.res_o(fuq_res[4]),
+	.cp_o(fuq_cp[4]),
 	.empty(fuq_empty[4])
 );
 
@@ -3416,11 +3444,13 @@ Stark_FuncResultQueue ufrq6
 	.aRt_i(alu1_aRtC2),
 	.tag_i({7'd0,alu1_ctagC2}),
 	.res_i(alu1_resC2),
+	.cp_i(alu1_cp2),
 	.we_o(fuq_we[5]),
 	.pRt_o(fuq_pRt[5]),
 	.aRt_o(fuq_aRt[5]),
 	.tag_o(fuq_tag[5]),
 	.res_o(fuq_res[5]),
+	.cp_o(fuq_cp[5]),
 	.empty(fuq_empty[5])
 );
 end
@@ -3430,18 +3460,21 @@ else begin
 	fuq_aRt[3] = 7'd0;
 	fuq_tag[3] = 8'b0;
 	fuq_res[3] = 64'd0;
+	fuq_cp[3] = 4'd0;
 	fuq_empty[3] = 1'b1;
 	fuq_we[4] = 9'd0;
 	fuq_pRt[4] = 8'd0;
 	fuq_aRt[4] = 7'd0;
 	fuq_tag[4] = 8'b0;
 	fuq_res[4] = 64'd0;
+	fuq_cp[4] = 4'd0;
 	fuq_empty[4] = 1'b1;
 	fuq_we[5] = 9'd0;
 	fuq_pRt[5] = 8'd0;
 	fuq_aRt[5] = 7'd0;
 	fuq_tag[5] = 8'b0;
 	fuq_res[5] = 64'd0;
+	fuq_cp[5] = 4'd0;
 	fuq_empty[5] = 1'b1;
 end
 end
@@ -3459,11 +3492,13 @@ Stark_FuncResultQueue ufrq7
 	.aRt_i(fpu0_aRtA2),
 	.tag_i({7'd0,fpu0_ctagA2}),
 	.res_i(fpu0_resA2),
+	.cp_i(fpu0_cp2),
 	.we_o(fuq_we[6]),
 	.pRt_o(fuq_pRt[6]),
 	.aRt_o(fuq_aRt[6]),
 	.tag_o(fuq_tag[6]),
 	.res_o(fuq_res[6]),
+	.cp_o(fuq_cp[6]),
 	.empty(fuq_empty[6])
 );
 
@@ -3477,11 +3512,13 @@ Stark_FuncResultQueue ufrq8
 	.aRt_i(fpu0_aRtB2),
 	.tag_i({7'd0,fpu0_ctagB2}),
 	.res_i(fpu0_resB2),
+	.cp_i(fpu0_cp2),
 	.we_o(fuq_we[7]),
 	.pRt_o(fuq_pRt[7]),
 	.aRt_o(fuq_aRt[7]),
 	.tag_o(fuq_tag[7]),
 	.res_o(fuq_res[7]),
+	.cp_o(fuq_cp[7]),
 	.empty(fuq_empty[7])
 );
 
@@ -3495,11 +3532,13 @@ Stark_FuncResultQueue ufrq9
 	.aRt_i(fpu0_aRtC2),
 	.tag_i({7'd0,fpu0_ctagC2}),
 	.res_i(fpu0_resC2),
+	.cp_i(fpu0_cp2),
 	.we_o(fuq_we[8]),
 	.pRt_o(fuq_pRt[8]),
 	.aRt_o(fuq_aRt[8]),
 	.tag_o(fuq_tag[8]),
 	.res_o(fuq_res[8]),
+	.cp_o(fuq_cp[8]),
 	.empty(fuq_empty[8])
 );
 end
@@ -3509,18 +3548,21 @@ else begin
 	fuq_aRt[6] = 7'd0;
 	fuq_tag[6] = 8'b0;
 	fuq_res[6] = 64'd0;
+	fuq_cp[6] = 4'd0;
 	fuq_empty[6] = 1'b1;
 	fuq_we[7] = 9'd0;
 	fuq_pRt[7] = 8'd0;
 	fuq_aRt[7] = 7'd0;
 	fuq_tag[7] = 8'b0;
 	fuq_res[7] = 64'd0;
+	fuq_cp[7] = 4'd0;
 	fuq_empty[7] = 1'b1;
 	fuq_we[8] = 9'd0;
 	fuq_pRt[8] = 8'd0;
 	fuq_aRt[8] = 7'd0;
 	fuq_tag[8] = 8'b0;
 	fuq_res[8] = 64'd0;
+	fuq_cp[8] = 4'd0;
 	fuq_empty[8] = 1'b1;
 end
 end
@@ -3538,11 +3580,13 @@ Stark_FuncResultQueue ufrq10
 	.aRt_i(fpu1_aRtA2),
 	.tag_i({7'd0,fpu1_ctagA2}),
 	.res_i(fpu1_resA2),
+	.cp_i(fpu1_cp2),
 	.we_o(fuq_we[9]),
 	.pRt_o(fuq_pRt[9]),
 	.aRt_o(fuq_aRt[9]),
 	.tag_o(fuq_tag[9]),
 	.res_o(fuq_res[9]),
+	.cp_o(fuq_cp[9]),
 	.empty(fuq_empty[9])
 );
 
@@ -3556,11 +3600,13 @@ Stark_FuncResultQueue ufrq11
 	.aRt_i(fpu1_aRtB2),
 	.tag_i({7'd0,fpu1_ctagB2}),
 	.res_i(fpu1_resB2),
+	.cp_i(fpu1_cp2),
 	.we_o(fuq_we[10]),
 	.pRt_o(fuq_pRt[10]),
 	.aRt_o(fuq_aRt[10]),
 	.tag_o(fuq_tag[10]),
 	.res_o(fuq_res[10]),
+	.cp_o(fuq_cp[10]),
 	.empty(fuq_empty[10])
 );
 
@@ -3574,11 +3620,13 @@ Stark_FuncResultQueue ufrq12
 	.aRt_i(fpu1_aRtC2),
 	.tag_i({7'd0,fpu1_ctagC2}),
 	.res_i(fpu1_resC2),
+	.cp_i(fpu1_cp2),
 	.we_o(fuq_we[11]),
 	.pRt_o(fuq_pRt[11]),
 	.aRt_o(fuq_aRt[11]),
 	.tag_o(fuq_tag[11]),
 	.res_o(fuq_res[11]),
+	.cp_o(fuq_cp[11]),
 	.empty(fuq_empty[11])
 );
 end
@@ -3588,18 +3636,21 @@ else begin
 	fuq_aRt[9] = 7'd0;
 	fuq_tag[9] = 8'b0;
 	fuq_res[9] = 64'd0;
+	fuq_cp[9] = 4'd0;
 	fuq_empty[9] = 1'b1;
 	fuq_we[10] = 9'd0;
 	fuq_pRt[10] = 8'd0;
 	fuq_aRt[10] = 7'd0;
 	fuq_tag[10] = 8'b0;
 	fuq_res[10] = 64'd0;
+	fuq_cp[10] = 4'd0;
 	fuq_empty[10] = 1'b1;
 	fuq_we[11] = 9'd0;
 	fuq_pRt[11] = 8'd0;
 	fuq_aRt[11] = 7'd0;
 	fuq_tag[11] = 8'b0;
 	fuq_res[11] = 64'd0;
+	fuq_cp[11] = 4'd0;
 	fuq_empty[11] = 1'b1;
 end
 end
@@ -3615,11 +3666,13 @@ Stark_FuncResultQueue ufrq13
 	.aRt_i(dram0_aRtA2),
 	.tag_i({7'd0,dram0_ctagA2}),
 	.res_i(dram0_resA2),
+	.cp_i(dram0_cp2),
 	.we_o(fuq_we[12]),
 	.pRt_o(fuq_pRt[12]),
 	.aRt_o(fuq_aRt[12]),
 	.tag_o(fuq_tag[12]),
 	.res_o(fuq_res[12]),
+	.cp_o(fuq_cp[12]),
 	.empty(fuq_empty[12])
 );
 
@@ -3633,11 +3686,13 @@ Stark_FuncResultQueue ufrq14
 	.aRt_i(dram0_aRtB2),
 	.tag_i({7'd0,dram0_ctagB2}),
 	.res_i(dram0_resB2),
+	.cp_i(dram0_cp2),
 	.we_o(fuq_we[13]),
 	.pRt_o(fuq_pRt[13]),
 	.aRt_o(fuq_aRt[13]),
 	.tag_o(fuq_tag[13]),
 	.res_o(fuq_res[13]),
+	.cp_o(fuq_cp[13]),
 	.empty(fuq_empty[13])
 );
 
@@ -3653,11 +3708,13 @@ Stark_FuncResultQueue ufrq15
 	.aRt_i(dram1_aRtA2),
 	.tag_i({7'd0,dram1_ctagA2}),
 	.res_i(dram1_resA2),
+	.cp_i(dram1_cp2),
 	.we_o(fuq_we[14]),
 	.pRt_o(fuq_pRt[14]),
 	.aRt_o(fuq_aRt[14]),
 	.tag_o(fuq_tag[14]),
 	.res_o(fuq_res[14]),
+	.cp_o(fuq_cp[14]),
 	.empty(fuq_empty[14])
 );
 
@@ -3671,11 +3728,13 @@ Stark_FuncResultQueue ufrq16
 	.aRt_i(dram1_aRtB2),
 	.tag_i({7'd0,dram1_ctagB2}),
 	.res_i(dram1_resB2),
+	.cp_i(dram1_cp2),
 	.we_o(fuq_we[15]),
 	.pRt_o(fuq_pRt[15]),
 	.aRt_o(fuq_aRt[15]),
 	.tag_o(fuq_tag[15]),
 	.res_o(fuq_res[15]),
+	.cp_o(fuq_cp[15]),
 	.empty(fuq_empty[15])
 );
 end
@@ -3685,12 +3744,14 @@ else begin
 	fuq_aRt[14] = 7'd0;
 	fuq_tag[14] = 8'b0;
 	fuq_res[14] = 64'd0;
+	fuq_cp[14] = 4'd0;
 	fuq_empty[14] = 1'b1;
 	fuq_we[15] = 9'd0;
 	fuq_pRt[15] = 8'd0;
 	fuq_aRt[15] = 7'd0;
 	fuq_tag[15] = 8'b0;
 	fuq_res[15] = 64'd0;
+	fuq_cp[15] = 4'd0;
 	fuq_empty[15] = 1'b1;
 end
 end
@@ -3706,11 +3767,13 @@ Stark_FuncResultQueue ufrq17
 	.aRt_i(fcu_aRtA2),
 	.tag_i({7'd0,fcu_ctagA2}),
 	.res_i(fcu_resA2),
+	.cp_i(fcu_cp2),
 	.we_o(fuq_we[16]),
 	.pRt_o(fuq_pRt[16]),
 	.aRt_o(fuq_aRt[16]),
 	.tag_o(fuq_tag[16]),
 	.res_o(fuq_res[16]),
+	.cp_o(fuq_cp[16]),
 	.empty(fuq_empty[16])
 );
 
@@ -3724,11 +3787,13 @@ Stark_FuncResultQueue ufrq18
 	.aRt_i(fcu_aRtB2),
 	.tag_i({7'd0,fcu_ctagB2}),
 	.res_i(fcu_resB2),
+	.cp_i(fcu_cp2),
 	.we_o(fuq_we[17]),
 	.pRt_o(fuq_pRt[17]),
 	.aRt_o(fuq_aRt[17]),
 	.tag_o(fuq_tag[17]),
 	.res_o(fuq_res[17]),
+	.cp_o(fuq_cp[17]),
 	.empty(fuq_empty[17])
 );
 
@@ -3738,6 +3803,7 @@ always_ff @(posedge clk) wrport0_we <= fuq_we[upd1];
 always_ff @(posedge clk) wrport0_Rt <= fuq_pRt[upd1]; 
 always_ff @(posedge clk) wrport0_aRt <= fuq_aRt[upd1]; 
 always_ff @(posedge clk) wrport0_res <= fuq_res[upd1]; 
+always_ff @(posedge clk) wrport0_cp <= fuq_cp[upd1]; 
 always_ff @(posedge clk) wrport0_tag <= fuq_tag[upd1]; 
 
 always_ff @(posedge clk) wrport1_v <= !fuq_empty[upd2];
@@ -3745,6 +3811,7 @@ always_ff @(posedge clk) wrport1_we <= fuq_we[upd2];
 always_ff @(posedge clk) wrport1_Rt <= fuq_pRt[upd2]; 
 always_ff @(posedge clk) wrport1_aRt <= fuq_aRt[upd2]; 
 always_ff @(posedge clk) wrport1_res <= fuq_res[upd2]; 
+always_ff @(posedge clk) wrport1_cp <= fuq_cp[upd2]; 
 always_ff @(posedge clk) wrport1_tag <= fuq_tag[upd2]; 
 
 always_ff @(posedge clk) wrport2_v <= !fuq_empty[upd3];
@@ -3752,6 +3819,7 @@ always_ff @(posedge clk) wrport2_we <= fuq_we[upd3];
 always_ff @(posedge clk) wrport2_Rt <= fuq_pRt[upd3]; 
 always_ff @(posedge clk) wrport2_aRt <= fuq_aRt[upd3]; 
 always_ff @(posedge clk) wrport2_res <= fuq_res[upd3]; 
+always_ff @(posedge clk) wrport2_cp <= fuq_cp[upd3]; 
 always_ff @(posedge clk) wrport2_tag <= fuq_tag[upd3]; 
 
 always_ff @(posedge clk) wrport3_v <= !fuq_empty[upd4];
@@ -3759,13 +3827,16 @@ always_ff @(posedge clk) wrport3_we <= fuq_we[upd4];
 always_ff @(posedge clk) wrport3_Rt <= fuq_pRt[upd4]; 
 always_ff @(posedge clk) wrport3_aRt <= fuq_aRt[upd4]; 
 always_ff @(posedge clk) wrport3_res <= fuq_res[upd4]; 
+always_ff @(posedge clk) wrport3_cp <= fuq_cp[upd4]; 
 always_ff @(posedge clk) wrport3_tag <= fuq_tag[upd4]; 
 
+`ifdef SIXPORT_FILE
 always_ff @(posedge clk) wrport4_v <= !fuq_empty[upd5];
 always_ff @(posedge clk) wrport4_we <= fuq_we[upd5]; 
 always_ff @(posedge clk) wrport4_Rt <= fuq_pRt[upd5];
 always_ff @(posedge clk) wrport4_aRt <= fuq_aRt[upd5]; 
 always_ff @(posedge clk) wrport4_res <= fuq_res[upd5]; 
+always_ff @(posedge clk) wrport4_cp <= fuq_cp[upd5]; 
 always_ff @(posedge clk) wrport4_tag <= fuq_tag[upd5]; 
 
 always_ff @(posedge clk) wrport5_v <= !fuq_empty[upd6];
@@ -3773,43 +3844,33 @@ always_ff @(posedge clk) wrport5_we <= fuq_we[upd6];
 always_ff @(posedge clk) wrport5_Rt <= fuq_pRt[upd6];
 always_ff @(posedge clk) wrport5_aRt <= fuq_aRt[upd6]; 
 always_ff @(posedge clk) wrport5_res <= fuq_res[upd6]; 
+always_ff @(posedge clk) wrport5_cp <= fuq_cp[upd6];
 always_ff @(posedge clk) wrport5_tag <= fuq_tag[upd6]; 
+`endif
 
-Stark_regfile6wNr #(.RPORTS(24)) urf1 (
+Stark_regfile4wNr #(.RPORTS(24)) urf1 (
 	.rst(irst),
 	.clk(clk), 
-//	.clk5x(clk5x),
-//	.ph4(ph4),
 	.wr0(wrport0_v),
 	.wr1(wrport1_v),
 	.wr2(wrport2_v),
 	.wr3(wrport3_v),
-	.wr4(wrport4_v),
-	.wr5(wrport5_v),
 	.we0(wrport0_we),
 	.we1(wrport1_we),
 	.we2(wrport2_we),
 	.we3(wrport3_we),
-	.we4(wrport4_we),
-	.we5(wrport5_we),
 	.wa0(wrport0_Rt),
 	.wa1(wrport1_Rt),
 	.wa2(wrport2_Rt),
 	.wa3(wrport3_Rt),
-	.wa4(wrport4_Rt),
-	.wa5(wrport5_Rt),
 	.i0(wrport0_res),
 	.i1(wrport1_res),
 	.i2(wrport2_res),
 	.i3(wrport3_res),
-	.i4(wrport4_res),
-	.i5(wrport5_res),
 	.ti0(wrport0_tag),
 	.ti1(wrport1_tag),
 	.ti2(wrport2_tag),
 	.ti3(wrport3_tag),
-	.ti4(wrport4_tag),
-	.ti5(wrport5_tag),
 //	.ti2(dram0_cload ? dram_ctag0 : 1'b0),
 //	.ti3(fpu0_ctag),
 //	.ti4(dram1_cload ? dram_ctag1 : 1'b0),
