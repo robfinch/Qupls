@@ -355,10 +355,13 @@ always_comb head7 = (head0 + 7) % ROB_ENTRIES;
 Stark_pkg::ex_instruction_t [7:0] ex_ins;
 
 Stark_pkg::decode_bus_t db0_r, db1_r, db2_r, db3_r;				// Regfetch/rename stage inputs
-Stark_pkg::pipeline_reg_t ins0_mux, ins1_mux, ins2_mux, ins3_mux, ins4_mux;
-Stark_pkg::pipeline_reg_t ins0_dec, ins1_dec, ins2_dec, ins3_dec, ins4_d, ins5_d, ins6_d, ins7_d, ins8_d;
+Stark_pkg::pipeline_reg_t pg_dec.pr0, pg_dec.pr1, pg_dec.pr2, pg_dec.pr3, ins4_d, ins5_d, ins6_d, ins7_d, ins8_d;
 Stark_pkg::pipeline_reg_t ins0_ren, ins1_ren, ins2_ren, ins3_ren;
 Stark_pkg::pipeline_reg_t ins0_que, ins1_que, ins2_que, ins3_que;
+Stark_pkg::pipeline_group_reg_t pg0_mux;
+Stark_pkg::pipeline_group_reg_t pg1_mux;
+Stark_pkg::pipeline_group_reg_t pg_dec;
+Stark_pkg::pipeline_group_reg_t pg_ren;
 
 reg backout;
 wire bo_wr;
@@ -852,6 +855,8 @@ wire pe_bsdone;
 reg [4:0] vl;
 
 reg [11:0] atom_mask;
+reg [31:0] carry_mod, csr_carry_mod, exc_ret_carry_mod, icarry_mod;
+wire [6:0] carry_reg = 7'd92|carry_mod[25:24];
 
 assign clk = clk_i;				// convenience
 assign clk2x = clk2x_i;
@@ -1420,6 +1425,7 @@ reg [7:0] length_byte;
 reg [63:0] vec_dat;
 always_comb length_byte = ic_line >> {icpc.pc[4:0],3'd0};
 always_comb vec_dat = ic_dline >> {icdp[4:0],3'd0};
+reg [31:0] ic_carry_mod;
 
 icache
 #(.CORENO(CORENO),.CID(0))
@@ -1461,6 +1467,13 @@ uic1
 	.port_i(1'b0)
 );
 assign ic_dhit = 1'b1;
+always_ff @(posedge clk)
+if (advance_f) begin
+	ic_carry_mod <= icarry_mod;
+	icarry_mod <= 32'd0;
+end
+else
+	icarry_mod <= icarry_mod;
 
 // ic_miss_adr is one clock in front of the translation pc_tlb_res.
 // Add in a clock delay to line them up for the cache controller.
@@ -1723,8 +1736,8 @@ Stark_stomp ustmp1
 	.pc(pc),
 	.pc_f(pc0_f),
 	.pc_fet(pc0_fet),
-	.pc_mux(ins0_mux.pc),
-	.pc_dec(ins0_dec.pc),
+	.pc_mux(pg0_mux.pr0.pc),
+	.pc_dec(pg_dec.pr0.pc),
 	.pc_ren(ins0_ren.pc),
 	.stomp_fet(stomp_fet),
 	.stomp_mux(stomp_mux),
@@ -1899,8 +1912,10 @@ else begin
 	if (advance_f) begin
 		pcf <= FALSE;
 		if (get_next_pc) begin
-			if (excret)
+			if (excret) begin
 				pc.pc <= exc_ret_pc;
+				icarry_mod <= exc_ret_carry_mod;
+			end
 			else begin
 				pc <= next_pc;			// early PC predictor from BTB logic
 				hwipc <= next_hwipc;
@@ -1929,8 +1944,8 @@ else begin
 	ins3_d_inv = FALSE;
 	/*
 	if (pt0_dec) begin
-		if (pt0_dec != ins0_dec.bt) begin
-			pc <= pt0_dec ? ins0_dec.brtgt : ins0_dec.pc + 5'd8;
+		if (pt0_dec != pg_dec.pr0.bt) begin
+			pc <= pt0_dec ? pg_dec.pr0.brtgt : pg_dec.pr0.pc + 5'd8;
 			stomp_fet1 = TRUE;
 			stomp_mux1 = TRUE;
 			if (pt0_dec) begin
@@ -1941,8 +1956,8 @@ else begin
 		end
 	end
 	else if (pt1_dec) begin
-		if (pt1_dec != ins1_dec.bt) begin
-			pc <= pt1_dec ? ins1_dec.brtgt : ins1_dec.pc + 5'd8;
+		if (pt1_dec != pg_dec.pr1.bt) begin
+			pc <= pt1_dec ? pg_dec.pr1.brtgt : pg_dec.pr1.pc + 5'd8;
 			stomp_fet1 = TRUE;
 			stomp_mux1 = TRUE;
 			if (pt1_dec) begin
@@ -1952,8 +1967,8 @@ else begin
 		end
 	end
 	else if (pt2_dec) begin
-		if (pt2_dec != ins2_dec.bt) begin
-			pc <= pt2_dec ? ins2_dec.brtgt : ins2_dec.pc + 5'd8;
+		if (pt2_dec != pg_dec.pr2.bt) begin
+			pc <= pt2_dec ? pg_dec.pr2.brtgt : pg_dec.pr2.pc + 5'd8;
 			stomp_fet1 = TRUE;
 			stomp_mux1 = TRUE;
 			if (pt2_dec) begin
@@ -1962,8 +1977,8 @@ else begin
 		end
 	end
 	else if (pt3_dec) begin
-		if (pt3_dec != ins3_dec.bt) begin
-			pc <= pt3_dec ? ins3_dec.brtgt : ins3_dec.pc + 5'd8;
+		if (pt3_dec != pg_dec.pr3.bt) begin
+			pc <= pt3_dec ? pg_dec.pr3.brtgt : pg_dec.pr3.pc + 5'd8;
 			stomp_fet1 = TRUE;
 			stomp_mux1 = TRUE;
 		end
@@ -2017,10 +2032,10 @@ end
 else begin
 	if (advance_pipeline) begin
 		if (micro_ip==12'h000) begin
-					 if (mip0v) mc_adr <= ins0_dec.pc;//pc0_d;
-			else if (mip1v) mc_adr <= ins1_dec.pc;//pc1_d;
-			else if (mip2v) mc_adr <= ins2_dec.pc;//pc2_d;
-			else if (mip3v) mc_adr <= ins3_dec.pc;//pc3_d;
+					 if (mip0v) mc_adr <= pg_dec.pr0.pc;//pc0_d;
+			else if (mip1v) mc_adr <= pg_dec.pr1.pc;//pc1_d;
+			else if (mip2v) mc_adr <= pg_dec.pr2.pc;//pc2_d;
+			else if (mip3v) mc_adr <= pg_dec.pr3.pc;//pc3_d;
 		end
 	end
 end
@@ -2034,10 +2049,10 @@ if (irst)
 else begin
 	if (advance_pipeline) begin
 		if (micro_ip==12'h000) begin
-			if (mip0v) begin micro_ir <= ins0_dec; end
-			else if (mip1v) begin micro_ir <= ins1_dec; end
-			else if (mip2v) begin micro_ir <= ins2_dec; end
-			else if (mip3v) begin micro_ir <= ins3_dec; end
+			if (mip0v) begin micro_ir <= pg_dec.pr0; end
+			else if (mip1v) begin micro_ir <= pg_dec.pr1; end
+			else if (mip2v) begin micro_ir <= pg_dec.pr2; end
+			else if (mip3v) begin micro_ir <= pg_dec.pr3; end
 		end
 	end
 end
@@ -2152,10 +2167,10 @@ end
 // A missed cache line comes back as all zeros. Unfortunately this matches with
 // the BRK instruction. So, we test to ensure there was a cache hit before
 // setting the micro-code address.
-Stark_mcat umcat0(stomp_dec|(!ihit_mux && !micro_code_active_d), ins0_dec, mip0);
-Stark_mcat umcat1(stomp_dec|(!ihit_mux && !micro_code_active_d), ins1_dec, mip1);
-Stark_mcat umcat2(stomp_dec|(!ihit_mux && !micro_code_active_d), ins2_dec, mip2);
-Stark_mcat umcat3(stomp_dec|(!ihit_mux && !micro_code_active_d), ins3_dec, mip3);
+Stark_mcat umcat0(stomp_dec|(!ihit_mux && !micro_code_active_d), pg_dec.pr0, mip0);
+Stark_mcat umcat1(stomp_dec|(!ihit_mux && !micro_code_active_d), pg_dec.pr1, mip1);
+Stark_mcat umcat2(stomp_dec|(!ihit_mux && !micro_code_active_d), pg_dec.pr2, mip2);
+Stark_mcat umcat3(stomp_dec|(!ihit_mux && !micro_code_active_d), pg_dec.pr3, mip3);
 
 always_comb mip0v = |mip0;
 always_comb mip1v = |mip1;
@@ -2222,6 +2237,7 @@ pc_address_ex_t misspc_fet;
 wire [1023:0] ic_line_fet;
 pc_address_t ic_hwipc, hwipc_fet;
 wire micro_code_active_fet;
+wire [31:0] carry_mod_fet;
 
 always_ff @(posedge clk)
 	ic_hwipc <= hwipc;
@@ -2240,6 +2256,8 @@ Stark_pipeline_fet ufet1
 	.pc_i(icpc),
 	.misspc(misspc),
 	.misspc_fet(misspc_fet),
+	.ic_carry_mod(ic_carry_mod),
+	.carry_mod_fet(carry_mod_fet),
 	.hwipc(ic_hwipc),
 	.hwipc_fet(hwipc_fet),
 	.pc0_fet(pc0_fet),
@@ -2298,7 +2316,7 @@ always_comb mcip2_mux = micro_ip|4'd2;
 always_comb mcip3_mux = micro_ip|4'd3;
 
 // Latency of one.
-// pt0_dec, etc. should be in line with ins0_dec, etc
+// pt0_dec, etc. should be in line with pg_dec.pr0, etc
 Stark_pipeline_mux uiext1
 (
 	.rst_i(irst),
@@ -2309,6 +2327,7 @@ Stark_pipeline_mux uiext1
 	.ssm_flag(ssm_flag),
 	.ihit(ihito),
 	.sr(sr),
+	.carry_mod_fet(carry_mod_fet),
 	.stomp_bno(stomp_bno),
 	.stomp_mux(stomp_mux|stomp_mux1|stomp_mux2/*icnop||brtgtv||fetch_new_block_x*/),
 	.nop_o(exti_nop),
@@ -2347,11 +2366,8 @@ Stark_pipeline_mux uiext1
 	.mc_ins1_i(mc_ins1),
 	.mc_ins2_i(mc_ins2),
 	.mc_ins3_i(mc_ins3),
-	.ins0_mux_o(ins0_mux),
-	.ins1_mux_o(ins1_mux),
-	.ins2_mux_o(ins2_mux),
-	.ins3_mux_o(ins3_mux),
-	.ins4_mux_o(ins4_mux),
+	.pg0_mux(pg0_mux),
+	.pg1_mux(pg1_mux),
 	.len0_i(len0),
 	.len1_i(len1),
 	.len2_i(len2),
@@ -2402,15 +2418,12 @@ Stark_pipeline_dec udecstg1
 	.stomp_dec(stomp_dec),
 	.stomp_mux(stomp_mux),
 	.stomp_bno(stomp_bno),
-	.ins0_mux(ins0_mux), 
-	.ins1_mux(ins1_mux),
-	.ins2_mux(ins2_mux),
-	.ins3_mux(ins3_mux),
-	.ins4_mux(ins4_mux),
-	.ins0_dec_inv(ins0_d_inv),
-	.ins1_dec_inv(ins1_d_inv),
-	.ins2_dec_inv(ins2_d_inv),
-	.ins3_dec_inv(ins3_d_inv),
+	.pg0_mux(pg0_mux),
+	.pg1_mux(pg1_mux),
+	.pg_dec.pr0_inv(ins0_d_inv),
+	.pg_dec.pr1_inv(ins1_d_inv),
+	.pg_dec.pr2_inv(ins2_d_inv),
+	.pg_dec.pr3_inv(ins3_d_inv),
 	.Rt0_dec(Rt0_dec),
 	.Rt1_dec(Rt1_dec),
 	.Rt2_dec(Rt2_dec),
@@ -2421,18 +2434,16 @@ Stark_pipeline_dec udecstg1
 	.Rt3_decv(Rt3_decv),
 	.micro_code_active_mux(micro_code_active_x),
 	.micro_code_active_dec(micro_code_active_d),
-	.ins0_dec(ins0_dec),
-	.ins1_dec(ins1_dec),
-	.ins2_dec(ins2_dec),
-	.ins3_dec(ins3_dec),
-	.pc0_dec(pc0_d),
-	.pc1_dec(pc1_d),
-	.pc2_dec(pc2_d),
-	.pc3_dec(pc3_d),
+	.pg_dec(pg_dec),
 	.ren_stallq(ren_stallq),
 	.ren_rst_busy(ren_rst_busy),
 	.avail_reg(avail_reg)
 );
+
+assign pc0_d = pg_dec.pr0.pc;
+assign pc1_d = pg_dec.pr1.pc;
+assign pc2_d = pg_dec.pr2.pc;
+assign pc3_d = pg_dec.pr3.pc;
 
 reg wrport0_v;
 reg wrport1_v;
@@ -2488,32 +2499,32 @@ checkpt_ndx_t pcndx_ren;
 
 always_comb
 begin
-	arn[0] = ins0_dec.aRa; arnt[0] = 1'b0; arng[0] = 3'd0;
-	arn[1] = ins0_dec.aRb; arnt[1] = 1'b0; arng[1] = 3'd0;
-	arn[2] = ins0_dec.aRc; arnt[2] = 1'b0; arng[2] = 3'd0;
-	arn[3] = ins0_dec.aRt; arnt[3] = 1'b1; arng[3] = 3'd0;
+	arn[0] = pg_dec.pr0.aRa; arnt[0] = 1'b0; arng[0] = 3'd0;
+	arn[1] = pg_dec.pr0.aRb; arnt[1] = 1'b0; arng[1] = 3'd0;
+	arn[2] = pg_dec.pr0.aRc; arnt[2] = 1'b0; arng[2] = 3'd0;
+	arn[3] = pg_dec.pr0.aRt; arnt[3] = 1'b1; arng[3] = 3'd0;
 	
-	arn[4] = ins1_dec.aRa; arnt[4] = 1'b0; arng[4] = 3'd1;
-	arn[5] = ins1_dec.aRb; arnt[5] = 1'b0; arng[5] = 3'd1;
-	arn[6] = ins1_dec.aRc; arnt[6] = 1'b0; arng[6] = 3'd1;
-	arn[7] = ins1_dec.aRt; arnt[7] = 1'b1; arng[7] = 3'd1;
+	arn[4] = pg_dec.pr1.aRa; arnt[4] = 1'b0; arng[4] = 3'd1;
+	arn[5] = pg_dec.pr1.aRb; arnt[5] = 1'b0; arng[5] = 3'd1;
+	arn[6] = pg_dec.pr1.aRc; arnt[6] = 1'b0; arng[6] = 3'd1;
+	arn[7] = pg_dec.pr1.aRt; arnt[7] = 1'b1; arng[7] = 3'd1;
 	
-	arn[8] = ins2_dec.aRa; arnt[8] = 1'b0; arng[8] = 3'd2;
-	arn[9] = ins2_dec.aRb; arnt[9] = 1'b0; arng[9] = 3'd2;
-	arn[10] = ins2_dec.aRc; arnt[10] = 1'b0; arng[10] = 3'd2;
-	arn[11] = ins2_dec.aRt; arnt[11] = 1'b1; arng[11] = 3'd2;
+	arn[8] = pg_dec.pr2.aRa; arnt[8] = 1'b0; arng[8] = 3'd2;
+	arn[9] = pg_dec.pr2.aRb; arnt[9] = 1'b0; arng[9] = 3'd2;
+	arn[10] = pg_dec.pr2.aRc; arnt[10] = 1'b0; arng[10] = 3'd2;
+	arn[11] = pg_dec.pr2.aRt; arnt[11] = 1'b1; arng[11] = 3'd2;
 	
-	arn[12] = ins3_dec.aRa; arnt[12] = 1'b0; arng[12] = 3'd3;
-	arn[13] = ins3_dec.aRb; arnt[13] = 1'b0; arng[13] = 3'd3;
-	arn[14] = ins3_dec.aRc; arnt[14] = 1'b0; arng[14] = 3'd3;
-	arn[15] = ins3_dec.aRt; arnt[15] = 1'b1; arng[15] = 3'd3;
+	arn[12] = pg_dec.pr3.aRa; arnt[12] = 1'b0; arng[12] = 3'd3;
+	arn[13] = pg_dec.pr3.aRb; arnt[13] = 1'b0; arng[13] = 3'd3;
+	arn[14] = pg_dec.pr3.aRc; arnt[14] = 1'b0; arng[14] = 3'd3;
+	arn[15] = pg_dec.pr3.aRt; arnt[15] = 1'b1; arng[15] = 3'd3;
 
  	arn[16] = 8'h00; arnt[16] = 1'b0; arng[16] = 3'd0;
 	
-	arn[17] = ins0_dec.decbus.Rm; arnt[17] = 1'b0; arng[17] = 3'd0;
-	arn[18] = ins1_dec.decbus.Rm; arnt[18] = 1'b0; arng[18] = 3'd1;
-	arn[19] = ins2_dec.decbus.Rm; arnt[19] = 1'b0; arng[19] = 3'd2;
-	arn[20] = ins3_dec.decbus.Rm; arnt[20] = 1'b0; arng[20] = 3'd3;
+	arn[17] = pg_dec.pr0.decbus.Rm; arnt[17] = 1'b0; arng[17] = 3'd0;
+	arn[18] = pg_dec.pr1.decbus.Rm; arnt[18] = 1'b0; arng[18] = 3'd1;
+	arn[19] = pg_dec.pr2.decbus.Rm; arnt[19] = 1'b0; arng[19] = 3'd2;
+	arn[20] = pg_dec.pr3.decbus.Rm; arnt[20] = 1'b0; arng[20] = 3'd3;
  	arn[21] = 8'h00; arnt[21] = 1'b0; arng[21] = 3'd4;
  	arn[22] = 8'h00; arnt[22] = 1'b0; arng[22] = 3'd4;
 	arn[23] = store_argC_aReg; arnt[23] = 1'b0; arng[23] = 3'd0;
@@ -2550,22 +2561,22 @@ begin
 
 end
 
-assign arnbank[0] = sr.om & {2{|ins0_dec.decbus.Ra}} & 0;
-assign arnbank[1] = sr.om & {2{|ins0_dec.decbus.Rb}} & 0;
-assign arnbank[2] = sr.om & {2{|ins0_dec.decbus.Rc}} & 0;
-assign arnbank[3] = sr.om & {2{|ins0_dec.decbus.Rt}} & 0;
-assign arnbank[4] = sr.om & {2{|ins1_dec.decbus.Ra}} & 0;
-assign arnbank[5] = sr.om & {2{|ins1_dec.decbus.Rb}} & 0;
-assign arnbank[6] = sr.om & {2{|ins1_dec.decbus.Rc}} & 0;
-assign arnbank[7] = sr.om & {2{|ins1_dec.decbus.Rt}} & 0;
-assign arnbank[8] = sr.om & {2{|ins2_dec.decbus.Ra}} & 0;
-assign arnbank[9] = sr.om & {2{|ins2_dec.decbus.Rb}} & 0;
-assign arnbank[10] = sr.om & {2{|ins2_dec.decbus.Rc}} & 0;
-assign arnbank[11] = sr.om & {2{|ins2_dec.decbus.Rt}} & 0;
-assign arnbank[12] = sr.om & {2{|ins3_dec.decbus.Ra}} & 0;
-assign arnbank[13] = sr.om & {2{|ins3_dec.decbus.Rb}} & 0;
-assign arnbank[14] = sr.om & {2{|ins3_dec.decbus.Rc}} & 0;
-assign arnbank[15] = sr.om & {2{|ins3_dec.decbus.Rt}} & 0;
+assign arnbank[0] = sr.om & {2{|pg_dec.pr0.decbus.Ra}} & 0;
+assign arnbank[1] = sr.om & {2{|pg_dec.pr0.decbus.Rb}} & 0;
+assign arnbank[2] = sr.om & {2{|pg_dec.pr0.decbus.Rc}} & 0;
+assign arnbank[3] = sr.om & {2{|pg_dec.pr0.decbus.Rt}} & 0;
+assign arnbank[4] = sr.om & {2{|pg_dec.pr1.decbus.Ra}} & 0;
+assign arnbank[5] = sr.om & {2{|pg_dec.pr1.decbus.Rb}} & 0;
+assign arnbank[6] = sr.om & {2{|pg_dec.pr1.decbus.Rc}} & 0;
+assign arnbank[7] = sr.om & {2{|pg_dec.pr1.decbus.Rt}} & 0;
+assign arnbank[8] = sr.om & {2{|pg_dec.pr2.decbus.Ra}} & 0;
+assign arnbank[9] = sr.om & {2{|pg_dec.pr2.decbus.Rb}} & 0;
+assign arnbank[10] = sr.om & {2{|pg_dec.pr2.decbus.Rc}} & 0;
+assign arnbank[11] = sr.om & {2{|pg_dec.pr2.decbus.Rt}} & 0;
+assign arnbank[12] = sr.om & {2{|pg_dec.pr3.decbus.Ra}} & 0;
+assign arnbank[13] = sr.om & {2{|pg_dec.pr3.decbus.Rb}} & 0;
+assign arnbank[14] = sr.om & {2{|pg_dec.pr3.decbus.Rc}} & 0;
+assign arnbank[15] = sr.om & {2{|pg_dec.pr3.decbus.Rt}} & 0;
 assign arnbank[16] = 1'b0;
 assign arnbank[17] = 1'b0;
 assign arnbank[18] = 1'b0;
@@ -2802,10 +2813,10 @@ Stark_pipeline_ren uren1
 	.Rt1_renv(Rt1_renv),
 	.Rt2_renv(Rt2_renv),
 	.Rt3_renv(Rt3_renv),
-	.ins0_dec(ins0_dec),
-	.ins1_dec(ins1_dec),
-	.ins2_dec(ins2_dec),
-	.ins3_dec(ins3_dec),
+	.pg_dec.pr0(pg_dec.pr0),
+	.pg_dec.pr1(pg_dec.pr1),
+	.pg_dec.pr2(pg_dec.pr2),
+	.pg_dec.pr3(pg_dec.pr3),
 	.ins0_ren(ins0_ren),
 	.ins1_ren(ins1_ren),
 	.ins2_ren(ins2_ren),
@@ -5585,18 +5596,18 @@ always_comb
 
 always_comb
 	inc_chkpt = (
-		(ins0_dec.decbus.br && !stomp0) ||
-		(ins1_dec.decbus.br && !stomp1) ||
-		(ins2_dec.decbus.br && !stomp2) ||
-		(ins3_dec.decbus.br && !stomp3) 
+		(pg_dec.pr0.decbus.br && !stomp0) ||
+		(pg_dec.pr1.decbus.br && !stomp1) ||
+		(pg_dec.pr2.decbus.br && !stomp2) ||
+		(pg_dec.pr3.decbus.br && !stomp3) 
 		)
 		;
 always_comb
 	chkpt_inc_amt =
-		(ins0_dec.decbus.br && !stomp0) +
-		(ins1_dec.decbus.br && !stomp1) +
-		(ins2_dec.decbus.br && !stomp2) +
-		(ins3_dec.decbus.br && !stomp3) 
+		(pg_dec.pr0.decbus.br && !stomp0) +
+		(pg_dec.pr1.decbus.br && !stomp1) +
+		(pg_dec.pr2.decbus.br && !stomp2) +
+		(pg_dec.pr3.decbus.br && !stomp3) 
 		;
 
 edge_det uedbsi1 (.rst(irst), .clk(clk), .ce(1'b1), .i(bs_idle_oh), .pe(pe_bsidle), .ne(), .ee());
@@ -5868,7 +5879,7 @@ else begin
 			tBypassValid(tail3, ins3_ren, ins0_ren);
 			tBypassValid(tail3, ins3_ren, ins1_ren);
 			tBypassValid(tail3, ins3_ren, ins2_ren);
-			
+		
 			atom_mask <= {4'b0,atom_mask[11:4]};
 
 			tail0 <= (tail0 + 3'd4) % ROB_ENTRIES;
@@ -6369,7 +6380,7 @@ else begin
 			rob[agen0_id].done[0] <= 1'b1;
 			rob[agen0_id].out[0] <= 1'b0;
 			agen0_idv <= INV;
-			tSetLSQ(agen0_id, agen0_res, tlb0_res);
+			tSetLSQ(agen0_id, tlb0_res);
 		end
 	end
 
@@ -6410,7 +6421,7 @@ else begin
 				rob[agen1_id].done[0] <= 1'b1;
 				rob[agen1_id].out[0] <= 1'b0;
 				agen1_idv <= INV;
-				tSetLSQ(agen1_id, agen1_res, tlb1_res);
+				tSetLSQ(agen1_id, tlb1_res);
 			end
 		end
 	end
@@ -6827,16 +6838,16 @@ else begin
 		end
 		else begin
 			dram0_hi <= 1'b0;
-			dram0_sel <= {64'h0,fnSel(rob[lsq[mem0_lsndx.row][mem0_lsndx.col].rndx].op)} << lsq[mem0_lsndx.row][mem0_lsndx.col].padr[5:0];
-			dram0_selh <= {64'h0,fnSel(rob[lsq[mem0_lsndx.row][mem0_lsndx.col].rndx].op)} << lsq[mem0_lsndx.row][mem0_lsndx.col].padr[5:0];
-			dram0_vaddr <= lsq[mem0_lsndx.row][mem0_lsndx.col].vadr;
-			dram0_paddr <= lsq[mem0_lsndx.row][mem0_lsndx.col].padr;
-			dram0_vaddrh <= lsq[mem0_lsndx.row][mem0_lsndx.col].vadr;
-			dram0_paddrh <= lsq[mem0_lsndx.row][mem0_lsndx.col].padr;
-			dram0_data <= lsq[mem0_lsndx.row][mem0_lsndx.col].res << {lsq[mem0_lsndx.row][mem0_lsndx.col].padr[5:0],3'b0};
-			dram0_datah <= lsq[mem0_lsndx.row][mem0_lsndx.col].res << {lsq[mem0_lsndx.row][mem0_lsndx.col].padr[5:0],3'b0};
+			dram0_sel <= {64'h0,fnSel(rob[lsq[mem0_lsndx.row][mem0_lsndx.col].rndx].op)} << lsq[mem0_lsndx.row][mem0_lsndx.col].adr[5:0];
+			dram0_selh <= {64'h0,fnSel(rob[lsq[mem0_lsndx.row][mem0_lsndx.col].rndx].op)} << lsq[mem0_lsndx.row][mem0_lsndx.col].adr[5:0];
+			dram0_vaddr <= lsq[mem0_lsndx.row][mem0_lsndx.col].adr;
+			dram0_paddr <= lsq[mem0_lsndx.row][mem0_lsndx.col].adr;
+			dram0_vaddrh <= lsq[mem0_lsndx.row][mem0_lsndx.col].adr;
+			dram0_paddrh <= lsq[mem0_lsndx.row][mem0_lsndx.col].adr;
+			dram0_data <= lsq[mem0_lsndx.row][mem0_lsndx.col].res << {lsq[mem0_lsndx.row][mem0_lsndx.col].adr[5:0],3'b0};
+			dram0_datah <= lsq[mem0_lsndx.row][mem0_lsndx.col].res << {lsq[mem0_lsndx.row][mem0_lsndx.col].adr[5:0],3'b0};
 			dram0_ctago <= lsq[mem0_lsndx.row][mem0_lsndx.col].ctag;
-			dram0_shift <= {lsq[mem0_lsndx.row][mem0_lsndx.col].padr[5:0],3'd0};
+			dram0_shift <= {lsq[mem0_lsndx.row][mem0_lsndx.col].adr[5:0],3'd0};
 		end
 		dram0_memsz <= fnMemsz(rob[lsq[mem0_lsndx.row][mem0_lsndx.col].rndx].op);
 		dram0_tid.core <= CORENO;
@@ -6885,16 +6896,16 @@ else begin
 			end
 			else begin
 				dram1_hi <= 1'b0;
-				dram1_sel <= {64'h0,fnSel(lsq[mem1_lsndx.row][mem1_lsndx.col].op)} << lsq[mem1_lsndx.row][mem1_lsndx.col].padr[5:0];
-				dram1_selh <= {64'h0,fnSel(lsq[mem1_lsndx.row][mem1_lsndx.col].op)} << lsq[mem1_lsndx.row][mem1_lsndx.col].padr[5:0];
-				dram1_vaddr	<= lsq[mem1_lsndx.row][mem1_lsndx.col].vadr;
-				dram1_paddr	<= lsq[mem1_lsndx.row][mem1_lsndx.col].padr;
-				dram1_vaddrh	<= lsq[mem1_lsndx.row][mem1_lsndx.col].vadr;
-				dram1_paddrh	<= lsq[mem1_lsndx.row][mem1_lsndx.col].padr;
-				dram1_data	<= lsq[mem1_lsndx.row][mem1_lsndx.col].res << {lsq[mem1_lsndx.row][mem1_lsndx.col].padr[5:0],3'b0};
-				dram1_datah	<= lsq[mem1_lsndx.row][mem1_lsndx.col].res << {lsq[mem1_lsndx.row][mem1_lsndx.col].padr[5:0],3'b0};
+				dram1_sel <= {64'h0,fnSel(lsq[mem1_lsndx.row][mem1_lsndx.col].op)} << lsq[mem1_lsndx.row][mem1_lsndx.col].adr[5:0];
+				dram1_selh <= {64'h0,fnSel(lsq[mem1_lsndx.row][mem1_lsndx.col].op)} << lsq[mem1_lsndx.row][mem1_lsndx.col].adr[5:0];
+				dram1_vaddr	<= lsq[mem1_lsndx.row][mem1_lsndx.col].adr;
+				dram1_paddr	<= lsq[mem1_lsndx.row][mem1_lsndx.col].adr;
+				dram1_vaddrh	<= lsq[mem1_lsndx.row][mem1_lsndx.col].adr;
+				dram1_paddrh	<= lsq[mem1_lsndx.row][mem1_lsndx.col].adr;
+				dram1_data	<= lsq[mem1_lsndx.row][mem1_lsndx.col].res << {lsq[mem1_lsndx.row][mem1_lsndx.col].adr[5:0],3'b0};
+				dram1_datah	<= lsq[mem1_lsndx.row][mem1_lsndx.col].res << {lsq[mem1_lsndx.row][mem1_lsndx.col].adr[5:0],3'b0};
 				dram1_ctago <= lsq[mem1_lsndx.row][mem1_lsndx.col].ctag;
-				dram1_shift <= {lsq[mem1_lsndx.row][mem1_lsndx.col].padr[5:0],3'd0};
+				dram1_shift <= {lsq[mem1_lsndx.row][mem1_lsndx.col].adr[5:0],3'd0};
 			end
 			dram1_memsz <= fnMemsz(lsq[mem1_lsndx.row][mem1_lsndx.col].op);
 			dram1_tid.core <= CORENO;
@@ -7552,18 +7563,18 @@ always_ff @(posedge clk) begin: clock_n_debug
 	$display("lineH: %h", uiext1.ic_line_fet[1023:512]);
 	$display("align: %x", uiext1.ic_line_aligned);
 	$display("- - - - - - Multiplex %c - - - - - - %s", ihit_mux ? "h":" ", stomp_mux ? stompstr : no_stompstr);
-	$display("pc0: %h.%h ins0: %h", uiext1.ins0_mux.pc.pc[23:0], uiext1.ins0_mux.mcip, uiext1.ins0_mux.ins[47:0]);
-	$display("pc1: %h.%h ins1: %h", uiext1.ins1_mux.pc.pc[23:0], uiext1.ins1_mux.mcip, uiext1.ins1_mux.ins[47:0]);
-	$display("pc2: %h.%h ins2: %h", uiext1.ins2_mux.pc.pc[23:0], uiext1.ins2_mux.mcip, uiext1.ins2_mux.ins[47:0]);
-	$display("pc3: %h.%h ins3: %h", uiext1.ins3_mux.pc.pc[23:0], uiext1.ins3_mux.mcip, uiext1.ins3_mux.ins[47:0]);
+	$display("pc0: %h.%h ins0: %h", uiext1.pg0_mux.pr0.pc.pc[23:0], uiext1.pg0_mux.pr0.mcip, uiext1.pg0_mux.pr0.ins[47:0]);
+	$display("pc1: %h.%h ins1: %h", uiext1.pg0_mux.pr1.pc.pc[23:0], uiext1.pg0_mux.pr1.mcip, uiext1.pg0_mux.pr1.ins[47:0]);
+	$display("pc2: %h.%h ins2: %h", uiext1.pg0_mux.pr2.pc.pc[23:0], uiext1.pg0_mux.pr2.mcip, uiext1.pg0_mux.pr2.ins[47:0]);
+	$display("pc3: %h.%h ins3: %h", uiext1.pg0_mux.pr3.pc.pc[23:0], uiext1.pg0_mux.pr3.mcip, uiext1.pg0_mux.pr3.ins[47:0]);
 	$display("micro_ip: %h", micro_ip);
 	if (do_bsr)
-		$display("BSR %h  pc0_fet=%h", bsr_tgt.pc, uiext1.ins0_mux.pc.pc[31:0]);
+		$display("BSR %h  pc0_fet=%h", bsr_tgt.pc, uiext1.pg0_mux.pr0.pc.pc[31:0]);
 	$display("----- Decode %c%c ----- %s", ihit_dec ? "h":" ", micro_code_active_d ? "a": " ", stomp_dec ? stompstr : no_stompstr);
-	$display("pc0: %h.%h ins0: %h", ins0_dec.pc.pc[23:0], ins0_dec.mcip, ins0_dec.ins[47:0]);
-	$display("pc1: %h.%h ins1: %h", ins1_dec.pc.pc[23:0], ins1_dec.mcip, ins1_dec.ins[47:0]);
-	$display("pc2: %h.%h ins2: %h", ins2_dec.pc.pc[23:0], ins2_dec.mcip, ins2_dec.ins[47:0]);
-	$display("pc3: %h.%h ins3: %h", ins3_dec.pc.pc[23:0], ins3_dec.mcip, ins3_dec.ins[47:0]);
+	$display("pc0: %h.%h ins0: %h", pg_dec.pr0.pc.pc[23:0], pg_dec.pr0.mcip, pg_dec.pr0.ins[47:0]);
+	$display("pc1: %h.%h ins1: %h", pg_dec.pr1.pc.pc[23:0], pg_dec.pr1.mcip, pg_dec.pr1.ins[47:0]);
+	$display("pc2: %h.%h ins2: %h", pg_dec.pr2.pc.pc[23:0], pg_dec.pr2.mcip, pg_dec.pr2.ins[47:0]);
+	$display("pc3: %h.%h ins3: %h", pg_dec.pr3.pc.pc[23:0], pg_dec.pr3.mcip, pg_dec.pr3.ins[47:0]);
 
 	if (1) begin	
 	$display("----- Physical Registers -----");
@@ -7646,7 +7657,7 @@ always_ff @(posedge clk) begin: clock_n_debug
 		$display("%c%c sn:%h %d: %d %c%c%c v%h p%h data:%h %c #", (i[2:0]==lsq_head.row)?72:46,(i[2:0]==lsq_tail.row)?84:46,
 			lsq[i][0].sn, i[2:0],
 			lsq[i][0].rndx,lsq[i][0].store ? "S": lsq[i][0].load ? "L" : "-",
-			lsq[i][0].v?"v":" ",lsq[i][0].agen?"a":" ",lsq[i][0].vadr,lsq[i][0].padr,
+			lsq[i][0].v?"v":" ",lsq[i][0].agen?"a":" ",lsq[i][0].vadr,lsq[i][0].adr,
 			lsq[i][0].res[511:0],lsq[i][0].datav?"v":" "
 		);
 	end
@@ -8187,7 +8198,6 @@ endtask
 
 task tSetLSQ;
 input rob_ndx_t id;
-input address_t vadr;
 input address_t padr;
 integer n18r, n18c;
 begin
@@ -8195,8 +8205,8 @@ begin
 		for (n18c = 0; n18c < 2; n18c = n18c + 1) begin
 			if (lsq[n18r][n18c].rndx==id && lsq[n18r][n18c].v) begin
 				lsq[n18r][n18c].agen <= TRUE;
-				lsq[n18r][n18c].vadr <= vadr;
-				lsq[n18r][n18c].padr <= padr;//{tlbe.pte.ppn,adr[12:0]};
+				lsq[n18r][n18c].vpa <= 1'b1;
+				lsq[n18r][n18c].adr <= padr;//{tlbe.pte.ppn,adr[12:0]};
 			end
 		end
 	end
@@ -8228,6 +8238,7 @@ begin
 	exc_ret_pc <= 32'hFFFFFFC0;
 	exc_ret_pc.bno_t <= 6'd1;
 	exc_ret_pc.bno_f <= 6'd1;
+	exc_ret_carry_mod <= 32'd0;
 	sr <= 64'd0;
 	sr.pl <= 8'hFF;					// highest priority
 	sr.om <= OM_SECURE;
@@ -8704,8 +8715,8 @@ begin
 	lsq[ndx.row][ndx.col].cload_tags <= rob.decbus.cload_tags|rob.excv;
 	lsq[ndx.row][ndx.col].store <= rob.decbus.store;
 	lsq[ndx.row][ndx.col].cstore <= rob.decbus.cstore;
-	lsq[ndx.row][ndx.col].vadr <= 32'd0;
-	lsq[ndx.row][ndx.col].padr <= 32'd0;
+	lsq[ndx.row][ndx.col].vpa <= 1'd0;
+	lsq[ndx.row][ndx.col].adr <= 32'd0;
 //	store_argC_reg <= rob.pRc;
 	lsq[ndx.row][ndx.col].aRc <= rob.decbus.Rc;
 	lsq[ndx.row][ndx.col].pRc <= rob.op.pRc;
@@ -8949,6 +8960,7 @@ begin
 	excir <= rob[id].op;
 	excid <= id;
 	excmiss <= FALSE;
+	csr_carry_mod <= rob[id].op.carry_mod;
 	// Hardware interrupts automatically vector at the next_pc stage. There is no
 	// need to vector here.
 	if (nmi) begin
@@ -9015,6 +9027,8 @@ begin
 	for (nn = 0; nn < 15; nn = nn + 1)
 		pc_stack[nn] <=	pc_stack[nn+1];
 	exc_ret_pc <= pc_stack[0];
+	exc_ret_carry_omd <= csr_carry_mod;
+	csr_carry_mod <= 32'd0;
 end
 endtask
 

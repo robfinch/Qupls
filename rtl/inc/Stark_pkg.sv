@@ -254,14 +254,14 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic resv1;
-	logic so;				// summary overflow
 	logic resv;
+	logic so;				// summary overflow / unordered
+	logic ca;				// carry / infinite
 	logic le;
 	logic lt;
 	logic _nor;
 	logic _nand;
-	logic eq;
+	logic eq;				// _xnor
 } condition_byte_t;
 
 typedef struct packed
@@ -1061,10 +1061,13 @@ typedef struct packed
 	logic pfxb;
 	logic pfxc;
 	logic pfxd;
+	cpu_types_pkg::aregno_t Rci;		// carry input
 	cpu_types_pkg::aregno_t Rs1;
 	cpu_types_pkg::aregno_t Rs2;
 	cpu_types_pkg::aregno_t Rs3;
 	cpu_types_pkg::aregno_t Rd;
+	cpu_types_pkg::aregno_t Rd2;
+	cpu_types_pkg::aregno_t Rco;		// carry output
 	logic has_imma;
 	logic has_immb;
 	logic has_immc;
@@ -1125,21 +1128,23 @@ typedef struct packed
 	cpu_types_pkg::pc_address_t brtgt;
 	logic takb;								// 1=branch evaluated to taken
 	logic ssm;								// 1=single step mode active
-	logic hwi;								// hardware interrupt occured during fetch
-	logic [5:0] hwi_level;		// the level of the hardware interrupt
-	logic [5:0] irq_mask;			// irq mask from sr.ipl or atom
 	logic [2:0] hwi_swstk;		// software stack
 	cause_code_t exc;					// non-zero indicate exception
 	logic excv;								// 1=exception
 	// The following fields are loaded at enqueue time, but otherwise do not change.
 	logic bt;									// branch to be taken as predicted
 	operating_mode_t om;			// operating mode
+	reg [31:0] carry_mod;			// carry modifie remnant
+	cpu_types_pkg::pregno_t pRci;							// physical registers (see decode bus for arch. regs)
 	cpu_types_pkg::pregno_t pRs1;							// physical registers (see decode bus for arch. regs)
 	cpu_types_pkg::pregno_t pRs2;
 	cpu_types_pkg::pregno_t pRs3;
-	cpu_types_pkg::pregno_t pRd;							// current Rt value
-	cpu_types_pkg::pregno_t nRd;							// new Rt
-	checkpt_ndx_t cndx;											// checkpoint index
+	cpu_types_pkg::pregno_t pRd;						// current Rd value
+	cpu_types_pkg::pregno_t pRd2;						// current Rd2 value
+	cpu_types_pkg::pregno_t pRco;						// current Rc
+	cpu_types_pkg::pregno_t nRd;						// new Rd
+	cpu_types_pkg::pregno_t nRd2;						// new Rd2
+	cpu_types_pkg::pregno_t nRco;						// new Rc
 	cpu_types_pkg::pc_address_ex_t pc;			// PC of instruction
 	cpu_types_pkg::mc_address_t mcip;				// Micro-code IP address
 	cpu_types_pkg::pc_address_ex_t hwipc;		// PC of instruction
@@ -1151,6 +1156,18 @@ typedef struct packed
 	instruction_t ins;
 	decode_bus_t db;
 } pipeline_reg_t;
+
+typedef struct packed
+{
+	logic hwi;								// hardware interrupt occured during fetch
+	logic [5:0] hwi_level;		// the level of the hardware interrupt
+	logic [5:0] irq_mask;			// irq mask from sr.ipl or atom
+	checkpt_ndx_t cndx;				// checkpoint index
+	pipeline_reg_t pr0;
+	pipeline_reg_t pr1;
+	pipeline_reg_t pr2;
+	pipeline_reg_t pr3;
+} pipeline_group_reg_t;
 
 typedef struct packed {
 	// The following fields may change state while an instruction is processed.
@@ -1309,5 +1326,11 @@ begin
 end
 endfunction
 
+function fnIsCarry;
+input instruction_t ir;
+begin
+	fnIsCarry = ir.any.opcode[5:1]==5'd12 && ir[8:6]==3'd7 && ir[31:29]==3'd0 && (ir[28:26]==3'd2 || ir[28:16]==3'd3);
+end
+endfunction
 
 endpackage

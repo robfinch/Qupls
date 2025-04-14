@@ -45,7 +45,7 @@ import cpu_types_pkg::*;
 import Stark_pkg::*;
 
 module Stark_pipeline_mux(rst_i, clk_i, rstcnt, advance_fet, ihit, en_i,
-	stomp_bno, stomp_mux, nop_o, 
+	stomp_bno, stomp_mux, nop_o, carry_mod_fet,
 	nmi_i, irq_fet, irqf_fet, hirq_i, vect_i, sr, pt_mux, p_override, po_bno,
 	branchmiss, misspc_fet,
 	mipv_i, mip_i, ic_line_fet, reglist_active, grp_i, grp_o,
@@ -54,7 +54,7 @@ module Stark_pipeline_mux(rst_i, clk_i, rstcnt, advance_fet, ihit, en_i,
 	ls_bmf_i, pack_regs_i, scale_regs_i, regcnt_i, mc_adr,
 	mc_ins0_i, mc_ins1_i, mc_ins2_i, mc_ins3_i,
 	len0_i, len1_i, len2_i, len3_i,
-	ins0_mux_o, ins1_mux_o, ins2_mux_o, ins3_mux_o, ins4_mux_o,
+	pg0_mux, pg1_mux,
 	mcip0_i, mcip1_i, mcip2_i, mcip3_i,
 //	mcip0_o, mcip1_o, mcip2_o, mcip3_o,
 	do_bsr, bsr_tgt, do_ret, ret_pc, do_call, get, stall);
@@ -67,6 +67,7 @@ input en_i;
 input [4:0] stomp_bno;
 input stomp_mux;
 output reg nop_o;
+input [31:0] carry_mod_fet;
 input nmi_i;
 input [2:0] irq_fet;
 input irqf_fet;
@@ -110,11 +111,8 @@ input [4:0] len0_i;
 input [4:0] len1_i;
 input [4:0] len2_i;
 input [4:0] len3_i;
-output Stark_pkg::pipeline_reg_t ins0_mux_o;
-output Stark_pkg::pipeline_reg_t ins1_mux_o;
-output Stark_pkg::pipeline_reg_t ins2_mux_o;
-output Stark_pkg::pipeline_reg_t ins3_mux_o;
-output Stark_pkg::pipeline_reg_t ins4_mux_o;
+output Stark_pkg::pipeline_group_reg_t pg0_mux;
+output Stark_pkg::pipeline_group_reg_t pg1_mux;
 /*
 output cpu_types_pkg::mc_address_t mcip0_o;
 output cpu_types_pkg::mc_address_t mcip1_o;
@@ -130,6 +128,13 @@ input get;
 output stall;
 
 integer nn,hh;
+Stark_pkg::pipeline_reg_t ins0_mux_o;
+Stark_pkg::pipeline_reg_t ins1_mux_o;
+Stark_pkg::pipeline_reg_t ins2_mux_o;
+Stark_pkg::pipeline_reg_t ins3_mux_o;
+Stark_pkg::pipeline_reg_t ins4_mux_o;
+Stark_pkg::pipeline_reg_t ins5_mux_o;
+Stark_pkg::pipeline_reg_t ins6_mux_o;
 reg [1023:0] ic_line_fet;
 wire [5:0] jj;
 reg [5:0] kk;
@@ -149,6 +154,8 @@ Stark_pkg::pipeline_reg_t ins1_fet;
 Stark_pkg::pipeline_reg_t ins2_fet;
 Stark_pkg::pipeline_reg_t ins3_fet;
 Stark_pkg::pipeline_reg_t ins4_fet;
+Stark_pkg::pipeline_reg_t ins5_fet;
+Stark_pkg::pipeline_reg_t ins6_fet;
 Stark_pkg::pipeline_reg_t mc_ins0;
 Stark_pkg::pipeline_reg_t mc_ins1;
 Stark_pkg::pipeline_reg_t mc_ins2;
@@ -312,6 +319,7 @@ begin
 	pr2_mux.hwi = nmi_i||irqf_fet;
 	pr3_mux.hwi = nmi_i||irqf_fet;
 	pr4_mux.hwi = nmi_i||irqf_fet;
+	pr0_mux.carry_mod = carry_mod_fet;
 end
 
 /* Under construction
@@ -626,6 +634,29 @@ Stark_ins_extract_mux umux4
 	.ins(ins4_mux)
 );
 
+Stark_ins_extract_mux umux5
+(
+	.rst(rst_i),
+	.clk(clk_i),
+	.en(en_i),
+	.nop(nop3),
+	.rgi(2'd3),
+	.regcnt(regcnt_i),
+	.hirq(hirq),
+	.irq_i(irq_i),
+	.vect_i(vect_i),
+	.mipv(mipv_i),
+	.mc_ins0(mc_ins0),
+	.mc_ins(mc_ins3),
+	.ins0(ins0_fet),
+	.insi(ins5_fet),
+	.reglist_active(reglist_active),
+	.ls_bmf(ls_bmf_i),
+	.scale_regs_i(scale_regs_i),
+	.pack_regs(pack_regs_i),
+	.ins(ins5_mux)
+);
+
 assign stall = 1'b0;
 
 always_comb ins0_mux_o = ins0_mux;
@@ -633,6 +664,13 @@ always_comb ins1_mux_o = ins1_mux;
 always_comb ins2_mux_o = ins2_mux;
 always_comb ins3_mux_o = ins3_mux;
 always_comb ins4_mux_o = ins4_mux;
+always_comb ins5_mux_o = ins5_mux;
+always_comb pg0_mux.pr0 = ins0_mux;
+always_comb pg0_mux.pr1 = ins1_mux;
+always_comb pg0_mux.pr2 = ins2_mux;
+always_comb pg0_mux.pr3 = ins3_mux;
+always_comb pg1_mux.pr0 = ins4_mux;
+always_comb pg1_mux.pr1 = ins5_mux;
 
 always_ff @(posedge clk) if (en) nop_o <= stomp_mux;
 /*

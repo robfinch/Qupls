@@ -42,11 +42,11 @@ import Stark_pkg::*;
 module Stark_pipeline_dec(rst_i, rst, clk, en, clk5x, ph4,
 	restored, restore_list, unavail_list, sr,
 	tags2free, freevals, bo_wr, bo_preg,
-	ins0_dec_inv, ins1_dec_inv, ins2_dec_inv, ins3_dec_inv,
-	stomp_dec, stomp_mux, stomp_bno, ins0_mux, ins1_mux, ins2_mux, ins3_mux, ins4_mux,
+	inso[0]_inv, inso[1]_inv, inso[2]_inv, inso[3]_inv,
+	stomp_dec, stomp_mux, stomp_bno, pg0_mux, pg1_mux,
 	Rt0_dec, Rt1_dec, Rt2_dec, Rt3_dec, Rt0_decv, Rt1_decv, Rt2_decv, Rt3_decv,
 	micro_code_active_mux, micro_code_active_dec,
-	ins0_dec, ins1_dec, ins2_dec, ins3_dec, pc0_dec, pc1_dec, pc2_dec, pc3_dec,
+	pg_dec,
 	ren_stallq, ren_rst_busy, avail_reg
 );
 input rst_i;
@@ -62,19 +62,16 @@ input status_reg_t sr;
 input stomp_dec;
 input stomp_mux;
 input [4:0] stomp_bno;
-input Stark_pkg::pipeline_reg_t ins0_mux;
-input Stark_pkg::pipeline_reg_t ins1_mux;
-input Stark_pkg::pipeline_reg_t ins2_mux;
-input Stark_pkg::pipeline_reg_t ins3_mux;
-input Stark_pkg::pipeline_reg_t ins4_mux;
+input Stark_pkg::pipeline_group_reg_t pg0_mux;
+input Stark_pkg::pipeline_group_reg_t pg1_mux;
 input pregno_t [3:0] tags2free;
 input [3:0] freevals;
 input bo_wr;
 input pregno_t bo_preg;
-input ins0_dec_inv;
-input ins1_dec_inv;
-input ins2_dec_inv;
-input ins3_dec_inv;
+input inso[0]_inv;
+input inso[1]_inv;
+input inso[2]_inv;
+input inso[3]_inv;
 output pregno_t Rt0_dec;
 output pregno_t Rt1_dec;
 output pregno_t Rt2_dec;
@@ -83,19 +80,21 @@ output Rt0_decv;
 output Rt1_decv;
 output Rt2_decv;
 output Rt3_decv;
-output Stark_pkg::pipeline_reg_t ins0_dec;
-output Stark_pkg::pipeline_reg_t ins1_dec;
-output Stark_pkg::pipeline_reg_t ins2_dec;
-output Stark_pkg::pipeline_reg_t ins3_dec;
-output pc_address_ex_t pc0_dec;
-output pc_address_ex_t pc1_dec;
-output pc_address_ex_t pc2_dec;
-output pc_address_ex_t pc3_dec;
+output Stark_pkg::pipeline_group_reg_t pg_dec;
 output ren_stallq;
 output ren_rst_busy;
 input micro_code_active_mux;
 output reg micro_code_active_dec;
 output [PREGS-1:0] avail_reg;
+
+Stark_pkg::pipeline_group_reg_t pg0_mux_r;
+reg [31:0] carry_mod_i;
+reg [31:0] carry_mod_o;
+always @(posedge clk)
+if (rst)
+	carry_mod_i <= 32'h0;
+else
+	carry_mod_i <= carry_mod_o;
 
 Stark_pkg::pipeline_reg_t ins0m;
 Stark_pkg::pipeline_reg_t ins1m;
@@ -110,6 +109,9 @@ pregno_t Rt0_dec1;
 pregno_t Rt1_dec1;
 pregno_t Rt2_dec1;
 pregno_t Rt3_dec1;
+
+always @(posedge clk)
+	pg0_mux_r <= pg0_mux;
 
 //reg stomp_dec;
 
@@ -148,10 +150,10 @@ Stark_reg_renamer3 utrn2
 	.restore_list(restore_list & ~unavail_list),
 	.tags2free(tags2free),
 	.freevals(freevals),
-	.alloc0(ins0_dec.aRt!=8'd0 && ins0_dec.v),// & ~stomp0),
-	.alloc1(ins1_dec.aRt!=8'd0 && ins1_dec.v),// & ~stomp1),
-	.alloc2(ins2_dec.aRt!=8'd0 && ins2_dec.v),// & ~stomp2),
-	.alloc3(ins3_dec.aRt!=8'd0 && ins3_dec.v),// & ~stomp3),
+	.alloc0(inso[0].aRt!=8'd0 && inso[0].v),// & ~stomp0),
+	.alloc1(inso[1].aRt!=8'd0 && inso[1].v),// & ~stomp1),
+	.alloc2(inso[2].aRt!=8'd0 && inso[2].v),// & ~stomp2),
+	.alloc3(inso[3].aRt!=8'd0 && inso[3].v),// & ~stomp3),
 	.wo0(Rt0_dec),
 	.wo1(Rt1_dec),
 	.wo2(Rt2_dec),
@@ -177,10 +179,10 @@ Stark_reg_renamer4 utrn1
 	.restore_list(restore_list & ~unavail_list),
 	.tags2free(tags2free),
 	.freevals(freevals),
-	.alloc0(ins0_dec.aRt!=8'd0 && ins0_dec.v),// & ~stomp0),
-	.alloc1(ins1_dec.aRt!=8'd0 && ins1_dec.v),// & ~stomp1),
-	.alloc2(ins2_dec.aRt!=8'd0 && ins2_dec.v),// & ~stomp2),
-	.alloc3(ins3_dec.aRt!=8'd0 && ins3_dec.v),// & ~stomp3),
+	.alloc0(inso[0].aRt!=8'd0 && inso[0].v),// & ~stomp0),
+	.alloc1(inso[1].aRt!=8'd0 && inso[1].v),// & ~stomp1),
+	.alloc2(inso[2].aRt!=8'd0 && inso[2].v),// & ~stomp2),
+	.alloc3(inso[3].aRt!=8'd0 && inso[3].v),// & ~stomp3),
 	.wo0(Rt0_dec),
 	.wo1(Rt1_dec),
 	.wo2(Rt2_dec),
@@ -208,10 +210,10 @@ Stark_reg_name_supplier2 utrn1
 	.freevals(freevals),
 	.bo_wr(bo_wr),
 	.bo_preg(bo_preg),
-	.alloc0(ins0_dec.aRt!=8'd0 && ins0_dec.v ),// & ~stomp0),
-	.alloc1(ins1_dec.aRt!=8'd0 && ins1_dec.v && !ins0_dec.decbus.bsr),// & ~stomp1),
-	.alloc2(ins2_dec.aRt!=8'd0 && ins2_dec.v && !ins0_dec.decbus.bsr && !ins1_dec.decbus.bsr),// & ~stomp2),
-	.alloc3(ins3_dec.aRt!=8'd0 && ins3_dec.v && !ins0_dec.decbus.bsr && !ins1_dec.decbus.bsr && !ins2_dec.decbus.bsr),// & ~stomp3),
+	.alloc0(inso[0].aRt!=8'd0 && inso[0].v ),// & ~stomp0),
+	.alloc1(inso[1].aRt!=8'd0 && inso[1].v && !inso[0].decbus.bl),// & ~stomp1),
+	.alloc2(inso[2].aRt!=8'd0 && inso[2].v && !inso[0].decbus.bl && !inso[1].decbus.bl),// & ~stomp2),
+	.alloc3(inso[3].aRt!=8'd0 && inso[3].v && !inso[0].decbus.bl && !inso[1].decbus.bl && !inso[2].decbus.bl),// & ~stomp3),
 	.o0(Rt0_dec1),
 	.o1(Rt1_dec1),
 	.o2(Rt2_dec1),
@@ -224,16 +226,16 @@ Stark_reg_name_supplier2 utrn1
 	.stall(ren_stallq),
 	.rst_busy(ren_rst_busy)
 );
-assign Rt0_dec = ins0_dec.aRt==8'd0 ? 9'd0 : Rt0_dec1;
-assign Rt1_dec = ins1_dec.aRt==8'd0 ? 9'd0 : Rt1_dec1;
-assign Rt2_dec = ins2_dec.aRt==8'd0 ? 9'd0 : Rt2_dec1;
-assign Rt3_dec = ins3_dec.aRt==8'd0 ? 9'd0 : Rt3_dec1;
+assign Rt0_dec = inso[0].aRt==8'd0 ? 9'd0 : Rt0_dec1;
+assign Rt1_dec = inso[1].aRt==8'd0 ? 9'd0 : Rt1_dec1;
+assign Rt2_dec = inso[2].aRt==8'd0 ? 9'd0 : Rt2_dec1;
+assign Rt3_dec = inso[3].aRt==8'd0 ? 9'd0 : Rt3_dec1;
 end
 else begin
-	assign Rt0_dec = ins0_dec.aRt;
-	assign Rt1_dec = ins1_dec.aRt;
-	assign Rt2_dec = ins2_dec.aRt;
-	assign Rt3_dec = ins3_dec.aRt;
+	assign Rt0_dec = inso[0].aRt;
+	assign Rt1_dec = inso[1].aRt;
+	assign Rt2_dec = inso[2].aRt;
+	assign Rt3_dec = inso[3].aRt;
 	assign Rt0_decv = TRUE;
 	assign Rt1_decv = TRUE;
 	assign Rt2_decv = TRUE;
@@ -310,11 +312,11 @@ end
 else begin
 	if (en)
 	begin
-		ins0m <= ins0_mux;
+		ins0m <= pg0_mux.pr0;
 		if (stomp_mux && FALSE) begin
-			if (ins0_mux.pc.bno_t!=stomp_bno) begin
+			if (pg0_mux.pr0.pc.bno_t!=stomp_bno) begin
 				ins0m <= nopi;
-				ins0m.pc.bno_t <= ins0_mux.pc.bno_t;
+				ins0m.pc.bno_t <= pg0_mux.pr0.pc.bno_t;
 			end
 		end
 	end
@@ -327,11 +329,11 @@ end
 else begin
 	if (en)
 	begin
-		ins1m <= ins1_mux;
+		ins1m <= pg0_mux.pr1;
 		if (stomp_mux && FALSE) begin
-			if (ins1_mux.pc.bno_t!=stomp_bno) begin
+			if (pg0_mux.pr1.pc.bno_t!=stomp_bno) begin
 				ins1m <= nopi;
-				ins1m.pc.bno_t <= ins1_mux.pc.bno_t;
+				ins1m.pc.bno_t <= pg0_mux.pr1.pc.bno_t;
 			end
 		end
 	end
@@ -344,11 +346,11 @@ end
 else begin
 	if (en)
 	begin
-		ins2m <= ins2_mux;
+		ins2m <= pg0_mux.pr2;
 		if (stomp_mux && FALSE) begin
-			if (ins2_mux.pc.bno_t!=stomp_bno) begin
+			if (pg0_mux.pr2.pc.bno_t!=stomp_bno) begin
 				ins2m <= nopi;
-				ins2m.pc.bno_t <= ins2_mux.pc.bno_t;
+				ins2m.pc.bno_t <= pg0_mux.pr2.pc.bno_t;
 			end
 		end
 	end
@@ -361,11 +363,11 @@ end
 else begin
 	if (en)
 	begin
-		ins3m <= ins3_mux;
+		ins3m <= pg0_mux.pr3;
 		if (stomp_mux && FALSE) begin
-			if (ins3_mux.pc.bno_t!=stomp_bno) begin
+			if (pg0_mux.pr3.pc.bno_t!=stomp_bno) begin
 				ins3m <= nopi;
-				ins3m.pc.bno_t <= ins3_mux.pc.bno_t;
+				ins3m.pc.bno_t <= pg0_mux.pr3.pc.bno_t;
 			end
 		end
 	end
@@ -378,7 +380,7 @@ Stark_decoder udeci0
 	.en(en),
 	.om(sr.om),
 	.ipl(sr.ipl),
-	.instr(ins0_mux),
+	.instr(pg0_mux.pr0),
 	.dbo(dec0)
 );
 
@@ -389,7 +391,7 @@ Stark_decoder udeci1
 	.en(en),
 	.om(sr.om),
 	.ipl(sr.ipl),
-	.instr(ins1_mux),
+	.instr(pg0_mux.pr1),
 	.dbo(dec1)
 );
 
@@ -400,7 +402,7 @@ Stark_decoder udeci2
 	.en(en),
 	.om(sr.om),
 	.ipl(sr.ipl),
-	.instr(ins2_mux),
+	.instr(pg0_mux.pr2),
 	.dbo(dec2)
 );
 
@@ -411,7 +413,7 @@ Stark_decoder udeci3
 	.en(en),
 	.om(sr.om),
 	.ipl(sr.ipl),
-	.instr(ins3_mux),
+	.instr(pg0_mux.pr3),
 	.dbo(dec3)
 );
 
@@ -422,7 +424,7 @@ Stark_decoder udeci4
 	.en(en),
 	.om(sr.om),
 	.ipl(sr.ipl),
-	.instr(ins4_mux),
+	.instr(pg1_mux.pr0),
 	.dbo(dec4)
 );
 /*
@@ -432,8 +434,8 @@ if (rst_i) begin
 end
 else begin
 	if (en_i)
-		ins2m <= (stomp_dec && ((ins0_mux.bt|ins1_mux.bt|ins2_mux.bt|ins3_mux.bt) && branchmiss ? ins3_mux.pc.bno_t==stomp_bno : ins3_mux.pc.bno_f==stomp_bno )) ? nopi : ins3_mux;
-//		ins3m <= (stomp_dec && ins3_mux.pc.bno_t==stomp_bno) ? nopi : ins3_mux;
+		ins2m <= (stomp_dec && ((pg0_mux.pr0.bt|pg0_mux.pr1.bt|pg0_mux.pr2.bt|pg0_mux.pr3.bt) && branchmiss ? pg0_mux.pr3.pc.bno_t==stomp_bno : pg0_mux.pr3.pc.bno_f==stomp_bno )) ? nopi : pg0_mux.pr3;
+//		ins3m <= (stomp_dec && pg0_mux.pr3.pc.bno_t==stomp_bno) ? nopi : pg0_mux.pr3;
 end
 */
 
@@ -536,15 +538,90 @@ begin
 		pr_dec3.decbus.has_immb = 1'b1;
 	end
 	if (dec4.pfxc) begin pr_dec3.decbus.immc = {dec4.immc[63:5],dec3.Rc[4:0]}; pr_dec3.decbus.has_immc = 1'b1; end
-	
+
+	// Apply carry mod to instructions in same group, and adjust
+	pr0_dec.carry_mod = carry_mod_i;
+	case ({pr0_dec.carry_mod[9],pr0_dec.carry_mod[0]})
+	2'd0:	;
+	2'd1:	pr_dec0.decbus.Rci = pr0_dec.carry_mod[25:24]|7'd92;
+	2'd2:	pr_dec0.decbus.Rco = pr0_dec.carry_mod[25:24]|7'd92;
+	2'd3:
+		begin
+			pr_dec0.decbus.Rci = pr0_dec.carry_mod[25:24]|7'd92;
+			pr_dec0.decbus.Rco = pr0_dec.carry_mod[25:24]|7'd92;
+		end
+	endcase
+	if (dec0.carry) begin
+		pr1_dec.carry_mod = ins0m.ins;
+	end
+	else begin
+		pr1_dec.carry_mod = pr0_dec.carry_mod;
+		pr1_dec.carry_mod[0] = pr0_dec.carry_mod[10];
+		pr1_dec.carry_mod[23:9] = {2'd0,pr0_dec.carry_mod[23:11]};
+	end
+	case ({pr1_dec.carry_mod[9],pr1_dec.carry_mod[0]})
+	2'd0:	;
+	2'd1:	pr_dec1.decbus.Rci = pr1_dec.carry_mod[25:24]|7'd92;
+	2'd2:	pr_dec1.decbus.Rco = pr1_dec.carry_mod[25:24]|7'd92;
+	2'd3:
+		begin
+			pr_dec1.decbus.Rci = pr1_dec.carry_mod[25:24]|7'd92;
+			pr_dec1.decbus.Rco = pr1_dec.carry_mod[25:24]|7'd92;
+		end
+	endcase
+	if (dec1.carry) begin
+		pr2_dec.carry_mod = ins1m.ins;
+	end
+	else begin
+		pr2_dec.carry_mod = pr1_dec.carry_mod;
+		pr2_dec.carry_mod[0] = pr1_dec.carry_mod[10];
+		pr2_dec.carry_mod[23:9] = {2'd0,pr1_dec.carry_mod[23:11]};
+	end
+	case ({pr2_dec.carry_mod[9],pr2_dec.carry_mod[0]})
+	2'd0:	;
+	2'd1:	pr_dec2.decbus.Rci = pr1_dec.carry_mod[25:24]|7'd92;
+	2'd2:	pr_dec2.decbus.Rco = pr1_dec.carry_mod[25:24]|7'd92;
+	2'd3:
+		begin
+			pr_dec2.decbus.Rci = pr1_dec.carry_mod[25:24]|7'd92;
+			pr_dec2.decbus.Rco = pr1_dec.carry_mod[25:24]|7'd92;
+		end
+	endcase
+	if (dec2.carry) begin
+		pr3_dec.carry_mod = ins2m.ins;
+	end
+	else begin
+		pr3_dec.carry_mod = pr2_dec.carry_mod;
+		pr3_dec.carry_mod[0] = pr2_dec.carry_mod[10];
+		pr3_dec.carry_mod[23:9] = {2'd0,pr2_dec.carry_mod[23:11]};
+	end
+	case ({pr3_dec.carry_mod[9],pr3_dec.carry_mod[0]})
+	2'd0:	;
+	2'd1:	pr_dec3.decbus.Rci = pr2_dec.carry_mod[25:24]|7'd92;
+	2'd2:	pr_dec3.decbus.Rco = pr2_dec.carry_mod[25:24]|7'd92;
+	2'd3:
+		begin
+			pr_dec3.decbus.Rci = pr2_dec.carry_mod[25:24]|7'd92;
+			pr_dec3.decbus.Rco = pr2_dec.carry_mod[25:24]|7'd92;
+		end
+	endcase
+	if (dec3.carry) begin
+		carry_mod_o = ins3m.ins;
+	end
+	else begin
+		carry_mod_o = pr3_dec.carry_mod;
+		carry_mod_o[0] = pr3_dec.carry_mod[10];
+		carry_mod_o[23:9] = {2'd0,pr3_dec.carry_mod[23:11]};
+	end
+
 	pr_dec0.mcip = ins0m.mcip;
 	pr_dec1.mcip = ins1m.mcip;
 	pr_dec2.mcip = ins2m.mcip;
 	pr_dec3.mcip = ins3m.mcip;
 	
-	if (ins1_dec_inv) pr_dec1.v = FALSE;
-	if (ins2_dec_inv) pr_dec2.v = FALSE;
-	if (ins3_dec_inv) pr_dec3.v = FALSE;
+	if (inso[1]_inv) pr_dec1.v = FALSE;
+	if (inso[2]_inv) pr_dec2.v = FALSE;
+	if (inso[3]_inv) pr_dec3.v = FALSE;
 	pr_dec0.om = sr.om;
 	pr_dec1.om = sr.om;
 	pr_dec2.om = sr.om;
@@ -574,15 +651,14 @@ Stark_space_branches uspb1
 	.stall(stall)
 );
 */
-always_comb ins0_dec = inso[0];
-always_comb ins1_dec = inso[1];
-always_comb ins2_dec = inso[2];
-always_comb ins3_dec = inso[3];
-always_comb pc0_dec = inso[0].pc;
-always_comb pc1_dec = inso[1].pc;
-always_comb pc2_dec = inso[2].pc;
-always_comb pc3_dec = inso[3].pc;
-
+always_comb
+begin
+	pg_dec = pg0_mux_r;
+	pg_dec.pr0 = inso[0];
+	pg_dec.pr1 = inso[1];
+	pg_dec.pr2 = inso[2];
+	pg_dec.pr3 = inso[3];
+end
 always_comb
 begin
 /*
@@ -600,13 +676,13 @@ end
 always_comb
 begin
 /*
-	if (ins0_dec_o.ins.any.opcode==OP_Bcc)
+	if (inso[0]_o.ins.any.opcode==OP_Bcc)
 		$finish;
-	if (ins1_dec_o.ins.any.opcode==OP_Bcc)
+	if (inso[1]_o.ins.any.opcode==OP_Bcc)
 		$finish;
-	if (ins2_dec_o.ins.any.opcode==OP_Bcc)
+	if (inso[2]_o.ins.any.opcode==OP_Bcc)
 		$finish;
-	if (ins3_dec_o.ins.any.opcode==OP_Bcc)
+	if (inso[3]_o.ins.any.opcode==OP_Bcc)
 		$finish;
 */
 end
