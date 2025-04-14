@@ -160,7 +160,8 @@ There are roughly ten stages in the pipeline, fetch, extract (parse), decode, re
 * The toolset indicates the core should be able to reach 40 MHz operation (in a -2 device). Under absolutely ideal conditions the core may execute four instructions per clock. All stages support processing at least four instructions per clock. Realistically the core will typically execute less than one instruction per clock.
 
 # Putting the Core Together
-* There are many components to the CPU core. Some components are generic library components found elsewhere in Github repositories. All components germaine to Qupls begin with name prefix "Qupls" and are in the Qupls repository.
+* There are many components to the CPU core. Some components are generic library components found elsewhere in Github repositories. All components germaine to Qupls begin with name prefix "Stark" and are in the Qupls repository under the cpu_v3 folder.
+* The cache code is located in the cache repository.
 
 * StarkCPU.sv is the top level for the CPU. Minimum of about 100k LUTs.
 * StarkMPU.sv is the top level for the MPU which contains the CPU, timers, and interrupt controller.
