@@ -80,13 +80,13 @@ input checkpt_ndx_t miss_cp;
 input new_chkpt;
 input [2:0] chkpt_amt;
 input rob_ndx_t tail0;
-input rob_entry_t [ROB_ENTRIES-1:0] rob;
-input [ROB_ENTRIES-1:0] robentry_stomp;
-input [PREGS-1:0] avail_reg;
+input Stark_pkg::rob_entry_t [ROB_ENTRIES-1:0] rob;
+input [Stark_pkg::ROB_ENTRIES-1:0] robentry_stomp;
+input [Stark_pkg::PREGS-1:0] avail_reg;
 input status_reg_t sr;
 input stomp_ren;
 input [4:0] stomp_bno;
-input branch_state_t branch_state;
+input Stark_pkg::branch_state_t branch_state;
 input aregno_t [23:0] arn;
 input [2:0] arng [0:23];
 input [23:0] arnt;
@@ -103,14 +103,14 @@ input Rt0_decv;
 input Rt1_decv;
 input Rt2_decv;
 input Rt3_decv;
-input pipeline_reg_t ins0_dec;
-input pipeline_reg_t ins1_dec;
-input pipeline_reg_t ins2_dec;
-input pipeline_reg_t ins3_dec;
-output pipeline_reg_t ins0_ren;
-output pipeline_reg_t ins1_ren;
-output pipeline_reg_t ins2_ren;
-output pipeline_reg_t ins3_ren;
+input Stark_pkg::pipeline_reg_t ins0_dec;
+input Stark_pkg::pipeline_reg_t ins1_dec;
+input Stark_pkg::pipeline_reg_t ins2_dec;
+input Stark_pkg::pipeline_reg_t ins3_dec;
+output Stark_pkg::pipeline_reg_t ins0_ren;
+output Stark_pkg::pipeline_reg_t ins1_ren;
+output Stark_pkg::pipeline_reg_t ins2_ren;
+output Stark_pkg::pipeline_reg_t ins3_ren;
 output pregno_t Rt0_ren;
 output pregno_t Rt1_ren;
 output pregno_t Rt2_ren;
@@ -701,7 +701,7 @@ else begin
 		ins0_ren <= ins0_dec;
 		if (ins0_dec.v & ~stomp_ren) begin
 			ins0_ren.nRt <= Rt0_dec;
-			if (ins3_ren.decbus.bsr)
+			if (ins3_ren.decbus.bl)
 				ins0_ren.v <= INV;
 		end
 		else begin
@@ -711,7 +711,7 @@ else begin
 //			ins0_ren.decbus.Rtn <= ins0_ren.decbus.Rtn;
 //			ins0_ren.decbus.Rtz <= ins0_ren.decbus.Rtz;
 //			ins0_ren.aRt <= ins0_ren.aRt;
-			if (SUPPORT_BACKOUT)
+			if (Stark_pkg::SUPPORT_BACKOUT)
 				ins0_ren.nRt <= 9'd0;//ins0_ren.nRt;
 			else
 				ins0_ren.nRt <= Rt0_dec;
@@ -732,9 +732,9 @@ else begin
 		ins1_ren <= ins1_dec;
 		if (ins1_dec.v & ~stomp_ren) begin
 			ins1_ren.nRt <= Rt1_dec;
-			if (ins0_dec.decbus.bsr)
+			if (ins0_dec.decbus.bl)
 				ins1_ren.v <= INV;
-			if (ins3_ren.decbus.bsr)
+			if (ins3_ren.decbus.bl)
 				ins1_ren.v <= INV;
 		end
 		else begin
@@ -744,7 +744,7 @@ else begin
 //			ins1_ren.decbus.Rtn <= ins1_ren.decbus.Rtn;
 //			ins1_ren.decbus.Rtz <= ins1_ren.decbus.Rtz;
 //			ins1_ren.aRt <= ins1_ren.aRt;
-			if (SUPPORT_BACKOUT)
+			if (Stark_pkg::SUPPORT_BACKOUT)
 				ins1_ren.nRt <= 9'd0;//ins1_ren.nRt;
 			else
 				ins1_ren.nRt <= Rt1_dec;
@@ -753,9 +753,9 @@ else begin
 		ins2_ren <= ins2_dec;
 		if (ins2_dec.v & ~stomp_ren) begin
 			ins2_ren.nRt <= Rt2_dec;
-			if (ins0_dec.decbus.bsr || ins1_dec.decbus.bsr)
+			if (ins0_dec.decbus.bl || ins1_dec.decbus.bl)
 				ins2_ren.v <= INV;
-			if (ins3_ren.decbus.bsr)
+			if (ins3_ren.decbus.bl)
 				ins2_ren.v <= INV;
 		end
 		else begin
@@ -765,7 +765,7 @@ else begin
 //			ins2_ren.decbus.Rtn <= ins2_ren.decbus.Rtn;
 //			ins2_ren.decbus.Rtz <= ins2_ren.decbus.Rtz;
 //			ins2_ren.aRt <= ins2_ren.aRt;
-			if (SUPPORT_BACKOUT)
+			if (Stark_pkg::SUPPORT_BACKOUT)
 				ins2_ren.nRt <= 9'd0;//ins2_ren.nRt;
 			else
 				ins2_ren.nRt <= Rt2_dec;
@@ -774,9 +774,9 @@ else begin
 		ins3_ren <= ins3_dec;
 		if (ins3_dec.v & ~stomp_ren) begin
 			ins3_ren.nRt <= Rt3_dec;
-			if (ins0_dec.decbus.bsr || ins1_dec.decbus.bsr || ins2_dec.decbus.bsr)
+			if (ins0_dec.decbus.bl || ins1_dec.decbus.bl || ins2_dec.decbus.bl)
 				ins3_ren.v <= INV;
-			if (ins3_ren.decbus.bsr)
+			if (ins3_ren.decbus.bl)
 				ins3_ren.v <= INV;
 		end
 		else begin
@@ -786,13 +786,13 @@ else begin
 //			ins3_ren.decbus.Rtn <= ins3_ren.decbus.Rtn;
 //			ins3_ren.decbus.Rtz <= ins3_ren.decbus.Rtz;
 //			ins3_ren.aRt <= ins3_ren.aRt;
-			if (SUPPORT_BACKOUT)
+			if (Stark_pkg::SUPPORT_BACKOUT)
 				ins3_ren.nRt <= 9'd0;//ins3_ren.nRt;
 			else
 				ins3_ren.nRt <= Rt3_dec;
 		end
 	end
-	if (branch_state==BS_DONE)
+	if (branch_state==Stark_pkg::BS_DONE)
 		tInvalidateRen(stomp_bno);//misspc.bno_t);
 end
 
@@ -807,7 +807,7 @@ input [4:0] bno;
 begin
 	if (ins0_ren.pc.bno_t!=bno) begin
 		ins0_ren.excv <= INV;
-		if (SUPPORT_BACKOUT)
+		if (Stark_pkg::SUPPORT_BACKOUT)
 			ins0_ren.v <= INV;
 		else begin
 			ins0_ren.decbus.cpytgt <= TRUE;
@@ -819,7 +819,7 @@ begin
 	end
 	if (ins1_ren.pc.bno_t!=bno) begin
 		ins1_ren.v <= INV;
-		if (SUPPORT_BACKOUT)
+		if (Stark_pkg::SUPPORT_BACKOUT)
 			ins1_ren.excv <= INV;
 		else begin
 			ins1_ren.decbus.cpytgt <= TRUE;
@@ -831,7 +831,7 @@ begin
 	end
 	if (ins2_ren.pc.bno_t!=bno) begin
 		ins2_ren.excv <= INV;
-		if (SUPPORT_BACKOUT)
+		if (Stark_pkg::SUPPORT_BACKOUT)
 			ins2_ren.v <= INV;
 		else begin
 			ins2_ren.decbus.cpytgt <= TRUE;
@@ -843,7 +843,7 @@ begin
 	end
 	if (ins3_ren.pc.bno_t!=bno) begin
 		ins3_ren.excv <= INV;
-		if (SUPPORT_BACKOUT)
+		if (Stark_pkg::SUPPORT_BACKOUT)
 			ins3_ren.v <= INV;
 		else begin
 			ins3_ren.decbus.cpytgt <= TRUE;

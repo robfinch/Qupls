@@ -1,11 +1,11 @@
-`timescale 1ns / 10ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2024-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2022-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
+//	cache_pkg.sv
 //
 // BSD 3-Clause License
 // Redistribution and use in source and binary forms, with or without
@@ -32,53 +32,55 @@
 // CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-//
+//                                                                          
 // ============================================================================
 
-package ptable_walker_pkg;
+package cache_pkg;
 
-parameter MISSQ_SIZE = 8;
+parameter ITAG_BIT = 14;
+parameter DCacheLineWidth = 512;
+localparam DCacheTagLoBit = $clog2((DCacheLineWidth/8));
+parameter ICacheBundleWidth = 256;
+parameter ICacheLineWidth = ICacheBundleWidth*2;
+localparam ICacheTagLoBit = $clog2((ICacheLineWidth/8));
 
-typedef enum logic [1:0] {
-	IDLE = 2'd0,
-	FAULT = 2'd1,
-	WAIT = 2'd2
-} ptw_state_t;
+`define TAG_ASID $bits(cpu_types_pkg::asid_t) + $bits(cpu_types_pkg::address_t)-ITAG_BIT-1:$bits(cpu_types_pkg::address_t)-ITAG_BIT
 
-typedef enum logic [3:0] {
-	INACTIVE = 4'd0,
-	SEG_BASE_FETCH = 4'd1,
-	SEG_LIMIT_FETCH = 4'd2,
-	SEG_FETCH_DONE = 4'd3,
-	TLB_PTE_FETCH = 4'd4,
-	TLB_PTE_FETCH_DONE = 4'd5,
-	VIRT_ADR_XLAT = 4'd6
-} ptw_access_state_t;
+typedef logic [$bits(cpu_types_pkg::address_t)-1:ITAG_BIT] cache_tag_t;
 
-typedef struct packed {
-	logic v;					// valid
-	logic [2:0] lvl;	// level begin processed
-	logic o;					// out
-	logic [1:0] bc;		// 1=bus cycle complete
-	logic [1:0] qn;
-	cpu_types_pkg::rob_ndx_t id;
+typedef struct packed
+{
+	logic v;		// valid indicator
+	logic m;		// modified indicator
 	cpu_types_pkg::asid_t asid;
-	cpu_types_pkg::virtual_address_t oadr;	// original address to translate
-	cpu_types_pkg::virtual_address_t adr;		// linear address to translate
-	cpu_types_pkg::virtual_address_t tadr;	// temporary address
-} ptw_miss_queue_t;
+	logic [$bits(cpu_types_pkg::address_t)-1:0] vtag;	// virtual tag
+	logic [$bits(cpu_types_pkg::address_t)-1:0] ptag;	// physical tag
+	logic [DCacheLineWidth-1:0] data;
+} DCacheLine;
 
-typedef struct packed {
+typedef struct packed
+{
+	logic [ICacheLineWidth/ICacheBundleWidth-1:0] v;	// 1 valid bit per 128 bits data
+	logic m;		// modified indicator
+	cpu_types_pkg::asid_t asid;
+	logic [$bits(cpu_types_pkg::address_t)-1:0] vtag;	// virtual tag
+	logic [$bits(cpu_types_pkg::address_t)-1:0] ptag;	// physical tag
+	logic [ICacheLineWidth-1:0] data;
+} ICacheLine;
+
+typedef struct packed
+{
 	logic v;
-	ptw_access_state_t access_state;
-	logic rdy;
-	fta_bus_pkg::fta_tranid_t tid;
-	logic [4:0] mqndx;											// index of associated miss queue
-	cpu_types_pkg::asid_t asid;
-	cpu_types_pkg::virtual_address_t vadr;
-	cpu_types_pkg::physical_address_t padr;
-	mmu_pkg::pte_t pte;
-	logic [255:0] dat;
-} ptw_tran_buf_t;
+	logic is_load;
+	logic is_dump;
+	logic [1:0] active;
+	logic [1:0] done;
+	logic [1:0] out;
+	logic [1:0] loaded;
+	logic write_allocate;
+	cpu_types_pkg:rob_ndx_t rndx;
+	fta_bus_pkg::fta_cmd_request512_t cpu_req;
+	fta_bus_pkg::fta_cmd_request256_t [1:0] tran_req;
+} dcache_req_queue_t;
 
 endpackage

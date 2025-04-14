@@ -43,37 +43,37 @@ module Stark_checkpointRam(rst, clka, ena, wea, addra, dina, douta,
 parameter NRDPORTS = 4; 
 localparam RBIT=$clog2(PREGS);
 localparam QBIT=$bits(cpu_types_pkg::pregno_t);
-localparam WID=$bits(checkpoint_t);
+localparam WID=$bits(Stark_pkg::checkpoint_t);
 localparam AWID=$clog2(NCHECK);
 input rst;
 input clka;
 input ena;
 input wea;
 input checkpt_ndx_t addra;
-input checkpoint_t dina;
-output checkpoint_t douta;
+input Stark_pkg::checkpoint_t dina;
+output cStark_pkg::heckpoint_t douta;
 input clkb;
 input enb;
 input checkpt_ndx_t addrb;
-output checkpoint_t doutb;
+output Stark_pkg::checkpoint_t doutb;
 
-checkpoint_t doutb1;
-checkpoint_t douta1;
+Stark_pkg::checkpoint_t doutb1;
+Stark_pkg::checkpoint_t douta1;
 genvar g;
 integer n;
 // The following outside of generate to make it easier to reference in SIM code.
 // It should be stripped out for synthesis as it would not be referenced.
 (* RAM_STYLE="distributed" *)
-checkpoint_t mem [0:NCHECK-1];
+checkpoint_t mem [0:Stark_pkg::NCHECK-1];
 reg ena1;
 reg wea1;
 checkpoint_t dina1;
 reg [3:0] addra1;
 
 initial begin
-	for (n = 0; n < NCHECK; n = n + 1) begin
-		mem[n] = {$bits(checkpoint_t){1'b0}};
-		mem[n].avail = {PREGS{1'b1}};
+	for (n = 0; n < Stark_pkg::NCHECK; n = n + 1) begin
+		mem[n] = {$bits(Stark_pkg::checkpoint_t){1'b0}};
+		mem[n].avail = {Stark_pkg::PREGS{1'b1}};
 		mem[n].avail[0] = 1'b0;
 	end
 end

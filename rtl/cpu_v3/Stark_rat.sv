@@ -68,7 +68,7 @@ module Stark_rat(rst, clk, clk5x, ph4, en, en2, nq, stallq,
 parameter XWID = 4;
 parameter NPORT = 24;
 parameter BANKS = 1;
-localparam RBIT=$clog2(PREGS);
+localparam RBIT=$clog2(Stark_pkg::PREGS);
 localparam BBIT=0;//$clog2(BANKS)-1;
 input rst;
 input clk;
@@ -81,15 +81,15 @@ input alloc_chkpt;
 input [2:0] chkpt_inc_amt;
 output reg stallq;
 input rob_ndx_t tail;
-input rob_entry_t [ROB_ENTRIES-1:0] rob;
-input rob_bitmask_t stomp;
+input Stark_pkg::rob_entry_t [Stark_pkg::ROB_ENTRIES-1:0] rob;
+input Stark_pkg::rob_bitmask_t stomp;
 input qbr0;		// enqueue branch, slot 0
 input qbr1;
 input qbr2;
 input qbr3;
 output checkpt_ndx_t cndx_o;			// current checkpoint index
 output checkpt_ndx_t pcndx_o;			// previous checkpoint index
-input [PREGS-1:0] avail_i;				// list of available registers from renamer
+input [Stark_pkg::PREGS-1:0] avail_i;				// list of available registers from renamer
 input restore;										// checkpoint restore
 input checkpt_ndx_t miss_cp;			// checkpoint map index of branch miss
 input wr0;
@@ -234,19 +234,19 @@ checkpoint_t cpram_out1;
 checkpoint_t cpram_out2;
 checkpoint_t cpram_outr;
 checkpoint_t cpram_in;
-reg [PREGS-1:0] currentRegvalid;
-wire [PREGS-1:0] regvalid_ram_o;
+reg [Stark_pkg::PREGS-1:0] currentRegvalid;
+wire [Stark_pkg::PREGS-1:0] regvalid_ram_o;
 
 reg cpvram_we;
-reg [PREGS-1:0] cpvram_in;
-wire [PREGS-1:0] cpvram_out;
-wire [PREGS-1:0] cpvram_wout;
+reg [Stark_pkg::PREGS-1:0] cpvram_in;
+wire [Stark_pkg::PREGS-1:0] cpvram_out;
+wire [Stark_pkg::PREGS-1:0] cpvram_wout;
 
 reg new_chkpt;							// new_chkpt map for current checkpoint
 checkpt_ndx_t cndx;
 reg pe_alloc_chkpt;
 wire pe_alloc_chkpt1;
-reg [PREGS-1:0] valid [0:NCHECK-1];
+reg [Stark_pkg::PREGS-1:0] valid [0:Stark_pkg::NCHECK-1];
 
 // There are four "extra" bits in the data to make the size work out evenly.
 // There is also an extra write bit. These are defaulted to prevent sim issues.
@@ -1142,7 +1142,7 @@ else begin
 	case(backout_st2)
 	2'd0:
 		if (restore) begin
-			rndx <= (fcu_id + 3'd4) % ROB_ENTRIES;
+			rndx <= (fcu_id + 3'd4) % Stark_pkg::ROB_ENTRIES;
 		end
 	2'd1:
 		begin
@@ -1150,7 +1150,7 @@ else begin
 				free_chkpt2 <= TRUE;
 				fchkpt2 <= rob[rndx].cndx;
 			end 
-			rndx <= (rndx + 3'd4) % ROB_ENTRIES;
+			rndx <= (rndx + 3'd4) % Stark_pkg::ROB_ENTRIES;
 		end
 	endcase
 end
@@ -1649,8 +1649,8 @@ reg [PREGS-1:0] unavail;
 
 always_comb
 if (rst) begin
-	nextCurrentMap = {$bits(checkpoint_t){1'b0}};
-	nextCurrentMap.avail = {{PREGS-1{1'b1}},1'b0};
+	nextCurrentMap = {$bits(Stark_pkg::checkpoint_t){1'b0}};
+	nextCurrentMap.avail = {{Stark_pkg::PREGS-1{1'b1}},1'b0};
 end
 else begin
 	nextCurrentMap = currentMap;
@@ -1697,11 +1697,11 @@ end
 
 always_ff @(posedge clk)
 if (rst)
-	unavail <= {PREGS{1'b0}};
+	unavail <= {Stark_pkg::PREGS{1'b0}};
 else begin
 
 	if (pe_bk)
-		unavail <= {PREGS{1'b0}};
+		unavail <= {Stark_pkg::PREGS{1'b0}};
 
 	// Backout update.
 	if (bo_wr) begin
@@ -2141,7 +2141,7 @@ begin
 //		restore_list = {PREGS{1'b0}};
 	end
 	else
-		restore_list = {PREGS{1'b0}};
+		restore_list = {Stark_pkg::PREGS{1'b0}};
 end
 
 endmodule

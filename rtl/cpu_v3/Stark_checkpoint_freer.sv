@@ -1,4 +1,3 @@
-`timescale 1ns / 10ps
 // ============================================================================
 //        __
 //   \\__/ o\    (C) 2024-2025  Robert Finch, Waterloo
@@ -35,50 +34,72 @@
 //
 // ============================================================================
 
-package ptable_walker_pkg;
+import const_pkg::*;
+import Stark_pkg::*;
 
-parameter MISSQ_SIZE = 8;
+module Stark_checkpoint_freer(rst, clk, rob, free, chkpt, chkpt_rndx);
+input rst;
+input clk;
+input rob_entry_t [Stark_pkg::ROB_ENTRIES-1:0] rob;
+output reg free;
+output checkpt_ndx_t chkpt;
+output rob_ndx_t chkpt_rndx;
 
-typedef enum logic [1:0] {
-	IDLE = 2'd0,
-	FAULT = 2'd1,
-	WAIT = 2'd2
-} ptw_state_t;
+integer n3,n33,n333;
+reg cond;
 
-typedef enum logic [3:0] {
-	INACTIVE = 4'd0,
-	SEG_BASE_FETCH = 4'd1,
-	SEG_LIMIT_FETCH = 4'd2,
-	SEG_FETCH_DONE = 4'd3,
-	TLB_PTE_FETCH = 4'd4,
-	TLB_PTE_FETCH_DONE = 4'd5,
-	VIRT_ADR_XLAT = 4'd6
-} ptw_access_state_t;
+// Search for instructions groups that are done or invalid. If there are any
+// branches in the group, then free the checkpoint. All the branches must have
+// resolved if all instructions are done or invalid.
+// Take care not to free the checkpoint more than once.
 
-typedef struct packed {
-	logic v;					// valid
-	logic [2:0] lvl;	// level begin processed
-	logic o;					// out
-	logic [1:0] bc;		// 1=bus cycle complete
-	logic [1:0] qn;
-	cpu_types_pkg::rob_ndx_t id;
-	cpu_types_pkg::asid_t asid;
-	cpu_types_pkg::virtual_address_t oadr;	// original address to translate
-	cpu_types_pkg::virtual_address_t adr;		// linear address to translate
-	cpu_types_pkg::virtual_address_t tadr;	// temporary address
-} ptw_miss_queue_t;
+function fnCond;
+input rob_ndx_t n3;
+input rob_entry_t [Stark_pkg::ROB_ENTRIES-1:0] rob;
+begin
+	fnCond =
+			!rob[n3+0].chkpt_freed &&
+			(&rob[n3+0].done || !rob[n3+0].v) &&
+			(&rob[n3+1].done || !rob[n3+1].v) &&
+			(&rob[n3+2].done || !rob[n3+2].v) &&
+			(&rob[n3+3].done || !rob[n3+3].v) &&
+			(rob[n3+0].decbus.br || rob[n3+0].decbus.cjb ||
+			rob[n3+1].decbus.br || rob[n3+1].decbus.cjb ||
+			rob[n3+2].decbus.br || rob[n3+2].decbus.cjb ||
+			rob[n3+3].decbus.br || rob[n3+3].decbus.cjb)
+			;
+end
+endfunction
 
-typedef struct packed {
-	logic v;
-	ptw_access_state_t access_state;
-	logic rdy;
-	fta_bus_pkg::fta_tranid_t tid;
-	logic [4:0] mqndx;											// index of associated miss queue
-	cpu_types_pkg::asid_t asid;
-	cpu_types_pkg::virtual_address_t vadr;
-	cpu_types_pkg::physical_address_t padr;
-	mmu_pkg::pte_t pte;
-	logic [255:0] dat;
-} ptw_tran_buf_t;
+always_ff @(posedge clk)
+if (rst)
+	free <= FALSE;
+else begin
+	free <= FALSE;
+	for (n3 = 0; n3 < Stark_pkg::ROB_ENTRIES; n3 = n3 + 4) begin
+		if (fnCond(n3,rob))
+			free <= TRUE;
+	end
+end
 
-endpackage
+always_ff @(posedge clk)
+if (rst)
+	chkpt <= 5'd0;
+else begin
+	for (n33 = 0; n33 < Stark_pkg::ROB_ENTRIES; n33 = n33 + 4) begin
+		if (fnCond(n33,rob))
+			chkpt <= rob[(n33)%Stark_pkg::ROB_ENTRIES].cndx;
+	end
+end
+
+always_ff @(posedge clk)
+if (rst)
+	chkpt_rndx <= 6'd0;
+else begin
+	for (n333 = 0; n333 < Stark_pkg::ROB_ENTRIES; n333 = n333 + 4) begin
+		if (fnCond(n333,rob))
+			chkpt_rndx <= n333;
+	end
+end
+
+endmodule

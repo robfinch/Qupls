@@ -54,8 +54,8 @@ input [3:0] free_chkpt2;
 input checkpt_ndx_t [3:0] fchkpt2;
 output reg stall;
 
-reg [NCHECK-1:0] avail_chkpts [0:3];
-reg [$clog2(NCHECK):0] avail_chkpt [0:3];
+reg [Stark_pkg::NCHECK-1:0] avail_chkpts [0:3];
+reg [$clog2(Stark_pkg::NCHECK):0] avail_chkpt [0:3];
 reg [2:0] wcnt;
 checkpt_ndx_t head_chkpt;
 
@@ -77,9 +77,9 @@ end
 // Multiple branches may be decoded in the same instruction group.
 
 generate begin : gAvail
-if (NCHECK==16)
+if (Stark_pkg::NCHECK==16)
 flo24 uflo0 (.i({8'd0,avail_chkpts[0]}), .o(avail_chkpt[0]));
-else if (NCHECK==32)
+else if (Stark_pkg::NCHECK==32)
 flo48 uflo0 (.i({16'd0,avail_chkpts[0]}), .o(avail_chkpt[0]));
 end
 endgenerate
@@ -107,7 +107,7 @@ generate begin : gAlloc
 if (GROUP_ALLOC) begin
 	always_ff @(posedge clk)
 	if (rst) begin
-		avail_chkpts[0] <= {{NCHECK-1{1'b1}},1'b0};
+		avail_chkpts[0] <= {{Stark_pkg::NCHECK-1{1'b1}},1'b0};
 		head_chkpt <= 4'd1;
 		chkptn[0] <= 4'd0;
 		chkptn[1] <= 4'd0;
@@ -156,7 +156,7 @@ end
 else begin
 	always_ff @(posedge clk5x)
 	if (rst)
-		avail_chkpts[0] <= {{NCHECK-1{1'b1}},1'b0};
+		avail_chkpts[0] <= {{Stark_pkg::NCHECK-1{1'b1}},1'b0};
 	else begin
 		if (alloc_chkpt) begin
 			if (wcnt < 3'd4) begin

@@ -344,7 +344,7 @@ wire clkb = clk;
       .ADDR_WIDTH_A($bits(checkpt_ndx_t)),               // DECIMAL
       .ADDR_WIDTH_B($bits(checkpt_ndx_t)),               // DECIMAL
       .AUTO_SLEEP_TIME(0),            // DECIMAL
-      .BYTE_WRITE_WIDTH_A(PREGS),     // DECIMAL
+      .BYTE_WRITE_WIDTH_A(Stark_pkg::PREGS),     // DECIMAL
       .CASCADE_HEIGHT(0),             // DECIMAL
       .CLOCKING_MODE("common_clock"), // String
       .ECC_MODE("no_ecc"),            // String
@@ -352,9 +352,9 @@ wire clkb = clk;
       .MEMORY_INIT_PARAM("0"),        // String
       .MEMORY_OPTIMIZATION("true"),   // String
       .MEMORY_PRIMITIVE("distributed"),      // String
-      .MEMORY_SIZE(PREGS*NCHECK),     // DECIMAL
+      .MEMORY_SIZE(Stark_pkg::PREGS*Stark_pkg::NCHECK),     // DECIMAL
       .MESSAGE_CONTROL(0),            // DECIMAL
-      .READ_DATA_WIDTH_B(PREGS),      // DECIMAL
+      .READ_DATA_WIDTH_B(Stark_pkg::PREGS),      // DECIMAL
       .READ_LATENCY_B(0),             // DECIMAL
       .READ_RESET_VALUE_B("0"),       // String
       .RST_MODE_A("SYNC"),            // String
@@ -364,7 +364,7 @@ wire clkb = clk;
       .USE_MEM_INIT(1),               // DECIMAL
       .USE_MEM_INIT_MMI(0),           // DECIMAL
       .WAKEUP_TIME("disable_sleep"),  // String
-      .WRITE_DATA_WIDTH_A(PREGS),        // DECIMAL
+      .WRITE_DATA_WIDTH_A(Stark_pkg::PREGS),        // DECIMAL
       .WRITE_MODE_B("read_first"),     // String
       .WRITE_PROTECT(1)               // DECIMAL
    )

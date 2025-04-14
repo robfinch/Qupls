@@ -1,4 +1,3 @@
-`timescale 1ns / 10ps
 // ============================================================================
 //        __
 //   \\__/ o\    (C) 2024-2025  Robert Finch, Waterloo
@@ -33,52 +32,49 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
+//
+// Compute a new tail position after a stomp.
 // ============================================================================
 
-package ptable_walker_pkg;
+import const_pkg::*;
+import Stark_pkg::*;
 
-parameter MISSQ_SIZE = 8;
+module Stark_stail(head0, tail0, robentry_stomp, rob, stail);
+input rob_ndx_t head0;
+input rob_ndx_t tail0;
+input [Stark_pkg::ROB_ENTRIES-1:0] robentry_stomp;
+input Stark_pkg::rob_entry_t [Stark_pkg::ROB_ENTRIES-1:0] rob;
+output rob_ndx_t stail;											// stomp tail
 
-typedef enum logic [1:0] {
-	IDLE = 2'd0,
-	FAULT = 2'd1,
-	WAIT = 2'd2
-} ptw_state_t;
+integer n5,n6,n7;
+reg okay_to_move_tail;
 
-typedef enum logic [3:0] {
-	INACTIVE = 4'd0,
-	SEG_BASE_FETCH = 4'd1,
-	SEG_LIMIT_FETCH = 4'd2,
-	SEG_FETCH_DONE = 4'd3,
-	TLB_PTE_FETCH = 4'd4,
-	TLB_PTE_FETCH_DONE = 4'd5,
-	VIRT_ADR_XLAT = 4'd6
-} ptw_access_state_t;
+// Reset the ROB tail pointer, if there is a head <-> tail collision move the
+// head pointer back a few entries. These will have been already committed
+// entries, so they will be skipped over.
+// If there is an interrupt pending in the ROB do not move the tail.
+always_comb
+begin
+	okay_to_move_tail = TRUE;
+	n7 = 1'd0;
+	stail = tail0;
+	for (n5 = 0; n5 < Stark_pkg::ROB_ENTRIES; n5 = n5 + 1) begin
+		if (rob[n5].op.hwi)
+			okay_to_move_tail = FALSE;
+	end
+	if (okay_to_move_tail) begin
+		for (n5 = 0; n5 < ROB_ENTRIES; n5 = n5 + 1) begin
+			if (n5==0)
+				n6 = Stark_pkg::ROB_ENTRIES - 1;
+			else
+				n6 = n5 - 1;
+			if (robentry_stomp[n5] && !robentry_stomp[n6] && !n7) begin
+				stail = (n5 + 3) % Stark_pkg::ROB_ENTRIES;
+				stail[1:0] = 2'b00;
+				n7 = 1'b1;
+			end
+		end
+	end
+end
 
-typedef struct packed {
-	logic v;					// valid
-	logic [2:0] lvl;	// level begin processed
-	logic o;					// out
-	logic [1:0] bc;		// 1=bus cycle complete
-	logic [1:0] qn;
-	cpu_types_pkg::rob_ndx_t id;
-	cpu_types_pkg::asid_t asid;
-	cpu_types_pkg::virtual_address_t oadr;	// original address to translate
-	cpu_types_pkg::virtual_address_t adr;		// linear address to translate
-	cpu_types_pkg::virtual_address_t tadr;	// temporary address
-} ptw_miss_queue_t;
-
-typedef struct packed {
-	logic v;
-	ptw_access_state_t access_state;
-	logic rdy;
-	fta_bus_pkg::fta_tranid_t tid;
-	logic [4:0] mqndx;											// index of associated miss queue
-	cpu_types_pkg::asid_t asid;
-	cpu_types_pkg::virtual_address_t vadr;
-	cpu_types_pkg::physical_address_t padr;
-	mmu_pkg::pte_t pte;
-	logic [255:0] dat;
-} ptw_tran_buf_t;
-
-endpackage
+endmodule

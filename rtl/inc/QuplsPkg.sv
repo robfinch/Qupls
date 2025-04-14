@@ -295,8 +295,6 @@ typedef enum logic [1:0] {
 	DRAMSLOT_DELAY = 2'd3
 } dram_state_t;
 
-typedef logic [$clog2(NCHECK)-1:0] checkpt_ndx_t;
-typedef logic [$clog2(ROB_ENTRIES)-1:0] rob_ndx_t;
 typedef logic [$clog2(BEB_ENTRIES)-1:0] beb_ndx_t;
 typedef struct packed
 {
@@ -394,7 +392,7 @@ typedef enum logic [6:0] {
 	OP_FBcc			= 7'd42,
 	OP_DFBcc		= 7'd43,
 	OP_PBcc			= 7'd44,
-	OP_MCB			= 7'd45,
+	OP_CBcc			= 7'd45,
 	OP_IBcc			= 7'd46,
 	OP_DBcc			= 7'd47,
 
@@ -470,6 +468,7 @@ typedef enum logic [6:0] {
 	OP_PRED			= 7'd121,
 	OP_ATOM			= 7'd122,
 	OP_PFX			= 7'd124,
+	OP_MCB			= 7'd126,
 	OP_NOP			= 7'd127
 } opcode_t;
 
@@ -1780,8 +1779,6 @@ typedef struct packed
 const cpu_types_pkg::pc_address_t RSTPC	= 32'hFFFFFD80;
 const cpu_types_pkg::address_t RSTSP = 32'hFFFF9000;
 
-typedef logic [6:0] seqnum_t;
-
 typedef struct packed
 {
 	logic [PREGS-1:0] avail;	// available registers at time of queue (for rollback)
@@ -1945,7 +1942,7 @@ typedef struct packed {
 } mvec_entry_t;
 
 // =============================================================================
-// Support Functionss
+// Support Functions
 // =============================================================================
 
 function cpu_types_pkg::pc_address_t fnTargetIP;
@@ -1953,26 +1950,7 @@ input cpu_types_pkg::pc_address_t ip;
 input cpu_types_pkg::value_t tgt;
 reg [5:0] lo;
 begin
-	if (SUPPORT_IBH) begin
-		case(tgt[3:0])
-		4'd0:	lo = 6'd00;
-		4'd1:	lo = 6'd05;
-		4'd2:	lo = 6'd10;
-		4'd3:	lo = 6'd15;
-		4'd5:	lo = 6'd20;
-		4'd6:	lo = 6'd25;
-		4'd7:	lo = 6'd30;
-		4'd8:	lo = 6'd35;
-		4'd9:	lo = 6'd40;
-		4'd11:	lo = 6'd45;
-		4'd12:	lo = 6'd50;
-		4'd13:	lo = 6'd55;
-		default:	lo = 6'd60;
-		endcase
-		fnTargetIP = {ip[$bits(cpu_types_pkg::pc_address_t)-1:6]+tgt[$bits(cpu_types_pkg::value_t)-1:4],lo};
-	end
-	else
-		fnTargetIP = ip+{tgt,3'b0};	// tgt*8
+	fnTargetIP = ip+{tgt,1'b0} + tgt;	// tgt*3
 end
 endfunction
 
@@ -2044,7 +2022,7 @@ function fnIsBranch;
 input instruction_t ir;
 begin
 	case(ir.any.opcode)
-	OP_Bcc,OP_BccU,OP_FBcc,OP_IBcc,OP_DBcc:
+	OP_Bcc,OP_BccU,OP_FBcc,OP_DFBcc,OP_PBcc,OP_CBcc,OP_IBcc,OP_DBcc:
 		fnIsBranch = 1'b1;
 	default:
 		fnIsBranch = 1'b0;
@@ -2065,8 +2043,8 @@ begin
 	case(ir.any.opcode)
 	OP_BSR:
 		fnBranchDispSign = ir[63];
-	OP_Bcc,OP_BccU,OP_FBcc,OP_IBcc,OP_DBcc:
-		fnBranchDispSign = ir[63];
+	OP_Bcc,OP_BccU,OP_FBcc,OP_DFBcc,OP_PBcc,OP_CBcc,OP_IBcc,OP_DBcc:
+		fnBranchDispSign = ir[45];
 	default:	fnBranchDispSign = 1'b0;
 	endcase	
 end
@@ -2076,7 +2054,7 @@ function [63:0] fnBranchDisp;
 input instruction_t ir;
 begin
 	case(ir.any.opcode)
-	OP_Bcc,OP_BccU,OP_FBcc,OP_IBcc,OP_DBcc:
+	OP_Bcc,OP_BccU,OP_FBcc,OP_DFBcc,OP_PBcc,OP_CBcc,OP_IBcc,OP_DBcc:
 		fnBranchDisp = {{41{ir[63]}},ir[63:44]};
 	OP_BSR:	fnBranchDisp = {{11{ir.bsr.disp[49]}},ir.bsr.disp};
 	default:	fnBranchDisp = 'd0;
@@ -2158,7 +2136,7 @@ begin
 	OP_CHK:	fnIsFlowCtrl = 1'b1;
 	OP_JSR:
 		fnIsFlowCtrl = 1'b1;
-	OP_Bcc,OP_BccU,OP_FBcc,OP_IBcc,OP_DBcc:
+	OP_Bcc,OP_BccU,OP_FBcc,OP_DFBcc,OP_PBcc,OP_CBcc,OP_IBcc,OP_DBcc:
 		fnIsFlowCtrl = 1'b1;	
 	OP_BSR,OP_RTD:
 		fnIsFlowCtrl = 1'b1;	
@@ -2240,7 +2218,8 @@ begin
 	OP_ZSGTUI:	fnSourceAv = fnConstReg(ir.ins.ri.Ra.num) || fnImma(ir);
 	OP_ZSGEUI:	fnSourceAv = fnConstReg(ir.ins.ri.Ra.num) || fnImma(ir);
 	OP_MOV:		fnSourceAv = fnConstReg(ir.ins.r3.Ra.num) || fnImma(ir);
-	OP_Bcc,OP_BccU,OP_FBcc,OP_IBcc,OP_DBcc:
+	OP_Bcc,OP_BccU,OP_FBcc,OP_DFBcc,OP_PBcc,OP_CBcc,OP_IBcc,OP_DBcc,
+	OP_BccR,OP_BccUR,OP_FBccR,OP_DFBccR,OP_PBccR,OP_CBccR,OP_IBccR,OP_DBccR:
 		fnSourceAv = fnConstReg(ir.ins.br.Ra.num) || fnImma(ir);
 	OP_LDA,
 	OP_LDx,OP_FLDx,OP_DFLDx,OP_PLDx,OP_LDxU:
@@ -2306,7 +2285,8 @@ begin
 		1'b0:	fnSourceBv = fnConstReg(ir.ins.lshifti.Rb.num) || fnImmb(ir);
 		1'b1: fnSourceBv = 1'b1;
 		endcase
-	OP_Bcc,OP_BccU,OP_FBcc,OP_IBcc,OP_DBcc:
+	OP_Bcc,OP_BccU,OP_FBcc,OP_DFBcc,OP_PBcc,OP_CBcc,OP_IBcc,OP_DBcc,
+	OP_BccR,OP_BccUR,OP_FBccR,OP_DFBccR,OP_PBccR,OP_CBccR,OP_IBccR,OP_DBccR:
 		fnSourceBv = fnConstReg(ir.ins.br.Rb.num) || fnImmb(ir);
 	OP_LDA,
 	OP_LDx,OP_FLDx,OP_DFLDx,OP_PLDx,OP_LDxU:
@@ -2358,7 +2338,7 @@ begin
 	OP_STx,OP_FSTx,OP_DFSTx,OP_PSTx:
 		fnSourceCv = fnConstReg(ir.ins.ls.Rt);
 	OP_JSR,OP_BSR,
-	OP_Bcc,OP_BccU,OP_FBcc,OP_IBcc,OP_DBcc:
+	OP_Bcc,OP_BccU,OP_FBcc,OP_DFBcc,OP_PBcc,OP_CBcc,OP_IBcc,OP_DBcc:
 		fnSourceCv = 1'b1;	
 	OP_RTD:
 		fnSourceCv = 1'd0;
@@ -2447,9 +2427,11 @@ begin
 		fnSourceTv = fnConstReg(ir.ins.ls.Rt.num);
 	OP_STx,OP_FSTx,OP_DFSTx,OP_PSTx:
 		fnSourceTv = 1'b1;
-	OP_IBcc,OP_DBcc:
+	OP_IBcc,OP_DBcc,
+	OP_IBccR,OP_DBccR:
 		fnSourceTv = fnConstReg(ir.ins.br.Ra.num);//ir.ins.br.inc==2'b00||ir.ins.br.inc==2'd2;
-	OP_Bcc,OP_BccU,OP_FBcc,OP_DFBcc,OP_PBcc:
+	OP_Bcc,OP_BccU,OP_FBcc,OP_DFBcc,OP_PBcc,OP_CBcc,
+	OP_BccR,OP_BccUR,OP_FBccR,OP_DFBccR,OP_PBccR,OP_CBccR:
 		fnSourceTv = 1'b1;//ir.ins.br.inc==2'b00||ir.ins.br.inc==2'd2;
 	OP_RTD:	fnSourceTv = 1'b0;
 	OP_PRED:

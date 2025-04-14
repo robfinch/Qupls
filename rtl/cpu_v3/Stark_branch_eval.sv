@@ -1,7 +1,6 @@
-`timescale 1ns / 10ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2024-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2023-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -33,52 +32,35 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
+// 60 LUTs
 // ============================================================================
+//
+import Stark_pkg::*;
 
-package ptable_walker_pkg;
+module Stark_branch_eval(instr, om, cr, lc, takb);
+input Stark_pkg::instruction_t instr;
+input Stark_pkg::operating_mode_t om;
+input Stark_pkg::condition_reg_t cr;
+input value_t lc;
+output reg takb;
 
-parameter MISSQ_SIZE = 8;
+wire [4:0] crbit = {om,instr[19:17]};
 
-typedef enum logic [1:0] {
-	IDLE = 2'd0,
-	FAULT = 2'd1,
-	WAIT = 2'd2
-} ptw_state_t;
+always_comb
+	case(instr.any.opcode)
+	Stark_pkg::OP_BCC0,Stark_pkg::OP_BCC1:	// integer unsigned branches
+		case(instr.bccld.cnd)
+		3'd0:	takb = lc != 64'd0 && cr[crbit]==1'b0;
+		3'd1:	takb = lc == 64'd0 && cr[crbit]==1'b0;
+		3'd2:	takb = cr[crbit]==1'b0;
+		3'd3: takb = lc != 64'd0 && cr[crbit]==1'b1;
+		3'd4: takb = lc == 64'd0 && cr[crbit]==1'b1;
+		3'd5:	takb = cr[crbit]==1'b1;
+		3'd6:	takb = lc != 64'd0;
+		3'd7:	takb = lc == 64'd0;
+		endcase
+	Stark_pkg::OP_B0,Stark_pkg::OP_B1:	takb = 1'b1;
+	default:	takb = 1'b0;
+	endcase
 
-typedef enum logic [3:0] {
-	INACTIVE = 4'd0,
-	SEG_BASE_FETCH = 4'd1,
-	SEG_LIMIT_FETCH = 4'd2,
-	SEG_FETCH_DONE = 4'd3,
-	TLB_PTE_FETCH = 4'd4,
-	TLB_PTE_FETCH_DONE = 4'd5,
-	VIRT_ADR_XLAT = 4'd6
-} ptw_access_state_t;
-
-typedef struct packed {
-	logic v;					// valid
-	logic [2:0] lvl;	// level begin processed
-	logic o;					// out
-	logic [1:0] bc;		// 1=bus cycle complete
-	logic [1:0] qn;
-	cpu_types_pkg::rob_ndx_t id;
-	cpu_types_pkg::asid_t asid;
-	cpu_types_pkg::virtual_address_t oadr;	// original address to translate
-	cpu_types_pkg::virtual_address_t adr;		// linear address to translate
-	cpu_types_pkg::virtual_address_t tadr;	// temporary address
-} ptw_miss_queue_t;
-
-typedef struct packed {
-	logic v;
-	ptw_access_state_t access_state;
-	logic rdy;
-	fta_bus_pkg::fta_tranid_t tid;
-	logic [4:0] mqndx;											// index of associated miss queue
-	cpu_types_pkg::asid_t asid;
-	cpu_types_pkg::virtual_address_t vadr;
-	cpu_types_pkg::physical_address_t padr;
-	mmu_pkg::pte_t pte;
-	logic [255:0] dat;
-} ptw_tran_buf_t;
-
-endpackage
+endmodule

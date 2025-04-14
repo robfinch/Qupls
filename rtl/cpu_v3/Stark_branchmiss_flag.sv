@@ -1,4 +1,3 @@
-`timescale 1ns / 10ps
 // ============================================================================
 //        __
 //   \\__/ o\    (C) 2024-2025  Robert Finch, Waterloo
@@ -33,52 +32,36 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
+//
 // ============================================================================
 
-package ptable_walker_pkg;
+import Stark_pkg::*;
 
-parameter MISSQ_SIZE = 8;
+module Stark_branchmiss_flag(rst, clk, bts, trig, miss_det, miss_flag);
+input rst;
+input clk;
+input Stark_pkg::bts_t bts;
+input trig;
+input miss_det;
+output reg miss_flag;
 
-typedef enum logic [1:0] {
-	IDLE = 2'd0,
-	FAULT = 2'd1,
-	WAIT = 2'd2
-} ptw_state_t;
+// Branchmiss flag
 
-typedef enum logic [3:0] {
-	INACTIVE = 4'd0,
-	SEG_BASE_FETCH = 4'd1,
-	SEG_LIMIT_FETCH = 4'd2,
-	SEG_FETCH_DONE = 4'd3,
-	TLB_PTE_FETCH = 4'd4,
-	TLB_PTE_FETCH_DONE = 4'd5,
-	VIRT_ADR_XLAT = 4'd6
-} ptw_access_state_t;
+always_ff @(posedge clk)
+if (rst)
+	miss_flag <= FALSE;
+else begin
+	miss_flag <= FALSE;		// pulse for only 1 cycle.
+	if (trig) begin
+		case(bts)
+		Stark_pkg::BTS_REG,Stark_pkg::BTS_DISP:
+			miss_flag <= miss_det;
+		Stark_pkg::BTS_CALL,Stark_pkg::BTS_RET:
+			miss_flag <= TRUE;
+		default:
+			miss_flag <= FALSE;
+		endcase
+	end
+end
 
-typedef struct packed {
-	logic v;					// valid
-	logic [2:0] lvl;	// level begin processed
-	logic o;					// out
-	logic [1:0] bc;		// 1=bus cycle complete
-	logic [1:0] qn;
-	cpu_types_pkg::rob_ndx_t id;
-	cpu_types_pkg::asid_t asid;
-	cpu_types_pkg::virtual_address_t oadr;	// original address to translate
-	cpu_types_pkg::virtual_address_t adr;		// linear address to translate
-	cpu_types_pkg::virtual_address_t tadr;	// temporary address
-} ptw_miss_queue_t;
-
-typedef struct packed {
-	logic v;
-	ptw_access_state_t access_state;
-	logic rdy;
-	fta_bus_pkg::fta_tranid_t tid;
-	logic [4:0] mqndx;											// index of associated miss queue
-	cpu_types_pkg::asid_t asid;
-	cpu_types_pkg::virtual_address_t vadr;
-	cpu_types_pkg::physical_address_t padr;
-	mmu_pkg::pte_t pte;
-	logic [255:0] dat;
-} ptw_tran_buf_t;
-
-endpackage
+endmodule

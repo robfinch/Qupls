@@ -45,7 +45,7 @@ input rst;
 input clk;
 input backout;
 input rob_ndx_t fcu_id;
-input rob_entry_t [ROB_ENTRIES-1:0] rob;
+input rob_entry_t [Stark_pkg::ROB_ENTRIES-1:0] rob;
 input rob_ndx_t tail;
 input restore;
 input rob_ndx_t restore_ndx;
@@ -125,18 +125,18 @@ else begin
 		else
 		*/
 		if (backout_id != fcu_id)
-			backout_id <= (backout_id + ROB_ENTRIES - 1) % ROB_ENTRIES;
+			backout_id <= (backout_id + Stark_pkg::ROB_ENTRIES - 1) % Stark_pkg::ROB_ENTRIES;
 		else begin
-			if (rob[(fcu_id + ROB_ENTRIES - 3) % ROB_ENTRIES].grp==rob[fcu_id].grp) begin
-				backout_id <= (fcu_id + ROB_ENTRIES - 3) % ROB_ENTRIES;
+			if (rob[(fcu_id + Stark_pkg::ROB_ENTRIES - 3) % Stark_pkg::ROB_ENTRIES].grp==rob[fcu_id].grp) begin
+				backout_id <= (fcu_id + Stark_pkg::ROB_ENTRIES - 3) % Stark_pkg::ROB_ENTRIES;
 				backout_state <= 2'd2;
 			end
-			else if (rob[(fcu_id + ROB_ENTRIES - 2) % ROB_ENTRIES].grp==rob[fcu_id].grp) begin
-				backout_id <= (fcu_id + ROB_ENTRIES - 2) % ROB_ENTRIES;
+			else if (rob[(fcu_id + Stark_pkg::ROB_ENTRIES - 2) % Stark_pkg::ROB_ENTRIES].grp==rob[fcu_id].grp) begin
+				backout_id <= (fcu_id + Stark_pkg::ROB_ENTRIES - 2) % Stark_pkg::ROB_ENTRIES;
 				backout_state <= 2'd2;
 			end
-			else if (rob[(fcu_id + ROB_ENTRIES - 1) % ROB_ENTRIES].grp==rob[fcu_id].grp) begin
-				backout_id <= (fcu_id + ROB_ENTRIES - 1) % ROB_ENTRIES;
+			else if (rob[(fcu_id + Stark_pkg::ROB_ENTRIES - 1) % Stark_pkg::ROB_ENTRIES].grp==rob[fcu_id].grp) begin
+				backout_id <= (fcu_id + Stark_pkg::ROB_ENTRIES - 1) % Stark_pkg::ROB_ENTRIES;
 				backout_state <= 2'd2;
 			end
 			else begin
@@ -147,7 +147,7 @@ else begin
 	// State 2: iterate forwards to the mispredicted branch.
 	2'd2:
 		if (backout_id != fcu_id)
-			backout_id <= (backout_id + 1) % ROB_ENTRIES;
+			backout_id <= (backout_id + 1) % Stark_pkg::ROB_ENTRIES;
 		else
 			backout_state <= 2'd0;
 	default:

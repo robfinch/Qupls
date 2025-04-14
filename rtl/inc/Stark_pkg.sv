@@ -229,8 +229,11 @@ parameter PANIC_CHECKPOINT_INDEX = 4'd14;
 // Type declarations
 // =============================================================================
 
-typedef logic [$clog2(NCHECK)-1:0] checkpt_ndx_t;
-typedef logic [$clog2(ROB_ENTRIES)-1:0] rob_ndx_t;
+typedef struct packed
+{
+	logic [2:0] row;
+	logic col;
+} lsq_ndx_t;
 
 typedef enum logic [1:0] {
 	OM_APP = 2'd0,
@@ -238,6 +241,75 @@ typedef enum logic [1:0] {
 	OM_HYPERVISOR = 2'd2,
 	OM_SECURE = 2'd3
 } operating_mode_t;
+
+typedef logic [4:0] regspec_t;
+
+typedef struct packed
+{
+	logic [Stark_pkg::PREGS-1:0] avail;	// available registers at time of queue (for rollback)
+//	cpu_types_pkg::pregno_t [AREGS-1:0] p2regmap;
+	cpu_types_pkg::pregno_t [Stark_pkg::AREGS-1:0] pregmap;
+	cpu_types_pkg::pregno_t [Stark_pkg::AREGS-1:0] regmap;
+} checkpoint_t;
+
+typedef struct packed
+{
+	logic resv1;
+	logic so;				// summary overflow
+	logic resv;
+	logic le;
+	logic lt;
+	logic _nor;
+	logic _nand;
+	logic eq;
+} condition_byte_t;
+
+typedef struct packed
+{
+	condition_byte_t _secure;
+	condition_byte_t _hyper;
+	condition_byte_t _super;
+	condition_byte_t _app;
+} condition_reg_t;
+
+typedef struct packed
+{
+	logic [7:0] pl;			// privilege level
+	logic swstk;				// software stack
+	logic [2:0] mprv;		// memory access priv indicator	
+	logic dbg;					// debug mode indicator
+	logic [1:0] ptrsz;	// pointer size 0=32,1=64,2=96
+	operating_mode_t om;	// operating mode
+	logic trace_en;			// instruction trace enable
+	logic ssm;					// single step mode
+	logic [5:0] ipl;		// interrupt privilege level
+	logic die;					// debug interrupt enable
+	logic mie;					// machine interrupt enable
+	logic hie;					// hypervisor interrupt enable
+	logic sie;					// supervisor interrupt enable
+	logic uie;					// user interrupt enable
+} status_reg_t;				// 32 bits
+
+typedef enum logic [2:0] {
+	BTS_NONE = 3'd0,
+	BTS_DISP = 3'd1,
+	BTS_REG = 3'd2,
+	BTS_BSR = 3'd3,
+	BTS_JSR = 3'd4,
+	BTS_CALL = 3'd5,
+	BTS_RET = 3'd6,
+	BTS_RTI = 3'd7
+} bts_t;
+
+typedef enum logic [2:0] {
+	BS_IDLE = 3'd0,
+	BS_CHKPT_RESTORE = 3'd1,
+	BS_CHKPT_RESTORED = 3'd2,
+	BS_STATE3 = 3'd3,
+	BS_CAPTURE_MISSPC = 3'd4,
+	BS_DONE = 3'd5,
+	BS_DONE2 = 3'd6
+} branch_state_t;
 
 typedef enum logic [5:0] {
 	OP_BRK = 6'd0,
@@ -347,7 +419,7 @@ typedef struct packed
 	logic zero;
 	logic [1:0] op2a;
 	logic [2:0] BRs;
-	logic [11:0] lmt;
+	logic [8:0] lmt;
 	logic resv1;
 	logic [4:0] Rs1;
 	logic [1:0] resv2;
@@ -361,7 +433,7 @@ typedef struct packed
 	logic zero;
 	logic [1:0] op2a;
 	logic [2:0] BRs;
-	logic [11:0] lmt;
+	logic [8:0] lmt;
 	logic [3:0] resv4;
 	logic [2:0] cl;
 	logic resv2;
@@ -375,7 +447,7 @@ typedef struct packed
 	logic one;
 	logic [1:0] disphi;
 	logic [2:0] BRs;
-	logic [3:0] cnd;
+	logic [2:0] cnd;
 	logic [5:0] CRs;
 	logic [7:0] displo;
 	logic [2:0] BRd;
@@ -388,7 +460,7 @@ typedef struct packed
 	logic zero;
 	logic [1:0] op2a;
 	logic [2:0] BRs;
-	logic [3:0] cnd;
+	logic [2:0] cnd;
 	logic [5:0] CRs;
 	logic resv1;
 	logic [4:0] Rs1;
@@ -402,7 +474,7 @@ typedef struct packed
 	logic zero;
 	logic [1:0] op2a;
 	logic [2:0] BRs;
-	logic [3:0] cnd;
+	logic [2:0] cnd;
 	logic [5:0] CRs;
 	logic [3:0] resv4;
 	logic [2:0] cl;
@@ -416,7 +488,7 @@ typedef struct packed
 	logic zero;
 	logic [1:0] maskhi;
 	logic [2:0] zero3;
-	logic [3:0] cnd;
+	logic [2:0] cnd;
 	logic [5:0] CRs;
 	logic [7:0] masklo;
 	logic [2:0] seven;
@@ -429,9 +501,8 @@ typedef struct packed
 	logic zero;
 	logic [1:0] maskhi;
 	logic [2:0] one3;
-	logic [3:0] five;
 	logic [5:0] ipl;
-	logic [7:0] masklo;
+	logic [10:0] masklo;
 	logic [2:0] seven;
 	logic [4:0] opcode;
 	logic m0;
@@ -752,7 +823,7 @@ typedef struct packed
 	logic zero;
 	logic [1:0] op2;
 	logic [1:0] grphi;
-	logic [8:0] lsthi;
+	logic [9:0] lsthi;
 	logic cr;
 	logic [1:0] grplo;
 	logic [7:0] lstlo;
@@ -775,7 +846,7 @@ typedef struct packed
 	logic one;
 	logic [1:0] lx;
 	logic [2:0] op3;
-	logic [3:0] resv;
+	logic [4:0] resv;
 	logic [1:0] Rs1h;
 	logic [1:0] Rdh;
 	logic cr;
@@ -789,7 +860,7 @@ typedef struct packed
 	logic one;
 	logic [1:0] immhi;
 	logic [2:0] op3;
-	logic [7:0] immlo;
+	logic [8:0] immlo;
 	logic cr;
 	logic [4:0] Rs1;
 	logic [4:0] Rd;
@@ -801,7 +872,7 @@ typedef struct packed
 	logic zero;
 	logic [1:0] lx;
 	logic [2:0] op3;
-	logic [2:0] resv;
+	logic [3:0] resv;
 	logic [4:0] Rs2;
 	logic cr;
 	logic [4:0] Rs1;
@@ -814,7 +885,7 @@ typedef struct packed
 	logic one;
 	logic [1:0] immhi;
 	logic [2:0] op3;
-	logic [3:0] immlo;
+	logic [4:0] immlo;
 	logic [1:0] Rs1h;
 	logic [1:0] Rdh;
 	logic cr;
@@ -828,7 +899,7 @@ typedef struct packed
 	logic zero;
 	logic [1:0] sz;
 	logic [2:0] op3a;
-	logic [2:0] op3;
+	logic [3:0] op4;
 	logic [4:0] Rs2;
 	logic cr;
 	logic [4:0] Rs1;
@@ -889,9 +960,9 @@ typedef union packed
 	alui_inst_t alui;
 	alu_inst_t alu;
 	alucli_inst_t alucli;
-	asbi_inst_t adbi;
-	asb_inst_t adb;
-	asbcli_inst_t adbcli;
+	adbi_inst_t adbi;
+	adb_inst_t adb;
+	adbcli_inst_t adbcli;
 	shi_inst_t shi;
 	sh_inst_t sh;
 	srai_inst_t srai;
@@ -991,7 +1062,7 @@ typedef struct packed
 	logic mcb;					// micro-code branch
 	logic bcc;					// conditional branch
 	logic cjb;					// call, jmp, or bra
-	logic bsr;					// bra or bsr
+	logic bl;						// branch and link to subroutine
 	logic jsri;					// indirect subroutine call
 	logic ret;
 	logic brk;
@@ -1075,6 +1146,15 @@ typedef struct packed {
 	cpu_types_pkg::value_t argM;
 	cpu_types_pkg::value_t res;
 `endif
+	logic updAv;
+	logic updBv;
+	logic updCv;
+	cpu_types_pkg::value_t updA;
+	cpu_types_pkg::value_t updB;
+	cpu_types_pkg::value_t updC;
+	cpu_types_pkg::pregno_t updAreg;
+	cpu_types_pkg::pregno_t updBreg;
+	cpu_types_pkg::pregno_t updCreg;
 	logic all_args_valid;			// 1 if all args are valid
 	logic could_issue;				// 1 if instruction ready to issue
 	logic could_issue_nm;			// 1 if instruction ready to issue NOP
@@ -1179,5 +1259,14 @@ begin
 		fnConstSize[3:2] = 2'b01;
 end
 endfunction
+
+// ATOM or ACARRY
+function fnIsAtom;
+input instruction_t ir;
+begin
+	fnIsAtom = ir.any.opcode[5:1]==5'd12 && ir[8:6]==3'd7 && ir[31:29]==3'd0 && (ir[28:26]==3'd1 || ir[28:16]==3'd3);
+end
+endfunction
+
 
 endpackage
