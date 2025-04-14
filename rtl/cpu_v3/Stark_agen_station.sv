@@ -44,7 +44,8 @@ module Stark_agen_station(rst, clk, idle_i, issue, rndx, rndxv, rob,
 	argC_v, beb_issue, bndx, beb,
 	id, om, we, argA, argB, argC, argI, argM, argC_ctag,
 	aRa, aRb, aRc, aRt, pRa, pRb, pRc, pRt,
-	pc, op, cp, excv, ldip, idle_o, store_argC_v, store_argI,
+	pc, op, virt2phys, load, store, amo,
+	cp, excv, ldip, idle_o, store_argC_v, store_argI,
 	store_argC_aReg,  store_argC_pReg, store_argC_cndx
 );
 input rst;
@@ -83,6 +84,10 @@ output pregno_t pRc;
 output pregno_t pRt;
 output pc_address_ex_t pc;
 output pipeline_reg_t op;
+output virt2phys;
+output load;
+output store;
+output amo;
 output checkpt_ndx_t cp;
 output reg excv;
 output reg ldip;
@@ -108,7 +113,11 @@ if (rst) begin
 	pc <= RSTPC;
 	pc.bno_t <= 6'd1;
 	pc.bno_f <= 6'd1;
-	op <= {41'd0,OP_NOP};
+	op <= {26'd0,OP_NOP};
+	virt2phys <= 1'b0;
+	load <= 1'b0;
+	store <= 1'b0;
+	amo <= 1'b0;
 	cp <= 4'd0;
 	aRt <= 9'd0;
 	pRa <= 9'd0;
@@ -152,6 +161,10 @@ else begin
 		pRt <= rob.op.nRt;
 		aRt <= rob.decbus.Rt;
 		op <= rob.op;
+		virt2phys <= rob.decbus.virt2phys;
+		load <= rob.decbus.load|rob.decbus.loadz;
+		store <= rob.decbus.store;
+		amo <= rob.decbus.amo;
 		pc <= rob.pc;
 		aRa <= rob.decbus.Ra;
 		aRb <= rob.decbus.Rb;
@@ -176,6 +189,10 @@ else begin
 		argM <= beb.argM;
 		aRt <= beb.decbus.Rt;
 		op <= beb.op;
+		virt2phys <= 1'b0;
+		load <= 1'b0;
+		store <= 1'b0;
+		amo <= 1'b0;
 		pc <= beb.pc;
 		aRa <= beb.decbus.Ra;
 		aRb <= beb.decbus.Rb;

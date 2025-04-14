@@ -1015,6 +1015,45 @@ typedef enum logic [2:0] {
 	BTS_RTI = 3'd7
 } bts_e;
 
+typedef struct packed {
+	logic v;
+	cpu_types_pkg::seqnum_t sn;
+	logic agen;						// address generated through to physical address
+	cpu_types_pkg::rob_ndx_t rndx;				// reference to related ROB entry
+	logic vpa;						// virtual or physical address
+	cpu_types_pkg::physical_address_t adr;
+	operating_mode_t omode;	// operating mode
+	logic v2p;						// 1=doing a virtual to physical address translation
+	logic load;						// 1=load
+	logic loadz;
+	logic cload;					// 1=cload
+	logic cload_tags;
+	logic store;
+	logic cstore;
+	ex_instruction_t op;
+	cpu_types_pkg::pc_address_ex_t pc;
+	memop_t func;					// operation to perform
+	logic [3:0] func2;		// more resolution to function
+	cause_code_t cause;
+	logic [3:0] cache_type;
+	logic [63:0] sel;			// +16 for unaligned accesses
+	cpu_types_pkg::asid_t asid;
+	cpu_types_pkg::code_address_t vcadr;		// victim cache address
+	logic dchit;
+	memsz_t memsz;				// indicates size of data
+	logic [7:0] bytcnt;		// byte count of data to load/store
+	cpu_types_pkg::pregno_t Rt;
+	cpu_types_pkg::aregno_t aRt;					// reference for freeing
+	logic aRtz;
+	cpu_types_pkg::aregno_t aRc;
+	cpu_types_pkg::pregno_t pRc;					// 'C' register for store
+	checkpt_ndx_t cndx;
+	operating_mode_t om;	// operating mode
+	logic ctag;						// capabilities tag
+	logic datav;					// store data is valid
+	logic [511:0] res;		// stores unaligned data as well (must be last field)
+} lsq_entry_t;
+
 typedef struct packed
 {
 	logic v;
@@ -1051,6 +1090,8 @@ typedef struct packed
 	logic bitwise;		// true if a bitwise operator (and, or, eor)
 	logic multicycle;
 	logic mem;
+	logic mem0;				// true if instruction must use only port #0
+	logic v2p;				// virtual to physical instruction
 	logic load;
 	logic loadz;
 	logic store;

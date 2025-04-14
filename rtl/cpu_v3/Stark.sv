@@ -595,6 +595,10 @@ wire tlb0_v, tlb1_v;
 reg agen0_idle;
 wire agen0_idle1;
 Stark_pkg::ex_instruction_t agen0_op;
+wire agen0_virt2phys;
+wire agen0_load;
+wire agen0_store;
+wire agen0_amo;
 rob_ndx_t agen0_id;
 operating_mode_t agen0_om;
 wire agen0_we;
@@ -623,6 +627,10 @@ wire agen0_ldip;
 reg agen1_idle = 1'b1;
 wire agen1_idle1;
 Stark_pkg::ex_instruction_t agen1_op;
+wire agen1_virt2phys;
+wire agen1_load;
+wire agen1_store;
+wire agen1_amo;
 rob_ndx_t agen1_id;
 operating_mode_t agen1_om;
 wire agen1_we;
@@ -4724,7 +4732,10 @@ Stark_agen uag0
 	.next(1'b0),
 	.out(rob[agen0_id].out[0]),
 	.tlb_v(tlb0_v),
-	.ir(agen0_op.ins),
+	.virt2phys(agen0_virt2phys),
+	.load(agen0_load),
+	.store(agen0_store),
+	.amo(agen0_amo),
 	.Ra(agen0_aRa),
 	.Rb(agen0_aRb),
 	.pc(agen0_pc),
@@ -4742,7 +4753,10 @@ Stark_agen uag1
 	.next(1'b0),
 	.out(rob[agen1_id].out[0]),
 	.tlb_v(tlb1_v),
-	.ir(agen1_op.ins),
+	.virt2phys(agen1_virt2phys),
+	.load(agen1_load),
+	.store(agen1_store),
+	.amo(agen1_amo),
 	.Ra(agen1_aRa),
 	.Rb(agen1_aRb),
 	.pc(agen1_pc),
@@ -4758,7 +4772,7 @@ always_comb
 begin
 	cantlsq0 = 1'b0;
 	cantlsq1 = 1'b0;
-	for (n11 = 0; n11 < ROB_ENTRIES; n11 = n11 + 1) begin
+	for (n11 = 0; n11 < Stark_pkg::ROB_ENTRIES; n11 = n11 + 1) begin
 		if (rob[n11].decbus.mem && rob[n11].sn < rob[agen0_id].sn && !rob[n11].lsq)
 			cantlsq0 = 1'b1;
 		if (rob[n11].decbus.mem && rob[n11].sn < rob[agen1_id].sn && !rob[n11].lsq)
@@ -4868,14 +4882,30 @@ begin
 		if (
 			(lsq[lsndx.row][lsndx.col].memsz==lsq[n15r][n15c].memsz) &&		// memory size matches
 			(lsq[lsndx.row][lsndx.col].load && lsq[n15r][n15c].store) &&	// and trying to load
-			 lsq[lsndx.row][lsndx.col].sn > lsq[n15r][n15c].sn && lsq[n15r][n15c].v && lsq[n15r][n15c].datav &&
-			 	stsn > lsq[n15r][n15c].sn) begin
+			// The load must come after the store and the store data should be valid.
+			lsq[lsndx.row][lsndx.col].sn > lsq[n15r][n15c].sn && lsq[n15r][n15c].v && lsq[n15r][n15c].datav && 
+			// And it should be the store closest to the load.
+			stsn > lsq[n15r][n15c].sn &&
+			// And the address should match.
+			lsq[lsndx.row][lsndx.col].vpa==1'b1 && lsq[n15r][n15c].vpa==1'b1	// must be physical addresses
+			lsq[lsndx.row][lsndx.col].adr == lsq[n15r][n15c].adr
+			) begin
 			 	stsn = lsq[n15r][n15c].sn;
 			 	fnLoadBypassIndex.row = n15r;
 			 	fnLoadBypassIndex.col = n15c;
 			end
 		end
 	end
+end
+endfunction
+
+function fnVirt2PhysReady;
+input lsq_ndx_t lsndx;
+begin
+	if (lsq[lsndx.row][lsndx.col].vpa==1'b1)
+		fnVirt2PhysReady = 1'b1;
+	else
+		fnVirt2PhysReady = 1'b0;
 end
 endfunction
 
@@ -5469,6 +5499,10 @@ Stark_agen_station uagen0stn
 	.pRt(agen0_Rt),
 	.pc(agen0_pc),
 	.op(agen0_op),
+	.virt2phys(agen0_virt2phys),
+	.load(agen0_load),
+	.store(agen0_store),
+	.amo(agen0_amo),
 	.cp(agen0_cp),
 	.excv(agen0_excv),
 	.ldip(agen0_ldip),
@@ -5517,6 +5551,10 @@ Stark_agen_station uagen1stn
 	.pRt(agen1_Rt),
 	.pc(agen1_pc),
 	.op(agen1_op),
+	.virt2phys(agen1_virt2phys),
+	.load(agen1_load),
+	.store(agen1_store),
+	.amo(agen1_amo),
 	.cp(agen1_cp),
 	.excv(agen1_excv),
 	.ldip(agen1_ldip),
@@ -6733,7 +6771,22 @@ else begin
 	// correct address is already available for the second bus cycle in the
 	// dramN_addr var. We can tell when to use it by the setting of the more
 	// flag.
-	if (SUPPORT_LOAD_BYPASSING && lbndx0 > 0) begin
+	
+	// If just performing a virtual to physical translation....
+	// This is done only on port #0
+	if (lsq[mem0_lsndx.row][mem0_lsndx.col].v2p && lsq[mem0_lsndx.row][mem0_lsndx.col].v) begin
+		if (lsq[mem0_lsndx.row][mem0_lsndx.col].vpa) begin
+			dram_bus0 <= lsq[mem0_lsndx.row][mem0_lsndx.col].adr;
+			dram_ctag0 <= lsq[mem0_lsndx.row][mem0_lsndx.col].ctag;
+			dram_Rt0 <= lsq[mem0_lsndx.row][mem0_lsndx.col].Rt;
+			dram_v0 <= 1'b1;
+			dram0_om <= lsq[mem0_lsndx.row][mem0_lsndx.col].om;
+			// Prevent multiple updates
+			lsq[mem0_lsndx.row][mem0_lsndx.col].v <= INV;
+			rob[lsqmem0_lsndx.row][mem0_lsndx.col].rndx].done <= 2'b11;
+		end
+	end
+	else if (SUPPORT_LOAD_BYPASSING && lbndx0 > 0) begin
 		// ??? dram0_bus???
 		dram_bus0 <= fnDati(1'b0,dram0_op,lsq[lbndx0.row][lbndx0.col].res,dram0_pc);
 		dram_ctag0 <= lsq[lbndx0.row][lbndx0.col].ctag;
