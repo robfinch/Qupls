@@ -47,8 +47,7 @@ module Stark_pipeline_ren(
 	arn, arng, arnt, arnv, rn_cp, store_argC_pReg, prn, prnv,
 	Rt0_dec, Rt1_dec, Rt2_dec, Rt3_dec, Rt0_decv, Rt1_decv, Rt2_decv, Rt3_decv, 
 	Rt0_ren, Rt1_ren, Rt2_ren, Rt3_ren, Rt0_renv, Rt1_renv, Rt2_renv, Rt3_renv, 
-	ins0_dec, ins1_dec, ins2_dec, ins3_dec, 
-	ins0_ren, ins1_ren, ins2_ren, ins3_ren, 
+	pg_dec, pg_ren,
 
 	wrport0_v, wrport1_v, wrport2_v, wrport3_v, 
 	wrport0_aRt, wrport1_aRt, wrport2_aRt, wrport3_aRt, 
@@ -103,14 +102,8 @@ input Rt0_decv;
 input Rt1_decv;
 input Rt2_decv;
 input Rt3_decv;
-input Stark_pkg::pipeline_reg_t ins0_dec;
-input Stark_pkg::pipeline_reg_t ins1_dec;
-input Stark_pkg::pipeline_reg_t ins2_dec;
-input Stark_pkg::pipeline_reg_t ins3_dec;
-output Stark_pkg::pipeline_reg_t ins0_ren;
-output Stark_pkg::pipeline_reg_t ins1_ren;
-output Stark_pkg::pipeline_reg_t ins2_ren;
-output Stark_pkg::pipeline_reg_t ins3_ren;
+input Stark_pkg::pipeline_group_reg_t pg_dec;
+output Stark_pkg::pipeline_group_reg_t pg_ren;
 output pregno_t Rt0_ren;
 output pregno_t Rt1_ren;
 output pregno_t Rt2_ren;
@@ -195,7 +188,7 @@ begin
 	nopi.pc.bno_f = 6'd1;
 	nopi.mcip = 12'h1A0;
 	nopi.len = 4'd6;
-	nopi.ins = {57'd0,OP_NOP};
+	nopi.ins = {26'd0,OP_NOP};
 	nopi.pred_btst = 6'd0;
 	nopi.element = 'd0;
 	nopi.aRa = 8'd0;
@@ -242,10 +235,10 @@ always_ff @(posedge clk) if (rst) Rt2_renv <= 1'b0; else if (en) Rt2_renv <= Rt2
 always_ff @(posedge clk) if (rst) Rt3_renv <= 1'b0; else if (en) Rt3_renv <= Rt3_decv;
 
 /*
-always_comb Rt0_q1 = Rt0_ren;// & {10{~ins0_ren.decbus.Rtz & ~stomp0}};
-always_comb Rt1_q1 = Rt1_ren;// & {10{~ins1_ren.decbus.Rtz & ~stomp1}};
-always_comb Rt2_q1 = Rt2_ren;// & {10{~ins2_ren.decbus.Rtz & ~stomp2}};
-always_comb Rt3_q1 = Rt3_ren;// & {10{~ins3_ren.decbus.Rtz & ~stomp3}};
+always_comb Rt0_q1 = Rt0_ren;// & {10{~pg_ren.pr0.decbus.Rtz & ~stomp0}};
+always_comb Rt1_q1 = Rt1_ren;// & {10{~pg_ren.pr1.decbus.Rtz & ~stomp1}};
+always_comb Rt2_q1 = Rt2_ren;// & {10{~pg_ren.pr2.decbus.Rtz & ~stomp2}};
+always_comb Rt3_q1 = Rt3_ren;// & {10{~pg_ren.pr3.decbus.Rtz & ~stomp3}};
 always_comb Rt0_que = Rt0_ren;
 always_comb Rt1_que = Rt1_ren;
 always_comb Rt2_que = Rt2_ren;
@@ -342,19 +335,19 @@ end
 /*
 always_ff @(posedge clk)
 if (advance_pipeline) begin
-	if (alloc0 && ins0_ren.decbus.Rt==0) begin
+	if (alloc0 && pg_ren.pr0.decbus.Rt==0) begin
 		$display("alloced r0");
 		$finish;
 	end
-	if (alloc1 && ins1_ren.decbus.Rt==0) begin
+	if (alloc1 && pg_ren.pr1.decbus.Rt==0) begin
 		$display("alloced r0");
 		$finish;
 	end
-	if (alloc2 && ins2_ren.decbus.Rt==0) begin
+	if (alloc2 && pg_ren.pr2.decbus.Rt==0) begin
 		$display("alloced r0");
 		$finish;
 	end
-	if (alloc3 && ins3_ren.decbus.Rt==0) begin
+	if (alloc3 && pg_ren.pr3.decbus.Rt==0) begin
 		$display("alloced r0");
 		$finish;
 	end
@@ -363,10 +356,10 @@ end
 /*
 always_ff @(posedge clk)
 begin
-	if (!stallq && (ins0_ren.decbus.Rt==7'd63 ||
-		ins1_ren.decbus.Rt==7'd63 ||
-		ins2_ren.decbus.Rt==7'd63 ||
-		ins3_ren.decbus.Rt==7'd63
+	if (!stallq && (pg_ren.pr0.decbus.Rt==7'd63 ||
+		pg_ren.pr1.decbus.Rt==7'd63 ||
+		pg_ren.pr2.decbus.Rt==7'd63 ||
+		pg_ren.pr3.decbus.Rt==7'd63
 	))
 		$finish;
 	for (n19 = 0; n19 < 16; n19 = n19 + 1)
@@ -410,10 +403,10 @@ Stark_rat #(.NPORT(24)) urat1
 	.avail_i(avail_reg),
 	.restore(restore),
 	.miss_cp(miss_cp),
-	.qbr0(ins0_dec.decbus.br|ins0_dec.decbus.cjb),
-	.qbr1(ins1_dec.decbus.br|ins1_dec.decbus.cjb),
-	.qbr2(ins2_dec.decbus.br|ins2_dec.decbus.cjb),
-	.qbr3(ins3_dec.decbus.br|ins3_dec.decbus.cjb),
+	.qbr0(pg_dec.pr0.decbus.br|pg_dec.pr0.decbus.cjb),
+	.qbr1(pg_dec.pr1.decbus.br|pg_dec.pr1.decbus.cjb),
+	.qbr2(pg_dec.pr2.decbus.br|pg_dec.pr2.decbus.cjb),
+	.qbr3(pg_dec.pr3.decbus.br|pg_dec.pr3.decbus.cjb),
 	.rnbank(arnbank),
 	.rn(arn),
 	.rng(arng),
@@ -427,14 +420,14 @@ Stark_rat #(.NPORT(24)) urat1
 	.wrbankb(sr.om==2'd0 ? 1'b0 : 1'b0),
 	.wrbankc(sr.om==2'd0 ? 1'b0 : 1'b0),
 	.wrbankd(sr.om==2'd0 ? 1'b0 : 1'b0),
-	.wr0(Rt0_decv && ins0_dec.aRt!=8'd0),// && !stomp0 && ~ins0_ren.decbus.Rtz),
-	.wr1(Rt1_decv && ins1_dec.aRt!=8'd0),// && !stomp1 && ~ins1_ren.decbus.Rtz),
-	.wr2(Rt2_decv && ins2_dec.aRt!=8'd0),// && !stomp2 && ~ins2_ren.decbus.Rtz),
-	.wr3(Rt3_decv && ins3_dec.aRt!=8'd0),// && !stomp3 && ~ins3_ren.decbus.Rtz),
-	.wra(ins0_dec.aRt),
-	.wrb(ins1_dec.aRt),
-	.wrc(ins2_dec.aRt),
-	.wrd(ins3_dec.aRt),
+	.wr0(Rt0_decv && pg_dec.pr0.aRt!=8'd0),// && !stomp0 && ~pg_ren.pr0.decbus.Rtz),
+	.wr1(Rt1_decv && pg_dec.pr1.aRt!=8'd0),// && !stomp1 && ~pg_ren.pr1.decbus.Rtz),
+	.wr2(Rt2_decv && pg_dec.pr2.aRt!=8'd0),// && !stomp2 && ~pg_ren.pr2.decbus.Rtz),
+	.wr3(Rt3_decv && pg_dec.pr3.aRt!=8'd0),// && !stomp3 && ~pg_ren.pr3.decbus.Rtz),
+	.wra(pg_dec.pr0.aRt),
+	.wrb(pg_dec.pr1.aRt),
+	.wrc(pg_dec.pr2.aRt),
+	.wrd(pg_dec.pr3.aRt),
 	.wrra(Rt0_dec),
 	.wrrb(Rt1_dec),
 	.wrrc(Rt2_dec),
@@ -677,119 +670,119 @@ if (advance_pipeline_seg2)
 /*
 always_ff @(posedge clk)
 if (advance_pipeline_seg2)
-	pc0_r <= ins0_dec.pc;//pc0_d;
+	pc0_r <= pg_dec.pr0.pc;//pc0_d;
 always_ff @(posedge clk)
 if (advance_pipeline_seg2)
-	pc1_r <= ins1_dec.pc;//pc1_d;
+	pc1_r <= pg_dec.pr1.pc;//pc1_d;
 always_ff @(posedge clk)
 if (advance_pipeline_seg2)
-	pc2_r <= ins2_dec.pc;//pc2_d;
+	pc2_r <= pg_dec.pr2.pc;//pc2_d;
 always_ff @(posedge clk)
 if (advance_pipeline_seg2)
-	pc3_r <= ins3_dec.pc;//pc3_d;
+	pc3_r <= pg_dec.pr3.pc;//pc3_d;
 */
 always_ff @(posedge clk)
 if (rst) begin
-	ins0_ren <= nopi;
-	ins1_ren <= nopi;
-	ins2_ren <= nopi;
-	ins3_ren <= nopi;
+	pg_ren.pr0 <= nopi;
+	pg_ren.pr1 <= nopi;
+	pg_ren.pr2 <= nopi;
+	pg_ren.pr3 <= nopi;
 end
 else begin
 	if (en) begin
-		ins0_ren.cndx <= cndx;
-		ins0_ren <= ins0_dec;
-		if (ins0_dec.v & ~stomp_ren) begin
-			ins0_ren.nRt <= Rt0_dec;
-			if (ins3_ren.decbus.bl)
-				ins0_ren.v <= INV;
+		pg_ren.pr0.cndx <= cndx;
+		pg_ren.pr0 <= pg_dec.pr0;
+		if (pg_dec.pr0.v & ~stomp_ren) begin
+			pg_ren.pr0.nRt <= Rt0_dec;
+			if (pg_ren.pr3.decbus.bl)
+				pg_ren.pr0.v <= INV;
 		end
 		else begin
-//			ins0_ren <= nopi;
-			ins0_ren.v <= INV;
-//			ins0_ren.decbus.Rt <= ins0_ren.decbus.Rt;
-//			ins0_ren.decbus.Rtn <= ins0_ren.decbus.Rtn;
-//			ins0_ren.decbus.Rtz <= ins0_ren.decbus.Rtz;
-//			ins0_ren.aRt <= ins0_ren.aRt;
+//			pg_ren.pr0 <= nopi;
+			pg_ren.pr0.v <= INV;
+//			pg_ren.pr0.decbus.Rt <= pg_ren.pr0.decbus.Rt;
+//			pg_ren.pr0.decbus.Rtn <= pg_ren.pr0.decbus.Rtn;
+//			pg_ren.pr0.decbus.Rtz <= pg_ren.pr0.decbus.Rtz;
+//			pg_ren.pr0.aRt <= pg_ren.pr0.aRt;
 			if (Stark_pkg::SUPPORT_BACKOUT)
-				ins0_ren.nRt <= 9'd0;//ins0_ren.nRt;
+				pg_ren.pr0.nRt <= 9'd0;//pg_ren.pr0.nRt;
 			else
-				ins0_ren.nRt <= Rt0_dec;
+				pg_ren.pr0.nRt <= Rt0_dec;
 		end
 	/*
 	if (bo_wr) begin
-		if (ins0_dec.aRa==bo_areg)
-			ins0_ren.pRa <= bo_preg;
-		if (ins0_dec.aRb==bo_areg)
-			ins0_ren.pRb <= bo_preg;
-		if (ins0_dec.aRc==bo_areg)
-			ins0_ren.pRc <= bo_preg;
-		if (ins0_dec.aRt==bo_areg)
-			ins0_ren.pRt <= bo_preg;
+		if (pg_dec.pr0.aRa==bo_areg)
+			pg_ren.pr0.pRa <= bo_preg;
+		if (pg_dec.pr0.aRb==bo_areg)
+			pg_ren.pr0.pRb <= bo_preg;
+		if (pg_dec.pr0.aRc==bo_areg)
+			pg_ren.pr0.pRc <= bo_preg;
+		if (pg_dec.pr0.aRt==bo_areg)
+			pg_ren.pr0.pRt <= bo_preg;
 	end
 	*/
-		ins1_ren.cndx <= cndx;
-		ins1_ren <= ins1_dec;
-		if (ins1_dec.v & ~stomp_ren) begin
-			ins1_ren.nRt <= Rt1_dec;
-			if (ins0_dec.decbus.bl)
-				ins1_ren.v <= INV;
-			if (ins3_ren.decbus.bl)
-				ins1_ren.v <= INV;
+		pg_ren.pr1.cndx <= cndx;
+		pg_ren.pr1 <= pg_dec.pr1;
+		if (pg_dec.pr1.v & ~stomp_ren) begin
+			pg_ren.pr1.nRt <= Rt1_dec;
+			if (pg_dec.pr0.decbus.bl)
+				pg_ren.pr1.v <= INV;
+			if (pg_ren.pr3.decbus.bl)
+				pg_ren.pr1.v <= INV;
 		end
 		else begin
-//			ins1_ren <= nopi;
-			ins1_ren.v <= INV;
-//			ins1_ren.decbus.Rt <= ins1_ren.decbus.Rt;
-//			ins1_ren.decbus.Rtn <= ins1_ren.decbus.Rtn;
-//			ins1_ren.decbus.Rtz <= ins1_ren.decbus.Rtz;
-//			ins1_ren.aRt <= ins1_ren.aRt;
+//			pg_ren.pr1 <= nopi;
+			pg_ren.pr1.v <= INV;
+//			pg_ren.pr1.decbus.Rt <= pg_ren.pr1.decbus.Rt;
+//			pg_ren.pr1.decbus.Rtn <= pg_ren.pr1.decbus.Rtn;
+//			pg_ren.pr1.decbus.Rtz <= pg_ren.pr1.decbus.Rtz;
+//			pg_ren.pr1.aRt <= pg_ren.pr1.aRt;
 			if (Stark_pkg::SUPPORT_BACKOUT)
-				ins1_ren.nRt <= 9'd0;//ins1_ren.nRt;
+				pg_ren.pr1.nRt <= 9'd0;//pg_ren.pr1.nRt;
 			else
-				ins1_ren.nRt <= Rt1_dec;
+				pg_ren.pr1.nRt <= Rt1_dec;
 		end
-		ins2_ren.cndx <= cndx;
-		ins2_ren <= ins2_dec;
-		if (ins2_dec.v & ~stomp_ren) begin
-			ins2_ren.nRt <= Rt2_dec;
-			if (ins0_dec.decbus.bl || ins1_dec.decbus.bl)
-				ins2_ren.v <= INV;
-			if (ins3_ren.decbus.bl)
-				ins2_ren.v <= INV;
+		pg_ren.pr2.cndx <= cndx;
+		pg_ren.pr2 <= pg_dec.pr2;
+		if (pg_dec.pr2.v & ~stomp_ren) begin
+			pg_ren.pr2.nRt <= Rt2_dec;
+			if (pg_dec.pr0.decbus.bl || pg_dec.pr1.decbus.bl)
+				pg_ren.pr2.v <= INV;
+			if (pg_ren.pr3.decbus.bl)
+				pg_ren.pr2.v <= INV;
 		end
 		else begin
-//			ins2_ren <= nopi;
-			ins2_ren.v <= INV;
-//			ins2_ren.decbus.Rt <= ins2_ren.decbus.Rt;
-//			ins2_ren.decbus.Rtn <= ins2_ren.decbus.Rtn;
-//			ins2_ren.decbus.Rtz <= ins2_ren.decbus.Rtz;
-//			ins2_ren.aRt <= ins2_ren.aRt;
+//			pg_ren.pr2 <= nopi;
+			pg_ren.pr2.v <= INV;
+//			pg_ren.pr2.decbus.Rt <= pg_ren.pr2.decbus.Rt;
+//			pg_ren.pr2.decbus.Rtn <= pg_ren.pr2.decbus.Rtn;
+//			pg_ren.pr2.decbus.Rtz <= pg_ren.pr2.decbus.Rtz;
+//			pg_ren.pr2.aRt <= pg_ren.pr2.aRt;
 			if (Stark_pkg::SUPPORT_BACKOUT)
-				ins2_ren.nRt <= 9'd0;//ins2_ren.nRt;
+				pg_ren.pr2.nRt <= 9'd0;//pg_ren.pr2.nRt;
 			else
-				ins2_ren.nRt <= Rt2_dec;
+				pg_ren.pr2.nRt <= Rt2_dec;
 		end
-		ins3_ren.cndx <= cndx;
-		ins3_ren <= ins3_dec;
-		if (ins3_dec.v & ~stomp_ren) begin
-			ins3_ren.nRt <= Rt3_dec;
-			if (ins0_dec.decbus.bl || ins1_dec.decbus.bl || ins2_dec.decbus.bl)
-				ins3_ren.v <= INV;
-			if (ins3_ren.decbus.bl)
-				ins3_ren.v <= INV;
+		pg_ren.pr3.cndx <= cndx;
+		pg_ren.pr3 <= pg_dec.pr3;
+		if (pg_dec.pr3.v & ~stomp_ren) begin
+			pg_ren.pr3.nRt <= Rt3_dec;
+			if (pg_dec.pr0.decbus.bl || pg_dec.pr1.decbus.bl || pg_dec.pr2.decbus.bl)
+				pg_ren.pr3.v <= INV;
+			if (pg_ren.pr3.decbus.bl)
+				pg_ren.pr3.v <= INV;
 		end
 		else begin
-//			ins3_ren <= nopi;
-			ins3_ren.v <= INV;
-//			ins3_ren.decbus.Rt <= ins3_ren.decbus.Rt;
-//			ins3_ren.decbus.Rtn <= ins3_ren.decbus.Rtn;
-//			ins3_ren.decbus.Rtz <= ins3_ren.decbus.Rtz;
-//			ins3_ren.aRt <= ins3_ren.aRt;
+//			pg_ren.pr3 <= nopi;
+			pg_ren.pr3.v <= INV;
+//			pg_ren.pr3.decbus.Rt <= pg_ren.pr3.decbus.Rt;
+//			pg_ren.pr3.decbus.Rtn <= pg_ren.pr3.decbus.Rtn;
+//			pg_ren.pr3.decbus.Rtz <= pg_ren.pr3.decbus.Rtz;
+//			pg_ren.pr3.aRt <= pg_ren.pr3.aRt;
 			if (Stark_pkg::SUPPORT_BACKOUT)
-				ins3_ren.nRt <= 9'd0;//ins3_ren.nRt;
+				pg_ren.pr3.nRt <= 9'd0;//pg_ren.pr3.nRt;
 			else
-				ins3_ren.nRt <= Rt3_dec;
+				pg_ren.pr3.nRt <= Rt3_dec;
 		end
 	end
 	if (branch_state==Stark_pkg::BS_DONE)
@@ -805,52 +798,52 @@ end
 task tInvalidateRen;
 input [4:0] bno;
 begin
-	if (ins0_ren.pc.bno_t!=bno) begin
-		ins0_ren.excv <= INV;
+	if (pg_ren.pr0.pc.bno_t!=bno) begin
+		pg_ren.pr0.excv <= INV;
 		if (Stark_pkg::SUPPORT_BACKOUT)
-			ins0_ren.v <= INV;
+			pg_ren.pr0.v <= INV;
 		else begin
-			ins0_ren.decbus.cpytgt <= TRUE;
-			ins0_ren.decbus.alu <= TRUE;
-			ins0_ren.decbus.fpu <= FALSE;
-			ins0_ren.decbus.fc <= FALSE;
-			ins0_ren.decbus.mem <= FALSE;
+			pg_ren.pr0.decbus.cpytgt <= TRUE;
+			pg_ren.pr0.decbus.alu <= TRUE;
+			pg_ren.pr0.decbus.fpu <= FALSE;
+			pg_ren.pr0.decbus.fc <= FALSE;
+			pg_ren.pr0.decbus.mem <= FALSE;
 		end
 	end
-	if (ins1_ren.pc.bno_t!=bno) begin
-		ins1_ren.v <= INV;
+	if (pg_ren.pr1.pc.bno_t!=bno) begin
+		pg_ren.pr1.v <= INV;
 		if (Stark_pkg::SUPPORT_BACKOUT)
-			ins1_ren.excv <= INV;
+			pg_ren.pr1.excv <= INV;
 		else begin
-			ins1_ren.decbus.cpytgt <= TRUE;
-			ins1_ren.decbus.alu <= TRUE;
-			ins1_ren.decbus.fpu <= FALSE;
-			ins1_ren.decbus.fc <= FALSE;
-			ins1_ren.decbus.mem <= FALSE;
+			pg_ren.pr1.decbus.cpytgt <= TRUE;
+			pg_ren.pr1.decbus.alu <= TRUE;
+			pg_ren.pr1.decbus.fpu <= FALSE;
+			pg_ren.pr1.decbus.fc <= FALSE;
+			pg_ren.pr1.decbus.mem <= FALSE;
 		end
 	end
-	if (ins2_ren.pc.bno_t!=bno) begin
-		ins2_ren.excv <= INV;
+	if (pg_ren.pr2.pc.bno_t!=bno) begin
+		pg_ren.pr2.excv <= INV;
 		if (Stark_pkg::SUPPORT_BACKOUT)
-			ins2_ren.v <= INV;
+			pg_ren.pr2.v <= INV;
 		else begin
-			ins2_ren.decbus.cpytgt <= TRUE;
-			ins2_ren.decbus.alu <= TRUE;
-			ins2_ren.decbus.fpu <= FALSE;
-			ins2_ren.decbus.fc <= FALSE;
-			ins2_ren.decbus.mem <= FALSE;
+			pg_ren.pr2.decbus.cpytgt <= TRUE;
+			pg_ren.pr2.decbus.alu <= TRUE;
+			pg_ren.pr2.decbus.fpu <= FALSE;
+			pg_ren.pr2.decbus.fc <= FALSE;
+			pg_ren.pr2.decbus.mem <= FALSE;
 		end
 	end
-	if (ins3_ren.pc.bno_t!=bno) begin
-		ins3_ren.excv <= INV;
+	if (pg_ren.pr3.pc.bno_t!=bno) begin
+		pg_ren.pr3.excv <= INV;
 		if (Stark_pkg::SUPPORT_BACKOUT)
-			ins3_ren.v <= INV;
+			pg_ren.pr3.v <= INV;
 		else begin
-			ins3_ren.decbus.cpytgt <= TRUE;
-			ins3_ren.decbus.alu <= TRUE;
-			ins3_ren.decbus.fpu <= FALSE;
-			ins3_ren.decbus.fc <= FALSE;
-			ins3_ren.decbus.mem <= FALSE;
+			pg_ren.pr3.decbus.cpytgt <= TRUE;
+			pg_ren.pr3.decbus.alu <= TRUE;
+			pg_ren.pr3.decbus.fpu <= FALSE;
+			pg_ren.pr3.decbus.fc <= FALSE;
+			pg_ren.pr3.decbus.mem <= FALSE;
 		end
 	end
 end

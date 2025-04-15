@@ -46,7 +46,7 @@ import Stark_pkg::*;
 
 module Stark_pipeline_mux(rst_i, clk_i, rstcnt, advance_fet, ihit, en_i,
 	stomp_bno, stomp_mux, nop_o, carry_mod_fet,
-	nmi_i, irq_fet, irqf_fet, hirq_i, vect_i, sr, pt_mux, p_override, po_bno,
+	nmi_i, irq_in, hirq_i, sr, pt_mux, p_override, po_bno,
 	branchmiss, misspc_fet,
 	mipv_i, mip_i, ic_line_fet, reglist_active, grp_i, grp_o,
 	takb_fet, mc_offs, pc_i, vl,
@@ -69,10 +69,8 @@ input stomp_mux;
 output reg nop_o;
 input [31:0] carry_mod_fet;
 input nmi_i;
-input [2:0] irq_fet;
-input irqf_fet;
+input irq_info_packet irq_in;
 input hirq_i;
-input [7:0] vect_i;
 input status_reg_t sr;
 input reglist_active;
 input branchmiss;
@@ -128,6 +126,7 @@ input get;
 output stall;
 
 integer nn,hh;
+irq_info_packet irq_in_r;
 Stark_pkg::pipeline_reg_t ins0_mux_o;
 Stark_pkg::pipeline_reg_t ins1_mux_o;
 Stark_pkg::pipeline_reg_t ins2_mux_o;
@@ -665,6 +664,7 @@ always_comb ins2_mux_o = ins2_mux;
 always_comb ins3_mux_o = ins3_mux;
 always_comb ins4_mux_o = ins4_mux;
 always_comb ins5_mux_o = ins5_mux;
+always_comb pg0_mux.irq = irq_in_r;
 always_comb pg0_mux.pr0 = ins0_mux;
 always_comb pg0_mux.pr1 = ins1_mux;
 always_comb pg0_mux.pr2 = ins2_mux;
@@ -672,6 +672,7 @@ always_comb pg0_mux.pr3 = ins3_mux;
 always_comb pg1_mux.pr0 = ins4_mux;
 always_comb pg1_mux.pr1 = ins5_mux;
 
+always_ff @(posedge clk) if (en) irq_in_r <= irq_in;
 always_ff @(posedge clk) if (en) nop_o <= stomp_mux;
 /*
 always_comb mcip0_o <= mcip0;

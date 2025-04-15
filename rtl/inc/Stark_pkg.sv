@@ -1134,7 +1134,8 @@ typedef struct packed
 	// The following fields are loaded at enqueue time, but otherwise do not change.
 	logic bt;									// branch to be taken as predicted
 	operating_mode_t om;			// operating mode
-	reg [31:0] carry_mod;			// carry modifie remnant
+	reg [31:0] carry_mod;			// carry modifier remnant
+	reg [11:0] atom_mask;			// interrupt masking by ATOM instruction
 	cpu_types_pkg::pregno_t pRci;							// physical registers (see decode bus for arch. regs)
 	cpu_types_pkg::pregno_t pRs1;							// physical registers (see decode bus for arch. regs)
 	cpu_types_pkg::pregno_t pRs2;
@@ -1159,10 +1160,22 @@ typedef struct packed
 
 typedef struct packed
 {
+	logic [5:0] level;
+	logic [2:0] om;
+	logic [2:0] swstk;
+	logic [63:0] vector;
+} irq_info_packet_t;
+
+typedef struct packed
+{
 	logic hwi;								// hardware interrupt occured during fetch
-	logic [5:0] hwi_level;		// the level of the hardware interrupt
-	logic [5:0] irq_mask;			// irq mask from sr.ipl or atom
+	irq_info_packet_t irq;		// the level of the hardware interrupt
 	checkpt_ndx_t cndx;				// checkpoint index
+} pipeline_group_hdr_t;
+
+typedef struct packed
+{
+	pipeline_group_hdr_t hdr;
 	pipeline_reg_t pr0;
 	pipeline_reg_t pr1;
 	pipeline_reg_t pr2;

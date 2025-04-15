@@ -41,7 +41,7 @@ import Stark_pkg::*;
 
 module Stark_pipeline_fet(rst, clk, rstcnt, ihit, en, pc_i, misspc, misspc_fet,
 	pc0_fet, pc1_fet, pc2_fet, pc3_fet, pc4_fet, stomp_fet, stomp_bno, ic_carry_mod,
-	ic_line_i, ic_line_fet, nmi_i, irq_i, irq_fet, irqf_i, irqf_fet, carry_mod_fet,
+	ic_line_i, ic_line_fet, nmi_i, carry_mod_fet,
 	micro_code_active, mc_adr
 );
 input rst;
@@ -63,10 +63,6 @@ input [31:0] ic_carry_mod;
 input [1023:0] ic_line_i;
 output reg [1023:0] ic_line_fet;
 input nmi_i;
-input [5:0] irq_i;
-output reg [5:0] irq_fet;
-input irqf_i;
-output reg irqf_fet;
 output reg [31:0] carry_mod_fet;
 input micro_code_active;
 input pc_address_ex_t mc_adr;
@@ -182,22 +178,6 @@ else begin
 		else
 			ic_line_fet <= ic_line_i;
 	end
-end
-
-always_ff @(posedge clk)
-if (rst)
-	irq_fet <= 6'b0;
-else begin
-	if (en)
-		irq_fet <= irq_i;
-end
-
-always_ff @(posedge clk)
-if (rst)
-	irqf_fet <= 1'b0;
-else begin
-	if (en)
-		irqf_fet <= irqf_i;
 end
 
 always_ff @(posedge clk)

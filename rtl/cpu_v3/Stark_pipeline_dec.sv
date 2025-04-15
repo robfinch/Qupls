@@ -90,11 +90,24 @@ output [PREGS-1:0] avail_reg;
 Stark_pkg::pipeline_group_reg_t pg0_mux_r;
 reg [31:0] carry_mod_i;
 reg [31:0] carry_mod_o;
+reg [11:0] atom_mask_i;
+reg [11:0] atom_mask_o;
+reg hwi_ignored;
+
 always @(posedge clk)
 if (rst)
 	carry_mod_i <= 32'h0;
-else
-	carry_mod_i <= carry_mod_o;
+else begin
+	if (en)
+		carry_mod_i <= carry_mod_o;
+end
+always @(posedge clk)
+if (rst)
+	atom_mask_i <= 12'd0;
+else begin
+	if (en)
+		atom_mask_i <= atom_mask_o;
+end
 
 Stark_pkg::pipeline_reg_t ins0m;
 Stark_pkg::pipeline_reg_t ins1m;
@@ -539,6 +552,46 @@ begin
 	end
 	if (dec4.pfxc) begin pr_dec3.decbus.immc = {dec4.immc[63:5],dec3.Rc[4:0]}; pr_dec3.decbus.has_immc = 1'b1; end
 
+	// Apply interrupt masking.
+	// Done by clearing the hardware interrupt flag.
+	// Hardware interrupts are recognized only for a group since all instructions 
+	// in the group are processed in the same clock cycle. An interrupt cannot
+	// happen in the middle of a group. This means we only need check the masking
+	// of the first instruction of the group. If the first instruction was not
+	// masked, and a later one was, then the interrupt will still occur, but the
+	// later instructions will not be executed.
+	pr0_dec.atom_mask = atom_mask_i;
+	hwi_ignore = FALSE;
+	if (pr0_dec.atom_mask[0]) begin
+		hwi_ignore = TRUE;
+	end
+
+	if (dec0.atom)
+		pr1_dec.atom_mask = {ins0m.ins[23:9],ins0m.ins[0]};
+	else
+		pr1_dec.atom_mask = pr0_dec.atom_mask >> 12'd1;
+	if (pr0_dec.hwi & ~hwi_ignore)
+		pr1_dec.v = INV;
+
+	if (dec1.atom)
+		pr2_dec.atom_mask = {ins1m.ins[23:9],ins1m.ins[0]};
+	else
+		pr2_dec.atom_mask = pr1_dec.atom_mask >> 12'd1;
+	if (pr0_dec.hwi & ~hwi_ignore)
+		pr2_dec.v = INV;
+
+	if (dec2.atom)
+		pr3_dec.atom_mask = {ins2m.ins[23:9],ins2m.ins[0]};
+	else
+		pr3_dec.atom_mask = pr2_dec.atom_mask >> 12'd1;
+	if (pr0_dec.hwi & ~hwi_ignore)
+		pr3_dec.v = INV;
+
+	if (dec3.atom)
+		atom_mask_o = {ins3m.ins[23:9],ins3m.ins[0]};
+	else
+		atom_mask_o = pr3_dec.atom_mask >> 12'd1;
+
 	// Apply carry mod to instructions in same group, and adjust
 	pr0_dec.carry_mod = carry_mod_i;
 	case ({pr0_dec.carry_mod[9],pr0_dec.carry_mod[0]})
@@ -547,8 +600,8 @@ begin
 	2'd2:	pr_dec0.decbus.Rco = pr0_dec.carry_mod[25:24]|7'd92;
 	2'd3:
 		begin
-			pr_dec0.decbus.Rci = pr0_dec.carry_mod[25:24]|7'd92;
-			pr_dec0.decbus.Rco = pr0_dec.carry_mod[25:24]|7'd92;
+			pr0_dec.decbus.Rci = pr0_dec.carry_mod[25:24]|7'd92;
+			pr0_dec.decbus.Rco = pr0_dec.carry_mod[25:24]|7'd92;
 		end
 	endcase
 	if (dec0.carry) begin
@@ -654,6 +707,13 @@ Stark_space_branches uspb1
 always_comb
 begin
 	pg_dec = pg0_mux_r;
+	if (hwi_ignore) begin
+		if (pg0_mux_r.irq.level != 6'd63) begin
+			pg_dec.hwi = 1'b0;
+		end
+	end
+	else
+		hwi_ignored = 6'd0;
 	pg_dec.pr0 = inso[0];
 	pg_dec.pr1 = inso[1];
 	pg_dec.pr2 = inso[2];
