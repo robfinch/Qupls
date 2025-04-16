@@ -185,6 +185,9 @@ parameter AREGS = `NREGS;
 parameter REGFILE_LATENCY = 2;
 parameter INSN_LEN = 8'd4;
 
+const cpu_types_pkg::pc_address_t RSTPC	= 32'hFFFFFD80;
+const cpu_types_pkg::address_t RSTSP = 32'hFFFF9000;
+
 // =============================================================================
 // Resources
 // =============================================================================
@@ -243,6 +246,10 @@ typedef enum logic [1:0] {
 } operating_mode_t;
 
 typedef logic [4:0] regspec_t;
+typedef logic [NREGS-1:1] reg_bitmask_t;
+typedef logic [ROB_ENTRIES-1:0] rob_bitmask_t;
+typedef logic [LSQ_ENTRIES-1:0] lsq_bitmask_t;
+typedef logic [3:0] beb_ndx_t;
 
 typedef struct packed
 {
@@ -991,6 +998,17 @@ typedef union packed
 	anyinst_t any;
 } instruction_t;
 
+typedef struct packed {
+	cpu_types_pkg::pc_address_ex_t pc;
+	cpu_types_pkg::mc_address_t mcip;
+	logic [5:0] pred_btst;
+	instruction_t ins;
+} ex_instruction_t;
+
+typedef enum logic [7:0] {
+	FLT_NONE = 0
+} cause_code_t;
+
 typedef enum logic [3:0] {
 	nul = 4'd0,
 	byt = 4'd1,
@@ -1003,17 +1021,6 @@ typedef enum logic [3:0] {
 	char = 4'd8,
 	vect = 4'd10
 } memsz_t;
-
-typedef enum logic [2:0] {
-	BTS_NONE = 3'd0,
-	BTS_DISP = 3'd1,
-	BTS_REG = 3'd2,
-	BTS_BSR = 3'd3,
-	BTS_JSR = 3'd4,
-	BTS_CALL = 3'd5,
-	BTS_RET = 3'd6,
-	BTS_RTI = 3'd7
-} bts_e;
 
 typedef struct packed {
 	logic v;
@@ -1047,12 +1054,20 @@ typedef struct packed {
 	logic aRtz;
 	cpu_types_pkg::aregno_t aRc;
 	cpu_types_pkg::pregno_t pRc;					// 'C' register for store
-	checkpt_ndx_t cndx;
+	cpu_types_pkg::checkpt_ndx_t cndx;
 	operating_mode_t om;	// operating mode
 	logic ctag;						// capabilities tag
 	logic datav;					// store data is valid
 	logic [511:0] res;		// stores unaligned data as well (must be last field)
 } lsq_entry_t;
+
+typedef struct packed
+{
+	logic v;
+	logic [4:0] Rs4;
+	logic [4:0] Rs3;
+	logic [4:0] Rd2;
+} regs_t;
 
 typedef struct packed
 {
@@ -1068,6 +1083,7 @@ typedef struct packed
 	cpu_types_pkg::aregno_t Rd;
 	cpu_types_pkg::aregno_t Rd2;
 	cpu_types_pkg::aregno_t Rco;		// carry output
+	logic Rdz;
 	logic has_imma;
 	logic has_immb;
 	logic has_immc;
@@ -1078,7 +1094,7 @@ typedef struct packed
 	logic nop;				// NOP semantics
 	logic fc;					// flow control op
 	logic backbr;			// backwards target branch
-	bts_e bts;				// branch target source
+	bts_t bts;				// branch target source
 	logic macro;			// true if macro instruction
 	logic alu;				// true if instruction must use alu (alu or mem)
 	logic alu0;				// true if instruction must use only alu #0
@@ -1095,6 +1111,7 @@ typedef struct packed
 	logic mem;
 	logic mem0;				// true if instruction must use only port #0
 	logic v2p;				// virtual to physical instruction
+	logic amo;
 	logic load;
 	logic loadz;
 	logic store;
@@ -1116,7 +1133,9 @@ typedef struct packed
 	logic pfx;
 	logic sync;
 	logic oddball;
-	logic regs;					// register list modifier
+	logic regs;
+	logic fregs;
+	regs_t xregs;				// "extra" registers from fregs/regs instruction
 	logic cpytgt;
 	logic qfext;				// true if QFEXT modifier
 } decode_bus_t;
@@ -1129,7 +1148,7 @@ typedef struct packed
 	logic takb;								// 1=branch evaluated to taken
 	logic ssm;								// 1=single step mode active
 	logic [2:0] hwi_swstk;		// software stack
-	cause_code_t exc;					// non-zero indicate exception
+//	cause_code_t exc;					// non-zero indicate exception
 	logic excv;								// 1=exception
 	// The following fields are loaded at enqueue time, but otherwise do not change.
 	logic bt;									// branch to be taken as predicted
@@ -1155,7 +1174,7 @@ typedef struct packed
 	cpu_types_pkg::aregno_t aRs3;
 	cpu_types_pkg::aregno_t aRd;
 	instruction_t ins;
-	decode_bus_t db;
+	decode_bus_t decbus;
 } pipeline_reg_t;
 
 typedef struct packed
@@ -1170,7 +1189,7 @@ typedef struct packed
 {
 	logic hwi;								// hardware interrupt occured during fetch
 	irq_info_packet_t irq;		// the level of the hardware interrupt
-	checkpt_ndx_t cndx;				// checkpoint index
+	cpu_types_pkg::checkpt_ndx_t cndx;				// checkpoint index
 } pipeline_group_hdr_t;
 
 typedef struct packed
@@ -1185,14 +1204,14 @@ typedef struct packed
 typedef struct packed {
 	// The following fields may change state while an instruction is processed.
 	logic v;									// 1=entry is valid, in use
-	seqnum_t sn;							// sequence number, decrements when instructions que
+	cpu_types_pkg::seqnum_t sn;							// sequence number, decrements when instructions que
 //	logic [5:0] sync_dep;			// sync instruction dependency
 //	logic [5:0] fc_dep;				// flow control dependency
 //	logic [5:0] sync_no;
 //	logic [5:0] fc_no;
 	logic [3:0] predino;			// predicated instruction number (1 to 8)
-	rob_ndx_t predrndx;				// ROB index of associate PRED instruction
-	rob_ndx_t orid;						// ROB id of originating macro-instruction
+	cpu_types_pkg::rob_ndx_t predrndx;				// ROB index of associate PRED instruction
+	cpu_types_pkg::rob_ndx_t orid;						// ROB id of originating macro-instruction
 	logic lsq;								// 1=instruction has associated LSQ entry
 	lsq_ndx_t lsqndx;					// index to LSQ entry
 	logic [1:0] out;					// 1=instruction is being executed
@@ -1206,7 +1225,7 @@ typedef struct packed {
 	cpu_types_pkg::pc_address_t brtgt;
 	cpu_types_pkg::mc_address_t mcbrtgt;			// micro-code branch target
 	logic takb;								// 1=branch evaluated to taken
-	cause_code_t exc;					// non-zero indicate exception
+//	cause_code_t exc;					// non-zero indicate exception
 	logic excv;								// 1=exception
 	cpu_types_pkg::value_t argC;	// for stores
 `ifdef IS_SIM
@@ -1231,30 +1250,30 @@ typedef struct packed {
 	logic could_issue_nm;			// 1 if instruction ready to issue NOP
 	logic prior_sync;					// 1 if instruction has sync prior to it
 	logic prior_fc;						// 1 if instruction has fc prior to it
+	logic argCi_vp;
 	logic argA_vp;						// 1=argument A valid pending
 	logic argB_vp;
 	logic argC_vp;
 	logic argT_vp;
-	logic argM_vp;
+	logic argCi_v;
 	logic argA_v;							// 1=argument A valid
 	logic argB_v;
 	logic argC_v;
 	logic argT_v;
-	logic argM_v;
 	logic rat_v;							// 1=checked with RAT for valid reg arg.
 	cpu_types_pkg::value_t arg;							// argument value for CSR instruction
 	// The following fields are loaded at enqueue time, but otherwise do not change.
 	logic last;								// 1=last instruction in group (not used)
-	rob_ndx_t group_len;			// length of instruction group (not used)
+	cpu_types_pkg::rob_ndx_t group_len;			// length of instruction group (not used)
 	logic bt;									// branch to be taken as predicted
 	operating_mode_t om;			// operating mode
 	decode_bus_t decbus;			// decoded instruction
-	checkpt_ndx_t cndx;				// checkpoint index
-	checkpt_ndx_t br_cndx;		// checkpoint index branch owns
+	cpu_types_pkg::checkpt_ndx_t cndx;				// checkpoint index
+	cpu_types_pkg::checkpt_ndx_t br_cndx;		// checkpoint index branch owns
 	pipeline_reg_t op;			// original instruction
 	cpu_types_pkg::pc_address_ex_t pc;			// PC of instruction
 	cpu_types_pkg::mc_address_t mcip;				// Micro-code IP address
-	seqnum_t grp;							// instruction group
+	cpu_types_pkg::seqnum_t grp;							// instruction group
 } rob_entry_t;
 
 // ============================================================================
@@ -1343,6 +1362,20 @@ function fnIsCarry;
 input instruction_t ir;
 begin
 	fnIsCarry = ir.any.opcode[5:1]==5'd12 && ir[8:6]==3'd7 && ir[31:29]==3'd0 && (ir[28:26]==3'd2 || ir[28:16]==3'd3);
+end
+endfunction
+
+function memsz_t fnMemsz;
+input instruction_t ir;
+begin
+	case(ir.any.opcode)
+	OP_LDB,OP_LDBZ,OP_STB,OP_STBI:	fnMemsz = byt;
+	OP_LDW,OP_LDWZ,OP_STW,OP_STWI:	fnMemsz = wyde;
+	OP_LDT,OP_LDTZ,OP_STT,OP_STTI:	fnMemsz = tetra;
+	OP_LOAD,OP_STORE,OP_STOREI:			fnMemsz = octa;
+	default:
+		fnMemsz = octa;
+	endcase
 end
 endfunction
 

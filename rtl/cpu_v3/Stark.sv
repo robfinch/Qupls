@@ -161,6 +161,8 @@ reg [7:0] scan;
 //op_src_t alu0_argB_src;
 //op_src_t alu0_argC_src;
 
+pregno_t [31:0] aRs;
+
 value_t rfo_alu0_argA;
 value_t rfo_alu0_argB;
 value_t rfo_alu0_argC;
@@ -403,7 +405,7 @@ reg alu0_available;
 reg alu0_dataready;
 ex_instruction_t alu0_instr;
 wire alu0_div;
-wire alu0_cap;
+wire alu0_capA, alu0_capB, alu0_capC;
 value_t alu0_argA;
 value_t alu0_argB;
 value_t alu0_argBI;
@@ -457,6 +459,7 @@ reg alu1_available;
 reg alu1_dataready;
 Stark_pkg::ex_instruction_t alu1_instr;
 wire alu1_div;
+wire alu1_capA, alu1_capB, alu1_capC;
 value_t alu1_argA;
 value_t alu1_argB;
 value_t alu1_argBI;
@@ -561,7 +564,7 @@ reg fpu1_bank;
 pc_address_ex_t fpu1_pc;
 value_t fpu1_res;
 rob_ndx_t fpu1_id;
-Stark_pkg::cause_code_t fpu1_exc = FLT_NONE;
+Stark_pkg::cause_code_t fpu1_exc = Stark_pkg::FLT_NONE;
 wire        fpu1_v;
 reg fpu1_idv;
 wire fpu1_qfext;
@@ -574,14 +577,18 @@ Stark_pkg::pipeline_reg_t fcu_missir;
 reg fcu_bt;
 reg fcu_cjb;
 reg fcu_bl;
-bts_t fcu_bts;
+Stark_pkg::bts_t fcu_bts;
 value_t fcu_argA;
 value_t fcu_argB;
 value_t fcu_argBr;
 value_t fcu_argI;	// only used by BEQ
+wire fcu_aRtzA,fcu_aRtzB;
+reg fcu_done;
 pc_address_ex_t fcu_pc;
 rob_ndx_t fcu_id;
 Stark_pkg::operating_mode_t fcu_om;
+Stark_pkg::operating_mode_t fcu_omA2, fcu_omB2;
+reg fcu_wrA,fcu_wrB;
 reg fcu_idv;
 Stark_pkg::cause_code_t fcu_exc;
 reg fcu_v, fcu_v2, fcu_v3, fcu_v4, fcu_v5, fcu_v6;
@@ -603,9 +610,9 @@ reg agen0_idle;
 wire agen0_idle1;
 Stark_pkg::ex_instruction_t agen0_op;
 wire agen0_virt2phys;
-wire agen0_load;
-wire agen0_store;
-wire agen0_amo;
+reg agen0_load;
+reg agen0_store;
+reg agen0_amo;
 rob_ndx_t agen0_id;
 operating_mode_t agen0_om;
 wire agen0_we;
@@ -635,9 +642,9 @@ reg agen1_idle = 1'b1;
 wire agen1_idle1;
 Stark_pkg::ex_instruction_t agen1_op;
 wire agen1_virt2phys;
-wire agen1_load;
-wire agen1_store;
-wire agen1_amo;
+reg agen1_load;
+reg agen1_store;
+reg agen1_amo;
 rob_ndx_t agen1_id;
 operating_mode_t agen1_om;
 wire agen1_we;
@@ -666,7 +673,7 @@ reg lsq1_idle = 1'b1;
 address_t tlb0_res, tlb1_res;
 
 pc_address_t icdp;
-branch_state_t branch_state;
+Stark_pkg::branch_state_t branch_state;
 reg bs_done_oh;
 reg bs_idle_oh;
 reg [4:0] excid;
@@ -718,8 +725,9 @@ reg dram0_store;
 reg dram0_cstore;
 pregno_t dram0_Rt, dram_Rt0;
 aregno_t dram0_aRt, dram_aRt0;
-operating_mode_t dram0_om, dram_om0;
-reg dram0_aRtz, dram_aRtz0;
+aregno_t dram0_aRtA2, dram0_aRtB2;
+Stark_pkg::operating_mode_t dram0_om, dram_om0;
+reg dram0_aRtz, dram_aRtz0A, dram_aRtz0B;
 reg dram0_bank;
 Stark_pkg::cause_code_t dram0_exc;
 reg dram0_ack;
@@ -754,8 +762,9 @@ reg dram1_store;
 reg dram1_cstore;
 pregno_t dram1_Rt, dram_Rt1;
 aregno_t dram1_aRt, dram_aRt1;
-operating_mode_t dram1_om, dram_om1;
-reg dram1_aRtz, dram_aRtz1;
+aregno_t dram1_aRtA2, dram1_aRtB2;
+Stark_pkg::operating_mode_t dram1_om, dram_om1;
+reg dram1_aRtz, dram_aRtz1A, dram_aRtz1B;
 reg dram1_bank;
 Stark_pkg::cause_code_t dram1_exc;
 reg dram1_ack;
@@ -830,12 +839,12 @@ Stark_pkg::status_reg_t sr_stack [0:8];
 Stark_pkg::status_reg_t sr;
 wire [2:0] swstk = sr.swstk;
 pc_address_t [8:0] pc_stack;
-reg micro_code_active;
-reg micro_code_active_f;
-reg micro_code_active_x;
-wire micro_code_active_d;
-wire micro_code_active_r;
-wire micro_code_active_q;
+reg micro_machine_active;
+reg micro_machine_active_f;
+reg micro_machine_active_x;
+wire micro_machine_active_d;
+wire micro_machine_active_r;
+wire micro_machine_active_q;
 reg [5:0] pending_ipl;				// pending interrupt level.
 wire [5:0] im = sr.ipl;
 always_comb
@@ -877,14 +886,8 @@ begin
 	nopi.pc.bno_t = 6'd1;
 	nopi.pc.bno_f = 6'd1;
 	nopi.mcip = 12'h1A0;
-	nopi.len = 4'd6;
 	nopi.ins = {26'd0,OP_NOP};
 	nopi.pred_btst = 6'd0;
-	nopi.element = 'd0;
-	nopi.aRa = 8'd0;
-	nopi.aRb = 8'd0;
-	nopi.aRc = 8'd0;
-	nopi.aRt = 8'd0;
 	nopi.decbus.Rtz = 1'b1;
 	nopi.decbus.nop = 1'b1;
 	nopi.decbus.alu = 1'b1;
@@ -1095,8 +1098,6 @@ value_t agen0_res, agen1_res;
 wire tlb_miss0, tlb_miss1;
 wire tlb_missack;
 tlb_entry_t tlb_entry1, tlb_entry;
-reg agen0_load, agen1_load;
-reg agen0_store, agen1_store;
 wire tlb0_load, tlb0_store;
 wire tlb1_load, tlb1_store;
 reg stall_load, stall_store;
@@ -1173,9 +1174,9 @@ wire irq_wr_rst;
 reg irq_rd_en, irq_rd_en2;
 reg irq_wr_en, irq_wr_en2;
 wire irq_empty;
-Stark_pkg::irq_packet_info_t irq2;
-Stark_pkg::irq_packet_info_t irq2_dout;
-Stark_pkg::irq_packet_info_t irq2_din;
+Stark_pkg::irq_info_packet_t irq2;
+Stark_pkg::irq_info_packet_t irq2_dout;
+Stark_pkg::irq_info_packet_t irq2_din;
 
 always_comb
 begin
@@ -1533,7 +1534,7 @@ Stark_btb ubtb1
 	.irq(irq),
 	.irq_addr(irq_addr),
 	.next_hwipc(next_hwipc),
-	.micro_code_active(micro_code_active),
+	.micro_machine_active(micro_machine_active),
 	.block_header(ibh_t'(ic_line[511:480])),
 	.igrp(igrp),
 	.length_byte(length_byte),
@@ -1610,7 +1611,7 @@ gselectPredictor ugsp1
 	.predict_taken3(pt3_mux)
 );
 
-wire micro_code_active_v;
+wire micro_machine_active_v;
 wire ne_mca, pe_mca, ee_mca;
 reg ne_mca_f, ne_mca_x, pe_mca_x, ee_mca_x;
 reg pe_mca_f, ee_mca_f;
@@ -1618,7 +1619,7 @@ edge_det ed4 (
 	.rst(irst),
 	.clk(clk),
 	.ce(advance_pipeline),
-	.i(micro_code_active),
+	.i(micro_machine_active),
 	.pe(pe_mca),
 	.ne(ne_mca),
 	.ee(ee_mca)
@@ -1706,10 +1707,10 @@ else begin
 		bms3 <= bms2;
 		ihit3 <= ihit_f;
 		do_bsr2 <= do_bsr|do_ret;
-		if (micro_code_active) begin
+		if (micro_machine_active) begin
 			do_bsr3 <= do_bsr2;
 		end
-		else if (!micro_code_active) begin
+		else if (!micro_machine_active) begin
 			do_bsr3 <= FALSE;
 		end
 		bms4 <= bms3;
@@ -1730,7 +1731,7 @@ Stark_stomp ustmp1
 	.ihit(ihit_f),
 	.advance_pipeline(advance_pipeline),
 	.advance_pipeline_seg2(advance_pipeline_seg2), 
-	.micro_code_active(micro_code_active),
+	.micro_machine_active(micro_machine_active),
 	.branchmiss(branchmiss),
 	.branch_state(branch_state), 
 	.do_bsr(do_bsr|do_ret),
@@ -1757,7 +1758,7 @@ Stark_stomp ustmp1
 );
 
 // Stomp on all pipeline stages rename and prior on a branch miss.
-assign micro_code_active_v = (micro_code_active_x || mip0v || mip1v || mip2v || mip3v) && mipv;
+assign micro_machine_active_v = (micro_machine_active_x || mip0v || mip1v || mip2v || mip3v) && mipv;
 // qd indicates which instructions will queue in a given cycle.
 always_comb
 begin
@@ -1868,7 +1869,7 @@ if (advance_pipeline)
 	fetch_new_block_x <= fetch_new_block;
 
 always_comb
-	hold_ins = |reg_bitmask || micro_code_active;
+	hold_ins = |reg_bitmask || micro_machine_active;
 
 reg get_next_pc;
 always_comb
@@ -2065,18 +2066,18 @@ end
 
 always_ff @(posedge clk)
 if (irst)
-	micro_code_active <= TRUE;
+	micro_machine_active <= TRUE;
 else begin
 	if (advance_pipeline) begin
 	  begin
 	  	if ((pe_allqd||allqd||&next_cqd)) begin
 				if (((mcbrtgtv & mipv) ? mcbrtgt : next_micro_ip) == 12'h000)
-					micro_code_active <= FALSE;
+					micro_machine_active <= FALSE;
 			end
 		end
 		if (micro_ip==12'h000) begin
 			if (mip0v|mip1v|mip2v|mip3v)
-				micro_code_active <= TRUE;
+				micro_machine_active <= TRUE;
 		end
 	end
 end
@@ -2096,7 +2097,7 @@ if ((fnIsAtom(pg_ren.pr0.ins) || fnIsAtom(pg_ren.pr1.ins) || fnIsAtom(pg_ren.pr2
 else
 	hirq = irq && !int_commit && (irq_i > (atom_mask[0] ? 6'd62 : sr.ipl));	// NMI (63) is always recognized.
 
-Stark_micro_code umc0 (
+Stark_micro_machine umc0 (
 	.om(sr.om),
 	.ipl(sr.ipl),
 	.micro_ip({micro_ip[11:2],2'd0}),
@@ -2106,7 +2107,7 @@ Stark_micro_code umc0 (
 	.regx(mc_regx0)
 );
 
-Stark_micro_code umc1 (
+Stark_micro_machine umc1 (
 	.om(sr.om),
 	.ipl(sr.ipl),
 	.micro_ip({micro_ip[11:2],2'd1}),
@@ -2116,7 +2117,7 @@ Stark_micro_code umc1 (
 	.regx(mc_regx1)
 );
 
-Stark_micro_code umc2 (
+Stark_micro_machine umc2 (
 	.om(sr.om),
 	.ipl(sr.ipl),
 	.micro_ip({micro_ip[11:2],2'd2}),
@@ -2126,7 +2127,7 @@ Stark_micro_code umc2 (
 	.regx(mc_regx2)
 );
 
-Stark_micro_code umc3 (
+Stark_micro_machine umc3 (
 	.om(sr.om),
 	.ipl(sr.ipl),
 	.micro_ip({micro_ip[11:2],2'd3}),
@@ -2169,10 +2170,10 @@ end
 // A missed cache line comes back as all zeros. Unfortunately this matches with
 // the BRK instruction. So, we test to ensure there was a cache hit before
 // setting the micro-code address.
-Stark_mcat umcat0(stomp_dec|(!ihit_mux && !micro_code_active_d), pg_dec.pr0, mip0);
-Stark_mcat umcat1(stomp_dec|(!ihit_mux && !micro_code_active_d), pg_dec.pr1, mip1);
-Stark_mcat umcat2(stomp_dec|(!ihit_mux && !micro_code_active_d), pg_dec.pr2, mip2);
-Stark_mcat umcat3(stomp_dec|(!ihit_mux && !micro_code_active_d), pg_dec.pr3, mip3);
+Stark_mcat umcat0(stomp_dec|(!ihit_mux && !micro_machine_active_d), pg_dec.pr0, mip0);
+Stark_mcat umcat1(stomp_dec|(!ihit_mux && !micro_machine_active_d), pg_dec.pr1, mip1);
+Stark_mcat umcat2(stomp_dec|(!ihit_mux && !micro_machine_active_d), pg_dec.pr2, mip2);
+Stark_mcat umcat3(stomp_dec|(!ihit_mux && !micro_machine_active_d), pg_dec.pr3, mip3);
 
 always_comb mip0v = |mip0;
 always_comb mip1v = |mip1;
@@ -2204,22 +2205,22 @@ always_comb pc0 = pc + (SUPPORT_VLIB ? 5'd1 : 5'd0);
 always_comb 
 begin
 	pc1 = pc0;
-	pc1.pc = micro_code_active ? pc0.pc : pc0.pc + len0;
+	pc1.pc = micro_machine_active ? pc0.pc : pc0.pc + len0;
 end
 always_comb
 begin
 	pc2 = pc0;
-	pc2.pc = micro_code_active ? pc0.pc : pc1.pc + len1;
+	pc2.pc = micro_machine_active ? pc0.pc : pc1.pc + len1;
 end
 always_comb
 begin
 	pc3 = pc0;
-	pc3.pc = micro_code_active ? pc0.pc : pc2.pc + len2;
+	pc3.pc = micro_machine_active ? pc0.pc : pc2.pc + len2;
 end
 always_comb
 begin
 	pc4 = pc0;
-	pc4.pc = micro_code_active ? pc0.pc : pc3.pc + len3;
+	pc4.pc = micro_machine_active ? pc0.pc : pc3.pc + len3;
 end
 
 // -----------------------------------------------------------------------------
@@ -2238,7 +2239,7 @@ wire irqf_fet;
 pc_address_ex_t misspc_fet;
 wire [1023:0] ic_line_fet;
 pc_address_t ic_hwipc, hwipc_fet;
-wire micro_code_active_fet;
+wire micro_machine_active_fet;
 wire [31:0] carry_mod_fet;
 
 always_ff @(posedge clk)
@@ -2268,8 +2269,8 @@ Stark_pipeline_fet ufet1
 	.ic_line_i(ic_line),
 	.ic_line_fet(ic_line_fet),
 	.nmi_i(pe_nmi),
-	.micro_code_active(micro_code_active),
-	.micro_code_active_fet(micro_code_active_fet),
+	.micro_machine_active(micro_machine_active),
+	.micro_machine_active_fet(micro_machine_active_fet),
 	.mc_adr(mc_adr)
 );
 
@@ -2333,14 +2334,14 @@ Stark_pipeline_mux uiext1
 	.irq_in(irq_in),
 	.hirq_i(hirq),
 	.reglist_active(1'b0),
-	.mipv_i(micro_code_active),
+	.mipv_i(micro_machine_active),
 	.mip_i(micro_ip),
 	.ic_line_fet(ic_line_fet),
 	.grp_i(igrp2),
 	.misspc_fet(misspc_fet),
 	.pc0_fet(pc0_fet),
 	.hwipc_fet(hwipc_fet),
-	.micro_code_active(micro_code_active_fet),
+	.micro_machine_active(micro_machine_active_fet),
 	.branchmiss(branch_state > BS_STATE3),
 	.mc_offs(32'd0),//mc_offs),
 	.mc_adr(mc_adr),
@@ -2416,10 +2417,10 @@ Stark_pipeline_dec udecstg1
 	.stomp_bno(stomp_bno),
 	.pg0_mux(pg0_mux),
 	.pg1_mux(pg1_mux),
-	.pg_dec.pr0_inv(ins0_d_inv),
-	.pg_dec.pr1_inv(ins1_d_inv),
-	.pg_dec.pr2_inv(ins2_d_inv),
-	.pg_dec.pr3_inv(ins3_d_inv),
+	.ins0_d_inv(ins0_d_inv),
+	.ins1_d_inv(ins1_d_inv),
+	.ins2_d_inv(ins2_d_inv),
+	.ins3_d_inv(ins3_d_inv),
 	.Rt0_dec(Rt0_dec),
 	.Rt1_dec(Rt1_dec),
 	.Rt2_dec(Rt2_dec),
@@ -2428,8 +2429,8 @@ Stark_pipeline_dec udecstg1
 	.Rt1_decv(Rt1_decv),
 	.Rt2_decv(Rt2_decv),
 	.Rt3_decv(Rt3_decv),
-	.micro_code_active_mux(micro_code_active_x),
-	.micro_code_active_dec(micro_code_active_d),
+	.micro_machine_active_mux(micro_machine_active_x),
+	.micro_machine_active_dec(micro_machine_active_d),
 	.pg_dec(pg_dec),
 	.ren_stallq(ren_stallq),
 	.ren_rst_busy(ren_rst_busy),
@@ -2475,24 +2476,29 @@ checkpt_ndx_t wrport0_cp;
 checkpt_ndx_t wrport1_cp;
 checkpt_ndx_t wrport2_cp;
 checkpt_ndx_t wrport3_cp;
+reg wrport0_tag;
+reg wrport1_tag;
+reg wrport2_tag;
+reg wrport3_tag;
 
 wire stomp0;
 wire stomp1;
 wire stomp2;
 wire stomp3;
 
-aregno_t [23:0] arn;
-reg [23:0] arnt;
+aregno_t [15:0] arn;
+reg [15:0] arnt;
 reg [2:0] arng [0:23];
-wire [23:0] arnv;
-pregno_t [23:0] prn;
-pregno_t [23:0] prn1;
-checkpt_ndx_t [23:0] rn_cp;
-wire [23:0] prnv;
-wire [0:0] arnbank [23:0];
+wire [15:0] arnv;
+pregno_t [15:0] prn;
+pregno_t [15:0] prn1;
+checkpt_ndx_t [15:0] rn_cp;
+wire [15:0] prnv;
+wire [0:0] arnbank [15:0];
 checkpt_ndx_t [3:0] cndx_ren;
 checkpt_ndx_t pcndx_ren;
 
+/*
 always_comb
 begin
 	arn[0] = pg_dec.pr0.aRa; arnt[0] = 1'b0; arng[0] = 3'd0;
@@ -2556,7 +2562,8 @@ begin
 	rn_cp[23] = store_argC_cndx;
 
 end
-
+*/
+/*
 assign arnbank[0] = sr.om & {2{|pg_dec.pr0.decbus.Ra}} & 0;
 assign arnbank[1] = sr.om & {2{|pg_dec.pr0.decbus.Rb}} & 0;
 assign arnbank[2] = sr.om & {2{|pg_dec.pr0.decbus.Rc}} & 0;
@@ -2581,14 +2588,22 @@ assign arnbank[20] = 1'b0;
 assign arnbank[21] = 1'b0;
 assign arnbank[22] = 1'b0;
 assign arnbank[23] = 1'b0;
-
+*/
+Stark_read_port_select urps1
+(
+	.rst(irst),
+	.clk(clk),
+	.aReg_i(aRs),
+	.aReg_o(arn),
+	.regAck_o()
+);
 
 reg vec_stallq;
 reg vec_stall2;
 always_comb advance_pipeline = !stallq && !vec_stallq && !ext_stall;
 always_comb advance_pipeline_seg2 = advance_pipeline;// || dc_get;//(!stallq && !vec_stallq) || dc_get;
 always_comb vec_stallq = !ic_dhit || vec_stall2;
-always_comb advance_f = advance_pipeline && !micro_code_active;
+always_comb advance_f = advance_pipeline && !micro_machine_active;
 reg nq0,nq1,nq2,nq3;
 ibh_t ibh;
 always_comb
@@ -2719,7 +2734,7 @@ assign arnv[20] = !stomp3;
 
 assign arnv[16] = 1'b1;
 */
-assign arnv = 24'hFFFFFF;
+assign arnv = 16'hFFFF;
 
 pregno_t Rt0_ren;
 pregno_t Rt1_ren;
@@ -2868,8 +2883,8 @@ Stark_pipeline_ren uren1
 	.cndx(cndx0),
 	.pcndx(pcndx),
 	.rat_stallq(rat_stallq),
-	.micro_code_active_dec(micro_code_active_d),
-	.micro_code_active_ren(micro_code_active_r)
+	.micro_machine_active_dec(micro_machine_active_d),
+	.micro_machine_active_ren(micro_machine_active_r)
 );
 
 
@@ -2911,22 +2926,22 @@ end
 /*
 always_ff @(posedge clk)
 if (irst)
-	micro_code_active_f <= TRUE;
+	micro_machine_active_f <= TRUE;
 else begin
 	if (advance_pipeline)
-		micro_code_active_f <= micro_code_active;
+		micro_machine_active_f <= micro_machine_active;
 end
 */
 always_ff @(posedge clk)
 if (irst)
-	micro_code_active_x <= FALSE;
+	micro_machine_active_x <= FALSE;
 else begin
 	if (advance_pipeline)
-		micro_code_active_x <= micro_code_active;
+		micro_machine_active_x <= micro_machine_active;
 end
 /*
 always_comb
-	micro_code_active_x = micro_code_active;
+	micro_machine_active_x = micro_machine_active;
 */
 
 // The cycle after the length is calculated
@@ -2974,16 +2989,16 @@ Stark_pipeline_que uque1
 	.rst(irst),
 	.clk(clk),
 	.en(advance_pipeline),
-	.pg_ren.pr0(pg_ren.pr0),
-	.pg_ren.pr1(pg_ren.pr1),
-	.pg_ren.pr2(pg_ren.pr2),
-	.pg_ren.pr3(pg_ren.pr3),
+	.ins0_ren(pg_ren.pr0),
+	.ins1_ren(pg_ren.pr1),
+	.ins2_ren(pg_ren.pr2),
+	.ins3_ren(pg_ren.pr3),
 	.ins0_que(ins0_que),
 	.ins1_que(ins1_que),
 	.ins2_que(ins2_que),
 	.ins3_que(ins3_que),
-	.micro_code_active_ren(micro_code_active_r),
-	.micro_code_active_que(micro_code_active_q)
+	.micro_machine_active_ren(micro_machine_active_r),
+	.micro_machine_active_que(micro_machine_active_q)
 );
 
 always_ff @(posedge clk)
@@ -3006,12 +3021,12 @@ always_ff @(posedge clk)
 if (advance_pipeline_seg2)
 	grp_r <= grp_d;
 
-reg alu0_wrA;
-reg alu1_wrA;
-reg fpu0_wrA;
-reg fpu1_wrA;
-reg dram0_wrA;
-reg dram1_wrA;
+reg alu0_wrA, alu0_wrB, alu0_wrC;
+reg alu1_wrA, alu1_wrB, alu1_wrC;
+reg fpu0_wrA, fpu0_wrB, fpu0_wrC;
+reg fpu1_wrA, fpu1_wrB, fpu1_wrC;
+reg dram0_wrA, dram0_wrB;
+reg dram1_wrA, dram1_wrB;
 reg fcu_wrA;
 reg wt0A, wt0B, wt0C;
 reg wt1A, wt1B, wt1C;
@@ -3036,6 +3051,9 @@ checkpt_ndx_t alu0_cp2, alu1_cp2, fpu0_cp2, fpu1_cp2;
 wire alu0_aRtz1, alu0_aRtz2, alu1_aRtz1, alu1_aRtz2, fpu0_aRtz2;
 rob_ndx_t alu0_id2, alu1_id2, fpu0_id2;
 operating_mode_t alu0_om2, alu1_om2, fpu0_om2, fpu1_om2, dram0_om2, dram1_om2;
+operating_mode_t alu0_omA2, alu1_omA2, fpu0_omA2, fpu1_omA2, dram0_omA2, dram1_omA2;
+operating_mode_t alu0_omB2, alu1_omB2, fpu0_omB2, fpu1_omB2, dram0_omB2, dram1_omB2;
+operating_mode_t alu0_omC2, alu1_omC2, fpu0_omC2, fpu1_omC2;
 
 // ALU #0 signals
 vtdl #($bits(pregno_t)) udlyal1A (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu0_RtA), .q(alu0_pRtA2) );
@@ -3159,31 +3177,93 @@ always_comb fpu0_wrC = (fpu0_sc_done2|fpu0_done1) && !fpu0_aRtzC2 && Stark_pkg::
 always_comb fpu1_wrA = (fpu1_sc_done|fpu1_done1) && !fpu1_aRtzA && Stark_pkg::NFPU > 1;
 always_comb fpu1_wrB = (fpu1_sc_done|fpu1_done1) && !fpu1_aRtzB && Stark_pkg::NFPU > 1;
 always_comb fpu1_wrC = (fpu1_sc_done|fpu1_done1) && !fpu1_aRtzC && Stark_pkg::NFPU > 1;
-always_comb dram0_wrA = dram_v0 && !dram_aRtzA0;
-always_comb dram0_wrB = dram_v0 && !dram_aRtzB0;
-always_comb dram1_wrA = dram_v1 && !dram_aRtzA1 && Stark_pkg::NDATA_PORTS > 1;
-always_comb dram1_wrB = dram_v1 && !dram_aRtzB1 && Stark_pkg::NDATA_PORTS > 1;
+always_comb dram0_wrA = dram_v0 && !dram_aRtz0A;
+always_comb dram0_wrB = dram_v0 && !dram_aRtz0B;
+always_comb dram1_wrA = dram_v1 && !dram_aRtz1A && Stark_pkg::NDATA_PORTS > 1;
+always_comb dram1_wrB = dram_v1 && !dram_aRtz1B && Stark_pkg::NDATA_PORTS > 1;
 always_comb fcu_wrA = 1'b0;
 
+reg [8:0] alu0_weA, alu0_weB, alu0_weC;
+reg [8:0] alu1_weA, alu1_weB, alu1_weC;
+reg [8:0] fpu0_weA, fpu0_weB, fpu0_weC;
+reg [8:0] fpu1_weA, fpu1_weB, fpu1_weC;
+reg [8:0] dram0_weA, dram0_weB;
+reg [8:0] dram1_weA, dram1_weB;
+reg [8:0] fcu_weA, fcu_weB;
+
 // Always write all bytes, unless a condition register.
-always_ff @(posedge clk) alu0_weA = ((alu0_aRt2A >= 7'd80 && alu0_aRt2A <= 7'd87) ? (alu0_om2A==Stark_pkg::OM_SECURE ? 9'h0FF : alu0_om2A==Stark_pkg::OM_HYPERVISOR ? 9'h0F : alu0_om2A==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01)) & {9{alu0_wrA}} : {wt0A,8'hFF} & {9{alu0_wrA}};
-always_ff @(posedge clk) alu0_weB = ((alu0_aRt2B >= 7'd80 && alu0_aRt2B <= 7'd87) ? (alu0_om2B==Stark_pkg::OM_SECURE ? 9'h0FF : alu0_om2B==Stark_pkg::OM_HYPERVISOR ? 9'h0F : alu0_om2B==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01)) & {9{alu0_wrB}} : {wt0B,8'hFF} & {9{alu0_wrB}};
-always_ff @(posedge clk) alu0_weC = ((alu0_aRt2C >= 7'd80 && alu0_aRt2C <= 7'd87) ? (alu0_om2C==Stark_pkg::OM_SECURE ? 9'h0FF : alu0_om2C==Stark_pkg::OM_HYPERVISOR ? 9'h0F : alu0_om2C==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01)) & {9{alu0_wrC}} : {wt0C,8'hFF} & {9{alu0_wrC}};
-always_ff @(posedge clk) alu1_weA = (((alu1_aRt2A >= 7'd80 && alu1_aRt2A <= 7'd87) ? (alu1_om2A==Stark_pkg::OM_SECURE ? 9'h0FF : alu1_om2A==Stark_pkg::OM_HYPERVISOR ? 9'h0F : alu1_om2A==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01)) & {9{alu1_wrA}} : {wt1A,8'hFF} & {9{alu1_wrA}}) & {9{Stark_pkg::NALU > 1}};
-always_ff @(posedge clk) alu1_weB = (((alu1_aRt2B >= 7'd80 && alu1_aRt2B <= 7'd87) ? (alu1_om2B==Stark_pkg::OM_SECURE ? 9'h0FF : alu1_om2B==Stark_pkg::OM_HYPERVISOR ? 9'h0F : alu1_om2B==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01)) & {9{alu1_wrB}} : {wt1B,8'hFF} & {9{alu1_wrB}}) & {9{Stark_pkg::NALU > 1}};
-always_ff @(posedge clk) alu1_weC = (((alu1_aRt2C >= 7'd80 && alu1_aRt2C <= 7'd87) ? (alu1_om2C==Stark_pkg::OM_SECURE ? 9'h0FF : alu1_om2C==Stark_pkg::OM_HYPERVISOR ? 9'h0F : alu1_om2C==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01)) & {9{alu1_wrC}} : {wt1C,8'hFF} & {9{alu1_wrC}}) & {9{Stark_pkg::NALU > 1}};
-always_ff @(posedge clk) fpu0_weA = (((fpu0_aRt2A >= 7'd80 && fpu0_aRt2A <= 7'd87) ? (fpu0_om2A==Stark_pkg::OM_SECURE ? 9'h0FF : fpu0_om2A==Stark_pkg::OM_HYPERVISOR ? 9'h0F : fpu0_om2A==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01)) & {9{fpu0_wrA}} : {wt2A,8'hFF} & {9{fpu0_wrA}}) & {9{Stark_pkg::NFPU > 0}};
-always_ff @(posedge clk) fpu0_weB = (((fpu0_aRt2B >= 7'd80 && fpu0_aRt2B <= 7'd87) ? (fpu0_om2B==Stark_pkg::OM_SECURE ? 9'h0FF : fpu0_om2B==Stark_pkg::OM_HYPERVISOR ? 9'h0F : fpu0_om2B==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01)) & {9{fpu0_wrB}} : {wt2B,8'hFF} & {9{fpu0_wrB}}) & {9{Stark_pkg::NFPU > 0}};
-always_ff @(posedge clk) fpu0_weC = (((fpu0_aRt2C >= 7'd80 && fpu0_aRt2C <= 7'd87) ? (fpu0_om2C==Stark_pkg::OM_SECURE ? 9'h0FF : fpu0_om2C==Stark_pkg::OM_HYPERVISOR ? 9'h0F : fpu0_om2C==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01)) & {9{fpu0_wrC}} : {wt2C,8'hFF} & {9{fpu0_wrC}}) & {9{Stark_pkg::NFPU > 0}};
-always_ff @(posedge clk) fpu1_weA = (((fpu1_aRt2A >= 7'd80 && fpu1_aRt2A <= 7'd87) ? (fpu1_om2A==Stark_pkg::OM_SECURE ? 9'h0FF : fpu1_om2A==Stark_pkg::OM_HYPERVISOR ? 9'h0F : fpu1_om2A==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01)) & {9{fpu1_wrA}} : {wt3A,8'hFF} & {9{fpu1_wrA}}) & {9{Stark_pkg::NFPU > 1}};
-always_ff @(posedge clk) fpu1_weB = (((fpu1_aRt2B >= 7'd80 && fpu1_aRt2B <= 7'd87) ? (fpu1_om2B==Stark_pkg::OM_SECURE ? 9'h0FF : fpu1_om2B==Stark_pkg::OM_HYPERVISOR ? 9'h0F : fpu1_om2B==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01)) & {9{fpu1_wrB}} : {wt3B,8'hFF} & {9{fpu1_wrB}}) & {9{Stark_pkg::NFPU > 1}};
-always_ff @(posedge clk) fpu1_weC = (((fpu1_aRt2C >= 7'd80 && fpu1_aRt2C <= 7'd87) ? (fpu1_om2C==Stark_pkg::OM_SECURE ? 9'h0FF : fpu1_om2C==Stark_pkg::OM_HYPERVISOR ? 9'h0F : fpu1_om2C==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01)) & {9{fpu1_wrC}} : {wt3C,8'hFF} & {9{fpu1_wrC}}) & {9{Stark_pkg::NFPU > 1}};
-always_ff @(posedge clk) dram0_weA = ((dram0_aRt2A >= 7'd80 && dram0_aRt2A <= 7'd87) ? (dram0_om2A==Stark_pkg::OM_SECURE ? 9'h0FF : dram0_om2A==Stark_pkg::OM_HYPERVISOR ? 9'h0F : dram0_om2A==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01)) & {9{dram0_wrA}} : {wt4A,8'hFF} & {9{dram0_wrA}};
-always_ff @(posedge clk) dram0_weB = ((dram0_aRt2B >= 7'd80 && dram0_aRt2B <= 7'd87) ? (dram0_om2B==Stark_pkg::OM_SECURE ? 9'h0FF : dram0_om2B==Stark_pkg::OM_HYPERVISOR ? 9'h0F : dram0_om2B==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01)) & {9{dram0_wrB}} : {wt4B,8'hFF} & {9{dram0_wrB}};
-always_ff @(posedge clk) dram1_weA = (((dram1_aRt2A >= 7'd80 && dram1_aRt2A <= 7'd87) ? (dram1_om2A==Stark_pkg::OM_SECURE ? 9'h0FF : dram1_om2A==Stark_pkg::OM_HYPERVISOR ? 9'h0F : dram1_om2A==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01)) & {9{dram1_wrA}} : {wt5A,8'hFF} & {9{dram1_wrA}}) & {9{Stark_pkg::NDATA_PORTS > 1}};
-always_ff @(posedge clk) dram1_weB = (((dram1_aRt2B >= 7'd80 && dram1_aRt2B <= 7'd87) ? (dram1_om2B==Stark_pkg::OM_SECURE ? 9'h0FF : dram1_om2B==Stark_pkg::OM_HYPERVISOR ? 9'h0F : dram1_om2B==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01)) & {9{dram1_wrB}} : {wt5B,8'hFF} & {9{dram1_wrB}}) & {9{Stark_pkg::NDATA_PORTS > 1}};
-always_ff @(posedge clk) fcu_weA = ((fcu_aRt2A >= 7'd80 && fcu_aRt2A <= 7'd87) ? (fcu_om2A==Stark_pkg::OM_SECURE ? 9'h0FF : fcu_om2A==Stark_pkg::OM_HYPERVISOR ? 9'h0F : fcu_om2A==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01)) & {9{fcu_wrA}} : {wt6A,8'hFF} & {9{fcu_wrA}};
-always_ff @(posedge clk) fcu_weB = ((fcu_aRt2B >= 7'd80 && fcu_aRt2B <= 7'd87) ? (fcu_om2B==Stark_pkg::OM_SECURE ? 9'h0FF : fcu_om2B==Stark_pkg::OM_HYPERVISOR ? 9'h0F : fcu_om2B==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01)) & {9{fcu_wrB}} : {wt6B,8'hFF} & {9{fcu_wrB}};
+always_ff @(posedge clk) alu0_weA =
+	(alu0_aRtA2 >= 7'd80 && alu0_aRtA2 <= 7'd87) ?
+	((alu0_omA2==Stark_pkg::OM_SECURE ? 9'h0FF : alu0_omA2==Stark_pkg::OM_HYPERVISOR ? 9'h0F : alu0_omA2==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01) & {9{alu0_wrA}}) :
+	{wt0A,8'hFF} & {9{alu0_wrA}};
+always_ff @(posedge clk) alu0_weB =
+	(alu0_aRtB2 >= 7'd80 && alu0_aRtB2 <= 7'd87) ?
+	((alu0_omB2==Stark_pkg::OM_SECURE ? 9'h0FF : alu0_omB2==Stark_pkg::OM_HYPERVISOR ? 9'h0F : alu0_omB2==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01) & {9{alu0_wrB}}) :
+	{wt0B,8'hFF} & {9{alu0_wrB}};
+always_ff @(posedge clk) alu0_weC = 
+	(alu0_aRtC2 >= 7'd80 && alu0_aRtC2 <= 7'd87) ?
+	((alu0_omC2==Stark_pkg::OM_SECURE ? 9'h0FF : alu0_omC2==Stark_pkg::OM_HYPERVISOR ? 9'h0F : alu0_omC2==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01) & {9{alu0_wrC}}) :
+	{wt0C,8'hFF} & {9{alu0_wrC}};
+	
+always_ff @(posedge clk) alu1_weA =
+	(alu1_aRtA2 >= 7'd80 && alu1_aRtA2 <= 7'd87) ?
+	((alu1_omA2==Stark_pkg::OM_SECURE ? 9'h0FF : alu1_omA2==Stark_pkg::OM_HYPERVISOR ? 9'h0F : alu1_omA2==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01) & {9{alu1_wrA}}) :
+	{wt1A,8'hFF} & {9{alu1_wrA}} & {9{Stark_pkg::NALU > 1}};
+always_ff @(posedge clk) alu1_weB =
+ 	(alu1_aRtB2 >= 7'd80 && alu1_aRtB2 <= 7'd87) ?
+ 	((alu1_omB2==Stark_pkg::OM_SECURE ? 9'h0FF : alu1_omB2==Stark_pkg::OM_HYPERVISOR ? 9'h0F : alu1_omB2==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01) & {9{alu1_wrB}}) :
+ 	{wt1B,8'hFF} & {9{alu1_wrB}} & {9{Stark_pkg::NALU > 1}};
+always_ff @(posedge clk) alu1_weC =
+ 	(alu1_aRtC2 >= 7'd80 && alu1_aRtC2 <= 7'd87) ?
+ 	((alu1_omC2==Stark_pkg::OM_SECURE ? 9'h0FF : alu1_omC2==Stark_pkg::OM_HYPERVISOR ? 9'h0F : alu1_omC2==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01) & {9{alu1_wrC}}) :
+ 	{wt1C,8'hFF} & {9{alu1_wrC}} & {9{Stark_pkg::NALU > 1}};
+
+always_ff @(posedge clk) fpu0_weA =
+	(fpu0_aRtA2 >= 7'd80 && fpu0_aRtA2 <= 7'd87) ?
+	((fpu0_omA2==Stark_pkg::OM_SECURE ? 9'h0FF : fpu0_omA2==Stark_pkg::OM_HYPERVISOR ? 9'h0F : fpu0_omA2==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01) & {9{fpu0_wrA}}) :
+	{wt2A,8'hFF} & {9{fpu0_wrA}} & {9{Stark_pkg::NFPU > 0}};
+always_ff @(posedge clk) fpu0_weB =
+	(fpu0_aRtB2 >= 7'd80 && fpu0_aRtB2 <= 7'd87) ?
+	((fpu0_omB2==Stark_pkg::OM_SECURE ? 9'h0FF : fpu0_omB2==Stark_pkg::OM_HYPERVISOR ? 9'h0F : fpu0_omB2==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01) & {9{fpu0_wrB}}) :
+	{wt2B,8'hFF} & {9{fpu0_wrB}} & {9{Stark_pkg::NFPU > 0}};
+always_ff @(posedge clk) fpu0_weC =
+	(fpu0_aRtC2 >= 7'd80 && fpu0_aRtC2 <= 7'd87) ?
+	((fpu0_omC2==Stark_pkg::OM_SECURE ? 9'h0FF : fpu0_omC2==Stark_pkg::OM_HYPERVISOR ? 9'h0F : fpu0_omC2==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01) & {9{fpu0_wrC}}) :
+	{wt2C,8'hFF} & {9{fpu0_wrC}} & {9{Stark_pkg::NFPU > 0}};
+
+always_ff @(posedge clk) fpu1_weA =
+	(fpu1_aRtA2 >= 7'd80 && fpu1_aRtA2 <= 7'd87) ?
+	((fpu1_omA2==Stark_pkg::OM_SECURE ? 9'h0FF : fpu1_omA2==Stark_pkg::OM_HYPERVISOR ? 9'h0F : fpu1_omA2==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01) & {9{fpu1_wrA}}) :
+	{wt3A,8'hFF} & {9{fpu1_wrA}} & {9{Stark_pkg::NFPU > 1}};
+always_ff @(posedge clk) fpu1_weB =
+	(fpu1_aRtB2 >= 7'd80 && fpu1_aRtB2 <= 7'd87) ?
+	((fpu1_omB2==Stark_pkg::OM_SECURE ? 9'h0FF : fpu1_omB2==Stark_pkg::OM_HYPERVISOR ? 9'h0F : fpu1_omB2==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01) & {9{fpu1_wrB}}) :
+	{wt3B,8'hFF} & {9{fpu1_wrB}} & {9{Stark_pkg::NFPU > 1}};
+always_ff @(posedge clk) fpu1_weC =
+	(fpu1_aRtC2 >= 7'd80 && fpu1_aRtC2 <= 7'd87) ?
+	((fpu1_omC2==Stark_pkg::OM_SECURE ? 9'h0FF : fpu1_omC2==Stark_pkg::OM_HYPERVISOR ? 9'h0F : fpu1_omC2==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01) & {9{fpu1_wrC}}) :
+	{wt3C,8'hFF} & {9{fpu1_wrC}} & {9{Stark_pkg::NFPU > 1}};
+
+always_ff @(posedge clk) dram0_weA =
+	(dram0_aRtA2 >= 7'd80 && dram0_aRtA2 <= 7'd87) ?
+	((dram0_omA2==Stark_pkg::OM_SECURE ? 9'h0FF : dram0_omA2==Stark_pkg::OM_HYPERVISOR ? 9'h0F : dram0_omA2==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01) & {9{dram0_wrA}}) : {wt4A,8'hFF} & {9{dram0_wrA}};
+always_ff @(posedge clk) dram0_weB =
+	(dram0_aRtB2 >= 7'd80 && dram0_aRtB2 <= 7'd87) ?
+	((dram0_omB2==Stark_pkg::OM_SECURE ? 9'h0FF : dram0_omB2==Stark_pkg::OM_HYPERVISOR ? 9'h0F : dram0_omB2==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01) & {9{dram0_wrB}}) : {wt4B,8'hFF} & {9{dram0_wrB}};
+
+always_ff @(posedge clk) dram1_weA =
+	(dram1_aRtA2 >= 7'd80 && dram1_aRtA2 <= 7'd87) ?
+	((dram1_omA2==Stark_pkg::OM_SECURE ? 9'h0FF : dram1_omA2==Stark_pkg::OM_HYPERVISOR ? 9'h0F : dram1_omA2==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01) & {9{dram1_wrA}}) : {wt5A,8'hFF} & {9{dram1_wrA}} & {9{Stark_pkg::NDATA_PORTS > 1}};
+always_ff @(posedge clk) dram1_weB =
+	(dram1_aRtB2 >= 7'd80 && dram1_aRtB2 <= 7'd87) ?
+	((dram1_omB2==Stark_pkg::OM_SECURE ? 9'h0FF : dram1_omB2==Stark_pkg::OM_HYPERVISOR ? 9'h0F : dram1_omB2==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01) & {9{dram1_wrB}}) : {wt5B,8'hFF} & {9{dram1_wrB}} & {9{Stark_pkg::NDATA_PORTS > 1}};
+
+always_ff @(posedge clk) fcu_weA =
+	(fcu_aRtA2 >= 7'd80 && fcu_aRtA2 <= 7'd87) ?
+	((fcu_omA2==Stark_pkg::OM_SECURE ? 9'h0FF : fcu_omA2==Stark_pkg::OM_HYPERVISOR ? 9'h0F : fcu_omA2==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01) & {9{fcu_wrA}}) : {wt6A,8'hFF} & {9{fcu_wrA}};
+always_ff @(posedge clk) fcu_weB =
+	(fcu_aRtB2 >= 7'd80 && fcu_aRtB2 <= 7'd87) ?
+	((fcu_omB2==Stark_pkg::OM_SECURE ? 9'h0FF : fcu_omB2==Stark_pkg::OM_HYPERVISOR ? 9'h0F : fcu_omB2==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01) & {9{fcu_wrB}}) : {wt6B,8'hFF} & {9{fcu_wrB}};
 
 always_comb wt0A = (alu0_sc_done|alu0_done) && !alu0_aRtzA2 && alu0_capA;
 always_comb wt0B = (alu0_sc_done|alu0_done) && !alu0_aRtzB2 && alu0_capB;
@@ -3243,6 +3323,14 @@ always_ff @(posedge clk) upd6 = upd6a==5'd31 ? 5'd31 : fuq_rot > upd6a ? 6'd18 +
 `endif
 
 // Read the next queue entry for the queue jsut used to update the register file.
+reg [17:0] fuq_rd;
+wire [17:0] fuq_we;
+pregno_t [17:0] fuq_pRt;
+aregno_t [17:0] fuq_aRt;
+wire [17:0] fuq_tag;
+value_t [17:0] fuq_res;
+wire [3:0] fuq_cp [0:17];
+
 always_ff @(posedge clk)
 if (rst)
 	fuq_rd <= 18'd0;
@@ -3381,27 +3469,27 @@ Stark_FuncResultQueue ufrq6
 );
 end
 else begin
-	fuq_we[3] = 9'd0;
-	fuq_pRt[3] = 8'd0;
-	fuq_aRt[3] = 7'd0;
-	fuq_tag[3] = 8'b0;
-	fuq_res[3] = 64'd0;
-	fuq_cp[3] = 4'd0;
-	fuq_empty[3] = 1'b1;
-	fuq_we[4] = 9'd0;
-	fuq_pRt[4] = 8'd0;
-	fuq_aRt[4] = 7'd0;
-	fuq_tag[4] = 8'b0;
-	fuq_res[4] = 64'd0;
-	fuq_cp[4] = 4'd0;
-	fuq_empty[4] = 1'b1;
-	fuq_we[5] = 9'd0;
-	fuq_pRt[5] = 8'd0;
-	fuq_aRt[5] = 7'd0;
-	fuq_tag[5] = 8'b0;
-	fuq_res[5] = 64'd0;
-	fuq_cp[5] = 4'd0;
-	fuq_empty[5] = 1'b1;
+	assign fuq_we[3] = 9'd0;
+	assign fuq_pRt[3] = 8'd0;
+	assign fuq_aRt[3] = 7'd0;
+	assign fuq_tag[3] = 8'b0;
+	assign fuq_res[3] = 64'd0;
+	assign fuq_cp[3] = 4'd0;
+	assign fuq_empty[3] = 1'b1;
+	assign fuq_we[4] = 9'd0;
+	assign fuq_pRt[4] = 8'd0;
+	assign fuq_aRt[4] = 7'd0;
+	assign fuq_tag[4] = 8'b0;
+	assign fuq_res[4] = 64'd0;
+	assign fuq_cp[4] = 4'd0;
+	assign fuq_empty[4] = 1'b1;
+	assign fuq_we[5] = 9'd0;
+	assign fuq_pRt[5] = 8'd0;
+	assign fuq_aRt[5] = 7'd0;
+	assign fuq_tag[5] = 8'b0;
+	assign fuq_res[5] = 64'd0;
+	assign fuq_cp[5] = 4'd0;
+	assign fuq_empty[5] = 1'b1;
 end
 end
 endgenerate
@@ -3469,27 +3557,27 @@ Stark_FuncResultQueue ufrq9
 );
 end
 else begin
-	fuq_we[6] = 9'd0;
-	fuq_pRt[6] = 8'd0;
-	fuq_aRt[6] = 7'd0;
-	fuq_tag[6] = 8'b0;
-	fuq_res[6] = 64'd0;
-	fuq_cp[6] = 4'd0;
-	fuq_empty[6] = 1'b1;
-	fuq_we[7] = 9'd0;
-	fuq_pRt[7] = 8'd0;
-	fuq_aRt[7] = 7'd0;
-	fuq_tag[7] = 8'b0;
-	fuq_res[7] = 64'd0;
-	fuq_cp[7] = 4'd0;
-	fuq_empty[7] = 1'b1;
-	fuq_we[8] = 9'd0;
-	fuq_pRt[8] = 8'd0;
-	fuq_aRt[8] = 7'd0;
-	fuq_tag[8] = 8'b0;
-	fuq_res[8] = 64'd0;
-	fuq_cp[8] = 4'd0;
-	fuq_empty[8] = 1'b1;
+	assign fuq_we[6] = 9'd0;
+	assign fuq_pRt[6] = 8'd0;
+	assign fuq_aRt[6] = 7'd0;
+	assign fuq_tag[6] = 8'b0;
+	assign fuq_res[6] = 64'd0;
+	assign fuq_cp[6] = 4'd0;
+	assign fuq_empty[6] = 1'b1;
+	assign fuq_we[7] = 9'd0;
+	assign fuq_pRt[7] = 8'd0;
+	assign fuq_aRt[7] = 7'd0;
+	assign fuq_tag[7] = 8'b0;
+	assign fuq_res[7] = 64'd0;
+	assign fuq_cp[7] = 4'd0;
+	assign fuq_empty[7] = 1'b1;
+	assign fuq_we[8] = 9'd0;
+	assign fuq_pRt[8] = 8'd0;
+	assign fuq_aRt[8] = 7'd0;
+	assign fuq_tag[8] = 8'b0;
+	assign fuq_res[8] = 64'd0;
+	assign fuq_cp[8] = 4'd0;
+	assign fuq_empty[8] = 1'b1;
 end
 end
 endgenerate
@@ -3557,27 +3645,27 @@ Stark_FuncResultQueue ufrq12
 );
 end
 else begin
-	fuq_we[9] = 9'd0;
-	fuq_pRt[9] = 8'd0;
-	fuq_aRt[9] = 7'd0;
-	fuq_tag[9] = 8'b0;
-	fuq_res[9] = 64'd0;
-	fuq_cp[9] = 4'd0;
-	fuq_empty[9] = 1'b1;
-	fuq_we[10] = 9'd0;
-	fuq_pRt[10] = 8'd0;
-	fuq_aRt[10] = 7'd0;
-	fuq_tag[10] = 8'b0;
-	fuq_res[10] = 64'd0;
-	fuq_cp[10] = 4'd0;
-	fuq_empty[10] = 1'b1;
-	fuq_we[11] = 9'd0;
-	fuq_pRt[11] = 8'd0;
-	fuq_aRt[11] = 7'd0;
-	fuq_tag[11] = 8'b0;
-	fuq_res[11] = 64'd0;
-	fuq_cp[11] = 4'd0;
-	fuq_empty[11] = 1'b1;
+	assign fuq_we[9] = 9'd0;
+	assign fuq_pRt[9] = 8'd0;
+	assign fuq_aRt[9] = 7'd0;
+	assign fuq_tag[9] = 8'b0;
+	assign fuq_res[9] = 64'd0;
+	assign fuq_cp[9] = 4'd0;
+	assign fuq_empty[9] = 1'b1;
+	assign fuq_we[10] = 9'd0;
+	assign fuq_pRt[10] = 8'd0;
+	assign fuq_aRt[10] = 7'd0;
+	assign fuq_tag[10] = 8'b0;
+	assign fuq_res[10] = 64'd0;
+	assign fuq_cp[10] = 4'd0;
+	assign fuq_empty[10] = 1'b1;
+	assign fuq_we[11] = 9'd0;
+	assign fuq_pRt[11] = 8'd0;
+	assign fuq_aRt[11] = 7'd0;
+	assign fuq_tag[11] = 8'b0;
+	assign fuq_res[11] = 64'd0;
+	assign fuq_cp[11] = 4'd0;
+	assign fuq_empty[11] = 1'b1;
 end
 end
 endgenerate
@@ -3665,20 +3753,20 @@ Stark_FuncResultQueue ufrq16
 );
 end
 else begin
-	fuq_we[14] = 9'd0;
-	fuq_pRt[14] = 8'd0;
-	fuq_aRt[14] = 7'd0;
-	fuq_tag[14] = 8'b0;
-	fuq_res[14] = 64'd0;
-	fuq_cp[14] = 4'd0;
-	fuq_empty[14] = 1'b1;
-	fuq_we[15] = 9'd0;
-	fuq_pRt[15] = 8'd0;
-	fuq_aRt[15] = 7'd0;
-	fuq_tag[15] = 8'b0;
-	fuq_res[15] = 64'd0;
-	fuq_cp[15] = 4'd0;
-	fuq_empty[15] = 1'b1;
+	assign fuq_we[14] = 9'd0;
+	assign fuq_pRt[14] = 8'd0;
+	assign fuq_aRt[14] = 7'd0;
+	assign fuq_tag[14] = 8'b0;
+	assign fuq_res[14] = 64'd0;
+	assign fuq_cp[14] = 4'd0;
+	assign fuq_empty[14] = 1'b1;
+	assign fuq_we[15] = 9'd0;
+	assign fuq_pRt[15] = 8'd0;
+	assign fuq_aRt[15] = 7'd0;
+	assign fuq_tag[15] = 8'b0;
+	assign fuq_res[15] = 64'd0;
+	assign fuq_cp[15] = 4'd0;
+	assign fuq_empty[15] = 1'b1;
 end
 end
 endgenerate
@@ -3774,7 +3862,7 @@ always_ff @(posedge clk) wrport5_cp <= fuq_cp[upd6];
 always_ff @(posedge clk) wrport5_tag <= fuq_tag[upd6]; 
 `endif
 
-Stark_regfile4wNr #(.RPORTS(24)) urf1 (
+Stark_regfile4wNr #(.RPORTS(16)) urf1 (
 	.rst(irst),
 	.clk(clk), 
 	.wr0(wrport0_v),
@@ -3911,11 +3999,11 @@ always_ff @(posedge clk) if (fcu_new) takbr <= takb;
 
 always_comb
 begin
-	fcu_exc = FLT_NONE;
+	fcu_exc = Stark_pkg::FLT_NONE;
 	// ToDo: fix check
 	if (fcu_instr.ins.any.opcode==OP_CHK) begin
 //		fcu_exc = cause_code_t'(fcu_instr.ins[34:27]);
-		fcu_exc = FLT_NONE;
+		fcu_exc = Stark_pkg::FLT_NONE;
 	end
 end
 
@@ -4255,6 +4343,7 @@ Stark_mem_sched umems1
 	.ndx1v(mem1_lsndxv)
 );
 
+/*
 assign alu0_argA_reg = rob[alu0_rndx].op.pRa;
 assign alu0_argB_reg = rob[alu0_rndx].op.pRb;
 assign alu0_argC_reg = rob[alu0_rndx].op.pRc;
@@ -4290,6 +4379,50 @@ assign agen1_argM_reg = rob[agen1_rndx].op.pRm;
 assign alu0_argT_reg = rob[alu0_rndx].op.pRt;
 assign alu1_argT_reg = rob[alu1_rndx].op.pRt;
 assign fpu0_argT_reg = rob[fpu0_rndx].op.pRt;
+*/
+
+assign aRs[0] = rob[alu0_rndx].op.decbus.Ra;
+assign aRs[7] = rob[alu0_rndx].op.decbus.Rb;
+assign aRs[3] = rob[alu0_rndx].op.decbus.Rc;
+assign aRs[4] = rob[alu0_rndx].op.decbus.Rt;
+
+assign aRs[1] = rob[alu1_rndx].op.decbus.Ra;
+assign aRs[8] = rob[alu1_rndx].op.decbus.Rb;
+assign aRs[9] = rob[alu1_rndx].op.decbus.Rc;
+assign aRs[10] = rob[alu1_rndx].op.decbus.Rt;
+
+assign aRs[2] = rob[fpu0_rndx].op.decbus.Ra;
+assign aRs[11] = rob[fpu0_rndx].op.decbus.Rb;
+assign aRs[12] = rob[fpu0_rndx].op.decbus.Rc;
+assign aRs[13] = rob[fpu0_rndx].op.decbus.Rt;
+
+assign aRs[3] = rob[fpu1_rndx].op.decbus.Ra;
+assign aRs[14] = rob[fpu1_rndx].op.decbus.Rb;
+assign aRs[15] = rob[fpu1_rndx].op.decbus.Rc;
+assign aRs[16] = rob[fpu1_rndx].op.decbus.Rt;
+
+assign aRs[4] = rob[fcu_rndx].op.decbus.Ra;
+assign aRs[17] = rob[fcu_rndx].op.decbus.Rb;
+
+assign aRs[5] = rob[agen0_rndx].op.decbus.Ra;
+assign aRs[18] = rob[agen0_rndx].op.decbus.Rb;
+assign aRs[19] = rob[agen0_rndx].op.decbus.Rc;
+assign aRs[20] = rob[agen0_rndx].op.decbus.Rt;
+
+assign aRs[6] = rob[agen1_rndx].op.decbus.Ra;
+assign aRs[21] = rob[agen1_rndx].op.decbus.Rb;
+assign aRs[22] = rob[agen1_rndx].op.decbus.Rc;
+assign aRs[23] = rob[agen1_rndx].op.decbus.Rt;
+
+assign aRs[24] = rob[alu0_rndx].op.Rci;
+assign aRs[25] = rob[alu1_rndx].op.Rci;
+
+assign aRs[26] = 7'd0;
+assign aRs[27] = 7'd0;
+assign aRs[28] = 7'd0;
+assign aRs[29] = 7'd0;
+assign aRs[30] = 7'd0;
+assign aRs[31] = 7'd0;
 
 // ----------------------------------------------------------------------------
 // EXECUTE stage combo logic
@@ -4573,7 +4706,7 @@ for (g = 0; g < Stark_pkg::NDATA_PORTS; g = g + 1) begin
 		end
 	end
 
-	Stark_dcache
+	dcache
 	#(.CORENO(CORENO), .CID(g+1))
 	udc1
 	(
@@ -4600,7 +4733,7 @@ for (g = 0; g < Stark_pkg::NDATA_PORTS; g = g + 1) begin
 		.dc_invall(dc_invall)
 	);
 
-	Stark_dcache_ctrl
+	dcache_ctrl
 	#(.CORENO(CORENO), .CID(g+1))
 	udcctrl1
 	(
@@ -4888,7 +5021,7 @@ begin
 			// And it should be the store closest to the load.
 			stsn > lsq[n15r][n15c].sn &&
 			// And the address should match.
-			lsq[lsndx.row][lsndx.col].vpa==1'b1 && lsq[n15r][n15c].vpa==1'b1	// must be physical addresses
+			lsq[lsndx.row][lsndx.col].vpa==1'b1 && lsq[n15r][n15c].vpa==1'b1 &&	// must be physical addresses
 			lsq[lsndx.row][lsndx.col].adr == lsq[n15r][n15c].adr
 			) begin
 			 	stsn = lsq[n15r][n15c].sn;
@@ -5118,18 +5251,11 @@ Stark_alu_station ualust0
 	.rndx(alu0_rndx),
 	.rndxv(alu0_rndxv),
 	.rob(rob[alu0_rndx]),
-	.rfo_argA(rfo_alu0_argA),
-	.rfo_argB(rfo_alu0_argB),
-	.rfo_argC(rfo_alu0_argC),
-	.rfo_argT(rfo_alu0_argT),
-	.rfo_argM(rfo_alu0_argM),
+	.prn(prn),
+	.prnv(prnv),
+	.rfo(rfo),
 	.rfo_argA_ctag(rfo_alu0_argA_ctag),
 	.rfo_argB_ctag(rfo_alu0_argB_ctag),
-	.vrm(vrm),
-	.vex(vex),
-	.wrport0_v(wrport0_v),
-	.wrport0_Rt(wrport0_Rt),
-	.wrport0_res(wrport0_res),
 	.ld(alu0_ld),
 	.id(alu0_id), 
 	.argA(alu0_argA),
@@ -5141,6 +5267,7 @@ Stark_alu_station ualust0
 	.argM(alu0_argM),
 	.argA_ctag(alu0_argA_ctag),
 	.argB_ctag(alu0_argB_ctag),
+	.all_args_valid(alu0_args_valid),
 	.cpytgt(alu0_cpytgt),
 	.cs(alu0_cs),
 	.aRtz(alu0_aRtz),
@@ -5175,18 +5302,11 @@ generate begin : gAluStation
 			.rndx(alu1_rndx),
 			.rndxv(alu1_rndxv),
 			.rob(rob[alu1_rndx]),
-			.rfo_argA(rfo_alu1_argA),
-			.rfo_argB(rfo_alu1_argB),
-			.rfo_argC(rfo_alu1_argC),
-			.rfo_argT(rfo_alu1_argT),
-			.rfo_argM(rfo_alu1_argM),
+			.prn(prn),
+			.prnv(prnv),
+			.rfo(rfo),
 			.rfo_argA_ctag(rfo_alu1_argA_ctag),
 			.rfo_argB_ctag(rfo_alu1_argB_ctag),
-			.vrm(vrm),
-			.vex(vex),
-			.wrport0_v(wrport0_v),
-			.wrport0_Rt(wrport0_Rt),
-			.wrport0_res(wrport0_res),
 			.ld(alu1_ld),
 			.id(alu1_id), 
 			.argA(alu1_argA),
@@ -5198,6 +5318,7 @@ generate begin : gAluStation
 			.argM(alu1_argM),
 			.argA_ctag(alu1_argA_ctag),
 			.argB_ctag(alu1_argB_ctag),
+			.all_args_valid(alu1_args_valid),
 			.cpytgt(alu1_cpytgt),
 			.cs(alu1_cs),
 			.aRtz(alu1_aRtz),
@@ -5223,7 +5344,6 @@ endgenerate
 
 always_ff @(posedge clk) alu1_ldd <= alu1_ld;
 
-genvar gStark_pkg::NFPU;
 wire fpu0_iq_rd_rst_busy, fpu0_iq_wr_rst_busy;
 wire fpu0_iq_data_valid;
 wire fpu0_iq_underflow;
@@ -5232,8 +5352,8 @@ wire fpu0_iq_rd_en = fpu0_idle;
 fpu_iq_t fpu0_iq_i, fpu0_iq_o;
 
 generate begin : gFpuStat
-	for (gStark_pkg::NFPU = 0; gStark_pkg::NFPU < Stark_pkg::NFPU; gStark_pkg::NFPU = gStark_pkg::NFPU + 1) begin
-		case (gStark_pkg::NFPU)
+	for (g = 0; g < Stark_pkg::NFPU; g = g + 1) begin
+		case (g)
 		0:
 			begin
 			Stark_fpu_station ufpustat0
@@ -5442,7 +5562,7 @@ if (irst) begin
 	fcu_pc.bno_f <= 6'd1;
 	fcu_pc.pc <= RSTPC;
 	fcu_bt <= FALSE;
-	fcu_bts <= BTS_NONE;
+	fcu_bts <= Stark_pkg::BTS_NONE;
 	fcu_id <= 5'd0;
 	fcu_cjb <= 1'b0;
 	fcu_bl <= 1'b0;
@@ -6232,7 +6352,7 @@ else begin
 				rob[fpu0_id].done <= {VAL,VAL};
 				rob[fpu0_id].out <= {INV,INV};
 				// If a quad precision op is performed, release the ALU
-				if (rob[fpu0_id].decbus.prc==StarkPkg::hexi) begin
+				if (rob[fpu0_id].decbus.prc==Stark_pkg::hexi) begin
 					if (rob[alu0_id].v && alu0_id==(fpu0_id+ROB_ENTRIES-1)%ROB_ENTRIES) begin
 			    	alu0_done <= TRUE;
 				    alu0_idle1 <= TRUE;
@@ -6679,7 +6799,7 @@ else begin
     dram_id0 <= dram0_id;
     dram_Rt0 <= dram0_Rt;
     dram_aRt0 <= dram0_aRt;
-    dram_aRtz0 <= dram0_aRtz;
+    dram_aRtz0A <= dram0_aRtz;
     dram_om0 <= dram0_om;
     dram_exc0 <= dram0_exc;
   	dram_bus0 <= fnDati(1'b0,dram0_op,(cpu_resp_o[0].dat << dram0_shift)|dram_bus0, dram0_pc);
@@ -6703,7 +6823,7 @@ else begin
     dram_id0 <= dram0_id;
     dram_Rt0 <= dram0_Rt;
     dram_aRt0 <= dram0_aRt;
-    dram_aRtz0 <= dram0_aRtz;
+    dram_aRtz0A <= dram0_aRtz;
     dram_om0 <= dram0_om;
     dram_exc0 <= dram0_exc;
   	dram_bus0 <= fnDati(dram0_more,dram0_op,cpu_resp_o[0].dat >> dram0_shift, dram0_pc);
@@ -6728,7 +6848,7 @@ else begin
 	    dram_id1 <= dram1_id;
 	    dram_Rt1 <= dram1_Rt;
 	    dram_aRt1 <= dram1_aRt;
-	    dram_aRtz1 <= dram1_aRtz;
+	    dram_aRtz1A <= dram1_aRtz;
 	    dram_om1 <= dram1_om;
 	    dram_exc1 <= dram1_exc;
     	dram_bus1 <= fnDati(1'b0,dram1_op,(cpu_resp_o[1].dat << dram1_shift)|dram_bus1, dram1_pc);
@@ -6748,7 +6868,7 @@ else begin
 	    dram_id1 <= dram1_id;
 	    dram_Rt1 <= dram1_Rt;
 	    dram_aRt1 <= dram1_aRt;
-	    dram_aRtz1 <= dram1_aRtz;
+	    dram_aRtz1A <= dram1_aRtz;
 	    dram_om1 <= dram1_om;
 	    dram_exc1 <= dram1_exc;
     	dram_bus1 <= fnDati(dram1_more,dram1_op,cpu_resp_o[1].dat >> dram1_shift, dram1_pc);
@@ -6784,7 +6904,7 @@ else begin
 			dram0_om <= lsq[mem0_lsndx.row][mem0_lsndx.col].om;
 			// Prevent multiple updates
 			lsq[mem0_lsndx.row][mem0_lsndx.col].v <= INV;
-			rob[lsqmem0_lsndx.row][mem0_lsndx.col].rndx].done <= 2'b11;
+			rob[lsq[lsqmem0_lsndx.row][mem0_lsndx.col].rndx].done <= 2'b11;
 		end
 	end
 	else if (SUPPORT_LOAD_BYPASSING && lbndx0 > 0) begin
@@ -6798,7 +6918,7 @@ else begin
 		rob[lsq[lbndx0.row][lbndx0.col].rndx].done <= 2'b11;
 	end
   else if (dram0 == DRAMSLOT_AVAIL && mem0_lsndxv && !robentry_stomp[lsq[mem0_lsndx.row][mem0_lsndx.col].rndx] && !dram0_idv && !dram0_idv2) begin
-		dram0_exc <= FLT_NONE;
+		dram0_exc <= Stark_pkg::FLT_NONE;
 		dram0_stomp <= 1'b0;
 		dram0_id <= lsq[mem0_lsndx.row][mem0_lsndx.col].rndx;
 		dram0_idv <= VAL;
@@ -6839,7 +6959,7 @@ else begin
 			dram0_ctago <= lsq[mem0_lsndx.row][mem0_lsndx.col].ctag;
 			dram0_shift <= {lsq[mem0_lsndx.row][mem0_lsndx.col].adr[5:0],3'd0};
 		end
-		dram0_memsz <= fnMemsz(rob[lsq[mem0_lsndx.row][mem0_lsndx.col].rndx].op);
+		dram0_memsz <= Stark_pkg::fnMemsz(rob[lsq[mem0_lsndx.row][mem0_lsndx.col].rndx].op);
 		dram0_tid.core <= CORENO;
 		dram0_tid.channel <= 3'd1;
 		dram0_tid.tranid <= dram0_tid.tranid + 2'd1;
@@ -6857,7 +6977,7 @@ else begin
 			rob[lsq[lbndx1.row][lbndx1.col].rndx].done <= 2'b11;
 		end
 	  else if (dram1 == DRAMSLOT_AVAIL && Stark_pkg::NDATA_PORTS > 1 && mem1_lsndxv && !robentry_stomp[lsq[mem1_lsndx.row][mem1_lsndx.col].rndx]) begin
-			dram1_exc <= FLT_NONE;
+			dram1_exc <= Stark_pkg::FLT_NONE;
 			dram1_stomp <= 1'b0;
 			dram1_id <= lsq[mem1_lsndx.row][mem1_lsndx.col].rndx;
 			dram1_idv <= VAL;
@@ -6897,7 +7017,7 @@ else begin
 				dram1_ctago <= lsq[mem1_lsndx.row][mem1_lsndx.col].ctag;
 				dram1_shift <= {lsq[mem1_lsndx.row][mem1_lsndx.col].adr[5:0],3'd0};
 			end
-			dram1_memsz <= fnMemsz(lsq[mem1_lsndx.row][mem1_lsndx.col].op);
+			dram1_memsz <= Stark_pkg::fnMemsz(lsq[mem1_lsndx.row][mem1_lsndx.col].op);
 			dram1_tid.core <= CORENO;
 			dram1_tid.channel <= 3'd2;
 			dram1_tid.tranid <= dram1_tid.tranid + 2'd1;
@@ -7386,7 +7506,7 @@ always_ff @(posedge clk)
 if (irst)
 	iact_cnt <= 40'd0;
 else
-	iact_cnt <= iact_cnt + (ihito|micro_code_active);
+	iact_cnt <= iact_cnt + (ihito|micro_machine_active);
 
 always_ff @(posedge clk)
 if (irst)
@@ -7543,7 +7663,7 @@ always_ff @(posedge clk) begin: clock_n_debug
 	$display("i$ pc output: %h %s #", icpc.pc, ihito ? "ihit" : "    ");
 	$display("cacheL: %x", ic_line[511:0]);
 	$display("cacheH: %x", ic_line[1023:512]);
-	$display("----- Instruction Extract %c%c ----- %s", ihit_fet ? "h":" ", micro_code_active_x ? "a": " ", stomp_fet ? stompstr : no_stompstr);
+	$display("----- Instruction Extract %c%c ----- %s", ihit_fet ? "h":" ", micro_machine_active_x ? "a": " ", stomp_fet ? stompstr : no_stompstr);
 	$display("pc 0: %h.%h.%h  1: %h.%h.%h  2: %h.%h.%x  3: %h.%h.%x",
 		uiext1.pc0_fet.bno_t, uiext1.pc0_fet.pc, mcip0_mux,
 		uiext1.pc1_fet.bno_t, uiext1.pc1_fet.pc, mcip1_mux,
@@ -7560,7 +7680,7 @@ always_ff @(posedge clk) begin: clock_n_debug
 	$display("micro_ip: %h", micro_ip);
 	if (do_bsr)
 		$display("BSR %h  pc0_fet=%h", bsr_tgt.pc, uiext1.pg0_mux.pr0.pc.pc[31:0]);
-	$display("----- Decode %c%c ----- %s", ihit_dec ? "h":" ", micro_code_active_d ? "a": " ", stomp_dec ? stompstr : no_stompstr);
+	$display("----- Decode %c%c ----- %s", ihit_dec ? "h":" ", micro_machine_active_d ? "a": " ", stomp_dec ? stompstr : no_stompstr);
 	$display("pc0: %h.%h ins0: %h", pg_dec.pr0.pc.pc[23:0], pg_dec.pr0.mcip, pg_dec.pr0.ins[47:0]);
 	$display("pc1: %h.%h ins1: %h", pg_dec.pr1.pc.pc[23:0], pg_dec.pr1.mcip, pg_dec.pr1.ins[47:0]);
 	$display("pc2: %h.%h ins2: %h", pg_dec.pr2.pc.pc[23:0], pg_dec.pr2.mcip, pg_dec.pr2.ins[47:0]);
@@ -7598,7 +7718,7 @@ always_ff @(posedge clk) begin: clock_n_debug
 			i[7:0]+8'd7, fnPreg(i+7), fnArchRegVal(i+7), fnArchRegV(i+7)?"v":" "
 			);
 
-	$display("----- Rename %c%c ----- %s", ihit_ren ? "h":" ", micro_code_active_r ? "a": " ", stomp_ren ? stompstr : no_stompstr);
+	$display("----- Rename %c%c ----- %s", ihit_ren ? "h":" ", micro_machine_active_r ? "a": " ", stomp_ren ? stompstr : no_stompstr);
 	$display("pc0: %x.%x ins0: %x  Rt: %d->%d%c  Rs: %d->%d%c  Ra: %d->%d%c  Rb: %d->%d%c  Rc: %d->%d%c",
 		pg_ren.pr0.pc.pc[23:0], pg_ren.pr0.mcip, pg_ren.pr0.ins[63:0],
 		pg_ren.pr0.nRt, Rt0_ren, Rt0_renv?"v":" ",
@@ -7625,7 +7745,7 @@ always_ff @(posedge clk) begin: clock_n_debug
 		pg_ren.pr3.aRb, prn[13], prnv[13]?"v":" ",
 		pg_ren.pr3.aRc, prn[14], prnv[14]?"v":" ");
 //	$display("----- Queue Time ----- %s", (stomp_que && !stomp_quem) ? stompstr : no_stompstr);
-	$display("----- Queue %c%c ----- %h", ihit_que ? "h":" ", micro_code_active_q ? "a": " ", qd);
+	$display("----- Queue %c%c ----- %h", ihit_que ? "h":" ", micro_machine_active_q ? "a": " ", qd);
 	for (i = 0; i < ROB_ENTRIES; i = i + 1) begin
     $display("%c%c%c sn:%h %d: %c%c%c%c%c%c %c %c%c %d %c %c%d Rt%d/%d=%h %h Rs%d/%d %h%c Ra%d/%d=%h %c Rb%d/%d=%h %c Rc%d/%d=%h %c I=%h %h.%h.%h cp:%h ins=%h #",
 			(i[4:0]==head0)?67:46, (i[4:0]==tail0)?81:46, rob[i].rstp ? "r" : " ", rob[i].sn, i[5:0],
@@ -8246,14 +8366,14 @@ begin
 	ip_asid <= 16'd0;
 	atom_mask <= 32'd0;
 //	postfix_mask <= 'd0;
-	dram_exc0 <= FLT_NONE;
-	dram_exc1 <= FLT_NONE;
+	dram_exc0 <= Stark_pkg::FLT_NONE;
+	dram_exc1 <= Stark_pkg::FLT_NONE;
 	dram0_stomp <= 32'd0;
 	dram0_vaddr <= 64'd0;
 	dram0_paddr <= 64'd0;
 	dram0_data <= 512'd0;
 	dram0_ctago <= 1'b0;
-	dram0_exc <= FLT_NONE;
+	dram0_exc <= Stark_pkg::FLT_NONE;
 	dram0_id <= 5'd0;
 	dram0_load <= 1'd0;
 	dram0_loadz <= 1'd0;
@@ -8278,7 +8398,7 @@ begin
 	dram1_paddr <= 64'd0;
 	dram1_data <= 512'd0;
 	dram1_ctago <= 1'b0;
-	dram1_exc <= FLT_NONE;
+	dram1_exc <= Stark_pkg::FLT_NONE;
 	dram1_id <= 5'd0;
 	dram1_load <= 1'd0;
 	dram1_loadz <= 1'd0;
@@ -8715,7 +8835,7 @@ begin
 	lsq[ndx.row][ndx.col].aRt <= rob.decbus.Rt;
 	lsq[ndx.row][ndx.col].aRtz <= rob.decbus.Rtz;
 	lsq[ndx.row][ndx.col].om <= rob.om;
-	lsq[ndx.row][ndx.col].memsz <= fnMemsz(rob.op);
+	lsq[ndx.row][ndx.col].memsz <= Stark_pkg::fnMemsz(rob.op);
 	for (n12r = 0; n12r < LSQ_ENTRIES; n12r = n12r + 1)
 		for (n12c = 0; n12c < 2; n12c = n12c + 1)
 			lsq[n12r][n12c].sn <= lsq[n12r][n12c].sn - n;
@@ -8929,7 +9049,7 @@ input irq;
 input nmi;
 integer nn;
 reg [7:0] vecno;
-reg [1:0] nom;			// next operating mode
+Stark_pkg::operating_mode_t nom;			// next operating mode
 begin
 	//vecno = rob[id].imm ? rob[id].a0[8:0] : rob[id].a1[8:0];
 	//vecno <= rob[id].exc;
@@ -8941,7 +9061,12 @@ begin
 	pc_stack[0] <= retpc;
 	sr.pl <= 8'hFF;
 	if (sr.om != 2'd3)
-		nom = sr.om + 2'd1;
+	   case(sr.om)
+	   Stark_pkg::OM_APP: nom = Stark_pkg::OM_SUPERVISOR;
+	   Stark_pkg::OM_SUPERVISOR: nom = Stark_pkg::OM_HYPERVISOR;
+	   Stark_pkg::OM_HYPERVISOR: nom = Stark_pkg::OM_SECURE;
+	   default:    ;
+	   endcase
 	sr.om = nom;
 	excir <= rob[id].op;
 	excid <= id;
@@ -8984,7 +9109,7 @@ input rob_ndx_t id;
 input ex_instruction_t ir;
 begin
 	if (sr.om > ir.ins[9:8]) begin
-		sr.om <= operating_mode_t'(ir.ins[9:8]);
+		sr.om <= Stark_pkg::operating_mode_t'(ir.ins[9:8]);
 		excid <= id;
 		excmiss <= TRUE;
 		if (cause[3][7:0] < 8'd16)
@@ -9013,7 +9138,7 @@ begin
 	for (nn = 0; nn < 15; nn = nn + 1)
 		pc_stack[nn] <=	pc_stack[nn+1];
 	exc_ret_pc <= pc_stack[0];
-	exc_ret_carry_omd <= csr_carry_mod;
+	exc_ret_carry_mod <= csr_carry_mod;
 	csr_carry_mod <= 32'd0;
 end
 endtask

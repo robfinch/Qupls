@@ -42,7 +42,7 @@ import Stark_pkg::*;
 module Stark_pipeline_dec(rst_i, rst, clk, en, clk5x, ph4,
 	restored, restore_list, unavail_list, sr,
 	tags2free, freevals, bo_wr, bo_preg,
-	inso[0]_inv, inso[1]_inv, inso[2]_inv, inso[3]_inv,
+	ins0_d_inv, ins1_d_inv, ins2_d_inv, ins3_d_inv,
 	stomp_dec, stomp_mux, stomp_bno, pg0_mux, pg1_mux,
 	Rt0_dec, Rt1_dec, Rt2_dec, Rt3_dec, Rt0_decv, Rt1_decv, Rt2_decv, Rt3_decv,
 	micro_code_active_mux, micro_code_active_dec,
@@ -58,7 +58,7 @@ input [4:0] ph4;
 input restored;
 input [Stark_pkg::PREGS-1:0] restore_list;
 input [Stark_pkg::PREGS-1:0] unavail_list;
-input status_reg_t sr;
+input Stark_pkg::status_reg_t sr;
 input stomp_dec;
 input stomp_mux;
 input [4:0] stomp_bno;
@@ -68,10 +68,10 @@ input pregno_t [3:0] tags2free;
 input [3:0] freevals;
 input bo_wr;
 input pregno_t bo_preg;
-input inso[0]_inv;
-input inso[1]_inv;
-input inso[2]_inv;
-input inso[3]_inv;
+input ins0_d_inv;
+input ins1_d_inv;
+input ins2_d_inv;
+input ins3_d_inv;
 output pregno_t Rt0_dec;
 output pregno_t Rt1_dec;
 output pregno_t Rt2_dec;
@@ -92,7 +92,9 @@ reg [31:0] carry_mod_i;
 reg [31:0] carry_mod_o;
 reg [11:0] atom_mask_i;
 reg [11:0] atom_mask_o;
-reg hwi_ignored;
+reg hwi_ignore;
+regs_t fregs_i;
+regs_t fregs_o;
 
 always @(posedge clk)
 if (rst)
@@ -107,6 +109,13 @@ if (rst)
 else begin
 	if (en)
 		atom_mask_i <= atom_mask_o;
+end
+always @(posedge clk)
+if (rst)
+	fregs_i <= 15'h0;
+else begin
+	if (en)
+		fregs_i <= fregs_o;
 end
 
 Stark_pkg::pipeline_reg_t ins0m;
@@ -135,14 +144,8 @@ begin
 	nopi.exc = FLT_NONE;
 	nopi.pc.pc = RSTPC;
 	nopi.mcip = 12'h1A0;
-	nopi.len = 4'd8;
 	nopi.ins = {26'd0,OP_NOP};
 	nopi.pred_btst = 6'd0;
-	nopi.element = 'd0;
-	nopi.aRa = 8'd0;
-	nopi.aRb = 8'd0;
-	nopi.aRc = 8'd0;
-	nopi.aRt = 8'd0;
 	nopi.v = 1'b1;
 	nopi.decbus.Rtz = 1'b1;
 	nopi.decbus.nop = 1'b1;
@@ -454,6 +457,7 @@ end
 
 always_comb
 begin
+	fregs_o = 15'd0;
 	
 	pr_dec0 = ins0m;
 	pr_dec1 = ins1m;
@@ -562,7 +566,7 @@ begin
 	// later instructions will not be executed.
 	pr0_dec.atom_mask = atom_mask_i;
 	hwi_ignore = FALSE;
-	if (pr0_dec.atom_mask[0]) begin
+	if (pr0_dec.atom_mask[0]|fregs_i.v) begin
 		hwi_ignore = TRUE;
 	end
 
@@ -596,8 +600,8 @@ begin
 	pr0_dec.carry_mod = carry_mod_i;
 	case ({pr0_dec.carry_mod[9],pr0_dec.carry_mod[0]})
 	2'd0:	;
-	2'd1:	pr_dec0.decbus.Rci = pr0_dec.carry_mod[25:24]|7'd92;
-	2'd2:	pr_dec0.decbus.Rco = pr0_dec.carry_mod[25:24]|7'd92;
+	2'd1:	pr0_dec.decbus.Rci = pr0_dec.carry_mod[25:24]|7'd92;
+	2'd2:	pr0_dec.decbus.Rco = pr0_dec.carry_mod[25:24]|7'd92;
 	2'd3:
 		begin
 			pr0_dec.decbus.Rci = pr0_dec.carry_mod[25:24]|7'd92;
@@ -667,22 +671,30 @@ begin
 		carry_mod_o[23:9] = {2'd0,pr3_dec.carry_mod[23:11]};
 	end
 
+	// Detect FREGS/REGS register additions
+	if (fregs_i.v)
+		pr0_dec.decbus.Rs3 = fregs_i.Rs3;
+	if (dec0.xregs.v)
+		pr1_dec.decbus.Rs3 = dec0.xregs.Rs3;
+	if (dec1.xregs.v)
+		pr2_dec.decbus.Rs3 = dec1.xregs.Rs3;
+	if (dec2.xregs.v)
+		pr3_dec.decbus.Rs3 = dec2.xregs.Rs3;
+	if (dec3.xregs.v)
+		fregs_o = dec3.xregs;
+
 	pr_dec0.mcip = ins0m.mcip;
 	pr_dec1.mcip = ins1m.mcip;
 	pr_dec2.mcip = ins2m.mcip;
 	pr_dec3.mcip = ins3m.mcip;
 	
-	if (inso[1]_inv) pr_dec1.v = FALSE;
-	if (inso[2]_inv) pr_dec2.v = FALSE;
-	if (inso[3]_inv) pr_dec3.v = FALSE;
+	if (ins1_d_inv) pr_dec1.v = FALSE;
+	if (ins1_d_inv) pr_dec2.v = FALSE;
+	if (ins3_d_inv) pr_dec3.v = FALSE;
 	pr_dec0.om = sr.om;
 	pr_dec1.om = sr.om;
 	pr_dec2.om = sr.om;
 	pr_dec3.om = sr.om;
-	pr_dec0.len = 4'd8;
-	pr_dec1.len = 4'd8;
-	pr_dec2.len = 4'd8;
-	pr_dec3.len = 4'd8;
 end
 
 always_comb prd[0] = pr_dec0;
@@ -712,8 +724,6 @@ begin
 			pg_dec.hwi = 1'b0;
 		end
 	end
-	else
-		hwi_ignored = 6'd0;
 	pg_dec.pr0 = inso[0];
 	pg_dec.pr1 = inso[1];
 	pg_dec.pr2 = inso[2];

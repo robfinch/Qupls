@@ -1658,7 +1658,7 @@ typedef struct packed
 	cpu_types_pkg::pregno_t pRt;							// current Rt value
 	cpu_types_pkg::pregno_t nRt;							// new Rt
 	cpu_types_pkg::pregno_t pRm;							// current Rt value
-	checkpt_ndx_t cndx;					// checkpoint index
+	cpu_types_pkg::checkpt_ndx_t cndx;					// checkpoint index
 	// The following matches the ex_instruction_t
 	cpu_types_pkg::pc_address_ex_t pc;			// PC of instruction
 	cpu_types_pkg::mc_address_t mcip;				// Micro-code IP address
@@ -1790,14 +1790,14 @@ typedef struct packed
 typedef struct packed {
 	// The following fields may change state while an instruction is processed.
 	logic v;									// 1=entry is valid, in use
-	seqnum_t sn;							// sequence number, decrements when instructions que
+	cpu_types_pkg::seqnum_t sn;							// sequence number, decrements when instructions que
 //	logic [5:0] sync_dep;			// sync instruction dependency
 //	logic [5:0] fc_dep;				// flow control dependency
 //	logic [5:0] sync_no;
 //	logic [5:0] fc_no;
 	logic [3:0] predino;			// predicated instruction number (1 to 8)
-	rob_ndx_t predrndx;				// ROB index of associate PRED instruction
-	rob_ndx_t orid;						// ROB id of originating macro-instruction
+	cpu_types_pkg::rob_ndx_t predrndx;				// ROB index of associate PRED instruction
+	cpu_types_pkg::rob_ndx_t orid;						// ROB id of originating macro-instruction
 	logic lsq;								// 1=instruction has associated LSQ entry
 	lsq_ndx_t lsqndx;					// index to LSQ entry
 	logic [1:0] out;					// 1=instruction is being executed
@@ -1841,29 +1841,29 @@ typedef struct packed {
 	cpu_types_pkg::value_t arg;							// argument value for CSR instruction
 	// The following fields are loaded at enqueue time, but otherwise do not change.
 	logic last;								// 1=last instruction in group (not used)
-	rob_ndx_t group_len;			// length of instruction group (not used)
+	cpu_types_pkg::rob_ndx_t group_len;			// length of instruction group (not used)
 	logic bt;									// branch to be taken as predicted
 	operating_mode_t om;			// operating mode
 	decode_bus_t decbus;			// decoded instruction
-	checkpt_ndx_t cndx;				// checkpoint index
-	checkpt_ndx_t br_cndx;		// checkpoint index branch owns
+	cpu_types_pkg::checkpt_ndx_t cndx;				// checkpoint index
+	cpu_types_pkg::checkpt_ndx_t br_cndx;		// checkpoint index branch owns
 	pipeline_reg_t op;			// original instruction
 	cpu_types_pkg::pc_address_ex_t pc;			// PC of instruction
 	cpu_types_pkg::mc_address_t mcip;				// Micro-code IP address
-	seqnum_t grp;							// instruction group
+	cpu_types_pkg::seqnum_t grp;							// instruction group
 } rob_entry_t;
 
 typedef struct packed
 {
-	checkpt_ndx_t cndx;				// checkpoint index
+	cpu_types_pkg::checkpt_ndx_t cndx;				// checkpoint index
 	cpu_types_pkg::pc_address_ex_t pc;			// PC of instruction
 	cpu_types_pkg::mc_address_t mcip;				// Micro-code IP address
-	seqnum_t grp;							// instruction group
+	cpu_types_pkg::seqnum_t grp;							// instruction group
 } rob_row_entry_t;
 
 typedef struct packed
 {
-	rob_ndx_t rndx;
+	cpu_types_pkg::rob_ndx_t rndx;
 	rob_entry_t rob;
 	cpu_types_pkg::value_t argA;
 	cpu_types_pkg::value_t argB;
@@ -1891,7 +1891,7 @@ typedef struct packed {
 	cpu_types_pkg::value_t res;
 	cpu_types_pkg::pregno_t pRc;
 	logic argC_v;
-	checkpt_ndx_t cndx;				// checkpoint index
+	cpu_types_pkg::checkpt_ndx_t cndx;				// checkpoint index
 	ex_instruction_t op;			// original instruction
 	cpu_types_pkg::pc_address_ex_t pc;			// PC of instruction
 	cpu_types_pkg::mc_address_t mcip;				// Micro-code IP address
@@ -1899,9 +1899,9 @@ typedef struct packed {
 
 typedef struct packed {
 	logic v;
-	seqnum_t sn;
+	cpu_types_pkg::seqnum_t sn;
 	logic agen;						// address generated through to physical address
-	rob_ndx_t rndx;				// reference to related ROB entry
+	cpu_types_pkg::rob_ndx_t rndx;				// reference to related ROB entry
 	cpu_types_pkg::virtual_address_t vadr;
 	cpu_types_pkg::physical_address_t padr;
 	operating_mode_t omode;	// operating mode
@@ -1928,7 +1928,7 @@ typedef struct packed {
 	logic aRtz;
 	cpu_types_pkg::aregno_t aRc;
 	cpu_types_pkg::pregno_t pRc;					// 'C' register for store
-	checkpt_ndx_t cndx;
+	cpu_types_pkg::checkpt_ndx_t cndx;
 	operating_mode_t om;	// operating mode
 	logic ctag;						// capabilities tag
 	logic datav;					// store data is valid

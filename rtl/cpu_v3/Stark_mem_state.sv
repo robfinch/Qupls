@@ -1,11 +1,9 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2022-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2023-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
-//
-//	cache_pkg.sv
 //
 // BSD 3-Clause License
 // Redistribution and use in source and binary forms, with or without
@@ -34,53 +32,35 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //                                                                          
 // ============================================================================
+//
+import Stark_pkg::*;
 
-package cache_pkg;
+module Stark_mem_state(rst_i, clk_i, ack_i, set_ready_i, set_avail_i, state_o);
+input rst_i;
+input clk_i;
+input ack_i;
+input set_ready_i;
+input set_avail_i;
+output dram_state_t state_o;
 
-parameter ITAG_BIT = 14;
-parameter DCacheLineWidth = 512;
-localparam DCacheTagLoBit = $clog2((DCacheLineWidth/8));
-parameter ICacheBundleWidth = 256;
-parameter ICacheLineWidth = ICacheBundleWidth*2;
-localparam ICacheTagLoBit = $clog2((ICacheLineWidth/8));
+always_ff @(posedge clk_i)
+if (rst_i)
+	state_o <= DRAMSLOT_AVAIL;
+else begin
+	case(state_o)
+	DRAMSLOT_AVAIL:	;
+	DRAMSLOT_READY:
+		state_o <= DRAMSLOT_ACTIVE;
+	DRAMSLOT_ACTIVE:
+		if (ack_i)
+			state_o <= DRAMSLOT_DELAY;
+	DRAMSLOT_DELAY:
+		state_o <= DRAMSLOT_AVAIL;
+	endcase
+	if (set_ready_i)
+		state_o <= DRAMSLOT_READY;
+	if (set_avail_i)
+		state_o <= DRAMSLOT_AVAIL;
+end
 
-`define TAG_ASID $bits(cpu_types_pkg::asid_t) + $bits(cpu_types_pkg::address_t)-ITAG_BIT-1:$bits(cpu_types_pkg::address_t)-ITAG_BIT
-
-typedef logic [$bits(cpu_types_pkg::address_t)-1:ITAG_BIT] cache_tag_t;
-
-typedef struct packed
-{
-	logic v;		// valid indicator
-	logic m;		// modified indicator
-	cpu_types_pkg::asid_t asid;
-	logic [$bits(cpu_types_pkg::address_t)-1:0] vtag;	// virtual tag
-	logic [$bits(cpu_types_pkg::address_t)-1:0] ptag;	// physical tag
-	logic [DCacheLineWidth-1:0] data;
-} DCacheLine;
-
-typedef struct packed
-{
-	logic [ICacheLineWidth/ICacheBundleWidth-1:0] v;	// 1 valid bit per 128 bits data
-	logic m;		// modified indicator
-	cpu_types_pkg::asid_t asid;
-	logic [$bits(cpu_types_pkg::address_t)-1:0] vtag;	// virtual tag
-	logic [$bits(cpu_types_pkg::address_t)-1:0] ptag;	// physical tag
-	logic [ICacheLineWidth-1:0] data;
-} ICacheLine;
-
-typedef struct packed
-{
-	logic v;
-	logic is_load;
-	logic is_dump;
-	logic [1:0] active;
-	logic [1:0] done;
-	logic [1:0] out;
-	logic [1:0] loaded;
-	logic write_allocate;
-	cpu_types_pkg::rob_ndx_t rndx;
-	fta_bus_pkg::fta_cmd_request512_t cpu_req;
-	fta_bus_pkg::fta_cmd_request256_t [1:0] tran_req;
-} dcache_req_queue_t;
-
-endpackage
+endmodule

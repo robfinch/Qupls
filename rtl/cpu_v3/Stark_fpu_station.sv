@@ -32,171 +32,148 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 3000 LUTs / 1000 FFs
+// 2400 LUTs / 420 FFs
 // ============================================================================
 
 import const_pkg::*;
 import cpu_types_pkg::*;
 import Stark_pkg::*;
 
-module Stark_alu_station(rst, clk, available, idle, issue, rndx, rndxv, rob,
-	rfo_argA_ctag, rfo_argB_ctag, ld, id, 
-	argA, argB, argBI, argC, argI, argT, argCi, argA_ctag, argB_ctag, cpytgt,
-	cs, aRtz, aRt, nRt, om, bank, instr, div, cap, cptgt, pc, cp,
-	pred, predz, prc, sc_done, idle_false,
-	prn, prnv, rfo, all_args_valid
-);
+module Stark_fpu_station(rst, clk, id, argA, argB, argC, argT, argI,
+	Rt, Rt1, aRt, aRtz, aRt1, aRtz1, argA_tag, argB_tag, cs, bank,
+	instr, pc, cp, qfext, cptgt, all_args_valid,
+	available, rndx, rndxv, idle, prn, prnv, rfo,
+	rfo_argA_ctag, rfo_argB_ctag, rob, sc_done);
 input rst;
 input clk;
+output rob_ndx_t id;
+output value_t argA;
+output value_t argB;
+output value_t argC;
+output value_t argT;
+output value_t argI;
+output pregno_t Rt;
+output pregno_t Rt1;
+output aregno_t aRt;
+output reg aRtz;
+output aregno_t aRt1;
+output reg aRtz1;
+output reg argA_tag;
+output reg argB_tag;
+output reg cs;
+output reg bank;
+output instruction_t instr;
+output pc_address_ex_t pc;
+output checkpt_ndx_t cp;
+output reg qfext;
+output reg [7:0] cptgt;
+output reg all_args_valid;
 input available;
-input idle;
-input issue;
 input rob_ndx_t rndx;
 input rndxv;
-input Stark_pkg::rob_entry_t rob;
-input rfo_argA_ctag;
-input rfo_argB_ctag;
+input idle;
 input pregno_t [15:0] prn;
 input [15:0] prnv;
 input value_t [15:0] rfo;
-input cpytgt;
-output reg ld;
-output rob_ndx_t id;
-output value_t argCi;
-output value_t argA;
-output value_t argB;
-output value_t argBI;
-output value_t argC;
-output value_t argI;
-output value_t argT;
-output reg all_args_valid;
-output reg argA_ctag;
-output reg argB_ctag;
-output reg cs;
-output reg aRtz;
-output aregno_t aRt;
-output pregno_t nRt;
-output Stark_pkg::operating_mode_t om;
-output reg bank;
-output Stark_pkg::pipeline_reg_t instr;
-output reg div;
-output reg cap;
-output reg [7:0] cptgt;
-output pc_address_ex_t pc;
-output checkpt_ndx_t cp;
-output reg pred;
-output reg predz;
-output memsz_t prc;
+input rfo_argA_ctag;
+input rfo_argB_ctag;
+input Stark_pkg::rob_entry_t rob;
 output reg sc_done;
-output reg idle_false;
 
 integer nn;
-reg [4:0] valid;
-reg [7:0] next_cptgt;
-always_comb
-	next_cptgt <= {8{cpytgt|rob.decbus.cpytgt}} | ~rob.pred_bits;
+reg [3:0] valid;
 
 always_comb
 	all_args_valid = &valid;
 
+
+// For a vector instruction we got the entire mask register, only the bits
+// relevant to the current element are needed. So, they are extracted.
+reg [7:0] next_cptgt;
+always_comb
+	next_cptgt <= {8{rob.op.decbus.cpytgt}};
+		
+
 always_ff @(posedge clk)
 if (rst) begin
-	ld <= 1'd0;
 	id <= 5'd0;
 	argA <= value_zero;
 	argB <= value_zero;
-	argBI <= value_zero;
 	argC <= value_zero;
-	argI <= value_zero;
 	argT <= value_zero;
-	argCi <= value_zero;
-	argA_ctag = 1'b0;
-	argB_ctag = 1'b0;
-	cs <= 1'b0;
-	nRt <= 11'd0;
-	bank <= 1'b0;
-	aRt <= 9'd0;
+	argI <= value_zero;
+	Rt <= 11'd0;
+	Rt1 <= 11'd0;
+	aRt <= 7'd0;
 	aRtz <= TRUE;
-	instr <= {41'd0,OP_NOP};
-	div <= 1'b0;
-	cptgt <= 8'h00;
+	aRt1 <= 7'd0;
+	aRtz1 <= TRUE;
+	argA_tag <= 1'b0;
+	argB_tag <= 1'b0;
+	cs <= 1'b0;
+	bank <= 1'b0;
+	instr <= {26'd0,OP_NOP};
 	pc <= RSTPC;
 	pc.bno_t <= 6'd1;
 	pc.bno_f <= 6'd1;
 	cp <= 4'd0;
-	pred <= FALSE;
-	predz <= FALSE;
-	prc <= QuplsPkg::octa;
+	qfext <= FALSE;
+	cptgt <= 16'h0;
 	sc_done <= FALSE;
-	idle_false <= FALSE;
-	valid <= 5'd0;
+	valid <= 4'd0;
 end
 else begin
-	ld <= 1'd0;
 	sc_done <= FALSE;
-	idle_false <= FALSE;
-	if (available && issue && rndxv && idle) begin
-		valid <= 5'd0;
-		ld <= 1'd1;
+	if (available && rndxv && idle) begin
+		valid <= 4'd0;
 		id <= rndx;
-		// Could bypass all the register args to improve performance as
-		// follows:
-		/*			
-		if (PERFORMANCE && wrport0_v && wrport0_Rt==rob.op.pRa)
-			argA <= wrport0_res;
-		else
-			argA <= rfo_argA;
-		*/
-		argI <= rob.op.decbus.has_immb ? rob.op.decbus.immb : rob.op.decbus.immc;
-		nRt <= rob.op.nRd;
-		aRt <= rob.op.decbus.Rd;
-		aRtz <= rob.op.decbus.Rd==8'd00;//rob.decbus.Rtz; <- this did not work
-		om <= rob.om;
-//		pred <= rob.op.decbus.pred;
-//		predz <= rob.op.decbus.pred ? rob.op.decbus.predz : 1'b0;
-		div <= rob.op.decbus.div;
-//		cap <= rob.op.decbus.cap;
+		argA_tag <= rfo_argA_ctag;
+		argB_tag <= rfo_argB_ctag;
+		if (rob.op.decbus.qfext) begin
+			qfext <= TRUE;
+			Rt1 <= rob.op.nRd;
+			aRt1 <= rob.op.decbus.Rd;
+			aRtz1 <= rob.op.decbus.Rdz;
+		end
+		else begin
+			qfext <= FALSE;
+		end
 		cptgt <= next_cptgt;
-		if (cpytgt|rob.op.decbus.cpytgt) begin
-			instr.ins <= {26'd0,OP_NOP};
+		argI <= rob.op.decbus.immb;
+		Rt <= rob.op.nRd;
+		aRt <= rob.op.decbus.Rd;
+		aRtz <= rob.op.decbus.Rd==8'd0;//rob.decbus.Rtz;
+		if (rob.op.decbus.cpytgt) begin
+			instr <= {26'd0,OP_NOP};
 //			pred <= FALSE;
-//			predz <= rob.op.decbus.cpytgt ? FALSE : rob.decbus.predz;
-			div <= FALSE;
+//			predz <= rob.decbus.cpytgt ? FALSE : rob.decbus.predz;
 		end
 		else
-			instr <= rob.op;
+			instr <= rob.op.ins;
 		pc <= rob.pc;
 		cp <= rob.cndx;
-		// Done even if multi-cycle if it is just a copy-target.
-		if (!rob.op.decbus.multicycle || (&next_cptgt))
+		if (!rob.op.decbus.multicycle || (&next_cptgt) || rob.op.decbus.cpytgt)
 			sc_done <= TRUE;
-		else
-			idle_false <= TRUE;
-	end
-	tValidate(rob.op.pRci,argCi,valid[0]);
-	if (rob.op.pRci==8'd0) begin
-		argCi <= value_zero;
-		valid[0] <= 1'b1;
 	end
 	tValidate(rob.op.pRs1,argA,valid[1]);
 	if (rob.op.pRs1==8'd0) begin
 		argA <= value_zero;
-		valid[1] <= 1'b1;
+		valid[0] <= 1'b1;
 	end
 	tValidate(rob.op.pRs2,argB,valid[2]);
 	if (rob.op.pRs2==8'd0) begin
 		argB <= value_zero;
-		valid[2] <= 1'b1;
+		valid[1] <= 1'b1;
 	end
 	tValidate(rob.op.pRs3,argC,valid[3]);
 	if (rob.op.pRs3==8'd0) begin
 		argC <= value_zero;
-		valid[3] <= 1'b1;
+		valid[2] <= 1'b1;
 	end
 	tValidate(rob.op.pRd,argT,valid[4]);
 	if (rob.op.pRd==8'd0) begin
 		argT <= value_zero;
-		valid[4] <= 1'b1;
+		valid[3] <= 1'b1;
 	end
 end
 

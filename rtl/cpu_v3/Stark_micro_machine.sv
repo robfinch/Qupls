@@ -145,12 +145,12 @@ case(micro_ip)
 12'h006:
 	begin		// move mc0,a0
 		next_ip=12'h007;
-		instr.ins={1'b1,10'h00,2'b00,2'b10,1'b0,5'd1,5'd4,OP_MOVE};
+		instr.ins={1'b1,10'h00,2'b00,2'b10,1'b0,5'd1,5'd4,Stark_pkg::OP_MOV};
 	end
 12'h007:
 	begin		// move a0,br1
 		next_ip=12'h008;
-		instr.ins={1'b1,10'h00,2'b10,2'b00,1'b0,5'd9,5'd1,OP_MOVE};
+		instr.ins={1'b1,10'h00,2'b10,2'b00,1'b0,5'd9,5'd1,OP_MOV};
 	end
 12'h008:
 	begin		// store a0,8[sp]
@@ -170,7 +170,7 @@ case(micro_ip)
 12'h00B:
 	begin		// move fp,sp
 		next_ip=12'h00C;
-		instr.ins={1'b1,10'h00,2'b00,2'b00,1'b0,5'd31,5'd30,OP_MOVE};
+		instr.ins={1'b1,10'h00,2'b00,2'b00,1'b0,5'd31,5'd30,OP_MOV};
 	end
 12'h00C:
 	begin		// sp = sp - saved count * 8
@@ -186,7 +186,7 @@ case(micro_ip)
 12'h00E:
 	begin		// move a0,mc0
 		next_ip=12'h000;
-		instr.ins={1'b1,10'h00,2'b10,2'b00,1'b0,5'd4,5'd1,OP_MOVE};
+		instr.ins={1'b1,10'h00,2'b10,2'b00,1'b0,5'd4,5'd1,OP_MOV};
 	end
 12'h00F,12'h010,12'h011,12'h012,12'h013:
 	begin
@@ -206,13 +206,13 @@ case(micro_ip)
 12'h019:
 	begin		// move mc0,a0
 		next_ip=12'h01A;
-		instr.ins={1'b1,10'h00,2'b00,2'b10,1'b0,5'd1,5'd4,OP_MOVE};
+		instr.ins={1'b1,10'h00,2'b00,2'b10,1'b0,5'd1,5'd4,OP_MOV};
 	end
 12'h01A:
 	begin
 		// if bit set, store register
 		if (mask[0]) begin	// move a0,reg
-			instr.ins={1'b1,10'h00,regno[6:5],2'b00,1'b0,regno[4:0],5'd1,OP_MOVE};
+			instr.ins={1'b1,10'h00,regno[6:5],2'b00,1'b0,regno[4:0],5'd1,OP_MOV};
 			next_ip = 12'h01B;
 		end
 		mask = mask >> 1;
@@ -233,7 +233,7 @@ case(micro_ip)
 12'h01D:
 	begin		// move a0,mc0
 		next_ip=12'h000;
-		instr.ins={1'b1,10'h00,2'b10,2'b00,1'b0,5'd4,5'd1,OP_MOVE};
+		instr.ins={1'b1,10'h00,2'b10,2'b00,1'b0,5'd4,5'd1,OP_MOV};
 	end
 12'h01E:	begin next_ip = 12'h000; instr.ins = {26'd0,OP_NOP};	end
 12'h01F:	begin next_ip = 12'h000; instr.ins = {26'd0,OP_NOP};	end
@@ -254,11 +254,11 @@ case(micro_ip)
 12'h029:
 	begin		// move mc0,a0
 		next_ip=12'h02A;
-		instr.ins={1'b1,10'h00,2'b00,2'b10,1'b0,5'd1,5'd4,OP_MOVE};
+		instr.ins={1'b1,10'h00,2'b00,2'b10,1'b0,5'd1,5'd4,OP_MOV};
 	end
 12'h02A:
 	begin
-		instr.ins = {16'h0,5'd31,5'd1,OP_LOAD};			// load a0,[sp]
+		instr.ins = {16'h0,5'd31,5'd1,Stark_pkg::OP_LOAD};			// load a0,[sp]
 		next_ip = 12'h01A;
 	end
 12'h02B:
@@ -266,15 +266,15 @@ case(micro_ip)
 		// if bit set, load register
 		if (mask[0]) begin	// move reg,a0
 			if (regno==7'd1)	// loading a0? -> move to mc0
-				instr.ins={1'b1,10'h00,2'b10,regno[6:5],1'b0,5'd4,regno[4:0],OP_MOVE};
+				instr.ins={1'b1,10'h00,2'b10,regno[6:5],1'b0,5'd4,regno[4:0],OP_MOV};
 			else
-				instr.ins={1'b1,10'h00,2'b00,regno[6:5],1'b0,5'd1,regno[4:0],OP_MOVE};
+				instr.ins={1'b1,10'h00,2'b00,regno[6:5],1'b0,5'd1,regno[4:0],OP_MOV};
 			next_ip = 12'h02C;
 		end
 		mask = mask >> 1;
 		regno = regno + 1;
 		if (~|mask)
-			next_ip = 12'h;
+			next_ip = 12'h02E;
 	end
 12'h02C:
 	begin
@@ -284,7 +284,7 @@ case(micro_ip)
 12'h02D:
 	begin		// move a0,mc0
 		next_ip=12'h000;
-		instr.ins={1'b1,10'h00,2'b10,2'b00,1'b0,5'd4,5'd1,OP_MOVE};
+		instr.ins={1'b1,10'h00,2'b10,2'b00,1'b0,5'd4,5'd1,OP_MOV};
 	end
 12'h02E:	begin next_ip = 12'h000; instr.ins = {26'd0,OP_NOP};	end
 12'h02F:	begin next_ip = 12'h000; instr.ins = {26'd0,OP_NOP};	end

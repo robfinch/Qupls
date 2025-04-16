@@ -66,7 +66,7 @@ module Stark_rat(rst, clk, clk5x, ph4, en, en2, nq, stallq,
 	restore_list, restored, tags2free, freevals, free_chkpt_i, fchkpt_i, backout, fcu_id,
 	bo_wr, bo_areg, bo_preg, bo_nreg);
 parameter XWID = 4;
-parameter NPORT = 24;
+parameter NPORT = 26;
 parameter BANKS = 1;
 localparam RBIT=$clog2(Stark_pkg::PREGS);
 localparam BBIT=0;//$clog2(BANKS)-1;
