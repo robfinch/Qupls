@@ -49,9 +49,9 @@ Many of the additions to earlier versions of Qupls have been removed to simplify
 * The register file contains 96 architectural registers split into different groups. Both integer and floating-point operations are supported using separate registers. There are also eight branch registers, eight condition registers, and three carry registers.
 * There is a dedicated zero register, r0. A register is dedicated to the stack pointer. The stack pointer is banked depending on processor operating mode.
 * Five hidden registers are dedicated to micro-code use.
-* The register file is 24r4w (24 read ports and 4 write ports).
-* The register file is organized with four read ports for each instruction (with four simulatneous instructions). Three read ports are for source operands A, B, and C. One port is for the target operand T which also needs to be readable.
-* Registers are renamed to remove dependencies. There are 256 physical registers available.
+* The register file is 16r4w (16 read ports and 4 write ports). This provides a good level of coverage for instructions. It may not always be possible to accomodate the current set of instructions in which case the latency increases as additional clock cycles are required. For instance, there may be up to 26 read ports required in the worst case, along with 17 write ports. The worst case is not being directly supported because of the hardware cost.
+* The register file is organized with potentially five read ports for each instruction. There could be up to seven instructions requiring port access at the same time. Three read ports are for source operands A, B, and C. One port is for the target operand T which also needs to be readable. And there is a carry input port as well. Not all types of instruction require all these ports.
+* Registers are renamed to remove dependencies. There are 256 physical registers available, or approximately 2.7 rename registers per register.
 
 ### Instruction Length
 The author has found that in an FPGA the decode of variable length instruction length was on the critical timing path, limiting the maximum clock frequency and performance. The decode has been simplified.
@@ -68,12 +68,12 @@ Yikes!
 There are roughly ten stages in the pipeline, fetch, extract (parse), decode, rename, queue, issue, execute, deque and writeback. The first few stages (up to queue) are in-order stages.
 #### Fetch / Extract Stages
 * The first step for an instruction is instruction fetch. At instruction fetch two instruction cache lines are fetched to accomodate instructions spanning cache lines. That means up to 32 instructions are fetched, but only five are processed further. Five instructions are extracted from the cache lines. The fetched instructions are right aligned as a block. The fifth instruction is processed only if it is an immediate postfix. 
-* If there is a hardware interrupt, a special interrupt instruction overrides the fetched instructions and the PC increment is disabled until the interrupt is recognized.
+* If there is a hardware interrupt, the interrupted instruction is tagged as interrupted by hardwware. This tag can be cleared later in the pipeline if interrupts were disabled for that instruction.
 #### Decode Stage
 * After instruction fetch and extract the instructions are decoded.
 #### Rename Stage
 * Target logical registers are assigned names from a name supplier component which can supply up to four names per clock cycle. Target name mappings are stored in the RAT. Decoded architectural registers are renamed to physical registers and register values are fetched. The instruction decodes are placed in the reorder buffer / queued.
-* The ATOM and ACARRY instructions are processed and create masking for interrupts.
+* The ATOM instruction is processed and create masking for interrupts.
 #### Queue Stage
 * The decoded instructions are copied to the reorder buffer in this stage. 
 #### Issue Stage
@@ -87,6 +87,7 @@ There are roughly ten stages in the pipeline, fetch, extract (parse), decode, re
 * At the deque stage instruction results that were queued are dequed in preparation for writeback. Deque proceeds at a maximum rate of four results per clock cycle (recall the register file has only four write ports). There is an 18:4 multiplexer which works in a rotating fashion.
 #### Writeback
 * At the end of instruction execution the result is placed into the register file. There may be a maximum of four results at the same time.
+* Results are also broadcast to reservation stations to make station values valid.
 * The register file makes use of a live value table and four copies of the register file to provide four write ports in a CPU clock cycle.
 #### Commit Stage
 * Writeback reorders instructions into program order reading the oldest instructions from the ROB. The core may writeback or commit six instructions per clock cycle. Exceptions and several other oddball instructions like CSR updates are also processed at the commit stage.
@@ -99,6 +100,7 @@ There are roughly ten stages in the pipeline, fetch, extract (parse), decode, re
 * Interrupts and exceptions are precise. There is a separate exception vector table for each operating mode of the CPU. The exception vector table address is programmable and may contain a maximum of 16 vectors. At reset the vector table is placed high in memory.
 * An interrupt will cause the stack pointer and condition registers to automatically switch to one dedicated for the operating mode (4 operating modes). There are sixty-three interrupt levels supported.
 * Interrupts are message signaled (QMSI). A message is sent by a device to an interrupt controller which then feeds the CPU core.
+* Interrupt essentially occur at the first instruction of an instruction group as all instructions in the group are processed at the same time.
 
 ## Instruction Set
 
@@ -107,9 +109,9 @@ There are roughly ten stages in the pipeline, fetch, extract (parse), decode, re
 
 ### Floating-point Operations
 * The ISA supports floating-point add, subtract, multiply and divide instructions.
-* Several floating-point ops have been added to the core, including fused multiply-add, reciprocal and reciprocal square root estimates and sine and cosine functions. Four precisions are directly supported: half, single, double, and quad.
+* Several floating-point ops have been added to the core, including fused multiply-add, reciprocal and reciprocal square root estimates and sine and cosine functions.
 * Quad precision operations are supported using register pairs and the quad precision extension modifier QFEXT. The modifier supplies the high order half of the quad precision values in the registers specified in the modifier. To perform a quad precision op the modifier is run through the ALU (not the FPU) to fetch the high half of the registers while the FPU fetches the low half. Then given both halves of registers the FPU can perform the quad precision operation. The result is written back to the register file using one write port from each of the ALU and FPU. Thus quad precision arithmetic may be performed.
-* The FPU can also perform many of the simpler ALU operations, this increases the number of instructions that can be handled in parallel.
+* The FPU can also perform many of the simpler integer ALU operations, this increases the number of instructions that can be handled in parallel.
 
 ### Large Constants
 * There are two means supporting large constants. The first uses a postfix instruction to specify 28 bits of a constant. The lower five bits of the constant are supplied by the register spec field. Any of the three source registers may be turned into a constant by specifying a postfix. Only one postfix is allowed per instruction.
@@ -146,7 +148,7 @@ There are roughly ten stages in the pipeline, fetch, extract (parse), decode, re
 * The instruction cache is a four-way set associative cache, 32kB in size with a 512-bit line size. There is only a single level of cache. (The system also caches values from DRAM and acts a bit like an L2 cache). The cache is divided into even and odd lines which are both fetched when the PC changes. Using even / odd lines allows instructions to span cache lines.
 
 ### Data Cache
-* The data cache is 64kB in size. The ISA and core implementation supports unaligned data accesses. Unaligned access support is a configurable option as it increases the core size.
+* The data cache is 64kB in size. The ISA and core implementation supports unaligned data accesses. Unaligned access support is a configurable option as it increases the core size. The core inherently supports unaligned access as long as the access will fit on a cache line. If the access does not fit, multiple accesses to the data cache are required.
 
 # Software
 * StarkCPU will use vasm and vlink to assemble and link programs. vlink is used 'out of the box'. A StarkCPU backend is being written for vasm. The Arpl compiler may be used for high-level work and compiles to vasm compatible source code.
