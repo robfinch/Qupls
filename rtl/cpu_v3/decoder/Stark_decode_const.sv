@@ -37,12 +37,12 @@
 // 502 LUTs
 // ============================================================================
 
-import Qupls3_pkg::*;
+import Stark_pkg::*;
 
-module decode_const(cline, ins, imma, immb, immc, has_imma, has_immb, has_immc,
-	pfxa, pfxb, pfxc);
+module Stark_decode_const(cline, ins, imma, immb, immc, has_imma, has_immb, has_immc,
+	pfxa, pfxb, pfxc, pos, isz);
 input [511:0] cline;
-input Qupls3_pkg::instruction_t ins;
+input Stark_pkg::instruction_t ins;
 output reg [31:0] imma;
 output reg [31:0] immb;
 output reg [31:0] immc;
@@ -52,8 +52,10 @@ output reg has_immc;
 output reg pfxa;
 output reg pfxb;
 output reg pfxc;
+output reg [7:0] pos;
+output reg [3:0] isz;
 
-Qupls3_pkg::instruction_t insf;
+Stark_pkg::instruction_t insf;
 wire [63:0] imm32x64a;
 wire [63:0] imm32x64b;
 wire [63:0] imm32x64c;
@@ -66,16 +68,14 @@ fpCvt32To64 ucvt32x64a(finsA[39:8], imm32x64a);
 fpCvt32To64 ucvt32x64b(finsB[39:8], imm32x64b);
 fpCvt32To64 ucvt32x64C(finsC[39:8], imm32x64c);
 
-reg [7:0] pos;
-reg [3:0] isz;
 wire [31:0] cnst1, cnst2;
 reg [31:0] cnst1a;
 
-always_comb pos = fnConstPos(ins);
-always_comb isz = fnConstSize(ins);
+always_comb pos = Stark_pkg::fnConstPos(ins);
+always_comb isz = Stark_pkg::fnConstSize(ins);
 
-constant_decoder u1 (pos[3:0],isz[1:0],cline,cnst1);
-constant_decoder u2 (pos[7:4],isz[3:2],cline,cnst2);
+Stark_constant_decoder u1 (pos[3:0],isz[1:0],cline,cnst1);
+Stark_constant_decoder u2 (pos[7:4],isz[3:2],cline,cnst2);
 
 always_comb
 begin
@@ -93,59 +93,65 @@ begin
 	finsB = 1'd0;
 	finsC = 1'd0;
 	case(ins.any.opcode)
-	OP_ADD,OP_MUL,OP_DIV,OP_SUBF,OP_ADB:
+	Stark_pkg::OP_ADD,Stark_pkg::OP_MUL,Stark_pkg::OP_DIV,Stark_pkg::OP_SUBF,Stark_pkg::OP_ADB:
 		begin
-			immb = fnHasExConst(ins) ? cnst1 : {{18{ins[30]}},ins[30:17]};
+			immb = Stark_pkg::fnHasExConst(ins) ? cnst1 : {{18{ins[30]}},ins[30:17]};
 			has_immb = ins[31:29]!=3'b100;
 		end
-	OP_CMP:
+	Stark_pkg::OP_CMP:
 		begin
-			immb = fnHasExConst(ins) ? cnst1 :
+			immb = Stark_pkg::fnHasExConst(ins) ? cnst1 :
 				ins[10:9]==2'b01 ? {{18{1'b0}},ins[30:17]} :	// CMPA?
 				{{18{ins[30]}},ins[30:17]};
 			has_immb = ins[31:29]!=3'b100;
 		end
-	OP_AND:
+	Stark_pkg::OP_AND:
 		begin
-			immb = fnHasExConst(ins) ? cnst1 : {{18{1'b1}},ins[30:17]};
+			immb = Stark_pkg::fnHasExConst(ins) ? cnst1 : {{18{1'b1}},ins[30:17]};
 			has_immb = ins[31:29]!=3'b100;
 		end
-	OP_OR,OP_XOR:
+	Stark_pkg::OP_OR,Stark_pkg::OP_XOR:
 		begin
-			immb = fnHasExConst(ins) ? cnst1 : {{18{1'b0}},ins[30:17]};
+			immb = Stark_pkg::fnHasExConst(ins) ? cnst1 : {{18{1'b0}},ins[30:17]};
 			has_immb = ins[31:29]!=3'b100;
 		end
-	OP_SHIFT:
+	Stark_pkg::OP_SHIFT:
 		begin
 			immb = ins[22:17];
 			has_immb = ins[31]==1'b0;
 		end
-	OP_CSR:
+	Stark_pkg::OP_CSR:
 		begin
 			// ToDo: fix
 			immb = {57'd0,ins[22:16]};
 			has_immb = 1'b0;
 		end
-	OP_B0,OP_B1:
+	Stark_pkg::OP_B0,Stark_pkg::OP_B1:
 		begin
-			immb = fnHasExConst(ins) ? cnst1 : ins[31] ? {{12{ins[25]}},ins[25:9],ins[0],2'b00} : {{7{ins[30]}},ins[30:9],ins[0],2'b00};
+			immb = Stark_pkg::fnHasExConst(ins) ? cnst1 : ins[31] ? {{12{ins[25]}},ins[25:9],ins[0],2'b00} : {{7{ins[30]}},ins[30:9],ins[0],2'b00};
 			has_immb = 1'b1;
 		end
-	OP_BCC0,OP_BCC1:
+	Stark_pkg::OP_BCC0,Stark_pkg::OP_BCC1:
 		begin
-			immb = fnHasExConst(ins) ? cnst1 : {{19{ins[30]}},ins[30:29],ins[16:9],ins[0],2'b00};
+			immb = Stark_pkg::fnHasExConst(ins) ? cnst1 : {{19{ins[30]}},ins[30:29],ins[16:9],ins[0],2'b00};
 			has_immb = ins[31:29]!=3'b100;
 		end
-	OP_LDA,
-	OP_LDB,OP_LDBZ,OP_LDW,OP_LDWZ,OP_LDT,OP_LDTZ,OP_LOAD,
-	OP_STB,OP_STW,OP_STT,OP_STORE:
+	Stark_pkg::OP_LOADA,
+	Stark_pkg::OP_LDB,Stark_pkg::OP_LDBZ,
+	Stark_pkg::OP_LDW,Stark_pkg::OP_LDWZ,
+	Stark_pkg::OP_LDT,Stark_pkg::OP_LDTZ,
+	Stark_pkg::OP_LOAD,
+	Stark_pkg::OP_STB,
+	Stark_pkg::OP_STW,
+	Stark_pkg::OP_STT,
+	Stark_pkg::OP_STORE:
 		begin
-			immb = fnHasExConst(ins) ? cnst1 : {{18{ins[30]}},ins[30:17]};
+			immb = Stark_pkg::fnHasExConst(ins) ? cnst1 : {{18{ins[30]}},ins[30:17]};
 			has_immb = ins[31:29]!=3'b100;
 		end
-	OP_STBI,OP_STWI,OP_STTI,OP_STOREI:
+	Stark_pkg::OP_STBI,Stark_pkg::OP_STWI,Stark_pkg::OP_STTI,Stark_pkg::OP_STOREI:
 		begin
-			immb = fnHasExConst(ins) ? cnst1 : {{18{ins[30]}},ins[30:17]};
+			immb = Stark_pkg::fnHasExConst(ins) ? cnst1 : {{18{ins[30]}},ins[30:17]};
 			immc = cnst2;
 			has_immb = ins[31:29]!=3'b100;
 			has_immc = 1'b1;
@@ -160,19 +166,19 @@ begin
 			case(ins[7:6])
 			2'b00:
 				begin
-					imma = fnHasExConst(ins) ? cnst1 : {{4{ins[30]}},ins[30:8],5'd0};
+					imma = Stark_pkg::fnHasExConst(ins) ? cnst1 : {{4{ins[30]}},ins[30:8],5'd0};
 					has_imma = 1'b1;
 					pfxa = 1'b1;
 				end
 			2'b01:
 				begin
-					immb = fnHasExConst(ins) ? cnst1 : {{4{ins[30]}},ins[30:8],5'd0};
+					immb = Stark_pkg::fnHasExConst(ins) ? cnst1 : {{4{ins[30]}},ins[30:8],5'd0};
 					has_immb = 1'b1;
 					pfxb = 1'b1;
 				end
 			2'b10:
 				begin
-					immc = fnHasExConst(ins) ? cnst1 : {{4{ins[30]}},ins[30:8],5'd0};
+					immc = Stark_pkg::fnHasExConst(ins) ? cnst1 : {{4{ins[30]}},ins[30:8],5'd0};
 					has_immc = 1'b1;
 					pfxc = 1'b1;
 				end

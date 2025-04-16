@@ -2283,6 +2283,8 @@ wire ext_stall;
 pc_address_ex_t pc0_f1;
 pc_address_ex_t pc0_f2;
 pc_address_ex_t pc0_f3;
+wire new_cline_mux;
+wire [1023:0] cline_mux;
 
 always_comb
 begin
@@ -2323,6 +2325,9 @@ Stark_pipeline_mux uiext1
 	.rstcnt(rstcnt[2:0]),
 	.advance_fet(advance_f),
 	.en_i(advance_pipeline),
+	.cline_fet(ic_line_fet),
+	.new_cline_mux(new_cline_mux),
+	.cline_mux(cline_mux),
 	.ssm_flag(ssm_flag),
 	.ihit(ihito),
 	.sr(sr),
@@ -2404,6 +2409,8 @@ Stark_pipeline_dec udecstg1
 	.en(advance_pipeline),
 	.clk5x(clk5x),
 	.ph4(ph4),
+	.new_cline(new_cline_mux),
+	.cline(cline_mux),
 	.restored(restored),
 	.restore_list(restore_list),
 	.unavail_list(unavail_list),

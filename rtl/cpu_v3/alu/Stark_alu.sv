@@ -72,11 +72,11 @@ output reg [WID-1:0] o;
 output reg mul_done;
 output div_done;
 output div_dbz;
-output cause_code_t exc_o;
+output Stark_pkg::cause_code_t exc_o;
 
 genvar g;
 integer nn,kk;
-cause_code_t exc;
+Stark_pkg::cause_code_t exc;
 wire [WID-1:0] zero = {WID{1'b0}};
 wire [WID-1:0] dead = {WID/16{16'hdead}};
 wire cd_args;
@@ -420,18 +420,18 @@ begin
 		endcase
 	OP_CHK:
 		case(ir[47:44])
-		4'd0:	if (!(a >= b && a < c)) exc = cause_code_t'(ir[34:27]);
-		4'd1: if (!(a >= b && a <= c)) exc = cause_code_t'(ir[34:27]);
-		4'd2: if (!(a > b && a < c)) exc = cause_code_t'(ir[34:27]);
-		4'd3: if (!(a > b && a <= c)) exc = cause_code_t'(ir[34:27]);
-		4'd4:	if (a >= b && a < c) exc = cause_code_t'(ir[34:27]);
-		4'd5: if (a >= b && a <= c) exc = cause_code_t'(ir[34:27]);
-		4'd6: if (a > b && a < c) exc = cause_code_t'(ir[34:27]);
-		4'd7: if (a > b && a <= c) exc = cause_code_t'(ir[34:27]);
-		4'd8:	if (!(a >= cpl)) exc = cause_code_t'(ir[34:27]);
-		4'd9:	if (!(a <= cpl)) exc = cause_code_t'(ir[34:27]);
-		4'd10:	if (!(a==canary)) exc = cause_code_t'(ir[34:27]);
-		default:	exc = FLT_UNIMP;
+		4'd0:	if (!(a >= b && a < c)) exc = Stark_pkg::cause_code_t'(ir[34:27]);
+		4'd1: if (!(a >= b && a <= c)) exc = Stark_pkg::cause_code_t'(ir[34:27]);
+		4'd2: if (!(a > b && a < c)) exc = Stark_pkg::cause_code_t'(ir[34:27]);
+		4'd3: if (!(a > b && a <= c)) exc = Stark_pkg::cause_code_t'(ir[34:27]);
+		4'd4:	if (a >= b && a < c) exc = Stark_pkg::cause_code_t'(ir[34:27]);
+		4'd5: if (a >= b && a <= c) exc = Stark_pkg::cause_code_t'(ir[34:27]);
+		4'd6: if (a > b && a < c) exc = Stark_pkg::cause_code_t'(ir[34:27]);
+		4'd7: if (a > b && a <= c) exc = Stark_pkg::cause_code_t'(ir[34:27]);
+		4'd8:	if (!(a >= cpl)) exc = Stark_pkg::cause_code_t'(ir[34:27]);
+		4'd9:	if (!(a <= cpl)) exc = Stark_pkg::cause_code_t'(ir[34:27]);
+		4'd10:	if (!(a==canary)) exc = Stark_pkg::cause_code_t'(ir[34:27]);
+		default:	exc = Stark_pkg::FLT_UNIMP;
 		endcase
 	OP_R3B,OP_R3W,OP_R3T,OP_R3O:
 		case(ir.r2.func)
@@ -604,7 +604,7 @@ begin
 		begin
 			bus = ALU0 ? div_q : dead;
 			if (div_dbz)
-				exc = FLT_DBZ;
+				exc = Stark_pkg::FLT_DBZ;
 		end
 	OP_DIVUI:	bus = ALU0 ? div_q : dead;
 	OP_ANDI:

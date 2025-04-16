@@ -141,6 +141,8 @@ parameter SUPPORT_QUAD_PRECISION = 1'b0;
 // size of the core and make it more vulnerable to security attacks.
 parameter SUPPORT_LOAD_BYPASSING = 1'b0;
 
+parameter SUPPORT_PREC = 1'b0;
+
 // The following controls the size of the reordering buffer.
 // Setting ROB_ENTRIES below 12 may not work. Setting the number of entries over
 // 63 may require changing the sequence number type. For ideal construction 
@@ -358,8 +360,9 @@ typedef enum logic [5:0] {
 	OP_STORE = 6'd46,
 	OP_STOREI = 6'd47,
 	OP_FENCE = 6'd51,
+	OP_STPTR = 6'd52,
 	OP_BLOCK = 6'd53,
-	OP_FLOAT = 6'd54,
+	OP_FLT = 6'd54,
 	OP_AMO = 6'd59,
 	OP_CMPSWAP = 6'd60,
 	OP_PFX = 6'd61,
@@ -967,6 +970,7 @@ typedef union packed
 	alui_inst_t alui;
 	alu_inst_t alu;
 	alucli_inst_t alucli;
+	alu_inst_t fpu;
 	adbi_inst_t adbi;
 	adb_inst_t adb;
 	adbcli_inst_t adbcli;
@@ -1006,8 +1010,56 @@ typedef struct packed {
 } ex_instruction_t;
 
 typedef enum logic [7:0] {
-	FLT_NONE = 0
+	FLT_DBG		= 8'h00,
+	FLT_SSM		= 8'h01,
+	FLT_BERR	= 8'h02,
+	FLT_ALN		= 8'h03,
+	FLT_UNIMP	= 8'h04,
+	FLT_PRIV	= 8'h05,
+	FLT_PAGE	= 8'h06,
+	FLT_TRACE	= 8'h07,
+	FLT_CANARY= 8'h08,
+	FLT_ABORT	= 8'h09,
+	FLT_IRQ		= 8'h0A,
+	FLT_NMI		= 8'h0B,
+	FLT_RST		= 8'h0C,
+	FLT_ALT		= 8'h0D,
+	FLT_DBZ		= 8'h10,
+	FLT_BADREG = 8'hDF,
+	FLT_CAPTAG = 8'hE0,
+	FLT_CAPOTYPE = 8'hE1,
+	FLT_CAPPERMS = 8'hE2,
+	FLT_CAPBOUNDS = 8'hE4,
+	FLT_CAPSEALED = 8'hE5,
+	FLT_NONE 	= 8'hFF
 } cause_code_t;
+
+typedef enum logic [4:0] {
+	MR_NOP = 5'd0,
+	MR_LOAD = 5'd1,
+	MR_LOADZ = 5'd2,
+	MR_STORE = 5'd3,
+	MR_STOREPTR = 5'd4,
+//	MR_TLBRD = 5'd4,
+//	MR_TLBRW = 5'd5,
+	MR_TLB = 5'd6,
+	MR_LEA = 5'd7,
+	MR_MOVLD = 5'd8,
+	MR_MOVST = 5'd9,
+	MR_RGN = 5'd10,
+	MR_ICACHE_LOAD = 5'd11,
+	MR_PTG = 5'd12,
+	MR_CACHE = 5'd13,
+	MR_ADD = 5'd16,
+	MR_AND = 5'd17,
+	MR_OR	= 5'd18,
+	MR_EOR = 5'd19,
+	MR_ASL = 5'd20,
+	MR_LSR = 5'd21,
+	MR_MIN = 5'd22,
+	MR_MAX = 5'd23,
+	MR_CAS = 5'd24
+} memop_t;
 
 typedef enum logic [3:0] {
 	nul = 4'd0,
@@ -1021,45 +1073,6 @@ typedef enum logic [3:0] {
 	char = 4'd8,
 	vect = 4'd10
 } memsz_t;
-
-typedef struct packed {
-	logic v;
-	cpu_types_pkg::seqnum_t sn;
-	logic agen;						// address generated through to physical address
-	cpu_types_pkg::rob_ndx_t rndx;				// reference to related ROB entry
-	logic vpa;						// virtual or physical address
-	cpu_types_pkg::physical_address_t adr;
-	operating_mode_t omode;	// operating mode
-	logic v2p;						// 1=doing a virtual to physical address translation
-	logic load;						// 1=load
-	logic loadz;
-	logic cload;					// 1=cload
-	logic cload_tags;
-	logic store;
-	logic cstore;
-	ex_instruction_t op;
-	cpu_types_pkg::pc_address_ex_t pc;
-	memop_t func;					// operation to perform
-	logic [3:0] func2;		// more resolution to function
-	cause_code_t cause;
-	logic [3:0] cache_type;
-	logic [63:0] sel;			// +16 for unaligned accesses
-	cpu_types_pkg::asid_t asid;
-	cpu_types_pkg::code_address_t vcadr;		// victim cache address
-	logic dchit;
-	memsz_t memsz;				// indicates size of data
-	logic [7:0] bytcnt;		// byte count of data to load/store
-	cpu_types_pkg::pregno_t Rt;
-	cpu_types_pkg::aregno_t aRt;					// reference for freeing
-	logic aRtz;
-	cpu_types_pkg::aregno_t aRc;
-	cpu_types_pkg::pregno_t pRc;					// 'C' register for store
-	cpu_types_pkg::checkpt_ndx_t cndx;
-	operating_mode_t om;	// operating mode
-	logic ctag;						// capabilities tag
-	logic datav;					// store data is valid
-	logic [511:0] res;		// stores unaligned data as well (must be last field)
-} lsq_entry_t;
 
 typedef struct packed
 {
@@ -1083,13 +1096,17 @@ typedef struct packed
 	cpu_types_pkg::aregno_t Rd;
 	cpu_types_pkg::aregno_t Rd2;
 	cpu_types_pkg::aregno_t Rco;		// carry output
+	logic Rs1z;
+	logic Rs2z;
+	logic Rs3z;
 	logic Rdz;
+	logic has_imm;
 	logic has_imma;
 	logic has_immb;
 	logic has_immc;
-	logic [31:0] imma;
-	logic [31:0] immb;
-	logic [31:0] immc;		// for store immediate
+	logic [63:0] imma;
+	logic [63:0] immb;
+	logic [63:0] immc;		// for store immediate
 	logic csr;				// CSR instruction
 	logic nop;				// NOP semantics
 	logic fc;					// flow control op
@@ -1133,12 +1150,76 @@ typedef struct packed
 	logic pfx;
 	logic sync;
 	logic oddball;
+	logic carry;
+	logic atom;
 	logic regs;
 	logic fregs;
 	regs_t xregs;				// "extra" registers from fregs/regs instruction
 	logic cpytgt;
 	logic qfext;				// true if QFEXT modifier
 } decode_bus_t;
+
+typedef struct packed {
+	logic v;
+	logic excv;								// 1=exception
+	logic [5:0] handle;
+	logic [1:0] nstate;				// number of states
+	logic [1:0] state;				// current state
+	decode_bus_t decbus;			// decoded instruction
+	logic done;
+	cpu_types_pkg::value_t argA;
+	cpu_types_pkg::value_t argB;
+	cpu_types_pkg::value_t argC;
+	cpu_types_pkg::value_t argI;
+	cpu_types_pkg::value_t argT;
+	cpu_types_pkg::value_t argM;
+	cpu_types_pkg::value_t res;
+	cpu_types_pkg::pregno_t pRc;
+	logic argC_v;
+	cpu_types_pkg::checkpt_ndx_t cndx;				// checkpoint index
+	ex_instruction_t op;			// original instruction
+	cpu_types_pkg::pc_address_ex_t pc;			// PC of instruction
+	cpu_types_pkg::mc_address_t mcip;				// Micro-code IP address
+} beb_entry_t;
+
+typedef struct packed {
+	logic v;
+	cpu_types_pkg::seqnum_t sn;
+	logic agen;						// address generated through to physical address
+	cpu_types_pkg::rob_ndx_t rndx;				// reference to related ROB entry
+	logic vpa;						// virtual or physical address
+	cpu_types_pkg::physical_address_t adr;
+	operating_mode_t omode;	// operating mode
+	logic v2p;						// 1=doing a virtual to physical address translation
+	logic load;						// 1=load
+	logic loadz;
+	logic cload;					// 1=cload
+	logic cload_tags;
+	logic store;
+	logic cstore;
+	ex_instruction_t op;
+	cpu_types_pkg::pc_address_ex_t pc;
+	memop_t func;					// operation to perform
+	logic [3:0] func2;		// more resolution to function
+	cause_code_t cause;
+	logic [3:0] cache_type;
+	logic [63:0] sel;			// +16 for unaligned accesses
+	cpu_types_pkg::asid_t asid;
+	cpu_types_pkg::code_address_t vcadr;		// victim cache address
+	logic dchit;
+	memsz_t memsz;				// indicates size of data
+	logic [7:0] bytcnt;		// byte count of data to load/store
+	cpu_types_pkg::pregno_t Rt;
+	cpu_types_pkg::aregno_t aRt;					// reference for freeing
+	logic aRtz;
+	cpu_types_pkg::aregno_t aRc;
+	cpu_types_pkg::pregno_t pRc;					// 'C' register for store
+	cpu_types_pkg::checkpt_ndx_t cndx;
+	operating_mode_t om;	// operating mode
+	logic ctag;						// capabilities tag
+	logic datav;					// store data is valid
+	logic [511:0] res;		// stores unaligned data as well (must be last field)
+} lsq_entry_t;
 
 typedef struct packed
 {
@@ -1147,6 +1228,7 @@ typedef struct packed
 	cpu_types_pkg::pc_address_t brtgt;
 	logic takb;								// 1=branch evaluated to taken
 	logic ssm;								// 1=single step mode active
+	logic hwi;
 	logic [2:0] hwi_swstk;		// software stack
 //	cause_code_t exc;					// non-zero indicate exception
 	logic excv;								// 1=exception
@@ -1286,7 +1368,7 @@ begin
 	case(ins.any.opcode)
 	OP_BRK,OP_SHIFT,OP_CSR,OP_CR,OP_CHK,
 	OP_PUSH,OP_POP,	// ENTER,LEAVE,PUSH,POP
-	OP_FENCE,OP_BLOCK,OP_FLOAT,
+	OP_FENCE,OP_BLOCK,OP_FLT,
 	OP_AMO:	// AMO
 		fnHasExConst = 1'b0;
 	default:	fnHasExConst = 1'b1;
