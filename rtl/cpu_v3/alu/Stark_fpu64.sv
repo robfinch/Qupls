@@ -53,7 +53,7 @@ input [WID-1:0] i;
 input [WID-1:0] p;
 output reg [WID-1:0] o;
 output reg done;
-output cause_code_t exc;
+output Stark_pkg::cause_code_t exc;
 
 reg [11:0] cnt;
 reg sincos_done, scale_done, f2i_done, i2f_done, sqrt_done, fres_done, trunc_done;

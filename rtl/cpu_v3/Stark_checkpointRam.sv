@@ -51,7 +51,7 @@ input ena;
 input wea;
 input checkpt_ndx_t addra;
 input Stark_pkg::checkpoint_t dina;
-output cStark_pkg::heckpoint_t douta;
+output Stark_pkg::checkpoint_t douta;
 input clkb;
 input enb;
 input checkpt_ndx_t addrb;

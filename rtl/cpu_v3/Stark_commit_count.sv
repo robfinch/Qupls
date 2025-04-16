@@ -45,7 +45,7 @@ module Stark_commit_count(rst, next_cqd, rob,
 parameter XWID = 4;
 input rst;
 input [XWID-1:0] next_cqd;
-input Stark_pkg::rob_entry_t [Stark_pkg::OB_ENTRIES-1:0] rob;
+input Stark_pkg::rob_entry_t [Stark_pkg::ROB_ENTRIES-1:0] rob;
 input rob_ndx_t head0;
 input rob_ndx_t head1;
 input rob_ndx_t head2;

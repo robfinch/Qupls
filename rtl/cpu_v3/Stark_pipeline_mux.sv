@@ -46,7 +46,7 @@ import Stark_pkg::*;
 
 module Stark_pipeline_mux(rst_i, clk_i, rstcnt, advance_fet, ihit, en_i,
 	stomp_bno, stomp_mux, nop_o, carry_mod_fet,
-	nmi_i, irq_in, hirq_i, sr, pt_mux, p_override, po_bno,
+	nmi_i, irqf_fet, irq_in, hirq_i, sr, pt_mux, p_override, po_bno,
 	branchmiss, misspc_fet,
 	mipv_i, mip_i, ic_line_fet, reglist_active, grp_i, grp_o,
 	takb_fet, mc_offs, pc_i, vl,
@@ -69,7 +69,8 @@ input stomp_mux;
 output reg nop_o;
 input [31:0] carry_mod_fet;
 input nmi_i;
-input irq_info_packet irq_in;
+input irqf_fet;
+input irq_info_packet_t irq_in;
 input hirq_i;
 input status_reg_t sr;
 input reglist_active;
@@ -178,7 +179,6 @@ begin
 	nopi.exc = FLT_NONE;
 	nopi.pc.pc = RSTPC;
 	nopi.mcip = 12'h1A0;
-	nopi.len = 4'd4;
 	nopi.ins = {26'd0,OP_NOP};
 	nopi.pred_btst = 6'd0;
 	nopi.element = 'd0;
@@ -696,7 +696,6 @@ begin
 	ins_o.pc = pc;
 	ins_o.bt = takb;
 	ins_o.mcip = mcip;
-	ins_o.len = len;
 	if (ins_o.ins.any.opcode==OP_QFEXT) begin
 		ins_o.aRa = {ins_i.ins.r3.Ra.num};
 		ins_o.aRb = {ins_i.ins.r3.Rb.num};

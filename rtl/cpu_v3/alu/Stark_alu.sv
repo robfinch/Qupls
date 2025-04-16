@@ -90,7 +90,6 @@ wire [WID-1:0] cmpo;
 reg [WID-1:0] bus;
 reg [WID-1:0] busx;
 reg [WID-1:0] blendo;
-reg [WID-1:0] immc8;
 reg [22:0] ii;
 reg [WID-1:0] sd;
 reg [WID-1:0] sum_ab;
@@ -109,13 +108,11 @@ always_comb
 	sum_gc = a + b + c;
 
 always_comb
-	immc8 = {{WID{ir[41]}},ir[41:34]};
+	shl = {a,a} << (ir[31] ? ir.shi.amt : b[5:0]);
 always_comb
-	shl = {b,a} << (ir.lshifti.func[3] ? ir.lshifti.imm : c[5:0]);
+	shr = {a,a} >> (ir[31] ? ir.shi.amt : b[5:0]);
 always_comb
-	shr = {b,a} >> (ir.rshifti.func[3] ? ir.rshifti.mb : c[5:0]);
-always_comb
-	asr = {{64{a[63]}},a,64'd0} >> (ir.rshifti.func[3] ? ir.rshifti.mb : c[5:0]);
+	asr = {{64{a[63]}},a,64'd0} >> (ir[31] ? ir.srai.amt : b[5:0]);
 
 always_ff @(posedge clk)
 begin
@@ -369,7 +366,7 @@ generate begin : gInfoBlend
 				.mask(vmasko)
 			);
 		end
-
+/*
 		Stark_blend ublend0
 		(
 			.a(c),
@@ -377,10 +374,11 @@ generate begin : gInfoBlend
 			.c1(bi),
 			.o(blendo)
 		);
+*/
 	end
 end
 endgenerate
-
+/*
 always_comb
 	case(ir[32:31])
 	2'd0:	chrndxv = a;
@@ -403,10 +401,10 @@ end
 endgenerate
 
 flo96 uflo1 (.i({96'd0,chndx[WID/8-1:0]}), .o(chndx2[6:0]));
-
+*/
 always_comb
 begin
-	exc = FLT_NONE;
+	exc = Stark_pkg::FLT_NONE;
 	bus = {(WID/16){16'h0000}};
 	case(ir.any.opcode)
 	OP_FLT3:
@@ -526,34 +524,6 @@ begin
 			
 		FN_BYTENDX:	bus = ALU0 ? chndx2 : dead;
 
-		FN_SEQ:	bus = a==b ? c : t;
-		FN_SNE:	bus = a!=b ? c : t;
-		FN_SLT:	bus = $signed(a) < $signed(b) ? c : t;
-		FN_SLE:	bus = $signed(a) <= $signed(b) ? c : t;
-		FN_SLTU:	bus = a < b ? c : t;
-		FN_SLEU: 	bus = a <= b ? c : t;
-
-		FN_SEQI8:	bus = a == b ? immc8 : t;
-		FN_SNEI8:	bus = a != b ? immc8 : t;
-		FN_SLTI8:	bus = $signed(a) < $signed(b) ? immc8 : t;
-		FN_SLEI8:	bus = $signed(a) <= $signed(b) ? immc8 : t;
-		FN_SLTUI8:	bus = a < b ? immc8 : t;
-		FN_SLEUI8:	bus = a <= b ? immc8 : t;
-
-		FN_ZSEQ:	bus = a==b ? c : zero;
-		FN_ZSNE:	bus = a!=b ? c : zero;
-		FN_ZSLT:	bus = $signed(a) < $signed(b) ? c : zero;
-		FN_ZSLE:	bus = $signed(a) <= $signed(b) ? c : zero;
-		FN_ZSLTU:	bus = a < b ? c : zero;
-		FN_ZSLEU:	bus = a <= b ? c : zero;
-
-		FN_ZSEQI8: bus = a==b ? immc8 : zero;
-		FN_ZSNEI8:	bus = a!=b ? immc8 : zero;
-		FN_ZSLTI8:	bus = $signed(a) < $signed(b) ? immc8 : zero;
-		FN_ZSLEI8:	bus = $signed(a) <= $signed(b) ? immc8 : zero;
-		FN_ZSLTUI8:	bus = a < b ? immc8 : zero;
-		FN_ZSLEUI8:	bus = a <= b ? immc8 : zero;
-
 		FN_MINMAX:
 			case(ir.r3.op4)
 			3'd0:	// MIN
@@ -661,27 +631,6 @@ begin
 			endcase
 		default:	bus = {(WID/16){16'hDEAD}};
 		endcase
-
-	OP_ZSEQI:	bus = a==i;
-	OP_ZSNEI:	bus = a!=i;
-	OP_ZSLTI:	bus = $signed(a) < $signed(i);
-	OP_ZSLEI:	bus = $signed(a) <= $signed(i);
-	OP_ZSLTUI:	bus = a < i;
-	OP_ZSLEUI:	bus = a <= i;
-	OP_ZSGTI: bus = $signed(a) > $signed(i);
-	OP_ZSGEI: bus = $signed(a) >= $signed(i);
-	OP_ZSGTUI: bus = a > i;
-	OP_ZSGEUI: bus = a >= i;
-	OP_SEQI:	bus = a==i ? 64'd1 : t;
-	OP_SNEI:	bus = a!=i ? 64'd1 : t;
-	OP_SLTI:	bus = $signed(a) < $signed(i) ? 64'd1 : t;
-	OP_SLEI:	bus = $signed(a) <= $signed(i) ? 64'd1 : t;
-	OP_SLTUI:	bus = a < i ? 64'd1 : t;
-	OP_SLEUI:	bus = a <= i ? 64'd1 : t;
-	OP_SGTI: bus = $signed(a) > $signed(i) ? 64'd1 : t;
-	OP_SGEI: bus = $signed(a) >= $signed(i) ? 64'd1 : t;
-	OP_SGTUI: bus = a > i ? 64'd1 : t;
-	OP_SGEUI: bus = a >= i ? 64'd1 : t;
 
 	OP_MOV:		bus = a;
 	OP_LDA:		bus = a + i + (b << ir[31:29]);

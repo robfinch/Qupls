@@ -34,6 +34,9 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // 
 // 9000k LUTs / 520 FFs / 80 BRAMs (4w20r)
+//
+// 11100 LUTS / 520 FFs / 104 BRAMs (4w26r)
+// 7900 LUTs / 520 FFs / 64 BRAMs (4w16r)
 // ============================================================================
 //
 import Stark_pkg::*;
@@ -47,7 +50,7 @@ module Stark_regfile4wNr(rst, clk,
 parameter WID = $bits(cpu_types_pkg::value_t)+8;
 parameter DEP = PREGS;
 parameter RBIT = $clog2(DEP)-1;
-parameter RPORTS = 20;
+parameter RPORTS = 16;
 input rst;
 input clk;
 input wr0;

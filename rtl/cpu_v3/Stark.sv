@@ -3284,7 +3284,7 @@ always_comb wt5B = dram_v1 && !dram_aRtz1B && Stark_pkg::NDATA_PORTS > 1;
 always_comb wt6A = fcu_done && !fcu_aRtzA;
 always_comb wt6B = fcu_done && !fcu_aRtzB;
 
-wire [4:0] upd1a,upd2a,upd2a,upd4a,upd5a,upd6a;
+wire [4:0] upd1a,upd2a,upd3a,upd4a,upd5a,upd6a;
 reg [4:0] upd1, upd2, upd3, upd4, upd5, upd6;
 reg [4:0] fuq_rot;
 

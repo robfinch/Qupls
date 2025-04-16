@@ -46,7 +46,7 @@ input [WID-1:0] b;
 input [WID-1:0] i;
 output reg [WID-1:0] o;
 
-wire [WID-1:0] o1;
+reg [WID-1:0] o1;
 Stark_pkg::condition_byte_t cb, cbi;
 wire inf, nan, snan;
 wire [15:0] fcmpo;
@@ -70,7 +70,7 @@ begin
 	o1 &= ~(64'hFF << {om,3'd0});	// clear cr bits
 	cb = 8'h00;
 	case(ir.any.opcode)
-	OP_CMP:
+	Stark_pkg::OP_CMP:
 		begin
 			if (ir[31]) begin
 				case(ir.cmpi.op2)
