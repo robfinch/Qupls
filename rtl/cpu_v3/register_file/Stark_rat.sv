@@ -39,8 +39,10 @@
 // There are a max of 32 regs to update (32 entries in ROB). While stomping
 // is occurring other updates are not allowed.
 //
-// 35k LUTs / 4k FFs / 0 BRAMS (128 regs, 8 checkpoints)
-// 57k LUTs / 7k FFs / 0 BRAMS (256 regs, 16 checkpoints)
+// 24100 LUTs / 2900 FFs / 0 BRANS (96a/256p regs, 16 checkpints)
+// 31k LUTs / 3500 FFs / 0 BRANS (192a/512p regs, 16 checkpints)
+// 35k LUTs / 4000 FFs / 0 BRAMS (128a regs, 8 checkpoints)
+// 57k LUTs / 7000 FFs / 0 BRAMS (256a regs, 16 checkpoints)
 // ============================================================================
 //
 import const_pkg::*;
@@ -66,7 +68,7 @@ module Stark_rat(rst, clk, clk5x, ph4, en, en2, nq, stallq,
 	restore_list, restored, tags2free, freevals, free_chkpt_i, fchkpt_i, backout, fcu_id,
 	bo_wr, bo_areg, bo_preg, bo_nreg);
 parameter XWID = 4;
-parameter NPORT = 26;
+parameter NPORT = 16;
 parameter BANKS = 1;
 localparam RBIT=$clog2(Stark_pkg::PREGS);
 localparam BBIT=0;//$clog2(BANKS)-1;

@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023-2024  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2023-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -158,7 +158,7 @@ for (n9r = 0; n9r < Stark_pkg::LSQ_ENTRIES; n9r = n9r + 1)
 		memopsvalid[n9c][n9r] = lsq[n9r][n9c].v && lsq[n9r][n9c].agen && (lsq[n9r][n9c].load|lsq[n9r][n9c].datav);
 
 always_ff @(posedge clk)
-for (n10 = 0; n10 < ROB_Stark_pkg::ENTRIES; n10 = n10 + 1)
+for (n10 = 0; n10 < Stark_pkg::ROB_ENTRIES; n10 = n10 + 1)
   memready[n10] = (rob[n10].v
   		&& memopsvalid[rob[n10].lsqndx.col][rob[n10].lsqndx.row] 
 //  		& ~robentry_memissue[n10] 
@@ -188,7 +188,8 @@ begin
 			no_issue1 = 1'd0;
 			no_issue2 = 1'd0;
 			no_issue3 = 1'd0;
-			if (issued < Stark_pkg::NDATA_PORTS) begin
+			// Check for issued on port #0 only. Might not need this check here.
+			if (issued < Stark_pkg::NDATA_PORTS && rob[lsq[lsq_heads[row].row][col].rndx].decbus.mem0 ? issued==2'd0 : 1'b1) begin
 				if (row==0) begin
 					if (memready[ lsq[lsq_heads[row].row][col].rndx ] &&
 						lsq[lsq_heads[row].row][col].v==VAL &&
