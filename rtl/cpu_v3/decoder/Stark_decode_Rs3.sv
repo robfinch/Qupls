@@ -37,12 +37,13 @@
 import cpu_types_pkg::*;
 import Stark_pkg::*;
 
-module Stark_decode_Rs3(om, instr, has_immc, Rs3, Rs3z);
+module Stark_decode_Rs3(om, instr, has_immc, Rs3, Rs3z, exc);
 input Stark_pkg::operating_mode_t om;
 input Stark_pkg::ex_instruction_t instr;
 input has_immc;
 output aregno_t Rs3;
 output reg Rs3z;
+output exc;
 
 function aregno_t fnRs3;
 input Stark_pkg::ex_instruction_t ir;
@@ -65,9 +66,8 @@ endfunction
 always_comb
 begin
 	Rs3 = fnRs3(instr, has_immc);
-	if (Rs3==7'd31 && (instr.ins.any.opcode==OP_MOV && instr.ins[28:26]!=3'd1))	// MOVEA?
-		Rs3 = 7'd64|om;
 	Rs3z = ~|Rs3;
+	tRegmap(om, Rs3, Rs3, exc);
 end
 
 endmodule

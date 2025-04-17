@@ -50,7 +50,7 @@ parameter SIM = 1'b0;
 
 // Number of architectural registers there are in the core, including registers
 // not visible in the programming model.
-`define NREGS	96
+`define NREGS	224
 
 // Number of physical registers supporting the architectural ones and used in
 // register renaming. There must be significantly more physical registers than
@@ -307,7 +307,7 @@ typedef enum logic [2:0] {
 	BTS_JSR = 3'd4,
 	BTS_CALL = 3'd5,
 	BTS_RET = 3'd6,
-	BTS_RTI = 3'd7
+	BTS_ERET = 3'd7
 } bts_t;
 
 typedef enum logic [2:0] {
@@ -368,6 +368,35 @@ typedef enum logic [5:0] {
 	OP_PFX = 6'd61,
 	OP_NOP = 6'd63
 } opcode_e;
+
+typedef enum logic [3:0] {
+	FOP4_ADD = 4'd4,
+	FOP4_SUB = 4'd5,
+	FOP4_MUL = 4'd6,
+	FOP4_DIV = 4'd7,
+	FOP4_G8 = 4'd8,
+	FOP4_G10 = 4'd10,
+	FOP4_TRIG = 4'd11
+} float_t;
+
+typedef enum logic [2:0] {
+	FG8_FSNGJ = 3'd0,
+	FG8_FSGNJN = 3'd1,
+	FG8_FSGNJX = 3'd2,
+	FG8_SCALEB = 3'd3
+} float_g8_t;
+
+typedef enum logic [4:0] {
+	FG10_FCVTF2I = 5'd0,
+	FG10_FCVTI2F = 5'd1,
+	FG8_FSIGN = 5'd16,
+	FG8_FSQRT = 5'd17
+} float_g10_t;
+
+typedef enum logic [4:0] {
+	FTRIG_COS = 5'd0,
+	FTRIG_SIN = 5'd1
+} float_trig_t;
 
 parameter NOP_INSN = {26'd0,OP_NOP};
 
@@ -1142,6 +1171,8 @@ typedef struct packed
 	logic cjb;					// call, jmp, or bra
 	logic bl;						// branch and link to subroutine
 	logic jsri;					// indirect subroutine call
+	logic br;
+	logic pbr;
 	logic ret;
 	logic brk;
 	logic irq;
@@ -1157,6 +1188,7 @@ typedef struct packed
 	regs_t xregs;				// "extra" registers from fregs/regs instruction
 	logic cpytgt;
 	logic qfext;				// true if QFEXT modifier
+	cause_code_t cause;
 } decode_bus_t;
 
 typedef struct packed {
@@ -1460,5 +1492,114 @@ begin
 	endcase
 end
 endfunction
+
+function fnIsBl;
+input instruction_t ir;
+begin
+	case(ir.any.opcode)
+	OP_B0,OP_B1:
+		fnIsBl = ir[31];	
+	default:
+		fnIsBl = 1'b0;
+	endcase
+end
+endfunction
+
+function fnIsBranch;
+input instruction_t ir;
+begin
+	case(ir.any.opcode)
+	OP_BCC0,OP_BCC1:
+		fnIsBranch = ir[8:6]!=3'd7;
+	default:
+		fnIsBranch = 1'b0;
+	endcase
+end
+endfunction
+
+function fnIsPredBranch;
+input Stark_pkg::instruction_t ir;
+begin
+	case(ir.any.opcode)
+	OP_BCC0,OP_BCC1:
+		fnIsPredBranch = ir[8:6]==3'd7 && ir[31];
+	default:
+		fnIsPredBranch = 1'b0;
+	endcase
+end
+endfunction
+
+function fnIsBccR;
+input instruction_t ir;
+begin
+	fnIsBccR = fnIsBranch(ir) && ir[39:36]==4'h7;
+end
+endfunction
+
+function fnIsDBcc;
+input instruction_t ir;
+begin
+	fnIsDBcc = fnIsBranch(ir) && ir[25:23]!=3'd2 && ir[25:23]!=3'd5;
+end
+endfunction
+
+function fnIsEret;
+input instruction_t ir;
+begin
+	fnIsEret = ir.any.opcode==OP_BRK &&  ir[28:18]==11'd1;	// eret or eret2
+end
+endfunction
+
+function fnIsRet;
+input instruction_t ir;
+begin
+	fnIsRet = (ir.any.opcode==OP_B0||ir.any.opcode==OP_B1) && 
+		ir[31:29]==3'd1 && ir[28:26]==3'd1 && ir[8:6]==3'd0;	// eret or eret2
+end
+endfunction
+
+// ============================================================================
+// Support Tasks
+// ============================================================================
+
+task tRegmap;
+input operating_mode_t om;
+input [6:0] a;
+output reg [7:0] o;
+output reg exc;
+begin
+	exc = 1'b0;
+	case(om)
+	OM_APP:	o = a;
+	OM_SUPERVISOR:
+		begin
+			if (a >= 7'd56 && a <= 7'd63 || a >= 7'd0 && a <= 7'd7)
+				o = a;
+			else if (a >= 7'd48)
+				exc = 1'b1;
+			else
+				o = 8'd96 + a;
+		end
+	OM_HYPERVISOR:
+		begin
+			if (a >= 7'd56 && a <= 7'd63 || a >= 7'd0 && a <= 7'd7)
+				o = a;
+			else if (a >= 7'd48)
+				exc = 1'b1;
+			else
+				o = 8'd136 + a;
+		end
+	OM_SECURE:
+		begin
+			if (a >= 7'd56 && a <= 7'd63 || a >= 7'd0 && a <= 7'd7)
+				o = a;
+			else if (a >= 7'd55)
+				exc = 1'b1;
+			else
+				o = 8'd176 + a;
+		end
+	endcase
+end
+endtask
 
 endpackage

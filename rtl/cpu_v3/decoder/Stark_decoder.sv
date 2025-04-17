@@ -52,6 +52,7 @@ Stark_pkg::ex_instruction_t ins;
 Stark_pkg::decode_bus_t db;
 wire [7:0] const_pos;
 wire [3:0] isz;
+wire excRs1, excRs2, excRs3, excRd;
 
 // There could be four 32-bit constant positions used up on the cache line.
 // The decode stage needs to be able to mark the constant positions as NOPs.
@@ -99,7 +100,8 @@ Stark_decode_Rs1 udcra
 	.instr(ins),
 	.has_imma(db.has_imma),
 	.Rs1(db.Rs1),
-	.Rs1z(db.Rs1z)
+	.Rs1z(db.Rs1z),
+	.exc(ecxRs1)
 );
 
 Stark_decode_Rs2 udcrb
@@ -108,7 +110,8 @@ Stark_decode_Rs2 udcrb
 	.instr(ins),
 	.has_immb(db.has_immb),
 	.Rs2(db.Rs2),
-	.Rs2z(db.Rs2z)
+	.Rs2z(db.Rs2z),
+	.exc(ecxRs2)
 );
 
 Stark_decode_Rs3 udcrc
@@ -117,7 +120,8 @@ Stark_decode_Rs3 udcrc
 	.instr(ins),
 	.has_immc(db.has_immc),
 	.Rs3(db.Rs3),
-	.Rs3z(db.Rs3z)
+	.Rs3z(db.Rs3z),
+	.exc(ecxRs3)
 );
 
 Stark_decode_Rd udcrt
@@ -125,7 +129,8 @@ Stark_decode_Rd udcrt
 	.om(om),
 	.instr(ins),
 	.Rd(db.Rd),
-	.Rdz(db.Rdz)
+	.Rdz(db.Rdz),
+	.exc(ecxRd)
 );
 
 Stark_decode_macro umacro1
@@ -371,6 +376,7 @@ Stark_decode_swap uswp1
 always_ff @(posedge clk)
 if (rst) begin
 	dbo <= {$bits(dbo){1'd0}};
+	dbo.cause <= Stark_pkg::FLT_NONE;
 	dbo.nop <= 1'b1;
 	dbo.Rdz <= 1'b1;
 	dbo.alu <= 1'b1;
@@ -379,11 +385,14 @@ else begin
 	if (en) begin
 		dbo <= {$bits(dbo){1'd0}};	// in case a signal was missed / unused.
 		dbo <= db;
+		dbo.cause <= Stark_pkg::FLT_NONE;
 		dbo.mem <= db.load|db.store|db.v2p;
 		dbo.sync <= db.fence && ins[15:8]==8'hFF;
 		dbo.cpytgt <= 1'b0;
 		dbo.qfext <= db.alu && ins.ins[28:27]==2'b10;
 //		dbo.regexc <= 1'b0;
+		if (excRs1|excRs2|excRs3|excRd)
+			dbo.cause <= Stark_pkg::FLT_BADREG;
 	end
 end
 

@@ -37,12 +37,13 @@
 import cpu_types_pkg::*;
 import Stark_pkg::*;
 
-module Stark_decode_Rs2(om, instr, has_immb, Rs2, Rs2z);
+module Stark_decode_Rs2(om, instr, has_immb, Rs2, Rs2z, exc);
 input Stark_pkg::operating_mode_t om;
 input Stark_pkg::ex_instruction_t instr;
 input has_immb;
 output aregno_t Rs2;
 output reg Rs2z;
+output exc;
 
 function aregno_t fnRs2;
 input Stark_pkg::ex_instruction_t ir;
@@ -52,9 +53,9 @@ begin
 		fnRs2 = 8'd0;
 	else
 		case(ir.ins.any.opcode)
-		OP_FLT:
+		Stark_pkg::OP_FLT:
 			fnRs2 = {2'b01,ir.ins.fpu.Rs2};
-		OP_CSR:
+		Stark_pkg::OP_CSR:
 			fnRs2 = ir.ins[31:29]==3'd0 ? {2'b00,ir.ins.csrr.Rs2} : 7'd0;
 		Stark_pkg::OP_B0,Stark_pkg::OP_B1,Stark_pkg::OP_BCC0,Stark_pkg::OP_BCC1:
 			if (ir.ins[30:29]==2'b00 && ir.ins[8:6]!=3'd7)
@@ -66,15 +67,11 @@ begin
 		Stark_pkg::OP_MUL,Stark_pkg::OP_DIV,
 		Stark_pkg::OP_SHIFT:
 			fnRs2 = {2'b00,ir.ins.alu.Rs2};
-		Stark_pkg::OP_LDB,Stark_pkg::OP_LDBZ,
-		Stark_pkg::OP_LDW,Stark_pkg::OP_LDWZ,
-		Stark_pkg::OP_LDT,Stark_pkg::OP_LDTZ,
-		Stark_pkg::OP_LOAD,Stark_pkg::OP_LOADA,
+		Stark_pkg::OP_LDB,Stark_pkg::OP_LDBZ,Stark_pkg::OP_LDW,Stark_pkg::OP_LDWZ,
+		Stark_pkg::OP_LDT,Stark_pkg::OP_LDTZ,Stark_pkg::OP_LOAD,Stark_pkg::OP_LOADA,
 		Stark_pkg::OP_AMO,Stark_pkg::OP_CMPSWAP,
-		Stark_pkg::OP_STB,Stark_pkg::OP_STBI,
-		Stark_pkg::OP_STW,Stark_pkg::OP_STWI,
-		Stark_pkg::OP_STT,Stark_pkg::OP_STTI,
-		Stark_pkg::OP_STORE,Stark_pkg::OP_STOREI,
+		Stark_pkg::OP_STB,Stark_pkg::OP_STBI,Stark_pkg::OP_STW,Stark_pkg::OP_STWI,
+		Stark_pkg::OP_STT,Stark_pkg::OP_STTI,Stark_pkg::OP_STORE,Stark_pkg::OP_STOREI,
 		Stark_pkg::OP_STPTR:
 			fnRs2 = {2'b00,ir.ins.lsscn.Rs2};
 		default:
@@ -86,9 +83,8 @@ endfunction
 always_comb
 begin
 	Rs2 = fnRs2(instr, has_immb);
-	if (Rs2==7'd31 && (instr.ins.any.opcode==OP_MOV && instr.ins[28:26]!=3'd1))	// MOVEA?
-		Rs2 = 7'd64|om;
 	Rs2z = ~|Rs2;
+	tRegmap(om, Rs2, Rs2, exc);
 end
 
 endmodule
