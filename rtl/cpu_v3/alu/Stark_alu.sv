@@ -75,7 +75,7 @@ output div_dbz;
 output Stark_pkg::cause_code_t exc_o;
 
 genvar g;
-integer nn,kk;
+integer nn,kk,jj;
 Stark_pkg::cause_code_t exc;
 wire [WID-1:0] zero = {WID{1'b0}};
 wire [WID-1:0] dead = {WID/16{16'hdead}};
@@ -99,6 +99,7 @@ reg [WID-1:0] chndx2;
 reg [WID-1:0] chrndxv;
 wire [WID-1:0] info;
 wire [WID-1:0] vmasko;
+reg [WID-1:0] tmp;
 
 always_comb
 	ii = {{6{i[WID-1]}},i};
@@ -108,9 +109,9 @@ always_comb
 	sum_gc = a + b + c;
 
 always_comb
-	shl = {a,a} << (ir[31] ? ir.shi.amt : b[5:0]);
+	shl = {{WID{1'b0}},a} << (ir[31] ? ir.shi.amt : b[5:0]);
 always_comb
-	shr = {a,a} >> (ir[31] ? ir.shi.amt : b[5:0]);
+	shr = {a,{WID{1'b0}}} >> (ir[31] ? ir.shi.amt : b[5:0]);
 always_comb
 	asr = {{64{a[63]}},a,64'd0} >> (ir[31] ? ir.srai.amt : b[5:0]);
 
@@ -148,13 +149,82 @@ Stark_divider #(.WID(WID)) udiv0(
 	.sgn(div),
 	.sgnus(1'b0),
 	.a(a),
-	.b(bi),
+	.b(ir[31] ? i : bi),
 	.qo(div_q),
 	.ro(div_r),
 	.dvByZr(div_dbz),
 	.done(div_done),
 	.idle()
 );
+
+reg [WID-1:0] locnt,lzcnt,popcnt,tzcnt;
+reg loz, lzz, tzz;
+reg [WID-1:0] t1;
+reg [WID-1:0] exto, extzo;
+
+// Handle ext, extz
+always_comb
+begin
+	t1 = a >> (ir[31] ? ir[22:17] : b[5:0]);	// srl
+	for (jj = 0; jj < WID; jj = jj + 1)
+		if (ir[31:29]==3'b110)		// extz
+			extzo[jj] = jj > ir[28:23] ? 1'b0 : t1[jj];
+		else if (ir[31:25]==7'd6)	// extz
+			extzo[jj] = jj > b[13:8] ? 1'b0 : t1[jj];
+		else if (ir[31:29]==3'b111)
+			exto[jj] = jj > ir[28:23] ? t1[ir[28:23]] : t1[jj];
+		else if (ir[31:25]==7'd7)	// extz
+			exto[jj] = jj > b[13:8] ? t1[b[13:8]] : t1[jj];
+end
+
+	
+generate begin : gffz
+	for (g = WID-1; g >= 0; g = g - 1)
+	always_comb
+	begin
+    	if (g==0)
+	      popcnt = {WID{1'd0}};
+		if (a[g]==1'b1)
+		  popcnt = popcnt + 2'd1;
+	end
+	for (g = WID-1; g >= 0; g = g - 1)
+	always_comb
+	begin
+	   if (g==0) begin
+	       locnt = {WID{1'd0}};
+	       loz = 0;
+	   end
+		if (a[g]==1'b1 && !loz)
+			locnt = locnt + 2'd1;
+		else
+			loz = 1;
+    end
+	for (g = WID-1; g >= 0; g = g - 1)
+	always_comb
+	begin
+	   if (g == 0) begin
+	       lzcnt = {WID{1'd0}};
+	       lzz = 0;
+	   end
+		if (a[g]==1'b0 && !lzz)
+			lzcnt = lzcnt + 2'd1;
+		else
+			lzz = 1;
+    end
+	for (g = 0; g < WID; g = g + 1)
+	always_comb
+	begin
+	   if (g==0) begin
+	       tzcnt = {WID{1'd0}};
+	       tzz = 0;
+	   end
+		if (a[g]==1'b0 && !tzz)
+			tzcnt = tzcnt + 2'd1;
+		else
+		  tzz = 1;
+    end
+end
+endgenerate
 
 // XPM_FIFO instantiation template for Synchronous FIFO configurations
 // Refer to the targeted device family architecture libraries guide for XPM_FIFO documentation
@@ -359,22 +429,7 @@ generate begin : gInfoBlend
 				.coreno(coreno),
 				.o(info)
 			);
-			Stark_setvmask usm1 (
-				.max_ele_sz($bits(value_t)),
-				.numlanes(a[6:0]),
-				.lanesz(b[5:0]|i[4:0]),
-				.mask(vmasko)
-			);
 		end
-/*
-		Stark_blend ublend0
-		(
-			.a(c),
-			.c0(a),
-			.c1(bi),
-			.o(blendo)
-		);
-*/
 	end
 end
 endgenerate
@@ -402,298 +457,226 @@ endgenerate
 
 flo96 uflo1 (.i({96'd0,chndx[WID/8-1:0]}), .o(chndx2[6:0]));
 */
+/*
+typedef enum logic [3:0] {
+	FOP4_ADD = 4'd4,
+	FOP4_SUB = 4'd5,
+	FOP4_MUL = 4'd6,
+	FOP4_DIV = 4'd7,
+	FOP4_G8 = 4'd8,
+	FOP4_G10 = 4'd10,
+	FOP4_TRIG = 4'd11
+} float_t;
+
+typedef enum logic [2:0] {
+	FG8_FSNGJ = 3'd0,
+	FG8_FSGNJN = 3'd1,
+	FG8_FSGNJX = 3'd2,
+	FG8_SCALEB = 3'd3
+} float_g8_t;
+
+typedef enum logic [4:0] {
+	FG10_FCVTF2I = 5'd0,
+	FG10_FCVTI2F = 5'd1,
+	FG8_FSIGN = 5'd16,
+	FG8_FSQRT = 5'd17
+} float_g10_t;
+*/
+
 always_comb
 begin
 	exc = Stark_pkg::FLT_NONE;
 	bus = {(WID/16){16'h0000}};
 	case(ir.any.opcode)
-	OP_FLT3:
-		case(ir.f3.func)
-		FN_FCMP:	bus = cmpo;
-		FN_FLT1:
-			case(ir.f1.func)
-			FN_FABS:	bus = {1'b0,a[WID-2:0]};
-			FN_FNEG:	bus = {a[WID-1]^1'b1,a[WID-2:0]};
-			default:	bus = {WID{1'd0}};
+	Stark_pkg::OP_FLT:
+		case(ir.fpu.op4)
+		FOP4_G8:	
+			case (ir.fpu.op3)
+			FG8_FSNGJ:	bus = {b[WID-1],a[WID-2:0]};
+			FG8_FSGNJN:	bus = {~b[WID-1],a[WID-2:0]};
+			FG8_FSGNJX:	bus = {b[WID-1]^a[WID-1],a[WID-2:0]};
+			default:	 bus = zero;
 			endcase
-		default:	bus = {WID{1'd0}};
+		default:	bus = zero;
 		endcase
-	OP_CHK:
-		case(ir[47:44])
-		4'd0:	if (!(a >= b && a < c)) exc = Stark_pkg::cause_code_t'(ir[34:27]);
-		4'd1: if (!(a >= b && a <= c)) exc = Stark_pkg::cause_code_t'(ir[34:27]);
-		4'd2: if (!(a > b && a < c)) exc = Stark_pkg::cause_code_t'(ir[34:27]);
-		4'd3: if (!(a > b && a <= c)) exc = Stark_pkg::cause_code_t'(ir[34:27]);
-		4'd4:	if (a >= b && a < c) exc = Stark_pkg::cause_code_t'(ir[34:27]);
-		4'd5: if (a >= b && a <= c) exc = Stark_pkg::cause_code_t'(ir[34:27]);
-		4'd6: if (a > b && a < c) exc = Stark_pkg::cause_code_t'(ir[34:27]);
-		4'd7: if (a > b && a <= c) exc = Stark_pkg::cause_code_t'(ir[34:27]);
-		4'd8:	if (!(a >= cpl)) exc = Stark_pkg::cause_code_t'(ir[34:27]);
-		4'd9:	if (!(a <= cpl)) exc = Stark_pkg::cause_code_t'(ir[34:27]);
-		4'd10:	if (!(a==canary)) exc = Stark_pkg::cause_code_t'(ir[34:27]);
+	Stark_pkg::OP_CHK:
+		case(ir.chk.op4)
+		4'd0:	if (!(a >= b && a < c)) exc = Stark_pkg::FLT_CHK;
+		4'd1: if (!(a >= b && a <= c)) exc = Stark_pkg::FLT_CHK;
+		4'd2: if (!(a > b && a < c)) exc = Stark_pkg::FLT_CHK;
+		4'd3: if (!(a > b && a <= c)) exc = Stark_pkg::FLT_CHK;
+		4'd4:	if (a >= b && a < c) exc = Stark_pkg::FLT_CHK;
+		4'd5: if (a >= b && a <= c) exc = Stark_pkg::FLT_CHK;
+		4'd6: if (a > b && a < c) exc = Stark_pkg::FLT_CHK;
+		4'd7: if (a > b && a <= c) exc = Stark_pkg::FLT_CHK;
+		4'd8:	if (!(a >= cpl)) exc = Stark_pkg::FLT_CHK;
+		4'd9:	if (!(a <= cpl)) exc = Stark_pkg::FLT_CHK;
+		4'd10:	if (!(a==canary)) exc = Stark_pkg::FLT_CHK;
 		default:	exc = Stark_pkg::FLT_UNIMP;
 		endcase
-	OP_R3B,OP_R3W,OP_R3T,OP_R3O:
-		case(ir.r2.func)
-		FN_CPUID:	bus = ALU0 ? info : 64'd0;
-		FN_ADD:
-			case(ir.r2.op4)
-			3'd0:	bus = (a + b) & c;
-			3'd1: bus = (a + b) | c;
-			3'd2: bus = (a + b) ^ c;
-			3'd3:	bus = (a + b) + c;
-			/*
-			4'd9:	bus = (a + b) - c;
-			4'd10: bus = (a + b) + c + 2'd1;
-			4'd11: bus = (a + b) + c - 2'd1;
-			4'd12:
-				begin
-					sd = (a + b) + c;
-					bus = sd[WID-1] ? -sd : sd;
-				end
-			4'd13:
-				begin
-					sd = (a + b) - c;
-					bus = sd[WID-1] ? -sd : sd;
-				end
-			*/
+	Stark_pkg::OP_CSR:		bus = csr;
+
+	Stark_pkg::OP_ADD:
+		begin
+			if (ir[31])
+				bus = a + i;
+			else
+				case(ir.alu.op3)
+				3'd0:		// ADD
+					case(ir.alu.lx)
+					2'd0:	bus = a + b;
+					default:	bus = a + i;
+					endcase
+				3'd2:		// ABS
+					case(ir.alu.lx)
+					2'd0:
+						begin
+							tmp = a + b;
+							bus = tmp[WID-1] ? -tmp : tmp;
+						end
+					default:
+						begin
+							tmp = a + i;
+							bus = tmp[WID-1] ? -tmp : tmp;
+						end
+					endcase
+				3'd3:	bus = locnt;
+				3'd4:	bus = lzcnt;
+				3'd5:	bus = popcnt;
+				3'd6:	bus = tzcnt;
+				default:	bus = zero;
+				endcase
+		end
+	Stark_pkg::OP_ADB:
+		if (ir[31])
+			bus = a + i;
+		else
+			case(ir.alu.lx)
+			2'd0:	bus = a + b;
+			default:	bus = a + i;
+			endcase
+	Stark_pkg::OP_MUL:
+		if (ir[31])
+			bus = produ[WID-1:0];
+		else
+			case (ir.alu.op3)
+			3'd0:	bus = produ[WID-1:0];
+			3'd1: bus = prod[WID-1:0];
+			3'd4:	bus = prod[WID*2-1:WID];
 			default:	bus = zero;
 			endcase
-		FN_SUB:	bus = a - b - c;
-		FN_CMP,FN_CMPU:	
-			case(ir.r2.op4)
-			3'd1:	bus = cmpo & c;
-			3'd2:	bus = cmpo | c;
-			3'd3:	bus = cmpo ^ c;
-			default:	bus = cmpo;
-			endcase
-		FN_MUL:	bus = prod[WID-1:0];
-		FN_MULU:	bus = produ[WID-1:0];
-		FN_MULW:	bus = ALU0 ? prod[WID-1:0] : prod[WID*2-1:WID];
-		FN_MULUW:	bus = ALU0 ? produ[WID-1:0] : produ[WID*2-1:WID];
-		FN_DIV: bus = ALU0 ? div_q : dead;
-		FN_MOD: bus = ALU0 ? div_r : dead;
-		FN_DIVU: bus = ALU0 ? div_q : dead;
-		FN_MODU: bus = ALU0 ? div_r : dead;
-		FN_AND:	
-			case(ir.r2.op4)
-			3'd0:	bus = (a & b) & c;
-			3'd1: bus = (a & b) | c;
-			3'd2: bus = (a & b) ^ c;
-			default:	bus = {WID{1'd0}};
-			endcase
-		FN_OR:
-			case(ir.r2.op4)
-			3'd0:	bus = (a | b) & c;
-			3'd1: bus = (a | b) | c;
-			3'd2: bus = (a | b) ^ c;
-			3'd7:	bus = (a & b) | (a & c) | (b & c);
-			default:	bus = {WID{1'd0}};
-			endcase
-		FN_EOR:	
-			case(ir.r2.op4)
-			3'd0:	bus = (a ^ b) & c;
-			3'd1: bus = (a ^ b) | c;
-			3'd2: bus = (a ^ b) ^ c;
-			3'd7:	bus = (^a) ^ (^b) ^ (^c);
-			default:	bus = {WID{1'd0}};
-			endcase
-		FN_CMOVZ: bus = a ? c : b;
-		FN_CMOVNZ:	bus = a ? b : c;
-		FN_NAND:
-			case(ir.r2.op4)
-			3'd0:	bus = ~(a & b) & c;
-			3'd1: bus = ~(a & b) | c;
-			3'd2: bus = ~(a & b) ^ c;
-			default:	bus = {WID{1'd0}};
-			endcase
-		FN_NOR:
-			case(ir.r2.op4)
-			3'd0:	bus = ~(a | b) & c;
-			3'd1: bus = ~(a | b) | c;
-			3'd2: bus = ~(a | b) ^ c;
-			default:	bus = {WID{1'd0}};
-			endcase
-		FN_ENOR:
-			case(ir.r2.op4)
-			3'd0:	bus = ~(a ^ b) & c;
-			3'd1: bus = ~(a ^ b) | c;
-			3'd2: bus = ~(a ^ b) ^ c;
-			default:	bus = {WID{1'd0}};
-			endcase
-			
-		FN_BYTENDX:	bus = ALU0 ? chndx2 : dead;
-
-		FN_MINMAX:
-			case(ir.r3.op4)
-			3'd0:	// MIN
-				begin
-					if ($signed(a) < $signed(b) && $signed(a) < $signed(c))
-						bus = a;
-					else if ($signed(b) < $signed(c))
-						bus = b;
-					else
-						bus = c;
-				end
-			3'd1:	// MAX
-				begin
-					if ($signed(a) > $signed(b) && $signed(a) > $signed(c))
-						bus = a;
-					else if ($signed(b) > $signed(c))
-						bus = b;
-					else
-						bus = c;
-				end
-			3'd2:	// MID
-				begin
-					if ($signed(a) > $signed(b) && $signed(a) < $signed(c))
-						bus = a;
-					else if ($signed(b) > $signed(a) && $signed(b) < $signed(c))
-						bus = b;
-					else
-						bus = c;
-				end
-			3'd4:	// MINU
-				begin
-					if (a < b && a < c)
-						bus = a;
-					else if (b < c)
-						bus = b;
-					else
-						bus = c;
-				end
-			3'd5:	// MAXU
-				begin
-					if (a > b && a > c)
-						bus = a;
-					else if (b > c)
-						bus = b;
-					else
-						bus = c;
-				end
-			3'd6:	// MIDU
-				begin
-					if (a > b && a < c)
-						bus = a;
-					else if (b > a && b < c)
-						bus = b;
-					else
-						bus = c;
-				end
-			default:	bus = {4{32'hDEADBEEF}};
-			endcase
-		FN_MVVR:	bus = a;
-		FN_VSETMASK:	bus = ALU0 ? vmasko : dead;
-		default:	bus = {4{32'hDEADBEEF}};
-		endcase
-	OP_CSR:		bus = csr;
-
-	OP_ADDI:
-		begin
-			bus = a + i;
-		end
-
-	OP_SUBFI:	bus = i - a;
-	OP_CMPI:
-		bus = cmpo;
-	OP_CMPUI:	bus = cmpo;
-	OP_MULI:
-		bus = prod[WID-1:0];
-	OP_MULUI:	bus = produ[WID-1:0];
-	OP_DIVI:
-		begin
-			bus = ALU0 ? div_q : dead;
-			if (div_dbz)
-				exc = Stark_pkg::FLT_DBZ;
-		end
-	OP_DIVUI:	bus = ALU0 ? div_q : dead;
-	OP_ANDI:
-		bus = a & i;
-	OP_ORI:
-		bus = a | i;
-	OP_EORI:
-		bus = a ^ i;
-	OP_AIPUI:
-		if (WID >= 32)
-		 	bus = pc + ({{WID{i[36]}},i[36:0]} << (ir[23:22]*32));
+	Stark_pkg::OP_DIV:
+		if (ir[31])
+			bus = div_q[WID-1:0];
 		else
-			bus = zero;
-	OP_SHIFTB,OP_SHIFTW,OP_SHIFTT,OP_SHIFTO:
-		case(ir.lshifti.func)
-		OP_ASL:	bus = shl[WID*2-1:WID];
-		OP_LSR:	bus = shr[WID-1:0];
-		OP_ASR:	
-			case(ir[46:44])
-			3'd2:	bus = asr[WID*2-1:WID];
-			3'd3: bus = asr[WID*2-1] ? asr[WID*2-1:WID] + asr[WID-1] : asr[WID*2-1:WID];
-			3'd4: bus = asr[WID*2-1:WID] + asr[WID-1];
-			default:	bus = asr[WID*2-1:WID];
+			case (ir.alu.op3)
+			3'd0:	bus = div_q[WID-1:0];
+			3'd1: bus = div_q[WID-1:0];
+			3'd4:	bus = div_r[WID-1:0];
+			default:	bus = zero;
 			endcase
-		default:	bus = {(WID/16){16'hDEAD}};
-		endcase
-
-	OP_MOV:		bus = a;
-	OP_LDA:		bus = a + i + (b << ir[31:29]);
-	OP_BLEND:	bus = ALU0 ? blendo : dead;
-	OP_PFX:		bus = zero;
-	OP_NOP:		bus = t;	// in case of copy target
-	OP_QFEXT:	bus = qres;
-	// Write the next PC to the link register.
-	OP_BSR,OP_JSR:
-		begin
-		/*
-			if (SUPPORT_CAPABILITIES) begin
-				tCapGetBaseTop(pcc, base, top);
-				obase = base;
-				otop = top;
-				tCapEncodeBaseTop(pcc.a + 4'd6, base, top, Lmsb, Ct);
-				Ct.perms = pcc.perms;
-				Ct.flags = pcc.flags;
-				tCapGetBaseTop(Ct, base, top);
-				// new base, top matches old, and not sealed.
-				if (base == obase && top == otop && pcc.otype!=4'hE)
-					otag = atag;
-				Ct.otype = 4'hE;	// seal
-				bus = Ct;
-			end
-			else
-		*/
-				bus = pc + 4'd8;
-		end
-	OP_RTD:
-		begin
-		/*
-			if (SUPPORT_CAPABILITIES) begin
-				tCapGetBaseTop(Cb, base, top);
-				obase = base;
-				otop = top;
-				tCapEncodeBaseTop(Cb.a + i, base, top, Lmsb, Ct);
-				Ct.perms = Cb.perms;
-				Ct.flags = Cb.flags;
-				tCapGetBaseTop(Ct, base, top);
-				// new base, top matches old, and not sealed.
-				if (base == obase && top == otop)
-					otag = atag;
-				Ct.otype = 4'hF;	// unseal
-				bus = Ct;
-			end
-			else
-		*/
-				bus = b + i;
-		end
-	OP_IBcc,OP_IBccR:	bus = a + 2'd1;
-	OP_DBcc,OP_DBccR:	bus = a - 2'd1;
-
-	OP_BFND, OP_BCMP:
-		bus = (bebfifo_overflow & ld2) ? 64'd0 : {58'd0,bebfifo_din.handle};
-
-	OP_BLOCK:
+	Stark_pkg::OP_AND:
+		if (ir[31])
+			bus = a & i;
+		else
+			case(ir.alu.op3)
+			3'd0:	bus = a & bi;
+			3'd1:	bus = ~(a & bi);
+			3'd2:	bus = a & ~bi;
+			default:	bus = zero;	
+			endcase
+	Stark_pkg::OP_OR:
+		if (ir[31])
+			bus = a | i;
+		else
+			case(ir.alu.op3)
+			3'd0:	bus = a | bi;
+			3'd1:	bus = ~(a | bi);
+			3'd2:	bus = a | ~bi;
+			default:	bus = zero;	
+			endcase
+	Stark_pkg::OP_XOR:
+		if (ir[31])
+			bus = a ^ i;
+		else
+			case(ir.alu.op3)
+			3'd0:	bus = a ^ bi;
+			3'd1:	bus = ~(a ^ bi);
+			3'd2:	bus = a ^ ~bi;
+			default:	bus = zero;	
+			endcase
+	Stark_pkg::OP_SUBF:
+		if (ir[31])
+			bus = i - a;
+		else
+			case(ir.alu.op3)
+			3'd0:	bus = bi - a;
+			3'd2:									// PTRDIF
+				begin
+					tmp = bi - a;
+					tmp = tmp[WID-1] ? -tmp : tmp;
+					bus = tmp >> ir[25:22];
+				end
+			default:	bus = zero;	
+			endcase
+	Stark_pkg::OP_CMP:	bus = cmpo;
+	Stark_pkg::OP_SHIFT:
+		if (ir[31])
+			case(ir.shi.op2)
+			2'd0:	
+				case(ir[28:26])
+				3'd0:	bus = ir.shi.h ? shl[WID*2-1:WID] : shl[WID-1:0];
+				3'd1:	bus = ir.shi.h ? shr[WID-1:0] : shr[WID*2-1:WID];
+				3'd2:	
+					case(ir.srai.rm)
+					default:
+						bus = asr[WID*2-1:WID];
+					endcase
+				3'd3:	bus = ir[25] ? exto : extzo;
+				3'd4:	
+					if (ir[25])	// ROL?
+						bus = shl[WID*2-1:WID]|shl[WID-1:0];
+					else
+						bus = shr[WID*2-1:WID]|shr[WID-1:0];
+				default:	bus = zero;
+				endcase
+			3'd2:	bus = extzo;
+			3'd3: bus = exto;
+			default: bus = zero;
+			endcase
+		else
+			case(ir.shi.op2)
+			2'd0:	
+				case(ir[28:26])
+				3'd0:	bus = ir.shi.h ? shl[WID*2-1:WID] : shl[WID-1:0];
+				3'd1:	bus = ir.shi.h ? shr[WID-1:0] : shr[WID*2-1:WID];
+				3'd2:	
+					case(ir.srai.rm)
+					default:
+						bus = asr[WID*2-1:WID];
+					endcase
+				3'd3:	bus = ir[25] ? exto : extzo;
+				3'd4:	
+					if (ir[25])	// ROL?
+						bus = shl[WID*2-1:WID]|shl[WID-1:0];
+					else
+						bus = shr[WID*2-1:WID]|shr[WID-1:0];
+				default:	bus = zero;
+				endcase
+			3'd2:	bus = extzo;
+			3'd3: bus = exto;
+			default: bus = zero;
+			endcase
+	Stark_pkg::OP_MOV:		bus = a;
+	Stark_pkg::OP_LOADA:	bus = a + i + (b << ir[23:22]);
+	Stark_pkg::OP_PFX:		bus = zero;
+	Stark_pkg::OP_NOP:		bus = t;	// in case of copy target
+	/*
+	Stark_pkg::OP_BLOCK:
 		case(ir.block.op)
 		default:	bus = 64'd0;
 		endcase
-
-	OP_PRED:	bus = a;
-
+    */
 	default:	bus = {(WID/16){16'hDEAD}};
 	endcase
 end
