@@ -224,17 +224,17 @@ Stark_decode_bitwise udcbitwise
 	.instr(ins.ins),
 	.bitwise(db.bitwise)
 );
-/*
+
 Stark_decode_mul umul1
 (
 	.instr(ins.ins),
 	.mul(db.mul)
 );
 
-Stark_decode_mulu umulu1
+Stark_decode_mula umulu1
 (
 	.instr(ins.ins),
-	.mulu(db.mulu)
+	.mul(db.mula)
 );
 
 Stark_decode_div udiv1
@@ -243,18 +243,16 @@ Stark_decode_div udiv1
 	.div(db.div)
 );
 
-Stark_decode_divu udivu1
+Stark_decode_diva udivu1
 (
 	.instr(ins.ins),
-	.divu(db.divu)
+	.div(db.diva)
 );
 
 Stark_decode_load udecld1
 (
 	.instr(ins.ins),
-	.load(db.load),
-	.cload(db.cload),
-	.cload_tags(db.cload_tags)
+	.load(db.load)
 );
 
 Stark_decode_loadz udecldz1
@@ -266,10 +264,9 @@ Stark_decode_loadz udecldz1
 Stark_decode_store udecst1
 (
 	.instr(ins.ins),
-	.store(db.store),
-	.cstore(db.cstore)
+	.store(db.store)
 );
-
+/*
 Stark_decode_lda udeclda1
 (
 	.instr(ins.ins),
