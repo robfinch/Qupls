@@ -107,7 +107,6 @@ Stark_decode_Rs2 udcrb
 	.om(om),
 	.instr(ins),
 	.has_immb(db.has_immb),
-//	.has_Rb(db.has_Rb),
 	.Rs2(db.Rs2),
 	.Rs2z(db.Rs2z)
 );
@@ -152,7 +151,7 @@ Stark_decode_fc ufc1
 	.instr(ins.ins),
 	.fc(db.fc)
 );
-/*
+
 Stark_decode_cjb ucjb1
 (
 	.instr(ins.ins),
@@ -162,26 +161,34 @@ Stark_decode_cjb ucjb1
 Stark_decode_bl ubsr1
 (
 	.instr(ins.ins),
-	.bsr(db.bl)
+	.bl(db.bl)
 );
 
-Stark_decode_branch udecbr
+Stark_decode_conditional_branch udecbr
 (
 	.instr(ins.ins),
 	.branch(db.br)
 );
 
+Stark_decode_predicate_branch udecpbr
+(
+	.instr(ins.ins),
+	.branch(db.pbr)
+);
+/*
 Stark_decode_mcb udecmcb
 (
 	.instr(ins.ins),
 	.mcb(db.mcb)
 );
-
+*/
+/*
 Stark_decode_backbr ubkbr1
 (
 	.instr(ins.ins),
 	.backbr(db.backbr)
 );
+*/
 
 Stark_decode_branch_tgt_src udbts1
 (
@@ -200,19 +207,19 @@ Stark_decode_alu0 udcalu0
 	.instr(ins.ins),
 	.alu0(db.alu0)
 );
-
+/*
 Stark_decode_alu_pair udcalup0
 (
 	.instr(ins.ins),
 	.alu_pair(db.alu_pair)
 );
-
+*/
 Stark_decode_bitwise udcbitwise
 (
 	.instr(ins.ins),
 	.bitwise(db.bitwise)
 );
-
+/*
 Stark_decode_mul umul1
 (
 	.instr(ins.ins),
