@@ -42,7 +42,9 @@ input Stark_pkg::operating_mode_t om;
 input Stark_pkg::ex_instruction_t instr;
 output aregno_t Rd;
 output reg Rdz;
-output exc;
+output reg exc;
+
+Stark_pkg::operating_mode_t om1;
 
 function aregno_t fnRd;
 input Stark_pkg::ex_instruction_t ir;
@@ -78,9 +80,11 @@ always_comb
 begin
 	Rd = fnRd(instr);
 	if (instr.ins.any.opcode==OP_MOV && instr.ins[28:26]==3'd1)	// MOVEMD?
-		om = instr.ins[22:21];
+		om1 = Stark_pkg::operating_mode_t'(instr.ins[22:21]);
+	else
+	   om1 = om;
 	Rdz = ~|Rd;
-	tRegmap(om, Rd, Rd, exc);
+	tRegmap(om1, Rd, Rd, exc);
 end
 
 endmodule

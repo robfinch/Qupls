@@ -43,7 +43,7 @@ input Stark_pkg::ex_instruction_t instr;
 input has_immb;
 output aregno_t Rs2;
 output reg Rs2z;
-output exc;
+output reg exc;
 
 function aregno_t fnRs2;
 input Stark_pkg::ex_instruction_t ir;

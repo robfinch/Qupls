@@ -43,7 +43,9 @@ input Stark_pkg::ex_instruction_t instr;
 input has_imma;
 output aregno_t Rs1;
 output reg Rs1z;
-output exc;
+output reg exc;
+
+Stark_pkg::operating_mode_t om1;
 
 function aregno_t fnRs1;
 input Stark_pkg::ex_instruction_t ir;
@@ -94,9 +96,11 @@ always_comb
 begin
 	Rs1 = fnRs1(instr, has_imma);
 	if (instr.ins.any.opcode==OP_MOV && instr.ins[28:26]==3'd1)	// MOVEMD?
-		om = instr.ins[24:23];
+		om1 = Stark_pkg::operating_mode_t'(instr.ins[24:23]);
+    else
+        om1 = om;
 	Rs1z = ~|Rs1;
-	tRegmap(om, Rs1, Rs1, exc);
+	tRegmap(om1, Rs1, Rs1, exc);
 end
 
 endmodule
