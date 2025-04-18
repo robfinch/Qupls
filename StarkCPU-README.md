@@ -65,7 +65,7 @@ Code is relocatable at any four byte boundary; however, within a subroutine or f
 
 ### Pipeline
 Yikes!
-![alt text](https://github.com/robfinch/Qupls/doc/StarkCPU_block_diagram.jpg?raw=true)
+![Pipeline Diagram](doc/StarkCPU_block_diagram.jpg?raw=true)
 There are roughly ten stages in the pipeline, fetch, extract (parse), decode, rename, queue, issue, execute, deque and writeback. The first few stages (up to queue) are in-order stages.
 #### Fetch / Extract Stages
 * The first step for an instruction is instruction fetch. At instruction fetch two instruction cache lines are fetched to accomodate instructions spanning cache lines. That means up to 32 instructions are fetched, but only five are processed further. Five instructions are extracted from the cache lines. The fetched instructions are right aligned as a block. The fifth instruction is processed only if it is an immediate postfix. 
