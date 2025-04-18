@@ -83,7 +83,7 @@ static int cmpreg(char *p, char* str)
 	int sl = strlen(str);
 	
 	for (nn = 0; nn <= sl; nn++) {
-		if (ISIDCHAR(p[nn])==0) {
+		if (ISIDCHAR(p[nn])==0 || p[nn]=='.') {
 			if (nn==sl)
 				return (1);
 			else
@@ -1282,7 +1282,7 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
 		else							// no constant
 			space = (64 - totsz - ((pc) & 0x3fL));
 		if (space < 0) {
-			printf("space=%d\n", space);
+			/* printf("space=%d\n", space); */
 			space = 0;
 		}
 
@@ -1452,7 +1452,7 @@ void cpu_reloc_write(FILE *f,rlist *rl)
 static void at_end(void)
 {
 	printf("Number of instructions: %d\n", insn_count);
-	printf("Largest number of constants: %d\n", greatest_bucket_number);
+	printf("Largest number of constants on cache line: %d\n", greatest_bucket_number);
 	printf("Number of 64-bit constants: %d\n", count64);
 	printf("Number of 32-bit constants: %d\n", count32);
 	printf("\n");

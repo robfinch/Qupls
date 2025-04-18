@@ -52,6 +52,7 @@
   "blt",          { CRS, BD }            ,{STARK,  BBOCB(24,BOT,CBLT,0,0)|0x80000000L},
   "blt",          { BD }            		,{STARK,  BBOCB(24,BOT,CBLT,0,0)|0x80100000L},
   "bne",          { CRS, BD }            ,{STARK,  BBOCB(24,BOF,CBEQ,0,0)|0x80000000L},
+  "bsr",         	{ LI }                ,{STARK,  B(26,0,0)|0x80000040LL},
   "clc",					{ 0 }                 ,{STARK,  0x0604514BL},
   "cmp",          { BF, RA, RB }        ,{STARK, 	0x00000003L},
   "cmpa",         { BF, RA, RB }        ,{STARK, 	0x00000203L},
