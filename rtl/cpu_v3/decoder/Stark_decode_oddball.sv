@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2024  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -36,23 +36,28 @@
 
 import Stark_pkg::*;
 
-module Stark_decode_store(instr, store);
-input Stark_pkg::instruction_t instr;
-output store;
+// Instructions specific to ALU #0
 
-function fnIsStore;
-input Stark_pkg::instruction_t op;
+module Stark_decode_oddball(instr, oddball);
+input Stark_pkg::instruction_t instr;
+output oddball;
+
+function fnIsOddball;
+input Stark_pkg::instruction_t ir;
 begin
-	case(op.any.opcode)
-	Stark_pkg::OP_STB,Stark_pkg::OP_STBI,Stark_pkg::OP_STW,Stark_pkg::OP_STWI,
-	Stark_pkg::OP_STT,Stark_pkg::OP_STTI,Stark_pkg::OP_STORE,Stark_pkg::OP_STPTR:
-		fnIsStore = 1'b1;
-	default:
-		fnIsStore = 1'b0;
+	case(ir.any.opcode)
+	Stark_pkg::OP_CSR:	fnIsOddball = 1'b1;
+	Stark_pkg::OP_BRK:
+		if (ir[28:17]==12'd2)		// ERET
+			fnIsOddball = 1'b1;
+		else
+			fnIsOddball = 1'b0;
+	Stark_pkg::OP_TRAP:	fnIsOddball = 1'b1;	// TRAP, REX, ECALL
+	default:	fnIsOddball = 1'b0;
 	endcase
 end
 endfunction
 
-assign store = fnIsStore(instr);
+assign oddball = fnIsOddball(instr);
 
 endmodule

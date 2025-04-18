@@ -40,13 +40,13 @@ module Stark_decode_loadz(instr, loadz);
 input Stark_pkg::instruction_t instr;
 output loadz;
 
-function fnIsLoad;
+function fnIsLoadz;
 input Stark_pkg::instruction_t op;
 begin
 	case(op.any.opcode)
 	Stark_pkg::OP_LDBZ,Stark_pkg::OP_LDWZ,
 	Stark_pkg::OP_LDTZ:
-		fnIsLoad = 1'b1;
+		fnIsLoadz = 1'b1;
 	default:
 		fnIsLoadz = 1'b0;
 	endcase

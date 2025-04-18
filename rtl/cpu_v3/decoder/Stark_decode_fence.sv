@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2023-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -36,23 +36,21 @@
 
 import Stark_pkg::*;
 
-module Stark_decode_store(instr, store);
+module Stark_decode_fence(instr, fence);
 input Stark_pkg::instruction_t instr;
-output store;
+output fence;
 
-function fnIsStore;
-input Stark_pkg::instruction_t op;
+function fnIsFence;
+input Stark_pkg::instruction_t ir;
 begin
-	case(op.any.opcode)
-	Stark_pkg::OP_STB,Stark_pkg::OP_STBI,Stark_pkg::OP_STW,Stark_pkg::OP_STWI,
-	Stark_pkg::OP_STT,Stark_pkg::OP_STTI,Stark_pkg::OP_STORE,Stark_pkg::OP_STPTR:
-		fnIsStore = 1'b1;
-	default:
-		fnIsStore = 1'b0;
+	case(ir.any.opcode)
+	Stark_pkg::OP_FENCE:
+		fnIsFence = 1'b1;
+	default:	fnIsFence = 1'b0;
 	endcase
 end
 endfunction
 
-assign store = fnIsStore(instr);
+assign fence = fnIsFence(instr);
 
 endmodule

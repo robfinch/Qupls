@@ -36,23 +36,25 @@
 
 import Stark_pkg::*;
 
-module Stark_decode_store(instr, store);
+module Stark_decode_fpu0(instr, fpu0);
 input Stark_pkg::instruction_t instr;
-output store;
+output fpu0;
 
-function fnIsStore;
-input Stark_pkg::instruction_t op;
+function fnIsFpu0;
+input Stark_pkg::instruction_t ir;
 begin
-	case(op.any.opcode)
-	Stark_pkg::OP_STB,Stark_pkg::OP_STBI,Stark_pkg::OP_STW,Stark_pkg::OP_STWI,
-	Stark_pkg::OP_STT,Stark_pkg::OP_STTI,Stark_pkg::OP_STORE,Stark_pkg::OP_STPTR:
-		fnIsStore = 1'b1;
-	default:
-		fnIsStore = 1'b0;
+	case(ir.any.opcode)
+	OP_FLT:
+		case(ir.fpu.op4)
+		FOP4_TRIG:	fnIsFpu0 = 1'b1;
+		FOP4_G10:		fnIsFpu0 = 1'b1;
+		default:	fnIsFpu0 = 1'b0;
+		endcase
+	default:	fnIsFpu0 = 1'b0;
 	endcase
 end
 endfunction
 
-assign store = fnIsStore(instr);
+assign fpu0 = fnIsFpu0(instr);
 
 endmodule

@@ -36,23 +36,21 @@
 
 import Stark_pkg::*;
 
-module Stark_decode_store(instr, store);
+module Stark_decode_loada(instr, loada);
 input Stark_pkg::instruction_t instr;
-output store;
+output loada;
 
-function fnIsStore;
+function fnIsLoada;
 input Stark_pkg::instruction_t op;
 begin
 	case(op.any.opcode)
-	Stark_pkg::OP_STB,Stark_pkg::OP_STBI,Stark_pkg::OP_STW,Stark_pkg::OP_STWI,
-	Stark_pkg::OP_STT,Stark_pkg::OP_STTI,Stark_pkg::OP_STORE,Stark_pkg::OP_STPTR:
-		fnIsStore = 1'b1;
+	Stark_pkg::OP_LOADA:	fnIsLoada = 1'b1;
 	default:
-		fnIsStore = 1'b0;
+		fnIsLoada = 1'b0;
 	endcase
 end
 endfunction
 
-assign store = fnIsStore(instr);
+assign loada = fnIsLoada(instr);
 
 endmodule

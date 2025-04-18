@@ -266,29 +266,17 @@ Stark_decode_store udecst1
 	.instr(ins.ins),
 	.store(db.store)
 );
-/*
-Stark_decode_lda udeclda1
-(
-	.instr(ins.ins),
-	.lda(db.lda)
-);
 
-Stark_decode_cls ucls1
+Stark_decode_loada udeclda1
 (
 	.instr(ins.ins),
-	.cls(db.cls)
+	.loada(db.loada)
 );
 
 Stark_decode_fence udfence1
 (
 	.instr(ins.ins),
 	.fence(db.fence)
-);
-
-Stark_decode_erc udecerc1
-(
-	.instr(ins.ins),
-	.erc(db.erc)
 );
 
 Stark_decode_pfx udecpfx1
@@ -326,7 +314,7 @@ Stark_decode_brk ubrk1
 	.instr(ins.ins),
 	.brk(db.brk)
 );
-
+/*
 Stark_decode_csr ucsr1
 (
 	.instr(ins.ins),

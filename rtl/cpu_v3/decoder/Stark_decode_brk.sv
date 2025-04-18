@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2023  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -36,23 +36,17 @@
 
 import Stark_pkg::*;
 
-module Stark_decode_store(instr, store);
+module Stark_decode_brk(instr, brk);
 input Stark_pkg::instruction_t instr;
-output store;
+output brk;
 
-function fnIsStore;
-input Stark_pkg::instruction_t op;
+function fnIsBrk;
+input Stark_pkg::instruction_t ir;
 begin
-	case(op.any.opcode)
-	Stark_pkg::OP_STB,Stark_pkg::OP_STBI,Stark_pkg::OP_STW,Stark_pkg::OP_STWI,
-	Stark_pkg::OP_STT,Stark_pkg::OP_STTI,Stark_pkg::OP_STORE,Stark_pkg::OP_STPTR:
-		fnIsStore = 1'b1;
-	default:
-		fnIsStore = 1'b0;
-	endcase
+	fnIsBrk = ir.any.opcode==Stark_pkg::OP_BRK && ir[16:6]==11'd0 && ir[31:29]==3'd0;
 end
 endfunction
 
-assign store = fnIsStore(instr);
+assign brk = fnIsBrk(instr);
 
 endmodule
