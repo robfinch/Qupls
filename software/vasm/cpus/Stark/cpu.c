@@ -25,40 +25,43 @@ static int regnames = 1;
 static taddr sdreg = 28;
 static taddr sd2reg = 2;
 static unsigned char opt_branch = 0;
-#define NREG	93
+static unsigned int abits = 32;
+#define NREG	96
 
-static char *regnamestr[93] = {
+static char *regnamestr[96] = {
 	"r0", "a0", "a1", "a2", "a3", "a4", "a5", "a6", 
 	"a7", "t0", "t1", "t2", "t3", "t4", "t5", "t6",
 	"t7", "t8", "t9", "s0", "s1", "s2", "s3", "s4",
 	"s5", "s6", "s7", "s8",	"s9", "gp", "fp", "sp",
 	
+	"xh","br1","br2","br3","br4","br5","br6","pc",
+	"cy0","cy1","cy2","cy3","lc","tcb","scratch","resv0",
+	"resv1","resv2","mc0","mc1","mc2","mc3","mlr","mpc", 
+	"cr0","cr1","cr2","cr3","cr4","cr5","cr6","cr7",
+	
 	"f0","f1","f2","f3","f4","f5","f6","f7",
 	"f8","f9","f10","f11","f12","f13","f14","f15",
 	"f16","f17","f18","f19","f20","f21","f22","f23",
-	"f24","f25","f26","f27","f28","f29","f30","f31",
-	
-	"usp","ssp","hsp","msp","mc0","mc1","mc2","mc3",
-	"br0","br1","br2","br3","br4","br5","br6","br7",
-	"cr0","cr1","cr2","cr3","cr4","cr5","cr6","cr7",
-	"lc","mlr","cb","mpc", "xh"
+	"f24","f25","f26","f27","f28","f29","f30","f31"
+
 };
 
-static int regop[93] = {
+static int regop[96] = {
 	OPER_GPR, OPER_GPR, OPER_GPR, OPER_GPR, OPER_GPR, OPER_GPR, OPER_GPR, OPER_GPR, 
 	OPER_GPR, OPER_GPR, OPER_GPR, OPER_GPR, OPER_GPR, OPER_GPR, OPER_GPR, OPER_GPR, 
 	OPER_GPR, OPER_GPR, OPER_GPR, OPER_GPR, OPER_GPR, OPER_GPR, OPER_GPR, OPER_GPR, 
 	OPER_GPR, OPER_GPR, OPER_GPR, OPER_GPR, OPER_GPR, OPER_GPR, OPER_GPR, OPER_GPR,
 	
+	OPER_GPR, OPER_BR, OPER_BR, OPER_BR, OPER_BR, OPER_BR, OPER_BR, OPER_BR, 
+	OPER_GPR, OPER_GPR, OPER_GPR, OPER_GPR, OPER_GPR, OPER_CB, OPER_GPR, OPER_GPR,
+	OPER_GPR, OPER_GPR, OPER_GPR, OPER_GPR, OPER_GPR, OPER_GPR, OPER_GPR, OPER_MPC, 
+	OPER_CR, OPER_CR, OPER_CR, OPER_CR, OPER_CR, OPER_CR, OPER_CR, OPER_CR,
+
 	OPER_FPR, OPER_FPR, OPER_FPR, OPER_FPR, OPER_FPR, OPER_FPR, OPER_FPR, OPER_FPR, 
 	OPER_FPR, OPER_FPR, OPER_FPR, OPER_FPR, OPER_FPR, OPER_FPR, OPER_FPR, OPER_FPR, 
 	OPER_FPR, OPER_FPR, OPER_FPR, OPER_FPR, OPER_FPR, OPER_FPR, OPER_FPR, OPER_FPR, 
 	OPER_FPR, OPER_FPR, OPER_FPR, OPER_FPR, OPER_FPR, OPER_FPR, OPER_FPR, OPER_FPR, 
 
-	OPER_GPR, OPER_GPR, OPER_GPR, OPER_GPR, OPER_GPR, OPER_GPR, OPER_GPR, OPER_GPR, 
-	OPER_BR, OPER_BR, OPER_BR, OPER_BR, OPER_BR, OPER_BR, OPER_BR, OPER_BR,
-	OPER_CR, OPER_CR, OPER_CR, OPER_CR, OPER_CR, OPER_CR, OPER_CR, OPER_CR,
-	OPER_GPR, OPER_GPR, OPER_CB, OPER_MPC, OPER_GPR
 };
 
 static char* condstr[7] = {
@@ -66,13 +69,32 @@ static char* condstr[7] = {
 };
 
 static uint8_t value_bucketno;
-static value_bucket_t value_bucket[32];
-static uint32_t instr[32];
+static value_bucket_t value_bucket[64];
+static uint32_t instr[64];
 static uint8_t instrno;
 static uint32_t greatest_bucket_number;
 static uint32_t count64, count32;
 static uint32_t insn_count;
 static instruction* lastip;
+
+static int cmpreg(char *p, char* str)
+{
+	int nn;
+	int sl = strlen(str);
+	
+	for (nn = 0; nn <= sl; nn++) {
+		if (ISIDCHAR(p[nn])==0) {
+			if (nn==sl)
+				return (1);
+			else
+				return (0); 
+		}
+		else {
+			if (p[nn]!=str[nn])
+				return (0);
+		}
+	}
+}
 
 static int is_reg(char *p, char **ep, int* typ)
 {
@@ -109,6 +131,15 @@ static int is_reg(char *p, char **ep, int* typ)
 		}
 		
 		for (nn = 0; nn < NREG; nn++) {
+			if (cmpreg(&p[n],regnamestr[nn])==1) {
+				if (ep)
+					*ep = p + n + strlen(regnamestr[nn]);
+				*typ = regop[nn];
+				rr = 1;
+				goto j1;
+			}
+		}
+#if 0			
 			if (p[n] == regnamestr[nn][0] && p[n+1] == regnamestr[nn][1]) {
 				if (!ISIDCHAR((unsigned char)p[n+2])) {
 					if (regnamestr[nn][2]=='\0') {
@@ -146,6 +177,7 @@ static int is_reg(char *p, char **ep, int* typ)
 				}
 			}
 		}
+#endif			
 	} while (0);
 j1:
 	/* Look for a suffix, place suffix index in bits 8 to 10 of return value. */
@@ -308,6 +340,14 @@ static char *parse_reloc_attr(char *p,operand *op)
       cpu_error(7);  /* multiple relocation attributes */
 
     chk = op->mode;
+    if (!strncmp(p,"t",1)) {
+      op->mode = OPM_T;
+      p += 1;
+    }
+    if (!strncmp(p,"o",1)) {
+      op->mode = OPM_O;
+      p += 1;
+    }
     if (chk!=OPM_NONE && chk!=op->mode)
       cpu_error(8);  /* multiple hi/lo modifiers */
   }
@@ -408,15 +448,15 @@ int parse_operand(char *p,int len,operand *op,int optype)
 	  op->value = OP_FLOAT(optype) ? parse_expr_float(&p) : parse_expr(&p);
 	}
   if (op->value->type==NUM) {
-  	if (powerpc_operands[optype].flags & OPER_U14) {
+  	if (powerpc_operands[optype].flags & (OPER_U14|OPER_UI)) {
 			if (!is_uint14(op->value->c.val)) {
 				op->attr = REL_CLRIMM;
-				//op->mode = OPM_CLR;
+				op->mode = OPM_CLR;
 			}
   	}
 		else if (!is_int14(op->value->c.val)) {
 			op->attr = REL_CLRIMM;
-			//op->mode = OPM_CLR;
+			op->mode = OPM_CLR;
 		}
   }
   else if (op->value->type==SYM && !(powerpc_operands[optype].flags & OPER_RELATIVE) && optype != CSRNO/*&& optype != JA*/) {
@@ -633,23 +673,6 @@ static int get_reloc_type(operand *op)
 }
 
 
-static int valid_hiloreloc(int type)
-/* checks if this relocation type allows a @l/@h/@ha modifier */
-{
-  switch (type) {
-  	case REL_CLRIMM:
-    case REL_ABS:
-    case REL_GOT:
-    case REL_PLT:
-    case REL_MORPHOS_DREL:
-    case REL_AMIGAOS_BREL:
-      return 1;
-  }
-  cpu_error(6);  /* relocation does not allow hi/lo modifier */
-  return 0;
-}
-
-
 static taddr make_reloc(int reloctype,operand *op,section *sec,
                         taddr pc,rlist **reloclist)
 /* create a reloc-entry when operand contains a non-constant expression */
@@ -657,6 +680,8 @@ static taddr make_reloc(int reloctype,operand *op,section *sec,
   taddr val;
  	symbol *base;
  	int btype;
+ 	uint64_t pos2;
+ 	int vbsz;
 
 	TRACE("make_reloc");
   btype = find_base(op->value,&base,sec,pc);
@@ -678,11 +703,6 @@ static taddr make_reloc(int reloctype,operand *op,section *sec,
       }
 
      	TRACE("mrelo 1");
-      if (op->mode != OPM_NONE) {
-        /* check if reloc allows @ha/@h/@l */
-        if (!valid_hiloreloc(reloctype))
-          op->mode = OPM_NONE;
-      }
 
       if (reloctype == REL_PC && !is_pc_reloc(base,sec)) {
         /* a relative branch - reloc is only needed for external reference */
@@ -718,6 +738,8 @@ static taddr make_reloc(int reloctype,operand *op,section *sec,
       }
       else {  /* instruction operand */
         const struct powerpc_operand *ppcop = &powerpc_operands[op->type];
+        pos2 = (uint64_t)(value_bucket[value_bucketno].pos*4) - (pc & 0x3fLL);
+        vbsz = value_bucket[value_bucketno].size;
 
         if (ppcop->flags & (OPER_RELATIVE|OPER_ABSOLUTE) && (op->type == BD || op->type==LI)) {
           addend = (btype == BASE_PCREL) ? val + offset : val;
@@ -730,14 +752,17 @@ static taddr make_reloc(int reloctype,operand *op,section *sec,
             mask = 0x1fffff8LL;
           }
           else {
+#if 0          	
 						if (!is_int13(val)) {
 
    						TRACE("add_4");
-							add_extnreloc_masked(reloclist,base,0,REL_CLRIMM,
-							                     10,3,0,0x7L);
-							value_bucket[value_bucketno].relocs = reloclist;
+   						if (vbsz==32)
+								add_extnreloc_masked(reloclist,base,0,REL_CLRIMM,0,32,pos2,0xffffffffL);
+							else
+								add_extnreloc_masked(reloclist,base,0,REL_CLRIMM,0,64,pos2,0xffffffffffffffffL);
 							return (val);
 						}
+#endif						
 			      add_extnreloc_masked(reloclist,base,addend,reloctype,
                            0,1,0,4L);
 			      add_extnreloc_masked(reloclist,base,addend,reloctype,
@@ -752,17 +777,21 @@ static taddr make_reloc(int reloctype,operand *op,section *sec,
           size = 16;
           offset = 2;
           addend = (btype == BASE_PCREL) ? val + offset : val;
+          pos2 = (uint64_t)(value_bucket[value_bucketno].pos*4);// - (pc & 0x3fLL);
+          pos2 &= 0x3fLL;
+          vbsz = value_bucket[value_bucketno].size;
+#if 1          
           switch (op->mode) {
             case OPM_CLR:
             	switch(op->type) {
             	case NSI:
             	case SI:
 								if (!is_int14(val)) {
-
 	     						TRACE("add_4");
-									add_extnreloc_masked(reloclist,base,0,REL_CLRIMM,
-									                     17,3,0,0x7L);
-									value_bucket[value_bucketno].relocs = reloclist;
+	     						if (vbsz==32)
+										add_extnreloc_masked(reloclist,base,0,REL_CLRIMM,0,32,pos2,0xffffffffL);
+									else
+										add_extnreloc_masked(reloclist,base,0,REL_CLRIMM,0,64,pos2,0xffffffffffffffffL);
 									return (val);
 								}
 								pos = 17;
@@ -774,9 +803,24 @@ static taddr make_reloc(int reloctype,operand *op,section *sec,
 								if (!is_uint14(val)) {
 
 	     						TRACE("add_4");
-									add_extnreloc_masked(reloclist,base,0,REL_CLRIMM,
-									                     17,3,0,0x7L);
-									value_bucket[value_bucketno].relocs = reloclist;
+	     						if (vbsz==32)
+										add_extnreloc_masked(reloclist,base,0,REL_CLRIMM,0,32,pos2,0xffffffffL);
+									else
+										add_extnreloc_masked(reloclist,base,0,REL_CLRIMM,0,64,pos2,0xffffffffffffffffL);
+									return (val);
+								}
+								pos = 17;
+								size = 14;
+								offset = 0;
+								mask = 0x3fffL;
+								break;
+							case D:
+								if (!is_int14(val)) {
+	     						TRACE("add_4");
+	     						if (vbsz==32 || abits <= 32)
+										add_extnreloc_masked(reloclist,base,0,REL_CLRIMM,0,32,pos2,0xffffffffL);
+									else
+										add_extnreloc_masked(reloclist,base,0,REL_CLRIMM,0,64,pos2,0xffffffffffffffffL);
 									return (val);
 								}
 								pos = 17;
@@ -788,9 +832,10 @@ static taddr make_reloc(int reloctype,operand *op,section *sec,
 								if (!is_int5(val)) {
 
 	     						TRACE("add_4");
-									add_extnreloc_masked(reloclist,base,0,REL_CLRIMM,
-									                     24,3,0,0x7L);
-									value_bucket[value_bucketno].relocs = reloclist;
+	     						if (vbsz==32 || abits <= 32)
+										add_extnreloc_masked(reloclist,base,0,REL_CLRIMM,0,32,pos2,0xffffffffL);
+									else
+										add_extnreloc_masked(reloclist,base,0,REL_CLRIMM,0,64,pos2,0xffffffffffffffffL);
 									return (val);
 								}
 								pos = 24;
@@ -824,12 +869,14 @@ static taddr make_reloc(int reloctype,operand *op,section *sec,
             	}
               break;
           }
+#endif
         }
       }
-
+#if 0
      	TRACE("add_2");
       add_extnreloc_masked(reloclist,base,addend,reloctype,
                            pos,size,offset,mask);
+#endif                           
     }
     else {
 illreloc:
@@ -840,15 +887,6 @@ illreloc:
      if (reloctype == REL_PC) {
        /* a relative reference to an absolute label */
        return val-pc;
-     }
-     if (!is_int14(val)) {
-     	if (base==NULL) {
-     		base = new_tmplabel(sec);
-     	}
-     	TRACE("add_1");
-	     add_extnreloc_masked(reloclist,base,(taddr)0,REL_CLRIMM,
-	                           17,5,0,0x1fL);
-	     value_bucket[value_bucketno].relocs = reloclist;
      }
   }
 
@@ -869,19 +907,12 @@ static void fix_reloctype(dblock *db,int rtype)
 static void range_check(taddr val,const struct powerpc_operand *o,dblock *db)
 /* checks if a value fits the allowed range for this operand field */
 {
-  int32_t v = (int32_t)val;
-  int32_t minv = 0;
-  int32_t maxv = (1L << o->bits) - 1;
+  int64_t v = (int64_t)val;
+  int64_t minv = 0;
+  int64_t maxv = (1LL << o->bits) - 1L;
   int force_signopt = 0;
 
-	return;
 	TRACE("range_check");
-	if (o->flags & OPER_U14) {
-		return;
-	}
-	else if (o->flags & OPER_S14) {
-		return;
-	}
 
   if (db) {
     if (db->relocs) {
@@ -895,25 +926,37 @@ static void range_check(taddr val,const struct powerpc_operand *o,dblock *db)
     }
   }
 
-  if (o->flags & OPER_SIGNED) {
+	if (o->flags & OPER_U14) {
+		minv = 0L;
+		maxv = 16383LL;
+	}
+	else if (o->flags & OPER_S14) {
+		minv = -8192LL;
+		maxv = 8191LL;
+	}
+  else if (o->flags & OPER_REGLIST) {
+  	minv = 0L;
+  	maxv = 0x7fffffffLL;
+  }
+  else if (o->flags & OPER_SIGNED) {
     minv = ~(maxv >> 1);
-
     /* @@@ Only recognize this flag in 32-bit mode! Don't care for now */
     if (!(o->flags & OPER_SIGNOPT) && !force_signopt)
       maxv >>= 1;
   }
+
+
   if (o->flags & OPER_NEGATIVE)
     v = -v;
     
+  if (o->flags & OPER_BR)
+  	v &= 7;
   if (o->flags & OPER_CR)
   	v &= 7;
   if (o->flags & OPER_FPR)
   	v &= 31;
-  	
-  if (o->flags & OPER_REGLIST) {
-  	minv = 0L;
-  	maxv = 0x7fffffffL;
-  }
+  if (o->flags & OPER_GPR)
+  	v &= 31;
 
   if (v<minv || v>maxv)
     cpu_error(12,v,minv,maxv);  /* operand out of range */
@@ -930,20 +973,20 @@ static void negate_bo_cond(uint32_t *p)
 }
 
 
-static uint32_t insertcode(uint32_t i,taddr val,
+static uint32_t insertcode(uint32_t i,taddr* val,
                            const struct powerpc_operand *o)
 {
   if (o->insert) {
     const char *errmsg = NULL;
 
-    i = (o->insert)(i,(int64_t)val,&errmsg);
+    i = (o->insert)(i,(int64_t*)val,&errmsg);
     if (errmsg)
       cpu_error(0,errmsg);
   }
   else
-    i |= ((int64_t)val & ((1<<o->bits)-1)) << o->shift;
+    i |= ((int64_t)(*val) & ((1LL<<o->bits)-1LL)) << o->shift;
 
-  return i;
+  return (i);
 }
 
 
@@ -979,11 +1022,14 @@ size_t eval_operands(instruction *ip,section *sec,taddr pc,
     ppcop = &powerpc_operands[op.type];
 
     if (ppcop->flags & OPER_FAKE) {
+     	int64_t vv = 0LL;
       if (insn != NULL) {
         if (op.value != NULL)
           cpu_error(16);  /* ignoring fake operand */
-        *insn = insertcode(*insn,0,ppcop);
+        *insn = insertcode(*insn,&vv,ppcop);
       }
+//      else
+//      	insertcode(0,&vv,ppcop);
       continue;
     }
 
@@ -1008,6 +1054,7 @@ size_t eval_operands(instruction *ip,section *sec,taddr pc,
     }
 
     /* execute modifier on val */
+    /*
     if (op.mode) {
       switch (op.mode) {
         case OPM_LO:
@@ -1021,12 +1068,12 @@ size_t eval_operands(instruction *ip,section *sec,taddr pc,
         	val = value_bucketno;
         	break;
       }
-      /*
+     
       if ((ppcop->flags & OPER_SIGNED) && (val & 0x8000))
         val -= 0x10000;
-      */
+      
     }
-
+		*/
     /* do optimizations here: */
 
     if (opt_branch) {
@@ -1036,8 +1083,9 @@ size_t eval_operands(instruction *ip,section *sec,taddr pc,
           /* "B<cc>" branch destination out of range, convert into
              a "B<!cc> ; B" combination */
           if (insn != NULL) {
+          	int64_t vv = 8LL;
             negate_bo_cond(insn);
-            *insn = insertcode(*insn,8,ppcop);  /* B<!cc> $+8 */
+            *insn = insertcode(*insn,&vv,ppcop);  /* B<!cc> $+8 */
             insn++;
             *insn = B(18,0,0);  /* set B instruction opcode */
             val -= 4;
@@ -1067,10 +1115,15 @@ size_t eval_operands(instruction *ip,section *sec,taddr pc,
 
         /* write displacement */
         if (insn != NULL) {
+          *insn = insertcode(*insn,&val,ppcop);
           range_check(val,ppcop,db);
-          *insn = insertcode(*insn,val,ppcop);
         }
-
+        
+        else {
+//          insertcode(0,&val,ppcop);
+//          range_check(val,ppcop,db);
+        }
+				
         /* move to next operand type to handle base register */
         switch(op.type) {
         case DBRS:	op.type = BRS; break;
@@ -1097,26 +1150,38 @@ size_t eval_operands(instruction *ip,section *sec,taddr pc,
 
     /* write val (register, immediate, etc.) */
     if (insn != NULL) {
+      *insn = insertcode(*insn,&val,ppcop);
       range_check(val,ppcop,db);
-      *insn = insertcode(*insn,val,ppcop);
     }
+    
+    else {
+//      insertcode(0,&val,ppcop);
+//      range_check(val,ppcop,db);
+    }
+    
 #if 0
 		switch(op.type) {
 			case JA:
 //				*insn = insertcode(*insn,val,&powerpc_operands[JA]);
 				if (insn != NULL) {
 					insn++;
-					*insn = insertcode(*insn,val,&powerpc_operands[JAB]);
+					*insn = insertcode(*insn,&val,&powerpc_operands[JAB]);
 				}
+				else
+					insertcode(0,&val,&powerpc_operands[JAB]);
 				isize = 8;
 				break;
 			case JOM:
 				if (insn != NULL)
-				*insn = insertcode(*insn,val,&powerpc_operands[JOM]);
+					*insn = insertcode(*insn,&val,&powerpc_operands[JOM]);
+				else
+					insertcode(0,&val,&powerpc_operands[JOM]);
 				break;
 			case JSWS:
 				if (insn != NULL)
-				*insn = insertcode(*insn,val,&powerpc_operands[JSWS]);
+					*insn = insertcode(*insn,&val,&powerpc_operands[JSWS]);
+				else
+					insertcode(0,&val,&powerpc_operands[JSWS]);
 				break;
 			}
 #endif
@@ -1129,14 +1194,20 @@ size_t eval_operands(instruction *ip,section *sec,taddr pc,
       op.mode = OPM_NONE;
       val = op.ndxreg;
 	    if (insn != NULL) {
+	      *insn = insertcode(*insn,&val,ppcop);
 	      range_check(val,ppcop,db);
-	      *insn = insertcode(*insn,val,ppcop);
 	    }
+	    /*
+	    else {
+	      insertcode(0,&val,ppcop);
+	      range_check(val,ppcop,db);
+	    }
+	    */
   	}
   	
   }
 
-  return isize;
+  return (isize);
 }
 
 /* Determine if an instruction is able to fit into the space remaining on the 
@@ -1147,7 +1218,8 @@ int will_not_fit(taddr pc, instruction* ip)
 {
 	int i;
 	int hasCLC = 0;
-	uint32_t ndx = pc & 0x3f;
+	uint32_t ndx = pc & 0x3fLL;
+	int ret;
 	
   for (i=0; i<MAX_OPERANDS && ip->op[i]!=NULL; i++) {
   	if (ip->op[i]->mode==OPM_CLR) {
@@ -1157,11 +1229,16 @@ int will_not_fit(taddr pc, instruction* ip)
   }
   /* cause a buffer flush at the end of source code */
   if (lastip==ip)
-  	return (1);
-  if (hasCLC)
-		return (ndx < 56-totsz) ? 0 : 2;
+  	return (4);
+  if (hasCLC) {
+  	if (value_bucket[value_bucketno-1].size==32)
+			ret = ((ndx < 60-totsz) ? 0 : 3);
+		else
+			ret = ((ndx < 56-totsz) ? 0 : 2);
+	}
 	else
-		return (ndx < 64-totsz) ? 0 : 1;
+		ret = ((ndx < 64-totsz) ? 0 : 1);
+	return (ret);
 }
 
 
@@ -1182,8 +1259,9 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
    when necessary. */
 {
   dblock *db = new_dblock();
-  uint32_t insn[2];
+  uint32_t insn[8];
   int iit;
+  static taddr last_pc_group = 0;
 
 	TRACE("eval_instruction");
 	uint32_t isize = eval_operands(ip,sec,pc,insn,db);
@@ -1192,49 +1270,69 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
 	iit=will_not_fit(pc+isize, ip);
 	if (iit != 0) {
 		int space;
-		
-		space = (64 - totsz - ((pc+isize) & 0x3fL));
+		int i;
+
+		/* Set the amount of space between the last instruction output and the
+		   constant area.
+		*/		
+		if (iit==2)				// 64-bit constant
+			space = (64 - totsz - ((pc) & 0x3fL)) - 8;
+		else if (iit==3)	// 32-bit constant
+			space = (64 - totsz - ((pc) & 0x3fL)) - 4;
+		else							// no constant
+			space = (64 - totsz - ((pc) & 0x3fL));
+		if (space < 0) {
+			printf("space=%d\n", space);
+			space = 0;
+		}
+
 		db->size = totsz + space + isize;
 		{
   		unsigned char *d = db->data = mymalloc(db->size);
 	    int i;
 			int pos;
-			rlist* p;
 
-			/* Fixup the reloc entries */
-			pos = 64 - totsz;
-			for (i=0; i < value_bucketno; i++) {
-				if (value_bucket[i].relocs) {
-					for (p = *value_bucket[i].relocs; p; p = p->next) {
-						if (p->type == REL_CLRIMM) {
-							p->type = REL_ABS;
-							((nreloc*)p->reloc)->addend = pos>>2;
-						}
-					}
-				}
-			}
-			/* Copy last instructions to fit on cache line to output	*/
-	    for (i=0; i<isize/4; i++)
-  		  d = setval(0,d,4,insn[i]);
-	    insn_count += isize/4;
   		/* Copy NOPs to output for the space between the last instruction
   		   and the constant values. */
 	    for (i=0; i<space/4; i++)
   		  d = setval(0,d,4,63);
-  		/* Copy the constant values to output */
-			for (i=0; i < value_bucketno; i++) {
+
+  		/* Copy the constant values to output. Note there may be an extra
+  			 constant output if the instruction with constant would not fit
+  			 on the cache line. */
+			for (i=value_bucketno-1; i >= 0; i--) {
 				switch(value_bucket[i].size) {
 				case 16:	d = setval(0,d,2,value_bucket[i].value);	break;
 				case 32:	d = setval(0,d,4,value_bucket[i].value);	break;
 				case 64:	d = setval(0,d,8,value_bucket[i].value);	break;
 				}
 			}
+
+			if (value_bucketno > greatest_bucket_number)
+				greatest_bucket_number = value_bucketno;
+			// If the instruction would not fit and it had a large constant, then
+			// it got moved to the next cache line. This means the cache line index
+			// for the constant needs to be re-evaluated. The constant will be
+			// placed on the next cache line.
+			if (iit==2||iit==3) {
+				totsz = 0;
+				memset(value_bucket,0,sizeof(value_bucket));
+				value_bucketno = 0;
+				memset(insn,0,sizeof(uint32_t)*8);
+				eval_operands(ip,sec,(pc+63LL) & -64LL,insn,db);
+			}
+			else {
+				totsz = 0;
+				memset(value_bucket,0,sizeof(value_bucket));
+				value_bucketno = 0;
+			}
+
+			/* Copy instructions to fit on next cache line to output	*/
+	    for (i=0; i<isize/4; i++)
+  		  d = setval(0,d,4,insn[i]);
+	    insn_count += isize/4;
 		}
 		/* Reset value buckets */
-		totsz = 0;
-		if (value_bucketno > greatest_bucket_number)
-			greatest_bucket_number = value_bucketno;
-		value_bucketno = 0;
 		return (db);
 	}
   if (db->size = isize) {
@@ -1245,7 +1343,16 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
       d = setval(0,d,4,insn[i]);
     insn_count += db->size/4;
   }
-
+#if 0
+	if ((last_pc_group & -64LL) != (pc & -64LL)) {
+		if (totsz != 0) {
+			totsz = 0;
+			memset(value_bucket,0,sizeof(value_bucket));
+			value_bucketno = 0;
+		}
+	}
+	last_pc_group = pc;
+#endif	
   return (db);
 }
 
@@ -1348,6 +1455,7 @@ static void at_end(void)
 	printf("Largest number of constants: %d\n", greatest_bucket_number);
 	printf("Number of 64-bit constants: %d\n", count64);
 	printf("Number of 32-bit constants: %d\n", count32);
+	printf("\n");
 }
 
 static void define_regnames(void)
@@ -1380,6 +1488,7 @@ int init_cpu(void)
 {
   if (regnames)
     define_regnames();
+  totsz = 0;
   insn_count = 0;
   count32 = 0;
   count64 = 0;
@@ -1425,6 +1534,9 @@ int cpu_args(char *p)
   }
   else if (!strcmp(p,"-opt-branch"))
     opt_branch = 1;
+  else if (!strncmp(p,"-abits=",7)) {
+    abits = atoi(p+7);
+  }
   else
     return 0;
 

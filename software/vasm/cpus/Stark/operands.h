@@ -1,14 +1,17 @@
 extern uint8_t value_bucketno;
-extern value_bucket_t value_bucket[32];
-extern uint16_t totsz;
+extern value_bucket_t value_bucket[64];
 extern uint32_t count32, count64;
+extern unsigned int abits;
+
+#define NBKT	15
+//#define INLINE_CONST	1
 
 /* Operand description structure */
 struct powerpc_operand
 {
   int bits;
   int shift;
-  uint32_t (*insert)(uint32_t,int64_t,const char **);
+  uint32_t (*insert)(uint32_t,int64_t*,const char **);
   uint32_t flags;
 };
 
@@ -35,6 +38,7 @@ struct powerpc_operand
 #define OPER_XH				(0x80000)
 #define OPER_DISP			(0x100000)
 #define OPER_REGLIST	(0x200000)
+#define OPER_UI				(0x400000)
 #define OPER_REG			(0x40000000)
 
 /* Operand types. */
@@ -42,10 +46,10 @@ enum {
   UNUSED,BA,CSRUI,BB,BBA,BD,BS,BDA,BDM,BDMA,BDP,BDPA,BF,OBF,BFA,BI,BO,BOE,CRS,CSRNO,
   BT,CR,D,DS,DX,E,FL1,FL2,FLM,FRA,FRB,FRC,FRS,FXM,L,LEV,LI,LIA,MB,ME,XH,BR,BRS,RL,
   MBE,MBE_,MB6,NB,NSI,RA,RAL,RAM,RAS,RB,RC,RBS,RS,SH,SH6,SI,SISIGNOPT,PM,BLR,BLRL,LMT,
-  SPR,SPRBAT,SPRG,SR,SV,TBR,TO,U,UI,VA,VB,VC,VD,SIMM,UIMM,SHB,SCNDX,/*JA,JAB,JOM,JSWS,*/
+  SPR,SPRBAT,SPRG,SR,SV,TBR,TO,U,UI,UI9,EXFMT,VA,VB,VC,VD,SIMM,UIMM,SHB,SCNDX,/*JA,JAB,JOM,JSWS,*/
   SLWI,SRWI,EXTLWI,EXTRWI,EXTWIB,INSLWI,INSRWI,ROTRWI,CLRRWI,CLRLSL,DBRS,
   STRM,AT,LS,RSOPT,RAOPT,RBOPT,CT,SHO,CRFS,EVUIMM_2,EVUIMM_4,EVUIMM_8,
-  MOVRD,MOVRS
+  MOVRD,MOVRS,M12,MPV,MD,MVRD,MVRS
 };
 
 #define FRT FRS
@@ -121,13 +125,14 @@ static int is_uint32(uint64_t value)
 
 /* The functions used to insert complex operands. */
 
-static uint32_t insert_ui(uint32_t insn,int64_t value,const char ** errmsg)
+static uint32_t insert_ui(uint32_t insn,int64_t* value,const char ** errmsg)
 {
 	int i;
+	int pos;
 
-	if (value >= 0 && is_uint14((uint64_t)value)) {
-		insn |= (value & 0x3fffL) << 17L;
-		return (insn);
+	if (*value >= 0 && is_uint14((uint64_t)*value)) {
+		insn |= ((*value) & 0x3fffL) << 17L;
+		return (4);
 	}
 	/*
 	if (value >= 0 && is_uint16((uint32_t)value)) {
@@ -144,40 +149,63 @@ static uint32_t insert_ui(uint32_t insn,int64_t value,const char ** errmsg)
 	*/
 #if 0
 	for (i = 0; i < value_bucketno; i++) {
-		if (value_bucket[i].value == value) {
-			insn |= ((i & 0x7) << 18);
+		if (value_bucket[i].value == *value) {
+			insn |= ((i & 0xf) << 18);
 			return (insn);
 		}
 	}	
 #endif
-	if (value >= 0 && is_uint32((uint64_t)value)) {
+#ifdef INLINE_CONST
+	if (*value >= 0 && is_uint32((uint64_t)*value)) {
+		insn[0] |= 0x20000000L;
+		insn[0] |= ((((pc + 4) >> 2LL) & 0xfLL) << 18);
+		insn[1] = *value;
+		return (8);
+	}
+	else{
+		insn[0] |= 0x40000000L;
+		insn[0] |= ((((pc + 4) >> 2LL) & 0xfLL) << 18);
+		insn[1] = *value;
+		insn[2] = (*value) >> 32LL;
+		return (12);
+	}
+#else
+	if (*value >= 0 && is_uint32((uint64_t)*value)) {
+		pos = (64 - totsz - 4)/4;
+		insn |= ((pos & 0xf) << 18);
+		value_bucket[value_bucketno].pos = pos;
 		insn |= 0x20000000L;
 		value_bucket[value_bucketno].insn = insn;
-		value_bucket[value_bucketno].value = value;
+		value_bucket[value_bucketno].value = *value;
 		value_bucket[value_bucketno].size = 32;
-		insn |= ((value_bucketno & 0x7) << 18);
+		*value = 0;
 		totsz += 4;
 		value_bucketno++;
 		count32++;
 	}
 	else {
+		pos = (64 - totsz - 8)/4;
+		insn |= ((pos & 0xf) << 18);
+		value_bucket[value_bucketno].pos = pos;
 		insn |= 0x40000000L;
 		value_bucket[value_bucketno].insn = insn;
-		value_bucket[value_bucketno].value = value;
+		value_bucket[value_bucketno].value = *value;
 		value_bucket[value_bucketno].size = 64;
-		insn |= ((value_bucketno & 0x7) << 18);
+		*value = 0;
 		totsz += 8;
 		value_bucketno++;
 		count64++;
 	}
-	if (totsz > 7*4)
+	if (totsz > NBKT*8)
     *errmsg = "too many value encountered";
+#endif    
   return (insn);
 }
 
-static uint32_t insert_blr(uint32_t insn,int64_t value,const char ** errmsg)
+static uint32_t insert_blr(uint32_t insn,int64_t* value,const char ** errmsg)
 {
 	int i;
+	int pos;
 
 	/*
 	if (is_int16(value)) {
@@ -194,43 +222,50 @@ static uint32_t insert_blr(uint32_t insn,int64_t value,const char ** errmsg)
 	*/
 #if 0	
 	for (i = 0; i < value_bucketno; i++) {
-		if (value_bucket[i].value == value) {
-			insn |= ((i & 0x7) << 10);
+		if (value_bucket[i].value == *value) {
+			insn |= ((i & 0xf) << 10);
 			return (insn);
 		}
 	}	
 #endif
-	if (is_int32(value)) {
+	if (is_int32(*value)) {
+		pos = (64 - totsz - 4)/4;
 		insn |= 0x20000000L;
+		insn |= ((pos & 0xf) << 10);
+		value_bucket[value_bucketno].pos = pos;
 		value_bucket[value_bucketno].insn = insn;
-		value_bucket[value_bucketno].value = value;
+		value_bucket[value_bucketno].value = *value;
 		value_bucket[value_bucketno].size = 32;
-		insn |= ((value_bucketno & 0x7) << 10);
+		*value = 0;
 		totsz += 4;
 		value_bucketno++;
 		count32++;
 	}
 	else {
 		insn |= 0x40000000L;
+		pos = (64 - totsz - 8)/4;
+		insn |= ((pos & 0xf) << 10);
+		value_bucket[value_bucketno].pos = pos;
 		value_bucket[value_bucketno].insn = insn;
-		value_bucket[value_bucketno].value = value;
+		value_bucket[value_bucketno].value = *value;
 		value_bucket[value_bucketno].size = 64;
-		insn |= ((value_bucketno & 0x7) << 10);
+		*value = 0;
 		totsz += 8;
 		value_bucketno++;
 		count64++;
 	}
-	if (totsz > 7*4)
+	if (totsz > NBKT*8)
     *errmsg = "too many value encountered";
   return (insn);
 }
 
-static uint32_t insert_si(uint32_t insn,int64_t value,const char ** errmsg)
+static uint32_t insert_si(uint32_t insn,int64_t* value,const char ** errmsg)
 {
 	int i;
+	int pos;
 
-	if (is_int14(value)) {
-		insn |= (value & 0x3fffL) << 17L;
+	if (is_int14(*value)) {
+		insn |= ((*value) & 0x3fffL) << 17L;
 		return (insn);
 	}
 	/*
@@ -248,43 +283,110 @@ static uint32_t insert_si(uint32_t insn,int64_t value,const char ** errmsg)
 	*/
 #if 0
 	for (i = 0; i < value_bucketno; i++) {
-		if (value_bucket[i].value == value) {
-			insn |= ((i & 0x7) << 18);
+		if (value_bucket[i].value == *value) {
+			insn |= ((i & 0xf) << 18);
 			return (insn);
 		}
 	}	
 #endif
-	if (is_int32(value)) {
+	if (is_int32(*value)) {
+		pos = (64 - totsz - 4)/4;
 		insn |= 0x20000000L;
+		insn |= ((pos & 0xf) << 18);
+		value_bucket[value_bucketno].pos = pos;
 		value_bucket[value_bucketno].insn = insn;
-		value_bucket[value_bucketno].value = value;
+		value_bucket[value_bucketno].value = *value;
 		value_bucket[value_bucketno].size = 32;
-		insn |= ((value_bucketno & 0x7) << 18);
+		*value = 0;
 		totsz += 4;
 		value_bucketno++;
 		count32++;
 	}
 	else {
+		pos = (64 - totsz - 8)/4;
 		insn |= 0x40000000L;
+		insn |= ((pos & 0xf) << 18);
+		value_bucket[value_bucketno].pos = pos;
 		value_bucket[value_bucketno].insn = insn;
-		value_bucket[value_bucketno].value = value;
+		value_bucket[value_bucketno].value = *value;
 		value_bucket[value_bucketno].size = 64;
-		insn |= ((value_bucketno & 0x7) << 18);
+		*value = 0;
 		totsz += 8;
 		value_bucketno++;
 		count64++;
 	}
-	if (totsz > 7*4)
+	if (totsz > NBKT*8)
     *errmsg = "too many value encountered";
   return (insn);
 }
 
-static uint32_t insert_xsi(uint32_t insn,int64_t value,const char ** errmsg)
+static uint32_t insert_dsi(uint32_t insn,int64_t* value,const char ** errmsg)
+{
+	int i;
+	int pos;
+
+	if (is_int14(*value)) {
+		insn |= ((*value) & 0x3fffL) << 17L;
+		return (insn);
+	}
+	/*
+	if (is_int16(value)) {
+		insn |= 0xA0000000L;
+		value_bucket[value_bucketno].insn = insn;
+		value_bucket[value_bucketno].value = value;
+		value_bucket[value_bucketno].size = 16;
+		totsz += 2;
+		value_bucketno++;
+		if (totsz > 23*4)
+	    *errmsg = "too many value encountered";
+	  return (insn);
+	}
+	*/
+#if 0
+	for (i = 0; i < value_bucketno; i++) {
+		if (value_bucket[i].value == *value) {
+			insn |= ((i & 0xf) << 18);
+			return (insn);
+		}
+	}	
+#endif
+	if (is_int32(*value) || abits <= 32) {
+		pos = (64 - totsz - 4)/4;
+		insn |= 0x20000000L;
+		insn |= ((pos & 0xf) << 18);
+		value_bucket[value_bucketno].pos = pos;
+		value_bucket[value_bucketno].insn = insn;
+		value_bucket[value_bucketno].value = *value;
+		value_bucket[value_bucketno].size = 32;
+		*value = 0;
+		totsz += 4;
+		value_bucketno++;
+		count32++;
+	}
+	else {
+		pos = (64 - totsz - 8)/4;
+		insn |= 0x40000000L;
+		insn |= ((pos & 0xf) << 18);
+		value_bucket[value_bucketno].pos = pos;
+		value_bucket[value_bucketno].insn = insn;
+		value_bucket[value_bucketno].value = *value;
+		value_bucket[value_bucketno].size = 64;
+		*value = 0;
+		totsz += 8;
+		value_bucketno++;
+		count64++;
+	}
+	if (totsz > NBKT*8)
+    *errmsg = "too many value encountered";
+  return (insn);
+}
+
+static uint32_t insert_xsi(uint32_t insn,int64_t* value,const char ** errmsg)
 {
 	int i;
 
 	insn |= 0x80000000L;
-	if (value != 0)
+	if (*value != 0)
 		*errmsg = "AMO ops cannot have a displacement";
 	/*
 	for (i = 0; i < value_bucketno; i++) {
@@ -304,123 +406,138 @@ static uint32_t insert_xsi(uint32_t insn,int64_t value,const char ** errmsg)
   return (insn);
 }
 
-static uint32_t insert_csrui(uint32_t insn,int64_t value,const char **errmsg)
+static uint32_t insert_csrui(uint32_t insn,int64_t* value,const char **errmsg)
 {
-	if (value >= 0 && is_uint32(value)) {
+	int pos;
+
+	if (*value >= 0 && is_uint32(*value)) {
+		pos = (64 - totsz - 4)/4;
 		insn |= 0x20000000L;
+		insn |= ((pos & 0xf) << 12);
+		value_bucket[value_bucketno].pos = pos;
 		value_bucket[value_bucketno].insn = insn;
-		value_bucket[value_bucketno].value = value;
+		value_bucket[value_bucketno].value = *value;
 		value_bucket[value_bucketno].size = 32;
-		insn |= ((value_bucketno & 0x7) << 11);
+		*value = 0;
 		totsz += 4;
 		value_bucketno++;
 		count32++;
 	}
 	else {
+		pos = (64 - totsz - 8)/4;
 		insn |= 0x40000000L;
+		insn |= ((pos & 0xf) << 12);
+		value_bucket[value_bucketno].pos = pos;
 		value_bucket[value_bucketno].insn = insn;
-		value_bucket[value_bucketno].value = value;
+		value_bucket[value_bucketno].value = *value;
 		value_bucket[value_bucketno].size = 64;
-		insn |= ((value_bucketno & 0x7) << 11);
+		*value = 0;
 		totsz += 8;
 		value_bucketno++;
 		count64++;
 	}
-	if (totsz > 7*4)
+	if (totsz > NBKT*8)
     *errmsg = "too many value encountered";
   return (insn);
 }
 
-static uint32_t insert_bba(uint32_t insn,int64_t value,const char **errmsg)
+static uint32_t insert_bba(uint32_t insn,int64_t* value,const char **errmsg)
 {
-  return insn | (((insn >> 16) & 0x1f) << 11);
+  return insn | (((insn >> 16) & 0x1f) << 11); //??
 }
 
-static uint32_t insert_bd(uint32_t insn,int64_t value,const char **errmsg)
+static uint32_t insert_bd(uint32_t insn,int64_t* value,const char **errmsg)
 {
 	int i;
+	int pos;
 
-	if (is_int13(value)) {
-		insn |= (value >> 2) & 1;
-		insn |= ((value >> 3) & 0xff) << 6;
-		insn |= ((value >> 11) << 29);
+	if (is_int13(*value)) {
+		insn |= ((*value) >> 2LL) & 1;
+		insn |= (((*value) >> 3LL) & 0xff) << 6;
+		insn |= (((*value) >> 11LL) << 29);
 	  return (insn);
 	}
 #if 0
 	for (i = 0; i < value_bucketno; i++) {
-		if (value_bucket[i].value == value) {
-			insn |= ((i & 0x7) << 10);
+		if (value_bucket[i].value == *value) {
+			insn |= ((i & 0xf) << 10);
 			return (insn);
 		}
 	}	
 #endif
-	if (is_int32(value)) {
+	if (is_int32(*value)) {
+		pos = (64 - totsz - 4)/4;
 		insn |= 0x20000000L;
+		insn |= ((pos & 0xf) << 10);
+		value_bucket[value_bucketno].pos = pos;
 		value_bucket[value_bucketno].insn = insn;
-		value_bucket[value_bucketno].value = value;
+		value_bucket[value_bucketno].value = *value;
 		value_bucket[value_bucketno].size = 32;
-		insn |= ((value_bucketno & 0x7) << 10);
+		*value = 0;
 		totsz += 4;
 		value_bucketno++;
 		count32++;
 	}
 	else {
+		pos = (64 - totsz - 8)/4;
 		insn |= 0x40000000L;
+		insn |= ((pos & 0xf) << 10);
+		value_bucket[value_bucketno].pos = pos;
 		value_bucket[value_bucketno].insn = insn;
-		value_bucket[value_bucketno].value = value;
+		value_bucket[value_bucketno].value = *value;
 		value_bucket[value_bucketno].size = 64;
-		insn |= ((value_bucketno & 0x7) << 10);
+		*value = 0;
 		totsz += 8;
 		value_bucketno++;
 		count64++;
 	}
-	if (totsz > 7*4)
+	if (totsz > NBKT*8)
     *errmsg = "too many value encountered";
   return (insn);
 }
 
 #if 0
-static uint32_t insert_ja(uint32_t insn,int64_t value,const char **errmsg)
+static uint32_t insert_ja(uint32_t insn,int64_t* value,const char **errmsg)
 {
-	insn |= ((value >> 3) & 0x3fffff << 9) | ((value >> 2) & 1);
+	insn |= (((*value) >> 3LL) & 0x3fffff << 9) | (((*value) >> 2LL) & 1);
 	return (insn);
 }
 
-static uint32_t insert_jom(uint32_t insn,int64_t value,const char **errmsg)
+static uint32_t insert_jom(uint32_t insn,int64_t* value,const char **errmsg)
 {
-	if (value < 0 || value > 7)
+	if (*value < 0 || *value > 7)
 		*errmsg = "illegal operating mode";
-	insn |= value << 10;
+	insn |= (*value) << 10;
 	return (insn);
 }
 
-static uint32_t insert_jsws(uint32_t insn,int64_t value,const char **errmsg)
+static uint32_t insert_jsws(uint32_t insn,int64_t* value,const char **errmsg)
 {
-	if (value < 0 || value > 7)
+	if (*value < 0 || *value > 7)
 		*errmsg = "illegal software stack";
-	insn |= value << 6;
+	insn |= (*value) << 6;
 	return (insn);
 }
 
-static uint32_t insert_jab(uint32_t insn,int64_t value,const char **errmsg)
+static uint32_t insert_jab(uint32_t insn,int64_t* value,const char **errmsg)
 {
-	insn |= ((value >> 25) << 14) | 0x3f;	// 3f = NOP
+	insn |= (((*value) >> 25) << 14) | 0x3f;	// 3f = NOP
 	return (insn);
 }
 #endif
 
-static uint32_t insert_bdm(uint32_t insn,int64_t value,const char **errmsg)
+static uint32_t insert_bdm(uint32_t insn,int64_t* value,const char **errmsg)
 {
-  if ((value & 0x8000) != 0)
+  if (((*value) & 0x8000LL) != 0)
     insn |= 1 << 21;
-  return insn | (value & 0xfffc);
+  return insn | ((*value) & 0xfffcLL);
 }
 
-static uint32_t insert_bdp(uint32_t insn,int64_t value,const char **errmsg)
+static uint32_t insert_bdp(uint32_t insn,int64_t* value,const char **errmsg)
 {
-  if ((value & 0x8000) == 0)
+  if (((*value) & 0x8000LL) == 0)
     insn |= 1 << 21;
-  return insn | (value & 0xfffc);
+  return insn | ((*value) & 0xfffcLL);
 }
 
 static int valid_bo(int64_t value)
@@ -438,46 +555,46 @@ static int valid_bo(int64_t value)
   }
 }
 
-static uint32_t insert_bo(uint32_t insn,int64_t value,const char **errmsg)
+static uint32_t insert_bo(uint32_t insn,int64_t* value,const char **errmsg)
 {
-  if (!valid_bo (value))
+  if (!valid_bo (*value))
     *errmsg = "invalid conditional option";
-  return insn | ((value & 0x1f) << 21);
+  return insn | (((*value) & 0x1fLL) << 21);
 }
 
-static uint32_t insert_boe(uint32_t insn,int64_t value,const char **errmsg)
+static uint32_t insert_boe(uint32_t insn,int64_t* value,const char **errmsg)
 {
-  if (!valid_bo (value))
+  if (!valid_bo (*value))
     *errmsg = "invalid conditional option";
-  else if ((value & 1) != 0)
+  else if (((*value) & 1LL) != 0)
     *errmsg = "attempt to set y bit when using + or - modifier";
-  return insn | ((value & 0x1f) << 21);
+  return insn | (((*value) & 0x1fLL) << 21);
 }
 
-static uint32_t insert_ds(uint32_t insn,int64_t value,const char **errmsg)
+static uint32_t insert_ds(uint32_t insn,int64_t* value,const char **errmsg)
 {
-  return insn | (value & 0xfffc);
+  return insn | ((*value) & 0xfffcLL);
 }
 
-static uint32_t insert_li(uint32_t insn,int64_t value,const char **errmsg)
+static uint32_t insert_li(uint32_t insn,int64_t* value,const char **errmsg)
 {
-  if ((value & 3) != 0)
+  if (((*value) & 3LL) != 0)
     *errmsg = "ignoring least significant bits in branch offset";
-  if (is_int25(value)) {
-  	insn |= (value >> 2) & 1;
-  	insn |= (((value & 0x1ffffff) >> 3) << 9);
+  if (is_int25(*value)) {
+  	insn |= ((*value) >> 2) & 1;
+  	insn |= ((((*value) & 0x1ffffffLL) >> 3) << 9);
   	return (insn);
 	}
   *errmsg = "branch out of range";
 	return (insn);
 }
 
-static uint32_t insert_mbe(uint32_t insn,int64_t value,const char **errmsg)
+static uint32_t insert_mbe(uint32_t insn,int64_t* value,const char **errmsg)
 {
   uint32_t uval, mask;
   int mb, me, mx, count, last;
 
-  uval = value;
+  uval = (uint32_t)*value;
 
   if (uval == 0) {
       *errmsg = "illegal bitmask";
@@ -492,7 +609,7 @@ static uint32_t insert_mbe(uint32_t insn,int64_t value,const char **errmsg)
     last = 0;
   count = 0;
 
-  for (mx = 0, mask = (int64_t) 1 << 31; mx < 32; ++mx, mask >>= 1) {
+  for (mx = 0, mask = (int64_t) 1LL << 31; mx < 32; ++mx, mask >>= 1) {
     if ((uval & mask) && !last) {
       ++count;
       mb = mx;
@@ -514,160 +631,162 @@ static uint32_t insert_mbe(uint32_t insn,int64_t value,const char **errmsg)
   return insn | (mb << 6) | ((me - 1) << 1);
 }
 
-static uint32_t insert_mb6(uint32_t insn,int64_t value,const char **errmsg)
+static uint32_t insert_mb6(uint32_t insn,int64_t* value,const char **errmsg)
 {
-  return insn | ((value & 0x1f) << 6) | (value & 0x20);
+  return insn | (((*value) & 0x1fLL) << 6) | ((*value) & 0x20LL);
 }
 
-static uint32_t insert_nb(uint32_t insn,int64_t value,const char **errmsg)
+static uint32_t insert_nb(uint32_t insn,int64_t* value,const char **errmsg)
 {
-  if (value < 0 || value > 32)
+  if (*value < 0 || *value > 32)
     *errmsg = "value out of range";
-  if (value == 32)
-    value = 0;
-  return insn | ((value & 0x1f) << 11);
+  if (*value == 32)
+    *value = 0;
+  return insn | (((*value) & 0x1fLL) << 11);
 }
 
-static uint32_t insert_nsi(uint32_t insn,int64_t value,const char **errmsg)
+static uint32_t insert_nsi(uint32_t insn,int64_t* value,const char **errmsg)
 {
-	return (insert_si(insn,-value,errmsg));
+	*value = -*value;
+	return (insert_si(insn,value,errmsg));
 }
 
-static uint32_t insert_ral(uint32_t insn,int64_t value,const char **errmsg)
+static uint32_t insert_ral(uint32_t insn,int64_t* value,const char **errmsg)
 {
-  if (value == 0
-      || (uint32_t) value == ((insn >> 21) & 0x1f))
+  if (*value == 0
+      || (uint32_t) *value == ((insn >> 21) & 0x1f))
     *errmsg = "invalid register operand when updating";
-  return insn | ((value & 0x1f) << 16);
+  return insn | (((*value) & 0x1fLL) << 16);
 }
 
-static uint32_t insert_ram(uint32_t insn,int64_t value,const char **errmsg)
+static uint32_t insert_ram(uint32_t insn,int64_t* value,const char **errmsg)
 {
-  if ((uint32_t) value >= ((insn >> 21) & 0x1f))
+  if ((uint32_t) *value >= ((insn >> 21) & 0x1f))
     *errmsg = "index register in load range";
-  return insn | ((value & 0x1f) << 16);
+  return insn | (((*value) & 0x1fLL) << 16);
 }
 
-static uint32_t insert_ras(uint32_t insn,int64_t value,const char **errmsg)
+static uint32_t insert_ras(uint32_t insn,int64_t* value,const char **errmsg)
 {
-  if (value == 0)
+  if (*value == 0)
     *errmsg = "invalid register operand when updating";
-  return insn | ((value & 0x1f) << 16);
+  return insn | (((*value) & 0x1fLL) << 16);
 }
 
-static uint32_t insert_rbs(uint32_t insn,int64_t value,const char **errmsg)
+static uint32_t insert_rbs(uint32_t insn,int64_t* value,const char **errmsg)
 {
   return insn | (((insn >> 21) & 0x1f) << 11);
 }
 
-static uint32_t insert_sh6(uint32_t insn,int64_t value,const char **errmsg)
+static uint32_t insert_sh6(uint32_t insn,int64_t* value,const char **errmsg)
 {
-  return insn | ((value & 0x3f) << 17);
+  return insn | (((*value) & 0x3fLL) << 17);
 }
 
-static uint32_t insert_spr(uint32_t insn,int64_t value,const char **errmsg)
+static uint32_t insert_spr(uint32_t insn,int64_t* value,const char **errmsg)
 {
-  return insn | ((value & 0x1f) << 16) | ((value & 0x3e0) << 6);
+  return insn | (((*value) & 0x1fLL) << 16) | (((*value) & 0x3e0LL) << 6);
 }
 
-static uint32_t insert_sprg(uint32_t insn,int64_t value,const char **errmsg)
+static uint32_t insert_sprg(uint32_t insn,int64_t* value,const char **errmsg)
 {
   /* @@@ only BOOKE, VLE and 405 have 8 SPRGs */
-  if (value & ~7)
+  if ((*value) & ~7LL)
     *errmsg = "illegal SPRG number";
-  if ((insn & 0x100)!=0 || value<=3)
-    value |= 0x10;  /* mfsprg 4..7 use SPR260..263 */
-  return insn | ((value & 17) << 16);
+  if ((insn & 0x100)!=0 || (*value)<=3LL)
+    (*value) |= 0x10LL;  /* mfsprg 4..7 use SPR260..263 */
+  return insn | (((*value) & 17LL) << 16);
 }
 
-static uint32_t insert_tbr(uint32_t insn,int64_t value,const char **errmsg)
+static uint32_t insert_tbr(uint32_t insn,int64_t* value,const char **errmsg)
 {
-  if (value == 0)
-    value = 268;
-  return insn | ((value & 0x1f) << 16) | ((value & 0x3e0) << 6);
+  if (*value == 0)
+    *value = 268;
+  return insn | (((*value) & 0x1fLL) << 16) | (((*value) & 0x3e0LL) << 6);
 }
 
-static uint32_t insert_slwi(uint32_t insn,int64_t value,const char **errmsg)
+static uint32_t insert_slwi(uint32_t insn,int64_t* value,const char **errmsg)
 {
-  return insn | ((value&0x1f)<<11) | ((31-(value&0x1f))<<1);
+  return insn | (((*value)&0x1fLL)<<11) | ((31-((*value)&0x1fLL))<<1);
 }
 
-static uint32_t insert_srwi(uint32_t insn,int64_t value,const char **errmsg)
+static uint32_t insert_srwi(uint32_t insn,int64_t* value,const char **errmsg)
 {
-  return insn | (((32-value)&0x1f)<<11) | ((value&0x1f)<<6) | (31<<1);
+  return insn | (((32LL-(*value))&0x1fLL)<<11) | (((*value)&0x1fLL)<<6) | (31<<1);
 }
 
-static uint32_t insert_extlwi(uint32_t insn,int64_t value,const char **errmsg)
+static uint32_t insert_extlwi(uint32_t insn,int64_t* value,const char **errmsg)
 {
-  if (value<1 || value>32)
+  if (*value<1 || *value>32)
     *errmsg = "value out of range (1-32)";
-  return insn | (((value-1)&0x1f)<<1);
+  return insn | ((((*value)-1LL)&0x1fLL)<<1);
 }
 
-static uint32_t insert_extrwi(uint32_t insn,int64_t value,const char **errmsg)
+static uint32_t insert_extrwi(uint32_t insn,int64_t* value,const char **errmsg)
 {
-  if (value<1 || value>32)
+  if (*value<1 || *value>32)
     *errmsg = "value out of range (1-32)";
-  return insn | ((value&0x1f)<<11) | (((32-value)&0x1f)<<6) | (31<<1);
+  return insn | (((*value)&0x1fLL)<<11) | (((32LL-(*value))&0x1fLL)<<6) | (31<<1);
 }
 
-static uint32_t insert_extwib(uint32_t insn,int64_t value,const char **errmsg)
+static uint32_t insert_extwib(uint32_t insn,int64_t* value,const char **errmsg)
 {
-  value += (insn>>11) & 0x1f;
-  if (value > 32)
+  *value += (insn>>11) & 0x1f;
+  if (*value > 32)
     *errmsg = "sum of last two operands out of range (0-32)";
-  return (insn&~0xf800) | ((value&0x1f)<<11);
+  return (insn&~0xf800) | (((*value)&0x1fLL)<<11);
 }
 
-static uint32_t insert_inslwi(uint32_t insn,int64_t value,const char **errmsg)
+static uint32_t insert_inslwi(uint32_t insn,int64_t* value,const char **errmsg)
 {
   int64_t n = ((insn>>1) & 0x1f) + 1;
-  if (value+n > 32)
+  if (*value+n > 32LL)
     *errmsg = "sum of last two operands out of range (1-32)";
-  return (insn&~0xfffe) | (((32-value)&0x1f)<<11) | ((value&0x1f)<<6)
-                        | ((((value+n)-1)&0x1f)<<1);
+  return (insn&~0xfffe) | (((32LL-(*value))&0x1fLL)<<11) | (((*value)&0x1fLL)<<6)
+                        | (((((*value)+n)-1LL)&0x1fLL)<<1);
 }
 
-static uint32_t insert_insrwi(uint32_t insn,int64_t value,const char **errmsg)
+static uint32_t insert_insrwi(uint32_t insn,int64_t* value,const char **errmsg)
 {
   int32_t n = ((insn>>1) & 0x1f) + 1;
-  if (value+n > 32)
+  if (*value+n > 32)
     *errmsg = "sum of last two operands out of range (1-32)";
-  return (insn&~0xfffe) | (((32-(value+n))&0x1f)<<11) | ((value&0x1f)<<6)
-                        | ((((value+n)-1)&0x1f)<<1);
+  return (insn&~0xfffe) | (((32LL-(*value+n))&0x1fLL)<<11) | (((*value)&0x1fLL)<<6)
+                        | (((((*value)+n)-1LL)&0x1fLL)<<1);
 }
 
-static uint32_t insert_rotrwi(uint32_t insn,int64_t value,const char **errmsg)
+static uint32_t insert_rotrwi(uint32_t insn,int64_t* value,const char **errmsg)
 {
-  return insn | (((32-value)&0x1f)<<11);
+  return insn | (((32LL-*value)&0x1fLL)<<11);
 }
 
-static uint32_t insert_clrrwi(uint32_t insn,int64_t value,const char **errmsg)
+static uint32_t insert_clrrwi(uint32_t insn,int64_t* value,const char **errmsg)
 {
-  return insn | (((31-value)&0x1f)<<1);
+  return insn | (((31LL-*value)&0x1fLL)<<1);
 }
 
-static uint32_t insert_clrlslwi(uint32_t insn,int64_t value,const char **errmsg)
+static uint32_t insert_clrlslwi(uint32_t insn,int64_t* value,const char **errmsg)
 {
   int64_t b = (insn>>6) & 0x1f;
-  if (value > b)
+  if (*value > b)
     *errmsg = "n (4th oper) must be less or equal to b (3rd oper)";
-  return (insn&~0x7c0) | ((value&0x1f)<<11) | (((b-value)&0x1f)<<6)
-                       | (((31-value)&0x1f)<<1);
+  return (insn&~0x7c0) | (((*value)&0x1fLL)<<11) | (((b-*value)&0x1fLL)<<6)
+                       | (((31LL-*value)&0x1fLL)<<1);
 }
 
-static uint32_t insert_ls(uint32_t insn,int64_t value,const char **errmsg)
+static uint32_t insert_ls(uint32_t insn,int64_t* value,const char **errmsg)
 {
   /* @@@ check for POWER4 */
-  return insn | ((value&3)<<21);
+  return insn | (((*value)&3LL)<<21);
 }
 
-static uint32_t insert_scndx(uint32_t insn, int64_t value, const char** errmsg)
+static uint32_t insert_scndx(uint32_t insn, int64_t* value, const char** errmsg)
 {
 	int i;
+	int pos;
 
-	if (is_int5(value)) {
-		insn |= (value & 0x1fL) << 24L;
+	if (is_int5(*value)) {
+		insn |= ((*value) & 0x1fLL) << 24L;
 		return (insn);
 	}
 	/*
@@ -685,124 +804,163 @@ static uint32_t insert_scndx(uint32_t insn, int64_t value, const char** errmsg)
 	*/
 #if 0
 	for (i = 0; i < value_bucketno; i++) {
-		if (value_bucket[i].value == value && value != 0) {
-			insn |= ((i & 0x7) << 24);
+		if (value_bucket[i].value == *value && *value != 0) {
+			insn |= ((i & 0xf) << 24);
 			return (insn);
 		}
 	}	
 #endif
-	if (is_int32(value)) {
+	if (is_int32(*value)) {
+		pos = (64 - totsz - 4)/4;
 		insn |= 0x20000000L;
+		insn |= ((pos & 0xf) << 24);
+		value_bucket[value_bucketno].pos = pos;
 		value_bucket[value_bucketno].insn = insn;
-		value_bucket[value_bucketno].value = value;
+		value_bucket[value_bucketno].value = *value;
 		value_bucket[value_bucketno].size = 32;
-		insn |= ((value_bucketno & 0x7) << 24);
+		*value = 0;
 		totsz += 4;
 		value_bucketno++;
 		count32++;
 	}
 	else {
+		pos = (64 - totsz - 8)/4;
 		insn |= 0x40000000L;
+		insn |= ((pos & 0xf) << 24);
+		value_bucket[value_bucketno].pos = pos;
 		value_bucket[value_bucketno].insn = insn;
-		value_bucket[value_bucketno].value = value;
+		value_bucket[value_bucketno].value = *value;
 		value_bucket[value_bucketno].size = 64;
-		insn |= ((value_bucketno & 0x7) << 24);
+		*value = 0;
 		totsz += 8;
 		value_bucketno++;
 		count64++;
 	}
-	if (totsz > 7*4)
+	if (totsz > NBKT*8)
     *errmsg = "too many value encountered";
   return (insn);
 }
 
-static uint32_t insert_dbrs(uint32_t insn, int64_t value, const char** errmsg)
+static uint32_t insert_dbrs(uint32_t insn, int64_t* value, const char** errmsg)
 {
 	int i;
+	int pos;
 
 #if 0
 	for (i = 0; i < value_bucketno; i++) {
-		if (value_bucket[i].value == value && value != 0) {
-			insn |= ((i & 0x7) << 10);
+		if (value_bucket[i].value == *value && *value != 0) {
+			insn |= ((i & 0xf) << 10);
 			return (insn);
 		}
 	}	
 #endif
-	if (is_int32(value)) {
+	if (is_int32(*value)) {
+		pos = (64 - totsz - 4)/4;
 		insn |= 0x20000000L;
+		insn |= ((value_bucketno & 0xf) << 10);
+		value_bucket[value_bucketno].pos = pos;
 		value_bucket[value_bucketno].insn = insn;
-		value_bucket[value_bucketno].value = value;
+		value_bucket[value_bucketno].value = *value;
 		value_bucket[value_bucketno].size = 32;
-		insn |= ((value_bucketno & 0x7) << 10);
+		*value = 0;
 		totsz += 4;
 		value_bucketno++;
 		count32++;
 	}
 	else {
+		pos = (64 - totsz - 8)/4;
 		insn |= 0x40000000L;
+		insn |= ((pos & 0xf) << 10);
+		value_bucket[value_bucketno].pos = pos;
 		value_bucket[value_bucketno].insn = insn;
-		value_bucket[value_bucketno].value = value;
+		value_bucket[value_bucketno].value = *value;
 		value_bucket[value_bucketno].size = 64;
-		insn |= ((value_bucketno & 0x7) << 10);
+		*value = 0;
 		totsz += 8;
 		value_bucketno++;
 		count64++;
 	}
-	if (totsz > 7*4)
+	if (totsz > NBKT*8)
     *errmsg = "too many value encountered";
   return (insn);
 }
 
-static uint32_t insert_movrd(uint32_t insn,int64_t value,const char **errmsg)
+static uint32_t insert_movrd(uint32_t insn,int64_t* value,const char **errmsg)
 {
-  return insn | ((value&31)<<6) | (((value & 0x7f) >> 5) <<17);
+  return insn | (((*value)&31LL)<<6) | ((((*value) & 0x7fLL) >> 5) <<17);
 }
 
-static uint32_t insert_movrs(uint32_t insn,int64_t value,const char **errmsg)
+static uint32_t insert_movrs(uint32_t insn,int64_t* value,const char **errmsg)
 {
-  return insn | ((value&31)<<11) | (((value & 0x7f) >> 5) <<19);
+  return insn | (((*value)&31LL)<<11) | ((((*value) & 0x7fLL) >> 5) <<19);
 }
 
-static uint32_t insert_reglist(uint32_t insn,int64_t value,const char **errmsg)
+static uint32_t insert_reglist(uint32_t insn,int64_t* value,const char **errmsg)
 {
-  return insn | ((value&0xff)<<6) | (((value & 0x1ff00) >> 8) << 17)
-  	| (((value >> 28) & 3) << 14) | (((value >> 30) & 3) << 27);
+  return insn | (((*value)&0xffLL)<<6) | ((((*value) & 0x1ff00LL) >> 8) << 17)
+  	| ((((*value) >> 28LL) & 3LL) << 14) | ((((*value) >> 30LL) & 3LL) << 27);
 }
 
 
-static uint32_t insert_crs(uint32_t insn,int64_t value,const char **errmsg)
+static uint32_t insert_crs(uint32_t insn,int64_t* value,const char **errmsg)
 {
-  return insn | ((value&3)<<20);
+  return insn | (((*value)&3LL)<<20);
 }
 
-static uint32_t insert_bt(uint32_t insn,int64_t value,const char **errmsg)
+static uint32_t insert_bt(uint32_t insn,int64_t* value,const char **errmsg)
 {
-  return insn | ((value&7)<<9) | (((value >> 8) & 7) << 6);
+  return insn | (((*value)&7LL)<<9) | ((((*value) >> 8LL) & 7LL) << 6);
 }
 
-static uint32_t insert_ba(uint32_t insn,int64_t value,const char **errmsg)
+static uint32_t insert_ba(uint32_t insn,int64_t* value,const char **errmsg)
 {
-  return insn | ((value&7)<<15) | (((value >> 8) & 7) << 12);
+  return insn | (((*value)&7LL)<<15) | ((((*value) >> 8LL) & 7LL) << 12);
 }
 
-static uint32_t insert_bb(uint32_t insn,int64_t value,const char **errmsg)
+static uint32_t insert_bb(uint32_t insn,int64_t* value,const char **errmsg)
 {
-  return insn | ((value&7)<<21) | (((value >> 8) & 7) << 18);
+  return insn | (((*value)&7LL)<<21) | ((((*value) >> 8LL) & 7LL) << 18);
 }
 
-static uint32_t insert_pm(uint32_t insn,int64_t value,const char **errmsg)
+static uint32_t insert_pm(uint32_t insn,int64_t* value,const char **errmsg)
 {
-	int i;
+	int64_t i;
 	
-	if (value < 0) {
+	if (*value < 0) {
 		*errmsg = "predicate window must be after predicate instruction";
-		i = 0;
+		i = 0LL;
 	}
 	else
-		i = (1 << (value >> 2)) -1;
-	return (insert_bd(insn,i,errmsg));
+		i = (1LL << ((*value) >> 2LL)) -1;
+	return (insert_bd(insn,&i,errmsg));
 }
 
+static uint32_t insert_m12(uint32_t insn,int64_t* value,const char **errmsg)
+{
+	if (*value < 0 || *value > 4095)
+		*errmsg = "too many bits in mask";
+
+	insn |= (*value & 1LL) | ((*value >> 1LL)	<< 9LL);
+	return (insn);
+}
+
+static uint32_t insert_mvrd(uint32_t insn,int64_t* value,const char **errmsg)
+{
+	if (*value < 0 || *value > 224)
+		*errmsg = "bad register number";
+
+	insn |= ((*value & 0x1fLL) << 6LL) | (((*value >> 5LL) & 0x3LL)	<< 17LL);
+	return (insn);
+}
+
+static uint32_t insert_mvrs(uint32_t insn,int64_t* value,const char **errmsg)
+{
+	if (*value < 0 || *value > 224)
+		*errmsg = "bad register number";
+
+	insn |= ((*value & 0x1fLL) << 11LL) | (((*value >> 5LL) & 0x3LL)	<< 19LL);
+	return (insn);
+}
 
 /* The operands table.
    The fields are: bits, shift, insert, flags. */
@@ -876,7 +1034,7 @@ const struct powerpc_operand powerpc_operands[] =
   { 3, 18, 0, OPER_CR|OPER_REG | OPER_OPTIONAL },
 
   /* D */
-  { 14, 17, insert_si, OPER_PARENS | OPER_SIGNED },
+  { 14, 17, insert_dsi, OPER_PARENS | OPER_SIGNED },
 
   /* DS */
   { 16, 0, insert_ds, OPER_PARENS | OPER_SIGNED },
@@ -1030,6 +1188,12 @@ const struct powerpc_operand powerpc_operands[] =
   /* UI */
   { 14, 17, insert_ui, OPER_U14 },
 
+  /* UI9 */
+  { 9, 17, insert_ui, OPER_UI },
+
+  /* EXFMT */
+  { 3, 26, insert_ui, OPER_UI },
+
   /* VA */
   { 5, 16, 0, OPER_VR },
 
@@ -1140,4 +1304,20 @@ const struct powerpc_operand powerpc_operands[] =
 
   /* MOVRS */
   { 5, 8, insert_movrs, OPER_GPR|OPER_FPR|OPER_CR|OPER_BR },
+  
+  /* M12 */
+  { 31, 0, insert_m12, 0},
+
+  /* MPV */
+  { 3, 23, 0, 0},
+
+  /* MD */
+  { 4, 20, 0, 0},
+
+  /* MVRD */
+  { 31, 0, insert_mvrd, 0},
+
+  /* MVRS */
+  { 31, 0, insert_mvrs, 0},
+
 };

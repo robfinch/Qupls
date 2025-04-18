@@ -65,13 +65,13 @@ typedef uint64_t utaddr;
 #define LAST_CPU_RELOC REL_AMIGAOS_BREL
 #define REL_CLRIMM (LAST_CPU_RELOC + 1)
 
-static uint16_t totsz;	// size in bytes of value cache
+static int totsz;	// size in bytes of value cache
 
 typedef struct {
 	int8_t size;
+	int8_t pos;			// position on cache line 0 to 60
 	int64_t value;
 	uint32_t insn;
-	rlist **relocs;
 } value_bucket_t;
 
 /* type to store each operand */
@@ -94,8 +94,9 @@ typedef struct {
 #define OPM_HA 3  /* high 16 bits with addi compensation */
 #define OPM_10	4	/* 10 bit immediate field */
 #define OPM_16	5	/* 16-bit immediate */
-#define OPM_32	6	/* 32-bit immediate */
-#define OPM_CLR	7	/* cache line relative immediate */
+#define OPM_T		6	/* 32-bit immediate (Tetra) */
+#define OPM_O		7 /* 64-bit immediate (Octa) */
+#define OPM_CLR	8	/* cache line relative immediate */
 
 
 /* additional mnemonic data */
