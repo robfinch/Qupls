@@ -75,6 +75,7 @@ static uint8_t instrno;
 static uint32_t greatest_bucket_number;
 static uint32_t count64, count32;
 static uint32_t insn_count;
+static uint32_t wasted_space;
 static instruction* lastip;
 
 static int cmpreg(char *p, char* str)
@@ -1220,21 +1221,37 @@ int will_not_fit(taddr pc, instruction* ip)
 	int hasCLC = 0;
 	uint32_t ndx = pc & 0x3fLL;
 	int ret;
-	
+	int vbn = value_bucketno - 1;
+	int cnt, cnt2;
+	int bktsz = 0;
+
+	/* Count up the number of cache line constants associated with the
+		instruction.
+	*/
   for (i=0; i<MAX_OPERANDS && ip->op[i]!=NULL; i++) {
   	if (ip->op[i]->mode==OPM_CLR) {
-  		hasCLC = 1;
-  		break;
+  		hasCLC++;
   	}
   }
   /* cause a buffer flush at the end of source code */
   if (lastip==ip)
-  	return (4);
-  if (hasCLC) {
-  	if (value_bucket[value_bucketno-1].size==32)
-			ret = ((ndx < 60-totsz) ? 0 : 3);
-		else
-			ret = ((ndx < 56-totsz) ? 0 : 2);
+  	return (2);
+  if (hasCLC > 0) {
+  	/* Compute the total space used by the values associated with the
+  	   instruction. There could be two constants for an instruction
+  	   if it is a store immediate.
+  	*/
+  	for (cnt2 = cnt = 0; cnt < hasCLC; cnt++, vbn--) {
+	  	if (value_bucket[vbn].size==32) {
+	  		bktsz += 4;
+	  		cnt2++;
+	  	}
+			else {
+				bktsz += 8;
+				cnt2 += 2;
+			}
+  	}
+		ret = ((ndx < (72 - bktsz)-totsz) ? 0 : 3 + cnt2);
 	}
 	else
 		ret = ((ndx < 64-totsz) ? 0 : 1);
@@ -1260,7 +1277,7 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
 {
   dblock *db = new_dblock();
   uint32_t insn[8];
-  int iit;
+  int iit, cnt;
   static taddr last_pc_group = 0;
 
 	TRACE("eval_instruction");
@@ -1275,10 +1292,8 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
 		/* Set the amount of space between the last instruction output and the
 		   constant area.
 		*/		
-		if (iit==2)				// 64-bit constant
-			space = (64 - totsz - ((pc) & 0x3fL)) - 8;
-		else if (iit==3)	// 32-bit constant
-			space = (64 - totsz - ((pc) & 0x3fL)) - 4;
+		if (iit>2)
+			space = (64 - totsz - ((pc) & 0x3fL)) - (4 * (iit-2));
 		else							// no constant
 			space = (64 - totsz - ((pc) & 0x3fL));
 		if (space < 0) {
@@ -1294,17 +1309,32 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
 
   		/* Copy NOPs to output for the space between the last instruction
   		   and the constant values. */
-	    for (i=0; i<space/4; i++)
+	    for (i=0; i<space/4; i++) {
   		  d = setval(0,d,4,63);
+  		  wasted_space += 4;
+  		}
 
   		/* Copy the constant values to output. Note there may be an extra
   			 constant output if the instruction with constant would not fit
-  			 on the cache line. */
+  			 on the cache line. This constant output has to be set to be a
+  			 NOP as there are no instructions on the cache line referencing
+  			 it. So, the instruction decoder has no way to mark it as invalid.
+  		*/
+  		cnt = iit - 3;
 			for (i=value_bucketno-1; i >= 0; i--) {
-				switch(value_bucket[i].size) {
-				case 16:	d = setval(0,d,2,value_bucket[i].value);	break;
-				case 32:	d = setval(0,d,4,value_bucket[i].value);	break;
-				case 64:	d = setval(0,d,8,value_bucket[i].value);	break;
+				if (i > value_bucketno-cnt && (iit > 2)) {
+					switch(value_bucket[i].size) {
+					case 16:	d = setval(0,d,2,value_bucket[i].value);	break;
+					case 32:	d = setval(0,d,4,0x0000003fLL);	break;
+					case 64:	d = setval(0,d,8,0x0000003f0000003fLL);	break;
+					}
+				}
+				else {
+					switch(value_bucket[i].size) {
+					case 16:	d = setval(0,d,2,value_bucket[i].value);	break;
+					case 32:	d = setval(0,d,4,value_bucket[i].value);	break;
+					case 64:	d = setval(0,d,8,value_bucket[i].value);	break;
+					}
 				}
 			}
 
@@ -1314,12 +1344,13 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
 			// it got moved to the next cache line. This means the cache line index
 			// for the constant needs to be re-evaluated. The constant will be
 			// placed on the next cache line.
-			if (iit==2||iit==3) {
+			if (iit > 2) {
 				totsz = 0;
 				memset(value_bucket,0,sizeof(value_bucket));
 				value_bucketno = 0;
 				memset(insn,0,sizeof(uint32_t)*8);
 				eval_operands(ip,sec,(pc+63LL) & -64LL,insn,db);
+				wasted_space += 4;
 			}
 			else {
 				totsz = 0;
@@ -1455,6 +1486,7 @@ static void at_end(void)
 	printf("Largest number of constants on cache line: %d\n", greatest_bucket_number);
 	printf("Number of 64-bit constants: %d\n", count64);
 	printf("Number of 32-bit constants: %d\n", count32);
+	printf("Bytes wasted in constant space: %d\n", wasted_space);
 	printf("\n");
 }
 
@@ -1494,6 +1526,7 @@ int init_cpu(void)
   count64 = 0;
   value_bucketno = 0;
   greatest_bucket_number = 0;
+  wasted_space = 0;
   atexit(at_end);
   return 1;
 }

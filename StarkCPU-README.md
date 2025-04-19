@@ -22,7 +22,7 @@ Many of the additions to earlier versions of Qupls have been removed to simplify
 * 32 floating-point registers
 * 8 branch registers
 * 8 condition registers
-* 3 carry registers
+* 4 carry registers
 * Register renaming to remove dependencies.
 * Standard suite of ALU operations, add, subtract, compare, multiply and divide.
 * Conditional relative branch instructions with 13-bit displacements
@@ -46,8 +46,10 @@ Many of the additions to earlier versions of Qupls have been removed to simplify
 * There should not be a signficant effect on the performance caused by reducing the number of registers.
 
 ### Register File
-* The register file contains 96 architectural registers split into different groups. Both integer and floating-point operations are supported using separate registers. There are also eight branch registers, eight condition registers, and three carry registers.
-* There is a dedicated zero register, r0. A register is dedicated to the stack pointer. The stack pointer is banked depending on processor operating mode.
+* The register file contains 96 architectural registers split into different groups. Both integer and floating-point operations are supported using separate registers. There are also eight branch registers, eight condition registers, and four carry registers.
+* There is a dedicated zero register, r0. A register is dedicated to the stack pointer.
+* A separate register bank is available for each operating mode. The first eight registers and the condition code registers are shared between modes. Floating-point is only available to the user / app mode.
+* User mode: 96 regs, Supervisor: 40, Hypervisor: 40, and Secure: 48.
 * Five hidden registers are dedicated to micro-code use.
 * The register file is 16r4w (16 read ports and 4 write ports). This provides a good level of coverage for instructions. It may not always be possible to accomodate the current set of instructions in which case the latency increases as additional clock cycles are required. For instance, there may be up to 26 read ports required in the worst case, along with 17 write ports. The worst case is not being directly supported because of the hardware cost.
 * The register file is organized with potentially five read ports for each instruction. There could be up to seven instructions requiring port access at the same time. Three read ports are for source operands A, B, and C. One port is for the target operand T which also needs to be readable. And there is a carry input port as well. Not all types of instruction require all these ports.
@@ -72,9 +74,9 @@ There are roughly ten stages in the pipeline, fetch, extract (parse), decode, re
 * If there is a hardware interrupt, the interrupted instruction is tagged as interrupted by hardwware. This tag can be cleared later in the pipeline if interrupts were disabled for that instruction.
 #### Decode Stage
 * After instruction fetch and extract the instructions are decoded.
-#### Rename Stage
-* Target logical registers are assigned names from a name supplier component which can supply up to four names per clock cycle. Target name mappings are stored in the RAT. Decoded architectural registers are renamed to physical registers and register values are fetched. The instruction decodes are placed in the reorder buffer / queued.
 * The ATOM instruction is processed and create masking for interrupts.
+#### Rename Stage
+* Destination logical registers are assigned names from a name supplier component which can supply up to four names per clock cycle. Destination name mappings are stored in the RAT. Decoded architectural registers are renamed to physical registers and register values are fetched. The instruction decodes are placed in the reorder buffer / queued.
 #### Queue Stage
 * The decoded instructions are copied to the reorder buffer in this stage. 
 #### Issue Stage
