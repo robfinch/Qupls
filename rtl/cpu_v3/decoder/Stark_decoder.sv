@@ -314,7 +314,7 @@ Stark_decode_brk ubrk1
 	.instr(ins.ins),
 	.brk(db.brk)
 );
-/*
+
 Stark_decode_csr ucsr1
 (
 	.instr(ins.ins),
@@ -326,17 +326,18 @@ Stark_decode_multicycle udmc1
 	.instr(ins.ins),
 	.multicycle(db.multicycle)
 );
-
+/*
 Stark_decode_irq udirq1
 (
 	.instr(ins.ins),
 	.irq(db.irq)
 );
+*/
 
-Stark_decode_rti udrti1
+Stark_decode_eret uderet1
 (
 	.instr(ins.ins),
-	.rti(db.rti)
+	.eret(db.eret)
 );
 
 Stark_decode_rex udrex1
@@ -344,19 +345,14 @@ Stark_decode_rex udrex1
 	.instr(ins.ins),
 	.rex(db.rex)
 );
-
+/*
 Stark_decode_prec udprec1
 (
 	.instr(ins.ins),
 	.prec(db.prc)
 );
-
-Stark_decode_swap uswp1
-(
-	.instr(ins.ins),
-	.swap(db.swap)
-);
 */
+
 
 always_ff @(posedge clk)
 if (rst) begin
@@ -375,9 +371,16 @@ else begin
 		dbo.sync <= db.fence && ins[15:8]==8'hFF;
 		dbo.cpytgt <= 1'b0;
 		dbo.qfext <= db.alu && ins.ins[28:27]==2'b10;
-//		dbo.regexc <= 1'b0;
 		if (excRs1|excRs2|excRs3|excRd)
 			dbo.cause <= Stark_pkg::FLT_BADREG;
+		// Check for unimplemented instruction, but not if it is being stomped on.
+		// If it is stomped on, we do not care.
+		if (!(db.nop|db.alu|db.fpu|db.fc|db.mem|db.macro
+			|db.csr|db.loada|db.fence|db.carry|db.atom|db.regs|db.fregs
+			|db.rex|db.oddball|db.pred|db.qfext
+			)) begin
+			dbo.cause <= Stark_pkg::FLT_UNIMP;
+		end
 	end
 end
 

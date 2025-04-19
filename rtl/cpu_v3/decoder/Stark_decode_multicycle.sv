@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2023-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -36,52 +36,37 @@
 
 import Stark_pkg::*;
 
-module Stark_decode_alu(instr, alu);
+module Stark_decode_multicycle(instr, multicycle);
 input Stark_pkg::instruction_t instr;
-output alu;
+output multicycle;
 
-function fnIsAlu;
+function fnIsMC;
 input Stark_pkg::instruction_t ir;
 begin
 	case(ir.any.opcode)
 	Stark_pkg::OP_FLT:
 		case(ir.fpu.op4)
-		Stark_pkg::FOP4_FADD:
-			if (ir[31:29]==3'b001 && ir.fpu.Rs2==5'd1)	// FABS
-				fnIsAlu = 1'b1;
-			else
-				fnIsAlu = 1'b0;
-		Stark_pkg::FOP4_G8:	fnIsAlu = 1'b1;
-		default:	fnIsAlu = 1'b0;
+		Stark_pkg::FOP4_FMUL,Stark_pkg::FOP4_FDIV,Stark_pkg::FOP4_FADD,Stark_pkg::FOP4_FSUB:
+			fnIsMC = 1'b1;
+		Stark_pkg::FOP4_G8:
+			case (ir.fpu.op3)
+			Stark_pkg::FG8_SCALEB:	fnIsMC = 1'b1;
+			default:
+				fnIsMC = 1'b0;
+			endcase
+		Stark_pkg::FOP4_G10:	fnIsMC = 1'b1;
+		Stark_pkg::FOP4_TRIG: fnIsMC = 1'b1;
+		default:	fnIsMC = 1'b0;
 		endcase
-	Stark_pkg::OP_CHK:	fnIsAlu = 1'b1;
-	Stark_pkg::OP_ADD:		fnIsAlu = 1'b1;
-	Stark_pkg::OP_SUBF:	fnIsAlu = 1'b1;
-	Stark_pkg::OP_CMP:		fnIsAlu = 1'b1;
-	Stark_pkg::OP_MUL:		fnIsAlu = 1'b1;
-	Stark_pkg::OP_DIV:		fnIsAlu = 1'b1;
-	Stark_pkg::OP_AND:		fnIsAlu = 1'b1;
-	Stark_pkg::OP_OR:		fnIsAlu = 1'b1;
-	Stark_pkg::OP_XOR:		fnIsAlu = 1'b1;
-	Stark_pkg::OP_ADB:		fnIsAlu = 1'b1;
-	Stark_pkg::OP_SHIFT:	fnIsAlu = 1'b1;
-	Stark_pkg::OP_CSR:		fnIsAlu = 1'b1;
-	Stark_pkg::OP_MOV:		fnIsAlu = 1'b1;
-	Stark_pkg::OP_LOADA:	fnIsAlu = 1'b1;
-	Stark_pkg::OP_PFX,
-	Stark_pkg::OP_NOP,Stark_pkg::OP_PUSH,Stark_pkg::OP_POP:
-		fnIsAlu = 1'b1;
-	Stark_pkg::OP_FENCE:
-		fnIsAlu = 1'b1;
-	default:
-		if (Stark_pkg::fnIsDBcc(ir))
-			fnIsAlu = 1'b1;
-		else
-			fnIsAlu = 1'b0;
+	Stark_pkg::OP_MUL:
+		fnIsMC = 1'b1;
+	Stark_pkg::OP_DIV:
+	 	fnIsMC = 1'b1;
+	default:	fnIsMC = 1'b0;
 	endcase
 end
 endfunction
 
-assign alu = fnIsAlu(instr);
+assign multicycle = fnIsMC(instr);
 
 endmodule

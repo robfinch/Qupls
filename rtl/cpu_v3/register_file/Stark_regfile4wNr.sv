@@ -184,7 +184,7 @@ generate begin : gRFO
 			o[g] =
 				// Physical register zero is zero, unless it is a predicate register
 				// spec, in which case it is -1.
-				ra[g]==10'd0 ? ((g==17||g==18||g==19||g==20)?64'hFFFFFFFFFFFFFFFF:64'h0) :
+				ra[g]==10'd0 ? value_zero :
 				(wr3 && &we3[7:0] && wa3 != 10'd0 && (ra[g]==wa3)) ? i3 :
 				(wr2 && &we2[7:0] && wa2 != 10'd0 && (ra[g]==wa2)) ? i2 :
 				(wr1 && &we1[7:0] && wa1 != 10'd0 && (ra[g]==wa1)) ? i1 :
@@ -195,7 +195,7 @@ generate begin : gRFO
 				o0[3][g];
 		always_comb
 			to[g] =
-				ra[g]==10'd0 ? 1'h0 :
+				ra[g]==10'd0 ? 1'h0 : 
 				(wr3 && we3[8] && wa3 != 10'd0 && (ra[g]==wa3)) ? ti3 :
 				(wr2 && we2[8] && wa2 != 10'd0 && (ra[g]==wa2)) ? ti2 :
 				(wr1 && we1[8] && wa1 != 10'd0 && (ra[g]==wa1)) ? ti1 :

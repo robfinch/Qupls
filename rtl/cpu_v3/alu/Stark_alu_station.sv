@@ -40,9 +40,11 @@ import cpu_types_pkg::*;
 import Stark_pkg::*;
 
 module Stark_alu_station(rst, clk, available, idle, issue, rndx, rndxv, rob,
-	rfo_argA_ctag, rfo_argB_ctag, ld, id, 
-	argA, argB, argBI, argC, argI, argT, argCi, argA_ctag, argB_ctag, cpytgt,
-	cs, aRtz, aRt, nRt, om, bank, instr, div, cap, cptgt, pc, cp,
+	rfo_tag, ld, id, 
+	argA, argB, argBI, argC, argI, argT, argCi, pc_o,
+	argCi_tag, argA_tag, argB_tag, argC_tag, argT_tag,
+	cpytgt,
+	cs, aRtz, aRt, nRt, om, bank, instr, div, cap, cptgt, cp,
 	pred, predz, prc, sc_done, idle_false,
 	prn, prnv, rfo, all_args_valid
 );
@@ -54,11 +56,10 @@ input issue;
 input rob_ndx_t rndx;
 input rndxv;
 input Stark_pkg::rob_entry_t rob;
-input rfo_argA_ctag;
-input rfo_argB_ctag;
 input pregno_t [15:0] prn;
 input [15:0] prnv;
 input value_t [15:0] rfo;
+input [15:0] rfo_tag;
 input cpytgt;
 output reg ld;
 output rob_ndx_t id;
@@ -69,9 +70,13 @@ output value_t argBI;
 output value_t argC;
 output value_t argI;
 output value_t argT;
+output pc_address_t pc_o;
 output reg all_args_valid;
-output reg argA_ctag;
-output reg argB_ctag;
+output reg argCi_tag;
+output reg argA_tag;
+output reg argB_tag;
+output reg argC_tag;
+output reg argT_tag;
 output reg cs;
 output reg aRtz;
 output aregno_t aRt;
@@ -82,7 +87,6 @@ output Stark_pkg::pipeline_reg_t instr;
 output reg div;
 output reg cap;
 output reg [7:0] cptgt;
-output pc_address_ex_t pc;
 output checkpt_ndx_t cp;
 output reg pred;
 output reg predz;
@@ -110,8 +114,11 @@ if (rst) begin
 	argI <= value_zero;
 	argT <= value_zero;
 	argCi <= value_zero;
-	argA_ctag = 1'b0;
-	argB_ctag = 1'b0;
+	argCi_tag = 1'b0;
+	argA_tag = 1'b0;
+	argB_tag = 1'b0;
+	argC_tag = 1'b0;
+	argT_tag = 1'b0;
 	cs <= 1'b0;
 	nRt <= 11'd0;
 	bank <= 1'b0;
@@ -120,9 +127,7 @@ if (rst) begin
 	instr <= {41'd0,OP_NOP};
 	div <= 1'b0;
 	cptgt <= 8'h00;
-	pc <= RSTPC;
-	pc.bno_t <= 6'd1;
-	pc.bno_f <= 6'd1;
+	pc_o <= RSTPC;
 	cp <= 4'd0;
 	pred <= FALSE;
 	predz <= FALSE;
@@ -165,7 +170,7 @@ else begin
 		end
 		else
 			instr <= rob.op;
-		pc <= rob.pc;
+		pc_o <= rob.op.pc.pc;
 		cp <= rob.cndx;
 		// Done even if multi-cycle if it is just a copy-target.
 		if (!rob.op.decbus.multicycle || (&next_cptgt))
@@ -173,29 +178,34 @@ else begin
 		else
 			idle_false <= TRUE;
 	end
-	tValidate(rob.op.pRci,argCi,valid[0]);
+	tValidate(rob.op.pRci,argCi,argCi_tag,valid[0]);
 	if (rob.op.pRci==8'd0) begin
 		argCi <= value_zero;
+		argCi_tag <= 1'b0;
 		valid[0] <= 1'b1;
 	end
-	tValidate(rob.op.pRs1,argA,valid[1]);
+	tValidate(rob.op.pRs1,argA,argA_tag,valid[1]);
 	if (rob.op.pRs1==8'd0) begin
 		argA <= value_zero;
+		argA_tag <= 1'b0;
 		valid[1] <= 1'b1;
 	end
-	tValidate(rob.op.pRs2,argB,valid[2]);
+	tValidate(rob.op.pRs2,argB,argB_tag,valid[2]);
 	if (rob.op.pRs2==8'd0) begin
 		argB <= value_zero;
+		argB_tag <= 1'b0;
 		valid[2] <= 1'b1;
 	end
-	tValidate(rob.op.pRs3,argC,valid[3]);
+	tValidate(rob.op.pRs3,argC,argC_tag,valid[3]);
 	if (rob.op.pRs3==8'd0) begin
 		argC <= value_zero;
+		argC_tag <= 1'b0;
 		valid[3] <= 1'b1;
 	end
-	tValidate(rob.op.pRd,argT,valid[4]);
+	tValidate(rob.op.pRd,argT,argT_tag,valid[4]);
 	if (rob.op.pRd==8'd0) begin
 		argT <= value_zero;
+		argT_tag <= 1'b0;
 		valid[4] <= 1'b1;
 	end
 end
@@ -203,6 +213,7 @@ end
 task tValidate;
 input pregno_t pRn;
 output value_t val;
+output val_tag;
 output valid;
 integer nn;
 begin
@@ -210,6 +221,7 @@ begin
 	for (nn = 0; nn < 16; nn = nn + 1) begin
 		if (pRn==prn[nn] && prnv[nn]) begin
 			val = rfo[nn];
+			val_tag = rfo_tag[nn];
 			valid = 1'b1;
 		end
 	end

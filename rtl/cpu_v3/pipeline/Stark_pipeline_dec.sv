@@ -32,7 +32,7 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 7600 LUTs / 2000 FFs
+// 7850 LUTs / 2150 FFs
 // ============================================================================
 
 import const_pkg::*;
@@ -394,6 +394,9 @@ else begin
 	end
 end
 
+/* An extra decoder is needed to catch any postfix instruction for the last
+	 instruction.
+*/
 Stark_decoder udeci0
 (
 	.rst(rst),
@@ -624,12 +627,12 @@ begin
 	if (pr0_dec.v)
 	case ({pr0_dec.carry_mod[9],pr0_dec.carry_mod[0]})
 	2'd0:	;
-	2'd1:	pr0_dec.decbus.Rci = pr0_dec.carry_mod[25:24]|7'd92;
-	2'd2:	pr0_dec.decbus.Rco = pr0_dec.carry_mod[25:24]|7'd92;
+	2'd1:	pr0_dec.decbus.Rci = pr0_dec.carry_mod[25:24]|7'd40;
+	2'd2:	pr0_dec.decbus.Rco = pr0_dec.carry_mod[25:24]|7'd40;
 	2'd3:
 		begin
-			pr0_dec.decbus.Rci = pr0_dec.carry_mod[25:24]|7'd92;
-			pr0_dec.decbus.Rco = pr0_dec.carry_mod[25:24]|7'd92;
+			pr0_dec.decbus.Rci = pr0_dec.carry_mod[25:24]|7'd40;
+			pr0_dec.decbus.Rco = pr0_dec.carry_mod[25:24]|7'd40;
 		end
 	endcase
 	if (dec0.carry && pr0_dec.v) begin
@@ -643,12 +646,12 @@ begin
 	if (pr1_dec.v)
 	case ({pr1_dec.carry_mod[9],pr1_dec.carry_mod[0]})
 	2'd0:	;
-	2'd1:	pr1_dec.decbus.Rci = pr1_dec.carry_mod[25:24]|7'd92;
-	2'd2:	pr1_dec.decbus.Rco = pr1_dec.carry_mod[25:24]|7'd92;
+	2'd1:	pr1_dec.decbus.Rci = pr1_dec.carry_mod[25:24]|7'd40;
+	2'd2:	pr1_dec.decbus.Rco = pr1_dec.carry_mod[25:24]|7'd40;
 	2'd3:
 		begin
-			pr1_dec.decbus.Rci = pr1_dec.carry_mod[25:24]|7'd92;
-			pr1_dec.decbus.Rco = pr1_dec.carry_mod[25:24]|7'd92;
+			pr1_dec.decbus.Rci = pr1_dec.carry_mod[25:24]|7'd40;
+			pr1_dec.decbus.Rco = pr1_dec.carry_mod[25:24]|7'd40;
 		end
 	endcase
 	if (dec1.carry && pr1_dec.v) begin
@@ -662,12 +665,12 @@ begin
 	if (pr2_dec.v)
 	case ({pr2_dec.carry_mod[9],pr2_dec.carry_mod[0]})
 	2'd0:	;
-	2'd1:	pr2_dec.decbus.Rci = pr1_dec.carry_mod[25:24]|7'd92;
-	2'd2:	pr2_dec.decbus.Rco = pr1_dec.carry_mod[25:24]|7'd92;
+	2'd1:	pr2_dec.decbus.Rci = pr1_dec.carry_mod[25:24]|7'd40;
+	2'd2:	pr2_dec.decbus.Rco = pr1_dec.carry_mod[25:24]|7'd40;
 	2'd3:
 		begin
-			pr2_dec.decbus.Rci = pr1_dec.carry_mod[25:24]|7'd92;
-			pr2_dec.decbus.Rco = pr1_dec.carry_mod[25:24]|7'd92;
+			pr2_dec.decbus.Rci = pr1_dec.carry_mod[25:24]|7'd40;
+			pr2_dec.decbus.Rco = pr1_dec.carry_mod[25:24]|7'd40;
 		end
 	endcase
 	if (dec2.carry && pr2_dec.v) begin
@@ -681,12 +684,12 @@ begin
 	if (pr3_dec.v)
 	case ({pr3_dec.carry_mod[9],pr3_dec.carry_mod[0]})
 	2'd0:	;
-	2'd1:	pr3_dec.decbus.Rci = pr2_dec.carry_mod[25:24]|7'd92;
-	2'd2:	pr3_dec.decbus.Rco = pr2_dec.carry_mod[25:24]|7'd92;
+	2'd1:	pr3_dec.decbus.Rci = pr2_dec.carry_mod[25:24]|7'd40;
+	2'd2:	pr3_dec.decbus.Rco = pr2_dec.carry_mod[25:24]|7'd40;
 	2'd3:
 		begin
-			pr3_dec.decbus.Rci = pr2_dec.carry_mod[25:24]|7'd92;
-			pr3_dec.decbus.Rco = pr2_dec.carry_mod[25:24]|7'd92;
+			pr3_dec.decbus.Rci = pr2_dec.carry_mod[25:24]|7'd40;
+			pr3_dec.decbus.Rco = pr2_dec.carry_mod[25:24]|7'd40;
 		end
 	endcase
 	if (dec3.carry & pr3_dec.v) begin

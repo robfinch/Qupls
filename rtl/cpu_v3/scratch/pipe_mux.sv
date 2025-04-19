@@ -23,27 +23,25 @@ Qupls3_pkg::instruction_t [4:0] ins;
 always_comb
 begin	
 	if (rst) begin
-		ins[0] = NOP_INSN;
-		ins[1] = NOP_INSN;
-		ins[2] = NOP_INSN;
-		ins[3] = NOP_INSN;
-		ins[4] = NOP_INSN;
+		ins[0] = Qupls3_pkg::NOP_INSN;
+		ins[1] = Qupls3_pkg::NOP_INSN;
+		ins[2] = Qupls3_pkg::NOP_INSN;
+		ins[3] = Qupls3_pkg::NOP_INSN;
+		ins[4] = Qupls3_pkg::NOP_INSN;
 	end
 	else if (hwi) begin
 		ins[0] = hwi_ins;
-		ins[1] = NOP_INSN;
-		ins[2] = NOP_INSN;
-		ins[3] = NOP_INSN;
-		ins[4] = NOP_INSN;
+		ins[1] = Qupls3_pkg::NOP_INSN;
+		ins[2] = Qupls3_pkg::NOP_INSN;
+		ins[3] = Qupls3_pkg::NOP_INSN;
+		ins[4] = Qupls3_pkg::NOP_INSN;
 	end
 	else if (mc_en) begin
-		case(n1)
-		0:	ins[0] = mc_ins[0];
-		1:	ins[1] = mc_ins[1];
-		2:	ins[2] = mc_ins[2];
-		3:	ins[3] = mc_ins[3];
-		4:	ins[4] = NOP_INSN;
-		endcase
+		ins[0] = mc_ins[0];
+		ins[1] = mc_ins[1];
+		ins[2] = mc_ins[2];
+		ins[3] = mc_ins[3];
+		ins[4] = Qupls3_pkg::NOP_INSN;
 	end
 	else if (en) begin
 		ins[0] = cline_i >> {pc_i[0][5:2],5'b0};
@@ -53,11 +51,11 @@ begin
 		ins[4] = cline_i >> {pc_i[4][5:2],5'b0};
 	end
 	else begin
-		ins[0] = NOP_INSN;
-		ins[1] = NOP_INSN;
-		ins[2] = NOP_INSN;
-		ins[3] = NOP_INSN;
-		ins[4] = NOP_INSN;
+		ins[0] = Qupls3_pkg::NOP_INSN;
+		ins[1] = Qupls3_pkg::NOP_INSN;
+		ins[2] = Qupls3_pkg::NOP_INSN;
+		ins[3] = Qupls3_pkg::NOP_INSN;
+		ins[4] = Qupls3_pkg::NOP_INSN;
 	end
 end
 
@@ -65,7 +63,7 @@ end
 
 always_ff @(posedge clk)
 if (rst)
-	cline_o <= {16{NOP_INSN}};
+	cline_o <= {16{Qupls3_pkg::NOP_INSN}};
 else begin
 	if (en)
 		cline_o <= cline_i;

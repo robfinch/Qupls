@@ -66,6 +66,7 @@ module Stark_pipeline_ren(
 	rat_stallq,
 	micro_code_active_dec, micro_code_active_ren
 );
+parameter NPORT = 16;
 input rst;
 input clk;
 input clk5x;
@@ -86,13 +87,13 @@ input status_reg_t sr;
 input stomp_ren;
 input [4:0] stomp_bno;
 input Stark_pkg::branch_state_t branch_state;
-input aregno_t [23:0] arn;
-input [2:0] arng [0:23];
-input [23:0] arnt;
-input [23:0] arnv;
-input checkpt_ndx_t [23:0] rn_cp;
-output pregno_t [23:0] prn;
-output [23:0] prnv;
+input aregno_t [NPORT-1:0] arn;
+input [2:0] arng [0:NPORT-1];
+input [NPORT-1:0] arnt;
+input [NPORT-1:0] arnv;
+input checkpt_ndx_t [NPORT-1:0] rn_cp;
+output pregno_t [NPORT-1:0] prn;
+output [NPORT-1:0] prnv;
 input pregno_t store_argC_pReg;
 input pregno_t Rt0_dec;
 input pregno_t Rt1_dec;
@@ -171,9 +172,9 @@ output reg micro_code_active_ren;
 
 integer jj,n5;
 
-reg [0:0] arnbank [23:0];
+reg [0:0] arnbank [NPORT-1:0];
 initial begin
-	for (jj = 0; jj < 24; jj = jj + 1)
+	for (jj = 0; jj < NPORT; jj = jj + 1)
 		arnbank[jj] = 1'b0;
 end
 
@@ -383,7 +384,7 @@ assign fchkpts[2] = fchkpt;
 assign fchkpts[3] = fchkpt;
 
 `ifdef SUPPORT_RAT
-Stark_rat #(.NPORT(24)) urat1
+Stark_rat #(.NPORT(NPORT)) urat1
 (	
 	.rst(rst),
 	.clk(clk),
@@ -420,14 +421,14 @@ Stark_rat #(.NPORT(24)) urat1
 	.wrbankb(sr.om==2'd0 ? 1'b0 : 1'b0),
 	.wrbankc(sr.om==2'd0 ? 1'b0 : 1'b0),
 	.wrbankd(sr.om==2'd0 ? 1'b0 : 1'b0),
-	.wr0(Rt0_decv && pg_dec.pr0.aRt!=8'd0),// && !stomp0 && ~pg_ren.pr0.decbus.Rtz),
-	.wr1(Rt1_decv && pg_dec.pr1.aRt!=8'd0),// && !stomp1 && ~pg_ren.pr1.decbus.Rtz),
-	.wr2(Rt2_decv && pg_dec.pr2.aRt!=8'd0),// && !stomp2 && ~pg_ren.pr2.decbus.Rtz),
-	.wr3(Rt3_decv && pg_dec.pr3.aRt!=8'd0),// && !stomp3 && ~pg_ren.pr3.decbus.Rtz),
-	.wra(pg_dec.pr0.aRt),
-	.wrb(pg_dec.pr1.aRt),
-	.wrc(pg_dec.pr2.aRt),
-	.wrd(pg_dec.pr3.aRt),
+	.wr0(Rt0_decv && pg_dec.pr0.decbus.Rd!=8'd0),// && !stomp0 && ~pg_ren.pr0.decbus.Rtz),
+	.wr1(Rt1_decv && pg_dec.pr1.decbus.Rd!=8'd0),// && !stomp1 && ~pg_ren.pr1.decbus.Rtz),
+	.wr2(Rt2_decv && pg_dec.pr2.decbus.Rd!=8'd0),// && !stomp2 && ~pg_ren.pr2.decbus.Rtz),
+	.wr3(Rt3_decv && pg_dec.pr3.decbus.Rd!=8'd0),// && !stomp3 && ~pg_ren.pr3.decbus.Rtz),
+	.wra(pg_dec.pr0.decbus.Rd),
+	.wrb(pg_dec.pr1.decbus.Rd),
+	.wrc(pg_dec.pr2.decbus.Rd),
+	.wrd(pg_dec.pr3.decbus.Rd),
 	.wrra(Rt0_dec),
 	.wrrb(Rt1_dec),
 	.wrrc(Rt2_dec),
@@ -690,10 +691,10 @@ if (rst) begin
 end
 else begin
 	if (en) begin
-		pg_ren.pr0.cndx <= cndx;
+		pg_ren.hdr.cndx <= cndx;
 		pg_ren.pr0 <= pg_dec.pr0;
 		if (pg_dec.pr0.v & ~stomp_ren) begin
-			pg_ren.pr0.nRt <= Rt0_dec;
+			pg_ren.pr0.nRd <= Rt0_dec;
 			if (pg_ren.pr3.decbus.bl)
 				pg_ren.pr0.v <= INV;
 		end
@@ -705,9 +706,9 @@ else begin
 //			pg_ren.pr0.decbus.Rtz <= pg_ren.pr0.decbus.Rtz;
 //			pg_ren.pr0.aRt <= pg_ren.pr0.aRt;
 			if (Stark_pkg::SUPPORT_BACKOUT)
-				pg_ren.pr0.nRt <= 9'd0;//pg_ren.pr0.nRt;
+				pg_ren.pr0.nRd <= 9'd0;//pg_ren.pr0.nRt;
 			else
-				pg_ren.pr0.nRt <= Rt0_dec;
+				pg_ren.pr0.nRd <= Rt0_dec;
 		end
 	/*
 	if (bo_wr) begin
@@ -721,10 +722,9 @@ else begin
 			pg_ren.pr0.pRt <= bo_preg;
 	end
 	*/
-		pg_ren.pr1.cndx <= cndx;
 		pg_ren.pr1 <= pg_dec.pr1;
 		if (pg_dec.pr1.v & ~stomp_ren) begin
-			pg_ren.pr1.nRt <= Rt1_dec;
+			pg_ren.pr1.nRd <= Rt1_dec;
 			if (pg_dec.pr0.decbus.bl)
 				pg_ren.pr1.v <= INV;
 			if (pg_ren.pr3.decbus.bl)
@@ -738,14 +738,13 @@ else begin
 //			pg_ren.pr1.decbus.Rtz <= pg_ren.pr1.decbus.Rtz;
 //			pg_ren.pr1.aRt <= pg_ren.pr1.aRt;
 			if (Stark_pkg::SUPPORT_BACKOUT)
-				pg_ren.pr1.nRt <= 9'd0;//pg_ren.pr1.nRt;
+				pg_ren.pr1.nRd <= 9'd0;//pg_ren.pr1.nRt;
 			else
-				pg_ren.pr1.nRt <= Rt1_dec;
+				pg_ren.pr1.nRd <= Rt1_dec;
 		end
-		pg_ren.pr2.cndx <= cndx;
 		pg_ren.pr2 <= pg_dec.pr2;
 		if (pg_dec.pr2.v & ~stomp_ren) begin
-			pg_ren.pr2.nRt <= Rt2_dec;
+			pg_ren.pr2.nRd <= Rt2_dec;
 			if (pg_dec.pr0.decbus.bl || pg_dec.pr1.decbus.bl)
 				pg_ren.pr2.v <= INV;
 			if (pg_ren.pr3.decbus.bl)
@@ -759,14 +758,13 @@ else begin
 //			pg_ren.pr2.decbus.Rtz <= pg_ren.pr2.decbus.Rtz;
 //			pg_ren.pr2.aRt <= pg_ren.pr2.aRt;
 			if (Stark_pkg::SUPPORT_BACKOUT)
-				pg_ren.pr2.nRt <= 9'd0;//pg_ren.pr2.nRt;
+				pg_ren.pr2.nRd <= 9'd0;//pg_ren.pr2.nRt;
 			else
-				pg_ren.pr2.nRt <= Rt2_dec;
+				pg_ren.pr2.nRd <= Rt2_dec;
 		end
-		pg_ren.pr3.cndx <= cndx;
 		pg_ren.pr3 <= pg_dec.pr3;
 		if (pg_dec.pr3.v & ~stomp_ren) begin
-			pg_ren.pr3.nRt <= Rt3_dec;
+			pg_ren.pr3.nRd <= Rt3_dec;
 			if (pg_dec.pr0.decbus.bl || pg_dec.pr1.decbus.bl || pg_dec.pr2.decbus.bl)
 				pg_ren.pr3.v <= INV;
 			if (pg_ren.pr3.decbus.bl)
@@ -780,9 +778,9 @@ else begin
 //			pg_ren.pr3.decbus.Rtz <= pg_ren.pr3.decbus.Rtz;
 //			pg_ren.pr3.aRt <= pg_ren.pr3.aRt;
 			if (Stark_pkg::SUPPORT_BACKOUT)
-				pg_ren.pr3.nRt <= 9'd0;//pg_ren.pr3.nRt;
+				pg_ren.pr3.nRd <= 9'd0;//pg_ren.pr3.nRt;
 			else
-				pg_ren.pr3.nRt <= Rt3_dec;
+				pg_ren.pr3.nRd <= Rt3_dec;
 		end
 	end
 	if (branch_state==Stark_pkg::BS_DONE)

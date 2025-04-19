@@ -40,10 +40,11 @@ import cpu_types_pkg::*;
 import Stark_pkg::*;
 
 module Stark_fpu_station(rst, clk, id, argA, argB, argC, argT, argI,
-	Rt, Rt1, aRt, aRtz, aRt1, aRtz1, argA_tag, argB_tag, cs, bank,
+	Rt, Rt1, aRt, aRtz, aRt1, aRtz1,
+	argA_tag, argB_tag, argC_tag, argT_tag, cs, bank,
 	instr, pc, cp, qfext, cptgt, all_args_valid,
 	available, rndx, rndxv, idle, prn, prnv, rfo,
-	rfo_argA_ctag, rfo_argB_ctag, rob, sc_done);
+	rfo_tag, rob, sc_done);
 input rst;
 input clk;
 output rob_ndx_t id;
@@ -60,6 +61,8 @@ output aregno_t aRt1;
 output reg aRtz1;
 output reg argA_tag;
 output reg argB_tag;
+output reg argC_tag;
+output reg argT_tag;
 output reg cs;
 output reg bank;
 output instruction_t instr;
@@ -75,8 +78,7 @@ input idle;
 input pregno_t [15:0] prn;
 input [15:0] prnv;
 input value_t [15:0] rfo;
-input rfo_argA_ctag;
-input rfo_argB_ctag;
+input [15:0] rfo_tag;
 input Stark_pkg::rob_entry_t rob;
 output reg sc_done;
 
@@ -110,6 +112,8 @@ if (rst) begin
 	aRtz1 <= TRUE;
 	argA_tag <= 1'b0;
 	argB_tag <= 1'b0;
+	argC_tag <= 1'b0;
+	argT_tag <= 1'b0;
 	cs <= 1'b0;
 	bank <= 1'b0;
 	instr <= {26'd0,OP_NOP};
@@ -127,8 +131,6 @@ else begin
 	if (available && rndxv && idle) begin
 		valid <= 4'd0;
 		id <= rndx;
-		argA_tag <= rfo_argA_ctag;
-		argB_tag <= rfo_argB_ctag;
 		if (rob.op.decbus.qfext) begin
 			qfext <= TRUE;
 			Rt1 <= rob.op.nRd;
@@ -155,24 +157,28 @@ else begin
 		if (!rob.op.decbus.multicycle || (&next_cptgt) || rob.op.decbus.cpytgt)
 			sc_done <= TRUE;
 	end
-	tValidate(rob.op.pRs1,argA,valid[1]);
+	tValidate(rob.op.pRs1,argA,argA_tag,valid[1]);
 	if (rob.op.pRs1==8'd0) begin
 		argA <= value_zero;
+		argA_tag <= 1'b0;
 		valid[0] <= 1'b1;
 	end
-	tValidate(rob.op.pRs2,argB,valid[2]);
+	tValidate(rob.op.pRs2,argB,argB_tag,valid[2]);
 	if (rob.op.pRs2==8'd0) begin
 		argB <= value_zero;
+		argB_tag <= 1'b0;
 		valid[1] <= 1'b1;
 	end
-	tValidate(rob.op.pRs3,argC,valid[3]);
+	tValidate(rob.op.pRs3,argC,argC_tag,valid[3]);
 	if (rob.op.pRs3==8'd0) begin
 		argC <= value_zero;
+		argC_tag <= 1'b0;
 		valid[2] <= 1'b1;
 	end
-	tValidate(rob.op.pRd,argT,valid[4]);
+	tValidate(rob.op.pRd,argT,argT_tag,valid[4]);
 	if (rob.op.pRd==8'd0) begin
 		argT <= value_zero;
+		argT_tag <= 1'b0;
 		valid[3] <= 1'b1;
 	end
 end
@@ -180,6 +186,7 @@ end
 task tValidate;
 input pregno_t pRn;
 output value_t val;
+output val_tag;
 output valid;
 integer nn;
 begin
@@ -187,6 +194,7 @@ begin
 	for (nn = 0; nn < 16; nn = nn + 1) begin
 		if (pRn==prn[nn] && prnv[nn]) begin
 			val = rfo[nn];
+			val_tag = rfo_tag[nn];
 			valid = 1'b1;
 		end
 	end
