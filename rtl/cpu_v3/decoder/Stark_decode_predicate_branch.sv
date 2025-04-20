@@ -36,10 +36,21 @@
 
 import Stark_pkg::*;
 
-module Stark_decode_predicate_branch(instr, branch);
+module Stark_decode_predicate_branch(instr, branch, mask, atom_mask, count);
 input Stark_pkg::instruction_t instr;
 output branch;
+output [11:0] mask;
+output [11:0] atom_mask;
+output [3:0] count;
+
+Stark_decode_pred_atom_mask upam1
+(
+	.ir(instr),
+	.mask(atom_mask),
+	.count(count)
+);
 
 assign branch = Stark_pkg::fnIsPredBranch(instr);
+assign mask = {instr[29],instr[24:23],instr[16:9],instr[0]};
 
 endmodule

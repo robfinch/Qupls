@@ -1096,6 +1096,12 @@ begin
 	if (ROB_ENTRIES > 63) begin
 		$display("StarkCPU: Warning: may need to alter code to support number of ROB entries.");
 	end
+	if (SUPPORT_PRED) begin
+		if (PRED_SHADOW < 1 || PRED_SHADOW > 7) begin
+			$display("StarkCPU: Error: predicate shadow must be between 1 and 7 inclusive.");
+			$finish;
+		end
+	end
 end
 
 // ----------------------------------------------------------------------------
@@ -2122,10 +2128,10 @@ end
 // A missed cache line comes back as all zeros. Unfortunately this matches with
 // the BRK instruction. So, we test to ensure there was a cache hit before
 // setting the micro-code address.
-Stark_mcat umcat0(stomp_dec|(!ihit_mux && !micro_machine_active_d), pg_dec.pr0, mip0);
-Stark_mcat umcat1(stomp_dec|(!ihit_mux && !micro_machine_active_d), pg_dec.pr1, mip1);
-Stark_mcat umcat2(stomp_dec|(!ihit_mux && !micro_machine_active_d), pg_dec.pr2, mip2);
-Stark_mcat umcat3(stomp_dec|(!ihit_mux && !micro_machine_active_d), pg_dec.pr3, mip3);
+Stark_mcat umcat0(stomp_dec|(!ihit_mux && !micro_machine_active_d)|~pg_dec.pr0.v, pg_dec.pr0, mip0);
+Stark_mcat umcat1(stomp_dec|(!ihit_mux && !micro_machine_active_d)|~pg_dec.pr1.v, pg_dec.pr1, mip1);
+Stark_mcat umcat2(stomp_dec|(!ihit_mux && !micro_machine_active_d)|~pg_dec.pr2.v, pg_dec.pr2, mip2);
+Stark_mcat umcat3(stomp_dec|(!ihit_mux && !micro_machine_active_d)|~pg_dec.pr3.v, pg_dec.pr3, mip3);
 
 always_comb mip0v = |mip0;
 always_comb mip1v = |mip1;
@@ -8352,7 +8358,7 @@ begin
 	end
 	rob[tail].predBit = FALSE;
 	rob[tail].argA_v <= fnSourceRs1v(ins) | db.has_imma;
-	rob[tail].argB_v <= fnSourceRs2v(ins) | (db.has_Rb ? 1'b0 : db.has_immb);
+	rob[tail].argB_v <= fnSourceRs2v(ins) | (db.has_Rs2 ? 1'b0 : db.has_immb);
 	rob[tail].argC_v <= fnSourceRs3v(ins) | db.has_immc;
 	rob[tail].argD_v <= fnSourceRdv(ins);
 	rob[tail].argCi_v <= fnSourceRciv(ins);
@@ -8842,6 +8848,7 @@ rob_ndx_t m4;
 rob_ndx_t m5;
 rob_ndx_t m6;
 rob_ndx_t m7;
+rob_ndx_t m8;
 begin
 	if (SUPPORT_PRED) begin
 		m1 = (ndx + Stark_pkg::ROB_ENTRIES - 1) % Stark_pkg::ROB_ENTRIES;
@@ -8851,6 +8858,7 @@ begin
 		m5 = (ndx + Stark_pkg::ROB_ENTRIES - 5) % Stark_pkg::ROB_ENTRIES;
 		m6 = (ndx + Stark_pkg::ROB_ENTRIES - 6) % Stark_pkg::ROB_ENTRIES;
 		m7 = (ndx + Stark_pkg::ROB_ENTRIES - 7) % Stark_pkg::ROB_ENTRIES;
+		m8 = (ndx + Stark_pkg::ROB_ENTRIES - 8) % Stark_pkg::ROB_ENTRIES;
 		if (rob[m1].v && rob[m1].sn < rob[ndx].sn && rob[m1].op.decbus.pred) begin
 			if (rob[m1].pred_mask[1:0]==2'd0) begin
 				rob[ndx].pred_bit = TRUE;
@@ -8860,7 +8868,7 @@ begin
 				rob[ndx].v = INV;
 			end
 		end
-		else if (rob[m2].v && rob[m2].sn < rob[ndx].sn && rob[m2].op.decbus.pred) begin
+		else if (rob[m2].v && rob[m2].sn < rob[ndx].sn && rob[m2].op.decbus.pred && PRED_SHADOW > 1) begin
 			if (rob[m2].pred_mask[3:2]==2'd0) begin
 				rob[ndx].pred_bit = TRUE;
 				rob[ndx].pred_bitv = VAL;
@@ -8869,7 +8877,7 @@ begin
 				rob[ndx].v = INV;
 			end
 		end
-		else if (rob[m3].v && rob[m3].sn < rob[ndx].sn && rob[m3].op.decbus.pred) begin
+		else if (rob[m3].v && rob[m3].sn < rob[ndx].sn && rob[m3].op.decbus.pred && PRED_SHADOW > 2) begin
 			if (rob[m3].pred_mask[5:4]==2'd0) begin
 				rob[ndx].pred_bit = TRUE;
 				rob[ndx].pred_bitv = VAL;
@@ -8878,7 +8886,7 @@ begin
 				rob[ndx].v = INV;
 			end
 		end
-		else if (rob[m4].v && rob[m4].sn < rob[ndx].sn && rob[m4].op.decbus.pred) begin
+		else if (rob[m4].v && rob[m4].sn < rob[ndx].sn && rob[m4].op.decbus.pred && PRED_SHADOW > 3) begin
 			if (rob[m4].pred_mask[7:6]==2'd0) begin
 				rob[ndx].pred_bit = TRUE;
 				rob[ndx].pred_bitv = VAL;
@@ -8887,7 +8895,7 @@ begin
 				rob[ndx].v = INV;
 			end
 		end
-		else if (rob[m5].v && rob[m5].sn < rob[ndx].sn && rob[m5].op.decbus.pred) begin
+		else if (rob[m5].v && rob[m5].sn < rob[ndx].sn && rob[m5].op.decbus.pred && PRED_SHADOW > 4) begin
 			if (rob[m5].pred_mask[9:8]==2'd0) begin
 				rob[ndx].pred_bit = TRUE;
 				rob[ndx].pred_bitv = VAL;
@@ -8896,7 +8904,7 @@ begin
 				rob[ndx].v = INV;
 			end
 		end
-		else if (rob[m6].v && rob[m6].sn < rob[ndx].sn && rob[m6].op.decbus.pred) begin
+		else if (rob[m6].v && rob[m6].sn < rob[ndx].sn && rob[m6].op.decbus.pred && PRED_SHADOW > 5) begin
 			if (rob[m6].pred_mask[11:10]==2'd0) begin
 				rob[ndx].pred_bit = TRUE;
 				rob[ndx].pred_bitv = VAL;
@@ -8905,7 +8913,16 @@ begin
 				rob[ndx].v = INV;
 			end
 		end
-		else if (rob[7].v && rob[m7].sn < rob[ndx].sn) begin
+		else if (rob[m7].v && rob[m6].sn < rob[ndx].sn && rob[m7].op.decbus.pred && PRED_SHADOW > 6) begin
+			if (rob[m7].pred_mask[13:12]==2'd0) begin
+				rob[ndx].pred_bit = TRUE;
+				rob[ndx].pred_bitv = VAL;
+			end
+			else if (rob[m7].done==2'b11 && rob[m7].pred_mask[13:12]!=2'b00) begin
+				rob[ndx].v = INV;
+			end
+		end
+		else if (rob[m8].v && rob[m8].sn < rob[ndx].sn) begin
 			rob[ndx].pred_bit = TRUE;
 			rob[ndx].pred_bitv = VAL;
 		end
@@ -8913,6 +8930,93 @@ begin
 	else begin
 		rob[ndx].pred_bit = TRUE;
 		rob[ndx].pred_bitv = VAL;
+	end
+end
+endtask
+
+task tClearPredMask;
+input rob_ndx_t ndx;
+rob_ndx_t m1;
+rob_ndx_t m2;
+rob_ndx_t m3;
+rob_ndx_t m4;
+rob_ndx_t m5;
+rob_ndx_t m6;
+rob_ndx_t m7;
+rob_ndx_t m8;
+begin
+	if (SUPPORT_PRED) begin
+		m1 = (ndx + Stark_pkg::ROB_ENTRIES - 1) % Stark_pkg::ROB_ENTRIES;
+		m2 = (ndx + Stark_pkg::ROB_ENTRIES - 2) % Stark_pkg::ROB_ENTRIES;
+		m3 = (ndx + Stark_pkg::ROB_ENTRIES - 3) % Stark_pkg::ROB_ENTRIES;
+		m4 = (ndx + Stark_pkg::ROB_ENTRIES - 4) % Stark_pkg::ROB_ENTRIES;
+		m5 = (ndx + Stark_pkg::ROB_ENTRIES - 5) % Stark_pkg::ROB_ENTRIES;
+		m6 = (ndx + Stark_pkg::ROB_ENTRIES - 6) % Stark_pkg::ROB_ENTRIES;
+		m7 = (ndx + Stark_pkg::ROB_ENTRIES - 7) % Stark_pkg::ROB_ENTRIES;
+		m8 = (ndx + Stark_pkg::ROB_ENTRIES - 8) % Stark_pkg::ROB_ENTRIES;
+		if (rob[m1].v && rob[m1].sn < rob[ndx].sn && rob[m1].op.decbus.pred) begin
+			rob[m1].pred_mask <= 14'd0;
+		end
+		else if (rob[m2].v && rob[m2].sn < rob[ndx].sn && rob[m2].op.decbus.pred && PRED_SHADOW > 1) begin
+			rob[m1].pred_bit = TRUE;
+			rob[m1].pred_v = VAL;
+			rob[m2].pred_mask <= 14'd0;
+		end
+		else if (rob[m3].v && rob[m3].sn < rob[ndx].sn && rob[m3].op.decbus.pred && PRED_SHADOW > 2) begin
+			rob[m1].pred_bit = TRUE;
+			rob[m1].pred_v = VAL;
+			rob[m2].pred_bit = TRUE;
+			rob[m2].pred_v = VAL;
+			rob[m3].pred_mask <= 14'd0;
+		end
+		else if (rob[m4].v && rob[m4].sn < rob[ndx].sn && rob[m4].op.decbus.pred && PRED_SHADOW > 3) begin
+			rob[m1].pred_bit = TRUE;
+			rob[m1].pred_v = VAL;
+			rob[m2].pred_bit = TRUE;
+			rob[m2].pred_v = VAL;
+			rob[m3].pred_bit = TRUE;
+			rob[m3].pred_v = VAL;
+			rob[m4].pred_mask <= 14'd0;
+		end
+		else if (rob[m5].v && rob[m5].sn < rob[ndx].sn && rob[m5].op.decbus.pred && PRED_SHADOW > 4) begin
+			rob[m1].pred_bit = TRUE;
+			rob[m1].pred_v = VAL;
+			rob[m2].pred_bit = TRUE;
+			rob[m2].pred_v = VAL;
+			rob[m3].pred_bit = TRUE;
+			rob[m3].pred_v = VAL;
+			rob[m4].pred_bit = TRUE;
+			rob[m4].pred_v = VAL;
+			rob[m5].pred_mask <= 14'd0;
+		end
+		else if (rob[m6].v && rob[m6].sn < rob[ndx].sn && rob[m6].op.decbus.pred && PRED_SHADOW > 5) begin
+			rob[m1].pred_bit = TRUE;
+			rob[m1].pred_v = VAL;
+			rob[m2].pred_bit = TRUE;
+			rob[m2].pred_v = VAL;
+			rob[m3].pred_bit = TRUE;
+			rob[m3].pred_v = VAL;
+			rob[m4].pred_bit = TRUE;
+			rob[m4].pred_v = VAL;
+			rob[m5].pred_bit = TRUE;
+			rob[m5].pred_v = VAL;
+			rob[m6].pred_mask <= 14'd0;
+		end
+		else if (rob[m7].v && rob[m7].sn < rob[ndx].sn && rob[m7].op.decbus.pred && PRED_SHADOW > 6) begin
+			rob[m1].pred_bit = TRUE;
+			rob[m1].pred_v = VAL;
+			rob[m2].pred_bit = TRUE;
+			rob[m2].pred_v = VAL;
+			rob[m3].pred_bit = TRUE;
+			rob[m3].pred_v = VAL;
+			rob[m4].pred_bit = TRUE;
+			rob[m4].pred_v = VAL;
+			rob[m5].pred_bit = TRUE;
+			rob[m5].pred_v = VAL;
+			rob[m6].pred_bit = TRUE;
+			rob[m6].pred_v = VAL;
+			rob[m7].pred_mask <= 14'd0;
+		end
 	end
 end
 endtask

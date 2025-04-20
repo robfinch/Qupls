@@ -53,6 +53,7 @@ Stark_pkg::decode_bus_t db;
 wire [7:0] const_pos;
 wire [3:0] isz;
 wire excRs1, excRs2, excRs3, excRd;
+wire [3:0] pred_shadow_count;
 
 // There could be four 32-bit constant positions used up on the cache line.
 // The decode stage needs to be able to mark the constant positions as NOPs.
@@ -111,6 +112,7 @@ Stark_decode_Rs2 udcrb
 	.has_immb(db.has_immb),
 	.Rs2(db.Rs2),
 	.Rs2z(db.Rs2z),
+	.has_Rs2(db.has_Rs2),
 	.exc(ecxRs2)
 );
 
@@ -178,8 +180,12 @@ Stark_decode_conditional_branch udecbr
 Stark_decode_predicate_branch udecpbr
 (
 	.instr(ins.ins),
-	.branch(db.pbr)
+	.branch(db.pbr),
+	.mask(db.pred_mask),
+	.atom_mask(db.pred_atom_mask),
+	.count(pred_shadow_count)
 );
+
 /*
 Stark_decode_mcb udecmcb
 (
@@ -373,6 +379,9 @@ else begin
 		dbo.qfext <= db.alu && ins.ins[28:27]==2'b10;
 		if (excRs1|excRs2|excRs3|excRd)
 			dbo.cause <= Stark_pkg::FLT_BADREG;
+		// Is the predicate shadow count within range?
+		if (pred_shadow_count >= PRED_SHADOW)
+			dbo.cause <= Stark_pkg::FLT_UNIMP;
 		// Check for unimplemented instruction, but not if it is being stomped on.
 		// If it is stomped on, we do not care.
 		if (!(db.nop|db.alu|db.fpu|db.fc|db.mem|db.macro

@@ -596,28 +596,36 @@ begin
 		hwi_ignore = TRUE;
 	end
 
-	if (dec0.atom && pr0_dec.v)
+	if (dec0.pred && pr0_dec.v)
+		pr1_dec.atom_mask = dec0.pred_atom_mask;
+	else if (dec0.atom && pr0_dec.v)
 		pr1_dec.atom_mask = {ins0m.ins[23:9],ins0m.ins[0]};
 	else
 		pr1_dec.atom_mask = pr0_dec.atom_mask >> 12'd1;
 	if (pr0_dec.hwi & ~hwi_ignore)
 		pr1_dec.v = INV;
 
-	if (dec1.atom && pr1_dec.v)
+	if (dec1.pred && pr1_dec.v)
+		pr2_dec.atom_mask = dec1.pred_atom_mask;
+	else if (dec1.atom && pr1_dec.v)
 		pr2_dec.atom_mask = {ins1m.ins[23:9],ins1m.ins[0]};
 	else
 		pr2_dec.atom_mask = pr1_dec.atom_mask >> 12'd1;
 	if (pr0_dec.hwi & ~hwi_ignore)
 		pr2_dec.v = INV;
 
-	if (dec2.atom && pr2_dec.v)
+	if (dec2.pred && pr2_dec.v)
+		pr3_dec.atom_mask = dec2.pred_atom_mask;
+	else if (dec2.atom && pr2_dec.v)
 		pr3_dec.atom_mask = {ins2m.ins[23:9],ins2m.ins[0]};
 	else
 		pr3_dec.atom_mask = pr2_dec.atom_mask >> 12'd1;
 	if (pr0_dec.hwi & ~hwi_ignore)
 		pr3_dec.v = INV;
 
-	if (dec3.atom && pr3_dec.v)
+	if (dec3.pred && pr3_dec.v)
+		atom_mask_o = dec3.pred_atom_mask;
+	else if (dec3.atom && pr3_dec.v)
 		atom_mask_o = {ins3m.ins[23:9],ins3m.ins[0]};
 	else
 		atom_mask_o = pr3_dec.atom_mask >> 12'd1;

@@ -1,9 +1,10 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2024-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
+//
 //
 // BSD 3-Clause License
 // Redistribution and use in source and binary forms, with or without
@@ -31,67 +32,35 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// micro-code address table (mcat)
-//
 // ============================================================================
-//
+
 import Stark_pkg::*;
 
-module Stark_mcat(stomp, ir, mip);
-input stomp;
-input Stark_pkg::pipeline_reg_t ir;
-output cpu_types_pkg::mc_address_t mip;
+module Stark_decode_pred_atom_mask(ir, mask, count);
+input Stark_pkg::instruction_t ir;
+output reg [11:0] mask;
+output reg [3:0] count;
+
+integer jj;
+reg [13:0] mask1, mask2;
 
 always_comb
-if (stomp)
-	mip = 12'h000;
-else begin
-	casez(ir.ins.any.opcode)
-//	OP_JSRI:	mip = 12'h128;
-//	OP_BSTORE:	mip = 12'h390;
-//	OP_BMOV:	mip = 12'h3A0;
-/*
-	OP_BCMP:	mip = 12'h3B0;
-	OP_BFND:	mip = 12'h3C0;
-*/
-	OP_PUSH:
-		case(ir.ins[31:29])
-		3'b111:	mip = 12'h01C;		// enter
-		default:	mip = 12'h028;	// push	
-		endcase
-	OP_POP:
-		case(ir.ins[31:29])
-		3'b111:	mip = 12'h1E4;		// exit
-		default:	mip = 12'h038;	// pop
-		endcase
-	OP_FLT:
-		case(ir.ins.fpu.op4)
-		/*
-		FN_FLT1:
-			case(ir.ins.f1.func)
-			FN_FRES:
-				case(ir.ins[26:25])
-				2'd0: mip = 12'h0C0;
-				2'd1:	mip = 12'h0D0;
-				2'd2:	mip = 12'h0E0;
-				2'd3: mip = 12'h0E0;
-				endcase
-			FN_RSQRTE:
-				case(ir.ins[26:25])
-				2'd0:	mip = 12'h050;
-				2'd1:	mip = 12'h0A0;
-				2'd2:	mip = 12'h080;
-				2'd3: mip = 12'h070;
-				endcase
-			default:	mip = 12'h000;			
-			endcase
-		*/
-		FOP4_FDIV:	mip = 12'h040;
-		default:	mip = 12'h000;
-		endcase
-//	7'b11???:	mip = 12'h220;
-	default:	mip = 12'h000;
-	endcase
+	mask1 = {ir[30:29],ir[25:23],ir[16:9],ir[0]};
+	
+always_comb
+begin
+	count = 0;
+	mask2 = mask1;
+	for (jj = 0; jj < 14; jj = jj + 2) begin
+		if (mask2==14'd0)
+			mask[jj>>1] = 1'b0;
+		else begin
+			mask[jj>>1] = 1'b1;
+			count = jj >> 1;
+		end
+		mask2 = mask2 >> 2;
+	end
+	mask [11:8] = 5'd0;
 end
 
 endmodule
