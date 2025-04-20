@@ -166,12 +166,12 @@ pregno_t [31:0] aRs;
 value_t rfo_alu0_argA;
 value_t rfo_alu0_argB;
 value_t rfo_alu0_argC;
-value_t rfo_alu0_argT;
+value_t rfo_alu0_argD;
 value_t rfo_alu0_argM;
 value_t rfo_alu1_argA;
 value_t rfo_alu1_argB;
 value_t rfo_alu1_argC;
-value_t rfo_alu1_argT;
+value_t rfo_alu1_argD;
 value_t rfo_alu1_argM;
 value_t rfo_fpu0_argA;
 value_t rfo_fpu0_argB;
@@ -180,7 +180,7 @@ value_t rfo_fpu0_argM;
 value_t rfo_fpu1_argA;
 value_t rfo_fpu1_argB;
 value_t rfo_fpu1_argC;
-value_t rfo_fpu1_argT;
+value_t rfo_fpu1_argD;
 value_t rfo_fpu1_argM;
 value_t rfo_fcu_argA;
 value_t rfo_fcu_argB;
@@ -206,7 +206,7 @@ wire rfo_agen1_argA_ctag;
 wire rfo_agen1_argB_ctag;
 wire rfo_store_argC_ctag;
 value_t store_argC;
-value_t rfo_cpytgt0_argT;
+value_t rfo_cpytgt0_argD;
 value_t load_res;
 value_t ma0,ma1;				// memory address
 wire store_argC_v;
@@ -214,19 +214,19 @@ wire store_argC_v;
 pregno_t alu0_argA_reg;
 pregno_t alu0_argB_reg;
 pregno_t alu0_argC_reg;
-pregno_t alu0_argT_reg;
+pregno_t alu0_argD_reg;
 pregno_t alu0_argM_reg;
 
 pregno_t alu1_argA_reg;
 pregno_t alu1_argB_reg;
 pregno_t alu1_argC_reg;
-pregno_t alu1_argT_reg;
+pregno_t alu1_argD_reg;
 pregno_t alu1_argM_reg;
 
 pregno_t fpu0_argA_reg;
 pregno_t fpu0_argB_reg;
 pregno_t fpu0_argC_reg;
-pregno_t fpu0_argT_reg;
+pregno_t fpu0_argD_reg;
 pregno_t fpu0_argM_reg;
 
 pregno_t fpu1_argA_reg;
@@ -411,7 +411,7 @@ value_t alu0_argB;
 value_t alu0_argBI;
 value_t alu0_argC;
 value_t alu0_argI;
-value_t alu0_argT;
+value_t alu0_argD;
 value_t alu0_argCi;
 pregno_t alu0_Rt;
 aregno_t alu0_aRt;
@@ -440,6 +440,7 @@ wire alu0_cpytgt;
 wire [7:0] alu0_cptgt;
 Stark_pkg::memsz_t alu0_prc;
 wire alu0_ctag;
+wire alu0_args_valid;
 
 reg alu1_idle;
 reg alu1_idle1;
@@ -464,7 +465,7 @@ value_t alu1_argA;
 value_t alu1_argB;
 value_t alu1_argBI;
 value_t alu1_argC;
-value_t alu1_argT;
+value_t alu1_argD;
 value_t alu1_argI;
 value_t alu1_argCi;
 reg [2:0] alu1_cs;
@@ -492,6 +493,7 @@ wire alu1_cpytgt;
 wire [7:0] alu1_cptgt;
 Stark_pkg::memsz_t alu1_prc;
 wire alu1_ctag;
+wire alu1_args_valid;
 
 reg fpu0_idle;
 wire fpu0_iq_prog_full;
@@ -507,7 +509,7 @@ operating_mode_t fpu0_om;
 value_t fpu0_argA;
 value_t fpu0_argB;
 value_t fpu0_argC;
-value_t fpu0_argT;
+value_t fpu0_argD;
 value_t fpu0_argP;
 value_t fpu0_argI;	// only used by BEQ
 value_t fpu0_argM;
@@ -534,6 +536,7 @@ reg fpu0_qfext;
 wire fpu0_ctag;
 reg [15:0] fpu0_cptgt;
 wire fpu0_predz;
+wire fpu0_args_valid;
 
 reg fpu1_idle;
 wire fpu1_done;
@@ -549,7 +552,7 @@ value_t fpu1_argA;
 value_t fpu1_argB;
 value_t fpu1_argC;
 value_t fpu1_argD;
-value_t fpu1_argT;
+value_t fpu1_argD;
 value_t fpu1_argP;
 value_t fpu1_argI;	// only used by BEQ
 value_t fpu1_argM;
@@ -569,19 +572,20 @@ wire        fpu1_v;
 reg fpu1_idv;
 wire fpu1_qfext;
 reg [15:0] fpu1_cptgt;
+wire fpu1_args_valid;
 
 reg fcu_idle;
 reg fcu_available;
 Stark_pkg::pipeline_reg_t fcu_instr;
 Stark_pkg::pipeline_reg_t fcu_missir;
-reg fcu_bt;
-reg fcu_cjb;
-reg fcu_bl;
+wire fcu_bt;
+wire fcu_cjb;
+wire fcu_bl;
 Stark_pkg::bts_t fcu_bts;
 value_t fcu_argA;
 value_t fcu_argB;
 value_t fcu_argBr;
-value_t fcu_argI;	// only used by BEQ
+value_t fcu_argI;
 wire fcu_aRtzA,fcu_aRtzB;
 reg fcu_done;
 pc_address_ex_t fcu_pc;
@@ -603,6 +607,7 @@ rob_ndx_t fcu_rndx;
 reg fcu_new;						// new FCU operation is taking place
 wire pe_bsidle;
 reg [2:0] bsi;
+wire fcu_args_valid;
 
 wire tlb0_v, tlb1_v;
 
@@ -637,6 +642,7 @@ Stark_pkg::cause_code_t agen0_exc;
 wire agen0_excv;
 reg agen0_idv;
 wire agen0_ldip;
+wire agen0_args_valid;
 
 reg agen1_idle = 1'b1;
 wire agen1_idle1;
@@ -664,6 +670,7 @@ Stark_pkg::cause_code_t agen1_exc;
 wire agen1_excv;
 reg agen1_idv;
 wire agen1_ldip;
+wire agen1_args_valid;
 
 rob_ndx_t [3:0] regv_rndx;
 
@@ -740,7 +747,7 @@ reg [11:0] dram0_tocnt;
 reg dram0_done;
 reg dram0_idv;
 checkpt_ndx_t dram0_cp;
-value_t dram0_argT;
+value_t dram0_argD;
 pc_address_t dram0_pc;
 reg dram0_ldip;
 
@@ -777,7 +784,7 @@ reg [11:0] dram1_tocnt;
 reg dram1_done;
 reg dram1_idv;
 checkpt_ndx_t dram1_cp;
-value_t dram1_argT;
+value_t dram1_argD;
 pc_address_t dram1_pc;
 
 reg [2:0] dramN [0:Stark_pkg::NDATA_PORTS-1];
@@ -4251,8 +4258,8 @@ Stark_sched uscd1
 	.robentry_fcu_issue(robentry_fcu_issue),
 	.robentry_agen_issue(robentry_agen_issue),
 	.alu0_rndx(alu0_rndx),
-	.alu1_rndx(alu1_rndx),
 	.alu0_rndxv(alu0_rndxv),
+	.alu1_rndx(alu1_rndx),
 	.alu1_rndxv(alu1_rndxv),
 	.fpu0_rndx(fpu0_rndx),
 	.fpu0_rndxv(fpu0_rndxv),
@@ -4261,8 +4268,8 @@ Stark_sched uscd1
 	.fcu_rndx(fcu_rndx),
 	.fcu_rndxv(fcu_rndxv),
 	.agen0_rndx(agen0_rndx),
-	.agen1_rndx(agen1_rndx),
 	.agen0_rndxv(agen0_rndxv),
+	.agen1_rndx(agen1_rndx),
 	.agen1_rndxv(agen1_rndxv),
 	.ratv0_rndx(ratv0_rndx),
 	.ratv1_rndx(ratv1_rndx),
@@ -4332,9 +4339,9 @@ assign agen1_argA_reg = rob[agen1_rndx].op.pRa;
 assign agen1_argB_reg = rob[agen1_rndx].op.pRb;
 assign agen1_argM_reg = rob[agen1_rndx].op.pRm;
 
-assign alu0_argT_reg = rob[alu0_rndx].op.pRt;
-assign alu1_argT_reg = rob[alu1_rndx].op.pRt;
-assign fpu0_argT_reg = rob[fpu0_rndx].op.pRt;
+assign alu0_argD_reg = rob[alu0_rndx].op.pRt;
+assign alu1_argD_reg = rob[alu1_rndx].op.pRt;
+assign fpu0_argD_reg = rob[fpu0_rndx].op.pRt;
 */
 
 assign aRs[0] = rob[alu0_rndx].op.decbus.Ra;
@@ -4406,7 +4413,7 @@ Stark_meta_alu #(.ALU0(1'b1)) ualu0
 	.bi(alu0_argBI),
 	.c(alu0_argC),
 	.i(alu0_argI),
-	.t(alu0_argT),
+	.t(alu0_argD),
 	.cs(alu0_cs),
 	.pc(alu0_pc),
 	.csr(csr_res),
@@ -4438,7 +4445,7 @@ if (Stark_pkg::NALU > 1) begin
 		.bi(alu1_argBI),
 		.c(alu1_argC),
 		.i(alu1_argI),
-		.t(alu1_argT),
+		.t(alu1_argD),
 		.cs(alu1_cs),
 		.pc(alu1_pc),
 		.csr(14'd0),
@@ -4508,7 +4515,7 @@ if (Stark_pkg::NFPU > 0) begin
 			.i(fpu0_argI),
 			.o({fpu0_resH,fpu0_res}),
 			.p(~64'd0),
-			.t({alu0_argT,fpu0_argT}),
+			.t({alu0_argD,fpu0_argD}),
 			.z(fpu0_predz),
 			.cptgt(fpu0_cptgt),
 			.atag(fpu0_argA_tag),
@@ -5219,12 +5226,12 @@ Stark_alu_station ualust0
 	.argBI(alu0_argBI),
 	.argC(alu0_argC),
 	.argI(alu0_argI),
-	.argT(alu0_argT),
+	.argD(alu0_argD),
 	.argCi_tag(),
 	.argA_tag(alu0_argA_ctag),
 	.argB_tag(alu0_argB_ctag),
 	.argC_tag(),
-	.argT_tag(),
+	.argD_tag(),
 	.all_args_valid(alu0_args_valid),
 	.cpytgt(alu0_cpytgt),
 	.cs(alu0_cs),
@@ -5272,12 +5279,12 @@ generate begin : gAluStation
 			.argBI(alu1_argBI),
 			.argC(alu1_argC),
 			.argI(alu1_argI),
-			.argT(alu1_argT),
+			.argD(alu1_argD),
 			.argCi_tag(),
 			.argA_ctag(alu1_argA_ctag),
 			.argB_ctag(alu1_argB_ctag),
 			.argC_tag(),
-			.argT_tag(),
+			.argD_tag(),
 			.all_args_valid(alu1_args_valid),
 			.cpytgt(alu1_cpytgt),
 			.cs(alu1_cs),
@@ -5324,7 +5331,7 @@ generate begin : gFpuStat
 				.argA(fpu0_argA),
 				.argB(fpu0_argB),
 				.argC(fpu0_argC),
-				.argT(fpu0_argT),
+				.argD(fpu0_argD),
 				.argM(fpu0_argM),
 				.argI(fpu0_argI),
 				.Rt(fpu0_Rt),
@@ -5337,7 +5344,7 @@ generate begin : gFpuStat
 				.argA_tag(fpu0_argA_tag),
 				.argB_tag(fpu0_argB_tag),
 				.argC_tag(),
-				.argT_tag(),
+				.argD_tag(),
 				.cs(fpu0_cs),
 				.bank(fpu0_bank),
 				.instr(fpu0_instr),
@@ -5346,6 +5353,7 @@ generate begin : gFpuStat
 				.qfext(fpu0_qfext),
 				.cptgt(fpu0_cptgt),
 				.sc_done(fpu0_sc_done),
+				.all_args_valid(fpu0_args_valid),
 				// inputs
 				.available(fpu0_available),
 				.rndx(fpu0_rndx),
@@ -5367,7 +5375,7 @@ generate begin : gFpuStat
 				.argA(fpu1_argA),
 				.argB(fpu1_argB),
 				.argC(fpu1_argC),
-				.argT(fpu1_argT),
+				.argD(fpu1_argD),
 				.argM(fpu1_argM),
 				.argI(fpu1_argI),
 				.Rt(fpu1_Rt),
@@ -5380,7 +5388,7 @@ generate begin : gFpuStat
 				.argA_tag(fpu1_argA_ctag),
 				.argB_tag(fpu1_argB_ctag),
 				.argC_tag(),
-				.argT_tag(),
+				.argD_tag(),
 				.cs(fpu1_cs),
 				.bank(fpu1_bank),
 				.instr(fpu1_instr),
@@ -5389,6 +5397,7 @@ generate begin : gFpuStat
 				.qfext(fpu1_qfext),
 				.cptgt(fpu1_cptgt),
 				.sc_done(fpu1_sc_done),
+				.all_args_valid(fpu1_args_valid),
 				// inputs
 				.available(fpu1_available),
 				.rndx(fpu1_rndx),
@@ -5405,40 +5414,37 @@ generate begin : gFpuStat
 end
 endgenerate
 
-always_ff @(posedge clk)
-if (irst) begin
-	fcu_argA <= 64'd0;
-	fcu_argB <= 64'd0;
-	fcu_argBr <= 64'd0;
-	fcu_argI <= 64'd0;
-	fcu_instr <= nopi;
-	fcu_pc.bno_t <= 6'd1;
-	fcu_pc.bno_f <= 6'd1;
-	fcu_pc.pc <= RSTPC;
-	fcu_bt <= FALSE;
-	fcu_bts <= Stark_pkg::BTS_NONE;
-	fcu_id <= 5'd0;
-	fcu_cjb <= 1'b0;
-	fcu_bl <= 1'b0;
-	fcu_cp <= 4'd0;
-	fcu_om <= Stark_pkg::OM_SECURE;
-end
-else begin
-	if (robentry_fcu_issue[fcu_rndx] && fcu_rndxv && fcu_idle && bs_idle_oh) begin
-		fcu_argA <= rfo_fcu_argA;
-		fcu_argB <= rfo_fcu_argB;
-		fcu_om <= rob[fcu_rndx].om;
-		fcu_argI <= rob[fcu_rndx].decbus.immb;
-		fcu_instr <= rob[fcu_rndx].op;
-		fcu_pc <= rob[fcu_rndx].pc;
-		fcu_bt <= rob[fcu_rndx].bt;
-		fcu_bts <= rob[fcu_rndx].decbus.bts;
-		fcu_id <= fcu_rndx;
-		fcu_cjb <= rob[fcu_rndx].decbus.cjb;
-		fcu_bl <= rob[fcu_rndx].decbus.bl;
-		fcu_cp <= rob[fcu_rndx].cndx;
-	end
-end
+Stark_branch_station ubs1
+(
+	.rst(irst),
+	.clk(clk),
+	.idle_i(fcu_idle),
+	.issue(robentry_fcu_issue[fcu_rndx]),
+	.rndx(fcu_rndx),
+	.rndxv(fcu_rndxv),
+	.rob(rob[fcu_rndx]),
+	.rfo(rfo),
+	.rfo_tag(rfo_tag),
+	.prn(prn),
+	.prnv(prnv),
+	.all_args_valid(fcu_args_valid),
+	.id(fcu_id),
+	.om(fcu_om),
+	.argA(fcu_argA),
+	.argB(fcu_argB),
+	.argBr(fcu_argBr),
+	.argC(fcu_argC),
+	.argI(fcu_argI),
+	.instr(fcu_instr),
+	.bt(fcu_bt),
+	.bts(fcu_bts),
+	.cjb(fcu_cjb),
+	.bl(fcu_bl),
+	.pc(fcu_pc),
+	.cp(fcu_cp),
+	.excv(),
+	.idle_o()
+);
 
 Stark_agen_station uagen0stn
 (
@@ -5460,6 +5466,7 @@ Stark_agen_station uagen0stn
 	.argC(agen0_argC),
 	.argI(agen0_argI),
 	.argC_ctag(agen0_argC_ctag),
+	.all_args_valid(agen0_args_valid),
 	.prn(prn),
 	.prnv(prnv),
 	.pc(agen0_pc),
@@ -5503,6 +5510,7 @@ Stark_agen_station uagen1stn
 	.argM(agen1_argM),
 	.argC_ctag(),
 	.argC_v(),
+	.all_args_valid(agen1_args_valid),
 	.prn(prn),
 	.prnv(prnv),
 	.pRc(),
@@ -5578,30 +5586,26 @@ else begin
 	if (sr.ssm & advance_pipeline)
 		ssm_flag <= TRUE;
 
-	// Check if all instruciton arguments are valid.
-	for (n3 = 0; n3 < ROB_ENTRIES; n3 = n3 + 1)
-		tAllArgsValid(n3, INV, INV, INV, INV, INV);
-
 	// The reorder buffer is not updated with the argument values. This is done
 	// just for debugging in SIM. All values come from the register file.
 `ifdef IS_SIM
 	if (alu0_available && alu0_rndxv && alu0_idle) begin
 		rob[alu0_rndx].argA <= rfo_alu0_argA;
 		rob[alu0_rndx].argB <= rfo_alu0_argB;
-		rob[alu0_rndx].argT <= rfo_alu0_argT;
+		rob[alu0_rndx].argD <= rfo_alu0_argD;
 	end
 	if (Stark_pkg::NALU > 1) begin
 		if (alu1_available && alu1_rndxv && alu1_idle) begin
 			rob[alu1_rndx].argA <= rfo_alu1_argA;
 			rob[alu1_rndx].argB <= rfo_alu1_argB;
-			rob[alu1_rndx].argT <= rfo_alu1_argT;
+			rob[alu1_rndx].argD <= rfo_alu1_argD;
 		end
 	end
 	if (Stark_pkg::NFPU > 0) begin
 		if (fpu0_available && fpu0_rndxv && fpu0_idle) begin
 			rob[fpu0_rndx].argA <= rfo_fpu0_argA;
 			rob[fpu0_rndx].argB <= rfo_fpu0_argB;
-			rob[fpu0_rndx].argT <= rfo_fpu0_argT;
+			rob[fpu0_rndx].argD <= rfo_fpu0_argD;
 		end
 	end
 	if (agen0_rndxv && agen0_idle && robentry_agen_issue[agen0_rndx]) begin
@@ -5706,10 +5710,7 @@ else begin
 			for (n12 = 0; n12 < ROB_ENTRIES; n12 = n12 + 1)
 				rob[n12].sn <= rob[n12].sn - 4;
 			tEnque(8'h80-XWID,groupno,predino,predrndx,pg_ren.pr0,pt0_q,tail0,
-				stomp0, ornop0,
-				prn[0], prn[1], prn[2], prn[3], Rt0_ren, prn[17],
-				prnv[0], prnv[1], prnv[2], prnv[3], prnv[17],
-				cndx_ren[0], pcndx_ren, grplen0, last0);
+				stomp0, ornop0, cndx_ren[0], pcndx_ren, grplen0, last0);
 			if (pg_ren.pr0.decbus.pred) begin
 				predino = 3'd1;
 				predrndx = tail0;
@@ -5719,23 +5720,9 @@ else begin
 				if (predino==4'd9)
 					predino = 4'd0;
 			end
-			/*
-			tBypassRegnames(tail0, pg_ren.pr0, ins0_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
-			tBypassRegnames(tail0, pg_ren.pr0, ins1_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
-			tBypassRegnames(tail0, pg_ren.pr0, ins2_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
-			tBypassRegnames(tail0, pg_ren.pr0, ins3_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
-			*/
-			/*
-			if (prn[0]==11'd0 && pg_ren.pr0.decbus.Ra!=9'd0) begin
-				$display("Enque0: Ra mapped to zero.");
-				$finish;
-			end
-			*/
 			
 			tEnque(8'h81-XWID,groupno,predino,predrndx,pg_ren.pr1,pt1_q,tail1,
-				stomp1, ornop1, prn[4], prn[5], prn[6], prn[7], Rt1_ren, prn[18],
-				prnv[4], prnv[5], prnv[6], prnv[7], prnv[18],
-				cndx_ren[1], pcndx_ren, grplen1, last1);
+				stomp1, ornop1, cndx_ren[1], pcndx_ren, grplen1, last1);
 			if (pg_ren.pr1.decbus.pred) begin
 				predino = 3'd1;
 				predrndx = tail1;
@@ -5745,30 +5732,11 @@ else begin
 				if (predino==4'd9)
 					predino = 4'd0;
 			end
-			/*
-			if (prn[4]==11'd0 && pg_ren.pr1.decbus.Ra!=9'd0) begin
-				$display("Enque1: Ra mapped to zero.");
-				$finish;
-			end
-			*/
-				// If the instruction's source register is the same as a previous target
-				// register, use the register mapping of the previous target register.
-				// The register mapping will not have been updated in the RAT yet in
-				// time to be available for the source register.
-			/*
-			tBypassRegnames(tail1, pg_ren.pr1, ins0_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
-			tBypassRegnames(tail1, pg_ren.pr1, ins1_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
-			tBypassRegnames(tail1, pg_ren.pr1, ins2_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
-			tBypassRegnames(tail1, pg_ren.pr1, ins3_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
-			*/
-			tBypassRegnames(tail1, pg_ren.pr1, pg_ren.pr0, 1'b0, pg_ren.pr1.decbus.has_immb | prnv[3], pg_ren.pr1.decbus.has_immc | prnv[3], prnv[3], prnv[3]);
-			tBypassValid(tail1, pg_ren.pr1, pg_ren.pr0);
+//			tBypassRegnames(tail1, pg_ren.pr1, pg_ren.pr0, 1'b0, pg_ren.pr1.decbus.has_immb | prnv[3], pg_ren.pr1.decbus.has_immc | prnv[3], prnv[3], prnv[3]);
+//			tBypassValid(tail1, pg_ren.pr1, pg_ren.pr0);
 			
 			tEnque(8'h82-XWID,groupno,predino,predrndx,pg_ren.pr2,pt2_q,tail2,
-				stomp2, ornop2, prn[8], prn[9], prn[10], prn[11], Rt2_ren, prn[19],
-				prnv[8], prnv[9], prnv[10], prnv[11], prnv[19],
-				cndx_ren[2], pcndx_ren,
-				grplen2, last3);
+				stomp2, ornop2, cndx_ren[2], pcndx_ren, grplen2, last3);
 			if (pg_ren.pr2.decbus.pred) begin
 				predino = 3'd1;
 				predrndx = tail2;
@@ -5778,28 +5746,13 @@ else begin
 				if (predino==4'd9)
 					predino = 4'd0;
 			end
-			/*
-			if (prn[8]==11'd0 && pg_ren.pr2.decbus.Ra!=9'd0) begin
-				$display("Enque2: Ra mapped to zero.");
-				$finish;
-			end
-			*/
-			/*
-			tBypassRegnames(tail2, pg_ren.pr2, ins0_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
-			tBypassRegnames(tail2, pg_ren.pr2, ins1_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
-			tBypassRegnames(tail2, pg_ren.pr2, ins2_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
-			tBypassRegnames(tail2, pg_ren.pr2, ins3_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
-			*/
-			tBypassRegnames(tail2, pg_ren.pr2, pg_ren.pr0, ins2_que.decbus.has_imma, pg_ren.pr2.decbus.has_immb | prnv[3], pg_ren.pr2.decbus.has_immc | prnv[3], prnv[3], prnv[3]);
-			tBypassRegnames(tail2, pg_ren.pr2, pg_ren.pr1, ins2_que.decbus.has_imma, pg_ren.pr2.decbus.has_immb | prnv[7], pg_ren.pr2.decbus.has_immc | prnv[7], prnv[7], prnv[7]);
-			tBypassValid(tail2, pg_ren.pr2, pg_ren.pr0);
-			tBypassValid(tail2, pg_ren.pr2, pg_ren.pr1);
+//			tBypassRegnames(tail2, pg_ren.pr2, pg_ren.pr0, ins2_que.decbus.has_imma, pg_ren.pr2.decbus.has_immb | prnv[3], pg_ren.pr2.decbus.has_immc | prnv[3], prnv[3], prnv[3]);
+//			tBypassRegnames(tail2, pg_ren.pr2, pg_ren.pr1, ins2_que.decbus.has_imma, pg_ren.pr2.decbus.has_immb | prnv[7], pg_ren.pr2.decbus.has_immc | prnv[7], prnv[7], prnv[7]);
+//			tBypassValid(tail2, pg_ren.pr2, pg_ren.pr0);
+//			tBypassValid(tail2, pg_ren.pr2, pg_ren.pr1);
 			
 			tEnque(8'h83-XWID,groupno,predino,predrndx,pg_ren.pr3,pt3_q,tail3,
-				stomp3, ornop3, prn[12], prn[13], prn[14], prn[15], Rt3_ren, prn[20],
-				prnv[12], prnv[13], prnv[14], prnv[15], prnv[20],
-				cndx_ren[3], pcndx_ren,
-				grplen3,last3);
+				stomp3, ornop3, cndx_ren[3], pcndx_ren, grplen3,last3);
 			if (pg_ren.pr3.decbus.pred) begin
 				predino = 3'd1;
 				predrndx = tail3;
@@ -5809,24 +5762,12 @@ else begin
 				if (predino==4'd9)
 					predino = 4'd0;
 			end
-			/*
-			if (prn[12]==11'd0 && !pg_ren.pr3.decbus.Raz) begin
-				$display("Enque3: Ra mapped to zero.");
-				$finish;
-			end
-			*/
-			/*
-			tBypassRegnames(tail3, pg_ren.pr3, ins0_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
-			tBypassRegnames(tail3, pg_ren.pr3, ins1_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
-			tBypassRegnames(tail3, pg_ren.pr3, ins2_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
-			tBypassRegnames(tail3, pg_ren.pr3, ins3_que, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
-			*/
-			tBypassRegnames(tail3, pg_ren.pr3, pg_ren.pr0, pg_ren.pr3.decbus.has_imma, pg_ren.pr3.decbus.has_immb | prnv[3], pg_ren.pr3.decbus.has_immc | prnv[3], prnv[3], prnv[3]);
-			tBypassRegnames(tail3, pg_ren.pr3, pg_ren.pr1, pg_ren.pr3.decbus.has_imma, pg_ren.pr3.decbus.has_immb | prnv[7], pg_ren.pr3.decbus.has_immc | prnv[7], prnv[7], prnv[7]);
-      tBypassRegnames(tail3, pg_ren.pr3, pg_ren.pr2, pg_ren.pr3.decbus.has_imma, pg_ren.pr3.decbus.has_immb | prnv[11], pg_ren.pr3.decbus.has_immc | prnv[11], prnv[11], prnv[11]);
-			tBypassValid(tail3, pg_ren.pr3, pg_ren.pr0);
-			tBypassValid(tail3, pg_ren.pr3, pg_ren.pr1);
-			tBypassValid(tail3, pg_ren.pr3, pg_ren.pr2);
+//			tBypassRegnames(tail3, pg_ren.pr3, pg_ren.pr0, pg_ren.pr3.decbus.has_imma, pg_ren.pr3.decbus.has_immb | prnv[3], pg_ren.pr3.decbus.has_immc | prnv[3], prnv[3], prnv[3]);
+//			tBypassRegnames(tail3, pg_ren.pr3, pg_ren.pr1, pg_ren.pr3.decbus.has_imma, pg_ren.pr3.decbus.has_immb | prnv[7], pg_ren.pr3.decbus.has_immc | prnv[7], prnv[7], prnv[7]);
+//      tBypassRegnames(tail3, pg_ren.pr3, pg_ren.pr2, pg_ren.pr3.decbus.has_imma, pg_ren.pr3.decbus.has_immb | prnv[11], pg_ren.pr3.decbus.has_immc | prnv[11], prnv[11], prnv[11]);
+//			tBypassValid(tail3, pg_ren.pr3, pg_ren.pr0);
+//			tBypassValid(tail3, pg_ren.pr3, pg_ren.pr1);
+//			tBypassValid(tail3, pg_ren.pr3, pg_ren.pr2);
 		
 			tail0 <= (tail0 + 3'd4) % ROB_ENTRIES;
 			groupno <= groupno + 2'd1;
@@ -5892,6 +5833,22 @@ else begin
 // in the various ALU queues.  
 // also invalidates instructions following a branch-miss BEQ or any JALR (STOMP logic)
 //
+	for (nn = 0; nn < ROB_ENTRIES; nn = nn + 1) begin
+		if (alu0_args_valid)
+			rob[alu0_rndx].all_args_valid <= VAL;
+		if (alu1_args_valid)
+			rob[alu1_rndx].all_args_valid <= VAL;
+		if (fpu0_args_valid)
+			rob[fpu0_rndx].all_args_valid <= VAL;
+		if (fpu1_args_valid)
+			rob[fpu1_rndx].all_args_valid <= VAL;
+		if (agen0_args_valid)
+			rob[agen0_rndx].all_args_valid <= VAL;
+		if (agen1_args_valid)
+			rob[agen1_rndx].all_args_valid <= VAL;
+		if (fcu_args_valid)
+			rob[fcu_rndx].all_args_valid <= VAL;
+	end
 
 	if (lsq[lsq_head.row][lsq_head.col].v==VAL) begin
 		store_argC_aReg <= lsq[lsq_head.row][lsq_head.col].aRc;
@@ -6444,63 +6401,7 @@ else begin
 		end
 	end
 
-	
-	// Validate arguments
 
-	for (nn = 0; nn < ROB_ENTRIES; nn = nn + 1) begin
-		
-		// ALU0
-		tValidateArg(nn, wrport0_Rt, wrport0_v, wrport0_res);
-	    
-		// ALU1
-		if (Stark_pkg::NALU > 1)
-			tValidateArg(nn, wrport1_Rt, wrport1_v, wrport1_res);
-
-		// DRAM0
-		tValidateArg(nn, wrport2_Rt, wrport2_v, wrport2_res);
-
-		// FPU0
-		if (Stark_pkg::NFPU > 0)
-			tValidateArg(nn, wrport3_Rt, wrport3_v, wrport3_res);
-
-		// DRAM1
-		if (Stark_pkg::NDATA_PORTS > 1)
-			tValidateArg(nn, wrport4_Rt, wrport4_v, wrport4_res);
-
-		// FPU1
-		if (Stark_pkg::NFPU > 1)
-			tValidateArg(nn, wrport5_Rt, wrport5_v, wrport5_res);
-	end
-	
-	// Move pending to real.	
-	for (nn = 0; nn < ROB_ENTRIES; nn = nn + 1) begin
-		if (rob[nn].argA_vp) begin
-			rob[nn].argA_v <= VAL;
-			tAllArgsValid(nn, VAL, INV, INV, INV, INV);
-			rob[nn].argA_vp <= INV;
-		end
-		if (rob[nn].argB_vp) begin
-			rob[nn].argB_v <= VAL;
-			tAllArgsValid(nn, INV, VAL, INV, INV, INV);
-			rob[nn].argB_vp <= INV;
-		end
-		if (rob[nn].argC_vp) begin
-			rob[nn].argC_v <= VAL;
-			tAllArgsValid(nn, INV, INV, VAL, INV, INV);
-			rob[nn].argC_vp <= INV;
-		end
-		if (rob[nn].argT_vp) begin
-			rob[nn].argT_v <= VAL;
-			tAllArgsValid(nn, INV, INV, INV, VAL, INV);
-			rob[nn].argT_vp <= INV;
-		end
-		if (rob[nn].argM_vp) begin
-			rob[nn].argM_v <= VAL;
-			tAllArgsValid(nn, INV, INV, INV, INV, VAL);
-			rob[nn].argM_vp <= INV;
-		end
-	end
-	
 	// Set LSQ register C, it may be waiting for data
 
   for (n3 = 0; n3 < LSQ_ENTRIES; n3 = n3 + 1) begin
@@ -7023,16 +6924,16 @@ else begin
 					rob[head0].argC_v <= VAL;
 					tAllArgsValid(head0, INV, INV, VAL, INV, INV);
 				end		
-				if (!rob[head0].argT_v) begin
+				if (!rob[head0].argD_v) begin
 					if (!fnFindSource(head0, rob[head0].decbus.Rt)) begin
 						$display("Q+: rob[%d]: argument T not possible to validate.", head0);
-						rob[head0].argT_v <= VAL;
+						rob[head0].argD_v <= VAL;
 						tAllArgsValid(head0, INV, INV, INV, VAL, INV);
 					end
 					/*
 					else begin
 						if (fnSourceValid(head0, rob[head0].decbus.Rt) begin
-							rob[head0].argT_v <= VAL;
+							rob[head0].argD_v <= VAL;
 							tAllArgsValid(head0, INV, INV, INV, VAL, INV);
 						end
 					end
@@ -7117,8 +7018,8 @@ else begin
 			rob[head0].argB_v <= VAL;
 		if (rob[nn].argC_v && rob[nn].pRa==rob[head0].pRa && rob[nn].sn > rob[head0].sn)
 			rob[head0].argC_v <= VAL;
-		if (rob[nn].argT_v && rob[nn].pRa==rob[head0].pRa && rob[nn].sn > rob[head0].sn)
-			rob[head0].argT_v <= VAL;
+		if (rob[nn].argD_v && rob[nn].pRa==rob[head0].pRa && rob[nn].sn > rob[head0].sn)
+			rob[head0].argD_v <= VAL;
 		if (rob[nn].argM_v && rob[nn].pRa==rob[head0].pRa && rob[nn].sn > rob[head0].sn)
 			rob[head0].argM_v <= VAL;
 	end
@@ -7214,7 +7115,7 @@ else begin
 					rob[n3].v
 				&& !robentry_stomp[n3]
 				&& !(&rob[n3].done)
-				&& (rob[n3].decbus.cpytgt ? (rob[n3].argT_v /*|| rob[g].op.nRt==9'd0*/) : rob[n3].all_args_valid)
+				&& (rob[n3].decbus.cpytgt ? (rob[n3].argD_v /*|| rob[g].op.nRt==9'd0*/) : rob[n3].all_args_valid)
 				&& (rob[n3].decbus.mem ? !rob[n3].prior_fc : 1'b1)
 				&& (SERIALIZE ? (rob[(n3+ROB_ENTRIES-1)%ROB_ENTRIES].done==2'b11 || rob[(n3+ROB_ENTRIES-1)%ROB_ENTRIES].v==INV) : 1'b1)
 				//&& !fnPriorFalsePred(g)
@@ -7227,7 +7128,7 @@ else begin
 					 rob[n3].v
 				&& !(&rob[n3].done)
 	//												&& !stomp_i[g]
-				&& rob[n3].argT_v 
+				&& rob[n3].argD_v 
 				//&& fnPredFalse(g)
 				&& !robentry_issue[n3]
 				&& ~|rob[n3].pred_bits
@@ -7590,7 +7491,7 @@ always_ff @(posedge clk) begin: clock_n_debug
 			(rob[i].decbus.cpytgt ? "c" : rob[i].decbus.fc ? "b" : rob[i].decbus.mem ? "m" : "a"),
 			rob[i].op.ins.any.opcode, 
 			rob[i].decbus.Rt, rob[i].op.nRt, rob[i].res, rob[i].exc,
-			rob[i].decbus.Rt, rob[i].op.pRt, rob[i].argT, rob[i].argT_v?"v":" ",
+			rob[i].decbus.Rt, rob[i].op.pRt, rob[i].argD, rob[i].argD_v?"v":" ",
 			rob[i].decbus.Ra, rob[i].op.pRa, rob[i].argA, rob[i].argA_v?"v":" ",
 			rob[i].decbus.Rb, rob[i].op.pRb, rob[i].argB, rob[i].argB_v?"v":" ",
 			rob[i].decbus.Rc, rob[i].op.pRc, rob[i].argC, rob[i].argC_v?"v":" ",
@@ -7642,14 +7543,14 @@ always_ff @(posedge clk) begin: clock_n_debug
 
 	$display("----- ALU -----");
 	$display("%d I=%h T=%h A=%h B=%h C=%h %c%d pc:%h #",
-		alu0_dataready, alu0_argI, alu0_argT, alu0_argA, alu0_argB, alu0_argC,
+		alu0_dataready, alu0_argI, alu0_argD, alu0_argA, alu0_argB, alu0_argC,
 		 ((fnIsLoad(alu0_instr) || fnIsStore(alu0_instr)) ? 109 : 97),
 		alu0_instr, alu0_pc);
 	$display("idle:%d res:%h rid:%d #", alu0_idle, alu0_res, alu0_id);
 
 	if (Stark_pkg::NALU > 1) begin
 		$display("%d I=%h T=%h A=%h B=%h C=%h %c%d pc:%h #",
-			alu1_dataready, alu1_argI, alu1_argT, alu1_argA, alu1_argB, alu1_argC, 
+			alu1_dataready, alu1_argI, alu1_argD, alu1_argA, alu1_argB, alu1_argC, 
 			 ((fnIsLoad(alu1_instr) || fnIsStore(alu1_instr)) ? 109 : 97),
 			alu1_instr, alu1_pc);
 		$display("idle:%d res:%h rid:%d #", alu1_idle, alu1_res, alu1_id);
@@ -7745,7 +7646,7 @@ begin
 	if (rob[dndx].sn > rob[ndx].sn) begin
 		if (rob[dndx].op.pRt==rob[ndx].op.nRt && 
 			rob[dndx].op.pRt!=9'd0 && rob[dndx].op.pRt!=PREGS-1) begin
-			rob[dndx].argT_v <= INV;
+			rob[dndx].argD_v <= INV;
 		end
 	end
 end
@@ -7881,7 +7782,7 @@ endfunction
 // cycle will not have been updated in the RAT in time for it to be used in
 // source register renames for the instructions queuing in the clock. So, the
 // regnames are bypassed.
-
+/*
 task tBypassRegnames;
 input rob_ndx_t ndx;
 input Stark_pkg::pipeline_reg_t db;
@@ -7914,7 +7815,7 @@ begin
 		if (db.decbus.Rt == pdb.decbus.Rt && !db.decbus.Rtz) begin
 			rob[ndx].op.pRt <= pdb.nRt;
 			if (fnSourceTv(db) | Tv)
-				rob[ndx].argT_v <= VAL;
+				rob[ndx].argD_v <= VAL;
 			tAllArgsValid(ndx, 1'b0, 1'b0, 1'b0, fnSourceTv(db) | Tv, 1'b0);
 		end
 		if (db.decbus.Rm == pdb.decbus.Rt) begin
@@ -7926,34 +7827,7 @@ begin
 	end
 end
 endtask
-
-task tBypassValid;
-input rob_ndx_t ndx;
-input Stark_pkg::pipeline_reg_t db;
-input Stark_pkg::pipeline_reg_t db2;
-begin
-	if (db.decbus.Ra == db2.decbus.Rt && !db.decbus.Raz) begin
-		rob[ndx].argA_v <= INV;
-		rob[ndx].all_args_valid <= INV;
-	end
-	if (db.decbus.Rb == db2.decbus.Rt && !db.decbus.Rbz) begin
-		rob[ndx].argB_v <= INV;
-		rob[ndx].all_args_valid <= INV;
-	end
-	if (db.decbus.Rc == db2.decbus.Rt && !db.decbus.Rcz) begin
-		rob[ndx].argC_v <= INV;
-		rob[ndx].all_args_valid <= INV;
-	end
-	if (db.decbus.Rt == db2.decbus.Rt && !db.decbus.Rtz) begin
-		rob[ndx].argT_v <= INV;
-		rob[ndx].all_args_valid <= INV;
-	end
-	if (db.decbus.Rm == db2.decbus.Rt) begin
-		rob[ndx].argM_v <= INV;
-		rob[ndx].all_args_valid <= INV;
-	end
-end
-endtask
+*/
 
 // Get the predicate bitmask for the instruction.
 // For scalar instructions this comes from the predicate modifier associated
@@ -7982,7 +7856,7 @@ endfunction
 // the physical regno will not be valid until a cycle later. So, a pending
 // valid flag is set. This flag is set to allow the real valid flag to be
 // updated in the next cycle.
-
+/*
 task tValidateArg;
 input rob_ndx_t nn;
 input pregno_t Rt;
@@ -7995,8 +7869,8 @@ begin
     rob[nn].argB_vp <= VAL;
 	if (rob[nn].argC_v == INV && rob[nn].op.pRc == Rt && rob[nn].v == VAL && v == VAL)
     rob[nn].argC_vp <= VAL;
-	if (rob[nn].argT_v == INV && rob[nn].op.pRt == Rt && rob[nn].v == VAL && v == VAL)
-    rob[nn].argT_vp <= VAL;
+	if (rob[nn].argD_v == INV && rob[nn].op.pRt == Rt && rob[nn].v == VAL && v == VAL)
+    rob[nn].argD_vp <= VAL;
 	if (rob[nn].argM_v == INV && rob[nn].op.pRm == Rt && rob[nn].v == VAL && v == VAL)
     rob[nn].argM_vp <= VAL;
 `ifdef IS_SIM
@@ -8004,8 +7878,8 @@ begin
     rob[nn].argA <= val;
 	if (rob[nn].argB_v == INV && rob[nn].op.pRb == Rt && rob[nn].v == VAL && v == VAL)
     rob[nn].argB <= val;
-	if (rob[nn].argT_v == INV && rob[nn].op.pRt == Rt && rob[nn].v == VAL && v == VAL)
-    rob[nn].argT <= val;
+	if (rob[nn].argD_v == INV && rob[nn].op.pRt == Rt && rob[nn].v == VAL && v == VAL)
+    rob[nn].argD <= val;
 	if (rob[nn].argM_v == INV && rob[nn].op.pRm == Rt && rob[nn].v == VAL && v == VAL)
     rob[nn].argM <= val;
 `endif    
@@ -8013,6 +7887,7 @@ begin
     rob[nn].argC <= val;
 end
 endtask	    
+*/
 
 // Called to invalidate ROB entries after a branch miss.
 
@@ -8060,7 +7935,7 @@ begin
 	for (nn = 0; nn < ROB_ENTRIES; nn = nn + 1) begin
 		if (robentry_stomp[nn] && rob[nn].sn < rob[ndx].sn && rob[nn].op.nRt==rob[ndx].op.pRt) begin
 			if (rob[ndx].op.pRt!=9'd0)
-				rob[ndx].argT_v <= INV;
+				rob[ndx].argD_v <= INV;
 		end
 	end
 end
@@ -8260,8 +8135,8 @@ begin
 	dram_bus1 <= 64'd0;
 	dram_ctag0 <= 1'b0;
 	dram_ctag1 <= 1'b0;
-	dram0_argT <= 64'd0;
-	dram1_argT <= 64'd0;
+	dram0_argD <= 64'd0;
+	dram1_argD <= 64'd0;
 	panic <= `PANIC_NONE;
 	for (n14 = 0; n14 < ROB_ENTRIES; n14 = n14 + 1) begin
 		rob[n14] <= {$bits(Stark_pkg::rob_entry_t){1'd0}};
@@ -8406,17 +8281,6 @@ input pt;
 input rob_ndx_t tail;
 input stomp;
 input ornop;
-input pregno_t pRa;
-input pregno_t pRb;
-input pregno_t pRc;
-input pregno_t pRt;
-input pregno_t nRt;
-input pregno_t pRm;
-input pRav;
-input pRbv;
-input pRcv;
-input pRtv;
-input pRmv;
 input checkpt_ndx_t cndxq;
 input checkpt_ndx_t pndxq;
 input rob_ndx_t grplen;
@@ -8483,27 +8347,20 @@ begin
 		rob[tail].exc <= FLT_NONE;
 		rob[tail].excv <= FALSE;
 	end
-	rob[tail].argA_v <= fnSourceAv(ins) | pRav | db.has_imma;
-	rob[tail].argB_v <= fnSourceBv(ins) | pRbv | (db.has_Rb ? 1'b0 : db.has_immb);
-	rob[tail].argC_v <= fnSourceCv(ins) | pRcv | db.has_immc;
-	rob[tail].argT_v <= fnSourceTv(ins) | pRtv;
-	rob[tail].argM_v <= fnSourceMv(ins) | pRmv;
+	rob[tail].argA_v <= fnSourceRs1v(ins) | db.has_imma;
+	rob[tail].argB_v <= fnSourceRs2v(ins) | (db.has_Rb ? 1'b0 : db.has_immb);
+	rob[tail].argC_v <= fnSourceRs3v(ins) | db.has_immc;
+	rob[tail].argD_v <= fnSourceRdv(ins);
+	rob[tail].argCi_v <= fnSourceRciv(ins);
 	rob[tail].all_args_valid <= 
-		(fnSourceAv(ins) | pRav | db.has_imma) &&
-		(fnSourceBv(ins) | pRbv | (db.has_Rb ? 1'b0 : db.has_immb)) &&
-		(fnSourceCv(ins) | pRcv | db.has_immc) &&
-		(fnSourceTv(ins) | pRtv) &&
-		(fnSourceMv(ins) | pRmv)
+		(fnSourceRs1v(ins) | db.has_imma) &&
+		(fnSourceRs2v(ins) | (db.has_Rb ? 1'b0 : db.has_immb)) &&
+		(fnSourceRs3v(ins) | db.has_immc) &&
+		(fnSourceRdv(ins)) &&
+		(fnSourceCiv(ins))
 		;
 	rob[tail].could_issue <= FALSE;
 	rob[tail].could_issue_nm <= FALSE;
-`ifdef IS_SIM
-	rob[tail].argA <= fnRegVal(pRa);
-	rob[tail].argB <= fnRegVal(pRb);
-	rob[tail].argC <= fnRegVal(pRc);
-	rob[tail].argT <= fnRegVal(pRt);
-	rob[tail].argM <= fnRegVal(pRm);
-`endif
 	// Assume these two are TRUE. They will be set FALSE later.
 	rob[tail].prior_sync <= TRUE;
 	rob[tail].prior_fc <= TRUE;
@@ -8524,15 +8381,6 @@ begin
 	rob[tail].bt <= ins.bt;//pt;
 	rob[tail].cndx <= cndxq;//db.br ? pndxq : cndxq;
 	rob[tail].decbus <= db;
-	if (db.Ra==9'd0) rob[tail].op.aRa <= 9'd0;
-	if (db.Rb==9'd0) rob[tail].op.aRb <= 9'd0;
-	if (db.Rc==9'd0) rob[tail].op.aRc <= 9'd0;
-	if (db.Rt==9'd0) rob[tail].op.aRt <= 9'd0;
-	rob[tail].op.pRa <= pRa;	
-	rob[tail].op.pRb <= pRb;
-	rob[tail].op.pRc <= pRc;
-	rob[tail].op.pRt <= pRt;
-	rob[tail].op.pRm <= pRm;
 	// Architectural register zero is not renamed, physical register zero is
 	// used which will always read as zero. The renamer will not assign
 	// physical register zero when registers are being renamed.
@@ -8583,7 +8431,7 @@ begin
 //		rob[tail].argA_v <= VAL;
 		rob[tail].argB_v <= VAL;
 		rob[tail].argC_v <= VAL;
-//		rob[tail].argT_v <= VAL;
+//		rob[tail].argD_v <= VAL;
 //		rob[tail].argM_v <= VAL;
 //		rob[tail].done <= {TRUE,TRUE};
 	end
@@ -8611,20 +8459,20 @@ input Av;
 input Bv;
 input Cv;
 input Tv;
-input Mv;
+input Civ;
 begin
 	
 	if (Av) rob[ndx].argA_v <= VAL;
 	if (Bv) rob[ndx].argB_v <= VAL;
 	if (Cv) rob[ndx].argC_v <= VAL;
-	if (Tv) rob[ndx].argT_v <= VAL;
-	if (Mv) rob[ndx].argM_v <= VAL;
+	if (Tv) rob[ndx].argD_v <= VAL;
+	if (Mv) rob[ndx].argCi_v <= VAL;
 	rob[ndx].all_args_valid <=
 		(rob[ndx].argA_v | Av) &&
 		(rob[ndx].argB_v | Bv) &&
 		(rob[ndx].argC_v | Cv) &&
-		(rob[ndx].argT_v | Tv) &&
-		(rob[ndx].argM_v | Mv)
+		(rob[ndx].argD_v | Tv) &&
+		(rob[ndx].argCi_v | Civ)
 	;
 	
 end

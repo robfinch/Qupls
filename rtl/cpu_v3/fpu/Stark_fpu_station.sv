@@ -157,25 +157,25 @@ else begin
 		if (!rob.op.decbus.multicycle || (&next_cptgt) || rob.op.decbus.cpytgt)
 			sc_done <= TRUE;
 	end
-	tValidate(rob.op.pRs1,argA,argA_tag,valid[1]);
+	tValidate(rob.op.pRs1,argA,argA_tag,valid[0],valid[0]);
 	if (rob.op.pRs1==8'd0) begin
 		argA <= value_zero;
 		argA_tag <= 1'b0;
 		valid[0] <= 1'b1;
 	end
-	tValidate(rob.op.pRs2,argB,argB_tag,valid[2]);
+	tValidate(rob.op.pRs2,argB,argB_tag,valid[1],valid[1]);
 	if (rob.op.pRs2==8'd0) begin
 		argB <= value_zero;
 		argB_tag <= 1'b0;
 		valid[1] <= 1'b1;
 	end
-	tValidate(rob.op.pRs3,argC,argC_tag,valid[3]);
+	tValidate(rob.op.pRs3,argC,argC_tag,valid[2],valid[2]);
 	if (rob.op.pRs3==8'd0) begin
 		argC <= value_zero;
 		argC_tag <= 1'b0;
 		valid[2] <= 1'b1;
 	end
-	tValidate(rob.op.pRd,argT,argT_tag,valid[4]);
+	tValidate(rob.op.pRd,argT,argT_tag,valid[3],valid[3]);
 	if (rob.op.pRd==8'd0) begin
 		argT <= value_zero;
 		argT_tag <= 1'b0;
@@ -187,15 +187,16 @@ task tValidate;
 input pregno_t pRn;
 output value_t val;
 output val_tag;
-output valid;
+input valid_i;
+output valid_o;
 integer nn;
 begin
-	valid = 1'b0;
+	valid_o = valid_i;
 	for (nn = 0; nn < 16; nn = nn + 1) begin
-		if (pRn==prn[nn] && prnv[nn]) begin
+		if (pRn==prn[nn] && prnv[nn] && !valid_i) begin
 			val = rfo[nn];
 			val_tag = rfo_tag[nn];
-			valid = 1'b1;
+			valid_o = 1'b1;
 		end
 	end
 end

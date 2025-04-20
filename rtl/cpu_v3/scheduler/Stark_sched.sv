@@ -44,9 +44,11 @@ module Stark_sched(rst, clk, alu0_idle, alu1_idle, fpu0_idle ,fpu1_idle, fcu_idl
 	stomp_i, robentry_islot_i, robentry_islot_o,
 	head, rob, robentry_issue, robentry_fpu_issue, robentry_fcu_issue,
 	robentry_agen_issue,
-	alu0_rndx, alu1_rndx, alu0_rndxv, alu1_rndxv,
-	fpu0_rndx, fpu0_rndxv, fpu1_rndx, fpu1_rndxv, fcu_rndx, fcu_rndxv,
-	agen0_rndx, agen1_rndx, cpytgt0, cpytgt1, agen0_rndxv, agen1_rndxv,
+	alu0_rndx, alu1_rndx, alu0_rndxv, alu0_args_valid, alu1_rndxv, alu1_args_valid,
+	fpu0_rndx, fpu0_rndxv, fpu0_args_valid, fpu1_rndx, fpu1_rndxv, fpu1_args_valid,
+	fcu_rndx, fcu_rndxv, fcu_args_valid,
+	agen0_rndx, agen1_rndx, cpytgt0, cpytgt1,
+	agen0_rndxv, agen0_args_valid, agen1_rndxv, agen1_args_valid,
 	ratv0_rndxv, ratv1_rndxv, ratv2_rndxv, ratv3_rndxv, 
 	ratv0_rndx, ratv1_rndx, ratv2_rndx, ratv3_rndx,
 	beb_buf, beb_issue
@@ -55,12 +57,19 @@ parameter WINDOW_SIZE = Stark_pkg::SCHED_WINDOW_SIZE;
 input rst;
 input clk;
 input alu0_idle;
+input alu0_args_valid;
 input alu1_idle;
+input alu1_args_valid;
 input fpu0_idle;
+input fpu0_args_valid;
 input fpu1_idle;
+input fpu1_args_valid;
 input fcu_idle;
+input fcu_args_valid;
 input agen0_idle;
+input agen0_args_valid;
 input agen1_idle;
+input agen1_args_valid;
 input lsq0_idle;
 input lsq1_idle;
 input [ROB_ENTRIES-1:0] stomp_i;
