@@ -1,5 +1,5 @@
 # fpu
-This folder contains files for components related to the FPUs.
+This folder contains files for components related to the FPUs. The FPU primitives can be found in the float repository. There is quite a few of them, they are a project on their own.
 * Stark_fpu_station.sv: is a reservation station for ALUs
 * Stark_fpu64.sv: is the main FPU component containing the arithmetic and some ALU operations for a 64-bit datapath.
 * Stark_fpu128.sv: is the main FPU component containing the arithmetic and some ALU operations for a 128-bit datapath.
