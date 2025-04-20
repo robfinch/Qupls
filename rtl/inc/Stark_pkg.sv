@@ -126,6 +126,8 @@ parameter SUPPORT_POSTFIX = 1;
 // speculate incorrectly leading to lower performance.
 parameter SUPPORT_OOOFC = 1'b0;
 
+parameter SUPPORT_PRED = 1'b1;
+
 // Allowing unaligned memory access increases the size of the core.
 parameter SUPPORT_UNALIGNED_MEMORY = 1'b0;
 parameter SUPPORT_BUS_TO = 1'b0;
@@ -370,10 +372,10 @@ typedef enum logic [5:0] {
 } opcode_e;
 
 typedef enum logic [3:0] {
-	FOP4_ADD = 4'd4,
-	FOP4_SUB = 4'd5,
-	FOP4_MUL = 4'd6,
-	FOP4_DIV = 4'd7,
+	FOP4_FADD = 4'd4,
+	FOP4_FSUB = 4'd5,
+	FOP4_FMUL = 4'd6,
+	FOP4_FDIV = 4'd7,
 	FOP4_G8 = 4'd8,
 	FOP4_G10 = 4'd10,
 	FOP4_TRIG = 4'd11
@@ -389,8 +391,8 @@ typedef enum logic [2:0] {
 typedef enum logic [4:0] {
 	FG10_FCVTF2I = 5'd0,
 	FG10_FCVTI2F = 5'd1,
-	FG8_FSIGN = 5'd16,
-	FG8_FSQRT = 5'd17
+	FG10_FSIGN = 5'd16,
+	FG10_FSQRT = 5'd17
 } float_g10_t;
 
 typedef enum logic [4:0] {
@@ -626,7 +628,7 @@ typedef struct packed
 	logic zero;
 	logic [1:0] lx;
 	logic [3:0] op4;
-	logic [2:0] resv;
+	logic [2:0] op3;
 	logic [4:0] Rs2;
 	logic cr;
 	logic [4:0] Rs1;
@@ -639,8 +641,8 @@ typedef struct packed
 	logic zero;
 	logic [1:0] lx;
 	logic [3:0] op4;
-	logic [3:0] resv1a;
-	logic [2:0] cl;
+	logic [2:0] op3;
+	logic [3:0] cl;
 	logic resv;
 	logic cr;
 	logic [4:0] Rs1;
@@ -1054,6 +1056,7 @@ typedef enum logic [7:0] {
 	FLT_RST		= 8'h0C,
 	FLT_ALT		= 8'h0D,
 	FLT_DBZ		= 8'h10,
+	FLT_CHK		= 8'h43,
 	FLT_BADREG = 8'hDF,
 	FLT_CAPTAG = 8'hE0,
 	FLT_CAPOTYPE = 8'hE1,
@@ -1133,9 +1136,9 @@ typedef struct packed
 	logic has_imma;
 	logic has_immb;
 	logic has_immc;
-	logic [63:0] imma;
-	logic [63:0] immb;
-	logic [63:0] immc;		// for store immediate
+	cpu_types_pkg::value_t imma;
+	cpu_types_pkg::value_t immb;
+	cpu_types_pkg::value_t immc;		// for store immediate
 	logic csr;				// CSR instruction
 	logic nop;				// NOP semantics
 	logic fc;					// flow control op
@@ -1149,9 +1152,9 @@ typedef struct packed
 	logic fpu0;				// true if instruction must use only fpu #0
 	memsz_t prc;			// precision of operation
 	logic mul;
-	logic mulu;
+	logic mula;
 	logic div;
-	logic divu;
+	logic diva;
 	logic bitwise;		// true if a bitwise operator (and, or, eor)
 	logic multicycle;
 	logic mem;
@@ -1163,7 +1166,7 @@ typedef struct packed
 	logic store;
 	logic bstore;
 	logic cls;
-	logic lda;
+	logic loada;
 	logic erc;
 	logic fence;
 	logic mcb;					// micro-code branch
@@ -1176,11 +1179,13 @@ typedef struct packed
 	logic ret;
 	logic brk;
 	logic irq;
-	logic rti;
+	logic eret;
 	logic rex;
 	logic pfx;
 	logic sync;
 	logic oddball;
+	logic pred;					// predicate instruction
+	logic [11:0] pred_mask;
 	logic carry;
 	logic atom;
 	logic regs;
@@ -1203,7 +1208,7 @@ typedef struct packed {
 	cpu_types_pkg::value_t argB;
 	cpu_types_pkg::value_t argC;
 	cpu_types_pkg::value_t argI;
-	cpu_types_pkg::value_t argT;
+	cpu_types_pkg::value_t argD;
 	cpu_types_pkg::value_t argM;
 	cpu_types_pkg::value_t res;
 	cpu_types_pkg::pregno_t pRc;
@@ -1331,9 +1336,6 @@ typedef struct packed {
 	logic [1:0] out;					// 1=instruction is being executed
 	logic [1:0] done;					// 2'b11=instruction is finished executing
 	logic rstp;								// indicate physical register reset required
-	logic [63:0] pred_status;	// predicate status for the next eight instructions.
-	logic [7:0] pred_bits;		// predicte bits for this instruction.
-	logic pred_bitv;					// 1=predicate bit is valid
 	logic [1:0] vn;						// vector index
 	logic chkpt_freed;
 	cpu_types_pkg::pc_address_t brtgt;
@@ -1346,7 +1348,7 @@ typedef struct packed {
 	cpu_types_pkg::value_t argA;
 	cpu_types_pkg::value_t argB;
 	cpu_types_pkg::value_t argI;
-	cpu_types_pkg::value_t argT;
+	cpu_types_pkg::value_t argD;
 	cpu_types_pkg::value_t argM;
 	cpu_types_pkg::value_t res;
 `endif
@@ -1359,6 +1361,9 @@ typedef struct packed {
 	cpu_types_pkg::pregno_t updAreg;
 	cpu_types_pkg::pregno_t updBreg;
 	cpu_types_pkg::pregno_t updCreg;
+	logic [11:0] pred_mask;		// predicte mask bits for this instruction.
+	logic pred_bit;						// 1 once previous predicate is true or ignored
+	logic pred_bitv;					// 1 if predicate bitis valid
 	logic all_args_valid;			// 1 if all args are valid
 	logic could_issue;				// 1 if instruction ready to issue
 	logic could_issue_nm;			// 1 if instruction ready to issue NOP
@@ -1368,12 +1373,12 @@ typedef struct packed {
 	logic argA_vp;						// 1=argument A valid pending
 	logic argB_vp;
 	logic argC_vp;
-	logic argT_vp;
+	logic argD_vp;
 	logic argCi_v;
 	logic argA_v;							// 1=argument A valid
 	logic argB_v;
 	logic argC_v;
-	logic argT_v;
+	logic argD_v;
 	logic rat_v;							// 1=checked with RAT for valid reg arg.
 	cpu_types_pkg::value_t arg;							// argument value for CSR instruction
 	// The following fields are loaded at enqueue time, but otherwise do not change.
@@ -1385,8 +1390,6 @@ typedef struct packed {
 	cpu_types_pkg::checkpt_ndx_t cndx;				// checkpoint index
 	cpu_types_pkg::checkpt_ndx_t br_cndx;		// checkpoint index branch owns
 	pipeline_reg_t op;			// original instruction
-	cpu_types_pkg::pc_address_ex_t pc;			// PC of instruction
-	cpu_types_pkg::mc_address_t mcip;				// Micro-code IP address
 	cpu_types_pkg::seqnum_t grp;							// instruction group
 } rob_entry_t;
 
@@ -1555,6 +1558,167 @@ input instruction_t ir;
 begin
 	fnIsRet = (ir.any.opcode==OP_B0||ir.any.opcode==OP_B1) && 
 		ir[31:29]==3'd1 && ir[28:26]==3'd1 && ir[8:6]==3'd0;	// eret or eret2
+end
+endfunction
+
+function fnImma;
+input ex_instruction_t ir;
+begin
+	fnImma = 1'b0;
+end
+endfunction
+
+function fnImmb;
+input ex_instruction_t ir;
+begin
+	fnImmb = 1'b0;
+	case(ir.ins.any.opcode)
+	OP_ADD,OP_CMP,OP_MUL,OP_DIV,OP_SUBF:
+		fnImmb = ir.ins[31] || ir.ins[30:29] >= 2'd1;
+//	OP_RTD:
+//		fnImmb = 1'b1;
+	OP_LOADA,
+	OP_LDB,,OP_LDBZ,OP_LDW,OP_LDWZ,OP_LDT,OP_LDTZ,OP_LOAD:
+		fnImmb = ir.ins[31] || ir.ins[30:29] >= 2'd1;
+	OP_STB,OP_STW,OP_STT,OP_STORE,OP_STBI,OP_STWI,OP_STTI,OP_STOREI,OP_STPTR:
+		fnImmb = ir.ins[31] || ir.ins[30:29] >= 2'd1;
+	default:	fnImmb = 1'b0;
+	endcase
+end
+endfunction
+
+function fnImmc;
+input ex_instruction_t ir;
+begin
+	fnImmc = 1'b0;
+	case(ir.ins.any.opcode)
+	OP_STBI,OP_STWI,OP_STTI,OP_STOREI:
+		fnImmc = 1'b1;
+	default:	fnImmb = 1'b0;
+	endcase
+end
+endfunction
+
+// Registers that are essentially constant
+// r0 and the PC alias
+function fnConstReg;
+input [7:0] Rn;
+begin
+	fnConstReg = Rn==8'd0 || Rn==8'd39 || Rn==8'd135 || Rn==8'd175 || Rn==8'd215;
+end
+endfunction
+
+//
+// 1 if the the operand is automatically valid, 
+// 0 if we need a RF value
+function fnSourceRs1v;
+input ex_instruction_t ir;
+begin
+	case(ir.ins.any.opcode)
+	OP_CHK:	fnSourceRs1v = fnConstReg(ir.ins.chk.Rs1) || fnImma(ir);
+//	OP_RTD:		fnSourceRs1v = fnConstReg(ir.ins.rtd.Ra.num) || fnImma(ir);
+//	OP_JSR:		fnSourceRs1v = fnConstReg(ir.ins.jsr.Ra.num) || fnImma(ir);
+	OP_ADD:		fnSourceRs1v = fnConstReg(ir.ins.alu.Rs1) || fnImma(ir);
+	OP_SUBF:	fnSourceRs1v = fnConstReg(ir.ins.alu.Rs1) || fnImma(ir);
+	OP_CMP:		fnSourceRs1v = fnConstReg(ir.ins.alu.Rs1) || fnImma(ir);
+	OP_MUL:		fnSourceRs1v = fnConstReg(ir.ins.alu.Rs1) || fnImma(ir);
+	OP_DIV:		fnSourceRs1v = fnConstReg(ir.ins.alu.Rs1) || fnImma(ir);
+	OP_AND:		fnSourceRs1v = fnConstReg(ir.ins.alu.Rs1) || fnImma(ir);
+	OP_OR:		fnSourceRs1v = fnConstReg(ir.ins.alu.Rs1) || fnImma(ir);
+	OP_XOR:		fnSourceRs1v = fnConstReg(ir.ins.alu.Rs1) || fnImma(ir);
+	OP_ADB:		fnSourceRs1v = ir.ins.adb.BRs1 > 3'd0;
+	OP_SHIFT:	fnSourceRs1v = fnConstReg(ir.ins.sh.Rs1) || fnImma(ir);
+	OP_MOV:		fnSourceRs1v = fnConstReg(ir.ins.mov.Rs1) || fnImma(ir);
+	OP_BCC0,OP_BCC1:
+		fnSourceRs1v = fnConstReg(ir.ins.bccld.BRs1) || fnImma(ir);
+	OP_LOADA,
+	OP_LDB,,OP_LDBZ,OP_LDW,OP_LDWZ,OP_LDT,OP_LDTZ,OP_LOAD:
+		fnSourceRs1v = fnConstReg(ir.ins.ls.Rs1) || fnImma(ir);
+	OP_STB,OP_STW,OP_STT,OP_STORE,OP_STBI,OP_STWI,OP_STTI,OP_STOREI,OP_STPTR:
+		fnSourceRs1v = fnConstReg(ir.ins.ls.Rs1) || fnImma(ir);
+	default:	fnSourceRs1v = 1'b1;
+	endcase
+end
+endfunction
+
+function fnSourceRs2v;
+input ex_instruction_t ir;
+begin
+	case(ir.ins.r2.opcode)
+	OP_CHK:	fnSourceRs2v = fnConstReg(ir.aRb) || fnImmb(ir);
+//	OP_RTD:		fnSourceRs2v = 1'b0;
+//	OP_JSR,OP_BSR,
+	OP_ADD:		fnSourceRs2v = fnConstReg(ir.aRb) || fnImmb(ir);
+	OP_SUBF:	fnSourceRs2v = fnConstReg(ir.aRb) || fnImmb(ir);
+	OP_CMP:	fnSourceRs2v = fnConstReg(ir.aRb) || fnImmb(ir);
+	OP_MUL:	fnSourceRs2v = fnConstReg(ir.aRb) || fnImmb(ir);
+	OP_DIV:	fnSourceRs2v = fnConstReg(ir.aRb) || fnImmb(ir);
+	OP_AND:	fnSourceRs2v = fnConstReg(ir.aRb) || fnImmb(ir);
+	OP_OR:		fnSourceRs2v = fnConstReg(ir.aRb) || fnImmb(ir);
+	OP_XOR:	fnSourceRs2v = fnConstReg(ir.aRb) || fnImmb(ir);
+	OP_SHIFT:	fnSourceRs2v = fnConstReg(ir.aRb) || ir.ins[31];
+	OP_BCC0,OP_BCC1:
+		fnSourceRs2v = fnConstReg(ir.ins.bccld.Rs2) || fnImmb(ir);
+	OP_LOADA,
+	OP_LDB,,OP_LDBZ,OP_LDW,OP_LDWZ,OP_LDT,OP_LDTZ,OP_LOAD:
+		fnSourceRs2v = fnConstReg(ir.ins.ls.Rs2) || fnImmb(ir);
+	OP_STB,OP_STW,OP_STT,OP_STORE,OP_STBI,OP_STWI,OP_STTI,OP_STOREI,OP_STPTR:
+		fnSourceRs2v = fnConstReg(ir.ins.ls.Rs2) || fnImmb(ir);
+	default:	fnSourceRs2v = 1'b1;
+	endcase
+end
+endfunction
+
+function fnSourceRs3v;
+input ex_instruction_t ir;
+begin
+	case(ir.ins.r2.opcode)
+	OP_CHK:	fnSourceRs3v = fnConstReg(ir.aRc);
+//	OP_RTD:
+//		fnSourceRs3v = 1'd0;
+	OP_STB,OP_STW,OP_STT,OP_STORE,OP_STBI,OP_STWI,OP_STTI,OP_STOREI,OP_STPTR:
+		fnSourceRs3v = fnConstReg(ir.ins.ls.Rs3) || fnImmc(ir);
+	default:
+		fnSourceRs3v = 1'b1;
+	endcase
+end
+endfunction
+
+function fnSourceRdv;
+input ex_instruction_t ir;
+begin
+	casez(ir.ins.any.opcode)
+	OP_CHK:	fnSourceRdv = 1'b1;
+//	OP_JSR:		fnSourceRdv = fnConstReg(ir.ins.jsr.Rt.num);
+	OP_ADD:		fnSourceRdv = fnConstReg(ir.ins.alu.Rd);
+	OP_SUBF:	fnSourceRdv = fnConstReg(ir.ins.alu.Rd);
+	OP_CMP:		fnSourceRdv = fnConstReg(ir.ins.alu.Rd);
+	OP_MUL:	fnSourceRdv = fnConstReg(ir.ins.alu.Rd);
+	OP_DIV:	fnSourceRdv = fnConstReg(ir.ins.alu.Rd);
+	OP_AND:	fnSourceRdv = fnConstReg(ir.ins.alu.Rd);
+	OP_OR:		fnSourceRdv = fnConstReg(ir.ins.alu.Rd);
+	OP_XOR:	fnSourceRdv = fnConstReg(ir.ins.alu.Rd);
+	OP_ADB:		fnSourceRdv = fnConstReg(ir.ins.adb.Rd);
+	OP_SHIFT:	fnSourceRdv = fnConstReg(ir.ins.sh.Rd);
+	OP_MOV:		fnSourceRdv = fnConstReg(ir.ins.mov.Rd);
+	OP_LOADA,
+	OP_LDB,,OP_LDBZ,OP_LDW,OP_LDWZ,OP_LDT,OP_LDTZ,OP_LOAD:
+		fnSourceRdv = fnConstReg(ir.ins.ls.Rd);
+	OP_STB,OP_STW,OP_STT,OP_STORE,OP_STBI,OP_STWI,OP_STTI,OP_STOREI,OP_STPTR:
+		fnSourceRdv = fnConstReg(ir.ins.ls.Rs3) || fnImmc(ir);
+	OP_BCC0,OP_BCC1:
+		fnSourceRdv = ir.ins.bccld.BRd==3'd0 || ir.ins.bccld.BRd==3'd7;
+//	OP_RTD:	fnSourceRdv = 1'b0;
+	default:
+		fnSourceRdv = 1'b1;
+	endcase
+end
+endfunction
+
+function fnSourceCiv;
+input ex_instruction_t ir;
+begin
+	fnSourceCiv = 1'b1;
 end
 endfunction
 

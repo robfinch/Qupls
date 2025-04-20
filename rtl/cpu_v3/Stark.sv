@@ -7102,6 +7102,7 @@ else begin
 	// scheduler. The latency is hidden.
 	begin : gSchedPrecalc
 		for (n3 = 0; n3 < ROB_ENTRIES; n3 = n3 + 1) begin
+			tSetPredBit(n3);
 			if (rob[n3].v) begin
 				if (!fnPriorSync(n3))
 					rob[n3].prior_sync <= FALSE; 
@@ -7115,7 +7116,7 @@ else begin
 					rob[n3].v
 				&& !robentry_stomp[n3]
 				&& !(&rob[n3].done)
-				&& (rob[n3].decbus.cpytgt ? (rob[n3].argD_v /*|| rob[g].op.nRt==9'd0*/) : rob[n3].all_args_valid)
+				&& (rob[n3].decbus.cpytgt ? (rob[n3].argD_v /*|| rob[g].op.nRt==9'd0*/) : rob[n3].all_args_valid && rob[n3].pred_bit)
 				&& (rob[n3].decbus.mem ? !rob[n3].prior_fc : 1'b1)
 				&& (SERIALIZE ? (rob[(n3+ROB_ENTRIES-1)%ROB_ENTRIES].done==2'b11 || rob[(n3+ROB_ENTRIES-1)%ROB_ENTRIES].v==INV) : 1'b1)
 				//&& !fnPriorFalsePred(g)
@@ -7131,7 +7132,7 @@ else begin
 				&& rob[n3].argD_v 
 				//&& fnPredFalse(g)
 				&& !robentry_issue[n3]
-				&& ~|rob[n3].pred_bits
+				&& ~rob[n3].pred_bit
 		    && rob[n3].pred_bitv
 				&& SUPPORT_PRED
 				;
@@ -8316,8 +8317,10 @@ begin
 
 	// "dynamic" fields, these fields may change after enqueue
 	rob[tail].sn <= sn;
-	rob[tail].pred_bitv <= FALSE;
-	rob[tail].pred_bits <= 8'h00;
+	rob[tail].pred_mask <= db.pred_mask;
+	// NOPs are valid regardless of predicate status
+	rob[tail].pred_bitv <= db.nop;
+	rob[tail].pred_bit <= db.nop;
 	rob[tail].orid <= mc_orid;
 	rob[tail].chkpt_freed <= FALSE;
 	rob[tail].br_cndx <= cndxq;
@@ -8347,18 +8350,21 @@ begin
 		rob[tail].exc <= FLT_NONE;
 		rob[tail].excv <= FALSE;
 	end
+	rob[tail].predBit = FALSE;
 	rob[tail].argA_v <= fnSourceRs1v(ins) | db.has_imma;
 	rob[tail].argB_v <= fnSourceRs2v(ins) | (db.has_Rb ? 1'b0 : db.has_immb);
 	rob[tail].argC_v <= fnSourceRs3v(ins) | db.has_immc;
 	rob[tail].argD_v <= fnSourceRdv(ins);
 	rob[tail].argCi_v <= fnSourceRciv(ins);
-	rob[tail].all_args_valid <= 
+	rob[tail].all_args_valid <= FALSE;
+	/*
 		(fnSourceRs1v(ins) | db.has_imma) &&
 		(fnSourceRs2v(ins) | (db.has_Rb ? 1'b0 : db.has_immb)) &&
 		(fnSourceRs3v(ins) | db.has_immc) &&
 		(fnSourceRdv(ins)) &&
 		(fnSourceCiv(ins))
 		;
+	*/
 	rob[tail].could_issue <= FALSE;
 	rob[tail].could_issue_nm <= FALSE;
 	// Assume these two are TRUE. They will be set FALSE later.
@@ -8472,7 +8478,8 @@ begin
 		(rob[ndx].argB_v | Bv) &&
 		(rob[ndx].argC_v | Cv) &&
 		(rob[ndx].argD_v | Tv) &&
-		(rob[ndx].argCi_v | Civ)
+		(rob[ndx].argCi_v | Civ) &&
+		(rob[ndx].predBit)
 	;
 	
 end
@@ -8817,5 +8824,97 @@ begin
 end
 endtask
 
-endmodule
 
+/* Searches the ROB backwards up to seven instructions looking for a predicate.
+	 If no predicate is found, then the predBit is marked TRUE allowing the 
+	 instruction to issue if other args are valid. Otherwise if there is a
+	 predicate, then the predBit will only be marked true if the predicate
+	 was true. Otherwise once the pred instruction has resolved the valid bit
+	 of instructions in the predicate window will be set according to the status
+	 of the predicate.
+*/
+task tSetPredBit;
+input rob_ndx_t ndx;
+rob_ndx_t m1;
+rob_ndx_t m2;
+rob_ndx_t m3;
+rob_ndx_t m4;
+rob_ndx_t m5;
+rob_ndx_t m6;
+rob_ndx_t m7;
+begin
+	if (SUPPORT_PRED) begin
+		m1 = (ndx + Stark_pkg::ROB_ENTRIES - 1) % Stark_pkg::ROB_ENTRIES;
+		m2 = (ndx + Stark_pkg::ROB_ENTRIES - 2) % Stark_pkg::ROB_ENTRIES;
+		m3 = (ndx + Stark_pkg::ROB_ENTRIES - 3) % Stark_pkg::ROB_ENTRIES;
+		m4 = (ndx + Stark_pkg::ROB_ENTRIES - 4) % Stark_pkg::ROB_ENTRIES;
+		m5 = (ndx + Stark_pkg::ROB_ENTRIES - 5) % Stark_pkg::ROB_ENTRIES;
+		m6 = (ndx + Stark_pkg::ROB_ENTRIES - 6) % Stark_pkg::ROB_ENTRIES;
+		m7 = (ndx + Stark_pkg::ROB_ENTRIES - 7) % Stark_pkg::ROB_ENTRIES;
+		if (rob[m1].v && rob[m1].sn < rob[ndx].sn && rob[m1].op.decbus.pred) begin
+			if (rob[m1].pred_mask[1:0]==2'd0) begin
+				rob[ndx].pred_bit = TRUE;
+				rob[ndx].pred_bitv = VAL;
+			end
+			else if (rob[m1].done==2'b11 && rob[m1].pred_mask[1:0]!=2'b00) begin
+				rob[ndx].v = INV;
+			end
+		end
+		else if (rob[m2].v && rob[m2].sn < rob[ndx].sn && rob[m2].op.decbus.pred) begin
+			if (rob[m2].pred_mask[3:2]==2'd0) begin
+				rob[ndx].pred_bit = TRUE;
+				rob[ndx].pred_bitv = VAL;
+			end
+			else if (rob[m2].done==2'b11 && rob[m2].pred_mask[3:2]!=2'b00) begin
+				rob[ndx].v = INV;
+			end
+		end
+		else if (rob[m3].v && rob[m3].sn < rob[ndx].sn && rob[m3].op.decbus.pred) begin
+			if (rob[m3].pred_mask[5:4]==2'd0) begin
+				rob[ndx].pred_bit = TRUE;
+				rob[ndx].pred_bitv = VAL;
+			end
+			else if (rob[m3].done==2'b11 && rob[m3].pred_mask[5:4]!=2'b00) begin
+				rob[ndx].v = INV;
+			end
+		end
+		else if (rob[m4].v && rob[m4].sn < rob[ndx].sn && rob[m4].op.decbus.pred) begin
+			if (rob[m4].pred_mask[7:6]==2'd0) begin
+				rob[ndx].pred_bit = TRUE;
+				rob[ndx].pred_bitv = VAL;
+			end
+			else if (rob[m4].done==2'b11 && rob[m4].pred_mask[7:6]!=2'b00) begin
+				rob[ndx].v = INV;
+			end
+		end
+		else if (rob[m5].v && rob[m5].sn < rob[ndx].sn && rob[m5].op.decbus.pred) begin
+			if (rob[m5].pred_mask[9:8]==2'd0) begin
+				rob[ndx].pred_bit = TRUE;
+				rob[ndx].pred_bitv = VAL;
+			end
+			else if (rob[m5].done==2'b11 && rob[m5].pred_mask[9:8]!=2'b00) begin
+				rob[ndx].v = INV;
+			end
+		end
+		else if (rob[m6].v && rob[m6].sn < rob[ndx].sn && rob[m6].op.decbus.pred) begin
+			if (rob[m6].pred_mask[11:10]==2'd0) begin
+				rob[ndx].pred_bit = TRUE;
+				rob[ndx].pred_bitv = VAL;
+			end
+			else if (rob[m6].done==2'b11 && rob[m6].pred_mask[11:10]!=2'b00) begin
+				rob[ndx].v = INV;
+			end
+		end
+		else if (rob[7].v && rob[m7].sn < rob[ndx].sn) begin
+			rob[ndx].pred_bit = TRUE;
+			rob[ndx].pred_bitv = VAL;
+		end
+	end
+	else begin
+		rob[ndx].pred_bit = TRUE;
+		rob[ndx].pred_bitv = VAL;
+	end
+end
+endtask
+
+endmodule
