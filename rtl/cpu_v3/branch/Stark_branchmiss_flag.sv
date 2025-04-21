@@ -54,7 +54,7 @@ else begin
 	miss_flag <= FALSE;		// pulse for only 1 cycle.
 	if (trig) begin
 		case(bts)
-		Stark_pkg::BTS_REG,Stark_pkg::BTS_DISP:
+		Stark_pkg::BTS_REG,Stark_pkg::BTS_BCC:
 			miss_flag <= miss_det;
 		Stark_pkg::BTS_CALL,Stark_pkg::BTS_RET:
 			miss_flag <= TRUE;

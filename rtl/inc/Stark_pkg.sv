@@ -126,7 +126,15 @@ parameter SUPPORT_POSTFIX = 1;
 // speculate incorrectly leading to lower performance.
 parameter SUPPORT_OOOFC = 1'b0;
 
+// The following parameter enables support for predicated logic in the core.
 parameter SUPPORT_PRED = 1'b1;
+
+// The PRED_SHADOW parameter controls the maximum number of instructions
+// following the predicate that are affected by it. Increasing the shadow
+// increases the amount of logic generated for the core in a more than
+// linear fashion. The maximum is seven instructions as that is all that
+// can be encoded in the instruction. The minimum is one.
+parameter PRED_SHADOW = 4;
 
 // Allowing unaligned memory access increases the size of the core.
 parameter SUPPORT_UNALIGNED_MEMORY = 1'b0;
@@ -303,7 +311,7 @@ typedef struct packed
 
 typedef enum logic [2:0] {
 	BTS_NONE = 3'd0,
-	BTS_DISP = 3'd1,
+	BTS_BCC = 3'd1,
 	BTS_REG = 3'd2,
 	BTS_BSR = 3'd3,
 	BTS_JSR = 3'd4,
@@ -382,22 +390,23 @@ typedef enum logic [3:0] {
 } float_t;
 
 typedef enum logic [2:0] {
-	FG8_FSNGJ = 3'd0,
+	FG8_FSGNJ = 3'd0,
 	FG8_FSGNJN = 3'd1,
 	FG8_FSGNJX = 3'd2,
-	FG8_SCALEB = 3'd3
+	FG8_FSCALEB = 3'd3
 } float_g8_t;
 
 typedef enum logic [4:0] {
 	FG10_FCVTF2I = 5'd0,
 	FG10_FCVTI2F = 5'd1,
 	FG10_FSIGN = 5'd16,
-	FG10_FSQRT = 5'd17
+	FG10_FSQRT = 5'd17,
+	FG10_FTRUNC = 5'd18
 } float_g10_t;
 
 typedef enum logic [4:0] {
-	FTRIG_COS = 5'd0,
-	FTRIG_SIN = 5'd1
+	FTRIG_FCOS = 5'd0,
+	FTRIG_FSIN = 5'd1
 } float_trig_t;
 
 parameter NOP_INSN = {26'd0,OP_NOP};
@@ -1057,6 +1066,7 @@ typedef enum logic [7:0] {
 	FLT_ALT		= 8'h0D,
 	FLT_DBZ		= 8'h10,
 	FLT_CHK		= 8'h43,
+	FLT_PRED  = 8'hDE,
 	FLT_BADREG = 8'hDF,
 	FLT_CAPTAG = 8'hE0,
 	FLT_CAPOTYPE = 8'hE1,
@@ -1132,6 +1142,7 @@ typedef struct packed
 	logic Rs2z;
 	logic Rs3z;
 	logic Rdz;
+	logic has_Rs2;
 	logic has_imm;
 	logic has_imma;
 	logic has_immb;
@@ -1186,6 +1197,8 @@ typedef struct packed
 	logic oddball;
 	logic pred;					// predicate instruction
 	logic [11:0] pred_mask;
+	logic [11:0] pred_atom_mask;
+	logic [3:0] pred_shadow_size;
 	logic carry;
 	logic atom;
 	logic regs;
@@ -1267,7 +1280,7 @@ typedef struct packed
 	logic ssm;								// 1=single step mode active
 	logic hwi;
 	logic [2:0] hwi_swstk;		// software stack
-//	cause_code_t exc;					// non-zero indicate exception
+	cause_code_t exc;					// non-zero indicate exception
 	logic excv;								// 1=exception
 	// The following fields are loaded at enqueue time, but otherwise do not change.
 	logic bt;									// branch to be taken as predicted
@@ -1341,7 +1354,7 @@ typedef struct packed {
 	cpu_types_pkg::pc_address_t brtgt;
 	cpu_types_pkg::mc_address_t mcbrtgt;			// micro-code branch target
 	logic takb;								// 1=branch evaluated to taken
-//	cause_code_t exc;					// non-zero indicate exception
+	cause_code_t exc;					// non-zero indicate exception
 	logic excv;								// 1=exception
 	cpu_types_pkg::value_t argC;	// for stores
 `ifdef IS_SIM
@@ -1361,6 +1374,9 @@ typedef struct packed {
 	cpu_types_pkg::pregno_t updAreg;
 	cpu_types_pkg::pregno_t updBreg;
 	cpu_types_pkg::pregno_t updCreg;
+	logic [1:0] pred_tf;			// true(1)/false(2)/unknown(0)
+	logic [5:0] pred_no;			// predicate number
+	logic [3:0] pred_shadow_size;	// number of instructions in shadow
 	logic [11:0] pred_mask;		// predicte mask bits for this instruction.
 	logic pred_bit;						// 1 once previous predicate is true or ignored
 	logic pred_bitv;					// 1 if predicate bitis valid
@@ -1444,12 +1460,12 @@ begin
 	if (ins[31]!=1'b1)							// and is the constant extended on the cache line?
 	if (ins[30:29]!=2'b00) begin		// and it is not a register spec
 		if (fnIsBccCsr(ins))
-			fnConstPos[3:0] = {1'b1,ins[14:12]};
+			fnConstPos[3:0] = ins[15:12];
 		else
-			fnConstPos[3:0] = {1'b1,ins[20:18]};
+			fnConstPos[3:0] = ins[21:18];
 	end
 	if (fnIsStimm(ins))
-		fnConstPos[7:4] = {1'b1,ins[8:6]};
+		fnConstPos[7:4] = ins[10:7];
 end
 endfunction
 
@@ -1463,22 +1479,22 @@ begin
 	if (ins[31]!=1'b1)							// and is the constant extended on the cache line?
 		fnConstSize[1:0] = ins[30:29];
 	if (fnIsStimm(ins))
-		fnConstSize[3:2] = 2'b01;
+		fnConstSize[3:2] = ins.opcode[2:1];	// store instructions are in size order
 end
 endfunction
 
-// ATOM or ACARRY
+// ATOM
 function fnIsAtom;
 input instruction_t ir;
 begin
-	fnIsAtom = ir.any.opcode[5:1]==5'd12 && ir[8:6]==3'd7 && ir[31:29]==3'd0 && (ir[28:26]==3'd1 || ir[28:16]==3'd3);
+	fnIsAtom = ir.any.opcode[5:1]==5'd12 && ir[8:6]==3'd7 && ir[31:29]==3'd0 && ir[28:26]==3'd1;
 end
 endfunction
 
 function fnIsCarry;
 input instruction_t ir;
 begin
-	fnIsCarry = ir.any.opcode[5:1]==5'd12 && ir[8:6]==3'd7 && ir[31:29]==3'd0 && (ir[28:26]==3'd2 || ir[28:16]==3'd3);
+	fnIsCarry = ir.any.opcode[5:1]==5'd12 && ir[8:6]==3'd7 && ir[31:29]==3'd0 && ir[28:26]==3'd2;
 end
 endfunction
 
@@ -1594,7 +1610,7 @@ begin
 	case(ir.ins.any.opcode)
 	OP_STBI,OP_STWI,OP_STTI,OP_STOREI:
 		fnImmc = 1'b1;
-	default:	fnImmb = 1'b0;
+	default:	fnImmc = 1'b0;
 	endcase
 end
 endfunction

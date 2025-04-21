@@ -506,7 +506,12 @@ else begin
 				end
 				// Issue flow controls in order, one at a time
 				if (!issued_fcu && fcu_idle && rob[heads[hd]].decbus.fc && !rob[heads[hd]].done[1] && !rob[heads[hd]].out[1]
-					&& !prev_issue[heads[hd]]
+					&& !prev_issue[heads[hd]]	//???
+					// The following line makes flow control wait until at least six other
+					// instructions are in the ROB. This is for the benefit of predication.
+					// Note it is only 1 or 2 instruction groups, so this is likely true
+					// already. (Sequence numbers decrement from 0x7f downwards.)
+					&& rob[heads[hd]].sn < 7'd79
 					&& !(|robentry_fcu_issue)
 					&& !(|next_robentry_fcu_issue)
 //					&& !prev_issue2[heads[hd]]

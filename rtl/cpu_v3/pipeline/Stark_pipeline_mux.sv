@@ -127,7 +127,7 @@ input get;
 output stall;
 
 integer nn,hh;
-irq_info_packet irq_in_r;
+Stark_pkg::irq_info_packet_t irq_in_r;
 Stark_pkg::pipeline_reg_t ins0_mux_o;
 Stark_pkg::pipeline_reg_t ins1_mux_o;
 Stark_pkg::pipeline_reg_t ins2_mux_o;
@@ -175,19 +175,17 @@ Stark_pkg::pipeline_reg_t nopi;
 // Define a NOP instruction.
 always_comb
 begin
-	nopi = {$bits(pipeline_reg_t){1'b0}};
-	nopi.exc = FLT_NONE;
-	nopi.pc.pc = RSTPC;
+	nopi = {$bits(Stark_pkg::pipeline_reg_t){1'b0}};
+	nopi.exc = Stark_pkg::FLT_NONE;
+	nopi.pc.pc = Stark_pkg::RSTPC;
 	nopi.mcip = 12'h1A0;
-	nopi.ins = {26'd0,OP_NOP};
-	nopi.pred_btst = 6'd0;
-	nopi.element = 'd0;
-	nopi.aRa = 8'd0;
-	nopi.aRb = 8'd0;
-	nopi.aRc = 8'd0;
-	nopi.aRt = 8'd0;
+	nopi.ins = {26'd0,Stark_pkg::OP_NOP};
+	nopi.aRs1 = 8'd0;
+	nopi.aRs2 = 8'd0;
+	nopi.aRs3 = 8'd0;
+	nopi.aRd = 8'd0;
 	nopi.v = 1'b1;
-	nopi.decbus.Rtz = 1'b1;
+	nopi.decbus.Rdz = 1'b1;
 	nopi.decbus.nop = 1'b1;
 	nopi.decbus.alu = 1'b1;
 end
@@ -212,10 +210,10 @@ begin
 	mc_ins1.mcip = mcip1_i;
 	mc_ins2.mcip = mcip2_i;
 	mc_ins3.mcip = mcip3_i;
-	mc_ins0.decbus.Rtz = mc_ins0_i.aRt==8'd0;
-	mc_ins1.decbus.Rtz = mc_ins1_i.aRt==8'd0;
-	mc_ins2.decbus.Rtz = mc_ins2_i.aRt==8'd0;
-	mc_ins3.decbus.Rtz = mc_ins3_i.aRt==8'd0;
+	mc_ins0.decbus.Rdz = mc_ins0_i.ins.alu.Rd==8'd0;
+	mc_ins1.decbus.Rdz = mc_ins1_i.ins.alu.Rd==8'd0;
+	mc_ins2.decbus.Rdz = mc_ins2_i.ins.alu.Rd==8'd0;
+	mc_ins3.decbus.Rdz = mc_ins3_i.ins.alu.Rd==8'd0;
 	mc_ins0.decbus.nop = 1'b1;
 	mc_ins1.decbus.nop = 1'b1;
 	mc_ins2.decbus.nop = 1'b1;
@@ -232,10 +230,6 @@ begin
 	mc_ins1.decbus.fpu = 1'b0;
 	mc_ins2.decbus.fpu = 1'b0;
 	mc_ins3.decbus.fpu = 1'b0;
-	mc_ins0.element = 4'd0;
-	mc_ins1.element = 4'd0;
-	mc_ins2.element = 4'd0;
-	mc_ins3.element = 4'd0;
 	mc_ins0.takb = 1'b0;
 	mc_ins1.takb = 1'b0;
 	mc_ins2.takb = 1'b0;
@@ -244,22 +238,18 @@ begin
 	mc_ins1.excv = 1'b0;
 	mc_ins2.excv = 1'b0;
 	mc_ins3.excv = 1'b0;
-	mc_ins0.exc = FLT_NONE;
-	mc_ins1.exc = FLT_NONE;
-	mc_ins2.exc = FLT_NONE;
-	mc_ins3.exc = FLT_NONE;
+	mc_ins0.exc = Stark_pkg::FLT_NONE;
+	mc_ins1.exc = Stark_pkg::FLT_NONE;
+	mc_ins2.exc = Stark_pkg::FLT_NONE;
+	mc_ins3.exc = Stark_pkg::FLT_NONE;
 	mc_ins0.bt = 1'b0;
 	mc_ins1.bt = 1'b0;
 	mc_ins2.bt = 1'b0;
 	mc_ins3.bt = 1'b0;
-	mc_ins0.cndx = 4'd0;
-	mc_ins1.cndx = 4'd0;
-	mc_ins2.cndx = 4'd0;
-	mc_ins3.cndx = 4'd0;
 end
 
 always_comb 
-	ic_line_aligned = {{64{2'd3,OP_NOP}},ic_line_fet} >> {pc0_fet.pc[5:2],5'd0};
+	ic_line_aligned = {{64{2'd3,Stark_pkg::OP_NOP}},ic_line_fet} >> {pc0_fet.pc[5:2],5'd0};
 
 pc_address_ex_t prev_pc0_fet;
 always_ff @(posedge clk_i)
@@ -301,11 +291,13 @@ begin
 		pr3_mux.ins = ic_line_aligned[127: 96];
 		pr4_mux.ins = ic_line_aligned[159:128];
 	end
+/*
 	pr0_mux.hwi_level = irq_fet;
 	pr1_mux.hwi_level = irq_fet;
 	pr2_mux.hwi_level = irq_fet;
 	pr3_mux.hwi_level = irq_fet;
 	pr4_mux.hwi_level = irq_fet;
+*/	
 	// If an NMI or IRQ is happening, invalidate instruction and mark as
 	// interrupted by external hardware.
 	pr0_mux.v = !(nmi_i || irqf_fet) && !stomp_mux;
@@ -313,11 +305,13 @@ begin
 	pr2_mux.v = !(nmi_i || irqf_fet) && !stomp_mux;
 	pr3_mux.v = !(nmi_i || irqf_fet) && !stomp_mux;
 	pr4_mux.v = !(nmi_i || irqf_fet) && !stomp_mux;
+/*	
 	pr0_mux.hwi = nmi_i||irqf_fet;
 	pr1_mux.hwi = nmi_i||irqf_fet;
 	pr2_mux.hwi = nmi_i||irqf_fet;
 	pr3_mux.hwi = nmi_i||irqf_fet;
 	pr4_mux.hwi = nmi_i||irqf_fet;
+*/
 	pr0_mux.carry_mod = carry_mod_fet;
 end
 
@@ -382,14 +376,15 @@ cpu_types_pkg::pc_address_ex_t bsr1_tgt;
 cpu_types_pkg::pc_address_ex_t bsr2_tgt;
 cpu_types_pkg::pc_address_ex_t bsr3_tgt;
 
-always_comb bsr0 = ins0_mux.ins.any.opcode==OP_BSR && ins0_mux.ins.bsr.Rt!=3'd0;
-always_comb bsr1 = ins1_mux.ins.any.opcode==OP_BSR && ins1_mux.ins.bsr.Rt!=3'd0;
-always_comb bsr2 = ins2_mux.ins.any.opcode==OP_BSR && ins2_mux.ins.bsr.Rt!=3'd0;
-always_comb bsr3 = ins3_mux.ins.any.opcode==OP_BSR && ins3_mux.ins.bsr.Rt!=3'd0;
-always_comb bra0 = ins0_mux.ins.any.opcode==OP_BSR && ins0_mux.ins.bsr.Rt==3'd0;
-always_comb bra1 = ins1_mux.ins.any.opcode==OP_BSR && ins1_mux.ins.bsr.Rt==3'd0;
-always_comb bra2 = ins2_mux.ins.any.opcode==OP_BSR && ins2_mux.ins.bsr.Rt==3'd0;
-always_comb bra3 = ins3_mux.ins.any.opcode==OP_BSR && ins3_mux.ins.bsr.Rt==3'd0;
+always_comb bsr0 = ins0_mux.ins[31]==1'b1 && ins0_mux.ins.any.opcode==5'd13 && ins0_mux.ins.bl.BRd!=3'd0 && ins0_mux.ins.bl.BRd!=3'd7;
+always_comb bsr1 = ins1_mux.ins[31]==1'b1 && ins1_mux.ins.any.opcode==5'd13 && ins1_mux.ins.bl.BRd!=3'd0 && ins1_mux.ins.bl.BRd!=3'd7;
+always_comb bsr2 = ins2_mux.ins[31]==1'b1 && ins2_mux.ins.any.opcode==5'd13 && ins2_mux.ins.bl.BRd!=3'd0 && ins2_mux.ins.bl.BRd!=3'd7;
+always_comb bsr3 = ins3_mux.ins[31]==1'b1 && ins3_mux.ins.any.opcode==5'd13 && ins3_mux.ins.bl.BRd!=3'd0 && ins3_mux.ins.bl.BRd!=3'd7;
+always_comb bra0 = ins0_mux.ins[31]==1'b1 && ins0_mux.ins.any.opcode==5'd13 && ins0_mux.ins.bl.BRd==3'd0;
+always_comb bra1 = ins1_mux.ins[31]==1'b1 && ins1_mux.ins.any.opcode==5'd13 && ins1_mux.ins.bl.BRd==3'd0;
+always_comb bra2 = ins2_mux.ins[31]==1'b1 && ins2_mux.ins.any.opcode==5'd13 && ins2_mux.ins.bl.BRd==3'd0;
+always_comb bra3 = ins3_mux.ins[31]==1'b1 && ins3_mux.ins.any.opcode==5'd13 && ins3_mux.ins.bl.BRd==3'd0;
+
 always_comb jmp0 = ins0_mux.ins.any.opcode==OP_JSR && ins0_mux.ins.bsr.Rt==3'd0;
 always_comb jmp1 = ins1_mux.ins.any.opcode==OP_JSR && ins1_mux.ins.bsr.Rt==3'd0;
 always_comb jmp2 = ins2_mux.ins.any.opcode==OP_JSR && ins2_mux.ins.bsr.Rt==3'd0;
@@ -410,6 +405,7 @@ always_comb jsrr0 = ins0_mux.ins.any.opcode==OP_JSRR && ins0_mux.ins.bsr.Rt!=3'd
 always_comb jsrr1 = ins1_mux.ins.any.opcode==OP_JSRR && ins1_mux.ins.bsr.Rt!=3'd0;
 always_comb jsrr2 = ins2_mux.ins.any.opcode==OP_JSRR && ins2_mux.ins.bsr.Rt!=3'd0;
 always_comb jsrr3 = ins3_mux.ins.any.opcode==OP_JSRR && ins3_mux.ins.bsr.Rt!=3'd0;
+/*
 always_comb jmpi0 = ins0_mux.ins.any.opcode==OP_JSRI && ins0_mux.ins.bsr.Rt==3'd0;
 always_comb jmpi1 = ins1_mux.ins.any.opcode==OP_JSRI && ins1_mux.ins.bsr.Rt==3'd0;
 always_comb jmpi2 = ins2_mux.ins.any.opcode==OP_JSRI && ins2_mux.ins.bsr.Rt==3'd0;
@@ -418,6 +414,7 @@ always_comb jsri0 = ins0_mux.ins.any.opcode==OP_JSRI && ins0_mux.ins.bsr.Rt!=3'd
 always_comb jsri1 = ins1_mux.ins.any.opcode==OP_JSRI && ins1_mux.ins.bsr.Rt!=3'd0;
 always_comb jsri2 = ins2_mux.ins.any.opcode==OP_JSRI && ins2_mux.ins.bsr.Rt!=3'd0;
 always_comb jsri3 = ins3_mux.ins.any.opcode==OP_JSRI && ins3_mux.ins.bsr.Rt!=3'd0;
+*/
 always_comb 
 begin
 	bsr0_tgt = ins0_mux.pc;
@@ -696,21 +693,11 @@ begin
 	ins_o.pc = pc;
 	ins_o.bt = takb;
 	ins_o.mcip = mcip;
-	if (ins_o.ins.any.opcode==OP_QFEXT) begin
-		ins_o.aRa = {ins_i.ins.r3.Ra.num};
-		ins_o.aRb = {ins_i.ins.r3.Rb.num};
-		ins_o.aRc = {ins_i.ins.r3.Rc.num};
-		ins_o.aRt = {ins_i.ins.r3.Rt.num};
-	end
-	else begin
-		ins_o.aRa = {ins_i.ins.r3.Ra.num};
-		ins_o.aRb = {ins_i.ins.r3.Rb.num};
-		ins_o.aRc = {ins_i.ins.r3.Rc.num};
-		ins_o.aRt = {ins_i.ins.r3.Rt.num};
-	end
+  ins_o.aRs1 = {ins_i.ins.alu.Rs1};
+  ins_o.aRs2 = {ins_i.ins.alu.Rs2};
+//  ins_o.aRs3 = {ins_i.ins.alu.Rs3};
+  ins_o.aRd = {ins_i.ins.alu.Rd};
 //	ins_o.decbus.Rtz = ins_o.aRt==8'd0;
-	ins_o.pred_btst = 6'd0;
-	ins_o.element = 'd0;
 	// Under construction
 	// If BTB did not match next predictor, invalidate instruction.
 	/*

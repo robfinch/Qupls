@@ -40,9 +40,9 @@ import cpu_types_pkg::*;
 import Stark_pkg::*;
 
 module Stark_branch_station(rst, clk, idle_i, issue, rndx, rndxv, rob,
-	rfo, rfo_tag, prn, prnv, all_args_valid,
+	rfo, rfo_tag, prn, prnv, all_args_valid, rfo_argC_tag,
 	id, om, we, argA, argB, argBr, argC, argI, instr, bt, bts, cjb, bl,
-	pc, op,
+	pc, op, bs_idle_oh, argA_tag, argB_tag, argC_tag, pRt, aRt,
 	cp, excv, idle_o
 );
 input rst;
@@ -53,40 +53,40 @@ input rob_ndx_t rndx;
 input rndxv;
 input Stark_pkg::rob_entry_t rob;
 input value_t [15:0] rfo;
+input [15:0] rfo_tag;
 input pregno_t [15:0] prn;
 input [15:0] prnv;
 input pc_address_ex_t pc;
+input bs_idle_oh;
+input rfo_argC_tag;
 
 output rob_ndx_t id;
 output Stark_pkg::operating_mode_t om;
+output reg we;
 output address_t argA;
 output address_t argB;
 output address_t argBr;
 output value_t argC;
+output reg argA_tag;
+output reg argB_tag;
+output reg argC_tag;
 output value_t argI;
-output instruction_ex_t instr;
+output Stark_pkg::ex_instruction_t instr;
 output reg all_args_valid;
-output value_t argI;
-output bt;
-output bts_t bts;
-output cjb;
-output bl;
-output pipeline_reg_t op;
+output reg bt;
+output Stark_pkg::bts_t bts;
+output reg cjb;
+output reg bl;
+output Stark_pkg::pipeline_reg_t op;
 output checkpt_ndx_t cp;
 output reg excv;
 output reg idle_o;
+output pregno_t pRt;
+output aregno_t aRt;
 
 reg [2:0] valid;
 always_comb
 	all_args_valid = &valid;
-
-always_ff @(posedge clk)
-if (irst) begin
-end
-else begin
-	if (robentry_fcu_issue[fcu_rndx] && fcu_rndxv && fcu_idle && bs_idle_oh) begin
-	end
-end
 
 Stark_pkg::pipeline_reg_t nopi;
 
@@ -134,11 +134,7 @@ else begin
 		id <= rndx;
 		om <= rob.om;
 		we <= rob.op.decbus.store;
-		if (rob.op.decbus.jsri)
-			ldip <= TRUE;
-		else
-			ldip <= FALSE;
-		argC_ctag <= rfo_argC_ctag;
+		argC_tag <= rfo_argC_tag;
 		argI <= address_t'(rob.op.decbus.immb);
 		pRt <= rob.op.nRd;
 		aRt <= rob.op.decbus.Rd;
@@ -146,22 +142,22 @@ else begin
 		pc <= rob.pc;
 		bt <= rob.bt;
 		bts <= rob.op.decbus.bts;
-		fcu_cjb <= rob.decbus.cjb;
-		fcu_bl <= rob.decbus.bl;
+		cjb <= rob.decbus.cjb;
+		bl <= rob.decbus.bl;
 		cp <= rob.cndx;
 		excv <= rob.excv;
 	end
-	tValidate(rob.op.pRs1,argA,valid[0],valid[0]);
+	tValidate(rob.op.pRs1,argA,argA_tag,valid[0],valid[0]);
 	if (rob.op.pRs1==8'd0) begin
 		argA <= value_zero;
 		valid[0] <= 1'b1;
 	end
-	tValidate(rob.op.pRs2,argB,valid[1],valid[1]);
+	tValidate(rob.op.pRs2,argB,argB_tag,valid[1],valid[1]);
 	if (rob.op.pRs2==8'd0) begin
 		argB <= value_zero;
 		valid[1] <= 1'b1;
 	end
-	tValidate(rob.op.pRs3,argC,valid[2],valid[2]);
+	tValidate(rob.op.pRs3,argC,argC_tag,valid[2],valid[2]);
 	if (rob.op.pRs3==8'd0) begin
 		argC <= value_zero;
 		valid[2] <= 1'b1;

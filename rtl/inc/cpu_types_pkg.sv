@@ -64,8 +64,8 @@ typedef logic [31:0] physical_address_t;
 `endif
 typedef logic [11:0] mc_address_t;
 `ifdef STARK_CPU
-typedef logic [7:0] pregno_t;
-typedef logic [6:0] aregno_t;
+typedef logic [8:0] pregno_t;
+typedef logic [7:0] aregno_t;
 typedef logic [63:0] value_t;
 typedef logic [31:0] half_value_t;
 `else

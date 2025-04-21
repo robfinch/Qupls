@@ -97,7 +97,7 @@ begin
 		end
 	Stark_pkg::BTS_BSR:
 		begin
-			tgtpc.pc = pc.pc + {{27{instr.ins.bsr.disp[36]}},instr.ins.bsr.disp};
+			dstpc.pc = pc.pc + {{27{instr.ins.bsr.disp[36]}},instr.ins.bsr.disp};
 		end
 	Stark_pkg::BTS_JSR:	tgtpc.pc = {{27{instr.ins.bsr.disp[36]}},instr.ins.bsr.disp};
 	Stark_pkg::BTS_CALL:
@@ -105,7 +105,7 @@ begin
 			case(instr[23:22])	//??
 //			2'd0:	tgtpc.pc = {pc.pc[$bits(pc_address_t)-1:16],argA[15:0]+argI[15:0]};
 //			2'd1:	tgtpc = {pc[$bits(pc_address_t)-1:32],argA[31:0]+argI[31:0]};
-			default: tgtpc.pc = argA + argI;
+			default: dstpc.pc = argA + argI;
 			endcase
 		end
 	// Must be tested before Ret
@@ -115,10 +115,10 @@ begin
 		end
 	Stark_pkg::BTS_RET:
 		begin
-			tgtpc.pc = argA + (instr.ins.rtd.offs * 2'd3);
+			dstpc.pc = argA + (instr.ins.rtd.offs * 2'd3);
 		end
 	default:
-		tgtpc.pc = RSTPC;
+		dstpc.pc = RSTPC;
 	endcase
 
 	case(bts)
@@ -133,14 +133,14 @@ begin
 			case({bt,takb})
 			2'b00:
 				begin
-					misspc = tgtpc;
+					misspc = dstpc;
 					miss_mcip = instr.ins.mcb.disp;
 					stomp_bno = pc.bno_t;
 					stomp_bno = 5'd0;
 				end
 			2'b01:
 				begin
-					misspc = tgtpc;
+					misspc = dstpc;
 					miss_mcip = instr.ins.mcb.disp;
 					stomp_bno = pc.bno_t;
 					stomp_bno = 5'd0;
@@ -164,31 +164,31 @@ begin
 		end
 	Stark_pkg::BTS_JSR,Stark_pkg::BTS_BSR:
 		begin
-			misspc = tgtpc;
+			misspc = dstpc;
 			stomp_bno = tgtpc.bno_t;
 			stomp_bno = 5'd0;
 		end
 	Stark_pkg::BTS_CALL:
 		begin
-			misspc = tgtpc;
+			misspc = dstpc;
 			stomp_bno = tgtpc.bno_t;
 			stomp_bno = 5'd0;
 		end
 	// Must be tested before Ret
 	Stark_pkg::BTS_ERET:
 		begin
-			misspc = tgtpc;
+			misspc = dstpc;
 			stomp_bno = tgtpc.bno_t;
 			stomp_bno = 5'd0;
 		end
 	Stark_pkg::BTS_RET:
 		begin
-			misspc = tgtpc;
+			misspc = dstpc;
 			stomp_bno = tgtpc.bno_t;
 			stomp_bno = 5'd0;
 		end
 	default:
-		misspc = tgtpc;
+		misspc = dstpc;
 	endcase
 end
 

@@ -38,7 +38,7 @@
 import Stark_pkg::*;
 
 module Stark_btb(rst, clk, en, clk_en, nmi, nmi_addr, irq, irq_addr,
-	rclk, micro_code_active, block_header,
+	rclk, micro_machine_active, block_header,
 	igrp, length_byte,
 	pc, pc0, pc1, pc2, pc3, pc4, next_pc, p_override, po_bno,
 	takb0, takb1, takb2, takb3, do_bsr, bsr_tgt, pe_bsdone, do_ret, ret_pc,
@@ -62,7 +62,7 @@ input irq;
 input pc_address_t irq_addr;
 input rclk;
 input ibh_t block_header;
-input micro_code_active;
+input micro_machine_active;
 output reg [2:0] igrp;
 input [7:0] length_byte;
 input cpu_types_pkg::pc_address_ex_t pc;
@@ -677,7 +677,7 @@ else begin
 			else
 				next_pc = {pc[$bits(pc_address_t)-1:6],pc4[5:0]};
 			*/
-			if (micro_code_active) begin
+			if (micro_machine_active) begin
 				next_pcs[next_act_bno] = pc;
 			end
 			else begin

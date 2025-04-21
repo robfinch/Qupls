@@ -580,7 +580,7 @@ Stark_pkg::pipeline_reg_t fcu_instr;
 Stark_pkg::pipeline_reg_t fcu_missir;
 wire fcu_bt;
 wire fcu_cjb;
-wire fcu_bl;
+reg fcu_bl;
 Stark_pkg::bts_t fcu_bts;
 value_t fcu_argA;
 value_t fcu_argB;
@@ -607,7 +607,12 @@ rob_ndx_t fcu_rndx;
 reg fcu_new;						// new FCU operation is taking place
 wire pe_bsidle;
 reg [2:0] bsi;
+reg fcu_found_destination;
+Stark_pkg::rob_bitmask_t fcu_found_destination_list;
 wire fcu_args_valid;
+reg [1:0] pred_tf [0:31];		// predicate was true (1) or false (2), unassigned (0)
+reg [31:0] pred_alloc_map;
+wire [5:0] pred_no [0:3];
 
 wire tlb0_v, tlb1_v;
 
@@ -894,8 +899,7 @@ begin
 	nopi.pc.bno_f = 6'd1;
 	nopi.mcip = 12'h1A0;
 	nopi.ins = {26'd0,OP_NOP};
-	nopi.pred_btst = 6'd0;
-	nopi.decbus.Rtz = 1'b1;
+	nopi.decbus.Rdz = 1'b1;
 	nopi.decbus.nop = 1'b1;
 	nopi.decbus.alu = 1'b1;
 end
@@ -1491,7 +1495,6 @@ Stark_btb ubtb1
 	.nmi_addr(nmi_addr),
 	.irq(irq),
 	.irq_addr(irq_addr),
-	.next_hwipc(next_hwipc),
 	.micro_machine_active(micro_machine_active),
 	.block_header(ibh_t'(ic_line[511:480])),
 	.igrp(igrp),
@@ -2219,8 +2222,8 @@ Stark_pipeline_fet ufet1
 	.misspc_fet(misspc_fet),
 	.ic_carry_mod(ic_carry_mod),
 	.carry_mod_fet(carry_mod_fet),
-	.hwipc(ic_hwipc),
-	.hwipc_fet(hwipc_fet),
+//	.hwipc(ic_hwipc),
+//	.hwipc_fet(hwipc_fet),
 	.pc0_fet(pc0_fet),
 	.stomp_fet(stomp_fet),
 	.stomp_bno(stomp_bno),
@@ -2670,9 +2673,9 @@ assign stomp1 = ((stomp1_r|stomp_ren|pg_ren.pr0.decbus.macro) /*&& pg_ren.pr1.pc
 assign stomp2 = ((stomp2_r|stomp_ren|pg_ren.pr0.decbus.macro|pg_ren.pr1.decbus.macro) /*&& pg_ren.pr2.pc.bno_t!=stomp_bno*/);
 assign stomp3 = ((stomp3_r|stomp_ren|pg_ren.pr0.decbus.macro|pg_ren.pr1.decbus.macro|pg_ren.pr2.decbus.macro) /*&& pg_ren.pr3.pc.bno_t!=stomp_bno*/);
 wire ornop0 = 1'b0;
-wire ornop1 = pg_ren.pr0.decbus.bsr;
-wire ornop2 = pg_ren.pr0.decbus.bsr || pg_ren.pr1.decbus.bsr;
-wire ornop3 = pg_ren.pr0.decbus.bsr || pg_ren.pr1.decbus.bsr || pg_ren.pr2.decbus.bsr;
+wire ornop1 = pg_ren.pr0.decbus.bl;
+wire ornop2 = pg_ren.pr0.decbus.bl || pg_ren.pr1.decbus.bl;
+wire ornop3 = pg_ren.pr0.decbus.bl || pg_ren.pr1.decbus.bl || pg_ren.pr2.decbus.bl;
 
 /*
 assign arnv[0] = !stomp0;
@@ -3879,8 +3882,13 @@ begin
 	unavail_list = {Stark_pkg::PREGS{1'b0}};
 for (n4 = 0; n4 < Stark_pkg::ROB_ENTRIES; n4 = n4 + 1) begin
 	robentry_cpytgt[n4] = FALSE;
-	if (!Stark_pkg::SUPPORT_BACKOUT)
+	if (!Stark_pkg::SUPPORT_BACKOUT) begin
 		robentry_cpytgt[n4] = robentry_stomp[n4];
+		if (fcu_idv && fcu_v2 && fcu_found_destination_list[n4]) begin
+			robentry_cpytgt[n4] = TRUE;
+			unavail_list[rob[n4].op.nRt] = TRUE;
+		end
+	end
 
 	if (Stark_pkg::SUPPORT_BACKOUT) begin
 		if (fcu_idv && ((rob[fcu_id].decbus.br && takb) || rob[fcu_id].decbus.cjb)) begin
@@ -3888,6 +3896,10 @@ for (n4 = 0; n4 < Stark_pkg::ROB_ENTRIES; n4 = n4 + 1) begin
 				robentry_cpytgt[n4] = TRUE;
 				unavail_list[rob[n4].op.nRt] = TRUE;
 	 		end
+		end
+		if (fcu_idv && fcu_v2 && fcu_found_destination_list[n4]) begin
+			robentry_cpytgt[n4] = TRUE;
+			unavail_list[rob[n4].op.nRt] = TRUE;
 		end
 	end
 
@@ -4005,10 +4017,14 @@ else begin
 	backout <= FALSE;
 	if (fcu_v2) begin
 		case(fcu_bts)
-		Stark_pkg::BTS_REG,Stark_pkg::BTS_DISP:
+		Stark_pkg::BTS_REG:
 			// backout when !fcu_bt will be handled below, triggerred by restore
 			if (takb && fcu_bt)
 				backout <= TRUE;
+		Stark_pkg::BTS_REG,Stark_pkg::BTS_BCC:
+			// backout when !fcu_bt will be handled below, triggerred by restore
+			if (takb && fcu_bt)
+				backout <= !fcu_found_destination;
 		Stark_pkg::BTS_CALL,Stark_pkg::BTS_RET:
 			backout <= TRUE;
 		default:
@@ -4029,9 +4045,12 @@ else begin
 	restore <= FALSE;
 	if (fcu_v2) begin
 		case(fcu_bts)
-		Stark_pkg::BTS_REG,Stark_pkg::BTS_DISP:
+		Stark_pkg::BTS_REG:
 			if (branchmiss_det)
 				restore <= TRUE;
+		Stark_pkg::BTS_BCC:
+			if (branchmiss_det)
+				restore <= !fcu_found_destination;
 		default:
 			;		
 		endcase
@@ -4214,6 +4233,14 @@ else begin
 	endcase
 end
 
+
+// ----------------------------------------------------------------------------
+// Predicate numbers
+// ----------------------------------------------------------------------------
+ffz48 uffzprd0 (.i({16'hFFFF,pred_alloc_map}), .o(pred_no[0]));
+ffz48 uffzprd1 (.i({16'hFFFF,pred_alloc_map} | (48'd1 << pred_no[0])), .o(pred_no[1]));
+ffz48 uffzprd2 (.i({16'hFFFF,pred_alloc_map} | (48'd1 << pred_no[0])| (48'd1 << pred_no[1])), .o(pred_no[2]));
+ffz48 uffzprd3 (.i({16'hFFFF,pred_alloc_map} | (48'd1 << pred_no[0])| (48'd1 << pred_no[1])| (48'd1 << pred_no[2])), .o(pred_no[3]));
 
 // ----------------------------------------------------------------------------
 // ISSUE stage combo logic
@@ -4623,6 +4650,7 @@ fta_cmd_response512_t [Stark_pkg::NDATA_PORTS-1:0] cpu_resp_o;
 fta_cmd_response512_t [Stark_pkg::NDATA_PORTS-1:0] update_data_i;
 rob_ndx_t [Stark_pkg::NDATA_PORTS-1:0] cpu_request_rndx;
 
+cpu_types_pkg::virtual_address_t [Stark_pkg::NDATA_PORTS-1:0] cpu_request_vadr, cpu_request_vadr2;
 wire [Stark_pkg::NDATA_PORTS-1:0] dump;
 wire DCacheLine dump_o[0:Stark_pkg::NDATA_PORTS-1];
 wire [Stark_pkg::NDATA_PORTS-1:0] dump_ack;
@@ -4654,12 +4682,14 @@ for (g = 0; g < Stark_pkg::NDATA_PORTS; g = g + 1) begin
 		cpu_request_i[g].cti = (dramN_erc[g] || ERC) ? fta_bus_pkg::ERC : fta_bus_pkg::CLASSIC;
 		cpu_request_i[g].blen = 6'd0;
 		cpu_request_i[g].seg = fta_bus_pkg::DATA;
-		cpu_request_i[g].asid = asid;
+//		cpu_request_i[g].asid = asid;
 		cpu_request_i[g].cyc = dramN[g]==DRAMSLOT_READY;
-		cpu_request_i[g].stb = dramN[g]==DRAMSLOT_READY;
+//		cpu_request_i[g].stb = dramN[g]==DRAMSLOT_READY;
 		cpu_request_i[g].we = dramN_store[g];
-		cpu_request_i[g].vadr = dramN_vaddr[g];
-		cpu_request_i[g].padr = dramN_paddr[g];
+//		cpu_request_i[g].vadr = dramN_vaddr[g];
+    cpu_request_vadr[g] <= dramN_vaddr[g];
+    cpu_request_i[g].pv = 1'b0;
+		cpu_request_i[g].adr = dramN_paddr[g];
 		cpu_request_i[g].sz = fta_bus_pkg::fta_size_t'(dramN_memsz[g]);
 		cpu_request_i[g].dat = dramN_data[g];
 		cpu_request_i[g].sel = dramN_sel[g];
@@ -4691,6 +4721,7 @@ for (g = 0; g < Stark_pkg::NDATA_PORTS; g = g + 1) begin
 		.uway(uway[g]),
 		.cpu_req_i(cpu_request_i2[g]),
 		.cpu_resp_o(cpu_resp_o[g]),
+		.cpu_req_vadr(cpu_request_vadr2[g]),
 		.update_data_i(update_data_i[g]),
 		.dump(dump[g]),
 		.dump_o(dump_o[g]),
@@ -4719,7 +4750,9 @@ for (g = 0; g < Stark_pkg::NDATA_PORTS; g = g + 1) begin
 		.cpu_request_cancel(cpu_request_cancel),
 		.cpu_request_rndx(cpu_request_rndx[g]),
 		.cpu_request_i(cpu_request_i[g]),
+		.cpu_request_vadr(cpu_request_vadr[g]),
 		.cpu_request_i2(cpu_request_i2[g]),
+		.cpu_request_vadr2(cpu_request_vadr2[g]),
 		.data_to_cache_o(update_data_i[g]),
 		.response_from_cache_i(cpu_resp_o[g]),
 		.wr(dwr[g]),
@@ -5287,8 +5320,8 @@ generate begin : gAluStation
 			.argI(alu1_argI),
 			.argD(alu1_argD),
 			.argCi_tag(),
-			.argA_ctag(alu1_argA_ctag),
-			.argB_ctag(alu1_argB_ctag),
+			.argA_tag(alu1_argA_ctag),
+			.argB_tag(alu1_argB_ctag),
 			.argC_tag(),
 			.argD_tag(),
 			.all_args_valid(alu1_args_valid),
@@ -5338,7 +5371,6 @@ generate begin : gFpuStat
 				.argB(fpu0_argB),
 				.argC(fpu0_argC),
 				.argD(fpu0_argD),
-				.argM(fpu0_argM),
 				.argI(fpu0_argI),
 				.Rt(fpu0_Rt),
 				.Rt1(fpu0_Rt1),
@@ -5425,6 +5457,7 @@ Stark_branch_station ubs1
 	.rst(irst),
 	.clk(clk),
 	.idle_i(fcu_idle),
+	.bs_idle_oh(bs_idle_oh),
 	.issue(robentry_fcu_issue[fcu_rndx]),
 	.rndx(fcu_rndx),
 	.rndxv(fcu_rndxv),
@@ -5462,7 +5495,8 @@ Stark_agen_station uagen0stn
 	.rndxv(agen0_rndxv),
 	.rob(rob[agen0_rndx]),
 	.rfo(rfo),
-	.rfo_argC_ctag(rfo_agen0_argC_ctag),
+	.rfo_tag(rfo_tag),
+	.rfo_argC_tag(rfo_agen0_argC_ctag),
 	.argC_v(agen0_argC_v),
 	.id(agen0_id),
 	.om(agen0_om),
@@ -5471,7 +5505,7 @@ Stark_agen_station uagen0stn
 	.argB(agen0_argB),
 	.argC(agen0_argC),
 	.argI(agen0_argI),
-	.argC_ctag(agen0_argC_ctag),
+	.argC_tag(agen0_argC_ctag),
 	.all_args_valid(agen0_args_valid),
 	.prn(prn),
 	.prnv(prnv),
@@ -5505,7 +5539,8 @@ Stark_agen_station uagen1stn
 	.rndxv(agen1_rndxv),
 	.rob(rob[agen1_rndx]),
 	.rfo(rfo),
-	.rfo_argC_ctag(1'b0),
+	.rfo_tag(rfo_tag),
+	.rfo_argC_tag(1'b0),
 	.id(agen1_id),
 	.om(agen1_om),
 	.we(agen1_we),
@@ -5514,7 +5549,7 @@ Stark_agen_station uagen1stn
 	.argC(),
 	.argI(agen1_argI),
 	.argM(agen1_argM),
-	.argC_ctag(),
+	.argC_tag(),
 	.argC_v(),
 	.all_args_valid(agen1_args_valid),
 	.prn(prn),
@@ -5715,58 +5750,100 @@ else begin
 			// little impact on performance.
 			for (n12 = 0; n12 < ROB_ENTRIES; n12 = n12 + 1)
 				rob[n12].sn <= rob[n12].sn - 4;
-			tEnque(8'h80-XWID,groupno,predino,predrndx,pg_ren.pr0,pt0_q,tail0,
+			tEnque(8'h80-XWID,groupno,pg_ren.pr0,pt0_q,tail0,
 				stomp0, ornop0, cndx_ren[0], pcndx_ren, grplen0, last0);
-			if (pg_ren.pr0.decbus.pred) begin
-				predino = 3'd1;
-				predrndx = tail0;
+			if (pg_ren.pr0.decbus.pred && pg_ren.pr0.v && pg_ren.pr0.decbus.v) begin
+				rob[tail0].pred_mask <= pg_ren.pr0.decbus.pred_mask;
 			end
-			else if (predino > 4'd0) begin
-				predino = predino + 2'd1;
-				if (predino==4'd9)
-					predino = 4'd0;
+			else begin
+				if (micro_machine_active)
+					rob[tail0].pred_mask <= rob[(tail0+ROB_ENTRIES-1) % ROB_ENTRIES].pred_mask;
+				else
+					rob[tail0].pred_mask <= rob[(tail0+ROB_ENTRIES-1) % ROB_ENTRIES].pred_mask >> 2'd2;
 			end
 			
-			tEnque(8'h81-XWID,groupno,predino,predrndx,pg_ren.pr1,pt1_q,tail1,
+			tEnque(8'h81-XWID,groupno,pg_ren.pr1,pt1_q,tail1,
 				stomp1, ornop1, cndx_ren[1], pcndx_ren, grplen1, last1);
-			if (pg_ren.pr1.decbus.pred) begin
-				predino = 3'd1;
-				predrndx = tail1;
+			if (pg_ren.pr1.decbus.pred && pg_ren.pr1.v && pg_ren.pr1.decbus.v) begin
+				rob[tail1].pred_mask <= pg_ren.pr1.decbus.pred_mask;
 			end
-			else if (predino > 4'd0) begin
-				predino = predino + 2'd1;
-				if (predino==4'd9)
-					predino = 4'd0;
+			else begin
+				if (pg_ren.pr0.decbus.pred) begin
+					rob[tail1].pred_no <= pred_no[0];
+					if (micro_machine_active)
+						rob[tail1].pred_mask <= pg_ren.pr0.decbus.pred_mask;
+					else
+						rob[tail1].pred_mask <= pg_ren.pr0.decbus.pred_mask >> 2'd2;
+				end
+				else begin
+					if (micro_machine_active)
+						rob[tail1].pred_mask <= rob[(tail0+ROB_ENTRIES-1) % ROB_ENTRIES].pred_mask;
+					else
+						rob[tail1].pred_mask <= rob[(tail0+ROB_ENTRIES-1) % ROB_ENTRIES].pred_mask >> 3'd4;
+				end
 			end
 //			tBypassRegnames(tail1, pg_ren.pr1, pg_ren.pr0, 1'b0, pg_ren.pr1.decbus.has_immb | prnv[3], pg_ren.pr1.decbus.has_immc | prnv[3], prnv[3], prnv[3]);
 //			tBypassValid(tail1, pg_ren.pr1, pg_ren.pr0);
 			
-			tEnque(8'h82-XWID,groupno,predino,predrndx,pg_ren.pr2,pt2_q,tail2,
+			tEnque(8'h82-XWID,groupno,pg_ren.pr2,pt2_q,tail2,
 				stomp2, ornop2, cndx_ren[2], pcndx_ren, grplen2, last3);
-			if (pg_ren.pr2.decbus.pred) begin
-				predino = 3'd1;
-				predrndx = tail2;
+			if (pg_ren.pr2.decbus.pred && pg_ren.pr2.v && pg_ren.pr2.decbus.v) begin
+				rob[tail2].pred_mask <= pg_ren.pr2.decbus.pred_mask;
 			end
-			else if (predino > 4'd0) begin
-				predino = predino + 2'd1;
-				if (predino==4'd9)
-					predino = 4'd0;
+			else begin
+				if (pg_ren.pr1.decbus.pred) begin
+					if (micro_machine_active)
+						rob[tail2].pred_mask <= pg_ren.pr1.decbus.pred_mask;
+					else
+						rob[tail2].pred_mask <= pg_ren.pr1.decbus.pred_mask >> 2'd2;
+				end
+				else if (pg_ren.pr0.decbus.pred) begin
+					if (micro_machine_active)
+						rob[tail2].pred_mask <= pg_ren.pr0.decbus.pred_mask;
+					else
+						rob[tail2].pred_mask <= pg_ren.pr0.decbus.pred_mask >> 3'd4;
+				end
+				else begin
+					if (micro_machine_active)
+						rob[tail2].pred_mask <= rob[(tail0+ROB_ENTRIES-1) % ROB_ENTRIES].pred_mask;
+					else
+						rob[tail2].pred_mask <= rob[(tail0+ROB_ENTRIES-1) % ROB_ENTRIES].pred_mask >> 3'd6;
+				end
 			end
 //			tBypassRegnames(tail2, pg_ren.pr2, pg_ren.pr0, ins2_que.decbus.has_imma, pg_ren.pr2.decbus.has_immb | prnv[3], pg_ren.pr2.decbus.has_immc | prnv[3], prnv[3], prnv[3]);
 //			tBypassRegnames(tail2, pg_ren.pr2, pg_ren.pr1, ins2_que.decbus.has_imma, pg_ren.pr2.decbus.has_immb | prnv[7], pg_ren.pr2.decbus.has_immc | prnv[7], prnv[7], prnv[7]);
 //			tBypassValid(tail2, pg_ren.pr2, pg_ren.pr0);
 //			tBypassValid(tail2, pg_ren.pr2, pg_ren.pr1);
 			
-			tEnque(8'h83-XWID,groupno,predino,predrndx,pg_ren.pr3,pt3_q,tail3,
+			tEnque(8'h83-XWID,groupno,pg_ren.pr3,pt3_q,tail3,
 				stomp3, ornop3, cndx_ren[3], pcndx_ren, grplen3,last3);
-			if (pg_ren.pr3.decbus.pred) begin
-				predino = 3'd1;
-				predrndx = tail3;
+			if (pg_ren.pr3.decbus.pred && pg_ren.pr3.v && pg_ren.pr3.decbus.v) begin
+				rob[tail3].pred_mask <= pg_ren.pr3.decbus.pred_mask;
 			end
-			else if (predino > 4'd0) begin
-				predino = predino + 2'd1;
-				if (predino==4'd9)
-					predino = 4'd0;
+			else begin
+				if (pg_ren.pr2.decbus.pred) begin
+					if (micro_machine_active)
+						rob[tail3].pred_mask <= pg_ren.pr2.decbus.pred_mask;
+					else
+						rob[tail3].pred_mask <= pg_ren.pr2.decbus.pred_mask >> 2'd2;
+				end
+				else if (pg_ren.pr1.decbus.pred) begin
+					if (micro_machine_active)
+						rob[tail3].pred_mask <= pg_ren.pr1.decbus.pred_mask;
+					else
+						rob[tail3].pred_mask <= pg_ren.pr1.decbus.pred_mask >> 3'd4;
+				end
+				else if (pg_ren.pr0.decbus.pred)
+					if (micro_machine_active)
+						rob[tail3].pred_mask <= pg_ren.pr0.decbus.pred_mask;
+					else
+						rob[tail3].pred_mask <= pg_ren.pr0.decbus.pred_mask >> 3'd6;
+				else begin
+					if (micro_machine_active)
+						rob[tail3].pred_mask <= rob[(tail0+ROB_ENTRIES-1) % ROB_ENTRIES].pred_mask;
+					else
+						rob[tail3].pred_mask <= rob[(tail0+ROB_ENTRIES-1) % ROB_ENTRIES].pred_mask >> 4'd8;
+				end
 			end
 //			tBypassRegnames(tail3, pg_ren.pr3, pg_ren.pr0, pg_ren.pr3.decbus.has_imma, pg_ren.pr3.decbus.has_immb | prnv[3], pg_ren.pr3.decbus.has_immc | prnv[3], prnv[3], prnv[3]);
 //			tBypassRegnames(tail3, pg_ren.pr3, pg_ren.pr1, pg_ren.pr3.decbus.has_imma, pg_ren.pr3.decbus.has_immb | prnv[7], pg_ren.pr3.decbus.has_immc | prnv[7], prnv[7], prnv[7]);
@@ -6021,7 +6098,7 @@ else begin
 	// Whenever a result would be written, update the exception and done/out status.
 	// Although no result may be written, the done/out status still needs to be set.
 	if (alu0_sc_done2) begin
-    rob[ alu0_id2 ].exc <= cause_code_t'(alu0_exc[7:0]);
+    rob[ alu0_id2 ].exc <= Stark_pkg::cause_code_t'(alu0_exc[7:0]);
     rob[ alu0_id2 ].excv <= ~&alu0_exc[7:0];
 		rob[ alu0_id2 ].done[0] <= TRUE;
 		rob[ alu0_id2 ].out[0] <= FALSE;
@@ -6038,7 +6115,7 @@ else begin
 	  // Handle multi-cycle ops
   	if (rob[ alu0_id ].decbus.multicycle &&
 			(!rob[alu0_id].done[0] || (|alu0_cptgt && rob[alu0_id].done!=2'b11))) begin
-	    rob[ alu0_id ].exc <= cause_code_t'(alu0_exc[7:0]);
+	    rob[ alu0_id ].exc <= Stark_pkg::cause_code_t'(alu0_exc[7:0]);
 	    rob[ alu0_id ].excv <= ~&alu0_exc[7:0];
 	    if (!rob[ alu0_id ].decbus.pushi) begin
 	    	rob[ alu0_id ].done[1] <= TRUE;
@@ -6091,7 +6168,7 @@ else begin
 	// Handle single-cycle ops
 	if (Stark_pkg::NALU > 1) begin
 		if (alu1_sc_done2) begin
-	    rob[ alu1_id2 ].exc <= cause_code_t'(alu1_exc[7:0]);
+	    rob[ alu1_id2 ].exc <= Stark_pkg::cause_code_t'(alu1_exc[7:0]);
 	    rob[ alu1_id2 ].excv <= ~&alu1_exc[7:0];
 			rob[ alu1_id2 ].done[0] <= TRUE;
 			rob[ alu1_id2 ].out[0] <= FALSE;
@@ -6106,7 +6183,7 @@ else begin
 	  // Handle multi-cycle ops
 	  if (rob[alu1_id].v && alu1_idv) begin
 			if (rob[ alu1_id ].decbus.multicycle && !rob[alu1_id].done[0]||(|alu1_cptgt&&rob[alu1_id].done!=2'b11)) begin
-		    rob[ alu1_id ].exc <= cause_code_t'(alu1_exc[7:0]);
+		    rob[ alu1_id ].exc <= Stark_pkg::cause_code_t'(alu1_exc[7:0]);
 		    rob[ alu1_id ].excv <= ~&alu1_exc[7:0];
 		    if (!rob[ alu1_id ].decbus.pushi) begin
 		    	rob[ alu1_id ].done[1] <= TRUE;
@@ -6135,7 +6212,7 @@ else begin
 	
 	if (Stark_pkg::NFPU > 0) begin
 		if (fpu0_sc_done2) begin// && !fpu0_aRtz2) begin
-	    rob[ fpu0_id2 ].exc <= cause_code_t'(fpu0_exc[7:0]);
+	    rob[ fpu0_id2 ].exc <= Stark_pkg::cause_code_t'(fpu0_exc[7:0]);
 	    rob[ fpu0_id2 ].excv <= ~&fpu0_exc[7:0];
 			rob[ fpu0_id2 ].done[0] <= TRUE;
 			rob[ fpu0_id2 ].out[0] <= FALSE;
@@ -6162,7 +6239,7 @@ else begin
 				end
 			end
 			if (!rob[fpu0_id].excv)
-	    	rob[ fpu0_id ].exc <= cause_code_t'(fpu0_exc[7:0]);
+	    	rob[ fpu0_id ].exc <= Stark_pkg::cause_code_t'(fpu0_exc[7:0]);
 	    if (~&fpu0_exc)
 	    	rob[ fpu0_id ].excv <= TRUE;
 	//    rob[ fpu0_id ].out <= {INV,INV};
@@ -6176,7 +6253,7 @@ else begin
 `endif
 	   	fpu1_done1 <= TRUE;
 	    fpu1_idle <= TRUE;
-	    rob[ fpu1_id ].exc <= cause_code_t'(fpu1_exc[7:0]);
+	    rob[ fpu1_id ].exc <= Stark_pkg::cause_code_t'(fpu1_exc[7:0]);
 	    rob[ fpu1_id ].excv <= ~&fpu1_exc[7:0];
 			rob[ fpu1_id ].done[0] <= TRUE;
 			rob[ fpu1_id ].out[0] <= FALSE;
@@ -6203,7 +6280,7 @@ else begin
 		fcu_v2 <= INV;
 		fcu_v3 <= INV;
 		if (fcu_v3) begin
-			if (branch_state==BS_DONE2)
+			if (branch_state==Stark_pkg::BS_DONE2)
 				fcu_idle <= TRUE;
 		end
     rob[ fcu_id ].exc <= fcu_exc;
@@ -6218,8 +6295,11 @@ else begin
     fcu_idv <= INV;
 //    fcu_bts <= BTS_NONE;
 	end
-	if (branch_state==BS_DONE2)
+	if (branch_state==Stark_pkg::BS_DONE2)
 		fcu_idle <= TRUE;
+	
+	if (fcu_bts == Stark_pkg::BTS_BCC && fcu_v2)
+		tFindDestination(fcu_id, fcu_found_destination, fcu_found_destination_list);
 
 	// If data for stomped instruction, ignore
 	// dram_vn will be false for stomped data
@@ -6252,7 +6332,7 @@ else begin
 	if (tlb0_v && rob[agen0_id].v && !rob[agen0_id].done[0] && rob[agen0_id].decbus.mem && agen0_idv) begin
 		if (|pg_fault && pg_faultq==2'd1) begin
 			agen0_idle <= TRUE;
-			rob[agen0_id].exc <= FLT_PAGE;
+			rob[agen0_id].exc <= Stark_pkg::FLT_PAGE;
 			rob[agen0_id].excv <= TRUE;
 			rob[agen0_id].done <= 2'b11;
 			rob[agen0_id].out[0] <= 1'b0;
@@ -6319,7 +6399,7 @@ else begin
 		if (tlb1_v && !agen1_idle) begin
 			if (|pg_fault && pg_faultq==2'd2) begin
 				agen1_idle <= TRUE;
-				rob[agen1_id].exc <= FLT_PAGE;
+				rob[agen1_id].exc <= Stark_pkg::FLT_PAGE;
 				rob[agen1_id].excv <= TRUE;
 				rob[agen1_id].done <= 2'b11;
 				rob[agen1_id].out[0] <= 1'b0;
@@ -6502,7 +6582,7 @@ else begin
 	// Reset out to trigger another access
 		if (dram0_tocnt[10]) begin
 			if (!rob[dram0_id].excv) begin
-				rob[dram0_id].exc <= FLT_BERR;
+				rob[dram0_id].exc <= Stark_pkg::FLT_BERR;
 				rob[dram0_id].excv <= TRUE;
 			end
 			rob[dram0_id].done <= 2'b11;
@@ -6519,7 +6599,7 @@ else begin
 		if (Stark_pkg::NDATA_PORTS > 1) begin
 			if (dram1_tocnt[10]) begin
 				if (!rob[dram1_id].excv) begin
-					rob[dram1_id].exc <= FLT_BERR;
+					rob[dram1_id].exc <= Stark_pkg::FLT_BERR;
 					rob[dram1_id].excv <= TRUE;
 				end
 				rob[dram1_id].done <= 2'b11;
@@ -6893,6 +6973,46 @@ else begin
 				tZeroFcDep(rob[head3].fc_no);
 		end
 		*/
+		if (rob[head0].op.decbus.pred) begin
+			pred_tf[rob[head0].pred_no] <= 2'b00;
+			pred_alloc_map[rob[head0].pred_no] <= 1'b0;
+		end
+		if (rob[head1].op.decbus.pred && cmtcnt > 3'd1) begin
+			pred_tf[rob[head1].pred_no] <= 2'b00;
+			pred_alloc_map[rob[head1].pred_no] <= 1'b0;
+		end
+		if (rob[head2].op.decbus.pred && cmtcnt > 3'd2) begin
+			pred_tf[rob[head2].pred_no] <= 2'b00;
+			pred_alloc_map[rob[head2].pred_no] <= 1'b0;
+		end
+		if (rob[head3].op.decbus.pred && cmtcnt > 3'd3) begin
+			pred_tf[rob[head3].pred_no] <= 2'b00;
+			pred_alloc_map[rob[head3].pred_no] <= 1'b0;
+		end
+		if (rob[head4].op.decbus.pred && cmtcnt > 3'd4) begin
+			pred_tf[rob[head4].pred_no] <= 2'b00;
+			pred_alloc_map[rob[head4].pred_no] <= 1'b0;
+		end
+		if (rob[head5].op.decbus.pred && cmtcnt > 3'd5) begin
+			pred_tf[rob[head5].pred_no] <= 2'b00;
+			pred_alloc_map[rob[head5].pred_no] <= 1'b0;
+		end
+		// Detect hardware fault if predicate is no longer active and there are
+		// still outstanding ROB entries waiting for it to resolve.
+		for (nn = 0; nn < ROB_ENTRIES; nn = nn + 1) begin
+			for (mm = 0; mm < 32; mm = mm + 1) begin
+				if (rob[nn].pred_no==mm && !pred_alloc_map[mm]) begin
+					if (!rob[nn].pred_bitv) begin
+						rob[nn].pred_bit <= 1'b0;
+						rob[nn].pred_bitv <= VAL;
+						if (!rob[nn].excv) begin
+							rob[nn].exc <= FLT_PRED;
+							rob[nn].excv <= VAL;
+						end
+					end
+				end
+			end
+		end
 	end
 	// ToDo: fix LSQ head update.
 	if (lsq[lsq_head.row][lsq_head.col].v==INV && lsq_head != lsq_tail)
@@ -6959,22 +7079,35 @@ else begin
 	// there is no prior predicate then the flag is automatically set TRUE.
 	begin
 		for (nn = 0; nn < ROB_ENTRIES; nn = nn + 1) begin
-			if (!rob[nn].pred_bitv && !fnHasPred(nn)) begin
-				rob[nn].pred_bitv <= TRUE;
-				rob[nn].pred_bits <= 8'hFF;
- 			end
-			if (rob[nn].v && rob[nn].decbus.pred && rob[nn].done==2'b11) begin
-				for (mm = 0; mm < ROB_ENTRIES; mm = mm + 1) begin
-					if (rob[mm].v 
-					&& rob[mm].predrndx == nn
-//					&& fnPredPCMatch(rob[nn].pc[7:0], rob[mm].pc[7:0])
-					&& !rob[mm].pred_bitv
-//					&& !rob[mm].decbus.vec
-					) begin
-						rob[mm].pred_bits <= fnPredSet(rob[mm].predino,rob[mm].decbus.vec2,rob[nn],rob[mm]);
-						rob[mm].pred_bitv <= TRUE;
-					end
+			for (mm = 0; mm < 32; mm = mm + 1) begin
+				// If predication is ignored for this instruction, mark valid and true.
+				if (rob[nn].pred_mask[1:0]==2'b00) begin
+					rob[nn].pred_bit <= 1'b1;
+					rob[nn].pred_bitv <= VAL;
 				end
+				else
+				case(pred_tf[mm])
+				2'b00:	;	// predicate not resolved yet, leave alone.
+				2'b11:	; // reserved, not used
+				2'b10,2'b01:
+					if (rob[nn].pred_no==mm) begin
+						// If predication matches result, mark valid and true.
+						if (rob[nn].pred_mask[1:0] == pred_tf[mm]) begin
+							rob[nn].pred_mask[1:0] <= 2'b00;
+							rob[nn].pred_bit <= 1'b1;
+							rob[nn].pred_bitv <= VAL;
+						end
+						// Otherwise, result not matched, instruction should not be executed.
+						else begin
+							rob[nn].pred_bit <= FALSE;
+							rob[nn].pred_bitv <= VAL;
+						end
+					end
+				endcase
+
+				// Predicate resolved?
+				if (rob[nn].v && rob[nn].decbus.pred && rob[nn].done==2'b11)
+					pred_tf[rob[nn].pred_no] <= rob[nn].pred_tf;
 			end
 		end
 	end
@@ -8271,6 +8404,7 @@ begin
 	fc_no <= 6'd0;
 	irq_wr_en <= FALSE;
 	ssm_flag <= FALSE;
+	pred_alloc_map <= 32'h0;
 end
 endtask
 
@@ -8281,8 +8415,6 @@ endtask
 task tEnque;
 input seqnum_t sn;
 input seqnum_t grp;
-input [2:0] predino;
-input rob_ndx_t predrndx;
 input Stark_pkg::pipeline_reg_t ins;
 input pt;
 input rob_ndx_t tail;
@@ -8323,7 +8455,9 @@ begin
 
 	// "dynamic" fields, these fields may change after enqueue
 	rob[tail].sn <= sn;
+	rob[tail].pred_tf <= 2'b00;	// unknown
 	rob[tail].pred_mask <= db.pred_mask;
+	rob[tail].pred_shadow_size <= db.pred_shadow_size;
 	// NOPs are valid regardless of predicate status
 	rob[tail].pred_bitv <= db.nop;
 	rob[tail].pred_bit <= db.nop;
@@ -8336,7 +8470,7 @@ begin
 	rob[tail].done <= {2{db.nop}};
 	// Unconditional branches and jumps are done already in the mux stage.
 	// Unconditional subroutine calls only need the target register updated.
-	if (db.bsr) begin
+	if (db.bl) begin
 		if (db.Rtz)
 			rob[tail].done <= {VAL,VAL};
 		else
@@ -8353,10 +8487,9 @@ begin
 		rob[tail].excv <= TRUE;
 	end
 	else begin
-		rob[tail].exc <= FLT_NONE;
+		rob[tail].exc <= Stark_pkg::FLT_NONE;
 		rob[tail].excv <= FALSE;
 	end
-	rob[tail].predBit = FALSE;
 	rob[tail].argA_v <= fnSourceRs1v(ins) | db.has_imma;
 	rob[tail].argB_v <= fnSourceRs2v(ins) | (db.has_Rs2 ? 1'b0 : db.has_immb);
 	rob[tail].argC_v <= fnSourceRs3v(ins) | db.has_immc;
@@ -8378,8 +8511,6 @@ begin
 	rob[tail].prior_fc <= TRUE;
 	// "static" fields, these fields remain constant after enqueue
 	rob[tail].grp <= grp;
-	rob[tail].predino <= predino;
-	rob[tail].predrndx <= predrndx;
 	rob[tail].brtgt <= fnTargetIP(ins.pc,db.immc);
 	rob[tail].mcbrtgt <= db.immc[11:0];
 	rob[tail].om <= sr.om;
@@ -8417,7 +8548,7 @@ begin
 	// If the instruction enqueues it must have been through the renamer.
 	// Propagate the target register to the new target by turning the instruction
 	// into a copy-target.
-	if (ins.ins.any.opcode==OP_NOP) begin
+	if (ins.ins.any.opcode==Stark_pkg::OP_NOP) begin
 		rob[tail].decbus.alu <= TRUE;
 		rob[tail].decbus.fpu <= FALSE;
 		rob[tail].decbus.fc <= FALSE;
@@ -8478,14 +8609,14 @@ begin
 	if (Bv) rob[ndx].argB_v <= VAL;
 	if (Cv) rob[ndx].argC_v <= VAL;
 	if (Tv) rob[ndx].argD_v <= VAL;
-	if (Mv) rob[ndx].argCi_v <= VAL;
+	if (Civ) rob[ndx].argCi_v <= VAL;
 	rob[ndx].all_args_valid <=
 		(rob[ndx].argA_v | Av) &&
 		(rob[ndx].argB_v | Bv) &&
 		(rob[ndx].argC_v | Cv) &&
 		(rob[ndx].argD_v | Tv) &&
 		(rob[ndx].argCi_v | Civ) &&
-		(rob[ndx].predBit)
+		(rob[ndx].pred_bit)
 	;
 	
 end
@@ -8934,6 +9065,10 @@ begin
 end
 endtask
 
+/* Clears the predicate mask and sets all the predicate bits valid and true
+	for all instructions in the predicate's shadow. Used when a branch is done
+	in the predicate shadow.
+*/
 task tClearPredMask;
 input rob_ndx_t ndx;
 rob_ndx_t m1;
@@ -9018,6 +9153,87 @@ begin
 			rob[m7].pred_mask <= 14'd0;
 		end
 	end
+end
+endtask
+
+// Search for the branch destination following the branch (forward search). If
+// the branch destination is found in the ROB within six instructions, then
+// predicate: mark the instructions as copy targets (done above)
+
+task tFindDestination;
+input rob_ndx_t ndx;
+output reg fnd;
+output Stark_pkg::rob_bitmask_t dst_list;
+rob_ndx_t m1;
+rob_ndx_t m2;
+rob_ndx_t m3;
+rob_ndx_t m4;
+rob_ndx_t m5;
+rob_ndx_t m6;
+reg [2:0] found;
+begin
+	dst_list = {ROB_ENTRIES{1'b0}};
+	found = 3'd0;
+	m1 = (ndx + Stark_pkg::ROB_ENTRIES + 1) % Stark_pkg::ROB_ENTRIES;
+	m2 = (ndx + Stark_pkg::ROB_ENTRIES + 2) % Stark_pkg::ROB_ENTRIES;
+	m3 = (ndx + Stark_pkg::ROB_ENTRIES + 3) % Stark_pkg::ROB_ENTRIES;
+	m4 = (ndx + Stark_pkg::ROB_ENTRIES + 4) % Stark_pkg::ROB_ENTRIES;
+	m5 = (ndx + Stark_pkg::ROB_ENTRIES + 5) % Stark_pkg::ROB_ENTRIES;
+	m6 = (ndx + Stark_pkg::ROB_ENTRIES + 6) % Stark_pkg::ROB_ENTRIES;
+	if (rob[m1].sn > rob[ndx].sn && rob[m1].v && rob[m1].op.pc.pc == rob[ndx].brtgt)
+		found = 3'd1;
+	else if (rob[m2].sn > rob[ndx].sn && rob[m2].v && rob[m2].op.pc.pc == rob[ndx].brtgt)
+		found = 3'd2;
+	else if (rob[m3].sn > rob[ndx].sn && rob[m3].v && rob[m3].op.pc.pc == rob[ndx].brtgt)
+		found = 3'd3;
+	else if (rob[m4].sn > rob[ndx].sn && rob[m4].v && rob[m4].op.pc.pc == rob[ndx].brtgt)
+		found = 3'd4;
+	else if (rob[m5].sn > rob[ndx].sn && rob[m5].v && rob[m5].op.pc.pc == rob[ndx].brtgt)
+		found = 3'd5;
+	else if (rob[m6].sn > rob[ndx].sn && rob[m6].v && rob[m6].op.pc.pc == rob[ndx].brtgt)
+		found = 3'd6;
+
+	case(found)
+	3'd1:	dst_list[m1] = 1'b1;
+	3'd2:
+		begin
+			dst_list[m1] = 1'b1;
+			dst_list[m2] = 1'b1;
+		end
+	3'd3:
+		begin
+			dst_list[m1] = 1'b1;
+			dst_list[m2] = 1'b1;
+			dst_list[m3] = 1'b1;
+		end
+	3'd4:
+		begin
+			dst_list[m1] = 1'b1;
+			dst_list[m2] = 1'b1;
+			dst_list[m3] = 1'b1;
+			dst_list[m4] = 1'b1;
+		end
+	3'd5:
+		begin
+			dst_list[m1] = 1'b1;
+			dst_list[m2] = 1'b1;
+			dst_list[m3] = 1'b1;
+			dst_list[m4] = 1'b1;
+			dst_list[m5] = 1'b1;
+		end
+	3'd6:
+		begin
+			dst_list[m1] = 1'b1;
+			dst_list[m2] = 1'b1;
+			dst_list[m3] = 1'b1;
+			dst_list[m4] = 1'b1;
+			dst_list[m5] = 1'b1;
+			dst_list[m6] = 1'b1;
+		end
+	default:	;
+	endcase
+	fnd = |found;
+
 end
 endtask
 

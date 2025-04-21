@@ -492,7 +492,7 @@ begin
 		case(ir.fpu.op4)
 		FOP4_G8:	
 			case (ir.fpu.op3)
-			FG8_FSNGJ:	bus = {b[WID-1],a[WID-2:0]};
+			FG8_FSGNJ:	bus = {b[WID-1],a[WID-2:0]};
 			FG8_FSGNJN:	bus = {~b[WID-1],a[WID-2:0]};
 			FG8_FSGNJX:	bus = {b[WID-1]^a[WID-1],a[WID-2:0]};
 			default:	 bus = zero;

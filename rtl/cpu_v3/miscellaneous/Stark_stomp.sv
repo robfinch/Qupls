@@ -41,7 +41,7 @@ import const_pkg::*;
 import Stark_pkg::*;
 
 module Stark_stomp(rst, clk, ihit, advance_pipeline, advance_pipeline_seg2, 
-	micro_code_active, branchmiss, branch_state, do_bsr, misspc,
+	micro_machine_active, branchmiss, branch_state, do_bsr, misspc,
 	pc, pc_f, pc_fet, pc_mux, pc_dec, pc_ren,
 	stomp_fet, stomp_mux, stomp_dec, stomp_ren, stomp_que, stomp_quem,
 	fcu_idv, fcu_id, missid, stomp_bno, takb, rob, robentry_stomp
@@ -51,7 +51,7 @@ input clk;
 input ihit;
 input advance_pipeline;
 input advance_pipeline_seg2;
-input micro_code_active;
+input micro_machine_active;
 input branchmiss;
 input branch_state_t branch_state;
 input do_bsr;
@@ -101,10 +101,10 @@ always_comb
 			 branchmiss
 		|| (branch_state >= BS_CHKPT_RESTORE && branch_state <= BS_DONE2)
 		;
-wire next_stomp_mux = (stomp_fet && !micro_code_active) || stomp_pipeline || do_bsr;
-wire next_stomp_dec = (stomp_mux && !micro_code_active) || stomp_pipeline;
-wire next_stomp_ren = (stomp_dec && !micro_code_active) || stomp_pipeline;
-wire next_stomp_quem = (stomp_ren && !micro_code_active) || stomp_pipeline;
+wire next_stomp_mux = (stomp_fet && !micro_machine_active) || stomp_pipeline || do_bsr;
+wire next_stomp_dec = (stomp_mux && !micro_machine_active) || stomp_pipeline;
+wire next_stomp_ren = (stomp_dec && !micro_machine_active) || stomp_pipeline;
+wire next_stomp_quem = (stomp_ren && !micro_machine_active) || stomp_pipeline;
 
 reg [2:0] bsi;
 wire pe_bsidle;
@@ -307,7 +307,7 @@ for (n4 = 0; n4 < Stark_pkg::ROB_ENTRIES; n4 = n4 + 1) begin
 		((branchmiss/*||((takb&~rob[fcu_id].bt) && (fcu_v2|fcu_v3|fcu_v4))*/) || (branch_state<BS_DONE2 && branch_state!=BS_IDLE))
 		&& rob[n4].sn > rob[missid].sn
 		&& fcu_idv	// miss_idv
-		&& rob[n4].pc.bno_t!=stomp_bno
+		&& rob[n4].op.pc.bno_t!=stomp_bno
 		//&& rob[n4].v
 		)
 	;

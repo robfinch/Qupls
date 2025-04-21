@@ -72,7 +72,7 @@ begin
 //	nopi = {$bits(pipeline_reg_t){1'b0}};
 	nopi = insi;
 	nopi.v = INV;
-	nopi.exc = FLT_NONE;
+	nopi.exc = Stark_pkg::FLT_NONE;
 //	nopi.v = 1'b1;
 /*
 	nopi.pc = insi.pc;

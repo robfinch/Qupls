@@ -102,21 +102,21 @@ reg fmaop, fma_done;
 reg [WID-1:0] fmac;
 reg [WID-1:0] fmab;
 reg [WID-1:0] fmao;
-
+/*
 always_comb
 	if (ir.f3.func==FN_FMS || ir.f3.func==FN_FNMS)
 		fmaop = 1'b1;
 	else
 		fmaop = 1'b0;
-
+*/
 always_comb
-	if (ir.f2.func==FN_FADD || ir.f2.func==FN_FSUB)
+	if (ir.fpu.op4==Stark_pkg::FOP4_FADD || ir.fpu.op4==Stark_pkg::FOP4_FSUB)
 		fmab <= 64'h3FF0000000000000;	// 1,0
 	else
 		fmab <= b;
 
 always_comb
-	if (ir.f2.func==FN_FMUL || ir.f2.func==FN_FDIV)
+	if (ir.fpu.op4==FOP4_FMUL || ir.fpu.op4==FOP4_FDIV)
 		fmac = 64'd0;
 	else
 		fmac = c;
@@ -305,133 +305,54 @@ always_comb
 begin
 	bus = 'd0;
 	case(ir.any.opcode)
-	OP_FLT3:
-		case(ir.f3.func)
+	OP_FLT:
+		case(ir.fpu.op4)
+		/*
 		FN_FLT1:
 			case(ir.f1.func)
-			FN_FABS:	bus = {1'b0,a[62:0]};
-			FN_FNEG:	bus = {a[63]^1'b1,a[62:0]};
-			FN_FTOI:	bus = f2io;
-			FN_ITOF:	bus = i2fo;
-			FN_FSIGN:	bus = signo;
 			FN_ISNAN:	bus = &a[62:52] && |a[51:0];
 			FN_FINITE:	bus = ~&a[62:52];
-			FN_FSIN:	bus = sino;
-			FN_FCOS:	bus = coso;
-			FN_FSQRT:	bus = sqrto;
 			FN_FRES:	bus = freso;
-			FN_FTRUNC:	bus = trunco;
 			FN_FCVTS2D:	bus = cvtS2Do;
 			default:	bus = 'd0;
 			endcase
-		FN_FSCALEB:
-			bus = scaleo;
-		FN_FADD,FN_FSUB,FN_FMUL:
+		*/
+		FOP4_FADD,FOP4_FSUB,FOP4_FMUL:
 			bus = fmao;
 		/*
 		FN_FDIV:
 			bus = divo;
 		*/
-		FN_FSEQ:	bus = cmpo[0];
-		FN_FSNE:	bus = ~cmpo[0];
-		FN_FSLT:	bus = cmpo[1];
-		FN_FSLE:	bus = cmpo[2];
-		FN_FCMP:	bus = cmpo;
-		FN_SGNJ:	bus = {a[63],b[62:0]};
-		FN_SGNJN:	bus = {~a[63],b[62:0]};
-		FN_SGNJX:	bus = {a[63]^b[63],b[62:0]};
-		default:	bus = 64'd0;
-		endcase
-	FN_FMA,FN_FMS,FN_FNMA,FN_FNMS:
-		bus = fmao;
-	OP_R3B,OP_R3W,OP_R3T,OP_R3O:
-		case(ir.r2.func)
-		FN_ADD:
-			case(ir.r2.op4)
-			3'd0:	bus = (a + b) & c;
-			3'd1: bus = (a + b) | c;
-			3'd2: bus = (a + b) ^ c;
-			3'd3:	bus = (a + b) + c;
-			/*
-			4'd9:	bus = (a + b) - c;
-			4'd10: bus = (a + b) + c + 2'd1;
-			4'd11: bus = (a + b) + c - 2'd1;
-			4'd12:
-				begin
-					sd = (a + b) + c;
-					bus = sd[WID-1] ? -sd : sd;
-				end
-			4'd13:
-				begin
-					sd = (a + b) - c;
-					bus = sd[WID-1] ? -sd : sd;
-				end
-			*/
-			default:	bus = {WID{1'd0}};
-			endcase
-		FN_SUB:	bus = a - b - c;
-		FN_CMP,FN_CMPU:	
-			case(ir.r2.op4)
-			3'd1:	bus = cmpo & c;
-			3'd2:	bus = cmpo | c;
-			3'd3:	bus = cmpo ^ c;
-			default:	bus = cmpo;
-			endcase
-		FN_AND:	
-			case(ir.r2.op4)
-			3'd0:	bus = (a & b) & c;
-			3'd1: bus = (a & b) | c;
-			3'd2: bus = (a & b) ^ c;
-			default:	bus = {WID{1'd0}};
-			endcase
-		FN_OR:
-			case(ir.r2.op4)
-			3'd0:	bus = (a | b) & c;
-			3'd1: bus = (a | b) | c;
-			3'd2: bus = (a | b) ^ c;
-			3'd7:	bus = (a & b) | (a & c) | (b & c);
-			default:	bus = {WID{1'd0}};
-			endcase
-		FN_EOR:	
-			case(ir.r2.op4)
-			3'd0:	bus = (a ^ b) & c;
-			3'd1: bus = (a ^ b) | c;
-			3'd2: bus = (a ^ b) ^ c;
-			3'd7:	bus = (^a) ^ (^b) ^ (^c);
-			default:	bus = {WID{1'd0}};
-			endcase
-		FN_CMOVZ: bus = a ? c : b;
-		FN_CMOVNZ:	bus = a ? b : c;
-		FN_NAND:
-			case(ir.r2.op4)
-			3'd0:	bus = ~(a & b) & c;
-			3'd1: bus = ~(a & b) | c;
-			3'd2: bus = ~(a & b) ^ c;
-			default:	bus = {WID{1'd0}};
-			endcase
-		FN_NOR:
-			case(ir.r2.op4)
-			3'd0:	bus = ~(a | b) & c;
-			3'd1: bus = ~(a | b) | c;
-			3'd2: bus = ~(a | b) ^ c;
-			default:	bus = {WID{1'd0}};
-			endcase
-		FN_ENOR:
-			case(ir.r2.op4)
-			3'd0:	bus = ~(a ^ b) & c;
-			3'd1: bus = ~(a ^ b) | c;
-			3'd2: bus = ~(a ^ b) ^ c;
-			default:	bus = {WID{1'd0}};
-			endcase
-		FN_MVVR:	bus = a;
-		default:	bus = {4{32'hDEADBEEF}};
-		endcase
-	OP_ADDI:	bus = a + i;
-	OP_CMPI:	bus = cmpo;
-	OP_CMPUI:	bus = cmpo;
-	OP_ANDI:	bus = a & i;
-	OP_ORI:		bus = a | i;
-	OP_EORI:	bus = a ^ i;
+		FOP4_G8:
+		  case(ir.fpu.op3)
+      FG8_FSGNJ:	bus = {a[63],b[62:0]};
+      FG8_FSGNJN:	bus = {~a[63],b[62:0]};
+      FG8_FSGNJX:	bus = {a[63]^b[63],b[62:0]};
+  		FG8_FSCALEB:	bus = scaleo;
+      default:	bus = 64'd0;
+      endcase
+    FOP4_G10:
+      case (ir.fpu.op3)
+			FG10_FCVTF2I:	 bus = f2io;
+			FG10_FCVTI2F:	 bus = i2fo;
+			FG10_FSIGN:    bus = signo;
+			FG10_FSQRT:	   bus = sqrto;
+			FG10_FTRUNC:	 bus = trunco;
+      default:  bus = 64'd0;
+      endcase
+    FOP4_TRIG:
+      case(ir.fpu.op3)
+			FTRIG_FSIN:	bus = sino;
+			FTRIG_FCOS:	bus = coso;
+      default:  bus = 64'd0;
+      endcase
+    default:  bus = 64'd0;
+    endcase  
+	OP_ADD:	 bus = a + i;
+	OP_CMP:	 bus = cmpo;
+	OP_AND:	 bus = a & i;
+	OP_OR:		bus = a | i;
+	OP_XOR:	   bus = a ^ i;
 	OP_MOV:		bus = a;
 	OP_NOP:		bus = 64'd0;
 	default:	bus = 64'd0;
@@ -440,22 +361,34 @@ end
 
 always_ff @(posedge clk)
 	case(ir.any.opcode)
-	OP_FLT3:
-		case(ir.f3.func)
+	OP_FLT:
+		case(ir.fpu.op4)
+		/*
 		FN_FLT1:
 			case(ir.f1.func)
-			FN_FTOI: done = f2i_done;
-			FN_ITOF: done = i2f_done;
-			FN_FSIN:	done = sincos_done;
-			FN_FCOS:	done = sincos_done;
 //			FN_FSQRT: done = sqrt_done;
 			FN_FRES:	done = fres_done;
-			FN_FTRUNC:	done = trunc_done;
 			default:	done = 1'b1;
 			endcase
-		FN_FSCALEB:
-			done = scale_done;
-		FN_FADD,FN_FSUB,FN_FMUL:
+		*/
+		FOP4_G8:
+		  case(ir.fpu.op3)
+		  FG8_FSCALEB: done = scale_done;
+		  default: done = 1'b1;
+			endcase
+		FOP4_G10:
+		  case (ir.fpu.op3)
+			FG10_FCVTF2I: done = f2i_done;
+			FG10_FCVTI2F: done = i2f_done;
+			FG10_FTRUNC:	done = trunc_done;
+			default: done = 1'b1;
+		  endcase
+		FOP4_TRIG:
+		  case(ir.fpu.op3)
+			FTRIG_FSIN:	done = sincos_done;
+			FTRIG_FCOS:	done = sincos_done;
+		  endcase
+		FOP4_FADD,FOP4_FSUB,FOP4_FMUL:
 			done = fma_done;
 		/*
 		FN_FDIV:
@@ -463,18 +396,11 @@ always_ff @(posedge clk)
 		*/
 		default:	done = 1'b1;
 		endcase
-	FN_FMA,FN_FMS,FN_FNMA,FN_FNMS:
-		done = fma_done;
-	OP_R3B:		done = 1'b1;
-	OP_R3W:		done = 1'b1;
-	OP_R3T:		done = 1'b1;
-	OP_R3O:		done = 1'b1;
-	OP_ADDI:	done = 1'b1;
-	OP_CMPI:	done = 1'b1;
-	OP_CMPUI:	done = 1'b1;
-	OP_ANDI:	done = 1'b1;
-	OP_ORI:		done = 1'b1;
-	OP_EORI:	done = 1'b1;
+	OP_ADD:	done = 1'b1;
+	OP_CMP:	done = 1'b1;
+	OP_AND:	done = 1'b1;
+	OP_OR:		done = 1'b1;
+	OP_XOR:	done = 1'b1;
 	OP_MOV:		done = 1'b1;
 	OP_NOP:		done = 1'b1;
 	default:	done = 1'b1;

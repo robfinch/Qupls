@@ -42,7 +42,7 @@ import Stark_pkg::*;
 module Stark_pipeline_fet(rst, clk, rstcnt, ihit, en, pc_i, misspc, misspc_fet,
 	pc0_fet, pc1_fet, pc2_fet, pc3_fet, pc4_fet, stomp_fet, stomp_bno, ic_carry_mod,
 	ic_line_i, ic_line_fet, nmi_i, carry_mod_fet,
-	micro_code_active, mc_adr
+	micro_machine_active, micro_machine_active_fet, mc_adr
 );
 input rst;
 input clk;
@@ -64,7 +64,8 @@ input [1023:0] ic_line_i;
 output reg [1023:0] ic_line_fet;
 input nmi_i;
 output reg [31:0] carry_mod_fet;
-input micro_code_active;
+input micro_machine_active;
+output reg micro_machine_active_fet;
 input pc_address_ex_t mc_adr;
 
 pc_address_ex_t pc0_f;
@@ -75,27 +76,27 @@ pc_address_ex_t pc4_f;
 
 always_comb
 begin
- 	pc0_f = micro_code_active ? mc_adr : pc_i;
+ 	pc0_f = micro_machine_active ? mc_adr : pc_i;
 end
 always_comb 
 begin
 	pc1_f = pc0_f;
-	pc1_f.pc = micro_code_active ? pc0_f.pc : pc0_f.pc + 6'd4;
+	pc1_f.pc = micro_machine_active ? pc0_f.pc : pc0_f.pc + 6'd4;
 end
 always_comb
 begin
 	pc2_f = pc0_f;
-	pc2_f.pc = micro_code_active ? pc0_f.pc : pc0_f.pc + 6'd8;
+	pc2_f.pc = micro_machine_active ? pc0_f.pc : pc0_f.pc + 6'd8;
 end
 always_comb
 begin
 	pc3_f = pc0_f;
-	pc3_f.pc = micro_code_active ? pc0_f.pc : pc0_f.pc + 6'd12;
+	pc3_f.pc = micro_machine_active ? pc0_f.pc : pc0_f.pc + 6'd12;
 end
 always_comb
 begin
 	pc4_f = pc0_f;
-	pc4_f.pc = micro_code_active ? pc0_f.pc : pc0_f.pc + 6'd16;
+	pc4_f.pc = micro_machine_active ? pc0_f.pc : pc0_f.pc + 6'd16;
 end
 
 always_ff @(posedge clk)
@@ -186,6 +187,14 @@ if (rst)
 else begin
 	if (en)
 		carry_mod_fet <= ic_carry_mod;
+end
+
+always_ff @(posedge clk)
+if (rst)
+	micro_machine_active_fet <= 1'b0;
+else begin
+	if (en)
+		micro_machine_active_fet <= micro_machine_active;
 end
 
 endmodule

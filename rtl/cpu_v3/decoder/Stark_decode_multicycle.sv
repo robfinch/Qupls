@@ -50,7 +50,7 @@ begin
 			fnIsMC = 1'b1;
 		Stark_pkg::FOP4_G8:
 			case (ir.fpu.op3)
-			Stark_pkg::FG8_SCALEB:	fnIsMC = 1'b1;
+			Stark_pkg::FG8_FSCALEB:	fnIsMC = 1'b1;
 			default:
 				fnIsMC = 1'b0;
 			endcase

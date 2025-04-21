@@ -41,10 +41,10 @@ import Stark_pkg::*;
 
 module Stark_alu_station(rst, clk, available, idle, issue, rndx, rndxv, rob,
 	rfo_tag, ld, id, 
-	argA, argB, argBI, argC, argI, argT, argCi, pc_o,
-	argCi_tag, argA_tag, argB_tag, argC_tag, argT_tag,
+	argA, argB, argBI, argC, argI, argD, argCi, pc_o,
+	argCi_tag, argA_tag, argB_tag, argC_tag, argD_tag,
 	cpytgt,
-	cs, aRtz, aRt, nRt, om, bank, instr, div, cap, cptgt, cp,
+	cs, aRtz, aRt, nRt, om, bank, instr, div, cap, cptgt, cp, pc,
 	pred, predz, prc, sc_done, idle_false,
 	prn, prnv, rfo, all_args_valid
 );
@@ -69,14 +69,14 @@ output value_t argB;
 output value_t argBI;
 output value_t argC;
 output value_t argI;
-output value_t argT;
+output value_t argD;
 output pc_address_t pc_o;
 output reg all_args_valid;
 output reg argCi_tag;
 output reg argA_tag;
 output reg argB_tag;
 output reg argC_tag;
-output reg argT_tag;
+output reg argD_tag;
 output reg cs;
 output reg aRtz;
 output aregno_t aRt;
@@ -88,6 +88,7 @@ output reg div;
 output reg cap;
 output reg [7:0] cptgt;
 output checkpt_ndx_t cp;
+output cpu_types_pkg::pc_address_t pc;
 output reg pred;
 output reg predz;
 output memsz_t prc;
@@ -98,7 +99,7 @@ integer nn;
 reg [4:0] valid;
 reg [7:0] next_cptgt;
 always_comb
-	next_cptgt <= {8{cpytgt|rob.decbus.cpytgt}} | ~rob.pred_bits;
+	next_cptgt <= {8{cpytgt|rob.decbus.cpytgt}} | ~{8{rob.pred_bit}};
 
 always_comb
 	all_args_valid = &valid;
@@ -112,13 +113,13 @@ if (rst) begin
 	argBI <= value_zero;
 	argC <= value_zero;
 	argI <= value_zero;
-	argT <= value_zero;
+	argD <= value_zero;
 	argCi <= value_zero;
 	argCi_tag = 1'b0;
 	argA_tag = 1'b0;
 	argB_tag = 1'b0;
 	argC_tag = 1'b0;
-	argT_tag = 1'b0;
+	argD_tag = 1'b0;
 	cs <= 1'b0;
 	nRt <= 11'd0;
 	bank <= 1'b0;
@@ -127,7 +128,7 @@ if (rst) begin
 	instr <= {41'd0,OP_NOP};
 	div <= 1'b0;
 	cptgt <= 8'h00;
-	pc_o <= RSTPC;
+	pc <= RSTPC;
 	cp <= 4'd0;
 	pred <= FALSE;
 	predz <= FALSE;
@@ -170,7 +171,7 @@ else begin
 		end
 		else
 			instr <= rob.op;
-		pc_o <= rob.op.pc.pc;
+		pc <= rob.op.pc.pc;
 		cp <= rob.cndx;
 		// Done even if multi-cycle if it is just a copy-target.
 		if (!rob.op.decbus.multicycle || (&next_cptgt))
@@ -202,10 +203,10 @@ else begin
 		argC_tag <= 1'b0;
 		valid[3] <= 1'b1;
 	end
-	tValidate(rob.op.pRd,argT,argT_tag,valid[4],valid[4]);
+	tValidate(rob.op.pRd,argD,argD_tag,valid[4],valid[4]);
 	if (rob.op.pRd==8'd0) begin
-		argT <= value_zero;
-		argT_tag <= 1'b0;
+		argD <= value_zero;
+		argD_tag <= 1'b0;
 		valid[4] <= 1'b1;
 	end
 end

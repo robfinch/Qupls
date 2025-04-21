@@ -40,9 +40,9 @@ import cpu_types_pkg::*;
 import Stark_pkg::*;
 
 module Stark_agen_station(rst, clk, idle_i, issue, rndx, rndxv, rob,
-	rfo, rfo_argC_ctag, prn, prnv, all_args_valid,
+	rfo, rfo_tag, rfo_argC_ctag, prn, prnv, all_args_valid,
 	argC_v, beb_issue, bndx, beb,
-	id, om, we, argA, argB, argC, argI, argC_ctag,
+	id, om, we, argA, argB, argC, argI, argA_tag, argB_tag, argC_tag,
 	aRa, aRb, aRc, aRt, pRa, pRb, pRc, pRt,
 	pc, op, virt2phys, load, store, amo,
 	cp, excv, ldip, idle_o, store_argC_v, store_argI,
@@ -56,6 +56,7 @@ input rob_ndx_t rndx;
 input rndxv;
 input Stark_pkg::rob_entry_t rob;
 input value_t [15:0] rfo;
+input [15:0] rfo_tag;
 input pregno_t [15:0] prn;
 input [15:0] prnv;
 input rfo_argC_ctag;
@@ -69,7 +70,9 @@ output reg we;
 output address_t argA;
 output address_t argB;
 output value_t argC;
-output reg argC_ctag;
+output reg argA_tag;
+output reg argB_tag;
+output reg argC_tag;
 output reg argC_v;
 output reg all_args_valid;
 output address_t argI;
@@ -108,7 +111,9 @@ if (rst) begin
 	argB <= {$bits(address_t){1'b0}};
 	argC <= {$bits(value_t){1'b0}};
 	argI <= {$bits(address_t){1'b0}};
-	argC_ctag <= 1'b0;
+	argA_tag <= 1'b0;
+	argB_tag <= 1'b0;
+	argC_tag <= 1'b0;
 	aRa <= 8'd0;
 	aRb <= 8'd0;
 	aRc <= 8'd0;
@@ -147,7 +152,7 @@ else begin
 			ldip <= TRUE;
 		else
 			ldip <= FALSE;
-		argC_ctag <= rfo_argC_ctag;
+		argC_tag <= rfo_argC_ctag;
 		argI <= address_t'(rob.op.decbus.immb);
 		pRt <= rob.op.nRd;
 		aRt <= rob.op.decbus.Rd;
@@ -197,17 +202,17 @@ else begin
 		store_argI <= address_t'(beb.decbus.immb);
 	end
 	*/
-	tValidate(rob.op.pRs1,argA,valid[0],valid[0]);
+	tValidate(rob.op.pRs1,argA,argA_tag,valid[0],valid[0]);
 	if (rob.op.pRs1==8'd0) begin
 		argA <= value_zero;
 		valid[0] <= 1'b1;
 	end
-	tValidate(rob.op.pRs2,argB,valid[1],valid[1]);
+	tValidate(rob.op.pRs2,argB,argB_tag,valid[1],valid[1]);
 	if (rob.op.pRs2==8'd0) begin
 		argB <= value_zero;
 		valid[1] <= 1'b1;
 	end
-	tValidate(rob.op.pRs3,argC,valid[2],valid[2]);
+	tValidate(rob.op.pRs3,argC,argC_tag,valid[2],valid[2]);
 	if (rob.op.pRs3==8'd0) begin
 		argC <= value_zero;
 		valid[2] <= 1'b1;

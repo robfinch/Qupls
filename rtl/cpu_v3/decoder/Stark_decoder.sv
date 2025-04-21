@@ -382,6 +382,8 @@ else begin
 		// Is the predicate shadow count within range?
 		if (pred_shadow_count >= PRED_SHADOW)
 			dbo.cause <= Stark_pkg::FLT_UNIMP;
+		else
+			dbo.pred_shadow_size <= pred_shadow_count;
 		// Check for unimplemented instruction, but not if it is being stomped on.
 		// If it is stomped on, we do not care.
 		if (!(db.nop|db.alu|db.fpu|db.fc|db.mem|db.macro
