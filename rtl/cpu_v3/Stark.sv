@@ -2302,7 +2302,6 @@ Stark_pipeline_mux uiext1
 	.reglist_active(1'b0),
 	.mipv_i(micro_machine_active),
 	.mip_i(micro_ip),
-	.ic_line_fet(ic_line_fet),
 	.grp_i(igrp2),
 	.misspc_fet(misspc_fet),
 	.pc0_fet(pc0_fet),
@@ -2370,7 +2369,7 @@ Stark_pipeline_dec udecstg1
 	.en(advance_pipeline),
 	.clk5x(clk5x),
 	.ph4(ph4),
-	.new_cline(new_cline_mux),
+	.new_cline_mux(new_cline_mux),
 	.cline(cline_mux),
 	.restored(restored),
 	.restore_list(restore_list),
@@ -2456,7 +2455,7 @@ wire stomp3;
 
 aregno_t [15:0] arn;
 reg [15:0] arnt;
-reg [2:0] arng [0:23];
+reg [2:0] arng [0:15];
 wire [15:0] arnv;
 pregno_t [15:0] prn;
 pregno_t [15:0] prn1;
@@ -2826,14 +2825,14 @@ Stark_pipeline_ren uren1
 	.cmtbiv(do_commit && !rob[head1].v && cmtcnt > 1),
 	.cmtciv(do_commit && !rob[head2].v && cmtcnt > 2),
 	.cmtdiv(do_commit && !rob[head3].v && cmtcnt > 3),
-	.cmtaa(rob[head0].op.aRt),
-	.cmtba(rob[head1].op.aRt),
-	.cmtca(rob[head2].op.aRt),
-	.cmtda(rob[head3].op.aRt),
-	.cmtap(rob[head0].op.nRt),
-	.cmtbp(rob[head1].op.nRt),
-	.cmtcp(rob[head2].op.nRt),
-	.cmtdp(rob[head3].op.nRt),
+	.cmtaa(rob[head0].op.aRd),
+	.cmtba(rob[head1].op.aRd),
+	.cmtca(rob[head2].op.aRd),
+	.cmtda(rob[head3].op.aRd),
+	.cmtap(rob[head0].op.nRd),
+	.cmtbp(rob[head1].op.nRd),
+	.cmtcp(rob[head2].op.nRd),
+	.cmtdp(rob[head3].op.nRd),
 	.cmta_cp(rob[head0].cndx),
 	.cmtb_cp(rob[head1].cndx),
 	.cmtc_cp(rob[head2].cndx),
@@ -3858,8 +3857,6 @@ Stark_regfile4wNr #(.RPORTS(16)) urf1 (
 //	.ti2(dram0_cload ? dram_ctag0 : 1'b0),
 //	.ti3(fpu0_ctag),
 //	.ti4(dram1_cload ? dram_ctag1 : 1'b0),
-	.pc(rf_pc),
-	.pc_tag(16'b0),
 	.ra(rf_reg),
 	.o(rfo),
 	.to(rfo_ctag)
@@ -3894,12 +3891,12 @@ for (n4 = 0; n4 < Stark_pkg::ROB_ENTRIES; n4 = n4 + 1) begin
 		if (fcu_idv && ((rob[fcu_id].decbus.br && takb) || rob[fcu_id].decbus.cjb)) begin
 	 		if (rob[n4].grp==rob[fcu_id].grp && rob[n4].sn > rob[fcu_id].sn) begin
 				robentry_cpytgt[n4] = TRUE;
-				unavail_list[rob[n4].op.nRt] = TRUE;
+				unavail_list[rob[n4].op.nRd] = TRUE;
 	 		end
 		end
 		if (fcu_idv && fcu_v2 && fcu_found_destination_list[n4]) begin
 			robentry_cpytgt[n4] = TRUE;
-			unavail_list[rob[n4].op.nRt] = TRUE;
+			unavail_list[rob[n4].op.nRd] = TRUE;
 		end
 	end
 

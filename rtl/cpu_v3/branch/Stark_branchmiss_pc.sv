@@ -70,7 +70,6 @@ reg [ABITS-1:0] rg;
 always_comb
 begin
 //	disp = {{38{instr.ins.br.dispHi[3]}},instr.ins.br.dispHi,instr.ins.br.dispLo};
-	disp = {{43{ir.br.dispLo[20]}},ir.br.dispLo};
 	miss_mcip = 12'h1A0;
 	misspc.pc = Stark_pkg::RSTPC;
 	misspc.bno_t = 6'd1;

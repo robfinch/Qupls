@@ -39,13 +39,13 @@ import const_pkg::*;
 import cpu_types_pkg::*;
 import Stark_pkg::*;
 
-module Stark_pipeline_dec(rst_i, rst, clk, en, clk5x, ph4, cline,
+module Stark_pipeline_dec(rst_i, rst, clk, en, clk5x, ph4, new_cline_mux, cline,
 	restored, restore_list, unavail_list, sr,
 	tags2free, freevals, bo_wr, bo_preg,
 	ins0_d_inv, ins1_d_inv, ins2_d_inv, ins3_d_inv,
 	stomp_dec, stomp_mux, stomp_bno, pg0_mux, pg1_mux,
 	Rt0_dec, Rt1_dec, Rt2_dec, Rt3_dec, Rt0_decv, Rt1_decv, Rt2_decv, Rt3_decv,
-	micro_code_active_mux, micro_code_active_dec,
+	micro_machine_active_mux, micro_machine_active_dec,
 	pg_dec,
 	ren_stallq, ren_rst_busy, avail_reg
 );
@@ -55,6 +55,7 @@ input clk;
 input en;
 input clk5x;
 input [4:0] ph4;
+input new_cline_mux;
 input [1023:0] cline;
 input restored;
 input [Stark_pkg::PREGS-1:0] restore_list;
@@ -84,8 +85,8 @@ output Rt3_decv;
 output Stark_pkg::pipeline_group_reg_t pg_dec;
 output ren_stallq;
 output ren_rst_busy;
-input micro_code_active_mux;
-output reg micro_code_active_dec;
+input micro_machine_active_mux;
+output reg micro_machine_active_dec;
 output [PREGS-1:0] avail_reg;
 
 integer n1,n2,n3;
@@ -306,14 +307,14 @@ end
 
 /*
 always_comb
-	micro_code_active_x = micro_code_active;
+	micro_machine_active_x = micro_machine_active;
 */
 always_ff @(posedge clk)
 if (rst)
-	micro_code_active_dec <= FALSE;
+	micro_machine_active_dec <= FALSE;
 else begin
 	if (en)
-		micro_code_active_dec <= micro_code_active_mux;
+		micro_machine_active_dec <= micro_machine_active_mux;
 end
 
 /*

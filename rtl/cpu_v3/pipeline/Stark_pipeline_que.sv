@@ -47,7 +47,7 @@ import Stark_pkg::*;
 module Stark_pipeline_que(rst, clk, en,
 	ins0_ren, ins1_ren, ins2_ren, ins3_ren, 
 	ins0_que, ins1_que, ins2_que, ins3_que,
-	micro_code_active_ren, micro_code_active_que 
+	micro_machine_active_ren, micro_machine_active_que 
 );
 input rst;
 input clk;
@@ -60,8 +60,8 @@ output Stark_pkg::pipeline_reg_t ins0_que;
 output Stark_pkg::pipeline_reg_t ins1_que;
 output Stark_pkg::pipeline_reg_t ins2_que;
 output Stark_pkg::pipeline_reg_t ins3_que;
-input micro_code_active_ren;
-output reg micro_code_active_que;
+input micro_machine_active_ren;
+output reg micro_machine_active_que;
 
 Stark_pkg::pipeline_reg_t nopi;
 
@@ -74,8 +74,7 @@ begin
 	nopi.pc.bno_f = 6'd1;
 	nopi.mcip = 12'h1A0;
 	nopi.ins = {26'd0,Stark_pkg::OP_NOP};
-	nopi.pred_btst = 6'd0;
-	nopi.decbus.Rtz = 1'b1;
+	nopi.decbus.Rdz = 1'b1;
 	nopi.decbus.nop = 1'b1;
 	nopi.decbus.alu = 1'b1;
 end
@@ -119,10 +118,10 @@ end
 
 always_ff @(posedge clk)
 if (rst)
-	micro_code_active_que <= FALSE;
+	micro_machine_active_que <= FALSE;
 else begin
 	if (en)
-		micro_code_active_que <= micro_code_active_ren;
+		micro_machine_active_que <= micro_machine_active_ren;
 end
 
 endmodule

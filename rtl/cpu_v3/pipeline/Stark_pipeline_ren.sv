@@ -64,7 +64,7 @@ module Stark_pipeline_ren(
 	bo_wr, bo_areg, bo_preg, bo_nreg,
 	cndx, pcndx,
 	rat_stallq,
-	micro_code_active_dec, micro_code_active_ren
+	micro_machine_active_dec, micro_machine_active_ren
 );
 parameter NPORT = 16;
 input rst;
@@ -167,8 +167,8 @@ output pregno_t bo_nreg;
 output checkpt_ndx_t cndx;
 output checkpt_ndx_t pcndx;
 output rat_stallq;
-input micro_code_active_dec;
-output reg micro_code_active_ren;
+input micro_machine_active_dec;
+output reg micro_machine_active_ren;
 
 integer jj,n5;
 
@@ -583,39 +583,39 @@ always_comb mcip3_mux = micro_ip|4'd3;
 /*
 always_ff @(posedge clk)
 if (rst)
-	micro_code_active_f <= TRUE;
+	micro_machine_active_f <= TRUE;
 else begin
 	if (advance_pipeline)
-		micro_code_active_f <= micro_code_active;
+		micro_machine_active_f <= micro_machine_active;
 end
 */
 /*
 always_ff @(posedge clk)
 if (rst)
-	micro_code_active_x <= FALSE;
+	micro_machine_active_x <= FALSE;
 else begin
 	if (advance_pipeline)
-		micro_code_active_x <= micro_code_active;
+		micro_machine_active_x <= micro_machine_active;
 end
 */
 /*
 always_comb
-	micro_code_active_x = micro_code_active;
+	micro_machine_active_x = micro_machine_active;
 */
 always_ff @(posedge clk)
 if (rst)
-	micro_code_active_ren <= FALSE;
+	micro_machine_active_ren <= FALSE;
 else begin
 	if (en)
-		micro_code_active_ren <= micro_code_active_dec;
+		micro_machine_active_ren <= micro_machine_active_dec;
 end
 /*
 always_ff @(posedge clk)
 if (rst)
-	micro_code_active_q <= FALSE;
+	micro_machine_active_q <= FALSE;
 else begin
 	if (advance_pipeline_seg2)
-		micro_code_active_q <= micro_code_active_r;
+		micro_machine_active_q <= micro_machine_active_r;
 end
 */
 // The cycle after the length is calculated
@@ -635,22 +635,22 @@ end
 
 always_comb
 begin
- 	pc0_fet = micro_code_active ? mc_adr : pc0_x1;
+ 	pc0_fet = micro_machine_active ? mc_adr : pc0_x1;
 end
 always_comb 
 begin
 	pc1_fet = pc0_fet;
-	pc1_fet.pc = micro_code_active ? pc0_fet.pc : pc0_fet.pc + 6'd8;
+	pc1_fet.pc = micro_machine_active ? pc0_fet.pc : pc0_fet.pc + 6'd8;
 end
 always_comb
 begin
 	pc2_fet = pc0_fet;
-	pc2_fet.pc = micro_code_active ? pc0_fet.pc : pc0_fet.pc + 6'd16;
+	pc2_fet.pc = micro_machine_active ? pc0_fet.pc : pc0_fet.pc + 6'd16;
 end
 always_comb
 begin
 	pc3_fet = pc0_fet;
-	pc3_fet.pc = micro_code_active ? pc0_fet.pc : pc0_fet.pc + 6'd24;
+	pc3_fet.pc = micro_machine_active ? pc0_fet.pc : pc0_fet.pc + 6'd24;
 end
 */
 /*
