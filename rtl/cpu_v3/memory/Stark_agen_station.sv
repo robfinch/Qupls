@@ -44,7 +44,7 @@ module Stark_agen_station(rst, clk, idle_i, issue, rndx, rndxv, rob,
 	argC_v, beb_issue, bndx, beb,
 	id, om, we, argA, argB, argC, argI, argA_tag, argB_tag, argC_tag,
 	aRa, aRb, aRc, aRt, pRa, pRb, pRc, pRt,
-	pc, op, virt2phys, load, store, amo,
+	instr, pc, op, virt2phys, load, store, amo,
 	cp, excv, ldip, idle_o, store_argC_v, store_argI,
 	store_argC_aReg,  store_argC_pReg, store_argC_cndx
 );
@@ -66,6 +66,7 @@ input beb_entry_t beb;
 
 output rob_ndx_t id;
 output Stark_pkg::operating_mode_t om;
+output Stark_pkg::ex_instruction_t instr;
 output reg we;
 output address_t argA;
 output address_t argB;
@@ -117,6 +118,7 @@ if (rst) begin
 	aRa <= 8'd0;
 	aRb <= 8'd0;
 	aRc <= 8'd0;
+	instr = {$bits(ex_instruction_t){1'b0}};
 	pc <= RSTPC;
 	pc.bno_t <= 6'd1;
 	pc.bno_f <= 6'd1;
@@ -148,6 +150,7 @@ else begin
 		id <= rndx;
 		om <= rob.om;
 		we <= rob.op.decbus.store;
+		instr = rob.op.ins;
 		if (rob.op.decbus.jsri)
 			ldip <= TRUE;
 		else
@@ -161,7 +164,7 @@ else begin
 		load <= rob.op.decbus.load|rob.op.decbus.loadz;
 		store <= rob.op.decbus.store;
 		amo <= rob.op.decbus.amo;
-		pc <= rob.pc;
+		pc <= rob.op.pc;
 		aRa <= rob.op.decbus.Rs1;
 		aRb <= rob.op.decbus.Rs2;
 		aRc <= rob.op.decbus.Rs3;

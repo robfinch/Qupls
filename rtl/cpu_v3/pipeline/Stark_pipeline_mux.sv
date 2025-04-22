@@ -399,27 +399,6 @@ cpu_types_pkg::pc_address_ex_t bsr1_tgt;
 cpu_types_pkg::pc_address_ex_t bsr2_tgt;
 cpu_types_pkg::pc_address_ex_t bsr3_tgt;
 
-function fnDecBsr;
-input Stark_pkg::pipeline_reg_t mux;
-begin
-	fnDecBsr =
-		mux.ins[31]==1'b1 &&
-		mux.ins.any.opcode==5'd13 &&
-		mux.ins.bl.BRd!=3'd0 &&
-		mux.ins.bl.BRd!=3'd7;
-end
-endfunction
-
-function fnDecBra;
-input Stark_pkg::pipeline_reg_t mux;
-begin
-	fnDecBra =
-		mux.ins[31]==1'b1 &&
-		mux.ins.any.opcode==5'd13 &&
-		mux.ins.bl.BRd==3'd0;
-end
-endfunction
-
 
 always_comb bsr0 = fnDecBsr(ins0_mux);
 always_comb bsr1 = fnDecBsr(ins1_mux);
@@ -430,87 +409,6 @@ always_comb bra1 = fnDecBra(ins1_mux);
 always_comb bra2 = fnDecBra(ins2_mux);
 always_comb bra3 = fnDecBra(ins3_mux);
 
-function fnDecJmp;
-input Stark_pkg::pipeline_reg_t mux;
-begin
-	fnDecJmp =
-		mux.ins[31]==1'b0 && |mux.ins[30:29] &&
-		mux.ins.any.opcode==5'd13 &&
-		mux.ins.blrlr.BRs==3'd0 &&
-		mux.ins.blrlr.BRd==3'd0;
-end
-endfunction
-
-function fnDecJmpr;
-input Stark_pkg::pipeline_reg_t mux;
-begin
-	fnDecJmpr =
-		mux.ins[31]==1'b0 && |mux.ins[30:29] &&
-		mux.ins.any.opcode==5'd12 &&
-		mux.ins.bcclr.BRd==3'd0;
-end
-endfunction
-
-function fnDecJsr;
-input Stark_pkg::pipeline_reg_t mux;
-begin
-	fnDecJsr =
-		mux.ins[31]==1'b0 && |mux.ins[30:29] &&
-		mux.ins.any.opcode==5'd13 &&
-		mux.ins.blrlr.BRs==3'd0 &&
-		mux.ins.blrlr.BRd!=3'd0 &&
-		mux.ins.blrlr.BRd!=3'd7;
-end
-endfunction
-
-function fnDecJsrr;
-input Stark_pkg::pipeline_reg_t mux;
-begin
-	fnDecJsrr =
-		mux.ins[31]==1'b0 && |mux.ins[30:29] &&
-		mux.ins.any.opcode==5'd12 &&
-		mux.ins.bcclr.BRd!=3'd0 &&
-		mux.ins.bcclr.BRd!=3'd7;
-end
-endfunction
-
-function fnDecBra2;
-input Stark_pkg::pipeline_reg_t mux;
-begin
-	fnDecBra2 =
-		mux.ins[31]==1'b0 && |mux.ins[30:29] &&
-		mux.ins.any.opcode==5'd13 &&
-		mux.ins[0]==1'b0 &&
-		mux.ins.blrlr.BRs==3'd7 &&
-		mux.ins.blrlr.BRd==3'd0;
-end
-endfunction
-
-function fnDecBsr2;
-input Stark_pkg::pipeline_reg_t mux;
-begin
-	fnDecBsr2 =
-		mux.ins[31]==1'b0 && |mux.ins[30:29] &&
-		mux.ins.any.opcode==5'd13 &&
-		mux.ins[0]==1'b0 &&
-		mux.ins.blrlr.BRs==3'd7 &&
-		mux.ins.blrlr.BRd!=3'd0 &&
-		mux.ins.blrlr.BRd!=3'd7;
-end
-endfunction
-
-function fnDecRet;
-input Stark_pkg::pipeline_reg_t mux;
-begin
-	fnDecRet =
-		mux.ins[31]==1'b0 &&
-		mux.ins.any.opcode==5'd13 &&
-		mux.ins[0]==1'b1 &&
-		mux.ins.blrlr.BRs==3'd7 &&
-		mux.ins.blrlr.BRd!=3'd0 &&
-		mux.ins.blrlr.BRd!=3'd7;
-end
-endfunction
 
 always_comb jmp0 = fnDecJmp(ins0_mux);
 always_comb jmp1 = fnDecJmp(ins1_mux);
@@ -550,49 +448,6 @@ always_comb jsri1 = ins1_mux.ins.any.opcode==OP_JSRI && ins1_mux.ins.bsr.Rt!=3'd
 always_comb jsri2 = ins2_mux.ins.any.opcode==OP_JSRI && ins2_mux.ins.bsr.Rt!=3'd0;
 always_comb jsri3 = ins3_mux.ins.any.opcode==OP_JSRI && ins3_mux.ins.bsr.Rt!=3'd0;
 */
-function [63:0] fnDecConst;
-input Stark_pkg::instruction_t ins;
-input [511:0] cline;
-reg [3:0] cnstpos1;
-reg [8:0] cnstpos;
-reg [1:0] cnstsize;
-reg [63:0] cnst1;
-begin
-	cnstsize = fnConstSize(ins);
-	cnstpos1 = fnConstPos(ins);
-	cnstpos = {cnstpos1,2'b0,3'b0};
-	cnst1 = cline >> cnstpos1;
-	case(cnstsize)
-	2'd0:	fnDecConst = 64'd0;
-	2'd1:	fnDecConst = {{32{cnst1[31]}},cnst1[31:0]};
-	2'd2:	fnDecConst = cnst1;
-	2'd3:	fnDecConst = cnst1;
-	endcase
-end
-endfunction
-
-function cpu_types_pkg::pc_address_ex_t fnDecDest;
-input Stark_pkg::pipeline_reg_t pr;
-input [511:0] cline;
-reg jsr,jmp,bsr,bra,bsr2,bra2;
-begin
-	fnDecDest = pr.pc;
-	jsr = fnDecJsr(pr.ins);
-	jmp = fnDecJmp(pr.ins);
-	bsr = fnDecBsr(pr.ins);
-	bra = fnDecBra(pr.ins);
-	bsr2 = fnDecBsr2(pr.ins);
-	bra2 = fnDecBra2(pr.ins);
-	case(1'b1)
-	jsr:	fnDecDest.pc = fnDecConst(pr.ins,cline);
-	jmp:	fnDecDest.pc = fnDecConst(pr.ins,cline);
-	bsr: 	fnDecDest.pc = pr.pc.pc + {{39{pr.ins.bl.disp[21]}},pr.ins.bl.disp,pr.ins.bl.d0};
-	bra: 	fnDecDest.pc = pr.pc.pc + {{39{pr.ins.bl.disp[21]}},pr.ins.bl.disp,pr.ins.bl.d0};
-	bsr2:	fnDecDest.pc = pr.pc.pc + fnDecConst(pr.ins,cline);
-	bra2:	fnDecDest.pc = pr.pc.pc + fnDecConst(pr.ins,cline);
-	endcase
-end
-endfunction
 
 always_comb
 begin

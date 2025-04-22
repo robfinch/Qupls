@@ -648,6 +648,7 @@ wire agen0_excv;
 reg agen0_idv;
 wire agen0_ldip;
 wire agen0_args_valid;
+Stark_pkg::ex_instruction_t agen0_instr;
 
 reg agen1_idle = 1'b1;
 wire agen1_idle1;
@@ -676,6 +677,7 @@ wire agen1_excv;
 reg agen1_idv;
 wire agen1_ldip;
 wire agen1_args_valid;
+Stark_pkg::ex_instruction_t agen1_instr;
 
 rob_ndx_t [3:0] regv_rndx;
 
@@ -2562,8 +2564,6 @@ Stark_read_port_select urps1
 	.clk(clk),
 	.aReg_i(aRs),
 	.aReg_o(arn),
-	.pc_i(pcs),
-	.pc_o(rfo_pc),
 	.regAck_o()
 );
 
@@ -3945,7 +3945,7 @@ Stark_branchmiss_pc umisspc1
 	.misspc(fcu_misspc1),
 	.missgrp(fcu_missgrp),
 	.miss_mcip(fcu_miss_mcip1),
-	.tgtpc(tgtpc),
+	.dstpc(tgtpc),
 	.stomp_bno(stomp_bno)
 );
 
@@ -4374,41 +4374,41 @@ assign alu1_argD_reg = rob[alu1_rndx].op.pRt;
 assign fpu0_argD_reg = rob[fpu0_rndx].op.pRt;
 */
 
-assign aRs[0] = rob[alu0_rndx].op.decbus.Ra;
-assign aRs[7] = rob[alu0_rndx].op.decbus.Rb;
-assign aRs[3] = rob[alu0_rndx].op.decbus.Rc;
-assign aRs[4] = rob[alu0_rndx].op.decbus.Rt;
+assign aRs[0] = rob[alu0_rndx].op.decbus.Rs1;
+assign aRs[7] = rob[alu0_rndx].op.decbus.Rs2;
+assign aRs[3] = rob[alu0_rndx].op.decbus.Rs3;
+assign aRs[4] = rob[alu0_rndx].op.decbus.Rd;
 
-assign aRs[1] = rob[alu1_rndx].op.decbus.Ra;
-assign aRs[8] = rob[alu1_rndx].op.decbus.Rb;
-assign aRs[9] = rob[alu1_rndx].op.decbus.Rc;
-assign aRs[10] = rob[alu1_rndx].op.decbus.Rt;
+assign aRs[1] = rob[alu1_rndx].op.decbus.Rs1;
+assign aRs[8] = rob[alu1_rndx].op.decbus.Rs2;
+assign aRs[9] = rob[alu1_rndx].op.decbus.Rs3;
+assign aRs[10] = rob[alu1_rndx].op.decbus.Rd;
 
-assign aRs[2] = rob[fpu0_rndx].op.decbus.Ra;
-assign aRs[11] = rob[fpu0_rndx].op.decbus.Rb;
-assign aRs[12] = rob[fpu0_rndx].op.decbus.Rc;
-assign aRs[13] = rob[fpu0_rndx].op.decbus.Rt;
+assign aRs[2] = rob[fpu0_rndx].op.decbus.Rs1;
+assign aRs[11] = rob[fpu0_rndx].op.decbus.Rs2;
+assign aRs[12] = rob[fpu0_rndx].op.decbus.Rs3;
+assign aRs[13] = rob[fpu0_rndx].op.decbus.Rd;
 
-assign aRs[3] = rob[fpu1_rndx].op.decbus.Ra;
-assign aRs[14] = rob[fpu1_rndx].op.decbus.Rb;
-assign aRs[15] = rob[fpu1_rndx].op.decbus.Rc;
-assign aRs[16] = rob[fpu1_rndx].op.decbus.Rt;
+assign aRs[3] = rob[fpu1_rndx].op.decbus.Rs1;
+assign aRs[14] = rob[fpu1_rndx].op.decbus.Rs2;
+assign aRs[15] = rob[fpu1_rndx].op.decbus.Rs3;
+assign aRs[16] = rob[fpu1_rndx].op.decbus.Rd;
 
-assign aRs[4] = rob[fcu_rndx].op.decbus.Ra;
-assign aRs[17] = rob[fcu_rndx].op.decbus.Rb;
+assign aRs[4] = rob[fcu_rndx].op.decbus.Rs1;
+assign aRs[17] = rob[fcu_rndx].op.decbus.Rs2;
 
-assign aRs[5] = rob[agen0_rndx].op.decbus.Ra;
-assign aRs[18] = rob[agen0_rndx].op.decbus.Rb;
-assign aRs[19] = rob[agen0_rndx].op.decbus.Rc;
-assign aRs[20] = rob[agen0_rndx].op.decbus.Rt;
+assign aRs[5] = rob[agen0_rndx].op.decbus.Rs1;
+assign aRs[18] = rob[agen0_rndx].op.decbus.Rs2;
+assign aRs[19] = rob[agen0_rndx].op.decbus.Rs3;
+assign aRs[20] = rob[agen0_rndx].op.decbus.Rd;
 
-assign aRs[6] = rob[agen1_rndx].op.decbus.Ra;
-assign aRs[21] = rob[agen1_rndx].op.decbus.Rb;
-assign aRs[22] = rob[agen1_rndx].op.decbus.Rc;
-assign aRs[23] = rob[agen1_rndx].op.decbus.Rt;
+assign aRs[6] = rob[agen1_rndx].op.decbus.Rs1;
+assign aRs[21] = rob[agen1_rndx].op.decbus.Rs2;
+assign aRs[22] = rob[agen1_rndx].op.decbus.Rs3;
+assign aRs[23] = rob[agen1_rndx].op.decbus.Rd;
 
-assign aRs[24] = rob[alu0_rndx].op.Rci;
-assign aRs[25] = rob[alu1_rndx].op.Rci;
+assign aRs[24] = rob[alu0_rndx].op.decbus.Rci;
+assign aRs[25] = rob[alu1_rndx].op.decbus.Rci;
 
 assign aRs[26] = 7'd0;
 assign aRs[27] = 7'd0;
@@ -4863,6 +4863,7 @@ Stark_agen uag0
 	.rst(irst),
 	.clk(clk),
 	.next(1'b0),
+	.ir(agen0_instr),
 	.out(rob[agen0_id].out[0]),
 	.tlb_v(tlb0_v),
 	.virt2phys(agen0_virt2phys),
@@ -4884,6 +4885,7 @@ Stark_agen uag1
 	.rst(irst),
 	.clk(clk),
 	.next(1'b0),
+	.ir(agen1_instr),
 	.out(rob[agen1_id].out[0]),
 	.tlb_v(tlb1_v),
 	.virt2phys(agen1_virt2phys),
@@ -4921,7 +4923,7 @@ mmu #(.CID(3)) ummu1
 	.tlb_pmt_base(32'hFFF80000),
 	.ic_miss_adr(ic_miss_adr),
 	.ic_miss_asid(ic_miss_asid),
-	.ic_om(ic_miss_om),
+	.ic_miss_om(ic_miss_om),
 	.vadr_ir(agen0_op.ins),
 	.vadr(agen0_res),
 	.vadr_v(agen0_v),
@@ -5493,7 +5495,7 @@ Stark_agen_station uagen0stn
 	.rob(rob[agen0_rndx]),
 	.rfo(rfo),
 	.rfo_tag(rfo_tag),
-	.rfo_argC_tag(rfo_agen0_argC_ctag),
+//	.rfo_argC_tag(rfo_agen0_argC_ctag),
 	.argC_v(agen0_argC_v),
 	.id(agen0_id),
 	.om(agen0_om),
@@ -5506,6 +5508,7 @@ Stark_agen_station uagen0stn
 	.all_args_valid(agen0_args_valid),
 	.prn(prn),
 	.prnv(prnv),
+	.instr(agen0_instr),
 	.pc(agen0_pc),
 	.op(agen0_op),
 	.virt2phys(agen0_virt2phys),
@@ -5537,7 +5540,6 @@ Stark_agen_station uagen1stn
 	.rob(rob[agen1_rndx]),
 	.rfo(rfo),
 	.rfo_tag(rfo_tag),
-	.rfo_argC_tag(1'b0),
 	.id(agen1_id),
 	.om(agen1_om),
 	.we(agen1_we),
@@ -5545,13 +5547,13 @@ Stark_agen_station uagen1stn
 	.argB(agen1_argB),
 	.argC(),
 	.argI(agen1_argI),
-	.argM(agen1_argM),
 	.argC_tag(),
 	.argC_v(),
 	.all_args_valid(agen1_args_valid),
 	.prn(prn),
 	.prnv(prnv),
 	.pRc(),
+	.instr(agen1_instr),
 	.pc(agen1_pc),
 	.op(agen1_op),
 	.virt2phys(agen1_virt2phys),
@@ -5577,10 +5579,10 @@ reg dram0_idv2;
 reg fcu_setflags;
 always_comb
 	fcu_setflags = fcu_v && rob[fcu_id].v && fcu_v3 && !robentry_stomp[fcu_id] 
-		&& (bs_idle_oh||bs_done_oh||branch_state==BS_DONE2) && fcu_idv;
+		&& (bs_idle_oh||bs_done_oh||branch_state==Stark_pkg::BS_DONE2) && fcu_idv;
  	
 always_comb
-	dc_get = !(branchmiss || (branch_state < BS_CAPTURE_MISSPC && !bs_idle_oh))
+	dc_get = !(branchmiss || (branch_state < Stark_pkg::BS_CAPTURE_MISSPC && !bs_idle_oh))
 //		&& advance_pipeline
 		&& room_for_que
 //		&& (!stomp_que || stomp_quem)
@@ -6062,11 +6064,11 @@ else begin
 		else begin
 			alu0_idle1 <= FALSE;
 			if ((!rob[alu0_id].done[0] || (|alu0_cptgt && rob[alu0_id].done!=2'b11))) begin
-		    if (rob[ alu0_id ].decbus.fc || rob[ alu0_id ].decbus.pushi)
+		    if (rob[ alu0_id ].decbus.fc)
 		    	alu0_idle1 <= TRUE;
-		    if ((rob[ alu0_id ].decbus.mul || rob[ alu0_id ].decbus.mulu) && mul0_done)
+		    if ((rob[ alu0_id ].decbus.mul || rob[ alu0_id ].decbus.mula) && mul0_done)
 			    alu0_idle1 <= TRUE;
-		    if ((rob[ alu0_id ].decbus.div || rob[ alu0_id ].decbus.divu) && div0_done)
+		    if ((rob[ alu0_id ].decbus.div || rob[ alu0_id ].decbus.diva) && div0_done)
 			    alu0_idle1 <= TRUE;
 			end
 		end
@@ -6081,11 +6083,11 @@ else begin
 		else begin
 			alu1_idle1 <= FALSE;
 			if ((!rob[alu1_id].done[0] || (|alu1_cptgt && rob[alu1_id].done!=2'b11))) begin
-		    if (rob[ alu1_id ].decbus.fc || rob[ alu1_id ].decbus.pushi)
+		    if (rob[ alu1_id ].decbus.fc)
 		    	alu1_idle1 <= TRUE;
-		    if ((rob[ alu1_id ].decbus.mul || rob[ alu1_id ].decbus.mulu) && mul1_done)
+		    if ((rob[ alu1_id ].decbus.mul || rob[ alu1_id ].decbus.mula) && mul1_done)
 			    alu1_idle1 <= TRUE;
-		    if ((rob[ alu1_id ].decbus.div || rob[ alu1_id ].decbus.divu) && div1_done)
+		    if ((rob[ alu1_id ].decbus.div || rob[ alu1_id ].decbus.diva) && div1_done)
 			    alu1_idle1 <= TRUE;
 			end
 		end
@@ -6101,7 +6103,7 @@ else begin
 		rob[ alu0_id2 ].out[0] <= FALSE;
 //		if (rob[alu0_id2].decbus.fc && rob[alu0_id2].op.ins.any.opcode==OP_Bcc)
 //			$finish;
-    if (((!rob[ alu0_id2 ].decbus.fc||rob[alu0_id2].decbus.cjb) && !rob[ alu0_id2 ].decbus.pushi) || rob[alu0_id2].decbus.cpytgt) begin
+    if (((!rob[ alu0_id2 ].decbus.fc||rob[alu0_id2].decbus.cjb)) || rob[alu0_id2].decbus.cpytgt) begin
 			rob[ alu0_id2 ].done[1] <= TRUE;
 			rob[ alu0_id2 ].out[1] <= FALSE;
 		end
@@ -6114,20 +6116,20 @@ else begin
 			(!rob[alu0_id].done[0] || (|alu0_cptgt && rob[alu0_id].done!=2'b11))) begin
 	    rob[ alu0_id ].exc <= Stark_pkg::cause_code_t'(alu0_exc[7:0]);
 	    rob[ alu0_id ].excv <= ~&alu0_exc[7:0];
-	    if (!rob[ alu0_id ].decbus.pushi) begin
+	    begin
 	    	rob[ alu0_id ].done[1] <= TRUE;
 		    rob[ alu0_id ].out[1] <= INV;
 	    end
 	    rob[ alu0_id ].out[0] <= INV;
 
-	    if ((rob[ alu0_id ].decbus.mul || rob[ alu0_id ].decbus.mulu) && mul0_done) begin
+	    if ((rob[ alu0_id ].decbus.mul || rob[ alu0_id ].decbus.mula) && mul0_done) begin
 	    	alu0_done <= TRUE;
 		    alu0_idv <= INV;
 		    rob[ alu0_id ].done <= {VAL,VAL};
 		    rob[ alu0_id ].out <= {INV,INV};
   		end
 
-	    if ((rob[ alu0_id ].decbus.div || rob[ alu0_id ].decbus.divu) && div0_done) begin
+	    if ((rob[ alu0_id ].decbus.div || rob[ alu0_id ].decbus.diva) && div0_done) begin
 	    	alu0_done <= TRUE;
 		    alu0_idv <= INV;
 		    rob[ alu0_id ].done <= {VAL,VAL};
@@ -6138,14 +6140,6 @@ else begin
 		  		alu0_idv <= INV;
 			    rob[ alu0_id ].done <= 2'b11;
 			    rob[ alu0_id ].out <= {INV,INV};
-			    rob[alu0_id].pred_status[ 7: 0] <= fnPredStatus(alu0_instr[45:44], alu0_argA[ 7: 0], alu0_argB[ 7: 0], alu0_argC[ 7: 0]);
-			    rob[alu0_id].pred_status[15: 8] <= fnPredStatus(alu0_instr[47:46], alu0_argA[15: 8], alu0_argB[15: 8], alu0_argC[15: 8]);
-			    rob[alu0_id].pred_status[23:16] <= fnPredStatus(alu0_instr[49:48], alu0_argA[23:16], alu0_argB[23:16], alu0_argC[23:16]);
-			    rob[alu0_id].pred_status[31:24] <= fnPredStatus(alu0_instr[51:50], alu0_argA[31:24], alu0_argB[31:24], alu0_argC[31:24]);
-			    rob[alu0_id].pred_status[39:32] <= fnPredStatus(alu0_instr[53:52], alu0_argA[39:32], alu0_argB[39:32], alu0_argC[39:32]);
-			    rob[alu0_id].pred_status[47:40] <= fnPredStatus(alu0_instr[55:54], alu0_argA[47:40], alu0_argB[47:40], alu0_argC[47:40]);
-			    rob[alu0_id].pred_status[55:48] <= fnPredStatus(alu0_instr[57:56], alu0_argA[55:48], alu0_argB[55:48], alu0_argC[55:48]);
-			    rob[alu0_id].pred_status[63:56] <= fnPredStatus(alu0_instr[59:58], alu0_argA[63:56], alu0_argB[63:56], alu0_argC[63:56]);
 		  	end
 	  	end
 	  	if (&alu0_cptgt) begin
@@ -6155,10 +6149,6 @@ else begin
 		    	rob[ alu0_id ].out <= {INV,INV};
 		  	end
 			end
-			if (~|alu0_exc[7:0])
-				vrm[rob[alu0_id].vn] <= vrm[rob[alu0_id].vn] & ~(64'hFF << {rob[alu0_id].op.element,3'b0});
-			if (|alu0_exc[7:0])
-				vex[rob[alu0_id].vn] <= vex[rob[alu0_id].vn] | (alu0_exc[7:0] << {rob[alu0_id].op.element,3'b0});
 		end
 	end
 
@@ -6171,7 +6161,7 @@ else begin
 			rob[ alu1_id2 ].out[0] <= FALSE;
 	//		if (rob[alu0_id2].decbus.fc && rob[alu0_id2].op.ins.any.opcode==OP_Bcc)
 	//			$finish;
-	    if (((!rob[ alu1_id2 ].decbus.fc||rob[alu1_id2].decbus.cjb) && !rob[ alu1_id2 ].decbus.pushi) || rob[alu1_id2].decbus.cpytgt) begin
+	    if (((!rob[ alu1_id2 ].decbus.fc||rob[alu1_id2].decbus.cjb)) || rob[alu1_id2].decbus.cpytgt) begin
 				rob[ alu1_id2 ].done[1] <= TRUE;
 				rob[ alu1_id2 ].out[1] <= FALSE;
 			end
@@ -6182,12 +6172,12 @@ else begin
 			if (rob[ alu1_id ].decbus.multicycle && !rob[alu1_id].done[0]||(|alu1_cptgt&&rob[alu1_id].done!=2'b11)) begin
 		    rob[ alu1_id ].exc <= Stark_pkg::cause_code_t'(alu1_exc[7:0]);
 		    rob[ alu1_id ].excv <= ~&alu1_exc[7:0];
-		    if (!rob[ alu1_id ].decbus.pushi) begin
+		    begin
 		    	rob[ alu1_id ].done[1] <= TRUE;
 			    rob[ alu1_id ].out[1] <= INV;
 		    end
 		    rob[ alu1_id ].out[0] <= INV;
-		    if ((rob[ alu1_id ].decbus.mul || rob[ alu1_id ].decbus.mulu) && mul1_done) begin
+		    if ((rob[ alu1_id ].decbus.mul || rob[ alu1_id ].decbus.mula) && mul1_done) begin
 		    	alu1_done <= TRUE;
 			    alu1_idv <= INV;
 			    rob[ alu1_id ].done <= {VAL,VAL};
@@ -6199,10 +6189,6 @@ else begin
 			    rob[ alu1_id ].done <= {VAL,VAL};
 			    rob[ alu1_id ].out <= {INV,INV};
 				end
-				if (~|alu1_exc[7:0])  		
-					vrm[rob[alu1_id].vn] <= vrm[rob[alu1_id].vn] & ~(64'hFF << {rob[alu1_id].op.element,3'b0});
-				if (|alu1_exc[7:0])
-					vex[rob[alu1_id].vn] <= vex[rob[alu1_id].vn] | (alu1_exc[7:0] << {rob[alu1_id].op.element,3'b0});
 			end
 		end
 	end
@@ -6724,7 +6710,7 @@ else begin
 			dram0_om <= lsq[mem0_lsndx.row][mem0_lsndx.col].om;
 			// Prevent multiple updates
 			lsq[mem0_lsndx.row][mem0_lsndx.col].v <= INV;
-			rob[lsq[lsqmem0_lsndx.row][mem0_lsndx.col].rndx].done <= 2'b11;
+			rob[lsq[mem0_lsndx.row][mem0_lsndx.col].rndx].done <= 2'b11;
 		end
 	end
 	else if (SUPPORT_LOAD_BYPASSING && lbndx0 > 0) begin
@@ -6884,10 +6870,10 @@ else begin
 		commit3_idv <= cmttlb3;
 	end
 	if (do_commit) begin
-		commit_pc0 <= rob[head0].pc;
-		commit_pc1 <= rob[head1].pc;
-		commit_pc2 <= rob[head2].pc;
-		commit_pc3 <= rob[head3].pc;
+		commit_pc0 <= rob[head0].op.pc;
+		commit_pc1 <= rob[head1].op.pc;
+		commit_pc2 <= rob[head2].op.pc;
+		commit_pc3 <= rob[head3].op.pc;
 		commit_brtgt0 <= rob[head0].brtgt;
 		commit_brtgt1 <= rob[head1].brtgt;
 		commit_brtgt2 <= rob[head2].brtgt;
@@ -6939,16 +6925,16 @@ else begin
 		if (rob[head0].excv && rob[head0].v)
 //			err_mask[head0] <= 1'b1;
 //			if (rob[head0].last)
-			tProcessExc(head0,rob[head0].pc,FALSE,FALSE);
+			tProcessExc(head0,rob[head0].op.pc,FALSE,FALSE);
 		else if (rob[head1].excv && cmtcnt > 3'd1 && rob[head1].v)
-			tProcessExc(head1,rob[head1].pc,FALSE,FALSE);
+			tProcessExc(head1,rob[head1].op.pc,FALSE,FALSE);
 		else if (rob[head2].excv && cmtcnt > 3'd2 && rob[head2].v)
-			tProcessExc(head2,rob[head2].pc,FALSE,FALSE);
+			tProcessExc(head2,rob[head2].op.pc,FALSE,FALSE);
 		else if (rob[head3].excv && cmtcnt > 3'd3 && rob[head3].v)
-			tProcessExc(head3,rob[head3].pc,FALSE,FALSE);
+			tProcessExc(head3,rob[head3].op.pc,FALSE,FALSE);
 			
 		if (rob[head0].op.ssm)
-			tProcessExc(head0,SSM_DEBUG ? rob[head0].pc : rob[head0].op.hwipc,FALSE,FALSE);
+			tProcessExc(head0,SSM_DEBUG ? rob[head0].op.pc : rob[head0].op.hwipc,FALSE,FALSE);
 
 		/*
 		if (FALSE) begin
@@ -7032,23 +7018,23 @@ else begin
 	begin
 		for (nn = 0; nn < ROB_ENTRIES; nn = nn + 1) begin
 			if (rob[head0].v) begin
-				if (!rob[head0].argA_v && !fnFindSource(head0, rob[head0].decbus.Ra)) begin
+				if (!rob[head0].argA_v && !fnFindSource(head0, rob[head0].decbus.Rs1)) begin
 					rob[head0].argA_v <= VAL;
 					tAllArgsValid(head0, VAL, INV, INV, INV, INV);
 					$display("Q+: rob[%d]: argument A not possible to validate.", head0);
 				end		
-				if (!rob[head0].argB_v && !fnFindSource(head0, rob[head0].decbus.Rb)) begin
+				if (!rob[head0].argB_v && !fnFindSource(head0, rob[head0].decbus.Rs2)) begin
 					$display("Q+: rob[%d]: argument B not possible to validate.", head0);
 					rob[head0].argB_v <= VAL;
 					tAllArgsValid(head0, INV, VAL, INV, INV, INV);
 				end		
-				if (!rob[head0].argC_v && !fnFindSource(head0, rob[head0].decbus.Rc)) begin
+				if (!rob[head0].argC_v && !fnFindSource(head0, rob[head0].decbus.Rs3)) begin
 					$display("Q+: rob[%d]: argument C not possible to validate.", head0);
 					rob[head0].argC_v <= VAL;
 					tAllArgsValid(head0, INV, INV, VAL, INV, INV);
 				end		
 				if (!rob[head0].argD_v) begin
-					if (!fnFindSource(head0, rob[head0].decbus.Rt)) begin
+					if (!fnFindSource(head0, rob[head0].decbus.Rd)) begin
 						$display("Q+: rob[%d]: argument T not possible to validate.", head0);
 						rob[head0].argD_v <= VAL;
 						tAllArgsValid(head0, INV, INV, INV, VAL, INV);
@@ -7062,11 +7048,6 @@ else begin
 					end
 					*/
 				end
-				if (!rob[head0].argM_v && !fnFindSource(head0, rob[head0].decbus.Rm)) begin
-					$display("Q+: rob[%d]: argument M not possible to validate.", head0);
-					rob[head0].argM_v <= VAL;
-					tAllArgsValid(head0, INV, INV, INV, INV, VAL);
-				end		
 			end
 		end
 	end
@@ -7874,7 +7855,7 @@ integer n;
 begin
 	fnValidate = FALSE;
 	for (n = 0; n < ROB_ENTRIES; n = n + 1)
-		if (rob[n].op.nRt==rg && rob[n].done==2'b11)
+		if (rob[n].op.nRd==rg && rob[n].done==2'b11)
 			fnValidate = TRUE;
 end
 endfunction
@@ -7890,7 +7871,7 @@ integer n;
 begin
 	fnFindSource = FALSE;
 	for (n = 0; n < ROB_ENTRIES; n = n + 1) begin
-		if (rob[n].decbus.Rt==rg && rob[n].sn < rob[ndx].sn)
+		if (rob[n].decbus.Rd==rg && rob[n].sn < rob[ndx].sn)
 			fnFindSource = TRUE;
 	end
 end
@@ -7965,29 +7946,6 @@ begin
 end
 endtask
 */
-
-// Get the predicate bitmask for the instruction.
-// For scalar instructions this comes from the predicate modifier associated
-// with the instruction.
-
-function [7:0] fnPredSet;
-input [3:0] btst;
-input vec;
-input Stark_pkg::rob_entry_t pred_rob;
-input Stark_pkg::rob_entry_t rob;
-integer jj;
-reg [3:0] btstm1;
-begin
-	btstm1 = btst - 2'd1;
-	fnPredSet = 8'h00;
-	for (jj = 0; jj < 8; jj = jj + 1) begin
-		if (vec)
-			fnPredSet[jj] = pred_rob.pred_status[{btstm1,jj[2:0]}];
-		else
-			fnPredSet[jj] = pred_rob.pred_status[{btstm1,jj[2:0]}];
-	end
-end
-endfunction
 
 // It takes a clock cycle for the register file to update. An update matching
 // the physical regno will not be valid until a cycle later. So, a pending
@@ -8070,8 +8028,8 @@ begin
 		end
 	end
 	for (nn = 0; nn < ROB_ENTRIES; nn = nn + 1) begin
-		if (robentry_stomp[nn] && rob[nn].sn < rob[ndx].sn && rob[nn].op.nRt==rob[ndx].op.pRt) begin
-			if (rob[ndx].op.pRt!=9'd0)
+		if (robentry_stomp[nn] && rob[nn].sn < rob[ndx].sn && rob[nn].op.nRd==rob[ndx].op.pRd) begin
+			if (rob[ndx].op.pRd!=9'd0)
 				rob[ndx].argD_v <= INV;
 		end
 	end
@@ -8423,7 +8381,7 @@ input rob_ndx_t grplen;
 input last;
 integer n12;
 integer n13;
-decode_bus_t db;
+Stark_pkg::decode_bus_t db;
 reg [5:0] next_sync_no;
 reg [5:0] next_fc_no;
 begin
@@ -8468,7 +8426,7 @@ begin
 	// Unconditional branches and jumps are done already in the mux stage.
 	// Unconditional subroutine calls only need the target register updated.
 	if (db.bl) begin
-		if (db.Rtz)
+		if (db.Rdz)
 			rob[tail].done <= {VAL,VAL};
 		else
 			rob[tail].done <= {VAL,INV};
@@ -8516,8 +8474,8 @@ begin
 `endif	
 //	rob[tail].rmd <= fpscr.rmd;
 	rob[tail].op <= ins;
-	rob[tail].pc <= ins.pc;
-	rob[tail].mcip <= ins.mcip;
+	rob[tail].op.pc <= ins.pc;
+	rob[tail].op.mcip <= ins.mcip;
 	rob[tail].bt <= ins.bt;//pt;
 	rob[tail].cndx <= cndxq;//db.br ? pndxq : cndxq;
 	rob[tail].decbus <= db;
@@ -8566,7 +8524,6 @@ begin
 		rob[tail].decbus.load <= FALSE;
 		rob[tail].decbus.store <= FALSE;
 		rob[tail].decbus.mem <= FALSE;
-		rob[tail].op.pred_btst <= 6'd0;
 //		rob[tail].op.ins <= {57'd0,OP_NOP};
 //		rob[tail].argA_v <= VAL;
 		rob[tail].argB_v <= VAL;
@@ -8581,14 +8538,6 @@ begin
 	// the instruction to be a NOP operation.
 //	else if (stomp)
 //		rob[tail].decbus.cpytgt <= TRUE;
-	if (db.vec) begin
-		vrm[vn] <= 64'hFFFFFFFFFFFFFFFF;
-		vex[vn] <= 64'h0;
-		vn <= vn + 2'd1;
-		rob[tail].vn <= vn;
-	end
-	if (!stomp && !ornop && db.vec)
-		mc_orid <= tail;
 	rob[tail].rat_v <= INV;
 end
 endtask
@@ -8633,22 +8582,22 @@ begin
 	lsq[ndx.row][ndx.col].v <= VAL;
 	lsq[ndx.row][ndx.col].agen <= FALSE;
 	lsq[ndx.row][ndx.col].op <= rob.op;
-	lsq[ndx.row][ndx.col].pc <= rob.pc;
+	lsq[ndx.row][ndx.col].pc <= rob.op.pc;
 	lsq[ndx.row][ndx.col].load <= rob.decbus.load|rob.excv;
 	lsq[ndx.row][ndx.col].loadz <= rob.decbus.loadz|rob.excv;
-	lsq[ndx.row][ndx.col].cload <= rob.decbus.cload|rob.excv;
-	lsq[ndx.row][ndx.col].cload_tags <= rob.decbus.cload_tags|rob.excv;
+	lsq[ndx.row][ndx.col].cload <= rob.excv;
+	lsq[ndx.row][ndx.col].cload_tags <= rob.excv;
 	lsq[ndx.row][ndx.col].store <= rob.decbus.store;
-	lsq[ndx.row][ndx.col].cstore <= rob.decbus.cstore;
+	lsq[ndx.row][ndx.col].cstore <= 1'b0;
 	lsq[ndx.row][ndx.col].vpa <= 1'd0;
 	lsq[ndx.row][ndx.col].adr <= 32'd0;
 //	store_argC_reg <= rob.pRc;
-	lsq[ndx.row][ndx.col].aRc <= rob.decbus.Rc;
-	lsq[ndx.row][ndx.col].pRc <= rob.op.pRc;
+	lsq[ndx.row][ndx.col].aRc <= rob.decbus.Rs3;
+	lsq[ndx.row][ndx.col].pRc <= rob.op.pRs3;
 	lsq[ndx.row][ndx.col].cndx <= rob.cndx;
-	lsq[ndx.row][ndx.col].Rt <= rob.op.nRt;
-	lsq[ndx.row][ndx.col].aRt <= rob.decbus.Rt;
-	lsq[ndx.row][ndx.col].aRtz <= rob.decbus.Rtz;
+	lsq[ndx.row][ndx.col].Rt <= rob.op.nRd;
+	lsq[ndx.row][ndx.col].aRt <= rob.decbus.Rd;
+	lsq[ndx.row][ndx.col].aRtz <= rob.decbus.Rdz;
 	lsq[ndx.row][ndx.col].om <= rob.om;
 	lsq[ndx.row][ndx.col].memsz <= Stark_pkg::fnMemsz(rob.op);
 	for (n12r = 0; n12r < LSQ_ENTRIES; n12r = n12r + 1)
@@ -8676,17 +8625,31 @@ input rob_ndx_t head;
 begin
 	if (v) begin
 		if (!rob[head].decbus.cpytgt) begin
-			if (rob[head].decbus.csr)
-				case(rob[head].op.ins.csr.op[1:0])
-				2'd0:	;	// readCSR
-				2'd1:	tWriteCSR(rob[head].arg,{2'b0,rob[head].op.ins.csr.regno});
-				2'd2:	tSetbitCSR(rob[head].arg,{2'b0,rob[head].op.ins.csr.regno});
-				2'd3:	tClrbitCSR(rob[head].arg,{2'b0,rob[head].op.ins.csr.regno});
-				endcase
+			if (rob[head].decbus.csr) begin
+				if (rob[head].op.ins[31])
+					case(rob[head].op.ins.csr.op2[1:0])
+					2'd0:	;	// readCSR
+					2'd1:	tWriteCSR(rob[head].arg,{2'b0,rob[head].op.ins.csr.regno});
+					2'd2:	tSetbitCSR(rob[head].arg,{2'b0,rob[head].op.ins.csr.regno});
+					2'd3:	tClrbitCSR(rob[head].arg,{2'b0,rob[head].op.ins.csr.regno});
+					endcase
+				else if (rob[head].op.ins[30:29]==2'b00)
+					case(rob[head].op.ins.csrr.op2[1:0])
+					2'd0:	;	// readCSR
+					2'd1:	tWriteCSR(rob[head].arg,{2'b0,rob[head].op.ins.csr.regno});
+					2'd2:	tSetbitCSR(rob[head].arg,{2'b0,rob[head].op.ins.csr.regno});
+					2'd3:	tClrbitCSR(rob[head].arg,{2'b0,rob[head].op.ins.csr.regno});
+					endcase
+				else if (rob[head].op.ins[30:29]==2'b01)
+					case(rob[head].op.ins.csrcl.op)
+					1'd0:	tSetbitCSR(rob[head].arg,{2'b0,rob[head].op.ins.csr.regno});
+					1'd1:	tClrbitCSR(rob[head].arg,{2'b0,rob[head].op.ins.csr.regno});
+					endcase
+			end
 			else if (rob[head].decbus.irq)
 				;
 			else if (rob[head].decbus.brk)
-				tProcessExc(head,fnPCInc(rob[head].pc),FALSE,FALSE);
+				tProcessExc(head,fnPCInc(rob[head].op.pc),FALSE,FALSE);
 			else if (rob[head].decbus.eret)
 				tProcessEret(rob[head].op[22:19]==5'd2,rob[head].op[23]==1'b1);
 			else if (rob[head].decbus.rex)
@@ -8694,9 +8657,9 @@ begin
 		end
 	end
 	else if (pgh[head[5:2]].hwi && pgh[head[5:2]].irq.level == 6'd63)	// NMI
-		tProcessExc(head,rob[head].pc,FALSE,TRUE);
+		tProcessExc(head,rob[head].op.pc,FALSE,TRUE);
 	else if (pgh[head[5:2]].hwi && pgh[head[5:2]].irq.level > sr.ipl && sr.mie)
-		tProcessExc(head,rob[head].pc,TRUE,FALSE);
+		tProcessExc(head,rob[head].op.pc,TRUE,FALSE);
 	// If interrupt turned out to be disabled, put the irq on a queue for
 	// later processing.
 	else if (|pgh[head[5:2]].irq.level) begin

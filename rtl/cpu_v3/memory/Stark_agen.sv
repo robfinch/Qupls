@@ -38,11 +38,12 @@
 import const_pkg::*;
 import Stark_pkg::*;
 
-module Stark_agen(rst, clk, next, out, tlb_v, virt2phys, load, store, amo,
+module Stark_agen(rst, clk, ir, next, out, tlb_v, virt2phys, load, store, amo,
 	a, b, i, Ra, Rb, pc, res, resv);
 input rst;
 input clk;
 input next;								// calculate for next cache line
+input Stark_pkg::ex_instruction_t ir;
 input out;
 input tlb_v;
 input virt2phys;

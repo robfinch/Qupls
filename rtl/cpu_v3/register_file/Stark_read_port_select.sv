@@ -56,7 +56,7 @@
 import cpu_types_pkg::aregno_t;
 import cpu_types_pkg::pc_address_t;
 
-module Stark_read_port_select(rst, clk, aReg_i, aReg_o, regAck_o, pc_i, pc_o);
+module Stark_read_port_select(rst, clk, aReg_i, aReg_o, regAck_o);
 parameter NPORTI=32;
 parameter NPORTO=16;
 parameter FIXEDPORTS = 8;
@@ -65,8 +65,6 @@ input clk;
 input aregno_t [NPORTI-1:0] aReg_i;
 output aregno_t [NPORTO-1:0] aReg_o;
 output reg [NPORTO-1:0] regAck_o;
-input cpu_types_pkg::pc_address_t [NPORTI-1:0] pc_i;
-output cpu_types_pkg::pc_address_t [NPORTO-1:0] pc_o;
 
 integer j,k,h,x;
 reg [4:0] m;
@@ -92,7 +90,6 @@ else begin
 	for (h = 0; h < FIXEDPORTS; h = h + 1) begin
 		regAck_o[h] = 1'b1;
 		aReg_o[h] = aReg_i[h];
-		pc_o[h] = pc_i[h];
 	end
 	for (j = 0; j < NPORTI-FIXEDPORTS; j = j + 1) begin
 		regAck_o[j+FIXEDPORTS] = 1'b0;
@@ -100,7 +97,6 @@ else begin
 			if (k < NPORTO) begin
 				regAck_o[((j+m)%(NPORTI-FIXEDPORTS))+FIXEDPORTS] = 1'b1;
 				aReg_o[k] = aReg_i[((j+m)%(NPORTI-FIXEDPORTS))+FIXEDPORTS];
-				pc_o[k] = pc_i[k];
 				k = k + 1;
 			end
 		end

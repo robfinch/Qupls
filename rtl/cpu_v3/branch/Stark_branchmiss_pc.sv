@@ -96,9 +96,9 @@ begin
 		end
 	Stark_pkg::BTS_BSR:
 		begin
-			dstpc.pc = pc.pc + {{27{instr.ins.bsr.disp[36]}},instr.ins.bsr.disp};
+			dstpc.pc = pc.pc + {{39{instr.ins.bl.disp[21]}},instr.ins.bl.disp,instr.ins.bl.d0};
 		end
-	Stark_pkg::BTS_JSR:	tgtpc.pc = {{27{instr.ins.bsr.disp[36]}},instr.ins.bsr.disp};
+	Stark_pkg::BTS_JSR:	dstpc.pc = {argI[ABITS-1:2],2'b00};
 	Stark_pkg::BTS_CALL:
 		begin
 			case(instr[23:22])	//??
@@ -110,11 +110,11 @@ begin
 	// Must be tested before Ret
 	Stark_pkg::BTS_ERET:
 		begin
-			tgtpc.pc = (instr.ins.rtd.typ==2'd1 ? pc_stack[1].pc : pc_stack[0].pc) + (instr.ins.rtd.offs * 2'd3);
+			dstpc.pc = (instr.ins[28:17]==12'd3 ? pc_stack[1].pc : pc_stack[0].pc) + (instr.ins[10:6] * 3'd4);
 		end
 	Stark_pkg::BTS_RET:
 		begin
-			dstpc.pc = argA + (instr.ins.rtd.offs * 2'd3);
+			dstpc.pc = argA;
 		end
 	default:
 		dstpc.pc = RSTPC;
@@ -133,14 +133,14 @@ begin
 			2'b00:
 				begin
 					misspc = dstpc;
-					miss_mcip = instr.ins.mcb.disp;
+					miss_mcip = {1'b0,instr.ins.mcb.disphi,instr.ins.mcb.displo,instr.ins.mcb.d0};
 					stomp_bno = pc.bno_t;
 					stomp_bno = 5'd0;
 				end
 			2'b01:
 				begin
 					misspc = dstpc;
-					miss_mcip = instr.ins.mcb.disp;
+					miss_mcip = {1'b0,instr.ins.mcb.disphi,instr.ins.mcb.displo,instr.ins.mcb.d0};
 					stomp_bno = pc.bno_t;
 					stomp_bno = 5'd0;
 				end
@@ -148,14 +148,14 @@ begin
 				begin
 					misspc = pc + 4'd8;
 					miss_mcip = micro_ip + 3'd4;
-					stomp_bno = tgtpc.bno_t;
+					stomp_bno = dstpc.bno_t;
 					stomp_bno = 5'd0;
 				end
 			2'b11:
 				begin
 					misspc = pc + 4'd8;
 					miss_mcip = micro_ip + 3'd4;
-					stomp_bno = tgtpc.bno_t;
+					stomp_bno = dstpc.bno_t;
 					stomp_bno = 5'd0;
 				end
 			endcase
@@ -164,26 +164,26 @@ begin
 	Stark_pkg::BTS_JSR,Stark_pkg::BTS_BSR:
 		begin
 			misspc = dstpc;
-			stomp_bno = tgtpc.bno_t;
+			stomp_bno = dstpc.bno_t;
 			stomp_bno = 5'd0;
 		end
 	Stark_pkg::BTS_CALL:
 		begin
 			misspc = dstpc;
-			stomp_bno = tgtpc.bno_t;
+			stomp_bno = dstpc.bno_t;
 			stomp_bno = 5'd0;
 		end
 	// Must be tested before Ret
 	Stark_pkg::BTS_ERET:
 		begin
 			misspc = dstpc;
-			stomp_bno = tgtpc.bno_t;
+			stomp_bno = dstpc.bno_t;
 			stomp_bno = 5'd0;
 		end
 	Stark_pkg::BTS_RET:
 		begin
 			misspc = dstpc;
-			stomp_bno = tgtpc.bno_t;
+			stomp_bno = dstpc.bno_t;
 			stomp_bno = 5'd0;
 		end
 	default:

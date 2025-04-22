@@ -758,9 +758,11 @@ Stark_space_branches uspb1
 always_comb
 begin
 	pg_dec = pg0_mux_r;
+	pg_dec.pr0.hwi_level = pg0_mux_r.hdr.irq.level;
 	if (hwi_ignore) begin
 		if (pg0_mux_r.hdr.irq.level != 6'd63) begin
 			pg_dec.hdr.hwi = 1'b0;
+			pg_dec.pr0.hwi = 1'b0;
 		end
 	end
 	pg_dec.pr0 = inso[0];

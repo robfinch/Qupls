@@ -56,7 +56,7 @@ input value_t [15:0] rfo;
 input [15:0] rfo_tag;
 input pregno_t [15:0] prn;
 input [15:0] prnv;
-input pc_address_ex_t pc;
+output pc_address_ex_t pc;
 input bs_idle_oh;
 input rfo_argC_tag;
 
@@ -99,8 +99,7 @@ begin
 	nopi.pc.bno_f = 6'd1;
 	nopi.mcip = 12'h1A0;
 	nopi.ins = {26'd0,OP_NOP};
-	nopi.pred_btst = 6'd0;
-	nopi.decbus.Rtz = 1'b1;
+	nopi.decbus.Rdz = 1'b1;
 	nopi.decbus.nop = 1'b1;
 	nopi.decbus.alu = 1'b1;
 end
@@ -139,7 +138,7 @@ else begin
 		pRt <= rob.op.nRd;
 		aRt <= rob.op.decbus.Rd;
 		instr <= rob.op;
-		pc <= rob.pc;
+		pc <= rob.op.pc;
 		bt <= rob.bt;
 		bts <= rob.op.decbus.bts;
 		cjb <= rob.decbus.cjb;
