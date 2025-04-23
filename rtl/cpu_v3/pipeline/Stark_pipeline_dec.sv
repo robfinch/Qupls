@@ -218,7 +218,7 @@ Stark_reg_renamer4 utrn1
 	.rst_busy(ren_rst_busy)
 );
 else
-
+/*
 Stark_reg_name_supplier2 utrn1
 (
 	.rst(rst_i),		// rst_i here not irst!
@@ -252,6 +252,17 @@ assign Rt0_dec = inso[0].decbus.Rd==8'd0 ? 9'd0 : Rt0_dec1;
 assign Rt1_dec = inso[1].decbus.Rd==8'd0 ? 9'd0 : Rt1_dec1;
 assign Rt2_dec = inso[2].decbus.Rd==8'd0 ? 9'd0 : Rt2_dec1;
 assign Rt3_dec = inso[3].decbus.Rd==8'd0 ? 9'd0 : Rt3_dec1;
+*/
+	assign Rt0_dec = inso[0].decbus.Rd;
+	assign Rt1_dec = inso[1].decbus.Rd;
+	assign Rt2_dec = inso[2].decbus.Rd;
+	assign Rt3_dec = inso[3].decbus.Rd;
+	assign Rt0_decv = TRUE;
+	assign Rt1_decv = TRUE;
+	assign Rt2_decv = TRUE;
+	assign Rt3_decv = TRUE;
+	assign ren_stallq = FALSE;
+	assign ren_rst_busy = FALSE;
 end
 else begin
 	assign Rt0_dec = inso[0].decbus.Rd;
@@ -574,13 +585,13 @@ begin
 	hilo = pr0_dec.pc.pc[6];
 	for (n3 = 0; n3 < 32; n3 = n3 + 1) begin
 		if (nops[{~hilo,pr0_dec.pc.pc[5:2]}])
-			pr0_dec.v <= INV;
+			pr0_dec.v = INV;
 		if (nops[{hilo^pr1_dec.pc.pc[6],pr1_dec.pc.pc[5:2]}])
-			pr1_dec.v <= INV;
+			pr1_dec.v = INV;
 		if (nops[{hilo^pr2_dec.pc.pc[6],pr2_dec.pc.pc[5:2]}])
-			pr2_dec.v <= INV;
+			pr2_dec.v = INV;
 		if (nops[{hilo^pr3_dec.pc.pc[6],pr3_dec.pc.pc[5:2]}])
-			pr3_dec.v <= INV;
+			pr3_dec.v = INV;
 	end
 
 	// Apply interrupt masking.

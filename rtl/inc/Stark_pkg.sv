@@ -157,7 +157,7 @@ parameter SUPPORT_PREC = 1'b0;
 // Setting ROB_ENTRIES below 12 may not work. Setting the number of entries over
 // 63 may require changing the sequence number type. For ideal construction 
 // should be a multiple of four.
-parameter ROB_ENTRIES = 16;
+parameter ROB_ENTRIES = 32;
 
 // Number of entries supporting block operate instructions.
 parameter BEB_ENTRIES = 4;
@@ -191,7 +191,6 @@ parameter pL1ICacheLineSize = `L1ICacheLineSize;
 parameter pL1Imsb = $clog2(`L1ICacheLines-1)-1+6;
 parameter pL1ICacheWays = `L1ICacheWays;
 parameter pL1DCacheWays = `L1DCacheWays;
-parameter TidMSB = $clog2(`NTHREADS)-1;
 
 parameter AREGS = `NREGS;
 parameter REGFILE_LATENCY = 2;
@@ -319,6 +318,24 @@ typedef enum logic [2:0] {
 	BTS_RET = 3'd6,
 	BTS_ERET = 3'd7
 } bts_t;
+
+typedef enum logic [9:0] {
+	BRC_NONE = 10'h000,
+	BRC_BL = 10'h001,
+	BRC_BLRLR = 10'h002,
+	BRC_BLRLC = 10'h004,
+	BRC_BCCD = 10'h008,
+	BRC_BCCR = 10'h010,
+	BRC_BCCC = 10'h020,
+	BRC_RETR = 10'h040,
+	BRC_RETC = 10'h080,
+	BRC_ERET = 10'h100,
+	BRC_ECALL = 10'h200
+} brclass_t;
+
+parameter BRC_BLR = BRC_BLRLR|BRC_BLRLC;
+parameter BRC_BCC = BRC_BCCR|BRC_BCCD|BRC_BCCC;
+parameter BRC_RET = BRC_RETR|BRC_RETC;
 
 typedef enum logic [2:0] {
 	BS_IDLE = 3'd0,
@@ -471,7 +488,7 @@ typedef struct packed
 	logic [2:0] BRs;
 	logic [8:0] lmt;
 	logic resv1;
-	logic [4:0] Rs1;
+	logic [4:0] Rs2;
 	logic [1:0] resv2;
 	logic [2:0] BRd;
 	logic [4:0] opcode;
@@ -513,7 +530,7 @@ typedef struct packed
 	logic [2:0] cnd;
 	logic [5:0] CRs;
 	logic resv1;
-	logic [4:0] Rs1;
+	logic [4:0] Rs2;
 	logic [1:0] resv2;
 	logic [2:0] BRd;
 	logic [5:0] opcode;
@@ -665,7 +682,7 @@ typedef struct packed
 	logic [13:0] imm;
 	logic cr;
 	logic [1:0] resv;
-	logic [2:0] Br;
+	logic [2:0] BRs;
 	logic [4:0] Rd;
 	logic [5:0] opcode;
 } adbi_inst_t;
@@ -679,7 +696,7 @@ typedef struct packed
 	logic [4:0] Rs2;
 	logic cr;
 	logic [1:0] resv;
-	logic [2:0] Br;
+	logic [2:0] BRs;
 	logic [4:0] Rd;
 	logic [5:0] opcode;
 } adb_inst_t;
@@ -694,7 +711,7 @@ typedef struct packed
 	logic resv;
 	logic cr;
 	logic [1:0] resv1b;
-	logic [2:0] Br;
+	logic [2:0] BRs;
 	logic [4:0] Rd;
 	logic [5:0] opcode;
 } adbcli_inst_t;
@@ -839,8 +856,8 @@ typedef struct packed
 	logic [1:0] one;
 	logic [11:0] regno;
 	logic cr;
-	logic [1:0] op2;
-	logic [2:0] cl;
+	logic [3:0] cl;
+	logic op;
 	logic [4:0] Rd;
 	logic [5:0] opcode;
 } csrcl_inst_t;
@@ -998,8 +1015,12 @@ typedef union packed
 	blrlr_inst_t blrlr;
 	blrlcl_inst_t blrlcl;
 	bccld_inst_t bccld;
+	bccld_inst_t retd;
+	bccld_inst_t mcb;
 	bcclr_inst_t bcclr;
+	bcclr_inst_t retr;
 	bcclcl_inst_t bcclcl;
+	bcclcl_inst_t retcl;
 	pcc_inst_t pcc;
 	atom_inst_t atom;
 	lsd_inst_t lsd;
@@ -1137,11 +1158,13 @@ typedef struct packed
 	cpu_types_pkg::aregno_t Rs3;
 	cpu_types_pkg::aregno_t Rd;
 	cpu_types_pkg::aregno_t Rd2;
+	cpu_types_pkg::aregno_t Rd3;
 	cpu_types_pkg::aregno_t Rco;		// carry output
 	logic Rs1z;
 	logic Rs2z;
 	logic Rs3z;
 	logic Rdz;
+	logic Rd3z;
 	logic has_Rs2;
 	logic has_imm;
 	logic has_imma;
@@ -1181,6 +1204,7 @@ typedef struct packed
 	logic erc;
 	logic fence;
 	logic mcb;					// micro-code branch
+	brclass_t brclass;
 	logic bcc;					// conditional branch
 	logic cjb;					// call, jmp, or bra
 	logic bl;						// branch and link to subroutine
@@ -1279,6 +1303,7 @@ typedef struct packed
 	logic takb;								// 1=branch evaluated to taken
 	logic ssm;								// 1=single step mode active
 	logic hwi;
+	logic [5:0] hwi_level;
 	logic [2:0] hwi_swstk;		// software stack
 	cause_code_t exc;					// non-zero indicate exception
 	logic excv;								// 1=exception
@@ -1297,6 +1322,16 @@ typedef struct packed
 	cpu_types_pkg::pregno_t nRd;						// new Rd
 	cpu_types_pkg::pregno_t nRd2;						// new Rd2
 	cpu_types_pkg::pregno_t nRco;						// new Rc
+	logic pRciv;
+	logic pRs1v;
+	logic pRs2v;
+	logic pRs3v;
+	logic pRdv;
+	logic pRd2v;
+	logic pRcov;
+	logic nRdv;
+	logic nRd2v;
+	logic nRcov;
 	cpu_types_pkg::pc_address_ex_t pc;			// PC of instruction
 	cpu_types_pkg::mc_address_t mcip;				// Micro-code IP address
 	cpu_types_pkg::pc_address_ex_t hwipc;		// PC of instruction
@@ -1319,9 +1354,15 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic hwi;								// hardware interrupt occured during fetch
-	irq_info_packet_t irq;		// the level of the hardware interrupt
-	cpu_types_pkg::checkpt_ndx_t cndx;				// checkpoint index
+	logic v;														// group header is valid
+	cpu_types_pkg::seqnum_t sn;					// sequence number, decrements when instructions que
+	logic hwi;													// hardware interrupt occured during fetch
+	irq_info_packet_t irq;							// the level of the hardware interrupt
+	logic cndxv;												// checkpoint index is valid
+	cpu_types_pkg::checkpt_ndx_t cndx;	// checkpoint index
+	logic chkpt_freed;
+	logic has_branch;
+	logic done;
 } pipeline_group_hdr_t;
 
 typedef struct packed
@@ -1479,7 +1520,7 @@ begin
 	if (ins[31]!=1'b1)							// and is the constant extended on the cache line?
 		fnConstSize[1:0] = ins[30:29];
 	if (fnIsStimm(ins))
-		fnConstSize[3:2] = ins.opcode[2:1];	// store instructions are in size order
+		fnConstSize[3:2] = ins.any.opcode[2:1];	// store instructions are in size order
 end
 endfunction
 
@@ -1532,6 +1573,153 @@ begin
 		fnIsBranch = ir[8:6]!=3'd7;
 	default:
 		fnIsBranch = 1'b0;
+	endcase
+end
+endfunction
+
+function fnDecBsr;
+input Stark_pkg::pipeline_reg_t mux;
+begin
+	fnDecBsr =
+		mux.ins[31]==1'b1 &&
+		mux.ins.any.opcode==5'd13 &&
+		mux.ins.bl.BRd!=3'd0 &&
+		mux.ins.bl.BRd!=3'd7;
+end
+endfunction
+
+function fnDecBra;
+input Stark_pkg::pipeline_reg_t mux;
+begin
+	fnDecBra =
+		mux.ins[31]==1'b1 &&
+		mux.ins.any.opcode==5'd13 &&
+		mux.ins.bl.BRd==3'd0;
+end
+endfunction
+
+function fnDecJmp;
+input Stark_pkg::pipeline_reg_t mux;
+begin
+	fnDecJmp =
+		mux.ins[31]==1'b0 && |mux.ins[30:29] &&
+		mux.ins.any.opcode==5'd13 &&
+		mux.ins.blrlr.BRs==3'd0 &&
+		mux.ins.blrlr.BRd==3'd0;
+end
+endfunction
+
+function fnDecJmpr;
+input Stark_pkg::pipeline_reg_t mux;
+begin
+	fnDecJmpr =
+		mux.ins[31]==1'b0 && |mux.ins[30:29] &&
+		mux.ins.any.opcode==5'd12 &&
+		mux.ins.bcclr.BRd==3'd0;
+end
+endfunction
+
+function fnDecJsr;
+input Stark_pkg::pipeline_reg_t mux;
+begin
+	fnDecJsr =
+		mux.ins[31]==1'b0 && |mux.ins[30:29] &&
+		mux.ins.any.opcode==5'd13 &&
+		mux.ins.blrlr.BRs==3'd0 &&
+		mux.ins.blrlr.BRd!=3'd0 &&
+		mux.ins.blrlr.BRd!=3'd7;
+end
+endfunction
+
+function fnDecJsrr;
+input Stark_pkg::pipeline_reg_t mux;
+begin
+	fnDecJsrr =
+		mux.ins[31]==1'b0 && |mux.ins[30:29] &&
+		mux.ins.any.opcode==5'd12 &&
+		mux.ins.bcclr.BRd!=3'd0 &&
+		mux.ins.bcclr.BRd!=3'd7;
+end
+endfunction
+
+function fnDecBra2;
+input Stark_pkg::pipeline_reg_t mux;
+begin
+	fnDecBra2 =
+		mux.ins[31]==1'b0 && |mux.ins[30:29] &&
+		mux.ins.any.opcode==5'd13 &&
+		mux.ins[0]==1'b0 &&
+		mux.ins.blrlr.BRs==3'd7 &&
+		mux.ins.blrlr.BRd==3'd0;
+end
+endfunction
+
+function fnDecBsr2;
+input Stark_pkg::pipeline_reg_t mux;
+begin
+	fnDecBsr2 =
+		mux.ins[31]==1'b0 && |mux.ins[30:29] &&
+		mux.ins.any.opcode==5'd13 &&
+		mux.ins[0]==1'b0 &&
+		mux.ins.blrlr.BRs==3'd7 &&
+		mux.ins.blrlr.BRd!=3'd0 &&
+		mux.ins.blrlr.BRd!=3'd7;
+end
+endfunction
+
+function fnDecRet;
+input Stark_pkg::pipeline_reg_t mux;
+begin
+	fnDecRet =
+		mux.ins[31]==1'b0 &&
+		mux.ins.any.opcode==5'd13 &&
+		mux.ins[0]==1'b1 &&
+		mux.ins.blrlr.BRs==3'd7 &&
+		mux.ins.blrlr.BRd!=3'd0 &&
+		mux.ins.blrlr.BRd!=3'd7;
+end
+endfunction
+
+function [63:0] fnDecConst;
+input Stark_pkg::instruction_t ins;
+input [511:0] cline;
+reg [3:0] cnstpos1;
+reg [8:0] cnstpos;
+reg [1:0] cnstsize;
+reg [63:0] cnst1;
+begin
+	cnstsize = fnConstSize(ins);
+	cnstpos1 = fnConstPos(ins);
+	cnstpos = {cnstpos1,2'b0,3'b0};
+	cnst1 = cline >> cnstpos1;
+	case(cnstsize)
+	2'd0:	fnDecConst = 64'd0;
+	2'd1:	fnDecConst = {{32{cnst1[31]}},cnst1[31:0]};
+	2'd2:	fnDecConst = cnst1;
+	2'd3:	fnDecConst = cnst1;
+	endcase
+end
+endfunction
+
+function cpu_types_pkg::pc_address_ex_t fnDecDest;
+input Stark_pkg::pipeline_reg_t pr;
+input [511:0] cline;
+reg jsr,jmp,bsr,bra,bsr2,bra2;
+begin
+	fnDecDest = pr.pc;
+	jsr = fnDecJsr(pr.ins);
+	jmp = fnDecJmp(pr.ins);
+	bsr = fnDecBsr(pr.ins);
+	bra = fnDecBra(pr.ins);
+	bsr2 = fnDecBsr2(pr.ins);
+	bra2 = fnDecBra2(pr.ins);
+	case(1'b1)
+	jsr:	fnDecDest.pc = fnDecConst(pr.ins,cline);
+	jmp:	fnDecDest.pc = fnDecConst(pr.ins,cline);
+	bsr: 	fnDecDest.pc = pr.pc.pc + {{39{pr.ins.bl.disp[21]}},pr.ins.bl.disp,pr.ins.bl.d0};
+	bra: 	fnDecDest.pc = pr.pc.pc + {{39{pr.ins.bl.disp[21]}},pr.ins.bl.disp,pr.ins.bl.d0};
+	bsr2:	fnDecDest.pc = pr.pc.pc + fnDecConst(pr.ins,cline);
+	bra2:	fnDecDest.pc = pr.pc.pc + fnDecConst(pr.ins,cline);
 	endcase
 end
 endfunction
@@ -1642,16 +1830,16 @@ begin
 	OP_AND:		fnSourceRs1v = fnConstReg(ir.ins.alu.Rs1) || fnImma(ir);
 	OP_OR:		fnSourceRs1v = fnConstReg(ir.ins.alu.Rs1) || fnImma(ir);
 	OP_XOR:		fnSourceRs1v = fnConstReg(ir.ins.alu.Rs1) || fnImma(ir);
-	OP_ADB:		fnSourceRs1v = ir.ins.adb.BRs1 > 3'd0;
+	OP_ADB:		fnSourceRs1v = ir.ins.adb.BRs == 3'd0 || ir.ins.adb.BRs == 3'd7;
 	OP_SHIFT:	fnSourceRs1v = fnConstReg(ir.ins.sh.Rs1) || fnImma(ir);
-	OP_MOV:		fnSourceRs1v = fnConstReg(ir.ins.mov.Rs1) || fnImma(ir);
+	OP_MOV:		fnSourceRs1v = fnConstReg({ir.ins.move.Rs1h,ir.ins.move.Rs1}) || fnImma(ir);
 	OP_BCC0,OP_BCC1:
-		fnSourceRs1v = fnConstReg(ir.ins.bccld.BRs1) || fnImma(ir);
+		fnSourceRs1v = fnConstReg(ir.ins.bccld.BRs) || fnImma(ir);
 	OP_LOADA,
 	OP_LDB,,OP_LDBZ,OP_LDW,OP_LDWZ,OP_LDT,OP_LDTZ,OP_LOAD:
-		fnSourceRs1v = fnConstReg(ir.ins.ls.Rs1) || fnImma(ir);
+		fnSourceRs1v = fnConstReg(ir.ins.lsd.Rs1) || fnImma(ir);
 	OP_STB,OP_STW,OP_STT,OP_STORE,OP_STBI,OP_STWI,OP_STTI,OP_STOREI,OP_STPTR:
-		fnSourceRs1v = fnConstReg(ir.ins.ls.Rs1) || fnImma(ir);
+		fnSourceRs1v = fnConstReg(ir.ins.lsd.Rs1) || fnImma(ir);
 	default:	fnSourceRs1v = 1'b1;
 	endcase
 end
@@ -1660,26 +1848,26 @@ endfunction
 function fnSourceRs2v;
 input ex_instruction_t ir;
 begin
-	case(ir.ins.r2.opcode)
-	OP_CHK:	fnSourceRs2v = fnConstReg(ir.aRb) || fnImmb(ir);
+	case(ir.ins.any.opcode)
+	OP_CHK:	fnSourceRs2v = fnConstReg(ir.ins.chk.Rs2) || fnImmb(ir);
 //	OP_RTD:		fnSourceRs2v = 1'b0;
 //	OP_JSR,OP_BSR,
-	OP_ADD:		fnSourceRs2v = fnConstReg(ir.aRb) || fnImmb(ir);
-	OP_SUBF:	fnSourceRs2v = fnConstReg(ir.aRb) || fnImmb(ir);
-	OP_CMP:	fnSourceRs2v = fnConstReg(ir.aRb) || fnImmb(ir);
-	OP_MUL:	fnSourceRs2v = fnConstReg(ir.aRb) || fnImmb(ir);
-	OP_DIV:	fnSourceRs2v = fnConstReg(ir.aRb) || fnImmb(ir);
-	OP_AND:	fnSourceRs2v = fnConstReg(ir.aRb) || fnImmb(ir);
-	OP_OR:		fnSourceRs2v = fnConstReg(ir.aRb) || fnImmb(ir);
-	OP_XOR:	fnSourceRs2v = fnConstReg(ir.aRb) || fnImmb(ir);
-	OP_SHIFT:	fnSourceRs2v = fnConstReg(ir.aRb) || ir.ins[31];
+	OP_ADD:		fnSourceRs2v = fnConstReg(ir.ins.alu.Rs2) || fnImmb(ir);
+	OP_SUBF:	fnSourceRs2v = fnConstReg(ir.ins.alu.Rs2) || fnImmb(ir);
+	OP_CMP:	fnSourceRs2v = fnConstReg(ir.ins.alu.Rs2) || fnImmb(ir);
+	OP_MUL:	fnSourceRs2v = fnConstReg(ir.ins.alu.Rs2) || fnImmb(ir);
+	OP_DIV:	fnSourceRs2v = fnConstReg(ir.ins.alu.Rs2) || fnImmb(ir);
+	OP_AND:	fnSourceRs2v = fnConstReg(ir.ins.alu.Rs2) || fnImmb(ir);
+	OP_OR:		fnSourceRs2v = fnConstReg(ir.ins.alu.Rs2) || fnImmb(ir);
+	OP_XOR:	fnSourceRs2v = fnConstReg(ir.ins.alu.Rs2) || fnImmb(ir);
+	OP_SHIFT:	fnSourceRs2v = fnConstReg(ir.ins.alu.Rs2) || ir.ins[31];
 	OP_BCC0,OP_BCC1:
-		fnSourceRs2v = fnConstReg(ir.ins.bccld.Rs2) || fnImmb(ir);
+		fnSourceRs2v = fnConstReg(ir.ins.bcclr.Rs2) || fnImmb(ir);
 	OP_LOADA,
 	OP_LDB,,OP_LDBZ,OP_LDW,OP_LDWZ,OP_LDT,OP_LDTZ,OP_LOAD:
-		fnSourceRs2v = fnConstReg(ir.ins.ls.Rs2) || fnImmb(ir);
+		fnSourceRs2v = fnConstReg(ir.ins.lsscn.Rs2) || fnImmb(ir);
 	OP_STB,OP_STW,OP_STT,OP_STORE,OP_STBI,OP_STWI,OP_STTI,OP_STOREI,OP_STPTR:
-		fnSourceRs2v = fnConstReg(ir.ins.ls.Rs2) || fnImmb(ir);
+		fnSourceRs2v = fnConstReg(ir.ins.lsscn.Rs2) || fnImmb(ir);
 	default:	fnSourceRs2v = 1'b1;
 	endcase
 end
@@ -1688,12 +1876,10 @@ endfunction
 function fnSourceRs3v;
 input ex_instruction_t ir;
 begin
-	case(ir.ins.r2.opcode)
-	OP_CHK:	fnSourceRs3v = fnConstReg(ir.aRc);
+	case(ir.ins.any.opcode)
+	OP_CHK:	fnSourceRs3v = fnConstReg(ir.ins.chk.Rs3);
 //	OP_RTD:
 //		fnSourceRs3v = 1'd0;
-	OP_STB,OP_STW,OP_STT,OP_STORE,OP_STBI,OP_STWI,OP_STTI,OP_STOREI,OP_STPTR:
-		fnSourceRs3v = fnConstReg(ir.ins.ls.Rs3) || fnImmc(ir);
 	default:
 		fnSourceRs3v = 1'b1;
 	endcase
@@ -1716,12 +1902,12 @@ begin
 	OP_XOR:	fnSourceRdv = fnConstReg(ir.ins.alu.Rd);
 	OP_ADB:		fnSourceRdv = fnConstReg(ir.ins.adb.Rd);
 	OP_SHIFT:	fnSourceRdv = fnConstReg(ir.ins.sh.Rd);
-	OP_MOV:		fnSourceRdv = fnConstReg(ir.ins.mov.Rd);
+	OP_MOV:		fnSourceRdv = fnConstReg({ir.ins.move.Rdh,ir.ins.move.Rd});
 	OP_LOADA,
 	OP_LDB,,OP_LDBZ,OP_LDW,OP_LDWZ,OP_LDT,OP_LDTZ,OP_LOAD:
-		fnSourceRdv = fnConstReg(ir.ins.ls.Rd);
+		fnSourceRdv = fnConstReg(ir.ins.lsd.Rsd);
 	OP_STB,OP_STW,OP_STT,OP_STORE,OP_STBI,OP_STWI,OP_STTI,OP_STOREI,OP_STPTR:
-		fnSourceRdv = fnConstReg(ir.ins.ls.Rs3) || fnImmc(ir);
+		fnSourceRdv = fnConstReg(ir.ins.lsscn.Rsd) || fnImmc(ir);
 	OP_BCC0,OP_BCC1:
 		fnSourceRdv = ir.ins.bccld.BRd==3'd0 || ir.ins.bccld.BRd==3'd7;
 //	OP_RTD:	fnSourceRdv = 1'b0;
@@ -1731,10 +1917,10 @@ begin
 end
 endfunction
 
-function fnSourceCiv;
+function fnSourceRciv;
 input ex_instruction_t ir;
 begin
-	fnSourceCiv = 1'b1;
+	fnSourceRciv = 1'b1;
 end
 endfunction
 

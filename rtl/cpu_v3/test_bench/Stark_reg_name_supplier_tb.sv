@@ -1,10 +1,12 @@
+`timescale 1ns / 1ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2024-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
+//	Stark_reg_name_supplier_tb.v
 //
 // BSD 3-Clause License
 // Redistribution and use in source and binary forms, with or without
@@ -31,69 +33,90 @@
 // CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-//
+//                                                                          
 // ============================================================================
 
-import const_pkg::*;
 import Stark_pkg::*;
 
-module Stark_checkpoint_freer(rst, clk, pgh, free, chkpt, chkpt_gndx);
-input rst;
-input clk;
-input Stark_pkg::pipeline_group_hdr_t [Stark_pkg::ROB_ENTRIES/4-1:0] pgh;
-output reg free;
-output checkpt_ndx_t chkpt;
-output reg [5:0] chkpt_gndx;
+module Stark_reg_name_supplier_tb();
+parameter NRENAME = 8;
 
-integer n3,n33,n333;
-reg cond;
+integer n1,count=0;
+reg rst;
+reg clk;
+reg restore;
+reg [PREGS-1:0] avail, avail_r;
+reg [NRENAME-1:0] alloc, alloc_r;
+reg [31:0] a;
+pregno_t [NRENAME-1:0] o;
+pregno_t [3:0] tags2free;
+reg [3:0] freevals;
+reg [NRENAME-1:0] ov;
 
-// Search for instructions groups that are done or invalid. If there are any
-// branches in the group, then free the checkpoint. All the branches must have
-// resolved if all instructions are done or invalid.
-// Take care not to free the checkpoint more than once.
+initial begin
+	rst = 1'b0;
+	clk = 1'b0;
+	a = $urandom(1);
+	#20 rst = 1;
+	#50 rst = 0;
+end
 
-function fnCond;
-input [5:0] n3;
-input Stark_pkg::pipeline_group_hdr_t [Stark_pkg::ROB_ENTRIES/4-1:0] pgh;
+always #5
+	clk = ~clk;
+
+always_ff @(posedge clk)
 begin
-	fnCond =
-			!pgh[n3].chkpt_freed &&
-			(pgh[n3].done || !pgh[n3].v) &&
-			pgh[n3].has_branch
-			;
-end
-endfunction
-
-always_ff @(posedge clk)
-if (rst)
-	free <= FALSE;
-else begin
-	free <= FALSE;
-	for (n3 = 0; n3 < Stark_pkg::ROB_ENTRIES/4; n3 = n3 + 1) begin
-		if (fnCond(n3,pgh))
-			free <= TRUE;
+	if (rst) begin
+		count <= 0;
+		for (n1 = 0; n1 < NRENAME; n1 = n1 + 1)
+			tags2free[n1] <= 9'd0;
+		freevals <= 12'h000;
+		$display("Reset");
+		$display("************************************************");
 	end
+	$display("count:%d", count);
+	if (stall)
+		$display("**** stall ****");
+	count <= count + 2'd1;
+	alloc <= $urandom();
+	alloc_r <= alloc;
+	avail_r <= avail;
+	$display("avail: %h", avail_r);
+	$display("   alloc    ");
+	$display("%b", alloc);
+	$display("   stalla   ");
+	$display("%b", uns3.stalla);
+	for (n1 = 0; n1 < NRENAME; n1 = n1 + 1) begin
+		$display("%d%c", o[n1], ov[n1]?"v": " ");
+	end
+	if (count > 10) begin
+		for (n1 = 0; n1 < 4; n1 = n1 + 1)
+			tags2free[n1] <= $urandom() % PREGS;
+		freevals <= 4'hF;
+	end
+	restore = (count % 20) == 0;
+	$display("freevals:%b", freevals);
+	for (n1 = 0; n1 < NRENAME; n1 = n1 + 1)
+		$display("free tag: %d", tags2free[n1]);
 end
 
-always_ff @(posedge clk)
-if (rst)
-	chkpt <= 5'd0;
-else begin
-	for (n33 = 0; n33 < Stark_pkg::ROB_ENTRIES/4; n33 = n33 + 1) begin
-		if (fnCond(n33,pgh))
-			chkpt <= pgh[n33].cndx;
-	end
-end
-
-always_ff @(posedge clk)
-if (rst)
-	chkpt_gndx <= 6'd0;
-else begin
-	for (n333 = 0; n333 < Stark_pkg::ROB_ENTRIES/4; n333 = n333 + 1) begin
-		if (fnCond(n333,pgh))
-			chkpt_gndx <= n333;
-	end
-end
+Stark_reg_name_supplier3 #(NRENAME) uns3
+(
+	.rst(rst),
+	.clk(clk),
+	.en(1'b1),
+	.restore(restore),
+	.restore_list({512{count[6]}}),
+	.tags2free(tags2free),
+	.freevals(freevals),
+	.bo_wr(1'b0),
+	.bo_preg(8'd0),
+	.alloc(alloc),
+	.o(o),
+	.ov(ov),
+	.avail(avail),
+	.stall(stall),
+	.rst_busy()
+);
 
 endmodule

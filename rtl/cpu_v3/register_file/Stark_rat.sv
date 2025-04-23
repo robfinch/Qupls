@@ -49,8 +49,9 @@ import const_pkg::*;
 import Stark_pkg::*;
 
 module Stark_rat(rst, clk, clk5x, ph4, en, en2, nq, stallq,
-	cndx_o, pcndx_o, avail_i, restore, tail, rob,
-	stomp, miss_cp, wr0, wr1, wr2, wr3, alloc_chkpt, chkpt_inc_amt,
+	alloc_chkpt, cndx, miss_cp,
+	avail_i, restore, tail, rob,
+	stomp, wr0, wr1, wr2, wr3, chkpt_inc_amt,
 	wra_cp, wrb_cp, wrc_cp, wrd_cp, qbr0, qbr1, qbr2, qbr3,
 	rn, rng, rnt, rnv, st_prn,
 	prn, rn_cp, rd_cp,
@@ -63,9 +64,10 @@ module Stark_rat(rst, clk, clk5x, ph4, en, en2, nq, stallq,
 	cmtav, cmtbv, cmtcv, cmtdv,
 	cmtaiv, cmtbiv, cmtciv, cmtdiv,
 	cmta_cp, cmtb_cp, cmtc_cp, cmtd_cp,
-	cmtaa, cmtba, cmtca, cmtda, cmtap, cmtbp, cmtcp, cmtdp, cmtbr,
+	cmtaa,
+	cmtba, cmtca, cmtda, cmtap, cmtbp, cmtcp, cmtdp, cmtbr,
 	cmtaval, cmtbval, cmtcval, cmtdval,
-	restore_list, restored, tags2free, freevals, free_chkpt_i, fchkpt_i, backout, fcu_id,
+	restore_list, restored, tags2free, freevals, backout, backout_st2, fcu_id,
 	bo_wr, bo_areg, bo_preg, bo_nreg);
 parameter XWID = 4;
 parameter NPORT = 16;
@@ -80,6 +82,8 @@ input en;
 input en2;
 input nq;			// enqueue instruction
 input alloc_chkpt;
+input checkpt_ndx_t cndx;
+input checkpt_ndx_t miss_cp;
 input [2:0] chkpt_inc_amt;
 output reg stallq;
 input rob_ndx_t tail;
@@ -89,11 +93,8 @@ input qbr0;		// enqueue branch, slot 0
 input qbr1;
 input qbr2;
 input qbr3;
-output checkpt_ndx_t cndx_o;			// current checkpoint index
-output checkpt_ndx_t pcndx_o;			// previous checkpoint index
 input [Stark_pkg::PREGS-1:0] avail_i;				// list of available registers from renamer
 input restore;										// checkpoint restore
-input checkpt_ndx_t miss_cp;			// checkpoint map index of branch miss
 input wr0;
 input wr1;
 input wr2;
@@ -177,9 +178,8 @@ output reg [PREGS-1:0] restore_list;	// bit vector of registers to free on branc
 output reg restored;
 output pregno_t [3:0] tags2free;
 output reg [3:0] freevals;
-input [3:0] free_chkpt_i;
-input checkpt_ndx_t [3:0] fchkpt_i;
 input backout;
+output [1:0] backout_st2;
 input rob_ndx_t fcu_id;
 output bo_wr;
 output aregno_t bo_areg;
@@ -188,7 +188,6 @@ output pregno_t bo_nreg;
 
 reg en2d;
 reg [NCHECK-1:0] avail_chkpts;
-checkpt_ndx_t [3:0] avail_chkpt;
 checkpt_ndx_t [3:0] chkptn;
 reg chkpt_stall;
 reg backout_stall;
@@ -250,6 +249,17 @@ reg pe_alloc_chkpt;
 wire pe_alloc_chkpt1;
 reg [Stark_pkg::PREGS-1:0] valid [0:Stark_pkg::NCHECK-1];
 
+reg [2:0] wcnt;
+always_ff @(posedge clk5x)
+if (rst)
+	wcnt <= 3'd0;
+else begin
+	if (ph4[1])
+		wcnt <= 3'd0;
+	else if (wcnt < 3'd4)
+		wcnt <= wcnt + 2'd1;
+end
+
 // There are four "extra" bits in the data to make the size work out evenly.
 // There is also an extra write bit. These are defaulted to prevent sim issues.
 
@@ -265,7 +275,7 @@ cpram1
 	.rst(rst),
 	.clka(clk),
 	.ena(1'b1),
-	.wea(pe_alloc_chkpt),
+	.wea(alloc_chkpt),
 	.addra(cndx),
 	.dina({4'd0,nextCurrentMap}),
 	.douta(),
@@ -1024,235 +1034,6 @@ if (rst)
 else
 	nob <= nob + qbr_ok - cmtbr;
 
-reg qbr0_ren;
-reg qbr1_ren;
-reg qbr2_ren;
-reg qbr3_ren;
-always_ff @(posedge clk)
-if (rst)
-	qbr0_ren <= 1'b0;
-else begin
-	if (en2)
-		qbr0_ren <= qbr0;
-end
-always_ff @(posedge clk)
-if (rst)
-	qbr1_ren <= 1'b0;
-else begin
-	if (en2)
-		qbr1_ren <= qbr1;
-end
-always_ff @(posedge clk)
-if (rst)
-	qbr2_ren <= 1'b0;
-else begin
-	if (en2)
-		qbr2_ren <= qbr2;
-end
-always_ff @(posedge clk)
-if (rst)
-	qbr3_ren <= 1'b0;
-else begin
-	if (en2)
-		qbr3_ren <= qbr3;
-end
-
-wire pe_qbr0;
-wire pe_qbr1;
-wire pe_qbr2;
-wire pe_qbr3;
-reg stallq2;
-edge_det uqbr0 (.rst(rst), .clk(clk), .ce(1'b1), .i((qbr0|qbr1|qbr2|qbr3) && en2d/*!stallq*/), .pe(pe_alloc_chkpt1), .ne(), .ee());
-always_comb//ff @(posedge clk)
-	pe_alloc_chkpt = pe_alloc_chkpt1 & en2d;
-
-//edge_det uqbr1 (.rst(rst), .clk(clk), .ce(1'b1), .i(qbr1), .pe(pe_qbr1), .ne(), .ee());
-//edge_det uqbr2 (.rst(rst), .clk(clk), .ce(1'b1), .i(qbr2), .pe(pe_qbr2), .ne(), .ee());
-//edge_det uqbr3 (.rst(rst), .clk(clk), .ce(1'b1), .i(qbr3), .pe(pe_qbr3), .ne(), .ee());
-
-//assign pe_alloc_chkpt = pe_qbr0|pe_qbr1|pe_qbr2|pe_qbr3;
-/*
-											(qbr0 & qbr0_ren) | (qbr1 & qbr1_ren) |
-											(qbr2 & qbr2_ren) | (qbr3 & qbr3_ren)
-											;
-*/
-reg [2:0] wcnt;
-always_ff @(posedge clk5x)
-if (rst)
-	wcnt <= 3'd0;
-else begin
-	if (ph4[1])
-		wcnt <= 3'd0;
-	else if (wcnt < 3'd4)
-		wcnt <= wcnt + 2'd1;
-end
-
-reg [3:0] free_chkpt_is;
-always_comb free_chkpt_is[0] = free_chkpt_i[0];
-always_comb free_chkpt_is[1] = free_chkpt_i[1];
-always_comb free_chkpt_is[2] = free_chkpt_i[2];
-always_comb free_chkpt_is[3] = free_chkpt_i[3];
-checkpt_ndx_t [3:0] fchkpt_is;
-always_comb fchkpt_is[0] = fchkpt_i[0];
-always_comb fchkpt_is[1] = fchkpt_i[1];
-always_comb fchkpt_is[2] = fchkpt_i[2];
-always_comb fchkpt_is[3] = fchkpt_i[3];
-reg free_chkpt2;
-reg [3:0] free_chkpt2s;
-always_comb free_chkpt2s[0] = free_chkpt2;
-always_comb free_chkpt2s[1] = free_chkpt2;
-always_comb free_chkpt2s[2] = free_chkpt2;
-always_comb free_chkpt2s[3] = free_chkpt2;
-checkpt_ndx_t fchkpt2;
-checkpt_ndx_t [3:0] fchkpt2s;
-always_comb fchkpt2s[0] = fchkpt2;
-always_comb fchkpt2s[1] = fchkpt2;
-always_comb fchkpt2s[2] = fchkpt2;
-always_comb fchkpt2s[3] = fchkpt2;
-
-// Checkpoint allocator / deallocator
-// GROUP_ALLOC if (TRUE) allocates a single checkpoint for the instruction group.
-Stark_checkpoint_allocator
-#(.GROUP_ALLOC(TRUE))
-uchkpta1
-(
-	.rst(rst),
-	.clk(clk),
-	.clk5x(clk5x),
-	.ph4(ph4),
-	.alloc_chkpt(pe_alloc_chkpt),
-	.br(br),
-	.chkptn(avail_chkpt),
-	.free_chkpt_i(free_chkpt_is),
-	.fchkpt_i(fchkpt_is),
-	.free_chkpt2(free_chkpt2s),
-	.fchkpt2(fchkpt2s),
-	.stall(chkpt_stall)
-);
-
-// Free all the branch checkpoints coming after a restore.
-
-rob_ndx_t rndx;
-wire [1:0] backout_st2;
-always_ff @(posedge clk)
-if (rst) begin
-	rndx <= {$bits(checkpt_ndx_t){1'b0}};
-	free_chkpt2 <= FALSE;
-end
-else begin
-	free_chkpt2 <= FALSE;
-	case(backout_st2)
-	2'd0:
-		if (restore) begin
-			rndx <= (fcu_id + 3'd4) % Stark_pkg::ROB_ENTRIES;
-		end
-	2'd1:
-		begin
-			if (rob[rndx].cndx != rob[fcu_id].cndx && rob[rndx].sn > rob[fcu_id].sn) begin
-				free_chkpt2 <= TRUE;
-				fchkpt2 <= rob[rndx].cndx;
-			end 
-			rndx <= (rndx + 3'd4) % Stark_pkg::ROB_ENTRIES;
-		end
-	endcase
-end
-
-
-// Set checkpoint index
-// Backup the checkpoint on a branch miss.
-// Increment checkpoint on a branch queue
-//edge_det uedichk1 (.rst(rst), .clk(clk), .ce(1'b1), .i(alloc_chkpt), .pe(pe_alloc_chkpt), .ne(), .ee());
-
-// This is really just a two-bit ring counter.
-always_ff @(posedge clk)
-if (rst) begin
-	new_chkpt <= 1'd0;
-	new_chkpt1 <= 1'd0;
-	new_chkpt2 <= 1'd0;
-end
-else begin
-	new_chkpt <= 1'd0;
-	new_chkpt1 <= 1'b0;
-	new_chkpt2 <= 1'd0;
-	if (pe_alloc_chkpt1)
-		new_chkpt <= 1'b1;
-	if (new_chkpt)
-		new_chkpt1 <= 1'b1;
-	if (new_chkpt1)
-		new_chkpt2 <= 1'b1;
-end
-
-// Some diags.
-always_ff @(posedge clk)
-begin
-	if (restore)
-		$display("Restoring checkpint %d.", miss_cp);
-	if (new_chkpt)
-		$display("Setting checkpoint %d.", cndx_o);
-end
-
-// Maybe queing up to four branches in a row. There is only one checkpoint
-// allowed per instruction group.
-
-reg [4:0] chkpt_rc;
-always_ff @(posedge clk)
-if (rst)
-	chkpt_rc <= 5'd0;
-else begin
-	if (restore)
-		chkpt_rc <= 5'b00000;
-	else if (pe_alloc_chkpt1)
-		chkpt_rc <= 5'b00001;
-	else if (!chkpt_stall)
-		chkpt_rc <= {chkpt_rc[3:0],1'b0};
-end
-
-// Checkpoint index. Allocates with a new conditional branch. Future
-// instructions will read from the checkpoint files at cndx.
-// Checkpoints are allocated in succession to wndx. cndx follows wndx.
-// This is the index used to read the checkpoint RAMs.
-reg alloc_chkpt2;
-reg alloc_chkpt3;
-always_ff @(posedge clk)
-if (rst)
-	alloc_chkpt2 <= 1'b0;
-else
-	alloc_chkpt2 <= pe_alloc_chkpt;
-always_ff @(posedge clk)
-if (rst)
-	alloc_chkpt3 <= 1'b0;
-else
-	alloc_chkpt3 <= alloc_chkpt2;
-
-always_ff @(posedge clk)
-if (rst)
-	cndx <= 4'd0;
-else begin
-	if (restore)
-		cndx <= miss_cp;
-	else if (alloc_chkpt2)
-		cndx <= avail_chkpt[0];
-end
-
-always_comb//ff @(posedge clk)
-if (rst)
-	pcndx_o <= 4'd0;
-else begin
-	if (restore)
-		pcndx_o <= cndx;
-	else if (alloc_chkpt2)
-		pcndx_o <= cndx;
-end
-
-// Want the checkpoint to take effect for the next group of instructions.
-always_ff @(posedge clk)
-if (rst)
-	cndx_o <= 4'd0;
-else begin
-	if (en2|alloc_chkpt3)
-		cndx_o <= cndx;
-end
-
 // Set checkpoint for each instruction in the group. The machine will stall
 // for checkpoint assignments.
 
@@ -1288,9 +1069,7 @@ Stark_backout_machine ubomac1
 // Also stall for a new checkpoint or a lack of available checkpoints.
 // Stall the CPU pipeline for amt+1 cycles to allow checkpoint copying.
 always_comb
-	stallq = /*pe_alloc_chkpt||*/new_chkpt||new_chkpt1||chkpt_stall||backout_stall||stall_same_reg;//||(qbr && nob==NCHECK-1);
-always_comb
-	stallq2 = chkpt_stall;
+	stallq = /*pe_alloc_chkpt||*/backout_stall||stall_same_reg;//||(qbr && nob==NCHECK-1);
 
 
 // Committing and queuing target physical register cannot be the same.
@@ -1396,7 +1175,7 @@ checkpt_ndx_t cndxa1;
 checkpt_ndx_t cndxb1;
 checkpt_ndx_t cndxc1;
 checkpt_ndx_t cndxd1;
-pregno_t cmtap1;
+pregno_t cmtapA1;
 pregno_t cmtbp1;
 pregno_t cmtcp1;
 pregno_t cmtdp1;
@@ -1563,7 +1342,7 @@ if (rst) begin
 	cndxb1 <= 4'd0;
 	cndxc1 <= 4'd0;
 	cndxd1 <= 4'd0;
-	cmtap1 <= 9'd0;
+	cmtapA1 <= 9'd0;
 	cmtbp1 <= 9'd0;
 	cmtcp1 <= 9'd0;
 	cmtdp1 <= 9'd0;
@@ -1578,7 +1357,7 @@ else begin
 		cndxb1 <= cndx;
 		cndxc1 <= cndx;
 		cndxd1 <= cndx;
-		cmtap1 <= cmtap;
+		cmtapA1 <= cmtap;
 		cmtbp1 <= cmtbp;
 		cmtcp1 <= cmtcp;
 		cmtdp1 <= cmtdp;

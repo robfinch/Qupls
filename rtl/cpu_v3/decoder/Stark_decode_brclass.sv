@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2024-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -34,66 +34,56 @@
 //
 // ============================================================================
 
-import const_pkg::*;
 import Stark_pkg::*;
 
-module Stark_checkpoint_freer(rst, clk, pgh, free, chkpt, chkpt_gndx);
-input rst;
-input clk;
-input Stark_pkg::pipeline_group_hdr_t [Stark_pkg::ROB_ENTRIES/4-1:0] pgh;
-output reg free;
-output checkpt_ndx_t chkpt;
-output reg [5:0] chkpt_gndx;
+module Stark_decode_brclass(instr, brclass);
+input Stark_pkg::instruction_t instr;
+output Stark_pkg::brclass_t brclass;
 
-integer n3,n33,n333;
-reg cond;
-
-// Search for instructions groups that are done or invalid. If there are any
-// branches in the group, then free the checkpoint. All the branches must have
-// resolved if all instructions are done or invalid.
-// Take care not to free the checkpoint more than once.
-
-function fnCond;
-input [5:0] n3;
-input Stark_pkg::pipeline_group_hdr_t [Stark_pkg::ROB_ENTRIES/4-1:0] pgh;
-begin
-	fnCond =
-			!pgh[n3].chkpt_freed &&
-			(pgh[n3].done || !pgh[n3].v) &&
-			pgh[n3].has_branch
-			;
-end
-endfunction
-
-always_ff @(posedge clk)
-if (rst)
-	free <= FALSE;
-else begin
-	free <= FALSE;
-	for (n3 = 0; n3 < Stark_pkg::ROB_ENTRIES/4; n3 = n3 + 1) begin
-		if (fnCond(n3,pgh))
-			free <= TRUE;
-	end
-end
-
-always_ff @(posedge clk)
-if (rst)
-	chkpt <= 5'd0;
-else begin
-	for (n33 = 0; n33 < Stark_pkg::ROB_ENTRIES/4; n33 = n33 + 1) begin
-		if (fnCond(n33,pgh))
-			chkpt <= pgh[n33].cndx;
-	end
-end
-
-always_ff @(posedge clk)
-if (rst)
-	chkpt_gndx <= 6'd0;
-else begin
-	for (n333 = 0; n333 < Stark_pkg::ROB_ENTRIES/4; n333 = n333 + 1) begin
-		if (fnCond(n333,pgh))
-			chkpt_gndx <= n333;
-	end
-end
-
+always_comb
+	case(instr.any.opcode)
+	Stark_pkg::OP_B0,Stark_pkg::OP_B1:
+		begin
+			if (instr[31])
+				brclass = Stark_pkg::BRC_BL;
+			else if (instr[30:29]==2'b00)
+				brclass = Stark_pkg::BRC_BLRLR;
+			else
+				brclass = Stark_pkg::BRC_BLRLC;
+		end
+	Stark_pkg::OP_BCC0,Stark_pkg::OP_BCC1:
+		begin
+			if (instr[31])
+				brclass = Stark_pkg::BRC_BCCD;
+			else if (instr[8:6]==3'b00) begin	// RETcc
+				if (instr[30:29]==2'b00)
+					brclass = Stark_pkg::BRC_BCCR;
+				else if (instr[30:29]==2'b01)
+					brclass = Stark_pkg::BRC_BCCC;
+				else
+					brclass = Stark_pkg::BRC_NONE;
+			end
+			else begin
+				if (instr[30:29]==2'b00)
+					brclass = Stark_pkg::BRC_RETR;
+				else if (instr[30:29]==2'b01)
+					brclass = Stark_pkg::BRC_RETC;
+				else
+					brclass = Stark_pkg::BRC_NONE;
+			end
+		end
+	Stark_pkg::OP_BRK:
+		if (instr[28:18]==11'd1)
+			brclass = Stark_pkg::BRC_ERET;
+		else
+			brclass = Stark_pkg::BRC_NONE;
+	Stark_pkg::OP_TRAP:
+		if (instr[10:6]==5'd31)
+			brclass = Stark_pkg::BRC_ECALL;
+		else
+			brclass = Stark_pkg::BRC_NONE;
+	default:
+		brclass = Stark_pkg::BRC_NONE;
+	endcase
+		
 endmodule

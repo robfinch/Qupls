@@ -41,10 +41,11 @@ import Stark_pkg::*;
 `define SUPPORT_RAT	1
 
 module Stark_pipeline_ren(
-	rst, clk, clk5x, ph4, en, nq, restore, restored, restore_list, miss_cp,
-	new_chkpt, chkpt_amt, tail0, rob, robentry_stomp, avail_reg, sr,
+	rst, clk, clk5x, ph4, en, nq, restore, restored, restore_list,
+	chkpt_amt, tail0, rob, robentry_stomp, avail_reg, sr,
 	stomp_ren, stomp_bno, branch_state,
 	arn, arng, arnt, arnv, rn_cp, store_argC_pReg, prn, prnv,
+	ns_areg,
 	Rt0_dec, Rt1_dec, Rt2_dec, Rt3_dec, Rt0_decv, Rt1_decv, Rt2_decv, Rt3_decv, 
 	Rt0_ren, Rt1_ren, Rt2_ren, Rt3_ren, Rt0_renv, Rt1_renv, Rt2_renv, Rt3_renv, 
 	pg_dec, pg_ren,
@@ -60,11 +61,11 @@ module Stark_pipeline_ren(
 	cmtaiv, cmtbiv, cmtciv, cmtdiv,
 
 	cmtbr,
-	tags2free, freevals, free_chkpt, fchkpt, backout, fcu_id,
+	tags2free, freevals, backout, backout_st2, fcu_id,
 	bo_wr, bo_areg, bo_preg, bo_nreg,
-	cndx, pcndx,
 	rat_stallq,
-	micro_machine_active_dec, micro_machine_active_ren
+	micro_machine_active_dec, micro_machine_active_ren,
+	alloc_chkpt, cndx, rcndx, miss_cp
 );
 parameter NPORT = 16;
 input rst;
@@ -76,8 +77,6 @@ input nq;
 input restore;
 output restored;
 output [PREGS-1:0] restore_list;
-input checkpt_ndx_t miss_cp;
-input new_chkpt;
 input [2:0] chkpt_amt;
 input rob_ndx_t tail0;
 input Stark_pkg::rob_entry_t [ROB_ENTRIES-1:0] rob;
@@ -95,6 +94,7 @@ input checkpt_ndx_t [NPORT-1:0] rn_cp;
 output pregno_t [NPORT-1:0] prn;
 output [NPORT-1:0] prnv;
 input pregno_t store_argC_pReg;
+input aregno_t [3:0] ns_areg;
 input pregno_t Rt0_dec;
 input pregno_t Rt1_dec;
 input pregno_t Rt2_dec;
@@ -156,19 +156,20 @@ input checkpt_ndx_t cmtd_cp;
 input cmtbr;
 output pregno_t [3:0] tags2free;
 output [3:0] freevals;
-input free_chkpt;
-input checkpt_ndx_t fchkpt;
 input backout;
+output [1:0] backout_st2;
 input rob_ndx_t fcu_id;
 output bo_wr;
 output aregno_t bo_areg;
 output pregno_t bo_preg;
 output pregno_t bo_nreg;
-output checkpt_ndx_t cndx;
-output checkpt_ndx_t pcndx;
 output rat_stallq;
 input micro_machine_active_dec;
 output reg micro_machine_active_ren;
+input alloc_chkpt;
+input checkpt_ndx_t cndx;
+input checkpt_ndx_t [3:0] rcndx;
+input checkpt_ndx_t miss_cp;
 
 integer jj,n5;
 
@@ -190,8 +191,6 @@ begin
 	nopi.mcip = 12'h1A0;
 	nopi.len = 4'd6;
 	nopi.ins = {26'd0,OP_NOP};
-	nopi.pred_btst = 6'd0;
-	nopi.element = 'd0;
 	nopi.aRa = 8'd0;
 	nopi.aRb = 8'd0;
 	nopi.aRc = 8'd0;
@@ -372,16 +371,6 @@ checkpt_ndx_t cndx1, cndx2, cndx3;
 assign cndx1 = cndx;
 assign cndx2 = cndx;
 assign cndx3 = cndx;
-wire [3:0] free_chkpts;
-assign free_chkpts[0] = free_chkpt;
-assign free_chkpts[1] = free_chkpt;
-assign free_chkpts[2] = free_chkpt;
-assign free_chkpts[3] = free_chkpt;
-checkpt_ndx_t [3:0] fchkpts;
-assign fchkpts[0] = fchkpt;
-assign fchkpts[1] = fchkpt;
-assign fchkpts[2] = fchkpt;
-assign fchkpts[3] = fchkpt;
 
 `ifdef SUPPORT_RAT
 Stark_rat #(.NPORT(NPORT)) urat1
@@ -393,17 +382,16 @@ Stark_rat #(.NPORT(NPORT)) urat1
 	.en(en),
 	.en2(en),
 	.nq(nq),
-	.alloc_chkpt(new_chkpt),
+	.alloc_chkpt(alloc_chkpt),
+	.cndx(cndx),
+	.miss_cp(miss_cp),
 	.chkpt_inc_amt(chkpt_amt),
 	.stallq(rat_stallq),
-	.cndx_o(cndx),
-	.pcndx_o(pcndx),
 	.tail(tail0),
 	.rob(rob),
 	.stomp(robentry_stomp),// & {32{branch_state==BS_CAPTURE_MISSPC}}),
 	.avail_i(avail_reg),
 	.restore(restore),
-	.miss_cp(miss_cp),
 	.qbr0(pg_dec.pr0.decbus.br|pg_dec.pr0.decbus.cjb),
 	.qbr1(pg_dec.pr1.decbus.br|pg_dec.pr1.decbus.cjb),
 	.qbr2(pg_dec.pr2.decbus.br|pg_dec.pr2.decbus.cjb),
@@ -421,22 +409,22 @@ Stark_rat #(.NPORT(NPORT)) urat1
 	.wrbankb(sr.om==2'd0 ? 1'b0 : 1'b0),
 	.wrbankc(sr.om==2'd0 ? 1'b0 : 1'b0),
 	.wrbankd(sr.om==2'd0 ? 1'b0 : 1'b0),
-	.wr0(Rt0_decv && pg_dec.pr0.decbus.Rd!=8'd0),// && !stomp0 && ~pg_ren.pr0.decbus.Rtz),
-	.wr1(Rt1_decv && pg_dec.pr1.decbus.Rd!=8'd0),// && !stomp1 && ~pg_ren.pr1.decbus.Rtz),
-	.wr2(Rt2_decv && pg_dec.pr2.decbus.Rd!=8'd0),// && !stomp2 && ~pg_ren.pr2.decbus.Rtz),
-	.wr3(Rt3_decv && pg_dec.pr3.decbus.Rd!=8'd0),// && !stomp3 && ~pg_ren.pr3.decbus.Rtz),
-	.wra(pg_dec.pr0.decbus.Rd),
-	.wrb(pg_dec.pr1.decbus.Rd),
-	.wrc(pg_dec.pr2.decbus.Rd),
-	.wrd(pg_dec.pr3.decbus.Rd),
+	.wr0(Rt0_decv && ns_areg[0]!=8'd0),// && !stomp0 && ~pg_ren.pr0.decbus.Rtz),
+	.wr1(Rt1_decv && ns_areg[1]!=8'd0),// && !stomp1 && ~pg_ren.pr1.decbus.Rtz),
+	.wr2(Rt2_decv && ns_areg[2]!=8'd0),// && !stomp2 && ~pg_ren.pr2.decbus.Rtz),
+	.wr3(Rt3_decv && ns_areg[3]!=8'd0),// && !stomp3 && ~pg_ren.pr3.decbus.Rtz),
+	.wra(ns_areg[0]),
+	.wrb(ns_areg[1]),
+	.wrc(ns_areg[2]),
+	.wrd(ns_areg[3]),
 	.wrra(Rt0_dec),
 	.wrrb(Rt1_dec),
 	.wrrc(Rt2_dec),
 	.wrrd(Rt3_dec),
-	.wra_cp(cndx),
-	.wrb_cp(cndx),
-	.wrc_cp(cndx),
-	.wrd_cp(cndx),
+	.wra_cp(rcndx[0]),
+	.wrb_cp(rcndx[1]),
+	.wrc_cp(rcndx[2]),
+	.wrd_cp(rcndx[3]),
 	.cmtbanka(1'b0),
 	.cmtbankb(1'b0),
 	.cmtbankc(1'b0),
@@ -486,9 +474,8 @@ Stark_rat #(.NPORT(NPORT)) urat1
 	.restored(restored),
 	.tags2free(tags2free),
 	.freevals(freevals),
-	.free_chkpt_i(free_chkpts),
-	.fchkpt_i(fchkpts),
 	.backout(backout),
+	.backout_st2(backout_st2),
 	.fcu_id(fcu_id),
 	.bo_wr(bo_wr),
 	.bo_areg(bo_areg),

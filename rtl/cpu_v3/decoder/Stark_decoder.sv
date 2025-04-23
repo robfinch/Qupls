@@ -52,7 +52,7 @@ Stark_pkg::ex_instruction_t ins;
 Stark_pkg::decode_bus_t db;
 wire [7:0] const_pos;
 wire [3:0] isz;
-wire excRs1, excRs2, excRs3, excRd;
+wire excRs1, excRs2, excRs3, excRd, excRd3;
 wire [3:0] pred_shadow_count;
 
 // There could be four 32-bit constant positions used up on the cache line.
@@ -135,6 +135,15 @@ Stark_decode_Rd udcrt
 	.exc(ecxRd)
 );
 
+Stark_decode_Rd3 udcrd3
+(
+	.om(om),
+	.instr(ins),
+	.Rd3(db.Rd3),
+	.Rd3z(db.Rd3z),
+	.exc(excRd3)
+);
+
 Stark_decode_macro umacro1
 (
 	.instr(ins.ins),
@@ -184,6 +193,12 @@ Stark_decode_predicate_branch udecpbr
 	.mask(db.pred_mask),
 	.atom_mask(db.pred_atom_mask),
 	.count(pred_shadow_count)
+);
+
+Stark_decode_brclass ubrc1
+(
+	.instr(ins.ins),
+	.brclass(db.brclass)
 );
 
 /*
@@ -377,7 +392,7 @@ else begin
 		dbo.sync <= db.fence && ins[15:8]==8'hFF;
 		dbo.cpytgt <= 1'b0;
 		dbo.qfext <= db.alu && ins.ins[28:27]==2'b10;
-		if (excRs1|excRs2|excRs3|excRd)
+		if (excRs1|excRs2|excRs3|excRd|excRd3)
 			dbo.cause <= Stark_pkg::FLT_BADREG;
 		// Is the predicate shadow count within range?
 		if (pred_shadow_count >= PRED_SHADOW)

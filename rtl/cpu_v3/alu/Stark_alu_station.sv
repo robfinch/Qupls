@@ -44,7 +44,7 @@ module Stark_alu_station(rst, clk, available, idle, issue, rndx, rndxv, rob,
 	argA, argB, argBI, argC, argI, argD, argCi, pc_o,
 	argCi_tag, argA_tag, argB_tag, argC_tag, argD_tag,
 	cpytgt,
-	cs, aRtz, aRt, nRt, om, bank, instr, div, cap, cptgt, cp, pc,
+	cs, aRdz, aRd, nRd, aRd2, aRd2z, nRd2, aRd3, aRd3z, nRd3, om, bank, instr, div, cap, cptgt, cp, pc,
 	pred, predz, prc, sc_done, idle_false,
 	prn, prnv, rfo, all_args_valid
 );
@@ -78,9 +78,15 @@ output reg argB_tag;
 output reg argC_tag;
 output reg argD_tag;
 output reg cs;
-output reg aRtz;
-output aregno_t aRt;
-output pregno_t nRt;
+output reg aRdz;
+output reg aRd2z;
+output reg aRd3z;
+output aregno_t aRd;
+output pregno_t nRd;
+output aregno_t aRd2;
+output pregno_t nRd2;
+output aregno_t aRd3;
+output pregno_t nRd3;
 output Stark_pkg::operating_mode_t om;
 output reg bank;
 output Stark_pkg::pipeline_reg_t instr;
@@ -121,10 +127,15 @@ if (rst) begin
 	argC_tag = 1'b0;
 	argD_tag = 1'b0;
 	cs <= 1'b0;
-	nRt <= 11'd0;
+	nRd <= 9'd0;
+	nRd2 <= 9'd0;
+	nRd3 <= 9'd0;
 	bank <= 1'b0;
-	aRt <= 9'd0;
-	aRtz <= TRUE;
+	aRd <= 9'd0;
+	aRdz <= TRUE;
+	aRd2z <= TRUE;
+	aRd3 <= 9'd0;
+	aRd3z <= TRUE;
 	instr <= {41'd0,OP_NOP};
 	div <= 1'b0;
 	cptgt <= 8'h00;
@@ -154,9 +165,15 @@ else begin
 			argA <= rfo_argA;
 		*/
 		argI <= rob.op.decbus.has_immb ? rob.op.decbus.immb : rob.op.decbus.immc;
-		nRt <= rob.op.nRd;
-		aRt <= rob.op.decbus.Rd;
-		aRtz <= rob.op.decbus.Rd==8'd00;//rob.decbus.Rtz; <- this did not work
+		nRd <= rob.op.nRd;
+		nRd2 <= rob.op.nRd2;
+		nRd3 <= rob.op.nRco;
+		aRd <= rob.op.decbus.Rd;
+		aRdz <= rob.op.decbus.Rd==8'd00;//rob.decbus.Rtz; <- this did not work
+		aRd2 <= rob.op.decbus.Rd2;
+		aRd2z <= rob.op.decbus.Rd2==8'd00;//rob.decbus.Rtz; <- this did not work
+		aRd3 <= rob.op.decbus.Rco;
+		aRd3z <= rob.op.decbus.Rco==9'd0;
 		om <= rob.om;
 //		pred <= rob.op.decbus.pred;
 //		predz <= rob.op.decbus.pred ? rob.op.decbus.predz : 1'b0;
@@ -219,12 +236,12 @@ input valid_i;
 output valid_o;
 integer nn;
 begin
-	valid_o = valid_i;
+	valid_o <= valid_i;
 	for (nn = 0; nn < 16; nn = nn + 1) begin
 		if (pRn==prn[nn] && prnv[nn] && !valid_i) begin
-			val = rfo[nn];
-			val_tag = rfo_tag[nn];
-			valid_o = 1'b1;
+			val <= rfo[nn];
+			val_tag <= rfo_tag[nn];
+			valid_o <= 1'b1;
 		end
 	end
 end
