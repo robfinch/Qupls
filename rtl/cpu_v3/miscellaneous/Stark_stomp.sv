@@ -41,7 +41,8 @@ import const_pkg::*;
 import Stark_pkg::*;
 
 module Stark_stomp(rst, clk, ihit, advance_pipeline, advance_pipeline_seg2, 
-	micro_machine_active, branchmiss, branch_state, do_bsr, misspc,
+	micro_machine_active, branchmiss, found_destination,
+	branch_state, do_bsr, misspc,
 	pc, pc_f, pc_fet, pc_mux, pc_dec, pc_ren,
 	stomp_fet, stomp_mux, stomp_dec, stomp_ren, stomp_que, stomp_quem,
 	fcu_idv, fcu_id, missid, stomp_bno, takb, rob, robentry_stomp
@@ -52,6 +53,7 @@ input ihit;
 input advance_pipeline;
 input advance_pipeline_seg2;
 input micro_machine_active;
+input found_destination;	// true if destination was found in ROB
 input branchmiss;
 input branch_state_t branch_state;
 input do_bsr;
@@ -98,10 +100,10 @@ reg [3:0] spl;
 wire pe_stomp_pipeline;
 always_comb
 	stomp_pipeline = 
-			 branchmiss
+			 (branchmiss && !found_destination)
 		|| (branch_state >= BS_CHKPT_RESTORE && branch_state <= BS_DONE2)
 		;
-wire next_stomp_mux = (stomp_fet && !micro_machine_active) || stomp_pipeline || do_bsr;
+wire next_stomp_mux = (stomp_fet && !micro_machine_active) || stomp_pipeline || (do_bsr && !found_destination);
 wire next_stomp_dec = (stomp_mux && !micro_machine_active) || stomp_pipeline;
 wire next_stomp_ren = (stomp_dec && !micro_machine_active) || stomp_pipeline;
 wire next_stomp_quem = (stomp_ren && !micro_machine_active) || stomp_pipeline;
@@ -187,7 +189,7 @@ else begin
 		else if (pc.pc == misspcr[0].pc)
 			stomp_alnr <= FALSE;
 		else if (!ff1)
-			stomp_alnr <= do_bsr;
+			stomp_alnr <= (do_bsr & ~found_destination);
 	end
 
 	if (advance_pipeline|pe_stomp_pipeline) begin
@@ -200,7 +202,7 @@ else begin
 	end
 
 	if (advance_pipeline|pe_stomp_pipeline) begin
-		do_bsr_mux <= do_bsr;
+		do_bsr_mux <= (do_bsr & ~found_destination);
 		if (pe_stomp_pipeline)
 			stomp_muxr <= TRUE;
 		else if (pc_fet.pc == misspcr[2].pc || !stomp_fet) // (next_stomp_mux)
@@ -304,7 +306,7 @@ for (n4 = 0; n4 < Stark_pkg::ROB_ENTRIES; n4 = n4 + 1) begin
 	// with no target copies. After that copy targets are in effect.
 	robentry_stomp[n4] = //(bno_bitmap[rob[n4].pc.bno_t]==1'b0) ||
 	(
-		((branchmiss/*||((takb&~rob[fcu_id].bt) && (fcu_v2|fcu_v3|fcu_v4))*/) || (branch_state<BS_DONE2 && branch_state!=BS_IDLE))
+		(((branchmiss && !found_destination)/*||((takb&~rob[fcu_id].bt) && (fcu_v2|fcu_v3|fcu_v4))*/) || (branch_state<BS_DONE2 && branch_state!=BS_IDLE))
 		&& rob[n4].sn > rob[missid].sn
 		&& fcu_idv	// miss_idv
 		&& rob[n4].op.pc.bno_t!=stomp_bno

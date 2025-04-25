@@ -218,11 +218,15 @@ begin
 	2'd2:	tpr3 = pg0_mux.pr2;
 	2'd3:	tpr3 = pg0_mux.pr3;
 	endcase
-	tpr0.ins = uop_buf[0].ins;
-	tpr1.ins = uop_buf[1].ins;
-	tpr2.ins = uop_buf[2].ins;
-	tpr3.ins = uop_buf[3].ins;
+	tpr0.uop = uop_buf[0].uop;
+	tpr1.uop = uop_buf[1].uop;
+	tpr2.uop = uop_buf[2].uop;
+	tpr3.uop = uop_buf[3].uop;
 end
+
+// Copy micro-ops from the micro-op decoders into a buffer for further
+// processing. The micro-ops are in program order in the buffer. Which
+// instruction the micro-op belongs to is stored in an array called uop_mark.
 
 always_ff @(posedge clk)
 if (rst) begin
@@ -267,6 +271,8 @@ else begin
 	end
 end
 
+// rd_mux is a flag set when the buffer is almost empty. If the buffer is
+// almost empty it is time to reload it.
 always_comb
 	rd_mux = (
 	 uop_buf[31]=={$bits(Stark_pkg::micro_op_t){1'b0}} &&
@@ -308,7 +314,8 @@ begin
 	nopi = {$bits(Stark_pkg::pipeline_reg_t){1'b0}};
 	nopi.pc.pc = RSTPC;
 	nopi.mcip = 12'h1A0;
-	nopi.ins = {26'd0,OP_NOP};
+	nopi.uop.count = 3'd1;
+	nopi.uop.ins = {26'd0,OP_NOP};
 	nopi.v = 1'b1;
 	nopi.decbus.Rdz = 1'b1;
 	nopi.decbus.nop = 1'b1;
@@ -574,7 +581,7 @@ Stark_decoder udeci0
 	.cline(cline),
 	.om(sr.om),
 	.ipl(sr.ipl),
-	.instr(tpr0.ins),
+	.instr(tpr0.uop.ins),
 	.dbo(dec0)
 );
 
@@ -586,7 +593,7 @@ Stark_decoder udeci1
 	.cline(cline),
 	.om(sr.om),
 	.ipl(sr.ipl),
-	.instr(tpr1.ins),
+	.instr(tpr1.uop.ins),
 	.dbo(dec1)
 );
 
@@ -598,7 +605,7 @@ Stark_decoder udeci2
 	.cline(cline),
 	.om(sr.om),
 	.ipl(sr.ipl),
-	.instr(tpr2.ins),
+	.instr(tpr2.uop.ins),
 	.dbo(dec2)
 );
 
@@ -610,7 +617,7 @@ Stark_decoder udeci3
 	.cline(cline),
 	.om(sr.om),
 	.ipl(sr.ipl),
-	.instr(tpr3.ins),
+	.instr(tpr3.uop.ins),
 	.dbo(dec3)
 );
 
@@ -622,7 +629,7 @@ Stark_decoder udeci4
 	.cline(cline),
 	.om(sr.om),
 	.ipl(sr.ipl),
-	.instr(tpr4.ins),
+	.instr(tpr4.uop.ins),
 	.dbo(dec4)
 );
 /*
@@ -769,8 +776,10 @@ begin
 		pr1_dec.atom_mask = dec0.pred_atom_mask;
 	else if (dec0.atom && pr0_dec.v)
 		pr1_dec.atom_mask = {ins0m.ins[23:9],ins0m.ins[0]};
-	else
+	else if (!pr0_dec.ssm)
 		pr1_dec.atom_mask = pr0_dec.atom_mask >> 12'd1;
+	else
+		pr1_dec.atom_mask = pr0_dec.atom_mask;
 	if (pr0_dec.hwi & ~hwi_ignore)
 		pr1_dec.v = INV;
 
@@ -778,8 +787,10 @@ begin
 		pr2_dec.atom_mask = dec1.pred_atom_mask;
 	else if (dec1.atom && pr1_dec.v)
 		pr2_dec.atom_mask = {ins1m.ins[23:9],ins1m.ins[0]};
-	else
+	else if (!pr1_dec.ssm)
 		pr2_dec.atom_mask = pr1_dec.atom_mask >> 12'd1;
+	else
+		pr2_dec.atom_mask = pr1_dec.atom_mask;
 	if (pr0_dec.hwi & ~hwi_ignore)
 		pr2_dec.v = INV;
 
@@ -787,8 +798,10 @@ begin
 		pr3_dec.atom_mask = dec2.pred_atom_mask;
 	else if (dec2.atom && pr2_dec.v)
 		pr3_dec.atom_mask = {ins2m.ins[23:9],ins2m.ins[0]};
-	else
+	else if (!pr2_dec.ssm)
 		pr3_dec.atom_mask = pr2_dec.atom_mask >> 12'd1;
+	else
+		pr3_dec.atom_mask = pr2_dec.atom_mask;
 	if (pr0_dec.hwi & ~hwi_ignore)
 		pr3_dec.v = INV;
 
@@ -796,8 +809,10 @@ begin
 		atom_mask_o = dec3.pred_atom_mask;
 	else if (dec3.atom && pr3_dec.v)
 		atom_mask_o = {ins3m.ins[23:9],ins3m.ins[0]};
-	else
+	else if (!pr3_dec.ssm)
 		atom_mask_o = pr3_dec.atom_mask >> 12'd1;
+	else
+		atom_mask_o = pr3_dec.atom_mask;
 
 	// Apply carry mod to instructions in same group, and adjust
 	pr0_dec.carry_mod = carry_mod_i;
@@ -817,8 +832,10 @@ begin
 	end
 	else begin
 		pr1_dec.carry_mod = pr0_dec.carry_mod;
-		pr1_dec.carry_mod[0] = pr0_dec.carry_mod[10];
-		pr1_dec.carry_mod[23:9] = {2'd0,pr0_dec.carry_mod[23:11]};
+		if (!pr0_dec.ssm) begin
+			pr1_dec.carry_mod[0] = pr0_dec.carry_mod[10];
+			pr1_dec.carry_mod[23:9] = {2'd0,pr0_dec.carry_mod[23:11]};
+		end
 	end
 	if (pr1_dec.v)
 	case ({pr1_dec.carry_mod[9],pr1_dec.carry_mod[0]})
@@ -836,8 +853,10 @@ begin
 	end
 	else begin
 		pr2_dec.carry_mod = pr1_dec.carry_mod;
-		pr2_dec.carry_mod[0] = pr1_dec.carry_mod[10];
-		pr2_dec.carry_mod[23:9] = {2'd0,pr1_dec.carry_mod[23:11]};
+		if (!pr1_dec.ssm) begin
+			pr2_dec.carry_mod[0] = pr1_dec.carry_mod[10];
+			pr2_dec.carry_mod[23:9] = {2'd0,pr1_dec.carry_mod[23:11]};
+		end
 	end
 	if (pr2_dec.v)
 	case ({pr2_dec.carry_mod[9],pr2_dec.carry_mod[0]})
@@ -855,8 +874,10 @@ begin
 	end
 	else begin
 		pr3_dec.carry_mod = pr2_dec.carry_mod;
-		pr3_dec.carry_mod[0] = pr2_dec.carry_mod[10];
-		pr3_dec.carry_mod[23:9] = {2'd0,pr2_dec.carry_mod[23:11]};
+		if (!pr2_dec.ssm) begin
+			pr3_dec.carry_mod[0] = pr2_dec.carry_mod[10];
+			pr3_dec.carry_mod[23:9] = {2'd0,pr2_dec.carry_mod[23:11]};
+		end
 	end
 	if (pr3_dec.v)
 	case ({pr3_dec.carry_mod[9],pr3_dec.carry_mod[0]})
@@ -874,8 +895,10 @@ begin
 	end
 	else begin
 		carry_mod_o = pr3_dec.carry_mod;
-		carry_mod_o[0] = pr3_dec.carry_mod[10];
-		carry_mod_o[23:9] = {2'd0,pr3_dec.carry_mod[23:11]};
+		if (!pr3_dec.ssm) begin
+			carry_mod_o[0] = pr3_dec.carry_mod[10];
+			carry_mod_o[23:9] = {2'd0,pr3_dec.carry_mod[23:11]};
+		end
 	end
 
 	// Detect FREGS/REGS register additions

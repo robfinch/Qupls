@@ -176,6 +176,7 @@ cpu_types_pkg::mc_address_t mcip1;
 cpu_types_pkg::mc_address_t mcip2;
 cpu_types_pkg::mc_address_t mcip3;
 reg ld;
+reg prev_ssm_flag;
 
 wire hirq = ~reglist_active && hirq_i && mip[11:8]!=4'h1;
 Stark_pkg::pipeline_reg_t nopi;
@@ -308,11 +309,37 @@ begin
 	pr3_mux = nopi;
 	pr4_mux = nopi;
 	if (!redundant_group) begin
-		pr0_mux.ins = ic_line_aligned[ 31:  0];
-		pr1_mux.ins = ic_line_aligned[ 63: 32];
-		pr2_mux.ins = ic_line_aligned[ 95: 64];
-		pr3_mux.ins = ic_line_aligned[127: 96];
-		pr4_mux.ins = ic_line_aligned[159:128];
+		// Allow only one instruction through when single stepping.
+		if (ssm_flag & ~prev_ssm_flag) begin
+			pr0_mux.ins = ic_line_aligned[ 31:  0];
+			pr1_mux.ins = nopi;
+			pr2_mux.ins = nopi;
+			pr3_mux.ins = nopi;
+			pr4_mux.ins = nopi;
+			pr1_mux.ssm = TRUE;
+			pr2_mux.ssm = TRUE;
+			pr3_mux.ssm = TRUE;
+			pr4_mux.ssm = TRUE;
+		end
+		else if (ssm_flag) begin
+			pr0_mux.ins = nopi;
+			pr1_mux.ins = nopi;
+			pr2_mux.ins = nopi;
+			pr3_mux.ins = nopi;
+			pr4_mux.ins = nopi;
+			pr0_mux.ssm = TRUE;
+			pr1_mux.ssm = TRUE;
+			pr2_mux.ssm = TRUE;
+			pr3_mux.ssm = TRUE;
+			pr4_mux.ssm = TRUE;
+		end
+		else begin
+			pr0_mux.ins = ic_line_aligned[ 31:  0];
+			pr1_mux.ins = ic_line_aligned[ 63: 32];
+			pr2_mux.ins = ic_line_aligned[ 95: 64];
+			pr3_mux.ins = ic_line_aligned[127: 96];
+			pr4_mux.ins = ic_line_aligned[159:128];
+		end
 	end
 /*
 	pr0_mux.hwi_level = irq_fet;
@@ -323,11 +350,11 @@ begin
 */	
 	// If an NMI or IRQ is happening, invalidate instruction and mark as
 	// interrupted by external hardware.
-	pr0_mux.v = !(nmi_i || irqf_fet) && !stomp_mux;
-	pr1_mux.v = !(nmi_i || irqf_fet) && !stomp_mux;
-	pr2_mux.v = !(nmi_i || irqf_fet) && !stomp_mux;
-	pr3_mux.v = !(nmi_i || irqf_fet) && !stomp_mux;
-	pr4_mux.v = !(nmi_i || irqf_fet) && !stomp_mux;
+	pr0_mux.v = !(nmi_i || irqf_fet) && !stomp_mux && !(ssm_flag && !(ssm_flag && !prev_ssm_flag));
+	pr1_mux.v = !(nmi_i || irqf_fet) && !stomp_mux && !ssm_flag;
+	pr2_mux.v = !(nmi_i || irqf_fet) && !stomp_mux && !ssm_flag;
+	pr3_mux.v = !(nmi_i || irqf_fet) && !stomp_mux && !ssm_flag;
+	pr4_mux.v = !(nmi_i || irqf_fet) && !stomp_mux && !ssm_flag;
 /*	
 	pr0_mux.hwi = nmi_i||irqf_fet;
 	pr1_mux.hwi = nmi_i||irqf_fet;
@@ -697,6 +724,13 @@ always_comb pg1_mux.pr1 = ins5_mux;
 
 always_ff @(posedge clk) if (en) irq_in_r <= irq_in;
 always_ff @(posedge clk) if (en) nop_o <= stomp_mux;
+always_ff @(posedge clk)
+if (rst)
+	prev_ssm_flag <= 1'b0;
+else begin
+	if (en)
+		prev_ssm_flag <= ssm_flag;
+end
 /*
 always_comb mcip0_o <= mcip0;
 always_comb mcip1_o <= |mcip0 ? mcip0 | 12'h001 : 12'h000;

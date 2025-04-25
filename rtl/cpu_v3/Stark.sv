@@ -1732,6 +1732,7 @@ Stark_stomp ustmp1
 	.advance_pipeline(advance_pipeline),
 	.advance_pipeline_seg2(advance_pipeline_seg2), 
 	.micro_machine_active(micro_machine_active),
+	.found_destination(fcu_found_destination),
 	.branchmiss(branchmiss),
 	.branch_state(branch_state), 
 	.do_bsr(do_bsr|do_ret),
@@ -1763,7 +1764,7 @@ assign micro_machine_active_v = (micro_machine_active_x || mip0v || mip1v || mip
 always_comb
 begin
 	qd = {XWID{1'd0}};
-	if ((branchmiss || branch_state < BS_CAPTURE_MISSPC) && |robentry_stomp)
+	if (((branchmiss && !found_destination) || branch_state < BS_CAPTURE_MISSPC) && |robentry_stomp)
 		;
 //	else if ((ihito || mipv || mipv2 || mipv3 || mipv4) && !stallq)
 	else if (advance_pipeline_seg2)
@@ -1924,7 +1925,7 @@ else begin
 				hwipc <= next_hwipc;
 			end
 		end
-		else if (!pcf && (bs_done_oh || do_bsr || do_ret)) begin
+		else if (!pcf && (bs_done_oh || ((do_bsr || do_ret) && !found_destination))) begin
 			pc <= next_pc;
 			hwipc <= next_hwipc;
 		end
@@ -1932,7 +1933,7 @@ else begin
 	// Prevent hang when the pipeline cannot advance because there is no room 
 	// to queue, yet the IP needs to change to get out of the branch miss state.
 	else begin
-		if (pe_bsdone || do_bsr || do_ret) begin
+		if (pe_bsdone || ((do_bsr || do_ret) && !found_destination)) begin
 			pc <= next_pc;
 			hwipc <= next_hwipc;
 			pcf <= TRUE;
@@ -2293,17 +2294,17 @@ wire [1023:0] cline_mux;
 always_comb
 begin
 	pc0_f1 = pc0_f;
-	pc0_f1.pc = pc0_f.pc + 6'd8;
+	pc0_f1.pc = pc0_f.pc + 6'd4;
 end
 always_comb
 begin
 	pc0_f2 = pc0_f;
-	pc0_f2.pc = pc0_f.pc + 6'd16;
+	pc0_f2.pc = pc0_f.pc + 6'd8;
 end
 always_comb
 begin
 	pc0_f3 = pc0_f;
-	pc0_f3.pc = pc0_f.pc + 6'd24;
+	pc0_f3.pc = pc0_f.pc + 6'd12;
 end
 
 always_ff @(posedge clk)
