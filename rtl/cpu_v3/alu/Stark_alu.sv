@@ -43,14 +43,15 @@ import const_pkg::*;
 import cpu_types_pkg::*;
 import Stark_pkg::*;
 
-module Stark_alu(rst, clk, clk2x, ld, ir, div, a, b, bi, c, i, t, qres,
-	cs, pc, pcc, csr, cpl, coreno, canary, o, mul_done, div_done, div_dbz, exc_o);
+module Stark_alu(rst, clk, clk2x, om, ld, ir, div, a, b, bi, c, i, t, qres,
+	cs, pc, pcc, csr, cpl, coreno, canary, o, o2, o3, mul_done, div_done, div_dbz, exc_o);
 parameter ALU0 = 1'b1;
 parameter WID=64;
 parameter LANE=0;
 input rst;
 input clk;
 input clk2x;
+input Stark_pkg::operating_mode_t om;
 input ld;
 input Stark_pkg::instruction_t ir;
 input div;
@@ -69,6 +70,8 @@ input [7:0] cpl;
 input [WID-1:0] coreno;
 input [WID-1:0] canary;
 output reg [WID-1:0] o;
+output reg [WID-1:0] o2;
+output reg [WID-1:0] o3;
 output reg mul_done;
 output div_done;
 output div_dbz;
@@ -77,8 +80,8 @@ output Stark_pkg::cause_code_t exc_o;
 genvar g;
 integer nn,kk,jj;
 Stark_pkg::cause_code_t exc;
-wire [WID-1:0] zero = {WID{1'b0}};
-wire [WID-1:0] dead = {WID/16{16'hdead}};
+wire [WID:0] zero = {WID+1{1'b0}};
+wire [WID:0] dead = {1'b0,{WID/16{16'hdead}}};
 wire cd_args;
 value_t cc;
 reg [3:0] mul_cnt;
@@ -87,7 +90,8 @@ reg [WID*2-1:0] produ, produ1, produ2;
 reg [WID*2-1:0] shl, shr, asr;
 wire [WID-1:0] div_q, div_r;
 wire [WID-1:0] cmpo;
-reg [WID-1:0] bus;
+reg [WID:0] bus;
+reg [WID-1:0] bus2, bus3;
 reg [WID-1:0] busx;
 reg [WID-1:0] blendo;
 reg [22:0] ii;
@@ -180,49 +184,94 @@ end
 	
 generate begin : gffz
 	for (g = WID-1; g >= 0; g = g - 1)
-	always_comb
-	begin
-    	if (g==0)
-	      popcnt = {WID{1'd0}};
-		if (a[g]==1'b1)
-		  popcnt = popcnt + 2'd1;
-	end
-	for (g = WID-1; g >= 0; g = g - 1)
-	always_comb
-	begin
-	   if (g==0) begin
-	       locnt = {WID{1'd0}};
-	       loz = 0;
-	   end
-		if (a[g]==1'b1 && !loz)
-			locnt = locnt + 2'd1;
-		else
-			loz = 1;
-    end
-	for (g = WID-1; g >= 0; g = g - 1)
-	always_comb
-	begin
-	   if (g == 0) begin
-	       lzcnt = {WID{1'd0}};
-	       lzz = 0;
-	   end
-		if (a[g]==1'b0 && !lzz)
-			lzcnt = lzcnt + 2'd1;
-		else
-			lzz = 1;
-    end
-	for (g = 0; g < WID; g = g + 1)
-	always_comb
-	begin
-	   if (g==0) begin
-	       tzcnt = {WID{1'd0}};
-	       tzz = 0;
-	   end
-		if (a[g]==1'b0 && !tzz)
-			tzcnt = tzcnt + 2'd1;
-		else
-		  tzz = 1;
-    end
+  case(WID)
+  16:	
+  	begin
+  	wire [4:0] popcnt;
+  	popcnt24 upopcnt16 (.i({8'h00,a[WID-1:0]}),.o(popcnt));
+  	end
+  32:
+  	begin
+  	wire [5:0] popcnt;
+  	popcnt48 upopcnt32 (.i({16'h0000,a[WID-1:0]}),.o(popcnt));
+  	end
+  64:
+  	begin
+  	wire [6:0] popcnt;
+  	popcnt96 upopcnt64 (.i({32'h00000000,a[WID-1:0]}),.o(popcnt));
+  	end
+  128:
+  	begin
+  	wire [7:0] popcnt;
+  	popcnt144 upopcnt128 (.i({16'h0000,a[WID-1:0]}),.o(popcnt));
+  	end
+	endcase
+  case(WID)
+  16:	
+  	begin
+  	wire [4:0] locnt;
+  	ffz24 uffz16 (.i({8'hFF,a[WID-1:0]}),.o(locnt));
+  	end
+  32:
+  	begin
+  	wire [5:0] locnt;
+  	ffz48 uffz32 (.i({16'hFFFF,a[WID-1:0]}),.o(locnt));
+  	end
+  64:
+  	begin
+  	wire [6:0] locnt;
+  	ffz96 uffo64 (.i({32'hFFFFFFFF,a[WID-1:0]}),.o(locnt));
+  	end
+  128:
+  	begin
+  	wire [7:0] locnt;
+  	ffz144 uffo128 (.i({16'hFFFF,a[WID-1:0]}),.o(locnt));
+  	end
+	endcase
+  case(WID)
+  16:	
+  	begin
+  	wire [4:0] lzcnt;
+  	ffo24 uffo16 (.i({8'h00,a[WID-1:0]}),.o(lzcnt));
+  	end
+  32:
+  	begin
+  	wire [5:0] lzcnt;
+  	ffo48 uffo32 (.i({16'h0000,a[WID-1:0]}),.o(lzcnt));
+  	end
+  64:
+  	begin
+  	wire [6:0] lzcnt;
+  	ffo96 uffo64 (.i({32'h00000000,a[WID-1:0]}),.o(lzcnt));
+  	end
+  128:
+  	begin
+  	wire [7:0] lzcnt;
+  	ffo144 uffo128 (.i({16'h0000,a[WID-1:0]}),.o(lzcnt));
+  	end
+	endcase
+  case(WID)
+  16:	
+  	begin
+  	wire [4:0] tzcnt;
+  	flo24 uflo16 (.i({8'hFF,a[WID-1:0]}),.o(tzcnt));
+  	end
+  32:
+  	begin
+  	wire [5:0] tzcnt;
+  	flo48 uflo32 (.i({16'hFFFF,a[WID-1:0]}),.o(tzcnt));
+  	end
+  64:
+  	begin
+  	wire [6:0] tzcnt;
+  	flo96 uflo64 (.i({32'hFFFFFFFF,a[WID-1:0]}),.o(tzcnt));
+  	end
+  128:
+  	begin
+  	wire [7:0] tzcnt;
+  	flo144 uflo128 (.i({16'hFFFF,a[WID-1:0]}),.o(tzcnt));
+  	end
+	endcase
 end
 endgenerate
 
@@ -487,6 +536,7 @@ always_comb
 begin
 	exc = Stark_pkg::FLT_NONE;
 	bus = {(WID/16){16'h0000}};
+	bus2 = {(WID/16){16'h0000}};
 	case(ir.any.opcode)
 	Stark_pkg::OP_FLT:
 		case(ir.fpu.op4)
@@ -540,10 +590,10 @@ begin
 							bus = tmp[WID-1] ? -tmp : tmp;
 						end
 					endcase
-				3'd3:	bus = locnt;
-				3'd4:	bus = lzcnt;
+				3'd3:	bus = &locnt ? WID : locnt;
+				3'd4:	bus = &lzcnt ? WID : lzcnt;
 				3'd5:	bus = popcnt;
-				3'd6:	bus = tzcnt;
+				3'd6:	bus = &tzcnt ? WID : tzcnt;
 				default:	bus = zero;
 				endcase
 		end
@@ -667,7 +717,39 @@ begin
 			3'd3: bus = exto;
 			default: bus = zero;
 			endcase
-	Stark_pkg::OP_MOV:		bus = a;
+	Stark_pkg::OP_MOV:
+		if (ir[31]) begin
+			case(ir.move.op3)
+			3'd0:	// MOVE / XCHG
+				begin
+					bus = a;	// MOVE
+					bus2 = b;	// not updated by MOVE
+				end
+			3'd1:	// XCHGMD / MOVEMD
+				begin	
+					bus = a;
+					bus2 = b;	// not updated by MOVEMD
+				end
+			3'd2:	bus = zero;		// MOVSX
+			3'd3:	bus = zero;		// MOVZX
+			3'd4:	bus = ~|a ? i : t;	// CMOVZ
+			3'd5:	bus =  |a ? i : t;	// CMOVNZ
+			3'd6:	bus = zero;		// BMAP
+			default:
+				begin
+					bus = zero;
+				end
+			endcase
+		end
+		else
+			case(ir.move.op3)
+			3'd4:	bus = ~|a ? b : t;	// CMOVZ
+			3'd5:	bus =  |a ? b : t;	// CMOVNZ
+			default:
+				begin
+					bus = zero;
+				end
+			endcase
 	Stark_pkg::OP_LOADA:	bus = a + i + (b << ir[23:22]);
 	Stark_pkg::OP_PFX:		bus = zero;
 	Stark_pkg::OP_NOP:		bus = t;	// in case of copy target
@@ -681,8 +763,25 @@ begin
 	endcase
 end
 
+always_comb
+begin
+	bus3 = zero;
+	bus3[0] = bus==zero;
+	bus3[1] = 1'b1;
+	bus3[2] = bus==zero;
+	bus3[3] = bus[WID-1];
+	bus3[4] = bus[WID-1]||bus==zero;
+	bus3[5] = bus[WID];
+	bus3[6] = 1'b0;
+	bus3[7] = 1'b0;
+end
+
 always_ff @(posedge clk)
 	o = bus;
+always_ff @(posedge clk)
+	o2 = bus2;
+always_ff @(posedge clk)
+	o3 = bus3 << {om,3'b0};
 always_ff @(posedge clk)
 	exc_o = exc;
 

@@ -230,12 +230,12 @@ input valid_i;
 output valid_o;
 integer nn;
 begin
-	valid_o = valid_i;
+	valid_o <= valid_i;
 	for (nn = 0; nn < 16; nn = nn + 1) begin
 		if (pRn==prn[nn] && prnv[nn] && !valid_i) begin
-			val = rfo[nn];
-			val_tag = rfo_tag[nn];
-			valid_o = 1'b1;
+			val <= rfo[nn];
+			val_tag <= rfo_tag[nn];
+			valid_o <= 1'b1;
 		end
 	end
 end

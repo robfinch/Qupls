@@ -55,6 +55,25 @@ begin
 		fnHas_Rs2 = 1'b0;
 	else
 		case(ir.ins.any.opcode)
+		Stark_pkg::OP_MOV:
+			if (ir.ins[31]) begin
+				case(ir.ins.move.op3)
+				3'd1:
+					if (ir.ins[25]==1'b1)		// XCHGMD
+						fnHas_Rs2 = 1'b1;	// Rd
+					else
+						fnHas_Rs2 = 1'b0;
+				3'd0:
+					if (ir.ins[25:21]==5'd1)	// XCHG
+						fnHas_Rs2 = 1'b1;	// Rd
+					else
+						fnHas_Rs2 = 1'd0;
+				default:
+					fnHas_Rs2 = 1'd0;
+				endcase
+			end
+			else
+				fnHas_Rs2 = 1'd0;
 		Stark_pkg::OP_FLT:	fnHas_Rs2 = 1'b1;
 		Stark_pkg::OP_CSR:
 			fnHas_Rs2 = ir.ins[31:29]==3'd0 ? 1'b1 : 1'b0;

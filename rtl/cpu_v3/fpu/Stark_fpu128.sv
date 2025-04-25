@@ -39,11 +39,12 @@ import cpu_types_pkg::*;
 import Stark_pkg::*;
 //import fp128Pkg::*;
 
-module Stark_fpu128(rst, clk, idle, ir, rm, a, b, c, t, i, p, atag, btag, o, otag, done, exc);
+module Stark_fpu128(rst, clk, om, idle, ir, rm, a, b, c, t, i, p, atag, btag, o, otag, done, exc);
 parameter FPU0 = 1'b1;
 parameter WID=128;
 input rst;
 input clk;
+input Stark_pkg::operating_mode_t om;
 input idle;
 input Stark_pkg::instruction_t ir;
 input [2:0] rm;
@@ -69,6 +70,8 @@ wire [WID-1:0] scaleo, f2io, i2fo, signo, cmpo, divo, sqrto, freso, trunco;
 wire [WID-1:0] cvtD2Qo;
 wire ce = 1'b1;
 wire cd_args;
+reg [WID-1:0] tmp;
+wire [WID-1:0] zero = {WID{1'b0}};
 
 reg [64:0] base,bbase;
 reg [64:0] top,btop;
@@ -352,96 +355,76 @@ begin
 		else
 			exc = FLT_UNIMP;
 
-	OP_R3B,OP_R3W,OP_R3T,OP_R3O:
-		case(ir.r3.func)
-		FN_ADD:
-			case(ir.r2.op4)
-			3'd0:	bus = (a + b) & c;
-			3'd1: bus = (a + b) | c;
-			3'd2: bus = (a + b) ^ c;
-			3'd3:	bus = (a + b) + c;
-			/*
-			4'd9:	bus = (a + b) - c;
-			4'd10: bus = (a + b) + c + 2'd1;
-			4'd11: bus = (a + b) + c - 2'd1;
-			4'd12:
-				begin
-					sd = (a + b) + c;
-					bus = sd[WID-1] ? -sd : sd;
-				end
-			4'd13:
-				begin
-					sd = (a + b) - c;
-					bus = sd[WID-1] ? -sd : sd;
-				end
-			*/
-			default:	bus = {WID{1'd0}};
+	Stark_pkg::OP_ADD:
+		begin
+			if (ir[31])
+				bus = a + i;
+			else
+				case(ir.alu.op3)
+				3'd0:		// ADD
+					case(ir.alu.lx)
+					2'd0:	bus = a + b;
+					default:	bus = a + i;
+					endcase
+				3'd2:		// ABS
+					case(ir.alu.lx)
+					2'd0:
+						begin
+							tmp = a + b;
+							bus = tmp[WID-1] ? -tmp : tmp;
+						end
+					default:
+						begin
+							tmp = a + i;
+							bus = tmp[WID-1] ? -tmp : tmp;
+						end
+					endcase
+				default:	bus = zero;
+				endcase
+		end
+	Stark_pkg::OP_AND:
+		if (ir[31])
+			bus = a & i;
+		else
+			case(ir.alu.op3)
+			3'd0:	bus = a & b;
+			3'd1:	bus = ~(a & b);
+			3'd2:	bus = a & ~b;
+			default:	bus = zero;	
 			endcase
-		FN_SUB:	bus = a - b - c;
-		FN_CMP,FN_CMPU:	
-			case(ir.r2.op4)
-			3'd1:	bus = cmpo & c;
-			3'd2:	bus = cmpo | c;
-			3'd3:	bus = cmpo ^ c;
-			default:	bus = cmpo;
+	Stark_pkg::OP_OR:
+		if (ir[31])
+			bus = a | i;
+		else
+			case(ir.alu.op3)
+			3'd0:	bus = a | b;
+			3'd1:	bus = ~(a | b);
+			3'd2:	bus = a | ~b;
+			default:	bus = zero;	
 			endcase
-		FN_AND:	
-			case(ir.r2.op4)
-			3'd0:	bus = (a & b) & c;
-			3'd1: bus = (a & b) | c;
-			3'd2: bus = (a & b) ^ c;
-			default:	bus = {WID{1'd0}};
+	Stark_pkg::OP_XOR:
+		if (ir[31])
+			bus = a ^ i;
+		else
+			case(ir.alu.op3)
+			3'd0:	bus = a ^ b;
+			3'd1:	bus = ~(a ^ b);
+			3'd2:	bus = a ^ ~b;
+			default:	bus = zero;	
 			endcase
-		FN_OR:
-			case(ir.r2.op4)
-			3'd0:	bus = (a | b) & c;
-			3'd1: bus = (a | b) | c;
-			3'd2: bus = (a | b) ^ c;
-			3'd7:	bus = (a & b) | (a & c) | (b & c);
-			default:	bus = {WID{1'd0}};
+	Stark_pkg::OP_SUBF:
+		if (ir[31])
+			bus = i - a;
+		else
+			case(ir.alu.op3)
+			3'd0:	bus = b - a;
+			default:	bus = zero;	
 			endcase
-		FN_EOR:	
-			case(ir.r2.op4)
-			3'd0:	bus = (a ^ b) & c;
-			3'd1: bus = (a ^ b) | c;
-			3'd2: bus = (a ^ b) ^ c;
-			3'd7:	bus = (^a) ^ (^b) ^ (^c);
-			default:	bus = {WID{1'd0}};
-			endcase
-		FN_CMOVZ: bus = a ? c : b;
-		FN_CMOVNZ:	bus = a ? b : c;
-		FN_NAND:
-			case(ir.r2.op4)
-			3'd0:	bus = ~(a & b) & c;
-			3'd1: bus = ~(a & b) | c;
-			3'd2: bus = ~(a & b) ^ c;
-			default:	bus = {WID{1'd0}};
-			endcase
-		FN_NOR:
-			case(ir.r2.op4)
-			3'd0:	bus = ~(a | b) & c;
-			3'd1: bus = ~(a | b) | c;
-			3'd2: bus = ~(a | b) ^ c;
-			default:	bus = {WID{1'd0}};
-			endcase
-		FN_ENOR:
-			case(ir.r2.op4)
-			3'd0:	bus = ~(a ^ b) & c;
-			3'd1: bus = ~(a ^ b) | c;
-			3'd2: bus = ~(a ^ b) ^ c;
-			default:	bus = {WID{1'd0}};
-			endcase
-		FN_MVVR:	bus = a;
-		default:	bus = {4{32'hDEADBEEF}};
-		endcase
-	OP_ADDI:	bus = a + i;
-	OP_CMPI:	bus = cmpo;
-	OP_CMPUI:	bus = cmpo;
-	OP_ANDI:	bus = a & i;
-	OP_ORI:		bus = a | i;
-	OP_EORI:	bus = a ^ i;
-	OP_MOV:		bus = a;
-	OP_NOP:		bus = 128'd0;
+	Stark_pkg::OP_CMP:	bus = cmpo;
+	Stark_pkg::OP_MOV:		bus = a;
+	Stark_pkg::OP_LOADA:	bus = a + i + (b << ir[23:22]);
+	Stark_pkg::OP_PFX:		bus = zero;
+	Stark_pkg::OP_NOP:		bus = t;	// in case of copy target
 
 	// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -	
 	// Capabilities logic

@@ -41,7 +41,7 @@ import Stark_pkg::*;
 
 module Stark_branch_station(rst, clk, idle_i, issue, rndx, rndxv, rob,
 	rfo, rfo_tag, prn, prnv, all_args_valid, rfo_argC_tag,
-	id, om, we, argA, argB, argBr, argC, argI, instr, bt, bts, cjb, bl,
+	id, om, we, argA, argB, argBr, argC, argI, instr, bt, brclass, cjb, bl,
 	pc, op, bs_idle_oh, argA_tag, argB_tag, argC_tag, pRt, aRt,
 	cp, excv, idle_o
 );
@@ -74,7 +74,7 @@ output value_t argI;
 output Stark_pkg::ex_instruction_t instr;
 output reg all_args_valid;
 output reg bt;
-output Stark_pkg::bts_t bts;
+output Stark_pkg::brclass_t brclass;
 output reg cjb;
 output reg bl;
 output Stark_pkg::pipeline_reg_t op;
@@ -117,7 +117,7 @@ if (rst) begin
 	pc.bno_t <= 6'd1;
 	pc.bno_f <= 6'd1;
 	bt <= FALSE;
-	bts <= Stark_pkg::BTS_NONE;
+	brclass <= Stark_pkg::BRC_NONE;
 	cjb <= 1'b0;
 	bl <= 1'b0;
 	op <= {26'd0,OP_NOP};
@@ -140,7 +140,7 @@ else begin
 		instr <= rob.op;
 		pc <= rob.op.pc;
 		bt <= rob.bt;
-		bts <= rob.op.decbus.bts;
+		brclass <= rob.op.decbus.brclass;
 		cjb <= rob.decbus.cjb;
 		bl <= rob.decbus.bl;
 		cp <= rob.cndx;
@@ -171,12 +171,12 @@ input valid_i;
 output valid_o;
 integer nn;
 begin
-	valid_o = valid_i;
+	valid_o <= valid_i;
 	for (nn = 0; nn < 16; nn = nn + 1) begin
 		if (pRn==prn[nn] && prnv[nn] && !valid_i) begin
-			val = rfo[nn];
-			val_tag = rfo_tag[nn];
-			valid_o = 1'b1;
+			val <= rfo[nn];
+			val_tag <= rfo_tag[nn];
+			valid_o <= 1'b1;
 		end
 	end
 end

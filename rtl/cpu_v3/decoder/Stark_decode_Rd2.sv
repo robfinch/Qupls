@@ -37,48 +37,53 @@
 import cpu_types_pkg::*;
 import Stark_pkg::*;
 
-module Stark_decode_Rd3(om, instr, Rd3, Rd3z, exc);
+module Stark_decode_Rd2(om, instr, Rd2, Rd2z, exc);
 input Stark_pkg::operating_mode_t om;
 input Stark_pkg::ex_instruction_t instr;
-output aregno_t Rd3;
-output reg Rd3z;
+output aregno_t Rd2;
+output reg Rd2z;
 output reg exc;
 
 Stark_pkg::operating_mode_t om1;
 
-function aregno_t fnRd3;
+function aregno_t fnRd2;
 input Stark_pkg::ex_instruction_t ir;
 begin
 	case(ir.ins.any.opcode)
-	Stark_pkg::OP_MOV:	fnRd3 = ir.ins[16] ? 8'd56 : 8'd0;
-	Stark_pkg::OP_FLT:	fnRd3 = ir.ins[16] ? 8'd57 : 8'd0;
-	Stark_pkg::OP_CSR:	fnRd3 = ir.ins[16] ? 8'd56 : 8'd0;
-	Stark_pkg::OP_CMP:	fnRd3 = 8'd0;
-	Stark_pkg::OP_ADD,Stark_pkg::OP_SUBF,
-	Stark_pkg::OP_AND,Stark_pkg::OP_OR,Stark_pkg::OP_XOR,
-	Stark_pkg::OP_MUL,Stark_pkg::OP_DIV,
-	Stark_pkg::OP_SHIFT:	fnRd3 = ir.ins[16] ? 8'd56 : 8'd0;
-	Stark_pkg::OP_B0,Stark_pkg::OP_B1,Stark_pkg::OP_BCC0,Stark_pkg::OP_BCC1:
-		fnRd3 = 8'd0;
-	Stark_pkg::OP_LDB,Stark_pkg::OP_LDBZ,Stark_pkg::OP_LDW,Stark_pkg::OP_LDWZ,
-	Stark_pkg::OP_LDT,Stark_pkg::OP_LDTZ,Stark_pkg::OP_LOAD,Stark_pkg::OP_LOADA,
-	Stark_pkg::OP_AMO,Stark_pkg::OP_CMPSWAP:
-		fnRd3 = ir.ins[16] ? 8'd56 : 8'd0;
+	Stark_pkg::OP_MOV:
+		if (ir.ins[31]) begin
+			case(ir.ins.move.op3)
+			3'd1:
+				if (ir.ins[25]==1'b1)		// XCHGMD
+					fnRd2 = {1'b0,ir.ins[20:19],ir.ins[15:11]};	// Rs1
+				else
+					fnRd2 = 8'd0;
+			3'd0:
+				if (ir.ins[25:21]==5'd1)	// XCHG
+					fnRd2 = {1'b0,ir.ins[20:19],ir.ins[15:11]};	// Rs1
+				else
+					fnRd2 = 8'd0;
+			default:
+				fnRd2 = 8'd0;
+			endcase
+		end
+		else
+			fnRd2 = 8'd0;
 	default:
-		fnRd3 = 8'd0;
+		fnRd2 = 8'd0;
 	endcase
 end
 endfunction
 
 always_comb
 begin
-	Rd3 = fnRd3(instr);
-	if (instr.ins.any.opcode==OP_MOV && instr.ins[28:26]==3'd1)	// MOVEMD / XCHGMD?
+	Rd2 = fnRd2(instr);
+	if (instr.ins.any.opcode==OP_MOV && instr.ins[28:26]==3'd1)	// MOVEMD/XCHGMD?
 		om1 = Stark_pkg::operating_mode_t'(instr.ins[22:21]);
 	else
 	  om1 = om;
-	Rd3z = ~|Rd3;
-	tRegmap(om1, Rd3, Rd3, exc);
+	Rd2z = ~|Rd2;
+	tRegmap(om1, Rd2, Rd2, exc);
 end
 
 endmodule

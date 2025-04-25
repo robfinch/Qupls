@@ -240,6 +240,18 @@ parameter PANIC_COMMIT = 4'd13;
 parameter PANIC_CHECKPOINT_INDEX = 4'd14;
 
 // =============================================================================
+// Constants
+// =============================================================================
+
+// Register accessibility
+parameter REG_U = 4'h1;
+parameter REG_S = 4'h2;
+parameter REG_H = 4'h4;
+parameter REG_M = 4'h8;
+parameter REG_SHM = REG_S|REG_H|REG_M;
+parameter REG_USHM = REG_U|REG_S|REG_H|REG_M;
+
+// =============================================================================
 // Type declarations
 // =============================================================================
 
@@ -293,7 +305,7 @@ typedef struct packed
 typedef struct packed
 {
 	logic [7:0] pl;			// privilege level
-	logic swstk;				// software stack
+	logic [2:0] swstk;	// software stack
 	logic [2:0] mprv;		// memory access priv indicator	
 	logic dbg;					// debug mode indicator
 	logic [1:0] ptrsz;	// pointer size 0=32,1=64,2=96
@@ -393,6 +405,7 @@ typedef enum logic [5:0] {
 	OP_AMO = 6'd59,
 	OP_CMPSWAP = 6'd60,
 	OP_PFX = 6'd61,
+	OP_MOD = 6'd62,
 	OP_NOP = 6'd63
 } opcode_e;
 
@@ -1064,6 +1077,11 @@ typedef union packed
 } instruction_t;
 
 typedef struct packed {
+	logic [2:0] count;
+	instruction_t ins;
+} micro_op_t;
+
+typedef struct packed {
 	cpu_types_pkg::pc_address_ex_t pc;
 	cpu_types_pkg::mc_address_t mcip;
 	logic [5:0] pred_btst;
@@ -1164,6 +1182,7 @@ typedef struct packed
 	logic Rs2z;
 	logic Rs3z;
 	logic Rdz;
+	logic Rd2z;
 	logic Rd3z;
 	logic has_Rs2;
 	logic has_imm;
@@ -1928,6 +1947,9 @@ endfunction
 // Support Tasks
 // ============================================================================
 
+// Maps a register spec to a logical register number depending on the mode and
+// checks for register accessibility.
+
 task tRegmap;
 input operating_mode_t om;
 input [6:0] a;
@@ -1936,13 +1958,23 @@ output reg exc;
 begin
 	exc = 1'b0;
 	case(om)
-	OM_APP:	o = a;
+	OM_APP:	
+		begin
+			if (a== 7'd45 || (a >= 7'd50 && a <= 7'd55)) begin
+				exc = 1'b1;
+				o = 7'd0;
+			end
+			else
+				o = a;
+		end
 	OM_SUPERVISOR:
 		begin
 			if (a >= 7'd56 && a <= 7'd63 || a >= 7'd0 && a <= 7'd7)
 				o = a;
-			else if (a >= 7'd48)
+			else if (a >= 7'd48) begin
 				exc = 1'b1;
+				o = 7'd0;
+			end
 			else
 				o = 8'd96 + a;
 		end
@@ -1950,8 +1982,10 @@ begin
 		begin
 			if (a >= 7'd56 && a <= 7'd63 || a >= 7'd0 && a <= 7'd7)
 				o = a;
-			else if (a >= 7'd48)
+			else if (a >= 7'd48) begin
 				exc = 1'b1;
+				o = 7'd0;
+			end
 			else
 				o = 8'd136 + a;
 		end
@@ -1959,8 +1993,10 @@ begin
 		begin
 			if (a >= 7'd56 && a <= 7'd63 || a >= 7'd0 && a <= 7'd7)
 				o = a;
-			else if (a >= 7'd55)
+			else if (a >= 7'd55) begin
 				exc = 1'b1;
+				o = 7'd0;
+			end
 			else
 				o = 8'd176 + a;
 		end

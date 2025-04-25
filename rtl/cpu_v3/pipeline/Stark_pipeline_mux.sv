@@ -58,7 +58,7 @@ module Stark_pipeline_mux(rst_i, clk_i, rstcnt, advance_fet, ihit, en_i,
 	pg0_mux, pg1_mux,
 	mcip0_i, mcip1_i, mcip2_i, mcip3_i,
 //	mcip0_o, mcip1_o, mcip2_o, mcip3_o,
-	do_bsr, bsr_tgt, do_ret, ret_pc, do_call, get, stall);
+	do_bsr, bsr_tgt, do_ret, ret_pc, do_call, get, mux_stallq, fet_stallq, stall);
 input rst_i;
 input clk_i;
 input [2:0] rstcnt;
@@ -130,6 +130,8 @@ output reg do_ret;
 output pc_address_t ret_pc;
 output reg do_call;
 input get;
+input mux_stallq;
+output reg fet_stallq;
 output stall;
 
 integer nn,hh;
@@ -145,7 +147,7 @@ reg [1023:0] cline_fet;
 wire [5:0] jj;
 reg [5:0] kk;
 wire clk = clk_i;
-wire en = en_i;
+wire en = en_i & !mux_stallq;
 wire mipv = mipv_i;
 wire ls_bmf = ls_bmf_i;
 wire pack_regs = pack_regs_i;
@@ -536,11 +538,14 @@ always_comb
 	else
 		ret_pc = RSTPC;
 
+always_comb
+	fet_stallq = mux_stallq;
+
 Stark_ins_extract_mux umux0
 (
 	.rst(rst_i),
 	.clk(clk_i),
-	.en(en_i),
+	.en(en),
 	.nop(nop0),
 	.rgi(2'd0),
 	.regcnt(regcnt_i),
@@ -563,7 +568,7 @@ Stark_ins_extract_mux umux1
 (
 	.rst(rst_i),
 	.clk(clk_i),
-	.en(en_i),
+	.en(en),
 	.nop(nop1),
 	.rgi(2'd1),
 	.regcnt(regcnt_i),
@@ -586,7 +591,7 @@ Stark_ins_extract_mux umux2
 (
 	.rst(rst_i),
 	.clk(clk_i),
-	.en(en_i),
+	.en(en),
 	.nop(nop2),
 	.rgi(2'd2),
 	.regcnt(regcnt_i),
@@ -609,7 +614,7 @@ Stark_ins_extract_mux umux3
 (
 	.rst(rst_i),
 	.clk(clk_i),
-	.en(en_i),
+	.en(en),
 	.nop(nop3),
 	.rgi(2'd3),
 	.regcnt(regcnt_i),
@@ -632,7 +637,7 @@ Stark_ins_extract_mux umux4
 (
 	.rst(rst_i),
 	.clk(clk_i),
-	.en(en_i),
+	.en(en),
 	.nop(nop3),
 	.rgi(2'd3),
 	.regcnt(regcnt_i),
@@ -655,7 +660,7 @@ Stark_ins_extract_mux umux5
 (
 	.rst(rst_i),
 	.clk(clk_i),
-	.en(en_i),
+	.en(en),
 	.nop(nop3),
 	.rgi(2'd3),
 	.regcnt(regcnt_i),

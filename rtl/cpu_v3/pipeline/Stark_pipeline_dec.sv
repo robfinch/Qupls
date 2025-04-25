@@ -47,7 +47,7 @@ module Stark_pipeline_dec(rst_i, rst, clk, en, clk5x, ph4, new_cline_mux, cline,
 	Rt0_dec, Rt1_dec, Rt2_dec, Rt3_dec, Rt0_decv, Rt1_decv, Rt2_decv, Rt3_decv,
 	micro_machine_active_mux, micro_machine_active_dec,
 	pg_dec,
-	ren_stallq, ren_rst_busy, avail_reg
+	mux_stallq, ren_stallq, ren_rst_busy, avail_reg
 );
 input rst_i;
 input rst;
@@ -83,13 +83,14 @@ output Rt1_decv;
 output Rt2_decv;
 output Rt3_decv;
 output Stark_pkg::pipeline_group_reg_t pg_dec;
+output reg mux_stallq;
 output ren_stallq;
 output ren_rst_busy;
 input micro_machine_active_mux;
 output reg micro_machine_active_dec;
 output [PREGS-1:0] avail_reg;
 
-integer n1,n2,n3;
+integer n1,n2,n3,n4,n5;
 Stark_pkg::pipeline_group_reg_t pg0_mux_r;
 reg [31:0] carry_mod_i;
 reg [31:0] carry_mod_o;
@@ -136,12 +137,168 @@ pregno_t Rt0_dec1;
 pregno_t Rt1_dec1;
 pregno_t Rt2_dec1;
 pregno_t Rt3_dec1;
+Stark_pkg::pipeline_reg_t tpr0,tpr1,tpr2,tpr3,tpr4;
 
 always @(posedge clk)
 	pg0_mux_r <= pg0_mux;
 
 Stark_min_constant_decoder umcd1 (cline[511:0], nops[15:0]);
 Stark_min_constant_decoder umcd2 (cline[1023:512], nops[31:16]);
+
+wire [2:0] uop_count [0:3];
+Stark_pkg::micro_op_t [7:0] uop [0:3];
+Stark_pkg::micro_op_t [31:0] uop_buf;
+
+Stark_microop uuop1
+(
+	.ir(pg0_mux.pr0.ins), 
+	.carry_reg(8'd0),
+	.carry_out(1'b0),
+	.carry_in(1'b0),
+	.count(uop_count[0]),
+	.uop(uop[0])
+);
+
+Stark_microop uuop2
+(
+	.ir(pg0_mux.pr1.ins), 
+	.carry_reg(8'd0),
+	.carry_out(1'b0),
+	.carry_in(1'b0),
+	.count(uop_count[1]),
+	.uop(uop[1])
+);
+
+Stark_microop uuop3
+(
+	.ir(pg0_mux.pr2.ins), 
+	.carry_reg(8'd0),
+	.carry_out(1'b0),
+	.carry_in(1'b0),
+	.count(uop_count[2]),
+	.uop(uop[2])
+);
+
+Stark_microop uuop4
+(
+	.ir(pg0_mux.pr3.ins), 
+	.carry_reg(8'd0),
+	.carry_out(1'b0),
+	.carry_in(1'b0),
+	.count(uop_count[3]),
+	.uop(uop[3])
+);
+
+reg rd_mux;
+reg [1:0] uop_mark [0:31];
+
+always_comb
+begin
+	case(uop_mark[0])
+	2'd0:	tpr0 = pg0_mux.pr0;
+	2'd1:	tpr0 = pg0_mux.pr1;
+	2'd2:	tpr0 = pg0_mux.pr2;
+	2'd3:	tpr0 = pg0_mux.pr3;
+	endcase
+	case(uop_mark[1])
+	2'd0:	tpr1 = pg0_mux.pr0;
+	2'd1:	tpr1 = pg0_mux.pr1;
+	2'd2:	tpr1 = pg0_mux.pr2;
+	2'd3:	tpr1 = pg0_mux.pr3;
+	endcase
+	case(uop_mark[2])
+	2'd0:	tpr2 = pg0_mux.pr0;
+	2'd1:	tpr2 = pg0_mux.pr1;
+	2'd2:	tpr2 = pg0_mux.pr2;
+	2'd3:	tpr2 = pg0_mux.pr3;
+	endcase
+	case(uop_mark[3])
+	2'd0:	tpr3 = pg0_mux.pr0;
+	2'd1:	tpr3 = pg0_mux.pr1;
+	2'd2:	tpr3 = pg0_mux.pr2;
+	2'd3:	tpr3 = pg0_mux.pr3;
+	endcase
+	tpr0.ins = uop_buf[0].ins;
+	tpr1.ins = uop_buf[1].ins;
+	tpr2.ins = uop_buf[2].ins;
+	tpr3.ins = uop_buf[3].ins;
+end
+
+always_ff @(posedge clk)
+if (rst) begin
+  for (n5 = 0; n5 < 32; n5 = n5 + 1)
+    uop_mark[n5] <= 2'b00;
+	uop_buf <= {$bits(Stark_pkg::micro_op_t)*32{1'b0}};
+end
+else begin
+	if (en) begin
+    for (n5 = 0; n5 < 28; n5 = n5 + 1)
+  		uop_buf[n5] <= uop_buf[n5+4];
+  	uop_buf[31] <= {$bits(Stark_pkg::micro_op_t){1'b0}};
+  	uop_buf[30] <= {$bits(Stark_pkg::micro_op_t){1'b0}};
+  	uop_buf[29] <= {$bits(Stark_pkg::micro_op_t){1'b0}};
+  	uop_buf[28] <= {$bits(Stark_pkg::micro_op_t){1'b0}};
+    for (n5 = 0; n5 < 28; n5 = n5 + 1)
+		  uop_mark[n5] <= uop_mark[n5+4];
+		uop_mark[31] <= 2'b00;
+		uop_mark[30] <= 2'b00;
+		uop_mark[29] <= 2'b00;
+		uop_mark[28] <= 2'b00;
+		if (rd_mux) begin
+			for (n4 = 0; n4 < 32; n4 = n4 + 2) begin
+				if (n4 < uop_count[0]) begin
+					uop_mark[n4] <= 2'd0;
+					uop_buf[n4] <= uop[0][n4];
+				end
+				else if (n4 < uop_count[0] + uop_count[1]) begin
+					uop_mark[n4] <= 2'd1;
+					uop_buf[n4] <= uop[1][n4-uop_count[0]];
+				end
+				else if (n4 < uop_count[0] + uop_count[1] + uop_count[2]) begin
+					uop_mark[n4] <= 2'd2;
+					uop_buf[n4] <= uop[2][n4-uop_count[0]-uop_count[1]];
+				end
+				else begin
+					uop_mark[n4] <= 2'd3;
+					uop_buf[n4] <= uop[3][n4-uop_count[0]-uop_count[1]-uop_count[2]];
+				end
+			end
+		end
+	end
+end
+
+always_comb
+	rd_mux = (
+	 uop_buf[31]=={$bits(Stark_pkg::micro_op_t){1'b0}} &&
+	 uop_buf[30]=={$bits(Stark_pkg::micro_op_t){1'b0}} &&
+	 uop_buf[29]=={$bits(Stark_pkg::micro_op_t){1'b0}} &&
+	 uop_buf[28]=={$bits(Stark_pkg::micro_op_t){1'b0}} &&
+	 uop_buf[27]=={$bits(Stark_pkg::micro_op_t){1'b0}} &&
+	 uop_buf[26]=={$bits(Stark_pkg::micro_op_t){1'b0}} &&
+	 uop_buf[25]=={$bits(Stark_pkg::micro_op_t){1'b0}} &&
+	 uop_buf[24]=={$bits(Stark_pkg::micro_op_t){1'b0}} &&
+	 uop_buf[23]=={$bits(Stark_pkg::micro_op_t){1'b0}} &&
+	 uop_buf[22]=={$bits(Stark_pkg::micro_op_t){1'b0}} &&
+	 uop_buf[21]=={$bits(Stark_pkg::micro_op_t){1'b0}} &&
+	 uop_buf[20]=={$bits(Stark_pkg::micro_op_t){1'b0}} &&
+	 uop_buf[19]=={$bits(Stark_pkg::micro_op_t){1'b0}} &&
+	 uop_buf[18]=={$bits(Stark_pkg::micro_op_t){1'b0}} &&
+	 uop_buf[17]=={$bits(Stark_pkg::micro_op_t){1'b0}} &&
+	 uop_buf[16]=={$bits(Stark_pkg::micro_op_t){1'b0}} &&
+	 uop_buf[15]=={$bits(Stark_pkg::micro_op_t){1'b0}} &&
+	 uop_buf[14]=={$bits(Stark_pkg::micro_op_t){1'b0}} &&
+	 uop_buf[13]=={$bits(Stark_pkg::micro_op_t){1'b0}} &&
+	 uop_buf[12]=={$bits(Stark_pkg::micro_op_t){1'b0}} &&
+	 uop_buf[11]=={$bits(Stark_pkg::micro_op_t){1'b0}} &&
+	 uop_buf[10]=={$bits(Stark_pkg::micro_op_t){1'b0}} &&
+	 uop_buf[9]=={$bits(Stark_pkg::micro_op_t){1'b0}} &&
+	 uop_buf[8]=={$bits(Stark_pkg::micro_op_t){1'b0}} &&
+	 uop_buf[7]=={$bits(Stark_pkg::micro_op_t){1'b0}} &&
+	 uop_buf[6]=={$bits(Stark_pkg::micro_op_t){1'b0}} &&
+	 uop_buf[5]=={$bits(Stark_pkg::micro_op_t){1'b0}} &&
+	 uop_buf[4]=={$bits(Stark_pkg::micro_op_t){1'b0}});
+always_comb
+	mux_stallq = !rd_mux;
 
 //reg stomp_dec;
 
@@ -345,11 +502,11 @@ end
 else begin
 	if (en)
 	begin
-		ins0m <= pg0_mux.pr0;
+		ins0m <= tpr0;
 		if (stomp_mux && FALSE) begin
-			if (pg0_mux.pr0.pc.bno_t!=stomp_bno) begin
+			if (tpr0.pc.bno_t!=stomp_bno) begin
 				ins0m <= nopi;
-				ins0m.pc.bno_t <= pg0_mux.pr0.pc.bno_t;
+				ins0m.pc.bno_t <= tpr0.pc.bno_t;
 			end
 		end
 	end
@@ -362,11 +519,11 @@ end
 else begin
 	if (en)
 	begin
-		ins1m <= pg0_mux.pr1;
+		ins1m <= tpr1;
 		if (stomp_mux && FALSE) begin
-			if (pg0_mux.pr1.pc.bno_t!=stomp_bno) begin
+			if (tpr1.pc.bno_t!=stomp_bno) begin
 				ins1m <= nopi;
-				ins1m.pc.bno_t <= pg0_mux.pr1.pc.bno_t;
+				ins1m.pc.bno_t <= tpr1.pc.bno_t;
 			end
 		end
 	end
@@ -379,11 +536,11 @@ end
 else begin
 	if (en)
 	begin
-		ins2m <= pg0_mux.pr2;
+		ins2m <= tpr2;
 		if (stomp_mux && FALSE) begin
-			if (pg0_mux.pr2.pc.bno_t!=stomp_bno) begin
+			if (tpr2.pc.bno_t!=stomp_bno) begin
 				ins2m <= nopi;
-				ins2m.pc.bno_t <= pg0_mux.pr2.pc.bno_t;
+				ins2m.pc.bno_t <= tpr2.pc.bno_t;
 			end
 		end
 	end
@@ -396,11 +553,11 @@ end
 else begin
 	if (en)
 	begin
-		ins3m <= pg0_mux.pr3;
+		ins3m <= tpr3;
 		if (stomp_mux && FALSE) begin
-			if (pg0_mux.pr3.pc.bno_t!=stomp_bno) begin
+			if (tpr3.pc.bno_t!=stomp_bno) begin
 				ins3m <= nopi;
-				ins3m.pc.bno_t <= pg0_mux.pr3.pc.bno_t;
+				ins3m.pc.bno_t <= tpr3.pc.bno_t;
 			end
 		end
 	end
@@ -417,7 +574,7 @@ Stark_decoder udeci0
 	.cline(cline),
 	.om(sr.om),
 	.ipl(sr.ipl),
-	.instr(pg0_mux.pr0),
+	.instr(tpr0.ins),
 	.dbo(dec0)
 );
 
@@ -429,7 +586,7 @@ Stark_decoder udeci1
 	.cline(cline),
 	.om(sr.om),
 	.ipl(sr.ipl),
-	.instr(pg0_mux.pr1),
+	.instr(tpr1.ins),
 	.dbo(dec1)
 );
 
@@ -441,7 +598,7 @@ Stark_decoder udeci2
 	.cline(cline),
 	.om(sr.om),
 	.ipl(sr.ipl),
-	.instr(pg0_mux.pr2),
+	.instr(tpr2.ins),
 	.dbo(dec2)
 );
 
@@ -453,7 +610,7 @@ Stark_decoder udeci3
 	.cline(cline),
 	.om(sr.om),
 	.ipl(sr.ipl),
-	.instr(pg0_mux.pr3),
+	.instr(tpr3.ins),
 	.dbo(dec3)
 );
 
@@ -465,7 +622,7 @@ Stark_decoder udeci4
 	.cline(cline),
 	.om(sr.om),
 	.ipl(sr.ipl),
-	.instr(pg1_mux.pr0),
+	.instr(tpr4.ins),
 	.dbo(dec4)
 );
 /*

@@ -37,11 +37,12 @@
 import Stark_pkg::*;
 //import fp64Pkg::*;
 
-module Stark_fpu64(rst, clk, clk3x, idle, ir, rm, a, b, c, t, i, p, o, done, exc);
+module Stark_fpu64(rst, clk, clk3x, om, idle, ir, rm, a, b, c, t, i, p, o, done, exc);
 parameter WID=64;
 input rst;
 input clk;
 input clk3x;
+input Stark_pkg::operating_mode_t om;
 input idle;
 input Stark_pkg::instruction_t ir;
 input [2:0] rm;
@@ -64,6 +65,8 @@ wire [WID-1:0] scaleo, f2io, i2fo, signo, cmpo, divo, sqrto, freso, trunco;
 wire [WID-1:0] cvtS2Do;
 wire ce = 1'b1;
 wire cd_args;
+reg [WID-1:0] tmp;
+wire [WID-1:0] zero = {WID{1'b0}};
 
 Stark_cmp #(.WID(WID)) ualu_cmp(ir, a, b, i, cmpo);
 
@@ -348,13 +351,82 @@ begin
       endcase
     default:  bus = 64'd0;
     endcase  
-	OP_ADD:	 bus = a + i;
-	OP_CMP:	 bus = cmpo;
-	OP_AND:	 bus = a & i;
-	OP_OR:		bus = a | i;
-	OP_XOR:	   bus = a ^ i;
-	OP_MOV:		bus = a;
-	OP_NOP:		bus = 64'd0;
+	Stark_pkg::OP_ADD:
+		begin
+			if (ir[31])
+				bus = a + i;
+			else
+				case(ir.alu.op3)
+				3'd0:		// ADD
+					case(ir.alu.lx)
+					2'd0:	bus = a + b;
+					default:	bus = a + i;
+					endcase
+				3'd2:		// ABS
+					case(ir.alu.lx)
+					2'd0:
+						begin
+							tmp = a + b;
+							bus = tmp[WID-1] ? -tmp : tmp;
+						end
+					default:
+						begin
+							tmp = a + i;
+							bus = tmp[WID-1] ? -tmp : tmp;
+						end
+					endcase
+				default:	bus = zero;
+				endcase
+		end
+	Stark_pkg::OP_AND:
+		if (ir[31])
+			bus = a & i;
+		else
+			case(ir.alu.op3)
+			3'd0:	bus = a & b;
+			3'd1:	bus = ~(a & b);
+			3'd2:	bus = a & ~b;
+			default:	bus = zero;	
+			endcase
+	Stark_pkg::OP_OR:
+		if (ir[31])
+			bus = a | i;
+		else
+			case(ir.alu.op3)
+			3'd0:	bus = a | b;
+			3'd1:	bus = ~(a | b);
+			3'd2:	bus = a | ~b;
+			default:	bus = zero;	
+			endcase
+	Stark_pkg::OP_XOR:
+		if (ir[31])
+			bus = a ^ i;
+		else
+			case(ir.alu.op3)
+			3'd0:	bus = a ^ b;
+			3'd1:	bus = ~(a ^ b);
+			3'd2:	bus = a ^ ~b;
+			default:	bus = zero;	
+			endcase
+	Stark_pkg::OP_SUBF:
+		if (ir[31])
+			bus = i - a;
+		else
+			case(ir.alu.op3)
+			3'd0:	bus = b - a;
+			default:	bus = zero;	
+			endcase
+	Stark_pkg::OP_CMP:	bus = cmpo;
+	Stark_pkg::OP_MOV:
+		case(ir.move.op3)
+		3'd0:	bus = a;
+		3'd4:	bus = ~|a ? b : c;
+		3'd5:	bus =  |a ? b : c;
+		default:	bus = zero;
+		endcase
+	Stark_pkg::OP_LOADA:	bus = a + i + (b << ir[23:22]);
+	Stark_pkg::OP_PFX:		bus = zero;
+	Stark_pkg::OP_NOP:		bus = t;	// in case of copy target
 	default:	bus = 64'd0;
 	endcase
 end

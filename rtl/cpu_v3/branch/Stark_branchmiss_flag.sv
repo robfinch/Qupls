@@ -37,10 +37,10 @@
 
 import Stark_pkg::*;
 
-module Stark_branchmiss_flag(rst, clk, bts, trig, miss_det, miss_flag);
+module Stark_branchmiss_flag(rst, clk, brclass, trig, miss_det, miss_flag);
 input rst;
 input clk;
-input Stark_pkg::bts_t bts;
+input Stark_pkg::brclass_t brclass;
 input trig;
 input miss_det;
 output reg miss_flag;
@@ -53,10 +53,16 @@ if (rst)
 else begin
 	miss_flag <= FALSE;		// pulse for only 1 cycle.
 	if (trig) begin
-		case(bts)
-		Stark_pkg::BTS_REG,Stark_pkg::BTS_BCC:
+		case(brclass)
+		Stark_pkg::BRC_BCCR,
+		Stark_pkg::BRC_BCCD,
+		Stark_pkg::BRC_BCCC:
 			miss_flag <= miss_det;
-		Stark_pkg::BTS_CALL,Stark_pkg::BTS_RET:
+//		Stark_pkg::BRC_BL,
+		Stark_pkg::BRC_BLRLR,
+		Stark_pkg::BRC_BLRLC,
+		Stark_pkg::BRC_RETR,
+		Stark_pkg::BRC_RETC:
 			miss_flag <= TRUE;
 		default:
 			miss_flag <= FALSE;

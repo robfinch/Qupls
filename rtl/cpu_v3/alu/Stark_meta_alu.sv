@@ -41,14 +41,15 @@
 import const_pkg::*;
 import Stark_pkg::*;
 
-module Stark_meta_alu(rst, clk, clk2x, ld, lane, prc, ir, div, cptgt, z, a, b, bi,
-	c, i, t, qres, cs, pc, csr, cpl, canary, o,
+module Stark_meta_alu(rst, clk, clk2x, om, ld, lane, prc, ir, div, cptgt, z, a, b, bi,
+	c, i, t, qres, cs, pc, csr, cpl, canary, o, o2, o3,
 	mul_done, div_done, div_dbz, exc);
 parameter ALU0 = 1'b0;
 parameter WID=$bits(cpu_types_pkg::value_t); 
 input rst;
 input clk;
 input clk2x;
+input Stark_pkg::operating_mode_t om;
 input ld;
 input [2:0] lane;
 input memsz_t prc;
@@ -69,17 +70,21 @@ input [7:0] cpl;
 input [WID-1:0] canary;
 input [WID-1:0] csr;
 output reg [WID-1:0] o;
+output reg [WID-1:0] o2;
+output reg [WID-1:0] o3;
 output reg mul_done;
 output reg div_done;
 output div_dbz;
 output reg [WID-1:0] exc;
 
-reg [WID-1:0] t1;
+reg [WID-1:0] t1,t1B,t1C;
 reg z1;
 reg [7:0] cptgt1;
 wire [WID-1:0] o16,o32,o64,o128;
+wire [WID-1:0] o16B,o32B,o64B,o128B;
+wire [WID-1:0] o16C,o32C,o64C,o128C;
 wire o64_tag, o128_tag;
-reg [WID-1:0] o1;
+reg [WID-1:0] o1,o1B,o1C;
 reg o1_tag;
 wire [WID-1:0] exc16,exc32,exc64,exc128;
 reg [WID-1:0] exc1;
@@ -102,6 +107,7 @@ generate begin : g16
 			.rst(rst),
 			.clk(clk),
 			.clk2x(clk2x),
+			.om(om),
 			.ld(ld),
 			.ir(ir),
 			.div(div),
@@ -118,6 +124,8 @@ generate begin : g16
 			.cpl(cpl),
 			.canary(canary),
 			.o(o16[g*16+15:g*16]),
+			.o2(o16B[g*16+15:g*16]),
+			.o3(o16C[g*16+15:g*16]),
 			.mul_done(mul_done16[g]),
 			.div_done(div_done16[g]),
 			.div_dbz(),
@@ -134,6 +142,7 @@ generate begin : g32
 			.rst(rst),
 			.clk(clk),
 			.clk2x(clk2x),
+			.om(om),
 			.ld(ld),
 			.ir(ir),
 			.div(div),
@@ -150,6 +159,8 @@ generate begin : g32
 			.cpl(cpl),
 			.canary(canary),
 			.o(o32[g*32+31:g*32]),
+			.o2(o32B[g*32+31:g*32]),
+			.o3(o32C[g*32+31:g*32]),
 			.mul_done(mul_done32[g]),
 			.div_done(div_done32[g]),
 			.div_dbz(),
@@ -166,6 +177,7 @@ generate begin : g64
 			.rst(rst),
 			.clk(clk),
 			.clk2x(clk2x),
+			.om(om),
 			.ld(ld),
 			.ir(ir),
 			.div(div),
@@ -182,6 +194,8 @@ generate begin : g64
 			.cpl(cpl),
 			.canary(canary),
 			.o(o64[g*64+63:g*64]),
+			.o2(o64B[g*64+63:g*64]),
+			.o3(o64C[g*64+63:g*64]),
 			.mul_done(mul_done64[g]),
 			.div_done(div_done64[g]),
 			.div_dbz(),
@@ -199,6 +213,7 @@ generate begin : g128
 			.rst(rst),
 			.clk(clk),
 			.clk2x(clk2x),
+			.om(om),
 			.ld(ld),
 			.ir(ir),
 			.div(div),
@@ -215,6 +230,8 @@ generate begin : g128
 			.cpl(cpl),
 			.canary(canary),
 			.o(o128[g*128+127:g*128]),
+			.o2(o128B[g*128+127:g*128]),
+			.o3(o128C[g*128+127:g*128]),
 			.mul_done(mul_done128[g]),
 			.div_done(div_done128[g]),
 			.div_dbz(),
@@ -272,19 +289,31 @@ end
 
 // Copy only the lanes specified in the mask to the target.
 always_ff @(posedge clk)
+begin
 	t1 <= t;
+end
 always_ff @(posedge clk)
 	z1 <= z;
 always_ff @(posedge clk)
 	cptgt1 <= cptgt;
 generate begin : gCptgt
 	for (mm = 0; mm < WID/8; mm = mm + 1) begin
-        always_comb
-            if (cptgt1[mm])
-                o[mm*8+7:mm*8] = z1 ? 8'h00 : t1[mm*8+7:mm*8];
-            else
-                o[mm*8+7:mm*8] = o1[mm*8+7:mm*8];
+    always_comb
+    begin
+      if (cptgt1[mm])
+        o[mm*8+7:mm*8] = z1 ? 8'h00 : t1[mm*8+7:mm*8];
+      else
+        o[mm*8+7:mm*8] = o1[mm*8+7:mm*8];
+      if (cptgt1[mm])
+        o2[mm*8+7:mm*8] = z1 ? 8'h00 : t1B[mm*8+7:mm*8];
+      else
+        o2[mm*8+7:mm*8] = o1B[mm*8+7:mm*8];
+      if (cptgt1[mm])
+        o3[mm*8+7:mm*8] = z1 ? 8'h00 : t1C[mm*8+7:mm*8];
+      else
+        o3[mm*8+7:mm*8] = o1C[mm*8+7:mm*8];
     end
+  end
 end
 endgenerate
 

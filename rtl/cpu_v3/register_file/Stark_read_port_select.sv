@@ -82,7 +82,7 @@ end
 
 always_ff @(posedge clk)
 if (rst) begin
-	for (j = 0; j < NPORTI; j = j + 1)
+	for (j = 0; j < NPORTO; j = j + 1)
 		regAck_o[j] = 1'b0;
 end
 else begin
