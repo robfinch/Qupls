@@ -60,7 +60,7 @@ output reg [4:0] stomp_bno;
 Stark_pkg::instruction_t ir;
 
 always_comb
-	ir = instr.ins;
+	ir = instr.uop.ins;
 
 reg [5:0] ino;
 reg [5:0] ino5;
@@ -110,7 +110,7 @@ begin
 		end
 	Stark_pkg::BRC_BL:
 		begin
-			disp = {{39{instr.ins.bl.disp[21]}},instr.ins.bl.disp,instr.ins.bl.d0};
+			disp = {{39{instr.uop.ins.bl.disp[21]}},instr.uop.ins.bl.disp,instr.uop.ins.bl.d0};
 			dstpc.pc = pc.pc + disp;
 		end
 	Stark_pkg::BRC_BLRLR:
@@ -146,7 +146,7 @@ begin
 	// Must be tested before Ret
 	Stark_pkg::BRC_ERET:
 		begin
-			dstpc.pc = (instr.ins[28:17]==12'd3 ? pc_stack[1].pc : pc_stack[0].pc) + (instr.ins[10:6] * 3'd4);
+			dstpc.pc = (instr.uop.ins[28:17]==12'd3 ? pc_stack[1].pc : pc_stack[0].pc) + (instr.uop.ins[10:6] * 3'd4);
 		end
 	default:
 		dstpc.pc = RSTPC;
@@ -167,14 +167,14 @@ begin
 			2'b00:
 				begin
 					misspc = dstpc;
-					miss_mcip = {1'b0,instr.ins.mcb.disphi,instr.ins.mcb.displo,instr.ins.mcb.d0};
+					miss_mcip = {1'b0,instr.uop.ins.mcb.disphi,instr.uop.ins.mcb.displo,instr.uop.ins.mcb.d0};
 					stomp_bno = pc.bno_t;
 					stomp_bno = 5'd0;
 				end
 			2'b01:
 				begin
 					misspc = dstpc;
-					miss_mcip = {1'b0,instr.ins.mcb.disphi,instr.ins.mcb.displo,instr.ins.mcb.d0};
+					miss_mcip = {1'b0,instr.uop.ins.mcb.disphi,instr.uop.ins.mcb.displo,instr.uop.ins.mcb.d0};
 					stomp_bno = pc.bno_t;
 					stomp_bno = 5'd0;
 				end

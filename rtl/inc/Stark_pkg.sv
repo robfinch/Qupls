@@ -1359,7 +1359,7 @@ typedef struct packed
 	cpu_types_pkg::aregno_t aRs2;
 	cpu_types_pkg::aregno_t aRs3;
 	cpu_types_pkg::aregno_t aRd;
-	instruction_t ins;
+	micro_op_t uop;
 	decode_bus_t decbus;
 } pipeline_reg_t;
 
@@ -1600,10 +1600,10 @@ function fnDecBsr;
 input Stark_pkg::pipeline_reg_t mux;
 begin
 	fnDecBsr =
-		mux.ins[31]==1'b1 &&
-		mux.ins.any.opcode==5'd13 &&
-		mux.ins.bl.BRd!=3'd0 &&
-		mux.ins.bl.BRd!=3'd7;
+		mux.uop.ins[31]==1'b1 &&
+		mux.uop.ins.any.opcode==5'd13 &&
+		mux.uop.ins.bl.BRd!=3'd0 &&
+		mux.uop.ins.bl.BRd!=3'd7;
 end
 endfunction
 
@@ -1611,9 +1611,9 @@ function fnDecBra;
 input Stark_pkg::pipeline_reg_t mux;
 begin
 	fnDecBra =
-		mux.ins[31]==1'b1 &&
-		mux.ins.any.opcode==5'd13 &&
-		mux.ins.bl.BRd==3'd0;
+		mux.uop.ins[31]==1'b1 &&
+		mux.uop.ins.any.opcode==5'd13 &&
+		mux.uop.ins.bl.BRd==3'd0;
 end
 endfunction
 
@@ -1621,10 +1621,10 @@ function fnDecJmp;
 input Stark_pkg::pipeline_reg_t mux;
 begin
 	fnDecJmp =
-		mux.ins[31]==1'b0 && |mux.ins[30:29] &&
-		mux.ins.any.opcode==5'd13 &&
-		mux.ins.blrlr.BRs==3'd0 &&
-		mux.ins.blrlr.BRd==3'd0;
+		mux.uop.ins[31]==1'b0 && |mux.uop.ins[30:29] &&
+		mux.uop.ins.any.opcode==5'd13 &&
+		mux.uop.ins.blrlr.BRs==3'd0 &&
+		mux.uop.ins.blrlr.BRd==3'd0;
 end
 endfunction
 
@@ -1632,9 +1632,9 @@ function fnDecJmpr;
 input Stark_pkg::pipeline_reg_t mux;
 begin
 	fnDecJmpr =
-		mux.ins[31]==1'b0 && |mux.ins[30:29] &&
-		mux.ins.any.opcode==5'd12 &&
-		mux.ins.bcclr.BRd==3'd0;
+		mux.uop.ins[31]==1'b0 && |mux.uop.ins[30:29] &&
+		mux.uop.ins.any.opcode==5'd12 &&
+		mux.uop.ins.bcclr.BRd==3'd0;
 end
 endfunction
 
@@ -1642,11 +1642,11 @@ function fnDecJsr;
 input Stark_pkg::pipeline_reg_t mux;
 begin
 	fnDecJsr =
-		mux.ins[31]==1'b0 && |mux.ins[30:29] &&
-		mux.ins.any.opcode==5'd13 &&
-		mux.ins.blrlr.BRs==3'd0 &&
-		mux.ins.blrlr.BRd!=3'd0 &&
-		mux.ins.blrlr.BRd!=3'd7;
+		mux.uop.ins[31]==1'b0 && |mux.uop.ins[30:29] &&
+		mux.uop.ins.any.opcode==5'd13 &&
+		mux.uop.ins.blrlr.BRs==3'd0 &&
+		mux.uop.ins.blrlr.BRd!=3'd0 &&
+		mux.uop.ins.blrlr.BRd!=3'd7;
 end
 endfunction
 
@@ -1654,10 +1654,10 @@ function fnDecJsrr;
 input Stark_pkg::pipeline_reg_t mux;
 begin
 	fnDecJsrr =
-		mux.ins[31]==1'b0 && |mux.ins[30:29] &&
-		mux.ins.any.opcode==5'd12 &&
-		mux.ins.bcclr.BRd!=3'd0 &&
-		mux.ins.bcclr.BRd!=3'd7;
+		mux.uop.ins[31]==1'b0 && |mux.uop.ins[30:29] &&
+		mux.uop.ins.any.opcode==5'd12 &&
+		mux.uop.ins.bcclr.BRd!=3'd0 &&
+		mux.uop.ins.bcclr.BRd!=3'd7;
 end
 endfunction
 
@@ -1665,11 +1665,11 @@ function fnDecBra2;
 input Stark_pkg::pipeline_reg_t mux;
 begin
 	fnDecBra2 =
-		mux.ins[31]==1'b0 && |mux.ins[30:29] &&
-		mux.ins.any.opcode==5'd13 &&
-		mux.ins[0]==1'b0 &&
-		mux.ins.blrlr.BRs==3'd7 &&
-		mux.ins.blrlr.BRd==3'd0;
+		mux.uop.ins[31]==1'b0 && |mux.uop.ins[30:29] &&
+		mux.uop.ins.any.opcode==5'd13 &&
+		mux.uop.ins[0]==1'b0 &&
+		mux.uop.ins.blrlr.BRs==3'd7 &&
+		mux.uop.ins.blrlr.BRd==3'd0;
 end
 endfunction
 
@@ -1677,12 +1677,12 @@ function fnDecBsr2;
 input Stark_pkg::pipeline_reg_t mux;
 begin
 	fnDecBsr2 =
-		mux.ins[31]==1'b0 && |mux.ins[30:29] &&
-		mux.ins.any.opcode==5'd13 &&
-		mux.ins[0]==1'b0 &&
-		mux.ins.blrlr.BRs==3'd7 &&
-		mux.ins.blrlr.BRd!=3'd0 &&
-		mux.ins.blrlr.BRd!=3'd7;
+		mux.uop.ins[31]==1'b0 && |mux.uop.ins[30:29] &&
+		mux.uop.ins.any.opcode==5'd13 &&
+		mux.uop.ins[0]==1'b0 &&
+		mux.uop.ins.blrlr.BRs==3'd7 &&
+		mux.uop.ins.blrlr.BRd!=3'd0 &&
+		mux.uop.ins.blrlr.BRd!=3'd7;
 end
 endfunction
 
@@ -1690,12 +1690,12 @@ function fnDecRet;
 input Stark_pkg::pipeline_reg_t mux;
 begin
 	fnDecRet =
-		mux.ins[31]==1'b0 &&
-		mux.ins.any.opcode==5'd13 &&
-		mux.ins[0]==1'b1 &&
-		mux.ins.blrlr.BRs==3'd7 &&
-		mux.ins.blrlr.BRd!=3'd0 &&
-		mux.ins.blrlr.BRd!=3'd7;
+		mux.uop.ins[31]==1'b0 &&
+		mux.uop.ins.any.opcode==5'd13 &&
+		mux.uop.ins[0]==1'b1 &&
+		mux.uop.ins.blrlr.BRs==3'd7 &&
+		mux.uop.ins.blrlr.BRd!=3'd0 &&
+		mux.uop.ins.blrlr.BRd!=3'd7;
 end
 endfunction
 
@@ -1726,19 +1726,19 @@ input [511:0] cline;
 reg jsr,jmp,bsr,bra,bsr2,bra2;
 begin
 	fnDecDest = pr.pc;
-	jsr = fnDecJsr(pr.ins);
-	jmp = fnDecJmp(pr.ins);
-	bsr = fnDecBsr(pr.ins);
-	bra = fnDecBra(pr.ins);
-	bsr2 = fnDecBsr2(pr.ins);
-	bra2 = fnDecBra2(pr.ins);
+	jsr = fnDecJsr(pr.uop.ins);
+	jmp = fnDecJmp(pr.uop.ins);
+	bsr = fnDecBsr(pr.uop.ins);
+	bra = fnDecBra(pr.uop.ins);
+	bsr2 = fnDecBsr2(pr.uop.ins);
+	bra2 = fnDecBra2(pr.uop.ins);
 	case(1'b1)
-	jsr:	fnDecDest.pc = fnDecConst(pr.ins,cline);
-	jmp:	fnDecDest.pc = fnDecConst(pr.ins,cline);
-	bsr: 	fnDecDest.pc = pr.pc.pc + {{39{pr.ins.bl.disp[21]}},pr.ins.bl.disp,pr.ins.bl.d0};
-	bra: 	fnDecDest.pc = pr.pc.pc + {{39{pr.ins.bl.disp[21]}},pr.ins.bl.disp,pr.ins.bl.d0};
-	bsr2:	fnDecDest.pc = pr.pc.pc + fnDecConst(pr.ins,cline);
-	bra2:	fnDecDest.pc = pr.pc.pc + fnDecConst(pr.ins,cline);
+	jsr:	fnDecDest.pc = fnDecConst(pr.uop.ins,cline);
+	jmp:	fnDecDest.pc = fnDecConst(pr.uop.ins,cline);
+	bsr: 	fnDecDest.pc = pr.pc.pc + {{39{pr.uop.ins.bl.disp[21]}},pr.uop.ins.bl.disp,pr.uop.ins.bl.d0};
+	bra: 	fnDecDest.pc = pr.pc.pc + {{39{pr.uop.ins.bl.disp[21]}},pr.uop.ins.bl.disp,pr.uop.ins.bl.d0};
+	bsr2:	fnDecDest.pc = pr.pc.pc + fnDecConst(pr.uop.ins,cline);
+	bra2:	fnDecDest.pc = pr.pc.pc + fnDecConst(pr.uop.ins,cline);
 	endcase
 end
 endfunction

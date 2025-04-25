@@ -188,22 +188,22 @@ generate begin : gffz
   16:	
   	begin
   	wire [4:0] popcnt;
-  	popcnt24 upopcnt16 (.i({8'h00,a[WID-1:0]}),.o(popcnt));
+  	cntpop16 upopcnt16 (.i({a[WID-1:0]}),.o(popcnt));
   	end
   32:
   	begin
   	wire [5:0] popcnt;
-  	popcnt48 upopcnt32 (.i({16'h0000,a[WID-1:0]}),.o(popcnt));
+  	cntpop32 upopcnt32 (.i({a[WID-1:0]}),.o(popcnt));
   	end
   64:
   	begin
   	wire [6:0] popcnt;
-  	popcnt96 upopcnt64 (.i({32'h00000000,a[WID-1:0]}),.o(popcnt));
+  	cntpop64 upopcnt64 (.i({a[WID-1:0]}),.o(popcnt));
   	end
   128:
   	begin
   	wire [7:0] popcnt;
-  	popcnt144 upopcnt128 (.i({16'h0000,a[WID-1:0]}),.o(popcnt));
+  	cntpop128 upopcnt128 (.i({a[WID-1:0]}),.o(popcnt));
   	end
 	endcase
   case(WID)

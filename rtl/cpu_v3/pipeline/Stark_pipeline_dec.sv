@@ -151,7 +151,7 @@ Stark_pkg::micro_op_t [31:0] uop_buf;
 
 Stark_microop uuop1
 (
-	.ir(pg0_mux.pr0.ins), 
+	.ir(pg0_mux.pr0.uop.ins), 
 	.carry_reg(8'd0),
 	.carry_out(1'b0),
 	.carry_in(1'b0),
@@ -161,7 +161,7 @@ Stark_microop uuop1
 
 Stark_microop uuop2
 (
-	.ir(pg0_mux.pr1.ins), 
+	.ir(pg0_mux.pr1.uop.ins), 
 	.carry_reg(8'd0),
 	.carry_out(1'b0),
 	.carry_in(1'b0),
@@ -171,7 +171,7 @@ Stark_microop uuop2
 
 Stark_microop uuop3
 (
-	.ir(pg0_mux.pr2.ins), 
+	.ir(pg0_mux.pr2.uop.ins), 
 	.carry_reg(8'd0),
 	.carry_out(1'b0),
 	.carry_in(1'b0),
@@ -181,7 +181,7 @@ Stark_microop uuop3
 
 Stark_microop uuop4
 (
-	.ir(pg0_mux.pr3.ins), 
+	.ir(pg0_mux.pr3.uop.ins), 
 	.carry_reg(8'd0),
 	.carry_out(1'b0),
 	.carry_in(1'b0),
@@ -218,10 +218,10 @@ begin
 	2'd2:	tpr3 = pg0_mux.pr2;
 	2'd3:	tpr3 = pg0_mux.pr3;
 	endcase
-	tpr0.uop = uop_buf[0].uop;
-	tpr1.uop = uop_buf[1].uop;
-	tpr2.uop = uop_buf[2].uop;
-	tpr3.uop = uop_buf[3].uop;
+	tpr0.uop = uop_buf[0];
+	tpr1.uop = uop_buf[1];
+	tpr2.uop = uop_buf[2];
+	tpr3.uop = uop_buf[3];
 end
 
 // Copy micro-ops from the micro-op decoders into a buffer for further
@@ -775,7 +775,7 @@ begin
 	if (dec0.pred && pr0_dec.v)
 		pr1_dec.atom_mask = dec0.pred_atom_mask;
 	else if (dec0.atom && pr0_dec.v)
-		pr1_dec.atom_mask = {ins0m.ins[23:9],ins0m.ins[0]};
+		pr1_dec.atom_mask = {ins0m.uop.ins[23:9],ins0m.uop.ins[0]};
 	else if (!pr0_dec.ssm)
 		pr1_dec.atom_mask = pr0_dec.atom_mask >> 12'd1;
 	else
@@ -786,7 +786,7 @@ begin
 	if (dec1.pred && pr1_dec.v)
 		pr2_dec.atom_mask = dec1.pred_atom_mask;
 	else if (dec1.atom && pr1_dec.v)
-		pr2_dec.atom_mask = {ins1m.ins[23:9],ins1m.ins[0]};
+		pr2_dec.atom_mask = {ins1m.uop.ins[23:9],ins1m.uop.ins[0]};
 	else if (!pr1_dec.ssm)
 		pr2_dec.atom_mask = pr1_dec.atom_mask >> 12'd1;
 	else
@@ -797,7 +797,7 @@ begin
 	if (dec2.pred && pr2_dec.v)
 		pr3_dec.atom_mask = dec2.pred_atom_mask;
 	else if (dec2.atom && pr2_dec.v)
-		pr3_dec.atom_mask = {ins2m.ins[23:9],ins2m.ins[0]};
+		pr3_dec.atom_mask = {ins2m.uop.ins[23:9],ins2m.uop.ins[0]};
 	else if (!pr2_dec.ssm)
 		pr3_dec.atom_mask = pr2_dec.atom_mask >> 12'd1;
 	else
@@ -808,7 +808,7 @@ begin
 	if (dec3.pred && pr3_dec.v)
 		atom_mask_o = dec3.pred_atom_mask;
 	else if (dec3.atom && pr3_dec.v)
-		atom_mask_o = {ins3m.ins[23:9],ins3m.ins[0]};
+		atom_mask_o = {ins3m.uop.ins[23:9],ins3m.uop.ins[0]};
 	else if (!pr3_dec.ssm)
 		atom_mask_o = pr3_dec.atom_mask >> 12'd1;
 	else
@@ -828,7 +828,7 @@ begin
 		end
 	endcase
 	if (dec0.carry && pr0_dec.v) begin
-		pr1_dec.carry_mod = ins0m.ins;
+		pr1_dec.carry_mod = ins0m.uop.ins;
 	end
 	else begin
 		pr1_dec.carry_mod = pr0_dec.carry_mod;
@@ -849,7 +849,7 @@ begin
 		end
 	endcase
 	if (dec1.carry && pr1_dec.v) begin
-		pr2_dec.carry_mod = ins1m.ins;
+		pr2_dec.carry_mod = ins1m.uop.ins;
 	end
 	else begin
 		pr2_dec.carry_mod = pr1_dec.carry_mod;
@@ -870,7 +870,7 @@ begin
 		end
 	endcase
 	if (dec2.carry && pr2_dec.v) begin
-		pr3_dec.carry_mod = ins2m.ins;
+		pr3_dec.carry_mod = ins2m.uop.ins;
 	end
 	else begin
 		pr3_dec.carry_mod = pr2_dec.carry_mod;
@@ -891,7 +891,7 @@ begin
 		end
 	endcase
 	if (dec3.carry & pr3_dec.v) begin
-		carry_mod_o = ins3m.ins;
+		carry_mod_o = ins3m.uop.ins;
 	end
 	else begin
 		carry_mod_o = pr3_dec.carry_mod;

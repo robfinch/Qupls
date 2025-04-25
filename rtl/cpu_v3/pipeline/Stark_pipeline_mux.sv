@@ -188,7 +188,8 @@ begin
 	nopi.exc = Stark_pkg::FLT_NONE;
 	nopi.pc.pc = Stark_pkg::RSTPC;
 	nopi.mcip = 12'h1A0;
-	nopi.ins = {26'd0,Stark_pkg::OP_NOP};
+	nopi.uop.count = 3'd1;
+	nopi.uop.ins = {26'd0,Stark_pkg::OP_NOP};
 	nopi.aRs1 = 8'd0;
 	nopi.aRs2 = 8'd0;
 	nopi.aRs3 = 8'd0;
@@ -311,22 +312,22 @@ begin
 	if (!redundant_group) begin
 		// Allow only one instruction through when single stepping.
 		if (ssm_flag & ~prev_ssm_flag) begin
-			pr0_mux.ins = ic_line_aligned[ 31:  0];
-			pr1_mux.ins = nopi;
-			pr2_mux.ins = nopi;
-			pr3_mux.ins = nopi;
-			pr4_mux.ins = nopi;
+			pr0_mux.uop.ins = ic_line_aligned[ 31:  0];
+			pr1_mux = nopi;
+			pr2_mux = nopi;
+			pr3_mux = nopi;
+			pr4_mux = nopi;
 			pr1_mux.ssm = TRUE;
 			pr2_mux.ssm = TRUE;
 			pr3_mux.ssm = TRUE;
 			pr4_mux.ssm = TRUE;
 		end
 		else if (ssm_flag) begin
-			pr0_mux.ins = nopi;
-			pr1_mux.ins = nopi;
-			pr2_mux.ins = nopi;
-			pr3_mux.ins = nopi;
-			pr4_mux.ins = nopi;
+			pr0_mux = nopi;
+			pr1_mux = nopi;
+			pr2_mux = nopi;
+			pr3_mux = nopi;
+			pr4_mux = nopi;
 			pr0_mux.ssm = TRUE;
 			pr1_mux.ssm = TRUE;
 			pr2_mux.ssm = TRUE;
@@ -334,11 +335,11 @@ begin
 			pr4_mux.ssm = TRUE;
 		end
 		else begin
-			pr0_mux.ins = ic_line_aligned[ 31:  0];
-			pr1_mux.ins = ic_line_aligned[ 63: 32];
-			pr2_mux.ins = ic_line_aligned[ 95: 64];
-			pr3_mux.ins = ic_line_aligned[127: 96];
-			pr4_mux.ins = ic_line_aligned[159:128];
+			pr0_mux.uop.ins = ic_line_aligned[ 31:  0];
+			pr1_mux.uop.ins = ic_line_aligned[ 63: 32];
+			pr2_mux.uop.ins = ic_line_aligned[ 95: 64];
+			pr3_mux.uop.ins = ic_line_aligned[127: 96];
+			pr4_mux.uop.ins = ic_line_aligned[159:128];
 		end
 	end
 /*
@@ -725,7 +726,7 @@ always_comb pg1_mux.pr1 = ins5_mux;
 always_ff @(posedge clk) if (en) irq_in_r <= irq_in;
 always_ff @(posedge clk) if (en) nop_o <= stomp_mux;
 always_ff @(posedge clk)
-if (rst)
+if (rst_i)
 	prev_ssm_flag <= 1'b0;
 else begin
 	if (en)
@@ -753,10 +754,10 @@ begin
 	ins_o.pc = pc;
 	ins_o.bt = takb;
 	ins_o.mcip = mcip;
-  ins_o.aRs1 = {ins_i.ins.alu.Rs1};
-  ins_o.aRs2 = {ins_i.ins.alu.Rs2};
+  ins_o.aRs1 = {ins_i.uop.ins.alu.Rs1};
+  ins_o.aRs2 = {ins_i.uop.ins.alu.Rs2};
 //  ins_o.aRs3 = {ins_i.ins.alu.Rs3};
-  ins_o.aRd = {ins_i.ins.alu.Rd};
+  ins_o.aRd = {ins_i.uop.ins.alu.Rd};
 //	ins_o.decbus.Rtz = ins_o.aRt==8'd0;
 	// Under construction
 	// If BTB did not match next predictor, invalidate instruction.

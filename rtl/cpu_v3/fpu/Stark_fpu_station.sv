@@ -153,7 +153,7 @@ else begin
 //			predz <= rob.decbus.cpytgt ? FALSE : rob.decbus.predz;
 		end
 		else
-			instr <= rob.op.ins;
+			instr <= rob.op.uop.ins;
 		om <= rob.op.om;
 		pc <= rob.op.pc;
 		cp <= rob.cndx;

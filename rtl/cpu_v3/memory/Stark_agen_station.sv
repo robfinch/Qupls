@@ -150,7 +150,7 @@ else begin
 		id <= rndx;
 		om <= rob.om;
 		we <= rob.op.decbus.store;
-		instr = rob.op.ins;
+		instr = rob.op.uop.ins;
 		if (rob.op.decbus.jsri)
 			ldip <= TRUE;
 		else

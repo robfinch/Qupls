@@ -181,7 +181,7 @@ else begin
 //		cap <= rob.op.decbus.cap;
 		cptgt <= next_cptgt;
 		if (cpytgt|rob.op.decbus.cpytgt) begin
-			instr.ins <= {26'd0,OP_NOP};
+			instr.uop.ins <= {26'd0,OP_NOP};
 //			pred <= FALSE;
 //			predz <= rob.op.decbus.cpytgt ? FALSE : rob.decbus.predz;
 			div <= FALSE;

@@ -46,6 +46,7 @@ import cache_pkg::*;
 import mmu_pkg::*;
 import Stark_pkg::*;
 
+`undef ZERO
 `define ZERO		64'd0
 
 //
@@ -923,7 +924,8 @@ begin
 	nopi.pc.bno_t = 6'd1;
 	nopi.pc.bno_f = 6'd1;
 	nopi.mcip = 12'h1A0;
-	nopi.ins = {26'd0,OP_NOP};
+	nopi.uop.count = 3'd1;
+	nopi.uop.ins = {26'd0,OP_NOP};
 	nopi.decbus.Rdz = 1'b1;
 	nopi.decbus.nop = 1'b1;
 	nopi.decbus.alu = 1'b1;
@@ -1552,7 +1554,7 @@ Stark_btb ubtb1
 	.takb1(ntakb[1]),
 	.takb2(ntakb[2]),
 	.takb3(ntakb[3]),
-	.branchmiss(branch_state == BS_CHKPT_RESTORED),
+	.branchmiss(branch_state == Stark_pkg::BS_CHKPT_RESTORED),
 	.misspc(misspc),
 	.commit_pc0(commit_pc0),
 	.commit_brtgt0(commit_brtgt0),
@@ -1698,7 +1700,7 @@ if (irst) begin
 end
 else begin
 	if (advance_pipeline) begin
-		if (pcf && branch_state==BS_CHKPT_RESTORE)
+		if (pcf && branch_state==Stark_pkg::BS_CHKPT_RESTORE)
 			bms <= TRUE;
 		if (bms3)
 			bms <= FALSE;
@@ -1764,7 +1766,7 @@ assign micro_machine_active_v = (micro_machine_active_x || mip0v || mip1v || mip
 always_comb
 begin
 	qd = {XWID{1'd0}};
-	if (((branchmiss && !found_destination) || branch_state < BS_CAPTURE_MISSPC) && |robentry_stomp)
+	if (((branchmiss && !fcu_found_destination) || branch_state < BS_CAPTURE_MISSPC) && |robentry_stomp)
 		;
 //	else if ((ihito || mipv || mipv2 || mipv3 || mipv4) && !stallq)
 	else if (advance_pipeline_seg2)
@@ -1925,7 +1927,7 @@ else begin
 				hwipc <= next_hwipc;
 			end
 		end
-		else if (!pcf && (bs_done_oh || ((do_bsr || do_ret) && !found_destination))) begin
+		else if (!pcf && (bs_done_oh || ((do_bsr || do_ret) && !fcu_found_destination))) begin
 			pc <= next_pc;
 			hwipc <= next_hwipc;
 		end
@@ -1933,7 +1935,7 @@ else begin
 	// Prevent hang when the pipeline cannot advance because there is no room 
 	// to queue, yet the IP needs to change to get out of the branch miss state.
 	else begin
-		if (pe_bsdone || ((do_bsr || do_ret) && !found_destination)) begin
+		if (pe_bsdone || ((do_bsr || do_ret) && !fcu_found_destination)) begin
 			pc <= next_pc;
 			hwipc <= next_hwipc;
 			pcf <= TRUE;
@@ -2048,8 +2050,10 @@ end
 // The micro-ir is loaded only when a macro-instruction is decoded.
 
 always_ff @(posedge clk)
-if (irst)
-	micro_ir.ins <= {26'd0,OP_NOP};
+if (irst) begin
+  micro_ir.uop.count <= 3'd1;
+	micro_ir.uop.ins <= {26'd0,OP_NOP};
+end
 else begin
 	if (advance_pipeline) begin
 		if (micro_ip==12'h000) begin
@@ -2093,7 +2097,7 @@ always_ff @(posedge clk) if (irst) mip2v_q <= FALSE; else if (advance_pipeline_s
 always_ff @(posedge clk) if (irst) mip3v_q <= FALSE; else if (advance_pipeline_seg2) mip3v_q <= mip3v_r;
 
 always_comb
-if ((fnIsAtom(pg_ren.pr0.ins) || fnIsAtom(pg_ren.pr1.ins) || fnIsAtom(pg_ren.pr2.ins) || fnIsAtom(pg_ren.pr3.ins)) && irq_i != 6'd63)
+if ((fnIsAtom(pg_ren.pr0.uop.ins) || fnIsAtom(pg_ren.pr1.uop.ins) || fnIsAtom(pg_ren.pr2.uop.ins) || fnIsAtom(pg_ren.pr3.uop.ins)) && irq_i != 6'd63)
 	hirq = 1'd0;
 else
 	hirq = irq && !int_commit && (irq_i > (atom_mask[0] ? 6'd62 : sr.ipl));	// NMI (63) is always recognized.
@@ -3111,7 +3115,6 @@ reg fpu0_wrA, fpu0_wrB, fpu0_wrC;
 reg fpu1_wrA, fpu1_wrB, fpu1_wrC;
 reg dram0_wrA, dram0_wrB;
 reg dram1_wrA, dram1_wrB;
-reg fcu_wrA;
 reg wt0A, wt0B, wt0C;
 reg wt1A, wt1B, wt1C;
 reg wt2A, wt2B, wt2C;
@@ -3138,10 +3141,10 @@ value_t fpu0_res3;
 checkpt_ndx_t alu0_cp2, alu1_cp2, fpu0_cp2, fpu1_cp2;
 wire alu0_aRdz1, alu0_aRdz2, alu1_aRdz1, alu1_aRdz2, fpu0_aRdz2;
 rob_ndx_t alu0_id2, alu1_id2, fpu0_id2;
-operating_mode_t alu0_om2, alu1_om2, fpu0_om2, fpu1_om2, dram0_om2, dram1_om2;
-operating_mode_t alu0_omA2, alu1_omA2, fpu0_omA2, fpu1_omA2, dram0_omA2, dram1_omA2;
-operating_mode_t alu0_omB2, alu1_omB2, fpu0_omB2, fpu1_omB2, dram0_omB2, dram1_omB2;
-operating_mode_t alu0_omC2, alu1_omC2, fpu0_omC2, fpu1_omC2;
+Stark_pkg::operating_mode_t alu0_om2, alu1_om2, fpu0_om2, fpu1_om2, dram0_om2, dram1_om2;
+Stark_pkg::operating_mode_t alu0_omA2, alu1_omA2, fpu0_omA2, fpu1_omA2, dram0_omA2, dram1_omA2;
+Stark_pkg::operating_mode_t alu0_omB2, alu1_omB2, fpu0_omB2, fpu1_omB2, dram0_omB2, dram1_omB2;
+Stark_pkg::operating_mode_t alu0_omC2, alu1_omC2, fpu0_omC2, fpu1_omC2;
 
 // ALU #0 signals
 vtdl #($bits(pregno_t)) udlyal1A (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu0_RdA), .q(alu0_pRdA2) );
@@ -4073,7 +4076,7 @@ always_comb
 
 Stark_branch_eval ube1
 (
-	.instr(fcu_instr.ins),
+	.instr(fcu_instr.uop.ins),
 	.om(fcu_om),
 	.cr(fcu_argA),
 	.lc(fcu_argB),
@@ -4098,7 +4101,7 @@ always_comb
 begin
 	fcu_exc = Stark_pkg::FLT_NONE;
 	// ToDo: fix check
-	if (fcu_instr.ins.any.opcode==OP_CHK) begin
+	if (fcu_instr.uop.ins.any.opcode==OP_CHK) begin
 //		fcu_exc = cause_code_t'(fcu_instr.ins[34:27]);
 		fcu_exc = Stark_pkg::FLT_NONE;
 	end
@@ -6042,16 +6045,16 @@ else begin
 	// Set atom mask
 	// Must be after ENQUE
 	if (fnIsAtom(pg_ren.pr0) & advance_pipeline) begin
-		atom_mask <= {pg_ren.pr0.ins[19:9],pg_ren.pr0.ins[0]};
+		atom_mask <= {pg_ren.pr0.uop.ins[19:9],pg_ren.pr0.uop.ins[0]};
 	end
 	if (fnIsAtom(pg_ren.pr1) & advance_pipeline) begin
-		atom_mask <= {pg_ren.pr1.ins[19:9],pg_ren.pr1.ins[0]};
+		atom_mask <= {pg_ren.pr1.uop.ins[19:9],pg_ren.pr1.uop.ins[0]};
 	end
 	if (fnIsAtom(pg_ren.pr2) & advance_pipeline) begin
-		atom_mask <= {pg_ren.pr2.ins[19:9],pg_ren.pr2.ins[0]};
+		atom_mask <= {pg_ren.pr2.uop.ins[19:9],pg_ren.pr2.uop.ins[0]};
 	end
 	if (fnIsAtom(pg_ren.pr3) & advance_pipeline) begin
-		atom_mask <= {pg_ren.pr3.ins[19:9],pg_ren.pr3.ins[0]};
+		atom_mask <= {pg_ren.pr3.uop.ins[19:9],pg_ren.pr3.uop.ins[0]};
 	end
 
 // ----------------------------------------------------------------------------
@@ -7719,18 +7722,18 @@ always_ff @(posedge clk) begin: clock_n_debug
 	$display("lineH: %h", uiext1.ic_line_fet[1023:512]);
 	$display("align: %x", uiext1.ic_line_aligned);
 	$display("- - - - - - Multiplex %c - - - - - - %s", ihit_mux ? "h":" ", stomp_mux ? stompstr : no_stompstr);
-	$display("pc0: %h.%h ins0: %h", uiext1.pg0_mux.pr0.pc.pc[23:0], uiext1.pg0_mux.pr0.mcip, uiext1.pg0_mux.pr0.ins[47:0]);
-	$display("pc1: %h.%h ins1: %h", uiext1.pg0_mux.pr1.pc.pc[23:0], uiext1.pg0_mux.pr1.mcip, uiext1.pg0_mux.pr1.ins[47:0]);
-	$display("pc2: %h.%h ins2: %h", uiext1.pg0_mux.pr2.pc.pc[23:0], uiext1.pg0_mux.pr2.mcip, uiext1.pg0_mux.pr2.ins[47:0]);
-	$display("pc3: %h.%h ins3: %h", uiext1.pg0_mux.pr3.pc.pc[23:0], uiext1.pg0_mux.pr3.mcip, uiext1.pg0_mux.pr3.ins[47:0]);
+	$display("pc0: %h.%h ins0: %h", uiext1.pg0_mux.pr0.pc.pc[23:0], uiext1.pg0_mux.pr0.mcip, uiext1.pg0_mux.pr0.uop.ins[47:0]);
+	$display("pc1: %h.%h ins1: %h", uiext1.pg0_mux.pr1.pc.pc[23:0], uiext1.pg0_mux.pr1.mcip, uiext1.pg0_mux.pr1.uop.ins[47:0]);
+	$display("pc2: %h.%h ins2: %h", uiext1.pg0_mux.pr2.pc.pc[23:0], uiext1.pg0_mux.pr2.mcip, uiext1.pg0_mux.pr2.uop.ins[47:0]);
+	$display("pc3: %h.%h ins3: %h", uiext1.pg0_mux.pr3.pc.pc[23:0], uiext1.pg0_mux.pr3.mcip, uiext1.pg0_mux.pr3.uop.ins[47:0]);
 	$display("micro_ip: %h", micro_ip);
 	if (do_bsr)
 		$display("BSR %h  pc0_fet=%h", bsr_tgt.pc, uiext1.pg0_mux.pr0.pc.pc[31:0]);
 	$display("----- Decode %c%c ----- %s", ihit_dec ? "h":" ", micro_machine_active_d ? "a": " ", stomp_dec ? stompstr : no_stompstr);
-	$display("pc0: %h.%h ins0: %h", pg_dec.pr0.pc.pc[23:0], pg_dec.pr0.mcip, pg_dec.pr0.ins[47:0]);
-	$display("pc1: %h.%h ins1: %h", pg_dec.pr1.pc.pc[23:0], pg_dec.pr1.mcip, pg_dec.pr1.ins[47:0]);
-	$display("pc2: %h.%h ins2: %h", pg_dec.pr2.pc.pc[23:0], pg_dec.pr2.mcip, pg_dec.pr2.ins[47:0]);
-	$display("pc3: %h.%h ins3: %h", pg_dec.pr3.pc.pc[23:0], pg_dec.pr3.mcip, pg_dec.pr3.ins[47:0]);
+	$display("pc0: %h.%h ins0: %h", pg_dec.pr0.pc.pc[23:0], pg_dec.pr0.mcip, pg_dec.pr0.uop.ins[47:0]);
+	$display("pc1: %h.%h ins1: %h", pg_dec.pr1.pc.pc[23:0], pg_dec.pr1.mcip, pg_dec.pr1.uop.ins[47:0]);
+	$display("pc2: %h.%h ins2: %h", pg_dec.pr2.pc.pc[23:0], pg_dec.pr2.mcip, pg_dec.pr2.uop.ins[47:0]);
+	$display("pc3: %h.%h ins3: %h", pg_dec.pr3.pc.pc[23:0], pg_dec.pr3.mcip, pg_dec.pr3.uop.ins[47:0]);
 
 	if (1) begin	
 	$display("----- Physical Registers -----");
@@ -7766,25 +7769,25 @@ always_ff @(posedge clk) begin: clock_n_debug
 
 	$display("----- Rename %c%c ----- %s", ihit_ren ? "h":" ", micro_machine_active_r ? "a": " ", stomp_ren ? stompstr : no_stompstr);
 	$display("pc0: %x.%x ins0: %x  Rt: %d->%d%c  Rs: %d->%d%c  Ra: %d->%d%c  Rb: %d->%d%c  Rc: %d->%d%c",
-		pg_ren.pr0.pc.pc[23:0], pg_ren.pr0.mcip, pg_ren.pr0.ins[63:0],
+		pg_ren.pr0.pc.pc[23:0], pg_ren.pr0.mcip, pg_ren.pr0.uop.ins[63:0],
 		pg_ren.pr0.nRt, Rt0_ren, Rt0_renv?"v":" ",
 		pg_ren.pr0.aRt, prn[3], prnv[3]?"v":" ",
 		pg_ren.pr0.aRa, prn[0], prnv[0]?"v": " ",
 		pg_ren.pr0.aRb, prn[1], prnv[1]?"v":" ",
 		pg_ren.pr0.aRc, prn[2], prnv[2]?"v":" ");
-	$display("pc1: %x.%x ins1: %x  Rt: %d->%d%c  Rs: %d->%d%c  Ra: %d->%d%c  Rb: %d->%d%c  Rc: %d->%d%c", pg_ren.pr1.pc.pc[23:0], pg_ren.pr1.mcip, pg_ren.pr1.ins[63:0], 
+	$display("pc1: %x.%x ins1: %x  Rt: %d->%d%c  Rs: %d->%d%c  Ra: %d->%d%c  Rb: %d->%d%c  Rc: %d->%d%c", pg_ren.pr1.pc.pc[23:0], pg_ren.pr1.mcip, pg_ren.pr1.uop.ins[63:0], 
 		pg_ren.pr1.nRt, Rt1_ren, Rt1_renv?"v":" ",
 		pg_ren.pr1.aRt, prn[7], prnv[7]?"v":" ",
 		pg_ren.pr1.aRa, prn[4], prnv[4]?"v":" ",
 		pg_ren.pr1.aRb, prn[5], prnv[5]?"v":" ",
 		pg_ren.pr1.aRc, prn[6], prnv[6]?"v":" ");
-	$display("pc2: %x.%x ins2: %x  Rt: %d->%d%c  Rs: %d->%d%c  Ra: %d->%d%c  Rb: %d->%d%c  Rc: %d->%d%c", pg_ren.pr2.pc.pc[23:0], pg_ren.pr2.mcip, pg_ren.pr2.ins[63:0],
+	$display("pc2: %x.%x ins2: %x  Rt: %d->%d%c  Rs: %d->%d%c  Ra: %d->%d%c  Rb: %d->%d%c  Rc: %d->%d%c", pg_ren.pr2.pc.pc[23:0], pg_ren.pr2.mcip, pg_ren.pr2.uop.ins[63:0],
 		pg_ren.pr2.nRt, Rt2_ren, Rt2_renv?"v":" ",
 		pg_ren.pr2.aRt, prn[11], prnv[11]?"v":" ",
 		pg_ren.pr2.aRa, prn[8], prnv[8]?"v":" ",
 		pg_ren.pr2.aRb, prn[9], prnv[9]?"v":" ",
 		pg_ren.pr2.aRc, prn[10], prnv[10]?"v":" ");
-	$display("pc3: %x.%x ins3: %x  Rt: %d->%d%c  Rs: %d->%d%c  Ra: %d->%d%c  Rb: %d->%d%c  Rc: %d->%d%c", pg_ren.pr3.pc.pc[23:0], pg_ren.pr3.mcip, pg_ren.pr3.ins[63:0],
+	$display("pc3: %x.%x ins3: %x  Rt: %d->%d%c  Rs: %d->%d%c  Ra: %d->%d%c  Rb: %d->%d%c  Rc: %d->%d%c", pg_ren.pr3.pc.pc[23:0], pg_ren.pr3.mcip, pg_ren.pr3.uop.ins[63:0],
 		pg_ren.pr3.nRt, Rt3_ren, Rt3_renv?"v":" ",
 		pg_ren.pr3.aRt, prn[15], prnv[15]?"v":" ",
 		pg_ren.pr3.aRa, prn[12], prnv[12]?"v":" ",
@@ -7798,7 +7801,7 @@ always_ff @(posedge clk) begin: clock_n_debug
 			rob[i].v?"v":"-", rob[i].done[0]?"d":"-", rob[i].done[1]?"d":"-", rob[i].out[0]?"o":"-", rob[i].out[1]?"o":"-", rob[i].bt?"t":"-", rob_memissue[i]?"i":"-", rob[i].lsq?"q":"-", (robentry_issue[i]|robentry_agen_issue[i])?"i":"-",
 			robentry_islot[i], robentry_stomp[i]?"s":"-",
 			(rob[i].decbus.cpytgt ? "c" : rob[i].decbus.fc ? "b" : rob[i].decbus.mem ? "m" : "a"),
-			rob[i].op.ins.any.opcode, 
+			rob[i].op.uop.ins.any.opcode, 
 			rob[i].decbus.Rt, rob[i].op.nRt, rob[i].res, rob[i].exc,
 			rob[i].decbus.Rt, rob[i].op.pRt, rob[i].argD, rob[i].argD_v?"v":" ",
 			rob[i].decbus.Ra, rob[i].op.pRa, rob[i].argA, rob[i].argA_v?"v":" ",
@@ -7806,7 +7809,7 @@ always_ff @(posedge clk) begin: clock_n_debug
 			rob[i].decbus.Rc, rob[i].op.pRc, rob[i].argC, rob[i].argC_v?"v":" ",
 			rob[i].argI,
 			rob[i].pc.bno_t, rob[i].pc.pc, rob[i].mcip,
-			rob[i].cndx, rob[i].op.ins[63:0]);
+			rob[i].cndx, rob[i].op.uop.ins[63:0]);
 	end
 	$display("----- LSQ -----");
 	for (i = 0; i < LSQ_ENTRIES; i = i + 1) begin
@@ -7846,8 +7849,8 @@ always_ff @(posedge clk) begin: clock_n_debug
 	$display("----- FCU -----");
 	$display("eval:%c A=%h B=%h BI=%h I=%h", takb?"T":"F", fcu_argA, fcu_argB, fcu_argBr, fcu_argI);
 	$display("bt:%c pc=%h id=%d brclass:%h", fcu_bt ? "T":"F", fcu_pc, fcu_id, fcu_brclass);
-	$display("miss: %c misspc=%h.%h instr=%h disp=%h", (takb&~fcu_bt)|(~takb&fcu_bt)?"T":"F",fcu_misspc1.bno_t,fcu_misspc1.pc, fcu_instr.ins[63:0],
-		{{37{fcu_instr.ins[63]}},fcu_instr.ins[63:44],3'd0}
+	$display("miss: %c misspc=%h.%h instr=%h disp=%h", (takb&~fcu_bt)|(~takb&fcu_bt)?"T":"F",fcu_misspc1.bno_t,fcu_misspc1.pc, fcu_instr.uop.ins[63:0],
+		{{37{fcu_instr.uop.ins[63]}},fcu_instr.uop.ins[63:44],3'd0}
 	);
 
 	$display("----- ALU -----");
@@ -8190,7 +8193,8 @@ begin
 		rob[ndx].decbus.fpu <= FALSE;
 		rob[ndx].decbus.fc <= FALSE;
 		rob[ndx].decbus.mem <= FALSE;
-		rob[ndx].op.ins <= {57'd0,OP_NOP};
+		rob[ndx].op.uop.count <= 3'd1;
+		rob[ndx].op.uop.ins <= {26'd0,OP_NOP};
 		//rob[n3].decbus.Rtz <= TRUE;
 		rob[ndx].done <= {FALSE,FALSE};
 		rob[ndx].out <= {FALSE,FALSE};
@@ -8715,7 +8719,7 @@ begin
 	// If the instruction enqueues it must have been through the renamer.
 	// Propagate the target register to the new target by turning the instruction
 	// into a copy-target.
-	if (ins.ins.any.opcode==Stark_pkg::OP_NOP) begin
+	if (ins.uop.ins.any.opcode==Stark_pkg::OP_NOP) begin
 		rob[tail].decbus.alu <= TRUE;
 		rob[tail].decbus.fpu <= FALSE;
 		rob[tail].decbus.fc <= FALSE;
@@ -8838,24 +8842,24 @@ begin
 	if (v) begin
 		if (!rob[head].decbus.cpytgt) begin
 			if (rob[head].decbus.csr) begin
-				if (rob[head].op.ins[31])
-					case(rob[head].op.ins.csr.op2[1:0])
+				if (rob[head].op.uop.ins[31])
+					case(rob[head].op.uop.ins.csr.op2[1:0])
 					2'd0:	;	// readCSR
-					2'd1:	tWriteCSR(rob[head].arg,{2'b0,rob[head].op.ins.csr.regno});
-					2'd2:	tSetbitCSR(rob[head].arg,{2'b0,rob[head].op.ins.csr.regno});
-					2'd3:	tClrbitCSR(rob[head].arg,{2'b0,rob[head].op.ins.csr.regno});
+					2'd1:	tWriteCSR(rob[head].arg,{2'b0,rob[head].op.uop.ins.csr.regno});
+					2'd2:	tSetbitCSR(rob[head].arg,{2'b0,rob[head].op.uop.ins.csr.regno});
+					2'd3:	tClrbitCSR(rob[head].arg,{2'b0,rob[head].op.uop.ins.csr.regno});
 					endcase
-				else if (rob[head].op.ins[30:29]==2'b00)
-					case(rob[head].op.ins.csrr.op2[1:0])
+				else if (rob[head].op.uop.ins[30:29]==2'b00)
+					case(rob[head].op.uop.ins.csrr.op2[1:0])
 					2'd0:	;	// readCSR
-					2'd1:	tWriteCSR(rob[head].arg,{2'b0,rob[head].op.ins.csr.regno});
-					2'd2:	tSetbitCSR(rob[head].arg,{2'b0,rob[head].op.ins.csr.regno});
-					2'd3:	tClrbitCSR(rob[head].arg,{2'b0,rob[head].op.ins.csr.regno});
+					2'd1:	tWriteCSR(rob[head].arg,{2'b0,rob[head].op.uop.ins.csr.regno});
+					2'd2:	tSetbitCSR(rob[head].arg,{2'b0,rob[head].op.uop.ins.csr.regno});
+					2'd3:	tClrbitCSR(rob[head].arg,{2'b0,rob[head].op.uop.ins.csr.regno});
 					endcase
-				else if (rob[head].op.ins[30:29]==2'b01)
-					case(rob[head].op.ins.csrcl.op)
-					1'd0:	tSetbitCSR(rob[head].arg,{2'b0,rob[head].op.ins.csr.regno});
-					1'd1:	tClrbitCSR(rob[head].arg,{2'b0,rob[head].op.ins.csr.regno});
+				else if (rob[head].op.uop.ins[30:29]==2'b01)
+					case(rob[head].op.uop.ins.csrcl.op)
+					1'd0:	tSetbitCSR(rob[head].arg,{2'b0,rob[head].op.uop.ins.csr.regno});
+					1'd1:	tClrbitCSR(rob[head].arg,{2'b0,rob[head].op.uop.ins.csr.regno});
 					endcase
 			end
 			else if (rob[head].decbus.irq)

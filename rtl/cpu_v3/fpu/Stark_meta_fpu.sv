@@ -39,13 +39,14 @@
 import const_pkg::*;
 import Stark_pkg::*;
 
-module Stark_meta_fpu(rst, clk, clk3x, idle, prc, ir, rm, a, b, c, t, i, p,
+module Stark_meta_fpu(rst, clk, clk3x, idle, om, prc, ir, rm, a, b, c, t, i, p,
 	atag, btag, z, cptgt, o, otag, done, exc);
 parameter WID=SUPPORT_QUAD_PRECISION|SUPPORT_CAPABILITIES ? 128 : 64;
 input rst;
 input clk;
 input clk3x;
 input idle;
+input Stark_pkg::operating_mode_t om;
 input [1:0] prc;
 input Stark_pkg::instruction_t ir;
 input [2:0] rm;
@@ -178,6 +179,7 @@ if (SUPPORT_QUAD_PRECISION|SUPPORT_CAPABILITIES)
 		.rst(rst),
 		.clk(clk),
 		.idle(idle),
+		.om(om),
 		.ir(ir),
 		.rm(),
 		.a(a),
@@ -202,6 +204,7 @@ if (NFPU > 0 && !(SUPPORT_QUAD_PRECISION|SUPPORT_CAPABILITIES))
 		.clk(clk),
 		.clk3x(clk3x),
 		.idle(idle),
+		.om(om),
 		.ir(ir),
 		.rm(),
 		.a(a[g*64+63:g*64]),

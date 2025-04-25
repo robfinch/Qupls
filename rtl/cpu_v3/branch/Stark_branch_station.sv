@@ -98,7 +98,8 @@ begin
 	nopi.pc.bno_t = 6'd1;
 	nopi.pc.bno_f = 6'd1;
 	nopi.mcip = 12'h1A0;
-	nopi.ins = {26'd0,OP_NOP};
+	nopi.uop.count = 3'd1;
+	nopi.uop.ins = {26'd0,OP_NOP};
 	nopi.decbus.Rdz = 1'b1;
 	nopi.decbus.nop = 1'b1;
 	nopi.decbus.alu = 1'b1;

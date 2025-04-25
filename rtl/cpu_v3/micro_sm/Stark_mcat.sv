@@ -46,7 +46,7 @@ always_comb
 if (stomp)
 	mip = 12'h000;
 else begin
-	casez(ir.ins.any.opcode)
+	casez(ir.uop.ins.any.opcode)
 //	OP_JSRI:	mip = 12'h128;
 //	OP_BSTORE:	mip = 12'h390;
 //	OP_BMOV:	mip = 12'h3A0;
@@ -55,17 +55,17 @@ else begin
 	OP_BFND:	mip = 12'h3C0;
 */
 	OP_PUSH:
-		case(ir.ins[31:29])
+		case(ir.uop.ins[31:29])
 		3'b111:	mip = 12'h01C;		// enter
 		default:	mip = 12'h028;	// push	
 		endcase
 	OP_POP:
-		case(ir.ins[31:29])
+		case(ir.uop.ins[31:29])
 		3'b111:	mip = 12'h1E4;		// exit
 		default:	mip = 12'h038;	// pop
 		endcase
 	OP_FLT:
-		case(ir.ins.fpu.op4)
+		case(ir.uop.ins.fpu.op4)
 		/*
 		FN_FLT1:
 			case(ir.ins.f1.func)
