@@ -102,6 +102,8 @@ output pregno_t store_argC_pReg;
 output checkpt_ndx_t store_argC_cndx;
 
 reg [2:0] valid;
+wire [2:0] valid_o;
+
 always_comb
 	all_args_valid = &valid;
 
@@ -110,6 +112,7 @@ Stark_validate_Rn uvRs1
 	.prn(prn),
 	.prnv(prnv),
 	.rfo(rfo),
+	.rfo_tag(rfo_tag),
 	.pRn(rob.op.pRs1),
 	.val(argA),
 	.val_tag(argA_tag),
@@ -122,6 +125,7 @@ Stark_validate_Rn uvRs2
 	.prn(prn),
 	.prnv(prnv),
 	.rfo(rfo),
+	.rfo_tag(rfo_tag),
 	.pRn(rob.op.pRs2),
 	.val(argB),
 	.val_tag(argB_tag),
@@ -134,6 +138,7 @@ Stark_validate_Rn uvRs3
 	.prn(prn),
 	.prnv(prnv),
 	.rfo(rfo),
+	.rfo_tag(rfo_tag),
 	.pRn(rob.op.pRs3),
 	.val(argC),
 	.val_tag(argC_tag),

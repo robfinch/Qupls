@@ -36,32 +36,63 @@
 
 import const_pkg::*;
 import cpu_types_pkg::*;
+import Stark_pkg::*;
 
-module Stark_validate_Rn(prn, prnv, rfo, rfo_tag, pRn, val, val_tag, valid_i, valid_o);
-input pregno_t [15:0] prn;
-input [15:0] prnv;
-input value_t [15:0] rfo;
-input [15:0] rfo_tag;
-input pregno_t pRn;
-output value_t val;
-output reg val_tag;
-input valid_i;
-output reg valid_o;
+module Stark_copydst(rst, clk, rob, fcu_branch_resolved, fcu_idv, fcu_id, skip_list, takb,
+	stomp, unavail_list, copydst);
+input rst;		// not used
+input clk;
+input Stark_pkg::rob_entry_t [Stark_pkg::ROB_ENTRIES-1:0] rob;
+input fcu_branch_resolved;
+input fcu_idv;
+input rob_ndx_t fcu_id;
+input [Stark_pkg::ROB_ENTRIES-1:0] skip_list;
+input takb;
+input [Stark_pkg::ROB_ENTRIES-1:0] stomp;
+output reg [Stark_pkg::PREGS-1:0] unavail_list;
+output reg [Stark_pkg::ROB_ENTRIES-1:0] copydst;
 
-integer nn;
-always_comb
+integer n4;
+
+// Copy-targets for when backout is not supported.
+// additional logic for handling a branch miss (STOMP logic)
+//
+always_ff @(posedge clk)
 begin
-	valid_o = valid_i;
-	val = value_zero;
-	val_tag = 1'b0;
-	if (pRn==9'd0)
-		valid_o = VAL;
-	else
-	for (nn = 0; nn < 16; nn = nn + 1) begin
-		if (pRn==prn[nn] && prnv[nn] && !valid_i) begin
-			val = rfo[nn];
-			val_tag = rfo_tag[nn];
-			valid_o = VAL;
+	unavail_list = {Stark_pkg::PREGS{1'b0}};
+	for (n4 = 0; n4 < Stark_pkg::ROB_ENTRIES; n4 = n4 + 1) begin
+		copydst[n4] = FALSE;
+		if (!Stark_pkg::SUPPORT_BACKOUT) begin
+			copydst[n4] = stomp[n4];
+			if (fcu_idv && fcu_branch_resolved && skip_list[n4]) begin
+				copydst[n4] = TRUE;
+				unavail_list[rob[n4].op.nRd] = TRUE;
+			end
+		end
+
+		if (Stark_pkg::SUPPORT_BACKOUT) begin
+			if (fcu_idv && ((rob[fcu_id].decbus.br && takb) || rob[fcu_id].decbus.cjb)) begin
+		 		if (rob[n4].grp==rob[fcu_id].grp && rob[n4].sn > rob[fcu_id].sn) begin
+					copydst[n4] = TRUE;
+					unavail_list[rob[n4].op.nRd] = TRUE;
+		 		end
+			end
+			if (fcu_idv && fcu_branch_resolved && skip_list[n4]) begin
+				copydst[n4] = TRUE;
+				unavail_list[rob[n4].op.nRd] = TRUE;
+			end
+		end
+		else begin
+			if (fcu_idv && ((rob[fcu_id].decbus.br && takb))) begin
+		 		if (rob[n4].grp==rob[fcu_id].grp && rob[n4].sn > rob[fcu_id].sn) begin
+					copydst[n4] = TRUE;
+		 		end
+			end
+			if (fcu_idv && rob[fcu_id].decbus.br && !takb) begin
+		 		if (rob[n4].grp==rob[fcu_id].grp && rob[n4].sn > rob[fcu_id].sn) begin
+					copydst[n4] = FALSE;
+		 		end
+			end
 		end
 	end
 end

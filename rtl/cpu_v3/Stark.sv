@@ -148,7 +148,7 @@ Stark_pkg::reg_bitmask_t [Stark_pkg::ROB_ENTRIES-1:0] rob_livetarget;
 Stark_pkg::reg_bitmask_t [Stark_pkg::ROB_ENTRIES-1:0] rob_latestID;
 Stark_pkg::reg_bitmask_t [Stark_pkg::ROB_ENTRIES-1:0] rob_cumulative;
 Stark_pkg::reg_bitmask_t [Stark_pkg::ROB_ENTRIES-1:0] rob_out;
-reg [Stark_pkg::PREGS-1:0] unavail_list;			// list of registers made unavailable via copy-targets
+wire [Stark_pkg::PREGS-1:0] unavail_list;			// list of registers made unavailable via copy-targets
 
 reg [Stark_pkg::ROB_ENTRIES-1:0] missidb;
 
@@ -617,7 +617,7 @@ Stark_pkg::operating_mode_t fcu_omA2, fcu_omB2;
 reg fcu_wrA,fcu_wrB;
 reg fcu_idv;
 Stark_pkg::cause_code_t fcu_exc;
-reg fcu_v, fcu_v2, fcu_v3, fcu_v4, fcu_v5, fcu_v6;
+reg fcu_state1, fcu_branch_resolved, fcu_v3, fcu_v4, fcu_v5, fcu_v6;
 wire fcu_branchmiss;
 pc_address_ex_t fcu_misspc, fcu_misspc1;
 mc_address_t fcu_miss_mcip, fcu_miss_mcip1;
@@ -4002,50 +4002,20 @@ begin
 	$display("wr3:%d Rt=%d/%d res=%x", wrport3_v, wrport3_aRt, wrport3_Rt, wrport3_res);
 end
 
-
-// Copy-targets for when backout is not supported.
-// additional logic for handling a branch miss (STOMP logic)
-//
-always_ff @(posedge clk)
-begin
-	unavail_list = {Stark_pkg::PREGS{1'b0}};
-for (n4 = 0; n4 < Stark_pkg::ROB_ENTRIES; n4 = n4 + 1) begin
-	robentry_cpytgt[n4] = FALSE;
-	if (!Stark_pkg::SUPPORT_BACKOUT) begin
-		robentry_cpytgt[n4] = robentry_stomp[n4];
-		if (fcu_idv && fcu_v2 && fcu_skip_list[n4]) begin
-			robentry_cpytgt[n4] = TRUE;
-			unavail_list[rob[n4].op.nRt] = TRUE;
-		end
-	end
-
-	if (Stark_pkg::SUPPORT_BACKOUT) begin
-		if (fcu_idv && ((rob[fcu_id].decbus.br && takb) || rob[fcu_id].decbus.cjb)) begin
-	 		if (rob[n4].grp==rob[fcu_id].grp && rob[n4].sn > rob[fcu_id].sn) begin
-				robentry_cpytgt[n4] = TRUE;
-				unavail_list[rob[n4].op.nRd] = TRUE;
-	 		end
-		end
-		if (fcu_idv && fcu_v2 && fcu_skip_list[n4]) begin
-			robentry_cpytgt[n4] = TRUE;
-			unavail_list[rob[n4].op.nRd] = TRUE;
-		end
-	end
-
-	if (!Stark_pkg::SUPPORT_BACKOUT) begin
-		if (fcu_idv && ((rob[fcu_id].decbus.br && takb))) begin
-	 		if (rob[n4].grp==rob[fcu_id].grp && rob[n4].sn > rob[fcu_id].sn) begin
-				robentry_cpytgt[n4] = TRUE;
-	 		end
-		end
-		if (fcu_idv && rob[fcu_id].decbus.br && !takb) begin
-	 		if (rob[n4].grp==rob[fcu_id].grp && rob[n4].sn > rob[fcu_id].sn) begin
-				robentry_cpytgt[n4] = FALSE;
-	 		end
-		end
-	end
-end
-end
+Stark_copydst ucpydst1
+(
+	.rst(irst),
+	.clk(clk),
+	.rob(rob),
+	.fcu_branch_resolved(fcu_branch_resolved),
+	.fcu_idv(fcu_idv),
+	.fcu_id(fcu_id),
+	.skip_list(fcu_skip_list),
+	.takb(takb),
+	.stomp(robentry_stomp),
+	.unavail_list(unavail_list),
+	.copydst(robentry_cpydst)
+);
 
 // Calc the location of the ROB tail pointer after a stomp.
 Stark_stail ustail1
@@ -4128,43 +4098,22 @@ Stark_branchmiss_flag ubmf1
 	.rst(irst),
 	.clk(clk),
 	.brclass(fcu_brclass),
-	.trig(fcu_v2),
+	.trig(fcu_branch_resolved),
 	.miss_det(branchmiss_det),
 	.miss_flag(fcu_branchmiss)
 );
 
-// Backout flag
-// If taking a branch, any following register mappings in the same group need
-// to be backed out. This is regardless of whether a prediction was true or not.
-// If there is a branch incorrectly predicted as taken, then the register
-// mappings also need to be backed out.
-
-always_ff @(posedge clk)
-if (irst)
-	backout <= FALSE;
-else begin
-	backout <= FALSE;
-	if (fcu_v2) begin
-		case(fcu_brclass)
-		Stark_pkg::BRC_BCCR:
-			// backout when !fcu_bt will be handled below, triggerred by restore
-			if (takb && fcu_bt)
-				backout <= !fcu_found_destination;
-		Stark_pkg::BRC_BCCD,
-		Stark_pkg::BRC_BCCC:
-			// backout when !fcu_bt will be handled below, triggerred by restore
-			if (takb && fcu_bt)
-				backout <= !fcu_found_destination;
-		Stark_pkg::BRC_RETR,
-		Stark_pkg::BRC_RETC,
-		Stark_pkg::BRC_BLRLR,
-		Stark_pkg::BRC_BLRLC:
-			backout <= TRUE;
-		default:
-			;		
-		endcase
-	end
-end
+Stark_backout_flag ubkoutf1
+(
+	.rst(irst),
+	.clk(clk),
+	.fcu_branch_resolved(fcu_branch_resolved),
+	.fcu_brclass(fcu_brclass),
+	.takb(takb),
+	.fcu_bt(fcu_bt), 
+	.fcu_found_destination(fcu_found_destination),
+	.backout(backout)
+);
 
 // Restore flag.
 // A restore will trigger a backout.
@@ -4176,7 +4125,7 @@ if (irst)
 	restore <= FALSE;
 else begin
 	restore <= FALSE;
-	if (fcu_v2) begin
+	if (fcu_branch_resolved) begin
 		case(fcu_brclass)
 		Stark_pkg::BRC_BCCR,
 		Stark_pkg::BRC_BCCD,
@@ -4275,7 +4224,7 @@ else begin
 end
 always_ff @(posedge clk)
 if (irst)
-	missir <= {57'd0,OP_NOP};
+	missir <= {26'd0,OP_NOP};
 else begin
 //	if (advance_pipeline)
 	if (branch_state==Stark_pkg::BS_CHKPT_RESTORE)
@@ -4652,7 +4601,7 @@ endgenerate
 //assign alu0_out = alu0_dataready;
 //assign alu1_out = alu1_dataready;
 
-//assign  fcu_v = fcu_dataready;
+//assign  fcu_state1 = fcu_dataready;
 
 // ToDo: add result exception 
 generate begin : gFpu
@@ -5718,9 +5667,9 @@ Stark_agen_station uagen1stn
 
 
 reg dram0_idv2;
-reg fcu_setflags;
+reg fcu_reset_state;
 always_comb
-	fcu_setflags = fcu_v && rob[fcu_id].v && fcu_v3 && !robentry_stomp[fcu_id] 
+	fcu_reset_state = fcu_state1 && rob[fcu_id].v && fcu_v3 && !robentry_stomp[fcu_id] 
 		&& (bs_idle_oh||bs_done_oh||branch_state==Stark_pkg::BS_DONE2) && fcu_idv;
  	
 always_comb
@@ -5835,8 +5784,8 @@ else begin
 		fpu1_done1 <= FALSE;
 	// Fcu op may have been stomped on after issue, so check valid flag.
 	if (TRUE) begin
-		fcu_v2 <= fcu_v && (rob[fcu_id].v|brtgtvr);
-		fcu_v3 <= fcu_v2 && (rob[fcu_id].v|brtgtvr);
+		fcu_branch_resolved <= fcu_state1 && (rob[fcu_id].v|brtgtvr);
+		fcu_v3 <= fcu_branch_resolved && (rob[fcu_id].v|brtgtvr);
 		fcu_v4 <= fcu_v3 && (rob[fcu_id].v|brtgtvr);
 		fcu_v5 <= fcu_v4 && (rob[fcu_id].v|brtgtvr);
 		fcu_v6 <= fcu_v5;
@@ -6413,9 +6362,9 @@ else begin
 		end
 	end
 	
-	if (fcu_setflags) begin
-		fcu_v <= INV;
-		fcu_v2 <= INV;
+	if (fcu_reset_state) begin
+		fcu_state1 <= INV;
+		fcu_branch_resolved <= INV;
 		fcu_v3 <= INV;
 		if (fcu_v3) begin
 			if (branch_state==Stark_pkg::BS_DONE2)
@@ -6436,7 +6385,7 @@ else begin
 	if (branch_state==Stark_pkg::BS_DONE2)
 		fcu_idle <= TRUE;
 	
-	if (fcu_v2)
+	if (fcu_branch_resolved)
 		tGetSkipList(fcu_id, fcu_found_destination, fcu_skip_list, fcu_m1, fcu_dst);
 
 	// If data for stomped instruction, ignore
@@ -6595,14 +6544,14 @@ else begin
 	fcu_idle <= TRUE;
 	if (robentry_fcu_issue[fcu_rndx] && fcu_rndxv && fcu_idle && bs_idle_oh) begin
 		fcu_idle <= FALSE;
-		fcu_v <= VAL;
+		fcu_state1 <= VAL;
 		fcu_idv <= VAL;
 	  rob[fcu_rndx].out[1] <= VAL;
 	  fcu_new <= TRUE;
 	end
 
 	if (brtgtv && bs_idle_oh) begin
-		fcu_v <= VAL;
+		fcu_state1 <= VAL;
 	end
 
 	if (robentry_agen_issue[agen0_rndx] && agen0_rndxv && agen0_idle) begin
@@ -7351,8 +7300,8 @@ else begin
 	*/
 	// Terminate FCU operation on stomp.
 	if (robentry_stomp[fcu_id] & fcu_idv) begin
-		fcu_v <= INV;
-		fcu_v2 <= INV;
+		fcu_state1 <= INV;
+		fcu_branch_resolved <= INV;
 		fcu_v3 <= INV;
 		fcu_idle <= TRUE;
 		fcu_idv <= INV;
@@ -7431,7 +7380,7 @@ else begin
 	// not in the shadow. But otherwise disable all interrupts in the shadow.
 	// But only defer/disable interrupts if taking the branch, in which case it
 	// is NOPs being skipped over, so it is only a couple of clock cycles.
-	if (fcu_v2 && takb) begin
+	if (fcu_branch_resolved && takb) begin
 		if (fcu_found_destination) begin
 			if (fnFindHwi(fcu_skip_list) < 8'hff) begin
 				pgh[((fcu_dst+3)>>2)%(ROB_ENTRIES/4)].hwi <= pgh[fnFindHwi(fcu_skip_list)>>2].hwi;
@@ -8473,8 +8422,8 @@ begin
 	fpu1_done1 <= FALSE;
 	fcu_available <= 1;
 //	fcu_exc <= FLT_NONE;
-	fcu_v <= INV;
-	fcu_v2 <= INV;
+	fcu_state1 <= INV;
+	fcu_branch_resolved <= INV;
 	fcu_v3 <= INV;
 	fcu_v4 <= INV;
 	fcu_v5 <= INV;

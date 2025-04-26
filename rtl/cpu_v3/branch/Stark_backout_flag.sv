@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2025 Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -32,37 +32,52 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
+// Backout flag:
+//
+// If taking a branch, any following register mappings in the same group need
+// to be backed out. This is regardless of whether a prediction was true or not.
+// If there is a branch incorrectly predicted as taken, then the register
+// mappings also need to be backed out.
 // ============================================================================
 
 import const_pkg::*;
-import cpu_types_pkg::*;
+import Stark_pkg::*;
 
-module Stark_validate_Rn(prn, prnv, rfo, rfo_tag, pRn, val, val_tag, valid_i, valid_o);
-input pregno_t [15:0] prn;
-input [15:0] prnv;
-input value_t [15:0] rfo;
-input [15:0] rfo_tag;
-input pregno_t pRn;
-output value_t val;
-output reg val_tag;
-input valid_i;
-output reg valid_o;
+module Stark_backout_flag(rst, clk, fcu_branch_resolved, fcu_brclass, takb, fcu_bt, 
+	fcu_found_destination, backout);
+input rst;
+input clk;
+input fcu_branch_resolved;
+input Stark_pkg::brclass_t fcu_brclass;
+input takb;
+input fcu_bt;
+input fcu_found_destination;
+output reg backout;
 
-integer nn;
-always_comb
-begin
-	valid_o = valid_i;
-	val = value_zero;
-	val_tag = 1'b0;
-	if (pRn==9'd0)
-		valid_o = VAL;
-	else
-	for (nn = 0; nn < 16; nn = nn + 1) begin
-		if (pRn==prn[nn] && prnv[nn] && !valid_i) begin
-			val = rfo[nn];
-			val_tag = rfo_tag[nn];
-			valid_o = VAL;
-		end
+always_ff @(posedge clk)
+if (rst)
+	backout <= FALSE;
+else begin
+	backout <= FALSE;
+	if (fcu_branch_resolved) begin
+		case(fcu_brclass)
+		Stark_pkg::BRC_BCCR:
+			// backout when !fcu_bt will be handled below, triggerred by restore
+			if (takb && fcu_bt)
+				backout <= !fcu_found_destination;
+		Stark_pkg::BRC_BCCD,
+		Stark_pkg::BRC_BCCC:
+			// backout when !fcu_bt will be handled below, triggerred by restore
+			if (takb && fcu_bt)
+				backout <= !fcu_found_destination;
+		Stark_pkg::BRC_RETR,
+		Stark_pkg::BRC_RETC,
+		Stark_pkg::BRC_BLRLR,
+		Stark_pkg::BRC_BLRLC:
+			backout <= TRUE;
+		default:
+			;		
+		endcase
 	end
 end
 

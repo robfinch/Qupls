@@ -69,7 +69,7 @@ xpm_fifo_sync #(
   .SIM_ASSERT_CHK(0),            // DECIMAL; 0=disable simulation messages, 1=enable simulation messages
   .USE_ADV_FEATURES("0000"),     // String
   .WAKEUP_TIME(0),               // DECIMAL
-  .WRITE_DATA_WIDTH(100),        // DECIMAL
+  .WRITE_DATA_WIDTH(96),        // DECIMAL
   .WR_DATA_COUNT_WIDTH(5)        // DECIMAL
 )
 xpm_fifo_sync_inst (
