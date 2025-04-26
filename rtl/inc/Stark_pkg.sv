@@ -1078,6 +1078,10 @@ typedef union packed
 
 typedef struct packed {
 	logic [2:0] count;
+	logic [1:0] xRs2;
+	logic [1:0] xRs1;
+	logic [1:0] xRd;
+	logic [3:0] xop4;
 	instruction_t ins;
 } micro_op_t;
 

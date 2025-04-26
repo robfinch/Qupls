@@ -68,7 +68,16 @@ wire cd_args;
 reg [WID-1:0] tmp;
 wire [WID-1:0] zero = {WID{1'b0}};
 
-Stark_cmp #(.WID(WID)) ualu_cmp(ir, a, b, i, cmpo);
+Stark_cmp #(.WID(WID)) ualu_cmp
+(
+	.ir(ir),
+	.om(om),
+	.cr(64'd0),
+	.a(a),
+	.b(b),
+	.i(i),
+	.o(cmpo)
+);
 
 // A change in arguments is used to load the divider.
 change_det #(.WID(128)) uargcd0 (
@@ -273,7 +282,7 @@ fpTrunc64 utrunc1
 
 fpCvt32To64 ucvtS2D1
 (
-	.i(a),
+	.i(a[31:0]),
 	.o(cvtS2Do)
 );
 
@@ -335,7 +344,7 @@ begin
       default:	bus = 64'd0;
       endcase
     FOP4_G10:
-      case (ir.fpu.op3)
+      case (ir.fpu.Rs2)
 			FG10_FCVTF2I:	 bus = f2io;
 			FG10_FCVTI2F:	 bus = i2fo;
 			FG10_FSIGN:    bus = signo;
@@ -344,7 +353,7 @@ begin
       default:  bus = 64'd0;
       endcase
     FOP4_TRIG:
-      case(ir.fpu.op3)
+      case(ir.fpu.Rs2)
 			FTRIG_FSIN:	bus = sino;
 			FTRIG_FCOS:	bus = coso;
       default:  bus = 64'd0;
@@ -433,7 +442,7 @@ end
 
 always_ff @(posedge clk)
 	case(ir.any.opcode)
-	OP_FLT:
+	Stark_pkg::OP_FLT:
 		case(ir.fpu.op4)
 		/*
 		FN_FLT1:
@@ -443,24 +452,24 @@ always_ff @(posedge clk)
 			default:	done = 1'b1;
 			endcase
 		*/
-		FOP4_G8:
+		Stark_pkg::FOP4_G8:
 		  case(ir.fpu.op3)
-		  FG8_FSCALEB: done = scale_done;
+		  Stark_pkg::FG8_FSCALEB: done = scale_done;
 		  default: done = 1'b1;
 			endcase
-		FOP4_G10:
-		  case (ir.fpu.op3)
-			FG10_FCVTF2I: done = f2i_done;
-			FG10_FCVTI2F: done = i2f_done;
-			FG10_FTRUNC:	done = trunc_done;
+		Stark_pkg::FOP4_G10:
+		  case (ir.fpu.Rs2)
+			Stark_pkg::FG10_FCVTF2I: done = f2i_done;
+			Stark_pkg::FG10_FCVTI2F: done = i2f_done;
+			Stark_pkg::FG10_FTRUNC:	done = trunc_done;
 			default: done = 1'b1;
 		  endcase
-		FOP4_TRIG:
-		  case(ir.fpu.op3)
-			FTRIG_FSIN:	done = sincos_done;
-			FTRIG_FCOS:	done = sincos_done;
+		Stark_pkg::FOP4_TRIG:
+		  case(ir.fpu.Rs2)
+			Stark_pkg::FTRIG_FSIN:	done = sincos_done;
+			Stark_pkg::FTRIG_FCOS:	done = sincos_done;
 		  endcase
-		FOP4_FADD,FOP4_FSUB,FOP4_FMUL:
+		Stark_pkg::FOP4_FADD,Stark_pkg::FOP4_FSUB,Stark_pkg::FOP4_FMUL:
 			done = fma_done;
 		/*
 		FN_FDIV:
@@ -468,13 +477,13 @@ always_ff @(posedge clk)
 		*/
 		default:	done = 1'b1;
 		endcase
-	OP_ADD:	done = 1'b1;
-	OP_CMP:	done = 1'b1;
-	OP_AND:	done = 1'b1;
-	OP_OR:		done = 1'b1;
-	OP_XOR:	done = 1'b1;
-	OP_MOV:		done = 1'b1;
-	OP_NOP:		done = 1'b1;
+	Stark_pkg::OP_ADD:	done = 1'b1;
+	Stark_pkg::OP_CMP:	done = 1'b1;
+	Stark_pkg::OP_AND:	done = 1'b1;
+	Stark_pkg::OP_OR:		done = 1'b1;
+	Stark_pkg::OP_XOR:	done = 1'b1;
+	Stark_pkg::OP_MOV:		done = 1'b1;
+	Stark_pkg::OP_NOP:		done = 1'b1;
 	default:	done = 1'b1;
 	endcase
 

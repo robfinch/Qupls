@@ -672,7 +672,7 @@ if (rst) begin
 	next_ratv1_rndxv = INV;
 	next_ratv2_rndxv = INV;
 	next_ratv3_rndxv = INV;
-	next_ratv_issue <= {$bits(Stark_pkg::rob_bitmask_t){1'd0}};
+	next_ratv_issue = {$bits(Stark_pkg::rob_bitmask_t){1'd0}};
 end
 else begin
 	next_ratv0_rndx = 5'd0;
@@ -683,7 +683,7 @@ else begin
 	next_ratv1_rndxv = INV;
 	next_ratv2_rndxv = INV;
 	next_ratv3_rndxv = INV;
-	next_ratv_issue <= {$bits(Stark_pkg::rob_bitmask_t){1'd0}};
+	next_ratv_issue = {$bits(Stark_pkg::rob_bitmask_t){1'd0}};
 	for (hd1 = 0; hd1 < WINDOW_SIZE; hd1 = hd1 + 1) begin
 		if (rob[heads[hd1]].v && !rob[heads[hd1]].rat_v &&
 			!ratv_issue[heads[hd1]]) begin

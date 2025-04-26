@@ -365,8 +365,7 @@ Stark_pkg::ex_instruction_t [7:0] ex_ins;
 Stark_pkg::decode_bus_t db0_r, db1_r, db2_r, db3_r;				// Regfetch/rename stage inputs
 Stark_pkg::pipeline_reg_t ins4_d, ins5_d, ins6_d, ins7_d, ins8_d;
 Stark_pkg::pipeline_reg_t ins0_que, ins1_que, ins2_que, ins3_que;
-Stark_pkg::pipeline_group_reg_t pg0_mux;
-Stark_pkg::pipeline_group_reg_t pg1_mux;
+Stark_pkg::pipeline_group_reg_t pg_mux;
 Stark_pkg::pipeline_group_reg_t pg_dec;
 Stark_pkg::pipeline_group_reg_t pg_ren;
 
@@ -1096,6 +1095,11 @@ wire [PREGS-1:0] ns_avail;
 // ----------------------------------------------------------------------------
 always_comb
 begin
+	$display("StarkCPU Config");
+	$display("---------------");
+	$display("Number of ALUs: %d", Stark_pkg::NALU);
+	$display("Number of FPUs: %d", Stark_pkg::NFPU);
+	$display("Number of data ports: %d", Stark_pkg::NDATA_PORTS);
 	if (SUPPORT_RENAMER) begin
 `ifdef SUPPORT_RAT
 		$display("StarkCPU: RAT available.");
@@ -1603,13 +1607,13 @@ gselectPredictor ugsp1
 	.takb1(commit_takb1),
 	.takb2(commit_takb2),
 	.takb3(commit_takb3),
-	.ip0(pc0_f),
+	.ip0(pc0_f.pc),
 	.predict_taken0(pt0_mux),
-	.ip1(pc0_f + 4'd4),
+	.ip1(pc0_f.pc + 4'd4),
 	.predict_taken1(pt1_mux),
-	.ip2(pc0_f + 4'd8),
+	.ip2(pc0_f.pc + 4'd8),
 	.predict_taken2(pt2_mux),
-	.ip3(pc0_f + 4'd12),
+	.ip3(pc0_f.pc + 4'd12),
 	.predict_taken3(pt3_mux)
 );
 
@@ -1742,7 +1746,7 @@ Stark_stomp ustmp1
 	.pc(pc),
 	.pc_f(pc0_f),
 	.pc_fet(pc0_fet),
-	.pc_mux(pg0_mux.pr0.pc),
+	.pc_mux(pg_mux.pr0.pc),
 	.pc_dec(pg_dec.pr0.pc),
 	.pc_ren(pg_ren.pr0.pc),
 	.stomp_fet(stomp_fet),
@@ -2376,8 +2380,7 @@ Stark_pipeline_mux uiext1
 	.mc_ins1_i(mc_ins1),
 	.mc_ins2_i(mc_ins2),
 	.mc_ins3_i(mc_ins3),
-	.pg0_mux(pg0_mux),
-	.pg1_mux(pg1_mux),
+	.pg_mux(pg_mux),
 	.len0_i(len0),
 	.len1_i(len1),
 	.len2_i(len2),
@@ -2432,8 +2435,7 @@ Stark_pipeline_dec udecstg1
 	.stomp_dec(stomp_dec),
 	.stomp_mux(stomp_mux),
 	.stomp_bno(stomp_bno),
-	.pg0_mux(pg0_mux),
-	.pg1_mux(pg1_mux),
+	.pg_mux(pg_mux),
 	.ins0_d_inv(ins0_d_inv),
 	.ins1_d_inv(ins1_d_inv),
 	.ins2_d_inv(ins2_d_inv),
@@ -3135,9 +3137,12 @@ pregno_t fpu0_pRdA2, fpu0_pRdB2, fpu0_pRdC2;
 pregno_t fpu1_pRdA2, fpu1_pRdB2, fpu1_pRdC2;
 pregno_t alu0_Rt2, fpu0_Rt3, fpu1_Rt3;
 aregno_t alu0_aRdA2, fpu0_aRd3, fpu1_aRd3;
+aregno_t alu1_aRdA2;
 pregno_t alu1_Rt2;
 aregno_t alu1_aRd2;
-value_t fpu0_res3;
+value_t alu0_resA2,alu1_resA2;
+value_t fpu0_res3, fpu0_resA2;
+value_t fpu1_resA2;
 checkpt_ndx_t alu0_cp2, alu1_cp2, fpu0_cp2, fpu1_cp2;
 wire alu0_aRdz1, alu0_aRdz2, alu1_aRdz1, alu1_aRdz2, fpu0_aRdz2;
 rob_ndx_t alu0_id2, alu1_id2, fpu0_id2;
@@ -3151,9 +3156,9 @@ vtdl #($bits(pregno_t)) udlyal1A (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu0_RdA), 
 vtdl #($bits(pregno_t)) udlyal1B (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu0_RtB), .q(alu0_pRdB2) );
 vtdl #($bits(pregno_t)) udlyal1C (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu0_RtC), .q(alu0_pRdC2) );
 
-vtdl #($bits(aregno_t)) udlyal2A (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu0_aRdAA), .q(alu0_aRdAA2) );
-vtdl #($bits(aregno_t)) udlyal2B (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu0_aRdAB), .q(alu0_aRdAB2) );
-vtdl #($bits(aregno_t)) udlyal2C (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu0_aRdAC), .q(alu0_aRdAC2) );
+vtdl #($bits(aregno_t)) udlyal2A (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu0_aRdA), .q(alu0_aRdA2) );
+vtdl #($bits(aregno_t)) udlyal2B (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu0_aRdB), .q(alu0_aRdB2) );
+vtdl #($bits(aregno_t)) udlyal2C (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu0_aRdC), .q(alu0_aRdC2) );
 
 vtdl #(1) 							udlyal3A (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu0_aRdzA), .q(alu0_aRdzA2) );
 vtdl #(1) 							udlyal3B (.clk(clk), .ce(1'b1), .a(4'd0), .d(alu0_aRdzB), .q(alu0_aRdzB2) );
@@ -3288,11 +3293,11 @@ always_ff @(posedge clk) alu0_weA =
 	((alu0_omA2==Stark_pkg::OM_SECURE ? 9'h0FF : alu0_omA2==Stark_pkg::OM_HYPERVISOR ? 9'h0F : alu0_omA2==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01) & {9{alu0_wrA}}) :
 	{wt0A,8'hFF} & {9{alu0_wrA}};
 always_ff @(posedge clk) alu0_weB =
-	(alu0_aRdAB2 >= 7'd80 && alu0_aRdAB2 <= 7'd87) ?
+	(alu0_aRdB2 >= 7'd80 && alu0_aRdB2 <= 7'd87) ?
 	((alu0_omB2==Stark_pkg::OM_SECURE ? 9'h0FF : alu0_omB2==Stark_pkg::OM_HYPERVISOR ? 9'h0F : alu0_omB2==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01) & {9{alu0_wrB}}) :
 	{wt0B,8'hFF} & {9{alu0_wrB}};
 always_ff @(posedge clk) alu0_weC = 
-	(alu0_aRdAC2 >= 7'd80 && alu0_aRdAC2 <= 7'd87) ?
+	(alu0_aRdC2 >= 7'd80 && alu0_aRdC2 <= 7'd87) ?
 	((alu0_omC2==Stark_pkg::OM_SECURE ? 9'h0FF : alu0_omC2==Stark_pkg::OM_HYPERVISOR ? 9'h0F : alu0_omC2==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01) & {9{alu0_wrC}}) :
 	{wt0C,8'hFF} & {9{alu0_wrC}};
 	
@@ -3415,10 +3420,10 @@ always_ff @(posedge clk) upd6 = upd6a==5'd31 ? 5'd31 : fuq_rot > upd6a ? 6'd18 +
 
 // Read the next queue entry for the queue jsut used to update the register file.
 reg [17:0] fuq_rd;
-wire [17:0] fuq_we;
+wire [7:0] fuq_we [0:17];
 pregno_t [17:0] fuq_pRt;
 aregno_t [17:0] fuq_aRt;
-wire [17:0] fuq_tag;
+wire [7:0] fuq_tag [0:17];
 value_t [17:0] fuq_res;
 wire [3:0] fuq_cp [0:17];
 
@@ -3437,7 +3442,7 @@ else begin
 end
 
 // Queue the outputs of the functional units.
-Stark_FuncResultQueue ufrq1
+Stark_func_result_queue ufrq1
 (
 	.rst_i(rst),
 	.clk_i(clk),
@@ -3457,7 +3462,8 @@ Stark_FuncResultQueue ufrq1
 	.empty(fuq_empty[0])
 );
 
-Stark_FuncResultQueue ufrq2
+/*
+Stark_func_result_queue ufrq2
 (
 	.rst_i(rst),
 	.clk_i(clk),
@@ -3477,7 +3483,7 @@ Stark_FuncResultQueue ufrq2
 	.empty(fuq_empty[1])
 );
 
-Stark_FuncResultQueue ufrq3
+Stark_func_result_queue ufrq3
 (
 	.rst_i(rst),
 	.clk_i(clk),
@@ -3496,10 +3502,10 @@ Stark_FuncResultQueue ufrq3
 	.cp_o(fuq_cp[2]),
 	.empty(fuq_empty[2])
 );
-
+*/
 generate begin : gALU1q
 	if (Stark_pkg::NALU > 1) begin
-Stark_FuncResultQueue ufrq4
+Stark_func_result_queue ufrq4
 (
 	.rst_i(rst),
 	.clk_i(clk),
@@ -3518,8 +3524,8 @@ Stark_FuncResultQueue ufrq4
 	.cp_o(fuq_cp[3]),
 	.empty(fuq_empty[3])
 );
-
-Stark_FuncResultQueue ufrq5
+/*
+Stark_func_result_queue ufrq5
 (
 	.rst_i(rst),
 	.clk_i(clk),
@@ -3539,7 +3545,7 @@ Stark_FuncResultQueue ufrq5
 	.empty(fuq_empty[4])
 );
 
-Stark_FuncResultQueue ufrq6
+Stark_func_result_queue ufrq6
 (
 	.rst_i(rst),
 	.clk_i(clk),
@@ -3558,6 +3564,7 @@ Stark_FuncResultQueue ufrq6
 	.cp_o(fuq_cp[5]),
 	.empty(fuq_empty[5])
 );
+*/
 end
 else begin
 	assign fuq_we[3] = 9'd0;
@@ -3587,7 +3594,7 @@ endgenerate
 
 generate begin : gFPU0q
 	if (Stark_pkg::NFPU > 0) begin
-Stark_FuncResultQueue ufrq7
+Stark_func_result_queue ufrq7
 (
 	.rst_i(rst),
 	.clk_i(clk),
@@ -3606,8 +3613,8 @@ Stark_FuncResultQueue ufrq7
 	.cp_o(fuq_cp[6]),
 	.empty(fuq_empty[6])
 );
-
-Stark_FuncResultQueue ufrq8
+/*
+Stark_func_result_queue ufrq8
 (
 	.rst_i(rst),
 	.clk_i(clk),
@@ -3627,7 +3634,7 @@ Stark_FuncResultQueue ufrq8
 	.empty(fuq_empty[7])
 );
 
-Stark_FuncResultQueue ufrq9
+Stark_func_result_queue ufrq9
 (
 	.rst_i(rst),
 	.clk_i(clk),
@@ -3646,6 +3653,7 @@ Stark_FuncResultQueue ufrq9
 	.cp_o(fuq_cp[8]),
 	.empty(fuq_empty[8])
 );
+*/
 end
 else begin
 	assign fuq_we[6] = 9'd0;
@@ -3675,7 +3683,7 @@ endgenerate
 
 generate begin : gFPU1q
 	if (Stark_pkg::NFPU > 1) begin
-Stark_FuncResultQueue ufrq10
+Stark_func_result_queue ufrq10
 (
 	.rst_i(rst),
 	.clk_i(clk),
@@ -3694,8 +3702,8 @@ Stark_FuncResultQueue ufrq10
 	.cp_o(fuq_cp[9]),
 	.empty(fuq_empty[9])
 );
-
-Stark_FuncResultQueue ufrq11
+/*
+Stark_func_result_queue ufrq11
 (
 	.rst_i(rst),
 	.clk_i(clk),
@@ -3715,7 +3723,7 @@ Stark_FuncResultQueue ufrq11
 	.empty(fuq_empty[10])
 );
 
-Stark_FuncResultQueue ufrq12
+Stark_func_result_queue ufrq12
 (
 	.rst_i(rst),
 	.clk_i(clk),
@@ -3734,6 +3742,7 @@ Stark_FuncResultQueue ufrq12
 	.cp_o(fuq_cp[11]),
 	.empty(fuq_empty[11])
 );
+*/
 end
 else begin
 	assign fuq_we[9] = 9'd0;
@@ -3761,7 +3770,7 @@ end
 end
 endgenerate
 
-Stark_FuncResultQueue ufrq13
+Stark_func_result_queue ufrq13
 (
 	.rst_i(rst),
 	.clk_i(clk),
@@ -3780,8 +3789,8 @@ Stark_FuncResultQueue ufrq13
 	.cp_o(fuq_cp[12]),
 	.empty(fuq_empty[12])
 );
-
-Stark_FuncResultQueue ufrq14
+/*
+Stark_func_result_queue ufrq14
 (
 	.rst_i(rst),
 	.clk_i(clk),
@@ -3800,10 +3809,10 @@ Stark_FuncResultQueue ufrq14
 	.cp_o(fuq_cp[13]),
 	.empty(fuq_empty[13])
 );
-
+*/
 generate begin : gDRAM1q
 	if (Stark_pkg::NDATA_PORTS > 1) begin
-Stark_FuncResultQueue ufrq15
+Stark_func_result_queue ufrq15
 (
 	.rst_i(rst),
 	.clk_i(clk),
@@ -3822,8 +3831,8 @@ Stark_FuncResultQueue ufrq15
 	.cp_o(fuq_cp[14]),
 	.empty(fuq_empty[14])
 );
-
-Stark_FuncResultQueue ufrq16
+/*
+Stark_func_result_queue ufrq16
 (
 	.rst_i(rst),
 	.clk_i(clk),
@@ -3842,6 +3851,7 @@ Stark_FuncResultQueue ufrq16
 	.cp_o(fuq_cp[15]),
 	.empty(fuq_empty[15])
 );
+*/
 end
 else begin
 	assign fuq_we[14] = 9'd0;
@@ -3862,7 +3872,7 @@ end
 end
 endgenerate
 
-Stark_FuncResultQueue ufrq17
+Stark_func_result_queue ufrq17
 (
 	.rst_i(rst),
 	.clk_i(clk),
@@ -3881,8 +3891,8 @@ Stark_FuncResultQueue ufrq17
 	.cp_o(fuq_cp[16]),
 	.empty(fuq_empty[16])
 );
-
-Stark_FuncResultQueue ufrq18
+/*
+Stark_func_result_queue ufrq18
 (
 	.rst_i(rst),
 	.clk_i(clk),
@@ -3901,7 +3911,7 @@ Stark_FuncResultQueue ufrq18
 	.cp_o(fuq_cp[17]),
 	.empty(fuq_empty[17])
 );
-
+*/
 // Mux the queue outputs onto the register file inputs.
 always_ff @(posedge clk) wrport0_v <= !fuq_empty[upd1];
 always_ff @(posedge clk) wrport0_we <= fuq_we[upd1]; 
@@ -4525,12 +4535,12 @@ assign aRs[23] = rob[agen1_rndx].op.decbus.Rd;
 assign aRs[24] = rob[alu0_rndx].op.decbus.Rci;
 assign aRs[25] = rob[alu1_rndx].op.decbus.Rci;
 
-assign aRs[26] = 7'd0;
-assign aRs[27] = 7'd0;
-assign aRs[28] = 7'd0;
-assign aRs[29] = 7'd0;
-assign aRs[30] = 7'd0;
-assign aRs[31] = 7'd0;
+assign aRs[26] = 8'd0;
+assign aRs[27] = 8'd0;
+assign aRs[28] = 8'd0;
+assign aRs[29] = 8'd0;
+assign aRs[30] = 8'd0;
+assign aRs[31] = 8'd0;
 
 // ----------------------------------------------------------------------------
 // EXECUTE stage combo logic
@@ -4561,14 +4571,12 @@ Stark_meta_alu #(.ALU0(1'b1)) ualu0
 	.i(alu0_argI),
 	.t(alu0_argD),
 	.cs(alu0_cs),
-	.pc(alu0_pc),
+	.pc(alu0_pc.pc),
 	.csr(csr_res),
 	.canary(canary),
 	.cpl(sr.pl),
 	.qres(fpu0_resH),
 	.o(alu0_resA),
-	.o2(alu0_resB),
-	.o3(alu0_resC),
 	.mul_done(mul0_done),
 	.div_done(div0_done),
 	.div_dbz(div_dbz),
@@ -4596,14 +4604,12 @@ if (Stark_pkg::NALU > 1) begin
 		.i(alu1_argI),
 		.t(alu1_argD),
 		.cs(alu1_cs),
-		.pc(alu1_pc),
+		.pc(alu1_pc.pc),
 		.csr(14'd0),
 		.canary(canary),
 		.cpl(sr.pl),
 		.qres(64'd0),
 		.o(alu1_resA),
-		.o2(alu1_resB),
-		.o3(alu1_resC),
 		.mul_done(mul1_done),
 		.div_done(),
 		.div_dbz(),
@@ -4698,7 +4704,7 @@ if (Stark_pkg::NFPU > 0) begin
 			.o(fpu0_resA),
 			.otag(),
 			.p(~64'd0),
-			.t(64'd0),
+			.t(fpu0_argD),
 			.done(fpu0_done),
 			.exc(fpu0_exc)
 		);
@@ -4725,7 +4731,7 @@ if (Stark_pkg::NFPU > 1) begin
 		.o(fpu1_resA),
 		.otag(),
 		.p(~64'd0),
-		.t(64'd0),
+		.t(fpu1_argD),
 		.done(fpu1_done),
 		.exc(fpu1_exc)
 	);
@@ -5509,7 +5515,7 @@ generate begin : gFpuStat
 				.argI(fpu0_argI),
 				.Rt(fpu0_RdA),
 				.Rt1(fpu0_RdB),
-				.aRt(fpu0_aRd),
+				.aRt(fpu0_aRdA),
 				.aRtz(fpu0_aRdzA),
 				.aRt1(fpu0_aRdB),
 				.aRtz1(fpu0_aRdzB),
@@ -5520,7 +5526,7 @@ generate begin : gFpuStat
 				.argD_tag(),
 				.cs(fpu0_cs),
 				.bank(fpu0_bank),
-				.instr(fpu0_instr),
+				.instr(fpu0_instr.ins),
 				.pc(fpu0_pc),
 				.cp(fpu0_cp),
 				.qfext(fpu0_qfext),
@@ -5564,7 +5570,7 @@ generate begin : gFpuStat
 				.argD_tag(),
 				.cs(fpu1_cs),
 				.bank(fpu1_bank),
-				.instr(fpu1_instr),
+				.instr(fpu1_instr.ins),
 				.pc(fpu1_pc),
 				.cp(fpu1_cp),
 				.qfext(fpu1_qfext),
@@ -7062,13 +7068,13 @@ else begin
 		if (group_len <= 0)
 			group_len <= rob[head0].group_len;
 		// Commit oddball instructions
-		if ((rob[head0].decbus.oddball && !rob[head0].excv) || pgh[head0[5:2]].hwi)
+		if ((rob[head0].decbus.oddball && !rob[head0].excv) || rob[head0].op.hwi)
 			tOddballCommit(rob[head0].v, head0);
-		else if ((rob[head1].decbus.oddball && !rob[head1].excv && cmtcnt > 3'd1) || pgh[head1[5:2]].hwi)
+		else if ((rob[head1].decbus.oddball && !rob[head1].excv && cmtcnt > 3'd1) || rob[head1].op.hwi)
 			tOddballCommit(rob[head1].v, head1);
-		else if ((rob[head2].decbus.oddball && !rob[head2].excv && cmtcnt > 3'd2) || pgh[head2[5:2]].hwi)
+		else if ((rob[head2].decbus.oddball && !rob[head2].excv && cmtcnt > 3'd2) || rob[head2].op.hwi)
 			tOddballCommit(rob[head2].v, head2);
-		else if ((rob[head3].decbus.oddball && !rob[head3].excv && cmtcnt > 3'd3) || pgh[head3[5:2]].hwi)
+		else if ((rob[head3].decbus.oddball && !rob[head3].excv && cmtcnt > 3'd3) || rob[head3].op.hwi)
 			tOddballCommit(rob[head3].v, head3);
 		// Trigger exception processing for last instruction in group.
 		if (rob[head0].excv && rob[head0].v)
@@ -7170,21 +7176,21 @@ else begin
 				if (!rob[head0].argA_v && !fnFindSource(head0, rob[head0].decbus.Rs1)) begin
 					rob[head0].argA_v <= VAL;
 					tAllArgsValid(head0, VAL, INV, INV, INV, INV);
-					$display("Q+: rob[%d]: argument A not possible to validate.", head0);
+					$display("StarkCPU: rob[%d]: argument A not possible to validate.", head0);
 				end		
 				if (!rob[head0].argB_v && !fnFindSource(head0, rob[head0].decbus.Rs2)) begin
-					$display("Q+: rob[%d]: argument B not possible to validate.", head0);
+					$display("StarkCPU: rob[%d]: argument B not possible to validate.", head0);
 					rob[head0].argB_v <= VAL;
 					tAllArgsValid(head0, INV, VAL, INV, INV, INV);
 				end		
 				if (!rob[head0].argC_v && !fnFindSource(head0, rob[head0].decbus.Rs3)) begin
-					$display("Q+: rob[%d]: argument C not possible to validate.", head0);
+					$display("StarkCPU: rob[%d]: argument C not possible to validate.", head0);
 					rob[head0].argC_v <= VAL;
 					tAllArgsValid(head0, INV, INV, VAL, INV, INV);
 				end		
 				if (!rob[head0].argD_v) begin
 					if (!fnFindSource(head0, rob[head0].decbus.Rd)) begin
-						$display("Q+: rob[%d]: argument T not possible to validate.", head0);
+						$display("StarkCPU: rob[%d]: argument D not possible to validate.", head0);
 						rob[head0].argD_v <= VAL;
 						tAllArgsValid(head0, INV, INV, INV, VAL, INV);
 					end
@@ -7427,8 +7433,11 @@ else begin
 	// is NOPs being skipped over, so it is only a couple of clock cycles.
 	if (fcu_v2 && takb) begin
 		if (fcu_found_destination) begin
-			if (fnFindHwi(fcu_skip_list) < 8'hff)
-				pgh[(fcu_dst+3)>>2] <= pgh[fnFindHwi(fcu_skip_list)>>2];
+			if (fnFindHwi(fcu_skip_list) < 8'hff) begin
+				pgh[((fcu_dst+3)>>2)%(ROB_ENTRIES/4)].hwi <= pgh[fnFindHwi(fcu_skip_list)>>2].hwi;
+				pgh[((fcu_dst+3)>>2)%(ROB_ENTRIES/4)].irq <= pgh[fnFindHwi(fcu_skip_list)>>2].irq;
+				pgh[fnFindHwi(fcu_skip_list)>>2].hwi <= FALSE;
+			end
 		end
 		for (n3 = 0; n3 < ROB_ENTRIES; n3 = n3 + 1) begin
 			if (fcu_skip_list[n3]) begin
@@ -7436,6 +7445,12 @@ else begin
 			end
 		end
 	end
+	//  Defer interrupt until first micro-op of instruction
+	for (n3 = 0; n3 < ROB_ENTRIES; n3 = n3 + 1) begin
+		if (rob[n3].op.uop.count==3'd0 && rob[n3].op.hwi)
+			tDeferToNextInstruction(n3);
+	end
+	
 			
 	// Mark the group done if all ROB entries in group are done.
 	for (n3 = 0; n3 < ROB_ENTRIES; n3 = n3 + 4) begin
@@ -7722,13 +7737,13 @@ always_ff @(posedge clk) begin: clock_n_debug
 	$display("lineH: %h", uiext1.ic_line_fet[1023:512]);
 	$display("align: %x", uiext1.ic_line_aligned);
 	$display("- - - - - - Multiplex %c - - - - - - %s", ihit_mux ? "h":" ", stomp_mux ? stompstr : no_stompstr);
-	$display("pc0: %h.%h ins0: %h", uiext1.pg0_mux.pr0.pc.pc[23:0], uiext1.pg0_mux.pr0.mcip, uiext1.pg0_mux.pr0.uop.ins[47:0]);
-	$display("pc1: %h.%h ins1: %h", uiext1.pg0_mux.pr1.pc.pc[23:0], uiext1.pg0_mux.pr1.mcip, uiext1.pg0_mux.pr1.uop.ins[47:0]);
-	$display("pc2: %h.%h ins2: %h", uiext1.pg0_mux.pr2.pc.pc[23:0], uiext1.pg0_mux.pr2.mcip, uiext1.pg0_mux.pr2.uop.ins[47:0]);
-	$display("pc3: %h.%h ins3: %h", uiext1.pg0_mux.pr3.pc.pc[23:0], uiext1.pg0_mux.pr3.mcip, uiext1.pg0_mux.pr3.uop.ins[47:0]);
+	$display("pc0: %h.%h ins0: %h", uiext1.pg_mux.pr0.pc.pc[23:0], uiext1.pg_mux.pr0.mcip, uiext1.pg_mux.pr0.uop.ins[47:0]);
+	$display("pc1: %h.%h ins1: %h", uiext1.pg_mux.pr1.pc.pc[23:0], uiext1.pg_mux.pr1.mcip, uiext1.pg_mux.pr1.uop.ins[47:0]);
+	$display("pc2: %h.%h ins2: %h", uiext1.pg_mux.pr2.pc.pc[23:0], uiext1.pg_mux.pr2.mcip, uiext1.pg_mux.pr2.uop.ins[47:0]);
+	$display("pc3: %h.%h ins3: %h", uiext1.pg_mux.pr3.pc.pc[23:0], uiext1.pg_mux.pr3.mcip, uiext1.pg_mux.pr3.uop.ins[47:0]);
 	$display("micro_ip: %h", micro_ip);
 	if (do_bsr)
-		$display("BSR %h  pc0_fet=%h", bsr_tgt.pc, uiext1.pg0_mux.pr0.pc.pc[31:0]);
+		$display("BSR %h  pc0_fet=%h", bsr_tgt.pc, uiext1.pg_mux.pr0.pc.pc[31:0]);
 	$display("----- Decode %c%c ----- %s", ihit_dec ? "h":" ", micro_machine_active_d ? "a": " ", stomp_dec ? stompstr : no_stompstr);
 	$display("pc0: %h.%h ins0: %h", pg_dec.pr0.pc.pc[23:0], pg_dec.pr0.mcip, pg_dec.pr0.uop.ins[47:0]);
 	$display("pc1: %h.%h ins1: %h", pg_dec.pr1.pc.pc[23:0], pg_dec.pr1.mcip, pg_dec.pr1.uop.ins[47:0]);
@@ -8872,9 +8887,9 @@ begin
 				tRex(head,rob[head].op);
 		end
 	end
-	else if (pgh[head[5:2]].hwi && pgh[head[5:2]].irq.level == 6'd63)	// NMI
+	else if (rob[head].op.hwi && pgh[head[5:2]].hwi && pgh[head[5:2]].irq.level == 6'd63)	// NMI
 		tProcessExc(head,rob[head].op.pc,FALSE,TRUE);
-	else if (pgh[head[5:2]].hwi && pgh[head[5:2]].irq.level > sr.ipl && sr.mie)
+	else if (rob[head].op.hwi && pgh[head[5:2]].hwi && pgh[head[5:2]].irq.level > sr.ipl && sr.mie)
 		tProcessExc(head,rob[head].op.pc,TRUE,FALSE);
 	// If interrupt turned out to be disabled, put the irq on a queue for
 	// later processing.
@@ -9168,75 +9183,75 @@ begin
 		m8 = (ndx + Stark_pkg::ROB_ENTRIES - 8) % Stark_pkg::ROB_ENTRIES;
 		if (rob[m1].v && rob[m1].sn < rob[ndx].sn && rob[m1].op.decbus.pred) begin
 			if (rob[m1].pred_mask[1:0]==2'd0) begin
-				rob[ndx].pred_bit = TRUE;
-				rob[ndx].pred_bitv = VAL;
+				rob[ndx].pred_bit <= TRUE;
+				rob[ndx].pred_bitv <= VAL;
 			end
 			else if (rob[m1].done==2'b11 && rob[m1].pred_mask[1:0]!=2'b00) begin
-				rob[ndx].v = INV;
+				rob[ndx].v <= INV;
 			end
 		end
 		else if (rob[m2].v && rob[m2].sn < rob[ndx].sn && rob[m2].op.decbus.pred && PRED_SHADOW > 1) begin
 			if (rob[m2].pred_mask[3:2]==2'd0) begin
-				rob[ndx].pred_bit = TRUE;
-				rob[ndx].pred_bitv = VAL;
+				rob[ndx].pred_bit <= TRUE;
+				rob[ndx].pred_bitv <= VAL;
 			end
 			else if (rob[m2].done==2'b11 && rob[m2].pred_mask[3:2]!=2'b00) begin
-				rob[ndx].v = INV;
+				rob[ndx].v <= INV;
 			end
 		end
 		else if (rob[m3].v && rob[m3].sn < rob[ndx].sn && rob[m3].op.decbus.pred && PRED_SHADOW > 2) begin
 			if (rob[m3].pred_mask[5:4]==2'd0) begin
-				rob[ndx].pred_bit = TRUE;
-				rob[ndx].pred_bitv = VAL;
+				rob[ndx].pred_bit <= TRUE;
+				rob[ndx].pred_bitv <= VAL;
 			end
 			else if (rob[m3].done==2'b11 && rob[m3].pred_mask[5:4]!=2'b00) begin
-				rob[ndx].v = INV;
+				rob[ndx].v <= INV;
 			end
 		end
 		else if (rob[m4].v && rob[m4].sn < rob[ndx].sn && rob[m4].op.decbus.pred && PRED_SHADOW > 3) begin
 			if (rob[m4].pred_mask[7:6]==2'd0) begin
-				rob[ndx].pred_bit = TRUE;
-				rob[ndx].pred_bitv = VAL;
+				rob[ndx].pred_bit <= TRUE;
+				rob[ndx].pred_bitv <= VAL;
 			end
 			else if (rob[m4].done==2'b11 && rob[m4].pred_mask[7:6]!=2'b00) begin
-				rob[ndx].v = INV;
+				rob[ndx].v <= INV;
 			end
 		end
 		else if (rob[m5].v && rob[m5].sn < rob[ndx].sn && rob[m5].op.decbus.pred && PRED_SHADOW > 4) begin
 			if (rob[m5].pred_mask[9:8]==2'd0) begin
-				rob[ndx].pred_bit = TRUE;
-				rob[ndx].pred_bitv = VAL;
+				rob[ndx].pred_bit <= TRUE;
+				rob[ndx].pred_bitv <= VAL;
 			end
 			else if (rob[m5].done==2'b11 && rob[m5].pred_mask[9:8]!=2'b00) begin
-				rob[ndx].v = INV;
+				rob[ndx].v <= INV;
 			end
 		end
 		else if (rob[m6].v && rob[m6].sn < rob[ndx].sn && rob[m6].op.decbus.pred && PRED_SHADOW > 5) begin
 			if (rob[m6].pred_mask[11:10]==2'd0) begin
-				rob[ndx].pred_bit = TRUE;
-				rob[ndx].pred_bitv = VAL;
+				rob[ndx].pred_bit <= TRUE;
+				rob[ndx].pred_bitv <= VAL;
 			end
 			else if (rob[m6].done==2'b11 && rob[m6].pred_mask[11:10]!=2'b00) begin
-				rob[ndx].v = INV;
+				rob[ndx].v <= INV;
 			end
 		end
 		else if (rob[m7].v && rob[m6].sn < rob[ndx].sn && rob[m7].op.decbus.pred && PRED_SHADOW > 6) begin
 			if (rob[m7].pred_mask[13:12]==2'd0) begin
-				rob[ndx].pred_bit = TRUE;
-				rob[ndx].pred_bitv = VAL;
+				rob[ndx].pred_bit <= TRUE;
+				rob[ndx].pred_bitv <= VAL;
 			end
 			else if (rob[m7].done==2'b11 && rob[m7].pred_mask[13:12]!=2'b00) begin
-				rob[ndx].v = INV;
+				rob[ndx].v <= INV;
 			end
 		end
 		else if (rob[m8].v && rob[m8].sn < rob[ndx].sn) begin
-			rob[ndx].pred_bit = TRUE;
-			rob[ndx].pred_bitv = VAL;
+			rob[ndx].pred_bit <= TRUE;
+			rob[ndx].pred_bitv <= VAL;
 		end
 	end
 	else begin
-		rob[ndx].pred_bit = TRUE;
-		rob[ndx].pred_bitv = VAL;
+		rob[ndx].pred_bit <= TRUE;
+		rob[ndx].pred_bitv <= VAL;
 	end
 end
 endtask
@@ -9411,5 +9426,53 @@ begin
 	end
 end
 endfunction
+
+task tDeferToNextInstruction;
+input rob_ndx_t ndx;
+integer kk;
+rob_ndx_t m1;
+rob_ndx_t m2;
+rob_ndx_t m3;
+rob_ndx_t m4;
+rob_ndx_t m5;
+rob_ndx_t m6;
+rob_ndx_t m7;
+rob_ndx_t ih;
+begin
+	m1 = (ndx + Stark_pkg::ROB_ENTRIES + 1) % Stark_pkg::ROB_ENTRIES;
+	m2 = (ndx + Stark_pkg::ROB_ENTRIES + 2) % Stark_pkg::ROB_ENTRIES;
+	m3 = (ndx + Stark_pkg::ROB_ENTRIES + 3) % Stark_pkg::ROB_ENTRIES;
+	m4 = (ndx + Stark_pkg::ROB_ENTRIES + 4) % Stark_pkg::ROB_ENTRIES;
+	m5 = (ndx + Stark_pkg::ROB_ENTRIES + 5) % Stark_pkg::ROB_ENTRIES;
+	m6 = (ndx + Stark_pkg::ROB_ENTRIES + 6) % Stark_pkg::ROB_ENTRIES;
+	m7 = (ndx + Stark_pkg::ROB_ENTRIES + 7) % Stark_pkg::ROB_ENTRIES;
+	if (rob[m1].op.uop.count!=3'd0 && rob[m1].sn > rob[ndx].sn)
+		ih = m1;
+	else if (rob[m2].op.uop.count!=3'd0 && rob[m2].sn > rob[ndx].sn)
+		ih = m2;
+	else if (rob[m3].op.uop.count!=3'd0 && rob[m3].sn > rob[ndx].sn)
+		ih = m3;
+	else if (rob[m4].op.uop.count!=3'd0 && rob[m4].sn > rob[ndx].sn)
+		ih = m4;
+	else if (rob[m5].op.uop.count!=3'd0 && rob[m5].sn > rob[ndx].sn)
+		ih = m5;
+	else if (rob[m6].op.uop.count!=3'd0 && rob[m6].sn > rob[ndx].sn)
+		ih = m6;
+	else if (rob[m7].op.uop.count!=3'd0 && rob[m7].sn > rob[ndx].sn)
+		ih = m7;
+	// Cannot find lead micro-op, must not be queued yet. Select tail position as
+	// place for interrupt.
+	else
+		ih = (tail0 + ROB_ENTRIES - 1) % ROB_ENTRIES;
+	if (ih != ndx) begin
+		rob[ih].op.hwi <= TRUE;
+		rob[ndx].op.hwi <= FALSE;
+		pgh[ih>>2].hwi <= TRUE;
+		pgh[ih>>2].irq <= pgh[ndx>>2].irq;
+		pgh[ndx>>2].hwi <= FALSE;
+		pgh[ndx>>2].irq.level <= 6'd0;
+	end
+end
+endtask
 
 endmodule

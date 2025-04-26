@@ -45,7 +45,7 @@ import Stark_pkg::*;
 
 module Stark_micro_machine(om, ipl, micro_ip, micro_ir, next_ip, instr, regx);
 input operating_mode_t om;
-input [2:0] ipl;
+input [5:0] ipl;
 input cpu_types_pkg::mc_address_t micro_ip;
 input pipeline_reg_t micro_ir;
 output cpu_types_pkg::mc_address_t next_ip;

@@ -96,6 +96,53 @@ reg [7:0] next_cptgt;
 always_comb
 	next_cptgt <= {8{rob.op.decbus.cpytgt}};
 		
+Stark_validate_Rn uvRs1
+(
+	.prn(prn),
+	.prnv(prnv),
+	.rfo(rfo),
+	.pRn(rob.op.pRs1),
+	.val(argA),
+	.val_tag(argA_tag),
+	.valid_i(valid[0]),
+	.valid_o(valid_o[0])
+);
+
+Stark_validate_Rn uvRs2
+(
+	.prn(prn),
+	.prnv(prnv),
+	.rfo(rfo),
+	.pRn(rob.op.pRs2),
+	.val(argB),
+	.val_tag(argB_tag),
+	.valid_i(valid[1]),
+	.valid_o(valid_o[1])
+);
+
+Stark_validate_Rn uvRs3
+(
+	.prn(prn),
+	.prnv(prnv),
+	.rfo(rfo),
+	.pRn(rob.op.pRs3),
+	.val(argC),
+	.val_tag(argC_tag),
+	.valid_i(valid[2]),
+	.valid_o(valid_o[2])
+);
+
+Stark_validate_Rn uvRd
+(
+	.prn(prn),
+	.prnv(prnv),
+	.rfo(rfo),
+	.pRn(rob.op.pRd),
+	.val(argD),
+	.val_tag(argD_tag),
+	.valid_i(valid[3]),
+	.valid_o(valid_o[3])
+);
 
 always_ff @(posedge clk)
 if (rst) begin
@@ -160,49 +207,7 @@ else begin
 		if (!rob.op.decbus.multicycle || (&next_cptgt) || rob.op.decbus.cpytgt)
 			sc_done <= TRUE;
 	end
-	tValidate(rob.op.pRs1,argA,argA_tag,valid[0],valid[0]);
-	if (rob.op.pRs1==8'd0) begin
-		argA <= value_zero;
-		argA_tag <= 1'b0;
-		valid[0] <= 1'b1;
-	end
-	tValidate(rob.op.pRs2,argB,argB_tag,valid[1],valid[1]);
-	if (rob.op.pRs2==8'd0) begin
-		argB <= value_zero;
-		argB_tag <= 1'b0;
-		valid[1] <= 1'b1;
-	end
-	tValidate(rob.op.pRs3,argC,argC_tag,valid[2],valid[2]);
-	if (rob.op.pRs3==8'd0) begin
-		argC <= value_zero;
-		argC_tag <= 1'b0;
-		valid[2] <= 1'b1;
-	end
-	tValidate(rob.op.pRd,argD,argD_tag,valid[3],valid[3]);
-	if (rob.op.pRd==8'd0) begin
-		argD <= value_zero;
-		argD_tag <= 1'b0;
-		valid[3] <= 1'b1;
-	end
+	valid <= valid_o;
 end
-
-task tValidate;
-input pregno_t pRn;
-output value_t val;
-output val_tag;
-input valid_i;
-output valid_o;
-integer nn;
-begin
-	valid_o <= valid_i;
-	for (nn = 0; nn < 16; nn = nn + 1) begin
-		if (pRn==prn[nn] && prnv[nn] && !valid_i) begin
-			val <= rfo[nn];
-			val_tag <= rfo_tag[nn];
-			valid_o <= 1'b1;
-		end
-	end
-end
-endtask
 
 endmodule

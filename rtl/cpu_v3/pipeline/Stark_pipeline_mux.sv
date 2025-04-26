@@ -51,11 +51,11 @@ module Stark_pipeline_mux(rst_i, clk_i, rstcnt, advance_fet, ihit, en_i,
 	micro_machine_active, mipv_i, mip_i, cline_fet, cline_mux, new_cline_mux,
 	reglist_active, grp_i, grp_o,
 	takb_fet, mc_offs, pc_i, vl,
-	pc0_fet, pc1_fet, pc2_fet, pc3_fet, pc4_fet,
+	pc0_fet,
 	ls_bmf_i, pack_regs_i, scale_regs_i, regcnt_i, mc_adr,
 	mc_ins0_i, mc_ins1_i, mc_ins2_i, mc_ins3_i,
 	len0_i, len1_i, len2_i, len3_i,
-	pg0_mux, pg1_mux,
+	pg_mux,
 	mcip0_i, mcip1_i, mcip2_i, mcip3_i,
 //	mcip0_o, mcip1_o, mcip2_o, mcip3_o,
 	do_bsr, bsr_tgt, do_ret, ret_pc, do_call, get, mux_stallq, fet_stallq, stall);
@@ -89,10 +89,6 @@ output reg new_cline_mux;
 input [2:0] grp_i;
 output reg [2:0] grp_o;
 input pc_address_ex_t pc0_fet;
-input pc_address_ex_t pc1_fet;
-input pc_address_ex_t pc2_fet;
-input pc_address_ex_t pc3_fet;
-input pc_address_ex_t pc4_fet;
 input [3:0] takb_fet;
 input [3:0] pt_mux;
 output reg [3:0] p_override;
@@ -116,8 +112,7 @@ input [4:0] len0_i;
 input [4:0] len1_i;
 input [4:0] len2_i;
 input [4:0] len3_i;
-output Stark_pkg::pipeline_group_reg_t pg0_mux;
-output Stark_pkg::pipeline_group_reg_t pg1_mux;
+output Stark_pkg::pipeline_group_reg_t pg_mux;
 /*
 output cpu_types_pkg::mc_address_t mcip0_o;
 output cpu_types_pkg::mc_address_t mcip1_o;
@@ -135,14 +130,14 @@ output reg fet_stallq;
 output stall;
 
 integer nn,hh;
+pc_address_ex_t pc1_fet;
+pc_address_ex_t pc2_fet;
+pc_address_ex_t pc3_fet;
 Stark_pkg::irq_info_packet_t irq_in_r;
 Stark_pkg::pipeline_reg_t ins0_mux_o;
 Stark_pkg::pipeline_reg_t ins1_mux_o;
 Stark_pkg::pipeline_reg_t ins2_mux_o;
 Stark_pkg::pipeline_reg_t ins3_mux_o;
-Stark_pkg::pipeline_reg_t ins4_mux_o;
-Stark_pkg::pipeline_reg_t ins5_mux_o;
-Stark_pkg::pipeline_reg_t ins6_mux_o;
 reg [1023:0] cline_fet;
 wire [5:0] jj;
 reg [5:0] kk;
@@ -156,14 +151,10 @@ Stark_pkg::pipeline_reg_t ins0_mux;
 Stark_pkg::pipeline_reg_t ins1_mux;
 Stark_pkg::pipeline_reg_t ins2_mux;
 Stark_pkg::pipeline_reg_t ins3_mux;
-Stark_pkg::pipeline_reg_t ins4_mux;
 Stark_pkg::pipeline_reg_t ins0_fet;
 Stark_pkg::pipeline_reg_t ins1_fet;
 Stark_pkg::pipeline_reg_t ins2_fet;
 Stark_pkg::pipeline_reg_t ins3_fet;
-Stark_pkg::pipeline_reg_t ins4_fet;
-Stark_pkg::pipeline_reg_t ins5_fet;
-Stark_pkg::pipeline_reg_t ins6_fet;
 Stark_pkg::pipeline_reg_t mc_ins0;
 Stark_pkg::pipeline_reg_t mc_ins1;
 Stark_pkg::pipeline_reg_t mc_ins2;
@@ -180,6 +171,10 @@ reg prev_ssm_flag;
 
 wire hirq = ~reglist_active && hirq_i && mip[11:8]!=4'h1;
 Stark_pkg::pipeline_reg_t nopi;
+
+always_comb pc1_fet = pc0_fet + 4'd4;
+always_comb pc2_fet = pc0_fet + 4'd8;
+always_comb pc3_fet = pc0_fet + 4'd12;
 
 // Define a NOP instruction.
 always_comb
@@ -301,14 +296,12 @@ Stark_pkg::pipeline_reg_t pr0_mux;
 Stark_pkg::pipeline_reg_t pr1_mux;
 Stark_pkg::pipeline_reg_t pr2_mux;
 Stark_pkg::pipeline_reg_t pr3_mux;
-Stark_pkg::pipeline_reg_t pr4_mux;
 always_comb
 begin
 	pr0_mux = nopi;
 	pr1_mux = nopi;
 	pr2_mux = nopi;
 	pr3_mux = nopi;
-	pr4_mux = nopi;
 	if (!redundant_group) begin
 		// Allow only one instruction through when single stepping.
 		if (ssm_flag & ~prev_ssm_flag) begin
@@ -316,30 +309,25 @@ begin
 			pr1_mux = nopi;
 			pr2_mux = nopi;
 			pr3_mux = nopi;
-			pr4_mux = nopi;
 			pr1_mux.ssm = TRUE;
 			pr2_mux.ssm = TRUE;
 			pr3_mux.ssm = TRUE;
-			pr4_mux.ssm = TRUE;
 		end
 		else if (ssm_flag) begin
 			pr0_mux = nopi;
 			pr1_mux = nopi;
 			pr2_mux = nopi;
 			pr3_mux = nopi;
-			pr4_mux = nopi;
 			pr0_mux.ssm = TRUE;
 			pr1_mux.ssm = TRUE;
 			pr2_mux.ssm = TRUE;
 			pr3_mux.ssm = TRUE;
-			pr4_mux.ssm = TRUE;
 		end
 		else begin
 			pr0_mux.uop.ins = ic_line_aligned[ 31:  0];
 			pr1_mux.uop.ins = ic_line_aligned[ 63: 32];
 			pr2_mux.uop.ins = ic_line_aligned[ 95: 64];
 			pr3_mux.uop.ins = ic_line_aligned[127: 96];
-			pr4_mux.uop.ins = ic_line_aligned[159:128];
 		end
 	end
 /*
@@ -355,7 +343,6 @@ begin
 	pr1_mux.v = !(nmi_i || irqf_fet) && !stomp_mux && !ssm_flag;
 	pr2_mux.v = !(nmi_i || irqf_fet) && !stomp_mux && !ssm_flag;
 	pr3_mux.v = !(nmi_i || irqf_fet) && !stomp_mux && !ssm_flag;
-	pr4_mux.v = !(nmi_i || irqf_fet) && !stomp_mux && !ssm_flag;
 /*	
 	pr0_mux.hwi = nmi_i||irqf_fet;
 	pr1_mux.hwi = nmi_i||irqf_fet;
@@ -378,7 +365,6 @@ always_comb tExtractIns(pc0_fet, pt_mux[0], takb_fet[0], mip_i|2'd0, len0_i, pr0
 always_comb tExtractIns(pc1_fet, pt_mux[1], takb_fet[1], mip_i|2'd1, len1_i, pr1_mux, ins1_fet, p_override[1], po_bno[1]);
 always_comb tExtractIns(pc2_fet, pt_mux[2], takb_fet[2], mip_i|2'd2, len2_i, pr2_mux, ins2_fet, p_override[2], po_bno[2]);
 always_comb tExtractIns(pc3_fet, pt_mux[3], takb_fet[3], mip_i|2'd3, len3_i, pr3_mux, ins3_fet, p_override[3], po_bno[3]);
-always_comb tExtractIns(pc4_fet, pt_mux[3], takb_fet[3], mip_i|2'd3, len3_i, pr4_mux, ins4_fet, p_override_dummy, po_bno_dummy);
 
 /* under construction
 always_ff @(posedge clk_i)
@@ -661,67 +647,17 @@ Stark_ins_extract_mux umux3
 	.ins(ins3_mux)
 );
 
-Stark_ins_extract_mux umux4
-(
-	.rst(rst_i),
-	.clk(clk_i),
-	.en(en),
-	.nop(nop3),
-	.rgi(2'd3),
-	.regcnt(regcnt_i),
-	.hirq(hirq),
-	.irq_i(irq_i),
-	.vect_i(vect_i),
-	.mipv(mipv_i),
-	.mc_ins0(mc_ins0),
-	.mc_ins(mc_ins3),
-	.ins0(ins0_fet),
-	.insi(ins4_fet),
-	.reglist_active(reglist_active),
-	.ls_bmf(ls_bmf_i),
-	.scale_regs_i(scale_regs_i),
-	.pack_regs(pack_regs_i),
-	.ins(ins4_mux)
-);
-
-Stark_ins_extract_mux umux5
-(
-	.rst(rst_i),
-	.clk(clk_i),
-	.en(en),
-	.nop(nop3),
-	.rgi(2'd3),
-	.regcnt(regcnt_i),
-	.hirq(hirq),
-	.irq_i(irq_i),
-	.vect_i(vect_i),
-	.mipv(mipv_i),
-	.mc_ins0(mc_ins0),
-	.mc_ins(mc_ins3),
-	.ins0(ins0_fet),
-	.insi(ins5_fet),
-	.reglist_active(reglist_active),
-	.ls_bmf(ls_bmf_i),
-	.scale_regs_i(scale_regs_i),
-	.pack_regs(pack_regs_i),
-	.ins(ins5_mux)
-);
-
 assign stall = 1'b0;
 
 always_comb ins0_mux_o = ins0_mux;
 always_comb ins1_mux_o = ins1_mux;
 always_comb ins2_mux_o = ins2_mux;
 always_comb ins3_mux_o = ins3_mux;
-always_comb ins4_mux_o = ins4_mux;
-always_comb ins5_mux_o = ins5_mux;
-always_comb pg0_mux.hdr.irq = irq_in_r;
-always_comb pg0_mux.pr0 = ins0_mux;
-always_comb pg0_mux.pr1 = ins1_mux;
-always_comb pg0_mux.pr2 = ins2_mux;
-always_comb pg0_mux.pr3 = ins3_mux;
-always_comb pg1_mux.pr0 = ins4_mux;
-always_comb pg1_mux.pr1 = ins5_mux;
+always_comb pg_mux.hdr.irq = irq_in_r;
+always_comb pg_mux.pr0 = ins0_mux;
+always_comb pg_mux.pr1 = ins1_mux;
+always_comb pg_mux.pr2 = ins2_mux;
+always_comb pg_mux.pr3 = ins3_mux;
 
 always_ff @(posedge clk) if (en) irq_in_r <= irq_in;
 always_ff @(posedge clk) if (en) nop_o <= stomp_mux;

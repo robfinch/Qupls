@@ -44,7 +44,7 @@ import cpu_types_pkg::*;
 import Stark_pkg::*;
 
 module Stark_alu(rst, clk, clk2x, om, ld, ir, div, a, b, bi, c, i, t, qres,
-	cs, pc, pcc, csr, cpl, coreno, canary, o, o2, o3, mul_done, div_done, div_dbz, exc_o);
+	cs, pc, pcc, csr, cpl, coreno, canary, o, mul_done, div_done, div_dbz, exc_o);
 parameter ALU0 = 1'b1;
 parameter WID=64;
 parameter LANE=0;
@@ -70,8 +70,6 @@ input [7:0] cpl;
 input [WID-1:0] coreno;
 input [WID-1:0] canary;
 output reg [WID-1:0] o;
-output reg [WID-1:0] o2;
-output reg [WID-1:0] o3;
 output reg mul_done;
 output div_done;
 output div_dbz;
@@ -91,7 +89,6 @@ reg [WID*2-1:0] shl, shr, asr;
 wire [WID-1:0] div_q, div_r;
 wire [WID-1:0] cmpo;
 reg [WID:0] bus;
-reg [WID-1:0] bus2, bus3;
 reg [WID-1:0] busx;
 reg [WID-1:0] blendo;
 reg [22:0] ii;
@@ -144,7 +141,16 @@ else begin
 	mul_done <= mul_cnt[3];
 end
 
-Stark_cmp #(.WID(WID)) ualu_cmp(ir, a, b, i, cmpo);
+Stark_cmp #(.WID(WID)) ualu_cmp
+(
+	.ir(ir),
+	.om(om),
+	.cr(64'd0),
+	.a(a),
+	.b(b),
+	.i(i),
+	.o(cmpo)
+);
 
 Stark_divider #(.WID(WID)) udiv0(
 	.rst(rst),
@@ -536,7 +542,6 @@ always_comb
 begin
 	exc = Stark_pkg::FLT_NONE;
 	bus = {(WID/16){16'h0000}};
-	bus2 = {(WID/16){16'h0000}};
 	case(ir.any.opcode)
 	Stark_pkg::OP_FLT:
 		case(ir.fpu.op4)
@@ -723,12 +728,10 @@ begin
 			3'd0:	// MOVE / XCHG
 				begin
 					bus = a;	// MOVE
-					bus2 = b;	// not updated by MOVE
 				end
 			3'd1:	// XCHGMD / MOVEMD
 				begin	
 					bus = a;
-					bus2 = b;	// not updated by MOVEMD
 				end
 			3'd2:	bus = zero;		// MOVSX
 			3'd3:	bus = zero;		// MOVZX
@@ -763,25 +766,8 @@ begin
 	endcase
 end
 
-always_comb
-begin
-	bus3 = zero;
-	bus3[0] = bus==zero;
-	bus3[1] = 1'b1;
-	bus3[2] = bus==zero;
-	bus3[3] = bus[WID-1];
-	bus3[4] = bus[WID-1]||bus==zero;
-	bus3[5] = bus[WID];
-	bus3[6] = 1'b0;
-	bus3[7] = 1'b0;
-end
-
 always_ff @(posedge clk)
 	o = bus;
-always_ff @(posedge clk)
-	o2 = bus2;
-always_ff @(posedge clk)
-	o3 = bus3 << {om,3'b0};
 always_ff @(posedge clk)
 	exc_o = exc;
 

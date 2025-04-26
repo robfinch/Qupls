@@ -9,7 +9,7 @@ input clk5x;
 input [4:0] ph4;
 input [1:0] backout_st2;
 input rob_ndx_t fcu_id;
-input pipeline_group_hdr_t [ROB_ENTRIES/4-1:0] pgh;
+input pipeline_group_hdr_t [Stark_pkg::ROB_ENTRIES/4-1:0] pgh;
 output reg setcp;
 output reg [5:0] setcp_grp;
 output wire freecp;
@@ -20,9 +20,9 @@ output reg alloc_chkpt;
 // instructions will read from the checkpoint files at cndx.
 // This is the index used to read the checkpoint RAMs.
 // Want the checkpoint to take effect for the next group of instructions.
-output checkpt_ndx_t cndx;
+output cpu_types_pkg::checkpt_ndx_t cndx;
 input restore;
-input checkpt_ndx_t miss_cp;
+input cpu_types_pkg::checkpt_ndx_t miss_cp;
 
 reg ialloc_chkpt;
 wire free_chkpt;

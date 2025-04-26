@@ -125,6 +125,7 @@ always_comb ti[3] = ti3;
 always_comb ti[4] = ti4;
 always_comb ti[5] = ti5;
 
+integer n;
 genvar g;
 
 // Live value table
@@ -216,8 +217,6 @@ generate begin : gRF
 	end
 end
 endgenerate
-
-integer n;
 
 generate begin : gRFO
 	for (g = 0; g < RPORTS; g = g + 1) begin

@@ -43,7 +43,7 @@ module Stark_pipeline_dec(rst_i, rst, clk, en, clk5x, ph4, new_cline_mux, cline,
 	restored, restore_list, unavail_list, sr,
 	tags2free, freevals, bo_wr, bo_preg,
 	ins0_d_inv, ins1_d_inv, ins2_d_inv, ins3_d_inv,
-	stomp_dec, stomp_mux, stomp_bno, pg0_mux, pg1_mux,
+	stomp_dec, stomp_mux, stomp_bno, pg_mux,
 	Rt0_dec, Rt1_dec, Rt2_dec, Rt3_dec, Rt0_decv, Rt1_decv, Rt2_decv, Rt3_decv,
 	micro_machine_active_mux, micro_machine_active_dec,
 	pg_dec,
@@ -64,8 +64,7 @@ input Stark_pkg::status_reg_t sr;
 input stomp_dec;
 input stomp_mux;
 input [4:0] stomp_bno;
-input Stark_pkg::pipeline_group_reg_t pg0_mux;
-input Stark_pkg::pipeline_group_reg_t pg1_mux;
+input Stark_pkg::pipeline_group_reg_t pg_mux;
 input pregno_t [3:0] tags2free;
 input [3:0] freevals;
 input bo_wr;
@@ -91,7 +90,7 @@ output reg micro_machine_active_dec;
 output [PREGS-1:0] avail_reg;
 
 integer n1,n2,n3,n4,n5;
-Stark_pkg::pipeline_group_reg_t pg0_mux_r;
+Stark_pkg::pipeline_group_reg_t pg_mux_r;
 reg [31:0] carry_mod_i;
 reg [31:0] carry_mod_o;
 reg [11:0] atom_mask_i;
@@ -140,7 +139,7 @@ pregno_t Rt3_dec1;
 Stark_pkg::pipeline_reg_t tpr0,tpr1,tpr2,tpr3,tpr4;
 
 always @(posedge clk)
-	pg0_mux_r <= pg0_mux;
+	pg_mux_r <= pg_mux;
 
 Stark_min_constant_decoder umcd1 (cline[511:0], nops[15:0]);
 Stark_min_constant_decoder umcd2 (cline[1023:512], nops[31:16]);
@@ -151,7 +150,7 @@ Stark_pkg::micro_op_t [31:0] uop_buf;
 
 Stark_microop uuop1
 (
-	.ir(pg0_mux.pr0.uop.ins), 
+	.ir(pg_mux.pr0.uop.ins), 
 	.carry_reg(8'd0),
 	.carry_out(1'b0),
 	.carry_in(1'b0),
@@ -161,7 +160,7 @@ Stark_microop uuop1
 
 Stark_microop uuop2
 (
-	.ir(pg0_mux.pr1.uop.ins), 
+	.ir(pg_mux.pr1.uop.ins), 
 	.carry_reg(8'd0),
 	.carry_out(1'b0),
 	.carry_in(1'b0),
@@ -171,7 +170,7 @@ Stark_microop uuop2
 
 Stark_microop uuop3
 (
-	.ir(pg0_mux.pr2.uop.ins), 
+	.ir(pg_mux.pr2.uop.ins), 
 	.carry_reg(8'd0),
 	.carry_out(1'b0),
 	.carry_in(1'b0),
@@ -181,7 +180,7 @@ Stark_microop uuop3
 
 Stark_microop uuop4
 (
-	.ir(pg0_mux.pr3.uop.ins), 
+	.ir(pg_mux.pr3.uop.ins), 
 	.carry_reg(8'd0),
 	.carry_out(1'b0),
 	.carry_in(1'b0),
@@ -195,28 +194,28 @@ reg [1:0] uop_mark [0:31];
 always_comb
 begin
 	case(uop_mark[0])
-	2'd0:	tpr0 = pg0_mux.pr0;
-	2'd1:	tpr0 = pg0_mux.pr1;
-	2'd2:	tpr0 = pg0_mux.pr2;
-	2'd3:	tpr0 = pg0_mux.pr3;
+	2'd0:	tpr0 = pg_mux.pr0;
+	2'd1:	tpr0 = pg_mux.pr1;
+	2'd2:	tpr0 = pg_mux.pr2;
+	2'd3:	tpr0 = pg_mux.pr3;
 	endcase
 	case(uop_mark[1])
-	2'd0:	tpr1 = pg0_mux.pr0;
-	2'd1:	tpr1 = pg0_mux.pr1;
-	2'd2:	tpr1 = pg0_mux.pr2;
-	2'd3:	tpr1 = pg0_mux.pr3;
+	2'd0:	tpr1 = pg_mux.pr0;
+	2'd1:	tpr1 = pg_mux.pr1;
+	2'd2:	tpr1 = pg_mux.pr2;
+	2'd3:	tpr1 = pg_mux.pr3;
 	endcase
 	case(uop_mark[2])
-	2'd0:	tpr2 = pg0_mux.pr0;
-	2'd1:	tpr2 = pg0_mux.pr1;
-	2'd2:	tpr2 = pg0_mux.pr2;
-	2'd3:	tpr2 = pg0_mux.pr3;
+	2'd0:	tpr2 = pg_mux.pr0;
+	2'd1:	tpr2 = pg_mux.pr1;
+	2'd2:	tpr2 = pg_mux.pr2;
+	2'd3:	tpr2 = pg_mux.pr3;
 	endcase
 	case(uop_mark[3])
-	2'd0:	tpr3 = pg0_mux.pr0;
-	2'd1:	tpr3 = pg0_mux.pr1;
-	2'd2:	tpr3 = pg0_mux.pr2;
-	2'd3:	tpr3 = pg0_mux.pr3;
+	2'd0:	tpr3 = pg_mux.pr0;
+	2'd1:	tpr3 = pg_mux.pr1;
+	2'd2:	tpr3 = pg_mux.pr2;
+	2'd3:	tpr3 = pg_mux.pr3;
 	endcase
 	tpr0.uop = uop_buf[0];
 	tpr1.uop = uop_buf[1];
@@ -249,7 +248,7 @@ else begin
 		uop_mark[29] <= 2'b00;
 		uop_mark[28] <= 2'b00;
 		if (rd_mux) begin
-			for (n4 = 0; n4 < 32; n4 = n4 + 2) begin
+			for (n4 = 0; n4 < 32; n4 = n4 + 1) begin
 				if (n4 < uop_count[0]) begin
 					uop_mark[n4] <= 2'd0;
 					uop_buf[n4] <= uop[0][n4];
@@ -570,9 +569,6 @@ else begin
 	end
 end
 
-/* An extra decoder is needed to catch any postfix instruction for the last
-	 instruction.
-*/
 Stark_decoder udeci0
 (
 	.rst(rst),
@@ -621,17 +617,6 @@ Stark_decoder udeci3
 	.dbo(dec3)
 );
 
-Stark_decoder udeci4
-(
-	.rst(rst),
-	.clk(clk),
-	.en(en),
-	.cline(cline),
-	.om(sr.om),
-	.ipl(sr.ipl),
-	.instr(tpr4.uop.ins),
-	.dbo(dec4)
-);
 /*
 always_ff @(posedge clk)
 if (rst_i) begin
@@ -639,8 +624,8 @@ if (rst_i) begin
 end
 else begin
 	if (en_i)
-		ins2m <= (stomp_dec && ((pg0_mux.pr0.bt|pg0_mux.pr1.bt|pg0_mux.pr2.bt|pg0_mux.pr3.bt) && branchmiss ? pg0_mux.pr3.pc.bno_t==stomp_bno : pg0_mux.pr3.pc.bno_f==stomp_bno )) ? nopi : pg0_mux.pr3;
-//		ins3m <= (stomp_dec && pg0_mux.pr3.pc.bno_t==stomp_bno) ? nopi : pg0_mux.pr3;
+		ins2m <= (stomp_dec && ((pg_mux.pr0.bt|pg_mux.pr1.bt|pg_mux.pr2.bt|pg_mux.pr3.bt) && branchmiss ? pg_mux.pr3.pc.bno_t==stomp_bno : pg_mux.pr3.pc.bno_f==stomp_bno )) ? nopi : pg_mux.pr3;
+//		ins3m <= (stomp_dec && pg_mux.pr3.pc.bno_t==stomp_bno) ? nopi : pg_mux.pr3;
 end
 */
 
@@ -714,36 +699,9 @@ begin
 		pr3_dec.decbus.Rci = dec3.Rci;
 	end
 	pr0_dec.decbus = dec0;
-	if (dec1.pfxa) begin pr0_dec.decbus.imma = {dec1.imma[63:5],dec0.Rs1[4:0]}; pr0_dec.decbus.has_imma = 1'b1; end
-	if (dec1.pfxb) begin 
-		pr0_dec.decbus.immb = dec0.mem ? {dec1.immb[63:5],dec0.immb[4:0]} : {dec1.immb[63:5],dec0.Rs2[4:0]};
-		pr0_dec.decbus.has_immb = 1'b1;
-	end
-	if (dec1.pfxc) begin pr0_dec.decbus.immc = {dec1.immc[63:5],dec0.Rs3[4:0]}; pr0_dec.decbus.has_immc = 1'b1; end
 	pr1_dec.decbus = dec1;
-	if (dec2.pfxa) begin 
-		pr1_dec.decbus.imma = {dec2.imma[63:5],dec1.Rs1[4:0]};
-		pr1_dec.decbus.has_imma = 1'b1;
-	end
-	if (dec2.pfxb) begin
-		pr1_dec.decbus.immb = dec1.mem ? {dec2.immb[63:5],dec1.immb[4:0]} : {dec2.immb[63:5],dec1.Rs2[4:0]};
-		pr1_dec.decbus.has_immb = 1'b1;
-	end
-	if (dec2.pfxc) begin pr1_dec.decbus.immc = {dec2.immc[63:5],dec1.Rs3[4:0]}; pr1_dec.decbus.has_immc = 1'b1; end
 	pr2_dec.decbus = dec2;
-	if (dec3.pfxa) begin pr2_dec.decbus.imma = {dec3.imma[63:5],dec2.Rs1[4:0]}; pr2_dec.decbus.has_imma = 1'b1; end
-	if (dec3.pfxb) begin 
-		pr2_dec.decbus.immb = dec2.mem ? {dec3.immb[63:5],dec2.immb[4:0]} : {dec3.immb[63:5],dec2.Rs2[4:0]};
-		pr2_dec.decbus.has_immb = 1'b1;
-	end
-	if (dec3.pfxc) begin pr2_dec.decbus.immc = {dec3.immc[63:5],dec2.Rs3[4:0]}; pr2_dec.decbus.has_immc = 1'b1; end
 	pr3_dec.decbus = dec3;
-	if (dec4.pfxa) begin pr3_dec.decbus.imma = {dec4.imma[63:5],dec3.Rs1[4:0]}; pr3_dec.decbus.has_imma = 1'b1; end
-	if (dec4.pfxb) begin
-		pr3_dec.decbus.immb = dec3.mem ? {dec4.immb[63:5],dec3.immb[4:0]} : {dec4.immb[63:5],dec3.Rs2[4:0]};
-		pr3_dec.decbus.has_immb = 1'b1;
-	end
-	if (dec4.pfxc) begin pr3_dec.decbus.immc = {dec4.immc[63:5],dec3.Rs3[4:0]}; pr3_dec.decbus.has_immc = 1'b1; end
 
 	// Mark instructions invalid according to where constants are located.
 	hilo = pr0_dec.pc.pc[6];
@@ -948,10 +906,10 @@ Stark_space_branches uspb1
 */
 always_comb
 begin
-	pg_dec = pg0_mux_r;
-	pg_dec.pr0.hwi_level = pg0_mux_r.hdr.irq.level;
+	pg_dec = pg_mux_r;
+	pg_dec.pr0.hwi_level = pg_mux_r.hdr.irq.level;
 	if (hwi_ignore) begin
-		if (pg0_mux_r.hdr.irq.level != 6'd63) begin
+		if (pg_mux_r.hdr.irq.level != 6'd63) begin
 			pg_dec.hdr.hwi = 1'b0;
 			pg_dec.pr0.hwi = 1'b0;
 		end

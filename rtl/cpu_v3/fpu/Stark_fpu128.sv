@@ -87,7 +87,16 @@ capability64_t Ca = capability64_t'(a);
 capability64_t Cb = capability64_t'(b);
 capability64_t Ct;
 
-Stark_cmp #(.WID(WID)) ualu_cmp(ir, a, b, i, cmpo);
+Stark_cmp #(.WID(WID)) ualu_cmp
+(
+	.ir(ir),
+	.om(om),
+	.cr(64'd0),
+	.a(a),
+	.b(b),
+	.i(i),
+	.o(cmpo)
+);
 
 // A change in arguments is used to load the divider.
 change_det #(.WID(256)) uargcd0 (
