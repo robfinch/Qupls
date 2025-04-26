@@ -774,7 +774,7 @@ reg dram0_hi;
 reg dram0_erc;
 reg [9:0] dram0_shift;
 reg [11:0] dram0_tocnt;
-reg dram0_done;
+wire dram0_done;
 reg dram0_idv;
 checkpt_ndx_t dram0_cp;
 value_t dram0_argD;
@@ -811,7 +811,7 @@ reg dram1_erc;
 reg dram1_hi;
 reg [9:0] dram1_shift;
 reg [11:0] dram1_tocnt;
-reg dram1_done;
+wire dram1_done;
 reg dram1_idv;
 checkpt_ndx_t dram1_cp;
 value_t dram1_argD;
@@ -2407,7 +2407,7 @@ pregno_t [3:0] tags2free;
 wire [3:0] freevals;
 wire [PREGS-1:0] avail_reg;						// available registers
 checkpt_ndx_t cndx0,cndx1,cndx2,cndx3,pcndx;		// checkpoint index for each queue slot
-reg restore;		// = branch_state==BS_CHKPT_RESTORE && restore_en;// && !fcu_cjb;
+wire restore;		// = branch_state==BS_CHKPT_RESTORE && restore_en;// && !fcu_cjb;
 wire restored;	// restore_chkpt delayed one clock.
 wire Rt0_decv;
 wire Rt1_decv;
@@ -3289,76 +3289,76 @@ reg [8:0] fcu_weA, fcu_weB;
 
 // Always write all bytes, unless a condition register.
 always_ff @(posedge clk) alu0_weA =
-	(alu0_aRdAA2 >= 7'd80 && alu0_aRdAA2 <= 7'd87) ?
+	(alu0_aRdA2 >= 7'd56 && alu0_aRdA2 <= 7'd63) ?
 	((alu0_omA2==Stark_pkg::OM_SECURE ? 9'h0FF : alu0_omA2==Stark_pkg::OM_HYPERVISOR ? 9'h0F : alu0_omA2==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01) & {9{alu0_wrA}}) :
 	{wt0A,8'hFF} & {9{alu0_wrA}};
 always_ff @(posedge clk) alu0_weB =
-	(alu0_aRdB2 >= 7'd80 && alu0_aRdB2 <= 7'd87) ?
+	(alu0_aRdB2 >= 7'd56 && alu0_aRdB2 <= 7'd63) ?
 	((alu0_omB2==Stark_pkg::OM_SECURE ? 9'h0FF : alu0_omB2==Stark_pkg::OM_HYPERVISOR ? 9'h0F : alu0_omB2==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01) & {9{alu0_wrB}}) :
 	{wt0B,8'hFF} & {9{alu0_wrB}};
 always_ff @(posedge clk) alu0_weC = 
-	(alu0_aRdC2 >= 7'd80 && alu0_aRdC2 <= 7'd87) ?
+	(alu0_aRdC2 >= 7'd56 && alu0_aRdC2 <= 7'd63) ?
 	((alu0_omC2==Stark_pkg::OM_SECURE ? 9'h0FF : alu0_omC2==Stark_pkg::OM_HYPERVISOR ? 9'h0F : alu0_omC2==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01) & {9{alu0_wrC}}) :
 	{wt0C,8'hFF} & {9{alu0_wrC}};
 	
 always_ff @(posedge clk) alu1_weA =
-	(alu1_aRdA2 >= 7'd80 && alu1_aRdA2 <= 7'd87) ?
+	(alu1_aRdA2 >= 7'd56 && alu1_aRdA2 <= 7'd63) ?
 	((alu1_omA2==Stark_pkg::OM_SECURE ? 9'h0FF : alu1_omA2==Stark_pkg::OM_HYPERVISOR ? 9'h0F : alu1_omA2==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01) & {9{alu1_wrA}}) :
 	{wt1A,8'hFF} & {9{alu1_wrA}} & {9{Stark_pkg::NALU > 1}};
 always_ff @(posedge clk) alu1_weB =
- 	(alu1_aRdB2 >= 7'd80 && alu1_aRdB2 <= 7'd87) ?
+ 	(alu1_aRdB2 >= 7'd56 && alu1_aRdB2 <= 7'd63) ?
  	((alu1_omB2==Stark_pkg::OM_SECURE ? 9'h0FF : alu1_omB2==Stark_pkg::OM_HYPERVISOR ? 9'h0F : alu1_omB2==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01) & {9{alu1_wrB}}) :
  	{wt1B,8'hFF} & {9{alu1_wrB}} & {9{Stark_pkg::NALU > 1}};
 always_ff @(posedge clk) alu1_weC =
- 	(alu1_aRdC2 >= 7'd80 && alu1_aRdC2 <= 7'd87) ?
+ 	(alu1_aRdC2 >= 7'd56 && alu1_aRdC2 <= 7'd63) ?
  	((alu1_omC2==Stark_pkg::OM_SECURE ? 9'h0FF : alu1_omC2==Stark_pkg::OM_HYPERVISOR ? 9'h0F : alu1_omC2==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01) & {9{alu1_wrC}}) :
  	{wt1C,8'hFF} & {9{alu1_wrC}} & {9{Stark_pkg::NALU > 1}};
 
 always_ff @(posedge clk) fpu0_weA =
-	(fpu0_aRdA2 >= 7'd80 && fpu0_aRdA2 <= 7'd87) ?
+	(fpu0_aRdA2 >= 7'd56 && fpu0_aRdA2 <= 7'd63) ?
 	((fpu0_omA2==Stark_pkg::OM_SECURE ? 9'h0FF : fpu0_omA2==Stark_pkg::OM_HYPERVISOR ? 9'h0F : fpu0_omA2==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01) & {9{fpu0_wrA}}) :
 	{wt2A,8'hFF} & {9{fpu0_wrA}} & {9{Stark_pkg::NFPU > 0}};
 always_ff @(posedge clk) fpu0_weB =
-	(fpu0_aRdB2 >= 7'd80 && fpu0_aRdB2 <= 7'd87) ?
+	(fpu0_aRdB2 >= 7'd56 && fpu0_aRdB2 <= 7'd63) ?
 	((fpu0_omB2==Stark_pkg::OM_SECURE ? 9'h0FF : fpu0_omB2==Stark_pkg::OM_HYPERVISOR ? 9'h0F : fpu0_omB2==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01) & {9{fpu0_wrB}}) :
 	{wt2B,8'hFF} & {9{fpu0_wrB}} & {9{Stark_pkg::NFPU > 0}};
 always_ff @(posedge clk) fpu0_weC =
-	(fpu0_aRdC2 >= 7'd80 && fpu0_aRdC2 <= 7'd87) ?
+	(fpu0_aRdC2 >= 7'd56 && fpu0_aRdC2 <= 7'd63) ?
 	((fpu0_omC2==Stark_pkg::OM_SECURE ? 9'h0FF : fpu0_omC2==Stark_pkg::OM_HYPERVISOR ? 9'h0F : fpu0_omC2==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01) & {9{fpu0_wrC}}) :
 	{wt2C,8'hFF} & {9{fpu0_wrC}} & {9{Stark_pkg::NFPU > 0}};
 
 always_ff @(posedge clk) fpu1_weA =
-	(fpu1_aRdA2 >= 7'd80 && fpu1_aRdA2 <= 7'd87) ?
+	(fpu1_aRdA2 >= 7'd56 && fpu1_aRdA2 <= 7'd63) ?
 	((fpu1_omA2==Stark_pkg::OM_SECURE ? 9'h0FF : fpu1_omA2==Stark_pkg::OM_HYPERVISOR ? 9'h0F : fpu1_omA2==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01) & {9{fpu1_wrA}}) :
 	{wt3A,8'hFF} & {9{fpu1_wrA}} & {9{Stark_pkg::NFPU > 1}};
 always_ff @(posedge clk) fpu1_weB =
-	(fpu1_aRdB2 >= 7'd80 && fpu1_aRdB2 <= 7'd87) ?
+	(fpu1_aRdB2 >= 7'd56 && fpu1_aRdB2 <= 7'd63) ?
 	((fpu1_omB2==Stark_pkg::OM_SECURE ? 9'h0FF : fpu1_omB2==Stark_pkg::OM_HYPERVISOR ? 9'h0F : fpu1_omB2==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01) & {9{fpu1_wrB}}) :
 	{wt3B,8'hFF} & {9{fpu1_wrB}} & {9{Stark_pkg::NFPU > 1}};
 always_ff @(posedge clk) fpu1_weC =
-	(fpu1_aRdC2 >= 7'd80 && fpu1_aRdC2 <= 7'd87) ?
+	(fpu1_aRdC2 >= 7'd56 && fpu1_aRdC2 <= 7'd63) ?
 	((fpu1_omC2==Stark_pkg::OM_SECURE ? 9'h0FF : fpu1_omC2==Stark_pkg::OM_HYPERVISOR ? 9'h0F : fpu1_omC2==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01) & {9{fpu1_wrC}}) :
 	{wt3C,8'hFF} & {9{fpu1_wrC}} & {9{Stark_pkg::NFPU > 1}};
 
 always_ff @(posedge clk) dram0_weA =
-	(dram0_aRtA2 >= 7'd80 && dram0_aRtA2 <= 7'd87) ?
+	(dram0_aRtA2 >= 7'd56 && dram0_aRtA2 <= 7'd63) ?
 	((dram0_omA2==Stark_pkg::OM_SECURE ? 9'h0FF : dram0_omA2==Stark_pkg::OM_HYPERVISOR ? 9'h0F : dram0_omA2==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01) & {9{dram0_wrA}}) : {wt4A,8'hFF} & {9{dram0_wrA}};
 always_ff @(posedge clk) dram0_weB =
-	(dram0_aRtB2 >= 7'd80 && dram0_aRtB2 <= 7'd87) ?
+	(dram0_aRtB2 >= 7'd56 && dram0_aRtB2 <= 7'd63) ?
 	((dram0_omB2==Stark_pkg::OM_SECURE ? 9'h0FF : dram0_omB2==Stark_pkg::OM_HYPERVISOR ? 9'h0F : dram0_omB2==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01) & {9{dram0_wrB}}) : {wt4B,8'hFF} & {9{dram0_wrB}};
 
 always_ff @(posedge clk) dram1_weA =
-	(dram1_aRtA2 >= 7'd80 && dram1_aRtA2 <= 7'd87) ?
+	(dram1_aRtA2 >= 7'd56 && dram1_aRtA2 <= 7'd63) ?
 	((dram1_omA2==Stark_pkg::OM_SECURE ? 9'h0FF : dram1_omA2==Stark_pkg::OM_HYPERVISOR ? 9'h0F : dram1_omA2==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01) & {9{dram1_wrA}}) : {wt5A,8'hFF} & {9{dram1_wrA}} & {9{Stark_pkg::NDATA_PORTS > 1}};
 always_ff @(posedge clk) dram1_weB =
-	(dram1_aRtB2 >= 7'd80 && dram1_aRtB2 <= 7'd87) ?
+	(dram1_aRtB2 >= 7'd56 && dram1_aRtB2 <= 7'd63) ?
 	((dram1_omB2==Stark_pkg::OM_SECURE ? 9'h0FF : dram1_omB2==Stark_pkg::OM_HYPERVISOR ? 9'h0F : dram1_omB2==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01) & {9{dram1_wrB}}) : {wt5B,8'hFF} & {9{dram1_wrB}} & {9{Stark_pkg::NDATA_PORTS > 1}};
 
 always_ff @(posedge clk) fcu_weA =
-	(fcu_aRtA2 >= 7'd80 && fcu_aRtA2 <= 7'd87) ?
+	(fcu_aRtA2 >= 7'd56 && fcu_aRtA2 <= 7'd63) ?
 	((fcu_omA2==Stark_pkg::OM_SECURE ? 9'h0FF : fcu_omA2==Stark_pkg::OM_HYPERVISOR ? 9'h0F : fcu_omA2==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01) & {9{fcu_wrA}}) : {wt6A,8'hFF} & {9{fcu_wrA}};
 always_ff @(posedge clk) fcu_weB =
-	(fcu_aRtB2 >= 7'd80 && fcu_aRtB2 <= 7'd87) ?
+	(fcu_aRtB2 >= 7'd56 && fcu_aRtB2 <= 7'd63) ?
 	((fcu_omB2==Stark_pkg::OM_SECURE ? 9'h0FF : fcu_omB2==Stark_pkg::OM_HYPERVISOR ? 9'h0F : fcu_omB2==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01) & {9{fcu_wrB}}) : {wt6B,8'hFF} & {9{fcu_wrB}};
 
 always_comb wt0A = (alu0_sc_done|alu0_done) && !alu0_aRdzA2 && alu0_capA;
@@ -4115,28 +4115,16 @@ Stark_backout_flag ubkoutf1
 	.backout(backout)
 );
 
-// Restore flag.
-// A restore will trigger a backout.
-// Almost the same as backout except a restore is not needed for correctly
-// predicated branches.
-
-always_ff @(posedge clk)
-if (irst)
-	restore <= FALSE;
-else begin
-	restore <= FALSE;
-	if (fcu_branch_resolved) begin
-		case(fcu_brclass)
-		Stark_pkg::BRC_BCCR,
-		Stark_pkg::BRC_BCCD,
-		Stark_pkg::BRC_BCCC:
-			if (branchmiss_det)
-				restore <= !fcu_found_destination;
-		default:
-			;		
-		endcase
-	end
-end
+Stark_restore_flag urstf1
+(
+	.rst(irst),
+	.clk(clk),
+	.fcu_branch_resolved(fcu_branchmiss_resolved),
+	.fcu_brclass(fcu_brclass),
+	.fcu_found_destination(fcu_found_destination),
+	.branchmiss_det(branchmiss_det),
+	.restore(restore)
+);
 
 // Registering the branch miss signals may allow a second miss directly after
 // the first one to occur. We want to process only the first miss. Three in
@@ -5051,38 +5039,51 @@ begin
 	end
 end
 
-// Stores are done as soon as they issue.
-// Loads are done when there is an ack back from the memory system.
-always_ff @(posedge clk)
-if (irst)
-	dram0_done <= FALSE;
-else begin
-	dram0_done <= FALSE;
-	if (!(dram0_store|dram0_cstore|dram0_load|dram0_cload) && dram0_idv)
-		dram0_done <= TRUE;
-	else if ((dram0_store|dram0_cstore) ? !robentry_stomp[dram0_id] && dram0_idv :
-		(dram0 == DRAMSLOT_ACTIVE && dram0_ack &&
-			(dram0_hi ? ((dram0_load|dram0_cload) & ~dram0_stomp) :
-			((dram0_load|dram0_cload|dram0_cload_tags) & ~dram0_more & ~dram0_stomp)))
-		)
-		dram0_done <= TRUE;
-end
+Stark_dram_done udrdn1
+(
+	.rst(irst),
+	.clk(clk),
+	.load(dram0_load),
+	.store(dram0_store),
+	.cload(dram0_cload),
+	.cstore(dram0_cstore),
+	.cload_tags(dram0_cload_tags),
+	.ack(dram0_ack),
+	.hilo(dram0_hi),
+	.dram_idv(dram0_idv),
+	.dram_id(dram0_id), 
+	.dram_state(dram0),
+	.dram_more(dram0_more),
+	.stomp(robentry_stomp),
+	.dram_stomp(dram0_stomp),
+	.done(dram0_done)
+);
 
-always_ff @(posedge clk)
-if (irst)
-	dram1_done <= FALSE;
-else begin
-	dram1_done <= FALSE;
-	if (Stark_pkg::NDATA_PORTS > 1) begin
-		if (!(dram1_store|dram1_cstore|dram1_load|dram1_cload))
-			dram1_done <= TRUE;
-		else if (dram1_store ? !robentry_stomp[dram1_id] && dram1_idv :
-			(dram1 == DRAMSLOT_ACTIVE && dram1_ack &&
-				(dram1_hi ? ((dram1_load|dram1_cload) & ~dram1_stomp) : ((dram1_load|dram1_cload|dram1_cload_tags) & ~dram1_more & ~dram1_stomp)))
-			)
-			dram1_done <= TRUE;
-	end
+generate begin : gDramDone
+if (Stark_pkg::NDATA_PORTS > 1)
+Stark_dram_done udrdn1
+(
+	.rst(irst),
+	.clk(clk),
+	.load(dram1_load),
+	.store(dram1_store),
+	.cload(dram1_cload),
+	.cstore(dram1_cstore),
+	.cload_tags(dram1_cload_tags),
+	.ack(dram1_ack),
+	.hilo(dram1_hi),
+	.dram_idv(dram1_idv),
+	.dram_id(dram1_id), 
+	.dram_state(dram1),
+	.dram_more(dram1_more),
+	.stomp(robentry_stomp),
+	.dram_stomp(dram1_stomp),
+	.done(dram1_done)
+);
+else
+	assign dram1_done = TRUE;
 end
+endgenerate
 
 function lsq_ndx_t fnLoadBypassIndex;
 input lsq_ndx_t lsndx;
@@ -7084,22 +7085,6 @@ else begin
 			pred_tf[rob[head5].pred_no] <= 2'b00;
 			pred_alloc_map[rob[head5].pred_no] <= 1'b0;
 		end
-		// Detect hardware fault if predicate is no longer active and there are
-		// still outstanding ROB entries waiting for it to resolve.
-		for (nn = 0; nn < ROB_ENTRIES; nn = nn + 1) begin
-			for (mm = 0; mm < 32; mm = mm + 1) begin
-				if (rob[nn].pred_no==mm && !pred_alloc_map[mm]) begin
-					if (!rob[nn].pred_bitv) begin
-						rob[nn].pred_bit <= 1'b0;
-						rob[nn].pred_bitv <= VAL;
-						if (!rob[nn].excv) begin
-							rob[nn].exc <= FLT_PRED;
-							rob[nn].excv <= VAL;
-						end
-					end
-				end
-			end
-		end
 	end
 	// ToDo: fix LSQ head update.
 	if (lsq[lsq_head.row][lsq_head.col].v==INV && lsq_head != lsq_tail)
@@ -7190,6 +7175,22 @@ else begin
 				// Predicate resolved?
 				if (rob[nn].v && rob[nn].decbus.pred && rob[nn].done==2'b11)
 					pred_tf[rob[nn].pred_no] <= rob[nn].pred_tf;
+			end
+		end
+		// Detect hardware fault if predicate is no longer active and there are
+		// still outstanding ROB entries waiting for it to resolve.
+		for (nn = 0; nn < ROB_ENTRIES; nn = nn + 1) begin
+			for (mm = 0; mm < 32; mm = mm + 1) begin
+				if (rob[nn].pred_no==mm && !pred_alloc_map[mm]) begin
+					if (!rob[nn].pred_bitv) begin
+						rob[nn].pred_bit <= 1'b0;
+						rob[nn].pred_bitv <= VAL;
+						if (!rob[nn].excv) begin
+							rob[nn].exc <= FLT_PRED;
+							rob[nn].excv <= VAL;
+						end
+					end
+				end
 			end
 		end
 	end

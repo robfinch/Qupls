@@ -145,7 +145,7 @@ Stark_cmp #(.WID(WID)) ualu_cmp
 (
 	.ir(ir),
 	.om(om),
-	.cr(64'd0),
+	.cr(t),
 	.a(a),
 	.b(b),
 	.i(i),
