@@ -39,24 +39,24 @@ import Stark_pkg::*;
 
 module Stark_decode_Rs3(om, instr, has_immc, Rs3, Rs3z, exc);
 input Stark_pkg::operating_mode_t om;
-input Stark_pkg::ex_instruction_t instr;
+input Stark_pkg::instruction_t instr;
 input has_immc;
 output aregno_t Rs3;
 output reg Rs3z;
 output reg exc;
 
 function aregno_t fnRs3;
-input Stark_pkg::ex_instruction_t ir;
+input Stark_pkg::instruction_t ir;
 input has_immc;
 begin
 	if (has_immc)
 		fnRs3 = 7'd0;
 	else
-		case(ir.ins.any.opcode)
+		case(ir.any.opcode)
 		Stark_pkg::OP_STB,Stark_pkg::OP_STBI,Stark_pkg::OP_STW,Stark_pkg::OP_STWI,
 		Stark_pkg::OP_STT,Stark_pkg::OP_STTI,Stark_pkg::OP_STORE,Stark_pkg::OP_STOREI,
 		Stark_pkg::OP_STPTR:
-			fnRs3 = {2'b00,ir.ins.lsscn.Rsd};
+			fnRs3 = {2'b00,ir.lsscn.Rsd};
 		default:
 			fnRs3 = 7'd0;
 		endcase

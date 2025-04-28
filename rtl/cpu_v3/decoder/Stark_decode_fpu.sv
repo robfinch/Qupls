@@ -45,12 +45,12 @@ input Stark_pkg::instruction_t ir;
 begin
 	case(ir.any.opcode)
 	Stark_pkg::OP_FLT:	fnIsFpu = 1'b1;
-	Stark_pkg::OP_ADD:	fnIsFpu = 1'b1;
-	Stark_pkg::OP_CMP:	fnIsFpu = 1'b1;
-	Stark_pkg::OP_AND:	fnIsFpu = 1'b1;
-	Stark_pkg::OP_OR:	fnIsFpu = 1'b1;
-	Stark_pkg::OP_XOR:	fnIsFpu = 1'b1;
-	Stark_pkg::OP_MOV:	fnIsFpu = 1'b1;
+	Stark_pkg::OP_ADD:	fnIsFpu = Stark_pkg::PERFORMANCE;
+	Stark_pkg::OP_CMP:	fnIsFpu = Stark_pkg::PERFORMANCE;
+	Stark_pkg::OP_AND:	fnIsFpu = Stark_pkg::PERFORMANCE;
+	Stark_pkg::OP_OR:	fnIsFpu = Stark_pkg::PERFORMANCE;
+	Stark_pkg::OP_XOR:	fnIsFpu = Stark_pkg::PERFORMANCE;
+	Stark_pkg::OP_MOV:	fnIsFpu = Stark_pkg::PERFORMANCE;
 	Stark_pkg::OP_NOP:	fnIsFpu = 1'b1;
 	default:	fnIsFpu = 1'b0;
 	endcase

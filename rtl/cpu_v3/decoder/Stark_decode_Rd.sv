@@ -39,7 +39,7 @@ import Stark_pkg::*;
 
 module Stark_decode_Rd(om, instr, Rd, Rdz, exc);
 input Stark_pkg::operating_mode_t om;
-input Stark_pkg::ex_instruction_t instr;
+input Stark_pkg::instruction_t instr;
 output aregno_t Rd;
 output reg Rdz;
 output reg exc;
@@ -47,29 +47,29 @@ output reg exc;
 Stark_pkg::operating_mode_t om1;
 
 function aregno_t fnRd;
-input Stark_pkg::ex_instruction_t ir;
+input Stark_pkg::instruction_t ir;
 begin
-	case(ir.ins.any.opcode)
+	case(ir.any.opcode)
 	Stark_pkg::OP_MOV:
-		if (ir.ins[28:26] < 3'd4)
-			fnRd = {ir.ins[18:17],ir.ins[10:6]};
+		if (ir[28:26] < 3'd4)
+			fnRd = {ir[18:17],ir[10:6]};
 		else
-			fnRd = {2'b00,ir.ins[10:6]};
+			fnRd = {2'b00,ir[10:6]};
 	Stark_pkg::OP_FLT:
-		fnRd = {2'b01,ir.ins.fpu.Rd};
+		fnRd = {2'b01,ir.fpu.Rd};
 	Stark_pkg::OP_CSR:
-		fnRd = {2'b00,ir.ins.csr.Rd};
+		fnRd = {2'b00,ir.csr.Rd};
 	Stark_pkg::OP_ADD,Stark_pkg::OP_SUBF,Stark_pkg::OP_CMP,
 	Stark_pkg::OP_AND,Stark_pkg::OP_OR,Stark_pkg::OP_XOR,
 	Stark_pkg::OP_MUL,Stark_pkg::OP_DIV,
 	Stark_pkg::OP_SHIFT:
-		fnRd = {2'b00,ir.ins.alui.Rd};
+		fnRd = {2'b00,ir.alui.Rd};
 	Stark_pkg::OP_B0,Stark_pkg::OP_B1,Stark_pkg::OP_BCC0,Stark_pkg::OP_BCC1:
-		fnRd = ir.ins[8:6]==3'd7 || ir.ins[8:6]==3'd0 ? 7'd0 : {4'b0100,ir.ins.blrlr.BRd};
+		fnRd = ir[8:6]==3'd7 || ir[8:6]==3'd0 ? 7'd0 : {4'b0100,ir.blrlr.BRd};
 	Stark_pkg::OP_LDB,Stark_pkg::OP_LDBZ,Stark_pkg::OP_LDW,Stark_pkg::OP_LDWZ,
 	Stark_pkg::OP_LDT,Stark_pkg::OP_LDTZ,Stark_pkg::OP_LOAD,Stark_pkg::OP_LOADA,
 	Stark_pkg::OP_AMO,Stark_pkg::OP_CMPSWAP:
-		fnRd = {2'b00,ir.ins.lsd.Rsd};
+		fnRd = {2'b00,ir.lsd.Rsd};
 	default:
 		fnRd = 7'd0;
 	endcase
@@ -79,8 +79,8 @@ endfunction
 always_comb
 begin
 	Rd = fnRd(instr);
-	if (instr.ins.any.opcode==OP_MOV && instr.ins[28:26]==3'd1)	// MOVEMD?
-		om1 = Stark_pkg::operating_mode_t'(instr.ins[22:21]);
+	if (instr.any.opcode==OP_MOV && instr[28:26]==3'd1)	// MOVEMD?
+		om1 = Stark_pkg::operating_mode_t'(instr[22:21]);
 	else
 	   om1 = om;
 	Rdz = ~|Rd;

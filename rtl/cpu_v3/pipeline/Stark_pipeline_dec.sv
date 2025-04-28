@@ -40,7 +40,7 @@ import cpu_types_pkg::*;
 import Stark_pkg::*;
 
 module Stark_pipeline_dec(rst_i, rst, clk, en, clk5x, ph4, new_cline_mux, cline,
-	restored, restore_list, unavail_list, sr,
+	restored, restore_list, unavail_list, sr, uop_num,
 	tags2free, freevals, bo_wr, bo_preg,
 	ins0_d_inv, ins1_d_inv, ins2_d_inv, ins3_d_inv,
 	stomp_dec, stomp_mux, stomp_bno, pg_mux,
@@ -61,6 +61,7 @@ input restored;
 input [Stark_pkg::PREGS-1:0] restore_list;
 input [Stark_pkg::PREGS-1:0] unavail_list;
 input Stark_pkg::status_reg_t sr;
+input [2:0] uop_num;
 input stomp_dec;
 input stomp_mux;
 input [4:0] stomp_bno;
@@ -150,7 +151,8 @@ Stark_pkg::micro_op_t [31:0] uop_buf;
 
 Stark_microop uuop1
 (
-	.ir(pg_mux.pr0.uop.ins), 
+	.ir(pg_mux.pr0.uop.ins),
+	.num(uop_num), 
 	.carry_reg(8'd0),
 	.carry_out(1'b0),
 	.carry_in(1'b0),
@@ -161,6 +163,7 @@ Stark_microop uuop1
 Stark_microop uuop2
 (
 	.ir(pg_mux.pr1.uop.ins), 
+	.num(3'd0), 
 	.carry_reg(8'd0),
 	.carry_out(1'b0),
 	.carry_in(1'b0),
@@ -171,6 +174,7 @@ Stark_microop uuop2
 Stark_microop uuop3
 (
 	.ir(pg_mux.pr2.uop.ins), 
+	.num(3'd0), 
 	.carry_reg(8'd0),
 	.carry_out(1'b0),
 	.carry_in(1'b0),
@@ -181,6 +185,7 @@ Stark_microop uuop3
 Stark_microop uuop4
 (
 	.ir(pg_mux.pr3.uop.ins), 
+	.num(3'd0), 
 	.carry_reg(8'd0),
 	.carry_out(1'b0),
 	.carry_in(1'b0),
@@ -577,7 +582,7 @@ Stark_decoder udeci0
 	.cline(cline),
 	.om(sr.om),
 	.ipl(sr.ipl),
-	.instr(tpr0.uop.ins),
+	.instr(tpr0.uop),
 	.dbo(dec0)
 );
 
@@ -589,7 +594,7 @@ Stark_decoder udeci1
 	.cline(cline),
 	.om(sr.om),
 	.ipl(sr.ipl),
-	.instr(tpr1.uop.ins),
+	.instr(tpr1.uop),
 	.dbo(dec1)
 );
 
@@ -601,7 +606,7 @@ Stark_decoder udeci2
 	.cline(cline),
 	.om(sr.om),
 	.ipl(sr.ipl),
-	.instr(tpr2.uop.ins),
+	.instr(tpr2.uop),
 	.dbo(dec2)
 );
 
@@ -613,7 +618,7 @@ Stark_decoder udeci3
 	.cline(cline),
 	.om(sr.om),
 	.ipl(sr.ipl),
-	.instr(tpr3.uop.ins),
+	.instr(tpr3.uop),
 	.dbo(dec3)
 );
 

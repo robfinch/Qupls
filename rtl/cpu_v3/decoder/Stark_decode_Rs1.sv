@@ -39,7 +39,7 @@ import Stark_pkg::*;
 
 module Stark_decode_Rs1(om, instr, has_imma, Rs1, Rs1z, exc);
 input Stark_pkg::operating_mode_t om;
-input Stark_pkg::ex_instruction_t instr;
+input Stark_pkg::instruction_t instr;
 input has_imma;
 output aregno_t Rs1;
 output reg Rs1z;
@@ -48,31 +48,31 @@ output reg exc;
 Stark_pkg::operating_mode_t om1;
 
 function aregno_t fnRs1;
-input Stark_pkg::ex_instruction_t ir;
+input Stark_pkg::instruction_t ir;
 input has_imma;
 begin
 	if (has_imma)
 		fnRs1 = 8'd0;
 	else
-		case(ir.ins.any.opcode)
+		case(ir.any.opcode)
 		Stark_pkg::OP_MOV:
-			if (ir.ins[28:26] < 3'd4)
-				fnRs1 = {ir.ins[20:19],ir.ins[15:11]};
+			if (ir[28:26] < 3'd4)
+				fnRs1 = {ir[20:19],ir[15:11]};
 			else
-				fnRs1 = {2'b00,ir.ins[15:11]};
+				fnRs1 = {2'b00,ir[15:11]};
 		Stark_pkg::OP_FLT:
-			fnRs1 = {2'b01,ir.ins.fpu.Rs1};
+			fnRs1 = {2'b01,ir.fpu.Rs1};
 		Stark_pkg::OP_CSR:
-			fnRs1 = {2'b00,ir.ins.csr.Rs1};
+			fnRs1 = {2'b00,ir.csr.Rs1};
 		Stark_pkg::OP_ADD,Stark_pkg::OP_SUBF,Stark_pkg::OP_CMP,
 		Stark_pkg::OP_AND,Stark_pkg::OP_OR,Stark_pkg::OP_XOR,
 		Stark_pkg::OP_MUL,Stark_pkg::OP_DIV,
 		Stark_pkg::OP_SHIFT:
-			fnRs1 = {2'b00,ir.ins.alui.Rs1};
+			fnRs1 = {2'b00,ir.alui.Rs1};
 		Stark_pkg::OP_B0,Stark_pkg::OP_B1:
-			fnRs1 = ir.ins[31] || ir.ins.blrlr.BRs==3'd0 ? 7'd0 : {4'b0100,ir.ins.blrlr.BRs};
+			fnRs1 = ir[31] || ir.blrlr.BRs==3'd0 ? 7'd0 : {4'b0100,ir.blrlr.BRs};
 		Stark_pkg::OP_BCC0,Stark_pkg::OP_BCC1:
-			fnRs1 = ir.ins.bccld.BRs != 3'd7 && ir.ins.bccld.BRs != 3'd0 ? {4'b0100,ir.ins.bccld.BRs} : 7'd0;
+			fnRs1 = ir.bccld.BRs != 3'd7 && ir.bccld.BRs != 3'd0 ? {4'b0100,ir.bccld.BRs} : 7'd0;
 		Stark_pkg::OP_LDB,Stark_pkg::OP_LDBZ,
 		Stark_pkg::OP_LDW,Stark_pkg::OP_LDWZ,
 		Stark_pkg::OP_LDT,Stark_pkg::OP_LDTZ,
@@ -83,7 +83,7 @@ begin
 		Stark_pkg::OP_STT,Stark_pkg::OP_STTI,
 		Stark_pkg::OP_STORE,Stark_pkg::OP_STOREI,
 		Stark_pkg::OP_STPTR:
-			fnRs1 = {2'b00,ir.ins.lsd.Rs1};
+			fnRs1 = {2'b00,ir.lsd.Rs1};
 		Stark_pkg::OP_PUSH,Stark_pkg::OP_POP:
 			fnRs1 = 7'd0;
 		default:
@@ -95,8 +95,8 @@ endfunction
 always_comb
 begin
 	Rs1 = fnRs1(instr, has_imma);
-	if (instr.ins.any.opcode==OP_MOV && instr.ins[28:26]==3'd1)	// MOVEMD?
-		om1 = Stark_pkg::operating_mode_t'(instr.ins[24:23]);
+	if (instr.any.opcode==OP_MOV && instr[28:26]==3'd1)	// MOVEMD?
+		om1 = Stark_pkg::operating_mode_t'(instr[24:23]);
     else
         om1 = om;
 	Rs1z = ~|Rs1;

@@ -48,10 +48,10 @@ begin
 		case(ir.fpu.op4)
 		Stark_pkg::FOP4_FADD:
 			if (ir[31:29]==3'b001 && ir.fpu.Rs2==5'd1)	// FABS
-				fnIsAlu = 1'b1;
+				fnIsAlu = Stark_pkg::PERFORMANCE;
 			else
 				fnIsAlu = 1'b0;
-		Stark_pkg::FOP4_G8:	fnIsAlu = 1'b1;
+		Stark_pkg::FOP4_G8:	fnIsAlu = Stark_pkg::PERFORMANCE;
 		default:	fnIsAlu = 1'b0;
 		endcase
 	Stark_pkg::OP_CHK:	fnIsAlu = 1'b1;

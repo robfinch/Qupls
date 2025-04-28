@@ -43,7 +43,7 @@ input en;
 input [511:0] cline;
 input Stark_pkg::operating_mode_t om;
 input [5:0] ipl;
-input Stark_pkg::ex_instruction_t instr;
+input Stark_pkg::micro_op_t instr;
 output Stark_pkg::decode_bus_t dbo;
 output reg [3:0] consts_pos [0:3];
 output reg [3:0] mark_nops;
@@ -74,13 +74,13 @@ begin
 end
 
 always_comb
-	ins = instr;
+	ins = instr.ins;
 
 assign db.v = 1'b1;
 
 Stark_decode_const udcimm
 (
-	.ins(instr.ins),
+	.ins(ins.ins),
 	.cline(cline),
 	.imma(db.imma),
 	.immb(db.immb),
@@ -98,7 +98,7 @@ Stark_decode_const udcimm
 Stark_decode_Rs1 udcra
 (
 	.om(om),
-	.instr(ins),
+	.instr(ins.ins),
 	.has_imma(db.has_imma),
 	.Rs1(db.Rs1),
 	.Rs1z(db.Rs1z),
@@ -108,7 +108,7 @@ Stark_decode_Rs1 udcra
 Stark_decode_Rs2 udcrb
 (
 	.om(om),
-	.instr(ins),
+	.instr(ins.ins),
 	.has_immb(db.has_immb),
 	.Rs2(db.Rs2),
 	.Rs2z(db.Rs2z),
@@ -119,7 +119,7 @@ Stark_decode_Rs2 udcrb
 Stark_decode_Rs3 udcrc
 (
 	.om(om),
-	.instr(ins),
+	.instr(ins.ins),
 	.has_immc(db.has_immc),
 	.Rs3(db.Rs3),
 	.Rs3z(db.Rs3z),
@@ -129,16 +129,16 @@ Stark_decode_Rs3 udcrc
 Stark_decode_Rd udcrt
 (
 	.om(om),
-	.instr(ins),
+	.instr(ins.ins),
 	.Rd(db.Rd),
 	.Rdz(db.Rdz),
 	.exc(ecxRd)
 );
-
+/*
 Stark_decode_Rd2 udcrd2
 (
 	.om(om),
-	.instr(ins),
+	.instr(ins.ins),
 	.Rd2(db.Rd2),
 	.Rd2z(db.Rd2z),
 	.exc(excRd2)
@@ -147,12 +147,12 @@ Stark_decode_Rd2 udcrd2
 Stark_decode_Rd3 udcrd3
 (
 	.om(om),
-	.instr(ins),
+	.instr(ins.ins),
 	.Rd3(db.Rd3),
 	.Rd3z(db.Rd3z),
 	.exc(excRd3)
 );
-
+*/
 Stark_decode_macro umacro1
 (
 	.instr(ins.ins),
@@ -396,6 +396,14 @@ else begin
 	if (en) begin
 		dbo <= {$bits(dbo){1'd0}};	// in case a signal was missed / unused.
 		dbo <= db;
+		if (!instr.v) begin
+			dbo.nop <= TRUE;
+			dbo.alu <= TRUE;
+			dbo.fpu <= FALSE;
+			dbo.load <= FALSE;
+			dbo.store <= FALSE;
+			dbo.mem <= FALSE;
+		end
 		dbo.cause <= Stark_pkg::FLT_NONE;
 		dbo.mem <= db.load|db.store|db.v2p;
 		dbo.sync <= db.fence && ins[15:8]==8'hFF;

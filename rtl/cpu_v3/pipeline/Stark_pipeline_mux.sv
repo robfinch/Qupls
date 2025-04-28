@@ -51,7 +51,7 @@ module Stark_pipeline_mux(rst_i, clk_i, rstcnt, advance_fet, ihit, en_i,
 	micro_machine_active, mipv_i, mip_i, cline_fet, cline_mux, new_cline_mux,
 	reglist_active, grp_i, grp_o,
 	takb_fet, mc_offs, pc_i, vl,
-	pc0_fet,
+	pc0_fet, uop_num_fet, uop_num_mux,
 	ls_bmf_i, pack_regs_i, scale_regs_i, regcnt_i, mc_adr,
 	mc_ins0_i, mc_ins1_i, mc_ins2_i, mc_ins3_i,
 	len0_i, len1_i, len2_i, len3_i,
@@ -89,6 +89,8 @@ output reg new_cline_mux;
 input [2:0] grp_i;
 output reg [2:0] grp_o;
 input pc_address_ex_t pc0_fet;
+input [2:0] uop_num_fet;
+output reg [2:0] uop_num_mux;
 input [3:0] takb_fet;
 input [3:0] pt_mux;
 output reg [3:0] p_override;
@@ -667,6 +669,14 @@ if (rst_i)
 else begin
 	if (en)
 		prev_ssm_flag <= ssm_flag;
+end
+
+always_ff @(posedge clk)
+if (rst_i)
+	uop_num_mux <= 3'b0;
+else begin
+	if (en)
+		uop_num_mux <= uop_num_fet;
 end
 /*
 always_comb mcip0_o <= mcip0;

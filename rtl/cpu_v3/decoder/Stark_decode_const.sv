@@ -161,6 +161,7 @@ begin
 			immb = {112'h0,ins[23:8]};
 			has_immb = 1'b1;
 		end
+	/*
 	OP_PFX:
 		begin
 			case(ins[7:6])
@@ -187,6 +188,7 @@ begin
 				end
 			endcase
 		end
+	*/
 	default:
 		immb = 32'd0;
 	endcase

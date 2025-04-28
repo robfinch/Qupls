@@ -49,7 +49,7 @@ parameter SIM = 1'b0;
 //`define SIGMOID	1
 
 // Number of architectural registers there are in the core, including registers
-// not visible in the programming model.
+// not visible in the programming model. Includes all operating modes.
 `define NREGS	224
 
 // Number of physical registers supporting the architectural ones and used in
@@ -100,6 +100,13 @@ parameter RENAMER = 6;
 // =============================================================================
 // =============================================================================
 
+// 1=defer interrupts to the start of the next instruction.
+// 2=record micro-op number for instruction restart (not recommended).
+parameter UOP_STRATEGY = 1;	// micro-op strategy
+
+// 1=no interrupts allowed when micro-code machine active
+parameter UCM_STRATEGY = 1;	// micro-code machine strategy
+
 // Set the following to one to support backout and restore branch handling.
 // backout / restore is not 100% working yet. Supporting backout / restore
 // makes the core larger.
@@ -107,9 +114,13 @@ parameter SUPPORT_BACKOUT = 1'b1;
 
 // Select building for performance or size.
 // If this is set to one extra logic will be included to improve performance.
-parameter PERFORMANCE = 1'b0;
+// Allows simple ALU ops to be performed on the FPU and simple FPU ops to be
+// performed on an ALU. 
+parameter PERFORMANCE = 1'b1;
 
 // Predictor
+// This is for the late stage predicator. The branch-target-buffer is always
+// present.
 //		0 = none
 //		1 = backwards branch predictor (accuracy < 60%)
 //		2 = g select predictor
@@ -117,8 +128,8 @@ parameter BRANCH_PREDICTOR = 0;
 
 // The following indicates whether to support postfix instructions or not.
 // Supporting postfix instructions increases the size of the core and reduces
-// the code density.
-parameter SUPPORT_POSTFIX = 1;
+// the code density. (Deprecated - the core does not support POSTFIXES).
+parameter SUPPORT_POSTFIX = 0;
 
 // The following allows the core to process flow control ops in any order
 // to reduce the size of the core. Set to zero to restrict flow control ops
@@ -206,9 +217,13 @@ const cpu_types_pkg::address_t RSTSP = 32'hFFFF9000;
 // Number of data ports should be 1 or 2. 2 ports will allow two simulataneous
 // reads, but still only a single write.
 parameter NDATA_PORTS = 1;
+// Number of AGENs should be 1 or 2. There is little value in having more agens
+// than there are data ports.
 parameter NAGEN = 1;
-// Increasing the number of ALUs will increase performance of vector operations.
-// Note that adding an FPU may also increase integer performance.
+// Increasing the number of ALUs will increase performance. There must be at
+// least one ALU.
+// Note that adding an FPU may also increase integer performance if PERFORMANCE
+// is set to 1.
 parameter NALU = 2;			// 1 or 2
 parameter NFPU = 1;			// 0, 1, or 2
 parameter FPU0_IQ_DEPTH = 32;
@@ -1077,7 +1092,9 @@ typedef union packed
 } instruction_t;
 
 typedef struct packed {
+	logic v;
 	logic [2:0] count;
+	logic [2:0] num;
 	logic [1:0] xRs2;
 	logic [1:0] xRs1;
 	logic [1:0] xRd;
@@ -1401,10 +1418,10 @@ typedef struct packed {
 	// The following fields may change state while an instruction is processed.
 	logic v;									// 1=entry is valid, in use
 	cpu_types_pkg::seqnum_t sn;							// sequence number, decrements when instructions que
-//	logic [5:0] sync_dep;			// sync instruction dependency
-//	logic [5:0] fc_dep;				// flow control dependency
-//	logic [5:0] sync_no;
-//	logic [5:0] fc_no;
+	cpu_types_pkg::rob_ndx_t sync_dep;			// sync instruction dependency
+	logic sync_depv;				// sync dependency valid
+	cpu_types_pkg::rob_ndx_t fc_dep;				// flow control dependency - relevant only for mem ops
+	logic fc_depv;					// flow control dependency valid
 	logic [3:0] predino;			// predicated instruction number (1 to 8)
 	cpu_types_pkg::rob_ndx_t predrndx;				// ROB index of associate PRED instruction
 	cpu_types_pkg::rob_ndx_t orid;						// ROB id of originating macro-instruction
@@ -1426,7 +1443,6 @@ typedef struct packed {
 	cpu_types_pkg::value_t argB;
 	cpu_types_pkg::value_t argI;
 	cpu_types_pkg::value_t argD;
-	cpu_types_pkg::value_t argM;
 	cpu_types_pkg::value_t res;
 `endif
 	logic updAv;
@@ -1449,12 +1465,10 @@ typedef struct packed {
 	logic could_issue_nm;			// 1 if instruction ready to issue NOP
 	logic prior_sync;					// 1 if instruction has sync prior to it
 	logic prior_fc;						// 1 if instruction has fc prior to it
-	logic argCi_vp;
 	logic argA_vp;						// 1=argument A valid pending
 	logic argB_vp;
 	logic argC_vp;
 	logic argD_vp;
-	logic argCi_v;
 	logic argA_v;							// 1=argument A valid
 	logic argB_v;
 	logic argC_v;

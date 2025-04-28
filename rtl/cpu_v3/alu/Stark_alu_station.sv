@@ -41,8 +41,8 @@ import Stark_pkg::*;
 
 module Stark_alu_station(rst, clk, available, idle, issue, rndx, rndxv, rob,
 	rfo_tag, ld, id, 
-	argA, argB, argBI, argC, argI, argD, argCi, pc_o,
-	argCi_tag, argA_tag, argB_tag, argC_tag, argD_tag,
+	argA, argB, argBI, argC, argI, argD, pc_o,
+	argA_tag, argB_tag, argC_tag, argD_tag,
 	cpytgt,
 	cs, aRdz, aRd, nRd, aRd2, aRd2z, nRd2, aRd3, aRd3z, nRd3, om, bank, instr, div, cap, cptgt, cp, pc,
 	pred, predz, prc, sc_done, idle_false,
@@ -63,7 +63,6 @@ input [15:0] rfo_tag;
 input cpytgt;
 output reg ld;
 output rob_ndx_t id;
-output value_t argCi;
 output value_t argA;
 output value_t argB;
 output value_t argBI;
@@ -72,7 +71,6 @@ output value_t argI;
 output value_t argD;
 output pc_address_t pc_o;
 output reg all_args_valid;
-output reg argCi_tag;
 output reg argA_tag;
 output reg argB_tag;
 output reg argC_tag;
@@ -102,27 +100,14 @@ output reg sc_done;
 output reg idle_false;
 
 integer nn;
-reg [4:0] valid;
-wire [4:0] valid_o;
+reg [3:0] valid;
+wire [3:0] valid_o;
 reg [7:0] next_cptgt;
 always_comb
 	next_cptgt <= {8{cpytgt|rob.decbus.cpytgt}} | ~{8{rob.pred_bit}};
 
 always_comb
 	all_args_valid = &valid;
-
-Stark_validate_Rn uvRci
-(
-	.prn(prn),
-	.prnv(prnv),
-	.rfo(rfo),
-	.rfo_tag(rfo_tag),
-	.pRn(rob.op.pRci),
-	.val(argCi),
-	.val_tag(argCi_tag),
-	.valid_i(valid[0]),
-	.valid_o(valid_o[0])
-);
 
 Stark_validate_Rn uvRs1
 (
@@ -133,8 +118,8 @@ Stark_validate_Rn uvRs1
 	.pRn(rob.op.pRs1),
 	.val(argA),
 	.val_tag(argA_tag),
-	.valid_i(valid[1]),
-	.valid_o(valid_o[1])
+	.valid_i(valid[0]),
+	.valid_o(valid_o[0])
 );
 
 Stark_validate_Rn uvRs2
@@ -146,8 +131,8 @@ Stark_validate_Rn uvRs2
 	.pRn(rob.op.pRs2),
 	.val(argB),
 	.val_tag(argB_tag),
-	.valid_i(valid[2]),
-	.valid_o(valid_o[2])
+	.valid_i(valid[1]),
+	.valid_o(valid_o[1])
 );
 
 Stark_validate_Rn uvRs3
@@ -159,8 +144,8 @@ Stark_validate_Rn uvRs3
 	.pRn(rob.op.pRs3),
 	.val(argC),
 	.val_tag(argC_tag),
-	.valid_i(valid[3]),
-	.valid_o(valid_o[3])
+	.valid_i(valid[2]),
+	.valid_o(valid_o[2])
 );
 
 Stark_validate_Rn uvRd
@@ -172,9 +157,12 @@ Stark_validate_Rn uvRd
 	.pRn(rob.op.pRd),
 	.val(argD),
 	.val_tag(argD_tag),
-	.valid_i(valid[4]),
-	.valid_o(valid_o[4])
+	.valid_i(valid[3]),
+	.valid_o(valid_o[3])
 );
+
+always_comb
+	argBI <= rob.op.decbus.immb | argB;
 
 always_ff @(posedge clk)
 if (rst) begin
@@ -186,8 +174,6 @@ if (rst) begin
 	argC <= value_zero;
 	argI <= value_zero;
 	argD <= value_zero;
-	argCi <= value_zero;
-	argCi_tag = 1'b0;
 	argA_tag = 1'b0;
 	argB_tag = 1'b0;
 	argC_tag = 1'b0;

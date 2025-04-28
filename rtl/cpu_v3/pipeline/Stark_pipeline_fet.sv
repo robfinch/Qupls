@@ -40,7 +40,7 @@ import cpu_types_pkg::*;
 import Stark_pkg::*;
 
 module Stark_pipeline_fet(rst, clk, rstcnt, ihit, en, fet_stallq, ic_stallq,
-	pc_i, misspc, misspc_fet,
+	pc_i, misspc, misspc_fet, uop_num_ic, uop_num_fet,
 	pc0_fet, pc1_fet, pc2_fet, pc3_fet, pc4_fet, stomp_fet, stomp_bno, ic_carry_mod,
 	ic_line_i, ic_line_fet, nmi_i, carry_mod_fet,
 	micro_machine_active, micro_machine_active_fet, mc_adr
@@ -55,6 +55,8 @@ output reg ic_stallq;
 input pc_address_ex_t pc_i;
 input pc_address_ex_t misspc;
 output pc_address_ex_t misspc_fet;
+input [2:0] uop_num_ic;
+output reg [2:0] uop_num_fet;
 output pc_address_ex_t pc0_fet;
 output pc_address_ex_t pc1_fet;
 output pc_address_ex_t pc2_fet;
@@ -202,6 +204,14 @@ if (rst)
 else begin
 	if (en2)
 		micro_machine_active_fet <= micro_machine_active;
+end
+
+always_ff @(posedge clk)
+if (rst)
+	uop_num_fet <= 3'd0;
+else begin
+	if (en2)
+		uop_num_fet <= uop_num_ic;
 end
 
 always_comb

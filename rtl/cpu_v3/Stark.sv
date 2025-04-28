@@ -37,6 +37,7 @@
 // 103k LUTs / 44.5k FFs / 92 BRAMs / 64 DSPs (14 vec regs - 2 ALU, 8 checkpts)
 // 117k LUTs / k FFs / 97 BRAMs / 64 DSPs (24 vec regs - 2 ALU, 8 checkpts)
 // 107k LUTs / 41.5k FFs / 132 BRAMS / 72 DSP (14 vec regs - 1 ALU, 8 chkpts)
+// 108k LUTs / 49k FFs / 90 BRAMS (2 ALU, 1 FPU, 16 checkpoints 32 ROB)
 // ============================================================================
 
 import const_pkg::*;
@@ -129,6 +130,7 @@ reg ssm_flag;
 // hirq squashes the pc increment if there's an irq.
 // Normally atom_mask is zero.
 reg hirq;
+reg [2:0] exc_uop_num;
 pc_address_t ret_pc;
 pc_address_ex_t misspc;
 mc_address_t miss_mcip, mcbrtgt, excmiss_mcip;
@@ -334,6 +336,10 @@ reg last0;
 reg last1;
 reg last2;
 reg last3;
+rob_ndx_t sync_ndx;
+reg sync_ndxv;
+rob_ndx_t fc_ndx;
+reg fc_ndxv;
 
 Stark_pkg::pipeline_reg_t pr_fet0,pr_fet1,pr_fet2,pr_fet3;
 Stark_pkg::pipeline_reg_t pr_mux0,pr_mux1,pr_mux2,pr_mux3;
@@ -412,7 +418,6 @@ value_t alu0_argBI;
 value_t alu0_argC;
 value_t alu0_argI;
 value_t alu0_argD;
-value_t alu0_argCi;
 pregno_t alu0_Rt;
 aregno_t alu0_aRdA, alu0_aRdB, alu0_aRdC;
 pregno_t alu0_RdA;
@@ -472,7 +477,6 @@ value_t alu1_argBI;
 value_t alu1_argC;
 value_t alu1_argD;
 value_t alu1_argI;
-value_t alu1_argCi;
 reg [2:0] alu1_cs;
 pregno_t alu1_Rt;
 aregno_t alu1_aRdA;
@@ -876,6 +880,8 @@ Stark_pkg::status_reg_t sr_stack [0:15];
 Stark_pkg::status_reg_t sr;
 wire [2:0] swstk = sr.swstk;
 pc_address_t [15:0] pc_stack;
+// Stack for micro-code machine state number and micro-op number
+reg [15:0] upc_stack [0:15];
 reg micro_machine_active;
 reg micro_machine_active_f;
 reg micro_machine_active_x;
@@ -1428,7 +1434,11 @@ always_comb vec_dat = ic_dline >> {icdp[4:0],3'd0};
 reg [31:0] ic_carry_mod;
 
 icache
-#(.CORENO(CORENO),.CID(0))
+#(
+	.CORENO(CORENO),
+	.CID(0),
+	// Opcode to fill an empty cache line with
+	.NOP({2'b0,Stark_pkg::OP_NOP}))
 uic1
 (
 	.rst(irst),
@@ -1474,6 +1484,13 @@ if (advance_f) begin
 end
 else
 	icarry_mod <= icarry_mod;
+reg [2:0] uop_num_ic, iuop_num;
+always_ff @(posedge clk)
+if (advance_f) begin
+	uop_num_ic <= iuop_num;
+end
+else
+	iuop_num <= iuop_num;
 
 // ic_miss_adr is one clock in front of the translation pc_tlb_res.
 // Add in a clock delay to line them up for the cache controller.
@@ -1917,14 +1934,19 @@ if (irst) begin
 	ins1_d_inv = FALSE;
 	ins2_d_inv = FALSE;
 	ins3_d_inv = FALSE;
+	icarry_mod <= 32'd0;
+	iuop_num <= 3'd0;
 end
 else begin
 	if (advance_f & !ic_stallq) begin
 		pcf <= FALSE;
+		iuop_num <= 3'd0;
+		icarry_mod <= 32'd0;
 		if (get_next_pc) begin
 			if (excret) begin
 				pc.pc <= exc_ret_pc;
 				icarry_mod <= exc_ret_carry_mod;
+				iuop_num <= exc_uop_num;
 			end
 			else begin
 				pc <= next_pc;			// early PC predictor from BTB logic
@@ -2251,6 +2273,7 @@ wire [1023:0] ic_line_fet;
 pc_address_t ic_hwipc, hwipc_fet;
 wire micro_machine_active_fet;
 wire [31:0] carry_mod_fet;
+wire [2:0] uop_num_fet;
 
 always_ff @(posedge clk)
 	ic_hwipc <= hwipc;
@@ -2266,6 +2289,8 @@ Stark_pipeline_fet ufet1
 	.rstcnt(rstcnt),
 	.ihit(ihito),
 	.en(advance_f),
+	.uop_num_ic(uop_num_ic),
+	.uop_num_fet(uop_num_fet),
 	.fet_stallq(fet_stallq),
 	.ic_stallq(ic_stallq),
 	.pc_i(icpc),
@@ -2298,6 +2323,7 @@ pc_address_ex_t pc0_f2;
 pc_address_ex_t pc0_f3;
 wire new_cline_mux;
 wire [1023:0] cline_mux;
+wire [2:0] uop_num_mux;
 
 always_comb
 begin
@@ -2344,6 +2370,8 @@ Stark_pipeline_mux uiext1
 	.ssm_flag(ssm_flag),
 	.ihit(ihito),
 	.sr(sr),
+	.uop_num_fet(uop_num_fet),
+	.uop_num_mux(uop_num_mux),
 	.carry_mod_fet(carry_mod_fet),
 	.stomp_bno(stomp_bno),
 	.stomp_mux(stomp_mux|stomp_mux1|stomp_mux2/*icnop||brtgtv||fetch_new_block_x*/),
@@ -2428,6 +2456,7 @@ Stark_pipeline_dec udecstg1
 	.restore_list(restore_list),
 	.unavail_list(unavail_list),
 	.sr(sr),
+	.uop_num(uop_num_mux),
 	.tags2free(tags2free),
 	.freevals(freevals),
 	.bo_wr(bo_wr),
@@ -5338,14 +5367,12 @@ Stark_alu_station ualust0
 	.rfo_tag(rfo_tag),
 	.ld(alu0_ld),
 	.id(alu0_id), 
-	.argCi(alu0_argCi),
 	.argA(alu0_argA),
 	.argB(alu0_argB),
 	.argBI(alu0_argBI),
 	.argC(alu0_argC),
 	.argI(alu0_argI),
 	.argD(alu0_argD),
-	.argCi_tag(),
 	.argA_tag(alu0_argA_ctag),
 	.argB_tag(alu0_argB_ctag),
 	.argC_tag(),
@@ -5397,14 +5424,12 @@ generate begin : gAluStation
 			.rfo_tag(rfo_tag),
 			.ld(alu1_ld),
 			.id(alu1_id), 
-			.argCi(alu1_argCi),
 			.argA(alu1_argA),
 			.argB(alu1_argB),
 			.argBI(alu1_argBI),
 			.argC(alu1_argC),
 			.argI(alu1_argI),
 			.argD(alu1_argD),
-			.argCi_tag(),
 			.argA_tag(alu1_argA_ctag),
 			.argB_tag(alu1_argB_ctag),
 			.argC_tag(),
@@ -5712,6 +5737,10 @@ edge_det uedbsi1 (.rst(irst), .clk(clk), .ce(1'b1), .i(bs_idle_oh), .pe(pe_bsidl
 always_ff @(posedge clk)
 if (irst) begin
 	tReset();
+	sync_ndx = 6'd63;
+	sync_ndxv = INV;
+	fc_ndx = 6'd63;
+	fc_ndxv = INV;
 end
 else begin
 	irq_wr_en <= FALSE;
@@ -5847,7 +5876,7 @@ else begin
 				pg_dec.pr2.decbus,
 				pg_dec.pr3.decbus
 			);
-
+			
 			// On a predicted taken branch the front end will continue to send
 			// instructions to be queued, but they will be ignored as they are
 			// treated as NOPs as the valid bit will not be set. They will however
@@ -5865,7 +5894,15 @@ else begin
 				else
 					rob[tail0].pred_mask <= rob[(tail0+ROB_ENTRIES-1) % ROB_ENTRIES].pred_mask >> 2'd2;
 			end
-			
+			if (pg_ren.pr0.decbus.sync) begin
+				sync_ndx = tail0;
+				sync_ndxv = VAL;
+			end
+			if (pg_ren.pr0.decbus.fc) begin
+				fc_ndx = tail0;
+				fc_ndxv = VAL;
+			end
+
 			tEnque(8'h81-XWID,groupno,pg_ren.pr1,pt1_q,tail1,
 				stomp1, ornop1, cndx_ren[1], pcndx_ren, grplen1, last1);
 			if (pg_ren.pr1.decbus.pred && pg_ren.pr1.v && pg_ren.pr1.decbus.v) begin
@@ -5885,6 +5922,14 @@ else begin
 					else
 						rob[tail1].pred_mask <= rob[(tail0+ROB_ENTRIES-1) % ROB_ENTRIES].pred_mask >> 3'd4;
 				end
+			end
+			if (pg_ren.pr1.decbus.sync) begin
+				sync_ndx = tail1;
+				sync_ndxv = VAL;
+			end
+			if (pg_ren.pr1.decbus.fc) begin
+				fc_ndx = tail1;
+				fc_ndxv = VAL;
 			end
 //			tBypassRegnames(tail1, pg_ren.pr1, pg_ren.pr0, 1'b0, pg_ren.pr1.decbus.has_immb | prnv[3], pg_ren.pr1.decbus.has_immc | prnv[3], prnv[3], prnv[3]);
 //			tBypassValid(tail1, pg_ren.pr1, pg_ren.pr0);
@@ -5913,6 +5958,14 @@ else begin
 					else
 						rob[tail2].pred_mask <= rob[(tail0+ROB_ENTRIES-1) % ROB_ENTRIES].pred_mask >> 3'd6;
 				end
+			end
+			if (pg_ren.pr2.decbus.sync) begin
+				sync_ndx = tail2;
+				sync_ndxv = VAL;
+			end
+			if (pg_ren.pr2.decbus.fc) begin
+				fc_ndx = tail2;
+				fc_ndxv = VAL;
 			end
 //			tBypassRegnames(tail2, pg_ren.pr2, pg_ren.pr0, ins2_que.decbus.has_imma, pg_ren.pr2.decbus.has_immb | prnv[3], pg_ren.pr2.decbus.has_immc | prnv[3], prnv[3], prnv[3]);
 //			tBypassRegnames(tail2, pg_ren.pr2, pg_ren.pr1, ins2_que.decbus.has_imma, pg_ren.pr2.decbus.has_immb | prnv[7], pg_ren.pr2.decbus.has_immc | prnv[7], prnv[7], prnv[7]);
@@ -5948,6 +6001,14 @@ else begin
 					else
 						rob[tail3].pred_mask <= rob[(tail0+ROB_ENTRIES-1) % ROB_ENTRIES].pred_mask >> 4'd8;
 				end
+			end
+			if (pg_ren.pr3.decbus.sync) begin
+				sync_ndx = tail3;
+				sync_ndxv = VAL;
+			end
+			if (pg_ren.pr3.decbus.fc) begin
+				fc_ndx = tail3;
+				fc_ndxv = VAL;
 			end
 //			tBypassRegnames(tail3, pg_ren.pr3, pg_ren.pr0, pg_ren.pr3.decbus.has_imma, pg_ren.pr3.decbus.has_immb | prnv[3], pg_ren.pr3.decbus.has_immc | prnv[3], prnv[3], prnv[3]);
 //			tBypassRegnames(tail3, pg_ren.pr3, pg_ren.pr1, pg_ren.pr3.decbus.has_imma, pg_ren.pr3.decbus.has_immb | prnv[7], pg_ren.pr3.decbus.has_immc | prnv[7], prnv[7], prnv[7]);
@@ -6963,6 +7024,7 @@ else begin
 // Only the first exception is processed.
 // Trigger page walk TLB update for outstanding agen request. Must be done when
 // the instruction is at the commit stage to mitigate Spectre attacks.
+// Clear the sync dependencies for any instructions dependent on a sync.
 
 	if (!htcolls) begin
 		commit0_id <= head0;
@@ -6992,25 +7054,25 @@ else begin
 		commit_br2 <= rob[head2].decbus.br && cmtcnt > 3'd2;
 		commit_br3 <= rob[head3].decbus.br && cmtcnt > 3'd3;
 		group_len <= group_len - 1;
-		tInvalidateQE(head0);
+		tCommits(head0);
 		if (cmtcnt > 3'd1) begin
-			tInvalidateQE(head1);
+			tCommits(head1);
 			group_len <= group_len - 2;
 		end
 		if (cmtcnt > 3'd2) begin
-			tInvalidateQE(head2);
+			tCommits(head2);
 			group_len <= group_len - 3;
 		end
 		if (cmtcnt > 3'd3) begin
-			tInvalidateQE(head3);
+			tCommits(head3);
 			group_len <= group_len - 4;
 		end
 		if (cmtcnt > 3'd4) begin
-			tInvalidateQE(head4);
+			tCommits(head4);
 			group_len <= group_len - 5;
 		end
 		if (cmtcnt > 3'd5) begin
-			tInvalidateQE(head5);
+			tCommits(head5);
 			group_len <= group_len - 6;
 		end
 		head0 <= (head0 + cmtcnt) % ROB_ENTRIES;	
@@ -7030,16 +7092,16 @@ else begin
 		if (rob[head0].excv && rob[head0].v)
 //			err_mask[head0] <= 1'b1;
 //			if (rob[head0].last)
-			tProcessExc(head0,rob[head0].op.pc,FALSE,FALSE);
+			tProcessExc(head0,rob[head0].op.pc,12'h0,rob[head0].op.uop.num,FALSE,FALSE);
 		else if (rob[head1].excv && cmtcnt > 3'd1 && rob[head1].v)
-			tProcessExc(head1,rob[head1].op.pc,FALSE,FALSE);
+			tProcessExc(head1,rob[head1].op.pc,12'h0,rob[head1].op.uop.num,FALSE,FALSE);
 		else if (rob[head2].excv && cmtcnt > 3'd2 && rob[head2].v)
-			tProcessExc(head2,rob[head2].op.pc,FALSE,FALSE);
+			tProcessExc(head2,rob[head2].op.pc,12'h0,rob[head2].op.uop.num,FALSE,FALSE);
 		else if (rob[head3].excv && cmtcnt > 3'd3 && rob[head3].v)
-			tProcessExc(head3,rob[head3].op.pc,FALSE,FALSE);
+			tProcessExc(head3,rob[head3].op.pc,12'h0,rob[head3].op.uop.num,FALSE,FALSE);
 			
 		if (rob[head0].op.ssm)
-			tProcessExc(head0,SSM_DEBUG ? rob[head0].op.pc : rob[head0].op.hwipc,FALSE,FALSE);
+			tProcessExc(head0,SSM_DEBUG ? rob[head0].op.pc : rob[head0].op.hwipc,12'h0,rob[head0].op.uop.num,FALSE,FALSE);
 
 		/*
 		if (FALSE) begin
@@ -7109,33 +7171,25 @@ else begin
 			if (rob[head0].v) begin
 				if (!rob[head0].argA_v && !fnFindSource(head0, rob[head0].decbus.Rs1)) begin
 					rob[head0].argA_v <= VAL;
-					tAllArgsValid(head0, VAL, INV, INV, INV, INV);
+					tAllArgsValid(head0, VAL, INV, INV, INV);
 					$display("StarkCPU: rob[%d]: argument A not possible to validate.", head0);
 				end		
 				if (!rob[head0].argB_v && !fnFindSource(head0, rob[head0].decbus.Rs2)) begin
 					$display("StarkCPU: rob[%d]: argument B not possible to validate.", head0);
 					rob[head0].argB_v <= VAL;
-					tAllArgsValid(head0, INV, VAL, INV, INV, INV);
+					tAllArgsValid(head0, INV, VAL, INV, INV);
 				end		
 				if (!rob[head0].argC_v && !fnFindSource(head0, rob[head0].decbus.Rs3)) begin
 					$display("StarkCPU: rob[%d]: argument C not possible to validate.", head0);
 					rob[head0].argC_v <= VAL;
-					tAllArgsValid(head0, INV, INV, VAL, INV, INV);
+					tAllArgsValid(head0, INV, INV, VAL, INV);
 				end		
 				if (!rob[head0].argD_v) begin
 					if (!fnFindSource(head0, rob[head0].decbus.Rd)) begin
 						$display("StarkCPU: rob[%d]: argument D not possible to validate.", head0);
 						rob[head0].argD_v <= VAL;
-						tAllArgsValid(head0, INV, INV, INV, VAL, INV);
+						tAllArgsValid(head0, INV, INV, INV, VAL);
 					end
-					/*
-					else begin
-						if (fnSourceValid(head0, rob[head0].decbus.Rt) begin
-							rob[head0].argD_v <= VAL;
-							tAllArgsValid(head0, INV, INV, INV, VAL, INV);
-						end
-					end
-					*/
 				end
 			end
 		end
@@ -7323,12 +7377,6 @@ else begin
 	begin : gSchedPrecalc
 		for (n3 = 0; n3 < ROB_ENTRIES; n3 = n3 + 1) begin
 			tSetPredBit(n3);
-			if (rob[n3].v) begin
-				if (!fnPriorSync(n3))
-					rob[n3].prior_sync <= FALSE; 
-				if (!fnPriorFC(n3))
-					rob[n3].prior_fc <= FALSE;
-			end
 		end
 
 		for (n3 = 0; n3 < ROB_ENTRIES; n3 = n3 + 1) begin
@@ -7337,10 +7385,10 @@ else begin
 				&& !robentry_stomp[n3]
 				&& !(&rob[n3].done)
 				&& (rob[n3].decbus.cpytgt ? (rob[n3].argD_v /*|| rob[g].op.nRt==9'd0*/) : rob[n3].all_args_valid && rob[n3].pred_bit)
-				&& (rob[n3].decbus.mem ? !rob[n3].prior_fc : 1'b1)
+				&& (rob[n3].decbus.mem ? !rob[n3].fc_depv : 1'b1)
 				&& (SERIALIZE ? (rob[(n3+ROB_ENTRIES-1)%ROB_ENTRIES].done==2'b11 || rob[(n3+ROB_ENTRIES-1)%ROB_ENTRIES].v==INV) : 1'b1)
 				//&& !fnPriorFalsePred(g)
-				&& !rob[n3].prior_sync
+				&& !rob[n3].sync_depv
 	//			&& |rob[n3].pred_bits
 				&& rob[n3].pred_bitv
 				;
@@ -7396,9 +7444,11 @@ else begin
 		end
 	end
 	//  Defer interrupt until first micro-op of instruction
-	for (n3 = 0; n3 < ROB_ENTRIES; n3 = n3 + 1) begin
-		if (rob[n3].op.uop.count==3'd0 && rob[n3].op.hwi)
-			tDeferToNextInstruction(n3);
+	if (UOP_STRATEGY==1) begin
+		for (n3 = 0; n3 < ROB_ENTRIES; n3 = n3 + 1) begin
+			if (rob[n3].op.uop.count==3'd0 && rob[n3].op.hwi)
+				tDeferToNextInstruction(n3);
+		end
 	end
 	
 			
@@ -8589,6 +8639,10 @@ begin
 		rob[tail].fc_dep <= fc_no;
 	end
 	*/
+	rob[tail].sync_dep <= sync_ndx;
+	rob[tail].sync_depv <= sync_ndxv;
+	rob[tail].fc_dep <= fc_ndx;
+	rob[tail].fc_depv <= fc_ndxv;
 
 	// "dynamic" fields, these fields may change after enqueue
 	rob[tail].sn <= sn;
@@ -8630,7 +8684,6 @@ begin
 	rob[tail].argB_v <= fnSourceRs2v(ins) | (db.has_Rs2 ? 1'b0 : db.has_immb);
 	rob[tail].argC_v <= fnSourceRs3v(ins) | db.has_immc;
 	rob[tail].argD_v <= fnSourceRdv(ins);
-	rob[tail].argCi_v <= fnSourceRciv(ins);
 	rob[tail].all_args_valid <= FALSE;
 	/*
 		(fnSourceRs1v(ins) | db.has_imma) &&
@@ -8642,9 +8695,6 @@ begin
 	*/
 	rob[tail].could_issue <= FALSE;
 	rob[tail].could_issue_nm <= FALSE;
-	// Assume these two are TRUE. They will be set FALSE later.
-	rob[tail].prior_sync <= TRUE;
-	rob[tail].prior_fc <= TRUE;
 	// "static" fields, these fields remain constant after enqueue
 	rob[tail].grp <= grp;
 	rob[tail].brtgt <= fnTargetIP(ins.pc,db.immc);
@@ -8728,21 +8778,18 @@ input rob_ndx_t ndx;
 input Av;
 input Bv;
 input Cv;
-input Tv;
-input Civ;
+input Dv;
 begin
 	
 	if (Av) rob[ndx].argA_v <= VAL;
 	if (Bv) rob[ndx].argB_v <= VAL;
 	if (Cv) rob[ndx].argC_v <= VAL;
-	if (Tv) rob[ndx].argD_v <= VAL;
-	if (Civ) rob[ndx].argCi_v <= VAL;
+	if (Dv) rob[ndx].argD_v <= VAL;
 	rob[ndx].all_args_valid <=
 		(rob[ndx].argA_v | Av) &&
 		(rob[ndx].argB_v | Bv) &&
 		(rob[ndx].argC_v | Cv) &&
-		(rob[ndx].argD_v | Tv) &&
-		(rob[ndx].argCi_v | Civ) &&
+		(rob[ndx].argD_v | Dv) &&
 		(rob[ndx].pred_bit)
 	;
 	
@@ -8830,7 +8877,7 @@ begin
 			else if (rob[head].decbus.irq)
 				;
 			else if (rob[head].decbus.brk)
-				tProcessExc(head,fnPCInc(rob[head].op.pc),FALSE,FALSE);
+				tProcessExc(head,fnPCInc(rob[head].op.pc),12'h0,rob[head].op.uop.num,FALSE,FALSE);
 			else if (rob[head].decbus.eret)
 				tProcessEret(rob[head].op[22:19]==5'd2,rob[head].op[23]==1'b1);
 			else if (rob[head].decbus.rex)
@@ -8838,9 +8885,9 @@ begin
 		end
 	end
 	else if (rob[head].op.hwi && pgh[head[5:2]].hwi && pgh[head[5:2]].irq.level == 6'd63)	// NMI
-		tProcessExc(head,rob[head].op.pc,FALSE,TRUE);
+		tProcessExc(head,rob[head].op.pc,12'h0,rob[head].op.uop.num,FALSE,TRUE);
 	else if (rob[head].op.hwi && pgh[head[5:2]].hwi && pgh[head[5:2]].irq.level > sr.ipl && sr.mie)
-		tProcessExc(head,rob[head].op.pc,TRUE,FALSE);
+		tProcessExc(head,rob[head].op.pc,12'h0,rob[head].op.uop.num,TRUE,FALSE);
 	// If interrupt turned out to be disabled, put the irq on a queue for
 	// later processing.
 	else if (|pgh[head[5:2]].irq.level) begin
@@ -9004,6 +9051,8 @@ endtask
 task tProcessExc;
 input rob_ndx_t id;
 input pc_address_t retpc;
+input [11:0] ucm_pc;
+input [2:0] uop_num;
 input irq;
 input nmi;
 integer nn;
@@ -9018,6 +9067,11 @@ begin
 	for (nn = 1; nn < 16; nn = nn + 1)
 		pc_stack[nn] <= pc_stack[nn-1];
 	pc_stack[0] <= retpc;
+	if (UOP_STRATEGY==2) begin
+		for (nn = 1; nn < 16; nn = nn + 1)
+			upc_stack[nn] <= upc_stack[nn-1];
+		upc_stack[0] <= {ucm_pc,1'b0,uop_num};
+	end
 	sr.pl <= 8'hFF;
 	if (sr.om != 2'd3)
 	   case(sr.om)
@@ -9098,6 +9152,11 @@ begin
 		pc_stack[nn] <=	pc_stack[nn+1];
 	exc_ret_pc <= pc_stack[0];
 	exc_ret_carry_mod <= csr_carry_mod;
+	if (UOP_STRATEGY==2) begin
+		for (nn = 0; nn < 15; nn = nn + 1)
+			upc_stack[nn] <= upc_stack[nn+1];
+		exc_uop_num <= upc_stack[0][2:0];
+	end
 	csr_carry_mod <= 32'd0;
 end
 endtask
@@ -9411,7 +9470,7 @@ begin
 	else if (rob[m7].op.uop.count!=3'd0 && rob[m7].sn > rob[ndx].sn)
 		ih = m7;
 	// Cannot find lead micro-op, must not be queued yet. Select tail position as
-	// place for interrupt.
+	// place for interrupt. It may be moved again later.
 	else
 		ih = (tail0 + ROB_ENTRIES - 1) % ROB_ENTRIES;
 	if (ih != ndx) begin
@@ -9422,6 +9481,49 @@ begin
 		pgh[ndx>>2].hwi <= FALSE;
 		pgh[ndx>>2].irq.level <= 6'd0;
 	end
+end
+endtask
+
+// Clear any sync dependencies, used when a sync instruction commits.
+
+task tClearSyncDep;
+input rob_ndx_t ndx;
+integer nn;
+begin
+	for (nn = 0; nn < ROB_ENTRIES; nn = nn + 1) begin
+		if (rob[nn].sync_depv && rob[nn].sync_dep==ndx)
+			rob[nn].sync_depv <= INV;
+	end
+end
+endtask
+
+// Clear any sync dependencies, used when a sync instruction commits.
+
+task tClearFcDep;
+input rob_ndx_t ndx;
+integer nn;
+begin
+	for (nn = 0; nn < ROB_ENTRIES; nn = nn + 1) begin
+		if (rob[nn].fc_depv && rob[nn].fc_dep==ndx)
+			rob[nn].fc_depv <= INV;
+	end
+end
+endtask
+
+// Commit logic the same for every head.
+
+task tCommits;
+input rob_ndx_t ndx;
+begin
+	tInvalidateQE(ndx);
+	if (sync_ndx==ndx)
+		sync_ndxv = INV;
+	if (fc_ndx==ndx)
+		fc_ndxv = INV;
+	if (rob[ndx].op.decbus.sync)
+		tClearSyncDep(ndx);
+	if (rob[ndx].op.decbus.fc)
+		tClearFcDep(ndx);
 end
 endtask
 

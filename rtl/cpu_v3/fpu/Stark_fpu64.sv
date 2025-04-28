@@ -361,7 +361,7 @@ begin
     default:  bus = 64'd0;
     endcase  
 	Stark_pkg::OP_ADD:
-		begin
+		if (Stark_pkg::PERFORMANCE) begin
 			if (ir[31])
 				bus = a + i;
 			else
@@ -388,53 +388,65 @@ begin
 				endcase
 		end
 	Stark_pkg::OP_AND:
-		if (ir[31])
-			bus = a & i;
-		else
-			case(ir.alu.op3)
-			3'd0:	bus = a & b;
-			3'd1:	bus = ~(a & b);
-			3'd2:	bus = a & ~b;
-			default:	bus = zero;	
-			endcase
+		if (Stark_pkg::PERFORMANCE) begin
+			if (ir[31])
+				bus = a & i;
+			else
+				case(ir.alu.op3)
+				3'd0:	bus = a & b;
+				3'd1:	bus = ~(a & b);
+				3'd2:	bus = a & ~b;
+				default:	bus = zero;	
+				endcase
+		end
 	Stark_pkg::OP_OR:
-		if (ir[31])
-			bus = a | i;
-		else
-			case(ir.alu.op3)
-			3'd0:	bus = a | b;
-			3'd1:	bus = ~(a | b);
-			3'd2:	bus = a | ~b;
-			default:	bus = zero;	
-			endcase
+		if (Stark_pkg::PERFORMANCE) begin
+			if (ir[31])
+				bus = a | i;
+			else
+				case(ir.alu.op3)
+				3'd0:	bus = a | b;
+				3'd1:	bus = ~(a | b);
+				3'd2:	bus = a | ~b;
+				default:	bus = zero;	
+				endcase
+		end
 	Stark_pkg::OP_XOR:
-		if (ir[31])
-			bus = a ^ i;
-		else
-			case(ir.alu.op3)
-			3'd0:	bus = a ^ b;
-			3'd1:	bus = ~(a ^ b);
-			3'd2:	bus = a ^ ~b;
-			default:	bus = zero;	
-			endcase
+		if (Stark_pkg::PERFORMANCE) begin
+			if (ir[31])
+				bus = a ^ i;
+			else
+				case(ir.alu.op3)
+				3'd0:	bus = a ^ b;
+				3'd1:	bus = ~(a ^ b);
+				3'd2:	bus = a ^ ~b;
+				default:	bus = zero;	
+				endcase
+		end
 	Stark_pkg::OP_SUBF:
-		if (ir[31])
-			bus = i - a;
-		else
-			case(ir.alu.op3)
-			3'd0:	bus = b - a;
-			default:	bus = zero;	
-			endcase
+		if (Stark_pkg::PERFORMANCE) begin
+			if (ir[31])
+				bus = i - a;
+			else
+				case(ir.alu.op3)
+				3'd0:	bus = b - a;
+				default:	bus = zero;	
+				endcase
+		end
 	Stark_pkg::OP_CMP:	bus = cmpo;
 	Stark_pkg::OP_MOV:
-		case(ir.move.op3)
-		3'd0:	bus = a;
-		3'd4:	bus = ~|a ? b : c;
-		3'd5:	bus =  |a ? b : c;
-		default:	bus = zero;
-		endcase
-	Stark_pkg::OP_LOADA:	bus = a + i + (b << ir[23:22]);
-	Stark_pkg::OP_PFX:		bus = zero;
+		if (Stark_pkg::PERFORMANCE) begin
+			case(ir.move.op3)
+			3'd0:	bus = a;
+			3'd4:	bus = ~|a ? b : c;
+			3'd5:	bus =  |a ? b : c;
+			default:	bus = zero;
+			endcase
+		end
+	Stark_pkg::OP_LOADA:
+		if (Stark_pkg::PERFORMANCE) begin
+			bus = a + i + (b << ir[23:22]);
+		end
 	Stark_pkg::OP_NOP:		bus = t;	// in case of copy target
 	default:	bus = 64'd0;
 	endcase

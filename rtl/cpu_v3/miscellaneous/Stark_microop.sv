@@ -38,15 +38,19 @@
 import const_pkg::*;
 import Stark_pkg::*;
 
-module Stark_microop(ir, carry_reg, carry_out, carry_in, count, uop);
+module Stark_microop(ir, num, carry_reg, carry_out, carry_in, count, uop);
 input Stark_pkg::instruction_t ir;
+input [2:0] num;
 input [7:0] carry_reg;
 input carry_out;
 input carry_in;
 output reg [2:0] count;
 output Stark_pkg::micro_op_t [7:0] uop;
 
+integer nn;
 Stark_pkg::cmp_inst_t icmp,fcmp;
+Stark_pkg::instruction_t nopi;
+
 always_comb
 begin
 	icmp = cmp_inst_t'(32'd0);
@@ -65,6 +69,10 @@ begin
 	fcmp.CRd = 3'd1;		// CR1
 	fcmp.opcode = Stark_pkg::OP_CMP;
 end
+always_comb
+begin
+	nopi = {26'd0,Stark_pkg::OP_NOP};
+end
 
 always_comb
 begin
@@ -78,23 +86,23 @@ begin
 	uop[6] = {$bits(Stark_pkg::micro_op_t){1'b0}};
 	uop[7] = {$bits(Stark_pkg::micro_op_t){1'b0}};
 	case(ir.any.opcode)
-	Stark_pkg::OP_BRK:	begin uop[0] = {3'd1,6'd0,4'd0,ir}; count = 3'd1; end
+	Stark_pkg::OP_BRK:	begin uop[0] = {1'b1,3'd1,3'd0,6'd0,4'd0,ir}; count = 3'd1; end
 	Stark_pkg::OP_SHIFT:
 		begin
 			if (ir[16]) begin
 				count = 3'd2;
-				uop[0] = {3'd2,6'd0,4'd0,ir};
-				uop[1] = {3'd0,6'd0,4'd0,icmp};
+				uop[0] = {1'b1,3'd2,3'd0,6'd0,4'd0,ir};
+				uop[1] = {1'b1,3'd0,3'd1,6'd0,4'd0,icmp};
 			end
 			else begin
 				count = 3'd1;
-				uop[0] = {3'd1,6'd0,4'd0,ir};
+				uop[0] = {1'b1,3'd1,3'd0,6'd0,4'd0,ir};
 			end
 		end
 	Stark_pkg::OP_CMP:
 		begin
 			count = 3'd1;
-			uop[0] = {3'd1,6'd0,4'd0,ir};
+			uop[0] = {1'b1,3'd1,3'd0,6'd0,4'd0,ir};
 		end
 	Stark_pkg::OP_ADD,
 	Stark_pkg::OP_ADB,
@@ -104,13 +112,13 @@ begin
 			3'b000:
 				begin
 					count = 3'd1;
-					uop[0] = {3'd1,6'd0,4'd0,ir};
+					uop[0] = {1'b1,3'd1,3'd0,6'd0,4'd0,ir};
 				end
 			3'b001:
 				begin
 					count = 3'd2;
-					uop[0] = {3'd2,6'd0,4'd0,ir};
-					uop[1] = {3'd0,6'd0,4'd0,icmp};
+					uop[0] = {1'b1,3'd2,3'd0,6'd0,4'd0,ir};
+					uop[1] = {1'b1,3'd0,3'd1,6'd0,4'd0,icmp};
 				end
 			3'b010:
 				begin
@@ -119,14 +127,16 @@ begin
 			3'b011:
 				begin
 					tAddCarryIn(3'd3);
-					uop[2] = {3'd0,6'd0,4'd0,icmp};
+					uop[2] = {1'b1,3'd0,3'd2,6'd0,4'd0,icmp};
 				end
 			3'b100:	
 				begin
 					if (ir[31]) begin
 						count = 3'd2;
 						uop[0] = {
+							1'b1,
 							3'd2,
+							3'd0,
 							6'd0,
 							4'd1,		// xop4 = AGC
 							ir
@@ -134,7 +144,9 @@ begin
 						uop[0].xRd = carry_reg[6:5];
 						uop[0].ins.alu.Rd = carry_reg[4:0];
 						uop[1] = {
+							1'b1,
 							3'd0,
+							3'd1,
 							6'd0,
 							4'd0,
 							ir
@@ -143,7 +155,9 @@ begin
 					else begin
 						count = 3'd2;
 						uop[0] = {
+							1'b1,
 							3'd2,
+							3'd0,
 							6'd0,
 							4'd1,
 							ir
@@ -151,7 +165,7 @@ begin
 						uop[0].xRd = carry_reg[6:5];
 						uop[0].ins.alu.Rd = carry_reg[4:0];
 						uop[0].ins.alu.op4 = 4'd1;	// AGC
-						uop[1] = {3'd0,6'd0,4'd0,ir};
+						uop[1] = {1'b1,3'd0,3'd1,6'd0,4'd0,ir};
 					end
 				end
 			3'b101:	
@@ -159,7 +173,9 @@ begin
 					if (ir[31]) begin
 						count = 3'd3;
 						uop[0] = {
+							1'b1,
 							3'd2,
+							3'd0,
 							6'd0,
 							4'd1,		// xop4 = AGC
 							ir
@@ -167,7 +183,9 @@ begin
 						uop[0].xRd = carry_reg[6:5];
 						uop[0].ins.alu.Rd = carry_reg[4:0];
 						uop[1] = {
+							1'b1,
 							3'd0,
+							3'd1,
 							6'd0,
 							4'd0,
 							ir
@@ -176,7 +194,9 @@ begin
 					else begin
 						count = 3'd3;
 						uop[0] = {
+							1'b1,
 							3'd2,
+							3'd0,
 							6'd0,
 							4'd1,
 							ir
@@ -184,15 +204,15 @@ begin
 						uop[0].xRd = carry_reg[6:5];
 						uop[0].ins.alu.Rd = carry_reg[4:0];
 						uop[0].ins.alu.op4 = 4'd1;	// AGC
-						uop[1] = {3'd0,6'd0,4'd0,ir};
+						uop[1] = {1'b1,3'd0,3'd1,6'd0,4'd0,ir};
 					end
-					uop[2] = {3'd0,6'd0,4'd0,icmp};
+					uop[2] = {1'b1,3'd0,3'd2,6'd0,4'd0,icmp};
 				end
 			3'b110:	tAddCarryInOut(3'd5);
 			3'b111:
 				begin
 					tAddCarryInOut(3'd6);
-					uop[5] = {3'd0,6'd0,4'd0,icmp};
+					uop[5] = {1'b1,3'd0,3'd5,6'd0,4'd0,icmp};
 				end
 			endcase
 		end
@@ -206,32 +226,32 @@ begin
 	Stark_pkg::OP_AMO,Stark_pkg::OP_CMPSWAP:
 		if (ir[16]) begin
 			count = 3'd2;
-			uop[0] = {3'd2,6'd0,4'd0,ir};
-			uop[1] = {3'd0,6'd0,4'd0,icmp};
+			uop[0] = {1'b1,3'd2,3'd0,6'd0,4'd0,ir};
+			uop[1] = {1'b1,3'd0,3'd1,6'd0,4'd0,icmp};
 		end
 		else begin
 			count = 3'd1;
-			uop[0] = {3'd1,6'd0,4'd0,ir};
+			uop[0] = {1'b1,3'd1,3'd0,6'd0,4'd0,ir};
 		end	
 	Stark_pkg::OP_B0,
 	Stark_pkg::OP_B1:
 		begin
 			count = 3'd1;
-			uop[0] = {3'd1,6'd0,4'd0,ir};
+			uop[0] = {1'b1,3'd1,3'd0,6'd0,4'd0,ir};
 		end
 	Stark_pkg::OP_BCC0,		
 	Stark_pkg::OP_BCC1:
 		begin
 			if (ir.bccld.cnd==3'd2 || ir.bccld.cnd==3'd5) begin	// no decrement
 				count = 3'd1;
-				uop[0] = {3'd1,6'd0,4'd0,ir};
+				uop[0] = {1'b1,3'd1,3'd0,6'd0,4'd0,ir};
 			end
 			else begin
 				count = 3'd2;
 				// Decrement loop counter
 				// ADD LC,LC,-1
-				uop[0] = {3'd2,6'h0A,4'd0,1'b1,14'h3FFF,1'b0,5'd12,5'd12,Stark_pkg::OP_ADD};
-				uop[1] = {3'd0,6'd0,4'd0,ir};
+				uop[0] = {1'b1,3'd2,3'd0,6'h0A,4'd0,1'b1,14'h3FFF,1'b0,5'd12,5'd12,Stark_pkg::OP_ADD};
+				uop[1] = {1'b1,3'd0,3'd1,6'd0,4'd0,ir};
 			end
 		end
 	Stark_pkg::OP_TRAP,
@@ -244,29 +264,33 @@ begin
 	Stark_pkg::OP_FENCE:
 		begin
 			count = 3'd1;
-			uop[0] = {3'd1,6'd0,4'd0,ir};
+			uop[0] = {1'b1,3'd1,3'd0,6'd0,4'd0,ir};
 		end
 	Stark_pkg::OP_FLT:
 		if (ir[16]) begin
 			count = 3'd2;
-			uop[0] = {3'd2,6'd0,4'd0,ir};
-			uop[1] = {3'd0,6'd0,4'd0,fcmp};
+			uop[0] = {1'b1,3'd2,3'd0,6'd0,4'd0,ir};
+			uop[1] = {1'b1,3'd0,3'd1,6'd0,4'd0,fcmp};
 		end
 		else begin
 			count = 3'd1;
-			uop[0] = {3'd1,6'd0,4'd0,ir};
+			uop[0] = {1'b1,3'd1,3'd0,6'd0,4'd0,ir};
 		end	
 	Stark_pkg::OP_MOD,Stark_pkg::OP_NOP:
 		begin
 			count = 3'd1;
-			uop[0] = {3'd1,6'd0,4'd0,ir};
+			uop[0] = {1'b1,3'd1,3'd0,6'd0,4'd0,ir};
 		end
 	default:
 		begin
 			count = 3'd1;
-			uop[0] = {3'd1,6'd0,4'd0,ir};
+			uop[0] = {1'b1,3'd1,3'd0,6'd0,4'd0,ir};
 		end
-	endcase	
+	endcase
+	for (nn = 0; nn < 8; nn = nn + 1) begin
+		if (nn < num)
+			uop[nn].v = 1'b0;
+	end	
 end
 
 task tAddCarryIn;
@@ -275,7 +299,9 @@ begin
 	count = cnt;
 	// ADD Rd,Rs1,carry_reg
 	uop[0] = {
+		1'b1,
 		count[2:0],
+		3'd0,
 		carry_reg[6:5],
 		4'd0,
 		4'd0,
@@ -288,7 +314,9 @@ begin
 	};
 	// ADD Rd,Rd,Rs2 or immediate
 	uop[1] = {
+		1'b1,
 		3'd0,
+		3'd1,
 		6'd0,
 		4'd0,
 		ir[31],
@@ -306,7 +334,9 @@ begin
 	count = cnt;
 	// ADD R47,Rs1,carry_reg
 	uop[0] = {
+		1'b1,
 		count[2:0],
+		3'd0,
 		carry_reg[6:5],
 		2'd0,
 		2'b01,
@@ -320,7 +350,9 @@ begin
 	};
 	// ADD R47,R47,Rs2 or immediate
 	uop[1] = {
+		1'b1,
 		3'd0,
+		3'd1,
 		2'd0,
 		2'b01,
 		2'b01,
@@ -333,7 +365,9 @@ begin
 	};
 	// ADD Rd,Rs1,carry_reg
 	uop[2] = {
+		1'b1,
 		count[2:0],
+		3'd2,
 		carry_reg[6:5],
 		4'd0,
 		4'd0,
@@ -346,7 +380,9 @@ begin
 	};
 	// AGC carry_out,Rd,Rs2 or immediate
 	uop[3] = {
+		1'b1,
 		3'd0,
+		3'd3,
 		4'd0,
 		carry_reg[6:5],
 		4'd1,				// AGC
@@ -358,7 +394,9 @@ begin
 	};
 	// MOVE Rd,R47
 	uop[4] = {
+		1'b1,
 		3'd0,
+		3'd4,
 		6'd0,
 		4'd0,
 		1'b1,

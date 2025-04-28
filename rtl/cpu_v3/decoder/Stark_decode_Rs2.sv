@@ -47,24 +47,24 @@ output reg exc;
 output reg has_Rs2;
 
 function aregno_t fnHas_Rs2;
-input Stark_pkg::ex_instruction_t ir;
+input Stark_pkg::instruction_t ir;
 input has_immb;
 begin
 	fnHas_Rs2 = 1'b0;
 	if (has_immb)
 		fnHas_Rs2 = 1'b0;
 	else
-		case(ir.ins.any.opcode)
+		case(ir.any.opcode)
 		Stark_pkg::OP_MOV:
-			if (ir.ins[31]) begin
-				case(ir.ins.move.op3)
+			if (ir[31]) begin
+				case(ir.move.op3)
 				3'd1:
-					if (ir.ins[25]==1'b1)		// XCHGMD
+					if (ir[25]==1'b1)		// XCHGMD
 						fnHas_Rs2 = 1'b1;	// Rd
 					else
 						fnHas_Rs2 = 1'b0;
 				3'd0:
-					if (ir.ins[25:21]==5'd1)	// XCHG
+					if (ir[25:21]==5'd1)	// XCHG
 						fnHas_Rs2 = 1'b1;	// Rd
 					else
 						fnHas_Rs2 = 1'd0;
@@ -76,9 +76,9 @@ begin
 				fnHas_Rs2 = 1'd0;
 		Stark_pkg::OP_FLT:	fnHas_Rs2 = 1'b1;
 		Stark_pkg::OP_CSR:
-			fnHas_Rs2 = ir.ins[31:29]==3'd0 ? 1'b1 : 1'b0;
+			fnHas_Rs2 = ir[31:29]==3'd0 ? 1'b1 : 1'b0;
 		Stark_pkg::OP_B0,Stark_pkg::OP_B1,Stark_pkg::OP_BCC0,Stark_pkg::OP_BCC1:
-			if (ir.ins[30:29]==2'b00 && ir.ins[8:6]!=3'd7)
+			if (ir[30:29]==2'b00 && ir[8:6]!=3'd7)
 				fnHas_Rs2 = 1'b1;
 			else
 				fnHas_Rs2 = 1'b0;
@@ -86,13 +86,13 @@ begin
 		Stark_pkg::OP_AND,Stark_pkg::OP_OR,Stark_pkg::OP_XOR,
 		Stark_pkg::OP_MUL,Stark_pkg::OP_DIV,
 		Stark_pkg::OP_SHIFT:
-			fnHas_Rs2 = ir.ins[31:29]==3'd0;
+			fnHas_Rs2 = ir[31:29]==3'd0;
 		Stark_pkg::OP_LDB,Stark_pkg::OP_LDBZ,Stark_pkg::OP_LDW,Stark_pkg::OP_LDWZ,
 		Stark_pkg::OP_LDT,Stark_pkg::OP_LDTZ,Stark_pkg::OP_LOAD,Stark_pkg::OP_LOADA,
 		Stark_pkg::OP_STB,Stark_pkg::OP_STBI,Stark_pkg::OP_STW,Stark_pkg::OP_STWI,
 		Stark_pkg::OP_STT,Stark_pkg::OP_STTI,Stark_pkg::OP_STORE,Stark_pkg::OP_STOREI,
 		Stark_pkg::OP_STPTR:
-			fnHas_Rs2 = ir.ins[31:29]==3'd0;
+			fnHas_Rs2 = ir[31:29]==3'd0;
 		Stark_pkg::OP_AMO,
 		Stark_pkg::OP_CMPSWAP:	fnHas_Rs2 = 1'b1;
 		default:
@@ -104,34 +104,34 @@ end
 endfunction
 
 function aregno_t fnRs2;
-input Stark_pkg::ex_instruction_t ir;
+input Stark_pkg::instruction_t ir;
 input has_immb;
 begin
 	if (has_immb)
 		fnRs2 = 8'd0;
 	else
-		case(ir.ins.any.opcode)
+		case(ir.any.opcode)
 		Stark_pkg::OP_FLT:
-			fnRs2 = {2'b01,ir.ins.fpu.Rs2};
+			fnRs2 = {2'b01,ir.fpu.Rs2};
 		Stark_pkg::OP_CSR:
-			fnRs2 = ir.ins[31:29]==3'd0 ? {2'b00,ir.ins.csrr.Rs2} : 7'd0;
+			fnRs2 = ir[31:29]==3'd0 ? {2'b00,ir.csrr.Rs2} : 7'd0;
 		Stark_pkg::OP_B0,Stark_pkg::OP_B1,Stark_pkg::OP_BCC0,Stark_pkg::OP_BCC1:
-			if (ir.ins[30:29]==2'b00 && ir.ins[8:6]!=3'd7)
-				fnRs2 = {2'b00,ir.ins[15:11]};
+			if (ir[30:29]==2'b00 && ir[8:6]!=3'd7)
+				fnRs2 = {2'b00,ir[15:11]};
 			else
 				fnRs2 = 7'd0;
 		Stark_pkg::OP_ADD,Stark_pkg::OP_SUBF,Stark_pkg::OP_CMP,
 		Stark_pkg::OP_AND,Stark_pkg::OP_OR,Stark_pkg::OP_XOR,
 		Stark_pkg::OP_MUL,Stark_pkg::OP_DIV,
 		Stark_pkg::OP_SHIFT:
-			fnRs2 = {2'b00,ir.ins.alu.Rs2};
+			fnRs2 = {2'b00,ir.alu.Rs2};
 		Stark_pkg::OP_LDB,Stark_pkg::OP_LDBZ,Stark_pkg::OP_LDW,Stark_pkg::OP_LDWZ,
 		Stark_pkg::OP_LDT,Stark_pkg::OP_LDTZ,Stark_pkg::OP_LOAD,Stark_pkg::OP_LOADA,
 		Stark_pkg::OP_AMO,Stark_pkg::OP_CMPSWAP,
 		Stark_pkg::OP_STB,Stark_pkg::OP_STBI,Stark_pkg::OP_STW,Stark_pkg::OP_STWI,
 		Stark_pkg::OP_STT,Stark_pkg::OP_STTI,Stark_pkg::OP_STORE,Stark_pkg::OP_STOREI,
 		Stark_pkg::OP_STPTR:
-			fnRs2 = {2'b00,ir.ins.lsscn.Rs2};
+			fnRs2 = {2'b00,ir.lsscn.Rs2};
 		default:
 			begin
 				fnRs2 = 7'd0;
