@@ -6,3 +6,4 @@ This folder contains files for components related to the ALUs.
 * Stark_divider.sv: is a file containing the divider component. The divider is standard radix two divider. Present only in the first ALU.
 * Stark_cmp.sv: is a file containing the comparator component. The comparator supports both integer and floating-point comparisons. It is also used in the FPU.
 * Stark_meta_alu.sv: is a top level ALU supporting multiple precisions.
+* Stark_validate_Rn.sv: marks arguments valid as they are read from the register file.

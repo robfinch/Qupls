@@ -5,3 +5,6 @@ This folder contains components related to branch or flow control logic.
 * Stark_branchmiss_flag.sv: component that sets a pipeline flag based on the branch type and whether there was a branch miss.
 * Stark_branchmiss_pc.sv: component that determines what the destination PC is for a branch miss.
 * Stark_btb.sv: branch target buffer component with 1024 entries. Used in the fetch stage to determine the next PC.
+* Stark_backout_flag.sv: flag activating backout process for a branch miss
+* Stark_restore_flag.sv: flag activing a restore
+* 
