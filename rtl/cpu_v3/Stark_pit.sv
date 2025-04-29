@@ -102,8 +102,8 @@ input clk3;
 input gate3;
 output out3;
 
-parameter QIT_ADDR = 32'hFEE40001;
-parameter QIT_ADDR_MASK = 32'hFFFF0000;
+parameter PIT_ADDR = 32'hFEE40001;
+parameter PIT_ADDR_MASK = 32'hFFFF0000;
 // 1000_0000_0000_1000_0000_0000_0000_0000
 // IRQ registers: 0x80080040 and 0x80080048
 parameter CFG_BUS = 8'd0;

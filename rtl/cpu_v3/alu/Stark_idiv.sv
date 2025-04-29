@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2023-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -32,53 +32,80 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
+// LUTs / FFs
 // ============================================================================
 
 import const_pkg::*;
 import cpu_types_pkg::*;
+import Stark_pkg::*;
 
-module Stark_validate_Rn(prn, prnv, rfo, rfo_tag, pRn, val, val_tag, 
-	rfi_val, rfi_tag, rfi_pRd, valid_i, valid_o);
-input pregno_t [15:0] prn;
-input [15:0] prnv;
-input value_t [15:0] rfo;
-input [15:0] rfo_tag;
-input pregno_t pRn;
-output value_t val;
-output reg val_tag;
-input value_t [3:0] rfi_val;
-input [3:0] rfi_tag;
-input pregno_t [3:0] rfi_pRd;
-input valid_i;
-output reg valid_o;
+module Stark_idiv(rst, clk, clk2x, ld, ir, div, a, b, bi, c, i, t, o,
+	div_done, div_dbz, exc_o);
+parameter ALU0 = 1'b1;
+parameter WID=64;
+parameter LANE=0;
+input rst;
+input clk;
+input clk2x;
+input ld;
+input Stark_pkg::instruction_t ir;
+input div;
+input [WID-1:0] a;
+input [WID-1:0] b;
+input [WID-1:0] bi;
+input [WID-1:0] c;
+input [WID-1:0] i;
+input [WID-1:0] t;
+output reg [WID-1:0] o;
+output div_done;
+output div_dbz;
+output Stark_pkg::cause_code_t exc_o;
 
-integer nn;
+genvar g;
+integer nn,kk,jj;
+Stark_pkg::cause_code_t exc;
+wire [WID:0] zero = {WID+1{1'b0}};
+wire [WID:0] dead = {1'b0,{WID/16{16'hdead}}};
+wire [WID-1:0] div_q, div_r;
+reg [WID:0] bus;
+
+Stark_divider #(.WID(WID)) udiv0(
+	.rst(rst),
+	.clk(clk2x),
+	.ld(ld),
+	.sgn(div),
+	.sgnus(1'b0),
+	.a(a),
+	.b(ir[31] ? i : bi),
+	.qo(div_q),
+	.ro(div_r),
+	.dvByZr(div_dbz),
+	.done(div_done),
+	.idle()
+);
+
 always_comb
 begin
-	valid_o = valid_i;
-	val = value_zero;
-	val_tag = 1'b0;
-	if (pRn==9'd0)
-		valid_o = VAL;
-	else
-	for (nn = 0; nn < 16; nn = nn + 1) begin
-		if (pRn==prn[nn] && prnv[nn] && !valid_i) begin
-			val = rfo[nn];
-			val_tag = rfo_tag[nn];
-			valid_o = VAL;
-		end
-	end
-	// Bypassing from the input to the register file trims a clock cycle off
-	// latency.
-	if (PERFORMANCE) begin
-		for (nn = 0; nn < 4; nn = nn + 1) begin
-			if (pRn==rfi_pRd[nn] && !valid_i) begin
-				val = rfi_val[nn];
-				val_tag = rfi_tag[nn];
-				valid_o = VAL;
-			end
-		end
-	end
+	exc = Stark_pkg::FLT_NONE;
+	bus = {(WID/16){16'h0000}};
+	case(ir.any.opcode)
+	Stark_pkg::OP_DIV:
+		if (ir[31])
+			bus = div_q[WID-1:0];
+		else
+			case (ir.alu.op3)
+			3'd0:	bus = div_q[WID-1:0];
+			3'd1: bus = div_q[WID-1:0];
+			3'd4:	bus = div_r[WID-1:0];
+			default:	bus = zero;
+			endcase
+	default:	bus = {(WID/16){16'hDEAD}};
+	endcase
 end
+
+always_ff @(posedge clk)
+	o = bus;
+always_ff @(posedge clk)
+	exc_o = exc;
 
 endmodule

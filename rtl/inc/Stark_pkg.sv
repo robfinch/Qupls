@@ -220,15 +220,17 @@ parameter NDATA_PORTS = 1;
 // Number of AGENs should be 1 or 2. There is little value in having more agens
 // than there are data ports.
 parameter NAGEN = 1;
-// Increasing the number of ALUs will increase performance. There must be at
-// least one ALU.
+// Increasing the number of SAUs will increase performance. There must be at
+// least one SAU.
 // Note that adding an FPU may also increase integer performance if PERFORMANCE
 // is set to 1.
-parameter NALU = 2;			// 1 or 2
+parameter NSAU = 2;			// 1 or 2
 parameter NFPU = 1;			// 0, 1, or 2
 parameter FPU0_IQ_DEPTH = 32;
 parameter FPU1_IQ_DEPTH = 32;
 parameter NLSQ_PORTS = 1;
+parameter SUPPORT_IDIV = 1;
+parameter SUPPORT_TRIG = 1;
 
 parameter RAS_DEPTH	= 4;
 
@@ -1352,26 +1354,16 @@ typedef struct packed
 	operating_mode_t om;			// operating mode
 	reg [31:0] carry_mod;			// carry modifier remnant
 	reg [11:0] atom_mask;			// interrupt masking by ATOM instruction
-	cpu_types_pkg::pregno_t pRci;							// physical registers (see decode bus for arch. regs)
 	cpu_types_pkg::pregno_t pRs1;							// physical registers (see decode bus for arch. regs)
 	cpu_types_pkg::pregno_t pRs2;
 	cpu_types_pkg::pregno_t pRs3;
 	cpu_types_pkg::pregno_t pRd;						// current Rd value
-	cpu_types_pkg::pregno_t pRd2;						// current Rd2 value
-	cpu_types_pkg::pregno_t pRco;						// current Rc
 	cpu_types_pkg::pregno_t nRd;						// new Rd
-	cpu_types_pkg::pregno_t nRd2;						// new Rd2
-	cpu_types_pkg::pregno_t nRco;						// new Rc
-	logic pRciv;
 	logic pRs1v;
 	logic pRs2v;
 	logic pRs3v;
 	logic pRdv;
-	logic pRd2v;
-	logic pRcov;
 	logic nRdv;
-	logic nRd2v;
-	logic nRcov;
 	cpu_types_pkg::pc_address_ex_t pc;			// PC of instruction
 	cpu_types_pkg::mc_address_t mcip;				// Micro-code IP address
 	cpu_types_pkg::pc_address_ex_t hwipc;		// PC of instruction
@@ -1413,6 +1405,27 @@ typedef struct packed
 	pipeline_reg_t pr2;
 	pipeline_reg_t pr3;
 } pipeline_group_reg_t;
+
+typedef struct packed {
+	logic busy;
+	logic ready;
+	logic [3:0] funcunit;					// functional unit dispatched to
+	instruction_t ins;
+	pregno_t nRd;
+	cpu_types_pkg::value_t argA;
+	cpu_types_pkg::value_t argB;
+	cpu_types_pkg::value_t argC;
+	cpu_types_pkg::value_t argD;
+	cpu_types_pkg::value_t argI;
+	logic tagA;
+	logic tagB;
+	logic tagC;
+	logic tagD;
+	logic argA_v;
+	logic argB_v;
+	logic argC_v;
+	logic argD_v;
+} reservation_station_entry_t;
 
 typedef struct packed {
 	// The following fields may change state while an instruction is processed.

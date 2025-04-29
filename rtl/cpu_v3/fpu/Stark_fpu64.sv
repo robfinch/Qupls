@@ -6,6 +6,9 @@
 //       ||
 //
 //
+// Stark_fpu64.sv
+//	- FPU ops with a two cycle latency
+//
 // BSD 3-Clause License
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are met:
@@ -61,8 +64,19 @@ reg sincos_done, scale_done, f2i_done, i2f_done, sqrt_done, fres_done, trunc_don
 wire div_done;
 reg [WID-1:0] bus;
 reg [WID-1:0] fmao1, fmao2, fmao3, fmao4, fmao5, fmao6, fmao7;
-wire [WID-1:0] scaleo, f2io, i2fo, signo, cmpo, divo, sqrto, freso, trunco;
-wire [WID-1:0] cvtS2Do;
+wire [WID-1:0] scaleo, f2io, i2fo, signo2, cmpo2, divo, sqrto, freso, trunco;
+wire [WID-1:0] fsgnj2,fsgnjn2,fsgnjx2;
+reg [WID-1:0] fsgnj1,fsgnjn1,fsgnjx1;
+reg [WID-1:0] fsgnj,fsgnjn,fsgnjx;
+reg [WID-1:0] cmpo,cmpo1;
+reg [WID-1:0] signo,signo1;
+wire [WID-1:0] cvtS2Do2;
+reg [WID-1:0] cvtS2Do,cvtS2Do1;
+wire [WID-1:0] ando2,oro2,xoro2,addo2;
+reg [WID-1:0] ando1,oro1,xoro1,addo1;
+reg [WID-1:0] ando,oro,xoro,addo;
+wire [WID-1:0] subfo2,movo2;
+reg [WID-1:0] subfo,subfo1,movo,movo1,loadao,loadao1;
 wire ce = 1'b1;
 wire cd_args;
 reg [WID-1:0] tmp;
@@ -78,6 +92,13 @@ Stark_cmp #(.WID(WID)) ualu_cmp
 	.i(i),
 	.o(cmpo)
 );
+
+always_ff @(posedge clk)
+	if (ce)
+		cmpo1 <= cmpo2;
+always_ff @(posedge clk)
+	if (ce)
+		cmpo <= cmpo1;
 
 // A change in arguments is used to load the divider.
 change_det #(.WID(128)) uargcd0 (
@@ -97,119 +118,7 @@ fpScaleb64 uscal1
 	.o(scaleo)
 );
 
-wire [WID-1:0] sino, coso;
-
-fpSincos64 usincos1
-(
-	.rst(rst),
-	.clk(clk),
-	.rm(rm),
-	.ld(cd_args),
-	.a(a),
-	.sin(sino),
-	.cos(coso)
-);
-
-reg fmaop, fma_done;
-reg [WID-1:0] fmac;
-reg [WID-1:0] fmab;
-reg [WID-1:0] fmao;
-/*
-always_comb
-	if (ir.f3.func==FN_FMS || ir.f3.func==FN_FNMS)
-		fmaop = 1'b1;
-	else
-		fmaop = 1'b0;
-*/
-always_comb
-	if (ir.fpu.op4==Stark_pkg::FOP4_FADD || ir.fpu.op4==Stark_pkg::FOP4_FSUB)
-		fmab <= 64'h3FF0000000000000;	// 1,0
-	else
-		fmab <= b;
-
-always_comb
-	if (ir.fpu.op4==FOP4_FMUL || ir.fpu.op4==FOP4_FDIV)
-		fmac = 64'd0;
-	else
-		fmac = c;
-
-fpFMA64nrL8 ufma1
-(
-	.clk(clk),
-	.ce(ce),
-	.op(fmaop),
-	.rm(rm),
-	.a(a),
-	.b(fmab),
-	.c(fmac),
-	.o(fmao),
-	.inf(),
-	.zero(),
-	.overflow(),
-	.underflow(),
-	.inexact()
-);
-
-/*
-fpFMA64nrCombo ufma1
-(
-	.op(fmaop),
-	.rm(rm),
-	.a(a),
-	.b(fmab),
-	.c(fmac),
-	.o(fmao1),
-	.inf(),
-	.zero(),
-	.overflow(),
-	.underflow(),
-	.inexact()
-);
-
-// Retiming pipeline
-always_ff @(posedge clk, posedge rst)
-if (rst) begin
-	fmao2 <= 'd0;
-	fmao3 <= 'd0;
-	fmao4 <= 'd0;
-	fmao5 <= 'd0;
-	fmao6 <= 'd0;
-	fmao7 <= 'd0;
-	fmao <= 'd0;
-end
-else if (ce) begin
-	fmao2 <= fmao1;
-	fmao3 <= fmao2;
-	fmao4 <= fmao3;
-	fmao5 <= fmao4;
-	fmao6 <= fmao5;
-	fmao7 <= fmao6;
-	fmao <= fmao7;
-end
-*/
-
-/*
-fpDivide64nr udiv1
-(
-	.rst(rst),
-	.clk(clk),
-	.clk4x(clk),
-	.ce(ce),
-	.ld(cd_args),
-	.op(1'b0),			// not used
-	.a(a),
-	.b(b),
-	.o(divo),
-	.rm(rm),
-	.done(div_done),
-	.sign_exe(),
-	.inf(),
-	.overflow(),
-	.underflow()
-);
-*/
-
-f2i64 uf2i641
+fpCvt64ToI64 uf2i641
 (
 	.clk(clk),
 	.ce(ce), 
@@ -233,36 +142,15 @@ fpCvtI64To64 ui2f1
 fpSign64 usign1
 (
 	.a(a),
-	.o(signo)
+	.o(signo2)
 );
 
-/*
-fpCompare64 ucmp1
-(
-	.a(a),
-	.b(b),
-	.o(cmpo),
-	.inf(),
-	.nan(),
-	.snan()
-);
-*/
-
-fpSqrt64nr usqrt1
-(
-	.rst(rst),
-	.clk(clk),
-	.ce(ce),
-	.ld(cd_args),
-	.a(a),
-	.o(sqrto),
-	.rm(rm),
-	.done(),
-	.inf(),
-	.sqrinf(),
-	.sqrneg()
-);
-
+always_ff @(posedge clk)
+	if (ce)
+		signo1 <= signo2;
+always_ff @(posedge clk)
+	if (ce)
+		signo <= signo1;
 
 fpRes64 ufre1
 (
@@ -283,63 +171,110 @@ fpTrunc64 utrunc1
 fpCvt32To64 ucvtS2D1
 (
 	.i(a[31:0]),
-	.o(cvtS2Do)
+	.o(cvtS2Do2)
 );
 
 always_ff @(posedge clk)
-if (rst) begin
-	cnt <= 'd0;
-	sincos_done <= 1'b0;
-	fma_done <= 1'b0;
-	scale_done <= 1'b0;
-	f2i_done <= 'd0;
-	i2f_done <= 'd0;
-	sqrt_done <= 'd0;
-	fres_done <= 'd0;
-	trunc_done <= 'd0;
-end
-else begin
-	if (cd_args)
-		cnt <= 'd0;
-	else
-		cnt <= cnt + 2'd1;
-	sincos_done <= cnt>=12'd64;
-	fma_done <= cnt>=12'h8;
-	scale_done <= cnt>=12'h3;
-	f2i_done <= cnt>=12'h2;
-	i2f_done <= cnt>=12'h2;
-	sqrt_done <= cnt >= 12'd121;
-	fres_done <= cnt >= 12'h002;
-	trunc_done <= cnt >= 12'h001;
-end
+	if (ce)
+		cvtS2Do1 <= cvtS2Do2;
+always_ff @(posedge clk)
+	if (ce)
+		cvtS2Do <= cvtS2Do1;
+
+// FSGNJ
+always_ff @(posedge clk)
+	if (ce)
+		fsgnj1 <= {a[63],b[62:0]};
+always_ff @(posedge clk)
+	if (ce)
+		fsgnj <= fsgnj1;
+// FSGNJN
+always_ff @(posedge clk)
+	if (ce)
+		fsgnj1 <= {~a[63],b[62:0]};
+always_ff @(posedge clk)
+	if (ce)
+		fsgnjn <= fsgnjn1;
+// FSGNJX
+always_ff @(posedge clk)
+	if (ce)
+		fsgnjx1 <= {a[63]^b[63],b[62:0]};
+always_ff @(posedge clk)
+	if (ce)
+		fsgnjx <= fsgnjx1;
+
+always_comb
+	tAdd(ir,addo2);
+always_ff @(posedge clk)
+	if (ce)
+		addo1 <= addo2;
+always_ff @(posedge clk)
+	if (ce)
+		addo <= addo1;
+
+always_comb
+	tSubf(ir,subfo2);
+always_ff @(posedge clk)
+	if (ce)
+		subfo1 <= subfo2;
+always_ff @(posedge clk)
+	if (ce)
+		subfo <= subfo1;
+
+always_comb
+	tAnd(ir,ando2);
+always_ff @(posedge clk)
+	if (ce)
+		ando1 <= ando2;
+always_ff @(posedge clk)
+	if (ce)
+		ando <= ando1;
+
+always_comb
+	tOr(ir,oro2);
+always_ff @(posedge clk)
+	if (ce)
+		oro1 <= oro2;
+always_ff @(posedge clk)
+	if (ce)
+		oro <= oro1;
+
+always_comb
+	tXor(ir,xoro2);
+always_ff @(posedge clk)
+	if (ce)
+		xoro1 <= xoro2;
+always_ff @(posedge clk)
+	if (ce)
+		xoro <= xoro1;
+
+always_comb
+	tMove(ir,movo2);
+always_ff @(posedge clk)
+	if (ce)
+		movo1 <= movo2;
+always_ff @(posedge clk)
+	if (ce)
+		movo <= movo1;
+
+always_ff @(posedge clk)
+	if (ce)
+		loadao1 <= a + i + (b << ir[23:22]);
+always_ff @(posedge clk)
+	if (ce)
+		loadao <= loadao1;
 
 always_comb
 begin
-	bus = 'd0;
+	bus = {WID{1'd0}};
 	case(ir.any.opcode)
 	OP_FLT:
 		case(ir.fpu.op4)
-		/*
-		FN_FLT1:
-			case(ir.f1.func)
-			FN_ISNAN:	bus = &a[62:52] && |a[51:0];
-			FN_FINITE:	bus = ~&a[62:52];
-			FN_FRES:	bus = freso;
-			FN_FCVTS2D:	bus = cvtS2Do;
-			default:	bus = 'd0;
-			endcase
-		*/
-		FOP4_FADD,FOP4_FSUB,FOP4_FMUL:
-			bus = fmao;
-		/*
-		FN_FDIV:
-			bus = divo;
-		*/
 		FOP4_G8:
 		  case(ir.fpu.op3)
-      FG8_FSGNJ:	bus = {a[63],b[62:0]};
-      FG8_FSGNJN:	bus = {~a[63],b[62:0]};
-      FG8_FSGNJX:	bus = {a[63]^b[63],b[62:0]};
+      FG8_FSGNJ:	bus = fsgnj;
+      FG8_FSGNJN:	bus = fsgnjn;
+      FG8_FSGNJX:	bus = fsgnjx;
   		FG8_FSCALEB:	bus = scaleo;
       default:	bus = 64'd0;
       endcase
@@ -348,166 +283,167 @@ begin
 			FG10_FCVTF2I:	 bus = f2io;
 			FG10_FCVTI2F:	 bus = i2fo;
 			FG10_FSIGN:    bus = signo;
-			FG10_FSQRT:	   bus = sqrto;
 			FG10_FTRUNC:	 bus = trunco;
-      default:  bus = 64'd0;
-      endcase
-    FOP4_TRIG:
-      case(ir.fpu.Rs2)
-			FTRIG_FSIN:	bus = sino;
-			FTRIG_FCOS:	bus = coso;
       default:  bus = 64'd0;
       endcase
     default:  bus = 64'd0;
     endcase  
-	Stark_pkg::OP_ADD:
-		if (Stark_pkg::PERFORMANCE) begin
-			if (ir[31])
-				bus = a + i;
-			else
-				case(ir.alu.op3)
-				3'd0:		// ADD
-					case(ir.alu.lx)
-					2'd0:	bus = a + b;
-					default:	bus = a + i;
-					endcase
-				3'd2:		// ABS
-					case(ir.alu.lx)
-					2'd0:
-						begin
-							tmp = a + b;
-							bus = tmp[WID-1] ? -tmp : tmp;
-						end
-					default:
-						begin
-							tmp = a + i;
-							bus = tmp[WID-1] ? -tmp : tmp;
-						end
-					endcase
-				default:	bus = zero;
-				endcase
-		end
-	Stark_pkg::OP_AND:
-		if (Stark_pkg::PERFORMANCE) begin
-			if (ir[31])
-				bus = a & i;
-			else
-				case(ir.alu.op3)
-				3'd0:	bus = a & b;
-				3'd1:	bus = ~(a & b);
-				3'd2:	bus = a & ~b;
-				default:	bus = zero;	
-				endcase
-		end
-	Stark_pkg::OP_OR:
-		if (Stark_pkg::PERFORMANCE) begin
-			if (ir[31])
-				bus = a | i;
-			else
-				case(ir.alu.op3)
-				3'd0:	bus = a | b;
-				3'd1:	bus = ~(a | b);
-				3'd2:	bus = a | ~b;
-				default:	bus = zero;	
-				endcase
-		end
-	Stark_pkg::OP_XOR:
-		if (Stark_pkg::PERFORMANCE) begin
-			if (ir[31])
-				bus = a ^ i;
-			else
-				case(ir.alu.op3)
-				3'd0:	bus = a ^ b;
-				3'd1:	bus = ~(a ^ b);
-				3'd2:	bus = a ^ ~b;
-				default:	bus = zero;	
-				endcase
-		end
-	Stark_pkg::OP_SUBF:
-		if (Stark_pkg::PERFORMANCE) begin
-			if (ir[31])
-				bus = i - a;
-			else
-				case(ir.alu.op3)
-				3'd0:	bus = b - a;
-				default:	bus = zero;	
-				endcase
-		end
+	Stark_pkg::OP_ADD:	bus = addo;
+	Stark_pkg::OP_AND:	bus = ando;
+	Stark_pkg::OP_OR:		bus = oro;
+	Stark_pkg::OP_XOR:	bus = xoro;
+	Stark_pkg::OP_SUBF:	bus = subfo;
 	Stark_pkg::OP_CMP:	bus = cmpo;
-	Stark_pkg::OP_MOV:
-		if (Stark_pkg::PERFORMANCE) begin
-			case(ir.move.op3)
-			3'd0:	bus = a;
-			3'd4:	bus = ~|a ? b : c;
-			3'd5:	bus =  |a ? b : c;
-			default:	bus = zero;
-			endcase
-		end
-	Stark_pkg::OP_LOADA:
-		if (Stark_pkg::PERFORMANCE) begin
-			bus = a + i + (b << ir[23:22]);
-		end
+	Stark_pkg::OP_MOV:	bus = movo;
+	Stark_pkg::OP_LOADA:	bus = loadao;
 	Stark_pkg::OP_NOP:		bus = t;	// in case of copy target
 	default:	bus = 64'd0;
 	endcase
 end
 
 always_ff @(posedge clk)
-	case(ir.any.opcode)
-	Stark_pkg::OP_FLT:
-		case(ir.fpu.op4)
-		/*
-		FN_FLT1:
-			case(ir.f1.func)
-//			FN_FSQRT: done = sqrt_done;
-			FN_FRES:	done = fres_done;
-			default:	done = 1'b1;
-			endcase
-		*/
-		Stark_pkg::FOP4_G8:
-		  case(ir.fpu.op3)
-		  Stark_pkg::FG8_FSCALEB: done = scale_done;
-		  default: done = 1'b1;
-			endcase
-		Stark_pkg::FOP4_G10:
-		  case (ir.fpu.Rs2)
-			Stark_pkg::FG10_FCVTF2I: done = f2i_done;
-			Stark_pkg::FG10_FCVTI2F: done = i2f_done;
-			Stark_pkg::FG10_FTRUNC:	done = trunc_done;
-			default: done = 1'b1;
-		  endcase
-		Stark_pkg::FOP4_TRIG:
-		  case(ir.fpu.Rs2)
-			Stark_pkg::FTRIG_FSIN:	done = sincos_done;
-			Stark_pkg::FTRIG_FCOS:	done = sincos_done;
-		  endcase
-		Stark_pkg::FOP4_FADD,Stark_pkg::FOP4_FSUB,Stark_pkg::FOP4_FMUL:
-			done = fma_done;
-		/*
-		FN_FDIV:
-			done = div_done;
-		*/
-		default:	done = 1'b1;
-		endcase
-	Stark_pkg::OP_ADD:	done = 1'b1;
-	Stark_pkg::OP_CMP:	done = 1'b1;
-	Stark_pkg::OP_AND:	done = 1'b1;
-	Stark_pkg::OP_OR:		done = 1'b1;
-	Stark_pkg::OP_XOR:	done = 1'b1;
-	Stark_pkg::OP_MOV:		done = 1'b1;
-	Stark_pkg::OP_NOP:		done = 1'b1;
-	default:	done = 1'b1;
-	endcase
-
-always_ff @(posedge clk)
 	o = bus;
-	/*
-	if (p[0])
-		o = bus;
-	else
-		o = t;
-	*/
 always_comb
 	exc = Stark_pkg::FLT_NONE;
+
+task tAdd;
+input Stark_pkg::instruction_t ir;
+output [WID-1:0] bus;
+begin
+	if (Stark_pkg::PERFORMANCE) begin
+		if (ir[31])
+			bus = a + i;
+		else
+			case(ir.alu.op3)
+			3'd0:		// ADD
+				case(ir.alu.lx)
+				2'd0:	bus = a + b;
+				default:	bus = a + i;
+				endcase
+			3'd2:		// ABS
+				case(ir.alu.lx)
+				2'd0:
+					begin
+						tmp = a + b;
+						bus = tmp[WID-1] ? -tmp : tmp;
+					end
+				default:
+					begin
+						tmp = a + i;
+						bus = tmp[WID-1] ? -tmp : tmp;
+					end
+				endcase
+			default:	bus = zero;
+			endcase
+	end
+end
+endtask
+
+task tSubf;
+input Stark_pkg::instruction_t ir;
+output [WID-1:0] bus;
+begin
+	if (Stark_pkg::PERFORMANCE) begin
+		if (ir[31])
+			bus = i - a;
+		else
+			case(ir.alu.op3)
+			3'd0:	bus = b - a;
+			default:	bus = zero;	
+			endcase
+	end
+end
+endtask
+
+task tAnd;
+input Stark_pkg::instruction_t ir;
+output [WID-1:0] bus;
+begin
+	if (Stark_pkg::PERFORMANCE) begin
+		if (ir[31])
+			bus = a & i;
+		else
+			case(ir.alu.op3)
+			3'd0:	bus = a & b;
+			3'd1:	bus = ~(a & b);
+			3'd2:	bus = a & ~b;
+			default:	bus = zero;	
+			endcase
+	end
+end
+endtask
+
+task tOr;
+input Stark_pkg::instruction_t ir;
+output [WID-1:0] bus;
+begin
+	if (Stark_pkg::PERFORMANCE) begin
+		if (ir[31])
+			bus = a | i;
+		else
+			case(ir.alu.op3)
+			3'd0:	bus = a | b;
+			3'd1:	bus = ~(a | b);
+			3'd2:	bus = a | ~b;
+			default:	bus = zero;	
+			endcase
+	end
+end
+endtask
+
+task tXor;
+input Stark_pkg::instruction_t ir;
+output [WID-1:0] bus;
+begin
+	if (Stark_pkg::PERFORMANCE) begin
+		if (ir[31])
+			bus = a ^ i;
+		else
+			case(ir.alu.op3)
+			3'd0:	bus = a ^ b;
+			3'd1:	bus = ~(a ^ b);
+			3'd2:	bus = a ^ ~b;
+			default:	bus = zero;	
+			endcase
+	end
+end
+endtask
+
+task tMove;
+input Stark_pkg::instruction_t ir;
+output [WID-1:0] bus;
+begin
+	if (ir[31]) begin
+		case(ir.move.op3)
+		3'd0:	// MOVE / XCHG
+			begin
+				bus = a;	// MOVE
+			end
+		3'd1:	// XCHGMD / MOVEMD
+			begin	
+				bus = a;
+			end
+		3'd2:	bus = zero;		// MOVSX
+		3'd3:	bus = zero;		// MOVZX
+		3'd4:	bus = ~|a ? i : t;	// CMOVZ
+		3'd5:	bus =  |a ? i : t;	// CMOVNZ
+		3'd6:	bus = zero;		// BMAP
+		default:
+			begin
+				bus = zero;
+			end
+		endcase
+	end
+	else
+		case(ir.move.op3)
+		3'd4:	bus = ~|a ? b : t;	// CMOVZ
+		3'd5:	bus =  |a ? b : t;	// CMOVNZ
+		default:
+			begin
+				bus = zero;
+			end
+		endcase
+end
+endtask
 
 endmodule

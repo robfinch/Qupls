@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2023-2025 Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -34,51 +34,81 @@
 //
 // ============================================================================
 
-import const_pkg::*;
-import cpu_types_pkg::*;
+import Stark_pkg::*;
+//import fp64Pkg::*;
 
-module Stark_validate_Rn(prn, prnv, rfo, rfo_tag, pRn, val, val_tag, 
-	rfi_val, rfi_tag, rfi_pRd, valid_i, valid_o);
-input pregno_t [15:0] prn;
-input [15:0] prnv;
-input value_t [15:0] rfo;
-input [15:0] rfo_tag;
-input pregno_t pRn;
-output value_t val;
-output reg val_tag;
-input value_t [3:0] rfi_val;
-input [3:0] rfi_tag;
-input pregno_t [3:0] rfi_pRd;
-input valid_i;
-output reg valid_o;
+module Stark_fpu_fma64(rst, clk, clk3x, om, idle, ir, rm, a, b, c, t, i, p, o, done, exc);
+parameter WID=64;
+input rst;
+input clk;
+input clk3x;
+input Stark_pkg::operating_mode_t om;
+input idle;
+input Stark_pkg::instruction_t ir;
+input [2:0] rm;
+input [WID-1:0] a;
+input [WID-1:0] b;
+input [WID-1:0] c;
+input [WID-1:0] t;
+input [WID-1:0] i;
+input [WID-1:0] p;
+output reg [WID-1:0] o;
+output reg done;
+output Stark_pkg::cause_code_t exc;
 
-integer nn;
+wire [WID-1:0] bus;
+wire ce = 1'b1;
+
+reg fmaop, fma_done;
+reg [WID-1:0] fmac;
+reg [WID-1:0] fmab;
+/*
 always_comb
-begin
-	valid_o = valid_i;
-	val = value_zero;
-	val_tag = 1'b0;
-	if (pRn==9'd0)
-		valid_o = VAL;
+	if (ir.f3.func==FN_FMS || ir.f3.func==FN_FNMS)
+		fmaop = 1'b1;
 	else
-	for (nn = 0; nn < 16; nn = nn + 1) begin
-		if (pRn==prn[nn] && prnv[nn] && !valid_i) begin
-			val = rfo[nn];
-			val_tag = rfo_tag[nn];
-			valid_o = VAL;
-		end
-	end
-	// Bypassing from the input to the register file trims a clock cycle off
-	// latency.
-	if (PERFORMANCE) begin
-		for (nn = 0; nn < 4; nn = nn + 1) begin
-			if (pRn==rfi_pRd[nn] && !valid_i) begin
-				val = rfi_val[nn];
-				val_tag = rfi_tag[nn];
-				valid_o = VAL;
-			end
-		end
-	end
+		fmaop = 1'b0;
+*/
+always_comb
+	if (ir.fpu.op4==Stark_pkg::FOP4_FADD || ir.fpu.op4==Stark_pkg::FOP4_FSUB)
+		fmab <= 64'h3FF0000000000000;	// 1,0
+	else
+		fmab <= b;
+
+always_comb
+	if (ir.fpu.op4==FOP4_FMUL || ir.fpu.op4==FOP4_FDIV)
+		fmac = 64'd0;
+	else
+		fmac = c;
+
+fpFMA64nrL8 ufma1
+(
+	.clk(clk),
+	.ce(ce),
+	.op(fmaop),
+	.rm(rm),
+	.a(a),
+	.b(fmab),
+	.c(fmac),
+	.o(bus),
+	.inf(),
+	.zero(),
+	.overflow(),
+	.underflow(),
+	.inexact()
+);
+
+always_ff @(posedge clk)
+if (rst) begin
+	fma_done <= 1'b0;
 end
+else begin
+	fma_done <= cnt>=12'h8;
+end
+
+always_ff @(posedge clk)
+	o = bus;
+always_comb
+	exc = Stark_pkg::FLT_NONE;
 
 endmodule
