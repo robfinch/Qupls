@@ -43,14 +43,14 @@ import const_pkg::*;
 import cpu_types_pkg::*;
 import Stark_pkg::*;
 
-module Stark_imul(rst, clk, ir, a, b, bi, c, i, t, o, mul_done);
+module Stark_imul(rst, clk, issue, ir, a, b, bi, c, i, t, o, mul_done);
 parameter ALU0 = 1'b1;
 parameter WID=64;
 parameter LANE=0;
 input rst;
 input clk;
+input issue;
 input Stark_pkg::instruction_t ir;
-input div;
 input [WID-1:0] a;
 input [WID-1:0] b;
 input [WID-1:0] bi;
@@ -87,7 +87,7 @@ if (rst) begin
 end
 else begin
 	mul_cnt <= {mul_cnt[2:0],1'b1};
-	if (ld)
+	if (issue)
 		mul_cnt <= 4'd0;
 	mul_done <= mul_cnt[3];
 end

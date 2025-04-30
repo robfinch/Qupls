@@ -57,9 +57,9 @@ import cpu_types_pkg::aregno_t;
 import cpu_types_pkg::pc_address_t;
 
 module Stark_read_port_select(rst, clk, aReg_i, aReg_o, regAck_o);
-parameter NPORTI=32;
+parameter NPORTI=64;
 parameter NPORTO=16;
-parameter FIXEDPORTS = 8;
+parameter FIXEDPORTS = 0;
 input rst;
 input clk;
 input aregno_t [NPORTI-1:0] aReg_i;
@@ -67,17 +67,17 @@ output aregno_t [NPORTO-1:0] aReg_o;
 output reg [NPORTO-1:0] regAck_o;
 
 integer j,k,h,x;
-reg [4:0] m;
+reg [5:0] m;
 
 // m used to rotate the port selections every clock cycle.
 always_ff @(posedge clk)
 if (rst)
-	m <= 5'd0;
+	m <= 6'd0;
 else begin
 	if (m==NPORTI-FIXEDPORTS-1)
-		m <= 5'd0;
+		m <= 6'd0;
 	else
-		m <= m + 5'd1;
+		m <= m + 6'd1;
 end
 
 always_ff @(posedge clk)

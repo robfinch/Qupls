@@ -41,32 +41,35 @@
 import const_pkg::*;
 import Stark_pkg::*;
 
-module Stark_meta_imul(rst, clk, lane, prc, ir, cptgt, z, a, b, bi, c, i, t,
-	cp_i, cp_o, pRd_i, pRd_o, aRd_i, aRd_o, o, we_o, mul_done);
+module Stark_meta_imul(rst, clk, rse_i, rse_o, lane, cptgt, z, o, we_o, mul_done);
 parameter WID=$bits(cpu_types_pkg::value_t); 
 input rst;
 input clk;
+input Stark_pkg::reservation_station_entry_t rse_i;
+output Stark_pkg::reservation_station_entry_t rse_o;
 input [2:0] lane;
-input memsz_t prc;
-input instruction_t ir;
 input [7:0] cptgt;
 input z;
-input [WID-1:0] a;
-input [WID-1:0] b;
-input [WID-1:0] bi;
-input [WID-1:0] c;
-input [WID-1:0] i;
-input [WID-1:0] t;
-input checkpt_ndx_t cp_i;
-output checkpt_ndx_t cp_o;
-input pregno_t pRd_i;
-output pregno_t pRd_o;
-input aregno_t aRd_i;
-output aregno_t aRd_o;
 output reg [WID-1:0] o;
 output reg [WID/8:0] we_o;
 output reg mul_done;
 
+Stark_pkg::memsz_t prc;
+Stark_pkg::instruction_t ir;
+reg [WID-1:0] a;
+reg [WID-1:0] b;
+reg [WID-1:0] bi;
+reg [WID-1:0] c;
+reg [WID-1:0] i;
+reg [WID-1:0] t;
+always_comb prc = rse_i.prc;
+always_comb ir = rse_i.ins;
+always_comb a = rse_i.argA;
+always_comb b = rse_i.argB;
+always_comb c = rse_i.argC;
+always_comb t = rse_i.argD;
+always_comb bi = rse_i.argB|rse_i.argI;
+always_comb i = rse_i.argI;
 reg [WID/8:0] we;
 reg [WID-1:0] t1;
 reg z1;
@@ -127,7 +130,6 @@ generate begin : g64
 			.rst(rst),
 			.clk(clk),
 			.ir(ir),
-			.div(div),
 			.a(a[g*64+63:g*64]),
 			.b(b[g*64+63:g*64]),
 			.bi(bi[g*64+63:g*64]),
@@ -188,7 +190,7 @@ delay3 #(.WID(WID/8)) udly3 (.clk(clk), .ce(1'b1), .i(cptgt), .o(cptgt1));
 delay3 #(.WID($bits(pregno_t))) udly4 (.clk(clk), .ce(1'b1), .i(pRd_i), .o(pRd_o));
 delay3 #(.WID($bits(aregno_t))) udly5 (.clk(clk), .ce(1'b1), .i(aRd_i), .o(aRd_o));
 delay2 #(.WID(WID/8)) udly6 (.clk(clk), .ce(1'b1), .i(we), .o(we_o));
-delay3 #(.WID($bits(checkpt_ndx_t)) udly7 (.clk(clk), .ce(1'b1), .i(cp_i), .o(cp_o));
+delay3 #(.WID($bits(checkpt_ndx_t))) udly7 (.clk(clk), .ce(1'b1), .i(cp_i), .o(cp_o));
 
 always_ff @(posedge clk)
 	if (|aRd_i)

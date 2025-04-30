@@ -41,40 +41,50 @@
 import const_pkg::*;
 import Stark_pkg::*;
 
-module Stark_meta_sau(rst, clk, om, lane, prc, ir, cptgt, z, a, b, bi,
-	c, i, t, qres, cs, pc, csr, cpl, canary, o, 
-	cp_i, cp_o, pRd_i, pRd_o, aRd_i, aRd_o, we_o, exc);
+module Stark_meta_sau(rst, clk, rse_i, rse_o, lane, cptgt, z,
+	qres, cs, csr, cpl, canary, o, cp_o, pRd_o, aRd_o, we_o, exc);
 parameter SAU0 = 1'b0;
 parameter WID=$bits(cpu_types_pkg::value_t); 
 input rst;
 input clk;
-input Stark_pkg::operating_mode_t om;
+input Stark_pkg::reservation_station_entry_t rse_i;
+output Stark_pkg::reservation_station_entry_t rse_o;
 input [2:0] lane;
-input memsz_t prc;
-input instruction_t ir;
 input [7:0] cptgt;
 input z;
-input [WID-1:0] a;
-input [WID-1:0] b;
-input [WID-1:0] bi;
-input [WID-1:0] c;
-input [WID-1:0] i;
-input [WID-1:0] t;
 input [WID-1:0] qres;
 input [2:0] cs;
-input cpu_types_pkg::pc_address_t pc;
 input [7:0] cpl;
 input [WID-1:0] canary;
 input [WID-1:0] csr;
 output reg [WID-1:0] o;
-input checkpt_ndx_t cp_i;
 output checkpt_ndx_t cp_o;
-input pregno_t pRd_i;
 output pregno_t pRd_o;
-input aregno_t aRd_i;
 output aregno_t aRd_o;
 output reg [WID/8:0] we_o;			// extra bit for tag update
 output reg [WID-1:0] exc;
+
+reg [WID-1:0] a;
+reg [WID-1:0] b;
+reg [WID-1:0] bi;
+reg [WID-1:0] c;
+reg [WID-1:0] i;
+reg [WID-1:0] t;
+Stark_pkg::memsz_t prc;
+cpu_types_pkg::pc_address_t pc;
+checkpt_ndx_t cp_i;
+aregno_t aRd_i;
+Stark_pkg::instruction_t ir;
+always_comb ir = rse_i.ins;
+always_comb a = rse_i.argA;
+always_comb b = rse_i.argB;
+always_comb bi = rse_i.argB|rse_i.argI;
+always_comb t = rse_i.argD;
+always_comb i = rse_i.argI;
+always_comb pc = rse_i.pc;
+always_comb cp_i = rse_i.cndx;
+always_comb aRd_i = rse_i.aRd;
+always_comb prc = Stark_pkg::memsz_t'(rse_i.prc);
 
 reg [WID-1:0] t1;
 reg z1;
@@ -95,7 +105,7 @@ generate begin : g16
 		(
 			.rst(rst),
 			.clk(clk),
-			.om(om),
+			.om(rse_i.om),
 			.ir(ir),
 			.a(a[g*16+15:g*16]),
 			.b(b[g*16+15:g*16]),
@@ -122,7 +132,7 @@ generate begin : g32
 		(
 			.rst(rst),
 			.clk(clk),
-			.om(om),
+			.om(rse_i.om),
 			.ir(ir),
 			.a(a[g*32+31:g*32]),
 			.b(b[g*32+31:g*32]),
@@ -149,7 +159,7 @@ generate begin : g64
 		(
 			.rst(rst),
 			.clk(clk),
-			.om(om),
+			.om(rse_i.om),
 			.ir(ir),
 			.a(a[g*64+63:g*64]),
 			.b(b[g*64+63:g*64]),
@@ -177,7 +187,7 @@ generate begin : g128
 		(
 			.rst(rst),
 			.clk(clk),
-			.om(om),
+			.om(rse_i.om),
 			.ir(ir),
 			.a(a[g*128+127:g*128]),
 			.b(b[g*128+127:g*128]),
@@ -227,17 +237,17 @@ always_ff @(posedge clk)
 always_ff @(posedge clk)
 	cptgt1 <= cptgt;
 
-delay1 #(.WID($bits(pregno_t)) udly1 (.clk(clk), .ce(1'b1), .i(pRd_i), .o(pRd_o));
-delay1 #(.WID($bits(aregno_t)) udly2 (.clk(clk), .ce(1'b1), .i(aRd_i), .o(aRd_o));
-delay1 #(.WID($bits(checkpt_ndx_t)) udly2 (.clk(clk), .ce(1'b1), .i(cp_i), .o(cp_o));
+delay1 #(.WID($bits(aregno_t))) udly2 (.clk(clk), .ce(1'b1), .i(aRd_i), .o(aRd_o));
+delay1 #(.WID($bits(checkpt_ndx_t))) udly3 (.clk(clk), .ce(1'b1), .i(cp_i), .o(cp_o));
+delay1 #(.WID($bits(Stark_pkg::reservation_station_entry_t))) udly4 (.clk(clk), .ce(1'b1), .i(rse_i), .o(rse_o));
 
 always_ff @(posedge clk)
-	if (aRd_i >= 8'd56 && aRdi_i <= 8'd63)
-		case(om)
-		OM_USER:				we_o <= 9'h001;
-		OM_SUPERVISOR:	we_o <= 9'h003;
-		OM_HYPERVISOR:	we_o <= 9'h007;
-		OM_SECURE:			we_o <= 9'h1FF;
+	if (aRd_i >= 8'd56 && aRd_i <= 8'd63)
+		case(rse_i.om)
+		Stark_pkg::OM_APP:				we_o <= 9'h001;
+		Stark_pkg::OM_SUPERVISOR:	we_o <= 9'h003;
+		Stark_pkg::OM_HYPERVISOR:	we_o <= 9'h007;
+		Stark_pkg::OM_SECURE:			we_o <= 9'h1FF;
 		endcase
 	else if (|aRd_i)
 		we_o <= 9'h1FF;

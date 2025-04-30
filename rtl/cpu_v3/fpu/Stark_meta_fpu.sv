@@ -39,31 +39,38 @@
 import const_pkg::*;
 import Stark_pkg::*;
 
-module Stark_meta_fpu(rst, clk, clk3x, idle, om, prc, ir, rm, a, b, c, t, i, p,
-	atag, btag, z, cptgt, o, otag, done, exc);
+module Stark_meta_fpu(rst, clk, clk3x, idle, rse_i, rse_o, rm,
+	z, cptgt, o, otag, done, exc);
 parameter WID=SUPPORT_QUAD_PRECISION|SUPPORT_CAPABILITIES ? 128 : 64;
 input rst;
 input clk;
 input clk3x;
 input idle;
-input Stark_pkg::operating_mode_t om;
-input [1:0] prc;
-input Stark_pkg::instruction_t ir;
+input Stark_pkg::reservation_station_entry_t rse_i;
+output Stark_pkg::reservation_station_entry_t rse_o;
 input [2:0] rm;
-input [WID-1:0] a;
-input [WID-1:0] b;
-input [WID-1:0] c;
-input [WID-1:0] t;
-input [WID-1:0] i;
-input [WID-1:0] p;
-input atag;
-input btag;
 input z;
 input [WID-1:0] cptgt;
 output reg [WID-1:0] o;
 output reg otag;
 output reg done;
 output cause_code_t exc;
+
+Stark_pkg::operating_mode_t om;
+reg [1:0] prc;
+Stark_pkg::instruction_t ir;
+reg [WID-1:0] a;
+reg [WID-1:0] b;
+reg [WID-1:0] c;
+reg [WID-1:0] t;
+reg [WID-1:0] i;
+always_comb om = rse_i.om;
+always_comb ir = rse_i.ins;
+always_comb a = rse_i.argA;
+always_comb b = rse_i.argB;
+always_comb c = rse_i.argC;
+always_comb t = rse_i.argD;
+always_comb i = rse_i.argI;
 
 cause_code_t exc128,exc64;
 reg [WID-1:0] o1;

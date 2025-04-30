@@ -41,7 +41,7 @@
 import const_pkg::*;
 import Stark_pkg::*;
 
-module Stark_meta_alu(rst, clk, clk2x, om, ld, lane, prc, ir, div, cptgt, z, a, b, bi,
+module Stark_meta_idiv(rst, clk, clk2x, om, ld, lane, prc, ir, div, cptgt, z, a, b, bi,
 	c, i, t, qres, cs, pc, csr, cpl, canary, o,
 	mul_done, div_done, div_dbz, exc);
 parameter ALU0 = 1'b0;
@@ -98,7 +98,7 @@ genvar g,mm,xx;
 generate begin : g16
 	if (Stark_pkg::SUPPORT_PREC)
 	for (g = 0; g < WID/16; g = g + 1)
-		Stark_alu #(.WID(16), .ALU0(ALU0)) ualu16
+		Stark_idiv #(.WID(16)) ualu16
 		(
 			.rst(rst),
 			.clk(clk),
@@ -131,12 +131,11 @@ endgenerate
 generate begin : g32
 	if (Stark_pkg::SUPPORT_PREC)
 	for (g = 0; g < WID/32; g = g + 1)
-		Stark_alu #(.WID(32), .ALU0(ALU0)) ualu32
+		Stark_idiv #(.WID(32)) ualu32
 		(
 			.rst(rst),
 			.clk(clk),
 			.clk2x(clk2x),
-			.om(om),
 			.ld(ld),
 			.ir(ir),
 			.div(div),
@@ -146,14 +145,7 @@ generate begin : g32
 			.c(c[g*32+31:g*32]),
 			.i(i),
 			.t(t[g*32+31:g*32]),
-			.qres(qres[g*32+31:g*32]),
-			.cs(cs),
-			.pc(pc),
-			.csr(csr),
-			.cpl(cpl),
-			.canary(canary),
 			.o(o32[g*32+31:g*32]),
-			.mul_done(mul_done32[g]),
 			.div_done(div_done32[g]),
 			.div_dbz(),
 			.exc_o(exc32[g*8+7:g*8])
@@ -164,12 +156,11 @@ endgenerate
 generate begin : g64
 	if (Stark_pkg::SUPPORT_PREC || WID==64)
 	for (g = 0; g < WID/64; g = g + 1)
-		Stark_alu #(.WID(64), .ALU0(ALU0)) ualu64
+		Stark_idiv #(.WID(64)) ualu64
 		(
 			.rst(rst),
 			.clk(clk),
 			.clk2x(clk2x),
-			.om(om),
 			.ld(ld),
 			.ir(ir),
 			.div(div),
@@ -179,14 +170,7 @@ generate begin : g64
 			.c(c[g*64+63:g*64]),
 			.i(i),
 			.t(t[g*64+63:g*64]),
-			.qres(qres[g*64+63:g*64]),
-			.cs(cs),
-			.pc(pc),
-			.csr(csr),
-			.cpl(cpl),
-			.canary(canary),
 			.o(o64[g*64+63:g*64]),
-			.mul_done(mul_done64[g]),
 			.div_done(div_done64[g]),
 			.div_dbz(),
 			.exc_o(exc64[g*8+7:g*8])
@@ -198,12 +182,11 @@ endgenerate
 generate begin : g128
 	if (WID==128)
 	for (g = 0; g < WID/128; g = g + 1)
-		Stark_alu #(.WID(128), .ALU0(ALU0)) ualu128
+		Stark_idiv #(.WID(128)) ualu128
 		(
 			.rst(rst),
 			.clk(clk),
 			.clk2x(clk2x),
-			.om(om),
 			.ld(ld),
 			.ir(ir),
 			.div(div),
@@ -213,14 +196,7 @@ generate begin : g128
 			.c(c[g*128+127:g*128]),
 			.i(i),
 			.t(t[g*128+127:g*128]),
-			.qres(qres[g*128+127:g*128]),
-			.cs(cs),
-			.pc(pc),
-			.csr(csr),
-			.cpl(cpl),
-			.canary(canary),
 			.o(o128[g*128+127:g*128]),
-			.mul_done(mul_done128[g]),
 			.div_done(div_done128[g]),
 			.div_dbz(),
 			.exc_o(exc128[g*8+7:g*8])

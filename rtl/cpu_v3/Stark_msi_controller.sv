@@ -41,12 +41,6 @@ import fta_bus_pkg::*;
 import Stark_pkg::*;
 import msi_pkg::*;
 
-typedef struct packed
-{
-	logic [23:0] timestamp;
-	fta_imessage_t msg;
-} irq_hist_t;
-
 module Stark_msi_controller(coreno, rst, clk, cs_config_i, req, resp,
 	ipl, irq_resp_i, irq, ivect_o, ipri, swstk, irq_ack);
 input [5:0] coreno;

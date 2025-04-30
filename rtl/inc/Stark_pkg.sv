@@ -225,7 +225,8 @@ parameter NAGEN = 1;
 // Note that adding an FPU may also increase integer performance if PERFORMANCE
 // is set to 1.
 parameter NSAU = 2;			// 1 or 2
-parameter NFPU = 1;			// 0, 1, or 2
+parameter NFPU = 1;			// 0 or 1
+parameter NFMA = 1;			// 0, 1 or 2
 parameter FPU0_IQ_DEPTH = 32;
 parameter FPU1_IQ_DEPTH = 32;
 parameter NLSQ_PORTS = 1;
@@ -1223,9 +1224,14 @@ typedef struct packed
 	logic macro;			// true if macro instruction
 	logic alu;				// true if instruction must use alu (alu or mem)
 	logic alu0;				// true if instruction must use only alu #0
+	logic sau;
+	logic sau0;
+	logic sqrt;
 	logic alu_pair;		// true if instruction requires pair of ALUs
 	logic fpu;				// FPU op
 	logic fpu0;				// true if instruction must use only fpu #0
+	logic fma;
+	logic trig;
 	memsz_t prc;			// precision of operation
 	logic mul;
 	logic mula;
@@ -1407,11 +1413,31 @@ typedef struct packed
 } pipeline_group_reg_t;
 
 typedef struct packed {
+	logic v;
 	logic busy;
 	logic ready;
-	logic [3:0] funcunit;					// functional unit dispatched to
+	logic [3:0] funcunit;						// functional unit dispatched to
+	cpu_types_pkg::rob_ndx_t rndx;
+	cpu_types_pkg::checkpt_ndx_t cndx;
 	instruction_t ins;
-	pregno_t nRd;
+	// needed only for mem
+	logic virt2phys;
+	logic load;
+	logic store;
+	logic amo;
+	// decodes only needed for branch
+	logic bt;												
+	brclass_t brclass;
+	logic cjb;
+	logic bl;
+	// - - - - - - - - - - - - - - - - 
+	memsz_t prc;
+	logic [$bits(cpu_types_pkg::value_t)/8-1:0] copydst;
+	logic aRdz;
+	cpu_types_pkg::aregno_t aRd;
+	cpu_types_pkg::pregno_t nRd;
+	operating_mode_t om;						// needed for mem ops
+	cpu_types_pkg::pc_address_t pc;
 	cpu_types_pkg::value_t argA;
 	cpu_types_pkg::value_t argB;
 	cpu_types_pkg::value_t argC;

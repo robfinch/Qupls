@@ -132,6 +132,7 @@ integer n,n1;
 wire irq;
 wire cs_io;
 fta_cmd_response64_t cfg_resp;
+fta_cmd_request64_t reqd;
 reg erc;
 reg cs_config;
 wire respack;
