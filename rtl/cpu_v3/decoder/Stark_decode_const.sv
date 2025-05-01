@@ -156,7 +156,7 @@ begin
 			has_immb = ins[31:29]!=3'b100;
 			has_immc = 1'b1;
 		end
-	OP_FENCE:
+	Stark_pkg::OP_FENCE:
 		begin
 			immb = {112'h0,ins[23:8]};
 			has_immb = 1'b1;

@@ -122,7 +122,7 @@ endfunction
 // but for now, we use the alignment of the largest load / store, 16B.
 
 function fnHasPreviousOverlap;
-input lsq_ndx_t id;
+input Stark_pkg::lsq_ndx_t id;
 integer n,c;
 begin
 	fnHasPreviousOverlap = FALSE;

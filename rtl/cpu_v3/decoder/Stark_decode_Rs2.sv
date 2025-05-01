@@ -39,7 +39,7 @@ import Stark_pkg::*;
 
 module Stark_decode_Rs2(om, instr, has_immb, Rs2, Rs2z, has_Rs2, exc);
 input Stark_pkg::operating_mode_t om;
-input Stark_pkg::ex_instruction_t instr;
+input Stark_pkg::micro_op_t instr;
 input has_immb;
 output aregno_t Rs2;
 output reg Rs2z;
@@ -47,9 +47,11 @@ output reg exc;
 output reg has_Rs2;
 
 function aregno_t fnHas_Rs2;
-input Stark_pkg::instruction_t ir;
+input Stark_pkg::micro_op_t instr;
 input has_immb;
+Stark_pkg::instruction_t ir;
 begin
+	ir = instr.ins;
 	fnHas_Rs2 = 1'b0;
 	if (has_immb)
 		fnHas_Rs2 = 1'b0;
@@ -104,9 +106,11 @@ end
 endfunction
 
 function aregno_t fnRs2;
-input Stark_pkg::instruction_t ir;
+input Stark_pkg::micro_op_t instr;
 input has_immb;
+Stark_pkg::instruction_t ir;
 begin
+	ir = instr.ins;
 	if (has_immb)
 		fnRs2 = 8'd0;
 	else
@@ -124,14 +128,14 @@ begin
 		Stark_pkg::OP_AND,Stark_pkg::OP_OR,Stark_pkg::OP_XOR,
 		Stark_pkg::OP_MUL,Stark_pkg::OP_DIV,
 		Stark_pkg::OP_SHIFT:
-			fnRs2 = {2'b00,ir.alu.Rs2};
+			fnRs2 = {instr.xRs2,ir.alu.Rs2};
 		Stark_pkg::OP_LDB,Stark_pkg::OP_LDBZ,Stark_pkg::OP_LDW,Stark_pkg::OP_LDWZ,
 		Stark_pkg::OP_LDT,Stark_pkg::OP_LDTZ,Stark_pkg::OP_LOAD,Stark_pkg::OP_LOADA,
 		Stark_pkg::OP_AMO,Stark_pkg::OP_CMPSWAP,
 		Stark_pkg::OP_STB,Stark_pkg::OP_STBI,Stark_pkg::OP_STW,Stark_pkg::OP_STWI,
 		Stark_pkg::OP_STT,Stark_pkg::OP_STTI,Stark_pkg::OP_STORE,Stark_pkg::OP_STOREI,
 		Stark_pkg::OP_STPTR:
-			fnRs2 = {2'b00,ir.lsscn.Rs2};
+			fnRs2 = {instr.xRs2,ir.lsscn.Rs2};
 		default:
 			begin
 				fnRs2 = 7'd0;

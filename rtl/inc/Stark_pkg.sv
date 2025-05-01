@@ -42,8 +42,8 @@ import  cpu_types_pkg::*;
 package Stark_pkg;
 `define STARK_PKG 1'b1
 `undef IS_SIM
-parameter SIM = 1'b0;
-//`define IS_SIM	1
+parameter SIM = 1'b1;
+`define IS_SIM	1
 
 // Comment out to remove the sigmoid approximate function
 //`define SIGMOID	1
@@ -1096,6 +1096,7 @@ typedef union packed
 
 typedef struct packed {
 	logic v;
+	logic exc;
 	logic [2:0] count;
 	logic [2:0] num;
 	logic [1:0] xRs2;
@@ -2000,6 +2001,20 @@ begin
 end
 endfunction
 
+function fnRegExc;
+input operating_mode_t om;
+input [6:0] a;
+begin
+	fnRegExc = 1'b0;
+	case (om)
+	OM_APP:	fnRegExc = a==7'd45 || (a >= 7'd50 && a <= 7'd55);
+	OM_SUPERVISOR: fnRegExc = a > 7'd63;
+	OM_HYPERVISOR: fnRegExc = a > 7'd63;
+	OM_SECURE: fnRegExc = a > 7'd63;
+	endcase
+end
+endfunction
+
 // ============================================================================
 // Support Tasks
 // ============================================================================
@@ -2017,7 +2032,7 @@ begin
 	case(om)
 	OM_APP:	
 		begin
-			if (a== 7'd45 || (a >= 7'd50 && a <= 7'd55)) begin
+			if (a== 7'd45/* || (a >= 7'd50 && a <= 7'd55)*/) begin
 				exc = 1'b1;
 				o = 7'd0;
 			end
@@ -2026,7 +2041,7 @@ begin
 		end
 	OM_SUPERVISOR:
 		begin
-			if (a >= 7'd56 && a <= 7'd63 || a >= 7'd0 && a <= 7'd7)
+			if (a >= 7'd50 && a <= 7'd63 || a >= 7'd0 && a <= 7'd7)
 				o = a;
 			else if (a >= 7'd48) begin
 				exc = 1'b1;
@@ -2037,7 +2052,7 @@ begin
 		end
 	OM_HYPERVISOR:
 		begin
-			if (a >= 7'd56 && a <= 7'd63 || a >= 7'd0 && a <= 7'd7)
+			if (a >= 7'd50 && a <= 7'd63 || a >= 7'd0 && a <= 7'd7)
 				o = a;
 			else if (a >= 7'd48) begin
 				exc = 1'b1;
@@ -2048,7 +2063,7 @@ begin
 		end
 	OM_SECURE:
 		begin
-			if (a >= 7'd56 && a <= 7'd63 || a >= 7'd0 && a <= 7'd7)
+			if (a >= 7'd50 && a <= 7'd63 || a >= 7'd0 && a <= 7'd7)
 				o = a;
 			else if (a >= 7'd55) begin
 				exc = 1'b1;

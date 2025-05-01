@@ -52,9 +52,9 @@ module Stark_instruction_dispatcher(rst, clk, pgh, rob, stomp, busy, rse_o,
 	rob_dispatched, rob_dispatched_v);
 input rst;
 input clk;
-input Stark_pkg::pipeline_group_hdr_t [ROB_ENTRIES/4-1:0] pgh;
-input Stark_pkg::rob_entry_t [ROB_ENTRIES-1:0] rob;
-input [ROB_ENTRIES-1:0] stomp;
+input Stark_pkg::pipeline_group_hdr_t [Stark_pkg::ROB_ENTRIES/4-1:0] pgh;
+input Stark_pkg::rob_entry_t [Stark_pkg::ROB_ENTRIES-1:0] rob;
+input [Stark_pkg::ROB_ENTRIES-1:0] stomp;
 input [15:0] busy;
 output Stark_pkg::reservation_station_entry_t [3:0] rse_o;
 output Stark_pkg::rob_entry_t [3:0] rob_dispatched;
@@ -78,7 +78,7 @@ begin
 	fpu_cnt = 4'd0;
 	sqrt_cnt = 4'd0;
 	rob_dispatched_v = 4'd0;
-	for (nn = 0; nn < ROB_ENTRIES; nn = nn + 1) begin
+	for (nn = 0; nn < Stark_pkg::ROB_ENTRIES; nn = nn + 1) begin
 		// If valid ...
 		if (rob[nn].v &&
 			// and checkpoint index valid...
@@ -94,7 +94,7 @@ begin
 			// if a store, then no previous flow control dependency
 			(rob[nn].op.decbus.store ? !rob[nn].fc_depv : TRUE) &&
 			// if serializing the previous instruction must be done...
-			(SERIALIZE ? &rob[(nn + ROB_ENTRIES-1)%ROB_ENTRIES].done || !rob[(nn + ROB_ENTRIES-1)%ROB_ENTRIES].v : TRUE) &&
+			(Stark_pkg::SERIALIZE ? &rob[(nn + Stark_pkg::ROB_ENTRIES-1)%Stark_pkg::ROB_ENTRIES].done || !rob[(nn + Stark_pkg::ROB_ENTRIES-1)%Stark_pkg::ROB_ENTRIES].v : TRUE) &&
 			// and registers are mapped
 			rob[nn].op.pRs1v &&
 			rob[nn].op.pRs2v &&
@@ -104,7 +104,7 @@ begin
 			// and dispatched fewer than four
 			kk < 4
 		) begin
-			rse_o[kk] = {$bits(reservation_station_entry_t){1'b0}};
+			rse_o[kk] = {$bits(Stark_pkg::reservation_station_entry_t){1'b0}};
 			rse_o[kk].om = rob[nn].om;
 			rse_o[kk].pc = rob[nn].op.pc.pc;
 			rse_o[kk].prc = rob[nn].op.decbus.prc;
@@ -143,7 +143,7 @@ begin
 			if (!rob[nn].argD_v) begin rse_o[kk].argD[8:0] = rob[nn].op.pRd; rse_o[kk].argD[23:16] = rob[nn].op.decbus.Rd; end
 			rse_o[kk].argI = rob[nn].op.decbus.has_immb ? rob[nn].op.decbus.immb : rob[nn].op.decbus.immc;
 			rse_o[kk].funcunit = 4'd15;
-			if (rob[nn].op.decbus.sau && sau_cnt < NSAU && !busy[{3'd0,sau_cnt[0]}]) begin
+			if (rob[nn].op.decbus.sau && sau_cnt < Stark_pkg::NSAU && !busy[{3'd0,sau_cnt[0]}]) begin
 				rse_o[kk].funcunit = {3'd0,sau_cnt[0]};
 				rse_o[kk].rndx = nn;
 				sau_cnt = sau_cnt + 1;
@@ -175,7 +175,7 @@ begin
 				rob_dispatched_v[kk] = VAL;
 				kk = kk + 1;
 			end
-			if (rob[nn].op.decbus.fma && fma_cnt < NFMA && !busy[4'd4+fma_cnt]) begin
+			if (rob[nn].op.decbus.fma && fma_cnt < Stark_pkg::NFMA && !busy[4'd4+fma_cnt]) begin
 				rse_o[kk].funcunit = 4'd4 + fma_cnt; 
 				rse_o[kk].rndx = nn;
 				fma_cnt = fma_cnt + 1;
@@ -199,7 +199,7 @@ begin
 				rob_dispatched_v[kk] = VAL;
 				kk = kk + 1;
 			end
-			if (rob[nn].op.decbus.mem && agen_cnt < NAGEN && !busy[4'd8 + agen_cnt]) begin
+			if (rob[nn].op.decbus.mem && agen_cnt < Stark_pkg::NAGEN && !busy[4'd8 + agen_cnt]) begin
 				rse_o[kk].funcunit = 4'd8 + agen_cnt; 
 				rse_o[kk].rndx = nn;
 				agen_cnt = agen_cnt + 1;

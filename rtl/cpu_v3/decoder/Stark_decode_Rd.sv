@@ -39,7 +39,7 @@ import Stark_pkg::*;
 
 module Stark_decode_Rd(om, instr, Rd, Rdz, exc);
 input Stark_pkg::operating_mode_t om;
-input Stark_pkg::instruction_t instr;
+input Stark_pkg::micro_op_t instr;
 output aregno_t Rd;
 output reg Rdz;
 output reg exc;
@@ -47,8 +47,10 @@ output reg exc;
 Stark_pkg::operating_mode_t om1;
 
 function aregno_t fnRd;
-input Stark_pkg::instruction_t ir;
+input Stark_pkg::micro_op_t instr;
+Stark_pkg::instruction_t ir;
 begin
+	ir = instr.ins;
 	case(ir.any.opcode)
 	Stark_pkg::OP_MOV:
 		if (ir[28:26] < 3'd4)
@@ -63,13 +65,13 @@ begin
 	Stark_pkg::OP_AND,Stark_pkg::OP_OR,Stark_pkg::OP_XOR,
 	Stark_pkg::OP_MUL,Stark_pkg::OP_DIV,
 	Stark_pkg::OP_SHIFT:
-		fnRd = {2'b00,ir.alui.Rd};
+		fnRd = {instr.xRd,ir.alui.Rd};
 	Stark_pkg::OP_B0,Stark_pkg::OP_B1,Stark_pkg::OP_BCC0,Stark_pkg::OP_BCC1:
 		fnRd = ir[8:6]==3'd7 || ir[8:6]==3'd0 ? 7'd0 : {4'b0100,ir.blrlr.BRd};
 	Stark_pkg::OP_LDB,Stark_pkg::OP_LDBZ,Stark_pkg::OP_LDW,Stark_pkg::OP_LDWZ,
 	Stark_pkg::OP_LDT,Stark_pkg::OP_LDTZ,Stark_pkg::OP_LOAD,Stark_pkg::OP_LOADA,
 	Stark_pkg::OP_AMO,Stark_pkg::OP_CMPSWAP:
-		fnRd = {2'b00,ir.lsd.Rsd};
+		fnRd = {instr.xRd,ir.lsd.Rsd};
 	default:
 		fnRd = 7'd0;
 	endcase
@@ -79,8 +81,8 @@ endfunction
 always_comb
 begin
 	Rd = fnRd(instr);
-	if (instr.any.opcode==OP_MOV && instr[28:26]==3'd1)	// MOVEMD?
-		om1 = Stark_pkg::operating_mode_t'(instr[22:21]);
+	if (instr.ins.any.opcode==OP_MOV && instr.ins[28:26]==3'd1)	// MOVEMD?
+		om1 = Stark_pkg::operating_mode_t'(instr.ins[22:21]);
 	else
 	   om1 = om;
 	Rdz = ~|Rd;

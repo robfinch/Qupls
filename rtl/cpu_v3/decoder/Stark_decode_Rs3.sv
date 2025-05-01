@@ -39,16 +39,18 @@ import Stark_pkg::*;
 
 module Stark_decode_Rs3(om, instr, has_immc, Rs3, Rs3z, exc);
 input Stark_pkg::operating_mode_t om;
-input Stark_pkg::instruction_t instr;
+input Stark_pkg::micro_op_t instr;
 input has_immc;
 output aregno_t Rs3;
 output reg Rs3z;
 output reg exc;
 
 function aregno_t fnRs3;
-input Stark_pkg::instruction_t ir;
+input Stark_pkg::micro_op_t instr;
 input has_immc;
+Stark_pkg::instruction_t ir;
 begin
+	ir = instr.ins;
 	if (has_immc)
 		fnRs3 = 7'd0;
 	else

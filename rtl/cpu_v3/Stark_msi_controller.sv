@@ -189,7 +189,7 @@ else begin
 		resp.err <= fta_bus_pkg::OKAY;
 		resp.rty <= 1'b0;
 		resp.pri <= 4'd5;
-		resp.adr <= respack ? reqd.padr : 40'd0;
+		resp.adr <= respack ? reqd.adr : 40'd0;
 		resp.dat <= respack ? dat_o : 64'd0;
 	end
 	else if (cs_ivtd) begin
@@ -200,7 +200,7 @@ else begin
 		resp.err <= fta_bus_pkg::OKAY;
 		resp.rty <= 1'b0;
 		resp.pri <= 4'd5;
-		resp.adr <= respackd ? reqvt.padr : 40'd0;
+		resp.adr <= respackd ? reqvt.adr : 40'd0;
 		resp.dat <= respackd ? dat_o : 64'd0;
 	end
 end
@@ -234,7 +234,6 @@ ucfg1
 	.clk_i(clk),
 	.irq_i(4'b0),
 	.cs_i(cs_config),
-	.resp_busy_i(cs_io|cs_ivtd), 
 	.req_i(reqd),
 	.resp_o(cfg_resp),
 	.cs_bar0_o(cs_pic),
@@ -249,7 +248,7 @@ ucfg1
 // register read path
 always_ff @(posedge clk)
 if (cs_io) begin
-	casez(reqd.padr[12:3])
+	casez(reqd.adr[12:3])
 	10'h0:	dat_o <= uvtbl_base_adr;
 	10'h1:	dat_o <= svtbl_base_adr;
 	10'h2:	dat_o <= hvtbl_base_adr;
@@ -270,16 +269,16 @@ if (cs_io) begin
 	10'h11: dat_o <= imsgh[76:64];
 	10'h70:	dat_o <= {63'd0,global_enable};
 	10'h72:	dat_o <= {58'd0,irq_threshold};
-	10'b01????????:	dat_o <= coreset[reqd.padr[9:3]];
+	10'b01????????:	dat_o <= coreset[reqd.adr[9:3]];
 	// 0x80 tp 0xBF = interrupt pending bits
-	10'b100???????:	dat_o <= irq_pending[reqd.padr[9:3]];
+	10'b100???????:	dat_o <= irq_pending[reqd.adr[9:3]];
 	// 0xC0 to 0xFF = interrupt endable bits
-	10'b101???????:	dat_o <= irq_enable[reqd.padr[9:3]];
+	10'b101???????:	dat_o <= irq_enable[reqd.adr[9:3]];
 	default:	dat_o <= 64'd0;
 	endcase
 end
 else if (cs_ivtd)
-	case(reqvt.padr[3])
+	case(reqvt.adr[3])
 	1'd0:	dat_o <= douta[ 63: 0];
 	1'd1:	dat_o <= douta[127:64];
 	endcase
@@ -329,7 +328,7 @@ else begin
 	if (!imsg_pending1)
 		irq_req <= 1'b0;
 	if (cs_io & reqd.we)
-		casez(reqd.padr[12:3])
+		casez(reqd.adr[12:3])
 		10'd0:	if (&reqd.sel[7:0]) uvtbl_base_adr <= reqd.dat[63:0];
 		10'd1:	if (&reqd.sel[7:0]) svtbl_base_adr <= reqd.dat[63:0];
 		10'd2:	if (&reqd.sel[7:0]) hvtbl_base_adr <= reqd.dat[63:0];
@@ -350,8 +349,8 @@ else begin
 			end
 		10'h70:	global_enable <= reqd.dat[0];
 		10'h72:	irq_threshold <= reqd.dat[5:0];
-		10'b01????????:	coreset[reqd.padr[9:3]] <= reqd.dat[63:0];
-		10'b100???????:	irq_enable[reqd.padr[9:3]] <= reqd.dat;
+		10'b01????????:	coreset[reqd.adr[9:3]] <= reqd.dat[63:0];
+		10'b100???????:	irq_enable[reqd.adr[9:3]] <= reqd.dat;
 		default:	;
 		endcase
 end
@@ -382,8 +381,8 @@ else begin
 	if (wr_ip)
 		wr_ipp <= 1'b0;
 	if (cs_io & reqd.we) begin
-		if (reqd.padr[12:10]==3'b101) begin
-			irq_pending[reqd.padr[9:3]] <= irq_pending[reqd.padr[9:3]] & ~({63'd0,reqd.dat[63]} << reqd.dat[5:0]);
+		if (reqd.adr[12:10]==3'b101) begin
+			irq_pending[reqd.adr[9:3]] <= irq_pending[reqd.adr[9:3]] & ~({63'd0,reqd.dat[63]} << reqd.dat[5:0]);
 			reqh <= reqd;
 			wr_ipp <= 1'b1;
 		end
@@ -406,13 +405,13 @@ always_comb
 	2'd3:	oma = mvtbl_base_adr[1:0];
 	endcase
 always_comb
-	addra = reqd.padr[14:4];
+	addra = reqd.adr[14:4];
 always_comb
-	addrb = wr_ip ? {reqh.padr[9:8],{LOG_NVEC{1'b0}}} + {reqh.padr[7:3],reqh.dat[5:0]} : {oma,{LOG_NVEC{1'b0}}} + que_dout.vecno[10:0];
+	addrb = wr_ip ? {reqh.adr[9:8],{LOG_NVEC{1'b0}}} + {reqh.adr[7:3],reqh.dat[5:0]} : {oma,{LOG_NVEC{1'b0}}} + que_dout.vecno[10:0];
 always_ff @(posedge clk)
 	addrbd <= addrb;
 always_comb
-	dina = reqd.padr[3] ? {reqd.dat[63:0],64'd0} : {64'h0,reqd.dat[63:0]};
+	dina = reqd.adr[3] ? {reqd.dat[63:0],64'd0} : {64'h0,reqd.dat[63:0]};
 always_comb
 	dinb = {que_dout.data,112'd0};
 always_comb
@@ -420,7 +419,7 @@ always_comb
 always_comb
 	enb = 1'b1;
 always_comb
-	wea = {16{reqd.we}} & {reqd.padr[3] ? {reqd.sel[7:0],8'h0} : {8'h0,reqd.sel[7:0]}};
+	wea = {16{reqd.we}} & {reqd.adr[3] ? {reqd.sel[7:0],8'h0} : {8'h0,reqd.sel[7:0]}};
 always_comb
 	web = wr_ip ? 16'b0 : irq2 ? 16'hC000 : 16'd0;
 always_comb
@@ -512,7 +511,7 @@ if (rst)
 	stuck <= 1'b0;
 else begin
 	if (cs_io & reqd.we)
-		case(reqd.padr[7:3])
+		case(reqd.adr[7:3])
 		5'd5:
 			if (reqd.dat[1]==1'b0)
 				stuck <= 1'b0;

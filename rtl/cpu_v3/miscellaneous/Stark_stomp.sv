@@ -55,7 +55,7 @@ input advance_pipeline_seg2;
 input micro_machine_active;
 input found_destination;	// true if destination was found in ROB
 input branchmiss;
-input branch_state_t branch_state;
+input Stark_pkg::branch_state_t branch_state;
 input do_bsr;
 input pc_address_ex_t misspc;
 input pc_address_ex_t pc;
@@ -101,7 +101,7 @@ wire pe_stomp_pipeline;
 always_comb
 	stomp_pipeline = 
 			 (branchmiss && !found_destination)
-		|| (branch_state >= BS_CHKPT_RESTORE && branch_state <= BS_DONE2)
+		|| (branch_state >= Stark_pkg::BS_CHKPT_RESTORE && branch_state <= Stark_pkg::BS_DONE2)
 		;
 wire next_stomp_mux = (stomp_fet && !micro_machine_active) || stomp_pipeline || (do_bsr && !found_destination);
 wire next_stomp_dec = (stomp_mux && !micro_machine_active) || stomp_pipeline;
@@ -110,7 +110,7 @@ wire next_stomp_quem = (stomp_ren && !micro_machine_active) || stomp_pipeline;
 
 reg [2:0] bsi;
 wire pe_bsidle;
-edge_det uedbsi1 (.rst(irst), .clk(clk), .ce(1'b1), .i(branch_state==BS_IDLE), .pe(pe_bsidle), .ne(), .ee());
+edge_det uedbsi1 (.rst(irst), .clk(clk), .ce(1'b1), .i(branch_state==Stark_pkg::BS_IDLE), .pe(pe_bsidle), .ne(), .ee());
 edge_det ued1 (.rst(rst), .clk(clk), .ce(advance_pipeline), .i(stomp_pipeline), .pe(pe_stomp_pipeline), .ne(), .ee());	
 always_ff @(posedge clk) if (advance_pipeline_seg2) bsi <= {bsi[1:0],pe_bsidle};
 
@@ -306,7 +306,7 @@ for (n4 = 0; n4 < Stark_pkg::ROB_ENTRIES; n4 = n4 + 1) begin
 	// with no target copies. After that copy targets are in effect.
 	robentry_stomp[n4] = //(bno_bitmap[rob[n4].pc.bno_t]==1'b0) ||
 	(
-		(((branchmiss && !found_destination)/*||((takb&~rob[fcu_id].bt) && (fcu_v2|fcu_v3|fcu_v4))*/) || (branch_state<BS_DONE2 && branch_state!=BS_IDLE))
+		(((branchmiss && !found_destination)/*||((takb&~rob[fcu_id].bt) && (fcu_v2|fcu_v3|fcu_v4))*/) || (branch_state<Stark_pkg::BS_DONE2 && branch_state!=Stark_pkg::BS_IDLE))
 		&& rob[n4].sn > rob[missid].sn
 		&& fcu_idv	// miss_idv
 		&& rob[n4].op.pc.bno_t!=stomp_bno
@@ -314,7 +314,7 @@ for (n4 = 0; n4 < Stark_pkg::ROB_ENTRIES; n4 = n4 + 1) begin
 		)
 	;
 	
-	if (SUPPORT_BACKOUT) begin
+	if (Stark_pkg::SUPPORT_BACKOUT) begin
 		// These (3) instructions must be turned into copy-targets because even if
 		// they should not execute, following instructions from the target address
 		// may have registers depending on the mappings.

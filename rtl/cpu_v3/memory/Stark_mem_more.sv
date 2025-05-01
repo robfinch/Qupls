@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2023-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -53,7 +53,7 @@ else begin
 	case(state_i)
 	DRAMSLOT_AVAIL:	;
 	DRAMSLOT_READY:
-		if (SUPPORT_UNALIGNED_MEMORY && |sel_i[79:64])
+		if (Stark_pkg::SUPPORT_UNALIGNED_MEMORY && |sel_i[79:64])
 			more_o <= TRUE;
 		else
 			more_o <= FALSE;

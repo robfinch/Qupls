@@ -63,7 +63,7 @@ begin
 			okay_to_move_tail = FALSE;
 	end
 	if (okay_to_move_tail) begin
-		for (n5 = 0; n5 < ROB_ENTRIES; n5 = n5 + 1) begin
+		for (n5 = 0; n5 < Stark_pkg::ROB_ENTRIES; n5 = n5 + 1) begin
 			if (n5==0)
 				n6 = Stark_pkg::ROB_ENTRIES - 1;
 			else

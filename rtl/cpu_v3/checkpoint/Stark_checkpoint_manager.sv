@@ -80,7 +80,7 @@ else begin
 				$display("Restoring checkpint %d.", miss_cp);
 				cndx <= miss_cp;
 			end
-			for (n1 = 0; n1 < ROB_ENTRIES/4; n1 = n1 + 1) begin
+			for (n1 = 0; n1 < Stark_pkg::ROB_ENTRIES/4; n1 = n1 + 1) begin
 				if (pgh[n1].v && pgh[n1].has_branch && !pgh[n1].cndxv) begin
 					ialloc_chkpt <= TRUE;
 					setcp_grp <= n1;

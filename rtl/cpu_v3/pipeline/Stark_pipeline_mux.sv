@@ -76,7 +76,7 @@ input nmi_i;
 input irqf_fet;
 input irq_info_packet_t irq_in;
 input hirq_i;
-input status_reg_t sr;
+input Stark_pkg::status_reg_t sr;
 input reglist_active;
 input branchmiss;
 input cpu_types_pkg::pc_address_ex_t misspc_fet;

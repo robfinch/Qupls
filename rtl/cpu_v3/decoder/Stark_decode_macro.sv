@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2024  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -37,14 +37,14 @@
 import Stark_pkg::*;
 
 module Stark_decode_macro(instr, macro);
-input instruction_t instr;
+input Stark_pkg::instruction_t instr;
 output macro;
 
 function fnIsMacro;
-input instruction_t ir;
+input Stark_pkg::instruction_t ir;
 begin
 	case(ir.any.opcode)
-	OP_PUSH,OP_POP,OP_ENTER,OP_LEAVE:
+	Stark_pkg::OP_PUSH,Stark_pkg::OP_POP:
 		fnIsMacro = 1'b1;
 //	OP_BSET,OP_BFND,OP_BMOV,OP_BCMP:
 //		fnIsMacro = 1'b1;

@@ -90,7 +90,7 @@ Stark_cmp #(.WID(WID)) ualu_cmp
 	.a(a),
 	.b(b),
 	.i(i),
-	.o(cmpo)
+	.o(cmpo2)
 );
 
 always_ff @(posedge clk)

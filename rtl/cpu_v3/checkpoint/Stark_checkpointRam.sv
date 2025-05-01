@@ -44,7 +44,7 @@ parameter NRDPORTS = 4;
 localparam RBIT=$clog2(PREGS);
 localparam QBIT=$bits(cpu_types_pkg::pregno_t);
 localparam WID=$bits(Stark_pkg::checkpoint_t);
-localparam AWID=$clog2(NCHECK);
+localparam AWID=$clog2(Stark_pkg::NCHECK);
 input rst;
 input clka;
 input ena;
@@ -64,10 +64,10 @@ integer n;
 // The following outside of generate to make it easier to reference in SIM code.
 // It should be stripped out for synthesis as it would not be referenced.
 (* RAM_STYLE="distributed" *)
-checkpoint_t mem [0:Stark_pkg::NCHECK-1];
+Stark_pkg::checkpoint_t mem [0:Stark_pkg::NCHECK-1];
 reg ena1;
 reg wea1;
-checkpoint_t dina1;
+Stark_pkg::checkpoint_t dina1;
 reg [3:0] addra1;
 
 initial begin
@@ -131,7 +131,7 @@ else begin
       .MEMORY_INIT_FILE("none"),      // String
       .MEMORY_INIT_PARAM("0"),        // String
       .MEMORY_OPTIMIZATION("true"),   // String
-      .MEMORY_SIZE(WID*NCHECK),       // DECIMAL
+      .MEMORY_SIZE(WID*Stark_pkg::NCHECK),       // DECIMAL
       .MESSAGE_CONTROL(0),            // DECIMAL
       .READ_DATA_WIDTH_A(WID),        // DECIMAL
       .READ_DATA_WIDTH_B(WID),        // DECIMAL

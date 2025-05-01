@@ -39,15 +39,13 @@ import const_pkg::*;
 import cpu_types_pkg::*;
 import Stark_pkg::*;
 
-module Stark_map_dstreg_req(pgh, rob, ns_alloc_req, ns_whrndx, ns_whreg, ns_rndx,
-	ns_reg, ns_areg, ns_cndx);
-input Stark_pkg::pipeline_group_hdr_t [ROB_ENTRIES/4-1:0] pgh;
-input Stark_pkg::rob_entry_t [ROB_ENTRIES-1:0] rob;
+module Stark_map_dstreg_req(pgh, rob, ns_alloc_req, ns_whrndx, ns_rndx,
+	ns_areg, ns_cndx);
+input Stark_pkg::pipeline_group_hdr_t [Stark_pkg::ROB_ENTRIES/4-1:0] pgh;
+input Stark_pkg::rob_entry_t [Stark_pkg::ROB_ENTRIES-1:0] rob;
 output reg [3:0] ns_alloc_req;
 output rob_ndx_t [3:0] ns_whrndx;
-output reg [1:0] ns_whreg [0:3];
 input rob_ndx_t [3:0] ns_rndx;
-input [1:0] ns_reg [0:3];
 output aregno_t [3:0] ns_areg;
 output checkpt_ndx_t [3:0] ns_cndx;
 
@@ -57,18 +55,19 @@ integer m1,m2,m3,m4;
 always_comb
 begin
 kk = 0;
-for (n1 = 0; n1 < 4; n1 = n1 + 1)
-	ns_whreg[n1] = 2'd0;
-for (n1 = 0; n1 < ROB_ENTRIES; n1 = n1 + 1) begin
+for (n1 = 0; n1 < 4; n1 = n1 + 1) begin
+	ns_alloc_req[n1] = 1'b0;
+	ns_areg[n1] = 8'd0;
+end
+for (n1 = 0; n1 < Stark_pkg::ROB_ENTRIES; n1 = n1 + 1) begin
 	if (rob[n1].v && kk < 4) begin
-		m1 = (n1==ns_rndx[0] && ns_reg[0]==2'd1);
-		m2 = (n1==ns_rndx[1] && ns_reg[0]==2'd1);
-		m3 = (n1==ns_rndx[2] && ns_reg[0]==2'd1);
-		m4 = (n1==ns_rndx[3] && ns_reg[0]==2'd1);
+		m1 = (n1==ns_rndx[0]);
+		m2 = (n1==ns_rndx[1]);
+		m3 = (n1==ns_rndx[2]);
+		m4 = (n1==ns_rndx[3]);
 		if (!rob[n1].op.pRdv && kk < 4 && !m1 && !m2 && !m3 && !m4) begin
 			ns_alloc_req[kk] = 1'b1;
 			ns_whrndx[kk] = n1;
-			ns_whreg[kk] = 2'd1;
 			ns_areg[kk] = rob[n1].op.decbus.Rd;
 			ns_cndx[kk] = pgh[n1>>2].cndx;
 			kk = kk + 1;

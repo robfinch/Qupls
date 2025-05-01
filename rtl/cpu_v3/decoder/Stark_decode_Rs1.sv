@@ -39,7 +39,7 @@ import Stark_pkg::*;
 
 module Stark_decode_Rs1(om, instr, has_imma, Rs1, Rs1z, exc);
 input Stark_pkg::operating_mode_t om;
-input Stark_pkg::instruction_t instr;
+input Stark_pkg::micro_op_t instr;
 input has_imma;
 output aregno_t Rs1;
 output reg Rs1z;
@@ -48,9 +48,11 @@ output reg exc;
 Stark_pkg::operating_mode_t om1;
 
 function aregno_t fnRs1;
-input Stark_pkg::instruction_t ir;
+input Stark_pkg::micro_op_t ins;
 input has_imma;
+Stark_pkg::instruction_t ir;
 begin
+	ir = ins.ins;
 	if (has_imma)
 		fnRs1 = 8'd0;
 	else
@@ -63,12 +65,12 @@ begin
 		Stark_pkg::OP_FLT:
 			fnRs1 = {2'b01,ir.fpu.Rs1};
 		Stark_pkg::OP_CSR:
-			fnRs1 = {2'b00,ir.csr.Rs1};
+			fnRs1 = {ins.xRs1,ir.csr.Rs1};
 		Stark_pkg::OP_ADD,Stark_pkg::OP_SUBF,Stark_pkg::OP_CMP,
 		Stark_pkg::OP_AND,Stark_pkg::OP_OR,Stark_pkg::OP_XOR,
 		Stark_pkg::OP_MUL,Stark_pkg::OP_DIV,
 		Stark_pkg::OP_SHIFT:
-			fnRs1 = {2'b00,ir.alui.Rs1};
+			fnRs1 = {ins.xRs1,ir.alui.Rs1};
 		Stark_pkg::OP_B0,Stark_pkg::OP_B1:
 			fnRs1 = ir[31] || ir.blrlr.BRs==3'd0 ? 7'd0 : {4'b0100,ir.blrlr.BRs};
 		Stark_pkg::OP_BCC0,Stark_pkg::OP_BCC1:
@@ -83,7 +85,7 @@ begin
 		Stark_pkg::OP_STT,Stark_pkg::OP_STTI,
 		Stark_pkg::OP_STORE,Stark_pkg::OP_STOREI,
 		Stark_pkg::OP_STPTR:
-			fnRs1 = {2'b00,ir.lsd.Rs1};
+			fnRs1 = {ins.xRs1,ir.lsd.Rs1};
 		Stark_pkg::OP_PUSH,Stark_pkg::OP_POP:
 			fnRs1 = 7'd0;
 		default:
@@ -95,8 +97,8 @@ endfunction
 always_comb
 begin
 	Rs1 = fnRs1(instr, has_imma);
-	if (instr.any.opcode==OP_MOV && instr[28:26]==3'd1)	// MOVEMD?
-		om1 = Stark_pkg::operating_mode_t'(instr[24:23]);
+	if (instr.ins.any.opcode==OP_MOV && instr.ins[28:26]==3'd1)	// MOVEMD?
+		om1 = Stark_pkg::operating_mode_t'(instr.ins[24:23]);
     else
         om1 = om;
 	Rs1z = ~|Rs1;

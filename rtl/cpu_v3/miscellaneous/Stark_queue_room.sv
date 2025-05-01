@@ -39,7 +39,7 @@
 import Stark_pkg::*;
 
 module Stark_queue_room(rob, head0, tails, room);
-input rob_entry_t [ROB_ENTRIES-1:0] rob;
+input Stark_pkg::rob_entry_t [Stark_pkg::ROB_ENTRIES-1:0] rob;
 input rob_ndx_t head0;
 input rob_ndx_t [11:0] tails;
 output reg [3:0] room;

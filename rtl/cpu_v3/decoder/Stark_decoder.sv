@@ -98,7 +98,7 @@ Stark_decode_const udcimm
 Stark_decode_Rs1 udcra
 (
 	.om(om),
-	.instr(ins.ins),
+	.instr(instr),
 	.has_imma(db.has_imma),
 	.Rs1(db.Rs1),
 	.Rs1z(db.Rs1z),
@@ -108,7 +108,7 @@ Stark_decode_Rs1 udcra
 Stark_decode_Rs2 udcrb
 (
 	.om(om),
-	.instr(ins.ins),
+	.instr(instr),
 	.has_immb(db.has_immb),
 	.Rs2(db.Rs2),
 	.Rs2z(db.Rs2z),
@@ -119,7 +119,7 @@ Stark_decode_Rs2 udcrb
 Stark_decode_Rs3 udcrc
 (
 	.om(om),
-	.instr(ins.ins),
+	.instr(instr),
 	.has_immc(db.has_immc),
 	.Rs3(db.Rs3),
 	.Rs3z(db.Rs3z),
@@ -129,7 +129,7 @@ Stark_decode_Rs3 udcrc
 Stark_decode_Rd udcrt
 (
 	.om(om),
-	.instr(ins.ins),
+	.instr(instr),
 	.Rd(db.Rd),
 	.Rdz(db.Rdz),
 	.exc(ecxRd)
@@ -224,13 +224,14 @@ Stark_decode_backbr ubkbr1
 	.backbr(db.backbr)
 );
 */
-
+/*
 Stark_decode_branch_tgt_src udbts1
 (
 	.ins(ins.ins),
 	.bts(db.bts)
 );
-
+*/
+/*
 Stark_decode_alu udcalu
 (
 	.instr(ins.ins),
@@ -242,6 +243,19 @@ Stark_decode_alu0 udcalu0
 	.instr(ins.ins),
 	.alu0(db.alu0)
 );
+*/
+Stark_decode_sau usaudec1
+(
+	.instr(ins),
+	.sau(db.sau)
+);
+
+Stark_decode_sau0 udcsau0
+(
+	.instr(ins),
+	.sau0(db.sau0)
+);
+
 /*
 Stark_decode_alu_pair udcalup0
 (
@@ -409,7 +423,7 @@ else begin
 		dbo.sync <= db.fence && ins[15:8]==8'hFF;
 		dbo.cpytgt <= 1'b0;
 		dbo.qfext <= db.alu && ins.ins[28:27]==2'b10;
-		if (excRs1|excRs2|excRs3|excRd|excRd2|excRd3)
+		if (excRs1|excRs2|excRs3|excRd)
 			dbo.cause <= Stark_pkg::FLT_BADREG;
 		// Is the predicate shadow count within range?
 		if (pred_shadow_count >= PRED_SHADOW)

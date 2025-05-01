@@ -45,7 +45,7 @@ input rst;
 input clk;
 input backout;
 input rob_ndx_t fcu_id;
-input rob_entry_t [Stark_pkg::ROB_ENTRIES-1:0] rob;
+input Stark_pkg::rob_entry_t [Stark_pkg::ROB_ENTRIES-1:0] rob;
 input rob_ndx_t tail;
 input restore;
 input rob_ndx_t restore_ndx;
@@ -184,14 +184,14 @@ else begin
 	if (!restore && (|backout_state)) begin
 		bo_wr <= TRUE;//backout_id != fcu_id;
 		if (rob[backout_id].sn > rob[fcu_id].sn) begin
-			bo_areg <= rob[backout_id].op.aRt;
-			bo_preg <= rob[backout_id].op.pRt;
-			bo_nreg <= rob[backout_id].op.nRt;
+			bo_areg <= rob[backout_id].op.aRd;
+			bo_preg <= rob[backout_id].op.pRd;
+			bo_nreg <= rob[backout_id].op.nRd;
 		end
 		else begin
-			bo_areg <= rob[backout_id].op.aRt;
-			bo_preg <= rob[backout_id].op.nRt;
-			bo_nreg <= rob[backout_id].op.pRt;
+			bo_areg <= rob[backout_id].op.aRd;
+			bo_preg <= rob[backout_id].op.nRd;
+			bo_nreg <= rob[backout_id].op.pRd;
 		end
 	end
 end
@@ -202,14 +202,14 @@ begin
 		$display("-  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -");
 		if (rob[backout_id].sn > rob[fcu_id].sn)
 			$display("StarkCPU RAT backout: %d -> %d/%d freed: %d", 
-				rob[backout_id].op.aRt,
-				rob[backout_id].op.aRt, rob[backout_id].op.pRt,
-				rob[backout_id].op.nRt);
+				rob[backout_id].op.aRd,
+				rob[backout_id].op.aRd, rob[backout_id].op.pRd,
+				rob[backout_id].op.nRd);
 		else
 			$display("StarkCPU RAT forward: %d -> %d/%d freed: %d", 
-				rob[backout_id].op.aRt,
-				rob[backout_id].op.aRt, rob[backout_id].op.nRt,
-				rob[backout_id].op.pRt);
+				rob[backout_id].op.aRd,
+				rob[backout_id].op.aRd, rob[backout_id].op.nRd,
+				rob[backout_id].op.pRd);
 		$display("-  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -");
 	end
 end

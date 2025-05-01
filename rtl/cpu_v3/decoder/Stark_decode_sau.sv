@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -34,51 +34,48 @@
 //
 // ============================================================================
 
-import const_pkg::*;
-import cpu_types_pkg::*;
+import Stark_pkg::*;
 
-module Stark_validate_Rn(prn, prnv, rfo, rfo_tag, pRn, val, val_tag, 
-	rfi_val, rfi_tag, rfi_pRd, valid_i, valid_o);
-input pregno_t [15:0] prn;
-input [15:0] prnv;
-input value_t [15:0] rfo;
-input [15:0] rfo_tag;
-input pregno_t pRn;
-output value_t val;
-output reg val_tag;
-input value_t [3:0] rfi_val;
-input [3:0] rfi_tag;
-input pregno_t [3:0] rfi_pRd;
-input valid_i;
-output reg valid_o;
+module Stark_decode_sau(instr, sau);
+input Stark_pkg::instruction_t instr;
+output sau;
 
-integer nn;
-always_comb
+function fnIsSau;
+input Stark_pkg::instruction_t ir;
 begin
-	valid_o = valid_i;
-	val = value_zero;
-	val_tag = 1'b0;
-	if (pRn==9'd0)
-		valid_o = VAL;
-	else
-	for (nn = 0; nn < 16; nn = nn + 1) begin
-		if (pRn==prn[nn] && prnv[nn] && !valid_i) begin
-			val = rfo[nn];
-			val_tag = rfo_tag[nn];
-			valid_o = VAL;
-		end
-	end
-	// Bypassing from the input to the register file trims a clock cycle off
-	// latency.
-	if (PERFORMANCE) begin
-		for (nn = 0; nn < 4; nn = nn + 1) begin
-			if (pRn==rfi_pRd[nn] && !valid_i) begin
-				val = rfi_val[nn];
-				val_tag = rfi_tag[nn];
-				valid_o = VAL;
-			end
-		end
-	end
+	case(ir.any.opcode)
+	Stark_pkg::OP_FLT:
+		case(ir.fpu.op4)
+		Stark_pkg::FOP4_FADD:
+			if (ir[31:29]==3'b001 && ir.fpu.Rs2==5'd1)	// FABS
+				fnIsSau = 1'b1;
+			else
+				fnIsSau = 1'b0;
+		Stark_pkg::FOP4_G8:	fnIsSau = 1'b1;
+		default:	fnIsSau = 1'b0;
+		endcase
+	Stark_pkg::OP_CHK:	fnIsSau = 1'b1;
+	Stark_pkg::OP_ADD:		fnIsSau = 1'b1;
+	Stark_pkg::OP_SUBF:	fnIsSau = 1'b1;
+	Stark_pkg::OP_CMP:		fnIsSau = 1'b1;
+	Stark_pkg::OP_AND:		fnIsSau = 1'b1;
+	Stark_pkg::OP_OR:		fnIsSau = 1'b1;
+	Stark_pkg::OP_XOR:		fnIsSau = 1'b1;
+	Stark_pkg::OP_ADB:		fnIsSau = 1'b1;
+	Stark_pkg::OP_SHIFT:	fnIsSau = 1'b1;
+	Stark_pkg::OP_CSR:		fnIsSau = 1'b1;
+	Stark_pkg::OP_MOV:		fnIsSau = 1'b1;
+	Stark_pkg::OP_LOADA:	fnIsSau = 1'b1;
+	Stark_pkg::OP_NOP,Stark_pkg::OP_PUSH,Stark_pkg::OP_POP:
+		fnIsSau = 1'b1;
+	Stark_pkg::OP_FENCE:
+		fnIsSau = 1'b1;
+	default:
+		fnIsSau = 1'b0;
+	endcase
 end
+endfunction
+
+assign sau = fnIsSau(instr);
 
 endmodule

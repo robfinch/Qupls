@@ -59,7 +59,7 @@ input btag;
 output reg otag;
 output reg [WID-1:0] o;
 output reg done;
-output cause_code_t exc;
+output Stark_pkg::cause_code_t exc;
 
 reg [11:0] cnt;
 reg sincos_done, scale_done, f2i_done, i2f_done, sqrt_done, fres_done, trunc_done;
@@ -317,8 +317,9 @@ begin
 	bus = 128'd0;
 	exc = FLT_NONE;
 	case(ir.any.opcode)
+	/*
 	OP_FLT3:
-		if (SUPPORT_QUAD_PRECISION) begin
+		if (Stark_pkg::SUPPORT_QUAD_PRECISION) begin
 			case(ir.f3.func)
 			FN_FLT1:
 				case(ir.f1.func)
@@ -341,10 +342,6 @@ begin
 				bus = scaleo;
 			FN_FADD,FN_FSUB,FN_FMUL:
 				bus = fmao;
-			/*
-			FN_FDIV:
-				bus = divo;
-			*/
 			FN_FSEQ:	bus = cmpo[0];
 			FN_FSNE:	bus = ~cmpo[0];
 			FN_FSLT:	bus = cmpo[1];
@@ -359,7 +356,7 @@ begin
 		else
 			exc = FLT_UNIMP;
 	FN_FMA,FN_FMS,FN_FNMA,FN_FNMS:
-		if (SUPPORT_QUAD_PRECISION)
+		if (Stark_pkg::SUPPORT_QUAD_PRECISION)
 			bus = fmao;
 		else
 			exc = FLT_UNIMP;
@@ -737,12 +734,14 @@ begin
 			bus = {8{16'hDEAD}};
 			exc = FLT_UNIMP;
 		end
+	*/
 	default:	bus = 128'd0;
 	endcase
 end
 
 always_comb
 	case(ir.any.opcode)
+	/*
 	OP_CAP:	done = 1'b1;
 	OP_FLT3:
 		if (SUPPORT_QUAD_PRECISION) begin
@@ -762,10 +761,6 @@ always_comb
 				done = scale_done;
 			FN_FADD,FN_FSUB,FN_FMUL:
 				done = fma_done;
-			/*
-			FN_FDIV:
-				done = div_done;
-			*/
 			default:	done = 1'b1;
 			endcase
 		end
@@ -788,6 +783,7 @@ always_comb
 	OP_EORI:	done = 1'b1;
 	OP_MOV:		done = 1'b1;
 	OP_NOP:		done = 1'b1;
+	*/
 	default:	done = 1'b1;
 	endcase
 

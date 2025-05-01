@@ -122,7 +122,7 @@ begin
 	// We could also bypass directly from the outputs of the functional units.
 	// This is not done here due to the size of the bypass network. There are
 	// 11 functional units that could be bypassed.
-	if (PERFORMANCE) begin
+	if (Stark_pkg::PERFORMANCE) begin
 		for (nn = 0; nn < 4; nn = nn + 1) begin
 			if (pRn0==rfi_pRd[nn] && !valid0_i) begin
 				val0 = rfi_val[nn];

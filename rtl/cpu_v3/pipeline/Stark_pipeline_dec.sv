@@ -151,6 +151,7 @@ Stark_pkg::micro_op_t [31:0] uop_buf;
 
 Stark_microop uuop1
 (
+	.om(pg_mux.pr0.om),
 	.ir(pg_mux.pr0.uop.ins),
 	.num(uop_num), 
 	.carry_reg(8'd0),
@@ -162,6 +163,7 @@ Stark_microop uuop1
 
 Stark_microop uuop2
 (
+	.om(pg_mux.pr1.om),
 	.ir(pg_mux.pr1.uop.ins), 
 	.num(3'd0), 
 	.carry_reg(8'd0),
@@ -173,6 +175,7 @@ Stark_microop uuop2
 
 Stark_microop uuop3
 (
+	.om(pg_mux.pr2.om),
 	.ir(pg_mux.pr2.uop.ins), 
 	.num(3'd0), 
 	.carry_reg(8'd0),
@@ -184,6 +187,7 @@ Stark_microop uuop3
 
 Stark_microop uuop4
 (
+	.om(pg_mux.pr3.om),
 	.ir(pg_mux.pr3.uop.ins), 
 	.num(3'd0), 
 	.carry_reg(8'd0),
@@ -327,8 +331,8 @@ begin
 end
 
 generate begin : gRenamer
-	if (SUPPORT_RENAMER) begin
-	if (RENAMER==3) begin
+	if (Stark_pkg::SUPPORT_RENAMER) begin
+	if (Stark_pkg::RENAMER==3) begin
 Stark_reg_renamer3 utrn2
 (
 	.rst(rst_i),		// rst_i here not irst!
@@ -357,7 +361,7 @@ Stark_reg_renamer3 utrn2
 );
 assign ren_rst_busy = FALSE;
 end
-else if (RENAMER==4)
+else if (Stark_pkg::RENAMER==4)
 Stark_reg_renamer4 utrn1
 (
 	.rst(rst_i),		// rst_i here not irst!

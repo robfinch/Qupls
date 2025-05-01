@@ -56,7 +56,7 @@ import Stark_pkg::*;
 
 module Stark_reg_name_supplier4(rst,clk,en,restore,restore_list,tags2free,freevals,
 	bo_wr, bo_preg, o, ov,
-	ns_alloc_req, ns_whrndx, ns_whreg, ns_cndx, ns_rndx, ns_reg, ns_dstreg, ns_dstregv,
+	ns_alloc_req, ns_whrndx, ns_cndx, ns_rndx, ns_dstreg, ns_dstregv,
 	avail,stall,rst_busy
 );
 parameter NFTAGS = 4;			// Number of register freed per clock.
@@ -73,12 +73,10 @@ output pregno_t [3:0] o;
 output reg [3:0] ov;
 input [3:0] ns_alloc_req;
 input rob_ndx_t [3:0] ns_whrndx;
-input [1:0] ns_whreg [0:3];
 input checkpt_ndx_t [3:0] ns_cndx;
 output rob_ndx_t [3:0] ns_rndx;
-output reg [1:0] ns_reg [0:3];
-output cpu_types_pkg::pregno_t [2:0] ns_dstreg [0:3];
-output reg [2:0] ns_dstregv [0:3];
+output cpu_types_pkg::pregno_t [3:0] ns_dstreg;
+output reg [3:0] ns_dstregv;
 output reg [PREGS-1:0] avail = {{PREGS-1{1'b1}},1'b0};
 output reg stall;											// stall enqueue while waiting for register availability
 output reg rst_busy;									// not used
@@ -196,7 +194,6 @@ begin
 	if (ns_alloc_req[n1]) begin
 		if (last_cndx==ns_cndx[n1]) begin
 			ns_rndx[n1] = ns_whrndx[n1];
-			ns_reg[n1] = ns_whreg[n1];
 			ns_dstreg[n1] = o[n1];
 			ns_dstregv[n1] = ov[n1];
 		end
@@ -245,7 +242,6 @@ begin
 	ns_dstregv[n1] = INV;
 	if (ns_alloc_req[n1]) begin
 		ns_rndx[n1] = ns_whrndx[n1];
-		ns_reg[n1] = ns_whreg[n1];
 		ns_dstreg[n1] = o[n1];
 		ns_dstregv[n1] = ov[n1];
 	end
@@ -289,7 +285,6 @@ begin
 	ns_dstregv[n1] = INV;
 	if (ns_alloc_req[n1]) begin
 		ns_rndx[n1] = ns_whrndx[n1];
-		ns_reg[n1] = ns_whreg[n1];
 		ns_dstreg[n1] = o[n1];
 		ns_dstregv[n1] = ov[n1];
 	end

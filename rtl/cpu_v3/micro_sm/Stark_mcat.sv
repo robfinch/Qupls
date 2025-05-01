@@ -54,17 +54,17 @@ else begin
 	OP_BCMP:	mip = 12'h3B0;
 	OP_BFND:	mip = 12'h3C0;
 */
-	OP_PUSH:
+	Stark_pkg::OP_PUSH:
 		case(ir.uop.ins[31:29])
 		3'b111:	mip = 12'h01C;		// enter
 		default:	mip = 12'h028;	// push	
 		endcase
-	OP_POP:
+	Stark_pkg::OP_POP:
 		case(ir.uop.ins[31:29])
 		3'b111:	mip = 12'h1E4;		// exit
 		default:	mip = 12'h038;	// pop
 		endcase
-	OP_FLT:
+	Stark_pkg::OP_FLT:
 		case(ir.uop.ins.fpu.op4)
 		/*
 		FN_FLT1:
@@ -86,7 +86,7 @@ else begin
 			default:	mip = 12'h000;			
 			endcase
 		*/
-		FOP4_FDIV:	mip = 12'h040;
+		Stark_pkg::FOP4_FDIV:	mip = 12'h040;
 		default:	mip = 12'h000;
 		endcase
 //	7'b11???:	mip = 12'h220;

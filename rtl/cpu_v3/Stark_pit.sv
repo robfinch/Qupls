@@ -78,6 +78,8 @@
 // 1255 LUTs / 2120 FFs (8x48 bit timers)
 // ============================================================================
 //
+import fta_bus_pkg::*;
+import msi_pkg::*;
 
 module Stark_pit(rst_i, clk_i, cs_config_i, sreq, sresp,
 	clk0, gate0, out0, clk1, gate1, out1, clk2, gate2, out2, clk3, gate3, out3
@@ -196,7 +198,7 @@ else begin
 		sresp.err <= fta_bus_pkg::OKAY;
 		sresp.rty <= 1'b0;
 		sresp.pri <= 4'd5;
-		sresp.adr <= respack ? reqd.padr : 40'd0;
+		sresp.adr <= respack ? reqd.adr : 40'd0;
 		sresp.dat <= respack ? dat_o : 64'd0;
 	end
 end
@@ -227,7 +229,6 @@ ucfg1
 	.clk_i(clk),
 	.irq_i({3'd0,irq}),
 	.cs_i(cs_config), 
-	.resp_busy_i(cs_io),
 	.req_i(reqd),
 	.resp_o(cfg_resp),
 	.cs_bar0_o(cs_io),
@@ -305,8 +306,8 @@ end
 else begin
 	for (n1 = 0; n1 < NTIMER; n1 = n1 + 1) begin
 		ld[n1] <= 1'b0;
-		if (cs_qit && reqd.we && reqd.padr[11:5]==n1)
-		case(reqd.padr[4:3])
+		if (cs_qit && reqd.we && reqd.adr[11:5]==n1)
+		case(reqd.adr[4:3])
 		2'd1:
 			begin
 				if (|reqd.sel[3:0])	
@@ -344,7 +345,7 @@ else begin
 		// Interrupt processing should read the underflow register to determine
 		// which timers underflowed, then write back the value to the underflow
 		// register.
-		if (cs_qit && reqd.we && reqd.padr[11:3]==9'h100) begin
+		if (cs_qit && reqd.we && reqd.adr[11:3]==9'h100) begin
 			if (reqd.dat[n1]) begin
 				ie[n1] <= 1'b0;
 				underflow[n1] <= 1'b0;
@@ -353,7 +354,7 @@ else begin
 		end
 		// The timer synchronization register indicates which timer's registers to
 		// update. All timers may have their registers updated synchronously.
-		if (cs_qit && reqd.we && reqd.padr[11:3]==9'h101)
+		if (cs_qit && reqd.we && reqd.adr[11:3]==9'h101)
 			if (reqd.dat[n1]) begin
 				ld[n1] <= ldh[n1];
 				ce[n1] <= ceh[n1];
@@ -365,7 +366,7 @@ else begin
 				ont[n1] <= onth[n1];
 			end
 		if (cs_qit & reqd.we)
-			case(reqd.padr[11:3])
+			case(reqd.adr[11:3])
 			9'h102:	ie <= reqd.dat;
 			9'h103:	tmp <= reqd.dat;
 			9'h105:	igate <= reqd.dat;
@@ -376,7 +377,7 @@ else begin
 		if (cs_config)
 			dat_o <= cfg_resp.dat;
 		else if (cs_qit) begin
-			case(reqd.padr[11:3])
+			case(reqd.adr[11:3])
 			9'h100:	dat_o <= underflow;
 			9'h101:	dat_o <= 'd0;
 			9'h102:	dat_o <= ie;
@@ -386,8 +387,8 @@ else begin
 			9'h106:	dat_o <= 'd0;
 			9'h107:	dat_o <= 'd0;
 			default:
-				if (reqd.padr[11:5]==n1)
-					case(reqd.padr[4:3])
+				if (reqd.adr[11:5]==n1)
+					case(reqd.adr[4:3])
 					2'd0:	dat_o <= count[n1];
 					2'd1:	dat_o <= maxcount[n1];
 					2'd2:	dat_o <= ont[n1];

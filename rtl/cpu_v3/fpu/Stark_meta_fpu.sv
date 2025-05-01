@@ -41,7 +41,7 @@ import Stark_pkg::*;
 
 module Stark_meta_fpu(rst, clk, clk3x, idle, rse_i, rse_o, rm,
 	z, cptgt, o, otag, done, exc);
-parameter WID=SUPPORT_QUAD_PRECISION|SUPPORT_CAPABILITIES ? 128 : 64;
+parameter WID=Stark_pkg::SUPPORT_QUAD_PRECISION|Stark_pkg::SUPPORT_CAPABILITIES ? 128 : 64;
 input rst;
 input clk;
 input clk3x;
@@ -54,7 +54,7 @@ input [WID-1:0] cptgt;
 output reg [WID-1:0] o;
 output reg otag;
 output reg done;
-output cause_code_t exc;
+output Stark_pkg::cause_code_t exc;
 
 Stark_pkg::operating_mode_t om;
 reg [1:0] prc;
@@ -72,7 +72,7 @@ always_comb c = rse_i.argC;
 always_comb t = rse_i.argD;
 always_comb i = rse_i.argI;
 
-cause_code_t exc128,exc64;
+Stark_pkg::cause_code_t exc128,exc64;
 reg [WID-1:0] o1;
 wire [WID-1:0] o16, o32, o64, o128;
 wire [7:0] sr64, sr128;
@@ -80,7 +80,7 @@ wire done16, done32, done64, done128;
 genvar g,mm;
 
 generate begin : gPrec
-if (SUPPORT_PREC) begin
+if (Stark_pkg::SUPPORT_PREC) begin
 for (g = 0; g < WID/16; g = g + 1)
 	Stark_seqFPU2c #(.PREC("H")) ufpu1
 	(
@@ -168,7 +168,7 @@ for (g = 0; g < WID/64; g = g + 1)
 	);
 */
 end
-if (SUPPORT_QUAD_PRECISION|SUPPORT_CAPABILITIES)
+if (Stark_pkg::SUPPORT_QUAD_PRECISION|Stark_pkg::SUPPORT_CAPABILITIES)
 /*
 	StarkSeqFPU2c #(.PREC("Q")) ufpu1
 	(
@@ -204,7 +204,7 @@ if (SUPPORT_QUAD_PRECISION|SUPPORT_CAPABILITIES)
 	);
 
 end
-if (NFPU > 0 && !(SUPPORT_QUAD_PRECISION|SUPPORT_CAPABILITIES))
+if (Stark_pkg::NFPU > 0 && !(Stark_pkg::SUPPORT_QUAD_PRECISION|Stark_pkg::SUPPORT_CAPABILITIES))
     for (g = 0; g < WID/64; g = g + 1)
 	Stark_fpu64 ufpu64 (
 		.rst(rst),
@@ -228,14 +228,14 @@ if (NFPU > 0 && !(SUPPORT_QUAD_PRECISION|SUPPORT_CAPABILITIES))
 endgenerate
 
 always_comb
-if (SUPPORT_PREC)
+if (Stark_pkg::SUPPORT_PREC)
 	case(prc)
 	2'd0:	o1 = o16;
 	2'd1:	o1 = o32;
 	2'd2:	o1 = o64;
 	2'd3:	o1 = o128;
 	endcase
-else if (SUPPORT_CAPABILITIES)
+else if (Stark_pkg::SUPPORT_CAPABILITIES)
 	o1 = o128;
 else
 	o1 = o64;
@@ -254,14 +254,14 @@ end
 endgenerate
 
 always_comb
-if (SUPPORT_PREC)
+if (Stark_pkg::SUPPORT_PREC)
 	case(prc)
 	2'd0:	done = done16;
 	2'd1:	done = done32;
 	2'd2:	done = done64;
 	2'd3: done = done128;
 	endcase
-else if (SUPPORT_CAPABILITIES)
+else if (Stark_pkg::SUPPORT_CAPABILITIES)
 	done = done128;
 else
 	done = done64;
