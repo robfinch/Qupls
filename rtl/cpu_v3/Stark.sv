@@ -817,12 +817,14 @@ Stark_pkg::regspec_t dram_tgt0;
 reg  [4:0] dram_id0;
 Stark_pkg::cause_code_t dram_exc0;
 reg        dram_v0;
+checkpt_ndx_t dram_cp0;
 value_t dram_bus1;
 reg dram_ctag1;
 Stark_pkg::regspec_t dram_tgt1;
 reg  [4:0] dram_id1;
 Stark_pkg::cause_code_t dram_exc1;
 reg        dram_v1;
+checkpt_ndx_t dram_cp1;
 
 reg [639:0] dram0_data, dram0_datah;
 reg dram0_ctag;
@@ -844,7 +846,7 @@ pregno_t dram0_Rt, dram_Rt0;
 aregno_t dram0_aRt, dram_aRt0;
 aregno_t dram0_aRtA2, dram0_aRtB2;
 Stark_pkg::operating_mode_t dram0_om, dram_om0;
-reg dram0_aRtz, dram_aRtz0A, dram_aRtz0B;
+reg dram0_aRtz, dram_aRtz0;
 reg dram0_bank;
 Stark_pkg::cause_code_t dram0_exc;
 reg dram0_ack;
@@ -881,7 +883,7 @@ pregno_t dram1_Rt, dram_Rt1;
 aregno_t dram1_aRt, dram_aRt1;
 aregno_t dram1_aRtA2, dram1_aRtB2;
 Stark_pkg::operating_mode_t dram1_om, dram_om1;
-reg dram1_aRtz, dram_aRtz1A, dram_aRtz1B;
+reg dram1_aRtz, dram_aRtz1;
 reg dram1_bank;
 Stark_pkg::cause_code_t dram1_exc;
 reg dram1_ack;
@@ -1832,6 +1834,7 @@ Stark_stomp ustmp1
 	.advance_pipeline_seg2(advance_pipeline_seg2), 
 	.micro_machine_active(micro_machine_active),
 	.found_destination(fcu_found_destination),
+	.destination_rndx(fcu_dst),
 	.branchmiss(branchmiss),
 	.branch_state(branch_state), 
 	.do_bsr(do_bsr|do_ret),
@@ -2791,10 +2794,10 @@ reg stomp1_q;
 reg stomp2_q;
 reg stomp3_q;
 // Detect stomp on leading instructions due to a branch.
-wire stomp0b_r = branch_state > BS_STATE3 && misspc.pc > pg_ren.pr0.pc.pc;
-wire stomp1b_r = branch_state > BS_STATE3 && misspc.pc > pg_ren.pr1.pc.pc;
-wire stomp2b_r = branch_state > BS_STATE3 && misspc.pc > pg_ren.pr2.pc.pc;
-wire stomp3b_r = branch_state > BS_STATE3 && misspc.pc > pg_ren.pr3.pc.pc;
+wire stomp0b_r = branch_state > Stark_pkg::BS_STATE3 && misspc.pc > pg_ren.pr0.pc.pc;
+wire stomp1b_r = branch_state > Stark_pkg::BS_STATE3 && misspc.pc > pg_ren.pr1.pc.pc;
+wire stomp2b_r = branch_state > Stark_pkg::BS_STATE3 && misspc.pc > pg_ren.pr2.pc.pc;
+wire stomp3b_r = branch_state > Stark_pkg::BS_STATE3 && misspc.pc > pg_ren.pr3.pc.pc;
 wire stomp0_r = /*~qd_r[0]||stomp_ren||stomp0b_r*/stomp_ren && pg_ren.pr0.pc.bno_t!=stomp_bno;
 wire stomp1_r = /*~qd_r[1]||stomp_ren||stomp1b_r||*/(stomp_ren && pg_ren.pr1.pc.bno_t!=stomp_bno);// ||
 //							 (pg_ren.pr0.decbus.br && pg_ren.pr0.bt);//pt0_r||XWID < 2;
@@ -3215,8 +3218,8 @@ reg sau0_wrA, sau0_wrB, sau0_wrC;
 reg sau1_wrA, sau1_wrB, sau1_wrC;
 reg fpu0_wrA, fpu0_wrB, fpu0_wrC;
 reg fma0_wrA, fma1_wrA;
-reg dram0_wrA, dram0_wrB;
-reg dram1_wrA, dram1_wrB;
+reg dram_wr0;
+reg dram_wr1;
 reg wt0A,wt1A,wt2A,wt3A,wt4A,wt5A,wt6A;
 reg wt7A,wt8A,wt9A,wt10A,wt11A,wt12A;
 
@@ -3305,29 +3308,26 @@ vtdl #($bits(Stark_pkg::operating_mode_t))	udlyfc8 (.clk(clk), .ce(1'b1), .a(4'd
 always_comb fpu0_wrA = !fpu0_rse2.aRdz && Stark_pkg::NFPU > 0;
 always_comb fma0_wrA = fma0_done && !fma0_rse2.aRdz && Stark_pkg::NFPU > 0;
 always_comb fma1_wrA = fma1_done && !fma1_rse2.aRdz && Stark_pkg::NFPU > 1;
-always_comb dram0_wrA = dram_v0 && !dram_aRtz0A;
-always_comb dram0_wrB = dram_v0 && !dram_aRtz0B;
-always_comb dram1_wrA = dram_v1 && !dram_aRtz1A && Stark_pkg::NDATA_PORTS > 1;
-always_comb dram1_wrB = dram_v1 && !dram_aRtz1B && Stark_pkg::NDATA_PORTS > 1;
+always_comb dram_wr0 = dram_v0 && !dram_aRtz0;
+always_comb dram_wr1 = dram_v1 && !dram_aRtz1 && Stark_pkg::NDATA_PORTS > 1;
 always_comb fcu_wrA = 1'b0;
 
-reg [8:0] sau0_weA, sau0_weB, sau0_weC;
-reg [8:0] sau1_weA, sau1_weB, sau1_weC;
-reg [8:0] fpu0_weA;
-reg [8:0] fma0_weA, fma1_weA;
-reg [8:0] dram0_weA, dram0_weB;
-reg [8:0] dram1_weA, dram1_weB;
-reg [8:0] fcu_weA, fcu_weB;
+wire [8:0] sau0_we;
+wire [8:0] sau1_we;
+wire [8:0] fpu0_we;
+reg [8:0] dram0_we;
+reg [8:0] dram1_we;
+reg [8:0] fcu_we;
 
-always_ff @(posedge clk) dram0_weA =
-	(dram0_aRtA2 >= 7'd56 && dram0_aRtA2 <= 7'd63) ?
-	((dram0_omA2==Stark_pkg::OM_SECURE ? 9'h0FF : dram0_omA2==Stark_pkg::OM_HYPERVISOR ? 9'h0F : dram0_omA2==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01) & {9{dram0_wrA}}) : {wt4A,8'hFF} & {9{dram0_wrA}};
+always_ff @(posedge clk) dram0_we =
+	(dram_aRt0 >= 7'd56 && dram_aRt0 <= 7'd63) ?
+	((dram_om0==Stark_pkg::OM_SECURE ? 9'h0FF : dram_om0==Stark_pkg::OM_HYPERVISOR ? 9'h0F : dram_om0==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01) & {9{dram_wr0}}) : {wt10A,8'hFF} & {9{dram_wr0}};
 
-always_ff @(posedge clk) dram1_weA =
-	(dram1_aRtA2 >= 7'd56 && dram1_aRtA2 <= 7'd63) ?
-	((dram1_omA2==Stark_pkg::OM_SECURE ? 9'h0FF : dram1_omA2==Stark_pkg::OM_HYPERVISOR ? 9'h0F : dram1_omA2==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01) & {9{dram1_wrA}}) : {wt5A,8'hFF} & {9{dram1_wrA}} & {9{Stark_pkg::NDATA_PORTS > 1}};
+always_ff @(posedge clk) dram1_we =
+	(dram_aRt1 >= 7'd56 && dram_aRt1 <= 7'd63) ?
+	((dram_om1==Stark_pkg::OM_SECURE ? 9'h0FF : dram_om1==Stark_pkg::OM_HYPERVISOR ? 9'h0F : dram_om1==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01) & {9{dram_wr1}}) : {wt11A,8'hFF} & {9{dram_wr1}} & {9{Stark_pkg::NDATA_PORTS > 1}};
 
-always_ff @(posedge clk) fcu_weA =
+always_ff @(posedge clk) fcu_we =
 	(fcu_rse.aRd >= 7'd56 && fcu_rse.aRd <= 7'd63) ?
 	((fcu_rse.om==Stark_pkg::OM_SECURE ? 9'h0FF : fcu_rse.om==Stark_pkg::OM_HYPERVISOR ? 9'h0F : fcu_rse.om==Stark_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01) & {9{fcu_wrA}}) : {wt6A,8'hFF} & {9{fcu_wrA}};
 
@@ -3335,8 +3335,8 @@ always_comb wt0A = !sau0_rse2.aRdz;
 always_comb wt1A = !sau1_rse2.aRdz && Stark_pkg::NSAU > 1;
 always_comb wt3A = fpu1_done && !fpu1_aRdzA && !fpu1_idle && Stark_pkg::NFPU > 1;
 always_comb wt7A = fcu_done && !fcu_aRtzA;
-always_comb wt10A = dram_v0 && !dram_aRtz0A;
-always_comb wt11A = dram_v1 && !dram_aRtz1A && Stark_pkg::NDATA_PORTS > 1;
+always_comb wt10A = dram_v0 && !dram_aRtz0;
+always_comb wt11A = dram_v1 && !dram_aRtz1 && Stark_pkg::NDATA_PORTS > 1;
 always_comb wt12A = !fpu0_rse2.aRdz && !fpu0_idle && Stark_pkg::NFPU > 0;
 
 wire [4:0] upd1a,upd2a,upd3a,upd4a,upd5a,upd6a;
@@ -3401,17 +3401,17 @@ else begin
 end
 
 // Queue the outputs of the functional units.
+// Results that have been stomped on are not queued.
+
 Stark_func_result_queue ufrq1
 (
 	.rst_i(rst),
 	.clk_i(clk),
 	.rd_i(fuq_rd[0]),
-	.we_i(sau0_weA),
-	.pRt_i(sau0_rse2.nRd),
-	.aRt_i(sau0_rse2.aRd),
+	.we_i(sau0_we),
+	.rse_i(sau0_rse2),
 	.tag_i({7'd0,sau0_rse2.tagD}),
 	.res_i(sau0_resA),
-	.cp_i(sau0_rse2.cndx),
 	.we_o(fuq_we[0]),
 	.pRt_o(fuq_pRt[0]),
 	.aRt_o(fuq_aRt[0]),
@@ -3429,12 +3429,10 @@ Stark_func_result_queue ufrq4
 	.rst_i(rst),
 	.clk_i(clk),
 	.rd_i(fuq_rd[1]),
-	.we_i(sau1_weA),
-	.pRt_i(sau1_rse2.nRd),
-	.aRt_i(sau1_rse2.aRd),
+	.we_i(sau1_we),
+	.rse_i(sau1_rse2),
 	.tag_i({7'd0,sau1_rse2.tagD}),
 	.res_i(sau1_resA),
-	.cp_i(sau1_rse2.cndx),
 	.we_o(fuq_we[1]),
 	.pRt_o(fuq_pRt[1]),
 	.aRt_o(fuq_aRt[1]),
@@ -3457,17 +3455,19 @@ end
 end
 endgenerate
 
+// IMUL
+// When doing a multiply we know the result will not be a capability, so the
+// tag is simply defaulted to zero.
+
 Stark_func_result_queue ufrq2
 (
 	.rst_i(rst),
 	.clk_i(clk),
 	.rd_i(fuq_rd[2]),
-	.we_i(imul0_weA),
-	.pRt_i(imul0_rse2.nRd),
-	.aRt_i(imul0_rse2.aRd),
+	.we_i(imul0_we),
+	.rse_i(imul0_rse2),
 	.tag_i(8'h0),
 	.res_i(imul0_resA),
-	.cp_i(imul0_rse2.cndx),
 	.we_o(fuq_we[2]),
 	.pRt_o(fuq_pRt[2]),
 	.aRt_o(fuq_aRt[2]),
@@ -3479,6 +3479,8 @@ Stark_func_result_queue ufrq2
 );
 
 // IDIV
+// When doing a divide we know the result will not be a capability, so the
+// tag is simply defaulted to zero.
 generate begin : gDivFRQ
 if (SUPPORT_IDIV) begin
 Stark_func_result_queue ufrq3
@@ -3486,12 +3488,10 @@ Stark_func_result_queue ufrq3
 	.rst_i(rst),
 	.clk_i(clk),
 	.rd_i(fuq_rd[3]),
-	.we_i(idiv0_weA),
-	.pRt_i(idiv0_rse2.nRd),
-	.aRt_i(idiv0_rse2.aRd),
+	.we_i(idiv0_we),
+	.rse_i(idiv0_rse2),
 	.tag_i(8'h00),
 	.res_i(idiv0_resA),
-	.cp_i(idiv0_rse2.cndx),
 	.we_o(fuq_we[3]),
 	.pRt_o(fuq_pRt[3]),
 	.aRt_o(fuq_aRt[3]),
@@ -3514,6 +3514,9 @@ end
 end
 endgenerate
 
+// When doing a multiply we know the result will not be a capability, so the
+// tag is simply defaulted to zero.
+
 generate begin : gFMAFRQ
 if (NFMA > 0) begin
 Stark_func_result_queue ufrq4
@@ -3522,11 +3525,9 @@ Stark_func_result_queue ufrq4
 	.clk_i(clk),
 	.rd_i(fuq_rd[4]),
 	.we_i(fma0_we),
-	.pRt_i(fma0_rse2.nRd),
-	.aRt_i(fma0_rse2.aRd),
+	.rse_i(fma0_rse2),
 	.tag_i(8'h00),
 	.res_i(fma0_res),
-	.cp_i(fma0_rse2.cndx),
 	.we_o(fuq_we[4]),
 	.pRt_o(fuq_pRt[4]),
 	.aRt_o(fuq_aRt[4]),
@@ -3553,11 +3554,9 @@ Stark_func_result_queue ufrq5
 	.clk_i(clk),
 	.rd_i(fuq_rd[5]),
 	.we_i(fma1_we),
-	.pRt_i(fma1_rse2.nRd),
-	.aRt_i(fma1_rse2.aRd),
+	.rse_i(fma1_rse2),
 	.tag_i(8'h00),
 	.res_i(fma1_res),
-	.cp_i(fma1_rse2.cndx),
 	.we_o(fuq_we[5]),
 	.pRt_o(fuq_pRt[5]),
 	.aRt_o(fuq_aRt[5]),
@@ -3585,12 +3584,9 @@ Stark_func_result_queue ufrq7
 	.rst_i(rst),
 	.clk_i(clk),
 	.rd_i(fuq_rd[7]),
-	.we_i(fcu_weA),
-	.pRt_i(fcu_rse.nRd),
-	.aRt_i(fcu_rse.aRd),
+	.rse_i(fcu_rse),
 	.tag_i({8'd0}),
 	.res_i(fcu_resA2),
-	.cp_i(fcu_rse.cndx),
 	.we_o(fuq_we[7]),
 	.pRt_o(fuq_pRt[7]),
 	.aRt_o(fuq_aRt[7]),
@@ -3601,17 +3597,33 @@ Stark_func_result_queue ufrq7
 	.full(fcu_full)
 );
 
+Stark_pkg::reservation_station_entry_t dram0_rse;
+always_comb
+begin
+	dram0_rse.aRd = dram_aRt0;
+	dram0_rse.nRd = dram_Rt0;
+	dram0_rse.rndx = dram_id0;
+	dram0_rse.cndx = dram_cp0;
+end
+
+Stark_pkg::reservation_station_entry_t dram1_rse;
+always_comb
+begin
+	dram1_rse.aRd = dram_aRt1;
+	dram1_rse.nRd = dram_Rt1;
+	dram1_rse.rndx = dram_id1;
+	dram1_rse.cndx = dram_cp1;
+end
+
 Stark_func_result_queue ufrq10
 (
 	.rst_i(rst),
 	.clk_i(clk),
 	.rd_i(fuq_rd[10]),
-	.we_i(dram0_weA),
-	.pRt_i(dram0_pRtA2),
-	.aRt_i(dram0_aRtA2),
+	.we_i(dram0_we & {9{dram_v0}}),
+	.rse_i(dram0_rse),
 	.tag_i({7'd0,dram0_ctagA2}),
-	.res_i(dram0_resA2),
-	.cp_i(dram0_cp2),
+	.res_i(dram_bus0),
 	.we_o(fuq_we[10]),
 	.pRt_o(fuq_pRt[10]),
 	.aRt_o(fuq_aRt[10]),
@@ -3629,12 +3641,10 @@ Stark_func_result_queue ufrq11
 	.rst_i(rst),
 	.clk_i(clk),
 	.rd_i(fuq_rd[11]),
-	.we_i(dram1_weA),
-	.pRt_i(dram1_pRtA2),
-	.aRt_i(dram1_aRtA2),
+	.we_i(dram1_we & {9{dram_v1}}),
+	.rse_i(dram1_rse),
 	.tag_i({7'd0,dram1_ctagA2}),
-	.res_i(dram1_resA2),
-	.cp_i(dram1_cp2),
+	.res_i(dram_bus1),
 	.we_o(fuq_we[11]),
 	.pRt_o(fuq_pRt[11]),
 	.aRt_o(fuq_aRt[11]),
@@ -3657,6 +3667,8 @@ end
 end
 endgenerate
 
+// When doing floating-point we know the result will not be a capability, so
+// the tag is simply defaulted to zero.
 generate begin : gFPU0q
 	if (Stark_pkg::NFPU > 0) begin
 Stark_func_result_queue ufrq12
@@ -3664,12 +3676,10 @@ Stark_func_result_queue ufrq12
 	.rst_i(rst),
 	.clk_i(clk),
 	.rd_i(fuq_rd[12]),
-	.we_i(fpu0_weA),
-	.pRt_i(fpu0_rse2.nRd),
-	.aRt_i(fpu0_rse2.aRd),
-	.tag_i({7'd0,fpu0_ctagA2}),
+	.we_i(fpu0_we),
+	.rse_i(fpu0_rse2),
+	.tag_i(8'd0),
 	.res_i(fpu0_resA2),
-	.cp_i(fpu0_rse2.cndx),
 	.we_o(fuq_we[12]),
 	.pRt_o(fuq_pRt[12]),
 	.aRt_o(fuq_aRt[12]),
@@ -4304,6 +4314,7 @@ Stark_meta_sau #(.SAU0(1'b1)) usau0
 	.rse_o(sau0_rse2),
 	.cptgt(sau0_cptgt),
 	.z(sau0_predz),
+	.stomp(robentry_stomp),
 	.cs(sau0_cs),
 	.csr(csr_res),
 	.canary(canary),
@@ -4312,7 +4323,7 @@ Stark_meta_sau #(.SAU0(1'b1)) usau0
 	.pRd_o(sau0_pRdA2),
 	.aRd_o(sau0_aRdA2),
 	.o(sau0_resA),
-	.we_o(sau0_weA),
+	.we_o(sau0_we),
 	.exc(sau0_exc)
 );
 
@@ -4367,6 +4378,7 @@ if (Stark_pkg::NSAU > 1) begin
 		.rse_o(sau1_rse2),
 		.cptgt(sau1_cptgt),
 		.z(sau1_predz),
+		.stomp(robentry_stomp),
 		.cs(sau1_cs),
 		.csr(14'd0),
 		.canary(canary),
@@ -4394,19 +4406,24 @@ if (Stark_pkg::NFMA > 0) begin
 		.rst(irst),
 		.clk(clk),
 		.idle(),
+		.stomp(robentry_stomp),
 		.rse_i(fma0_rse),
 		.rse_o(fma0_rse2),
 		.z(1'b0),
 		.cptgt(8'h00),
 		.o(fma0_res),
 		.otag(),
+		.we_o(fma0_we),
 		.done(),
 		.exc()
 	);
 end
 else begin
-	fma0_rse2 = {{reservation_station_entry_t}{1'b0}};
-	fma0_res = value_zero;
+	always_comb
+	begin
+		fma0_rse2 = {$bits(Stark_pkg::reservation_station_entry_t){1'b0}};
+		fma0_res = value_zero;
+	end
 end
 
 if (Stark_pkg::NFMA > 1) begin
@@ -4415,19 +4432,24 @@ if (Stark_pkg::NFMA > 1) begin
 		.rst(irst),
 		.clk(clk),
 		.idle(),
+		.stomp(robentry_stomp),
 		.rse_i(fma1_rse),
 		.rse_o(fma1_rse2),
 		.z(1'b0),
 		.cptgt(8'h00),
 		.o(fma1_res),
 		.otag(),
+		.we_o(fma1_we),
 		.done(),
 		.exc()
 	);
 end
 else begin
-	fma1_rse2 = {{reservation_station_entry_t}{1'b0}};
-	fma1_res = value_zero;
+	always_comb
+	begin
+		fma1_rse2 = {$bits(Stark_pkg::reservation_station_entry_t){1'b0}};
+		fma1_res = value_zero;
+	end
 end
 end
 endgenerate
@@ -5150,6 +5172,7 @@ usaust0
 	.available(sau0_available),
 	.busy(rs_busy[0]),
 	.stall(sau0_full),
+	.stomp(robentry_stomp),
 	.issue(sau0_issue),//robentry_issue[sau0_rndx]),
 	.rse_i(rse),
 	.rse_o(sau0_rse),
@@ -5170,6 +5193,7 @@ uimulst0
 	.available(imul0_available),
 	.busy(rs_busy[2]),
 	.stall(imul0_full),
+	.stomp(robentry_stomp),
 	.issue(),
 	.rse_i(rse),
 	.rse_o(imul0_rse),
@@ -5194,6 +5218,7 @@ uidivst0
 	.available(idiv0_available),
 	.busy(rs_busy[3]),
 	.stall(!idiv0_done||idiv0_full),
+	.stomp(robentry_stomp),
 	.issue(idiv0_ld),
 	.rse_i(rse),
 	.rse_o(idiv0_rse),
@@ -5220,6 +5245,7 @@ generate begin : gSauStation
 			.available(sau1_available),
 			.busy(rs_busy[1]),
 			.stall(sau1_full),
+			.stomp(robentry_stomp),
 			.issue(),//robentry_issue[sau0_rndx]),
 			.rse_i(rse),
 			.rse_o(sau1_rse),
@@ -5257,6 +5283,7 @@ generate begin : gFpuStat
 					.available(fpu0_available),
 					.busy(rs_busy[4]),
 					.stall(fma0_full),
+					.stomp(robentry_stomp),
 					.issue(),//robentry_issue[sau0_rndx]),
 					.rse_i(rse),
 					.rse_o(fma0_rse),
@@ -5276,6 +5303,7 @@ generate begin : gFpuStat
 					.available(fpu0_available),
 					.busy(rs_busy[12]),
 					.stall(fpu0_full),
+					.stomp(robentry_stomp),
 					.issue(),//robentry_issue[sau0_rndx]),
 					.rse_i(rse),
 					.rse_o(fpu0_rse),
@@ -5341,6 +5369,7 @@ generate begin : gFpuStat
 					.available(fpu0_available),
 					.busy(rs_busy[5]),
 					.stall(fma1_full),
+					.stomp(robentry_stomp),
 					.issue(),//robentry_issue[sau0_rndx]),
 					.rse_i(rse),
 					.rse_o(fma1_rse),
@@ -5410,6 +5439,7 @@ ubrast1
 	.available(1'b1),
 	.busy(rs_busy[7]),
 	.stall(!bs_idle_oh||fcu_full),
+	.stomp(robentry_stomp),
 	.issue(),//robentry_issue[sau0_rndx]),
 	.rse_i(rse),
 	.rse_o(fma1_rse),
@@ -5430,6 +5460,7 @@ uagenst1
 	.available(1'b1),
 	.busy(rs_busy[8]),
 	.stall(!agen0_idle),
+	.stomp(robentry_stomp),
 	.issue(),//robentry_issue[sau0_rndx]),
 	.rse_i(rse),
 	.rse_o(agen0_rse),
@@ -5472,6 +5503,7 @@ uagenst2
 	.available(1'b1),
 	.busy(rs_busy[9]),
 	.stall(!agen1_idle),
+	.stomp(robentry_stomp),
 	.issue(),//robentry_issue[sau0_rndx]),
 	.rse_i(rse),
 	.rse_o(agen1_rse),
@@ -6359,8 +6391,9 @@ else begin
     dram_id0 <= dram0_id;
     dram_Rt0 <= dram0_Rt;
     dram_aRt0 <= dram0_aRt;
-    dram_aRtz0A <= dram0_aRtz;
+    dram_aRtz0 <= dram0_aRtz;
     dram_om0 <= dram0_om;
+    dram_cp0 <= dram0_cp;
     dram_exc0 <= dram0_exc;
   	dram_bus0 <= fnDati(1'b0,dram0_op,(cpu_resp_o[0].dat << dram0_shift)|dram_bus0, dram0_pc);
   	dram_ctag0 <= dram0_ctag;
@@ -6383,8 +6416,9 @@ else begin
     dram_id0 <= dram0_id;
     dram_Rt0 <= dram0_Rt;
     dram_aRt0 <= dram0_aRt;
-    dram_aRtz0A <= dram0_aRtz;
+    dram_aRtz0 <= dram0_aRtz;
     dram_om0 <= dram0_om;
+    dram_cp0 <= dram0_cp;
     dram_exc0 <= dram0_exc;
   	dram_bus0 <= fnDati(dram0_more,dram0_op,cpu_resp_o[0].dat >> dram0_shift, dram0_pc);
     if (dram0_store) begin
@@ -6408,8 +6442,9 @@ else begin
 	    dram_id1 <= dram1_id;
 	    dram_Rt1 <= dram1_Rt;
 	    dram_aRt1 <= dram1_aRt;
-	    dram_aRtz1A <= dram1_aRtz;
+	    dram_aRtz1 <= dram1_aRtz;
 	    dram_om1 <= dram1_om;
+	    dram_cp1 <= dram1_cp;
 	    dram_exc1 <= dram1_exc;
     	dram_bus1 <= fnDati(1'b0,dram1_op,(cpu_resp_o[1].dat << dram1_shift)|dram_bus1, dram1_pc);
     	dram_ctag1 <= dram1_ctag;
@@ -6428,8 +6463,9 @@ else begin
 	    dram_id1 <= dram1_id;
 	    dram_Rt1 <= dram1_Rt;
 	    dram_aRt1 <= dram1_aRt;
-	    dram_aRtz1A <= dram1_aRtz;
+	    dram_aRtz1 <= dram1_aRtz;
 	    dram_om1 <= dram1_om;
+	    dram_cp1 <= dram1_cp;
 	    dram_exc1 <= dram1_exc;
     	dram_bus1 <= fnDati(dram1_more,dram1_op,cpu_resp_o[1].dat >> dram1_shift, dram1_pc);
 	    if (dram1_store) begin
@@ -6461,7 +6497,8 @@ else begin
 			dram_ctag0 <= lsq[mem0_lsndx.row][mem0_lsndx.col].ctag;
 			dram_Rt0 <= lsq[mem0_lsndx.row][mem0_lsndx.col].Rt;
 			dram_v0 <= 1'b1;
-			dram0_om <= lsq[mem0_lsndx.row][mem0_lsndx.col].om;
+			dram_om0 <= lsq[mem0_lsndx.row][mem0_lsndx.col].om;
+			dram_cp0 <= rob[lsq[mem0_lsndx.row][mem0_lsndx.col].rndx].cndx;
 			// Prevent multiple updates
 			lsq[mem0_lsndx.row][mem0_lsndx.col].v <= INV;
 			rob[lsq[mem0_lsndx.row][mem0_lsndx.col].rndx].done <= 2'b11;
@@ -6474,6 +6511,7 @@ else begin
 		dram_Rt0 <= lsq[lbndx0.row][lbndx0.col].Rt;
 		dram_v0 <= lsq[lbndx0.row][lbndx0.col].v;
 		dram_om0	<= lsq[lbndx0.row][lbndx0.col].om;
+		dram_cp0 <= rob[lsq[lbndx0.row][lbndx0.col].rndx].cndx;
 		lsq[lbndx0.row][lbndx0.col].v <= INV;
 		rob[lsq[lbndx0.row][lbndx0.col].rndx].done <= 2'b11;
 	end
@@ -6532,7 +6570,8 @@ else begin
 			dram_bus1 <= fnDati(1'b0,dram1_op,lsq[lbndx1.row][lbndx1.col].res,dram1_pc);
 			dram_Rt1 <= lsq[lbndx1.row][lbndx1.col].Rt;
 			dram_v1 <= lsq[lbndx1.row][lbndx1.col].v;
-			dram_om1	<= lsq[lbndx1.row][lbndx1.col].om;
+			dram_om1 <= lsq[lbndx1.row][lbndx1.col].om;
+			dram_cp1 <= rob[lsq[lbndx1.row][lbndx1.col].rndx].cndx;
 			lsq[lbndx1.row][lbndx1.col].v <= INV;
 			rob[lsq[lbndx1.row][lbndx1.col].rndx].done <= 2'b11;
 		end
@@ -7020,14 +7059,16 @@ else begin
 			end
 		end
 	end
-	//  Defer interrupt until first micro-op of instruction
-	if (UOP_STRATEGY==1) begin
-		for (n3 = 0; n3 < Stark_pkg::ROB_ENTRIES; n3 = n3 + 1) begin
-			if (rob[n3].op.uop.count==3'd0 && rob[n3].op.hwi)
-				tDeferToNextInstruction(n3);
-		end
+
+	//  Adjust interrupt position to first micro-op of instruction
+	for (n3 = 0; n3 < Stark_pkg::ROB_ENTRIES; n3 = n3 + 1) begin
+		if (rob[n3].op.uop.count==3'd0 && rob[n3].op.hwi)
+			case(UOP_STRATEGY)
+			1:	tMoveIRQToInstructionStart(n3);
+			2:	tDeferToNextInstruction(n3);
+			3:	;
+			endcase
 	end
-	
 			
 	// Mark the group done if all ROB entries in group are done.
 	for (n3 = 0; n3 < Stark_pkg::ROB_ENTRIES; n3 = n3 + 4) begin
@@ -9003,6 +9044,23 @@ begin
 	end
 end
 endfunction
+
+task tMoveIRQToInstructionStart;
+input rob_ndx_t ndx;
+integer kk;
+rob_ndx_t ih;
+begin
+	ih = (ndx + Stark_pkg::ROB_ENTRIES - rob[ndx].op.uop.num) % Stark_pkg::ROB_ENTRIES;
+	if (ih != ndx && rob[ih].sn < rob[ndx].sn) begin
+		rob[ih].op.hwi <= TRUE;
+		rob[ndx].op.hwi <= FALSE;
+		pgh[ih>>2].hwi <= TRUE;
+		pgh[ih>>2].irq <= pgh[ndx>>2].irq;
+		pgh[ndx>>2].hwi <= FALSE;
+		pgh[ndx>>2].irq.level <= 6'd0;
+	end
+end
+endtask
 
 task tDeferToNextInstruction;
 input rob_ndx_t ndx;

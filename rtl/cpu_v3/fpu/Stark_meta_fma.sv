@@ -39,21 +39,27 @@
 import const_pkg::*;
 import Stark_pkg::*;
 
-module Stark_meta_fma(rst, clk, idle, rse_i, rse_o, z, cptgt, o, otag, done, exc);
+module Stark_meta_fma(rst, clk, idle, stomp, rse_i, rse_o, z, cptgt, o, otag, we_o, done, exc);
 parameter WID=Stark_pkg::SUPPORT_QUAD_PRECISION||Stark_pkg::SUPPORT_CAPABILITIES ? 128 : 64;
+parameter LATENCY = 8;
 input rst;
 input clk;
 input idle;
+input Stark_pkg::rob_bitmask_t stomp;
 input Stark_pkg::reservation_station_entry_t rse_i;
 output Stark_pkg::reservation_station_entry_t rse_o;
 input z;
 input [WID-1:0] cptgt;
 output reg [WID-1:0] o;
 output reg otag;
+output reg [WID/8:0] we_o;
 output reg done;
 output Stark_pkg::cause_code_t exc;
 
+integer n1,n2;
 wire ce = 1'b1;
+Stark_pkg::reservation_station_entry_t [LATENCY-2:0] rse;
+reg [LATENCY-1:0] stomp_con;
 Stark_pkg::operating_mode_t om;
 reg [1:0] prc;
 Stark_pkg::instruction_t ir;
@@ -69,6 +75,17 @@ always_comb b = rse_i.argB;
 always_comb c = rse_i.argC;
 always_comb t = rse_i.argD;
 always_comb i = rse_i.argI;
+
+always_comb
+begin
+	if (WID != 64 && WID != 128) begin
+		$display("StarkCPU: FMA width must be either 64 or 128");
+	end
+	if (LATENCY < 2) begin
+		$display("StarkCPU: FMA latency must be at least 2");
+		$finish;
+	end
+end
 
 Stark_pkg::cause_code_t exc128,exc64;
 reg [WID-1:0] o1;
@@ -208,12 +225,29 @@ else
 always_comb
 	exc = exc64;
 
-vtdl #($bits(reservation_station_entry_t)) udlyfma1 (
-	.clk(clk),
-	.ce(1'b1),
-	.a(4'd7),
-	.d(rse_i),
-	.q(rse_o)
-);
+always_ff @(posedge clk)
+begin
+	rse[0] <= rse_i;
+	for (n1 = 1; n1 < 7; n1 = n1 + 1)
+		rse[n1] <= rse[n1-1];
+	rse_o <= rse[6];
+end
+
+always_ff @(posedge clk)
+begin
+	if (rse_i.aRd==8'h00 || !rse_i.v || stomp[rse_i.rndx])
+		stomp_con[0] = TRUE;
+	else
+		stomp_con[0] = FALSE;
+	for (n2 = 1; n2 < 8; n2 = n2 + 1) begin
+		if (stomp[rse[n2].rndx])
+			stomp_con[n2] = TRUE;
+		else
+			stomp_con[n2] = stomp_con[n2-1];
+	end
+end		
+
+always_comb
+	we_o = stomp_con[7] ? 9'h000 : 9'h1FF;
 
 endmodule

@@ -329,7 +329,7 @@ Stark_decode_pfx udecpfx1
 	.pfx(db.pfx)
 );
 
-Stark_decode_fpu ufma
+Stark_decode_fma ufma
 (
 	.instr(ins.ins),
 	.fma(db.fma)

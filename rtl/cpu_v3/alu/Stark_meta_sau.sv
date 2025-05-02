@@ -41,7 +41,7 @@
 import const_pkg::*;
 import Stark_pkg::*;
 
-module Stark_meta_sau(rst, clk, rse_i, rse_o, lane, cptgt, z,
+module Stark_meta_sau(rst, clk, rse_i, rse_o, lane, cptgt, z, stomp,
 	qres, cs, csr, cpl, canary, o, cp_o, pRd_o, aRd_o, we_o, exc);
 parameter SAU0 = 1'b0;
 parameter WID=$bits(cpu_types_pkg::value_t); 
@@ -52,6 +52,7 @@ output Stark_pkg::reservation_station_entry_t rse_o;
 input [2:0] lane;
 input [7:0] cptgt;
 input z;
+input Stark_pkg::rob_bitmask_t stomp;
 input [WID-1:0] qres;
 input [2:0] cs;
 input [7:0] cpl;
@@ -242,7 +243,9 @@ delay1 #(.WID($bits(checkpt_ndx_t))) udly3 (.clk(clk), .ce(1'b1), .i(cp_i), .o(c
 delay1 #(.WID($bits(Stark_pkg::reservation_station_entry_t))) udly4 (.clk(clk), .ce(1'b1), .i(rse_i), .o(rse_o));
 
 always_ff @(posedge clk)
-	if (aRd_i >= 8'd56 && aRd_i <= 8'd63)
+	if (~rse_i.v || stomp[rse_i.rndx])
+		we_o <= 9'h000;
+	else if (aRd_i >= 8'd56 && aRd_i <= 8'd63)
 		case(rse_i.om)
 		Stark_pkg::OM_APP:				we_o <= 9'h001;
 		Stark_pkg::OM_SUPERVISOR:	we_o <= 9'h003;

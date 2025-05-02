@@ -41,10 +41,11 @@
 import const_pkg::*;
 import Stark_pkg::*;
 
-module Stark_meta_imul(rst, clk, rse_i, rse_o, lane, cptgt, z, o, we_o, mul_done);
+module Stark_meta_imul(rst, clk, stomp, rse_i, rse_o, lane, cptgt, z, o, we_o, mul_done);
 parameter WID=$bits(cpu_types_pkg::value_t); 
 input rst;
 input clk;
+input Stark_pkg::rob_bitmask_t stomp;
 input Stark_pkg::reservation_station_entry_t rse_i;
 output Stark_pkg::reservation_station_entry_t rse_o;
 input [2:0] lane;
@@ -54,6 +55,7 @@ output reg [WID-1:0] o;
 output reg [WID/8:0] we_o;
 output reg mul_done;
 
+Stark_pkg::reservation_station_entry_t rse1,rse2,rse3;
 Stark_pkg::memsz_t prc;
 Stark_pkg::instruction_t ir;
 reg [WID-1:0] a;
@@ -62,6 +64,7 @@ reg [WID-1:0] bi;
 reg [WID-1:0] c;
 reg [WID-1:0] i;
 reg [WID-1:0] t;
+aregno_t aRd_i;
 always_comb prc = rse_i.prc;
 always_comb ir = rse_i.ins;
 always_comb a = rse_i.argA;
@@ -70,7 +73,9 @@ always_comb c = rse_i.argC;
 always_comb t = rse_i.argD;
 always_comb bi = rse_i.argB|rse_i.argI;
 always_comb i = rse_i.argI;
-reg [WID/8:0] we;
+always_comb aRd_i = rse_i.aRd;
+reg [2:0] stomp_con;	// stomp conveyor
+reg [WID/8:0] we,we1,we2,we3;
 reg [WID-1:0] t1;
 reg z1;
 reg [7:0] cptgt1;
@@ -189,14 +194,37 @@ delay3 #(.WID(1)) udly2 (.clk(clk), .ce(1'b1), .i(z), .o(z1));
 delay3 #(.WID(WID/8)) udly3 (.clk(clk), .ce(1'b1), .i(cptgt), .o(cptgt1));
 delay3 #(.WID($bits(pregno_t))) udly4 (.clk(clk), .ce(1'b1), .i(pRd_i), .o(pRd_o));
 delay3 #(.WID($bits(aregno_t))) udly5 (.clk(clk), .ce(1'b1), .i(aRd_i), .o(aRd_o));
-delay2 #(.WID(WID/8)) udly6 (.clk(clk), .ce(1'b1), .i(we), .o(we_o));
+delay3 #(.WID(WID/8+1)) udly6 (.clk(clk), .ce(1'b1), .i(we), .o(we3));
 delay3 #(.WID($bits(checkpt_ndx_t))) udly7 (.clk(clk), .ce(1'b1), .i(cp_i), .o(cp_o));
 
 always_ff @(posedge clk)
-	if (|aRd_i)
-		we <= 9'h1FF;
+	rse1 <= rse_i;
+always_ff @(posedge clk)
+	rse2 <= rse1;
+always_ff @(posedge clk)
+	rse3 <= rse2;
+
+always_comb
+	we = 9'h1FF;
+
+always_ff @(posedge clk)
+begin
+	if (~|aRd_i || stomp[rse_i.rndx])
+		stomp_con[0] <= 1'b1;
 	else
-		we <= 9'h000;
+		stomp_con[0] <= 1'b0;
+	if (stomp[rse1.rndx])
+		stomp_con[1] <= 1'b1;
+	else
+		stomp_con[1] <= stomp_con[0];
+	if (stomp[rse2.rndx])
+		stomp_con[2] <= 1'b1;
+	else
+		stomp_con[2] <= stomp_con[1];
+end
+
+always_comb
+	we_o = stomp_con[2] ? 9'h000 : we3;
 
 generate begin : gCptgt
 	for (mm = 0; mm < WID/8; mm = mm + 1) begin

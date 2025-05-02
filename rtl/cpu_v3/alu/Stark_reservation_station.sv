@@ -40,7 +40,7 @@ import cpu_types_pkg::*;
 import Stark_pkg::*;
 
 module Stark_reservation_station(rst, clk, available, busy, issue, stall,
-	rfo_tag, rse_i, rse_o,	
+	rfo_tag, rse_i, rse_o, stomp,
 	rfi_val, rfi_tag, rfi_pRd,
 	prn, prnv, rfo, req_pRn
 );
@@ -51,6 +51,7 @@ input clk;
 input available;
 input stall;
 input reservation_station_entry_t [3:0] rse_i;
+input Stark_pkg::rob_bitmask_t stomp;
 input pregno_t [15:0] prn;
 input [15:0] prnv;
 input value_t [15:0] rfo;
@@ -237,20 +238,22 @@ else begin
 	pstall <= stall;
 	if (available && dispatch && idle) begin
 		// Load up the reservation stations.
-		if (!rse[0].busy) begin
-			rse[0] <= rsei;
-			rse[0].busy <= TRUE;
-			rse[0].ready <= rsei.argA_v && rsei.argB_v && (rsei.argC_v||rsei.store) && rsei.argD_v;
-		end
-		else if (!rse[1].busy) begin
-			rse[1] <= rsei;
-			rse[1].busy <= TRUE;
-			rse[1].ready <= rsei.argA_v && rsei.argB_v && (rsei.argC_v||rsei.store) && rsei.argD_v;
-		end
-		else if (!rse[2].busy) begin
-			rse[2] <= rsei;
-			rse[2].busy <= TRUE;
-			rse[2].ready <= rsei.argA_v && rsei.argB_v && (rsei.argC_v||rsei.store) && rsei.argD_v;
+		if (!stomp[rsei.rndx]) begin
+			if (!rse[0].busy) begin
+				rse[0] <= rsei;
+				rse[0].busy <= TRUE;
+				rse[0].ready <= rsei.argA_v && rsei.argB_v && (rsei.argC_v||rsei.store) && rsei.argD_v;
+			end
+			else if (!rse[1].busy) begin
+				rse[1] <= rsei;
+				rse[1].busy <= TRUE;
+				rse[1].ready <= rsei.argA_v && rsei.argB_v && (rsei.argC_v||rsei.store) && rsei.argD_v;
+			end
+			else if (!rse[2].busy) begin
+				rse[2] <= rsei;
+				rse[2].busy <= TRUE;
+				rse[2].ready <= rsei.argA_v && rsei.argB_v && (rsei.argC_v||rsei.store) && rsei.argD_v;
+			end
 		end
 /*
 		if (cpytgt) begin
@@ -316,29 +319,95 @@ else begin
 	casez({stall,rse[2].ready,rse[1].ready,rse[0].ready})
 	4'b1???:	;
 	4'b0000:	;
-	4'b0001: begin issue <= TRUE; rse_o <= rse[0]; rse[0].busy <= FALSE; end
-	4'b0010: begin issue <= TRUE; rse_o <= rse[1]; rse[1].busy <= FALSE; end
-	4'b0011: begin issue <= TRUE; rse_o <= lfsro[0] ? rse[1] : rse[0]; rse[0].busy <= lfsro[0]; rse[1].busy <= ~lfsro[0]; end
-	4'b0100: begin issue <= TRUE; rse_o <= rse[2]; rse[2].busy <= FALSE; end
-	4'b0101: begin issue <= TRUE; rse_o <= lfsro[0] ? rse[2] : rse[0]; rse[0].busy <= lfsro[0]; rse[2].busy <= ~lfsro[0]; end
-	4'b0110: begin issue <= TRUE; rse_o <= lfsro[0] ? rse[2] : rse[1]; rse[1].busy <= lfsro[0]; rse[2].busy <= ~lfsro[0]; end
-	4'b0111:
+	4'b0001:
 		begin
-			issue <= TRUE;
-			if (lfsro[3:0] < 4'd5) begin
-				rse_o <= rse[0];
-				rse[0].busy <= FALSE;
-			end
-			else if (lfsro[3:0] < 4'd10) begin
+			issue <= !stomp[rse[0].rndx];
+			rse_o <= rse[0];
+			rse[0].busy <= FALSE;
+		end
+	4'b0010:
+		begin
+			issue <= !stomp[rse[1].rndx];
+			rse_o <= rse[1];
+			rse[1].busy <= FALSE;
+		end
+	4'b0011:
+		begin
+			if (lfsro[0]) begin
+				issue <= !stomp[rse[1].rndx];
 				rse_o <= rse[1];
 				rse[1].busy <= FALSE;
 			end
 			else begin
+				issue <= !stomp[rse[0].rndx];
+				rse_o <= rse[0];
+				rse[0].busy <= FALSE;
+			end
+		end
+	4'b0100:
+		begin
+			issue <= !stomp[rse[2].rndx];
+			rse_o <= rse[2];
+			rse[2].busy <= FALSE;
+		end
+	4'b0101:
+		begin
+			if (lfsro[0]) begin
+				issue <= !stomp[rse[2].rndx];
+				rse_o <= rse[2];
+				rse[2].busy <= FALSE;
+			end
+			else begin
+				issue <= !stomp[rse[0].rndx];
+				rse_o <= rse[0];
+				rse[0].busy <= FALSE;
+			end
+		end
+	4'b0110:
+		begin
+			if (lfsro[0]) begin
+				issue <= !stomp[rse[2].rndx];
+				rse_o <= rse[2];
+				rse[2].busy <= FALSE;
+			end
+			else begin
+				issue <= !stomp[rse[1].rndx];
+				rse_o <= rse[1];
+				rse[1].busy <= FALSE;
+			end
+		end
+	4'b0111:
+		begin
+			if (lfsro[3:0] < 4'd5) begin
+				issue <= !stomp[rse[0].rndx];
+				rse_o <= rse[0];
+				rse[0].busy <= FALSE;
+			end
+			else if (lfsro[3:0] < 4'd10) begin
+				issue <= !stomp[rse[1].rndx];
+				rse_o <= rse[1];
+				rse[1].busy <= FALSE;
+			end
+			else begin
+				issue <= !stomp[rse[2].rndx];
 				rse_o <= rse[2];
 				rse[2].busy <= FALSE;
 			end
 		end
 	endcase
+
+	if (stomp[rse[0].rndx]) begin
+		rse[0].v <= INV;
+		rse[0].busy <= FALSE;
+	end
+	if (stomp[rse[1].rndx]) begin
+		rse[1].v <= INV;
+		rse[1].busy <= FALSE;
+	end
+	if (stomp[rse[2].rndx]) begin
+		rse[2].v <= INV;
+		rse[2].busy <= FALSE;
+	end
 end
 
 always_comb

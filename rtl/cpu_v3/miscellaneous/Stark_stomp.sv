@@ -41,7 +41,7 @@ import const_pkg::*;
 import Stark_pkg::*;
 
 module Stark_stomp(rst, clk, ihit, advance_pipeline, advance_pipeline_seg2, 
-	micro_machine_active, branchmiss, found_destination,
+	micro_machine_active, branchmiss, found_destination, destination_rndx,
 	branch_state, do_bsr, misspc,
 	pc, pc_f, pc_fet, pc_mux, pc_dec, pc_ren,
 	stomp_fet, stomp_mux, stomp_dec, stomp_ren, stomp_que, stomp_quem,
@@ -54,6 +54,7 @@ input advance_pipeline;
 input advance_pipeline_seg2;
 input micro_machine_active;
 input found_destination;	// true if destination was found in ROB
+input destination_rndx;
 input branchmiss;
 input Stark_pkg::branch_state_t branch_state;
 input do_bsr;
@@ -302,17 +303,23 @@ always_comb stomp_que = do_bsr_rrr ? stomp_quer | stomp_rrr : stomp_quer;
 // required.
 always_ff @(posedge clk)
 for (n4 = 0; n4 < Stark_pkg::ROB_ENTRIES; n4 = n4 + 1) begin
-	// The first three groups of instructions after miss needs to be stomped on 
-	// with no target copies. After that copy targets are in effect.
-	robentry_stomp[n4] = //(bno_bitmap[rob[n4].pc.bno_t]==1'b0) ||
-	(
-		(((branchmiss && !found_destination)/*||((takb&~rob[fcu_id].bt) && (fcu_v2|fcu_v3|fcu_v4))*/) || (branch_state<Stark_pkg::BS_DONE2 && branch_state!=Stark_pkg::BS_IDLE))
-		&& rob[n4].sn > rob[missid].sn
-		&& fcu_idv	// miss_idv
-		&& rob[n4].op.pc.bno_t!=stomp_bno
-		//&& rob[n4].v
+	robentry_stomp[n4] = FALSE;
+	// Stomp on instructions between the branch and the destination.
+	if (found_destination) begin
+		if (rob[n4].sn < rob[destination_rndx].sn && rob[n4].sn > rob[missid].sn)
+			robentry_stomp[n4] = TRUE;
+	end
+	else begin
+		// The first three groups of instructions after miss needs to be stomped on 
+		// with no target copies. After that copy targets are in effect.
+//	((branchmiss/*||((takb&~rob[fcu_id].bt) && (fcu_v2|fcu_v3|fcu_v4))*/) || (branch_state<Stark_pkg::BS_DONE2 && branch_state!=Stark_pkg::BS_IDLE))
+		if ((branchmiss || (branch_state<Stark_pkg::BS_DONE2 && branch_state!=Stark_pkg::BS_IDLE)) &&
+			rob[n4].sn > rob[missid].sn &&
+			fcu_idv	&& // miss_idv
+			rob[n4].op.pc.bno_t!=stomp_bno
 		)
-	;
+			robentry_stomp[n4] = TRUE;
+	end
 	
 	if (Stark_pkg::SUPPORT_BACKOUT) begin
 		// These (3) instructions must be turned into copy-targets because even if
