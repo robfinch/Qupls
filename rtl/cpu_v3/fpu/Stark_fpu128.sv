@@ -315,7 +315,7 @@ end
 always_comb
 begin
 	bus = 128'd0;
-	exc = FLT_NONE;
+	exc = Stark_pkg::FLT_NONE;
 	case(ir.any.opcode)
 	/*
 	OP_FLT3:

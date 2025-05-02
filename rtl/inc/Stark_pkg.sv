@@ -42,8 +42,8 @@ import  cpu_types_pkg::*;
 package Stark_pkg;
 `define STARK_PKG 1'b1
 `undef IS_SIM
-parameter SIM = 1'b1;
-`define IS_SIM	1
+parameter SIM = 1'b0;
+//`define IS_SIM	1
 
 // Comment out to remove the sigmoid approximate function
 //`define SIGMOID	1
@@ -338,6 +338,44 @@ typedef struct packed
 	logic uie;					// user interrupt enable
 } status_reg_t;				// 32 bits
 
+typedef struct packed
+{
+	fround_t rm;
+	logic inexe;		// inexact exception enable
+	logic dbzxe;		// divide by zero exception enable
+	logic underxe;	// underflow exception enable
+	logic overxe;		// overflow exception enable
+	logic invopxe;	// invalid operation exception enable
+	//- - - - - - - 
+	logic ns;
+	// Result status
+	logic fractie;	// last instruction rounded intermediate result
+	logic rawayz;		// rounded away from zero
+	logic c;				// denormalized, negative zero, or quiet nan
+	logic neg;			// result is negative
+	logic pos;			// result is positive
+	logic zero;			// result is zero
+	logic inf;			// result is infinite
+	// Exception occurrance
+	logic swt;			// set this bit to trigger an invalid operation
+	logic inerx;		// inexact result exception occurred (sticky)
+	logic dbzx;			// divide by zero exception occurred
+	logic underx;		// underflow exception occurred
+	logic overx;		// overflow exception occurred
+	logic giopx;		// global invalid operation exception
+	logic gx;				// global exception indicator, set for any exception
+	logic sumx;			// summary exception
+	// Exception type resolution
+	logic cvt;			// attempt to convert NaN or too large integer
+	logic sqrtx;		// square root of non-zero negative
+	logic nancmp;		// comparison of NaNs not using unordered comparisons
+	logic infzero;	// multiply infinity by zero
+	logic zerozero;	// divide zero by zero
+	logic infdiv;		// division of infinities
+	logic subinfx;	// subtraction of infinities
+	logic snanx;		// signalling nan
+} fp_status_reg_t;
+
 typedef enum logic [2:0] {
 	BTS_NONE = 3'd0,
 	BTS_BCC = 3'd1,
@@ -456,6 +494,15 @@ typedef enum logic [4:0] {
 	FTRIG_FCOS = 5'd0,
 	FTRIG_FSIN = 5'd1
 } float_trig_t;
+
+typedef enum logic [2:0] {
+	RND_NE = 3'd0,		// nearest ties to even
+	RND_ZR = 3'd1,		// round to zero (truncate)
+	RND_PL = 3'd2,		// round to plus infinity
+	RND_MI = 3'd3,		// round to minus infinity
+	RND_MM = 3'd4,		// round to maxumum magnitude (nearest ties away from zero)
+	RND_FL = 3'd7			// round according to flags register
+} fround_t;
 
 parameter NOP_INSN = {26'd0,OP_NOP};
 
@@ -1037,6 +1084,32 @@ typedef struct packed
 	logic [5:0] opcode;
 } cr_inst_t;
 
+typedef struct packed
+{
+	logic zero;
+	logic [1:0] lx;
+	logic [3:0] op4;
+	logic [2:0] op3;
+	logic [4:0] Rs2;
+	logic cr;
+	logic [4:0] Rs1;
+	logic [4:0] Rd;
+	logic [5:0] opcode;
+} fpu_inst_t;
+
+typedef struct packed
+{
+	logic zero;
+	logic [1:0] lx;
+	logic [3:0] op4;
+	fround_t rm;
+	logic [4:0] Rs2;
+	logic cr;
+	logic [4:0] Rs1;
+	logic [4:0] Rd;
+	logic [5:0] opcode;
+} fpurm_inst_t;
+
 typedef union packed
 {
 	cmpi_inst_t cmpi;
@@ -1062,7 +1135,8 @@ typedef union packed
 	alui_inst_t alui;
 	alu_inst_t alu;
 	alucli_inst_t alucli;
-	alu_inst_t fpu;
+	fpu_inst_t fpu;
+	fpurm_inst_t fpurm;
 	adbi_inst_t adbi;
 	adb_inst_t adb;
 	adbcli_inst_t adbcli;
@@ -1233,6 +1307,7 @@ typedef struct packed
 	logic fpu0;				// true if instruction must use only fpu #0
 	logic fma;
 	logic trig;
+	fround_t rm;
 	memsz_t prc;			// precision of operation
 	logic mul;
 	logic mula;
@@ -1354,7 +1429,7 @@ typedef struct packed
 	logic hwi;
 	logic [5:0] hwi_level;
 	logic [2:0] hwi_swstk;		// software stack
-	cause_code_t exc;					// non-zero indicate exception
+	cause_code_t exc;					// non-0xFF indicate exception
 	logic excv;								// 1=exception
 	// The following fields are loaded at enqueue time, but otherwise do not change.
 	logic bt;									// branch to be taken as predicted
@@ -1417,10 +1492,11 @@ typedef struct packed {
 	logic v;
 	logic busy;
 	logic ready;
-	logic [3:0] funcunit;						// functional unit dispatched to
-	cpu_types_pkg::rob_ndx_t rndx;
+	logic [3:0] funcunit;							// functional unit dispatched to
+	cpu_types_pkg::rob_ndx_t rndx;		// associated ROB entry
 	cpu_types_pkg::checkpt_ndx_t cndx;
 	instruction_t ins;
+	cause_code_t exc;
 	// needed only for mem
 	logic virt2phys;
 	logic load;
@@ -1438,6 +1514,7 @@ typedef struct packed {
 	cpu_types_pkg::aregno_t aRd;
 	cpu_types_pkg::pregno_t nRd;
 	operating_mode_t om;						// needed for mem ops
+	fround_t rm;										// needed for float-ops
 	cpu_types_pkg::pc_address_t pc;
 	cpu_types_pkg::value_t argA;
 	cpu_types_pkg::value_t argB;
@@ -1520,6 +1597,7 @@ typedef struct packed {
 	cpu_types_pkg::rob_ndx_t group_len;			// length of instruction group (not used)
 	logic bt;									// branch to be taken as predicted
 	operating_mode_t om;			// operating mode
+	fround_t rm;							// float round mode
 	decode_bus_t decbus;			// decoded instruction
 	cpu_types_pkg::checkpt_ndx_t cndx;				// checkpoint index
 	cpu_types_pkg::checkpt_ndx_t br_cndx;		// checkpoint index branch owns
@@ -1816,7 +1894,7 @@ endfunction
 function fnIsBccR;
 input instruction_t ir;
 begin
-	fnIsBccR = fnIsBranch(ir) && ir[39:36]==4'h7;
+	fnIsBccR = fnIsBranch(ir) && 1'b0;//ir[39:36]==4'h7;
 end
 endfunction
 

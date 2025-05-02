@@ -2,7 +2,7 @@
 
 import Stark_pkg::*;
 
-module Stark_func_result_queue(rst_i, clk_i, rd_i, we_i, pRt_i, aRt_i, tag_i, res_i, cp_i, we_o, pRt_o, aRt_o, tag_o, res_o, cp_o, empty);
+module Stark_func_result_queue(rst_i, clk_i, rd_i, we_i, pRt_i, aRt_i, tag_i, res_i, cp_i, we_o, pRt_o, aRt_o, tag_o, res_o, cp_o, empty, full);
 input rst_i;
 input clk_i;
 input rd_i;
@@ -19,9 +19,8 @@ output reg [7:0] tag_o;
 output value_t res_o;
 output cpu_types_pkg::checkpt_ndx_t cp_o;
 output empty;
+output full;
 
-wire full;
-wire almost_full;
 wire data_valid;
 wire rd_rst_busy;
 wire wr_rst_busy;
@@ -62,27 +61,27 @@ xpm_fifo_sync #(
   .FIFO_WRITE_DEPTH(32),  	     // DECIMAL
   .FULL_RESET_VALUE(0),          // DECIMAL
   .PROG_EMPTY_THRESH(10),        // DECIMAL
-  .PROG_FULL_THRESH(10),         // DECIMAL
+  .PROG_FULL_THRESH(27),         // DECIMAL
   .RD_DATA_COUNT_WIDTH(5),       // DECIMAL
   .READ_DATA_WIDTH(96),         	// DECIMAL
   .READ_MODE("fwft"),            // String
   .SIM_ASSERT_CHK(0),            // DECIMAL; 0=disable simulation messages, 1=enable simulation messages
-  .USE_ADV_FEATURES("0000"),     // String
+  .USE_ADV_FEATURES("0002"),     // prog_almost_full
   .WAKEUP_TIME(0),               // DECIMAL
   .WRITE_DATA_WIDTH(96),        // DECIMAL
   .WR_DATA_COUNT_WIDTH(5)        // DECIMAL
 )
 xpm_fifo_sync_inst (
   .almost_empty(),   // 1-bit output: Almost Empty : When asserted, this signal indicates that
-  .almost_full(almost_full),     // 1-bit output: Almost Full: When asserted, this signal indicates that
+  .almost_full(),     // 1-bit output: Almost Full: When asserted, this signal indicates that
   .data_valid(data_valid),       // 1-bit output: Read Data Valid: When asserted, this signal indicates
   .dbiterr(),             // 1-bit output: Double Bit Error: Indicates that the ECC decoder detected
   .dout(dout),                   // READ_DATA_WIDTH-bit output: Read Data: The output data bus is driven
   .empty(empty),                 // 1-bit output: Empty Flag: When asserted, this signal indicates that the
-  .full(full),                   // 1-bit output: Full Flag: When asserted, this signal indicates that the
+  .full(),                   // 1-bit output: Full Flag: When asserted, this signal indicates that the
   .overflow(),           // 1-bit output: Overflow: This signal indicates that a write request
-  .prog_empty(),       // 1-bit output: Programmable Empty: This signal is asserted when the
-  .prog_full(),         // 1-bit output: Programmable Full: This signal is asserted when the
+  .prog_empty(),       	// 1-bit output: Programmable Empty: This signal is asserted when the
+  .prog_full(full),			// 1-bit output: Programmable Full: This signal is asserted when the
   .rd_data_count(), // RD_DATA_COUNT_WIDTH-bit output: Read Data Count: This bus indicates the
   .rd_rst_busy(rd_rst_busy),     // 1-bit output: Read Reset Busy: Active-High indicator that the FIFO read
   .sbiterr(),             // 1-bit output: Single Bit Error: Indicates that the ECC decoder detected

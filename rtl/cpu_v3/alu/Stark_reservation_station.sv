@@ -67,7 +67,6 @@ integer nn,kk,jj;
 reg idle;
 reg dispatch;
 reg pstall;
-reg v1;
 cpu_types_pkg::value_t argA0, argA1, argA2;
 cpu_types_pkg::value_t argB0, argB1, argB2;
 cpu_types_pkg::value_t argC0, argC1, argC2;
@@ -229,7 +228,6 @@ end
 
 always_ff @(posedge clk)
 if (rst) begin
-	v1 <= INV;
   rse[0] = {$bits(reservation_station_entry_t){1'b0}};
   rse[1] = {$bits(reservation_station_entry_t){1'b0}};
   rse[2] = {$bits(reservation_station_entry_t){1'b0}};
@@ -313,9 +311,6 @@ else begin
 		rse[2].argD_v <= VAL;
 	end
 
-	if (pstall & ~stall)
-		v1 <= INV;
-
 	// Issue scheduling: if there is only one ready easy: pick the ready one.
 	// If there are ties: pick one at random.
 	casez({stall,rse[2].ready,rse[1].ready,rse[0].ready})
@@ -332,17 +327,14 @@ else begin
 			issue <= TRUE;
 			if (lfsro[3:0] < 4'd5) begin
 				rse_o <= rse[0];
-				v1 <= VAL;
 				rse[0].busy <= FALSE;
 			end
 			else if (lfsro[3:0] < 4'd10) begin
 				rse_o <= rse[1];
-				v1 <= VAL;
 				rse[1].busy <= FALSE;
 			end
 			else begin
 				rse_o <= rse[2];
-				v1 <= VAL;
 				rse[2].busy <= FALSE;
 			end
 		end
@@ -350,7 +342,7 @@ else begin
 end
 
 always_comb
-	rse_o.v = (pstall & ~stall) ? 1'b0 : v1;
+	rse_o.v = (pstall & ~stall) ? 1'b0 : issue;
 
 // Request register reads for missing arguments.
 

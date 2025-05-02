@@ -41,15 +41,15 @@
 import const_pkg::*;
 import Stark_pkg::*;
 
-module Stark_meta_idiv(rst, clk, clk2x, om, ld, lane, prc, ir, div, cptgt, z, a, b, bi,
-	c, i, t, qres, cs, pc, csr, cpl, canary, o,
-	mul_done, div_done, div_dbz, exc);
+module Stark_meta_idiv(rst, clk, clk2x, rse_i, rse_o, ld, lane, prc, ir, div,
+	cptgt, z, qres, o, we_o, div_done, div_dbz, exc);
 parameter ALU0 = 1'b0;
 parameter WID=$bits(cpu_types_pkg::value_t); 
 input rst;
 input clk;
 input clk2x;
-input Stark_pkg::operating_mode_t om;
+input Stark_pkg::reservation_station_entry_t rse_i;
+output Stark_pkg::reservation_station_entry_t rse_o;
 input ld;
 input [2:0] lane;
 input Stark_pkg::memsz_t prc;
@@ -57,24 +57,32 @@ input Stark_pkg::instruction_t ir;
 input div;
 input [7:0] cptgt;
 input z;
-input [WID-1:0] a;
-input [WID-1:0] b;
-input [WID-1:0] bi;
-input [WID-1:0] c;
-input [WID-1:0] i;
-input [WID-1:0] t;
 input [WID-1:0] qres;
-input [2:0] cs;
-input cpu_types_pkg::pc_address_t pc;
-input [7:0] cpl;
-input [WID-1:0] canary;
-input [WID-1:0] csr;
 output reg [WID-1:0] o;
-output reg mul_done;
+output [WID/8:0] we_o;
 output reg div_done;
 output div_dbz;
 output reg [WID-1:0] exc;
 
+Stark_pkg::operating_mode_t om;
+reg [WID-1:0] a;
+reg [WID-1:0] b;
+reg [WID-1:0] bi;
+reg [WID-1:0] c;
+reg [WID-1:0] i;
+reg [WID-1:0] t;
+reg div_done1,div_done2;
+aregno_t aRd_i;
+always_comb om = rse_i.om;
+always_comb a = rse_i.argA;
+always_comb b = rse_i.argB;
+always_comb bi = rse_i.argB|rse_i.argI;
+always_comb c = rse_i.argC;
+always_comb i = rse_i.argI;
+always_comb t = rse_i.argD;
+always_comb aRd_i = rse_i.aRd;
+
+reg [WID/8:0] we;
 reg [WID-1:0] t1;
 reg z1;
 reg [7:0] cptgt1;
@@ -85,13 +93,9 @@ reg o1_tag;
 wire [WID-1:0] exc16,exc32,exc64,exc128;
 reg [WID-1:0] exc1;
 wire [WID/16-1:0] div_done16;
-wire [WID/16-1:0] mul_done16;
 wire [WID/32-1:0] div_done32;
-wire [WID/32-1:0] mul_done32;
 wire [WID/64-1:0] div_done64;
-wire [WID/64-1:0] mul_done64;
 wire [WID/128-1:0] div_done128;
-wire [WID/128-1:0] mul_done128;
 integer n;
 genvar g,mm,xx;
 
@@ -114,13 +118,7 @@ generate begin : g16
 			.i(i),
 			.t(t[g*16+15:g*16]),
 			.qres(qres[g*16+15:g*16]),
-			.cs(cs),
-			.pc(pc),
-			.csr(csr),
-			.cpl(cpl),
-			.canary(canary),
 			.o(o16[g*16+15:g*16]),
-			.mul_done(mul_done16[g]),
 			.div_done(div_done16[g]),
 			.div_dbz(),
 			.exc_o(exc16[g*8+7:g*8])
@@ -236,7 +234,7 @@ begin
 	if (Stark_pkg::SUPPORT_PREC)
 		case(prc)
 		Stark_pkg::wyde:		begin o1 = o16; end
-		Stark_pkg::tetra:	begin o1 = o32; end
+		Stark_pkg::tetra:		begin o1 = o32; end
 		Stark_pkg::octa:		begin o1 = o64; end
 		Stark_pkg::hexi:		begin o1 = o128; end
 		default:	begin o1 = o128; end
@@ -276,23 +274,11 @@ endgenerate
 always_comb
 	if (Stark_pkg::SUPPORT_PREC)
 		case(prc)
-		Stark_pkg::wyde:		mul_done = &mul_done16;
-		Stark_pkg::tetra:	mul_done = &mul_done32;
-		Stark_pkg::octa:		mul_done = &mul_done64;
-		Stark_pkg::hexi:		mul_done = &mul_done128;
-		default:mul_done = &mul_done128;
-		endcase
-	else
-		mul_done = &mul_done64;
-
-always_comb
-	if (Stark_pkg::SUPPORT_PREC)
-		case(prc)
-		Stark_pkg::wyde:		div_done = &div_done16;
-		Stark_pkg::tetra:	div_done = &div_done32;
-		Stark_pkg::octa:		div_done = &div_done64;
-		Stark_pkg::hexi:		div_done = &div_done128;
-		default:div_done = &div_done128;
+		Stark_pkg::wyde:		div_done1 = &div_done16;
+		Stark_pkg::tetra:		div_done1 = &div_done32;
+		Stark_pkg::octa:		div_done1 = &div_done64;
+		Stark_pkg::hexi:		div_done1 = &div_done128;
+		default:	div_done1 = &div_done128;
 		endcase
 	else
 		div_done = &div_done64;
@@ -301,10 +287,10 @@ always_comb
 	if (Stark_pkg::SUPPORT_PREC)
 		case(prc)
 		Stark_pkg::wyde:		exc1 = exc16;
-		Stark_pkg::tetra:	exc1 = exc32;
+		Stark_pkg::tetra:		exc1 = exc32;
 		Stark_pkg::octa:		exc1 = exc64;
 		Stark_pkg::hexi:		exc1 = exc128;
-		default:exc1 = exc64;
+		default:	exc1 = exc64;
 		endcase
 	else
 		exc1 = exc64;
@@ -313,12 +299,42 @@ always_comb
 
 generate begin : gExc
 	for (xx = 0; xx < WID/8; xx = xx + 1)
-	    always_comb
-            if (cptgt[xx])
-                exc[xx*8+7:xx*8] = FLT_NONE;
-            else
-                exc[xx*8+7:xx*8] = exc1[xx*8+7:xx*8];
+    always_comb
+      if (cptgt[xx])
+        exc[xx*8+7:xx*8] = FLT_NONE;
+      else
+        exc[xx*8+7:xx*8] = exc1[xx*8+7:xx*8];
 end
 endgenerate
+
+// div_done pulses for only a single cycle.
+assign rse_o = div_done1 ? rse_i : {$bits(Stark_pkg::reservation_station_entry_t){1'b0}};
+
+always_ff @(posedge clk)
+if (rst)
+	div_done2 <= TRUE;
+else begin
+	if (ld)
+		div_done2 <= FALSE;
+	else if (div_done1)
+		div_done2 <= TRUE;
+end
+
+assign div_done = ld ? 1'b0 : div_done1 | div_done2;
+
+always_ff @(posedge clk)
+	if (aRd_i >= 8'd56 && aRd_i <= 8'd63)
+		case(rse_i.om)
+		Stark_pkg::OM_APP:				we <= 9'h001;
+		Stark_pkg::OM_SUPERVISOR:	we <= 9'h003;
+		Stark_pkg::OM_HYPERVISOR:	we <= 9'h007;
+		Stark_pkg::OM_SECURE:			we <= 9'h1FF;
+		endcase
+	else if (|aRd_i)
+		we <= 9'h1FF;
+	else
+		we <= 9'h000;
+
+assign we_o = ld ? 9'd0 : div_done1 ? we : 9'd0;
 
 endmodule

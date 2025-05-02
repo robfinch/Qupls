@@ -106,6 +106,7 @@ begin
 		) begin
 			rse_o[kk] = {$bits(Stark_pkg::reservation_station_entry_t){1'b0}};
 			rse_o[kk].om = rob[nn].om;
+			rse_o[kk].rm = rob[nn].rm;
 			rse_o[kk].pc = rob[nn].op.pc.pc;
 			rse_o[kk].prc = rob[nn].op.decbus.prc;
 			rse_o[kk].cndx = pgh[nn>>2].cndx;
