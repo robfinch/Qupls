@@ -76,7 +76,7 @@ input en;
 input nq;
 input restore;
 output restored;
-output [PREGS-1:0] restore_list;
+output [Stark_pkg::PREGS-1:0] restore_list;
 input [2:0] chkpt_amt;
 input rob_ndx_t tail0;
 input Stark_pkg::rob_entry_t [Stark_pkg::ROB_ENTRIES-1:0] rob;

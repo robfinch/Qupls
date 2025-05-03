@@ -546,7 +546,7 @@ reg imul0_aRdz;
 checkpt_ndx_t imul0_cp;
 reg [2:0] imul0_cs;
 reg imul0_bank;
-value_t imul0_resA;
+value_t imul0_res;
 rob_ndx_t imul0_id;
 reg imul0_idv;
 wire [63:0] imul0_exc;
@@ -560,6 +560,7 @@ wire [7:0] imul0_cptgt;
 Stark_pkg::memsz_t imul0_prc;
 wire imul0_ctag;
 wire imul0_args_valid;
+wire [8:0] imul0_we;
 Stark_pkg::reservation_station_entry_t imul0_rse,imul0_rse2;
 Stark_pkg::reservation_station_entry_t idiv0_rse,idiv0_rse2;
 
@@ -568,6 +569,8 @@ wire idiv0_ld;
 wire idiv0_pred;
 wire idiv0_predz;
 wire [7:0] idiv0_cptgt;
+wire [8:0] idiv0_we;
+value_t idiv0_res;
 wire idiv0_done;
 
 reg fpu0_idle;
@@ -578,7 +581,7 @@ wire fpu0_sc_done;		// single-cycle done
 wire fpu0_sc_done2;		// pipeline delayed version of above
 reg fpu0_done1;
 reg fpu0_stomp = 1'b0;
-reg fpu0_available;
+reg fpu0_available = 1'b1;
 Stark_pkg::ex_instruction_t fpu0_instr;
 reg [2:0] fpu0_rmd;
 Stark_pkg::operating_mode_t fpu0_om;
@@ -624,10 +627,12 @@ Stark_pkg::reservation_station_entry_t fma0_rse,fma0_rse2;
 Stark_pkg::reservation_station_entry_t fma1_rse,fma1_rse2;
 Stark_pkg::reservation_station_entry_t fpu0_rse,fpu0_rse2;
 
+reg fma0_available = 1'b1;
 wire fma0_done;
 wire fma0_full;
 reg [8:0] fma0_we;
 value_t fma0_res;
+reg fma1_available = 1'b1;
 wire fma1_done;
 wire fma1_full;
 value_t fma1_res;
@@ -3239,7 +3244,7 @@ aregno_t sau0_aRdA2, fpu0_aRd3, fpu1_aRd3, imul0_aRdA2;
 aregno_t sau1_aRdA2;
 pregno_t sau1_Rt2;
 aregno_t sau1_aRd2;
-value_t sau0_resA2,sau1_resA2,imul0_resA2;
+value_t sau0_resA2,sau1_resA2;
 value_t fpu0_res3, fpu0_resA2;
 value_t fpu1_resA2;
 checkpt_ndx_t sau0_cp2, sau1_cp2, fpu0_cp2, fpu1_cp2, imul0_cp2;
@@ -3379,7 +3384,7 @@ always_ff @(posedge clk) upd6 = upd6a==5'd31 ? 5'd31 : fuq_rot > upd6a ? 6'd13 +
 
 // Read the next queue entry for the queue jsut used to update the register file.
 reg [12:0] fuq_rd;
-wire [7:0] fuq_we [0:12];
+wire [8:0] fuq_we [0:12];
 pregno_t [12:0] fuq_pRt;
 aregno_t [12:0] fuq_aRt;
 wire [7:0] fuq_tag [0:12];
@@ -3405,7 +3410,7 @@ end
 
 Stark_func_result_queue ufrq1
 (
-	.rst_i(rst),
+	.rst_i(irst),
 	.clk_i(clk),
 	.rd_i(fuq_rd[0]),
 	.we_i(sau0_we),
@@ -3426,7 +3431,7 @@ generate begin : gSAU1q
 	if (Stark_pkg::NSAU > 1) begin
 Stark_func_result_queue ufrq4
 (
-	.rst_i(rst),
+	.rst_i(irst),
 	.clk_i(clk),
 	.rd_i(fuq_rd[1]),
 	.we_i(sau1_we),
@@ -3461,13 +3466,13 @@ endgenerate
 
 Stark_func_result_queue ufrq2
 (
-	.rst_i(rst),
+	.rst_i(irst),
 	.clk_i(clk),
 	.rd_i(fuq_rd[2]),
 	.we_i(imul0_we),
 	.rse_i(imul0_rse2),
 	.tag_i(8'h0),
-	.res_i(imul0_resA),
+	.res_i(imul0_res),
 	.we_o(fuq_we[2]),
 	.pRt_o(fuq_pRt[2]),
 	.aRt_o(fuq_aRt[2]),
@@ -3485,13 +3490,13 @@ generate begin : gDivFRQ
 if (SUPPORT_IDIV) begin
 Stark_func_result_queue ufrq3
 (
-	.rst_i(rst),
+	.rst_i(irst),
 	.clk_i(clk),
 	.rd_i(fuq_rd[3]),
 	.we_i(idiv0_we),
 	.rse_i(idiv0_rse2),
 	.tag_i(8'h00),
-	.res_i(idiv0_resA),
+	.res_i(idiv0_res),
 	.we_o(fuq_we[3]),
 	.pRt_o(fuq_pRt[3]),
 	.aRt_o(fuq_aRt[3]),
@@ -3521,7 +3526,7 @@ generate begin : gFMAFRQ
 if (NFMA > 0) begin
 Stark_func_result_queue ufrq4
 (
-	.rst_i(rst),
+	.rst_i(irst),
 	.clk_i(clk),
 	.rd_i(fuq_rd[4]),
 	.we_i(fma0_we),
@@ -3550,7 +3555,7 @@ end
 if (NFMA > 1) begin
 Stark_func_result_queue ufrq5
 (
-	.rst_i(rst),
+	.rst_i(irst),
 	.clk_i(clk),
 	.rd_i(fuq_rd[5]),
 	.we_i(fma1_we),
@@ -3581,7 +3586,7 @@ endgenerate
 
 Stark_func_result_queue ufrq7
 (
-	.rst_i(rst),
+	.rst_i(irst),
 	.clk_i(clk),
 	.rd_i(fuq_rd[7]),
 	.rse_i(fcu_rse),
@@ -3617,7 +3622,7 @@ end
 
 Stark_func_result_queue ufrq10
 (
-	.rst_i(rst),
+	.rst_i(irst),
 	.clk_i(clk),
 	.rd_i(fuq_rd[10]),
 	.we_i(dram0_we & {9{dram_v0}}),
@@ -3638,7 +3643,7 @@ generate begin : gDRAM1q
 	if (Stark_pkg::NDATA_PORTS > 1) begin
 Stark_func_result_queue ufrq11
 (
-	.rst_i(rst),
+	.rst_i(irst),
 	.clk_i(clk),
 	.rd_i(fuq_rd[11]),
 	.we_i(dram1_we & {9{dram_v1}}),
@@ -3673,7 +3678,7 @@ generate begin : gFPU0q
 	if (Stark_pkg::NFPU > 0) begin
 Stark_func_result_queue ufrq12
 (
-	.rst_i(rst),
+	.rst_i(irst),
 	.clk_i(clk),
 	.rd_i(fuq_rd[12]),
 	.we_i(fpu0_we),
@@ -4336,8 +4341,8 @@ Stark_meta_imul uimul0
 	.lane(3'd0),
 	.cptgt(imul0_cptgt),
 	.z(imul0_predz),
-	.o(imul0_resA),
-	.we_o(imul0_weA),
+	.o(imul0_res),
+	.we_o(imul0_we),
 	.mul_done()
 );
 
@@ -4354,8 +4359,8 @@ Stark_meta_idiv uidiv0
 	.div(idiv0_div),
 	.cptgt(idiv0_cptgt),
 	.z(idiv0_predz),
-	.o(idiv0_resA),
-	.we_o(idiv0_weA),
+	.o(idiv0_res),
+	.we_o(idiv0_we),
 	.div_done(idiv0_done),
 	.div_dbz(idiv0_dbz),
 	.exc(div0_exc)
@@ -4468,7 +4473,7 @@ if (Stark_pkg::NFPU > 0) begin
 			.idle(fpu0_idle),
 			.rm(3'd0),
 			.o({fpu0_resH,fpu0_resA}),
-			.we_o(fpu0_weA),
+			.we_o(fpu0_we),
 			.t({sau0_argD,fpu0_argD}),
 			.z(fpu0_predz),
 			.cptgt(fpu0_cptgt),
@@ -4490,6 +4495,7 @@ if (Stark_pkg::NFPU > 0) begin
 			.cptgt(fpu0_cptgt),
 			.o(fpu0_resA),
 			.otag(),
+			.we_o(fpu0_we),
 			.done(fpu0_done),
 			.exc(fpu0_exc)
 		);
@@ -4508,6 +4514,7 @@ if (Stark_pkg::NFPU > 1) begin
     .z(1'b0),
     .cptgt(fpu1_cptgt),
     .o(fpu1_resA),
+		.we_o(fpu1_we),
     .otag(),
     .done(fpu1_done),
     .exc(fpu1_exc)
@@ -5280,7 +5287,7 @@ generate begin : gFpuStat
 				(
 					.rst(irst),
 					.clk(clk),
-					.available(fpu0_available),
+					.available(fma0_available),
 					.busy(rs_busy[4]),
 					.stall(fma0_full),
 					.stomp(robentry_stomp),
@@ -5314,50 +5321,6 @@ generate begin : gFpuStat
 					.req_pRn(bRs[12])
 				);
 			end
-			/*
-			Stark_fpu_station ufpustat0
-			(
-				.rst(irst),
-				.clk(clk),
-				// outputs
-				.id(fpu0_id),
-				.argA(fpu0_argA),
-				.argB(fpu0_argB),
-				.argC(fpu0_argC),
-				.argD(fpu0_argD),
-				.argI(fpu0_argI),
-				.Rt(fpu0_RdA),
-				.Rt1(fpu0_RdB),
-				.aRt(fpu0_aRdA),
-				.aRtz(fpu0_aRdzA),
-				.aRt1(fpu0_aRdB),
-				.aRtz1(fpu0_aRdzB),
-				.om(fpu0_om),
-				.argA_tag(fpu0_argA_tag),
-				.argB_tag(fpu0_argB_tag),
-				.argC_tag(),
-				.argD_tag(),
-				.cs(fpu0_cs),
-				.bank(fpu0_bank),
-				.instr(fpu0_instr.ins),
-				.pc(fpu0_pc),
-				.cp(fpu0_cp),
-				.qfext(fpu0_qfext),
-				.cptgt(fpu0_cptgt),
-				.sc_done(fpu0_sc_done),
-				.all_args_valid(fpu0_args_valid),
-				// inputs
-				.available(fpu0_available),
-				.rndx(fpu0_rndx),
-				.rndxv(fpu0_rndxv),
-				.idle(fpu0_idle),
-				.prn(prn),
-				.prnv(prnv),
-				.rfo(rfo),
-				.rfo_tag(rfo_tag),
-				.rob(rob[fpu0_rndx])
-			);
-			*/
 		1:
 				Stark_reservation_station #(
 					.FUNCUNIT(4'd5)
@@ -5366,7 +5329,7 @@ generate begin : gFpuStat
 				(
 					.rst(irst),
 					.clk(clk),
-					.available(fpu0_available),
+					.available(fma1_available),
 					.busy(rs_busy[5]),
 					.stall(fma1_full),
 					.stomp(robentry_stomp),
@@ -5379,51 +5342,6 @@ generate begin : gFpuStat
 					.rfo_tag(rfo_tag),
 					.req_pRn(bRs[5])
 				);
-				/*
-				Stark_fpu_station ufpustat1
-				(
-					.rst(irst),
-					.clk(clk),
-					// outputs
-					.id(fpu1_id),
-					.argA(fpu1_argA),
-					.argB(fpu1_argB),
-					.argC(fpu1_argC),
-					.argD(fpu1_argD),
-					.argM(fpu1_argM),
-					.argI(fpu1_argI),
-					.Rt(fpu1_RdA),
-					.Rt1(fpu1_RdB),
-					.aRt(fpu1_aRdA),
-					.aRtz(fpu1_aRdzA),
-					.aRt1(fpu1_aRdB),
-					.aRtz1(fpu1_aRdzB),
-					.om(fpu1_om),
-					.argA_tag(fpu1_argA_ctag),
-					.argB_tag(fpu1_argB_ctag),
-					.argC_tag(),
-					.argD_tag(),
-					.cs(fpu1_cs),
-					.bank(fpu1_bank),
-					.instr(fpu1_instr.ins),
-					.pc(fpu1_pc),
-					.cp(fpu1_cp),
-					.qfext(fpu1_qfext),
-					.cptgt(fpu1_cptgt),
-					.sc_done(fpu1_sc_done),
-					.all_args_valid(fpu1_args_valid),
-					// inputs
-					.available(fpu1_available),
-					.rndx(fpu1_rndx),
-					.rndxv(fpu1_rndxv),
-					.idle(fpu1_idle),
-					.prn(prn),
-					.prnv(prnv),
-					.rfo(rfo),
-					.rfo_tag(rfo_tag),
-					.rob(rob[fpu1_rndx])
-				);
-				*/
 		endcase
 	end
 end
@@ -5554,6 +5472,37 @@ always_comb
 	agen0_done = agen0_rse.v ? tlb0_v | (|pg_fault && pg_faultq==2'd1) : TRUE;
 always_comb
 	agen1_done = agen1_rse.v ? tlb1_v | (|pg_fault && pg_faultq==2'd2) : TRUE;
+
+// Validation of the STORE source operand.
+
+wire rfo_store_argC_valid;
+
+Stark_validate_operand uvLSsrcC
+(
+	.prn(prn),
+	.prnv(prnv),
+	.rfo(rfo),
+	.rfo_tag(rfo_tag),
+	.val0(rfo_store_argC),
+	.val1(),
+	.val2(),
+	.val0_tag(rfo_store_argC_tag),
+	.val1_tag(),
+	.val2_tag(),
+	.rfi_val(rfi_val),
+	.rfi_tag(rfi_tag),
+	.rfi_pRd(rfi_pRd),
+	.pRn0(store_argC_pReg),
+	.pRn1(9'd0),
+	.pRn2(9'd0),
+	.valid0_i(lsq[lsq_head.row][lsq_head.col].datav),
+	.valid1_i(1'b1),
+	.valid2_i(1'b1),
+	.valid0_o(rfo_store_argC_valid),
+	.valid1_o(),
+	.valid2_o()
+);
+
 			
 // ----------------------------------------------------------------------------
 // fet/mux/dec/ren/que
@@ -5582,15 +5531,15 @@ else begin
 	// just for debugging in SIM. All values come from the register file.
 `ifdef IS_SIM
 	if (sau0_available && sau0_issue) begin
-		rob[sau0_rndx].argA <= sau0_rse.argA;
-		rob[sau0_rndx].argB <= sau0_rse.argB;
-		rob[sau0_rndx].argD <= sau0_rse.argD;
+		rob[sau0_rse.rndx].argA <= sau0_rse.argA;
+		rob[sau0_rse.rndx].argB <= sau0_rse.argB;
+		rob[sau0_rse.rndx].argD <= sau0_rse.argD;
 	end
 	if (Stark_pkg::NSAU > 1) begin
 		if (sau1_available && sau1_rndxv && sau1_idle) begin
-			rob[sau1_rndx].argA <= rfo_sau1_argA;
-			rob[sau1_rndx].argB <= rfo_sau1_argB;
-			rob[sau1_rndx].argD <= rfo_sau1_argD;
+			rob[sau1_rse.rndx].argA <= sau1_rse.argA;
+			rob[sau1_rse.rndx].argB <= sau1_rse.argB;
+			rob[sau1_rse.rndx].argD <= sau1_rse.argD;
 		end
 	end
 	if (Stark_pkg::NFPU > 0) begin
@@ -5936,112 +5885,38 @@ else begin
 			rob[fcu_rndx].all_args_valid <= VAL;
 	end
 
+	// Issue register read request for store operand. The register value will
+	// appear on the prn bus and be picked up by the register validation module.
 	if (lsq[lsq_head.row][lsq_head.col].v==VAL) begin
 		store_argC_aReg <= lsq[lsq_head.row][lsq_head.col].aRc;
 		store_argC_pReg <= lsq[lsq_head.row][lsq_head.col].pRc;
 		store_argC_cndx <= lsq[lsq_head.row][lsq_head.col].cndx;
 		store_argC_id <= lsq_head;
 		store_argC_id1 <= store_argC_id;
+		bRs[10][0] <= 9'd0;
+		bRs[10][1] <= 9'd0;
+		bRs[10][3] <= 9'd0;
+		if (lsq[lsq_head.row][lsq_head.col].store)
+			bRs[10][2] <= lsq[lsq_head.row][lsq_head.col].aRc;
+		else
+			bRs[10][2] <= 9'd0;
 	end
 
 	// It takes a clock cycle for the register to be read once it is known to be
 	// valid. A flag, load_lsq_argc, is set to delay by a clock. This flag pulses
 	// for only a single clock cycle.
 	if (lsq[store_argC_id1.row][store_argC_id1.col].v==VAL && lsq[store_argC_id1.row][store_argC_id1.col].store && lsq[store_argC_id1.row][store_argC_id1.col].datav==INV) begin
-		if (prnv[23]|rob[lsq[store_argC_id1.row][store_argC_id1.col].rndx].argC_v)//|store_argC_v)
+		if (rfo_store_argC_valid|rob[lsq[store_argC_id1.row][store_argC_id1.col].rndx].argC_v)//|store_argC_v)
 			load_lsq_argc <= TRUE;
 	end
 	if (lsq[store_argC_id1.row][store_argC_id1.col].v==VAL && lsq[store_argC_id1.row][store_argC_id1.col].store && lsq[store_argC_id1.row][store_argC_id1.col].datav==INV) begin
 	if (load_lsq_argc) begin//prnv[23]) begin
-		$display("Q+ CPU: LSQ Rc=%h from r%d/%d", rfo_store_argC, store_argC_aReg, store_argC_pReg);
-		lsq[store_argC_id1.row][store_argC_id1.col].res <= prnv[23] ? rfo_store_argC : rob[lsq[store_argC_id1.row][store_argC_id1.col].rndx].argC;
-		lsq[store_argC_id1.row][store_argC_id1.col].ctag <= rfo_store_argC_ctag;
-		lsq[store_argC_id1.row][store_argC_id1.col].datav <= VAL;
+		$display("StarkCPU: LSQ Rc=%h from r%d/%d", rfo_store_argC, store_argC_aReg, store_argC_pReg);
+		lsq[store_argC_id1.row][store_argC_id1.col].res <= rfo_store_argC;//prnv[23] ? rfo_store_argC : rob[lsq[store_argC_id1.row][store_argC_id1.col].rndx].argC;
+		lsq[store_argC_id1.row][store_argC_id1.col].ctag <= rfo_store_argC_tag;
+		lsq[store_argC_id1.row][store_argC_id1.col].datav <= rfo_store_argC_valid;
 	end
 	end
-
-/*
-	// Operand source muxes
-	if (sau0_available) begin
-		case(sau0_argA_src)
-		OP_SRC_REG:	sau0_argA <= rfo_sau0_argA;
-		OP_SRC_ALU0: sau0_argA <= sau0_resA;
-		OP_SRC_ALU1: sau0_argA <= sau1_resA;
-		OP_SRC_FPU0: sau0_argA <= fpu0_resA;
-		OP_SRC_FCU:	sau0_argA <= fcu_res;
-		OP_SRC_LOAD:	sau0_argA <= load_res;
-		OP_SRC_IMM:	sau0_argA <= rob[sau0_sndx].imma;
-		default:	sau0_argA <= {2{32'hDEADBEEF}};
-		endcase
-		case(sau0_argB_src)
-		OP_SRC_REG:	sau0_argB <= rfo_sau0_argB;
-		OP_SRC_ALU0: sau0_argB <= sau0_resA;
-		OP_SRC_ALU1: sau0_argB <= sau1_resA;
-		OP_SRC_FPU0: sau0_argB <= fpu0_resA;
-		OP_SRC_FCU:	sau0_argB <= fcu_res;
-		OP_SRC_LOAD:	sau0_argB <= load_res;
-		OP_SRC_IMM:	sau0_argB <= rob[sau0_sndx].immb;
-		default:	sau0_arga <= {2{32'hDEADBEEF}};
-		endcase
-		case(sau0_argC_src)
-		OP_SRC_REG:	sau0_argC <= rfo_sau0_argC;
-		OP_SRC_ALU0: sau0_argC <= sau0_resA;
-		OP_SRC_ALU1: sau0_argC <= sau1_resA;
-		OP_SRC_FPU0: sau0_argC <= fpu0_resA;
-		OP_SRC_FCU:	sau0_argC <= fcu_res;
-		OP_SRC_LOAD:	sau0_argC <= load_res;
-		OP_SRC_IMM:	sau0_argC <= rob[sau0_sndx].immc;
-		default:	sau0_argC <= {2{32'hDEADBEEF}};
-		endcase
-		sau0_argI	<= rob[sau0_sndx].decbus.immb;
-		sau0_ld <= 1'b1;
-		sau0_instr <= rob[sau0_sndx].op;
-		sau0_div <= rob[sau0_sndx].decbus.div;
-		sau0_pc <= rob[sau0_sndx].pc;
-    rob[sau0_sndx].out <= VAL;
-    rob[sau0_sndx].owner <= StarkPkg::ALU0;
-  end
-
-	if (sau1_available) begin
-		case(sau1_argA_src)
-		OP_SRC_REG:	sau1_argA <= rfo_sau1_argA;
-		OP_SRC_sau1: sau1_argA <= sau1_resA;
-		OP_SRC_ALU1: sau1_argA <= sau1_resA;
-		OP_SRC_FPU0: sau1_argA <= fpu0_resA;
-		OP_SRC_FCU:	sau1_argA <= fcu_res;
-		OP_SRC_LOAD:	sau1_argA <= load_res;
-		OP_SRC_IMM:	sau1_argA <= rob[sau1_sndx].imma;
-		default:	sau1_argA <= {2{32'hDEADBEEF}};
-		endcase
-		case(sau1_argB_src)
-		OP_SRC_REG:	sau1_argB <= rfo_sau1_argB;
-		OP_SRC_sau1: sau1_argB <= sau1_resA;
-		OP_SRC_ALU1: sau1_argB <= sau1_resA;
-		OP_SRC_FPU0: sau1_argB <= fpu0_resA;
-		OP_SRC_FCU:	sau1_argB <= fcu_res;
-		OP_SRC_LOAD:	sau1_argB <= load_res;
-		OP_SRC_IMM:	sau1_argB <= rob[sau1_sndx].immb;
-		default:	sau1_arga <= {2{32'hDEADBEEF}};
-		endcase
-		case(sau1_argC_src)
-		OP_SRC_REG:	sau1_argC <= rfo_sau1_argC;
-		OP_SRC_sau1: sau1_argC <= sau1_resA;
-		OP_SRC_ALU1: sau1_argC <= sau1_resA;
-		OP_SRC_FPU0: sau1_argC <= fpu0_resA;
-		OP_SRC_FCU:	sau1_argC <= fcu_res;
-		OP_SRC_LOAD:	sau1_argC <= load_res;
-		OP_SRC_IMM:	sau1_argC <= rob[sau1_sndx].immc;
-		default:	sau1_argC <= {2{32'hDEADBEEF}};
-		endcase
-		sau1_argI	<= rob[sau1_sndx].decbus.immb;
-		sau1_ld <= 1'b1;
-		sau1_instr <= rob[sau1_sndx].op;
-		sau1_div <= rob[sau1_sndx].decbus.div;
-		sau1_pc <= rob[sau1_sndx].pc;
-    rob[sau1_sndx].out <= VAL;
-    rob[sau1_sndx].owner <= StarkPkg::sau1;
-  end
-*/
 
 //
 // DATAINCOMING
@@ -7055,7 +6930,7 @@ else begin
 		end
 		for (n3 = 0; n3 < Stark_pkg::ROB_ENTRIES; n3 = n3 + 1) begin
 			if (fcu_skip_list[n3]) begin
-				pgh[n3>>2] <= {$bits(irq_info_packet_t){1'b0}};
+				pgh[n3>>2].irq <= {$bits(irq_info_packet_t){1'b0}};
 			end
 		end
 	end

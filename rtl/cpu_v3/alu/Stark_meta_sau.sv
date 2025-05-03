@@ -80,6 +80,7 @@ always_comb ir = rse_i.ins;
 always_comb a = rse_i.argA;
 always_comb b = rse_i.argB;
 always_comb bi = rse_i.argB|rse_i.argI;
+always_comb c = rse_i.argC;
 always_comb t = rse_i.argD;
 always_comb i = rse_i.argI;
 always_comb pc = rse_i.pc;

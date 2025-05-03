@@ -77,8 +77,8 @@ input cpu_types_pkg::pregno_t [RPORTS-1:0] ra;
 output cpu_types_pkg::value_t [RPORTS-1:0] o;
 output reg [RPORTS-1:0] to;
 
-cpu_types_pkg::value_t [RPORTS-1:0] o0 [0:5];
-reg [RPORTS-1:0] to0 [0:5];
+cpu_types_pkg::value_t [RPORTS-1:0] o0 [0:3];
+reg [RPORTS-1:0] to0 [0:3];
 
 reg [3:0] wr;
 reg [WID/8-1:0] we [0:3];
@@ -134,7 +134,7 @@ generate begin : gRF
 		  .ena(wr[0]),
 		  .wea(we[0]),
 		  .addra(wa[0]),
-		  .dina({ti[0],i[0]}),
+		  .dina({7'h00,ti[0],i[0]}),
 		  .clkb(~clk),
 		  .enb(1'b1),
 		  .addrb(ra[g]),
@@ -145,7 +145,7 @@ generate begin : gRF
 		  .ena(wr[1]),
 		  .wea(we[1]),
 		  .addra(wa[1]),
-		  .dina({ti[1],i[1]}),
+		  .dina({7'h00,ti[1],i[1]}),
 		  .clkb(~clk),
 		  .enb(1'b1),
 		  .addrb(ra[g]),
@@ -156,7 +156,7 @@ generate begin : gRF
 		  .ena(wr[2]),
 		  .wea(we[2]),
 		  .addra(wa[2]),
-		  .dina({ti[2],i[2]}),
+		  .dina({7'h00,ti[2],i[2]}),
 		  .clkb(~clk),
 		  .enb(1'b1),
 		  .addrb(ra[g]),
@@ -167,7 +167,7 @@ generate begin : gRF
 		  .ena(wr[3]),
 		  .wea(we[3]),
 		  .addra(wa[3]),
-		  .dina({ti[3],i[3]}),
+		  .dina({7'h00,ti[3],i[3]}),
 		  .clkb(~clk),
 		  .enb(1'b1),
 		  .addrb(ra[g]),

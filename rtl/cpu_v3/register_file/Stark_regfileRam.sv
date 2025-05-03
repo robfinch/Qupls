@@ -82,7 +82,7 @@ else begin
       .ADDR_WIDTH_A($clog2(DEP)),               // DECIMAL
       .ADDR_WIDTH_B($clog2(DEP)),               // DECIMAL
       .AUTO_SLEEP_TIME(0),            // DECIMAL
-      .BYTE_WRITE_WIDTH_A(WID/8),       // DECIMAL
+      .BYTE_WRITE_WIDTH_A(8),       	// DECIMAL
       .CASCADE_HEIGHT(0),             // DECIMAL
       .CLOCKING_MODE("independent_clock"), // String
       .ECC_MODE("no_ecc"),            // String

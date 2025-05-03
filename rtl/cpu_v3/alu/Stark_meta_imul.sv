@@ -203,6 +203,8 @@ always_ff @(posedge clk)
 	rse2 <= rse1;
 always_ff @(posedge clk)
 	rse3 <= rse2;
+always_comb
+	rse_o = rse3;
 
 always_comb
 	we = 9'h1FF;

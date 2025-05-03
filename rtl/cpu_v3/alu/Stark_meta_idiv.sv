@@ -281,7 +281,7 @@ always_comb
 		default:	div_done1 = &div_done128;
 		endcase
 	else
-		div_done = &div_done64;
+		div_done1 = &div_done64;
 
 always_comb
 	if (Stark_pkg::SUPPORT_PREC)
@@ -306,6 +306,8 @@ generate begin : gExc
         exc[xx*8+7:xx*8] = exc1[xx*8+7:xx*8];
 end
 endgenerate
+
+assign div_dbz = |exc;
 
 // div_done pulses for only a single cycle.
 assign rse_o = div_done1 ? rse_i : {$bits(Stark_pkg::reservation_station_entry_t){1'b0}};

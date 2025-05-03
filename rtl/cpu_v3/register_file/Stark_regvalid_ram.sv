@@ -48,10 +48,10 @@ input clk;
 input ena;
 input wea;
 input checkpt_ndx_t addra;
-input [PREGS-1:0] dina;
+input [Stark_pkg::PREGS-1:0] dina;
 input enb;
 input checkpt_ndx_t addrb;
-output [PREGS-1:0] doutb;
+output [Stark_pkg::PREGS-1:0] doutb;
 
 wire clka = clk;
 wire clkb = clk;

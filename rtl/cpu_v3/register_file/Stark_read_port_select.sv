@@ -64,7 +64,7 @@ input rst;
 input clk;
 input aregno_t [NPORTI-1:0] aReg_i;
 output aregno_t [NPORTO-1:0] aReg_o;
-output reg [NPORTO-1:0] regAck_o;
+output reg [NPORTI-1:0] regAck_o;
 
 integer j,k,h,x;
 reg [5:0] m;
@@ -82,7 +82,7 @@ end
 
 always_ff @(posedge clk)
 if (rst) begin
-	for (j = 0; j < NPORTO; j = j + 1)
+	for (j = 0; j < NPORTI; j = j + 1)
 		regAck_o[j] = 1'b0;
 end
 else begin

@@ -40,7 +40,7 @@ import const_pkg::*;
 import Stark_pkg::*;
 
 module Stark_meta_fpu(rst, clk, clk3x, idle, rse_i, rse_o, rm,
-	z, cptgt, o, otag, done, exc);
+	z, cptgt, o, otag, we_o, done, exc);
 parameter WID=Stark_pkg::SUPPORT_QUAD_PRECISION|Stark_pkg::SUPPORT_CAPABILITIES ? 128 : 64;
 input rst;
 input clk;
@@ -53,9 +53,11 @@ input z;
 input [WID-1:0] cptgt;
 output reg [WID-1:0] o;
 output reg otag;
+output [WID/8:0] we_o;
 output reg done;
 output Stark_pkg::cause_code_t exc;
 
+Stark_pkg::reservation_station_entry_t rse1,rse2;
 Stark_pkg::operating_mode_t om;
 reg [1:0] prc;
 Stark_pkg::instruction_t ir;
@@ -64,6 +66,8 @@ reg [WID-1:0] b;
 reg [WID-1:0] c;
 reg [WID-1:0] t;
 reg [WID-1:0] i;
+reg [1:0] stomp_con;	// stomp conveyor
+reg [WID/8:0] we,we1,we2;
 always_comb om = rse_i.om;
 always_comb ir = rse_i.ins;
 always_comb a = rse_i.argA;
@@ -252,6 +256,34 @@ generate begin : gCptgt
     end
 end
 endgenerate
+
+delay2 #(.WID(WID/8+1)) udly6 (.clk(clk), .ce(1'b1), .i(we), .o(we2));
+
+always_ff @(posedge clk)
+	rse1 <= rse_i;
+always_ff @(posedge clk)
+	rse2 <= rse1;
+always_comb
+	rse_o = rse2;
+
+always_comb
+	we = 9'h1FF;
+
+always_ff @(posedge clk)
+begin
+	if (~|aRd_i || stomp[rse_i.rndx])
+		stomp_con[0] <= 1'b1;
+	else
+		stomp_con[0] <= 1'b0;
+	if (stomp[rse1.rndx])
+		stomp_con[1] <= 1'b1;
+	else
+		stomp_con[1] <= stomp_con[0];
+end
+
+always_comb
+	we_o = stomp_con[1] ? 9'h000 : we2;
+
 
 always_comb
 if (Stark_pkg::SUPPORT_PREC)

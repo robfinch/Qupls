@@ -54,7 +54,7 @@ input advance_pipeline;
 input advance_pipeline_seg2;
 input micro_machine_active;
 input found_destination;	// true if destination was found in ROB
-input destination_rndx;
+input rob_ndx_t destination_rndx;
 input branchmiss;
 input Stark_pkg::branch_state_t branch_state;
 input do_bsr;
