@@ -32,7 +32,7 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 820 LUTs / 520 FFs / 4 BRAMS
+// 1150 LUTs / 580 FFs / 4 BRAMS / 6 DSP
 // ============================================================================
 
 import const_pkg::*;
@@ -64,10 +64,12 @@ reg [4:0] Rs1;
 reg [4:0] Rs2;
 reg [31:0] a,a1,b,b1,imm;
 reg [31:0] res,res1;
+reg [7:0] crres;
 reg [15:0] brres;
 reg [31:0] ldres;
+reg [31:0] prod,produ;
 reg [7:0] cra,cra1;
-reg is_imm;
+reg is_imm,is_cli;
 reg wr_cr,wr_br;
 reg wr_rf,wr_rflo, wr_rfhi;
 wire rsta,rstb;
@@ -252,6 +254,7 @@ begin
 	dc_pc <= if_pc;
 	rf_ir <= ir;
 	is_imm <= 1'b0;
+	is_cli <= 1'b0;
 	Rd <= 5'd0;
 	case(ir.any.opcode)
 	Stark_pkg::OP_CMP:
@@ -263,6 +266,12 @@ begin
 				imm <= {{18{ir[30]}},ir[30:17]};
 				is_imm <= 1'b1;
 			end
+			else
+				case(ir.cmpcl.lx)
+				2'd0:	;		// Rs2
+				2'd1:	begin mar <= {pc[15:6],ir.cmpcl.cl,2'b00}; is_cli <= 1'b1; end
+				default:	;
+				endcase
 		end
 	Stark_pkg::OP_LOAD,Stark_pkg::OP_STORE,
 	Stark_pkg::OP_ADD,Stark_pkg::OP_SUBF:
@@ -274,6 +283,12 @@ begin
 				is_imm <= 1'b1;
 				imm <= {{18{ir[30]}},ir[30:17]};
 			end
+			else
+				case(ir.alu.lx)
+				2'd0:	;		// Rs2
+				2'd1:	begin mar <= {pc[15:6],ir.alucli.cl,2'b00}; is_cli <= 1'b1; end
+				default:	;
+				endcase
 		end
 	Stark_pkg::OP_AND:
 		begin
@@ -284,6 +299,12 @@ begin
 				is_imm <= 1'b1;
 				imm <= {{18{1'b1}},ir[30:17]};
 			end
+			else
+				case(ir.alu.lx)
+				2'd0:	;		// Rs2
+				2'd1:	begin mar <= {pc[15:6],ir.alucli.cl,2'b00}; is_cli <= 1'b1; end
+				default:	;
+				endcase
 		end
 	Stark_pkg::OP_OR,
 	Stark_pkg::OP_XOR:
@@ -295,6 +316,12 @@ begin
 				is_imm <= 1'b1;
 				imm <= {{18{1'b0}},ir[30:17]};
 			end
+			else
+				case(ir.alu.lx)
+				2'd0:	;		// Rs2
+				2'd1:	begin mar <= {pc[15:6],ir.alucli.cl,2'b00}; is_cli <= 1'b1; end
+				default:	;
+				endcase
 		end
 	Stark_pkg::OP_SHIFT:
 	  begin
@@ -306,6 +333,23 @@ begin
 	    	imm <= {26'd0,ir.shi.amt};
 	    end
 	  end
+	Stark_pkg::OP_MUL,
+	Stark_pkg::OP_DIV:
+		begin
+			Rd <= ir.sh.Rd;
+			Rs1 <= ir.sh.Rs1;
+			Rs2 <= ir.sh.Rs2;
+	    if (ir[31]) begin
+	    	is_imm <= 1'b1;
+				imm <= {{18{1'b1}},ir[30:17]};
+	    end
+			else
+				case(ir.alu.lx)
+				2'd0:	;		// Rs2
+				2'd1:	begin mar <= {pc[15:6],ir.alucli.cl,2'b00}; is_cli <= 1'b1; end
+				default:	;
+				endcase
+		end
 	Stark_pkg::OP_B0,Stark_pkg::OP_B1:
 		begin
 			/*
@@ -354,7 +398,9 @@ begin
 	if (Rs2==5'd0)
 		b1 = 32'd0;
 	cra1 = cr[CRs1][crbit];
-	if (is_imm)
+	if (is_cli)
+		b1 = douta;
+	else if (is_imm)
 		b1 = imm;
 	mar = a1 + imm;
 	dina <= b1;
@@ -399,6 +445,8 @@ begin
 	a <= a1;
 	b <= b1;
 	cra <= cra1;
+	produ <= a1 * b1;
+	prod <= $signed(a1) * $signed(b1);
 	case(mf_ir.any.opcode)
 	Stark_pkg::OP_BCC0,Stark_pkg::OP_BCC1:
 		begin
@@ -442,46 +490,66 @@ begin
 	wr_rf <= 1'b0;
 	wr_rflo <= 1'b0;
 	wr_rfhi <= 1'b0;
+	res = 32'd0;
+	crres <= 8'd0;
 	case(ex_ir.any.opcode)
 	Stark_pkg::OP_CMP:
 		begin
-			res[0] <= a == b;
-			res[1] <= ~(|a & |b);
-			res[2] <= ~(|a | |b);
+			crres[0] <= a == b;
+			crres[1] <= ~(|a & |b);
+			crres[2] <= ~(|a | |b);
 			if (ir.cmp.op2==2'b01) begin	// CMPA
-				res[3] <= a < b;
-				res[4] <= a <= b;
+				crres[3] <= a < b;
+				crres[4] <= a <= b;
 			end
 			else begin
-				res[3] <= $signed(a) < $signed(b);
-				res[4] <= $signed(a) <= $signed(b);
+				crres[3] <= $signed(a) < $signed(b);
+				crres[4] <= $signed(a) <= $signed(b);
 			end
-			res[31:5] <= 27'd0;
+			crres[7:5] <= 3'd0;
 			wr_cr <= 1'b1;
 		end
 	Stark_pkg::OP_ADD:
 		begin
-			res <= a + b;
+			res = a + b;
+			tCrres(ex_ir,res,CRdx,crres,wr_cr);
 			wr_rf <= 1'b1;
 		end
 	Stark_pkg::OP_SUBF:
 		begin
-			res <= b - a;
+			res = b - a;
+			tCrres(ex_ir,res,CRdx,crres,wr_cr);
 			wr_rf <= 1'b1;
 		end
 	Stark_pkg::OP_AND:
 		begin
-			res <= a & b;
+			res = a & b;
+			tCrres(ex_ir,res,CRdx,crres,wr_cr);
 			wr_rf <= 1'b1;
 		end
 	Stark_pkg::OP_OR:
 		begin
-			res <= a | b;
+			res = a | b;
+			tCrres(ex_ir,res,CRdx,crres,wr_cr);
 			wr_rf <= 1'b1;
 		end
 	Stark_pkg::OP_XOR:
 		begin
-			res <= a ^ b;
+			res = a ^ b;
+			tCrres(ex_ir,res,CRdx,crres,wr_cr);
+			wr_rf <= 1'b1;
+		end
+	Stark_pkg::OP_MUL:
+		begin
+			if (ex_ir[31])
+				res = produ;		// MULA
+			else
+				case(ex_ir.alu.op4)
+				4'd0:	res = produ;	// MULA
+				4'd1:	res = prod;	// MUL
+				default:	res = produ;
+				endcase
+			tCrres(ex_ir,res,CRdx,crres,wr_cr);
 			wr_rf <= 1'b1;
 		end
 	Stark_pkg::OP_SHIFT:
@@ -494,9 +562,9 @@ begin
 					end
 					else
 						case(ex_ir.sh.op3)
-						3'd0:	begin res <= a << b[4:0]; wr_rf <= 1'b1; end
-						3'd1:	begin res <= a >> b[4:0]; wr_rf <= 1'b1; end
-						3'd2: begin res <= {{32{a[31]}},a[31:0]} >> b[4:0]; wr_rf <= 1'b1; end
+						3'd0:	begin res = a << b[4:0]; wr_rf <= 1'b1; end
+						3'd1:	begin res = a >> b[4:0]; wr_rf <= 1'b1; end
+						3'd2: begin res = {{32{a[31]}},a[31:0]} >> b[4:0]; wr_rf <= 1'b1; end
 						default:	;
 						endcase
 				end
@@ -505,15 +573,15 @@ begin
 				end
 			default:	;
 			endcase
+			tCrres(ex_ir,res,CRdx,crres,wr_cr);
 		end
 	Stark_pkg::OP_LOAD:
 		begin
-		  if (marx[15:14]==2'b11) begin
-  			res <= douta;
-			end
-			else begin
-		    res <= ldres[31:0];
-			end
+		  if (marx[15:14]==2'b11)
+  			res = douta;
+			else
+		    res = ldres[31:0];
+			tCrres(ex_ir,res,CRdx,crres,wr_cr);
 			wr_rf <= 1'b1;
 		end
 	endcase
@@ -536,16 +604,38 @@ end
 
 always_ff @(posedge clk)
 	if (wr_cr)
-		cr[CRdx] <= res[7:0];
+		cr[CRdx] <= crres;
 
 always_ff @(posedge clk)
 	if (wr_br)
 		br[BRd] <= brres;
 
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// Support tasks
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
 task tGoto;
 input state_e nst;
 begin
 	state <= nst;
+end
+endtask
+
+task tCrres;
+input instruction_t ex_ir;
+input [31:0] res;
+output [2:0] CRdx;
+output [7:0] crres;
+output wr_cr;
+begin
+	CRdx <= 3'd0;
+	wr_cr <= ex_ir[16];
+	crres[0] <= res==32'd0;
+	crres[1] <= 1'b1;
+	crres[2] <= ~|res;
+	crres[3] <= $signed(res) < $signed(32'd0);
+	crres[4] <= $signed(res) <= $signed(32'd0);
+	crres[7:5] <= 3'd0;
 end
 endtask
 
