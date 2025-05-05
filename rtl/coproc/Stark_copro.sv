@@ -44,8 +44,8 @@ input clk;
 output reg cyc;
 output reg wr;
 output [15:0] adr;
-input [63:0] din;
-output reg [63:0] dout;
+input [31:0] din;
+output reg [31:0] dout;
 input ack;
 
 reg [31:0] regfile [0:31];
@@ -114,7 +114,7 @@ xpm_memory_tdpram #(
   .ECC_MODE("no_ecc"),            // String
   .ECC_TYPE("none"),              // String
   .IGNORE_INIT_SYNTH(0),          // DECIMAL
-  .MEMORY_INIT_FILE("none"),      // String
+  .MEMORY_INIT_FILE("copro.mem"), // String
   .MEMORY_INIT_PARAM("0"),        // String
   .MEMORY_OPTIMIZATION("true"),   // String
   .MEMORY_PRIMITIVE("auto"),      // String
@@ -273,6 +273,7 @@ begin
 				default:	;
 				endcase
 		end
+	Stark_pkg::OP_LDT,Stark_pkg::OP_LDTZ,Stark_pkg::OP_STT,
 	Stark_pkg::OP_LOAD,Stark_pkg::OP_STORE,
 	Stark_pkg::OP_ADD,Stark_pkg::OP_SUBF:
 		begin
@@ -361,7 +362,6 @@ begin
 			if (ir[31]) begin
 				BRd <= ir.bl.BRd;
 				pc <= {ir.bl.disp,ir.bl.d0,2'b00};
-				tGoto(COPRO_IFETCH);
 			end
 			else begin
 				BRd <= ir.blrlr.BRd;
@@ -405,17 +405,17 @@ begin
 	mar = a1 + imm;
 	dina <= b1;
 	case(rf_ir.any.opcode)
+	Stark_pkg::OP_LDT,
+	Stark_pkg::OP_LDTZ,
 	Stark_pkg::OP_LOAD:
 		cyc <= mar[15:14]!=2'b11;
+	Stark_pkg::OP_STT,		
 	Stark_pkg::OP_STORE:
 		begin
 			cyc <= mar[15:14]!=2'b11;
 			wea <= mar[15:14]==2'b11 && mar[13:12]==2'd3;
-			wr <= mar[15:14]!=2'b11 && mar[3];
-	    if (mar[3])
-	      dout[63:32] <= b1;
-	    else
-	      dout[31:0] <= b1;
+			wr <= mar[15:14]!=2'b11;
+      dout <= b1;
     end
   Stark_pkg::OP_BCC0,Stark_pkg::OP_BCC1:
   	begin
@@ -429,15 +429,18 @@ begin
 end
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Memory
+// - If there is an external memory request, waits until it sees an ack
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 COPRO_MEMORY:
 begin
-	tGoto(COPRO_EXECUTE);
+	if (cyc) begin
+		if (ack)
+			tGoto(COPRO_EXECUTE);
+	end
+	else
+		tGoto(COPRO_EXECUTE);
   marx <= mar;
-  if (mar[3])
-    ldres <= din[63:32];
-  else
-    ldres <= din[31: 0];
+  ldres <= din;
 	mf_v <= rf_v;
 	Rdm <= Rdr;
 	CRdm <= CRdr;
@@ -460,7 +463,6 @@ begin
 					mf_v <= 1'b0;
 					*/
 			 		pc <= b1;
-			 		tGoto(COPRO_IFETCH);
 			 	end
 			3'd5:
 				if ( cra) begin
@@ -471,7 +473,6 @@ begin
 					mf_v <= 1'b0;
 					*/
 					pc <= b1;
-			 		tGoto(COPRO_IFETCH);
 				end
 			endcase
 		end
@@ -575,6 +576,7 @@ begin
 			endcase
 			tCrres(ex_ir,res,CRdx,crres,wr_cr);
 		end
+	Stark_pkg::OP_LDT,Stark_pkg::OP_LDTZ,
 	Stark_pkg::OP_LOAD:
 		begin
 		  if (marx[15:14]==2'b11)

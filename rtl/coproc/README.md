@@ -1,10 +1,13 @@
 # Stark_coproc.sv
 ## Overview
-The StarkCPU co-processor is a much smaller sequential implementation for the StarkCPU instruction set. It supports most of the integer instruction set.
+The StarkCPU co-processor is a much smaller 32-bit sequential implementation for the StarkCPU instruction set. It supports most of the integer instruction set.
 * Floating-point is not supported.
-* The divide instruction DIV/DIVA is not supported due to the amount of logic required.
+* The divide instruction DIV/DIVA is not supported.
 * Only 32-bit loads and stores are supported.
 * Load / Store operations must be aligned.
+* There is no loop counter.
+
+The co-processor is about 1% of the size of the OoO core.
 
 The co-processor is intended for debugging purposes. It has its own built-in ROM and scratchpad RAM.
 * 0xC000 to 0xFFFF is the ROM area
@@ -13,16 +16,14 @@ The co-processor is intended for debugging purposes. It has its own built-in ROM
 * 0xBF00 to 0xBFFF is the serial port
 ## Bus Interface
 The co-processor interfaces to external memory/IO as a bus master using a subset of the WISHBONE bus.
-Since the CPU is only 32-bit bus interface with a 64-bit data bus, to perform a 64-bit write the program must write 32-bits to an even address, and the next 32-bits to an odd address.
-Once the odd address is written a bus cycle will be triggered. For reads, reading an even address reads the low order 32-bits. Reading an odd address reads the high-order 32-bits.
 ### WISHBONE datasheet:
 |Description									 | Specification     |
 |------------------------------|-------------------|
 |General Description					 | co-processing CPU |
 |Supported Cycles              | MASTER read/write |
-|Data port Size                | 64 bits           |
-|Data port Granularity         | 64 bits           |
-|Data port Maximum Operand Size| 64 bits           |
+|Data port Size                | 32 bits           |
+|Data port Granularity         | 32 bits           |
+|Data port Maximum Operand Size| 32 bits           |
 |Data transfer ordering        | little endian     |
 |Data transfer sequencing      | any               |
 |Clock Frequency Constraints   | none              |
