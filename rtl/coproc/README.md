@@ -35,5 +35,5 @@ The co-processor interfaces to external memory/IO as a bus master using a subset
 | cyc  | cyc_o         | indicates valid cycle  |
 |  wr  | we_o          | write cycle is active  |
 | adr  | adr_o         | 16-bit address bus     |
-| din  | dat_i         | 64-bit data input      |
-| dout | dat_o         | 64-bit data output     |
+| din  | dat_i         | 32-bit data input      |
+| dout | dat_o         | 32-bit data output     |
