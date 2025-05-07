@@ -226,13 +226,15 @@ begin
 end
 
 always_comb
-	we_o = stomp_con[2] ? 9'h000 : we3;
+	we_o = we3;
 
 generate begin : gCptgt
 	for (mm = 0; mm < WID/8; mm = mm + 1) begin
     always_comb
     begin
-      if (cptgt1[mm])
+    	if (stomp_con[2]||rse3.ins.any.opcode==Stark_pkg::OP_NOP)
+        o[mm*8+7:mm*8] = t1[mm*8+7:mm*8];
+      else if (cptgt1[mm])
         o[mm*8+7:mm*8] = z1 ? 8'h00 : t1[mm*8+7:mm*8];
       else
         o[mm*8+7:mm*8] = o1[mm*8+7:mm*8];

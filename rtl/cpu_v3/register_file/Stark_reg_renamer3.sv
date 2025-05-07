@@ -51,7 +51,7 @@ input clk5x;
 input [4:0] ph4;
 input en;
 input restore;
-input [PREGS-1:0] restore_list;
+input [Stark_pkg::PREGS-1:0] restore_list;
 input cpu_types_pkg::pregno_t [NFTAGS-1:0] tags2free;		// register tags to free
 input [NFTAGS-1:0] freevals;					// bitmnask indicating which tags to free
 input alloc0;					// allocate target register 0
@@ -66,7 +66,7 @@ output reg wv0 = 1'b0;
 output reg wv1 = 1'b0;
 output reg wv2 = 1'b0;
 output reg wv3 = 1'b0;
-output reg [PREGS-1:0] avail = {1'b0,{PREGS-2{1'b1}},1'b0};				// recorded in ROB
+output reg [Stark_pkg::PREGS-1:0] avail = {1'b0,{Stark_pkg::PREGS-2{1'b1}},1'b0};				// recorded in ROB
 output reg stall;			// stall enqueue while waiting for register availability
 
 wire pe_alloc0;
@@ -89,7 +89,7 @@ reg wv0r;
 reg wv1r;
 reg wv2r;
 reg wv3r;
-reg [PREGS-1:0] next_avail;
+reg [Stark_pkg::PREGS-1:0] next_avail;
 pregno_t wo0r;
 pregno_t wo1r;
 pregno_t wo2r;
@@ -168,9 +168,9 @@ end
 
 always_comb
 if (rst) begin
-	next_avail = {1'b0,{PREGS-2{1'b1}},1'b0};
+	next_avail = {1'b0,{Stark_pkg::PREGS-2{1'b1}},1'b0};
 	next_avail[0] = 1'b0;
-	next_avail[PREGS-1] = 1'b0;
+	next_avail[Stark_pkg::PREGS-1] = 1'b0;
 end
 else begin
 	
@@ -199,9 +199,9 @@ else begin
 	if (restore)
 		next_avail = restore_list;
 	next_avail[0] = 1'b0;
-	next_avail[PREGS/4] = 1'b0;
-	next_avail[PREGS/2] = 1'b0;
-	next_avail[PREGS*3/4] = 1'b0;
+	next_avail[Stark_pkg::PREGS/4] = 1'b0;
+	next_avail[Stark_pkg::PREGS/2] = 1'b0;
+	next_avail[Stark_pkg::PREGS*3/4] = 1'b0;
 end
 
 always_ff @(posedge clk) if (rst) alloc0d <= 1'b0; else if(en) alloc0d <= alloc0;

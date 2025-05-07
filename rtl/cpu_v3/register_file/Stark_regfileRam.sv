@@ -37,7 +37,7 @@
 
 module Stark_regfileRam(clka, ena, wea, addra, dina, clkb, enb, addrb, doutb);
 parameter WID=$bits(cpu_types_pkg::value_t)+8;
-parameter DEP=PREGS;
+parameter DEP=Stark_pkg::PREGS;
 localparam RBIT=$clog2(DEP)-1;
 input clka;
 input ena;
@@ -63,7 +63,7 @@ initial begin
 end
 
 generate begin : gRegfileRam
-if (SIM) begin
+if (Stark_pkg::SIM) begin
 
 	for (g = 0; g < WID/8; g = g + 1)
 	always_ff @(posedge clka)

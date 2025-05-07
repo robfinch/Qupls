@@ -46,8 +46,8 @@ import Stark_pkg::*;
 
 module Stark_pipeline_mux(rst_i, clk_i, rstcnt, advance_fet, ihit, en_i,
 	stomp_bno, stomp_mux, nop_o, carry_mod_fet, ssm_flag, hwipc_fet,
-	nmi_i, irqf_fet, irq_in, hirq_i, sr, pt_mux, p_override, po_bno,
-	branchmiss, misspc_fet,
+	nmi_i, irqf_fet, irq_in, hirq_i, sr, pt_mux, pt_dec, p_override, po_bno,
+	branchmiss, misspc_fet, flush_fet, flush_mux,
 	micro_machine_active, mipv_i, mip_i, cline_fet, cline_mux, new_cline_mux,
 	reglist_active, grp_i, grp_o,
 	takb_fet, mc_offs, pc_i, vl,
@@ -80,6 +80,8 @@ input Stark_pkg::status_reg_t sr;
 input reglist_active;
 input branchmiss;
 input cpu_types_pkg::pc_address_ex_t misspc_fet;
+input flush_fet;
+output reg flush_mux;
 input mipv_i;
 input [11:0] mip_i;
 input cpu_types_pkg::pc_address_ex_t mc_adr;
@@ -93,6 +95,7 @@ input [2:0] uop_num_fet;
 output reg [2:0] uop_num_mux;
 input [3:0] takb_fet;
 input [3:0] pt_mux;
+output reg [3:0] pt_dec;
 output reg [3:0] p_override;
 output reg [4:0] po_bno [0:3];
 input cpu_types_pkg::pc_address_t mc_offs;
@@ -678,6 +681,23 @@ else begin
 	if (en)
 		uop_num_mux <= uop_num_fet;
 end
+
+always_ff @(posedge clk)
+if (rst_i)
+	pt_dec <= 4'h0;
+else begin
+	if (en)
+		pt_dec <= pt_mux;
+end
+
+always_ff @(posedge clk)
+if (rst_i)
+	flush_mux <= 1'b0;
+else begin
+	if (en)
+		flush_mux <= flush_fet;
+end
+
 /*
 always_comb mcip0_o <= mcip0;
 always_comb mcip1_o <= |mcip0 ? mcip0 | 12'h001 : 12'h000;

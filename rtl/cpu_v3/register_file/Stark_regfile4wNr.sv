@@ -48,7 +48,7 @@ module Stark_regfile4wNr(rst, clk,
 	ti0, ti1, ti2, ti3,
 	ra, o, to);
 parameter WID = $bits(cpu_types_pkg::value_t)+8;
-parameter DEP = PREGS;
+parameter DEP = Stark_pkg::PREGS;
 parameter RBIT = $clog2(DEP)-1;
 parameter RPORTS = 16;
 input rst;

@@ -174,7 +174,7 @@ input checkpt_ndx_t [NPORT-1:0] rn_cp;
 input checkpt_ndx_t [3:0] rd_cp;
 output cpu_types_pkg::pregno_t [NPORT-1:0] prn;	// physical register name
 output reg [NPORT-1:0] prv;											// physical register valid
-output reg [PREGS-1:0] restore_list;	// bit vector of registers to free on branch miss
+output reg [Stark_pkg::PREGS-1:0] restore_list;	// bit vector of registers to free on branch miss
 output reg restored;
 output pregno_t [3:0] tags2free;
 output reg [3:0] freevals;
@@ -244,7 +244,6 @@ wire [Stark_pkg::PREGS-1:0] cpvram_out;
 wire [Stark_pkg::PREGS-1:0] cpvram_wout;
 
 reg new_chkpt;							// new_chkpt map for current checkpoint
-checkpt_ndx_t cndx;
 reg pe_alloc_chkpt;
 wire pe_alloc_chkpt1;
 reg [Stark_pkg::PREGS-1:0] valid [0:Stark_pkg::NCHECK-1];
@@ -392,7 +391,7 @@ else
 
 always_ff @(posedge clk)
 if (rst)
-	currentRegvalid <= {PREGS{1'b1}};
+	currentRegvalid <= {Stark_pkg::PREGS{1'b1}};
 else begin
 
 	if (restore)
@@ -1133,7 +1132,7 @@ end
 /*
 always_ff @(posedge clk5x)
 if (rst) begin
-	cpram_in.avail = {{PREGS-1{1'b1}},1'b0};
+	cpram_in.avail = {{Stark_pkg::PREGS-1{1'b1}},1'b0};
 	cpram_in.regmap = {AREGS*10{1'b0}};
 end
 else begin
@@ -1419,7 +1418,7 @@ assign cdcmtdv = cd_cmtdv & (cmtdv|cmtdiv);
 
 wire pe_bk, ne_bk;
 edge_det uedbckout1 (.rst(rst), .clk(clk), .ce(1'b1), .i(backout_state==2'd1), .pe(pe_bk), .ne(ne_bk), .ee());
-reg [PREGS-1:0] unavail;
+reg [Stark_pkg::PREGS-1:0] unavail;
 
 // Set the checkpoint RAM input.
 // For checkpoint establishment the current read value is desired.
@@ -1493,7 +1492,7 @@ end
 
 // Diags.
 always_ff @(posedge clk)
-if (SIM) begin
+if (Stark_pkg::SIM) begin
 	if (TRUE||en2) begin
 		if (bo_wr)
 			$display("StarkCPU RAT: backout %d restored to %d", currentMap.regmap[bo_areg], bo_preg);
@@ -1919,7 +1918,7 @@ begin
 	// But not the registers allocated up to the branch miss
 	if (restored) begin	//(restored) begin
 		restore_list = cpram_out.avail;// & ~unavail;
-//		restore_list = {PREGS{1'b0}};
+//		restore_list = {Stark_pkg::PREGS{1'b0}};
 	end
 	else
 		restore_list = {Stark_pkg::PREGS{1'b0}};

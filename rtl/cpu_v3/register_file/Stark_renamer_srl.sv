@@ -37,19 +37,19 @@ import Stark_pkg::*;
 
 module Stark_renamer_srl(rst, clk, en, rot, o);
 parameter N=0;
-localparam SIZE = $clog2(PREGS/4);
-localparam TOPBIT = $clog2(PREGS/4)-1;
+localparam SIZE = $clog2(Stark_pkg::PREGS/4);
+localparam TOPBIT = $clog2(Stark_pkg::PREGS/4)-1;
 input rst;
 input clk;
 input en;
 input rot;
 output reg [9:0] o = 10'd0;
 
-reg [7:0] mem [0:PREGS/4-1];
+reg [7:0] mem [0:Stark_pkg::PREGS/4-1];
 integer nn,mm;
 
 initial begin
-	for (nn = 0; nn < PREGS/4; nn = nn + 1)
+	for (nn = 0; nn < Stark_pkg::PREGS/4; nn = nn + 1)
 		mem[nn] = nn;
 end
 
@@ -59,9 +59,9 @@ if (rst) begin
 end
 else begin
 	if (rot & en) begin
-		for (mm = 1; mm < PREGS/4-1; mm = mm + 1)
+		for (mm = 1; mm < Stark_pkg::PREGS/4-1; mm = mm + 1)
 			mem[mm] <= mem[mm+1];
-		mem[PREGS/4-1] <= mem[1];
+		mem[Stark_pkg::PREGS/4-1] <= mem[1];
 	end
 	if (rot & en) begin
 		o <= {1'b0,N[1:0],7'd0} | mem[1];

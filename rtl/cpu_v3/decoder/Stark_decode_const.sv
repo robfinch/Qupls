@@ -43,9 +43,9 @@ module Stark_decode_const(cline, ins, imma, immb, immc, has_imma, has_immb, has_
 	pfxa, pfxb, pfxc, pos, isz);
 input [511:0] cline;
 input Stark_pkg::instruction_t ins;
-output reg [31:0] imma;
-output reg [31:0] immb;
-output reg [31:0] immc;
+output reg [63:0] imma;
+output reg [63:0] immb;
+output reg [63:0] immc;
 output reg has_imma;
 output reg has_immb;
 output reg has_immc;
@@ -68,8 +68,8 @@ fpCvt32To64 ucvt32x64a(finsA[39:8], imm32x64a);
 fpCvt32To64 ucvt32x64b(finsB[39:8], imm32x64b);
 fpCvt32To64 ucvt32x64C(finsC[39:8], imm32x64c);
 
-wire [31:0] cnst1, cnst2;
-reg [31:0] cnst1a;
+wire [63:0] cnst1, cnst2;
+reg [63:0] cnst1a;
 
 always_comb pos = Stark_pkg::fnConstPos(ins);
 always_comb isz = Stark_pkg::fnConstSize(ins);

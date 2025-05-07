@@ -201,7 +201,9 @@ else
 generate begin : gCptgt
 	for (mm = 0; mm < WID/8; mm = mm + 1) begin
     always_comb
-      if (cptgt[mm])
+    	if (stomp_con[7]||rse_o.ins.any.opcode==Stark_pkg::OP_NOP)
+        o[mm*8+7:mm*8] = t[mm*8+7:mm*8];
+      else if (cptgt[mm])
         o[mm*8+7:mm*8] = z ? 8'h00 : t[mm*8+7:mm*8];
       else
         o[mm*8+7:mm*8] = o1[mm*8+7:mm*8];
@@ -248,6 +250,6 @@ begin
 end		
 
 always_comb
-	we_o = stomp_con[7] ? 9'h000 : 9'h1FF;
+	we_o = {9{rse_o.aRd!=8'h00}};
 
 endmodule

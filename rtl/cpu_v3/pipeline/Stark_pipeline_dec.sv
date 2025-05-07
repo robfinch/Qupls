@@ -40,7 +40,7 @@ import cpu_types_pkg::*;
 import Stark_pkg::*;
 
 module Stark_pipeline_dec(rst_i, rst, clk, en, clk5x, ph4, new_cline_mux, cline,
-	restored, restore_list, unavail_list, sr, uop_num,
+	restored, restore_list, unavail_list, sr, uop_num, flush_mux, flush_dec,
 	tags2free, freevals, bo_wr, bo_preg,
 	ins0_d_inv, ins1_d_inv, ins2_d_inv, ins3_d_inv,
 	stomp_dec, stomp_mux, stomp_bno, pg_mux,
@@ -53,6 +53,8 @@ input rst_i;
 input rst;
 input clk;
 input en;
+input flush_mux;
+output reg flush_dec;
 input clk5x;
 input [4:0] ph4;
 input new_cline_mux;
@@ -88,7 +90,7 @@ output ren_stallq;
 output ren_rst_busy;
 input micro_machine_active_mux;
 output reg micro_machine_active_dec;
-output [PREGS-1:0] avail_reg;
+output [Stark_pkg::PREGS-1:0] avail_reg;
 
 integer n1,n2,n3,n4,n5;
 Stark_pkg::pipeline_group_reg_t pg_mux_r;
@@ -258,15 +260,15 @@ else begin
 		uop_mark[28] <= 2'b00;
 		if (rd_mux) begin
 			for (n4 = 0; n4 < 32; n4 = n4 + 1) begin
-				if (n4 < uop_count[0]) begin
+				if (n4 < {2'd0,uop_count[0]}) begin
 					uop_mark[n4] <= 2'd0;
 					uop_buf[n4] <= uop[0][n4];
 				end
-				else if (n4 < uop_count[0] + uop_count[1]) begin
+				else if (n4 < {2'd0,uop_count[0]} + uop_count[1]) begin
 					uop_mark[n4] <= 2'd1;
 					uop_buf[n4] <= uop[1][n4-uop_count[0]];
 				end
-				else if (n4 < uop_count[0] + uop_count[1] + uop_count[2]) begin
+				else if (n4 < {2'd0,uop_count[0]} + uop_count[1] + uop_count[2]) begin
 					uop_mark[n4] <= 2'd2;
 					uop_buf[n4] <= uop[2][n4-uop_count[0]-uop_count[1]];
 				end
@@ -323,7 +325,7 @@ begin
 	nopi.pc.pc = RSTPC;
 	nopi.mcip = 12'h1A0;
 	nopi.uop.count = 3'd1;
-	nopi.uop.ins = {26'd0,OP_NOP};
+	nopi.uop.ins = {26'd0,Stark_pkg::OP_NOP};
 	nopi.v = 1'b1;
 	nopi.decbus.Rdz = 1'b1;
 	nopi.decbus.nop = 1'b1;
@@ -954,6 +956,14 @@ begin
 	if (inso[3]_o.ins.any.opcode==OP_Bcc)
 		$finish;
 */
+end
+
+always_ff @(posedge clk)
+if (rst)
+	flush_dec <= 1'b0;
+else begin
+	if (en)
+		flush_dec <= flush_mux;
 end
 
 endmodule

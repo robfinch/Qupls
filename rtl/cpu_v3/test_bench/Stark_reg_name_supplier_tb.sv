@@ -45,7 +45,7 @@ integer n1,count=0;
 reg rst;
 reg clk;
 reg restore;
-reg [PREGS-1:0] avail, avail_r;
+reg [Stark_pkg::PREGS-1:0] avail, avail_r;
 reg [NRENAME-1:0] alloc, alloc_r;
 reg [31:0] a;
 pregno_t [NRENAME-1:0] o;
@@ -91,7 +91,7 @@ begin
 	end
 	if (count > 10) begin
 		for (n1 = 0; n1 < 4; n1 = n1 + 1)
-			tags2free[n1] <= $urandom() % PREGS;
+			tags2free[n1] <= $urandom() % Stark_pkg::PREGS;
 		freevals <= 4'hF;
 	end
 	restore = (count % 20) == 0;

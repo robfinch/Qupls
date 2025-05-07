@@ -138,6 +138,8 @@ begin
 			exto[jj] = jj > ir[28:23] ? t1[ir[28:23]] : t1[jj];
 		else if (ir[31:25]==7'd7)	// extz
 			exto[jj] = jj > b[13:8] ? t1[b[13:8]] : t1[jj];
+		else
+			exto[jj] = zero;
 end
 
 	

@@ -41,13 +41,14 @@
 import const_pkg::*;
 import Stark_pkg::*;
 
-module Stark_meta_idiv(rst, clk, clk2x, rse_i, rse_o, ld, lane, prc, ir, div,
+module Stark_meta_idiv(rst, clk, clk2x, stomp, rse_i, rse_o, ld, lane, prc, ir, div,
 	cptgt, z, qres, o, we_o, div_done, div_dbz, exc);
 parameter ALU0 = 1'b0;
 parameter WID=$bits(cpu_types_pkg::value_t); 
 input rst;
 input clk;
 input clk2x;
+input Stark_pkg::rob_bitmask_t stomp;
 input Stark_pkg::reservation_station_entry_t rse_i;
 output Stark_pkg::reservation_station_entry_t rse_o;
 input ld;
@@ -262,7 +263,9 @@ generate begin : gCptgt
 	for (mm = 0; mm < WID/8; mm = mm + 1) begin
     always_comb
     begin
-      if (cptgt1[mm])
+    	if (rse_o.ins.any.opcode==Stark_pkg::OP_NOP)
+        o[mm*8+7:mm*8] = t1[mm*8+7:mm*8];
+      else if (cptgt1[mm])
         o[mm*8+7:mm*8] = z1 ? 8'h00 : t1[mm*8+7:mm*8];
       else
         o[mm*8+7:mm*8] = o1[mm*8+7:mm*8];
@@ -300,8 +303,8 @@ always_comb
 generate begin : gExc
 	for (xx = 0; xx < WID/8; xx = xx + 1)
     always_comb
-      if (cptgt[xx])
-        exc[xx*8+7:xx*8] = FLT_NONE;
+      if (cptgt[xx]||rse_o.ins.any.opcode==Stark_pkg::OP_NOP)
+        exc[xx*8+7:xx*8] = Stark_pkg::FLT_NONE;
       else
         exc[xx*8+7:xx*8] = exc1[xx*8+7:xx*8];
 end

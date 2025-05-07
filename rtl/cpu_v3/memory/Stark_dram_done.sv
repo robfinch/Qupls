@@ -53,7 +53,7 @@ input ack;
 input hilo;
 input dram_idv;
 input rob_ndx_t dram_id;
-input dram_state_t dram_state;
+input Stark_pkg::dram_state_t dram_state;
 input dram_more;
 input [Stark_pkg::ROB_ENTRIES-1:0] stomp;
 input dram_stomp;
@@ -67,7 +67,7 @@ begin
 	if (!(store|cstore|load|cload) && dram_idv)
 		done <= TRUE;
 	else if ((store|cstore) ? !stomp[dram_id] && dram_idv :
-		(dram_state == DRAMSLOT_ACTIVE && ack &&
+		(dram_state == Stark_pkg::DRAMSLOT_ACTIVE && ack &&
 			(hilo ? ((load|cload) & ~dram_stomp) :
 			((load|cload|cload_tags) & ~dram_more & ~dram_stomp)))
 		)

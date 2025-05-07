@@ -42,7 +42,7 @@ import const_pkg::*;
 import Stark_pkg::*;
 
 module Stark_meta_sau(rst, clk, rse_i, rse_o, lane, cptgt, z, stomp,
-	qres, cs, csr, cpl, canary, o, cp_o, pRd_o, aRd_o, we_o, exc);
+	qres, cs, csr, cpl, canary, o, cp_o, we_o, exc);
 parameter SAU0 = 1'b0;
 parameter WID=$bits(cpu_types_pkg::value_t); 
 input rst;
@@ -60,8 +60,6 @@ input [WID-1:0] canary;
 input [WID-1:0] csr;
 output reg [WID-1:0] o;
 output checkpt_ndx_t cp_o;
-output pregno_t pRd_o;
-output aregno_t aRd_o;
 output reg [WID/8:0] we_o;			// extra bit for tag update
 output reg [WID-1:0] exc;
 
@@ -71,6 +69,7 @@ reg [WID-1:0] bi;
 reg [WID-1:0] c;
 reg [WID-1:0] i;
 reg [WID-1:0] t;
+Stark_pkg::rob_bitmask_t stompo;
 Stark_pkg::memsz_t prc;
 cpu_types_pkg::pc_address_t pc;
 checkpt_ndx_t cp_i;
@@ -239,12 +238,12 @@ always_ff @(posedge clk)
 always_ff @(posedge clk)
 	cptgt1 <= cptgt;
 
-delay1 #(.WID($bits(aregno_t))) udly2 (.clk(clk), .ce(1'b1), .i(aRd_i), .o(aRd_o));
 delay1 #(.WID($bits(checkpt_ndx_t))) udly3 (.clk(clk), .ce(1'b1), .i(cp_i), .o(cp_o));
 delay1 #(.WID($bits(Stark_pkg::reservation_station_entry_t))) udly4 (.clk(clk), .ce(1'b1), .i(rse_i), .o(rse_o));
+delay1 #(.WID($bits(Stark_pkg::rob_bitmask_t))) udly5 (.clk(clk), .ce(1'b1), .i(stomp), .o(stompo));
 
 always_ff @(posedge clk)
-	if (~rse_i.v || stomp[rse_i.rndx])
+	if (~rse_i.v)
 		we_o <= 9'h000;
 	else if (aRd_i >= 8'd56 && aRd_i <= 8'd63)
 		case(rse_i.om)
@@ -262,7 +261,9 @@ generate begin : gCptgt
 	for (mm = 0; mm < WID/8; mm = mm + 1) begin
     always_comb
     begin
-      if (cptgt1[mm])
+    	if (stompo[rse_o.rndx])
+    		o[mm*8+7:mm*8] = t1[mm*8+7:mm*8];
+      else if (cptgt1[mm])
         o[mm*8+7:mm*8] = z1 ? 8'h00 : t1[mm*8+7:mm*8];
       else
         o[mm*8+7:mm*8] = o1[mm*8+7:mm*8];
@@ -287,11 +288,11 @@ always_comb
 
 generate begin : gExc
 	for (xx = 0; xx < WID/8; xx = xx + 1)
-	    always_comb
-            if (cptgt[xx])
-                exc[xx*8+7:xx*8] = FLT_NONE;
-            else
-                exc[xx*8+7:xx*8] = exc1[xx*8+7:xx*8];
+    always_comb
+      if (cptgt[xx])
+        exc[xx*8+7:xx*8] = Stark_pkg::FLT_NONE;
+      else
+        exc[xx*8+7:xx*8] = exc1[xx*8+7:xx*8];
 end
 endgenerate
 

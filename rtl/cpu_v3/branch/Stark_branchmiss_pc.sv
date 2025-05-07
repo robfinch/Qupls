@@ -37,7 +37,7 @@
 import cpu_types_pkg::*;
 import Stark_pkg::*;
 
-module Stark_branchmiss_pc(instr, brclass, pc, pc_stack, micro_ip, bt, takb, BRs, argA, argB, argI, ibh, misspc, missgrp, miss_mcip, dstpc, stomp_bno);
+module Stark_branchmiss_pc(instr, brclass, pc, pc_stack, micro_ip, bt, takb, BRs, argA, argB, argI, misspc, missgrp, miss_mcip, dstpc, stomp_bno);
 parameter ABITS=32;
 input Stark_pkg::pipeline_reg_t instr;
 input Stark_pkg::brclass_t brclass;
@@ -50,7 +50,6 @@ input [2:0] BRs;
 input value_t argA;
 input value_t argB;
 input value_t argI;
-input ibh_t ibh;
 output pc_address_ex_t misspc;
 output reg [2:0] missgrp;
 output mc_address_t miss_mcip;

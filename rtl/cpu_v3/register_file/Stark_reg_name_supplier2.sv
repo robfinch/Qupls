@@ -63,7 +63,7 @@ input rst;
 input clk;
 input en;
 input restore;
-input [PREGS-1:0] restore_list;				// from checkpoint memory, which regs were available
+input [Stark_pkg::PREGS-1:0] restore_list;				// from checkpoint memory, which regs were available
 input cpu_types_pkg::pregno_t [NFTAGS-1:0] tags2free;		// register tags to free
 input [NFTAGS-1:0] freevals;					// bitmnask indicating which tags to free
 input bo_wr;
@@ -80,17 +80,17 @@ output reg ov0 = 1'b0;
 output reg ov1 = 1'b0;
 output reg ov2 = 1'b0;
 output reg ov3 = 1'b0;
-output reg [PREGS-1:0] avail = {{PREGS-1{1'b1}},1'b0};
+output reg [Stark_pkg::PREGS-1:0] avail = {{Stark_pkg::PREGS-1{1'b1}},1'b0};
 output reg stall;											// stall enqueue while waiting for register availability
 output reg rst_busy;									// not used
 
-reg [PREGS-1:0] avail1 = {{PREGS-1{1'b1}},1'b0};
+reg [Stark_pkg::PREGS-1:0] avail1 = {{Stark_pkg::PREGS-1{1'b1}},1'b0};
 reg [3:0] fpop = 4'd0;
 reg stalla0 = 1'b0;
 reg stalla1 = 1'b0;
 reg stalla2 = 1'b0;
 reg stalla3 = 1'b0;
-reg [PREGS-1:0] next_avail;
+reg [Stark_pkg::PREGS-1:0] next_avail;
 
 pregno_t [3:0] tags;
 reg [3:0] fpush;
@@ -103,7 +103,7 @@ always_comb stall = stalla0|stalla1|stalla2|stalla3;
 always_comb rst_busy = 1'b0;
 
 always_comb
-if (PREGS != 512 && PREGS != 256 && PREGS != 128) begin
+if (Stark_pkg::PREGS != 512 && Stark_pkg::PREGS != 256 && Stark_pkg::PREGS != 128) begin
 	$display("Q+ renamer: number of registers must be 128, 256, or 512");
 	$finish;
 end
@@ -135,10 +135,10 @@ always_comb fpop[2] = (alloc2 & en & ~stall) | (alloc2 & stalla2);
 always_comb fpop[3] = (alloc3 & en & ~stall) | (alloc3 & stalla3);
 
 reg [3:0] freevals1;
-reg [$clog2(PREGS)-3:0] freeCnt;
+reg [$clog2(Stark_pkg::PREGS)-3:0] freeCnt;
 reg [2:0] ffreeCnt;
-reg [PREGS-1:0] next_toFreeList;
-reg [PREGS-1:0] toFreeList;
+reg [Stark_pkg::PREGS-1:0] next_toFreeList;
+reg [Stark_pkg::PREGS-1:0] toFreeList;
 reg [3:0] ffree;
 always_comb
 	avail1 = restore ? restore_list : avail;
@@ -177,8 +177,8 @@ begin
 end
 
 generate begin : gAvail
-	if (PREGS==512) begin
-reg [$clog2(PREGS)-3:0] rotcnt [0:3];
+	if (Stark_pkg::PREGS==512) begin
+reg [$clog2(Stark_pkg::PREGS)-3:0] rotcnt [0:3];
 reg [511:0] avail_rot;
 always_comb avail_rot[127:  0] = (avail[127:  0] << rotcnt[0]) | (avail[127:  0] >> (128-rotcnt[0]));
 always_comb avail_rot[255:128] = (avail[255:128] << rotcnt[1]) | (avail[255:128] >> (128-rotcnt[1]));
@@ -215,8 +215,8 @@ else begin
 end
 	end
 
-	else if (PREGS==256) begin
-reg [$clog2(PREGS)-2:0] rotcnt [0:1];
+	else if (Stark_pkg::PREGS==256) begin
+reg [$clog2(Stark_pkg::PREGS)-2:0] rotcnt [0:1];
 reg [255:0] avail_rot;
 always_comb avail_rot[127:  0] = (avail[127:  0] << rotcnt[0]) | (avail[127:  0] >> (128-rotcnt[0]));
 always_comb avail_rot[255:128] = (avail[255:128] << rotcnt[1]) | (avail[255:128] >> (128-rotcnt[1]));
@@ -247,8 +247,8 @@ else begin
 end
 	end
 
-	else if (PREGS==128) begin
-reg [$clog2(PREGS)-3:0] rotcnt [0:3];
+	else if (Stark_pkg::PREGS==128) begin
+reg [$clog2(Stark_pkg::PREGS)-3:0] rotcnt [0:3];
 reg [127:0] avail_rot;
 always_comb avail_rot[ 31:  0] = (avail[ 31:  0] << rotcnt[0]) | (avail[ 31:  0] >> (32-rotcnt[0]));
 always_comb avail_rot[ 63: 32] = (avail[ 63: 32] << rotcnt[1]) | (avail[ 63: 32] >> (32-rotcnt[1]));
@@ -331,7 +331,7 @@ end
 
 always_ff @(posedge clk)
 if (rst)
-	avail <= {{PREGS-1{1'b1}},1'b0};
+	avail <= {{Stark_pkg::PREGS-1{1'b1}},1'b0};
 else
 	avail <= next_avail;
 

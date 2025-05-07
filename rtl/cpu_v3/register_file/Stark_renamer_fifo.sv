@@ -37,8 +37,8 @@ import Stark_pkg::*;
 
 module Stark_renamer_fifo(rst, clk, push, pop, i, o, empty, rst_busy);
 parameter N=0;
-localparam SIZE = $clog2(PREGS/4);
-localparam TOPBIT = $clog2(PREGS/4)-1;
+localparam SIZE = $clog2(Stark_pkg::PREGS/4);
+localparam TOPBIT = $clog2(Stark_pkg::PREGS/4)-1;
 input rst;
 input clk;
 input push;
@@ -108,18 +108,18 @@ else
       .ECC_MODE("no_ecc"),       // String
       .FIFO_MEMORY_TYPE("block"), // String
       .FIFO_READ_LATENCY(1),     // DECIMAL
-      .FIFO_WRITE_DEPTH(PREGS/2),   // DECIMAL
+      .FIFO_WRITE_DEPTH(Stark_pkg::PREGS/2),   // DECIMAL
       .FULL_RESET_VALUE(0),      // DECIMAL
       .PROG_EMPTY_THRESH(10),    // DECIMAL
       .PROG_FULL_THRESH(10),     // DECIMAL
-      .RD_DATA_COUNT_WIDTH($clog2(PREGS)),   // DECIMAL
+      .RD_DATA_COUNT_WIDTH($clog2(Stark_pkg::PREGS)),   // DECIMAL
       .READ_DATA_WIDTH($bits(pregno_t)),      // DECIMAL
       .READ_MODE("std"),         // String
       .SIM_ASSERT_CHK(0),        // DECIMAL; 0=disable simulation messages, 1=enable simulation messages
       .USE_ADV_FEATURES("0707"), // String
       .WAKEUP_TIME(0),           // DECIMAL
       .WRITE_DATA_WIDTH($bits(pregno_t)),     // DECIMAL
-      .WR_DATA_COUNT_WIDTH($clog2(PREGS))    // DECIMAL
+      .WR_DATA_COUNT_WIDTH($clog2(Stark_pkg::PREGS))    // DECIMAL
    )
    xpm_fifo_sync_inst (
       .almost_empty(),   // 1-bit output: Almost Empty : When asserted, this signal indicates that

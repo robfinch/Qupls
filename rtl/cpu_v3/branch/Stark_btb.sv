@@ -38,7 +38,7 @@
 import Stark_pkg::*;
 
 module Stark_btb(rst, clk, en, clk_en, nmi, nmi_addr, irq, irq_addr,
-	rclk, micro_machine_active, block_header,
+	rclk, micro_machine_active,
 	igrp, length_byte,
 	pc, pc0, pc1, pc2, pc3, pc4, next_pc, p_override, po_bno,
 	takb0, takb1, takb2, takb3, do_bsr, bsr_tgt, pe_bsdone, do_ret, ret_pc,
@@ -61,7 +61,6 @@ input pc_address_t nmi_addr;
 input irq;
 input pc_address_t irq_addr;
 input rclk;
-input ibh_t block_header;
 input micro_machine_active;
 output reg [2:0] igrp;
 input [7:0] length_byte;
@@ -638,31 +637,7 @@ else begin
 		takb3 = 1'b1;
 	end
 	else begin
-		if (SUPPORT_IBH) begin
-			/*
-			*/
-		end
-		else if (SUPPORT_VLI) begin
-			/*
-			if (SUPPORT_VLIB)
-				next_pc = pc + length_byte;
-			else begin
-				if (pc0[5:0] >= block_header[21:16])
-					next_pc = {pc[$bits(pc_address_t)-1:6]+2'd1,6'd0};
-				else if (pc1[5:0] >= block_header[21:16])
-					next_pc = {pc[$bits(pc_address_t)-1:6]+2'd1,6'd0};
-				else if (pc2[5:0] >= block_header[21:16])
-					next_pc = {pc[$bits(pc_address_t)-1:6]+2'd1,6'd0};
-				else if (pc3[5:0] >= block_header[21:16])
-					next_pc = {pc[$bits(pc_address_t)-1:6]+2'd1,6'd0};
-				else if (pc4[5:0] >= block_header[21:16]|| pc4[7:6]!=pc[7:6])
-					next_pc = {pc[$bits(pc_address_t)-1:6]+2'd1,6'd0};
-				else
-					next_pc = {pc[$bits(pc_address_t)-1:6],pc4[5:0]};
-			end
-			*/
-		end
-		else begin
+		begin
 			/*
 			if (pc0[5:0] >= block_header[21:16])
 				next_pc = {pc[$bits(pc_address_t)-1:6]+2'd1,6'd0};
@@ -761,47 +736,6 @@ else begin
 end
 
 assign next_pc = next_pcs[next_act_bno];
-
-generate begin : giGrp
-if (SUPPORT_IBH) begin
-	always_ff @(posedge clk)
-	if (rst)
-		igrp <= 3'd0;
-	else begin
-		if (clk_en) begin
-			/*
-			// Instruction block header should be valid again at this state.
-			if (branchmiss_state==3'd4) begin
-				if (pc[5:0] >= ibh[21:16])
-					igrp <= 3'd4;
-				else if (pc[5:0] >= ibh.offs[2])
-					igrp <= 3'd3;
-				else if (pc[5:0] >= ibh.offs[1])
-					igrp <= 3'd2;
-				else if (pc[5:0] >= ibh.offs[0])
-					igrp <= 3'd1;
-				else
-					igrp <= 3'd0;
-			end
-			else if (pc0==doutb0.pc && doutb0.takb)
-				igrp <= doutb0.grp;
-			else if (pc1==doutb1.pc && doutb1.takb)
-				igrp <= doutb1.grp;
-			else if (pc2==doutb2.pc && doutb2.takb)
-				igrp <= doutb2.grp;
-			else if (pc3==doutb3.pc && doutb3.takb)
-				igrp <= doutb3.grp;
-			else begin
-				igrp <= igrp + 2'd1;
-				if (igrp>=3'd3 || block_header.offs[igrp]=='d0)
-					igrp <= 'd0;
-			end
-			*/
-		end
-	end
-end
-end
-endgenerate
 
 always_ff @(posedge clk)
 if (rst) begin

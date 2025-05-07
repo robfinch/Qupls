@@ -60,13 +60,14 @@ output Stark_pkg::reservation_station_entry_t [3:0] rse_o;
 output Stark_pkg::rob_entry_t [3:0] rob_dispatched;
 output reg [3:0] rob_dispatched_v;
 
-integer nn, kk;
+integer nn, kk, jj;
 reg [3:0] sau_cnt, mul_cnt, div_cnt, fma_cnt, trig_cnt, fcu_cnt, agen_cnt;
 reg [3:0] mem_cnt, fpu_cnt, sqrt_cnt;
 
 always_ff @(posedge clk)
 begin
 	kk = 0;
+	jj = 0;
 	sau_cnt = 4'd0;
 	mul_cnt = 4'd0;
 	div_cnt = 4'd0;

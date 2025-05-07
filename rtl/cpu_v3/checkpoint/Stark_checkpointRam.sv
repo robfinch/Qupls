@@ -41,7 +41,7 @@ import const_pkg::*;
 module Stark_checkpointRam(rst, clka, ena, wea, addra, dina, douta, 
 	clkb, enb, addrb, doutb);
 parameter NRDPORTS = 4; 
-localparam RBIT=$clog2(PREGS);
+localparam RBIT=$clog2(Stark_pkg::PREGS);
 localparam QBIT=$bits(cpu_types_pkg::pregno_t);
 localparam WID=$bits(Stark_pkg::checkpoint_t);
 localparam AWID=$clog2(Stark_pkg::NCHECK);
@@ -86,7 +86,7 @@ always_ff @(posedge clka) addra1 <= addra;
 always_ff @(posedge clka) dina1 <= dina;
 
 generate begin : gRegfileRam
-if (SIM) begin
+if (Stark_pkg::SIM) begin
 
 //	for (g = 0; g < AREGS; g = g + 1)
 		always_ff @(posedge clka)

@@ -48,7 +48,7 @@ input rst;
 input clk;
 input en;
 input restore;
-input [PREGS-1:0] restore_list;
+input [Stark_pkg::PREGS-1:0] restore_list;
 input cpu_types_pkg::pregno_t [NFTAGS-1:0] tags2free;		// register tags to free
 input [NFTAGS-1:0] freevals;					// bitmnask indicating which tags to free
 input alloc0;					// allocate target register 0
@@ -63,7 +63,7 @@ output reg wv0 = 1'b0;
 output reg wv1 = 1'b0;
 output reg wv2 = 1'b0;
 output reg wv3 = 1'b0;
-output reg [PREGS-1:0] avail = {1'b0,{PREGS-2{1'b1}},1'b0};				// recorded in ROB
+output reg [Stark_pkg::PREGS-1:0] avail = {1'b0,{Stark_pkg::PREGS-2{1'b1}},1'b0};				// recorded in ROB
 output reg stall;			// stall enqueue while waiting for register availability
 output reg rst_busy;
 
@@ -79,7 +79,7 @@ reg alloc0d;
 reg alloc1d;
 reg alloc2d;
 reg alloc3d;
-reg [PREGS-1:0] next_avail;
+reg [Stark_pkg::PREGS-1:0] next_avail;
 
 wire rst_busy0;
 wire rst_busy1;
@@ -129,10 +129,10 @@ always_comb pop2 = (alloc2 & en & ~stall) | (stalla2|empty2);
 always_comb pop3 = (alloc3 & en & ~stall) | (stalla3|empty3);
 
 reg [3:0] freevals1;
-reg [$clog2(PREGS)-3:0] freeCnt;
+reg [$clog2(Stark_pkg::PREGS)-3:0] freeCnt;
 reg [2:0] ffreeCnt;
-reg [PREGS-1:0] next_toFreeList;
-reg [PREGS-1:0] toFreeList;
+reg [Stark_pkg::PREGS-1:0] next_toFreeList;
+reg [Stark_pkg::PREGS-1:0] toFreeList;
 reg [3:0] ffree;
 
 always_ff @(posedge clk)
@@ -152,7 +152,7 @@ begin
 end
 
 generate begin : gRenamer
-if (PREGS==512) begin
+if (Stark_pkg::PREGS==512) begin
 	// Refuse to put 0 onto the stack. 0 is specially reserved.
 	// If the tag is already free, refuse to place on stack.
 	always_comb
@@ -355,9 +355,9 @@ end
 
 always_comb
 if (rst) begin
-	next_avail = {{PREGS-1{1'b0}},1'b0};
+	next_avail = {{Stark_pkg::PREGS-1{1'b0}},1'b0};
 	next_avail[0] = 1'b0;
-	next_avail[PREGS-1] = 1'b0;
+	next_avail[Stark_pkg::PREGS-1] = 1'b0;
 end
 else begin
 
@@ -408,10 +408,10 @@ begin
 	next_toFreeList = toFreeList;
 	if (restore)
 		next_toFreeList = restore_list;//next_toFreeList;// | (restore_list & ~avail);
-	if (empty0) next_toFreeList = next_toFreeList | avail[PREGS/4-1:0];
-	if (empty1) next_toFreeList = next_toFreeList | avail[PREGS/2-1:PREGS/4];
-	if (empty2) next_toFreeList = next_toFreeList | avail[PREGS*3/4-1:PREGS/2];
-	if (empty3) next_toFreeList = next_toFreeList | avail[PREGS-1:PREGS*3/4];
+	if (empty0) next_toFreeList = next_toFreeList | avail[Stark_pkg::PREGS/4-1:0];
+	if (empty1) next_toFreeList = next_toFreeList | avail[Stark_pkg::PREGS/2-1:Stark_pkg::PREGS/4];
+	if (empty2) next_toFreeList = next_toFreeList | avail[Stark_pkg::PREGS*3/4-1:Stark_pkg::PREGS/2];
+	if (empty3) next_toFreeList = next_toFreeList | avail[Stark_pkg::PREGS-1:Stark_pkg::PREGS*3/4];
 	if (fpush[0])	next_toFreeList[tags[0]] = 1'b0;
  	if (fpush[1])	next_toFreeList[tags[1]] = 1'b0;
  	if (fpush[2])	next_toFreeList[tags[2]] = 1'b0;
@@ -420,9 +420,9 @@ end
 
 always_ff @(posedge clk)
 if (rst) begin
-	toFreeList <= {PREGS{1'b1}};
+	toFreeList <= {Stark_pkg::PREGS{1'b1}};
 	toFreeList[0] <= 1'b0;
-	toFreeList[PREGS-1] <= 1'b0;
+	toFreeList[Stark_pkg::PREGS-1] <= 1'b0;
 end
 else
 	toFreeList <= next_toFreeList;

@@ -130,85 +130,6 @@ fpSincos64 usincos1
 	.cos(coso)
 );
 */
-reg fmaop, fma_done;
-reg [WID-1:0] fmac;
-reg [WID-1:0] fmab;
-reg [WID-1:0] fmao;
-
-always_comb
-	if (ir.f3.func==FN_FMS || ir.f3.func==FN_FNMS)
-		fmaop = 1'b1;
-	else
-		fmaop = 1'b0;
-
-always_comb
-	if (ir.f2.func==FN_FADD || ir.f2.func==FN_FSUB)
-		fmab <= 128'h3FFF0000000000000000000000000000;	// 1,0
-	else
-		fmab <= b;
-
-always_comb
-	if (ir.f2.func==FN_FMUL || ir.f2.func==FN_FDIV)
-		fmac = 64'd0;
-	else
-		fmac = c;
-
-fpFMA128nrCombo ufma1
-(
-	.op(fmaop),
-	.rm(rm),
-	.a(a),
-	.b(fmab),
-	.c(fmac),
-	.o(fmao1),
-	.inf(),
-	.zero(),
-	.overflow(),
-	.underflow(),
-	.inexact()
-);
-
-// Retiming pipeline
-always_ff @(posedge clk, posedge rst)
-if (rst) begin
-	fmao2 <= 'd0;
-	fmao3 <= 'd0;
-	fmao4 <= 'd0;
-	fmao5 <= 'd0;
-	fmao6 <= 'd0;
-	fmao7 <= 'd0;
-	fmao <= 'd0;
-end
-else if (ce) begin
-	fmao2 <= fmao1;
-	fmao3 <= fmao2;
-	fmao4 <= fmao3;
-	fmao5 <= fmao4;
-	fmao6 <= fmao5;
-	fmao7 <= fmao6;
-	fmao <= fmao7;
-end
-
-/*
-fpDivide64nr udiv1
-(
-	.rst(rst),
-	.clk(clk),
-	.clk4x(clk),
-	.ce(ce),
-	.ld(cd_args),
-	.op(1'b0),			// not used
-	.a(a),
-	.b(b),
-	.o(divo),
-	.rm(rm),
-	.done(div_done),
-	.sign_exe(),
-	.inf(),
-	.overflow(),
-	.underflow()
-);
-*/
 
 f2i128 uf2i1281
 (
@@ -288,8 +209,6 @@ fpCvt64To128 ucvtS2D1
 always_ff @(posedge clk)
 if (rst) begin
 	cnt <= 'd0;
-	sincos_done <= 1'b0;
-	fma_done <= 1'b0;
 	scale_done <= 1'b0;
 	f2i_done <= 'd0;
 	i2f_done <= 'd0;
@@ -302,8 +221,6 @@ else begin
 		cnt <= 'd0;
 	else
 		cnt <= cnt + 2'd1;
-	sincos_done <= cnt>=12'd64;
-	fma_done <= cnt>=12'h8;
 	scale_done <= cnt>=12'h3;
 	f2i_done <= cnt>=12'h2;
 	i2f_done <= cnt>=12'h2;

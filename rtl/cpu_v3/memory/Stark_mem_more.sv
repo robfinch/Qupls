@@ -51,8 +51,8 @@ if (rst_i)
 	more_o <= FALSE;
 else begin
 	case(state_i)
-	DRAMSLOT_AVAIL:	;
-	DRAMSLOT_READY:
+	Stark_pkg::DRAMSLOT_AVAIL:	;
+	Stark_pkg::DRAMSLOT_READY:
 		if (Stark_pkg::SUPPORT_UNALIGNED_MEMORY && |sel_i[79:64])
 			more_o <= TRUE;
 		else

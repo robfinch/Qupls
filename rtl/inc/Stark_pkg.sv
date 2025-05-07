@@ -100,8 +100,9 @@ parameter RENAMER = 6;
 // =============================================================================
 // =============================================================================
 
-// 1=defer interrupts to the start of the next instruction.
-// 2=record micro-op number for instruction restart (not recommended).
+// 1=move interrupt to the start of the instruction (recommended).
+// 2=defer interrupts to the start of the next instruction.
+// 3=record micro-op number for instruction restart (not recommended).
 parameter UOP_STRATEGY = 1;	// micro-op strategy
 
 // 1=no interrupts allowed when micro-code machine active
@@ -227,8 +228,6 @@ parameter NAGEN = 1;
 parameter NSAU = 2;			// 1 or 2
 parameter NFPU = 1;			// 0 or 1
 parameter NFMA = 1;			// 0, 1 or 2
-parameter FPU0_IQ_DEPTH = 32;
-parameter FPU1_IQ_DEPTH = 32;
 parameter NLSQ_PORTS = 1;
 parameter SUPPORT_IDIV = 1;
 parameter SUPPORT_TRIG = 1;
@@ -272,6 +271,13 @@ parameter REG_USHM = REG_U|REG_S|REG_H|REG_M;
 // =============================================================================
 // Type declarations
 // =============================================================================
+
+typedef enum logic [1:0] {
+	DRAMSLOT_AVAIL = 2'd0,
+	DRAMSLOT_READY = 2'd1,
+	DRAMSLOT_ACTIVE = 2'd2,
+	DRAMSLOT_DELAY = 2'd3
+} dram_state_t;
 
 typedef struct packed
 {
@@ -337,6 +343,15 @@ typedef struct packed
 	logic sie;					// supervisor interrupt enable
 	logic uie;					// user interrupt enable
 } status_reg_t;				// 32 bits
+
+typedef enum logic [2:0] {
+	RND_NE = 3'd0,		// nearest ties to even
+	RND_ZR = 3'd1,		// round to zero (truncate)
+	RND_PL = 3'd2,		// round to plus infinity
+	RND_MI = 3'd3,		// round to minus infinity
+	RND_MM = 3'd4,		// round to maxumum magnitude (nearest ties away from zero)
+	RND_FL = 3'd7			// round according to flags register
+} fround_t;
 
 typedef struct packed
 {
@@ -495,15 +510,6 @@ typedef enum logic [4:0] {
 	FTRIG_FSIN = 5'd1
 } float_trig_t;
 
-typedef enum logic [2:0] {
-	RND_NE = 3'd0,		// nearest ties to even
-	RND_ZR = 3'd1,		// round to zero (truncate)
-	RND_PL = 3'd2,		// round to plus infinity
-	RND_MI = 3'd3,		// round to minus infinity
-	RND_MM = 3'd4,		// round to maxumum magnitude (nearest ties away from zero)
-	RND_FL = 3'd7			// round according to flags register
-} fround_t;
-
 parameter NOP_INSN = {26'd0,OP_NOP};
 
 typedef struct packed
@@ -539,9 +545,9 @@ typedef struct packed
 typedef struct packed
 {
 	logic zero;
-	logic [1:0] op2a;
-	logic [7:0] resv;
-	logic [2:0] cl;
+	logic [1:0] lx;
+	logic [6:0] resv;
+	logic [3:0] cl;
 	logic resv1;
 	logic Cr;
 	logic [4:0] Rs1;
@@ -1110,6 +1116,19 @@ typedef struct packed
 	logic [5:0] opcode;
 } fpurm_inst_t;
 
+typedef struct packed
+{
+	logic zero;
+	logic op;
+	fround_t rm;
+	logic [4:0] Rs3;
+	logic [4:0] Rs2;
+	logic cr;
+	logic [4:0] Rs1;
+	logic [4:0] Rd;
+	logic [5:0] opcode;
+} fma_inst_t;
+
 typedef union packed
 {
 	cmpi_inst_t cmpi;
@@ -1137,6 +1156,7 @@ typedef union packed
 	alucli_inst_t alucli;
 	fpu_inst_t fpu;
 	fpurm_inst_t fpurm;
+	fma_inst_t fma;
 	adbi_inst_t adbi;
 	adb_inst_t adb;
 	adbcli_inst_t adbcli;
@@ -1168,11 +1188,68 @@ typedef union packed
 	anyinst_t any;
 } instruction_t;
 
+parameter CSR_SR		= 16'h?004;
+parameter CSR_CAUSE	= 16'h?006;
+parameter CSR_REPBUF = 16'h0008;
+parameter CSR_MAXVL	= 16'h0200;
+parameter CSR_MAXVLB= 16'h0201;
+parameter CSR_SEMA	= 16'h?00C;
+parameter CSR_PTBR	= 16'h1003;
+parameter CSR_HMASK	= 16'h1005;
+parameter CSR_FSTAT	= 16'h?014;
+parameter CSR_ASID	= 16'h101F;
+parameter CSR_KEYS	= 16'b00010000001000??;
+parameter CSR_KEYTBL= 16'h1024;
+parameter CSR_SCRATCH=16'h?041;
+parameter CSR_MCR0	= 16'h3000;
+parameter CSR_MHARTID = 16'h3001;
+parameter CSR_MCORENO = 16'h3001;
+parameter CSR_TICK	= 16'h3002;
+parameter CSR_MBADADDR	= 16'h3007;
+parameter CSR_MTVEC = 16'b00110000001100??;
+parameter CSR_MDBAD	= 16'b00110000000110??;
+parameter CSR_MDBAM	= 16'b00110000000111??;
+parameter CSR_MDBCR	= 16'h3020;
+parameter CSR_MDBSR	= 16'h3021;
+parameter CSR_KVEC3 = 16'h3033;
+parameter CSR_MPLSTACK	= 16'h303F;
+parameter CSR_MPMSTACK	= 16'h3040;
+parameter CSR_MSTUFF0	= 16'h3042;
+parameter CSR_MSTUFF1	= 16'h3043;
+parameter CSR_USTATUS	= 16'h0044;
+parameter CSR_SSTATUS	= 16'h1044;
+parameter CSR_HSTATUS	= 16'h2044;
+parameter CSR_MSTATUS	= 16'h3044;
+parameter CSR_MVSTEP= 16'h3046;
+parameter CSR_MVTMP	= 16'h3047;
+parameter CSR_MEIP	=	16'h3048;
+parameter CSR_MECS	= 16'h3049;
+parameter CSR_MPCS	= 16'h304A;
+parameter CSR_UCA		=	16'b00000001000?????;
+parameter CSR_SCA		=	16'b00010001000?????;
+parameter CSR_HCA		=	16'b00100001000?????;
+parameter CSR_MCA		=	16'b00110001000?????;
+parameter CSR_MSEL	= 16'b0011010000100???;
+parameter CSR_MTCBPTR=16'h3050;
+parameter CSR_MGDT	= 16'h3051;
+parameter CSR_MLDT	= 16'h3052;
+parameter CSR_MTCB	= 16'h3054;
+parameter CSR_CTX		= 16'h3053;
+parameter CSR_MBVEC	= 16'b0011000001011???;
+parameter CSR_MSP		= 16'h3060;
+parameter CSR_SR_STACK		= 16'h308?;
+parameter CSR_MCIR_STACK 	= 16'h309?;
+parameter CSR_MEPC	= 16'h3108;
+parameter CSR_TIME	= 16'h?FE0;
+parameter CSR_MTIME	= 16'h3FE0;
+parameter CSR_MTIMECMP	= 16'h3FE1;
+
 typedef struct packed {
 	logic v;
 	logic exc;
 	logic [2:0] count;
 	logic [2:0] num;
+	logic [1:0] xRs3;
 	logic [1:0] xRs2;
 	logic [1:0] xRs1;
 	logic [1:0] xRd;
@@ -1535,6 +1612,7 @@ typedef struct packed {
 	// The following fields may change state while an instruction is processed.
 	logic v;									// 1=entry is valid, in use
 	cpu_types_pkg::seqnum_t sn;							// sequence number, decrements when instructions que
+	logic flush;
 	cpu_types_pkg::rob_ndx_t sync_dep;			// sync instruction dependency
 	logic sync_depv;				// sync dependency valid
 	cpu_types_pkg::rob_ndx_t fc_dep;				// flow control dependency - relevant only for mem ops
@@ -1608,6 +1686,14 @@ typedef struct packed {
 // ============================================================================
 // Support Functions
 // ============================================================================
+
+function cpu_types_pkg::pc_address_t fnTargetIP;
+input cpu_types_pkg::pc_address_t ip;
+input cpu_types_pkg::value_t tgt;
+begin
+	fnTargetIP = ip+{tgt,2'b00};
+end
+endfunction
 
 function fnHasExConst;
 input instruction_t ins;
@@ -1694,6 +1780,24 @@ begin
 end
 endfunction
 
+// Sign or zero extend data as needed according to op.
+function [63:0] fnDati;
+input more;
+input instruction_t ins;
+input cpu_types_pkg::value_t dat;
+input cpu_types_pkg::pc_address_t pc;
+case(ins.any.opcode)
+OP_LDB:		fnDati = {{56{dat[7]}},dat[7:0]};
+OP_LDBZ:	fnDati = {{56{1'b0}},dat[7:0]};
+OP_LDW:		fnDati = {{48{dat[15]}},dat[15:0]};
+OP_LDWZ:	fnDati = {{48{1'b0}},dat[15:0]};
+OP_LDT:		fnDati = {{32{dat[31]}},dat[31:0]};
+OP_LDTZ:	fnDati = {{32{1'b0}},dat[31:0]};
+OP_LOAD:	fnDati = dat[63:0];
+default:    fnDati = dat;
+endcase
+endfunction
+
 function memsz_t fnMemsz;
 input instruction_t ir;
 begin
@@ -1704,6 +1808,18 @@ begin
 	OP_LOAD,OP_STORE,OP_STOREI:			fnMemsz = octa;
 	default:
 		fnMemsz = octa;
+	endcase
+end
+endfunction
+
+function [15:0] fnSel;
+input instruction_t ir;
+begin
+	case(ir.any.opcode)
+	OP_LDB,OP_LDBZ,OP_STB,OP_STBI:	fnSel = 8'h01;
+	OP_LDW,OP_LDWZ,OP_STW,OP_STWI:	fnSel = 8'h03;
+	OP_LDT,OP_LDTZ,OP_STT,OP_STTI:	fnSel = 8'h0F;
+	default:	fnSel = 8'hFF;
 	endcase
 end
 endfunction

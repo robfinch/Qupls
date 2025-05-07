@@ -39,13 +39,14 @@
 import const_pkg::*;
 import Stark_pkg::*;
 
-module Stark_meta_fpu(rst, clk, clk3x, idle, rse_i, rse_o, rm,
+module Stark_meta_fpu(rst, clk, clk3x, idle, stomp, rse_i, rse_o, rm,
 	z, cptgt, o, otag, we_o, done, exc);
 parameter WID=Stark_pkg::SUPPORT_QUAD_PRECISION|Stark_pkg::SUPPORT_CAPABILITIES ? 128 : 64;
 input rst;
 input clk;
 input clk3x;
 input idle;
+input Stark_pkg::rob_bitmask_t stomp;
 input Stark_pkg::reservation_station_entry_t rse_i;
 output Stark_pkg::reservation_station_entry_t rse_o;
 input [2:0] rm;
@@ -53,7 +54,7 @@ input z;
 input [WID-1:0] cptgt;
 output reg [WID-1:0] o;
 output reg otag;
-output [WID/8:0] we_o;
+output reg [WID/8:0] we_o;
 output reg done;
 output Stark_pkg::cause_code_t exc;
 
@@ -66,6 +67,7 @@ reg [WID-1:0] b;
 reg [WID-1:0] c;
 reg [WID-1:0] t;
 reg [WID-1:0] i;
+aregno_t aRd_i;
 reg [1:0] stomp_con;	// stomp conveyor
 reg [WID/8:0] we,we1,we2;
 always_comb om = rse_i.om;
@@ -75,6 +77,7 @@ always_comb b = rse_i.argB;
 always_comb c = rse_i.argC;
 always_comb t = rse_i.argD;
 always_comb i = rse_i.argI;
+always_comb aRd_i = rse_i.aRd;
 
 Stark_pkg::cause_code_t exc128,exc64;
 reg [WID-1:0] o1;
@@ -248,11 +251,13 @@ else
 
 generate begin : gCptgt
 	for (mm = 0; mm < WID/8; mm = mm + 1) begin
-        always_comb
-            if (cptgt[mm])
-                o[mm*8+7:mm*8] = z ? 8'h00 : t[mm*8+7:mm*8];
-            else
-                o[mm*8+7:mm*8] = o1[mm*8+7:mm*8];
+    always_comb
+    	if (stomp_con[1]||rse2.ins.any.opcode==Stark_pkg::OP_NOP)
+        o[mm*8+7:mm*8] = t[mm*8+7:mm*8];
+      else if (cptgt[mm])
+        o[mm*8+7:mm*8] = z ? 8'h00 : t[mm*8+7:mm*8];
+      else
+        o[mm*8+7:mm*8] = o1[mm*8+7:mm*8];
     end
 end
 endgenerate
@@ -282,7 +287,7 @@ begin
 end
 
 always_comb
-	we_o = stomp_con[1] ? 9'h000 : we2;
+	we_o = rse_o.v ? we2 : 9'h000;
 
 
 always_comb

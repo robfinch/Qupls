@@ -97,7 +97,7 @@ endfunction
 always_comb
 begin
 	Rs1 = fnRs1(instr, has_imma);
-	if (instr.ins.any.opcode==OP_MOV && instr.ins[28:26]==3'd1)	// MOVEMD?
+	if (instr.ins.any.opcode==Stark_pkg::OP_MOV && instr.ins[28:26]==3'd1)	// MOVEMD?
 		om1 = Stark_pkg::operating_mode_t'(instr.ins[24:23]);
     else
         om1 = om;

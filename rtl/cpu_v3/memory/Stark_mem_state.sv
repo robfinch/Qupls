@@ -41,26 +41,26 @@ input clk_i;
 input ack_i;
 input set_ready_i;
 input set_avail_i;
-output dram_state_t state_o;
+output Stark_pkg::dram_state_t state_o;
 
 always_ff @(posedge clk_i)
 if (rst_i)
-	state_o <= DRAMSLOT_AVAIL;
+	state_o <= Stark_pkg::DRAMSLOT_AVAIL;
 else begin
 	case(state_o)
-	DRAMSLOT_AVAIL:	;
-	DRAMSLOT_READY:
-		state_o <= DRAMSLOT_ACTIVE;
-	DRAMSLOT_ACTIVE:
+	Stark_pkg::DRAMSLOT_AVAIL:	;
+	Stark_pkg::DRAMSLOT_READY:
+		state_o <= Stark_pkg::DRAMSLOT_ACTIVE;
+	Stark_pkg::DRAMSLOT_ACTIVE:
 		if (ack_i)
-			state_o <= DRAMSLOT_DELAY;
-	DRAMSLOT_DELAY:
-		state_o <= DRAMSLOT_AVAIL;
+			state_o <= Stark_pkg::DRAMSLOT_DELAY;
+	Stark_pkg::DRAMSLOT_DELAY:
+		state_o <= Stark_pkg::DRAMSLOT_AVAIL;
 	endcase
 	if (set_ready_i)
-		state_o <= DRAMSLOT_READY;
+		state_o <= Stark_pkg::DRAMSLOT_READY;
 	if (set_avail_i)
-		state_o <= DRAMSLOT_AVAIL;
+		state_o <= Stark_pkg::DRAMSLOT_AVAIL;
 end
 
 endmodule

@@ -43,7 +43,7 @@ import Stark_pkg::*;
 module Stark_pipeline_ren(
 	rst, clk, clk5x, ph4, en, nq, restore, restored, restore_list,
 	chkpt_amt, tail0, rob, robentry_stomp, avail_reg, sr,
-	stomp_ren, stomp_bno, branch_state,
+	stomp_ren, stomp_bno, branch_state, flush_dec, flush_ren,
 	arn, arng, arnt, arnv, rn_cp, store_argC_pReg, prn, prnv,
 	ns_areg,
 	Rt0_dec, Rt1_dec, Rt2_dec, Rt3_dec, Rt0_decv, Rt1_decv, Rt2_decv, Rt3_decv, 
@@ -73,6 +73,8 @@ input clk;
 input clk5x;
 input [4:0] ph4;
 input en;
+input flush_dec;
+output reg flush_ren;
 input nq;
 input restore;
 output restored;
@@ -179,25 +181,32 @@ initial begin
 		arnbank[jj] = 1'b0;
 end
 
-pipeline_reg_t nopi;
+Stark_pkg::pipeline_reg_t nopi;
 
 // Define a NOP instruction.
 always_comb
 begin
-	nopi = {$bits(pipeline_reg_t){1'b0}};
+	nopi = {$bits(Stark_pkg::pipeline_reg_t){1'b0}};
 	nopi.pc = RSTPC;
 	nopi.pc.bno_t = 6'd1;
 	nopi.pc.bno_f = 6'd1;
 	nopi.mcip = 12'h1A0;
-	nopi.len = 4'd6;
-	nopi.ins = {26'd0,OP_NOP};
-	nopi.aRa = 8'd0;
-	nopi.aRb = 8'd0;
-	nopi.aRc = 8'd0;
-	nopi.aRt = 8'd0;
-	nopi.decbus.Rtz = 1'b1;
+	nopi.uop.ins = {26'd0,Stark_pkg::OP_NOP};
+	nopi.aRs1 = 8'd0;
+	nopi.aRs2 = 8'd0;
+	nopi.aRs3 = 8'd0;
+	nopi.aRd = 8'd0;
+	nopi.decbus.Rdz = 1'b1;
 	nopi.decbus.nop = 1'b1;
 	nopi.decbus.alu = 1'b1;
+end
+
+always_ff @(posedge clk)
+if (rst)
+	flush_ren <= 1'b0;
+else begin
+	if (en) 
+		flush_ren <= flush_dec;
 end
 
 always_ff @(posedge clk)
