@@ -36,7 +36,7 @@
 
 import Qupls4_pkg::*;
 
-module Qupls4_decoder(rst, clk, en, cline, om, ipl, instr, dbo, consts_pos, mark_nops);
+module Qupls4_decoder(rst, clk, en, cline, om, ipl, instr, dbo);
 input rst;
 input clk;
 input en;
@@ -45,8 +45,6 @@ input Qupls4_pkg::operating_mode_t om;
 input [5:0] ipl;
 input Qupls4_pkg::micro_op_t instr;
 output Qupls4_pkg::decode_bus_t dbo;
-output reg [3:0] consts_pos [0:3];
-output reg [3:0] mark_nops;
 
 Qupls4_pkg::ex_instruction_t ins;
 Qupls4_pkg::decode_bus_t db;
@@ -55,30 +53,12 @@ wire [5:0] isz;
 wire excRs1, excRs2, excRs3, excRd, excRd2, excRd3;
 wire [3:0] pred_shadow_count;
 
-// There could be four 32-bit constant positions used up on the cache line.
-// The decode stage needs to be able to mark the constant positions as NOPs.
-always_comb
-begin
-	mark_nops[0] = isz[1:0]!=2'b00;
-	mark_nops[1] = isz[1:0]==2'b10;
-	mark_nops[2] = isz[1:0]!=2'b00;
-	mark_nops[3] = isz[1:0]==2'b10;
-end
-
-always_comb
-begin
-	consts_pos[0] = const_pos[3:0];
-	consts_pos[1] = isz[1:0]==2'b10 ? const_pos[3:0] + 4'd1 : const_pos[3:0];
-	consts_pos[2] = const_pos[7:4];
-	consts_pos[3] = isz[3:2]==2'b10 ? const_pos[7:4] + 4'd1 : const_pos[7:4];
-end
-
 always_comb
 	ins = instr.ins;
 
 assign db.v = 1'b1;
 
-Stark_decode_const udcimm
+Qupls4_decode_const udcimm
 (
 	.ins(ins.ins),
 	.cline(cline),

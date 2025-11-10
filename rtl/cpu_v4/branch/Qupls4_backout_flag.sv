@@ -41,14 +41,14 @@
 // ============================================================================
 
 import const_pkg::*;
-import Stark_pkg::*;
+import Qupls4_pkg::*;
 
-module Stark_backout_flag(rst, clk, fcu_branch_resolved, fcu_brclass, takb, fcu_bt, 
+module Qupls4_backout_flag(rst, clk, fcu_branch_resolved, fcu_brclass, takb, fcu_bt, 
 	fcu_found_destination, backout);
 input rst;
 input clk;
 input fcu_branch_resolved;
-input Stark_pkg::brclass_t fcu_brclass;
+input Qupls4_pkg::brclass_t fcu_brclass;
 input takb;
 input fcu_bt;
 input fcu_found_destination;
@@ -61,19 +61,19 @@ else begin
 	backout <= FALSE;
 	if (fcu_branch_resolved) begin
 		case(fcu_brclass)
-		Stark_pkg::BRC_BCCR:
+		Qupls4_pkg::BRC_BCCR:
 			// backout when !fcu_bt will be handled below, triggerred by restore
 			if (takb && fcu_bt)
 				backout <= !fcu_found_destination;
-		Stark_pkg::BRC_BCCD,
-		Stark_pkg::BRC_BCCC:
+		Qupls4_pkg::BRC_BCCD,
+		Qupls4_pkg::BRC_BCCC:
 			// backout when !fcu_bt will be handled below, triggerred by restore
 			if (takb && fcu_bt)
 				backout <= !fcu_found_destination;
-		Stark_pkg::BRC_RETR,
-		Stark_pkg::BRC_RETC,
-		Stark_pkg::BRC_BLRLR,
-		Stark_pkg::BRC_BLRLC:
+		Qupls4_pkg::BRC_RETR,
+		Qupls4_pkg::BRC_RETC,
+		Qupls4_pkg::BRC_BLRLR,
+		Qupls4_pkg::BRC_BLRLC:
 			backout <= TRUE;
 		default:
 			;		

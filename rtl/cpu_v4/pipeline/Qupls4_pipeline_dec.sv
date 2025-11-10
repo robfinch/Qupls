@@ -580,7 +580,7 @@ else begin
 	end
 end
 
-Stark_decoder udeci0
+Qupls4_decoder udeci0
 (
 	.rst(rst),
 	.clk(clk),
@@ -592,7 +592,7 @@ Stark_decoder udeci0
 	.dbo(dec0)
 );
 
-Stark_decoder udeci1
+Qupls4_decoder udeci1
 (
 	.rst(rst),
 	.clk(clk),
@@ -604,7 +604,7 @@ Stark_decoder udeci1
 	.dbo(dec1)
 );
 
-Stark_decoder udeci2
+Qupls4_decoder udeci2
 (
 	.rst(rst),
 	.clk(clk),
@@ -616,7 +616,7 @@ Stark_decoder udeci2
 	.dbo(dec2)
 );
 
-Stark_decoder udeci3
+Qupls4_decoder udeci3
 (
 	.rst(rst),
 	.clk(clk),
