@@ -36,14 +36,14 @@
 
 import Qupls4_pkg::*;
 
-module Qupls4_decoder(rst, clk, en, cline, om, ipl, instr, dbo);
+module Qupls4_decoder(rst, clk, en, om, ipl, instr, instr_raw, dbo);
 input rst;
 input clk;
 input en;
-input [511:0] cline;
 input Qupls4_pkg::operating_mode_t om;
 input [5:0] ipl;
 input Qupls4_pkg::micro_op_t instr;
+input [239:0] instr_raw;
 output Qupls4_pkg::decode_bus_t dbo;
 
 Qupls4_pkg::ex_instruction_t ins;
@@ -61,16 +61,13 @@ assign db.v = 1'b1;
 Qupls4_decode_const udcimm
 (
 	.ins(ins.ins),
-	.cline(cline),
+	.instr_raw(instr_raw),
 	.imma(db.imma),
 	.immb(db.immb),
 	.immc(db.immc),
 	.has_imma(db.has_imma),
 	.has_immb(db.has_immb),
 	.has_immc(db.has_immc),
-	.pfxa(db.pfxa),
-	.pfxb(db.pfxb),
-	.pfxc(db.pfxc),
 	.pos(const_pos),
 	.isz(isz)
 );

@@ -32,7 +32,7 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 7850 LUTs / 2150 FFs
+// 15025 LUTs / 4550 FFs
 // ============================================================================
 
 import const_pkg::*;
@@ -585,10 +585,10 @@ Qupls4_decoder udeci0
 	.rst(rst),
 	.clk(clk),
 	.en(en),
-	.cline(cline),
 	.om(sr.om),
 	.ipl(sr.ipl),
 	.instr(tpr0.uop),
+	.instr_raw(cline >> {tpr0.cli,4'b0}),
 	.dbo(dec0)
 );
 
@@ -597,10 +597,10 @@ Qupls4_decoder udeci1
 	.rst(rst),
 	.clk(clk),
 	.en(en),
-	.cline(cline),
 	.om(sr.om),
 	.ipl(sr.ipl),
 	.instr(tpr1.uop),
+	.instr_raw(cline >> {tpr1.cli,4'b0}),
 	.dbo(dec1)
 );
 
@@ -609,10 +609,10 @@ Qupls4_decoder udeci2
 	.rst(rst),
 	.clk(clk),
 	.en(en),
-	.cline(cline),
 	.om(sr.om),
 	.ipl(sr.ipl),
 	.instr(tpr2.uop),
+	.instr_raw(cline >> {tpr2.cli,4'b0}),
 	.dbo(dec2)
 );
 
@@ -621,10 +621,10 @@ Qupls4_decoder udeci3
 	.rst(rst),
 	.clk(clk),
 	.en(en),
-	.cline(cline),
 	.om(sr.om),
 	.ipl(sr.ipl),
 	.instr(tpr3.uop),
+	.instr_raw(cline >> {tpr3.cli,4'b0}),
 	.dbo(dec3)
 );
 

@@ -34,14 +34,14 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //                                                                          
-// 1000 LUTs
+// 700 LUTs
 // ============================================================================
 
 import Qupls4_pkg::*;
 
-module Qupls4_decode_const(cline, ins, imma, immb, immc, has_imma, has_immb, has_immc,
+module Qupls4_decode_const(instr_raw, ins, imma, immb, immc, has_imma, has_immb, has_immc,
 	pos, isz);
-input [511:0] cline;
+input [239:0] instr_raw;
 input Qupls4_pkg::instruction_t ins;
 output reg [63:0] imma;
 output reg [63:0] immb;
@@ -77,9 +77,9 @@ reg [63:0] cnst1a;
 always_comb pos = Qupls4_pkg::fnConstPos(ins);
 always_comb isz = Qupls4_pkg::fnConstSize(ins);
 
-Qupls4_constant_decoder u1 (pos[3:0],isz[1:0],cline,cnst1);
-Qupls4_constant_decoder u2 (pos[7:4],isz[3:2],cline,cnst2);
-Qupls4_constant_decoder u3 (pos[11:8],isz[5:4],cline,cnst3);
+Qupls4_constant_decoder u1 (pos[3:0],isz[1:0],instr_raw,cnst1);
+Qupls4_constant_decoder u2 (pos[7:4],isz[3:2],instr_raw,cnst2);
+Qupls4_constant_decoder u3 (pos[11:8],isz[5:4],instr_raw,cnst3);
 
 always_comb
 begin
