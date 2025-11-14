@@ -2700,7 +2700,7 @@ assign arnbank[21] = 1'b0;
 assign arnbank[22] = 1'b0;
 assign arnbank[23] = 1'b0;
 */
-Stark_read_port_select urps1
+Qupls4_read_port_select urps1
 (
 	.rst(irst),
 	.clk(clk),
@@ -5145,7 +5145,7 @@ end
 
 reg load_lsq_argc;
 
-Stark_reservation_station #(
+Qupls4_reservation_station #(
 	.FUNCUNIT(4'd0)
 )
 usaust0
@@ -5166,7 +5166,7 @@ usaust0
 	.req_pRn(bRs[0])
 );
 
-Stark_reservation_station #(
+Qupls4_reservation_station #(
 	.FUNCUNIT(4'd2)
 )
 uimulst0
@@ -5191,7 +5191,7 @@ always_ff @(posedge clk) sau0_ldd <= sau0_ld;
 
 generate begin : gIDivStation
 if (SUPPORT_IDIV)
-Stark_reservation_station #(
+Qupls4_reservation_station #(
 	.FUNCUNIT(4'd3)
 )
 uidivst0
@@ -5218,7 +5218,7 @@ endgenerate
 
 generate begin : gSauStation
 	if (Stark_pkg::NSAU > 1) begin
-		Stark_reservation_station #(
+		Qupls4_reservation_station #(
 			.FUNCUNIT(4'd1)
 		)
 		usaust1
@@ -5255,7 +5255,7 @@ generate begin : gFpuStat
 		case (g)
 		0:
 			begin
-				Stark_reservation_station #(
+				Qupls4_reservation_station #(
 					.FUNCUNIT(4'd4)
 				)
 				ufmast1
@@ -5275,7 +5275,7 @@ generate begin : gFpuStat
 					.rfo_tag(rfo_tag),
 					.req_pRn(bRs[4])
 				);
-				Stark_reservation_station #(
+				Qupls4_reservation_station #(
 					.FUNCUNIT(4'd12)
 				)
 				ufpust1
@@ -5297,7 +5297,7 @@ generate begin : gFpuStat
 				);
 			end
 		1:
-				Stark_reservation_station #(
+				Qupls4_reservation_station #(
 					.FUNCUNIT(4'd5)
 				)
 				ufmast2
@@ -5322,7 +5322,7 @@ generate begin : gFpuStat
 end
 endgenerate
 
-Stark_reservation_station #(
+Qupls4_reservation_station #(
 	.FUNCUNIT(4'd7)
 )
 ubrast1
@@ -5343,7 +5343,7 @@ ubrast1
 	.req_pRn(bRs[7])
 );
 
-Stark_reservation_station #(
+Qupls4_reservation_station #(
 	.FUNCUNIT(4'd8)
 )
 uagenst1
@@ -5386,7 +5386,7 @@ Stark_agen_station uagen0stn
 
 generate begin : gAgen
 if (Stark_pkg::NDATA_PORTS > 1)
-Stark_reservation_station #(
+Qupls4_reservation_station #(
 	.FUNCUNIT(4'd9)
 )
 uagenst2

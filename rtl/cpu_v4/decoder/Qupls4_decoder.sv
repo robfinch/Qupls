@@ -65,21 +65,23 @@ Qupls4_decode_const udcimm
 	.imma(db.imma),
 	.immb(db.immb),
 	.immc(db.immc),
+	.immd(db.immd),
 	.has_imma(db.has_imma),
 	.has_immb(db.has_immb),
 	.has_immc(db.has_immc),
+	.has_immd(db.has_immd),
 	.pos(const_pos),
 	.isz(isz)
 );
 
-Stark_decode_Rs1 udcra
+Qupls4_decode_Rs1 udcra
 (
 	.om(om),
 	.instr(instr),
 	.has_imma(db.has_imma),
 	.Rs1(db.Rs1),
 	.Rs1z(db.Rs1z),
-	.exc(ecxRs1)
+	.exc(excRs1)
 );
 
 Stark_decode_Rs2 udcrb
@@ -90,7 +92,7 @@ Stark_decode_Rs2 udcrb
 	.Rs2(db.Rs2),
 	.Rs2z(db.Rs2z),
 	.has_Rs2(db.has_Rs2),
-	.exc(ecxRs2)
+	.exc(excRs2)
 );
 
 Stark_decode_Rs3 udcrc
@@ -100,7 +102,7 @@ Stark_decode_Rs3 udcrc
 	.has_immc(db.has_immc),
 	.Rs3(db.Rs3),
 	.Rs3z(db.Rs3z),
-	.exc(ecxRs3)
+	.exc(excRs3)
 );
 
 Stark_decode_Rd udcrt
@@ -109,7 +111,7 @@ Stark_decode_Rd udcrt
 	.instr(instr),
 	.Rd(db.Rd),
 	.Rdz(db.Rdz),
-	.exc(ecxRd)
+	.exc(excRd)
 );
 /*
 Stark_decode_Rd2 udcrd2

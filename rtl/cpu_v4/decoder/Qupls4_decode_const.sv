@@ -39,16 +39,18 @@
 
 import Qupls4_pkg::*;
 
-module Qupls4_decode_const(instr_raw, ins, imma, immb, immc, has_imma, has_immb, has_immc,
-	pos, isz);
+module Qupls4_decode_const(instr_raw, ins, imma, immb, immc, immd,
+	has_imma, has_immb, has_immc, has_immd, pos, isz);
 input [239:0] instr_raw;
 input Qupls4_pkg::instruction_t ins;
 output reg [63:0] imma;
 output reg [63:0] immb;
 output reg [63:0] immc;
+output reg [63:0] immd;
 output reg has_imma;
 output reg has_immb;
 output reg has_immc;
+output reg has_immd;
 output reg [11:0] pos;
 output reg [5:0] isz;
 
@@ -71,7 +73,7 @@ fpCvt32To64 ucvt32x64a(cnst1[31:0], imm32x64a);
 fpCvt32To64 ucvt32x64b(cnst2[31:0], imm32x64b);
 fpCvt32To64 ucvt32x64C(cnst3[31:0], imm32x64c);
 
-wire [63:0] cnst1, cnst2, cnst3;
+wire [63:0] cnst1, cnst2, cnst3, cnst4;
 reg [63:0] cnst1a;
 
 always_comb pos = Qupls4_pkg::fnConstPos(ins);
@@ -80,6 +82,8 @@ always_comb isz = Qupls4_pkg::fnConstSize(ins);
 Qupls4_constant_decoder u1 (pos[3:0],isz[1:0],instr_raw,cnst1);
 Qupls4_constant_decoder u2 (pos[7:4],isz[3:2],instr_raw,cnst2);
 Qupls4_constant_decoder u3 (pos[11:8],isz[5:4],instr_raw,cnst3);
+// For store immediate
+Qupls4_constant_decoder u4 (ins[10:7],ins[12:11],instr_raw,cnst4);
 
 always_comb
 begin
@@ -152,15 +156,15 @@ begin
 	Qupls4_pkg::OP_STT,
 	Qupls4_pkg::OP_STORE:
 		begin
-			immb = Qupls4_pkg::fnHasExConst(ins) ? cnst1 : {{18{ins[30]}},ins[30:17]};
-			has_immb = ins[31:29]!=3'b100;
+			has_immc = Qupls4_pkg::fnHasConstRs3(ins);
+			immc = has_immc ? cnst3 : {{48{ins[43]}},ins[43:28]};
 		end
 	Qupls4_pkg::OP_STI:
 		begin
-			immb = Qupls4_pkg::fnHasExConst(ins) ? cnst1 : {{18{ins[30]}},ins[30:17]};
-			immc = cnst2;
-			has_immb = ins[31:29]!=3'b100;
-			has_immc = 1'b1;
+			has_immd = 1'b1;
+			immd = cnst4;
+			has_immc = Qupls4_pkg::fnHasConstRs3(ins);
+			immc = has_immc ? cnst3 : {{48{ins[43]}},ins[43:28]};
 		end
 	Qupls4_pkg::OP_FENCE:
 		begin
