@@ -272,10 +272,11 @@ Stark_decode_diva udivu1
 	.div(db.diva)
 );
 
-Stark_decode_load udecld1
+Qupls4_decode_load udecld1
 (
 	.instr(ins.ins),
-	.load(db.load)
+	.load(db.load),
+	.aldf(db.aldf)
 );
 
 Stark_decode_loadz udecldz1
@@ -284,10 +285,11 @@ Stark_decode_loadz udecldz1
 	.loadz(db.loadz)
 );
 
-Stark_decode_store udecst1
+Qupls4_decode_store udecst1
 (
 	.instr(ins.ins),
-	.store(db.store)
+	.store(db.store),
+	.astf(db.astf)
 );
 
 Stark_decode_loada udeclda1
@@ -402,9 +404,11 @@ else begin
 			dbo.load <= FALSE;
 			dbo.store <= FALSE;
 			dbo.mem <= FALSE;
+			dbo.aldf <= FALSE;
+			dbo.astf <= FALSE;
 		end
 		dbo.cause <= Qupls4_pkg::FLT_NONE;
-		dbo.mem <= db.load|db.store|db.v2p;
+		dbo.mem <= db.load|db.store|db.v2p|db.aldf|db.astf;
 		dbo.sync <= db.fence && ins[15:8]==8'hFF;
 		dbo.cpytgt <= 1'b0;
 		dbo.qfext <= db.alu && ins.ins[28:27]==2'b10;

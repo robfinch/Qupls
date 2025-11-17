@@ -47,23 +47,24 @@ module Qupls4_reservation_station(rst, clk, available, busy, issue, stall,
 );
 parameter NRSE = 1;
 parameter FUNCUNIT = 4'd0;
-parameter NBPI = 8;			// number of bypasssing inputs
+parameter NBPI = 4;			// number of bypasssing inputs
+parameter OPER128 = 1'b0;
 input rst;
 input clk;
 input available;
 input stall;
-input reservation_station_entry_t [3:0] rse_i;
+input Qupls4_pkg::reservation_station_entry_t [3:0] rse_i;
 input Qupls4_pkg::rob_bitmask_t stomp;
 input pregno_t [15:0] prn;
 input [15:0] prnv;
 input value_t [15:0] rfo;
-input [15:0] rfo_tag;
+input Qupls4_pkg::flags_t [15:0] rfo_tag;
 input value_t [NBPI-1:0] rfi_val;
 input pregno_t [NBPI-1:0] rfi_pRd;
-input [NBPI-1:0] rfi_tag;
+input Qupls4_pkg::flags_t[NBPI-1:0] rfi_tag;
 output reg busy;
 output reg issue;
-output reservation_station_entry_t rse_o;
+output Qupls4_pkg::reservation_station_entry_t rse_o;
 output aregno_t [3:0] req_pRn;
 
 integer nn,kk,jj;
@@ -74,16 +75,27 @@ cpu_types_pkg::value_t argA0, argA1, argA2;
 cpu_types_pkg::value_t argB0, argB1, argB2;
 cpu_types_pkg::value_t argC0, argC1, argC2;
 cpu_types_pkg::value_t argD0, argD1, argD2;
-reg argA0_tag, argA1_tag, argA2_tag;
-reg argB0_tag, argB1_tag, argB2_tag;
-reg argC0_tag, argC1_tag, argC2_tag;
-reg argD0_tag, argD1_tag, argD2_tag;
+cpu_types_pkg::value_t argA0h, argA1h, argA2h;
+cpu_types_pkg::value_t argB0h, argB1h, argB2h;
+cpu_types_pkg::value_t argC0h, argC1h, argC2h;
+cpu_types_pkg::value_t argD0h, argD1h, argD2h;
+Qupls4_pkg::flags_t argA0_tag, argA1_tag, argA2_tag;
+Qupls4_pkg::flags_t argB0_tag, argB1_tag, argB2_tag;
+Qupls4_pkg::flags_t argC0_tag, argC1_tag, argC2_tag;
+Qupls4_pkg::flags_t argD0_tag, argD1_tag, argD2_tag;
+Qupls4_pkg::flags_t argA0h_tag, argA1h_tag, argA2h_tag;
+Qupls4_pkg::flags_t argB0h_tag, argB1h_tag, argB2h_tag;
+Qupls4_pkg::flags_t argC0h_tag, argC1h_tag, argC2h_tag;
+Qupls4_pkg::flags_t argD0h_tag, argD1h_tag, argD2h_tag;
 wire [3:0] valid0_o;
 wire [3:0] valid1_o;
 wire [3:0] valid2_o;
+wire [3:0] valid0h_o;
+wire [3:0] valid1h_o;
+wire [3:0] valid2h_o;
 wire [16:0] lfsro;
-reservation_station_entry_t [2:0] rse;
-reservation_station_entry_t rsei;
+Qupls4_pkg::reservation_station_entry_t [2:0] rse;
+Qupls4_pkg::reservation_station_entry_t rsei;
 always_comb
 	busy = rse[0].busy & rse[1].busy & rse[2].busy;
 always_comb
@@ -205,6 +217,117 @@ Qupls4_validate_operand #(.NBPI(NBPI)) uvsrcD
 	.valid2_o(valid2_o[3])
 );
 
+generate begin : gOper128
+	if (OPER128) begin
+Qupls4_validate_operand #(.NBPI(NBPI)) uvsrcAh
+(
+	.prn(prn),
+	.prnv(prnv),
+	.rfo(rfo),
+	.rfo_tag(rfo_tag),
+	.val0(argA0h),
+	.val1(argA1h),
+	.val2(argA2h),
+	.val0_tag(argA0h_tag),
+	.val1_tag(argA1h_tag),
+	.val2_tag(argA2h_tag),
+	.rfi_val(rfi_val),
+	.rfi_tag(rfi_tag),
+	.rfi_pRd(rfi_pRd),
+	.pRn0(pregno_t'(rse[0].argAh[8:0])),
+	.pRn1(pregno_t'(rse[1].argAh[8:0])),
+	.pRn2(pregno_t'(rse[2].argAh[8:0])),
+	.valid0_i(rse[0].argAh_v),
+	.valid1_i(rse[1].argAh_v),
+	.valid2_i(rse[2].argAh_v),
+	.valid0_o(valid0h_o[0]),
+	.valid1_o(valid1h_o[0]),
+	.valid2_o(valid2h_o[0])
+);
+Qupls4_validate_operand #(.NBPI(NBPI)) uvsrcBh
+(
+	.prn(prn),
+	.prnv(prnv),
+	.rfo(rfo),
+	.rfo_tag(rfo_tag),
+	.val0(argB0h),
+	.val1(argB1h),
+	.val2(argB2h),
+	.val0_tag(argB0h_tag),
+	.val1_tag(argB1h_tag),
+	.val2_tag(argB2h_tag),
+	.rfi_val(rfi_val),
+	.rfi_tag(rfi_tag),
+	.rfi_pRd(rfi_pRd),
+	.pRn0(pregno_t'(rse[0].argBh[8:0])),
+	.pRn1(pregno_t'(rse[1].argBh[8:0])),
+	.pRn2(pregno_t'(rse[2].argBh[8:0])),
+	.valid0_i(rse[0].argBh_v),
+	.valid1_i(rse[1].argBh_v),
+	.valid2_i(rse[2].argBh_v),
+	.valid0_o(valid0h_o[1]),
+	.valid1_o(valid1h_o[1]),
+	.valid2_o(valid2h_o[1])
+);
+Qupls4_validate_operand #(.NBPI(NBPI)) uvsrcCh
+(
+	.prn(prn),
+	.prnv(prnv),
+	.rfo(rfo),
+	.rfo_tag(rfo_tag),
+	.val0(argC0h),
+	.val1(argC1h),
+	.val2(argC2h),
+	.val0_tag(argC0h_tag),
+	.val1_tag(argC1h_tag),
+	.val2_tag(argC2h_tag),
+	.rfi_val(rfi_val),
+	.rfi_tag(rfi_tag),
+	.rfi_pRd(rfi_pRd),
+	.pRn0(pregno_t'(rse[0].argCh[8:0])),
+	.pRn1(pregno_t'(rse[1].argCh[8:0])),
+	.pRn2(pregno_t'(rse[2].argCh[8:0])),
+	.valid0_i(rse[0].argCh_v),
+	.valid1_i(rse[1].argCh_v),
+	.valid2_i(rse[2].argCh_v),
+	.valid0_o(valid0h_o[2]),
+	.valid1_o(valid1h_o[2]),
+	.valid2_o(valid2h_o[2])
+);
+Qupls4_validate_operand #(.NBPI(NBPI)) uvsrcDh
+(
+	.prn(prn),
+	.prnv(prnv),
+	.rfo(rfo),
+	.rfo_tag(rfo_tag),
+	.val0(argD0h),
+	.val1(argD1h),
+	.val2(argD2h),
+	.val0_tag(argD0h_tag),
+	.val1_tag(argD1h_tag),
+	.val2_tag(argD2h_tag),
+	.rfi_val(rfi_val),
+	.rfi_tag(rfi_tag),
+	.rfi_pRd(rfi_pRd),
+	.pRn0(pregno_t'(rse[0].argDh[8:0])),
+	.pRn1(pregno_t'(rse[1].argDh[8:0])),
+	.pRn2(pregno_t'(rse[2].argDh[8:0])),
+	.valid0_i(rse[0].argDh_v),
+	.valid1_i(rse[1].argDh_v),
+	.valid2_i(rse[2].argDh_v),
+	.valid0_o(valid0h_o[3]),
+	.valid1_o(valid1h_o[3]),
+	.valid2_o(valid2h_o[3])
+);
+end
+else begin
+	assign valid0h_o = 4'hF;
+	assign valid1h_o = 4'hF;
+	assign valid2h_o = 4'hF;
+end
+end
+endgenerate
+
 always_comb
 begin
 	if (rse_i[0].funcunit==FUNCUNIT) begin
@@ -258,42 +381,84 @@ else begin
 		if (!rse[0].busy) begin
 			rse[0] <= rsei;
 			rse[0].busy <= TRUE;
-			rse[0].ready <= rsei.argA_v && rsei.argB_v && (rsei.argC_v||rsei.store) && rsei.argD_v;
+			rse[0].ready <= rsei.argA_v && rsei.argB_v && (rsei.argC_v||rsei.store) && rsei.argD_v
+			&& rsei.argAh_v && rsei.argBh_v && (rsei.argCh_v||rsei.store) && rsei.argDh_v;
 			if (stomp[rsei.rndx])
 				rse[0].ins <= {26'd0,Qupls4_pkg::OP_NOP};
 		end
 		else if (!rse[1].busy) begin
 			rse[1] <= rsei;
 			rse[1].busy <= TRUE;
-			rse[1].ready <= rsei.argA_v && rsei.argB_v && (rsei.argC_v||rsei.store) && rsei.argD_v;
+			rse[1].ready <= rsei.argA_v && rsei.argB_v && (rsei.argC_v||rsei.store) && rsei.argD_v
+			&& rsei.argAh_v && rsei.argBh_v && (rsei.argCh_v||rsei.store) && rsei.argDh_v;
 			if (stomp[rsei.rndx])
 				rse[1].ins <= {26'd0,Qupls4_pkg::OP_NOP};
 		end
 		else if (!rse[2].busy) begin
 			rse[2] <= rsei;
 			rse[2].busy <= TRUE;
-			rse[2].ready <= rsei.argA_v && rsei.argB_v && (rsei.argC_v||rsei.store) && rsei.argD_v;
+			rse[2].ready <= rsei.argA_v && rsei.argB_v && (rsei.argC_v||rsei.store) && rsei.argD_v
+			&& rsei.argAh_v && rsei.argBh_v && (rsei.argCh_v||rsei.store) && rsei.argDh_v;
 			if (stomp[rsei.rndx])
 				rse[2].ins <= {26'd0,Qupls4_pkg::OP_NOP};
 		end
 	end
-	if (valid0_o[0]) begin rse[0].argA_v <= VAL; rse[0].argA <= argA0; rse[0].tagA <= argA0_tag; end
-	if (valid1_o[0]) begin rse[1].argA_v <= VAL; rse[1].argA <= argA1; rse[1].tagA <= argA1_tag; end
-	if (valid2_o[0]) begin rse[2].argA_v <= VAL; rse[2].argA <= argA2; rse[2].tagA <= argA2_tag; end
-	if (valid0_o[1]) begin rse[0].argB_v <= VAL; rse[0].argB <= argB0; rse[0].tagB <= argB0_tag; end
-	if (valid1_o[1]) begin rse[1].argB_v <= VAL; rse[1].argB <= argB1; rse[1].tagB <= argB1_tag; end
-	if (valid2_o[1]) begin rse[2].argB_v <= VAL; rse[2].argB <= argB2; rse[2].tagB <= argB2_tag; end
-	if (valid0_o[2]) begin rse[0].argC_v <= VAL; rse[0].argC <= argC0; rse[0].tagC <= argC0_tag; end
-	if (valid1_o[2]) begin rse[1].argC_v <= VAL; rse[1].argC <= argC1; rse[1].tagC <= argC1_tag; end
-	if (valid2_o[2]) begin rse[2].argC_v <= VAL; rse[2].argC <= argC2; rse[2].tagC <= argC2_tag; end
-	if (valid0_o[3]) begin rse[0].argD_v <= VAL; rse[0].argD <= argD0; rse[0].tagD <= argD0_tag; end
-	if (valid1_o[3]) begin rse[1].argD_v <= VAL; rse[1].argD <= argD1; rse[1].tagD <= argD1_tag; end
-	if (valid2_o[3]) begin rse[2].argD_v <= VAL; rse[2].argD <= argD2; rse[0].tagD <= argD2_tag; end
-	if (rse[0].argA_v && rse[0].argB_v && (rse[0].argC_v|rse[0].store) && rse[0].argD_v)
+	if (valid0_o[0] & valid0h_o[0]) begin
+		rse[0].argA_v <= VAL; rse[0].argA <= argA0; rse[0].tagA <= argA0_tag;
+		rse[0].argAh_v <= VAL; rse[0].argAh <= argA0h; rse[0].tagAh <= argA0h_tag;
+	end
+	if (valid1_o[0] & valid1h_o[0]) begin
+		rse[1].argA_v <= VAL; rse[1].argA <= argA1; rse[1].tagA <= argA1_tag;
+		rse[1].argAh_v <= VAL; rse[1].argAh <= argA1h; rse[1].tagAh <= argA1h_tag;
+	end
+	if (valid2_o[0] & valid2h_o[0]) begin
+		rse[2].argA_v <= VAL; rse[2].argA <= argA2; rse[2].tagA <= argA2_tag;
+		rse[2].argAh_v <= VAL; rse[2].argAh <= argA2h; rse[2].tagAh <= argA2h_tag;
+	end
+	if (valid0_o[1] & valid0h_o[1]) begin
+		rse[0].argB_v <= VAL; rse[0].argB <= argB0; rse[0].tagB <= argB0_tag;
+		rse[0].argBh_v <= VAL; rse[0].argBh <= argB0; rse[0].tagBh <= argB0h_tag;
+	end
+	if (valid1_o[1] & valid1h_o[1]) begin
+		rse[1].argB_v <= VAL; rse[1].argB <= argB1; rse[1].tagB <= argB1_tag;
+		rse[1].argBh_v <= VAL; rse[1].argBh <= argB1h; rse[1].tagBh <= argB1h_tag;
+	end
+	if (valid2_o[1] & valid2h_o[1]) begin
+		rse[2].argB_v <= VAL; rse[2].argB <= argB2; rse[2].tagB <= argB2_tag;
+		rse[2].argBh_v <= VAL; rse[2].argBh <= argB2h; rse[2].tagBh <= argB2h_tag;
+	end
+	if (valid0_o[2] & valid0h_o[2]) begin
+		rse[0].argC_v <= VAL; rse[0].argC <= argC0; rse[0].tagC <= argC0_tag;
+		rse[0].argCh_v <= VAL; rse[0].argCh <= argC0h; rse[0].tagCh <= argC0h_tag;
+	end
+	if (valid1_o[2] & valid1h_o[2]) begin
+		rse[1].argC_v <= VAL; rse[1].argC <= argC1; rse[1].tagC <= argC1_tag;
+		rse[1].argCh_v <= VAL; rse[1].argCh <= argC1h; rse[1].tagCh <= argC1h_tag;
+	end
+	if (valid2_o[2] & valid2h_o[2]) begin
+		rse[2].argC_v <= VAL; rse[2].argC <= argC2; rse[2].tagC <= argC2_tag;
+		rse[2].argCh_v <= VAL; rse[2].argCh <= argC2h; rse[2].tagCh <= argC2h_tag;
+	end
+	if (valid0_o[3] & valid0h_o[3]) begin
+		rse[0].argD_v <= VAL; rse[0].argD <= argD0; rse[0].tagD <= argD0_tag;
+		rse[0].argDh_v <= VAL; rse[0].argDh <= argD0h; rse[0].tagDh <= argD0h_tag;
+	end
+	if (valid1_o[3] & valid1h_o[3]) begin
+		rse[1].argD_v <= VAL; rse[1].argD <= argD1; rse[1].tagD <= argD1_tag;
+		rse[1].argDh_v <= VAL; rse[1].argDh <= argD1h; rse[1].tagDh <= argD1h_tag;
+	end
+	if (valid2_o[3] & valid2h_o[3]) begin
+		rse[2].argD_v <= VAL; rse[2].argD <= argD2; rse[0].tagD <= argD2_tag;
+		rse[2].argDh_v <= VAL; rse[2].argDh <= argD2h; rse[0].tagDh <= argD2h_tag;
+	end
+	if (rse[0].argA_v && rse[0].argB_v && (rse[0].argC_v|rse[0].store) && rse[0].argD_v
+	&& rse[0].argAh_v && rse[0].argBh_v && (rse[0].argCh_v|rse[0].store) && rse[0].argDh_v)
 		rse[0].ready <= TRUE;
-	if (rse[1].argA_v && rse[1].argB_v && (rse[1].argC_v|rse[1].store) && rse[1].argD_v)
+	if (rse[1].argA_v && rse[1].argB_v && (rse[1].argC_v|rse[1].store) && rse[1].argD_v
+	&& rse[1].argAh_v && rse[1].argBh_v && (rse[1].argCh_v|rse[1].store) && rse[1].argDh_v)
 		rse[1].ready <= TRUE;
-	if (rse[2].argA_v && rse[2].argB_v && (rse[2].argC_v|rse[2].store) && rse[2].argD_v)
+	if (rse[2].argA_v && rse[2].argB_v && (rse[2].argC_v|rse[2].store) && rse[2].argD_v
+	&& rse[2].argAh_v && rse[2].argBh_v && (rse[2].argCh_v|rse[2].store) && rse[2].argDh_v)
 		rse[2].ready <= TRUE;
 
 	// Unused stations are never ready.
@@ -310,6 +475,14 @@ else begin
 		rse[2].argB_v <= VAL;
 		rse[2].argC_v <= VAL;
 		rse[2].argD_v <= VAL;
+		rse[1].argAh_v <= VAL;
+		rse[1].argBh_v <= VAL;
+		rse[1].argCh_v <= VAL;
+		rse[1].argDh_v <= VAL;
+		rse[2].argAh_v <= VAL;
+		rse[2].argBh_v <= VAL;
+		rse[2].argCh_v <= VAL;
+		rse[2].argDh_v <= VAL;
 	end
 	if (NRSE < 3) begin
 		rse[2].busy <= TRUE;
@@ -318,6 +491,10 @@ else begin
 		rse[2].argB_v <= VAL;
 		rse[2].argC_v <= VAL;
 		rse[2].argD_v <= VAL;
+		rse[2].argAh_v <= VAL;
+		rse[2].argBh_v <= VAL;
+		rse[2].argCh_v <= VAL;
+		rse[2].argDh_v <= VAL;
 	end
 
 	// Issue scheduling: if there is only one ready easy: pick the ready one.

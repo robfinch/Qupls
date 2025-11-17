@@ -32,11 +32,12 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 2500 LUTs / 0 FFs (8 bypassing inputs)
+// 2800 LUTs / 0 FFs (8 bypassing inputs)
 // ============================================================================
 
 import const_pkg::*;
 import cpu_types_pkg::*;
+import Qupls4_pkg::*;
 
 module Qupls4_validate_operand(prn, prnv, rfo, rfo_tag,
 	pRn0,pRn1,pRn2,
@@ -47,18 +48,18 @@ parameter NBPI = 8;					// number of bypassing inputs
 input pregno_t [15:0] prn;
 input [15:0] prnv;
 input value_t [15:0] rfo;
-input [15:0] rfo_tag;
+input Qupls4_pkg::flags_t [15:0] rfo_tag;
 input pregno_t pRn0;
 input pregno_t pRn1;
 input pregno_t pRn2;
 output value_t val0;
 output value_t val1;
 output value_t val2;
-output reg val0_tag;
-output reg val1_tag;
-output reg val2_tag;
+output flags_t val0_tag;
+output flags_t val1_tag;
+output flags_t val2_tag;
 input value_t [NBPI-1:0] rfi_val;
-input [NBPI-1:0] rfi_tag;
+input Qupls4_pkg::flags_t [NBPI-1:0] rfi_tag;
 input pregno_t [NBPI-1:0] rfi_pRd;
 input valid0_i;
 input valid1_i;

@@ -200,38 +200,57 @@ Stark_microop uuop4
 );
 
 reg rd_mux;
-reg [1:0] uop_mark [0:31];
+reg [2:0] uop_mark [0:31];
 
 always_comb
 begin
 	case(uop_mark[0])
-	2'd0:	tpr0 = pg_mux.pr0;
-	2'd1:	tpr0 = pg_mux.pr1;
-	2'd2:	tpr0 = pg_mux.pr2;
-	2'd3:	tpr0 = pg_mux.pr3;
+	3'd0:	tpr0 = pg_mux.pr0;
+	3'd1:	tpr0 = pg_mux.pr1;
+	3'd2:	tpr0 = pg_mux.pr2;
+	3'd3:	tpr0 = pg_mux.pr3;
+//	3'd4:	tpr0 = pg_mux.pr4;
+//	default:	tpr0 = pg_mux.pr4;
 	endcase
 	case(uop_mark[1])
-	2'd0:	tpr1 = pg_mux.pr0;
-	2'd1:	tpr1 = pg_mux.pr1;
-	2'd2:	tpr1 = pg_mux.pr2;
-	2'd3:	tpr1 = pg_mux.pr3;
+	3'd0:	tpr1 = pg_mux.pr0;
+	3'd1:	tpr1 = pg_mux.pr1;
+	3'd2:	tpr1 = pg_mux.pr2;
+	3'd3:	tpr1 = pg_mux.pr3;
+//	3'd4:	tpr1 = pg_mux.pr4;
+//	default:	tpr1 = pg_mux.pr4;
 	endcase
 	case(uop_mark[2])
-	2'd0:	tpr2 = pg_mux.pr0;
-	2'd1:	tpr2 = pg_mux.pr1;
-	2'd2:	tpr2 = pg_mux.pr2;
-	2'd3:	tpr2 = pg_mux.pr3;
+	3'd0:	tpr2 = pg_mux.pr0;
+	3'd1:	tpr2 = pg_mux.pr1;
+	3'd2:	tpr2 = pg_mux.pr2;
+	3'd3:	tpr2 = pg_mux.pr3;
+//	3'd4:	tpr2 = pg_mux.pr4;
+//	default:	tpr2 = pg_mux.pr4;
 	endcase
 	case(uop_mark[3])
-	2'd0:	tpr3 = pg_mux.pr0;
-	2'd1:	tpr3 = pg_mux.pr1;
-	2'd2:	tpr3 = pg_mux.pr2;
-	2'd3:	tpr3 = pg_mux.pr3;
+	3'd0:	tpr3 = pg_mux.pr0;
+	3'd1:	tpr3 = pg_mux.pr1;
+	3'd2:	tpr3 = pg_mux.pr2;
+	3'd3:	tpr3 = pg_mux.pr3;
+//	3'd4:	tpr3 = pg_mux.pr4;
+//	default:	tpr3 = pg_mux.pr4;
 	endcase
+/*
+	case(uop_mark[3])
+	3'd0:	tpr4 = pg_mux.pr0;
+	3'd1:	tpr4 = pg_mux.pr1;
+	3'd2:	tpr4 = pg_mux.pr2;
+	3'd3:	tpr4 = pg_mux.pr3;
+	3'd4:	tpr4 = pg_mux.pr4;
+	default:	tpr4 = pg_mux.pr4;
+	endcase
+*/
 	tpr0.uop = uop_buf[0];
 	tpr1.uop = uop_buf[1];
 	tpr2.uop = uop_buf[2];
 	tpr3.uop = uop_buf[3];
+//	tpr4.uop = uop_buf[4];
 end
 
 // Copy micro-ops from the micro-op decoders into a buffer for further
@@ -254,26 +273,26 @@ else begin
   	uop_buf[28] <= {$bits(Qupls4_pkg::micro_op_t){1'b0}};
     for (n5 = 0; n5 < 28; n5 = n5 + 1)
 		  uop_mark[n5] <= uop_mark[n5+4];
-		uop_mark[31] <= 2'b00;
-		uop_mark[30] <= 2'b00;
-		uop_mark[29] <= 2'b00;
-		uop_mark[28] <= 2'b00;
+		uop_mark[31] <= 3'b00;
+		uop_mark[30] <= 3'b00;
+		uop_mark[29] <= 3'b00;
+		uop_mark[28] <= 3'b00;
 		if (rd_mux) begin
 			for (n4 = 0; n4 < 32; n4 = n4 + 1) begin
 				if (n4 < {2'd0,uop_count[0]}) begin
-					uop_mark[n4] <= 2'd0;
+					uop_mark[n4] <= 3'd0;
 					uop_buf[n4] <= uop[0][n4];
 				end
 				else if (n4 < {2'd0,uop_count[0]} + uop_count[1]) begin
-					uop_mark[n4] <= 2'd1;
+					uop_mark[n4] <= 3'd1;
 					uop_buf[n4] <= uop[1][n4-uop_count[0]];
 				end
 				else if (n4 < {2'd0,uop_count[0]} + uop_count[1] + uop_count[2]) begin
-					uop_mark[n4] <= 2'd2;
+					uop_mark[n4] <= 3'd2;
 					uop_buf[n4] <= uop[2][n4-uop_count[0]-uop_count[1]];
 				end
 				else begin
-					uop_mark[n4] <= 2'd3;
+					uop_mark[n4] <= 3'd3;
 					uop_buf[n4] <= uop[3][n4-uop_count[0]-uop_count[1]-uop_count[2]];
 				end
 			end
