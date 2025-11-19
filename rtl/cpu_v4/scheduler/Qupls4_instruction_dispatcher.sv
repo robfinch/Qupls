@@ -41,7 +41,7 @@
 // given type. For example there is only one flow control unit, so dispatch
 // will not try and dispatch two flow controls in the same cycle.
 //
-// 22200 LUTs 1050 FFs
+// 39000 LUTs 1300 FFs
 // ============================================================================
 
 import const_pkg::*;
@@ -103,7 +103,12 @@ begin
 			rob[nn].op.pRdv &&
 			rob[nn].op.nRdv &&
 			// and dispatched fewer than four
-			kk < 4
+			kk < 4 &&
+			// and was not dispatched in the last cycle
+			nn != rob_dispatched[0] &&
+			nn != rob_dispatched[1] &&
+			nn != rob_dispatched[2] &&
+			nn != rob_dispatched[3]
 		) begin
 			rse_o[kk] = {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
 			rse_o[kk].om = rob[nn].om;
@@ -119,6 +124,9 @@ begin
 			rse_o[kk].load = rob[nn].op.decbus.load|rob[nn].op.decbus.loadz;
 			rse_o[kk].store = rob[nn].op.decbus.store;
 			rse_o[kk].amo = rob[nn].op.decbus.amo;
+			rse_o[kk].push = rob[nn].op.decbus.push;
+			rse_o[kk].pop = rob[nn].op.decbus.pop;
+			rse_o[kk].count = rob[nn].op.decbus.count;
 			// branch specific
 			rse_o[kk].bt = rob[nn].bt;
 			rse_o[kk].brclass = rob[nn].op.decbus.brclass;
@@ -130,6 +138,11 @@ begin
 				rse_o[kk].argA_v = VAL;
 				rse_o[kk].argB_v = VAL;
 				rse_o[kk].argC_v = VAL;
+				/*
+				rse_o[kk].argAh_v = VAL;
+				rse_o[kk].argBh_v = VAL;
+				rse_o[kk].argCh_v = VAL;
+				*/
 			end
 			else begin
 				rse_o[kk].ins = rob[nn].op.uop.ins;
@@ -137,12 +150,42 @@ begin
 				rse_o[kk].argA_v = rob[nn].argA_v;
 				rse_o[kk].argB_v = rob[nn].argB_v;
 				rse_o[kk].argC_v = rob[nn].argC_v;
+				/*
+				rse_o[kk].argAh_v = !rob[nn].op.decbus.b128;
+				rse_o[kk].argBh_v = !rob[nn].op.decbus.b128;
+				rse_o[kk].argCh_v = !rob[nn].op.decbus.b128;
+				*/
 			end
 			rse_o[kk].argD_v = rob[nn].argD_v;
 			if (!rob[nn].argA_v) begin rse_o[kk].argA[8:0] = rob[nn].op.pRs1; rse_o[kk].argA[23:16] = rob[nn].op.decbus.Rs1; end
 			if (!rob[nn].argB_v) begin rse_o[kk].argB[8:0] = rob[nn].op.pRs2; rse_o[kk].argB[23:16] = rob[nn].op.decbus.Rs2; end
 			if (!rob[nn].argC_v) begin rse_o[kk].argC[8:0] = rob[nn].op.pRs3; rse_o[kk].argC[23:16] = rob[nn].op.decbus.Rs3; end
 			if (!rob[nn].argD_v) begin rse_o[kk].argD[8:0] = rob[nn].op.pRd; rse_o[kk].argD[23:16] = rob[nn].op.decbus.Rd; end
+			/*
+			if (!rob[nn].argAh_v) begin rse_o[kk].argAh[8:0] = rob[nn].op.pRs1; rse_o[kk].argA[23:16] = rob[nn].op.decbus.Rs1; end
+			if (!rob[nn].argBh_v) begin rse_o[kk].argBh[8:0] = rob[nn].op.pRs2; rse_o[kk].argB[23:16] = rob[nn].op.decbus.Rs2; end
+			if (!rob[nn].argCh_v) begin rse_o[kk].argCh[8:0] = rob[nn].op.pRs3; rse_o[kk].argC[23:16] = rob[nn].op.decbus.Rs3; end
+			if (!rob[nn].argDh_v) begin rse_o[kk].argDh[8:0] = rob[nn].op.pRd; rse_o[kk].argD[23:16] = rob[nn].op.decbus.Rd; end
+			*/
+			// Search for references to the IP and fill in.
+			if (rob[nn].op.decbus.Rs1==7'd63) begin
+				rse_o[kk].argA = rob[nn].op.pc.pc;
+//				rse_o[kk].argAh = rob[nn].op.pc.pch;
+				rse_o[kk].argA_v = VAL;
+//				rse_o[kk].argAh_v = VAL;
+			end
+			if (rob[nn].op.decbus.Rs2==7'd63) begin
+				rse_o[kk].argB = rob[nn].op.pc.pc;
+//				rse_o[kk].argBh = rob[nn].op.pc.pch;
+				rse_o[kk].argB_v = VAL;
+//				rse_o[kk].argBh_v = VAL;
+			end
+			if (rob[nn].op.decbus.Rs3==7'd63) begin
+				rse_o[kk].argC = rob[nn].op.pc.pc;
+//				rse_o[kk].argCh = rob[nn].op.pc.pch;
+				rse_o[kk].argC_v = VAL;
+//				rse_o[kk].argCh_v = VAL;
+			end
 			rse_o[kk].argI = rob[nn].op.decbus.has_immb ? rob[nn].op.decbus.immb : rob[nn].op.decbus.immc;
 			rse_o[kk].funcunit = 4'd15;
 			if (rob[nn].op.decbus.sau && sau_cnt < Qupls4_pkg::NSAU && !busy[{3'd0,sau_cnt[0]}]) begin

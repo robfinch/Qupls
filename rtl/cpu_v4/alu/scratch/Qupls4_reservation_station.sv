@@ -33,9 +33,7 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 // 3900 LUTs / 900 FFs  (1 station)
-// 4650 LUTs / 900 FFs  (8 bypass inputs) - 48-bit operands
-// 5650 LUTs / 1050 FFs  (8 bypass inputs)	- 64 bit operands
-// 19200 LUTs / 1800 FFs  (8 bypass inputs) - 128 bit operands
+// 4800 LUTs / 950 FFs  (8 bypass inputs)
 // ============================================================================
 
 import const_pkg::*;
@@ -43,17 +41,22 @@ import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
 module Qupls4_reservation_station(rst, clk, available, busy, issue, stall,
+	pc_i, rndx_i, rext_ready_i, select_o,
 	rfo_tag, rse_i, rse_o, stomp,
 	rfi_val, rfi_tag, rfi_pRd,
 	prn, prnv, rfo, req_pRn
 );
 parameter NRSE = 1;
 parameter FUNCUNIT = 4'd0;
-parameter NBPI = 8;			// number of bypasssing inputs
+parameter NBPI = 4;			// number of bypasssing inputs
+parameter RSTYPE = 1'b0;		// 0=normal, 1=register extension
 input rst;
 input clk;
 input available;
 input stall;
+input cpu_type_pkg::pc_address_t [3:0] pc_i;
+input Qupls4_pkg::rob_ndx_t [3:0] rndx_i;
+input rext_ready_i;
 input Qupls4_pkg::reservation_station_entry_t [3:0] rse_i;
 input Qupls4_pkg::rob_bitmask_t stomp;
 input pregno_t [15:0] prn;
@@ -67,6 +70,7 @@ output reg busy;
 output reg issue;
 output Qupls4_pkg::reservation_station_entry_t rse_o;
 output aregno_t [3:0] req_pRn;
+output [3:0] select_o;
 
 integer nn,kk,jj;
 reg idle;
@@ -86,8 +90,6 @@ wire [3:0] valid2_o;
 wire [16:0] lfsro;
 Qupls4_pkg::reservation_station_entry_t [2:0] rse;
 Qupls4_pkg::reservation_station_entry_t rsei;
-
-
 always_comb
 	busy = rse[0].busy & rse[1].busy & rse[2].busy;
 always_comb
@@ -248,6 +250,48 @@ end
 		else
 			idle_false <= TRUE;
 */
+reg [3:0] match [0:2];
+always_comb
+begin
+	if (rse[0].pc==pc_i[0]+4'd6 && rse[0].rndx==rndx_i[0]+2'd1)
+		match[0][0] = TRUE;
+	if (rse[0].pc==pc_i[1]+4'd6 && rse[0].rndx==rndx_i[1]+2'd1)
+		match[0][1] = TRUE;
+	if (rse[0].pc==pc_i[2]+4'd6 && rse[0].rndx==rndx_i[2]+2'd1)
+		match[0][2] = TRUE;
+	if (rse[0].pc==pc_i[3]+4'd6 && rse[0].rndx==rndx_i[3]+2'd1)
+		match[0][3] = TRUE;
+
+	if (rse[1].pc==pc_i[0]+4'd6 && rse[1].rndx==rndx_i[0]+2'd1)
+		match[1][0] = TRUE;
+	if (rse[1].pc==pc_i[1]+4'd6 && rse[1].rndx==rndx_i[1]+2'd1)
+		match[1][1] = TRUE;
+	if (rse[1].pc==pc_i[2]+4'd6 && rse[1].rndx==rndx_i[2]+2'd1)
+		match[1][2] = TRUE;
+	if (rse[1].pc==pc_i[3]+4'd6 && rse[1].rndx==rndx_i[3]+2'd1)
+		match[1][3] = TRUE;
+
+	if (rse[2].pc==pc_i[0]+4'd6 && rse[2].rndx==rndx_i[0]+2'd1)
+		match[2][0] = TRUE;
+	if (rse[2].pc==pc_i[1]+4'd6 && rse[2].rndx==rndx_i[1]+2'd1)
+		match[2][1] = TRUE;
+	if (rse[2].pc==pc_i[2]+4'd6 && rse[2].rndx==rndx_i[2]+2'd1)
+		match[2][2] = TRUE;
+	if (rse[2].pc==pc_i[3]+4'd6 && rse[2].rndx==rndx_i[3]+2'd1)
+		match[2][3] = TRUE;
+
+end
+
+always_comb
+	if (|match[0])
+		select_o = match[0];
+	else if (|match[1])
+		select_o = match[1];
+	else if (|match[2])
+		select_o = match[2];
+	else
+		select_o = 4'h0;
+
 always_ff @(posedge clk)
 if (rst) begin
   rse[0] <= {$bits(reservation_station_entry_t){1'b0}};
@@ -262,21 +306,24 @@ else begin
 		if (!rse[0].busy) begin
 			rse[0] <= rsei;
 			rse[0].busy <= TRUE;
-			rse[0].ready <= rsei.argA_v && rsei.argB_v && (rsei.argC_v||rsei.store) && rsei.argD_v;
+			rse[0].ready <= rsei.argA_v && rsei.argB_v && (rsei.argC_v||rsei.store) && rsei.argD_v
+			&& (RSTYPE ? |match[0] : rse[0].has_rext ? rext_ready_i : 1'b1);
 			if (stomp[rsei.rndx])
 				rse[0].ins <= {26'd0,Qupls4_pkg::OP_NOP};
 		end
 		else if (!rse[1].busy) begin
 			rse[1] <= rsei;
 			rse[1].busy <= TRUE;
-			rse[1].ready <= rsei.argA_v && rsei.argB_v && (rsei.argC_v||rsei.store) && rsei.argD_v;
+			rse[1].ready <= rsei.argA_v && rsei.argB_v && (rsei.argC_v||rsei.store) && rsei.argD_v
+			&& (RSTYPE ? |match[1] : rse[1].has_rext ? rext_ready_i : 1'b1);
 			if (stomp[rsei.rndx])
 				rse[1].ins <= {26'd0,Qupls4_pkg::OP_NOP};
 		end
 		else if (!rse[2].busy) begin
 			rse[2] <= rsei;
 			rse[2].busy <= TRUE;
-			rse[2].ready <= rsei.argA_v && rsei.argB_v && (rsei.argC_v||rsei.store) && rsei.argD_v;
+			rse[2].ready <= rsei.argA_v && rsei.argB_v && (rsei.argC_v||rsei.store) && rsei.argD_v
+			&& (RSTYPE ? |match[2] : rse[2].has_rext ? rext_ready_i : 1'b1);
 			if (stomp[rsei.rndx])
 				rse[2].ins <= {26'd0,Qupls4_pkg::OP_NOP};
 		end
@@ -317,11 +364,14 @@ else begin
 	if (valid2_o[3]) begin
 		rse[2].argD_v <= VAL; rse[2].argD <= argD2; rse[0].tagD <= argD2_tag;
 	end
-	if (rse[0].argA_v && rse[0].argB_v && (rse[0].argC_v|rse[0].store) && rse[0].argD_v)
+	if (rse[0].argA_v && rse[0].argB_v && (rse[0].argC_v|rse[0].store) && rse[0].argD_v
+		&& (RSTYPE ? rse[0].pc==pc_i+64'd6 && rse[0].rndx==rndx_i+2'd1 : rse[0].has_rext ? rext_ready_i : 1'b1))
 		rse[0].ready <= TRUE;
-	if (rse[1].argA_v && rse[1].argB_v && (rse[1].argC_v|rse[1].store) && rse[1].argD_v)
+	if (rse[1].argA_v && rse[1].argB_v && (rse[1].argC_v|rse[1].store) && rse[1].argD_v
+		&& (RSTYPE ? rse[1].pc==pc_i+64'd6 && rse[1].rndx==rndx_i+2'd1 : rse[1].has_rext ? rext_ready_i : 1'b1))
 		rse[1].ready <= TRUE;
-	if (rse[2].argA_v && rse[2].argB_v && (rse[2].argC_v|rse[2].store) && rse[2].argD_v)
+	if (rse[2].argA_v && rse[2].argB_v && (rse[2].argC_v|rse[2].store) && rse[2].argD_v
+		&& (RSTYPE ? rse[2].pc==pc_i+64'd6 && rse[2].rndx==rndx_i+2'd1 : rse[2].has_rext ? rext_ready_i : 1'b1))
 		rse[2].ready <= TRUE;
 
 	// Unused stations are never ready.
@@ -469,45 +519,21 @@ begin
 	req_pRn[3] = 8'd0;
 	for (jj = 0; jj < NRSE; jj = jj  + 1) begin
 		if (rse[jj].busy && !rse[jj].argA_v && kk < 4) begin
-			req_pRn[kk] = {1'b0,rse[jj].argA[22:16]};
+			req_pRn[kk] = rse[jj].argA[23:16];
 			kk = kk + 1;
 		end
-		/*
-		else if (rse[jj].busy && !rse[jj].argAh_v && kk < 4) begin
-			req_pRn[kk] = {2'b01,rse[jj].argAh[21:16]};
-			kk = kk + 1;
-		end
-		*/
 		if (rse[jj].busy && !rse[jj].argB_v && kk < 4) begin
-			req_pRn[kk] = {1'b0,rse[jj].argB[22:16]};
+			req_pRn[kk] = rse[jj].argB[23:16];
 			kk = kk + 1;
 		end
-		/*
-		else if (rse[jj].busy && !rse[jj].argBh_v && kk < 4) begin
-			req_pRn[kk] = {2'b01,rse[jj].argBh[21:16]};
-			kk = kk + 1;
-		end
-		*/
 		if (rse[jj].busy && !rse[jj].argC_v && kk < 4) begin
-			req_pRn[kk] = {1'b0,rse[jj].argC[22:16]};
+			req_pRn[kk] = rse[jj].argC[23:16];
 			kk = kk + 1;
 		end
-		/*
-		else if (rse[jj].busy && !rse[jj].argCh_v && kk < 4) begin
-			req_pRn[kk] = {2'b01,rse[jj].argCh[21:16]};
-			kk = kk + 1;
-		end
-		*/
 		if (rse[jj].busy && !rse[jj].argD_v && kk < 4) begin
-			req_pRn[kk] = {1'b0,rse[jj].argD[22:16]};
+			req_pRn[kk] = rse[jj].argD[23:16];
 			kk = kk + 1;
 		end
-		/*
-		else if (rse[jj].busy && !rse[jj].argDh_v && kk < 4) begin
-			req_pRn[kk] = {2'b01,rse[jj].argDh[21:16]};
-			kk = kk + 1;
-		end
-		*/
 	end
 end
 

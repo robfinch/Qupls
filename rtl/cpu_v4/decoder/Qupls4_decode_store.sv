@@ -56,19 +56,7 @@ begin
 end
 endfunction
 
-function fnIsAstf;
-input Qupls4_pkg::instruction_t op;
-begin
-	case(op.any.opcode)
-	Qupls4_pkg::OP_ASTF:
-		fnIsAstf = 1'b1;
-	default:
-		fnIsAstf = 1'b0;
-	endcase
-end
-endfunction
-
 assign store = fnIsStore(instr);
-assign astf = fnIsAstf(instr);
+assign astf = 1'b0;
 
 endmodule

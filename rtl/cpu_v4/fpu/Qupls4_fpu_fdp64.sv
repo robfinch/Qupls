@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2023-2025 Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -32,54 +32,83 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 15 LUTs
 // ============================================================================
 
-import cpu_types_pkg::*;
-import Qupls4_pkg::*;
+import Stark_pkg::*;
+//import fp64Pkg::*;
 
-module Qupls4_decode_Rs3(om, instr, instr_raw, has_immc, Rs3, Rs3z, exc);
-input Qupls4_pkg::operating_mode_t om;
-input Qupls4_pkg::micro_op_t instr;
-input [239:0] instr_raw;
-input has_immc;
-output aregno_t Rs3;
-output reg Rs3z;
-output reg exc;
+module Stark_fpu_fma64(rst, clk, clk3x, om, idle, ir, rm, a, b, c, t, i, p, o, done, exc);
+parameter WID=64;
+input rst;
+input clk;
+input clk3x;
+input Stark_pkg::operating_mode_t om;
+input idle;
+input Stark_pkg::instruction_t ir;
+input [2:0] rm;
+input [WID-1:0] a;
+input [WID-1:0] b;
+input [WID-1:0] c;
+input [WID-1:0] t;
+input [WID-1:0] i;
+input [WID-1:0] p;
+output reg [WID-1:0] o;
+output reg done;
+output Stark_pkg::cause_code_t exc;
 
-reg exc2;
+wire [WID-1:0] bus;
+wire ce = 1'b1;
 
-function aregno_t fnRs3;
-input Qupls4_pkg::micro_op_t instr;
-input [239:0] instr_raw;
-input has_immc;
-Qupls4_pkg::instruction_t ir;
-reg has_rext;
-begin
-	ir = instr.ins;
-	has_rext = instr_raw[54:48]==OP_REXT;
-	if (has_immc)
-		fnRs3 = 7'd0;
+reg fmaop, fma_done;
+reg [WID-1:0] fmac;
+reg [WID-1:0] fmab;
+/*
+always_comb
+	if (ir.f3.func==FN_FMS || ir.f3.func==FN_FNMS)
+		fmaop = 1'b1;
 	else
-		case(ir.any.opcode)
-		Qupls4_pkg::OP_STB,Qupls4_pkg::OP_STW,
-		Qupls4_pkg::OP_STT,Qupls4_pkg::OP_STORE,Qupls4_pkg::OP_STI,
-		Qupls4_pkg::OP_STPTR,Qupls4_pkg::OP_STF:
-			fnRs3 = has_rext ? instr_raw[48+34:48+28] : {2'b00,ir.lsscn.Rsd};
-		Qupls4_pkg::OP_R3B,Qupls4_pkg::OP_R3W,Qupls4_pkg::OP_R3T,Qupls4_pkg::OP_R3O:
-			fnRs3 = has_rext ? instr_raw[48+34:48+28] : {2'b00,ir.alu.Rs3};
-		default:
-			fnRs3 = 7'd0;
-		endcase
-end
-endfunction
+		fmaop = 1'b0;
+*/
+always_comb
+	if (ir.fpu.op4==Stark_pkg::FOP4_FADD || ir.fpu.op4==Stark_pkg::FOP4_FSUB)
+		fmab <= 64'h3FF0000000000000;	// 1,0
+	else
+		fmab <= b;
 
 always_comb
-begin
-	Rs3 = fnRs3(instr, instr_raw, has_immc);
-	Rs3z = ~|Rs3;
-	exc = 1'b0;
-//	tRegmap(om, Rs3, Rs3, exc);
+	if (ir.fpu.op4==FOP4_FMUL || ir.fpu.op4==FOP4_FDIV)
+		fmac = 64'd0;
+	else
+		fmac = c;
+
+fpFMA64nrL8 ufma1
+(
+	.clk(clk),
+	.ce(ce),
+	.op(fmaop),
+	.rm(rm),
+	.a(a),
+	.b(fmab),
+	.c(fmac),
+	.o(bus),
+	.inf(),
+	.zero(),
+	.overflow(),
+	.underflow(),
+	.inexact()
+);
+
+always_ff @(posedge clk)
+if (rst) begin
+	fma_done <= 1'b0;
 end
+else begin
+	fma_done <= cnt>=12'h8;
+end
+
+always_ff @(posedge clk)
+	o = bus;
+always_comb
+	exc = Stark_pkg::FLT_NONE;
 
 endmodule

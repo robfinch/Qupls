@@ -54,19 +54,7 @@ begin
 end
 endfunction
 
-function fnIsAldf;
-input Qupls4_pkg::instruction_t op;
-begin
-	case(op.any.opcode)
-	Qupls4_pkg::OP_ALDF:
-		fnIsAldf = 1'b1;
-	default:
-		fnIsAldf = 1'b0;
-	endcase
-end
-endfunction
-
 assign load = fnIsLoad(instr);
-assign aldf = fnIsAldf(instr);
+assign aldf = 1'b0;
 
 endmodule

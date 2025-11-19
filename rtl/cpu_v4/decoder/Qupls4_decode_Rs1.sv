@@ -32,14 +32,16 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
+// 25 LUTs
 // ============================================================================
 
 import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_decode_Rs1(om, instr, has_imma, Rs1, Rs1z, exc);
+module Qupls4_decode_Rs1(om, instr, instr_raw, has_imma, Rs1, Rs1z, exc);
 input Qupls4_pkg::operating_mode_t om;
 input Qupls4_pkg::micro_op_t instr;
+input [239:0] instr_raw;
 input has_imma;
 output aregno_t Rs1;
 output reg Rs1z;
@@ -49,33 +51,36 @@ Qupls4_pkg::operating_mode_t om1;
 
 function aregno_t fnRs1;
 input Qupls4_pkg::micro_op_t ins;
+input [239:0] instr_raw;
 input has_imma;
 Qupls4_pkg::instruction_t ir;
+reg has_rext;
 begin
 	ir = ins.ins;
+	has_rext = instr_raw[54:48] == OP_REXT;
 	if (has_imma)
 		fnRs1 = 8'd0;
 	else
 		case(ir.any.opcode)
-/*			
+			
 		Qupls4_pkg::OP_MOV:
 			if (ir[28:26] < 3'd4)
 				fnRs1 = {ir[20:19],ir[15:11]};
 			else
 				fnRs1 = {2'b00,ir[15:11]};
 		Qupls4_pkg::OP_FLTH,Qupls4_pkg::OP_FLTS,Qupls4_pkg::OP_FLTD,Qupls4_pkg::OP_FLTQ:
-			fnRs1 = {2'b01,ir.fpu.Rs1};
+			fnRs1 = has_rext ? instr_raw[61:55] : {1'b0,ir.fpu.Rs1};
 		Qupls4_pkg::OP_CSR:
-			fnRs1 = {ins.xRs1,ir.csr.Rs1};
+			fnRs1 = has_rext ? instr_raw[61:55] : {1'b0,ir.csr.Rs1};
 		Qupls4_pkg::OP_ADDI,Qupls4_pkg::OP_SUBFI,Qupls4_pkg::OP_CMPI,Qupls4_pkg::OP_CMPUI,
 		Qupls4_pkg::OP_ANDI,Qupls4_pkg::OP_ORI,Qupls4_pkg::OP_XORI,
 		Qupls4_pkg::OP_MULI,Qupls4_pkg::OP_MULUI,Qupls4_pkg::OP_DIVI,Qupls4_pkg::OP_DIVUI,
 		Qupls4_pkg::OP_SHIFT:
-			fnRs1 = {ins.xRs1,ir.alui.Rs1};
+			fnRs1 = has_rext ? instr_raw[61:55] : {1'b0,ir.alui.Rs1};
 		Qupls4_pkg::OP_B0,Qupls4_pkg::OP_B1:
-			fnRs1 = ir[31] || ir.blrlr.BRs==3'd0 ? 7'd0 : {4'b0100,ir.blrlr.BRs};
+			fnRs1 = has_rext ? instr_raw[61:55] : {1'b0,ir.br.Rs1};
 		Qupls4_pkg::OP_BCC0,Qupls4_pkg::OP_BCC1:
-			fnRs1 = ir.bccld.BRs != 3'd7 && ir.bccld.BRs != 3'd0 ? {4'b0100,ir.bccld.BRs} : 7'd0;
+			fnRs1 = has_rext ? instr_raw[61:55] : {1'b0,ir.br.Rs1};
 		Qupls4_pkg::OP_LDB,Qupls4_pkg::OP_LDBZ,
 		Qupls4_pkg::OP_LDW,Qupls4_pkg::OP_LDWZ,
 		Qupls4_pkg::OP_LDT,Qupls4_pkg::OP_LDTZ,
@@ -83,8 +88,8 @@ begin
 		Qupls4_pkg::OP_AMO,Qupls4_pkg::OP_CMPSWAP,
 		Qupls4_pkg::OP_STB,Qupls4_pkg::OP_STW,Qupls4_pkg::OP_STT,Qupls4_pkg::OP_STORE,Qupls4_pkg::OP_STI,
 		Qupls4_pkg::OP_STPTR:
-			fnRs1 = {ins.xRs1,ir.lsd.Rs1};
-*/
+			fnRs1 = has_rext ? instr_raw[61:55] : {1'b0,ir.lsd.Rs1};
+
 		Qupls4_pkg::OP_PUSH,Qupls4_pkg::OP_POP:
 			fnRs1 = 7'd0;
 		default:
@@ -95,7 +100,7 @@ endfunction
 
 always_comb
 begin
-	Rs1 = fnRs1(instr, has_imma);
+	Rs1 = fnRs1(instr, instr_raw, has_imma);
 	/*
 	if (instr.ins.any.opcode==Qupls4_pkg::OP_MOV && instr.ins[28:26]==3'd1)	// MOVEMD?
 		om1 = Qupls4_pkg::operating_mode_t'(instr.ins[24:23]);

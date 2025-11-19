@@ -32,54 +32,61 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 15 LUTs
+// 25 LUTs
 // ============================================================================
 
 import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_decode_Rs3(om, instr, instr_raw, has_immc, Rs3, Rs3z, exc);
+module Qupls4_decode_Rd(om, instr, instr_raw, Rd, Rdz, exc);
 input Qupls4_pkg::operating_mode_t om;
 input Qupls4_pkg::micro_op_t instr;
 input [239:0] instr_raw;
-input has_immc;
-output aregno_t Rs3;
-output reg Rs3z;
+output aregno_t Rd;
+output reg Rdz;
 output reg exc;
 
-reg exc2;
-
-function aregno_t fnRs3;
+function aregno_t fnRd;
 input Qupls4_pkg::micro_op_t instr;
 input [239:0] instr_raw;
-input has_immc;
 Qupls4_pkg::instruction_t ir;
 reg has_rext;
 begin
 	ir = instr.ins;
 	has_rext = instr_raw[54:48]==OP_REXT;
-	if (has_immc)
-		fnRs3 = 7'd0;
-	else
-		case(ir.any.opcode)
-		Qupls4_pkg::OP_STB,Qupls4_pkg::OP_STW,
-		Qupls4_pkg::OP_STT,Qupls4_pkg::OP_STORE,Qupls4_pkg::OP_STI,
-		Qupls4_pkg::OP_STPTR,Qupls4_pkg::OP_STF:
-			fnRs3 = has_rext ? instr_raw[48+34:48+28] : {2'b00,ir.lsscn.Rsd};
-		Qupls4_pkg::OP_R3B,Qupls4_pkg::OP_R3W,Qupls4_pkg::OP_R3T,Qupls4_pkg::OP_R3O:
-			fnRs3 = has_rext ? instr_raw[48+34:48+28] : {2'b00,ir.alu.Rs3};
-		default:
-			fnRs3 = 7'd0;
-		endcase
+	case(ir.any.opcode)
+	Qupls4_pkg::OP_MOV:
+		if (ir[28:26] < 3'd4)
+			fnRd = {ir[18:17],ir[10:6]};
+		else
+			fnRd = {2'b00,ir[10:6]};
+	Qupls4_pkg::OP_FLTH,Qupls4_pkg::OP_FLTS,Qupls4_pkg::OP_FLTD,Qupls4_pkg::OP_FLTQ:
+		fnRd = has_rext ? instr_raw[48+13:48+7] : ir.fpu.Rd;
+	Qupls4_pkg::OP_CSR:
+		fnRd = has_rext ? instr_raw[48+13:48+7] : ir.csr.Rd;
+	Qupls4_pkg::OP_ADDI,Qupls4_pkg::OP_SUBFI,Qupls4_pkg::OP_CMPI,Qupls4_pkg::OP_CMPUI,
+	Qupls4_pkg::OP_ANDI,Qupls4_pkg::OP_ORI,Qupls4_pkg::OP_XORI,
+	Qupls4_pkg::OP_MULI,Qupls4_pkg::OP_MULUI,Qupls4_pkg::OP_DIVI,Qupls4_pkg::OP_DIVUI,
+	Qupls4_pkg::OP_SHIFT:
+		fnRd = has_rext ? instr_raw[48+13:48+7] : ir.alui.Rd;
+	Qupls4_pkg::OP_B0,Qupls4_pkg::OP_B1,Qupls4_pkg::OP_BCC0,Qupls4_pkg::OP_BCC1:
+		fnRd = ir[8:6]==3'd7 || ir[8:6]==3'd0 ? 7'd0 : {4'b0100,ir.blrlr.BRd};
+	Qupls4_pkg::OP_LDB,Qupls4_pkg::OP_LDBZ,Qupls4_pkg::OP_LDW,Qupls4_pkg::OP_LDWZ,
+	Qupls4_pkg::OP_LDT,Qupls4_pkg::OP_LDTZ,Qupls4_pkg::OP_LOAD,Qupls4_pkg::OP_LOADA,
+	Qupls4_pkg::OP_LDF,
+	Qupls4_pkg::OP_AMO,Qupls4_pkg::OP_CMPSWAP:
+		fnRd = has_rext ? instr_raw[48+13:48+7] : ir.lsd.Rsd;
+	default:
+		fnRd = 7'd0;
+	endcase
 end
 endfunction
 
 always_comb
 begin
-	Rs3 = fnRs3(instr, instr_raw, has_immc);
-	Rs3z = ~|Rs3;
-	exc = 1'b0;
-//	tRegmap(om, Rs3, Rs3, exc);
+	Rd = fnRd(instr, instr_raw);
+	Rdz = ~|Rd;
+//	tRegmap(om1, Rd, Rd, exc);
 end
 
 endmodule

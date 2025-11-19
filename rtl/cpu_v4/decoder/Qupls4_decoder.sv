@@ -78,16 +78,18 @@ Qupls4_decode_Rs1 udcra
 (
 	.om(om),
 	.instr(instr),
+	.instr_raw(instr_raw),
 	.has_imma(db.has_imma),
 	.Rs1(db.Rs1),
 	.Rs1z(db.Rs1z),
 	.exc(excRs1)
 );
 
-Stark_decode_Rs2 udcrb
+Qupls4_decode_Rs2 udcrb
 (
 	.om(om),
 	.instr(instr),
+	.instr_raw(instr_raw),
 	.has_immb(db.has_immb),
 	.Rs2(db.Rs2),
 	.Rs2z(db.Rs2z),
@@ -95,20 +97,22 @@ Stark_decode_Rs2 udcrb
 	.exc(excRs2)
 );
 
-Stark_decode_Rs3 udcrc
+Qupls4_decode_Rs3 udcrc
 (
 	.om(om),
 	.instr(instr),
+	.instr_raw(instr_raw),
 	.has_immc(db.has_immc),
 	.Rs3(db.Rs3),
 	.Rs3z(db.Rs3z),
 	.exc(excRs3)
 );
 
-Stark_decode_Rd udcrt
+Qupls4_decode_Rd udcrt
 (
 	.om(om),
 	.instr(instr),
+	.instr_raw(instr_raw),
 	.Rd(db.Rd),
 	.Rdz(db.Rdz),
 	.exc(excRd)

@@ -33,7 +33,8 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // 
-// 7000 LUTs / 520 FFs / 96 BRAMs (4w16r)
+// 7000 LUTs / 520 FFs / 96 BRAMs (4w16r) - 64 bit
+// 10650 LUTs / 1050 FFs / 120 BRAMs (4w12r) - 128 bit
 // ============================================================================
 //
 import Qupls4_pkg::*;
@@ -48,7 +49,7 @@ parameter WID = $bits(cpu_types_pkg::value_t)+$bits(Qupls4_pkg::flags_t);
 parameter DEP = Qupls4_pkg::PREGS;
 parameter BWW = 8;
 parameter RBIT = $clog2(DEP)-1;
-parameter RPORTS = 16;
+parameter RPORTS = 12;
 input rst;
 input clk;
 input wr0;

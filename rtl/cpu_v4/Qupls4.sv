@@ -394,7 +394,7 @@ wire [3:0] mc_regx1;
 wire [3:0] mc_regx2;
 wire [3:0] mc_regx3;
 wire [12:0] rs_busy;
-Qupls4_pkg::reservation_station_entry_t rse;
+Qupls4_pkg::reservation_station_entry_t [3:0] rse;
 
 // ALU done and idle are almost the same, but idle is sticky and set
 // if the ALU is not busy, whereas done pulses at the end of an ALU

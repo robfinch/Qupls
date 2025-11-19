@@ -151,7 +151,7 @@ wire [2:0] uop_count [0:3];
 Qupls4_pkg::micro_op_t [7:0] uop [0:3];
 Qupls4_pkg::micro_op_t [31:0] uop_buf;
 
-Stark_microop uuop1
+Qupls4_microop uuop1
 (
 	.om(pg_mux.pr0.om),
 	.ir(pg_mux.pr0.uop.ins),
@@ -163,7 +163,7 @@ Stark_microop uuop1
 	.uop(uop[0])
 );
 
-Stark_microop uuop2
+Qupls4_microop uuop2
 (
 	.om(pg_mux.pr1.om),
 	.ir(pg_mux.pr1.uop.ins), 
@@ -175,7 +175,7 @@ Stark_microop uuop2
 	.uop(uop[1])
 );
 
-Stark_microop uuop3
+Qupls4_microop uuop3
 (
 	.om(pg_mux.pr2.om),
 	.ir(pg_mux.pr2.uop.ins), 
@@ -187,7 +187,7 @@ Stark_microop uuop3
 	.uop(uop[2])
 );
 
-Stark_microop uuop4
+Qupls4_microop uuop4
 (
 	.om(pg_mux.pr3.om),
 	.ir(pg_mux.pr3.uop.ins), 
