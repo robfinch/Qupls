@@ -33,9 +33,8 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 // 41000 LUTs / 2000 FFs / 239 DSPs	-	SAU0 (128-bit)
-// 15300 LUTs / 570 FFs / 56 DSPs (64-bit)
-// 5800 LUTs / 360 FFs / 32 DSPs (64-bit, no precision support)
-// 6600 LUTs / 400 FFs / 32 DSPs (64-bit, no precision support - with caps.)
+// 37000 LUTs / 1610 FFs / 0 DSPs (64-bit, full precision support)
+// 7600 LUTs / 360 FFs / 0 DSPs (64-bit, no precision support)
 // ============================================================================
 
 import const_pkg::*;
@@ -86,7 +85,28 @@ always_comb pc = rse_i.pc;
 always_comb cp_i = rse_i.cndx;
 always_comb aRd_i = rse_i.aRd;
 always_comb prc = Qupls4_pkg::memsz_t'(rse_i.prc);
+reg isflt,issimd;
 
+always_comb
+	isflt = ir.any.opcode==Qupls4_pkg::OP_FLTH||
+		ir.any.opcode==Qupls4_pkg::OP_FLTS||
+		ir.any.opcode==Qupls4_pkg::OP_FLTD||
+		ir.any.opcode==Qupls4_pkg::OP_FLTQ ||
+		ir.any.opcode==Qupls4_pkg::OP_FLTPH ||
+		ir.any.opcode==Qupls4_pkg::OP_FLTPS ||
+		ir.any.opcode==Qupls4_pkg::OP_FLTPD ||
+		ir.any.opcode==Qupls4_pkg::OP_FLTPQ
+		;
+always_comb
+	issimd = ir.any.opcode==Qupls4_pkg::OP_R3BP ||
+		ir.any.opcode==Qupls4_pkg::OP_R3WP ||
+		ir.any.opcode==Qupls4_pkg::OP_R3TP ||
+		ir.any.opcode==Qupls4_pkg::OP_R3OP ||
+		ir.any.opcode==Qupls4_pkg::OP_FLTPH ||
+		ir.any.opcode==Qupls4_pkg::OP_FLTPS ||
+		ir.any.opcode==Qupls4_pkg::OP_FLTPD ||
+		ir.any.opcode==Qupls4_pkg::OP_FLTPQ
+		;
 reg [WID-1:0] t1;
 reg z1;
 reg [7:0] cptgt1;
@@ -102,7 +122,7 @@ genvar g,mm,xx;
 generate begin : g8
 	if (Qupls4_pkg::SUPPORT_PREC)
 	for (g = 0; g < WID/8; g = g + 1)
-		Stark_sau #(.WID(8), .SAU0(SAU0)) ualu16
+		Qupls4_sau #(.WID(8), .SAU0(SAU0), .LANE(g)) ualu8
 		(
 			.rst(rst),
 			.clk(clk),
@@ -129,7 +149,7 @@ endgenerate
 generate begin : g16
 	if (Qupls4_pkg::SUPPORT_PREC)
 	for (g = 0; g < WID/16; g = g + 1)
-		Stark_sau #(.WID(16), .SAU0(SAU0)) ualu16
+		Qupls4_sau #(.WID(16), .SAU0(SAU0), .LANE(g)) ualu16
 		(
 			.rst(rst),
 			.clk(clk),
@@ -156,7 +176,7 @@ endgenerate
 generate begin : g32
 	if (Qupls4_pkg::SUPPORT_PREC)
 	for (g = 0; g < WID/32; g = g + 1)
-		Stark_sau #(.WID(32), .SAU0(SAU0)) usau32
+		Qupls4_sau #(.WID(32), .SAU0(SAU0), .LANE(g)) usau32
 		(
 			.rst(rst),
 			.clk(clk),
@@ -183,7 +203,7 @@ endgenerate
 generate begin : g64
 	if (Qupls4_pkg::SUPPORT_PREC || WID==64)
 	for (g = 0; g < WID/64; g = g + 1)
-		Stark_sau #(.WID(64), .SAU0(SAU0)) usau64
+		Qupls4_sau #(.WID(64), .SAU0(SAU0), .LANE(g)) usau64
 		(
 			.rst(rst),
 			.clk(clk),
@@ -211,7 +231,7 @@ endgenerate
 generate begin : g128
 	if (WID==128)
 	for (g = 0; g < WID/128; g = g + 1)
-		Stark_sau #(.WID(128), .SAU0(SAU0)) usau128
+		Qupls4_sau #(.WID(128), .SAU0(SAU0), .LANE(g)) usau128
 		(
 			.rst(rst),
 			.clk(clk),
@@ -267,7 +287,7 @@ begin
 			case(prc)
 			Qupls4_pkg::wyde:		begin o1 = o16; exc1 = exc16; end
 			Qupls4_pkg::tetra:	begin o1 = o32; exc1 = exc32; end
-			Qupls4_pkg::octa:		begin o1 = o64; eexc1 = exc64; end
+			Qupls4_pkg::octa:		begin o1 = o64; exc1 = exc64; end
 			Qupls4_pkg::hexi:		begin o1 = o128; exc1 = exc128; end
 			default:	begin o1 = o128; exc1 = exc128; end
 			endcase

@@ -41,7 +41,7 @@ import mmu_pkg::*;
 import Qupls4_pkg::*;
 
 module Qupls4_dram_done(rst, clk, load, store, cload, cstore, cload_tags,
-	ack, hilo, dram_idv, dram_id, dram_state, dram_more, stomp, dram_stomp, done);
+	ack, dram_v, dram_idv, dram_id, dram_state, dram_more, stomp, dram_stomp, done);
 input rst;		// not used
 input clk;
 input load;
@@ -50,7 +50,7 @@ input cload;
 input cstore;
 input cload_tags;
 input ack;
-input hilo;
+input dram_v;
 input dram_idv;
 input rob_ndx_t dram_id;
 input Qupls4_pkg::dram_state_t dram_state;
@@ -67,10 +67,7 @@ begin
 	if (!(store|cstore|load|cload) && dram_idv)
 		done <= TRUE;
 	else if ((store|cstore) ? !stomp[dram_id] && dram_idv :
-		(dram_state == Qupls4_pkg::DRAMSLOT_ACTIVE && ack &&
-			(hilo ? ((load|cload) & ~dram_stomp) :
-			((load|cload|cload_tags) & ~dram_more & ~dram_stomp)))
-		)
+		(dram_state == Qupls4_pkg::DRAMSLOT_DELAY || dram_state==Qupls4_pkg::DRAMSLOT_DELAY2) && dram_v)
 		done <= TRUE;
 end
 

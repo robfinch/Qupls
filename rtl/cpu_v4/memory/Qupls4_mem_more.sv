@@ -1,10 +1,9 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2023-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
-//
 //
 // BSD 3-Clause License
 // Redistribution and use in source and binary forms, with or without
@@ -32,59 +31,34 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 25 LUTs
+//
+// The more flag indicates when a second bus cycle needs to be run to support
+// unaligned memory.k                                                                          
 // ============================================================================
-
-import cpu_types_pkg::*;
+//
+import const_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_decode_Rd(om, instr, instr_raw, Rd, Rdz, exc);
-input Qupls4_pkg::operating_mode_t om;
-input Qupls4_pkg::micro_op_t instr;
-input [239:0] instr_raw;
-output aregno_t Rd;
-output reg Rdz;
-output reg exc;
+module Qupls4_mem_more(rst_i, clk_i, state_i, sel_i, more_o);
+input rst_i;
+input clk_i;
+input [1:0] state_i;
+input [79:0] sel_i;
+output reg more_o;
 
-function aregno_t fnRd;
-input Qupls4_pkg::micro_op_t instr;
-input [239:0] instr_raw;
-Qupls4_pkg::instruction_t ir;
-begin
-	ir = instr.ins;
-	case(ir.any.opcode)
-	Qupls4_pkg::OP_MOV:
-		if (ir[28:26] < 3'd4)
-			fnRd = {ir[18:17],ir[10:6]};
+always_ff @(posedge clk_i)
+if (rst_i)
+	more_o <= FALSE;
+else begin
+	case(state_i)
+	Qupls4_pkg::DRAMSLOT_AVAIL:	;
+	Qupls4_pkg::DRAMSLOT_READY:
+		if (Qupls4_pkg::SUPPORT_UNALIGNED_MEMORY && |sel_i[79:64])
+			more_o <= TRUE;
 		else
-			fnRd = {2'b00,ir[10:6]};
-	Qupls4_pkg::OP_FLTH,Qupls4_pkg::OP_FLTS,Qupls4_pkg::OP_FLTD,Qupls4_pkg::OP_FLTQ:
-		fnRd = ir.fpu.Rd;
-	Qupls4_pkg::OP_CSR:
-		fnRd = ir.csr.Rd;
-	Qupls4_pkg::OP_ADDI,Qupls4_pkg::OP_SUBFI,Qupls4_pkg::OP_CMPI,Qupls4_pkg::OP_CMPUI,
-	Qupls4_pkg::OP_ANDI,Qupls4_pkg::OP_ORI,Qupls4_pkg::OP_XORI,
-	Qupls4_pkg::OP_MULI,Qupls4_pkg::OP_MULUI,Qupls4_pkg::OP_DIVI,Qupls4_pkg::OP_DIVUI,
-	Qupls4_pkg::OP_SHIFT:
-		fnRd = ir.alui.Rd;
-	Qupls4_pkg::OP_B0,Qupls4_pkg::OP_B1,Qupls4_pkg::OP_BCC0,Qupls4_pkg::OP_BCC1:
-		fnRd = ir[8:6]==3'd7 || ir[8:6]==3'd0 ? 7'd0 : {4'b0100,ir.blrlr.BRd};
-	Qupls4_pkg::OP_LDB,Qupls4_pkg::OP_LDBZ,Qupls4_pkg::OP_LDW,Qupls4_pkg::OP_LDWZ,
-	Qupls4_pkg::OP_LDT,Qupls4_pkg::OP_LDTZ,Qupls4_pkg::OP_LOAD,Qupls4_pkg::OP_LOADA,
-	Qupls4_pkg::OP_LDV,
-	Qupls4_pkg::OP_AMO,Qupls4_pkg::OP_CMPSWAP:
-		fnRd = ir.lsd.Rsd;
-	default:
-		fnRd = 7'd0;
+			more_o <= FALSE;
+	default:	;
 	endcase
-end
-endfunction
-
-always_comb
-begin
-	Rd = fnRd(instr, instr_raw);
-	Rdz = ~|Rd;
-//	tRegmap(om1, Rd, Rd, exc);
 end
 
 endmodule

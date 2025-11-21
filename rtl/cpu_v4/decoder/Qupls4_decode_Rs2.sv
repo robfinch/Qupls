@@ -94,8 +94,7 @@ begin
 			fnHas_Rs2 = ir[31:29]==3'd0;
 		Qupls4_pkg::OP_LDB,Qupls4_pkg::OP_LDBZ,Qupls4_pkg::OP_LDW,Qupls4_pkg::OP_LDWZ,
 		Qupls4_pkg::OP_LDT,Qupls4_pkg::OP_LDTZ,Qupls4_pkg::OP_LOAD,Qupls4_pkg::OP_LOADA,
-		Qupls4_pkg::OP_LDF,
-		Qupls4_pkg::OP_STB,Qupls4_pkg::OP_STW,Qupls4_pkg::OP_STF,
+		Qupls4_pkg::OP_STB,Qupls4_pkg::OP_STW,
 		Qupls4_pkg::OP_STT,Qupls4_pkg::OP_STORE,
 		Qupls4_pkg::OP_STPTR:
 			fnHas_Rs2 = ir[31:29]==3'd0;
@@ -114,37 +113,33 @@ input Qupls4_pkg::micro_op_t instr;
 input [239:0] instr_raw;
 input has_immb;
 Qupls4_pkg::instruction_t ir;
-reg has_rext;
 begin
 	ir = instr.ins;
-	has_rext = instr_raw[54:48]==OP_REXT;
 	if (has_immb)
 		fnRs2 = 8'd0;
 	else
 		case(ir.any.opcode)
 		Qupls4_pkg::OP_FLTH,Qupls4_pkg::OP_FLTS,Qupls4_pkg::OP_FLTD,Qupls4_pkg::OP_FLTQ:
-			fnRs2 = has_rext ? instr_raw[48+27:48+21] : {2'b01,ir.fpu.Rs2};
+			fnRs2 = {2'b01,ir.fpu.Rs2};
 		Qupls4_pkg::OP_CSR:
-			fnRs2 = ir[31:29]==3'd0 ? (has_rext ? instr_raw[48+27:48+21] : {2'b00,ir.csrr.Rs2}) : 7'd0;
+			fnRs2 = ir[31:29]==3'd0 ? {2'b00,ir.csrr.Rs2} : 7'd0;
 		Qupls4_pkg::OP_B0,Qupls4_pkg::OP_B1,Qupls4_pkg::OP_BCC0,Qupls4_pkg::OP_BCC1:
 			if (ir[30:29]==2'b00 && ir[8:6]!=3'd7)
-				fnRs2 = has_rext ? instr_raw[48+27:48+21] : {2'b00,ir[15:11]};
+				fnRs2 = {2'b00,ir[15:11]};
 			else
 				fnRs2 = 7'd0;
 		Qupls4_pkg::OP_ADDI,Qupls4_pkg::OP_SUBFI,Qupls4_pkg::OP_CMPI,Qupls4_pkg::OP_CMPUI,
 		Qupls4_pkg::OP_ANDI,Qupls4_pkg::OP_ORI,Qupls4_pkg::OP_XORI,
 		Qupls4_pkg::OP_MULI,Qupls4_pkg::OP_MULUI,Qupls4_pkg::OP_DIVI,Qupls4_pkg::OP_DIVUI,
 		Qupls4_pkg::OP_SHIFT:
-			fnRs2 = has_rext ? instr_raw[48+27:48+21] : {1'b0,ir.alu.Rs2};
+			fnRs2 = {1'b0,ir.alu.Rs2};
 		Qupls4_pkg::OP_LDB,Qupls4_pkg::OP_LDBZ,Qupls4_pkg::OP_LDW,Qupls4_pkg::OP_LDWZ,
 		Qupls4_pkg::OP_LDT,Qupls4_pkg::OP_LDTZ,Qupls4_pkg::OP_LOAD,Qupls4_pkg::OP_LOADA,
-		Qupls4_pkg::OP_LDF,
 		Qupls4_pkg::OP_AMO,Qupls4_pkg::OP_CMPSWAP,
 		Qupls4_pkg::OP_STB,Qupls4_pkg::OP_STW,
 		Qupls4_pkg::OP_STT,Qupls4_pkg::OP_STORE,Qupls4_pkg::OP_STI,
-		Qupls4_pkg::OP_STF,
 		Qupls4_pkg::OP_STPTR:
-			fnRs2 = has_rext ? instr_raw[48+27:48+21] : {1'b0,ir.lsscn.Rs2};
+			fnRs2 = {1'b0,ir.lsscn.Rs2};
 		default:
 			begin
 				fnRs2 = 7'd0;

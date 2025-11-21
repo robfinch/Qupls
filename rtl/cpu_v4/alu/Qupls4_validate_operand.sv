@@ -32,26 +32,28 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 2800 LUTs / 0 FFs (8 bypassing inputs)
+// 3500 LUTs / 0 FFs (0 bypassing inputs)
+// 5010 LUTs / 0 FFs (8 bypassing inputs) performance
 // ============================================================================
 
 import const_pkg::*;
 import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_validate_operand(prn, prnv, rfo, rfo_tag,
-	pRn0,pRn1,pRn2,
+module Qupls4_validate_operand(arn, prn, prnv, rfo, rfo_tag,
+	aRn0,aRn1,aRn2,
 	val0, val1, val2, val0_tag, val1_tag, val2_tag, 
-	rfi_val, rfi_tag, rfi_pRd,
+	rfi_val, rfi_tag, rfi_aRd, rfi_pRd,
 	valid0_i, valid1_i, valid2_i, valid0_o, valid1_o, valid2_o);
 parameter NBPI = 8;					// number of bypassing inputs
+input aregno_t [15:0] arn;	// arn for corresponding prn
 input pregno_t [15:0] prn;
 input [15:0] prnv;
 input value_t [15:0] rfo;
 input Qupls4_pkg::flags_t [15:0] rfo_tag;
-input pregno_t pRn0;
-input pregno_t pRn1;
-input pregno_t pRn2;
+input aregno_t aRn0;
+input aregno_t aRn1;
+input aregno_t aRn2;
 output value_t val0;
 output value_t val1;
 output value_t val2;
@@ -60,6 +62,7 @@ output flags_t val1_tag;
 output flags_t val2_tag;
 input value_t [NBPI-1:0] rfi_val;
 input Qupls4_pkg::flags_t [NBPI-1:0] rfi_tag;
+input pregno_t [NBPI-1:0] rfi_aRd;
 input pregno_t [NBPI-1:0] rfi_pRd;
 input valid0_i;
 input valid1_i;
@@ -68,8 +71,41 @@ output reg valid0_o;
 output reg valid1_o;
 output reg valid2_o;
 
-
 integer nn;
+/*
+pregno_t pRn0;
+pregno_t pRn1;
+pregno_t pRn2;
+reg pRn0v, pRn1v, pRn2v;
+
+integer nn,mm;
+
+// Find the physical registers matching the architectural ones.
+always_comb
+begin
+	pRn0 = 9'd0;
+	pRn1 = 9'd0;
+	pRn2 = 9'd0;
+	pRn0v = INV;
+	pRn1v = INV;
+	pRn2v = INV;
+	for (mm = 0; mm < 16; mm = mm + 1) begin
+		if (aRn0 == arn[mm] && prnv[mm]) begin
+			pRn0 = prn[mm];
+			pRn0v = VAL;
+		end
+		if (aRn1 == arn[mm] && prnv[mm]) begin
+			pRn1 = prn[mm];
+			pRn1v = VAL;
+		end
+		if (aRn2 == arn[mm] && prnv[mm]) begin
+			pRn2 = prn[mm];
+			pRn2v = VAL;
+		end
+	end
+end
+*/
+
 always_comb
 begin
 	valid0_o = valid0_i;
@@ -81,40 +117,40 @@ begin
 	val0_tag = 1'b0;
 	val1_tag = 1'b0;
 	val2_tag = 1'b0;
-	if (pRn0==9'd0) begin
+	if (aRn0==8'd0) begin
 		val0 = {$bits(value_t){1'b0}};
 		val0_tag = 1'b0;
 		valid0_o = VAL;
 	end
 	else
 	for (nn = 0; nn < 16; nn = nn + 1) begin
-		if (pRn0==prn[nn] && prnv[nn] && !valid0_i) begin
+		if (aRn0==arn[nn] && prnv[nn] && !valid0_i) begin
 			val0 = rfo[nn];
 			val0_tag = rfo_tag[nn];
 			valid0_o = VAL;
 		end
 	end
-	if (pRn1==9'd0) begin
+	if (aRn1==8'd0) begin
 		val1 = {$bits(value_t){1'b0}};
 		val1_tag = 1'b0;
 		valid1_o = VAL;
 	end
 	else
 	for (nn = 0; nn < 16; nn = nn + 1) begin
-		if (pRn1==prn[nn] && prnv[nn] && !valid1_i) begin
+		if (aRn1==arn[nn] && prnv[nn] && !valid1_i) begin
 			val1 = rfo[nn];
 			val1_tag = rfo_tag[nn];
 			valid1_o = VAL;
 		end
 	end
-	if (pRn2==9'd0) begin
+	if (aRn2==8'd0) begin
 		valid2_o = VAL;
 		val2 = {$bits(value_t){1'b0}};
 		val2_tag = 1'b0;
 	end
 	else
 	for (nn = 0; nn < 16; nn = nn + 1) begin
-		if (pRn2==prn[nn] && prnv[nn] && !valid2_i) begin
+		if (aRn2==arn[nn] && prnv[nn] && !valid2_i) begin
 			val2 = rfo[nn];
 			val2_tag = rfo_tag[nn];
 			valid2_o = VAL;
@@ -128,21 +164,21 @@ begin
 	// However, there is bypassing from the output of the first SAU.
 	if (Qupls4_pkg::PERFORMANCE) begin
 		for (nn = 0; nn < NBPI; nn = nn + 1) begin
-			if (pRn0==rfi_pRd[nn] && !valid0_i) begin
+			if (aRn0==rfi_aRd[nn] && !valid0_i) begin
 				val0 = rfi_val[nn];
 				val0_tag = rfi_tag[nn];
 				valid0_o = VAL;
 			end
 		end
 		for (nn = 0; nn < NBPI; nn = nn + 1) begin
-			if (pRn1==rfi_pRd[nn] && !valid1_i) begin
+			if (aRn1==rfi_aRd[nn] && !valid1_i) begin
 				val1 = rfi_val[nn];
 				val1_tag = rfi_tag[nn];
 				valid1_o = VAL;
 			end
 		end
 		for (nn = 0; nn < NBPI; nn = nn + 1) begin
-			if (pRn2==rfi_pRd[nn] && !valid2_i) begin
+			if (aRn2==rfi_aRd[nn] && !valid2_i) begin
 				val2 = rfi_val[nn];
 				val2_tag = rfi_tag[nn];
 				valid2_o = VAL;

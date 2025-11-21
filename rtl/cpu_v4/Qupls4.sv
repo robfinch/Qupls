@@ -394,7 +394,7 @@ wire [3:0] mc_regx1;
 wire [3:0] mc_regx2;
 wire [3:0] mc_regx3;
 wire [12:0] rs_busy;
-Qupls4_pkg::reservation_station_entry_t [3:0] rse;
+Qupls4_pkg::reservation_station_entry_t rse;
 
 // ALU done and idle are almost the same, but idle is sticky and set
 // if the ALU is not busy, whereas done pulses at the end of an ALU
@@ -4180,7 +4180,7 @@ rob_ndx_t [3:0] rob_dispatched;
 Qupls4_pkg::rob_bitmask_t rob_dispatched_stomped;
 wire [3:0] rob_dispatched_v;
 
-Qupls4_instruction_dispatcher uid1
+Stark_instruction_dispatcher uid1
 (
 	.rst(irst),
 	.clk(clk),
@@ -4999,7 +4999,7 @@ begin
 	end
 end
 
-Stark_mem_state udrst0
+Qupls4_mem_state udrst0
 (
 	.rst_i(irst),
 	.clk_i(clk),
@@ -5009,7 +5009,7 @@ Stark_mem_state udrst0
 	.state_o(dram0)
 );
 
-Stark_mem_state udrst1
+Qupls4_mem_state udrst1
 (
 	.rst_i(irst),
 	.clk_i(clk),
@@ -6414,9 +6414,10 @@ else begin
 			dram0_paddr <= lsq[mem0_lsndx.row][mem0_lsndx.col].adr;
 			dram0_vaddrh <= lsq[mem0_lsndx.row][mem0_lsndx.col].adr;
 			dram0_paddrh <= lsq[mem0_lsndx.row][mem0_lsndx.col].adr;
-			if (lsq[mem0_lsndx.row][mem0_lsndx.col].astf)
+			if (lsq[mem0_lsndx.row][mem0_lsndx.col].astf) begin
 				dram0_data <= storeflags_buf << {lsq[mem0_lsndx.row][mem0_lsndx.col].adr[5:0],3'b0};
 				dram0_datah <= storeflags_buf << {lsq[mem0_lsndx.row][mem0_lsndx.col].adr[5:0],3'b0};
+			end 
 			else begin
 				dram0_data <= lsq[mem0_lsndx.row][mem0_lsndx.col].res << {lsq[mem0_lsndx.row][mem0_lsndx.col].adr[5:0],3'b0};
 				dram0_datah <= lsq[mem0_lsndx.row][mem0_lsndx.col].res << {lsq[mem0_lsndx.row][mem0_lsndx.col].adr[5:0],3'b0};
@@ -6738,7 +6739,7 @@ else begin
 						rob[nn].pred_bit <= 1'b0;
 						rob[nn].pred_bitv <= VAL;
 						if (!rob[nn].excv) begin
-							rob[nn].exc <= FLT_PRED;
+							rob[nn].exc <= Qupls4_pkg::FLT_PRED;
 							rob[nn].excv <= VAL;
 						end
 					end
@@ -7857,7 +7858,7 @@ begin
 	exc_ret_carry_mod <= 32'd0;
 	sr <= 64'd0;
 	sr.pl <= 8'hFF;					// highest priority
-	sr.om <= OM_SECURE;
+	sr.om <= Qupls4_pkg::OM_SECURE;
 	sr.dbg <= TRUE;
 	sr.ipl <= 6'd63;				// non-maskable interrupts only
 	/* This must be setup by software

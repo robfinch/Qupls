@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2023-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -32,59 +32,37 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 25 LUTs
+//
 // ============================================================================
 
-import cpu_types_pkg::*;
+import const_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_decode_Rd(om, instr, instr_raw, Rd, Rdz, exc);
-input Qupls4_pkg::operating_mode_t om;
-input Qupls4_pkg::micro_op_t instr;
-input [239:0] instr_raw;
-output aregno_t Rd;
-output reg Rdz;
-output reg exc;
-
-function aregno_t fnRd;
-input Qupls4_pkg::micro_op_t instr;
-input [239:0] instr_raw;
-Qupls4_pkg::instruction_t ir;
-begin
-	ir = instr.ins;
-	case(ir.any.opcode)
-	Qupls4_pkg::OP_MOV:
-		if (ir[28:26] < 3'd4)
-			fnRd = {ir[18:17],ir[10:6]};
-		else
-			fnRd = {2'b00,ir[10:6]};
-	Qupls4_pkg::OP_FLTH,Qupls4_pkg::OP_FLTS,Qupls4_pkg::OP_FLTD,Qupls4_pkg::OP_FLTQ:
-		fnRd = ir.fpu.Rd;
-	Qupls4_pkg::OP_CSR:
-		fnRd = ir.csr.Rd;
-	Qupls4_pkg::OP_ADDI,Qupls4_pkg::OP_SUBFI,Qupls4_pkg::OP_CMPI,Qupls4_pkg::OP_CMPUI,
-	Qupls4_pkg::OP_ANDI,Qupls4_pkg::OP_ORI,Qupls4_pkg::OP_XORI,
-	Qupls4_pkg::OP_MULI,Qupls4_pkg::OP_MULUI,Qupls4_pkg::OP_DIVI,Qupls4_pkg::OP_DIVUI,
-	Qupls4_pkg::OP_SHIFT:
-		fnRd = ir.alui.Rd;
-	Qupls4_pkg::OP_B0,Qupls4_pkg::OP_B1,Qupls4_pkg::OP_BCC0,Qupls4_pkg::OP_BCC1:
-		fnRd = ir[8:6]==3'd7 || ir[8:6]==3'd0 ? 7'd0 : {4'b0100,ir.blrlr.BRd};
-	Qupls4_pkg::OP_LDB,Qupls4_pkg::OP_LDBZ,Qupls4_pkg::OP_LDW,Qupls4_pkg::OP_LDWZ,
-	Qupls4_pkg::OP_LDT,Qupls4_pkg::OP_LDTZ,Qupls4_pkg::OP_LOAD,Qupls4_pkg::OP_LOADA,
-	Qupls4_pkg::OP_LDV,
-	Qupls4_pkg::OP_AMO,Qupls4_pkg::OP_CMPSWAP:
-		fnRd = ir.lsd.Rsd;
-	default:
-		fnRd = 7'd0;
-	endcase
-end
-endfunction
+module Qupls4_info(ndx, coreno, o);
+input [63:0] coreno;
+input [4:0] ndx;
+output cpu_types_pkg::value_t o;
 
 always_comb
-begin
-	Rd = fnRd(instr, instr_raw);
-	Rdz = ~|Rd;
-//	tRegmap(om1, Rd, Rd, exc);
-end
-
+	case(ndx)
+	5'd0:	o = coreno;
+	5'd2:	o = "Finitron";
+	5'd3:	o = 64'd0;
+	5'd4:	o = "64BitSS ";
+	5'd5: o = 64'd0;
+	5'd6:	o = "Qupls4  ";
+	5'd7:	o = 64'd0;
+	5'd8:	o = "M1";
+	5'd9:	o = 64'h1234;
+	5'd10:	o = 64'h0;
+	5'd11:	
+		begin
+			o[31:0] = 32'd32768;
+			o[63:32] = 32'd65536;
+		end
+	5'd12:	o = 64'd8;
+	5'd13:	o = 64'd64;
+	default:	o = 64'h0;
+	endcase
+	
 endmodule

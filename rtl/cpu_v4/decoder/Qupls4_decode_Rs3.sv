@@ -64,7 +64,7 @@ begin
 		case(ir.any.opcode)
 		Qupls4_pkg::OP_STB,Qupls4_pkg::OP_STW,
 		Qupls4_pkg::OP_STT,Qupls4_pkg::OP_STORE,Qupls4_pkg::OP_STI,
-		Qupls4_pkg::OP_STPTR,Qupls4_pkg::OP_STF:
+		Qupls4_pkg::OP_STPTR:
 			fnRs3 = has_rext ? instr_raw[48+34:48+28] : {2'b00,ir.lsscn.Rsd};
 		Qupls4_pkg::OP_R3B,Qupls4_pkg::OP_R3W,Qupls4_pkg::OP_R3T,Qupls4_pkg::OP_R3O:
 			fnRs3 = has_rext ? instr_raw[48+34:48+28] : {2'b00,ir.alu.Rs3};

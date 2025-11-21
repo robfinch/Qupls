@@ -32,20 +32,24 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-//  240 LUTs / 0 FFs
+//  800 LUTs / 0 FFs (with vectors)
+//	200 LUTs / 0 FFs (no vectors)
 // ============================================================================
 
 import const_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_microop(om, ir, num, carry_reg, carry_out, carry_in, count, uop);
+module Qupls4_microop(clk, om, ir, num, carry_reg, carry_out, carry_in, vlen_reg, velsz, count, uop);
+input clk;
 input Qupls4_pkg::operating_mode_t om;
 input Qupls4_pkg::instruction_t ir;
 input [2:0] num;
 input [7:0] carry_reg;
 input carry_out;
 input carry_in;
-output reg [2:0] count;
+input [15:0] vlen_reg;
+input [15:0] velsz;
+output reg [3:0] count;
 output Qupls4_pkg::micro_op_t [7:0] uop;
 
 integer nn;
@@ -60,6 +64,13 @@ Qupls4_pkg::alui_inst_t incssp32,decssp32;
 Qupls4_pkg::anyinst_t enter_st_fp, exit_ld_fp;
 Qupls4_pkg::anyinst_t enter_st_lr, exit_ld_lr;
 Qupls4_pkg::anyinst_t fp_eq_sp, sp_eq_fp;
+reg [47:0] instr;
+reg [9:0] vlen, fvlen, vlen1;
+
+always_ff @(posedge clk)
+	vlen = (vlen_reg[7:0] * (7'd1 << velsz[1:0])) >> 4'd6;
+always_ff @(posedge clk)
+	fvlen = (vlen_reg[15:8] * (7'd2 << velsz[9:8])) >> 4'd6;
 
 always_comb
 begin
@@ -139,6 +150,34 @@ begin
 end
 
 always_comb
+	case(ir.any.opcode)
+	Qupls4_pkg::OP_R3P:
+		begin
+			instr = (ir & ~48'h7F) | Qupls4_pkg::OP_R3BP | velsz[1:0];
+			vlen1 = vlen;
+		end
+	Qupls4_pkg::OP_FLTP:
+		begin
+			instr = (ir & ~48'h7F) | Qupls4_pkg::OP_FLTPH | velsz[9:8];
+			vlen1 = fvlen;
+		end
+	Qupls4_pkg::OP_R3BP,Qupls4_pkg::OP_R3WP,Qupls4_pkg::OP_R3TP,Qupls4_pkg::OP_R3OP:
+		vlen1 = vlen;
+	Qupls4_pkg::OP_FLTPH,Qupls4_pkg::OP_FLTPS,Qupls4_pkg::OP_FLTPD,Qupls4_pkg::OP_FLTPQ:
+		vlen1 = fvlen;
+	Qupls4_pkg::OP_LDV,Qupls4_pkg::OP_STV:
+		vlen1 = vlen;
+	Qupls4_pkg::OP_FLDV,Qupls4_pkg::OP_FSTV:
+		vlen1 = fvlen;
+	Qupls4_pkg::OP_LDG,Qupls4_pkg::OP_STG:
+		vlen1 = vlen;
+	Qupls4_pkg::OP_FLDG,Qupls4_pkg::OP_FSTG:
+		vlen1 = fvlen;
+	default:
+		vlen1 = 10'd0;
+	endcase
+
+always_comb
 begin
 	count = 3'd0;
 	uop[0] = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
@@ -149,44 +188,368 @@ begin
 	uop[5] = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
 	uop[6] = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
 	uop[7] = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
+	instr = ir;
 
 	case(ir.any.opcode)
 	Qupls4_pkg::OP_BRK:	begin uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,ir}; count = 3'd1; end
 	Qupls4_pkg::OP_SHIFT:
 		begin
 			begin
-				count = 3'd1;
+				count = 4'd1;
 				uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,ir};
 			end
 		end
 	Qupls4_pkg::OP_CMPI,
 	Qupls4_pkg::OP_CMPUI:
 		begin
-			count = 3'd1;
+			count = 4'd1;
 			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,ir};
 		end
 	Qupls4_pkg::OP_ADDI,
 	Qupls4_pkg::OP_SUBFI:
 		begin
-			count = 3'd1;
+			count = 4'd1;
 			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,ir};
 		end
 
-	Qupls4_pkg::OP_R3BP,Qupls4_pkg::OP_R3WP,Qupls4_pkg::OP_R3TP,Qupls4_pkg::OP_R3OP:
-		begin
-			count = 3'd4;
+	Qupls4_pkg::OP_R3P,
+	Qupls4_pkg::OP_FLTP:
+		if (SUPPORT_VECTOR) begin
+			case(vlen1[3:0])
+			4'd1:
+				begin
+			count = 4'd1;
+			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,instr};
+				end
+			4'd2:
+				begin
+			count = 4'd2;
+			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,instr  & ~48'h020010204080};	// select 0 regs
+			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,(instr & ~48'h020010204080) | 48'h020010204080};	// select 1 regs
+				end
+			4'd3:
+				begin
+			count = 4'd3;
+			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,instr  & ~48'h060030604180};	// select 0 regs
+			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,(instr & ~48'h060030604180) | 48'h020010204080};	// select 1 regs
+			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,(instr & ~48'h060030604180) | 48'h040020408100};	// select 2 regs
+				end
+			4'd4:
+				begin
+			count = 4'd4;
+			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,instr  & ~48'h06003060C180};	// select 00 regs
+			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,(instr & ~48'h06003060C180) | 48'h020010204080};	// select 01 regs
+			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,(instr & ~48'h06003060C180) | 48'h040020408100};	// select 02 regs
+			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,(instr & ~48'h06003060C180) | 48'h06003060C180};	// select 03 regs
+				end
+			4'd5:
+				begin
+			count = 4'd5;
+			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,instr  & ~48'h0E0070E1C380};	// select 00 regs
+			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,(instr & ~48'h0E0070E1C380) | 48'h020010204080};	// select 01 regs
+			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,(instr & ~48'h0E0070E1C380) | 48'h040020408100};	// select 02 regs
+			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,(instr & ~48'h0E0070E1C380) | 48'h06003060C180};	// select 03 regs
+			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,(instr & ~48'h0E0070E1C380) | 48'h080040810200};	// select 03 regs
+				end
+			4'd6:
+				begin
+			count = 4'd6;
+			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,instr  & ~48'h0E0070E1C380};	// select 00 regs
+			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,(instr & ~48'h0E0070E1C380) | 48'h020010204080};	// select 01 regs
+			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,(instr & ~48'h0E0070E1C380) | 48'h040020408100};	// select 02 regs
+			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,(instr & ~48'h0E0070E1C380) | 48'h06003060C180};	// select 03 regs
+			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,(instr & ~48'h0E0070E1C380) | 48'h080040810200};	// select 03 regs
+			uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,(instr & ~48'h0E0070E1C380) | 48'h0A0050A14280};	// select 03 regs
+				end
+			4'd7:
+				begin
+			count = 4'd7;
+			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,instr  & ~48'h0E0070E1C380};	// select 00 regs
+			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,(instr & ~48'h0E0070E1C380) | 48'h020010204080};	// select 01 regs
+			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,(instr & ~48'h0E0070E1C380) | 48'h040020408100};	// select 02 regs
+			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,(instr & ~48'h0E0070E1C380) | 48'h06003060C180};	// select 03 regs
+			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,(instr & ~48'h0E0070E1C380) | 48'h080040810200};	// select 03 regs
+			uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,(instr & ~48'h0E0070E1C380) | 48'h0A0050A14280};	// select 03 regs
+			uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,(instr & ~48'h0E0070E1C380) | 48'h0C0060C18300};	// select 03 regs
+				end
+			4'd8:
+				begin
+			count = 4'd8;
+			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,instr  & ~48'h0E0070E1C380};	// select 0 regs
+			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,(instr & ~48'h0E0070E1C380) | 48'h020010204080};	// select 1 regs
+			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,(instr & ~48'h0E0070E1C380) | 48'h040020408100};	// select 2 regs
+			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,(instr & ~48'h0E0070E1C380) | 48'h06003060C180};	// select 3 regs
+			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,(instr & ~48'h0E0070E1C380) | 48'h080040810200};	// select 4 regs
+			uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,(instr & ~48'h0E0070E1C380) | 48'h0A0050A14280};	// select 5 regs
+			uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,(instr & ~48'h0E0070E1C380) | 48'h0C0060C18300};	// select 6 regs
+			uop[7] = {1'b1,1'b0,3'd0,3'd7,4'd0,(instr & ~48'h0E0070E1C380) | 48'h0E0070E1C380};	// select 7 regs
+				end
+			default:	
+				begin
+			count = 4'd1;
+			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,nopi};
+				end
+			endcase
+		end
+		// Should really exception here.
+		else begin
+			count = 4'd1;
+			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,nopi};
+		end
+	Qupls4_pkg::OP_R3BP,Qupls4_pkg::OP_R3WP,Qupls4_pkg::OP_R3TP,Qupls4_pkg::OP_R3OP,
+	Qupls4_pkg::OP_FLTPH,Qupls4_pkg::OP_FLTPS,Qupls4_pkg::OP_FLTPD,Qupls4_pkg::OP_FLTPQ:
+		if (SUPPORT_VECTOR) begin
+			case(vlen1[3:0])
+			4'd1:
+				begin
+			count = 4'd1;
+			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,ir};
+				end
+			4'd2:
+				begin
+			count = 4'd2;
+			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,ir  & ~48'h020010204080};	// select 0 regs
+			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,(ir & ~48'h020010204080) | 48'h020010204080};	// select 1 regs
+				end
+			4'd3:
+				begin
+			count = 4'd3;
+			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,ir  & ~48'h060030604180};	// select 0 regs
+			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,(ir & ~48'h060030604180) | 48'h020010204080};	// select 1 regs
+			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,(ir & ~48'h060030604180) | 48'h040020408100};	// select 2 regs
+				end
+			4'd4:
+				begin
+			count = 4'd4;
 			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,ir  & ~48'h06003060C180};	// select 00 regs
 			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,(ir & ~48'h06003060C180) | 48'h020010204080};	// select 01 regs
 			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,(ir & ~48'h06003060C180) | 48'h040020408100};	// select 02 regs
 			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,(ir & ~48'h06003060C180) | 48'h06003060C180};	// select 03 regs
+				end
+			4'd5:
+				begin
+			count = 4'd5;
+			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,ir  & ~48'h0E0070E1C380};	// select 00 regs
+			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,(ir & ~48'h0E0070E1C380) | 48'h020010204080};	// select 01 regs
+			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,(ir & ~48'h0E0070E1C380) | 48'h040020408100};	// select 02 regs
+			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,(ir & ~48'h0E0070E1C380) | 48'h06003060C180};	// select 03 regs
+			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,(ir & ~48'h0E0070E1C380) | 48'h080040810200};	// select 03 regs
+				end
+			4'd6:
+				begin
+			count = 4'd6;
+			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,ir  & ~48'h0E0070E1C380};	// select 00 regs
+			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,(ir & ~48'h0E0070E1C380) | 48'h020010204080};	// select 01 regs
+			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,(ir & ~48'h0E0070E1C380) | 48'h040020408100};	// select 02 regs
+			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,(ir & ~48'h0E0070E1C380) | 48'h06003060C180};	// select 03 regs
+			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,(ir & ~48'h0E0070E1C380) | 48'h080040810200};	// select 03 regs
+			uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,(ir & ~48'h0E0070E1C380) | 48'h0A0050A14280};	// select 03 regs
+				end
+			4'd7:
+				begin
+			count = 4'd7;
+			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,ir  & ~48'h0E0070E1C380};	// select 00 regs
+			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,(ir & ~48'h0E0070E1C380) | 48'h020010204080};	// select 01 regs
+			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,(ir & ~48'h0E0070E1C380) | 48'h040020408100};	// select 02 regs
+			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,(ir & ~48'h0E0070E1C380) | 48'h06003060C180};	// select 03 regs
+			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,(ir & ~48'h0E0070E1C380) | 48'h080040810200};	// select 03 regs
+			uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,(ir & ~48'h0E0070E1C380) | 48'h0A0050A14280};	// select 03 regs
+			uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,(ir & ~48'h0E0070E1C380) | 48'h0C0060C18300};	// select 03 regs
+				end
+			4'd8:
+				begin
+			count = 4'd8;
+			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,ir  & ~48'h0E0070E1C380};	// select 0 regs
+			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,(ir & ~48'h0E0070E1C380) | 48'h020010204080};	// select 1 regs
+			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,(ir & ~48'h0E0070E1C380) | 48'h040020408100};	// select 2 regs
+			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,(ir & ~48'h0E0070E1C380) | 48'h06003060C180};	// select 3 regs
+			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,(ir & ~48'h0E0070E1C380) | 48'h080040810200};	// select 4 regs
+			uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,(ir & ~48'h0E0070E1C380) | 48'h0A0050A14280};	// select 5 regs
+			uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,(ir & ~48'h0E0070E1C380) | 48'h0C0060C18300};	// select 6 regs
+			uop[7] = {1'b1,1'b0,3'd0,3'd7,4'd0,(ir & ~48'h0E0070E1C380) | 48'h0E0070E1C380};	// select 7 regs
+				end
+			default:	
+				begin
+			count = 4'd1;
+			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,nopi};
+				end
+			endcase
 		end
-	Qupls4_pkg::OP_LDQ,Qupls4_pkg::OP_STQ:
-		begin
-			count = 3'd4;
-			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,(ir & ~48'h06000060C180)};	// select 00 regs
-			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,((ir & ~48'h06000060C180) | 48'h020000204080) + 48'h080000000};	// select 01 regs
-			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,((ir & ~48'h06000060C180) | 48'h040000408100) + 48'h100000000};	// select 02 regs
-			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,((ir & ~48'h06000060C180) | 48'h06000060C180) + 48'h180000000};	// select 03 regs
+		// Should really exception here.
+		else begin
+			count = 4'd1;
+			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,nopi};
+		end
+	Qupls4_pkg::OP_LDV,Qupls4_pkg::OP_STV,
+	Qupls4_pkg::OP_FLDV,Qupls4_pkg::OP_FSTV:
+		if (SUPPORT_VECTOR) begin
+			case(vlen1[3:0])
+			4'd1:
+				begin
+			count = 4'd1;
+			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,ir};
+				end
+			4'd2:
+				begin
+			count = 4'd2;
+			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,( ir & ~48'h020000000080)};	// select 00 regs
+			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,((ir & ~48'h020000000080) | 48'h020000000080) + 48'h080000000};	// select 01 regs
+				end
+			4'd3:
+				begin
+			count = 4'd3;
+			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,( ir & ~48'h060000000080)};	// select 00 regs
+			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,((ir & ~48'h060000000080) | 48'h020000000080) + 48'h080000000};	// select 01 regs
+			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,((ir & ~48'h060000000080) | 48'h040000000180) + 48'h100000000};	// select 01 regs
+				end
+			4'd4:
+				begin
+			count = 4'd4;
+			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,( ir & ~48'h060000000180)};	// select 00 regs
+			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,((ir & ~48'h060000000180) | 48'h020000000080) + 48'h080000000};	// select 01 regs
+			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,((ir & ~48'h060000000180) | 48'h040000000100) + 48'h100000000};	// select 02 regs
+			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,((ir & ~48'h060000000180) | 48'h060000000180) + 48'h180000000};	// select 03 regs
+				end
+			4'd5:
+				begin
+			count = 4'd5;
+			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,( ir & ~48'h0E0000000380)};	// select 00 regs
+			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,((ir & ~48'h0E0000000380) | 48'h020000000080) + 48'h080000000};	// select 01 regs
+			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,((ir & ~48'h0E0000000380) | 48'h040000000100) + 48'h100000000};	// select 02 regs
+			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,((ir & ~48'h0E0000000380) | 48'h060000000180) + 48'h180000000};	// select 03 regs
+			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,((ir & ~48'h0E0000000380) | 48'h060000000200) + 48'h100000000};	// select 04 regs
+				end
+			4'd6:
+				begin
+			count = 4'd6;
+			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,( ir & ~48'h0E0000000380)};	// select 00 regs
+			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,((ir & ~48'h0E0000000380) | 48'h020000000080) + 48'h080000000};	// select 01 regs
+			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,((ir & ~48'h0E0000000380) | 48'h040000000100) + 48'h100000000};	// select 02 regs
+			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,((ir & ~48'h0E0000000380) | 48'h060000000180) + 48'h180000000};	// select 03 regs
+			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,((ir & ~48'h0E0000000380) | 48'h060000000200) + 48'h100000000};	// select 04 regs
+			uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,((ir & ~48'h0E0000000380) | 48'h060000000280) + 48'h280000000};	// select 05 regs
+			uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,((ir & ~48'h0E0000000380) | 48'h060000000300) + 48'h300000000};	// select 05 regs
+				end
+			4'd7:
+				begin
+			count = 4'd7;
+			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,( ir & ~48'h0E0000000380)};	// select 00 regs
+			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,((ir & ~48'h0E0000000380) | 48'h020000000080) + 48'h080000000};	// select 01 regs
+			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,((ir & ~48'h0E0000000380) | 48'h040000000100) + 48'h100000000};	// select 02 regs
+			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,((ir & ~48'h0E0000000380) | 48'h060000000180) + 48'h180000000};	// select 03 regs
+			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,((ir & ~48'h0E0000000380) | 48'h060000000200) + 48'h100000000};	// select 04 regs
+			uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,((ir & ~48'h0E0000000380) | 48'h060000000280) + 48'h280000000};	// select 05 regs
+			uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,((ir & ~48'h0E0000000380) | 48'h060000000300) + 48'h300000000};	// select 05 regs
+			uop[7] = {1'b1,1'b0,3'd0,3'd7,4'd0,((ir & ~48'h0E0000000380) | 48'h060000000380) + 48'h380000000};	// select 05 regs
+				end
+			4'd8:
+				begin
+			count = 4'd8;
+			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,( ir & ~48'h0E0000000380)};	// select 00 regs
+			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,((ir & ~48'h0E0000000380) | 48'h020000000080) + 48'h080000000};	// select 01 regs
+			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,((ir & ~48'h0E0000000380) | 48'h040000000100) + 48'h100000000};	// select 02 regs
+			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,((ir & ~48'h0E0000000380) | 48'h060000000180) + 48'h180000000};	// select 03 regs
+			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,((ir & ~48'h0E0000000380) | 48'h060000000200) + 48'h100000000};	// select 04 regs
+			uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,((ir & ~48'h0E0000000380) | 48'h060000000280) + 48'h280000000};	// select 05 regs
+			uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,((ir & ~48'h0E0000000380) | 48'h060000000300) + 48'h300000000};	// select 05 regs
+			uop[7] = {1'b1,1'b0,3'd0,3'd7,4'd0,((ir & ~48'h0E0000000380) | 48'h060000000380) + 48'h380000000};	// select 05 regs
+				end
+			default:	
+				begin
+			count = 4'd1;
+			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,nopi};
+				end
+			endcase
+		end
+		// Should really exception here.
+		else begin
+			count = 4'd1;
+			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,nopi};
+		end
+
+	Qupls4_pkg::OP_LDG,Qupls4_pkg::OP_STG,
+	Qupls4_pkg::OP_FLDG,Qupls4_pkg::OP_FSTG:
+		if (SUPPORT_VECTOR) begin
+			case(vlen1[3:0])
+			4'd1:
+				begin
+			count = 4'd1;
+			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,ir};
+				end
+			4'd2:
+				begin
+			count = 4'd2;
+			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,( ir & ~48'h020000004080)};	// select 00 regs
+			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,((ir & ~48'h020000004080) | 48'h020000004080) + 48'h080000000};	// select 01 regs
+				end
+			4'd3:
+				begin
+			count = 4'd3;
+			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,( ir & ~48'h06000000C180)};	// select 00 regs
+			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,((ir & ~48'h06000000C180) | 48'h020000004080) + 48'h080000000};	// select 01 regs
+			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,((ir & ~48'h06000000C180) | 48'h040000008100) + 48'h100000000};	// select 02 regs
+				end
+			4'd4:
+				begin
+			count = 4'd4;
+			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,( ir & ~48'h06000000C180)};	// select 00 regs
+			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,((ir & ~48'h06000000C180) | 48'h020000004080) + 48'h080000000};	// select 01 regs
+			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,((ir & ~48'h06000000C180) | 48'h040000008100) + 48'h100000000};	// select 02 regs
+			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,((ir & ~48'h06000000C180) | 48'h06000000C180) + 48'h180000000};	// select 03 regs
+				end
+			4'd5:
+				begin
+			count = 4'd5;
+			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,( ir & ~48'h0E0000000380)};	// select 00 regs
+			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,((ir & ~48'h0E0000000380) | 48'h020000004080) + 48'h080000000};	// select 01 regs
+			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,((ir & ~48'h0E0000000380) | 48'h040000008100) + 48'h100000000};	// select 02 regs
+			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,((ir & ~48'h0E0000000380) | 48'h06000000C180) + 48'h180000000};	// select 03 regs
+			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,((ir & ~48'h0E0000000380) | 48'h060000010200) + 48'h100000000};	// select 04 regs
+				end
+			4'd6:
+				begin
+			count = 4'd6;
+			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,( ir & ~48'h0E0000000380)};	// select 00 regs
+			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,((ir & ~48'h0E0000000380) | 48'h020000004080) + 48'h080000000};	// select 01 regs
+			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,((ir & ~48'h0E0000000380) | 48'h040000008100) + 48'h100000000};	// select 02 regs
+			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,((ir & ~48'h0E0000000380) | 48'h06000000C180) + 48'h180000000};	// select 03 regs
+			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,((ir & ~48'h0E0000000380) | 48'h060000010200) + 48'h100000000};	// select 04 regs
+			uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,((ir & ~48'h0E0000000380) | 48'h060000014280) + 48'h280000000};	// select 05 regs
+				end
+			4'd7:
+				begin
+			count = 4'd7;
+			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,( ir & ~48'h0E0000000380)};	// select 00 regs
+			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,((ir & ~48'h0E0000000380) | 48'h020000004080) + 48'h080000000};	// select 01 regs
+			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,((ir & ~48'h0E0000000380) | 48'h040000008100) + 48'h100000000};	// select 02 regs
+			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,((ir & ~48'h0E0000000380) | 48'h06000000C180) + 48'h180000000};	// select 03 regs
+			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,((ir & ~48'h0E0000000380) | 48'h060000010200) + 48'h100000000};	// select 04 regs
+			uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,((ir & ~48'h0E0000000380) | 48'h060000014280) + 48'h280000000};	// select 05 regs
+			uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,((ir & ~48'h0E0000000380) | 48'h060000018300) + 48'h300000000};	// select 05 regs
+				end
+			4'd8:
+				begin
+			count = 4'd8;
+			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,( ir & ~48'h0E0000000380)};	// select 00 regs
+			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,((ir & ~48'h0E0000000380) | 48'h020000004080) + 48'h080000000};	// select 01 regs
+			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,((ir & ~48'h0E0000000380) | 48'h040000008100) + 48'h100000000};	// select 02 regs
+			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,((ir & ~48'h0E0000000380) | 48'h06000000C180) + 48'h180000000};	// select 03 regs
+			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,((ir & ~48'h0E0000000380) | 48'h060000010200) + 48'h100000000};	// select 04 regs
+			uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,((ir & ~48'h0E0000000380) | 48'h060000014280) + 48'h280000000};	// select 05 regs
+			uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,((ir & ~48'h0E0000000380) | 48'h060000018300) + 48'h300000000};	// select 05 regs
+			uop[7] = {1'b1,1'b0,3'd0,3'd7,4'd0,((ir & ~48'h0E0000000380) | 48'h06000001C380) + 48'h380000000};	// select 05 regs
+				end
+			default:	
+				begin
+			count = 4'd1;
+			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,nopi};
+				end
+			endcase
+		end
+		// Should really exception here.
+		else begin
+			count = 4'd1;
+			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,nopi};
 		end
 		/*
 			case(ir.r3.func)
@@ -213,33 +576,33 @@ begin
 	Qupls4_pkg::OP_ANDI,
 	Qupls4_pkg::OP_ORI,
 	Qupls4_pkg::OP_XORI,
-	Qupls4_pkg::OP_LDB,Qupls4_pkg::OP_LDBZ,Qupls4_pkg::OP_LDW,Qupls4_pkg::OP_LDWZ,Qupls4_pkg::OP_LDF,
+	Qupls4_pkg::OP_LDB,Qupls4_pkg::OP_LDBZ,Qupls4_pkg::OP_LDW,Qupls4_pkg::OP_LDWZ,
 	Qupls4_pkg::OP_LDT,Qupls4_pkg::OP_LDTZ,Qupls4_pkg::OP_LOAD,Qupls4_pkg::OP_LOADA,
 	Qupls4_pkg::OP_AMO,Qupls4_pkg::OP_CMPSWAP:
 		begin
-			count = 3'd1;
+			count = 4'd1;
 			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,ir};
 		end
 	Qupls4_pkg::OP_MOV:
 		begin
-			count = 3'd1;
+			count = 4'd1;
 			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,ir};
 		end	
 	Qupls4_pkg::OP_B0,
 	Qupls4_pkg::OP_B1:
 		begin
-			count = 3'd1;
+			count = 4'd1;
 			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,ir};
 		end
 	Qupls4_pkg::OP_BCC0,
 	Qupls4_pkg::OP_BCC1:
 		begin
 			if (ir.bccld.cnd==3'd2 || ir.bccld.cnd==3'd5) begin	// no decrement
-				count = 3'd1;
+				count = 4'd1;
 				uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,ir};
 			end
 			else begin
-				count = 3'd2;
+				count = 4'd2;
 				// Decrement loop counter
 				// ADD LC,LC,-1
 				uop[0] = {1'b1,1'b0,3'd2,3'd0,4'd0,1'b1,14'h3FFF,1'b0,5'd12,5'd12,Qupls4_pkg::OP_ADDI};
@@ -248,7 +611,7 @@ begin
 		end
 	Qupls4_pkg::OP_ENTER:
 		begin
-			count = 3'd5;
+			count = 4'd5;
 			uop[0] = {1'b1,1'b0,3'd5,3'd0,4'd0,enter_st_fp};
 			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,fp_eq_sp};
 			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,enter_st_lr};
@@ -257,7 +620,7 @@ begin
 		end
 	Qupls4_pkg::OP_EXIT:
 		begin
-			count = 3'd5;
+			count = 4'd5;
 			uop[0] = {1'b1,1'b0,3'd5,3'd0,4'd0,sp_eq_fp};
 			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,exit_ld_fp};
 			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,exit_ld_lr};
@@ -266,7 +629,7 @@ begin
 		end
 	Qupls4_pkg::OP_PUSH:
 		begin
-			count = ir[40:38] + 2'd1;
+			count = {1'b0,ir[40:38]} + 2'd1;
 			case(count)
 			4'd2:	
 				begin
@@ -305,14 +668,14 @@ begin
 				end
 			default:	
 				begin
-					count = 3'd1;
+					count = 4'd1;
 					uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,nopi};
 				end
 			endcase
 		end
 	Qupls4_pkg::OP_POP:
 		begin
-			count = ir[40:38] + 2'd1;
+			count = {1'b0,ir[40:38]} + 2'd1;
 			case(count)
 			4'd2:	
 				begin
@@ -351,19 +714,19 @@ begin
 				end
 			default:	
 				begin
-					count = 3'd1;
+					count = 4'd1;
 					uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,nopi};
 				end
 			endcase
 		end
 	Qupls4_pkg::OP_TRAP,
 	Qupls4_pkg::OP_CHK,
-	Qupls4_pkg::OP_STB,Qupls4_pkg::OP_STW,Qupls4_pkg::OP_STF,
+	Qupls4_pkg::OP_STB,Qupls4_pkg::OP_STW,
 	Qupls4_pkg::OP_STT,Qupls4_pkg::OP_STORE,Qupls4_pkg::OP_STI,
 	Qupls4_pkg::OP_STPTR,
 	Qupls4_pkg::OP_FENCE:
 		begin
-			count = 3'd1;
+			count = 4'd1;
 			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,ir};
 		end
 	Qupls4_pkg::OP_FLTH,Qupls4_pkg::OP_FLTS,Qupls4_pkg::OP_FLTD,Qupls4_pkg::OP_FLTQ:
@@ -421,12 +784,12 @@ begin
 		end
 	Qupls4_pkg::OP_MOD,Qupls4_pkg::OP_NOP:
 		begin
-			count = 3'd1;
+			count = 4'd1;
 			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,ir};
 		end
 	default:
 		begin
-			count = 3'd1;
+			count = 4'd1;
 			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,ir};
 		end
 	endcase

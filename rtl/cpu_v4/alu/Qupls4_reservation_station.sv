@@ -35,6 +35,7 @@
 // 3900 LUTs / 900 FFs  (1 station)
 // 4650 LUTs / 900 FFs  (8 bypass inputs) - 48-bit operands
 // 5650 LUTs / 1050 FFs  (8 bypass inputs)	- 64 bit operands
+// 15800 LUTs / 1800 FFs  (0 bypass inputs)	- 64 bit operands
 // 19200 LUTs / 1800 FFs  (8 bypass inputs) - 128 bit operands
 // ============================================================================
 
@@ -44,8 +45,8 @@ import Qupls4_pkg::*;
 
 module Qupls4_reservation_station(rst, clk, available, busy, issue, stall,
 	rfo_tag, rse_i, rse_o, stomp,
-	rfi_val, rfi_tag, rfi_pRd,
-	prn, prnv, rfo, req_pRn
+	rfi_val, rfi_tag, rfi_aRd, rfi_pRd,
+	arn, prn, prnv, rfo, req_pRn
 );
 parameter NRSE = 1;
 parameter FUNCUNIT = 4'd0;
@@ -56,12 +57,14 @@ input available;
 input stall;
 input Qupls4_pkg::reservation_station_entry_t [3:0] rse_i;
 input Qupls4_pkg::rob_bitmask_t stomp;
+input aregno_t [15:0] arn;
 input pregno_t [15:0] prn;
 input [15:0] prnv;
 input value_t [15:0] rfo;
 input Qupls4_pkg::flags_t [15:0] rfo_tag;
 input value_t [NBPI-1:0] rfi_val;
 input pregno_t [NBPI-1:0] rfi_pRd;
+input aregno_t [NBPI-1:0] rfi_aRd;
 input Qupls4_pkg::flags_t[NBPI-1:0] rfi_tag;
 output reg busy;
 output reg issue;
@@ -107,6 +110,7 @@ lfsr17 ulfsr1
 
 Qupls4_validate_operand #(.NBPI(NBPI)) uvsrcA
 (
+	.arn(arn),
 	.prn(prn),
 	.prnv(prnv),
 	.rfo(rfo),
@@ -119,10 +123,11 @@ Qupls4_validate_operand #(.NBPI(NBPI)) uvsrcA
 	.val2_tag(argA2_tag),
 	.rfi_val(rfi_val),
 	.rfi_tag(rfi_tag),
+	.rfi_aRd(rfi_aRd),
 	.rfi_pRd(rfi_pRd),
-	.pRn0(pregno_t'(rse[0].argA[8:0])),
-	.pRn1(pregno_t'(rse[1].argA[8:0])),
-	.pRn2(pregno_t'(rse[2].argA[8:0])),
+	.aRn0(pregno_t'(rse[0].argA[23:16])),
+	.aRn1(pregno_t'(rse[1].argA[23:16])),
+	.aRn2(pregno_t'(rse[2].argA[23:16])),
 	.valid0_i(rse[0].argA_v),
 	.valid1_i(rse[1].argA_v),
 	.valid2_i(rse[2].argA_v),
@@ -133,6 +138,7 @@ Qupls4_validate_operand #(.NBPI(NBPI)) uvsrcA
 
 Qupls4_validate_operand #(.NBPI(NBPI)) uvsrcB
 (
+	.arn(arn),
 	.prn(prn),
 	.prnv(prnv),
 	.rfo(rfo),
@@ -145,10 +151,11 @@ Qupls4_validate_operand #(.NBPI(NBPI)) uvsrcB
 	.val2_tag(argB2_tag),
 	.rfi_val(rfi_val),
 	.rfi_tag(rfi_tag),
+	.rfi_aRd(rfi_aRd),
 	.rfi_pRd(rfi_pRd),
-	.pRn0(pregno_t'(rse[0].argB[8:0])),
-	.pRn1(pregno_t'(rse[1].argB[8:0])),
-	.pRn2(pregno_t'(rse[2].argB[8:0])),
+	.aRn0(pregno_t'(rse[0].argB[23:16])),
+	.aRn1(pregno_t'(rse[1].argB[23:16])),
+	.aRn2(pregno_t'(rse[2].argB[23:16])),
 	.valid0_i(rse[0].argB_v),
 	.valid1_i(rse[1].argB_v),
 	.valid2_i(rse[2].argB_v),
@@ -159,6 +166,7 @@ Qupls4_validate_operand #(.NBPI(NBPI)) uvsrcB
 
 Qupls4_validate_operand #(.NBPI(NBPI)) uvsrcC
 (
+	.arn(arn),
 	.prn(prn),
 	.prnv(prnv),
 	.rfo(rfo),
@@ -171,10 +179,11 @@ Qupls4_validate_operand #(.NBPI(NBPI)) uvsrcC
 	.val2_tag(argC2_tag),
 	.rfi_val(rfi_val),
 	.rfi_tag(rfi_tag),
+	.rfi_aRd(rfi_aRd),
 	.rfi_pRd(rfi_pRd),
-	.pRn0(pregno_t'(rse[0].argC[8:0])),
-	.pRn1(pregno_t'(rse[1].argC[8:0])),
-	.pRn2(pregno_t'(rse[2].argC[8:0])),
+	.aRn0(pregno_t'(rse[0].argC[23:16])),
+	.aRn1(pregno_t'(rse[1].argC[23:16])),
+	.aRn2(pregno_t'(rse[2].argC[23:16])),
 	.valid0_i(rse[0].argC_v),
 	.valid1_i(rse[1].argC_v),
 	.valid2_i(rse[2].argC_v),
@@ -185,6 +194,7 @@ Qupls4_validate_operand #(.NBPI(NBPI)) uvsrcC
 
 Qupls4_validate_operand #(.NBPI(NBPI)) uvsrcD
 (
+	.arn(arn),
 	.prn(prn),
 	.prnv(prnv),
 	.rfo(rfo),
@@ -197,10 +207,11 @@ Qupls4_validate_operand #(.NBPI(NBPI)) uvsrcD
 	.val2_tag(argD2_tag),
 	.rfi_val(rfi_val),
 	.rfi_tag(rfi_tag),
+	.rfi_aRd(rfi_aRd),
 	.rfi_pRd(rfi_pRd),
-	.pRn0(pregno_t'(rse[0].argD[8:0])),
-	.pRn1(pregno_t'(rse[1].argD[8:0])),
-	.pRn2(pregno_t'(rse[2].argD[8:0])),
+	.aRn0(pregno_t'(rse[0].argD[23:16])),
+	.aRn1(pregno_t'(rse[1].argD[23:16])),
+	.aRn2(pregno_t'(rse[2].argD[23:16])),
 	.valid0_i(rse[0].argD_v),
 	.valid1_i(rse[1].argD_v),
 	.valid2_i(rse[2].argD_v),
