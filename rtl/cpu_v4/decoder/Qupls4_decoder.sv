@@ -43,7 +43,7 @@ input en;
 input Qupls4_pkg::operating_mode_t om;
 input [5:0] ipl;
 input Qupls4_pkg::micro_op_t instr;
-input [239:0] instr_raw;
+input [335:0] instr_raw;
 output Qupls4_pkg::decode_bus_t dbo;
 
 Qupls4_pkg::ex_instruction_t ins;
@@ -280,7 +280,8 @@ Qupls4_decode_load udecld1
 (
 	.instr(ins.ins),
 	.load(db.load),
-	.aldf(db.aldf)
+	.vload(db.vload),
+	.vload_ndx(db.vload_ndx)
 );
 
 Stark_decode_loadz udecldz1
@@ -293,7 +294,8 @@ Qupls4_decode_store udecst1
 (
 	.instr(ins.ins),
 	.store(db.store),
-	.astf(db.astf)
+	.vstore(db.vstore),
+	.vstore_ndx(db.vstore_ndx)
 );
 
 Stark_decode_loada udeclda1
@@ -407,12 +409,20 @@ else begin
 			dbo.fpu <= FALSE;
 			dbo.load <= FALSE;
 			dbo.store <= FALSE;
+			dbo.vload <= FALSE;
+			dbo.vstore <= FALSE;
+			dbo.vload_ndx <= FALSE;
+			dbo.vstore_ndx <= FALSE;
+			dbo.v2p = FALSE;
+			dbo.vv2p = FALSE;
+			dbo.vvn2p = FALSE;
 			dbo.mem <= FALSE;
-			dbo.aldf <= FALSE;
-			dbo.astf <= FALSE;
 		end
 		dbo.cause <= Qupls4_pkg::FLT_NONE;
-		dbo.mem <= db.load|db.store|db.v2p|db.aldf|db.astf;
+		dbo.mem <= 
+			 db.load|db.vload|db.vload_ndx
+			|db.store|db.vstore|db.vstore_ndx
+			|db.v2p|db.vv2p|db.vvn2p;
 		dbo.sync <= db.fence && ins[15:8]==8'hFF;
 		dbo.cpytgt <= 1'b0;
 		dbo.qfext <= db.alu && ins.ins[28:27]==2'b10;

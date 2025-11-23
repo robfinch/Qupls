@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2023-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -32,55 +32,78 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
+// 250 LUTs / 40 FFs
 // ============================================================================
 
+import const_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_decode_load(instr, load, vload, vload_ndx);
-input Qupls4_pkg::instruction_t instr;
-output load;
-output vload;
-output vload_ndx;
+module Qupls4_agen(rst, clk, ir, next, out, tlb_v, virt2phys, 
+	load, store, vload_ndx, vstore_ndx, amo, laneno,
+	a, b, i, Ra, Rb, pc, res, resv);
+input rst;
+input clk;
+input next;								// calculate for next cache line
+input Qupls4_pkg::ex_instruction_t ir;
+input out;
+input tlb_v;
+input virt2phys;
+input load;
+input store;
+input vload_ndx;
+input vstore_ndx;
+input amo;
+input [7:0] laneno;
+input cpu_types_pkg::address_t a;
+input cpu_types_pkg::address_t b;
+input cpu_types_pkg::address_t i;
+input cpu_types_pkg::aregno_t Ra;
+input cpu_types_pkg::aregno_t Rb;
+input cpu_types_pkg::pc_address_t pc;
+output cpu_types_pkg::address_t res;
+output reg resv;
 
-function fnIsLoad;
-input Qupls4_pkg::instruction_t op;
+cpu_types_pkg::address_t as, bs;
+cpu_types_pkg::address_t res1;
+
+always_comb
+	as = a;
+
+always_comb
+	bs = b << ir.ins.lsscn.sc;
+
+always_comb
 begin
-	case(op.any.opcode)
-	Qupls4_pkg::OP_LDB,Qupls4_pkg::OP_LDBZ,Qupls4_pkg::OP_LDW,Qupls4_pkg::OP_LDWZ,
-	Qupls4_pkg::OP_LDT,Qupls4_pkg::OP_LDTZ,Qupls4_pkg::OP_LOAD:
-		fnIsLoad = 1'b1;
-	default:
-		fnIsLoad = 1'b0;
-	endcase
+	if (vload_ndx | vstore_ndx)
+		res1 = as + bs * laneno + i;
+	else if (amo)
+		res1 = as;				// just [Rs1]
+	else if (virt2phys | load | store)
+		res1 = as + bs + i;
+	else
+		res1 <= 64'd0;
 end
-endfunction
 
-function fnIsVLoad;
-input Qupls4_pkg::instruction_t op;
-begin
-	case(op.any.opcode)
-	Qupls4_pkg::OP_LDV:
-		fnIsVLoad = 1'b1;
-	default:
-		fnIsVLoad = 1'b0;
-	endcase
+always_ff @(posedge clk)
+	res = next ? {res1[$bits(cpu_types_pkg::address_t)-1:6] + 2'd1,6'd0} : res1;
+
+// Make Agen valid sticky
+// The agen takes a clock cycle to compute after the out signal is valid.
+reg resv1;
+always_ff @(posedge clk) 
+if (rst) begin
+	resv <= INV;
+	resv1 <= INV;
 end
-endfunction
-
-function fnIsVLoadNdx;
-input Qupls4_pkg::instruction_t op;
-begin
-	case(op.any.opcode)
-	Qupls4_pkg::OP_LDVN:
-		fnIsVLoadNdx = 1'b1;
-	default:
-		fnIsVLoadNdx = 1'b0;
-	endcase
+else begin
+	if (out)
+		resv1 <= VAL;
+	resv <= resv1;
+	if (tlb_v) begin
+		resv1 <= INV;
+		resv <= INV;
+	end
 end
-endfunction
 
-assign load = fnIsLoad(instr);
-assign vload = fnIsVLoad(instr);
-assign vload_ndx = fnIsVLoadNdx(instr);
 
 endmodule

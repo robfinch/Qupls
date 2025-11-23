@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2024-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2024-2026  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -32,7 +32,7 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 15025 LUTs / 4550 FFs
+// 18600 LUTs / 5800 FFs / 2 BRAMs
 // ============================================================================
 
 import const_pkg::*;
@@ -200,39 +200,39 @@ Qupls4_microop uuop4
 );
 
 reg rd_mux;
-reg [2:0] uop_mark [0:31];
+reg [1:0] uop_mark [0:31];
 
 always_comb
 begin
 	case(uop_mark[0])
-	3'd0:	tpr0 = pg_mux.pr0;
-	3'd1:	tpr0 = pg_mux.pr1;
-	3'd2:	tpr0 = pg_mux.pr2;
-	3'd3:	tpr0 = pg_mux.pr3;
+	2'd0:	tpr0 = pg_mux.pr0;
+	2'd1:	tpr0 = pg_mux.pr1;
+	2'd2:	tpr0 = pg_mux.pr2;
+	2'd3:	tpr0 = pg_mux.pr3;
 //	3'd4:	tpr0 = pg_mux.pr4;
 //	default:	tpr0 = pg_mux.pr4;
 	endcase
 	case(uop_mark[1])
-	3'd0:	tpr1 = pg_mux.pr0;
-	3'd1:	tpr1 = pg_mux.pr1;
-	3'd2:	tpr1 = pg_mux.pr2;
-	3'd3:	tpr1 = pg_mux.pr3;
+	2'd0:	tpr1 = pg_mux.pr0;
+	2'd1:	tpr1 = pg_mux.pr1;
+	2'd2:	tpr1 = pg_mux.pr2;
+	2'd3:	tpr1 = pg_mux.pr3;
 //	3'd4:	tpr1 = pg_mux.pr4;
 //	default:	tpr1 = pg_mux.pr4;
 	endcase
 	case(uop_mark[2])
-	3'd0:	tpr2 = pg_mux.pr0;
-	3'd1:	tpr2 = pg_mux.pr1;
-	3'd2:	tpr2 = pg_mux.pr2;
-	3'd3:	tpr2 = pg_mux.pr3;
+	2'd0:	tpr2 = pg_mux.pr0;
+	2'd1:	tpr2 = pg_mux.pr1;
+	2'd2:	tpr2 = pg_mux.pr2;
+	2'd3:	tpr2 = pg_mux.pr3;
 //	3'd4:	tpr2 = pg_mux.pr4;
 //	default:	tpr2 = pg_mux.pr4;
 	endcase
 	case(uop_mark[3])
-	3'd0:	tpr3 = pg_mux.pr0;
-	3'd1:	tpr3 = pg_mux.pr1;
-	3'd2:	tpr3 = pg_mux.pr2;
-	3'd3:	tpr3 = pg_mux.pr3;
+	2'd0:	tpr3 = pg_mux.pr0;
+	2'd1:	tpr3 = pg_mux.pr1;
+	2'd2:	tpr3 = pg_mux.pr2;
+	2'd3:	tpr3 = pg_mux.pr3;
 //	3'd4:	tpr3 = pg_mux.pr4;
 //	default:	tpr3 = pg_mux.pr4;
 	endcase
@@ -273,27 +273,27 @@ else begin
   	uop_buf[28] <= {$bits(Qupls4_pkg::micro_op_t){1'b0}};
     for (n5 = 0; n5 < 28; n5 = n5 + 1)
 		  uop_mark[n5] <= uop_mark[n5+4];
-		uop_mark[31] <= 3'b00;
-		uop_mark[30] <= 3'b00;
-		uop_mark[29] <= 3'b00;
-		uop_mark[28] <= 3'b00;
+		uop_mark[31] <= 2'b00;
+		uop_mark[30] <= 2'b00;
+		uop_mark[29] <= 2'b00;
+		uop_mark[28] <= 2'b00;
 		if (rd_mux) begin
 			for (n4 = 0; n4 < 32; n4 = n4 + 1) begin
 				if (n4 < {2'd0,uop_count[0]}) begin
-					uop_mark[n4] <= 3'd0;
-					uop_buf[n4] <= uop[0][n4];
+					uop_mark[n4] <= 2'd0;
+					uop_buf[n4] <= uop[0][n4 % 8];	// % 8 gets rid of index out of range warning
 				end
 				else if (n4 < {2'd0,uop_count[0]} + uop_count[1]) begin
-					uop_mark[n4] <= 3'd1;
-					uop_buf[n4] <= uop[1][n4-uop_count[0]];
+					uop_mark[n4] <= 2'd1;
+					uop_buf[n4] <= uop[1][(n4-uop_count[0]) % 8];
 				end
 				else if (n4 < {2'd0,uop_count[0]} + uop_count[1] + uop_count[2]) begin
-					uop_mark[n4] <= 3'd2;
-					uop_buf[n4] <= uop[2][n4-uop_count[0]-uop_count[1]];
+					uop_mark[n4] <= 2'd2;
+					uop_buf[n4] <= uop[2][(n4-uop_count[0]-uop_count[1]) % 8];
 				end
 				else begin
-					uop_mark[n4] <= 3'd3;
-					uop_buf[n4] <= uop[3][n4-uop_count[0]-uop_count[1]-uop_count[2]];
+					uop_mark[n4] <= 2'd3;
+					uop_buf[n4] <= uop[3][(n4-uop_count[0]-uop_count[1]-uop_count[2]) % 8];
 				end
 			end
 		end
@@ -342,7 +342,6 @@ always_comb
 begin
 	nopi = {$bits(Qupls4_pkg::pipeline_reg_t){1'b0}};
 	nopi.pc.pc = RSTPC;
-	nopi.mcip = 12'h1A0;
 	nopi.uop.count = 3'd1;
 	nopi.uop.ins = {26'd0,Qupls4_pkg::OP_NOP};
 	nopi.v = 1'b1;
@@ -901,11 +900,6 @@ begin
 	if (dec3.xregs.v & pr3_dec.v)
 		fregs_o = dec3.xregs;
 
-	pr0_dec.mcip = ins0m.mcip;
-	pr1_dec.mcip = ins1m.mcip;
-	pr2_dec.mcip = ins2m.mcip;
-	pr3_dec.mcip = ins3m.mcip;
-	
 	if (ins1_d_inv) pr1_dec.v = FALSE;
 	if (ins1_d_inv) pr2_dec.v = FALSE;
 	if (ins3_d_inv) pr3_dec.v = FALSE;

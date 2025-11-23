@@ -36,10 +36,11 @@
 
 import Qupls4_pkg::*;
 
-module Qupls4_decode_store(instr, store, astf);
+module Qupls4_decode_store(instr, store, vstore, vstore_ndx,);
 input Qupls4_pkg::instruction_t instr;
 output store;
-output astf;
+output vstore;
+output vstore_ndx;
 
 function fnIsStore;
 input Qupls4_pkg::instruction_t op;
@@ -56,7 +57,32 @@ begin
 end
 endfunction
 
+function fnIsStoreVec;
+input Qupls4_pkg::instruction_t op;
+begin
+	case(op.any.opcode)
+	Qupls4_pkg::OP_STV:
+		fnIsStoreVec = 1'b1;
+	default:
+		fnIsStoreVec = 1'b0;
+	endcase
+end
+endfunction
+
+function fnIsStoreVn;
+input Qupls4_pkg::instruction_t op;
+begin
+	case(op.any.opcode)
+	Qupls4_pkg::OP_STV:
+		fnIsStoreVn = 1'b1;
+	default:
+		fnIsStoreVn = 1'b0;
+	endcase
+end
+endfunction
 assign store = fnIsStore(instr);
+assign vstore = fnIsStoreVec(instr);
+assign vstore_ndx = fnIsStoreVn(instr);
 assign astf = 1'b0;
 
 endmodule

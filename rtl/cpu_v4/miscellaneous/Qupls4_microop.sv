@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2025-2026  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -47,8 +47,8 @@ input [2:0] num;
 input [7:0] carry_reg;
 input carry_out;
 input carry_in;
-input [15:0] vlen_reg;
-input [15:0] velsz;
+input [63:0] vlen_reg;
+input [63:0] velsz;
 output reg [3:0] count;
 output Qupls4_pkg::micro_op_t [7:0] uop;
 
@@ -64,8 +64,12 @@ Qupls4_pkg::alui_inst_t incssp32,decssp32;
 Qupls4_pkg::anyinst_t enter_st_fp, exit_ld_fp;
 Qupls4_pkg::anyinst_t enter_st_lr, exit_ld_lr;
 Qupls4_pkg::anyinst_t fp_eq_sp, sp_eq_fp;
-reg [47:0] instr;
+Qupls4_pkg::r3_inst_t instr;
+Qupls4_pkg::instruction_t ins2;
+Qupls4_pkg::extd_inst_t vsins;
+Qupls4_pkg::vls_inst_t vls;
 reg [9:0] vlen, fvlen, vlen1;
+wire [6:0] mo0 = 7'd48;		// micro-op temporary
 
 always_ff @(posedge clk)
 	vlen = (vlen_reg[7:0] * (7'd1 << velsz[1:0])) >> 4'd6;
@@ -150,7 +154,21 @@ begin
 end
 
 always_comb
+begin
+	ins2 = ir;
+	vsins = ir;
+	vls = ir;
 	case(ir.any.opcode)
+	Qupls4_pkg::OP_EXTD:
+		begin
+			ins2 = ir;
+			vlen1 = vlen;	// use integer length
+			case(ir.extd.op3)
+			Qupls4_pkg::EX_VSHLV:	vsins.extdop = Qupls4_pkg::EXT_ASLC;
+			Qupls4_pkg::EX_VSHRV:	vsins.extdop = Qupls4_pkg::EXT_LSRC;
+			default:	;
+			endcase
+		end
 	Qupls4_pkg::OP_R3P:
 		begin
 			instr = (ir & ~48'h7F) | Qupls4_pkg::OP_R3BP | velsz[1:0];
@@ -162,9 +180,15 @@ always_comb
 			vlen1 = fvlen;
 		end
 	Qupls4_pkg::OP_R3BP,Qupls4_pkg::OP_R3WP,Qupls4_pkg::OP_R3TP,Qupls4_pkg::OP_R3OP:
-		vlen1 = vlen;
+		begin
+			instr = ir;
+			vlen1 = vlen;
+		end
 	Qupls4_pkg::OP_FLTPH,Qupls4_pkg::OP_FLTPS,Qupls4_pkg::OP_FLTPD,Qupls4_pkg::OP_FLTPQ:
-		vlen1 = fvlen;
+		begin
+			instr = ir;
+			vlen1 = fvlen;
+		end
 	Qupls4_pkg::OP_LDV,Qupls4_pkg::OP_STV:
 		vlen1 = vlen;
 	Qupls4_pkg::OP_FLDV,Qupls4_pkg::OP_FSTV:
@@ -176,6 +200,7 @@ always_comb
 	default:
 		vlen1 = 10'd0;
 	endcase
+end
 
 always_comb
 begin
@@ -192,9 +217,56 @@ begin
 
 	case(ir.any.opcode)
 	Qupls4_pkg::OP_BRK:	begin uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,ir}; count = 3'd1; end
-	Qupls4_pkg::OP_SHIFT:
+	Qupls4_pkg::OP_EXTD:
 		begin
-			begin
+			if (SUPPORT_VECTOR) begin
+				case(ir.extd.op3)
+				EX_VSHLV,EX_VSHRV:
+					case(vlen1[3:0])
+					4'd1:	
+						begin
+							count = 4'd1;
+							uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,vsins};
+						end
+					4'd2:	
+						begin
+							count = 4'd2;
+							uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,mo0,vsins.ms,vsins.exdop,vsins.Rs3,vsins.Rs2,vsins.Rs1,vsins.Rd,vsins.opcode};
+							uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,vsins.Rs4,vsins.ms,vsins.exdop,mo0,vsins.Rs2,vsins.Rs1+7'd1,vsins.Rd+7'd1,vsins.opcode};
+						end
+					4'd4:	
+						begin
+							count = 4'd4;
+							uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,mo0,vsins.ms,vsins.exdop,vsins.Rs3,vsins.Rs2,vsins.Rs1,vsins.Rd,vsins.opcode};
+							uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,mo0,vsins.ms,vsins.exdop,mo0,vsins.Rs2,vsins.Rs1+7'd1,vsins.Rd+7'd1,vsins.opcode};
+							uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,mo0,vsins.ms,vsins.exdop,mo0,vsins.Rs2,vsins.Rs1+7'd2,vsins.Rd+7'd2,vsins.opcode};
+							uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,vsins.Rs4,vsins.ms,vsins.exdop,mo0,vsins.Rs2,vsins.Rs1+7'd3,vsins.Rd+7'd3,vsins.opcode};
+						end
+					4'd8:	
+						begin
+							count = 4'd8;
+							uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,mo0,vsins.ms,vsins.exdop,vsins.Rs3,vsins.Rs2,vsins.Rs1,vsins.Rd,vsins.opcode};
+							uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,mo0,vsins.ms,vsins.exdop,mo0,vsins.Rs2,vsins.Rs1+7'd1,vsins.Rd+7'd1,vsins.opcode};
+							uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,mo0,vsins.ms,vsins.exdop,mo0,vsins.Rs2,vsins.Rs1+7'd2,vsins.Rd+7'd2,vsins.opcode};
+							uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,mo0,vsins.ms,vsins.exdop,mo0,vsins.Rs2,vsins.Rs1+7'd3,vsins.Rd+7'd3,vsins.opcode};
+							uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,mo0,vsins.ms,vsins.exdop,mo0,vsins.Rs2,vsins.Rs1+7'd4,vsins.Rd+7'd4,vsins.opcode};
+							uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,mo0,vsins.ms,vsins.exdop,mo0,vsins.Rs2,vsins.Rs1+7'd5,vsins.Rd+7'd5,vsins.opcode};
+							uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,mo0,vsins.ms,vsins.exdop,mo0,vsins.Rs2,vsins.Rs1+7'd6,vsins.Rd+7'd6,vsins.opcode};
+							uop[7] = {1'b1,1'b0,3'd0,3'd7,4'd0,vsins.Rs4,vsins.ms,vsins.exdop,mo0,vsins.Rs2,vsins.Rs1+7'd7,vsins.Rd+7'd7,vsins.opcode};
+						end
+					default:
+						count = 4'd1;
+						uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,nopi};
+				end
+					endcase
+				default:
+					begin
+						count = 4'd1;
+						uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,ir};
+					end
+				endcase
+			end
+			else begin
 				count = 4'd1;
 				uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,ir};
 			end
@@ -213,89 +285,7 @@ begin
 		end
 
 	Qupls4_pkg::OP_R3P,
-	Qupls4_pkg::OP_FLTP:
-		if (SUPPORT_VECTOR) begin
-			case(vlen1[3:0])
-			4'd1:
-				begin
-			count = 4'd1;
-			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,instr};
-				end
-			4'd2:
-				begin
-			count = 4'd2;
-			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,instr  & ~48'h020010204080};	// select 0 regs
-			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,(instr & ~48'h020010204080) | 48'h020010204080};	// select 1 regs
-				end
-			4'd3:
-				begin
-			count = 4'd3;
-			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,instr  & ~48'h060030604180};	// select 0 regs
-			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,(instr & ~48'h060030604180) | 48'h020010204080};	// select 1 regs
-			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,(instr & ~48'h060030604180) | 48'h040020408100};	// select 2 regs
-				end
-			4'd4:
-				begin
-			count = 4'd4;
-			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,instr  & ~48'h06003060C180};	// select 00 regs
-			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,(instr & ~48'h06003060C180) | 48'h020010204080};	// select 01 regs
-			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,(instr & ~48'h06003060C180) | 48'h040020408100};	// select 02 regs
-			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,(instr & ~48'h06003060C180) | 48'h06003060C180};	// select 03 regs
-				end
-			4'd5:
-				begin
-			count = 4'd5;
-			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,instr  & ~48'h0E0070E1C380};	// select 00 regs
-			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,(instr & ~48'h0E0070E1C380) | 48'h020010204080};	// select 01 regs
-			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,(instr & ~48'h0E0070E1C380) | 48'h040020408100};	// select 02 regs
-			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,(instr & ~48'h0E0070E1C380) | 48'h06003060C180};	// select 03 regs
-			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,(instr & ~48'h0E0070E1C380) | 48'h080040810200};	// select 03 regs
-				end
-			4'd6:
-				begin
-			count = 4'd6;
-			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,instr  & ~48'h0E0070E1C380};	// select 00 regs
-			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,(instr & ~48'h0E0070E1C380) | 48'h020010204080};	// select 01 regs
-			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,(instr & ~48'h0E0070E1C380) | 48'h040020408100};	// select 02 regs
-			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,(instr & ~48'h0E0070E1C380) | 48'h06003060C180};	// select 03 regs
-			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,(instr & ~48'h0E0070E1C380) | 48'h080040810200};	// select 03 regs
-			uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,(instr & ~48'h0E0070E1C380) | 48'h0A0050A14280};	// select 03 regs
-				end
-			4'd7:
-				begin
-			count = 4'd7;
-			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,instr  & ~48'h0E0070E1C380};	// select 00 regs
-			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,(instr & ~48'h0E0070E1C380) | 48'h020010204080};	// select 01 regs
-			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,(instr & ~48'h0E0070E1C380) | 48'h040020408100};	// select 02 regs
-			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,(instr & ~48'h0E0070E1C380) | 48'h06003060C180};	// select 03 regs
-			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,(instr & ~48'h0E0070E1C380) | 48'h080040810200};	// select 03 regs
-			uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,(instr & ~48'h0E0070E1C380) | 48'h0A0050A14280};	// select 03 regs
-			uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,(instr & ~48'h0E0070E1C380) | 48'h0C0060C18300};	// select 03 regs
-				end
-			4'd8:
-				begin
-			count = 4'd8;
-			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,instr  & ~48'h0E0070E1C380};	// select 0 regs
-			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,(instr & ~48'h0E0070E1C380) | 48'h020010204080};	// select 1 regs
-			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,(instr & ~48'h0E0070E1C380) | 48'h040020408100};	// select 2 regs
-			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,(instr & ~48'h0E0070E1C380) | 48'h06003060C180};	// select 3 regs
-			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,(instr & ~48'h0E0070E1C380) | 48'h080040810200};	// select 4 regs
-			uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,(instr & ~48'h0E0070E1C380) | 48'h0A0050A14280};	// select 5 regs
-			uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,(instr & ~48'h0E0070E1C380) | 48'h0C0060C18300};	// select 6 regs
-			uop[7] = {1'b1,1'b0,3'd0,3'd7,4'd0,(instr & ~48'h0E0070E1C380) | 48'h0E0070E1C380};	// select 7 regs
-				end
-			default:	
-				begin
-			count = 4'd1;
-			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,nopi};
-				end
-			endcase
-		end
-		// Should really exception here.
-		else begin
-			count = 4'd1;
-			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,nopi};
-		end
+	Qupls4_pkg::OP_FLTP,
 	Qupls4_pkg::OP_R3BP,Qupls4_pkg::OP_R3WP,Qupls4_pkg::OP_R3TP,Qupls4_pkg::OP_R3OP,
 	Qupls4_pkg::OP_FLTPH,Qupls4_pkg::OP_FLTPS,Qupls4_pkg::OP_FLTPD,Qupls4_pkg::OP_FLTPQ:
 		if (SUPPORT_VECTOR) begin
@@ -303,70 +293,70 @@ begin
 			4'd1:
 				begin
 			count = 4'd1;
-			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,ir};
+			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,instr};
 				end
 			4'd2:
 				begin
 			count = 4'd2;
-			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,ir  & ~48'h020010204080};	// select 0 regs
-			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,(ir & ~48'h020010204080) | 48'h020010204080};	// select 1 regs
+			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,instr};
+			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd1,instr.Rs2+7'd1,instr.Rs1+7'd1,instr.Rd+7'd1,instr.opcode};
 				end
 			4'd3:
 				begin
 			count = 4'd3;
-			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,ir  & ~48'h060030604180};	// select 0 regs
-			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,(ir & ~48'h060030604180) | 48'h020010204080};	// select 1 regs
-			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,(ir & ~48'h060030604180) | 48'h040020408100};	// select 2 regs
+			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,instr};
+			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd1,instr.Rs2+7'd1,instr.Rs1+7'd1,instr.Rd+7'd1,instr.opcode};
+			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd2,instr.Rs2+7'd2,instr.Rs1+7'd2,instr.Rd+7'd2,instr.opcode};
 				end
 			4'd4:
 				begin
 			count = 4'd4;
-			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,ir  & ~48'h06003060C180};	// select 00 regs
-			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,(ir & ~48'h06003060C180) | 48'h020010204080};	// select 01 regs
-			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,(ir & ~48'h06003060C180) | 48'h040020408100};	// select 02 regs
-			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,(ir & ~48'h06003060C180) | 48'h06003060C180};	// select 03 regs
+			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,instr};
+			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd1,instr.Rs2+7'd1,instr.Rs1+7'd1,instr.Rd+7'd1,instr.opcode};
+			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd2,instr.Rs2+7'd2,instr.Rs1+7'd2,instr.Rd+7'd2,instr.opcode};
+			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd3,instr.Rs2+7'd3,instr.Rs1+7'd3,instr.Rd+7'd3,instr.opcode};
 				end
 			4'd5:
 				begin
 			count = 4'd5;
-			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,ir  & ~48'h0E0070E1C380};	// select 00 regs
-			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,(ir & ~48'h0E0070E1C380) | 48'h020010204080};	// select 01 regs
-			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,(ir & ~48'h0E0070E1C380) | 48'h040020408100};	// select 02 regs
-			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,(ir & ~48'h0E0070E1C380) | 48'h06003060C180};	// select 03 regs
-			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,(ir & ~48'h0E0070E1C380) | 48'h080040810200};	// select 03 regs
+			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,instr};
+			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd1,instr.Rs2+7'd1,instr.Rs1+7'd1,instr.Rd+7'd1,instr.opcode};
+			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd2,instr.Rs2+7'd2,instr.Rs1+7'd2,instr.Rd+7'd2,instr.opcode};
+			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd3,instr.Rs2+7'd3,instr.Rs1+7'd3,instr.Rd+7'd3,instr.opcode};
+			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd4,instr.Rs2+7'd4,instr.Rs1+7'd4,instr.Rd+7'd4,instr.opcode};
 				end
 			4'd6:
 				begin
 			count = 4'd6;
-			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,ir  & ~48'h0E0070E1C380};	// select 00 regs
-			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,(ir & ~48'h0E0070E1C380) | 48'h020010204080};	// select 01 regs
-			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,(ir & ~48'h0E0070E1C380) | 48'h040020408100};	// select 02 regs
-			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,(ir & ~48'h0E0070E1C380) | 48'h06003060C180};	// select 03 regs
-			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,(ir & ~48'h0E0070E1C380) | 48'h080040810200};	// select 03 regs
-			uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,(ir & ~48'h0E0070E1C380) | 48'h0A0050A14280};	// select 03 regs
+			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,instr};
+			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd1,instr.Rs2+7'd1,instr.Rs1+7'd1,instr.Rd+7'd1,instr.opcode};
+			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd2,instr.Rs2+7'd2,instr.Rs1+7'd2,instr.Rd+7'd2,instr.opcode};
+			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd3,instr.Rs2+7'd3,instr.Rs1+7'd3,instr.Rd+7'd3,instr.opcode};
+			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd4,instr.Rs2+7'd4,instr.Rs1+7'd4,instr.Rd+7'd4,instr.opcode};
+			uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd5,instr.Rs2+7'd5,instr.Rs1+7'd5,instr.Rd+7'd5,instr.opcode};
 				end
 			4'd7:
 				begin
 			count = 4'd7;
-			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,ir  & ~48'h0E0070E1C380};	// select 00 regs
-			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,(ir & ~48'h0E0070E1C380) | 48'h020010204080};	// select 01 regs
-			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,(ir & ~48'h0E0070E1C380) | 48'h040020408100};	// select 02 regs
-			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,(ir & ~48'h0E0070E1C380) | 48'h06003060C180};	// select 03 regs
-			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,(ir & ~48'h0E0070E1C380) | 48'h080040810200};	// select 03 regs
-			uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,(ir & ~48'h0E0070E1C380) | 48'h0A0050A14280};	// select 03 regs
-			uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,(ir & ~48'h0E0070E1C380) | 48'h0C0060C18300};	// select 03 regs
+			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,instr};
+			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd1,instr.Rs2+7'd1,instr.Rs1+7'd1,instr.Rd+7'd1,instr.opcode};
+			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd2,instr.Rs2+7'd2,instr.Rs1+7'd2,instr.Rd+7'd2,instr.opcode};
+			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd3,instr.Rs2+7'd3,instr.Rs1+7'd3,instr.Rd+7'd3,instr.opcode};
+			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd4,instr.Rs2+7'd4,instr.Rs1+7'd4,instr.Rd+7'd4,instr.opcode};
+			uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd5,instr.Rs2+7'd5,instr.Rs1+7'd5,instr.Rd+7'd5,instr.opcode};
+			uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd6,instr.Rs2+7'd6,instr.Rs1+7'd6,instr.Rd+7'd6,instr.opcode};
 				end
 			4'd8:
 				begin
 			count = 4'd8;
-			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,ir  & ~48'h0E0070E1C380};	// select 0 regs
-			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,(ir & ~48'h0E0070E1C380) | 48'h020010204080};	// select 1 regs
-			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,(ir & ~48'h0E0070E1C380) | 48'h040020408100};	// select 2 regs
-			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,(ir & ~48'h0E0070E1C380) | 48'h06003060C180};	// select 3 regs
-			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,(ir & ~48'h0E0070E1C380) | 48'h080040810200};	// select 4 regs
-			uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,(ir & ~48'h0E0070E1C380) | 48'h0A0050A14280};	// select 5 regs
-			uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,(ir & ~48'h0E0070E1C380) | 48'h0C0060C18300};	// select 6 regs
-			uop[7] = {1'b1,1'b0,3'd0,3'd7,4'd0,(ir & ~48'h0E0070E1C380) | 48'h0E0070E1C380};	// select 7 regs
+			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,instr};
+			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd1,instr.Rs2+7'd1,instr.Rs1+7'd1,instr.Rd+7'd1,instr.opcode};
+			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd2,instr.Rs2+7'd2,instr.Rs1+7'd2,instr.Rd+7'd2,instr.opcode};
+			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd3,instr.Rs2+7'd3,instr.Rs1+7'd3,instr.Rd+7'd3,instr.opcode};
+			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd4,instr.Rs2+7'd4,instr.Rs1+7'd4,instr.Rd+7'd4,instr.opcode};
+			uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd5,instr.Rs2+7'd5,instr.Rs1+7'd5,instr.Rd+7'd5,instr.opcode};
+			uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd6,instr.Rs2+7'd6,instr.Rs1+7'd6,instr.Rd+7'd6,instr.opcode};
+			uop[7] = {1'b1,1'b0,3'd0,3'd7,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd7,instr.Rs2+7'd7,instr.Rs1+7'd7,instr.Rd+7'd7,instr.opcode};
 				end
 			default:	
 				begin
@@ -380,79 +370,76 @@ begin
 			count = 4'd1;
 			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,nopi};
 		end
-	Qupls4_pkg::OP_LDV,Qupls4_pkg::OP_STV,
-	Qupls4_pkg::OP_FLDV,Qupls4_pkg::OP_FSTV:
+	Qupls4_pkg::OP_LDV,Qupls4_pkg::OP_STV:
 		if (SUPPORT_VECTOR) begin
 			case(vlen1[3:0])
 			4'd1:
 				begin
 			count = 4'd1;
-			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,ir};
+			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,vls};
 				end
 			4'd2:
 				begin
 			count = 4'd2;
-			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,( ir & ~48'h020000000080)};	// select 00 regs
-			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,((ir & ~48'h020000000080) | 48'h020000000080) + 48'h080000000};	// select 01 regs
+			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,vls};
+			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,vls.sc,vls.ms,vls.disp+6'd8,vls.dt,vls.Rs3,vls.Rs2,vls.Rs1,vls.Rd+7'd1,vls.opcode};
 				end
 			4'd3:
 				begin
 			count = 4'd3;
-			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,( ir & ~48'h060000000080)};	// select 00 regs
-			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,((ir & ~48'h060000000080) | 48'h020000000080) + 48'h080000000};	// select 01 regs
-			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,((ir & ~48'h060000000080) | 48'h040000000180) + 48'h100000000};	// select 01 regs
+			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,vls};
+			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,vls.sc,vls.ms,vls.disp+6'd8,vls.dt,vls.Rs3,vls.Rs2,vls.Rs1,vls.Rd+7'd1,vls.opcode};
+			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,vls.sc,vls.ms,vls.disp+6'd16,vls.dt,vls.Rs3,vls.Rs2,vls.Rs1,vls.Rd+7'd2,vls.opcode};
 				end
 			4'd4:
 				begin
 			count = 4'd4;
-			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,( ir & ~48'h060000000180)};	// select 00 regs
-			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,((ir & ~48'h060000000180) | 48'h020000000080) + 48'h080000000};	// select 01 regs
-			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,((ir & ~48'h060000000180) | 48'h040000000100) + 48'h100000000};	// select 02 regs
-			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,((ir & ~48'h060000000180) | 48'h060000000180) + 48'h180000000};	// select 03 regs
+			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,vls};
+			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,vls.sc,vls.ms,vls.disp+6'd8,vls.dt,vls.Rs3,vls.Rs2,vls.Rs1,vls.Rd+7'd1,vls.opcode};
+			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,vls.sc,vls.ms,vls.disp+6'd16,vls.dt,vls.Rs3,vls.Rs2,vls.Rs1,vls.Rd+7'd2,vls.opcode};
+			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,vls.sc,vls.ms,vls.disp+6'd24,vls.dt,vls.Rs3,vls.Rs2,vls.Rs1,vls.Rd+7'd3,vls.opcode};
 				end
 			4'd5:
 				begin
 			count = 4'd5;
-			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,( ir & ~48'h0E0000000380)};	// select 00 regs
-			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,((ir & ~48'h0E0000000380) | 48'h020000000080) + 48'h080000000};	// select 01 regs
-			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,((ir & ~48'h0E0000000380) | 48'h040000000100) + 48'h100000000};	// select 02 regs
-			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,((ir & ~48'h0E0000000380) | 48'h060000000180) + 48'h180000000};	// select 03 regs
-			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,((ir & ~48'h0E0000000380) | 48'h060000000200) + 48'h100000000};	// select 04 regs
+			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,vls};
+			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,vls.sc,vls.ms,vls.disp+6'd8,vls.dt,vls.Rs3,vls.Rs2,vls.Rs1,vls.Rd+7'd1,vls.opcode};
+			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,vls.sc,vls.ms,vls.disp+6'd16,vls.dt,vls.Rs3,vls.Rs2,vls.Rs1,vls.Rd+7'd2,vls.opcode};
+			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,vls.sc,vls.ms,vls.disp+6'd24,vls.dt,vls.Rs3,vls.Rs2,vls.Rs1,vls.Rd+7'd3,vls.opcode};
+			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,vls.sc,vls.ms,vls.disp+6'd32,vls.dt,vls.Rs3,vls.Rs2,vls.Rs1,vls.Rd+7'd4,vls.opcode};
 				end
 			4'd6:
 				begin
 			count = 4'd6;
-			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,( ir & ~48'h0E0000000380)};	// select 00 regs
-			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,((ir & ~48'h0E0000000380) | 48'h020000000080) + 48'h080000000};	// select 01 regs
-			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,((ir & ~48'h0E0000000380) | 48'h040000000100) + 48'h100000000};	// select 02 regs
-			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,((ir & ~48'h0E0000000380) | 48'h060000000180) + 48'h180000000};	// select 03 regs
-			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,((ir & ~48'h0E0000000380) | 48'h060000000200) + 48'h100000000};	// select 04 regs
-			uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,((ir & ~48'h0E0000000380) | 48'h060000000280) + 48'h280000000};	// select 05 regs
-			uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,((ir & ~48'h0E0000000380) | 48'h060000000300) + 48'h300000000};	// select 05 regs
+			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,vls};
+			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,vls.sc,vls.ms,vls.disp+6'd8,vls.dt,vls.Rs3,vls.Rs2,vls.Rs1,vls.Rd+7'd1,vls.opcode};
+			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,vls.sc,vls.ms,vls.disp+6'd16,vls.dt,vls.Rs3,vls.Rs2,vls.Rs1,vls.Rd+7'd2,vls.opcode};
+			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,vls.sc,vls.ms,vls.disp+6'd24,vls.dt,vls.Rs3,vls.Rs2,vls.Rs1,vls.Rd+7'd3,vls.opcode};
+			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,vls.sc,vls.ms,vls.disp+6'd32,vls.dt,vls.Rs3,vls.Rs2,vls.Rs1,vls.Rd+7'd4,vls.opcode};
+			uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,vls.sc,vls.ms,vls.disp+6'd40,vls.dt,vls.Rs3,vls.Rs2,vls.Rs1,vls.Rd+7'd5,vls.opcode};
 				end
 			4'd7:
 				begin
 			count = 4'd7;
-			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,( ir & ~48'h0E0000000380)};	// select 00 regs
-			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,((ir & ~48'h0E0000000380) | 48'h020000000080) + 48'h080000000};	// select 01 regs
-			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,((ir & ~48'h0E0000000380) | 48'h040000000100) + 48'h100000000};	// select 02 regs
-			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,((ir & ~48'h0E0000000380) | 48'h060000000180) + 48'h180000000};	// select 03 regs
-			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,((ir & ~48'h0E0000000380) | 48'h060000000200) + 48'h100000000};	// select 04 regs
-			uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,((ir & ~48'h0E0000000380) | 48'h060000000280) + 48'h280000000};	// select 05 regs
-			uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,((ir & ~48'h0E0000000380) | 48'h060000000300) + 48'h300000000};	// select 05 regs
-			uop[7] = {1'b1,1'b0,3'd0,3'd7,4'd0,((ir & ~48'h0E0000000380) | 48'h060000000380) + 48'h380000000};	// select 05 regs
+			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,vls};
+			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,vls.sc,vls.ms,vls.disp+6'd8,vls.dt,vls.Rs3,vls.Rs2,vls.Rs1,vls.Rd+7'd1,vls.opcode};
+			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,vls.sc,vls.ms,vls.disp+6'd16,vls.dt,vls.Rs3,vls.Rs2,vls.Rs1,vls.Rd+7'd2,vls.opcode};
+			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,vls.sc,vls.ms,vls.disp+6'd24,vls.dt,vls.Rs3,vls.Rs2,vls.Rs1,vls.Rd+7'd3,vls.opcode};
+			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,vls.sc,vls.ms,vls.disp+6'd32,vls.dt,vls.Rs3,vls.Rs2,vls.Rs1,vls.Rd+7'd4,vls.opcode};
+			uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,vls.sc,vls.ms,vls.disp+6'd40,vls.dt,vls.Rs3,vls.Rs2,vls.Rs1,vls.Rd+7'd5,vls.opcode};
+			uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,vls.sc,vls.ms,vls.disp+6'd48,vls.dt,vls.Rs3,vls.Rs2,vls.Rs1,vls.Rd+7'd6,vls.opcode};
 				end
 			4'd8:
 				begin
 			count = 4'd8;
-			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,( ir & ~48'h0E0000000380)};	// select 00 regs
-			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,((ir & ~48'h0E0000000380) | 48'h020000000080) + 48'h080000000};	// select 01 regs
-			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,((ir & ~48'h0E0000000380) | 48'h040000000100) + 48'h100000000};	// select 02 regs
-			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,((ir & ~48'h0E0000000380) | 48'h060000000180) + 48'h180000000};	// select 03 regs
-			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,((ir & ~48'h0E0000000380) | 48'h060000000200) + 48'h100000000};	// select 04 regs
-			uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,((ir & ~48'h0E0000000380) | 48'h060000000280) + 48'h280000000};	// select 05 regs
-			uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,((ir & ~48'h0E0000000380) | 48'h060000000300) + 48'h300000000};	// select 05 regs
-			uop[7] = {1'b1,1'b0,3'd0,3'd7,4'd0,((ir & ~48'h0E0000000380) | 48'h060000000380) + 48'h380000000};	// select 05 regs
+			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,vls};
+			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,vls.sc,vls.ms,vls.disp+6'd8,vls.dt,vls.Rs3,vls.Rs2,vls.Rs1,vls.Rd+7'd1,vls.opcode};
+			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,vls.sc,vls.ms,vls.disp+6'd16,vls.dt,vls.Rs3,vls.Rs2,vls.Rs1,vls.Rd+7'd2,vls.opcode};
+			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,vls.sc,vls.ms,vls.disp+6'd24,vls.dt,vls.Rs3,vls.Rs2,vls.Rs1,vls.Rd+7'd3,vls.opcode};
+			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,vls.sc,vls.ms,vls.disp+6'd32,vls.dt,vls.Rs3,vls.Rs2,vls.Rs1,vls.Rd+7'd4,vls.opcode};
+			uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,vls.sc,vls.ms,vls.disp+6'd40,vls.dt,vls.Rs3,vls.Rs2,vls.Rs1,vls.Rd+7'd5,vls.opcode};
+			uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,vls.sc,vls.ms,vls.disp+6'd48,vls.dt,vls.Rs3,vls.Rs2,vls.Rs1,vls.Rd+7'd6,vls.opcode};
+			uop[6] = {1'b1,1'b0,3'd0,3'd7,4'd0,vls.sc,vls.ms,vls.disp+6'd56,vls.dt,vls.Rs3,vls.Rs2,vls.Rs1,vls.Rd+7'd7,vls.opcode};
 				end
 			default:	
 				begin
@@ -467,77 +454,76 @@ begin
 			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,nopi};
 		end
 
-	Qupls4_pkg::OP_LDG,Qupls4_pkg::OP_STG,
-	Qupls4_pkg::OP_FLDG,Qupls4_pkg::OP_FSTG:
+	Qupls4_pkg::OP_LDVN,Qupls4_pkg::OP_STVN:
 		if (SUPPORT_VECTOR) begin
 			case(vlen1[3:0])
 			4'd1:
 				begin
 			count = 4'd1;
-			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,ir};
+			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,vls};
 				end
 			4'd2:
 				begin
 			count = 4'd2;
-			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,( ir & ~48'h020000004080)};	// select 00 regs
-			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,((ir & ~48'h020000004080) | 48'h020000004080) + 48'h080000000};	// select 01 regs
+			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,vls};
+			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,vls.sc,1'b0,6'd0,vls.dt,vls.Rs3,vls.Rs2+7'd1,vls.Rs1,vls.Rd+7'd1,vls.opcode};
 				end
 			4'd3:
 				begin
 			count = 4'd3;
-			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,( ir & ~48'h06000000C180)};	// select 00 regs
-			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,((ir & ~48'h06000000C180) | 48'h020000004080) + 48'h080000000};	// select 01 regs
-			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,((ir & ~48'h06000000C180) | 48'h040000008100) + 48'h100000000};	// select 02 regs
+			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,vls};
+			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,vls.sc,1'b0,6'd0,vls.dt,vls.Rs3,vls.Rs2+7'd1,vls.Rs1,vls.Rd+7'd1,vls.opcode};
+			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,vls.sc,1'b0,6'd0,vls.dt,vls.Rs3,vls.Rs2+7'd2,vls.Rs1,vls.Rd+7'd2,vls.opcode};
 				end
 			4'd4:
 				begin
 			count = 4'd4;
-			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,( ir & ~48'h06000000C180)};	// select 00 regs
-			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,((ir & ~48'h06000000C180) | 48'h020000004080) + 48'h080000000};	// select 01 regs
-			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,((ir & ~48'h06000000C180) | 48'h040000008100) + 48'h100000000};	// select 02 regs
-			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,((ir & ~48'h06000000C180) | 48'h06000000C180) + 48'h180000000};	// select 03 regs
+			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,vls};
+			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,vls.sc,1'b0,6'd0,vls.dt,vls.Rs3,vls.Rs2+7'd1,vls.Rs1,vls.Rd+7'd1,vls.opcode};
+			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,vls.sc,1'b0,6'd0,vls.dt,vls.Rs3,vls.Rs2+7'd2,vls.Rs1,vls.Rd+7'd2,vls.opcode};
+			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,vls.sc,1'b0,6'd0,vls.dt,vls.Rs3,vls.Rs2+7'd3,vls.Rs1,vls.Rd+7'd3,vls.opcode};
 				end
 			4'd5:
 				begin
 			count = 4'd5;
-			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,( ir & ~48'h0E0000000380)};	// select 00 regs
-			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,((ir & ~48'h0E0000000380) | 48'h020000004080) + 48'h080000000};	// select 01 regs
-			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,((ir & ~48'h0E0000000380) | 48'h040000008100) + 48'h100000000};	// select 02 regs
-			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,((ir & ~48'h0E0000000380) | 48'h06000000C180) + 48'h180000000};	// select 03 regs
-			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,((ir & ~48'h0E0000000380) | 48'h060000010200) + 48'h100000000};	// select 04 regs
+			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,vls};
+			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,vls.sc,1'b0,6'd0,vls.dt,vls.Rs3,vls.Rs2+7'd1,vls.Rs1,vls.Rd+7'd1,vls.opcode};
+			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,vls.sc,1'b0,6'd0,vls.dt,vls.Rs3,vls.Rs2+7'd2,vls.Rs1,vls.Rd+7'd2,vls.opcode};
+			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,vls.sc,1'b0,6'd0,vls.dt,vls.Rs3,vls.Rs2+7'd3,vls.Rs1,vls.Rd+7'd3,vls.opcode};
+			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,vls.sc,1'b0,6'd0,vls.dt,vls.Rs3,vls.Rs2+7'd4,vls.Rs1,vls.Rd+7'd4,vls.opcode};
 				end
 			4'd6:
 				begin
 			count = 4'd6;
-			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,( ir & ~48'h0E0000000380)};	// select 00 regs
-			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,((ir & ~48'h0E0000000380) | 48'h020000004080) + 48'h080000000};	// select 01 regs
-			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,((ir & ~48'h0E0000000380) | 48'h040000008100) + 48'h100000000};	// select 02 regs
-			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,((ir & ~48'h0E0000000380) | 48'h06000000C180) + 48'h180000000};	// select 03 regs
-			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,((ir & ~48'h0E0000000380) | 48'h060000010200) + 48'h100000000};	// select 04 regs
-			uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,((ir & ~48'h0E0000000380) | 48'h060000014280) + 48'h280000000};	// select 05 regs
+			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,vls};
+			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,vls.sc,1'b0,6'd0,vls.dt,vls.Rs3,vls.Rs2+7'd1,vls.Rs1,vls.Rd+7'd1,vls.opcode};
+			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,vls.sc,1'b0,6'd0,vls.dt,vls.Rs3,vls.Rs2+7'd2,vls.Rs1,vls.Rd+7'd2,vls.opcode};
+			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,vls.sc,1'b0,6'd0,vls.dt,vls.Rs3,vls.Rs2+7'd3,vls.Rs1,vls.Rd+7'd3,vls.opcode};
+			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,vls.sc,1'b0,6'd0,vls.dt,vls.Rs3,vls.Rs2+7'd4,vls.Rs1,vls.Rd+7'd4,vls.opcode};
+			uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,vls.sc,1'b0,6'd0,vls.dt,vls.Rs3,vls.Rs2+7'd5,vls.Rs1,vls.Rd+7'd5,vls.opcode};
 				end
 			4'd7:
 				begin
 			count = 4'd7;
-			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,( ir & ~48'h0E0000000380)};	// select 00 regs
-			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,((ir & ~48'h0E0000000380) | 48'h020000004080) + 48'h080000000};	// select 01 regs
-			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,((ir & ~48'h0E0000000380) | 48'h040000008100) + 48'h100000000};	// select 02 regs
-			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,((ir & ~48'h0E0000000380) | 48'h06000000C180) + 48'h180000000};	// select 03 regs
-			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,((ir & ~48'h0E0000000380) | 48'h060000010200) + 48'h100000000};	// select 04 regs
-			uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,((ir & ~48'h0E0000000380) | 48'h060000014280) + 48'h280000000};	// select 05 regs
-			uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,((ir & ~48'h0E0000000380) | 48'h060000018300) + 48'h300000000};	// select 05 regs
+			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,vls};
+			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,vls.sc,1'b0,6'd0,vls.dt,vls.Rs3,vls.Rs2+7'd1,vls.Rs1,vls.Rd+7'd1,vls.opcode};
+			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,vls.sc,1'b0,6'd0,vls.dt,vls.Rs3,vls.Rs2+7'd2,vls.Rs1,vls.Rd+7'd2,vls.opcode};
+			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,vls.sc,1'b0,6'd0,vls.dt,vls.Rs3,vls.Rs2+7'd3,vls.Rs1,vls.Rd+7'd3,vls.opcode};
+			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,vls.sc,1'b0,6'd0,vls.dt,vls.Rs3,vls.Rs2+7'd4,vls.Rs1,vls.Rd+7'd4,vls.opcode};
+			uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,vls.sc,1'b0,6'd0,vls.dt,vls.Rs3,vls.Rs2+7'd5,vls.Rs1,vls.Rd+7'd5,vls.opcode};
+			uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,vls.sc,1'b0,6'd0,vls.dt,vls.Rs3,vls.Rs2+7'd6,vls.Rs1,vls.Rd+7'd6,vls.opcode};
 				end
 			4'd8:
 				begin
 			count = 4'd8;
-			uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,( ir & ~48'h0E0000000380)};	// select 00 regs
-			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,((ir & ~48'h0E0000000380) | 48'h020000004080) + 48'h080000000};	// select 01 regs
-			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,((ir & ~48'h0E0000000380) | 48'h040000008100) + 48'h100000000};	// select 02 regs
-			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,((ir & ~48'h0E0000000380) | 48'h06000000C180) + 48'h180000000};	// select 03 regs
-			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,((ir & ~48'h0E0000000380) | 48'h060000010200) + 48'h100000000};	// select 04 regs
-			uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,((ir & ~48'h0E0000000380) | 48'h060000014280) + 48'h280000000};	// select 05 regs
-			uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,((ir & ~48'h0E0000000380) | 48'h060000018300) + 48'h300000000};	// select 05 regs
-			uop[7] = {1'b1,1'b0,3'd0,3'd7,4'd0,((ir & ~48'h0E0000000380) | 48'h06000001C380) + 48'h380000000};	// select 05 regs
+			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,vls};
+			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,vls.sc,1'b0,6'd0,vls.dt,vls.Rs3,vls.Rs2+7'd1,vls.Rs1,vls.Rd+7'd1,vls.opcode};
+			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,vls.sc,1'b0,6'd0,vls.dt,vls.Rs3,vls.Rs2+7'd2,vls.Rs1,vls.Rd+7'd2,vls.opcode};
+			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,vls.sc,1'b0,6'd0,vls.dt,vls.Rs3,vls.Rs2+7'd3,vls.Rs1,vls.Rd+7'd3,vls.opcode};
+			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,vls.sc,1'b0,6'd0,vls.dt,vls.Rs3,vls.Rs2+7'd4,vls.Rs1,vls.Rd+7'd4,vls.opcode};
+			uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,vls.sc,1'b0,6'd0,vls.dt,vls.Rs3,vls.Rs2+7'd5,vls.Rs1,vls.Rd+7'd5,vls.opcode};
+			uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,vls.sc,1'b0,6'd0,vls.dt,vls.Rs3,vls.Rs2+7'd6,vls.Rs1,vls.Rd+7'd6,vls.opcode};
+			uop[7] = {1'b1,1'b0,3'd0,3'd7,4'd0,vls.sc,1'b0,6'd0,vls.dt,vls.Rs3,vls.Rs2+7'd7,vls.Rs1,vls.Rd+7'd7,vls.opcode};
 				end
 			default:	
 				begin

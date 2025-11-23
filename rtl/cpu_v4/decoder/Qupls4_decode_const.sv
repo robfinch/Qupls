@@ -41,7 +41,7 @@ import Qupls4_pkg::*;
 
 module Qupls4_decode_const(instr_raw, ins, imma, immb, immc, immd,
 	has_imma, has_immb, has_immc, has_immd, pos, isz);
-input [239:0] instr_raw;
+input [335:0] instr_raw;
 input Qupls4_pkg::instruction_t ins;
 output reg [63:0] imma;
 output reg [63:0] immb;
@@ -73,17 +73,22 @@ fpCvt32To64 ucvt32x64a(cnst1[31:0], imm32x64a);
 fpCvt32To64 ucvt32x64b(cnst2[31:0], imm32x64b);
 fpCvt32To64 ucvt32x64C(cnst3[31:0], imm32x64c);
 
+reg [239:0] czone;
 wire [63:0] cnst1, cnst2, cnst3, cnst4;
 reg [63:0] cnst1a;
 
 always_comb pos = Qupls4_pkg::fnConstPos(ins);
 always_comb isz = Qupls4_pkg::fnConstSize(ins);
 
-Qupls4_constant_decoder u1 (pos[3:0],isz[1:0],instr_raw,cnst1);
-Qupls4_constant_decoder u2 (pos[7:4],isz[3:2],instr_raw,cnst2);
-Qupls4_constant_decoder u3 (pos[11:8],isz[5:4],instr_raw,cnst3);
+// Aggregate constant zone
+always_comb
+	czone = {instr_raw[287:248],instr_raw[239:200],instr_raw[191:152],instr_raw[143:104],instr_raw[95:56],instr_raw[47:8]};
+
+Qupls4_constant_decoder u1 (pos[3:0],isz[1:0],czone,cnst1);
+Qupls4_constant_decoder u2 (pos[7:4],isz[3:2],czone,cnst2);
+Qupls4_constant_decoder u3 (pos[11:8],isz[5:4],czone,cnst3);
 // For store immediate
-Qupls4_constant_decoder u4 (ins[10:7],ins[12:11],instr_raw,cnst4);
+Qupls4_constant_decoder u4 (ins[10:7],ins[12:11],czone,cnst4);
 
 always_comb
 begin

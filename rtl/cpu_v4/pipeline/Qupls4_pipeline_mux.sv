@@ -48,16 +48,13 @@ module Qupls4_pipeline_mux(rst_i, clk_i, rstcnt, advance_fet, ihit, en_i,
 	stomp_bno, stomp_mux, nop_o, carry_mod_fet, ssm_flag, hwipc_fet,
 	nmi_i, irqf_fet, irq_in, hirq_i, sr, pt_mux, pt_dec, p_override, po_bno,
 	branchmiss, misspc_fet, flush_fet, flush_mux,
-	micro_machine_active, mipv_i, mip_i, cline_fet, cline_mux, new_cline_mux,
+	micro_machine_active, cline_fet, cline_mux, new_cline_mux,
 	reglist_active, grp_i, grp_o,
-	takb_fet, mc_offs, pc_i, vl,
+	takb_fet, pc_i, vl,
 	pc0_fet, uop_num_fet, uop_num_mux,
-	ls_bmf_i, pack_regs_i, scale_regs_i, regcnt_i, mc_adr,
-	mc_ins0_i, mc_ins1_i, mc_ins2_i, mc_ins3_i,
+	ls_bmf_i, pack_regs_i, scale_regs_i, regcnt_i,
 	len0_i, len1_i, len2_i, len3_i,
 	pg_mux,
-	mcip0_i, mcip1_i, mcip2_i, mcip3_i,
-//	mcip0_o, mcip1_o, mcip2_o, mcip3_o,
 	do_bsr, bsr_tgt, do_ret, ret_pc, do_call, get, mux_stallq, fet_stallq, stall);
 input rst_i;
 input clk_i;
@@ -82,9 +79,6 @@ input branchmiss;
 input cpu_types_pkg::pc_address_ex_t misspc_fet;
 input flush_fet;
 output reg flush_mux;
-input mipv_i;
-input [11:0] mip_i;
-input cpu_types_pkg::pc_address_ex_t mc_adr;
 input [1023:0] cline_fet;
 output reg [1023:0] cline_mux;
 output reg new_cline_mux;
@@ -98,21 +92,12 @@ input [3:0] pt_mux;
 output reg [3:0] pt_dec;
 output reg [3:0] p_override;
 output reg [4:0] po_bno [0:3];
-input cpu_types_pkg::pc_address_t mc_offs;
 input cpu_types_pkg::pc_address_ex_t pc_i;
-input cpu_types_pkg::mc_address_t mcip0_i;
-input cpu_types_pkg::mc_address_t mcip1_i;
-input cpu_types_pkg::mc_address_t mcip2_i;
-input cpu_types_pkg::mc_address_t mcip3_i;
 input [4:0] vl;
 input ls_bmf_i;
 input pack_regs_i;
 input [2:0] scale_regs_i;
 input cpu_types_pkg::aregno_t regcnt_i;
-input Qupls4_pkg::ex_instruction_t mc_ins0_i;
-input Qupls4_pkg::ex_instruction_t mc_ins1_i;
-input Qupls4_pkg::ex_instruction_t mc_ins2_i;
-input Qupls4_pkg::ex_instruction_t mc_ins3_i;
 input [4:0] len0_i;
 input [4:0] len1_i;
 input [4:0] len2_i;
@@ -148,7 +133,6 @@ wire [5:0] jj;
 reg [5:0] kk;
 wire clk = clk_i;
 wire en = en_i & !mux_stallq;
-wire mipv = mipv_i;
 wire ls_bmf = ls_bmf_i;
 wire pack_regs = pack_regs_i;
 cpu_types_pkg::aregno_t regcnt;
@@ -160,26 +144,17 @@ Qupls4_pkg::pipeline_reg_t ins0_fet;
 Qupls4_pkg::pipeline_reg_t ins1_fet;
 Qupls4_pkg::pipeline_reg_t ins2_fet;
 Qupls4_pkg::pipeline_reg_t ins3_fet;
-Qupls4_pkg::pipeline_reg_t mc_ins0;
-Qupls4_pkg::pipeline_reg_t mc_ins1;
-Qupls4_pkg::pipeline_reg_t mc_ins2;
-Qupls4_pkg::pipeline_reg_t mc_ins3;
-wire [11:0] mip = mip_i;
 reg [319:0] ic_line_aligned;
 reg [319:0] prev_ic_line_aligned;
-cpu_types_pkg::mc_address_t mcip0;
-cpu_types_pkg::mc_address_t mcip1;
-cpu_types_pkg::mc_address_t mcip2;
-cpu_types_pkg::mc_address_t mcip3;
 reg ld;
 reg prev_ssm_flag;
 
-wire hirq = ~reglist_active && hirq_i && mip[11:8]!=4'h1;
+wire hirq = ~reglist_active && hirq_i;
 Qupls4_pkg::pipeline_reg_t nopi;
 
-always_comb pc1_fet = pc0_fet + 4'd4;
-always_comb pc2_fet = pc0_fet + 4'd8;
-always_comb pc3_fet = pc0_fet + 4'd12;
+always_comb pc1_fet = pc0_fet + 6'd6;
+always_comb pc2_fet = pc0_fet + 6'd12;
+always_comb pc3_fet = pc0_fet + 6'd18;
 
 // Define a NOP instruction.
 always_comb
@@ -187,7 +162,6 @@ begin
 	nopi = {$bits(Qupls4_pkg::pipeline_reg_t){1'b0}};
 	nopi.exc = Qupls4_pkg::FLT_NONE;
 	nopi.pc.pc = Qupls4_pkg::RSTPC;
-	nopi.mcip = 12'h1A0;
 	nopi.uop.count = 3'd1;
 	nopi.uop.ins = {26'd0,Qupls4_pkg::OP_NOP};
 	nopi.aRs1 = 8'd0;
@@ -203,63 +177,7 @@ end
 always_comb regcnt = regcnt_i;
 
 always_comb 
-begin
-	mc_ins0 = mc_ins0_i;
-	mc_ins1 = mc_ins1_i;
-	mc_ins2 = mc_ins2_i;
-	mc_ins3 = mc_ins3_i;
-	mc_ins0.v = 1'b1;
-	mc_ins1.v = 1'b1;
-	mc_ins2.v = 1'b1;
-	mc_ins3.v = 1'b1;
-	mc_ins0.pc = pc_i;
-	mc_ins1.pc = pc_i;
-	mc_ins2.pc = pc_i;
-	mc_ins3.pc = pc_i;
-	mc_ins0.mcip = mcip0_i;
-	mc_ins1.mcip = mcip1_i;
-	mc_ins2.mcip = mcip2_i;
-	mc_ins3.mcip = mcip3_i;
-	mc_ins0.decbus.Rdz = mc_ins0_i.ins.alu.Rd==8'd0;
-	mc_ins1.decbus.Rdz = mc_ins1_i.ins.alu.Rd==8'd0;
-	mc_ins2.decbus.Rdz = mc_ins2_i.ins.alu.Rd==8'd0;
-	mc_ins3.decbus.Rdz = mc_ins3_i.ins.alu.Rd==8'd0;
-	mc_ins0.decbus.nop = 1'b1;
-	mc_ins1.decbus.nop = 1'b1;
-	mc_ins2.decbus.nop = 1'b1;
-	mc_ins3.decbus.nop = 1'b1;
-	mc_ins0.decbus.alu = 1'b1;
-	mc_ins1.decbus.alu = 1'b1;
-	mc_ins2.decbus.alu = 1'b1;
-	mc_ins3.decbus.alu = 1'b1;
-	mc_ins0.decbus.mem = 1'b0;
-	mc_ins1.decbus.mem = 1'b0;
-	mc_ins2.decbus.mem = 1'b0;
-	mc_ins3.decbus.mem = 1'b0;
-	mc_ins0.decbus.fpu = 1'b0;
-	mc_ins1.decbus.fpu = 1'b0;
-	mc_ins2.decbus.fpu = 1'b0;
-	mc_ins3.decbus.fpu = 1'b0;
-	mc_ins0.takb = 1'b0;
-	mc_ins1.takb = 1'b0;
-	mc_ins2.takb = 1'b0;
-	mc_ins3.takb = 1'b0;
-	mc_ins0.excv = 1'b0;
-	mc_ins1.excv = 1'b0;
-	mc_ins2.excv = 1'b0;
-	mc_ins3.excv = 1'b0;
-	mc_ins0.exc = Qupls4_pkg::FLT_NONE;
-	mc_ins1.exc = Qupls4_pkg::FLT_NONE;
-	mc_ins2.exc = Qupls4_pkg::FLT_NONE;
-	mc_ins3.exc = Qupls4_pkg::FLT_NONE;
-	mc_ins0.bt = 1'b0;
-	mc_ins1.bt = 1'b0;
-	mc_ins2.bt = 1'b0;
-	mc_ins3.bt = 1'b0;
-end
-
-always_comb 
-	ic_line_aligned = {{64{2'd3,Qupls4_pkg::OP_NOP}},cline_fet} >> {pc0_fet.pc[5:1],4'd0};
+	ic_line_aligned = {{64{1'd1,Qupls4_pkg::OP_NOP}},cline_fet} >> {pc0_fet.pc[5:1],4'd0};
 
 pc_address_ex_t prev_pc0_fet;
 always_ff @(posedge clk_i)
@@ -330,10 +248,12 @@ begin
 			pr3_mux.ssm = TRUE;
 		end
 		else begin
+			// Compute index of instruction on cache-line.
+			// Note! the index is in terms of 16-bit parcels.
 			pr0_mux.cli = pc0_fet.pc[5:1] + 6'd0;
-			pr1_mux.cli = pc0_fet.pc[5:1] + 6'd6;
-			pr2_mux.cli = pc0_fet.pc[5:1] + 6'd12;
-			pr3_mux.cli = pc0_fet.pc[5:1] + 6'd18;
+			pr1_mux.cli = pc0_fet.pc[5:1] + 6'd3;
+			pr2_mux.cli = pc0_fet.pc[5:1] + 6'd6;
+			pr3_mux.cli = pc0_fet.pc[5:1] + 6'd9;
 			pr0_mux.uop.ins = ic_line_aligned[ 47:  0];
 			pr1_mux.uop.ins = ic_line_aligned[ 95: 48];
 			pr2_mux.uop.ins = ic_line_aligned[143: 96];
@@ -371,10 +291,10 @@ reg [4:0] po_bno2 [0:3];
 reg p_override_dummy;
 reg [4:0] po_bno_dummy;
 
-always_comb tExtractIns(pc0_fet, pt_mux[0], takb_fet[0], mip_i|2'd0, len0_i, pr0_mux, ins0_fet, p_override[0], po_bno[0]);
-always_comb tExtractIns(pc1_fet, pt_mux[1], takb_fet[1], mip_i|2'd1, len1_i, pr1_mux, ins1_fet, p_override[1], po_bno[1]);
-always_comb tExtractIns(pc2_fet, pt_mux[2], takb_fet[2], mip_i|2'd2, len2_i, pr2_mux, ins2_fet, p_override[2], po_bno[2]);
-always_comb tExtractIns(pc3_fet, pt_mux[3], takb_fet[3], mip_i|2'd3, len3_i, pr3_mux, ins3_fet, p_override[3], po_bno[3]);
+always_comb tExtractIns(pc0_fet, pt_mux[0], takb_fet[0], len0_i, pr0_mux, ins0_fet, p_override[0], po_bno[0]);
+always_comb tExtractIns(pc1_fet, pt_mux[1], takb_fet[1], len1_i, pr1_mux, ins1_fet, p_override[1], po_bno[1]);
+always_comb tExtractIns(pc2_fet, pt_mux[2], takb_fet[2], len2_i, pr2_mux, ins2_fet, p_override[2], po_bno[2]);
+always_comb tExtractIns(pc3_fet, pt_mux[3], takb_fet[3], len3_i, pr3_mux, ins3_fet, p_override[3], po_bno[3]);
 
 /* under construction
 always_ff @(posedge clk_i)
@@ -565,7 +485,7 @@ always_comb
 always_comb
 	fet_stallq = mux_stallq;
 
-Stark_ins_extract_mux umux0
+Qupls4_ins_extract_mux umux0
 (
 	.rst(rst_i),
 	.clk(clk_i),
@@ -576,9 +496,6 @@ Stark_ins_extract_mux umux0
 	.hirq(hirq),
 	.irq_i(irq_fet),
 	.vect_i(vect_i),
-	.mipv(mipv_i),
-	.mc_ins0(mc_ins0),
-	.mc_ins(mc_ins0),
 	.ins0(ins0_fet),
 	.insi(ins0_fet),
 	.reglist_active(reglist_active),
@@ -588,7 +505,7 @@ Stark_ins_extract_mux umux0
 	.ins(ins0_mux)
 );
 
-Stark_ins_extract_mux umux1
+Qupls4_ins_extract_mux umux1
 (
 	.rst(rst_i),
 	.clk(clk_i),
@@ -599,9 +516,6 @@ Stark_ins_extract_mux umux1
 	.hirq(hirq),
 	.irq_i(irq_i),
 	.vect_i(vect_i),
-	.mipv(mipv_i),
-	.mc_ins0(mc_ins0),
-	.mc_ins(mc_ins1),
 	.ins0(ins0_fet),
 	.insi(ins1_fet),
 	.reglist_active(reglist_active),
@@ -611,7 +525,7 @@ Stark_ins_extract_mux umux1
 	.ins(ins1_mux)
 );
 
-Stark_ins_extract_mux umux2
+Qupls4_ins_extract_mux umux2
 (
 	.rst(rst_i),
 	.clk(clk_i),
@@ -622,9 +536,6 @@ Stark_ins_extract_mux umux2
 	.hirq(hirq),
 	.irq_i(irq_i),
 	.vect_i(vect_i),
-	.mipv(mipv_i),
-	.mc_ins0(mc_ins0),
-	.mc_ins(mc_ins2),
 	.ins0(ins0_fet),
 	.insi(ins2_fet),
 	.reglist_active(reglist_active),
@@ -634,7 +545,7 @@ Stark_ins_extract_mux umux2
 	.ins(ins2_mux)
 );
 
-Stark_ins_extract_mux umux3
+Qupls4_ins_extract_mux umux3
 (
 	.rst(rst_i),
 	.clk(clk_i),
@@ -645,9 +556,6 @@ Stark_ins_extract_mux umux3
 	.hirq(hirq),
 	.irq_i(irq_i),
 	.vect_i(vect_i),
-	.mipv(mipv_i),
-	.mc_ins0(mc_ins0),
-	.mc_ins(mc_ins3),
 	.ins0(ins0_fet),
 	.insi(ins3_fet),
 	.reglist_active(reglist_active),
@@ -713,7 +621,6 @@ task tExtractIns;
 input pc_address_ex_t pc;
 input pt_mux;
 input takb;
-input mc_address_t mcip;
 input [3:0] len;
 input Qupls4_pkg::pipeline_reg_t ins_i;
 output Qupls4_pkg::pipeline_reg_t ins_o;
@@ -724,9 +631,9 @@ begin
 	ins_o = ins_i;
 	ins_o.pc = pc;
 	ins_o.bt = takb;
-	ins_o.mcip = mcip;
   ins_o.aRs1 = {ins_i.uop.ins.alu.Rs1};
   ins_o.aRs2 = {ins_i.uop.ins.alu.Rs2};
+  ins_o.aRs3 = {ins_i.uop.ins.alu.Rs3};
 //  ins_o.aRs3 = {ins_i.ins.alu.Rs3};
   ins_o.aRd = {ins_i.uop.ins.alu.Rd};
 //	ins_o.decbus.Rtz = ins_o.aRt==8'd0;

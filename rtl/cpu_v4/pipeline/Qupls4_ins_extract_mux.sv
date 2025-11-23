@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2023-2026  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -32,55 +32,71 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
+//
+// Multiplex a hardware interrupt into the instruction stream.
+// Multiplex micro-code instructions into the instruction stream.
+// Modify instructions for register bit lists.
+//
 // ============================================================================
 
 import Qupls4_pkg::*;
 
-module Qupls4_decode_load(instr, load, vload, vload_ndx);
-input Qupls4_pkg::instruction_t instr;
-output load;
-output vload;
-output vload_ndx;
+module Qupls4_ins_extract_mux(rst, clk, en, nop, rgi, hirq, irq_i, vect_i, 
+  ins0, insi, reglist_active, ls_bmf, scale_regs_i, pack_regs,
+	regcnt, ins);
+input rst;
+input clk;
+input en;
+input nop;
+input hirq;
+input [1:0] rgi;
+input [5:0] irq_i;
+input [7:0] vect_i;
+input Qupls4_pkg::pipeline_reg_t ins0;
+input Qupls4_pkg::pipeline_reg_t insi;
+input reglist_active;
+input ls_bmf;
+input [2:0] scale_regs_i;
+input pack_regs;
+input cpu_types_pkg::aregno_t regcnt;
+output Qupls4_pkg::pipeline_reg_t ins;
 
-function fnIsLoad;
-input Qupls4_pkg::instruction_t op;
+Qupls4_pkg::pipeline_reg_t nopi;
+
+// Define a NOP instruction.
+always_comb
 begin
-	case(op.any.opcode)
-	Qupls4_pkg::OP_LDB,Qupls4_pkg::OP_LDBZ,Qupls4_pkg::OP_LDW,Qupls4_pkg::OP_LDWZ,
-	Qupls4_pkg::OP_LDT,Qupls4_pkg::OP_LDTZ,Qupls4_pkg::OP_LOAD:
-		fnIsLoad = 1'b1;
-	default:
-		fnIsLoad = 1'b0;
-	endcase
+//	nopi = {$bits(pipeline_reg_t){1'b0}};
+	nopi = insi;
+	nopi.v = INV;
+	nopi.exc = Qupls4_pkg::FLT_NONE;
+//	nopi.v = 1'b1;
+/*
+	nopi.pc = insi.pc;
+	nopi.mcip = 12'h000;
+	nopi.len = 4'd8;
+	nopi.ins = {57'd0,OP_NOP};
+	nopi.pred_btst = 6'd0;
+	nopi.element = 'd0;
+	nopi.aRa = 8'd0;
+	nopi.aRb = 8'd0;
+	nopi.aRc = 8'd0;
+	nopi.aRt = 8'd0;
+	nopi.decbus.Rtz = 1'b1;
+	nopi.decbus.nop = 1'b1;
+	nopi.decbus.alu = 1'b1;
+*/
 end
-endfunction
 
-function fnIsVLoad;
-input Qupls4_pkg::instruction_t op;
-begin
-	case(op.any.opcode)
-	Qupls4_pkg::OP_LDV:
-		fnIsVLoad = 1'b1;
-	default:
-		fnIsVLoad = 1'b0;
-	endcase
+always_ff @(posedge clk)
+if (rst)
+	ins <= nopi;
+else begin
+	if (en)
+		ins <= hirq ? {4'd0,vect_i[7:0],2'b0,5'd0,2'b0,5'd0,2'b0,5'd0,irq_i,1'b0,3'b0,1'b0,Qupls4_pkg::OP_CHK} :
+			nop ? nopi : insi;
+//	else
+//		ins <= {41'd0,OP_NOP};
 end
-endfunction
-
-function fnIsVLoadNdx;
-input Qupls4_pkg::instruction_t op;
-begin
-	case(op.any.opcode)
-	Qupls4_pkg::OP_LDVN:
-		fnIsVLoadNdx = 1'b1;
-	default:
-		fnIsVLoadNdx = 1'b0;
-	endcase
-end
-endfunction
-
-assign load = fnIsLoad(instr);
-assign vload = fnIsVLoad(instr);
-assign vload_ndx = fnIsVLoadNdx(instr);
 
 endmodule
