@@ -111,6 +111,14 @@ always_comb
 always_comb
 	asr = {{64{a[63]}},a,64'd0} >> b[5:0];
 
+wire a_dn, b_dn;
+wire az, bz;
+wire aInf,bInf;
+wire aNan,bNan;
+wire asNan,bsNan;
+wire aqNan,bqNan;
+wire [WID-1:0] can_nan = {1'b0,{WID-1{1'b1}}};	// Quiet NaN as MSB of fract is set
+reg [WID-1:0] fmin,fmax;
 
 Qupls4_cmp #(.WID(WID)) ualu_cmp
 (
@@ -161,8 +169,35 @@ generate begin : gffz
   	end
   64:
   	begin
+		FP64 fa,fb;
   	wire [6:0] popcnt;
   	cntpop64 upopcnt64 (.i({a[WID-1:0]}),.o(popcnt));
+ 
+		fpDecomp64 udc1a (
+			.i(a),
+			.sgn(fa.sign),
+			.exp(fa.exp),
+			.fract(fa.sig),
+			.xz(a_dn),
+			.vz(az),
+			.inf(aInf),
+			.nan(aNan),
+			.snan(asNan),
+			.qnan(aqNan)
+		);
+
+		fpDecomp64 udc1b (
+			.i(b),
+			.sgn(fb.sign),
+			.exp(fb.exp),
+			.fract(fb.sig),
+			.xz(b_dn),
+			.vz(bz),
+			.inf(bInf),
+			.nan(bNan),
+			.snan(bsNan),
+			.qnan(bqNan)
+		);
   	end
   128:
   	begin
@@ -238,6 +273,32 @@ generate begin : gffz
 	endcase
 end
 endgenerate
+
+// FMIN
+always_comb
+	if ((asNan|bsNan)||(aqNan&bqNan))
+		fmin <= can_nan;	// canonical NaN
+	else if (aqNan & !bNan)
+		fmin <= b;
+	else if (!aNan & bqNan)
+		fmin <= a;
+	else if (cmpo[1])
+		fmin <= a;
+	else
+		fmin <= b;
+
+// FMAX
+always_comb
+	if ((asNan|bsNan)||(aqNan&bqNan))
+		fmax <= can_nan;	// canonical NaN
+	else if (aqNan & !bNan)
+		fmax <= b;
+	else if (!aNan & bqNan)
+		fmax <= a;
+	else if (cmpo[1])
+		fmax <= b;
+	else
+		fmax <= a;
 
 
 generate begin : gInfoBlend
@@ -585,6 +646,59 @@ begin
 			default:	bus = zero;
 			endcase
 		endcase
+
+	Qupls_pkg::OP_FLTH,Qupls_pkg::OP_FLTS,Qupls_pkg::OP_FLTD,Qupls_pkg::OP_FLTQ:
+		case(ir.f3.func)
+		FLT_MIN:	bus = fmin;
+		FLT_MAX:	bus = fmax;
+		FLT_NEG:	bus = (anan ? a : {~a[WID-1],a[WID-2:0]});
+		FLT_SEQ:
+			begin	
+				bus = ((anan|bnan) ? 1'b0 : cmpo[0]);
+			end
+		FLT_SNE:
+			begin	
+				bus = ((anan|bnan) ? 1'b0 : cmpo[8]);
+			end
+		FLT_SLT:
+			begin	
+				bus = ((anan|bnan) ? 1'b0 : cmpo[1]);
+			end
+		FLT_SGNJ:
+			begin	
+				bus = (anan ? a : bnan ? b : {a[WID-1],b[WID-2:0]});
+			end
+		default:	bus = zero;
+		endcase
+	
+	Qupls_pkg::OP_FLTPH,Qupls_pkg::OP_FLTPS,Qupls_pkg::OP_FLTPD,Qupls_pkg::OP_FLTPQ,
+	Qupls_pkg::OP_FLTP:
+		case(ir.f3.func)
+		FLT_MIN:	bus = c[LANE] ? fmin : t;
+		FLT_MAX:	bus = c[LANE] ? fmax : t;
+		FLT_NEG:	bus = c[LANE] ? (anan ? a : {~a[WID-1],a[WID-2:0]}) : t;
+		FLT_SEQ:
+			begin	
+				bus = t;
+				bus[LANE] = c[LANE] ? ((anan|bnan) ? 1'b0 : cmpo[0]) : t[LANE];
+			end
+		FLT_SNE:
+			begin	
+				bus = t;
+				bus[LANE] = c[LANE] ? ((anan|bnan) ? 1'b0 : cmpo[8]) : t[LANE];
+			end
+		FLT_SLT:
+			begin	
+				bus = t;
+				bus[LANE] = c[LANE] ? ((anan|bnan) ? 1'b0 : cmpo[1]) : t[LANE];
+			end
+		FLT_SGNJ:
+			begin	
+				bus = c[LANE] ? (anan ? a : bnan ? b : {a[WID-1],b[WID-2:0]}) : t;
+			end
+		default:	bus = zero;
+		endcase
+
 	/*
 	Qupls4_pkg::OP_FLTH,Qupls4_pkg::OP_FLTS,Qupls4_pkg::OP_FLTD,Qupls4_pkg::OP_FLTQ:
 		case(ir.fpu.op4)
