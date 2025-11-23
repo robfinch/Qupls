@@ -68,13 +68,19 @@ Qupls4_pkg::r3_inst_t instr;
 Qupls4_pkg::instruction_t ins2;
 Qupls4_pkg::extd_inst_t vsins;
 Qupls4_pkg::vls_inst_t vls;
-reg [9:0] vlen, fvlen, vlen1;
+reg [9:0] vlen, fvlen, vlen1, xvlen, cvlen, avlen;
 wire [6:0] mo0 = 7'd48;		// micro-op temporary
 
 always_ff @(posedge clk)
 	vlen = (vlen_reg[7:0] * (7'd1 << velsz[1:0])) >> 4'd6;
 always_ff @(posedge clk)
 	fvlen = (vlen_reg[15:8] * (7'd2 << velsz[9:8])) >> 4'd6;
+always_ff @(posedge clk)
+	xvlen = (vlen_reg[23:16] * (7'd1 << velsz[17:16])) >> 4'd6;
+always_ff @(posedge clk)
+	cvlen = (vlen_reg[23:16] * (7'd1 << velsz[17:16])) >> 4'd6;
+always_ff @(posedge clk)
+	avlen = (vlen_reg[31:24] * (7'd1 << velsz[25:24])) >> 4'd6;
 
 always_comb
 begin
@@ -164,8 +170,8 @@ begin
 			ins2 = ir;
 			vlen1 = vlen;	// use integer length
 			case(ir.extd.op3)
-			Qupls4_pkg::EX_VSHLV:	vsins.extdop = Qupls4_pkg::EXT_ASLC;
-			Qupls4_pkg::EX_VSHRV:	vsins.extdop = Qupls4_pkg::EXT_LSRC;
+			Qupls4_pkg::EX_VSHLV:	vsins.extdop = Qupls4_pkg::EX_ASLC;
+			Qupls4_pkg::EX_VSHRV:	vsins.extdop = Qupls4_pkg::EX_LSRC;
 			default:	;
 			endcase
 		end
@@ -189,14 +195,16 @@ begin
 			instr = ir;
 			vlen1 = fvlen;
 		end
-	Qupls4_pkg::OP_LDV,Qupls4_pkg::OP_STV:
-		vlen1 = vlen;
-	Qupls4_pkg::OP_FLDV,Qupls4_pkg::OP_FSTV:
-		vlen1 = fvlen;
-	Qupls4_pkg::OP_LDG,Qupls4_pkg::OP_STG:
-		vlen1 = vlen;
-	Qupls4_pkg::OP_FLDG,Qupls4_pkg::OP_FSTG:
-		vlen1 = fvlen;
+	Qupls4_pkg::OP_LDV,Qupls4_pkg::OP_STV,
+	Qupls4_pkg::OP_LDVN,Qupls4_pkg::OP_STVN:
+		case(vls.dt)
+		3'd0:	vlen1 = vlen;
+		3'd1:	vlen1 = fvlen;
+		3'd2:	vlen1 = xvlen;
+		3'd3:	vlen1 = cvlen;
+		3'd4:	vlen1 = avlen;
+		default:	vlen1 = vlen;
+		endcase
 	default:
 		vlen1 = 10'd0;
 	endcase
@@ -255,9 +263,10 @@ begin
 							uop[7] = {1'b1,1'b0,3'd0,3'd7,4'd0,vsins.Rs4,vsins.ms,vsins.exdop,mo0,vsins.Rs2,vsins.Rs1+7'd7,vsins.Rd+7'd7,vsins.opcode};
 						end
 					default:
-						count = 4'd1;
-						uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,nopi};
-				end
+						begin
+							count = 4'd1;
+							uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,nopi};
+						end
 					endcase
 				default:
 					begin

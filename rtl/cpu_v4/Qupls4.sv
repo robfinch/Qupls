@@ -141,6 +141,14 @@ reg [2:0] missgrp;
 wire [2:0] missino;
 reg restore_en = 1'b1;
 
+wire [15:0] q_rst;
+wire [15:0] q_trigger;
+wire [15:0] q_rd;
+wire [15:0] q_wr;
+wire [15:0] q_addr;
+wire [63:0] q_rd_data [15:0];
+wire [63:0] q_wr_data;
+
 Qupls4_pkg::ex_instruction_t missir;
 
 reg [39:0] I;		// Committed instructions
@@ -1420,6 +1428,189 @@ else begin
 		irq_ack <= TRUE;
 end
 
+
+// NaN trace fifo
+reg [8:0] nan_log_addr;
+reg do_log_nan = 1'b0;
+wire nan0 = rob[head0].v && cmtcmt > 3'd0 && rob[head0].nan;
+wire nan1 = rob[head1].v && cmtcmt > 3'd1 && rob[head1].nan;
+wire nan2 = rob[head2].v && cmtcmt > 3'd2 && rob[head2].nan;
+wire nan3 = rob[head3].v && cmtcmt > 3'd3 && rob[head3].nan;
+cpu_types_pkg::pc_address_t nan1e, nan2e;
+wire log_nan = (nan0|nan1|nan2|nan3) && do_commit && cmtcnt > 3'd0 && do_log_nan;
+
+generate begin : gNaNTrace
+	if (SUPPORT_NAN_TRACE) begin
+always_ff @(posedge clk)
+if (irst|q_rst[14]) begin
+	nan_log_addr <= 9'd0;;
+end
+else if (log_nan) begin
+	case({nan3,nan2,nan1,nan0})
+	4'b0000:	;
+	4'b0001:
+		begin
+			nan1e <= rob[head0].nan_pc;
+			nan2e <= {$bits(cpu_types_pkg::pc_address_t){1'b0}};
+			nan_log_addr <= nan_log_addr + 2'd1;
+		end
+	4'b0010:
+		begin
+			nan1e <= rob[head1].nan_pc;
+			nan2e <= {$bits(cpu_types_pkg::pc_address_t){1'b0}};
+			nan_log_addr <= nan_log_addr + 2'd1;
+		end
+	4'b0011,4'b0111,4'b1011,4'b1111:
+		begin
+			nan1e <= rob[head0].nan_pc;
+			nan2e <= rob[head1].nan_pc;
+			nan_log_addr <= nan_log_addr + 2'd1;
+		end
+	4'b0100:
+		begin
+			nan1e <= rob[head2].nan_pc;
+			nan_log_addr <= nan_log_addr + 2'd1;
+		end
+	4'b0101,4'b1101:
+		begin
+			nan1e <= rob[head0].nan_pc;
+			nan2e <= rob[head2].nan_pc;
+			nan_log_addr <= nan_log_addr + 2'd1;
+		end
+	4'b0110,4'b1110:
+		begin
+			nan1e <= rob[head1].nan_pc;
+			nan2e <= rob[head2].nan_pc;
+			nan_log_addr <= nan_log_addr + 2'd1;
+		end
+	4'b1000:
+		begin
+			nan1e <= rob[head3].nan_pc;
+			nan_log_addr <= nan_log_addr + 2'd1;
+		end
+	4'b1001:
+		begin
+			nan1e <= rob[head0].nan_pc;
+			nan2e <= rob[head3].nan_pc;
+			nan_log_addr <= nan_log_addr + 2'd1;
+		end
+	4'b1010:
+		begin
+			nan1e <= rob[head1].nan_pc;
+			nan2e <= rob[head3].nan_pc;
+			nan_log_addr <= nan_log_addr + 2'd1;
+		end
+	4'b1100:
+		begin
+			nan1e <= rob[head2].nan_pc;
+			nan2e <= rob[head3].nan_pc;
+			nan_log_addr <= nan_log_addr + 2'd1;
+		end
+	endcase
+end
+
+
+   // xpm_memory_tdpram: True Dual Port RAM
+   // Xilinx Parameterized Macro, version 2025.1
+
+   xpm_memory_tdpram #(
+      .ADDR_WIDTH_A(9),               // DECIMAL
+      .ADDR_WIDTH_B(9),               // DECIMAL
+      .AUTO_SLEEP_TIME(0),            // DECIMAL
+      .BYTE_WRITE_WIDTH_A($bits(cpu_type_pkg::pc_address_t)*2),        // DECIMAL
+      .BYTE_WRITE_WIDTH_B($bits(cpu_type_pkg::pc_address_t)),        // DECIMAL
+      .CASCADE_HEIGHT(0),             // DECIMAL
+      .CLOCKING_MODE("common_clock"), // String
+      .ECC_BIT_RANGE("7:0"),          // String
+      .ECC_MODE("no_ecc"),            // String
+      .ECC_TYPE("none"),              // String
+      .IGNORE_INIT_SYNTH(0),          // DECIMAL
+      .MEMORY_INIT_FILE("none"),      // String
+      .MEMORY_INIT_PARAM("0"),        // String
+      .MEMORY_OPTIMIZATION("true"),   // String
+      .MEMORY_PRIMITIVE("auto"),      // String
+      .MEMORY_SIZE($bits(cpu_type_pkg::pc_address_t)*2*512),             // DECIMAL
+      .MESSAGE_CONTROL(0),            // DECIMAL
+      .RAM_DECOMP("auto"),            // String
+      .READ_DATA_WIDTH_A($bits(cpu_type_pkg::pc_address_t)*2),         // DECIMAL
+      .READ_DATA_WIDTH_B($bits(cpu_type_pkg::pc_address_t)),         // DECIMAL
+      .READ_LATENCY_A(2),             // DECIMAL
+      .READ_LATENCY_B(2),             // DECIMAL
+      .READ_RESET_VALUE_A("0"),       // String
+      .READ_RESET_VALUE_B("0"),       // String
+      .RST_MODE_A("SYNC"),            // String
+      .RST_MODE_B("SYNC"),            // String
+      .SIM_ASSERT_CHK(0),             // DECIMAL; 0=disable simulation messages, 1=enable simulation messages
+      .USE_EMBEDDED_CONSTRAINT(0),    // DECIMAL
+      .USE_MEM_INIT(1),               // DECIMAL
+      .USE_MEM_INIT_MMI(0),           // DECIMAL
+      .WAKEUP_TIME("disable_sleep"),  // String
+      .WRITE_DATA_WIDTH_A($bits(cpu_type_pkg::pc_address_t)*2),        // DECIMAL
+      .WRITE_DATA_WIDTH_B($bits(cpu_type_pkg::pc_address_t)),        // DECIMAL
+      .WRITE_MODE_A("no_change"),     // String
+      .WRITE_MODE_B("no_change"),     // String
+      .WRITE_PROTECT(1)               // DECIMAL
+   )
+   unan_trace_ram (
+      .dbiterra(),             // 1-bit output: Status signal to indicate double bit error occurrence on the data output of port A.
+      .dbiterrb(),             // 1-bit output: Status signal to indicate double bit error occurrence on the data output of port A.
+      .douta(),                   // READ_DATA_WIDTH_A-bit output: Data output for port A read operations.
+      .doutb(q_rd_data[14]),     // READ_DATA_WIDTH_B-bit output: Data output for port B read operations.
+      .sbiterra(),             // 1-bit output: Status signal to indicate single bit error occurrence on the data output of port A.
+      .sbiterrb(),             // 1-bit output: Status signal to indicate single bit error occurrence on the data output of port B.
+      .addra(nan_log_addr),            // ADDR_WIDTH_A-bit input: Address for port A write and read operations.
+      .addrb(q_addr[8:0]), 	         // ADDR_WIDTH_B-bit input: Address for port B write and read operations.
+      .clka(clk),                     // 1-bit input: Clock signal for port A. Also clocks port B when parameter CLOCKING_MODE is "common_clock".
+      .clkb(clk),                     // 1-bit input: Clock signal for port B when parameter CLOCKING_MODE is "independent_clock". Unused when
+                                       // parameter CLOCKING_MODE is "common_clock".
+
+      .dina({nan2e,nan1e}),            // WRITE_DATA_WIDTH_A-bit input: Data input for port A write operations.
+      .dinb(q_wr_data),                // WRITE_DATA_WIDTH_B-bit input: Data input for port B write operations.
+      .ena(log_nan),                       // 1-bit input: Memory enable signal for port A. Must be high on clock cycles when read or write operations
+                                       // are initiated. Pipelined internally.
+
+      .enb(1'b1),                       // 1-bit input: Memory enable signal for port B. Must be high on clock cycles when read or write operations
+                                       // are initiated. Pipelined internally.
+
+      .injectdbiterra(1'b0), // 1-bit input: Controls double bit error injection on input data when ECC enabled (Error injection capability
+                                       // is not available in "decode_only" mode).
+
+      .injectdbiterrb(1'b0), // 1-bit input: Controls double bit error injection on input data when ECC enabled (Error injection capability
+                                       // is not available in "decode_only" mode).
+
+      .injectsbiterra(1'b0), // 1-bit input: Controls single bit error injection on input data when ECC enabled (Error injection capability
+                                       // is not available in "decode_only" mode).
+
+      .injectsbiterrb(1'b0), // 1-bit input: Controls single bit error injection on input data when ECC enabled (Error injection capability
+                                       // is not available in "decode_only" mode).
+
+      .regcea(1'b1),                 // 1-bit input: Clock Enable for the last register stage on the output data path.
+      .regceb(1'b1),                 // 1-bit input: Clock Enable for the last register stage on the output data path.
+      .rsta(irst),                     // 1-bit input: Reset signal for the final port A output register stage. Synchronously resets output port
+                                       // douta to the value specified by parameter READ_RESET_VALUE_A.
+
+      .rstb(irst),                     // 1-bit input: Reset signal for the final port B output register stage. Synchronously resets output port
+                                       // doutb to the value specified by parameter READ_RESET_VALUE_B.
+
+      .sleep(1'b0),                   // 1-bit input: sleep signal to enable the dynamic power saving feature.
+      .wea(log_nan),                       // WRITE_DATA_WIDTH_A/BYTE_WRITE_WIDTH_A-bit input: Write enable vector for port A input data port dina. 1 bit
+                                       // wide when word-wide writes are used. In byte-wide write configurations, each bit controls the writing one
+                                       // byte of dina to address addra. For example, to synchronously write only bits [15-8] of dina when
+                                       // WRITE_DATA_WIDTH_A is 32, wea would be 4'b0010.
+
+      .web(q_wr[14])                   // WRITE_DATA_WIDTH_B/BYTE_WRITE_WIDTH_B-bit input: Write enable vector for port B input data port dinb. 1 bit
+                                       // wide when word-wide writes are used. In byte-wide write configurations, each bit controls the writing one
+                                       // byte of dinb to address addrb. For example, to synchronously write only bits [15-8] of dinb when
+                                       // WRITE_DATA_WIDTH_B is 32, web would be 4'b0010.
+
+   );
+end
+else
+	assign q_rd_data[14] = {$bits(cpu_type_pkg::pc_address_t){1'b0}};
+end
+endgenerate
+						
+			
 wire ic_port;
 wire ftaim_full, ftadm_full;
 reg ihit_fet, ihit_mux, ihit_dec, ihit_ren, ihit_que;
@@ -2456,7 +2647,7 @@ end
 reg room_for_que;
 wire [3:0] enqueue_room;
 
-Stark_queue_room uqroom1
+Qupls4_queue_room uqroom1
 (
 	.rob(rob),
 	.head0(head0),
@@ -3353,7 +3544,7 @@ Qupls4_func_result_queue ufrq12
 	.we_i(fpu0_we),
 	.rse_i(fpu0_rse2),
 	.tag_i(8'd0),
-	.res_i(fpu0_resA2),
+	.res_i(fpu0_resA),
 	.we_o(fuq_we[12]),
 	.pRt_o(fuq_pRt[12]),
 	.aRt_o(fuq_aRt[12]),
@@ -4000,7 +4191,7 @@ Stark_meta_imul uimul0
 
 generate begin : gIDiv
 if (SUPPORT_IDIV)
-Stark_meta_idiv uidiv0
+Qupls4_meta_idiv uidiv0
 (
 	.rst(irst),
 	.clk(clk),
@@ -4015,12 +4206,25 @@ Stark_meta_idiv uidiv0
 	.we_o(idiv0_we),
 	.div_done(idiv0_done),
 	.div_dbz(idiv0_dbz),
-	.exc(div0_exc)
+	.exc(div0_exc),
+	.q_rst(q_rst),
+	.q_trigger(q_trigger),
+	.q_rd(q_rd),
+	.q_wr(q_wr),
+	.q_addr(q_addr),
+	.q_rd_data(q_rd_data),
+	.q_wr_data(q_wr_data)
 );
 else begin
 	assign idiv0_done = TRUE;
 	assign idiv0_dbz = FALSE;
 	assign idiv0_res = value_zero;
+	assign q_rst = 16'd0;
+	assign q_trigger = 16'd0;
+	assign q_rd = 16'd0;
+	assign q_wr = 16'd0;
+	assign q_addr = 16'd0;
+	assign q_wr_data = 64'd0;
 end
 end
 endgenerate
@@ -4753,7 +4957,7 @@ always_comb cmttlb1 = XWID > 1 && (rob[head1].v && rob[head1].lsq && !lsq[rob[he
 always_comb cmttlb2 = XWID > 2 && (rob[head2].v && rob[head2].lsq && !lsq[rob[head2].lsqndx.row][rob[head2].lsqndx.col].agen);
 always_comb cmttlb3 = XWID > 3 && (rob[head3].v && rob[head3].lsq && !lsq[rob[head3].lsqndx.row][rob[head3].lsqndx.col].agen);
 
-Stark_commit_count
+Qupls4_commit_count
 #(.XWID(XWID))
 ucmtcnt1
 (
@@ -5621,6 +5825,8 @@ else begin
 		if (fma1_rse2.v) begin
 	    rob[ fma1_rse2.rndx ].exc <= fma1_rse2.exc;
 	    rob[ fma1_rse2.rndx ].excv <= fma1_rse2.exc != Qupls4_pkg::FLT_NONE;
+	    rob[ fma1_rse2.rndx ].nan <= fma1_rse2.nan;
+	    rob[ fma1_rse2.rndx ].nan_pc <= fma1_rse2.pc;
 			rob[ fma1_rse2.rndx ].done <= {TRUE,TRUE};
 			rob[ fma1_rse2.rndx ].out <= {FALSE,FALSE};
 		end
@@ -5629,6 +5835,8 @@ else begin
 		if (fpu0_rse2.v) begin
 	    rob[ fpu0_rse2.rndx ].exc <= fpu0_rse2.exc;
 	    rob[ fpu0_rse2.rndx ].excv <= fpu0_rse2.exc != Qupls4_pkg::FLT_NONE;
+	    rob[ fpu0_rse2.rndx ].nan <= fpu0_rse2.nan;
+	    rob[ fpu0_rse2.rndx ].nan_pc <= fpu0_rse2.pc;
 			rob[ fpu0_rse2.rndx ].done <= {TRUE,TRUE};
 			rob[ fpu0_rse2.rndx ].out <= {FALSE,FALSE};
 		end
