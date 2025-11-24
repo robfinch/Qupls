@@ -12,9 +12,8 @@ output Qupls4_pkg::reservation_station_entry_t rse_o;
 input ld;
 input [2:0] lane;
 input Qupls4_pkg::instruction_t ir;
-input [WID-1:0] qres;
 output reg [WID-1:0] o;
-output [WID/8:0] we_o;
+output reg [WID/8:0] we_o;
 output reg que_done;
 output reg [WID-1:0] exc;
 output reg [15:0] q_rst;
@@ -42,15 +41,15 @@ else begin
 	q_rd <= 16'h0000;
 	
 	case(ir.any.opcode)
-	Qupls4_pkg::OP_R3:
+	Qupls4_pkg::OP_R3O:
 		case(ir.r3.func)
-		FN_RESETQ:	q_rst[rse_i.argB[3:0]] <= 1'b1;
-		FN_READQ:
+		Qupls4_pkg::FN_RESETQ:	q_rst[rse_i.argB[3:0]] <= 1'b1;
+		Qupls4_pkg::FN_READQ:
 			begin
 				q_rd[rse_i.argB[3:0]] <= 1'b1;
 				q_addr <= rse_i.argA[15:0];
 			end
-		FN_WRITEQ:
+		Qupls4_pkg::FN_WRITEQ:
 			begin
 				q_wr[rse_i.argB[3:0]] <= 1'b1;
 				q_addr <= rse_i.argA[15:0];
@@ -81,9 +80,9 @@ begin
 	if (nanq_rdrdy)
 		que_done <= 1'b1;
 	case(ir.any.opcode)
-	Qupls4_pkg::OP_R3:
+	Qupls4_pkg::OP_R3O:
 		case(ir.r3.func)
-		FN_RESETQ:
+		Qupls4_pkg::FN_RESETQ:
 			case(rse_i.argB[3:0])
 			4'd14:	// NaN queue
 				begin
@@ -91,7 +90,7 @@ begin
 				end
 			default:	;
 			endcase
-		FN_WRITEQ:
+		Qupls4_pkg::FN_WRITEQ:
 			case(rse_i.argB[3:0])
 			4'd14:	// NaN queue
 				begin

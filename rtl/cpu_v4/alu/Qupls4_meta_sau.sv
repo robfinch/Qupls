@@ -86,6 +86,123 @@ always_comb cp_i = rse_i.cndx;
 always_comb aRd_i = rse_i.aRd;
 always_comb prc = Qupls4_pkg::memsz_t'(rse_i.prc);
 reg isflt,issimd;
+wire [WID-1:0] zero = {WID{1'b0}};
+
+function [7:0] tmaxu8;
+input [7:0] a;
+input [7:0] b;
+input [7:0] c;
+begin
+	tmaxu8 = a > b && a > c ? a : b > c ? b : c;
+end
+endfunction
+
+function [7:0] tminu8;
+input [7:0] a;
+input [7:0] b;
+input [7:0] c;
+begin
+	tminu8 = a < b && a < c ? a : b < c ? b : c;
+end
+endfunction
+
+function [7:0] tmax8;
+input [7:0] a;
+input [7:0] b;
+input [7:0] c;
+begin
+	tmax8 = $signed(a) > $signed(b) && $signed(a) > $signed(c) ? a : $signed(b) > $signed (c) ? b : c;
+end
+endfunction
+
+function [7:0] tmin8;
+input [7:0] a;
+input [7:0] b;
+input [7:0] c;
+begin
+	tmin8 = $signed(a) < $signed(b) && $signed(a) < $signed(c) ? a : $signed(b) < $signed (c) ? b : c;
+end
+endfunction
+
+function [15:0] tmaxu16;
+input [15:0] a;
+input [15:0] b;
+input [15:0] c;
+begin
+	tmaxu16 = a > b && a > c ? a : b > c ? b : c;
+end
+endfunction
+
+function [15:0] tminu16;
+input [15:0] a;
+input [15:0] b;
+input [15:0] c;
+begin
+	tminu16 = a < b && a < c ? a : b < c ? b : c;
+end
+endfunction
+
+function [15:0] tmax16;
+input [15:0] a;
+input [15:0] b;
+input [15:0] c;
+begin
+	tmax16 = $signed(a) > $signed(b) && $signed(a) > $signed(c) ? a : $signed(b) > $signed (c) ? b : c;
+end
+endfunction
+
+function [15:0] tmin16;
+input [15:0] a;
+input [15:0] b;
+input [15:0] c;
+begin
+	tmin16 = $signed(a) < $signed(b) && $signed(a) < $signed(c) ? a : $signed(b) < $signed (c) ? b : c;
+end
+endfunction
+
+function [31:0] tmaxu32;
+input [31:0] a;
+input [31:0] b;
+input [31:0] c;
+begin
+	tmaxu32 = a > b && a > c ? a : b > c ? b : c;
+end
+endfunction
+
+function [31:0] tminu32;
+input [31:0] a;
+input [31:0] b;
+input [31:0] c;
+begin
+	tminu32 = a < b && a < c ? a : b < c ? b : c;
+end
+endfunction
+
+function [31:0] tmax32;
+input [31:0] a;
+input [31:0] b;
+input [31:0] c;
+begin
+	tmax32 = $signed(a) > $signed(b) && $signed(a) > $signed(c) ? a : $signed(b) > $signed (c) ? b : c;
+end
+endfunction
+
+function [31:0] tmin32;
+input [31:0] a;
+input [31:0] b;
+input [31:0] c;
+begin
+	tmin32 = $signed(a) < $signed(b) && $signed(a) < $signed(c) ? a : $signed(b) < $signed (c) ? b : c;
+end
+endfunction
+
+function [7:0] mask8;
+input [7:0] a;
+input c;
+begin
+	mask8 = c ? a : 8'h00;
+end
+endfunction
 
 always_comb
 	isflt = ir.any.opcode==Qupls4_pkg::OP_FLTH||
@@ -111,6 +228,7 @@ reg [WID-1:0] t1;
 reg z1;
 reg [7:0] cptgt1;
 wire [WID-1:0] o8,o16,o32,o64,o128;
+reg [WID-1:0] ro8,ro16,ro32,ro64,ro128;
 wire o64_tag, o128_tag;
 reg [WID-1:0] o1;
 reg o1_tag;
@@ -143,6 +261,65 @@ generate begin : g8
 			.o(o8[g*8+7:g*8]),
 			.exc_o(exc8[g*8+7:g*8])
 		);
+	always_comb
+		case(ir.any.opcode)
+			// ToDo: finish these off
+		Qupls4_pkg::OP_R3B:
+			case(ir.r3.func)
+			Qupls4_pkg::FN_REDSUM:	ro8 =
+				mask8(a[7:0],c[0])+
+				mask8(a[15:8],c[1])+
+				mask8(a[23:16],c[2])+
+				mask8(a[31:24],c[3])+
+				mask8(a[39:32],c[4])+
+				mask8(a[47:40],c[5])+
+				mask8(a[55:48],c[6])+
+				mask8(a[63:56],c[7])+
+				(lane==3'd0 ? 8'h00:b[7:0]);
+			Qupls4_pkg::FN_REDAND:	ro8 = 
+				maska8(a[7:0],c[0])&
+				maska8(a[15:8],c[1])&
+				maska8(a[23:16],c[2])&
+				maska8(a[31:24],c[3])&
+				maska8(a[39:32],c[4])&
+				maska8(a[47:40],c[5])&
+				maska8(a[55:48],c[6])&
+				maska8(a[63:56],c[7])&
+				(lane==3'd0 ? 8'hFF:b[7:0]);
+			Qupls4_pkg::FN_REDOR:		ro8 =
+				mask8(a[7:0],c[0])|
+				mask8(a[15:8],c[1])|
+				mask8(a[23:16],c[2])|
+				mask8(a[31:24],c[3])|
+				mask8(a[39:32],c[4])|
+				mask8(a[47:40],c[5])|
+				mask8(a[55:48],c[6])|
+				mask8(a[63:56],c[7])|
+				(lane==3'd0 ? 8'h00:b[7:0]);
+			Qupls4_pkg::FN_REDEOR:		ro8 =
+				mask8(a[7:0],c[0])^
+				mask8(a[15:8],c[1])^
+				mask8(a[23:16],c[2])^
+				mask8(a[31:24],c[3])^
+				mask8(a[39:32],c[4])^
+				mask8(a[47:40],c[5])^
+				mask8(a[55:48],c[6])^
+				mask8(a[63:56],c[7])^
+				(lane==3'd0 ? 8'h00:b[7:0]);
+			Qupls4_pkg::FN_REDMAXU:	ro8 = 
+				tmaxu8(tmaxu8(
+					c[0] ? a[7:0] : 8'h00,c[1] ? a[15:8] : 8'h00, c[2] ? a[23:16] : 8'h00),
+					tmaxu8(c[3] ? a[31:32] : 8'h00, c[4] ? a[39:32] : 8'h00, c[5] ? a[47:40] : 8'h00),
+					tmaxu8(c[6] ? a[55:48] : 8'h00, c[7] ? a[63:56] : 8'h00,(lane==3'd0 ? 8'h00:b[7:0])));
+			Qupls4_pkg::FN_REDMINU:	ro8 = 
+				tminu8(tminu8(a[7:0],a[15:8],a[23:16]),tminu8(a[31:32],a[39:32],a[47:40]),tminu8(a[55:48],a[63:56],(lane==3'd0 ? 8'hFF:b[7:0])));
+			Qupls4_pkg::FN_REDMAX:	ro8 = 
+				tmax8(tmax8(a[7:0],a[15:8],a[23:16]),tmax8(a[31:32],a[39:32],a[47:40]),tmax8(a[55:48],a[63:56],(lane==3'd0 ? 8'h00:b[7:0])));
+			Qupls4_pkg::FN_REDMIN:	ro8 = 
+				tminu8(tmin8(a[7:0],a[15:8],a[23:16]),tmin8(a[31:32],a[39:32],a[47:40]),tmin8(a[55:48],a[63:56],(lane==3'd0 ? 8'h7F:b[7:0])));
+			default:	ro8 = zero;
+			endcase
+		endcase
 end
 endgenerate
 
@@ -170,6 +347,25 @@ generate begin : g16
 			.o(o16[g*16+15:g*16]),
 			.exc_o(exc16[g*8+7:g*8])
 		);
+	always_comb
+		case(ir.any.opcode)
+		Qupls4_pkg::OP_R3W:
+			case(ir.r3.func)
+			Qupls4_pkg::FN_REDSUM:	ro16 = a[15:0]+a[31:16]+a[47:32]+a[63:48]+(lane==3'd0 ? 16'h0000:b[15:0]);
+			Qupls4_pkg::FN_REDAND:	ro16 = a[15:0]&a[31:16]&a[47:32]&a[63:48]&(lane==3'd0 ? 16'hFFFF:b[15:0]);
+			Qupls4_pkg::FN_REDOR:		ro16 = a[15:0]|a[31:16]|a[47:32]|a[63:48]|(lane==3'd0 ? 16'h0000:b[15:0]);
+			Qupls4_pkg::FN_REDEOR:	ro16 = a[15:0]^a[31:16]^a[47:32]^a[63:48]^(lane==3'd0 ? 16'h0000:b[15:0]);
+			Qupls4_pkg::FN_REDMAXU:	ro16 = 
+				tmaxu16(tmaxu16(a[15:0],a[31:16],a[47:32]),a[63:48],(lane==3'd0 ? 16'h0000:b[15:0]));
+			Qupls4_pkg::FN_REDMINU:	ro16 = 
+				tminu16(tminu16(a[15:0],a[31:16],a[47:32]),a[63:48],(lane==3'd0 ? 16'hFFFF:b[15:0]));
+			Qupls4_pkg::FN_REDMAX:	ro16 = 
+				tmax16(tmax16(a[15:0],a[31:16],a[47:32]),a[63:48],(lane==3'd0 ? 16'h0000:b[15:0]));
+			Qupls4_pkg::FN_REDMIN:	ro16 = 
+				tmin16(tmaxu16(a[15:0],a[31:16],a[47:32]),a[63:48],(lane==3'd0 ? 16'h7FFF:b[15:0]));
+			default:	ro16 = zero;
+			endcase
+		endcase
 end
 endgenerate
 
@@ -197,6 +393,27 @@ generate begin : g32
 			.o(o32[g*32+31:g*32]),
 			.exc_o(exc32[g*8+7:g*8])
 		);
+	always_comb
+		case(ir.any.opcode)
+		Qupls4_pkg::OP_R3T:
+			case(ir.r3.func)
+			Qupls4_pkg::FN_REDSUM:
+				case(ir.r3.op3)
+				3'd0:	ro32 = a[31:0]+a[63:32]+b[31:0];
+				3'd1:	ro32 = {{32{a[31]}},a[31:0]}+{{32{a[63]}},a[63:32]}+{{32{b[31]}},b[31:0]};
+				3'd2:	ro32 = {32'd0,a[31:0]}+{32'd0,a[63:32]}+{32'd0,b[31:0]};
+				default:	ro32 = zero;
+				endcase
+			Qupls4_pkg::FN_REDAND:	ro32 = a[31:0]&a[63:32]&(lane==3'd0 ? 32'hFFFFFFFF:b[31:0]);
+			Qupls4_pkg::FN_REDOR:		ro32 = a[31:0]|a[63:32]|(lane==3'd0 ? 32'h00000000:b[31:0]);
+			Qupls4_pkg::FN_REDEOR:	ro32 = a[31:0]^a[63:32]^(lane==3'd0 ? 32'h00000000:b[31:0]);
+			Qupls4_pkg::FN_REDMAXU:	ro32 = tmaxu32(a[31:0],a[63:32],(lane==3'd0 ? 32'h00000000:b[31:0]));
+			Qupls4_pkg::FN_REDMINU:	ro32 = tminu32(a[31:0],a[63:32],(lane==3'd0 ? 32'hFFFFFFFF:b[31:0]));
+			Qupls4_pkg::FN_REDMAX:	ro32 = tmax32(a[31:0],a[63:32],(lane==3'd0 ? 32'h00000000:b[31:0]));
+			Qupls4_pkg::FN_REDMIN:	ro32 = tmin32(a[31:0],a[63:32],(lane==3'd0 ? 32'h7FFFFFFF:b[31:0]));
+			default:	ro32 = zero;
+			endcase
+		endcase
 end
 endgenerate
 
@@ -269,9 +486,9 @@ begin
 			endcase
 		2'b01:
 			case(prc)
-			Qupls4_pkg::byt:		begin o1 = o8; exc1 = exc8; end
-			Qupls4_pkg::wyde:	begin o1 = o16; exc1 = exc16; end
-			Qupls4_pkg::tetra:		begin o1 = o32; exc1 = exc32; end
+			Qupls4_pkg::byt:		begin o1 = o8|ro8; exc1 = exc8; end
+			Qupls4_pkg::wyde:	begin o1 = o16|ro16; exc1 = exc16; end
+			Qupls4_pkg::tetra:		begin o1 = o32|ro32; exc1 = exc32; end
 			Qupls4_pkg::octa:		begin o1 = o64; exc1 = exc64; end
 			default:	begin o1 = o128; exc1 = exc128; end
 			endcase

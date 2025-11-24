@@ -84,6 +84,7 @@ reg [WID*2-1:0] shl, shr, asr;
 wire [WID-1:0] cmpo;
 reg [WID:0] bus;
 reg [WID-1:0] busx;
+wire bus_nan;
 reg [WID-1:0] blendo;
 reg [WID-1:0] res;
 reg [22:0] ii;
@@ -96,6 +97,15 @@ reg [WID-1:0] chrndxv;
 wire [WID-1:0] info;
 wire [WID-1:0] vmasko;
 reg [WID-1:0] tmp;
+
+function [WID-1:0] fnBitRev;
+input [WID-1:0] i;
+reg nn;
+begin
+	for (nn = 0; nn < WID/2; nn = nn + 1)
+		fnBitRev[nn] = i[WID-1-nn];
+end
+endfunction
 
 always_comb
 	ii = {{6{i[WID-1]}},i};
@@ -198,6 +208,20 @@ generate begin : gffz
 			.snan(bsNan),
 			.qnan(bqNan)
 		);
+
+		fpDecomp64 udc1bus (
+			.i(bus),
+			.sgn(),
+			.exp(),
+			.fract(),
+			.xz(),
+			.vz(),
+			.inf(),
+			.nan(bus_nan),
+			.snan(),
+			.qnan()
+		);
+
   	end
   128:
   	begin
@@ -337,9 +361,10 @@ begin
 	exc = Qupls4_pkg::FLT_NONE;
 	bus = {(WID/16){16'h0000}};
 	case(ir.any.opcode)
-	Qupls4_pkg::OP_R3BP,Qupls4_pkg::OP_R3WP,Qupls4_pkg::OP_R3TP,Qupls4_pkg::OP_R3OP:
+	Qupls4_pkg::OP_R3BP,Qupls4_pkg::OP_R3WP,Qupls4_pkg::OP_R3TP,Qupls4_pkg::OP_R3OP,
+	Qupls4_pkg::OP_R3P,Qupls4_pkg::OP_R3VS:
 		case(ir.r3.func)
-		FN_CMP,FN_CMPU:
+		Qupls4_pkg::FN_CMP,Qupls4_pkg::FN_CMPU:
 			begin
 				bus = t;
 				case(ir.r3.op3)
@@ -352,7 +377,7 @@ begin
 				bus = res;
 			end
 
-		FN_SEQ:
+		Qupls4_pkg::FN_SEQ:
 			begin
 				bus = t;
 				case(ir.r3.op3)
@@ -365,7 +390,7 @@ begin
 				endcase
 			end
 
-		FN_SNE:
+		Qupls4_pkg::FN_SNE:
 			begin
 				bus = t;
 				case(ir.r3.op3)
@@ -378,7 +403,7 @@ begin
 				endcase
 			end
 
-		FN_SLT:
+		Qupls4_pkg::FN_SLT:
 			begin
 				bus = t;
 				case(ir.r3.op3)
@@ -391,7 +416,7 @@ begin
 				endcase
 			end
 
-		FN_SLE:
+		Qupls4_pkg::FN_SLE:
 			begin
 				bus = t;
 				case(ir.r3.op3)
@@ -404,7 +429,7 @@ begin
 				endcase
 			end
 
-		FN_SLTU:
+		Qupls4_pkg::FN_SLTU:
 			begin
 				bus = t;
 				case(ir.r3.op3)
@@ -417,7 +442,7 @@ begin
 				endcase
 			end
 
-		FN_SLEU:
+		Qupls4_pkg::FN_SLEU:
 			begin
 				bus = t;
 				case(ir.r3.op3)
@@ -430,7 +455,7 @@ begin
 				endcase
 			end
 
-		FN_ADD:
+		Qupls4_pkg::FN_ADD:
 			begin
 				case(ir.r3.op3)
 				3'd0:	bus = (a + b) & c;
@@ -442,7 +467,7 @@ begin
 				endcase
 			end
 
-		FN_SUB:
+		Qupls4_pkg::FN_SUB:
 			begin
 				case(ir.r3.op3)
 				3'd0:	bus = (a - b) & c;
@@ -454,7 +479,7 @@ begin
 				endcase
 			end
 
-		FN_AND:
+		Qupls4_pkg::FN_AND:
 			begin
 				case(ir.r3.op3)
 				3'd0:	bus = (a & b) & c;
@@ -466,7 +491,7 @@ begin
 				endcase
 			end
 
-		FN_OR:
+		Qupls4_pkg::FN_OR:
 			begin
 				case(ir.r3.op3)
 				3'd0:	bus = (a | b) & c;
@@ -478,7 +503,7 @@ begin
 				endcase
 			end
 
-		FN_XOR:
+		Qupls4_pkg::FN_XOR:
 			begin
 				case(ir.r3.op3)
 				3'd0:	bus = (a ^ b) & c;
@@ -490,7 +515,7 @@ begin
 				endcase
 			end
 
-		FN_ASL:
+		Qupls4_pkg::FN_ASL:
 			begin
 				case(ir.r3.op3)
 				3'd0:	bus = shl & c;
@@ -502,7 +527,7 @@ begin
 				endcase
 			end
 
-		FN_LSR:
+		Qupls4_pkg::FN_LSR:
 			begin
 				case(ir.r3.op3)
 				3'd0:	bus = shr & c;
@@ -514,7 +539,7 @@ begin
 				endcase
 			end
 
-		FN_ASR:
+		Qupls4_pkg::FN_ASR:
 			case(ir.alu.op3)
 			3'd0: bus = asr;
 			3'd1:	bus = asr;
@@ -524,7 +549,7 @@ begin
 			default:	bus = zero;
 			endcase
 
-		FN_ROL:
+		Qupls4_pkg::FN_ROL:
 			case(ir.alu.op3)
 			3'd0: bus = (shl | shl[WID*2-1:WID]) & c;
 			3'd1:	bus = (shl | shl[WID*2-1:WID]) | c;
@@ -534,7 +559,7 @@ begin
 			default:	bus = zero;
 			endcase
 
-		FN_ROR:
+		Qupls4_pkg::FN_ROR:
 			case(ir.alu.op3)
 			3'd0: bus = (shr | shr[WID*2-1:WID]) & c;
 			3'd1:	bus = (shr | shr[WID*2-1:WID]) | c;
@@ -543,29 +568,32 @@ begin
 			3'd6:	bus = c[Ra[1:0] * NUM_LANES + LANE] ? (shr | shr[WID*2-1:WID]) : t;
 			default:	bus = zero;
 			endcase
+			
+		Qupls4_pkg::FN_MOVE:
+			bus = b;
 
 		default:	bus = zero;
 		endcase
 
 	Qupls4_pkg::OP_R3B,Qupls4_pkg::OP_R3W,Qupls4_pkg::OP_R3T,Qupls4_pkg::OP_R3O:
 		case(ir.r3.func)
-		FN_R1:
+		Qupls4_pkg::FN_R1:
 			case(ir.r3.Rs3)
-			R1_CNTLZ:	bus = lzcnt;
-			R1_CNTPOP:	bus = popcnt;
-			R1_CNTLO:	bus = locnt;
-			R1_CNTTZ:	bus = tzcnt;
+			Qupls4_pkg::R1_CNTLZ:	bus = lzcnt;
+			Qupls4_pkg::R1_CNTPOP:	bus = popcnt;
+			Qupls4_pkg::R1_CNTLO:	bus = locnt;
+			Qupls4_pkg::R1_CNTTZ:	bus = tzcnt;
 			default:	;
 			endcase
-		FN_CMP:	bus = cmpo;
-		FN_CMPU:	bus = cmpo;
-		FN_SEQ:	bus = a==b;
-		FN_SNE:	bus = a != b;
-		FN_SLT:	bus = $signed(a) < $signed(b);
-		FN_SLE:	bus = $signed(a) <= $signed(b);
-		FN_SLTU:	bus = a < b;
-		FN_SLEU:	bus = a <= b;
-		FN_ADD:
+		Qupls4_pkg::FN_CMP:	bus = cmpo;
+		Qupls4_pkg::FN_CMPU:	bus = cmpo;
+		Qupls4_pkg::FN_SEQ:	bus = a==b;
+		Qupls4_pkg::FN_SNE:	bus = a != b;
+		Qupls4_pkg::FN_SLT:	bus = $signed(a) < $signed(b);
+		Qupls4_pkg::FN_SLE:	bus = $signed(a) <= $signed(b);
+		Qupls4_pkg::FN_SLTU:	bus = a < b;
+		Qupls4_pkg::FN_SLEU:	bus = a <= b;
+		Qupls4_pkg::FN_ADD:
 			case(ir.alu.op3)
 			3'd0: bus = (a + b) & c;
 			3'd1:	bus = (a + b) | c;
@@ -573,7 +601,7 @@ begin
 			3'd3:	bus = a + b + c;
 			default:	bus = zero;
 			endcase
-		FN_SUB:
+		Qupls4_pkg::FN_SUB:
 			case(ir.alu.op3)
 			3'd0: bus = (a - b) & c;
 			3'd1:	bus = (a - b) | c;
@@ -581,7 +609,7 @@ begin
 			3'd3:	bus = a - b - c;
 			default:	bus = zero;
 			endcase
-		FN_AND:
+		Qupls4_pkg::FN_AND:
 			case(ir.alu.op3)
 			3'd0: bus = (a & b) & c;
 			3'd1:	bus = (a & b) | c;
@@ -589,7 +617,7 @@ begin
 			3'd3:	bus = (a & b) + c;
 			default:	bus = zero;
 			endcase
-		FN_OR:
+		Qupls4_pkg::FN_OR:
 			case(ir.alu.op3)
 			3'd0: bus = (a | b) & c;
 			3'd1:	bus = (a | b) | c;
@@ -597,7 +625,7 @@ begin
 			3'd3:	bus = (a | b) + c;
 			default:	bus = zero;
 			endcase
-		FN_XOR:
+		Qupls4_pkg::FN_XOR:
 			case(ir.alu.op3)
 			3'd0: bus = (a ^ b) & c;
 			3'd1:	bus = (a ^ b) | c;
@@ -605,7 +633,7 @@ begin
 			3'd3:	bus = (a ^ b) + c;
 			default:	bus = zero;
 			endcase
-		FN_ASL:
+		Qupls4_pkg::FN_ASL:
 			case(ir.alu.op3)
 			3'd0: bus = shl & c;
 			3'd1:	bus = shl | c;
@@ -613,7 +641,7 @@ begin
 			3'd3:	bus = shl + c;
 			default:	bus = zero;
 			endcase
-		FN_ASR:
+		Qupls4_pkg::FN_ASR:
 			case(ir.alu.op3)
 			3'd0: bus = asr;
 			3'd1:	bus = asr;
@@ -621,7 +649,7 @@ begin
 			3'd3:	bus = asr;
 			default:	bus = zero;
 			endcase
-		FN_LSR:
+		Qupls4_pkg::FN_LSR:
 			case(ir.alu.op3)
 			3'd0: bus = shr & c;
 			3'd1:	bus = shr | c;
@@ -629,7 +657,7 @@ begin
 			3'd3:	bus = shr + c;
 			default:	bus = zero;
 			endcase
-		FN_ROL:
+		Qupls4_pkg::FN_ROL:
 			case(ir.alu.op3)
 			3'd0: bus = (shl | shl[WID*2-1:WID]) & c;
 			3'd1:	bus = (shl | shl[WID*2-1:WID]) | c;
@@ -637,7 +665,7 @@ begin
 			3'd3:	bus = (shl | shl[WID*2-1:WID]) + c;
 			default:	bus = zero;
 			endcase
-		FN_ROR:
+		Qupls4_pkg::FN_ROR:
 			case(ir.alu.op3)
 			3'd0: bus = (shr | shr[WID*2-1:WID]) & c;
 			3'd1:	bus = (shr | shr[WID*2-1:WID]) | c;
@@ -645,56 +673,57 @@ begin
 			3'd3:	bus = (shr | shr[WID*2-1:WID]) + c;
 			default:	bus = zero;
 			endcase
+		Qupls4_pkg::FN_MOVE:	bus = b;
 		endcase
 
-	Qupls_pkg::OP_FLTH,Qupls_pkg::OP_FLTS,Qupls_pkg::OP_FLTD,Qupls_pkg::OP_FLTQ:
+	Qupls4_pkg::OP_FLTH,Qupls4_pkg::OP_FLTS,Qupls4_pkg::OP_FLTD,Qupls4_pkg::OP_FLTQ:
 		case(ir.f3.func)
-		FLT_MIN:	bus = fmin;
-		FLT_MAX:	bus = fmax;
-		FLT_NEG:	bus = (anan ? a : {~a[WID-1],a[WID-2:0]});
-		FLT_SEQ:
+		Qupls4_pkg::FLT_MIN:	bus = fmin;
+		Qupls4_pkg::FLT_MAX:	bus = fmax;
+		Qupls4_pkg::FLT_NEG:	bus = (aNan ? a : {~a[WID-1],a[WID-2:0]});
+		Qupls4_pkg::FLT_SEQ:
 			begin	
-				bus = ((anan|bnan) ? 1'b0 : cmpo[0]);
+				bus = ((aNan|bNan) ? 1'b0 : cmpo[0]);
 			end
-		FLT_SNE:
+		Qupls4_pkg::FLT_SNE:
 			begin	
-				bus = ((anan|bnan) ? 1'b0 : cmpo[8]);
+				bus = ((aNan|bNan) ? 1'b0 : cmpo[8]);
 			end
-		FLT_SLT:
+		Qupls4_pkg::FLT_SLT:
 			begin	
-				bus = ((anan|bnan) ? 1'b0 : cmpo[1]);
+				bus = ((aNan|bNan) ? 1'b0 : cmpo[1]);
 			end
-		FLT_SGNJ:
+		Qupls4_pkg::FLT_SGNJ:
 			begin	
-				bus = (anan ? a : bnan ? b : {a[WID-1],b[WID-2:0]});
+				bus = (aNan ? a : bNan ? b : {a[WID-1],b[WID-2:0]});
 			end
 		default:	bus = zero;
 		endcase
 	
-	Qupls_pkg::OP_FLTPH,Qupls_pkg::OP_FLTPS,Qupls_pkg::OP_FLTPD,Qupls_pkg::OP_FLTPQ,
-	Qupls_pkg::OP_FLTP:
+	Qupls4_pkg::OP_FLTPH,Qupls4_pkg::OP_FLTPS,Qupls4_pkg::OP_FLTPD,Qupls4_pkg::OP_FLTPQ,
+	Qupls4_pkg::OP_FLTP:
 		case(ir.f3.func)
-		FLT_MIN:	bus = c[LANE] ? fmin : t;
-		FLT_MAX:	bus = c[LANE] ? fmax : t;
-		FLT_NEG:	bus = c[LANE] ? (anan ? a : {~a[WID-1],a[WID-2:0]}) : t;
-		FLT_SEQ:
+		Qupls4_pkg::FLT_MIN:	bus = c[LANE] ? fmin : t;
+		Qupls4_pkg::FLT_MAX:	bus = c[LANE] ? fmax : t;
+		Qupls4_pkg::FLT_NEG:	bus = c[LANE] ? (aNan ? a : {~a[WID-1],a[WID-2:0]}) : t;
+		Qupls4_pkg::FLT_SEQ:
 			begin	
 				bus = t;
-				bus[LANE] = c[LANE] ? ((anan|bnan) ? 1'b0 : cmpo[0]) : t[LANE];
+				bus[LANE] = c[LANE] ? ((aNan|bNan) ? 1'b0 : cmpo[0]) : t[LANE];
 			end
-		FLT_SNE:
+		Qupls4_pkg::FLT_SNE:
 			begin	
 				bus = t;
-				bus[LANE] = c[LANE] ? ((anan|bnan) ? 1'b0 : cmpo[8]) : t[LANE];
+				bus[LANE] = c[LANE] ? ((aNan|bNan) ? 1'b0 : cmpo[8]) : t[LANE];
 			end
-		FLT_SLT:
+		Qupls4_pkg::FLT_SLT:
 			begin	
 				bus = t;
-				bus[LANE] = c[LANE] ? ((anan|bnan) ? 1'b0 : cmpo[1]) : t[LANE];
+				bus[LANE] = c[LANE] ? ((aNan|bNan) ? 1'b0 : cmpo[1]) : t[LANE];
 			end
-		FLT_SGNJ:
+		Qupls4_pkg::FLT_SGNJ:
 			begin	
-				bus = c[LANE] ? (anan ? a : bnan ? b : {a[WID-1],b[WID-2:0]}) : t;
+				bus = c[LANE] ? (aNan ? a : bNan ? b : {a[WID-1],b[WID-2:0]}) : t;
 			end
 		default:	bus = zero;
 		endcase
@@ -774,7 +803,14 @@ begin
 end
 
 always_ff @(posedge clk)
-	o = bus;
+	case(WID)
+	16:	o = bus;
+	32:	o = bus_nan ? bus | (fnBitRev(pc) >> 6'd48) : bus;
+	64:	o = bus_nan ? bus | (fnBitRev(pc) >> 6'd20) : bus;
+	128:	o = bus_nan ? bus | fnBitRev(pc) : bus;
+	default:	o = zero;
+	endcase
+
 always_ff @(posedge clk)
 	exc_o = exc;
 

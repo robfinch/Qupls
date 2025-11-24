@@ -261,7 +261,7 @@ Qupls4_alu #(.WID(128), .ALU0(ALU0)) ualu128
 
 always_comb
 begin
-	if (WID==64 && ir.any.opcode==OP_R3 && ir.r3.func >= OP_PEEKQ && ir.r3.func <= OP_WRITEQ) begin
+	if (WID==64 && ir.any.opcode==Qupls4_pkg::OP_R3O && ir.r3.func >= Qupls4_pkg::FN_PEEKQ && ir.r3.func <= Qupls4_pkg::FN_WRITEQ) begin
 		o1 = oq;
 	end
 	else if (Qupls4_pkg::SUPPORT_PREC)

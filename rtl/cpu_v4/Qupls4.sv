@@ -1432,10 +1432,10 @@ end
 // NaN trace fifo
 reg [8:0] nan_log_addr;
 reg do_log_nan = 1'b0;
-wire nan0 = rob[head0].v && cmtcmt > 3'd0 && rob[head0].nan;
-wire nan1 = rob[head1].v && cmtcmt > 3'd1 && rob[head1].nan;
-wire nan2 = rob[head2].v && cmtcmt > 3'd2 && rob[head2].nan;
-wire nan3 = rob[head3].v && cmtcmt > 3'd3 && rob[head3].nan;
+wire nan0 = rob[head0].v && cmtcnt > 3'd0 && rob[head0].nan;
+wire nan1 = rob[head1].v && cmtcnt > 3'd1 && rob[head1].nan;
+wire nan2 = rob[head2].v && cmtcnt > 3'd2 && rob[head2].nan;
+wire nan3 = rob[head3].v && cmtcnt > 3'd3 && rob[head3].nan;
 cpu_types_pkg::pc_address_t nan1e, nan2e;
 wire log_nan = (nan0|nan1|nan2|nan3) && do_commit && cmtcnt > 3'd0 && do_log_nan;
 
@@ -1450,60 +1450,60 @@ else if (log_nan) begin
 	4'b0000:	;
 	4'b0001:
 		begin
-			nan1e <= rob[head0].nan_pc;
+			nan1e <= rob[head0].op.pc;
 			nan2e <= {$bits(cpu_types_pkg::pc_address_t){1'b0}};
 			nan_log_addr <= nan_log_addr + 2'd1;
 		end
 	4'b0010:
 		begin
-			nan1e <= rob[head1].nan_pc;
+			nan1e <= rob[head1].op.pc;
 			nan2e <= {$bits(cpu_types_pkg::pc_address_t){1'b0}};
 			nan_log_addr <= nan_log_addr + 2'd1;
 		end
 	4'b0011,4'b0111,4'b1011,4'b1111:
 		begin
-			nan1e <= rob[head0].nan_pc;
-			nan2e <= rob[head1].nan_pc;
+			nan1e <= rob[head0].op.pc;
+			nan2e <= rob[head1].op.pc;
 			nan_log_addr <= nan_log_addr + 2'd1;
 		end
 	4'b0100:
 		begin
-			nan1e <= rob[head2].nan_pc;
+			nan1e <= rob[head2].op.pc;
 			nan_log_addr <= nan_log_addr + 2'd1;
 		end
 	4'b0101,4'b1101:
 		begin
-			nan1e <= rob[head0].nan_pc;
-			nan2e <= rob[head2].nan_pc;
+			nan1e <= rob[head0].op.pc;
+			nan2e <= rob[head2].op.pc;
 			nan_log_addr <= nan_log_addr + 2'd1;
 		end
 	4'b0110,4'b1110:
 		begin
-			nan1e <= rob[head1].nan_pc;
-			nan2e <= rob[head2].nan_pc;
+			nan1e <= rob[head1].op.pc;
+			nan2e <= rob[head2].op.pc;
 			nan_log_addr <= nan_log_addr + 2'd1;
 		end
 	4'b1000:
 		begin
-			nan1e <= rob[head3].nan_pc;
+			nan1e <= rob[head3].op.pc;
 			nan_log_addr <= nan_log_addr + 2'd1;
 		end
 	4'b1001:
 		begin
-			nan1e <= rob[head0].nan_pc;
-			nan2e <= rob[head3].nan_pc;
+			nan1e <= rob[head0].op.pc;
+			nan2e <= rob[head3].op.pc;
 			nan_log_addr <= nan_log_addr + 2'd1;
 		end
 	4'b1010:
 		begin
-			nan1e <= rob[head1].nan_pc;
-			nan2e <= rob[head3].nan_pc;
+			nan1e <= rob[head1].op.pc;
+			nan2e <= rob[head3].op.pc;
 			nan_log_addr <= nan_log_addr + 2'd1;
 		end
 	4'b1100:
 		begin
-			nan1e <= rob[head2].nan_pc;
-			nan2e <= rob[head3].nan_pc;
+			nan1e <= rob[head2].op.pc;
+			nan2e <= rob[head3].op.pc;
 			nan_log_addr <= nan_log_addr + 2'd1;
 		end
 	endcase
@@ -1517,8 +1517,8 @@ end
       .ADDR_WIDTH_A(9),               // DECIMAL
       .ADDR_WIDTH_B(9),               // DECIMAL
       .AUTO_SLEEP_TIME(0),            // DECIMAL
-      .BYTE_WRITE_WIDTH_A($bits(cpu_type_pkg::pc_address_t)*2),        // DECIMAL
-      .BYTE_WRITE_WIDTH_B($bits(cpu_type_pkg::pc_address_t)),        // DECIMAL
+      .BYTE_WRITE_WIDTH_A($bits(cpu_types_pkg::pc_address_t)*2),        // DECIMAL
+      .BYTE_WRITE_WIDTH_B($bits(cpu_types_pkg::pc_address_t)),        // DECIMAL
       .CASCADE_HEIGHT(0),             // DECIMAL
       .CLOCKING_MODE("common_clock"), // String
       .ECC_BIT_RANGE("7:0"),          // String
@@ -1529,11 +1529,11 @@ end
       .MEMORY_INIT_PARAM("0"),        // String
       .MEMORY_OPTIMIZATION("true"),   // String
       .MEMORY_PRIMITIVE("auto"),      // String
-      .MEMORY_SIZE($bits(cpu_type_pkg::pc_address_t)*2*512),             // DECIMAL
+      .MEMORY_SIZE($bits(cpu_types_pkg::pc_address_t)*2*512),             // DECIMAL
       .MESSAGE_CONTROL(0),            // DECIMAL
       .RAM_DECOMP("auto"),            // String
-      .READ_DATA_WIDTH_A($bits(cpu_type_pkg::pc_address_t)*2),         // DECIMAL
-      .READ_DATA_WIDTH_B($bits(cpu_type_pkg::pc_address_t)),         // DECIMAL
+      .READ_DATA_WIDTH_A($bits(cpu_types_pkg::pc_address_t)*2),         // DECIMAL
+      .READ_DATA_WIDTH_B($bits(cpu_types_pkg::pc_address_t)),         // DECIMAL
       .READ_LATENCY_A(2),             // DECIMAL
       .READ_LATENCY_B(2),             // DECIMAL
       .READ_RESET_VALUE_A("0"),       // String
@@ -1545,8 +1545,8 @@ end
       .USE_MEM_INIT(1),               // DECIMAL
       .USE_MEM_INIT_MMI(0),           // DECIMAL
       .WAKEUP_TIME("disable_sleep"),  // String
-      .WRITE_DATA_WIDTH_A($bits(cpu_type_pkg::pc_address_t)*2),        // DECIMAL
-      .WRITE_DATA_WIDTH_B($bits(cpu_type_pkg::pc_address_t)),        // DECIMAL
+      .WRITE_DATA_WIDTH_A($bits(cpu_types_pkg::pc_address_t)*2),        // DECIMAL
+      .WRITE_DATA_WIDTH_B($bits(cpu_types_pkg::pc_address_t)),        // DECIMAL
       .WRITE_MODE_A("no_change"),     // String
       .WRITE_MODE_B("no_change"),     // String
       .WRITE_PROTECT(1)               // DECIMAL
@@ -1606,7 +1606,7 @@ end
    );
 end
 else
-	assign q_rd_data[14] = {$bits(cpu_type_pkg::pc_address_t){1'b0}};
+	assign q_rd_data[14] = {$bits(cpu_types_pkg::pc_address_t){1'b0}};
 end
 endgenerate
 						
