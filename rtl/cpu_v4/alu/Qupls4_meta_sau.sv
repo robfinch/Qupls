@@ -33,8 +33,8 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 // 41000 LUTs / 2000 FFs / 239 DSPs	-	SAU0 (128-bit)
-// 37000 LUTs / 1610 FFs / 0 DSPs (64-bit, full precision support)
-// 7600 LUTs / 360 FFs / 0 DSPs (64-bit, no precision support)
+// 21900 LUTs / 810 FFs / 0 DSPs (64-bit, full precision support)
+// 7200 LUTs / 650 FFs / 0 DSPs (64-bit, no precision support)
 // ============================================================================
 
 import const_pkg::*;
@@ -68,13 +68,14 @@ reg [WID-1:0] bi;
 reg [WID-1:0] c;
 reg [WID-1:0] i;
 reg [WID-1:0] t;
+reg [2:0] chunk;
 Qupls4_pkg::rob_bitmask_t stompo;
 Qupls4_pkg::memsz_t prc;
 cpu_types_pkg::pc_address_t pc;
 checkpt_ndx_t cp_i;
 aregno_t aRd_i;
 Qupls4_pkg::instruction_t ir;
-always_comb ir = rse_i.ins;
+always_comb ir = rse_i.uop.ins;
 always_comb a = rse_i.argA;
 always_comb b = rse_i.argB;
 always_comb bi = rse_i.argB|rse_i.argI;
@@ -205,6 +206,9 @@ end
 endfunction
 
 always_comb
+	chunk = rse_i.uop.num;
+
+always_comb
 	isflt = ir.any.opcode==Qupls4_pkg::OP_FLTH||
 		ir.any.opcode==Qupls4_pkg::OP_FLTS||
 		ir.any.opcode==Qupls4_pkg::OP_FLTD||
@@ -238,12 +242,15 @@ integer n;
 genvar g,mm,xx;
 
 generate begin : g8
+reg [WID-1:0] c1;
 	if (Qupls4_pkg::SUPPORT_PREC)
 	for (g = 0; g < WID/8; g = g + 1)
 		Qupls4_sau #(.WID(8), .SAU0(SAU0), .LANE(g)) ualu8
 		(
 			.rst(rst),
 			.clk(clk),
+			.chunk(chunk),
+			.mask(c),
 			.om(rse_i.om),
 			.ir(ir),
 			.a(a[g*8+7:g*8]),
@@ -262,74 +269,90 @@ generate begin : g8
 			.exc_o(exc8[g*8+7:g*8])
 		);
 	always_comb
+	begin
+		c1 = zero;
 		case(ir.any.opcode)
 			// ToDo: finish these off
 		Qupls4_pkg::OP_R3B:
+			begin
+			c1 = c >> {lane,3'b0};
 			case(ir.r3.func)
 			Qupls4_pkg::FN_REDSUM:	ro8 =
-				mask8(a[7:0],c[0])+
-				mask8(a[15:8],c[1])+
-				mask8(a[23:16],c[2])+
-				mask8(a[31:24],c[3])+
-				mask8(a[39:32],c[4])+
-				mask8(a[47:40],c[5])+
-				mask8(a[55:48],c[6])+
-				mask8(a[63:56],c[7])+
-				(lane==3'd0 ? 8'h00:b[7:0]);
+				(c1[0] ? a[7:0] : 8'h00) +
+				(c1[1] ? a[15:8] : 8'h00) +
+				(c1[2] ? a[23:16] : 8'h00) +
+				(c1[3] ? a[31:24] : 8'h00) +
+				(c1[4] ? a[39:32] : 8'h00) +
+				(c1[5] ? a[47:40] : 8'h00) +
+				(c1[6] ? a[55:48] : 8'h00) +
+				(c1[7] ? a[63:56] : 8'h00) +
+				b[7:0];
 			Qupls4_pkg::FN_REDAND:	ro8 = 
-				maska8(a[7:0],c[0])&
-				maska8(a[15:8],c[1])&
-				maska8(a[23:16],c[2])&
-				maska8(a[31:24],c[3])&
-				maska8(a[39:32],c[4])&
-				maska8(a[47:40],c[5])&
-				maska8(a[55:48],c[6])&
-				maska8(a[63:56],c[7])&
-				(lane==3'd0 ? 8'hFF:b[7:0]);
+				(c1[0] ? a[7:0] : 8'hFF) &
+				(c1[1] ? a[15:8] : 8'hFF) &
+				(c1[2] ? a[23:16] : 8'hFF) &
+				(c1[3] ? a[31:24] : 8'hFF) &
+				(c1[4] ? a[39:32] : 8'hFF) &
+				(c1[5] ? a[47:40] : 8'hFF) &
+				(c1[6] ? a[55:48] : 8'hFF) &
+				(c1[7] ? a[63:56] : 8'hFF) &
+				b[7:0];
 			Qupls4_pkg::FN_REDOR:		ro8 =
-				mask8(a[7:0],c[0])|
-				mask8(a[15:8],c[1])|
-				mask8(a[23:16],c[2])|
-				mask8(a[31:24],c[3])|
-				mask8(a[39:32],c[4])|
-				mask8(a[47:40],c[5])|
-				mask8(a[55:48],c[6])|
-				mask8(a[63:56],c[7])|
-				(lane==3'd0 ? 8'h00:b[7:0]);
+				(c1[0] ? a[7:0] : 8'h00) |
+				(c1[1] ? a[15:8] : 8'h00) |
+				(c1[2] ? a[23:16] : 8'h00) |
+				(c1[3] ? a[31:24] : 8'h00) |
+				(c1[4] ? a[39:32] : 8'h00) |
+				(c1[5] ? a[47:40] : 8'h00) |
+				(c1[6] ? a[55:48] : 8'h00) |
+				(c1[7] ? a[63:56] : 8'h00) |
+				b[7:0];
 			Qupls4_pkg::FN_REDEOR:		ro8 =
-				mask8(a[7:0],c[0])^
-				mask8(a[15:8],c[1])^
-				mask8(a[23:16],c[2])^
-				mask8(a[31:24],c[3])^
-				mask8(a[39:32],c[4])^
-				mask8(a[47:40],c[5])^
-				mask8(a[55:48],c[6])^
-				mask8(a[63:56],c[7])^
-				(lane==3'd0 ? 8'h00:b[7:0]);
+				(c1[0] ? a[7:0] : 8'h00) ^
+				(c1[1] ? a[15:8] : 8'h00) ^
+				(c1[2] ? a[23:16] : 8'h00) ^
+				(c1[3] ? a[31:24] : 8'h00) ^
+				(c1[4] ? a[39:32] : 8'h00) ^
+				(c1[5] ? a[47:40] : 8'h00) ^
+				(c1[6] ? a[55:48] : 8'h00) ^
+				(c1[7] ? a[63:56] : 8'h00) ^
+				b[7:0];
 			Qupls4_pkg::FN_REDMAXU:	ro8 = 
 				tmaxu8(tmaxu8(
-					c[0] ? a[7:0] : 8'h00,c[1] ? a[15:8] : 8'h00, c[2] ? a[23:16] : 8'h00),
-					tmaxu8(c[3] ? a[31:32] : 8'h00, c[4] ? a[39:32] : 8'h00, c[5] ? a[47:40] : 8'h00),
-					tmaxu8(c[6] ? a[55:48] : 8'h00, c[7] ? a[63:56] : 8'h00,(lane==3'd0 ? 8'h00:b[7:0])));
+					c1[0] ? a[7:0] : 8'h00,c1[1] ? a[15:8] : 8'h00, c1[2] ? a[23:16] : 8'h00),
+					tmaxu8(c1[3] ? a[31:24] : 8'h00, c1[4] ? a[39:32] : 8'h00, c1[5] ? a[47:40] : 8'h00),
+					tmaxu8(c1[6] ? a[55:48] : 8'h00, c1[7] ? a[63:56] : 8'h00,b[7:0]));
 			Qupls4_pkg::FN_REDMINU:	ro8 = 
-				tminu8(tminu8(a[7:0],a[15:8],a[23:16]),tminu8(a[31:32],a[39:32],a[47:40]),tminu8(a[55:48],a[63:56],(lane==3'd0 ? 8'hFF:b[7:0])));
+				tminu8(tminu8(c1[0] ? a[7:0] : 8'hFF,c1[1] ? a[15:8] : 8'hFF,c1[2] ? a[23:16] : 8'hFF),
+				tminu8(c1[3] ? a[31:24] : 8'hFF, c1[4] ? a[39:32] : 8'hFF, c1[5] ? a[47:40] : 8'hFF),
+				tminu8(c1[6] ? a[55:48] : 8'hFF, c1[7] ? a[63:56] : 8'hFF,b[7:0]));
 			Qupls4_pkg::FN_REDMAX:	ro8 = 
-				tmax8(tmax8(a[7:0],a[15:8],a[23:16]),tmax8(a[31:32],a[39:32],a[47:40]),tmax8(a[55:48],a[63:56],(lane==3'd0 ? 8'h00:b[7:0])));
+				tmax8(tmax8(
+					c1[0] ? a[7:0] : 8'h00,c1[1] ? a[15:8] : 8'h00, c1[2] ? a[23:16] : 8'h00),
+					tmax8(c1[3] ? a[31:24] : 8'h00, c1[4] ? a[39:32] : 8'h00, c1[5] ? a[47:40] : 8'h00),
+					tmax8(c1[6] ? a[55:48] : 8'h00, c1[7] ? a[63:56] : 8'h00,b[7:0]));
 			Qupls4_pkg::FN_REDMIN:	ro8 = 
-				tminu8(tmin8(a[7:0],a[15:8],a[23:16]),tmin8(a[31:32],a[39:32],a[47:40]),tmin8(a[55:48],a[63:56],(lane==3'd0 ? 8'h7F:b[7:0])));
+				tmin8(tmin8(c1[0] ? a[7:0] : 8'h7F,c1[1] ? a[15:8] : 8'h7F,c1[2] ? a[23:16] : 8'h7F),
+				tmin8(c1[3] ? a[31:24] : 8'h7F, c1[4] ? a[39:32] : 8'h7F, c1[5] ? a[47:40] : 8'h7F),
+				tmin8(c1[6] ? a[55:48] : 8'h7F, c1[7] ? a[63:56] : 8'h7F,b[7:0]));
 			default:	ro8 = zero;
 			endcase
+			end
 		endcase
+	end
 end
 endgenerate
 
 generate begin : g16
+reg [WID-1:0] c1;
 	if (Qupls4_pkg::SUPPORT_PREC)
 	for (g = 0; g < WID/16; g = g + 1)
 		Qupls4_sau #(.WID(16), .SAU0(SAU0), .LANE(g)) ualu16
 		(
 			.rst(rst),
 			.clk(clk),
+			.chunk(chunk),
+			.mask(c),
 			.om(rse_i.om),
 			.ir(ir),
 			.a(a[g*16+15:g*16]),
@@ -348,34 +371,67 @@ generate begin : g16
 			.exc_o(exc16[g*8+7:g*8])
 		);
 	always_comb
+	begin
+		c1 = zero;
 		case(ir.any.opcode)
 		Qupls4_pkg::OP_R3W:
+			begin
+			c1 = c >> {lane,2'd0};
 			case(ir.r3.func)
-			Qupls4_pkg::FN_REDSUM:	ro16 = a[15:0]+a[31:16]+a[47:32]+a[63:48]+(lane==3'd0 ? 16'h0000:b[15:0]);
-			Qupls4_pkg::FN_REDAND:	ro16 = a[15:0]&a[31:16]&a[47:32]&a[63:48]&(lane==3'd0 ? 16'hFFFF:b[15:0]);
-			Qupls4_pkg::FN_REDOR:		ro16 = a[15:0]|a[31:16]|a[47:32]|a[63:48]|(lane==3'd0 ? 16'h0000:b[15:0]);
-			Qupls4_pkg::FN_REDEOR:	ro16 = a[15:0]^a[31:16]^a[47:32]^a[63:48]^(lane==3'd0 ? 16'h0000:b[15:0]);
+			Qupls4_pkg::FN_REDSUM:	ro16 =
+				(c1[0] ? a[15:0] : 16'h00) +
+				(c1[1] ? a[31:16] : 16'h00) +
+				(c1[2] ? a[47:32] : 16'h00) +
+				(c1[3] ? a[63:48] : 16'h00) +
+				b[15:0];
+			Qupls4_pkg::FN_REDAND:	ro16 = 
+				(c1[0] ? a[15:0] : 16'hFFFF) &
+				(c1[1] ? a[31:16] : 16'hFFFF) &
+				(c1[2] ? a[47:32] : 16'hFFFF) &
+				(c1[3] ? a[63:48] : 16'hFFFF) &
+				b[15:0];
+			Qupls4_pkg::FN_REDOR:		ro16 =
+				(c1[0] ? a[15:0] : 16'h00) |
+				(c1[1] ? a[31:16] : 16'h00) |
+				(c1[2] ? a[47:32] : 16'h00) |
+				(c1[3] ? a[63:48] : 16'h00) |
+				b[15:0];
+			Qupls4_pkg::FN_REDEOR:		ro16 =
+				(c1[0] ? a[15:0] : 16'h00) ^
+				(c1[1] ? a[31:16] : 16'h00) ^
+				(c1[2] ? a[47:32] : 16'h00) ^
+				(c1[3] ? a[63:48] : 16'h00) ^
+				b[15:0];
 			Qupls4_pkg::FN_REDMAXU:	ro16 = 
-				tmaxu16(tmaxu16(a[15:0],a[31:16],a[47:32]),a[63:48],(lane==3'd0 ? 16'h0000:b[15:0]));
+				tmaxu16(tmaxu16(c1[0] ? a[15:0] : 16'h0000,c1[1] ? a[31:16] : 16'h0000, c1[2] ? a[47:32] : 16'h0000),
+					c1[3] ? a[63:48] : 16'h0000,b[15:0]);
 			Qupls4_pkg::FN_REDMINU:	ro16 = 
-				tminu16(tminu16(a[15:0],a[31:16],a[47:32]),a[63:48],(lane==3'd0 ? 16'hFFFF:b[15:0]));
+				tminu16(tminu16(c1[0] ? a[15:0] : 16'hFFFF, c1[1] ? a[31:16] : 16'hFFFF, c1[2] ? a[47:32] : 16'hFFFF),
+					c1[3] ? a[63:48] : 16'hFFFF,b[15:0]);
 			Qupls4_pkg::FN_REDMAX:	ro16 = 
-				tmax16(tmax16(a[15:0],a[31:16],a[47:32]),a[63:48],(lane==3'd0 ? 16'h0000:b[15:0]));
+				tmax16(tmax16(c1[0] ? a[15:0] : 16'h0, c1[1] ? a[31:16] : 16'h0, c1[2] ? a[47:32]: 16'h0),
+					c1[3] ? a[63:48] : 16'h0,b[15:0]);
 			Qupls4_pkg::FN_REDMIN:	ro16 = 
-				tmin16(tmaxu16(a[15:0],a[31:16],a[47:32]),a[63:48],(lane==3'd0 ? 16'h7FFF:b[15:0]));
+				tmin16(tmin16(c1[0] ? a[15:0] : 16'h7FFF, c1[1] ? a[31:16] : 16'h7FFF, c1[2] ? a[47:32] : 16'h7FFF),
+					c1[3] ? a[63:48] : 16'h7FFF,b[15:0]);
 			default:	ro16 = zero;
 			endcase
+			end
 		endcase
-end
+		end
+	end
 endgenerate
 
 generate begin : g32
+reg [WID-1:0] c1;
 	if (Qupls4_pkg::SUPPORT_PREC)
 	for (g = 0; g < WID/32; g = g + 1)
 		Qupls4_sau #(.WID(32), .SAU0(SAU0), .LANE(g)) usau32
 		(
 			.rst(rst),
 			.clk(clk),
+			.chunk(chunk),
+			.mask(c),
 			.om(rse_i.om),
 			.ir(ir),
 			.a(a[g*32+31:g*32]),
@@ -394,36 +450,45 @@ generate begin : g32
 			.exc_o(exc32[g*8+7:g*8])
 		);
 	always_comb
+	begin
+		c1 = zero;
 		case(ir.any.opcode)
 		Qupls4_pkg::OP_R3T:
+			begin
+			c1 = c >> {lane,1'b0};
 			case(ir.r3.func)
 			Qupls4_pkg::FN_REDSUM:
 				case(ir.r3.op3)
-				3'd0:	ro32 = a[31:0]+a[63:32]+b[31:0];
-				3'd1:	ro32 = {{32{a[31]}},a[31:0]}+{{32{a[63]}},a[63:32]}+{{32{b[31]}},b[31:0]};
-				3'd2:	ro32 = {32'd0,a[31:0]}+{32'd0,a[63:32]}+{32'd0,b[31:0]};
+				3'd0:	ro32 = (c1[0] ? a[31:0] : 32'd0)+ (c1[1] ? a[63:32] : 32'd0) + b[31:0];
+				3'd1:	ro32 = (c1[0] ? {{32{a[31]}},a[31:0]} : 64'd0)+(c1[1] ? {{32{a[63]}},a[63:32]} : 64'd0) + {{32{b[31]}},b[31:0]};
+				3'd2:	ro32 = (c1[0] ? {32'd0,a[31:0]} : 64'd0)+(c1[1] ? {32'd0,a[63:32]} : 64'd0) + {32'd0,b[31:0]};
 				default:	ro32 = zero;
 				endcase
-			Qupls4_pkg::FN_REDAND:	ro32 = a[31:0]&a[63:32]&(lane==3'd0 ? 32'hFFFFFFFF:b[31:0]);
-			Qupls4_pkg::FN_REDOR:		ro32 = a[31:0]|a[63:32]|(lane==3'd0 ? 32'h00000000:b[31:0]);
-			Qupls4_pkg::FN_REDEOR:	ro32 = a[31:0]^a[63:32]^(lane==3'd0 ? 32'h00000000:b[31:0]);
-			Qupls4_pkg::FN_REDMAXU:	ro32 = tmaxu32(a[31:0],a[63:32],(lane==3'd0 ? 32'h00000000:b[31:0]));
-			Qupls4_pkg::FN_REDMINU:	ro32 = tminu32(a[31:0],a[63:32],(lane==3'd0 ? 32'hFFFFFFFF:b[31:0]));
-			Qupls4_pkg::FN_REDMAX:	ro32 = tmax32(a[31:0],a[63:32],(lane==3'd0 ? 32'h00000000:b[31:0]));
-			Qupls4_pkg::FN_REDMIN:	ro32 = tmin32(a[31:0],a[63:32],(lane==3'd0 ? 32'h7FFFFFFF:b[31:0]));
+			Qupls4_pkg::FN_REDAND:	ro32 = (c1[0] ? a[31:0] : 32'hFFFFFFFF) & (c1[1] ? a[63:32] : 32'hFFFFFFFF) & b[31:0];
+			Qupls4_pkg::FN_REDOR:		ro32 = (c1[0] ? a[31:0] : 32'd0)|(c1[1] ?a[63:32] : 32'd0)|b[31:0];
+			Qupls4_pkg::FN_REDEOR:	ro32 = (c1[0] ? a[31:0] : 32'd0)^(c1[1] ?a[63:32] : 32'd0)^b[31:0];
+			Qupls4_pkg::FN_REDMAXU:	ro32 = tmaxu32(c1[0] ? a[31:0] : 32'd0,c1[1] ? a[63:32] : 32'd0,b[31:0]);
+			Qupls4_pkg::FN_REDMINU:	ro32 = tminu32(c1[0] ? a[31:0] : 32'hFFFFFFFF,c1[1] ? a[63:32]: 32'hFFFFFFFF,b[31:0]);
+			Qupls4_pkg::FN_REDMAX:	ro32 = tmax32(c1[0] ? a[31:0] : 32'd0,c1[1] ? a[63:32] : 32'd0,b[31:0]);
+			Qupls4_pkg::FN_REDMIN:	ro32 = tmin32(c1[0] ? a[31:0] : 32'h7FFFFFFF,c1[1] ? a[63:32]: 32'h7FFFFFFF,b[31:0]);
 			default:	ro32 = zero;
 			endcase
+			end
 		endcase
-end
+		end
+	end
 endgenerate
 
 generate begin : g64
+reg [WID-1:0] c1;
 	if (Qupls4_pkg::SUPPORT_PREC || WID==64)
 	for (g = 0; g < WID/64; g = g + 1)
 		Qupls4_sau #(.WID(64), .SAU0(SAU0), .LANE(g)) usau64
 		(
 			.rst(rst),
 			.clk(clk),
+			.chunk(chunk),
+			.mask(c),
 			.om(rse_i.om),
 			.ir(ir),
 			.a(a[g*64+63:g*64]),
@@ -441,7 +506,34 @@ generate begin : g64
 			.o(o64[g*64+63:g*64]),
 			.exc_o(exc64[g*8+7:g*8])
 		);
-end
+	always_comb
+	begin
+		c1 = zero;
+		case(ir.any.opcode)
+		Qupls4_pkg::OP_R3T:
+			begin
+			c1 = c >> lane;
+			case(ir.r3.func)
+			Qupls4_pkg::FN_REDSUM:
+				case(ir.r3.op3)
+				3'd0:	ro64 = (c1[0] ? a[63:0] : 64'd0) + b[63:0];
+				3'd1:	ro64 = (c1[0] ? a[63:0] : 64'd0) + b[63:0];
+				3'd2:	ro64 = (c1[0] ? a[63:0] : 64'd0) + b[63:0];
+				default:	ro64 = zero;
+				endcase
+			Qupls4_pkg::FN_REDAND:	ro64 = (c1[0] ? a[63:0] : 64'hFFFFFFFFFFFFFFFF) & b[63:0];
+			Qupls4_pkg::FN_REDOR:		ro64 = (c1[0] ? a[63:0] : 64'd0)|b[63:0];
+			Qupls4_pkg::FN_REDEOR:	ro64 = (c1[0] ? a[63:0] : 64'd0)^b[63:0];
+			Qupls4_pkg::FN_REDMAXU:	ro64 = tmaxu32(c1[0] ? a[63:0] : 64'd0,b[63:0],b[63:0]);
+			Qupls4_pkg::FN_REDMINU:	ro64 = tminu32(c1[0] ? a[63:0] : 64'hFFFFFFFFFFFFFFFF,b[63:0],b[63:0]);
+			Qupls4_pkg::FN_REDMAX:	ro64 = tmax32(c1[0] ? a[63:0] : 64'd0,c1[1] ? a[63:32] : 64'd0, b[63:0]);
+			Qupls4_pkg::FN_REDMIN:	ro64 = tmin32(c1[0] ? a[63:0] : 64'h7FFFFFFFFFFFFFFF,c1[1] ? a[63:0]: 64'h7FFFFFFFFFFFFFFF,b[63:0]);
+			default:	ro64 = zero;
+			endcase
+			end
+		endcase
+		end
+	end
 endgenerate
 
 // Always supported.
@@ -452,6 +544,8 @@ generate begin : g128
 		(
 			.rst(rst),
 			.clk(clk),
+			.chunk(chunk),
+			.mask(c),
 			.om(rse_i.om),
 			.ir(ir),
 			.a(a[g*128+127:g*128]),

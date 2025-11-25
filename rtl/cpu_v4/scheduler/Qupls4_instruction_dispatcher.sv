@@ -133,7 +133,7 @@ begin
 			rse_o[kk].cjb = rob[nn].op.decbus.cjb;
 			rse_o[kk].bl = rob[nn].op.decbus.bl;
 			if (rob[nn].op.decbus.cpytgt|stomp[nn]|~rob[nn].pred_bit) begin
-				rse_o[kk].ins = {26'd0,Qupls4_pkg::OP_NOP};
+				rse_o[kk].uop.ins = {26'd0,Qupls4_pkg::OP_NOP};
 				rse_o[kk].store = FALSE;
 				rse_o[kk].argA_v = VAL;
 				rse_o[kk].argB_v = VAL;
@@ -145,7 +145,7 @@ begin
 				*/
 			end
 			else begin
-				rse_o[kk].ins = rob[nn].op.uop.ins;
+				rse_o[kk].uop.ins = rob[nn].op.uop.ins;
 				rse_o[kk].store = rob[nn].op.decbus.store;
 				rse_o[kk].argA_v = rob[nn].argA_v;
 				rse_o[kk].argB_v = rob[nn].argB_v;

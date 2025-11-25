@@ -39,8 +39,8 @@ import const_pkg::*;
 import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_sau(rst, clk, clk2x, om, ld, ir, div, Ra, a, b, bi, c, i, t, qres,
-	cs, pc, pcc, csr, cpl, coreno, canary, velsz, o, exc_o);
+module Qupls4_sau(rst, clk, clk2x, chunk, om, ld, ir, div, Ra, a, b, bi, c, i, t, qres,
+	mask, cs, pc, pcc, csr, cpl, coreno, canary, velsz, o, exc_o);
 parameter SAU0 = 1'b1;
 parameter WID=64;
 parameter LANE=0;
@@ -48,6 +48,7 @@ parameter NUM_LANES=1;
 input rst;
 input clk;
 input clk2x;
+input [2:0] chunk;
 input Qupls4_pkg::operating_mode_t om;
 input ld;
 input Qupls4_pkg::instruction_t ir;
@@ -60,6 +61,7 @@ input [WID-1:0] c;
 input [WID-1:0] i;
 input [WID-1:0] t;
 input [WID-1:0] qres;
+input [63:0] mask;
 input [2:0] cs;
 input cpu_types_pkg::pc_address_ex_t pc;
 input capability32_t pcc;
@@ -75,6 +77,9 @@ genvar g;
 integer nn,kk,jj;
 integer element_number;
 reg [7:0] cm;
+reg [63:0] mask1;
+reg [5:0] base_eleno;
+reg [6:0] elesz;
 Qupls4_pkg::cause_code_t exc;
 wire [WID:0] zero = {WID+1{1'b0}};
 wire [WID:0] dead = {1'b0,{WID/16{16'hdead}}};
@@ -100,7 +105,7 @@ reg [WID-1:0] tmp;
 
 function [WID-1:0] fnBitRev;
 input [WID-1:0] i;
-reg nn;
+integer nn;
 begin
 	for (nn = 0; nn < WID/2; nn = nn + 1)
 		fnBitRev[nn] = i[WID-1-nn];
@@ -361,8 +366,32 @@ begin
 	exc = Qupls4_pkg::FLT_NONE;
 	bus = {(WID/16){16'h0000}};
 	case(ir.any.opcode)
-	Qupls4_pkg::OP_R3BP,Qupls4_pkg::OP_R3WP,Qupls4_pkg::OP_R3TP,Qupls4_pkg::OP_R3OP,
-	Qupls4_pkg::OP_R3P,Qupls4_pkg::OP_R3VS:
+	Qupls4_pkg::OP_R3BP:
+		begin
+			elesz = 7'd8;
+			base_eleno = {chunk,3'b0};
+		end
+	Qupls4_pkg::OP_R3WP:
+		begin
+			elesz = 7'd16;
+			base_eleno = {chunk,2'b0};
+		end
+	Qupls4_pkg::OP_R3TP:
+		begin
+			elesz = 7'd32;
+			base_eleno = {chunk,1'b0};
+		end
+	Qupls4_pkg::OP_R3OP:
+		begin
+			elesz = 7'd64;
+			base_eleno = chunk;
+		end
+	default:
+		mask1 = 64'd0;
+	endcase
+	mask1 = mask >> base_eleno;
+	case(ir.any.opcode)
+	Qupls4_pkg::OP_R3BP,Qupls4_pkg::OP_R3WP,Qupls4_pkg::OP_R3TP,Qupls4_pkg::OP_R3OP:
 		case(ir.r3.func)
 		Qupls4_pkg::FN_CMP,Qupls4_pkg::FN_CMPU:
 			begin
@@ -371,7 +400,7 @@ begin
 				3'd0:	bus = cmpo & c;
 				3'd1:	bus = cmpo | c;
 				3'd2:	bus = cmpo ^ c;
-				3'd6: bus = c[Ra[1:0] * NUM_LANES + LANE] ? cmpo : t;
+				3'd6: bus = mask1[LANE] ? cmpo : t;
 				default:	bus = zero;
 				endcase
 				bus = res;
@@ -385,7 +414,7 @@ begin
 				3'd1:	bus = ($signed(a) == $signed(b)) | c;
 				3'd2:	bus = ($signed(a) == $signed(b)) ^ c;
 				3'd3:	bus = ($signed(a) == $signed(b)) + c;
-				3'd6:	bus[Ra[1:0] * NUM_LANES + LANE] = c[Ra[1:0] * NUM_LANES + LANE] ? $signed(a) == $signed(b) : t;
+				3'd6:	bus[base_eleno + LANE] = mask1[LANE] ? $signed(a) == $signed(b) : t;
 				default:	bus = zero;
 				endcase
 			end
@@ -398,7 +427,7 @@ begin
 				3'd1:	bus = ($signed(a) != $signed(b)) | c;
 				3'd2:	bus = ($signed(a) != $signed(b)) ^ c;
 				3'd3:	bus = ($signed(a) != $signed(b)) + c;
-				3'd6:	bus[Ra[1:0] * NUM_LANES + LANE] = c[Ra[1:0] * NUM_LANES + LANE] ? $signed(a) != $signed(b) : t;
+				3'd6:	bus[base_eleno + LANE] = mask1[LANE] ? $signed(a) != $signed(b) : t;
 				default:	bus = zero;
 				endcase
 			end
@@ -411,7 +440,7 @@ begin
 				3'd1:	bus = ($signed(a) < $signed(b)) | c;
 				3'd2:	bus = ($signed(a) < $signed(b)) ^ c;
 				3'd3:	bus = ($signed(a) < $signed(b)) + c;
-				3'd6:	bus[Ra[1:0] * NUM_LANES + LANE] = c[Ra[1:0] * NUM_LANES + LANE] ? $signed(a) < $signed(b) : t;
+				3'd6:	bus[base_eleno + LANE] = mask1[LANE] ? $signed(a) < $signed(b) : t;
 				default:	bus = zero;
 				endcase
 			end
@@ -424,7 +453,7 @@ begin
 				3'd1:	bus = ($signed(a) <= $signed(b)) | c;
 				3'd2:	bus = ($signed(a) <= $signed(b)) ^ c;
 				3'd3:	bus = ($signed(a) <= $signed(b)) + c;
-				3'd6:	bus[Ra[1:0] * NUM_LANES + LANE] = c[Ra[1:0] * NUM_LANES + LANE] ? $signed(a) <= $signed(b) : t;
+				3'd6:	bus[base_eleno + LANE] = mask1[LANE] ? $signed(a) <= $signed(b) : t;
 				default:	bus = zero;
 				endcase
 			end
@@ -437,7 +466,7 @@ begin
 				3'd1:	bus = (a < b) | c;
 				3'd2:	bus = (a < b) ^ c;
 				3'd3:	bus = (a < b) + c;
-				3'd6:	bus[Ra[1:0] * NUM_LANES + LANE] = c[Ra[1:0] * NUM_LANES + LANE] ? a < b : t;
+				3'd6:	bus[base_eleno + LANE] = mask1[LANE] ? a < b : t;
 				default:	bus = zero;
 				endcase
 			end
@@ -450,7 +479,7 @@ begin
 				3'd1:	bus = (a <= b) | c;
 				3'd2:	bus = (a <= b) ^ c;
 				3'd3:	bus = (a <= b) + c;
-				3'd6:	bus[Ra[1:0] * NUM_LANES + LANE] = c[Ra[1:0] * NUM_LANES + LANE] ? a <= b : t;
+				3'd6:	bus[base_eleno + LANE] = mask1[LANE] ? a <= b : t;
 				default:	bus = zero;
 				endcase
 			end
@@ -462,7 +491,7 @@ begin
 				3'd1:	bus = (a + b) | c;
 				3'd2:	bus = (a + b) ^ c;
 				3'd3:	bus = (a + b) + c;
-				3'd6:	bus = c[Ra[1:0] * NUM_LANES + LANE] ? a + b : t;
+				3'd6:	bus = mask1[LANE] ? a + b : t;
 				default:	bus = zero;
 				endcase
 			end
@@ -474,7 +503,7 @@ begin
 				3'd1:	bus = (a - b) | c;
 				3'd2:	bus = (a - b) ^ c;
 				3'd3:	bus = (a - b) - c;
-				3'd6:	bus = c[Ra[1:0] * NUM_LANES + LANE] ? a - b : t;
+				3'd6:	bus = mask1[LANE] ? a - b : t;
 				default:	bus = zero;
 				endcase
 			end
@@ -486,7 +515,7 @@ begin
 				3'd1:	bus = (a & b) | c;
 				3'd2:	bus = (a & b) ^ c;
 				3'd3:	bus = (a & b) + c;
-				3'd6:	bus = c[Ra[1:0] * NUM_LANES + LANE] ? a & b : t;
+				3'd6:	bus = mask1[LANE] ? a & b : t;
 				default:	bus = zero;
 				endcase
 			end
@@ -498,7 +527,7 @@ begin
 				3'd1:	bus = (a | b) | c;
 				3'd2:	bus = (a | b) ^ c;
 				3'd3:	bus = (a | b) + c;
-				3'd6:	bus = c[Ra[1:0] * NUM_LANES + LANE] ? a | b : t;
+				3'd6:	bus = mask1[LANE] ? a | b : t;
 				default:	bus = zero;
 				endcase
 			end
@@ -510,7 +539,7 @@ begin
 				3'd1:	bus = (a ^ b) | c;
 				3'd2:	bus = (a ^ b) ^ c;
 				3'd3:	bus = (a ^ b) + c;
-				3'd6:	bus = c[Ra[1:0] * NUM_LANES + LANE] ? a ^ b : t;
+				3'd6:	bus = mask1[LANE] ? a ^ b : t;
 				default:	bus = zero;
 				endcase
 			end
@@ -522,7 +551,7 @@ begin
 				3'd1:	bus = shl | c;
 				3'd2:	bus = shl ^ c;
 				3'd3:	bus = shl + c;
-				3'd6:	bus = c[Ra[1:0] * NUM_LANES + LANE] ? shl : t;
+				3'd6:	bus = mask1[LANE] ? shl : t;
 				default:	bus = zero;
 				endcase
 			end
@@ -534,7 +563,7 @@ begin
 				3'd1:	bus = shr | c;
 				3'd2:	bus = shr ^ c;
 				3'd3:	bus = shr + c;
-				3'd6:	bus = c[Ra[1:0] * NUM_LANES + LANE] ? shr : t;
+				3'd6:	bus = mask1[LANE] ? shr : t;
 				default:	bus = zero;
 				endcase
 			end
@@ -545,7 +574,7 @@ begin
 			3'd1:	bus = asr;
 			3'd2:	bus = asr;
 			3'd3:	bus = asr;
-			3'd6:	bus = c[Ra[1:0] * NUM_LANES + LANE] ? asr : t;
+			3'd6:	bus = mask1[LANE] ? asr : t;
 			default:	bus = zero;
 			endcase
 
@@ -555,7 +584,7 @@ begin
 			3'd1:	bus = (shl | shl[WID*2-1:WID]) | c;
 			3'd2:	bus = (shl | shl[WID*2-1:WID]) ^ c;
 			3'd3:	bus = (shl | shl[WID*2-1:WID]) + c;
-			3'd6:	bus = c[Ra[1:0] * NUM_LANES + LANE] ? (shl | shl[WID*2-1:WID]) : t;
+			3'd6:	bus = mask1[LANE] ? (shl | shl[WID*2-1:WID]) : t;
 			default:	bus = zero;
 			endcase
 
@@ -565,7 +594,7 @@ begin
 			3'd1:	bus = (shr | shr[WID*2-1:WID]) | c;
 			3'd2:	bus = (shr | shr[WID*2-1:WID]) ^ c;
 			3'd3:	bus = (shr | shr[WID*2-1:WID]) + c;
-			3'd6:	bus = c[Ra[1:0] * NUM_LANES + LANE] ? (shr | shr[WID*2-1:WID]) : t;
+			3'd6:	bus = mask1[LANE] ? (shr | shr[WID*2-1:WID]) : t;
 			default:	bus = zero;
 			endcase
 			
@@ -703,27 +732,27 @@ begin
 	Qupls4_pkg::OP_FLTPH,Qupls4_pkg::OP_FLTPS,Qupls4_pkg::OP_FLTPD,Qupls4_pkg::OP_FLTPQ,
 	Qupls4_pkg::OP_FLTP:
 		case(ir.f3.func)
-		Qupls4_pkg::FLT_MIN:	bus = c[LANE] ? fmin : t;
-		Qupls4_pkg::FLT_MAX:	bus = c[LANE] ? fmax : t;
-		Qupls4_pkg::FLT_NEG:	bus = c[LANE] ? (aNan ? a : {~a[WID-1],a[WID-2:0]}) : t;
+		Qupls4_pkg::FLT_MIN:	bus = mask1[LANE] ? fmin : t;
+		Qupls4_pkg::FLT_MAX:	bus = mask1[LANE] ? fmax : t;
+		Qupls4_pkg::FLT_NEG:	bus = mask1[LANE] ? (aNan ? a : {~a[WID-1],a[WID-2:0]}) : t;
 		Qupls4_pkg::FLT_SEQ:
 			begin	
 				bus = t;
-				bus[LANE] = c[LANE] ? ((aNan|bNan) ? 1'b0 : cmpo[0]) : t[LANE];
+				bus[base_eleno + LANE] = mask1[LANE] ? ((aNan|bNan) ? 1'b0 : cmpo[0]) : t[LANE];
 			end
 		Qupls4_pkg::FLT_SNE:
 			begin	
 				bus = t;
-				bus[LANE] = c[LANE] ? ((aNan|bNan) ? 1'b0 : cmpo[8]) : t[LANE];
+				bus[base_eleno + LANE] = mask1[LANE] ? ((aNan|bNan) ? 1'b0 : cmpo[8]) : t[LANE];
 			end
 		Qupls4_pkg::FLT_SLT:
 			begin	
 				bus = t;
-				bus[LANE] = c[LANE] ? ((aNan|bNan) ? 1'b0 : cmpo[1]) : t[LANE];
+				bus[base_eleno + LANE] = mask1[LANE] ? ((aNan|bNan) ? 1'b0 : cmpo[1]) : t[LANE];
 			end
 		Qupls4_pkg::FLT_SGNJ:
 			begin	
-				bus = c[LANE] ? (aNan ? a : bNan ? b : {a[WID-1],b[WID-2:0]}) : t;
+				bus = mask1[LANE] ? (aNan ? a : bNan ? b : {a[WID-1],b[WID-2:0]}) : t;
 			end
 		default:	bus = zero;
 		endcase

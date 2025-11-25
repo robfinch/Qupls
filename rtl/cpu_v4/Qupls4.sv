@@ -4043,7 +4043,7 @@ rob_ndx_t [3:0] rob_dispatched;
 Qupls4_pkg::rob_bitmask_t rob_dispatched_stomped;
 wire [3:0] rob_dispatched_v;
 
-Stark_instruction_dispatcher uid1
+Qupls4_instruction_dispatcher uid1
 (
 	.rst(irst),
 	.clk(clk),
@@ -4156,7 +4156,7 @@ wire div_dbz;
 always_comb
 	tReadCSR(csr_res,sau0_argI[15:0]);
 
-Stark_meta_sau #(.SAU0(1'b1)) usau0
+Qupls4_meta_sau #(.SAU0(1'b1)) usau0
 (
 	.rst(irst),
 	.clk(clk),
@@ -4231,7 +4231,7 @@ endgenerate
 
 generate begin : gSau1
 if (Qupls4_pkg::NSAU > 1) begin
-	Stark_meta_sau #(.SAU0(1'b0)) usau1
+	Qupls4_meta_sau #(.SAU0(1'b0)) usau1
 	(
 		.rst(irst),
 		.clk(clk),
@@ -7212,7 +7212,7 @@ always_ff @(posedge clk) begin: clock_n_debug
 	if (Qupls4_pkg::NAGEN > 1) begin
 		$display(" I=%h A=%h B=%h %c%h pc:%h #",
 			agen1_rse.argI, agen1_rse.argA, agen1_rse.argB,
-			 ((fnIsLoad(agen1_rse.ins) || fnIsStore(agen1_rse.ins)) ? 109 : 97),
+			 ((fnIsLoad(agen1_rse.uop.ins) || fnIsStore(agen1_rse.uop.ins)) ? 109 : 97),
 			agen1_op, agen1_pc);
 		$display("idle:%d res:%h rid:%d #", agen1_idle, agen1_res, agen1_rse.rndx);
 	end
@@ -7239,15 +7239,15 @@ always_ff @(posedge clk) begin: clock_n_debug
 	$display("----- ALU -----");
 	$display("%d I=%h T=%h A=%h B=%h C=%h %c%d pc:%h #",
 		sau0_dataready, sau0_rse.argI, sau0_rse.argD, sau0_rse.argA, sau0_rse.argB, sau0_rse.argC,
-		 ((fnIsLoad(sau0_rse.ins) || fnIsStore(sau0_rse.ins)) ? 109 : 97),
+		 ((fnIsLoad(sau0_rse.uop.ins) || fnIsStore(sau0_rse.uop.ins)) ? 109 : 97),
 		sau0_instr, sau0_pc);
 	$display("idle:%d res:%h rid:%d #", sau0_idle, sau0_rse.resA, sau0_rse.rndx);
 
 	if (Qupls4_pkg::NSAU > 1) begin
 		$display("%d I=%h T=%h A=%h B=%h C=%h %c%d pc:%h #",
 			sau1_dataready, sau1_rse.argI, sau1_rse.argD, sau1_rse.argA, sau1_rse.argB, sau1_rse.argC, 
-			 ((fnIsLoad(sau1_rse.ins) || fnIsStore(sau1_rse.ins)) ? 109 : 97),
-			sau1_rse.ins, sau1_rse.pc);
+			 ((fnIsLoad(sau1_rse.uop.ins) || fnIsStore(sau1_rse.uop.ins)) ? 109 : 97),
+			sau1_rse.uop.ins, sau1_rse.pc);
 		$display("idle:%d res:%h rid:%d #", sau1_idle, sau1_rse.resA, sau1_rse.rndx);
 	end
 
