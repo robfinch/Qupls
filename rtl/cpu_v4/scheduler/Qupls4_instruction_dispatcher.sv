@@ -135,9 +135,12 @@ begin
 			if (rob[nn].op.decbus.cpytgt|stomp[nn]|~rob[nn].pred_bit) begin
 				rse_o[kk].uop.ins = {26'd0,Qupls4_pkg::OP_NOP};
 				rse_o[kk].store = FALSE;
-				rse_o[kk].argA_v = VAL;
-				rse_o[kk].argB_v = VAL;
-				rse_o[kk].argC_v = VAL;
+				rse_o[kk].argAL_v = VAL;
+				rse_o[kk].argBL_v = VAL;
+				rse_o[kk].argCL_v = VAL;
+				rse_o[kk].argAH_v = VAL;
+				rse_o[kk].argBH_v = VAL;
+				rse_o[kk].argCH_v = VAL;
 				/*
 				rse_o[kk].argAh_v = VAL;
 				rse_o[kk].argBh_v = VAL;
@@ -147,16 +150,16 @@ begin
 			else begin
 				rse_o[kk].uop.ins = rob[nn].op.uop.ins;
 				rse_o[kk].store = rob[nn].op.decbus.store;
-				rse_o[kk].argA_v = rob[nn].argA_v;
-				rse_o[kk].argB_v = rob[nn].argB_v;
-				rse_o[kk].argC_v = rob[nn].argC_v;
+				rse_o[kk].argAL_v = rob[nn].argA_v;
+				rse_o[kk].argBL_v = rob[nn].argB_v;
+				rse_o[kk].argCL_v = rob[nn].argC_v;
 				/*
 				rse_o[kk].argAh_v = !rob[nn].op.decbus.b128;
 				rse_o[kk].argBh_v = !rob[nn].op.decbus.b128;
 				rse_o[kk].argCh_v = !rob[nn].op.decbus.b128;
 				*/
 			end
-			rse_o[kk].argD_v = rob[nn].argD_v;
+			rse_o[kk].argDL_v = rob[nn].argD_v;
 			if (!rob[nn].argA_v) begin rse_o[kk].argA[8:0] = rob[nn].op.pRs1; rse_o[kk].argA[23:16] = rob[nn].op.decbus.Rs1; end
 			if (!rob[nn].argB_v) begin rse_o[kk].argB[8:0] = rob[nn].op.pRs2; rse_o[kk].argB[23:16] = rob[nn].op.decbus.Rs2; end
 			if (!rob[nn].argC_v) begin rse_o[kk].argC[8:0] = rob[nn].op.pRs3; rse_o[kk].argC[23:16] = rob[nn].op.decbus.Rs3; end
@@ -171,19 +174,22 @@ begin
 			if (rob[nn].op.decbus.Rs1==7'd63) begin
 				rse_o[kk].argA = rob[nn].op.pc.pc;
 //				rse_o[kk].argAh = rob[nn].op.pc.pch;
-				rse_o[kk].argA_v = VAL;
+				rse_o[kk].argAL_v = VAL;
+				rse_o[kk].argAH_v = VAL;
 //				rse_o[kk].argAh_v = VAL;
 			end
 			if (rob[nn].op.decbus.Rs2==7'd63) begin
 				rse_o[kk].argB = rob[nn].op.pc.pc;
 //				rse_o[kk].argBh = rob[nn].op.pc.pch;
-				rse_o[kk].argB_v = VAL;
+				rse_o[kk].argBL_v = VAL;
+				rse_o[kk].argBH_v = VAL;
 //				rse_o[kk].argBh_v = VAL;
 			end
 			if (rob[nn].op.decbus.Rs3==7'd63) begin
 				rse_o[kk].argC = rob[nn].op.pc.pc;
 //				rse_o[kk].argCh = rob[nn].op.pc.pch;
-				rse_o[kk].argC_v = VAL;
+				rse_o[kk].argCL_v = VAL;
+				rse_o[kk].argCH_v = VAL;
 //				rse_o[kk].argCh_v = VAL;
 			end
 			rse_o[kk].argI = rob[nn].op.decbus.has_immb ? rob[nn].op.decbus.immb : rob[nn].op.decbus.immc;

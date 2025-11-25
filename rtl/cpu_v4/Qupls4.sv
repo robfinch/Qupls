@@ -173,7 +173,7 @@ reg [7:0] scan;
 //op_src_t sau0_argC_src;
 
 aregno_t [63:0] aRs = {8*64{1'b0}};
-aregno_t [3:0] bRs [0:12];// = {8*52{1'b0}};
+aregno_t [3:0] bRs [0:13];// = {8*52{1'b0}};
 
 value_t rfo_sau0_argA;
 value_t rfo_sau0_argB;
@@ -685,6 +685,9 @@ wire fpu1_qfext;
 reg [15:0] fpu1_cptgt;
 wire fpu1_args_valid;
 
+wire dfpu0_full;
+Qupls4_pkg::reservation_station_entry_t dfpu0_rse;
+
 reg fcu_idle;
 wire fcu_full;
 reg fcu_available;
@@ -1000,6 +1003,8 @@ wire ihito,ihit,ihit_f,ic_dhit;
 wire alt_ihit;
 wire pe_bsdone;
 reg [4:0] vl;
+// 16 vectors for 5 operating modes (debug has its own set))
+pc_address_t [4:0] kernel_vectors;
 
 reg [11:0] atom_mask;
 reg [31:0] carry_mod, csr_carry_mod, exc_ret_carry_mod, icarry_mod;
@@ -4093,8 +4098,8 @@ assign fpu0_argD_reg = rob[fpu0_rndx].op.pRt;
 always_comb
 begin
 	kk = 0;
-	aRs = {52*9{1'b0}};
-	for (jj = 0; jj < 52; jj = jj + 1) begin
+	aRs = {56*9{1'b0}};
+	for (jj = 0; jj < 56; jj = jj + 1) begin
 		if (bRs[jj/4][jj % 4] != 9'd0) begin
 			aRs[kk] = bRs[jj/4][jj % 4];
 			kk = kk + 1;
@@ -5217,6 +5222,32 @@ generate begin : gFpuStat
 					.req_pRn(bRs[5])
 				);
 		endcase
+	end
+end
+endgenerate
+
+generate begin : gDecimalFloat
+	if (NDFPU > 0) begin
+		Qupls4_pair_reservation_station #(
+			.FUNCUNIT(4'd13)
+		)
+		udfpust1
+		(
+			.rst(irst),
+			.clk(clk),
+			.available(fpu0_available),
+			.busy(rs_busy[13]),
+			.stall(dfpu0_full),
+			.stomp(robentry_stomp),
+			.issue(),//robentry_issue[sau0_rndx]),
+			.rse_i(rse),
+			.rse_o(dfpu0_rse),
+			.prn(prn),
+			.prnv(prnv),
+			.rfo(rfo),
+			.rfo_tag(rfo_tag),
+			.req_pRn(bRs[13])
+		);
 	end
 end
 endgenerate
@@ -8282,6 +8313,9 @@ begin
 		Qupls4_pkg::CSR_KVEC3: res = kvec[3];
 		16'h3080:	res = sr_stack[0];
 		(Qupls4_pkg::CSR_MEPC+0):	res = pc_stack[0];
+		16'h303?:	res = kernel_vectors[regno[2:0]];
+		16'h203?:	res = kernel_vectors[regno[2:0]];
+		16'h103?:	res = kernel_vectors[regno[2:0]];
 		/*
 		CSR_SCRATCH:	res = scratch[regno[13:12]];
 		CSR_MHARTID: res = hartid_i;
@@ -8340,6 +8374,9 @@ begin
 		Qupls4_pkg::CSR_KVEC3:	kvec[3] <= val;
 		16'h3080: sr_stack[0] <= val[31:0];
 		Qupls4_pkg::CSR_MEPC:	pc_stack[0] <= val;
+		16'h303?:	kernel_vectors[regno[2:0]] <= val;
+		16'h203?:	kernel_vectors[regno[2:0]] <= val;
+		16'h103?:	kernel_vectors[regno[2:0]] <= val;
 		/*
 		CSR_SCRATCH:	scratch[regno[13:12]] <= val;
 		CSR_MCR0:		cr0 <= val;
@@ -8442,6 +8479,7 @@ begin
 	   Qupls4_pkg::OM_APP: nom = Qupls4_pkg::OM_SUPERVISOR;
 	   Qupls4_pkg::OM_SUPERVISOR: nom = Qupls4_pkg::OM_HYPERVISOR;
 	   Qupls4_pkg::OM_HYPERVISOR: nom = Qupls4_pkg::OM_SECURE;
+	   Qupls4_pkg::OM_SECURE: nom = Qupls4_pkg::OM_SECURE;
 	   default:    ;
 	   endcase
 	sr.om <= nom;
@@ -8466,16 +8504,16 @@ begin
 	else if (rob[id].op.ssm) begin
 		sr.ssm <= FALSE;
 		ssm_flag <= FALSE;
-		excmisspc.pc <= {kvec[sr.dbg ? 4 : nom][$bits(pc_address_t)-1:8] + 4'd1,8'h0};
+		excmisspc.pc <= kernel_vectors[sr.dbg ? 3'd4:{1'b0,nom}];
 		excmiss <= TRUE;
-	end
-	else if (vecno < 8'd16) begin
-		excmisspc.pc <= {kvec[sr.dbg ? 4 : nom][$bits(pc_address_t)-1:8] + vecno,8'h0};
-		excmiss <= TRUE;
+//		excmisspc.pc <= {kvec[sr.dbg ? 4 : nom][$bits(pc_address_t)-1:8] + 4'd1,8'h0};
+//		excmiss <= TRUE;
 	end
 	else begin
-		excmisspc.pc <= {kvec[sr.dbg ? 4 : nom][$bits(pc_address_t)-1:8] + 4'd13,8'h0};
+		excmisspc.pc <= kernel_vectors[{1'b0,nom}];
 		excmiss <= TRUE;
+		//excmisspc.pc <= {kvec[sr.dbg ? 4 : nom][$bits(pc_address_t)-1:8] + 4'd13,8'h0};
+		//excmiss <= TRUE;
 	end
 //		excmisspc <= {avec[$bits(pc_address_t)-1:16] + vecno,3'h0};
 end

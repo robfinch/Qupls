@@ -32,7 +32,7 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-//  1010 LUTs / 12 FFs (with vectors)
+//  1100 LUTs / 12 FFs / 1 DSP (with vectors)
 //	200 LUTs / 0 FFs (no vectors)
 // ============================================================================
 
@@ -53,25 +53,31 @@ output reg [3:0] count;
 output Qupls4_pkg::micro_op_t [7:0] uop;
 
 integer nn;
-Qupls4_pkg::cmp_inst_t icmp,fcmp;
-Qupls4_pkg::instruction_t nopi;
+Qupls4_pkg::micro_op_t icmp,fcmp;
+Qupls4_pkg::micro_op_t nopi;
 Qupls4_pkg::fpu_inst_t floadi1;
-Qupls4_pkg::push_inst_t push1,push2,push3,push4,push5;
-Qupls4_pkg::push_inst_t pop1,pop2,pop3,pop4,pop5;
-Qupls4_pkg::alui_inst_t decsp8,decsp16,decsp24,decsp32,decsp40;
-Qupls4_pkg::alui_inst_t incsp8,incsp16,incsp24,incsp32,incsp40;
-Qupls4_pkg::alui_inst_t incssp32,decssp32;
-Qupls4_pkg::anyinst_t enter_st_fp, exit_ld_fp;
-Qupls4_pkg::anyinst_t enter_st_lr, exit_ld_lr;
-Qupls4_pkg::anyinst_t fp_eq_sp, sp_eq_fp;
-Qupls4_pkg::r3_inst_t instr;
-Qupls4_pkg::instruction_t ins2;
-Qupls4_pkg::extd_inst_t vsins;
-Qupls4_pkg::vls_inst_t vls;
+Qupls4_pkg::micro_op_t push1,push2,push3,push4,push5,push6;
+Qupls4_pkg::micro_op_t pop1,pop2,pop3,pop4,pop5,pop6;
+Qupls4_pkg::micro_op_t decsp8,decsp16,decsp24,decsp32,decsp40,decsp48;
+Qupls4_pkg::micro_op_t incsp8,incsp16,incsp24,incsp32,incsp40,incsp48;
+Qupls4_pkg::micro_op_t incssp32,decssp32;
+Qupls4_pkg::micro_op_t enter_st_fp, exit_ld_fp;
+Qupls4_pkg::micro_op_t enter_st_lr, exit_ld_lr;
+Qupls4_pkg::micro_op_t fp_eq_sp, sp_eq_fp;
+Qupls4_pkg::micro_op_t instr;
+Qupls4_pkg::micro_op_t vsins;
+Qupls4_pkg::vls_uop_t vls;
+reg is_vector;
 reg is_reduction;
 reg is_vs, is_masked;
-reg [9:0] vlen, fvlen, vlen1, xvlen, cvlen, avlen;
-wire [6:0] mo0 = 7'd48;		// micro-op temporary
+reg [9:0] vlen, fvlen, xvlen, cvlen, avlen;
+reg [3:0] vlen1;
+wire [7:0] mo0 = 8'd40;		// micro-op temporary
+wire [7:0] sp = 8'd37;
+wire [7:0] fp = 8'd36;
+wire [7:0] lr1 = 8'd33;
+reg [7:0] vRd, vRs1, vRs2, vRs3;
+Qupls4_pkg::micro_op_t uop0 = {1'b1,1'b0,3'd1,3'd0,4'd0,ir.any.payload[40:24],{2'b00,ir.r3.Rs3},{2'b00,ir.r3.Rs2},{2'b00,ir.r3.Rs1},{2'b00,ir.r3.Rd},ir.any.opcode};
 
 always_ff @(posedge clk)
 	vlen = (vlen_reg[7:0] * (7'd1 << velsz[1:0])) >> 4'd6;
@@ -86,25 +92,22 @@ always_ff @(posedge clk)
 
 always_comb
 begin
-	icmp = Qupls4_pkg::cmp_inst_t'(32'd0);
-	icmp.Rs2 = 5'd0;		// compare to zero
+	icmp = Qupls4_pkg::micro_op_t'(52'd0);
+	icmp.Rs2 = 8'd0;		// compare to zero
 	icmp.Rs1 = ir.alu.Rd;
-	icmp.op2 = 2'd0;		// signed integer compare
-	icmp.CRd = 3'd0;		// CR0
 	icmp.opcode = Qupls4_pkg::OP_CMPI;
 end
 always_comb
 begin
-	fcmp = Qupls4_pkg::cmp_inst_t'(32'd0);
-	fcmp.Rs2 = 5'd0;		// compare to zero
+	fcmp = Qupls4_pkg::cmp_inst_t'(52'd0);
+	fcmp.Rs2 = 8'd0;		// compare to zero
 	fcmp.Rs1 = ir.fpu.Rd;
-	fcmp.op2 = 2'd2;		// float compare
-	fcmp.CRd = 3'd1;		// CR1
+	fcmp.Rs4 = Qupls4_pkg::FLT_CMP;
 	fcmp.opcode = Qupls4_pkg::OP_FLTD;
 end
 always_comb
 begin
-	floadi1 = Qupls4_pkg::fpu_inst_t'(32'd0);
+	floadi1 = Qupls4_pkg::fpu_inst_t'(52'd0);
 	floadi1[30:29] = 3'd1;
 //	floadi1.op4 = 4'd10;
 	floadi1.Rd = 5'd15;
@@ -114,51 +117,55 @@ begin
 end
 always_comb
 begin
-	nopi = {26'd0,Qupls4_pkg::OP_NOP};
+	nopi = {1'b1,1'b0,3'd1,3'd0,4'd0,45'd0,Qupls4_pkg::OP_NOP};
 end
 always_comb
 begin
-	push1 = {3'd0,16'hFFE0,7'd0,7'd61+ir[37:35],ir[13: 7],Qupls4_pkg::OP_STORE};
-	push2 = {3'd0,16'hFFC0,7'd0,7'd61+ir[37:35],ir[20:14],Qupls4_pkg::OP_STORE};
-	push3 = {3'd0,16'hFFA0,7'd0,7'd61+ir[37:35],ir[27:21],Qupls4_pkg::OP_STORE};
-	push4 = {3'd0,16'hFF80,7'd0,7'd61+ir[37:35],ir[34:28],Qupls4_pkg::OP_STORE};
-	push5 = {3'd0,16'hFF60,7'd0,7'd61+ir[37:35],ir[47:41],Qupls4_pkg::OP_STORE};
+	push1 = {4'd0,16'hFFE0,9'd0,sp+ir[44:43],2'b00,ir[12: 7],Qupls4_pkg::OP_STORE};
+	push2 = {4'd0,16'hFFC0,9'd0,sp+ir[44:43],2'b00,ir[18:13],Qupls4_pkg::OP_STORE};
+	push3 = {4'd0,16'hFFA0,9'd0,sp+ir[44:43],2'b00,ir[24:19],Qupls4_pkg::OP_STORE};
+	push4 = {4'd0,16'hFF80,9'd0,sp+ir[44:43],2'b00,ir[30:25],Qupls4_pkg::OP_STORE};
+	push5 = {4'd0,16'hFF60,9'd0,sp+ir[44:43],2'b00,ir[36:31],Qupls4_pkg::OP_STORE};
+	push6 = {4'd0,16'hFF40,9'd0,sp+ir[44:43],2'b00,ir[42:37],Qupls4_pkg::OP_STORE};
 end
 always_comb
 begin
-	pop1 = {3'd0,16'h0000,7'd0,7'd61+ir[37:35],ir[13: 7],Qupls4_pkg::OP_LOAD};
-	pop2 = {3'd0,16'h0020,7'd0,7'd61+ir[37:35],ir[20:14],Qupls4_pkg::OP_LOAD};
-	pop3 = {3'd0,16'h0040,7'd0,7'd61+ir[37:35],ir[27:21],Qupls4_pkg::OP_LOAD};
-	pop4 = {3'd0,16'h0060,7'd0,7'd61+ir[37:35],ir[34:28],Qupls4_pkg::OP_LOAD};
-	pop5 = {3'd0,16'h0080,7'd0,7'd61+ir[37:35],ir[47:41],Qupls4_pkg::OP_LOAD};
+	pop1 = {4'd0,16'h0000,9'd0,sp+ir[44:43],2'b00,ir[12: 7],Qupls4_pkg::OP_LOAD};
+	pop2 = {4'd0,16'h0020,9'd0,sp+ir[44:43],2'b00,ir[18:13],Qupls4_pkg::OP_LOAD};
+	pop3 = {4'd0,16'h0040,9'd0,sp+ir[44:43],2'b00,ir[24:19],Qupls4_pkg::OP_LOAD};
+	pop4 = {4'd0,16'h0060,9'd0,sp+ir[44:43],2'b00,ir[30:25],Qupls4_pkg::OP_LOAD};
+	pop5 = {4'd0,16'h0080,9'd0,sp+ir[44:43],2'b00,ir[36:31],Qupls4_pkg::OP_LOAD};
+	pop6 = {4'd0,16'h00A0,9'd0,sp+ir[44:43],2'b00,ir[42:37],Qupls4_pkg::OP_LOAD};
 end
 always_comb
 begin
-	decsp8 = {2'd3,25'h1FFFFF8,7'd61,7'd61,Qupls4_pkg::OP_ADDI};
-	decsp16 = {2'd3,25'h1FFFFF0,7'd61,7'd61,Qupls4_pkg::OP_ADDI};
-	decsp24 = {2'd3,25'h1FFFFE8,7'd61,7'd61,Qupls4_pkg::OP_ADDI};
-	decsp32 = {2'd3,25'h1FFFFE0,7'd61,7'd61,Qupls4_pkg::OP_ADDI};
-	decsp40 = {2'd3,25'h1FFFFD8,7'd61,7'd61,Qupls4_pkg::OP_ADDI};
+	decsp8 = {2'd3,25'h1FFFFF8,2'd0,sp,sp,Qupls4_pkg::OP_ADDI};
+	decsp16 = {2'd3,25'h1FFFFF0,2'd0,sp,sp,Qupls4_pkg::OP_ADDI};
+	decsp24 = {2'd3,25'h1FFFFE8,2'd0,sp,sp,Qupls4_pkg::OP_ADDI};
+	decsp32 = {2'd3,25'h1FFFFE0,2'd0,sp,sp,Qupls4_pkg::OP_ADDI};
+	decsp40 = {2'd3,25'h1FFFFD8,2'd0,sp,sp,Qupls4_pkg::OP_ADDI};
+	decsp48 = {2'd3,25'h1FFFFD0,2'd0,sp,sp,Qupls4_pkg::OP_ADDI};
 end
 always_comb
 begin
-	incsp8 = {2'd3,25'h0000008,7'd61,7'd61,Qupls4_pkg::OP_ADDI};
-	incsp16 = {2'd3,25'h0000010,7'd61,7'd61,Qupls4_pkg::OP_ADDI};
-	incsp24 = {2'd3,25'h0000018,7'd61,7'd61,Qupls4_pkg::OP_ADDI};
-	incsp32 = {2'd3,25'h0000020,7'd61,7'd61,Qupls4_pkg::OP_ADDI};
-	incsp40 = {2'd3,25'h0000028,7'd61,7'd61,Qupls4_pkg::OP_ADDI};
+	incsp8 = {2'd3,25'h0000008,2'd0,sp,sp,Qupls4_pkg::OP_ADDI};
+	incsp16 = {2'd3,25'h0000010,2'd0,sp,sp,Qupls4_pkg::OP_ADDI};
+	incsp24 = {2'd3,25'h0000018,2'd0,sp,sp,Qupls4_pkg::OP_ADDI};
+	incsp32 = {2'd3,25'h0000020,2'd0,sp,sp,Qupls4_pkg::OP_ADDI};
+	incsp40 = {2'd3,25'h0000028,2'd0,sp,sp,Qupls4_pkg::OP_ADDI};
+	incsp48 = {2'd3,25'h0000030,2'd0,sp,sp,Qupls4_pkg::OP_ADDI};
 end
 // ENTER instructions
 always_comb
 begin
-	enter_st_fp = {3'd0,16'hFFE0,7'd0,7'd62,7'd56,Qupls4_pkg::OP_STORE};
-	enter_st_lr = {3'd0,16'hFFE8,7'd0,7'd62,7'd57,Qupls4_pkg::OP_STORE};
-	fp_eq_sp = {2'd0,25'h0,7'd61,7'd56,Qupls4_pkg::OP_ORI};
-	decssp32 = {2'd3,25'h1FFFFE0,7'd62,7'd62,Qupls4_pkg::OP_ADDI};
-	incssp32 = {2'd3,25'h0000020,7'd62,7'd62,Qupls4_pkg::OP_ADDI};
-	sp_eq_fp = {2'd0,25'h0,7'd56,7'd61,Qupls4_pkg::OP_ORI};
-	exit_ld_fp = {3'd0,16'h0000,7'd0,7'd62,7'd56,Qupls4_pkg::OP_LOAD};
-	exit_ld_lr = {3'd0,16'h0008,7'd0,7'd62,7'd57,Qupls4_pkg::OP_LOAD};
+	enter_st_fp = {4'd0,16'hFFE0,9'd0,sp,fp,Qupls4_pkg::OP_STORE};
+	enter_st_lr = {4'd0,16'hFFE8,9'd0,sp,lr1,Qupls4_pkg::OP_STORE};
+	fp_eq_sp = {2'd0,25'h0,sp,fp,Qupls4_pkg::OP_ORI};
+	decssp32 = {2'd3,25'h1FFFFE0,sp,sp,Qupls4_pkg::OP_ADDI};
+	incssp32 = {2'd3,25'h0000020,sp,sp,Qupls4_pkg::OP_ADDI};
+	sp_eq_fp = {2'd0,25'h0,fp,sp,Qupls4_pkg::OP_ORI};
+	exit_ld_fp = {4'd0,16'h0000,9'd0,sp,fp,Qupls4_pkg::OP_LOAD};
+	exit_ld_lr = {4'd0,16'h0008,9'd0,sp,lr1,Qupls4_pkg::OP_LOAD};
 end
 
 always_comb
@@ -195,13 +202,48 @@ end
 
 always_comb
 begin
-	ins2 = ir;
-	vsins = ir;
-	vls = ir;
+	case (ir.any.opcode)
+	Qupls4_pkg::OP_R3P,Qupls4_pkg::OP_FLTP:
+		is_vector = 1'b1;
+	default:	is_vector = 1'b0;
+	endcase
+end
+
+always_comb
+begin
+	instr = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
+	vsins = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
+	vls = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
+	vsins.opcode = ir.any.opcode;
+	vsins.Rd = ir.r3.Rd;
+	vsins.Rs1 = ir.r3.Rs1;
+	vsins.Rs2 = ir.r3.Rs2;
+	vsins.Rs3 = ir.r3.Rs3;
+	vsins.vn = ir.r3.vn;
+	vsins.op3 = ir.r3.op3;
+	vsins.ms = ir.r3.ms;
+	vsins.Rs4 = ir.r3.func;
+	vls.opcode = ir.any.opcode;
+	vls.Rd = ir.r3.Rd;
+	vls.Rs1 = ir.r3.Rs1;
+	vls.Rs2 = ir.r3.Rs2;
+	vls.Rs3 = ir.r3.Rs3;
+	vls.dt = ir[37:35];
+	vls.disp = ir[43:38];
+	vls.ms = ir[44];
+	vls.sc = ir[47:45];
+	instr.opcode = ir.any.opcode;
+	instr.Rd = ir.r3.Rd;
+	instr.Rs1 = ir.r3.Rs1;
+	instr.Rs2 = ir.r3.Rs2;
+	instr.Rs3 = ir.r3.Rs3;
+	instr.vn = ir.r3.vn;
+	instr.op3 = ir.r3.op3;
+	instr.ms = ir.r3.ms;
+	instr.Rs4 = ir.r3.func;
 	case(ir.any.opcode)
 	Qupls4_pkg::OP_EXTD:
 		begin
-			ins2 = ir;
 			vlen1 = vlen;	// use integer length
 			case(ir.extd.op3)
 			Qupls4_pkg::EX_VSHLV:	vsins.op3 = Qupls4_pkg::EX_ASLC;
@@ -209,24 +251,52 @@ begin
 			default:	;
 			endcase
 		end
-	Qupls4_pkg::OP_R3P,Qupls4_pkg::OP_R3VS:
+	Qupls4_pkg::OP_R3P:
 		begin
-			instr = (ir & ~48'h7F) | Qupls4_pkg::OP_R3BP | velsz[1:0];
+			instr.opcode = Qupls4_pkg::OP_R3BP | velsz[1:0];
+			instr.Rd = ir.r3.Rd;
+			instr.Rs1 = ir.r3.Rs1;
+			instr.Rs2 = ir.r3.Rs2;
+			instr.Rs3 = ir.r3.Rs3;
+			instr.vn = ir.r3.vn;
+			instr.op3 = ir.r3.op3;
+			instr.Rs4 = ir.r3.func;
 			vlen1 = vlen;
 		end
 	Qupls4_pkg::OP_FLTP:
 		begin
-			instr = (ir & ~48'h7F) | Qupls4_pkg::OP_FLTPH | velsz[9:8];
+			instr.opcode = Qupls4_pkg::OP_FLTPH | velsz[9:8];
+			instr.Rd = ir.r3.Rd;
+			instr.Rs1 = ir.r3.Rs1;
+			instr.Rs2 = ir.r3.Rs2;
+			instr.Rs3 = ir.r3.Rs3;
+			instr.vn = ir.r3.vn;
+			instr.op3 = ir.r3.op3;
+			instr.Rs4 = ir.r3.func;
 			vlen1 = fvlen;
 		end
 	Qupls4_pkg::OP_R3BP,Qupls4_pkg::OP_R3WP,Qupls4_pkg::OP_R3TP,Qupls4_pkg::OP_R3OP:
 		begin
-			instr = ir;
+			instr.opcode = ir.any.opcode;
+			instr.Rd = ir.r3.Rd;
+			instr.Rs1 = ir.r3.Rs1;
+			instr.Rs2 = ir.r3.Rs2;
+			instr.Rs3 = ir.r3.Rs3;
+			instr.vn = ir.r3.vn;
+			instr.op3 = ir.r3.op3;
+			instr.Rs4 = ir.r3.func;
 			vlen1 = vlen;
 		end
 	Qupls4_pkg::OP_FLTPH,Qupls4_pkg::OP_FLTPS,Qupls4_pkg::OP_FLTPD,Qupls4_pkg::OP_FLTPQ:
 		begin
-			instr = ir;
+			instr.opcode = ir.any.opcode;
+			instr.Rd = ir.r3.Rd;
+			instr.Rs1 = ir.r3.Rs1;
+			instr.Rs2 = ir.r3.Rs2;
+			instr.Rs3 = ir.r3.Rs3;
+			instr.vn = ir.r3.vn;
+			instr.op3 = ir.r3.op3;
+			instr.Rs4 = ir.r3.func;
 			vlen1 = fvlen;
 		end
 	Qupls4_pkg::OP_LDV,Qupls4_pkg::OP_STV,
@@ -244,6 +314,11 @@ begin
 	endcase
 end
 
+always_comb vRd = (instr.vn[0] & is_vector) ? ({1'b0,instr.Rd,2'b00} << vlen1[3]) + 8'd128 : {2'b0,instr.Rd};
+always_comb vRs1 = (instr.vn[1] & is_vector) ? ({1'b0,instr.Rs1,2'b00} << vlen1[3]) + 8'd128 : {2'b0,instr.Rs1};
+always_comb vRs2 = (instr.vn[2] & is_vector) ? ({1'b0,instr.Rs2,2'b00} << vlen1[3]) + 8'd128 : {2'b0,instr.Rs2};
+always_comb vRs3 = (instr.vn[3] & is_vector) ? ({1'b0,instr.Rs3,2'b00} << vlen1[3]) + 8'd128 : {2'b0,instr.Rs3};
+
 always_comb
 begin
 	count = 3'd0;
@@ -255,7 +330,6 @@ begin
 	uop[5] = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
 	uop[6] = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
 	uop[7] = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
-	instr = ir;
 	
 	case(ir.any.opcode)
 	Qupls4_pkg::OP_BRK:	begin uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,ir}; count = 3'd1; end
@@ -268,63 +342,63 @@ begin
 					4'd1:	
 						begin
 							count = 4'd1;
-							uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,vsins};
+							uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,mo0,vsins.ms,vsins.op3,{2'b00,vsins.Rs3},{2'b00,vsins.Rs2},vRs1,vRd,vsins.opcode};
 						end
 					4'd2:	
 						begin
 							count = 4'd2;
-							uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,mo0,vsins.ms,vsins.op3,vsins.Rs3,vsins.Rs2,vsins.Rs1,vsins.Rd,vsins.opcode};
-							uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,vsins.Rs4,vsins.ms,vsins.op3,mo0,vsins.Rs2,vsins.Rs1+7'd1,vsins.Rd+7'd1,vsins.opcode};
+							uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,mo0,vsins.ms,vsins.op3,{2'b00,vsins.Rs3},{2'b00,vsins.Rs2},vRs1,vRd,vsins.opcode};
+							uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,{2'b0,vsins.Rs4},vsins.ms,vsins.op3,mo0,{2'b00,vsins.Rs2},vRs1+7'd1,vRd+7'd1,vsins.opcode};
 						end
 					4'd4:	
 						begin
 							count = 4'd4;
-							uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,mo0,vsins.ms,vsins.op3,vsins.Rs3,vsins.Rs2,vsins.Rs1,vsins.Rd,vsins.opcode};
-							uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,mo0,vsins.ms,vsins.op3,mo0,vsins.Rs2,vsins.Rs1+7'd1,vsins.Rd+7'd1,vsins.opcode};
-							uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,mo0,vsins.ms,vsins.op3,mo0,vsins.Rs2,vsins.Rs1+7'd2,vsins.Rd+7'd2,vsins.opcode};
-							uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,vsins.Rs4,vsins.ms,vsins.op3,mo0,vsins.Rs2,vsins.Rs1+7'd3,vsins.Rd+7'd3,vsins.opcode};
+							uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,mo0,vsins.ms,vsins.op3,{2'b00,vsins.Rs3},{2'b00,vsins.Rs2},vRs1,vRd,vsins.opcode};
+							uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,mo0,vsins.ms,vsins.op3,mo0,{2'b00,vsins.Rs2},vRs1+7'd1,vRd+7'd1,vsins.opcode};
+							uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,mo0,vsins.ms,vsins.op3,mo0,{2'b00,vsins.Rs2},vRs1+7'd2,vRd+7'd2,vsins.opcode};
+							uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,{2'b00,vsins.Rs4},vsins.ms,vsins.op3,mo0,{2'b00,vsins.Rs2},vRs1+7'd2,vRd+7'd2,vsins.opcode};
 						end
 					4'd8:	
 						begin
 							count = 4'd8;
-							uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,mo0,vsins.ms,vsins.op3,vsins.Rs3,vsins.Rs2,vsins.Rs1,vsins.Rd,vsins.opcode};
-							uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,mo0,vsins.ms,vsins.op3,mo0,vsins.Rs2,vsins.Rs1+7'd1,vsins.Rd+7'd1,vsins.opcode};
-							uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,mo0,vsins.ms,vsins.op3,mo0,vsins.Rs2,vsins.Rs1+7'd2,vsins.Rd+7'd2,vsins.opcode};
-							uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,mo0,vsins.ms,vsins.op3,mo0,vsins.Rs2,vsins.Rs1+7'd3,vsins.Rd+7'd3,vsins.opcode};
-							uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,mo0,vsins.ms,vsins.op3,mo0,vsins.Rs2,vsins.Rs1+7'd4,vsins.Rd+7'd4,vsins.opcode};
-							uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,mo0,vsins.ms,vsins.op3,mo0,vsins.Rs2,vsins.Rs1+7'd5,vsins.Rd+7'd5,vsins.opcode};
-							uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,mo0,vsins.ms,vsins.op3,mo0,vsins.Rs2,vsins.Rs1+7'd6,vsins.Rd+7'd6,vsins.opcode};
-							uop[7] = {1'b1,1'b0,3'd0,3'd7,4'd0,vsins.Rs4,vsins.ms,vsins.op3,mo0,vsins.Rs2,vsins.Rs1+7'd7,vsins.Rd+7'd7,vsins.opcode};
+							uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,mo0,vsins.ms,vsins.op3,{2'b00,vsins.Rs3},{2'b00,vsins.Rs2},vRs1,vRd,vsins.opcode};
+							uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,mo0,vsins.ms,vsins.op3,mo0,{2'b00,vsins.Rs2},vRs1+7'd1,vRd+7'd1,vsins.opcode};
+							uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,mo0,vsins.ms,vsins.op3,mo0,{2'b00,vsins.Rs2},vRs1+7'd2,vRd+7'd2,vsins.opcode};
+							uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,mo0,vsins.ms,vsins.op3,mo0,{2'b00,vsins.Rs2},vRs1+7'd3,vRd+7'd3,vsins.opcode};
+							uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,mo0,vsins.ms,vsins.op3,mo0,{2'b00,vsins.Rs2},vRs1+7'd4,vRd+7'd4,vsins.opcode};
+							uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,mo0,vsins.ms,vsins.op3,mo0,{2'b00,vsins.Rs2},vRs1+7'd5,vRd+7'd5,vsins.opcode};
+							uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,mo0,vsins.ms,vsins.op3,mo0,{2'b00,vsins.Rs2},vRs1+7'd6,vRd+7'd6,vsins.opcode};
+							uop[7] = {1'b1,1'b0,3'd0,3'd7,4'd0,{2'b00,vsins.Rs4},vsins.ms,vsins.op3,mo0,{2'b00,vsins.Rs2},vRs1+7'd7,vRd+7'd7,vsins.opcode};
 						end
 					default:
 						begin
 							count = 4'd1;
-							uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,nopi};
+							uop[0] = nopi;
 						end
 					endcase
 				default:
 					begin
 						count = 4'd1;
-						uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,ir};
+						uop[0] = uop0;
 					end
 				endcase
 			end
 			else begin
 				count = 4'd1;
-				uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,ir};
+				uop[0] = uop0;
 			end
 		end
 	Qupls4_pkg::OP_CMPI,
 	Qupls4_pkg::OP_CMPUI:
 		begin
 			count = 4'd1;
-			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,ir};
+			uop[0] = uop0;
 		end
 	Qupls4_pkg::OP_ADDI,
 	Qupls4_pkg::OP_SUBFI:
 		begin
 			count = 4'd1;
-			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,ir};
+			uop[0] = uop0;
 		end
 
 	Qupls4_pkg::OP_R3P,Qupls4_pkg::OP_R3VS,
@@ -336,313 +410,313 @@ begin
 			4'd1:
 				begin
 			count = 4'd1;
-			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,instr};
-				end
+			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2,vRs1,vRd,instr.opcode};
+			     end
 			4'd2:
 				begin
 			count = 4'd2;
-			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,instr};
+			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2,vRs1,vRd,instr.opcode};
 			casez({is_reduction,is_vs,is_masked})
 			3'b000:
 				begin
-					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd1,instr.Rs2+7'd1,instr.Rs1+7'd1,instr.Rd+7'd1,instr.opcode};
+					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+8'd1,vRs2+8'd1,vRs1+8'd1,vRd+8'd1,instr.opcode};
 				end
 			3'b001:
 				begin
-					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2+7'd1,instr.Rs1+7'd1,instr.Rd+7'd1,instr.opcode};
+					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2+7'd1,vRs1+7'd1,vRd+7'd1,instr.opcode};
 				end
 			3'b010:
 				begin
-					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd1,instr.Rs2,instr.Rs1+7'd1,instr.Rd+7'd1,instr.opcode};
+					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+7'd1,vRs2,vRs1+7'd1,vRd+7'd1,instr.opcode};
 				end
 			3'b011:
 				begin
-					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2,instr.Rs1+7'd1,instr.Rd+7'd1,instr.opcode};
+					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2,vRs1+7'd1,vRd+7'd1,instr.opcode};
 				end
 			3'b1??:
 				begin
-					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rd,instr.Rs1+7'd1,instr.Rd,instr.opcode};
+					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRd,vRs1+7'd1,vRd,instr.opcode};
 				end
 			endcase
 				end
 			4'd3:
 				begin
 			count = 4'd3;
-			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,instr};
+			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2,vRs1,vRd,instr.opcode};
 			casez({is_reduction,is_vs,is_masked})
 			3'b000:
 				begin
-					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd1,instr.Rs2+7'd1,instr.Rs1+7'd1,instr.Rd+7'd1,instr.opcode};
-					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd2,instr.Rs2+7'd2,instr.Rs1+7'd2,instr.Rd+7'd2,instr.opcode};
+					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+7'd1,vRs2+7'd1,vRs1+7'd1,vRd+7'd1,instr.opcode};
+					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+7'd2,vRs2+7'd2,vRs1+7'd2,vRd+7'd2,instr.opcode};
 				end
 			3'b001:
 				begin
-					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2+7'd1,instr.Rs1+7'd1,instr.Rd+7'd1,instr.opcode};
-					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2+7'd2,instr.Rs1+7'd2,instr.Rd+7'd2,instr.opcode};
+					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2+7'd1,vRs1+7'd1,vRd+7'd1,instr.opcode};
+					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2+7'd2,vRs1+7'd2,vRd+7'd2,instr.opcode};
 				end
 			3'b010:
 					begin
-						uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd1,instr.Rs2,instr.Rs1+7'd1,instr.Rd+7'd1,instr.opcode};
-						uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd2,instr.Rs2,instr.Rs1+7'd2,instr.Rd+7'd2,instr.opcode};
+						uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+7'd1,vRs2,vRs1+7'd1,vRd+7'd1,instr.opcode};
+						uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+7'd2,vRs2,vRs1+7'd2,vRd+7'd2,instr.opcode};
 					end
 			3'b011:
 					begin
-						uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2,instr.Rs1+7'd1,instr.Rd+7'd1,instr.opcode};
-						uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2,instr.Rs1+7'd2,instr.Rd+7'd2,instr.opcode};
+						uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2,vRs1+7'd1,vRd+7'd1,instr.opcode};
+						uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2,vRs1+7'd2,vRd+7'd2,instr.opcode};
 					end
 			3'b1??:
 					begin
-						uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rd,instr.Rs1+7'd1,instr.Rd,instr.opcode};
-						uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rd,instr.Rs1+7'd2,instr.Rd,instr.opcode};
+						uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRd,vRs1+7'd1,vRd,instr.opcode};
+						uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRd,vRs1+7'd2,vRd,instr.opcode};
 					end
 			endcase
 				end
 			4'd4:
 				begin
 			count = 4'd4;
-			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,instr};
+			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2,vRs1,vRd,instr.opcode};
 			casez({is_reduction,is_vs,is_masked})
 			3'b000:
 				begin
-					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd1,instr.Rs2+7'd1,instr.Rs1+7'd1,instr.Rd+7'd1,instr.opcode};
-					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd2,instr.Rs2+7'd2,instr.Rs1+7'd2,instr.Rd+7'd2,instr.opcode};
-					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd3,instr.Rs2+7'd3,instr.Rs1+7'd3,instr.Rd+7'd3,instr.opcode};
+					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+7'd1,vRs2+7'd1,vRs1+7'd1,vRd+7'd1,instr.opcode};
+					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+7'd2,vRs2+7'd2,vRs1+7'd2,vRd+7'd2,instr.opcode};
+					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+7'd3,vRs2+7'd3,vRs1+7'd3,vRd+7'd3,instr.opcode};
 				end
 			3'b001:
 				begin
-					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2+7'd1,instr.Rs1+7'd1,instr.Rd+7'd1,instr.opcode};
-					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2+7'd2,instr.Rs1+7'd2,instr.Rd+7'd2,instr.opcode};
-					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2+7'd3,instr.Rs1+7'd3,instr.Rd+7'd3,instr.opcode};
+					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2+7'd1,vRs1+7'd1,vRd+7'd1,instr.opcode};
+					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2+7'd2,vRs1+7'd2,vRd+7'd2,instr.opcode};
+					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2+7'd3,vRs1+7'd3,vRd+7'd3,instr.opcode};
 				end
 			3'b010:
 				begin
-					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd1,instr.Rs2,instr.Rs1+7'd1,instr.Rd+7'd1,instr.opcode};
-					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd2,instr.Rs2,instr.Rs1+7'd2,instr.Rd+7'd2,instr.opcode};
-					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd3,instr.Rs2,instr.Rs1+7'd3,instr.Rd+7'd3,instr.opcode};
+					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+7'd1,vRs2,vRs1+7'd1,vRd+7'd1,instr.opcode};
+					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+7'd2,vRs2,vRs1+7'd2,vRd+7'd2,instr.opcode};
+					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+7'd3,vRs2,vRs1+7'd3,vRd+7'd3,instr.opcode};
 				end
 			3'b011:
 				begin
-					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2,instr.Rs1+7'd1,instr.Rd+7'd1,instr.opcode};
-					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2,instr.Rs1+7'd2,instr.Rd+7'd2,instr.opcode};
-					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2,instr.Rs1+7'd3,instr.Rd+7'd3,instr.opcode};
+					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2,vRs1+7'd1,vRd+7'd1,instr.opcode};
+					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2,vRs1+7'd2,vRd+7'd2,instr.opcode};
+					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2,vRs1+7'd3,vRd+7'd3,instr.opcode};
 				end
 			3'b1??:
 				begin
-					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rd,instr.Rs1+7'd1,instr.Rd,instr.opcode};
-					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rd,instr.Rs1+7'd2,instr.Rd,instr.opcode};
-					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rd,instr.Rs1+7'd3,instr.Rd,instr.opcode};
+					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRd,vRs1+7'd1,vRd,instr.opcode};
+					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRd,vRs1+7'd2,vRd,instr.opcode};
+					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRd,vRs1+7'd3,vRd,instr.opcode};
 				end
 			endcase
 				end
 			4'd5:
 				begin
 			count = 4'd5;
-			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,instr};
+			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2,vRs1,vRd,instr.opcode};
 			casez({is_reduction,is_vs,is_masked})
 			3'b000:
 				begin
-					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd1,instr.Rs2+7'd1,instr.Rs1+7'd1,instr.Rd+7'd1,instr.opcode};
-					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd2,instr.Rs2+7'd2,instr.Rs1+7'd2,instr.Rd+7'd2,instr.opcode};
-					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd3,instr.Rs2+7'd3,instr.Rs1+7'd3,instr.Rd+7'd3,instr.opcode};
-					uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd4,instr.Rs2+7'd4,instr.Rs1+7'd4,instr.Rd+7'd4,instr.opcode};
+					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+7'd1,vRs2+7'd1,vRs1+7'd1,vRd+7'd1,instr.opcode};
+					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+7'd2,vRs2+7'd2,vRs1+7'd2,vRd+7'd2,instr.opcode};
+					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+7'd3,vRs2+7'd3,vRs1+7'd3,vRd+7'd3,instr.opcode};
+					uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+7'd4,vRs2+7'd4,vRs1+7'd4,vRd+7'd4,instr.opcode};
 				end
 			3'b001:
 				begin
-					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2+7'd1,instr.Rs1+7'd1,instr.Rd+7'd1,instr.opcode};
-					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2+7'd2,instr.Rs1+7'd2,instr.Rd+7'd2,instr.opcode};
-					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2+7'd3,instr.Rs1+7'd3,instr.Rd+7'd3,instr.opcode};
-					uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2+7'd4,instr.Rs1+7'd4,instr.Rd+7'd4,instr.opcode};
+					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2+7'd1,vRs1+7'd1,vRd+7'd1,instr.opcode};
+					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2+7'd2,vRs1+7'd2,vRd+7'd2,instr.opcode};
+					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2+7'd3,vRs1+7'd3,vRd+7'd3,instr.opcode};
+					uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2+7'd4,vRs1+7'd4,vRd+7'd4,instr.opcode};
 				end
 			3'b010:
 				begin
-					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd1,instr.Rs2,instr.Rs1+7'd1,instr.Rd+7'd1,instr.opcode};
-					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd2,instr.Rs2,instr.Rs1+7'd2,instr.Rd+7'd2,instr.opcode};
-					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd3,instr.Rs2,instr.Rs1+7'd3,instr.Rd+7'd3,instr.opcode};
-					uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd4,instr.Rs2,instr.Rs1+7'd4,instr.Rd+7'd4,instr.opcode};
+					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+7'd1,vRs2,vRs1+7'd1,vRd+7'd1,instr.opcode};
+					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+7'd2,vRs2,vRs1+7'd2,vRd+7'd2,instr.opcode};
+					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+7'd3,vRs2,vRs1+7'd3,vRd+7'd3,instr.opcode};
+					uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+7'd4,vRs2,vRs1+7'd4,vRd+7'd4,instr.opcode};
 				end
 			3'b011:
 				begin
-					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2,instr.Rs1+7'd1,instr.Rd+7'd1,instr.opcode};
-					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2,instr.Rs1+7'd2,instr.Rd+7'd2,instr.opcode};
-					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2,instr.Rs1+7'd3,instr.Rd+7'd3,instr.opcode};
-					uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2,instr.Rs1+7'd4,instr.Rd+7'd4,instr.opcode};
+					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2,vRs1+7'd1,vRd+7'd1,instr.opcode};
+					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2,vRs1+7'd2,vRd+7'd2,instr.opcode};
+					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2,vRs1+7'd3,vRd+7'd3,instr.opcode};
+					uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2,vRs1+7'd4,vRd+7'd4,instr.opcode};
 				end
 			3'b1??:
 				begin
-					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rd,instr.Rs1+7'd1,instr.Rd,instr.opcode};
-					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rd,instr.Rs1+7'd2,instr.Rd,instr.opcode};
-					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rd,instr.Rs1+7'd3,instr.Rd,instr.opcode};
-					uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rd,instr.Rs1+7'd4,instr.Rd,instr.opcode};
+					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRd,vRs1+7'd1,vRd,instr.opcode};
+					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRd,vRs1+7'd2,vRd,instr.opcode};
+					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRd,vRs1+7'd3,vRd,instr.opcode};
+					uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRd,vRs1+7'd4,vRd,instr.opcode};
 				end
 			endcase
 				end
 			4'd6:
 				begin
 			count = 4'd6;
-			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,instr};
+			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2,vRs1,vRd,instr.opcode};
 			casez({is_reduction,is_vs,is_masked})
 			3'b000:
 				begin
-					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd1,instr.Rs2+7'd1,instr.Rs1+7'd1,instr.Rd+7'd1,instr.opcode};
-					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd2,instr.Rs2+7'd2,instr.Rs1+7'd2,instr.Rd+7'd2,instr.opcode};
-					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd3,instr.Rs2+7'd3,instr.Rs1+7'd3,instr.Rd+7'd3,instr.opcode};
-					uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd4,instr.Rs2+7'd4,instr.Rs1+7'd4,instr.Rd+7'd4,instr.opcode};
-					uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd5,instr.Rs2+7'd5,instr.Rs1+7'd5,instr.Rd+7'd5,instr.opcode};
+					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+7'd1,vRs2+7'd1,vRs1+7'd1,vRd+7'd1,instr.opcode};
+					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+7'd2,vRs2+7'd2,vRs1+7'd2,vRd+7'd2,instr.opcode};
+					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+7'd3,vRs2+7'd3,vRs1+7'd3,vRd+7'd3,instr.opcode};
+					uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+7'd4,vRs2+7'd4,vRs1+7'd4,vRd+7'd4,instr.opcode};
+					uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+7'd5,vRs2+7'd5,vRs1+7'd5,vRd+7'd5,instr.opcode};
 				end
 			3'b001:
 				begin
-					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2+7'd1,instr.Rs1+7'd1,instr.Rd+7'd1,instr.opcode};
-					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2+7'd2,instr.Rs1+7'd2,instr.Rd+7'd2,instr.opcode};
-					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2+7'd3,instr.Rs1+7'd3,instr.Rd+7'd3,instr.opcode};
-					uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2+7'd4,instr.Rs1+7'd4,instr.Rd+7'd4,instr.opcode};
-					uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2+7'd5,instr.Rs1+7'd5,instr.Rd+7'd5,instr.opcode};
+					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2+7'd1,vRs1+7'd1,vRd+7'd1,instr.opcode};
+					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2+7'd2,vRs1+7'd2,vRd+7'd2,instr.opcode};
+					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2+7'd3,vRs1+7'd3,vRd+7'd3,instr.opcode};
+					uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2+7'd4,vRs1+7'd4,vRd+7'd4,instr.opcode};
+					uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2+7'd5,vRs1+7'd5,vRd+7'd5,instr.opcode};
 				end
 			3'b010:
 				begin
-					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd1,instr.Rs2,instr.Rs1+7'd1,instr.Rd+7'd1,instr.opcode};
-					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd2,instr.Rs2,instr.Rs1+7'd2,instr.Rd+7'd2,instr.opcode};
-					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd3,instr.Rs2,instr.Rs1+7'd3,instr.Rd+7'd3,instr.opcode};
-					uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd4,instr.Rs2,instr.Rs1+7'd4,instr.Rd+7'd4,instr.opcode};
-					uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd5,instr.Rs2,instr.Rs1+7'd5,instr.Rd+7'd5,instr.opcode};
+					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+7'd1,vRs2,vRs1+7'd1,vRd+7'd1,instr.opcode};
+					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+7'd2,vRs2,vRs1+7'd2,vRd+7'd2,instr.opcode};
+					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+7'd3,vRs2,vRs1+7'd3,vRd+7'd3,instr.opcode};
+					uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+7'd4,vRs2,vRs1+7'd4,vRd+7'd4,instr.opcode};
+					uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+7'd5,vRs2,vRs1+7'd5,vRd+7'd5,instr.opcode};
 				end
 			3'b011:
 				begin
-					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2,instr.Rs1+7'd1,instr.Rd+7'd1,instr.opcode};
-					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2,instr.Rs1+7'd2,instr.Rd+7'd2,instr.opcode};
-					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2,instr.Rs1+7'd3,instr.Rd+7'd3,instr.opcode};
-					uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2,instr.Rs1+7'd4,instr.Rd+7'd4,instr.opcode};
-					uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2,instr.Rs1+7'd5,instr.Rd+7'd5,instr.opcode};
+					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2,vRs1+7'd1,vRd+7'd1,instr.opcode};
+					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2,vRs1+7'd2,vRd+7'd2,instr.opcode};
+					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2,vRs1+7'd3,vRd+7'd3,instr.opcode};
+					uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2,vRs1+7'd4,vRd+7'd4,instr.opcode};
+					uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2,vRs1+7'd5,vRd+7'd5,instr.opcode};
 				end
 			3'b1??:
 				begin
-					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rd,instr.Rs1+7'd1,instr.Rd,instr.opcode};
-					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rd,instr.Rs1+7'd2,instr.Rd,instr.opcode};
-					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rd,instr.Rs1+7'd3,instr.Rd,instr.opcode};
-					uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rd,instr.Rs1+7'd4,instr.Rd,instr.opcode};
-					uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rd,instr.Rs1+7'd5,instr.Rd,instr.opcode};
+					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRd,vRs1+7'd1,vRd,instr.opcode};
+					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRd,vRs1+7'd2,vRd,instr.opcode};
+					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRd,vRs1+7'd3,vRd,instr.opcode};
+					uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRd,vRs1+7'd4,vRd,instr.opcode};
+					uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRd,vRs1+7'd5,vRd,instr.opcode};
 				end
 			endcase
 				end
 			4'd7:
 				begin
 			count = 4'd7;
-			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,instr};
+			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2,vRs1,vRd,instr.opcode};
 			casez({is_reduction,is_vs,is_masked})
 			3'b000:
 				begin
-					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd1,instr.Rs2+7'd1,instr.Rs1+7'd1,instr.Rd+7'd1,instr.opcode};
-					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd2,instr.Rs2+7'd2,instr.Rs1+7'd2,instr.Rd+7'd2,instr.opcode};
-					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd3,instr.Rs2+7'd3,instr.Rs1+7'd3,instr.Rd+7'd3,instr.opcode};
-					uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd4,instr.Rs2+7'd4,instr.Rs1+7'd4,instr.Rd+7'd4,instr.opcode};
-					uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd5,instr.Rs2+7'd5,instr.Rs1+7'd5,instr.Rd+7'd5,instr.opcode};
-					uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd6,instr.Rs2+7'd6,instr.Rs1+7'd6,instr.Rd+7'd6,instr.opcode};
+					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+7'd1,vRs2+7'd1,vRs1+7'd1,vRd+7'd1,instr.opcode};
+					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+7'd2,vRs2+7'd2,vRs1+7'd2,vRd+7'd2,instr.opcode};
+					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+7'd3,vRs2+7'd3,vRs1+7'd3,vRd+7'd3,instr.opcode};
+					uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+7'd4,vRs2+7'd4,vRs1+7'd4,vRd+7'd4,instr.opcode};
+					uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+7'd5,vRs2+7'd5,vRs1+7'd5,vRd+7'd5,instr.opcode};
+					uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+7'd6,vRs2+7'd6,vRs1+7'd6,vRd+7'd6,instr.opcode};
 				end
 			3'b001:
 				begin
-					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2+7'd1,instr.Rs1+7'd1,instr.Rd+7'd1,instr.opcode};
-					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2+7'd2,instr.Rs1+7'd2,instr.Rd+7'd2,instr.opcode};
-					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2+7'd3,instr.Rs1+7'd3,instr.Rd+7'd3,instr.opcode};
-					uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2+7'd4,instr.Rs1+7'd4,instr.Rd+7'd4,instr.opcode};
-					uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2+7'd5,instr.Rs1+7'd5,instr.Rd+7'd5,instr.opcode};
-					uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2+7'd6,instr.Rs1+7'd6,instr.Rd+7'd6,instr.opcode};
+					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2+7'd1,vRs1+7'd1,vRd+7'd1,instr.opcode};
+					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2+7'd2,vRs1+7'd2,vRd+7'd2,instr.opcode};
+					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2+7'd3,vRs1+7'd3,vRd+7'd3,instr.opcode};
+					uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2+7'd4,vRs1+7'd4,vRd+7'd4,instr.opcode};
+					uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2+7'd5,vRs1+7'd5,vRd+7'd5,instr.opcode};
+					uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2+7'd6,vRs1+7'd6,vRd+7'd6,instr.opcode};
 				end
 			3'b010:
 				begin
-					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd1,instr.Rs2,instr.Rs1+7'd1,instr.Rd+7'd1,instr.opcode};
-					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd2,instr.Rs2,instr.Rs1+7'd2,instr.Rd+7'd2,instr.opcode};
-					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd3,instr.Rs2,instr.Rs1+7'd3,instr.Rd+7'd3,instr.opcode};
-					uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd4,instr.Rs2,instr.Rs1+7'd4,instr.Rd+7'd4,instr.opcode};
-					uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd5,instr.Rs2,instr.Rs1+7'd5,instr.Rd+7'd5,instr.opcode};
-					uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd6,instr.Rs2,instr.Rs1+7'd6,instr.Rd+7'd6,instr.opcode};
+					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+7'd1,vRs2,vRs1+7'd1,vRd+7'd1,instr.opcode};
+					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+7'd2,vRs2,vRs1+7'd2,vRd+7'd2,instr.opcode};
+					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+7'd3,vRs2,vRs1+7'd3,vRd+7'd3,instr.opcode};
+					uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+7'd4,vRs2,vRs1+7'd4,vRd+7'd4,instr.opcode};
+					uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+7'd5,vRs2,vRs1+7'd5,vRd+7'd5,instr.opcode};
+					uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+7'd6,vRs2,vRs1+7'd6,vRd+7'd6,instr.opcode};
 				end
 			3'b011:
 				begin
-					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2,instr.Rs1+7'd1,instr.Rd+7'd1,instr.opcode};
-					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2,instr.Rs1+7'd2,instr.Rd+7'd2,instr.opcode};
-					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2,instr.Rs1+7'd3,instr.Rd+7'd3,instr.opcode};
-					uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2,instr.Rs1+7'd4,instr.Rd+7'd4,instr.opcode};
-					uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2,instr.Rs1+7'd5,instr.Rd+7'd5,instr.opcode};
-					uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2,instr.Rs1+7'd6,instr.Rd+7'd6,instr.opcode};
+					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2,vRs1+7'd1,vRd+7'd1,instr.opcode};
+					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2,vRs1+7'd2,vRd+7'd2,instr.opcode};
+					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2,vRs1+7'd3,vRd+7'd3,instr.opcode};
+					uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2,vRs1+7'd4,vRd+7'd4,instr.opcode};
+					uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2,vRs1+7'd5,vRd+7'd5,instr.opcode};
+					uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2,vRs1+7'd6,vRd+7'd6,instr.opcode};
 				end
 			3'b1??:
 				begin
-					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rd,instr.Rs1+7'd1,instr.Rd,instr.opcode};
-					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rd,instr.Rs1+7'd2,instr.Rd,instr.opcode};
-					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rd,instr.Rs1+7'd3,instr.Rd,instr.opcode};
-					uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rd,instr.Rs1+7'd4,instr.Rd,instr.opcode};
-					uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rd,instr.Rs1+7'd5,instr.Rd,instr.opcode};
-					uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rd,instr.Rs1+7'd6,instr.Rd,instr.opcode};
+					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRd,vRs1+7'd1,vRd,instr.opcode};
+					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRd,vRs1+7'd2,vRd,instr.opcode};
+					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRd,vRs1+7'd3,vRd,instr.opcode};
+					uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRd,vRs1+7'd4,vRd,instr.opcode};
+					uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRd,vRs1+7'd5,vRd,instr.opcode};
+					uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRd,vRs1+7'd6,vRd,instr.opcode};
 				end
 			endcase
 				end
 			4'd8:
 				begin
 			count = 4'd8;
-			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,instr};
+			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2,vRs1,vRd,instr.opcode};
 			casez({is_reduction,is_vs,is_masked})
 			3'b000:
 				begin
-					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd1,instr.Rs2+7'd1,instr.Rs1+7'd1,instr.Rd+7'd1,instr.opcode};
-					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd2,instr.Rs2+7'd2,instr.Rs1+7'd2,instr.Rd+7'd2,instr.opcode};
-					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd3,instr.Rs2+7'd3,instr.Rs1+7'd3,instr.Rd+7'd3,instr.opcode};
-					uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd4,instr.Rs2+7'd4,instr.Rs1+7'd4,instr.Rd+7'd4,instr.opcode};
-					uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd5,instr.Rs2+7'd5,instr.Rs1+7'd5,instr.Rd+7'd5,instr.opcode};
-					uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd6,instr.Rs2+7'd6,instr.Rs1+7'd6,instr.Rd+7'd6,instr.opcode};
-					uop[7] = {1'b1,1'b0,3'd0,3'd7,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd7,instr.Rs2+7'd7,instr.Rs1+7'd7,instr.Rd+7'd7,instr.opcode};
+					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+7'd1,vRs2+7'd1,vRs1+7'd1,vRd+7'd1,instr.opcode};
+					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+7'd2,vRs2+7'd2,vRs1+7'd2,vRd+7'd2,instr.opcode};
+					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+7'd3,vRs2+7'd3,vRs1+7'd3,vRd+7'd3,instr.opcode};
+					uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+7'd4,vRs2+7'd4,vRs1+7'd4,vRd+7'd4,instr.opcode};
+					uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+7'd5,vRs2+7'd5,vRs1+7'd5,vRd+7'd5,instr.opcode};
+					uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+7'd6,vRs2+7'd6,vRs1+7'd6,vRd+7'd6,instr.opcode};
+					uop[7] = {1'b1,1'b0,3'd0,3'd7,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+7'd7,vRs2+7'd7,vRs1+7'd7,vRd+7'd7,instr.opcode};
 				end
 			3'b001:
 				begin
-					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2+7'd1,instr.Rs1+7'd1,instr.Rd+7'd1,instr.opcode};
-					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2+7'd2,instr.Rs1+7'd2,instr.Rd+7'd2,instr.opcode};
-					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2+7'd3,instr.Rs1+7'd3,instr.Rd+7'd3,instr.opcode};
-					uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2+7'd4,instr.Rs1+7'd4,instr.Rd+7'd4,instr.opcode};
-					uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2+7'd5,instr.Rs1+7'd5,instr.Rd+7'd5,instr.opcode};
-					uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2+7'd6,instr.Rs1+7'd6,instr.Rd+7'd6,instr.opcode};
-					uop[7] = {1'b1,1'b0,3'd0,3'd7,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2+7'd7,instr.Rs1+7'd7,instr.Rd+7'd7,instr.opcode};
+					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2+7'd1,vRs1+7'd1,vRd+7'd1,instr.opcode};
+					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2+7'd2,vRs1+7'd2,vRd+7'd2,instr.opcode};
+					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2+7'd3,vRs1+7'd3,vRd+7'd3,instr.opcode};
+					uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2+7'd4,vRs1+7'd4,vRd+7'd4,instr.opcode};
+					uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2+7'd5,vRs1+7'd5,vRd+7'd5,instr.opcode};
+					uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2+7'd6,vRs1+7'd6,vRd+7'd6,instr.opcode};
+					uop[7] = {1'b1,1'b0,3'd0,3'd7,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2+7'd7,vRs1+7'd7,vRd+7'd7,instr.opcode};
 				end
 			3'b010:
 				begin
-					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd1,instr.Rs2,instr.Rs1+7'd1,instr.Rd+7'd1,instr.opcode};
-					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd2,instr.Rs2,instr.Rs1+7'd2,instr.Rd+7'd2,instr.opcode};
-					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd3,instr.Rs2,instr.Rs1+7'd3,instr.Rd+7'd3,instr.opcode};
-					uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd4,instr.Rs2,instr.Rs1+7'd4,instr.Rd+7'd4,instr.opcode};
-					uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd5,instr.Rs2,instr.Rs1+7'd5,instr.Rd+7'd5,instr.opcode};
-					uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd6,instr.Rs2,instr.Rs1+7'd6,instr.Rd+7'd6,instr.opcode};
-					uop[7] = {1'b1,1'b0,3'd0,3'd7,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3+7'd7,instr.Rs2,instr.Rs1+7'd7,instr.Rd+7'd7,instr.opcode};
+					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+7'd1,vRs2,vRs1+7'd1,vRd+7'd1,instr.opcode};
+					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+7'd2,vRs2,vRs1+7'd2,vRd+7'd2,instr.opcode};
+					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+7'd3,vRs2,vRs1+7'd3,vRd+7'd3,instr.opcode};
+					uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+7'd4,vRs2,vRs1+7'd4,vRd+7'd4,instr.opcode};
+					uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+7'd5,vRs2,vRs1+7'd5,vRd+7'd5,instr.opcode};
+					uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+7'd6,vRs2,vRs1+7'd6,vRd+7'd6,instr.opcode};
+					uop[7] = {1'b1,1'b0,3'd0,3'd7,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3+7'd7,vRs2,vRs1+7'd7,vRd+7'd7,instr.opcode};
 				end
 			3'b011:
 				begin
-					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2,instr.Rs1+7'd1,instr.Rd+7'd1,instr.opcode};
-					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2,instr.Rs1+7'd2,instr.Rd+7'd2,instr.opcode};
-					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2,instr.Rs1+7'd3,instr.Rd+7'd3,instr.opcode};
-					uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2,instr.Rs1+7'd4,instr.Rd+7'd4,instr.opcode};
-					uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2,instr.Rs1+7'd5,instr.Rd+7'd5,instr.opcode};
-					uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2,instr.Rs1+7'd6,instr.Rd+7'd6,instr.opcode};
-					uop[7] = {1'b1,1'b0,3'd0,3'd7,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rs2,instr.Rs1+7'd7,instr.Rd+7'd7,instr.opcode};
+					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2,vRs1+7'd1,vRd+7'd1,instr.opcode};
+					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2,vRs1+7'd2,vRd+7'd2,instr.opcode};
+					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2,vRs1+7'd3,vRd+7'd3,instr.opcode};
+					uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2,vRs1+7'd4,vRd+7'd4,instr.opcode};
+					uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2,vRs1+7'd5,vRd+7'd5,instr.opcode};
+					uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2,vRs1+7'd6,vRd+7'd6,instr.opcode};
+					uop[7] = {1'b1,1'b0,3'd0,3'd7,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRs2,vRs1+7'd7,vRd+7'd7,instr.opcode};
 				end
 			3'b1??:
 				begin
-					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rd,instr.Rs1+7'd1,instr.Rd,instr.opcode};
-					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rd,instr.Rs1+7'd2,instr.Rd,instr.opcode};
-					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rd,instr.Rs1+7'd3,instr.Rd,instr.opcode};
-					uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rd,instr.Rs1+7'd4,instr.Rd,instr.opcode};
-					uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rd,instr.Rs1+7'd5,instr.Rd,instr.opcode};
-					uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rd,instr.Rs1+7'd6,instr.Rd,instr.opcode};
-					uop[7] = {1'b1,1'b0,3'd0,3'd7,4'd0,instr.func,instr.ms,instr.op3,instr.Rs3,instr.Rd,instr.Rs1+7'd7,instr.Rd,instr.opcode};
+					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRd,vRs1+7'd1,vRd,instr.opcode};
+					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRd,vRs1+7'd2,vRd,instr.opcode};
+					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRd,vRs1+7'd3,vRd,instr.opcode};
+					uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRd,vRs1+7'd4,vRd,instr.opcode};
+					uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRd,vRs1+7'd5,vRd,instr.opcode};
+					uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRd,vRs1+7'd6,vRd,instr.opcode};
+					uop[7] = {1'b1,1'b0,3'd0,3'd7,4'd0,instr.Rs4,instr.ms,instr.op3,vRs3,vRd,vRs1+7'd7,vRd,instr.opcode};
 				end
 			endcase
 				end
 			default:	
 				begin
 			count = 4'd1;
-			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,nopi};
+			uop[0] = nopi;
 				end
 			endcase
 		end
 		// Should really exception here.
 		else begin
 			count = 4'd1;
-			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,nopi};
+			uop[0] = nopi;
 		end
 	Qupls4_pkg::OP_LDV,Qupls4_pkg::OP_STV:
 		if (SUPPORT_VECTOR) begin
@@ -718,14 +792,14 @@ begin
 			default:	
 				begin
 			count = 4'd1;
-			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,nopi};
+			uop[0] = nopi;
 				end
 			endcase
 		end
 		// Should really exception here.
 		else begin
 			count = 4'd1;
-			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,nopi};
+			uop[0] = nopi;
 		end
 
 	Qupls4_pkg::OP_LDVN,Qupls4_pkg::OP_STVN:
@@ -802,14 +876,14 @@ begin
 			default:	
 				begin
 			count = 4'd1;
-			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,nopi};
+			uop[0] = nopi;
 				end
 			endcase
 		end
 		// Should really exception here.
 		else begin
 			count = 4'd1;
-			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,nopi};
+			uop[0] = nopi;
 		end
 		/*
 			case(ir.r3.func)
@@ -929,7 +1003,7 @@ begin
 			default:	
 				begin
 					count = 4'd1;
-					uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,nopi};
+					uop[0] = nopi;
 				end
 			endcase
 		end
@@ -975,7 +1049,7 @@ begin
 			default:	
 				begin
 					count = 4'd1;
-					uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,nopi};
+					uop[0] = nopi;
 				end
 			endcase
 		end
@@ -987,7 +1061,7 @@ begin
 	Qupls4_pkg::OP_FENCE:
 		begin
 			count = 4'd1;
-			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,ir};
+			uop[0] = uop0;
 		end
 	Qupls4_pkg::OP_FLTH,Qupls4_pkg::OP_FLTS,Qupls4_pkg::OP_FLTD,Qupls4_pkg::OP_FLTQ:
 		begin
@@ -1045,12 +1119,12 @@ begin
 	Qupls4_pkg::OP_MOD,Qupls4_pkg::OP_NOP:
 		begin
 			count = 4'd1;
-			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,ir};
+			uop[0] = uop0;
 		end
 	default:
 		begin
 			count = 4'd1;
-			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,ir};
+			uop[0] = uop0;
 		end
 	endcase
 	for (nn = 0; nn < 8; nn = nn + 1) begin
