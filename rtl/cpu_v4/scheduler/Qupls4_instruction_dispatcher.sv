@@ -170,28 +170,6 @@ begin
 			if (!rob[nn].argCh_v) begin rse_o[kk].argCh[8:0] = rob[nn].op.pRs3; rse_o[kk].argC[23:16] = rob[nn].op.decbus.Rs3; end
 			if (!rob[nn].argDh_v) begin rse_o[kk].argDh[8:0] = rob[nn].op.pRd; rse_o[kk].argD[23:16] = rob[nn].op.decbus.Rd; end
 			*/
-			// Search for references to the IP and fill in.
-			if (rob[nn].op.decbus.Rs1==7'd63) begin
-				rse_o[kk].argA = rob[nn].op.pc.pc;
-//				rse_o[kk].argAh = rob[nn].op.pc.pch;
-				rse_o[kk].argAL_v = VAL;
-				rse_o[kk].argAH_v = VAL;
-//				rse_o[kk].argAh_v = VAL;
-			end
-			if (rob[nn].op.decbus.Rs2==7'd63) begin
-				rse_o[kk].argB = rob[nn].op.pc.pc;
-//				rse_o[kk].argBh = rob[nn].op.pc.pch;
-				rse_o[kk].argBL_v = VAL;
-				rse_o[kk].argBH_v = VAL;
-//				rse_o[kk].argBh_v = VAL;
-			end
-			if (rob[nn].op.decbus.Rs3==7'd63) begin
-				rse_o[kk].argC = rob[nn].op.pc.pc;
-//				rse_o[kk].argCh = rob[nn].op.pc.pch;
-				rse_o[kk].argCL_v = VAL;
-				rse_o[kk].argCH_v = VAL;
-//				rse_o[kk].argCh_v = VAL;
-			end
 			rse_o[kk].argI = rob[nn].op.decbus.has_immb ? rob[nn].op.decbus.immb : rob[nn].op.decbus.immc;
 			rse_o[kk].funcunit = 4'd15;
 			if (rob[nn].op.decbus.sau && sau_cnt < Qupls4_pkg::NSAU && !busy[{3'd0,sau_cnt[0]}]) begin

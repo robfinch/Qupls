@@ -62,12 +62,13 @@ begin
 		fnRs1 = 8'd0;
 	else
 		case(ir.any.opcode)
-			
+/*			
 		Qupls4_pkg::OP_MOV:
 			if (ir[28:26] < 3'd4)
 				fnRs1 = {ir[20:19],ir[15:11]};
 			else
 				fnRs1 = {2'b00,ir[15:11]};
+*/				
 		Qupls4_pkg::OP_FLTH,Qupls4_pkg::OP_FLTS,Qupls4_pkg::OP_FLTD,Qupls4_pkg::OP_FLTQ:
 			fnRs1 = has_rext ? instr_raw[61:55] : {1'b0,ir.fpu.Rs1};
 		Qupls4_pkg::OP_CSR:

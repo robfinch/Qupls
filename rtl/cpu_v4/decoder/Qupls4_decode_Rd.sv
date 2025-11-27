@@ -53,11 +53,13 @@ Qupls4_pkg::instruction_t ir;
 begin
 	ir = instr.ins;
 	case(ir.any.opcode)
+/*
 	Qupls4_pkg::OP_MOV:
 		if (ir[28:26] < 3'd4)
 			fnRd = {ir[18:17],ir[10:6]};
 		else
 			fnRd = {2'b00,ir[10:6]};
+*/			
 	Qupls4_pkg::OP_FLTH,Qupls4_pkg::OP_FLTS,Qupls4_pkg::OP_FLTD,Qupls4_pkg::OP_FLTQ:
 		fnRd = ir.fpu.Rd;
 	Qupls4_pkg::OP_CSR:

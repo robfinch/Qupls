@@ -59,6 +59,7 @@ begin
 		fnHas_Rs2 = 1'b0;
 	else
 		case(ir.any.opcode)
+/*		
 		Qupls4_pkg::OP_MOV:
 			if (ir[31]) begin
 				case(ir.move.op3)
@@ -78,6 +79,7 @@ begin
 			end
 			else
 				fnHas_Rs2 = 1'd0;
+*/				
 		Qupls4_pkg::OP_FLTH,Qupls4_pkg::OP_FLTS,Qupls4_pkg::OP_FLTD,Qupls4_pkg::OP_FLTQ:
 			fnHas_Rs2 = 1'b1;
 		Qupls4_pkg::OP_CSR:

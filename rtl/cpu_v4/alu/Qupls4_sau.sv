@@ -788,12 +788,14 @@ begin
 	Qupls4_pkg::OP_CSR:		bus = csr;
 
 	Qupls4_pkg::OP_ADDI:	bus = a + i;
+	Qupls4_pkg::OP_ADDIPI:	bus = a + i + pc.pc;
 	Qupls4_pkg::OP_ANDI:	bus = a & i;
 	Qupls4_pkg::OP_ORI:		bus = a | i;
 	Qupls4_pkg::OP_XORI:	bus = a ^ i;
 	Qupls4_pkg::OP_SUBFI:	bus = i - a;
 	Qupls4_pkg::OP_CMPI:	bus = cmpo;
 	Qupls4_pkg::OP_CMPUI:	bus = cmpo;
+/*	
 	Qupls4_pkg::OP_MOV:
 		if (ir[31]) begin
 			case(ir.move.op3)
@@ -824,7 +826,8 @@ begin
 				begin
 					bus = zero;
 				end
-			endcase
+			endcase	
+*/
 	Qupls4_pkg::OP_LOADA:	bus = a + i + (b << ir[47:45]);
 	Qupls4_pkg::OP_NOP:		bus = t;	// in case of copy target
 	default:	bus = {(WID/16){16'hDEAD}};
