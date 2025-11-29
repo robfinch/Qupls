@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2024-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2023-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -32,42 +32,36 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-//
+// 60 LUTs
 // ============================================================================
+//
+import Qupls4_pkg::*;
 
-import Stark_pkg::*;
+module Qupls4_meta_branch_eval(instr, a, b, takb);
+parameter WID=64;
+input Qupls4_pkg::micro_op_t instr;
+input [WID-1:0] a;
+input [WID-1:0] b;
+output reg takb;
 
-module Stark_branchmiss_flag(rst, clk, brclass, trig, miss_det, miss_flag);
-input rst;
-input clk;
-input Stark_pkg::brclass_t brclass;
-input trig;
-input miss_det;
-output reg miss_flag;
+wire takb8, takb16, takb32, takb64;
+Qupls4_branch_eval #(.WID( 8))  u8 (instr, a[7: 0], b[7: 0], takb8);
+Qupls4_branch_eval #(.WID(16)) u16 (instr, a[15:0], b[15:0], takb16);
+Qupls4_branch_eval #(.WID(32)) u32 (instr, a[31:0], b[31:0], takb32);
+Qupls4_branch_eval #(.WID(64)) u64 (instr, a[63:0], b[63:0], takb64);
 
-// Branchmiss flag
-
-always_ff @(posedge clk)
-if (rst)
-	miss_flag <= FALSE;
-else begin
-	miss_flag <= FALSE;		// pulse for only 1 cycle.
-	if (trig) begin
-		case(brclass)
-		Stark_pkg::BRC_BCCR,
-		Stark_pkg::BRC_BCCD,
-		Stark_pkg::BRC_BCCC:
-			miss_flag <= miss_det;
-//		Stark_pkg::BRC_BL,
-		Stark_pkg::BRC_BLRLR,
-		Stark_pkg::BRC_BLRLC,
-		Stark_pkg::BRC_RETR,
-		Stark_pkg::BRC_RETC:
-			miss_flag <= TRUE;
-		default:
-			miss_flag <= FALSE;
-		endcase
-	end
-end
+always_comb
+	case(instr.any.opcode)
+	Qupls4_pkg::OP_BCCU8,Qupls4_pkg::OP_BCC8:
+		takb = takb8;
+	Qupls4_pkg::OP_BCCU16,Qupls4_pkg::OP_BCC16:
+		takb = takb16;
+	Qupls4_pkg::OP_BCCU32,Qupls4_pkg::OP_BCC32:
+		takb = takb32;
+	Qupls4_pkg::OP_BCCU64,Qupls4_pkg::OP_BCC64:
+		takb = takb64;
+	default:	takb = 1'b0;
+	endcase
 
 endmodule
+

@@ -32,54 +32,29 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 15 LUTs
+// Detect if the instruction has a 27-bit immediate eg. ADDI 
 // ============================================================================
 
-import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_decode_Rs3(om, instr, instr_raw, has_immc, Rs3, Rs3z, exc);
-input Qupls4_pkg::operating_mode_t om;
+module Qupls4_decode_has_imm(instr, has_imm);
 input Qupls4_pkg::micro_op_t instr;
-input [335:0] instr_raw;
-input has_immc;
-output aregno_t Rs3;
-output reg Rs3z;
-output reg exc;
+output has_imm;
 
-reg exc2;
-
-function aregno_t fnRs3;
-input Qupls4_pkg::micro_op_t instr;
-input [335:0] instr_raw;
-input has_immc;
-Qupls4_pkg::micro_op_t ir;
-reg has_rext;
+function fnHasImm;
+input Qupls4_pkg::micro_op_t op;
 begin
-	ir = instr;
-	has_rext = instr_raw[54:48]==OP_REXT;
-	if (has_immc)
-		fnRs3 = 7'd0;
-	else
-		case(ir.any.opcode)
-		Qupls4_pkg::OP_STB,Qupls4_pkg::OP_STW,
-		Qupls4_pkg::OP_STT,Qupls4_pkg::OP_STORE,Qupls4_pkg::OP_STI,
-		Qupls4_pkg::OP_STPTR:
-			fnRs3 = has_rext ? instr_raw[48+34:48+28] : {2'b00,ir.ls.Rsd};
-		Qupls4_pkg::OP_R3B,Qupls4_pkg::OP_R3W,Qupls4_pkg::OP_R3T,Qupls4_pkg::OP_R3O:
-			fnRs3 = has_rext ? instr_raw[48+34:48+28] : {2'b00,ir.alu.Rs3};
-		default:
-			fnRs3 = 7'd0;
-		endcase
+	case(op.any.opcode)
+	Qupls4_pkg::OP_ADDI,Qupls4_pkg::OP_SUBFI,Qupls4_pkg::OP_CMPI,Qupls4_pkg::OP_CMPUI,
+	Qupls4_pkg::OP_MULI,Qupls4_pkg::OP_MULUI,Qupls4_pkg::OP_DIVI,Qupls4_pkg::OP_DIVUI,
+	Qupls4_pkg::OP_ADDIPI,
+	Qupls4_pkg::OP_ANDI,Qupls4_pkg::OP_ORI,Qupls4_pkg::OP_XORI:
+		fnHasImm = 1'b1;
+	default:	fnHasImm = 1'b0;
+	endcase
 end
 endfunction
 
-always_comb
-begin
-	Rs3 = fnRs3(instr, instr_raw, has_immc);
-	Rs3z = ~|Rs3;
-	exc = 1'b0;
-//	tRegmap(om, Rs3, Rs3, exc);
-end
+assign has_imm = fnHasImm(instr);
 
 endmodule

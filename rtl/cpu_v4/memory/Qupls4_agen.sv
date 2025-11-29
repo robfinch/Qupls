@@ -38,13 +38,13 @@
 import const_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_agen(rst, clk, ir, next, out, tlb_v, virt2phys, 
+module Qupls4_agen(rst, clk, next, rse, out, tlb_v, virt2phys, 
 	load, store, vload_ndx, vstore_ndx, amo, laneno,
-	a, b, i, Ra, Rb, pc, res, resv);
+	res, resv);
 input rst;
 input clk;
 input next;								// calculate for next cache line
-input Qupls4_pkg::ex_instruction_t ir;
+input Qupls4_pkg::reservation_station_entry_t rse;
 input out;
 input tlb_v;
 input virt2phys;
@@ -54,12 +54,6 @@ input vload_ndx;
 input vstore_ndx;
 input amo;
 input [7:0] laneno;
-input cpu_types_pkg::address_t a;
-input cpu_types_pkg::address_t b;
-input cpu_types_pkg::address_t i;
-input cpu_types_pkg::aregno_t Ra;
-input cpu_types_pkg::aregno_t Rb;
-input cpu_types_pkg::pc_address_t pc;
 output cpu_types_pkg::address_t res;
 output reg resv;
 
@@ -67,19 +61,19 @@ cpu_types_pkg::address_t as, bs;
 cpu_types_pkg::address_t res1;
 
 always_comb
-	as = a;
+	as = rse.argA;
 
 always_comb
-	bs = b << ir.ins.lsscn.sc;
+	bs = rse.argB << rse.uop.ls.sc;
 
 always_comb
 begin
 	if (vload_ndx | vstore_ndx)
-		res1 = as + bs * laneno + i;
+		res1 = as + bs * laneno + rse.argI;
 	else if (amo)
 		res1 = as;				// just [Rs1]
 	else if (virt2phys | load | store)
-		res1 = as + bs + i;
+		res1 = as + bs + rse.argI;
 	else
 		res1 <= 64'd0;
 end

@@ -37,13 +37,13 @@
 import Qupls4_pkg::*;
 
 module Qupls4_decode_load(instr, load, vload, vload_ndx);
-input Qupls4_pkg::instruction_t instr;
+input Qupls4_pkg::micro_op_t instr;
 output load;
 output vload;
 output vload_ndx;
 
 function fnIsLoad;
-input Qupls4_pkg::instruction_t op;
+input Qupls4_pkg::micro_op_t op;
 begin
 	case(op.any.opcode)
 	Qupls4_pkg::OP_LDB,Qupls4_pkg::OP_LDBZ,Qupls4_pkg::OP_LDW,Qupls4_pkg::OP_LDWZ,
@@ -56,7 +56,7 @@ end
 endfunction
 
 function fnIsVLoad;
-input Qupls4_pkg::instruction_t op;
+input Qupls4_pkg::micro_op_t op;
 begin
 	case(op.any.opcode)
 	Qupls4_pkg::OP_LDV:
@@ -68,7 +68,7 @@ end
 endfunction
 
 function fnIsVLoadNdx;
-input Qupls4_pkg::instruction_t op;
+input Qupls4_pkg::micro_op_t op;
 begin
 	case(op.any.opcode)
 	Qupls4_pkg::OP_LDVN:

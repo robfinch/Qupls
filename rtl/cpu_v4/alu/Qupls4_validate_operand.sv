@@ -40,14 +40,13 @@ import const_pkg::*;
 import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_validate_operand(arn, prn, prnv, rfo, rfo_tag,
+module Qupls4_validate_operand(arn, prnv, rfo, rfo_tag,
 	aRn0,aRn1,aRn2,
 	val0, val1, val2, val0_tag, val1_tag, val2_tag, 
-	rfi_val, rfi_tag, rfi_aRd, rfi_pRd,
+	rfi_val, rfi_tag, rfi_aRd,
 	valid0_i, valid1_i, valid2_i, valid0_o, valid1_o, valid2_o);
 parameter NBPI = 8;					// number of bypassing inputs
 input aregno_t [15:0] arn;	// arn for corresponding prn
-input pregno_t [15:0] prn;
 input [15:0] prnv;
 input value_t [15:0] rfo;
 input Qupls4_pkg::flags_t [15:0] rfo_tag;
@@ -62,8 +61,7 @@ output flags_t val1_tag;
 output flags_t val2_tag;
 input value_t [NBPI-1:0] rfi_val;
 input Qupls4_pkg::flags_t [NBPI-1:0] rfi_tag;
-input pregno_t [NBPI-1:0] rfi_aRd;
-input pregno_t [NBPI-1:0] rfi_pRd;
+input aregno_t [NBPI-1:0] rfi_aRd;
 input valid0_i;
 input valid1_i;
 input valid2_i;
@@ -114,12 +112,12 @@ begin
 	val0 = value_zero;
 	val1 = value_zero;
 	val2 = value_zero;
-	val0_tag = 1'b0;
-	val1_tag = 1'b0;
-	val2_tag = 1'b0;
+	val0_tag = {$bits(flags_t){1'b0}};
+	val1_tag = {$bits(flags_t){1'b0}};
+	val2_tag = {$bits(flags_t){1'b0}};
 	if (aRn0==8'd0) begin
 		val0 = {$bits(value_t){1'b0}};
-		val0_tag = 1'b0;
+		val0_tag = {$bits(flags_t){1'b0}};
 		valid0_o = VAL;
 	end
 	else
@@ -132,7 +130,7 @@ begin
 	end
 	if (aRn1==8'd0) begin
 		val1 = {$bits(value_t){1'b0}};
-		val1_tag = 1'b0;
+		val1_tag = {$bits(flags_t){1'b0}};
 		valid1_o = VAL;
 	end
 	else
@@ -146,7 +144,7 @@ begin
 	if (aRn2==8'd0) begin
 		valid2_o = VAL;
 		val2 = {$bits(value_t){1'b0}};
-		val2_tag = 1'b0;
+		val2_tag = {$bits(flags_t){1'b0}};
 	end
 	else
 	for (nn = 0; nn < 16; nn = nn + 1) begin

@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2024-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -32,80 +32,96 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// LUTs / FFs
+//
+// This stage overlaps with the enqueue to the ROB from the rename stage. It
+// reflects the values placed in the ROB. Its purpose is to allow access to 
+// those values without having to mux them out of the ROB.
+// Note that this stage holds onto the last valid rename stage output. This is
+// for purposes of bypassing. Invalid stages are ignored.
 // ============================================================================
 
 import const_pkg::*;
 import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_idiv(rst, clk, clk2x, ld, ir, div, a, b, bi, c, i, t, o,
-	div_done, div_dbz, exc_o);
-parameter ALU0 = 1'b1;
-parameter WID=64;
-parameter LANE=0;
+module Qupls4_pipeline_que(rst, clk, en,
+	ins0_ren, ins1_ren, ins2_ren, ins3_ren, 
+	ins0_que, ins1_que, ins2_que, ins3_que,
+	micro_machine_active_ren, micro_machine_active_que 
+);
 input rst;
 input clk;
-input clk2x;
-input ld;
-input Qupls4_pkg::micro_op_t ir;
-input div;
-input [WID-1:0] a;
-input [WID-1:0] b;
-input [WID-1:0] bi;
-input [WID-1:0] c;
-input [WID-1:0] i;
-input [WID-1:0] t;
-output reg [WID-1:0] o;
-output reg div_done;
-output div_dbz;
-output Qupls4_pkg::cause_code_t exc_o;
+input en;
+input Qupls4_pkg::pipeline_reg_t ins0_ren;
+input Qupls4_pkg::pipeline_reg_t ins1_ren;
+input Qupls4_pkg::pipeline_reg_t ins2_ren;
+input Qupls4_pkg::pipeline_reg_t ins3_ren;
+output Qupls4_pkg::pipeline_reg_t ins0_que;
+output Qupls4_pkg::pipeline_reg_t ins1_que;
+output Qupls4_pkg::pipeline_reg_t ins2_que;
+output Qupls4_pkg::pipeline_reg_t ins3_que;
+input micro_machine_active_ren;
+output reg micro_machine_active_que;
 
-genvar g;
-integer nn,kk,jj;
-Qupls4_pkg::cause_code_t exc;
-wire [WID:0] zero = {WID+1{1'b0}};
-wire [WID:0] dead = {1'b0,{WID/16{16'hdead}}};
-wire [WID-1:0] div_q, div_r;
-wire div_done1;
-reg [WID:0] bus;
+Qupls4_pkg::pipeline_reg_t nopi;
 
-Qupls4_divider #(.WID(WID)) udiv0(
-	.rst(rst),
-	.clk(clk2x),
-	.ld(ld),
-	.sgn(div),
-	.sgnus(1'b0),
-	.a(a),
-	.b(ir[31] ? i : bi),
-	.qo(div_q),
-	.ro(div_r),
-	.dvByZr(div_dbz),
-	.done(div_done1),
-	.idle()
-);
-
+// Define a NOP instruction.
 always_comb
 begin
-	exc = Qupls4_pkg::FLT_NONE;
-	bus = {(WID/16){16'h0000}};
-	case(ir.any.opcode)
-	Qupls4_pkg::OP_DIVI:
-		case (ir.alu.op3)
-		3'd0:	bus = div_q[WID-1:0];
-		3'd1: bus = div_q[WID-1:0];
-		3'd4:	bus = div_r[WID-1:0];
-		default:	bus = zero;
-		endcase
-	default:	bus = {(WID/16){16'hDEAD}};
-	endcase
+	nopi = {$bits(Qupls4_pkg::pipeline_reg_t){1'b0}};
+	nopi.pc = Qupls4_pkg::RSTPC;
+	nopi.pc.bno_t = 6'd1;
+	nopi.pc.bno_f = 6'd1;
+	nopi.uop = {26'd0,Qupls4_pkg::OP_NOP};
+	nopi.uop.any.count = 3'd1;
+	nopi.decbus.Rdz = 1'b1;
+	nopi.decbus.nop = 1'b1;
+	nopi.decbus.alu = 1'b1;
 end
 
 always_ff @(posedge clk)
-	div_done <= div_done1;
+if (rst)
+	ins0_que <= nopi;
+else begin
+	if (en) begin
+		if (ins0_ren.v)
+			ins0_que <= ins0_ren;
+	end
+end
 always_ff @(posedge clk)
-	o <= bus;
+if (rst)
+	ins1_que <= nopi;
+else begin
+	if (en) begin
+		if (ins1_ren.v)
+			ins1_que <= ins1_ren;
+	end
+end
 always_ff @(posedge clk)
-	exc_o <= exc;
+if (rst)
+	ins2_que <= nopi;
+else begin
+	if (en) begin
+		if (ins2_ren.v)
+			ins2_que <= ins2_ren;
+	end
+end
+always_ff @(posedge clk)
+if (rst)
+	ins3_que <= nopi;
+else begin
+	if (en) begin
+		if (ins3_ren.v)
+			ins3_que <= ins3_ren;
+	end
+end
+
+always_ff @(posedge clk)
+if (rst)
+	micro_machine_active_que <= FALSE;
+else begin
+	if (en)
+		micro_machine_active_que <= micro_machine_active_ren;
+end
 
 endmodule

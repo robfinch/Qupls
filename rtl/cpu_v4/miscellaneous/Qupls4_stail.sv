@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2024-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -32,54 +32,49 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 15 LUTs
+//
+// Compute a new tail position after a stomp.
 // ============================================================================
 
-import cpu_types_pkg::*;
+import const_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_decode_Rs3(om, instr, instr_raw, has_immc, Rs3, Rs3z, exc);
-input Qupls4_pkg::operating_mode_t om;
-input Qupls4_pkg::micro_op_t instr;
-input [335:0] instr_raw;
-input has_immc;
-output aregno_t Rs3;
-output reg Rs3z;
-output reg exc;
+module Qupls4_stail(head0, tail0, robentry_stomp, rob, stail);
+input rob_ndx_t head0;
+input rob_ndx_t tail0;
+input [Qupls4_pkg::ROB_ENTRIES-1:0] robentry_stomp;
+input Qupls4_pkg::rob_entry_t [Qupls4_pkg::ROB_ENTRIES-1:0] rob;
+output rob_ndx_t stail;											// stomp tail
 
-reg exc2;
+integer n5,n6,n7;
+reg okay_to_move_tail;
 
-function aregno_t fnRs3;
-input Qupls4_pkg::micro_op_t instr;
-input [335:0] instr_raw;
-input has_immc;
-Qupls4_pkg::micro_op_t ir;
-reg has_rext;
-begin
-	ir = instr;
-	has_rext = instr_raw[54:48]==OP_REXT;
-	if (has_immc)
-		fnRs3 = 7'd0;
-	else
-		case(ir.any.opcode)
-		Qupls4_pkg::OP_STB,Qupls4_pkg::OP_STW,
-		Qupls4_pkg::OP_STT,Qupls4_pkg::OP_STORE,Qupls4_pkg::OP_STI,
-		Qupls4_pkg::OP_STPTR:
-			fnRs3 = has_rext ? instr_raw[48+34:48+28] : {2'b00,ir.ls.Rsd};
-		Qupls4_pkg::OP_R3B,Qupls4_pkg::OP_R3W,Qupls4_pkg::OP_R3T,Qupls4_pkg::OP_R3O:
-			fnRs3 = has_rext ? instr_raw[48+34:48+28] : {2'b00,ir.alu.Rs3};
-		default:
-			fnRs3 = 7'd0;
-		endcase
-end
-endfunction
-
+// Reset the ROB tail pointer, if there is a head <-> tail collision move the
+// head pointer back a few entries. These will have been already committed
+// entries, so they will be skipped over.
+// If there is an interrupt pending in the ROB do not move the tail.
 always_comb
 begin
-	Rs3 = fnRs3(instr, instr_raw, has_immc);
-	Rs3z = ~|Rs3;
-	exc = 1'b0;
-//	tRegmap(om, Rs3, Rs3, exc);
+	okay_to_move_tail = TRUE;
+	n7 = 1'd0;
+	stail = tail0;
+	for (n5 = 0; n5 < Qupls4_pkg::ROB_ENTRIES; n5 = n5 + 1) begin
+		if (rob[n5].op.hwi)
+			okay_to_move_tail = FALSE;
+	end
+	if (okay_to_move_tail) begin
+		for (n5 = 0; n5 < Qupls4_pkg::ROB_ENTRIES; n5 = n5 + 1) begin
+			if (n5==0)
+				n6 = Qupls4_pkg::ROB_ENTRIES - 1;
+			else
+				n6 = n5 - 1;
+			if (robentry_stomp[n5] && !robentry_stomp[n6] && !n7) begin
+				stail = (n5 + 3) % Qupls4_pkg::ROB_ENTRIES;
+				stail[1:0] = 2'b00;
+				n7 = 1'b1;
+			end
+		end
+	end
 end
 
 endmodule

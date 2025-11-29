@@ -42,7 +42,7 @@ import Qupls4_pkg::*;
 module Qupls4_decode_const(instr_raw, ins, imma, immb, immc, immd,
 	has_imma, has_immb, has_immc, has_immd, pos, isz);
 input [335:0] instr_raw;
-input Qupls4_pkg::instruction_t ins;
+input Qupls4_pkg::micro_op_t ins;
 output reg [63:0] imma;
 output reg [63:0] immb;
 output reg [63:0] immc;
@@ -54,7 +54,7 @@ output reg has_immd;
 output reg [11:0] pos;
 output reg [5:0] isz;
 
-Qupls4_pkg::instruction_t insf;
+Qupls4_pkg::micro_op_t insf;
 wire [63:0] imm16x64a;
 wire [63:0] imm16x64b;
 wire [63:0] imm16x64c;

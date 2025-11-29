@@ -3,7 +3,7 @@ import Qupls4_pkg::*;
 // 100 LUTs
 
 module Qupls4_calc_cz(instr, pc_inc, nop);
-input Qupls4_pkg::instruction_t [3:0] instr;
+input Qupls4_pkg::micro_op_t [3:0] instr;
 output reg [5:0] pc_inc;
 output reg [7:0] nop;
 

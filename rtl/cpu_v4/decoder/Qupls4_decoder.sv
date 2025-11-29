@@ -46,21 +46,17 @@ input Qupls4_pkg::micro_op_t instr;
 input [335:0] instr_raw;
 output Qupls4_pkg::decode_bus_t dbo;
 
-Qupls4_pkg::ex_instruction_t ins;
 Qupls4_pkg::decode_bus_t db;
 wire [11:0] const_pos;
 wire [5:0] isz;
 wire excRs1, excRs2, excRs3, excRd, excRd2, excRd3;
 wire [3:0] pred_shadow_count;
 
-always_comb
-	ins = instr.ins;
-
 assign db.v = 1'b1;
 
 Qupls4_decode_const udcimm
 (
-	.ins(ins.ins),
+	.ins(instr),
 	.instr_raw(instr_raw),
 	.imma(db.imma),
 	.immb(db.immb),
@@ -121,7 +117,7 @@ Qupls4_decode_Rd udcrt
 Stark_decode_Rd2 udcrd2
 (
 	.om(om),
-	.instr(ins.ins),
+	.instr(instr),
 	.Rd2(db.Rd2),
 	.Rd2z(db.Rd2z),
 	.exc(excRd2)
@@ -130,155 +126,157 @@ Stark_decode_Rd2 udcrd2
 Stark_decode_Rd3 udcrd3
 (
 	.om(om),
-	.instr(ins.ins),
+	.instr(instr),
 	.Rd3(db.Rd3),
 	.Rd3z(db.Rd3z),
 	.exc(excRd3)
 );
 */
+/*
 Stark_decode_macro umacro1
 (
-	.instr(ins.ins),
+	.instr(instr),
 	.macro(db.macro)
 );
+*/
 
-Stark_decode_has_imm uhi
+Qupls4_decode_has_imm uhi
 (
-	.instr(ins.ins),
+	.instr(instr),
 	.has_imm(db.has_imm)
 );
 
-Stark_decode_nop unop1
+Qupls4_decode_nop unop1
 (
-	.instr(ins.ins),
+	.instr(instr),
 	.nop(db.nop)
 );
 
 Stark_decode_fc ufc1
 (
-	.instr(ins.ins),
+	.instr(instr),
 	.fc(db.fc)
 );
 
 Stark_decode_cjb ucjb1
 (
-	.instr(ins.ins),
+	.instr(instr),
 	.cjb(db.cjb)
 );
 
 Stark_decode_bl ubsr1
 (
-	.instr(ins.ins),
+	.instr(instr),
 	.bl(db.bl)
 );
 
 Stark_decode_conditional_branch udecbr
 (
-	.instr(ins.ins),
+	.instr(instr),
 	.branch(db.br)
 );
 
 Stark_decode_predicate_branch udecpbr
 (
-	.instr(ins.ins),
+	.instr(instr),
 	.branch(db.pbr),
 	.mask(db.pred_mask),
 	.atom_mask(db.pred_atom_mask),
 	.count(pred_shadow_count)
 );
 
-Stark_decode_brclass ubrc1
+Qupls4_decode_brclass ubrc1
 (
-	.instr(ins.ins),
+	.instr(instr),
 	.brclass(db.brclass)
 );
 
 /*
 Stark_decode_mcb udecmcb
 (
-	.instr(ins.ins),
+	.instr(instr),
 	.mcb(db.mcb)
 );
 */
 /*
 Stark_decode_backbr ubkbr1
 (
-	.instr(ins.ins),
+	.instr(instr),
 	.backbr(db.backbr)
 );
 */
 /*
 Stark_decode_branch_tgt_src udbts1
 (
-	.ins(ins.ins),
+	.ins(instr),
 	.bts(db.bts)
 );
 */
 /*
 Stark_decode_alu udcalu
 (
-	.instr(ins.ins),
+	.instr(instr),
 	.alu(db.alu)
 );
 
 Stark_decode_alu0 udcalu0
 (
-	.instr(ins.ins),
+	.instr(instr),
 	.alu0(db.alu0)
 );
 */
 Stark_decode_sau usaudec1
 (
-	.instr(ins),
+	.instr(instr),
 	.sau(db.sau)
 );
 
 Stark_decode_sau0 udcsau0
 (
-	.instr(ins),
+	.instr(instr),
 	.sau0(db.sau0)
 );
 
 /*
 Stark_decode_alu_pair udcalup0
 (
-	.instr(ins.ins),
+	.instr(instr),
 	.alu_pair(db.alu_pair)
 );
 */
 Stark_decode_bitwise udcbitwise
 (
-	.instr(ins.ins),
+	.instr(instr),
 	.bitwise(db.bitwise)
 );
 
 Stark_decode_mul umul1
 (
-	.instr(ins.ins),
+	.instr(instr),
 	.mul(db.mul)
 );
 
 Stark_decode_mula umulu1
 (
-	.instr(ins.ins),
+	.instr(instr),
 	.mul(db.mula)
 );
 
 Stark_decode_div udiv1
 (
-	.instr(ins.ins),
+	.instr(instr),
 	.div(db.div)
 );
 
 Stark_decode_diva udivu1
 (
-	.instr(ins.ins),
+	.instr(instr),
 	.div(db.diva)
 );
 
 Qupls4_decode_load udecld1
 (
-	.instr(ins.ins),
+	.instr(instr),
 	.load(db.load),
 	.vload(db.vload),
 	.vload_ndx(db.vload_ndx)
@@ -286,13 +284,13 @@ Qupls4_decode_load udecld1
 
 Stark_decode_loadz udecldz1
 (
-	.instr(ins.ins),
+	.instr(instr),
 	.loadz(db.loadz)
 );
 
 Qupls4_decode_store udecst1
 (
-	.instr(ins.ins),
+	.instr(instr),
 	.store(db.store),
 	.vstore(db.vstore),
 	.vstore_ndx(db.vstore_ndx)
@@ -300,92 +298,92 @@ Qupls4_decode_store udecst1
 
 Stark_decode_loada udeclda1
 (
-	.instr(ins.ins),
+	.instr(instr),
 	.loada(db.loada)
 );
 
 Stark_decode_fence udfence1
 (
-	.instr(ins.ins),
+	.instr(instr),
 	.fence(db.fence)
 );
 
 Stark_decode_pfx udecpfx1
 (
-	.instr(ins.ins),
+	.instr(instr),
 	.pfx(db.pfx)
 );
 
 Stark_decode_fma ufma
 (
-	.instr(ins.ins),
+	.instr(instr),
 	.fma(db.fma)
 );
 
 Stark_decode_fpu ufpu
 (
-	.instr(ins.ins),
+	.instr(instr),
 	.fpu(db.fpu)
 );
 
 Stark_decode_fpu0 ufpu0
 (
-	.instr(ins.ins),
+	.instr(instr),
 	.fpu0(db.fpu0)
 );
 
 Stark_decode_oddball uob0
 (
-	.instr(ins.ins),
+	.instr(instr),
 	.oddball(db.oddball)
 );
 
 Stark_decode_regs uregs0
 (
-	.instr(ins.ins),
+	.instr(instr),
 	.regs(db.regs)
 );
 
 Stark_decode_brk ubrk1
 (
-	.instr(ins.ins),
+	.instr(instr),
 	.brk(db.brk)
 );
 
 Stark_decode_csr ucsr1
 (
-	.instr(ins.ins),
+	.instr(instr),
 	.csr(db.csr)
 );
 
 Stark_decode_multicycle udmc1
 (
-	.instr(ins.ins),
+	.instr(instr),
 	.multicycle(db.multicycle)
 );
 /*
 Stark_decode_irq udirq1
 (
-	.instr(ins.ins),
+	.instr(instr),
 	.irq(db.irq)
 );
 */
 
 Stark_decode_eret uderet1
 (
-	.instr(ins.ins),
+	.instr(instr),
 	.eret(db.eret)
 );
 
 Stark_decode_rex udrex1
 (
-	.instr(ins.ins),
+	.instr(instr),
 	.rex(db.rex)
 );
 /*
 Stark_decode_prec udprec1
 (
-	.instr(ins.ins),
+	.instr(instr),
 	.prec(db.prc)
 );
 */
@@ -403,7 +401,7 @@ else begin
 	if (en) begin
 		dbo <= {$bits(dbo){1'd0}};	// in case a signal was missed / unused.
 		dbo <= db;
-		if (!instr.v) begin
+		if (!instr.any.v) begin
 			dbo.nop <= TRUE;
 			dbo.alu <= TRUE;
 			dbo.fpu <= FALSE;
@@ -423,9 +421,9 @@ else begin
 			 db.load|db.vload|db.vload_ndx
 			|db.store|db.vstore|db.vstore_ndx
 			|db.v2p|db.vv2p|db.vvn2p;
-		dbo.sync <= db.fence && ins[15:8]==8'hFF;
+		dbo.sync <= db.fence && instr[15:8]==8'hFF;
 		dbo.cpytgt <= 1'b0;
-		dbo.qfext <= db.alu && ins.ins[28:27]==2'b10;
+		dbo.qfext <= 1'b0;//db.alu && ins.ins[28:27]==2'b10;
 		if (excRs1|excRs2|excRs3|excRd)
 			dbo.cause <= Qupls4_pkg::FLT_BADREG;
 		// Is the predicate shadow count within range?

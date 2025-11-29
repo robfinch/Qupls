@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -32,54 +32,48 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 15 LUTs
+//  1475 LUTs /  0 FFs
 // ============================================================================
 
+import const_pkg::*;
 import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_decode_Rs3(om, instr, instr_raw, has_immc, Rs3, Rs3z, exc);
-input Qupls4_pkg::operating_mode_t om;
-input Qupls4_pkg::micro_op_t instr;
-input [335:0] instr_raw;
-input has_immc;
-output aregno_t Rs3;
-output reg Rs3z;
-output reg exc;
+module Qupls4_map_dstreg_req(pgh, rob, ns_alloc_req, ns_whrndx, ns_rndx,
+	ns_areg, ns_cndx);
+input Qupls4_pkg::pipeline_group_hdr_t [Qupls4_pkg::ROB_ENTRIES/4-1:0] pgh;
+input Qupls4_pkg::rob_entry_t [Qupls4_pkg::ROB_ENTRIES-1:0] rob;
+output reg [3:0] ns_alloc_req;
+output rob_ndx_t [3:0] ns_whrndx;
+input rob_ndx_t [3:0] ns_rndx;
+output aregno_t [3:0] ns_areg;
+output checkpt_ndx_t [3:0] ns_cndx;
 
-reg exc2;
-
-function aregno_t fnRs3;
-input Qupls4_pkg::micro_op_t instr;
-input [335:0] instr_raw;
-input has_immc;
-Qupls4_pkg::micro_op_t ir;
-reg has_rext;
-begin
-	ir = instr;
-	has_rext = instr_raw[54:48]==OP_REXT;
-	if (has_immc)
-		fnRs3 = 7'd0;
-	else
-		case(ir.any.opcode)
-		Qupls4_pkg::OP_STB,Qupls4_pkg::OP_STW,
-		Qupls4_pkg::OP_STT,Qupls4_pkg::OP_STORE,Qupls4_pkg::OP_STI,
-		Qupls4_pkg::OP_STPTR:
-			fnRs3 = has_rext ? instr_raw[48+34:48+28] : {2'b00,ir.ls.Rsd};
-		Qupls4_pkg::OP_R3B,Qupls4_pkg::OP_R3W,Qupls4_pkg::OP_R3T,Qupls4_pkg::OP_R3O:
-			fnRs3 = has_rext ? instr_raw[48+34:48+28] : {2'b00,ir.alu.Rs3};
-		default:
-			fnRs3 = 7'd0;
-		endcase
-end
-endfunction
+integer n1,kk;
+integer m1,m2,m3,m4;
 
 always_comb
 begin
-	Rs3 = fnRs3(instr, instr_raw, has_immc);
-	Rs3z = ~|Rs3;
-	exc = 1'b0;
-//	tRegmap(om, Rs3, Rs3, exc);
+kk = 0;
+for (n1 = 0; n1 < 4; n1 = n1 + 1) begin
+	ns_alloc_req[n1] = 1'b0;
+	ns_areg[n1] = 8'd0;
+end
+for (n1 = 0; n1 < Qupls4_pkg::ROB_ENTRIES; n1 = n1 + 1) begin
+	if (rob[n1].v && kk < 4) begin
+		m1 = (n1==ns_rndx[0]);
+		m2 = (n1==ns_rndx[1]);
+		m3 = (n1==ns_rndx[2]);
+		m4 = (n1==ns_rndx[3]);
+		if (!rob[n1].op.pRdv && kk < 4 && !m1 && !m2 && !m3 && !m4) begin
+			ns_alloc_req[kk] = 1'b1;
+			ns_whrndx[kk] = n1;
+			ns_areg[kk] = rob[n1].op.decbus.Rd;
+			ns_cndx[kk] = pgh[n1>>2].cndx;
+			kk = kk + 1;
+		end
+	end
+end
 end
 
 endmodule

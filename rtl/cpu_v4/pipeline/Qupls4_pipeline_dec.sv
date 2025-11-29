@@ -154,7 +154,7 @@ Qupls4_pkg::micro_op_t [31:0] uop_buf;
 Qupls4_microop uuop1
 (
 	.om(pg_mux.pr0.om),
-	.ir(pg_mux.pr0.uop.ins),
+	.ir(pg_mux.pr0.uop),
 	.num(uop_num), 
 	.carry_reg(8'd0),
 	.carry_out(1'b0),
@@ -166,7 +166,7 @@ Qupls4_microop uuop1
 Qupls4_microop uuop2
 (
 	.om(pg_mux.pr1.om),
-	.ir(pg_mux.pr1.uop.ins), 
+	.ir(pg_mux.pr1.uop), 
 	.num(3'd0), 
 	.carry_reg(8'd0),
 	.carry_out(1'b0),
@@ -178,7 +178,7 @@ Qupls4_microop uuop2
 Qupls4_microop uuop3
 (
 	.om(pg_mux.pr2.om),
-	.ir(pg_mux.pr2.uop.ins), 
+	.ir(pg_mux.pr2.uop), 
 	.num(3'd0), 
 	.carry_reg(8'd0),
 	.carry_out(1'b0),
@@ -190,7 +190,7 @@ Qupls4_microop uuop3
 Qupls4_microop uuop4
 (
 	.om(pg_mux.pr3.om),
-	.ir(pg_mux.pr3.uop.ins), 
+	.ir(pg_mux.pr3.uop), 
 	.num(3'd0), 
 	.carry_reg(8'd0),
 	.carry_out(1'b0),
@@ -342,8 +342,8 @@ always_comb
 begin
 	nopi = {$bits(Qupls4_pkg::pipeline_reg_t){1'b0}};
 	nopi.pc.pc = RSTPC;
-	nopi.uop.count = 3'd1;
-	nopi.uop.ins = {26'd0,Qupls4_pkg::OP_NOP};
+	nopi.uop = {26'd0,Qupls4_pkg::OP_NOP};
+	nopi.uop.any.count = 3'd1;
 	nopi.v = 1'b1;
 	nopi.decbus.Rdz = 1'b1;
 	nopi.decbus.nop = 1'b1;
@@ -762,7 +762,7 @@ begin
 	if (dec0.pred && pr0_dec.v)
 		pr1_dec.atom_mask = dec0.pred_atom_mask;
 	else if (dec0.atom && pr0_dec.v)
-		pr1_dec.atom_mask = {ins0m.uop.ins[23:9],ins0m.uop.ins[0]};
+		pr1_dec.atom_mask = {ins0m.uop[23:9],ins0m.uop[0]};
 	else if (!pr0_dec.ssm)
 		pr1_dec.atom_mask = pr0_dec.atom_mask >> 12'd1;
 	else
@@ -773,7 +773,7 @@ begin
 	if (dec1.pred && pr1_dec.v)
 		pr2_dec.atom_mask = dec1.pred_atom_mask;
 	else if (dec1.atom && pr1_dec.v)
-		pr2_dec.atom_mask = {ins1m.uop.ins[23:9],ins1m.uop.ins[0]};
+		pr2_dec.atom_mask = {ins1m.uop[23:9],ins1m.uop[0]};
 	else if (!pr1_dec.ssm)
 		pr2_dec.atom_mask = pr1_dec.atom_mask >> 12'd1;
 	else
@@ -784,7 +784,7 @@ begin
 	if (dec2.pred && pr2_dec.v)
 		pr3_dec.atom_mask = dec2.pred_atom_mask;
 	else if (dec2.atom && pr2_dec.v)
-		pr3_dec.atom_mask = {ins2m.uop.ins[23:9],ins2m.uop.ins[0]};
+		pr3_dec.atom_mask = {ins2m.uop[23:9],ins2m.uop[0]};
 	else if (!pr2_dec.ssm)
 		pr3_dec.atom_mask = pr2_dec.atom_mask >> 12'd1;
 	else
@@ -795,7 +795,7 @@ begin
 	if (dec3.pred && pr3_dec.v)
 		atom_mask_o = dec3.pred_atom_mask;
 	else if (dec3.atom && pr3_dec.v)
-		atom_mask_o = {ins3m.uop.ins[23:9],ins3m.uop.ins[0]};
+		atom_mask_o = {ins3m.uop[23:9],ins3m.uop[0]};
 	else if (!pr3_dec.ssm)
 		atom_mask_o = pr3_dec.atom_mask >> 12'd1;
 	else
@@ -815,7 +815,7 @@ begin
 		end
 	endcase
 	if (dec0.carry && pr0_dec.v) begin
-		pr1_dec.carry_mod = ins0m.uop.ins;
+		pr1_dec.carry_mod = ins0m.uop;
 	end
 	else begin
 		pr1_dec.carry_mod = pr0_dec.carry_mod;
@@ -836,7 +836,7 @@ begin
 		end
 	endcase
 	if (dec1.carry && pr1_dec.v) begin
-		pr2_dec.carry_mod = ins1m.uop.ins;
+		pr2_dec.carry_mod = ins1m.uop;
 	end
 	else begin
 		pr2_dec.carry_mod = pr1_dec.carry_mod;
@@ -857,7 +857,7 @@ begin
 		end
 	endcase
 	if (dec2.carry && pr2_dec.v) begin
-		pr3_dec.carry_mod = ins2m.uop.ins;
+		pr3_dec.carry_mod = ins2m.uop;
 	end
 	else begin
 		pr3_dec.carry_mod = pr2_dec.carry_mod;
@@ -878,7 +878,7 @@ begin
 		end
 	endcase
 	if (dec3.carry & pr3_dec.v) begin
-		carry_mod_o = ins3m.uop.ins;
+		carry_mod_o = ins3m.uop;
 	end
 	else begin
 		carry_mod_o = pr3_dec.carry_mod;

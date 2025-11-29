@@ -51,7 +51,7 @@ output Qupls4_pkg::reservation_station_entry_t rse_o;
 input ld;
 input [2:0] lane;
 input Qupls4_pkg::memsz_t prc;
-input Qupls4_pkg::instruction_t ir;
+input Qupls4_pkg::micro_op_t ir;
 input div;
 input [7:0] cptgt;
 input z;
@@ -295,7 +295,7 @@ generate begin : gCptgt
 	for (mm = 0; mm < WID/8; mm = mm + 1) begin
     always_comb
     begin
-    	if (rse_o.ins.any.opcode==Qupls4_pkg::OP_NOP)
+    	if (rse_o.uop.any.opcode==Qupls4_pkg::OP_NOP)
         o[mm*8+7:mm*8] = t1[mm*8+7:mm*8];
       else if (cptgt1[mm])
         o[mm*8+7:mm*8] = z1 ? 8'h00 : t1[mm*8+7:mm*8];
@@ -335,7 +335,7 @@ always_comb
 generate begin : gExc
 	for (xx = 0; xx < WID/8; xx = xx + 1)
     always_comb
-      if (cptgt[xx]||rse_o.ins.any.opcode==Qupls4_pkg::OP_NOP)
+      if (cptgt[xx]||rse_o.uop.any.opcode==Qupls4_pkg::OP_NOP)
         exc[xx*8+7:xx*8] = Qupls4_pkg::FLT_NONE;
       else
         exc[xx*8+7:xx*8] = exc1[xx*8+7:xx*8];

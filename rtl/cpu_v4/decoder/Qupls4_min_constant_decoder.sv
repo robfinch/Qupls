@@ -9,7 +9,7 @@ import Qupls4_pkg::*;
 // starting at the of the cache line and working backwards.
 
 module Qupls4_min_constant_decoder(cline, nops);
-input Qupls4_pkg::instruction_t [9:0] cline;	// cache line in terms of instructions
+input Qupls4_pkg::micro_op_t [9:0] cline;	// cache line in terms of instructions
 output reg [9:0] nops;
 
 integer n1;

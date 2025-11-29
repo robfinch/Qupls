@@ -38,7 +38,7 @@ import Qupls4_pkg::*;
 
 module Qupls4_cmp(ir, om, cr, a, b, i, o);
 parameter WID=64;
-input Qupls4_pkg::instruction_t ir;
+input Qupls4_pkg::micro_op_t ir;
 input Qupls4_pkg::operating_mode_t om;
 input [WID-1:0] cr;
 input [WID-1:0] a;

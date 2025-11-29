@@ -41,17 +41,17 @@ import Qupls4_pkg::*;
 module Qupls4_decode_Rd(om, instr, instr_raw, Rd, Rdz, exc);
 input Qupls4_pkg::operating_mode_t om;
 input Qupls4_pkg::micro_op_t instr;
-input [239:0] instr_raw;
+input [335:0] instr_raw;
 output aregno_t Rd;
 output reg Rdz;
 output reg exc;
 
 function aregno_t fnRd;
 input Qupls4_pkg::micro_op_t instr;
-input [239:0] instr_raw;
-Qupls4_pkg::instruction_t ir;
+input [335:0] instr_raw;
+Qupls4_pkg::micro_op_t ir;
 begin
-	ir = instr.ins;
+	ir = instr;
 	case(ir.any.opcode)
 /*
 	Qupls4_pkg::OP_MOV:
@@ -70,12 +70,12 @@ begin
 	Qupls4_pkg::OP_SHIFT:
 		fnRd = ir.alui.Rd;
 	Qupls4_pkg::OP_B0,Qupls4_pkg::OP_B1,Qupls4_pkg::OP_BCC0,Qupls4_pkg::OP_BCC1:
-		fnRd = ir[8:6]==3'd7 || ir[8:6]==3'd0 ? 7'd0 : {4'b0100,ir.blrlr.BRd};
+		fnRd = ir[8:6]==3'd7 || ir[8:6]==3'd0 ? 7'd0 : {2'b00,ir.bsr.Rd};
 	Qupls4_pkg::OP_LDB,Qupls4_pkg::OP_LDBZ,Qupls4_pkg::OP_LDW,Qupls4_pkg::OP_LDWZ,
 	Qupls4_pkg::OP_LDT,Qupls4_pkg::OP_LDTZ,Qupls4_pkg::OP_LOAD,Qupls4_pkg::OP_LOADA,
 	Qupls4_pkg::OP_LDV,
 	Qupls4_pkg::OP_AMO,Qupls4_pkg::OP_CMPSWAP:
-		fnRd = ir.lsd.Rsd;
+		fnRd = ir.ls.Rsd;
 	default:
 		fnRd = 7'd0;
 	endcase

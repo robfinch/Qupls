@@ -65,6 +65,8 @@ else begin
 			state_o <= Qupls4_pkg::DRAMSLOT_DELAY2;
 	Qupls4_pkg::DRAMSLOT_DELAY2:
 		state_o <= Qupls4_pkg::DRAMSLOT_AVAIL;
+	default:
+		state_o <= Qupls4_pkg::DRAMSLOT_AVAIL;
 	endcase
 	if (set_ready_i)
 		state_o <= Qupls4_pkg::DRAMSLOT_READY;

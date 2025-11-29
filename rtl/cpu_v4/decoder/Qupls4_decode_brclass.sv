@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -32,54 +32,37 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 15 LUTs
 // ============================================================================
 
-import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_decode_Rs3(om, instr, instr_raw, has_immc, Rs3, Rs3z, exc);
-input Qupls4_pkg::operating_mode_t om;
-input Qupls4_pkg::micro_op_t instr;
-input [335:0] instr_raw;
-input has_immc;
-output aregno_t Rs3;
-output reg Rs3z;
-output reg exc;
-
-reg exc2;
-
-function aregno_t fnRs3;
-input Qupls4_pkg::micro_op_t instr;
-input [335:0] instr_raw;
-input has_immc;
-Qupls4_pkg::micro_op_t ir;
-reg has_rext;
-begin
-	ir = instr;
-	has_rext = instr_raw[54:48]==OP_REXT;
-	if (has_immc)
-		fnRs3 = 7'd0;
-	else
-		case(ir.any.opcode)
-		Qupls4_pkg::OP_STB,Qupls4_pkg::OP_STW,
-		Qupls4_pkg::OP_STT,Qupls4_pkg::OP_STORE,Qupls4_pkg::OP_STI,
-		Qupls4_pkg::OP_STPTR:
-			fnRs3 = has_rext ? instr_raw[48+34:48+28] : {2'b00,ir.ls.Rsd};
-		Qupls4_pkg::OP_R3B,Qupls4_pkg::OP_R3W,Qupls4_pkg::OP_R3T,Qupls4_pkg::OP_R3O:
-			fnRs3 = has_rext ? instr_raw[48+34:48+28] : {2'b00,ir.alu.Rs3};
-		default:
-			fnRs3 = 7'd0;
-		endcase
-end
-endfunction
+module Qupls4_decode_brclass(instr, brclass);
+input Qupls4_pkg::instruction_t instr;
+output Qupls4_pkg::brclass_t brclass;
 
 always_comb
-begin
-	Rs3 = fnRs3(instr, instr_raw, has_immc);
-	Rs3z = ~|Rs3;
-	exc = 1'b0;
-//	tRegmap(om, Rs3, Rs3, exc);
-end
-
+	case(instr.any.opcode)
+	Qupls4_pkg::OP_BCC8,Qupls4_pkg::OP_BCC16,Qupls4_pkg::OP_BCC32,Qupls4_pkg::OP_BCC64,
+	Qupls4_pkg::OP_BCCU8,Qupls4_pkg::OP_BCCU16,Qupls4_pkg::OP_BCCU32,Qupls4_pkg::OP_BCCU64:
+		begin
+			if (instr.br.md)
+				brclass = Qupls4_pkg::BRC_BCCR;
+			else
+				brclass = Qupls4_pkg::BRC_BCCD;
+		end
+	Qupls4_pkg::OP_JSR:
+		brclass = Qupls4_pkg::BRC_JSR;
+	Qupls4_pkg::OP_JSRN:
+		brclass = Qupls4_pkg::BRC_JSRN;
+	Qupls4_pkg::OP_RTD:
+		brclass = Qupls4_pkg::BRC_RTD;
+	Qupls4_pkg::OP_BRK:
+		if (instr[28:18]==11'd1)
+			brclass = Qupls4_pkg::BRC_ERET;
+		else
+			brclass = Qupls4_pkg::BRC_NONE;
+	default:
+		brclass = Qupls4_pkg::BRC_NONE;
+	endcase
+		
 endmodule

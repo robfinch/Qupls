@@ -41,7 +41,7 @@ import Qupls4_pkg::*;
 module Qupls4_decode_Rs1(om, instr, instr_raw, has_imma, Rs1, Rs1z, exc);
 input Qupls4_pkg::operating_mode_t om;
 input Qupls4_pkg::micro_op_t instr;
-input [239:0] instr_raw;
+input [335:0] instr_raw;
 input has_imma;
 output aregno_t Rs1;
 output reg Rs1z;
@@ -51,12 +51,12 @@ Qupls4_pkg::operating_mode_t om1;
 
 function aregno_t fnRs1;
 input Qupls4_pkg::micro_op_t ins;
-input [239:0] instr_raw;
+input [335:0] instr_raw;
 input has_imma;
-Qupls4_pkg::instruction_t ir;
+Qupls4_pkg::micro_op_t ir;
 reg has_rext;
 begin
-	ir = ins.ins;
+	ir = ins;
 	has_rext = instr_raw[54:48] == OP_REXT;
 	if (has_imma)
 		fnRs1 = 8'd0;
@@ -89,7 +89,7 @@ begin
 		Qupls4_pkg::OP_AMO,Qupls4_pkg::OP_CMPSWAP,
 		Qupls4_pkg::OP_STB,Qupls4_pkg::OP_STW,Qupls4_pkg::OP_STT,Qupls4_pkg::OP_STORE,Qupls4_pkg::OP_STI,
 		Qupls4_pkg::OP_STPTR:
-			fnRs1 = has_rext ? instr_raw[61:55] : {1'b0,ir.lsd.Rs1};
+			fnRs1 = has_rext ? instr_raw[61:55] : {1'b0,ir.ls.Rs1};
 
 		Qupls4_pkg::OP_PUSH,Qupls4_pkg::OP_POP:
 			fnRs1 = 7'd0;

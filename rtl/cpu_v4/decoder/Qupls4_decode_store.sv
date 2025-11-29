@@ -37,13 +37,13 @@
 import Qupls4_pkg::*;
 
 module Qupls4_decode_store(instr, store, vstore, vstore_ndx,);
-input Qupls4_pkg::instruction_t instr;
+input Qupls4_pkg::micro_op_t instr;
 output store;
 output vstore;
 output vstore_ndx;
 
 function fnIsStore;
-input Qupls4_pkg::instruction_t op;
+input Qupls4_pkg::micro_op_t op;
 begin
 	case(op.any.opcode)
 	Qupls4_pkg::OP_STB,Qupls4_pkg::OP_STW,
@@ -58,7 +58,7 @@ end
 endfunction
 
 function fnIsStoreVec;
-input Qupls4_pkg::instruction_t op;
+input Qupls4_pkg::micro_op_t op;
 begin
 	case(op.any.opcode)
 	Qupls4_pkg::OP_STV:
@@ -70,7 +70,7 @@ end
 endfunction
 
 function fnIsStoreVn;
-input Qupls4_pkg::instruction_t op;
+input Qupls4_pkg::micro_op_t op;
 begin
 	case(op.any.opcode)
 	Qupls4_pkg::OP_STV:

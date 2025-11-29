@@ -218,7 +218,6 @@ Qupls4_pkg::flags_t rfo_agen1_argA_flags;
 Qupls4_pkg::flags_t rfo_agen1_argB_flags;
 Qupls4_pkg::flags_t rfo_store_argC_flags;
 value_t store_argC;
-value_t rfo_cpytgt0_argD;
 value_t load_res;
 value_t ma0,ma1;				// memory address
 wire store_argC_v;
@@ -227,18 +226,21 @@ pregno_t sau0_argA_reg;
 pregno_t sau0_argB_reg;
 pregno_t sau0_argC_reg;
 pregno_t sau0_argD_reg;
+pregno_t sau0_argT_reg;
 pregno_t sau0_argM_reg;
 
 pregno_t sau1_argA_reg;
 pregno_t sau1_argB_reg;
 pregno_t sau1_argC_reg;
 pregno_t sau1_argD_reg;
+pregno_t sau1_argT_reg;
 pregno_t sau1_argM_reg;
 
 pregno_t fpu0_argA_reg;
 pregno_t fpu0_argB_reg;
 pregno_t fpu0_argC_reg;
 pregno_t fpu0_argD_reg;
+pregno_t fpu0_argT_reg;
 pregno_t fpu0_argM_reg;
 
 pregno_t fpu1_argA_reg;
@@ -429,6 +431,7 @@ value_t sau0_argA;
 value_t sau0_argB;
 value_t sau0_argBI;
 value_t sau0_argC;
+value_t sau0_argT;
 value_t sau0_argI;
 value_t sau0_argD;
 pregno_t sau0_Rt;
@@ -488,6 +491,7 @@ value_t sau1_argB;
 value_t sau1_argBI;
 value_t sau1_argC;
 value_t sau1_argD;
+value_t sau1_argT;
 value_t sau1_argI;
 reg [2:0] sau1_cs;
 pregno_t sau1_Rt;
@@ -596,6 +600,7 @@ value_t fpu0_argA;
 value_t fpu0_argB;
 value_t fpu0_argC;
 value_t fpu0_argD;
+value_t fpu0_argT;
 value_t fpu0_argP;
 value_t fpu0_argI;	// only used by BEQ
 value_t fpu0_argM;
@@ -661,6 +666,7 @@ value_t fpu1_argA;
 value_t fpu1_argB;
 value_t fpu1_argC;
 value_t fpu1_argD;
+value_t fpu1_argT;
 value_t fpu1_argP;
 value_t fpu1_argI;	// only used by BEQ
 value_t fpu1_argM;
@@ -746,6 +752,7 @@ wire agen0_we;
 value_t agen0_argA;
 value_t agen0_argB;
 value_t agen0_argC;
+value_t agen0_argD;
 value_t agen0_argC_v;
 value_t agen0_argI;
 value_t agen0_argM;
@@ -819,7 +826,7 @@ pc_address_ex_t exc_ret_pc;
 wire do_bsr, do_ret, do_call;
 pc_address_ex_t bsr_tgt;
 mc_address_t exc_ret_mcip;
-Qupls4_pkg::instruction_t exc_ret_mcir;
+Qupls4_pkg::micro_op_t exc_ret_mcir;
 reg dc_get;
 wire [31:0] bno_bitmap;
 
@@ -1028,9 +1035,8 @@ begin
 	nopi.pc = RSTPC;
 	nopi.pc.bno_t = 6'd1;
 	nopi.pc.bno_f = 6'd1;
-	nopi.mcip = 12'h1A0;
-	nopi.uop.count = 3'd1;
-	nopi.uop.ins = {26'd0,Qupls4_pkg::OP_NOP};
+	nopi.uop = {26'd0,Qupls4_pkg::OP_NOP};
+	nopi.uop.any.count = 3'd1;
 	nopi.decbus.Rdz = 1'b1;
 	nopi.decbus.nop = 1'b1;
 	nopi.decbus.alu = 1'b1;
@@ -1427,9 +1433,11 @@ end
 else begin
 	irq_ack <= FALSE;
 	irq_rd_en <= FALSE;
-	if (irq2_dout.level > pending_ipl && irq2_dout.swstk==swstk && sr.mie && !irq_empty)
+//	if (irq2_dout.level > pending_ipl && irq2_dout.swstk==swstk && sr.mie && !irq_empty)
+	if (irq2_dout.level > pending_ipl && sr.mie && !irq_empty)
 		irq_rd_en <= TRUE;
-	else if (irq_i > pending_ipl && swstk_i==swstk && sr.mie)
+//	else if (irq_i > pending_ipl && swstk_i==swstk && sr.mie)
+	else if (irq_i > pending_ipl && sr.mie)
 		irq_ack <= TRUE;
 end
 
@@ -2190,10 +2198,10 @@ else begin
 end
 
 always_comb
-if ((Qupls4_pkg::fnIsAtom(pg_ren.pr0.uop.ins) ||
-	Qupls4_pkg::fnIsAtom(pg_ren.pr1.uop.ins) ||
-	Qupls4_pkg::fnIsAtom(pg_ren.pr2.uop.ins) ||
-	Qupls4_pkg::fnIsAtom(pg_ren.pr3.uop.ins)) && irq_i != 6'd63)
+if ((Qupls4_pkg::fnIsAtom(pg_ren.pr0.uop) ||
+	Qupls4_pkg::fnIsAtom(pg_ren.pr1.uop) ||
+	Qupls4_pkg::fnIsAtom(pg_ren.pr2.uop) ||
+	Qupls4_pkg::fnIsAtom(pg_ren.pr3.uop)) && irq_i != 6'd63)
 	hirq = 1'd0;
 else
 	hirq = irq && !int_commit && (irq_i > (atom_mask[0] ? 6'd62 : sr.ipl));	// NMI (63) is always recognized.
@@ -2805,7 +2813,7 @@ wire [3:0] ns_dstregv;
 aregno_t [3:0] ns_areg;
 checkpt_ndx_t [3:0] ns_cndx;
 
-Stark_pipeline_ren uren1
+Qupls4_pipeline_ren uren1
 (
 	.rst(irst),
 	.clk(clk),
@@ -2921,7 +2929,7 @@ wire pgh_setcp;
 wire [5:0] pgh_setcp_grp;
 wire [5:0] freecp_grp;
 
-Stark_checkpoint_manager ucpm1
+Qupls4_checkpoint_manager ucpm1
 (
 	.rst(irst),
 	.clk(clk),
@@ -2940,7 +2948,7 @@ Stark_checkpoint_manager ucpm1
 	.miss_cp(miss_cp)
 );
 
-Stark_map_dstreg_req umdr
+Qupls4_map_dstreg_req umdr
 (
 	.pgh(pgh),
 	.rob(rob),
@@ -2951,7 +2959,7 @@ Stark_map_dstreg_req umdr
 	.ns_cndx(ns_cndx)
 );
 
-Stark_reg_name_supplier4 uns4
+Qupls4_reg_name_supplier4 uns4
 (
 	.rst(irst),
 	.clk(clk),
@@ -3047,7 +3055,7 @@ always_ff @(posedge clk)
 if (advance_pipeline_seg2)
 	pt3_r <= pt3_dec;
 
-Stark_pipeline_que uque1
+Qupls4_pipeline_que uque1
 (
 	.rst(irst),
 	.clk(clk),
@@ -3663,7 +3671,7 @@ begin
 	$display("wr3:%d Rt=%d/%d res=%x", wrport3_v, wrport3_aRt, wrport3_Rt, wrport3_res);
 end
 
-Stark_copydst ucpydst1
+Qupls4_copydst ucpydst1
 (
 	.rst(irst),
 	.clk(clk),
@@ -3679,7 +3687,7 @@ Stark_copydst ucpydst1
 );
 
 // Calc the location of the ROB tail pointer after a stomp.
-Stark_stail ustail1
+Qupls4_stail ustail1
 (
 	.head0(head0),
 	.tail0(tail0),
@@ -3690,13 +3698,12 @@ Stark_stail ustail1
 
 pc_address_t tpc;
 always_comb
-	tpc = fcu_pc + 4'd8;
+	tpc = fcu_pc + 4'd6;
 
-Stark_branchmiss_pc umisspc1
+Qupls4_branchmiss_pc umisspc1
 (
-	.instr(fcu_rse.ins),
+	.instr(fcu_rse.uop),
 	.brclass(fcu_rse.brclass),
-	.micro_ip(micro_ip),
 	.pc(fcu_rse.pc),
 	.pc_stack(pc_stack),
 	.bt(fcu_rse.bt),
@@ -3706,7 +3713,6 @@ Stark_branchmiss_pc umisspc1
 	.argI(fcu_rse.argI),
 	.misspc(fcu_misspc1),
 	.missgrp(fcu_missgrp),
-	.miss_mcip(fcu_miss_mcip1),
 	.dstpc(tgtpc),
 	.stomp_bno(stomp_bno)
 );
@@ -3714,12 +3720,11 @@ Stark_branchmiss_pc umisspc1
 always_comb
 	fcu_missir <= fcu_instr;
 
-Stark_branch_eval ube1
+Qupls4_meta_branch_eval ube1
 (
-	.instr(fcu_instr.uop.ins),
-	.om(fcu_rse.om),
-	.cr(fcu_rse.argA),
-	.lc(fcu_rse.argB),
+	.instr(fcu_instr.uop),
+	.a(fcu_rse.argA),
+	.b(fcu_rse.argB),
 	.takb(takb)
 );
 /*
@@ -3741,7 +3746,7 @@ always_comb
 begin
 	fcu_exc = Qupls4_pkg::FLT_NONE;
 	// ToDo: fix check
-	if (fcu_rse.ins.any.opcode==Qupls4_pkg::OP_CHK) begin
+	if (fcu_rse.uop.any.opcode==Qupls4_pkg::OP_CHK) begin
 //		fcu_exc = cause_code_t'(fcu_instr.ins[34:27]);
 		fcu_exc = Qupls4_pkg::FLT_NONE;
 	end
@@ -4628,30 +4633,22 @@ end
 always_ff @(posedge clk)
 	agen0_load <= rob[agen0_rndx].decbus.load|
 		rob[agen0_rndx].decbus.vload|
-		rob[agen0_rndx].decbus.vfload|
-		rob[agen0_rndx].decbus.vload_ndx|
-		rob[agen0_rndx].decbus.vfload_ndx
+		rob[agen0_rndx].decbus.vload_ndx
 		;
 always_ff @(posedge clk)
 	agen1_load <= rob[agen1_rndx].decbus.load|
 		rob[agen1_rndx].decbus.vload|
-		rob[agen1_rndx].decbus.vfload|
-		rob[agen1_rndx].decbus.vload_ndx|
-		rob[agen1_rndx].decbus.vfload_ndx
+		rob[agen1_rndx].decbus.vload_ndx
 		;
 always_ff @(posedge clk)
 	agen0_store <= rob[agen0_rndx].decbus.store|
 		rob[agen0_rndx].decbus.vstore|
-		rob[agen0_rndx].decbus.vfstore|
-		rob[agen0_rndx].decbus.vstore_ndx|
-		rob[agen0_rndx].decbus.vfstore_ndx
+		rob[agen0_rndx].decbus.vstore_ndx
 	;
 always_ff @(posedge clk)
 	agen1_store <= rob[agen1_rndx].decbus.store|
 		rob[agen1_rndx].decbus.vstore|
-		rob[agen1_rndx].decbus.vfstore|
-		rob[agen1_rndx].decbus.vstore_ndx|
-		rob[agen1_rndx].decbus.vfstore_ndx
+		rob[agen1_rndx].decbus.vstore_ndx
 	;
 
 Qupls4_agen uag0
@@ -4659,19 +4656,13 @@ Qupls4_agen uag0
 	.rst(irst),
 	.clk(clk),
 	.next(1'b0),
-	.ir(agen0_instr),
+	.rse(agen0_rse),
 	.out(rob[agen0_id].out[0]),
 	.tlb_v(tlb0_v),
 	.virt2phys(agen0_virt2phys),
 	.load(agen0_load),
 	.store(agen0_store),
 	.amo(agen0_amo),
-	.Ra(agen0_aRa),
-	.Rb(agen0_aRb),
-	.pc(agen0_pc),
-	.a(agen0_argA),
-	.b(agen0_argB),
-	.i(agen0_argI),
 	.res(agen0_res),
 	.resv(agen0_v)
 );
@@ -4681,19 +4672,13 @@ Qupls4_agen uag1
 	.rst(irst),
 	.clk(clk),
 	.next(1'b0),
-	.ir(agen1_instr),
+	.rse(agen1_rse),
 	.out(rob[agen1_id].out[0]),
 	.tlb_v(tlb1_v),
 	.virt2phys(agen1_virt2phys),
 	.load(agen1_load),
 	.store(agen1_store),
 	.amo(agen1_amo),
-	.Ra(agen1_aRa),
-	.Rb(agen1_aRb),
-	.pc(agen1_pc),
-	.a(agen1_argA),
-	.b(agen1_argB),
-	.i(agen1_argI),
 	.res(agen1_res),
 	.resv(agen1_v)
 );
@@ -5063,7 +5048,7 @@ usaust0
 	.issue(sau0_issue),//robentry_issue[sau0_rndx]),
 	.rse_i(rse),
 	.rse_o(sau0_rse),
-	.prn(prn),
+	.arn(arn),
 	.prnv(prnv),
 	.rfo(rfo),
 	.rfo_tag(rfo_tag),
@@ -5084,7 +5069,7 @@ uimulst0
 	.issue(),
 	.rse_i(rse),
 	.rse_o(imul0_rse),
-	.prn(prn),
+	.arn(arn),
 	.prnv(prnv),
 	.rfo(rfo),
 	.rfo_tag(rfo_tag),
@@ -5109,7 +5094,7 @@ uidivst0
 	.issue(idiv0_ld),
 	.rse_i(rse),
 	.rse_o(idiv0_rse),
-	.prn(prn),
+	.arn(arn),
 	.prnv(prnv),
 	.rfo(rfo),
 	.rfo_tag(rfo_tag),
@@ -5136,7 +5121,7 @@ generate begin : gSauStation
 			.issue(),//robentry_issue[sau0_rndx]),
 			.rse_i(rse),
 			.rse_o(sau1_rse),
-			.prn(prn),
+			.arn(arn),
 			.prnv(prnv),
 			.rfo(rfo),
 			.rfo_tag(rfo_tag),
@@ -5173,7 +5158,7 @@ generate begin : gFpuStat
 					.issue(),//robentry_issue[sau0_rndx]),
 					.rse_i(rse),
 					.rse_o(fma0_rse),
-					.prn(prn),
+					.arn(arn),
 					.prnv(prnv),
 					.rfo(rfo),
 					.rfo_tag(rfo_tag),
@@ -5193,7 +5178,7 @@ generate begin : gFpuStat
 					.issue(),//robentry_issue[sau0_rndx]),
 					.rse_i(rse),
 					.rse_o(fpu0_rse),
-					.prn(prn),
+					.arn(arn),
 					.prnv(prnv),
 					.rfo(rfo),
 					.rfo_tag(rfo_tag),
@@ -5215,7 +5200,7 @@ generate begin : gFpuStat
 					.issue(),//robentry_issue[sau0_rndx]),
 					.rse_i(rse),
 					.rse_o(fma1_rse),
-					.prn(prn),
+					.arn(arn),
 					.prnv(prnv),
 					.rfo(rfo),
 					.rfo_tag(rfo_tag),
@@ -5242,7 +5227,7 @@ generate begin : gDecimalFloat
 			.issue(),//robentry_issue[sau0_rndx]),
 			.rse_i(rse),
 			.rse_o(dfpu0_rse),
-			.prn(prn),
+			.arn(arn),
 			.prnv(prnv),
 			.rfo(rfo),
 			.rfo_tag(rfo_tag),
@@ -5265,8 +5250,8 @@ ubrast1
 	.stomp(robentry_stomp),
 	.issue(),//robentry_issue[sau0_rndx]),
 	.rse_i(rse),
-	.rse_o(fma1_rse),
-	.prn(prn),
+	.rse_o(fcu_rse),
+	.arn(arn),
 	.prnv(prnv),
 	.rfo(rfo),
 	.rfo_tag(rfo_tag),
@@ -5287,7 +5272,7 @@ uagenst1
 	.issue(),//robentry_issue[sau0_rndx]),
 	.rse_i(rse),
 	.rse_o(agen0_rse),
-	.prn(prn),
+	.arn(arn),
 	.prnv(prnv),
 	.rfo(rfo),
 	.rfo_tag(rfo_tag),
@@ -5330,7 +5315,7 @@ uagenst2
 	.issue(),//robentry_issue[sau0_rndx]),
 	.rse_i(rse),
 	.rse_o(agen1_rse),
-	.prn(prn),
+	.arn(arn),
 	.prnv(prnv),
 	.rfo(rfo),
 	.rfo_tag(rfo_tag),
@@ -5382,9 +5367,9 @@ always_comb
 
 wire rfo_store_argC_valid;
 
-Stark_validate_operand uvLSsrcC
+Qupls4_validate_operand uvLSsrcC
 (
-	.prn(prn),
+	.arn(arn),
 	.prnv(prnv),
 	.rfo(rfo),
 	.rfo_tag(rfo_tag),
@@ -5394,12 +5379,14 @@ Stark_validate_operand uvLSsrcC
 	.val0_tag(rfo_store_argC_tag),
 	.val1_tag(),
 	.val2_tag(),
+/*
 	.rfi_val(rfi_val),
 	.rfi_tag(rfi_tag),
-	.rfi_pRd(rfi_pRd),
-	.pRn0(store_argC_pReg),
-	.pRn1(9'd0),
-	.pRn2(9'd0),
+	.rfi_aRd(rfi_aRd),
+*/
+	.aRn0(store_argC_aReg),
+	.aRn1(8'd0),
+	.aRn2(8'd0),
 	.valid0_i(lsq[lsq_head.row][lsq_head.col].datav),
 	.valid1_i(1'b1),
 	.valid2_i(1'b1),
@@ -5438,20 +5425,20 @@ else begin
 	if (sau0_available && sau0_issue) begin
 		rob[sau0_rse.rndx].argA <= sau0_rse.argA;
 		rob[sau0_rse.rndx].argB <= sau0_rse.argB;
-		rob[sau0_rse.rndx].argD <= sau0_rse.argD;
+		rob[sau0_rse.rndx].argT <= sau0_rse.argT;
 	end
 	if (Qupls4_pkg::NSAU > 1) begin
 		if (sau1_available && sau1_rndxv && sau1_idle) begin
 			rob[sau1_rse.rndx].argA <= sau1_rse.argA;
 			rob[sau1_rse.rndx].argB <= sau1_rse.argB;
-			rob[sau1_rse.rndx].argD <= sau1_rse.argD;
+			rob[sau1_rse.rndx].argT <= sau1_rse.argT;
 		end
 	end
 	if (Qupls4_pkg::NFPU > 0) begin
 		if (fpu0_available && fpu0_rndxv && fpu0_idle) begin
 			rob[fpu0_rndx].argA <= rfo_fpu0_argA;
 			rob[fpu0_rndx].argB <= rfo_fpu0_argB;
-			rob[fpu0_rndx].argD <= rfo_fpu0_argD;
+			rob[fpu0_rndx].argT <= rfo_fpu0_argT;
 		end
 	end
 	/*
@@ -5719,16 +5706,16 @@ else begin
 	// Set atom mask
 	// Must be after ENQUE
 	if (Qupls4_pkg::fnIsAtom(pg_ren.pr0) & advance_pipeline) begin
-		atom_mask <= {pg_ren.pr0.uop.ins[19:9],pg_ren.pr0.uop.ins[0]};
+		atom_mask <= {pg_ren.pr0.uop[19:9],pg_ren.pr0.uop[0]};
 	end
 	if (Qupls4_pkg::fnIsAtom(pg_ren.pr1) & advance_pipeline) begin
-		atom_mask <= {pg_ren.pr1.uop.ins[19:9],pg_ren.pr1.uop.ins[0]};
+		atom_mask <= {pg_ren.pr1.uop[19:9],pg_ren.pr1.uop[0]};
 	end
 	if (Qupls4_pkg::fnIsAtom(pg_ren.pr2) & advance_pipeline) begin
-		atom_mask <= {pg_ren.pr2.uop.ins[19:9],pg_ren.pr2.uop.ins[0]};
+		atom_mask <= {pg_ren.pr2.uop[19:9],pg_ren.pr2.uop[0]};
 	end
 	if (Qupls4_pkg::fnIsAtom(pg_ren.pr3) & advance_pipeline) begin
-		atom_mask <= {pg_ren.pr3.uop.ins[19:9],pg_ren.pr3.uop.ins[0]};
+		atom_mask <= {pg_ren.pr3.uop[19:9],pg_ren.pr3.uop[0]};
 	end
 
 // ----------------------------------------------------------------------------
@@ -5857,7 +5844,6 @@ else begin
 	    rob[ fma1_rse2.rndx ].exc <= fma1_rse2.exc;
 	    rob[ fma1_rse2.rndx ].excv <= fma1_rse2.exc != Qupls4_pkg::FLT_NONE;
 	    rob[ fma1_rse2.rndx ].nan <= fma1_rse2.nan;
-	    rob[ fma1_rse2.rndx ].nan_pc <= fma1_rse2.pc;
 			rob[ fma1_rse2.rndx ].done <= {TRUE,TRUE};
 			rob[ fma1_rse2.rndx ].out <= {FALSE,FALSE};
 		end
@@ -5867,7 +5853,6 @@ else begin
 	    rob[ fpu0_rse2.rndx ].exc <= fpu0_rse2.exc;
 	    rob[ fpu0_rse2.rndx ].excv <= fpu0_rse2.exc != Qupls4_pkg::FLT_NONE;
 	    rob[ fpu0_rse2.rndx ].nan <= fpu0_rse2.nan;
-	    rob[ fpu0_rse2.rndx ].nan_pc <= fpu0_rse2.pc;
 			rob[ fpu0_rse2.rndx ].done <= {TRUE,TRUE};
 			rob[ fpu0_rse2.rndx ].out <= {FALSE,FALSE};
 		end
@@ -6492,16 +6477,16 @@ else begin
 		if (rob[head0].excv && rob[head0].v)
 //			err_mask[head0] <= 1'b1;
 //			if (rob[head0].last)
-			tProcessExc(head0,rob[head0].op.pc,12'h0,rob[head0].op.uop.num,FALSE,FALSE);
+			tProcessExc(head0,rob[head0].op.pc,12'h0,rob[head0].op.uop.any.num,FALSE,FALSE);
 		else if (rob[head1].excv && cmtcnt > 3'd1 && rob[head1].v)
-			tProcessExc(head1,rob[head1].op.pc,12'h0,rob[head1].op.uop.num,FALSE,FALSE);
+			tProcessExc(head1,rob[head1].op.pc,12'h0,rob[head1].op.uop.any.num,FALSE,FALSE);
 		else if (rob[head2].excv && cmtcnt > 3'd2 && rob[head2].v)
-			tProcessExc(head2,rob[head2].op.pc,12'h0,rob[head2].op.uop.num,FALSE,FALSE);
+			tProcessExc(head2,rob[head2].op.pc,12'h0,rob[head2].op.uop.any.num,FALSE,FALSE);
 		else if (rob[head3].excv && cmtcnt > 3'd3 && rob[head3].v)
-			tProcessExc(head3,rob[head3].op.pc,12'h0,rob[head3].op.uop.num,FALSE,FALSE);
+			tProcessExc(head3,rob[head3].op.pc,12'h0,rob[head3].op.uop.any.num,FALSE,FALSE);
 			
 		if (rob[head0].op.ssm)
-			tProcessExc(head0,Qupls4_pkg::SSM_DEBUG ? rob[head0].op.pc : rob[head0].op.hwipc,12'h0,rob[head0].op.uop.num,FALSE,FALSE);
+			tProcessExc(head0,Qupls4_pkg::SSM_DEBUG ? rob[head0].op.pc : rob[head0].op.hwipc,12'h0,rob[head0].op.uop.any.num,FALSE,FALSE);
 
 		/*
 		if (FALSE) begin
@@ -6571,24 +6556,29 @@ else begin
 			if (rob[head0].v) begin
 				if (!rob[head0].argA_v && !fnFindSource(head0, rob[head0].decbus.Rs1)) begin
 					rob[head0].argA_v <= VAL;
-					tAllArgsValid(head0, VAL, INV, INV, INV);
+					tAllArgsValid(head0, VAL, INV, INV, INV, INV);
 					$display("Qupls4: rob[%d]: argument A not possible to validate.", head0);
 				end		
 				if (!rob[head0].argB_v && !fnFindSource(head0, rob[head0].decbus.Rs2)) begin
 					$display("Qupls4: rob[%d]: argument B not possible to validate.", head0);
 					rob[head0].argB_v <= VAL;
-					tAllArgsValid(head0, INV, VAL, INV, INV);
+					tAllArgsValid(head0, INV, VAL, INV, INV, INV);
 				end		
 				if (!rob[head0].argC_v && !fnFindSource(head0, rob[head0].decbus.Rs3)) begin
 					$display("Qupls4: rob[%d]: argument C not possible to validate.", head0);
 					rob[head0].argC_v <= VAL;
-					tAllArgsValid(head0, INV, INV, VAL, INV);
+					tAllArgsValid(head0, INV, INV, VAL, INV, INV);
 				end		
-				if (!rob[head0].argD_v) begin
+				if (!rob[head0].argD_v && !fnFindSource(head0, rob[head0].decbus.Rs4)) begin
+					$display("Qupls4: rob[%d]: argument D not possible to validate.", head0);
+					rob[head0].argD_v <= VAL;
+					tAllArgsValid(head0, INV, INV, INV, VAL, INV);
+				end		
+				if (!rob[head0].argT_v) begin
 					if (!fnFindSource(head0, rob[head0].decbus.Rd)) begin
-						$display("Qupls4: rob[%d]: argument D not possible to validate.", head0);
-						rob[head0].argD_v <= VAL;
-						tAllArgsValid(head0, INV, INV, INV, VAL);
+						$display("Qupls4: rob[%d]: destination T not possible to validate.", head0);
+						rob[head0].argT_v <= VAL;
+						tAllArgsValid(head0, INV, INV, INV, INV, VAL);
 					end
 				end
 			end
@@ -6797,7 +6787,7 @@ else begin
 					 rob[n3].v
 				&& !(&rob[n3].done)
 	//												&& !stomp_i[g]
-				&& rob[n3].argD_v 
+				&& rob[n3].argT_v 
 				//&& fnPredFalse(g)
 				&& !robentry_issue[n3]
 				&& ~rob[n3].pred_bit
@@ -6835,7 +6825,7 @@ else begin
 
 	//  Adjust interrupt position to first micro-op of instruction
 	for (n3 = 0; n3 < Qupls4_pkg::ROB_ENTRIES; n3 = n3 + 1) begin
-		if (rob[n3].op.uop.count==3'd0 && rob[n3].op.hwi)
+		if (rob[n3].op.uop.any.count==3'd0 && rob[n3].op.hwi)
 			case(UOP_STRATEGY)
 			1:	tMoveIRQToInstructionStart(n3);
 			2:	tDeferToNextInstruction(n3);
@@ -7133,19 +7123,19 @@ always_ff @(posedge clk) begin: clock_n_debug
 	$display("align: %x", uiext1.ic_line_aligned);
 	$display("- - - - - - Multiplex %c - - - - - - %s", ihit_mux ? "h":" ", stomp_mux ? stompstr : no_stompstr);
 	/*
-	$display("pc0: %h.%h ins0: %h", uiext1.pg_mux.pr0.pc.pc[23:0], uiext1.pg_mux.pr0.mcip, uiext1.pg_mux.pr0.uop.ins[47:0]);
-	$display("pc1: %h.%h ins1: %h", uiext1.pg_mux.pr1.pc.pc[23:0], uiext1.pg_mux.pr1.mcip, uiext1.pg_mux.pr1.uop.ins[47:0]);
-	$display("pc2: %h.%h ins2: %h", uiext1.pg_mux.pr2.pc.pc[23:0], uiext1.pg_mux.pr2.mcip, uiext1.pg_mux.pr2.uop.ins[47:0]);
-	$display("pc3: %h.%h ins3: %h", uiext1.pg_mux.pr3.pc.pc[23:0], uiext1.pg_mux.pr3.mcip, uiext1.pg_mux.pr3.uop.ins[47:0]);
+	$display("pc0: %h.%h ins0: %h", uiext1.pg_mux.pr0.pc.pc[23:0], uiext1.pg_mux.pr0.mcip, uiext1.pg_mux.pr0.uop[47:0]);
+	$display("pc1: %h.%h ins1: %h", uiext1.pg_mux.pr1.pc.pc[23:0], uiext1.pg_mux.pr1.mcip, uiext1.pg_mux.pr1.uop[47:0]);
+	$display("pc2: %h.%h ins2: %h", uiext1.pg_mux.pr2.pc.pc[23:0], uiext1.pg_mux.pr2.mcip, uiext1.pg_mux.pr2.uop[47:0]);
+	$display("pc3: %h.%h ins3: %h", uiext1.pg_mux.pr3.pc.pc[23:0], uiext1.pg_mux.pr3.mcip, uiext1.pg_mux.pr3.uop[47:0]);
 	*/
 	if (do_bsr)
 		$display("BSR %h  pc0_fet=%h", bsr_tgt.pc, uiext1.pg_mux.pr0.pc.pc[31:0]);
 	$display("----- Decode %c%c ----- %s", ihit_dec ? "h":" ", micro_machine_active_d ? "a": " ", stomp_dec ? stompstr : no_stompstr);
 	/*
-	$display("pc0: %h.%h ins0: %h", pg_dec.pr0.pc.pc[23:0], pg_dec.pr0.mcip, pg_dec.pr0.uop.ins[47:0]);
-	$display("pc1: %h.%h ins1: %h", pg_dec.pr1.pc.pc[23:0], pg_dec.pr1.mcip, pg_dec.pr1.uop.ins[47:0]);
-	$display("pc2: %h.%h ins2: %h", pg_dec.pr2.pc.pc[23:0], pg_dec.pr2.mcip, pg_dec.pr2.uop.ins[47:0]);
-	$display("pc3: %h.%h ins3: %h", pg_dec.pr3.pc.pc[23:0], pg_dec.pr3.mcip, pg_dec.pr3.uop.ins[47:0]);
+	$display("pc0: %h.%h ins0: %h", pg_dec.pr0.pc.pc[23:0], pg_dec.pr0.mcip, pg_dec.pr0.uop[47:0]);
+	$display("pc1: %h.%h ins1: %h", pg_dec.pr1.pc.pc[23:0], pg_dec.pr1.mcip, pg_dec.pr1.uop[47:0]);
+	$display("pc2: %h.%h ins2: %h", pg_dec.pr2.pc.pc[23:0], pg_dec.pr2.mcip, pg_dec.pr2.uop[47:0]);
+	$display("pc3: %h.%h ins3: %h", pg_dec.pr3.pc.pc[23:0], pg_dec.pr3.mcip, pg_dec.pr3.uop[47:0]);
 	*/
 	if (1) begin	
 	$display("----- Physical Registers -----");
@@ -7182,25 +7172,25 @@ always_ff @(posedge clk) begin: clock_n_debug
 	$display("----- Rename %c ----- %s", ihit_ren ? "h":" ", stomp_ren ? stompstr : no_stompstr);
 	/*
 	$display("pc0: %x.%x ins0: %x  Rt: %d->%d%c  Rs: %d->%d%c  Ra: %d->%d%c  Rb: %d->%d%c  Rc: %d->%d%c",
-		pg_ren.pr0.pc.pc[23:0], pg_ren.pr0.mcip, pg_ren.pr0.uop.ins[63:0],
+		pg_ren.pr0.pc.pc[23:0], pg_ren.pr0.mcip, pg_ren.pr0.uop[63:0],
 		pg_ren.pr0.nRt, Rt0_ren, Rt0_renv?"v":" ",
 		pg_ren.pr0.aRt, prn[3], prnv[3]?"v":" ",
 		pg_ren.pr0.aRa, prn[0], prnv[0]?"v": " ",
 		pg_ren.pr0.aRb, prn[1], prnv[1]?"v":" ",
 		pg_ren.pr0.aRc, prn[2], prnv[2]?"v":" ");
-	$display("pc1: %x.%x ins1: %x  Rt: %d->%d%c  Rs: %d->%d%c  Ra: %d->%d%c  Rb: %d->%d%c  Rc: %d->%d%c", pg_ren.pr1.pc.pc[23:0], pg_ren.pr1.mcip, pg_ren.pr1.uop.ins[63:0], 
+	$display("pc1: %x.%x ins1: %x  Rt: %d->%d%c  Rs: %d->%d%c  Ra: %d->%d%c  Rb: %d->%d%c  Rc: %d->%d%c", pg_ren.pr1.pc.pc[23:0], pg_ren.pr1.mcip, pg_ren.pr1.uop[63:0], 
 		pg_ren.pr1.nRt, Rt1_ren, Rt1_renv?"v":" ",
 		pg_ren.pr1.aRt, prn[7], prnv[7]?"v":" ",
 		pg_ren.pr1.aRa, prn[4], prnv[4]?"v":" ",
 		pg_ren.pr1.aRb, prn[5], prnv[5]?"v":" ",
 		pg_ren.pr1.aRc, prn[6], prnv[6]?"v":" ");
-	$display("pc2: %x.%x ins2: %x  Rt: %d->%d%c  Rs: %d->%d%c  Ra: %d->%d%c  Rb: %d->%d%c  Rc: %d->%d%c", pg_ren.pr2.pc.pc[23:0], pg_ren.pr2.mcip, pg_ren.pr2.uop.ins[63:0],
+	$display("pc2: %x.%x ins2: %x  Rt: %d->%d%c  Rs: %d->%d%c  Ra: %d->%d%c  Rb: %d->%d%c  Rc: %d->%d%c", pg_ren.pr2.pc.pc[23:0], pg_ren.pr2.mcip, pg_ren.pr2.uop[63:0],
 		pg_ren.pr2.nRt, Rt2_ren, Rt2_renv?"v":" ",
 		pg_ren.pr2.aRt, prn[11], prnv[11]?"v":" ",
 		pg_ren.pr2.aRa, prn[8], prnv[8]?"v":" ",
 		pg_ren.pr2.aRb, prn[9], prnv[9]?"v":" ",
 		pg_ren.pr2.aRc, prn[10], prnv[10]?"v":" ");
-	$display("pc3: %x.%x ins3: %x  Rt: %d->%d%c  Rs: %d->%d%c  Ra: %d->%d%c  Rb: %d->%d%c  Rc: %d->%d%c", pg_ren.pr3.pc.pc[23:0], pg_ren.pr3.mcip, pg_ren.pr3.uop.ins[63:0],
+	$display("pc3: %x.%x ins3: %x  Rt: %d->%d%c  Rs: %d->%d%c  Ra: %d->%d%c  Rb: %d->%d%c  Rc: %d->%d%c", pg_ren.pr3.pc.pc[23:0], pg_ren.pr3.mcip, pg_ren.pr3.uop[63:0],
 		pg_ren.pr3.nRt, Rt3_ren, Rt3_renv?"v":" ",
 		pg_ren.pr3.aRt, prn[15], prnv[15]?"v":" ",
 		pg_ren.pr3.aRa, prn[12], prnv[12]?"v":" ",
@@ -7215,7 +7205,7 @@ always_ff @(posedge clk) begin: clock_n_debug
 			rob[i].v?"v":"-", rob[i].done[0]?"d":"-", rob[i].done[1]?"d":"-", rob[i].out[0]?"o":"-", rob[i].out[1]?"o":"-", rob[i].bt?"t":"-", rob_memissue[i]?"i":"-", rob[i].lsq?"q":"-", (robentry_issue[i]|robentry_agen_issue[i])?"i":"-",
 			robentry_islot[i], robentry_stomp[i]?"s":"-",
 			(rob[i].decbus.cpytgt ? "c" : rob[i].decbus.fc ? "b" : rob[i].decbus.mem ? "m" : "a"),
-			rob[i].op.uop.ins.any.opcode, 
+			rob[i].op.uop.any.opcode, 
 			rob[i].decbus.Rt, rob[i].op.nRt, rob[i].res, rob[i].exc,
 			rob[i].decbus.Rt, rob[i].op.pRt, rob[i].argD, rob[i].argD_v?"v":" ",
 			rob[i].decbus.Ra, rob[i].op.pRa, rob[i].argA, rob[i].argA_v?"v":" ",
@@ -7223,7 +7213,7 @@ always_ff @(posedge clk) begin: clock_n_debug
 			rob[i].decbus.Rc, rob[i].op.pRc, rob[i].argC, rob[i].argC_v?"v":" ",
 			rob[i].argI,
 			rob[i].pc.bno_t, rob[i].pc.pc,
-			rob[i].cndx, rob[i].op.uop.ins[63:0]);
+			rob[i].cndx, rob[i].op.uop[63:0]);
 	end
 	$display("----- LSQ -----");
 	for (i = 0; i < Qupls4_pkg::LSQ_ENTRIES; i = i + 1) begin
@@ -7237,13 +7227,13 @@ always_ff @(posedge clk) begin: clock_n_debug
 	$display("----- AGEN -----");
 	$display(" I=%h A=%h B=%h %c%h pc:%h #",
 		agen0_rse.argI, agen0_rse.argA, agen0_rse.argB,
-		 ((fnIsLoad(agen0_rse.ins) || fnIsStore(agen0_rse.ins)) ? 109 : 97),
+		 ((fnIsLoad(agen0_rse.uop) || fnIsStore(agen0_rse.uop)) ? 109 : 97),
 		agen0_op, agen0_pc);
 	$display("idle:%d res:%h rid:%d #", agen0_idle, agen0_res, agen0_rse.rndx);
 	if (Qupls4_pkg::NAGEN > 1) begin
 		$display(" I=%h A=%h B=%h %c%h pc:%h #",
 			agen1_rse.argI, agen1_rse.argA, agen1_rse.argB,
-			 ((fnIsLoad(agen1_rse.uop.ins) || fnIsStore(agen1_rse.uop.ins)) ? 109 : 97),
+			 ((fnIsLoad(agen1_rse.uop) || fnIsStore(agen1_rse.uop)) ? 109 : 97),
 			agen1_op, agen1_pc);
 		$display("idle:%d res:%h rid:%d #", agen1_idle, agen1_res, agen1_rse.rndx);
 	end
@@ -7263,22 +7253,22 @@ always_ff @(posedge clk) begin: clock_n_debug
 	$display("----- FCU -----");
 	$display("eval:%c A=%h B=%h BI=%h I=%h", takb?"T":"F", fcu_rse.argA, fcu_rse.argB, fcu_argBr, fcu_rse.argI);
 	$display("bt:%c pc=%h id=%d brclass:%h", fcu_bt ? "T":"F", fcu_pc, fcu_rse.rndx, fcu_rse.brclass);
-	$display("miss: %c misspc=%h.%h instr=%h disp=%h", (takb&~fcu_bt)|(~takb&fcu_bt)?"T":"F",fcu_misspc1.bno_t,fcu_misspc1.pc, fcu_instr.uop.ins[63:0],
-		{{37{fcu_instr.uop.ins[63]}},fcu_instr.uop.ins[63:44],3'd0}
+	$display("miss: %c misspc=%h.%h instr=%h disp=%h", (takb&~fcu_bt)|(~takb&fcu_bt)?"T":"F",fcu_misspc1.bno_t,fcu_misspc1.pc, fcu_instr.uop[63:0],
+		{{37{fcu_instr.uop[63]}},fcu_instr.uop[63:44],3'd0}
 	);
 
 	$display("----- ALU -----");
 	$display("%d I=%h T=%h A=%h B=%h C=%h %c%d pc:%h #",
 		sau0_dataready, sau0_rse.argI, sau0_rse.argD, sau0_rse.argA, sau0_rse.argB, sau0_rse.argC,
-		 ((fnIsLoad(sau0_rse.uop.ins) || fnIsStore(sau0_rse.uop.ins)) ? 109 : 97),
+		 ((fnIsLoad(sau0_rse.uop) || fnIsStore(sau0_rse.uop)) ? 109 : 97),
 		sau0_instr, sau0_pc);
 	$display("idle:%d res:%h rid:%d #", sau0_idle, sau0_rse.resA, sau0_rse.rndx);
 
 	if (Qupls4_pkg::NSAU > 1) begin
 		$display("%d I=%h T=%h A=%h B=%h C=%h %c%d pc:%h #",
 			sau1_dataready, sau1_rse.argI, sau1_rse.argD, sau1_rse.argA, sau1_rse.argB, sau1_rse.argC, 
-			 ((fnIsLoad(sau1_rse.uop.ins) || fnIsStore(sau1_rse.uop.ins)) ? 109 : 97),
-			sau1_rse.uop.ins, sau1_rse.pc);
+			 ((fnIsLoad(sau1_rse.uop) || fnIsStore(sau1_rse.uop)) ? 109 : 97),
+			sau1_rse.uop, sau1_rse.pc);
 		$display("idle:%d res:%h rid:%d #", sau1_idle, sau1_rse.resA, sau1_rse.rndx);
 	end
 
@@ -7441,18 +7431,21 @@ endfunction
 // register if the lanes are byte sized.
 
 function [7:0] fnPredStatus;
-input [1:0] mask;
+input [2:0] mask;
 input [7:0] argA;
 input [7:0] argB;
 input [7:0] argC;
+input [7:0] argD;
 integer n30;
 begin
 	for (n30 = 0; n30 < 8; n30 = n30 + 1)
 		case(mask)
-		2'd0:	fnPredStatus[n30] = 1'b1;
-		2'd1:	fnPredStatus[n30] = argA[n30];
-		2'd2:	fnPredStatus[n30] = argB[n30];
-		2'd3:	fnPredStatus[n30] = argC[n30];
+		3'd0:	fnPredStatus[n30] = 1'b1;
+		3'd1:	fnPredStatus[n30] = argA[n30];
+		3'd2:	fnPredStatus[n30] = argB[n30];
+		3'd3:	fnPredStatus[n30] = argC[n30];
+		3'd3:	fnPredStatus[n30] = argD[n30];
+		default:	fnPredStatus[n30] = 8'h00;
 		endcase
 end
 endfunction
@@ -7607,8 +7600,8 @@ begin
 		rob[ndx].decbus.fpu <= FALSE;
 		rob[ndx].decbus.fc <= FALSE;
 		rob[ndx].decbus.mem <= FALSE;
-		rob[ndx].op.uop.count <= 3'd1;
-		rob[ndx].op.uop.ins <= {26'd0,Qupls4_pkg::OP_NOP};
+		rob[ndx].op.uop.any.count <= 3'd1;
+		rob[ndx].op.uop <= {26'd0,Qupls4_pkg::OP_NOP};
 		//rob[n3].decbus.Rtz <= TRUE;
 		rob[ndx].done <= {FALSE,FALSE};
 		rob[ndx].out <= {FALSE,FALSE};
@@ -8079,7 +8072,8 @@ begin
 	rob[tail].argA_v <= fnSourceRs1v(ins) | db.has_imma;
 	rob[tail].argB_v <= fnSourceRs2v(ins) | (db.has_Rs2 ? 1'b0 : db.has_immb);
 	rob[tail].argC_v <= fnSourceRs3v(ins) | db.has_immc;
-	rob[tail].argD_v <= fnSourceRdv(ins);
+	rob[tail].argD_v <= fnSourceRs4v(ins);
+	rob[tail].argT_v <= fnSourceRdv(ins);
 	rob[tail].all_args_valid <= FALSE;
 	/*
 		(fnSourceRs1v(ins) | db.has_imma) &&
@@ -8127,7 +8121,7 @@ begin
 	// If the instruction enqueues it must have been through the renamer.
 	// Propagate the target register to the new target by turning the instruction
 	// into a copy-target.
-	if (ins.uop.ins.any.opcode==Qupls4_pkg::OP_NOP) begin
+	if (ins.uop.any.opcode==Qupls4_pkg::OP_NOP) begin
 		rob[tail].decbus.alu <= TRUE;
 		rob[tail].decbus.fpu <= FALSE;
 		rob[tail].decbus.fc <= FALSE;
@@ -8138,6 +8132,7 @@ begin
 		rob[tail].argA_v <= VAL;
 		rob[tail].argB_v <= VAL;
 		rob[tail].argC_v <= VAL;
+		rob[tail].argD_v <= VAL;
 	end
 	
 	if (ornop|(Qupls4_pkg::SUPPORT_BACKOUT ? 1'b0 : stomp)) begin
@@ -8152,6 +8147,7 @@ begin
 //		rob[tail].argA_v <= VAL;
 		rob[tail].argB_v <= VAL;
 		rob[tail].argC_v <= VAL;
+		rob[tail].argD_v <= VAL;
 //		rob[tail].argD_v <= VAL;
 //		rob[tail].argM_v <= VAL;
 //		rob[tail].done <= {TRUE,TRUE};
@@ -8172,17 +8168,20 @@ input Av;
 input Bv;
 input Cv;
 input Dv;
+input Tv;
 begin
 	
 	if (Av) rob[ndx].argA_v <= VAL;
 	if (Bv) rob[ndx].argB_v <= VAL;
 	if (Cv) rob[ndx].argC_v <= VAL;
 	if (Dv) rob[ndx].argD_v <= VAL;
+	if (Tv) rob[ndx].argT_v <= VAL;
 	rob[ndx].all_args_valid <=
 		(rob[ndx].argA_v | Av) &&
 		(rob[ndx].argB_v | Bv) &&
 		(rob[ndx].argC_v | Cv) &&
 		(rob[ndx].argD_v | Dv) &&
+		(rob[ndx].argT_v | Tv) &&
 		(rob[ndx].pred_bit)
 	;
 	
@@ -8246,33 +8245,22 @@ task tOddballCommit;
 input v;
 input rob_ndx_t head;
 begin
+	// If there was an external interrupt, the instruction will have been marked
+	// invalid.
 	if (v) begin
 		if (!rob[head].decbus.cpytgt) begin
 			if (rob[head].decbus.csr) begin
-				if (rob[head].op.uop.ins[31])
-					case(rob[head].op.uop.ins.csr.op2[1:0])
-					2'd0:	;	// readCSR
-					2'd1:	tWriteCSR(rob[head].arg,{2'b0,rob[head].op.uop.ins.csr.regno});
-					2'd2:	tSetbitCSR(rob[head].arg,{2'b0,rob[head].op.uop.ins.csr.regno});
-					2'd3:	tClrbitCSR(rob[head].arg,{2'b0,rob[head].op.uop.ins.csr.regno});
-					endcase
-				else if (rob[head].op.uop.ins[30:29]==2'b00)
-					case(rob[head].op.uop.ins.csrr.op2[1:0])
-					2'd0:	;	// readCSR
-					2'd1:	tWriteCSR(rob[head].arg,{2'b0,rob[head].op.uop.ins.csr.regno});
-					2'd2:	tSetbitCSR(rob[head].arg,{2'b0,rob[head].op.uop.ins.csr.regno});
-					2'd3:	tClrbitCSR(rob[head].arg,{2'b0,rob[head].op.uop.ins.csr.regno});
-					endcase
-				else if (rob[head].op.uop.ins[30:29]==2'b01)
-					case(rob[head].op.uop.ins.csrcl.op)
-					1'd0:	tSetbitCSR(rob[head].arg,{2'b0,rob[head].op.uop.ins.csr.regno});
-					1'd1:	tClrbitCSR(rob[head].arg,{2'b0,rob[head].op.uop.ins.csr.regno});
-					endcase
+				case(rob[head].op.uop.csr.op3[1:0])
+				2'd0:	;	// readCSR
+				2'd1:	tWriteCSR(rob[head].arg,{2'b0,rob[head].op.uop.csr.regno});
+				2'd2:	tSetbitCSR(rob[head].arg,{2'b0,rob[head].op.uop.csr.regno});
+				2'd3:	tClrbitCSR(rob[head].arg,{2'b0,rob[head].op.uop.csr.regno});
+				endcase
 			end
 			else if (rob[head].decbus.irq)
 				;
 			else if (rob[head].decbus.brk)
-				tProcessExc(head,rob[head].op.pc+32'd8,12'h0,rob[head].op.uop.num,FALSE,FALSE);
+				tProcessExc(head,rob[head].op.pc+32'd6,12'h0,rob[head].op.uop.any.num,FALSE,FALSE);
 			else if (rob[head].decbus.eret)
 				tProcessEret(rob[head].op[22:19]==5'd2,rob[head].op[23]==1'b1);
 			else if (rob[head].decbus.rex)
@@ -8280,14 +8268,24 @@ begin
 		end
 	end
 	else if (rob[head].op.hwi && pgh[head[5:2]].hwi && pgh[head[5:2]].irq.level == 6'd63)	// NMI
-		tProcessExc(head,rob[head].op.pc,12'h0,rob[head].op.uop.num,FALSE,TRUE);
+		tProcessExc(head,rob[head].op.pc,12'h0,rob[head].op.uop.any.num,FALSE,TRUE);
 	else if (rob[head].op.hwi && pgh[head[5:2]].hwi && pgh[head[5:2]].irq.level > sr.ipl && sr.mie)
-		tProcessExc(head,rob[head].op.pc,12'h0,rob[head].op.uop.num,TRUE,FALSE);
+		tProcessExc(head,rob[head].op.pc,12'h0,rob[head].op.uop.any.num,TRUE,FALSE);
 	// If interrupt turned out to be disabled, put the irq on a queue for
-	// later processing.
+	// later processing. Note that the interrupt enable level has been set to
+	// disable further interrupts. So, instruction fetch should be able to 
+	// continue with the desired stream.
 	else if (|pgh[head[5:2]].irq.level) begin
 		irq_wr_en <= TRUE;
 		irq2_din <= pgh[head[5:2]].irq;
+		// The fetch address needs to be reset to the original instruction stream,
+		// since the interrupt was actually disabled. Otherwise instructions would
+		// continue to be fetched from the ISR.
+		excir <= rob[head].op;
+		excid <= head;
+		excmissgrp <= head>>2;
+		excmisspc.pc <= rob[head].op.pc;
+		excmiss <= TRUE;
 	end
 end
 endtask
@@ -8412,7 +8410,10 @@ input [15:0] regno;
 begin
 	if (Qupls4_pkg::operating_mode_t'(regno[13:12]) <= sr.om) begin
 		casez(regno[15:0])
-		Qupls4_pkg::CSR_SR:				sr <= sr | val;
+		Qupls4_pkg::CSR_SR:
+			begin
+				sr <= sr | val;
+			end
 		/*
 		CSR_MCR0:			cr0[val[5:0]] <= 1'b1;
 		CSR_SEMA:			sema[val[5:0]] <= 1'b1;
@@ -8431,7 +8432,10 @@ input [15:0] regno;
 begin
 	if (Qupls4_pkg::operating_mode_t'(regno[13:12]) <= sr.om) begin
 		casez(regno[15:0])
-		Qupls4_pkg::CSR_SR:				sr <= sr & ~val;
+		Qupls4_pkg::CSR_SR:
+			begin
+				sr <= sr & ~val;
+			end
 		/*
 		CSR_MCR0:			cr0[val[5:0]] <= 1'b0;
 		CSR_SEMA:			sema[val[5:0]] <= 1'b0;
@@ -8480,11 +8484,11 @@ begin
 	   Qupls4_pkg::OM_SUPERVISOR: nom = Qupls4_pkg::OM_HYPERVISOR;
 	   Qupls4_pkg::OM_HYPERVISOR: nom = Qupls4_pkg::OM_SECURE;
 	   Qupls4_pkg::OM_SECURE: nom = Qupls4_pkg::OM_SECURE;
-	   default:    ;
 	   endcase
 	sr.om <= nom;
 	excir <= rob[id].op;
 	excid <= id;
+	excmissgrp <= id>>2;
 	excmiss <= FALSE;
 	csr_carry_mod <= rob[id].op.carry_mod;
 	// Hardware interrupts automatically vector at the next_pc stage. There is no
@@ -8526,6 +8530,7 @@ begin
 	if (sr.om > ir.ins[9:8]) begin
 		sr.om <= Qupls4_pkg::operating_mode_t'(ir.ins[9:8]);
 		excid <= id;
+		excmissgrp <= id>>2;
 		excmiss <= TRUE;
 		if (cause[3][7:0] < 8'd16)
 			excmisspc.pc <= {kvec[ir.ins[9:8]][$bits(pc_address_t)-1:4] + cause[3][3:0],4'h0};
@@ -8842,8 +8847,9 @@ input rob_ndx_t ndx;
 integer kk;
 rob_ndx_t ih;
 begin
-	ih = (ndx + Qupls4_pkg::ROB_ENTRIES - rob[ndx].op.uop.num) % Qupls4_pkg::ROB_ENTRIES;
+	ih = (ndx + Qupls4_pkg::ROB_ENTRIES - rob[ndx].op.uop.any.num) % Qupls4_pkg::ROB_ENTRIES;
 	if (ih != ndx && rob[ih].sn < rob[ndx].sn) begin
+		rob[ih].v <= INV;							// instruction is no longer valid.
 		rob[ih].op.hwi <= TRUE;
 		rob[ndx].op.hwi <= FALSE;
 		pgh[ih>>2].hwi <= TRUE;
@@ -8865,7 +8871,9 @@ rob_ndx_t m5;
 rob_ndx_t m6;
 rob_ndx_t m7;
 rob_ndx_t ih;
+reg inv;
 begin
+	inv = FALSE;
 	m1 = (ndx + Qupls4_pkg::ROB_ENTRIES + 1) % Qupls4_pkg::ROB_ENTRIES;
 	m2 = (ndx + Qupls4_pkg::ROB_ENTRIES + 2) % Qupls4_pkg::ROB_ENTRIES;
 	m3 = (ndx + Qupls4_pkg::ROB_ENTRIES + 3) % Qupls4_pkg::ROB_ENTRIES;
@@ -8873,26 +8881,43 @@ begin
 	m5 = (ndx + Qupls4_pkg::ROB_ENTRIES + 5) % Qupls4_pkg::ROB_ENTRIES;
 	m6 = (ndx + Qupls4_pkg::ROB_ENTRIES + 6) % Qupls4_pkg::ROB_ENTRIES;
 	m7 = (ndx + Qupls4_pkg::ROB_ENTRIES + 7) % Qupls4_pkg::ROB_ENTRIES;
-	if (rob[m1].op.uop.count!=3'd0 && rob[m1].sn > rob[ndx].sn)
+	if (rob[m1].op.uop.count!=3'd0 && rob[m1].sn > rob[ndx].sn) begin
 		ih = m1;
-	else if (rob[m2].op.uop.count!=3'd0 && rob[m2].sn > rob[ndx].sn)
+		inv = TRUE;
+	end
+	else if (rob[m2].op.uop.count!=3'd0 && rob[m2].sn > rob[ndx].sn) begin
 		ih = m2;
-	else if (rob[m3].op.uop.count!=3'd0 && rob[m3].sn > rob[ndx].sn)
+		inv = TRUE;
+	end
+	else if (rob[m3].op.uop.count!=3'd0 && rob[m3].sn > rob[ndx].sn) begin
 		ih = m3;
-	else if (rob[m4].op.uop.count!=3'd0 && rob[m4].sn > rob[ndx].sn)
+		inv = TRUE;
+	end
+	else if (rob[m4].op.uop.count!=3'd0 && rob[m4].sn > rob[ndx].sn) begin
 		ih = m4;
-	else if (rob[m5].op.uop.count!=3'd0 && rob[m5].sn > rob[ndx].sn)
+		inv = TRUE;
+	end
+	else if (rob[m5].op.uop.count!=3'd0 && rob[m5].sn > rob[ndx].sn) begin
 		ih = m5;
-	else if (rob[m6].op.uop.count!=3'd0 && rob[m6].sn > rob[ndx].sn)
+		inv = TRUE;
+	end
+	else if (rob[m6].op.uop.count!=3'd0 && rob[m6].sn > rob[ndx].sn) begin
 		ih = m6;
-	else if (rob[m7].op.uop.count!=3'd0 && rob[m7].sn > rob[ndx].sn)
+		inv = TRUE;
+	end
+	else if (rob[m7].op.uop.count!=3'd0 && rob[m7].sn > rob[ndx].sn) begin
 		ih = m7;
+		inv = TRUE;
+	end
 	// Cannot find lead micro-op, must not be queued yet. Select tail position as
 	// place for interrupt. It may be moved again later.
 	else
 		ih = (tail0 + Qupls4_pkg::ROB_ENTRIES - 1) % Qupls4_pkg::ROB_ENTRIES;
 	if (ih != ndx) begin
 		rob[ih].op.hwi <= TRUE;
+		// If the lead instruction was found, invalidate it.
+		if (inv)
+			rob[ih].v <= INV;
 		rob[ndx].op.hwi <= FALSE;
 		pgh[ih>>2].hwi <= TRUE;
 		pgh[ih>>2].irq <= pgh[ndx>>2].irq;

@@ -40,7 +40,7 @@
 import Qupls4_pkg::*;
 
 module Qupls4_crypto(ir, a, b, c, o);
-input Qupls4_pkg::instruction_t ir;
+input Qupls4_pkg::micro_op_t ir;
 input cpu_types_pkg::value_t a;
 input cpu_types_pkg::value_t b;
 input cpu_types_pkg::value_t c;

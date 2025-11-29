@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2024-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -32,54 +32,68 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 15 LUTs
 // ============================================================================
 
-import cpu_types_pkg::*;
+import const_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_decode_Rs3(om, instr, instr_raw, has_immc, Rs3, Rs3z, exc);
-input Qupls4_pkg::operating_mode_t om;
-input Qupls4_pkg::micro_op_t instr;
-input [335:0] instr_raw;
-input has_immc;
-output aregno_t Rs3;
-output reg Rs3z;
-output reg exc;
+module Qupls4_checkpoint_freer(rst, clk, pgh, free, chkpt, chkpt_gndx);
+input rst;
+input clk;
+input Qupls4_pkg::pipeline_group_hdr_t [Qupls4_pkg::ROB_ENTRIES/4-1:0] pgh;
+output reg free;
+output checkpt_ndx_t chkpt;
+output reg [5:0] chkpt_gndx;
 
-reg exc2;
+integer n3,n33,n333;
+reg cond;
 
-function aregno_t fnRs3;
-input Qupls4_pkg::micro_op_t instr;
-input [335:0] instr_raw;
-input has_immc;
-Qupls4_pkg::micro_op_t ir;
-reg has_rext;
+// Search for instructions groups that are done or invalid. If there are any
+// branches in the group, then free the checkpoint. All the branches must have
+// resolved if all instructions are done or invalid.
+// Take care not to free the checkpoint more than once.
+
+function fnCond;
+input [5:0] n3;
+input Qupls4_pkg::pipeline_group_hdr_t [Qupls4_pkg::ROB_ENTRIES/4-1:0] pgh;
 begin
-	ir = instr;
-	has_rext = instr_raw[54:48]==OP_REXT;
-	if (has_immc)
-		fnRs3 = 7'd0;
-	else
-		case(ir.any.opcode)
-		Qupls4_pkg::OP_STB,Qupls4_pkg::OP_STW,
-		Qupls4_pkg::OP_STT,Qupls4_pkg::OP_STORE,Qupls4_pkg::OP_STI,
-		Qupls4_pkg::OP_STPTR:
-			fnRs3 = has_rext ? instr_raw[48+34:48+28] : {2'b00,ir.ls.Rsd};
-		Qupls4_pkg::OP_R3B,Qupls4_pkg::OP_R3W,Qupls4_pkg::OP_R3T,Qupls4_pkg::OP_R3O:
-			fnRs3 = has_rext ? instr_raw[48+34:48+28] : {2'b00,ir.alu.Rs3};
-		default:
-			fnRs3 = 7'd0;
-		endcase
+	fnCond =
+			!pgh[n3].chkpt_freed &&
+			(pgh[n3].done || !pgh[n3].v) &&
+			pgh[n3].has_branch
+			;
 end
 endfunction
 
-always_comb
-begin
-	Rs3 = fnRs3(instr, instr_raw, has_immc);
-	Rs3z = ~|Rs3;
-	exc = 1'b0;
-//	tRegmap(om, Rs3, Rs3, exc);
+always_ff @(posedge clk)
+if (rst)
+	free <= FALSE;
+else begin
+	free <= FALSE;
+	for (n3 = 0; n3 < Qupls4_pkg::ROB_ENTRIES/4; n3 = n3 + 1) begin
+		if (fnCond(n3,pgh))
+			free <= TRUE;
+	end
+end
+
+always_ff @(posedge clk)
+if (rst)
+	chkpt <= 5'd0;
+else begin
+	for (n33 = 0; n33 < Qupls4_pkg::ROB_ENTRIES/4; n33 = n33 + 1) begin
+		if (fnCond(n33,pgh))
+			chkpt <= pgh[n33].cndx;
+	end
+end
+
+always_ff @(posedge clk)
+if (rst)
+	chkpt_gndx <= 6'd0;
+else begin
+	for (n333 = 0; n333 < Qupls4_pkg::ROB_ENTRIES/4; n333 = n333 + 1) begin
+		if (fnCond(n333,pgh))
+			chkpt_gndx <= n333;
+	end
 end
 
 endmodule

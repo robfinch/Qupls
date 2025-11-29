@@ -74,8 +74,8 @@ Qupls4_pkg::memsz_t prc;
 cpu_types_pkg::pc_address_t pc;
 checkpt_ndx_t cp_i;
 aregno_t aRd_i;
-Qupls4_pkg::instruction_t ir;
-always_comb ir = rse_i.uop.ins;
+Qupls4_pkg::micro_op_t ir;
+always_comb ir = rse_i.uop;
 always_comb a = rse_i.argA;
 always_comb b = rse_i.argB;
 always_comb bi = rse_i.argB|rse_i.argI;
@@ -206,7 +206,7 @@ end
 endfunction
 
 always_comb
-	chunk = rse_i.uop.num;
+	chunk = rse_i.uop.any.num;
 
 always_comb
 	isflt = ir.any.opcode==Qupls4_pkg::OP_FLTH||

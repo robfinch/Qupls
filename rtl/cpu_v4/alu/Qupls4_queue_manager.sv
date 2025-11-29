@@ -11,7 +11,7 @@ input Qupls4_pkg::reservation_station_entry_t rse_i;
 output Qupls4_pkg::reservation_station_entry_t rse_o;
 input ld;
 input [2:0] lane;
-input Qupls4_pkg::instruction_t ir;
+input Qupls4_pkg::micro_op_t ir;
 output reg [WID-1:0] o;
 output reg [WID/8:0] we_o;
 output reg que_done;

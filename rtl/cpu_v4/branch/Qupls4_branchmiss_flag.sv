@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2024-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -32,35 +32,40 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 60 LUTs
-// ============================================================================
 //
-import Stark_pkg::*;
+// ============================================================================
 
-module Stark_branch_eval(instr, om, cr, lc, takb);
-input Stark_pkg::instruction_t instr;
-input Stark_pkg::operating_mode_t om;
-input Stark_pkg::condition_reg_t cr;
-input value_t lc;
-output reg takb;
+import Qupls4_pkg::*;
 
-wire [4:0] crbit = {om,instr[19:17]};
+module Qupls4_branchmiss_flag(rst, clk, brclass, trig, miss_det, miss_flag);
+input rst;
+input clk;
+input Qupls4_pkg::brclass_t brclass;
+input trig;
+input miss_det;
+output reg miss_flag;
 
-always_comb
-	case(instr.any.opcode)
-	Stark_pkg::OP_BCC0,Stark_pkg::OP_BCC1:	// integer unsigned branches
-		case(instr.bccld.cnd)
-		3'd0:	takb = lc != 64'd0 && cr[crbit]==1'b0;
-		3'd1:	takb = lc == 64'd0 && cr[crbit]==1'b0;
-		3'd2:	takb = cr[crbit]==1'b0;
-		3'd3: takb = lc != 64'd0 && cr[crbit]==1'b1;
-		3'd4: takb = lc == 64'd0 && cr[crbit]==1'b1;
-		3'd5:	takb = cr[crbit]==1'b1;
-		3'd6:	takb = lc != 64'd0;
-		3'd7:	takb = lc == 64'd0;
+// Branchmiss flag
+
+always_ff @(posedge clk)
+if (rst)
+	miss_flag <= FALSE;
+else begin
+	miss_flag <= FALSE;		// pulse for only 1 cycle.
+	if (trig) begin
+		case(brclass)
+		Qupls4_pkg::BRC_BCCR,
+		Qupls4_pkg::BRC_BCCD:
+			miss_flag <= miss_det;
+//		Qupls4_pkg::BRC_BL,
+		Qupls4_pkg::BRC_JSR,
+		Qupls4_pkg::BRC_JSRN,
+		Qupls4_pkg::BRC_RTD:
+			miss_flag <= TRUE;
+		default:
+			miss_flag <= FALSE;
 		endcase
-	Stark_pkg::OP_B0,Stark_pkg::OP_B1:	takb = 1'b1;
-	default:	takb = 1'b0;
-	endcase
+	end
+end
 
 endmodule

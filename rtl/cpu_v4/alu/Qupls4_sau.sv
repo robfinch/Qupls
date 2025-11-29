@@ -51,7 +51,7 @@ input clk2x;
 input [2:0] chunk;
 input Qupls4_pkg::operating_mode_t om;
 input ld;
-input Qupls4_pkg::instruction_t ir;
+input Qupls4_pkg::micro_op_t ir;
 input div;
 input [6:0] Ra;
 input [WID-1:0] a;
@@ -771,7 +771,7 @@ begin
 		endcase
 	*/
 	Qupls4_pkg::OP_CHK:
-		case(ir.chk.op4)
+		case(ir.chk.Rd)
 		4'd0:	if (!(a >= b && a < c)) exc = Qupls4_pkg::FLT_CHK;
 		4'd1: if (!(a >= b && a <= c)) exc = Qupls4_pkg::FLT_CHK;
 		4'd2: if (!(a > b && a < c)) exc = Qupls4_pkg::FLT_CHK;

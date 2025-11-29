@@ -162,8 +162,8 @@ begin
 	nopi = {$bits(Qupls4_pkg::pipeline_reg_t){1'b0}};
 	nopi.exc = Qupls4_pkg::FLT_NONE;
 	nopi.pc.pc = Qupls4_pkg::RSTPC;
-	nopi.uop.count = 3'd1;
-	nopi.uop.ins = {26'd0,Qupls4_pkg::OP_NOP};
+	nopi.uop = {26'd0,Qupls4_pkg::OP_NOP};
+	nopi.uop.any.count = 3'd1;
 	nopi.aRs1 = 8'd0;
 	nopi.aRs2 = 8'd0;
 	nopi.aRs3 = 8'd0;
@@ -229,7 +229,7 @@ begin
 		// Allow only one instruction through when single stepping.
 		if (ssm_flag & ~prev_ssm_flag) begin
 			pr0_mux.cli = pc0_fet.pc[5:1];
-			pr0_mux.uop.ins = ic_line_aligned[ 47:  0];
+			pr0_mux.uop = fnMapRawToUop(ic_line_aligned[ 47:  0]);
 			pr1_mux = nopi;
 			pr2_mux = nopi;
 			pr3_mux = nopi;
@@ -254,10 +254,10 @@ begin
 			pr1_mux.cli = pc0_fet.pc[5:1] + 6'd3;
 			pr2_mux.cli = pc0_fet.pc[5:1] + 6'd6;
 			pr3_mux.cli = pc0_fet.pc[5:1] + 6'd9;
-			pr0_mux.uop.ins = ic_line_aligned[ 47:  0];
-			pr1_mux.uop.ins = ic_line_aligned[ 95: 48];
-			pr2_mux.uop.ins = ic_line_aligned[143: 96];
-			pr3_mux.uop.ins = ic_line_aligned[191:144];
+			pr0_mux.uop = fnMapRawToUop(ic_line_aligned[ 47:  0]);
+			pr1_mux.uop = fnMapRawToUop(ic_line_aligned[ 95: 48]);
+			pr2_mux.uop = fnMapRawToUop(ic_line_aligned[143: 96]);
+			pr3_mux.uop = fnMapRawToUop(ic_line_aligned[191:144]);
 		end
 	end
 /*
@@ -631,11 +631,11 @@ begin
 	ins_o = ins_i;
 	ins_o.pc = pc;
 	ins_o.bt = takb;
-  ins_o.aRs1 = {ins_i.uop.ins.alu.Rs1};
-  ins_o.aRs2 = {ins_i.uop.ins.alu.Rs2};
-  ins_o.aRs3 = {ins_i.uop.ins.alu.Rs3};
+  ins_o.aRs1 = {ins_i.uop.alu.Rs1};
+  ins_o.aRs2 = {ins_i.uop.alu.Rs2};
+  ins_o.aRs3 = {ins_i.uop.alu.Rs3};
 //  ins_o.aRs3 = {ins_i.ins.alu.Rs3};
-  ins_o.aRd = {ins_i.uop.ins.alu.Rd};
+  ins_o.aRd = {ins_i.uop.alu.Rd};
 //	ins_o.decbus.Rtz = ins_o.aRt==8'd0;
 	// Under construction
 	// If BTB did not match next predictor, invalidate instruction.

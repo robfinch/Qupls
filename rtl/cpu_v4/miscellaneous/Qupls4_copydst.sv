@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -32,54 +32,69 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 15 LUTs
 // ============================================================================
 
+import const_pkg::*;
 import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_decode_Rs3(om, instr, instr_raw, has_immc, Rs3, Rs3z, exc);
-input Qupls4_pkg::operating_mode_t om;
-input Qupls4_pkg::micro_op_t instr;
-input [335:0] instr_raw;
-input has_immc;
-output aregno_t Rs3;
-output reg Rs3z;
-output reg exc;
+module Qupls4_copydst(rst, clk, rob, fcu_branch_resolved, fcu_idv, fcu_id, skip_list, takb,
+	stomp, unavail_list, copydst);
+input rst;		// not used
+input clk;
+input Qupls4_pkg::rob_entry_t [Qupls4_pkg::ROB_ENTRIES-1:0] rob;
+input fcu_branch_resolved;
+input fcu_idv;
+input rob_ndx_t fcu_id;
+input [Qupls4_pkg::ROB_ENTRIES-1:0] skip_list;
+input takb;
+input [Qupls4_pkg::ROB_ENTRIES-1:0] stomp;
+output reg [Qupls4_pkg::PREGS-1:0] unavail_list;
+output reg [Qupls4_pkg::ROB_ENTRIES-1:0] copydst;
 
-reg exc2;
+integer n4;
 
-function aregno_t fnRs3;
-input Qupls4_pkg::micro_op_t instr;
-input [335:0] instr_raw;
-input has_immc;
-Qupls4_pkg::micro_op_t ir;
-reg has_rext;
+// Copy-targets for when backout is not supported.
+// additional logic for handling a branch miss (STOMP logic)
+//
+always_ff @(posedge clk)
 begin
-	ir = instr;
-	has_rext = instr_raw[54:48]==OP_REXT;
-	if (has_immc)
-		fnRs3 = 7'd0;
-	else
-		case(ir.any.opcode)
-		Qupls4_pkg::OP_STB,Qupls4_pkg::OP_STW,
-		Qupls4_pkg::OP_STT,Qupls4_pkg::OP_STORE,Qupls4_pkg::OP_STI,
-		Qupls4_pkg::OP_STPTR:
-			fnRs3 = has_rext ? instr_raw[48+34:48+28] : {2'b00,ir.ls.Rsd};
-		Qupls4_pkg::OP_R3B,Qupls4_pkg::OP_R3W,Qupls4_pkg::OP_R3T,Qupls4_pkg::OP_R3O:
-			fnRs3 = has_rext ? instr_raw[48+34:48+28] : {2'b00,ir.alu.Rs3};
-		default:
-			fnRs3 = 7'd0;
-		endcase
-end
-endfunction
+	unavail_list = {Qupls4_pkg::PREGS{1'b0}};
+	for (n4 = 0; n4 < Qupls4_pkg::ROB_ENTRIES; n4 = n4 + 1) begin
+		copydst[n4] = FALSE;
+		if (!Qupls4_pkg::SUPPORT_BACKOUT) begin
+			copydst[n4] = stomp[n4];
+			if (fcu_idv && fcu_branch_resolved && skip_list[n4]) begin
+				copydst[n4] = TRUE;
+				unavail_list[rob[n4].op.nRd] = TRUE;
+			end
+		end
 
-always_comb
-begin
-	Rs3 = fnRs3(instr, instr_raw, has_immc);
-	Rs3z = ~|Rs3;
-	exc = 1'b0;
-//	tRegmap(om, Rs3, Rs3, exc);
+		if (Qupls4_pkg::SUPPORT_BACKOUT) begin
+			if (fcu_idv && ((rob[fcu_id].decbus.br && takb) || rob[fcu_id].decbus.cjb)) begin
+		 		if (rob[n4].grp==rob[fcu_id].grp && rob[n4].sn > rob[fcu_id].sn) begin
+					copydst[n4] = TRUE;
+					unavail_list[rob[n4].op.nRd] = TRUE;
+		 		end
+			end
+			if (fcu_idv && fcu_branch_resolved && skip_list[n4]) begin
+				copydst[n4] = TRUE;
+				unavail_list[rob[n4].op.nRd] = TRUE;
+			end
+		end
+		else begin
+			if (fcu_idv && ((rob[fcu_id].decbus.br && takb))) begin
+		 		if (rob[n4].grp==rob[fcu_id].grp && rob[n4].sn > rob[fcu_id].sn) begin
+					copydst[n4] = TRUE;
+		 		end
+			end
+			if (fcu_idv && rob[fcu_id].decbus.br && !takb) begin
+		 		if (rob[n4].grp==rob[fcu_id].grp && rob[n4].sn > rob[fcu_id].sn) begin
+					copydst[n4] = FALSE;
+		 		end
+			end
+		end
+	end
 end
 
 endmodule
