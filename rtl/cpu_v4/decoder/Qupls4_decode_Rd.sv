@@ -69,8 +69,8 @@ begin
 	Qupls4_pkg::OP_MULI,Qupls4_pkg::OP_MULUI,Qupls4_pkg::OP_DIVI,Qupls4_pkg::OP_DIVUI,
 	Qupls4_pkg::OP_SHIFT:
 		fnRd = ir.alui.Rd;
-	Qupls4_pkg::OP_B0,Qupls4_pkg::OP_B1,Qupls4_pkg::OP_BCC0,Qupls4_pkg::OP_BCC1:
-		fnRd = ir[8:6]==3'd7 || ir[8:6]==3'd0 ? 7'd0 : {2'b00,ir.bsr.Rd};
+	Qupls4_pkg::OP_BSR,Qupls4_pkg::OP_JSR:
+		fnRd = ir.bsr.Rd;
 	Qupls4_pkg::OP_LDB,Qupls4_pkg::OP_LDBZ,Qupls4_pkg::OP_LDW,Qupls4_pkg::OP_LDWZ,
 	Qupls4_pkg::OP_LDT,Qupls4_pkg::OP_LDTZ,Qupls4_pkg::OP_LOAD,Qupls4_pkg::OP_LOADA,
 	Qupls4_pkg::OP_LDV,

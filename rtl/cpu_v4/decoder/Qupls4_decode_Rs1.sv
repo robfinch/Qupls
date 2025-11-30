@@ -78,9 +78,8 @@ begin
 		Qupls4_pkg::OP_MULI,Qupls4_pkg::OP_MULUI,Qupls4_pkg::OP_DIVI,Qupls4_pkg::OP_DIVUI,
 		Qupls4_pkg::OP_SHIFT:
 			fnRs1 = has_rext ? instr_raw[61:55] : {1'b0,ir.alui.Rs1};
-		Qupls4_pkg::OP_B0,Qupls4_pkg::OP_B1:
-			fnRs1 = has_rext ? instr_raw[61:55] : {1'b0,ir.br.Rs1};
-		Qupls4_pkg::OP_BCC0,Qupls4_pkg::OP_BCC1:
+		Qupls4_pkg::OP_BCC8,Qupls4_pkg::OP_BCC16,Qupls4_pkg::OP_BCC32,Qupls4_pkg::OP_BCC64,
+		Qupls4_pkg::OP_BCCU8,Qupls4_pkg::OP_BCCU16,Qupls4_pkg::OP_BCCU32,Qupls4_pkg::OP_BCCU64:
 			fnRs1 = has_rext ? instr_raw[61:55] : {1'b0,ir.br.Rs1};
 		Qupls4_pkg::OP_LDB,Qupls4_pkg::OP_LDBZ,
 		Qupls4_pkg::OP_LDW,Qupls4_pkg::OP_LDWZ,

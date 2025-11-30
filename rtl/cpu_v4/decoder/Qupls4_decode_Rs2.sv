@@ -84,22 +84,21 @@ begin
 			fnHas_Rs2 = 1'b1;
 		Qupls4_pkg::OP_CSR:
 			fnHas_Rs2 = ir[31:29]==3'd0 ? 1'b1 : 1'b0;
-		Qupls4_pkg::OP_B0,Qupls4_pkg::OP_B1,Qupls4_pkg::OP_BCC0,Qupls4_pkg::OP_BCC1:
-			if (ir[30:29]==2'b00 && ir[8:6]!=3'd7)
-				fnHas_Rs2 = 1'b1;
-			else
-				fnHas_Rs2 = 1'b0;
+		Qupls4_pkg::OP_BCC8,Qupls4_pkg::OP_BCC16,Qupls4_pkg::OP_BCC32,Qupls4_pkg::OP_BCC64,
+		Qupls4_pkg::OP_BCCU8,Qupls4_pkg::OP_BCCU16,Qupls4_pkg::OP_BCCU32,Qupls4_pkg::OP_BCCU64:
+			fnHas_Rs2 = 1'b1;
 		Qupls4_pkg::OP_ADDI,Qupls4_pkg::OP_SUBFI,Qupls4_pkg::OP_CMPI,Qupls4_pkg::OP_CMPUI,
 		Qupls4_pkg::OP_ANDI,Qupls4_pkg::OP_ORI,Qupls4_pkg::OP_XORI,
-		Qupls4_pkg::OP_MULI,Qupls4_pkg::OP_MULUI,Qupls4_pkg::OP_DIVI,Qupls4_pkg::OP_DIVUI,
+		Qupls4_pkg::OP_MULI,Qupls4_pkg::OP_MULUI,Qupls4_pkg::OP_DIVI,Qupls4_pkg::OP_DIVUI:
+			fnHas_Rs2 = 1'b0;
 		Qupls4_pkg::OP_SHIFT:
-			fnHas_Rs2 = ir[31:29]==3'd0;
+			fnHas_Rs2 = 1'b1;
 		Qupls4_pkg::OP_LDB,Qupls4_pkg::OP_LDBZ,Qupls4_pkg::OP_LDW,Qupls4_pkg::OP_LDWZ,
 		Qupls4_pkg::OP_LDT,Qupls4_pkg::OP_LDTZ,Qupls4_pkg::OP_LOAD,Qupls4_pkg::OP_LOADA,
 		Qupls4_pkg::OP_STB,Qupls4_pkg::OP_STW,
 		Qupls4_pkg::OP_STT,Qupls4_pkg::OP_STORE,
 		Qupls4_pkg::OP_STPTR:
-			fnHas_Rs2 = ir[31:29]==3'd0;
+			fnHas_Rs2 = 1'b1;
 		Qupls4_pkg::OP_AMO,
 		Qupls4_pkg::OP_CMPSWAP:	fnHas_Rs2 = 1'b1;
 		default:
@@ -123,11 +122,9 @@ begin
 		case(ir.any.opcode)
 		Qupls4_pkg::OP_FLTH,Qupls4_pkg::OP_FLTS,Qupls4_pkg::OP_FLTD,Qupls4_pkg::OP_FLTQ:
 			fnRs2 = {2'b01,ir.fpu.Rs2};
-		Qupls4_pkg::OP_B0,Qupls4_pkg::OP_B1,Qupls4_pkg::OP_BCC0,Qupls4_pkg::OP_BCC1:
-			if (ir[30:29]==2'b00 && ir[8:6]!=3'd7)
-				fnRs2 = {2'b00,ir[15:11]};
-			else
-				fnRs2 = 7'd0;
+		Qupls4_pkg::OP_BCC8,Qupls4_pkg::OP_BCC16,Qupls4_pkg::OP_BCC32,Qupls4_pkg::OP_BCC64,
+		Qupls4_pkg::OP_BCCU8,Qupls4_pkg::OP_BCCU16,Qupls4_pkg::OP_BCCU32,Qupls4_pkg::OP_BCCU64:
+			fnRs2 = {1'b0,ir.br.Rs2};
 		Qupls4_pkg::OP_ADDI,Qupls4_pkg::OP_SUBFI,Qupls4_pkg::OP_CMPI,Qupls4_pkg::OP_CMPUI,
 		Qupls4_pkg::OP_ANDI,Qupls4_pkg::OP_ORI,Qupls4_pkg::OP_XORI,
 		Qupls4_pkg::OP_MULI,Qupls4_pkg::OP_MULUI,Qupls4_pkg::OP_DIVI,Qupls4_pkg::OP_DIVUI,

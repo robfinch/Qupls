@@ -1244,6 +1244,7 @@ always_comb
 always_comb
 	irq_wr_en2 = irq_wr_en & ~irst & ~irq_rd_rst & ~irq_wr_rst;
 
+
 	// This fifo to record IRQs that got disabled after already being fetched.
 
    // xpm_fifo_sync: Synchronous FIFO
@@ -1370,13 +1371,15 @@ reg irq_trig;
 wire pe_nmi;
 reg exe_nmi, exe_irq;
 reg ic_irqf;
+reg [7:0] irq_downcount;
+reg [7:0] irq_downcount_base;
 
 always_comb
 	nmi = irq_i==6'd63;
 always_comb
-	irq_addr = irq ? ivect_i[63:0]  : {kvec[sr.dbg ? 4 : 3][$bits(pc_address_t)-1:8] + 4'd10,8'h0};
+	irq_addr = irq ? ivect_i[63:0]  : kernel_vectors[sr.dbg ? 4 : fnNextOm(sr.om)];
 always_comb
-	nmi_addr = {kvec[sr.dbg ? 4 : 3][$bits(pc_address_t)-1:8] + 4'd11,8'h0};
+	nmi_addr = kernel_vectors[sr.dbg ? 4 : fnNextOm(sr.om)];
 
 edge_det unmied1 (.clk(clk), .rst(irst), .ce(advance_f), .i(nmi), .pe(pe_nmi), .ne(), .ee());
 always_ff @(posedge clk)
@@ -1414,12 +1417,15 @@ always_ff @(posedge clk)
 if (irst)
 	pending_ipl <= 6'd63;
 else begin
+	// RTE and a write to the SR may reset the interrupt level.
 	if (set_pending_ipl)
 		pending_ipl <= next_pending_ipl;
-	if (advance_pipeline) begin
+//	if (advance_pipeline)
+	else begin
 		if (irq2_dout.level > pending_ipl && sr.mie && !irq_empty)
 			pending_ipl <= irq2_dout.level;
-		else if (irq_i > pending_ipl && sr.mie)
+		else
+		if (irq_i > pending_ipl && sr.mie)
 			pending_ipl <= irq_i;
 	end
 end
@@ -1434,10 +1440,11 @@ else begin
 	irq_ack <= FALSE;
 	irq_rd_en <= FALSE;
 //	if (irq2_dout.level > pending_ipl && irq2_dout.swstk==swstk && sr.mie && !irq_empty)
-	if (irq2_dout.level > pending_ipl && sr.mie && !irq_empty)
+	if (irq2_dout.level > pending_ipl && sr.mie && !irq_empty && irq_downcount==8'd0)
 		irq_rd_en <= TRUE;
 //	else if (irq_i > pending_ipl && swstk_i==swstk && sr.mie)
-	else if (irq_i > pending_ipl && sr.mie)
+	else
+	if (irq_i > pending_ipl && sr.mie)
 		irq_ack <= TRUE;
 end
 
@@ -5418,6 +5425,8 @@ else begin
 	irq_wr_en <= FALSE;
 	if (sr.ssm & advance_pipeline)
 		ssm_flag <= TRUE;
+	if (advance_pipeline && |irq_downcount)
+		irq_downcount <= irq_downcount - 2'd1;
 
 	// The reorder buffer is not updated with the argument values. This is done
 	// just for debugging in SIM. All values come from the register file.
@@ -6477,16 +6486,16 @@ else begin
 		if (rob[head0].excv && rob[head0].v)
 //			err_mask[head0] <= 1'b1;
 //			if (rob[head0].last)
-			tProcessExc(head0,rob[head0].op.pc,12'h0,rob[head0].op.uop.any.num,FALSE,FALSE);
+			tProcessExc(head0,rob[head0].op.pc,rob[head0].op.uop.any.num,FALSE,FALSE);
 		else if (rob[head1].excv && cmtcnt > 3'd1 && rob[head1].v)
-			tProcessExc(head1,rob[head1].op.pc,12'h0,rob[head1].op.uop.any.num,FALSE,FALSE);
+			tProcessExc(head1,rob[head1].op.pc,rob[head1].op.uop.any.num,FALSE,FALSE);
 		else if (rob[head2].excv && cmtcnt > 3'd2 && rob[head2].v)
-			tProcessExc(head2,rob[head2].op.pc,12'h0,rob[head2].op.uop.any.num,FALSE,FALSE);
+			tProcessExc(head2,rob[head2].op.pc,rob[head2].op.uop.any.num,FALSE,FALSE);
 		else if (rob[head3].excv && cmtcnt > 3'd3 && rob[head3].v)
-			tProcessExc(head3,rob[head3].op.pc,12'h0,rob[head3].op.uop.any.num,FALSE,FALSE);
+			tProcessExc(head3,rob[head3].op.pc,rob[head3].op.uop.any.num,FALSE,FALSE);
 			
 		if (rob[head0].op.ssm)
-			tProcessExc(head0,Qupls4_pkg::SSM_DEBUG ? rob[head0].op.pc : rob[head0].op.hwipc,12'h0,rob[head0].op.uop.any.num,FALSE,FALSE);
+			tProcessExc(head0,Qupls4_pkg::SSM_DEBUG ? rob[head0].op.pc : rob[head0].op.hwipc,rob[head0].op.uop.any.num,FALSE,FALSE);
 
 		/*
 		if (FALSE) begin
@@ -7496,6 +7505,19 @@ begin
 end
 endfunction
 
+function Qupls4_pkg::operating_mode_t fnNextOm;
+input Qupls4_pkg::operating_mode_t om;
+begin
+	fnNextOm = om;
+	if (om != 2'd3)
+	   case(om)
+	   Qupls4_pkg::OM_APP: fnNextOm = Qupls4_pkg::OM_SUPERVISOR;
+	   Qupls4_pkg::OM_SUPERVISOR: fnNextOm = Qupls4_pkg::OM_HYPERVISOR;
+	   Qupls4_pkg::OM_HYPERVISOR: fnNextOm = Qupls4_pkg::OM_SECURE;
+	   Qupls4_pkg::OM_SECURE: fnNextOm = Qupls4_pkg::OM_SECURE;
+	   endcase
+end
+endfunction
 
 // Register name bypassing logic. The target register for the previous clock
 // cycle will not have been updated in the RAT in time for it to be used in
@@ -7951,6 +7973,8 @@ begin
 	sync_no <= 6'd0;
 	fc_no <= 6'd0;
 	irq_wr_en <= FALSE;
+	irq_downcount <= 8'd00;
+	irq_downcount_base <= 8'd10;
 	ssm_flag <= FALSE;
 	pred_alloc_map <= 32'h0;
 	flush_pipeline <= 1'b0;
@@ -8260,7 +8284,7 @@ begin
 			else if (rob[head].decbus.irq)
 				;
 			else if (rob[head].decbus.brk)
-				tProcessExc(head,rob[head].op.pc+32'd6,12'h0,rob[head].op.uop.any.num,FALSE,FALSE);
+				tProcessExc(head,rob[head].op.pc+32'd6,rob[head].op.uop.any.num,FALSE,FALSE);
 			else if (rob[head].decbus.eret)
 				tProcessEret(rob[head].op[22:19]==5'd2,rob[head].op[23]==1'b1);
 			else if (rob[head].decbus.rex)
@@ -8268,9 +8292,9 @@ begin
 		end
 	end
 	else if (rob[head].op.hwi && pgh[head[5:2]].hwi && pgh[head[5:2]].irq.level == 6'd63)	// NMI
-		tProcessExc(head,rob[head].op.pc,12'h0,rob[head].op.uop.any.num,FALSE,TRUE);
+		tProcessExc(head,rob[head].op.pc,rob[head].op.uop.any.num,FALSE,TRUE);
 	else if (rob[head].op.hwi && pgh[head[5:2]].hwi && pgh[head[5:2]].irq.level > sr.ipl && sr.mie)
-		tProcessExc(head,rob[head].op.pc,12'h0,rob[head].op.uop.any.num,TRUE,FALSE);
+		tProcessExc(head,rob[head].op.pc,rob[head].op.uop.any.num,TRUE,FALSE);
 	// If interrupt turned out to be disabled, put the irq on a queue for
 	// later processing. Note that the interrupt enable level has been set to
 	// disable further interrupts. So, instruction fetch should be able to 
@@ -8286,6 +8310,10 @@ begin
 		excmissgrp <= head>>2;
 		excmisspc.pc <= rob[head].op.pc;
 		excmiss <= TRUE;
+		irq_downcount <= irq_downcount_base;
+		irq_downcount_base <= {irq_downcount_base,1'b0} | 8'd8;
+		if (irq_downcount_base[7])
+			tProcessExc(head,rob[head].op.pc,rob[head].op.uop.any.num,FALSE,TRUE);
 	end
 end
 endtask
@@ -8367,6 +8395,7 @@ begin
 				sr <= val;
 				set_pending_ipl <= TRUE;
 				next_pending_ipl <= val[10:5];
+				irq_downcount_base <= 4'd8;
 			end
 		Qupls4_pkg::CSR_ASID: 	asid <= val;
 		Qupls4_pkg::CSR_KVEC3:	kvec[3] <= val;
@@ -8413,6 +8442,7 @@ begin
 		Qupls4_pkg::CSR_SR:
 			begin
 				sr <= sr | val;
+				irq_downcount_base <= 4'd8;
 			end
 		/*
 		CSR_MCR0:			cr0[val[5:0]] <= 1'b1;
@@ -8435,6 +8465,7 @@ begin
 		Qupls4_pkg::CSR_SR:
 			begin
 				sr <= sr & ~val;
+				irq_downcount_base <= 4'd8;
 			end
 		/*
 		CSR_MCR0:			cr0[val[5:0]] <= 1'b0;
@@ -8456,13 +8487,11 @@ endtask
 task tProcessExc;
 input rob_ndx_t id;
 input pc_address_t retpc;
-input [11:0] ucm_pc;
 input [2:0] uop_num;
 input irq;
 input nmi;
 integer nn;
 reg [7:0] vecno;
-Qupls4_pkg::operating_mode_t nom;			// next operating mode
 begin
 	//vecno = rob[id].imm ? rob[id].a0[8:0] : rob[id].a1[8:0];
 	//vecno <= rob[id].exc;
@@ -8475,17 +8504,10 @@ begin
 	if (UOP_STRATEGY==2) begin
 		for (nn = 1; nn < 16; nn = nn + 1)
 			upc_stack[nn] <= upc_stack[nn-1];
-		upc_stack[0] <= {ucm_pc,1'b0,uop_num};
+		upc_stack[0] <= {1'b0,uop_num};
 	end
 	sr.pl <= 8'hFF;
-	if (sr.om != 2'd3)
-	   case(sr.om)
-	   Qupls4_pkg::OM_APP: nom = Qupls4_pkg::OM_SUPERVISOR;
-	   Qupls4_pkg::OM_SUPERVISOR: nom = Qupls4_pkg::OM_HYPERVISOR;
-	   Qupls4_pkg::OM_HYPERVISOR: nom = Qupls4_pkg::OM_SECURE;
-	   Qupls4_pkg::OM_SECURE: nom = Qupls4_pkg::OM_SECURE;
-	   endcase
-	sr.om <= nom;
+	sr.om <= fnNextOm(sr.om);
 	excir <= rob[id].op;
 	excid <= id;
 	excmissgrp <= id>>2;
@@ -8508,13 +8530,13 @@ begin
 	else if (rob[id].op.ssm) begin
 		sr.ssm <= FALSE;
 		ssm_flag <= FALSE;
-		excmisspc.pc <= kernel_vectors[sr.dbg ? 3'd4:{1'b0,nom}];
+		excmisspc.pc <= kernel_vectors[sr.dbg ? 3'd4:{1'b0,fnNextOm(sr.om)}];
 		excmiss <= TRUE;
 //		excmisspc.pc <= {kvec[sr.dbg ? 4 : nom][$bits(pc_address_t)-1:8] + 4'd1,8'h0};
 //		excmiss <= TRUE;
 	end
 	else begin
-		excmisspc.pc <= kernel_vectors[{1'b0,nom}];
+		excmisspc.pc <= kernel_vectors[{1'b0,fnNextOm(sr.om)}];
 		excmiss <= TRUE;
 		//excmisspc.pc <= {kvec[sr.dbg ? 4 : nom][$bits(pc_address_t)-1:8] + 4'd13,8'h0};
 		//excmiss <= TRUE;
@@ -8548,6 +8570,7 @@ begin
 	excret <= TRUE;
 	err_mask <= 64'd0;
 	sr <= sr_stack[0];
+	irq_downcount_base <= 8'd8;
 	if (!restore_ssm)
 		sr.ssm <= 1'b0;
 	for (nn = 0; nn < 15; nn = nn + 1)

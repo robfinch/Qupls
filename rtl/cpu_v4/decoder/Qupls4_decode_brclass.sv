@@ -37,7 +37,7 @@
 import Qupls4_pkg::*;
 
 module Qupls4_decode_brclass(instr, brclass);
-input Qupls4_pkg::instruction_t instr;
+input Qupls4_pkg::micro_op_t instr;
 output Qupls4_pkg::brclass_t brclass;
 
 always_comb

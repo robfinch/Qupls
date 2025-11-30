@@ -141,12 +141,8 @@ begin
 			immb = {57'd0,ins[22:16]};
 			has_immb = 1'b0;
 		end
-	Qupls4_pkg::OP_B0,Qupls4_pkg::OP_B1:
-		begin
-			immb = Qupls4_pkg::fnHasExConst(ins) ? cnst1 : ins[31] ? {{12{ins[25]}},ins[25:9],ins[0],2'b00} : {{7{ins[30]}},ins[30:9],ins[0],2'b00};
-			has_immb = 1'b1;
-		end
-	Qupls4_pkg::OP_BCC0,Qupls4_pkg::OP_BCC1:
+	Qupls4_pkg::OP_BCC8,Qupls4_pkg::OP_BCC16,Qupls4_pkg::OP_BCC32,Qupls4_pkg::OP_BCC64,
+	Qupls4_pkg::OP_BCCU8,Qupls4_pkg::OP_BCCU16,Qupls4_pkg::OP_BCCU32,Qupls4_pkg::OP_BCCU64:
 		begin
 			immb = Qupls4_pkg::fnHasExConst(ins) ? cnst1 : {{19{ins[30]}},ins[30:29],ins[16:9],ins[0],2'b00};
 			has_immb = ins[31:29]!=3'b100;

@@ -54,7 +54,7 @@ output reg [2:0] missgrp;
 output pc_address_ex_t dstpc;
 output reg [4:0] stomp_bno;
 
-Qupls4_pkg::instruction_t ir;
+Qupls4_pkg::micro_op_t ir;
 
 always_comb
 	ir = instr.uop;

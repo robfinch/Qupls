@@ -823,12 +823,6 @@ begin
 			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,ir};
 		end
 */			
-	Qupls4_pkg::OP_B0,
-	Qupls4_pkg::OP_B1:
-		begin
-			count = 4'd1;
-			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,instr};
-		end
 	Qupls4_pkg::OP_ENTER:
 		begin
 			count = 4'd5;
@@ -981,7 +975,6 @@ begin
 				end
 			endcase
 		end
-	Qupls4_pkg::OP_TRAP,
 	Qupls4_pkg::OP_CHK,
 	Qupls4_pkg::OP_STB,Qupls4_pkg::OP_STW,
 	Qupls4_pkg::OP_STT,Qupls4_pkg::OP_STORE,Qupls4_pkg::OP_STI,
