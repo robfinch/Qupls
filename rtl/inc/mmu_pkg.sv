@@ -158,6 +158,7 @@ typedef struct packed
 	REGION_ATTR [3:0] at;
 	cpu_types_pkg::physical_address_t cta;
 	cpu_types_pkg::physical_address_t pmt;
+	cpu_types_pkg::physical_address_t pam;
 	cpu_types_pkg::physical_address_t end_adr;
 	cpu_types_pkg::physical_address_t start_adr;
 	logic [31:0] lock;
@@ -264,6 +265,7 @@ typedef struct packed
 	logic [1:0] cache;				// cache location (none,L1,L2,LLC)
 	logic u;									// 1=user page
 	logic [2:0] rwx;					// read-write-execute
+	logic [7:0] pl;						// privilege level
 	logic [21:0] ppn;					// 35 bit address space (22 bit page number)
 } spte_lvl1_t;							// 40 bits
 
@@ -280,6 +282,7 @@ typedef struct packed
 	logic [1:0] cache;				// cache location (none,L1,L2,LLC)
 	logic u;									// 1=user page
 	logic [2:0] rwx;					// read-write-execute
+	logic [7:0] pl;						// privilege level
 	logic [11:0] ppn;					// 35 bit address space (22 bit page number)
 	logic [9:0] limit;
 } spte_lvl2_t;							// 40 bits

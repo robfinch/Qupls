@@ -40,6 +40,7 @@ import  cpu_types_pkg::*;
 `endif
 
 package Qupls4_pkg;
+`define QUPLS4	1'b1
 `define STARK_PKG 1'b1
 `undef IS_SIM
 parameter SIM = 1'b0;
@@ -50,7 +51,7 @@ parameter SIM = 1'b0;
 
 // Number of architectural registers there are in the core, including registers
 // not visible in the programming model. Includes all operating modes.
-`define NREGS	224
+`define NREGS	163
 
 // Number of physical registers supporting the architectural ones and used in
 // register renaming. There must be significantly more physical registers than
@@ -58,6 +59,10 @@ parameter SIM = 1'b0;
 // Must be a multiple of four. If it is not 512 or 256 then the renamer logic will
 // need to be modified.
 parameter PREGS = 512;
+
+// Length of a vector register in bits.
+parameter VLEN = 256;
+parameter VREGS = (VLEN/$bits(cpu_types_pkg::value_t));
 
 `define L1CacheLines	1024
 `define L1CacheLineSize		256
@@ -92,7 +97,7 @@ parameter SUPPORT_RENAMER = 1;
 // 4 = FIFO based, larger, does not work correctly yet
 // 			(sometimes supplies the same register twice)
 // 6 = FFO / Bitmap, a find-first-ones approach with a bitmap
-parameter RENAMER = 6;
+parameter RENAMER = 4;
 
 // Comment out the following to remove the RAT
 `define SUPPORT_RAT 1;
@@ -117,7 +122,7 @@ parameter SUPPORT_BACKOUT = 1'b1;
 // If this is set to one extra logic will be included to improve performance.
 // Allows simple ALU ops to be performed on the FPU and simple FPU ops to be
 // performed on an ALU. 
-parameter PERFORMANCE = 1'b1;
+parameter PERFORMANCE = 1'b0;
 
 // Predictor
 // This is for the late stage predicator. The branch-target-buffer is always
@@ -163,7 +168,16 @@ parameter SUPPORT_QUAD_PRECISION = 1'b0;
 // size of the core and make it more vulnerable to security attacks.
 parameter SUPPORT_LOAD_BYPASSING = 1'b0;
 
+// Support mutiple precisions for SAU and FPU operations. If not supported only
+// 64-bit precision will be supported. Suppporting multiple precisions adds
+// considerable size to the SAU / FPU. Eg. 5x larger.
 parameter SUPPORT_PREC = 1'b0;
+
+// Support for vector operations.
+parameter SUPPORT_VECTOR = 1'b1;
+
+// Support for NaN tracing
+parameter SUPPORT_NAN_TRACE = 1'b0;
 
 // The following controls the size of the reordering buffer.
 // Setting ROB_ENTRIES below 12 may not work. Setting the number of entries over
@@ -228,6 +242,7 @@ parameter NAGEN = 1;
 parameter NSAU = 2;			// 1 or 2
 parameter NFPU = 1;			// 0 or 1
 parameter NFMA = 1;			// 0, 1 or 2
+parameter NDFPU = 0;		// 0 or 1
 parameter NLSQ_PORTS = 1;
 parameter SUPPORT_IDIV = 1;
 parameter SUPPORT_TRIG = 1;
@@ -272,11 +287,13 @@ parameter REG_USHM = REG_U|REG_S|REG_H|REG_M;
 // Type declarations
 // =============================================================================
 
-typedef enum logic [1:0] {
-	DRAMSLOT_AVAIL = 2'd0,
-	DRAMSLOT_READY = 2'd1,
-	DRAMSLOT_ACTIVE = 2'd2,
-	DRAMSLOT_DELAY = 2'd3
+typedef enum logic [2:0] {
+	DRAMSLOT_AVAIL = 3'd0,
+	DRAMSLOT_READY = 3'd1,
+	DRAMSLOT_ACTIVE = 3'd2,
+	DRAMSLOT_DELAY = 3'd3,
+	DRAMSLOT_ACTIVE2 = 3'd4,
+	DRAMSLOT_DELAY2 = 3'd5
 } dram_state_t;
 
 typedef struct packed
@@ -300,21 +317,20 @@ typedef logic [3:0] beb_ndx_t;
 
 typedef struct packed
 {
-	logic [Stark_pkg::PREGS-1:0] avail;	// available registers at time of queue (for rollback)
+	logic [Qupls4_pkg::PREGS-1:0] avail;	// available registers at time of queue (for rollback)
 //	cpu_types_pkg::pregno_t [AREGS-1:0] p2regmap;
-	cpu_types_pkg::pregno_t [Stark_pkg::AREGS-1:0] pregmap;
-	cpu_types_pkg::pregno_t [Stark_pkg::AREGS-1:0] regmap;
+	cpu_types_pkg::pregno_t [Qupls4_pkg::AREGS-1:0] pregmap;
+	cpu_types_pkg::pregno_t [Qupls4_pkg::AREGS-1:0] regmap;
 } checkpoint_t;
 
 typedef struct packed
 {
-	logic resv;
-	logic so;				// summary overflow / unordered
-	logic ca;				// carry / infinite
+	logic [1:0] resv;
+	logic gt;
+	logic ge;
 	logic le;
 	logic lt;
-	logic _nor;
-	logic _nand;
+	logic ne;
 	logic eq;				// _xnor
 } condition_byte_t;
 
@@ -405,21 +421,20 @@ typedef enum logic [2:0] {
 
 typedef enum logic [9:0] {
 	BRC_NONE = 10'h000,
-	BRC_BL = 10'h001,
-	BRC_BLRLR = 10'h002,
+	BRC_JSR = 10'h001,
+	BRC_JSRN = 10'h002,
 	BRC_BLRLC = 10'h004,
 	BRC_BCCD = 10'h008,
 	BRC_BCCR = 10'h010,
 	BRC_BCCC = 10'h020,
-	BRC_RETR = 10'h040,
-	BRC_RETC = 10'h080,
+	BRC_RTD = 10'h040,
 	BRC_ERET = 10'h100,
 	BRC_ECALL = 10'h200
 } brclass_t;
 
-parameter BRC_BLR = BRC_BLRLR|BRC_BLRLC;
-parameter BRC_BCC = BRC_BCCR|BRC_BCCD|BRC_BCCC;
-parameter BRC_RET = BRC_RETR|BRC_RETC;
+parameter BRC_BLR = 1'b0;
+parameter BRC_BCC = BRC_BCCR|BRC_BCCD;
+parameter BRC_RET = BRC_RTD;
 
 typedef enum logic [2:0] {
 	BS_IDLE = 3'd0,
@@ -433,6 +448,7 @@ typedef enum logic [2:0] {
 
 typedef enum logic [6:0] {
 	OP_BRK = 7'd0,
+	OP_R3H = 7'd2,
 	OP_ADDI = 7'd4,
 	OP_SUBFI = 7'd5,
 	OP_MULI = 7'd6,
@@ -441,22 +457,49 @@ typedef enum logic [6:0] {
 	OP_ORI = 7'd9,
 	OP_XORI = 7'd10,
 	OP_CMPI = 7'd11,
+	OP_EXTD = 7'd12,
 	OP_DIVI = 7'd13,
 	OP_MULUI = 7'd14,
-	OP_MOV = 7'd15,
-	OP_FLTD = 7'd16,
+	OP_ADDIPI = 7'd15,
+	OP_SHIFT = 7'd16,
 	OP_CMPUI = 7'd19,
+	OP_LOADA = 7'd20,
 	OP_DIVUI = 7'd21,
+	OP_MOVMR = 7'd23,
+//	OP_TRAP = 7'd28,
 
-	OP_BCC0 = 7'd24,
-	OP_BCC1 = 7'd25,
-	OP_B0 = 7'd26,
-	OP_B1 = 7'd27,
-	OP_TRAP = 7'd28,
-	OP_CHK = 7'd29,
+	OP_BCCU8 = 7'd24,
+	OP_BCCU16 = 7'd25,
+	OP_BCCU32 = 7'd26,
+	OP_BCCU64 = 7'd27,
+	OP_BCC8 = 7'd28,
+	OP_BCC16 = 7'd29,
+	OP_BCC32 = 7'd30,
+	OP_BCC64 = 7'd31,
+	
+	OP_BSR = 7'd32,
+	OP_JSR = 7'd33,
+	OP_JSRN = 7'd36,
+	OP_RTD = 7'd35,
+	
+	OP_CHK = 7'd47,
 
+	OP_FLTPH = 7'd48,
+	OP_FLTPS = 7'd49,
+	OP_FLTPD = 7'd50,
+	OP_FLTPQ = 7'd51,
+
+	OP_ENTER = 7'd52,
+	OP_EXIT = 7'd53,
 	OP_PUSH = 7'd54,
 	OP_POP = 7'd55,
+	OP_FLTH = 7'd56,
+	OP_FLTS = 7'd57,
+	OP_FLTD = 7'd58,
+	OP_FLTQ = 7'd59,
+
+	OP_PFX = 7'd61,
+	OP_MOD = 7'd62,
 
 	OP_LDB = 7'd64,
 	OP_LDBZ = 7'd65,
@@ -465,38 +508,138 @@ typedef enum logic [6:0] {
 	OP_LDT = 7'd68,
 	OP_LDTZ = 7'd69,
 	OP_LOAD = 7'd70,
+	OP_LDV = 7'd71,
+	OP_CLOAD = 7'd73,
 	OP_FLDH = 7'd74,
 	OP_FLDS = 7'd76,
-	OP_LOADA = 7'd57,
+	OP_LDVN = 7'd79,
 	
 	OP_STB = 7'd80,
 	OP_STW = 7'd81,
 	OP_STT = 7'd82,
 	OP_STORE = 7'd83,
 	OP_STI = 7'd84,
-	OP_STOREI = 7'd47,
+	OP_CSTORE = 7'd85,
+	OP_LDG = 7'd87,
 	OP_STPTR = 7'd86,
 
-	OP_SHIFT = 7'd88,
+	OP_STV = 7'd88,
+	OP_STVN = 7'd89,
+	OP_V2P = 7'd90,
+	OP_VV2P = 7'd91,
 
-	OP_FENCE = 7'd51,
-	OP_BLOCK = 7'd53,
-	OP_AMO = 7'd59,
-	OP_CMPSWAP = 7'd60,
-	OP_PFX = 7'd61,
-	OP_MOD = 7'd62,
-	OP_NOP = 7'd63,
+	OP_AMO = 7'd92,
+	OP_CMPSWAP = 7'd93,
+	OP_FLDG = 7'd95,
 	
+	OP_R3VS = 7'd100,
+	OP_FLTVS = 7'd101,
+
 	OP_R3B = 7'd104,
 	OP_R3W = 7'd105,
 	OP_R3T = 7'd106,
-	OP_R3O = 7'd107
+	OP_R3O = 7'd107,
+	OP_BLOCK = 7'd111,
+	OP_R3BP = 7'd112,
+	OP_R3WP = 7'd113,
+	OP_R3TP = 7'd114,
+	OP_R3OP = 7'd115,
+	OP_R3P = 7'd116,
+	OP_FLTP = 7'd117,
+
+	OP_REXT = 7'd120,
+	OP_FENCE = 7'd123,
+	OP_NOP = 7'd127
 } opcode_e;
 
 typedef enum logic [6:0] {
+	EX_ADC = 7'd0,
+	EX_ASLC = 7'd1,
+	EX_ASRC = 7'd2,
+	EX_LSRC = 7'd3,
+	EX_VSHLV = 7'd6,
+	EX_VSHRV = 7'd7
+} extdop_e;
+
+typedef enum logic [6:0] {
+	FN_AND = 7'd0,
+	FN_OR = 7'd1,
+	FN_XOR = 7'd2,
+	FN_CMP = 7'd3,
 	FN_ADD = 7'd4,
-	FN_SUB = 7'd5
+	FN_SUB = 7'd5,
+	FN_CMPU = 7'd6,
+	FN_NAND = 7'd8,
+	FN_NOR = 7'd9,
+	FN_XNOR = 7'd10,
+	FN_MOVE = 7'd15,
+	FN_MUL = 7'd16,
+	FN_DIV = 7'd17,
+	FN_MULU = 7'd19,
+	FN_DIVU = 7'd20,
+	FN_MULSU = 7'd21,
+	FN_DIVSU = 7'd22,
+	FN_MOD = 7'd25,
+	FN_R1 = 7'd26,
+	FN_MODU = 7'd28,
+	FN_MUX = 7'd33,
+	FN_ROL = 7'd80,
+	FN_ROR = 7'd81,
+	FN_ASR = 7'd82,
+	FN_ASL = 7'd83,
+	FN_LSR = 7'd84,
+	FN_REDAND = 7'd96,
+	FN_REDOR = 7'd97,
+	FN_REDEOR = 7'd98,
+	FN_REDMINU = 7'd99,
+	FN_REDSUM = 7'd100,
+	FN_REDMAXU = 7'd101,
+	FN_REDMIN = 7'd102,
+	FN_REDMAX = 7'd103,
+	FN_PEEKQ = 7'd104,
+	FN_POPQ = 7'd105,
+	FN_PUSHQ = 7'd106,
+	FN_RESETQ = 7'd107,
+	FN_STATQ = 7'd108,
+	FN_READQ = 7'd110,
+	FN_WRITEQ = 7'd111,
+	FN_SEQ = 7'd120,
+	FN_SNE = 7'd121,
+	FN_SLT = 7'd122,
+	FN_SLE = 7'd123,
+	FN_SLTU = 7'd124,
+	FN_SLEU = 7'd125
 } func_e;
+
+typedef enum logic [6:0] {
+	R1_CNTLZ = 7'd0,
+	R1_CNTLO = 7'd1,
+	R1_CNTPOP = 7'd2,
+	R1_SQRT = 7'd4,
+	R1_REVBIT = 7'd5,
+	R1_CNTTZ = 7'd6,
+	R1_NOT = 7'd7,
+	// NNA
+	R1_NNA_TRIG = 7'd8,
+	R1_NNA_STAT = 7'd9,
+	R1_NNA_MFACT = 7'd10,
+
+	R1_MKBOOL = 7'd12,
+	// Crypto
+	R1_SM3P1 = 7'd14,
+	R1_SM3PO = 7'd15
+} r1_e;
+
+typedef enum logic [6:0] {
+	FLT_MIN = 7'd2,
+	FLT_MAX = 7'd3,
+	FLT_SEQ = 7'd8,
+	FLT_SNE = 7'd9,
+	FLT_SLT = 7'd10,
+	FLT_CMP = 7'd13,
+	FLT_SGNJ = 7'd16,
+	FLT_NEG = 7'd33
+} flt_e;
 
 typedef enum logic [3:0] {
 	FOP4_FADD = 4'd4,
@@ -528,155 +671,83 @@ typedef enum logic [4:0] {
 	FTRIG_FSIN = 5'd1
 } float_trig_t;
 
+typedef enum logic [3:0] {
+	CND_EQ = 4'd0,
+	CND_NE = 4'd1,
+	CND_LT = 4'd2,
+	CND_LE = 4'd3,
+	CND_GE = 4'd4,
+	CND_GT = 4'd5,
+	CND_NAND = 4'd8,
+	CND_AND = 4'd9,
+	CND_NOR = 4'd10,
+	CND_OR = 4'd11
+} cnd_e;
+
 parameter NOP_INSN = {26'd0,OP_NOP};
 
 typedef struct packed
 {
-	logic [40:0] payload;
+	logic v;
+	logic exc;
+	logic [2:0] count;
+	logic [2:0] num;
+	logic [49:0] payload;
 	logic [6:0] opcode;
 } anyinst_t;
 
 typedef struct packed
 {
-	logic [14:0] mor;
-	logic one;
-	logic [13:0] imm;
-	logic Cr;
-	logic [4:0] Rs1;
-	logic [1:0] op2;
-	logic [2:0] CRd;
-	logic [6:0] opcode;
-} cmpi_inst_t;
-
-typedef struct packed
-{
-	logic [14:0] mor;
-	logic zero;
-	logic [1:0] op2a;
-	logic [6:0] resv;
-	logic [4:0] Rs2;
-	logic Cr;
-	logic [4:0] Rs1;
-	logic [1:0] op2;
-	logic [2:0] CRd;
-	logic [6:0] opcode;
-} cmp_inst_t;
-
-typedef struct packed
-{
-	logic [14:0] mor;
-	logic zero;
-	logic [1:0] lx;
-	logic [6:0] resv;
-	logic [3:0] cl;
-	logic resv1;
-	logic Cr;
-	logic [4:0] Rs1;
-	logic [1:0] op2;
-	logic [2:0] CRd;
-	logic [6:0] opcode;
-} cmpcl_inst_t;
-
-typedef struct packed
-{
-	logic [15:0] mor;
-	logic one;
-	logic [21:0] disp;
-	logic [2:0] BRd;
-	logic [4:0] opcode;
-	logic d0;
-} bl_inst_t;
-
-typedef struct packed
-{
-	logic [15:0] mor;
-	logic zero;
-	logic [1:0] op2a;
-	logic [2:0] BRs;
-	logic [8:0] lmt;
-	logic resv1;
-	logic [4:0] Rs2;
-	logic [1:0] resv2;
-	logic [2:0] BRd;
-	logic [4:0] opcode;
-	logic l0;
-} blrlr_inst_t;
-
-typedef struct packed
-{
-	logic [15:0] mor;
-	logic zero;
-	logic [1:0] op2a;
-	logic [2:0] BRs;
-	logic [8:0] lmt;
-	logic [3:0] resv4;
-	logic [2:0] cl;
+	logic v;
+	logic exc;
+	logic [2:0] count;
+	logic [2:0] num;
 	logic resv2;
-	logic [2:0] BRd;
-	logic [4:0] opcode;
-	logic l0;
-} blrlcl_inst_t;
+	logic [1:0] prc;
+	logic md;
+	logic [3:0] resv;
+	logic [19:0] disp;
+	logic [7:0] Rs2;
+	logic [7:0] Rs1;
+	logic [1:0] ms;
+	logic [3:0] cnd;
+	opcode_e opcode;
+} br_inst_t;
 
 typedef struct packed
 {
-	logic [15:0] mor;
-	logic one;
-	logic [1:0] disphi;
-	logic [2:0] BRs;
-	logic [2:0] cnd;
-	logic [5:0] CRs;
-	logic [7:0] displo;
-	logic [2:0] BRd;
-	logic [4:0] opcode;
-	logic d0;
-} bccld_inst_t;
+	logic v;
+	logic exc;
+	logic [2:0] count;
+	logic [2:0] num;
+	logic resv2;
+	logic [1:0] prc;
+	logic md;
+	logic [15:0] resv;
+	logic [7:0] Rs3;
+	logic [7:0] Rs2;
+	logic [7:0] Rs1;
+	logic [1:0] ms;
+	logic [3:0] cnd;
+	opcode_e opcode;
+} brr_inst_t;
 
 typedef struct packed
 {
-	logic [14:0] mor;
-	logic zero;
-	logic [1:0] op2a;
-	logic [2:0] BRs;
-	logic [2:0] cnd;
-	logic [5:0] CRs;
-	logic resv1;
-	logic [4:0] Rs2;
-	logic [1:0] resv2;
-	logic [2:0] BRd;
-	logic [6:0] opcode;
-} bcclr_inst_t;
+	logic v;
+	logic exc;
+	logic [2:0] count;
+	logic [2:0] num;
+	logic resv2;
+	logic [5:0] resv;
+	logic [34:0] disp;
+	logic [7:0] Rd;
+	opcode_e opcode;
+} bsr_inst_t;
 
 typedef struct packed
 {
-	logic [14:0] mor;
-	logic zero;
-	logic [1:0] op2a;
-	logic [2:0] BRs;
-	logic [2:0] cnd;
-	logic [5:0] CRs;
-	logic [3:0] resv4;
-	logic [2:0] cl;
-	logic resv1;
-	logic [2:0] BRd;
-	logic [6:0] opcode;
-} bcclcl_inst_t;
-
-typedef struct packed
-{
-	logic [15:0] mor;
-	logic zero;
-	logic [1:0] maskhi;
-	logic [2:0] zero3;
-	logic [2:0] cnd;
-	logic [5:0] CRs;
-	logic [7:0] masklo;
-	logic [2:0] seven;
-	logic [4:0] opcode;
-	logic m0;
-} pcc_inst_t;
-
-typedef struct packed
-{
+/*
 	logic [15:0] mor;
 	logic zero;
 	logic [1:0] maskhi;
@@ -686,478 +757,391 @@ typedef struct packed
 	logic [2:0] seven;
 	logic [4:0] opcode;
 	logic m0;
+*/
+	logic v;
+	logic exc;
+	logic [2:0] count;
+	logic [2:0] num;
+	logic resv2;
+	logic [48:0] resv;
+	opcode_e opcode;
 } atom_inst_t;
 
 typedef struct packed
 {
-	logic [14:0] mor;
-	logic one;
-	logic [13:0] disp;
-	logic cr;
-	logic [4:0] Rs1;
-	logic [4:0] Rsd;
-	logic [6:0] opcode;
-} lsd_inst_t;
+	logic v;
+	logic exc;
+	logic [2:0] count;
+	logic [2:0] num;
+	logic resv2;
+	logic [2:0] sc;
+	logic ms;
+	logic [1:0] resv;
+	logic [18:0] disp;
+	logic [7:0] Rs2;
+	logic [7:0] Rs1;
+	logic [7:0] Rsd;
+	opcode_e opcode;
+} ls_inst_t;
 
 typedef struct packed
 {
-	logic [14:0] mor;
-	logic zero;
-	logic [1:0] zero1a;
-	logic [4:0] disp;
-	logic [1:0] sc;
-	logic [4:0] Rs2;
-	logic cr;
-	logic [4:0] Rs1;
-	logic [4:0] Rsd;
-	logic [6:0] opcode;
-} lsscn_inst_t;
-
-typedef struct packed
-{
-	logic [15:0] mor;
-	logic zero;
-	logic [1:0] lx;
-	logic resv1a;
-	logic [2:0] cl;
-	logic resv1;
-	logic [1:0] sc;
-	logic [4:0] Rs2;
-	logic [4:0] Rs1;
-	logic [4:0] Rsd;
-	logic [6:0] opcode;
-} lsscncl_inst_t;
-
-typedef struct packed
-{
-	logic [15:0] mor;
-	logic zero;
-	logic [1:0] zero2;
-	logic [4:0] op5;
-	logic [1:0] sz;
-	logic [4:0] Rs2;
-	logic [4:0] Rs1;
-	logic [4:0] Rd;
-	logic [6:0] opcode;
+	logic v;
+	logic exc;
+	logic [2:0] count;
+	logic [2:0] num;
+	logic resv2;
+	logic [6:0] func;
+	logic [2:0] ms;
+	logic [2:0] ar;
+	logic [3:0] vn;
+	logic [7:0] Rs3;
+	logic [7:0] Rs2;
+	logic [7:0] Rs1;
+	logic [7:0] Rd;
+	opcode_e opcode;
 } amo_inst_t;
 
 typedef struct packed
 {
-	logic [15:0] mor;
-	logic zero;
-	logic [1:0] zero2;
-	logic [1:0] resv;
-	logic [4:0] Rs3;
-	logic [4:0] Rs2;
-	logic [4:0] Rs1;
-	logic [4:0] Rd;
-	logic [6:0] opcode;
+	logic v;
+	logic exc;
+	logic [2:0] count;
+	logic [2:0] num;
+	logic resv2;
+	logic [6:0] func;
+	logic [2:0] ms;
+	logic [2:0] ar;
+	logic [3:0] vn;
+	logic [7:0] Rs3;
+	logic [7:0] Rs2;
+	logic [7:0] Rs1;
+	logic [7:0] Rd;
+	opcode_e opcode;
 } cas_inst_t;
 
 typedef struct packed
 {
-	logic [15:0] mor;
-	logic one;
-	logic [13:0] imm;
-	logic [4:0] Rs1;
-	logic [4:0] Rd;
-	logic [6:0] opcode;
+	logic v;
+	logic exc;
+	logic [2:0] count;
+	logic [2:0] num;
+	logic resv2;
+	logic [1:0] pr;
+	logic [3:0] resv;
+	logic [26:0] imm;
+	logic [7:0] Rs1;
+	logic [7:0] Rd;
+	opcode_e opcode;
 } alui_inst_t;
 
 typedef struct packed
 {
-	logic [2:0] mor;
-	logic zero;
-	logic [1:0] lx;
-	logic [3:0] op4;
+	logic v;
+	logic exc;
+	logic [2:0] count;
+	logic [2:0] num;
+	logic resv2;
+	logic [6:0] func;
+	logic [2:0] ms;
 	logic [2:0] op3;
-	logic N3;
-	logic [5:0] Rs3;
-	logic N2;
-	logic [5:0] Rs2;
-	logic N1;
-	logic [5:0] Rs1;
-	logic Nd;
-	logic [5:0] Rd;
-	logic [6:0] opcode;
+	logic [3:0] vn;
+	logic [7:0] Rs3;
+	logic [7:0] Rs2;
+	logic [7:0] Rs1;
+	logic [7:0] Rd;
+	opcode_e opcode;
 } alu_inst_t;
 
 typedef struct packed
 {
-	logic [15:0] mor;
-	logic zero;
-	logic [1:0] lx;
-	logic [3:0] op4;
+	logic v;
+	logic exc;
+	logic [2:0] count;
+	logic [2:0] num;
+	logic resv2;
+	logic [6:0] func;
+	logic [2:0] ms;
 	logic [2:0] op3;
-	logic [3:0] cl;
-	logic resv;
-	logic [4:0] Rs1;
-	logic [4:0] Rd;
-	logic [6:0] opcode;
-} alucli_inst_t;
+	logic [3:0] vn;
+	logic [7:0] Rs3;
+	logic [7:0] Rs2;
+	logic [7:0] Rs1;
+	logic [7:0] Rd;
+	opcode_e opcode;
+} r3_inst_t;
 
 typedef struct packed
 {
-	logic [15:0] mor;
-	logic one;
-	logic [1:0] op2;
-	logic [2:0] op3;
-	logic h;
-	logic [1:0] resv;
-	logic [5:0] amt;
-	logic [4:0] Rs1;
-	logic [4:0] Rd;
-	logic [6:0] opcode;
-} shi_inst_t;
+	logic v;
+	logic exc;
+	logic [2:0] count;
+	logic [2:0] num;
+	logic resv2;
+	flt_e func;
+	logic [2:0] ms;
+	logic [2:0] rm;
+	logic [3:0] vn;
+	logic [7:0] Rs3;
+	logic [7:0] Rs2;
+	logic [7:0] Rs1;
+	logic [7:0] Rd;
+	opcode_e opcode;
+} f3_inst_t;
 
 typedef struct packed
 {
-	logic [15:0] mor;
-	logic zero;
-	logic [1:0] op2;
+	logic v;
+	logic exc;
+	logic [2:0] count;
+	logic [2:0] num;
+	logic resv2;
+	logic [6:0] func;
+	logic [2:0] ms;
 	logic [2:0] op3;
-	logic h;
-	logic [2:0] resv;
-	logic [4:0] Rs2;
-	logic [4:0] Rs1;
-	logic [4:0] Rd;
-	logic [6:0] opcode;
+	logic [3:0] vn;
+	logic [7:0] Rs3;
+	logic [7:0] Rs2;
+	logic [7:0] Rs1;
+	logic [7:0] Rd;
+	opcode_e opcode;
 } sh_inst_t;
 
 typedef struct packed
 {
-	logic [15:0] mor;
-	logic one;
-	logic [1:0] op2;
-	logic [2:0] op3;
-	logic [1:0] rm;
-	logic resv;
-	logic [5:0] amt;
-	logic [4:0] Rs1;
-	logic [4:0] Rd;
-	logic [6:0] opcode;
-} srai_inst_t;
-
-typedef struct packed
-{
-	logic [15:0] mor;
-	logic zero;
-	logic [1:0] op2;
-	logic [2:0] op3;
-	logic [1:0] rm;
-	logic [1:0] resv;
-	logic [4:0] Rs2;
-	logic [4:0] Rs1;
-	logic [4:0] Rd;
-	logic [6:0] opcode;
+	logic v;
+	logic exc;
+	logic [2:0] count;
+	logic [2:0] num;
+	logic resv2;
+	logic [6:0] func;
+	logic [2:0] ms;
+	logic [2:0] rm;
+	logic [3:0] vn;
+	logic [7:0] Rs3;
+	logic [7:0] Rs2;
+	logic [7:0] Rs1;
+	logic [7:0] Rd;
+	opcode_e opcode;
 } sra_inst_t;
 
 typedef struct packed
 {
-	logic [15:0] mor;
-	logic one;
-	logic [1:0] op2;
+	logic v;
+	logic exc;
+	logic [2:0] count;
+	logic [2:0] num;
+	logic resv2;
 	logic [2:0] op3;
-	logic l;
-	logic [1:0] resv;
-	logic [5:0] amt;
-	logic [4:0] Rs1;
-	logic [4:0] Rd;
-	logic [6:0] opcode;
-} roti_inst_t;
-
-typedef struct packed
-{
-	logic [15:0] mor;
-	logic zero;
-	logic [1:0] op2;
-	logic [2:0] op3;
-	logic l;
-	logic [2:0] resv;
-	logic [4:0] Rs2;
-	logic [4:0] Rs1;
-	logic [4:0] Rd;
-	logic [6:0] opcode;
-} rot_inst_t;
-
-typedef struct packed
-{
-	logic [15:0] mor;
-	logic one;
-	logic [1:0] op2;
-	logic [5:0] me;
-	logic [5:0] mb;
-	logic [4:0] Rs1;
-	logic [4:0] Rd;
-	logic [6:0] opcode;
-} exti_inst_t;
-
-typedef struct packed
-{
-	logic [15:0] mor;
-	logic zero;
-	logic [1:0] op2;
-	logic [2:0] op3;
-	logic z;
-	logic [2:0] resv;
-	logic [4:0] Rs2;
-	logic [4:0] Rs1;
-	logic [4:0] Rd;
-	logic [6:0] opcode;
-} ext_inst_t;
-
-typedef struct packed
-{
-	logic [15:0] mor;
-	logic one;
-	logic [1:0] op2;
-	logic [11:0] regno;
-	logic [4:0] Rs1;
-	logic [4:0] Rd;
-	logic [6:0] opcode;
+	logic [2:0] ms;
+	logic [13:0] regno;
+	logic [12:0] resv;
+	logic [7:0] Rs1;
+	logic [7:0] Rd;
+	opcode_e opcode;
 } csr_inst_t;
 
 typedef struct packed
 {
-	logic [15:0] mor;
-	logic zero;
-	logic [1:0] zero1a;
-	logic [1:0] op2;
-	logic [4:0] resv;
-	logic [4:0] Rs2;
-	logic [4:0] Rs1;
-	logic [4:0] Rd;
-	logic [6:0] opcode;
-} csrr_inst_t;
+	logic v;
+	logic exc;
+	logic [2:0] count;
+	logic [2:0] num;
+	logic resv2;
+	logic [2:0] op3;
+	logic [2:0] immH;
+	logic [13:0] regno;
+	logic [5:0] resv;
+	logic [14:0] imm;
+	logic [7:0] Rd;
+	opcode_e opcode;
+} csri_inst_t;
 
 typedef struct packed
 {
-	logic [15:0] mor;
-	logic zero;
-	logic [1:0] one;
-	logic [11:0] regno;
-	logic [3:0] cl;
-	logic op;
-	logic [4:0] Rd;
-	logic [6:0] opcode;
-} csrcl_inst_t;
-
-typedef struct packed
-{
-	logic [15:0] mor;
-	logic one;
-	logic [1:0] zero;
-	logic [11:0] op12;
-	logic [4:0] Rs1;
-	logic [4:0] cnst;
-	logic [6:0] opcode;
+	logic v;
+	logic exc;
+	logic [2:0] count;
+	logic [2:0] num;
+	logic resv2;
+	logic [48:0] resv;
+	opcode_e opcode;
 } brk_inst_t;
 
 typedef struct packed
 {
-	logic [15:0] mor;
-	logic zero;
-	logic [3:0] op4;
-	logic [4:0] Rs3;
-	logic [4:0] Rs2;
-	logic [4:0] Rs1;
-	logic [4:0] offs;
-	logic [6:0] opcode;
+	logic v;
+	logic exc;
+	logic [2:0] count;
+	logic [2:0] num;
+	logic resv2;
+	logic [6:0] func;
+	logic [2:0] ms;
+	logic [2:0] op3;
+	logic [3:0] vn;
+	logic [7:0] Rs3;
+	logic [7:0] Rs2;
+	logic [7:0] Rs1;
+	logic [7:0] Rd;
+	opcode_e opcode;
 } chk_inst_t;
 
 typedef struct packed
 {
-	logic [15:0] mor;
-	logic zero;
-	logic [1:0] op2;
-	logic [1:0] grphi;
-	logic [9:0] lsthi;
-	logic [1:0] grplo;
-	logic [7:0] lstlo;
-	logic [6:0] opcode;
-} push_inst_t;
-
-typedef struct packed
-{
-	logic [15:0] mor;
-	logic one;
-	logic [1:0] op2;
-	logic [11:0] imm;
-	logic [5:0] resv;
-	logic [3:0] ns4;
-	logic [6:0] opcode;
+	logic v;
+	logic exc;
+	logic [2:0] count;
+	logic [2:0] num;
+	logic resv2;
+	logic [1:0] resv;
+	logic [22:0] imm;
+	logic [7:0] Rs2;
+	logic [7:0] Rs1;
+	logic [7:0] Rd;
+	opcode_e opcode;
 } enter_inst_t;
 
 typedef struct packed
 {
-	logic [15:0] mor;
-	logic one;
-	logic [1:0] lx;
+	logic v;
+	logic exc;
+	logic [2:0] count;
+	logic [2:0] num;
+	logic resv2;
+	logic [6:0] func;
+	logic [2:0] ms;
 	logic [2:0] op3;
-	logic [4:0] resv;
-	logic [1:0] Rs1h;
-	logic [1:0] Rdh;
-	logic [4:0] Rs1;
-	logic [4:0] Rd;
-	logic [6:0] opcode;
-} move_inst_t;
-
-typedef struct packed
-{
-	logic [15:0] mor;
-	logic one;
-	logic [1:0] immhi;
-	logic [2:0] op3;
-	logic [8:0] immlo;
-	logic [4:0] Rs1;
-	logic [4:0] Rd;
-	logic [6:0] opcode;
-} cmovi_inst_t;
-
-typedef struct packed
-{
-	logic [15:0] mor;
-	logic zero;
-	logic [1:0] lx;
-	logic [2:0] op3;
-	logic [3:0] resv;
-	logic [4:0] Rs2;
-	logic [4:0] Rs1;
-	logic [4:0] Rd;
-	logic [6:0] opcode;
+	logic [3:0] vn;
+	logic [7:0] Rs3;
+	logic [7:0] Rs2;
+	logic [7:0] Rs1;
+	logic [7:0] Rd;
+	opcode_e opcode;
 } cmov_inst_t;
 
 typedef struct packed
 {
-	logic [15:0] mor;
-	logic one;
-	logic [1:0] immhi;
+	logic v;
+	logic exc;
+	logic [2:0] count;
+	logic [2:0] num;
+	logic resv2;
+	logic [6:0] func;
+	logic [2:0] ms;
 	logic [2:0] op3;
-	logic [4:0] immlo;
+	logic [3:0] vn;
+	logic [7:0] Rs3;
+	logic [3:0] resv;
 	logic [1:0] Rs1h;
 	logic [1:0] Rdh;
-	logic [4:0] Rs1;
-	logic [4:0] Rd;
-	logic [6:0] opcode;
-} movx_inst_t;
+	logic [7:0] Rs1;
+	logic [7:0] Rd;
+	opcode_e opcode;
+} move_inst_t;
 
 typedef struct packed
 {
-	logic [15:0] mor;
-	logic zero;
-	logic [1:0] sz;
-	logic [2:0] op3a;
-	logic [3:0] op4;
-	logic [4:0] Rs2;
-	logic [4:0] Rs1;
-	logic [4:0] Rd;
-	logic [6:0] opcode;
+	logic v;
+	logic exc;
+	logic [2:0] count;
+	logic [2:0] num;
+	logic resv2;
+	logic [6:0] func;
+	logic [2:0] ms;
+	logic [2:0] op3;
+	logic [3:0] vn;
+	logic [7:0] Rs3;
+	logic [7:0] Rs2;
+	logic [7:0] Rs1;
+	logic [7:0] Rd;
+	opcode_e opcode;
 } bmap_inst_t;
 
 typedef struct packed
 {
-	logic [14:0] mor;
-	logic one;
-	logic [22:0] imm;
-	logic [1:0] wh;
-	logic [6:0] opcode;
-} pfx_inst_t;
-
-typedef struct packed
-{
-	logic [14:0] mor;
-	logic one;
-	logic [1:0] zero;
-	logic [3:0] op4;
-	logic [5:0] resv;
-	logic i;
-	logic [5:0] CRs1;
-	logic [5:0] CRd;
-	logic [6:0] opcode;
-} cri_inst_t;
-
-typedef struct packed
-{
-	logic [14:0] mor;
-	logic zero;
-	logic [1:0] zero1a;
-	logic [3:0] op4;
-	logic resv;
-	logic [5:0] CRs2;
-	logic [5:0] CRs1;
-	logic [5:0] CRd;
-	logic [6:0] opcode;
-} cr_inst_t;
-
-typedef struct packed
-{
+	logic v;
+	logic exc;
+	logic [2:0] count;
+	logic [2:0] num;
+	logic resv2;
 	logic [6:0] func;
 	logic [2:0] ms;
 	fround_t rm;
-	logic N3;
-	logic [5:0] Rs3;
-	logic N2;
-	logic [5:0] Rs2;
-	logic N1;
-	logic [5:0] Rs1;
-	logic Nd;
-	logic [5:0] Rd;
-	logic [6:0] opcode;
+	logic [3:0] vn;
+	logic [7:0] Rs3;
+	logic [7:0] Rs2;
+	logic [7:0] Rs1;
+	logic [7:0] Rd;
+	opcode_e opcode;
 } fpu_inst_t;
+
+typedef struct packed
+{
+	logic v;
+	logic exc;
+	logic [2:0] count;
+	logic [2:0] num;
+	logic [7:0] Rs4;
+	logic [2:0] ms;
+	logic [2:0] op3;
+	logic [3:0] vn;
+	logic [7:0] Rs3;
+	logic [7:0] Rs2;
+	logic [7:0] Rs1;
+	logic [7:0] Rd;
+	opcode_e opcode;
+} extd_inst_t;
+
+typedef struct packed
+{
+	logic v;
+	logic exc;
+	logic [2:0] count;
+	logic [2:0] num;
+	logic resv2;
+	logic [2:0] sc;
+	logic ms;
+	logic [9:0] disp;
+	logic [2:0] dt;
+	logic [7:0] Rs3;
+	logic [7:0] Rs2;
+	logic [7:0] Rs1;
+	logic [7:0] Rd;
+	opcode_e opcode;
+} vls_inst_t;
 
 typedef union packed
 {
-	cmpi_inst_t cmpi;
-	cmp_inst_t cmp;
-	cmpcl_inst_t cmpcl;
-	bl_inst_t bl;
-	blrlr_inst_t blrlr;
-	blrlcl_inst_t blrlcl;
-	bccld_inst_t bccld;
-	bccld_inst_t retd;
-	bccld_inst_t mcb;
-	bcclr_inst_t bcclr;
-	bcclr_inst_t retr;
-	bcclcl_inst_t bcclcl;
-	bcclcl_inst_t retcl;
-	pcc_inst_t pcc;
+	alui_inst_t cmpi;
+	alu_inst_t cmp;
+	br_inst_t br;
+	brr_inst_t brr;
+	bsr_inst_t bsr;
 	atom_inst_t atom;
-	lsd_inst_t lsd;
-	lsscn_inst_t lsscn;
-	lsscncl_inst_t lsscncl;
+	ls_inst_t ls;
 	amo_inst_t amo;
 	cas_inst_t cas;
 	alui_inst_t alui;
 	alu_inst_t alu;
-	alucli_inst_t alucli;
+	r3_inst_t r3;
+	f3_inst_t f3;
 	fpu_inst_t fpu;
-	shi_inst_t shi;
 	sh_inst_t sh;
-	srai_inst_t srai;
 	sra_inst_t sra;
-	roti_inst_t roti;
-	rot_inst_t rot;
-	exti_inst_t exti;
-	ext_inst_t ext;
+	sh_inst_t rot;
+	csri_inst_t csri;
 	csr_inst_t csr;
-	csrr_inst_t csrr;
-	csrcl_inst_t csrcl;
 	brk_inst_t brk;
 	chk_inst_t chk;
-	push_inst_t push;
-	push_inst_t pop;
 	enter_inst_t enter;
 	enter_inst_t leave;
 	move_inst_t move;
-	cmovi_inst_t cmovi;
 	cmov_inst_t cmov;
-	movx_inst_t movx;
 	bmap_inst_t bmap;
-	pfx_inst_t pfx;
-	cri_inst_t cri;
-	cr_inst_t cr;
+	extd_inst_t extd;
+	vls_inst_t vls;
 	anyinst_t any;
-} instruction_t;
+} micro_op_t;
 
 parameter CSR_SR		= 16'h?004;
 parameter CSR_CAUSE	= 16'h?006;
@@ -1215,24 +1199,46 @@ parameter CSR_TIME	= 16'h?FE0;
 parameter CSR_MTIME	= 16'h3FE0;
 parameter CSR_MTIMECMP	= 16'h3FE1;
 
+/*
 typedef struct packed {
 	logic v;
 	logic exc;
 	logic [2:0] count;
 	logic [2:0] num;
-	logic [1:0] xRs3;
-	logic [1:0] xRs2;
-	logic [1:0] xRs1;
-	logic [1:0] xRd;
 	logic [3:0] xop4;
-	instruction_t ins;
+	logic [7:0] Rs4;
+	logic [2:0] ms;
+	logic [2:0] op3;
+	logic [3:0] vn;
+	logic [7:0] Rs3;
+	logic [7:0] Rs2;
+	logic [7:0] Rs1;
+	logic [7:0] Rd;
+	logic [6:0] opcode;
 } micro_op_t;
 
 typedef struct packed {
+	logic v;
+	logic exc;
+	logic [2:0] count;
+	logic [2:0] num;
+	logic [3:0] xop4;
+	logic [2:0] sc;
+	logic ms;
+	logic [5:0] disp;
+	logic [2:0] dt;
+	logic [7:0] Rs3;
+	logic [7:0] Rs2;
+	logic [7:0] Rs1;
+	logic [7:0] Rd;
+	logic [6:0] opcode;
+} vls_uop_t;
+*/
+
+typedef struct packed {
 	cpu_types_pkg::pc_address_ex_t pc;
-	cpu_types_pkg::mc_address_t mcip;
 	logic [5:0] pred_btst;
-	instruction_t ins;
+	micro_op_t ins;
 } ex_instruction_t;
 
 typedef enum logic [7:0] {
@@ -1299,7 +1305,8 @@ typedef enum logic [3:0] {
 	hexi = 4'd6,
 	dodeca = 4'd7,
 	char = 4'd8,
-	vect = 4'd10
+	vect = 4'd10,
+	mem72 = 4'd11
 } memsz_t;
 
 typedef struct packed
@@ -1312,6 +1319,29 @@ typedef struct packed
 
 typedef struct packed
 {
+	logic cap;		// capabilities tag
+	logic ptr;		// register contains a pointer
+	logic cry;		// carry
+	logic ovf;		// overflow
+	logic [3:0] user;
+//	logic [7:0] ecc;	// error correcting bits
+} flags_t;
+
+// Holds the sizes of lanes for vector operations.
+
+typedef struct packed
+{
+	logic [39:0] reserved;
+	logic [4:0] resv3;
+	logic [2:0] address_size;
+	logic [4:0] resv2;
+	logic [2:0] float_size;
+	logic [4:0] resv1;
+	logic [2:0] int_size;
+} velsz_t;
+
+typedef struct packed
+{
 	logic v;
 	logic pfxa;
 	logic pfxb;
@@ -1321,14 +1351,24 @@ typedef struct packed
 	cpu_types_pkg::aregno_t Rs1;
 	cpu_types_pkg::aregno_t Rs2;
 	cpu_types_pkg::aregno_t Rs3;
+	cpu_types_pkg::aregno_t Rs4;
 	cpu_types_pkg::aregno_t Rd;
+	cpu_types_pkg::aregno_t Rs1a;
+	cpu_types_pkg::aregno_t Rs2a;
+	cpu_types_pkg::aregno_t Rs3a;
+	cpu_types_pkg::aregno_t Rs4a;
 	cpu_types_pkg::aregno_t Rd2;
 	cpu_types_pkg::aregno_t Rd3;
 	cpu_types_pkg::aregno_t Rco;		// carry output
 	logic Rs1z;
 	logic Rs2z;
 	logic Rs3z;
+	logic Rs4z;
 	logic Rdz;
+	logic Rs1az;
+	logic Rs2az;
+	logic Rs3az;
+	logic Rs4az;
 	logic Rd2z;
 	logic Rd3z;
 	logic has_Rs2;
@@ -1336,9 +1376,11 @@ typedef struct packed
 	logic has_imma;
 	logic has_immb;
 	logic has_immc;
+	logic has_immd;
 	cpu_types_pkg::value_t imma;
 	cpu_types_pkg::value_t immb;
-	cpu_types_pkg::value_t immc;		// for store immediate
+	cpu_types_pkg::value_t immc;
+	cpu_types_pkg::value_t immd;		// for store immediate
 	logic csr;				// CSR instruction
 	logic nop;				// NOP semantics
 	logic fc;					// flow control op
@@ -1366,11 +1408,22 @@ typedef struct packed
 	logic mem;
 	logic mem0;				// true if instruction must use only port #0
 	logic v2p;				// virtual to physical instruction
+	logic vv2p;				// vector virtual to physical
+	logic vvn2p;			// indexed vector virtual to physical
 	logic amo;
 	logic load;
 	logic loadz;
+	logic vload;				// vector load
+	logic vload_ndx;		// indexed vector load
 	logic store;
+	logic vstore;				// vector store
+	logic vstore_ndx;		// indexed vector store
 	logic bstore;
+	logic push;
+	logic pop;
+	logic [2:0] count;
+	logic aldf;
+	logic astf;
 	logic cls;
 	logic loada;
 	logic erc;
@@ -1443,6 +1496,8 @@ typedef struct packed {
 	logic cload_tags;
 	logic store;
 	logic cstore;
+	logic aldf;
+	logic astf;
 	ex_instruction_t op;
 	cpu_types_pkg::pc_address_ex_t pc;
 	memop_t func;					// operation to perform
@@ -1462,7 +1517,7 @@ typedef struct packed {
 	cpu_types_pkg::pregno_t pRc;					// 'C' register for store
 	cpu_types_pkg::checkpt_ndx_t cndx;
 	operating_mode_t om;	// operating mode
-	logic ctag;						// capabilities tag
+	flags_t flags;	// capabilities tag / carry / overflow / parity
 	logic datav;					// store data is valid
 	logic [511:0] res;		// stores unaligned data as well (must be last field)
 } lsq_entry_t;
@@ -1487,20 +1542,22 @@ typedef struct packed
 	cpu_types_pkg::pregno_t pRs1;							// physical registers (see decode bus for arch. regs)
 	cpu_types_pkg::pregno_t pRs2;
 	cpu_types_pkg::pregno_t pRs3;
+	cpu_types_pkg::pregno_t pRs4;
 	cpu_types_pkg::pregno_t pRd;						// current Rd value
 	cpu_types_pkg::pregno_t nRd;						// new Rd
 	logic pRs1v;
 	logic pRs2v;
 	logic pRs3v;
+	logic pRs4v;
 	logic pRdv;
 	logic nRdv;
+	logic [5:0] cli;												// 16-bit parcel cache line index of instruction
 	cpu_types_pkg::pc_address_ex_t pc;			// PC of instruction
-	cpu_types_pkg::mc_address_t mcip;				// Micro-code IP address
 	cpu_types_pkg::pc_address_ex_t hwipc;		// PC of instruction
-	cpu_types_pkg::mc_address_t hwi_mcip;		// Micro-code IP address
 	cpu_types_pkg::aregno_t aRs1;
 	cpu_types_pkg::aregno_t aRs2;
 	cpu_types_pkg::aregno_t aRs3;
+	cpu_types_pkg::aregno_t aRs4;
 	cpu_types_pkg::aregno_t aRd;
 	micro_op_t uop;
 	decode_bus_t decbus;
@@ -1543,13 +1600,18 @@ typedef struct packed {
 	logic [3:0] funcunit;							// functional unit dispatched to
 	cpu_types_pkg::rob_ndx_t rndx;		// associated ROB entry
 	cpu_types_pkg::checkpt_ndx_t cndx;
-	instruction_t ins;
+	micro_op_t uop;
+	logic has_rext;
 	cause_code_t exc;
+	logic nan;
 	// needed only for mem
 	logic virt2phys;
 	logic load;
 	logic store;
 	logic amo;
+	logic push;
+	logic pop;
+	logic [2:0] count;
 	// decodes only needed for branch
 	logic bt;												
 	brclass_t brclass;
@@ -1564,19 +1626,40 @@ typedef struct packed {
 	operating_mode_t om;						// needed for mem ops
 	fround_t rm;										// needed for float-ops
 	cpu_types_pkg::pc_address_t pc;
-	cpu_types_pkg::value_t argA;
-	cpu_types_pkg::value_t argB;
-	cpu_types_pkg::value_t argC;
-	cpu_types_pkg::value_t argD;
+//	logic [63:0] pch;
+	cpu_types_pkg::value_pair_t argA;
+	cpu_types_pkg::value_pair_t argB;
+	cpu_types_pkg::value_pair_t argC;
+	cpu_types_pkg::value_pair_t argD;
+	cpu_types_pkg::value_pair_t argT;
 	cpu_types_pkg::value_t argI;
-	logic tagA;
-	logic tagB;
-	logic tagC;
-	logic tagD;
+	/*
+	cpu_types_pkg::value_t argAh;
+	cpu_types_pkg::value_t argBh;
+	cpu_types_pkg::value_t argCh;
+	cpu_types_pkg::value_t argDh;
+	*/
+	flags_t tagA;
+	flags_t tagB;
+	flags_t tagC;
+	flags_t tagD;
+	flags_t tagT;
 	logic argA_v;
 	logic argB_v;
 	logic argC_v;
 	logic argD_v;
+	logic argT_v;
+	logic argAH_v;
+	logic argBH_v;
+	logic argCH_v;
+	logic argDH_v;
+	logic argTH_v;
+	/*
+	logic argAh_v;
+	logic argBh_v;
+	logic argCh_v;
+	logic argDh_v;
+	*/
 } reservation_station_entry_t;
 
 typedef struct packed {
@@ -1603,6 +1686,7 @@ typedef struct packed {
 	logic takb;								// 1=branch evaluated to taken
 	cause_code_t exc;					// non-zero indicate exception
 	logic excv;								// 1=exception
+	logic nan;								// FP op generated a NaN
 	cpu_types_pkg::value_t argC;	// for stores
 `ifdef IS_SIM
 	cpu_types_pkg::value_t argA;
@@ -1617,9 +1701,11 @@ typedef struct packed {
 	cpu_types_pkg::value_t updA;
 	cpu_types_pkg::value_t updB;
 	cpu_types_pkg::value_t updC;
+	cpu_types_pkg::value_t updD;
 	cpu_types_pkg::pregno_t updAreg;
 	cpu_types_pkg::pregno_t updBreg;
 	cpu_types_pkg::pregno_t updCreg;
+	cpu_types_pkg::pregno_t updDreg;
 	logic [1:0] pred_tf;			// true(1)/false(2)/unknown(0)
 	logic [5:0] pred_no;			// predicate number
 	logic [3:0] pred_shadow_size;	// number of instructions in shadow
@@ -1635,16 +1721,20 @@ typedef struct packed {
 	logic argB_vp;
 	logic argC_vp;
 	logic argD_vp;
+	logic argT_vp;
 	logic argA_v;							// 1=argument A valid
 	logic argB_v;
 	logic argC_v;
 	logic argD_v;
+	logic argT_v;
 	logic rat_v;							// 1=checked with RAT for valid reg arg.
 	cpu_types_pkg::value_t arg;							// argument value for CSR instruction
 	// The following fields are loaded at enqueue time, but otherwise do not change.
 	logic last;								// 1=last instruction in group (not used)
 	cpu_types_pkg::rob_ndx_t group_len;			// length of instruction group (not used)
 	logic bt;									// branch to be taken as predicted
+	logic [7:0] laneno;				// current lane number
+	logic [5:0] data_bitpos;	// position of data to load / store
 	operating_mode_t om;			// operating mode
 	fround_t rm;							// float round mode
 	decode_bus_t decbus;			// decoded instruction
@@ -1703,7 +1793,7 @@ end
 endfunction
 
 function fnHasExConst;
-input instruction_t ins;
+input micro_op_t ins;
 begin
 	case(ins.any.opcode)
 	OP_BRK,OP_SHIFT,OP_CSR,OP_CHK,
@@ -1717,14 +1807,14 @@ end
 endfunction
 
 function fnIsShift;
-input instruction_t ins;
+input micro_op_t ins;
 begin
 	fnIsShift = ins.any.opcode == OP_SHIFT;
 end
 endfunction
 
 function [2:0] fnDecMs;
-input instruction_t ins;
+input micro_op_t ins;
 begin
 	if (fnIsShift(ins))
 		fnDecMs = ins[41:39];
@@ -1736,7 +1826,7 @@ end
 endfunction
 
 function fnHasConstRs1;
-input instruction_t ins;
+input micro_op_t ins;
 begin
 	case(ins.any.opcode)
 	OP_BRK,OP_SHIFT,OP_CSR,OP_CHK,
@@ -1750,7 +1840,7 @@ end
 endfunction
 
 function fnHasConstRs2;
-input instruction_t ins;
+input micro_op_t ins;
 begin
 	case(ins.any.opcode)
 	OP_BRK,OP_SHIFT,OP_CSR,OP_CHK,
@@ -1764,7 +1854,7 @@ end
 endfunction
 
 function fnHasConstRs3;
-input instruction_t ins;
+input micro_op_t ins;
 begin
 	case(ins.any.opcode)
 	OP_BRK,OP_SHIFT,OP_CSR,OP_CHK,
@@ -1778,7 +1868,7 @@ end
 endfunction
 
 function fnIsStimm;
-input instruction_t ins;
+input micro_op_t ins;
 begin
 	case(ins.any.opcode)
 	OP_STI:
@@ -1789,13 +1879,6 @@ begin
 end
 endfunction
 
-function fnIsBccCsr;
-input instruction_t ins;
-begin
-	fnIsBccCsr = ins.any.opcode==OP_BCC0 || ins.any.opcode==OP_BCC1 || ins.any.opcode==OP_CSR;
-end
-endfunction
-
 
 // Decodes the constant position from an instruction.
 // Three positions are returned. The lower four bits are the base constant
@@ -1803,7 +1886,7 @@ endfunction
 // constant.
 
 function [11:0] fnConstPos;
-input instruction_t ins;
+input micro_op_t ins;
 reg [2:0] ms;
 begin
 	ms = fnDecMs(ins);
@@ -1826,7 +1909,7 @@ end
 endfunction
 
 function [5:0] fnConstSize;
-input instruction_t ins;
+input micro_op_t ins;
 reg [2:0] ms;
 begin
 	ms = fnDecMs(ins);
@@ -1850,14 +1933,14 @@ endfunction
 
 // ATOM
 function fnIsAtom;
-input instruction_t ir;
+input micro_op_t ir;
 begin
 	fnIsAtom = ir.any.opcode[5:1]==5'd12 && ir[8:6]==3'd7 && ir[31:29]==3'd0 && ir[28:26]==3'd1;
 end
 endfunction
 
 function fnIsCarry;
-input instruction_t ir;
+input micro_op_t ir;
 begin
 	fnIsCarry = ir.any.opcode[5:1]==5'd12 && ir[8:6]==3'd7 && ir[31:29]==3'd0 && ir[28:26]==3'd2;
 end
@@ -1866,7 +1949,7 @@ endfunction
 // Sign or zero extend data as needed according to op.
 function [63:0] fnDati;
 input more;
-input instruction_t ins;
+input micro_op_t ins;
 input cpu_types_pkg::value_t dat;
 input cpu_types_pkg::pc_address_t pc;
 case(ins.any.opcode)
@@ -1882,7 +1965,7 @@ endcase
 endfunction
 
 function memsz_t fnMemsz;
-input instruction_t ir;
+input micro_op_t ir;
 begin
 	case(ir.any.opcode)
 	OP_LDB,OP_LDBZ,OP_STB:	fnMemsz = byt;
@@ -1902,43 +1985,32 @@ begin
 end
 endfunction
 
-function [15:0] fnSel;
-input instruction_t ir;
+function [31:0] fnSel;
+input micro_op_t ir;
 begin
 	case(ir.any.opcode)
-	OP_LDB,OP_LDBZ,OP_STB:	fnSel = 8'h01;
-	OP_LDW,OP_LDWZ,OP_STW:	fnSel = 8'h03;
-	OP_LDT,OP_LDTZ,OP_STT:	fnSel = 8'h0F;
+	OP_LDB,OP_LDBZ,OP_STB:	fnSel = 32'h01;
+	OP_LDW,OP_LDWZ,OP_STW:	fnSel = 32'h03;
+	OP_LDT,OP_LDTZ,OP_STT:	fnSel = 32'h0F;
 	OP_STI:
 		case(ir[12:11])
-		2'd0:	fnSel = 8'h01;
-		2'd1:	fnSel = 8'h03;
-		2'd2:	fnSel = 8'h0F;
-		2'd3:	fnSel = 8'hFF;
+		2'd0:	fnSel = 32'h01;
+		2'd1:	fnSel = 32'h03;
+		2'd2:	fnSel = 32'h0F;
+		2'd3:	fnSel = 32'hFF;
 		endcase
-	default:	fnSel = 8'hFF;
-	endcase
-end
-endfunction
-
-function fnIsBl;
-input instruction_t ir;
-begin
-	case(ir.any.opcode)
-	OP_B0,OP_B1:
-		fnIsBl = ir[31];	
-	default:
-		fnIsBl = 1'b0;
+	default:	fnSel = 32'hFF;
 	endcase
 end
 endfunction
 
 function fnIsBranch;
-input instruction_t ir;
+input micro_op_t ir;
 begin
 	case(ir.any.opcode)
-	OP_BCC0,OP_BCC1:
-		fnIsBranch = ir[8:6]!=3'd7;
+	OP_BCC8,OP_BCC16,OP_BCC32,OP_BCC64,
+	OP_BCCU8,OP_BCCU16,OP_BCCU32,OP_BCCU64:
+		fnIsBranch = 1'b1;
 	default:
 		fnIsBranch = 1'b0;
 	endcase
@@ -1946,131 +2018,71 @@ end
 endfunction
 
 function fnDecBsr;
-input Stark_pkg::pipeline_reg_t mux;
+input Qupls4_pkg::pipeline_reg_t mux;
 begin
-	fnDecBsr =
-		mux.uop.ins[31]==1'b1 &&
-		mux.uop.ins.any.opcode==5'd13 &&
-		mux.uop.ins.bl.BRd!=3'd0 &&
-		mux.uop.ins.bl.BRd!=3'd7;
+	fnDecBsr = mux.uop.any.opcode == OP_BSR && mux.uop.bsr.Rd!=8'd0;
 end
 endfunction
 
 function fnDecBra;
-input Stark_pkg::pipeline_reg_t mux;
+input Qupls4_pkg::pipeline_reg_t mux;
 begin
-	fnDecBra =
-		mux.uop.ins[31]==1'b1 &&
-		mux.uop.ins.any.opcode==5'd13 &&
-		mux.uop.ins.bl.BRd==3'd0;
+	fnDecBra = mux.uop.any.opcode == OP_BSR && mux.uop.bsr.Rd==8'd0;
 end
 endfunction
 
 function fnDecJmp;
-input Stark_pkg::pipeline_reg_t mux;
+input Qupls4_pkg::pipeline_reg_t mux;
 begin
-	fnDecJmp =
-		mux.uop.ins[31]==1'b0 && |mux.uop.ins[30:29] &&
-		mux.uop.ins.any.opcode==5'd13 &&
-		mux.uop.ins.blrlr.BRs==3'd0 &&
-		mux.uop.ins.blrlr.BRd==3'd0;
+	fnDecJmp = mux.op.any.opcode==OP_JSR && mux.op.jsr.Rd==8'd0;
 end
 endfunction
 
 function fnDecJmpr;
-input Stark_pkg::pipeline_reg_t mux;
+input Qupls4_pkg::pipeline_reg_t mux;
 begin
-	fnDecJmpr =
-		mux.uop.ins[31]==1'b0 && |mux.uop.ins[30:29] &&
-		mux.uop.ins.any.opcode==5'd12 &&
-		mux.uop.ins.bcclr.BRd==3'd0;
+	fnDecJmpr = 1'b0;
 end
 endfunction
 
 function fnDecJsr;
-input Stark_pkg::pipeline_reg_t mux;
+input Qupls4_pkg::pipeline_reg_t mux;
 begin
-	fnDecJsr =
-		mux.uop.ins[31]==1'b0 && |mux.uop.ins[30:29] &&
-		mux.uop.ins.any.opcode==5'd13 &&
-		mux.uop.ins.blrlr.BRs==3'd0 &&
-		mux.uop.ins.blrlr.BRd!=3'd0 &&
-		mux.uop.ins.blrlr.BRd!=3'd7;
+	fnDecJsr = mux.op.any.opcode==OP_JSR && mux.op.jsr.Rd!=8'd0;
 end
 endfunction
 
 function fnDecJsrr;
-input Stark_pkg::pipeline_reg_t mux;
+input Qupls4_pkg::pipeline_reg_t mux;
 begin
-	fnDecJsrr =
-		mux.uop.ins[31]==1'b0 && |mux.uop.ins[30:29] &&
-		mux.uop.ins.any.opcode==5'd12 &&
-		mux.uop.ins.bcclr.BRd!=3'd0 &&
-		mux.uop.ins.bcclr.BRd!=3'd7;
+	fnDecJsrr = 1'b0;
 end
 endfunction
 
 function fnDecBra2;
-input Stark_pkg::pipeline_reg_t mux;
+input Qupls4_pkg::pipeline_reg_t mux;
 begin
-	fnDecBra2 =
-		mux.uop.ins[31]==1'b0 && |mux.uop.ins[30:29] &&
-		mux.uop.ins.any.opcode==5'd13 &&
-		mux.uop.ins[0]==1'b0 &&
-		mux.uop.ins.blrlr.BRs==3'd7 &&
-		mux.uop.ins.blrlr.BRd==3'd0;
+	fnDecBra2 = 1'b0;
 end
 endfunction
 
 function fnDecBsr2;
-input Stark_pkg::pipeline_reg_t mux;
+input Qupls4_pkg::pipeline_reg_t mux;
 begin
-	fnDecBsr2 =
-		mux.uop.ins[31]==1'b0 && |mux.uop.ins[30:29] &&
-		mux.uop.ins.any.opcode==5'd13 &&
-		mux.uop.ins[0]==1'b0 &&
-		mux.uop.ins.blrlr.BRs==3'd7 &&
-		mux.uop.ins.blrlr.BRd!=3'd0 &&
-		mux.uop.ins.blrlr.BRd!=3'd7;
+	fnDecBsr2 = 1'b0;
 end
 endfunction
 
 function fnDecRet;
-input Stark_pkg::pipeline_reg_t mux;
+input Qupls4_pkg::pipeline_reg_t mux;
 begin
 	fnDecRet =
-		mux.uop.ins[31]==1'b0 &&
-		mux.uop.ins.any.opcode==5'd13 &&
-		mux.uop.ins[0]==1'b1 &&
-		mux.uop.ins.blrlr.BRs==3'd7 &&
-		mux.uop.ins.blrlr.BRd!=3'd0 &&
-		mux.uop.ins.blrlr.BRd!=3'd7;
-end
-endfunction
-
-function [63:0] fnDecConst;
-input Stark_pkg::instruction_t ins;
-input [511:0] cline;
-reg [3:0] cnstpos1;
-reg [8:0] cnstpos;
-reg [1:0] cnstsize;
-reg [63:0] cnst1;
-begin
-	cnstsize = fnConstSize(ins);
-	cnstpos1 = fnConstPos(ins);
-	cnstpos = {cnstpos1,2'b0,3'b0};
-	cnst1 = cline >> cnstpos1;
-	case(cnstsize)
-	2'd0:	fnDecConst = 64'd0;
-	2'd1:	fnDecConst = {{32{cnst1[31]}},cnst1[31:0]};
-	2'd2:	fnDecConst = cnst1;
-	2'd3:	fnDecConst = cnst1;
-	endcase
+		mux.uop.ins.any.opcode==OP_RTD;
 end
 endfunction
 
 function cpu_types_pkg::pc_address_ex_t fnDecDest;
-input Stark_pkg::pipeline_reg_t pr;
+input Qupls4_pkg::pipeline_reg_t pr;
 input [511:0] cline;
 reg jsr,jmp,bsr,bra,bsr2,bra2;
 begin
@@ -2093,43 +2105,37 @@ end
 endfunction
 
 function fnIsPredBranch;
-input Stark_pkg::instruction_t ir;
+input Qupls4_pkg::micro_op_t ir;
 begin
-	case(ir.any.opcode)
-	OP_BCC0,OP_BCC1:
-		fnIsPredBranch = ir[8:6]==3'd7 && ir[31];
-	default:
-		fnIsPredBranch = 1'b0;
-	endcase
+	fnIsPredBranch = 1'b0;
 end
 endfunction
 
 function fnIsBccR;
-input instruction_t ir;
+input micro_op_t ir;
 begin
 	fnIsBccR = fnIsBranch(ir) && 1'b0;//ir[39:36]==4'h7;
 end
 endfunction
 
 function fnIsDBcc;
-input instruction_t ir;
+input micro_op_t ir;
 begin
 	fnIsDBcc = fnIsBranch(ir) && ir[25:23]!=3'd2 && ir[25:23]!=3'd5;
 end
 endfunction
 
 function fnIsEret;
-input instruction_t ir;
+input micro_op_t ir;
 begin
 	fnIsEret = ir.any.opcode==OP_BRK &&  ir[28:18]==11'd1;	// eret or eret2
 end
 endfunction
 
 function fnIsRet;
-input instruction_t ir;
+input micro_op_t ir;
 begin
-	fnIsRet = (ir.any.opcode==OP_B0||ir.any.opcode==OP_B1) && 
-		ir[31:29]==3'd1 && ir[28:26]==3'd1 && ir[8:6]==3'd0;	// eret or eret2
+	fnIsRet = ir.any.opcode==OP_RTD;
 end
 endfunction
 
@@ -2170,6 +2176,13 @@ begin
 end
 endfunction
 
+function fnImmd;
+input ex_instruction_t ir;
+begin
+	fnImmd = 1'b0;
+end
+endfunction
+
 // Registers that are essentially constant
 // r0 and the PC alias
 function fnConstReg;
@@ -2193,9 +2206,10 @@ begin
 	OP_R3B,OP_R3W,OP_R3T,OP_R3O:
 			fnSourceRs1v = fnConstReg(ir.ins.alu.Rs1) || fnImma(ir);
 	OP_SHIFT:	fnSourceRs1v = fnConstReg(ir.ins.sh.Rs1) || fnImma(ir);
-	OP_MOV:		fnSourceRs1v = fnConstReg({ir.ins.move.Rs1h,ir.ins.move.Rs1}) || fnImma(ir);
-	OP_BCC0,OP_BCC1:
-		fnSourceRs1v = fnConstReg(ir.ins.bccld.BRs) || fnImma(ir);
+//	OP_MOV:		fnSourceRs1v = fnConstReg({ir.ins.move.Rs1h,ir.ins.move.Rs1}) || fnImma(ir);
+	OP_BCC8,OP_BCC16,OP_BCC32,OP_BCC64,
+	OP_BCCU8,OP_BCCU16,OP_BCCU32,OP_BCCU64:
+		fnSourceRs1v = fnConstReg(ir.ins.br.Rs1) || fnImma(ir);
 	OP_LOADA,
 	OP_LDB,,OP_LDBZ,OP_LDW,OP_LDWZ,OP_LDT,OP_LDTZ,OP_LOAD:
 		fnSourceRs1v = fnConstReg(ir.ins.lsd.Rs1);
@@ -2218,8 +2232,9 @@ begin
 	OP_R3B,OP_R3W,OP_R3T,OP_R3O:
 			fnSourceRs2v = fnConstReg(ir.ins.alu.Rs2) || fnImmb(ir);
 	OP_SHIFT:	fnSourceRs2v = fnConstReg(ir.ins.alu.Rs2) || ir.ins[31];
-	OP_BCC0,OP_BCC1:
-		fnSourceRs2v = fnConstReg(ir.ins.bcclr.Rs2) || fnImmb(ir);
+	OP_BCC8,OP_BCC16,OP_BCC32,OP_BCC64,
+	OP_BCCU8,OP_BCCU16,OP_BCCU32,OP_BCCU64:
+		fnSourceRs2v = fnConstReg(ir.ins.br.Rs2) || fnImmb(ir);
 	OP_LOADA,
 	OP_LDB,,OP_LDBZ,OP_LDW,OP_LDWZ,OP_LDT,OP_LDTZ,OP_LOAD:
 		fnSourceRs2v = fnConstReg(ir.ins.lsscn.Rs2);
@@ -2243,6 +2258,18 @@ begin
 		fnSourceRs3v = 1'b1;
 	default:
 		fnSourceRs3v = 1'b1;
+	endcase
+end
+endfunction
+
+function fnSourceRs4v;
+input ex_instruction_t ir;
+begin
+	case(ir.ins.any.opcode)
+	OP_EXTD:
+			fnSourceRs4v = fnConstReg(ir.ins.extd.Rs4) || fnImmd(ir);
+	default:
+		fnSourceRs4v = 1'b1;
 	endcase
 end
 endfunction
@@ -2275,6 +2302,69 @@ begin
 end
 endfunction
 
+// Not as complex as it looks. Mainly wires.
+// Some routing as fields in the micro-op may be wider than the raw instruction.
+
+function micro_op_t fnMapRawToUop;
+input [47:0] raw;
+begin
+	fnMapRawToUop = {$bits(micro_op_t){1'b0}};
+	case(raw[6:0])
+	// Immediate operate
+	Qupls4_pkg::OP_ADDI,Qupls4_pkg::OP_SUBFI,
+	Qupls4_pkg::OP_CMPI,Qupls4_pkg::OP_CMPUI,
+	Qupls4_pkg::OP_MULI,Qupls4_pkg::OP_MULUI,
+	Qupls4_pkg::OP_DIVI,Qupls4_pkg::OP_DIVUI:
+		begin
+			fnMapRawToUop.any.opcode = Qupls4_pkg::opcode_e'(raw[6:0]);
+			fnMapRawToUop.alui.Rd = {2'd0,raw[12:7]};
+			fnMapRawToUop.alui.Rs1 = {2'd0,raw[18:13]};
+			fnMapRawToUop.alui.imm = raw[45:19];
+			fnMapRawToUop.alui.pr = raw[47:46];
+		end
+	// Loads and stores
+	Qupls4_pkg::OP_LDB,Qupls4_pkg::OP_LDW,Qupls4_pkg::OP_LDT,Qupls4_pkg::OP_LOAD,
+	Qupls4_pkg::OP_LDBZ,Qupls4_pkg::OP_LDWZ,Qupls4_pkg::OP_LDTZ,
+	Qupls4_pkg::OP_STB,Qupls4_pkg::OP_STW,Qupls4_pkg::OP_STT,Qupls4_pkg::OP_STORE:
+		begin
+			fnMapRawToUop.any.opcode = Qupls4_pkg::opcode_e'(raw[6:0]);
+			fnMapRawToUop.ls.Rsd = {2'd0,raw[12:7]};
+			fnMapRawToUop.ls.Rs1 = {2'd0,raw[18:13]};
+			fnMapRawToUop.ls.Rs2 = {2'd0,raw[24:19]};
+			fnMapRawToUop.ls.disp = raw[43:25];
+			fnMapRawToUop.ls.ms = raw[44];
+			fnMapRawToUop.ls.sc = raw[47:45];
+		end
+	// Vector loads and stores
+	Qupls4_pkg::OP_LDV,Qupls4_pkg::OP_LDVN,
+	Qupls4_pkg::OP_STV,Qupls4_pkg::OP_STVN:
+		begin
+			fnMapRawToUop.vls.Rd = {2'd0,raw[12:7]};
+			fnMapRawToUop.vls.Rs1 = {2'd0,raw[18:13]};
+			fnMapRawToUop.vls.Rs2 = {2'd0,raw[24:19]};
+			fnMapRawToUop.vls.Rs3 = {2'd0,raw[30:25]};
+			fnMapRawToUop.vls.dt = raw[33:31];
+			fnMapRawToUop.vls.disp = raw[43:34];
+			fnMapRawToUop.vls.ms = raw[44];
+			fnMapRawToUop.vls.sc = raw[47:45];
+		end
+	default:
+		begin
+			fnMapRawToUop.any.opcode = Qupls4_pkg::opcode_e'(raw[6:0]);
+			fnMapRawToUop.r3.Rd = {2'd0,raw[12:7]};
+			fnMapRawToUop.r3.Rs1 = {2'd0,raw[18:13]};
+			fnMapRawToUop.r3.Rs2 = {2'd0,raw[24:19]};
+			fnMapRawToUop.r3.Rs3 = {2'd0,raw[30:25]};
+			fnMapRawToUop.r3.vn = raw[34:31];
+			fnMapRawToUop.r3.op3 = raw[37:35];
+			fnMapRawToUop.r3.ms = raw[40:38];
+			fnMapRawToUop.r3.func = Qupls4_pkg::func_e'(raw[47:41]);
+		end
+	endcase
+end
+endfunction
+
+
 // ============================================================================
 // Support Tasks
 // ============================================================================
@@ -2292,16 +2382,11 @@ begin
 	case(om)
 	OM_APP:	
 		begin
-			if (a== 7'd45/* || (a >= 7'd50 && a <= 7'd55)*/) begin
-				exc = 1'b1;
-				o = 7'd0;
-			end
-			else
-				o = a;
+			o = a;
 		end
 	OM_SUPERVISOR:
 		begin
-			if (a >= 7'd50 && a <= 7'd63 || a >= 7'd0 && a <= 7'd7)
+			if (a >= 7'd0 && a <= 7'd7)
 				o = a;
 			else if (a >= 7'd48) begin
 				exc = 1'b1;

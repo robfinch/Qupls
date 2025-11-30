@@ -63,16 +63,26 @@ typedef logic [31:0] virtual_address_t;
 typedef logic [31:0] physical_address_t;
 `endif
 typedef logic [11:0] mc_address_t;
+`ifdef QUPLS4
+typedef logic [8:0] pregno_t;
+typedef logic [7:0] aregno_t;
+typedef logic [127:0] value_pair_t;
+typedef logic [63:0] value_t;
+typedef logic [31:0] half_value_t;
+`else
 `ifdef STARK_CPU
 typedef logic [8:0] pregno_t;
 typedef logic [7:0] aregno_t;
+typedef logic [127:0] value_pair_t;
 typedef logic [63:0] value_t;
 typedef logic [31:0] half_value_t;
 `else
 typedef logic [8:0] pregno_t;
 typedef logic [7:0] aregno_t;
+typedef logic [127:0] value_pair_t;
 typedef logic [63:0] value_t;
 typedef logic [31:0] half_value_t;
+`endif
 `endif
 //typedef logic [63:0] segment_reg_t;
 
@@ -104,6 +114,7 @@ typedef struct packed {
 } octa_value_t;
 
 parameter value_zero = {$bits(value_t){1'b0}};
+parameter value_pair_zero = {$bits(value_pair_t){1'b0}};
 
 typedef struct packed
 {
@@ -117,6 +128,22 @@ typedef struct packed
 	logic [2:0] Be;
 	logic [31:0] a;
 } capability32_t;
+
+/*
+typedef struct packed
+{
+	logic [11:0] perms;
+	logic flags;
+	logic [3:0] otype;
+	logic Ie;
+	logic [5:0] T;
+	logic [2:0] Te;
+	logic [7:0] B;
+	logic [2:0] Be;
+	
+	logic [47:0] a;
+} capability48_t;
+*/
 
 typedef struct packed
 {
