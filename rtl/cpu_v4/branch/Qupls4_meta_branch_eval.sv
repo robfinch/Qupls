@@ -37,18 +37,19 @@
 //
 import Qupls4_pkg::*;
 
-module Qupls4_meta_branch_eval(instr, a, b, takb);
+module Qupls4_meta_branch_eval(instr, a, b, c, takb);
 parameter WID=64;
 input Qupls4_pkg::micro_op_t instr;
 input [WID-1:0] a;
 input [WID-1:0] b;
+input c;
 output reg takb;
 
 wire takb8, takb16, takb32, takb64;
-Qupls4_branch_eval #(.WID( 8))  u8 (instr, a[7: 0], b[7: 0], takb8);
-Qupls4_branch_eval #(.WID(16)) u16 (instr, a[15:0], b[15:0], takb16);
-Qupls4_branch_eval #(.WID(32)) u32 (instr, a[31:0], b[31:0], takb32);
-Qupls4_branch_eval #(.WID(64)) u64 (instr, a[63:0], b[63:0], takb64);
+Qupls4_branch_eval #(.WID( 8))  u8 (instr, a[7: 0], b[7: 0], c, takb8);
+Qupls4_branch_eval #(.WID(16)) u16 (instr, a[15:0], b[15:0], c, takb16);
+Qupls4_branch_eval #(.WID(32)) u32 (instr, a[31:0], b[31:0], c, takb32);
+Qupls4_branch_eval #(.WID(64)) u64 (instr, a[63:0], b[63:0], c, takb64);
 
 always_comb
 	case(instr.any.opcode)

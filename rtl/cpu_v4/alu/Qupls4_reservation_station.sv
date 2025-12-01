@@ -43,9 +43,7 @@ import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
 module Qupls4_reservation_station(rst, clk, available, busy, issue, stall,
-	rfo_tag, rse_i, rse_o, stomp,
-	rfi_val, rfi_tag, rfi_aRd,
-	arn, prnv, rfo, req_pRn
+	rse_i, rse_o, stomp, rf_oper_i, bypass_i req_aRn
 );
 parameter NRSE = 1;
 parameter FUNCUNIT = 4'd0;
@@ -57,38 +55,38 @@ input available;
 input stall;
 input Qupls4_pkg::reservation_station_entry_t [3:0] rse_i;
 input Qupls4_pkg::rob_bitmask_t stomp;
-input aregno_t [15:0] arn;
-input [15:0] prnv;
-input value_t [15:0] rfo;
-input Qupls4_pkg::flags_t [15:0] rfo_tag;
-input value_t [NBPI-1:0] rfi_val;
-input aregno_t [NBPI-1:0] rfi_aRd;
-input Qupls4_pkg::flags_t[NBPI-1:0] rfi_tag;
+input Qupls4_pkg::operand_t [NREG_RPORTS-1:0] rf_oper_i;
+input Qupls4_pkg::operand_t [NBPI-1:0] bypass_i;
 output reg busy;
 output reg issue;
 output Qupls4_pkg::reservation_station_entry_t rse_o;
-output aregno_t [3:0] req_pRn;
+output aregno_t [3:0] req_aRn;
 
-integer kk,jj;
+integer kk,jj,nn,mm,rdy,pp,qq;
+genvar g;
 reg idle;
 reg dispatch;
 reg pstall;
-cpu_types_pkg::value_t argA0, argA1, argA2;
-cpu_types_pkg::value_t argB0, argB1, argB2;
-cpu_types_pkg::value_t argC0, argC1, argC2;
-cpu_types_pkg::value_t argD0, argD1, argD2;
-cpu_types_pkg::value_t argT0, argT1, argT2;
-Qupls4_pkg::flags_t argA0_tag, argA1_tag, argA2_tag;
-Qupls4_pkg::flags_t argB0_tag, argB1_tag, argB2_tag;
-Qupls4_pkg::flags_t argC0_tag, argC1_tag, argC2_tag;
-Qupls4_pkg::flags_t argD0_tag, argD1_tag, argD2_tag;
-Qupls4_pkg::flags_t argT0_tag, argT1_tag, argT2_tag;
-wire [4:0] valid0_o;
-wire [4:0] valid1_o;
-wire [4:0] valid2_o;
+Qupls4_pkg::operand_t [NRSE-1:0] arg [0:NSARG-1];
+
 wire [16:0] lfsro;
-Qupls4_pkg::reservation_station_entry_t [2:0] rse;
+Qupls4_pkg::reservation_station_entry_t [NRSE-1:0] rse;
+Qupls4_pkg::operand_t [NRSE-1:0] rse_argA;
+Qupls4_pkg::operand_t [NRSE-1:0] rse_argB;
+Qupls4_pkg::operand_t [NRSE-1:0] rse_argC;
+Qupls4_pkg::operand_t [NRSE-1:0] rse_argD;
+Qupls4_pkg::operand_t [NRSE-1:0] rse_argT;
 Qupls4_pkg::reservation_station_entry_t rsei;
+
+always_comb
+for (nn = 0; nn < NRSE; nn = nn + 1)
+begin
+	rse_argA[nn] = rse[nn].argA;
+	rse_argB[nn] = rse[nn].argB;
+	rse_argC[nn] = rse[nn].argC;
+	rse_argD[nn] = rse[nn].argD;
+	rse_argT[nn] = rse[nn].argT;
+end
 
 always_comb
 	busy = rse[0].busy & rse[1].busy & rse[2].busy;
@@ -109,146 +107,62 @@ lfsr17 ulfsr1
 
 // Always assume at least one source operand.
 
-Qupls4_validate_operand #(.NBPI(NBPI)) uvsrcA
+Qupls4_validate_operand #(.NBPI(NBPI), .NENTRY(NRSE)) uvsrcA
 (
-	.arn(arn),
-	.prnv(prnv),
-	.rfo(rfo),
-	.rfo_tag(rfo_tag),
-	.val0(argA0),
-	.val1(argA1),
-	.val2(argA2),
-	.val0_tag(argA0_tag),
-	.val1_tag(argA1_tag),
-	.val2_tag(argA2_tag),
-	.rfi_val(rfi_val),
-	.rfi_tag(rfi_tag),
-	.rfi_aRd(rfi_aRd),
-	.aRn0(aregno_t'(rse[0].argA[23:16])),
-	.aRn1(aregno_t'(rse[1].argA[23:16])),
-	.aRn2(aregno_t'(rse[2].argA[23:16])),
-	.valid0_i(rse[0].argA_v),
-	.valid1_i(rse[1].argA_v),
-	.valid2_i(rse[2].argA_v),
-	.valid0_o(valid0_o[0]),
-	.valid1_o(valid1_o[0]),
-	.valid2_o(valid2_o[0])
+	.rf_oper_i(rf_oper_i),
+	.oper_i(rse_argA),
+	.oper_o(arg[0]),
+	.bypass_i(bypass_i)
 );
 
 generate begin : gOperands
 
 if (NSARG > 1)
-Qupls4_validate_operand #(.NBPI(NBPI)) uvsrcB
+Qupls4_validate_operand #(.NBPI(NBPI), .NENTRY(NRSE)) uvsrcB
 (
-	.arn(arn),
-	.prnv(prnv),
-	.rfo(rfo),
-	.rfo_tag(rfo_tag),
-	.val0(argB0),
-	.val1(argB1),
-	.val2(argB2),
-	.val0_tag(argB0_tag),
-	.val1_tag(argB1_tag),
-	.val2_tag(argB2_tag),
-	.rfi_val(rfi_val),
-	.rfi_tag(rfi_tag),
-	.rfi_aRd(rfi_aRd),
-	.aRn0(aregno_t'(rse[0].argB[23:16])),
-	.aRn1(aregno_t'(rse[1].argB[23:16])),
-	.aRn2(aregno_t'(rse[2].argB[23:16])),
-	.valid0_i(rse[0].argB_v),
-	.valid1_i(rse[1].argB_v),
-	.valid2_i(rse[2].argB_v),
-	.valid0_o(valid0_o[1]),
-	.valid1_o(valid1_o[1]),
-	.valid2_o(valid2_o[1])
+	.rf_oper_i(rf_oper_i),
+	.oper_i(rse_argB),
+	.oper_o(arg[1]),
+	.bypass_i(bypass_i)
 );
 else begin
-	assign valid0_o[1] = 1'b1;
-	assign valid1_o[1] = 1'b1;
-	assign valid2_o[1] = 1'b1;
-	assign argB0 = {$bits(cpu_types_pkg::value_t){1'b0}};
-	assign argB1 = {$bits(cpu_types_pkg::value_t){1'b0}};
-	assign argB2 = {$bits(cpu_types_pkg::value_t){1'b0}};
-	assign argB0_tag = 'd0;
-	assign argB1_tag = 'd0;
-	assign argB2_tag = 'd0;
+	for (g = 0; g < NRSE; g = g + 1) begin
+		arg[1][g].v = VAL;
+		arg[1][g].val = value_zero;
+		arg[1][g].flags = 8'd0;
+	end
 end
 
 if (NSARG > 2)
-Qupls4_validate_operand #(.NBPI(NBPI)) uvsrcC
+Qupls4_validate_operand #(.NBPI(NBPI), .NENTRY(NRSE)) uvsrcC
 (
-	.arn(arn),
-	.prnv(prnv),
-	.rfo(rfo),
-	.rfo_tag(rfo_tag),
-	.val0(argC0),
-	.val1(argC1),
-	.val2(argC2),
-	.val0_tag(argC0_tag),
-	.val1_tag(argC1_tag),
-	.val2_tag(argC2_tag),
-	.rfi_val(rfi_val),
-	.rfi_tag(rfi_tag),
-	.rfi_aRd(rfi_aRd),
-	.aRn0(aregno_t'(rse[0].argC[23:16])),
-	.aRn1(aregno_t'(rse[1].argC[23:16])),
-	.aRn2(aregno_t'(rse[2].argC[23:16])),
-	.valid0_i(rse[0].argC_v),
-	.valid1_i(rse[1].argC_v),
-	.valid2_i(rse[2].argC_v),
-	.valid0_o(valid0_o[2]),
-	.valid1_o(valid1_o[2]),
-	.valid2_o(valid2_o[2])
+	.rf_oper_i(rf_oper_i),
+	.oper_i(rse_argC),
+	.oper_o(arg[2]),
+	.bypass_i(bypass_i)
 );
 else begin
-	assign valid0_o[2] = 1'b1;
-	assign valid1_o[2] = 1'b1;
-	assign valid2_o[2] = 1'b1;
-	assign argC0 = {$bits(cpu_types_pkg::value_t){1'b0}};
-	assign argC1 = {$bits(cpu_types_pkg::value_t){1'b0}};
-	assign argC2 = {$bits(cpu_types_pkg::value_t){1'b0}};
-	assign argC0_tag = 'd0;
-	assign argC1_tag = 'd0;
-	assign argC2_tag = 'd0;
+	for (g = 0; g < NRSE; g = g + 1) begin
+		arg[2][g].v = VAL;
+		arg[2][g].val = value_zero;
+		arg[2][g].flags = 8'd0;
+	end
 end
 
 if (NSARG > 3)
-Qupls4_validate_operand #(.NBPI(NBPI)) uvsrcD
+Qupls4_validate_operand #(.NBPI(NBPI), .NENTRY(NRSE)) uvsrcD
 (
-	.arn(arn),
-	.prnv(prnv),
-	.rfo(rfo),
-	.rfo_tag(rfo_tag),
-	.val0(argD0),
-	.val1(argD1),
-	.val2(argD2),
-	.val0_tag(argD0_tag),
-	.val1_tag(argD1_tag),
-	.val2_tag(argD2_tag),
-	.rfi_val(rfi_val),
-	.rfi_tag(rfi_tag),
-	.rfi_aRd(rfi_aRd),
-	.aRn0(aregno_t'(rse[0].argD[23:16])),
-	.aRn1(aregno_t'(rse[1].argD[23:16])),
-	.aRn2(aregno_t'(rse[2].argD[23:16])),
-	.valid0_i(rse[0].argD_v),
-	.valid1_i(rse[1].argD_v),
-	.valid2_i(rse[2].argD_v),
-	.valid0_o(valid0_o[3]),
-	.valid1_o(valid1_o[3]),
-	.valid2_o(valid2_o[3])
+	.rf_oper_i(rf_oper_i),
+	.oper_i(rse_argD),
+	.oper_o(arg[3]),
+	.bypass_i(bypass_i)
 );
 else begin
-	assign valid0_o[3] = 1'b1;
-	assign valid1_o[3] = 1'b1;
-	assign valid2_o[3] = 1'b1;
-	assign argD0 = {$bits(cpu_types_pkg::value_t){1'b0}};
-	assign argD1 = {$bits(cpu_types_pkg::value_t){1'b0}};
-	assign argD2 = {$bits(cpu_types_pkg::value_t){1'b0}};
-	assign argD0_tag = 'd0;
-	assign argD1_tag = 'd0;
-	assign argD2_tag = 'd0;
+	for (g = 0; g < NRSE; g = g + 1) begin
+		arg[3][g].v = VAL;
+		arg[3][g].val = value_zero;
+		arg[3][g].flags = 8'd0;
+	end
 end
 
 end
@@ -256,30 +170,12 @@ endgenerate
 
 // Destination operand which sometimes needs to be read.
 
-Qupls4_validate_operand #(.NBPI(NBPI)) uvsrcT
+Qupls4_validate_operand #(.NBPI(NBPI), .NENTRY(NRSE)) uvsrcT
 (
-	.arn(arn),
-	.prnv(prnv),
-	.rfo(rfo),
-	.rfo_tag(rfo_tag),
-	.val0(argT0),
-	.val1(argT1),
-	.val2(argT2),
-	.val0_tag(argT0_tag),
-	.val1_tag(argT1_tag),
-	.val2_tag(argT2_tag),
-	.rfi_val(rfi_val),
-	.rfi_tag(rfi_tag),
-	.rfi_aRd(rfi_aRd),
-	.aRn0(aregno_t'(rse[0].argT[23:16])),
-	.aRn1(aregno_t'(rse[1].argT[23:16])),
-	.aRn2(aregno_t'(rse[2].argT[23:16])),
-	.valid0_i(rse[0].argT_v),
-	.valid1_i(rse[1].argT_v),
-	.valid2_i(rse[2].argT_v),
-	.valid0_o(valid0_o[4]),
-	.valid1_o(valid1_o[4]),
-	.valid2_o(valid2_o[4])
+	.rf_oper_i(rf_oper_i),
+	.oper_i(rse_argT),
+	.oper_o(arg[4]),
+	.bypass_i(bypass_i)
 );
 
 always_comb
@@ -335,81 +231,30 @@ else begin
 	pstall <= stall;
 	if (available && dispatch && idle) begin
 		// Load up the reservation stations.
-		if (!rse[0].busy) begin
-			rse[0] <= rsei;
-			rse[0].busy <= TRUE;
-			rse[0].ready <= rsei.argA_v && rsei.argB_v && (rsei.argC_v||rsei.store) && rsei.argD_v && rsei.argT_v;
+		qq = fnChooseIdle(rse);
+		if (qq >= 0) begin
+			rse[qq] <= rsei;
+			rse[qq].busy <= TRUE;
+			rse[qq].ready <= rsei.arg[0].v && rsei.arg[1].v && (rsei.arg[2].v||rsei.store) && rsei.arg[3].v && rsei.arg[4].v;
 			if (stomp[rsei.rndx])
-				rse[0].uop <= {26'd0,Qupls4_pkg::OP_NOP};
-		end
-		else if (!rse[1].busy) begin
-			rse[1] <= rsei;
-			rse[1].busy <= TRUE;
-			rse[1].ready <= rsei.argA_v && rsei.argB_v && (rsei.argC_v||rsei.store) && rsei.argD_v && rsei.argT_v;
-			if (stomp[rsei.rndx])
-				rse[1].uop <= {26'd0,Qupls4_pkg::OP_NOP};
-		end
-		else if (!rse[2].busy) begin
-			rse[2] <= rsei;
-			rse[2].busy <= TRUE;
-			rse[2].ready <= rsei.argA_v && rsei.argB_v && (rsei.argC_v||rsei.store) && rsei.argD_v && rsei.argT_v;
-			if (stomp[rsei.rndx])
-				rse[2].uop <= {26'd0,Qupls4_pkg::OP_NOP};
+				rse[qq].uop <= {26'd0,Qupls4_pkg::OP_NOP};
 		end
 	end
-	if (valid0_o[0]) begin
-		rse[0].argA_v <= VAL; rse[0].argA <= argA0; rse[0].tagA <= argA0_tag;
+	for (pp = 0; pp < 5; pp = pp + 1) begin
+		for (mm = 0; mm < NRSE; mm = mm + 1)
+			if (arg[pp][mm].v) begin
+				rse[mm].arg[pp] <= arg[pp][mm];
+				rse[mm].arg[pp].v <= VAL;
+			end
 	end
-	if (valid1_o[0]) begin
-		rse[1].argA_v <= VAL; rse[1].argA <= argA1; rse[1].tagA <= argA1_tag;
+	for (mm = 0; mm < NRSE; mm = mm + 1) begin
+		rse[mm].ready <= FALSE;
+		if (rse[mm].arg[0].v && rse[mm].arg[1].v && (rse[mm].arg[2].v|rse[mm].store) && rse[mm].arg[3].v && rse[mm].arg[4].v)
+			rse[mm].ready <= TRUE;
 	end
-	if (valid2_o[0]) begin
-		rse[2].argA_v <= VAL; rse[2].argA <= argA2; rse[2].tagA <= argA2_tag;
-	end
-	if (valid0_o[1]) begin
-		rse[0].argB_v <= VAL; rse[0].argB <= argB0; rse[0].tagB <= argB0_tag;
-	end
-	if (valid1_o[1]) begin
-		rse[1].argB_v <= VAL; rse[1].argB <= argB1; rse[1].tagB <= argB1_tag;
-	end
-	if (valid2_o[1]) begin
-		rse[2].argB_v <= VAL; rse[2].argB <= argB2; rse[2].tagB <= argB2_tag;
-	end
-	if (valid0_o[2]) begin
-		rse[0].argC_v <= VAL; rse[0].argC <= argC0; rse[0].tagC <= argC0_tag;
-	end
-	if (valid1_o[2]) begin
-		rse[1].argC_v <= VAL; rse[1].argC <= argC1; rse[1].tagC <= argC1_tag;
-	end
-	if (valid2_o[2]) begin
-		rse[2].argC_v <= VAL; rse[2].argC <= argC2; rse[2].tagC <= argC2_tag;
-	end
-	if (valid0_o[3]) begin
-		rse[0].argD_v <= VAL; rse[0].argD <= argD0; rse[0].tagD <= argD0_tag;
-	end
-	if (valid1_o[3]) begin
-		rse[1].argD_v <= VAL; rse[1].argD <= argD1; rse[1].tagD <= argD1_tag;
-	end
-	if (valid2_o[3]) begin
-		rse[2].argD_v <= VAL; rse[2].argD <= argD2; rse[2].tagD <= argD2_tag;
-	end
-	if (valid0_o[4]) begin
-		rse[0].argT_v <= VAL; rse[0].argT <= argT0; rse[0].tagT <= argT0_tag;
-	end
-	if (valid1_o[4]) begin
-		rse[1].argT_v <= VAL; rse[1].argT <= argT1; rse[1].tagT <= argT1_tag;
-	end
-	if (valid2_o[4]) begin
-		rse[2].argT_v <= VAL; rse[2].argT <= argT2; rse[2].tagT <= argT2_tag;
-	end
-	if (rse[0].argA_v && rse[0].argB_v && (rse[0].argC_v|rse[0].store) && rse[0].argD_v && rse[0].argT_v)
-		rse[0].ready <= TRUE;
-	if (rse[1].argA_v && rse[1].argB_v && (rse[1].argC_v|rse[1].store) && rse[1].argD_v && rse[1].argT_v)
-		rse[1].ready <= TRUE;
-	if (rse[2].argA_v && rse[2].argB_v && (rse[2].argC_v|rse[2].store) && rse[2].argD_v && rse[2].argT_v)
-		rse[2].ready <= TRUE;
 
 	// Unused stations are never ready.
+	/*
 	if (NRSE < 2) begin
 		rse[1].busy <= TRUE;
 		rse[2].busy <= TRUE;
@@ -435,123 +280,23 @@ else begin
 		rse[2].argD_v <= VAL;
 		rse[2].argT_v <= VAL;
 	end
-
+	*/
 	// Issue scheduling: if there is only one ready easy: pick the ready one.
 	// If there are ties: pick one at random.
 	rse_o.v <= INV;
-	casez({pstall,stall,rse[2].ready,rse[1].ready,rse[0].ready})
-	5'b10???:	;
-	5'b01???:	;
-	5'b11???:	;
-	5'b00000:	;
-	5'b00001:
+	casez({pstall,stall})
+	2'b10:	;
+	2'b01:	;
+	2'b11:	;
+	default:
 		begin
-			issue <= TRUE;
-			rse_o <= rse[0];
-			rse_o.v <= !stomp[rse[0].rndx] & rse[0].v;
-			rse[0].busy <= FALSE;
-			if (stomp[rse[0].rndx])
-				rse_o.uop <= {26'd0,Qupls4_pkg::OP_NOP};
-		end
-	5'b00010:
-		begin
-			issue <= !stomp[rse[1].rndx];
-			rse_o <= rse[1];
-			rse_o.v <= !stomp[rse[1].rndx] & rse[1].v;
-			rse[1].busy <= FALSE;
-			if (stomp[rse[1].rndx])
-				rse_o.uop <= {26'd0,Qupls4_pkg::OP_NOP};
-		end
-	5'b00011:
-		begin
-			if (lfsro[0]) begin
-				issue <= !stomp[rse[1].rndx];
-				rse_o <= rse[1];
-				rse_o.v <= !stomp[rse[1].rndx] & rse[1].v;
-				rse[1].busy <= FALSE;
-				if (stomp[rse[1].rndx])
-					rse_o.uop <= {26'd0,Qupls4_pkg::OP_NOP};
-			end
-			else begin
-				issue <= !stomp[rse[0].rndx];
-				rse_o <= rse[0];
-				rse_o.v <= !stomp[rse[0].rndx] & rse[0].v;
-				rse[0].busy <= FALSE;
-				if (stomp[rse[0].rndx])
-					rse_o.uop <= {26'd0,Qupls4_pkg::OP_NOP};
-			end
-		end
-	5'b00100:
-		begin
-			issue <= !stomp[rse[2].rndx];
-			rse_o <= rse[2];
-			rse[2].busy <= FALSE;
-			rse_o.v <= !stomp[rse[2].rndx] & rse[2].v;
-			if (stomp[rse[2].rndx])
-				rse_o.uop <= {26'd0,Qupls4_pkg::OP_NOP};
-		end
-	5'b00101:
-		begin
-			if (lfsro[0]) begin
-				issue <= !stomp[rse[2].rndx];
-				rse_o <= rse[2];
-				rse_o.v <= !stomp[rse[2].rndx] & rse[2].v;
-				rse[2].busy <= FALSE;
-				if (stomp[rse[2].rndx])
-					rse_o.uop <= {26'd0,Qupls4_pkg::OP_NOP};
-			end
-			else begin
-				issue <= !stomp[rse[0].rndx];
-				rse_o <= rse[0];
-				rse_o.v <= !stomp[rse[0].rndx] & rse[0].v;
-				rse[0].busy <= FALSE;
-				if (stomp[rse[0].rndx])
-					rse_o.uop <= {26'd0,Qupls4_pkg::OP_NOP};
-			end
-		end
-	5'b00110:
-		begin
-			if (lfsro[0]) begin
-				issue <= !stomp[rse[2].rndx];
-				rse_o <= rse[2];
-				rse_o.v <= !stomp[rse[2].rndx] & rse[2].v;
-				rse[2].busy <= FALSE;
-				if (stomp[rse[2].rndx])
-					rse_o.uop <= {26'd0,Qupls4_pkg::OP_NOP};
-			end
-			else begin
-				issue <= !stomp[rse[1].rndx];
-				rse_o <= rse[1];
-				rse_o.v <= !stomp[rse[1].rndx] & rse[1].v;
-				rse[1].busy <= FALSE;
-				if (stomp[rse[1].rndx])
-					rse_o.uop <= {26'd0,Qupls4_pkg::OP_NOP};
-			end
-		end
-	5'b00111:
-		begin
-			if (lfsro[3:0] < 4'd5) begin
-				issue <= !stomp[rse[0].rndx];
-				rse_o <= rse[0];
-				rse_o.v <= !stomp[rse[0].rndx] & rse[0].v;
-				rse[0].busy <= FALSE;
-				if (stomp[rse[0].rndx])
-					rse_o.uop <= {26'd0,Qupls4_pkg::OP_NOP};
-			end
-			else if (lfsro[3:0] < 4'd10) begin
-				issue <= !stomp[rse[1].rndx];
-				rse_o <= rse[1];
-				rse_o.v <= !stomp[rse[1].rndx] & rse[1].v;
-				rse[1].busy <= FALSE;
-				if (stomp[rse[1].rndx])
-					rse_o.uop <= {26'd0,Qupls4_pkg::OP_NOP};
-			end
-			else begin
-				issue <= !stomp[rse[2].rndx];
-				rse_o <= rse[2];
-				rse_o.v <= !stomp[rse[2].rndx] & rse[2].v;
-				rse[2].busy <= FALSE;
-				if (stomp[rse[2].rndx])
+			rdy = fnChooseReady(rse);
+			if (rdy >= 0) begin
+				issue <= TRUE:
+				rse_o <= rse[rdy];
+				rse_o.v <= !stomp[rse[rdy].rndx] & rse[rdy].v;
+				rse[rdy].busy <= FALSE;
+				if (stomp[rse[rdy].rndx])
 					rse_o.uop <= {26'd0,Qupls4_pkg::OP_NOP};
 			end
 		end
@@ -568,54 +313,37 @@ begin
 	req_pRn[2] = 8'd0;
 	req_pRn[3] = 8'd0;
 	for (jj = 0; jj < NRSE; jj = jj + 1) begin
-		if (rse[jj].busy && !rse[jj].argA_v && kk < 4) begin
-			req_pRn[kk] = rse[jj].argA[23:16];
-			kk = kk + 1;
+		for (pp = 0; pp < NSARG; pp = pp + 1) begin
+			if (rse[jj].busy && !rse[jj].arg[pp].v && kk < 4) begin
+				req_aRn[kk] = rse[jj].arg[pp].Rn;
+				kk = kk + 1;
+			end
 		end
-		/*
-		else if (rse[jj].busy && !rse[jj].argAh_v && kk < 4) begin
-			req_pRn[kk] = {2'b01,rse[jj].argAh[21:16]};
-			kk = kk + 1;
-		end
-		*/
-		if (rse[jj].busy && !rse[jj].argB_v && kk < 4) begin
-			req_pRn[kk] = rse[jj].argB[23:16];
-			kk = kk + 1;
-		end
-		/*
-		else if (rse[jj].busy && !rse[jj].argBh_v && kk < 4) begin
-			req_pRn[kk] = {2'b01,rse[jj].argBh[21:16]};
-			kk = kk + 1;
-		end
-		*/
-		if (rse[jj].busy && !rse[jj].argC_v && kk < 4) begin
-			req_pRn[kk] = rse[jj].argC[23:16];
-			kk = kk + 1;
-		end
-		/*
-		else if (rse[jj].busy && !rse[jj].argCh_v && kk < 4) begin
-			req_pRn[kk] = {2'b01,rse[jj].argCh[21:16]};
-			kk = kk + 1;
-		end
-		*/
-		// ArgT is used much more often than argD so we check for it first.
-		if (rse[jj].busy && !rse[jj].argT_v && kk < 4) begin
-			req_pRn[kk] = rse[jj].argT[23:16];
-			kk = kk + 1;
-		end
-
-		if (rse[jj].busy && !rse[jj].argD_v && kk < 4) begin
-			req_pRn[kk] = rse[jj].argD[23:16];
-			kk = kk + 1;
-		end
-		/*
-		else if (rse[jj].busy && !rse[jj].argDh_v && kk < 4) begin
-			req_pRn[kk] = {2'b01,rse[jj].argDh[21:16]};
-			kk = kk + 1;
-		end
-		*/
 	end
 end
 
+function integer fnChooseReady;
+input Qupls4_pkg::reservation_station_entry_t [NRSE-1:0] rse;
+integer nn;
+begin
+	fnChooseReady = -1;
+	for (nn = 0; nn < NRSE; nn = nn + 1) begin
+		if (rse[nn].ready)
+			fnChooseReady = nn;
+	end
+end
+endfunction
+
+function integer fnChooseIdle;
+input Qupls4_pkg::reservation_station_entry_t [NRSE-1:0] rse;
+integer nn;
+begin
+	fnChooseIdle = -1;
+	for (nn = 0; nn < NRSE; nn = nn + 1) begin
+		if (!rse[nn].busy)
+			fnChooseIdle = nn;
+	end
+end
+endfunction
 
 endmodule

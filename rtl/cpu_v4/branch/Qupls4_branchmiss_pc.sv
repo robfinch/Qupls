@@ -37,12 +37,14 @@
 import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_branchmiss_pc(instr, brclass, pc, pc_stack, bt, takb, argA, argB, argC, argI, misspc, missgrp, dstpc, stomp_bno);
+module Qupls4_branchmiss_pc(instr, brclass, pc, pc_stack, bt, takb,
+	argA, argB, argC, argI, misspc, missgrp, dstpc, vector, stomp_bno);
 parameter ABITS=32;
 input Qupls4_pkg::pipeline_reg_t instr;
 input Qupls4_pkg::brclass_t brclass;
 input pc_address_ex_t pc;
 input pc_address_ex_t [8:0] pc_stack;
+input [63:0] vector;
 input bt;
 input takb;
 input value_t argA;
@@ -76,8 +78,12 @@ begin
 	case (brclass)
 	Qupls4_pkg::BRC_BCCD:
 		begin
-			disp = {{44{ir.br.disp[19]}},ir.br.disp,1'b0};
-			dstpc.pc = pc.pc + disp;
+			if (instr.uop.br.cnd==Qupls4_pkg::CND_BOI)
+				dstpc.pc = vector;
+			else begin
+				disp = {{44{ir.br.disp[19]}},ir.br.disp,1'b0};
+				dstpc.pc = pc.pc + disp;
+			end
 		end
 	Qupls4_pkg::BRC_BCCR:
 		dstpc.pc = argC;

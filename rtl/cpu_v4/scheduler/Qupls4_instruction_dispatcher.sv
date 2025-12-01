@@ -117,6 +117,7 @@ begin
 			rse_o[kk].pc = rob[nn].op.pc.pc;
 			rse_o[kk].prc = rob[nn].op.decbus.prc;
 			rse_o[kk].cndx = pgh[nn>>2].cndx;
+			rse_o[kk].irq_sn = pgh[nn>>2].irq_sn;
 			rse_o[kk].aRdz = rob[nn].op.decbus.Rdz;
 			rse_o[kk].aRd = rob[nn].op.decbus.Rd;
 			rse_o[kk].nRd = rob[nn].op.nRd;

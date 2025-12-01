@@ -41,24 +41,13 @@
 
 import Qupls4_pkg::*;
 
-module Qupls4_ins_extract_mux(rst, clk, en, nop, rgi, hirq, irq_i, vect_i, 
-  ins0, insi, reglist_active, ls_bmf, scale_regs_i, pack_regs,
-	regcnt, ins);
+module Qupls4_ins_extract_mux(rst, clk, en, nop, ins0, insi, ins);
 input rst;
 input clk;
 input en;
 input nop;
-input hirq;
-input [1:0] rgi;
-input [5:0] irq_i;
-input [7:0] vect_i;
 input Qupls4_pkg::pipeline_reg_t ins0;
 input Qupls4_pkg::pipeline_reg_t insi;
-input reglist_active;
-input ls_bmf;
-input [2:0] scale_regs_i;
-input pack_regs;
-input cpu_types_pkg::aregno_t regcnt;
 output Qupls4_pkg::pipeline_reg_t ins;
 
 Qupls4_pkg::pipeline_reg_t nopi;
@@ -93,8 +82,7 @@ if (rst)
 	ins <= nopi;
 else begin
 	if (en)
-		ins <= hirq ? {4'd0,vect_i[7:0],2'b0,5'd0,2'b0,5'd0,2'b0,5'd0,irq_i,1'b0,3'b0,1'b0,Qupls4_pkg::OP_CHK} :
-			nop ? nopi : insi;
+		ins <= nop ? nopi : insi;
 //	else
 //		ins <= {41'd0,OP_NOP};
 end

@@ -113,7 +113,7 @@ real IPC,PIPC;
 integer nn,mm,n2,n3,n4,m4,n5,n6,n8,n9,n10,n11,n12,n13,n14,n15,n17;
 integer n16r, n16c, n12r, n12c, n14r, n14c, n17r, n17c, n18r, n18c;
 integer n19,n20,n21,n22,n23,n24,n25,n26,n27,n28,n29,i,n30,n31,n32,n33;
-integer n34,n35;
+integer n34,n35,n36,n37;
 integer jj,kk;
 
 genvar g,h,gvg;
@@ -269,9 +269,9 @@ pregno_t store_argC_pReg;
 Qupls4_pkg::lsq_ndx_t store_argC_id;
 Qupls4_pkg::lsq_ndx_t store_argC_id1;
 
-pregno_t [15:0] rf_reg;
-value_t [15:0] rfo;
-Qupls4_pkg::flags_t [15:0] rfo_flags;
+pregno_t [NREG_RPORTS-1:0] rf_reg;
+value_t [NREG_RPORTS-1:0] rfo;
+Qupls4_pkg::flags_t [NREG_RPORTS-1:0] rfo_flags;
 
 rob_ndx_t mc_orid;
 pc_address_ex_t mc_adr;
@@ -1068,7 +1068,7 @@ initial begin: Init
 
 end
 
-pregno_t [15:0] prn;
+pregno_t [NREG_RPORTS-1:0] prn;
 always_comb
 	rf_reg = prn;
 
@@ -1181,13 +1181,6 @@ begin
 		$display("Qupls4: Error: too many physical registers configured.");
 		$finish;
 	end
-	if (Qupls4_pkg::PREGS < Qupls4_pkg::NREGS * 3) begin
-		$display("Qupls4: Warning: physical registers below threshold for good performance.");
-	end
-	if (Qupls4_pkg::PREGS < Qupls4_pkg::NREGS * 1.25) begin
-		$display("Qupls4: Error: not enough physical registers.");
-		$finish;
-	end
 	if (Qupls4_pkg::ROB_ENTRIES < 12) begin
 		$display("Qupls4: Error: ROB has too few entries.");
 		$finish;
@@ -1228,7 +1221,8 @@ end
 wire irq_wr_clk = clk_i;
 wire irq_rd_rst;
 wire irq_wr_rst;
-reg irq_rd_en, irq_rd_en2;
+reg advance_irq_fifo, irq_rd_en2;
+reg advance_msi;
 reg irq_wr_en, irq_wr_en2;
 wire irq_empty;
 Qupls4_pkg::irq_info_packet_t irq2;
@@ -1240,7 +1234,7 @@ begin
 	irq2 = irq2_dout;
 end
 always_comb
-	irq_rd_en2 = irq_rd_en & ~irst & ~irq_rd_rst;
+	irq_rd_en2 = advance_irq_fifo & ~irst & ~irq_rd_rst;
 always_comb
 	irq_wr_en2 = irq_wr_en & ~irst & ~irq_rd_rst & ~irq_wr_rst;
 
@@ -1365,7 +1359,7 @@ always_comb
 
 pc_address_t nmi_addr, irq_addr, next_hwipc, hwipc;
 reg nmi, ic_nmi, nmi_fet;
-reg [5:0] ic_irq;
+reg [5:0] ic_irq, ipl_ic, ipl_fet;
 wire ic_stallq;
 reg irq_trig;
 wire pe_nmi;
@@ -1373,6 +1367,9 @@ reg exe_nmi, exe_irq;
 reg ic_irqf;
 reg [7:0] irq_downcount;
 reg [7:0] irq_downcount_base;
+reg irq_in_pipe;
+reg irq_ack_ok;
+cpu_types_pkg::seqnum_t irq_sn;
 
 always_comb
 	nmi = irq_i==6'd63;
@@ -1382,6 +1379,19 @@ always_comb
 	nmi_addr = kernel_vectors[sr.dbg ? 4 : fnNextOm(sr.om)];
 
 edge_det unmied1 (.clk(clk), .rst(irst), .ce(advance_f), .i(nmi), .pe(pe_nmi), .ne(), .ee());
+
+always_ff @(posedge clk)
+if (irst)
+	irq_sn <= 8'h00;
+else begin
+	if (advance_pipeline) begin
+		if (pe_nmi)
+			irq_sn <= irq_sn + 2'd1;
+		if (advance_msi|irq_rd_en2)
+			irq_sn <= irq_sn + 2'd1;
+	end
+end
+
 always_ff @(posedge clk)
 if (irst)
 	ic_nmi <= FALSE;
@@ -1389,6 +1399,7 @@ else begin
 	if (advance_pipeline)
 		ic_nmi <= pe_nmi;
 end
+
 always_ff @(posedge clk)
 if (irst)
 	ic_irqf <= FALSE;
@@ -1400,6 +1411,7 @@ else begin
 			ic_irqf <= irq_i > pending_ipl && sr.mie;
 	end
 end
+
 always_ff @(posedge clk)
 if (irst)
 	ic_irq <= 6'd0;
@@ -1412,7 +1424,9 @@ else begin
 	end
 end
 
-// Set pending IPL to IPL of hardware interrupt.
+// Set pending IPL to IPL of hardware interrupt. This is to disabled further
+// interrupts.
+
 always_ff @(posedge clk)
 if (irst)
 	pending_ipl <= 6'd63;
@@ -1422,34 +1436,57 @@ else begin
 		pending_ipl <= next_pending_ipl;
 //	if (advance_pipeline)
 	else begin
+		/*
+		if (takb && fcu_instr.uop==Qupls4_pkg::OP_BCCU64 && fcu_instr.uop.br.cnd==Qupls4_pkg::CND_BOI)
+			pending_ipl <= ic_irq;
+		*/
+		
 		if (irq2_dout.level > pending_ipl && sr.mie && !irq_empty)
 			pending_ipl <= irq2_dout.level;
-		else
-		if (irq_i > pending_ipl && sr.mie)
+		else if (irq_i > pending_ipl && sr.mie)
 			pending_ipl <= irq_i;
+		
 	end
 end
 
-// Read from the outstanding IRQ fifo first.
 always_ff @(posedge clk)
 if (irst) begin
-	irq_ack <= FALSE;
-	irq_rd_en <= FALSE;
+	ipl_ic <= 6'd63;
+	ipl_fet <= 6'd63;
 end
 else begin
-	irq_ack <= FALSE;
-	irq_rd_en <= FALSE;
-//	if (irq2_dout.level > pending_ipl && irq2_dout.swstk==swstk && sr.mie && !irq_empty)
-	if (irq2_dout.level > pending_ipl && sr.mie && !irq_empty && irq_downcount==8'd0)
-		irq_rd_en <= TRUE;
-//	else if (irq_i > pending_ipl && swstk_i==swstk && sr.mie)
-	else
-	if (irq_i > pending_ipl && sr.mie)
-		irq_ack <= TRUE;
+	if (advance_pipeline) begin
+		ipl_ic <= sr.ipl;
+		ipl_fet <= ipl_ic;
+	end
 end
 
+// Advance input from either the FIFO or the MSI controller.
+// Read from the outstanding IRQ fifo first.
 
+always_ff @(posedge clk)
+if (irst) begin
+	advance_msi <= FALSE;
+	advance_irq_fifo <= FALSE;
+end
+else begin
+	advance_msi <= FALSE;
+	advance_irq_fifo <= FALSE;
+	if (irq_downcount==8'h00) begin
+		if (irq2_dout.level > pending_ipl && sr.mie && !irq_empty)
+			advance_irq_fifo <= TRUE;
+		else if (irq_i > pending_ipl && sr.mie)
+			advance_msi <= TRUE;
+	end
+end
+
+always_comb
+	irq_ack = advance_msi;
+
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // NaN trace fifo
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 reg [8:0] nan_log_addr;
 reg do_log_nan = 1'b0;
 wire nan0 = rob[head0].v && cmtcnt > 3'd0 && rob[head0].nan;
@@ -1643,6 +1680,7 @@ reg [63:0] vec_dat;
 always_comb length_byte = ic_line >> {icpc.pc[4:0],3'd0};
 always_comb vec_dat = ic_dline >> {icdp[4:0],3'd0};
 reg [31:0] ic_carry_mod;
+cpu_types_pkg::seqnum_t ic_irq_sn;
 
 icache
 #(
@@ -1701,6 +1739,10 @@ if (advance_f) begin
 end
 else
 	iuop_num <= iuop_num;
+always_ff @(posedge clk)
+if (advance_f) begin
+	ic_irq_sn <= irq_sn;
+end
 
 // ic_miss_adr is one clock in front of the translation pc_tlb_res.
 // Add in a clock delay to line them up for the cache controller.
@@ -2258,8 +2300,6 @@ end
 
 wire fet_stallq;
 wire flush_fet;
-wire [2:0] irq_fet;
-wire irqf_fet;
 pc_address_ex_t misspc_fet;
 wire [1023:0] ic_line_fet;
 pc_address_t ic_hwipc, hwipc_fet;
@@ -2267,20 +2307,34 @@ wire micro_machine_active_fet;
 wire [31:0] carry_mod_fet;
 wire [2:0] uop_num_fet;
 reg [511:0] inj_cline;
+reg irq_ic;
+Qupls4_pkg::irq_info_packet_t irq_in_ic;
+reg irq_fet;
+Qupls4_pkg::irq_info_packet_t irq_in_fet;
 
 always_ff @(posedge clk)
 	ic_hwipc <= hwipc;
+always_ff @(posedge clk)
+	irq_ic <= hirq;
+always_ff @(posedge clk)
+	irq_in_ic <= irq_in;
 
 pregno_t pred_reg;
 always_comb
 	ic_line = {ic_clineh.data,ic_clinel.data};
-
+	
 Qupls4_pipeline_fet ufet1
 (
 	.rst(irst),
 	.clk(clk),
 	.rstcnt(rstcnt),
 	.ihit(ihito),
+	.irq_in_ic(irq_in_ic),
+	.irq_ic(irq_ic),
+	.irq_in_fet(irq_in_fet),
+	.irq_fet(irq_fet),
+	.irq_sn_ic(ic_irq_sn),
+	.irq_sn_fet(irq_sn_fet),
 	.en(advance_f),
 	.uop_num_ic(uop_num_ic),
 	.uop_num_fet(uop_num_fet),
@@ -2348,6 +2402,19 @@ always_ff @(posedge clk)
 if (advance_pipeline)
 	takb_fet <= takb_f;
 
+reg rob_hwi;
+always_comb
+begin
+	rob_hwi = FALSE;
+	for (n36 = 0; n36 < ROB_ENTRIES / 4; n36 = n36 + 1)
+		rob_hwi = rob_hwi | pgh[n36].hwi;
+end
+
+always_comb
+	irq_in_pipe = 
+		hirq | ic_irq | irq_fet | pg_mux.hdr.hwi | pg_dec.hdr.hwi | pg_ren.hdr.hwi | rob_hwi
+		;
+
 // Latency of one.
 // pt0_dec, etc. should be in line with pg_dec.pr0, etc
 Qupls4_pipeline_mux uiext1
@@ -2365,15 +2432,17 @@ Qupls4_pipeline_mux uiext1
 	.ssm_flag(ssm_flag),
 	.ihit(ihito),
 	.sr(sr),
+	.ipl_fet(ipl_fet),
 	.uop_num_fet(uop_num_fet),
 	.uop_num_mux(uop_num_mux),
 	.carry_mod_fet(carry_mod_fet),
 	.stomp_bno(stomp_bno),
 	.stomp_mux(stomp_mux|stomp_mux1|stomp_mux2/*icnop||brtgtv||fetch_new_block_x*/),
 	.nop_o(exti_nop),
-	.nmi_i(pe_nmi),
-	.irq_in(irq_in),
-	.hirq_i(hirq),
+//	.nmi_i(pe_nmi),
+	.irq_sn_fet(irq_sn_fet),
+	.irq_in_fet(irq_in_fet),
+	.irq_fet(irq_fet),
 	.reglist_active(1'b0),
 	.grp_i(igrp2),
 	.misspc_fet(misspc_fet),
@@ -2522,17 +2591,27 @@ wire stomp1;
 wire stomp2;
 wire stomp3;
 
-aregno_t [15:0] arn;
-reg [15:0] arnt;
-reg [2:0] arng [0:15];
-wire [15:0] arnv;
-pregno_t [15:0] prn1;
-checkpt_ndx_t [15:0] rn_cp;
-wire [15:0] prnv;
-wire [0:0] arnbank [15:0];
+Qupls4_pkg::operand_t [NREG_RPORTS-1:0] rf_oper;
+aregno_t [NREG_RPORTS-1:0] arn;
+reg [NREG_RPORTS-1:0] arnt;
+reg [2:0] arng [0:NREG_RPORTS-1];
+wire [NREG_RPORTS-1:0] arnv;
+pregno_t [NREG_RPORTS-1:0] prn1;
+checkpt_ndx_t [NREG_RPORTS-1:0] rn_cp;
+wire [NREG_RPORTS-1:0] prnv;
+wire [0:0] arnbank [NREG_RPORTS-1:0];
 checkpt_ndx_t [3:0] cndx_ren;
 checkpt_ndx_t pcndx_ren;
 
+always_comb
+begin
+	for (n37 = 0; n37 < NREG_RPORTS; n37 = n37 + 1) begin
+		rf_oper[n37].Rn = arn[n37];
+		rf_oper[n37].val = rfo[n37];
+		rf_oper[n37].flags = rfo_tag[n37];
+		rf_oper[n37].v = prnv[n37];
+	end
+end
 /*
 always_comb
 begin
@@ -2624,7 +2703,7 @@ assign arnbank[21] = 1'b0;
 assign arnbank[22] = 1'b0;
 assign arnbank[23] = 1'b0;
 */
-Qupls4_read_port_select urps1
+Qupls4_read_port_select #(.NPORTO(NREG_RPORTS), .NPORTI(NREG_RPORTS*4)) urps1
 (
 	.rst(irst),
 	.clk(clk),
@@ -3639,7 +3718,7 @@ always_ff @(posedge clk) wrport5_cp <= fuq_cp[upd6];
 always_ff @(posedge clk) wrport5_tag <= fuq_tag[upd6]; 
 `endif
 
-Qupls4_regfile4wNr #(.RPORTS(16)) urf1 (
+Qupls4_regfile4wNr #(.RPORTS(NREG_RPORTS)) urf1 (
 	.rst(irst),
 	.clk(clk), 
 	.wr0(wrport0_v),
@@ -3717,8 +3796,10 @@ Qupls4_branchmiss_pc umisspc1
 	.takb(takb),
 	.argA(fcu_rse.argA),
 	.argB(fcu_rse.argB),
+	.argC(fcu_rse.argC),
 	.argI(fcu_rse.argI),
 	.misspc(fcu_misspc1),
+	.vector(irq_in.vector),
 	.missgrp(fcu_missgrp),
 	.dstpc(tgtpc),
 	.stomp_bno(stomp_bno)
@@ -3729,9 +3810,10 @@ always_comb
 
 Qupls4_meta_branch_eval ube1
 (
-	.instr(fcu_instr.uop),
+	.instr(fcu_rse.uop),
 	.a(fcu_rse.argA),
 	.b(fcu_rse.argB),
+	.c(ic_irq > sr.ipl && sr.mie && irq_sn!=fcu_rse.irq_sn || ic_irq==6'd63),
 	.takb(takb)
 );
 /*
@@ -3856,7 +3938,7 @@ end
 else begin
 //	if (advance_pipeline)
 	if (branch_state==Qupls4_pkg::BS_CAPTURE_MISSPC)
-		misspc = excmiss ? excmisspc : fcu_misspc;
+		misspc <= excmiss ? excmisspc : fcu_misspc;
 //		misspc <= excmiss ? {dram0_bus[$bits(pc_address_t)-1:8],8'h00} : brtgtvr ? brtgt : fcu_misspc;
 end
 always_ff @(posedge clk)
@@ -4111,7 +4193,7 @@ always_comb
 begin
 	kk = 0;
 	aRs = {56*9{1'b0}};
-	for (jj = 0; jj < 56; jj = jj + 1) begin
+	for (jj = 0; jj < NREG_RPORTS*4; jj = jj + 1) begin
 		if (bRs[jj/4][jj % 4] != 9'd0) begin
 			aRs[kk] = bRs[jj/4][jj % 4];
 			kk = kk + 1;
@@ -4277,7 +4359,7 @@ endgenerate
 
 generate begin : gFMA
 if (Qupls4_pkg::NFMA > 0) begin
-	Stark_meta_fma umfma1
+	Qupls4_meta_fma umfma1
 	(
 		.rst(irst),
 		.clk(clk),
@@ -4303,7 +4385,7 @@ else begin
 end
 
 if (Qupls4_pkg::NFMA > 1) begin
-	Stark_meta_fma umfma2
+	Qupls4_meta_fma umfma2
 	(
 		.rst(irst),
 		.clk(clk),
@@ -5042,7 +5124,9 @@ end
 reg load_lsq_argc;
 
 Qupls4_reservation_station #(
-	.FUNCUNIT(4'd0)
+	.FUNCUNIT(4'd0),
+	.NRSE(1),
+	.NSARG(3)
 )
 usaust0
 (
@@ -5055,15 +5139,20 @@ usaust0
 	.issue(sau0_issue),//robentry_issue[sau0_rndx]),
 	.rse_i(rse),
 	.rse_o(sau0_rse),
+	.rf_oper_i(rf_oper),
+	/*
 	.arn(arn),
 	.prnv(prnv),
 	.rfo(rfo),
 	.rfo_tag(rfo_tag),
+	*/
 	.req_pRn(bRs[0])
 );
 
 Qupls4_reservation_station #(
-	.FUNCUNIT(4'd2)
+	.FUNCUNIT(4'd2),
+	.NRSE(1),
+	.NSARG(3)
 )
 uimulst0
 (
@@ -5076,10 +5165,7 @@ uimulst0
 	.issue(),
 	.rse_i(rse),
 	.rse_o(imul0_rse),
-	.arn(arn),
-	.prnv(prnv),
-	.rfo(rfo),
-	.rfo_tag(rfo_tag),
+	.rf_oper_i(rf_oper),
 	.req_pRn(bRs[2])
 );
 
@@ -5088,7 +5174,9 @@ always_ff @(posedge clk) sau0_ldd <= sau0_ld;
 generate begin : gIDivStation
 if (SUPPORT_IDIV)
 Qupls4_reservation_station #(
-	.FUNCUNIT(4'd3)
+	.FUNCUNIT(4'd3),
+	.NRSE(1),
+	.NSARG(2)
 )
 uidivst0
 (
@@ -5101,10 +5189,7 @@ uidivst0
 	.issue(idiv0_ld),
 	.rse_i(rse),
 	.rse_o(idiv0_rse),
-	.arn(arn),
-	.prnv(prnv),
-	.rfo(rfo),
-	.rfo_tag(rfo_tag),
+	.rf_oper_i(rf_oper),
 	.req_pRn(bRs[3])
 );
 else begin
@@ -5115,7 +5200,9 @@ endgenerate
 generate begin : gSauStation
 	if (Qupls4_pkg::NSAU > 1) begin
 		Qupls4_reservation_station #(
-			.FUNCUNIT(4'd1)
+			.FUNCUNIT(4'd1),
+			.NRSE(1),
+			.NSARG(3)
 		)
 		usaust1
 		(
@@ -5128,10 +5215,7 @@ generate begin : gSauStation
 			.issue(),//robentry_issue[sau0_rndx]),
 			.rse_i(rse),
 			.rse_o(sau1_rse),
-			.arn(arn),
-			.prnv(prnv),
-			.rfo(rfo),
-			.rfo_tag(rfo_tag),
+			.rf_oper_i(rf_oper),
 			.req_pRn(bRs[1])
 		);
 	end
@@ -5152,7 +5236,9 @@ generate begin : gFpuStat
 		0:
 			begin
 				Qupls4_reservation_station #(
-					.FUNCUNIT(4'd4)
+					.FUNCUNIT(4'd4),
+					.NRSE(1),
+					.NSARG(3+SUPPORT_FDP)
 				)
 				ufmast1
 				(
@@ -5165,14 +5251,13 @@ generate begin : gFpuStat
 					.issue(),//robentry_issue[sau0_rndx]),
 					.rse_i(rse),
 					.rse_o(fma0_rse),
-					.arn(arn),
-					.prnv(prnv),
-					.rfo(rfo),
-					.rfo_tag(rfo_tag),
+					.rf_oper_i(rf_oper),
 					.req_pRn(bRs[4])
 				);
 				Qupls4_reservation_station #(
-					.FUNCUNIT(4'd12)
+					.FUNCUNIT(4'd12),
+					.NRSE(1),
+					.NSARG(3)
 				)
 				ufpust1
 				(
@@ -5185,16 +5270,15 @@ generate begin : gFpuStat
 					.issue(),//robentry_issue[sau0_rndx]),
 					.rse_i(rse),
 					.rse_o(fpu0_rse),
-					.arn(arn),
-					.prnv(prnv),
-					.rfo(rfo),
-					.rfo_tag(rfo_tag),
+					.rf_oper_i(rf_oper),
 					.req_pRn(bRs[12])
 				);
 			end
 		1:
 				Qupls4_reservation_station #(
-					.FUNCUNIT(4'd5)
+					.FUNCUNIT(4'd5),
+					.NRSE(1),
+					.NSARG(3+SUPPORT_FDP)
 				)
 				ufmast2
 				(
@@ -5207,10 +5291,7 @@ generate begin : gFpuStat
 					.issue(),//robentry_issue[sau0_rndx]),
 					.rse_i(rse),
 					.rse_o(fma1_rse),
-					.arn(arn),
-					.prnv(prnv),
-					.rfo(rfo),
-					.rfo_tag(rfo_tag),
+					.rf_oper_i(rf_oper),
 					.req_pRn(bRs[5])
 				);
 		endcase
@@ -5221,7 +5302,9 @@ endgenerate
 generate begin : gDecimalFloat
 	if (NDFPU > 0) begin
 		Qupls4_pair_reservation_station #(
-			.FUNCUNIT(4'd13)
+			.FUNCUNIT(4'd13),
+			.NRSE(1),
+			.NSARG(3)
 		)
 		udfpust1
 		(
@@ -5234,10 +5317,7 @@ generate begin : gDecimalFloat
 			.issue(),//robentry_issue[sau0_rndx]),
 			.rse_i(rse),
 			.rse_o(dfpu0_rse),
-			.arn(arn),
-			.prnv(prnv),
-			.rfo(rfo),
-			.rfo_tag(rfo_tag),
+			.rf_oper_i(rf_oper),
 			.req_pRn(bRs[13])
 		);
 	end
@@ -5245,7 +5325,9 @@ end
 endgenerate
 
 Qupls4_reservation_station #(
-	.FUNCUNIT(4'd7)
+	.FUNCUNIT(4'd7),
+	.NRSE(1),
+	.NSARG(3)
 )
 ubrast1
 (
@@ -5258,15 +5340,14 @@ ubrast1
 	.issue(),//robentry_issue[sau0_rndx]),
 	.rse_i(rse),
 	.rse_o(fcu_rse),
-	.arn(arn),
-	.prnv(prnv),
-	.rfo(rfo),
-	.rfo_tag(rfo_tag),
+	.rf_oper_i(rf_oper),
 	.req_pRn(bRs[7])
 );
 
 Qupls4_reservation_station #(
-	.FUNCUNIT(4'd8)
+	.FUNCUNIT(4'd8),
+	.NRSE(1),
+	.NSARG(3)
 )
 uagenst1
 (
@@ -5279,10 +5360,7 @@ uagenst1
 	.issue(),//robentry_issue[sau0_rndx]),
 	.rse_i(rse),
 	.rse_o(agen0_rse),
-	.arn(arn),
-	.prnv(prnv),
-	.rfo(rfo),
-	.rfo_tag(rfo_tag),
+	.rf_oper_i(rf_oper),
 	.req_pRn(bRs[8])
 );
 
@@ -5309,7 +5387,9 @@ Stark_agen_station uagen0stn
 generate begin : gAgen
 if (Qupls4_pkg::NDATA_PORTS > 1)
 Qupls4_reservation_station #(
-	.FUNCUNIT(4'd9)
+	.FUNCUNIT(4'd9),
+	.NRSE(1),
+	.NSARG(3)
 )
 uagenst2
 (
@@ -5322,10 +5402,7 @@ uagenst2
 	.issue(),//robentry_issue[sau0_rndx]),
 	.rse_i(rse),
 	.rse_o(agen1_rse),
-	.arn(arn),
-	.prnv(prnv),
-	.rfo(rfo),
-	.rfo_tag(rfo_tag),
+	.rf_oper_i(rf_oper),
 	.req_pRn(bRs[9])
 );
 else begin
@@ -5422,9 +5499,20 @@ if (irst) begin
 	fc_ndxv = INV;
 end
 else begin
-	irq_wr_en <= FALSE;
+	/*
+	advance_msi <= FALSE;
+	advance_irq_fifo <= FALSE;
+	if (takb & ~takb1) begin	// edge on takb
+		if (!irq_empty)
+			advance_irq_fifo <= TRUE;
+		else
+			advance_msi <= TRUE;
+	end
+	*/
 	if (sr.ssm & advance_pipeline)
 		ssm_flag <= TRUE;
+
+	irq_wr_en <= FALSE;
 	if (advance_pipeline && |irq_downcount)
 		irq_downcount <= irq_downcount - 2'd1;
 
@@ -5742,6 +5830,7 @@ else begin
 // in the various ALU queues.  
 // also invalidates instructions following a branch-miss BEQ or any JALR (STOMP logic)
 //
+	/*
 	for (nn = 0; nn < Qupls4_pkg::ROB_ENTRIES; nn = nn + 1) begin
 		if (sau0_args_valid)
 			rob[sau0_rndx].all_args_valid <= VAL;
@@ -5758,7 +5847,7 @@ else begin
 		if (fcu_args_valid)
 			rob[fcu_rndx].all_args_valid <= VAL;
 	end
-
+	*/
 	// Issue register read request for store operand. The register value will
 	// appear on the prn bus and be picked up by the register validation module.
 	if (lsq[lsq_head.row][lsq_head.col].v==VAL) begin
@@ -6486,16 +6575,16 @@ else begin
 		if (rob[head0].excv && rob[head0].v)
 //			err_mask[head0] <= 1'b1;
 //			if (rob[head0].last)
-			tProcessExc(head0,rob[head0].op.pc,rob[head0].op.uop.any.num,FALSE,FALSE);
+			tProcessExc(head0,rob[head0].op.pc,rob[head0].op.uop.any.num);
 		else if (rob[head1].excv && cmtcnt > 3'd1 && rob[head1].v)
-			tProcessExc(head1,rob[head1].op.pc,rob[head1].op.uop.any.num,FALSE,FALSE);
+			tProcessExc(head1,rob[head1].op.pc,rob[head1].op.uop.any.num);
 		else if (rob[head2].excv && cmtcnt > 3'd2 && rob[head2].v)
-			tProcessExc(head2,rob[head2].op.pc,rob[head2].op.uop.any.num,FALSE,FALSE);
+			tProcessExc(head2,rob[head2].op.pc,rob[head2].op.uop.any.num);
 		else if (rob[head3].excv && cmtcnt > 3'd3 && rob[head3].v)
-			tProcessExc(head3,rob[head3].op.pc,rob[head3].op.uop.any.num,FALSE,FALSE);
+			tProcessExc(head3,rob[head3].op.pc,rob[head3].op.uop.any.num);
 			
 		if (rob[head0].op.ssm)
-			tProcessExc(head0,Qupls4_pkg::SSM_DEBUG ? rob[head0].op.pc : rob[head0].op.hwipc,rob[head0].op.uop.any.num,FALSE,FALSE);
+			tProcessExc(head0,Qupls4_pkg::SSM_DEBUG ? rob[head0].op.pc : rob[head0].op.hwipc,rob[head0].op.uop.any.num);
 
 		/*
 		if (FALSE) begin
@@ -6783,7 +6872,7 @@ else begin
 					rob[n3].v
 				&& !robentry_stomp[n3]
 				&& !(&rob[n3].done)
-				&& (rob[n3].decbus.cpytgt ? (rob[n3].argD_v /*|| rob[g].op.nRt==9'd0*/) : rob[n3].all_args_valid && rob[n3].pred_bit)
+				&& (rob[n3].decbus.cpytgt ? (rob[n3].argT_v /*|| rob[g].op.nRt==9'd0*/) : rob[n3].all_args_valid && rob[n3].pred_bit)
 				&& (rob[n3].decbus.mem ? !rob[n3].fc_depv : 1'b1)
 				&& (Qupls4_pkg::SERIALIZE ? (rob[(n3+Qupls4_pkg::ROB_ENTRIES-1)%Qupls4_pkg::ROB_ENTRIES].done==2'b11 || rob[(n3+Qupls4_pkg::ROB_ENTRIES-1)%Qupls4_pkg::ROB_ENTRIES].v==INV) : 1'b1)
 				//&& !fnPriorFalsePred(g)
@@ -6818,6 +6907,7 @@ else begin
 	// But only defer/disable interrupts if taking the branch, in which case it
 	// is NOPs being skipped over, so it is only a couple of clock cycles.
 	if (fcu_branch_resolved && takb) begin
+		
 		if (fcu_found_destination) begin
 			if (fnFindHwi(fcu_skip_list) < 8'hff) begin
 				pgh[((fcu_dst+3)>>2)%(Qupls4_pkg::ROB_ENTRIES/4)].hwi <= pgh[fnFindHwi(fcu_skip_list)>>2].hwi;
@@ -6825,6 +6915,7 @@ else begin
 				pgh[fnFindHwi(fcu_skip_list)>>2].hwi <= FALSE;
 			end
 		end
+		
 		for (n3 = 0; n3 < Qupls4_pkg::ROB_ENTRIES; n3 = n3 + 1) begin
 			if (fcu_skip_list[n3]) begin
 				pgh[n3>>2].irq <= {$bits(irq_info_packet_t){1'b0}};
@@ -6833,6 +6924,7 @@ else begin
 	end
 
 	//  Adjust interrupt position to first micro-op of instruction
+	
 	for (n3 = 0; n3 < Qupls4_pkg::ROB_ENTRIES; n3 = n3 + 1) begin
 		if (rob[n3].op.uop.any.count==3'd0 && rob[n3].op.hwi)
 			case(UOP_STRATEGY)
@@ -6841,7 +6933,8 @@ else begin
 			3:	;
 			endcase
 	end
-			
+	
+	
 	// Mark the group done if all ROB entries in group are done.
 	for (n3 = 0; n3 < Qupls4_pkg::ROB_ENTRIES; n3 = n3 + 4) begin
 		if (&rob[n3].done && &rob[n3+1].done && &rob[n3+2].done && &rob[n3+3].done)
@@ -7216,7 +7309,7 @@ always_ff @(posedge clk) begin: clock_n_debug
 			(rob[i].decbus.cpytgt ? "c" : rob[i].decbus.fc ? "b" : rob[i].decbus.mem ? "m" : "a"),
 			rob[i].op.uop.any.opcode, 
 			rob[i].decbus.Rt, rob[i].op.nRt, rob[i].res, rob[i].exc,
-			rob[i].decbus.Rt, rob[i].op.pRt, rob[i].argD, rob[i].argD_v?"v":" ",
+			rob[i].decbus.Rt, rob[i].op.pRt, rob[i].argT, rob[i].argT_v?"v":" ",
 			rob[i].decbus.Ra, rob[i].op.pRa, rob[i].argA, rob[i].argA_v?"v":" ",
 			rob[i].decbus.Rb, rob[i].op.pRb, rob[i].argB, rob[i].argB_v?"v":" ",
 			rob[i].decbus.Rc, rob[i].op.pRc, rob[i].argC, rob[i].argC_v?"v":" ",
@@ -7268,14 +7361,14 @@ always_ff @(posedge clk) begin: clock_n_debug
 
 	$display("----- ALU -----");
 	$display("%d I=%h T=%h A=%h B=%h C=%h %c%d pc:%h #",
-		sau0_dataready, sau0_rse.argI, sau0_rse.argD, sau0_rse.argA, sau0_rse.argB, sau0_rse.argC,
+		sau0_dataready, sau0_rse.argI, sau0_rse.argT, sau0_rse.argA, sau0_rse.argB, sau0_rse.argC,
 		 ((fnIsLoad(sau0_rse.uop) || fnIsStore(sau0_rse.uop)) ? 109 : 97),
 		sau0_instr, sau0_pc);
 	$display("idle:%d res:%h rid:%d #", sau0_idle, sau0_rse.resA, sau0_rse.rndx);
 
 	if (Qupls4_pkg::NSAU > 1) begin
 		$display("%d I=%h T=%h A=%h B=%h C=%h %c%d pc:%h #",
-			sau1_dataready, sau1_rse.argI, sau1_rse.argD, sau1_rse.argA, sau1_rse.argB, sau1_rse.argC, 
+			sau1_dataready, sau1_rse.argI, sau1_rse.argT, sau1_rse.argA, sau1_rse.argB, sau1_rse.argC, 
 			 ((fnIsLoad(sau1_rse.uop) || fnIsStore(sau1_rse.uop)) ? 109 : 97),
 			sau1_rse.uop, sau1_rse.pc);
 		$display("idle:%d res:%h rid:%d #", sau1_idle, sau1_rse.resA, sau1_rse.rndx);
@@ -7371,7 +7464,7 @@ begin
 	if (rob[dndx].sn > rob[ndx].sn) begin
 		if (rob[dndx].op.pRd==rob[ndx].op.nRd && 
 			rob[dndx].op.pRd!=9'd0) begin
-			rob[dndx].argD_v <= INV;
+			rob[dndx].argT_v <= INV;
 		end
 	end
 end
@@ -7650,7 +7743,7 @@ begin
 	for (nn = 0; nn < Qupls4_pkg::ROB_ENTRIES; nn = nn + 1) begin
 		if (robentry_stomp[nn] && rob[nn].sn < rob[ndx].sn && rob[nn].op.nRd==rob[ndx].op.pRd) begin
 			if (rob[ndx].op.pRd!=9'd0)
-				rob[ndx].argD_v <= INV;
+				rob[ndx].argT_v <= INV;
 		end
 	end
 end
@@ -7972,9 +8065,15 @@ begin
 	groupno <= {$bits(seqnum_t){1'b0}};
 	sync_no <= 6'd0;
 	fc_no <= 6'd0;
+	/*
+	advance_msi <= FALSE;
+	advance_irq_fifo <= FALSE;
+	*/
 	irq_wr_en <= FALSE;
+	
 	irq_downcount <= 8'd00;
 	irq_downcount_base <= 8'd10;
+	
 	ssm_flag <= FALSE;
 	pred_alloc_map <= 32'h0;
 	flush_pipeline <= 1'b0;
@@ -8157,6 +8256,7 @@ begin
 		rob[tail].argB_v <= VAL;
 		rob[tail].argC_v <= VAL;
 		rob[tail].argD_v <= VAL;
+		rob[tail].argT_v <= VAL;
 	end
 	
 	if (ornop|(Qupls4_pkg::SUPPORT_BACKOUT ? 1'b0 : stomp)) begin
@@ -8172,6 +8272,7 @@ begin
 		rob[tail].argB_v <= VAL;
 		rob[tail].argC_v <= VAL;
 		rob[tail].argD_v <= VAL;
+		rob[tail].argT_v <= VAL;
 //		rob[tail].argD_v <= VAL;
 //		rob[tail].argM_v <= VAL;
 //		rob[tail].done <= {TRUE,TRUE};
@@ -8269,8 +8370,38 @@ task tOddballCommit;
 input v;
 input rob_ndx_t head;
 begin
-	// If there was an external interrupt, the instruction will have been marked
-	// invalid.
+	/*
+	if (rob[head].decbus.boi) begin
+		if (rob[head].bt) begin
+			if (rob[head].v) begin
+				// Ensure interrupts are still enabled.
+				if (sr.mie || pgh[head[5:2]].irq.level==6'd63)
+					tProcessExc(head,rob[head].op.pc,rob[head].op.uop.any.num,TRUE,FALSE);
+				// The IRQ processing should not have been taken, it is a branch miss.
+				else begin
+					excir <= rob[head].op;
+					excid <= head;
+					excmissgrp <= head>>2;
+					excmisspc.pc <= rob[head].op.pc;
+					excmiss <= TRUE;
+					irq_wr_en <= TRUE;
+					irq2_din <= pgh[head[5:2]].irq;
+				end
+			// If instruction got invalidated, write the IRQ to the FIFO so it may
+			// be picked up again.
+			else begin
+				excir <= rob[head].op;
+				excid <= head;
+				excmissgrp <= head>>2;
+				excmisspc.pc <= rob[head].op.pc;
+				excmiss <= TRUE;
+				irq_wr_en <= TRUE;
+				irq2_din <= pgh[head[5:2]].irq;
+			end
+		end
+		// else: Here there was no interrupt, nothing to do.
+	end
+	*/
 	if (v) begin
 		if (!rob[head].decbus.cpytgt) begin
 			if (rob[head].decbus.csr) begin
@@ -8284,37 +8415,56 @@ begin
 			else if (rob[head].decbus.irq)
 				;
 			else if (rob[head].decbus.brk)
-				tProcessExc(head,rob[head].op.pc+32'd6,rob[head].op.uop.any.num,FALSE,FALSE);
+				tProcessExc(head,rob[head].op.pc+32'd6,rob[head].op.uop.any.num);
 			else if (rob[head].decbus.eret)
 				tProcessEret(rob[head].op[22:19]==5'd2,rob[head].op[23]==1'b1);
 			else if (rob[head].decbus.rex)
 				tRex(head,rob[head].op);
 		end
+		// If interrupts are still enabled at commit, go do interrupt processing.
+		if (rob[head].op.hwi && pgh[head[5:2]].hwi && pgh[head[5:2]].irq.level == 6'd63)	// NMI
+			tProcessHwi(head,rob[head].op.pc,rob[head].op.uop.any.num,FALSE,TRUE);
+		else if (rob[head].op.hwi && pgh[head[5:2]].hwi && pgh[head[5:2]].irq.level > sr.ipl && sr.mie)
+			tProcessHwi(head,rob[head].op.pc,rob[head].op.uop.any.num,TRUE,FALSE);
+		// If interrupt turned out to be disabled reload the IRQ at the fetch stage,
+		// but only after loading some other instructions. Put the irq on a queue for
+		// later processing. Note that the interrupt enable level has been set to
+		// disable further interrupts. So, instruction fetch should be able to 
+		// continue with the desired stream.
+		// Instruction was valid, but interrupts were disabled.
+		else if (pgh[head[5:2]].hwi) begin
+			irq_wr_en <= TRUE;
+			irq2_din <= pgh[head[5:2]].irq;
+			irq_downcount <= irq_downcount_base;
+			irq_downcount_base <= {irq_downcount_base,1'b0} | 8'd8;
+			excir <= rob[head].op;
+			excid <= head;
+			excmissgrp <= head>>2;
+			excmisspc.pc <= rob[head].op.pc;
+			excmiss <= TRUE;
+			set_pending_ipl <= TRUE;
+			next_pending_ipl <= pgh[head[5:2]].old_ipl;	// restore IPL
+			sr.ipl <= pgh[head[5:2]].old_ipl;
+			if (irq_downcount_base[7])
+				tProcessExc(head,rob[head].op.pc,rob[head].op.uop.any.num);
+		end
 	end
-	else if (rob[head].op.hwi && pgh[head[5:2]].hwi && pgh[head[5:2]].irq.level == 6'd63)	// NMI
-		tProcessExc(head,rob[head].op.pc,rob[head].op.uop.any.num,FALSE,TRUE);
-	else if (rob[head].op.hwi && pgh[head[5:2]].hwi && pgh[head[5:2]].irq.level > sr.ipl && sr.mie)
-		tProcessExc(head,rob[head].op.pc,rob[head].op.uop.any.num,TRUE,FALSE);
-	// If interrupt turned out to be disabled, put the irq on a queue for
-	// later processing. Note that the interrupt enable level has been set to
-	// disable further interrupts. So, instruction fetch should be able to 
-	// continue with the desired stream.
-	else if (|pgh[head[5:2]].irq.level) begin
+	// If the instruction got invalidated (eg branch) there is not an easy way to
+	// know what address a hardware interrupt should change flow to. So,
+	// just put the interrupt into a FIFO to be redone later.
+	// The branch will have already reset the fetch pointer.
+	else if (pgh[head[5:2]].hwi) begin
 		irq_wr_en <= TRUE;
 		irq2_din <= pgh[head[5:2]].irq;
-		// The fetch address needs to be reset to the original instruction stream,
-		// since the interrupt was actually disabled. Otherwise instructions would
-		// continue to be fetched from the ISR.
-		excir <= rob[head].op;
-		excid <= head;
-		excmissgrp <= head>>2;
-		excmisspc.pc <= rob[head].op.pc;
-		excmiss <= TRUE;
 		irq_downcount <= irq_downcount_base;
 		irq_downcount_base <= {irq_downcount_base,1'b0} | 8'd8;
 		if (irq_downcount_base[7])
-			tProcessExc(head,rob[head].op.pc,rob[head].op.uop.any.num,FALSE,TRUE);
+			tProcessExc(head,rob[head].op.pc,rob[head].op.uop.any.num);
+		set_pending_ipl <= TRUE;
+		next_pending_ipl <= pgh[head[5:2]].old_ipl;	// restore IPL
+		sr.ipl <= pgh[head[5:2]].old_ipl;
 	end
+	
 end
 endtask
 
@@ -8488,8 +8638,6 @@ task tProcessExc;
 input rob_ndx_t id;
 input pc_address_t retpc;
 input [2:0] uop_num;
-input irq;
-input nmi;
 integer nn;
 reg [7:0] vecno;
 begin
@@ -8513,21 +8661,8 @@ begin
 	excmissgrp <= id>>2;
 	excmiss <= FALSE;
 	csr_carry_mod <= rob[id].op.carry_mod;
-	// Hardware interrupts automatically vector at the next_pc stage. There is no
-	// need to vector here.
-	if (nmi) begin
-		sr.ipl <= 6'd63;
-		sr.ssm <= FALSE;
-		ssm_flag <= FALSE;
-	end
-		//	excmisspc.pc <= {kvec[sr.dbg ? 4 : 3][$bits(pc_address_t)-1:8] + 4'd11,8'h0};
-	else if (irq) begin
-		sr.ipl <= 6'd63;
-		sr.ssm <= FALSE;
-		ssm_flag <= FALSE;
-	end
-		// excmisspc.pc <= {kvec[sr.dbg ? 4 : 3][$bits(pc_address_t)-1:8] + 4'd10,8'h0};
-	else if (rob[id].op.ssm) begin
+	// excmisspc.pc <= {kvec[sr.dbg ? 4 : 3][$bits(pc_address_t)-1:8] + 4'd10,8'h0};
+	if (rob[id].op.ssm) begin
 		sr.ssm <= FALSE;
 		ssm_flag <= FALSE;
 		excmisspc.pc <= kernel_vectors[sr.dbg ? 3'd4:{1'b0,fnNextOm(sr.om)}];
@@ -8542,6 +8677,48 @@ begin
 		//excmiss <= TRUE;
 	end
 //		excmisspc <= {avec[$bits(pc_address_t)-1:16] + vecno,3'h0};
+end
+endtask
+
+// HWI processing
+// Since interrupts immediately change the IP at the fetch stage there is no
+// need to vector here.
+
+task tProcessHwi;
+input rob_ndx_t id;
+input pc_address_t retpc;
+input [2:0] uop_num;
+input irq;
+input nmi;
+integer nn;
+begin
+	for (nn = 1; nn < 16; nn = nn + 1)
+		sr_stack[nn] <= sr_stack[nn-1];
+	sr_stack[0] <= sr;
+	for (nn = 1; nn < 16; nn = nn + 1)
+		pc_stack[nn] <= pc_stack[nn-1];
+	pc_stack[0] <= retpc;
+	if (UOP_STRATEGY==2) begin
+		for (nn = 1; nn < 16; nn = nn + 1)
+			upc_stack[nn] <= upc_stack[nn-1];
+		upc_stack[0] <= {1'b0,uop_num};
+	end
+	sr.pl <= 8'hFF;
+	sr.om <= fnNextOm(sr.om);
+	csr_carry_mod <= rob[id].op.carry_mod;
+	// Hardware interrupts automatically vector at the next_pc stage. There is no
+	// need to vector here.
+	if (nmi) begin
+		sr.ipl <= pgh[id[5:2]].irq.level;
+		sr.ssm <= FALSE;
+		ssm_flag <= FALSE;
+	end
+		//	excmisspc.pc <= {kvec[sr.dbg ? 4 : 3][$bits(pc_address_t)-1:8] + 4'd11,8'h0};
+	else if (irq) begin
+		sr.ipl <= pgh[id[5:2]].irq.level;
+		sr.ssm <= FALSE;
+		ssm_flag <= FALSE;
+	end
 end
 endtask
 

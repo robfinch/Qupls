@@ -41,6 +41,7 @@ import const_pkg::*;
 import Qupls4_pkg::*;
 
 module Qupls4_stomp(rst, clk, ihit, advance_pipeline, advance_pipeline_seg2, 
+//	irq_in_pipe, di_inst,
 	micro_machine_active, branchmiss, found_destination, destination_rndx,
 	branch_state, do_bsr, misspc,
 	pc, pc_f, pc_fet, pc_mux, pc_dec, pc_ren,
@@ -50,6 +51,8 @@ module Qupls4_stomp(rst, clk, ihit, advance_pipeline, advance_pipeline_seg2,
 input rst;
 input clk;
 input ihit;
+//input irq_in_pipe;
+//input di_inst;
 input advance_pipeline;
 input advance_pipeline_seg2;
 input micro_machine_active;
@@ -153,17 +156,23 @@ else begin
 end
 
 // Instruction stomp waterfall.
-
+/*
+wire hwi_at_ren = di_inst && pg_ren.hwi;
+wire hwi_at_dec = di_inst && pg_dec.hwi;
+wire hwi_at_mux = di_inst && pg_mux.hwi;
+wire hwi_at_fet = di_inst && ic_irq;
+wire hwi_at_aln = di_inst && hirq;
+*/
 always_comb
-	stomp_aln = (stomp_alnr || pe_stomp_pipeline) && (pc.pc != misspcr[0].pc);
+	stomp_aln = (stomp_alnr || pe_stomp_pipeline) && (pc.pc != misspcr[0].pc);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_fet && !hwi_at_aln;
 always_comb
-	stomp_fet = (stomp_fetr || pe_stomp_pipeline) && (pc_f.pc != misspcr[1].pc);
+	stomp_fet = (stomp_fetr || pe_stomp_pipeline) && (pc_f.pc != misspcr[1].pc);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_fet;
 always_comb
-	stomp_mux = (pe_stomp_pipeline || stomp_muxr) && (pc_fet.pc != misspcr[2].pc);
+	stomp_mux = (pe_stomp_pipeline || stomp_muxr) && (pc_fet.pc != misspcr[2].pc);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_mux;
 always_comb
-	stomp_dec = (pe_stomp_pipeline || stomp_decr) && (pc_mux.pc != misspcr[3].pc);
+	stomp_dec = (pe_stomp_pipeline || stomp_decr) && (pc_mux.pc != misspcr[3].pc);// && !hwi_at_ren && !hwi_at_dec;
 always_comb
-	stomp_ren = (pe_stomp_pipeline || stomp_renr) && (pc_dec.pc != misspcr[4].pc);
+	stomp_ren = (pe_stomp_pipeline || stomp_renr) && (pc_dec.pc != misspcr[4].pc);// && !hwi_at_ren;
 
 // On a cache miss, the fetch stage is stomped on, but not if micro-code is
 // active. Micro-code does not require the cache-line data.

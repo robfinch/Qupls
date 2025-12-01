@@ -37,7 +37,7 @@
 import Qupls4_pkg::*;
 //import fp64Pkg::*;
 
-module Qupls4_fpu_fdp64(rst, clk, clk3x, om, idle, ir, rm, a, b, c, d, t, i, p, o, done, exc);
+module Qupls4_fpu_fma64(rst, clk, clk3x, om, idle, ir, rm, a, b, c, t, i, p, o, done, exc);
 parameter WID=64;
 input rst;
 input clk;
@@ -49,7 +49,6 @@ input [2:0] rm;
 input [WID-1:0] a;
 input [WID-1:0] b;
 input [WID-1:0] c;
-input [WID-1:0] d;
 input [WID-1:0] t;
 input [WID-1:0] i;
 input [WID-1:0] p;
@@ -71,26 +70,18 @@ always_comb
 		fmaop = 1'b0;
 */
 always_comb
-	if (ir.fpu.op4==Qupls4_pkg::FOP4_FADD || ir.fpu.op4==Qupls4_pkg::FOP4_FSUB) begin
-		fmab = 64'h3FF0000000000000;	// 1,0
-		fmad = 64'h3FF0000000000000;	// 1,0
-	end
-	else begin
-		fmab = b;
-		fmad = d;
-	end
+	if (ir.fpu.op4==Qupls4_pkg::FOP4_FADD || ir.fpu.op4==Qupls4_pkg::FOP4_FSUB)
+		fmab <= 64'h3FF0000000000000;	// 1,0
+	else
+		fmab <= b;
 
 always_comb
-	if (ir.fpu.op4==FOP4_FMUL || ir.fpu.op4==FOP4_FDIV) begin
+	if (ir.fpu.op4==FOP4_FMUL || ir.fpu.op4==FOP4_FDIV)
 		fmac = 64'd0;
-		fmad = 64'd0;
-	end
-	else begin
+	else
 		fmac = c;
-		fmad = d;
-	end
 
-fpFDP64nrL8 ufma1
+fpFMA64nrL8 ufma1
 (
 	.clk(clk),
 	.ce(ce),
@@ -99,7 +90,6 @@ fpFDP64nrL8 ufma1
 	.a(a),
 	.b(fmab),
 	.c(fmac),
-	.d(fmad),
 	.o(bus),
 	.inf(),
 	.zero(),

@@ -40,6 +40,7 @@ import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
 module Qupls4_pipeline_fet(rst, clk, rstcnt, ihit, en, fet_stallq, ic_stallq,
+	irq_in_ic, irq_ic, irq_in_fet, irq_fet, irq_sn_ic, irq_sn_fet,
 	pc_i, misspc, misspc_fet, uop_num_ic, uop_num_fet, flush_i,flush_fet,
 	pc0_fet, pc1_fet, pc2_fet, pc3_fet, pc4_fet, stomp_fet, stomp_bno, ic_carry_mod,
 	inject_cl, ic_line_i, inj_line_i, ic_line_fet, nmi_i, carry_mod_fet,
@@ -51,6 +52,12 @@ input [2:0] rstcnt;
 input ihit;
 input en;
 input fet_stallq;
+input irq_ic;
+output reg irq_fet;
+input cpu_types_pkg::seqnum_t irq_sn_ic;
+output cpu_types_pkg::seqnum_t irq_sn_fet;
+input Qupls4_pkg::irq_info_packet_t irq_in_ic;
+output Qupls4_pkg::irq_info_packet_t irq_in_fet;
 output reg ic_stallq;
 input pc_address_ex_t pc_i;
 input pc_address_ex_t misspc;
@@ -226,6 +233,30 @@ if (rst)
 else begin
 	if (en2)
 		flush_fet <= flush_i;
+end
+
+always_ff @(posedge clk)
+if (rst)
+	irq_in_fet <= 1'b0;
+else begin
+	if (en2)
+		irq_in_fet <= irq_in_ic;
+end
+
+always_ff @(posedge clk)
+if (rst)
+	irq_fet <= 1'b0;
+else begin
+	if (en2)
+		irq_fet <= irq_ic;
+end
+
+always_ff @(posedge clk)
+if (rst)
+	irq_sn_fet <= 8'd0;
+else begin
+	if (en2)
+		irq_sn_fet <= irq_sn_ic;
 end
 
 always_comb

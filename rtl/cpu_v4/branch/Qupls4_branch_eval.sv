@@ -37,11 +37,12 @@
 //
 import Qupls4_pkg::*;
 
-module Qupls4_branch_eval(instr, a, b, takb);
+module Qupls4_branch_eval(instr, a, b, c, takb);
 parameter WID=64;
 input Qupls4_pkg::micro_op_t instr;
 input [WID-1:0] a;
 input [WID-1:0] b;
+input c;
 output reg takb;
 
 always_comb
@@ -59,6 +60,7 @@ always_comb
 		CND_AND:	takb = |a & |b;
 		CND_NOR:	takb = ~(|a | |b);
 		CND_OR:	takb = |a | |b;
+		CND_BOI:	takb = c;
 		default:	takb = 1'b0;
 		endcase
 	Qupls4_pkg::OP_BCC8,Qupls4_pkg::OP_BCC16,Qupls4_pkg::OP_BCC32,Qupls4_pkg::OP_BCC64:	// integer signed branches
