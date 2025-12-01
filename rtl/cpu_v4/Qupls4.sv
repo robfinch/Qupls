@@ -845,13 +845,17 @@ reg  [4:0] dram_id1;
 reg dram0_ack;
 wire dram0_done;
 reg dram0_idv;
+reg dram0_ctag;
 value_t dram0_argD;
 reg dram0_ldip;
+reg dram0_stomp;
 
 reg dram1_ack;
 wire dram1_done;
 reg dram1_idv;
+reg dram1_ctag;
 value_t dram1_argD;
+reg dram1_stomp;
 
 reg [2:0] dramN [0:Qupls4_pkg::NDATA_PORTS-1];
 reg [511:0] dramN_data [0:Qupls4_pkg::NDATA_PORTS-1];
@@ -2534,7 +2538,7 @@ begin
 	for (n37 = 0; n37 < NREG_RPORTS; n37 = n37 + 1) begin
 		rf_oper[n37].Rn = arn[n37];
 		rf_oper[n37].val = rfo[n37];
-		rf_oper[n37].flags = rfo_tag[n37];
+		rf_oper[n37].flags = rfo_flags[n37];
 		rf_oper[n37].v = prnv[n37];
 	end
 end
@@ -3198,8 +3202,8 @@ vtdl #($bits(Qupls4_pkg::operating_mode_t))	udlyfc8 (.clk(clk), .ce(1'b1), .a(4'
 always_comb fpu0_wrA = !fpu0_rse2.aRdz && Qupls4_pkg::NFPU > 0;
 always_comb fma0_wrA = fma0_done && !fma0_rse2.aRdz && Qupls4_pkg::NFPU > 0;
 always_comb fma1_wrA = fma1_done && !fma1_rse2.aRdz && Qupls4_pkg::NFPU > 1;
-always_comb dram_wr0 = dram_v0 && !dram_aRtz0;
-always_comb dram_wr1 = dram_v1 && !dram_aRtz1 && Qupls4_pkg::NDATA_PORTS > 1;
+always_comb dram_wr0 = dram0_oper.oper.v && !dram0_oper.oper.aRdz;
+always_comb dram_wr1 = dram1_oper.oper.v && !dram1_oper.oper.aRdz && Qupls4_pkg::NDATA_PORTS > 1;
 always_comb fcu_wrA = 1'b0;
 
 wire [8:0] sau0_we;
@@ -3209,13 +3213,8 @@ reg [8:0] dram0_we;
 reg [8:0] dram1_we;
 reg [8:0] fcu_we;
 
-always_ff @(posedge clk) dram0_we =
-	(dram_aRt0 >= 7'd56 && dram_aRt0 <= 7'd63) ?
-	((dram_om0==Qupls4_pkg::OM_SECURE ? 9'h0FF : dram_om0==Qupls4_pkg::OM_HYPERVISOR ? 9'h0F : dram_om0==Qupls4_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01) & {9{dram_wr0}}) : {wt10A,8'hFF} & {9{dram_wr0}};
-
-always_ff @(posedge clk) dram1_we =
-	(dram_aRt1 >= 7'd56 && dram_aRt1 <= 7'd63) ?
-	((dram_om1==Qupls4_pkg::OM_SECURE ? 9'h0FF : dram_om1==Qupls4_pkg::OM_HYPERVISOR ? 9'h0F : dram_om1==Qupls4_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01) & {9{dram_wr1}}) : {wt11A,8'hFF} & {9{dram_wr1}} & {9{Qupls4_pkg::NDATA_PORTS > 1}};
+always_ff @(posedge clk) dram0_we = {wt10A,8'hFF} & {9{dram_wr0}};
+always_ff @(posedge clk) dram1_we = {wt11A,8'hFF} & {9{dram_wr1}} & {9{Qupls4_pkg::NDATA_PORTS > 1}};
 
 always_ff @(posedge clk) fcu_we =
 	(fcu_rse.aRd >= 7'd56 && fcu_rse.aRd <= 7'd63) ?
@@ -3225,8 +3224,8 @@ always_comb wt0A = !sau0_rse2.aRdz;
 always_comb wt1A = !sau1_rse2.aRdz && Qupls4_pkg::NSAU > 1;
 always_comb wt3A = fpu1_done && !fpu1_aRdzA && !fpu1_idle && Qupls4_pkg::NFPU > 1;
 always_comb wt7A = fcu_done && !fcu_aRtzA;
-always_comb wt10A = dram_v0 && !dram_aRtz0;
-always_comb wt11A = dram_v1 && !dram_aRtz1 && Qupls4_pkg::NDATA_PORTS > 1;
+always_comb wt10A = dram0_oper.oper.v && !dram0_oper.oper.aRdz;
+always_comb wt11A = dram1_oper.oper.v && !dram1_oper.oper.aRdz && Qupls4_pkg::NDATA_PORTS > 1;
 always_comb wt12A = !fpu0_rse2.aRdz && !fpu0_idle && Qupls4_pkg::NFPU > 0;
 
 wire [4:0] upd1a,upd2a,upd3a,upd4a,upd5a,upd6a;
@@ -4601,7 +4600,7 @@ begin
 
 	if (Qupls4_pkg::NDATA_PORTS > 1) begin
 		dramN[1] = dram1;
-		dramN_id[1] = dram1_id;
+		dramN_id[1] = dram1_work.rndx;
 		dramN_vaddr[1] = dram1_work.vaddr;
 		dramN_paddr[1] = dram1_work.paddr;
 		dramN_data[1] = dram1_work.data[511:0];
@@ -4779,7 +4778,7 @@ Qupls4_dram_done udrdn1
 	.cload_tags(dram0_cload_tags),
 	.ack(dram0_ack),
 	.dram_idv(dram0_idv),
-	.dram_id(dram0_id), 
+	.dram_id(dram0_work.rndx), 
 	.dram_state(dram0),
 	.dram_more(dram0_more),
 	.stomp(robentry_stomp),
@@ -4800,7 +4799,7 @@ Qupls4_dram_done udrdn1
 	.cload_tags(dram1_cload_tags),
 	.ack(dram1_ack),
 	.dram_idv(dram1_idv),
-	.dram_id(dram1_id), 
+	.dram_id(dram1_work.rndx), 
 	.dram_state(dram1),
 	.dram_more(dram1_more),
 	.stomp(robentry_stomp),
@@ -4883,9 +4882,9 @@ always_comb
 begin
 	dram0_timeout <= FALSE;
 	if (Qupls4_pkg::SUPPORT_BUS_TO) begin
-		if (dram0_tocnt[10])
+		if (dram0_work.tocnt[10])
 			dram0_timeout = TRUE;
-		else if (dram0_tocnt[8])
+		else if (dram0_work.tocnt[8])
 			dram0_timeout = TRUE;
 	end
 end
@@ -4894,9 +4893,9 @@ always_comb
 begin
 	dram1_timeout <= FALSE;
 	if (Qupls4_pkg::SUPPORT_BUS_TO && Qupls4_pkg::NDATA_PORTS > 1) begin
-		if (dram1_tocnt[10])
+		if (dram1_work.tocnt[10])
 			dram1_timeout = TRUE;
-		else if (dram1_tocnt[8])
+		else if (dram1_work.tocnt[8])
 			dram1_timeout = TRUE;
 	end
 end
@@ -4939,7 +4938,7 @@ Qupls_mem_more ummore1
 	.more_o(dram1_more)
 );
 
-Qupls4_set_dram_work usdr1 (
+Qupls4_set_dram_work #(.CORENO(CORENO)) usdr1 (
 	.rst_i(rsti),
 	.clk_i(clk),
 	.rob_i(rob),
@@ -4960,8 +4959,8 @@ Qupls4_set_dram_work usdr1 (
 );
 
 generate begin : gDramWork
-	if (NDATA_PORT > 1)
-		Qupls4_set_dram_work usdr2 (
+	if (NDATA_PORTS > 1)
+		Qupls4_set_dram_work #(.CORENO(CORENO)) usdr2 (
 			.rst_i(rsti),
 			.clk_i(clk),
 			.rob_i(rob),
@@ -5968,23 +5967,23 @@ else begin
 
 	// If data for stomped instruction, ignore
 	// dram_vn will be false for stomped data
-	if (dram0_done && rob[ dram0_id ].v && dram0_idv) begin
-    rob[ dram0_id ].exc <= dram0_oper.exc;
-    rob[ dram0_id ].excv <= ~&dram0_oper.exc;
-    rob[ dram0_id ].out <= {INV,INV};
-    rob[ dram0_id ].done <= 2'b11;
+	if (dram0_done && rob[ dram0_work.rndx ].v && dram0_idv) begin
+    rob[ dram0_work.rndx ].exc <= dram0_oper.exc;
+    rob[ dram0_work.rndx ].excv <= ~&dram0_oper.exc;
+    rob[ dram0_work.rndx ].out <= {INV,INV};
+    rob[ dram0_work.rndx ].done <= 2'b11;
 		dram0_idv <= INV;
 		$display("Qupls4 set dram0_idv=INV at done");
-    tInvalidateLSQ(dram0_id,FALSE);
+    tInvalidateLSQ(dram0_work.rndx,FALSE);
 	end
 	if (Qupls4_pkg::NDATA_PORTS > 1) begin
-		if (dram1_done && rob[ dram1_id ].v && dram1_idv) begin
-	    rob[ dram1_id ].exc <= dram1_oper.exc;
-	    rob[ dram1_id ].excv <= ~&dram1_oper.exc;
-	    rob[ dram1_id ].out <= {INV,INV};
-	    rob[ dram1_id ].done <= 2'b11;
+		if (dram1_done && rob[ dram1_work.rndx ].v && dram1_idv) begin
+	    rob[ dram1_work.rndx ].exc <= dram1_oper.exc;
+	    rob[ dram1_work.rndx ].excv <= ~&dram1_oper.exc;
+	    rob[ dram1_work.rndx ].out <= {INV,INV};
+	    rob[ dram1_work.rndx ].done <= 2'b11;
 			dram1_idv <= INV;
-	    tInvalidateLSQ(dram1_id,FALSE);
+	    tInvalidateLSQ(dram1_work.rndx,FALSE);
 		end
 	end
 
@@ -6153,34 +6152,34 @@ else begin
 	// Bus timeout logic
 	// Reset out to trigger another access
 		if (dram0_work.tocnt[10]) begin
-			if (!rob[dram0_id].excv) begin
-				rob[dram0_id].exc <= Qupls4_pkg::FLT_BERR;
-				rob[dram0_id].excv <= TRUE;
+			if (!rob[dram0_work.rndx].excv) begin
+				rob[dram0_work.rndx].exc <= Qupls4_pkg::FLT_BERR;
+				rob[dram0_work.rndx].excv <= TRUE;
 			end
-			rob[dram0_id].done <= 2'b11;
-			rob[dram0_id].out <= {INV,INV};
+			rob[dram0_work.rndx].done <= 2'b11;
+			rob[dram0_work.rndx].out <= {INV,INV};
 			dram0_idv <= INV;
 			$display("Q+ set dram0_idv=INV at timeout");
-			tInvalidateLSQ(dram0_id,TRUE);
-			//lsq[rob[dram0_id].lsqndx.row][rob[dram0_id].lsqndx.col].v <= INV;
+			tInvalidateLSQ(dram0_work.rndx,TRUE);
+			//lsq[rob[dram0_work.rndx].lsqndx.row][rob[dram0_work.rndx].lsqndx.col].v <= INV;
 		end
 		else if (dram0_work.tocnt[8]) begin
-			rob[dram0_id].out <= {INV,INV};
+			rob[dram0_work.rndx].out <= {INV,INV};
 		end
 		if (Qupls4_pkg::NDATA_PORTS > 1) begin
 			if (dram1_work.tocnt[10]) begin
-				if (!rob[dram1_id].excv) begin
-					rob[dram1_id].exc <= Qupls4_pkg::FLT_BERR;
-					rob[dram1_id].excv <= TRUE;
+				if (!rob[dram1_work.rndx].excv) begin
+					rob[dram1_work.rndx].exc <= Qupls4_pkg::FLT_BERR;
+					rob[dram1_work.rndx].excv <= TRUE;
 				end
-				rob[dram1_id].done <= 2'b11;
-				rob[dram1_id].out <= {INV,INV};
+				rob[dram1_work.rndx].done <= 2'b11;
+				rob[dram1_work.rndx].out <= {INV,INV};
 				dram1_idv <= INV;
-				tInvalidateLSQ(dram1_id,TRUE);
-//				lsq[rob[dram1_id].lsqndx.row][rob[dram1_id].lsqndx.col].v <= INV;
+				tInvalidateLSQ(dram1_work.rndx,TRUE);
+//				lsq[rob[dram1_work.rndx].lsqndx.row][rob[dram1_work.rndx].lsqndx.col].v <= INV;
 			end
-			else if (dram1_tocnt[8]) begin
-				rob[dram1_id].out <= {INV,INV};
+			else if (dram1_work.tocnt[8]) begin
+				rob[dram1_work.rndx].out <= {INV,INV};
 			end
 		end
 	end
@@ -6207,8 +6206,10 @@ else begin
 		tInvalidateLSQ(lsq[lbndx0.row][lbndx0.col].rndx,FALSE);
 		rob[lsq[lbndx0.row][lbndx0.col].rndx].done <= 2'b11;
 	end
-  else if (dram0 == Qupls4_pkg::DRAMSLOT_AVAIL && mem0_lsndxv && !robentry_stomp[lsq[mem0_lsndx.row][mem0_lsndx.col].rndx] && !dram0_idv && !dram0_idv2)
+  else if (dram0 == Qupls4_pkg::DRAMSLOT_AVAIL && mem0_lsndxv && !robentry_stomp[lsq[mem0_lsndx.row][mem0_lsndx.col].rndx] && !dram0_idv && !dram0_idv2) begin
 		rob[lsq[mem0_lsndx.row][mem0_lsndx.col].rndx].out <= {VAL,VAL};
+		dram0_stomp <= FALSE;
+	end
 
   if (Qupls4_pkg::NDATA_PORTS > 1) begin
 		if (Qupls4_pkg::SUPPORT_LOAD_BYPASSING && lbndx1.vb) begin
@@ -6217,21 +6218,21 @@ else begin
 		end
 	  else if (dram1 == Qupls4_pkg::DRAMSLOT_AVAIL && Qupls4_pkg::NDATA_PORTS > 1 && mem1_lsndxv && !robentry_stomp[lsq[mem1_lsndx.row][mem1_lsndx.col].rndx]) begin
 			rob[lsq[mem1_lsndx.row][mem1_lsndx.col].rndx].out	<= {VAL,VAL};
-	    dram1_tocnt <= 12'd0;
-	  end
+			dram1_stomp <= FALSE;
+		end
 	end
  
   for (n3 = 0; n3 < Qupls4_pkg::ROB_ENTRIES; n3 = n3 + 1) begin
 		if (robentry_stomp[n3] && rob[n3].lsqndx==mem0_lsndx && lsq[mem0_lsndx.row][mem0_lsndx.col].v)
 			dram0_stomp <= 1'b1;
-		if (!rob[n3].lsq && dram0_id==n3 && dram0_idv) begin
+		if (!rob[n3].lsq && dram0_work.rndx==n3 && dram0_idv) begin
 			dram0_stomp <= TRUE;
 			dram0_idv <= INV;
 		end
 		if (Qupls4_pkg::NDATA_PORTS > 1) begin
 			if (robentry_stomp[n3] && rob[n3].lsqndx==mem1_lsndx && lsq[mem1_lsndx.row][mem1_lsndx.col].v)
 				dram1_stomp <= 1'b1;
-			if (!rob[n3].lsq && dram1_id==n3 && dram1_idv) begin
+			if (!rob[n3].lsq && dram1_work.rndx==n3 && dram1_idv) begin
 				dram1_stomp <= TRUE;
 				dram1_idv <= INV;
 			end
@@ -6502,12 +6503,12 @@ else begin
 	if (!anyout0) begin
 		agen0_idle <= TRUE;
 		agen0_idv <= INV;
-		if (dram0_id==agen0_id)
+		if (dram0_work.rndx==agen0_id)
 			dram0_stomp <= TRUE;
 		if (Qupls4_pkg::NDATA_PORTS > 1) begin
 			agen1_idle <= TRUE;
 			agen1_idv <= INV;
-			if (dram1_id==agen1_id)
+			if (dram1_work.rndx==agen1_id)
 				dram1_stomp <= TRUE;
 		end
 	end
@@ -6557,30 +6558,30 @@ else begin
 		fpu1_idv <= INV;
 		fpu1_stomp <= TRUE;
 	end
-	if (robentry_stomp[dram0_id]) begin
+	if (robentry_stomp[dram0_work.rndx]) begin
 		dram0_stomp <= TRUE;
 		dram0_idv <= INV;
-		rob[dram0_id].done <= 2'b11;
-		rob[dram0_id].out <= 2'b00;
+		rob[dram0_work.rndx].done <= 2'b11;
+		rob[dram0_work.rndx].out <= 2'b00;
 	end
-	if (robentry_stomp[dram1_id]) begin
+	if (robentry_stomp[dram1_work.rndx]) begin
 		dram1_stomp <= TRUE;
 		dram1_idv <= INV;
-		rob[dram1_id].done <= 2'b11;
-		rob[dram1_id].out <= 2'b00;
+		rob[dram1_work.rndx].done <= 2'b11;
+		rob[dram1_work.rndx].out <= 2'b00;
 	end
 	/*
 	if (robentry_stomp[agen0_id]) begin// || !rob[agen0_id].v) begin
 		agen0_idle <= TRUE;
 		agen0_idv <= INV;
-		if (dram0_id==agen0_id)
+		if (dram0_work.rndx==agen0_id)
 			dram0_stomp <= TRUE;
 	end
 	if (Qupls4_pkg::NDATA_PORTS > 1) begin
 		if (robentry_stomp[agen1_id]) begin// || !rob[agen1_id].v) begin
 			agen1_idle <= TRUE;
 			agen1_idv <= INV;
-			if (dram1_id==agen1_id)
+			if (dram1_work.rndx==agen1_id)
 				dram1_stomp <= TRUE;
 		end
 	end
@@ -7085,10 +7086,10 @@ always_ff @(posedge clk) begin: clock_n_debug
 	end
 	$display("----- Memory -----");
 	$display("%d%c v%h p%h, %h %c%d %o #",
-	    dram0, dram0_ack?"A":" ", dram0_vaddr, dram0_paddr, dram0_data, ((dram0_load || dram0_cload || dram0_cload_tags || dram0_store || dram0_cstore) ? 109 : 97), dram0_op, dram0_id);
+	    dram0, dram0_ack?"A":" ", dram0_vaddr, dram0_paddr, dram0_data, ((dram0_load || dram0_cload || dram0_cload_tags || dram0_store || dram0_cstore) ? 109 : 97), dram0_op, dram0_work.rndx);
 	if (Qupls4_pkg::NDATA_PORTS > 1) begin
 	$display("%d v%h p%h %h %c%d %o #",
-	    dram1, dram1_vaddr, dram1_paddr, dram1_data, ((dram1_load || dram1_cload || dram1_cload_tags || dram1_store || dram1_cstore) ? 109 : 97), dram1_op, dram1_id);
+	    dram1, dram1_vaddr, dram1_paddr, dram1_data, ((dram1_load || dram1_cload || dram1_cload_tags || dram1_store || dram1_cstore) ? 109 : 97), dram1_op, dram1_work.rndx);
 	end
 //	$display("%d %h %h %c%d %o #",
 //	    dram2, dram2_addr, dram2_data, (fnIsFlowCtrl(dram2_op) ? 98 : (dram2_load || dram2_store) ? 109 : 97), 
@@ -7475,12 +7476,12 @@ begin
 	if (rob[ndx].lsq)
 		tInvalidateLSQ(ndx,TRUE);
 	if (ndx==agen0_rse.rndx) begin
-		if (dram0_id==agen0_rse.rndx)
+		if (dram0_work.rndx==agen0_rse.rndx)
 			dram0_stomp <= TRUE;
 	end
 	if (Qupls4_pkg::NDATA_PORTS > 1) begin
 		if (ndx==agen1_rse.rndx) begin
-			if (dram1_id==agen1_rse.rndx)
+			if (dram1_work.rndx==agen1_rse.rndx)
 				dram1_stomp <= TRUE;
 		end
 	end
@@ -7541,7 +7542,7 @@ input rob_ndx_t id;
 input can;
 integer n18r, n18c;
 begin
-	for (n18 = 0; n18r < Qupls4_pkg::LSQ_ENTRIES; n18r = n18r + 1) begin
+	for (n18r = 0; n18r < Qupls4_pkg::LSQ_ENTRIES; n18r = n18r + 1) begin
 		for (n18c = 0; n18c < 2; n18c = n18c + 1) begin
 			if (lsq[n18r][n18c].rndx==id && lsq[n18r][n18c].v==VAL) begin
 				lsq[n18r][n18c].v <= INV;
@@ -7551,9 +7552,9 @@ begin
 				lsq[n18r][n18c].load <= FALSE;
 				// It is possible that a load operation already in progress got
 				// cancelled.
-				if (dram0_id==lsq[n18r][n18c].rndx)
+				if (dram0_work.rndx==lsq[n18r][n18c].rndx)
 					dram0_stomp <= TRUE;
-				if (Qupls4_pkg::NDATA_PORTS > 1 && dram0_id==lsq[n18r][n18c].rndx)
+				if (Qupls4_pkg::NDATA_PORTS > 1 && dram0_work.rndx==lsq[n18r][n18c].rndx)
 					dram1_stomp <= TRUE;
 				if (can)
 					cpu_request_cancel[lsq[n18r][n18c].rndx] <= 1'b1;
@@ -7624,68 +7625,12 @@ begin
 	ip_asid <= 16'd0;
 	atom_mask <= 32'd0;
 //	postfix_mask <= 'd0;
-	dram_exc0 <= Qupls4_pkg::FLT_NONE;
-	dram_exc1 <= Qupls4_pkg::FLT_NONE;
 	dram0_stomp <= 32'd0;
-	dram0_vaddr <= 64'd0;
-	dram0_paddr <= 64'd0;
-	dram0_data <= 512'd0;
-	dram0_ctago <= 1'b0;
-	dram0_exc <= Qupls4_pkg::FLT_NONE;
-	dram0_id <= 5'd0;
-	dram0_load <= 1'd0;
-	dram0_loadz <= 1'd0;
-	dram0_cload <= 1'd0;
-	dram0_cload_tags <= 1'd0;
-	dram0_store <= 1'd0;
-	dram0_cstore <= 1'd0;
-	dram0_aldf <= 1'b0;
-	dram0_astf <= 1'b0;
-	dram0_erc <= 1'd0;
-	dram0_op <= Qupls4_pkg::OP_NOP;
-	dram0_pc <= RSTPC;
-	dram0_Rt <= 8'd0;
-	dram0_tid <= 13'd0;
-	dram0_hi <= 1'd0;
-	dram0_shift <= 1'd0;
-	dram0_tocnt <= 12'd0;
 	dram0_idv <= INV;
 	dram0_idv2 <= INV;
-	dram0_cp <= 4'd0;
 	dram0_ldip <= FALSE;
 	dram1_stomp <= 32'd0;
-	dram1_vaddr <= 64'd0;
-	dram1_paddr <= 64'd0;
-	dram1_data <= 512'd0;
-	dram1_ctago <= 1'b0;
-	dram1_exc <= Qupls4_pkg::FLT_NONE;
-	dram1_id <= 5'd0;
-	dram1_load <= 1'd0;
-	dram1_loadz <= 1'd0;
-	dram1_cload <= 1'd0;
-	dram1_cload_tags <= 1'd0;
-	dram1_store <= 1'd0;
-	dram1_cstore <= 1'd0;
-	dram1_erc <= 1'd0;
-	dram1_op <= Qupls4_pkg::OP_NOP;
-	dram1_pc <= RSTPC;
-	dram1_Rt <= 8'd0;
-	dram1_tid <= 8'h08;
-	dram1_hi <= 1'd0;
-	dram1_shift <= 1'd0;
-	dram1_tocnt <= 12'd0;
 	dram1_idv <= INV;
-	dram1_cp <= 4'd0;
-	dram_v0 <= 1'd0;
-	dram_v1 <= 1'd0;
-	dram_Rt0 <= 9'd0;
-	dram_Rt1 <= 9'd0;
-	dram_bus0 <= 64'd0;
-	dram_bus1 <= 64'd0;
-	dram_ctag0 <= 1'b0;
-	dram_ctag1 <= 1'b0;
-	dram0_argD <= 64'd0;
-	dram1_argD <= 64'd0;
 	panic <= `PANIC_NONE;
 	for (n14 = 0; n14 < Qupls4_pkg::ROB_ENTRIES; n14 = n14 + 1) begin
 		rob[n14] <= {$bits(Qupls4_pkg::rob_entry_t){1'd0}};
@@ -7730,10 +7675,6 @@ begin
 	brtgtv <= INV;
 	brtgtvr <= INV;
 	mcbrtgtv <= INV;
-	dram0_aRt <= 7'd0;
-	dram1_aRt <= 7'd0;
-	dram0_aRtz <= TRUE;
-	dram1_aRtz <= TRUE;
 //	fcu_argC <= 'd0;
 	/*
 	for (n11 = 0; n11 < Qupls4_pkg::NDATA_PORTS; n11 = n11 + 1) begin

@@ -1350,11 +1350,11 @@ typedef struct packed
 typedef struct packed
 {
 	logic v;
-	aregno_t aRn;
+	cpu_types_pkg::aregno_t aRn;
 	logic aRnz;
-	pregno_t pRn;
+	cpu_types_pkg::pregno_t pRn;
 	flags_t flags;
-	value_t val;
+	cpu_types_pkg::value_t val;
 } operand_t;
 
 
@@ -1559,17 +1559,20 @@ typedef struct packed
 	operand_t oper;
 	operating_mode_t om;
 	cause_code_t exc;
-	checkpt_ndx_t cndx;
-	rob_ndx_t rndx;
+	cpu_types_pkg::checkpt_ndx_t cndx;
+	cpu_types_pkg::rob_ndx_t rndx;
 } dram_oper_t;
 
 typedef struct packed
 {
 	logic v;
 	cause_code_t exc;
-	rob_ndx_t rndx;
+	operating_mode_t om;
+	cpu_types_pkg::rob_ndx_t rndx;
 	logic rndxv;
-	aregno_t aRd;
+	cpu_types_pkg::checkpt_ndx_t cndx;
+	cpu_types_pkg::aregno_t pRd;
+	cpu_types_pkg::aregno_t aRd;
 	logic aRdz;
 	logic bank;
 	micro_op_t op;
@@ -1585,16 +1588,17 @@ typedef struct packed
 	logic [79:0] sel;
 	logic [79:0] selh;
 	cpu_types_pkg::virtual_address_t vaddr;
+	cpu_types_pkg::virtual_address_t vaddrh;
 	cpu_types_pkg::physical_address_t paddr;
 	cpu_types_pkg::physical_address_t paddrh;
 	logic [767:0] data;
 	logic [767:0] datah;
 	logic [8:0] shift;
-	logic ctago;
+	logic ctag;
 	memsz_t memsz;
-	fta_bus_pkg::tranid_t tid;
+	fta_bus_pkg::fta_tranid_t tid;
 	logic [11:0] tocnt;
-}	dram_t;
+}	dram_work_t;
 
 typedef struct packed
 {

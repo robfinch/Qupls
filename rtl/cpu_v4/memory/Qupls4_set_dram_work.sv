@@ -32,6 +32,7 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
+// 2300 LUTs / 1200 FFs
 // ============================================================================
 
 import const_pkg::*;
@@ -41,6 +42,7 @@ module Qupls4_set_dram_work(rst_i, clk_i, rob_i, stomp_i, vb_i, lsndxv_i,
 	dram_state_i, dram_done_i, dram_more_i, dram_idv_i, dram_idv2_i, dram_ack_i,
 	dram_stomp_i, cpu_dat_i, lsq_i, dram_oper_o, dram_work_o
 );
+parameter CORENO = 6'd1;
 input rst_i;
 input clk_i;
 input Qupls4_pkg::rob_entry_t [ROB_ENTRIES-1:0] rob_i;
@@ -62,12 +64,14 @@ output dram_work_t dram_work_o;
 
 always_ff @(posedge clk_i)
 if (rst_i) begin
-	dram_oper_o <= {$bits(dram_oper_t){1'b0}};
-	dram_work_o <= {$bits(dram_work_t){1'b0}};
+	dram_oper_o <= {$bits(Qupls4_pkg::dram_oper_t){1'b0}};
+	dram_work_o <= {$bits(Qupls4_pkg::dram_work_t){1'b0}};
+	dram_oper_o.exc <= Qupls4_pkg::FLT_NONE;
+	dram_oper_o.oper.aRnz <= TRUE;
 end
 else begin
 	
-	if (dram_done) begin
+	if (dram_done_i) begin
 		dram_work_o.load <= FALSE;
 		dram_work_o.loadz <= FALSE;
 		dram_work_o.cload <= FALSE;
@@ -82,7 +86,7 @@ else begin
 
 	if (Qupls4_pkg::SUPPORT_BUS_TO) begin
 		// Increment timeout counters while memory access is taking place.
-		if (dram_state==Qupls4_pkg::DRAMSLOT_ACTIVE)
+		if (dram_state_i==Qupls4_pkg::DRAMSLOT_ACTIVE)
 			dram_work_o.tocnt <= dram_work_o.tocnt + 2'd1;
 
 		// Bus timeout logic
@@ -105,7 +109,7 @@ else begin
     dram_oper_o.exc <= dram_work_o.exc;
   	dram_oper_o.oper.val <= Qupls4_pkg::fnDati(1'b0,dram_work_o.op,(cpu_dat_i << dram_work_o.shift)|dram_oper_o.val, dram_work_o.pc);
   	dram_oper_o.oper.flags <= dram_work_o.flags;
-    if (dram0_store) begin
+    if (dram_work_o.store) begin
     	dram_work_o.store <= 1'd0;
     	dram_work_o.sel <= 80'd0;
   	end
@@ -118,11 +122,11 @@ else begin
 	end
 	else if (dram_state_i == Qupls4_pkg::DRAMSLOT_ACTIVE && dram_ack_i) begin
 		// If there is more to do, trigger a second instruction issue.
-    dram_oper_o.oper.v <= (dram_work_o.load|dram_work_o.cload|dram_work_o.cload_tags) & ~dram_more_i & ~dram_stomp;
+    dram_oper_o.oper.v <= (dram_work_o.load|dram_work_o.cload|dram_work_o.cload_tags) & ~dram_more_i & ~dram_stomp_i;
     dram_oper_o.rndx <= dram_work_o.rndx;
-    dram_oper_o.oper.pRd <= dram_work_o.pRd;
-    dram_oper_o.oper.aRd <= dram_work_o.aRd;
-    dram_oper_o.oper.aRdz <= dram_work_o.aRdz;
+    dram_oper_o.oper.pRn <= dram_work_o.pRd;
+    dram_oper_o.oper.aRn <= dram_work_o.aRd;
+    dram_oper_o.oper.aRnz <= dram_work_o.aRdz;
     dram_oper_o.om <= dram_work_o.om;
     dram_oper_o.cndx <= dram_work_o.cndx;
     dram_oper_o.exc <= dram_work_o.exc;
@@ -139,12 +143,12 @@ else begin
     	$display("m[%h] <- %h", dram_work_o.vaddr, dram_work_o.data);
 	end
 	else
-		dram_oper.oper.v <= INV;
+		dram_oper_o.oper.v <= INV;
 
 	// If just performing a virtual to physical translation....
 	// This is done only on port #0
-	if (lsq.v2p && lsq.v) begin
-		if (lsq.vpa) begin
+	if (lsq_i.v2p && lsq_i.v) begin
+		if (lsq_i.vpa) begin
 			dram_oper_o.oper.val <= lsq_i.adr;
 			dram_oper_o.oper.flags <= lsq_i.flags;
 			dram_oper_o.oper.pRn <= lsq_i.Rt;
@@ -155,7 +159,7 @@ else begin
 		end
 	end
 	else if (Qupls4_pkg::SUPPORT_LOAD_BYPASSING && vb_i) begin
-		dram_oper_o.oper.val <= Qupls4_pkg::fnDati(1'b0,dram0_op,lsq_i.res,dram0_pc);
+		dram_oper_o.oper.val <= Qupls4_pkg::fnDati(1'b0,dram_work_o.op,lsq_i.res,dram_work_o.pc);
 		dram_oper_o.flags <= lsq_i.flags;
 		dram_oper_o.oper.pRd <= lsq_i.Rt;
 		dram_oper_o.oper.v <= lsq_i.v;
@@ -165,9 +169,9 @@ else begin
 	end
   else if (dram_state_i == Qupls4_pkg::DRAMSLOT_AVAIL && lsndxv_i && !stomp_i[lsq_i.rndx] && !dram_idv_i && !dram_idv2_i) begin
 		dram_work_o.exc <= Qupls4_pkg::FLT_NONE;
-		dram_work_o.stomp <= FALSE;
 		dram_work_o.rndx <= lsq_i.rndx;
 		dram_work_o.rndxv <= VAL;
+		dram_work_o.om <= lsq_i.om;
 		dram_work_o.op <= lsq_i.op;
 //		dram0_ldip <= rob[lsq[mem0_lsndx.row][mem0_lsndx.col].rndx].excv;
 		dram_work_o.pc <= lsq_i.pc;
@@ -177,14 +181,14 @@ else begin
 		dram_work_o.cload_tags <= lsq_i.cload_tags;
 		dram_work_o.store <= lsq_i.store;
 		dram_work_o.cstore <= lsq_i.cstore;
-		dram_work_o.erc <= rob[lsq_i.rndx].decbus.erc;
+		dram_work_o.erc <= rob_i[lsq_i.rndx].decbus.erc;
 		dram_work_o.pRd	<= lsq_i.Rt;
 		dram_work_o.aRd	<= lsq_i.aRt;
 		dram_work_o.aRdz <= lsq_i.aRtz;
 		dram_work_o.om <= lsq_i.om;
 		dram_work_o.bank <= lsq_i.om==2'd0 ? 1'b0 : 1'b1;
 		dram_work_o.cndx <= rob_i[lsq_i.rndx].cndx;
-		if (dram_more && Qupls4_pkg::SUPPORT_UNALIGNED_MEMORY) begin
+		if (dram_more_i && Qupls4_pkg::SUPPORT_UNALIGNED_MEMORY) begin
 			dram_work_o.hi <= 1'b1;
 			dram_work_o.sel <= dram0_work_o.selh >> 8'd64;
 			dram_work_o.vaddr <= {dram0_work_o.vaddrh[$bits(virtual_address_t)-1:6] + 2'd1,6'h0};
@@ -202,13 +206,13 @@ else begin
 			dram_work_o.paddrh <= lsq_i.adr;
 			dram_work_o.data <= lsq_i.res << {lsq_i.adr[5:0],3'b0};
 			dram_work_o.datah <= lsq_i.res << {lsq_i.adr[5:0],3'b0};
-			dram_work_o.ctago <= lsq_i.flags.cap;
+			dram_work_o.ctag <= lsq_i.flags.cap;
 			dram_work_o.shift <= {lsq_i.adr[5:0],3'd0};
 		end
 		dram_work_o.memsz <= Qupls4_pkg::fnMemsz(rob_i[lsq_i.rndx].op);
 		dram_work_o.tid.core <= CORENO;
 		dram_work_o.tid.channel <= 3'd1;
-		dram_work_o.tid.tranid <= dram_work_tid.tranid + 2'd1;
+		dram_work_o.tid.tranid <= dram_work_o.tid.tranid + 2'd1;
     dram_work_o.tocnt <= 12'd0;
   end
 end
