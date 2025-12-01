@@ -49,16 +49,15 @@ parameter SIM = 1'b0;
 // Comment out to remove the sigmoid approximate function
 //`define SIGMOID	1
 
-// Number of architectural registers there are in the core, including registers
-// not visible in the programming model. Includes all operating modes.
-`define NREGS	163
-
 // Number of physical registers supporting the architectural ones and used in
 // register renaming. There must be significantly more physical registers than
 // architectural ones, or performance will suffer due to stalls.
 // Must be a multiple of four. If it is not 512 or 256 then the renamer logic will
 // need to be modified.
-parameter PREGS = 512;
+parameter PREGS = 256;
+
+// Number of operands (including destination) a micro-op can have.
+parameter NOPER = 4;
 
 // Length of a vector register in bits.
 parameter VLEN = 256;
@@ -157,15 +156,12 @@ parameter PRED_SHADOW = 4;
 parameter SUPPORT_UNALIGNED_MEMORY = 1'b0;
 parameter SUPPORT_BUS_TO = 1'b0;
 
-// This parameter adds support for capabilities. Increases the size of the core.
-// An FPU must also be enabled.
-parameter SUPPORT_CAPABILITIES = 1'b0;
-
 // This parameter enables support for quad (128-bit) precision operations.
 parameter SUPPORT_QUAD_PRECISION = 1'b0;
 
 // Supporting load bypassing may improve performance, but will also increase the
 // size of the core and make it more vulnerable to security attacks.
+// Loads are bypassed only when there is an exact match to a store.
 parameter SUPPORT_LOAD_BYPASSING = 1'b0;
 
 // Support mutiple precisions for SAU and FPU operations. If not supported only
@@ -173,17 +169,17 @@ parameter SUPPORT_LOAD_BYPASSING = 1'b0;
 // considerable size to the SAU / FPU. Eg. 5x larger.
 parameter SUPPORT_PREC = 1'b0;
 
-// Support for vector operations.
-parameter SUPPORT_VECTOR = 1'b1;
-
 // Support for NaN tracing
 parameter SUPPORT_NAN_TRACE = 1'b0;
+
+// Support insertion of IRQ polling instructions into the micro-op stream.
+parameter SUPPORT_IRQ_POLLING = 1'b0;
 
 // The following controls the size of the reordering buffer.
 // Setting ROB_ENTRIES below 12 may not work. Setting the number of entries over
 // 63 may require changing the sequence number type. For ideal construction 
 // should be a multiple of four.
-parameter ROB_ENTRIES = 32;
+parameter ROB_ENTRIES = 16;
 
 // Number of entries supporting block operate instructions.
 parameter BEB_ENTRIES = 4;
@@ -199,14 +195,18 @@ parameter SCHED_WINDOW_SIZE = 8;
 // will result if there are insufficient checkpoints for the number of
 // outstanding branches. More checkpoints will only consume resources without
 // improving performance significantly.
-parameter NCHECK = 16;			// number of checkpoints
+parameter NCHECK = 8;			// number of checkpoints
 
 parameter LOADQ_ENTRIES = 8;
 parameter STOREQ_ENTRIES = 8;
 parameter LSQ_ENTRIES = 8;
 parameter LSQ2 = 1'b0;			// Queue two LSQ entries at once?
 
-parameter NREGS = `NREGS;
+// Number of architectural registers including registers to support vector
+// operations. Each vector register needs four registers.
+parameter NREGS = 64;
+parameter AREGS = 64;
+parameter REGFILE_LATENCY = 2;
 
 parameter pL1CacheLines = `L1CacheLines;
 parameter pL1LineSize = `L1CacheLineSize;
@@ -218,16 +218,36 @@ parameter pL1Imsb = $clog2(`L1ICacheLines-1)-1+6;
 parameter pL1ICacheWays = `L1ICacheWays;
 parameter pL1DCacheWays = `L1DCacheWays;
 
-parameter AREGS = `NREGS;
-parameter REGFILE_LATENCY = 2;
 parameter INSN_LEN = 8'd4;
 
 const cpu_types_pkg::pc_address_t RSTPC	= 32'hFFFFFD80;
 const cpu_types_pkg::address_t RSTSP = 32'hFFFF9000;
 
+
+// =============================================================================
+// Instruction Support
+// =============================================================================
+
+// This parameter adds support for capabilities instructions. Increases the
+// size of the core. An FPU must also be enabled.
+parameter SUPPORT_CAPABILITIES = 1'b0;
+
+// Support for vector operations.
+parameter SUPPORT_VECTOR = 1'b0;
+
+parameter SUPPORT_IDIV = 1;
+parameter SUPPORT_TRIG = 0;
+parameter SUPPORT_FDP = 0;
+
 // =============================================================================
 // Resources
 // =============================================================================
+
+// Number of register read ports. More ports allows more simultaneous reads
+// (obvious) and may increase performance. However, most instructions will
+// have two or fewer arguments, and allowing for four instructions at once
+// means an average of eight ports per cycle.
+parameter NREG_RPORTS = 12;
 
 // Number of data ports should be 1 or 2. 2 ports will allow two simulataneous
 // reads, but still only a single write.
@@ -244,8 +264,6 @@ parameter NFPU = 1;			// 0 or 1
 parameter NFMA = 1;			// 0, 1 or 2
 parameter NDFPU = 0;		// 0 or 1
 parameter NLSQ_PORTS = 1;
-parameter SUPPORT_IDIV = 1;
-parameter SUPPORT_TRIG = 1;
 
 parameter RAS_DEPTH	= 4;
 
@@ -298,6 +316,7 @@ typedef enum logic [2:0] {
 
 typedef struct packed
 {
+	logic vb;									// valid bypass
 	logic [2:0] row;
 	logic col;
 } lsq_ndx_t;
@@ -681,7 +700,8 @@ typedef enum logic [3:0] {
 	CND_NAND = 4'd8,
 	CND_AND = 4'd9,
 	CND_NOR = 4'd10,
-	CND_OR = 4'd11
+	CND_OR = 4'd11,
+	CND_BOI = 4'd15
 } cnd_e;
 
 parameter NOP_INSN = {26'd0,OP_NOP};
@@ -1327,6 +1347,17 @@ typedef struct packed
 //	logic [7:0] ecc;	// error correcting bits
 } flags_t;
 
+typedef struct packed
+{
+	logic v;
+	aregno_t aRn;
+	logic aRnz;
+	pregno_t pRn;
+	flags_t flags;
+	value_t val;
+} operand_t;
+
+
 // Holds the sizes of lanes for vector operations.
 
 typedef struct packed
@@ -1438,6 +1469,7 @@ typedef struct packed
 	logic pbr;
 	logic ret;
 	logic brk;
+	logic boi;
 	logic irq;
 	logic eret;
 	logic rex;
@@ -1524,6 +1556,48 @@ typedef struct packed {
 
 typedef struct packed
 {
+	operand_t oper;
+	operating_mode_t om;
+	cause_code_t exc;
+	checkpt_ndx_t cndx;
+	rob_ndx_t rndx;
+} dram_oper_t;
+
+typedef struct packed
+{
+	logic v;
+	cause_code_t exc;
+	rob_ndx_t rndx;
+	logic rndxv;
+	aregno_t aRd;
+	logic aRdz;
+	logic bank;
+	micro_op_t op;
+	cpu_types_pkg::pc_address_t pc;
+	logic load;
+	logic loadz;
+	logic cload;
+	logic cload_tags;
+	logic store;
+	logic cstore;
+	logic erc;
+	logic hi;
+	logic [79:0] sel;
+	logic [79:0] selh;
+	cpu_types_pkg::virtual_address_t vaddr;
+	cpu_types_pkg::physical_address_t paddr;
+	cpu_types_pkg::physical_address_t paddrh;
+	logic [767:0] data;
+	logic [767:0] datah;
+	logic [8:0] shift;
+	logic ctago;
+	memsz_t memsz;
+	fta_bus_pkg::tranid_t tid;
+	logic [11:0] tocnt;
+}	dram_t;
+
+typedef struct packed
+{
 	logic v;
 	logic rstp;								// indicate physical register reset required
 	cpu_types_pkg::pc_address_t brtgt;
@@ -1575,6 +1649,8 @@ typedef struct packed
 {
 	logic v;														// group header is valid
 	cpu_types_pkg::seqnum_t sn;					// sequence number, decrements when instructions que
+	cpu_types_pkg::seqnum_t irq_sn;			// sequence number, increments for each interrupt
+	reg [5:0] old_ipl;
 	logic hwi;													// hardware interrupt occured during fetch
 	irq_info_packet_t irq;							// the level of the hardware interrupt
 	logic cndxv;												// checkpoint index is valid
@@ -1598,6 +1674,7 @@ typedef struct packed {
 	logic busy;
 	logic ready;
 	logic [3:0] funcunit;							// functional unit dispatched to
+	cpu_types_pkg::seqnum_t irq_sn;
 	cpu_types_pkg::rob_ndx_t rndx;		// associated ROB entry
 	cpu_types_pkg::checkpt_ndx_t cndx;
 	micro_op_t uop;
@@ -1627,39 +1704,9 @@ typedef struct packed {
 	fround_t rm;										// needed for float-ops
 	cpu_types_pkg::pc_address_t pc;
 //	logic [63:0] pch;
-	cpu_types_pkg::value_pair_t argA;
-	cpu_types_pkg::value_pair_t argB;
-	cpu_types_pkg::value_pair_t argC;
-	cpu_types_pkg::value_pair_t argD;
-	cpu_types_pkg::value_pair_t argT;
 	cpu_types_pkg::value_t argI;
-	/*
-	cpu_types_pkg::value_t argAh;
-	cpu_types_pkg::value_t argBh;
-	cpu_types_pkg::value_t argCh;
-	cpu_types_pkg::value_t argDh;
-	*/
-	flags_t tagA;
-	flags_t tagB;
-	flags_t tagC;
-	flags_t tagD;
-	flags_t tagT;
-	logic argA_v;
-	logic argB_v;
-	logic argC_v;
-	logic argD_v;
-	logic argT_v;
-	logic argAH_v;
-	logic argBH_v;
-	logic argCH_v;
-	logic argDH_v;
-	logic argTH_v;
-	/*
-	logic argAh_v;
-	logic argBh_v;
-	logic argCh_v;
-	logic argDh_v;
-	*/
+	operand_t [NOPER-1:0] arg;
+	operand_t [NOPER-1:0] argH;			// high order 64-bits of 128-bit arg
 } reservation_station_entry_t;
 
 typedef struct packed {

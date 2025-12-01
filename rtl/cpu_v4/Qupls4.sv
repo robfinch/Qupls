@@ -837,95 +837,21 @@ Qupls4_pkg::dram_state_t dram1;	// state of the DRAM request
 reg [255:0] storeflags_buf;
 reg [255:0] loadflags_buf;
 
-value_t dram_bus0;
-reg dram_ctag0;
-Qupls4_pkg::regspec_t dram_tgt0;
-reg  [4:0] dram_id0;
-Qupls4_pkg::cause_code_t dram_exc0;
-reg        dram_v0;
-checkpt_ndx_t dram_cp0;
-value_t dram_bus1;
-reg dram_ctag1;
-Qupls4_pkg::regspec_t dram_tgt1;
-reg  [4:0] dram_id1;
-Qupls4_pkg::cause_code_t dram_exc1;
-reg        dram_v1;
-checkpt_ndx_t dram_cp1;
+Qupls4_pkg::dram_work_t dram0_work, dram1_work;
+Qupls4_pkg::dram_oper_t dram0_oper, dram1_oper;
 
-reg [767:0] dram0_data, dram0_datah;
-reg dram0_ctag;
-reg dram0_ctago;
-virtual_address_t dram0_vaddr, dram0_vaddrh;
-physical_address_t dram0_paddr, dram0_paddrh;
-reg [79:0] dram0_sel, dram0_selh;
-Qupls4_pkg::ex_instruction_t dram0_op;
-Qupls4_pkg::memsz_t dram0_memsz;
-rob_ndx_t dram0_id;
-reg dram0_stomp;
-reg dram0_load;
-reg dram0_loadz;
-reg dram0_cload;
-reg dram0_cload_tags;
-reg dram0_store;
-reg dram0_cstore;
-reg dram0_aldf;
-reg dram0_astf;
-pregno_t dram0_Rt, dram_Rt0;
-aregno_t dram0_aRt, dram_aRt0;
-aregno_t dram0_aRtA2, dram0_aRtB2;
-Qupls4_pkg::operating_mode_t dram0_om, dram_om0;
-reg dram0_aRtz, dram_aRtz0;
-reg dram0_bank;
-Qupls4_pkg::cause_code_t dram0_exc;
+reg  [4:0] dram_id0;
+reg  [4:0] dram_id1;
 reg dram0_ack;
-fta_tranid_t dram0_tid;
-wire dram0_more;
-reg dram0_hi;
-reg dram0_erc;
-reg [9:0] dram0_shift;
-reg [11:0] dram0_tocnt;
 wire dram0_done;
 reg dram0_idv;
-checkpt_ndx_t dram0_cp;
 value_t dram0_argD;
-pc_address_t dram0_pc;
 reg dram0_ldip;
 
-reg [639:0] dram1_data, dram1_datah;
-reg dram1_ctag;
-reg dram1_ctago;
-virtual_address_t dram1_vaddr, dram1_vaddrh;
-physical_address_t dram1_paddr, dram1_paddrh;
-reg [79:0] dram1_sel, dram1_selh;
-Qupls4_pkg::ex_instruction_t dram1_op;
-Qupls4_pkg::memsz_t dram1_memsz;
-rob_ndx_t dram1_id;
-reg dram1_stomp;
-reg dram1_load;
-reg dram1_loadz;
-reg dram1_cload;
-reg dram1_cload_tags;
-reg dram1_store;
-reg dram1_cstore;
-pregno_t dram1_Rt, dram_Rt1;
-aregno_t dram1_aRt, dram_aRt1;
-aregno_t dram1_aRtA2, dram1_aRtB2;
-Qupls4_pkg::operating_mode_t dram1_om, dram_om1;
-reg dram1_aRtz, dram_aRtz1;
-reg dram1_bank;
-Qupls4_pkg::cause_code_t dram1_exc;
 reg dram1_ack;
-fta_tranid_t dram1_tid;
-wire dram1_more;
-reg dram1_erc;
-reg dram1_hi;
-reg [9:0] dram1_shift;
-reg [11:0] dram1_tocnt;
 wire dram1_done;
 reg dram1_idv;
-checkpt_ndx_t dram1_cp;
 value_t dram1_argD;
-pc_address_t dram1_pc;
 
 reg [2:0] dramN [0:Qupls4_pkg::NDATA_PORTS-1];
 reg [511:0] dramN_data [0:Qupls4_pkg::NDATA_PORTS-1];
@@ -3564,19 +3490,19 @@ Qupls4_func_result_queue ufrq7
 Qupls4_pkg::reservation_station_entry_t dram0_rse;
 always_comb
 begin
-	dram0_rse.aRd = dram_aRt0;
-	dram0_rse.nRd = dram_Rt0;
-	dram0_rse.rndx = dram_id0;
-	dram0_rse.cndx = dram_cp0;
+	dram0_rse.aRd = dram0_oper.aRd;
+	dram0_rse.nRd = dram0_oper.pRd;
+	dram0_rse.rndx = dram0_oper.rndx;
+	dram0_rse.cndx = dram0_oper.cndx;
 end
 
 Qupls4_pkg::reservation_station_entry_t dram1_rse;
 always_comb
 begin
-	dram1_rse.aRd = dram_aRt1;
-	dram1_rse.nRd = dram_Rt1;
-	dram1_rse.rndx = dram_id1;
-	dram1_rse.cndx = dram_cp1;
+	dram1_rse.aRd = dram1_oper.aRd;
+	dram1_rse.nRd = dram1_oper.pRd;
+	dram1_rse.rndx = dram1_oper.rndx;
+	dram1_rse.cndx = dram1_oper.cndx;
 end
 
 Qupls4_func_result_queue ufrq10
@@ -3584,10 +3510,10 @@ Qupls4_func_result_queue ufrq10
 	.rst_i(irst),
 	.clk_i(clk),
 	.rd_i(fuq_rd[10]),
-	.we_i(dram0_we & {9{dram_v0}}),
+	.we_i(dram0_we & {9{dram0_oper.oper.v}}),
 	.rse_i(dram0_rse),
-	.tag_i({7'd0,dram0_ctagA2}),
-	.res_i(dram_bus0),
+	.tag_i(dram0_oper.oper.flags),
+	.res_i(dram0_oper.oper.val),
 	.we_o(fuq_we[10]),
 	.pRt_o(fuq_pRt[10]),
 	.aRt_o(fuq_aRt[10]),
@@ -3605,10 +3531,10 @@ Qupls4_func_result_queue ufrq11
 	.rst_i(irst),
 	.clk_i(clk),
 	.rd_i(fuq_rd[11]),
-	.we_i(dram1_we & {9{dram_v1}}),
+	.we_i(dram1_we & {9{dram1_oper.oper.v}}),
 	.rse_i(dram1_rse),
-	.tag_i({7'd0,dram1_ctagA2}),
-	.res_i(dram_bus1),
+	.tag_i(dram1_oper.oper.flags),
+	.res_i(dram1_oper.oper.val),
 	.we_o(fuq_we[11]),
 	.pRt_o(fuq_pRt[11]),
 	.aRt_o(fuq_aRt[11]),
@@ -4655,41 +4581,41 @@ endgenerate
 always_comb
 begin
 	dramN[0] = dram0;
-	dramN_id[0] = dram0_id;
-	dramN_paddr[0] = dram0_paddr;
-	dramN_vaddr[0] = dram0_vaddr;
-	dramN_data[0] = dram0_data[511:0];
-	dramN_ctago[0] = dram0_ctago;
-	dramN_sel[0] = dram0_sel[63:0];
-	dramN_store[0] = dram0_store;
-	dramN_cstore[0] = dram0_cstore;
-	dramN_erc[0] = dram0_erc;
-	dramN_load[0] = dram0_load;
-	dramN_loadz[0] = dram0_loadz;
-	dramN_cload[0] = dram0_cload;
-	dramN_cload_tags[0] = dram0_cload_tags;
-	dramN_memsz[0] = dram0_memsz;
-	dramN_tid[0] = dram0_tid;
+	dramN_id[0] = dram0_work.rndx;
+	dramN_paddr[0] = dram0_work.paddr;
+	dramN_vaddr[0] = dram0_work.vaddr;
+	dramN_data[0] = dram0_work.data[511:0];
+	dramN_ctago[0] = dram0_work.ctago;
+	dramN_sel[0] = dram0_work.sel[63:0];
+	dramN_store[0] = dram0_work.store;
+	dramN_cstore[0] = dram0_work.cstore;
+	dramN_erc[0] = dram0_work.erc;
+	dramN_load[0] = dram0_work.load;
+	dramN_loadz[0] = dram0_work.loadz;
+	dramN_cload[0] = dram0_work.cload;
+	dramN_cload_tags[0] = dram0_work.cload_tags;
+	dramN_memsz[0] = dram0_work.memsz;
+	dramN_tid[0] = dram0_work.tid;
 	dram0_ack = dramN_ack[0];
 	dram0_ctag = dramN_ctago[0];
 
 	if (Qupls4_pkg::NDATA_PORTS > 1) begin
 		dramN[1] = dram1;
 		dramN_id[1] = dram1_id;
-		dramN_vaddr[1] = dram1_vaddr;
-		dramN_paddr[1] = dram1_paddr;
-		dramN_data[1] = dram1_data[511:0];
-		dramN_ctago[1] = dram1_ctag;
-		dramN_sel[1] = dram1_sel[63:0];
-		dramN_store[1] = dram1_store;
-		dramN_cstore[1] = dram1_cstore;
-		dramN_erc[1] = dram1_erc;
-		dramN_load[1] = dram1_load;
-		dramN_loadz[1] = dram1_loadz;
-		dramN_cload[1] = dram1_cload;
-		dramN_cload_tags[1] = dram1_cload_tags;
-		dramN_memsz[1] = dram1_memsz;
-		dramN_tid[1] = dram1_tid;
+		dramN_vaddr[1] = dram1_work.vaddr;
+		dramN_paddr[1] = dram1_work.paddr;
+		dramN_data[1] = dram1_work.data[511:0];
+		dramN_ctago[1] = dram1_work.ctag;
+		dramN_sel[1] = dram1_work.sel[63:0];
+		dramN_store[1] = dram1_work.store;
+		dramN_cstore[1] = dram1_work.cstore;
+		dramN_erc[1] = dram1_work.erc;
+		dramN_load[1] = dram1_work.load;
+		dramN_loadz[1] = dram1_work.loadz;
+		dramN_cload[1] = dram1_work.cload;
+		dramN_cload_tags[1] = dram1_work.cload_tags;
+		dramN_memsz[1] = dram1_work.memsz;
+		dramN_tid[1] = dram1_work.tid;
 		dram1_ack = dramN_ack[1];
 		dram1_ctag = dramN_ctago[1];
 	end
@@ -4891,7 +4817,7 @@ input Qupls4_pkg::lsq_ndx_t lsndx;
 integer n15r,n15c;
 seqnum_t stsn;
 begin
-	fnLoadBypassIndex = -1;
+	fnLoadBypassIndex = 0;
 	stsn = 8'hFF;
 	for (n15r = 0; n15r < Qupls4_pkg::LSQ_ENTRIES; n15r = n15r + 1) begin
 		for (n15c = 0; n15c < 2; n15c = n15c + 1) begin
@@ -4909,6 +4835,7 @@ begin
 			 	stsn = lsq[n15r][n15c].sn;
 			 	fnLoadBypassIndex.row = n15r;
 			 	fnLoadBypassIndex.col = n15c;
+			 	fnLoadBypassIndex.vb = VAL;
 			end
 		end
 	end
@@ -4928,23 +4855,25 @@ endfunction
 always_comb	lbndx0 = fnLoadBypassIndex(mem0_lsndx);
 always_comb lbndx1 = fnLoadBypassIndex(mem1_lsndx);
 
-reg dram0_setready;
+reg dram0_setready, dram0_setavail;
 always_comb
 begin
 	dram0_setready = FALSE;
-	if (Qupls4_pkg::SUPPORT_LOAD_BYPASSING && lbndx0 > 0)
-		;
+	dram0_setavail = FALSE;
+	if (Qupls4_pkg::SUPPORT_LOAD_BYPASSING && lbndx0.vb)
+		dram0_setavail = TRUE;
 	else if (dram0 == Qupls4_pkg::DRAMSLOT_AVAIL && mem0_lsndxv && dram0_idv)
 		dram0_setready = TRUE;
 end
 
-reg dram1_setready;
+reg dram1_setready, dram1_setavail;
 always_comb
 begin
 	dram1_setready = FALSE;
+	dram1_setavail = FALSE;
 	if (Qupls4_pkg::NDATA_PORTS > 1) begin
-		if (Qupls4_pkg::SUPPORT_LOAD_BYPASSING && lbndx1 > 0)
-			;
+		if (Qupls4_pkg::SUPPORT_LOAD_BYPASSING && lbndx1.vb)
+			dram1_setavail = TRUE;
 		else if (dram1 == Qupls4_pkg::DRAMSLOT_AVAIL && mem1_lsndxv && dram1_idv)
 			dram1_setready = TRUE;
 	end
@@ -4978,7 +4907,7 @@ Qupls4_mem_state udrst0
 	.clk_i(clk),
 	.ack_i(dram0_ack),
 	.set_ready_i(dram0_setready),
-	.set_avail_i(dram0_timeout|dram0_stomp),
+	.set_avail_i(dram0_timeout|dram0_stomp|dram0_setavail),
 	.state_o(dram0)
 );
 
@@ -4988,7 +4917,7 @@ Qupls4_mem_state udrst1
 	.clk_i(clk),
 	.ack_i(dram1_ack),
 	.set_ready_i(dram1_setready),
-	.set_avail_i(dram1_timeout|dram1_stomp),
+	.set_avail_i(dram1_timeout|dram1_stomp|dram1_setavail),
 	.state_o(dram1)
 );
 
@@ -5009,6 +4938,50 @@ Qupls_mem_more ummore1
 	.sel_i(dram1_sel),
 	.more_o(dram1_more)
 );
+
+Qupls4_set_dram_work usdr1 (
+	.rst_i(rsti),
+	.clk_i(clk),
+	.rob_i(rob),
+	.stomp_i(dram0_stomp),
+	.vb_i(lbndx0.vb),
+	.lsndxv_i(mem0_lsndxv),
+	.dram_state_i(dram0_state),
+	.dram_done_i(dram0_done),
+	.dram_more_i(dram0_more),
+	.dram_idv_i(dram0_idv),
+	.dram_idv2_i(dram0_idv2),
+	.dram_ack_i(dram0_ack),
+	.dram_stomp_i(dram0_stomp),
+	.cpu_dat_i(cpu_resp_o[0].dat),
+	.lsq_i(lbndx0.vb ? lsq[lbndx0.row][lbndx0.col] : lsq[mem0_lsndx.row][mem0_lsndx.col]),
+	.dram_oper_o(dram0_oper),
+	.dram_work_o(dram0_work)
+);
+
+generate begin : gDramWork
+	if (NDATA_PORT > 1)
+		Qupls4_set_dram_work usdr2 (
+			.rst_i(rsti),
+			.clk_i(clk),
+			.rob_i(rob),
+			.stomp_i(dram1_stomp),
+			.vb_i(lbndx1.vb),
+			.lsndxv_i(mem1_lsndxv),
+			.dram_state_i(dram1_state),
+			.dram_done_i(dram1_done),
+			.dram_more_i(dram1_more),
+			.dram_idv_i(dram1_idv),
+			.dram_idv2_i(dram1_idv2),
+			.dram_ack_i(dram1_ack),
+			.dram_stomp_i(dram1_stomp),
+			.cpu_dat_i(cpu_resp_o[1].dat),
+			.lsq_i(lbndx1.vb ? lsq[lbndx1.row][lbndx1.col] : lsq[mem1_lsndx.row][mem1_lsndx.col]),
+			.dram_oper_o(dram1_oper),
+			.dram_work_o(dram1_work)
+		);
+end
+endgenerate
 
 // -----------------------------------------------------------------------------
 // Commit stage combo logic
@@ -5140,6 +5113,7 @@ usaust0
 	.rse_i(rse),
 	.rse_o(sau0_rse),
 	.rf_oper_i(rf_oper),
+	.bypass_i(),
 	/*
 	.arn(arn),
 	.prnv(prnv),
@@ -5166,6 +5140,7 @@ uimulst0
 	.rse_i(rse),
 	.rse_o(imul0_rse),
 	.rf_oper_i(rf_oper),
+	.bypass_i(),
 	.req_pRn(bRs[2])
 );
 
@@ -5190,6 +5165,7 @@ uidivst0
 	.rse_i(rse),
 	.rse_o(idiv0_rse),
 	.rf_oper_i(rf_oper),
+	.bypass_i(),
 	.req_pRn(bRs[3])
 );
 else begin
@@ -5216,6 +5192,7 @@ generate begin : gSauStation
 			.rse_i(rse),
 			.rse_o(sau1_rse),
 			.rf_oper_i(rf_oper),
+			.bypass_i(),
 			.req_pRn(bRs[1])
 		);
 	end
@@ -5252,6 +5229,7 @@ generate begin : gFpuStat
 					.rse_i(rse),
 					.rse_o(fma0_rse),
 					.rf_oper_i(rf_oper),
+					.bypass_i(),
 					.req_pRn(bRs[4])
 				);
 				Qupls4_reservation_station #(
@@ -5271,6 +5249,7 @@ generate begin : gFpuStat
 					.rse_i(rse),
 					.rse_o(fpu0_rse),
 					.rf_oper_i(rf_oper),
+					.bypass_i(),
 					.req_pRn(bRs[12])
 				);
 			end
@@ -5292,6 +5271,7 @@ generate begin : gFpuStat
 					.rse_i(rse),
 					.rse_o(fma1_rse),
 					.rf_oper_i(rf_oper),
+					.bypass_i(),
 					.req_pRn(bRs[5])
 				);
 		endcase
@@ -5318,6 +5298,7 @@ generate begin : gDecimalFloat
 			.rse_i(rse),
 			.rse_o(dfpu0_rse),
 			.rf_oper_i(rf_oper),
+			.bypass_i(),
 			.req_pRn(bRs[13])
 		);
 	end
@@ -5341,6 +5322,7 @@ ubrast1
 	.rse_i(rse),
 	.rse_o(fcu_rse),
 	.rf_oper_i(rf_oper),
+	.bypass_i(),
 	.req_pRn(bRs[7])
 );
 
@@ -5361,6 +5343,7 @@ uagenst1
 	.rse_i(rse),
 	.rse_o(agen0_rse),
 	.rf_oper_i(rf_oper),
+	.bypass_i(),
 	.req_pRn(bRs[8])
 );
 
@@ -5403,6 +5386,7 @@ uagenst2
 	.rse_i(rse),
 	.rse_o(agen1_rse),
 	.rf_oper_i(rf_oper),
+	.bypass_i(),
 	.req_pRn(bRs[9])
 );
 else begin
@@ -5985,8 +5969,8 @@ else begin
 	// If data for stomped instruction, ignore
 	// dram_vn will be false for stomped data
 	if (dram0_done && rob[ dram0_id ].v && dram0_idv) begin
-    rob[ dram0_id ].exc <= dram_exc0;
-    rob[ dram0_id ].excv <= ~&dram_exc0;
+    rob[ dram0_id ].exc <= dram0_oper.exc;
+    rob[ dram0_id ].excv <= ~&dram0_oper.exc;
     rob[ dram0_id ].out <= {INV,INV};
     rob[ dram0_id ].done <= 2'b11;
 		dram0_idv <= INV;
@@ -5995,8 +5979,8 @@ else begin
 	end
 	if (Qupls4_pkg::NDATA_PORTS > 1) begin
 		if (dram1_done && rob[ dram1_id ].v && dram1_idv) begin
-	    rob[ dram1_id ].exc <= dram_exc1;
-	    rob[ dram1_id ].excv <= ~&dram_exc1;
+	    rob[ dram1_id ].exc <= dram1_oper.exc;
+	    rob[ dram1_id ].excv <= ~&dram1_oper.exc;
 	    rob[ dram1_id ].out <= {INV,INV};
 	    rob[ dram1_id ].done <= 2'b11;
 			dram1_idv <= INV;
@@ -6157,19 +6141,6 @@ else begin
 // -----------------------------------------------------------------------------
 // update the memory queues and put data out on bus if appropriate
 //
-	if (dram0_done) begin
-		dram0_load <= FALSE;
-		dram0_loadz <= FALSE;
-		dram0_cload <= FALSE;
-	end
-	if (Qupls4_pkg::NDATA_PORTS > 1) begin
-		if (dram1_done) begin
-			dram1_load <= FALSE;
-			dram1_loadz <= FALSE;
-			dram1_cload <= FALSE;
-		end
-	end
-
 	// Bus timeout logic.
 	// If the memory access has taken too long, then it is retried. This applies
 	// mainly to loads as stores will ack right away. Bit 8 of the counter is
@@ -6178,18 +6149,10 @@ else begin
 	// responded after 1024 clock cycles then a bus error exception is noted.
 
 	if (Qupls4_pkg::SUPPORT_BUS_TO) begin
-		// Increment timeout counters while memory access is taking place.
-		if (dram0==Qupls4_pkg::DRAMSLOT_ACTIVE)
-			dram0_tocnt <= dram0_tocnt + 2'd1;
-
-		if (Qupls4_pkg::NDATA_PORTS > 1) begin
-			if (dram1==Qupls4_pkg::DRAMSLOT_ACTIVE)
-				dram1_tocnt <= dram1_tocnt + 2'd1;
-		end
 	
 	// Bus timeout logic
 	// Reset out to trigger another access
-		if (dram0_tocnt[10]) begin
+		if (dram0_work.tocnt[10]) begin
 			if (!rob[dram0_id].excv) begin
 				rob[dram0_id].exc <= Qupls4_pkg::FLT_BERR;
 				rob[dram0_id].excv <= TRUE;
@@ -6200,13 +6163,12 @@ else begin
 			$display("Q+ set dram0_idv=INV at timeout");
 			tInvalidateLSQ(dram0_id,TRUE);
 			//lsq[rob[dram0_id].lsqndx.row][rob[dram0_id].lsqndx.col].v <= INV;
-			dram0_tocnt <= 12'd0;
 		end
-		else if (dram0_tocnt[8]) begin
+		else if (dram0_work.tocnt[8]) begin
 			rob[dram0_id].out <= {INV,INV};
 		end
 		if (Qupls4_pkg::NDATA_PORTS > 1) begin
-			if (dram1_tocnt[10]) begin
+			if (dram1_work.tocnt[10]) begin
 				if (!rob[dram1_id].excv) begin
 					rob[dram1_id].exc <= Qupls4_pkg::FLT_BERR;
 					rob[dram1_id].excv <= TRUE;
@@ -6216,111 +6178,11 @@ else begin
 				dram1_idv <= INV;
 				tInvalidateLSQ(dram1_id,TRUE);
 //				lsq[rob[dram1_id].lsqndx.row][rob[dram1_id].lsqndx.col].v <= INV;
-				dram1_tocnt <= 12'd0;
 			end
 			else if (dram1_tocnt[8]) begin
 				rob[dram1_id].out <= {INV,INV};
 			end
 		end
-	end
-
-	// grab requests that have finished and put them on the dram_bus
-	if (dram0 == Qupls4_pkg::DRAMSLOT_ACTIVE && dram0_ack && dram0_hi && Qupls4_pkg::SUPPORT_UNALIGNED_MEMORY) begin
-		dram0_hi <= 1'b0;
-    dram_v0 <= (dram0_load|dram0_cload|dram0_cload_tags|dram0_aldf) & ~dram0_stomp;
-    dram_id0 <= dram0_id;
-    dram_Rt0 <= dram0_Rt;
-    dram_aRt0 <= dram0_aRt;
-    dram_aRtz0 <= dram0_aRtz;
-    dram_om0 <= dram0_om;
-    dram_cp0 <= dram0_cp;
-    dram_exc0 <= dram0_exc;
-  	dram_bus0 <= Qupls4_pkg::fnDati(1'b0,dram0_op,(cpu_resp_o[0].dat << dram0_shift)|dram_bus0, dram0_pc);
-  	if (dram0_aldf)
-  		loadflags_buf <= (cpu_resp_o[0].dat << dram0_shift)|loadflags_buf;
-  	dram_ctag0 <= dram0_ctag;
-    if (dram0_store) begin
-    	dram0_store <= 1'd0;
-    	dram0_sel <= 80'd0;
-  	end
-    if (dram0_cstore) begin
-    	dram0_cstore <= 1'd0;
-    	dram0_sel <= 80'd0;
-  	end
-    if (dram0_store)
-    	$display("m[%h] <- %h", dram0_vaddr, dram0_data);
-	end
-	else if (dram0 == Qupls4_pkg::DRAMSLOT_ACTIVE && dram0_ack) begin
-		// If there is more to do, trigger a second instruction issue.
-		if (dram0_more && !dram0_stomp)
-			rob[dram0_id].out <= {INV,INV};
-    dram_v0 <= (dram0_load|dram0_cload|dram0_cload_tags|dram0_aldf) & ~dram0_more & ~dram0_stomp;
-    dram_id0 <= dram0_id;
-    dram_Rt0 <= dram0_Rt;
-    dram_aRt0 <= dram0_aRt;
-    dram_aRtz0 <= dram0_aRtz;
-    dram_om0 <= dram0_om;
-    dram_cp0 <= dram0_cp;
-    dram_exc0 <= dram0_exc;
-  	dram_bus0 <= Qupls4_pkg::fnDati(dram0_more,dram0_op,cpu_resp_o[0].dat >> dram0_shift, dram0_pc);
-  	if (dram0_aldf)
-  		loadflags_buf <= cpu_resp_o[0].dat >> dram0_shift;
-    if (dram0_store) begin
-    	dram0_store <= 1'd0;
-    	dram0_sel <= 80'd0;
-  	end
-    if (dram0_cstore) begin
-    	dram0_cstore <= 1'd0;
-    	dram0_sel <= 80'd0;
-  	end
-    if (dram0_store)
-    	$display("m[%h] <- %h", dram0_vaddr, dram0_data);
-	end
-	else
-		dram_v0 <= INV;
-
-	if (Qupls4_pkg::NDATA_PORTS > 1) begin
-		if (dram1 == Qupls4_pkg::DRAMSLOT_ACTIVE && dram1_ack && dram1_hi && Qupls4_pkg::SUPPORT_UNALIGNED_MEMORY) begin
-			dram1_hi <= 1'b0;
-	    dram_v1 <= (dram1_load|dram1_cload|dram1_cload_tags) & ~dram1_stomp;
-	    dram_id1 <= dram1_id;
-	    dram_Rt1 <= dram1_Rt;
-	    dram_aRt1 <= dram1_aRt;
-	    dram_aRtz1 <= dram1_aRtz;
-	    dram_om1 <= dram1_om;
-	    dram_cp1 <= dram1_cp;
-	    dram_exc1 <= dram1_exc;
-    	dram_bus1 <= Qupls4_pkg::fnDati(1'b0,dram1_op,(cpu_resp_o[1].dat << dram1_shift)|dram_bus1, dram1_pc);
-    	dram_ctag1 <= dram1_ctag;
-	    if (dram1_store) begin
-	    	dram1_store <= 1'b0;
-	    	dram1_sel <= 80'd0;
-	  	end
-	    if (dram1_store)
-	     	$display("m[%h] <- %h", dram1_vaddr, dram1_data);
-		end
-		else if (dram1 == Qupls4_pkg::DRAMSLOT_ACTIVE && dram1_ack) begin
-			// If there is more to do, trigger a second instruction issue.
-			if (dram1_more && !dram1_stomp)
-				rob[dram1_id].out <= {INV,INV};
-	    dram_v1 <= (dram1_load|dram1_cload|dram1_cload_tags) & ~dram1_more & ~dram1_stomp;
-	    dram_id1 <= dram1_id;
-	    dram_Rt1 <= dram1_Rt;
-	    dram_aRt1 <= dram1_aRt;
-	    dram_aRtz1 <= dram1_aRtz;
-	    dram_om1 <= dram1_om;
-	    dram_cp1 <= dram1_cp;
-	    dram_exc1 <= dram1_exc;
-    	dram_bus1 <= Qupls4_pkg::fnDati(dram1_more,dram1_op,cpu_resp_o[1].dat >> dram1_shift, dram1_pc);
-	    if (dram1_store) begin
-	    	dram1_store <= 1'b0;
-	    	dram1_sel <= 80'd0;
-	  	end
-	    if (dram1_store)
-	     	$display("m[%h] <- %h", dram1_vaddr, dram1_data);
-		end
-		else
-			dram_v1 <= INV;
 	end
 
 	// Take requests that are ready and put them into DRAM slots
@@ -6333,145 +6195,27 @@ else begin
 	// dramN_addr var. We can tell when to use it by the setting of the more
 	// flag.
 	
-	// If just performing a virtual to physical translation....
-	// This is done only on port #0
+
 	if (lsq[mem0_lsndx.row][mem0_lsndx.col].v2p && lsq[mem0_lsndx.row][mem0_lsndx.col].v) begin
 		if (lsq[mem0_lsndx.row][mem0_lsndx.col].vpa) begin
-			dram_bus0 <= lsq[mem0_lsndx.row][mem0_lsndx.col].adr;
-			dram_ctag0 <= lsq[mem0_lsndx.row][mem0_lsndx.col].flags.cap;
-			dram_Rt0 <= lsq[mem0_lsndx.row][mem0_lsndx.col].Rt;
-			dram_v0 <= 1'b1;
-			dram_om0 <= lsq[mem0_lsndx.row][mem0_lsndx.col].om;
-			dram_cp0 <= rob[lsq[mem0_lsndx.row][mem0_lsndx.col].rndx].cndx;
 			// Prevent multiple updates
-			lsq[mem0_lsndx.row][mem0_lsndx.col].v <= INV;
+			tInvalidateLSQ(lsq[mem0_lsndx.row][mem0_lsndx.col].rndx,FALSE);
 			rob[lsq[mem0_lsndx.row][mem0_lsndx.col].rndx].done <= 2'b11;
 		end
 	end
-	else if (Qupls4_pkg::SUPPORT_LOAD_BYPASSING && lbndx0 > 0) begin
-		// ??? dram0_bus???
-		dram_bus0 <= Qupls4_pkg::fnDati(1'b0,dram0_op,lsq[lbndx0.row][lbndx0.col].res,dram0_pc);
-		dram_ctag0 <= lsq[lbndx0.row][lbndx0.col].flags.cap;
-		dram_Rt0 <= lsq[lbndx0.row][lbndx0.col].Rt;
-		dram_v0 <= lsq[lbndx0.row][lbndx0.col].v;
-		dram_om0	<= lsq[lbndx0.row][lbndx0.col].om;
-		dram_cp0 <= rob[lsq[lbndx0.row][lbndx0.col].rndx].cndx;
-		lsq[lbndx0.row][lbndx0.col].v <= INV;
+	else if (Qupls4_pkg::SUPPORT_LOAD_BYPASSING && lbndx0.vb) begin
+		tInvalidateLSQ(lsq[lbndx0.row][lbndx0.col].rndx,FALSE);
 		rob[lsq[lbndx0.row][lbndx0.col].rndx].done <= 2'b11;
 	end
-  else if (dram0 == Qupls4_pkg::DRAMSLOT_AVAIL && mem0_lsndxv && !robentry_stomp[lsq[mem0_lsndx.row][mem0_lsndx.col].rndx] && !dram0_idv && !dram0_idv2) begin
-		dram0_exc <= Qupls4_pkg::FLT_NONE;
-		dram0_stomp <= 1'b0;
-		dram0_id <= lsq[mem0_lsndx.row][mem0_lsndx.col].rndx;
-		dram0_idv <= VAL;
-		dram0_op <= lsq[mem0_lsndx.row][mem0_lsndx.col].op;
-		dram0_ldip <= rob[lsq[mem0_lsndx.row][mem0_lsndx.col].rndx].excv;
-		dram0_pc <= lsq[mem0_lsndx.row][mem0_lsndx.col].pc;
-		dram0_load <= lsq[mem0_lsndx.row][mem0_lsndx.col].load;
-		dram0_loadz <= lsq[mem0_lsndx.row][mem0_lsndx.col].loadz;
-		dram0_cload <= lsq[mem0_lsndx.row][mem0_lsndx.col].cload;
-		dram0_cload_tags <= lsq[mem0_lsndx.row][mem0_lsndx.col].cload_tags;
-		dram0_store <= lsq[mem0_lsndx.row][mem0_lsndx.col].store;
-		dram0_cstore <= lsq[mem0_lsndx.row][mem0_lsndx.col].cstore;
-		dram0_aldf <= lsq[mem0_lsndx.row][mem0_lsndx.col].aldf;
-		dram0_astf <= lsq[mem0_lsndx.row][mem0_lsndx.col].astf;
-		dram0_erc <= rob[lsq[mem0_lsndx.row][mem0_lsndx.col].rndx].decbus.erc;
-		dram0_Rt	<= lsq[mem0_lsndx.row][mem0_lsndx.col].Rt;
-		dram0_aRt	<= lsq[mem0_lsndx.row][mem0_lsndx.col].aRt;
-		dram0_aRtz <= lsq[mem0_lsndx.row][mem0_lsndx.col].aRtz;
-		dram0_om <= lsq[mem0_lsndx.row][mem0_lsndx.col].om;
-		dram0_bank <= lsq[mem0_lsndx.row][mem0_lsndx.col].om==2'd0 ? 1'b0 : 1'b1;
-		dram0_cp <= rob[lsq[mem0_lsndx.row][mem0_lsndx.col].rndx].cndx;
-		if (dram0_more && Qupls4_pkg::SUPPORT_UNALIGNED_MEMORY) begin
-			dram0_hi <= 1'b1;
-			dram0_sel <= dram0_selh >> 8'd64;
-			dram0_vaddr <= {dram0_vaddrh[$bits(virtual_address_t)-1:6] + 2'd1,6'h0};
-			dram0_paddr <= {dram0_paddrh[$bits(physical_address_t)-1:6] + 2'd1,6'h0};
-			dram0_data <= dram0_datah >> 12'd512;
-			dram0_shift <= {7'd64-dram0_paddrh[5:0],3'b0};
-		end
-		else begin
-			dram0_hi <= 1'b0;
-			dram0_sel <= {64'h0,Qupls4_pkg::fnSel(rob[lsq[mem0_lsndx.row][mem0_lsndx.col].rndx].op)} << lsq[mem0_lsndx.row][mem0_lsndx.col].adr[5:0];
-			dram0_selh <= {64'h0,Qupls4_pkg::fnSel(rob[lsq[mem0_lsndx.row][mem0_lsndx.col].rndx].op)} << lsq[mem0_lsndx.row][mem0_lsndx.col].adr[5:0];
-			dram0_vaddr <= lsq[mem0_lsndx.row][mem0_lsndx.col].adr;
-			dram0_paddr <= lsq[mem0_lsndx.row][mem0_lsndx.col].adr;
-			dram0_vaddrh <= lsq[mem0_lsndx.row][mem0_lsndx.col].adr;
-			dram0_paddrh <= lsq[mem0_lsndx.row][mem0_lsndx.col].adr;
-			if (lsq[mem0_lsndx.row][mem0_lsndx.col].astf) begin
-				dram0_data <= storeflags_buf << {lsq[mem0_lsndx.row][mem0_lsndx.col].adr[5:0],3'b0};
-				dram0_datah <= storeflags_buf << {lsq[mem0_lsndx.row][mem0_lsndx.col].adr[5:0],3'b0};
-			end 
-			else begin
-				dram0_data <= lsq[mem0_lsndx.row][mem0_lsndx.col].res << {lsq[mem0_lsndx.row][mem0_lsndx.col].adr[5:0],3'b0};
-				dram0_datah <= lsq[mem0_lsndx.row][mem0_lsndx.col].res << {lsq[mem0_lsndx.row][mem0_lsndx.col].adr[5:0],3'b0};
-			end
-			dram0_ctago <= lsq[mem0_lsndx.row][mem0_lsndx.col].flags.cap;
-			dram0_shift <= {lsq[mem0_lsndx.row][mem0_lsndx.col].adr[5:0],3'd0};
-		end
-		dram0_memsz <= Qupls4_pkg::fnMemsz(rob[lsq[mem0_lsndx.row][mem0_lsndx.col].rndx].op);
-		dram0_tid.core <= CORENO;
-		dram0_tid.channel <= 3'd1;
-		dram0_tid.tranid <= dram0_tid.tranid + 2'd1;
+  else if (dram0 == Qupls4_pkg::DRAMSLOT_AVAIL && mem0_lsndxv && !robentry_stomp[lsq[mem0_lsndx.row][mem0_lsndx.col].rndx] && !dram0_idv && !dram0_idv2)
 		rob[lsq[mem0_lsndx.row][mem0_lsndx.col].rndx].out <= {VAL,VAL};
-    dram0_tocnt <= 12'd0;
-  end
 
   if (Qupls4_pkg::NDATA_PORTS > 1) begin
-		if (Qupls4_pkg::SUPPORT_LOAD_BYPASSING && lbndx1 > 0) begin
-			dram_bus1 <= Qupls4_pkg::fnDati(1'b0,dram1_op,lsq[lbndx1.row][lbndx1.col].res,dram1_pc);
-			dram_Rt1 <= lsq[lbndx1.row][lbndx1.col].Rt;
-			dram_v1 <= lsq[lbndx1.row][lbndx1.col].v;
-			dram_om1 <= lsq[lbndx1.row][lbndx1.col].om;
-			dram_cp1 <= rob[lsq[lbndx1.row][lbndx1.col].rndx].cndx;
-			lsq[lbndx1.row][lbndx1.col].v <= INV;
+		if (Qupls4_pkg::SUPPORT_LOAD_BYPASSING && lbndx1.vb) begin
+			tInvalidateLSQ(lsq[lbndx1.row][lbndx1.col].rndx,FALSE);
 			rob[lsq[lbndx1.row][lbndx1.col].rndx].done <= 2'b11;
 		end
 	  else if (dram1 == Qupls4_pkg::DRAMSLOT_AVAIL && Qupls4_pkg::NDATA_PORTS > 1 && mem1_lsndxv && !robentry_stomp[lsq[mem1_lsndx.row][mem1_lsndx.col].rndx]) begin
-			dram1_exc <= Qupls4_pkg::FLT_NONE;
-			dram1_stomp <= 1'b0;
-			dram1_id <= lsq[mem1_lsndx.row][mem1_lsndx.col].rndx;
-			dram1_idv <= VAL;
-			dram1_op <= lsq[mem1_lsndx.row][mem1_lsndx.col].op;
-			dram1_pc <= lsq[mem1_lsndx.row][mem1_lsndx.col].pc;
-			dram1_load <= lsq[mem1_lsndx.row][mem1_lsndx.col].load;
-			dram1_loadz <= lsq[mem1_lsndx.row][mem1_lsndx.col].loadz;
-			dram1_cload <= lsq[mem1_lsndx.row][mem1_lsndx.col].cload;
-			dram1_cload_tags <= lsq[mem1_lsndx.row][mem1_lsndx.col].cload_tags;
-			dram1_store <= lsq[mem1_lsndx.row][mem1_lsndx.col].store;
-			dram1_cstore <= lsq[mem1_lsndx.row][mem1_lsndx.col].cstore;
-			dram1_erc <= rob[lsq[mem1_lsndx.row][mem1_lsndx.col].rndx].decbus.erc;
-			dram1_Rt <= lsq[mem1_lsndx.row][mem1_lsndx.col].Rt;
-			dram1_aRt	<= lsq[mem1_lsndx.row][mem1_lsndx.col].aRt;
-			dram1_aRtz <= lsq[mem1_lsndx.row][mem1_lsndx.col].aRtz;
-			dram1_om	<= lsq[mem1_lsndx.row][mem1_lsndx.col].om;
-			dram1_bank <= lsq[mem1_lsndx.row][mem1_lsndx.col].om==2'd0 ? 1'b0 : 1'b1;
-			dram1_cp <= rob[lsq[mem1_lsndx.row][mem1_lsndx.col].rndx].cndx;
-			if (dram1_more && Qupls4_pkg::SUPPORT_UNALIGNED_MEMORY) begin
-				dram1_hi <= 1'b1;
-				dram1_sel <= dram1_selh >> 8'd64;
-				dram1_vaddr <= {dram1_vaddrh[$bits(virtual_address_t)-1:6] + 2'd1,6'h0};
-				dram1_paddr <= {dram1_paddrh[$bits(physical_address_t)-1:6] + 2'd1,6'h0};
-				dram1_data <= dram1_datah >> 12'd512;
-				dram1_shift <= {7'd64-dram1_paddrh[5:0],3'b0};
-			end
-			else begin
-				dram1_hi <= 1'b0;
-				dram1_sel <= {64'h0,Qupls4_pkg::fnSel(lsq[mem1_lsndx.row][mem1_lsndx.col].op)} << lsq[mem1_lsndx.row][mem1_lsndx.col].adr[5:0];
-				dram1_selh <= {64'h0,Qupls4_pkg::fnSel(lsq[mem1_lsndx.row][mem1_lsndx.col].op)} << lsq[mem1_lsndx.row][mem1_lsndx.col].adr[5:0];
-				dram1_vaddr	<= lsq[mem1_lsndx.row][mem1_lsndx.col].adr;
-				dram1_paddr	<= lsq[mem1_lsndx.row][mem1_lsndx.col].adr;
-				dram1_vaddrh	<= lsq[mem1_lsndx.row][mem1_lsndx.col].adr;
-				dram1_paddrh	<= lsq[mem1_lsndx.row][mem1_lsndx.col].adr;
-				dram1_data	<= lsq[mem1_lsndx.row][mem1_lsndx.col].res << {lsq[mem1_lsndx.row][mem1_lsndx.col].adr[5:0],3'b0};
-				dram1_datah	<= lsq[mem1_lsndx.row][mem1_lsndx.col].res << {lsq[mem1_lsndx.row][mem1_lsndx.col].adr[5:0],3'b0};
-				dram1_ctago <= lsq[mem1_lsndx.row][mem1_lsndx.col].flags.cap;
-				dram1_shift <= {lsq[mem1_lsndx.row][mem1_lsndx.col].adr[5:0],3'd0};
-			end
-			dram1_memsz <= Qupls4_pkg::fnMemsz(lsq[mem1_lsndx.row][mem1_lsndx.col].op);
-			dram1_tid.core <= CORENO;
-			dram1_tid.channel <= 3'd2;
-			dram1_tid.tranid <= dram1_tid.tranid + 2'd1;
 			rob[lsq[mem1_lsndx.row][mem1_lsndx.col].rndx].out	<= {VAL,VAL};
 	    dram1_tocnt <= 12'd0;
 	  end
@@ -7797,7 +7541,7 @@ input rob_ndx_t id;
 input can;
 integer n18r, n18c;
 begin
-	for (n18r = 0; n18r < Qupls4_pkg::LSQ_ENTRIES; n18r = n18r + 1) begin
+	for (n18 = 0; n18r < Qupls4_pkg::LSQ_ENTRIES; n18r = n18r + 1) begin
 		for (n18c = 0; n18c < 2; n18c = n18c + 1) begin
 			if (lsq[n18r][n18c].rndx==id && lsq[n18r][n18c].v==VAL) begin
 				lsq[n18r][n18c].v <= INV;
