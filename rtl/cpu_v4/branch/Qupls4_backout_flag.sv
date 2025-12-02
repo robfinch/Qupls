@@ -65,15 +65,14 @@ else begin
 			// backout when !fcu_bt will be handled below, triggerred by restore
 			if (takb && fcu_bt)
 				backout <= !fcu_found_destination;
-		Qupls4_pkg::BRC_BCCD,
-		Qupls4_pkg::BRC_BCCC:
+		Qupls4_pkg::BRC_BCCD:
 			// backout when !fcu_bt will be handled below, triggerred by restore
 			if (takb && fcu_bt)
 				backout <= !fcu_found_destination;
-		Qupls4_pkg::BRC_RETR,
-		Qupls4_pkg::BRC_RETC,
-		Qupls4_pkg::BRC_BLRLR,
-		Qupls4_pkg::BRC_BLRLC:
+		Qupls4_pkg::BRC_RTD,
+		Qupls4_pkg::BRC_BSR,
+		Qupls4_pkg::BRC_JSR,
+		Qupls4_pkg::BRC_JSRN:
 			backout <= TRUE;
 		default:
 			;		

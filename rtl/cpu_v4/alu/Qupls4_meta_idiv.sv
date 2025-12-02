@@ -79,12 +79,12 @@ reg [WID-1:0] t;
 reg div_done1,div_done2;
 aregno_t aRd_i;
 always_comb om = rse_i.om;
-always_comb a = rse_i.argA;
-always_comb b = rse_i.argB;
-always_comb bi = rse_i.argB|rse_i.argI;
-always_comb c = rse_i.argC;
+always_comb a = rse_i.arg[0].val;
+always_comb b = rse_i.arg[1].val;
+always_comb bi = rse_i.arg[1].val|rse_i.argI;
+always_comb c = rse_i.arg[2].val;
 always_comb i = rse_i.argI;
-always_comb t = rse_i.argD;
+always_comb t = rse_i.arg[NOPER-1].val;
 always_comb aRd_i = rse_i.aRd;
 
 reg [WID/8:0] we;

@@ -2536,7 +2536,7 @@ checkpt_ndx_t pcndx_ren;
 always_comb
 begin
 	for (n37 = 0; n37 < NREG_RPORTS; n37 = n37 + 1) begin
-		rf_oper[n37].Rn = arn[n37];
+		rf_oper[n37].aRn = arn[n37];
 		rf_oper[n37].val = rfo[n37];
 		rf_oper[n37].flags = rfo_flags[n37];
 		rf_oper[n37].v = prnv[n37];
@@ -2829,7 +2829,7 @@ wire [3:0] ns_dstregv;
 aregno_t [3:0] ns_areg;
 checkpt_ndx_t [3:0] ns_cndx;
 
-Qupls4_pipeline_ren uren1
+Qupls4_pipeline_ren #(.NPORT(NREG_RPORTS)) uren1
 (
 	.rst(irst),
 	.clk(clk),
@@ -3202,8 +3202,8 @@ vtdl #($bits(Qupls4_pkg::operating_mode_t))	udlyfc8 (.clk(clk), .ce(1'b1), .a(4'
 always_comb fpu0_wrA = !fpu0_rse2.aRdz && Qupls4_pkg::NFPU > 0;
 always_comb fma0_wrA = fma0_done && !fma0_rse2.aRdz && Qupls4_pkg::NFPU > 0;
 always_comb fma1_wrA = fma1_done && !fma1_rse2.aRdz && Qupls4_pkg::NFPU > 1;
-always_comb dram_wr0 = dram0_oper.oper.v && !dram0_oper.oper.aRdz;
-always_comb dram_wr1 = dram1_oper.oper.v && !dram1_oper.oper.aRdz && Qupls4_pkg::NDATA_PORTS > 1;
+always_comb dram_wr0 = dram0_oper.oper.v && !dram0_oper.oper.aRnz;
+always_comb dram_wr1 = dram1_oper.oper.v && !dram1_oper.oper.aRnz && Qupls4_pkg::NDATA_PORTS > 1;
 always_comb fcu_wrA = 1'b0;
 
 wire [8:0] sau0_we;
@@ -3224,8 +3224,8 @@ always_comb wt0A = !sau0_rse2.aRdz;
 always_comb wt1A = !sau1_rse2.aRdz && Qupls4_pkg::NSAU > 1;
 always_comb wt3A = fpu1_done && !fpu1_aRdzA && !fpu1_idle && Qupls4_pkg::NFPU > 1;
 always_comb wt7A = fcu_done && !fcu_aRtzA;
-always_comb wt10A = dram0_oper.oper.v && !dram0_oper.oper.aRdz;
-always_comb wt11A = dram1_oper.oper.v && !dram1_oper.oper.aRdz && Qupls4_pkg::NDATA_PORTS > 1;
+always_comb wt10A = dram0_oper.oper.v && !dram0_oper.oper.aRnz;
+always_comb wt11A = dram1_oper.oper.v && !dram1_oper.oper.aRnz && Qupls4_pkg::NDATA_PORTS > 1;
 always_comb wt12A = !fpu0_rse2.aRdz && !fpu0_idle && Qupls4_pkg::NFPU > 0;
 
 wire [4:0] upd1a,upd2a,upd3a,upd4a,upd5a,upd6a;
@@ -3299,7 +3299,7 @@ Qupls4_func_result_queue ufrq1
 	.rd_i(fuq_rd[0]),
 	.we_i(sau0_we),
 	.rse_i(sau0_rse2),
-	.tag_i({7'd0,sau0_rse2.tagD}),
+	.tag_i(sau0_rse2.arg[NOPER-1].flags),
 	.res_i(sau0_resA),
 	.we_o(fuq_we[0]),
 	.pRt_o(fuq_pRt[0]),
@@ -3320,7 +3320,7 @@ Qupls4_func_result_queue ufrq4
 	.rd_i(fuq_rd[1]),
 	.we_i(sau1_we),
 	.rse_i(sau1_rse2),
-	.tag_i({7'd0,sau1_rse2.tagD}),
+	.tag_i(sau1_rse2.arg[NOPER-1].flags),
 	.res_i(sau1_resA),
 	.we_o(fuq_we[1]),
 	.pRt_o(fuq_pRt[1]),
@@ -3489,8 +3489,8 @@ Qupls4_func_result_queue ufrq7
 Qupls4_pkg::reservation_station_entry_t dram0_rse;
 always_comb
 begin
-	dram0_rse.aRd = dram0_oper.aRd;
-	dram0_rse.nRd = dram0_oper.pRd;
+	dram0_rse.aRd = dram0_oper.oper.aRn;
+	dram0_rse.nRd = dram0_oper.oper.pRn;
 	dram0_rse.rndx = dram0_oper.rndx;
 	dram0_rse.cndx = dram0_oper.cndx;
 end
@@ -3498,8 +3498,8 @@ end
 Qupls4_pkg::reservation_station_entry_t dram1_rse;
 always_comb
 begin
-	dram1_rse.aRd = dram1_oper.aRd;
-	dram1_rse.nRd = dram1_oper.pRd;
+	dram1_rse.aRd = dram1_oper.oper.aRn;
+	dram1_rse.nRd = dram1_oper.oper.pRn;
 	dram1_rse.rndx = dram1_oper.rndx;
 	dram1_rse.cndx = dram1_oper.cndx;
 end
@@ -3719,9 +3719,9 @@ Qupls4_branchmiss_pc umisspc1
 	.pc_stack(pc_stack),
 	.bt(fcu_rse.bt),
 	.takb(takb),
-	.argA(fcu_rse.argA),
-	.argB(fcu_rse.argB),
-	.argC(fcu_rse.argC),
+	.argA(fcu_rse.arg[0].val),
+	.argB(fcu_rse.arg[1].val),
+	.argC(fcu_rse.arg[2].val),
 	.argI(fcu_rse.argI),
 	.misspc(fcu_misspc1),
 	.vector(irq_in.vector),
@@ -3736,8 +3736,8 @@ always_comb
 Qupls4_meta_branch_eval ube1
 (
 	.instr(fcu_rse.uop),
-	.a(fcu_rse.argA),
-	.b(fcu_rse.argB),
+	.a(fcu_rse.arg[0].val),
+	.b(fcu_rse.arg[1].val),
 	.c(ic_irq > sr.ipl && sr.mie && irq_sn!=fcu_rse.irq_sn || ic_irq==6'd63),
 	.takb(takb)
 );
@@ -3772,7 +3772,7 @@ always_comb
 
 // Branchmiss flag
 
-Stark_branchmiss_flag ubmf1
+Qupls4_branchmiss_flag ubmf1
 (
 	.rst(irst),
 	.clk(clk),
@@ -3782,7 +3782,7 @@ Stark_branchmiss_flag ubmf1
 	.miss_flag(fcu_branchmiss)
 );
 
-Stark_backout_flag ubkoutf1
+Qupls4_backout_flag ubkoutf1
 (
 	.rst(irst),
 	.clk(clk),
@@ -4584,7 +4584,7 @@ begin
 	dramN_paddr[0] = dram0_work.paddr;
 	dramN_vaddr[0] = dram0_work.vaddr;
 	dramN_data[0] = dram0_work.data[511:0];
-	dramN_ctago[0] = dram0_work.ctago;
+	dramN_ctago[0] = dram0_work.ctag;
 	dramN_sel[0] = dram0_work.sel[63:0];
 	dramN_store[0] = dram0_work.store;
 	dramN_cstore[0] = dram0_work.cstore;
@@ -5119,7 +5119,7 @@ usaust0
 	.rfo(rfo),
 	.rfo_tag(rfo_tag),
 	*/
-	.req_pRn(bRs[0])
+	.req_aRn(bRs[0])
 );
 
 Qupls4_reservation_station #(
@@ -5140,7 +5140,7 @@ uimulst0
 	.rse_o(imul0_rse),
 	.rf_oper_i(rf_oper),
 	.bypass_i(),
-	.req_pRn(bRs[2])
+	.req_aRn(bRs[2])
 );
 
 always_ff @(posedge clk) sau0_ldd <= sau0_ld;
@@ -5165,7 +5165,7 @@ uidivst0
 	.rse_o(idiv0_rse),
 	.rf_oper_i(rf_oper),
 	.bypass_i(),
-	.req_pRn(bRs[3])
+	.req_aRn(bRs[3])
 );
 else begin
 end
@@ -5192,7 +5192,7 @@ generate begin : gSauStation
 			.rse_o(sau1_rse),
 			.rf_oper_i(rf_oper),
 			.bypass_i(),
-			.req_pRn(bRs[1])
+			.req_aRn(bRs[1])
 		);
 	end
 end
@@ -5229,7 +5229,7 @@ generate begin : gFpuStat
 					.rse_o(fma0_rse),
 					.rf_oper_i(rf_oper),
 					.bypass_i(),
-					.req_pRn(bRs[4])
+					.req_aRn(bRs[4])
 				);
 				Qupls4_reservation_station #(
 					.FUNCUNIT(4'd12),
@@ -5249,7 +5249,7 @@ generate begin : gFpuStat
 					.rse_o(fpu0_rse),
 					.rf_oper_i(rf_oper),
 					.bypass_i(),
-					.req_pRn(bRs[12])
+					.req_aRn(bRs[12])
 				);
 			end
 		1:
@@ -5271,7 +5271,7 @@ generate begin : gFpuStat
 					.rse_o(fma1_rse),
 					.rf_oper_i(rf_oper),
 					.bypass_i(),
-					.req_pRn(bRs[5])
+					.req_aRn(bRs[5])
 				);
 		endcase
 	end
@@ -5298,7 +5298,7 @@ generate begin : gDecimalFloat
 			.rse_o(dfpu0_rse),
 			.rf_oper_i(rf_oper),
 			.bypass_i(),
-			.req_pRn(bRs[13])
+			.req_aRn(bRs[13])
 		);
 	end
 end
@@ -5322,7 +5322,7 @@ ubrast1
 	.rse_o(fcu_rse),
 	.rf_oper_i(rf_oper),
 	.bypass_i(),
-	.req_pRn(bRs[7])
+	.req_aRn(bRs[7])
 );
 
 Qupls4_reservation_station #(
@@ -5343,7 +5343,7 @@ uagenst1
 	.rse_o(agen0_rse),
 	.rf_oper_i(rf_oper),
 	.bypass_i(),
-	.req_pRn(bRs[8])
+	.req_aRn(bRs[8])
 );
 
 /*
@@ -5386,7 +5386,7 @@ uagenst2
 	.rse_o(agen1_rse),
 	.rf_oper_i(rf_oper),
 	.bypass_i(),
-	.req_pRn(bRs[9])
+	.req_aRn(bRs[9])
 );
 else begin
 	assign agen1_rse = {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
@@ -5433,9 +5433,28 @@ always_comb
 // Validation of the STORE source operand.
 
 wire rfo_store_argC_valid;
+Qupls4_pkg::operand_t store_operi, store_opero;
+always_comb
+begin
+	store_operi = {$bits(Qupls4_pkg::operand_t){1'b0}};
+	store_operi.v = lsq[lsq_head.row][lsq_head.col].datav;
+	store_operi.val = rfo_store_argC;
+	store_operi.flags = 8'h00;
+	store_operi.aRn = store_argC_aReg;
+	store_operi.aRnz = ~|store_argC_aReg;
+	
+	rfo_store_argC = store_opero.val;
+end
+assign rfo_store_argC_valid = store_opero.v;
 
 Qupls4_validate_operand uvLSsrcC
 (
+	.rf_oper_i(rf_oper),
+	.oper_i(store_operi),
+	.oper_o(store_opero),
+	.bypass_i({$bits(Qupls4_pkg::operand_t){1'b0}})
+);
+/*
 	.arn(arn),
 	.prnv(prnv),
 	.rfo(rfo),
@@ -5446,11 +5465,6 @@ Qupls4_validate_operand uvLSsrcC
 	.val0_tag(rfo_store_argC_tag),
 	.val1_tag(),
 	.val2_tag(),
-/*
-	.rfi_val(rfi_val),
-	.rfi_tag(rfi_tag),
-	.rfi_aRd(rfi_aRd),
-*/
 	.aRn0(store_argC_aReg),
 	.aRn1(8'd0),
 	.aRn2(8'd0),
@@ -5461,7 +5475,7 @@ Qupls4_validate_operand uvLSsrcC
 	.valid1_o(),
 	.valid2_o()
 );
-
+*/
 			
 // ----------------------------------------------------------------------------
 // fet/mux/dec/ren/que

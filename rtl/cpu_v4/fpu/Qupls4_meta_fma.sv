@@ -62,7 +62,7 @@ Qupls4_pkg::reservation_station_entry_t [LATENCY-2:0] rse;
 reg [LATENCY-1:0] stomp_con;
 Qupls4_pkg::operating_mode_t om;
 reg [1:0] prc;
-Qupls4_pkg::instruction_t ir;
+Qupls4_pkg::micro_op_t ir;
 reg [WID-1:0] a;
 reg [WID-1:0] b;
 reg [WID-1:0] c;
@@ -70,12 +70,12 @@ reg [WID-1:0] d;
 reg [WID-1:0] t;
 reg [WID-1:0] i;
 always_comb om = rse_i.om;
-always_comb ir = rse_i.ins;
-always_comb a = rse_i.argA;
-always_comb b = rse_i.argB;
-always_comb c = rse_i.argC;
-always_comb d = rse_i.argD;
-always_comb t = rse_i.argT;
+always_comb ir = rse_i.uop;
+always_comb a = rse_i.arg[0].val;
+always_comb b = rse_i.arg[1].val;
+always_comb c = rse_i.arg[2].val;
+always_comb d = rse_i.arg[3].val;
+always_comb t = rse_i.arg[NOPER-1].val;
 always_comb i = rse_i.argI;
 
 always_comb
@@ -239,7 +239,7 @@ else
 generate begin : gCptgt
 	for (mm = 0; mm < WID/8; mm = mm + 1) begin
     always_comb
-    	if (stomp_con[7]||rse_o.ins.any.opcode==Qupls4_pkg::OP_NOP)
+    	if (stomp_con[7]||rse_o.uop.any.opcode==Qupls4_pkg::OP_NOP)
         o[mm*8+7:mm*8] = t[mm*8+7:mm*8];
       else if (cptgt[mm])
         o[mm*8+7:mm*8] = z ? 8'h00 : t[mm*8+7:mm*8];

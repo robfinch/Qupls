@@ -43,17 +43,17 @@ else begin
 	case(ir.any.opcode)
 	Qupls4_pkg::OP_R3O:
 		case(ir.r3.func)
-		Qupls4_pkg::FN_RESETQ:	q_rst[rse_i.argB[3:0]] <= 1'b1;
+		Qupls4_pkg::FN_RESETQ:	q_rst[rse_i.arg[1].val[3:0]] <= 1'b1;
 		Qupls4_pkg::FN_READQ:
 			begin
-				q_rd[rse_i.argB[3:0]] <= 1'b1;
-				q_addr <= rse_i.argA[15:0];
+				q_rd[rse_i.arg[1].val[3:0]] <= 1'b1;
+				q_addr <= rse_i.arg[0].val[15:0];
 			end
 		Qupls4_pkg::FN_WRITEQ:
 			begin
-				q_wr[rse_i.argB[3:0]] <= 1'b1;
-				q_addr <= rse_i.argA[15:0];
-				q_wr_data <= rse_i.argC;
+				q_wr[rse_i.arg[1].val[3:0]] <= 1'b1;
+				q_addr <= rse_i.arg[0].val[15:0];
+				q_wr_data <= rse_i.arg[2].val;
 			end
 		default:	;
 		endcase
@@ -83,7 +83,7 @@ begin
 	Qupls4_pkg::OP_R3O:
 		case(ir.r3.func)
 		Qupls4_pkg::FN_RESETQ:
-			case(rse_i.argB[3:0])
+			case(rse_i.arg[1].val[3:0])
 			4'd14:	// NaN queue
 				begin
 					que_done <= 1'b1;
@@ -91,7 +91,7 @@ begin
 			default:	;
 			endcase
 		Qupls4_pkg::FN_WRITEQ:
-			case(rse_i.argB[3:0])
+			case(rse_i.arg[1].val[3:0])
 			4'd14:	// NaN queue
 				begin
 					que_done <= 1'b1;

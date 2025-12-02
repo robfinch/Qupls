@@ -43,7 +43,7 @@ import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
 module Qupls4_reservation_station(rst, clk, available, busy, issue, stall,
-	rse_i, rse_o, stomp, rf_oper_i, bypass_i req_aRn
+	rse_i, rse_o, stomp, rf_oper_i, bypass_i, req_aRn
 );
 parameter NRSE = 1;
 parameter FUNCUNIT = 4'd0;
@@ -81,11 +81,11 @@ Qupls4_pkg::reservation_station_entry_t rsei;
 always_comb
 for (nn = 0; nn < NRSE; nn = nn + 1)
 begin
-	rse_argA[nn] = rse[nn].argA;
-	rse_argB[nn] = rse[nn].argB;
-	rse_argC[nn] = rse[nn].argC;
-	rse_argD[nn] = rse[nn].argD;
-	rse_argT[nn] = rse[nn].argT;
+	rse_argA[nn] = rse[nn].arg[0];
+	rse_argB[nn] = rse[nn].arg[1];
+	rse_argC[nn] = rse[nn].arg[2];
+	rse_argD[nn] = rse[nn].arg[3];
+	rse_argT[nn] = rse[nn].arg[NOPER-1];
 end
 
 always_comb
@@ -127,9 +127,9 @@ Qupls4_validate_operand #(.NBPI(NBPI), .NENTRY(NRSE)) uvsrcB
 );
 else begin
 	for (g = 0; g < NRSE; g = g + 1) begin
-		arg[1][g].v = VAL;
-		arg[1][g].val = value_zero;
-		arg[1][g].flags = 8'd0;
+		assign arg[1][g].v = VAL;
+		assign arg[1][g].val = value_zero;
+		assign arg[1][g].flags = 8'd0;
 	end
 end
 
@@ -143,9 +143,9 @@ Qupls4_validate_operand #(.NBPI(NBPI), .NENTRY(NRSE)) uvsrcC
 );
 else begin
 	for (g = 0; g < NRSE; g = g + 1) begin
-		arg[2][g].v = VAL;
-		arg[2][g].val = value_zero;
-		arg[2][g].flags = 8'd0;
+		assign arg[2][g].v = VAL;
+		assign arg[2][g].val = value_zero;
+		assign arg[2][g].flags = 8'd0;
 	end
 end
 
@@ -159,9 +159,9 @@ Qupls4_validate_operand #(.NBPI(NBPI), .NENTRY(NRSE)) uvsrcD
 );
 else begin
 	for (g = 0; g < NRSE; g = g + 1) begin
-		arg[3][g].v = VAL;
-		arg[3][g].val = value_zero;
-		arg[3][g].flags = 8'd0;
+		assign arg[3][g].v = VAL;
+		assign arg[3][g].val = value_zero;
+		assign arg[3][g].flags = 8'd0;
 	end
 end
 
@@ -292,7 +292,7 @@ else begin
 		begin
 			rdy = fnChooseReady(rse);
 			if (rdy >= 0) begin
-				issue <= TRUE:
+				issue <= TRUE;
 				rse_o <= rse[rdy];
 				rse_o.v <= !stomp[rse[rdy].rndx] & rse[rdy].v;
 				rse[rdy].busy <= FALSE;
@@ -308,14 +308,14 @@ end
 always_comb
 begin
 	kk = 0;
-	req_pRn[0] = 8'd0;
-	req_pRn[1] = 8'd0;
-	req_pRn[2] = 8'd0;
-	req_pRn[3] = 8'd0;
+	req_aRn[0] = 8'd0;
+	req_aRn[1] = 8'd0;
+	req_aRn[2] = 8'd0;
+	req_aRn[3] = 8'd0;
 	for (jj = 0; jj < NRSE; jj = jj + 1) begin
 		for (pp = 0; pp < NSARG; pp = pp + 1) begin
 			if (rse[jj].busy && !rse[jj].arg[pp].v && kk < 4) begin
-				req_aRn[kk] = rse[jj].arg[pp].Rn;
+				req_aRn[kk] = rse[jj].arg[pp].aRn;
 				kk = kk + 1;
 			end
 		end

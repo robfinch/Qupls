@@ -61,10 +61,10 @@ cpu_types_pkg::address_t as, bs;
 cpu_types_pkg::address_t res1;
 
 always_comb
-	as = rse.argA;
+	as = rse.arg[0].val;
 
 always_comb
-	bs = rse.argB << rse.uop.ls.sc;
+	bs = rse.arg[1].val << rse.uop.ls.sc;
 
 always_comb
 begin

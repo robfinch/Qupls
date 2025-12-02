@@ -64,7 +64,7 @@ typedef struct packed
 	pregno_t pRd;
 	aregno_t aRd;
 	logic [7:0] tag;
-	value_t argD;
+	value_t argT;
 	value_t res;
 	cpu_types_pkg::rob_ndx_t rndx;
 	cpu_types_pkg::checkpt_ndx_t cndx;
@@ -80,13 +80,13 @@ wire rd_rst_busy;
 wire wr_rst_busy;
 wire wr_clk = clk_i;
 wire rst = rst_i;
-value_t argD_o;					// dummy placeholder
+value_t argT_o;					// dummy placeholder
 frq_entry_t din = {
 	we_i,
 	rse_i.nRd,
 	rse_i.aRd,
 	tag_i,
-	rse_i.argD,
+	rse_i.arg[NOPER-1],
 	res_i,
 	rse_i.rndx,
 	rse_i.cndx
@@ -102,7 +102,7 @@ always_comb
 	full = cnt > (DEP - 5);
 
 always_comb
-	{we_o,pRt_o,aRt_o,tag_o,argD_o,res_o,cp_o} = dout;
+	{we_o,pRt_o,aRt_o,tag_o,argT_o,res_o,cp_o} = dout;
 always_comb
 	rd_en = rd_i & ~rst;
 always_comb
@@ -110,7 +110,7 @@ always_comb
 always_comb
 	wr_en = wr_en1 & ~rst && cnt < DEP - 2;
 
-always @(posedge clk_i)
+always_ff @(posedge clk_i)
 begin
 	if (rst_i)
 		wr_ptr <= 5'd0;
@@ -120,11 +120,11 @@ begin
 	end
 	for (n1 = 0; n1 < DEP; n1 = n1 + 1) begin
 		if (stomp_i[mem[n1].rndx])
-			mem[n1].res <= mem[n1].argD;
+			mem[n1].res <= mem[n1].argT;
 	end
 end
 
-always @(posedge clk_i)
+always_ff @(posedge clk_i)
 	if (rst_i)
 		rd_ptr <= 5'd0;
 	else if (rd_en)
@@ -133,7 +133,7 @@ always @(posedge clk_i)
 always_comb
 begin
 	dout = mem[rd_ptr];
-	dout.res = stomp_i[mem[rd_ptr].rndx] ? mem[rd_ptr].argD : mem[rd_ptr].res;
+	dout.res = stomp_i[mem[rd_ptr].rndx] ? mem[rd_ptr].argT : mem[rd_ptr].res;
 end
 
 always_comb

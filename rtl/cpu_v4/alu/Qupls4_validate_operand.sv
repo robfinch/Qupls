@@ -46,7 +46,7 @@ parameter NENTRY = 3;
 input Qupls4_pkg::operand_t [NREG_RPORTS-1:0] rf_oper_i;
 input Qupls4_pkg::operand_t [NENTRY-1:0] oper_i;
 output Qupls4_pkg::operand_t [NENTRY-1:0] oper_o;
-input Qupls4_pkg::operand_t [NBPI-1:0] byapss_i;
+input Qupls4_pkg::operand_t [NBPI-1:0] bypass_i;
 
 integer nn,jj;
 
@@ -56,14 +56,14 @@ begin
 		oper_o[nn] = oper_i[nn];
 		oper_o[nn].val = value_zero;
 		oper_o[nn].flags = {$bits(flags_t){1'b0}};
-		if (oper_i[nn].Rn==8'd0) begin
+		if (oper_i[nn].aRn==8'd0) begin
 			oper_o[nn].val = value_zero;
 			oper_o[nn].flags = {$bits(flags_t){1'b0}};
 			oper_o[nn].v = VAL;
 		end
 		else begin
 			for (jj = 0; jj < 16; jj = jj + 1) begin
-				if (oper_i[nn].Rn==rf_oper_i[jj].Rn && rf_oper_i[jj].v && !oper_i[nn].v) begin
+				if (oper_i[nn].aRn==rf_oper_i[jj].aRn && rf_oper_i[jj].v && !oper_i[nn].v) begin
 					oper_o[nn] = rf_oper_i[jj];
 					oper_o[nn].v = VAL;
 				end
@@ -78,8 +78,8 @@ begin
 	// However, there is bypassing from the output of the first SAU.
 	if (Qupls4_pkg::PERFORMANCE) begin
 		for (nn = 0; nn < NENTRY; nn = nn + 1) begin
-			for (jj = 0; jj < NBPI; jj = jj + 1) begin
-				if (oper_i[nn].Rn==bypass_i[jj].Rn && bypass_i[jj].v && !oper_i[nn].v) begin
+			for (jj = 0; jj < NBPI; jj = jj + 1) begin //check phys reg???
+				if (oper_i[nn].aRn==bypass_i[jj].aRn && bypass_i[jj].v && !oper_i[nn].v) begin
 					oper_o[nn] = bypass_i[jj];
 					oper_o[nn].v = VAL;
 				end
