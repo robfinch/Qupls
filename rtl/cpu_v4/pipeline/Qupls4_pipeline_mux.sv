@@ -342,6 +342,7 @@ reg jmpr0,jmpr1,jmpr2,jmpr3;
 reg jmpi0,jmpi1,jmpi2,jmpi3;
 reg rtd0,rtd1,rtd2,rtd3;
 reg do_bsr1;
+reg bcc0,bcc1,bcc2.bcc3;
 cpu_types_pkg::pc_address_ex_t bsr0_tgt;
 cpu_types_pkg::pc_address_ex_t bsr1_tgt;
 cpu_types_pkg::pc_address_ex_t bsr2_tgt;
@@ -356,7 +357,10 @@ always_comb bra0 = fnDecBra(ins0_mux);
 always_comb bra1 = fnDecBra(ins1_mux);
 always_comb bra2 = fnDecBra(ins2_mux);
 always_comb bra3 = fnDecBra(ins3_mux);
-
+always_comb bcc0 = fnIsBranch(ins0_mux.uop);
+always_comb bcc1 = fnIsBranch(ins1_mux.uop);
+always_comb bcc2 = fnIsBranch(ins2_mux.uop);
+always_comb bcc3 = fnIsBranch(ins3_mux.uop);
 
 always_comb jmp0 = fnDecJmp(ins0_mux);
 always_comb jmp1 = fnDecJmp(ins1_mux);
@@ -414,15 +418,15 @@ begin
 	do_ret = FALSE;
 	do_call = FALSE;
 	if (~stomp_mux) begin
-		if (bsr0|jsr0) begin
+		if (bsr0|jsr0|bcc0) begin
 			do_bsr = TRUE;
-			if (bsr0|jsr0|bsr02)
+			if (bsr0|jsr0)
 				do_call = TRUE;
 		end
 		else if (rtd0)
 			do_ret = TRUE;
 
-		else if (bsr1|jsr1) begin
+		else if (bsr1|jsr1|bcc1) begin
 			do_bsr = TRUE;
 			if (bsr1|jsr1)
 				do_call = TRUE;
@@ -430,7 +434,7 @@ begin
 		else if (rtd1)
 			do_ret = TRUE;
 
-		else if (bsr2|jsr2) begin
+		else if (bsr2|jsr2|bcc2) begin
 			do_bsr = TRUE;
 			if (bsr2|jsr2)
 				do_call = TRUE;
@@ -438,7 +442,7 @@ begin
 		else if (rtd2)
 			do_ret = TRUE;
 
-		else if (bsr3|jsr3) begin
+		else if (bsr3|jsr3|bccc3) begin
 			do_bsr = TRUE;
 			if (bsr3|jsr3)
 				do_call = TRUE;
@@ -451,13 +455,13 @@ end
 // Compute target PC for subroutine call or jump.
 always_comb
 begin
-	if (bsr0|jsr0)
+	if (bsr0|jsr0|bcc0)
 		bsr_tgt = bsr0_tgt;
-	else if (bsr1|jsr1)
+	else if (bsr1|jsr1|bcc1)
 		bsr_tgt = bsr1_tgt;
-	else if (bsr2|jsr2)
+	else if (bsr2|jsr2|bcc2)
 		bsr_tgt = bsr2_tgt;
-	else if (bsr3|jsr3)
+	else if (bsr3|jsr3|bcc3)
 		bsr_tgt = bsr3_tgt;
 	else
 		bsr_tgt.pc = RSTPC;

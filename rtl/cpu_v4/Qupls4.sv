@@ -1828,13 +1828,7 @@ gselectPredictor ugsp1
 );
 
 always_comb
-	case(1'b1)
-	pt0_mux:	new_address_mux = pc0_f.pc;
-	pt1_mux:	new_address_mux = pc0_f.pc + 6'd6;
-	pt1_mux:	new_address_mux = pc0_f.pc + 6'd12;
-	pt1_mux:	new_address_mux = pc0_f.pc + 6'd18;
-	default:	new_address_mux = Qupls4_pkg::RSTPC;
-	endcase
+	new_address_mux = bsr_tgt;
 
 always_ff @(posedge clk)
 if (irst)
