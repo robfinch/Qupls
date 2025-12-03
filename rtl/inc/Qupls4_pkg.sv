@@ -2141,9 +2141,11 @@ begin
 	fnDecDest = pr.pc;
 	jsr = fnDecJsr(pr.uop.ins);
 	bsr = fnDecBsr(pr.uop.ins);
+	bcc = fnIsBranch(pr.uop);
 	case(1'b1)
 	jsr:	fnDecDest.pc = {{23{pr.uop.jsr.disp[40]}},pr.uop.jsr.disp,1'b0};
 	bsr: 	fnDecDest.pc = pr.pc.pc + {{23{pr.uop.jsr.disp[40]}},pr.uop.jsr.disp,1'b0};
+	bcc:	fnDecDest.pc = pr.pc.pc + {{44{pr.uop.br.disp[19]}},pr.uop.br.disp,1'b0};
 	default:	fnDecDest.pc = Qupls4_pkg::RSTPC;
 	endcase
 end
