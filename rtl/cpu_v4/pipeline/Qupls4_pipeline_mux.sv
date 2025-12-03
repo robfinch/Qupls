@@ -399,10 +399,10 @@ always_comb jsri3 = ins3_mux.ins.any.opcode==OP_JSRI && ins3_mux.ins.bsr.Rt!=3'd
 
 always_comb
 begin
-	bsr0_tgt = fnDecDest(ins0_mux,cline_fet[511:0]);
-	bsr1_tgt = fnDecDest(ins1_mux,cline_fet[511:0]);
-	bsr2_tgt = fnDecDest(ins2_mux,cline_fet[511:0]);
-	bsr3_tgt = fnDecDest(ins3_mux,cline_fet[511:0]);
+	bsr0_tgt = fnDecDest(ins0_mux);
+	bsr1_tgt = fnDecDest(ins1_mux);
+	bsr2_tgt = fnDecDest(ins2_mux);
+	bsr3_tgt = fnDecDest(ins3_mux);
 end
 
 // Figure whether a subroutine call, or return is being performed. Note
@@ -414,43 +414,35 @@ begin
 	do_ret = FALSE;
 	do_call = FALSE;
 	if (~stomp_mux) begin
-		if (bsr0|bra0|jsr0|jmp0|bsr02|bra02) begin
+		if (bsr0|jsr0) begin
 			do_bsr = TRUE;
 			if (bsr0|jsr0|bsr02)
 				do_call = TRUE;
 		end
-		else if (jsr0|jsrr0)
-			do_call = TRUE;
 		else if (rtd0)
 			do_ret = TRUE;
 
-		else if (bsr1|bra1|jsr1|jmp1|bsr12|bra12) begin
+		else if (bsr1|jsr1) begin
 			do_bsr = TRUE;
-			if (bsr1|jsr1|bsr12)
+			if (bsr1|jsr1)
 				do_call = TRUE;
 		end
-		else if (jsr1|jsrr1)
-			do_call = TRUE;
 		else if (rtd1)
 			do_ret = TRUE;
 
-		else if (bsr2|bra2|jsr2|jmp2|bsr22|bra22) begin
+		else if (bsr2|jsr2) begin
 			do_bsr = TRUE;
-			if (bsr2|jsr2|bsr22)
+			if (bsr2|jsr2)
 				do_call = TRUE;
 		end
-		else if (jsr2|jsrr2)
-			do_call = TRUE;
 		else if (rtd2)
 			do_ret = TRUE;
 
-		else if (bsr3|bra3|jsr3|jmp3|bsr32|bra32) begin
+		else if (bsr3|jsr3) begin
 			do_bsr = TRUE;
-			if (bsr3|jsr3|bsr32)
+			if (bsr3|jsr3)
 				do_call = TRUE;
 		end
-		else if (jsr3|jsrr3)
-			do_call = TRUE;
 		else if (rtd3)
 			do_ret = TRUE;
 	end
@@ -459,13 +451,13 @@ end
 // Compute target PC for subroutine call or jump.
 always_comb
 begin
-	if (bsr0|bra0|jsr0|jmp0|bsr02|bra02)
+	if (bsr0|jsr0)
 		bsr_tgt = bsr0_tgt;
-	else if (bsr1|bra1|jsr1|jmp1|bsr12|bra12)
+	else if (bsr1|jsr1)
 		bsr_tgt = bsr1_tgt;
-	else if (bsr2|bra2|jsr2|jmp2|bsr22|bra22)
+	else if (bsr2|jsr2)
 		bsr_tgt = bsr2_tgt;
-	else if (bsr3|bra3|jsr3|jmp3|bsr32|bra32)
+	else if (bsr3|jsr3)
 		bsr_tgt = bsr3_tgt;
 	else
 		bsr_tgt.pc = RSTPC;
@@ -473,14 +465,14 @@ end
 
 // Compute return PC for subroutine call.
 always_comb
-	if (bsr0|jsr0|jsrr0|bsr02)
-		ret_pc = ins0_mux.pc.pc + 4'd4;
-	else if (bsr1|jsr1|jsrr1|bsr12)
-		ret_pc = ins1_mux.pc.pc + 4'd4;
-	else if (bsr2|jsr2|jsrr2|bsr22)
-		ret_pc = ins2_mux.pc.pc + 4'd4;
-	else if (bsr3|jsr3|jsrr3|bsr32)
-		ret_pc = ins3_mux.pc.pc + 4'd4;
+	if (bsr0|jsr0)
+		ret_pc = ins0_mux.pc.pc + 4'd6;
+	else if (bsr1|jsr1)
+		ret_pc = ins1_mux.pc.pc + 4'd6;
+	else if (bsr2|jsr2)
+		ret_pc = ins2_mux.pc.pc + 4'd6;
+	else if (bsr3|jsr3)
+		ret_pc = ins3_mux.pc.pc + 4'd6;
 	else
 		ret_pc = RSTPC;
 

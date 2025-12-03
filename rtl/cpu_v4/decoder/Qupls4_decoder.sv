@@ -185,12 +185,6 @@ Stark_decode_predicate_branch udecpbr
 	.count(pred_shadow_count)
 );
 
-Qupls4_decode_brclass ubrc1
-(
-	.instr(instr),
-	.brclass(db.brclass)
-);
-
 /*
 Stark_decode_mcb udecmcb
 (
@@ -417,6 +411,8 @@ else begin
 			dbo.mem <= FALSE;
 		end
 		dbo.boi <= instr.any.opcode==Qupls4_pkg::OP_BCCU64 && instr.br.cnd==Qupls4_pkg::CND_BOI;
+		dbo.bsr <= instr.any.opcode==Qupls4_pkg::OP_BSR;
+		dbo.jsr <= instr.any.opcode==Qupls4_pkg::OP_JSR;
 		dbo.cause <= Qupls4_pkg::FLT_NONE;
 		dbo.mem <= 
 			 db.load|db.vload|db.vload_ndx

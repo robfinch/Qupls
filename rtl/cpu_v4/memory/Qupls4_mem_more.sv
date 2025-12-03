@@ -52,7 +52,8 @@ if (rst_i)
 else begin
 	case(state_i)
 	Qupls4_pkg::DRAMSLOT_AVAIL:	;
-	Qupls4_pkg::DRAMSLOT_READY:
+	Qupls4_pkg::DRAMSLOT_READY,
+	Qupls4_pkg::DRAMSLOT_ACTIVE:
 		if (Qupls4_pkg::SUPPORT_UNALIGNED_MEMORY && |sel_i[79:64])
 			more_o <= TRUE;
 		else

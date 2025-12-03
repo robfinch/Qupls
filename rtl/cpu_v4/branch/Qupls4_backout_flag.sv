@@ -43,14 +43,13 @@
 import const_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_backout_flag(rst, clk, fcu_branch_resolved, fcu_brclass, takb, fcu_bt, 
+module Qupls4_backout_flag(rst, clk, fcu_branch_resolved, fcu_rse, takb, 
 	fcu_found_destination, backout);
 input rst;
 input clk;
 input fcu_branch_resolved;
-input Qupls4_pkg::brclass_t fcu_brclass;
+input Qupls4_pkg::reservation_station_entry_t fcu_rse;
 input takb;
-input fcu_bt;
 input fcu_found_destination;
 output reg backout;
 
@@ -60,19 +59,15 @@ if (rst)
 else begin
 	backout <= FALSE;
 	if (fcu_branch_resolved) begin
-		case(fcu_brclass)
-		Qupls4_pkg::BRC_BCCR:
+		case(1'b1)
+		fcu_rse.bcc:
 			// backout when !fcu_bt will be handled below, triggerred by restore
-			if (takb && fcu_bt)
+			if (takb && fcu_rse.bt)
 				backout <= !fcu_found_destination;
-		Qupls4_pkg::BRC_BCCD:
-			// backout when !fcu_bt will be handled below, triggerred by restore
-			if (takb && fcu_bt)
-				backout <= !fcu_found_destination;
-		Qupls4_pkg::BRC_RTD,
-		Qupls4_pkg::BRC_BSR,
-		Qupls4_pkg::BRC_JSR,
-		Qupls4_pkg::BRC_JSRN:
+		fcu_rse.ret,
+		fcu_rse.eret,
+		fcu_rse.bsr,
+		fcu_rse.jsr:
 			backout <= TRUE;
 		default:
 			;		

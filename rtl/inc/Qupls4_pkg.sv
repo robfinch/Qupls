@@ -442,10 +442,9 @@ typedef enum logic [9:0] {
 	BRC_NONE = 10'h000,
 	BRC_JSR = 10'h001,
 	BRC_JSRN = 10'h002,
-	BRC_BLRLC = 10'h004,
+	BRC_BSR = 10'h004,
 	BRC_BCCD = 10'h008,
 	BRC_BCCR = 10'h010,
-	BRC_BCCC = 10'h020,
 	BRC_RTD = 10'h040,
 	BRC_ERET = 10'h100,
 	BRC_ECALL = 10'h200
@@ -1374,20 +1373,12 @@ typedef struct packed
 typedef struct packed
 {
 	logic v;
-	logic pfxa;
-	logic pfxb;
-	logic pfxc;
-	logic pfxd;
 	cpu_types_pkg::aregno_t Rci;		// carry input
 	cpu_types_pkg::aregno_t Rs1;
 	cpu_types_pkg::aregno_t Rs2;
 	cpu_types_pkg::aregno_t Rs3;
 	cpu_types_pkg::aregno_t Rs4;
 	cpu_types_pkg::aregno_t Rd;
-	cpu_types_pkg::aregno_t Rs1a;
-	cpu_types_pkg::aregno_t Rs2a;
-	cpu_types_pkg::aregno_t Rs3a;
-	cpu_types_pkg::aregno_t Rs4a;
 	cpu_types_pkg::aregno_t Rd2;
 	cpu_types_pkg::aregno_t Rd3;
 	cpu_types_pkg::aregno_t Rco;		// carry output
@@ -1396,10 +1387,6 @@ typedef struct packed
 	logic Rs3z;
 	logic Rs4z;
 	logic Rdz;
-	logic Rs1az;
-	logic Rs2az;
-	logic Rs3az;
-	logic Rs4az;
 	logic Rd2z;
 	logic Rd3z;
 	logic has_Rs2;
@@ -1453,25 +1440,25 @@ typedef struct packed
 	logic push;
 	logic pop;
 	logic [2:0] count;
-	logic aldf;
-	logic astf;
 	logic cls;
 	logic loada;
 	logic erc;
 	logic fence;
 	logic mcb;					// micro-code branch
-	brclass_t brclass;
+
 	logic bcc;					// conditional branch
 	logic cjb;					// call, jmp, or bra
-	logic bl;						// branch and link to subroutine
 	logic jsri;					// indirect subroutine call
 	logic br;
+	logic bsr;
+	logic jsr;
 	logic pbr;
 	logic ret;
-	logic brk;
 	logic boi;
-	logic irq;
 	logic eret;
+	
+	logic brk;
+	logic irq;
 	logic rex;
 	logic pfx;
 	logic sync;
@@ -1515,11 +1502,12 @@ typedef struct packed {
 
 typedef struct packed {
 	logic v;
+	logic [1:0] state;		// 00=run first bus cycle, 01=run second bus cycle, 11=done
 	cpu_types_pkg::seqnum_t sn;
 	logic agen;						// address generated through to physical address
 	cpu_types_pkg::rob_ndx_t rndx;				// reference to related ROB entry
-	logic vpa;						// virtual or physical address
-	cpu_types_pkg::physical_address_t adr;
+	cpu_types_pkg::virtual_address_t vadr;
+	cpu_types_pkg::physical_address_t padr;
 	operating_mode_t omode;	// operating mode
 	logic v2p;						// 1=doing a virtual to physical address translation
 	logic load;						// 1=load
@@ -1528,8 +1516,10 @@ typedef struct packed {
 	logic cload_tags;
 	logic store;
 	logic cstore;
-	logic aldf;
-	logic astf;
+	logic vload;
+	logic vload_ndx;
+	logic vstore;
+	logic vstore_ndx;
 	ex_instruction_t op;
 	cpu_types_pkg::pc_address_ex_t pc;
 	memop_t func;					// operation to perform
@@ -1542,6 +1532,7 @@ typedef struct packed {
 	logic dchit;
 	memsz_t memsz;				// indicates size of data
 	logic [7:0] bytcnt;		// byte count of data to load/store
+	logic [6:0] shift;		// amount to shift data
 	cpu_types_pkg::pregno_t Rt;
 	cpu_types_pkg::aregno_t aRt;					// reference for freeing
 	logic aRtz;
@@ -1579,9 +1570,13 @@ typedef struct packed
 	cpu_types_pkg::pc_address_t pc;
 	logic load;
 	logic loadz;
+	logic vload;
+	logic vload_ndx;
 	logic cload;
 	logic cload_tags;
 	logic store;
+	logic vstore;
+	logic vstore_ndx;
 	logic cstore;
 	logic erc;
 	logic hi;
@@ -1694,10 +1689,18 @@ typedef struct packed {
 	logic pop;
 	logic [2:0] count;
 	// decodes only needed for branch
+	logic bcc;					// conditional branch
+	logic cjb;					// call, jmp, or bra
+	logic jsri;					// indirect subroutine call
+	logic bsr;
+	logic jsr;
+	logic br;
+	logic pbr;
+	logic ret;
+	logic boi;
+	logic eret;
+
 	logic bt;												
-	brclass_t brclass;
-	logic cjb;
-	logic bl;
 	// - - - - - - - - - - - - - - - - 
 	memsz_t prc;
 	logic [$bits(cpu_types_pkg::value_t)/8-1:0] copydst;
@@ -2002,7 +2005,6 @@ function [63:0] fnDati;
 input more;
 input micro_op_t ins;
 input cpu_types_pkg::value_t dat;
-input cpu_types_pkg::pc_address_t pc;
 case(ins.any.opcode)
 OP_LDB:		fnDati = {{56{dat[7]}},dat[7:0]};
 OP_LDBZ:	fnDati = {{56{1'b0}},dat[7:0]};
@@ -2134,23 +2136,15 @@ endfunction
 
 function cpu_types_pkg::pc_address_ex_t fnDecDest;
 input Qupls4_pkg::pipeline_reg_t pr;
-input [511:0] cline;
-reg jsr,jmp,bsr,bra,bsr2,bra2;
+reg jsr,bsr;
 begin
 	fnDecDest = pr.pc;
 	jsr = fnDecJsr(pr.uop.ins);
-	jmp = fnDecJmp(pr.uop.ins);
 	bsr = fnDecBsr(pr.uop.ins);
-	bra = fnDecBra(pr.uop.ins);
-	bsr2 = fnDecBsr2(pr.uop.ins);
-	bra2 = fnDecBra2(pr.uop.ins);
 	case(1'b1)
-	jsr:	fnDecDest.pc = fnDecConst(pr.uop.ins,cline);
-	jmp:	fnDecDest.pc = fnDecConst(pr.uop.ins,cline);
-	bsr: 	fnDecDest.pc = pr.pc.pc + {{39{pr.uop.ins.bl.disp[21]}},pr.uop.ins.bl.disp,pr.uop.ins.bl.d0};
-	bra: 	fnDecDest.pc = pr.pc.pc + {{39{pr.uop.ins.bl.disp[21]}},pr.uop.ins.bl.disp,pr.uop.ins.bl.d0};
-	bsr2:	fnDecDest.pc = pr.pc.pc + fnDecConst(pr.uop.ins,cline);
-	bra2:	fnDecDest.pc = pr.pc.pc + fnDecConst(pr.uop.ins,cline);
+	jsr:	fnDecDest.pc = {{23{pr.uop.jsr.disp[40]}},pr.uop.jsr.disp,1'b0};
+	bsr: 	fnDecDest.pc = pr.pc.pc + {{23{pr.uop.jsr.disp[40]}},pr.uop.jsr.disp,1'b0};
+	default:	fnDecDest.pc = Qupls4_pkg::RSTPC;
 	endcase
 end
 endfunction

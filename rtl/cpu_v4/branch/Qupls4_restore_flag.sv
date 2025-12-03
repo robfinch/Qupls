@@ -41,14 +41,14 @@
 
 import const_pkg::*;
 import cpu_types_pkg::*;
-import Stark_pkg::*;
+import Qupls4_pkg::*;
 
-module Stark_restore_flag(rst, clk, fcu_branch_resolved, fcu_brclass,
+module Qupls4_restore_flag(rst, clk, fcu_branch_resolved, rse,
 	fcu_found_destination, branchmiss_det, restore);
 input rst;	// not used
 input clk;
 input fcu_branch_resolved;
-input Stark_pkg::brclass_t fcu_brclass;
+input Qupls4_pkg::reservation_station_entry_t rse;
 input fcu_found_destination;
 input branchmiss_det;
 output reg restore;
@@ -57,10 +57,8 @@ always_ff @(posedge clk)
 begin
 	restore <= FALSE;
 	if (fcu_branch_resolved) begin
-		case(fcu_brclass)
-		Stark_pkg::BRC_BCCR,
-		Stark_pkg::BRC_BCCD,
-		Stark_pkg::BRC_BCCC:
+		case(1'b1)
+		rse.bcc:
 			if (branchmiss_det)
 				restore <= !fcu_found_destination;
 		default:

@@ -60,9 +60,14 @@ input [511:0] cpu_dat_i;
 input Qupls4_pkg::lsq_entry_t lsq_i;
 output dram_oper_t dram_oper_o;
 output dram_work_t dram_work_o;
+output page_cross;
 
-cpu_types_pkg::virtual_address_t next_vaddr = {dram_work_o.vaddrh[$bits(virtual_address_t)-1:6] + 2'd1,6'h0};
-cpu_types_pkg::physical_address_t next_paddr = {dram_work_o.paddrh[$bits(physical_address_t)-1:6] + 2'd1,6'h0};
+cpu_types_pkg::virtual_address_t next_vaddr = {lsq_i.vadr[$bits(virtual_address_t)-1:6] + 2'd1,6'h0};
+cpu_types_pkg::physical_address_t next_paddr = {lsq_i.padr[$bits(physical_address_t)-1:6] + 2'd1,6'h0};
+// Compute and shift select lines into position.
+wire [79:0] sel = {64'h0,Qupls4_pkg::fnSel(rob_i[lsq_i.rndx].op)} << lsq_i.vadr[5:0];
+
+assign page_cross = next_vaddr[$bits(virtual_address_t)-1:13] != lsq_i.vadr[$bits(virtual_address_t)-1:13] && |sel[79:64];
 
 always_ff @(posedge clk_i)
 if (rst_i) begin
@@ -98,9 +103,11 @@ else begin
 	end
 
 	// grab requests that have finished and put them on the dram_bus
+	// .hi runs the high half bus cycle for an unaligned access that does not cross a page boundary
 	if (dram_state_i == Qupls4_pkg::DRAMSLOT_ACTIVE && dram_ack_i && dram_work_o.hi && Qupls4_pkg::SUPPORT_UNALIGNED_MEMORY) begin
 		dram_work_o.hi <= 1'b0;
     dram_oper_o.oper.v <= (dram_work_o.load|dram_work_o.cload|dram_work_o.cload_tags) & ~dram_stomp_i;
+    dram_oper_o.state <= 2'b11;
     dram_oper_o.rndx <= dram_work_o.rndx;
     dram_oper_o.oper.pRn <= dram_work_o.pRd;
     dram_oper_o.oper.aRn <= dram_work_o.aRd;
@@ -109,7 +116,7 @@ else begin
     dram_oper_o.cndx <= dram_work_o.cndx;
     dram_oper_o.rndx <= dram_work_o.rndx;
     dram_oper_o.exc <= dram_work_o.exc;
-  	dram_oper_o.oper.val <= Qupls4_pkg::fnDati(1'b0,dram_work_o.op,(cpu_dat_i << dram_work_o.shift)|dram_oper_o.val, dram_work_o.pc);
+  	dram_oper_o.oper.val <= Qupls4_pkg::fnDati(1'b0,dram_work_o.op,(cpu_dat_i << (7'd64-lsq_i.shift))|dram_oper_o.val, dram_work_o.pc);
   	dram_oper_o.oper.flags <= dram_work_o.flags;
     if (dram_work_o.store) begin
     	dram_work_o.store <= 1'd0;
@@ -125,6 +132,7 @@ else begin
 	else if (dram_state_i == Qupls4_pkg::DRAMSLOT_ACTIVE && dram_ack_i) begin
 		// If there is more to do, trigger a second instruction issue.
     dram_oper_o.oper.v <= (dram_work_o.load|dram_work_o.cload|dram_work_o.cload_tags) & ~dram_more_i & ~dram_stomp_i;
+    dram_oper_o.state <= dram_more_i ? 2'b01 : 2'b11;
     dram_oper_o.rndx <= dram_work_o.rndx;
     dram_oper_o.oper.pRn <= dram_work_o.pRd;
     dram_oper_o.oper.aRn <= dram_work_o.aRd;
@@ -132,7 +140,11 @@ else begin
     dram_oper_o.om <= dram_work_o.om;
     dram_oper_o.cndx <= dram_work_o.cndx;
     dram_oper_o.exc <= dram_work_o.exc;
-  	dram_oper_o.oper.val <= Qupls4_pkg::fnDati(dram_more_i,dram_work_o.op,cpu_dat_i >> dram_work_o.shift, dram_work_o.pc);
+    // Note shift gets switched for second bus cycle.
+    if (dram_oper.state==2'b01)
+	  	dram_oper_o.oper.val <= Qupls4_pkg::fnDati(1'b0,dram_work_o.op,(cpu_dat_i << lsq_i.shift)|dram_oper_o.val);
+    else
+  		dram_oper_o.oper.val <= Qupls4_pkg::fnDati(dram_more_i,dram_work_o.op,cpu_dat_i >> lsq_i.shift);
     if (dram_work_o.store) begin
     	dram_work_o.store <= 1'd0;
     	dram_work_o.sel <= 80'd0;
@@ -158,6 +170,7 @@ else begin
 			dram_oper_o.om <= lsq_i.om;
 			dram_oper_o.cndx <= rob_i[lsq_i.rndx].cndx;
 	    dram_oper_o.rndx <= lsq_i.rndx;
+	    dram_oper_o.state <= 2'b11;
 		end
 	end
 	else if (Qupls4_pkg::SUPPORT_LOAD_BYPASSING && vb_i) begin
@@ -168,57 +181,75 @@ else begin
 		dram_oper_o.om	<= lsq_i.om;
 		dram_oper_o.cndx <= rob_i[lsq_i.rndx].cndx;
     dram_oper_o.rndx <= lsq_i.rndx;
+    dram_oper_o.state <= 2'b11;
 	end
-  else if (dram_state_i == Qupls4_pkg::DRAMSLOT_AVAIL && lsndxv_i && !stomp_i[lsq_i.rndx] && !dram_idv_i && !dram_idv2_i) begin
-		dram_work_o.exc <= Qupls4_pkg::FLT_NONE;
-		dram_work_o.rndx <= lsq_i.rndx;
-		dram_work_o.rndxv <= VAL;
-		dram_work_o.om <= lsq_i.om;
-		dram_work_o.op <= lsq_i.op;
-//		dram0_ldip <= rob[lsq[mem0_lsndx.row][mem0_lsndx.col].rndx].excv;
-		dram_work_o.pc <= lsq_i.pc;
-		dram_work_o.load <= lsq_i.load;
-		dram_work_o.loadz <= lsq_i.loadz;
-		dram_work_o.cload <= lsq_i.cload;
-		dram_work_o.cload_tags <= lsq_i.cload_tags;
-		dram_work_o.store <= lsq_i.store;
-		dram_work_o.cstore <= lsq_i.cstore;
-		dram_work_o.erc <= rob_i[lsq_i.rndx].decbus.erc;
-		dram_work_o.pRd	<= lsq_i.Rt;
-		dram_work_o.aRd	<= lsq_i.aRt;
-		dram_work_o.aRdz <= lsq_i.aRtz;
-		dram_work_o.om <= lsq_i.om;
-		dram_work_o.bank <= lsq_i.om==2'd0 ? 1'b0 : 1'b1;
-		dram_work_o.cndx <= rob_i[lsq_i.rndx].cndx;
-		if (dram_more_i && Qupls4_pkg::SUPPORT_UNALIGNED_MEMORY) begin
-			dram_work_o.hi <= 1'b1;
-			dram_work_o.sel <= dram_work_o.selh >> 8'd64;
-			dram_work_o.vaddr <= next_vaddr;
-			dram_work_o.paddr <= next_paddr;
-			dram_work_o.data <= dram_work_o.datah >> 12'd512;
-			dram_work_o.shift <= {7'd64-dram_work_o.paddrh[5:0],3'b0};
-			// Cross page boundary?
-			if (next_vaddr[12:0]==13'h000)
-				dram_work_o.exc <= Qupls4_pkg::FLT_ALN;
-		end
-		else begin
-			dram_work_o.hi <= 1'b0;
-			dram_work_o.sel <= {64'h0,Qupls4_pkg::fnSel(rob_i[lsq_i.rndx].op)} << lsq_i.adr[5:0];
-			dram_work_o.selh <= {64'h0,Qupls4_pkg::fnSel(rob_i[lsq_i.rndx].op)} << lsq_i.adr[5:0];
-			dram_work_o.vaddr <= lsq_i.adr;
-			dram_work_o.paddr <= lsq_i.adr;
-			dram_work_o.vaddrh <= lsq_i.adr;
-			dram_work_o.paddrh <= lsq_i.adr;
-			dram_work_o.data <= lsq_i.res << {lsq_i.adr[5:0],3'b0};
-			dram_work_o.datah <= lsq_i.res << {lsq_i.adr[5:0],3'b0};
-			dram_work_o.ctag <= lsq_i.flags.cap;
-			dram_work_o.shift <= {lsq_i.adr[5:0],3'd0};
-		end
-		dram_work_o.memsz <= Qupls4_pkg::fnMemsz(rob_i[lsq_i.rndx].op);
-		dram_work_o.tid.core <= CORENO;
-		dram_work_o.tid.channel <= 3'd1;
-		dram_work_o.tid.tranid <= dram_work_o.tid.tranid + 2'd1;
-    dram_work_o.tocnt <= 12'd0;
+  else begin
+  	case(dram_state_i)
+  	Qupls4_pkg::DRAMSLOT_AVAIL:
+  		if (lsndxv_i && !stomp_i[lsq_i.rndx] && !dram_idv_i && !dram_idv2_i) begin
+				dram_work_o.exc <= Qupls4_pkg::FLT_NONE;
+				dram_work_o.rndx <= lsq_i.rndx;
+				dram_work_o.rndxv <= VAL;
+				dram_work_o.om <= lsq_i.om;
+				dram_work_o.op <= lsq_i.op;
+		//		dram0_ldip <= rob[lsq[mem0_lsndx.row][mem0_lsndx.col].rndx].excv;
+				dram_work_o.pc <= lsq_i.pc;
+				dram_work_o.load <= lsq_i.load;
+				dram_work_o.vload <= lsq_i.vload;
+				dram_work_o.vload_ndx <= lsq_i.vload_ndx;
+				dram_work_o.loadz <= lsq_i.loadz;
+				dram_work_o.cload <= lsq_i.cload;
+				dram_work_o.cload_tags <= lsq_i.cload_tags;
+				dram_work_o.store <= lsq_i.store;
+				dram_work_o.vstore <= lsq_i.vstore;
+				dram_work_o.vstore_ndx <= lsq_i.vstore_ndx;
+				dram_work_o.cstore <= lsq_i.cstore;
+				dram_work_o.erc <= rob_i[lsq_i.rndx].decbus.erc;
+				dram_work_o.pRd	<= lsq_i.Rt;
+				dram_work_o.aRd	<= lsq_i.aRt;
+				dram_work_o.aRdz <= lsq_i.aRtz;
+				dram_work_o.om <= lsq_i.om;
+				dram_work_o.bank <= lsq_i.om==2'd0 ? 1'b0 : 1'b1;
+				dram_work_o.cndx <= rob_i[lsq_i.rndx].cndx;
+				// Did access cross page boundary?
+				if (lsq_i.state==2'b01 && Qupls4_pkg::SUPPORT_UNALIGNED_MEMORY) begin
+					dram_work_o.hi <= 1'b0;
+					dram_work_o.sel <= sel >> lsq_i.shift;
+					dram_work_o.vaddr <= lsq_i.vadr;	// bin recomputed.
+					dram_work_o.paddr <= lsq_i.padr;
+					dram_work_o.data <= lsq_i.res >> {lsq_i.shift[5:0],3'b0};
+				end
+				else begin
+					dram_work_o.hi <= 1'b0;
+					dram_work_o.sel <= sel;
+					dram_work_o.selh <= sel;
+					dram_work_o.vaddr <= lsq_i.vadr;
+					dram_work_o.paddr <= lsq_i.padr;
+					dram_work_o.vaddrh <= lsq_i.vadr;
+					dram_work_o.paddrh <= lsq_i.padr;
+					dram_work_o.data <= lsq_i.res << {lsq_i.shift,3'b0};
+					dram_work_o.datah <= lsq_i.res << {lsq_i.shift,3'b0};
+					dram_work_o.ctag <= lsq_i.flags.cap;
+				end
+				dram_work_o.memsz <= Qupls4_pkg::fnMemsz(rob_i[lsq_i.rndx].op);
+				dram_work_o.tid.core <= CORENO;
+				dram_work_o.tid.channel <= 3'd1;
+				dram_work_o.tid.tranid <= dram_work_o.tid.tranid + 2'd1;
+		    dram_work_o.tocnt <= 12'd0;
+		  end
+		Qupls4_pkg::DRAMSLOT_DELAY:
+			if (dram_more_i && !page_cross && Qupls4_pkg::SUPPORT_UNALIGNED_MEMORY) begin
+				dram_work_o.hi <= 1'b1;
+				dram_work_o.sel <= sel >> (7'd64-lsq_i.shift);
+				dram_work_o.vaddr <= next_vaddr;
+				dram_work_o.paddr <= next_paddr;
+				dram_work_o.data <= lsq_i.res >> (7'd64 - {lsq_i.shift,3'b0});
+				// Cross page boundary?
+	//			if (page_cross)
+	//				dram_work_o.exc <= Qupls4_pkg::FLT_ALN;
+			end
+		default:	;
+		endcase
   end
 end
 

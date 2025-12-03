@@ -743,9 +743,9 @@ wire agen0_full;
 reg agen0_done = 1'b1;
 Qupls4_pkg::ex_instruction_t agen0_op;
 wire agen0_virt2phys;
-reg agen0_load;
-reg agen0_store;
+reg agen0_load_store;
 reg agen0_amo;
+reg agen0_vlsndx;
 rob_ndx_t agen0_id;
 Qupls4_pkg::operating_mode_t agen0_om;
 wire agen0_we;
@@ -779,9 +779,9 @@ reg agen1_done = 1'b1;
 wire agen1_full;
 Qupls4_pkg::ex_instruction_t agen1_op;
 wire agen1_virt2phys;
-reg agen1_load;
-reg agen1_store;
+reg agen1_load_store;
 reg agen1_amo;
+reg agen1_vlsndx;
 rob_ndx_t agen1_id;
 Qupls4_pkg::operating_mode_t agen1_om;
 wire agen1_we;
@@ -864,10 +864,14 @@ address_t dramN_addr [0:Qupls4_pkg::NDATA_PORTS-1];
 address_t dramN_vaddr [0:Qupls4_pkg::NDATA_PORTS-1];
 address_t dramN_paddr [0:Qupls4_pkg::NDATA_PORTS-1];
 reg [Qupls4_pkg::NDATA_PORTS-1:0] dramN_load;
+reg [Qupls4_pkg::NDATA_PORTS-1:0] dramN_vload;
+reg [Qupls4_pkg::NDATA_PORTS-1:0] dramN_vload_ndx;
 reg [Qupls4_pkg::NDATA_PORTS-1:0] dramN_loadz;
 reg [Qupls4_pkg::NDATA_PORTS-1:0] dramN_cload;
 reg [Qupls4_pkg::NDATA_PORTS-1:0] dramN_cload_tags;
 reg [Qupls4_pkg::NDATA_PORTS-1:0] dramN_store;
+reg [Qupls4_pkg::NDATA_PORTS-1:0] dramN_vstore;
+reg [Qupls4_pkg::NDATA_PORTS-1:0] dramN_vstore_ndx;
 reg [Qupls4_pkg::NDATA_PORTS-1:0] dramN_cstore;
 reg [Qupls4_pkg::NDATA_PORTS-1:0] dramN_ack;
 reg [Qupls4_pkg::NDATA_PORTS-1:0] dramN_erc;
@@ -1597,7 +1601,9 @@ else
 end
 endgenerate
 						
-			
+
+wire predicted_correctly_dec;
+wire [63:0] new_address_dec;			
 wire ic_port;
 wire ftaim_full, ftadm_full;
 reg ihit_fet, ihit_mux, ihit_dec, ihit_ren, ihit_que;
@@ -1739,6 +1745,8 @@ Qupls4_btb ubtb1
 	.do_call(do_call),
 	.ret_pc(ret_pc),
 	.bsr_tgt(bsr_tgt),
+	.predicted_correctly_dec(predicted_correctly_dec),
+	.new_address_dec(new_address_dec),
 	.mip0v(mip0v),
 	.mip1v(mip1v),
 	.mip2v(mip2v),
@@ -1756,7 +1764,7 @@ Qupls4_btb ubtb1
 	.takb1(ntakb[1]),
 	.takb2(ntakb[2]),
 	.takb3(ntakb[3]),
-	.branchmiss(branch_state == Qupls4_pkg::BS_CHKPT_RESTORED),
+	.branchmiss(branchmiss && fcu_rse.v),//branch_state == Qupls4_pkg::BS_CHKPT_RESTORED),
 	.misspc(misspc),
 	.commit_pc0(commit_pc0),
 	.commit_brtgt0(commit_brtgt0),
@@ -1916,10 +1924,12 @@ Qupls4_stomp ustmp1
 	.micro_machine_active(1'b0),
 	.found_destination(fcu_found_destination),
 	.destination_rndx(fcu_dst),
-	.branchmiss(branchmiss),
+	.branch_resolved(fcu_branch_resolved),
+	.branchmiss(branchmiss & fcu_rse.v),
 	.branch_state(branch_state), 
 	.do_bsr(do_bsr|do_ret),
 	.misspc(misspc),
+	.predicted_correctly_dec(predicted_correctly_dec),
 	.pc(pc),
 	.pc_f(pc0_f),
 	.pc_fet(pc0_fet),
@@ -2379,7 +2389,7 @@ Qupls4_pipeline_mux uiext1
 	.pc0_fet(pc0_fet),
 	.hwipc_fet(hwipc_fet),
 	.micro_machine_active(1'b0),
-	.branchmiss(branch_state > Qupls4_pkg::BS_STATE3),
+	.branchmiss(branchmiss & fcu_rse.v),//branch_state > Qupls4_pkg::BS_STATE3),
 	.takb_fet(takb_fet),
 	.pt_mux(pt_mux),
 	.pt_dec(pt_dec),
@@ -3509,7 +3519,7 @@ Qupls4_func_result_queue ufrq10
 	.rst_i(irst),
 	.clk_i(clk),
 	.rd_i(fuq_rd[10]),
-	.we_i(dram0_we & {9{dram0_oper.oper.v}}),
+	.we_i(dram0_we & {9{dram0_oper.oper.v & dram0_oper.state==2'b11}}),
 	.rse_i(dram0_rse),
 	.tag_i(dram0_oper.oper.flags),
 	.res_i(dram0_oper.oper.val),
@@ -3530,7 +3540,7 @@ Qupls4_func_result_queue ufrq11
 	.rst_i(irst),
 	.clk_i(clk),
 	.rd_i(fuq_rd[11]),
-	.we_i(dram1_we & {9{dram1_oper.oper.v}}),
+	.we_i(dram1_we & {9{dram1_oper.oper.v & dram1_oper.state==2'b11}}),
 	.rse_i(dram1_rse),
 	.tag_i(dram1_oper.oper.flags),
 	.res_i(dram1_oper.oper.val),
@@ -3713,16 +3723,9 @@ always_comb
 
 Qupls4_branchmiss_pc umisspc1
 (
-	.instr(fcu_rse.uop),
-	.brclass(fcu_rse.brclass),
-	.pc(fcu_rse.pc),
+	.rse(fcu_rse),
 	.pc_stack(pc_stack),
-	.bt(fcu_rse.bt),
 	.takb(takb),
-	.argA(fcu_rse.arg[0].val),
-	.argB(fcu_rse.arg[1].val),
-	.argC(fcu_rse.arg[2].val),
-	.argI(fcu_rse.argI),
 	.misspc(fcu_misspc1),
 	.vector(irq_in.vector),
 	.missgrp(fcu_missgrp),
@@ -3768,16 +3771,13 @@ end
 
 reg branchmiss_det;
 always_comb
-	branchmiss_det = ((takb && !fcu_bt) || (!takb && fcu_bt));
+	branchmiss_det = ((takb && !fcu_rse.bt) || (!takb && fcu_rse.bt));
 
 // Branchmiss flag
 
 Qupls4_branchmiss_flag ubmf1
 (
-	.rst(irst),
-	.clk(clk),
-	.brclass(fcu_rse.brclass),
-	.trig(fcu_branch_resolved),
+	.rse(fcu_rse),
 	.miss_det(branchmiss_det),
 	.miss_flag(fcu_branchmiss)
 );
@@ -3787,19 +3787,18 @@ Qupls4_backout_flag ubkoutf1
 	.rst(irst),
 	.clk(clk),
 	.fcu_branch_resolved(fcu_branch_resolved),
-	.fcu_brclass(fcu_rse.brclass),
+	.rse(fcu_rse),
 	.takb(takb),
-	.fcu_bt(fcu_rse.bt), 
 	.fcu_found_destination(fcu_found_destination),
 	.backout(backout)
 );
 
-Stark_restore_flag urstf1
+Qupls4_restore_flag urstf1
 (
 	.rst(irst),
 	.clk(clk),
 	.fcu_branch_resolved(fcu_branchmiss_resolved),
-	.fcu_brclass(fcu_rse.brclass),
+	.rse(fcu_rse),
 	.fcu_found_destination(fcu_found_destination),
 	.branchmiss_det(branchmiss_det),
 	.restore(restore)
@@ -3811,14 +3810,8 @@ Stark_restore_flag urstf1
 
 reg brtgtvr;
 always_comb
-	branchmiss_next = (excmiss | fcu_branchmiss);// & ~branchmiss;
-always_comb//ff @(posedge clk)
-if (irst)
-	branchmiss <= FALSE;
-else begin
-//	if (advance_pipeline)
-		branchmiss = branchmiss_next;
-end
+	branchmiss = irst ? FALSE: (excmiss | fcu_branchmiss);// & ~branchmiss;
+
 always_ff @(posedge clk)
 if (irst)
 	branchmiss_h <= FALSE;
@@ -3828,13 +3821,10 @@ else begin
 	if (advance_pipeline)
 		branchmiss_h <= FALSE;
 end
+
 always_comb//ff @(posedge clk)
-if (irst)
-	missid <= 5'd0;
-else begin
-//	if (advance_pipeline)
-		missid <= excmiss ? excid : fcu_rse.rndx;
-end
+	missid = irst ? 8'd0 : excmiss ? excid : fcu_rse.rndx;
+
 /*
 always_ff @(posedge clk)
 	if (branch_state==BS_CHKPT_RESTORE) begin
@@ -3842,38 +3832,25 @@ always_ff @(posedge clk)
 			missidb[n24] = (excmiss ? excid : fcu_rse.rndx)==n24;
 	end
 */
-always_ff @(posedge clk)
+always_comb
 if (irst) begin
-	fcu_misspc.bno_t <= 6'd1;
-	fcu_misspc.bno_f <= 6'd1;
-	fcu_misspc.pc <= next_pc.pc;
+	misspc.bno_t = 6'd1;
+	misspc.bno_f = 6'd1;
+	misspc.pc = next_pc.pc;
 end
 else begin
-	if (do_bsr)
-		fcu_misspc <= bsr_tgt;
-	else// if (fcu_v6)
-		fcu_misspc <= fcu_misspc1;
+	case(1'b1)
+	excmiss: misspc = excmisspc;
+	default:	misspc = fcu_misspc1;
+	endcase
 end		
-always_ff @(posedge clk)
-if (irst) begin
-	misspc.bno_t <= 6'd1;
-	misspc.bno_f <= 6'd1;
-	misspc.pc <= Qupls4_pkg::RSTPC;
-end
-else begin
-//	if (advance_pipeline)
-	if (branch_state==Qupls4_pkg::BS_CAPTURE_MISSPC)
-		misspc <= excmiss ? excmisspc : fcu_misspc;
-//		misspc <= excmiss ? {dram0_bus[$bits(pc_address_t)-1:8],8'h00} : brtgtvr ? brtgt : fcu_misspc;
-end
-always_ff @(posedge clk)
+
+always_comb
 if (irst)
 	missgrp <= 4'd0;
-else begin
-//	if (advance_pipeline)
-	if (branch_state==Qupls4_pkg::BS_CHKPT_RESTORE)
-		missgrp <= excmiss ? excmissgrp : fcu_missgrp;
-end
+else
+	missgrp <= excmiss ? excmissgrp : fcu_missgrp;
+/*
 always_ff @(posedge clk)
 if (irst)
 	missir <= {26'd0,Qupls4_pkg::OP_NOP};
@@ -3882,17 +3859,21 @@ else begin
 	if (branch_state==Qupls4_pkg::BS_CHKPT_RESTORE)
 		missir <= excmiss ? excir : fcu_missir;
 end
-
+*/
+/*
 wire s4s7 = (pc.pc==misspc.pc && ihito && brtgtvr) ||
 	(robentry_stomp[fcu_rse.rndx] || (rob[fcu_rse.rndx].out[1] && !rob[fcu_rse.rndx].v))
 	;
+*/
+/*
 wire s5s7 = (next_pc.pc==misspc.pc && ihit && (rob[fcu_rse.rndx].done==2'b11 || fcu_idle)) ||
 //wire s5s7 = (next_pc==misspc && get_next_pc && ihito && (rob[fcu_rse.rndx].done==2'b11 || fcu_idle)) ||
 	(robentry_stomp[fcu_rse.rndx] || 
 	(!rob[fcu_rse.rndx].v))
 //	(rob[fcu_rse.rndx].out[1] && !rob[fcu_rse.rndx].v))
 	;
-
+*/
+/*
 always_ff @(posedge clk)
 if (irst)
 	branch_state <= Qupls4_pkg::BS_IDLE;
@@ -3926,7 +3907,8 @@ else begin
 		endcase
 	end
 end
-
+*/
+/*
 always_ff @(posedge clk)
 if (irst)
 	bs_idle_oh <= TRUE;
@@ -3955,7 +3937,7 @@ else begin
 	default:	;
 	endcase
 end
-
+*/
 
 // ----------------------------------------------------------------------------
 // Predicate numbers
@@ -4404,9 +4386,9 @@ end
 end
 endgenerate
 
-// ----------------------------------------------------------------------------
+// =============================================================================
 // MEMORY stage
-// ----------------------------------------------------------------------------
+// =============================================================================
 
 wire agen0_v, agen1_v;
 
@@ -4422,14 +4404,15 @@ virtual_address_t ptw_vadr;
 physical_address_t ptw_padr;
 wire ptw_vv;
 wire ptw_pv;
+wire page_cross;
 
 Qupls4_pkg::lsq_ndx_t lsq_tail, lsq_tail0;
 Qupls4_pkg::lsq_ndx_t lsq_heads [0:Qupls4_pkg::LSQ_ENTRIES];
 
 Qupls4_pkg::lsq_ndx_t lbndx0, lbndx1;
 
-reg dram0_timeout;
-reg dram1_timeout;
+wire dram0_timeout;
+wire dram1_timeout;
 
 wire [Qupls4_pkg::NDATA_PORTS-1:0] dcache_load;
 wire [Qupls4_pkg::NDATA_PORTS-1:0] dhit2;
@@ -4468,8 +4451,19 @@ for (g = 0; g < Qupls4_pkg::NDATA_PORTS; g = g + 1) begin
 		cpu_request_rndx[g] = dramN_id[g];
 		cpu_request_i[g].tid = dramN_tid[g];
 		cpu_request_i[g].om = fta_bus_pkg::MACHINE;
-		cpu_request_i[g].cmd = dramN_store[g] ? fta_bus_pkg::CMD_STORE : dramN_loadz[g] ? fta_bus_pkg::CMD_LOADZ :
-			dramN_load[g]|dramN_cload[g]|dramN_cload_tags ? fta_bus_pkg::CMD_LOAD : fta_bus_pkg::CMD_NONE;
+		case(1'b1)
+		dramN_store[g]:	cpu_request_i[g].cmd = fta_bus_pkg::CMD_STORE;
+		dramN_cstore[g]:	cpu_request_i[g].cmd = fta_bus_pkg::CMD_STORE;
+		dramN_vstore[g]:	cpu_request_i[g].cmd = fta_bus_pkg::CMD_STORE;
+		dramN_vstore_ndx[g]:	cpu_request_i[g].cmd = fta_bus_pkg::CMD_STORE;
+		dramN_loadz[g]:	cpu_request_i[g].cmd = fta_bus_pkg::CMD_LOADZ;
+		dramN_load[g]:	cpu_request_i[g].cmd = fta_bus_pkg::CMD_LOAD;
+		dramN_vload[g]:	cpu_request_i[g].cmd = fta_bus_pkg::CMD_LOAD;
+		dramN_vload_ndx[g]:	cpu_request_i[g].cmd = fta_bus_pkg::CMD_LOAD;
+		dramN_cload[g]:	cpu_request_i[g].cmd = fta_bus_pkg::CMD_LOAD;
+		dramN_cload_tags[g]:	cpu_request_i[g].cmd = fta_bus_pkg::CMD_LOAD;
+		default:	cpu_request_i[g].cmd = fta_bus_pkg::CMD_NONE;
+		endcase
 		cpu_request_i[g].bte = fta_bus_pkg::LINEAR;
 		cpu_request_i[g].cti = (dramN_erc[g] || ERC) ? fta_bus_pkg::ERC : fta_bus_pkg::CLASSIC;
 		cpu_request_i[g].blen = 6'd0;
@@ -4487,7 +4481,7 @@ for (g = 0; g < Qupls4_pkg::NDATA_PORTS; g = g + 1) begin
 		cpu_request_i[g].sel = dramN_sel[g];
 		cpu_request_i[g].pl = 8'h00;
 		cpu_request_i[g].pri = 4'd7;
-		if (dramN_load[g]|dramN_cload[g]|dramN_cload_tags) begin
+		if (dramN_load[g]|dramN_cload[g]|dramN_cload_tags|dramN_vload[g]|dramN_vload_ndx[g]) begin
 			cpu_request_i[g].cache = fta_bus_pkg::WT_READ_ALLOCATE;
 			dramN_ack[g] = cpu_resp_o[g].ack & ~cpu_resp_o[g].rty;
 		end
@@ -4588,9 +4582,13 @@ begin
 	dramN_sel[0] = dram0_work.sel[63:0];
 	dramN_store[0] = dram0_work.store;
 	dramN_cstore[0] = dram0_work.cstore;
+	dramN_vstore[0] = dram0_work.vstore;
+	dramN_vstore_ndx[0] = dram0_work.vstore_ndx;
 	dramN_erc[0] = dram0_work.erc;
 	dramN_load[0] = dram0_work.load;
 	dramN_loadz[0] = dram0_work.loadz;
+	dramN_vload[0] = dram0_work.vload;
+	dramN_vload_ndx[0] = dram0_work.vload_ndx;
 	dramN_cload[0] = dram0_work.cload;
 	dramN_cload_tags[0] = dram0_work.cload_tags;
 	dramN_memsz[0] = dram0_work.memsz;
@@ -4607,10 +4605,14 @@ begin
 		dramN_ctago[1] = dram1_work.ctag;
 		dramN_sel[1] = dram1_work.sel[63:0];
 		dramN_store[1] = dram1_work.store;
+		dramN_vstore[1] = dram1_work.vstore;
+		dramN_vstore_ndx[1] = dram1_work.vstore_ndx;
 		dramN_cstore[1] = dram1_work.cstore;
 		dramN_erc[1] = dram1_work.erc;
 		dramN_load[1] = dram1_work.load;
 		dramN_loadz[1] = dram1_work.loadz;
+		dramN_vload[1] = dram1_work.vload;
+		dramN_vload_ndx[1] = dram1_work.vload_ndx;
 		dramN_cload[1] = dram1_work.cload;
 		dramN_cload_tags[1] = dram1_work.cload_tags;
 		dramN_memsz[1] = dram1_work.memsz;
@@ -4645,25 +4647,29 @@ begin
 end
 */
 always_ff @(posedge clk)
-	agen0_load <= rob[agen0_rndx].decbus.load|
+	agen0_load_store <=
+		rob[agen0_rndx].decbus.load|
 		rob[agen0_rndx].decbus.vload|
-		rob[agen0_rndx].decbus.vload_ndx
+		rob[agen0_rndx].decbus.store|
+		rob[agen0_rndx].decbus.vstore
 		;
 always_ff @(posedge clk)
-	agen1_load <= rob[agen1_rndx].decbus.load|
+	agen1_load_store <=
+	 	rob[agen1_rndx].decbus.load|
 		rob[agen1_rndx].decbus.vload|
-		rob[agen1_rndx].decbus.vload_ndx
+		rob[agen1_rndx].decbus.store|
+		rob[agen1_rndx].decbus.vstore
 		;
 always_ff @(posedge clk)
-	agen0_store <= rob[agen0_rndx].decbus.store|
-		rob[agen0_rndx].decbus.vstore|
-		rob[agen0_rndx].decbus.vstore_ndx
-	;
+	agen0_vlsndx <=
+		rob[agen0_rndx].vload_ndx|
+		rob[agen0_rndx].vstore_ndx
+		;
 always_ff @(posedge clk)
-	agen1_store <= rob[agen1_rndx].decbus.store|
-		rob[agen1_rndx].decbus.vstore|
-		rob[agen1_rndx].decbus.vstore_ndx
-	;
+	agen1_vlsndx <=
+		rob[agen1_rndx].vload_ndx|
+		rob[agen1_rndx].vstore_ndx
+		;
 
 Qupls4_agen uag0
 (
@@ -4673,9 +4679,8 @@ Qupls4_agen uag0
 	.rse(agen0_rse),
 	.out(rob[agen0_id].out[0]),
 	.tlb_v(tlb0_v),
-	.virt2phys(agen0_virt2phys),
-	.load(agen0_load),
-	.store(agen0_store),
+	.load_store(agen0_load_store),
+	.vlsndx(agen0_vlsndx),
 	.amo(agen0_amo),
 	.res(agen0_res),
 	.resv(agen0_v)
@@ -4689,9 +4694,8 @@ Qupls4_agen uag1
 	.rse(agen1_rse),
 	.out(rob[agen1_id].out[0]),
 	.tlb_v(tlb1_v),
-	.virt2phys(agen1_virt2phys),
-	.load(agen1_load),
-	.store(agen1_store),
+	.load_store(agen1_load_store),
+	.vlsndx(agen1_vlsndx),
 	.amo(agen1_amo),
 	.res(agen1_res),
 	.resv(agen1_v)
@@ -4771,8 +4775,8 @@ Qupls4_dram_done udrdn1
 (
 	.rst(irst),
 	.clk(clk),
-	.load(dram0_load|dram0_aldf),
-	.store(dram0_store|dram0_astf),
+	.load(dram0_load|dram0_vload|dram0_vload_ndx),
+	.store(dram0_store|dram0_vstore|dram0_vstore_ndx),
 	.cload(dram0_cload),
 	.cstore(dram0_cstore),
 	.cload_tags(dram0_cload_tags),
@@ -4786,138 +4790,42 @@ Qupls4_dram_done udrdn1
 	.done(dram0_done)
 );
 
-generate begin : gDramDone
-if (Qupls4_pkg::NDATA_PORTS > 1)
-Qupls4_dram_done udrdn1
-(
-	.rst(irst),
-	.clk(clk),
-	.load(dram1_load),
-	.store(dram1_store),
-	.cload(dram1_cload),
-	.cstore(dram1_cstore),
-	.cload_tags(dram1_cload_tags),
-	.ack(dram1_ack),
-	.dram_idv(dram1_idv),
-	.dram_id(dram1_work.rndx), 
-	.dram_state(dram1),
-	.dram_more(dram1_more),
-	.stomp(robentry_stomp),
-	.dram_stomp(dram1_stomp),
-	.done(dram1_done)
-);
-else
-	assign dram1_done = TRUE;
-end
-endgenerate
-
-function Qupls4_pkg::lsq_ndx_t fnLoadBypassIndex;
-input Qupls4_pkg::lsq_ndx_t lsndx;
-integer n15r,n15c;
-seqnum_t stsn;
-begin
-	fnLoadBypassIndex = 0;
-	stsn = 8'hFF;
-	for (n15r = 0; n15r < Qupls4_pkg::LSQ_ENTRIES; n15r = n15r + 1) begin
-		for (n15c = 0; n15c < 2; n15c = n15c + 1) begin
-		if (
-			(lsq[lsndx.row][lsndx.col].memsz==lsq[n15r][n15c].memsz) &&		// memory size matches
-			(lsq[lsndx.row][lsndx.col].load && lsq[n15r][n15c].store) &&	// and trying to load
-			// The load must come after the store and the store data should be valid.
-			lsq[lsndx.row][lsndx.col].sn > lsq[n15r][n15c].sn && lsq[n15r][n15c].v && lsq[n15r][n15c].datav && 
-			// And it should be the store closest to the load.
-			stsn > lsq[n15r][n15c].sn &&
-			// And the address should match.
-			lsq[lsndx.row][lsndx.col].vpa==1'b1 && lsq[n15r][n15c].vpa==1'b1 &&	// must be physical addresses
-			lsq[lsndx.row][lsndx.col].adr == lsq[n15r][n15c].adr
-			) begin
-			 	stsn = lsq[n15r][n15c].sn;
-			 	fnLoadBypassIndex.row = n15r;
-			 	fnLoadBypassIndex.col = n15c;
-			 	fnLoadBypassIndex.vb = VAL;
-			end
-		end
-	end
-end
-endfunction
-
 function fnVirt2PhysReady;
 input Qupls4_pkg::lsq_ndx_t lsndx;
 begin
-	if (lsq[lsndx.row][lsndx.col].vpa==1'b1)
+	if (lsq[lsndx.row][lsndx.col].agen==1'b1)
 		fnVirt2PhysReady = 1'b1;
 	else
 		fnVirt2PhysReady = 1'b0;
 end
 endfunction
 
-always_comb	lbndx0 = fnLoadBypassIndex(mem0_lsndx);
-always_comb lbndx1 = fnLoadBypassIndex(mem1_lsndx);
+wire dram0_setready, dram0_setavail;
+wire dram1_setready, dram1_setavail;
 
-reg dram0_setready, dram0_setavail;
-always_comb
-begin
-	dram0_setready = FALSE;
-	dram0_setavail = FALSE;
-	if (Qupls4_pkg::SUPPORT_LOAD_BYPASSING && lbndx0.vb)
-		dram0_setavail = TRUE;
-	else if (dram0 == Qupls4_pkg::DRAMSLOT_AVAIL && mem0_lsndxv && dram0_idv)
-		dram0_setready = TRUE;
-end
+Qupls4_calc_load_bypass_index uclbn0(lsq, mem0_lsndx, lbndx0);
 
-reg dram1_setready, dram1_setavail;
-always_comb
-begin
-	dram1_setready = FALSE;
-	dram1_setavail = FALSE;
-	if (Qupls4_pkg::NDATA_PORTS > 1) begin
-		if (Qupls4_pkg::SUPPORT_LOAD_BYPASSING && lbndx1.vb)
-			dram1_setavail = TRUE;
-		else if (dram1 == Qupls4_pkg::DRAMSLOT_AVAIL && mem1_lsndxv && dram1_idv)
-			dram1_setready = TRUE;
-	end
-end
+Qupls4_mem_timeout_flag umtf0(dram0_work, dram0_timeout);
 
-always_comb
-begin
-	dram0_timeout <= FALSE;
-	if (Qupls4_pkg::SUPPORT_BUS_TO) begin
-		if (dram0_work.tocnt[10])
-			dram0_timeout = TRUE;
-		else if (dram0_work.tocnt[8])
-			dram0_timeout = TRUE;
-	end
-end
-
-always_comb
-begin
-	dram1_timeout <= FALSE;
-	if (Qupls4_pkg::SUPPORT_BUS_TO && Qupls4_pkg::NDATA_PORTS > 1) begin
-		if (dram1_work.tocnt[10])
-			dram1_timeout = TRUE;
-		else if (dram1_work.tocnt[8])
-			dram1_timeout = TRUE;
-	end
-end
+Qupls4_mem_set_state usms0
+(
+	.state_i(dram0),
+	.lsndxv_i(mem0_lsndxv),
+	.idv_i(dram0_idv),
+	.lbndx_i(lbndx0),
+	.setavail_o(dram0_setavail),
+	.setready_o(dram0_setready)
+);
 
 Qupls4_mem_state udrst0
 (
 	.rst_i(irst),
 	.clk_i(clk),
 	.ack_i(dram0_ack),
+	.more_i(dram0_more & ~page_cross),
 	.set_ready_i(dram0_setready),
 	.set_avail_i(dram0_timeout|dram0_stomp|dram0_setavail),
 	.state_o(dram0)
-);
-
-Qupls4_mem_state udrst1
-(
-	.rst_i(irst),
-	.clk_i(clk),
-	.ack_i(dram1_ack),
-	.set_ready_i(dram1_setready),
-	.set_avail_i(dram1_timeout|dram1_stomp|dram1_setavail),
-	.state_o(dram1)
 );
 
 Qupls_mem_more ummore0
@@ -4927,15 +4835,6 @@ Qupls_mem_more ummore0
 	.state_i(dram0),
 	.sel_i(dram0_sel),
 	.more_o(dram0_more)
-);
-
-Qupls_mem_more ummore1
-(
-	.rst_i(irst),
-	.clk_i(clk),
-	.state_i(dram1),
-	.sel_i(dram1_sel),
-	.more_o(dram1_more)
 );
 
 Qupls4_set_dram_work #(.CORENO(CORENO)) usdr1 (
@@ -4955,11 +4854,68 @@ Qupls4_set_dram_work #(.CORENO(CORENO)) usdr1 (
 	.cpu_dat_i(cpu_resp_o[0].dat),
 	.lsq_i(lbndx0.vb ? lsq[lbndx0.row][lbndx0.col] : lsq[mem0_lsndx.row][mem0_lsndx.col]),
 	.dram_oper_o(dram0_oper),
-	.dram_work_o(dram0_work)
+	.dram_work_o(dram0_work),
+	.page_cross(page_cross)
 );
 
-generate begin : gDramWork
-	if (NDATA_PORTS > 1)
+// Modules for second memory port.
+
+generate begin : gMemory2
+	if (Qupls4_pkg::NDATA_PORTS > 1) begin
+
+		Qupls4_dram_done udrdn1
+		(
+			.rst(irst),
+			.clk(clk),
+			.load(dram1_load|dram1_vload|dram1_vload_ndx),
+			.store(dram1_store|dram1_vstore|dram1_vstore_ndx),
+			.cload(dram1_cload),
+			.cstore(dram1_cstore),
+			.cload_tags(dram1_cload_tags),
+			.ack(dram1_ack),
+			.dram_idv(dram1_idv),
+			.dram_id(dram1_work.rndx), 
+			.dram_state(dram1),
+			.dram_more(dram1_more),
+			.stomp(robentry_stomp),
+			.dram_stomp(dram1_stomp),
+			.done(dram1_done)
+		);
+
+		Qupls4_calc_load_bypass_index uclbn1(lsq, mem1_lsndx, lbndx1);
+
+		Qupls4_mem_timeout_flag umtf1(dram1_work, dram1_timeout);
+
+		Qupls4_mem_set_state usms1
+		(
+			.state_i(dram1),
+			.lsndxv_i(mem1_lsndxv),
+			.idv_i(dram1_idv),
+			.lbndx_i(lbndx1),
+			.setavail_o(dram1_setavail),
+			.setready_o(dram1_setready)
+		);
+
+		Qupls4_mem_state udrst1
+		(
+			.rst_i(irst),
+			.clk_i(clk),
+			.ack_i(dram1_ack),
+			.more_i(dram1_more & ~page_cross),
+			.set_ready_i(dram1_setready),
+			.set_avail_i(dram1_timeout|dram1_stomp|dram1_setavail),
+			.state_o(dram1)
+		);
+
+		Qupls_mem_more ummore1
+		(
+			.rst_i(irst),
+			.clk_i(clk),
+			.state_i(dram1),
+			.sel_i(dram1_sel),
+			.more_o(dram1_more)
+		);
+
 		Qupls4_set_dram_work #(.CORENO(CORENO)) usdr2 (
 			.rst_i(rsti),
 			.clk_i(clk),
@@ -4979,12 +4935,24 @@ generate begin : gDramWork
 			.dram_oper_o(dram1_oper),
 			.dram_work_o(dram1_work)
 		);
+
+	end
+	else begin
+		assign dram1_done = TRUE;
+		assign lbndx1 = {$bits(lsq_ndx_t){1'b0}};
+		assign dram1_timeout = FALSE;
+		assign dram1 = 0;
+		assign dram1_more = FALSE;
+		assign dram1_oper = {$bits(dram_oper_t){1'b0}};
+		assign dram1_work = {$bits(dram_work_t){1'b0}};
+	end
 end
 endgenerate
 
-// -----------------------------------------------------------------------------
+
+// =============================================================================
 // Commit stage combo logic
-// -----------------------------------------------------------------------------
+// =============================================================================
 
 // Figure out how many instructions can be committed.
 // If there is an oddball instruction (eg. CSR, RTE) then only commit up until
@@ -5315,7 +5283,7 @@ ubrast1
 	.clk(clk),
 	.available(1'b1),
 	.busy(rs_busy[7]),
-	.stall(!bs_idle_oh||fcu_full),
+	.stall(fcu_full),
 	.stomp(robentry_stomp),
 	.issue(),//robentry_issue[sau0_rndx]),
 	.rse_i(rse),
@@ -5554,15 +5522,18 @@ else begin
 `endif
 	if (sau0_available && sau0_rndxv && sau0_idle) begin
 		rob[sau0_rndx].argC <= rfo_sau0_argC;
+		rob[sau0_rndx].argC_v <= VAL;
 	end
 	if (Qupls4_pkg::NSAU > 1) begin
 		if (sau1_available && sau1_rndxv && sau1_idle) begin
 			rob[sau1_rndx].argC <= rfo_sau1_argC;
+			rob[sau1_rndx].argC_v <= VAL;
 		end
 	end
 	if (Qupls4_pkg::NFPU > 0) begin
 		if (fpu0_available && fpu0_rndxv && fpu0_idle) begin
 			rob[fpu0_rndx].argC <= rfo_fpu0_argC;
+			rob[fpu0_rndx].argC_v <= VAL;
 		end
 	end
 	if (agen0_rndxv && agen0_idle && robentry_agen_issue[agen0_rndx]) begin
@@ -5581,20 +5552,9 @@ else begin
 	if (fpu1_done1)
 		fpu1_done1 <= FALSE;
 	// Fcu op may have been stomped on after issue, so check valid flag.
-	if (TRUE) begin
-		fcu_branch_resolved <= fcu_state1 && (rob[fcu_rse.rndx].v|brtgtvr);
-		fcu_v3 <= fcu_branch_resolved && (rob[fcu_rse.rndx].v|brtgtvr);
-		fcu_v4 <= fcu_v3 && (rob[fcu_rse.rndx].v|brtgtvr);
-		fcu_v5 <= fcu_v4 && (rob[fcu_rse.rndx].v|brtgtvr);
-		fcu_v6 <= fcu_v5;
-		fcu_new <= FALSE;
-		brtgtv <= INV;
-		if (fcu_v6)
-			brtgtvr <= INV;
-	  if (~hirq) begin
-	  	if ((pe_allqd|allqd) && !hold_ins && advance_pipeline_seg2)
-	  		excret <= FALSE;
-		end
+  if (~hirq) begin
+  	if ((pe_allqd|allqd) && !hold_ins && advance_pipeline_seg2)
+  		excret <= FALSE;
 	end
 	sau0_stomp <= FALSE;
 	sau1_stomp <= FALSE;
@@ -5953,31 +5913,24 @@ else begin
 		end
 	end
 
-	if (fcu_reset_state) begin
-		fcu_state1 <= INV;
-		fcu_branch_resolved <= INV;
-		fcu_v3 <= INV;
-		if (fcu_v3) begin
-			if (branch_state==Qupls4_pkg::BS_DONE2)
-				fcu_idle <= TRUE;
-		end
-    rob[ fcu_rse.rndx ].exc <= fcu_exc;
-    rob[ fcu_rse.rndx ].excv <= ~&fcu_exc;
-    if (!rob[ fcu_rse.rndx ].decbus.alu) begin
-    	rob[ fcu_rse.rndx ].done[0] <= VAL;
-	    rob[ fcu_rse.rndx ].out[0] <= INV;
-    end
-    rob[ fcu_rse.rndx ].done[1] <= VAL;
-    rob[ fcu_rse.rndx ].out[1] <= INV;
-    rob[ fcu_rse.rndx ].takb <= takbr;	// could maybe just use takb
-    fcu_idv <= INV;
-//    fcu_bts <= BTS_NONE;
-	end
-	if (branch_state==Qupls4_pkg::BS_DONE2)
-		fcu_idle <= TRUE;
-	
 	if (fcu_branch_resolved)
 		tGetSkipList(fcu_rse.rndx, fcu_found_destination, fcu_skip_list, fcu_m1, fcu_dst);
+
+	if (fcu_rse.v) begin
+		fcu_state1 <= VAL;
+		fcu_idv <= VAL;
+		fcu_branch_resolved <= TRUE;
+    rob[ fcu_rse.rndx ].exc <= fcu_exc;
+    rob[ fcu_rse.rndx ].excv <= ~&fcu_exc;
+    rob[ fcu_rse.rndx ].done <= 2'b11;
+    rob[ fcu_rse.rndx ].out <= 2'b00;
+    rob[ fcu_rse.rndx ].takb <= takb;
+	end
+
+	// Causes issues vvv
+	// If the operation is not multi-cycle assume it will complete within one
+	// clock cycle, in which case the ALU is still idle. This allows back-to-back
+	// issue of ALU operations to the ALU.
 
 	// If data for stomped instruction, ignore
 	// dram_vn will be false for stomped data
@@ -5985,19 +5938,27 @@ else begin
     rob[ dram0_work.rndx ].exc <= dram0_oper.exc;
     rob[ dram0_work.rndx ].excv <= ~&dram0_oper.exc;
     rob[ dram0_work.rndx ].out <= {INV,INV};
-    rob[ dram0_work.rndx ].done <= 2'b11;
-		dram0_idv <= INV;
+    rob[ dram0_work.rndx ].done <= dram0_oper.state;
 		$display("Qupls4 set dram0_idv=INV at done");
-    tInvalidateLSQ(dram0_work.rndx,FALSE);
+		if (dram0_oper.state==2'b11) begin
+			dram0_idv <= INV;
+    	tInvalidateLSQ(dram0_work.rndx,FALSE);
+    end
+    else
+    	tIncLSQAddr(dram0_work.rndx);
 	end
 	if (Qupls4_pkg::NDATA_PORTS > 1) begin
 		if (dram1_done && rob[ dram1_work.rndx ].v && dram1_idv) begin
 	    rob[ dram1_work.rndx ].exc <= dram1_oper.exc;
 	    rob[ dram1_work.rndx ].excv <= ~&dram1_oper.exc;
 	    rob[ dram1_work.rndx ].out <= {INV,INV};
-	    rob[ dram1_work.rndx ].done <= 2'b11;
-			dram1_idv <= INV;
-	    tInvalidateLSQ(dram1_work.rndx,FALSE);
+	    rob[ dram1_work.rndx ].done <= dram1_oper.state;
+			if (dram1_oper.state==2'b11) begin
+				dram1_idv <= INV;
+		    tInvalidateLSQ(dram1_work.rndx,FALSE);
+		  end
+	    else
+  	  	tIncLSQAddr(dram1_work.rndx);
 		end
 	end
 
@@ -6085,24 +6046,6 @@ else begin
 	end
 
 	// Reservation stations - flags bits
-
-	// Causes issues vvv
-	// If the operation is not multi-cycle assume it will complete within one
-	// clock cycle, in which case the ALU is still idle. This allows back-to-back
-	// issue of ALU operations to the ALU.
-
-	fcu_idle <= TRUE;
-	if (robentry_fcu_issue[fcu_rse.rndx] && fcu_rse.v && fcu_idle && bs_idle_oh) begin
-		fcu_idle <= FALSE;
-		fcu_state1 <= VAL;
-		fcu_idv <= VAL;
-	  rob[fcu_rse.rndx].out[1] <= VAL;
-	  fcu_new <= TRUE;
-	end
-
-	if (brtgtv && bs_idle_oh) begin
-		fcu_state1 <= VAL;
-	end
 
 	// Set LSQ register C, it may be waiting for data
 
@@ -6210,7 +6153,7 @@ else begin
 	
 
 	if (lsq[mem0_lsndx.row][mem0_lsndx.col].v2p && lsq[mem0_lsndx.row][mem0_lsndx.col].v) begin
-		if (lsq[mem0_lsndx.row][mem0_lsndx.col].vpa) begin
+		if (lsq[mem0_lsndx.row][mem0_lsndx.col].agen) begin
 			// Prevent multiple updates
 			tInvalidateLSQ(lsq[mem0_lsndx.row][mem0_lsndx.col].rndx,FALSE);
 			rob[lsq[mem0_lsndx.row][mem0_lsndx.col].rndx].done <= 2'b11;
@@ -6683,6 +6626,8 @@ else begin
 	end
 
 	//  Adjust interrupt position to first micro-op of instruction
+	// Interrupts are not allowed in the middle of a micro-op stream for
+	// instructions.
 	
 	for (n3 = 0; n3 < Qupls4_pkg::ROB_ENTRIES; n3 = n3 + 1) begin
 		if (rob[n3].op.uop.any.count==3'd0 && rob[n3].op.hwi)
@@ -7081,7 +7026,7 @@ always_ff @(posedge clk) begin: clock_n_debug
 		$display("%c%c sn:%h %d: %d %c%c%c v%h p%h data:%h %c #", (i[2:0]==lsq_head.row)?72:46,(i[2:0]==lsq_tail.row)?84:46,
 			lsq[i][0].sn, i[2:0],
 			lsq[i][0].rndx,lsq[i][0].store ? "S": lsq[i][0].load ? "L" : "-",
-			lsq[i][0].v?"v":" ",lsq[i][0].agen?"a":" ",lsq[i][0].vadr,lsq[i][0].adr,
+			lsq[i][0].v?"v":" ",lsq[i][0].agen?"a":" ",lsq[i][0].vadr,lsq[i][0].padr,
 			lsq[i][0].res[511:0],lsq[i][0].datav?"v":" "
 		);
 	end
@@ -7474,9 +7419,7 @@ begin
 		rob[ndx].decbus.fpu <= FALSE;
 		rob[ndx].decbus.fc <= FALSE;
 		rob[ndx].decbus.mem <= FALSE;
-		rob[ndx].op.uop.any.count <= 3'd1;
-		rob[ndx].op.uop <= {26'd0,Qupls4_pkg::OP_NOP};
-		//rob[n3].decbus.Rtz <= TRUE;
+		rob[ndx].op.uop.any.opcode <= Qupls4_pkg::OP_NOP;
 		rob[ndx].done <= {FALSE,FALSE};
 		rob[ndx].out <= {FALSE,FALSE};
 	end
@@ -7545,6 +7488,7 @@ begin
 end
 endtask
 
+
 // Invalidate LSQ entries associated with a ROB entry. This searches the LSQ
 // which is small in case multiple LSQ entries are associated. This is an
 // issue in the core's current operation.
@@ -7560,10 +7504,15 @@ begin
 		for (n18c = 0; n18c < 2; n18c = n18c + 1) begin
 			if (lsq[n18r][n18c].rndx==id && lsq[n18r][n18c].v==VAL) begin
 				lsq[n18r][n18c].v <= INV;
+				lsq[n18r][n18c].state <= 2'b00;
 				lsq[n18r][n18c].agen <= FALSE;
 				lsq[n18r][n18c].datav <= INV;
 				lsq[n18r][n18c].store <= FALSE;
+				lsq[n18r][n18c].vstore <= FALSE;
+				lsq[n18r][n18c].vstore_ndx <= FALSE;
 				lsq[n18r][n18c].load <= FALSE;
+				lsq[n18r][n18c].vload <= FALSE;
+				lsq[n18r][n18c].vload_ndx <= FALSE;
 				// It is possible that a load operation already in progress got
 				// cancelled.
 				if (dram0_work.rndx==lsq[n18r][n18c].rndx)
@@ -7578,7 +7527,28 @@ begin
 end
 endtask
 
+
+// Increment LSQ virtual address to next page and trigger agen again.
+
+task tIncLSQAddr;
+input rob_ndx_t id;
+integer n18r, n18c;
+begin
+	for (n18r = 0; n18r < Qupls4_pkg::LSQ_ENTRIES; n18r = n18r + 1) begin
+		for (n18c = 0; n18c < 2; n18c = n18c + 1) begin
+			if (lsq[n18r][n18c].rndx==id && lsq[n18r][n18c].v==VAL) begin
+				lsq[n18r][n18c].agen <= FALSE;	// cause agen again
+				lsq[n18r][n18c].vadr <= {lsq[n18r][n18c].vadr[$bits(virtual_address_t)-1:6]+2'd1,6'd0};
+				lsq[n18r][n18c].state <= 2'b01;
+			end
+		end
+	end
+end
+endtask
+
+
 // Update the address fields in the LSQ entries.
+// Invoked once the address has been translated.
 
 task tSetLSQ;
 input rob_ndx_t id;
@@ -7589,13 +7559,18 @@ begin
 		for (n18c = 0; n18c < 2; n18c = n18c + 1) begin
 			if (lsq[n18r][n18c].rndx==id && lsq[n18r][n18c].v) begin
 				lsq[n18r][n18c].agen <= TRUE;
-				lsq[n18r][n18c].vpa <= 1'b1;
-				lsq[n18r][n18c].adr <= padr;//{tlbe.pte.ppn,adr[12:0]};
+				lsq[n18r][n18c].padr <= padr;//{tlbe.pte.ppn,adr[12:0]};
+				case(lsq[n18r][n18c].state)
+				2'b00:	lsq[n18r][n18c].shift <= padr[5:0];
+				2'b01:	lsq[n18r][n18c].shift <= 7'd64 - lsq[n18r][n18c].shift;
+				default:	;
+				endcase	
 			end
 		end
 	end
 end
 endtask
+
 
 // Reset.
 // A lot of resets to keep simulation happy.
@@ -7948,7 +7923,11 @@ begin
 		rob[tail].decbus.fpu <= FALSE;
 		rob[tail].decbus.fc <= FALSE;
 		rob[tail].decbus.load <= FALSE;
+		rob[tail].decbus.vload <= FALSE;
+		rob[tail].decbus.vload_ndx <= FALSE;
 		rob[tail].decbus.store <= FALSE;
+		rob[tail].decbus.vstore <= FALSE;
+		rob[tail].decbus.vstore_ndx <= FALSE;
 		rob[tail].decbus.mem <= FALSE;
 		rob[tail].op <= nopi;
 		rob[tail].argA_v <= VAL;
@@ -7964,7 +7943,11 @@ begin
 		rob[tail].decbus.fpu <= FALSE;
 		rob[tail].decbus.fc <= FALSE;
 		rob[tail].decbus.load <= FALSE;
+		rob[tail].decbus.vload <= FALSE;
+		rob[tail].decbus.vload_ndx <= FALSE;
 		rob[tail].decbus.store <= FALSE;
+		rob[tail].decbus.vstore <= FALSE;
+		rob[tail].decbus.vstore_ndx <= FALSE;
 		rob[tail].decbus.mem <= FALSE;
 //		rob[tail].op.ins <= {57'd0,OP_NOP};
 //		rob[tail].argA_v <= VAL;
@@ -8024,6 +8007,7 @@ begin
 	lsq[ndx.row][ndx.col] <= {$bits(Qupls4_pkg::lsq_entry_t){1'b0}};
 	lsq[ndx.row][ndx.col].rndx <= id;
 	lsq[ndx.row][ndx.col].v <= VAL;
+	lsq[ndx.row][ndx.col].state <= 2'b00;
 	lsq[ndx.row][ndx.col].agen <= FALSE;
 	lsq[ndx.row][ndx.col].op <= rob.op;
 	lsq[ndx.row][ndx.col].pc <= rob.op.pc;
@@ -8033,10 +8017,13 @@ begin
 	lsq[ndx.row][ndx.col].cload_tags <= rob.excv;
 	lsq[ndx.row][ndx.col].store <= rob.decbus.store;
 	lsq[ndx.row][ndx.col].cstore <= 1'b0;
-	lsq[ndx.row][ndx.col].aldf <= rob.decbus.aldf;
-	lsq[ndx.row][ndx.col].astf <= rob.decbus.astf;
-	lsq[ndx.row][ndx.col].vpa <= 1'd0;
-	lsq[ndx.row][ndx.col].adr <= 32'd0;
+	lsq[ndx.row][ndx.col].vload <= rob.decbus.vload;
+	lsq[ndx.row][ndx.col].vload_ndx <= rob.decbus.vload_ndx;
+	lsq[ndx.row][ndx.col].vstore <= rob.decbus.vstore;
+	lsq[ndx.row][ndx.col].vstore_ndx <= rob.decbus.vstore_ndx;
+	lsq[ndx.row][ndx.col].vadr <= {$bits(cpu_types_pkg::virtual_address_t){1'b0}};
+	lsq[ndx.row][ndx.col].padr <= 3{$bits(cpu_types_pkg::physical_address_t){1'b0}};
+	lsq[ndx.row][ndx.col].shift <= 7'd0;
 //	store_argC_reg <= rob.pRc;
 	lsq[ndx.row][ndx.col].aRc <= rob.decbus.Rs3;
 	lsq[ndx.row][ndx.col].pRc <= rob.op.pRs3;
@@ -8759,6 +8746,12 @@ begin
 end
 endtask
 
+// A look-back is made for only up to six micro-ops. Most instructions have
+// fewer micro-ops and searching cost LUTs. If the lead micro-op has not been
+// found, the last micro-op searched is marked as interrupted. The interrupt
+// will be deferred again later until finally the first micro-op of an
+// instruction is found.
+
 task tDeferToNextInstruction;
 input rob_ndx_t ndx;
 integer kk;
@@ -8768,7 +8761,6 @@ rob_ndx_t m3;
 rob_ndx_t m4;
 rob_ndx_t m5;
 rob_ndx_t m6;
-rob_ndx_t m7;
 rob_ndx_t ih;
 reg inv;
 begin
@@ -8779,7 +8771,7 @@ begin
 	m4 = (ndx + Qupls4_pkg::ROB_ENTRIES + 4) % Qupls4_pkg::ROB_ENTRIES;
 	m5 = (ndx + Qupls4_pkg::ROB_ENTRIES + 5) % Qupls4_pkg::ROB_ENTRIES;
 	m6 = (ndx + Qupls4_pkg::ROB_ENTRIES + 6) % Qupls4_pkg::ROB_ENTRIES;
-	m7 = (ndx + Qupls4_pkg::ROB_ENTRIES + 7) % Qupls4_pkg::ROB_ENTRIES;
+	//m7 = (ndx + Qupls4_pkg::ROB_ENTRIES + 7) % Qupls4_pkg::ROB_ENTRIES;
 	if (rob[m1].op.uop.count!=3'd0 && rob[m1].sn > rob[ndx].sn) begin
 		ih = m1;
 		inv = TRUE;
@@ -8800,18 +8792,10 @@ begin
 		ih = m5;
 		inv = TRUE;
 	end
-	else if (rob[m6].op.uop.count!=3'd0 && rob[m6].sn > rob[ndx].sn) begin
-		ih = m6;
-		inv = TRUE;
-	end
-	else if (rob[m7].op.uop.count!=3'd0 && rob[m7].sn > rob[ndx].sn) begin
-		ih = m7;
-		inv = TRUE;
-	end
 	// Cannot find lead micro-op, must not be queued yet. Select tail position as
 	// place for interrupt. It may be moved again later.
 	else
-		ih = (tail0 + Qupls4_pkg::ROB_ENTRIES - 1) % Qupls4_pkg::ROB_ENTRIES;
+		ih = m6;//(tail0 + Qupls4_pkg::ROB_ENTRIES - 1) % Qupls4_pkg::ROB_ENTRIES;
 	if (ih != ndx) begin
 		rob[ih].op.hwi <= TRUE;
 		// If the lead instruction was found, invalidate it.

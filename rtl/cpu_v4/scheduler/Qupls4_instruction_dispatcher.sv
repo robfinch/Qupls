@@ -131,9 +131,10 @@ begin
 			rse_o[kk].count = rob[nn].op.decbus.count;
 			// branch specific
 			rse_o[kk].bt = rob[nn].bt;
-			rse_o[kk].brclass = rob[nn].op.decbus.brclass;
+			rse_o[kk].bcc = rob[nn].op.decbus.bcc;
 			rse_o[kk].cjb = rob[nn].op.decbus.cjb;
-			rse_o[kk].bl = rob[nn].op.decbus.bl;
+			rse_o[kk].bsr = rob[nn].op.decbus.bsr;
+			rse_o[kk].jsr = rob[nn].op.decbus.jsr;
 			if (rob[nn].op.decbus.cpytgt|stomp[nn]|~rob[nn].pred_bit) begin
 				rse_o[kk].uop = {26'd0,Qupls4_pkg::OP_NOP};
 				rse_o[kk].store = FALSE;

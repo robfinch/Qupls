@@ -1,10 +1,9 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
-//
 //
 // BSD 3-Clause License
 // Redistribution and use in source and binary forms, with or without
@@ -31,70 +30,44 @@
 // CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-//
-// 250 LUTs / 40 FFs
+//                                                                          
 // ============================================================================
-
-import const_pkg::*;
+//
 import Qupls4_pkg::*;
 
-module Qupls4_agen(rst, clk, next, rse, out, tlb_v, 
-	load_store, vlsndx, amo, laneno,
-	res, resv);
-input rst;
-input clk;
-input next;								// calculate for next cache line
-input Qupls4_pkg::reservation_station_entry_t rse;
-input out;
-input tlb_v;
-input load_store;
-input vlsndx;
-input amo;
-input [7:0] laneno;
-output cpu_types_pkg::address_t res;
-output reg resv;
+module Qupls4_calc_load_bypass_index(lsq_i, lsndx_i, ndx_o);
+input Qupls4_pkg::lsq_entry_t [1:0] lsq_i [0:7];
+input Qupls4_pkg::lsq_ndx_t lsndx_i;
+output Qupls4_pkg::lsq_ndx_t ndx_o;
 
-cpu_types_pkg::address_t as, bs;
-cpu_types_pkg::address_t res1;
-
-always_comb
-	as = rse.arg[0].val;
-
-always_comb
-	bs = rse.arg[1].val << rse.uop.ls.sc;
+integer n15r,n15c;
+seqnum_t stsn;
 
 always_comb
 begin
-	if (vlsndx)
-		res1 = as + bs * laneno + rse.argI;
-	else if (amo)
-		res1 = as;				// just [Rs1]
-	else if (load_store)
-		res1 = as + bs + rse.argI;
-	else
-		res1 <= 64'd0;
-end
-
-always_ff @(posedge clk)
-	res = next ? {res1[$bits(cpu_types_pkg::address_t)-1:6] + 2'd1,6'd0} : res1;
-
-// Make Agen valid sticky
-// The agen takes a clock cycle to compute after the out signal is valid.
-reg resv1;
-always_ff @(posedge clk) 
-if (rst) begin
-	resv <= INV;
-	resv1 <= INV;
-end
-else begin
-	if (out)
-		resv1 <= VAL;
-	resv <= resv1;
-	if (tlb_v) begin
-		resv1 <= INV;
-		resv <= INV;
+	ndx_o = 0;
+	stsn = 8'hFF;
+	for (n15r = 0; n15r < Qupls4_pkg::LSQ_ENTRIES; n15r = n15r + 1) begin
+		for (n15c = 0; n15c < 2; n15c = n15c + 1) begin
+		if (
+			(lsq[lsndx.row][lsndx.col].memsz==lsq[n15r][n15c].memsz) &&		// memory size matches
+			(lsq[lsndx.row][lsndx.col].load && lsq[n15r][n15c].store) &&	// and trying to load
+			// The load must come after the store and the store data should be valid.
+			lsq[lsndx.row][lsndx.col].sn > lsq[n15r][n15c].sn && lsq[n15r][n15c].v && lsq[n15r][n15c].datav && 
+			// And it should be the store closest to the load.
+			stsn > lsq[n15r][n15c].sn &&
+			// And the address should match.
+			lsq[lsndx.row][lsndx.col].agen==1'b1 && lsq[n15r][n15c].agen==1'b1 &&	// must be physical addresses
+			lsq[lsndx.row][lsndx.col].padr == lsq[n15r][n15c].padr
+			) begin
+			 	stsn = lsq[n15r][n15c].sn;
+			 	ndx_o.row = n15r;
+			 	ndx_o.col = n15c;
+			 	ndx_o.vb = VAL;
+			end
+		end
 	end
 end
 
-
 endmodule
+

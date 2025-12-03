@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -32,69 +32,23 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 250 LUTs / 40 FFs
 // ============================================================================
 
-import const_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_agen(rst, clk, next, rse, out, tlb_v, 
-	load_store, vlsndx, amo, laneno,
-	res, resv);
-input rst;
-input clk;
-input next;								// calculate for next cache line
-input Qupls4_pkg::reservation_station_entry_t rse;
-input out;
-input tlb_v;
-input load_store;
-input vlsndx;
-input amo;
-input [7:0] laneno;
-output cpu_types_pkg::address_t res;
-output reg resv;
-
-cpu_types_pkg::address_t as, bs;
-cpu_types_pkg::address_t res1;
-
-always_comb
-	as = rse.arg[0].val;
-
-always_comb
-	bs = rse.arg[1].val << rse.uop.ls.sc;
+module Qupls4_mem_timeout_flag(work_i, flag_o);
+input Qupls4_pkg::dram_work_t work_i;
+output reg flag_o;
 
 always_comb
 begin
-	if (vlsndx)
-		res1 = as + bs * laneno + rse.argI;
-	else if (amo)
-		res1 = as;				// just [Rs1]
-	else if (load_store)
-		res1 = as + bs + rse.argI;
-	else
-		res1 <= 64'd0;
-end
-
-always_ff @(posedge clk)
-	res = next ? {res1[$bits(cpu_types_pkg::address_t)-1:6] + 2'd1,6'd0} : res1;
-
-// Make Agen valid sticky
-// The agen takes a clock cycle to compute after the out signal is valid.
-reg resv1;
-always_ff @(posedge clk) 
-if (rst) begin
-	resv <= INV;
-	resv1 <= INV;
-end
-else begin
-	if (out)
-		resv1 <= VAL;
-	resv <= resv1;
-	if (tlb_v) begin
-		resv1 <= INV;
-		resv <= INV;
+	flag_o <= FALSE;
+	if (Qupls4_pkg::SUPPORT_BUS_TO) begin
+		if (work_i.tocnt[10])
+			flag_o = TRUE;
+		else if (work_i.tocnt[8])
+			flag_o = TRUE;
 	end
 end
-
 
 endmodule

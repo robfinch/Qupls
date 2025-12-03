@@ -5,7 +5,6 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//
 // BSD 3-Clause License
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are met:
@@ -31,70 +30,28 @@
 // CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-//
-// 250 LUTs / 40 FFs
+//                                                                          
 // ============================================================================
-
+//
 import const_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_agen(rst, clk, next, rse, out, tlb_v, 
-	load_store, vlsndx, amo, laneno,
-	res, resv);
-input rst;
-input clk;
-input next;								// calculate for next cache line
-input Qupls4_pkg::reservation_station_entry_t rse;
-input out;
-input tlb_v;
-input load_store;
-input vlsndx;
-input amo;
-input [7:0] laneno;
-output cpu_types_pkg::address_t res;
-output reg resv;
-
-cpu_types_pkg::address_t as, bs;
-cpu_types_pkg::address_t res1;
-
-always_comb
-	as = rse.arg[0].val;
-
-always_comb
-	bs = rse.arg[1].val << rse.uop.ls.sc;
+module Qupls4_mem_set_state(state_i, lsndxv_i, idv_i, lbndx_i, setavail_o, setready_o);
+input Qupls4_pkg::dram_state_t state_i;
+input lsq_ndx_t lbndx_i;
+input ldndxv_i;
+input idv_i;
+output reg setready_o;
+output reg setavail_o;
 
 always_comb
 begin
-	if (vlsndx)
-		res1 = as + bs * laneno + rse.argI;
-	else if (amo)
-		res1 = as;				// just [Rs1]
-	else if (load_store)
-		res1 = as + bs + rse.argI;
-	else
-		res1 <= 64'd0;
+	setready_o = FALSE;
+	setavail_o = FALSE;
+	if (Qupls4_pkg::SUPPORT_LOAD_BYPASSING && lbndx_i.vb)
+		setavail_o = TRUE;
+	else if (state_i == Qupls4_pkg::DRAMSLOT_AVAIL && lsndxv_i && idv_i)
+		setready_o = TRUE;
 end
-
-always_ff @(posedge clk)
-	res = next ? {res1[$bits(cpu_types_pkg::address_t)-1:6] + 2'd1,6'd0} : res1;
-
-// Make Agen valid sticky
-// The agen takes a clock cycle to compute after the out signal is valid.
-reg resv1;
-always_ff @(posedge clk) 
-if (rst) begin
-	resv <= INV;
-	resv1 <= INV;
-end
-else begin
-	if (out)
-		resv1 <= VAL;
-	resv <= resv1;
-	if (tlb_v) begin
-		resv1 <= INV;
-		resv <= INV;
-	end
-end
-
 
 endmodule

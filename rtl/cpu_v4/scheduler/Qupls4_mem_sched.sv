@@ -78,7 +78,7 @@ reg [1:0] next_islot_o [0:Qupls4_pkg::LSQ_ENTRIES*2-1];
 
 always_comb
 if (WINDOW_SIZE > Qupls4_pkg::LSQ_ENTRIES) begin
-	$display("Qupls4CPU mem sched: bad WINDOW_SIZE %d > %d", WINDOW_SIZE, Qupls4_pkg::LSQ_ENTRIES);
+	$display("Qupls4 CPU mem sched: bad WINDOW_SIZE %d > %d", WINDOW_SIZE, Qupls4_pkg::LSQ_ENTRIES);
 	$finish;
 end
 
@@ -192,7 +192,7 @@ begin
 			if (issued < Qupls4_pkg::NDATA_PORTS && rob[lsq[lsq_heads[row].row][col].rndx].decbus.mem0 ? issued==2'd0 : 1'b1) begin
 				if (row==0) begin
 					if (memready[ lsq[lsq_heads[row].row][col].rndx ] &&
-						lsq[lsq_heads[row].row][col].v==VAL &&
+						|lsq[lsq_heads[row].row][col].state &&
 						lsq[lsq_heads[row].row][col].agen
 					) begin
 						do_issue = 1'b1;

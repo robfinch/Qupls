@@ -37,29 +37,28 @@
 import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_branchmiss_pc(instr, brclass, pc, pc_stack, bt, takb,
-	argA, argB, argC, argI, misspc, missgrp, dstpc, vector, stomp_bno);
+module Qupls4_branchmiss_pc(rse, pc_stack, bt, takb,
+	misspc, missgrp, dstpc, vector, stomp_bno);
 parameter ABITS=32;
-input Qupls4_pkg::pipeline_reg_t instr;
-input Qupls4_pkg::brclass_t brclass;
-input pc_address_ex_t pc;
+input Qupls4_pkg::reservation_station_entry_t rse;
 input pc_address_ex_t [8:0] pc_stack;
 input [63:0] vector;
 input bt;
 input takb;
-input value_t argA;
-input value_t argB;
-input value_t argC;
-input value_t argI;
 output pc_address_ex_t misspc;
 output reg [2:0] missgrp;
 output pc_address_ex_t dstpc;
 output reg [4:0] stomp_bno;
 
 Qupls4_pkg::micro_op_t ir;
+pc_address_ex_t pc = rse.pc;
+value_t argA = rse.arg[0].val;
+value_t argB = rse.arg[1].val;
+value_t argC = rse.arg[2].val;
+value_t argI = rse.argI;
 
 always_comb
-	ir = instr.uop;
+	ir = rse.uop;
 
 reg [5:0] ino;
 reg [5:0] ino5;
@@ -75,43 +74,49 @@ begin
 	dstpc = pc;					// copy bno fields
 	stomp_bno = 6'd0;
 
-	case (brclass)
-	Qupls4_pkg::BRC_BCCD:
-		begin
-			if (instr.uop.br.cnd==Qupls4_pkg::CND_BOI)
-				dstpc.pc = vector;
-			else begin
-				disp = {{44{ir.br.disp[19]}},ir.br.disp,1'b0};
-				dstpc.pc = pc.pc + disp;
-			end
+	case(1'b1)
+	rse.boi:
+		if (ir.br.md)
+			dstpc.pc = ir.brr.Rs3==8'h00 ? vector : argC;
+		else begin
+			disp = {{44{ir.br.disp[19]}},ir.br.disp,1'b0};
+			dstpc.pc = pc.pc + disp;
 		end
-	Qupls4_pkg::BRC_BCCR:
-		dstpc.pc = argC;
-	Qupls4_pkg::BRC_JSR:
+	rse.bcc:
+		if (ir.br.md)
+			dstpc.pc = argC;
+		else	
+		else begin
+			disp = {{44{ir.br.disp[19]}},ir.br.disp,1'b0};
+			dstpc.pc = pc.pc + disp;
+		end
+	rse.bsr:
 		begin
 			disp = {{23{instr.uop[47]}},instr.uop[47:7],1'b0};
 			dstpc.pc = pc.pc + disp;
 		end
-	Qupls4_pkg::BRC_RTD:
-		dstpc.pc = argA;
-	// Must be tested before Ret
-	Qupls4_pkg::BRC_ERET:
+	rse.jsr:
 		begin
-			dstpc.pc = (instr.uop[28:17]==12'd3 ? pc_stack[1].pc : pc_stack[0].pc) + (instr.uop[10:6] * 3'd6);
+			disp = {{23{instr.uop[47]}},instr.uop[47:7],1'b0};
+			dstpc.pc = disp;
 		end
+	// Must be tested before Ret
+	rse.eret:
+		dstpc.pc = (instr.uop[28:17]==12'd3 ? pc_stack[1].pc : pc_stack[0].pc) + (instr.uop[10:7] * 3'd6);
+	rse.ret:
+		dstpc.pc = argA;
 	default:
 		dstpc.pc = RSTPC;
 	endcase
 
-	case(brclass)
+	case(1'b1)
 	/*
 	BTS_REG:
 		 begin
 			misspc = bt ? tpc : argC + {{53{instr[39]}},instr[39:31],instr[12:11]};
 		end
 	*/
-	Qupls4_pkg::BRC_BCCR,
-	Qupls4_pkg::BRC_BCCD:
+	rse.bcc:
 		begin
 			case({bt,takb})
 			2'b00:

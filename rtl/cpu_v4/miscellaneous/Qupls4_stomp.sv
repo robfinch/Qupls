@@ -42,8 +42,8 @@ import Qupls4_pkg::*;
 
 module Qupls4_stomp(rst, clk, ihit, advance_pipeline, advance_pipeline_seg2, 
 //	irq_in_pipe, di_inst,
-	micro_machine_active, branchmiss, found_destination, destination_rndx,
-	branch_state, do_bsr, misspc,
+	micro_machine_active, branch_resolved, branchmiss, found_destination, destination_rndx,
+	branch_state, do_bsr, misspc, predicted_correctly_dec,
 	pc, pc_f, pc_fet, pc_mux, pc_dec, pc_ren,
 	stomp_fet, stomp_mux, stomp_dec, stomp_ren, stomp_que, stomp_quem,
 	fcu_idv, fcu_id, missid, stomp_bno, takb, rob, robentry_stomp
@@ -58,10 +58,12 @@ input advance_pipeline_seg2;
 input micro_machine_active;
 input found_destination;	// true if destination was found in ROB
 input rob_ndx_t destination_rndx;
+input branch_resolved;
 input branchmiss;
 input Qupls4_pkg::branch_state_t branch_state;
 input do_bsr;
 input pc_address_ex_t misspc;
+input predicted_correctly_dec;
 input pc_address_ex_t pc;
 input pc_address_ex_t pc_f;
 input pc_address_ex_t pc_fet;
@@ -107,7 +109,7 @@ always_comb
 			 (branchmiss && !found_destination)
 		|| (branch_state >= Qupls4_pkg::BS_CHKPT_RESTORE && branch_state <= Qupls4_pkg::BS_DONE2)
 		;
-wire next_stomp_mux = (stomp_fet && !micro_machine_active) || stomp_pipeline || (do_bsr && !found_destination);
+wire next_stomp_mux = (stomp_fet && !micro_machine_active) || stomp_pipeline || do_bsr;
 wire next_stomp_dec = (stomp_mux && !micro_machine_active) || stomp_pipeline;
 wire next_stomp_ren = (stomp_dec && !micro_machine_active) || stomp_pipeline;
 wire next_stomp_quem = (stomp_ren && !micro_machine_active) || stomp_pipeline;
@@ -164,13 +166,13 @@ wire hwi_at_fet = di_inst && ic_irq;
 wire hwi_at_aln = di_inst && hirq;
 */
 always_comb
-	stomp_aln = (stomp_alnr || pe_stomp_pipeline) && (pc.pc != misspcr[0].pc);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_fet && !hwi_at_aln;
+	stomp_aln = (stomp_alnr || pe_stomp_pipeline || !predicted_correctly_dec) && (pc.pc != misspcr[0].pc);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_fet && !hwi_at_aln;
 always_comb
-	stomp_fet = (stomp_fetr || pe_stomp_pipeline) && (pc_f.pc != misspcr[1].pc);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_fet;
+	stomp_fet = (stomp_fetr || pe_stomp_pipeline || !predicted_correctly_dec) && (pc_f.pc != misspcr[1].pc);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_fet;
 always_comb
-	stomp_mux = (pe_stomp_pipeline || stomp_muxr) && (pc_fet.pc != misspcr[2].pc);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_mux;
+	stomp_mux = (pe_stomp_pipeline || stomp_muxr || !predicted_correctly_dec) && (pc_fet.pc != misspcr[2].pc);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_mux;
 always_comb
-	stomp_dec = (pe_stomp_pipeline || stomp_decr) && (pc_mux.pc != misspcr[3].pc);// && !hwi_at_ren && !hwi_at_dec;
+	stomp_dec = (pe_stomp_pipeline || stomp_decr || !predicted_correctly_dec) && (pc_mux.pc != misspcr[3].pc);// && !hwi_at_ren && !hwi_at_dec;
 always_comb
 	stomp_ren = (pe_stomp_pipeline || stomp_renr) && (pc_dec.pc != misspcr[4].pc);// && !hwi_at_ren;
 
@@ -199,7 +201,7 @@ else begin
 		else if (pc.pc == misspcr[0].pc)
 			stomp_alnr <= FALSE;
 		else if (!ff1)
-			stomp_alnr <= (do_bsr & ~found_destination);
+			stomp_alnr <= do_bsr;
 	end
 
 	if (advance_pipeline|pe_stomp_pipeline) begin
@@ -212,7 +214,7 @@ else begin
 	end
 
 	if (advance_pipeline|pe_stomp_pipeline) begin
-		do_bsr_mux <= (do_bsr & ~found_destination);
+		do_bsr_mux <= do_bsr;
 		if (pe_stomp_pipeline)
 			stomp_muxr <= TRUE;
 		else if (pc_fet.pc == misspcr[2].pc || !stomp_fet) // (next_stomp_mux)
@@ -314,35 +316,37 @@ always_ff @(posedge clk)
 for (n4 = 0; n4 < Qupls4_pkg::ROB_ENTRIES; n4 = n4 + 1) begin
 	robentry_stomp[n4] = FALSE;
 	// Stomp on instructions between the branch and the destination.
-	if (found_destination) begin
-		if (rob[n4].sn < rob[destination_rndx].sn && rob[n4].sn > rob[missid].sn)
-			robentry_stomp[n4] = TRUE;
-	end
-	else begin
-		// The first three groups of instructions after miss needs to be stomped on 
-		// with no target copies. After that copy targets are in effect.
-//	((branchmiss/*||((takb&~rob[fcu_id].bt) && (fcu_v2|fcu_v3|fcu_v4))*/) || (branch_state<Qupls4_pkg::BS_DONE2 && branch_state!=Qupls4_pkg::BS_IDLE))
-		if ((branchmiss || (branch_state<Qupls4_pkg::BS_DONE2 && branch_state!=Qupls4_pkg::BS_IDLE)) &&
-			rob[n4].sn > rob[missid].sn &&
-			fcu_idv	&& // miss_idv
-			rob[n4].op.pc.bno_t!=stomp_bno
-		)
-			robentry_stomp[n4] = TRUE;
-	end
-	
-	if (Qupls4_pkg::SUPPORT_BACKOUT) begin
-		// These (3) instructions must be turned into copy-targets because even if
-		// they should not execute, following instructions from the target address
-		// may have registers depending on the mappings.
-		if (fcu_idv && (rob[fcu_id].decbus.br || rob[fcu_id].decbus.cjb)) begin
-	 		if (rob[n4].grp==rob[fcu_id].grp && rob[n4].sn > rob[fcu_id].sn)
-	 			robentry_stomp[n4] = FALSE;
+	if (branch_resolved) begin
+		if (found_destination) begin
+			if (rob[n4].sn < rob[destination_rndx].sn && rob[n4].sn > rob[missid].sn)
+				robentry_stomp[n4] = TRUE;
 		end
-	end
-	else begin
-		if (fcu_idv && rob[fcu_id].decbus.br && !takb) begin
-	 		if (rob[n4].grp==rob[fcu_id].grp && rob[n4].sn > rob[fcu_id].sn)
-	 			robentry_stomp[n4] = FALSE;
+		else begin
+			// The first three groups of instructions after miss needs to be stomped on 
+			// with no target copies. After that copy targets are in effect.
+	//	((branchmiss/*||((takb&~rob[fcu_id].bt) && (fcu_v2|fcu_v3|fcu_v4))*/) || (branch_state<Qupls4_pkg::BS_DONE2 && branch_state!=Qupls4_pkg::BS_IDLE))
+			if ((branchmiss || (branch_state<Qupls4_pkg::BS_DONE2 && branch_state!=Qupls4_pkg::BS_IDLE)) &&
+				rob[n4].sn > rob[missid].sn &&
+				fcu_idv	&& // miss_idv
+				rob[n4].op.pc.bno_t!=stomp_bno
+			)
+				robentry_stomp[n4] = TRUE;
+		end
+	
+		if (Qupls4_pkg::SUPPORT_BACKOUT) begin
+			// These (3) instructions must be turned into copy-targets because even if
+			// they should not execute, following instructions from the target address
+			// may have registers depending on the mappings.
+			if (fcu_idv && (rob[fcu_id].decbus.br || rob[fcu_id].decbus.cjb)) begin
+		 		if (rob[n4].grp==rob[fcu_id].grp && rob[n4].sn > rob[fcu_id].sn)
+		 			robentry_stomp[n4] = FALSE;
+			end
+		end
+		else begin
+			if (fcu_idv && rob[fcu_id].decbus.br && !takb) begin
+		 		if (rob[n4].grp==rob[fcu_id].grp && rob[n4].sn > rob[fcu_id].sn)
+		 			robentry_stomp[n4] = FALSE;
+			end
 		end
 	end
 	

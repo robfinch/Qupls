@@ -70,25 +70,30 @@ begin
 			end
 		end
 
+		// This takes care of instructions within the same group of instructions.
 		if (Qupls4_pkg::SUPPORT_BACKOUT) begin
-			if (fcu_idv && ((rob[fcu_id].decbus.br && takb) || rob[fcu_id].decbus.cjb)) begin
+			if (fcu_idv && ((fcu_branch_resolved && rob[fcu_id].decbus.br && takb) || rob[fcu_id].decbus.cjb)) begin
+				// Instructions following the branch in the same instruction group are
+				// marked as copy dests if the branch is taken.
 		 		if (rob[n4].grp==rob[fcu_id].grp && rob[n4].sn > rob[fcu_id].sn) begin
 					copydst[n4] = TRUE;
 					unavail_list[rob[n4].op.nRd] = TRUE;
 		 		end
 			end
+			// If the branch target is in reach in the ROB mark instructions in the
+			// skp list as copy dests.
 			if (fcu_idv && fcu_branch_resolved && skip_list[n4]) begin
 				copydst[n4] = TRUE;
 				unavail_list[rob[n4].op.nRd] = TRUE;
 			end
 		end
 		else begin
-			if (fcu_idv && ((rob[fcu_id].decbus.br && takb))) begin
+			if (fcu_idv && ((fcu_branch_resolved && rob[fcu_id].decbus.br && takb))) begin
 		 		if (rob[n4].grp==rob[fcu_id].grp && rob[n4].sn > rob[fcu_id].sn) begin
 					copydst[n4] = TRUE;
 		 		end
 			end
-			if (fcu_idv && rob[fcu_id].decbus.br && !takb) begin
+			if (fcu_idv && fcu_branch_resolved && rob[fcu_id].decbus.br && !takb) begin
 		 		if (rob[n4].grp==rob[fcu_id].grp && rob[n4].sn > rob[fcu_id].sn) begin
 					copydst[n4] = FALSE;
 		 		end

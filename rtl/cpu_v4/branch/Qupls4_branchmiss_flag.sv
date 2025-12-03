@@ -37,11 +37,8 @@
 
 import Qupls4_pkg::*;
 
-module Qupls4_branchmiss_flag(rst, clk, brclass, trig, miss_det, miss_flag);
-input rst;
-input clk;
-input Qupls4_pkg::brclass_t brclass;
-input trig;
+module Qupls4_branchmiss_flag(rse, miss_det, miss_flag);
+input Qupls4_pkg::reservation_station_entry_t rse;
 input miss_det;
 output reg miss_flag;
 
@@ -51,21 +48,13 @@ always_ff @(posedge clk)
 if (rst)
 	miss_flag <= FALSE;
 else begin
-	miss_flag <= FALSE;		// pulse for only 1 cycle.
-	if (trig) begin
-		case(brclass)
-		Qupls4_pkg::BRC_BCCR,
-		Qupls4_pkg::BRC_BCCD:
-			miss_flag <= miss_det;
-//		Qupls4_pkg::BRC_BL,
-		Qupls4_pkg::BRC_JSR,
-		Qupls4_pkg::BRC_JSRN,
-		Qupls4_pkg::BRC_RTD:
-			miss_flag <= TRUE;
-		default:
-			miss_flag <= FALSE;
-		endcase
-	end
+	case(1'b1)
+	rse.br:		miss_flag <= miss_det;
+	rse.cjb:	miss_flag <= TRUE;
+	rse.ret:	miss_flag <= TRUE;
+	rse.eret:	miss_flag <= TRUE;
+	default:	miss_flag <= FALSE;
+	endcase
 end
 
 endmodule

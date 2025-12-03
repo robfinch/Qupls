@@ -47,7 +47,8 @@ module Qupls4_pipeline_dec(rst_i, rst, clk, en, clk5x, ph4, new_cline_mux, cline
 	Rt0_dec, Rt1_dec, Rt2_dec, Rt3_dec, Rt0_decv, Rt1_decv, Rt2_decv, Rt3_decv,
 	micro_machine_active_mux, micro_machine_active_dec,
 	pg_dec,
-	mux_stallq, ren_stallq, ren_rst_busy, avail_reg
+	mux_stallq, ren_stallq, ren_rst_busy, avail_reg,
+	predicted_correctly_o, new_address_o
 );
 input rst_i;
 input rst;
@@ -91,6 +92,8 @@ output ren_rst_busy;
 input micro_machine_active_mux;
 output reg micro_machine_active_dec;
 output [Qupls4_pkg::PREGS-1:0] avail_reg;
+reg predicted_correctly_o;
+reg [63:0] new_address_o;
 
 integer n1,n2,n3,n4,n5;
 Qupls4_pkg::pipeline_group_reg_t pg_mux_r;
@@ -907,6 +910,29 @@ begin
 	pr1_dec.om = sr.om;
 	pr2_dec.om = sr.om;
 	pr3_dec.om = sr.om;
+
+	// Instructions following a BSR / JSR in the same pipeline group are never
+	// executed, whether predicted correctly or not.
+	// If correctly predicted, the incoming MUX stage will begin with the
+	// correct address.
+	if (pr0_dec.decbus.bsr|pr0_dec.decbus.jsr) begin
+		pr1_dec.v = INV;
+		pr1_dec.uop.any.opcode = Qupls4_pkg::OP_NOP;
+		pr2_dec.v = INV;
+		pr2_dec.uop.any.opcode = Qupls4_pkg::OP_NOP;
+		pr3_dec.v = INV;
+		pr3_dec.uop.any.opcode = Qupls4_pkg::OP_NOP;
+	end
+	else if (pr1_dec.decbus.bsr|pr1_dec.decbus.jsr) begin
+		pr2_dec.v = INV;
+		pr2_dec.uop.any.opcode = Qupls4_pkg::OP_NOP;
+		pr3_dec.v = INV;
+		pr3_dec.uop.any.opcode = Qupls4_pkg::OP_NOP;
+	end
+	else if (pr2_dec.decbus.bsr|pr2_dec.decbus.jsr) begin
+		pr3_dec.v = INV;
+		pr3_dec.uop.any.opcode = Qupls4_pkg::OP_NOP;
+	end
 end
 
 always_comb prd[0] = pr0_dec;
@@ -915,6 +941,42 @@ always_comb prd[2] = pr2_dec;
 always_comb prd[3] = pr3_dec;
 
 always_comb inso = prd;
+
+reg [63:0] bsr0_tgt, bsr1_tgt, bsr2_tgt;
+reg [63:0] jsr0_tgt, jsr1_tgt, jsr2_tgt;
+reg [63:0] new_address;
+always_comb bsr0_tgt = {{23{pr0_dec.uop.bsr.disp[40]}},pr0_dec.uop.bsr.disp,1'b0} + pr0_dec.pc.pc;
+always_comb bsr1_tgt = {{23{pr1_dec.uop.bsr.disp[40]}},pr1_dec.uop.bsr.disp,1'b0} + pr1_dec.pc.pc;
+always_comb bsr2_tgt = {{23{pr2_dec.uop.bsr.disp[40]}},pr2_dec.uop.bsr.disp,1'b0} + pr2_dec.pc.pc;
+always_comb jsr0_tgt = {{23{pr0_dec.uop.bsr.disp[40]}},pr0_dec.uop.bsr.disp,1'b0};
+always_comb jsr1_tgt = {{23{pr1_dec.uop.bsr.disp[40]}},pr1_dec.uop.bsr.disp,1'b0};
+always_comb jsr2_tgt = {{23{pr2_dec.uop.bsr.disp[40]}},pr2_dec.uop.bsr.disp,1'b0};
+
+reg predicted_correctly;
+
+always_comb
+begin
+	new_address_o = Qupls4_pkg::RSTPC;
+	predicted_correctly_o = TRUE;
+	if (pr0_dec.decbus.bsr|pr0_dec.decbus.jsr) begin
+		predicted_correctly_o = FALSE;
+		new_address_o = pr0_dec.decbus.bsr ? bsr0_tgt : jsr0_tgt;
+		if (pg_dec.pr0.pc.pc==pg_mux.pr0.pc.pc)
+			predicted_correctly_o = TRUE;
+	end
+	else if (pr1_dec.decbus.bsr|pr1_dec.decbus.jsr) begin
+		predicted_correctly_o = FALSE;
+		new_address_o = pr1_dec.decbus.bsr ? bsr1_tgt : jsr1_tgt;
+		if (pg_dec.pr1.pc.pc==pg_mux.pr0.pc.pc)
+			predicted_correctly_o = TRUE;
+	end
+	else if (pr2_dec.decbus.bsr|pr2_dec.decbus.jsr) begin
+		predicted_correctly_o = FALSE;
+		new_address_o = pr2_dec.decbus.bsr ? bsr2_tgt : jsr2_tgt;
+		if (pg_dec.pr2.pc.pc==pg_mux.pr0.pc.pc)
+			predicted_correctly_o = TRUE;
+	end
+end
 
 /* under construction
 Stark_space_branches uspb1
