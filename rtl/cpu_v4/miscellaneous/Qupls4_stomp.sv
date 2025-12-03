@@ -43,7 +43,7 @@ import Qupls4_pkg::*;
 module Qupls4_stomp(rst, clk, ihit, advance_pipeline, advance_pipeline_seg2, 
 //	irq_in_pipe, di_inst,
 	micro_machine_active, branch_resolved, branchmiss, found_destination, destination_rndx,
-	branch_state, do_bsr, misspc, predicted_correctly_dec,
+	branch_state, do_bsr, misspc, predicted_correctly_dec, predicted_match_mux,
 	pc, pc_f, pc_fet, pc_mux, pc_dec, pc_ren,
 	stomp_fet, stomp_mux, stomp_dec, stomp_ren, stomp_que, stomp_quem,
 	fcu_idv, fcu_id, missid, stomp_bno, takb, rob, robentry_stomp
@@ -64,6 +64,7 @@ input Qupls4_pkg::branch_state_t branch_state;
 input do_bsr;
 input pc_address_ex_t misspc;
 input predicted_correctly_dec;
+input predicted_match_mux;
 input pc_address_ex_t pc;
 input pc_address_ex_t pc_f;
 input pc_address_ex_t pc_fet;
@@ -166,11 +167,11 @@ wire hwi_at_fet = di_inst && ic_irq;
 wire hwi_at_aln = di_inst && hirq;
 */
 always_comb
-	stomp_aln = (stomp_alnr || pe_stomp_pipeline || !predicted_correctly_dec) && (pc.pc != misspcr[0].pc);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_fet && !hwi_at_aln;
+	stomp_aln = (pe_stomp_pipeline || stomp_alnr || !predicted_match_mux || !predicted_correctly_dec) && (pc.pc != misspcr[0].pc);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_fet && !hwi_at_aln;
 always_comb
-	stomp_fet = (stomp_fetr || pe_stomp_pipeline || !predicted_correctly_dec) && (pc_f.pc != misspcr[1].pc);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_fet;
+	stomp_fet = (pe_stomp_pipeline || stomp_fetr || !predicted_match_mux || !predicted_correctly_dec) && (pc_f.pc != misspcr[1].pc);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_fet;
 always_comb
-	stomp_mux = (pe_stomp_pipeline || stomp_muxr || !predicted_correctly_dec) && (pc_fet.pc != misspcr[2].pc);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_mux;
+	stomp_mux = (pe_stomp_pipeline || stomp_muxr || !predicted_match_mux || !predicted_correctly_dec) && (pc_fet.pc != misspcr[2].pc);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_mux;
 always_comb
 	stomp_dec = (pe_stomp_pipeline || stomp_decr || !predicted_correctly_dec) && (pc_mux.pc != misspcr[3].pc);// && !hwi_at_ren && !hwi_at_dec;
 always_comb

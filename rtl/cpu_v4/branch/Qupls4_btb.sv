@@ -40,6 +40,7 @@ import Qupls4_pkg::*;
 module Qupls4_btb(rst, clk, en, clk_en, nmi, nmi_addr, irq, irq_addr,
 	rclk, micro_machine_active,
 	igrp, length_byte, predicted_correctly_dec, new_address_dec,
+	new_address_mux,
 	pc, pc0, pc1, pc2, pc3, pc4, next_pc, p_override, po_bno,
 	takb0, takb1, takb2, takb3, do_bsr, bsr_tgt, pe_bsdone, do_ret, ret_pc,
 	do_call,
@@ -77,6 +78,7 @@ output reg takb0;
 output reg takb1;
 output reg takb2;
 output reg takb3;
+input pc_address_t new_address_mux;
 input predicted_correctly_dec;
 input pc_address_t new_address_dec;
 input mip0v;
@@ -565,9 +567,14 @@ else begin
 		next_pcs[next_act_bno].bno_t = act_bno;
 		next_pcs[next_act_bno].bno_f = 6'd0;
 	end
+	// Decode stage corrections override mux stage.
 	else if (!predicted_correctly_dec) begin
 		next_act_bno = act_bno;
 		next_pcs[act_bno] = new_address_dec;
+	end
+	else if (|p_override) begin
+		next_act_bno = act_bno;
+		next_pcs[act_bno] = new_address_mux;
 	end
 	else if (do_bsr) begin
 		next_pcs[bsr_tgt.bno_t] = bsr_tgt;

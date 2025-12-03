@@ -962,6 +962,9 @@ Qupls4_pkg::pipeline_reg_t nopi;
 reg [5:0] sync_no;
 reg [5:0] fc_no;
 
+always_comb
+	fcu_branch_resolved = fcu_rse.v;
+
 // Define a NOP instruction.
 always_comb
 begin
@@ -1603,7 +1606,7 @@ endgenerate
 						
 
 wire predicted_correctly_dec;
-wire [63:0] new_address_dec;			
+wire [63:0] new_address_dec, new_address_mux;
 wire ic_port;
 wire ftaim_full, ftadm_full;
 reg ihit_fet, ihit_mux, ihit_dec, ihit_ren, ihit_que;
@@ -1745,6 +1748,8 @@ Qupls4_btb ubtb1
 	.do_call(do_call),
 	.ret_pc(ret_pc),
 	.bsr_tgt(bsr_tgt),
+	.p_override(p_override),
+	.new_address_mux(new_address_mux),
 	.predicted_correctly_dec(predicted_correctly_dec),
 	.new_address_dec(new_address_dec),
 	.mip0v(mip0v),
@@ -1758,7 +1763,6 @@ Qupls4_btb ubtb1
 	.pc3(pc3),
 	.pc4(XWID==2 ? pc2:XWID==3 ? pc3:pc4),
 	.next_pc(next_pc),
-	.p_override(p_override),
 	.po_bno(po_bno),
 	.takb0(ntakb[0]),
 	.takb1(ntakb[1]),
@@ -1815,13 +1819,22 @@ gselectPredictor ugsp1
 	.takb3(commit_takb3),
 	.ip0(pc0_f.pc),
 	.predict_taken0(pt0_mux),
-	.ip1(pc0_f.pc + 4'd4),
+	.ip1(pc0_f.pc + 6'd6),
 	.predict_taken1(pt1_mux),
-	.ip2(pc0_f.pc + 4'd8),
+	.ip2(pc0_f.pc + 6'd12),
 	.predict_taken2(pt2_mux),
-	.ip3(pc0_f.pc + 4'd12),
+	.ip3(pc0_f.pc + 6'd18),
 	.predict_taken3(pt3_mux)
 );
+
+always_comb
+	case(1'b1)
+	pt0_mux:	new_address_mux = pc0_f.pc;
+	pt1_mux:	new_address_mux = pc0_f.pc + 6'd6;
+	pt1_mux:	new_address_mux = pc0_f.pc + 6'd12;
+	pt1_mux:	new_address_mux = pc0_f.pc + 6'd18;
+	default:	new_address_mux = Qupls4_pkg::RSTPC;
+	endcase
 
 always_ff @(posedge clk)
 if (irst)
@@ -1929,6 +1942,7 @@ Qupls4_stomp ustmp1
 	.branch_state(branch_state), 
 	.do_bsr(do_bsr|do_ret),
 	.misspc(misspc),
+	.predicted_match_mux(~|p_override),
 	.predicted_correctly_dec(predicted_correctly_dec),
 	.pc(pc),
 	.pc_f(pc0_f),
@@ -1942,7 +1956,7 @@ Qupls4_stomp ustmp1
 	.stomp_ren(stomp_ren),
 	.stomp_que(stomp_que),
 	.stomp_quem(stomp_quem),
-	.fcu_idv(fcu_idv),
+	.fcu_idv(fcu_rse.v),
 	.fcu_id(fcu_rse.rndx),
 	.missid(missid),
 	.stomp_bno(stomp_bno),
@@ -3227,8 +3241,9 @@ always_ff @(posedge clk) dram0_we = {wt10A,8'hFF} & {9{dram_wr0}};
 always_ff @(posedge clk) dram1_we = {wt11A,8'hFF} & {9{dram_wr1}} & {9{Qupls4_pkg::NDATA_PORTS > 1}};
 
 always_ff @(posedge clk) fcu_we =
-	(fcu_rse.aRd >= 7'd56 && fcu_rse.aRd <= 7'd63) ?
-	((fcu_rse.om==Qupls4_pkg::OM_SECURE ? 9'h0FF : fcu_rse.om==Qupls4_pkg::OM_HYPERVISOR ? 9'h0F : fcu_rse.om==Qupls4_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01) & {9{fcu_wrA}}) : {wt6A,8'hFF} & {9{fcu_wrA}};
+//	(fcu_rse.aRd >= 7'd56 && fcu_rse.aRd <= 7'd63) ?
+//	((fcu_rse.om==Qupls4_pkg::OM_SECURE ? 9'h0FF : fcu_rse.om==Qupls4_pkg::OM_HYPERVISOR ? 9'h0F : fcu_rse.om==Qupls4_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01) & {9{fcu_wrA}}) :
+	{wt6A,8'hFF} & {9{fcu_wrA}};
 
 always_comb wt0A = !sau0_rse2.aRdz;
 always_comb wt1A = !sau1_rse2.aRdz && Qupls4_pkg::NSAU > 1;
@@ -3485,7 +3500,7 @@ Qupls4_func_result_queue ufrq7
 	.rd_i(fuq_rd[7]),
 	.rse_i(fcu_rse),
 	.tag_i({8'd0}),
-	.res_i(fcu_resA2),
+	.res_i(fcu_rse.arg[0].val),//resA2),
 	.we_o(fuq_we[7]),
 	.pRt_o(fuq_pRt[7]),
 	.aRt_o(fuq_aRt[7]),
@@ -5363,11 +5378,12 @@ end
 endgenerate
 
 reg dram0_idv2;
+/*
 reg fcu_reset_state;
 always_comb
 	fcu_reset_state = fcu_state1 && rob[fcu_rse.rndx].v && fcu_v3 && !robentry_stomp[fcu_rse.rndx] 
 		&& (bs_idle_oh||bs_done_oh||branch_state==Qupls4_pkg::BS_DONE2) && fcu_idv;
- 	
+*/ 	
 always_comb
 	dc_get = !(branchmiss || (branch_state < Qupls4_pkg::BS_CAPTURE_MISSPC && !bs_idle_oh))
 //		&& advance_pipeline
@@ -5580,7 +5596,7 @@ else begin
 	// invalidated (state 2), quing new instructions can begin.
 	// Only reset the tail if something was stomped on. It could be that there
 	// are no valid instructions following the branch in the queue.
-	if (branchmiss || (branch_state < Qupls4_pkg::BS_CAPTURE_MISSPC && !bs_idle_oh)) begin
+	if (branchmiss && fcu_rse.v)// || (branch_state < Qupls4_pkg::BS_CAPTURE_MISSPC && !bs_idle_oh)) begin
 		;
 //		if (|robentry_stomp)
 //			tail0 <= stail;		// computed above
@@ -5918,8 +5934,8 @@ else begin
 
 	if (fcu_rse.v) begin
 		fcu_state1 <= VAL;
-		fcu_idv <= VAL;
-		fcu_branch_resolved <= TRUE;
+//		fcu_idv <= VAL;
+//		fcu_branch_resolved <= TRUE;
     rob[ fcu_rse.rndx ].exc <= fcu_exc;
     rob[ fcu_rse.rndx ].excv <= ~&fcu_exc;
     rob[ fcu_rse.rndx ].done <= 2'b11;
@@ -6544,12 +6560,12 @@ else begin
 	end
 	*/
 	// Terminate FCU operation on stomp.
-	if (robentry_stomp[fcu_rse.rndx] & fcu_idv) begin
+	if (robentry_stomp[fcu_rse.rndx] & fcu_rse.v) begin
 		fcu_state1 <= INV;
-		fcu_branch_resolved <= INV;
+//		fcu_branch_resolved <= INV;
 		fcu_v3 <= INV;
 		fcu_idle <= TRUE;
-		fcu_idv <= INV;
+//		fcu_idv <= INV;
 	end
 
 	// Redo instruction as copy target.
@@ -7224,7 +7240,7 @@ begin
 			|| (n==fpu1_id && !fpu1_idle)
 			|| n==agen0_id
 			|| n==agen1_id
-			|| n==fcu_rse.rndx
+			|| (n==fcu_rse.rndx && fcu_rse.v)
 			))
 	fnStuckOut = TRUE;
 	if ((&rob[n].out) && (&rob[n].done) && rob[n].v)
@@ -7652,13 +7668,13 @@ begin
 	fcu_available <= 1;
 //	fcu_exc <= FLT_NONE;
 	fcu_state1 <= INV;
-	fcu_branch_resolved <= INV;
+//	fcu_branch_resolved <= INV;
 	fcu_v3 <= INV;
 	fcu_v4 <= INV;
 	fcu_v5 <= INV;
 	fcu_v6 <= INV;
-	fcu_idle <= TRUE;
-	fcu_idv <= INV;
+//	fcu_idle <= TRUE;
+//	fcu_idv <= INV;
 	fcu_bl <= FALSE;
 	fcu_new <= FALSE;
 	brtgtv <= INV;
