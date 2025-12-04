@@ -92,8 +92,8 @@ output ren_rst_busy;
 input micro_machine_active_mux;
 output reg micro_machine_active_dec;
 output [Qupls4_pkg::PREGS-1:0] avail_reg;
-reg predicted_correctly_o;
-reg [63:0] new_address_o;
+output reg predicted_correctly_o;
+output reg [63:0] new_address_o;
 
 integer n1,n2,n3,n4,n5;
 Qupls4_pkg::pipeline_group_reg_t pg_mux_r;

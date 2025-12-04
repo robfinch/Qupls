@@ -44,10 +44,7 @@ output reg miss_flag;
 
 // Branchmiss flag
 
-always_ff @(posedge clk)
-if (rst)
-	miss_flag <= FALSE;
-else begin
+always_comb
 	case(1'b1)
 	rse.br:		miss_flag <= miss_det;
 	rse.cjb:	miss_flag <= TRUE;
@@ -55,6 +52,5 @@ else begin
 	rse.eret:	miss_flag <= TRUE;
 	default:	miss_flag <= FALSE;
 	endcase
-end
 
 endmodule

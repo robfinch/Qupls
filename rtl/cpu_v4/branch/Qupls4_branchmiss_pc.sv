@@ -85,24 +85,23 @@ begin
 	rse.bcc:
 		if (ir.br.md)
 			dstpc.pc = argC;
-		else	
 		else begin
 			disp = {{44{ir.br.disp[19]}},ir.br.disp,1'b0};
 			dstpc.pc = pc.pc + disp;
 		end
 	rse.bsr:
 		begin
-			disp = {{23{instr.uop[47]}},instr.uop[47:7],1'b0};
+			disp = {{29{ir.bsr.disp[34]}},ir.bsr.disp,1'b0};
 			dstpc.pc = pc.pc + disp;
 		end
 	rse.jsr:
 		begin
-			disp = {{23{instr.uop[47]}},instr.uop[47:7],1'b0};
+			disp = {{29{ir.jsr.disp[34]}},ir.jsr.disp,1'b0};
 			dstpc.pc = disp;
 		end
 	// Must be tested before Ret
 	rse.eret:
-		dstpc.pc = (instr.uop[28:17]==12'd3 ? pc_stack[1].pc : pc_stack[0].pc) + (instr.uop[10:7] * 3'd6);
+		dstpc.pc = (ir[28:17]==12'd3 ? pc_stack[1].pc : pc_stack[0].pc) + (ir[10:7] * 3'd6);
 	rse.ret:
 		dstpc.pc = argA;
 	default:

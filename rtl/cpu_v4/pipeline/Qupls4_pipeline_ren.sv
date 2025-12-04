@@ -32,6 +32,7 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
+// 16800 LUTs / 5325 FFs / 0 BRAMs
 // ============================================================================
 
 import const_pkg::*;
@@ -67,7 +68,7 @@ module Qupls4_pipeline_ren(
 	micro_machine_active_dec, micro_machine_active_ren,
 	alloc_chkpt, cndx, rcndx, miss_cp
 );
-parameter NPORT = 16;
+parameter NPORT = 12;
 input rst;
 input clk;
 input clk5x;
@@ -174,12 +175,6 @@ input checkpt_ndx_t [3:0] rcndx;
 input checkpt_ndx_t miss_cp;
 
 integer jj,n5;
-
-reg [0:0] arnbank [NPORT-1:0];
-initial begin
-	for (jj = 0; jj < NPORT; jj = jj + 1)
-		arnbank[jj] = 1'b0;
-end
 
 Qupls4_pkg::pipeline_reg_t nopi;
 
@@ -386,8 +381,6 @@ Qupls4_rat #(.NPORT(NPORT)) urat1
 (	
 	.rst(rst),
 	.clk(clk),
-	.clk5x(clk5x),
-	.ph4(ph4),
 	.en(en),
 	.en2(en),
 	.nq(nq),
@@ -405,7 +398,6 @@ Qupls4_rat #(.NPORT(NPORT)) urat1
 	.qbr1(pg_dec.pr1.decbus.br|pg_dec.pr1.decbus.cjb),
 	.qbr2(pg_dec.pr2.decbus.br|pg_dec.pr2.decbus.cjb),
 	.qbr3(pg_dec.pr3.decbus.br|pg_dec.pr3.decbus.cjb),
-	.rnbank(arnbank),
 	.rn(arn),
 	.rng(arng),
 	.rnt(arnt),
@@ -414,10 +406,6 @@ Qupls4_rat #(.NPORT(NPORT)) urat1
 	.st_prn(store_argC_pReg),
 	.prn(prn),
 	.prv(prnv),
-	.wrbanka(sr.om==2'd0 ? 1'b0 : 1'b0),	// For now, only 1 bank
-	.wrbankb(sr.om==2'd0 ? 1'b0 : 1'b0),
-	.wrbankc(sr.om==2'd0 ? 1'b0 : 1'b0),
-	.wrbankd(sr.om==2'd0 ? 1'b0 : 1'b0),
 	.wr0(Rt0_decv && ns_areg[0]!=8'd0),// && !stomp0 && ~pg_ren.pr0.decbus.Rtz),
 	.wr1(Rt1_decv && ns_areg[1]!=8'd0),// && !stomp1 && ~pg_ren.pr1.decbus.Rtz),
 	.wr2(Rt2_decv && ns_areg[2]!=8'd0),// && !stomp2 && ~pg_ren.pr2.decbus.Rtz),
@@ -434,10 +422,6 @@ Qupls4_rat #(.NPORT(NPORT)) urat1
 	.wrb_cp(rcndx[1]),
 	.wrc_cp(rcndx[2]),
 	.wrd_cp(rcndx[3]),
-	.cmtbanka(1'b0),
-	.cmtbankb(1'b0),
-	.cmtbankc(1'b0),
-	.cmtbankd(1'b0),
 	.wrport0_v(wrport0_v),
 	.wrport1_v(wrport1_v),
 	.wrport2_v(wrport2_v),
@@ -691,7 +675,7 @@ else begin
 		pg_ren.pr0 <= pg_dec.pr0;
 		if (pg_dec.pr0.v & ~stomp_ren) begin
 			pg_ren.pr0.nRd <= Rt0_dec;
-			if (pg_ren.pr3.decbus.bl)
+			if (pg_ren.pr3.decbus.bsr|pg_ren.pr3.decbus.jsr)
 				pg_ren.pr0.v <= INV;
 		end
 		else begin
@@ -721,9 +705,9 @@ else begin
 		pg_ren.pr1 <= pg_dec.pr1;
 		if (pg_dec.pr1.v & ~stomp_ren) begin
 			pg_ren.pr1.nRd <= Rt1_dec;
-			if (pg_dec.pr0.decbus.bl)
+			if (pg_dec.pr0.decbus.bsr|pg_dec.pr0.decbus.jsr)
 				pg_ren.pr1.v <= INV;
-			if (pg_ren.pr3.decbus.bl)
+			if (pg_ren.pr3.decbus.bsr|pg_ren.pr3.decbus.jsr)
 				pg_ren.pr1.v <= INV;
 		end
 		else begin
@@ -741,9 +725,9 @@ else begin
 		pg_ren.pr2 <= pg_dec.pr2;
 		if (pg_dec.pr2.v & ~stomp_ren) begin
 			pg_ren.pr2.nRd <= Rt2_dec;
-			if (pg_dec.pr0.decbus.bl || pg_dec.pr1.decbus.bl)
+			if (pg_dec.pr0.decbus.bsr || pg_dec.pr1.decbus.bsr || pg_dec.pr0.decbus.jsr || pg_dec.pr1.decbus.jsr)
 				pg_ren.pr2.v <= INV;
-			if (pg_ren.pr3.decbus.bl)
+			if (pg_ren.pr3.decbus.bsr | pg_ren.pr3.decbus.jsr)
 				pg_ren.pr2.v <= INV;
 		end
 		else begin
@@ -761,9 +745,11 @@ else begin
 		pg_ren.pr3 <= pg_dec.pr3;
 		if (pg_dec.pr3.v & ~stomp_ren) begin
 			pg_ren.pr3.nRd <= Rt3_dec;
-			if (pg_dec.pr0.decbus.bl || pg_dec.pr1.decbus.bl || pg_dec.pr2.decbus.bl)
+			if (pg_dec.pr0.decbus.bsr || pg_dec.pr1.decbus.bsr || pg_dec.pr2.decbus.bsr ||
+				pg_dec.pr0.decbus.jsr || pg_dec.pr1.decbus.jsr || pg_dec.pr2.decbus.jsr
+			)
 				pg_ren.pr3.v <= INV;
-			if (pg_ren.pr3.decbus.bl)
+			if (pg_ren.pr3.decbus.bsr | pg_ren.pr3.decbus.jsr)
 				pg_ren.pr3.v <= INV;
 		end
 		else begin

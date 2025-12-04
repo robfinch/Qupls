@@ -1606,7 +1606,8 @@ endgenerate
 						
 
 wire predicted_correctly_dec;
-wire [63:0] new_address_dec, new_address_mux;
+wire [63:0] new_address_dec;
+reg [63:0] new_address_mux;
 wire ic_port;
 wire ftaim_full, ftadm_full;
 reg ihit_fet, ihit_mux, ihit_dec, ihit_ren, ihit_que;
@@ -2763,9 +2764,11 @@ assign stomp1 = ((stomp1_r|stomp_ren|pg_ren.pr0.decbus.macro) /*&& pg_ren.pr1.pc
 assign stomp2 = ((stomp2_r|stomp_ren|pg_ren.pr0.decbus.macro|pg_ren.pr1.decbus.macro) /*&& pg_ren.pr2.pc.bno_t!=stomp_bno*/);
 assign stomp3 = ((stomp3_r|stomp_ren|pg_ren.pr0.decbus.macro|pg_ren.pr1.decbus.macro|pg_ren.pr2.decbus.macro) /*&& pg_ren.pr3.pc.bno_t!=stomp_bno*/);
 wire ornop0 = 1'b0;
-wire ornop1 = pg_ren.pr0.decbus.bl;
-wire ornop2 = pg_ren.pr0.decbus.bl || pg_ren.pr1.decbus.bl;
-wire ornop3 = pg_ren.pr0.decbus.bl || pg_ren.pr1.decbus.bl || pg_ren.pr2.decbus.bl;
+wire ornop1 = pg_ren.pr0.decbus.bsr||pg_ren.pr0.decbus.jsr;
+wire ornop2 = pg_ren.pr0.decbus.bsr || pg_ren.pr1.decbus.bsr || pg_ren.pr0.decbus.jsr || pg_ren.pr1.decbus.jsr;
+wire ornop3 = pg_ren.pr0.decbus.bsr || pg_ren.pr1.decbus.bsr || pg_ren.pr2.decbus.bsr ||
+	pg_ren.pr0.decbus.jsr || pg_ren.pr1.decbus.jsr || pg_ren.pr2.decbus.jsr
+	;
 
 /*
 assign arnv[0] = !stomp0;
@@ -3796,7 +3799,7 @@ Qupls4_backout_flag ubkoutf1
 	.rst(irst),
 	.clk(clk),
 	.fcu_branch_resolved(fcu_branch_resolved),
-	.rse(fcu_rse),
+	.fcu_rse(fcu_rse),
 	.takb(takb),
 	.fcu_found_destination(fcu_found_destination),
 	.backout(backout)
@@ -4671,13 +4674,13 @@ always_ff @(posedge clk)
 		;
 always_ff @(posedge clk)
 	agen0_vlsndx <=
-		rob[agen0_rndx].vload_ndx|
-		rob[agen0_rndx].vstore_ndx
+		rob[agen0_rndx].decbus.vload_ndx|
+		rob[agen0_rndx].decbus.vstore_ndx
 		;
 always_ff @(posedge clk)
 	agen1_vlsndx <=
-		rob[agen1_rndx].vload_ndx|
-		rob[agen1_rndx].vstore_ndx
+		rob[agen1_rndx].decbus.vload_ndx|
+		rob[agen1_rndx].decbus.vstore_ndx
 		;
 
 Qupls4_agen uag0
@@ -4864,7 +4867,7 @@ Qupls4_set_dram_work #(.CORENO(CORENO)) usdr1 (
 	.lsq_i(lbndx0.vb ? lsq[lbndx0.row][lbndx0.col] : lsq[mem0_lsndx.row][mem0_lsndx.col]),
 	.dram_oper_o(dram0_oper),
 	.dram_work_o(dram0_work),
-	.page_cross(page_cross)
+	.page_cross_o(page_cross)
 );
 
 // Modules for second memory port.
@@ -4950,7 +4953,7 @@ generate begin : gMemory2
 		assign dram1_done = TRUE;
 		assign lbndx1 = {$bits(lsq_ndx_t){1'b0}};
 		assign dram1_timeout = FALSE;
-		assign dram1 = 0;
+		assign dram1 = Qupls4_pkg::DRAMSLOT_AVAIL;
 		assign dram1_more = FALSE;
 		assign dram1_oper = {$bits(dram_oper_t){1'b0}};
 		assign dram1_work = {$bits(dram_work_t){1'b0}};
@@ -5594,7 +5597,6 @@ else begin
 		;
 //		if (|robentry_stomp)
 //			tail0 <= stail;		// computed above
-	end
 	else if (advance_pipeline) begin
 		//if (!stomp_que || stomp_quem) 
 		begin
@@ -7068,7 +7070,7 @@ always_ff @(posedge clk) begin: clock_n_debug
 
 	$display("----- FCU -----");
 	$display("eval:%c A=%h B=%h BI=%h I=%h", takb?"T":"F", fcu_rse.argA, fcu_rse.argB, fcu_argBr, fcu_rse.argI);
-	$display("bt:%c pc=%h id=%d brclass:%h", fcu_bt ? "T":"F", fcu_pc, fcu_rse.rndx, fcu_rse.brclass);
+	$display("bt:%c pc=%h id=%d ", fcu_bt ? "T":"F", fcu_pc, fcu_rse.rndx);
 	$display("miss: %c misspc=%h.%h instr=%h disp=%h", (takb&~fcu_bt)|(~takb&fcu_bt)?"T":"F",fcu_misspc1.bno_t,fcu_misspc1.pc, fcu_instr.uop[63:0],
 		{{37{fcu_instr.uop[63]}},fcu_instr.uop[63:44],3'd0}
 	);
@@ -7780,12 +7782,14 @@ begin
 	pgh[tail>>2].chkpt_freed <= FALSE;
 	pgh[tail>>2].done <= FALSE;
 	pgh[tail>>2].sn <= sn;
+	/*
 	pgh[tail>>2].has_branch <= |(
 		db0.brclass|
 		db1.brclass|
 		db2.brclass|
 		db3.brclass
 		);
+	*/
 end
 endtask
 
@@ -7856,7 +7860,7 @@ begin
 	rob[tail].done <= {2{db.nop}};
 	// Unconditional branches and jumps are done already in the mux stage.
 	// Unconditional subroutine calls only need the target register updated.
-	if (db.bl) begin
+	if (db.bsr|db.jsr) begin
 		if (db.Rdz)
 			rob[tail].done <= {VAL,VAL};
 		else
@@ -8019,7 +8023,6 @@ begin
 	lsq[ndx.row][ndx.col].v <= VAL;
 	lsq[ndx.row][ndx.col].state <= 2'b00;
 	lsq[ndx.row][ndx.col].agen <= FALSE;
-	lsq[ndx.row][ndx.col].op <= rob.op;
 	lsq[ndx.row][ndx.col].pc <= rob.op.pc;
 	lsq[ndx.row][ndx.col].load <= rob.decbus.load|rob.excv;
 	lsq[ndx.row][ndx.col].loadz <= rob.decbus.loadz|rob.excv;
@@ -8032,7 +8035,7 @@ begin
 	lsq[ndx.row][ndx.col].vstore <= rob.decbus.vstore;
 	lsq[ndx.row][ndx.col].vstore_ndx <= rob.decbus.vstore_ndx;
 	lsq[ndx.row][ndx.col].vadr <= {$bits(cpu_types_pkg::virtual_address_t){1'b0}};
-	lsq[ndx.row][ndx.col].padr <= 3{$bits(cpu_types_pkg::physical_address_t){1'b0}};
+	lsq[ndx.row][ndx.col].padr <= {$bits(cpu_types_pkg::physical_address_t){1'b0}};
 	lsq[ndx.row][ndx.col].shift <= 7'd0;
 //	store_argC_reg <= rob.pRc;
 	lsq[ndx.row][ndx.col].aRc <= rob.decbus.Rs3;

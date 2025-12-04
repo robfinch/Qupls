@@ -41,13 +41,13 @@
 // One available register is selected "popped" from each part of the bitmap
 // when needed using a find-first-one module.
 // The parts of the bitmap are rotated after a register is "popped" so that
-// registers are not reused too soon.
+// registers are not reused too soon. This prevents pipelining issues.
 // Freeing the register, a "push", is simple, the register is just marked
 // available in the bitmap.
 // For a checkpoint restore, the available register map is simply copied from
 // the checkpoint.
 // 
-// 6000 LUTs / 550 FFs / 0 BRAMs (512 regs)
+// 7200 LUTs / 550 FFs / 0 BRAMs (512 regs)
 // ============================================================================
 //
 import const_pkg::*;
@@ -77,13 +77,13 @@ input checkpt_ndx_t [3:0] ns_cndx;
 output rob_ndx_t [3:0] ns_rndx;
 output cpu_types_pkg::pregno_t [3:0] ns_dstreg;
 output reg [3:0] ns_dstregv;
-output reg [Qupls4_pkg::PREGS-1:0] avail = {{Qupls4_pkg::PREGS-1{1'b1}},1'b0};
+output reg [Qupls4_pkg::PREGS-1:0] avail = {Qupls4_pkg::PREGS{1'b1}};
 output reg stall;											// stall enqueue while waiting for register availability
 output reg rst_busy;									// not used
 
 integer n1,n2;
 
-reg [Qupls4_pkg::PREGS-1:0] avail1 = {{Qupls4_pkg::PREGS-1{1'b1}},1'b0};
+reg [Qupls4_pkg::PREGS-1:0] avail1 = {Qupls4_pkg::PREGS{1'b1}};
 reg [3:0] fpop = 4'd0;
 reg stalla0 = 1'b0;
 reg stalla1 = 1'b0;
@@ -91,7 +91,6 @@ reg stalla2 = 1'b0;
 reg stalla3 = 1'b0;
 reg [Qupls4_pkg::PREGS-1:0] next_avail;
 
-pregno_t [3:0] tags;
 reg [3:0] fpush;
 reg [3:0] ovr;
 
@@ -149,21 +148,12 @@ begin
 	end
 end
 
-// Refuse to put 0 onto the stack. 0 is specially reserved.
 always_comb
 begin
-	fpush[0] = tags2free[0]==9'd0 ? 1'b0 : freevals[0];
-	fpush[1] = tags2free[1]==9'd0 ? 1'b0 : freevals[1];
-	fpush[2] = tags2free[2]==9'd0 ? 1'b0 : freevals[2];
-	fpush[3] = tags2free[3]==9'd0 ? 1'b0 : freevals[3];
-end
-
-always_comb
-begin
-	tags[0] = fpush[0] ? tags2free[0] : 9'd0;
-	tags[1] = fpush[1] ? tags2free[1] : 9'd0;
-	tags[2] = fpush[2] ? tags2free[2] : 9'd0;
-	tags[3] = fpush[3] ? tags2free[3] : 9'd0;
+	fpush[0] = freevals[0];
+	fpush[1] = freevals[1];
+	fpush[2] = freevals[2];
+	fpush[3] = freevals[3];
 end
 
 generate begin : gAvail
@@ -344,19 +334,18 @@ begin
 	if (ov[2] & en) next_avail[o[2]] = 1'b0;
 	if (ov[3] & en) next_avail[o[3]] = 1'b0;
 
-	if (fpush[0]) next_avail[tags[0]] = 1'b1;
-	if (fpush[1]) next_avail[tags[1]] = 1'b1;
-	if (fpush[2]) next_avail[tags[2]] = 1'b1;
-	if (fpush[3]) next_avail[tags[3]] = 1'b1;
+	if (fpush[0]) next_avail[tags2free[0]] = 1'b1;
+	if (fpush[1]) next_avail[tags2free[1]] = 1'b1;
+	if (fpush[2]) next_avail[tags2free[2]] = 1'b1;
+	if (fpush[3]) next_avail[tags2free[3]] = 1'b1;
 
 	if (bo_wr) next_avail[bo_preg] = 1'b0;
 
-	next_avail[0] = 1'b0;
 end
 
 always_ff @(posedge clk)
 if (rst)
-	avail <= {{Qupls4_pkg::PREGS-1{1'b1}},1'b0};
+	avail <= {Qupls4_pkg::PREGS{1'b1}};
 else
 	avail <= next_avail;
 

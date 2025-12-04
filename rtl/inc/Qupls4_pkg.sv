@@ -54,7 +54,7 @@ parameter SIM = 1'b0;
 // architectural ones, or performance will suffer due to stalls.
 // Must be a multiple of four. If it is not 512 or 256 then the renamer logic will
 // need to be modified.
-parameter PREGS = 256;
+parameter PREGS = 512;
 
 // Number of operands (including destination) a micro-op can have.
 parameter NOPER = 4;
@@ -195,7 +195,7 @@ parameter SCHED_WINDOW_SIZE = 8;
 // will result if there are insufficient checkpoints for the number of
 // outstanding branches. More checkpoints will only consume resources without
 // improving performance significantly.
-parameter NCHECK = 8;			// number of checkpoints
+parameter NCHECK = 16;			// number of checkpoints
 
 parameter LOADQ_ENTRIES = 8;
 parameter STOREQ_ENTRIES = 8;
@@ -1136,6 +1136,7 @@ typedef union packed
 	br_inst_t br;
 	brr_inst_t brr;
 	bsr_inst_t bsr;
+	bsr_inst_t jsr;
 	atom_inst_t atom;
 	ls_inst_t ls;
 	amo_inst_t amo;
@@ -1509,6 +1510,7 @@ typedef struct packed {
 	cpu_types_pkg::virtual_address_t vadr;
 	cpu_types_pkg::physical_address_t padr;
 	operating_mode_t omode;	// operating mode
+	// micro-op decodes
 	logic v2p;						// 1=doing a virtual to physical address translation
 	logic load;						// 1=load
 	logic loadz;
@@ -1520,16 +1522,16 @@ typedef struct packed {
 	logic vload_ndx;
 	logic vstore;
 	logic vstore_ndx;
-	ex_instruction_t op;
+
 	cpu_types_pkg::pc_address_ex_t pc;
 	memop_t func;					// operation to perform
 	logic [3:0] func2;		// more resolution to function
 	cause_code_t cause;
-	logic [3:0] cache_type;
+//	logic [3:0] cache_type;
 	logic [63:0] sel;			// +16 for unaligned accesses
-	cpu_types_pkg::asid_t asid;
-	cpu_types_pkg::code_address_t vcadr;		// victim cache address
-	logic dchit;
+//	cpu_types_pkg::asid_t asid;
+//	cpu_types_pkg::code_address_t vcadr;		// victim cache address
+//	logic dchit;
 	memsz_t memsz;				// indicates size of data
 	logic [7:0] bytcnt;		// byte count of data to load/store
 	logic [6:0] shift;		// amount to shift data
@@ -1547,6 +1549,7 @@ typedef struct packed {
 
 typedef struct packed
 {
+	logic [1:0] state;
 	operand_t oper;
 	operating_mode_t om;
 	cause_code_t exc;
@@ -2087,7 +2090,7 @@ endfunction
 function fnDecJmp;
 input Qupls4_pkg::pipeline_reg_t mux;
 begin
-	fnDecJmp = mux.op.any.opcode==OP_JSR && mux.op.jsr.Rd==8'd0;
+	fnDecJmp = mux.uop.any.opcode==OP_JSR && mux.uop.jsr.Rd==8'd0;
 end
 endfunction
 
@@ -2101,7 +2104,7 @@ endfunction
 function fnDecJsr;
 input Qupls4_pkg::pipeline_reg_t mux;
 begin
-	fnDecJsr = mux.op.any.opcode==OP_JSR && mux.op.jsr.Rd!=8'd0;
+	fnDecJsr = mux.uop.any.opcode==OP_JSR && mux.uop.jsr.Rd!=8'd0;
 end
 endfunction
 
@@ -2136,11 +2139,11 @@ endfunction
 
 function cpu_types_pkg::pc_address_ex_t fnDecDest;
 input Qupls4_pkg::pipeline_reg_t pr;
-reg jsr,bsr;
+reg jsr,bsr,bcc;
 begin
 	fnDecDest = pr.pc;
-	jsr = fnDecJsr(pr.uop.ins);
-	bsr = fnDecBsr(pr.uop.ins);
+	jsr = fnDecJsr(pr);
+	bsr = fnDecBsr(pr);
 	bcc = fnIsBranch(pr.uop);
 	case(1'b1)
 	jsr:	fnDecDest.pc = {{23{pr.uop.jsr.disp[40]}},pr.uop.jsr.disp,1'b0};

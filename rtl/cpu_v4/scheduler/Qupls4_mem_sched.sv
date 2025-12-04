@@ -131,7 +131,7 @@ begin
 			if (lsq[n][c].sn < lsq[id.row][id.col].sn) begin
 				if (!lsq[n][c].agen)
 					fnHasPreviousOverlap = TRUE;
-				if (lsq[n][c].adr[$bits(physical_address_t)-1:4]==lsq[id.row][id.col].adr[$bits(physical_address_t)-1:4])
+				if (lsq[n][c].padr[$bits(physical_address_t)-1:4]==lsq[id.row][id.col].padr[$bits(physical_address_t)-1:4])
 					fnHasPreviousOverlap = TRUE;
 			end
 		end

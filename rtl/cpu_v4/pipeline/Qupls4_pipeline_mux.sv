@@ -342,7 +342,7 @@ reg jmpr0,jmpr1,jmpr2,jmpr3;
 reg jmpi0,jmpi1,jmpi2,jmpi3;
 reg rtd0,rtd1,rtd2,rtd3;
 reg do_bsr1;
-reg bcc0,bcc1,bcc2.bcc3;
+reg bcc0,bcc1,bcc2,bcc3;
 cpu_types_pkg::pc_address_ex_t bsr0_tgt;
 cpu_types_pkg::pc_address_ex_t bsr1_tgt;
 cpu_types_pkg::pc_address_ex_t bsr2_tgt;
@@ -403,10 +403,10 @@ always_comb jsri3 = ins3_mux.ins.any.opcode==OP_JSRI && ins3_mux.ins.bsr.Rt!=3'd
 
 always_comb
 begin
-	bsr0_tgt = fnDecDest(ins0_mux);
-	bsr1_tgt = fnDecDest(ins1_mux);
-	bsr2_tgt = fnDecDest(ins2_mux);
-	bsr3_tgt = fnDecDest(ins3_mux);
+	bsr0_tgt = Qupls4_pkg::fnDecDest(ins0_mux);
+	bsr1_tgt = Qupls4_pkg::fnDecDest(ins1_mux);
+	bsr2_tgt = Qupls4_pkg::fnDecDest(ins2_mux);
+	bsr3_tgt = Qupls4_pkg::fnDecDest(ins3_mux);
 end
 
 // Figure whether a subroutine call, or return is being performed. Note
@@ -442,7 +442,7 @@ begin
 		else if (rtd2)
 			do_ret = TRUE;
 
-		else if (bsr3|jsr3|bccc3) begin
+		else if (bsr3|jsr3|bcc3) begin
 			do_bsr = TRUE;
 			if (bsr3|jsr3)
 				do_call = TRUE;

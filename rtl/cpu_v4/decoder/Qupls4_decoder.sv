@@ -164,12 +164,6 @@ Stark_decode_cjb ucjb1
 	.cjb(db.cjb)
 );
 
-Stark_decode_bl ubsr1
-(
-	.instr(instr),
-	.bl(db.bl)
-);
-
 Stark_decode_conditional_branch udecbr
 (
 	.instr(instr),

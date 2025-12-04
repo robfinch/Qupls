@@ -38,11 +38,11 @@ import Qupls4_pkg::*;
 
 module Qupls4_mem_set_state(state_i, lsndxv_i, idv_i, lbndx_i, setavail_o, setready_o);
 input Qupls4_pkg::dram_state_t state_i;
-input lsq_ndx_t lbndx_i;
-input ldndxv_i;
+input lsndxv_i;
 input idv_i;
-output reg setready_o;
+input Qupls4_pkg::lsq_ndx_t lbndx_i;
 output reg setavail_o;
+output reg setready_o;
 
 always_comb
 begin

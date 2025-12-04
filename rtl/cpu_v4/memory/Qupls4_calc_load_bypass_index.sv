@@ -50,17 +50,17 @@ begin
 	for (n15r = 0; n15r < Qupls4_pkg::LSQ_ENTRIES; n15r = n15r + 1) begin
 		for (n15c = 0; n15c < 2; n15c = n15c + 1) begin
 		if (
-			(lsq[lsndx.row][lsndx.col].memsz==lsq[n15r][n15c].memsz) &&		// memory size matches
-			(lsq[lsndx.row][lsndx.col].load && lsq[n15r][n15c].store) &&	// and trying to load
+			(lsq_i[lsndx_i.row][lsndx_i.col].memsz==lsq_i[n15r][n15c].memsz) &&		// memory size matches
+			(lsq_i[lsndx_i.row][lsndx_i.col].load && lsq_i[n15r][n15c].store) &&	// and trying to load
 			// The load must come after the store and the store data should be valid.
-			lsq[lsndx.row][lsndx.col].sn > lsq[n15r][n15c].sn && lsq[n15r][n15c].v && lsq[n15r][n15c].datav && 
+			lsq_i[lsndx_i.row][lsndx_i.col].sn > lsq_i[n15r][n15c].sn && lsq_i[n15r][n15c].v && lsq_i[n15r][n15c].datav && 
 			// And it should be the store closest to the load.
-			stsn > lsq[n15r][n15c].sn &&
+			stsn > lsq_i[n15r][n15c].sn &&
 			// And the address should match.
-			lsq[lsndx.row][lsndx.col].agen==1'b1 && lsq[n15r][n15c].agen==1'b1 &&	// must be physical addresses
-			lsq[lsndx.row][lsndx.col].padr == lsq[n15r][n15c].padr
+			lsq_i[lsndx_i.row][lsndx_i.col].agen==1'b1 && lsq_i[n15r][n15c].agen==1'b1 &&	// must be physical addresses
+			lsq_i[lsndx_i.row][lsndx_i.col].padr == lsq_i[n15r][n15c].padr
 			) begin
-			 	stsn = lsq[n15r][n15c].sn;
+			 	stsn = lsq_i[n15r][n15c].sn;
 			 	ndx_o.row = n15r;
 			 	ndx_o.col = n15c;
 			 	ndx_o.vb = VAL;

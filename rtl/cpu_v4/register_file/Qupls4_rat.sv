@@ -39,16 +39,13 @@
 // There are a max of 32 regs to update (32 entries in ROB). While stomping
 // is occurring other updates are not allowed.
 //
-// 24100 LUTs / 2900 FFs / 0 BRANS (96a/256p regs, 16 checkpints)
-// 31k LUTs / 3500 FFs / 0 BRANS (192a/512p regs, 16 checkpints)
-// 35k LUTs / 4000 FFs / 0 BRAMS (128a regs, 8 checkpoints)
-// 57k LUTs / 7000 FFs / 0 BRAMS (256a regs, 16 checkpoints)
+// 17350 LUTs / 2250 FFs / 00 BRAMs (512p regs, 16 checkpoints)
 // ============================================================================
 //
 import const_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_rat(rst, clk, clk5x, ph4, en, en2, nq, stallq,
+module Qupls4_rat(rst, clk, en, en2, nq, stallq,
 	alloc_chkpt, cndx, miss_cp,
 	avail_i, restore, tail, rob,
 	stomp, wr0, wr1, wr2, wr3, chkpt_inc_amt,
@@ -56,7 +53,6 @@ module Qupls4_rat(rst, clk, clk5x, ph4, en, en2, nq, stallq,
 	rn, rng, rnt, rnv, st_prn,
 	prn, rn_cp, rd_cp,
 	prv, 
-	wrbanka, wrbankb, wrbankc, wrbankd, cmtbanka, cmtbankb, cmtbankc, cmtbankd, rnbank,
 	wra, wrra, wrb, wrrb, wrc, wrrc, wrd, wrrd,
 	wrport0_v, wrport1_v, wrport2_v, wrport3_v, wrport0_aRt, wrport1_aRt, wrport2_aRt, wrport3_aRt,
 	wrport0_Rt, wrport1_Rt, wrport2_Rt, wrport3_Rt, wrport0_cp, wrport1_cp, wrport2_cp, wrport3_cp,
@@ -70,14 +66,12 @@ module Qupls4_rat(rst, clk, clk5x, ph4, en, en2, nq, stallq,
 	restore_list, restored, tags2free, freevals, backout, backout_st2, fcu_id,
 	bo_wr, bo_areg, bo_preg, bo_nreg);
 parameter XWID = 4;
-parameter NPORT = 16;
-parameter BANKS = 1;
+parameter NPORT = 12;
 localparam RBIT=$clog2(Qupls4_pkg::PREGS);
-localparam BBIT=0;//$clog2(BANKS)-1;
 input rst;
 input clk;
-input clk5x;
-input [4:0] ph4;
+//input clk5x;
+//input [4:0] ph4;
 input en;
 input en2;
 input nq;			// enqueue instruction
@@ -103,10 +97,6 @@ input checkpt_ndx_t wra_cp;
 input checkpt_ndx_t wrb_cp;
 input checkpt_ndx_t wrc_cp;
 input checkpt_ndx_t wrd_cp;
-input [BBIT:0] wrbanka;
-input [BBIT:0] wrbankb;
-input [BBIT:0] wrbankc;
-input [BBIT:0] wrbankd;
 input cpu_types_pkg::aregno_t wra;	// architectural register
 input cpu_types_pkg::aregno_t wrb;
 input cpu_types_pkg::aregno_t wrc;
@@ -147,10 +137,6 @@ input checkpt_ndx_t cmta_cp;
 input checkpt_ndx_t cmtb_cp;
 input checkpt_ndx_t cmtc_cp;
 input checkpt_ndx_t cmtd_cp;
-input [BBIT:0] cmtbanka;
-input [BBIT:0] cmtbankb;
-input [BBIT:0] cmtbankc;
-input [BBIT:0] cmtbankd;
 input cpu_types_pkg::aregno_t cmtaa;				// architectural register being committed
 input cpu_types_pkg::aregno_t cmtba;
 input cpu_types_pkg::aregno_t cmtca;
@@ -164,7 +150,6 @@ input value_t cmtbval;
 input value_t cmtcval;
 input value_t cmtdval;
 input cmtbr;								// comitting a branch
-input [BBIT:0] rnbank [NPORT-1:0];
 input cpu_types_pkg::aregno_t [NPORT-1:0] rn;		// architectural register
 input cpu_types_pkg::pregno_t st_prn;
 input [2:0] rng [0:NPORT-1];
@@ -248,6 +233,7 @@ reg pe_alloc_chkpt;
 wire pe_alloc_chkpt1;
 reg [Qupls4_pkg::PREGS-1:0] valid [0:Qupls4_pkg::NCHECK-1];
 
+/*
 reg [2:0] wcnt;
 always_ff @(posedge clk5x)
 if (rst)
@@ -258,6 +244,7 @@ else begin
 	else if (wcnt < 3'd4)
 		wcnt <= wcnt + 2'd1;
 end
+*/
 
 // There are four "extra" bits in the data to make the size work out evenly.
 // There is also an extra write bit. These are defaulted to prevent sim issues.
@@ -675,8 +662,8 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 						// First instruction of group, no bypass needed.
 						3'd0:	
 						
-							if (prn[g]==9'd0)
-								prv[g] = VAL;
+//							if (prn[g]==9'd0)
+//								prv[g] = VAL;
 							/*
 							else if (prn[g]==cmtdp && cmtdv)
 								prv[g] = VAL;
@@ -737,14 +724,14 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 							else if (prn[g]==cpv_wa[0] && cpv_wr[0] && rn_cp[g]==cpv_wc[0])
 								prv[g] = VAL;
 							*/	
-							else
+//							else
 														
 								prv[g] = currentRegvalid[prn[g]];//cpv_o[g];
 						// Second instruction of group, bypass only if first instruction target is same.
 						3'd1:
 						begin							
-							if (prn[g]==9'd0)
-								prv[g] = VAL;
+//							if (prn[g]==9'd0)
+//								prv[g] = VAL;
 							/*								
 							else if (prn[g]==cmtdp && cmtdv)
 								prv[g] = VAL;
@@ -810,7 +797,7 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 							else if (prn[g]==cpv_wa[0] && cpv_wr[0] && rn_cp[g]==cpv_wc[0])
 								prv[g] = VAL;
 							*/	
-							else
+//							else
 							
 //								prv[g] = valid[cndx][prn[g]];
 //								prv[g] = cpv_o[g];
@@ -819,8 +806,8 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 						// Third instruction, check two previous ones.
 						3'd2:
 						begin
-							if (prn[g]==9'd0)
-								prv[g] = VAL;
+//						if (prn[g]==9'd0)
+//								prv[g] = VAL;
 							/*	
 							else if (prn[g]==cmtdp && cmtdv)
 								prv[g] = VAL;
@@ -879,7 +866,7 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 							else if (prn[g]==cpv_wa[0] && cpv_wr[0] && rn_cp[g]==cpv_wc[0])
 								prv[g] = VAL;
 							*/
-							else
+//							else
 							
 								prv[g] = currentRegvalid[prn[g]];//cpv_o[g];
 //								prv[g] = cpv_o[g];
@@ -888,8 +875,8 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 					// Fourth instruction, check three previous ones.						
 						3'd3:
 							begin
-							if (prn[g]==9'd0)
-								prv[g] = VAL;
+//							if (prn[g]==9'd0)
+//								prv[g] = VAL;
 							/*
 							else if (prn[g]==cmtdp && cmtdv)
 								prv[g] = VAL;
@@ -950,7 +937,7 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 							else if (prn[g]==cpv_wa[0] && cpv_wr[0] && rn_cp[g]==cpv_wc[0])
 								prv[g] = VAL;
 							*/	
-							else
+//							else
 							
 								prv[g] = currentRegvalid[prn[g]];//cpv_o[g];
 //								prv[g] = cpv_o[g];
@@ -977,9 +964,12 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 	always_comb
 		prn[NPORT-1] <= st_prn;
 	always_comb//ff @(posedge clk)
+	/*
 		if (prn[NPORT-1]==9'd0)
 			prv[NPORT-1] = VAL;
-		else if (prn[NPORT-1]==cmtdp && cmtdv)
+		else
+	*/
+		if (prn[NPORT-1]==cmtdp && cmtdv)
 			prv[NPORT-1] = VAL;
 		else if (prn[NPORT-1]==cmtcp && cmtcv)
 			prv[NPORT-1] = VAL;
@@ -1082,7 +1072,7 @@ aregno_t aregno;
 pregno_t pregno;
 aregno_t cmtareg;
 reg cdcmtv;
-
+/*
 always_comb
 begin
 	case(wcnt)
@@ -1128,7 +1118,7 @@ begin
 		end
 	endcase
 end
-
+*/
 /*
 always_ff @(posedge clk5x)
 if (rst) begin

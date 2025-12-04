@@ -32,7 +32,7 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 3500 LUTs / 0 FFs (0 bypassing inputs)
+// 1850 LUTs / 0 FFs (0 bypassing inputs)
 // 5010 LUTs / 0 FFs (8 bypassing inputs) performance
 // ============================================================================
 
@@ -56,17 +56,11 @@ begin
 		oper_o[nn] = oper_i[nn];
 		oper_o[nn].val = value_zero;
 		oper_o[nn].flags = {$bits(flags_t){1'b0}};
-		if (oper_i[nn].aRn==8'd0) begin
-			oper_o[nn].val = value_zero;
-			oper_o[nn].flags = {$bits(flags_t){1'b0}};
-			oper_o[nn].v = VAL;
-		end
-		else begin
-			for (jj = 0; jj < 16; jj = jj + 1) begin
-				if (oper_i[nn].aRn==rf_oper_i[jj].aRn && rf_oper_i[jj].v && !oper_i[nn].v) begin
-					oper_o[nn] = rf_oper_i[jj];
-					oper_o[nn].v = VAL;
-				end
+		// Note r0 is bypassed to zero by the register file.
+		for (jj = 0; jj < 16; jj = jj + 1) begin
+			if (oper_i[nn].aRn==rf_oper_i[jj].aRn && rf_oper_i[jj].v && !oper_i[nn].v) begin
+				oper_o[nn] = rf_oper_i[jj];
+				oper_o[nn].v = VAL;
 			end
 		end
 	end

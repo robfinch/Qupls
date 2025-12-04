@@ -40,7 +40,7 @@ import Qupls4_pkg::*;
 
 module Qupls4_set_dram_work(rst_i, clk_i, rob_i, stomp_i, vb_i, lsndxv_i,
 	dram_state_i, dram_done_i, dram_more_i, dram_idv_i, dram_idv2_i, dram_ack_i,
-	dram_stomp_i, cpu_dat_i, lsq_i, dram_oper_o, dram_work_o
+	dram_stomp_i, cpu_dat_i, lsq_i, dram_oper_o, dram_work_o, page_cross_o
 );
 parameter CORENO = 6'd1;
 input rst_i;
@@ -60,14 +60,14 @@ input [511:0] cpu_dat_i;
 input Qupls4_pkg::lsq_entry_t lsq_i;
 output dram_oper_t dram_oper_o;
 output dram_work_t dram_work_o;
-output page_cross;
+output page_cross_o;
 
 cpu_types_pkg::virtual_address_t next_vaddr = {lsq_i.vadr[$bits(virtual_address_t)-1:6] + 2'd1,6'h0};
 cpu_types_pkg::physical_address_t next_paddr = {lsq_i.padr[$bits(physical_address_t)-1:6] + 2'd1,6'h0};
 // Compute and shift select lines into position.
 wire [79:0] sel = {64'h0,Qupls4_pkg::fnSel(rob_i[lsq_i.rndx].op)} << lsq_i.vadr[5:0];
 
-assign page_cross = next_vaddr[$bits(virtual_address_t)-1:13] != lsq_i.vadr[$bits(virtual_address_t)-1:13] && |sel[79:64];
+assign page_cross_o = next_vaddr[$bits(virtual_address_t)-1:13] != lsq_i.vadr[$bits(virtual_address_t)-1:13] && |sel[79:64];
 
 always_ff @(posedge clk_i)
 if (rst_i) begin
@@ -116,7 +116,7 @@ else begin
     dram_oper_o.cndx <= dram_work_o.cndx;
     dram_oper_o.rndx <= dram_work_o.rndx;
     dram_oper_o.exc <= dram_work_o.exc;
-  	dram_oper_o.oper.val <= Qupls4_pkg::fnDati(1'b0,dram_work_o.op,(cpu_dat_i << (7'd64-lsq_i.shift))|dram_oper_o.val, dram_work_o.pc);
+  	dram_oper_o.oper.val <= Qupls4_pkg::fnDati(1'b0,dram_work_o.op,(cpu_dat_i << (7'd64-lsq_i.shift))|dram_oper_o.oper.val);
   	dram_oper_o.oper.flags <= dram_work_o.flags;
     if (dram_work_o.store) begin
     	dram_work_o.store <= 1'd0;
@@ -141,8 +141,8 @@ else begin
     dram_oper_o.cndx <= dram_work_o.cndx;
     dram_oper_o.exc <= dram_work_o.exc;
     // Note shift gets switched for second bus cycle.
-    if (dram_oper.state==2'b01)
-	  	dram_oper_o.oper.val <= Qupls4_pkg::fnDati(1'b0,dram_work_o.op,(cpu_dat_i << lsq_i.shift)|dram_oper_o.val);
+    if (dram_oper_o.state==2'b01)
+	  	dram_oper_o.oper.val <= Qupls4_pkg::fnDati(1'b0,dram_work_o.op,(cpu_dat_i << lsq_i.shift)|dram_oper_o.oper.val);
     else
   		dram_oper_o.oper.val <= Qupls4_pkg::fnDati(dram_more_i,dram_work_o.op,cpu_dat_i >> lsq_i.shift);
     if (dram_work_o.store) begin
@@ -162,8 +162,8 @@ else begin
 	// If just performing a virtual to physical translation....
 	// This is done only on port #0
 	if (lsq_i.v2p && lsq_i.v) begin
-		if (lsq_i.vpa) begin
-			dram_oper_o.oper.val <= lsq_i.adr;
+		if (lsq_i.agen) begin
+			dram_oper_o.oper.val <= lsq_i.padr;
 			dram_oper_o.oper.flags <= lsq_i.flags;
 			dram_oper_o.oper.pRn <= lsq_i.Rt;
 			dram_oper_o.oper.v <= VAL;
@@ -174,7 +174,7 @@ else begin
 		end
 	end
 	else if (Qupls4_pkg::SUPPORT_LOAD_BYPASSING && vb_i) begin
-		dram_oper_o.oper.val <= Qupls4_pkg::fnDati(1'b0,dram_work_o.op,lsq_i.res,dram_work_o.pc);
+		dram_oper_o.oper.val <= Qupls4_pkg::fnDati(1'b0,dram_work_o.op,lsq_i.res);
 		dram_oper_o.flags <= lsq_i.flags;
 		dram_oper_o.oper.pRd <= lsq_i.Rt;
 		dram_oper_o.oper.v <= lsq_i.v;
@@ -191,7 +191,7 @@ else begin
 				dram_work_o.rndx <= lsq_i.rndx;
 				dram_work_o.rndxv <= VAL;
 				dram_work_o.om <= lsq_i.om;
-				dram_work_o.op <= lsq_i.op;
+//				dram_work_o.op <= lsq_i.op;
 		//		dram0_ldip <= rob[lsq[mem0_lsndx.row][mem0_lsndx.col].rndx].excv;
 				dram_work_o.pc <= lsq_i.pc;
 				dram_work_o.load <= lsq_i.load;
@@ -238,7 +238,7 @@ else begin
 		    dram_work_o.tocnt <= 12'd0;
 		  end
 		Qupls4_pkg::DRAMSLOT_DELAY:
-			if (dram_more_i && !page_cross && Qupls4_pkg::SUPPORT_UNALIGNED_MEMORY) begin
+			if (dram_more_i && !page_cross_o && Qupls4_pkg::SUPPORT_UNALIGNED_MEMORY) begin
 				dram_work_o.hi <= 1'b1;
 				dram_work_o.sel <= sel >> (7'd64-lsq_i.shift);
 				dram_work_o.vaddr <= next_vaddr;
