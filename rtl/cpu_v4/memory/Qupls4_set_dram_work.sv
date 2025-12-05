@@ -201,10 +201,11 @@ else begin
 				dram_work_o.cload <= lsq_i.cload;
 				dram_work_o.cload_tags <= lsq_i.cload_tags;
 				dram_work_o.store <= lsq_i.store;
+				dram_work_o.stptr <= lsq_i.stptr;
 				dram_work_o.vstore <= lsq_i.vstore;
 				dram_work_o.vstore_ndx <= lsq_i.vstore_ndx;
 				dram_work_o.cstore <= lsq_i.cstore;
-				dram_work_o.erc <= rob_i[lsq_i.rndx].decbus.erc;
+				dram_work_o.erc <= rob_i[lsq_i.rndx].op.decbus.erc;
 				dram_work_o.pRd	<= lsq_i.Rt;
 				dram_work_o.aRd	<= lsq_i.aRt;
 				dram_work_o.aRdz <= lsq_i.aRtz;

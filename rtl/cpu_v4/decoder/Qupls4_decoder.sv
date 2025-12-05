@@ -407,6 +407,7 @@ else begin
 		dbo.boi <= instr.any.opcode==Qupls4_pkg::OP_BCCU64 && instr.br.cnd==Qupls4_pkg::CND_BOI;
 		dbo.bsr <= instr.any.opcode==Qupls4_pkg::OP_BSR;
 		dbo.jsr <= instr.any.opcode==Qupls4_pkg::OP_JSR;
+		dbo.stptr <= instr.any.opcode==Qupls4_pkg::OP_STPTR;
 		dbo.cause <= Qupls4_pkg::FLT_NONE;
 		dbo.mem <= 
 			 db.load|db.vload|db.vload_ndx

@@ -92,7 +92,7 @@ integer n;
 begin
 	fnHasPreviousFc = FALSE;
 	for (n = 0; n < Qupls4_pkg::ROB_ENTRIES; n = n + 1)
-		if (rob[n].v==VAL && rob[n].sn < rob[id].sn && rob[n].decbus.fc && rob[n].done!=2'b11)
+		if (rob[n].v==VAL && rob[n].sn < rob[id].sn && rob[n].op.decbus.fc && rob[n].done!=2'b11)
 			fnHasPreviousFc = TRUE;
 end
 endfunction
@@ -108,7 +108,7 @@ integer n;
 begin
 	fnHasPreviousMem = FALSE;
 	for (n = 0; n < Qupls4_pkg::ROB_ENTRIES; n = n + 1)
-		if (rob[n].v==VAL && rob[n].sn < rob[id].sn && rob[n].decbus.mem && !rob[n].done[0] && (seq ? !rob[n].done[1]:1'b1))
+		if (rob[n].v==VAL && rob[n].sn < rob[id].sn && rob[n].op.decbus.mem && !rob[n].done[0] && (seq ? !rob[n].done[1]:1'b1))
 			fnHasPreviousMem = TRUE;
 end
 endfunction
@@ -189,7 +189,7 @@ begin
 			no_issue2 = 1'd0;
 			no_issue3 = 1'd0;
 			// Check for issued on port #0 only. Might not need this check here.
-			if (issued < Qupls4_pkg::NDATA_PORTS && rob[lsq[lsq_heads[row].row][col].rndx].decbus.mem0 ? issued==2'd0 : 1'b1) begin
+			if (issued < Qupls4_pkg::NDATA_PORTS && rob[lsq[lsq_heads[row].row][col].rndx].op.decbus.mem0 ? issued==2'd0 : 1'b1) begin
 				if (row==0) begin
 					if (memready[ lsq[lsq_heads[row].row][col].rndx ] &&
 						|lsq[lsq_heads[row].row][col].state &&
@@ -224,7 +224,7 @@ begin
 						if (lsq[lsq_heads[row].row][col].v==VAL && lsq[lsq_heads[row].row][col].agen) begin // && rob[heads[phd]].sn < rob[lsq[lsq_heads[row].row][col].rndx].sn) begin
 							do_issue = 1'b1;
 							// ... and there is no fence
-//							if (lsq[heads[phd]].fence && rob[heads[phd]].decbus.immb[15:0]==16'hFF00)
+//							if (lsq[heads[phd]].fence && rob[heads[phd]].op.decbus.immb[15:0]==16'hFF00)
 //								no_issue = 1'b1;
 							// ... and, if it is a store, there is no chance of it being undone
 							if (lsq[lsq_heads[row].row][col].store && fnHasPreviousFc(lsq[lsq_heads[row].row][col].rndx))

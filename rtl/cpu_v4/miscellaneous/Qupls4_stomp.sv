@@ -338,13 +338,13 @@ for (n4 = 0; n4 < Qupls4_pkg::ROB_ENTRIES; n4 = n4 + 1) begin
 			// These (3) instructions must be turned into copy-targets because even if
 			// they should not execute, following instructions from the target address
 			// may have registers depending on the mappings.
-			if (fcu_idv && (rob[fcu_id].decbus.br || rob[fcu_id].decbus.cjb)) begin
+			if (fcu_idv && (rob[fcu_id].op.decbus.br || rob[fcu_id].op.decbus.cjb)) begin
 		 		if (rob[n4].grp==rob[fcu_id].grp && rob[n4].sn > rob[fcu_id].sn)
 		 			robentry_stomp[n4] = FALSE;
 			end
 		end
 		else begin
-			if (fcu_idv && rob[fcu_id].decbus.br && !takb) begin
+			if (fcu_idv && rob[fcu_id].op.decbus.br && !takb) begin
 		 		if (rob[n4].grp==rob[fcu_id].grp && rob[n4].sn > rob[fcu_id].sn)
 		 			robentry_stomp[n4] = FALSE;
 			end

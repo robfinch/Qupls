@@ -537,10 +537,10 @@ always_comb pg_mux.hdr.irq_sn = irq_sn_mux;
 always_comb pg_mux.hdr.irq = irq_in_mux;
 always_comb pg_mux.hdr.old_ipl = ipl_mux;
 always_comb pg_mux.hdr.hwi = irq_mux;
-always_comb pg_mux.pr0 = ins0_mux;
-always_comb pg_mux.pr1 = ins1_mux;
-always_comb pg_mux.pr2 = ins2_mux;
-always_comb pg_mux.pr3 = ins3_mux;
+always_comb pg_mux.pr0.op = ins0_mux;
+always_comb pg_mux.pr1.op = ins1_mux;
+always_comb pg_mux.pr2.op = ins2_mux;
+always_comb pg_mux.pr3.op = ins3_mux;
 
 always_ff @(posedge clk) if (en) irq_sn_mux <= irq_sn_fet;
 always_ff @(posedge clk) if (en) irq_in_mux <= irq_in_fet;

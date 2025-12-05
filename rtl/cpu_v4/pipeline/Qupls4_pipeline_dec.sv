@@ -156,8 +156,8 @@ Qupls4_pkg::micro_op_t [31:0] uop_buf;
 
 Qupls4_microop uuop1
 (
-	.om(pg_mux.pr0.om),
-	.ir(pg_mux.pr0.uop),
+	.om(pg_mux.pr0.op.om),
+	.ir(pg_mux.pr0.op.uop),
 	.num(uop_num), 
 	.carry_reg(8'd0),
 	.carry_out(1'b0),
@@ -168,8 +168,8 @@ Qupls4_microop uuop1
 
 Qupls4_microop uuop2
 (
-	.om(pg_mux.pr1.om),
-	.ir(pg_mux.pr1.uop), 
+	.om(pg_mux.pr1.op.om),
+	.ir(pg_mux.pr1.op.uop), 
 	.num(3'd0), 
 	.carry_reg(8'd0),
 	.carry_out(1'b0),
@@ -180,8 +180,8 @@ Qupls4_microop uuop2
 
 Qupls4_microop uuop3
 (
-	.om(pg_mux.pr2.om),
-	.ir(pg_mux.pr2.uop), 
+	.om(pg_mux.pr2.op.om),
+	.ir(pg_mux.pr2.op.uop), 
 	.num(3'd0), 
 	.carry_reg(8'd0),
 	.carry_out(1'b0),
@@ -192,8 +192,8 @@ Qupls4_microop uuop3
 
 Qupls4_microop uuop4
 (
-	.om(pg_mux.pr3.om),
-	.ir(pg_mux.pr3.uop), 
+	.om(pg_mux.pr3.op.om),
+	.ir(pg_mux.pr3.op.uop), 
 	.num(3'd0), 
 	.carry_reg(8'd0),
 	.carry_out(1'b0),
@@ -208,34 +208,34 @@ reg [1:0] uop_mark [0:31];
 always_comb
 begin
 	case(uop_mark[0])
-	2'd0:	tpr0 = pg_mux.pr0;
-	2'd1:	tpr0 = pg_mux.pr1;
-	2'd2:	tpr0 = pg_mux.pr2;
-	2'd3:	tpr0 = pg_mux.pr3;
+	2'd0:	tpr0 = pg_mux.pr0.op;
+	2'd1:	tpr0 = pg_mux.pr1.op;
+	2'd2:	tpr0 = pg_mux.pr2.op;
+	2'd3:	tpr0 = pg_mux.pr3.op;
 //	3'd4:	tpr0 = pg_mux.pr4;
 //	default:	tpr0 = pg_mux.pr4;
 	endcase
 	case(uop_mark[1])
-	2'd0:	tpr1 = pg_mux.pr0;
-	2'd1:	tpr1 = pg_mux.pr1;
-	2'd2:	tpr1 = pg_mux.pr2;
-	2'd3:	tpr1 = pg_mux.pr3;
+	2'd0:	tpr1 = pg_mux.pr0.op;
+	2'd1:	tpr1 = pg_mux.pr1.op;
+	2'd2:	tpr1 = pg_mux.pr2.op;
+	2'd3:	tpr1 = pg_mux.pr3.op;
 //	3'd4:	tpr1 = pg_mux.pr4;
 //	default:	tpr1 = pg_mux.pr4;
 	endcase
 	case(uop_mark[2])
-	2'd0:	tpr2 = pg_mux.pr0;
-	2'd1:	tpr2 = pg_mux.pr1;
-	2'd2:	tpr2 = pg_mux.pr2;
-	2'd3:	tpr2 = pg_mux.pr3;
+	2'd0:	tpr2 = pg_mux.pr0.op;
+	2'd1:	tpr2 = pg_mux.pr1.op;
+	2'd2:	tpr2 = pg_mux.pr2.op;
+	2'd3:	tpr2 = pg_mux.pr3.op;
 //	3'd4:	tpr2 = pg_mux.pr4;
 //	default:	tpr2 = pg_mux.pr4;
 	endcase
 	case(uop_mark[3])
-	2'd0:	tpr3 = pg_mux.pr0;
-	2'd1:	tpr3 = pg_mux.pr1;
-	2'd2:	tpr3 = pg_mux.pr2;
-	2'd3:	tpr3 = pg_mux.pr3;
+	2'd0:	tpr3 = pg_mux.pr0.op;
+	2'd1:	tpr3 = pg_mux.pr1.op;
+	2'd2:	tpr3 = pg_mux.pr2.op;
+	2'd3:	tpr3 = pg_mux.pr3.op;
 //	3'd4:	tpr3 = pg_mux.pr4;
 //	default:	tpr3 = pg_mux.pr4;
 	endcase
@@ -367,10 +367,10 @@ Stark_reg_renamer3 utrn2
 	.restore_list(restore_list & ~unavail_list),
 	.tags2free(tags2free),
 	.freevals(freevals),
-	.alloc0(inso[0].decbus.Rd!=8'd0 && inso[0].v),// & ~stomp0),
-	.alloc1(inso[1].decbus.Rd!=8'd0 && inso[1].v),// & ~stomp1),
-	.alloc2(inso[2].decbus.Rd!=8'd0 && inso[2].v),// & ~stomp2),
-	.alloc3(inso[3].decbus.Rd!=8'd0 && inso[3].v),// & ~stomp3),
+	.alloc0(inso[0].op.decbus.Rd!=8'd0 && inso[0].v),// & ~stomp0),
+	.alloc1(inso[1].op.decbus.Rd!=8'd0 && inso[1].v),// & ~stomp1),
+	.alloc2(inso[2].op.decbus.Rd!=8'd0 && inso[2].v),// & ~stomp2),
+	.alloc3(inso[3].op.decbus.Rd!=8'd0 && inso[3].v),// & ~stomp3),
 	.wo0(Rt0_dec),
 	.wo1(Rt1_dec),
 	.wo2(Rt2_dec),
@@ -427,10 +427,10 @@ Stark_reg_name_supplier2 utrn1
 	.freevals(freevals),
 	.bo_wr(bo_wr),
 	.bo_preg(bo_preg),
-	.alloc0(inso[0].decbus.Rd!=8'd0 && inso[0].v ),// & ~stomp0),
-	.alloc1(inso[1].decbus.Rd!=8'd0 && inso[1].v && !inso[0].decbus.bl),// & ~stomp1),
-	.alloc2(inso[2].decbus.Rd!=8'd0 && inso[2].v && !inso[0].decbus.bl && !inso[1].decbus.bl),// & ~stomp2),
-	.alloc3(inso[3].decbus.Rd!=8'd0 && inso[3].v && !inso[0].decbus.bl && !inso[1].decbus.bl && !inso[2].decbus.bl),// & ~stomp3),
+	.alloc0(inso[0].op.decbus.Rd!=8'd0 && inso[0].v ),// & ~stomp0),
+	.alloc1(inso[1].op.decbus.Rd!=8'd0 && inso[1].v && !inso[0].op.decbus.bl),// & ~stomp1),
+	.alloc2(inso[2].op.decbus.Rd!=8'd0 && inso[2].v && !inso[0].op.decbus.bl && !inso[1].op.decbus.bl),// & ~stomp2),
+	.alloc3(inso[3].op.decbus.Rd!=8'd0 && inso[3].v && !inso[0].op.decbus.bl && !inso[1].op.decbus.bl && !inso[2].op.decbus.bl),// & ~stomp3),
 	.o0(Rt0_dec1),
 	.o1(Rt1_dec1),
 	.o2(Rt2_dec1),
@@ -443,10 +443,10 @@ Stark_reg_name_supplier2 utrn1
 	.stall(ren_stallq),
 	.rst_busy(ren_rst_busy)
 );
-assign Rt0_dec = inso[0].decbus.Rd==8'd0 ? 9'd0 : Rt0_dec1;
-assign Rt1_dec = inso[1].decbus.Rd==8'd0 ? 9'd0 : Rt1_dec1;
-assign Rt2_dec = inso[2].decbus.Rd==8'd0 ? 9'd0 : Rt2_dec1;
-assign Rt3_dec = inso[3].decbus.Rd==8'd0 ? 9'd0 : Rt3_dec1;
+assign Rt0_dec = inso[0].op.decbus.Rd==8'd0 ? 9'd0 : Rt0_dec1;
+assign Rt1_dec = inso[1].op.decbus.Rd==8'd0 ? 9'd0 : Rt1_dec1;
+assign Rt2_dec = inso[2].op.decbus.Rd==8'd0 ? 9'd0 : Rt2_dec1;
+assign Rt3_dec = inso[3].op.decbus.Rd==8'd0 ? 9'd0 : Rt3_dec1;
 */
 	assign Rt0_dec = inso[0].decbus.Rd;
 	assign Rt1_dec = inso[1].decbus.Rd;
@@ -961,19 +961,19 @@ begin
 	if (pr0_dec.decbus.bsr|pr0_dec.decbus.jsr) begin
 		predicted_correctly_o = FALSE;
 		new_address_o = pr0_dec.decbus.bsr ? bsr0_tgt : jsr0_tgt;
-		if (pg_dec.pr0.pc.pc==pg_mux.pr0.pc.pc)
+		if (pg_dec.pr0.op.pc.pc==pg_mux.pr0.op.pc.pc)
 			predicted_correctly_o = TRUE;
 	end
 	else if (pr1_dec.decbus.bsr|pr1_dec.decbus.jsr) begin
 		predicted_correctly_o = FALSE;
 		new_address_o = pr1_dec.decbus.bsr ? bsr1_tgt : jsr1_tgt;
-		if (pg_dec.pr1.pc.pc==pg_mux.pr0.pc.pc)
+		if (pg_dec.pr1.op.pc.pc==pg_mux.pr0.op.pc.pc)
 			predicted_correctly_o = TRUE;
 	end
 	else if (pr2_dec.decbus.bsr|pr2_dec.decbus.jsr) begin
 		predicted_correctly_o = FALSE;
 		new_address_o = pr2_dec.decbus.bsr ? bsr2_tgt : jsr2_tgt;
-		if (pg_dec.pr2.pc.pc==pg_mux.pr0.pc.pc)
+		if (pg_dec.pr2.op.pc.pc==pg_mux.pr0.op.pc.pc)
 			predicted_correctly_o = TRUE;
 	end
 end
@@ -993,17 +993,17 @@ Stark_space_branches uspb1
 always_comb
 begin
 	pg_dec = pg_mux_r;
-	pg_dec.pr0.hwi_level = pg_mux_r.hdr.irq.level;
+	pg_dec.pr0.op.hwi_level = pg_mux_r.hdr.irq.level;
 	if (hwi_ignore) begin
 		if (pg_mux_r.hdr.irq.level != 6'd63) begin
 			pg_dec.hdr.hwi = 1'b0;
-			pg_dec.pr0.hwi = 1'b0;
+			pg_dec.pr0.op.hwi = 1'b0;
 		end
 	end
-	pg_dec.pr0 = inso[0];
-	pg_dec.pr1 = inso[1];
-	pg_dec.pr2 = inso[2];
-	pg_dec.pr3 = inso[3];
+	pg_dec.pr0.op = inso[0];
+	pg_dec.pr1.op = inso[1];
+	pg_dec.pr2.op = inso[2];
+	pg_dec.pr3.op = inso[3];
 end
 always_comb
 begin

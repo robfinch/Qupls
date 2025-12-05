@@ -70,15 +70,15 @@ wire nan3 = rob[head3].v && rob[head3].nan;
 
 always_comb cmt0 = (rob[head0].v && &rob[head0].done) || (!rob[head0].v && ((head0 != tail0) || &next_cqd));
 always_comb cmt1 = XWID > 1 && ((rob[head1].v && &rob[head1].done) || (!rob[head1].v && head0 != tail0 && head0 != tail1)) &&
-										!rob[head0].decbus.oddball && !rob[head0].excv
+										!rob[head0].op.decbus.oddball && !rob[head0].excv
 										;
 always_comb cmt2 = XWID > 2 && ((rob[head2].v && &rob[head2].done) || (!rob[head2].v && head0 != tail0 && head0 != tail1 && head0 != tail2)) &&
-										!rob[head0].decbus.oddball && !rob[head1].decbus.oddball &&
+										!rob[head0].op.decbus.oddball && !rob[head1].op.decbus.oddball &&
 										!rob[head0].excv && !rob[head1].excv &&
 										!(nan0 && nan1)
 										;
 always_comb cmt3 = XWID > 3 && ((rob[head3].v && &rob[head3].done) || (!rob[head3].v && head0 != tail0 && head0 != tail1 && head0 != tail2 && head0 != tail3)) &&
-										!rob[head0].decbus.oddball && !rob[head1].decbus.oddball && !rob[head2].decbus.oddball &&
+										!rob[head0].op.decbus.oddball && !rob[head1].op.decbus.oddball && !rob[head2].op.decbus.oddball &&
 										!rob[head0].excv && !rob[head1].excv && !rob[head2].excv &&
 										!((nan0 && nan1) || (nan0 && nan2) || (nan1 && nan2))
 										;
