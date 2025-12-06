@@ -40,7 +40,7 @@
 import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_regfile4wNr(rst, clk, ip,
+module Qupls4_regfile4wNr(rst, clk,
 	wr0, wr1, wr2, wr3, we0, we1, we2, we3,
 	wa0, wa1, wa2, wa3,
 	i0, i1, i2, i3,
@@ -53,7 +53,6 @@ parameter RBIT = $clog2(DEP)-1;
 parameter RPORTS = 12;
 input rst;
 input clk;
-input cpu_types_pkg::pc_address_t ip;
 input wr0;
 input wr1;
 input wr2;
