@@ -56,6 +56,8 @@ parameter SIM = 1'b0;
 // need to be modified.
 parameter PREGS = 512;
 
+parameter IP_REG = 8'd31;
+
 // Number of operands (including destination) a micro-op can have.
 parameter NOPER = 4;
 
@@ -1430,11 +1432,13 @@ typedef struct packed
 	logic vv2p;				// vector virtual to physical
 	logic vvn2p;			// indexed vector virtual to physical
 	logic amo;
+	logic iprel;
 	logic load;
 	logic loadz;
 	logic vload;				// vector load
 	logic vload_ndx;		// indexed vector load
 	logic store;
+	logic stptr;
 	logic vstore;				// vector store
 	logic vstore_ndx;		// indexed vector store
 	logic bstore;
@@ -1517,6 +1521,7 @@ typedef struct packed {
 	logic cload;					// 1=cload
 	logic cload_tags;
 	logic store;
+	logic stptr;
 	logic cstore;
 	logic vload;
 	logic vload_ndx;
@@ -1578,6 +1583,7 @@ typedef struct packed
 	logic cload;
 	logic cload_tags;
 	logic store;
+	logic stptr;
 	logic vstore;
 	logic vstore_ndx;
 	logic cstore;
@@ -1647,30 +1653,6 @@ typedef struct packed
 	logic [63:0] vector;
 } irq_info_packet_t;
 
-typedef struct packed
-{
-	logic v;														// group header is valid
-	cpu_types_pkg::seqnum_t sn;					// sequence number, decrements when instructions que
-	cpu_types_pkg::seqnum_t irq_sn;			// sequence number, increments for each interrupt
-	reg [5:0] old_ipl;
-	logic hwi;													// hardware interrupt occured during fetch
-	irq_info_packet_t irq;							// the level of the hardware interrupt
-	logic cndxv;												// checkpoint index is valid
-	cpu_types_pkg::checkpt_ndx_t cndx;	// checkpoint index
-	logic chkpt_freed;
-	logic has_branch;
-	logic done;
-} pipeline_group_hdr_t;
-
-typedef struct packed
-{
-	pipeline_group_hdr_t hdr;
-	pipeline_reg_t pr0;
-	pipeline_reg_t pr1;
-	pipeline_reg_t pr2;
-	pipeline_reg_t pr3;
-} pipeline_group_reg_t;
-
 typedef struct packed {
 	logic v;
 	logic busy;
@@ -1685,6 +1667,7 @@ typedef struct packed {
 	logic nan;
 	// needed only for mem
 	logic virt2phys;
+	logic iprel;				// IP relative addressing Rs1 spec'd as r31
 	logic load;
 	logic store;
 	logic amo;
@@ -1708,6 +1691,8 @@ typedef struct packed {
 	memsz_t prc;
 	logic [$bits(cpu_types_pkg::value_t)/8-1:0] copydst;
 	logic aRdz;
+	logic Rs1z;
+	logic Rs2z;
 	cpu_types_pkg::aregno_t aRd;
 	cpu_types_pkg::pregno_t nRd;
 	operating_mode_t om;						// needed for mem ops
@@ -1794,12 +1779,35 @@ typedef struct packed {
 	logic [5:0] data_bitpos;	// position of data to load / store
 	operating_mode_t om;			// operating mode
 	fround_t rm;							// float round mode
-	decode_bus_t decbus;			// decoded instruction
 	cpu_types_pkg::checkpt_ndx_t cndx;				// checkpoint index
 	cpu_types_pkg::checkpt_ndx_t br_cndx;		// checkpoint index branch owns
-	pipeline_reg_t op;			// original instruction
 	cpu_types_pkg::seqnum_t grp;							// instruction group
+	pipeline_reg_t op;			// original instruction
 } rob_entry_t;
+
+typedef struct packed
+{
+	logic v;														// group header is valid
+	cpu_types_pkg::seqnum_t sn;					// sequence number, decrements when instructions que
+	cpu_types_pkg::seqnum_t irq_sn;			// sequence number, increments for each interrupt
+	reg [5:0] old_ipl;
+	logic hwi;													// hardware interrupt occured during fetch
+	irq_info_packet_t irq;							// the level of the hardware interrupt
+	logic cndxv;												// checkpoint index is valid
+	cpu_types_pkg::checkpt_ndx_t cndx;	// checkpoint index
+	logic chkpt_freed;
+	logic has_branch;
+	logic done;
+} pipeline_group_hdr_t;
+
+typedef struct packed
+{
+	pipeline_group_hdr_t hdr;
+	rob_entry_t pr0;
+	rob_entry_t pr1;
+	rob_entry_t pr2;
+	rob_entry_t pr3;
+} pipeline_group_reg_t;
 
 // ============================================================================
 // Support Functions

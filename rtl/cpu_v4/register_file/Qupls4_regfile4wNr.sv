@@ -34,12 +34,13 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // 
 // 7000 LUTs / 520 FFs / 96 BRAMs (4w16r) - 64 bit
-// 10650 LUTs / 1050 FFs / 120 BRAMs (4w12r) - 128 bit
+// 9275 LUTs / 1050 FFs / 72 BRAMs (4wr12) - 64 bit
 // ============================================================================
 //
+import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_regfile4wNr(rst, clk,
+module Qupls4_regfile4wNr(rst, clk, ip,
 	wr0, wr1, wr2, wr3, we0, we1, we2, we3,
 	wa0, wa1, wa2, wa3,
 	i0, i1, i2, i3,
@@ -52,6 +53,7 @@ parameter RBIT = $clog2(DEP)-1;
 parameter RPORTS = 12;
 input rst;
 input clk;
+input cpu_types_pkg::pc_address_t ip;
 input wr0;
 input wr1;
 input wr2;
@@ -60,10 +62,10 @@ input [WID/BWW:0] we0;
 input [WID/BWW:0] we1;
 input [WID/BWW:0] we2;
 input [WID/BWW:0] we3;
-input [RBIT:0] wa0;
-input [RBIT:0] wa1;
-input [RBIT:0] wa2;
-input [RBIT:0] wa3;
+input cpu_types_pkg::pregno_t wa0;
+input cpu_types_pkg::pregno_t wa1;
+input cpu_types_pkg::pregno_t wa2;
+input cpu_types_pkg::pregno_t wa3;
 input cpu_types_pkg::value_t i0;
 input cpu_types_pkg::value_t i1;
 input cpu_types_pkg::value_t i2;
@@ -135,6 +137,7 @@ generate begin : gRF
 		  .addra(wa[0]),
 		  .dina({ti[0],i[0]}),
 		  .clkb(~clk),
+		  .rstb(1'b0),
 		  .enb(1'b1),
 		  .addrb(ra[g]),
 		  .doutb({to0[0][g],o0[0][g]})
@@ -146,6 +149,7 @@ generate begin : gRF
 		  .wea(we[1]),
 		  .addra(wa[1]),
 		  .dina({ti[1],i[1]}),
+		  .rstb(1'b0),
 		  .clkb(~clk),
 		  .enb(1'b1),
 		  .addrb(ra[g]),
@@ -158,6 +162,7 @@ generate begin : gRF
 		  .wea(we[2]),
 		  .addra(wa[2]),
 		  .dina({ti[2],i[2]}),
+		  .rstb(1'b0),
 		  .clkb(~clk),
 		  .enb(1'b1),
 		  .addrb(ra[g]),
@@ -170,6 +175,7 @@ generate begin : gRF
 		  .wea(we[3]),
 		  .addra(wa[3]),
 		  .dina({ti[3],i[3]}),
+		  .rstb(1'b0),
 		  .clkb(~clk),
 		  .enb(1'b1),
 		  .addrb(ra[g]),
@@ -185,7 +191,7 @@ generate begin : gRFO
 			o[g] =
 				// Physical register zero is zero, unless it is a predicate register
 				// spec, in which case it is -1.
-				ra[g]==10'd0 ? value_zero :
+//				ara[g]==8'd0 ? value_zero :
 				(wr3 && &we3[WID/BWW-1:0] && wa3 != 10'd0 && (ra[g]==wa3)) ? i3 :
 				(wr2 && &we2[WID/BWW-1:0] && wa2 != 10'd0 && (ra[g]==wa2)) ? i2 :
 				(wr1 && &we1[WID/BWW-1:0] && wa1 != 10'd0 && (ra[g]==wa1)) ? i1 :
@@ -196,7 +202,7 @@ generate begin : gRFO
 				o0[3][g];
 		always_comb
 			to[g] =
-				ra[g]==10'd0 ? 1'h0 : 
+//				ara[g]==8'd0 ? 1'b0 :
 				(wr3 && &we3[WID/BWW-1:WID/BWW-2] && wa3 != 10'd0 && (ra[g]==wa3)) ? ti3 :
 				(wr2 && &we2[WID/BWW-1:WID/BWW-2] && wa2 != 10'd0 && (ra[g]==wa2)) ? ti2 :
 				(wr1 && &we1[WID/BWW-1:WID/BWW-2] && wa1 != 10'd0 && (ra[g]==wa1)) ? ti1 :
@@ -205,11 +211,13 @@ generate begin : gRFO
 				lvt[ra[g]]==3'd1 ? to0[1][g] :
 				lvt[ra[g]]==3'd2 ? to0[2][g] :
 				to0[3][g];
+		/*
 		always_ff @(posedge clk)
 			if (o[g] != cpu_types_pkg::value_zero && ra[g]==10'd0) begin
-				$display("Qupls4CPU: r0 is not zero.");
+				$display("Qupls4 CPU: r0 is not zero.");
 				$finish;
 			end
+		*/
 	end
 end
 endgenerate

@@ -34,13 +34,16 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //                                                                          
-// 700 LUTs
+// 900 LUTs
 // ============================================================================
 
+import const_pkg::*;
+import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_decode_const(instr_raw, ins, imma, immb, immc, immd,
+module Qupls4_decode_const(instr_raw, ip, ins, imma, immb, immc, immd,
 	has_imma, has_immb, has_immc, has_immd, pos, isz);
+input cpu_types_pkg::pc_address_t ip;
 input [335:0] instr_raw;
 input Qupls4_pkg::micro_op_t ins;
 output reg [63:0] imma;
@@ -102,10 +105,44 @@ begin
 	finsA = 1'd0;
 	finsB = 1'd0;
 	finsC = 1'd0;
+
 	case(ins.any.opcode)
-	Qupls4_pkg::OP_ADDI,Qupls4_pkg::OP_MULI,Qupls4_pkg::OP_DIVI,Qupls4_pkg::OP_SUBFI,
+	// Quick immediate mode		Rd=Rs1+imm
+	Qupls4_pkg::OP_ADDI,Qupls4_pkg::OP_MULI,Qupls4_pkg::OP_DIVI,
+	Qupls4_pkg::OP_SUBFI,Qupls4_pkg::OP_CMPI:
+		begin
+			immb = {{37{ins.alui.imm[26]}},ins.alui.imm};
+			has_immb = TRUE;
+			if (ins.alui.Rs1==8'd0) begin				
+				imma = value_zero;
+				has_imma = TRUE;
+			end
+		end
 	Qupls4_pkg::OP_MULUI,Qupls4_pkg::OP_DIVUI,Qupls4_pkg::OP_CMPUI,
-	Qupls4_pkg::OP_CMPI,Qupls4_pkg::OP_ANDI,Qupls4_pkg::OP_ORI,Qupls4_pkg::OP_XORI,Qupls4_pkg::OP_SHIFT:
+	Qupls4_pkg::OP_ORI,Qupls4_pkg::OP_XORI:
+		begin
+			immb = {{37{1'b0}},ins.alui.imm};
+			has_immb = TRUE;
+			if (ins.alui.Rs1==8'd0) begin				
+				imma = value_zero;
+				has_imma = TRUE;
+			end
+		end
+	Qupls4_pkg::OP_ANDI:
+		begin
+			immb = {{37{1'b1}},ins.alui.imm};
+			has_immb = TRUE;
+			if (ins.alui.Rs1==8'd0) begin				
+				imma = value_zero;
+				has_imma = TRUE;
+			end
+		end
+
+	// Register R3 forms	Rd = Rs1,Rs2,Rs3
+	Qupls4_pkg::OP_R3B,Qupls4_pkg::OP_R3W,Qupls4_pkg::OP_R3T,Qupls4_pkg::OP_R3O,
+	Qupls4_pkg::OP_R3BP,Qupls4_pkg::OP_R3WP,Qupls4_pkg::OP_R3TP,Qupls4_pkg::OP_R3OP,
+	Qupls4_pkg::OP_R3P,
+	Qupls4_pkg::OP_SHIFT:
 		begin
 			imma = cnst1;
 			has_imma = Qupls4_pkg::fnHasConstRs1(ins);
@@ -113,8 +150,23 @@ begin
 			has_immb = Qupls4_pkg::fnHasConstRs2(ins);
 			immc = cnst3;
 			has_immc = Qupls4_pkg::fnHasConstRs3(ins);
+			if (ins.r3.Rs1==8'd0 && !has_imma) begin
+				imma = value_zero;
+				has_imma = TRUE;
+			end
+			if (ins.r3.Rs2==8'd0 && !has_immb) begin				
+				immb = value_zero;
+				has_immb = TRUE;
+			end
+			if (ins.r3.Rs3==8'd0 && !has_immc) begin				
+				immc = value_zero;
+				has_immc = TRUE;
+			end
 		end
-	Qupls4_pkg::OP_FLTD:
+
+	// Register F3 forms	Rd = Rs1,Rs2,Rs3
+	Qupls4_pkg::OP_FLTH,Qupls4_pkg::OP_FLTS,Qupls4_pkg::OP_FLTD,Qupls4_pkg::OP_FLTQ,
+	Qupls4_pkg::OP_FLTPH,Qupls4_pkg::OP_FLTPS,Qupls4_pkg::OP_FLTPD,Qupls4_pkg::OP_FLTPQ:
 		begin
 			has_imma = Qupls4_pkg::fnHasConstRs1(ins);
 			has_immb = Qupls4_pkg::fnHasConstRs2(ins);
@@ -134,19 +186,51 @@ begin
 			2'd2:	immc = imm32x64c;
 			default:	immc = cnst3;
 			endcase
+			if (ins.f3.Rs1==8'd0 && !has_imma) begin
+				imma = value_zero;
+				has_imma = TRUE;
+			end
+			if (ins.f3.Rs2==8'd0 && !has_immb) begin				
+				immb = value_zero;
+				has_immb = TRUE;
+			end
+			if (ins.f3.Rs3==8'd0 && !has_immc) begin				
+				immc = value_zero;
+				has_immc = TRUE;
+			end
 		end
+
 	Qupls4_pkg::OP_CSR:
 		begin
 			// ToDo: fix
 			immb = {57'd0,ins[22:16]};
 			has_immb = 1'b0;
+			if (ins.alui.Rs1==8'd0) begin
+				imma = value_zero;
+				has_imma = TRUE;
+			end
 		end
 	Qupls4_pkg::OP_BCC8,Qupls4_pkg::OP_BCC16,Qupls4_pkg::OP_BCC32,Qupls4_pkg::OP_BCC64,
 	Qupls4_pkg::OP_BCCU8,Qupls4_pkg::OP_BCCU16,Qupls4_pkg::OP_BCCU32,Qupls4_pkg::OP_BCCU64:
 		begin
-			immb = Qupls4_pkg::fnHasExConst(ins) ? cnst1 : {{19{ins[30]}},ins[30:29],ins[16:9],ins[0],2'b00};
-			has_immb = ins[31:29]!=3'b100;
+			if (ins.br.Rs1==8'd0) begin
+				imma = value_zero;
+				has_imma = TRUE;
+			end
+			if (ins.br.Rs2==8'd0) begin
+				immb = value_zero;
+				has_immb = TRUE;
+			end
+			if (ins.br.ms[1]) begin
+				immb = cnst2;
+				has_immb = TRUE;
+			end
+			if (ins.br.ms[0]) begin
+				imma = cnst1;
+				has_imma = TRUE;
+			end
 		end
+
 	Qupls4_pkg::OP_LOADA,
 	Qupls4_pkg::OP_LDB,Qupls4_pkg::OP_LDBZ,
 	Qupls4_pkg::OP_LDW,Qupls4_pkg::OP_LDWZ,
@@ -157,15 +241,41 @@ begin
 	Qupls4_pkg::OP_STT,
 	Qupls4_pkg::OP_STORE:
 		begin
-			has_immc = Qupls4_pkg::fnHasConstRs3(ins);
-			immc = has_immc ? cnst3 : {{48{ins[43]}},ins[43:28]};
+			if (ins.ls.Rs1==8'd31) begin
+				imma = ip;
+				has_imma = TRUE;
+			end
+			else if (ins.ls.Rs1==8'd0) begin
+				imma = value_zero;
+				has_imma = TRUE;
+			end
+			if (ins.ls.Rs2==8'd0) begin
+				immb = value_zero;
+				has_immb = TRUE;
+			end
+			has_immc = TRUE;
+			if (ins.ls.ms)
+				immc = cnst3;
+			else
+				immc = {{45{ins.ls.disp[18]}},ins.ls.disp};
 		end
 	Qupls4_pkg::OP_STI:
 		begin
-			has_immd = 1'b1;
+			if (ins.ls.Rs1==8'd0) begin
+				imma = value_zero;
+				has_imma = TRUE;
+			end
+			if (ins.ls.Rs2==8'd0) begin
+				immb = value_zero;
+				has_immb = TRUE;
+			end
+			has_immd = TRUE;
 			immd = cnst4;
-			has_immc = Qupls4_pkg::fnHasConstRs3(ins);
-			immc = has_immc ? cnst3 : {{48{ins[43]}},ins[43:28]};
+			has_immc = TRUE;
+			if (ins.ls.ms)
+				immc = cnst3;
+			else
+				immc = {{45{ins.ls.disp[18]}},ins.ls.disp};
 		end
 	Qupls4_pkg::OP_FENCE:
 		begin

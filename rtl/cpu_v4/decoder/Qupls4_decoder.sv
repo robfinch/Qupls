@@ -34,12 +34,14 @@
 //
 // ============================================================================
 
+import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_decoder(rst, clk, en, om, ipl, instr, instr_raw, dbo);
+module Qupls4_decoder(rst, clk, en, ip, om, ipl, instr, instr_raw, dbo);
 input rst;
 input clk;
 input en;
+input cpu_types_pkg::pc_address_t ip;
 input Qupls4_pkg::operating_mode_t om;
 input [5:0] ipl;
 input Qupls4_pkg::micro_op_t instr;
@@ -58,6 +60,7 @@ Qupls4_decode_const udcimm
 (
 	.ins(instr),
 	.instr_raw(instr_raw),
+	.ip(ip),
 	.imma(db.imma),
 	.immb(db.immb),
 	.immc(db.immc),
@@ -408,6 +411,7 @@ else begin
 		dbo.bsr <= instr.any.opcode==Qupls4_pkg::OP_BSR;
 		dbo.jsr <= instr.any.opcode==Qupls4_pkg::OP_JSR;
 		dbo.stptr <= instr.any.opcode==Qupls4_pkg::OP_STPTR;
+		dbo.iprel <= db.Rs1==8'd31;
 		dbo.cause <= Qupls4_pkg::FLT_NONE;
 		dbo.mem <= 
 			 db.load|db.vload|db.vload_ndx

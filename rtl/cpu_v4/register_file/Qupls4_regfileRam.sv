@@ -35,7 +35,7 @@
 //
 // ============================================================================
 
-module Qupls4_regfileRam(clka, ena, wea, addra, dina, clkb, enb, addrb, doutb);
+module Qupls4_regfileRam(clka, ena, wea, addra, dina, rstb, clkb, enb, addrb, doutb);
 parameter WID=$bits(cpu_types_pkg::value_t);
 parameter DEP=Qupls4_pkg::PREGS;
 parameter BWW=8;
@@ -45,6 +45,7 @@ input ena;
 input [WID/BWW-1:0] wea;
 input [RBIT:0] addra;
 input [WID-1:0] dina;
+input rstb;
 input clkb;
 input enb;
 input [RBIT:0] addrb;
@@ -72,7 +73,7 @@ if (Qupls4_pkg::SIM) begin
 
 	always_ff @(posedge clkb)
 		raddrb <= addrb;
-	assign doutb = mem[addrb];
+	assign doutb = rstb ? {WID{1'b0}} : mem[addrb];
 
 end
 else begin
@@ -142,7 +143,7 @@ else begin
       .regceb(1'b1),                 // 1-bit input: Clock Enable for the last register stage on the output
                                        // data path.
 
-      .rstb(1'b0),                     // 1-bit input: Reset signal for the final port B output register stage.
+      .rstb(rstb),                     // 1-bit input: Reset signal for the final port B output register stage.
                                        // Synchronously resets output port doutb to the value specified by
                                        // parameter READ_RESET_VALUE_B.
 

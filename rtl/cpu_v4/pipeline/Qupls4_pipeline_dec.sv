@@ -32,7 +32,7 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 18600 LUTs / 5800 FFs / 2 BRAMs
+// 21400 LUTs / 8575 FFs / 2 BRAMs
 // ============================================================================
 
 import const_pkg::*;
@@ -606,6 +606,7 @@ Qupls4_decoder udeci0
 	.rst(rst),
 	.clk(clk),
 	.en(en),
+	.ip(tpr0.pc.pc),
 	.om(sr.om),
 	.ipl(sr.ipl),
 	.instr(tpr0.uop),
@@ -618,6 +619,7 @@ Qupls4_decoder udeci1
 	.rst(rst),
 	.clk(clk),
 	.en(en),
+	.ip(tpr1.pc.pc),
 	.om(sr.om),
 	.ipl(sr.ipl),
 	.instr(tpr1.uop),
@@ -630,6 +632,7 @@ Qupls4_decoder udeci2
 	.rst(rst),
 	.clk(clk),
 	.en(en),
+	.ip(tpr2.pc.pc),
 	.om(sr.om),
 	.ipl(sr.ipl),
 	.instr(tpr2.uop),
@@ -642,6 +645,7 @@ Qupls4_decoder udeci3
 	.rst(rst),
 	.clk(clk),
 	.en(en),
+	.ip(tpr3.pc.pc),
 	.om(sr.om),
 	.ipl(sr.ipl),
 	.instr(tpr3.uop),

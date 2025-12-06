@@ -68,7 +68,7 @@ import Qupls4_pkg::*;
 `define PANIC_COMMIT 4'd13
 
 module Qupls4(coreno_i, rst_i, clk_i, clk2x_i, clk3x_i, clk5x_i, ipl, irq, irq_ack,
-	irq_i, ivect_i, swstk_i, om_i,
+	irq_i, ivect_i, swstk_i, om_i, fta_cyc, fta_bg, fta_bgack, fta_resp_ack,
 	fta_req, fta_resp, snoop_adr, snoop_v, snoop_cid);
 parameter CORENO = 6'd1;
 parameter CID = 6'd1;
@@ -88,6 +88,10 @@ input [2:0] swstk_i;
 input [2:0] om_i;
 output fta_cmd_request256_t fta_req;
 input fta_cmd_response256_t fta_resp;
+output fta_cyc;
+input fta_bg;
+output reg fta_bgack;
+output fta_resp_ack;
 input cpu_types_pkg::address_t snoop_adr;
 input snoop_v;
 input [5:0] snoop_cid;
@@ -4731,6 +4735,8 @@ begin
 	end
 end
 
+wire ptable_resp_ack;
+
 mmu #(.CID(3)) ummu1
 (
 	.rst(irst),
@@ -4770,6 +4776,7 @@ mmu #(.CID(3)) ummu1
 	.commit3_idv(commit3_idv),
 	.ftas_req(ftadm_req),
 	.ftas_resp(ptable_resp),
+	.ftas_resp_ack(ptable_resp_ack),
 	.ftam_req(ftatm_req),
 	.ftam_resp(ftatm_resp),
 	.fault_o(pg_fault),
@@ -6675,88 +6682,36 @@ else begin
 		cp_stall <= 1'b0;
 end
 
-// External bus arbiter. Simple priority encoded.
+// ----------------------------------------------------------------------------
+// External bus arbiter. mux is round-robin.
+// ----------------------------------------------------------------------------
 
-always_comb
-begin
-	
-	ftatm_resp = {$bits(fta_cmd_response256_t){1'd0}};
-	ftaim_resp = {$bits(fta_cmd_response256_t){1'd0}};
-	ftadm_resp[0] = {$bits(fta_cmd_response256_t){1'd0}};
-	ftadm_resp[1] = {$bits(fta_cmd_response256_t){1'd0}};
-	cap_tag_resp[0] = {$bits(fta_cmd_response256_t){1'd0}};
-	cap_tag_resp[1] = {$bits(fta_cmd_response256_t){1'd0}};
+wishbone_pkg::wb_cmd_request256_t [5:0] cmds;
+wishbone_pkg::wb_cmd_response256_t [5:0] resps;
+always_comb cmds[0] = ftatm_req;
+always_comb cmds[1] = ftaim_req;
+always_comb cmds[2] = ftadm_req[0];
+always_comb cmds[3] = cap_tag_req[0];
+always_comb cmds[4] = ftadm_req[1];
+always_comb cmds[5] = cap_tag_req[1];
 
-	// Setup to retry.
-	ftatm_resp.rty = 1'b1;
-	ftaim_resp.rty = 1'b1;
-	ftadm_resp[0].rty = 1'b1;
-	ftadm_resp[1].rty = 1'b1;
-	ftadm_resp[0].tid = ftadm_req[0].tid;
-	ftadm_resp[1].tid = ftadm_req[1].tid;
-	cap_tag_resp[0].rty = 1'b1;
-	cap_tag_resp[1].rty = 1'b1;
-	cap_tag_resp[0].tid = cap_tag_req[0].tid;
-	cap_tag_resp[1].tid = cap_tag_req[1].tid;
-		
-	// Cancel retry if bus aquired.
-	if (ftatm_req.cyc)
-		ftatm_resp.rty = 1'b0;
-	else if (ftaim_req.cyc)
-		ftaim_resp.rty = 1'b0;
-	else if (ftadm_req[0].cyc)
-		ftadm_resp[0].rty = 1'b0;
-	else if (ftadm_req[1].cyc)
-		ftadm_resp[1].rty = 1'b0;
-	else if (cap_tag_req[0].cyc)
-		cap_tag_resp[0].rty = 1'b0;
-	else if (cap_tag_req[1].cyc)
-		cap_tag_resp[1].rty = 1'b0;
+always_comb begin ftatm_resp = resps[0]; end
+always_comb begin ftaim_resp = resps[1]; end
+always_comb begin ftadm_resp[0] = resps[2]; end
+always_comb begin cap_tag_resp[0] = resps[3]; end
+always_comb begin ftadm_resp[1] = resps[4]; end
+always_comb begin cap_tag_resp[1] = resps[5]; end
 
-	// Route bus responses.
-	case(fta_resp1.tid.channel)
-	3'd0:	ftaim_resp = fta_resp1;
-	3'd1:	ftadm_resp[0] = fta_resp1;
-//	3'd2:	ftadm_resp[1] <= fta_resp1;
-	3'd3:	ftatm_resp = fta_resp1;
-	3'd4:	cap_tag_resp[0] = fta_resp1;
-//	3'd5:	cap_tag_resp[1] = fta_resp1;
-	default:	;	// response was not for us
-	endcase
-	
-end
-
-always_ff @(posedge clk)
-	if (ftatm_req.cyc)
-		fta_req <= ftatm_req;
-	else if (ftaim_req.cyc)
-		fta_req <= ftaim_req;
-	else if (ftadm_req[0].cyc)
-		fta_req <= ftadm_req[0];
-	else if (ftadm_req[1].cyc)
-		fta_req <= ftadm_req[1];
-	else if (cap_tag_req[0].cyc)
-		fta_req <= cap_tag_req[0];
-	else if (cap_tag_req[1].cyc)
-		fta_req <= cap_tag_req[1];
-	else
-		fta_req <= {$bits(fta_cmd_request256_t){1'd0}};
-
-
-fta_cmd_response256_t [1:0] resp_ch;
-
-fta_respbuf256 #(.CHANNELS(2))
-urb1
+wb_mux #(.NPORT(6)) utmrmux1
 (
-	.rst(irst),
-	.clk(clk),
-	.clk5x(clk5x),
-	.resp(resp_ch),
-	.resp_o(fta_resp1)
+	.rst_i(irst),
+	.clk_i(clk),
+	.cmd_i(cmds),
+	.cmd_o(fta_req),
+	.resp_i(ptable_resp.ack ? ptable_resp : fta_resp),
+	.resp_o(resps),
+	.busy_o(busy)
 );
-
-assign resp_ch[0] = fta_resp;
-assign resp_ch[1] = ptable_resp;
 
 // ----------------------------------------------------------------------------
 // Performance statistics

@@ -131,7 +131,7 @@ assign resp64_ch[1] = msi_resp;
 assign resp64_ch[2] = 'd0;
 assign resp64_ch[3] = 'd0;
 
-Stark_pit utmr1
+Qupls4_pit utmr1
 (
 	.rst_i(rst_i),
 	.clk_i(clk_i),
@@ -161,7 +161,7 @@ fta_bridge256to32 ubridge2
 	.resp32_i(pic_resp)
 );
 */
-Stark_msi_controller umsi
+Qupls4_msi_controller umsi
 (
 	.coreno(MPUNO),
 	.rst(rst_i),

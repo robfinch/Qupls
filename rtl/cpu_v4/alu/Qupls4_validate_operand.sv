@@ -56,7 +56,6 @@ begin
 		oper_o[nn] = oper_i[nn];
 		oper_o[nn].val = value_zero;
 		oper_o[nn].flags = {$bits(flags_t){1'b0}};
-		// Note r0 is bypassed to zero by the register file.
 		for (jj = 0; jj < 16; jj = jj + 1) begin
 			if (oper_i[nn].aRn==rf_oper_i[jj].aRn && rf_oper_i[jj].v && !oper_i[nn].v) begin
 				oper_o[nn] = rf_oper_i[jj];

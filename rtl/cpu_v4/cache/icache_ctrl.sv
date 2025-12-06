@@ -1,10 +1,11 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
+//	icache_ctrl.sv
 //
 // BSD 3-Clause License
 // Redistribution and use in source and binary forms, with or without
@@ -32,72 +33,81 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// Note this is the only place register codes are bypassed for r0 and r31 to
-// allow the use of zero and the instruction pointer.
-//
-// 250 LUTs / 40 FFs
+// 1000 LUTs / 2100 FFs
 // ============================================================================
 
-import const_pkg::*;
-import Qupls4_pkg::*;
+import wishbone_pkg::*;
+import cpu_types_pkg::*;
+import cache_pkg::*;
 
-module Qupls4_agen(rst, clk, next, rse, out, tlb_v, 
-	load_store, vlsndx, amo, laneno,
-	res, resv);
+module icache_ctrl(rst, clk, wbm_req, wbm_resp, ftam_full,
+	hit, tlb_v, miss_vadr, miss_padr, miss_asid, port, port_o,
+	wr_ic, way, line_o, snoop_adr, snoop_v, snoop_cid);
+parameter WAYS = 4;
+parameter CORENO = 6'd1;
+parameter CID = 6'd0;
+localparam LOG_WAYS = $clog2(WAYS);
 input rst;
 input clk;
-input next;								// calculate for next cache line
-input Qupls4_pkg::reservation_station_entry_t rse;
-input out;
+output wb_cmd_request256_t wbm_req;
+input wb_cmd_response256_t wbm_resp;
+input ftam_full;
+input hit;
 input tlb_v;
-input load_store;
-input vlsndx;
-input amo;
-input [7:0] laneno;
-output cpu_types_pkg::address_t res;
-output reg resv;
+input cpu_types_pkg::virtual_address_t miss_vadr;
+input cpu_types_pkg::physical_address_t miss_padr;
+input cpu_types_pkg::asid_t miss_asid;
+input port;
+output wr_ic;
+output [LOG_WAYS-1:0] way;
+output ICacheLine line_o;
+input cpu_types_pkg::physical_address_t snoop_adr;
+input snoop_v;
+input [5:0] snoop_cid;
+output reg port_o;
 
-cpu_types_pkg::address_t as, bs;
-cpu_types_pkg::address_t res1;
+wire cpu_types_pkg::virtual_address_t [15:0] vtags;
+wire cpu_types_pkg::physical_address_t [15:0] ptags;
+wire ack;
 
-always_comb
-	as = rse.Rs1z ? value_zero : rse.iprel ? rse.pc : rse.arg[0].val;
+// Generate memory requests to fill cache line.
 
-always_comb
-	bs = rse.Rs2z ? value_zero : (rse.arg[1].val << rse.uop.ls.sc);
+icache_req_generator
+#(
+	.CORENO(CORENO),
+	.CID(CID)
+)
+icrq1
+(
+	.rst(rst),
+	.clk(clk),
+	.hit(hit), 
+	.tlb_v(tlb_v),
+	.miss_vadr(miss_vadr),
+	.miss_padr(miss_padr),
+	.wbm_req(wbm_req),
+	.ack_i(wbm_resp.ack),
+	.vtags(vtags),
+	.ptags(ptags),
+	.ack(wr_ic)
+);
 
-always_comb
-begin
-	if (vlsndx)
-		res1 = as + bs * laneno + rse.argI;
-	else if (amo)
-		res1 = as;				// just [Rs1]
-	else if (load_store)
-		res1 = as + bs + rse.argI;
-	else
-		res1 <= 64'd0;
-end
+// Process ACK responses coming back.
 
-always_ff @(posedge clk)
-	res = next ? {res1[$bits(cpu_types_pkg::address_t)-1:6] + 2'd1,6'd0} : res1;
-
-// Make Agen valid sticky
-// The agen takes a clock cycle to compute after the out signal is valid.
-reg resv1;
-always_ff @(posedge clk) 
-if (rst) begin
-	resv <= INV;
-	resv1 <= INV;
-end
-else begin
-	if (out)
-		resv1 <= VAL;
-	resv <= resv1;
-	if (tlb_v) begin
-		resv1 <= INV;
-		resv <= INV;
-	end
-end
-
+icache_ack_processor 
+#(
+	.LOG_WAYS(LOG_WAYS)
+)
+uicap1
+(
+	.rst(rst),
+	.clk(clk),
+	.wbm_resp(wbm_resp),
+	.wr_ic(wr_ic),
+	.line_o(line_o),
+	.vtags(vtags),
+	.ptags(ptags),
+	.way(way)
+);
 
 endmodule

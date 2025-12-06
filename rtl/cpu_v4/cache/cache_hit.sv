@@ -1,10 +1,11 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
+//	cache_hit.sv
 //
 // BSD 3-Clause License
 // Redistribution and use in source and binary forms, with or without
@@ -32,72 +33,66 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// Note this is the only place register codes are bypassed for r0 and r31 to
-// allow the use of zero and the instruction pointer.
-//
-// 250 LUTs / 40 FFs
+// 356 LUTs / 22 FFs                                                                          
 // ============================================================================
 
-import const_pkg::*;
-import Qupls4_pkg::*;
+import mmu_pkg::*;
+import cache_pkg::*;
 
-module Qupls4_agen(rst, clk, next, rse, out, tlb_v, 
-	load_store, vlsndx, amo, laneno,
-	res, resv);
-input rst;
+module cache_hit(clk, adr, ndx, tag, valid, hit, rway, cv);
+parameter LINES=256;
+parameter WAYS=4;
+parameter AWID=32;
+parameter TAGBIT=14;
 input clk;
-input next;								// calculate for next cache line
-input Qupls4_pkg::reservation_station_entry_t rse;
-input out;
-input tlb_v;
-input load_store;
-input vlsndx;
-input amo;
-input [7:0] laneno;
-output cpu_types_pkg::address_t res;
-output reg resv;
+input cpu_types_pkg::address_t adr;
+input [$clog2(LINES)-1:0] ndx;
+input cache_tag_t [3:0] tag;
+input [LINES-1:0] valid [0:WAYS-1];
+output reg hit;
+output [1:0] rway;
+output reg cv;
 
-cpu_types_pkg::address_t as, bs;
-cpu_types_pkg::address_t res1;
+reg [1:0] prev_rway = 'd0;
+reg [WAYS-1:0] hit1, snoop_hit1;
+reg hit2;
+reg cv2, cv1;
+reg [1:0] rway1;
 
-always_comb
-	as = rse.Rs1z ? value_zero : rse.iprel ? rse.pc : rse.arg[0].val;
+integer k,ks;
+always_comb//ff @(posedge clk)
+begin
+	for (k = 0; k < WAYS; k = k + 1)
+	  hit1[k] = tag[k[1:0]]==adr[$bits(cpu_types_pkg::address_t)-1:TAGBIT] && 
+	  					valid[k][ndx]==1'b1;
+end
 
-always_comb
-	bs = rse.Rs2z ? value_zero : (rse.arg[1].val << rse.uop.ls.sc);
-
+integer k1;
 always_comb
 begin
-	if (vlsndx)
-		res1 = as + bs * laneno + rse.argI;
-	else if (amo)
-		res1 = as;				// just [Rs1]
-	else if (load_store)
-		res1 = as + bs + rse.argI;
-	else
-		res1 <= 64'd0;
+	cv2 = 1'b0;
+	for (k1 = 0; k1 < WAYS; k1 = k1 + 1)
+	  cv2 = cv2 | valid[k1][ndx]==1'b1;
+end
+
+integer n;
+always_comb
+begin
+	rway1 = prev_rway;
+	for (n = 0; n < WAYS; n = n + 1)	
+		if (hit1[n]) rway1 = n;
 end
 
 always_ff @(posedge clk)
-	res = next ? {res1[$bits(cpu_types_pkg::address_t)-1:6] + 2'd1,6'd0} : res1;
+	prev_rway <= rway1;
+assign rway = rway1;
 
-// Make Agen valid sticky
-// The agen takes a clock cycle to compute after the out signal is valid.
-reg resv1;
-always_ff @(posedge clk) 
-if (rst) begin
-	resv <= INV;
-	resv1 <= INV;
-end
-else begin
-	if (out)
-		resv1 <= VAL;
-	resv <= resv1;
-	if (tlb_v) begin
-		resv1 <= INV;
-		resv <= INV;
-	end
-end
+always_comb//ff @(posedge clk)
+	hit = |hit1;
 
+always_ff @(posedge clk)
+	cv1 <= cv2;
+always_ff @(posedge clk)
+	cv <= cv1;	
 
 endmodule
