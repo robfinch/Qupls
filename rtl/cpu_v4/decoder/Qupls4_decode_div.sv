@@ -37,13 +37,13 @@
 import Qupls4_pkg::*;
 
 module Qupls4_decode_div(instr, div);
-input instruction_t instr;
+input Qupls4_pkg::micro_op_t instr;
 output div;
 
 function fnIsDivs;
-input instruction_t ir;
+input Qupls4_pkg::micro_op_t ir;
 begin
-	fnIsDivs = ir.any.opcode==Qupls4_pkg::OP_DIV || (
+	fnIsDivs = ir.any.opcode==Qupls4_pkg::OP_DIVI || (
 		(
 		ir.any.opcode==Qupls4_pkg::OP_R3B||
 		ir.any.opcode==Qupls4_pkg::OP_R3W||

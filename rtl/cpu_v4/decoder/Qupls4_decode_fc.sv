@@ -37,11 +37,11 @@
 import Qupls4_pkg::*;
 
 module Qupls4_decode_fc(instr, fc);
-input Qupls4_pkg::instruction_t instr;
+input Qupls4_pkg::micro_op_t instr;
 output fc;
 
 function fnIsFlowCtrl;
-input Qupls4_pkg::instruction_t ir;
+input Qupls4_pkg::micro_op_t ir;
 begin
 	case(ir.any.opcode)
 	Qupls4_pkg::OP_BRK,

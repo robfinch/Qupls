@@ -37,11 +37,11 @@
 import Qupls4_pkg::*;
 
 module Qupls4_decode_cjb(instr, cjb);
-input micro_op_t instr;
+input Qupls4_pkg::micro_op_t instr;
 output cjb;
 
 function fnIsCJB;
-input micro_op_t ir;
+input Qupls4_pkg::micro_op_t ir;
 begin
 	fnIsCJB = 1'b0;
 	case(ir.any.opcode)

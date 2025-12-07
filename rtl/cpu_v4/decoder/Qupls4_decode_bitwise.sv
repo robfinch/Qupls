@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2024-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -36,53 +36,31 @@
 
 import Qupls4_pkg::*;
 
-module Qupls4_decode_sau(instr, sau);
+module Qupls4_decode_bitwise(instr, bitwise);
 input Qupls4_pkg::micro_op_t instr;
-output sau;
+output bitwise;
 
-function fnIsSau;
+function fnIsBitwise;
 input Qupls4_pkg::micro_op_t ir;
 begin
-	fnIsSau = 1'b0;
 	case(ir.any.opcode)
-	Qupls4_pkg::OP_BFLD:
-		fnIsSau = 1'b1;
 	Qupls4_pkg::OP_R3B,Qupls4_pkg::OP_R3W,Qupls4_pkg::OP_R3T,Qupls4_pkg::OP_R3O,
 	Qupls4_pkg::OP_R3BP,Qupls4_pkg::OP_R3WP,Qupls4_pkg::OP_R3TP,Qupls4_pkg::OP_R3OP,
 	Qupls4_pkg::OP_R3P:
-		fnIsSau = 1'b1;
-	Qupls4_pkg::OP_FLTH,Qupls4_pkg::OP_FLTS,Qupls4_pkg::OP_FLTD,Qupls4_pkg::OP_FLTQ,
-	Qupls4_pkg::OP_FLTPH,Qupls4_pkg::OP_FLTPS,Qupls4_pkg::OP_FLTPD,Qupls4_pkg::OP_FLTPQ,
-	Qupls4_pkg::OP_FLTP:
-		case(ir.f3.func)
-		Qupls4_pkg::FLT_CMP,
-		Qupls4_pkg::FLT_ABS,Qupls4_pkg::FLT_NEG:
-			fnIsSau = 1'b1;
-		default:	fnIsSau = 1'b0;
+		case(ir.r3.func)
+		Qupls4_pkg::FN_AND:	fnIsBitwise = 1'b1;
+		Qupls4_pkg::FN_OR:	fnIsBitwise = 1'b1;
+		Qupls4_pkg::FN_XOR:	fnIsBitwise = 1'b1;
+		default:	fnIsBitwise = 1'b0;
 		endcase
-	Qupls4_pkg::OP_CHK:	fnIsSau = 1'b1;
-	Qupls4_pkg::OP_ADDI:		fnIsSau = 1'b1;
-	Qupls4_pkg::OP_SUBFI:	fnIsSau = 1'b1;
-	Qupls4_pkg::OP_CMPI:		fnIsSau = 1'b1;
-	Qupls4_pkg::OP_CMPUI:		fnIsSau = 1'b1;
-	Qupls4_pkg::OP_ANDI:		fnIsSau = 1'b1;
-	Qupls4_pkg::OP_ORI:		fnIsSau = 1'b1;
-	Qupls4_pkg::OP_XORI:		fnIsSau = 1'b1;
-	Qupls4_pkg::OP_SHIFT:	fnIsSau = 1'b1;
-	Qupls4_pkg::OP_CSR:		fnIsSau = 1'b1;
-	Qupls4_pkg::OP_MOVMR:		fnIsSau = 1'b1;
-	Qupls4_pkg::OP_LOADA:	fnIsSau = 1'b1;
-	Qupls4_pkg::OP_NOP,
-	Qupls4_pkg::OP_PUSH,Qupls4_pkg::OP_POP:
-		fnIsSau = 1'b1;
-	Qupls4_pkg::OP_FENCE:
-		fnIsSau = 1'b1;
-	default:
-		fnIsSau = 1'b0;
+	Qupls4_pkg::OP_ANDI:	fnIsBitwise = 1'b1;
+	Qupls4_pkg::OP_ORI:	fnIsBitwise = 1'b1;
+	Qupls4_pkg::OP_XORI:	fnIsBitwise = 1'b1;
+	default:	fnIsBitwise = 1'b0;
 	endcase
 end
 endfunction
 
-assign sau = fnIsSau(instr);
+assign bitwise = fnIsBitwise(instr);
 
 endmodule

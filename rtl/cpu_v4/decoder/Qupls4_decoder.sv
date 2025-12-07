@@ -236,22 +236,22 @@ Stark_decode_alu_pair udcalup0
 	.alu_pair(db.alu_pair)
 );
 */
-Stark_decode_bitwise udcbitwise
+Qupls4_decode_bitwise udcbitwise
 (
 	.instr(instr),
 	.bitwise(db.bitwise)
 );
 
-Stark_decode_mul umul1
+Qupls4_decode_mul umul1
 (
 	.instr(instr),
 	.mul(db.mul)
 );
 
-Stark_decode_mula umulu1
+Qupls4_decode_mulu umulu1
 (
 	.instr(instr),
-	.mul(db.mula)
+	.mulu(db.mula)
 );
 
 Qupls4_decode_div udiv1
@@ -260,10 +260,10 @@ Qupls4_decode_div udiv1
 	.div(db.div)
 );
 
-Stark_decode_diva udivu1
+Qupls4_decode_divu udivu1
 (
 	.instr(instr),
-	.div(db.diva)
+	.divu(db.diva)
 );
 
 Qupls4_decode_load udecld1
@@ -274,7 +274,7 @@ Qupls4_decode_load udecld1
 	.vload_ndx(db.vload_ndx)
 );
 
-Stark_decode_loadz udecldz1
+Qupls4_decode_loadz udecldz1
 (
 	.instr(instr),
 	.loadz(db.loadz)
@@ -288,7 +288,7 @@ Qupls4_decode_store udecst1
 	.vstore_ndx(db.vstore_ndx)
 );
 
-Stark_decode_loada udeclda1
+Qupls4_decode_loada udeclda1
 (
 	.instr(instr),
 	.loada(db.loada)

@@ -21,7 +21,7 @@
 //    contributors may be used to endorse or promote products derived from
 //    this software without specific prior written permission.
 //
-// THI+S SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 // AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 // IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
 // DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
@@ -32,7 +32,7 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 19000 LUTs / 5675 FFs / 2 BRAMs	- 48 uops per instruction.
+// 21400 LUTs / 8575 FFs / 2 BRAMs
 // ============================================================================
 
 import const_pkg::*;
@@ -50,8 +50,6 @@ module Qupls4_pipeline_dec(rst_i, rst, clk, en, clk5x, ph4, new_cline_mux, cline
 	mux_stallq, ren_stallq, ren_rst_busy, avail_reg,
 	predicted_correctly_o, new_address_o
 );
-parameter MAX_MICROOPS = 12;
-parameter MICROOPS_PER_INSTR = 48;
 input rst_i;
 input rst;
 input clk;
@@ -97,16 +95,17 @@ output [Qupls4_pkg::PREGS-1:0] avail_reg;
 output reg predicted_correctly_o;
 output reg [63:0] new_address_o;
 
-integer n1,n2,n3,n4,n5,n6;
+integer n1,n2,n3,n4,n5;
 Qupls4_pkg::pipeline_group_reg_t pg_mux_r;
 reg [31:0] carry_mod_i;
 reg [31:0] carry_mod_o;
 reg [11:0] atom_mask_i;
 reg [11:0] atom_mask_o;
+reg [31:0] nops;
+reg hilo;
 reg hwi_ignore;
 Qupls4_pkg::regs_t fregs_i;
 Qupls4_pkg::regs_t fregs_o;
-reg rd_more;
 
 always @(posedge clk)
 if (rst)
@@ -148,11 +147,14 @@ Qupls4_pkg::pipeline_reg_t tpr0,tpr1,tpr2,tpr3,tpr4;
 always @(posedge clk)
 	pg_mux_r <= pg_mux;
 
-wire [5:0] uop_count [0:3];
-Qupls4_pkg::micro_op_t [MICROOPS_PER_INSTR-1:0] uop [0:3];
-Qupls4_pkg::micro_op_t [MAX_MICROOPS-1:0] uop_buf;
+Stark_min_constant_decoder umcd1 (cline[511:0], nops[15:0]);
+Stark_min_constant_decoder umcd2 (cline[1023:512], nops[31:16]);
 
-Qupls4_microop_mem uuop1
+wire [2:0] uop_count [0:3];
+Qupls4_pkg::micro_op_t [31:0] uop [0:3];
+Qupls4_pkg::micro_op_t [31:0] uop_buf;
+
+Qupls4_microop uuop1
 (
 	.om(pg_mux.pr0.op.om),
 	.ir(pg_mux.pr0.op.uop),
@@ -164,7 +166,7 @@ Qupls4_microop_mem uuop1
 	.uop(uop[0])
 );
 
-Qupls4_microop_mem uuop2
+Qupls4_microop uuop2
 (
 	.om(pg_mux.pr1.op.om),
 	.ir(pg_mux.pr1.op.uop), 
@@ -176,7 +178,7 @@ Qupls4_microop_mem uuop2
 	.uop(uop[1])
 );
 
-Qupls4_microop_mem uuop3
+Qupls4_microop uuop3
 (
 	.om(pg_mux.pr2.op.om),
 	.ir(pg_mux.pr2.op.uop), 
@@ -188,7 +190,7 @@ Qupls4_microop_mem uuop3
 	.uop(uop[2])
 );
 
-Qupls4_microop_mem uuop4
+Qupls4_microop uuop4
 (
 	.om(pg_mux.pr3.op.om),
 	.ir(pg_mux.pr3.op.uop), 
@@ -201,129 +203,7 @@ Qupls4_microop_mem uuop4
 );
 
 reg rd_mux;
-reg [1:0] uop_mark [0:MAX_MICROOPS-1];
-reg [2:0] head0;
-reg [2:0] head1;
-reg [2:0] head2;
-reg [2:0] head3;
-reg [2:0] tail0;
-reg [2:0] tail1;
-reg [2:0] tail2;
-reg [2:0] tail3;
-reg [2:0] next_tail0;
-reg [7:0] room;
-reg [7:0] sum_of_count;
-reg [7:0] rc_uop_count [0:3];
-integer kk,jj;
-
-always_comb
-	if (head0 > tail0)
-		room = head0 - tail0;
-	else
-		room = MAX_MICROOPS + head0 - tail0;
-
-always_comb
-begin
-	head1 = head0 + 2'd1;
-	head2 = head0 + 2'd2;
-	head3 = head0 + 2'd3;
-end
-
-always_comb
-begin
-	tail1 = tail0 + uop_count[0];
-	tail2 = tail1 + uop_count[1];
-	tail3 = tail2 + uop_count[2];
-	next_tail0 = tail0 + {2'b00,uop_count[0]} + {2'b00,uop_count[1]} + {2'b00,uop_count[2]} + {2'b00,uop_count[3]};
-end
-
-// Copy micro-ops from the micro-op decoders into a buffer for further
-// processing. The micro-ops are in program order in the buffer. Which
-// instruction the micro-op belongs to is stored in an array called uop_mark.
-
-always_ff @(posedge clk)
-if (rst) begin
-  for (n5 = 0; n5 < MAX_MICROOPS; n5 = n5 + 1)
-    uop_mark[n5] = 2'b00;
-   // On reset fill buffer with NOPs (0xff).
-	uop_buf = {$bits(Qupls4_pkg::micro_op_t)*16{8'hFF}};
-	rc_uop_count[0] = 8'd0;
-	rc_uop_count[1] = 8'd0;
-	rc_uop_count[2] = 8'd0;
-	rc_uop_count[3] = 8'd0;
-	rd_more = TRUE;
-	head0 = 3'd0;
-	kk = 0;
-end
-else if (en) begin
-
-	rd_more = FALSE;
-	jj = tail0;
-	if (rc_uop_count[kk] < uop_count[kk] && kk < 4) begin
-		uop_buf[jj] = uop[kk][rc_uop_count[kk]];
-		uop_mark[jj] = jj;
-		jj = jj + 1;
-		rc_uop_count[kk] = rc_uop_count[kk] + 4'd1;
-	end
-	else if (kk < 4)
-		kk = kk + 1;
-	if (rc_uop_count[kk] < uop_count[kk] && kk < 4) begin
-		uop_buf[jj] = uop[kk][rc_uop_count[kk]];
-		uop_mark[jj] = jj;
-		jj = jj + 1;
-		rc_uop_count[kk] = rc_uop_count[kk] + 4'd1;
-	end
-	else if (kk < 4)
-		kk = kk + 1;
-	if (rc_uop_count[kk] < uop_count[kk] && kk < 4) begin
-		uop_buf[jj] = uop[kk][rc_uop_count[kk]];
-		uop_mark[jj] = jj;
-		jj = jj + 1;
-		rc_uop_count[kk] = rc_uop_count[kk] + 4'd1;
-	end
-	else if (kk < 4)
-		kk = kk + 1;
-	if (rc_uop_count[kk] < uop_count[kk] && kk < 4) begin
-		uop_buf[jj] = uop[kk][rc_uop_count[kk]];
-		uop_mark[jj] = jj;
-		jj = jj + 1;
-		rc_uop_count[kk] = rc_uop_count[kk] + 4'd1;
-	end
-	else if (kk < 4)
-		kk = kk + 1;
-	if (rc_uop_count[kk] < uop_count[kk] && kk < 4) begin
-		uop_buf[jj] = uop[kk][rc_uop_count[kk]];
-		uop_mark[jj] = jj;
-		jj = jj + 1;
-		rc_uop_count[kk] = rc_uop_count[kk] + 4'd1;
-	end
-	else if (kk < 4)
-		kk = kk + 1;
-	if (rc_uop_count[kk] < uop_count[kk] && kk < 4) begin
-		uop_buf[jj] = uop[kk][rc_uop_count[kk]];
-		uop_mark[jj] = jj;
-		jj = jj + 1;
-		rc_uop_count[kk] = rc_uop_count[kk] + 4'd1;
-	end
-	else if (kk < 4)
-		kk = kk + 1;
-	tail0 = tail0 + jj;
-	head0 = head0 + 4'd4;
-	if (kk >= 4) begin
-		kk = 0;
-		rc_uop_count[0] = 8'd0;
-		rc_uop_count[1] = 8'd0;
-		rc_uop_count[2] = 8'd0;
-		rc_uop_count[3] = 8'd0;
-		rd_more = room > 3;
-	end
-
-
-end
-
-
-// rd_more is a flag set when there is room in the buffer.
-assign mux_stallq = !rd_more;
+reg [1:0] uop_mark [0:31];
 
 always_comb
 begin
@@ -369,12 +249,94 @@ begin
 	default:	tpr4 = pg_mux.pr4;
 	endcase
 */
-	tpr0.uop = uop_buf[head0];
-	tpr1.uop = uop_buf[head1];
-	tpr2.uop = uop_buf[head2];
-	tpr3.uop = uop_buf[head3];
+	tpr0.uop = uop_buf[0];
+	tpr1.uop = uop_buf[1];
+	tpr2.uop = uop_buf[2];
+	tpr3.uop = uop_buf[3];
 //	tpr4.uop = uop_buf[4];
 end
+
+// Copy micro-ops from the micro-op decoders into a buffer for further
+// processing. The micro-ops are in program order in the buffer. Which
+// instruction the micro-op belongs to is stored in an array called uop_mark.
+
+always_ff @(posedge clk)
+if (rst) begin
+  for (n5 = 0; n5 < 32; n5 = n5 + 1)
+    uop_mark[n5] <= 2'b00;
+	uop_buf <= {$bits(Qupls4_pkg::micro_op_t)*32{1'b0}};
+end
+else begin
+	if (en) begin
+    for (n5 = 0; n5 < 28; n5 = n5 + 1)
+  		uop_buf[n5] <= uop_buf[n5+4];
+  	uop_buf[31] <= {$bits(Qupls4_pkg::micro_op_t){1'b0}};
+  	uop_buf[30] <= {$bits(Qupls4_pkg::micro_op_t){1'b0}};
+  	uop_buf[29] <= {$bits(Qupls4_pkg::micro_op_t){1'b0}};
+  	uop_buf[28] <= {$bits(Qupls4_pkg::micro_op_t){1'b0}};
+    for (n5 = 0; n5 < 28; n5 = n5 + 1)
+		  uop_mark[n5] <= uop_mark[n5+4];
+		uop_mark[31] <= 2'b00;
+		uop_mark[30] <= 2'b00;
+		uop_mark[29] <= 2'b00;
+		uop_mark[28] <= 2'b00;
+		if (rd_mux) begin
+			for (n4 = 0; n4 < 32; n4 = n4 + 1) begin
+				if (n4 < {2'd0,uop_count[0]}) begin
+					uop_mark[n4] <= 2'd0;
+					uop_buf[n4] <= uop[0][n4 % 8];	// % 8 gets rid of index out of range warning
+				end
+				else if (n4 < {2'd0,uop_count[0]} + uop_count[1]) begin
+					uop_mark[n4] <= 2'd1;
+					uop_buf[n4] <= uop[1][(n4-uop_count[0]) % 8];
+				end
+				else if (n4 < {2'd0,uop_count[0]} + uop_count[1] + uop_count[2]) begin
+					uop_mark[n4] <= 2'd2;
+					uop_buf[n4] <= uop[2][(n4-uop_count[0]-uop_count[1]) % 8];
+				end
+				else begin
+					uop_mark[n4] <= 2'd3;
+					uop_buf[n4] <= uop[3][(n4-uop_count[0]-uop_count[1]-uop_count[2]) % 8];
+				end
+			end
+		end
+	end
+end
+
+// rd_mux is a flag set when the buffer is almost empty. If the buffer is
+// almost empty it is time to reload it.
+always_comb
+	rd_mux = (
+	 uop_buf[31]=={$bits(Qupls4_pkg::micro_op_t){1'b0}} &&
+	 uop_buf[30]=={$bits(Qupls4_pkg::micro_op_t){1'b0}} &&
+	 uop_buf[29]=={$bits(Qupls4_pkg::micro_op_t){1'b0}} &&
+	 uop_buf[28]=={$bits(Qupls4_pkg::micro_op_t){1'b0}} &&
+	 uop_buf[27]=={$bits(Qupls4_pkg::micro_op_t){1'b0}} &&
+	 uop_buf[26]=={$bits(Qupls4_pkg::micro_op_t){1'b0}} &&
+	 uop_buf[25]=={$bits(Qupls4_pkg::micro_op_t){1'b0}} &&
+	 uop_buf[24]=={$bits(Qupls4_pkg::micro_op_t){1'b0}} &&
+	 uop_buf[23]=={$bits(Qupls4_pkg::micro_op_t){1'b0}} &&
+	 uop_buf[22]=={$bits(Qupls4_pkg::micro_op_t){1'b0}} &&
+	 uop_buf[21]=={$bits(Qupls4_pkg::micro_op_t){1'b0}} &&
+	 uop_buf[20]=={$bits(Qupls4_pkg::micro_op_t){1'b0}} &&
+	 uop_buf[19]=={$bits(Qupls4_pkg::micro_op_t){1'b0}} &&
+	 uop_buf[18]=={$bits(Qupls4_pkg::micro_op_t){1'b0}} &&
+	 uop_buf[17]=={$bits(Qupls4_pkg::micro_op_t){1'b0}} &&
+	 uop_buf[16]=={$bits(Qupls4_pkg::micro_op_t){1'b0}} &&
+	 uop_buf[15]=={$bits(Qupls4_pkg::micro_op_t){1'b0}} &&
+	 uop_buf[14]=={$bits(Qupls4_pkg::micro_op_t){1'b0}} &&
+	 uop_buf[13]=={$bits(Qupls4_pkg::micro_op_t){1'b0}} &&
+	 uop_buf[12]=={$bits(Qupls4_pkg::micro_op_t){1'b0}} &&
+	 uop_buf[11]=={$bits(Qupls4_pkg::micro_op_t){1'b0}} &&
+	 uop_buf[10]=={$bits(Qupls4_pkg::micro_op_t){1'b0}} &&
+	 uop_buf[9]=={$bits(Qupls4_pkg::micro_op_t){1'b0}} &&
+	 uop_buf[8]=={$bits(Qupls4_pkg::micro_op_t){1'b0}} &&
+	 uop_buf[7]=={$bits(Qupls4_pkg::micro_op_t){1'b0}} &&
+	 uop_buf[6]=={$bits(Qupls4_pkg::micro_op_t){1'b0}} &&
+	 uop_buf[5]=={$bits(Qupls4_pkg::micro_op_t){1'b0}} &&
+	 uop_buf[4]=={$bits(Qupls4_pkg::micro_op_t){1'b0}});
+always_comb
+	mux_stallq = !rd_mux;
 
 //reg stomp_dec;
 
@@ -776,6 +738,19 @@ begin
 	pr1_dec.decbus = dec1;
 	pr2_dec.decbus = dec2;
 	pr3_dec.decbus = dec3;
+
+	// Mark instructions invalid according to where constants are located.
+	hilo = pr0_dec.pc.pc[6];
+	for (n3 = 0; n3 < 32; n3 = n3 + 1) begin
+		if (nops[{~hilo,pr0_dec.pc.pc[5:2]}])
+			pr0_dec.v = INV;
+		if (nops[{hilo^pr1_dec.pc.pc[6],pr1_dec.pc.pc[5:2]}])
+			pr1_dec.v = INV;
+		if (nops[{hilo^pr2_dec.pc.pc[6],pr2_dec.pc.pc[5:2]}])
+			pr2_dec.v = INV;
+		if (nops[{hilo^pr3_dec.pc.pc[6],pr3_dec.pc.pc[5:2]}])
+			pr3_dec.v = INV;
+	end
 
 	// Apply interrupt masking.
 	// Done by clearing the hardware interrupt flag.

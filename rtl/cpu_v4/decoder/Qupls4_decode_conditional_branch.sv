@@ -37,7 +37,7 @@
 import Qupls4_pkg::*;
 
 module Qupls4_decode_conditional_branch(instr, branch);
-input Qupls4_pkg::instruction_t instr;
+input Qupls4_pkg::micro_op_t instr;
 output branch;
 
 assign branch = Qupls4_pkg::fnIsBranch(instr);
