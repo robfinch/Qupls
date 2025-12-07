@@ -36,9 +36,9 @@
 
 import const_pkg::*;
 import fta_bus_pkg::*;
-import QuplsMmupkg::*;
+import mmu_pkg::*;
 import QuplsPkg::*;
-import Qupls_ptable_walker_pkg::*;
+import ptable_walker_pkg::*;
 
 module Qupls_ptw_tran_buffer(rst, clk, state, ptw_pv, ptw_ppv, tranbuf,
 	miss_queue, sel_tran, sel_qe, ftam_resp, tid, ptw_vadr, ptw_padr);
@@ -46,7 +46,7 @@ parameter CORENO = 6'd1;
 parameter CID = 3'd3;
 input rst;
 input clk;
-input Qupls_ptable_walker_pkg::ptw_state_t state;
+input ptable_walker_pkg::ptw_state_t state;
 input ptw_pv;
 input ptw_ppv;
 output ptw_tran_buf_t [15:0] tranbuf;
@@ -71,7 +71,7 @@ end
 else begin
 
 	case(state)
-	IDLE:
+	ptable_walker_pkg::IDLE:
 		begin
 			if (ptw_pv & ~ptw_ppv & ~sel_qe[5]) begin
 				if (miss_queue[sel_qe].lvl != 3'd7) begin

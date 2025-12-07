@@ -52,7 +52,10 @@ typedef enum logic [3:0] {
 	SEG_FETCH_DONE = 4'd3,
 	TLB_PTE_FETCH = 4'd4,
 	TLB_PTE_FETCH_DONE = 4'd5,
-	VIRT_ADR_XLAT = 4'd6
+	TLB_PTE_CYC = 4'd6,
+	TLB_PTE_ACK = 4'd7,
+	TLB_PTE_NACK = 4'd8,
+	VIRT_ADR_XLAT = 4'd9
 } ptw_access_state_t;
 
 typedef struct packed {

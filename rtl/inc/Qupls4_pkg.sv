@@ -330,7 +330,12 @@ typedef enum logic [1:0] {
 	OM_SECURE = 2'd3
 } operating_mode_t;
 
-typedef logic [4:0] regspec_t;
+typedef struct packed
+{
+	logic inv;
+	logic [6:0] rg;
+} regspec_t;
+
 typedef logic [NREGS-1:1] reg_bitmask_t;
 typedef logic [ROB_ENTRIES-1:0] rob_bitmask_t;
 typedef logic [LSQ_ENTRIES-1:0] lsq_bitmask_t;
@@ -469,6 +474,7 @@ typedef enum logic [2:0] {
 typedef enum logic [6:0] {
 	OP_BRK = 7'd0,
 	OP_R3H = 7'd2,
+	OP_BFLD = 7'd3,
 	OP_ADDI = 7'd4,
 	OP_SUBFI = 7'd5,
 	OP_MULI = 7'd6,
@@ -485,6 +491,7 @@ typedef enum logic [6:0] {
 	OP_CMPUI = 7'd19,
 	OP_LOADA = 7'd20,
 	OP_DIVUI = 7'd21,
+	OP_LOADI = 7'd22,
 	OP_MOVMR = 7'd23,
 //	OP_TRAP = 7'd28,
 
@@ -529,6 +536,7 @@ typedef enum logic [6:0] {
 	OP_LDTZ = 7'd69,
 	OP_LOAD = 7'd70,
 	OP_LDV = 7'd71,
+	OP_LDIP = 7'd72,
 	OP_CLOAD = 7'd73,
 	OP_FLDH = 7'd74,
 	OP_FLDS = 7'd76,
@@ -540,7 +548,7 @@ typedef enum logic [6:0] {
 	OP_STORE = 7'd83,
 	OP_STI = 7'd84,
 	OP_CSTORE = 7'd85,
-	OP_LDG = 7'd87,
+	OP_STIP = 7'd87,
 	OP_STPTR = 7'd86,
 
 	OP_STV = 7'd88,
@@ -658,6 +666,7 @@ typedef enum logic [6:0] {
 	FLT_SLT = 7'd10,
 	FLT_CMP = 7'd13,
 	FLT_SGNJ = 7'd16,
+	FLT_ABS = 7'd32,
 	FLT_NEG = 7'd33
 } flt_e;
 
@@ -728,8 +737,8 @@ typedef struct packed
 	logic md;
 	logic [3:0] resv;
 	logic [19:0] disp;
-	logic [7:0] Rs2;
-	logic [7:0] Rs1;
+	regspec_t Rs2;
+	regspec_t Rs1;
 	logic [1:0] ms;
 	logic [3:0] cnd;
 	opcode_e opcode;
@@ -745,9 +754,9 @@ typedef struct packed
 	logic [1:0] prc;
 	logic md;
 	logic [15:0] resv;
-	logic [7:0] Rs3;
-	logic [7:0] Rs2;
-	logic [7:0] Rs1;
+	regspec_t Rs3;
+	regspec_t Rs2;
+	regspec_t Rs1;
 	logic [1:0] ms;
 	logic [3:0] cnd;
 	opcode_e opcode;
@@ -762,7 +771,7 @@ typedef struct packed
 	logic resv2;
 	logic [5:0] resv;
 	logic [34:0] disp;
-	logic [7:0] Rd;
+	regspec_t Rd;
 	opcode_e opcode;
 } bsr_inst_t;
 
@@ -799,9 +808,9 @@ typedef struct packed
 	logic ms;
 	logic [1:0] resv;
 	logic [18:0] disp;
-	logic [7:0] Rs2;
-	logic [7:0] Rs1;
-	logic [7:0] Rsd;
+	regspec_t Rs2;
+	regspec_t Rs1;
+	regspec_t Rsd;
 	opcode_e opcode;
 } ls_inst_t;
 
@@ -816,10 +825,10 @@ typedef struct packed
 	logic [2:0] ms;
 	logic [2:0] ar;
 	logic [3:0] vn;
-	logic [7:0] Rs3;
-	logic [7:0] Rs2;
-	logic [7:0] Rs1;
-	logic [7:0] Rd;
+	regspec_t Rs3;
+	regspec_t Rs2;
+	regspec_t Rs1;
+	regspec_t Rd;
 	opcode_e opcode;
 } amo_inst_t;
 
@@ -834,10 +843,10 @@ typedef struct packed
 	logic [2:0] ms;
 	logic [2:0] ar;
 	logic [3:0] vn;
-	logic [7:0] Rs3;
-	logic [7:0] Rs2;
-	logic [7:0] Rs1;
-	logic [7:0] Rd;
+	regspec_t Rs3;
+	regspec_t Rs2;
+	regspec_t Rs1;
+	regspec_t Rd;
 	opcode_e opcode;
 } cas_inst_t;
 
@@ -851,8 +860,8 @@ typedef struct packed
 	logic [1:0] pr;
 	logic [3:0] resv;
 	logic [26:0] imm;
-	logic [7:0] Rs1;
-	logic [7:0] Rd;
+	regspec_t Rs1;
+	regspec_t Rd;
 	opcode_e opcode;
 } alui_inst_t;
 
@@ -867,10 +876,10 @@ typedef struct packed
 	logic [2:0] ms;
 	logic [2:0] op3;
 	logic [3:0] vn;
-	logic [7:0] Rs3;
-	logic [7:0] Rs2;
-	logic [7:0] Rs1;
-	logic [7:0] Rd;
+	regspec_t Rs3;
+	regspec_t Rs2;
+	regspec_t Rs1;
+	regspec_t Rd;
 	opcode_e opcode;
 } alu_inst_t;
 
@@ -885,10 +894,10 @@ typedef struct packed
 	logic [2:0] ms;
 	logic [2:0] op3;
 	logic [3:0] vn;
-	logic [7:0] Rs3;
-	logic [7:0] Rs2;
-	logic [7:0] Rs1;
-	logic [7:0] Rd;
+	regspec_t Rs3;
+	regspec_t Rs2;
+	regspec_t Rs1;
+	regspec_t Rd;
 	opcode_e opcode;
 } r3_inst_t;
 
@@ -903,10 +912,10 @@ typedef struct packed
 	logic [2:0] ms;
 	logic [2:0] rm;
 	logic [3:0] vn;
-	logic [7:0] Rs3;
-	logic [7:0] Rs2;
-	logic [7:0] Rs1;
-	logic [7:0] Rd;
+	regspec_t Rs3;
+	regspec_t Rs2;
+	regspec_t Rs1;
+	regspec_t Rd;
 	opcode_e opcode;
 } f3_inst_t;
 
@@ -921,10 +930,10 @@ typedef struct packed
 	logic [2:0] ms;
 	logic [2:0] op3;
 	logic [3:0] vn;
-	logic [7:0] Rs3;
-	logic [7:0] Rs2;
-	logic [7:0] Rs1;
-	logic [7:0] Rd;
+	regspec_t Rs3;
+	regspec_t Rs2;
+	regspec_t Rs1;
+	regspec_t Rd;
 	opcode_e opcode;
 } sh_inst_t;
 
@@ -939,10 +948,10 @@ typedef struct packed
 	logic [2:0] ms;
 	logic [2:0] rm;
 	logic [3:0] vn;
-	logic [7:0] Rs3;
-	logic [7:0] Rs2;
-	logic [7:0] Rs1;
-	logic [7:0] Rd;
+	regspec_t Rs3;
+	regspec_t Rs2;
+	regspec_t Rs1;
+	regspec_t Rd;
 	opcode_e opcode;
 } sra_inst_t;
 
@@ -957,8 +966,8 @@ typedef struct packed
 	logic [2:0] ms;
 	logic [13:0] regno;
 	logic [12:0] resv;
-	logic [7:0] Rs1;
-	logic [7:0] Rd;
+	regspec_t Rs1;
+	regspec_t Rd;
 	opcode_e opcode;
 } csr_inst_t;
 
@@ -974,7 +983,7 @@ typedef struct packed
 	logic [13:0] regno;
 	logic [5:0] resv;
 	logic [14:0] imm;
-	logic [7:0] Rd;
+	regspec_t Rd;
 	opcode_e opcode;
 } csri_inst_t;
 
@@ -1000,10 +1009,10 @@ typedef struct packed
 	logic [2:0] ms;
 	logic [2:0] op3;
 	logic [3:0] vn;
-	logic [7:0] Rs3;
-	logic [7:0] Rs2;
-	logic [7:0] Rs1;
-	logic [7:0] Rd;
+	regspec_t Rs3;
+	regspec_t Rs2;
+	regspec_t Rs1;
+	regspec_t Rd;
 	opcode_e opcode;
 } chk_inst_t;
 
@@ -1016,9 +1025,9 @@ typedef struct packed
 	logic resv2;
 	logic [1:0] resv;
 	logic [22:0] imm;
-	logic [7:0] Rs2;
-	logic [7:0] Rs1;
-	logic [7:0] Rd;
+	regspec_t Rs2;
+	regspec_t Rs1;
+	regspec_t Rd;
 	opcode_e opcode;
 } enter_inst_t;
 
@@ -1033,10 +1042,10 @@ typedef struct packed
 	logic [2:0] ms;
 	logic [2:0] op3;
 	logic [3:0] vn;
-	logic [7:0] Rs3;
-	logic [7:0] Rs2;
-	logic [7:0] Rs1;
-	logic [7:0] Rd;
+	regspec_t Rs3;
+	regspec_t Rs2;
+	regspec_t Rs1;
+	regspec_t Rd;
 	opcode_e opcode;
 } cmov_inst_t;
 
@@ -1051,12 +1060,12 @@ typedef struct packed
 	logic [2:0] ms;
 	logic [2:0] op3;
 	logic [3:0] vn;
-	logic [7:0] Rs3;
+	regspec_t Rs3;
 	logic [3:0] resv;
 	logic [1:0] Rs1h;
 	logic [1:0] Rdh;
-	logic [7:0] Rs1;
-	logic [7:0] Rd;
+	regspec_t Rs1;
+	regspec_t Rd;
 	opcode_e opcode;
 } move_inst_t;
 
@@ -1071,10 +1080,10 @@ typedef struct packed
 	logic [2:0] ms;
 	logic [2:0] op3;
 	logic [3:0] vn;
-	logic [7:0] Rs3;
-	logic [7:0] Rs2;
-	logic [7:0] Rs1;
-	logic [7:0] Rd;
+	regspec_t Rs3;
+	regspec_t Rs2;
+	regspec_t Rs1;
+	regspec_t Rd;
 	opcode_e opcode;
 } bmap_inst_t;
 
@@ -1089,10 +1098,10 @@ typedef struct packed
 	logic [2:0] ms;
 	fround_t rm;
 	logic [3:0] vn;
-	logic [7:0] Rs3;
-	logic [7:0] Rs2;
-	logic [7:0] Rs1;
-	logic [7:0] Rd;
+	regspec_t Rs3;
+	regspec_t Rs2;
+	regspec_t Rs1;
+	regspec_t Rd;
 	opcode_e opcode;
 } fpu_inst_t;
 
@@ -1102,14 +1111,14 @@ typedef struct packed
 	logic exc;
 	logic [2:0] count;
 	logic [2:0] num;
-	logic [7:0] Rs4;
+	regspec_t Rs4;
 	logic [2:0] ms;
 	logic [2:0] op3;
 	logic [3:0] vn;
-	logic [7:0] Rs3;
-	logic [7:0] Rs2;
-	logic [7:0] Rs1;
-	logic [7:0] Rd;
+	regspec_t Rs3;
+	regspec_t Rs2;
+	regspec_t Rs1;
+	regspec_t Rd;
 	opcode_e opcode;
 } extd_inst_t;
 
@@ -1124,10 +1133,10 @@ typedef struct packed
 	logic ms;
 	logic [9:0] disp;
 	logic [2:0] dt;
-	logic [7:0] Rs3;
-	logic [7:0] Rs2;
-	logic [7:0] Rs1;
-	logic [7:0] Rd;
+	regspec_t Rs3;
+	regspec_t Rs2;
+	regspec_t Rs1;
+	regspec_t Rd;
 	opcode_e opcode;
 } vls_inst_t;
 
@@ -1513,7 +1522,6 @@ typedef struct packed {
 	cpu_types_pkg::rob_ndx_t rndx;				// reference to related ROB entry
 	cpu_types_pkg::virtual_address_t vadr;
 	cpu_types_pkg::physical_address_t padr;
-	operating_mode_t omode;	// operating mode
 	// micro-op decodes
 	logic v2p;						// 1=doing a virtual to physical address translation
 	logic load;						// 1=load
@@ -1636,11 +1644,6 @@ typedef struct packed
 	logic [5:0] cli;												// 16-bit parcel cache line index of instruction
 	cpu_types_pkg::pc_address_ex_t pc;			// PC of instruction
 	cpu_types_pkg::pc_address_ex_t hwipc;		// PC of instruction
-	cpu_types_pkg::aregno_t aRs1;
-	cpu_types_pkg::aregno_t aRs2;
-	cpu_types_pkg::aregno_t aRs3;
-	cpu_types_pkg::aregno_t aRs4;
-	cpu_types_pkg::aregno_t aRd;
 	micro_op_t uop;
 	decode_bus_t decbus;
 } pipeline_reg_t;
@@ -1724,7 +1727,7 @@ typedef struct packed {
 	logic [1:0] vn;						// vector index
 	logic chkpt_freed;
 	cpu_types_pkg::pc_address_t brtgt;
-	cpu_types_pkg::mc_address_t mcbrtgt;			// micro-code branch target
+//	cpu_types_pkg::mc_address_t mcbrtgt;			// micro-code branch target
 	logic takb;								// 1=branch evaluated to taken
 	cause_code_t exc;					// non-zero indicate exception
 	logic excv;								// 1=exception
@@ -1737,6 +1740,7 @@ typedef struct packed {
 	cpu_types_pkg::value_t argD;
 	cpu_types_pkg::value_t res;
 `endif
+	/*
 	logic updAv;
 	logic updBv;
 	logic updCv;
@@ -1748,6 +1752,7 @@ typedef struct packed {
 	cpu_types_pkg::pregno_t updBreg;
 	cpu_types_pkg::pregno_t updCreg;
 	cpu_types_pkg::pregno_t updDreg;
+	*/
 	logic [1:0] pred_tf;			// true(1)/false(2)/unknown(0)
 	logic [5:0] pred_no;			// predicate number
 	logic [3:0] pred_shadow_size;	// number of instructions in shadow
@@ -1759,11 +1764,13 @@ typedef struct packed {
 	logic could_issue_nm;			// 1 if instruction ready to issue NOP
 	logic prior_sync;					// 1 if instruction has sync prior to it
 	logic prior_fc;						// 1 if instruction has fc prior to it
+	/*
 	logic argA_vp;						// 1=argument A valid pending
 	logic argB_vp;
 	logic argC_vp;
 	logic argD_vp;
 	logic argT_vp;
+	*/
 	logic argA_v;							// 1=argument A valid
 	logic argB_v;
 	logic argC_v;
@@ -2036,6 +2043,13 @@ begin
 	OP_LDW,OP_LDWZ,OP_STW:	fnMemsz = wyde;
 	OP_LDT,OP_LDTZ,OP_STT:	fnMemsz = tetra;
 	OP_LOAD,OP_STORE:				fnMemsz = octa;
+	OP_LDIP,OP_STIP:
+		case(ir.ls.Rs1[5:4])
+		2'd0:	fnMemsz = byt;
+		2'd1:	fnMemsz = wyde;
+		2'd2:	fnMemsz = tetra;
+		2'd3:	fnMemsz = octa;
+		endcase
 	OP_STI:
 		case(ir[12:11])
 		2'd0:	fnMemsz = byt;
@@ -2056,6 +2070,13 @@ begin
 	OP_LDB,OP_LDBZ,OP_STB:	fnSel = 32'h01;
 	OP_LDW,OP_LDWZ,OP_STW:	fnSel = 32'h03;
 	OP_LDT,OP_LDTZ,OP_STT:	fnSel = 32'h0F;
+	OP_LDIP,OP_STIP:
+		case(ir.ls.Rs1[5:4])
+		2'd0:	fnSel = 32'h01;
+		2'd1:	fnSel = 32'h03;
+		2'd2:	fnSel = 32'h0F;
+		2'd3:	fnSel = 32'hFF;
+		endcase
 	OP_STI:
 		case(ir[12:11])
 		2'd0:	fnSel = 32'h01;
@@ -2141,7 +2162,7 @@ function fnDecRet;
 input Qupls4_pkg::pipeline_reg_t mux;
 begin
 	fnDecRet =
-		mux.uop.ins.any.opcode==OP_RTD;
+		mux.uop.any.opcode==OP_RTD;
 end
 endfunction
 
@@ -2212,7 +2233,7 @@ begin
 	OP_ADDI,OP_CMPI,OP_MULI,OP_DIVI,OP_SUBFI:
 		fnImmb = 1'b1;
 	OP_R3B,OP_R3W,OP_R3T,OP_R3O:
-		fnImmb = ir.ins.alu.ms[1] == 1'b1 && ir.ins.alu.N2 == 1'b1;
+		fnImmb = ir.ins.alu.ms[1] == 1'b1 && ir.ins.alu.Rs2[5] == 1'b1;
 //	OP_RTD:
 //		fnImmb = 1'b1;
 	default:	fnImmb = 1'b0;
@@ -2226,7 +2247,7 @@ begin
 	fnImmc = 1'b0;
 	case(ir.ins.any.opcode)
 	OP_R3B,OP_R3W,OP_R3T,OP_R3O:
-		fnImmc = ir.ins.alu.ms[2] == 1'b1 && ir.ins.alu.N3 == 1'b1;
+		fnImmc = ir.ins.alu.ms[2] == 1'b1 && ir.ins.alu.Rs3[5] == 1'b1;
 	OP_STI:
 		fnImmc = 1'b1;
 	default:	fnImmc = 1'b0;
@@ -2270,9 +2291,9 @@ begin
 		fnSourceRs1v = fnConstReg(ir.ins.br.Rs1) || fnImma(ir);
 	OP_LOADA,
 	OP_LDB,,OP_LDBZ,OP_LDW,OP_LDWZ,OP_LDT,OP_LDTZ,OP_LOAD:
-		fnSourceRs1v = fnConstReg(ir.ins.lsd.Rs1);
+		fnSourceRs1v = fnConstReg(ir.ins.ls.Rs1);
 	OP_STB,OP_STW,OP_STT,OP_STORE,OP_STI,OP_STPTR:
-		fnSourceRs1v = fnConstReg(ir.ins.lsd.Rs1);
+		fnSourceRs1v = fnConstReg(ir.ins.ls.Rs1);
 	default:	fnSourceRs1v = 1'b1;
 	endcase
 end
@@ -2295,9 +2316,9 @@ begin
 		fnSourceRs2v = fnConstReg(ir.ins.br.Rs2) || fnImmb(ir);
 	OP_LOADA,
 	OP_LDB,,OP_LDBZ,OP_LDW,OP_LDWZ,OP_LDT,OP_LDTZ,OP_LOAD:
-		fnSourceRs2v = fnConstReg(ir.ins.lsscn.Rs2);
+		fnSourceRs2v = fnConstReg(ir.ins.ls.Rs2);
 	OP_STB,OP_STW,OP_STT,OP_STORE,OP_STI,OP_STPTR:
-		fnSourceRs2v = fnConstReg(ir.ins.lsscn.Rs2);
+		fnSourceRs2v = fnConstReg(ir.ins.ls.Rs2);
 	default:	fnSourceRs2v = 1'b1;
 	endcase
 end

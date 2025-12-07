@@ -129,8 +129,8 @@ begin
 			rse_o[kk].push = rob[nn].op.decbus.push;
 			rse_o[kk].pop = rob[nn].op.decbus.pop;
 			rse_o[kk].count = rob[nn].op.decbus.count;
-			rse_o[kk].Rs1z = rob[nn].op.Rs1z;
-			rse_o[kk].Rs2z = rob[nn].op.Rs2z;
+			rse_o[kk].Rs1z = rob[nn].op.decbus.Rs1z;
+			rse_o[kk].Rs2z = rob[nn].op.decbus.Rs2z;
 			// branch specific
 			rse_o[kk].bt = rob[nn].bt;
 			rse_o[kk].bcc = rob[nn].op.decbus.bcc;

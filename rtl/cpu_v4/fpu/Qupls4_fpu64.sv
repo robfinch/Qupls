@@ -47,7 +47,7 @@ input clk;
 input clk3x;
 input Qupls4_pkg::operating_mode_t om;
 input idle;
-input Qupls4_pkg::instruction_t ir;
+input Qupls4_pkg::micro_op_t ir;
 input [2:0] rm;
 input [WID-1:0] a;
 input [WID-1:0] b;
@@ -328,6 +328,7 @@ begin
     default:  bus = 64'd0;
     endcase  
   */
+  /*
 	Qupls4_pkg::OP_ADD:	bus = addo;
 	Qupls4_pkg::OP_AND:	bus = ando;
 	Qupls4_pkg::OP_OR:		bus = oro;
@@ -335,6 +336,7 @@ begin
 	Qupls4_pkg::OP_SUBF:	bus = subfo;
 	Qupls4_pkg::OP_CMP:	bus = cmpo;
 	Qupls4_pkg::OP_MOV:	bus = movo;
+    */
 	Qupls4_pkg::OP_LOADA:	bus = loadao;
 	Qupls4_pkg::OP_NOP:		bus = t;	// in case of copy target
 	default:	bus = 64'd0;
@@ -347,7 +349,7 @@ always_comb
 	exc = Qupls4_pkg::FLT_NONE;
 
 task tAdd;
-input Qupls4_pkg::instruction_t ir;
+input Qupls4_pkg::micro_op_t ir;
 output [WID-1:0] bus;
 begin
 	if (Qupls4_pkg::PERFORMANCE) begin
@@ -380,7 +382,7 @@ end
 endtask
 
 task tSubf;
-input Qupls4_pkg::instruction_t ir;
+input Qupls4_pkg::micro_op_t ir;
 output [WID-1:0] bus;
 begin
 	if (Qupls4_pkg::PERFORMANCE) begin
@@ -396,7 +398,7 @@ end
 endtask
 
 task tAnd;
-input Qupls4_pkg::instruction_t ir;
+input Qupls4_pkg::micro_op_t ir;
 output [WID-1:0] bus;
 begin
 	if (Qupls4_pkg::PERFORMANCE) begin
@@ -414,7 +416,7 @@ end
 endtask
 
 task tOr;
-input Qupls4_pkg::instruction_t ir;
+input Qupls4_pkg::micro_op_t ir;
 output [WID-1:0] bus;
 begin
 	if (Qupls4_pkg::PERFORMANCE) begin
@@ -432,7 +434,7 @@ end
 endtask
 
 task tXor;
-input Qupls4_pkg::instruction_t ir;
+input Qupls4_pkg::micro_op_t ir;
 output [WID-1:0] bus;
 begin
 	if (Qupls4_pkg::PERFORMANCE) begin
@@ -450,7 +452,7 @@ end
 endtask
 
 task tMove;
-input Qupls4_pkg::instruction_t ir;
+input Qupls4_pkg::micro_op_t ir;
 output [WID-1:0] bus;
 begin
 	if (ir[31]) begin

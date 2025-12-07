@@ -139,7 +139,6 @@ reg hirq;
 reg [2:0] exc_uop_num;
 pc_address_t ret_pc;
 pc_address_ex_t misspc;
-mc_address_t miss_mcip, mcbrtgt, excmiss_mcip;
 wire [$bits(pc_address_t)-1:6] missblock;
 reg [2:0] missgrp;
 wire [2:0] missino;
@@ -306,7 +305,7 @@ Qupls4_pkg::lsq_ndx_t lq_tail, lq_head;
 wire nq;
 reg [3:0] wnq;
 
-reg brtgtv, mcbrtgtv;
+reg brtgtv;
 pc_address_ex_t pc0_f;
 pc_address_ex_t brtgt;
 reg pc_in_sync;
@@ -1199,12 +1198,12 @@ always_comb
       .PROG_EMPTY_THRESH(10),        // DECIMAL
       .PROG_FULL_THRESH(10),         // DECIMAL
       .RD_DATA_COUNT_WIDTH(5),       // DECIMAL
-      .READ_DATA_WIDTH($bits(irq_info_packet_t)),          // DECIMAL
+      .READ_DATA_WIDTH($bits(Qupls4_pkg::irq_info_packet_t)),          // DECIMAL
       .READ_MODE("fwft"),             // String
       .SIM_ASSERT_CHK(0),            // DECIMAL; 0=disable simulation messages, 1=enable simulation messages
       .USE_ADV_FEATURES("0000"),     // String
       .WAKEUP_TIME(0),               // DECIMAL
-      .WRITE_DATA_WIDTH($bits(irq_info_packet_t)),         // DECIMAL
+      .WRITE_DATA_WIDTH($bits(Qupls4_pkg::irq_info_packet_t)),         // DECIMAL
       .WR_DATA_COUNT_WIDTH(5)        // DECIMAL
    )
    irq_victim_fifo (
@@ -1440,7 +1439,7 @@ cpu_types_pkg::pc_address_t nan1e, nan2e;
 wire log_nan = (nan0|nan1|nan2|nan3) && do_commit && cmtcnt > 3'd0 && do_log_nan;
 
 generate begin : gNaNTrace
-	if (SUPPORT_NAN_TRACE) begin
+	if (Qupls4_pkg::SUPPORT_NAN_TRACE) begin
 always_ff @(posedge clk)
 if (irst|q_rst[14]) begin
 	nan_log_addr <= 9'd0;;
@@ -2935,10 +2934,10 @@ Qupls4_pipeline_ren #(.NPORT(NREG_RPORTS)) uren1
 	.cmtbiv(do_commit && !rob[head1].v && cmtcnt > 1),
 	.cmtciv(do_commit && !rob[head2].v && cmtcnt > 2),
 	.cmtdiv(do_commit && !rob[head3].v && cmtcnt > 3),
-	.cmtaa(rob[head0].op.aRd),
-	.cmtba(rob[head1].op.aRd),
-	.cmtca(rob[head2].op.aRd),
-	.cmtda(rob[head3].op.aRd),
+	.cmtaa(rob[head0].op.decbus.Rd),
+	.cmtba(rob[head1].op.decbus.Rd),
+	.cmtca(rob[head2].op.decbus.Rd),
+	.cmtda(rob[head3].op.decbus.Rd),
 	.cmtap(rob[head0].op.nRd),
 	.cmtbp(rob[head1].op.nRd),
 	.cmtcp(rob[head2].op.nRd),
@@ -3399,7 +3398,7 @@ Qupls4_func_result_queue ufrq2
 // When doing a divide we know the result will not be a capability, so the
 // tag is simply defaulted to zero.
 generate begin : gDivFRQ
-if (SUPPORT_IDIV) begin
+if (Qupls4_pkg::SUPPORT_IDIV) begin
 Qupls4_func_result_queue ufrq3
 (
 	.rst_i(irst),
@@ -3435,7 +3434,7 @@ endgenerate
 // tag is simply defaulted to zero.
 
 generate begin : gFMAFRQ
-if (NFMA > 0) begin
+if (Qupls4_pkg::NFMA > 0) begin
 Qupls4_func_result_queue ufrq4
 (
 	.rst_i(irst),
@@ -3464,7 +3463,7 @@ else begin
 	assign fuq_cp[4] = 4'd0;
 	assign fuq_empty[4] = 1'b1;
 end
-if (NFMA > 1) begin
+if (Qupls4_pkg::NFMA > 1) begin
 Qupls4_func_result_queue ufrq5
 (
 	.rst_i(irst),
@@ -4214,7 +4213,7 @@ Stark_meta_imul uimul0
 );
 
 generate begin : gIDiv
-if (SUPPORT_IDIV)
+if (Qupls4_pkg::SUPPORT_IDIV)
 Qupls4_meta_idiv uidiv0
 (
 	.rst(irst),
@@ -4341,7 +4340,7 @@ endgenerate
 generate begin : gFpu
 if (Qupls4_pkg::NFPU > 0) begin
 	if (Qupls4_pkg::SUPPORT_QUAD_PRECISION||Qupls4_pkg::SUPPORT_CAPABILITIES) begin
-		Stark_meta_fpu #(.WID(128)) ufpu1
+		Qupls4_meta_fpu #(.WID(128)) ufpu1
 		(
 			.rst(irst),
 			.clk(clk),
@@ -4361,7 +4360,7 @@ if (Qupls4_pkg::NFPU > 0) begin
 		);
 	end
 	else begin
-		Stark_meta_fpu #(.WID(64)) ufpu1
+		Qupls4_meta_fpu #(.WID(64)) ufpu1
 		(
 			.rst(irst),
 			.clk(clk),
@@ -4382,7 +4381,7 @@ if (Qupls4_pkg::NFPU > 0) begin
 	end
 end
 if (Qupls4_pkg::NFPU > 1) begin
-	Stark_meta_fpu #(.WID(64)) ufpu2
+	Qupls4_meta_fpu #(.WID(64)) ufpu2
 	(
     .rst(irst),
     .clk(clk),
@@ -5138,7 +5137,7 @@ uimulst0
 always_ff @(posedge clk) sau0_ldd <= sau0_ld;
 
 generate begin : gIDivStation
-if (SUPPORT_IDIV)
+if (Qupls4_pkg::SUPPORT_IDIV)
 Qupls4_reservation_station #(
 	.FUNCUNIT(4'd3),
 	.NRSE(1),
@@ -5206,7 +5205,7 @@ generate begin : gFpuStat
 				Qupls4_reservation_station #(
 					.FUNCUNIT(4'd4),
 					.NRSE(1),
-					.NSARG(3+SUPPORT_FDP)
+					.NSARG(3+Qupls4_pkg::SUPPORT_FDP)
 				)
 				ufmast1
 				(
@@ -5248,7 +5247,7 @@ generate begin : gFpuStat
 				Qupls4_reservation_station #(
 					.FUNCUNIT(4'd5),
 					.NRSE(1),
-					.NSARG(3+SUPPORT_FDP)
+					.NSARG(3+Qupls4_pkg::SUPPORT_FDP)
 				)
 				ufmast2
 				(
@@ -6644,7 +6643,7 @@ else begin
 		
 		for (n3 = 0; n3 < Qupls4_pkg::ROB_ENTRIES; n3 = n3 + 1) begin
 			if (fcu_skip_list[n3]) begin
-				pgh[n3>>2].irq <= {$bits(irq_info_packet_t){1'b0}};
+				pgh[n3>>2].irq <= {$bits(Qupls4_pkg::irq_info_packet_t){1'b0}};
 			end
 		end
 	end
@@ -6655,7 +6654,7 @@ else begin
 	
 	for (n3 = 0; n3 < Qupls4_pkg::ROB_ENTRIES; n3 = n3 + 1) begin
 		if (rob[n3].op.uop.any.count==3'd0 && rob[n3].op.hwi)
-			case(UOP_STRATEGY)
+			case(Qupls4_pkg::UOP_STRATEGY)
 			1:	tMoveIRQToInstructionStart(n3);
 			2:	tDeferToNextInstruction(n3);
 			3:	;
@@ -6706,11 +6705,10 @@ wb_mux #(.NPORT(6)) utmrmux1
 (
 	.rst_i(irst),
 	.clk_i(clk),
-	.cmd_i(cmds),
-	.cmd_o(fta_req),
+	.req_i(cmds),
+	.req_o(fta_req),
 	.resp_i(ptable_resp.ack ? ptable_resp : fta_resp),
-	.resp_o(resps),
-	.busy_o(busy)
+	.resp_o(resps)
 );
 
 // ----------------------------------------------------------------------------
@@ -7670,7 +7668,6 @@ begin
 	fcu_new <= FALSE;
 	brtgtv <= INV;
 	brtgtvr <= INV;
-	mcbrtgtv <= INV;
 //	fcu_argC <= 'd0;
 	/*
 	for (n11 = 0; n11 < Qupls4_pkg::NDATA_PORTS; n11 = n11 + 1) begin
@@ -7877,11 +7874,11 @@ begin
 		rob[tail].exc <= Qupls4_pkg::FLT_NONE;
 		rob[tail].excv <= FALSE;
 	end
-	rob[tail].argA_v <= fnSourceRs1v(robe.op) | db.has_imma;
-	rob[tail].argB_v <= fnSourceRs2v(robe.op) | (db.has_Rs2 ? 1'b0 : db.has_immb);
-	rob[tail].argC_v <= fnSourceRs3v(robe.op) | db.has_immc;
-	rob[tail].argD_v <= fnSourceRs4v(robe.op);
-	rob[tail].argT_v <= fnSourceRdv(robe.op);
+	rob[tail].argA_v <= Qupls4_pkg::fnSourceRs1v(robe.op) | db.has_imma;
+	rob[tail].argB_v <= Qupls4_pkg::fnSourceRs2v(robe.op) | (db.has_Rs2 ? 1'b0 : db.has_immb);
+	rob[tail].argC_v <= Qupls4_pkg::fnSourceRs3v(robe.op) | db.has_immc;
+	rob[tail].argD_v <= Qupls4_pkg::fnSourceRs4v(robe.op);
+	rob[tail].argT_v <= Qupls4_pkg::fnSourceRdv(robe.op);
 	rob[tail].all_args_valid <= FALSE;
 	/*
 		(fnSourceRs1v(ins) | db.has_imma) &&
@@ -8343,7 +8340,7 @@ begin
 	for (nn = 1; nn < 16; nn = nn + 1)
 		pc_stack[nn] <= pc_stack[nn-1];
 	pc_stack[0] <= retpc;
-	if (UOP_STRATEGY==2) begin
+	if (Qupls4_pkg::UOP_STRATEGY==2) begin
 		for (nn = 1; nn < 16; nn = nn + 1)
 			upc_stack[nn] <= upc_stack[nn-1];
 		upc_stack[0] <= {1'b0,uop_num};
@@ -8392,7 +8389,7 @@ begin
 	for (nn = 1; nn < 16; nn = nn + 1)
 		pc_stack[nn] <= pc_stack[nn-1];
 	pc_stack[0] <= retpc;
-	if (UOP_STRATEGY==2) begin
+	if (Qupls4_pkg::UOP_STRATEGY==2) begin
 		for (nn = 1; nn < 16; nn = nn + 1)
 			upc_stack[nn] <= upc_stack[nn-1];
 		upc_stack[0] <= {1'b0,uop_num};
@@ -8452,7 +8449,7 @@ begin
 		pc_stack[nn] <=	pc_stack[nn+1];
 	exc_ret_pc <= pc_stack[0];
 	exc_ret_carry_mod <= csr_carry_mod;
-	if (UOP_STRATEGY==2) begin
+	if (Qupls4_pkg::UOP_STRATEGY==2) begin
 		for (nn = 0; nn < 15; nn = nn + 1)
 			upc_stack[nn] <= upc_stack[nn+1];
 		exc_uop_num <= upc_stack[0][2:0];
@@ -8499,7 +8496,7 @@ begin
 				rob[ndx].v <= INV;
 			end
 		end
-		else if (rob[m2].v && rob[m2].sn < rob[ndx].sn && rob[m2].op.decbus.pred && PRED_SHADOW > 1) begin
+		else if (rob[m2].v && rob[m2].sn < rob[ndx].sn && rob[m2].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 1) begin
 			if (rob[m2].pred_mask[3:2]==2'd0) begin
 				rob[ndx].pred_bit <= TRUE;
 				rob[ndx].pred_bitv <= VAL;
@@ -8508,7 +8505,7 @@ begin
 				rob[ndx].v <= INV;
 			end
 		end
-		else if (rob[m3].v && rob[m3].sn < rob[ndx].sn && rob[m3].op.decbus.pred && PRED_SHADOW > 2) begin
+		else if (rob[m3].v && rob[m3].sn < rob[ndx].sn && rob[m3].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 2) begin
 			if (rob[m3].pred_mask[5:4]==2'd0) begin
 				rob[ndx].pred_bit <= TRUE;
 				rob[ndx].pred_bitv <= VAL;
@@ -8517,7 +8514,7 @@ begin
 				rob[ndx].v <= INV;
 			end
 		end
-		else if (rob[m4].v && rob[m4].sn < rob[ndx].sn && rob[m4].op.decbus.pred && PRED_SHADOW > 3) begin
+		else if (rob[m4].v && rob[m4].sn < rob[ndx].sn && rob[m4].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 3) begin
 			if (rob[m4].pred_mask[7:6]==2'd0) begin
 				rob[ndx].pred_bit <= TRUE;
 				rob[ndx].pred_bitv <= VAL;
@@ -8526,7 +8523,7 @@ begin
 				rob[ndx].v <= INV;
 			end
 		end
-		else if (rob[m5].v && rob[m5].sn < rob[ndx].sn && rob[m5].op.decbus.pred && PRED_SHADOW > 4) begin
+		else if (rob[m5].v && rob[m5].sn < rob[ndx].sn && rob[m5].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 4) begin
 			if (rob[m5].pred_mask[9:8]==2'd0) begin
 				rob[ndx].pred_bit <= TRUE;
 				rob[ndx].pred_bitv <= VAL;
@@ -8535,7 +8532,7 @@ begin
 				rob[ndx].v <= INV;
 			end
 		end
-		else if (rob[m6].v && rob[m6].sn < rob[ndx].sn && rob[m6].op.decbus.pred && PRED_SHADOW > 5) begin
+		else if (rob[m6].v && rob[m6].sn < rob[ndx].sn && rob[m6].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 5) begin
 			if (rob[m6].pred_mask[11:10]==2'd0) begin
 				rob[ndx].pred_bit <= TRUE;
 				rob[ndx].pred_bitv <= VAL;
@@ -8544,7 +8541,7 @@ begin
 				rob[ndx].v <= INV;
 			end
 		end
-		else if (rob[m7].v && rob[m6].sn < rob[ndx].sn && rob[m7].op.decbus.pred && PRED_SHADOW > 6) begin
+		else if (rob[m7].v && rob[m6].sn < rob[ndx].sn && rob[m7].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 6) begin
 			if (rob[m7].pred_mask[13:12]==2'd0) begin
 				rob[ndx].pred_bit <= TRUE;
 				rob[ndx].pred_bitv <= VAL;
@@ -8592,19 +8589,19 @@ begin
 		if (rob[m1].v && rob[m1].sn < rob[ndx].sn && rob[m1].op.decbus.pred) begin
 			rob[m1].pred_mask <= 14'd0;
 		end
-		else if (rob[m2].v && rob[m2].sn < rob[ndx].sn && rob[m2].op.decbus.pred && PRED_SHADOW > 1) begin
+		else if (rob[m2].v && rob[m2].sn < rob[ndx].sn && rob[m2].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 1) begin
 			rob[m1].pred_bit = TRUE;
 			rob[m1].pred_bitv = VAL;
 			rob[m2].pred_mask <= 14'd0;
 		end
-		else if (rob[m3].v && rob[m3].sn < rob[ndx].sn && rob[m3].op.decbus.pred && PRED_SHADOW > 2) begin
+		else if (rob[m3].v && rob[m3].sn < rob[ndx].sn && rob[m3].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 2) begin
 			rob[m1].pred_bit = TRUE;
 			rob[m1].pred_bitv = VAL;
 			rob[m2].pred_bit = TRUE;
 			rob[m2].pred_bitv = VAL;
 			rob[m3].pred_mask <= 14'd0;
 		end
-		else if (rob[m4].v && rob[m4].sn < rob[ndx].sn && rob[m4].op.decbus.pred && PRED_SHADOW > 3) begin
+		else if (rob[m4].v && rob[m4].sn < rob[ndx].sn && rob[m4].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 3) begin
 			rob[m1].pred_bit = TRUE;
 			rob[m1].pred_bitv = VAL;
 			rob[m2].pred_bit = TRUE;
@@ -8613,7 +8610,7 @@ begin
 			rob[m3].pred_bitv = VAL;
 			rob[m4].pred_mask <= 14'd0;
 		end
-		else if (rob[m5].v && rob[m5].sn < rob[ndx].sn && rob[m5].op.decbus.pred && PRED_SHADOW > 4) begin
+		else if (rob[m5].v && rob[m5].sn < rob[ndx].sn && rob[m5].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 4) begin
 			rob[m1].pred_bit = TRUE;
 			rob[m1].pred_bitv = VAL;
 			rob[m2].pred_bit = TRUE;
@@ -8624,7 +8621,7 @@ begin
 			rob[m4].pred_bitv = VAL;
 			rob[m5].pred_mask <= 14'd0;
 		end
-		else if (rob[m6].v && rob[m6].sn < rob[ndx].sn && rob[m6].op.decbus.pred && PRED_SHADOW > 5) begin
+		else if (rob[m6].v && rob[m6].sn < rob[ndx].sn && rob[m6].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 5) begin
 			rob[m1].pred_bit = TRUE;
 			rob[m1].pred_bitv = VAL;
 			rob[m2].pred_bit = TRUE;
@@ -8637,7 +8634,7 @@ begin
 			rob[m5].pred_bitv = VAL;
 			rob[m6].pred_mask <= 14'd0;
 		end
-		else if (rob[m7].v && rob[m7].sn < rob[ndx].sn && rob[m7].op.decbus.pred && PRED_SHADOW > 6) begin
+		else if (rob[m7].v && rob[m7].sn < rob[ndx].sn && rob[m7].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 6) begin
 			rob[m1].pred_bit = TRUE;
 			rob[m1].pred_bitv = VAL;
 			rob[m2].pred_bit = TRUE;

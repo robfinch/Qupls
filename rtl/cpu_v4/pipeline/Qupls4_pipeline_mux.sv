@@ -166,14 +166,16 @@ begin
 	nopi.pc.pc = Qupls4_pkg::RSTPC;
 	nopi.uop = {26'd0,Qupls4_pkg::OP_NOP};
 	nopi.uop.any.count = 3'd1;
-	nopi.aRs1 = 8'd0;
-	nopi.aRs2 = 8'd0;
-	nopi.aRs3 = 8'd0;
-	nopi.aRd = 8'd0;
+	nopi.uop.r3.Rs1 = 8'd0;
+	nopi.uop.r3.Rs2 = 8'd0;
+	nopi.uop.r3.Rs3 = 8'd0;
+	nopi.uop.r3.Rd = 8'd0;
 	nopi.v = 1'b1;
+	/* NOP will be decoded later
 	nopi.decbus.Rdz = 1'b1;
 	nopi.decbus.nop = 1'b1;
 	nopi.decbus.alu = 1'b1;
+	*/
 end
 
 always_comb regcnt = regcnt_i;
@@ -349,47 +351,47 @@ cpu_types_pkg::pc_address_ex_t bsr2_tgt;
 cpu_types_pkg::pc_address_ex_t bsr3_tgt;
 
 
-always_comb bsr0 = fnDecBsr(ins0_mux);
-always_comb bsr1 = fnDecBsr(ins1_mux);
-always_comb bsr2 = fnDecBsr(ins2_mux);
-always_comb bsr3 = fnDecBsr(ins3_mux);
-always_comb bra0 = fnDecBra(ins0_mux);
-always_comb bra1 = fnDecBra(ins1_mux);
-always_comb bra2 = fnDecBra(ins2_mux);
-always_comb bra3 = fnDecBra(ins3_mux);
-always_comb bcc0 = fnIsBranch(ins0_mux.uop);
-always_comb bcc1 = fnIsBranch(ins1_mux.uop);
-always_comb bcc2 = fnIsBranch(ins2_mux.uop);
-always_comb bcc3 = fnIsBranch(ins3_mux.uop);
+always_comb bsr0 = Qupls4_pkg::fnDecBsr(ins0_mux);
+always_comb bsr1 = Qupls4_pkg::fnDecBsr(ins1_mux);
+always_comb bsr2 = Qupls4_pkg::fnDecBsr(ins2_mux);
+always_comb bsr3 = Qupls4_pkg::fnDecBsr(ins3_mux);
+always_comb bra0 = Qupls4_pkg::fnDecBra(ins0_mux);
+always_comb bra1 = Qupls4_pkg::fnDecBra(ins1_mux);
+always_comb bra2 = Qupls4_pkg::fnDecBra(ins2_mux);
+always_comb bra3 = Qupls4_pkg::fnDecBra(ins3_mux);
+always_comb bcc0 = Qupls4_pkg::fnIsBranch(ins0_mux.uop);
+always_comb bcc1 = Qupls4_pkg::fnIsBranch(ins1_mux.uop);
+always_comb bcc2 = Qupls4_pkg::fnIsBranch(ins2_mux.uop);
+always_comb bcc3 = Qupls4_pkg::fnIsBranch(ins3_mux.uop);
 
-always_comb jmp0 = fnDecJmp(ins0_mux);
-always_comb jmp1 = fnDecJmp(ins1_mux);
-always_comb jmp2 = fnDecJmp(ins2_mux);
-always_comb jmp3 = fnDecJmp(ins3_mux);
-always_comb bra02 = fnDecBra2(ins0_mux);
-always_comb bra12 = fnDecBra2(ins1_mux);
-always_comb bra22 = fnDecBra2(ins2_mux);
-always_comb bra32 = fnDecBra2(ins3_mux);
-always_comb jsr0 = fnDecJsr(ins0_mux);
-always_comb jsr1 = fnDecJsr(ins1_mux);
-always_comb jsr2 = fnDecJsr(ins2_mux);
-always_comb jsr3 = fnDecJsr(ins3_mux);
-always_comb bsr02 = fnDecBsr2(ins0_mux);
-always_comb bsr12 = fnDecBsr2(ins1_mux);
-always_comb bsr22 = fnDecBsr2(ins2_mux);
-always_comb bsr32 = fnDecBsr2(ins3_mux);
-always_comb rtd0 = fnDecRet(ins0_mux);
-always_comb rtd1 = fnDecRet(ins1_mux);
-always_comb rtd2 = fnDecRet(ins2_mux);
-always_comb rtd3 = fnDecRet(ins3_mux);
-always_comb jmpr0 = fnDecJmpr(ins0_mux);
-always_comb jmpr1 = fnDecJmpr(ins1_mux);
-always_comb jmpr2 = fnDecJmpr(ins2_mux);
-always_comb jmpr3 = fnDecJmpr(ins3_mux);
-always_comb jsrr0 = fnDecJsrr(ins0_mux);
-always_comb jsrr1 = fnDecJsrr(ins1_mux);
-always_comb jsrr2 = fnDecJsrr(ins2_mux);
-always_comb jsrr3 = fnDecJsrr(ins3_mux);
+always_comb jmp0 = Qupls4_pkg::fnDecJmp(ins0_mux);
+always_comb jmp1 = Qupls4_pkg::fnDecJmp(ins1_mux);
+always_comb jmp2 = Qupls4_pkg::fnDecJmp(ins2_mux);
+always_comb jmp3 = Qupls4_pkg::fnDecJmp(ins3_mux);
+always_comb bra02 = Qupls4_pkg::fnDecBra2(ins0_mux);
+always_comb bra12 = Qupls4_pkg::fnDecBra2(ins1_mux);
+always_comb bra22 = Qupls4_pkg::fnDecBra2(ins2_mux);
+always_comb bra32 = Qupls4_pkg::fnDecBra2(ins3_mux);
+always_comb jsr0 = Qupls4_pkg::fnDecJsr(ins0_mux);
+always_comb jsr1 = Qupls4_pkg::fnDecJsr(ins1_mux);
+always_comb jsr2 = Qupls4_pkg::fnDecJsr(ins2_mux);
+always_comb jsr3 = Qupls4_pkg::fnDecJsr(ins3_mux);
+always_comb bsr02 = Qupls4_pkg::fnDecBsr2(ins0_mux);
+always_comb bsr12 = Qupls4_pkg::fnDecBsr2(ins1_mux);
+always_comb bsr22 = Qupls4_pkg::fnDecBsr2(ins2_mux);
+always_comb bsr32 = Qupls4_pkg::fnDecBsr2(ins3_mux);
+always_comb rtd0 = Qupls4_pkg::fnDecRet(ins0_mux);
+always_comb rtd1 = Qupls4_pkg::fnDecRet(ins1_mux);
+always_comb rtd2 = Qupls4_pkg::fnDecRet(ins2_mux);
+always_comb rtd3 = Qupls4_pkg::fnDecRet(ins3_mux);
+always_comb jmpr0 = Qupls4_pkg::fnDecJmpr(ins0_mux);
+always_comb jmpr1 = Qupls4_pkg::fnDecJmpr(ins1_mux);
+always_comb jmpr2 = Qupls4_pkg::fnDecJmpr(ins2_mux);
+always_comb jmpr3 = Qupls4_pkg::fnDecJmpr(ins3_mux);
+always_comb jsrr0 = Qupls4_pkg::fnDecJsrr(ins0_mux);
+always_comb jsrr1 = Qupls4_pkg::fnDecJsrr(ins1_mux);
+always_comb jsrr2 = Qupls4_pkg::fnDecJsrr(ins2_mux);
+always_comb jsrr3 = Qupls4_pkg::fnDecJsrr(ins3_mux);
 /*
 always_comb jmpi0 = ins0_mux.ins.any.opcode==OP_JSRI && ins0_mux.ins.bsr.Rt==3'd0;
 always_comb jmpi1 = ins1_mux.ins.any.opcode==OP_JSRI && ins1_mux.ins.bsr.Rt==3'd0;
@@ -599,11 +601,13 @@ begin
 	ins_o = ins_i;
 	ins_o.pc = pc;
 	ins_o.bt = takb;
+	/*
   ins_o.aRs1 = {ins_i.uop.alu.Rs1};
   ins_o.aRs2 = {ins_i.uop.alu.Rs2};
   ins_o.aRs3 = {ins_i.uop.alu.Rs3};
 //  ins_o.aRs3 = {ins_i.ins.alu.Rs3};
   ins_o.aRd = {ins_i.uop.alu.Rd};
+  */
 //	ins_o.decbus.Rtz = ins_o.aRt==8'd0;
 	// Under construction
 	// If BTB did not match next predictor, invalidate instruction.

@@ -36,7 +36,7 @@
 
 import Qupls4_pkg::*;
 
-module Qupls4_decode_store(instr, store, vstore, vstore_ndx,);
+module Qupls4_decode_store(instr, store, vstore, vstore_ndx);
 input Qupls4_pkg::micro_op_t instr;
 output store;
 output vstore;
@@ -49,6 +49,7 @@ begin
 	Qupls4_pkg::OP_STB,Qupls4_pkg::OP_STW,
 	Qupls4_pkg::OP_STT,Qupls4_pkg::OP_STORE,
 	Qupls4_pkg::OP_STT,Qupls4_pkg::OP_STI,
+	Qupls4_pkg::OP_STT,Qupls4_pkg::OP_STIP,
 	Qupls4_pkg::OP_STPTR:
 		fnIsStore = 1'b1;
 	default:
@@ -83,6 +84,5 @@ endfunction
 assign store = fnIsStore(instr);
 assign vstore = fnIsStoreVec(instr);
 assign vstore_ndx = fnIsStoreVn(instr);
-assign astf = 1'b0;
 
 endmodule

@@ -46,7 +46,7 @@ input clk5x;
 input [4:0] ph4;
 input [1:0] backout_st2;
 input rob_ndx_t fcu_id;
-input pipeline_group_hdr_t [Qupls4_pkg::ROB_ENTRIES/4-1:0] pgh;
+input Qupls4_pkg::pipeline_group_hdr_t [Qupls4_pkg::ROB_ENTRIES/4-1:0] pgh;
 output reg setcp;
 output reg [5:0] setcp_grp;
 output wire freecp;

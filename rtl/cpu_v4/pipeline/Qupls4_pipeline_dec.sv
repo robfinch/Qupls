@@ -104,8 +104,8 @@ reg [11:0] atom_mask_o;
 reg [31:0] nops;
 reg hilo;
 reg hwi_ignore;
-regs_t fregs_i;
-regs_t fregs_o;
+Qupls4_pkg::regs_t fregs_i;
+Qupls4_pkg::regs_t fregs_o;
 
 always @(posedge clk)
 if (rst)
@@ -151,7 +151,7 @@ Stark_min_constant_decoder umcd1 (cline[511:0], nops[15:0]);
 Stark_min_constant_decoder umcd2 (cline[1023:512], nops[31:16]);
 
 wire [2:0] uop_count [0:3];
-Qupls4_pkg::micro_op_t [7:0] uop [0:3];
+Qupls4_pkg::micro_op_t [31:0] uop [0:3];
 Qupls4_pkg::micro_op_t [31:0] uop_buf;
 
 Qupls4_microop uuop1

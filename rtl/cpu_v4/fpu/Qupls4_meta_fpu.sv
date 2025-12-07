@@ -61,7 +61,7 @@ output Qupls4_pkg::cause_code_t exc;
 Qupls4_pkg::reservation_station_entry_t rse1,rse2;
 Qupls4_pkg::operating_mode_t om;
 reg [1:0] prc;
-Qupls4_pkg::instruction_t ir;
+Qupls4_pkg::micro_op_t ir;
 reg [WID-1:0] a;
 reg [WID-1:0] b;
 reg [WID-1:0] c;
@@ -71,11 +71,11 @@ aregno_t aRd_i;
 reg [1:0] stomp_con;	// stomp conveyor
 reg [WID/8:0] we,we1,we2;
 always_comb om = rse_i.om;
-always_comb ir = rse_i.ins;
-always_comb a = rse_i.argA;
-always_comb b = rse_i.argB;
-always_comb c = rse_i.argC;
-always_comb t = rse_i.argD;
+always_comb ir = rse_i.uop;
+always_comb a = rse_i.arg[0].val;
+always_comb b = rse_i.arg[1].val;
+always_comb c = rse_i.arg[2].val;
+always_comb t = rse_i.arg[3].val;
 always_comb i = rse_i.argI;
 always_comb aRd_i = rse_i.aRd;
 
@@ -88,7 +88,8 @@ genvar g,mm;
 
 generate begin : gPrec
 if (Qupls4_pkg::SUPPORT_PREC) begin
-for (g = 0; g < WID/16; g = g + 1)
+//for (g = 0; g < WID/16; g = g + 1)
+/*
 	Qupls4_seqFPU2c #(.PREC("H")) ufpu1
 	(
 		.rst(rst),
@@ -100,6 +101,7 @@ for (g = 0; g < WID/16; g = g + 1)
 		.o(o16[g*16+15:g*16]),
 		.sr()
 	);
+*/
 /*
 	Qupls4_fpu16(
 		.rst(rst),
@@ -117,7 +119,8 @@ for (g = 0; g < WID/16; g = g + 1)
 		.done()
 	);
 */
-for (g = 0; g < WID/32; g = g + 1)
+//for (g = 0; g < WID/32; g = g + 1)
+/*
 	Qupls4_seqFPU2c #(.PREC("S")) ufpu1
 	(
 		.rst(rst),
@@ -129,6 +132,7 @@ for (g = 0; g < WID/32; g = g + 1)
 		.o(o32[g*32+31:g*32]),
 		.sr()
 	);
+*/
 /*
 	Qupls4_fpu32(
 		.rst(rst),
@@ -146,7 +150,8 @@ for (g = 0; g < WID/32; g = g + 1)
 		.done()
 	);
 */
-for (g = 0; g < WID/64; g = g + 1)
+//for (g = 0; g < WID/64; g = g + 1)
+/*
 	Qupls4_seqFPU2c #(.PREC("D")) ufpu1
 	(
 		.rst(rst),
@@ -157,6 +162,7 @@ for (g = 0; g < WID/64; g = g + 1)
 		.o(o64[g*64+63:g*64]),
 		.sr(sr64)
 	);
+*/
 /*
 	Qupls4_fpu64 (
 		.rst(rst),
@@ -252,7 +258,7 @@ else
 generate begin : gCptgt
 	for (mm = 0; mm < WID/8; mm = mm + 1) begin
     always_comb
-    	if (stomp_con[1]||rse2.ins.any.opcode==Qupls4_pkg::OP_NOP)
+    	if (stomp_con[1]||rse2.uop.any.opcode==Qupls4_pkg::OP_NOP)
         o[mm*8+7:mm*8] = t[mm*8+7:mm*8];
       else if (cptgt[mm])
         o[mm*8+7:mm*8] = z ? 8'h00 : t[mm*8+7:mm*8];

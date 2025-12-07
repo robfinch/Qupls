@@ -213,7 +213,6 @@ reg [5:0] sel_tran;
 wire [5:0] sel_qe;
 wire virt_adr_cd;
 reg virt_adr_cdd;
-wire [127:0] region_dat;
 reg [31:16] pmtadr;
 reg [63:0] virt_adr, virt_adrd;
 reg [63:0] phys_adr;
@@ -889,7 +888,7 @@ else begin
 	ptable_walker_pkg::TLB_PTE_CYC:
 		begin
 			ftam_req_cyc <= TRUE;
-			req_state <= ptable_walker_pkg::TLB_PTE_ACK;
+			access_state <= ptable_walker_pkg::TLB_PTE_ACK;
 		end
 	ptable_walker_pkg::TLB_PTE_ACK:
 		if (ftam_req_ack) begin

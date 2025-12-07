@@ -197,7 +197,7 @@ begin
 		dispatch = TRUE;
 	end
 	else begin
-		rsei = {$bits(reservation_station_entry_t){1'b0}};
+		rsei = {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
 		dispatch = FALSE;
 	end
 end
@@ -219,10 +219,10 @@ end
 */
 always_ff @(posedge clk)
 if (rst) begin
-  rse[0] <= {$bits(reservation_station_entry_t){1'b0}};
-  rse[1] <= {$bits(reservation_station_entry_t){1'b0}};
-  rse[2] <= {$bits(reservation_station_entry_t){1'b0}};
-  rse_o <= {$bits(reservation_station_entry_t){1'b0}};
+  rse[0] <= {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
+  rse[1] <= {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
+  rse[2] <= {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
+  rse_o <= {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
 	issue <= FALSE;
   pstall <= FALSE;
 end

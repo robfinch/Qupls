@@ -36,9 +36,9 @@
 
 import const_pkg::*;
 import fta_bus_pkg::*;
-import QuplsMmupkg::*;
+import mmu_pkg::*;
 import QuplsPkg::*;
-import Qupls_ptable_walker_pkg::*;
+import ptable_walker_pkg::*;
 
 module Qupls_ptw_miss_queue(rst, clk, state, ptbr,
 	commit0_id, commit0_idv, commit1_id, commit1_idv, commit2_id, commit2_idv,
@@ -48,7 +48,7 @@ module Qupls_ptw_miss_queue(rst, clk, state, ptbr,
 
 input rst;
 input clk;
-input Qupls_ptable_walker_pkg::ptw_state_t state;
+input ptable_walker_pkg::ptw_state_t state;
 input ptbr_t ptbr;
 input rob_ndx_t commit0_id;
 input commit0_idv;
@@ -179,7 +179,7 @@ else begin
 	end
 
 	case(state)
-	Qupls_ptable_walker_pkg::IDLE:
+	ptable_walker_pkg::IDLE:
 		begin
 			if (dump_qe >= 0) begin
 				miss_queue[dump_qe].v <= 1'b0;

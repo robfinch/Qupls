@@ -184,12 +184,12 @@ else begin
 	if (!restore && (|backout_state)) begin
 		bo_wr <= TRUE;//backout_id != fcu_id;
 		if (rob[backout_id].sn > rob[fcu_id].sn) begin
-			bo_areg <= rob[backout_id].op.aRd;
+			bo_areg <= rob[backout_id].op.decbus.Rd;
 			bo_preg <= rob[backout_id].op.pRd;
 			bo_nreg <= rob[backout_id].op.nRd;
 		end
 		else begin
-			bo_areg <= rob[backout_id].op.aRd;
+			bo_areg <= rob[backout_id].op.decbus.Rd;
 			bo_preg <= rob[backout_id].op.nRd;
 			bo_nreg <= rob[backout_id].op.pRd;
 		end
@@ -202,13 +202,13 @@ begin
 		$display("-  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -");
 		if (rob[backout_id].sn > rob[fcu_id].sn)
 			$display("Qupls4CPU RAT backout: %d -> %d/%d freed: %d", 
-				rob[backout_id].op.aRd,
-				rob[backout_id].op.aRd, rob[backout_id].op.pRd,
+				rob[backout_id].op.decbus.Rd,
+				rob[backout_id].op.decbus.Rd, rob[backout_id].op.pRd,
 				rob[backout_id].op.nRd);
 		else
 			$display("Qupls4CPU RAT forward: %d -> %d/%d freed: %d", 
-				rob[backout_id].op.aRd,
-				rob[backout_id].op.aRd, rob[backout_id].op.nRd,
+				rob[backout_id].op.decbus.Rd,
+				rob[backout_id].op.decbus.Rd, rob[backout_id].op.nRd,
 				rob[backout_id].op.pRd);
 		$display("-  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -");
 	end

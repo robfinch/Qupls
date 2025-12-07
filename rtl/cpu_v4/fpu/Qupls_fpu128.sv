@@ -46,7 +46,7 @@ input rst;
 input clk;
 input Qupls4_pkg::operating_mode_t om;
 input idle;
-input Qupls4_pkg::instruction_t ir;
+input Qupls4_pkg::micro_op_t ir;
 input [2:0] rm;
 input [63:0] a;
 input [63:0] b;

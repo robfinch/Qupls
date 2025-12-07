@@ -155,24 +155,25 @@ Qupls4_decode_nop unop1
 	.nop(db.nop)
 );
 
-Stark_decode_fc ufc1
+Qupls4_decode_fc ufc1
 (
 	.instr(instr),
 	.fc(db.fc)
 );
 
-Stark_decode_cjb ucjb1
+Qupls4_decode_cjb ucjb1
 (
 	.instr(instr),
 	.cjb(db.cjb)
 );
 
-Stark_decode_conditional_branch udecbr
+Qupls4_decode_conditional_branch udecbr
 (
 	.instr(instr),
 	.branch(db.br)
 );
 
+/*
 Stark_decode_predicate_branch udecpbr
 (
 	.instr(instr),
@@ -181,7 +182,7 @@ Stark_decode_predicate_branch udecpbr
 	.atom_mask(db.pred_atom_mask),
 	.count(pred_shadow_count)
 );
-
+*/
 /*
 Stark_decode_mcb udecmcb
 (
@@ -216,13 +217,13 @@ Stark_decode_alu0 udcalu0
 	.alu0(db.alu0)
 );
 */
-Stark_decode_sau usaudec1
+Qupls4_decode_sau usaudec1
 (
 	.instr(instr),
 	.sau(db.sau)
 );
 
-Stark_decode_sau0 udcsau0
+Qupls4_decode_sau0 udcsau0
 (
 	.instr(instr),
 	.sau0(db.sau0)
@@ -253,7 +254,7 @@ Stark_decode_mula umulu1
 	.mul(db.mula)
 );
 
-Stark_decode_div udiv1
+Qupls4_decode_div udiv1
 (
 	.instr(instr),
 	.div(db.div)
@@ -423,7 +424,7 @@ else begin
 		if (excRs1|excRs2|excRs3|excRd)
 			dbo.cause <= Qupls4_pkg::FLT_BADREG;
 		// Is the predicate shadow count within range?
-		if (pred_shadow_count >= PRED_SHADOW)
+		if (pred_shadow_count >= Qupls4_pkg::PRED_SHADOW)
 			dbo.cause <= Qupls4_pkg::FLT_UNIMP;
 		else
 			dbo.pred_shadow_size <= pred_shadow_count;
