@@ -105,6 +105,8 @@ reg [3:0] atom_count_i;
 reg [3:0] atom_count_o;
 reg [15:0] pred_mask_i;
 reg [15:0] pred_mask_o;
+reg [4:0] pred_no_i;
+reg [4:0] pred_no_o;
 reg hwi_ignore;
 Qupls4_pkg::regs_t fregs_i;
 Qupls4_pkg::regs_t fregs_o;
@@ -130,6 +132,13 @@ if (rst)
 else begin
 	if (en)
 		pred_mask_i <= pred_mask_o;
+end
+always @(posedge clk)
+if (rst)
+	pred_no_i <= 5'h0;
+else begin
+	if (en)
+		pred_no_i <= pred_no_o;
 end
 always @(posedge clk)
 if (rst)
@@ -794,6 +803,10 @@ begin
 	// of the first instruction of the group. If the first instruction was not
 	// masked, and a later one was, then the interrupt will still occur, but the
 	// later instructions will not be executed.
+
+	// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+	// ATOM modifier support
+	// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 	pr0_dec.atom_count = atom_count_i;
 	hwi_ignore = FALSE;
 	if ((|pr0_dec.atom_count|fregs_i.v) && pr0_dec.v) begin
@@ -836,37 +849,69 @@ begin
 	else
 		atom_count_o = pr3_dec.atom_count;
 
-	// PRED modifier		
-	pr0_dec.pred_mask = pred_mask_i;
-	if (dec0.pred && pr0_dec.v)
-		pr1_dec.pred_mask = ins0m.uop.pred.mask.
-	else if (!pr0_dec.ssm && pr0_dec.uop.any.lead && |pr0_dec.pred_mask)
-		pr1_dec.pred_mask = pr0_dec.pred_mask >> 2'd2;
-	else
-		pr1_dec.pred_mask = pr0_dec.pred_mask;
+	// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+	// PRED modifier support
+	// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+	pr0_dec.decbus.pred_mask = pred_mask_i;
+	pr0_dec.decbus.pred_no = pred_no_i;
+	if (dec0.pred && pr0_dec.v) begin
+		pr0_dec.decbus.pred_no = pr0_dec.decbus.pred_no + 5'd1;
+		pr1_dec.decbus.pred_mask = ins0m.uop.pred.mask;
+		pr1_dec.decbus.pred_no = pr0_dec.decbus.pred_no;
+	end
+	else if (!pr0_dec.ssm && pr0_dec.uop.any.lead && |pr0_dec.pred_mask) begin
+		pr1_dec.decbus.pred_mask = pr0_dec.decbus.pred_mask >> 2'd2;
+		pr1_dec.decbus.pred_no = pr0_dec.decbus.pred_no;
+	end
+	else begin
+		pr1_dec.decbus.pred_mask = pr0_dec.decbus.pred_mask;
+		pr1_dec.decbus.pred_no = pr0_dec.decbus.pred_no;
+	end
 
-	if (dec1.pred && pr1_dec.v)
-		pr2_dec.pred_mask = ins1m.uop.pred.mask.
-	else if (!pr1_dec.ssm && pr1_dec.uop.any.lead && |pr1_dec.pred_mask)
-		pr2_dec.pred_mask = pr1_dec.pred_mask >> 2'd2;
-	else
-		pr2_dec.pred_mask = pr1_dec.pred_mask;
+	if (dec1.pred && pr1_dec.v) begin
+		pr1_dec.decbus.pred_no = pr1_dec.decbus.pred_no + 5'd1;
+		pr2_dec.decbus.pred_mask = ins1m.uop.pred.mask;
+		pr2_dec.decbus.pred_no = pr1_dec.decbus.pred_no;
+	end
+	else if (!pr1_dec.ssm && pr1_dec.uop.any.lead && |pr1_dec.pred_mask) begin
+		pr2_dec.decbus.pred_mask = pr1_dec.decbus.pred_mask >> 2'd2;
+		pr2_dec.decbus.pred_no = pr1_dec.decbus.pred_no;
+	end
+	else begin
+		pr2_dec.decbus.pred_mask = pr1_dec.decbus.pred_mask;
+		pr2_dec.decbus.pred_no = pr1_dec.decbus.pred_no;
+	end
 
-	if (dec2.pred && pr2_dec.v)
-		pr3_dec.pred_mask = ins2m.uop.pred.mask.
-	else if (!pr2_dec.ssm && pr2_dec.uop.any.lead && |pr2_dec.pred_mask)
-		pr3_dec.pred_mask = pr2_dec.pred_mask >> 2'd2;
-	else
-		pr3_dec.pred_mask = pr2_dec.pred_mask;
+	if (dec2.pred && pr2_dec.v) begin
+		pr2_dec.decbus.pred_no = pr2_dec.decbus.pred_no + 5'd1;
+		pr3_dec.decbus.pred_mask = ins2m.uop.pred.mask;
+		pr3_dec.decbus.pred_no = pr2_dec.decbus.pred_no;
+	end
+	else if (!pr2_dec.ssm && pr2_dec.uop.any.lead && |pr2_dec.pred_mask) begin
+		pr3_dec.decbus.pred_mask = pr2_dec.decbus.pred_mask >> 2'd2;
+		pr3_dec.decbus.pred_no = pr2_dec.decbus.pred_no;
+	end
+	else begin
+		pr3_dec.decbus.pred_mask = pr2_dec.decbus.pred_mask;
+		pr3_dec.decbus.pred_no = pr2_dec.decbus.pred_no;
+	end
 
-	if (dec3.pred && pr3_dec.v)
-		pred_mask_o = ins3m.uop.pred.mask.
-	else if (!pr3_dec.ssm && pr3_dec.uop.any.lead && |pr3_dec.pred_mask)
-		pred_mask_o = pr3_dec.pred_mask >> 2'd2;
-	else
-		pred_mask_o = pr3_dec.pred_mask;
+	if (dec3.pred && pr3_dec.v) begin
+		pred_no_o = pr3_dec.decbus.pred_no + 5'd1;
+		pred_mask_o = ins3m.uop.pred.mask;
+	end
+	else if (!pr3_dec.ssm && pr3_dec.uop.any.lead && |pr3_dec.pred_mask) begin
+		pred_mask_o = pr3_dec.decbus.pred_mask >> 2'd2;
+		pred_no_o = pr3_dec.pred_no;
+	end
+	else begin
+		pred_mask_o = pr3_dec.decbus.pred_mask;
+		pred_no_o = pr3_dec.pred_no;
+	end
 
+	// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 	// Apply carry mod to instructions in same group, and adjust
+	// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 	pr0_dec.carry_mod = carry_mod_i;
 	if (pr0_dec.v)
 	case ({pr0_dec.carry_mod[9],pr0_dec.carry_mod[0]})

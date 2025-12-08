@@ -659,6 +659,7 @@ typedef enum logic [6:0] {
 } r1_e;
 
 typedef enum logic [6:0] {
+	FLT_FMA = 7'd1,
 	FLT_MIN = 7'd2,
 	FLT_MAX = 7'd3,
 	FLT_SEQ = 7'd8,
@@ -720,8 +721,8 @@ typedef struct packed
 {
 	logic v;
 	logic exc;
-	logic [2:0] count;
-	logic [2:0] num;
+	logic lead;
+	logic [4:0] num;
 	logic [49:0] payload;
 	logic [6:0] opcode;
 } anyinst_t;
@@ -730,8 +731,8 @@ typedef struct packed
 {
 	logic v;
 	logic exc;
-	logic [2:0] count;
-	logic [2:0] num;
+	logic lead;
+	logic [4:0] num;
 	logic resv2;
 	logic [1:0] prc;
 	logic md;
@@ -748,8 +749,8 @@ typedef struct packed
 {
 	logic v;
 	logic exc;
-	logic [2:0] count;
-	logic [2:0] num;
+	logic lead;
+	logic [4:0] num;
 	logic resv2;
 	logic [1:0] prc;
 	logic md;
@@ -766,8 +767,8 @@ typedef struct packed
 {
 	logic v;
 	logic exc;
-	logic [2:0] count;
-	logic [2:0] num;
+	logic lead;
+	logic [4:0] num;
 	logic resv2;
 	logic [5:0] resv;
 	logic [34:0] disp;
@@ -790,10 +791,12 @@ typedef struct packed
 */
 	logic v;
 	logic exc;
-	logic [2:0] count;
-	logic [2:0] num;
+	logic lead;
+	logic [4:0] num;
 	logic resv2;
-	logic [48:0] resv;
+	logic [43:0] resv;
+	logic [3:0] count;
+	logic resv1;
 	opcode_e opcode;
 } atom_inst_t;
 
@@ -801,8 +804,8 @@ typedef struct packed
 {
 	logic v;
 	logic exc;
-	logic [2:0] count;
-	logic [2:0] num;
+	logic lead;
+	logic [4:0] num;
 	logic resv2;
 	logic [2:0] sc;
 	logic ms;
@@ -818,8 +821,8 @@ typedef struct packed
 {
 	logic v;
 	logic exc;
-	logic [2:0] count;
-	logic [2:0] num;
+	logic lead;
+	logic [4:0] num;
 	logic resv2;
 	logic [6:0] func;
 	logic [2:0] ms;
@@ -836,8 +839,8 @@ typedef struct packed
 {
 	logic v;
 	logic exc;
-	logic [2:0] count;
-	logic [2:0] num;
+	logic lead;
+	logic [4:0] num;
 	logic resv2;
 	logic [6:0] func;
 	logic [2:0] ms;
@@ -854,8 +857,8 @@ typedef struct packed
 {
 	logic v;
 	logic exc;
-	logic [2:0] count;
-	logic [2:0] num;
+	logic lead;
+	logic [4:0] num;
 	logic resv2;
 	logic [1:0] pr;
 	logic [3:0] resv;
@@ -869,8 +872,8 @@ typedef struct packed
 {
 	logic v;
 	logic exc;
-	logic [2:0] count;
-	logic [2:0] num;
+	logic lead;
+	logic [4:0] num;
 	logic resv2;
 	logic [6:0] func;
 	logic [2:0] ms;
@@ -887,8 +890,8 @@ typedef struct packed
 {
 	logic v;
 	logic exc;
-	logic [2:0] count;
-	logic [2:0] num;
+	logic lead;
+	logic [4:0] num;
 	logic resv2;
 	logic [6:0] func;
 	logic [2:0] ms;
@@ -905,8 +908,8 @@ typedef struct packed
 {
 	logic v;
 	logic exc;
-	logic [2:0] count;
-	logic [2:0] num;
+	logic lead;
+	logic [4:0] num;
 	logic resv2;
 	flt_e func;
 	logic [2:0] ms;
@@ -923,8 +926,8 @@ typedef struct packed
 {
 	logic v;
 	logic exc;
-	logic [2:0] count;
-	logic [2:0] num;
+	logic lead;
+	logic [4:0] num;
 	logic resv2;
 	logic [6:0] func;
 	logic [2:0] ms;
@@ -941,8 +944,8 @@ typedef struct packed
 {
 	logic v;
 	logic exc;
-	logic [2:0] count;
-	logic [2:0] num;
+	logic lead;
+	logic [4:0] num;
 	logic resv2;
 	logic [6:0] func;
 	logic [2:0] ms;
@@ -959,8 +962,8 @@ typedef struct packed
 {
 	logic v;
 	logic exc;
-	logic [2:0] count;
-	logic [2:0] num;
+	logic lead;
+	logic [4:0] num;
 	logic resv2;
 	logic [2:0] op3;
 	logic [2:0] ms;
@@ -975,8 +978,8 @@ typedef struct packed
 {
 	logic v;
 	logic exc;
-	logic [2:0] count;
-	logic [2:0] num;
+	logic lead;
+	logic [4:0] num;
 	logic resv2;
 	logic [2:0] op3;
 	logic [2:0] immH;
@@ -991,8 +994,8 @@ typedef struct packed
 {
 	logic v;
 	logic exc;
-	logic [2:0] count;
-	logic [2:0] num;
+	logic lead;
+	logic [4:0] num;
 	logic resv2;
 	logic [48:0] resv;
 	opcode_e opcode;
@@ -1002,8 +1005,8 @@ typedef struct packed
 {
 	logic v;
 	logic exc;
-	logic [2:0] count;
-	logic [2:0] num;
+	logic lead;
+	logic [4:0] num;
 	logic resv2;
 	logic [6:0] func;
 	logic [2:0] ms;
@@ -1020,8 +1023,8 @@ typedef struct packed
 {
 	logic v;
 	logic exc;
-	logic [2:0] count;
-	logic [2:0] num;
+	logic lead;
+	logic [4:0] num;
 	logic resv2;
 	logic [1:0] resv;
 	logic [22:0] imm;
@@ -1035,8 +1038,8 @@ typedef struct packed
 {
 	logic v;
 	logic exc;
-	logic [2:0] count;
-	logic [2:0] num;
+	logic lead;
+	logic [4:0] num;
 	logic resv2;
 	logic [6:0] func;
 	logic [2:0] ms;
@@ -1053,8 +1056,8 @@ typedef struct packed
 {
 	logic v;
 	logic exc;
-	logic [2:0] count;
-	logic [2:0] num;
+	logic lead;
+	logic [4:0] num;
 	logic resv2;
 	logic [6:0] func;
 	logic [2:0] ms;
@@ -1073,8 +1076,8 @@ typedef struct packed
 {
 	logic v;
 	logic exc;
-	logic [2:0] count;
-	logic [2:0] num;
+	logic lead;
+	logic [4:0] num;
 	logic resv2;
 	logic [6:0] func;
 	logic [2:0] ms;
@@ -1091,8 +1094,8 @@ typedef struct packed
 {
 	logic v;
 	logic exc;
-	logic [2:0] count;
-	logic [2:0] num;
+	logic lead;
+	logic [4:0] num;
 	logic resv2;
 	logic [6:0] func;
 	logic [2:0] ms;
@@ -1109,8 +1112,8 @@ typedef struct packed
 {
 	logic v;
 	logic exc;
-	logic [2:0] count;
-	logic [2:0] num;
+	logic lead;
+	logic [4:0] num;
 	regspec_t Rs4;
 	logic [2:0] ms;
 	logic [2:0] op3;
@@ -1126,8 +1129,8 @@ typedef struct packed
 {
 	logic v;
 	logic exc;
-	logic [2:0] count;
-	logic [2:0] num;
+	logic lead;
+	logic [4:0] num;
 	logic resv2;
 	logic [2:0] sc;
 	logic ms;
@@ -1139,6 +1142,22 @@ typedef struct packed
 	regspec_t Rd;
 	opcode_e opcode;
 } vls_inst_t;
+
+typedef struct packed
+{
+	logic v;
+	logic exc;
+	logic lead;
+	logic [4:0] num;
+	logic [6:0] resv;
+	logic z;
+	logic [2:0] ms;
+	logic [2:0] op3;
+	logic [15:0] mask;
+	regspec_t Rs1;
+	regspec_t Rd;				// not used for PRED
+	opcode_e opcode;
+} pred_inst_t;
 
 typedef union packed
 {
@@ -1171,6 +1190,7 @@ typedef union packed
 	bmap_inst_t bmap;
 	extd_inst_t extd;
 	vls_inst_t vls;
+	pred_inst_t pred;
 	anyinst_t any;
 } micro_op_t;
 
@@ -1478,9 +1498,9 @@ typedef struct packed
 	logic sync;
 	logic oddball;
 	logic pred;					// predicate instruction
-	logic [11:0] pred_mask;
-	logic [11:0] pred_atom_mask;
-	logic [3:0] pred_shadow_size;
+	logic [15:0] pred_mask;
+	logic [4:0] pred_shadow_size;
+	logic [4:0] pred_no;	// pipeline predicate register number
 	logic carry;
 	logic atom;
 	logic regs;
@@ -1619,8 +1639,10 @@ typedef struct packed
 	cpu_types_pkg::pc_address_t brtgt;
 	logic takb;								// 1=branch evaluated to taken
 	logic ssm;								// 1=single step mode active
+	logic [15:0] pred_mask;		// predicate mask
 	logic hwi;
 	logic [5:0] hwi_level;
+	logic [5:0] hwi_olevel;		// old IRQ level
 	logic [2:0] hwi_swstk;		// software stack
 	cause_code_t exc;					// non-0xFF indicate exception
 	logic excv;								// 1=exception
@@ -1628,7 +1650,7 @@ typedef struct packed
 	logic bt;									// branch to be taken as predicted
 	operating_mode_t om;			// operating mode
 	reg [31:0] carry_mod;			// carry modifier remnant
-	reg [11:0] atom_mask;			// interrupt masking by ATOM instruction
+	reg [3:0] atom_count;			// interrupt masking by ATOM instruction
 	cpu_types_pkg::pregno_t pRs1;							// physical registers (see decode bus for arch. regs)
 	cpu_types_pkg::pregno_t pRs2;
 	cpu_types_pkg::pregno_t pRs3;
@@ -1667,6 +1689,7 @@ typedef struct packed {
 	micro_op_t uop;
 	logic has_rext;
 	cause_code_t exc;
+	logic excv;					// 1=a valid cause code is present
 	logic nan;
 	// needed only for mem
 	logic virt2phys;
@@ -1718,6 +1741,10 @@ typedef struct packed {
 	logic fc_depv;					// flow control dependency valid
 	logic [3:0] predino;			// predicated instruction number (1 to 8)
 	cpu_types_pkg::rob_ndx_t predrndx;				// ROB index of associate PRED instruction
+	logic [1:0] pred_tf;			// true(1)/false(2)/unknown(0)
+	logic pred_bit;						// 1 once previous predicate is true or ignored
+	logic pred_bitv;					// 1 if predicate bitis valid
+
 	cpu_types_pkg::rob_ndx_t orid;						// ROB id of originating macro-instruction
 	logic lsq;								// 1=instruction has associated LSQ entry
 	lsq_ndx_t lsqndx;					// index to LSQ entry
@@ -1753,12 +1780,6 @@ typedef struct packed {
 	cpu_types_pkg::pregno_t updCreg;
 	cpu_types_pkg::pregno_t updDreg;
 	*/
-	logic [1:0] pred_tf;			// true(1)/false(2)/unknown(0)
-	logic [5:0] pred_no;			// predicate number
-	logic [3:0] pred_shadow_size;	// number of instructions in shadow
-	logic [11:0] pred_mask;		// predicte mask bits for this instruction.
-	logic pred_bit;						// 1 once previous predicate is true or ignored
-	logic pred_bitv;					// 1 if predicate bitis valid
 	logic all_args_valid;			// 1 if all args are valid
 	logic could_issue;				// 1 if instruction ready to issue
 	logic could_issue_nm;			// 1 if instruction ready to issue NOP

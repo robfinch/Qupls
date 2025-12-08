@@ -41,7 +41,7 @@
 // ============================================================================
 
 import const_pkg::*;
-import fta_bus_pkg::*;
+import wishbone_pkg::*;
 import cpu_types_pkg::*;
 import cache_pkg::*;
 import mmu_pkg::*;
@@ -3952,11 +3952,12 @@ end
 // ----------------------------------------------------------------------------
 // Predicate numbers
 // ----------------------------------------------------------------------------
+/*
 ffz48 uffzprd0 (.i({16'hFFFF,pred_alloc_map}), .o(pred_no[0]));
 ffz48 uffzprd1 (.i({16'hFFFF,pred_alloc_map} | (48'd1 << pred_no[0])), .o(pred_no[1]));
 ffz48 uffzprd2 (.i({16'hFFFF,pred_alloc_map} | (48'd1 << pred_no[0])| (48'd1 << pred_no[1])), .o(pred_no[2]));
 ffz48 uffzprd3 (.i({16'hFFFF,pred_alloc_map} | (48'd1 << pred_no[0])| (48'd1 << pred_no[1])| (48'd1 << pred_no[2])), .o(pred_no[3]));
-
+*/
 // ----------------------------------------------------------------------------
 // ISSUE stage combo logic
 // ----------------------------------------------------------------------------
@@ -5839,7 +5840,7 @@ else begin
 	if (fcu_branch_resolved)
 		tGetSkipList(fcu_rse.rndx, fcu_found_destination, fcu_skip_list, fcu_m1, fcu_dst);
 
-	if (fcu_rse.v) begin
+	if (fcu_rse.v)
 		fcu_state1 <= VAL;
 	tSetROBDone(fcu_rse,takb);
 
@@ -6313,8 +6314,12 @@ else begin
 				endcase
 
 				// Predicate resolved?
-				if (rob[nn].v && rob[nn].op.decbus.pred && rob[nn].done==2'b11)
-					pred_tf[rob[nn].pred_no] <= rob[nn].pred_tf;
+				if (rob[nn].v && rob[nn].op.decbus.pred) begin
+					if (rob[nn].done==2'b11)
+						pred_tf[rob[nn].pred_no] <= rob[nn].pred_tf;
+					else
+						pred_tf[rob[nn].pred_no] <= 2'b00;
+				end
 			end
 		end
 		// Detect hardware fault if predicate is no longer active and there are
@@ -7718,6 +7723,9 @@ begin
 	// NOPs are valid regardless of predicate status
 	rob[tail].pred_bitv <= db.nop;
 	rob[tail].pred_bit <= db.nop;
+	if (db.pred)
+		pred_tf[db.pred_no] <= 2'b00;
+	
 	rob[tail].orid <= mc_orid;
 	rob[tail].br_cndx <= cndxq;
 
@@ -8360,65 +8368,65 @@ begin
 		m7 = (ndx + Qupls4_pkg::ROB_ENTRIES - 7) % Qupls4_pkg::ROB_ENTRIES;
 		m8 = (ndx + Qupls4_pkg::ROB_ENTRIES - 8) % Qupls4_pkg::ROB_ENTRIES;
 		if (rob[m1].v && rob[m1].sn < rob[ndx].sn && rob[m1].op.decbus.pred) begin
-			if (rob[m1].pred_mask[1:0]==2'd0) begin
+			if (rob[m1].op.decbus.pred_mask[1:0]==2'd0) begin
 				rob[ndx].pred_bit <= TRUE;
 				rob[ndx].pred_bitv <= VAL;
 			end
-			else if (rob[m1].done==2'b11 && rob[m1].pred_mask[1:0]!=2'b00) begin
+			else if (rob[m1].done==2'b11 && rob[m1].op.decbus.pred_mask[1:0]!=2'b00) begin
 				rob[ndx].v <= INV;
 			end
 		end
 		else if (rob[m2].v && rob[m2].sn < rob[ndx].sn && rob[m2].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 1) begin
-			if (rob[m2].pred_mask[3:2]==2'd0) begin
+			if (rob[m2].op.decbus.pred_mask[3:2]==2'd0) begin
 				rob[ndx].pred_bit <= TRUE;
 				rob[ndx].pred_bitv <= VAL;
 			end
-			else if (rob[m2].done==2'b11 && rob[m2].pred_mask[3:2]!=2'b00) begin
+			else if (rob[m2].done==2'b11 && rob[m2].op.decbus.pred_mask[3:2]!=2'b00) begin
 				rob[ndx].v <= INV;
 			end
 		end
 		else if (rob[m3].v && rob[m3].sn < rob[ndx].sn && rob[m3].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 2) begin
-			if (rob[m3].pred_mask[5:4]==2'd0) begin
+			if (rob[m3].op.decbus.pred_mask[5:4]==2'd0) begin
 				rob[ndx].pred_bit <= TRUE;
 				rob[ndx].pred_bitv <= VAL;
 			end
-			else if (rob[m3].done==2'b11 && rob[m3].pred_mask[5:4]!=2'b00) begin
+			else if (rob[m3].done==2'b11 && rob[m3].op.decbus.pred_mask[5:4]!=2'b00) begin
 				rob[ndx].v <= INV;
 			end
 		end
 		else if (rob[m4].v && rob[m4].sn < rob[ndx].sn && rob[m4].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 3) begin
-			if (rob[m4].pred_mask[7:6]==2'd0) begin
+			if (rob[m4].op.decbus.pred_mask[7:6]==2'd0) begin
 				rob[ndx].pred_bit <= TRUE;
 				rob[ndx].pred_bitv <= VAL;
 			end
-			else if (rob[m4].done==2'b11 && rob[m4].pred_mask[7:6]!=2'b00) begin
+			else if (rob[m4].done==2'b11 && rob[m4].op.decbus.pred_mask[7:6]!=2'b00) begin
 				rob[ndx].v <= INV;
 			end
 		end
 		else if (rob[m5].v && rob[m5].sn < rob[ndx].sn && rob[m5].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 4) begin
-			if (rob[m5].pred_mask[9:8]==2'd0) begin
+			if (rob[m5].op.decbus.pred_mask[9:8]==2'd0) begin
 				rob[ndx].pred_bit <= TRUE;
 				rob[ndx].pred_bitv <= VAL;
 			end
-			else if (rob[m5].done==2'b11 && rob[m5].pred_mask[9:8]!=2'b00) begin
+			else if (rob[m5].done==2'b11 && rob[m5].op.decbus.pred_mask[9:8]!=2'b00) begin
 				rob[ndx].v <= INV;
 			end
 		end
 		else if (rob[m6].v && rob[m6].sn < rob[ndx].sn && rob[m6].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 5) begin
-			if (rob[m6].pred_mask[11:10]==2'd0) begin
+			if (rob[m6].op.decbus.pred_mask[11:10]==2'd0) begin
 				rob[ndx].pred_bit <= TRUE;
 				rob[ndx].pred_bitv <= VAL;
 			end
-			else if (rob[m6].done==2'b11 && rob[m6].pred_mask[11:10]!=2'b00) begin
+			else if (rob[m6].done==2'b11 && rob[m6].op.decbus.pred_mask[11:10]!=2'b00) begin
 				rob[ndx].v <= INV;
 			end
 		end
 		else if (rob[m7].v && rob[m6].sn < rob[ndx].sn && rob[m7].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 6) begin
-			if (rob[m7].pred_mask[13:12]==2'd0) begin
+			if (rob[m7].op.decbus.pred_mask[13:12]==2'd0) begin
 				rob[ndx].pred_bit <= TRUE;
 				rob[ndx].pred_bitv <= VAL;
 			end
-			else if (rob[m7].done==2'b11 && rob[m7].pred_mask[13:12]!=2'b00) begin
+			else if (rob[m7].done==2'b11 && rob[m7].op.decbus.pred_mask[13:12]!=2'b00) begin
 				rob[ndx].v <= INV;
 			end
 		end
@@ -8459,19 +8467,19 @@ begin
 		m7 = (ndx + Qupls4_pkg::ROB_ENTRIES - 7) % Qupls4_pkg::ROB_ENTRIES;
 		m8 = (ndx + Qupls4_pkg::ROB_ENTRIES - 8) % Qupls4_pkg::ROB_ENTRIES;
 		if (rob[m1].v && rob[m1].sn < rob[ndx].sn && rob[m1].op.decbus.pred) begin
-			rob[m1].pred_mask <= 14'd0;
+			rob[m1].op.decbus.pred_mask <= 14'd0;
 		end
 		else if (rob[m2].v && rob[m2].sn < rob[ndx].sn && rob[m2].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 1) begin
 			rob[m1].pred_bit = TRUE;
 			rob[m1].pred_bitv = VAL;
-			rob[m2].pred_mask <= 14'd0;
+			rob[m2].op.decbus.pred_mask <= 14'd0;
 		end
 		else if (rob[m3].v && rob[m3].sn < rob[ndx].sn && rob[m3].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 2) begin
 			rob[m1].pred_bit = TRUE;
 			rob[m1].pred_bitv = VAL;
 			rob[m2].pred_bit = TRUE;
 			rob[m2].pred_bitv = VAL;
-			rob[m3].pred_mask <= 14'd0;
+			rob[m3].op.decbus.pred_mask <= 14'd0;
 		end
 		else if (rob[m4].v && rob[m4].sn < rob[ndx].sn && rob[m4].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 3) begin
 			rob[m1].pred_bit = TRUE;
@@ -8480,7 +8488,7 @@ begin
 			rob[m2].pred_bitv = VAL;
 			rob[m3].pred_bit = TRUE;
 			rob[m3].pred_bitv = VAL;
-			rob[m4].pred_mask <= 14'd0;
+			rob[m4].op.decbus.pred_mask <= 14'd0;
 		end
 		else if (rob[m5].v && rob[m5].sn < rob[ndx].sn && rob[m5].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 4) begin
 			rob[m1].pred_bit = TRUE;
@@ -8491,7 +8499,7 @@ begin
 			rob[m3].pred_bitv = VAL;
 			rob[m4].pred_bit = TRUE;
 			rob[m4].pred_bitv = VAL;
-			rob[m5].pred_mask <= 14'd0;
+			rob[m5].op.decbus.pred_mask <= 14'd0;
 		end
 		else if (rob[m6].v && rob[m6].sn < rob[ndx].sn && rob[m6].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 5) begin
 			rob[m1].pred_bit = TRUE;
@@ -8504,7 +8512,7 @@ begin
 			rob[m4].pred_bitv = VAL;
 			rob[m5].pred_bit = TRUE;
 			rob[m5].pred_bitv = VAL;
-			rob[m6].pred_mask <= 14'd0;
+			rob[m6].op.decbus.pred_mask <= 14'd0;
 		end
 		else if (rob[m7].v && rob[m7].sn < rob[ndx].sn && rob[m7].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 6) begin
 			rob[m1].pred_bit = TRUE;
@@ -8519,7 +8527,7 @@ begin
 			rob[m5].pred_bitv = VAL;
 			rob[m6].pred_bit = TRUE;
 			rob[m6].pred_bitv = VAL;
-			rob[m7].pred_mask <= 14'd0;
+			rob[m7].op.decbus.pred_mask <= 14'd0;
 		end
 	end
 end

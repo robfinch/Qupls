@@ -173,6 +173,13 @@ Qupls4_decode_conditional_branch udecbr
 	.branch(db.br)
 );
 
+Qupls4_decode_pred
+(
+	.instr(instr),
+	.pred(db.pred),
+	.pred_mask(db.pred_mask)
+);
+
 /*
 Stark_decode_predicate_branch udecpbr
 (
@@ -301,13 +308,14 @@ Qupls4_decode_fence udfence1
 	.atom(db.atom)
 );
 
+/*
 Stark_decode_pfx udecpfx1
 (
 	.instr(instr),
 	.pfx(db.pfx)
 );
-
-Stark_decode_fma ufma
+*/
+Qupls4_decode_fma ufma
 (
 	.instr(instr),
 	.fma(db.fma)
@@ -413,7 +421,7 @@ else begin
 		dbo.bsr <= instr.any.opcode==Qupls4_pkg::OP_BSR;
 		dbo.jsr <= instr.any.opcode==Qupls4_pkg::OP_JSR;
 		dbo.stptr <= instr.any.opcode==Qupls4_pkg::OP_STPTR;
-		dbo.iprel <= db.Rs1==8'd31;
+		dbo.iprel <= 1'b0;//db.Rs1==8'd31;
 		dbo.cause <= Qupls4_pkg::FLT_NONE;
 		dbo.mem <= 
 			 db.load|db.vload|db.vload_ndx
