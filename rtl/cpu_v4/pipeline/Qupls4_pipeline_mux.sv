@@ -165,7 +165,7 @@ begin
 	nopi.exc = Qupls4_pkg::FLT_NONE;
 	nopi.pc.pc = Qupls4_pkg::RSTPC;
 	nopi.uop = {26'd0,Qupls4_pkg::OP_NOP};
-	nopi.uop.any.count = 3'd1;
+	nopi.uop.any.lead = 1'd1;
 	nopi.uop.r3.Rs1 = 8'd0;
 	nopi.uop.r3.Rs2 = 8'd0;
 	nopi.uop.r3.Rs3 = 8'd0;

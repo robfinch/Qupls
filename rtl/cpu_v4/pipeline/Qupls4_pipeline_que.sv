@@ -73,7 +73,7 @@ begin
 	nopi.pc.bno_t = 6'd1;
 	nopi.pc.bno_f = 6'd1;
 	nopi.uop = {26'd0,Qupls4_pkg::OP_NOP};
-	nopi.uop.any.count = 3'd1;
+	nopi.uop.any.lead = 1'd1;
 	nopi.decbus.Rdz = 1'b1;
 	nopi.decbus.nop = 1'b1;
 	nopi.decbus.alu = 1'b1;

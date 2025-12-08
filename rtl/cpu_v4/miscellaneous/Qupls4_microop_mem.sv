@@ -45,7 +45,7 @@ module Qupls4_microop_mem(clk, om, ir, num, carry_reg, carry_out, carry_in,
 input clk;
 input Qupls4_pkg::operating_mode_t om;
 input [47:0] ir;
-input [2:0] num;
+input [4:0] num;
 input [7:0] carry_reg;
 input carry_out;
 input carry_in;
@@ -89,8 +89,8 @@ reg vRdi, vRs1i, vRs2i, vRs3i;		// whether to increment the register spec or not
 
 // Copy instruction to micro-op verbatium. The register fields need to be
 // expanded by two bits each.
-Qupls4_pkg::micro_op_t uop0 = {1'b1,1'b0,3'd1,3'd0,4'd0,instr};
-Qupls4_pkg::micro_op_t uop1 = {1'b1,1'b0,3'd0,3'd1,4'd0,instr};
+Qupls4_pkg::micro_op_t uop0 = {1'b1,1'b0,1'd1,5'd0,4'd0,instr};
+Qupls4_pkg::micro_op_t uop1 = {1'b1,1'b0,1'd0,5'd1,4'd0,instr};
 
 always_ff @(posedge clk)
 	boi_count <= boi_count + 2'd1;
@@ -126,14 +126,14 @@ begin
 end
 always_comb
 begin
-	nopi = {1'b1,1'b0,3'd1,3'd0,4'd0,45'd0,Qupls4_pkg::OP_NOP};
+	nopi = {1'b1,1'b0,1'd1,5'd0,4'd0,45'd0,Qupls4_pkg::OP_NOP};
 end
 always_comb
 begin
 	uop_boi = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
 	uop_boi.br.opcode = Qupls4_pkg::OP_BCCU64;
 	uop_boi.br.cnd = Qupls4_pkg::CND_BOI;
-	uop_boi.any.count = 3'd1;
+	uop_boi.any.lead = 3'd1;
 end
 always_comb
 begin
@@ -357,36 +357,36 @@ begin
 	uop[7] = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
 	
 	case(ir[6:0])
-	Qupls4_pkg::OP_BRK:	begin uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,ir}; count = 3'd1; end
+	Qupls4_pkg::OP_BRK:	begin uop[0] = {1'b1,1'b0,1'd1,5'd0,4'd0,ir}; count = 3'd1; end
 	Qupls4_pkg::OP_MOVMR:
 		begin
 			if (insert_boi) begin
 				kk = 1;
 				uop[0] = uop_boi;
-				if (ir[11: 7]!=5'd0) begin uop[kk] = {1'b1,1'b0,3'd0,3'd0,4'd0,Qupls4_pkg::FN_MOVE,3'd0,3'd4,4'd0,8'h00,8'h00,{3'd0,ir[16:12]},{3'd0,ir[11: 7]},Qupls4_pkg::OP_R3O}; kk = kk + 1; end
-				if (ir[21:17]!=5'd0) begin uop[kk] = {1'b1,1'b0,3'd0,3'd0,4'd0,Qupls4_pkg::FN_MOVE,3'd0,3'd4,4'd0,8'h00,8'h00,{3'd0,ir[26:22]},{3'd0,ir[21:17]},Qupls4_pkg::OP_R3O}; kk = kk + 1; end
-				if (ir[31:27]!=5'd0) begin uop[kk] = {1'b1,1'b0,3'd0,3'd0,4'd0,Qupls4_pkg::FN_MOVE,3'd0,3'd4,4'd0,8'h00,8'h00,{3'd0,ir[36:32]},{3'd0,ir[31:27]},Qupls4_pkg::OP_R3O}; kk = kk + 1; end
-				if (ir[41:37]!=5'd0) begin uop[kk] = {1'b1,1'b0,3'd0,3'd0,4'd0,Qupls4_pkg::FN_MOVE,3'd0,3'd4,4'd0,8'h00,8'h00,{3'd0,ir[46:42]},{3'd0,ir[41:37]},Qupls4_pkg::OP_R3O}; kk = kk + 1; end
+				if (ir[11: 7]!=5'd0) begin uop[kk] = {1'b1,1'b0,1'd0,5'd0,4'd0,Qupls4_pkg::FN_MOVE,3'd0,3'd4,4'd0,8'h00,8'h00,{3'd0,ir[16:12]},{3'd0,ir[11: 7]},Qupls4_pkg::OP_R3O}; kk = kk + 1; end
+				if (ir[21:17]!=5'd0) begin uop[kk] = {1'b1,1'b0,1'd0,5'd0,4'd0,Qupls4_pkg::FN_MOVE,3'd0,3'd4,4'd0,8'h00,8'h00,{3'd0,ir[26:22]},{3'd0,ir[21:17]},Qupls4_pkg::OP_R3O}; kk = kk + 1; end
+				if (ir[31:27]!=5'd0) begin uop[kk] = {1'b1,1'b0,1'd0,5'd0,4'd0,Qupls4_pkg::FN_MOVE,3'd0,3'd4,4'd0,8'h00,8'h00,{3'd0,ir[36:32]},{3'd0,ir[31:27]},Qupls4_pkg::OP_R3O}; kk = kk + 1; end
+				if (ir[41:37]!=5'd0) begin uop[kk] = {1'b1,1'b0,1'd0,5'd0,4'd0,Qupls4_pkg::FN_MOVE,3'd0,3'd4,4'd0,8'h00,8'h00,{3'd0,ir[46:42]},{3'd0,ir[41:37]},Qupls4_pkg::OP_R3O}; kk = kk + 1; end
 				count = kk[3:0];
-				uop[0].any.count = 3'd1;
-				uop[0].any.num = 3'd0;
-				uop[1].any.num = 3'd1;
-				uop[2].any.num = 3'd2;
-				uop[3].any.num = 3'd3;
-				uop[4].any.num = 3'd4;
+				uop[0].any.lead = 1'd1;
+				uop[0].any.num = 5'd0;
+				uop[1].any.num = 5'd1;
+				uop[2].any.num = 5'd2;
+				uop[3].any.num = 5'd3;
+				uop[4].any.num = 5'd4;
 			end
 			else begin
 				kk = 0;
-				if (ir[11: 7]!=5'd0) begin uop[kk] = {1'b1,1'b0,3'd0,3'd0,4'd0,Qupls4_pkg::FN_MOVE,3'd0,3'd4,4'd0,8'h00,8'h00,{3'd0,ir[16:12]},{3'd0,ir[11: 7]},Qupls4_pkg::OP_R3O}; kk = kk + 1; end
-				if (ir[21:17]!=5'd0) begin uop[kk] = {1'b1,1'b0,3'd0,3'd0,4'd0,Qupls4_pkg::FN_MOVE,3'd0,3'd4,4'd0,8'h00,8'h00,{3'd0,ir[26:22]},{3'd0,ir[21:17]},Qupls4_pkg::OP_R3O}; kk = kk + 1; end
-				if (ir[31:27]!=5'd0) begin uop[kk] = {1'b1,1'b0,3'd0,3'd0,4'd0,Qupls4_pkg::FN_MOVE,3'd0,3'd4,4'd0,8'h00,8'h00,{3'd0,ir[36:32]},{3'd0,ir[31:27]},Qupls4_pkg::OP_R3O}; kk = kk + 1; end
-				if (ir[41:37]!=5'd0) begin uop[kk] = {1'b1,1'b0,3'd0,3'd0,4'd0,Qupls4_pkg::FN_MOVE,3'd0,3'd4,4'd0,8'h00,8'h00,{3'd0,ir[46:42]},{3'd0,ir[41:37]},Qupls4_pkg::OP_R3O}; kk = kk + 1; end
+				if (ir[11: 7]!=5'd0) begin uop[kk] = {1'b1,1'b0,1'd0,5'd0,4'd0,Qupls4_pkg::FN_MOVE,3'd0,3'd4,4'd0,8'h00,8'h00,{3'd0,ir[16:12]},{3'd0,ir[11: 7]},Qupls4_pkg::OP_R3O}; kk = kk + 1; end
+				if (ir[21:17]!=5'd0) begin uop[kk] = {1'b1,1'b0,1'd0,5'd0,4'd0,Qupls4_pkg::FN_MOVE,3'd0,3'd4,4'd0,8'h00,8'h00,{3'd0,ir[26:22]},{3'd0,ir[21:17]},Qupls4_pkg::OP_R3O}; kk = kk + 1; end
+				if (ir[31:27]!=5'd0) begin uop[kk] = {1'b1,1'b0,1'd0,5'd0,4'd0,Qupls4_pkg::FN_MOVE,3'd0,3'd4,4'd0,8'h00,8'h00,{3'd0,ir[36:32]},{3'd0,ir[31:27]},Qupls4_pkg::OP_R3O}; kk = kk + 1; end
+				if (ir[41:37]!=5'd0) begin uop[kk] = {1'b1,1'b0,1'd0,5'd0,4'd0,Qupls4_pkg::FN_MOVE,3'd0,3'd4,4'd0,8'h00,8'h00,{3'd0,ir[46:42]},{3'd0,ir[41:37]},Qupls4_pkg::OP_R3O}; kk = kk + 1; end
 				count = kk[3:0];
-				uop[0].any.count = 3'd1;
-				uop[0].any.num = 3'd0;
-				uop[1].any.num = 3'd1;
-				uop[2].any.num = 3'd2;
-				uop[3].any.num = 3'd3;
+				uop[0].any.lead = 1'd1;
+				uop[0].any.num = 5'd0;
+				uop[1].any.num = 5'd1;
+				uop[2].any.num = 5'd2;
+				uop[3].any.num = 5'd3;
 			end
 		end
 	Qupls4_pkg::OP_EXTD:
@@ -398,70 +398,70 @@ begin
 					5'd1:	
 						begin
 							count = 4'd1;
-							uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,{2'b00,vsins.extd.Rs3},{2'b00,vsins.extd.Rs2},vRs1,vRd,vsins.extd.opcode};
+							uop[0] = {1'b1,1'b0,1'd1,5'd0,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,{2'b00,vsins.extd.Rs3},{2'b00,vsins.extd.Rs2},vRs1,vRd,vsins.extd.opcode};
 						end
 					5'd2:	
 						begin
 							count = 4'd2;
-							uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,{2'b00,vsins.extd.Rs3},{2'b00,vsins.extd.Rs2},vRs1,vRd,vsins.extd.opcode};
-							uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,{2'b0,vsins.extd.Rs4},vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd1,vRd+7'd1,vsins.extd.opcode};
+							uop[0] = {1'b1,1'b0,1'd1,5'd0,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,{2'b00,vsins.extd.Rs3},{2'b00,vsins.extd.Rs2},vRs1,vRd,vsins.extd.opcode};
+							uop[1] = {1'b1,1'b0,1'd0,5'd1,4'd0,{2'b0,vsins.extd.Rs4},vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd1,vRd+7'd1,vsins.extd.opcode};
 						end
 					5'd3:	
 						begin
 							count = 4'd3;
-							uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,{2'b00,vsins.extd.Rs3},{2'b00,vsins.extd.Rs2},vRs1,vRd,vsins.extd.opcode};
-							uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd1,vRd+7'd1,vsins.extd.opcode};
-							uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,{2'b0,vsins.extd.Rs4},vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd2,vRd+7'd2,vsins.extd.opcode};
+							uop[0] = {1'b1,1'b0,1'd1,5'd0,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,{2'b00,vsins.extd.Rs3},{2'b00,vsins.extd.Rs2},vRs1,vRd,vsins.extd.opcode};
+							uop[1] = {1'b1,1'b0,1'd0,5'd1,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd1,vRd+7'd1,vsins.extd.opcode};
+							uop[2] = {1'b1,1'b0,1'd0,5'd2,4'd0,{2'b0,vsins.extd.Rs4},vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd2,vRd+7'd2,vsins.extd.opcode};
 						end
 					5'd4:	
 						begin
 							count = 4'd4;
-							uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,{2'b00,vsins.extd.Rs3},{2'b00,vsins.extd.Rs2},vRs1,vRd,vsins.extd.opcode};
-							uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd1,vRd+7'd1,vsins.extd.opcode};
-							uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd2,vRd+7'd2,vsins.extd.opcode};
-							uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,{2'b00,vsins.extd.Rs4},vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd3,vRd+7'd3,vsins.extd.opcode};
+							uop[0] = {1'b1,1'b0,1'd1,5'd0,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,{2'b00,vsins.extd.Rs3},{2'b00,vsins.extd.Rs2},vRs1,vRd,vsins.extd.opcode};
+							uop[1] = {1'b1,1'b0,1'd0,5'd1,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd1,vRd+7'd1,vsins.extd.opcode};
+							uop[2] = {1'b1,1'b0,1'd0,5'd2,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd2,vRd+7'd2,vsins.extd.opcode};
+							uop[3] = {1'b1,1'b0,1'd0,5'd3,4'd0,{2'b00,vsins.extd.Rs4},vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd3,vRd+7'd3,vsins.extd.opcode};
 						end
 					5'd21:	
 						begin
 							count = 4'd5;
-							uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,{2'b00,vsins.extd.Rs3},{2'b00,vsins.extd.Rs2},vRs1,vRd,vsins.extd.opcode};
-							uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd1,vRd+7'd1,vsins.extd.opcode};
-							uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd2,vRd+7'd2,vsins.extd.opcode};
-							uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd3,vRd+7'd3,vsins.extd.opcode};
-							uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,{2'b00,vsins.extd.Rs4},vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd4,vRd+7'd4,vsins.extd.opcode};
+							uop[0] = {1'b1,1'b0,1'd1,5'd0,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,{2'b00,vsins.extd.Rs3},{2'b00,vsins.extd.Rs2},vRs1,vRd,vsins.extd.opcode};
+							uop[1] = {1'b1,1'b0,1'd0,5'd1,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd1,vRd+7'd1,vsins.extd.opcode};
+							uop[2] = {1'b1,1'b0,1'd0,5'd2,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd2,vRd+7'd2,vsins.extd.opcode};
+							uop[3] = {1'b1,1'b0,1'd0,5'd3,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd3,vRd+7'd3,vsins.extd.opcode};
+							uop[4] = {1'b1,1'b0,1'd0,5'd4,4'd0,{2'b00,vsins.extd.Rs4},vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd4,vRd+7'd4,vsins.extd.opcode};
 						end
 					5'd22:	
 						begin
 							count = 4'd6;
-							uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,{2'b00,vsins.extd.Rs3},{2'b00,vsins.extd.Rs2},vRs1,vRd,vsins.extd.opcode};
-							uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd1,vRd+7'd1,vsins.extd.opcode};
-							uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd2,vRd+7'd2,vsins.extd.opcode};
-							uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd3,vRd+7'd3,vsins.extd.opcode};
-							uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd4,vRd+7'd4,vsins.extd.opcode};
-							uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,{2'b00,vsins.extd.Rs4},vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd5,vRd+7'd5,vsins.extd.opcode};
+							uop[0] = {1'b1,1'b0,1'd1,5'd0,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,{2'b00,vsins.extd.Rs3},{2'b00,vsins.extd.Rs2},vRs1,vRd,vsins.extd.opcode};
+							uop[1] = {1'b1,1'b0,1'd0,5'd1,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd1,vRd+7'd1,vsins.extd.opcode};
+							uop[2] = {1'b1,1'b0,1'd0,5'd2,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd2,vRd+7'd2,vsins.extd.opcode};
+							uop[3] = {1'b1,1'b0,1'd0,5'd3,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd3,vRd+7'd3,vsins.extd.opcode};
+							uop[4] = {1'b1,1'b0,1'd0,5'd4,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd4,vRd+7'd4,vsins.extd.opcode};
+							uop[5] = {1'b1,1'b0,1'd0,5'd5,4'd0,{2'b00,vsins.extd.Rs4},vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd5,vRd+7'd5,vsins.extd.opcode};
 						end
 					5'd23:	
 						begin
 							count = 4'd7;
-							uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,{2'b00,vsins.extd.Rs3},{2'b00,vsins.extd.Rs2},vRs1,vRd,vsins.extd.opcode};
-							uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd1,vRd+7'd1,vsins.extd.opcode};
-							uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd2,vRd+7'd2,vsins.extd.opcode};
-							uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd3,vRd+7'd3,vsins.extd.opcode};
-							uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd4,vRd+7'd4,vsins.extd.opcode};
-							uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd5,vRd+7'd5,vsins.extd.opcode};
-							uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,{2'b00,vsins.extd.Rs4},vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd6,vRd+7'd6,vsins.extd.opcode};
+							uop[0] = {1'b1,1'b0,1'd1,5'd0,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,{2'b00,vsins.extd.Rs3},{2'b00,vsins.extd.Rs2},vRs1,vRd,vsins.extd.opcode};
+							uop[1] = {1'b1,1'b0,1'd0,5'd1,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd1,vRd+7'd1,vsins.extd.opcode};
+							uop[2] = {1'b1,1'b0,1'd0,5'd2,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd2,vRd+7'd2,vsins.extd.opcode};
+							uop[3] = {1'b1,1'b0,1'd0,5'd3,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd3,vRd+7'd3,vsins.extd.opcode};
+							uop[4] = {1'b1,1'b0,1'd0,5'd4,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd4,vRd+7'd4,vsins.extd.opcode};
+							uop[5] = {1'b1,1'b0,1'd0,5'd5,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd5,vRd+7'd5,vsins.extd.opcode};
+							uop[6] = {1'b1,1'b0,1'd0,5'd6,4'd0,{2'b00,vsins.extd.Rs4},vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd6,vRd+7'd6,vsins.extd.opcode};
 						end
 					5'd24:
 						begin
 							count = 4'd8;
-							uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,{2'b00,vsins.extd.Rs3},{2'b00,vsins.extd.Rs2},vRs1,vRd,vsins.extd.opcode};
-							uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd1,vRd+7'd1,vsins.extd.opcode};
-							uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd2,vRd+7'd2,vsins.extd.opcode};
-							uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd3,vRd+7'd3,vsins.extd.opcode};
-							uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd4,vRd+7'd4,vsins.extd.opcode};
-							uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd5,vRd+7'd5,vsins.extd.opcode};
-							uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd6,vRd+7'd6,vsins.extd.opcode};
-							uop[7] = {1'b1,1'b0,3'd0,3'd7,4'd0,{2'b00,vsins.extd.Rs4},vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd7,vRd+7'd7,vsins.extd.opcode};
+							uop[0] = {1'b1,1'b0,1'd1,5'd0,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,{2'b00,vsins.extd.Rs3},{2'b00,vsins.extd.Rs2},vRs1,vRd,vsins.extd.opcode};
+							uop[1] = {1'b1,1'b0,1'd0,5'd1,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd1,vRd+7'd1,vsins.extd.opcode};
+							uop[2] = {1'b1,1'b0,1'd0,5'd2,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd2,vRd+7'd2,vsins.extd.opcode};
+							uop[3] = {1'b1,1'b0,1'd0,5'd3,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd3,vRd+7'd3,vsins.extd.opcode};
+							uop[4] = {1'b1,1'b0,1'd0,5'd4,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd4,vRd+7'd4,vsins.extd.opcode};
+							uop[5] = {1'b1,1'b0,1'd0,5'd5,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd5,vRd+7'd5,vsins.extd.opcode};
+							uop[6] = {1'b1,1'b0,1'd0,5'd6,4'd0,mo0,vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd6,vRd+7'd6,vsins.extd.opcode};
+							uop[7] = {1'b1,1'b0,1'd0,5'd7,4'd0,{2'b00,vsins.extd.Rs4},vsins.extd.ms,vsins.extd.op3,mo0,{2'b00,vsins.extd.Rs2},vRs1+7'd7,vRd+7'd7,vsins.extd.opcode};
 						end
 					default:
 						begin
@@ -517,90 +517,90 @@ begin
 			5'd1:
 				begin
 			count = 4'd1;
-			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,vRs3,vRs2,vRs1,vRd,instr.any.opcode};
+			uop[0] = {1'b1,1'b0,1'd1,5'd0,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,vRs3,vRs2,vRs1,vRd,instr.any.opcode};
 			     end
 			5'd2:
 				begin
 			count = 4'd2;
-			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,vRs3,vRs2,vRs1,vRd,instr.any.opcode};
-			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,vRs3+vRs3i,vRs2+vRs2i,vRs1+vRs1i,vRd+vRdi,instr.any.opcode};
+			uop[0] = {1'b1,1'b0,1'd1,5'd0,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,vRs3,vRs2,vRs1,vRd,instr.any.opcode};
+			uop[1] = {1'b1,1'b0,1'd0,5'd1,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,vRs3+vRs3i,vRs2+vRs2i,vRs1+vRs1i,vRd+vRdi,instr.any.opcode};
 				end
 			5'd3:
 				begin
 			count = 4'd3;
-			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,vRs3,vRs2,vRs1,vRd,instr.any.opcode};
-			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,vRs3+vRs3i,vRs2+vRs2i,vRs1+vRs1i,vRd+vRdi,instr.any.opcode};
-			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,
+			uop[0] = {1'b1,1'b0,1'd1,5'd0,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,vRs3,vRs2,vRs1,vRd,instr.any.opcode};
+			uop[1] = {1'b1,1'b0,1'd0,5'd1,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,vRs3+vRs3i,vRs2+vRs2i,vRs1+vRs1i,vRd+vRdi,instr.any.opcode};
+			uop[2] = {1'b1,1'b0,1'd0,5'd2,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,
 				vRs3+(vRs3i?8'd2:8'd0),vRs2+(vRs2i?8'd2:8'd0),vRs1+(vRs1i?8'd2:8'd0),vRd+(vRdi?8'd2:8'd0),instr.any.opcode};
 				end
 			5'd4:
 				begin
 			count = 4'd4;
-			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,vRs3,vRs2,vRs1,vRd,instr.any.opcode};
-			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,vRs3+vRs3i,vRs2+vRs2i,vRs1+vRs1i,vRd+vRdi,instr.any.opcode};
-			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,
+			uop[0] = {1'b1,1'b0,1'd1,5'd0,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,vRs3,vRs2,vRs1,vRd,instr.any.opcode};
+			uop[1] = {1'b1,1'b0,1'd0,5'd1,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,vRs3+vRs3i,vRs2+vRs2i,vRs1+vRs1i,vRd+vRdi,instr.any.opcode};
+			uop[2] = {1'b1,1'b0,1'd0,5'd2,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,
 				vRs3+(vRs3i?8'd2:8'd0),vRs2+(vRs2i?8'd2:8'd0),vRs1+(vRs1i?8'd2:8'd0),vRd+(vRdi?8'd2:8'd0),instr.any.opcode};
-			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,
+			uop[3] = {1'b1,1'b0,1'd0,5'd3,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,
 				vRs3+(vRs3i?8'd3:8'd0),vRs2+(vRs2i?8'd3:8'd0),vRs1+(vRs1i?8'd3:8'd0),vRd+(vRdi?8'd3:8'd0),instr.any.opcode};
 				end
 			5'd21:
 				begin
 			count = 4'd5;
-			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,vRs3,vRs2,vRs1,vRd,instr.any.opcode};
-			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,vRs3+vRs3i,vRs2+vRs2i,vRs1+vRs1i,vRd+vRdi,instr.any.opcode};
-			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,
+			uop[0] = {1'b1,1'b0,1'd1,5'd0,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,vRs3,vRs2,vRs1,vRd,instr.any.opcode};
+			uop[1] = {1'b1,1'b0,1'd0,5'd1,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,vRs3+vRs3i,vRs2+vRs2i,vRs1+vRs1i,vRd+vRdi,instr.any.opcode};
+			uop[2] = {1'b1,1'b0,1'd0,5'd2,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,
 				vRs3+(vRs3i?8'd2:8'd0),vRs2+(vRs2i?8'd2:8'd0),vRs1+(vRs1i?8'd2:8'd0),vRd+(vRdi?8'd2:8'd0),instr.any.opcode};
-			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,
+			uop[3] = {1'b1,1'b0,1'd0,5'd3,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,
 				vRs3+(vRs3i?8'd3:8'd0),vRs2+(vRs2i?8'd3:8'd0),vRs1+(vRs1i?8'd3:8'd0),vRd+(vRdi?8'd3:8'd0),instr.any.opcode};
-			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,
+			uop[4] = {1'b1,1'b0,1'd0,5'd4,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,
 				vRs3+(vRs3i?8'd4:8'd0),vRs2+(vRs2i?8'd4:8'd0),vRs1+(vRs1i?8'd4:8'd0),vRd+(vRdi?8'd4:8'd0),instr.any.opcode};
 				end
 			5'd22:
 				begin
 			count = 4'd6;
-			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,vRs3,vRs2,vRs1,vRd,instr.any.opcode};
-			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,vRs3+vRs3i,vRs2+vRs2i,vRs1+vRs1i,vRd+vRdi,instr.any.opcode};
-			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,
+			uop[0] = {1'b1,1'b0,1'd1,5'd0,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,vRs3,vRs2,vRs1,vRd,instr.any.opcode};
+			uop[1] = {1'b1,1'b0,1'd0,5'd1,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,vRs3+vRs3i,vRs2+vRs2i,vRs1+vRs1i,vRd+vRdi,instr.any.opcode};
+			uop[2] = {1'b1,1'b0,1'd0,5'd2,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,
 				vRs3+(vRs3i?8'd2:8'd0),vRs2+(vRs2i?8'd2:8'd0),vRs1+(vRs1i?8'd2:8'd0),vRd+(vRdi?8'd2:8'd0),instr.any.opcode};
-			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,
+			uop[3] = {1'b1,1'b0,1'd0,5'd3,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,
 				vRs3+(vRs3i?8'd3:8'd0),vRs2+(vRs2i?8'd3:8'd0),vRs1+(vRs1i?8'd3:8'd0),vRd+(vRdi?8'd3:8'd0),instr.any.opcode};
-			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,
+			uop[4] = {1'b1,1'b0,1'd0,5'd4,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,
 				vRs3+(vRs3i?8'd4:8'd0),vRs2+(vRs2i?8'd4:8'd0),vRs1+(vRs1i?8'd4:8'd0),vRd+(vRdi?8'd4:8'd0),instr.any.opcode};
-			uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,
+			uop[5] = {1'b1,1'b0,1'd0,5'd5,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,
 				vRs3+(vRs3i?8'd5:8'd0),vRs2+(vRs2i?8'd5:8'd0),vRs1+(vRs1i?8'd5:8'd0),vRd+(vRdi?8'd5:8'd0),instr.any.opcode};
 				end
 			5'd23:
 				begin
 			count = 4'd7;
-			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,vRs3,vRs2,vRs1,vRd,instr.any.opcode};
-			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,vRs3+vRs3i,vRs2+vRs2i,vRs1+vRs1i,vRd+vRdi,instr.any.opcode};
-			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,
+			uop[0] = {1'b1,1'b0,1'd1,5'd0,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,vRs3,vRs2,vRs1,vRd,instr.any.opcode};
+			uop[1] = {1'b1,1'b0,1'd0,5'd1,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,vRs3+vRs3i,vRs2+vRs2i,vRs1+vRs1i,vRd+vRdi,instr.any.opcode};
+			uop[2] = {1'b1,1'b0,1'd0,5'd2,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,
 				vRs3+(vRs3i?8'd2:8'd0),vRs2+(vRs2i?8'd2:8'd0),vRs1+(vRs1i?8'd2:8'd0),vRd+(vRdi?8'd2:8'd0),instr.any.opcode};
-			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,
+			uop[3] = {1'b1,1'b0,1'd0,5'd3,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,
 				vRs3+(vRs3i?8'd3:8'd0),vRs2+(vRs2i?8'd3:8'd0),vRs1+(vRs1i?8'd3:8'd0),vRd+(vRdi?8'd3:8'd0),instr.any.opcode};
-			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,
+			uop[4] = {1'b1,1'b0,1'd0,5'd4,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,
 				vRs3+(vRs3i?8'd4:8'd0),vRs2+(vRs2i?8'd4:8'd0),vRs1+(vRs1i?8'd4:8'd0),vRd+(vRdi?8'd4:8'd0),instr.any.opcode};
-			uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,
+			uop[5] = {1'b1,1'b0,1'd0,5'd5,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,
 				vRs3+(vRs3i?8'd5:8'd0),vRs2+(vRs2i?8'd5:8'd0),vRs1+(vRs1i?8'd5:8'd0),vRd+(vRdi?8'd5:8'd0),instr.any.opcode};
-			uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,
+			uop[6] = {1'b1,1'b0,1'd0,5'd6,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,
 				vRs3+(vRs3i?8'd6:8'd0),vRs2+(vRs2i?8'd6:8'd0),vRs1+(vRs1i?8'd6:8'd0),vRd+(vRdi?8'd6:8'd0),instr.any.opcode};
 				end
 			5'd24:
 				begin
 			count = 4'd8;
-			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,vRs3,vRs2,vRs1,vRd,instr.any.opcode};
-			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,vRs3+vRs3i,vRs2+vRs2i,vRs1+vRs1i,vRd+vRdi,instr.any.opcode};
-			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,
+			uop[0] = {1'b1,1'b0,1'd1,5'd0,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,vRs3,vRs2,vRs1,vRd,instr.any.opcode};
+			uop[1] = {1'b1,1'b0,1'd0,5'd1,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,vRs3+vRs3i,vRs2+vRs2i,vRs1+vRs1i,vRd+vRdi,instr.any.opcode};
+			uop[2] = {1'b1,1'b0,1'd0,5'd2,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,
 				vRs3+(vRs3i?8'd2:8'd0),vRs2+(vRs2i?8'd2:8'd0),vRs1+(vRs1i?8'd2:8'd0),vRd+(vRdi?8'd2:8'd0),instr.any.opcode};
-			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,
+			uop[3] = {1'b1,1'b0,1'd0,5'd3,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,
 				vRs3+(vRs3i?8'd3:8'd0),vRs2+(vRs2i?8'd3:8'd0),vRs1+(vRs1i?8'd3:8'd0),vRd+(vRdi?8'd3:8'd0),instr.any.opcode};
-			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,
+			uop[4] = {1'b1,1'b0,1'd0,5'd4,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,
 				vRs3+(vRs3i?8'd4:8'd0),vRs2+(vRs2i?8'd4:8'd0),vRs1+(vRs1i?8'd4:8'd0),vRd+(vRdi?8'd4:8'd0),instr.any.opcode};
-			uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,
+			uop[5] = {1'b1,1'b0,1'd0,5'd5,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,
 				vRs3+(vRs3i?8'd5:8'd0),vRs2+(vRs2i?8'd5:8'd0),vRs1+(vRs1i?8'd5:8'd0),vRd+(vRdi?8'd5:8'd0),instr.any.opcode};
-			uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,
+			uop[6] = {1'b1,1'b0,1'd0,5'd6,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,
 				vRs3+(vRs3i?8'd6:8'd0),vRs2+(vRs2i?8'd6:8'd0),vRs1+(vRs1i?8'd6:8'd0),vRd+(vRdi?8'd6:8'd0),instr.any.opcode};
-			uop[7] = {1'b1,1'b0,3'd0,3'd7,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,
+			uop[7] = {1'b1,1'b0,1'd0,5'd7,4'd0,instr.r3.func,instr.r3.ms,instr.r3.op3,
 				vRs3+(vRs3i?8'd7:8'd0),vRs2+(vRs2i?8'd7:8'd0),vRs1+(vRs1i?8'd7:8'd0),vRd+(vRdi?8'd7:8'd0),instr.any.opcode};
 				end
 			default:	
@@ -621,70 +621,70 @@ begin
 			5'd1:
 				begin
 			count = 4'd1;
-			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,vls};
+			uop[0] = {1'b1,1'b0,1'd1,5'd0,4'd0,vls};
 				end
 			5'd2:
 				begin
 			count = 4'd2;
-			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,vls};
-			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd8,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd1,vls.vls.opcode};
+			uop[0] = {1'b1,1'b0,1'd1,5'd0,4'd0,vls};
+			uop[1] = {1'b1,1'b0,1'd0,5'd1,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd8,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd1,vls.vls.opcode};
 				end
 			5'd3:
 				begin
 			count = 4'd3;
-			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,vls};
-			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd8,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd1,vls.vls.opcode};
-			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd16,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd2,vls.vls.opcode};
+			uop[0] = {1'b1,1'b0,1'd1,5'd0,4'd0,vls};
+			uop[1] = {1'b1,1'b0,1'd0,5'd1,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd8,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd1,vls.vls.opcode};
+			uop[2] = {1'b1,1'b0,1'd0,5'd2,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd16,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd2,vls.vls.opcode};
 				end
 			5'd4:
 				begin
 			count = 4'd4;
-			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,vls};
-			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd8,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd1,vls.vls.opcode};
-			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd16,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd2,vls.vls.opcode};
-			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd24,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd3,vls.vls.opcode};
+			uop[0] = {1'b1,1'b0,1'd1,5'd0,4'd0,vls};
+			uop[1] = {1'b1,1'b0,1'd0,5'd1,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd8,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd1,vls.vls.opcode};
+			uop[2] = {1'b1,1'b0,1'd0,5'd2,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd16,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd2,vls.vls.opcode};
+			uop[3] = {1'b1,1'b0,1'd0,5'd3,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd24,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd3,vls.vls.opcode};
 				end
 			5'd21:
 				begin
 			count = 4'd5;
-			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,vls};
-			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd8,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd1,vls.vls.opcode};
-			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd16,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd2,vls.vls.opcode};
-			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd24,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd3,vls.vls.opcode};
-			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd32,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd4,vls.vls.opcode};
+			uop[0] = {1'b1,1'b0,1'd1,5'd0,4'd0,vls};
+			uop[1] = {1'b1,1'b0,1'd0,5'd1,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd8,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd1,vls.vls.opcode};
+			uop[2] = {1'b1,1'b0,1'd0,5'd2,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd16,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd2,vls.vls.opcode};
+			uop[3] = {1'b1,1'b0,1'd0,5'd3,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd24,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd3,vls.vls.opcode};
+			uop[4] = {1'b1,1'b0,1'd0,5'd4,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd32,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd4,vls.vls.opcode};
 				end
 			5'd22:
 				begin
 			count = 4'd6;
-			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,vls};
-			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd8,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd1,vls.vls.opcode};
-			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd16,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd2,vls.vls.opcode};
-			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd24,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd3,vls.vls.opcode};
-			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd32,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd4,vls.vls.opcode};
-			uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd40,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd5,vls.vls.opcode};
+			uop[0] = {1'b1,1'b0,1'd1,5'd0,4'd0,vls};
+			uop[1] = {1'b1,1'b0,1'd0,5'd1,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd8,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd1,vls.vls.opcode};
+			uop[2] = {1'b1,1'b0,1'd0,5'd2,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd16,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd2,vls.vls.opcode};
+			uop[3] = {1'b1,1'b0,1'd0,5'd3,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd24,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd3,vls.vls.opcode};
+			uop[4] = {1'b1,1'b0,1'd0,5'd4,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd32,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd4,vls.vls.opcode};
+			uop[5] = {1'b1,1'b0,1'd0,5'd5,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd40,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd5,vls.vls.opcode};
 				end
 			5'd23:
 				begin
 			count = 4'd7;
-			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,vls};
-			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd8,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd1,vls.vls.opcode};
-			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd16,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd2,vls.vls.opcode};
-			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd24,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd3,vls.vls.opcode};
-			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd32,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd4,vls.vls.opcode};
-			uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd40,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd5,vls.vls.opcode};
-			uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd48,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd6,vls.vls.opcode};
+			uop[0] = {1'b1,1'b0,1'd1,5'd0,4'd0,vls};
+			uop[1] = {1'b1,1'b0,1'd0,5'd1,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd8,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd1,vls.vls.opcode};
+			uop[2] = {1'b1,1'b0,1'd0,5'd2,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd16,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd2,vls.vls.opcode};
+			uop[3] = {1'b1,1'b0,1'd0,5'd3,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd24,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd3,vls.vls.opcode};
+			uop[4] = {1'b1,1'b0,1'd0,5'd4,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd32,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd4,vls.vls.opcode};
+			uop[5] = {1'b1,1'b0,1'd0,5'd5,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd40,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd5,vls.vls.opcode};
+			uop[6] = {1'b1,1'b0,1'd0,5'd6,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd48,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd6,vls.vls.opcode};
 				end
 			5'd24:
 				begin
 			count = 4'd8;
-			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,vls};
-			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd8,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd1,vls.vls.opcode};
-			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd16,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd2,vls.vls.opcode};
-			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd24,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd3,vls.vls.opcode};
-			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd32,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd4,vls.vls.opcode};
-			uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd40,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd5,vls.vls.opcode};
-			uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd48,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd6,vls.vls.opcode};
-			uop[7] = {1'b1,1'b0,3'd0,3'd7,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd56,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd7,vls.vls.opcode};
+			uop[0] = {1'b1,1'b0,1'd1,5'd0,4'd0,vls};
+			uop[1] = {1'b1,1'b0,1'd0,5'd1,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd8,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd1,vls.vls.opcode};
+			uop[2] = {1'b1,1'b0,1'd0,5'd2,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd16,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd2,vls.vls.opcode};
+			uop[3] = {1'b1,1'b0,1'd0,5'd3,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd24,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd3,vls.vls.opcode};
+			uop[4] = {1'b1,1'b0,1'd0,5'd4,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd32,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd4,vls.vls.opcode};
+			uop[5] = {1'b1,1'b0,1'd0,5'd5,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd40,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd5,vls.vls.opcode};
+			uop[6] = {1'b1,1'b0,1'd0,5'd6,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd48,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd6,vls.vls.opcode};
+			uop[7] = {1'b1,1'b0,1'd0,5'd7,4'd0,vls.vls.sc,vls.vls.ms,vls.vls.disp+6'd56,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2,vls.vls.Rs1,vls.vls.Rd+7'd7,vls.vls.opcode};
 				end
 			default:	
 				begin
@@ -705,70 +705,70 @@ begin
 			5'd1:
 				begin
 			count = 4'd1;
-			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,vls};
+			uop[0] = {1'b1,1'b0,1'd1,5'd0,4'd0,vls};
 				end
 			5'd2:
 				begin
 			count = 4'd2;
-			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,vls};
-			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd1,vls.vls.Rs1,vls.vls.Rd+7'd1,vls.vls.opcode};
+			uop[0] = {1'b1,1'b0,1'd1,5'd0,4'd0,vls};
+			uop[1] = {1'b1,1'b0,1'd0,5'd1,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd1,vls.vls.Rs1,vls.vls.Rd+7'd1,vls.vls.opcode};
 				end
 			5'd3:
 				begin
 			count = 4'd3;
-			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,vls};
-			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd1,vls.vls.Rs1,vls.vls.Rd+7'd1,vls.vls.opcode};
-			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd2,vls.vls.Rs1,vls.vls.Rd+7'd2,vls.vls.opcode};
+			uop[0] = {1'b1,1'b0,1'd1,5'd0,4'd0,vls};
+			uop[1] = {1'b1,1'b0,1'd0,5'd1,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd1,vls.vls.Rs1,vls.vls.Rd+7'd1,vls.vls.opcode};
+			uop[2] = {1'b1,1'b0,1'd0,5'd2,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd2,vls.vls.Rs1,vls.vls.Rd+7'd2,vls.vls.opcode};
 				end
 			5'd4:
 				begin
 			count = 4'd4;
-			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,vls};
-			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd1,vls.vls.Rs1,vls.vls.Rd+7'd1,vls.vls.opcode};
-			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd2,vls.vls.Rs1,vls.vls.Rd+7'd2,vls.vls.opcode};
-			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd3,vls.vls.Rs1,vls.vls.Rd+7'd3,vls.vls.opcode};
+			uop[0] = {1'b1,1'b0,1'd1,5'd0,4'd0,vls};
+			uop[1] = {1'b1,1'b0,1'd0,5'd1,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd1,vls.vls.Rs1,vls.vls.Rd+7'd1,vls.vls.opcode};
+			uop[2] = {1'b1,1'b0,1'd0,5'd2,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd2,vls.vls.Rs1,vls.vls.Rd+7'd2,vls.vls.opcode};
+			uop[3] = {1'b1,1'b0,1'd0,5'd3,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd3,vls.vls.Rs1,vls.vls.Rd+7'd3,vls.vls.opcode};
 				end
 			5'd21:
 				begin
 			count = 4'd5;
-			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,vls};
-			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd1,vls.vls.Rs1,vls.vls.Rd+7'd1,vls.vls.opcode};
-			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd2,vls.vls.Rs1,vls.vls.Rd+7'd2,vls.vls.opcode};
-			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd3,vls.vls.Rs1,vls.vls.Rd+7'd3,vls.vls.opcode};
-			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd4,vls.vls.Rs1,vls.vls.Rd+7'd4,vls.vls.opcode};
+			uop[0] = {1'b1,1'b0,1'd1,5'd0,4'd0,vls};
+			uop[1] = {1'b1,1'b0,1'd0,5'd1,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd1,vls.vls.Rs1,vls.vls.Rd+7'd1,vls.vls.opcode};
+			uop[2] = {1'b1,1'b0,1'd0,5'd2,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd2,vls.vls.Rs1,vls.vls.Rd+7'd2,vls.vls.opcode};
+			uop[3] = {1'b1,1'b0,1'd0,5'd3,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd3,vls.vls.Rs1,vls.vls.Rd+7'd3,vls.vls.opcode};
+			uop[4] = {1'b1,1'b0,1'd0,5'd4,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd4,vls.vls.Rs1,vls.vls.Rd+7'd4,vls.vls.opcode};
 				end
 			5'd22:
 				begin
 			count = 4'd6;
-			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,vls};
-			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd1,vls.vls.Rs1,vls.vls.Rd+7'd1,vls.vls.opcode};
-			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd2,vls.vls.Rs1,vls.vls.Rd+7'd2,vls.vls.opcode};
-			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd3,vls.vls.Rs1,vls.vls.Rd+7'd3,vls.vls.opcode};
-			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd4,vls.vls.Rs1,vls.vls.Rd+7'd4,vls.vls.opcode};
-			uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd5,vls.vls.Rs1,vls.vls.Rd+7'd5,vls.vls.opcode};
+			uop[0] = {1'b1,1'b0,1'd1,5'd0,4'd0,vls};
+			uop[1] = {1'b1,1'b0,1'd0,5'd1,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd1,vls.vls.Rs1,vls.vls.Rd+7'd1,vls.vls.opcode};
+			uop[2] = {1'b1,1'b0,1'd0,5'd2,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd2,vls.vls.Rs1,vls.vls.Rd+7'd2,vls.vls.opcode};
+			uop[3] = {1'b1,1'b0,1'd0,5'd3,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd3,vls.vls.Rs1,vls.vls.Rd+7'd3,vls.vls.opcode};
+			uop[4] = {1'b1,1'b0,1'd0,5'd4,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd4,vls.vls.Rs1,vls.vls.Rd+7'd4,vls.vls.opcode};
+			uop[5] = {1'b1,1'b0,1'd0,5'd5,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd5,vls.vls.Rs1,vls.vls.Rd+7'd5,vls.vls.opcode};
 				end
 			5'd23:
 				begin
 			count = 4'd7;
-			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,vls};
-			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd1,vls.vls.Rs1,vls.vls.Rd+7'd1,vls.vls.opcode};
-			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd2,vls.vls.Rs1,vls.vls.Rd+7'd2,vls.vls.opcode};
-			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd3,vls.vls.Rs1,vls.vls.Rd+7'd3,vls.vls.opcode};
-			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd4,vls.vls.Rs1,vls.vls.Rd+7'd4,vls.vls.opcode};
-			uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd5,vls.vls.Rs1,vls.vls.Rd+7'd5,vls.vls.opcode};
-			uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd6,vls.vls.Rs1,vls.vls.Rd+7'd6,vls.vls.opcode};
+			uop[0] = {1'b1,1'b0,1'd1,5'd0,4'd0,vls};
+			uop[1] = {1'b1,1'b0,1'd0,5'd1,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd1,vls.vls.Rs1,vls.vls.Rd+7'd1,vls.vls.opcode};
+			uop[2] = {1'b1,1'b0,1'd0,5'd2,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd2,vls.vls.Rs1,vls.vls.Rd+7'd2,vls.vls.opcode};
+			uop[3] = {1'b1,1'b0,1'd0,5'd3,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd3,vls.vls.Rs1,vls.vls.Rd+7'd3,vls.vls.opcode};
+			uop[4] = {1'b1,1'b0,1'd0,5'd4,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd4,vls.vls.Rs1,vls.vls.Rd+7'd4,vls.vls.opcode};
+			uop[5] = {1'b1,1'b0,1'd0,5'd5,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd5,vls.vls.Rs1,vls.vls.Rd+7'd5,vls.vls.opcode};
+			uop[6] = {1'b1,1'b0,1'd0,5'd6,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd6,vls.vls.Rs1,vls.vls.Rd+7'd6,vls.vls.opcode};
 				end
 			5'd24:
 				begin
 			count = 4'd8;
-			uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,vls};
-			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd1,vls.vls.Rs1,vls.vls.Rd+7'd1,vls.vls.opcode};
-			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd2,vls.vls.Rs1,vls.vls.Rd+7'd2,vls.vls.opcode};
-			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd3,vls.vls.Rs1,vls.vls.Rd+7'd3,vls.vls.opcode};
-			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd4,vls.vls.Rs1,vls.vls.Rd+7'd4,vls.vls.opcode};
-			uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd5,vls.vls.Rs1,vls.vls.Rd+7'd5,vls.vls.opcode};
-			uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd6,vls.vls.Rs1,vls.vls.Rd+7'd6,vls.vls.opcode};
-			uop[7] = {1'b1,1'b0,3'd0,3'd7,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd7,vls.vls.Rs1,vls.vls.Rd+7'd7,vls.vls.opcode};
+			uop[0] = {1'b1,1'b0,1'd1,5'd0,4'd0,vls};
+			uop[1] = {1'b1,1'b0,1'd0,5'd1,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd1,vls.vls.Rs1,vls.vls.Rd+7'd1,vls.vls.opcode};
+			uop[2] = {1'b1,1'b0,1'd0,5'd2,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd2,vls.vls.Rs1,vls.vls.Rd+7'd2,vls.vls.opcode};
+			uop[3] = {1'b1,1'b0,1'd0,5'd3,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd3,vls.vls.Rs1,vls.vls.Rd+7'd3,vls.vls.opcode};
+			uop[4] = {1'b1,1'b0,1'd0,5'd4,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd4,vls.vls.Rs1,vls.vls.Rd+7'd4,vls.vls.opcode};
+			uop[5] = {1'b1,1'b0,1'd0,5'd5,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd5,vls.vls.Rs1,vls.vls.Rd+7'd5,vls.vls.opcode};
+			uop[6] = {1'b1,1'b0,1'd0,5'd6,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd6,vls.vls.Rs1,vls.vls.Rd+7'd6,vls.vls.opcode};
+			uop[7] = {1'b1,1'b0,1'd0,5'd7,4'd0,vls.vls.sc,1'b0,6'd0,vls.vls.dt,vls.vls.Rs3,vls.vls.Rs2+7'd7,vls.vls.Rs1,vls.vls.Rd+7'd7,vls.vls.opcode};
 				end
 			default:	
 				begin
@@ -814,11 +814,11 @@ begin
 			if (insert_boi) begin
 				count = 4'd2;
 				uop[0] = uop_boi;
-				uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,instr};
+				uop[1] = {1'b1,1'b0,1'd0,5'd1,4'd0,instr};
 			end
 			else begin
 				count = 4'd1;
-				uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,instr};
+				uop[0] = {1'b1,1'b0,1'd1,5'd0,4'd0,instr};
 			end
 		end
 /*		
@@ -831,20 +831,20 @@ begin
 	Qupls4_pkg::OP_ENTER:
 		begin
 			count = 4'd5;
-			uop[0] = {1'b1,1'b0,3'd5,3'd0,4'd0,enter_st_fp};
-			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,fp_eq_sp};
-			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,enter_st_lr};
-			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,decssp32};
-			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,instr};
+			uop[0] = {1'b1,1'b0,1'd1,5'd0,4'd0,enter_st_fp};
+			uop[1] = {1'b1,1'b0,1'd0,5'd1,4'd0,fp_eq_sp};
+			uop[2] = {1'b1,1'b0,1'd0,5'd2,4'd0,enter_st_lr};
+			uop[3] = {1'b1,1'b0,1'd0,5'd3,4'd0,decssp32};
+			uop[4] = {1'b1,1'b0,1'd0,5'd4,4'd0,instr};
 		end
 	Qupls4_pkg::OP_EXIT:
 		begin
 			count = 4'd5;
-			uop[0] = {1'b1,1'b0,3'd5,3'd0,4'd0,sp_eq_fp};
-			uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,exit_ld_fp};
-			uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,exit_ld_lr};
-			uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,incssp32};
-			uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,2'd3,ir[45:21],7'd57,ir[13:7],Qupls4_pkg::OP_RTD};	// change LEAVE into RTD
+			uop[0] = {1'b1,1'b0,1'd1,5'd0,4'd0,sp_eq_fp};
+			uop[1] = {1'b1,1'b0,1'd0,5'd1,4'd0,exit_ld_fp};
+			uop[2] = {1'b1,1'b0,1'd0,5'd2,4'd0,exit_ld_lr};
+			uop[3] = {1'b1,1'b0,1'd0,5'd3,4'd0,incssp32};
+			uop[4] = {1'b1,1'b0,1'd0,5'd4,4'd0,2'd3,ir[45:21],7'd57,ir[13:7],Qupls4_pkg::OP_RTD};	// change LEAVE into RTD
 		end
 	Qupls4_pkg::OP_PUSH:
 		begin
@@ -852,59 +852,59 @@ begin
 			case(ir[47:45])
 			4'd1:	
 				begin
-					uop[0] = {1'b1,1'b0,3'd2,3'd0,4'd0,push1};
-					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,2'd3,4'd0,27'h7FFFFF8,sp+ir[37:35],sp+ir[44:42],Qupls4_pkg::OP_ADDI};
+					uop[0] = {1'b1,1'b0,1'd1,5'd0,4'd0,push1};
+					uop[1] = {1'b1,1'b0,1'd0,5'd1,4'd0,2'd3,4'd0,27'h7FFFFF8,sp+ir[37:35],sp+ir[44:42],Qupls4_pkg::OP_ADDI};
 				end
 			4'd2:
 				begin
-					uop[0] = {1'b1,1'b0,3'd3,3'd0,4'd0,push1};
-					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,push2};
-					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,2'd3,4'd0,27'h7FFFFF0,sp+ir[37:35],sp+ir[44:42],Qupls4_pkg::OP_ADDI};
+					uop[0] = {1'b1,1'b0,1'd1,5'd0,4'd0,push1};
+					uop[1] = {1'b1,1'b0,1'd0,5'd1,4'd0,push2};
+					uop[2] = {1'b1,1'b0,1'd0,5'd2,4'd0,2'd3,4'd0,27'h7FFFFF0,sp+ir[37:35],sp+ir[44:42],Qupls4_pkg::OP_ADDI};
 				end
 			4'd3:
 				begin
-					uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,push1};
-					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,push2};
-					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,push3};
-					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,2'd3,4'd0,27'h7FFFFE8,sp+ir[37:35],sp+ir[44:42],Qupls4_pkg::OP_ADDI};
+					uop[0] = {1'b1,1'b0,1'd1,5'd0,4'd0,push1};
+					uop[1] = {1'b1,1'b0,1'd0,5'd1,4'd0,push2};
+					uop[2] = {1'b1,1'b0,1'd0,5'd2,4'd0,push3};
+					uop[3] = {1'b1,1'b0,1'd0,5'd3,4'd0,2'd3,4'd0,27'h7FFFFE8,sp+ir[37:35],sp+ir[44:42],Qupls4_pkg::OP_ADDI};
 				end
 			4'd4:
 				begin
-					uop[0] = {1'b1,1'b0,3'd5,3'd0,4'd0,push1};
-					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,push2};
-					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,push3};
-					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,push4};
-					uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,2'd3,4'd0,27'h7FFFFE0,sp+ir[37:35],sp+ir[44:42],Qupls4_pkg::OP_ADDI};
+					uop[0] = {1'b1,1'b0,1'd1,5'd0,4'd0,push1};
+					uop[1] = {1'b1,1'b0,1'd0,5'd1,4'd0,push2};
+					uop[2] = {1'b1,1'b0,1'd0,5'd2,4'd0,push3};
+					uop[3] = {1'b1,1'b0,1'd0,5'd3,4'd0,push4};
+					uop[4] = {1'b1,1'b0,1'd0,5'd4,4'd0,2'd3,4'd0,27'h7FFFFE0,sp+ir[37:35],sp+ir[44:42],Qupls4_pkg::OP_ADDI};
 				end
 			4'd5:
 				begin
-					uop[0] = {1'b1,1'b0,3'd5,3'd0,4'd0,push1};
-					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,push2};
-					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,push3};
-					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,push4};
-					uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,push5};
-					uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,2'd3,4'd0,27'h7FFFFD8,sp+ir[37:35],sp+ir[44:42],Qupls4_pkg::OP_ADDI};
+					uop[0] = {1'b1,1'b0,1'd1,5'd0,4'd0,push1};
+					uop[1] = {1'b1,1'b0,1'd0,5'd1,4'd0,push2};
+					uop[2] = {1'b1,1'b0,1'd0,5'd2,4'd0,push3};
+					uop[3] = {1'b1,1'b0,1'd0,5'd3,4'd0,push4};
+					uop[4] = {1'b1,1'b0,1'd0,5'd4,4'd0,push5};
+					uop[5] = {1'b1,1'b0,1'd0,5'd5,4'd0,2'd3,4'd0,27'h7FFFFD8,sp+ir[37:35],sp+ir[44:42],Qupls4_pkg::OP_ADDI};
 				end
 			4'd6:
 				begin
-					uop[0] = {1'b1,1'b0,3'd5,3'd0,4'd0,push1};
-					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,push2};
-					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,push3};
-					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,push4};
-					uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,push5};
-					uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,push6};
-					uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,2'd3,4'd0,27'h7FFFFD0,sp+ir[37:35],sp+ir[44:42],Qupls4_pkg::OP_ADDI};
+					uop[0] = {1'b1,1'b0,1'd1,5'd0,4'd0,push1};
+					uop[1] = {1'b1,1'b0,1'd0,5'd1,4'd0,push2};
+					uop[2] = {1'b1,1'b0,1'd0,5'd2,4'd0,push3};
+					uop[3] = {1'b1,1'b0,1'd0,5'd3,4'd0,push4};
+					uop[4] = {1'b1,1'b0,1'd0,5'd4,4'd0,push5};
+					uop[5] = {1'b1,1'b0,1'd0,5'd5,4'd0,push6};
+					uop[6] = {1'b1,1'b0,1'd0,5'd6,4'd0,2'd3,4'd0,27'h7FFFFD0,sp+ir[37:35],sp+ir[44:42],Qupls4_pkg::OP_ADDI};
 				end
 			4'd7:
 				begin
-					uop[0] = {1'b1,1'b0,3'd5,3'd0,4'd0,push1};
-					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,push2};
-					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,push3};
-					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,push4};
-					uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,push5};
-					uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,push6};
-					uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,push7};
-					uop[7] = {1'b1,1'b0,3'd0,3'd7,4'd0,2'd3,4'd0,27'h7FFFFC8,sp+ir[37:35],sp+ir[44:42],Qupls4_pkg::OP_ADDI};
+					uop[0] = {1'b1,1'b0,1'd1,5'd0,4'd0,push1};
+					uop[1] = {1'b1,1'b0,1'd0,5'd1,4'd0,push2};
+					uop[2] = {1'b1,1'b0,1'd0,5'd2,4'd0,push3};
+					uop[3] = {1'b1,1'b0,1'd0,5'd3,4'd0,push4};
+					uop[4] = {1'b1,1'b0,1'd0,5'd4,4'd0,push5};
+					uop[5] = {1'b1,1'b0,1'd0,5'd5,4'd0,push6};
+					uop[6] = {1'b1,1'b0,1'd0,5'd6,4'd0,push7};
+					uop[7] = {1'b1,1'b0,1'd0,5'd7,4'd0,2'd3,4'd0,27'h7FFFFC8,sp+ir[37:35],sp+ir[44:42],Qupls4_pkg::OP_ADDI};
 				end
 			default:	
 				begin
@@ -919,59 +919,59 @@ begin
 			case(ir[47:45])
 			4'd1:	
 				begin
-					uop[0] = {1'b1,1'b0,3'd2,3'd0,4'd0,pop1};
-					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,2'd3,31'h08,sp+ir[44:42],sp+ir[44:42],Qupls4_pkg::OP_ADDI};
+					uop[0] = {1'b1,1'b0,1'd1,5'd0,4'd0,pop1};
+					uop[1] = {1'b1,1'b0,1'd0,5'd1,4'd0,2'd3,31'h08,sp+ir[44:42],sp+ir[44:42],Qupls4_pkg::OP_ADDI};
 				end
 			4'd2:
 				begin
-					uop[0] = {1'b1,1'b0,3'd3,3'd0,4'd0,pop1};
-					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,pop2};
-					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,2'd3,31'h10,sp+ir[44:42],sp+ir[44:42],Qupls4_pkg::OP_ADDI};
+					uop[0] = {1'b1,1'b0,1'd1,5'd0,4'd0,pop1};
+					uop[1] = {1'b1,1'b0,1'd0,5'd1,4'd0,pop2};
+					uop[2] = {1'b1,1'b0,1'd0,5'd2,4'd0,2'd3,31'h10,sp+ir[44:42],sp+ir[44:42],Qupls4_pkg::OP_ADDI};
 				end
 			4'd3:
 				begin
-					uop[0] = {1'b1,1'b0,3'd4,3'd0,4'd0,pop1};
-					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,pop2};
-					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,pop3};
-					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,2'd3,31'h18,sp+ir[44:42],sp+ir[44:42],Qupls4_pkg::OP_ADDI};
+					uop[0] = {1'b1,1'b0,1'd1,5'd0,4'd0,pop1};
+					uop[1] = {1'b1,1'b0,1'd0,5'd1,4'd0,pop2};
+					uop[2] = {1'b1,1'b0,1'd0,5'd2,4'd0,pop3};
+					uop[3] = {1'b1,1'b0,1'd0,5'd3,4'd0,2'd3,31'h18,sp+ir[44:42],sp+ir[44:42],Qupls4_pkg::OP_ADDI};
 				end
 			4'd4:
 				begin
-					uop[0] = {1'b1,1'b0,3'd5,3'd0,4'd0,pop1};
-					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,pop2};
-					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,pop3};
-					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,pop4};
-					uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,2'd3,31'h20,sp+ir[44:42],sp+ir[44:42],Qupls4_pkg::OP_ADDI};
+					uop[0] = {1'b1,1'b0,1'd1,5'd0,4'd0,pop1};
+					uop[1] = {1'b1,1'b0,1'd0,5'd1,4'd0,pop2};
+					uop[2] = {1'b1,1'b0,1'd0,5'd2,4'd0,pop3};
+					uop[3] = {1'b1,1'b0,1'd0,5'd3,4'd0,pop4};
+					uop[4] = {1'b1,1'b0,1'd0,5'd4,4'd0,2'd3,31'h20,sp+ir[44:42],sp+ir[44:42],Qupls4_pkg::OP_ADDI};
 				end
 			4'd5:
 				begin
-					uop[0] = {1'b1,1'b0,3'd5,3'd0,4'd0,pop1};
-					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,pop2};
-					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,pop3};
-					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,pop4};
-					uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,pop5};
-					uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,2'd3,31'h28,sp+ir[44:42],sp+ir[44:42],Qupls4_pkg::OP_ADDI};
+					uop[0] = {1'b1,1'b0,1'd1,5'd0,4'd0,pop1};
+					uop[1] = {1'b1,1'b0,1'd0,5'd1,4'd0,pop2};
+					uop[2] = {1'b1,1'b0,1'd0,5'd2,4'd0,pop3};
+					uop[3] = {1'b1,1'b0,1'd0,5'd3,4'd0,pop4};
+					uop[4] = {1'b1,1'b0,1'd0,5'd4,4'd0,pop5};
+					uop[5] = {1'b1,1'b0,1'd0,5'd5,4'd0,2'd3,31'h28,sp+ir[44:42],sp+ir[44:42],Qupls4_pkg::OP_ADDI};
 				end
 			4'd6:
 				begin
-					uop[0] = {1'b1,1'b0,3'd5,3'd0,4'd0,pop1};
-					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,pop2};
-					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,pop3};
-					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,pop4};
-					uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,pop5};
-					uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,pop6};
-					uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,2'd3,31'h30,sp+ir[44:42],sp+ir[44:42],Qupls4_pkg::OP_ADDI};
+					uop[0] = {1'b1,1'b0,1'd1,5'd0,4'd0,pop1};
+					uop[1] = {1'b1,1'b0,1'd0,5'd1,4'd0,pop2};
+					uop[2] = {1'b1,1'b0,1'd0,5'd2,4'd0,pop3};
+					uop[3] = {1'b1,1'b0,1'd0,5'd3,4'd0,pop4};
+					uop[4] = {1'b1,1'b0,1'd0,5'd4,4'd0,pop5};
+					uop[5] = {1'b1,1'b0,1'd0,5'd5,4'd0,pop6};
+					uop[6] = {1'b1,1'b0,1'd0,5'd6,4'd0,2'd3,31'h30,sp+ir[44:42],sp+ir[44:42],Qupls4_pkg::OP_ADDI};
 				end
 			4'd7:
 				begin
-					uop[0] = {1'b1,1'b0,3'd5,3'd0,4'd0,pop1};
-					uop[1] = {1'b1,1'b0,3'd0,3'd1,4'd0,pop2};
-					uop[2] = {1'b1,1'b0,3'd0,3'd2,4'd0,pop3};
-					uop[3] = {1'b1,1'b0,3'd0,3'd3,4'd0,pop4};
-					uop[4] = {1'b1,1'b0,3'd0,3'd4,4'd0,pop5};
-					uop[5] = {1'b1,1'b0,3'd0,3'd5,4'd0,pop6};
-					uop[6] = {1'b1,1'b0,3'd0,3'd6,4'd0,pop6};
-					uop[7] = {1'b1,1'b0,3'd0,3'd7,4'd0,2'd3,31'h38,sp+ir[44:42],sp+ir[44:42],Qupls4_pkg::OP_ADDI};
+					uop[0] = {1'b1,1'b0,1'd1,5'd0,4'd0,pop1};
+					uop[1] = {1'b1,1'b0,1'd0,5'd1,4'd0,pop2};
+					uop[2] = {1'b1,1'b0,1'd0,5'd2,4'd0,pop3};
+					uop[3] = {1'b1,1'b0,1'd0,5'd3,4'd0,pop4};
+					uop[4] = {1'b1,1'b0,1'd0,5'd4,4'd0,pop5};
+					uop[5] = {1'b1,1'b0,1'd0,5'd5,4'd0,pop6};
+					uop[6] = {1'b1,1'b0,1'd0,5'd6,4'd0,pop6};
+					uop[7] = {1'b1,1'b0,1'd0,5'd7,4'd0,2'd3,31'h38,sp+ir[44:42],sp+ir[44:42],Qupls4_pkg::OP_ADDI};
 				end
 			default:	
 				begin
@@ -1074,7 +1074,7 @@ begin
 			end
 		end
 	endcase
-	for (nn = 0; nn < 8; nn = nn + 1) begin
+	for (nn = 0; nn < 32; nn = nn + 1) begin
 		if (nn < num)
 			uop[nn].any.v = 1'b0;
 	end	

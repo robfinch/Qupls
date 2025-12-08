@@ -32,85 +32,44 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// Note this is the only place register codes are bypassed for r0 and r31 to
-// allow the use of zero and the instruction pointer.
-//
-// 250 LUTs / 40 FFs
 // ============================================================================
 
-import const_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_agen(rst, clk, next, rse_i, rse_o, out,
-	tlb_v, page_fault, page_fault_v,
-	load_store, vlsndx, amo, laneno,
-	res, resv);
-input rst;
-input clk;
-input next;								// calculate for next cache line
-input Qupls4_pkg::reservation_station_entry_t rse_i;
-output Qupls4_pkg::reservation_station_entry_t rse_o;
-input out;
-input tlb_v;
-input page_fault;
-input page_fault_v;
-input load_store;
-input vlsndx;
-input amo;
-input [7:0] laneno;
-output cpu_types_pkg::address_t res;
-output reg resv;
+module Qupls4_decode_fence(instr, fence, atom);
+input Qupls4_pkg::micro_op_t instr;
+output fence;
+output atom;
 
-cpu_types_pkg::address_t as, bs;
-cpu_types_pkg::address_t res1;
-
-always_ff @(posedge clk) 
+function fnIsFence;
+input Qupls4_pkg::micro_op_t ir;
 begin
-	rse_o <= rse_i;
-	if (page_fault && !rse_i.excv) begin
-		rse_o.exc <= Qupls4_pkg::FLT_PAGE;
-		rse_o.excv <= page_fault_v;
-	end
+	case(ir.any.opcode)
+	Qupls4_pkg::OP_FENCE:
+		case(ir.r3.func)
+		7'd0:	fnIsFence = 1'b1;
+		default:	fnIsFence = 1'b0;
+		endcase
+	default:	fnIsFence = 1'b0;
+	endcase
 end
+endfunction
 
-always_comb
-	as = rse.Rs1z ? value_zero : rse.iprel ? rse.pc : rse.arg[0].val;
-
-always_comb
-	bs = rse.Rs2z ? value_zero : (rse.arg[1].val << rse.uop.ls.sc);
-
-always_comb
+function fnIsAtom;
+input Qupls4_pkg::micro_op_t ir;
 begin
-	if (vlsndx)
-		res1 = as + bs * laneno + rse.argI;
-	else if (amo)
-		res1 = as;				// just [Rs1]
-	else if (load_store)
-		res1 = as + bs + rse.argI;
-	else
-		res1 <= 64'd0;
+	case(ir.any.opcode)
+	Qupls4_pkg::OP_FENCE:
+		case(ir.r3.func)
+		7'd1:	fnIsAtom = 1'b1;
+		default:	fnIsAtom = 1'b0;
+		endcase
+	default:	fnIsAtom = 1'b0;
+	endcase
 end
+endfunction
 
-always_ff @(posedge clk)
-	res = next ? {res1[$bits(cpu_types_pkg::address_t)-1:6] + 2'd1,6'd0} : res1;
-
-// Make Agen valid sticky
-// The agen takes a clock cycle to compute after the out signal is valid.
-reg resv1;
-always_ff @(posedge clk) 
-if (rst) begin
-	resv <= INV;
-	resv1 <= INV;
-end
-else begin
-	if (out)
-		resv1 <= VAL;
-	resv <= resv1;
-	if (tlb_v) begin
-		resv1 <= INV;
-		resv <= INV;
-	end
-end
-
+assign fence = fnIsFence(instr);
+assign atom = fnIsAtom(instr);
 
 endmodule

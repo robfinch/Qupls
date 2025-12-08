@@ -32,7 +32,7 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 19000 LUTs / 5675 FFs / 2 BRAMs	- 48 uops per instruction.
+// 19000 LUTs / 5620 FFs / 2 BRAMs	- 32 uops per instruction.
 // ============================================================================
 
 import const_pkg::*;
@@ -51,7 +51,7 @@ module Qupls4_pipeline_dec(rst_i, rst, clk, en, clk5x, ph4, new_cline_mux, cline
 	predicted_correctly_o, new_address_o
 );
 parameter MAX_MICROOPS = 12;
-parameter MICROOPS_PER_INSTR = 48;
+parameter MICROOPS_PER_INSTR = 32;
 input rst_i;
 input rst;
 input clk;
@@ -66,7 +66,7 @@ input restored;
 input [Qupls4_pkg::PREGS-1:0] restore_list;
 input [Qupls4_pkg::PREGS-1:0] unavail_list;
 input Qupls4_pkg::status_reg_t sr;
-input [2:0] uop_num;
+input [4:0] uop_num;
 input stomp_dec;
 input stomp_mux;
 input [4:0] stomp_bno;
@@ -101,8 +101,10 @@ integer n1,n2,n3,n4,n5,n6;
 Qupls4_pkg::pipeline_group_reg_t pg_mux_r;
 reg [31:0] carry_mod_i;
 reg [31:0] carry_mod_o;
-reg [11:0] atom_mask_i;
-reg [11:0] atom_mask_o;
+reg [3:0] atom_count_i;
+reg [3:0] atom_count_o;
+reg [15:0] pred_mask_i;
+reg [15:0] pred_mask_o;
 reg hwi_ignore;
 Qupls4_pkg::regs_t fregs_i;
 Qupls4_pkg::regs_t fregs_o;
@@ -117,10 +119,17 @@ else begin
 end
 always @(posedge clk)
 if (rst)
-	atom_mask_i <= 12'd0;
+	atom_count_i <= 4'd0;
 else begin
 	if (en)
-		atom_mask_i <= atom_mask_o;
+		atom_count_i <= atom_count_o;
+end
+always @(posedge clk)
+if (rst)
+	pred_mask_i <= 12'h000;
+else begin
+	if (en)
+		pred_mask_i <= pred_mask_o;
 end
 always @(posedge clk)
 if (rst)
@@ -168,7 +177,7 @@ Qupls4_microop_mem uuop2
 (
 	.om(pg_mux.pr1.op.om),
 	.ir(pg_mux.pr1.op.uop), 
-	.num(3'd0), 
+	.num(5'd0), 
 	.carry_reg(8'd0),
 	.carry_out(1'b0),
 	.carry_in(1'b0),
@@ -180,7 +189,7 @@ Qupls4_microop_mem uuop3
 (
 	.om(pg_mux.pr2.op.om),
 	.ir(pg_mux.pr2.op.uop), 
-	.num(3'd0), 
+	.num(5'd0), 
 	.carry_reg(8'd0),
 	.carry_out(1'b0),
 	.carry_in(1'b0),
@@ -192,7 +201,7 @@ Qupls4_microop_mem uuop4
 (
 	.om(pg_mux.pr3.op.om),
 	.ir(pg_mux.pr3.op.uop), 
-	.num(3'd0), 
+	.num(5'd0), 
 	.carry_reg(8'd0),
 	.carry_out(1'b0),
 	.carry_in(1'b0),
@@ -308,14 +317,14 @@ else if (en) begin
 	else if (kk < 4)
 		kk = kk + 1;
 	tail0 = tail0 + jj;
-	head0 = head0 + 4'd4;
+	head0 = head0 + 4;
 	if (kk >= 4) begin
 		kk = 0;
 		rc_uop_count[0] = 8'd0;
 		rc_uop_count[1] = 8'd0;
 		rc_uop_count[2] = 8'd0;
 		rc_uop_count[3] = 8'd0;
-		rd_more = room > 3;
+		rd_more = TRUE;//room > 3;
 	end
 
 
@@ -384,7 +393,7 @@ begin
 	nopi = {$bits(Qupls4_pkg::pipeline_reg_t){1'b0}};
 	nopi.pc.pc = RSTPC;
 	nopi.uop = {26'd0,Qupls4_pkg::OP_NOP};
-	nopi.uop.any.count = 3'd1;
+	nopi.uop.any.lead = 3'd1;
 	nopi.v = 1'b1;
 	nopi.decbus.Rdz = 1'b1;
 	nopi.decbus.nop = 1'b1;
@@ -785,53 +794,77 @@ begin
 	// of the first instruction of the group. If the first instruction was not
 	// masked, and a later one was, then the interrupt will still occur, but the
 	// later instructions will not be executed.
-	pr0_dec.atom_mask = atom_mask_i;
+	pr0_dec.atom_count = atom_count_i;
 	hwi_ignore = FALSE;
-	if ((pr0_dec.atom_mask[0]|fregs_i.v) && pr0_dec.v) begin
+	if ((|pr0_dec.atom_count|fregs_i.v) && pr0_dec.v) begin
 		hwi_ignore = TRUE;
 	end
 
-	if (dec0.pred && pr0_dec.v)
-		pr1_dec.atom_mask = dec0.pred_atom_mask;
-	else if (dec0.atom && pr0_dec.v)
-		pr1_dec.atom_mask = {ins0m.uop[23:9],ins0m.uop[0]};
-	else if (!pr0_dec.ssm)
-		pr1_dec.atom_mask = pr0_dec.atom_mask >> 12'd1;
+	if (dec0.atom && pr0_dec.v)
+		pr1_dec.atom_count = ins0m.uop.atom.count;
+	// Note to mask instructions not micro-ops, by detecting the lead micro-op
+	// of the instruction.
+	else if (!pr0_dec.ssm && pr0_dec.uop.any.lead && |pr0_dec.atom_count)
+		pr1_dec.atom_count = pr0_dec.atom_count - 4'd1;
 	else
-		pr1_dec.atom_mask = pr0_dec.atom_mask;
+		pr1_dec.atom_count = pr0_dec.atom_count;
 	if (pr0_dec.hwi & ~hwi_ignore)
 		pr1_dec.v = INV;
 
-	if (dec1.pred && pr1_dec.v)
-		pr2_dec.atom_mask = dec1.pred_atom_mask;
-	else if (dec1.atom && pr1_dec.v)
-		pr2_dec.atom_mask = {ins1m.uop[23:9],ins1m.uop[0]};
-	else if (!pr1_dec.ssm)
-		pr2_dec.atom_mask = pr1_dec.atom_mask >> 12'd1;
+	if (dec1.atom && pr1_dec.v)
+		pr2_dec.atom_count = ins1m.uop.atom.count;
+	else if (!pr1_dec.ssm && pr1_dec.uop.any.lead && |pr1_dec.atom_count)
+		pr2_dec.atom_count = pr1_dec.atom_count - 4'd1;
 	else
-		pr2_dec.atom_mask = pr1_dec.atom_mask;
+		pr2_dec.atom_count = pr1_dec.atom_count;
 	if (pr0_dec.hwi & ~hwi_ignore)
 		pr2_dec.v = INV;
 
-	if (dec2.pred && pr2_dec.v)
-		pr3_dec.atom_mask = dec2.pred_atom_mask;
-	else if (dec2.atom && pr2_dec.v)
-		pr3_dec.atom_mask = {ins2m.uop[23:9],ins2m.uop[0]};
-	else if (!pr2_dec.ssm)
-		pr3_dec.atom_mask = pr2_dec.atom_mask >> 12'd1;
+	if (dec2.atom && pr2_dec.v)
+		pr3_dec.atom_count = ins2m.uop.atom.count;
+	else if (!pr2_dec.ssm && pr2_dec.uop.any.lead && |pr2_dec.atom_count)
+		pr3_dec.atom_count = pr2_dec.atom_count - 4'd1;
 	else
-		pr3_dec.atom_mask = pr2_dec.atom_mask;
+		pr3_dec.atom_count = pr2_dec.atom_count;
 	if (pr0_dec.hwi & ~hwi_ignore)
 		pr3_dec.v = INV;
 
-	if (dec3.pred && pr3_dec.v)
-		atom_mask_o = dec3.pred_atom_mask;
-	else if (dec3.atom && pr3_dec.v)
-		atom_mask_o = {ins3m.uop[23:9],ins3m.uop[0]};
-	else if (!pr3_dec.ssm)
-		atom_mask_o = pr3_dec.atom_mask >> 12'd1;
+	if (dec3.atom && pr3_dec.v)
+		atom_count_o = ins3m.uop.atom.count;
+	else if (!pr3_dec.ssm && pr3_dec.uop.any.lead && |pr3_dec.atom_count)
+		atom_count_o = pr3_dec.atom_count - 4'd1;
 	else
-		atom_mask_o = pr3_dec.atom_mask;
+		atom_count_o = pr3_dec.atom_count;
+
+	// PRED modifier		
+	pr0_dec.pred_mask = pred_mask_i;
+	if (dec0.pred && pr0_dec.v)
+		pr1_dec.pred_mask = ins0m.uop.pred.mask.
+	else if (!pr0_dec.ssm && pr0_dec.uop.any.lead && |pr0_dec.pred_mask)
+		pr1_dec.pred_mask = pr0_dec.pred_mask >> 2'd2;
+	else
+		pr1_dec.pred_mask = pr0_dec.pred_mask;
+
+	if (dec1.pred && pr1_dec.v)
+		pr2_dec.pred_mask = ins1m.uop.pred.mask.
+	else if (!pr1_dec.ssm && pr1_dec.uop.any.lead && |pr1_dec.pred_mask)
+		pr2_dec.pred_mask = pr1_dec.pred_mask >> 2'd2;
+	else
+		pr2_dec.pred_mask = pr1_dec.pred_mask;
+
+	if (dec2.pred && pr2_dec.v)
+		pr3_dec.pred_mask = ins2m.uop.pred.mask.
+	else if (!pr2_dec.ssm && pr2_dec.uop.any.lead && |pr2_dec.pred_mask)
+		pr3_dec.pred_mask = pr2_dec.pred_mask >> 2'd2;
+	else
+		pr3_dec.pred_mask = pr2_dec.pred_mask;
+
+	if (dec3.pred && pr3_dec.v)
+		pred_mask_o = ins3m.uop.pred.mask.
+	else if (!pr3_dec.ssm && pr3_dec.uop.any.lead && |pr3_dec.pred_mask)
+		pred_mask_o = pr3_dec.pred_mask >> 2'd2;
+	else
+		pred_mask_o = pr3_dec.pred_mask;
 
 	// Apply carry mod to instructions in same group, and adjust
 	pr0_dec.carry_mod = carry_mod_i;

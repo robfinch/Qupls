@@ -294,10 +294,11 @@ Qupls4_decode_loada udeclda1
 	.loada(db.loada)
 );
 
-Stark_decode_fence udfence1
+Qupls4_decode_fence udfence1
 (
 	.instr(instr),
-	.fence(db.fence)
+	.fence(db.fence),
+	.atom(db.atom)
 );
 
 Stark_decode_pfx udecpfx1
@@ -431,8 +432,8 @@ else begin
 		// Check for unimplemented instruction, but not if it is being stomped on.
 		// If it is stomped on, we do not care.
 		if (!(db.nop|db.alu|db.fpu|db.fc|db.mem|db.macro
-			|db.csr|db.loada|db.fence|db.carry|db.atom|db.regs|db.fregs
-			|db.rex|db.oddball|db.pred|db.qfext
+			|db.csr|db.loada|db.fence|db.carry|db.pred|db.atom|db.regs|db.fregs
+			|db.rex|db.oddball|db.qfext
 			)) begin
 			dbo.cause <= Qupls4_pkg::FLT_UNIMP;
 		end
