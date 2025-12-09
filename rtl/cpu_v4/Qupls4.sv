@@ -73,6 +73,7 @@ module Qupls4(coreno_i, rst_i, clk_i, clk2x_i, clk3x_i, clk5x_i, ipl, irq, irq_a
 parameter CORENO = 6'd1;
 parameter CID = 6'd1;
 parameter XWID = 4;
+parameter ISTACK_DEPTH = 16;
 input [63:0] coreno_i;
 input rst_i;
 input clk_i;
@@ -406,7 +407,7 @@ wire [3:0] mc_regx1;
 wire [3:0] mc_regx2;
 wire [3:0] mc_regx3;
 wire [12:0] rs_busy;
-Qupls4_pkg::reservation_station_entry_t rse;
+Qupls4_pkg::reservation_station_entry_t [4:0] rse;
 
 // ALU done and idle are almost the same, but idle is sticky and set
 // if the ALU is not busy, whereas done pulses at the end of an ALU
@@ -921,11 +922,11 @@ reg [39:0] cpytgts;
 reg [39:0] marked_insn_count;
 reg [39:0] stomped_insn;
 Qupls4_pkg::cause_code_t [3:0] cause;
-Qupls4_pkg::status_reg_t sr_stack [0:15];
+Qupls4_pkg::status_reg_t [ISTACK_DEPTH-1:0] sr_stack;
 Qupls4_pkg::status_reg_t sr;
 Qupls4_pkg::fp_status_reg_t fpcsr;
 wire [2:0] swstk = sr.swstk;
-pc_address_t [15:0] pc_stack;
+pc_address_t [ISTACK_DEPTH-1:0] pc_stack;
 // Stack for micro-code machine state number and micro-op number
 reg [15:0] upc_stack [0:15];
 reg [5:0] pending_ipl;				// pending interrupt level.
@@ -939,8 +940,6 @@ value_t vex [0:3];						// vector exception
 reg [1:0] vn;
 asid_t asid;
 asid_t ip_asid;
-pc_address_t [4:0] kvec;
-pc_address_t avec;
 Qupls4_pkg::rob_bitmask_t err_mask;
 reg ERC = 1'b0;
 reg [39:0] icache_cnt;
@@ -951,6 +950,7 @@ wire pe_bsdone;
 reg [4:0] vl;
 // 16 vectors for 5 operating modes (debug has its own set))
 pc_address_t [4:0] kernel_vectors;
+pc_address_t [4:0] syscall_vectors;
 
 reg [31:0] carry_mod, csr_carry_mod, exc_ret_carry_mod, icarry_mod;
 wire [6:0] carry_reg = 7'd92|carry_mod[25:24];
@@ -3738,6 +3738,8 @@ Qupls4_branchmiss_pc umisspc1
 	.takb(takb),
 	.misspc(fcu_misspc1),
 	.vector(irq_in.vector),
+	.syscall_vector(syscall_vectors),
+	.kernel_vector(kernel_vectors),
 	.missgrp(fcu_missgrp),
 	.dstpc(tgtpc),
 	.stomp_bno(stomp_bno)
@@ -4056,9 +4058,9 @@ Qupls4_mem_sched umems1
 	.ndx1v(mem1_lsndxv)
 );
 
-rob_ndx_t [3:0] rob_dispatched;
+rob_ndx_t [4:0] rob_dispatched;
 Qupls4_pkg::rob_bitmask_t rob_dispatched_stomped;
-wire [3:0] rob_dispatched_v;
+wire [4:0] rob_dispatched_v;
 
 Qupls4_instruction_dispatcher uid1
 (
@@ -4067,8 +4069,8 @@ Qupls4_instruction_dispatcher uid1
 	.rob(rob),
 	.busy(rs_busy),
 	.rse_o(rse),
-	.rob_dispatched(rob_dispatched),
-	.rob_dispatched_v(rob_dispatched_v)
+	.rob_dispatched_o(rob_dispatched),
+	.rob_dispatched_v_o(rob_dispatched_v)
 );
 /*
 assign sau0_argA_reg = rob[sau0_rndx].op.pRa;
@@ -5089,7 +5091,9 @@ reg load_lsq_argc;
 Qupls4_reservation_station #(
 	.FUNCUNIT(4'd0),
 	.NRSE(1),
-	.NSARG(3)
+	.NSARG(3),
+	.NREG_PORTS(NREG_RPORTS),
+	.RC(0)
 )
 usaust0
 (
@@ -5116,7 +5120,9 @@ usaust0
 Qupls4_reservation_station #(
 	.FUNCUNIT(4'd2),
 	.NRSE(1),
-	.NSARG(3)
+	.NSARG(3),
+	.NREG_PORTS(NREG_RPORTS),
+	.RC(0)
 )
 uimulst0
 (
@@ -5141,7 +5147,9 @@ if (Qupls4_pkg::SUPPORT_IDIV)
 Qupls4_reservation_station #(
 	.FUNCUNIT(4'd3),
 	.NRSE(1),
-	.NSARG(2)
+	.NSARG(2),
+	.NREG_PORTS(NREG_RPORTS),
+	.RC(0)
 )
 uidivst0
 (
@@ -5168,7 +5176,9 @@ generate begin : gSauStation
 		Qupls4_reservation_station #(
 			.FUNCUNIT(4'd1),
 			.NRSE(1),
-			.NSARG(3)
+			.NSARG(3),
+			.NREG_PORTS(NREG_RPORTS),
+			.RC(0)
 		)
 		usaust1
 		(
@@ -5205,7 +5215,9 @@ generate begin : gFpuStat
 				Qupls4_reservation_station #(
 					.FUNCUNIT(4'd4),
 					.NRSE(1),
-					.NSARG(3+Qupls4_pkg::SUPPORT_FDP)
+					.NSARG(3+Qupls4_pkg::SUPPORT_FDP),
+					.NREG_PORTS(NREG_RPORTS),
+					.RC(1)
 				)
 				ufmast1
 				(
@@ -5225,7 +5237,9 @@ generate begin : gFpuStat
 				Qupls4_reservation_station #(
 					.FUNCUNIT(4'd12),
 					.NRSE(1),
-					.NSARG(3)
+					.NSARG(3),
+					.NREG_PORTS(NREG_RPORTS),
+					.RC(1)
 				)
 				ufpust1
 				(
@@ -5247,7 +5261,9 @@ generate begin : gFpuStat
 				Qupls4_reservation_station #(
 					.FUNCUNIT(4'd5),
 					.NRSE(1),
-					.NSARG(3+Qupls4_pkg::SUPPORT_FDP)
+					.NSARG(3+Qupls4_pkg::SUPPORT_FDP),
+					.NREG_PORTS(NREG_RPORTS),
+					.RC(1)
 				)
 				ufmast2
 				(
@@ -5274,7 +5290,9 @@ generate begin : gDecimalFloat
 		Qupls4_pair_reservation_station #(
 			.FUNCUNIT(4'd13),
 			.NRSE(1),
-			.NSARG(3)
+			.NSARG(3),
+			.NREG_PORTS(NREG_RPORTS),
+			.RC(1)
 		)
 		udfpust1
 		(
@@ -5298,7 +5316,9 @@ endgenerate
 Qupls4_reservation_station #(
 	.FUNCUNIT(4'd7),
 	.NRSE(1),
-	.NSARG(3)
+	.NSARG(3),
+	.NREG_PORTS(NREG_RPORTS),
+	.RC(0)
 )
 ubrast1
 (
@@ -5319,7 +5339,9 @@ ubrast1
 Qupls4_reservation_station #(
 	.FUNCUNIT(4'd8),
 	.NRSE(1),
-	.NSARG(3)
+	.NSARG(3),
+	.NREG_PORTS(NREG_RPORTS),
+	.RC(0)
 )
 uagenst1
 (
@@ -5362,7 +5384,9 @@ if (Qupls4_pkg::NDATA_PORTS > 1)
 Qupls4_reservation_station #(
 	.FUNCUNIT(4'd9),
 	.NRSE(1),
-	.NSARG(3)
+	.NSARG(3),
+	.NREG_PORTS(NREG_RPORTS),
+	.RC(0)
 )
 uagenst2
 (
@@ -6206,28 +6230,28 @@ else begin
 		end
 		*/
 		if (rob[head0].op.decbus.pred) begin
-			pred_tf[rob[head0].pred_no] <= 2'b00;
-			pred_alloc_map[rob[head0].pred_no] <= 1'b0;
+			pred_tf[rob[head0].op.decbus.pred_no] <= 2'b00;
+			pred_alloc_map[rob[head0].op.decbus.pred_no] <= 1'b0;
 		end
 		if (rob[head1].op.decbus.pred && cmtcnt > 3'd1) begin
-			pred_tf[rob[head1].pred_no] <= 2'b00;
-			pred_alloc_map[rob[head1].pred_no] <= 1'b0;
+			pred_tf[rob[head1].op.decbus.pred_no] <= 2'b00;
+			pred_alloc_map[rob[head1].op.decbus.pred_no] <= 1'b0;
 		end
 		if (rob[head2].op.decbus.pred && cmtcnt > 3'd2) begin
-			pred_tf[rob[head2].pred_no] <= 2'b00;
-			pred_alloc_map[rob[head2].pred_no] <= 1'b0;
+			pred_tf[rob[head2].op.decbus.pred_no] <= 2'b00;
+			pred_alloc_map[rob[head2].op.decbus.pred_no] <= 1'b0;
 		end
 		if (rob[head3].op.decbus.pred && cmtcnt > 3'd3) begin
-			pred_tf[rob[head3].pred_no] <= 2'b00;
-			pred_alloc_map[rob[head3].pred_no] <= 1'b0;
+			pred_tf[rob[head3].op.decbus.pred_no] <= 2'b00;
+			pred_alloc_map[rob[head3].op.decbus.pred_no] <= 1'b0;
 		end
 		if (rob[head4].op.decbus.pred && cmtcnt > 3'd4) begin
-			pred_tf[rob[head4].pred_no] <= 2'b00;
-			pred_alloc_map[rob[head4].pred_no] <= 1'b0;
+			pred_tf[rob[head4].op.decbus.pred_no] <= 2'b00;
+			pred_alloc_map[rob[head4].op.decbus.pred_no] <= 1'b0;
 		end
 		if (rob[head5].op.decbus.pred && cmtcnt > 3'd5) begin
-			pred_tf[rob[head5].pred_no] <= 2'b00;
-			pred_alloc_map[rob[head5].pred_no] <= 1'b0;
+			pred_tf[rob[head5].op.decbus.pred_no] <= 2'b00;
+			pred_alloc_map[rob[head5].op.decbus.pred_no] <= 1'b0;
 		end
 	end
 	// ToDo: fix LSQ head update.
@@ -6298,7 +6322,7 @@ else begin
 				2'b00:	;	// predicate not resolved yet, leave alone.
 				2'b11:	; // reserved, not used
 				2'b10,2'b01:
-					if (rob[nn].pred_no==mm) begin
+					if (rob[nn].op.decbus.pred_no==mm) begin
 						// If predication matches result, mark valid and true.
 						if (rob[nn].op.pred_mask[1:0] == pred_tf[mm]) begin
 							rob[nn].op.pred_mask[1:0] <= 2'b00;
@@ -6316,9 +6340,9 @@ else begin
 				// Predicate resolved?
 				if (rob[nn].v && rob[nn].op.decbus.pred) begin
 					if (rob[nn].done==2'b11)
-						pred_tf[rob[nn].pred_no] <= rob[nn].pred_tf;
+						pred_tf[rob[nn].op.decbus.pred_no] <= rob[nn].pred_tf;
 					else
-						pred_tf[rob[nn].pred_no] <= 2'b00;
+						pred_tf[rob[nn].op.decbus.pred_no] <= 2'b00;
 				end
 			end
 		end
@@ -6326,7 +6350,7 @@ else begin
 		// still outstanding ROB entries waiting for it to resolve.
 		for (nn = 0; nn < Qupls4_pkg::ROB_ENTRIES; nn = nn + 1) begin
 			for (mm = 0; mm < 32; mm = mm + 1) begin
-				if (rob[nn].pred_no==mm && !pred_alloc_map[mm]) begin
+				if (rob[nn].op.decbus.pred_no==mm && !pred_alloc_map[mm]) begin
 					if (!rob[nn].pred_bitv) begin
 						rob[nn].pred_bit <= 1'b0;
 						rob[nn].pred_bitv <= VAL;
@@ -7185,20 +7209,6 @@ begin
 end
 endfunction
 
-function Qupls4_pkg::operating_mode_t fnNextOm;
-input Qupls4_pkg::operating_mode_t om;
-begin
-	fnNextOm = om;
-	if (om != 2'd3)
-	   case(om)
-	   Qupls4_pkg::OM_APP: fnNextOm = Qupls4_pkg::OM_SUPERVISOR;
-	   Qupls4_pkg::OM_SUPERVISOR: fnNextOm = Qupls4_pkg::OM_HYPERVISOR;
-	   Qupls4_pkg::OM_HYPERVISOR: fnNextOm = Qupls4_pkg::OM_SECURE;
-	   Qupls4_pkg::OM_SECURE: fnNextOm = Qupls4_pkg::OM_SECURE;
-	   endcase
-end
-endfunction
-
 // Register name bypassing logic. The target register for the previous clock
 // cycle will not have been updated in the RAT in time for it to be used in
 // source register renames for the instructions queuing in the clock. So, the
@@ -7465,8 +7475,8 @@ begin
 	vl <= 5'd8;
 	macro_queued <= FALSE;
 	for (n14 = 0; n14 < 5; n14 = n14 + 1) begin
-		kvec[n14] <= 32'hFFFFFC00;
-		avec[n14] <= 32'hFFFFFC00;
+		kernel_vectors[n14] <= 32'hFFFFFC00;
+		syscall_vectors[n14] <= 32'hFFFFFC00;
 	end
 	next_pending_ipl <= 6'd63;
 	err_mask <= 64'd0;
@@ -7719,7 +7729,7 @@ begin
 	// "dynamic" fields, these fields may change after enqueue
 	rob[tail].sn <= sn;
 	rob[tail].pred_tf <= 2'b00;	// unknown
-	rob[tail].pred_shadow_size <= db.pred_shadow_size;
+//	rob[tail].pred_shadow_size <= db.pred_shadow_size;
 	// NOPs are valid regardless of predicate status
 	rob[tail].pred_bitv <= db.nop;
 	rob[tail].pred_bit <= db.nop;
@@ -7758,6 +7768,7 @@ begin
 	rob[tail].argB_v <= Qupls4_pkg::fnSourceRs2v(robe.op) | (db.has_Rs2 ? 1'b0 : db.has_immb);
 	rob[tail].argC_v <= Qupls4_pkg::fnSourceRs3v(robe.op) | db.has_immc;
 	rob[tail].argD_v <= Qupls4_pkg::fnSourceRs4v(robe.op);
+	rob[tail].argS_v <= Qupls4_pkg::fnSourceArgSv(robe.op);
 	rob[tail].argT_v <= Qupls4_pkg::fnSourceRdv(robe.op);
 	rob[tail].all_args_valid <= FALSE;
 	/*
@@ -7911,7 +7922,7 @@ begin
 	lsq[ndx.row][ndx.col].shift <= 7'd0;
 //	store_argC_reg <= rob.pRc;
 	lsq[ndx.row][ndx.col].aRc <= rob.op.decbus.Rs3;
-	lsq[ndx.row][ndx.col].pRc <= rob.op.pRs3;
+//	lsq[ndx.row][ndx.col].pRc <= rob.op.pRs3;
 	lsq[ndx.row][ndx.col].cndx <= rob.cndx;
 	lsq[ndx.row][ndx.col].Rt <= rob.op.nRd;
 	lsq[ndx.row][ndx.col].aRt <= rob.op.decbus.Rd;
@@ -7987,6 +7998,8 @@ begin
 				;
 			else if (rob[head].op.decbus.brk)
 				tProcessExc(head,rob[head].op.pc+32'd6,rob[head].op.uop.any.num);
+			else if (rob[head].op.decbus.sys)
+				tProcessExc(head,rob[head].op.pc+32'd6,rob[head].op.uop.any.num);
 			else if (rob[head].op.decbus.eret)
 				tProcessEret(rob[head].op[22:19]==5'd2,rob[head].op[23]==1'b1);
 			else if (rob[head].op.decbus.rex)
@@ -8057,12 +8070,14 @@ begin
 		Qupls4_pkg::CSR_SR:		res = sr;
 		Qupls4_pkg::CSR_TICK:	res = tick;
 		Qupls4_pkg::CSR_ASID:	res = asid;
-		Qupls4_pkg::CSR_KVEC3: res = kvec[3];
 		16'h3080:	res = sr_stack[0];
 		(Qupls4_pkg::CSR_MEPC+0):	res = pc_stack[0];
-		16'h303?:	res = kernel_vectors[regno[2:0]];
-		16'h203?:	res = kernel_vectors[regno[2:0]];
-		16'h103?:	res = kernel_vectors[regno[2:0]];
+		16'b0011000000110???:	res = kernel_vectors[regno[2:0]];
+		16'h0010000000110???:	res = kernel_vectors[regno[2:0]];
+		16'h0001000000110???:	res = kernel_vectors[regno[2:0]];
+		16'b0011000000111???:	res = syscall_vectors[regno[2:0]];
+		16'h0010000000111???:	res = syscall_vectors[regno[2:0]];
+		16'h0001000000111???:	res = syscall_vectors[regno[2:0]];
 		/*
 		CSR_SCRATCH:	res = scratch[regno[13:12]];
 		CSR_MHARTID: res = hartid_i;
@@ -8119,12 +8134,14 @@ begin
 				irq_downcount_base <= 4'd8;
 			end
 		Qupls4_pkg::CSR_ASID: 	asid <= val;
-		Qupls4_pkg::CSR_KVEC3:	kvec[3] <= val;
 		16'h3080: sr_stack[0] <= val[31:0];
 		Qupls4_pkg::CSR_MEPC:	pc_stack[0] <= val;
-		16'h303?:	kernel_vectors[regno[2:0]] <= val;
-		16'h203?:	kernel_vectors[regno[2:0]] <= val;
-		16'h103?:	kernel_vectors[regno[2:0]] <= val;
+		16'b0011000000110???:	kernel_vectors[regno[2:0]] <= val;
+		16'h0010000000110???:	kernel_vectors[regno[2:0]] <= val;
+		16'h0001000000110???:	kernel_vectors[regno[2:0]] <= val;
+		16'b0011000000111???:	syscall_vectors[regno[2:0]] <= val;
+		16'h0010000000111???:	syscall_vectors[regno[2:0]] <= val;
+		16'h0001000000111???:	syscall_vectors[regno[2:0]] <= val;
 		/*
 		CSR_SCRATCH:	scratch[regno[13:12]] <= val;
 		CSR_MCR0:		cr0 <= val;
@@ -8214,14 +8231,14 @@ reg [7:0] vecno;
 begin
 	//vecno = rob[id].imm ? rob[id].a0[8:0] : rob[id].a1[8:0];
 	//vecno <= rob[id].exc;
-	for (nn = 1; nn < 16; nn = nn + 1)
+	for (nn = 1; nn < ISTACK_DEPTH; nn = nn + 1)
 		sr_stack[nn] <= sr_stack[nn-1];
 	sr_stack[0] <= sr;
-	for (nn = 1; nn < 16; nn = nn + 1)
+	for (nn = 1; nn < ISTACK_DEPTH; nn = nn + 1)
 		pc_stack[nn] <= pc_stack[nn-1];
 	pc_stack[0] <= retpc;
 	if (Qupls4_pkg::UOP_STRATEGY==2) begin
-		for (nn = 1; nn < 16; nn = nn + 1)
+		for (nn = 1; nn < ISTACK_DEPTH; nn = nn + 1)
 			upc_stack[nn] <= upc_stack[nn-1];
 		upc_stack[0] <= {1'b0,uop_num};
 	end
@@ -8240,6 +8257,16 @@ begin
 		excmiss <= TRUE;
 //		excmisspc.pc <= {kvec[sr.dbg ? 4 : nom][$bits(pc_address_t)-1:8] + 4'd1,8'h0};
 //		excmiss <= TRUE;
+	end
+	else if (rob[id].op.decbus.sys) begin
+		case(rob[id].op.decbus.Rd)
+		6'h00,6'h20: excmisspc.pc <= rob[id].brtgt;
+		6'h01,6'h21: excmisspc.pc <= rob[id].brtgt;
+		6'h02,6'h22:	excmisspc.pc <= syscall_vectors[{1'b0,fnNextOm(sr.om)}];
+		6'h03,6'h23:	excmisspc.pc <= kernel_vectors[{1'b0,fnNextOm(sr.om)}];
+		default:	excmisspc.pc <= kernel_vectors[{1'b0,fnNextOm(sr.om)}];
+		endcase
+		excmiss <= TRUE;
 	end
 	else begin
 		excmisspc.pc <= kernel_vectors[{1'b0,fnNextOm(sr.om)}];
@@ -8263,14 +8290,14 @@ input irq;
 input nmi;
 integer nn;
 begin
-	for (nn = 1; nn < 16; nn = nn + 1)
+	for (nn = 1; nn < ISTACK_DEPTH; nn = nn + 1)
 		sr_stack[nn] <= sr_stack[nn-1];
 	sr_stack[0] <= sr;
-	for (nn = 1; nn < 16; nn = nn + 1)
+	for (nn = 1; nn < ISTACK_DEPTH; nn = nn + 1)
 		pc_stack[nn] <= pc_stack[nn-1];
 	pc_stack[0] <= retpc;
 	if (Qupls4_pkg::UOP_STRATEGY==2) begin
-		for (nn = 1; nn < 16; nn = nn + 1)
+		for (nn = 1; nn < ISTACK_DEPTH; nn = nn + 1)
 			upc_stack[nn] <= upc_stack[nn-1];
 		upc_stack[0] <= {1'b0,uop_num};
 	end
@@ -8302,10 +8329,12 @@ begin
 		excid <= id;
 		excmissgrp <= id>>2;
 		excmiss <= TRUE;
+		/*
 		if (cause[3][7:0] < 8'd16)
 			excmisspc.pc <= {kvec[ir.ins[9:8]][$bits(pc_address_t)-1:4] + cause[3][3:0],4'h0};
 		else
 			excmisspc.pc <= {kvec[ir.ins[9:8]][$bits(pc_address_t)-1:4] + 4'd13,4'h0};
+		*/
 	end
 end
 endtask
@@ -8321,16 +8350,16 @@ begin
 	irq_downcount_base <= 8'd8;
 	if (!restore_ssm)
 		sr.ssm <= 1'b0;
-	for (nn = 0; nn < 15; nn = nn + 1)
+	for (nn = 0; nn < ISTACK_DEPTH-1; nn = nn + 1)
 		sr_stack[nn] <= sr_stack[nn+1];
 	set_pending_ipl <= TRUE;
 	next_pending_ipl <= sr_stack[0].ipl;
-	for (nn = 0; nn < 15; nn = nn + 1)
+	for (nn = 0; nn < ISTACK_DEPTH-1; nn = nn + 1)
 		pc_stack[nn] <=	pc_stack[nn+1];
 	exc_ret_pc <= pc_stack[0];
 	exc_ret_carry_mod <= csr_carry_mod;
 	if (Qupls4_pkg::UOP_STRATEGY==2) begin
-		for (nn = 0; nn < 15; nn = nn + 1)
+		for (nn = 0; nn < ISTACK_DEPTH-1; nn = nn + 1)
 			upc_stack[nn] <= upc_stack[nn+1];
 		exc_uop_num <= upc_stack[0][2:0];
 	end
@@ -8757,7 +8786,7 @@ endtask
 
 task tSetROBMemDone;
 input dram_work_t dram_work;
-input cause_code_t cause;
+input Qupls4_pkg::cause_code_t cause;
 input [1:0] done;
 begin
 	if (!rob[ dram_work.rndx ].excv) begin

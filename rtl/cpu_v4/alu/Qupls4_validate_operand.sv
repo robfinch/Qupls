@@ -32,7 +32,7 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 1850 LUTs / 0 FFs (0 bypassing inputs)
+// 1860 LUTs / 0 FFs (0 bypassing inputs)
 // 5010 LUTs / 0 FFs (8 bypassing inputs) performance
 // ============================================================================
 
@@ -43,6 +43,7 @@ import Qupls4_pkg::*;
 module Qupls4_validate_operand(rf_oper_i, oper_i, oper_o, bypass_i);
 parameter NBPI = 8;					// number of bypassing inputs
 parameter NENTRY = 3;
+parameter NREG_PORTS = 12;
 input Qupls4_pkg::operand_t [NREG_RPORTS-1:0] rf_oper_i;
 input Qupls4_pkg::operand_t [NENTRY-1:0] oper_i;
 output Qupls4_pkg::operand_t [NENTRY-1:0] oper_o;
@@ -56,7 +57,7 @@ begin
 		oper_o[nn] = oper_i[nn];
 		oper_o[nn].val = value_zero;
 		oper_o[nn].flags = {$bits(flags_t){1'b0}};
-		for (jj = 0; jj < 16; jj = jj + 1) begin
+		for (jj = 0; jj < NREG_PORTS; jj = jj + 1) begin
 			if (oper_i[nn].aRn==rf_oper_i[jj].aRn && rf_oper_i[jj].v && !oper_i[nn].v) begin
 				oper_o[nn] = rf_oper_i[jj];
 				oper_o[nn].v = VAL;

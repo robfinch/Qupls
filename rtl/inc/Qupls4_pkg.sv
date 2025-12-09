@@ -59,7 +59,7 @@ parameter PREGS = 512;
 parameter IP_REG = 8'd31;
 
 // Number of operands (including destination) a micro-op can have.
-parameter NOPER = 4;
+parameter NOPER = 5;
 
 // Length of a vector register in bits.
 parameter VLEN = 256;
@@ -84,7 +84,7 @@ parameter SUPPORT_TLBLVL2	= 1'b0;
 // =============================================================================
 // Set the following parameter to one to serialize operation of the CPU.
 // Meant for debugging purposes.
-parameter SERIALIZE = 1;
+parameter SERIALIZE = 0;
 
 // Set the following parameter to disable invocation of the single step
 // routine. Meant for debugging purposes.
@@ -240,6 +240,7 @@ parameter SUPPORT_VECTOR = 1'b0;
 parameter SUPPORT_IDIV = 1;
 parameter SUPPORT_TRIG = 0;
 parameter SUPPORT_FDP = 0;
+parameter SUPPORT_FLOAT = 0;
 
 // =============================================================================
 // Resources
@@ -576,6 +577,8 @@ typedef enum logic [6:0] {
 	OP_FLTP = 7'd117,
 
 	OP_REXT = 7'd120,
+	OP_PRED = 7'd121,
+	OP_SYS = 7'd122,
 	OP_FENCE = 7'd123,
 	OP_NOP = 7'd127
 } opcode_e;
@@ -658,17 +661,24 @@ typedef enum logic [6:0] {
 	R1_SM3PO = 7'd15
 } r1_e;
 
-typedef enum logic [6:0] {
-	FLT_FMA = 7'd1,
-	FLT_MIN = 7'd2,
-	FLT_MAX = 7'd3,
-	FLT_SEQ = 7'd8,
-	FLT_SNE = 7'd9,
-	FLT_SLT = 7'd10,
-	FLT_CMP = 7'd13,
-	FLT_SGNJ = 7'd16,
-	FLT_ABS = 7'd32,
-	FLT_NEG = 7'd33
+typedef enum logic [5:0] {
+	FLT_FMA = 6'd1,
+	FLT_MIN = 6'd2,
+	FLT_MAX = 6'd3,
+	FLT_SEQ = 6'd8,
+	FLT_SNE = 6'd9,
+	FLT_SLT = 6'd10,
+	FLT_CMP = 6'd13,
+	FLT_SGNJ = 6'd16,
+	FLT_STAT = 6'd22,
+	FLT_ABS = 6'd32,
+	FLT_NEG = 6'd33,
+	FLT_SQRT = 6'd40,
+	FLT_SIN = 6'd24,
+	FLT_COS = 6'd25,
+	FLT_TAN = 6'd26,
+	FLT_ATAN = 6'd27,
+	FLT_SIGMOID = 6'd56
 } flt_e;
 
 typedef enum logic [3:0] {
@@ -911,6 +921,7 @@ typedef struct packed
 	logic lead;
 	logic [4:0] num;
 	logic resv2;
+	logic rc;
 	flt_e func;
 	logic [2:0] ms;
 	logic [2:0] rm;
@@ -1149,10 +1160,11 @@ typedef struct packed
 	logic exc;
 	logic lead;
 	logic [4:0] num;
-	logic [6:0] resv;
+	logic [6:0] resv2;
 	logic z;
 	logic [2:0] ms;
 	logic [2:0] op3;
+	logic [3:0] resv1;
 	logic [15:0] mask;
 	regspec_t Rs1;
 	regspec_t Rd;				// not used for PRED
@@ -1380,11 +1392,24 @@ typedef struct packed
 
 typedef struct packed
 {
+	logic [$bits(value_t)-($bits(aregno_t)+$bits(pregno_t))-1:0] resv;
+	cpu_types_pkg::aregno_t aRn;	// 8 bits
+	cpu_types_pkg::pregno_t pRn;	// 9 bits
+} aprpair_t;
+
+typedef union packed
+{
+	aprpair_t rg;
+	cpu_types_pkg::value_t val;
+} valreg_u;
+
+typedef struct packed
+{
 	logic v;
-	cpu_types_pkg::aregno_t aRn;
 	logic aRnz;
-	cpu_types_pkg::pregno_t pRn;
 	flags_t flags;
+	cpu_types_pkg::aregno_t aRn;
+	cpu_types_pkg::pregno_t pRn;
 	cpu_types_pkg::value_t val;
 } operand_t;
 
@@ -1447,6 +1472,7 @@ typedef struct packed
 	logic fpu0;				// true if instruction must use only fpu #0
 	logic fma;
 	logic trig;
+	logic rc;					// condition record indicator for float ops.
 	fround_t rm;
 	memsz_t prc;			// precision of operation
 	logic mul;
@@ -1486,6 +1512,7 @@ typedef struct packed
 	logic br;
 	logic bsr;
 	logic jsr;
+	logic sys;
 	logic pbr;
 	logic ret;
 	logic boi;
@@ -1651,16 +1678,19 @@ typedef struct packed
 	operating_mode_t om;			// operating mode
 	reg [31:0] carry_mod;			// carry modifier remnant
 	reg [3:0] atom_count;			// interrupt masking by ATOM instruction
+/*	
 	cpu_types_pkg::pregno_t pRs1;							// physical registers (see decode bus for arch. regs)
 	cpu_types_pkg::pregno_t pRs2;
 	cpu_types_pkg::pregno_t pRs3;
 	cpu_types_pkg::pregno_t pRs4;
+*/
 	cpu_types_pkg::pregno_t pRd;						// current Rd value
 	cpu_types_pkg::pregno_t nRd;						// new Rd
 	logic pRs1v;
 	logic pRs2v;
 	logic pRs3v;
 	logic pRs4v;
+	logic pSv;
 	logic pRdv;
 	logic nRdv;
 	logic [5:0] cli;												// 16-bit parcel cache line index of instruction
@@ -1687,7 +1717,7 @@ typedef struct packed {
 	cpu_types_pkg::rob_ndx_t rndx;		// associated ROB entry
 	cpu_types_pkg::checkpt_ndx_t cndx;
 	micro_op_t uop;
-	logic has_rext;
+//	logic has_rext;
 	cause_code_t exc;
 	logic excv;					// 1=a valid cause code is present
 	logic nan;
@@ -1710,6 +1740,7 @@ typedef struct packed {
 	logic pbr;
 	logic ret;
 	logic boi;
+	logic sys;
 	logic eret;
 
 	logic bt;												
@@ -1726,8 +1757,8 @@ typedef struct packed {
 	cpu_types_pkg::pc_address_t pc;
 //	logic [63:0] pch;
 	cpu_types_pkg::value_t argI;
-	operand_t [NOPER-1:0] arg;
-	operand_t [NOPER-1:0] argH;			// high order 64-bits of 128-bit arg
+	operand_t [NOPER:0] arg;			// +1 for status
+//	operand_t [NOPER:0] argH;			// high order 64-bits of 128-bit arg
 } reservation_station_entry_t;
 
 typedef struct packed {
@@ -1796,6 +1827,7 @@ typedef struct packed {
 	logic argB_v;
 	logic argC_v;
 	logic argD_v;
+	logic argS_v;							// status register valid
 	logic argT_v;
 	logic rat_v;							// 1=checked with RAT for valid reg arg.
 	cpu_types_pkg::value_t arg;							// argument value for CSR instruction
@@ -1841,10 +1873,26 @@ typedef struct packed
 // Support Functions
 // ============================================================================
 
+function Qupls4_pkg::operating_mode_t fnNextOm;
+input Qupls4_pkg::operating_mode_t om;
+begin
+	fnNextOm = om;
+	if (om != 2'd3)
+	   case(om)
+	   Qupls4_pkg::OM_APP: fnNextOm = Qupls4_pkg::OM_SUPERVISOR;
+	   Qupls4_pkg::OM_SUPERVISOR: fnNextOm = Qupls4_pkg::OM_HYPERVISOR;
+	   Qupls4_pkg::OM_HYPERVISOR: fnNextOm = Qupls4_pkg::OM_SECURE;
+	   Qupls4_pkg::OM_SECURE: fnNextOm = Qupls4_pkg::OM_SECURE;
+	   endcase
+end
+endfunction
+
 function cpu_types_pkg::pc_address_t fnAddToIP;
 input cpu_types_pkg::pc_address_t ip;
 input [5:0] amt;
 begin
+	fnAddToIP = ip + amt;
+	/*
 	case(amt)
 	6'd6:
 		case (ip[5:0])
@@ -1874,6 +1922,7 @@ begin
 		endcase
 	default:	fnAddToIP = ip;
 	endcase
+	*/
 end
 endfunction
 
@@ -2370,6 +2419,20 @@ begin
 			fnSourceRs4v = fnConstReg(ir.ins.extd.Rs4) || fnImmd(ir);
 	default:
 		fnSourceRs4v = 1'b1;
+	endcase
+end
+endfunction
+
+function fnSourceArgSv;
+input ex_instruction_t ir;
+begin
+	case(ir.ins.any.opcode)
+	OP_FLTS,OP_FLTS,OP_FLTD,OP_FLTQ,
+	OP_FLTPS,OP_FLTPS,OP_FLTPD,OP_FLTPQ,
+	OP_FLTP:
+		fnSourceArgSv = ir.ins.f3.rm==3'd7;
+	default:
+		fnSourceArgSv = 1'b1;
 	endcase
 end
 endfunction

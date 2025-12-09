@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -32,85 +32,34 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// Note this is the only place register codes are bypassed for r0 and r31 to
-// allow the use of zero and the instruction pointer.
-//
-// 250 LUTs / 40 FFs
 // ============================================================================
 
-import const_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_agen(rst, clk, next, rse_i, rse_o, out,
-	tlb_v, page_fault, page_fault_v,
-	load_store, vlsndx, amo, laneno,
-	res, resv);
-input rst;
-input clk;
-input next;								// calculate for next cache line
-input Qupls4_pkg::reservation_station_entry_t rse_i;
-output Qupls4_pkg::reservation_station_entry_t rse_o;
-input out;
-input tlb_v;
-input page_fault;
-input page_fault_v;
-input load_store;
-input vlsndx;
-input amo;
-input [7:0] laneno;
-output cpu_types_pkg::address_t res;
-output reg resv;
+module Qupls4_decode_fpu(instr, fpu);
+input Qupls4_pkg::micro_op_t instr;
+output fpu;
 
-cpu_types_pkg::address_t as, bs;
-cpu_types_pkg::address_t res1;
-
-always_ff @(posedge clk) 
+function fnIsFpu;
+input Qupls4_pkg::micro_op_t ir;
 begin
-	rse_o <= rse_i;
-	if (page_fault && !rse_i.excv) begin
-		rse_o.exc <= Qupls4_pkg::FLT_PAGE;
-		rse_o.excv <= page_fault_v;
-	end
+	case(ir.any.opcode)
+	Qupls4_pkg::OP_FLTH,Qupls4_pkg::OP_FLTS,Qupls4_pkg::OP_FLTD,Qupls4_pkg::OP_FLTQ,
+	Qupls4_pkg::OP_FLTPH,Qupls4_pkg::OP_FLTPS,Qupls4_pkg::OP_FLTPD,Qupls4_pkg::OP_FLTPQ,
+	Qupls4_pkg::OP_FLTP:
+		fnIsFpu = 1'b1;
+	Qupls4_pkg::OP_ADDI:	fnIsFpu = Qupls4_pkg::PERFORMANCE;
+	Qupls4_pkg::OP_CMPI:	fnIsFpu = Qupls4_pkg::PERFORMANCE;
+	Qupls4_pkg::OP_ANDI:	fnIsFpu = Qupls4_pkg::PERFORMANCE;
+	Qupls4_pkg::OP_ORI:	fnIsFpu = Qupls4_pkg::PERFORMANCE;
+	Qupls4_pkg::OP_XORI:	fnIsFpu = Qupls4_pkg::PERFORMANCE;
+//	Qupls4_pkg::OP_MOV:	fnIsFpu = Qupls4_pkg::PERFORMANCE;
+	Qupls4_pkg::OP_NOP:	fnIsFpu = 1'b1;
+	default:	fnIsFpu = 1'b0;
+	endcase
 end
+endfunction
 
-always_comb
-	as = rse_i.Rs1z ? value_zero : rse_i.iprel ? rse_i.pc : rse_i.arg[0].val;
-
-always_comb
-	bs = rse_i.Rs2z ? value_zero : (rse_i.arg[1].val << rse_i.uop.ls.sc);
-
-always_comb
-begin
-	if (vlsndx)
-		res1 = as + bs * laneno + rse_i.argI;
-	else if (amo)
-		res1 = as;				// just [Rs1]
-	else if (load_store)
-		res1 = as + bs + rse_i.argI;
-	else
-		res1 <= 64'd0;
-end
-
-always_ff @(posedge clk)
-	res = next ? {res1[$bits(cpu_types_pkg::address_t)-1:6] + 2'd1,6'd0} : res1;
-
-// Make Agen valid sticky
-// The agen takes a clock cycle to compute after the out signal is valid.
-reg resv1;
-always_ff @(posedge clk) 
-if (rst) begin
-	resv <= INV;
-	resv1 <= INV;
-end
-else begin
-	if (out)
-		resv1 <= VAL;
-	resv <= resv1;
-	if (tlb_v) begin
-		resv1 <= INV;
-		resv <= INV;
-	end
-end
-
+assign fpu = fnIsFpu(instr);
 
 endmodule

@@ -30,7 +30,7 @@ always_comb
 always_comb
 	hold = |holdn;
 always_comb
-	lock = lockn[req_grant];
+	lock = lockn[req_grant_enc];
 
 RoundRobinArbiter #(
   .NumRequests(NPORT)

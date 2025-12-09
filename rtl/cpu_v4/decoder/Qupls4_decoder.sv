@@ -321,13 +321,13 @@ Qupls4_decode_fma ufma
 	.fma(db.fma)
 );
 
-Stark_decode_fpu ufpu
+Qupls4_decode_fpu ufpu
 (
 	.instr(instr),
 	.fpu(db.fpu)
 );
 
-Stark_decode_fpu0 ufpu0
+Qupls4_decode_fpu0 ufpu0
 (
 	.instr(instr),
 	.fpu0(db.fpu0)
@@ -420,6 +420,7 @@ else begin
 		dbo.boi <= instr.any.opcode==Qupls4_pkg::OP_BCCU64 && instr.br.cnd==Qupls4_pkg::CND_BOI;
 		dbo.bsr <= instr.any.opcode==Qupls4_pkg::OP_BSR;
 		dbo.jsr <= instr.any.opcode==Qupls4_pkg::OP_JSR;
+		dbo.sys <= instr.any.opcode==Qupls4_pkg::OP_SYS;
 		dbo.stptr <= instr.any.opcode==Qupls4_pkg::OP_STPTR;
 		dbo.iprel <= 1'b0;//db.Rs1==8'd31;
 		dbo.cause <= Qupls4_pkg::FLT_NONE;
@@ -432,6 +433,7 @@ else begin
 		dbo.qfext <= 1'b0;//db.alu && ins.ins[28:27]==2'b10;
 		if (excRs1|excRs2|excRs3|excRd)
 			dbo.cause <= Qupls4_pkg::FLT_BADREG;
+		dbo.rc = instr.f3.rc;
 		// Is the predicate shadow count within range?
 		if (pred_shadow_count >= Qupls4_pkg::PRED_SHADOW)
 			dbo.cause <= Qupls4_pkg::FLT_UNIMP;

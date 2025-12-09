@@ -38,13 +38,16 @@ import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
 module Qupls4_branchmiss_pc(rse, pc_stack, bt, takb,
-	misspc, missgrp, dstpc, vector, stomp_bno);
+	misspc, missgrp, dstpc, vector, stomp_bno,
+	syscall_vector, kernel_vector);
 parameter ABITS=32;
 input Qupls4_pkg::reservation_station_entry_t rse;
 input pc_address_ex_t [8:0] pc_stack;
 input [63:0] vector;
 input bt;
 input takb;
+input pc_address_t [4:0] syscall_vector;
+input pc_address_t [4:0] kernel_vector;
 output pc_address_ex_t misspc;
 output reg [2:0] missgrp;
 output pc_address_ex_t dstpc;
@@ -98,6 +101,14 @@ begin
 		begin
 			disp = {{29{ir.jsr.disp[34]}},ir.jsr.disp,1'b0};
 			dstpc.pc = disp;
+		end
+	rse.sys:
+		begin
+			case(ir.jsr.Rd)
+			6'h02,6'h22:	dstpc.pc = syscall_vector[Qupls4_pkg::fnNextOm(rse.om)];
+			6'h03,6'h23:	dstpc.pc = kernel_vector[Qupls4_pkg::fnNextOm(rse.om)];
+			default:	dstpc.pc = kernel_vector[Qupls4_pkg::fnNextOm(rse.om)];
+			endcase
 		end
 	// Must be tested before Ret
 	rse.eret:

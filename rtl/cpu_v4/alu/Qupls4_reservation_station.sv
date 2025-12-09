@@ -49,11 +49,13 @@ parameter NRSE = 1;
 parameter FUNCUNIT = 4'd0;
 parameter NBPI = 8;			// number of bypasssing inputs
 parameter NSARG = 3;		// number of source operands
+parameter NREG_PORTS = 12;
+parameter RC = 1'b0;
 input rst;
 input clk;
 input available;
 input stall;
-input Qupls4_pkg::reservation_station_entry_t [3:0] rse_i;
+input Qupls4_pkg::reservation_station_entry_t [4:0] rse_i;
 input Qupls4_pkg::rob_bitmask_t stomp;
 input Qupls4_pkg::operand_t [NREG_RPORTS-1:0] rf_oper_i;
 input Qupls4_pkg::operand_t [NBPI-1:0] bypass_i;
@@ -67,7 +69,7 @@ genvar g;
 reg idle;
 reg dispatch;
 reg pstall;
-Qupls4_pkg::operand_t [NRSE-1:0] arg [0:NSARG-1];
+Qupls4_pkg::operand_t [NRSE-1:0] arg [0:NSARG+RC];
 
 wire [16:0] lfsro;
 Qupls4_pkg::reservation_station_entry_t [NRSE-1:0] rse;
@@ -76,6 +78,7 @@ Qupls4_pkg::operand_t [NRSE-1:0] rse_argB;
 Qupls4_pkg::operand_t [NRSE-1:0] rse_argC;
 Qupls4_pkg::operand_t [NRSE-1:0] rse_argD;
 Qupls4_pkg::operand_t [NRSE-1:0] rse_argT;
+Qupls4_pkg::operand_t [NRSE-1:0] rse_argS;		// status (for round mode)
 Qupls4_pkg::reservation_station_entry_t rsei;
 
 always_comb
@@ -85,7 +88,8 @@ begin
 	rse_argB[nn] = rse[nn].arg[1];
 	rse_argC[nn] = rse[nn].arg[2];
 	rse_argD[nn] = rse[nn].arg[3];
-	rse_argT[nn] = rse[nn].arg[NOPER-1];
+	rse_argT[nn] = rse[nn].arg[4];
+	rse_argS[nn] = rse[nn].arg[5];
 end
 
 always_comb
@@ -107,7 +111,7 @@ lfsr17 ulfsr1
 
 // Always assume at least one source operand.
 
-Qupls4_validate_operand #(.NBPI(NBPI), .NENTRY(NRSE)) uvsrcA
+Qupls4_validate_operand #(.NBPI(NBPI), .NENTRY(NRSE), .NREG_PORTS(NREG_PORTS)) uvsrcA
 (
 	.rf_oper_i(rf_oper_i),
 	.oper_i(rse_argA),
@@ -118,7 +122,7 @@ Qupls4_validate_operand #(.NBPI(NBPI), .NENTRY(NRSE)) uvsrcA
 generate begin : gOperands
 
 if (NSARG > 1)
-Qupls4_validate_operand #(.NBPI(NBPI), .NENTRY(NRSE)) uvsrcB
+Qupls4_validate_operand #(.NBPI(NBPI), .NENTRY(NRSE), .NREG_PORTS(NREG_PORTS)) uvsrcB
 (
 	.rf_oper_i(rf_oper_i),
 	.oper_i(rse_argB),
@@ -134,7 +138,7 @@ else begin
 end
 
 if (NSARG > 2)
-Qupls4_validate_operand #(.NBPI(NBPI), .NENTRY(NRSE)) uvsrcC
+Qupls4_validate_operand #(.NBPI(NBPI), .NENTRY(NRSE), .NREG_PORTS(NREG_PORTS)) uvsrcC
 (
 	.rf_oper_i(rf_oper_i),
 	.oper_i(rse_argC),
@@ -150,7 +154,7 @@ else begin
 end
 
 if (NSARG > 3)
-Qupls4_validate_operand #(.NBPI(NBPI), .NENTRY(NRSE)) uvsrcD
+Qupls4_validate_operand #(.NBPI(NBPI), .NENTRY(NRSE), .NREG_PORTS(NREG_PORTS)) uvsrcD
 (
 	.rf_oper_i(rf_oper_i),
 	.oper_i(rse_argD),
@@ -178,6 +182,19 @@ Qupls4_validate_operand #(.NBPI(NBPI), .NENTRY(NRSE)) uvsrcT
 	.bypass_i(bypass_i)
 );
 
+// Status operand which sometimes needs to be read.
+generate begin : gStat
+	if (RC > 0)
+Qupls4_validate_operand #(.NBPI(NBPI), .NENTRY(NRSE)) uvsrcS
+(
+	.rf_oper_i(rf_oper_i),
+	.oper_i(rse_argS),
+	.oper_o(arg[5]),
+	.bypass_i(bypass_i)
+);
+end
+endgenerate
+
 always_comb
 begin
 	if (rse_i[0].funcunit==FUNCUNIT) begin
@@ -194,6 +211,10 @@ begin
 	end
 	else if (rse_i[3].funcunit==FUNCUNIT) begin
 		rsei = rse_i[3];
+		dispatch = TRUE;
+	end
+	else if (rse_i[4].funcunit==FUNCUNIT) begin
+		rsei = rse_i[4];
 		dispatch = TRUE;
 	end
 	else begin
@@ -235,12 +256,12 @@ else begin
 		if (qq >= 0) begin
 			rse[qq] <= rsei;
 			rse[qq].busy <= TRUE;
-			rse[qq].ready <= rsei.arg[0].v && rsei.arg[1].v && (rsei.arg[2].v||rsei.store) && rsei.arg[3].v && rsei.arg[4].v;
+			rse[qq].ready <= rsei.arg[0].v && rsei.arg[1].v && (rsei.arg[2].v||rsei.store) && rsei.arg[3].v && rsei.arg[4].v && rsei.arg[5].v;
 			if (stomp[rsei.rndx])
 				rse[qq].uop <= {26'd0,Qupls4_pkg::OP_NOP};
 		end
 	end
-	for (pp = 0; pp < 5; pp = pp + 1) begin
+	for (pp = 0; pp < 6; pp = pp + 1) begin
 		for (mm = 0; mm < NRSE; mm = mm + 1)
 			if (arg[pp][mm].v) begin
 				rse[mm].arg[pp] <= arg[pp][mm];
@@ -249,7 +270,7 @@ else begin
 	end
 	for (mm = 0; mm < NRSE; mm = mm + 1) begin
 		rse[mm].ready <= FALSE;
-		if (rse[mm].arg[0].v && rse[mm].arg[1].v && (rse[mm].arg[2].v|rse[mm].store) && rse[mm].arg[3].v && rse[mm].arg[4].v)
+		if (rse[mm].arg[0].v && rse[mm].arg[1].v && (rse[mm].arg[2].v|rse[mm].store) && rse[mm].arg[3].v && rse[mm].arg[4].v && rse[mm].arg[5].v)
 			rse[mm].ready <= TRUE;
 	end
 
@@ -313,7 +334,7 @@ begin
 	req_aRn[2] = 8'd0;
 	req_aRn[3] = 8'd0;
 	for (jj = 0; jj < NRSE; jj = jj + 1) begin
-		for (pp = 0; pp < NSARG; pp = pp + 1) begin
+		for (pp = 0; pp < NSARG+RC+1; pp = pp + 1) begin
 			if (rse[jj].busy && !rse[jj].arg[pp].v && kk < 4) begin
 				req_aRn[kk] = rse[jj].arg[pp].aRn;
 				kk = kk + 1;

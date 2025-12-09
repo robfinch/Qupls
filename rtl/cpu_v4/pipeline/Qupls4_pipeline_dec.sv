@@ -902,11 +902,11 @@ begin
 	end
 	else if (!pr3_dec.ssm && pr3_dec.uop.any.lead && |pr3_dec.pred_mask) begin
 		pred_mask_o = pr3_dec.decbus.pred_mask >> 2'd2;
-		pred_no_o = pr3_dec.pred_no;
+		pred_no_o = pr3_dec.decbus.pred_no;
 	end
 	else begin
 		pred_mask_o = pr3_dec.decbus.pred_mask;
-		pred_no_o = pr3_dec.pred_no;
+		pred_no_o = pr3_dec.decbus.pred_no;
 	end
 
 	// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
