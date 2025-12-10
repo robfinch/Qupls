@@ -303,8 +303,10 @@ always_comb
 begin
 	bus = {WID{1'd0}};
 	case(ir.any.opcode)
-	OP_FLT:
-		case(ir.fpu.func)
+	Qupls4_pkg::OP_FLTH,Qupls4_pkg::OP_FLTS,Qupls4_pkg::OP_FLTD,Qupls4_pkg::OP_FLTQ,
+	Qupls4_pkg::OP_FLTPH,Qupls4_pkg::OP_FLTPS,Qupls4_pkg::OP_FLTPD,Qupls4_pkg::OP_FLTPQ,
+	Qupls4_pkg::OP_FLTP:
+		case(ir.f3.func)
 		endcase
 	/*
 	OP_FLT:

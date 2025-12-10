@@ -27,7 +27,7 @@
 // AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 // IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
 // DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-// FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+// FOR ANY DIRECT, INDIRECT, INCHANNELENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
 // DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
 // SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
 // CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
@@ -58,7 +58,7 @@ module icache(rst,clk,ce,invce,snoop_adr,snoop_v,snoop_cid,invall,invline,
 	dp, dp_asid, dhit_o, dc_line_o, dc_valid, port, port_i
 	);
 parameter CORENO = 6'd1;
-parameter CID = 6'd0;
+parameter CHANNEL = 6'd0;
 parameter FALSE = 1'b0;
 parameter WAYS = 4;
 parameter LINES = 64;
@@ -630,7 +630,7 @@ else begin
 	// end up in the same set as long as the cache is smaller than a memory page
 	// in size. So, there is no need to compare every physical address, just every
 	// address in a set will do.
-	if (snoop_v && snoop_cid != CID) begin
+	if (snoop_v && snoop_cid != CHANNEL) begin
 		if (snoop_adr[$bits(cpu_types_pkg::address_t)-1:TAGBIT]==ptagse[0])
 			valide[0][snoop_adr[HIBIT:LOBIT]] <= 1'b0;
 		if (snoop_adr[$bits(cpu_types_pkg::address_t)-1:TAGBIT]==ptagse[1])

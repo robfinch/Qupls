@@ -46,7 +46,7 @@ module dcache(rst, clk, dce, snoop_adr, snoop_v, snoop_cid,
 	dump_ack_i, wr, way,
 	invce, dc_invline, dc_invall);
 parameter CORENO = 6'd1;
-parameter CID = 6'd1;
+parameter CHANNEL = 6'd1;
 parameter WAYS = 4;
 parameter LINES = 512;
 parameter LOBIT = 6;
@@ -445,7 +445,7 @@ else begin
 	// address in a set will do.
 	// Invalidation does not need to be done for the channel that triggered the
 	// snoop.
-	if (snoop_v && snoop_cid!=CID) begin
+	if (snoop_v && snoop_cid!=CHANNEL) begin
 		for (k = 0; k < WAYS; k = k + 1) begin
 			if (snoop_adr[$bits(cpu_types_pkg::address_t)-1:T15]==snoop_ptags[k][$bits(cpu_types_pkg::address_t)-1:T15])
 				validr[k][snoop_adr[HIBIT:LOBIT]] <= 1'b0;

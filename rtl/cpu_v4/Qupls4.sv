@@ -71,7 +71,7 @@ module Qupls4(coreno_i, rst_i, clk_i, clk2x_i, clk3x_i, clk5x_i, ipl, irq, irq_a
 	irq_i, ivect_i, swstk_i, om_i, fta_cyc, fta_bg, fta_bgack, fta_resp_ack,
 	fta_req, fta_resp, snoop_adr, snoop_v, snoop_cid);
 parameter CORENO = 6'd1;
-parameter CID = 6'd1;
+parameter CHANNEL = 6'd1;
 parameter XWID = 4;
 parameter ISTACK_DEPTH = 16;
 input [63:0] coreno_i;
@@ -87,8 +87,8 @@ input [5:0] irq_i;
 input [63:0] ivect_i;
 input [2:0] swstk_i;
 input [2:0] om_i;
-output fta_cmd_request256_t fta_req;
-input fta_cmd_response256_t fta_resp;
+output wb_cmd_request256_t fta_req;
+input wb_cmd_response256_t fta_resp;
 output fta_cyc;
 input fta_bg;
 output reg fta_bgack;
@@ -102,16 +102,16 @@ Qupls4_pkg::irq_info_packet_t irq_in = {irq_i,om_i,swstk_i,ivect_i};
 wire ren_rst_busy;
 reg irst;
 always_comb irst = rst_i|ren_rst_busy;
-fta_cmd_request256_t ftatm_req;
-fta_cmd_response256_t ftatm_resp;
-fta_cmd_request256_t ftaim_req;
-fta_cmd_response256_t ftaim_resp;
-fta_cmd_request256_t [1:0] ftadm_req;
-fta_cmd_response256_t [1:0] ftadm_resp;
-fta_cmd_response256_t fta_resp1;
-fta_cmd_response256_t ptable_resp;
-fta_cmd_request256_t [1:0] cap_tag_req;
-fta_cmd_response256_t [1:0] cap_tag_resp;
+wb_cmd_request256_t ftatm_req;
+wb_cmd_response256_t ftatm_resp;
+wb_cmd_request256_t ftaim_req;
+wb_cmd_response256_t ftaim_resp;
+wb_cmd_request256_t [1:0] ftadm_req;
+wb_cmd_response256_t [1:0] ftadm_resp;
+wb_cmd_response256_t fta_resp1;
+wb_cmd_response256_t ptable_resp;
+wb_cmd_request256_t [1:0] cap_tag_req;
+wb_cmd_response256_t [1:0] cap_tag_resp;
 wire [1:0] cap_tag_hit;
 
 real IPC,PIPC;
@@ -1629,7 +1629,7 @@ cpu_types_pkg::seqnum_t ic_irq_sn;
 icache
 #(
 	.CORENO(CORENO),
-	.CID(0),
+	.CHANNEL(0),
 	// Opcode to fill an empty cache line with
 	.NOP({2'b0,Qupls4_pkg::OP_NOP}))
 uic1
@@ -1698,7 +1698,7 @@ wire [3:0] p_override;
 wire [4:0] po_bno [0:3];
 
 icache_ctrl
-#(.CORENO(CORENO),.CID(0))
+#(.CORENO(CORENO),.CHANNEL(0))
 icctrl1
 (
 	.rst(irst),
@@ -4432,10 +4432,10 @@ wire [Qupls4_pkg::NDATA_PORTS-1:0] dhit2;
 reg [Qupls4_pkg::NDATA_PORTS-1:0] dhit;
 wire [Qupls4_pkg::NDATA_PORTS-1:0] modified;
 wire [1:0] uway [0:Qupls4_pkg::NDATA_PORTS-1];
-fta_cmd_request512_t [Qupls4_pkg::NDATA_PORTS-1:0] cpu_request_i;
-fta_cmd_request512_t [Qupls4_pkg::NDATA_PORTS-1:0] cpu_request_i2;
-fta_cmd_response512_t [Qupls4_pkg::NDATA_PORTS-1:0] cpu_resp_o;
-fta_cmd_response512_t [Qupls4_pkg::NDATA_PORTS-1:0] update_data_i;
+wb_cmd_request512_t [Qupls4_pkg::NDATA_PORTS-1:0] cpu_request_i;
+wb_cmd_request512_t [Qupls4_pkg::NDATA_PORTS-1:0] cpu_request_i2;
+wb_cmd_response512_t [Qupls4_pkg::NDATA_PORTS-1:0] cpu_resp_o;
+wb_cmd_response512_t [Qupls4_pkg::NDATA_PORTS-1:0] update_data_i;
 rob_ndx_t [Qupls4_pkg::NDATA_PORTS-1:0] cpu_request_rndx;
 
 cpu_types_pkg::virtual_address_t [Qupls4_pkg::NDATA_PORTS-1:0] cpu_request_vadr, cpu_request_vadr2;
@@ -4463,25 +4463,25 @@ for (g = 0; g < Qupls4_pkg::NDATA_PORTS; g = g + 1) begin
 //		cpu_request_i[g].cid = g + 1;
 		cpu_request_rndx[g] = dramN_id[g];
 		cpu_request_i[g].tid = dramN_tid[g];
-		cpu_request_i[g].om = fta_bus_pkg::MACHINE;
+		cpu_request_i[g].om = wishbone_pkg::MACHINE;
 		case(1'b1)
-		dramN_store[g]:	cpu_request_i[g].cmd = fta_bus_pkg::CMD_STORE;
-		dramN_cstore[g]:	cpu_request_i[g].cmd = fta_bus_pkg::CMD_STORE;
-		dramN_stptr[g]:	cpu_request_i[g].cmd = fta_bus_pkg::CMD_STORE;
-		dramN_vstore[g]:	cpu_request_i[g].cmd = fta_bus_pkg::CMD_STORE;
-		dramN_vstore_ndx[g]:	cpu_request_i[g].cmd = fta_bus_pkg::CMD_STORE;
-		dramN_loadz[g]:	cpu_request_i[g].cmd = fta_bus_pkg::CMD_LOADZ;
-		dramN_load[g]:	cpu_request_i[g].cmd = fta_bus_pkg::CMD_LOAD;
-		dramN_vload[g]:	cpu_request_i[g].cmd = fta_bus_pkg::CMD_LOAD;
-		dramN_vload_ndx[g]:	cpu_request_i[g].cmd = fta_bus_pkg::CMD_LOAD;
-		dramN_cload[g]:	cpu_request_i[g].cmd = fta_bus_pkg::CMD_LOAD;
-		dramN_cload_tags[g]:	cpu_request_i[g].cmd = fta_bus_pkg::CMD_LOAD;
-		default:	cpu_request_i[g].cmd = fta_bus_pkg::CMD_NONE;
+		dramN_store[g]:	cpu_request_i[g].cmd = wishbone_pkg::CMD_STORE;
+		dramN_cstore[g]:	cpu_request_i[g].cmd = wishbone_pkg::CMD_STORE;
+		dramN_stptr[g]:	cpu_request_i[g].cmd = wishbone_pkg::CMD_STORE;
+		dramN_vstore[g]:	cpu_request_i[g].cmd = wishbone_pkg::CMD_STORE;
+		dramN_vstore_ndx[g]:	cpu_request_i[g].cmd = wishbone_pkg::CMD_STORE;
+		dramN_loadz[g]:	cpu_request_i[g].cmd = wishbone_pkg::CMD_LOADZ;
+		dramN_load[g]:	cpu_request_i[g].cmd = wishbone_pkg::CMD_LOAD;
+		dramN_vload[g]:	cpu_request_i[g].cmd = wishbone_pkg::CMD_LOAD;
+		dramN_vload_ndx[g]:	cpu_request_i[g].cmd = wishbone_pkg::CMD_LOAD;
+		dramN_cload[g]:	cpu_request_i[g].cmd = wishbone_pkg::CMD_LOAD;
+		dramN_cload_tags[g]:	cpu_request_i[g].cmd = wishbone_pkg::CMD_LOAD;
+		default:	cpu_request_i[g].cmd = wishbone_pkg::CMD_NONE;
 		endcase
-		cpu_request_i[g].bte = fta_bus_pkg::LINEAR;
-		cpu_request_i[g].cti = (dramN_erc[g] || ERC) ? fta_bus_pkg::ERC : fta_bus_pkg::CLASSIC;
+		cpu_request_i[g].bte = wishbone_pkg::LINEAR;
+		cpu_request_i[g].cti = (dramN_erc[g] || ERC) ? wishbone_pkg::ERC : wishbone_pkg::CLASSIC;
 		cpu_request_i[g].blen = 6'd0;
-		cpu_request_i[g].seg = fta_bus_pkg::DATA;
+		cpu_request_i[g].seg = wishbone_pkg::DATA;
 //		cpu_request_i[g].asid = asid;
 		cpu_request_i[g].cyc = dramN[g]==Qupls4_pkg::DRAMSLOT_READY;
 //		cpu_request_i[g].stb = dramN[g]==DRAMSLOT_READY;
@@ -4490,23 +4490,23 @@ for (g = 0; g < Qupls4_pkg::NDATA_PORTS; g = g + 1) begin
     cpu_request_vadr[g] <= dramN_vaddr[g];
     cpu_request_i[g].pv = 1'b0;
 		cpu_request_i[g].adr = dramN_paddr[g];
-		cpu_request_i[g].sz = fta_bus_pkg::fta_size_t'(dramN_memsz[g]);
+		cpu_request_i[g].sz = wishbone_pkg::wb_size_t'(dramN_memsz[g]);
 		cpu_request_i[g].dat = dramN_data[g];
 		cpu_request_i[g].sel = dramN_sel[g];
 		cpu_request_i[g].pl = 8'h00;
 		cpu_request_i[g].pri = 4'd7;
 		if (dramN_load[g]|dramN_cload[g]|dramN_cload_tags|dramN_vload[g]|dramN_vload_ndx[g]) begin
-			cpu_request_i[g].cache = fta_bus_pkg::WT_READ_ALLOCATE;
+			cpu_request_i[g].cache = wishbone_pkg::WT_READ_ALLOCATE;
 			dramN_ack[g] = cpu_resp_o[g].ack & ~cpu_resp_o[g].rty;
 		end
 		else begin
-			cpu_request_i[g].cache = fta_bus_pkg::WT_NO_ALLOCATE;
+			cpu_request_i[g].cache = wishbone_pkg::WT_NO_ALLOCATE;
 			dramN_ack[g] = cpu_resp_o[g].ack;
 		end
 	end
 
 	dcache
-	#(.CORENO(CORENO), .CID(g+1))
+	#(.CORENO(CORENO), .CHANNEL(g+1))
 	udc1
 	(
 		.rst(irst),
@@ -4534,7 +4534,7 @@ for (g = 0; g < Qupls4_pkg::NDATA_PORTS; g = g + 1) begin
 	);
 
 	dcache_ctrl
-	#(.CORENO(CORENO), .CID(g+1))
+	#(.CORENO(CORENO), .CHANNEL(g+1))
 	udcctrl1
 	(
 		.rst_i(irst),
@@ -4736,9 +4736,7 @@ begin
 	end
 end
 
-wire ptable_resp_ack;
-
-mmu #(.CID(3)) ummu1
+mmu #(.CORENO(CORENO), .CHANNEL(3)) ummu1
 (
 	.rst(irst),
 	.clk(clk), 
@@ -4777,7 +4775,6 @@ mmu #(.CID(3)) ummu1
 	.commit3_idv(commit3_idv),
 	.ftas_req(ftadm_req),
 	.ftas_resp(ptable_resp),
-	.ftas_resp_ack(ptable_resp_ack),
 	.ftam_req(ftatm_req),
 	.ftam_resp(ftatm_resp),
 	.fault_o(pg_fault),
@@ -4853,7 +4850,7 @@ Qupls4_mem_state udrst0
 	.state_o(dram0)
 );
 
-Qupls_mem_more ummore0
+Qupls4_mem_more ummore0
 (
 	.rst_i(irst),
 	.clk_i(clk),

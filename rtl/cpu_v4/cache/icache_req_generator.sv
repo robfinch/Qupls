@@ -26,7 +26,7 @@
 // AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 // IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
 // DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-// FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+// FOR ANY DIRECT, INDIRECT, INCHANNELENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
 // DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
 // SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
 // CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
@@ -43,7 +43,7 @@ import cache_pkg::*;
 module icache_req_generator(rst, clk, hit, tlb_v, miss_vadr, miss_padr,
 	wbm_req, ack_i, vtags, ptags, ack);
 parameter CORENO = 6'd1;
-parameter CID = 6'd0;
+parameter CHANNEL = 6'd0;
 parameter WAIT = 6'd6;
 input rst;
 input clk;
@@ -109,7 +109,7 @@ else begin
 			wbm_req.cyc <= 1'b0;
 			wbm_req.sel <= 32'h00000000;
 			wbm_req.we <= 1'b0;
-			if (lfsr_cnt=={CID,2'b0})
+			if (lfsr_cnt=={CHANNEL,2'b0})
 				req_state <= WAIT4MISS;
 			lfsr_cnt <= lfsr_cnt + 2'd1;
 			tid <= 4'h0;
@@ -118,7 +118,7 @@ else begin
 		if (!hit & tlb_v) begin
 			tid_cnt <= 4'h0;
 			wbm_req.tid.core = CORENO;
-			wbm_req.tid.channel = CID;			
+			wbm_req.tid.channel = CHANNEL;			
 			wbm_req.tid.tranid <= {tid,2'd0};
 			wbm_req.blen <= 6'd1;
 			wbm_req.cti <= wishbone_pkg::FIXED;
@@ -162,7 +162,7 @@ else begin
 	STATE4a:
 		begin
 			wbm_req.tid.core = CORENO;
-			wbm_req.tid.channel = CID;			
+			wbm_req.tid.channel = CHANNEL;			
 			wbm_req.tid.tranid <= {tid,2'd2};
 			wbm_req.cti <= fta_bus_pkg::FIXED;
 			wbm_req.cyc <= 1'b1;
@@ -186,7 +186,7 @@ else begin
 	STATE5a:
 		begin
 			wbm_req.tid.core = CORENO;
-			wbm_req.tid.channel = CID;			
+			wbm_req.tid.channel = CHANNEL;			
 			wbm_req.tid.tranid <= {tid,2'd3};
 			wbm_req.cti <= fta_bus_pkg::EOB;
 			wbm_req.cyc <= 1'b1;

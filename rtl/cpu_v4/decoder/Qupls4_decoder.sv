@@ -370,7 +370,7 @@ Stark_decode_irq udirq1
 );
 */
 
-Stark_decode_eret uderet1
+Qupls4_decode_eret uderet1
 (
 	.instr(instr),
 	.eret(db.eret)

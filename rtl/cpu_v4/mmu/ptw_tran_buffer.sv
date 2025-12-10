@@ -25,7 +25,7 @@
 // AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 // IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
 // DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-// FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+// FOR ANY DIRECT, INDIRECT, INCHANNELENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
 // DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
 // SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
 // CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
@@ -45,7 +45,7 @@ import ptable_walker_pkg::*;
 module ptw_tran_buffer(rst, clk, ptattr, state, access_state, ptw_vv, ptw_pv, ptw_ppv, tranbuf,
 	miss_queue, sel_tran, sel_qe, ftam_resp, ftam_resp_ack, tid, ptw_vadr, ptw_padr);
 parameter CORENO = 6'd1;
-parameter CID = 3'd4;
+parameter CHANNEL = 3'd4;
 input rst;
 input clk;
 input ptattr_t ptattr;
@@ -69,7 +69,7 @@ integer nn;
 always_ff @(posedge clk)
 if (rst) begin
 	tid.core <= CORENO;
-	tid.channel <= CID;
+	tid.channel <= CHANNEL;
 	tid.tranid <= 4'd1;
 	for (nn = 0; nn < 16; nn = nn + 1)
 		tranbuf[nn] <= {$bits(ptw_tran_buf_t){1'b0}};

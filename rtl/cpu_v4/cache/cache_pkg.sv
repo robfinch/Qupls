@@ -1,11 +1,11 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2022-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//	icache_ctrl.sv
+//	cache_pkg.sv
 //
 // BSD 3-Clause License
 // Redistribution and use in source and binary forms, with or without
@@ -26,88 +26,61 @@
 // AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 // IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
 // DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-// FOR ANY DIRECT, INDIRECT, INCHANNELENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+// FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
 // DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
 // SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
 // CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-//
-// 1000 LUTs / 2100 FFs
+//                                                                          
 // ============================================================================
 
-import wishbone_pkg::*;
-import cpu_types_pkg::*;
-import cache_pkg::*;
+package cache_pkg;
 
-module icache_ctrl(rst, clk, wbm_req, wbm_resp, ftam_full,
-	hit, tlb_v, miss_vadr, miss_padr, miss_asid, port, port_o,
-	wr_ic, way, line_o, snoop_adr, snoop_v, snoop_cid);
-parameter WAYS = 4;
-parameter CORENO = 6'd1;
-parameter CHANNEL = 6'd0;
-localparam LOG_WAYS = $clog2(WAYS);
-input rst;
-input clk;
-output wb_cmd_request256_t wbm_req;
-input wb_cmd_response256_t wbm_resp;
-input ftam_full;
-input hit;
-input tlb_v;
-input cpu_types_pkg::virtual_address_t miss_vadr;
-input cpu_types_pkg::physical_address_t miss_padr;
-input cpu_types_pkg::asid_t miss_asid;
-input port;
-output wr_ic;
-output [LOG_WAYS-1:0] way;
-output ICacheLine line_o;
-input cpu_types_pkg::physical_address_t snoop_adr;
-input snoop_v;
-input [5:0] snoop_cid;
-output reg port_o;
+parameter ITAG_BIT = 14;
+parameter DCacheLineWidth = 512;
+localparam DCacheTagLoBit = $clog2((DCacheLineWidth/8));
+parameter ICacheBundleWidth = 256;
+parameter ICacheLineWidth = ICacheBundleWidth*2;
+localparam ICacheTagLoBit = $clog2((ICacheLineWidth/8));
 
-wire cpu_types_pkg::virtual_address_t [15:0] vtags;
-wire cpu_types_pkg::physical_address_t [15:0] ptags;
-wire ack;
+`define TAG_ASID $bits(cpu_types_pkg::asid_t) + $bits(cpu_types_pkg::address_t)-ITAG_BIT-1:$bits(cpu_types_pkg::address_t)-ITAG_BIT
 
-// Generate memory requests to fill cache line.
+typedef logic [$bits(cpu_types_pkg::address_t)-1:ITAG_BIT] cache_tag_t;
 
-icache_req_generator
-#(
-	.CORENO(CORENO),
-	.CHANNEL(CHANNEL)
-)
-icrq1
-(
-	.rst(rst),
-	.clk(clk),
-	.hit(hit), 
-	.tlb_v(tlb_v),
-	.miss_vadr(miss_vadr),
-	.miss_padr(miss_padr),
-	.wbm_req(wbm_req),
-	.ack_i(wbm_resp.ack),
-	.vtags(vtags),
-	.ptags(ptags),
-	.ack(wr_ic)
-);
+typedef struct packed
+{
+	logic v;		// valid indicator
+	logic m;		// modified indicator
+	cpu_types_pkg::asid_t asid;
+	logic [$bits(cpu_types_pkg::address_t)-1:0] vtag;	// virtual tag
+	logic [$bits(cpu_types_pkg::address_t)-1:0] ptag;	// physical tag
+	logic [DCacheLineWidth-1:0] data;
+} DCacheLine;
 
-// Process ACK responses coming back.
+typedef struct packed
+{
+	logic [ICacheLineWidth/ICacheBundleWidth-1:0] v;	// 1 valid bit per 128 bits data
+	logic m;		// modified indicator
+	cpu_types_pkg::asid_t asid;
+	logic [$bits(cpu_types_pkg::address_t)-1:0] vtag;	// virtual tag
+	logic [$bits(cpu_types_pkg::address_t)-1:0] ptag;	// physical tag
+	logic [ICacheLineWidth-1:0] data;
+} ICacheLine;
 
-icache_ack_processor 
-#(
-	.LOG_WAYS(LOG_WAYS)
-)
-uicap1
-(
-	.rst(rst),
-	.clk(clk),
-	.wbm_resp(wbm_resp),
-	.wr_ic(wr_ic),
-	.line_o(line_o),
-	.vtags(vtags),
-	.ptags(ptags),
-	.way(way)
-);
+typedef struct packed
+{
+	logic v;
+	logic is_load;
+	logic is_dump;
+	logic [1:0] active;
+	logic [1:0] done;
+	logic [1:0] out;
+	logic [1:0] loaded;
+	logic write_allocate;
+	cpu_types_pkg::rob_ndx_t rndx;
+	wishbone_pkg::wb_cmd_request512_t cpu_req;
+	wishbone_pkg::wb_cmd_request256_t [1:0] tran_req;
+} dcache_req_queue_t;
 
-endmodule
+endpackage

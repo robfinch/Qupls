@@ -263,8 +263,8 @@ parameter NAGEN = 1;
 // Note that adding an FPU may also increase integer performance if PERFORMANCE
 // is set to 1.
 parameter NSAU = 2;			// 1 or 2
-parameter NFPU = 1;			// 0 or 1
-parameter NFMA = 1;			// 0, 1 or 2
+parameter NFPU = 0;			// 0 or 1
+parameter NFMA = 0;			// 0, 1 or 2
 parameter NDFPU = 0;		// 0 or 1
 parameter NLSQ_PORTS = 1;
 
@@ -1171,6 +1171,22 @@ typedef struct packed
 	opcode_e opcode;
 } pred_inst_t;
 
+typedef struct packed
+{
+	logic v;
+	logic exc;
+	logic lead;
+	logic [4:0] num;
+	logic resv2;
+	logic [1:0] pr;
+	logic [3:0] resv;
+	logic [23:0] imm;
+	logic [2:0] op3;
+	regspec_t Rs1;
+	regspec_t Rd;
+	opcode_e opcode;
+} rtd_inst_t;
+
 typedef union packed
 {
 	alui_inst_t cmpi;
@@ -1203,6 +1219,7 @@ typedef union packed
 	extd_inst_t extd;
 	vls_inst_t vls;
 	pred_inst_t pred;
+	rtd_inst_t rtd;
 	anyinst_t any;
 } micro_op_t;
 

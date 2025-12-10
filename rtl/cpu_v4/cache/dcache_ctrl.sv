@@ -49,7 +49,7 @@ module dcache_ctrl(rst_i, clk_i, dce, ftam_req, ftam_resp, ftam_full, acr, hit, 
 	cpu_request_i2, data_to_cache_o,
 	response_from_cache_i, wr, uway, way,
 	dump, dump_i, dump_ack, snoop_adr, snoop_v, snoop_cid);
-parameter CID = 3'd1;
+parameter CHANNEL = 3'd1;
 parameter CORENO = 6'd1;
 parameter WAYS = 4;
 parameter NSEL = 32;
@@ -154,11 +154,11 @@ always_comb
 always_comb
 	non_cacheable =
 	!dce ||
-	cache_type==wishbone_bus_pkg::NC_NB ||
-	cache_type==wishbone_bus_pkg::NON_CACHEABLE
+	cache_type==wishbone_pkg::NC_NB ||
+	cache_type==wishbone_pkg::NON_CACHEABLE
 	;
 always_comb
-	allocate = fnFtaAllocate(cpu_request_i2.cache);
+	allocate = fnWbAllocate(cpu_request_i2.cache);
 
 // Comb logic so that hits do not take an extra cycle.
 always_comb
@@ -259,7 +259,7 @@ begin
 	which_tran = 5'd8;
 	for (nn8 = 0; nn8 < 8; nn8 = nn8 + 1)
 		if (cpu_req_queue[nn8[2:1]].tran_req[nn8[0]].tid==ftam_resp.tid
-			&& cpu_req_queue[nn8[2:1]].tran_req[nn8[0]].cmd!=wishbone_bus_pkg::CMD_NONE)
+			&& cpu_req_queue[nn8[2:1]].tran_req[nn8[0]].cmd!=wishbone_pkg::CMD_NONE)
 			which_tran = nn8;
 end
 //			|| (cpu_req_queue[nn8[3:2]].active[nn8[1:0]] && !cpu_req_queue[nn8[3:2]].tran_req[nn8[1:0]].cyc)
@@ -267,11 +267,11 @@ end
 always_comb
 	cpu_request_busy_o = free_queue_entry >= 4;
 
-wishbone_tranid_t tmptid;
+wb_tranid_t tmptid;
 always_comb
 begin
 	tmptid.core = CORENO;
-	tmptid.channel = CID;
+	tmptid.channel = CHANNEL;
 	tmptid.tranid = tidcnt;
 end
 
@@ -333,7 +333,7 @@ else begin
 	endcase
 
 	if (snoop_v && snoop_adr[cache_pkg::ITAG_BIT:cache_pkg::ICacheTagLoBit]==
-		cpu_request_vadr[cache_pkg::ITAG_BIT:cache_pkg::ICacheTagLoBit] && snoop_cid==CID)
+		cpu_request_vadr[cache_pkg::ITAG_BIT:cache_pkg::ICacheTagLoBit] && snoop_cid==CHANNEL)
 		next_req_state <= IDLE;		
 end
 
@@ -396,7 +396,7 @@ else begin
 			cpu_req_queue[free_queue_entry[1:0]].active <= 2'b00;
 			cpu_req_queue[free_queue_entry[1:0]].out <= 2'b00;
 			cpu_req_queue[free_queue_entry[1:0]].cpu_req <= cpu_request_i;
-			cpu_req_queue[free_queue_entry[1:0]].req_vadr <= cpu_request_vadr;
+//			cpu_req_queue[free_queue_entry[1:0]].req_vadr <= cpu_request_vadr;
 			cpu_req_queue[free_queue_entry[1:0]].rndx <= cpu_request_rndx;
 		end
 	end
@@ -431,20 +431,20 @@ else begin
 	case(req_state)
 	RESET:
 		begin
-			ftam_req.cmd <= wishbone_bus_pkg::CMD_DCACHE_LOAD;
-			ftam_req.sz  <= wishbone_bus_pkg::dhexi;
+			ftam_req.cmd <= wishbone_pkg::CMD_DCACHE_LOAD;
+			ftam_req.sz  <= wishbone_pkg::dhexi;
 			ftam_req.blen <= 6'd0;
-//			ftam_req.cid <= CID;					// CPU channel id
+//			ftam_req.cid <= CHANNEL;					// CPU channel id
 			ftam_req.tid.core <= CORENO;
-			ftam_req.tid.channel <= CID;
+			ftam_req.tid.channel <= CHANNEL;
 			ftam_req.tid.tranid <= 4'd0;		// transaction id
 			ftam_req.csr  <= 1'd0;						// clear/set reservation
 			ftam_req.pl	<= 8'd0;						// privilege level
 			ftam_req.pri	<= 4'h7;					// average priority (higher is better).
-			ftam_req.cache <= wishbone_bus_pkg::CACHEABLE;
-			ftam_req.seg <= wishbone_bus_pkg::DATA;
-			ftam_req.bte <= wishbone_bus_pkg::LINEAR;
-			ftam_req.cti <= wishbone_bus_pkg::CLASSIC;
+			ftam_req.cache <= wishbone_pkg::CACHEABLE;
+			ftam_req.seg <= wishbone_pkg::DATA;
+			ftam_req.bte <= wishbone_pkg::LINEAR;
+			ftam_req.cti <= wishbone_pkg::CLASSIC;
 			tBusClear();
 			cpu_trans_queued <= 1'd0;
 			wr_cnt <= 4'd0;
@@ -457,7 +457,8 @@ else begin
 				if (cpu_req_select < 3'd4 && cpu_req_queue[cpu_req_select[1:0]].cpu_req.tid != lasttid2) begin
 					queued_req <= cpu_req_select[1:0];
 					cpu_request_i2 <= cpu_req_queue[cpu_req_select[1:0]].cpu_req;
-					cpu_request_vadr2 <= cpu_req_queue[cpu_req_select[1:0]].req_vadr;
+//					cpu_request_vadr2 <= cpu_req_queue[cpu_req_select[1:0]].req_vadr;
+					cpu_request_vadr2 <= cpu_req_queue[cpu_req_select[1:0]].cpu_req.adr;
 					lasttid2 <= cpu_req_queue[cpu_req_select[1:0]].cpu_req.tid;
 					//cpu_req_queue[cpu_req_select[1:0]].active <= 2'b11;
 					cpu_req_queue[cpu_req_select[1:0]].done <= 2'b00;
@@ -508,7 +509,7 @@ else begin
 					{dump_i.ptag[$bits(cpu_types_pkg::address_t)-1:cache_pkg::DCacheTagLoBit],dump_cnt[0],{cache_pkg::DCacheTagLoBit-1{1'h0}}},
 					32'hFFFFFFFF,
 					dump_i.data >> {dump_cnt[0],8'd0},
-					CID,
+					CHANNEL,
 					tmptid,
 					dump_cnt[0],
 					1'b0
@@ -537,7 +538,7 @@ else begin
 					{cpu_request_i2.adr[$bits(cpu_types_pkg::address_t)-1:cache_pkg::DCacheTagLoBit],load_cnt[0],{cache_pkg::DCacheTagLoBit-1{1'h0}}},
 					32'hFFFFFFFF,
 					1'd0,
-					CID,
+					CHANNEL,
 					tmptid,
 					load_cnt[0],
 					1'b1
@@ -577,7 +578,7 @@ else begin
 			cpu_req_queue[which_tran[2:1]].active[which_tran[0]] <= 1'b0;
 			cpu_req_queue[which_tran[2:1]].out[which_tran[0]] <= 1'b0;
 			cpu_req_queue[which_tran[2:1]].done[which_tran[0]] <= 1'b1;
-			cpu_req_queue[which_tran[2:1]].tran_req[which_tran[0]].cmd <= wishbone_bus_pkg::CMD_NONE;
+			cpu_req_queue[which_tran[2:1]].tran_req[which_tran[0]].cmd <= wishbone_pkg::CMD_NONE;
 		end
 	end
 
@@ -662,7 +663,7 @@ else begin
 		active_req <= output_tran[2:1];
 		last_out <= cpu_req_queue[output_tran[2:1]].tran_req[output_tran[0]].tid.tranid;
 		// If its a read or ERC write there is more to do. Set status to 'out'.
-		if (!cpu_req_queue[output_tran[2:1]].tran_req[output_tran[0]].we || cpu_req_queue[output_tran[2:1]].tran_req[output_tran[0]].cti==wishbone_bus_pkg::ERC)
+		if (!cpu_req_queue[output_tran[2:1]].tran_req[output_tran[0]].we || cpu_req_queue[output_tran[2:1]].tran_req[output_tran[0]].cti==wishbone_pkg::ERC)
 			cpu_req_queue[output_tran[2:1]].out[output_tran[0]] <= 1'b1;
 		// Non-ERC writes are done as soon as issued.
 		else begin
@@ -681,7 +682,7 @@ else begin
 
 	// Only the cache index need be compared for snoop hit.
 	if (snoop_v && snoop_adr[cache_pkg::ITAG_BIT:cache_pkg::ICacheTagLoBit]==
-		cpu_request_vadr2[cache_pkg::ITAG_BIT:cache_pkg::ICacheTagLoBit] && snoop_cid==CID) begin
+		cpu_request_vadr2[cache_pkg::ITAG_BIT:cache_pkg::ICacheTagLoBit] && snoop_cid==CHANNEL) begin
 		/*
 		tBusClear();
 		wr <= 1'b0;
@@ -713,7 +714,7 @@ end
 endtask
 
 task tAddr;
-input wishbone_operating_mode_t om;
+input wb_operating_mode_t om;
 input wr;
 input cache;
 input cpu_types_pkg::virtual_address_t vadr;
@@ -721,16 +722,16 @@ input cpu_types_pkg::physical_address_t padr;
 input [31:0] sel;
 input [255:0] data;
 input [3:0] cid;
-input wishbone_tranid_t tid;
+input wb_tranid_t tid;
 input [0:0] which;
 input ack;
 begin
 	to_cnt <= 11'd0;
 	if (!cpu_req_queue[queued_req].tran_req[which].cyc) begin
 		cpu_req_queue[queued_req].tran_req[which].om <= om;
-		cpu_req_queue[queued_req].tran_req[which].cmd <= wr ? wishbone_bus_pkg::CMD_STORE : 
-			cache ? wishbone_bus_pkg::CMD_DCACHE_LOAD : wishbone_bus_pkg::CMD_LOADZ;
-		cpu_req_queue[queued_req].tran_req[which].sz <= wishbone_bus_pkg::dhexi;
+		cpu_req_queue[queued_req].tran_req[which].cmd <= wr ? wishbone_pkg::CMD_STORE : 
+			cache ? wishbone_pkg::CMD_DCACHE_LOAD : wishbone_pkg::CMD_LOADZ;
+		cpu_req_queue[queued_req].tran_req[which].sz <= wishbone_pkg::dhexi;
 		cpu_req_queue[queued_req].tran_req[which].blen <= 6'd0;
 		cpu_req_queue[queued_req].tran_req[which].tid <= tid;
 		cpu_req_queue[queued_req].tran_req[which].bte <= cpu_request_i2.bte;
@@ -741,17 +742,17 @@ begin
 		cpu_req_queue[queued_req].tran_req[which].csr <= 1'd0;
 		cpu_req_queue[queued_req].tran_req[which].pv <= 1'b0;
 		cpu_req_queue[queued_req].tran_req[which].adr <= padr;
-		cpu_req_queue[queued_req].tran_req[which].data1 <= data;
+		cpu_req_queue[queued_req].tran_req[which].dat <= data;
 		cpu_req_queue[queued_req].tran_req[which].csr <= 1'd0;
 		cpu_req_queue[queued_req].tran_req[which].pl <= 8'd0;
 		cpu_req_queue[queued_req].tran_req[which].pri <= 4'h7;
-		cpu_req_queue[queued_req].tran_req[which].cache <= cpu_request_i2.cache;//wishbone_bus_pkg::CACHEABLE;
-		cpu_req_queue[queued_req].tran_req[which].seg <= wishbone_bus_pkg::DATA;
+		cpu_req_queue[queued_req].tran_req[which].cache <= cpu_request_i2.cache;//wishbone_pkg::CACHEABLE;
+		cpu_req_queue[queued_req].tran_req[which].seg <= wishbone_pkg::DATA;
 		cpu_req_queue[queued_req].active[which] <= 1'b1;
 	end
 //	tran_done[completed_tran] <= 1'b0;
 	cpu_req_queue[queued_req].write_allocate <= wr & allocate;
-//	if (wr && !allocate && cpu_request_i2.cti!=wishbone_bus_pkg::ERC) begin
+//	if (wr && !allocate && cpu_request_i2.cti!=wishbone_pkg::ERC) begin
 //		cpu_req_queue[queued_req].done[which] <= 1'b1;
 //	end
 	if (~|cpu_request_i2.sel[31:0])
@@ -768,7 +769,7 @@ end
 endtask
 
 task tAccess;
-input wishbone_tranid_t tid;
+input wb_tranid_t tid;
 cpu_types_pkg::address_t ta;
 begin
 	if (wr_cnt == 4'd1) begin
@@ -791,10 +792,10 @@ begin
 					{cpu_request_i2.adr[$bits(cpu_types_pkg::address_t)-1:6],1'd0,5'h0},
 					cpu_request_i2.sel[31:0],
 					cpu_request_i2.dat[255:0],
-					CID,
+					CHANNEL,
 					{tmptid.core,tmptid.channel,4'd1},
 					1'd0,
-					cpu_request_i2.cti==wishbone_bus_pkg::ERC || !cpu_request_i2.we
+					cpu_request_i2.cti==wishbone_pkg::ERC || !cpu_request_i2.we
 				);
 //				req_state <= RAND_DELAY;
 			end
@@ -812,10 +813,10 @@ begin
 						{cpu_request_i2.adr[$bits(cpu_types_pkg::address_t)-1:6],1'd1,5'h0},
 						cpu_request_i2.sel[63:32],
 						cpu_request_i2.dat[511:256],
-						CID,
+						CHANNEL,
 						{tmptid.core,tmptid.channel,4'd2},
 						1'd1,
-						cpu_request_i2.cti==wishbone_bus_pkg::ERC || !cpu_request_i2.we
+						cpu_request_i2.cti==wishbone_pkg::ERC || !cpu_request_i2.we
 					);
 //					req_state <= RAND_DELAY;
 				end
@@ -833,10 +834,10 @@ begin
 							{cpu_request_i2.padr[$bits(cpu_types_pkg::address_t)-1:6],2'd2,4'h0},
 							cpu_request_i2.sel[47:32],
 							cpu_request_i2.dat[383:256],
-							CID,
+							CHANNEL,
 							{tmptid.core,tmptid.channel,4'd3},
 							2'd2,
-							cpu_request_i2.cti==wishbone_bus_pkg::ERC || !cpu_request_i2.we
+							cpu_request_i2.cti==wishbone_pkg::ERC || !cpu_request_i2.we
 						);
 //						req_state <= RAND_DELAY;
 					end
@@ -855,10 +856,10 @@ begin
 								{cpu_request_i2.padr[$bits(cpu_types_pkg::address_t)-1:6],2'd3,4'h0},
 								cpu_request_i2.sel[63:48],
 								cpu_request_i2.dat[511:384],
-								CID,
+								CHANNEL,
 								{tmptid.core,tmptid.channel,4'd4},
 								2'd3,
-								cpu_request_i2.cti==wishbone_bus_pkg::ERC || !cpu_request_i2.we
+								cpu_request_i2.cti==wishbone_pkg::ERC || !cpu_request_i2.we
 							);
 //							req_state <= RAND_DELAY;
 						end
@@ -881,10 +882,10 @@ begin
 					{cpu_request_i2.adr[$bits(cpu_types_pkg::address_t)-1:6],1'd1,5'h0},
 					cpu_request_i2.sel[63:32],
 					cpu_request_i2.dat[511:256],
-					CID,
+					CHANNEL,
 					{tmptid.core,tmptid.channel,4'd5},
 					1'd1,
-					cpu_request_i2.cti==wishbone_bus_pkg::ERC || !cpu_request_i2.we
+					cpu_request_i2.cti==wishbone_pkg::ERC || !cpu_request_i2.we
 				);
 //				req_state <= RAND_DELAY;
 			end
@@ -902,10 +903,10 @@ begin
 						{cpu_request_i2.padr[$bits(cpu_types_pkg::address_t)-1:6],2'd2,4'h0},
 						cpu_request_i2.sel[47:32],
 						cpu_request_i2.dat[383:256],
-						CID,
+						CHANNEL,
 						{tmptid.core,tmptid.channel,4'd6},
 						2'd2,
-						cpu_request_i2.cti==wishbone_bus_pkg::ERC || !cpu_request_i2.we
+						cpu_request_i2.cti==wishbone_pkg::ERC || !cpu_request_i2.we
 					);
 //					req_state <= RAND_DELAY;
 				end
@@ -924,10 +925,10 @@ begin
 							{cpu_request_i2.padr[$bits(cpu_types_pkg::address_t)-1:6],2'd3,4'h0},
 							cpu_request_i2.sel[63:48],
 							cpu_request_i2.dat[511:384],
-							CID,
+							CHANNEL,
 							{tmptid.core,tmptid.channel,4'd7},
 							2'd3,
-							cpu_request_i2.cti==wishbone_bus_pkg::ERC || !cpu_request_i2.we
+							cpu_request_i2.cti==wishbone_pkg::ERC || !cpu_request_i2.we
 						);
 //						req_state <= RAND_DELAY;
 					end
@@ -951,10 +952,10 @@ begin
 					{cpu_request_i2.padr[$bits(cpu_types_pkg::address_t)-1:6],2'd2,4'h0},
 					cpu_request_i2.sel[47:32],
 					cpu_request_i2.dat[383:256],
-					CID,
+					CHANNEL,
 					{tmptid.core,tmptid.channel,4'd8},
 					2'd2,
-					cpu_request_i2.cti==wishbone_bus_pkg::ERC || !cpu_request_i2.we
+					cpu_request_i2.cti==wishbone_pkg::ERC || !cpu_request_i2.we
 				);
 //				req_state <= RAND_DELAY;
 			end
@@ -973,10 +974,10 @@ begin
 						{cpu_request_i2.padr[$bits(cpu_types_pkg::address_t)-1:6],2'd3,4'h0},
 						cpu_request_i2.sel[63:48],
 						cpu_request_i2.dat[511:384],
-						CID,
+						CHANNEL,
 						{tmptid.core,tmptid.channel,4'd9},
 						2'd3,
-						cpu_request_i2.cti==wishbone_bus_pkg::ERC || !cpu_request_i2.we
+						cpu_request_i2.cti==wishbone_pkg::ERC || !cpu_request_i2.we
 					);
 //					req_state <= RAND_DELAY;
 				end
@@ -999,10 +1000,10 @@ begin
 					{cpu_request_i2.padr[$bits(cpu_types_pkg::address_t)-1:6],2'd3,4'h0},
 					cpu_request_i2.sel[63:48],
 					cpu_request_i2.dat[511:384],
-					CID,
+					CHANNEL,
 					{tmptid.core,tmptid.channel,4'd10},
 					2'd3,
-					cpu_request_i2.cti==wishbone_bus_pkg::ERC || !cpu_request_i2.we
+					cpu_request_i2.cti==wishbone_pkg::ERC || !cpu_request_i2.we
 				);
 //				req_state <= RAND_DELAY;
 			end
@@ -1042,13 +1043,13 @@ else begin
 			// Got an ack back so the tran no longer needs to be performed.
 			tran_load_data[which_tran[2:1]].tid <= cpu_req_queue[which_tran[2:1]].cpu_req.tid;
 			tran_load_data[which_tran[2:1]].pri <= ftam_resp.pri;
-			tran_load_data[which_tran[2:1]].adr <= {ftam_resp.adr[$bits(cpu_types_pkg::address_t)-1:6],6'd0};
-			case(ftam_resp.adr[5])
+//			tran_load_data[which_tran[2:1]].adr <= {cpu_req_queue[which_tran[2:1]].cpu_req.adr[$bits(cpu_types_pkg::address_t)-1:6],6'd0};
+			case(cpu_req_queue[which_tran[2:1]].cpu_req.adr[5])
 			1'd0: begin tran_load_data[which_tran[2:1]].dat[255:  0] <= ftam_resp.dat; end
 			1'd1:	begin tran_load_data[which_tran[2:1]].dat[511:256] <= ftam_resp.dat; end
 			endcase
 			tran_load_data[which_tran[2:1]].rty <= 1'b0;
-			tran_load_data[which_tran[2:1]].err <= ftam_resp.err;	//wishbone_bus_pkg::OKAY;
+			tran_load_data[which_tran[2:1]].err <= ftam_resp.err;	//wishbone_pkg::OKAY;
 		end
 	end
 	// Retry (only if transaction active)

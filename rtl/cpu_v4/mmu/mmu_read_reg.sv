@@ -3,7 +3,7 @@ import mmu_pkg::*;
 import fta_bus_pkg::*;
 
 module mmu_read_reg(rst, clk, cs_config, cs_regs, sreq, sresp, cfg_out,
-	fault_adr, fault_seg, fault_asid, ptbr, ptattr,
+	cfg_tid, cfg_ack, fault_adr, fault_seg, fault_asid, ptbr, ptattr,
 	virt_adr, phys_adr, phys_adr_v, pbl_regset, pbl, pte_size, region_dat
 );
 input rst;
@@ -13,6 +13,8 @@ input cs_regs;
 input fta_cmd_request256_t sreq;
 output fta_cmd_response256_t sresp;
 input [255:0] cfg_out;
+input [15:0] cfg_tid;
+input cfg_ack;
 input address_t fault_adr;
 input [63:0] fault_seg;
 input asid_t fault_asid;
@@ -36,8 +38,11 @@ else begin
 		sresp.tid <= sreq.tid;
 		sresp.pri <= sreq.pri;
 	end
-	if (cs_config)
+	if (cs_config) begin
 		sresp.dat <= cfg_out;
+		sresp.tid <= cfg_tid;
+		sresp.ack <= cfg_ack;
+	end
 	else if (cs_regs) begin
 		sresp.dat <= 256'd0;
 		casez(sreq.adr[13:0])

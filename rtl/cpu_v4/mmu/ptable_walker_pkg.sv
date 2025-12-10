@@ -39,10 +39,12 @@ package ptable_walker_pkg;
 
 parameter MISSQ_SIZE = 8;
 
-typedef enum logic [1:0] {
-	IDLE = 2'd0,
-	FAULT = 2'd1,
-	WAIT = 2'd2
+typedef enum logic [2:0] {
+	IDLE = 3'd0,
+	FAULT = 3'd1,
+	WAIT = 3'd2,
+	WB_ACK = 3'd3,
+	WB_NACK = 3'd4
 } ptw_state_t;
 
 typedef enum logic [3:0] {

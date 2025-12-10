@@ -192,7 +192,7 @@ if (rst)
 	ic_line_fet <= {128{2'd3,Qupls4_pkg::OP_NOP}};
 else begin
 	if (!rstcnt[2])
-		ic_line_fet <= {128{2'd3,Qupls4_pkg::OP_NOP}};
+		ic_line_fet <= {128{1'd1,Qupls4_pkg::OP_NOP}};
 	else if (en2|inject_cl) begin
 		if (inject_cl)
 			ic_line_fet <= {{64{2'd3,Qupls4_pkg::OP_NOP}},inj_line_i};

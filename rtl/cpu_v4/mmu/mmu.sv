@@ -25,18 +25,18 @@
 // AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 // IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
 // DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-// FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+// FOR ANY DIRECT, INDIRECT, INCHANNELENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
 // DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
 // SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
 // CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 9200 LUTs / 8300 FFs / 28 BRAMs
+// 5110 LUTs / 6300 FFs / 28 BRAMs
 // ============================================================================
 
 import const_pkg::*;
-import fta_bus_pkg::*;
+import wishbone_pkg::*;
 import mmu_pkg::*;
 import cpu_types_pkg::*;
 import QuplsPkg::*;
@@ -57,15 +57,12 @@ module mmu(rst, clk, paging_en, cpl,
 	tlb_pc_entry, tlb0_v, pc_padr_v, pc_padr,
 	commit0_id, commit0_idv, commit1_id, commit1_idv, commit2_id, commit2_idv,
 	commit3_id, commit3_idv,
-	ftas_req, ftas_resp, ftas_resp_ack, ftam_resp_ack,
-	ftam_req_cyc,
-	ftam_req_ack,
+	ftas_req, ftas_resp,
 	ftam_req, ftam_resp, fault_o, faultq_o, pe_fault_o
 );
 parameter CORENO = 6'd1;
-parameter CID = 3'd3;
+parameter CHANNEL = 3'd3;
 parameter WAYS = 3;
-parameter BUS_WIDTH = 256;
 
 parameter IO_ADDR = 32'hFFF40001;	//32'hFEFC0001;
 parameter IO_ADDR_MASK = 32'hFFFF0000;
@@ -91,6 +88,9 @@ parameter CFG_MAX_LATENCY = 8'h00;
 parameter CFG_IRQ_LINE = 8'd27;
 
 localparam CFG_HEADER_TYPE = 8'h00;			// 00 = a general device
+
+parameter BUS_PROTOCOL = 0;
+parameter BUS_WIDTH = 256;
 
 input rst;
 input clk;
@@ -134,16 +134,12 @@ input commit2_idv;
 input rob_ndx_t commit3_id;
 input commit3_idv;
 
-// FTA slave
-input fta_cmd_request256_t ftas_req;
-output fta_cmd_response256_t ftas_resp;
-input ftas_resp_ack;
-// FTA master
-output reg ftam_req_cyc;
-input ftam_req_ack;
-output fta_cmd_request256_t ftam_req;
-input fta_cmd_response256_t ftam_resp;
-output ftam_resp_ack;
+// Bus slave
+input wb_cmd_request256_t ftas_req;
+output wb_cmd_response256_t ftas_resp;
+// Bus master
+output wb_cmd_request256_t ftam_req;
+input wb_cmd_response256_t ftam_resp;
 
 output [31:0] fault_o;
 output reg [1:0] faultq_o;
@@ -202,7 +198,7 @@ reg tlbmiss_ip;		// miss processing in progress.
 reg fault;
 reg upd_req, upd_req2, upd_req3;
 ptw_tran_buf_t [15:0] tranbuf;
-fta_tranid_t tid;
+wb_tranid_t tid;
 ptw_miss_queue_t [MISSQ_SIZE-1:0] miss_queue;
 reg [31:0] miss_adr;
 asid_t miss_asid;
@@ -232,11 +228,13 @@ reg priv_err0, priv_err1,priv_err2;
 operating_mode_t om;
 
 integer nn,n4;
-fta_cmd_request256_t sreq, sreqd;
-fta_cmd_response256_t sresp;
+wb_cmd_request256_t sreq, sreqd;
+wb_cmd_response256_t sresp;
 wire irq_en;
 wire cs_tw;
-wire [127:0] cfg_out;
+wire [15:0] cfg_tid;
+wire cfg_ack;
+wire [255:0] cfg_out;
 
 e_pte_size pte_size;
 
@@ -251,16 +249,19 @@ always_ff @(posedge clk)
 // Latch slave response until ACKd by master
 always_ff @(posedge clk)
 if (rst) begin
-	if (SIM) ftas_resp <= {$bits(fta_cmd_response256_t){1'b0}};
-	ftas_resp.ack <= NACK;
+	ftas_resp <= {$bits(wb_cmd_response256_t){1'b0}};
 end
 else begin
+	if (BUS_PROTOCOL==0) begin
+		if (ftas_resp.ack & ~ftas_req.cyc)
+			ftas_resp <= {$bits(wb_cmd_response256_t){1'b0}};
+	end
+	if (BUS_PROTOCOL==1)
+		ftas_resp <= {$bits(wb_cmd_response256_t){1'b0}};
 	if (sack|sack_desc) begin
 		ftas_resp <= sresp;
 		ftas_resp.ack <= ACK;
 	end
-	if (ftas_resp_ack)
-		ftas_resp.ack <= NACK;
 end
 
 always_ff @(posedge clk)
@@ -299,7 +300,8 @@ ddbb256_config #(
 	.CFG_CACHE_LINE_SIZE(CFG_CACHE_LINE_SIZE),
 	.CFG_MIN_GRANT(CFG_MIN_GRANT),
 	.CFG_MAX_LATENCY(CFG_MAX_LATENCY),
-	.CFG_IRQ_LINE(CFG_IRQ_LINE)
+	.CFG_IRQ_LINE(CFG_IRQ_LINE),
+	.BUS_PROTOCOL(BUS_PROTOCOL)
 )
 upci
 (
@@ -308,10 +310,14 @@ upci
 	.irq_i({priv_err0|priv_err1|prive_err2,fault} & {2{irq_en}}),
 	.irq_o(fault_o),
 	.cs_config_i(cs_configd),
+	.tid_i(sreqd.tid),
+	.tid_o(cfg_tid),
+	.cyc_i(sreqd.cyc),
+	.ack_o(cfg_ack),
 	.we_i(sreqd.we),
 	.sel_i(sreqd.sel),
 	.adr_i(sreqd.adr),
-	.dat_i(sreqd.data1),
+	.dat_i(sreqd.dat),
 	.dat_o(cfg_out),
 	.cs_bar0_o(cs_tw),
 	.cs_bar1_o(cs_rgn),
@@ -390,7 +396,7 @@ always_ff @(posedge clk)
     .addrb({pbl_regset,tlb_missadr[31:28]}),    // ADDR_WIDTH_B-bit input: Address for port B write and read operations.
     .clka(clk),                     // 1-bit input: Clock signal for port A. Also clocks port B when
     .clkb(clk),                     // 1-bit input: Clock signal for port B when parameter CLOCKING_MODE is
-    .dina(sreq.data1 >> {sreq.adr[4:3],6'b0}),	// WRITE_DATA_WIDTH_A-bit input: Data input for port A write operations.
+    .dina(sreq.dat >> {sreq.adr[4:3],6'b0}),	// WRITE_DATA_WIDTH_A-bit input: Data input for port A write operations.
     .dinb(64'd0),                     // WRITE_DATA_WIDTH_B-bit input: Data input for port B write operations.
     .ena(sreq.adr[13:11]==3'b0 && cs_hwtw),  // 1-bit input: Memory enable signal for port A. Must be high on clock
     .enb(1'b1),                       // 1-bit input: Memory enable signal for port B. Must be high on clock
@@ -452,7 +458,7 @@ upbl2 (
   .addrb({pbl_regset,virt_adr[31:28]}), // ADDR_WIDTH_B-bit input: Address for port B read operations.
   .clka(clk),                     // 1-bit input: Clock signal for port A. Also clocks port B when
   .clkb(clk),                     // 1-bit input: Clock signal for port B when parameter CLOCKING_MODE is
-  .dina(sreq.data1 >> {sreq.adr[4:3],6'b0}),	// WRITE_DATA_WIDTH_A-bit input: Data input for port A write operations.
+  .dina(sreq.dat >> {sreq.adr[4:3],6'b0}),	// WRITE_DATA_WIDTH_A-bit input: Data input for port A write operations.
   .ena(sreq.adr[13:11]==3'b0 && cs_hwtw), // 1-bit input: Memory enable signal for port A. Must be high on clock
   .enb(1'b1),                       // 1-bit input: Memory enable signal for port B. Must be high on clock
   .injectdbiterra(1'b0), // 1-bit input: Controls double bit error injection on input data when
@@ -499,6 +505,8 @@ mmu_read_reg ummurdrg
 	.sreq(sreqd),
 	.sresp(sresp),
 	.cfg_out(cfg_out),
+	.cfg_tid(cfg_tid),
+	.cfg_ack(cfg_ack),
 	.fault_adr(fault_adr),
 	.fault_seg(fault_seg),
 	.fault_asid(fault_asid),
@@ -609,7 +617,7 @@ ptw_miss_queue umsq1
 	.sel_qe(sel_qe)
 );
 
-ptw_tran_buffer #(.CID(CID)) utrbf1
+ptw_tran_buffer #(.CORENO(CORENO), .CHANNEL(CHANNEL)) utrbf1
 (
 	.rst(rst),
 	.clk(clk),
@@ -693,8 +701,7 @@ tlb3way utlb1
 always_ff @(posedge clk)
 if (rst) begin
 	tlbmiss_ip <= 'd0;
-	ftam_req <= {$bits(fta_cmd_request256_t){1'd0}};		// clear all fields.
-	ftam_req_cyc <= FALSE;
+	ftam_req <= {$bits(wb_cmd_request256_t){1'd0}};		// clear all fields.
 	upd_req <= 'd0;
 	upd_req2 <= 1'b0;
 	upd_req3 <= 1'b0;
@@ -768,6 +775,10 @@ else begin
 		tlb_replaced_entry2 <= tlb_replaced_entry;
 	end
 
+	// FTA bus: clear all fields after one cycle.
+	if (BUS_PROTOCOL==1 && ftam_resp.rty==FALSE)
+			ftam_req <= {$bits(wb_cmd_request256_t){1'd0}};
+
 	case(req_state)
 	IDLE:
 		begin
@@ -824,11 +835,11 @@ else begin
 			if (miss_queue[sel_qe].lvl != 3'd0) begin
 				$display("PTW: walk level=%d", miss_queue[sel_qe].lvl);
 				ptw_ppv <= FALSE;
-				ftam_req <= {$bits(fta_cmd_request256_t){1'd0}};		// clear all fields.
-				ftam_req.cmd <= fta_bus_pkg::CMD_LOAD;
+				ftam_req <= {$bits(wb_cmd_request256_t){1'd0}};		// clear all fields.
+				ftam_req.cmd <= wishbone_pkg::CMD_LOAD;
 				ftam_req.blen <= 6'd0;
-				ftam_req.bte <= fta_bus_pkg::LINEAR;
-				ftam_req.cti <= fta_bus_pkg::CLASSIC;
+				ftam_req.bte <= wishbone_pkg::LINEAR;
+				ftam_req.cti <= wishbone_pkg::CLASSIC;
 				ftam_req.cyc <= 1'b1;
 				ftam_req.we <= 1'b0;
 				tSetSel(padr2);
@@ -837,7 +848,8 @@ else begin
 				ftam_req.adr <= padr2;
 				ftam_req.tid <= tid;
 				rty_wait <= 5'd0;
-				access_state <= ptable_walker_pkg::TLB_PTE_FETCH;
+				if (BUS_PROTOCOL==0)
+					access_state <= ptable_walker_pkg::TLB_PTE_ACK;
 			end
 		end
 	// Store old PMT back to memory. The access count or modified may have been updated.
@@ -846,10 +858,10 @@ else begin
 		if (~sel_qe[5] & ptw_pv & ptw_ppv) begin
 		begin
 			ftam_req <= 'd0;		// clear all fields.
-			ftam_req.cmd <= fta_bus_pkg::CMD_STORE;
+			ftam_req.cmd <= wishbone_pkg::CMD_STORE;
 			ftam_req.blen <= 6'd0;
-			ftam_req.bte <= fta_bus_pkg::LINEAR;
-			ftam_req.cti <= fta_bus_pkg::CLASSIC;
+			ftam_req.bte <= wishbone_pkg::LINEAR;
+			ftam_req.cti <= wishbone_pkg::CLASSIC;
 			ftam_req.cyc <= 1'b1;
 			ftam_req.stb <= 1'b1;
 			ftam_req.we <= 1'b1;
@@ -857,18 +869,18 @@ else begin
 			ftam_req.asid <= tlb_replaced_entry2.vpn.asid;
 			ftam_req.vadr <= {tlb_pmt_base[$bits(physical_address_t)-1:4],4'b0} + {tlb_replaced_entry2.pmtadr[31:16],4'b0};
 			ftam_req.padr <= {tlb_pmt_base[$bits(physical_address_t)-1:4],4'b0} + {tlb_replaced_entry2.pmtadr[31:16],4'b0};
-			ftam_req.data1 <= tlb_replaced_entry2.pmte;
+			ftam_req.dat <= tlb_replaced_entry2.pmte;
 			ftam_req.tid <= tid;
-			ftam_req.cid <= CID;
+			ftam_req.cid <= CHANNEL;
 			access_state <= TLB_PTE_STORE_DONE;
 		end
 	TLB_PTE_STORE_DONE:
 		if (ftam_resp.rty) begin
 			ftam_req <= 'd0;		// clear all fields.
-			ftam_req.cmd <= fta_bus_pkg::CMD_STORE;
+			ftam_req.cmd <= wishbone_pkg::CMD_STORE;
 			ftam_req.blen <= 6'd0;
-			ftam_req.bte <= fta_bus_pkg::LINEAR;
-			ftam_req.cti <= fta_bus_pkg::CLASSIC;
+			ftam_req.bte <= wishbone_pkg::LINEAR;
+			ftam_req.cti <= wishbone_pkg::CLASSIC;
 			ftam_req.cyc <= 1'b1;
 			ftam_req.stb <= 1'b1;
 			ftam_req.we <= 1'b1;
@@ -876,28 +888,21 @@ else begin
 			ftam_req.asid <= tlb_replaced_entry2.vpn.asid;
 			ftam_req.vadr <= {tlb_pmt_base[$bits(physical_address_t)-1:4],4'b0} + {tlb_replaced_entry2.pmtadr[31:16],4'b0};
 			ftam_req.padr <= {tlb_pmt_base[$bits(physical_address_t)-1:4],4'b0} + {tlb_replaced_entry2.pmtadr[31:16],4'b0};
-			ftam_req.data1 <= tlb_replaced_entry2.pmte;
+			ftam_req.dat <= tlb_replaced_entry2.pmte;
 			ftam_req.tid <= tid;
-			ftam_req.cid <= CID;
+			ftam_req.cid <= CHANNEL;
 		end
 		else begin
 			access_state <= INACTIVE;
 			req_state <= IDLE;
 		end
 	*/
-	ptable_walker_pkg::TLB_PTE_CYC:
-		begin
-			ftam_req_cyc <= TRUE;
-			access_state <= ptable_walker_pkg::TLB_PTE_ACK;
-		end
 	ptable_walker_pkg::TLB_PTE_ACK:
-		if (ftam_req_ack) begin
-			ftam_req_cyc <= FALSE;
+		if (ftam_resp.ack)
 			access_state <= ptable_walker_pkg::TLB_PTE_NACK;
-		end
 	ptable_walker_pkg::TLB_PTE_NACK:
 		begin
-			ftam_req <= {$bits(fta_cmd_request256_t){1'd0}};		// clear all fields.
+			ftam_req <= {$bits(wb_cmd_request256_t){1'd0}};		// clear all fields.
 			access_state <= ptable_walker_pkg::INACTIVE;
 			req_state <= ptable_walker_pkg::IDLE;
 		end
@@ -939,10 +944,10 @@ end
 
 task tBusClear;
 begin
-	ftam_req.cmd <= fta_bus_pkg::CMD_NONE;
+	ftam_req.cmd <= wishbone_pkg::CMD_NONE;
 	ftam_req.blen <= 6'd0;
-	ftam_req.bte <= fta_bus_pkg::LINEAR;
-	ftam_req.cti <= fta_bus_pkg::CLASSIC;
+	ftam_req.bte <= wishbone_pkg::LINEAR;
+	ftam_req.cti <= wishbone_pkg::CLASSIC;
 	ftam_req.cyc <= 1'b0;
 	ftam_req.sel <= 32'h0000;
 	ftam_req.we <= 1'b0;

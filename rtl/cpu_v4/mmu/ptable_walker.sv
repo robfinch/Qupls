@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2024  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -36,7 +36,7 @@
 // ============================================================================
 
 import const_pkg::*;
-import fta_bus_pkg::*;
+import wishbone_pkg::*;
 import mmu_pkg::*;
 import cpu_types_pkg::*;
 import QuplsPkg::*;
@@ -77,6 +77,8 @@ parameter CFG_IRQ_LINE = 8'd27;
 
 localparam CFG_HEADER_TYPE = 8'h00;			// 00 = a general device
 
+parameter BUS_PROTOCOL = 0;							// 0=WISHBONE, 1=FTA
+
 input rst;
 input clk;
 input paging_en;
@@ -94,10 +96,10 @@ input commit2_idv;
 input rob_ndx_t commit3_id;
 input commit3_idv;
 output reg in_que;
-input fta_cmd_request128_t ftas_req;
-output fta_cmd_response128_t ftas_resp;
-output fta_cmd_request128_t ftam_req;
-input fta_cmd_response128_t ftam_resp;
+input wb_cmd_request256_t ftas_req;
+output wb_cmd_response256_t ftas_resp;
+output wb_cmd_request256_t ftam_req;
+input wb_cmd_response256_t ftam_resp;
 output [31:0] fault_o;
 output reg [1:0] faultq_o;
 output reg pe_fault_o;
@@ -134,11 +136,13 @@ reg [WAYS-1:0] way;
 spte_t pte;
 
 integer nn,n4;
-fta_cmd_request128_t sreq;
-fta_cmd_response128_t sresp;
+wb_cmd_request256_t sreq;
+wb_cmd_response256_t sresp;
+wire cfg_ack;
 wire irq_en;
 wire cs_tw;
-wire [127:0] cfg_out;
+wire [15:0] cfg_tid;
+wire [255:0] cfg_out;
 
 always_ff @(posedge clk)
 	sreq <= ftas_req;
@@ -153,14 +157,15 @@ always_ff @(posedge clk)
 		ftas_req.padr[31:28]==4'hD &&
 		ftas_req.padr[27:20]==CFG_BUS &&
 		ftas_req.padr[19:15]==CFG_DEVICE &&
-		ftas_req.padr[14:12]==CFG_FUNC;
+		ftas_req.padr[14:12]==CFG_FUNC &&
+		(BUS_PROTOCOL==1) ? !ftas_resp.ack : TRUE;
 
 always_comb
 	cs_hwtw <= cs_tw && sreq.cyc && sreq.stb;
 
 vtdl #(.WID(1), .DEP(16)) urdyd1 (.clk(clk), .ce(1'b1), .a(4'd1), .d(cs_hwtw|cs_config), .q(sack));
 
-pci128_config #(
+ddbb256_config #(
 	.CFG_BUS(CFG_BUS),
 	.CFG_DEVICE(CFG_DEVICE),
 	.CFG_FUNC(CFG_FUNC),
@@ -189,7 +194,11 @@ upci
 	.irq_i(fault & irq_en),
 	.irq_o(fault_o),
 	.cs_config_i(cs_config),
+	.tid_i(sreq.tid),
+	.tid_o(cfg_tid),
+	.cyc_i(sreq.cyc),
 	.we_i(sreq.we),
+	.ack_o(cfg_ack),
 	.sel_i(sreq.sel),
 	.adr_i(sreq.padr),
 	.dat_i(sreq.data1),
@@ -218,28 +227,59 @@ else begin
 		endcase
 end
 
+reg [1:0] state;
 always_ff @(posedge clk)
 if (rst) begin
 	sresp <= 'd0;
+	state <= 2'd0;
 end
 else begin
-	sresp.dat <= 128'd0;
-	sresp.tid <= sreq.tid;
-	sresp.pri <= sreq.pri;
-	if (cs_config)
-		sresp.dat <= cfg_out;
-	else if (cs_hwtw) begin
-		sresp.dat <= 128'd0;
-		casez(sreq.padr[15:0])
-		16'hFF00:	sresp.dat[63: 0] <= fault_adr;
-		16'hFF10:	sresp.dat[63:48] <= fault_asid;
-		16'hFF20:	sresp.dat[63: 0] <= ptbr;
-		16'hFF30:	sresp.dat <= pt_attr;
-		default:	sresp.dat <= 128'd0;
-		endcase
+	if (BUS_PROTOCOL==1) begin
+		sresp.ack <= FALSE;
+		sresp.dat <= 256'd0;
+		sresp.tid <= 16'd0;
+		sresp.pri <= 4'd0;
 	end
-	else
-		sresp.dat <= 128'd0;
+
+	case(state)
+	2'd0:
+		if (cs_config) begin
+			sresp.dat <= cfg_out;
+			sresp.ack <= cfg_ack;
+			sresp.tid <= cfg_tid;
+			sresp.pri <= 4'd7;
+		end
+		else if (cs_hwtw) begin
+			if (BUS_PROTOCOL==0)
+				state <= 2'd1;
+			else
+				sresp.ack <= TRUE;
+			sresp.tid <= cfg_tid;
+			sresp.pri <= 4'd7;
+			sresp.dat <= 256'd0;
+			casez(sreq.padr[15:0])
+			16'hFF00:	sresp.dat[63: 0] <= {64'd0,fault_asid,48'd0,64'd0,fault_adr};
+			16'hFF20:	sresp.dat[63: 0] <= {128'd0,pt_attr,64'd0,ptbr};
+			default:	sresp.dat <= 256'd0;
+			endcase
+		end
+		else
+			sresp.dat <= 256'd0;
+	2'd1:
+		if (cs)
+			sresp.ack <= TRUE;
+		else
+			state <= 2'd2;
+	2'd2:
+		if (!cs) begin
+			sresp.ack <= FALSE;
+			sresp.tid <= 16'd0;
+			sresp.dat <= 256'd0;
+			sresp.pri <= 4'd0;
+			state <= 2'd0;
+		end
+	default:	state <= 2'd0;
+	endcase
 end
 
 always_comb
@@ -331,7 +371,7 @@ else begin
 	way <= way + 2'd1;
 
 	// Grab the bus for only 1 clock.
-	if (ftam_req.cyc && !ftam_resp.rty)
+	if (ftam_req.cyc && !ftam_resp.rty && BUS_PROTOCOL==1)
 		tBusClear();
 
 	case(req_state)
@@ -359,7 +399,7 @@ else begin
 				ptw_ppv <= FALSE;
 				if (miss_queue[sel_qe].lvl != 3'd7) begin
 					$display("PTW: walk level=%d", miss_queue[sel_qe].lvl);
-					ftam_req <= 'd0;		// clear all fields.
+					ftam_req <= {$bits(wb_cmd_request256_t){1'b0}};		// clear all fields.
 					ftam_req.cmd <= fta_bus_pkg::CMD_LOAD;
 					ftam_req.blen <= 6'd0;
 					ftam_req.bte <= fta_bus_pkg::LINEAR;
@@ -372,8 +412,18 @@ else begin
 					ftam_req.vadr <= ptw_vadr;
 					ftam_req.padr <= ptw_padr;
 					ftam_req.tid <= tid;
+					if (BUS_PROTOCOL==0)
+						state <= ptable_walker_pkg::WB_ACK;
 				end
 			end
+		end
+	ptable_walker_pkg::WB_ACK:
+		if (ftam_resp.ack)
+			req_state <= ptable_walker_pkg::WB_NACK;
+	ptable_walker_pkg::WB_NACK:
+		begin
+			ftam_req <= {$bits(wb_cmd_request256_t){1'b0}};
+			req_state <= ptable_walker_pkg::IDLE;
 		end
 	// Remain in fault state until cleared by accessing the table-walker register.
 	ptable_walker_pkg::FAULT:
