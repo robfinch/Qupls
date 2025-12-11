@@ -208,7 +208,7 @@ reg cpram_en;
 reg cpram_en1;
 reg new_chkpt1;
 reg new_chkpt2;
-localparam RAMWIDTH = Qupls4_pkg::AREGS*BANKS*RBIT+Qupls4_pkg::PREGS;
+localparam RAMWIDTH = Qupls4_pkg::AREGS*RBIT+Qupls4_pkg::PREGS;
 Qupls4_pkg::checkpoint_t currentMap;
 Qupls4_pkg::checkpoint_t nextCurrentMap;
 Qupls4_pkg::checkpoint_t currentMap0;

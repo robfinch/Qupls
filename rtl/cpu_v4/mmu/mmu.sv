@@ -39,7 +39,7 @@ import const_pkg::*;
 import wishbone_pkg::*;
 import mmu_pkg::*;
 import cpu_types_pkg::*;
-import QuplsPkg::*;
+import Qupls4_pkg::*;
 import ptable_walker_pkg::*;
 
 //`define SEGMENTATION 1'b1
@@ -100,23 +100,23 @@ input physical_address_t tlb_pmt_base;
 
 input pc_address_t ic_miss_adr;
 input asid_t ic_miss_asid;
-input operating_mode_t ic_miss_om;
+input Qupls4_pkg::operating_mode_t ic_miss_om;
 output pc_padr_v;
 output physical_address_t pc_padr;
 
-input instruction_t vadr_ir;
+input Qupls4_pkg::micro_op_t vadr_ir;
 input physical_address_t vadr;
 input asid_t vadr_asid;
-input operating_mode_t vadr_om;
+input Qupls4_pkg::operating_mode_t vadr_om;
 input vadr_we;
 input vadr_v;
 input rob_ndx_t vadr_id;
 output physical_address_t padr;
 
-input instruction_t vadr2_ir;
+input Qupls4_pkg::micro_op_t vadr2_ir;
 input physical_address_t vadr2;
 input asid_t vadr2_asid;
-input operating_mode_t vadr2_om;
+input Qupls4_pkg::operating_mode_t vadr2_om;
 input vadr2_we;
 input vadr2_v;
 input rob_ndx_t vadr2_id;
@@ -225,7 +225,7 @@ wire [255:0] region_dat;
 REGION region0, region1, region2;
 wire [7:0] rgn_sel0, rgn_sel1, rgn_sel2;
 reg priv_err0, priv_err1,priv_err2;
-operating_mode_t om;
+Qupls4_pkg::operating_mode_t om;
 
 integer nn,n4;
 wb_cmd_request256_t sreq, sreqd;
@@ -761,7 +761,7 @@ else begin
 		upd_req2 <= 1'b1;
 		tlb_wr <= 1'b1;
 		tlb_way <= way;
-		if (pte.l2.lvl==3'd2 && SUPPORT_TLBLVL2)
+		if (pte.l2.lvl==3'd2 && Qupls4_pkg::SUPPORT_TLBLVL2)
 			tlb_entryno <= {3'd0,miss_adr[`VADR_L2_MBITS]};
 		else
 			tlb_entryno <= miss_adr[`VADR_MBITS];
@@ -932,7 +932,7 @@ else begin
 				// Otherwise translation was valid, update it in the TLB
 				// when level zero reached, or a shortcut page.
 				else if (miss_queue[tranbuf[sel_tran].mqndx].lvl==3'd0 ||
-					(tranbuf[sel_tran].pte.l2.s==1'b1 && SUPPORT_TLBLVL2)) begin
+					(tranbuf[sel_tran].pte.l2.s==1'b1 && Qupls4_pkg::SUPPORT_TLBLVL2)) begin
 					upd_req <= 1'b1;
 					$display("PTW: TLB update request triggered.");
 				end

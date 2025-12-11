@@ -36,6 +36,7 @@
 // ============================================================================
 
 import const_pkg::*;
+import fp64Pkg::*;
 import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 

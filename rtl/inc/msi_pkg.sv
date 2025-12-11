@@ -1,4 +1,4 @@
-import fta_bus_pkg::fta_imessage_t;
+import wishbone_pkg::wb_imessage_t;
 
 package msi_pkg;
 
@@ -16,7 +16,7 @@ typedef struct packed
 typedef struct packed
 {
 	logic [23:0] timestamp;
-	fta_bus_pkg::fta_imessage_t msg;
+	wishbone_pkg::wb_imessage_t msg;
 } irq_hist_t;
 
 endpackage

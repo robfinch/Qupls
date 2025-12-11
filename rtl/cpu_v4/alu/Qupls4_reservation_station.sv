@@ -32,10 +32,7 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 3900 LUTs / 900 FFs  (1 station)
-// 4650 LUTs / 900 FFs  (8 bypass inputs) - 48-bit operands
-// 5700 LUTs / 1900 FFs  (8 bypass inputs)	- 64 bit operands, 4 source args
-// 19200 LUTs / 1800 FFs  (8 bypass inputs) - 128 bit operands
+// 4000 LUTs / 1450 FFs
 // ============================================================================
 
 import const_pkg::*;
@@ -51,11 +48,12 @@ parameter NBPI = 8;			// number of bypasssing inputs
 parameter NSARG = 3;		// number of source operands
 parameter NREG_PORTS = 12;
 parameter RC = 1'b0;
+parameter DISPATCH_COUNT=6;	// number of lanes of dispatching
 input rst;
 input clk;
 input available;
 input stall;
-input Qupls4_pkg::reservation_station_entry_t [4:0] rse_i;
+input Qupls4_pkg::reservation_station_entry_t [DISPATCH_COUNT-1:0] rse_i;
 input Qupls4_pkg::rob_bitmask_t stomp;
 input Qupls4_pkg::operand_t [NREG_RPORTS-1:0] rf_oper_i;
 input Qupls4_pkg::operand_t [NBPI-1:0] bypass_i;
@@ -64,7 +62,7 @@ output reg issue;
 output Qupls4_pkg::reservation_station_entry_t rse_o;
 output aregno_t [3:0] req_aRn;
 
-integer kk,jj,nn,mm,rdy,pp,qq;
+integer kk,jj,nn,mm,rdy,pp,qq,n1;
 genvar g;
 reg idle;
 reg dispatch;
@@ -195,32 +193,19 @@ Qupls4_validate_operand #(.NBPI(NBPI), .NENTRY(NRSE)) uvsrcS
 end
 endgenerate
 
+
+// Check for instruction dispatches. Select dispatch input and set dispatch
+// flags if dispatch is available.
+
 always_comb
 begin
-	if (rse_i[0].funcunit==FUNCUNIT) begin
-		rsei = rse_i[0];
-		dispatch = TRUE;
-	end
-	else if (rse_i[1].funcunit==FUNCUNIT) begin
-		rsei = rse_i[1];
-		dispatch = TRUE;
-	end
-	else if (rse_i[2].funcunit==FUNCUNIT) begin
-		rsei = rse_i[2];
-		dispatch = TRUE;
-	end
-	else if (rse_i[3].funcunit==FUNCUNIT) begin
-		rsei = rse_i[3];
-		dispatch = TRUE;
-	end
-	else if (rse_i[4].funcunit==FUNCUNIT) begin
-		rsei = rse_i[4];
-		dispatch = TRUE;
-	end
-	else begin
-		rsei = {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
-		dispatch = FALSE;
-	end
+	rsei = {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
+	dispatch = FALSE;
+	for (n1 = 0; n1 < DISPATCH_COUNT; n1 = n1 + 1)
+		if (rse_i[n1].funcunit==FUNCUNIT) begin
+			rsei = rse_i[n1];
+			dispatch = TRUE;
+		end
 end
 
 /*

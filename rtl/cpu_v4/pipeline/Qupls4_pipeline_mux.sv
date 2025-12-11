@@ -56,6 +56,7 @@ module Qupls4_pipeline_mux(rst_i, clk_i, rstcnt, advance_fet, ihit, en_i,
 	len0_i, len1_i, len2_i, len3_i,
 	pg_mux,
 	do_bsr, bsr_tgt, do_ret, ret_pc, do_call, get, mux_stallq, fet_stallq, stall);
+parameter MWIDTH = 4;
 input rst_i;
 input clk_i;
 input [2:0] rstcnt;
@@ -127,10 +128,7 @@ reg [5:0] ipl_mux;
 Qupls4_pkg::irq_info_packet_t irq_in_mux;
 cpu_types_pkg::seqnum_t irq_sn_mux;
 reg irq_mux;
-Qupls4_pkg::pipeline_reg_t ins0_mux_o;
-Qupls4_pkg::pipeline_reg_t ins1_mux_o;
-Qupls4_pkg::pipeline_reg_t ins2_mux_o;
-Qupls4_pkg::pipeline_reg_t ins3_mux_o;
+Qupls4_pkg::pipeline_reg_t [MWIDTH-1:0] ins_mux_o;
 reg [1023:0] cline_fet;
 wire [5:0] jj;
 reg [5:0] kk;
@@ -139,14 +137,8 @@ wire en = en_i & !mux_stallq;
 wire ls_bmf = ls_bmf_i;
 wire pack_regs = pack_regs_i;
 cpu_types_pkg::aregno_t regcnt;
-Qupls4_pkg::pipeline_reg_t ins0_mux;
-Qupls4_pkg::pipeline_reg_t ins1_mux;
-Qupls4_pkg::pipeline_reg_t ins2_mux;
-Qupls4_pkg::pipeline_reg_t ins3_mux;
-Qupls4_pkg::pipeline_reg_t ins0_fet;
-Qupls4_pkg::pipeline_reg_t ins1_fet;
-Qupls4_pkg::pipeline_reg_t ins2_fet;
-Qupls4_pkg::pipeline_reg_t ins3_fet;
+Qupls4_pkg::pipeline_reg_t [MWIDTH-1:0] ins_mux;
+Qupls4_pkg::pipeline_reg_t [MWIDTH-1:0] ins_fet;
 reg [319:0] ic_line_aligned;
 reg [319:0] prev_ic_line_aligned;
 reg ld;
@@ -219,72 +211,69 @@ else
 	redundant_group = FALSE;
 //wire redundant_group = {prev_pc0_fet,prev_ic_line_aligned}=={pc0_fet,ic_line_aligned};
 
-Qupls4_pkg::pipeline_reg_t pr0_mux;
-Qupls4_pkg::pipeline_reg_t pr1_mux;
-Qupls4_pkg::pipeline_reg_t pr2_mux;
-Qupls4_pkg::pipeline_reg_t pr3_mux;
+Qupls4_pkg::pipeline_reg_t [MWIDTH-1:0] pr_mux;
 always_comb
 begin
-	pr0_mux = nopi;
-	pr1_mux = nopi;
-	pr2_mux = nopi;
-	pr3_mux = nopi;
+	pr_mux[0] = nopi;
+	pr_mux[1] = nopi;
+	pr_mux[2] = nopi;
+	pr_mux[3] = nopi;
 	if (!redundant_group) begin
 		// Allow only one instruction through when single stepping.
 		if (ssm_flag & ~prev_ssm_flag) begin
-			pr0_mux.cli = pc0_fet.pc[5:1];
-			pr0_mux.uop = fnMapRawToUop(ic_line_aligned[ 47:  0]);
-			pr1_mux = nopi;
-			pr2_mux = nopi;
-			pr3_mux = nopi;
-			pr1_mux.ssm = TRUE;
-			pr2_mux.ssm = TRUE;
-			pr3_mux.ssm = TRUE;
+			pr_mux[0].cli = pc0_fet.pc[5:1];
+			pr_mux[0].uop = fnMapRawToUop(ic_line_aligned[ 47:  0]);
+			pr_mux[1] = nopi;
+			pr_mux[2] = nopi;
+			pr_mux[3] = nopi;
+			pr_mux[1].ssm = TRUE;
+			pr_mux[2].ssm = TRUE;
+			pr_mux[3].ssm = TRUE;
 		end
 		else if (ssm_flag) begin
-			pr0_mux = nopi;
-			pr1_mux = nopi;
-			pr2_mux = nopi;
-			pr3_mux = nopi;
-			pr0_mux.ssm = TRUE;
-			pr1_mux.ssm = TRUE;
-			pr2_mux.ssm = TRUE;
-			pr3_mux.ssm = TRUE;
+			pr_mux[0] = nopi;
+			pr_mux[1] = nopi;
+			pr_mux[2] = nopi;
+			pr_mux[3] = nopi;
+			pr_mux[0].ssm = TRUE;
+			pr_mux[1].ssm = TRUE;
+			pr_mux[2].ssm = TRUE;
+			pr_mux[3].ssm = TRUE;
 		end
 		else begin
 			// Compute index of instruction on cache-line.
 			// Note! the index is in terms of 16-bit parcels.
-			pr0_mux.cli = pc0_fet.pc[5:1] + 6'd0;
-			pr1_mux.cli = pc0_fet.pc[5:1] + 6'd3;
-			pr2_mux.cli = pc0_fet.pc[5:1] + 6'd6;
-			pr3_mux.cli = pc0_fet.pc[5:1] + 6'd9;
-			pr0_mux.uop = fnMapRawToUop(ic_line_aligned[ 47:  0]);
-			pr1_mux.uop = fnMapRawToUop(ic_line_aligned[ 95: 48]);
-			pr2_mux.uop = fnMapRawToUop(ic_line_aligned[143: 96]);
-			pr3_mux.uop = fnMapRawToUop(ic_line_aligned[191:144]);
+			pr_mux[0].cli = pc0_fet.pc[5:1] + 6'd0;
+			pr_mux[1].cli = pc0_fet.pc[5:1] + 6'd3;
+			pr_mux[2].cli = pc0_fet.pc[5:1] + 6'd6;
+			pr_mux[3].cli = pc0_fet.pc[5:1] + 6'd9;
+			pr_mux[0].uop = fnMapRawToUop(ic_line_aligned[ 47:  0]);
+			pr_mux[1].uop = fnMapRawToUop(ic_line_aligned[ 95: 48]);
+			pr_mux[2].uop = fnMapRawToUop(ic_line_aligned[143: 96]);
+			pr_mux[3].uop = fnMapRawToUop(ic_line_aligned[191:144]);
 		end
 	end
 /*
-	pr0_mux.hwi_level = irq_fet;
-	pr1_mux.hwi_level = irq_fet;
-	pr2_mux.hwi_level = irq_fet;
-	pr3_mux.hwi_level = irq_fet;
+	pr_mux[0].hwi_level = irq_fet;
+	pr_mux[1].hwi_level = irq_fet;
+	pr_mux[2].hwi_level = irq_fet;
+	pr_mux[3].hwi_level = irq_fet;
 	pr4_mux.hwi_level = irq_fet;
 */	
 	// If an NMI or IRQ is happening, invalidate instruction and mark as
 	// interrupted by external hardware.
-	pr0_mux.v = !(irq_fet) && !stomp_mux && !(ssm_flag && !(ssm_flag && !prev_ssm_flag));
-	pr1_mux.v = !(irq_fet) && !stomp_mux && !ssm_flag;
-	pr2_mux.v = !(irq_fet) && !stomp_mux && !ssm_flag;
-	pr3_mux.v = !(irq_fet) && !stomp_mux && !ssm_flag;
+	pr_mux[0].v = !(irq_fet) && !stomp_mux && !(ssm_flag && !(ssm_flag && !prev_ssm_flag));
+	pr_mux[1].v = !(irq_fet) && !stomp_mux && !ssm_flag;
+	pr_mux[2].v = !(irq_fet) && !stomp_mux && !ssm_flag;
+	pr_mux[3].v = !(irq_fet) && !stomp_mux && !ssm_flag;
 /*	
-	pr0_mux.hwi = nmi_i||irqf_fet;
-	pr1_mux.hwi = nmi_i||irqf_fet;
-	pr2_mux.hwi = nmi_i||irqf_fet;
-	pr3_mux.hwi = nmi_i||irqf_fet;
+	pr_mux[0].hwi = nmi_i||irqf_fet;
+	pr_mux[1].hwi = nmi_i||irqf_fet;
+	pr_mux[2].hwi = nmi_i||irqf_fet;
+	pr_mux[3].hwi = nmi_i||irqf_fet;
 	pr4_mux.hwi = nmi_i||irqf_fet;
 */
-	pr0_mux.carry_mod = carry_mod_fet;
+	pr_mux[0].carry_mod = carry_mod_fet;
 end
 
 /* Under construction
@@ -295,10 +284,10 @@ reg [4:0] po_bno2 [0:3];
 reg p_override_dummy;
 reg [4:0] po_bno_dummy;
 
-always_comb tExtractIns(pc0_fet, pt_mux[0], takb_fet[0], len0_i, pr0_mux, ins0_fet, p_override[0], po_bno[0]);
-always_comb tExtractIns(pc1_fet, pt_mux[1], takb_fet[1], len1_i, pr1_mux, ins1_fet, p_override[1], po_bno[1]);
-always_comb tExtractIns(pc2_fet, pt_mux[2], takb_fet[2], len2_i, pr2_mux, ins2_fet, p_override[2], po_bno[2]);
-always_comb tExtractIns(pc3_fet, pt_mux[3], takb_fet[3], len3_i, pr3_mux, ins3_fet, p_override[3], po_bno[3]);
+always_comb tExtractIns(pc0_fet, pt_mux[0], takb_fet[0], len0_i, pr_mux[0], ins_fet[0], p_override[0], po_bno[0]);
+always_comb tExtractIns(pc1_fet, pt_mux[1], takb_fet[1], len1_i, pr_mux[1], ins_fet[1], p_override[1], po_bno[1]);
+always_comb tExtractIns(pc2_fet, pt_mux[2], takb_fet[2], len2_i, pr_mux[2], ins_fet[2], p_override[2], po_bno[2]);
+always_comb tExtractIns(pc3_fet, pt_mux[3], takb_fet[3], len3_i, pr_mux[3], ins_fet[3], p_override[3], po_bno[3]);
 
 /* under construction
 always_ff @(posedge clk_i)
@@ -351,64 +340,64 @@ cpu_types_pkg::pc_address_ex_t bsr2_tgt;
 cpu_types_pkg::pc_address_ex_t bsr3_tgt;
 
 
-always_comb bsr0 = Qupls4_pkg::fnDecBsr(ins0_mux);
-always_comb bsr1 = Qupls4_pkg::fnDecBsr(ins1_mux);
-always_comb bsr2 = Qupls4_pkg::fnDecBsr(ins2_mux);
-always_comb bsr3 = Qupls4_pkg::fnDecBsr(ins3_mux);
-always_comb bra0 = Qupls4_pkg::fnDecBra(ins0_mux);
-always_comb bra1 = Qupls4_pkg::fnDecBra(ins1_mux);
-always_comb bra2 = Qupls4_pkg::fnDecBra(ins2_mux);
-always_comb bra3 = Qupls4_pkg::fnDecBra(ins3_mux);
-always_comb bcc0 = Qupls4_pkg::fnIsBranch(ins0_mux.uop);
-always_comb bcc1 = Qupls4_pkg::fnIsBranch(ins1_mux.uop);
-always_comb bcc2 = Qupls4_pkg::fnIsBranch(ins2_mux.uop);
-always_comb bcc3 = Qupls4_pkg::fnIsBranch(ins3_mux.uop);
+always_comb bsr0 = Qupls4_pkg::fnDecBsr(ins_mux[0]);
+always_comb bsr1 = Qupls4_pkg::fnDecBsr(ins_mux[1]);
+always_comb bsr2 = Qupls4_pkg::fnDecBsr(ins_mux[2]);
+always_comb bsr3 = Qupls4_pkg::fnDecBsr(ins_mux[3]);
+always_comb bra0 = Qupls4_pkg::fnDecBra(ins_mux[0]);
+always_comb bra1 = Qupls4_pkg::fnDecBra(ins_mux[1]);
+always_comb bra2 = Qupls4_pkg::fnDecBra(ins_mux[2]);
+always_comb bra3 = Qupls4_pkg::fnDecBra(ins_mux[3]);
+always_comb bcc0 = Qupls4_pkg::fnIsBranch(ins_mux[0].uop);
+always_comb bcc1 = Qupls4_pkg::fnIsBranch(ins_mux[1].uop);
+always_comb bcc2 = Qupls4_pkg::fnIsBranch(ins_mux[2].uop);
+always_comb bcc3 = Qupls4_pkg::fnIsBranch(ins_mux[3].uop);
 
-always_comb jmp0 = Qupls4_pkg::fnDecJmp(ins0_mux);
-always_comb jmp1 = Qupls4_pkg::fnDecJmp(ins1_mux);
-always_comb jmp2 = Qupls4_pkg::fnDecJmp(ins2_mux);
-always_comb jmp3 = Qupls4_pkg::fnDecJmp(ins3_mux);
-always_comb bra02 = Qupls4_pkg::fnDecBra2(ins0_mux);
-always_comb bra12 = Qupls4_pkg::fnDecBra2(ins1_mux);
-always_comb bra22 = Qupls4_pkg::fnDecBra2(ins2_mux);
-always_comb bra32 = Qupls4_pkg::fnDecBra2(ins3_mux);
-always_comb jsr0 = Qupls4_pkg::fnDecJsr(ins0_mux);
-always_comb jsr1 = Qupls4_pkg::fnDecJsr(ins1_mux);
-always_comb jsr2 = Qupls4_pkg::fnDecJsr(ins2_mux);
-always_comb jsr3 = Qupls4_pkg::fnDecJsr(ins3_mux);
-always_comb bsr02 = Qupls4_pkg::fnDecBsr2(ins0_mux);
-always_comb bsr12 = Qupls4_pkg::fnDecBsr2(ins1_mux);
-always_comb bsr22 = Qupls4_pkg::fnDecBsr2(ins2_mux);
-always_comb bsr32 = Qupls4_pkg::fnDecBsr2(ins3_mux);
-always_comb rtd0 = Qupls4_pkg::fnDecRet(ins0_mux);
-always_comb rtd1 = Qupls4_pkg::fnDecRet(ins1_mux);
-always_comb rtd2 = Qupls4_pkg::fnDecRet(ins2_mux);
-always_comb rtd3 = Qupls4_pkg::fnDecRet(ins3_mux);
-always_comb jmpr0 = Qupls4_pkg::fnDecJmpr(ins0_mux);
-always_comb jmpr1 = Qupls4_pkg::fnDecJmpr(ins1_mux);
-always_comb jmpr2 = Qupls4_pkg::fnDecJmpr(ins2_mux);
-always_comb jmpr3 = Qupls4_pkg::fnDecJmpr(ins3_mux);
-always_comb jsrr0 = Qupls4_pkg::fnDecJsrr(ins0_mux);
-always_comb jsrr1 = Qupls4_pkg::fnDecJsrr(ins1_mux);
-always_comb jsrr2 = Qupls4_pkg::fnDecJsrr(ins2_mux);
-always_comb jsrr3 = Qupls4_pkg::fnDecJsrr(ins3_mux);
+always_comb jmp0 = Qupls4_pkg::fnDecJmp(ins_mux[0]);
+always_comb jmp1 = Qupls4_pkg::fnDecJmp(ins_mux[1]);
+always_comb jmp2 = Qupls4_pkg::fnDecJmp(ins_mux[2]);
+always_comb jmp3 = Qupls4_pkg::fnDecJmp(ins_mux[3]);
+always_comb bra02 = Qupls4_pkg::fnDecBra2(ins_mux[0]);
+always_comb bra12 = Qupls4_pkg::fnDecBra2(ins_mux[1]);
+always_comb bra22 = Qupls4_pkg::fnDecBra2(ins_mux[2]);
+always_comb bra32 = Qupls4_pkg::fnDecBra2(ins_mux[3]);
+always_comb jsr0 = Qupls4_pkg::fnDecJsr(ins_mux[0]);
+always_comb jsr1 = Qupls4_pkg::fnDecJsr(ins_mux[1]);
+always_comb jsr2 = Qupls4_pkg::fnDecJsr(ins_mux[2]);
+always_comb jsr3 = Qupls4_pkg::fnDecJsr(ins_mux[3]);
+always_comb bsr02 = Qupls4_pkg::fnDecBsr2(ins_mux[0]);
+always_comb bsr12 = Qupls4_pkg::fnDecBsr2(ins_mux[1]);
+always_comb bsr22 = Qupls4_pkg::fnDecBsr2(ins_mux[2]);
+always_comb bsr32 = Qupls4_pkg::fnDecBsr2(ins_mux[3]);
+always_comb rtd0 = Qupls4_pkg::fnDecRet(ins_mux[0]);
+always_comb rtd1 = Qupls4_pkg::fnDecRet(ins_mux[1]);
+always_comb rtd2 = Qupls4_pkg::fnDecRet(ins_mux[2]);
+always_comb rtd3 = Qupls4_pkg::fnDecRet(ins_mux[3]);
+always_comb jmpr0 = Qupls4_pkg::fnDecJmpr(ins_mux[0]);
+always_comb jmpr1 = Qupls4_pkg::fnDecJmpr(ins_mux[1]);
+always_comb jmpr2 = Qupls4_pkg::fnDecJmpr(ins_mux[2]);
+always_comb jmpr3 = Qupls4_pkg::fnDecJmpr(ins_mux[3]);
+always_comb jsrr0 = Qupls4_pkg::fnDecJsrr(ins_mux[0]);
+always_comb jsrr1 = Qupls4_pkg::fnDecJsrr(ins_mux[1]);
+always_comb jsrr2 = Qupls4_pkg::fnDecJsrr(ins_mux[2]);
+always_comb jsrr3 = Qupls4_pkg::fnDecJsrr(ins_mux[3]);
 /*
-always_comb jmpi0 = ins0_mux.ins.any.opcode==OP_JSRI && ins0_mux.ins.bsr.Rt==3'd0;
-always_comb jmpi1 = ins1_mux.ins.any.opcode==OP_JSRI && ins1_mux.ins.bsr.Rt==3'd0;
-always_comb jmpi2 = ins2_mux.ins.any.opcode==OP_JSRI && ins2_mux.ins.bsr.Rt==3'd0;
-always_comb jmpi3 = ins3_mux.ins.any.opcode==OP_JSRI && ins3_mux.ins.bsr.Rt==3'd0;
-always_comb jsri0 = ins0_mux.ins.any.opcode==OP_JSRI && ins0_mux.ins.bsr.Rt!=3'd0;
-always_comb jsri1 = ins1_mux.ins.any.opcode==OP_JSRI && ins1_mux.ins.bsr.Rt!=3'd0;
-always_comb jsri2 = ins2_mux.ins.any.opcode==OP_JSRI && ins2_mux.ins.bsr.Rt!=3'd0;
-always_comb jsri3 = ins3_mux.ins.any.opcode==OP_JSRI && ins3_mux.ins.bsr.Rt!=3'd0;
+always_comb jmpi0 = ins_mux[0].ins.any.opcode==OP_JSRI && ins_mux[0].ins.bsr.Rt==3'd0;
+always_comb jmpi1 = ins_mux[1].ins.any.opcode==OP_JSRI && ins_mux[1].ins.bsr.Rt==3'd0;
+always_comb jmpi2 = ins_mux[2].ins.any.opcode==OP_JSRI && ins_mux[2].ins.bsr.Rt==3'd0;
+always_comb jmpi3 = ins_mux[3].ins.any.opcode==OP_JSRI && ins_mux[3].ins.bsr.Rt==3'd0;
+always_comb jsri0 = ins_mux[0].ins.any.opcode==OP_JSRI && ins_mux[0].ins.bsr.Rt!=3'd0;
+always_comb jsri1 = ins_mux[1].ins.any.opcode==OP_JSRI && ins_mux[1].ins.bsr.Rt!=3'd0;
+always_comb jsri2 = ins_mux[2].ins.any.opcode==OP_JSRI && ins_mux[2].ins.bsr.Rt!=3'd0;
+always_comb jsri3 = ins_mux[3].ins.any.opcode==OP_JSRI && ins_mux[3].ins.bsr.Rt!=3'd0;
 */
 
 always_comb
 begin
-	bsr0_tgt = Qupls4_pkg::fnDecDest(ins0_mux);
-	bsr1_tgt = Qupls4_pkg::fnDecDest(ins1_mux);
-	bsr2_tgt = Qupls4_pkg::fnDecDest(ins2_mux);
-	bsr3_tgt = Qupls4_pkg::fnDecDest(ins3_mux);
+	bsr0_tgt = Qupls4_pkg::fnDecDest(ins_mux[0]);
+	bsr1_tgt = Qupls4_pkg::fnDecDest(ins_mux[1]);
+	bsr2_tgt = Qupls4_pkg::fnDecDest(ins_mux[2]);
+	bsr3_tgt = Qupls4_pkg::fnDecDest(ins_mux[3]);
 end
 
 // Figure whether a subroutine call, or return is being performed. Note
@@ -472,13 +461,13 @@ end
 // Compute return PC for subroutine call.
 always_comb
 	if (bsr0|jsr0)
-		ret_pc = ins0_mux.pc.pc + 4'd6;
+		ret_pc = ins_mux[0].pc.pc + 4'd6;
 	else if (bsr1|jsr1)
-		ret_pc = ins1_mux.pc.pc + 4'd6;
+		ret_pc = ins_mux[1].pc.pc + 4'd6;
 	else if (bsr2|jsr2)
-		ret_pc = ins2_mux.pc.pc + 4'd6;
+		ret_pc = ins_mux[2].pc.pc + 4'd6;
 	else if (bsr3|jsr3)
-		ret_pc = ins3_mux.pc.pc + 4'd6;
+		ret_pc = ins_mux[3].pc.pc + 4'd6;
 	else
 		ret_pc = RSTPC;
 
@@ -491,9 +480,9 @@ Qupls4_ins_extract_mux umux0
 	.clk(clk_i),
 	.en(en),
 	.nop(nop0),
-	.ins0(ins0_fet),
-	.insi(ins0_fet),
-	.ins(ins0_mux)
+	.ins0(ins_fet[0]),
+	.insi(ins_fet[0]),
+	.ins(ins_mux[0])
 );
 
 Qupls4_ins_extract_mux umux1
@@ -502,9 +491,9 @@ Qupls4_ins_extract_mux umux1
 	.clk(clk_i),
 	.en(en),
 	.nop(nop1),
-	.ins0(ins0_fet),
-	.insi(ins1_fet),
-	.ins(ins1_mux)
+	.ins0(ins_fet[0]),
+	.insi(ins_fet[1]),
+	.ins(ins_mux[1])
 );
 
 Qupls4_ins_extract_mux umux2
@@ -513,9 +502,9 @@ Qupls4_ins_extract_mux umux2
 	.clk(clk_i),
 	.en(en),
 	.nop(nop2),
-	.ins0(ins0_fet),
-	.insi(ins2_fet),
-	.ins(ins2_mux)
+	.ins0(ins_fet[0]),
+	.insi(ins_fet[2]),
+	.ins(ins_mux[2])
 );
 
 Qupls4_ins_extract_mux umux3
@@ -524,25 +513,25 @@ Qupls4_ins_extract_mux umux3
 	.clk(clk_i),
 	.en(en),
 	.nop(nop3),
-	.ins0(ins0_fet),
-	.insi(ins3_fet),
-	.ins(ins3_mux)
+	.ins0(ins_fet[0]),
+	.insi(ins_fet[3]),
+	.ins(ins_mux[3])
 );
 
 assign stall = 1'b0;
 
-always_comb ins0_mux_o = ins0_mux;
-always_comb ins1_mux_o = ins1_mux;
-always_comb ins2_mux_o = ins2_mux;
-always_comb ins3_mux_o = ins3_mux;
+always_comb ins_mux_o[0] = ins_mux[0];
+always_comb ins_mux_o[1] = ins_mux[1];
+always_comb ins_mux_o[2] = ins_mux[2];
+always_comb ins_mux_o[3] = ins_mux[3];
 always_comb pg_mux.hdr.irq_sn = irq_sn_mux;
 always_comb pg_mux.hdr.irq = irq_in_mux;
 always_comb pg_mux.hdr.old_ipl = ipl_mux;
 always_comb pg_mux.hdr.hwi = irq_mux;
-always_comb pg_mux.pr0.op = ins0_mux;
-always_comb pg_mux.pr1.op = ins1_mux;
-always_comb pg_mux.pr2.op = ins2_mux;
-always_comb pg_mux.pr3.op = ins3_mux;
+always_comb pg_mux.pr[0].op = ins_mux[0];
+always_comb pg_mux.pr[1].op = ins_mux[1];
+always_comb pg_mux.pr[2].op = ins_mux[2];
+always_comb pg_mux.pr[3].op = ins_mux[3];
 
 always_ff @(posedge clk) if (en) irq_sn_mux <= irq_sn_fet;
 always_ff @(posedge clk) if (en) irq_in_mux <= irq_in_fet;

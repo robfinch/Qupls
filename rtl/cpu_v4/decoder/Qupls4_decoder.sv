@@ -173,7 +173,7 @@ Qupls4_decode_conditional_branch udecbr
 	.branch(db.br)
 );
 
-Qupls4_decode_pred
+Qupls4_decode_pred upred1
 (
 	.instr(instr),
 	.pred(db.pred),
@@ -333,6 +333,7 @@ Qupls4_decode_fpu0 ufpu0
 	.fpu0(db.fpu0)
 );
 
+/*
 Stark_decode_oddball uob0
 (
 	.instr(instr),
@@ -362,6 +363,7 @@ Stark_decode_multicycle udmc1
 	.instr(instr),
 	.multicycle(db.multicycle)
 );
+*/
 /*
 Stark_decode_irq udirq1
 (
@@ -375,12 +377,13 @@ Qupls4_decode_eret uderet1
 	.instr(instr),
 	.eret(db.eret)
 );
-
+/*
 Stark_decode_rex udrex1
 (
 	.instr(instr),
 	.rex(db.rex)
 );
+*/
 /*
 Stark_decode_prec udprec1
 (

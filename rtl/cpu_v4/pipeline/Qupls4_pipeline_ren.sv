@@ -245,10 +245,10 @@ always_ff @(posedge clk) if (rst) Rt2_renv <= 1'b0; else if (en) Rt2_renv <= Rt2
 always_ff @(posedge clk) if (rst) Rt3_renv <= 1'b0; else if (en) Rt3_renv <= Rt3_decv;
 
 /*
-always_comb Rt0_q1 = Rt0_ren;// & {10{~pg_ren.pr0.decbus.Rtz & ~stomp0}};
-always_comb Rt1_q1 = Rt1_ren;// & {10{~pg_ren.pr1.decbus.Rtz & ~stomp1}};
-always_comb Rt2_q1 = Rt2_ren;// & {10{~pg_ren.pr2.decbus.Rtz & ~stomp2}};
-always_comb Rt3_q1 = Rt3_ren;// & {10{~pg_ren.pr3.decbus.Rtz & ~stomp3}};
+always_comb Rt0_q1 = Rt0_ren;// & {10{~pg_ren.pr[0].decbus.Rtz & ~stomp0}};
+always_comb Rt1_q1 = Rt1_ren;// & {10{~pg_ren.pr[1].decbus.Rtz & ~stomp1}};
+always_comb Rt2_q1 = Rt2_ren;// & {10{~pg_ren.pr[2].decbus.Rtz & ~stomp2}};
+always_comb Rt3_q1 = Rt3_ren;// & {10{~pg_ren.pr[3].decbus.Rtz & ~stomp3}};
 always_comb Rt0_que = Rt0_ren;
 always_comb Rt1_que = Rt1_ren;
 always_comb Rt2_que = Rt2_ren;
@@ -345,19 +345,19 @@ end
 /*
 always_ff @(posedge clk)
 if (advance_pipeline) begin
-	if (alloc0 && pg_ren.pr0.decbus.Rt==0) begin
+	if (alloc0 && pg_ren.pr[0].decbus.Rt==0) begin
 		$display("alloced r0");
 		$finish;
 	end
-	if (alloc1 && pg_ren.pr1.decbus.Rt==0) begin
+	if (alloc1 && pg_ren.pr[1].decbus.Rt==0) begin
 		$display("alloced r0");
 		$finish;
 	end
-	if (alloc2 && pg_ren.pr2.decbus.Rt==0) begin
+	if (alloc2 && pg_ren.pr[2].decbus.Rt==0) begin
 		$display("alloced r0");
 		$finish;
 	end
-	if (alloc3 && pg_ren.pr3.decbus.Rt==0) begin
+	if (alloc3 && pg_ren.pr[3].decbus.Rt==0) begin
 		$display("alloced r0");
 		$finish;
 	end
@@ -366,10 +366,10 @@ end
 /*
 always_ff @(posedge clk)
 begin
-	if (!stallq && (pg_ren.pr0.decbus.Rt==7'd63 ||
-		pg_ren.pr1.decbus.Rt==7'd63 ||
-		pg_ren.pr2.decbus.Rt==7'd63 ||
-		pg_ren.pr3.decbus.Rt==7'd63
+	if (!stallq && (pg_ren.pr[0].decbus.Rt==7'd63 ||
+		pg_ren.pr[1].decbus.Rt==7'd63 ||
+		pg_ren.pr[2].decbus.Rt==7'd63 ||
+		pg_ren.pr[3].decbus.Rt==7'd63
 	))
 		$finish;
 	for (n19 = 0; n19 < 16; n19 = n19 + 1)
@@ -400,10 +400,10 @@ Qupls4_rat #(.NPORT(NPORT)) urat1
 	.stomp(robentry_stomp),// & {32{branch_state==BS_CAPTURE_MISSPC}}),
 	.avail_i(avail_reg),
 	.restore(restore),
-	.qbr0(pg_dec.pr0.op.decbus.br|pg_dec.pr0.op.decbus.cjb),
-	.qbr1(pg_dec.pr1.op.decbus.br|pg_dec.pr1.op.decbus.cjb),
-	.qbr2(pg_dec.pr2.op.decbus.br|pg_dec.pr2.op.decbus.cjb),
-	.qbr3(pg_dec.pr3.op.decbus.br|pg_dec.pr3.op.decbus.cjb),
+	.qbr0(pg_dec.pr[0].op.decbus.br|pg_dec.pr[0].op.decbus.cjb),
+	.qbr1(pg_dec.pr[1].op.decbus.br|pg_dec.pr[1].op.decbus.cjb),
+	.qbr2(pg_dec.pr[2].op.decbus.br|pg_dec.pr[2].op.decbus.cjb),
+	.qbr3(pg_dec.pr[3].op.decbus.br|pg_dec.pr[3].op.decbus.cjb),
 	.rn(arn),
 	.rng(arng),
 	.rnt(arnt),
@@ -412,10 +412,10 @@ Qupls4_rat #(.NPORT(NPORT)) urat1
 	.st_prn(store_argC_pReg),
 	.prn(prn),
 	.prv(prnv),
-	.wr0(Rt0_decv && ns_areg[0]!=8'd0),// && !stomp0 && ~pg_ren.pr0.decbus.Rtz),
-	.wr1(Rt1_decv && ns_areg[1]!=8'd0),// && !stomp1 && ~pg_ren.pr1.decbus.Rtz),
-	.wr2(Rt2_decv && ns_areg[2]!=8'd0),// && !stomp2 && ~pg_ren.pr2.decbus.Rtz),
-	.wr3(Rt3_decv && ns_areg[3]!=8'd0),// && !stomp3 && ~pg_ren.pr3.decbus.Rtz),
+	.wr0(Rt0_decv && ns_areg[0]!=8'd0),// && !stomp0 && ~pg_ren.pr[0].decbus.Rtz),
+	.wr1(Rt1_decv && ns_areg[1]!=8'd0),// && !stomp1 && ~pg_ren.pr[1].decbus.Rtz),
+	.wr2(Rt2_decv && ns_areg[2]!=8'd0),// && !stomp2 && ~pg_ren.pr[2].decbus.Rtz),
+	.wr3(Rt3_decv && ns_areg[3]!=8'd0),// && !stomp3 && ~pg_ren.pr[3].decbus.Rtz),
 	.wra(ns_areg[0]),
 	.wrb(ns_areg[1]),
 	.wrc(ns_areg[2]),
@@ -657,118 +657,118 @@ if (advance_pipeline_seg2)
 /*
 always_ff @(posedge clk)
 if (advance_pipeline_seg2)
-	pc0_r <= pg_dec.pr0.pc;//pc0_d;
+	pc0_r <= pg_dec.pr[0].pc;//pc0_d;
 always_ff @(posedge clk)
 if (advance_pipeline_seg2)
-	pc1_r <= pg_dec.pr1.pc;//pc1_d;
+	pc1_r <= pg_dec.pr[1].pc;//pc1_d;
 always_ff @(posedge clk)
 if (advance_pipeline_seg2)
-	pc2_r <= pg_dec.pr2.pc;//pc2_d;
+	pc2_r <= pg_dec.pr[2].pc;//pc2_d;
 always_ff @(posedge clk)
 if (advance_pipeline_seg2)
-	pc3_r <= pg_dec.pr3.pc;//pc3_d;
+	pc3_r <= pg_dec.pr[3].pc;//pc3_d;
 */
 always_ff @(posedge clk)
 if (rst) begin
-	pg_ren.pr0.op <= nopi;
-	pg_ren.pr1.op <= nopi;
-	pg_ren.pr2.op <= nopi;
-	pg_ren.pr3.op <= nopi;
+	pg_ren.pr[0].op <= nopi;
+	pg_ren.pr[1].op <= nopi;
+	pg_ren.pr[2].op <= nopi;
+	pg_ren.pr[3].op <= nopi;
 end
 else begin
 	if (en) begin
 		pg_ren.hdr.cndx <= cndx;
-		pg_ren.pr0 <= pg_dec.pr0;
-		if (pg_dec.pr0.v & ~stomp_ren) begin
-			pg_ren.pr0.op.nRd <= Rt0_dec;
-			if (pg_ren.pr3.op.decbus.bsr|pg_ren.pr3.op.decbus.jsr)
-				pg_ren.pr0.v <= INV;
+		pg_ren.pr[0] <= pg_dec.pr[0];
+		if (pg_dec.pr[0].v & ~stomp_ren) begin
+			pg_ren.pr[0].op.nRd <= Rt0_dec;
+			if (pg_ren.pr[3].op.decbus.bsr|pg_ren.pr[3].op.decbus.jsr)
+				pg_ren.pr[0].v <= INV;
 		end
 		else begin
-//			pg_ren.pr0 <= nopi;
-			pg_ren.pr0.v <= INV;
-//			pg_ren.pr0.decbus.Rt <= pg_ren.pr0.decbus.Rt;
-//			pg_ren.pr0.decbus.Rtn <= pg_ren.pr0.decbus.Rtn;
-//			pg_ren.pr0.decbus.Rtz <= pg_ren.pr0.decbus.Rtz;
-//			pg_ren.pr0.aRt <= pg_ren.pr0.aRt;
+//			pg_ren.pr[0] <= nopi;
+			pg_ren.pr[0].v <= INV;
+//			pg_ren.pr[0].decbus.Rt <= pg_ren.pr[0].decbus.Rt;
+//			pg_ren.pr[0].decbus.Rtn <= pg_ren.pr[0].decbus.Rtn;
+//			pg_ren.pr[0].decbus.Rtz <= pg_ren.pr[0].decbus.Rtz;
+//			pg_ren.pr[0].aRt <= pg_ren.pr[0].aRt;
 			if (Qupls4_pkg::SUPPORT_BACKOUT)
-				pg_ren.pr0.op.nRd <= 9'd0;//pg_ren.pr0.nRt;
+				pg_ren.pr[0].op.nRd <= 9'd0;//pg_ren.pr[0].nRt;
 			else
-				pg_ren.pr0.op.nRd <= Rt0_dec;
+				pg_ren.pr[0].op.nRd <= Rt0_dec;
 		end
 	/*
 	if (bo_wr) begin
-		if (pg_dec.pr0.aRa==bo_areg)
-			pg_ren.pr0.pRa <= bo_preg;
-		if (pg_dec.pr0.aRb==bo_areg)
-			pg_ren.pr0.pRb <= bo_preg;
-		if (pg_dec.pr0.aRc==bo_areg)
-			pg_ren.pr0.pRc <= bo_preg;
-		if (pg_dec.pr0.aRt==bo_areg)
-			pg_ren.pr0.pRt <= bo_preg;
+		if (pg_dec.pr[0].aRa==bo_areg)
+			pg_ren.pr[0].pRa <= bo_preg;
+		if (pg_dec.pr[0].aRb==bo_areg)
+			pg_ren.pr[0].pRb <= bo_preg;
+		if (pg_dec.pr[0].aRc==bo_areg)
+			pg_ren.pr[0].pRc <= bo_preg;
+		if (pg_dec.pr[0].aRt==bo_areg)
+			pg_ren.pr[0].pRt <= bo_preg;
 	end
 	*/
-		pg_ren.pr1 <= pg_dec.pr1;
-		if (pg_dec.pr1.v & ~stomp_ren) begin
-			pg_ren.pr1.op.nRd <= Rt1_dec;
-			if (pg_dec.pr0.op.decbus.bsr|pg_dec.pr0.op.decbus.jsr)
-				pg_ren.pr1.v <= INV;
-			if (pg_ren.pr3.op.decbus.bsr|pg_ren.pr3.op.decbus.jsr)
-				pg_ren.pr1.v <= INV;
+		pg_ren.pr[1] <= pg_dec.pr[1];
+		if (pg_dec.pr[1].v & ~stomp_ren) begin
+			pg_ren.pr[1].op.nRd <= Rt1_dec;
+			if (pg_dec.pr[0].op.decbus.bsr|pg_dec.pr[0].op.decbus.jsr)
+				pg_ren.pr[1].v <= INV;
+			if (pg_ren.pr[3].op.decbus.bsr|pg_ren.pr[3].op.decbus.jsr)
+				pg_ren.pr[1].v <= INV;
 		end
 		else begin
-//			pg_ren.pr1 <= nopi;
-			pg_ren.pr1.v <= INV;
-//			pg_ren.pr1.decbus.Rt <= pg_ren.pr1.decbus.Rt;
-//			pg_ren.pr1.decbus.Rtn <= pg_ren.pr1.decbus.Rtn;
-//			pg_ren.pr1.decbus.Rtz <= pg_ren.pr1.decbus.Rtz;
-//			pg_ren.pr1.aRt <= pg_ren.pr1.aRt;
+//			pg_ren.pr[1] <= nopi;
+			pg_ren.pr[1].v <= INV;
+//			pg_ren.pr[1].decbus.Rt <= pg_ren.pr[1].decbus.Rt;
+//			pg_ren.pr[1].decbus.Rtn <= pg_ren.pr[1].decbus.Rtn;
+//			pg_ren.pr[1].decbus.Rtz <= pg_ren.pr[1].decbus.Rtz;
+//			pg_ren.pr[1].aRt <= pg_ren.pr[1].aRt;
 			if (Qupls4_pkg::SUPPORT_BACKOUT)
-				pg_ren.pr1.op.nRd <= 9'd0;//pg_ren.pr1.nRt;
+				pg_ren.pr[1].op.nRd <= 9'd0;//pg_ren.pr[1].nRt;
 			else
-				pg_ren.pr1.op.nRd <= Rt1_dec;
+				pg_ren.pr[1].op.nRd <= Rt1_dec;
 		end
-		pg_ren.pr2 <= pg_dec.pr2;
-		if (pg_dec.pr2.v & ~stomp_ren) begin
-			pg_ren.pr2.op.nRd <= Rt2_dec;
-			if (pg_dec.pr0.op.decbus.bsr || pg_dec.pr1.op.decbus.bsr || pg_dec.pr0.op.decbus.jsr || pg_dec.pr1.op.decbus.jsr)
-				pg_ren.pr2.v <= INV;
-			if (pg_ren.pr3.op.decbus.bsr | pg_ren.pr3.op.decbus.jsr)
-				pg_ren.pr2.v <= INV;
+		pg_ren.pr[2] <= pg_dec.pr[2];
+		if (pg_dec.pr[2].v & ~stomp_ren) begin
+			pg_ren.pr[2].op.nRd <= Rt2_dec;
+			if (pg_dec.pr[0].op.decbus.bsr || pg_dec.pr[1].op.decbus.bsr || pg_dec.pr[0].op.decbus.jsr || pg_dec.pr[1].op.decbus.jsr)
+				pg_ren.pr[2].v <= INV;
+			if (pg_ren.pr[3].op.decbus.bsr | pg_ren.pr[3].op.decbus.jsr)
+				pg_ren.pr[2].v <= INV;
 		end
 		else begin
-//			pg_ren.pr2 <= nopi;
-			pg_ren.pr2.v <= INV;
-//			pg_ren.pr2.decbus.Rt <= pg_ren.pr2.decbus.Rt;
-//			pg_ren.pr2.decbus.Rtn <= pg_ren.pr2.decbus.Rtn;
-//			pg_ren.pr2.decbus.Rtz <= pg_ren.pr2.decbus.Rtz;
-//			pg_ren.pr2.aRt <= pg_ren.pr2.aRt;
+//			pg_ren.pr[2] <= nopi;
+			pg_ren.pr[2].v <= INV;
+//			pg_ren.pr[2].decbus.Rt <= pg_ren.pr[2].decbus.Rt;
+//			pg_ren.pr[2].decbus.Rtn <= pg_ren.pr[2].decbus.Rtn;
+//			pg_ren.pr[2].decbus.Rtz <= pg_ren.pr[2].decbus.Rtz;
+//			pg_ren.pr[2].aRt <= pg_ren.pr[2].aRt;
 			if (Qupls4_pkg::SUPPORT_BACKOUT)
-				pg_ren.pr2.op.nRd <= 9'd0;//pg_ren.pr2.nRt;
+				pg_ren.pr[2].op.nRd <= 9'd0;//pg_ren.pr[2].nRt;
 			else
-				pg_ren.pr2.op.nRd <= Rt2_dec;
+				pg_ren.pr[2].op.nRd <= Rt2_dec;
 		end
-		pg_ren.pr3 <= pg_dec.pr3;
-		if (pg_dec.pr3.v & ~stomp_ren) begin
-			pg_ren.pr3.op.nRd <= Rt3_dec;
-			if (pg_dec.pr0.op.decbus.bsr || pg_dec.pr1.op.decbus.bsr || pg_dec.pr2.op.decbus.bsr ||
-				pg_dec.pr0.op.decbus.jsr || pg_dec.pr1.op.decbus.jsr || pg_dec.pr2.op.decbus.jsr
+		pg_ren.pr[3] <= pg_dec.pr[3];
+		if (pg_dec.pr[3].v & ~stomp_ren) begin
+			pg_ren.pr[3].op.nRd <= Rt3_dec;
+			if (pg_dec.pr[0].op.decbus.bsr || pg_dec.pr[1].op.decbus.bsr || pg_dec.pr[2].op.decbus.bsr ||
+				pg_dec.pr[0].op.decbus.jsr || pg_dec.pr[1].op.decbus.jsr || pg_dec.pr[2].op.decbus.jsr
 			)
-				pg_ren.pr3.v <= INV;
-			if (pg_ren.pr3.op.decbus.bsr | pg_ren.pr3.op.decbus.jsr)
-				pg_ren.pr3.v <= INV;
+				pg_ren.pr[3].v <= INV;
+			if (pg_ren.pr[3].op.decbus.bsr | pg_ren.pr[3].op.decbus.jsr)
+				pg_ren.pr[3].v <= INV;
 		end
 		else begin
-//			pg_ren.pr3 <= nopi;
-			pg_ren.pr3.v <= INV;
-//			pg_ren.pr3.decbus.Rt <= pg_ren.pr3.decbus.Rt;
-//			pg_ren.pr3.decbus.Rtn <= pg_ren.pr3.decbus.Rtn;
-//			pg_ren.pr3.decbus.Rtz <= pg_ren.pr3.decbus.Rtz;
-//			pg_ren.pr3.aRt <= pg_ren.pr3.aRt;
+//			pg_ren.pr[3] <= nopi;
+			pg_ren.pr[3].v <= INV;
+//			pg_ren.pr[3].decbus.Rt <= pg_ren.pr[3].decbus.Rt;
+//			pg_ren.pr[3].decbus.Rtn <= pg_ren.pr[3].decbus.Rtn;
+//			pg_ren.pr[3].decbus.Rtz <= pg_ren.pr[3].decbus.Rtz;
+//			pg_ren.pr[3].aRt <= pg_ren.pr[3].aRt;
 			if (Qupls4_pkg::SUPPORT_BACKOUT)
-				pg_ren.pr3.op.nRd <= 9'd0;//pg_ren.pr3.nRt;
+				pg_ren.pr[3].op.nRd <= 9'd0;//pg_ren.pr[3].nRt;
 			else
-				pg_ren.pr3.op.nRd <= Rt3_dec;
+				pg_ren.pr[3].op.nRd <= Rt3_dec;
 		end
 	end
 	if (branch_state==Qupls4_pkg::BS_DONE)
@@ -784,52 +784,52 @@ end
 task tInvalidateRen;
 input [4:0] bno;
 begin
-	if (pg_ren.pr0.op.pc.bno_t!=bno) begin
-		pg_ren.pr0.op.excv <= INV;
+	if (pg_ren.pr[0].op.pc.bno_t!=bno) begin
+		pg_ren.pr[0].op.excv <= INV;
 		if (Qupls4_pkg::SUPPORT_BACKOUT)
-			pg_ren.pr0.v <= INV;
+			pg_ren.pr[0].v <= INV;
 		else begin
-			pg_ren.pr0.op.decbus.cpytgt <= TRUE;
-			pg_ren.pr0.op.decbus.alu <= TRUE;
-			pg_ren.pr0.op.decbus.fpu <= FALSE;
-			pg_ren.pr0.op.decbus.fc <= FALSE;
-			pg_ren.pr0.op.decbus.mem <= FALSE;
+			pg_ren.pr[0].op.decbus.cpytgt <= TRUE;
+			pg_ren.pr[0].op.decbus.alu <= TRUE;
+			pg_ren.pr[0].op.decbus.fpu <= FALSE;
+			pg_ren.pr[0].op.decbus.fc <= FALSE;
+			pg_ren.pr[0].op.decbus.mem <= FALSE;
 		end
 	end
-	if (pg_ren.pr1.op.pc.bno_t!=bno) begin
-		pg_ren.pr1.v <= INV;
+	if (pg_ren.pr[1].op.pc.bno_t!=bno) begin
+		pg_ren.pr[1].v <= INV;
 		if (Qupls4_pkg::SUPPORT_BACKOUT)
-			pg_ren.pr1.op.excv <= INV;
+			pg_ren.pr[1].op.excv <= INV;
 		else begin
-			pg_ren.pr1.op.decbus.cpytgt <= TRUE;
-			pg_ren.pr1.op.decbus.alu <= TRUE;
-			pg_ren.pr1.op.decbus.fpu <= FALSE;
-			pg_ren.pr1.op.decbus.fc <= FALSE;
-			pg_ren.pr1.op.decbus.mem <= FALSE;
+			pg_ren.pr[1].op.decbus.cpytgt <= TRUE;
+			pg_ren.pr[1].op.decbus.alu <= TRUE;
+			pg_ren.pr[1].op.decbus.fpu <= FALSE;
+			pg_ren.pr[1].op.decbus.fc <= FALSE;
+			pg_ren.pr[1].op.decbus.mem <= FALSE;
 		end
 	end
-	if (pg_ren.pr2.op.pc.bno_t!=bno) begin
-		pg_ren.pr2.op.excv <= INV;
+	if (pg_ren.pr[2].op.pc.bno_t!=bno) begin
+		pg_ren.pr[2].op.excv <= INV;
 		if (Qupls4_pkg::SUPPORT_BACKOUT)
-			pg_ren.pr2.v <= INV;
+			pg_ren.pr[2].v <= INV;
 		else begin
-			pg_ren.pr2.op.decbus.cpytgt <= TRUE;
-			pg_ren.pr2.op.decbus.alu <= TRUE;
-			pg_ren.pr2.op.decbus.fpu <= FALSE;
-			pg_ren.pr2.op.decbus.fc <= FALSE;
-			pg_ren.pr2.op.decbus.mem <= FALSE;
+			pg_ren.pr[2].op.decbus.cpytgt <= TRUE;
+			pg_ren.pr[2].op.decbus.alu <= TRUE;
+			pg_ren.pr[2].op.decbus.fpu <= FALSE;
+			pg_ren.pr[2].op.decbus.fc <= FALSE;
+			pg_ren.pr[2].op.decbus.mem <= FALSE;
 		end
 	end
-	if (pg_ren.pr3.op.pc.bno_t!=bno) begin
-		pg_ren.pr3.op.excv <= INV;
+	if (pg_ren.pr[3].op.pc.bno_t!=bno) begin
+		pg_ren.pr[3].op.excv <= INV;
 		if (Qupls4_pkg::SUPPORT_BACKOUT)
-			pg_ren.pr3.v <= INV;
+			pg_ren.pr[3].v <= INV;
 		else begin
-			pg_ren.pr3.op.decbus.cpytgt <= TRUE;
-			pg_ren.pr3.op.decbus.alu <= TRUE;
-			pg_ren.pr3.op.decbus.fpu <= FALSE;
-			pg_ren.pr3.op.decbus.fc <= FALSE;
-			pg_ren.pr3.op.decbus.mem <= FALSE;
+			pg_ren.pr[3].op.decbus.cpytgt <= TRUE;
+			pg_ren.pr[3].op.decbus.alu <= TRUE;
+			pg_ren.pr[3].op.decbus.fpu <= FALSE;
+			pg_ren.pr[3].op.decbus.fc <= FALSE;
+			pg_ren.pr[3].op.decbus.mem <= FALSE;
 		end
 	end
 end

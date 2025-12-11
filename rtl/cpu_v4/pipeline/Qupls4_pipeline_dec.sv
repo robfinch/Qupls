@@ -32,7 +32,7 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 19000 LUTs / 5620 FFs / 2 BRAMs	- 32 uops per instruction.
+// 21200 LUTs / 5800 FFs / 2 BRAMs	- 32 uops per instruction.
 // ============================================================================
 
 import const_pkg::*;
@@ -50,6 +50,7 @@ module Qupls4_pipeline_dec(rst_i, rst, clk, en, clk5x, ph4, new_cline_mux, cline
 	mux_stallq, ren_stallq, ren_rst_busy, avail_reg,
 	predicted_correctly_o, new_address_o
 );
+parameter MWIDTH = 4;		// Machine width, under construction
 parameter MAX_MICROOPS = 12;
 parameter MICROOPS_PER_INSTR = 32;
 input rst_i;
@@ -97,7 +98,8 @@ output [Qupls4_pkg::PREGS-1:0] avail_reg;
 output reg predicted_correctly_o;
 output reg [63:0] new_address_o;
 
-integer n1,n2,n3,n4,n5,n6;
+genvar g;
+integer n1,n2,n3,n4,n5,n6,n7,n8,n9;
 Qupls4_pkg::pipeline_group_reg_t pg_mux_r;
 reg [31:0] carry_mod_i;
 reg [31:0] carry_mod_o;
@@ -148,44 +150,46 @@ else begin
 		fregs_i <= fregs_o;
 end
 
-Qupls4_pkg::pipeline_reg_t ins0m;
-Qupls4_pkg::pipeline_reg_t ins1m;
-Qupls4_pkg::pipeline_reg_t ins2m;
-Qupls4_pkg::pipeline_reg_t ins3m;
+Qupls4_pkg::pipeline_reg_t [MWIDTH-1:0] insm;
 Qupls4_pkg::pipeline_reg_t ins4d;
 Qupls4_pkg::pipeline_reg_t nopi;
-Qupls4_pkg::decode_bus_t dec0,dec1,dec2,dec3,dec4;
-Qupls4_pkg::pipeline_reg_t pr0_dec,pr1_dec,pr2_dec,pr3_dec;
-Qupls4_pkg::pipeline_reg_t [3:0] prd, inso;
+Qupls4_pkg::decode_bus_t [MWIDTH-1:0] dec;
+Qupls4_pkg::pipeline_reg_t [MWIDTH-1:0] pr_dec;
+Qupls4_pkg::pipeline_reg_t [MWIDTH-1:0] prd, inso;
 pregno_t Rt0_dec1;
 pregno_t Rt1_dec1;
 pregno_t Rt2_dec1;
 pregno_t Rt3_dec1;
-Qupls4_pkg::pipeline_reg_t tpr0,tpr1,tpr2,tpr3,tpr4;
+Qupls4_pkg::pipeline_reg_t [MWIDTH-1:0] tpr;
 
-always @(posedge clk)
+always_ff @(posedge clk)
 	pg_mux_r <= pg_mux;
 
-wire [5:0] uop_count [0:3];
-Qupls4_pkg::micro_op_t [MICROOPS_PER_INSTR-1:0] uop [0:3];
+wire [5:0] uop_count [0:MWIDTH-1];
+Qupls4_pkg::micro_op_t [MICROOPS_PER_INSTR-1:0] uop [0:MWIDTH-1];
 Qupls4_pkg::micro_op_t [MAX_MICROOPS-1:0] uop_buf;
 
+generate begin : gMicroopMem
+	for (g = 0; g < MWIDTH; g = g + 1)
 Qupls4_microop_mem uuop1
 (
-	.om(pg_mux.pr0.op.om),
-	.ir(pg_mux.pr0.op.uop),
-	.num(uop_num), 
+	.om(pg_mux.pr[g].op.om),
+	.ir(pg_mux.pr[g].op.uop),
+	.num(5'd0), 
 	.carry_reg(8'd0),
 	.carry_out(1'b0),
 	.carry_in(1'b0),
-	.count(uop_count[0]),
-	.uop(uop[0])
+	.count(uop_count[g]),
+	.uop(uop[g])
 );
+end
+endgenerate
 
+/*
 Qupls4_microop_mem uuop2
 (
-	.om(pg_mux.pr1.op.om),
-	.ir(pg_mux.pr1.op.uop), 
+	.om(pg_mux.pr[1].op.om),
+	.ir(pg_mux.pr[1].op.uop), 
 	.num(5'd0), 
 	.carry_reg(8'd0),
 	.carry_out(1'b0),
@@ -196,8 +200,8 @@ Qupls4_microop_mem uuop2
 
 Qupls4_microop_mem uuop3
 (
-	.om(pg_mux.pr2.op.om),
-	.ir(pg_mux.pr2.op.uop), 
+	.om(pg_mux.pr[2].op.om),
+	.ir(pg_mux.pr[2].op.uop), 
 	.num(5'd0), 
 	.carry_reg(8'd0),
 	.carry_out(1'b0),
@@ -208,8 +212,8 @@ Qupls4_microop_mem uuop3
 
 Qupls4_microop_mem uuop4
 (
-	.om(pg_mux.pr3.op.om),
-	.ir(pg_mux.pr3.op.uop), 
+	.om(pg_mux.pr[3].op.om),
+	.ir(pg_mux.pr[3].op.uop), 
 	.num(5'd0), 
 	.carry_reg(8'd0),
 	.carry_out(1'b0),
@@ -217,43 +221,29 @@ Qupls4_microop_mem uuop4
 	.count(uop_count[3]),
 	.uop(uop[3])
 );
+*/
 
 reg rd_mux;
-reg [1:0] uop_mark [0:MAX_MICROOPS-1];
-reg [2:0] head0;
-reg [2:0] head1;
-reg [2:0] head2;
-reg [2:0] head3;
-reg [2:0] tail0;
-reg [2:0] tail1;
-reg [2:0] tail2;
-reg [2:0] tail3;
-reg [2:0] next_tail0;
+reg [2:0] uop_mark [0:MAX_MICROOPS-1];
+reg [3:0] head [0:MWIDTH-1];
+reg [3:0] tail;
 reg [7:0] room;
 reg [7:0] sum_of_count;
-reg [7:0] rc_uop_count [0:3];
+reg [7:0] rc_uop_count [0:MWIDTH-1];
 integer kk,jj;
 
 always_comb
-	if (head0 > tail0)
-		room = head0 - tail0;
+	if (head[0] > tail)
+		room = head[0] - tail;
 	else
-		room = MAX_MICROOPS + head0 - tail0;
+		room = MAX_MICROOPS + head[0] - tail;
 
 always_comb
 begin
-	head1 = head0 + 2'd1;
-	head2 = head0 + 2'd2;
-	head3 = head0 + 2'd3;
+	for (n8 = 1; n8 < MWIDTH; n8 = n8 + 1)
+		head[n8] = head[n8-1] + 2'd1;
 end
 
-always_comb
-begin
-	tail1 = tail0 + uop_count[0];
-	tail2 = tail1 + uop_count[1];
-	tail3 = tail2 + uop_count[2];
-	next_tail0 = tail0 + {2'b00,uop_count[0]} + {2'b00,uop_count[1]} + {2'b00,uop_count[2]} + {2'b00,uop_count[3]};
-end
 
 // Copy micro-ops from the micro-op decoders into a buffer for further
 // processing. The micro-ops are in program order in the buffer. Which
@@ -265,74 +255,71 @@ if (rst) begin
     uop_mark[n5] = 2'b00;
    // On reset fill buffer with NOPs (0xff).
 	uop_buf = {$bits(Qupls4_pkg::micro_op_t)*16{8'hFF}};
-	rc_uop_count[0] = 8'd0;
-	rc_uop_count[1] = 8'd0;
-	rc_uop_count[2] = 8'd0;
-	rc_uop_count[3] = 8'd0;
+	for (n5 = 0; n5 < MWIDTH; n5 = n5 + 1)
+		rc_uop_count[n5] = 8'd0;
 	rd_more = TRUE;
-	head0 = 3'd0;
+	head[0] = 4'd0;
+	tail = 4'd0;
 	kk = 0;
 end
 else if (en) begin
 
 	rd_more = FALSE;
-	jj = tail0;
-	if (rc_uop_count[kk] < uop_count[kk] && kk < 4) begin
+	jj = tail;
+	if (rc_uop_count[kk] < uop_count[kk] && kk < MWIDTH) begin
 		uop_buf[jj] = uop[kk][rc_uop_count[kk]];
 		uop_mark[jj] = jj;
 		jj = jj + 1;
 		rc_uop_count[kk] = rc_uop_count[kk] + 4'd1;
 	end
-	else if (kk < 4)
+	else if (kk < MWIDTH)
 		kk = kk + 1;
-	if (rc_uop_count[kk] < uop_count[kk] && kk < 4) begin
+	if (rc_uop_count[kk] < uop_count[kk] && kk < MWIDTH) begin
 		uop_buf[jj] = uop[kk][rc_uop_count[kk]];
 		uop_mark[jj] = jj;
 		jj = jj + 1;
 		rc_uop_count[kk] = rc_uop_count[kk] + 4'd1;
 	end
-	else if (kk < 4)
+	else if (kk < MWIDTH)
 		kk = kk + 1;
-	if (rc_uop_count[kk] < uop_count[kk] && kk < 4) begin
+	if (rc_uop_count[kk] < uop_count[kk] && kk < MWIDTH) begin
 		uop_buf[jj] = uop[kk][rc_uop_count[kk]];
 		uop_mark[jj] = jj;
 		jj = jj + 1;
 		rc_uop_count[kk] = rc_uop_count[kk] + 4'd1;
 	end
-	else if (kk < 4)
+	else if (kk < MWIDTH)
 		kk = kk + 1;
-	if (rc_uop_count[kk] < uop_count[kk] && kk < 4) begin
+	if (rc_uop_count[kk] < uop_count[kk] && kk < MWIDTH) begin
 		uop_buf[jj] = uop[kk][rc_uop_count[kk]];
 		uop_mark[jj] = jj;
 		jj = jj + 1;
 		rc_uop_count[kk] = rc_uop_count[kk] + 4'd1;
 	end
-	else if (kk < 4)
+	else if (kk < MWIDTH)
 		kk = kk + 1;
-	if (rc_uop_count[kk] < uop_count[kk] && kk < 4) begin
+	if (rc_uop_count[kk] < uop_count[kk] && kk < MWIDTH) begin
 		uop_buf[jj] = uop[kk][rc_uop_count[kk]];
 		uop_mark[jj] = jj;
 		jj = jj + 1;
 		rc_uop_count[kk] = rc_uop_count[kk] + 4'd1;
 	end
-	else if (kk < 4)
+	else if (kk < MWIDTH)
 		kk = kk + 1;
-	if (rc_uop_count[kk] < uop_count[kk] && kk < 4) begin
+	if (rc_uop_count[kk] < uop_count[kk] && kk < MWIDTH) begin
 		uop_buf[jj] = uop[kk][rc_uop_count[kk]];
 		uop_mark[jj] = jj;
 		jj = jj + 1;
 		rc_uop_count[kk] = rc_uop_count[kk] + 4'd1;
 	end
-	else if (kk < 4)
+	else if (kk < MWIDTH)
 		kk = kk + 1;
-	tail0 = tail0 + jj;
-	head0 = head0 + 4;
-	if (kk >= 4) begin
+	tail = tail + jj;
+	head[0] = head[0] + MWIDTH;
+	if (kk >= MWIDTH) begin
 		kk = 0;
-		rc_uop_count[0] = 8'd0;
-		rc_uop_count[1] = 8'd0;
-		rc_uop_count[2] = 8'd0;
-		rc_uop_count[3] = 8'd0;
+		for (n5 = 0; n5 < MWIDTH; n5 = n5 + 1)
+			rc_uop_count[n5] = 8'd0;
 		rd_more = TRUE;//room > 3;
 	end
 
@@ -345,53 +332,10 @@ assign mux_stallq = !rd_more;
 
 always_comb
 begin
-	case(uop_mark[0])
-	2'd0:	tpr0 = pg_mux.pr0.op;
-	2'd1:	tpr0 = pg_mux.pr1.op;
-	2'd2:	tpr0 = pg_mux.pr2.op;
-	2'd3:	tpr0 = pg_mux.pr3.op;
-//	3'd4:	tpr0 = pg_mux.pr4;
-//	default:	tpr0 = pg_mux.pr4;
-	endcase
-	case(uop_mark[1])
-	2'd0:	tpr1 = pg_mux.pr0.op;
-	2'd1:	tpr1 = pg_mux.pr1.op;
-	2'd2:	tpr1 = pg_mux.pr2.op;
-	2'd3:	tpr1 = pg_mux.pr3.op;
-//	3'd4:	tpr1 = pg_mux.pr4;
-//	default:	tpr1 = pg_mux.pr4;
-	endcase
-	case(uop_mark[2])
-	2'd0:	tpr2 = pg_mux.pr0.op;
-	2'd1:	tpr2 = pg_mux.pr1.op;
-	2'd2:	tpr2 = pg_mux.pr2.op;
-	2'd3:	tpr2 = pg_mux.pr3.op;
-//	3'd4:	tpr2 = pg_mux.pr4;
-//	default:	tpr2 = pg_mux.pr4;
-	endcase
-	case(uop_mark[3])
-	2'd0:	tpr3 = pg_mux.pr0.op;
-	2'd1:	tpr3 = pg_mux.pr1.op;
-	2'd2:	tpr3 = pg_mux.pr2.op;
-	2'd3:	tpr3 = pg_mux.pr3.op;
-//	3'd4:	tpr3 = pg_mux.pr4;
-//	default:	tpr3 = pg_mux.pr4;
-	endcase
-/*
-	case(uop_mark[3])
-	3'd0:	tpr4 = pg_mux.pr0;
-	3'd1:	tpr4 = pg_mux.pr1;
-	3'd2:	tpr4 = pg_mux.pr2;
-	3'd3:	tpr4 = pg_mux.pr3;
-	3'd4:	tpr4 = pg_mux.pr4;
-	default:	tpr4 = pg_mux.pr4;
-	endcase
-*/
-	tpr0.uop = uop_buf[head0];
-	tpr1.uop = uop_buf[head1];
-	tpr2.uop = uop_buf[head2];
-	tpr3.uop = uop_buf[head3];
-//	tpr4.uop = uop_buf[4];
+	for (n7 = 0; n7 < MWIDTH; n7 = n7 + 1) begin
+		tpr[n7] = pg_mux.pr[uop_mark[n7]].op;
+		tpr[n7].uop = uop_buf[head[n7]];
+	end
 end
 
 //reg stomp_dec;
@@ -400,7 +344,7 @@ end
 always_comb
 begin
 	nopi = {$bits(Qupls4_pkg::pipeline_reg_t){1'b0}};
-	nopi.pc.pc = RSTPC;
+	nopi.pc.pc = Qupls4_pkg::RSTPC;
 	nopi.uop = {26'd0,Qupls4_pkg::OP_NOP};
 	nopi.uop.any.lead = 3'd1;
 	nopi.v = 1'b1;
@@ -487,10 +431,10 @@ Stark_reg_name_supplier2 utrn1
 	.alloc1(inso[1].op.decbus.Rd!=8'd0 && inso[1].v && !inso[0].op.decbus.bl),// & ~stomp1),
 	.alloc2(inso[2].op.decbus.Rd!=8'd0 && inso[2].v && !inso[0].op.decbus.bl && !inso[1].op.decbus.bl),// & ~stomp2),
 	.alloc3(inso[3].op.decbus.Rd!=8'd0 && inso[3].v && !inso[0].op.decbus.bl && !inso[1].op.decbus.bl && !inso[2].op.decbus.bl),// & ~stomp3),
-	.o0(Rt0_dec1),
-	.o1(Rt1_dec1),
-	.o2(Rt2_dec1),
-	.o3(Rt3_dec1),
+	.o0(Rt0_dec[1]),
+	.o1(Rt1_dec[1]),
+	.o2(Rt2_dec[1]),
+	.o3(Rt3_dec[1]),
 	.ov0(Rt0_decv),
 	.ov1(Rt1_decv),
 	.ov2(Rt2_decv),
@@ -499,10 +443,10 @@ Stark_reg_name_supplier2 utrn1
 	.stall(ren_stallq),
 	.rst_busy(ren_rst_busy)
 );
-assign Rt0_dec = inso[0].op.decbus.Rd==8'd0 ? 9'd0 : Rt0_dec1;
-assign Rt1_dec = inso[1].op.decbus.Rd==8'd0 ? 9'd0 : Rt1_dec1;
-assign Rt2_dec = inso[2].op.decbus.Rd==8'd0 ? 9'd0 : Rt2_dec1;
-assign Rt3_dec = inso[3].op.decbus.Rd==8'd0 ? 9'd0 : Rt3_dec1;
+assign Rt0_dec = inso[0].op.decbus.Rd==8'd0 ? 9'd0 : Rt0_dec[1];
+assign Rt1_dec = inso[1].op.decbus.Rd==8'd0 ? 9'd0 : Rt1_dec[1];
+assign Rt2_dec = inso[2].op.decbus.Rd==8'd0 ? 9'd0 : Rt2_dec[1];
+assign Rt3_dec = inso[3].op.decbus.Rd==8'd0 ? 9'd0 : Rt3_dec[1];
 */
 	assign Rt0_dec = inso[0].decbus.Rd;
 	assign Rt1_dec = inso[1].decbus.Rd;
@@ -591,133 +535,48 @@ end
 
 always_ff @(posedge clk)
 if (rst) begin
-	ins0m <= {$bits(Qupls4_pkg::pipeline_reg_t){1'b0}};
+	for (n9 = 0; n9 < MWIDTH; n9 = n9 + 1)
+		insm[n9] <= {$bits(Qupls4_pkg::pipeline_reg_t){1'b0}};
 end
 else begin
-	if (en)
-	begin
-		ins0m <= tpr0;
-		if (stomp_mux && FALSE) begin
-			if (tpr0.pc.bno_t!=stomp_bno) begin
-				ins0m <= nopi;
-				ins0m.pc.bno_t <= tpr0.pc.bno_t;
+	if (en) begin
+		for (n9 = 0; n9 < MWIDTH; n9 = n9 + 1) begin
+			insm[n9] <= tpr[n9];
+			if (stomp_mux && FALSE) begin
+				if (tpr[n9].pc.bno_t!=stomp_bno) begin
+					insm[n9] <= nopi;
+					insm[n9].pc.bno_t <= tpr[n9].pc.bno_t;
+				end
 			end
 		end
 	end
 end
 
-always_ff @(posedge clk)
-if (rst) begin
-	ins1m <= {$bits(Qupls4_pkg::pipeline_reg_t){1'b0}};
-end
-else begin
-	if (en)
-	begin
-		ins1m <= tpr1;
-		if (stomp_mux && FALSE) begin
-			if (tpr1.pc.bno_t!=stomp_bno) begin
-				ins1m <= nopi;
-				ins1m.pc.bno_t <= tpr1.pc.bno_t;
-			end
-		end
-	end
-end
-
-always_ff @(posedge clk)
-if (rst) begin
-	ins2m <= {$bits(Qupls4_pkg::pipeline_reg_t){1'b0}};
-end
-else begin
-	if (en)
-	begin
-		ins2m <= tpr2;
-		if (stomp_mux && FALSE) begin
-			if (tpr2.pc.bno_t!=stomp_bno) begin
-				ins2m <= nopi;
-				ins2m.pc.bno_t <= tpr2.pc.bno_t;
-			end
-		end
-	end
-end
-
-always_ff @(posedge clk)
-if (rst) begin
-	ins3m <= {$bits(Qupls4_pkg::pipeline_reg_t){1'b0}};
-end
-else begin
-	if (en)
-	begin
-		ins3m <= tpr3;
-		if (stomp_mux && FALSE) begin
-			if (tpr3.pc.bno_t!=stomp_bno) begin
-				ins3m <= nopi;
-				ins3m.pc.bno_t <= tpr3.pc.bno_t;
-			end
-		end
-	end
-end
-
+generate begin : gDecoders
+	for (g = 0; g < MWIDTH; g = g + 1)
 Qupls4_decoder udeci0
 (
 	.rst(rst),
 	.clk(clk),
 	.en(en),
-	.ip(tpr0.pc.pc),
+	.ip(tpr[g].pc.pc),
 	.om(sr.om),
 	.ipl(sr.ipl),
-	.instr(tpr0.uop),
-	.instr_raw(cline >> {tpr0.cli,4'b0}),
-	.dbo(dec0)
+	.instr(tpr[g].uop),
+	.instr_raw(cline >> {tpr[g].cli,4'b0}),
+	.dbo(dec[g])
 );
-
-Qupls4_decoder udeci1
-(
-	.rst(rst),
-	.clk(clk),
-	.en(en),
-	.ip(tpr1.pc.pc),
-	.om(sr.om),
-	.ipl(sr.ipl),
-	.instr(tpr1.uop),
-	.instr_raw(cline >> {tpr1.cli,4'b0}),
-	.dbo(dec1)
-);
-
-Qupls4_decoder udeci2
-(
-	.rst(rst),
-	.clk(clk),
-	.en(en),
-	.ip(tpr2.pc.pc),
-	.om(sr.om),
-	.ipl(sr.ipl),
-	.instr(tpr2.uop),
-	.instr_raw(cline >> {tpr2.cli,4'b0}),
-	.dbo(dec2)
-);
-
-Qupls4_decoder udeci3
-(
-	.rst(rst),
-	.clk(clk),
-	.en(en),
-	.ip(tpr3.pc.pc),
-	.om(sr.om),
-	.ipl(sr.ipl),
-	.instr(tpr3.uop),
-	.instr_raw(cline >> {tpr3.cli,4'b0}),
-	.dbo(dec3)
-);
-
+end
+endgenerate
 /*
 always_ff @(posedge clk)
 if (rst_i) begin
-	ins3m <= {$bits(pipeline_reg_t){1'b0}};
+	insm[3] <= {$bits(pipeline_reg_t){1'b0}};
 end
 else begin
 	if (en_i)
-		ins2m <= (stomp_dec && ((pg_mux.pr0.bt|pg_mux.pr1.bt|pg_mux.pr2.bt|pg_mux.pr3.bt) && branchmiss ? pg_mux.pr3.pc.bno_t==stomp_bno : pg_mux.pr3.pc.bno_f==stomp_bno )) ? nopi : pg_mux.pr3;
-//		ins3m <= (stomp_dec && pg_mux.pr3.pc.bno_t==stomp_bno) ? nopi : pg_mux.pr3;
+		insm[2] <= (stomp_dec && ((pg_mux.pr[0].bt|pg_mux.pr[1].bt|pg_mux.pr[2].bt|pg_mux.pr[3].bt) && branchmiss ? pg_mux.pr[3].pc.bno_t==stomp_bno : pg_mux.pr[3].pc.bno_f==stomp_bno )) ? nopi : pg_mux.pr[3];
+//		insm[3] <= (stomp_dec && pg_mux.pr[3].pc.bno_t==stomp_bno) ? nopi : pg_mux.pr[3];
 end
 */
 
@@ -725,75 +584,75 @@ always_comb
 begin
 	fregs_o = 15'd0;
 	
-	pr0_dec = ins0m;
-	pr1_dec = ins1m;
-	pr2_dec = ins2m;
-	pr3_dec = ins3m;
+	pr_dec[0] = insm[0];
+	pr_dec[1] = insm[1];
+	pr_dec[2] = insm[2];
+	pr_dec[3] = insm[3];
 	
-	pr0_dec.v = !stomp_dec;
-	pr1_dec.v = !stomp_dec;
-	pr2_dec.v = !stomp_dec;
-	pr3_dec.v = !stomp_dec;
+	pr_dec[0].v = !stomp_dec;
+	pr_dec[1].v = !stomp_dec;
+	pr_dec[2].v = !stomp_dec;
+	pr_dec[3].v = !stomp_dec;
 	if (stomp_dec) begin
 		// Clear the branch flags so that a new checkpoint is not assigned and
 		// the checkpoint will not be freed.
 		/*
-		pr0_dec.decbus.br = FALSE;
-		pr0_dec.decbus.cjb = FALSE;
-		pr1_dec.decbus.br = FALSE;
-		pr1_dec.decbus.cjb = FALSE;
-		pr2_dec.decbus.br = FALSE;
-		pr2_dec.decbus.cjb = FALSE;
-		pr3_dec.decbus.br = FALSE;
-		pr3_dec.decbus.cjb = FALSE;
+		pr_dec[0].decbus.br = FALSE;
+		pr_dec[0].decbus.cjb = FALSE;
+		pr_dec[1].decbus.br = FALSE;
+		pr_dec[1].decbus.cjb = FALSE;
+		pr_dec[2].decbus.br = FALSE;
+		pr_dec[2].decbus.cjb = FALSE;
+		pr_dec[3].decbus.br = FALSE;
+		pr_dec[3].decbus.cjb = FALSE;
 		*/
-		pr0_dec.decbus.Rci = dec0.Rci;
-		pr0_dec.decbus.Rs1 = dec0.Rs1;
-		pr0_dec.decbus.Rs2 = dec0.Rs2;
-		pr0_dec.decbus.Rs3 = dec0.Rs3;
-		pr0_dec.decbus.Rd = dec0.Rd;
-		pr1_dec.decbus.Rs1 = dec1.Rs1;
-		pr1_dec.decbus.Rs2 = dec1.Rs2;
-		pr1_dec.decbus.Rs3 = dec1.Rs3;
-		pr1_dec.decbus.Rd = dec1.Rd;
-		pr1_dec.decbus.Rci = dec1.Rci;
-		pr2_dec.decbus.Rs1 = dec2.Rs1;
-		pr2_dec.decbus.Rs2 = dec2.Rs2;
-		pr2_dec.decbus.Rs3 = dec2.Rs3;
-		pr2_dec.decbus.Rd = dec2.Rd;
-		pr2_dec.decbus.Rci = dec2.Rci;
-		pr3_dec.decbus.Rs1 = dec3.Rs1;
-		pr3_dec.decbus.Rs2 = dec3.Rs2;
-		pr3_dec.decbus.Rs3 = dec3.Rs3;
-		pr3_dec.decbus.Rd = dec3.Rd;
-		pr3_dec.decbus.Rci = dec3.Rci;
+		pr_dec[0].decbus.Rci = dec[0].Rci;
+		pr_dec[0].decbus.Rs1 = dec[0].Rs1;
+		pr_dec[0].decbus.Rs2 = dec[0].Rs2;
+		pr_dec[0].decbus.Rs3 = dec[0].Rs3;
+		pr_dec[0].decbus.Rd = dec[0].Rd;
+		pr_dec[1].decbus.Rs1 = dec[1].Rs1;
+		pr_dec[1].decbus.Rs2 = dec[1].Rs2;
+		pr_dec[1].decbus.Rs3 = dec[1].Rs3;
+		pr_dec[1].decbus.Rd = dec[1].Rd;
+		pr_dec[1].decbus.Rci = dec[1].Rci;
+		pr_dec[2].decbus.Rs1 = dec[2].Rs1;
+		pr_dec[2].decbus.Rs2 = dec[2].Rs2;
+		pr_dec[2].decbus.Rs3 = dec[2].Rs3;
+		pr_dec[2].decbus.Rd = dec[2].Rd;
+		pr_dec[2].decbus.Rci = dec[2].Rci;
+		pr_dec[3].decbus.Rs1 = dec[3].Rs1;
+		pr_dec[3].decbus.Rs2 = dec[3].Rs2;
+		pr_dec[3].decbus.Rs3 = dec[3].Rs3;
+		pr_dec[3].decbus.Rd = dec[3].Rd;
+		pr_dec[3].decbus.Rci = dec[3].Rci;
 	end
 	else begin
-		pr0_dec.decbus.Rs1 = dec0.Rs1;
-		pr0_dec.decbus.Rs2 = dec0.Rs2;
-		pr0_dec.decbus.Rs3 = dec0.Rs3;
-		pr0_dec.decbus.Rd = dec0.Rd;
-		pr0_dec.decbus.Rci = dec0.Rci;
-		pr1_dec.decbus.Rs1 = dec1.Rs1;
-		pr1_dec.decbus.Rs2 = dec1.Rs2;
-		pr1_dec.decbus.Rs3 = dec1.Rs3;
-		pr1_dec.decbus.Rd = dec1.Rd;
-		pr1_dec.decbus.Rci = dec1.Rci;
-		pr2_dec.decbus.Rs1 = dec2.Rs1;
-		pr2_dec.decbus.Rs2 = dec2.Rs2;
-		pr2_dec.decbus.Rs3 = dec2.Rs3;
-		pr2_dec.decbus.Rd = dec2.Rd;
-		pr2_dec.decbus.Rci = dec2.Rci;
-		pr3_dec.decbus.Rs1 = dec3.Rs1;
-		pr3_dec.decbus.Rs2 = dec3.Rs2;
-		pr3_dec.decbus.Rs3 = dec3.Rs3;
-		pr3_dec.decbus.Rd = dec3.Rd;
-		pr3_dec.decbus.Rci = dec3.Rci;
+		pr_dec[0].decbus.Rs1 = dec[0].Rs1;
+		pr_dec[0].decbus.Rs2 = dec[0].Rs2;
+		pr_dec[0].decbus.Rs3 = dec[0].Rs3;
+		pr_dec[0].decbus.Rd = dec[0].Rd;
+		pr_dec[0].decbus.Rci = dec[0].Rci;
+		pr_dec[1].decbus.Rs1 = dec[1].Rs1;
+		pr_dec[1].decbus.Rs2 = dec[1].Rs2;
+		pr_dec[1].decbus.Rs3 = dec[1].Rs3;
+		pr_dec[1].decbus.Rd = dec[1].Rd;
+		pr_dec[1].decbus.Rci = dec[1].Rci;
+		pr_dec[2].decbus.Rs1 = dec[2].Rs1;
+		pr_dec[2].decbus.Rs2 = dec[2].Rs2;
+		pr_dec[2].decbus.Rs3 = dec[2].Rs3;
+		pr_dec[2].decbus.Rd = dec[2].Rd;
+		pr_dec[2].decbus.Rci = dec[2].Rci;
+		pr_dec[3].decbus.Rs1 = dec[3].Rs1;
+		pr_dec[3].decbus.Rs2 = dec[3].Rs2;
+		pr_dec[3].decbus.Rs3 = dec[3].Rs3;
+		pr_dec[3].decbus.Rd = dec[3].Rd;
+		pr_dec[3].decbus.Rci = dec[3].Rci;
 	end
-	pr0_dec.decbus = dec0;
-	pr1_dec.decbus = dec1;
-	pr2_dec.decbus = dec2;
-	pr3_dec.decbus = dec3;
+	pr_dec[0].decbus = dec[0];
+	pr_dec[1].decbus = dec[1];
+	pr_dec[2].decbus = dec[2];
+	pr_dec[3].decbus = dec[3];
 
 	// Apply interrupt masking.
 	// Done by clearing the hardware interrupt flag.
@@ -807,257 +666,263 @@ begin
 	// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 	// ATOM modifier support
 	// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-	pr0_dec.atom_count = atom_count_i;
-	hwi_ignore = FALSE;
-	if ((|pr0_dec.atom_count|fregs_i.v) && pr0_dec.v) begin
-		hwi_ignore = TRUE;
+	if (SUPPORT_ATOM) begin
+		pr_dec[0].atom_count = atom_count_i;
+		hwi_ignore = FALSE;
+		if ((|pr_dec[0].atom_count|fregs_i.v) && pr_dec[0].v) begin
+			hwi_ignore = TRUE;
+		end
+
+		if (dec[0].atom && pr_dec[0].v)
+			pr_dec[1].atom_count = insm[0].uop.atom.count;
+		// Note to mask instructions not micro-ops, by detecting the lead micro-op
+		// of the instruction.
+		else if (!pr_dec[0].ssm && pr_dec[0].uop.any.lead && |pr_dec[0].atom_count)
+			pr_dec[1].atom_count = pr_dec[0].atom_count - 4'd1;
+		else
+			pr_dec[1].atom_count = pr_dec[0].atom_count;
+		if (pr_dec[0].hwi & ~hwi_ignore)
+			pr_dec[1].v = INV;
+
+		if (dec[1].atom && pr_dec[1].v)
+			pr_dec[2].atom_count = insm[1].uop.atom.count;
+		else if (!pr_dec[1].ssm && pr_dec[1].uop.any.lead && |pr_dec[1].atom_count)
+			pr_dec[2].atom_count = pr_dec[1].atom_count - 4'd1;
+		else
+			pr_dec[2].atom_count = pr_dec[1].atom_count;
+		if (pr_dec[0].hwi & ~hwi_ignore)
+			pr_dec[2].v = INV;
+
+		if (dec[2].atom && pr_dec[2].v)
+			pr_dec[3].atom_count = insm[2].uop.atom.count;
+		else if (!pr_dec[2].ssm && pr_dec[2].uop.any.lead && |pr_dec[2].atom_count)
+			pr_dec[3].atom_count = pr_dec[2].atom_count - 4'd1;
+		else
+			pr_dec[3].atom_count = pr_dec[2].atom_count;
+		if (pr_dec[0].hwi & ~hwi_ignore)
+			pr_dec[3].v = INV;
+
+		if (dec[3].atom && pr_dec[3].v)
+			atom_count_o = insm[3].uop.atom.count;
+		else if (!pr_dec[3].ssm && pr_dec[3].uop.any.lead && |pr_dec[3].atom_count)
+			atom_count_o = pr_dec[3].atom_count - 4'd1;
+		else
+			atom_count_o = pr_dec[3].atom_count;
 	end
-
-	if (dec0.atom && pr0_dec.v)
-		pr1_dec.atom_count = ins0m.uop.atom.count;
-	// Note to mask instructions not micro-ops, by detecting the lead micro-op
-	// of the instruction.
-	else if (!pr0_dec.ssm && pr0_dec.uop.any.lead && |pr0_dec.atom_count)
-		pr1_dec.atom_count = pr0_dec.atom_count - 4'd1;
-	else
-		pr1_dec.atom_count = pr0_dec.atom_count;
-	if (pr0_dec.hwi & ~hwi_ignore)
-		pr1_dec.v = INV;
-
-	if (dec1.atom && pr1_dec.v)
-		pr2_dec.atom_count = ins1m.uop.atom.count;
-	else if (!pr1_dec.ssm && pr1_dec.uop.any.lead && |pr1_dec.atom_count)
-		pr2_dec.atom_count = pr1_dec.atom_count - 4'd1;
-	else
-		pr2_dec.atom_count = pr1_dec.atom_count;
-	if (pr0_dec.hwi & ~hwi_ignore)
-		pr2_dec.v = INV;
-
-	if (dec2.atom && pr2_dec.v)
-		pr3_dec.atom_count = ins2m.uop.atom.count;
-	else if (!pr2_dec.ssm && pr2_dec.uop.any.lead && |pr2_dec.atom_count)
-		pr3_dec.atom_count = pr2_dec.atom_count - 4'd1;
-	else
-		pr3_dec.atom_count = pr2_dec.atom_count;
-	if (pr0_dec.hwi & ~hwi_ignore)
-		pr3_dec.v = INV;
-
-	if (dec3.atom && pr3_dec.v)
-		atom_count_o = ins3m.uop.atom.count;
-	else if (!pr3_dec.ssm && pr3_dec.uop.any.lead && |pr3_dec.atom_count)
-		atom_count_o = pr3_dec.atom_count - 4'd1;
-	else
-		atom_count_o = pr3_dec.atom_count;
-
+	
 	// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 	// PRED modifier support
 	// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-	pr0_dec.decbus.pred_mask = pred_mask_i;
-	pr0_dec.decbus.pred_no = pred_no_i;
-	if (dec0.pred && pr0_dec.v) begin
-		pr0_dec.decbus.pred_no = pr0_dec.decbus.pred_no + 5'd1;
-		pr1_dec.decbus.pred_mask = ins0m.uop.pred.mask;
-		pr1_dec.decbus.pred_no = pr0_dec.decbus.pred_no;
-	end
-	else if (!pr0_dec.ssm && pr0_dec.uop.any.lead && |pr0_dec.pred_mask) begin
-		pr1_dec.decbus.pred_mask = pr0_dec.decbus.pred_mask >> 2'd2;
-		pr1_dec.decbus.pred_no = pr0_dec.decbus.pred_no;
-	end
-	else begin
-		pr1_dec.decbus.pred_mask = pr0_dec.decbus.pred_mask;
-		pr1_dec.decbus.pred_no = pr0_dec.decbus.pred_no;
-	end
+	if (SUPPORT_PRED) begin
+		pr_dec[0].decbus.pred_mask = pred_mask_i;
+		pr_dec[0].decbus.pred_no = pred_no_i;
+		if (dec[0].pred && pr_dec[0].v) begin
+			pr_dec[0].decbus.pred_no = pr_dec[0].decbus.pred_no + 5'd1;
+			pr_dec[1].decbus.pred_mask = insm[0].uop.pred.mask;
+			pr_dec[1].decbus.pred_no = pr_dec[0].decbus.pred_no;
+		end
+		else if (!pr_dec[0].ssm && pr_dec[0].uop.any.lead && |pr_dec[0].pred_mask) begin
+			pr_dec[1].decbus.pred_mask = pr_dec[0].decbus.pred_mask >> 2'd2;
+			pr_dec[1].decbus.pred_no = pr_dec[0].decbus.pred_no;
+		end
+		else begin
+			pr_dec[1].decbus.pred_mask = pr_dec[0].decbus.pred_mask;
+			pr_dec[1].decbus.pred_no = pr_dec[0].decbus.pred_no;
+		end
 
-	if (dec1.pred && pr1_dec.v) begin
-		pr1_dec.decbus.pred_no = pr1_dec.decbus.pred_no + 5'd1;
-		pr2_dec.decbus.pred_mask = ins1m.uop.pred.mask;
-		pr2_dec.decbus.pred_no = pr1_dec.decbus.pred_no;
-	end
-	else if (!pr1_dec.ssm && pr1_dec.uop.any.lead && |pr1_dec.pred_mask) begin
-		pr2_dec.decbus.pred_mask = pr1_dec.decbus.pred_mask >> 2'd2;
-		pr2_dec.decbus.pred_no = pr1_dec.decbus.pred_no;
-	end
-	else begin
-		pr2_dec.decbus.pred_mask = pr1_dec.decbus.pred_mask;
-		pr2_dec.decbus.pred_no = pr1_dec.decbus.pred_no;
-	end
+		if (dec[1].pred && pr_dec[1].v) begin
+			pr_dec[1].decbus.pred_no = pr_dec[1].decbus.pred_no + 5'd1;
+			pr_dec[2].decbus.pred_mask = insm[1].uop.pred.mask;
+			pr_dec[2].decbus.pred_no = pr_dec[1].decbus.pred_no;
+		end
+		else if (!pr_dec[1].ssm && pr_dec[1].uop.any.lead && |pr_dec[1].pred_mask) begin
+			pr_dec[2].decbus.pred_mask = pr_dec[1].decbus.pred_mask >> 2'd2;
+			pr_dec[2].decbus.pred_no = pr_dec[1].decbus.pred_no;
+		end
+		else begin
+			pr_dec[2].decbus.pred_mask = pr_dec[1].decbus.pred_mask;
+			pr_dec[2].decbus.pred_no = pr_dec[1].decbus.pred_no;
+		end
 
-	if (dec2.pred && pr2_dec.v) begin
-		pr2_dec.decbus.pred_no = pr2_dec.decbus.pred_no + 5'd1;
-		pr3_dec.decbus.pred_mask = ins2m.uop.pred.mask;
-		pr3_dec.decbus.pred_no = pr2_dec.decbus.pred_no;
-	end
-	else if (!pr2_dec.ssm && pr2_dec.uop.any.lead && |pr2_dec.pred_mask) begin
-		pr3_dec.decbus.pred_mask = pr2_dec.decbus.pred_mask >> 2'd2;
-		pr3_dec.decbus.pred_no = pr2_dec.decbus.pred_no;
-	end
-	else begin
-		pr3_dec.decbus.pred_mask = pr2_dec.decbus.pred_mask;
-		pr3_dec.decbus.pred_no = pr2_dec.decbus.pred_no;
-	end
+		if (dec[2].pred && pr_dec[2].v) begin
+			pr_dec[2].decbus.pred_no = pr_dec[2].decbus.pred_no + 5'd1;
+			pr_dec[3].decbus.pred_mask = insm[2].uop.pred.mask;
+			pr_dec[3].decbus.pred_no = pr_dec[2].decbus.pred_no;
+		end
+		else if (!pr_dec[2].ssm && pr_dec[2].uop.any.lead && |pr_dec[2].pred_mask) begin
+			pr_dec[3].decbus.pred_mask = pr_dec[2].decbus.pred_mask >> 2'd2;
+			pr_dec[3].decbus.pred_no = pr_dec[2].decbus.pred_no;
+		end
+		else begin
+			pr_dec[3].decbus.pred_mask = pr_dec[2].decbus.pred_mask;
+			pr_dec[3].decbus.pred_no = pr_dec[2].decbus.pred_no;
+		end
 
-	if (dec3.pred && pr3_dec.v) begin
-		pred_no_o = pr3_dec.decbus.pred_no + 5'd1;
-		pred_mask_o = ins3m.uop.pred.mask;
-	end
-	else if (!pr3_dec.ssm && pr3_dec.uop.any.lead && |pr3_dec.pred_mask) begin
-		pred_mask_o = pr3_dec.decbus.pred_mask >> 2'd2;
-		pred_no_o = pr3_dec.decbus.pred_no;
-	end
-	else begin
-		pred_mask_o = pr3_dec.decbus.pred_mask;
-		pred_no_o = pr3_dec.decbus.pred_no;
+		if (dec[3].pred && pr_dec[3].v) begin
+			pred_no_o = pr_dec[3].decbus.pred_no + 5'd1;
+			pred_mask_o = insm[3].uop.pred.mask;
+		end
+		else if (!pr_dec[3].ssm && pr_dec[3].uop.any.lead && |pr_dec[3].pred_mask) begin
+			pred_mask_o = pr_dec[3].decbus.pred_mask >> 2'd2;
+			pred_no_o = pr_dec[3].decbus.pred_no;
+		end
+		else begin
+			pred_mask_o = pr_dec[3].decbus.pred_mask;
+			pred_no_o = pr_dec[3].decbus.pred_no;
+		end
 	end
 
 	// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 	// Apply carry mod to instructions in same group, and adjust
 	// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-	pr0_dec.carry_mod = carry_mod_i;
-	if (pr0_dec.v)
-	case ({pr0_dec.carry_mod[9],pr0_dec.carry_mod[0]})
-	2'd0:	;
-	2'd1:	pr0_dec.decbus.Rci = pr0_dec.carry_mod[25:24]|7'd40;
-	2'd2:	pr0_dec.decbus.Rco = pr0_dec.carry_mod[25:24]|7'd40;
-	2'd3:
-		begin
-			pr0_dec.decbus.Rci = pr0_dec.carry_mod[25:24]|7'd40;
-			pr0_dec.decbus.Rco = pr0_dec.carry_mod[25:24]|7'd40;
+	if (SUPPORT_CARRY) begin
+		pr_dec[0].carry_mod = carry_mod_i;
+		if (pr_dec[0].v)
+		case ({pr_dec[0].carry_mod[9],pr_dec[0].carry_mod[0]})
+		2'd0:	;
+		2'd1:	pr_dec[0].decbus.Rci = pr_dec[0].carry_mod[25:24]|7'd40;
+		2'd2:	pr_dec[0].decbus.Rco = pr_dec[0].carry_mod[25:24]|7'd40;
+		2'd3:
+			begin
+				pr_dec[0].decbus.Rci = pr_dec[0].carry_mod[25:24]|7'd40;
+				pr_dec[0].decbus.Rco = pr_dec[0].carry_mod[25:24]|7'd40;
+			end
+		endcase
+		if (dec[0].carry && pr_dec[0].v) begin
+			pr_dec[1].carry_mod = insm[0].uop;
 		end
-	endcase
-	if (dec0.carry && pr0_dec.v) begin
-		pr1_dec.carry_mod = ins0m.uop;
-	end
-	else begin
-		pr1_dec.carry_mod = pr0_dec.carry_mod;
-		if (!pr0_dec.ssm) begin
-			pr1_dec.carry_mod[0] = pr0_dec.carry_mod[10];
-			pr1_dec.carry_mod[23:9] = {2'd0,pr0_dec.carry_mod[23:11]};
+		else begin
+			pr_dec[1].carry_mod = pr_dec[0].carry_mod;
+			if (!pr_dec[0].ssm) begin
+				pr_dec[1].carry_mod[0] = pr_dec[0].carry_mod[10];
+				pr_dec[1].carry_mod[23:9] = {2'd0,pr_dec[0].carry_mod[23:11]};
+			end
 		end
-	end
-	if (pr1_dec.v)
-	case ({pr1_dec.carry_mod[9],pr1_dec.carry_mod[0]})
-	2'd0:	;
-	2'd1:	pr1_dec.decbus.Rci = pr1_dec.carry_mod[25:24]|7'd40;
-	2'd2:	pr1_dec.decbus.Rco = pr1_dec.carry_mod[25:24]|7'd40;
-	2'd3:
-		begin
-			pr1_dec.decbus.Rci = pr1_dec.carry_mod[25:24]|7'd40;
-			pr1_dec.decbus.Rco = pr1_dec.carry_mod[25:24]|7'd40;
+		if (pr_dec[1].v)
+		case ({pr_dec[1].carry_mod[9],pr_dec[1].carry_mod[0]})
+		2'd0:	;
+		2'd1:	pr_dec[1].decbus.Rci = pr_dec[1].carry_mod[25:24]|7'd40;
+		2'd2:	pr_dec[1].decbus.Rco = pr_dec[1].carry_mod[25:24]|7'd40;
+		2'd3:
+			begin
+				pr_dec[1].decbus.Rci = pr_dec[1].carry_mod[25:24]|7'd40;
+				pr_dec[1].decbus.Rco = pr_dec[1].carry_mod[25:24]|7'd40;
+			end
+		endcase
+		if (dec[1].carry && pr_dec[1].v) begin
+			pr_dec[2].carry_mod = insm[1].uop;
 		end
-	endcase
-	if (dec1.carry && pr1_dec.v) begin
-		pr2_dec.carry_mod = ins1m.uop;
-	end
-	else begin
-		pr2_dec.carry_mod = pr1_dec.carry_mod;
-		if (!pr1_dec.ssm) begin
-			pr2_dec.carry_mod[0] = pr1_dec.carry_mod[10];
-			pr2_dec.carry_mod[23:9] = {2'd0,pr1_dec.carry_mod[23:11]};
+		else begin
+			pr_dec[2].carry_mod = pr_dec[1].carry_mod;
+			if (!pr_dec[1].ssm) begin
+				pr_dec[2].carry_mod[0] = pr_dec[1].carry_mod[10];
+				pr_dec[2].carry_mod[23:9] = {2'd0,pr_dec[1].carry_mod[23:11]};
+			end
 		end
-	end
-	if (pr2_dec.v)
-	case ({pr2_dec.carry_mod[9],pr2_dec.carry_mod[0]})
-	2'd0:	;
-	2'd1:	pr2_dec.decbus.Rci = pr1_dec.carry_mod[25:24]|7'd40;
-	2'd2:	pr2_dec.decbus.Rco = pr1_dec.carry_mod[25:24]|7'd40;
-	2'd3:
-		begin
-			pr2_dec.decbus.Rci = pr1_dec.carry_mod[25:24]|7'd40;
-			pr2_dec.decbus.Rco = pr1_dec.carry_mod[25:24]|7'd40;
+		if (pr_dec[2].v)
+		case ({pr_dec[2].carry_mod[9],pr_dec[2].carry_mod[0]})
+		2'd0:	;
+		2'd1:	pr_dec[2].decbus.Rci = pr_dec[1].carry_mod[25:24]|7'd40;
+		2'd2:	pr_dec[2].decbus.Rco = pr_dec[1].carry_mod[25:24]|7'd40;
+		2'd3:
+			begin
+				pr_dec[2].decbus.Rci = pr_dec[1].carry_mod[25:24]|7'd40;
+				pr_dec[2].decbus.Rco = pr_dec[1].carry_mod[25:24]|7'd40;
+			end
+		endcase
+		if (dec[2].carry && pr_dec[2].v) begin
+			pr_dec[3].carry_mod = insm[2].uop;
 		end
-	endcase
-	if (dec2.carry && pr2_dec.v) begin
-		pr3_dec.carry_mod = ins2m.uop;
-	end
-	else begin
-		pr3_dec.carry_mod = pr2_dec.carry_mod;
-		if (!pr2_dec.ssm) begin
-			pr3_dec.carry_mod[0] = pr2_dec.carry_mod[10];
-			pr3_dec.carry_mod[23:9] = {2'd0,pr2_dec.carry_mod[23:11]};
+		else begin
+			pr_dec[3].carry_mod = pr_dec[2].carry_mod;
+			if (!pr_dec[2].ssm) begin
+				pr_dec[3].carry_mod[0] = pr_dec[2].carry_mod[10];
+				pr_dec[3].carry_mod[23:9] = {2'd0,pr_dec[2].carry_mod[23:11]};
+			end
 		end
-	end
-	if (pr3_dec.v)
-	case ({pr3_dec.carry_mod[9],pr3_dec.carry_mod[0]})
-	2'd0:	;
-	2'd1:	pr3_dec.decbus.Rci = pr2_dec.carry_mod[25:24]|7'd40;
-	2'd2:	pr3_dec.decbus.Rco = pr2_dec.carry_mod[25:24]|7'd40;
-	2'd3:
-		begin
-			pr3_dec.decbus.Rci = pr2_dec.carry_mod[25:24]|7'd40;
-			pr3_dec.decbus.Rco = pr2_dec.carry_mod[25:24]|7'd40;
+		if (pr_dec[3].v)
+		case ({pr_dec[3].carry_mod[9],pr_dec[3].carry_mod[0]})
+		2'd0:	;
+		2'd1:	pr_dec[3].decbus.Rci = pr_dec[2].carry_mod[25:24]|7'd40;
+		2'd2:	pr_dec[3].decbus.Rco = pr_dec[2].carry_mod[25:24]|7'd40;
+		2'd3:
+			begin
+				pr_dec[3].decbus.Rci = pr_dec[2].carry_mod[25:24]|7'd40;
+				pr_dec[3].decbus.Rco = pr_dec[2].carry_mod[25:24]|7'd40;
+			end
+		endcase
+		if (dec[3].carry & pr_dec[3].v) begin
+			carry_mod_o = insm[3].uop;
 		end
-	endcase
-	if (dec3.carry & pr3_dec.v) begin
-		carry_mod_o = ins3m.uop;
-	end
-	else begin
-		carry_mod_o = pr3_dec.carry_mod;
-		if (!pr3_dec.ssm) begin
-			carry_mod_o[0] = pr3_dec.carry_mod[10];
-			carry_mod_o[23:9] = {2'd0,pr3_dec.carry_mod[23:11]};
+		else begin
+			carry_mod_o = pr_dec[3].carry_mod;
+			if (!pr_dec[3].ssm) begin
+				carry_mod_o[0] = pr_dec[3].carry_mod[10];
+				carry_mod_o[23:9] = {2'd0,pr_dec[3].carry_mod[23:11]};
+			end
 		end
 	end
 
 	// Detect FREGS/REGS register additions
 	if (fregs_i.v)
-		pr0_dec.decbus.Rs3 = fregs_i.Rs3;
-	if (dec0.xregs.v & pr0_dec.v)
-		pr1_dec.decbus.Rs3 = dec0.xregs.Rs3;
-	if (dec1.xregs.v & pr1_dec.v)
-		pr2_dec.decbus.Rs3 = dec1.xregs.Rs3;
-	if (dec2.xregs.v & pr2_dec.v)
-		pr3_dec.decbus.Rs3 = dec2.xregs.Rs3;
-	if (dec3.xregs.v & pr3_dec.v)
-		fregs_o = dec3.xregs;
+		pr_dec[0].decbus.Rs3 = fregs_i.Rs3;
+	if (dec[0].xregs.v & pr_dec[0].v)
+		pr_dec[1].decbus.Rs3 = dec[0].xregs.Rs3;
+	if (dec[1].xregs.v & pr_dec[1].v)
+		pr_dec[2].decbus.Rs3 = dec[1].xregs.Rs3;
+	if (dec[2].xregs.v & pr_dec[2].v)
+		pr_dec[3].decbus.Rs3 = dec[2].xregs.Rs3;
+	if (dec[3].xregs.v & pr_dec[3].v)
+		fregs_o = dec[3].xregs;
 
-	if (ins1_d_inv) pr1_dec.v = FALSE;
-	if (ins1_d_inv) pr2_dec.v = FALSE;
-	if (ins3_d_inv) pr3_dec.v = FALSE;
-	pr0_dec.om = sr.om;
-	pr1_dec.om = sr.om;
-	pr2_dec.om = sr.om;
-	pr3_dec.om = sr.om;
+	if (ins1_d_inv) pr_dec[1].v = FALSE;
+	if (ins1_d_inv) pr_dec[2].v = FALSE;
+	if (ins3_d_inv) pr_dec[3].v = FALSE;
+	pr_dec[0].om = sr.om;
+	pr_dec[1].om = sr.om;
+	pr_dec[2].om = sr.om;
+	pr_dec[3].om = sr.om;
 
 	// Instructions following a BSR / JSR in the same pipeline group are never
 	// executed, whether predicted correctly or not.
 	// If correctly predicted, the incoming MUX stage will begin with the
 	// correct address.
-	if (pr0_dec.decbus.bsr|pr0_dec.decbus.jsr) begin
-		pr1_dec.v = INV;
-		pr1_dec.uop.any.opcode = Qupls4_pkg::OP_NOP;
-		pr2_dec.v = INV;
-		pr2_dec.uop.any.opcode = Qupls4_pkg::OP_NOP;
-		pr3_dec.v = INV;
-		pr3_dec.uop.any.opcode = Qupls4_pkg::OP_NOP;
+	if (pr_dec[0].decbus.bsr|pr_dec[0].decbus.jsr) begin
+		pr_dec[1].v = INV;
+		pr_dec[1].uop.any.opcode = Qupls4_pkg::OP_NOP;
+		pr_dec[2].v = INV;
+		pr_dec[2].uop.any.opcode = Qupls4_pkg::OP_NOP;
+		pr_dec[3].v = INV;
+		pr_dec[3].uop.any.opcode = Qupls4_pkg::OP_NOP;
 	end
-	else if (pr1_dec.decbus.bsr|pr1_dec.decbus.jsr) begin
-		pr2_dec.v = INV;
-		pr2_dec.uop.any.opcode = Qupls4_pkg::OP_NOP;
-		pr3_dec.v = INV;
-		pr3_dec.uop.any.opcode = Qupls4_pkg::OP_NOP;
+	else if (pr_dec[1].decbus.bsr|pr_dec[1].decbus.jsr) begin
+		pr_dec[2].v = INV;
+		pr_dec[2].uop.any.opcode = Qupls4_pkg::OP_NOP;
+		pr_dec[3].v = INV;
+		pr_dec[3].uop.any.opcode = Qupls4_pkg::OP_NOP;
 	end
-	else if (pr2_dec.decbus.bsr|pr2_dec.decbus.jsr) begin
-		pr3_dec.v = INV;
-		pr3_dec.uop.any.opcode = Qupls4_pkg::OP_NOP;
+	else if (pr_dec[2].decbus.bsr|pr_dec[2].decbus.jsr) begin
+		pr_dec[3].v = INV;
+		pr_dec[3].uop.any.opcode = Qupls4_pkg::OP_NOP;
 	end
 end
 
-always_comb prd[0] = pr0_dec;
-always_comb prd[1] = pr1_dec;
-always_comb prd[2] = pr2_dec;
-always_comb prd[3] = pr3_dec;
+always_comb prd[0] = pr_dec[0];
+always_comb prd[1] = pr_dec[1];
+always_comb prd[2] = pr_dec[2];
+always_comb prd[3] = pr_dec[3];
 
 always_comb inso = prd;
 
 reg [63:0] bsr0_tgt, bsr1_tgt, bsr2_tgt;
 reg [63:0] jsr0_tgt, jsr1_tgt, jsr2_tgt;
 reg [63:0] new_address;
-always_comb bsr0_tgt = {{23{pr0_dec.uop.bsr.disp[40]}},pr0_dec.uop.bsr.disp,1'b0} + pr0_dec.pc.pc;
-always_comb bsr1_tgt = {{23{pr1_dec.uop.bsr.disp[40]}},pr1_dec.uop.bsr.disp,1'b0} + pr1_dec.pc.pc;
-always_comb bsr2_tgt = {{23{pr2_dec.uop.bsr.disp[40]}},pr2_dec.uop.bsr.disp,1'b0} + pr2_dec.pc.pc;
-always_comb jsr0_tgt = {{23{pr0_dec.uop.bsr.disp[40]}},pr0_dec.uop.bsr.disp,1'b0};
-always_comb jsr1_tgt = {{23{pr1_dec.uop.bsr.disp[40]}},pr1_dec.uop.bsr.disp,1'b0};
-always_comb jsr2_tgt = {{23{pr2_dec.uop.bsr.disp[40]}},pr2_dec.uop.bsr.disp,1'b0};
+always_comb bsr0_tgt = {{23{pr_dec[0].uop.bsr.disp[40]}},pr_dec[0].uop.bsr.disp,1'b0} + pr_dec[0].pc.pc;
+always_comb bsr1_tgt = {{23{pr_dec[1].uop.bsr.disp[40]}},pr_dec[1].uop.bsr.disp,1'b0} + pr_dec[1].pc.pc;
+always_comb bsr2_tgt = {{23{pr_dec[2].uop.bsr.disp[40]}},pr_dec[2].uop.bsr.disp,1'b0} + pr_dec[2].pc.pc;
+always_comb jsr0_tgt = {{23{pr_dec[0].uop.bsr.disp[40]}},pr_dec[0].uop.bsr.disp,1'b0};
+always_comb jsr1_tgt = {{23{pr_dec[1].uop.bsr.disp[40]}},pr_dec[1].uop.bsr.disp,1'b0};
+always_comb jsr2_tgt = {{23{pr_dec[2].uop.bsr.disp[40]}},pr_dec[2].uop.bsr.disp,1'b0};
 
 reg predicted_correctly;
 
@@ -1065,22 +930,22 @@ always_comb
 begin
 	new_address_o = Qupls4_pkg::RSTPC;
 	predicted_correctly_o = TRUE;
-	if (pr0_dec.decbus.bsr|pr0_dec.decbus.jsr) begin
+	if (pr_dec[0].decbus.bsr|pr_dec[0].decbus.jsr) begin
 		predicted_correctly_o = FALSE;
-		new_address_o = pr0_dec.decbus.bsr ? bsr0_tgt : jsr0_tgt;
-		if (pg_dec.pr0.op.pc.pc==pg_mux.pr0.op.pc.pc)
+		new_address_o = pr_dec[0].decbus.bsr ? bsr0_tgt : jsr0_tgt;
+		if (pg_dec.pr[0].op.pc.pc==pg_mux.pr[0].op.pc.pc)
 			predicted_correctly_o = TRUE;
 	end
-	else if (pr1_dec.decbus.bsr|pr1_dec.decbus.jsr) begin
+	else if (pr_dec[1].decbus.bsr|pr_dec[1].decbus.jsr) begin
 		predicted_correctly_o = FALSE;
-		new_address_o = pr1_dec.decbus.bsr ? bsr1_tgt : jsr1_tgt;
-		if (pg_dec.pr1.op.pc.pc==pg_mux.pr0.op.pc.pc)
+		new_address_o = pr_dec[1].decbus.bsr ? bsr1_tgt : jsr1_tgt;
+		if (pg_dec.pr[1].op.pc.pc==pg_mux.pr[0].op.pc.pc)
 			predicted_correctly_o = TRUE;
 	end
-	else if (pr2_dec.decbus.bsr|pr2_dec.decbus.jsr) begin
+	else if (pr_dec[2].decbus.bsr|pr_dec[2].decbus.jsr) begin
 		predicted_correctly_o = FALSE;
-		new_address_o = pr2_dec.decbus.bsr ? bsr2_tgt : jsr2_tgt;
-		if (pg_dec.pr2.op.pc.pc==pg_mux.pr0.op.pc.pc)
+		new_address_o = pr_dec[2].decbus.bsr ? bsr2_tgt : jsr2_tgt;
+		if (pg_dec.pr[2].op.pc.pc==pg_mux.pr[0].op.pc.pc)
 			predicted_correctly_o = TRUE;
 	end
 end
@@ -1100,28 +965,28 @@ Stark_space_branches uspb1
 always_comb
 begin
 	pg_dec = pg_mux_r;
-	pg_dec.pr0.op.hwi_level = pg_mux_r.hdr.irq.level;
+	pg_dec.pr[0].op.hwi_level = pg_mux_r.hdr.irq.level;
 	if (hwi_ignore) begin
 		if (pg_mux_r.hdr.irq.level != 6'd63) begin
 			pg_dec.hdr.hwi = 1'b0;
-			pg_dec.pr0.op.hwi = 1'b0;
+			pg_dec.pr[0].op.hwi = 1'b0;
 		end
 	end
-	pg_dec.pr0.op = inso[0];
-	pg_dec.pr1.op = inso[1];
-	pg_dec.pr2.op = inso[2];
-	pg_dec.pr3.op = inso[3];
+	pg_dec.pr[0].op = inso[0];
+	pg_dec.pr[1].op = inso[1];
+	pg_dec.pr[2].op = inso[2];
+	pg_dec.pr[3].op = inso[3];
 end
 always_comb
 begin
 /*
-	if (pr0_dec.ins.any.opcode==OP_Bcc)
+	if (pr_dec[0].ins.any.opcode==OP_Bcc)
 		$finish;
-	if (pr1_dec.ins.any.opcode==OP_Bcc)
+	if (pr_dec[1].ins.any.opcode==OP_Bcc)
 		$finish;
-	if (pr2_dec.ins.any.opcode==OP_Bcc)
+	if (pr_dec[2].ins.any.opcode==OP_Bcc)
 		$finish;
-	if (pr3_dec.ins.any.opcode==OP_Bcc)
+	if (pr_dec[3].ins.any.opcode==OP_Bcc)
 		$finish;
 */
 end

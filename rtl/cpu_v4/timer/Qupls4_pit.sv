@@ -78,7 +78,7 @@
 // 1255 LUTs / 2120 FFs (8x48 bit timers)
 // ============================================================================
 //
-import fta_bus_pkg::*;
+import wishbone_pkg::*;
 import msi_pkg::*;
 
 module Qupls4_pit(rst_i, clk_i, cs_config_i, sreq, sresp,
@@ -89,8 +89,8 @@ parameter BITS=48;
 input rst_i;
 input clk_i;
 input cs_config_i;
-input fta_cmd_request64_t sreq;
-output fta_cmd_response64_t sresp;
+input wb_cmd_request64_t sreq;
+output wb_cmd_response64_t sresp;
 input clk0;
 input gate0;
 output out0;
@@ -128,13 +128,14 @@ parameter CFG_IRQ_LINE = 8'd29;
 
 localparam CFG_HEADER_TYPE = 8'h00;			// 00 = a general device
 
+parameter BUS_PROTOCOL = 0;
 parameter MSIX = 1'b0;
 
 integer n,n1;
 wire irq;
 wire cs_io;
-fta_cmd_response64_t cfg_resp;
-fta_cmd_request64_t reqd;
+wb_cmd_response64_t cfg_resp;
+wb_cmd_request64_t reqd;
 reg erc;
 reg cs_config;
 wire respack;
@@ -184,23 +185,41 @@ always_ff @(posedge clk_i)
 	erc <= sreq.cti==fta_bus_pkg::ERC;
 
 vtdl #(.WID(1), .DEP(16)) urdyd2 (.clk(clk_i), .ce(1'b1), .a(4'd0), .d((cs_qit)&(erc|~reqd.we)), .q(respack));
+reg [1:0] state;
 always_ff @(posedge clk)
-if (rst)
-	sresp <= {$bits(fta_cmd_response64_t){1'b0}};
+if (rst) begin
+	sresp <= {$bits(wb_cmd_response64_t){1'b0}};
+	state <= 2'd0;
+end
 else begin
-	if (cfg_resp.ack)
-		sresp <= cfg_resp;
-	else if (respack) begin
-		sresp.ack <= respack ? reqd.cyc : 1'b0;
-		sresp.tid <= respack ? reqd.tid : 13'd0;
-		sresp.next <= 1'b0;
-		sresp.stall <= 1'b0;
-		sresp.err <= fta_bus_pkg::OKAY;
-		sresp.rty <= 1'b0;
-		sresp.pri <= 4'd5;
-		sresp.adr <= respack ? reqd.adr : 40'd0;
-		sresp.dat <= respack ? dat_o : 64'd0;
-	end
+	if (BUS_PROTOCOL==1)
+		sresp <= {$bits(wb_cmd_response64_t){1'b0}};
+	case(state)
+	2'd0:
+		if (cfg_resp.ack) begin
+			sresp <= cfg_resp;
+			if (BUS_PROTOCOL==0)
+				state <= 2'd1;
+		end
+		else if (respack) begin
+			sresp.ack <= respack ? reqd.cyc : 1'b0;
+			sresp.tid <= respack ? reqd.tid : 13'd0;
+			sresp.next <= 1'b0;
+			sresp.stall <= 1'b0;
+			sresp.err <= fta_bus_pkg::OKAY;
+			sresp.rty <= 1'b0;
+			sresp.pri <= 4'd5;
+			sresp.dat <= respack ? dat_o : 64'd0;
+			if (BUS_PROTOCOL==0)
+				state <= 2'd1;
+		end
+	2'd1:
+		if (!reqd.cyc) begin
+			sresp <= {$bits(wb_cmd_response64_t){1'b0}};
+			state <= 2'd0;
+		end
+	default:	state <= 2'd0;
+	endcase
 end
 
 ddbb64_config #(
@@ -221,7 +240,8 @@ ddbb64_config #(
 	.CFG_CACHE_LINE_SIZE(CFG_CACHE_LINE_SIZE),
 	.CFG_MIN_GRANT(CFG_MIN_GRANT),
 	.CFG_MAX_LATENCY(CFG_MAX_LATENCY),
-	.CFG_IRQ_LINE(CFG_IRQ_LINE)
+	.CFG_IRQ_LINE(CFG_IRQ_LINE),
+	.BUS_PROTOCOL(BUS_PROTOCOL)
 )
 ucfg1
 (

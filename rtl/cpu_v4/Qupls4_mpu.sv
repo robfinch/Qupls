@@ -36,7 +36,7 @@
 //
 // ============================================================================
 
-import fta_bus_pkg::*;
+import wishbone_pkg::*;
 import const_pkg::*;
 import Qupls4_pkg::*;
 
@@ -46,13 +46,14 @@ module Qupls4_mpu(rst_i, clk_i, clk2x_i, clk3x_i, clk5x_i, ftam_req, ftam_resp,
 	);
 parameter CPU="OOO";
 parameter MPUNO = 6'd1;				// MPU number
+parameter BUS_PROTOCOL = 0;
 input rst_i;
 input clk_i;
 input clk2x_i;
 input clk3x_i;
 input clk5x_i;
-output fta_cmd_request256_t ftam_req;
-input fta_cmd_response256_t ftam_resp;
+output wb_cmd_request256_t ftam_req;
+input wb_cmd_response256_t ftam_resp;
 input [31:0] irq_bus;
 input clk0;
 input gate0;
@@ -93,50 +94,22 @@ wire pic_ack,pit_ack;
 wire [31:0] pic_dato;
 wire [63:0] pit_dato;
 wire [31:0] page_fault;
-fta_cmd_request32_t wbm32_req;
-fta_cmd_request64_t wbm64_req;
-fta_cmd_response256_t [2:0] resp_ch;
-fta_cmd_response64_t [3:0] resp64_ch;
-fta_cmd_response256_t pwalk_resp;
-fta_cmd_request256_t pwalk_mreq;
-fta_cmd_response256_t pwalk_mresp;
-fta_cmd_response32_t pic_resp;
-fta_cmd_response64_t msi_resp;
-fta_cmd_response64_t wbs64_resp;
-fta_cmd_response256_t pic256_resp;
-fta_cmd_response64_t pit_resp;
-fta_cmd_response256_t pit256_resp;
-fta_cmd_response256_t wb256_resp;
+wb_cmd_response256_t [0:0] fan256_resp;
+wb_cmd_request64_t [1:0] fan64_req;
+wb_cmd_response64_t [1:0] fan64_resp;
+wb_cmd_request64_t msi64_req;
+wb_cmd_response64_t msi_resp;
+wb_cmd_response256_t pic256_resp;
+wb_cmd_request64_t pit64_req;
+wb_cmd_response64_t pit_resp;
+wb_cmd_response256_t wb256_resp;
 
-fta_bridge256to64 ubridge1
-(
-	.req256_i(ftam_req),
-	.resp256_o(pit256_resp),
-	.req64_o(wbm64_req),
-	.resp64_i(wbs64_resp)
-);
-
-fta_respbuf64 #(.CHANNELS(4))
-urb64
-(
-	.rst(rst_i),
-	.clk(clk_i),
-	.clk5x(clk5x_i),
-	.resp(resp_ch),
-	.resp_o(wbs64_resp)
-);
-
-assign resp64_ch[0] = pit_resp;
-assign resp64_ch[1] = msi_resp;
-assign resp64_ch[2] = 'd0;
-assign resp64_ch[3] = 'd0;
-
-Qupls4_pit utmr1
+Qupls4_pit #(.BUS_PROTOCOL(BUS_PROTOCOL)) utmr1
 (
 	.rst_i(rst_i),
 	.clk_i(clk_i),
 	.cs_config_i(cs_config),
-	.sreq(wbm64_req),
+	.sreq(pit64_req),
 	.sresp(pit_resp),
 	.clk0(clk0),
 	.gate0(gate0),
@@ -152,22 +125,13 @@ Qupls4_pit utmr1
 	.out3(out3)
 );
 
-/*
-fta_bridge256to32 ubridge2
-(
-	.req256_i(ftam_req),
-	.resp256_o(pic256_resp),
-	.req32_o(wbm32_req),
-	.resp32_i(pic_resp)
-);
-*/
-Qupls4_msi_controller umsi
+Qupls4_msi_controller #(.BUS_PROTOCOL(BUS_PROTOCOL)) umsi
 (
 	.coreno(MPUNO),
 	.rst(rst_i),
 	.clk(clk_i),
 	.cs_config_i(cs_config),
-	.req(wbm64_req),
+	.req(msi64_req),
 	.resp(msi_resp),
 	.ipl(ipl),
 	.irq_resp_i(wb256_resp),
@@ -178,6 +142,7 @@ Qupls4_msi_controller umsi
 	.ipri(ipri)
 );
 
+/*
 always_comb
 begin
 	pic_resp.tid = wbm32_req.tid;
@@ -190,11 +155,12 @@ begin
 	pic_resp.adr = wbm32_req.adr;
 	pic_resp.pri = wbm32_req.pri;
 end
+*/
 
 Qupls4
 #(
 	.CORENO(6'd1),
-	.CID(6'd1)
+	.CHANNEL(6'd1)
 )
 ucpu1
 (
@@ -211,27 +177,31 @@ ucpu1
 	.ivect_i(ivect),
 	.swstk_i(swstk),
 	.om_i(2'd3),
-	.fta_req(ftam_req),
+	.fta_req(fan256_req),
 	.fta_resp(wb256_resp),
 	.snoop_v(snoop_v),
 	.snoop_adr(snoop_adr),
 	.snoop_cid(snoop_cid)
 );
 
-fta_respbuf256 #(.CHANNELS(4))
-urb1
+wb_slave_fanout #(.FANOUT64(2), .FANOUT256(1))
+ufo1
 (
-	.rst(rst_i),
-	.clk(clk_i),
-	.clk5x(clk5x_i),
-	.resp(resp_ch),
-	.resp_o(wb256_resp)
+	.rst_i(rst_i),
+	.clk_i(clk_i),
+	.wb_req(fan256_req),
+	.wb_resp(wb256_resp),
+	.fan64_req(fan64_req),
+	.fan64_resp(fan64_resp),
+	.fan256_req(ftam_req),
+	.fan256_resp(fan256_resp)
 );
 
-assign resp_ch[0] = pic256_resp;
-assign resp_ch[1] = pit256_resp;
-assign resp_ch[2] = ftam_resp;
-assign resp_ch[3] = 'd0;
+assign fan64_resp[0] = msi_resp;
+assign fan64_resp[1] = pit_resp;
+assign fan256_resp[0] = ftam_resp;
+assign msi64_req = fan64_req[0];
+assign pit64_req = fan64_req[1];
 
 always_comb
 	iirq = irq_bus|pit_irq;

@@ -209,10 +209,10 @@ case(state)
 // Reset: 512 cycles
 RESET:
  	begin
- 		web <= !SIM;
- 		enb <= !SIM;
+ 		web <= !Qupls4_pkg::SIM;
+ 		enb <= !Qupls4_pkg::SIM;
  		// It is a pita to wait 512 cycles during simulation
- 		if (SIM) begin
+ 		if (Qupls4_pkg::SIM) begin
  			for (n1 = 0; n1 < DEP; n1 = n1 + 1)
  				tag[n1] = 12'd0;
 			state <= IDLE;

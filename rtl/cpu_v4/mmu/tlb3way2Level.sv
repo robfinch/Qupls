@@ -90,9 +90,9 @@ output tlb_entry_t entry_o;
 input address_t vadr0;
 input address_t vadr1;
 input pc_address_t pc_ladr;
-input operating_mode_t omd0;
-input operating_mode_t omd1;
-input operating_mode_t pc_omd;
+input Qupls4_pkg::operating_mode_t omd0;
+input Qupls4_pkg::operating_mode_t omd1;
+input Qupls4_pkg::operating_mode_t pc_omd;
 input asid_t asid0;
 input asid_t asid1;
 input asid_t pc_asid;
@@ -109,10 +109,10 @@ input missack;
 output reg padr0_v;
 output reg padr1_v;
 output reg pswt_v;
-input instruction_t op0;
-input instruction_t op1;
-output instruction_t tlb0_op;
-output instruction_t tlb1_op;
+input Qupls4_pkg::micro_op_t op0;
+input Qupls4_pkg::micro_op_t op1;
+output Qupls4_pkg::micro_op_t tlb0_op;
+output Qupls4_pkg::micro_op_t tlb1_op;
 output physical_address_t padr0;
 output physical_address_t padr1;
 output physical_address_t pc_padr;
@@ -162,7 +162,7 @@ reg [1:0] missqn [0:MISSQ_ENTRIES-1];
 rob_ndx_t [MISSQ_ENTRIES-1:0] missid;
 REGION region0, region1, region2;
 wire [7:0] sel0, sel1, sel2;
-operating_mode_t omd0a, omd1a, pc_omda;
+Qupls4_pkg::operating_mode_t omd0a, omd1a, pc_omda;
 reg [10:0] rstcnt;
 reg pc_tlb_v1, pc_tlb_v2;
 reg web0a=1'b0, web0b=1'b0, web0c=1'b0;
@@ -1230,7 +1230,7 @@ always_ff @(posedge clk) store1r <= store1_i;
 
    // Level 2 entries
 generate begin : gTLBLVL2
-if (SUPPORT_TLBLVL2) begin
+if (Qupls4_pkg::SUPPORT_TLBLVL2) begin
    xpm_memory_tdpram #(
       .ADDR_WIDTH_A(TLB_L2_ABITS),               // DECIMAL
       .ADDR_WIDTH_B(TLB_L2_ABITS),               // DECIMAL
@@ -2307,23 +2307,23 @@ change_det #(.WID($bits(virtual_address_t)-LOG_PAGE_SIZE)) ucd3 (.rst(rst), .clk
 always_ff @(posedge clk) miss_en_pc <= cd_pc|cdrstcnt[4:0]==5'h1f;
 always_ff @(posedge clk) miss_en_vadr0 <= cd_vadr0|cdrstcnt[4:0]==5'h1f;
 always_ff @(posedge clk) miss_en_vadr1 <= cd_vadr1|cdrstcnt[4:0]==5'h1f;
-wire hit0aL2 =(t0a.vpn.vpn[`L2_VPN_BITS]==vadr0r[`L2_VADR_BITS] && t0a.vpn.asid==asid0 && t0a.pte.l2.v && t0a.pte.l2.s && SUPPORT_TLBLVL2);
+wire hit0aL2 =(t0a.vpn.vpn[`L2_VPN_BITS]==vadr0r[`L2_VADR_BITS] && t0a.vpn.asid==asid0 && t0a.pte.l2.v && t0a.pte.l2.s && Qupls4_pkg::SUPPORT_TLBLVL2);
 wire hit0a =	(t0a.vpn.vpn[`VPN_BITS]==vadr0r[`VADR_BITS] && t0a.vpn.asid==asid0 && t0a.pte.l1.v);
-wire hit0bL2 =(t0b.vpn.vpn[`L2_VPN_BITS]==vadr0r[`L2_VADR_BITS] && t0b.vpn.asid==asid0 && t0b.pte.l2.v && t0b.pte.l2.s && SUPPORT_TLBLVL2);
+wire hit0bL2 =(t0b.vpn.vpn[`L2_VPN_BITS]==vadr0r[`L2_VADR_BITS] && t0b.vpn.asid==asid0 && t0b.pte.l2.v && t0b.pte.l2.s && Qupls4_pkg::SUPPORT_TLBLVL2);
 wire hit0b = 	(t0b.vpn.vpn[`VPN_BITS]==vadr0r[`VADR_BITS] && t0b.vpn.asid==asid0 && t0b.pte.l1.v);
-wire hit0cL2=	(t0c.vpn.vpn[`L2_VPN_BITS]==vadr0r[`L2_VADR_BITS] && t0c.vpn.asid==asid0 && t0c.pte.l2.v && t0c.pte.l2.s && SUPPORT_TLBLVL2);
+wire hit0cL2=	(t0c.vpn.vpn[`L2_VPN_BITS]==vadr0r[`L2_VADR_BITS] && t0c.vpn.asid==asid0 && t0c.pte.l2.v && t0c.pte.l2.s && Qupls4_pkg::SUPPORT_TLBLVL2);
 wire hit0c = 	(t0c.vpn.vpn[`VPN_BITS]==vadr0r[`VADR_BITS] && t0c.vpn.asid==asid0 && t0c.pte.l1.v);
-wire hit1aL2=	(t1a.vpn.vpn[`L2_VPN_BITS]==vadr1r[`L2_VADR_BITS] && t1a.vpn.asid==asid1 && t1a.pte.l2.v && t1a.pte.l2.s && SUPPORT_TLBLVL2);
+wire hit1aL2=	(t1a.vpn.vpn[`L2_VPN_BITS]==vadr1r[`L2_VADR_BITS] && t1a.vpn.asid==asid1 && t1a.pte.l2.v && t1a.pte.l2.s && Qupls4_pkg::SUPPORT_TLBLVL2);
 wire hit1a =	(t1a.vpn.vpn[`VPN_BITS]==vadr1r[`VADR_BITS] && t1a.vpn.asid==asid1 && t1a.pte.l1.v);
-wire hit1bL2 =(t1b.vpn.vpn[`L2_VPN_BITS]==vadr1r[`L2_VADR_BITS] && t1b.vpn.asid==asid1 && t1b.pte.l2.v && t1b.pte.l2.s && SUPPORT_TLBLVL2);
+wire hit1bL2 =(t1b.vpn.vpn[`L2_VPN_BITS]==vadr1r[`L2_VADR_BITS] && t1b.vpn.asid==asid1 && t1b.pte.l2.v && t1b.pte.l2.s && Qupls4_pkg::SUPPORT_TLBLVL2);
 wire hit1b =	(t1b.vpn.vpn[`VPN_BITS]==vadr1r[`VADR_BITS] && t1b.vpn.asid==asid1 && t1b.pte.l1.v);
-wire hit1cL2 =(t1c.vpn.vpn[`L2_VPN_BITS]==vadr1r[`L2_VADR_BITS] && t1c.vpn.asid==asid1 && t1c.pte.l2.v && t1c.pte.l2.s && SUPPORT_TLBLVL2);
+wire hit1cL2 =(t1c.vpn.vpn[`L2_VPN_BITS]==vadr1r[`L2_VADR_BITS] && t1c.vpn.asid==asid1 && t1c.pte.l2.v && t1c.pte.l2.s && Qupls4_pkg::SUPPORT_TLBLVL2);
 wire hit1c =	(t1c.vpn.vpn[`VPN_BITS]==vadr1r[`VADR_BITS] && t1c.vpn.asid==asid1 && t1c.pte.l1.v);
-wire hit2aL2=	(t2a.vpn.vpn[`L2_VPN_BITS]==pc_ladrr[`L2_VADR_BITS] && t2a.vpn.asid==pc_asid && t2a.pte.l2.v && t2a.pte.l2.s && SUPPORT_TLBLVL2);
+wire hit2aL2=	(t2a.vpn.vpn[`L2_VPN_BITS]==pc_ladrr[`L2_VADR_BITS] && t2a.vpn.asid==pc_asid && t2a.pte.l2.v && t2a.pte.l2.s && Qupls4_pkg::SUPPORT_TLBLVL2);
 wire hit2a =	(t2a.vpn.vpn[`VPN_BITS]==pc_ladrr[`VADR_BITS] && t2a.vpn.asid==pc_asid && t2a.pte.l1.v);
-wire hit2bL2 =(t2b.vpn.vpn[`L2_VPN_BITS]==pc_ladrr[`L2_VADR_BITS] && t2b.vpn.asid==pc_asid && t2b.pte.l2.v && t2b.pte.l2.s && SUPPORT_TLBLVL2);
+wire hit2bL2 =(t2b.vpn.vpn[`L2_VPN_BITS]==pc_ladrr[`L2_VADR_BITS] && t2b.vpn.asid==pc_asid && t2b.pte.l2.v && t2b.pte.l2.s && Qupls4_pkg::SUPPORT_TLBLVL2);
 wire hit2b =	(t2b.vpn.vpn[`VPN_BITS]==pc_ladrr[`VADR_BITS] && t2b.vpn.asid==pc_asid && t2b.pte.l1.v);
-wire hit2cL2 =(t2c.vpn.vpn[`L2_VPN_BITS]==pc_ladrr[`L2_VADR_BITS] && t2c.vpn.asid==pc_asid && t2c.pte.l2.v && t2c.pte.l2.s && SUPPORT_TLBLVL2);
+wire hit2cL2 =(t2c.vpn.vpn[`L2_VPN_BITS]==pc_ladrr[`L2_VADR_BITS] && t2c.vpn.asid==pc_asid && t2c.pte.l2.v && t2c.pte.l2.s && Qupls4_pkg::SUPPORT_TLBLVL2);
 wire hit2c =	(t2c.vpn.vpn[`VPN_BITS]==pc_ladrr[`VADR_BITS] && t2c.vpn.asid==pc_asid && t2c.pte.l1.v);
 always_comb web0a = hit0a & !cd_vadr0;
 always_comb web0b = hit0b & !cd_vadr0;
@@ -2358,13 +2358,13 @@ generate begin : gL1tlb
 		always_comb
 			begin
 				hits[0][g1] = ((L1tlb[g1].vpn.vpn[`L1_VPN_BITS]==vadr0[`L1_VADR_BITS] && L1tlb[g1].pte.l1.lvl==3'd1) ||	// Level1 hit or
-											 (L1tlb[g1].vpn.vpn[`L1_VPN_BITS_LVL2]==vadr0[`L1_VADR_BITS_LVL2] && L1tlb[g1].pte.l2.lvl==3'd2 && L1tlb[g1].pte.l2.s==1'd1 && SUPPORT_TLBLVL2)) &&	// Level2 shortcut hit
+											 (L1tlb[g1].vpn.vpn[`L1_VPN_BITS_LVL2]==vadr0[`L1_VADR_BITS_LVL2] && L1tlb[g1].pte.l2.lvl==3'd2 && L1tlb[g1].pte.l2.s==1'd1 && Qupls4_pkg::SUPPORT_TLBLVL2)) &&	// Level2 shortcut hit
 											L1tlb[g1].vpn.asid==asid0;
 				hits[1][g1] = ((L1tlb[g1].vpn.vpn[`L1_VPN_BITS]==vadr1[`L1_VADR_BITS] && L1tlb[g1].pte.l1.lvl==3'd1) ||	// Level1 hit or
-											 (L1tlb[g1].vpn.vpn[`L1_VPN_BITS_LVL2]==vadr1[`L1_VADR_BITS_LVL2] && L1tlb[g1].pte.l2.lvl==3'd2 && L1tlb[g1].pte.l2.s==1'd1 && SUPPORT_TLBLVL2)) &&	// Level2 shortcut hit
+											 (L1tlb[g1].vpn.vpn[`L1_VPN_BITS_LVL2]==vadr1[`L1_VADR_BITS_LVL2] && L1tlb[g1].pte.l2.lvl==3'd2 && L1tlb[g1].pte.l2.s==1'd1 && Qupls4_pkg::SUPPORT_TLBLVL2)) &&	// Level2 shortcut hit
 											L1tlb[g1].vpn.asid==asid1;
 				hits[2][g1] = ((L1tlb[g1].vpn.vpn[`L1_VPN_BITS]==pc_ladr[`L1_VADR_BITS] && L1tlb[g1].pte.l1.lvl==3'd1) ||	// Level1 hit or
-											 (L1tlb[g1].vpn.vpn[`L1_VPN_BITS_LVL2]==pc_ladr[`L1_VADR_BITS_LVL2] && L1tlb[g1].pte.l2.lvl==3'd2 && L1tlb[g1].pte.l2.s==1'd1 && SUPPORT_TLBLVL2)) &&	// Level2 shortcut hit
+											 (L1tlb[g1].vpn.vpn[`L1_VPN_BITS_LVL2]==pc_ladr[`L1_VADR_BITS_LVL2] && L1tlb[g1].pte.l2.lvl==3'd2 && L1tlb[g1].pte.l2.s==1'd1 && Qupls4_pkg::SUPPORT_TLBLVL2)) &&	// Level2 shortcut hit
 											L1tlb[g1].vpn.asid==pc_asid;
 			end
 end
@@ -2502,7 +2502,7 @@ tCount(t2b,t2bw,hit2b,1'b0);
 tCount(t2c,t2cw,hit2c,1'b0);
 end
 generate begin : gTLBLVL2Count
-if (SUPPORT_TLBLVL2) begin
+if (Qupls4_pkg::SUPPORT_TLBLVL2) begin
 always_comb
 begin
 tCount(t0aL2,t0awL2,hit0aL2,store0r);
@@ -2538,8 +2538,8 @@ if (rst) begin
 	pc_padr_v1 <= TRUE;
 	pc_tlb_entry_o <= {$bits(tlb_entry_t){1'b0}};
 	
-	omd0a <= OM_MACHINE;
-	omd1a <= OM_MACHINE;
+	omd0a <= Qupls4_pkg::OM_SECURE;
+	omd1a <= Qupls4_pkg::OM_SECURE;
 	
 	agen0_rndx_o <= 'd0;
 	agen1_rndx_o <= 'd0;
@@ -2565,7 +2565,7 @@ else begin
 	entry1 <= L1tlb[ndx1];
 
 	if (paging_en) begin
-		if (L1tlb[ndx0].pte.l2.lvl==3'd2 && SUPPORT_TLBLVL2)
+		if (L1tlb[ndx0].pte.l2.lvl==3'd2 && Qupls4_pkg::SUPPORT_TLBLVL2)
 			padr0 <= {L1tlb[ndx0].pte.l2.ppn,vadr0[`VADR_PBITS_LVL2]};
 		else
 			padr0 <= {L1tlb[ndx0].pte.l1.ppn,vadr0[`VADR_PBITS_LVL1]};
@@ -2581,7 +2581,7 @@ else begin
 	// Allow the address to change only on a hit.
 	if (paging_en) begin
 		if (L1hit2) begin
-			if (L1tlb[ndx2].pte.l2.lvl==3'd2 && SUPPORT_TLBLVL2)
+			if (L1tlb[ndx2].pte.l2.lvl==3'd2 && Qupls4_pkg::SUPPORT_TLBLVL2)
 				pc_padr <= {L1tlb[ndx2].pte.l2.ppn,pc_ladr[`VADR_PBITS_LVL2]};
 			else
 				pc_padr <= {L1tlb[ndx2].pte.l1.ppn,pc_ladr[`VADR_PBITS_LVL1]};
@@ -2629,7 +2629,7 @@ else begin
 			tlb_v0a <= agen0_v;
 			omd0a <= omd0;
 		end
-		else if (hit0aL2 & ~L1hit0 & agen0_v && SUPPORT_TLBLVL2) begin
+		else if (hit0aL2 & ~L1hit0 & agen0_v && Qupls4_pkg::SUPPORT_TLBLVL2) begin
 //			entry0 <= t0a;
 			L1tlb[wway] <= t0aL2;
 			tlb0_op <= op0;
@@ -2640,7 +2640,7 @@ else begin
 			tlb_v0a <= agen0_v;
 			omd0a <= omd0;
 		end
-		else if (hit0bL2 & ~L1hit0 & agen0_v && SUPPORT_TLBLVL2) begin
+		else if (hit0bL2 & ~L1hit0 & agen0_v && Qupls4_pkg::SUPPORT_TLBLVL2) begin
 //			entry0 <= t0b;
 			L1tlb[wway] <= t0bL2;
 			tlb0_op <= op0;
@@ -2651,7 +2651,7 @@ else begin
 			tlb_v0a <= agen0_v;
 			omd0a <= omd0;
 		end
-		else if (hit0cL2 & ~L1hit0 & agen0_v && SUPPORT_TLBLVL2) begin
+		else if (hit0cL2 & ~L1hit0 & agen0_v && Qupls4_pkg::SUPPORT_TLBLVL2) begin
 //			entry0 <= t0c;
 			L1tlb[wway] <= t0cL2;
 			tlb0_op <= op0;
@@ -2699,7 +2699,7 @@ else begin
 			tlb_v1a <= agen1_v;
 			omd1a <= omd1;
 		end
-		else if (hit1aL2 & ~L1hit1 & agen1_v && SUPPORT_TLBLVL2) begin
+		else if (hit1aL2 & ~L1hit1 & agen1_v && Qupls4_pkg::SUPPORT_TLBLVL2) begin
 //			entry1 <= t1a;
 			L1tlb[wway] <= t1aL2;
 			tlb1_op <= op1;
@@ -2710,7 +2710,7 @@ else begin
 			tlb_v1a <= agen1_v;
 			omd1a <= omd1;
 		end
-		else if (hit1bL2 & ~L1hit1 & agen1_v && SUPPORT_TLBLVL2) begin
+		else if (hit1bL2 & ~L1hit1 & agen1_v && Qupls4_pkg::SUPPORT_TLBLVL2) begin
 //			entry1 <= t1b;
 			L1tlb[wway] <= t1bL2;
 			tlb1_op <= op1;
@@ -2721,7 +2721,7 @@ else begin
 			tlb_v1a <= agen1_v;
 			omd1a <= omd1;
 		end
-		else if (hit1cL2 & ~L1hit1 & agen1_v && SUPPORT_TLBLVL2) begin
+		else if (hit1cL2 & ~L1hit1 & agen1_v && Qupls4_pkg::SUPPORT_TLBLVL2) begin
 //			entry1 <= t1c;
 			L1tlb[wway] <= t1cL2;
 			tlb1_op <= op1;
@@ -2749,17 +2749,17 @@ else begin
 		pc_omda <= pc_omd;
 		pc_tlb_v2 <= 1'd1;
 	end
-	else if (hit2aL2 && ~L1hit2 && SUPPORT_TLBLVL2) begin
+	else if (hit2aL2 && ~L1hit2 && Qupls4_pkg::SUPPORT_TLBLVL2) begin
 		L1tlb[wway] <= t2aL2;
 		pc_omda <= pc_omd;
 		pc_tlb_v2 <= 1'd1;
 	end
-	else if (hit2bL2 & ~L1hit2 && SUPPORT_TLBLVL2) begin
+	else if (hit2bL2 & ~L1hit2 && Qupls4_pkg::SUPPORT_TLBLVL2) begin
 		L1tlb[wway] <= t2bL2;
 		pc_omda <= pc_omd;
 		pc_tlb_v2 <= 1'd1;
 	end
-	else if (hit2cL2 & ~L1hit2 && SUPPORT_TLBLVL2) begin
+	else if (hit2cL2 & ~L1hit2 && Qupls4_pkg::SUPPORT_TLBLVL2) begin
 		L1tlb[wway] <= t2cL2;
 		pc_omda <= pc_omd;
 		pc_tlb_v2 <= 1'd1;
@@ -2883,21 +2883,21 @@ else begin
 	// Provide the address bits early.
 	if (!stall_tlb1) begin
 		if (hit1a & ~L1hit1 & agen1_v) begin
-			if (t1a.pte.l2.lvl==3'd2 && SUPPORT_TLBLVL2)
+			if (t1a.pte.l2.lvl==3'd2 && Qupls4_pkg::SUPPORT_TLBLVL2)
 				padr1 <= {t1a.pte.l2.ppn,vadr0[`VADR_PBITS_LVL2]};
 			else
 				padr1 <= {t1a.pte.l1.ppn,vadr0[`VADR_PBITS_LVL1]};
 			padr1_v <= 1'b1;
 		end
 		else if (hit1b & ~L1hit1 & agen1_v) begin
-			if (t1b.pte.l2.lvl==3'd2 && SUPPORT_TLBLVL2)
+			if (t1b.pte.l2.lvl==3'd2 && Qupls4_pkg::SUPPORT_TLBLVL2)
 				padr1 <= {t1b.pte.l2.ppn,vadr0[`VADR_PBITS_LVL2]};
 			else
 				padr1 <= {t1b.pte.l1.ppn,vadr0[`VADR_PBITS_LVL1]};
 			padr1_v <= 1'b1;
 		end
 		else if (hit1c & ~L1hit1 & agen1_v) begin
-			if (t1c.pte.l2.lvl==3'd2 && SUPPORT_TLBLVL2)
+			if (t1c.pte.l2.lvl==3'd2 && Qupls4_pkg::SUPPORT_TLBLVL2)
 				padr1 <= {t1c.pte.l2.ppn,vadr0[`VADR_PBITS_LVL2]};
 			else
 				padr1 <= {t1c.pte.l1.ppn,vadr0[`VADR_PBITS_LVL1]};

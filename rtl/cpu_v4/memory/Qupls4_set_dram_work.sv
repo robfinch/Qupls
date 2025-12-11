@@ -43,6 +43,7 @@ module Qupls4_set_dram_work(rst_i, clk_i, rob_i, stomp_i, vb_i, lsndxv_i,
 	dram_stomp_i, cpu_dat_i, lsq_i, dram_oper_o, dram_work_o, page_cross_o
 );
 parameter CORENO = 6'd1;
+parameter LSQNO = 2'd0;
 input rst_i;
 input clk_i;
 input Qupls4_pkg::rob_entry_t [ROB_ENTRIES-1:0] rob_i;
@@ -161,7 +162,7 @@ else begin
 
 	// If just performing a virtual to physical translation....
 	// This is done only on port #0
-	if (lsq_i.v2p && lsq_i.v) begin
+	if (LSQNO==2'd0 && lsq_i.v2p && lsq_i.v) begin
 		if (lsq_i.agen) begin
 			dram_oper_o.oper.val <= lsq_i.padr;
 			dram_oper_o.oper.flags <= lsq_i.flags;

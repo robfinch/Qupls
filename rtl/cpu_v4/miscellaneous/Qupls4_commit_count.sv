@@ -40,8 +40,7 @@ import Qupls4_pkg::*;
 
 module Qupls4_commit_count(rst, next_cqd, rob,
 	head0, head1, head2, head3, head4, head5,
-	tail0, tail1, tail2, tail3, tail4, tail5,
-	cmtcnt, do_commit);
+	tails, cmtcnt, do_commit);
 parameter XWID = 4;
 input rst;
 input [XWID-1:0] next_cqd;
@@ -52,12 +51,7 @@ input rob_ndx_t head2;
 input rob_ndx_t head3;
 input rob_ndx_t head4;
 input rob_ndx_t head5;
-input rob_ndx_t tail0;
-input rob_ndx_t tail1;
-input rob_ndx_t tail2;
-input rob_ndx_t tail3;
-input rob_ndx_t tail4;
-input rob_ndx_t tail5;
+input rob_ndx_t [11:0] tails;
 output reg [2:0] cmtcnt;
 output reg do_commit;
 
@@ -68,22 +62,22 @@ wire nan1 = rob[head1].v && rob[head1].nan;
 wire nan2 = rob[head2].v && rob[head2].nan;
 wire nan3 = rob[head3].v && rob[head3].nan;
 
-always_comb cmt0 = (rob[head0].v && &rob[head0].done) || (!rob[head0].v && ((head0 != tail0) || &next_cqd));
-always_comb cmt1 = XWID > 1 && ((rob[head1].v && &rob[head1].done) || (!rob[head1].v && head0 != tail0 && head0 != tail1)) &&
+always_comb cmt0 = (rob[head0].v && &rob[head0].done) || (!rob[head0].v && ((head0 != tails[0]) || &next_cqd));
+always_comb cmt1 = XWID > 1 && ((rob[head1].v && &rob[head1].done) || (!rob[head1].v && head0 != tails[0] && head0 != tails[1])) &&
 										!rob[head0].op.decbus.oddball && !rob[head0].excv
 										;
-always_comb cmt2 = XWID > 2 && ((rob[head2].v && &rob[head2].done) || (!rob[head2].v && head0 != tail0 && head0 != tail1 && head0 != tail2)) &&
+always_comb cmt2 = XWID > 2 && ((rob[head2].v && &rob[head2].done) || (!rob[head2].v && head0 != tails[0] && head0 != tails[1] && head0 != tails[2])) &&
 										!rob[head0].op.decbus.oddball && !rob[head1].op.decbus.oddball &&
 										!rob[head0].excv && !rob[head1].excv &&
 										!(nan0 && nan1)
 										;
-always_comb cmt3 = XWID > 3 && ((rob[head3].v && &rob[head3].done) || (!rob[head3].v && head0 != tail0 && head0 != tail1 && head0 != tail2 && head0 != tail3)) &&
+always_comb cmt3 = XWID > 3 && ((rob[head3].v && &rob[head3].done) || (!rob[head3].v && head0 != tails[0] && head0 != tails[1] && head0 != tails[2] && head0 != tails[3])) &&
 										!rob[head0].op.decbus.oddball && !rob[head1].op.decbus.oddball && !rob[head2].op.decbus.oddball &&
 										!rob[head0].excv && !rob[head1].excv && !rob[head2].excv &&
 										!((nan0 && nan1) || (nan0 && nan2) || (nan1 && nan2))
 										;
-always_comb	cmt4 = FALSE;//!rob[head4].v && (head0 != tail0 && head0 != tail1 && head0 != tail2 && head0 != tail3 && head0 != tail4);
-always_comb	cmt5 = FALSE;//!rob[head5].v && (head0 != tail0 && head0 != tail1 && head0 != tail2 && head0 != tail3 && head0 != tail4 && head0 != tail5);
+always_comb	cmt4 = FALSE;//!rob[head4].v && (head0 != tails[0] && head0 != tails[1] && head0 != tails[2] && head0 != tails[3] && head0 != tails[4]);
+always_comb	cmt5 = FALSE;//!rob[head5].v && (head0 != tails[0] && head0 != tails[1] && head0 != tails[2] && head0 != tails[3] && head0 != tails[4] && head0 != tails[5]);
 
 // Figure out how many instructions can be committed.
 // If there is an oddball instruction (eg. CSR, RTE) then only commit up until
@@ -102,7 +96,7 @@ begin
 end
 endfunction
 
-always_comb htcolls = fnColls(head0, tail0);
+always_comb htcolls = fnColls(head0, tails[0]);
 
 // Commit only by instructions with the same checkpoint index. The RAT can
 // currently handle only one checkpoint index spec for update.

@@ -46,6 +46,8 @@ package Qupls4_pkg;
 parameter SIM = 1'b0;
 //`define IS_SIM	1
 
+parameter MWIDTH = 4;
+
 // Comment out to remove the sigmoid approximate function
 //`define SIGMOID	1
 
@@ -144,8 +146,13 @@ parameter SUPPORT_POSTFIX = 0;
 // speculate incorrectly leading to lower performance.
 parameter SUPPORT_OOOFC = 1'b0;
 
+// =============================================================================
+// Instruction Modifier Support
+// =============================================================================
 // The following parameter enables support for predicated logic in the core.
-parameter SUPPORT_PRED = 1'b1;
+parameter SUPPORT_PRED = 1'b0;
+parameter SUPPORT_ATOM = 1'b0;
+parameter SUPPORT_CARRY = 1'b0;
 
 // The PRED_SHADOW parameter controls the maximum number of instructions
 // following the predicate that are affected by it. Increasing the shadow
@@ -154,6 +161,8 @@ parameter SUPPORT_PRED = 1'b1;
 // can be encoded in the instruction. The minimum is one.
 parameter PRED_SHADOW = 4;
 
+// =============================================================================
+// =============================================================================
 // Allowing unaligned memory access increases the size of the core.
 parameter SUPPORT_UNALIGNED_MEMORY = 1'b0;
 parameter SUPPORT_BUS_TO = 1'b0;
@@ -180,8 +189,8 @@ parameter SUPPORT_IRQ_POLLING = 1'b0;
 // The following controls the size of the reordering buffer.
 // Setting ROB_ENTRIES below 12 may not work. Setting the number of entries over
 // 63 may require changing the sequence number type. For ideal construction 
-// should be a multiple of four.
-parameter ROB_ENTRIES = 16;
+// should be a multiple of the machine width (4).
+parameter ROB_ENTRIES = 4 * MWIDTH;
 
 // Number of entries supporting block operate instructions.
 parameter BEB_ENTRIES = 4;
@@ -220,7 +229,7 @@ parameter pL1Imsb = $clog2(`L1ICacheLines-1)-1+6;
 parameter pL1ICacheWays = `L1ICacheWays;
 parameter pL1DCacheWays = `L1DCacheWays;
 
-parameter INSN_LEN = 8'd4;
+parameter INSN_LEN = 8'd6;
 
 const cpu_types_pkg::pc_address_t RSTPC	= 32'hFFFFFD80;
 const cpu_types_pkg::address_t RSTSP = 32'hFFFF9000;
@@ -1880,10 +1889,7 @@ typedef struct packed
 typedef struct packed
 {
 	pipeline_group_hdr_t hdr;
-	rob_entry_t pr0;
-	rob_entry_t pr1;
-	rob_entry_t pr2;
-	rob_entry_t pr3;
+	rob_entry_t [MWIDTH-1:0] pr;
 } pipeline_group_reg_t;
 
 // ============================================================================

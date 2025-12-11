@@ -337,7 +337,7 @@ else begin
 					$display("PTW: walk level=%d", miss_queue[sel_qe].lvl);
 					miss_queue[sel_qe].o <= 1'b1;
 					miss_queue[sel_qe].lvl <= miss_queue[sel_qe].lvl - 1;
-					if (tranbuf[sel_tran].pte.l1.s==1'b1 && SUPPORT_TLBLVL2)
+					if (tranbuf[sel_tran].pte.l1.s==1'b1 && Qupls4_pkg::SUPPORT_TLBLVL2)
 						miss_queue[sel_qe].lvl <= 3'd0;
 				end
 				else if (miss_queue[sel_qe].bc < 3'd2) begin

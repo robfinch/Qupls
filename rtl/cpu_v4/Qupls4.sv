@@ -72,7 +72,7 @@ module Qupls4(coreno_i, rst_i, clk_i, clk2x_i, clk3x_i, clk5x_i, ipl, irq, irq_a
 	fta_req, fta_resp, snoop_adr, snoop_v, snoop_cid);
 parameter CORENO = 6'd1;
 parameter CHANNEL = 6'd1;
-parameter XWID = 4;
+parameter MWIDTH = 4;
 parameter ISTACK_DEPTH = 16;
 input [63:0] coreno_i;
 input rst_i;
@@ -118,7 +118,7 @@ real IPC,PIPC;
 integer nn,mm,n2,n3,n4,m4,n5,n6,n8,n9,n10,n11,n12,n13,n14,n15,n17;
 integer n16r, n16c, n12r, n12c, n14r, n14c, n17r, n17c, n18r, n18c;
 integer n19,n20,n21,n22,n23,n24,n25,n26,n27,n28,n29,i,n30,n31,n32,n33;
-integer n34,n35,n36,n37;
+integer n34,n35,n36,n37,n38,n39;
 integer jj,kk;
 
 genvar g,h,gvg;
@@ -319,22 +319,9 @@ reg set_pending_ipl;
 reg [5:0] next_pending_ipl;
 wire stallq, rat_stallq, ren_stallq;
 
-rob_ndx_t tail0, tail1, tail2, tail3, tail4, tail5, tail6, tail7, tail8, tail9, tail10, tail11;
 rob_ndx_t head0, head1, head2, head3, head4, head5, head6, head7;
 rob_ndx_t [11:0] tails;
 rob_ndx_t stail;
-always_comb tails[0] = tail0;
-always_comb tails[1] = tail1;
-always_comb tails[2] = tail2;
-always_comb tails[3] = tail3;
-always_comb tails[4] = tail4;
-always_comb tails[5] = tail5;
-always_comb tails[6] = tail6;
-always_comb tails[7] = tail7;
-always_comb tails[8] = tail8;
-always_comb tails[9] = tail9;
-always_comb tails[10] = tail10;
-always_comb tails[11] = tail11;
 Qupls4_pkg::reg_bitmask_t reg_bitmask;
 Qupls4_pkg::reg_bitmask_t Ra_bitmask;
 Qupls4_pkg::reg_bitmask_t Rt_bitmask;
@@ -343,14 +330,8 @@ Qupls4_pkg::ex_instruction_t hold_ir;
 reg hold_ins;
 reg pack_regs;
 reg [2:0] scale_regs;
-rob_ndx_t grplen0;
-rob_ndx_t grplen1;
-rob_ndx_t grplen2;
-rob_ndx_t grplen3;
-reg last0;
-reg last1;
-reg last2;
-reg last3;
+rob_ndx_t [MWIDTH-1:0] grplen;
+reg [MWIDTH-1:0] last;
 rob_ndx_t sync_ndx;
 reg sync_ndxv;
 rob_ndx_t fc_ndx;
@@ -362,17 +343,17 @@ Qupls4_pkg::pipeline_reg_t pr_dec0,pr_dec1,pr_dec2,pr_dec3;
 Qupls4_pkg::pipeline_reg_t pr_ren0,pr_ren1,pr_ren2,pr_ren3;
 Qupls4_pkg::pipeline_reg_t pr_que0,pr_que1,pr_que2,pr_que3;
 
-always_comb tail1 = (tail0 + 1) % Qupls4_pkg::ROB_ENTRIES;
-always_comb tail2 = (tail0 + 2) % Qupls4_pkg::ROB_ENTRIES;
-always_comb tail3 = (tail0 + 3) % Qupls4_pkg::ROB_ENTRIES;
-always_comb tail4 = (tail0 + 4) % Qupls4_pkg::ROB_ENTRIES;
-always_comb tail5 = (tail0 + 5) % Qupls4_pkg::ROB_ENTRIES;
-always_comb tail6 = (tail0 + 6) % Qupls4_pkg::ROB_ENTRIES;
-always_comb tail7 = (tail0 + 7) % Qupls4_pkg::ROB_ENTRIES;
-always_comb tail8 = (tail0 + 8) % Qupls4_pkg::ROB_ENTRIES;
-always_comb tail9 = (tail0 + 9) % Qupls4_pkg::ROB_ENTRIES;
-always_comb tail10 = (tail0 + 10) % Qupls4_pkg::ROB_ENTRIES;
-always_comb tail11 = (tail0 + 11) % Qupls4_pkg::ROB_ENTRIES;
+always_comb tails[1] = (tails[0] + 1) % Qupls4_pkg::ROB_ENTRIES;
+always_comb tails[2] = (tails[0] + 2) % Qupls4_pkg::ROB_ENTRIES;
+always_comb tails[3] = (tails[0] + 3) % Qupls4_pkg::ROB_ENTRIES;
+always_comb tails[4] = (tails[0] + 4) % Qupls4_pkg::ROB_ENTRIES;
+always_comb tails[5] = (tails[0] + 5) % Qupls4_pkg::ROB_ENTRIES;
+always_comb tails[6] = (tails[0] + 6) % Qupls4_pkg::ROB_ENTRIES;
+always_comb tails[7] = (tails[0] + 7) % Qupls4_pkg::ROB_ENTRIES;
+always_comb tails[8] = (tails[0] + 8) % Qupls4_pkg::ROB_ENTRIES;
+always_comb tails[9] = (tails[0] + 9) % Qupls4_pkg::ROB_ENTRIES;
+always_comb tails[10] = (tails[0] + 10) % Qupls4_pkg::ROB_ENTRIES;
+always_comb tails[11] = (tails[0] + 11) % Qupls4_pkg::ROB_ENTRIES;
 always_comb head1 = (head0 + 1) % Qupls4_pkg::ROB_ENTRIES;
 always_comb head2 = (head0 + 2) % Qupls4_pkg::ROB_ENTRIES;
 always_comb head3 = (head0 + 3) % Qupls4_pkg::ROB_ENTRIES;
@@ -1051,9 +1032,9 @@ reg ins1_d_inv;
 reg ins2_d_inv;
 reg ins3_d_inv;
 reg insnq0,insnq1,insnq2,insnq3;
-reg [XWID-1:0] qd, cqd;
-reg [XWID-1:0] qd_x,qd_d,qd_r,qd_q;
-reg [XWID-1:0] next_cqd;
+reg [MWIDTH-1:0] qd, cqd;
+reg [MWIDTH-1:0] qd_x,qd_d,qd_r,qd_q;
+reg [MWIDTH-1:0] next_cqd;
 wire pe_allqd;
 reg fetch_new;
 reg fetch_new_block, fetch_new_block_x;
@@ -1061,15 +1042,8 @@ mmu_pkg::tlb_entry_t tlb_pc_entry;
 pc_address_t pc_tlb_res;
 wire pc_tlb_v;
 
-wire [3:0] pt_dec;
-reg pt0_dec, pt1_dec, pt2_dec, pt3_dec;		// predict taken branches
-always_comb pt0_dec = pt_dec[0];
-always_comb pt1_dec = pt_dec[1];
-always_comb pt2_dec = pt_dec[2];
-always_comb pt3_dec = pt_dec[3];
-
-reg pt0_r, pt1_r, pt2_r, pt3_r;
-reg pt0_q, pt1_q, pt2_q, pt3_q;
+wire [MWIDTH-1:0] pt_dec;	// predict taken branches
+reg [MWIDTH-1:0] pt_q, pt_r;
 reg regs;
 reg [3:0] takb_pc;
 reg [3:0] takb_f;
@@ -1766,7 +1740,7 @@ Qupls4_btb ubtb1
 	.pc1(pc1),
 	.pc2(pc2),
 	.pc3(pc3),
-	.pc4(XWID==2 ? pc2:XWID==3 ? pc3:pc4),
+	.pc4(MWIDTH==2 ? pc2:MWIDTH==3 ? pc3:pc4),
 	.next_pc(next_pc),
 	.po_bno(po_bno),
 	.takb0(ntakb[0]),
@@ -1946,9 +1920,9 @@ Qupls4_stomp ustmp1
 	.pc(pc),
 	.pc_f(pc0_f),
 	.pc_fet(pc0_fet),
-	.pc_mux(pg_mux.pr0.op.pc),
-	.pc_dec(pg_dec.pr0.op.pc),
-	.pc_ren(pg_ren.pr0.op.pc),
+	.pc_mux(pg_mux.pr[0].op.pc),
+	.pc_dec(pg_dec.pr[0].op.pc),
+	.pc_ren(pg_ren.pr[0].op.pc),
 	.stomp_fet(stomp_fet),
 	.stomp_mux(stomp_mux),
 	.stomp_dec(stomp_dec),
@@ -1967,7 +1941,7 @@ Qupls4_stomp ustmp1
 // qd indicates which instructions will queue in a given cycle.
 always_comb
 begin
-	qd = {XWID{1'd0}};
+	qd = {MWIDTH{1'd0}};
 	if (((branchmiss && !fcu_found_destination) || branch_state < Qupls4_pkg::BS_CAPTURE_MISSPC) && |robentry_stomp)
 		;
 //	else if ((ihito || mipv || mipv2 || mipv3 || mipv4) && !stallq)
@@ -1991,7 +1965,7 @@ begin
     4'b0111:
     	panic <= Qupls4_pkg::PANIC_INVALIDIQSTATE;
     4'b1000:
-    	if (rob[tail3].v==INV)
+    	if (rob[tails[3]].v==INV)
 	   		qd = 4'b1000;
 	  // Cannot have an instruction in the middle that has not queued.
     4'b1001:
@@ -2001,10 +1975,10 @@ begin
     4'b1011:
     	panic <= Qupls4_pkg::PANIC_INVALIDIQSTATE;
     4'b1100:
-    	if (rob[tail2].v==INV) begin
+    	if (rob[tails[2]].v==INV) begin
     		qd = 4'b0100;
-    		if (!pt2_q && !pg_ren.pr2.op.decbus.regs) begin
-    			if (rob[tail3].v==INV) begin
+    		if (!pt_q[2] && !pg_ren.pr[2].op.decbus.regs) begin
+    			if (rob[tails[3]].v==INV) begin
 	    			qd = 4'b1100;
 	    		end
 	    	end
@@ -2012,13 +1986,13 @@ begin
     4'b1101:
     	panic <= Qupls4_pkg::PANIC_INVALIDIQSTATE;
     4'b1110:
-    	if (rob[tail1].v==INV) begin
+    	if (rob[tails[1]].v==INV) begin
     		qd = 4'b0010;
-    		if (!pt1_q && !pg_ren.pr1.op.decbus.regs) begin
-    			if (rob[tail2].v==INV) begin
+    		if (!pt_q[1] && !pg_ren.pr[1].op.decbus.regs) begin
+    			if (rob[tails[2]].v==INV) begin
 		    		qd = 4'b0110;
-	    			if (!pt2_q && !pg_ren.pr2.op.decbus.regs) begin
-	    				if (rob[tail3].v==INV) begin
+	    			if (!pt_q[2] && !pg_ren.pr[2].op.decbus.regs) begin
+	    				if (rob[tails[3]].v==INV) begin
 			    			qd = 4'b1110;
 			    		end
 			    	end
@@ -2026,16 +2000,16 @@ begin
     		end
     	end
     default:
-    	if (rob[tail0].v==INV) begin
+    	if (rob[tails[0]].v==INV) begin
     		qd = 4'b0001;
-    		if (!pt0_q && !pg_ren.pr0.op.decbus.regs) begin
-    			if (rob[tail1].v==INV) begin
+    		if (!pt_q[0] && !pg_ren.pr[0].op.decbus.regs) begin
+    			if (rob[tails[1]].v==INV) begin
 	    			qd = 4'b0011;
-	    			if (!pt1_q && !pg_ren.pr1.op.decbus.regs) begin
-	    				if (rob[tail2].v==INV) begin
+	    			if (!pt_q[1] && !pg_ren.pr[1].op.decbus.regs) begin
+	    				if (rob[tails[2]].v==INV) begin
 			    			qd = 4'b0111;
-		    				if (!pt2_q && !pg_ren.pr2.op.decbus.regs) begin
-		    					if (rob[tail3].v==INV)
+		    				if (!pt_q[2] && !pg_ren.pr[2].op.decbus.regs) begin
+		    					if (rob[tails[3]].v==INV)
 				    				qd = 4'b1111;
 				    		end
 			    		end
@@ -2051,17 +2025,17 @@ always_comb
 	next_cqd = cqd | qd;
 always_ff @(posedge clk)
 if (irst)
-	cqd <= {XWID{1'd0}};
+	cqd <= {MWIDTH{1'd0}};
 else begin
 	if (advance_pipeline_seg2) begin
 		cqd <= next_cqd;
-		if (next_cqd == {XWID{1'b1}})
-			cqd <= {XWID{1'd0}};
+		if (next_cqd == {MWIDTH{1'b1}})
+			cqd <= {MWIDTH{1'd0}};
 	end
 end
 
 reg allqd;
-edge_det ued1 (.rst(irst), .clk(clk), .ce(advance_pipeline_seg2), .i(next_cqd=={XWID{1'b1}}), .pe(pe_allqd), .ne(), .ee());
+edge_det ued1 (.rst(irst), .clk(clk), .ce(advance_pipeline_seg2), .i(next_cqd=={MWIDTH{1'b1}}), .pe(pe_allqd), .ne(), .ee());
 
 always_comb
 	fetch_new = (ihito & ~hirq & (pe_allqd|allqd));
@@ -2088,7 +2062,7 @@ if (irst)
 else if(advance_pipeline_seg2) begin
 	if (pe_allqd & ~(ihito & ~hirq))
 		allqd <= 1'b1;
-	if (next_cqd=={XWID{1'b1}})
+	if (next_cqd=={MWIDTH{1'b1}})
 		allqd <= 1'b1;
 	if (branchmiss)
 		allqd <= 1'b0;
@@ -2156,42 +2130,42 @@ else begin
 	ins2_d_inv = FALSE;
 	ins3_d_inv = FALSE;
 	/*
-	if (pt0_dec) begin
-		if (pt0_dec != pg_dec.pr0.bt) begin
-			pc <= pt0_dec ? pg_dec.pr0.brtgt : pg_dec.pr0.pc + 5'd8;
+	if (pt_dec[0]) begin
+		if (pt_dec[0] != pg_dec.pr[0].bt) begin
+			pc <= pt_dec[0] ? pg_dec.pr[0].brtgt : pg_dec.pr[0].pc + 5'd8;
 			stomp_fet1 = TRUE;
 			stomp_mux1 = TRUE;
-			if (pt0_dec) begin
+			if (pt_dec[0]) begin
 				ins1_d_inv = TRUE;
 				ins2_d_inv = TRUE;
 				ins3_d_inv = TRUE;
 			end
 		end
 	end
-	else if (pt1_dec) begin
-		if (pt1_dec != pg_dec.pr1.bt) begin
-			pc <= pt1_dec ? pg_dec.pr1.brtgt : pg_dec.pr1.pc + 5'd8;
+	else if (pt_dec[1]) begin
+		if (pt_dec[1] != pg_dec.pr[1].bt) begin
+			pc <= pt_dec[1] ? pg_dec.pr[1].brtgt : pg_dec.pr[1].pc + 5'd8;
 			stomp_fet1 = TRUE;
 			stomp_mux1 = TRUE;
-			if (pt1_dec) begin
+			if (pt_dec[1]) begin
 				ins2_d_inv = TRUE;
 				ins3_d_inv = TRUE;
 			end
 		end
 	end
-	else if (pt2_dec) begin
-		if (pt2_dec != pg_dec.pr2.bt) begin
-			pc <= pt2_dec ? pg_dec.pr2.brtgt : pg_dec.pr2.pc + 5'd8;
+	else if (pt_dec[2]) begin
+		if (pt_dec[2] != pg_dec.pr[2].bt) begin
+			pc <= pt_dec[2] ? pg_dec.pr[2].brtgt : pg_dec.pr[2].pc + 5'd8;
 			stomp_fet1 = TRUE;
 			stomp_mux1 = TRUE;
-			if (pt2_dec) begin
+			if (pt_dec[2]) begin
 				ins3_d_inv = TRUE;
 			end
 		end
 	end
-	else if (pt3_dec) begin
-		if (pt3_dec != pg_dec.pr3.bt) begin
-			pc <= pt3_dec ? pg_dec.pr3.brtgt : pg_dec.pr3.pc + 5'd8;
+	else if (pt_dec[3]) begin
+		if (pt_dec[3] != pg_dec.pr[3].bt) begin
+			pc <= pt_dec[3] ? pg_dec.pr[3].brtgt : pg_dec.pr[3].pc + 5'd8;
 			stomp_fet1 = TRUE;
 			stomp_mux1 = TRUE;
 		end
@@ -2363,8 +2337,8 @@ always_comb
 		;
 
 // Latency of one.
-// pt0_dec, etc. should be in line with pg_dec.pr0, etc
-Qupls4_pipeline_mux uiext1
+// pt_dec[0], etc. should be in line with pg_dec.pr[0], etc
+Qupls4_pipeline_mux #(.MWIDTH(MWIDTH)) uiext1
 (
 	.rst_i(irst),
 	.clk_i(clk),
@@ -2443,7 +2417,7 @@ wire Rt1_decv;
 wire Rt2_decv;
 wire Rt3_decv;
 
-Qupls4_pipeline_dec udecstg1
+Qupls4_pipeline_dec #(.MWIDTH(MWIDTH)) udecstg1
 (
 	.rst_i(rst_i),
 	.rst(irst),
@@ -2489,10 +2463,10 @@ Qupls4_pipeline_dec udecstg1
 	.avail_reg(avail_reg)
 );
 
-assign pc0_d = pg_dec.pr0.op.pc;
-assign pc1_d = pg_dec.pr1.op.pc;
-assign pc2_d = pg_dec.pr2.op.pc;
-assign pc3_d = pg_dec.pr3.op.pc;
+assign pc0_d = pg_dec.pr[0].op.pc;
+assign pc1_d = pg_dec.pr[1].op.pc;
+assign pc2_d = pg_dec.pr[2].op.pc;
+assign pc3_d = pg_dec.pr[3].op.pc;
 
 reg wrport0_v;
 reg wrport1_v;
@@ -2533,10 +2507,7 @@ reg wrport1_tag;
 reg wrport2_tag;
 reg wrport3_tag;
 
-wire stomp0;
-wire stomp1;
-wire stomp2;
-wire stomp3;
+wire [MWIDTH-1:0] stomps;
 
 Qupls4_pkg::operand_t [NREG_RPORTS-1:0] rf_oper;
 aregno_t [NREG_RPORTS-1:0] arn;
@@ -2562,32 +2533,32 @@ end
 /*
 always_comb
 begin
-	arn[0] = pg_dec.pr0.aRa; arnt[0] = 1'b0; arng[0] = 3'd0;
-	arn[1] = pg_dec.pr0.aRb; arnt[1] = 1'b0; arng[1] = 3'd0;
-	arn[2] = pg_dec.pr0.aRc; arnt[2] = 1'b0; arng[2] = 3'd0;
-	arn[3] = pg_dec.pr0.aRt; arnt[3] = 1'b1; arng[3] = 3'd0;
+	arn[0] = pg_dec.pr[0].aRa; arnt[0] = 1'b0; arng[0] = 3'd0;
+	arn[1] = pg_dec.pr[0].aRb; arnt[1] = 1'b0; arng[1] = 3'd0;
+	arn[2] = pg_dec.pr[0].aRc; arnt[2] = 1'b0; arng[2] = 3'd0;
+	arn[3] = pg_dec.pr[0].aRt; arnt[3] = 1'b1; arng[3] = 3'd0;
 	
-	arn[4] = pg_dec.pr1.aRa; arnt[4] = 1'b0; arng[4] = 3'd1;
-	arn[5] = pg_dec.pr1.aRb; arnt[5] = 1'b0; arng[5] = 3'd1;
-	arn[6] = pg_dec.pr1.aRc; arnt[6] = 1'b0; arng[6] = 3'd1;
-	arn[7] = pg_dec.pr1.aRt; arnt[7] = 1'b1; arng[7] = 3'd1;
+	arn[4] = pg_dec.pr[1].aRa; arnt[4] = 1'b0; arng[4] = 3'd1;
+	arn[5] = pg_dec.pr[1].aRb; arnt[5] = 1'b0; arng[5] = 3'd1;
+	arn[6] = pg_dec.pr[1].aRc; arnt[6] = 1'b0; arng[6] = 3'd1;
+	arn[7] = pg_dec.pr[1].aRt; arnt[7] = 1'b1; arng[7] = 3'd1;
 	
-	arn[8] = pg_dec.pr2.aRa; arnt[8] = 1'b0; arng[8] = 3'd2;
-	arn[9] = pg_dec.pr2.aRb; arnt[9] = 1'b0; arng[9] = 3'd2;
-	arn[10] = pg_dec.pr2.aRc; arnt[10] = 1'b0; arng[10] = 3'd2;
-	arn[11] = pg_dec.pr2.aRt; arnt[11] = 1'b1; arng[11] = 3'd2;
+	arn[8] = pg_dec.pr[2].aRa; arnt[8] = 1'b0; arng[8] = 3'd2;
+	arn[9] = pg_dec.pr[2].aRb; arnt[9] = 1'b0; arng[9] = 3'd2;
+	arn[10] = pg_dec.pr[2].aRc; arnt[10] = 1'b0; arng[10] = 3'd2;
+	arn[11] = pg_dec.pr[2].aRt; arnt[11] = 1'b1; arng[11] = 3'd2;
 	
-	arn[12] = pg_dec.pr3.aRa; arnt[12] = 1'b0; arng[12] = 3'd3;
-	arn[13] = pg_dec.pr3.aRb; arnt[13] = 1'b0; arng[13] = 3'd3;
-	arn[14] = pg_dec.pr3.aRc; arnt[14] = 1'b0; arng[14] = 3'd3;
-	arn[15] = pg_dec.pr3.aRt; arnt[15] = 1'b1; arng[15] = 3'd3;
+	arn[12] = pg_dec.pr[3].aRa; arnt[12] = 1'b0; arng[12] = 3'd3;
+	arn[13] = pg_dec.pr[3].aRb; arnt[13] = 1'b0; arng[13] = 3'd3;
+	arn[14] = pg_dec.pr[3].aRc; arnt[14] = 1'b0; arng[14] = 3'd3;
+	arn[15] = pg_dec.pr[3].aRt; arnt[15] = 1'b1; arng[15] = 3'd3;
 
  	arn[16] = 8'h00; arnt[16] = 1'b0; arng[16] = 3'd0;
 	
-	arn[17] = pg_dec.pr0.decbus.Rm; arnt[17] = 1'b0; arng[17] = 3'd0;
-	arn[18] = pg_dec.pr1.decbus.Rm; arnt[18] = 1'b0; arng[18] = 3'd1;
-	arn[19] = pg_dec.pr2.decbus.Rm; arnt[19] = 1'b0; arng[19] = 3'd2;
-	arn[20] = pg_dec.pr3.decbus.Rm; arnt[20] = 1'b0; arng[20] = 3'd3;
+	arn[17] = pg_dec.pr[0].decbus.Rm; arnt[17] = 1'b0; arng[17] = 3'd0;
+	arn[18] = pg_dec.pr[1].decbus.Rm; arnt[18] = 1'b0; arng[18] = 3'd1;
+	arn[19] = pg_dec.pr[2].decbus.Rm; arnt[19] = 1'b0; arng[19] = 3'd2;
+	arn[20] = pg_dec.pr[3].decbus.Rm; arnt[20] = 1'b0; arng[20] = 3'd3;
  	arn[21] = 8'h00; arnt[21] = 1'b0; arng[21] = 3'd4;
  	arn[22] = 8'h00; arnt[22] = 1'b0; arng[22] = 3'd4;
 	arn[23] = store_argC_aReg; arnt[23] = 1'b0; arng[23] = 3'd0;
@@ -2625,22 +2596,22 @@ begin
 end
 */
 /*
-assign arnbank[0] = sr.om & {2{|pg_dec.pr0.decbus.Ra}} & 0;
-assign arnbank[1] = sr.om & {2{|pg_dec.pr0.decbus.Rb}} & 0;
-assign arnbank[2] = sr.om & {2{|pg_dec.pr0.decbus.Rc}} & 0;
-assign arnbank[3] = sr.om & {2{|pg_dec.pr0.decbus.Rt}} & 0;
-assign arnbank[4] = sr.om & {2{|pg_dec.pr1.decbus.Ra}} & 0;
-assign arnbank[5] = sr.om & {2{|pg_dec.pr1.decbus.Rb}} & 0;
-assign arnbank[6] = sr.om & {2{|pg_dec.pr1.decbus.Rc}} & 0;
-assign arnbank[7] = sr.om & {2{|pg_dec.pr1.decbus.Rt}} & 0;
-assign arnbank[8] = sr.om & {2{|pg_dec.pr2.decbus.Ra}} & 0;
-assign arnbank[9] = sr.om & {2{|pg_dec.pr2.decbus.Rb}} & 0;
-assign arnbank[10] = sr.om & {2{|pg_dec.pr2.decbus.Rc}} & 0;
-assign arnbank[11] = sr.om & {2{|pg_dec.pr2.decbus.Rt}} & 0;
-assign arnbank[12] = sr.om & {2{|pg_dec.pr3.decbus.Ra}} & 0;
-assign arnbank[13] = sr.om & {2{|pg_dec.pr3.decbus.Rb}} & 0;
-assign arnbank[14] = sr.om & {2{|pg_dec.pr3.decbus.Rc}} & 0;
-assign arnbank[15] = sr.om & {2{|pg_dec.pr3.decbus.Rt}} & 0;
+assign arnbank[0] = sr.om & {2{|pg_dec.pr[0].decbus.Ra}} & 0;
+assign arnbank[1] = sr.om & {2{|pg_dec.pr[0].decbus.Rb}} & 0;
+assign arnbank[2] = sr.om & {2{|pg_dec.pr[0].decbus.Rc}} & 0;
+assign arnbank[3] = sr.om & {2{|pg_dec.pr[0].decbus.Rt}} & 0;
+assign arnbank[4] = sr.om & {2{|pg_dec.pr[1].decbus.Ra}} & 0;
+assign arnbank[5] = sr.om & {2{|pg_dec.pr[1].decbus.Rb}} & 0;
+assign arnbank[6] = sr.om & {2{|pg_dec.pr[1].decbus.Rc}} & 0;
+assign arnbank[7] = sr.om & {2{|pg_dec.pr[1].decbus.Rt}} & 0;
+assign arnbank[8] = sr.om & {2{|pg_dec.pr[2].decbus.Ra}} & 0;
+assign arnbank[9] = sr.om & {2{|pg_dec.pr[2].decbus.Rb}} & 0;
+assign arnbank[10] = sr.om & {2{|pg_dec.pr[2].decbus.Rc}} & 0;
+assign arnbank[11] = sr.om & {2{|pg_dec.pr[2].decbus.Rt}} & 0;
+assign arnbank[12] = sr.om & {2{|pg_dec.pr[3].decbus.Ra}} & 0;
+assign arnbank[13] = sr.om & {2{|pg_dec.pr[3].decbus.Rb}} & 0;
+assign arnbank[14] = sr.om & {2{|pg_dec.pr[3].decbus.Rc}} & 0;
+assign arnbank[15] = sr.om & {2{|pg_dec.pr[3].decbus.Rt}} & 0;
 assign arnbank[16] = 1'b0;
 assign arnbank[17] = 1'b0;
 assign arnbank[18] = 1'b0;
@@ -2723,23 +2694,23 @@ reg stomp1_q;
 reg stomp2_q;
 reg stomp3_q;
 // Detect stomp on leading instructions due to a branch.
-wire stomp0b_r = branch_state > Qupls4_pkg::BS_STATE3 && misspc.pc > pg_ren.pr0.op.pc.pc;
-wire stomp1b_r = branch_state > Qupls4_pkg::BS_STATE3 && misspc.pc > pg_ren.pr1.op.pc.pc;
-wire stomp2b_r = branch_state > Qupls4_pkg::BS_STATE3 && misspc.pc > pg_ren.pr2.op.pc.pc;
-wire stomp3b_r = branch_state > Qupls4_pkg::BS_STATE3 && misspc.pc > pg_ren.pr3.op.pc.pc;
-wire stomp0_r = /*~qd_r[0]||stomp_ren||stomp0b_r*/stomp_ren && pg_ren.pr0.op.pc.bno_t!=stomp_bno;
-wire stomp1_r = /*~qd_r[1]||stomp_ren||stomp1b_r||*/(stomp_ren && pg_ren.pr1.op.pc.bno_t!=stomp_bno);// ||
-//							 (pg_ren.pr0.decbus.br && pg_ren.pr0.bt);//pt0_r||XWID < 2;
-wire stomp2_r = /*~qd_r[2]||stomp_ren||stomp2b_r||*/(stomp_ren && pg_ren.pr2.op.pc.bno_t!=stomp_bno);// ||
-//							 (pg_ren.pr0.decbus.br && pg_ren.pr0.bt) ||
-//							 (pg_ren.pr1.decbus.br && pg_ren.pr1.bt)
-//;//pt0_r||pt1_r||XWID < 3;
-wire stomp3_r = /*~qd_r[3]||stomp_ren||stomp3b_r||*/(stomp_ren && pg_ren.pr3.op.pc.bno_t!=stomp_bno);// ||
-//							 (pg_ren.pr0.decbus.br && pg_ren.pr0.bt) ||
-//							 (pg_ren.pr1.decbus.br && pg_ren.pr1.bt) ||
-//							 (pg_ren.pr2.decbus.br && pg_ren.pr2.bt)
+wire stomp0b_r = branch_state > Qupls4_pkg::BS_STATE3 && misspc.pc > pg_ren.pr[0].op.pc.pc;
+wire stomp1b_r = branch_state > Qupls4_pkg::BS_STATE3 && misspc.pc > pg_ren.pr[1].op.pc.pc;
+wire stomp2b_r = branch_state > Qupls4_pkg::BS_STATE3 && misspc.pc > pg_ren.pr[2].op.pc.pc;
+wire stomp3b_r = branch_state > Qupls4_pkg::BS_STATE3 && misspc.pc > pg_ren.pr[3].op.pc.pc;
+wire stomp0_r = /*~qd_r[0]||stomp_ren||stomp0b_r*/stomp_ren && pg_ren.pr[0].op.pc.bno_t!=stomp_bno;
+wire stomp1_r = /*~qd_r[1]||stomp_ren||stomp1b_r||*/(stomp_ren && pg_ren.pr[1].op.pc.bno_t!=stomp_bno);// ||
+//							 (pg_ren.pr[0].decbus.br && pg_ren.pr[0].bt);//pt_r[0]||MWIDTH < 2;
+wire stomp2_r = /*~qd_r[2]||stomp_ren||stomp2b_r||*/(stomp_ren && pg_ren.pr[2].op.pc.bno_t!=stomp_bno);// ||
+//							 (pg_ren.pr[0].decbus.br && pg_ren.pr[0].bt) ||
+//							 (pg_ren.pr[1].decbus.br && pg_ren.pr[1].bt)
+//;//pt_r[0]||pt_r[1]||MWIDTH < 3;
+wire stomp3_r = /*~qd_r[3]||stomp_ren||stomp3b_r||*/(stomp_ren && pg_ren.pr[3].op.pc.bno_t!=stomp_bno);// ||
+//							 (pg_ren.pr[0].decbus.br && pg_ren.pr[0].bt) ||
+//							 (pg_ren.pr[1].decbus.br && pg_ren.pr[1].bt) ||
+//							 (pg_ren.pr[2].decbus.br && pg_ren.pr[2].bt)
 //							 ;
-//;//pt0_r||pt1_r||pt2_r||XWID < 4;
+//;//pt_r[0]||pt_r[1]||pt_r[2]||MWIDTH < 4;
 always_ff @(posedge clk)
 if (irst)
 	stomp0_q <= FALSE;
@@ -2757,41 +2728,59 @@ end
 always_ff @(posedge clk) if (advance_pipeline) bsi <= {bsi[1:0],pe_bsidle};
 always_ff @(posedge clk) if (advance_pipeline) stomp2_q <= stomp2_r;
 always_ff @(posedge clk) if (advance_pipeline) stomp3_q <= stomp3_r;
-assign stomp0 = ((stomp0_r|stomp_ren) /*&& pg_ren.pr0.pc.bno_t!=stomp_bno*/);
-assign stomp1 = ((stomp1_r|stomp_ren|pg_ren.pr0.op.decbus.macro) /*&& pg_ren.pr1.pc.bno_t!=stomp_bno*/);
-assign stomp2 = ((stomp2_r|stomp_ren|pg_ren.pr0.op.decbus.macro|pg_ren.pr1.op.decbus.macro) /*&& pg_ren.pr2.pc.bno_t!=stomp_bno*/);
-assign stomp3 = ((stomp3_r|stomp_ren|pg_ren.pr0.op.decbus.macro|pg_ren.pr1.op.decbus.macro|pg_ren.pr2.op.decbus.macro) /*&& pg_ren.pr3.pc.bno_t!=stomp_bno*/);
-wire ornop0 = 1'b0;
-wire ornop1 = pg_ren.pr0.op.decbus.bsr||pg_ren.pr0.op.decbus.jsr;
-wire ornop2 = pg_ren.pr0.op.decbus.bsr || pg_ren.pr1.op.decbus.bsr || pg_ren.pr0.op.decbus.jsr || pg_ren.pr1.op.decbus.jsr;
-wire ornop3 = pg_ren.pr0.op.decbus.bsr || pg_ren.pr1.op.decbus.bsr || pg_ren.pr2.op.decbus.bsr ||
-	pg_ren.pr0.op.decbus.jsr || pg_ren.pr1.op.decbus.jsr || pg_ren.pr2.op.decbus.jsr
-	;
+assign stomps[0] = ((stomp0_r|stomp_ren) /*&& pg_ren.pr[0].pc.bno_t!=stomp_bno*/);
+assign stomps[1] = ((stomp1_r|stomp_ren|pg_ren.pr[0].op.decbus.macro) /*&& pg_ren.pr[1].pc.bno_t!=stomp_bno*/);
+assign stomps[2] = ((stomp2_r|stomp_ren|pg_ren.pr[0].op.decbus.macro|pg_ren.pr[1].op.decbus.macro) /*&& pg_ren.pr[2].pc.bno_t!=stomp_bno*/);
+assign stomps[3] = ((stomp3_r|stomp_ren|pg_ren.pr[0].op.decbus.macro|pg_ren.pr[1].op.decbus.macro|pg_ren.pr[2].op.decbus.macro) /*&& pg_ren.pr[3].pc.bno_t!=stomp_bno*/);
+
+// Determine which instructions following a jsr/bsr should not be executed.
+reg [MWIDTH-1:0] ornops;
+reg [MWIDTH-1:0] jbsrnop;
+flo12 unops1 (.i({11'd0,jbsrnop}), .o(jbsr_pos));	// find the first jsr/bsr
+
+always_comb
+begin
+	jbsrnop = {MWIDTH{1'b0}};
+	for (n38 = 0; n38 < MWIDTH; n38 = n38 + 1)
+		jbsrnop[n38] = pg_ren.pr[n38].op.decbus.bsr | pg_ren.pr[n38].op.decbus.jsr;
+end
+// If a jsr/bsr not found, jbsr_pos will be 15 and the mask will shift off the
+// end resulting in a zero.
+always_comb
+	ornops = ~{{8'd2 << jbsr_pos} - 1};
 
 /*
-assign arnv[0] = !stomp0;
-assign arnv[1] = !stomp0;
-assign arnv[2] = !stomp0;
-assign arnv[3] = !stomp0;
-assign arnv[17] = !stomp0;
+wire ornops[0] = 1'b0;
+wire ornops[1] = pg_ren.pr[0].op.decbus.bsr||pg_ren.pr[0].op.decbus.jsr;
+wire ornops[2] = pg_ren.pr[0].op.decbus.bsr || pg_ren.pr[1].op.decbus.bsr || pg_ren.pr[0].op.decbus.jsr || pg_ren.pr[1].op.decbus.jsr;
+wire ornops[3] = pg_ren.pr[0].op.decbus.bsr || pg_ren.pr[1].op.decbus.bsr || pg_ren.pr[2].op.decbus.bsr ||
+	pg_ren.pr[0].op.decbus.jsr || pg_ren.pr[1].op.decbus.jsr || pg_ren.pr[2].op.decbus.jsr
+	;
+*/
+/*
+assign arnv[0] = !stomps[0];
+assign arnv[1] = !stomps[0];
+assign arnv[2] = !stomps[0];
+assign arnv[3] = !stomps[0];
+assign arnv[17] = !stomps[0];
 
-assign arnv[4] = !stomp1;
-assign arnv[5] = !stomp1;
-assign arnv[6] = !stomp1;
-assign arnv[7] = !stomp1;
-assign arnv[18] = !stomp1;
+assign arnv[4] = !stomps[1];
+assign arnv[5] = !stomps[1];
+assign arnv[6] = !stomps[1];
+assign arnv[7] = !stomps[1];
+assign arnv[18] = !stomps[1];
 
-assign arnv[8] = !stomp2;
-assign arnv[9] = !stomp2;
-assign arnv[10] = !stomp2;
-assign arnv[11] = !stomp2;
-assign arnv[19] = !stomp2;
+assign arnv[8] = !stomps[2];
+assign arnv[9] = !stomps[2];
+assign arnv[10] = !stomps[2];
+assign arnv[11] = !stomps[2];
+assign arnv[19] = !stomps[2];
 
-assign arnv[12] = !stomp3;
-assign arnv[13] = !stomp3;
-assign arnv[14] = !stomp3;
-assign arnv[15] = !stomp3;
-assign arnv[20] = !stomp3;
+assign arnv[12] = !stomps[3];
+assign arnv[13] = !stomps[3];
+assign arnv[14] = !stomps[3];
+assign arnv[15] = !stomps[3];
+assign arnv[20] = !stomps[3];
 
 assign arnv[16] = 1'b1;
 */
@@ -2809,19 +2798,19 @@ wire Rt3_renv;
 /*
 always_ff @(posedge clk)
 if (advance_pipeline) begin
-	if (alloc0 && pg_ren.pr0.decbus.Rt==0) begin
+	if (alloc0 && pg_ren.pr[0].decbus.Rt==0) begin
 		$display("alloced r0");
 		$finish;
 	end
-	if (alloc1 && pg_ren.pr1.decbus.Rt==0) begin
+	if (alloc1 && pg_ren.pr[1].decbus.Rt==0) begin
 		$display("alloced r0");
 		$finish;
 	end
-	if (alloc2 && pg_ren.pr2.decbus.Rt==0) begin
+	if (alloc2 && pg_ren.pr[2].decbus.Rt==0) begin
 		$display("alloced r0");
 		$finish;
 	end
-	if (alloc3 && pg_ren.pr3.decbus.Rt==0) begin
+	if (alloc3 && pg_ren.pr[3].decbus.Rt==0) begin
 		$display("alloced r0");
 		$finish;
 	end
@@ -2862,7 +2851,7 @@ Qupls4_pipeline_ren #(.NPORT(NREG_RPORTS)) uren1
 	.restored(restored),
 	.restore_list(restore_list),
 	.chkpt_amt(chkpt_inc_amt),
-	.tail0(tail0),
+	.tail0(tails[0]),
 	.rob(rob),
 	.robentry_stomp(robentry_stomp),
 	.stomp_ren(stomp_ren),
@@ -3079,26 +3068,26 @@ if (advance_pipeline_seg2)
 
 always_ff @(posedge clk)
 if (advance_pipeline_seg2)
-	pt0_r <= pt0_dec;
+	pt_r[0] <= pt_dec[0];
 always_ff @(posedge clk)
 if (advance_pipeline_seg2)
-	pt1_r <= pt1_dec;
+	pt_r[1] <= pt_dec[1];
 always_ff @(posedge clk)
 if (advance_pipeline_seg2)
-	pt2_r <= pt2_dec;
+	pt_r[2] <= pt_dec[2];
 always_ff @(posedge clk)
 if (advance_pipeline_seg2)
-	pt3_r <= pt3_dec;
+	pt_r[3] <= pt_dec[3];
 
 Qupls4_pipeline_que uque1
 (
 	.rst(irst),
 	.clk(clk),
 	.en(advance_pipeline),
-	.ins0_ren(pg_ren.pr0.op),
-	.ins1_ren(pg_ren.pr1.op),
-	.ins2_ren(pg_ren.pr2.op),
-	.ins3_ren(pg_ren.pr3.op),
+	.ins0_ren(pg_ren.pr[0].op),
+	.ins1_ren(pg_ren.pr[1].op),
+	.ins2_ren(pg_ren.pr[2].op),
+	.ins3_ren(pg_ren.pr[3].op),
 	.ins0_que(ins0_que),
 	.ins1_que(ins1_que),
 	.ins2_que(ins2_que),
@@ -3109,16 +3098,16 @@ Qupls4_pipeline_que uque1
 
 always_ff @(posedge clk)
 if (advance_pipeline_seg2)
-	pt0_q <= pt0_r;
+	pt_q[0] <= pt_r[0];
 always_ff @(posedge clk)
 if (advance_pipeline_seg2)
-	pt1_q <= pt1_r;
+	pt_q[1] <= pt_r[1];
 always_ff @(posedge clk)
 if (advance_pipeline_seg2)
-	pt2_q <= pt2_r;
+	pt_q[2] <= pt_r[2];
 always_ff @(posedge clk)
 if (advance_pipeline_seg2)
-	pt3_q <= pt3_r;
+	pt_q[3] <= pt_r[3];
 
 always_ff @(posedge clk)
 if (advance_pipeline_seg2)
@@ -3721,7 +3710,7 @@ Qupls4_copydst ucpydst1
 Qupls4_stail ustail1
 (
 	.head0(head0),
-	.tail0(tail0),
+	.tail0(tails[0]),
 	.robentry_stomp(robentry_stomp),
 	.rob(rob),
 	.stail(stail)
@@ -4193,7 +4182,7 @@ Qupls4_meta_sau #(.SAU0(1'b1)) usau0
 	.we_o(sau0_we),
 	.exc(sau0_exc)
 );
-
+/*
 Stark_meta_imul uimul0
 (
 	.rst(irst),
@@ -4207,7 +4196,7 @@ Stark_meta_imul uimul0
 	.we_o(imul0_we),
 	.mul_done()
 );
-
+*/
 generate begin : gIDiv
 if (Qupls4_pkg::SUPPORT_IDIV)
 Qupls4_meta_idiv uidiv0
@@ -4859,7 +4848,7 @@ Qupls4_mem_more ummore0
 	.more_o(dram0_more)
 );
 
-Qupls4_set_dram_work #(.CORENO(CORENO)) usdr1 (
+Qupls4_set_dram_work #(.CORENO(CORENO), .LSQNO(0)) usdr1 (
 	.rst_i(rsti),
 	.clk_i(clk),
 	.rob_i(rob),
@@ -4929,7 +4918,7 @@ generate begin : gMemory2
 			.state_o(dram1)
 		);
 
-		Qupls_mem_more ummore1
+		Qupls4_mem_more ummore1
 		(
 			.rst_i(irst),
 			.clk_i(clk),
@@ -4938,7 +4927,7 @@ generate begin : gMemory2
 			.more_o(dram1_more)
 		);
 
-		Qupls4_set_dram_work #(.CORENO(CORENO)) usdr2 (
+		Qupls4_set_dram_work #(.CORENO(CORENO), .LSQNO(1)) usdr2 (
 			.rst_i(rsti),
 			.clk_i(clk),
 			.rob_i(rob),
@@ -4961,7 +4950,7 @@ generate begin : gMemory2
 	end
 	else begin
 		assign dram1_done = TRUE;
-		assign lbndx1 = {$bits(lsq_ndx_t){1'b0}};
+		assign lbndx1 = {$bits(Qupls4_pkg::lsq_ndx_t){1'b0}};
 		assign dram1_timeout = FALSE;
 		assign dram1 = Qupls4_pkg::DRAMSLOT_AVAIL;
 		assign dram1_more = FALSE;
@@ -4983,23 +4972,23 @@ endgenerate
 // and done. Do not commit invalid instructions at the tail of the queue.
 
 always_comb
-	if (head0 > tail0)
-		cmtlen = head0-tail0;
+	if (head0 > tails[0])
+		cmtlen = head0-tails[0];
 	else
-		cmtlen = Qupls4_pkg::ROB_ENTRIES+head0-tail0;
+		cmtlen = Qupls4_pkg::ROB_ENTRIES+head0-tails[0];
 
 /*
 										(
-											head0 == tail0 || head0 == tail1 || head0 == tail2 || head0 == tail3 ||
-											head0 == tail4 || head0 == tail5 || head0 == tail6 || head0 == tail7);
+											head0 == tails[0] || head0 == tails[1] || head0 == tails[2] || head0 == tails[3] ||
+											head0 == tails[4] || head0 == tails[5] || head0 == tails[6] || head0 == tails[7]);
 */
 always_comb cmttlb0 = (rob[head0].v && rob[head0].lsq && !lsq[rob[head0].lsqndx.row][rob[head0].lsqndx.col].agen);
-always_comb cmttlb1 = XWID > 1 && (rob[head1].v && rob[head1].lsq && !lsq[rob[head1].lsqndx.row][rob[head1].lsqndx.col].agen);
-always_comb cmttlb2 = XWID > 2 && (rob[head2].v && rob[head2].lsq && !lsq[rob[head2].lsqndx.row][rob[head2].lsqndx.col].agen);
-always_comb cmttlb3 = XWID > 3 && (rob[head3].v && rob[head3].lsq && !lsq[rob[head3].lsqndx.row][rob[head3].lsqndx.col].agen);
+always_comb cmttlb1 = MWIDTH > 1 && (rob[head1].v && rob[head1].lsq && !lsq[rob[head1].lsqndx.row][rob[head1].lsqndx.col].agen);
+always_comb cmttlb2 = MWIDTH > 2 && (rob[head2].v && rob[head2].lsq && !lsq[rob[head2].lsqndx.row][rob[head2].lsqndx.col].agen);
+always_comb cmttlb3 = MWIDTH > 3 && (rob[head3].v && rob[head3].lsq && !lsq[rob[head3].lsqndx.row][rob[head3].lsqndx.col].agen);
 
 Qupls4_commit_count
-#(.XWID(XWID))
+#(.XWID(MWIDTH))
 ucmtcnt1
 (
 	.rst(irst),
@@ -5011,12 +5000,7 @@ ucmtcnt1
 	.head3(head3),
 	.head4(head4),
 	.head5(head5),
-	.tail0(tail0),
-	.tail1(tail1),
-	.tail2(tail2),
-	.tail3(tail3),
-	.tail4(tail4),
-	.tail5(tail5),
+	.tails(tails),
 	.cmtcnt(cmtcnt),
 	.do_commit(do_commit)
 );
@@ -5024,9 +5008,9 @@ ucmtcnt1
 always_comb
 cmtbr = (
 	(rob[head0].op.decbus.br & rob[head0].v) ||
-	(XWID > 1 && (rob[head1].op.decbus.br & rob[head1].v)) ||
-	(XWID > 2 && (rob[head2].op.decbus.br & rob[head2].v)) ||
-	(XWID > 3 && (rob[head3].op.decbus.br & rob[head3].v))) && do_commit
+	(MWIDTH > 1 && (rob[head1].op.decbus.br & rob[head1].v)) ||
+	(MWIDTH > 2 && (rob[head2].op.decbus.br & rob[head2].v)) ||
+	(MWIDTH > 3 && (rob[head3].op.decbus.br & rob[head3].v))) && do_commit
 	;
 
 always_comb
@@ -5036,16 +5020,16 @@ begin
 		int_commit = 1'b1;
 	else if (((rob[head0].v && &rob[head0].done) || !rob[head0].v) &&
 					(rob[head1].v && &rob[head1].done && rob[head1].op.hwi_level > sr.ipl /*fnIsIrq(rob[head1].op.ins*/))
-		int_commit = XWID > 1;
+		int_commit = MWIDTH > 1;
 	else if (((rob[head0].v && &rob[head0].done) || !rob[head0].v) &&
 					 ((rob[head1].v && &rob[head1].done) || !rob[head1].v) &&
 					(rob[head2].v && &rob[head2].done && rob[head2].op.hwi_level > sr.ipl /*fnIsIrq(rob[head2].op.ins*/))
-		int_commit = XWID > 2;
+		int_commit = MWIDTH > 2;
 	else if (((rob[head0].v && &rob[head0].done) || !rob[head0].v) &&
 					 ((rob[head1].v && &rob[head1].done) || !rob[head1].v) &&
 					 ((rob[head2].v && &rob[head2].done) || !rob[head2].v) &&
 					(rob[head3].v && &rob[head3].done && rob[head3].op.hwi_level > sr.ipl /*fnIsIrq(rob[head3].op.ins*/))
-		int_commit = XWID > 3;
+		int_commit = MWIDTH > 3;
 end
 
 
@@ -5422,18 +5406,18 @@ always_comb
 
 always_comb
 	inc_chkpt = (
-		(pg_dec.pr0.op.decbus.br && !stomp0) ||
-		(pg_dec.pr1.op.decbus.br && !stomp1) ||
-		(pg_dec.pr2.op.decbus.br && !stomp2) ||
-		(pg_dec.pr3.op.decbus.br && !stomp3) 
+		(pg_dec.pr[0].op.decbus.br && !stomps[0]) ||
+		(pg_dec.pr[1].op.decbus.br && !stomps[1]) ||
+		(pg_dec.pr[2].op.decbus.br && !stomps[2]) ||
+		(pg_dec.pr[3].op.decbus.br && !stomps[3]) 
 		)
 		;
 always_comb
 	chkpt_inc_amt =
-		(pg_dec.pr0.op.decbus.br && !stomp0) +
-		(pg_dec.pr1.op.decbus.br && !stomp1) +
-		(pg_dec.pr2.op.decbus.br && !stomp2) +
-		(pg_dec.pr3.op.decbus.br && !stomp3) 
+		(pg_dec.pr[0].op.decbus.br && !stomps[0]) +
+		(pg_dec.pr[1].op.decbus.br && !stomps[1]) +
+		(pg_dec.pr[2].op.decbus.br && !stomps[2]) +
+		(pg_dec.pr[3].op.decbus.br && !stomps[3]) 
 		;
 
 edge_det uedbsi1 (.rst(irst), .clk(clk), .ce(1'b1), .i(bs_idle_oh), .pe(pe_bsidle), .ne(), .ee());
@@ -5629,25 +5613,23 @@ else begin
 	if (branchmiss && fcu_rse.v)// || (branch_state < Qupls4_pkg::BS_CAPTURE_MISSPC && !bs_idle_oh)) begin
 		;
 //		if (|robentry_stomp)
-//			tail0 <= stail;		// computed above
+//			tails[0] <= stail;		// computed above
 	else if (advance_pipeline) begin
 		//if (!stomp_que || stomp_quem) 
 		begin
 			// Decrement sequence numbers.
 			for (n12 = 0; n12 < Qupls4_pkg::ROB_ENTRIES; n12 = n12 + 1)
-				rob[n12].sn <= rob[n12].sn - 4;
-			for (n12 = 0; n12 < Qupls4_pkg::ROB_ENTRIES/4; n12 = n12 + 1)
+				rob[n12].sn <= rob[n12].sn - MWIDTH;
+			for (n12 = 0; n12 < Qupls4_pkg::ROB_ENTRIES/MWIDTH; n12 = n12 + 1)
 				pgh[n12].sn <= pgh[n12].sn - 1;
 
 			// Enqeue the group header.
-			pgh[tail0[5:2]] <= pg_ren.hdr;
+//			pgh[tails[0][5:2]] <= pg_ren.hdr;
+			pgh[groupno] <= pg_ren.hdr;
 			tEnqueGroupHdr(
 				8'h7F,
-				tail0,
-				pg_dec.pr0.op.decbus,
-				pg_dec.pr1.op.decbus,
-				pg_dec.pr2.op.decbus,
-				pg_dec.pr3.op.decbus
+				groupno,//tails[0],
+				pg_dec
 			);
 			
 			// On a predicted taken branch the front end will continue to send
@@ -5656,67 +5638,104 @@ else begin
 			// occupy slots in the ROB. It takes extra logic to pack the ROB and
 			// the logic budget is tight, so we do not bother. There should be
 			// little impact on performance.
-			tEnque(8'h80-XWID,groupno,pg_ren.pr0,pt0_q,tail0,flush_ren,
-				stomp0, ornop0, cndx_ren[0], pcndx_ren, grplen0, last0);
+			for (n39 = 0; n39 < MWIDTH; n39 = n39 + 1) begin
+				tEnque((8'h80|n39)-MWIDTH,groupno,pg_ren.pr[n39],pt_q[n39],tails[n39],flush_ren,
+					stomps[n39], ornops[n39], cndx_ren[n39], pcndx_ren, grplen[n39], last[n39]);
 
-			if (pg_ren.pr0.op.decbus.sync) begin
-				sync_ndx = tail0;
+				if (pg_ren.pr[n39].op.decbus.sync) begin
+					sync_ndx = tails[n39];
+					sync_ndxv = VAL;
+				end
+				if (pg_ren.pr[n39].op.decbus.fc) begin
+					fc_ndx = tails[n39];
+					fc_ndxv = VAL;
+				end
+			end
+/*
+			tEnque(8'h81-MWIDTH,groupno,pg_ren.pr[1],pt_q[1],tails[1],flush_ren,
+				stomps[1], ornops[1], cndx_ren[1], pcndx_ren, grplen[1], last[1]);
+
+			if (pg_ren.pr[1].op.decbus.sync) begin
+				sync_ndx = tails[1];
 				sync_ndxv = VAL;
 			end
-			if (pg_ren.pr0.op.decbus.fc) begin
-				fc_ndx = tail0;
-				fc_ndxv = VAL;
-			end
-
-			tEnque(8'h81-XWID,groupno,pg_ren.pr1,pt1_q,tail1,flush_ren,
-				stomp1, ornop1, cndx_ren[1], pcndx_ren, grplen1, last1);
-
-			if (pg_ren.pr1.op.decbus.sync) begin
-				sync_ndx = tail1;
-				sync_ndxv = VAL;
-			end
-			if (pg_ren.pr1.op.decbus.fc) begin
-				fc_ndx = tail1;
-				fc_ndxv = VAL;
-			end
-			
-			tEnque(8'h82-XWID,groupno,pg_ren.pr2,pt2_q,tail2,flush_ren,
-				stomp2, ornop2, cndx_ren[2], pcndx_ren, grplen2, last2);
-	
-			if (pg_ren.pr2.op.decbus.sync) begin
-				sync_ndx = tail2;
-				sync_ndxv = VAL;
-			end
-			if (pg_ren.pr2.op.decbus.fc) begin
-				fc_ndx = tail2;
-				fc_ndxv = VAL;
-			end
-//			tBypassRegnames(tail2, pg_ren.pr2, pg_ren.pr0, ins2_que.decbus.has_imma, pg_ren.pr2.decbus.has_immb | prnv[3], pg_ren.pr2.decbus.has_immc | prnv[3], prnv[3], prnv[3]);
-//			tBypassRegnames(tail2, pg_ren.pr2, pg_ren.pr1, ins2_que.decbus.has_imma, pg_ren.pr2.decbus.has_immb | prnv[7], pg_ren.pr2.decbus.has_immc | prnv[7], prnv[7], prnv[7]);
-//			tBypassValid(tail2, pg_ren.pr2, pg_ren.pr0);
-//			tBypassValid(tail2, pg_ren.pr2, pg_ren.pr1);
-			
-			tEnque(8'h83-XWID,groupno,pg_ren.pr3,pt3_q,tail3,flush_ren,
-				stomp3, ornop3, cndx_ren[3], pcndx_ren, grplen3,last3);
-
-			if (pg_ren.pr3.op.decbus.sync) begin
-				sync_ndx = tail3;
-				sync_ndxv = VAL;
-			end
-			if (pg_ren.pr3.op.decbus.fc) begin
-				fc_ndx = tail3;
+			if (pg_ren.pr[1].op.decbus.fc) begin
+				fc_ndx = tails[1];
 				fc_ndxv = VAL;
 			end
 			
-//			tBypassRegnames(tail3, pg_ren.pr3, pg_ren.pr0, pg_ren.pr3.decbus.has_imma, pg_ren.pr3.decbus.has_immb | prnv[3], pg_ren.pr3.decbus.has_immc | prnv[3], prnv[3], prnv[3]);
-//			tBypassRegnames(tail3, pg_ren.pr3, pg_ren.pr1, pg_ren.pr3.decbus.has_imma, pg_ren.pr3.decbus.has_immb | prnv[7], pg_ren.pr3.decbus.has_immc | prnv[7], prnv[7], prnv[7]);
-//      tBypassRegnames(tail3, pg_ren.pr3, pg_ren.pr2, pg_ren.pr3.decbus.has_imma, pg_ren.pr3.decbus.has_immb | prnv[11], pg_ren.pr3.decbus.has_immc | prnv[11], prnv[11], prnv[11]);
-//			tBypassValid(tail3, pg_ren.pr3, pg_ren.pr0);
-//			tBypassValid(tail3, pg_ren.pr3, pg_ren.pr1);
-//			tBypassValid(tail3, pg_ren.pr3, pg_ren.pr2);
+			if (MWIDTH > 2) begin
+				tEnque(8'h82-MWIDTH,groupno,pg_ren.pr[2],pt_q[2],tails[2],flush_ren,
+					stomps[2], ornops[2], cndx_ren[2], pcndx_ren, grplen[2], last[2]);
 		
-			tail0 <= (tail0 + 3'd4) % Qupls4_pkg::ROB_ENTRIES;
+				if (pg_ren.pr[2].op.decbus.sync) begin
+					sync_ndx = tails[2];
+					sync_ndxv = VAL;
+				end
+				if (pg_ren.pr[2].op.decbus.fc) begin
+					fc_ndx = tails[2];
+					fc_ndxv = VAL;
+				end
+			end
+//			tBypassRegnames(tails[2], pg_ren.pr[2], pg_ren.pr[0], ins2_que.decbus.has_imma, pg_ren.pr[2].decbus.has_immb | prnv[3], pg_ren.pr[2].decbus.has_immc | prnv[3], prnv[3], prnv[3]);
+//			tBypassRegnames(tails[2], pg_ren.pr[2], pg_ren.pr[1], ins2_que.decbus.has_imma, pg_ren.pr[2].decbus.has_immb | prnv[7], pg_ren.pr[2].decbus.has_immc | prnv[7], prnv[7], prnv[7]);
+//			tBypassValid(tails[2], pg_ren.pr[2], pg_ren.pr[0]);
+//			tBypassValid(tails[2], pg_ren.pr[2], pg_ren.pr[1]);
+
+			if (MWIDTH > 3) begin			
+				tEnque(8'h83-MWIDTH,groupno,pg_ren.pr[3],pt_q[3],tails[3],flush_ren,
+					stomps[3], ornops[3], cndx_ren[3], pcndx_ren, grplen[3],last[3]);
+
+				if (pg_ren.pr[3].op.decbus.sync) begin
+					sync_ndx = tails[3];
+					sync_ndxv = VAL;
+				end
+				if (pg_ren.pr[3].op.decbus.fc) begin
+					fc_ndx = tails[3];
+					fc_ndxv = VAL;
+				end
+			end
+*/
+/*			
+			if (MWIDTH > 4) begin			
+				tEnque(8'h84-MWIDTH,groupno,pg_ren.pr[4],pt4_q,tails[4],flush_ren,
+					stomp4, ornop4, cndx_ren[4], pcndx_ren, grplen4,last4);
+
+				if (pg_ren.pr[4].op.decbus.sync) begin
+					sync_ndx = tails[4];
+					sync_ndxv = VAL;
+				end
+				if (pg_ren.pr[4].op.decbus.fc) begin
+					fc_ndx = tails[4];
+					fc_ndxv = VAL;
+				end
+			end
+			
+			if (MWIDTH > 5) begin			
+				tEnque(8'h85-MWIDTH,groupno,pg_ren.pr[5],pt5_q,tails[5],flush_ren,
+					stomp5, ornop5, cndx_ren[5], pcndx_ren, grplen5,last5);
+
+				if (pg_ren.pr[5].op.decbus.sync) begin
+					sync_ndx = tails[5];
+					sync_ndxv = VAL;
+				end
+				if (pg_ren.pr[5].op.decbus.fc) begin
+					fc_ndx = tails[5];
+					fc_ndxv = VAL;
+				end
+			end
+*/			
+//			tBypassRegnames(tails[3], pg_ren.pr[3], pg_ren.pr[0], pg_ren.pr[3].decbus.has_imma, pg_ren.pr[3].decbus.has_immb | prnv[3], pg_ren.pr[3].decbus.has_immc | prnv[3], prnv[3], prnv[3]);
+//			tBypassRegnames(tails[3], pg_ren.pr[3], pg_ren.pr[1], pg_ren.pr[3].decbus.has_imma, pg_ren.pr[3].decbus.has_immb | prnv[7], pg_ren.pr[3].decbus.has_immc | prnv[7], prnv[7], prnv[7]);
+//      tBypassRegnames(tails[3], pg_ren.pr[3], pg_ren.pr[2], pg_ren.pr[3].decbus.has_imma, pg_ren.pr[3].decbus.has_immb | prnv[11], pg_ren.pr[3].decbus.has_immc | prnv[11], prnv[11], prnv[11]);
+//			tBypassValid(tails[3], pg_ren.pr[3], pg_ren.pr[0]);
+//			tBypassValid(tails[3], pg_ren.pr[3], pg_ren.pr[1]);
+//			tBypassValid(tails[3], pg_ren.pr[3], pg_ren.pr[2]);
+		
+			tails[0] <= (tails[0] + MWIDTH) % Qupls4_pkg::ROB_ENTRIES;
 			groupno <= groupno + 2'd1;
+			if (groupno >= Qupls4_pkg::ROB_ENTRIES / MWIDTH - 1)
+				groupno <= 8'd0;
 		end
 	end
 
@@ -6833,19 +6852,19 @@ always_ff @(posedge clk) begin: clock_n_debug
 	$display("align: %x", uiext1.ic_line_aligned);
 	$display("- - - - - - Multiplex %c - - - - - - %s", ihit_mux ? "h":" ", stomp_mux ? stompstr : no_stompstr);
 	/*
-	$display("pc0: %h.%h ins0: %h", uiext1.pg_mux.pr0.pc.pc[23:0], uiext1.pg_mux.pr0.mcip, uiext1.pg_mux.pr0.uop[47:0]);
-	$display("pc1: %h.%h ins1: %h", uiext1.pg_mux.pr1.pc.pc[23:0], uiext1.pg_mux.pr1.mcip, uiext1.pg_mux.pr1.uop[47:0]);
-	$display("pc2: %h.%h ins2: %h", uiext1.pg_mux.pr2.pc.pc[23:0], uiext1.pg_mux.pr2.mcip, uiext1.pg_mux.pr2.uop[47:0]);
-	$display("pc3: %h.%h ins3: %h", uiext1.pg_mux.pr3.pc.pc[23:0], uiext1.pg_mux.pr3.mcip, uiext1.pg_mux.pr3.uop[47:0]);
+	$display("pc0: %h.%h ins0: %h", uiext1.pg_mux.pr[0].pc.pc[23:0], uiext1.pg_mux.pr[0].mcip, uiext1.pg_mux.pr[0].uop[47:0]);
+	$display("pc1: %h.%h ins1: %h", uiext1.pg_mux.pr[1].pc.pc[23:0], uiext1.pg_mux.pr[1].mcip, uiext1.pg_mux.pr[1].uop[47:0]);
+	$display("pc2: %h.%h ins2: %h", uiext1.pg_mux.pr[2].pc.pc[23:0], uiext1.pg_mux.pr[2].mcip, uiext1.pg_mux.pr[2].uop[47:0]);
+	$display("pc3: %h.%h ins3: %h", uiext1.pg_mux.pr[3].pc.pc[23:0], uiext1.pg_mux.pr[3].mcip, uiext1.pg_mux.pr[3].uop[47:0]);
 	*/
 	if (do_bsr)
-		$display("BSR %h  pc0_fet=%h", bsr_tgt.pc, uiext1.pg_mux.pr0.op.pc.pc[31:0]);
+		$display("BSR %h  pc0_fet=%h", bsr_tgt.pc, uiext1.pg_mux.pr[0].op.pc.pc[31:0]);
 	$display("----- Decode %c%c ----- %s", ihit_dec ? "h":" ", micro_machine_active_d ? "a": " ", stomp_dec ? stompstr : no_stompstr);
 	/*
-	$display("pc0: %h.%h ins0: %h", pg_dec.pr0.pc.pc[23:0], pg_dec.pr0.mcip, pg_dec.pr0.uop[47:0]);
-	$display("pc1: %h.%h ins1: %h", pg_dec.pr1.pc.pc[23:0], pg_dec.pr1.mcip, pg_dec.pr1.uop[47:0]);
-	$display("pc2: %h.%h ins2: %h", pg_dec.pr2.pc.pc[23:0], pg_dec.pr2.mcip, pg_dec.pr2.uop[47:0]);
-	$display("pc3: %h.%h ins3: %h", pg_dec.pr3.pc.pc[23:0], pg_dec.pr3.mcip, pg_dec.pr3.uop[47:0]);
+	$display("pc0: %h.%h ins0: %h", pg_dec.pr[0].pc.pc[23:0], pg_dec.pr[0].mcip, pg_dec.pr[0].uop[47:0]);
+	$display("pc1: %h.%h ins1: %h", pg_dec.pr[1].pc.pc[23:0], pg_dec.pr[1].mcip, pg_dec.pr[1].uop[47:0]);
+	$display("pc2: %h.%h ins2: %h", pg_dec.pr[2].pc.pc[23:0], pg_dec.pr[2].mcip, pg_dec.pr[2].uop[47:0]);
+	$display("pc3: %h.%h ins3: %h", pg_dec.pr[3].pc.pc[23:0], pg_dec.pr[3].mcip, pg_dec.pr[3].uop[47:0]);
 	*/
 	if (1) begin	
 	$display("----- Physical Registers -----");
@@ -6882,36 +6901,36 @@ always_ff @(posedge clk) begin: clock_n_debug
 	$display("----- Rename %c ----- %s", ihit_ren ? "h":" ", stomp_ren ? stompstr : no_stompstr);
 	/*
 	$display("pc0: %x.%x ins0: %x  Rt: %d->%d%c  Rs: %d->%d%c  Ra: %d->%d%c  Rb: %d->%d%c  Rc: %d->%d%c",
-		pg_ren.pr0.pc.pc[23:0], pg_ren.pr0.mcip, pg_ren.pr0.uop[63:0],
-		pg_ren.pr0.nRt, Rt0_ren, Rt0_renv?"v":" ",
-		pg_ren.pr0.aRt, prn[3], prnv[3]?"v":" ",
-		pg_ren.pr0.aRa, prn[0], prnv[0]?"v": " ",
-		pg_ren.pr0.aRb, prn[1], prnv[1]?"v":" ",
-		pg_ren.pr0.aRc, prn[2], prnv[2]?"v":" ");
-	$display("pc1: %x.%x ins1: %x  Rt: %d->%d%c  Rs: %d->%d%c  Ra: %d->%d%c  Rb: %d->%d%c  Rc: %d->%d%c", pg_ren.pr1.pc.pc[23:0], pg_ren.pr1.mcip, pg_ren.pr1.uop[63:0], 
-		pg_ren.pr1.nRt, Rt1_ren, Rt1_renv?"v":" ",
-		pg_ren.pr1.aRt, prn[7], prnv[7]?"v":" ",
-		pg_ren.pr1.aRa, prn[4], prnv[4]?"v":" ",
-		pg_ren.pr1.aRb, prn[5], prnv[5]?"v":" ",
-		pg_ren.pr1.aRc, prn[6], prnv[6]?"v":" ");
-	$display("pc2: %x.%x ins2: %x  Rt: %d->%d%c  Rs: %d->%d%c  Ra: %d->%d%c  Rb: %d->%d%c  Rc: %d->%d%c", pg_ren.pr2.pc.pc[23:0], pg_ren.pr2.mcip, pg_ren.pr2.uop[63:0],
-		pg_ren.pr2.nRt, Rt2_ren, Rt2_renv?"v":" ",
-		pg_ren.pr2.aRt, prn[11], prnv[11]?"v":" ",
-		pg_ren.pr2.aRa, prn[8], prnv[8]?"v":" ",
-		pg_ren.pr2.aRb, prn[9], prnv[9]?"v":" ",
-		pg_ren.pr2.aRc, prn[10], prnv[10]?"v":" ");
-	$display("pc3: %x.%x ins3: %x  Rt: %d->%d%c  Rs: %d->%d%c  Ra: %d->%d%c  Rb: %d->%d%c  Rc: %d->%d%c", pg_ren.pr3.pc.pc[23:0], pg_ren.pr3.mcip, pg_ren.pr3.uop[63:0],
-		pg_ren.pr3.nRt, Rt3_ren, Rt3_renv?"v":" ",
-		pg_ren.pr3.aRt, prn[15], prnv[15]?"v":" ",
-		pg_ren.pr3.aRa, prn[12], prnv[12]?"v":" ",
-		pg_ren.pr3.aRb, prn[13], prnv[13]?"v":" ",
-		pg_ren.pr3.aRc, prn[14], prnv[14]?"v":" ");
+		pg_ren.pr[0].pc.pc[23:0], pg_ren.pr[0].mcip, pg_ren.pr[0].uop[63:0],
+		pg_ren.pr[0].nRt, Rt0_ren, Rt0_renv?"v":" ",
+		pg_ren.pr[0].aRt, prn[3], prnv[3]?"v":" ",
+		pg_ren.pr[0].aRa, prn[0], prnv[0]?"v": " ",
+		pg_ren.pr[0].aRb, prn[1], prnv[1]?"v":" ",
+		pg_ren.pr[0].aRc, prn[2], prnv[2]?"v":" ");
+	$display("pc1: %x.%x ins1: %x  Rt: %d->%d%c  Rs: %d->%d%c  Ra: %d->%d%c  Rb: %d->%d%c  Rc: %d->%d%c", pg_ren.pr[1].pc.pc[23:0], pg_ren.pr[1].mcip, pg_ren.pr[1].uop[63:0], 
+		pg_ren.pr[1].nRt, Rt1_ren, Rt1_renv?"v":" ",
+		pg_ren.pr[1].aRt, prn[7], prnv[7]?"v":" ",
+		pg_ren.pr[1].aRa, prn[4], prnv[4]?"v":" ",
+		pg_ren.pr[1].aRb, prn[5], prnv[5]?"v":" ",
+		pg_ren.pr[1].aRc, prn[6], prnv[6]?"v":" ");
+	$display("pc2: %x.%x ins2: %x  Rt: %d->%d%c  Rs: %d->%d%c  Ra: %d->%d%c  Rb: %d->%d%c  Rc: %d->%d%c", pg_ren.pr[2].pc.pc[23:0], pg_ren.pr[2].mcip, pg_ren.pr[2].uop[63:0],
+		pg_ren.pr[2].nRt, Rt2_ren, Rt2_renv?"v":" ",
+		pg_ren.pr[2].aRt, prn[11], prnv[11]?"v":" ",
+		pg_ren.pr[2].aRa, prn[8], prnv[8]?"v":" ",
+		pg_ren.pr[2].aRb, prn[9], prnv[9]?"v":" ",
+		pg_ren.pr[2].aRc, prn[10], prnv[10]?"v":" ");
+	$display("pc3: %x.%x ins3: %x  Rt: %d->%d%c  Rs: %d->%d%c  Ra: %d->%d%c  Rb: %d->%d%c  Rc: %d->%d%c", pg_ren.pr[3].pc.pc[23:0], pg_ren.pr[3].mcip, pg_ren.pr[3].uop[63:0],
+		pg_ren.pr[3].nRt, Rt3_ren, Rt3_renv?"v":" ",
+		pg_ren.pr[3].aRt, prn[15], prnv[15]?"v":" ",
+		pg_ren.pr[3].aRa, prn[12], prnv[12]?"v":" ",
+		pg_ren.pr[3].aRb, prn[13], prnv[13]?"v":" ",
+		pg_ren.pr[3].aRc, prn[14], prnv[14]?"v":" ");
 	*/
 //	$display("----- Queue Time ----- %s", (stomp_que && !stomp_quem) ? stompstr : no_stompstr);
 	$display("----- Queue %c ----- %h", ihit_que ? "h":" ", qd);
 	for (i = 0; i < Qupls4_pkg::ROB_ENTRIES; i = i + 1) begin
     $display("%c%c%c sn:%h %d: %c%c%c%c%c%c %c %c%c %d %c %c%d Rt%d/%d=%h %h Rs%d/%d %h%c Ra%d/%d=%h %c Rb%d/%d=%h %c Rc%d/%d=%h %c I=%h %h.%h cp:%h ins=%h #",
-			(i[4:0]==head0)?67:46, (i[4:0]==tail0)?81:46, rob[i].rstp ? "r" : " ", rob[i].sn, i[5:0],
+			(i[4:0]==head0)?67:46, (i[4:0]==tails[0])?81:46, rob[i].rstp ? "r" : " ", rob[i].sn, i[5:0],
 			rob[i].v?"v":"-", rob[i].done[0]?"d":"-", rob[i].done[1]?"d":"-", rob[i].out[0]?"o":"-", rob[i].out[1]?"o":"-", rob[i].bt?"t":"-", rob_memissue[i]?"i":"-", rob[i].lsq?"q":"-", (robentry_issue[i]|robentry_agen_issue[i])?"i":"-",
 			robentry_islot[i], robentry_stomp[i]?"s":"-",
 			(rob[i].op.decbus.cpytgt ? "c" : rob[i].op.decbus.fc ? "b" : rob[i].op.decbus.mem ? "m" : "a"),
@@ -7567,16 +7586,16 @@ begin
 		dramN_tid[n11] = {4'd0,n11[0],3'd0};
 	end
 	*/
-	grplen0 <= 6'd0;
-	grplen1 <= 6'd0;
-	grplen2 <= 6'd0;
-	grplen3 <= 6'd0;
+	grplen[0] <= 6'd0;
+	grplen[1] <= 6'd0;
+	grplen[2] <= 6'd0;
+	grplen[3] <= 6'd0;
 	group_len <= 6'd0;
-	last0 <= 1'b1;
-	last1 <= 1'b1;
-	last2 <= 1'b1;
-	last3 <= 1'b1;
-	tail0 <= 5'd0;
+	last[0] <= 1'b1;
+	last[1] <= 1'b1;
+	last[2] <= 1'b1;
+	last[3] <= 1'b1;
+	tails[0] <= 5'd0;
 	head0 <= 5'd0;
 	rstcnt <= 4'd0;
 	lsq_head <= 3'd0;
@@ -7648,17 +7667,14 @@ endtask
 
 task tEnqueGroupHdr;
 input seqnum_t sn;
-input rob_ndx_t tail;
-input Qupls4_pkg::decode_bus_t db0;
-input Qupls4_pkg::decode_bus_t db1;
-input Qupls4_pkg::decode_bus_t db2;
-input Qupls4_pkg::decode_bus_t db3;
+input [7:0] tail;
+input Qupls4_pkg::pipeline_group_reg_t pg;
 begin
-	pgh[tail>>2].v <= VAL;
-	pgh[tail>>2].cndxv <= INV;
-	pgh[tail>>2].chkpt_freed <= FALSE;
-	pgh[tail>>2].done <= FALSE;
-	pgh[tail>>2].sn <= sn;
+	pgh[tail].v <= VAL;
+	pgh[tail].cndxv <= INV;
+	pgh[tail].chkpt_freed <= FALSE;
+	pgh[tail].done <= FALSE;
+	pgh[tail].sn <= sn;
 	/*
 	pgh[tail>>2].has_branch <= |(
 		db0.brclass|
@@ -8706,7 +8722,7 @@ begin
 	// Cannot find lead micro-op, must not be queued yet. Select tail position as
 	// place for interrupt. It may be moved again later.
 	else
-		ih = m6;//(tail0 + Qupls4_pkg::ROB_ENTRIES - 1) % Qupls4_pkg::ROB_ENTRIES;
+		ih = m6;//(tails[0] + Qupls4_pkg::ROB_ENTRIES - 1) % Qupls4_pkg::ROB_ENTRIES;
 	if (ih != ndx) begin
 		rob[ih].op.hwi <= TRUE;
 		// If the lead instruction was found, invalidate it.

@@ -41,7 +41,7 @@
 // given type. For example there is only one flow control unit, so dispatch
 // will not try and dispatch two flow controls in the same cycle.
 //
-// 39000 LUTs 1300 FFs
+// 7425 LUTs 1700 FFs
 // ============================================================================
 
 import const_pkg::*;
@@ -51,7 +51,7 @@ import Qupls4_pkg::*;
 module Qupls4_instruction_dispatcher(rst, clk, head, pgh, rob, stomp, busy, rse_o,
 	rob_dispatched_o, rob_dispatched_v_o);
 parameter WINDOW=8;
-parameter DISPATCH_COUNT=5;
+parameter DISPATCH_COUNT=6;
 input rst;
 input clk;
 input cpu_types_pkg::rob_ndx_t head;
@@ -147,13 +147,22 @@ else begin
 			(nn != rob_dispatched[2] || !rob_dispatched_v[2]) &&
 			(nn != rob_dispatched[3] || !rob_dispatched_v[3])
 		) begin
-			if (rob[nn].op.decbus.sau && sau_cnt < Qupls4_pkg::NSAU && !busy[{3'd0,sau_cnt[0]}]) begin
+			if (rob[nn].op.decbus.sau && sau_cnt == 4'd0 && !busy[{3'd0,sau_cnt[0]}]) begin
 				tLoadRse(0,nn);
 				rse[0].funcunit = {3'd0,sau_cnt[0]};
 				rse[0].rndx = nn;
 				sau_cnt = sau_cnt + 1;
 				rob_dispatched[0] = nn;
 				rob_dispatched_v[0] = VAL;
+				kk = kk + 1;
+			end
+			if (rob[nn].op.decbus.sau && sau_cnt > 4'd0 && sau_cnt < Qupls4_pkg::NSAU && !busy[{3'd0,sau_cnt[0]}]) begin
+				tLoadRse(5,nn);
+				rse[5].funcunit = {3'd0,sau_cnt[0]};
+				rse[5].rndx = nn;
+				sau_cnt = sau_cnt + 1;
+				rob_dispatched[5] = nn;
+				rob_dispatched_v[5] = VAL;
 				kk = kk + 1;
 			end
 			if (rob[nn].op.decbus.mul && mul_cnt < 1 && !busy[2]) begin
