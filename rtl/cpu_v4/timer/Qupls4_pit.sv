@@ -206,7 +206,7 @@ else begin
 			sresp.tid <= respack ? reqd.tid : 13'd0;
 			sresp.next <= 1'b0;
 			sresp.stall <= 1'b0;
-			sresp.err <= fta_bus_pkg::OKAY;
+			sresp.err <= wishbone_pkg::OKAY;
 			sresp.rty <= 1'b0;
 			sresp.pri <= 4'd5;
 			sresp.dat <= respack ? dat_o : 64'd0;

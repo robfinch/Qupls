@@ -571,7 +571,8 @@ else begin
 	// Process responses.
 	// Could have a string of ack's coming back due to a string of requests.
 	// If there is an ack for something not requested, ignore it.
-	if (ftam_resp.ack) begin
+	// Ignore IRQs coming in.
+	if (ftam_resp.ack && ftam_resp.err != wishbone_pkg::IRQ) begin
 		tBusClear();
 		if (which_tran < 5'd8) begin
 			// Got an ack back so the tran no longer needs to be performed.
@@ -1038,7 +1039,7 @@ if (rst_i) begin
 		tran_load_data[nn] <= {$bits(wb_cmd_response512_t){1'd0}};
 end
 else begin
-	if (ftam_resp.ack) begin
+	if (ftam_resp.ack && ftam_resp.err != wishbone_pkg::IRQ) begin
 		if (which_tran < 5'd8) begin
 			// Got an ack back so the tran no longer needs to be performed.
 			tran_load_data[which_tran[2:1]].tid <= cpu_req_queue[which_tran[2:1]].cpu_req.tid;

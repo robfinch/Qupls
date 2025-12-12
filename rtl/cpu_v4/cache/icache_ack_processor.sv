@@ -81,7 +81,8 @@ end
 else begin
 	wr_ic <= 1'b0;
 	// Process responses.
-	if (wbm_resp.ack) begin
+	// Filter out IRQs coming back.
+	if (wbm_resp.ack && wbm_resp.err!=wishbone_pkg::IRQ) begin
 		if (wbm_resp.tid != last_tid) begin
 			last_tid <= wbm_resp.tid;
 		end

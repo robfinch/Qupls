@@ -300,7 +300,7 @@ DUMP:
 		state <= DUMP_ACK;
 	end
 DUMP_ACK:
-	if (resp.ack) begin
+	if (resp.ack && resp.err != wishbone_pkg::IRQ) begin
 		req.cmd <= wishbone_pkg::CMD_NONE;
 		req.cyc <= LOW;
 		req.we <= LOW;
@@ -329,7 +329,7 @@ LOAD:
 		state <= LOAD_ACK;
 	end
 LOAD_ACK:
-	if (resp.ack) begin
+	if (resp.ack && resp.err != wishbone_pkg::IRQ) begin
 		req.cyc <= LOW;
 		req.we <= LOW;
 		req.adr <= reqw.adr;

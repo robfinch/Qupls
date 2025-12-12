@@ -47,6 +47,7 @@ module Qupls4_mpu(rst_i, clk_i, clk2x_i, clk3x_i, clk5x_i, ftam_req, ftam_resp,
 parameter CPU="OOO";
 parameter MPUNO = 6'd1;				// MPU number
 parameter BUS_PROTOCOL = 0;
+parameter HAS_MSI_LOGGER = 0;
 input rst_i;
 input clk_i;
 input clk2x_i;
@@ -94,15 +95,15 @@ wire pic_ack,pit_ack;
 wire [31:0] pic_dato;
 wire [63:0] pit_dato;
 wire [31:0] page_fault;
-wb_cmd_response256_t [0:0] fan256_resp;
-wb_cmd_request64_t [1:0] fan64_req;
-wb_cmd_response64_t [1:0] fan64_resp;
+wb_cmd_request256_t cpu_req;
+wb_cmd_response256_t cpu_resp;
+wb_cmd_request256_t mpu_req;
+wb_cmd_response256_t mpu_resp;
 wb_cmd_request64_t msi64_req;
 wb_cmd_response64_t msi_resp;
 wb_cmd_response256_t pic256_resp;
 wb_cmd_request64_t pit64_req;
 wb_cmd_response64_t pit_resp;
-wb_cmd_response256_t wb256_resp;
 
 Qupls4_pit #(.BUS_PROTOCOL(BUS_PROTOCOL)) utmr1
 (
@@ -134,7 +135,7 @@ Qupls4_msi_controller #(.BUS_PROTOCOL(BUS_PROTOCOL)) umsi
 	.req(msi64_req),
 	.resp(msi_resp),
 	.ipl(ipl),
-	.irq_resp_i(wb256_resp),
+	.irq_resp_i(cpu_resp),	// snoop CPU response bus
 	.irq(irq),
 	.irq_ack(irq_ack),
 	.swstk(swstk),
@@ -177,31 +178,72 @@ ucpu1
 	.ivect_i(ivect),
 	.swstk_i(swstk),
 	.om_i(2'd3),
-	.fta_req(fan256_req),
-	.fta_resp(wb256_resp),
+	.fta_req(cpu_req),
+	.fta_resp(cpu_resp),
 	.snoop_v(snoop_v),
 	.snoop_adr(snoop_adr),
 	.snoop_cid(snoop_cid)
 );
 
-wb_slave_fanout #(.FANOUT64(2), .FANOUT256(1))
-ufo1
+wb_cmd_request256_t [1:0] t1mreq;
+wb_cmd_response256_t [1:0] t1mresp;
+wb_cmd_request64_t [1:0] t2mreq;
+wb_cmd_response64_t [1:0] t2mresp;
+wb_cmd_request256_t cl_req;
+wb_cmd_response256_t cl_resp;
+assign ftam_req = t1mreq[0];
+assign t1mresp[0] = ftam_resp;
+assign mpu_req = t1mreq[1];
+assign t1mresp[1] = mpu_resp;
+
+assign msi64_req = t2mreq[0];
+assign t2mresp[0] = msi_resp;
+assign pit64_req = t2mreq[1];
+assign t2mresp[1] = pit_resp;
+
+// Fanout to MPU peripherals.
+wb_IOBridge256to64 #(.CHANNELS(2)) ubridge2
 (
 	.rst_i(rst_i),
 	.clk_i(clk_i),
-	.wb_req(fan256_req),
-	.wb_resp(wb256_resp),
-	.fan64_req(fan64_req),
-	.fan64_resp(fan64_resp),
-	.fan256_req(ftam_req),
-	.fan256_resp(fan256_resp)
+	.s1_req(mpu_req),
+	.s1_resp(mpu_resp),
+	.m_req(t2mreq),
+	.chresp(t2mresp)
 );
 
-assign fan64_resp[0] = msi_resp;
-assign fan64_resp[1] = pit_resp;
-assign fan256_resp[0] = ftam_resp;
-assign msi64_req = fan64_req[0];
-assign pit64_req = fan64_req[1];
+// Fan out to internal MPU bus and external bus.
+wb_IOBridge256to256 #(.CHANNELS(2)) ubridge1
+(
+	.rst_i(rst_i),
+	.clk_i(clk_i),
+	.s1_req(cl_req),
+	.s1_resp(cl_resp),
+	.m_req(t1mreq),
+	.chresp(t1mresp)
+);
+
+wb_cmd_request256_t [1:0] t3mreq;
+wb_cmd_response256_t [1:0] t3mresp;
+wb_cmd_request256_t log_req;
+wb_cmd_response256_t log_resp;
+assign t3mreq[0] = cpu_req;
+assign t3mreq[1] = log_req;
+assign cpu_resp = t3mresp[0];
+assign log_resp = t3mresp[1];
+assign log_req = {$bits(wb_cmd_request256_t){1'b0}};
+
+// Under construction: adding MSI logging component.
+// Bus master multiplexor.
+wb_mux #(.NPORT(2)) utmrmux1
+(
+	.rst_i(irst),
+	.clk_i(clk),
+	.req_i(t3mreq),
+	.resp_o(t3mresp),
+	.req_o(cl_req),
+	.resp_i(cl_resp)
+);
 
 always_comb
 	iirq = irq_bus|pit_irq;

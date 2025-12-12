@@ -71,6 +71,7 @@ wire cpu_types_pkg::physical_address_t [15:0] ptags;
 wire ack;
 
 // Generate memory requests to fill cache line.
+// Filter out IRQs coming back.
 
 icache_req_generator
 #(
@@ -86,7 +87,7 @@ icrq1
 	.miss_vadr(miss_vadr),
 	.miss_padr(miss_padr),
 	.wbm_req(wbm_req),
-	.ack_i(wbm_resp.ack),
+	.ack_i(wbm_resp.ack && wbm_resp.err!=wishbone_pkg::IRQ),
 	.vtags(vtags),
 	.ptags(ptags),
 	.ack(wr_ic)
