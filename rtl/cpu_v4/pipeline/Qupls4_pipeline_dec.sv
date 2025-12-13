@@ -42,8 +42,7 @@ import Qupls4_pkg::*;
 module Qupls4_pipeline_dec(rst_i, rst, clk, en, clk5x, ph4, new_cline_mux, cline,
 	restored, restore_list, unavail_list, sr, uop_num, flush_mux, flush_dec,
 	tags2free, freevals, bo_wr, bo_preg,
-	ins0_d_inv, ins1_d_inv, ins2_d_inv, ins3_d_inv,
-	stomp_dec, stomp_mux, stomp_bno, pg_mux,
+	stomp_dec, stomp_mux, kept_stream, pg_mux,
 	Rt0_dec, Rt1_dec, Rt2_dec, Rt3_dec, Rt0_decv, Rt1_decv, Rt2_decv, Rt3_decv,
 	micro_machine_active_mux, micro_machine_active_dec,
 	pg_dec,
@@ -70,16 +69,12 @@ input Qupls4_pkg::status_reg_t sr;
 input [4:0] uop_num;
 input stomp_dec;
 input stomp_mux;
-input [4:0] stomp_bno;
+input pc_stream_t kept_stream;
 input Qupls4_pkg::pipeline_group_reg_t pg_mux;
 input pregno_t [3:0] tags2free;
 input [3:0] freevals;
 input bo_wr;
 input pregno_t bo_preg;
-input ins0_d_inv;
-input ins1_d_inv;
-input ins2_d_inv;
-input ins3_d_inv;
 output pregno_t Rt0_dec;
 output pregno_t Rt1_dec;
 output pregno_t Rt2_dec;
@@ -543,9 +538,9 @@ else begin
 		for (n9 = 0; n9 < MWIDTH; n9 = n9 + 1) begin
 			insm[n9] <= tpr[n9];
 			if (stomp_mux && FALSE) begin
-				if (tpr[n9].pc.bno_t!=stomp_bno) begin
+				if (tpr[n9].pc.stream!=kept_stream) begin
 					insm[n9] <= nopi;
-					insm[n9].pc.bno_t <= tpr[n9].pc.bno_t;
+					insm[n9].pc.stream <= tpr[n9].pc.stream;
 				end
 			end
 		end
@@ -875,9 +870,11 @@ begin
 	if (dec[3].xregs.v & pr_dec[3].v)
 		fregs_o = dec[3].xregs;
 
+/* insx_d_inv was always false in mainline
 	if (ins1_d_inv) pr_dec[1].v = FALSE;
-	if (ins1_d_inv) pr_dec[2].v = FALSE;
+	if (ins2_d_inv) pr_dec[2].v = FALSE;
 	if (ins3_d_inv) pr_dec[3].v = FALSE;
+*/
 	pr_dec[0].om = sr.om;
 	pr_dec[1].om = sr.om;
 	pr_dec[2].om = sr.om;

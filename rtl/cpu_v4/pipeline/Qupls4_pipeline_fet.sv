@@ -42,7 +42,7 @@ import Qupls4_pkg::*;
 module Qupls4_pipeline_fet(rst, clk, rstcnt, ihit, en, fet_stallq, ic_stallq,
 	irq_in_ic, irq_ic, irq_in_fet, irq_fet, irq_sn_ic, irq_sn_fet,
 	pc_i, misspc, misspc_fet, uop_num_ic, uop_num_fet, flush_i,flush_fet,
-	pc0_fet, pc1_fet, pc2_fet, pc3_fet, pc4_fet, stomp_fet, stomp_bno, ic_carry_mod,
+	pc0_fet, pc1_fet, pc2_fet, pc3_fet, pc4_fet, stomp_fet, kept_stream, ic_carry_mod,
 	inject_cl, ic_line_i, inj_line_i, ic_line_fet, nmi_i, carry_mod_fet,
 	micro_machine_active, micro_machine_active_fet, mc_adr
 );
@@ -72,7 +72,7 @@ output pc_address_ex_t pc2_fet;
 output pc_address_ex_t pc3_fet;
 output pc_address_ex_t pc4_fet;
 input stomp_fet;
-input [4:0] stomp_bno;
+input pc_stream_t kept_stream;
 input [31:0] ic_carry_mod;
 input inject_cl;
 input [1023:0] ic_line_i;
@@ -121,8 +121,7 @@ end
 
 always_ff @(posedge clk)
 if (rst) begin
-	pc0_fet.bno_t <= 6'd1;
-	pc0_fet.bno_f <= 6'd1;
+	pc0_fet.stream <= pc_stream_t'(7'd1);
 	pc0_fet.pc <= RSTPC;
 end
 else begin
@@ -131,8 +130,7 @@ else begin
 end
 always_ff @(posedge clk)
 if (rst) begin
-	pc1_fet.bno_t <= 6'd1;
-	pc1_fet.bno_f <= 6'd1;
+	pc1_fet.stream <= pc_stream_t'(7'd1);
 	pc1_fet.pc <= RSTPC + 6'd8;
 end
 else begin
@@ -143,8 +141,7 @@ else begin
 end
 always_ff @(posedge clk)
 if (rst) begin
-	pc2_fet.bno_t <= 6'd1;
-	pc2_fet.bno_f <= 6'd1;
+	pc2_fet.stream <= pc_stream_t'(7'd1);
 	pc2_fet.pc <= RSTPC + 6'd16;
 end
 else begin
@@ -155,8 +152,7 @@ else begin
 end
 always_ff @(posedge clk)
 if (rst) begin
-	pc3_fet.bno_t <= 6'd1;
-	pc3_fet.bno_f <= 6'd1;
+	pc3_fet.stream <= pc_stream_t'(7'd1);
 	pc3_fet.pc <= RSTPC + 6'd24;
 end
 else begin
@@ -167,8 +163,7 @@ else begin
 end
 always_ff @(posedge clk)
 if (rst) begin
-	pc4_fet.bno_t <= 6'd1;
-	pc4_fet.bno_f <= 6'd1;
+	pc4_fet.stream <= pc_stream_t'(7'd1);
 	pc4_fet.pc <= RSTPC + 6'd32;
 end
 else begin
@@ -178,8 +173,7 @@ end
 
 always_ff @(posedge clk)
 if (rst) begin
-	misspc_fet.bno_t <= 6'd1;
-	misspc_fet.bno_f <= 6'd1;
+	misspc.stream <= pc_stream_t'(7'd1);
 	misspc_fet <= RSTPC;
 end
 else begin
@@ -196,7 +190,7 @@ else begin
 	else if (en2|inject_cl) begin
 		if (inject_cl)
 			ic_line_fet <= {{64{2'd3,Qupls4_pkg::OP_NOP}},inj_line_i};
-		else if (!ihit || (stomp_fet && pc_i.bno_t!=stomp_bno) || nmi_i || flush_i)
+		else if (!ihit || (stomp_fet && pc_i.stream!=kept_stream) || nmi_i || flush_i)
 			ic_line_fet <= {128{2'd3,Qupls4_pkg::OP_NOP}};
 		else
 			ic_line_fet <= ic_line_i;

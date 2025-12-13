@@ -44,7 +44,7 @@ import Qupls4_pkg::*;
 module Qupls4_pipeline_ren(
 	rst, clk, clk5x, ph4, en, nq, restore, restored, restore_list,
 	chkpt_amt, tail0, rob, robentry_stomp, avail_reg, sr,
-	stomp_ren, stomp_bno, branch_state, flush_dec, flush_ren,
+	stomp_ren, kept_stream, branch_state, flush_dec, flush_ren,
 	arn, arng, arnt, arnv, rn_cp, store_argC_pReg, prn, prnv,
 	ns_areg,
 	Rt0_dec, Rt1_dec, Rt2_dec, Rt3_dec, Rt0_decv, Rt1_decv, Rt2_decv, Rt3_decv, 
@@ -87,7 +87,7 @@ input [Qupls4_pkg::ROB_ENTRIES-1:0] robentry_stomp;
 input [Qupls4_pkg::PREGS-1:0] avail_reg;
 input Qupls4_pkg::status_reg_t sr;
 input stomp_ren;
-input [4:0] stomp_bno;
+input pc_stream_t kept_stream;
 input Qupls4_pkg::branch_state_t branch_state;
 input aregno_t [NPORT-1:0] arn;
 input [2:0] arng [0:NPORT-1];
@@ -183,8 +183,7 @@ always_comb
 begin
 	nopi = {$bits(Qupls4_pkg::pipeline_reg_t){1'b0}};
 	nopi.pc = RSTPC;
-	nopi.pc.bno_t = 6'd1;
-	nopi.pc.bno_f = 6'd1;
+	nopi.pc.stream = pc_stream_t'(7'd1);
 	nopi.uop = {26'd0,Qupls4_pkg::OP_NOP};
 	nopi.uop.any.lead = 1'd1;
 	nopi.uop.r3.Rs1 = 8'd0;
@@ -772,7 +771,7 @@ else begin
 		end
 	end
 	if (branch_state==Qupls4_pkg::BS_DONE)
-		tInvalidateRen(stomp_bno);//misspc.bno_t);
+		tInvalidateRen(kept_stream);//misspc.bno_t);
 end
 
 // fet/mux/dec stages can be invalidated by turning the instruction in the
@@ -782,9 +781,9 @@ end
 // already, instructions must be turned into copy targets.
 
 task tInvalidateRen;
-input [4:0] bno;
+input pc_stream_t bno;
 begin
-	if (pg_ren.pr[0].op.pc.bno_t!=bno) begin
+	if (pg_ren.pr[0].op.pc.stream!=bno) begin
 		pg_ren.pr[0].op.excv <= INV;
 		if (Qupls4_pkg::SUPPORT_BACKOUT)
 			pg_ren.pr[0].v <= INV;
@@ -796,7 +795,7 @@ begin
 			pg_ren.pr[0].op.decbus.mem <= FALSE;
 		end
 	end
-	if (pg_ren.pr[1].op.pc.bno_t!=bno) begin
+	if (pg_ren.pr[1].op.pc.stream!=bno) begin
 		pg_ren.pr[1].v <= INV;
 		if (Qupls4_pkg::SUPPORT_BACKOUT)
 			pg_ren.pr[1].op.excv <= INV;
@@ -808,7 +807,7 @@ begin
 			pg_ren.pr[1].op.decbus.mem <= FALSE;
 		end
 	end
-	if (pg_ren.pr[2].op.pc.bno_t!=bno) begin
+	if (pg_ren.pr[2].op.pc.stream!=bno) begin
 		pg_ren.pr[2].op.excv <= INV;
 		if (Qupls4_pkg::SUPPORT_BACKOUT)
 			pg_ren.pr[2].v <= INV;
@@ -820,7 +819,7 @@ begin
 			pg_ren.pr[2].op.decbus.mem <= FALSE;
 		end
 	end
-	if (pg_ren.pr[3].op.pc.bno_t!=bno) begin
+	if (pg_ren.pr[3].op.pc.stream!=bno) begin
 		pg_ren.pr[3].op.excv <= INV;
 		if (Qupls4_pkg::SUPPORT_BACKOUT)
 			pg_ren.pr[3].v <= INV;

@@ -70,8 +70,7 @@ always_comb
 begin
 	nopi = {$bits(Qupls4_pkg::pipeline_reg_t){1'b0}};
 	nopi.pc = Qupls4_pkg::RSTPC;
-	nopi.pc.bno_t = 6'd1;
-	nopi.pc.bno_f = 6'd1;
+	nopi.pc.stream = 7'd1;
 	nopi.uop = {26'd0,Qupls4_pkg::OP_NOP};
 	nopi.uop.any.lead = 1'd1;
 	nopi.decbus.Rdz = 1'b1;

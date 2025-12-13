@@ -45,7 +45,7 @@ import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
 module Qupls4_pipeline_mux(rst_i, clk_i, rstcnt, advance_fet, ihit, en_i,
-	stomp_bno, stomp_mux, nop_o, carry_mod_fet, ssm_flag, hwipc_fet,
+	kept_stream, stomp_mux, nop_o, carry_mod_fet, ssm_flag, hwipc_fet,
 	irq_fet, irq_in_fet, irq_sn_fet, ipl_fet, sr, pt_mux, pt_dec, p_override, po_bno,
 	branchmiss, misspc_fet, flush_fet, flush_mux,
 	micro_machine_active, cline_fet, cline_mux, new_cline_mux,
@@ -54,7 +54,7 @@ module Qupls4_pipeline_mux(rst_i, clk_i, rstcnt, advance_fet, ihit, en_i,
 	pc0_fet, uop_num_fet, uop_num_mux,
 	ls_bmf_i, pack_regs_i, scale_regs_i, regcnt_i,
 	len0_i, len1_i, len2_i, len3_i,
-	pg_mux,
+	pg_mux, new_stream, alloc_stream,
 	do_bsr, bsr_tgt, do_ret, ret_pc, do_call, get, mux_stallq, fet_stallq, stall);
 parameter MWIDTH = 4;
 input rst_i;
@@ -67,7 +67,7 @@ input Qupls4_pkg::irq_info_packet_t irq_in_fet;
 input cpu_types_pkg::seqnum_t irq_sn_fet;
 input [5:0] ipl_fet;
 input en_i;
-input [4:0] stomp_bno;
+input pc_stream_t kept_stream;
 input stomp_mux;
 output reg nop_o;
 input [31:0] carry_mod_fet;
@@ -92,7 +92,7 @@ input [3:0] takb_fet;
 input [3:0] pt_mux;
 output reg [3:0] pt_dec;
 output reg [3:0] p_override;
-output reg [4:0] po_bno [0:3];
+output reg [6:0] po_bno [0:3];
 input cpu_types_pkg::pc_address_ex_t pc_i;
 input [4:0] vl;
 input ls_bmf_i;
@@ -113,12 +113,14 @@ output cpu_types_pkg::mc_address_t mcip3_o;
 output reg do_bsr;
 output cpu_types_pkg::pc_address_ex_t bsr_tgt;
 output reg do_ret;
-output pc_address_t ret_pc;
+output pc_address_ex_t ret_pc;
 output reg do_call;
 input get;
 input mux_stallq;
 output reg fet_stallq;
 output stall;
+input [4:0] new_stream;
+output reg alloc_stream;
 
 integer nn,hh;
 pc_address_ex_t pc1_fet;
@@ -282,7 +284,7 @@ reg [4:0] po_bno1 [0:3];
 reg [4:0] po_bno2 [0:3];
 */
 reg p_override_dummy;
-reg [4:0] po_bno_dummy;
+reg [6:0] po_bno_dummy;
 
 always_comb tExtractIns(pc0_fet, pt_mux[0], takb_fet[0], len0_i, pr_mux[0], ins_fet[0], p_override[0], po_bno[0]);
 always_comb tExtractIns(pc1_fet, pt_mux[1], takb_fet[1], len1_i, pr_mux[1], ins_fet[1], p_override[1], po_bno[1]);
@@ -446,30 +448,66 @@ end
 // Compute target PC for subroutine call or jump.
 always_comb
 begin
-	if (bsr0|jsr0|bcc0)
-		bsr_tgt = bsr0_tgt;
-	else if (bsr1|jsr1|bcc1)
+	alloc_stream = 1'b0;
+	if (bsr0|jsr0|bcc0) begin
+		bsr_tgt.pc = bsr0_tgt;
+		if (pt_mux[0] || ~bcc0)
+			bsr_tgt.stream = pc0_fet.stream;
+		else begin
+			bsr_tgt.stream = new_stream;
+			alloc_stream = 1'b1;
+		end
+	end
+	else if (bsr1|jsr1|bcc1) begin
 		bsr_tgt = bsr1_tgt;
-	else if (bsr2|jsr2|bcc2)
+		if (pt_mux[1] || ~bcc1)
+			bsr_tgt.stream = pc0_fet.stream;
+		else begin
+			bsr_tgt.stream = new_stream;
+			alloc_stream = 1'b1;
+		end
+	end
+	else if (bsr2|jsr2|bcc2) begin
 		bsr_tgt = bsr2_tgt;
-	else if (bsr3|jsr3|bcc3)
+		if (pt_mux[2] || ~bcc2)
+			bsr_tgt.stream = pc0_fet.stream;
+		else begin
+			bsr_tgt.stream = new_stream;
+			alloc_stream = 1'b1;
+		end
+	end
+	else if (bsr3|jsr3|bcc3) begin
 		bsr_tgt = bsr3_tgt;
-	else
+		if (pt_mux[3] || ~bcc3)
+			bsr_tgt.stream = pc0_fet.stream;
+		else begin
+			bsr_tgt.stream = new_stream;
+			alloc_stream = 1'b1;
+		end
+	end
+	else begin
 		bsr_tgt.pc = RSTPC;
+		bsr_tgt.stream = 5'd1;
+	end
 end
 
 // Compute return PC for subroutine call.
 always_comb
+begin
+	ret_pc.stream = pc0_fet.stream;
 	if (bsr0|jsr0)
-		ret_pc = ins_mux[0].pc.pc + 4'd6;
+		ret_pc.pc = ins_mux[0].pc.pc + 4'd6;
 	else if (bsr1|jsr1)
-		ret_pc = ins_mux[1].pc.pc + 4'd6;
+		ret_pc.pc = ins_mux[1].pc.pc + 4'd6;
 	else if (bsr2|jsr2)
-		ret_pc = ins_mux[2].pc.pc + 4'd6;
+		ret_pc.pc = ins_mux[2].pc.pc + 4'd6;
 	else if (bsr3|jsr3)
-		ret_pc = ins_mux[3].pc.pc + 4'd6;
-	else
-		ret_pc = RSTPC;
+		ret_pc.pc = ins_mux[3].pc.pc + 4'd6;
+	else begin
+		ret_pc.pc = RSTPC;
+		ret_pc.stream = 5'd1;
+	end
+end
 
 always_comb
 	fet_stallq = mux_stallq;
@@ -584,7 +622,7 @@ input [3:0] len;
 input Qupls4_pkg::pipeline_reg_t ins_i;
 output Qupls4_pkg::pipeline_reg_t ins_o;
 output p_override;
-output [4:0] bno;
+output [6:0] bno;
 begin
 	p_override = 1'b0;
 	ins_o = ins_i;
@@ -608,7 +646,8 @@ begin
 		p_override = 1'b1;
 	end
 	*/
-	bno = takb ? ins_o.pc.bno_t : ins_o.pc.bno_f;
+//	bno = takb ? ins_o.pc.stream : ins_o.pc.bno_f;
+	bno = ins_o.pc.stream;
 end
 endtask
 

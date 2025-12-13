@@ -153,8 +153,7 @@ if (ce)
 assign nop_o = nop2;
 always_ff @(posedge clk)
 if (rst) begin
-	ip2.bno_t <= 6'd1;
-	ip2.bno_f <= 6'd1;
+	ip2.stream <= 7'd1;
 	ip2.pc <= RSTPC;
 end
 else begin

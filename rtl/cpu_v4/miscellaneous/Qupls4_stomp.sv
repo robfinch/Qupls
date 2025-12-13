@@ -42,11 +42,12 @@ import Qupls4_pkg::*;
 
 module Qupls4_stomp(rst, clk, ihit, advance_pipeline, advance_pipeline_seg2, 
 //	irq_in_pipe, di_inst,
+	dep_stream,
 	micro_machine_active, branch_resolved, branchmiss, found_destination, destination_rndx,
 	branch_state, do_bsr, misspc, predicted_correctly_dec, predicted_match_mux,
 	pc, pc_f, pc_fet, pc_mux, pc_dec, pc_ren,
 	stomp_fet, stomp_mux, stomp_dec, stomp_ren, stomp_que, stomp_quem,
-	fcu_idv, fcu_id, missid, stomp_bno, takb, rob, robentry_stomp
+	fcu_idv, fcu_id, missid, kept_stream, takb, rob, robentry_stomp
 	);
 input rst;
 input clk;
@@ -71,6 +72,7 @@ input pc_address_ex_t pc_fet;
 input pc_address_ex_t pc_mux;
 input pc_address_ex_t pc_dec;
 input pc_address_ex_t pc_ren;
+input [4:0] dep_stream [0:31][0:31];
 output reg stomp_fet;
 output reg stomp_mux;			// IRQ / micro-code Mux stage
 output reg stomp_dec;
@@ -80,7 +82,7 @@ output reg stomp_quem;
 input fcu_idv;
 input rob_ndx_t fcu_id;
 input rob_ndx_t missid;
-input [4:0] stomp_bno;
+input pc_stream_t kept_stream;
 input takb;
 input Qupls4_pkg::rob_entry_t [Qupls4_pkg::ROB_ENTRIES-1:0] rob;
 output reg [Qupls4_pkg::ROB_ENTRIES-1:0] robentry_stomp;
@@ -101,6 +103,7 @@ reg do_bsr_dec;
 reg do_bsr_ren;
 reg do_bsr_que;
 reg do_bsr_rrr;
+reg [31:0] stomped;
 
 reg stomp_pipeline;
 reg [3:0] spl;
@@ -117,15 +120,29 @@ wire next_stomp_quem = (stomp_ren && !micro_machine_active) || stomp_pipeline;
 
 reg [2:0] bsi;
 wire pe_bsidle;
-edge_det uedbsi1 (.rst(irst), .clk(clk), .ce(1'b1), .i(branch_state==Qupls4_pkg::BS_IDLE), .pe(pe_bsidle), .ne(), .ee());
+edge_det uedbsi1 (.rst(rst), .clk(clk), .ce(1'b1), .i(branch_state==Qupls4_pkg::BS_IDLE), .pe(pe_bsidle), .ne(), .ee());
 edge_det ued1 (.rst(rst), .clk(clk), .ce(advance_pipeline), .i(stomp_pipeline), .pe(pe_stomp_pipeline), .ne(), .ee());	
 always_ff @(posedge clk) if (advance_pipeline_seg2) bsi <= {bsi[1:0],pe_bsidle};
+
+integer n5;
+reg [32*5-1:0] list;
+always_comb
+begin
+	// Compute dependencies to stomp.
+	stomped = 32'd0;
+	
+	list = fnComputeBranchDependencies(kept_stream);
+	for (n5 = 0; n5 < 16; n5 = n5 + 1) begin
+		stomped[list[4:0]] = 1'b1;
+		list = list >> 5;
+	end
+	
+end
 
 always_ff @(posedge clk)
 if (rst) begin
 	for (nn = 0; nn < 5; nn = nn + 1) begin
-		misspcr[nn].bno_t <= 5'd1;
-		misspcr[nn].bno_f <= 5'd0;
+		misspcr[nn].stream <= pc_stream_t'(7'd1);
 		misspcr[nn].pc <= RSTPC;
 	end
 end
@@ -166,16 +183,22 @@ wire hwi_at_mux = di_inst && pg_mux.hwi;
 wire hwi_at_fet = di_inst && ic_irq;
 wire hwi_at_aln = di_inst && hirq;
 */
+// kept_stream is the stream we want to keep.
 always_comb
-	stomp_aln = (pe_stomp_pipeline || stomp_alnr || !predicted_match_mux || !predicted_correctly_dec) && (pc.pc != misspcr[0].pc);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_fet && !hwi_at_aln;
+	stomp_aln = stomped[pc.stream] ||
+		(pe_stomp_pipeline || stomp_alnr || !predicted_match_mux || !predicted_correctly_dec) && (pc.pc != misspcr[0].pc);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_fet && !hwi_at_aln;
 always_comb
-	stomp_fet = (pe_stomp_pipeline || stomp_fetr || !predicted_match_mux || !predicted_correctly_dec) && (pc_f.pc != misspcr[1].pc);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_fet;
+	stomp_fet = stomped[pc_f.stream] ||
+		(pe_stomp_pipeline || stomp_fetr || !predicted_match_mux || !predicted_correctly_dec) && (pc_f.pc != misspcr[1].pc);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_fet;
 always_comb
-	stomp_mux = (pe_stomp_pipeline || stomp_muxr || !predicted_match_mux || !predicted_correctly_dec) && (pc_fet.pc != misspcr[2].pc);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_mux;
+	stomp_mux = stomped[pc_fet.stream] ||
+		(pe_stomp_pipeline || stomp_muxr || !predicted_match_mux || !predicted_correctly_dec) && (pc_fet.pc != misspcr[2].pc);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_mux;
 always_comb
-	stomp_dec = (pe_stomp_pipeline || stomp_decr || !predicted_correctly_dec) && (pc_mux.pc != misspcr[3].pc);// && !hwi_at_ren && !hwi_at_dec;
+	stomp_dec = stomped[pc_mux.stream] ||
+	 (pe_stomp_pipeline || stomp_decr || !predicted_correctly_dec) && (pc_mux.pc != misspcr[3].pc);// && !hwi_at_ren && !hwi_at_dec;
 always_comb
-	stomp_ren = (pe_stomp_pipeline || stomp_renr) && (pc_dec.pc != misspcr[4].pc);// && !hwi_at_ren;
+	stomp_ren = stomped[pc_dec.stream] ||
+		(pe_stomp_pipeline || stomp_renr) && (pc_dec.pc != misspcr[4].pc);// && !hwi_at_ren;
 
 // On a cache miss, the fetch stage is stomped on, but not if micro-code is
 // active. Micro-code does not require the cache-line data.
@@ -301,9 +324,11 @@ end
 
 always_comb stomp_que = do_bsr_rrr ? stomp_quer | stomp_rrr : stomp_quer;
 
+
 // 
 // additional logic for handling a branch miss (STOMP logic)
 //
+// The kept_stream is the stream we want to keep.
 // stomp drives a lot of logic, so it's registered.
 // The bitmap is fed to the RAT among other things.
 
@@ -314,44 +339,72 @@ always_comb stomp_que = do_bsr_rrr ? stomp_quer | stomp_rrr : stomp_quer;
 // Somewhat complicated as backout of the target register mappings is
 // required.
 always_ff @(posedge clk)
-for (n4 = 0; n4 < Qupls4_pkg::ROB_ENTRIES; n4 = n4 + 1) begin
-	robentry_stomp[n4] = FALSE;
-	// Stomp on instructions between the branch and the destination.
-	if (branch_resolved) begin
-		if (found_destination) begin
-			if (rob[n4].sn < rob[destination_rndx].sn && rob[n4].sn > rob[missid].sn)
-				robentry_stomp[n4] = TRUE;
-		end
-		else begin
-			// The first three groups of instructions after miss needs to be stomped on 
-			// with no target copies. After that copy targets are in effect.
-	//	((branchmiss/*||((takb&~rob[fcu_id].bt) && (fcu_v2|fcu_v3|fcu_v4))*/) || (branch_state<Qupls4_pkg::BS_DONE2 && branch_state!=Qupls4_pkg::BS_IDLE))
-			if ((branchmiss || (branch_state<Qupls4_pkg::BS_DONE2 && branch_state!=Qupls4_pkg::BS_IDLE)) &&
-				rob[n4].sn > rob[missid].sn &&
-				fcu_idv	&& // miss_idv
-				rob[n4].op.pc.bno_t!=stomp_bno
-			)
-				robentry_stomp[n4] = TRUE;
-		end
-	
-		if (Qupls4_pkg::SUPPORT_BACKOUT) begin
-			// These (3) instructions must be turned into copy-targets because even if
-			// they should not execute, following instructions from the target address
-			// may have registers depending on the mappings.
-			if (fcu_idv && (rob[fcu_id].op.decbus.br || rob[fcu_id].op.decbus.cjb)) begin
-		 		if (rob[n4].grp==rob[fcu_id].grp && rob[n4].sn > rob[fcu_id].sn)
-		 			robentry_stomp[n4] = FALSE;
+begin
+
+	for (n4 = 0; n4 < Qupls4_pkg::ROB_ENTRIES; n4 = n4 + 1) begin
+		robentry_stomp[n4] = FALSE;
+		// Stomp on instructions between the branch and the destination.
+		if (branch_resolved) begin
+			if (found_destination) begin
+				if (rob[n4].sn < rob[destination_rndx].sn && rob[n4].sn > rob[missid].sn)
+					robentry_stomp[n4] = TRUE;
+			end
+			else begin
+				// The first three groups of instructions after miss needs to be stomped on 
+				// with no target copies. After that copy targets are in effect.
+		//	((branchmiss/*||((takb&~rob[fcu_id].bt) && (fcu_v2|fcu_v3|fcu_v4))*/) || (branch_state<Qupls4_pkg::BS_DONE2 && branch_state!=Qupls4_pkg::BS_IDLE))
+				if ((branchmiss || (branch_state<Qupls4_pkg::BS_DONE2 && branch_state!=Qupls4_pkg::BS_IDLE)) &&
+					rob[n4].sn > rob[missid].sn &&
+					fcu_idv	&& // miss_idv
+					rob[n4].op.pc.stream!=kept_stream
+				)
+					robentry_stomp[n4] = TRUE;
+			end
+		
+			if (Qupls4_pkg::SUPPORT_BACKOUT) begin
+				// These (3) instructions must be turned into copy-targets because even if
+				// they should not execute, following instructions from the target address
+				// may have registers depending on the mappings.
+				if (fcu_idv && (rob[fcu_id].op.decbus.br || rob[fcu_id].op.decbus.cjb)) begin
+			 		if (rob[n4].grp==rob[fcu_id].grp && rob[n4].sn > rob[fcu_id].sn)
+			 			robentry_stomp[n4] = FALSE;
+				end
+			end
+			else begin
+				if (fcu_idv && rob[fcu_id].op.decbus.br && !takb) begin
+			 		if (rob[n4].grp==rob[fcu_id].grp && rob[n4].sn > rob[fcu_id].sn)
+			 			robentry_stomp[n4] = FALSE;
+				end
 			end
 		end
-		else begin
-			if (fcu_idv && rob[fcu_id].op.decbus.br && !takb) begin
-		 		if (rob[n4].grp==rob[fcu_id].grp && rob[n4].sn > rob[fcu_id].sn)
-		 			robentry_stomp[n4] = FALSE;
-			end
-		end
+
+		// Stomp on any dependent instructions.
+		if (stomped[rob[n4].op.pc.stream])
+			robentry_stomp[n4] = TRUE;
 	end
-	
 end
+
+function [32*5-1:0] fnComputeBranchDependencies;
+input [4:0] ks;
+integer nn, jj;
+reg [32*5-1:0] list [0:31];
+begin
+    for (jj = 0; jj < 3; jj = jj + 1)
+        list[jj] = 0;
+	for (jj = 0; jj < 3; jj = jj + 1) begin
+	    for (nn = 1; nn < 16; nn = nn + 1)
+	      if (|dep_stream[ks][nn] && nn != ks)
+	        list[jj] = (list[jj] << 5) | dep_stream[ks][nn];
+	    for (nn = 1; nn < 16; nn = nn + 1) begin
+	    	ks = list[jj][4:0];
+	    	list[jj] = list[jj] >> 5;
+	      if (|dep_stream[ks][nn] && nn != ks)
+		    	list[jj+1] = (list[jj+1] << 5) | dep_stream[ks][nn];
+	    end
+  	end
+  	fnComputeBranchDependencies = list[jj];
+end
+endfunction
 
 
 endmodule

@@ -38,7 +38,7 @@ import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
 module Qupls4_branchmiss_pc(rse, pc_stack, bt, takb,
-	misspc, missgrp, dstpc, vector, stomp_bno,
+	misspc, missgrp, dstpc, vector, kept_stream, new_stream, alloc_new_stream,
 	syscall_vector, kernel_vector);
 parameter ABITS=32;
 input Qupls4_pkg::reservation_station_entry_t rse;
@@ -51,7 +51,9 @@ input pc_address_t [4:0] kernel_vector;
 output pc_address_ex_t misspc;
 output reg [2:0] missgrp;
 output pc_address_ex_t dstpc;
-output reg [4:0] stomp_bno;
+output pc_stream_t kept_stream;
+input pc_stream_t new_stream;
+output reg alloc_new_stream;
 
 Qupls4_pkg::micro_op_t ir;
 pc_address_ex_t pc = rse.pc;
@@ -72,42 +74,71 @@ always_comb
 begin
 //	disp = {{38{instr.ins.br.dispHi[3]}},instr.ins.br.dispHi,instr.ins.br.dispLo};
 	misspc.pc = Qupls4_pkg::RSTPC;
-	misspc.bno_t = 6'd1;
-	misspc.bno_f = 6'd1;
+	misspc.stream = 7'd1;
+//	misspc.bno_f = 6'd1;
 	dstpc = pc;					// copy bno fields
-	stomp_bno = 6'd0;
+	kept_stream = 7'd0;
+	alloc_new_stream = 1'b0;
 
 	case(1'b1)
+
 	rse.boi:
-		if (ir.br.md)
+		if (ir.br.md) begin
 			dstpc.pc = ir.brr.Rs3==8'h00 ? vector : argC;
+			dstpc.stream = rse.pc.stream;
+		end
 		else begin
 			disp = {{44{ir.br.disp[19]}},ir.br.disp,1'b0};
 			dstpc.pc = pc.pc + disp;
+			dstpc.stream = rse.pc.stream;
 		end
+
 	rse.bcc:
-		if (ir.br.md)
+		if (ir.br.md) begin
 			dstpc.pc = argC;
+			dstpc.stream = rse.pc.stream;
+		end
 		else begin
 			disp = {{44{ir.br.disp[19]}},ir.br.disp,1'b0};
 			dstpc.pc = pc.pc + disp;
+			dstpc.stream = rse.pc.stream;
 		end
+
 	rse.bsr:
 		begin
 			disp = {{29{ir.bsr.disp[34]}},ir.bsr.disp,1'b0};
 			dstpc.pc = pc.pc + disp;
+			dstpc.stream = new_stream;
+			alloc_new_stream = 1'b1;
 		end
 	rse.jsr:
 		begin
 			disp = {{29{ir.jsr.disp[34]}},ir.jsr.disp,1'b0};
 			dstpc.pc = disp;
+			dstpc.stream = new_stream;
+			alloc_new_stream = 1'b1;
 		end
 	rse.sys:
 		begin
 			case(ir.jsr.Rd)
-			6'h02,6'h22:	dstpc.pc = syscall_vector[Qupls4_pkg::fnNextOm(rse.om)];
-			6'h03,6'h23:	dstpc.pc = kernel_vector[Qupls4_pkg::fnNextOm(rse.om)];
-			default:	dstpc.pc = kernel_vector[Qupls4_pkg::fnNextOm(rse.om)];
+			6'h02,6'h22:
+				begin
+					dstpc.pc = syscall_vector[Qupls4_pkg::fnNextOm(rse.om)];
+					dstpc.stream = new_stream;
+					alloc_new_stream = 1'b1;
+				end
+			6'h03,6'h23:
+				begin
+					dstpc.pc = kernel_vector[Qupls4_pkg::fnNextOm(rse.om)];
+					dstpc.stream = new_stream;
+					alloc_new_stream = 1'b1;
+				end
+			default:
+				begin
+					dstpc.pc = kernel_vector[Qupls4_pkg::fnNextOm(rse.om)];
+					dstpc.stream = new_stream;
+					alloc_new_stream = 1'b1;
+				end
 			endcase
 		end
 	// Must be tested before Ret
@@ -126,32 +157,37 @@ begin
 			misspc = bt ? tpc : argC + {{53{instr[39]}},instr[39:31],instr[12:11]};
 		end
 	*/
-	rse.bcc:
+	rse.boi,rse.bcc:
 		begin
 			case({bt,takb})
 			2'b00:
 				begin
-					misspc = dstpc;
-					stomp_bno = pc.bno_t;
-					stomp_bno = 5'd0;
+					misspc.pc = dstpc;
+//					kept_stream = pc.bno_t;
+					kept_stream = 7'd0;
 				end
 			2'b01:
 				begin
-					misspc = dstpc;
-					stomp_bno = pc.bno_t;
-					stomp_bno = 5'd0;
+					misspc.pc = dstpc;
+					misspc.stream = new_stream;
+					alloc_new_stream = 1'b1;
+					kept_stream = pc.stream;
+//					kept_stream = 5'd0;
 				end
 			2'b10:
 				begin
-					misspc = pc + 4'd6;
-					stomp_bno = dstpc.bno_t;
-					stomp_bno = 5'd0;
+					misspc.pc = pc + 4'd6;
+					misspc.stream = new_stream;
+					alloc_new_stream = 1'b1;
+					kept_stream = dstpc.stream;
+//					kept_stream = 5'd0;
 				end
 			2'b11:
 				begin
-					misspc = pc + 4'd6;
-					stomp_bno = dstpc.bno_t;
-					stomp_bno = 5'd0;
+					misspc.pc = pc + 4'd6;
+					misspc.stream = pc.stream;
+//					kept_stream = dstpc.bno_t;
+					kept_stream = 7'd0;
 				end
 			endcase
 //			misspc = bt ? pc + 4'd5 : pc + {{47{instr[39]}},instr[39:25],instr[12:11]};
@@ -159,8 +195,8 @@ begin
 	default:
 		begin
 			misspc = dstpc;
-			stomp_bno = dstpc.bno_t;
-			stomp_bno = 5'd0;
+//			kept_stream = dstpc.bno_t;
+			kept_stream = 7'd0;
 		end
 	endcase
 end

@@ -108,6 +108,9 @@ parameter RENAMER = 4;
 // =============================================================================
 // =============================================================================
 
+parameter THREADS = 2;
+parameter XSTREAMS = 16;
+
 // 1=move interrupt to the start of the instruction (recommended).
 // 2=defer interrupts to the start of the next instruction.
 // 3=record micro-op number for instruction restart (not recommended).
@@ -1780,7 +1783,7 @@ typedef struct packed {
 	cpu_types_pkg::pregno_t nRd;
 	operating_mode_t om;						// needed for mem ops
 	fround_t rm;										// needed for float-ops
-	cpu_types_pkg::pc_address_t pc;
+	cpu_types_pkg::pc_address_ex_t pc;
 //	logic [63:0] pch;
 	cpu_types_pkg::value_t argI;
 	operand_t [NOPER:0] arg;			// +1 for status
@@ -1789,7 +1792,7 @@ typedef struct packed {
 
 typedef struct packed {
 	// The following fields may change state while an instruction is processed.
-	logic v;									// 1=entry is valid, in use
+	logic [4:0] v;						// 0=entry is invalid, otherwise instruction stream number in use
 	cpu_types_pkg::seqnum_t sn;							// sequence number, decrements when instructions que
 	logic flush;
 	cpu_types_pkg::rob_ndx_t sync_dep;			// sync instruction dependency

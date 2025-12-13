@@ -87,10 +87,15 @@ typedef logic [31:0] half_value_t;
 //typedef logic [63:0] segment_reg_t;
 
 typedef struct packed {
-	logic [4:0] bno_t;				// true branch number
+	logic [4:0] stream;				// instruction fetch stream number
 	logic [4:0] bno_f;				// false branch number
 	pc_address_t pc;
 } pc_address_ex_t;
+
+typedef struct packed {
+	logic [1:0] thread;
+	logic [4:0] stream;
+} pc_stream_t;
 
 typedef struct packed {
 	value_t V1;

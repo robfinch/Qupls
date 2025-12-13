@@ -50,9 +50,11 @@ module Qupls4_btb(rst, clk, en, clk_en, nmi, nmi_addr, irq, irq_addr,
 	commit_pc1, commit_brtgt1, commit_takb1, commit_grp1,
 	commit_pc2, commit_brtgt2, commit_takb2, commit_grp2,
 	commit_pc3, commit_brtgt3, commit_takb3, commit_grp3,
-	bno_bitmap, act_bno
-	);
+	strm_bitmap, act_stream, fet_stream, pcs,
+	new_stream, alloc_stream, free_stream, thread_probability, dep_stream
+);
 parameter DEP=1024;
+parameter MWIDTH = 4;
 input rst;
 input clk;
 input en;
@@ -73,14 +75,14 @@ input cpu_types_pkg::pc_address_ex_t pc3;
 input cpu_types_pkg::pc_address_ex_t pc4;
 output cpu_types_pkg::pc_address_ex_t next_pc;
 input [3:0] p_override;
-input [4:0] po_bno [0:3];
+input [6:0] po_bno [0:3];
 output reg takb0;
 output reg takb1;
 output reg takb2;
 output reg takb3;
-input pc_address_t new_address_mux;
+input pc_address_ex_t new_address_mux;
 input predicted_correctly_dec;
-input pc_address_t new_address_dec;
+input pc_address_ex_t new_address_dec;
 input mip0v;
 input mip1v;
 input mip2v;
@@ -89,7 +91,7 @@ input pe_bsdone;
 input do_bsr;
 input do_ret;
 input do_call;
-input pc_address_t ret_pc;
+input pc_address_ex_t ret_pc;
 input cpu_types_pkg::pc_address_ex_t bsr_tgt;
 input branchmiss;
 input bs_done_oh;
@@ -110,8 +112,18 @@ input cpu_types_pkg::pc_address_ex_t commit_pc3;
 input cpu_types_pkg::pc_address_ex_t commit_brtgt3;
 input commit_takb3;
 input [2:0] commit_grp3;
-output reg [31:0] bno_bitmap;
-output reg [4:0] act_bno;
+
+output [XSTREAMS*THREADS-1:0] strm_bitmap;
+output pc_stream_t act_stream;
+output pc_stream_t fet_stream;
+output pc_stream_t [3:0] new_stream;
+input alloc_stream;
+input [XSTREAMS*THREADS-1:0] free_stream;
+output pc_address_ex_t [XSTREAMS*THREADS-1:0] pcs;
+
+input [7:0] thread_probability [0:3];
+output [XSTREAMS:0] dep_stream [0:XSTREAMS-1];
+
 
 typedef struct packed {
 	logic takb;
@@ -120,16 +132,14 @@ typedef struct packed {
 	cpu_types_pkg::pc_address_t tgt;
 } btb_entry_t;
 
-pc_address_t [31:0] ras;
+pc_address_ex_t [31:0] ras;
 reg [4:0] ras_sp;
 
-pc_address_ex_t [31:0] pcs;
-pc_address_ex_t [31:0] next_pcs;
-reg [4:0] next_act_bno;
-reg [4:0] next_alt_bno;
-reg [63:0] next_bno_bitmap;
-reg [4:0] alt_bno;
-reg [4:0] prev_act_bno;
+pc_address_ex_t [XSTREAMS*THREADS-1] next_pcs;
+pc_stream_t next_act_stream;
+pc_stream_t next_alt_strm;
+reg [XSTREAMS*THREADS-1] next_strm_bitmap;
+pc_stream_t prev_act_stream;
 reg next_is_alt;
 reg is_alt;
 reg [9:0] addrb0;
@@ -140,12 +150,31 @@ btb_entry_t doutb2;
 btb_entry_t doutb3;
 reg w0,w1,w2,w3;
 btb_entry_t tmp0, tmp1, tmp2, tmp3;
-integer nn,mm,jj;
+integer nn,mm,jj,n1,n2,n3;
 genvar g;
 
-wire [5:0] ffz0,ffz1;
-ffz48 uffz0 (.i({16'hFFFF,bno_bitmap}), .o(ffz0));
-ffz48 uffz1 (.i({16'hFFFF,bno_bitmap | (32'd1 << ffz0)}), .o(ffz1));
+// Used to select streams "randomly"
+wire [26:0] lfsro;
+lfsr27 #(.WID(27)) ulfsr1(rst, clk, 1'b1, 1'b0, lfsro);
+
+wire [5:0] ffz0,ffz1,ffz2,ffz3;
+generate begin : gFFZ
+	if (XSTREAMS==32) begin
+ffz48 uffz0 (.i({16'hFFFF,strm_bitmap[ 31: 0]}), .o(ffz0));
+ffz48 uffz1 (.i({16'hFFFF,strm_bitmap[ 63:32]}), .o(ffz1));
+ffz48 uffz2 (.i({16'hFFFF,strm_bitmap[ 95:64]}), .o(ffz2));
+ffz48 uffz3 (.i({16'hFFFF,strm_bitmap[127:96]}), .o(ffz3));
+end
+else if (XSTREAMS==16) begin
+ffz24 uffz0 (.i({8'hFF,strm_bitmap[ 15: 0]}), .o(ffz0));
+ffz24 uffz1 (.i({8'hFF,strm_bitmap[ 31:16]}), .o(ffz1));
+ffz24 uffz2 (.i({8'hFF,strm_bitmap[ 47:32]}), .o(ffz2));
+ffz24 uffz3 (.i({8'hFF,strm_bitmap[ 63:48]}), .o(ffz3));
+end
+end
+endgenerate
+
+//ffz48 uffz1 (.i({16'hFFFF,strm_bitmap | (144'd1 << ffz0)}), .o(ffz1));
 
    // xpm_memory_sdpram: Simple Dual Port RAM
    // Xilinx Parameterized Macro, version 2022.2
@@ -469,6 +498,34 @@ ffz48 uffz1 (.i({16'hFFFF,bno_bitmap | (32'd1 << ffz0)}), .o(ffz1));
 
 always_comb//ff @(posedge clk)
 	addrb0 = pc0.pc[10:1];
+
+
+Qupls4_btb_stream_bitmap usb1
+(
+	.rst(rst),
+	.clk(clk),
+	.clk_en(clk_en),
+	.ffz0(ffz0),
+	.act_stream(act_stream),
+	.free_stream(free_stream),
+	.alloc_stream(alloc_stream),
+	.new_stream(new_stream),
+	.dep_stream(dep_stream),
+	.strm_bitmap(strm_bitmap),
+	.next_strm_bitmap(next_strm_bitmap)
+);
+
+// Choose a fetch stream
+always_comb
+begin
+	fet_stream = {$bits(pc_stream_t){1'b0}};
+	for (n2 = 0; n2 < XSTREAMS*THREADS; n2 = n2 + 1)
+		if (strm_bitmap[n2] && (lfsro[7:0] <= thread_probability[n2 >> $clog2(XSTREAMS)]))
+			fet_stream = pc_stream_t'(n2);
+	if (fet_stream=={$bits(pc_stream_t){1'b0}})
+		fet_stream = act_stream;
+end
+	
 	
 // Make BS_DONE sticky
 reg bs_done1, bs_done;
@@ -486,13 +543,12 @@ always_comb
 
 always_comb
 if (rst) begin
-	next_bno_bitmap = 32'h3;
-	next_act_bno = ffz0;
-	next_alt_bno = ffz1;
+	next_act_stream = {2'd0,ffz0[4:0]};
+//	next_alt_strm = ffz1;
 	next_is_alt = 1'b0;
-	for (nn = 0; nn < 32; nn = nn + 1) begin
-		next_pcs[nn].bno_t = 6'd1;
-		next_pcs[nn].bno_f = 6'd1;
+	for (nn = 0; nn < XSTREAM*THREADS; nn = nn + 1) begin
+		next_pcs[nn].stream = {(nn >> $clog2(XSTREAMS)),{$clog2(XSTREAMS){1'd1}}};
+//		next_pcs[nn].bno_f = 6'd1;
 		next_pcs[nn].pc = RSTPC;
 	end
 	takb0 = 1'b0;
@@ -502,16 +558,14 @@ if (rst) begin
 end
 else begin
 //	next_act_bno = is_alt ? prev_act_bno : act_bno;
-	next_act_bno = 5'd1;//act_bno;
-	next_alt_bno = alt_bno;
-	next_bno_bitmap = bno_bitmap;
-	next_bno_bitmap[0] = 1'b1;
-	next_is_alt = 1'b0;
+	next_act_stream = fet_stream;
+//	next_alt_strm = alt_bno;
+//	next_is_alt = 1'b0;
 	takb0 = 1'b0;
 	takb1 = 1'b0;
 	takb2 = 1'b0;
 	takb3 = 1'b0;
-	for (nn = 0; nn < 32; nn = nn + 1)
+	for (nn = 0; nn < XSTREAMS*THREADS; nn = nn + 1)
 		next_pcs[nn] = pcs[nn];
 	/* Under construction
 	if (p_override[0])
@@ -562,40 +616,36 @@ else begin
 	*/
 	// Under construction: RAS
 	if (do_ret) begin
-		next_act_bno = act_bno;
-		next_pcs[next_act_bno].pc = ras[ras_sp];
-		next_pcs[next_act_bno].bno_t = act_bno;
-		next_pcs[next_act_bno].bno_f = 6'd0;
+		next_pcs[act_stream].pc = ras[ras_sp];
+//		next_pcs[next_act_stream].bno_t = act_bno;
+//		next_pcs[next_act_stream].bno_f = 6'd0;
 	end
 	// Decode stage corrections override mux stage.
 	else if (!predicted_correctly_dec) begin
-		next_act_bno = act_bno;
-		next_pcs[act_bno] = new_address_dec;
+		next_pcs[act_stream] = new_address_dec;
 	end
 	else if (|p_override) begin
-		next_act_bno = act_bno;
-		next_pcs[act_bno] = new_address_mux;
+		next_pcs[act_stream] = new_address_mux;
 	end
 	else if (do_bsr) begin
-		next_pcs[bsr_tgt.bno_t] = bsr_tgt;
+		next_pcs[bsr_tgt.stream] = bsr_tgt;
 	end
 	else if (branchmiss) begin//(bs_done_oh||bs_done) begin
-		next_act_bno = misspc.bno_t;
-		next_alt_bno = 6'd0;
-		next_pcs[next_act_bno].pc = misspc;
-		next_pcs[next_act_bno].bno_t = next_act_bno;
-		next_pcs[next_act_bno].bno_f = 6'd0;
+		next_alt_strm = 7'd0;
+		next_pcs[misspc.stream].pc = misspc;
+		next_pcs[misspc.stream].stream = next_act_stream;
+//		next_pcs[next_act_stream].bno_f = 6'd0;
 		// The branch resolved, so free up alternate PC stream
-		next_bno_bitmap[misspc.bno_f] = 1'b0;
+//		next_strm_bitmap[act_stream] = 1'b0;
 	end
 	else if (en && pc0.pc==doutb0.pc && doutb0.takb) begin
-		next_act_bno = pc0.bno_t;//ffz1;
-		next_alt_bno = ffz0;
-		next_pcs[next_act_bno].pc = doutb0.tgt;
-		next_pcs[next_act_bno].bno_t = next_act_bno;
-		next_pcs[next_act_bno].bno_f = ffz0;
+		// Inherit the stream from pc0
+//		next_alt_strm = ffz0;
+		next_pcs[pc0.stream].pc = doutb0.tgt;
+		next_pcs[pc0.stream].stream = next_act_stream;
+//		next_pcs[next_act_bno].bno_f = ffz0;
 		// Alocate two streams, one for true, one for false
-		next_bno_bitmap[ffz0] = 1'b1;
+//		next_bno_bitmap[ffz0] = 1'b1;
 		/*
 		next_bno_bitmap[ffz0] = 1'b1;
 		next_pcs[ffz0].pc = pc0.pc + 5'd8;
@@ -605,12 +655,11 @@ else begin
 		takb0 = 1'b1;
 	end
 	else if (en && pc1.pc==doutb1.pc && doutb1.takb) begin
-		next_act_bno = pc1.bno_t;//ffz0;
-		next_alt_bno = ffz0;
-		next_pcs[next_act_bno].pc = doutb1.tgt;
-		next_pcs[next_act_bno].bno_t = next_act_bno;
-		next_pcs[next_act_bno].bno_f = ffz0;
-		next_bno_bitmap[ffz0] = 1'b1;
+//		next_alt_bno = ffz0;
+		next_pcs[pc1.stream].pc = doutb1.tgt;
+		next_pcs[pc1.stream].stream = next_act_stream;
+//		next_pcs[next_act_bno].bno_f = ffz0;
+//		next_bno_bitmap[ffz0] = 1'b1;
 		/*
 		next_bno_bitmap[ffz0] = 1'b1;
 		next_pcs[ffz0].pc = pc1.pc + 5'd8;
@@ -620,12 +669,11 @@ else begin
 		takb1 = 1'b1;
 	end
 	else if (en && pc2.pc==doutb2.pc && doutb2.takb) begin
-		next_act_bno = pc2.bno_t;//ffz0;
-		next_alt_bno = ffz0;
-		next_pcs[next_act_bno].pc = doutb2.tgt;
-		next_pcs[next_act_bno].bno_t = next_act_bno;
-		next_pcs[next_act_bno].bno_f = ffz0;
-		next_bno_bitmap[ffz0] = 1'b1;
+//		next_alt_bno = ffz0;
+		next_pcs[pc2.stream].pc = doutb2.tgt;
+		next_pcs[pc2.stream].stream = next_act_stream;
+//		next_pcs[next_act_bno].bno_f = ffz0;
+//		next_bno_bitmap[ffz0] = 1'b1;
 		/*
 		next_bno_bitmap[ffz0] = 1'b1;
 		next_pcs[ffz0].pc = pc2.pc + 5'd8;
@@ -635,12 +683,11 @@ else begin
 		takb2 = 1'b1;
 	end
 	else if (en && pc3.pc==doutb3.pc && doutb3.takb) begin
-		next_act_bno = pc3.bno_t;//ffz0;
-		next_alt_bno = ffz0;
-		next_pcs[next_act_bno].pc = doutb3.tgt;
-		next_pcs[next_act_bno].bno_t = next_act_bno;
-		next_pcs[next_act_bno].bno_f = ffz0;
-		next_bno_bitmap[ffz0] = 1'b1;
+//		next_alt_bno = ffz0;
+		next_pcs[pc3.stream].pc = doutb3.tgt;
+		next_pcs[pc3.stream].stream = next_act_stream;
+//		next_pcs[next_act_bno].bno_f = ffz0;
+//		next_bno_bitmap[ffz0] = 1'b1;
 		/*
 		next_bno_bitmap[ffz0] = 1'b1;
 		next_pcs[ffz0].pc = pc3.pc + 5'd8;
@@ -666,32 +713,32 @@ else begin
 				next_pc = {pc[$bits(pc_address_t)-1:6],pc4[5:0]};
 			*/
 			if (micro_machine_active) begin
-				next_pcs[next_act_bno] = pc;
+				next_pcs[next_act_stream] = pc;
 			end
 			else begin
 				case(1'b1)
-				mip0v:	begin next_pcs[next_act_bno] = pc; next_pcs[next_act_bno].pc = fnAddToIP(pc.pc,6'd6); end
-				mip1v:	begin next_pcs[next_act_bno] = pc; next_pcs[next_act_bno].pc = fnAddToIP(pc.pc,6'd12); end
-				mip2v:	begin next_pcs[next_act_bno] = pc; next_pcs[next_act_bno].pc = fnAddToIP(pc.pc,6'd18); end
-				mip3v:	begin next_pcs[next_act_bno] = pc; next_pcs[next_act_bno].pc = fnAddToIP(pc.pc,6'd24); end
-				default:	begin next_pcs[next_act_bno] = pc; next_pcs[next_act_bno].pc = fnAddToIP(pc.pc,6'd24); end	// four instructions
+				mip0v:	begin next_pcs[next_act_stream] = pc; next_pcs[next_act_stream].pc = pc.pc + 6'd6; end
+				mip1v:	begin next_pcs[next_act_stream] = pc; next_pcs[next_act_stream].pc = pc.pc + 6'd12; end
+				mip2v:	begin next_pcs[next_act_stream] = pc; next_pcs[next_act_stream].pc = pc.pc + 6'd18; end
+				mip3v:	begin next_pcs[next_act_stream] = pc; next_pcs[next_act_stream].pc = pc.pc + 6'd24; end
+				default:	begin next_pcs[act_stream] = pc; next_pcs[act_stream].pc = pc.pc + MWIDTH*6; end	// four instructions
 				endcase
 			end
 		end
 		// If stuck on the same PC, fetch alternate path
-		if (next_pcs[next_act_bno].pc==pc.pc) begin
+//		if (next_pcs[next_act_stream].pc==pc.pc) begin
 //			next_is_alt = 1'b1;
 //			next_act_bno = alt_bno;
-		end
+//		end
 	end
 end
 
 generate begin : gPCs
-	for (g = 0; g < 32; g = g + 1) begin
+	for (g = 0; g < XSTREAMS*THREADS; g = g + 1) begin
 		always_ff @(posedge clk)
 		if (rst) begin
-			pcs[g].bno_t <= 6'd1;
-			pcs[g].bno_f <= 6'd1;
+			pcs[g].stream <= {g >> $clog2(XSTREAMS),{$clog2(XSTREAMS){1'd1}}};
+//			pcs[g].bno_f <= 6'd1;
 			pcs[g].pc <= RSTPC;
 		end
 		else
@@ -702,15 +749,15 @@ endgenerate
 
 always_ff @(posedge clk)
 if (rst) begin
-	prev_act_bno <= 6'd1;
-	act_bno <= 6'd1;
-	alt_bno <= 6'd1;
+	prev_act_stream <= {2'd0,5'd1};
+	act_stream <= {2'd0,5'd1};
+//	alt_bno <= 6'd1;
 end
 else begin
 	if (clk_en) begin
-		prev_act_bno <= act_bno;
-		act_bno <= next_act_bno;
-		alt_bno <= next_alt_bno;
+		prev_act_stream <= act_stream;
+		act_stream <= next_act_stream;
+//		alt_bno <= next_alt_bno;
 	end
 end
 
@@ -740,15 +787,7 @@ else begin
 	if (clk_en)
 		is_alt <= next_is_alt;
 end
-always_ff @(posedge clk)
-if (rst)
-	bno_bitmap <= 64'h3;
-else begin
-	if (clk_en)
-		bno_bitmap <= next_bno_bitmap;
-end
-
-assign next_pc = next_pcs[next_act_bno];
+assign next_pc = next_pcs[next_act_stream];
 
 always_ff @(posedge clk)
 if (rst) begin
