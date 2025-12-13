@@ -72,7 +72,7 @@ input pc_address_ex_t pc_fet;
 input pc_address_ex_t pc_mux;
 input pc_address_ex_t pc_dec;
 input pc_address_ex_t pc_ren;
-input [4:0] dep_stream [0:XSTREAMS-1][0:XSTREAMS-1];
+input [XSTREAMS-1:0] dep_stream [0:XSTREAMS-1];
 output reg stomp_fet;
 output reg stomp_mux;			// IRQ / micro-code Mux stage
 output reg stomp_dec;
@@ -103,7 +103,7 @@ reg do_bsr_dec;
 reg do_bsr_ren;
 reg do_bsr_que;
 reg do_bsr_rrr;
-reg [31:0] stomped;
+reg [XSTREAMS-1:0] stomped;
 
 reg stomp_pipeline;
 reg [3:0] spl;
@@ -125,18 +125,11 @@ edge_det ued1 (.rst(rst), .clk(clk), .ce(advance_pipeline), .i(stomp_pipeline), 
 always_ff @(posedge clk) if (advance_pipeline_seg2) bsi <= {bsi[1:0],pe_bsidle};
 
 integer n5;
-reg [32*5-1:0] list;
+reg [XSTREAMS-1:0] list;
 always_comb
 begin
 	// Compute dependencies to stomp.
-	stomped = 32'd0;
-	
-	list = fnComputeBranchDependencies(kept_stream);
-	for (n5 = 0; n5 < XSTREAMS; n5 = n5 + 1) begin
-		stomped[list[4:0]] = 1'b1;
-		list = list >> 5;
-	end
-	
+	stomped = fnComputeBranchDependencies(kept_stream);
 end
 
 always_ff @(posedge clk)
@@ -384,22 +377,23 @@ begin
 	end
 end
 
-function [32*5-1:0] fnComputeBranchDependencies;
+function [XSTREAMS-1:0] fnComputeBranchDependencies;
 input [4:0] ks;
-integer nn, jj;
-reg [32*5-1:0] list [0:XSTREAMS-1];
+integer nn, jj, kk, kj;
+reg [XSTREAMS-1:0] list [0:BRANCH_LEVELS];
 begin
-    for (jj = 0; jj < 4; jj = jj + 1)
+    kj = ks;
+    for (jj = 0; jj < BRANCH_LEVELS; jj = jj + 1)
         list[jj] = 0;
-	for (jj = 0; jj < 4; jj = jj + 1) begin
+		for (jj = 0; jj < BRANCH_LEVELS; jj = jj + 1) begin
 	    for (nn = 1; nn < XSTREAMS; nn = nn + 1)
-	      if (|dep_stream[ks][nn] && nn != ks)
-	        list[jj] = (list[jj] << 5) | dep_stream[ks][nn];
+	      if (|dep_stream[kj][nn] && nn != kj)
+	        list[jj][nn] = list[jj][nn] | dep_stream[kj][nn];
 	    for (nn = 1; nn < XSTREAMS; nn = nn + 1) begin
-	    	ks = list[jj][4:0];
-	    	list[jj] = list[jj] >> 5;
-	      if (|dep_stream[ks][nn] && nn != ks)
-		    	list[jj+1] = (list[jj+1] << 5) | dep_stream[ks][nn];
+	    	kj = list[jj][nn]?nn:5'd0;
+	    	for (kk = 1; kk < XSTREAMS; kk = kk + 1)
+	      	if (|dep_stream[kj][kk] && kk != kj)
+		    		list[jj+1][kk] = list[jj+1][kk] | dep_stream[kj][kk];
 	    end
   	end
   	fnComputeBranchDependencies = list[jj];
