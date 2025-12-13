@@ -72,7 +72,7 @@ input pc_address_ex_t pc_fet;
 input pc_address_ex_t pc_mux;
 input pc_address_ex_t pc_dec;
 input pc_address_ex_t pc_ren;
-input [4:0] dep_stream [0:31][0:31];
+input [4:0] dep_stream [0:XSTREAMS-1][0:XSTREAMS-1];
 output reg stomp_fet;
 output reg stomp_mux;			// IRQ / micro-code Mux stage
 output reg stomp_dec;
@@ -132,7 +132,7 @@ begin
 	stomped = 32'd0;
 	
 	list = fnComputeBranchDependencies(kept_stream);
-	for (n5 = 0; n5 < 16; n5 = n5 + 1) begin
+	for (n5 = 0; n5 < XSTREAMS; n5 = n5 + 1) begin
 		stomped[list[4:0]] = 1'b1;
 		list = list >> 5;
 	end
@@ -387,15 +387,15 @@ end
 function [32*5-1:0] fnComputeBranchDependencies;
 input [4:0] ks;
 integer nn, jj;
-reg [32*5-1:0] list [0:31];
+reg [32*5-1:0] list [0:XSTREAMS-1];
 begin
-    for (jj = 0; jj < 3; jj = jj + 1)
+    for (jj = 0; jj < 4; jj = jj + 1)
         list[jj] = 0;
-	for (jj = 0; jj < 3; jj = jj + 1) begin
-	    for (nn = 1; nn < 16; nn = nn + 1)
+	for (jj = 0; jj < 4; jj = jj + 1) begin
+	    for (nn = 1; nn < XSTREAMS; nn = nn + 1)
 	      if (|dep_stream[ks][nn] && nn != ks)
 	        list[jj] = (list[jj] << 5) | dep_stream[ks][nn];
-	    for (nn = 1; nn < 16; nn = nn + 1) begin
+	    for (nn = 1; nn < XSTREAMS; nn = nn + 1) begin
 	    	ks = list[jj][4:0];
 	    	list[jj] = list[jj] >> 5;
 	      if (|dep_stream[ks][nn] && nn != ks)
