@@ -7731,10 +7731,10 @@ begin
 	cp_stall <= 1'b0;
 	loadflags_buf <= 256'd0;
 	storeflags_buf <= 256'd0;
-	thread_probability[0] = 8'h3;
-	thread_probability[1] = 8'h7;
-	thread_probability[2] = 8'h7;
-	thread_probability[3] = 8'h7;
+	thread_probability[0] = 8'hFF;
+	thread_probability[1] = 8'h00;
+	thread_probability[2] = 8'h00;
+	thread_probability[3] = 8'h00;
 end
 endtask
 
@@ -8156,6 +8156,8 @@ begin
 		Qupls4_pkg::CSR_SR:		res = sr;
 		Qupls4_pkg::CSR_TICK:	res = tick;
 		Qupls4_pkg::CSR_ASID:	res = asid;
+		Qupls4_pkg::CSR_THREAD_WEIGHT:	
+			res = {32'd0,thread_probability[3],thread_probability[2],thread_probability[1],thread_probability[0]};
 		16'h3080:	res = sr_stack[0];
 		(Qupls4_pkg::CSR_MEPC+0):	res = pc_stack[0];
 		16'b0011000000110???:	res = kernel_vectors[regno[2:0]];
@@ -8220,6 +8222,13 @@ begin
 				irq_downcount_base <= 4'd8;
 			end
 		Qupls4_pkg::CSR_ASID: 	asid <= val;
+		Qupls4_pkg::CSR_THREAD_WEIGHT:
+			begin
+				thread_probability[0] <= val[7:4]==4'h0 ? 8'h10 : val[7:0];
+				thread_probability[1] <= val[15:8];
+				thread_probability[2] <= val[23:16];
+				thread_probability[3] <= val[31:24];
+			end
 		16'h3080: sr_stack[0] <= val[31:0];
 		Qupls4_pkg::CSR_MEPC:	pc_stack[0] <= val;
 		16'b0011000000110???:	kernel_vectors[regno[2:0]] <= val;
