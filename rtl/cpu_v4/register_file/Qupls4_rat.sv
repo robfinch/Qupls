@@ -254,7 +254,7 @@ always_comb
 always_ff @(posedge clk)
 	cpram_en1 <= cpram_en;
 
-Qupls4_checkpointRam 
+Qupls4_checkpoint_ram 
 # (.NRDPORTS(1))
 cpram1
 (

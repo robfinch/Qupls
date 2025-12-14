@@ -187,13 +187,14 @@ generate begin : gffz
   	begin
 		FP64 fa,fb;
   	wire [6:0] popcnt;
+  	wire fasig_hidden,fbsig_hidden;
   	cntpop64 upopcnt64 (.i({a[WID-1:0]}),.o(popcnt));
  
 		fpDecomp64 udc1a (
 			.i(a),
 			.sgn(fa.sign),
 			.exp(fa.exp),
-			.fract(fa.sig),
+			.fract({fasig_hidden,fa.sig}),
 			.xz(a_dn),
 			.vz(az),
 			.inf(aInf),
@@ -206,7 +207,7 @@ generate begin : gffz
 			.i(b),
 			.sgn(fb.sign),
 			.exp(fb.exp),
-			.fract(fb.sig),
+			.fract({fbsig_hidden,fb.sig}),
 			.xz(b_dn),
 			.vz(bz),
 			.inf(bInf),
@@ -705,6 +706,7 @@ begin
 			default:	bus = zero;
 			endcase
 		Qupls4_pkg::FN_MOVE:	bus = b;
+		default:	bus = zero;
 		endcase
 
 	Qupls4_pkg::OP_FLTH,Qupls4_pkg::OP_FLTS,Qupls4_pkg::OP_FLTD,Qupls4_pkg::OP_FLTQ:

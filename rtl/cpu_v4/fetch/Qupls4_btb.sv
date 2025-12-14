@@ -49,7 +49,7 @@ module Qupls4_btb(rst, clk, en, clk_en, nmi, nmi_addr, irq, irq_addr,
 	commit_pc1, commit_brtgt1, commit_takb1, commit_grp1,
 	commit_pc2, commit_brtgt2, commit_takb2, commit_grp2,
 	commit_pc3, commit_brtgt3, commit_takb3, commit_grp3,
-	strm_bitmap, fet_stream, pcs,
+	strm_bitmap, act_stream, pcs,
 	new_stream, alloc_stream, free_stream, thread_probability, dep_stream
 );
 parameter DEP=1024;
@@ -113,7 +113,7 @@ input commit_takb3;
 input [2:0] commit_grp3;
 
 output [XSTREAMS*THREADS-1:0] strm_bitmap;
-output pc_stream_t fet_stream;
+output pc_stream_t act_stream;
 output pc_stream_t [3:0] new_stream;
 input alloc_stream;
 input [XSTREAMS*THREADS-1:0] free_stream;
@@ -678,13 +678,13 @@ always_ff @(posedge clk)
 if (rst) begin
 	prev_fet_stream.stream <= 5'd1;
 	prev_fet_stream.thread <= 2'd0;
-	fet_stream.stream <= 5'd1;
-	fet_stream.thread <= 2'd0;
+	act_stream.stream <= 5'd1;
+	act_stream.thread <= 2'd0;
 end
 else begin
 	if (clk_en) begin
-		prev_fet_stream <= fet_stream;
-		fet_stream <= next_fet_stream;
+		prev_fet_stream <= act_stream;
+		act_stream <= next_fet_stream;
 	end
 end
 

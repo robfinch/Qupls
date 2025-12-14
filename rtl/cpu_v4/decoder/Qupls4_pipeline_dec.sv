@@ -43,7 +43,6 @@ module Qupls4_pipeline_dec(rst_i, rst, clk, en, clk5x, ph4, new_cline_mux, cline
 	restored, restore_list, unavail_list, sr, uop_num, flush_mux, flush_dec,
 	tags2free, freevals, bo_wr, bo_preg,
 	stomp_dec, stomp_mux, kept_stream, pg_mux,
-	Rt0_dec, Rt1_dec, Rt2_dec, Rt3_dec, Rt0_decv, Rt1_decv, Rt2_decv, Rt3_decv,
 	micro_machine_active_mux, micro_machine_active_dec,
 	pg_dec,
 	mux_stallq, ren_stallq, ren_rst_busy, avail_reg,
@@ -75,14 +74,6 @@ input pregno_t [3:0] tags2free;
 input [3:0] freevals;
 input bo_wr;
 input pregno_t bo_preg;
-output pregno_t Rt0_dec;
-output pregno_t Rt1_dec;
-output pregno_t Rt2_dec;
-output pregno_t Rt3_dec;
-output Rt0_decv;
-output Rt1_decv;
-output Rt2_decv;
-output Rt3_decv;
 output Qupls4_pkg::pipeline_group_reg_t pg_dec;
 output reg mux_stallq;
 output ren_stallq;
@@ -151,10 +142,6 @@ Qupls4_pkg::pipeline_reg_t nopi;
 Qupls4_pkg::decode_bus_t [MWIDTH-1:0] dec;
 Qupls4_pkg::pipeline_reg_t [MWIDTH-1:0] pr_dec;
 Qupls4_pkg::pipeline_reg_t [MWIDTH-1:0] prd, inso;
-pregno_t Rt0_dec1;
-pregno_t Rt1_dec1;
-pregno_t Rt2_dec1;
-pregno_t Rt3_dec1;
 Qupls4_pkg::pipeline_reg_t [MWIDTH-1:0] tpr;
 
 always_ff @(posedge clk)
@@ -176,7 +163,7 @@ Qupls4_microop_mem uuop1
 	.carry_in(1'b0),
 	.count(uop_count[g]),
 	.uop(uop[g]),
-	.thread(pg_mux.pr[g].op.pc.thread)
+	.thread(pg_mux.pr[g].op.pc.stream.thread)
 );
 end
 endgenerate
@@ -349,127 +336,9 @@ begin
 	nopi.decbus.alu = 1'b1;
 end
 
-generate begin : gRenamer
-	if (Qupls4_pkg::SUPPORT_RENAMER) begin
-	if (Qupls4_pkg::RENAMER==3) begin
-Stark_reg_renamer3 utrn2
-(
-	.rst(rst_i),		// rst_i here not irst!
-	.clk(clk),
-	.clk5x(clk5x),
-	.ph4(ph4),
-	.en(en),
-	.restore(restored),
-	.restore_list(restore_list & ~unavail_list),
-	.tags2free(tags2free),
-	.freevals(freevals),
-	.alloc0(inso[0].op.decbus.Rd!=8'd0 && inso[0].v),// & ~stomp0),
-	.alloc1(inso[1].op.decbus.Rd!=8'd0 && inso[1].v),// & ~stomp1),
-	.alloc2(inso[2].op.decbus.Rd!=8'd0 && inso[2].v),// & ~stomp2),
-	.alloc3(inso[3].op.decbus.Rd!=8'd0 && inso[3].v),// & ~stomp3),
-	.wo0(Rt0_dec),
-	.wo1(Rt1_dec),
-	.wo2(Rt2_dec),
-	.wo3(Rt3_dec),
-	.wv0(Rt0_decv),
-	.wv1(Rt1_decv),
-	.wv2(Rt2_decv),
-	.wv3(Rt3_decv),
-	.avail(avail_reg),
-	.stall(ren_stallq)
-);
-assign ren_rst_busy = FALSE;
-end
-else if (Qupls4_pkg::RENAMER==4)
-Stark_reg_renamer4 utrn1
-(
-	.rst(rst_i),		// rst_i here not irst!
-	.clk(clk),
-//	.clk5x(clk5x),
-//	.ph4(ph4),
-	.en(en),
-	.restore(restored),
-	.restore_list(restore_list & ~unavail_list),
-	.tags2free(tags2free),
-	.freevals(freevals),
-	.alloc0(inso[0].decbus.Rd!=8'd0 && inso[0].v),// & ~stomp0),
-	.alloc1(inso[1].decbus.Rd!=8'd0 && inso[1].v),// & ~stomp1),
-	.alloc2(inso[2].decbus.Rd!=8'd0 && inso[2].v),// & ~stomp2),
-	.alloc3(inso[3].decbus.Rd!=8'd0 && inso[3].v),// & ~stomp3),
-	.wo0(Rt0_dec),
-	.wo1(Rt1_dec),
-	.wo2(Rt2_dec),
-	.wo3(Rt3_dec),
-	.wv0(Rt0_decv),
-	.wv1(Rt1_decv),
-	.wv2(Rt2_decv),
-	.wv3(Rt3_decv),
-	.avail(avail_reg),
-	.stall(ren_stallq),
-	.rst_busy(ren_rst_busy)
-);
-else
 /*
-Stark_reg_name_supplier2 utrn1
-(
-	.rst(rst_i),		// rst_i here not irst!
-	.clk(clk),
-//	.clk5x(clk5x),
-//	.ph4(ph4),
-	.en(en),
-	.restore(restored),
-	.restore_list(restore_list & ~unavail_list),
-	.tags2free(tags2free),
-	.freevals(freevals),
-	.bo_wr(bo_wr),
-	.bo_preg(bo_preg),
-	.alloc0(inso[0].op.decbus.Rd!=8'd0 && inso[0].v ),// & ~stomp0),
-	.alloc1(inso[1].op.decbus.Rd!=8'd0 && inso[1].v && !inso[0].op.decbus.bl),// & ~stomp1),
-	.alloc2(inso[2].op.decbus.Rd!=8'd0 && inso[2].v && !inso[0].op.decbus.bl && !inso[1].op.decbus.bl),// & ~stomp2),
-	.alloc3(inso[3].op.decbus.Rd!=8'd0 && inso[3].v && !inso[0].op.decbus.bl && !inso[1].op.decbus.bl && !inso[2].op.decbus.bl),// & ~stomp3),
-	.o0(Rt0_dec[1]),
-	.o1(Rt1_dec[1]),
-	.o2(Rt2_dec[1]),
-	.o3(Rt3_dec[1]),
-	.ov0(Rt0_decv),
-	.ov1(Rt1_decv),
-	.ov2(Rt2_decv),
-	.ov3(Rt3_decv),
-	.avail(avail_reg),
-	.stall(ren_stallq),
-	.rst_busy(ren_rst_busy)
-);
-assign Rt0_dec = inso[0].op.decbus.Rd==8'd0 ? 9'd0 : Rt0_dec[1];
-assign Rt1_dec = inso[1].op.decbus.Rd==8'd0 ? 9'd0 : Rt1_dec[1];
-assign Rt2_dec = inso[2].op.decbus.Rd==8'd0 ? 9'd0 : Rt2_dec[1];
-assign Rt3_dec = inso[3].op.decbus.Rd==8'd0 ? 9'd0 : Rt3_dec[1];
+	Renaming has moved to Qupls4 mainline as asynch process.
 */
-	assign Rt0_dec = inso[0].decbus.Rd;
-	assign Rt1_dec = inso[1].decbus.Rd;
-	assign Rt2_dec = inso[2].decbus.Rd;
-	assign Rt3_dec = inso[3].decbus.Rd;
-	assign Rt0_decv = TRUE;
-	assign Rt1_decv = TRUE;
-	assign Rt2_decv = TRUE;
-	assign Rt3_decv = TRUE;
-	assign ren_stallq = FALSE;
-	assign ren_rst_busy = FALSE;
-end
-else begin
-	assign Rt0_dec = inso[0].decbus.Rd;
-	assign Rt1_dec = inso[1].decbus.Rd;
-	assign Rt2_dec = inso[2].decbus.Rd;
-	assign Rt3_dec = inso[3].decbus.Rd;
-	assign Rt0_decv = TRUE;
-	assign Rt1_decv = TRUE;
-	assign Rt2_decv = TRUE;
-	assign Rt3_decv = TRUE;
-	assign ren_stallq = FALSE;
-	assign ren_rst_busy = FALSE;
-end
-//assign ren_rst_busy = 1'b0;
-end
-endgenerate
 
 /*
 always_ff @(posedge clk)
@@ -915,12 +784,12 @@ always_comb inso = prd;
 reg [63:0] bsr0_tgt, bsr1_tgt, bsr2_tgt;
 reg [63:0] jsr0_tgt, jsr1_tgt, jsr2_tgt;
 reg [63:0] new_address;
-always_comb bsr0_tgt = {{23{pr_dec[0].uop.bsr.disp[40]}},pr_dec[0].uop.bsr.disp,1'b0} + pr_dec[0].pc.pc;
-always_comb bsr1_tgt = {{23{pr_dec[1].uop.bsr.disp[40]}},pr_dec[1].uop.bsr.disp,1'b0} + pr_dec[1].pc.pc;
-always_comb bsr2_tgt = {{23{pr_dec[2].uop.bsr.disp[40]}},pr_dec[2].uop.bsr.disp,1'b0} + pr_dec[2].pc.pc;
-always_comb jsr0_tgt = {{23{pr_dec[0].uop.bsr.disp[40]}},pr_dec[0].uop.bsr.disp,1'b0};
-always_comb jsr1_tgt = {{23{pr_dec[1].uop.bsr.disp[40]}},pr_dec[1].uop.bsr.disp,1'b0};
-always_comb jsr2_tgt = {{23{pr_dec[2].uop.bsr.disp[40]}},pr_dec[2].uop.bsr.disp,1'b0};
+always_comb bsr0_tgt = {{29{pr_dec[0].uop.bsr.disp[34]}},pr_dec[0].uop.bsr.disp,1'b0} + pr_dec[0].pc.pc;
+always_comb bsr1_tgt = {{29{pr_dec[1].uop.bsr.disp[34]}},pr_dec[1].uop.bsr.disp,1'b0} + pr_dec[1].pc.pc;
+always_comb bsr2_tgt = {{29{pr_dec[2].uop.bsr.disp[34]}},pr_dec[2].uop.bsr.disp,1'b0} + pr_dec[2].pc.pc;
+always_comb jsr0_tgt = {{29{pr_dec[0].uop.bsr.disp[34]}},pr_dec[0].uop.bsr.disp,1'b0};
+always_comb jsr1_tgt = {{29{pr_dec[1].uop.bsr.disp[34]}},pr_dec[1].uop.bsr.disp,1'b0};
+always_comb jsr2_tgt = {{29{pr_dec[2].uop.bsr.disp[34]}},pr_dec[2].uop.bsr.disp,1'b0};
 
 reg predicted_correctly;
 

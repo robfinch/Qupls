@@ -64,6 +64,8 @@ output reg ust;			// update status
 output reg done;
 output Qupls4_pkg::cause_code_t exc;
 
+Qupls4_pkg::micro_op_t ird;
+Qupls4_pkg::fp_status_reg_t sd;
 reg [11:0] cnt;
 reg sincos_done, scale_done, f2i_done, i2f_done, sqrt_done, fres_done, trunc_done;
 wire div_done;
@@ -89,6 +91,7 @@ wire i2f_inexact;
 wire ce = 1'b1;
 wire cd_args;
 reg [WID-1:0] tmp;
+wire [WID-1:0] ad,bd,id,cd,td;
 wire [WID-1:0] zero = {WID{1'b0}};
 
 FP64 fa,fb;
@@ -102,6 +105,13 @@ wire [2:0] a3;
 
 delay3 #(1) udlyust1 (.clk(clk), .ce(1'b1), .i(ir.f3.rc), .o(ust));
 delay2 #(3) udlyrm2 (.clk(clk), .ce(1'b1), .i(a[2:0]), .o(a3));
+delay2 #($bits(Qupls4_pkg::micro_op_t)) udlymo3 (.clk(clk), .ce(1'b1), .i(ir), .o(ird));
+delay2 #($bits(Qupls4_pkg::fp_status_reg_t)) udlysd4 (.clk(clk), .ce(1'b1), .i(s), .o(sd));
+delay2 #(WID) udlya5 (.clk(clk), .ce(1'b1), .i(a), .o(ad));
+delay2 #(WID) udlyb6 (.clk(clk), .ce(1'b1), .i(b), .o(bd));
+delay2 #(WID) udlyi7 (.clk(clk), .ce(1'b1), .i(i), .o(id));
+delay2 #(WID) udlyc8 (.clk(clk), .ce(1'b1), .i(c), .o(cd));
+delay2 #(WID) udlyt9 (.clk(clk), .ce(1'b1), .i(t), .o(td));
 
 fpDecomp64 udc1a (
 	.i(a),
@@ -317,11 +327,65 @@ always_ff @(posedge clk)
 always_comb
 begin
 	bus = {WID{1'd0}};
-	case(ir.any.opcode)
+	case(ird.any.opcode)
+	Qupls4_pkg::OP_ADDI:	if (PERFORMANCE) bus = ad + id; else bus = zero;
+	Qupls4_pkg::OP_SUBFI:	if (PERFORMANCE) bus = id - ad; else bus = zero;
+	Qupls4_pkg::OP_ANDI:	if (PERFORMANCE) bus = ad & id; else bus = zero;
+	Qupls4_pkg::OP_ORI:		if (PERFORMANCE) bus = ad | id; else bus = zero;
+	Qupls4_pkg::OP_XORI:	if (PERFORMANCE) bus = ad ^ id; else bus = zero;
+	Qupls4_pkg::OP_R3O:
+		if (PERFORMANCE)
+			case(ird.r3.func)
+			Qupls4_pkg::FN_ADD:
+				case(ird.r3.op3)
+				3'd0: bus = (ad + bd) & cd;
+				3'd1: bus = (ad + bd) | cd;
+				3'd2: bus = (ad + bd) ^ cd;
+				3'd3:	bus = (ad + bd) + cd;
+				3'd4:	bus = (ad + bd) << cd;
+				3'd6:	bus = cd ? (ad + bd) : td;
+				3'd7:	bus = cd ? (ad + bd) : bd;
+				default:	bus = zero;
+				endcase
+			Qupls4_pkg::FN_AND:
+				case(ird.r3.op3)
+				3'd0: bus = (ad & bd) & cd;
+				3'd1: bus = (ad & bd) | cd;
+				3'd2: bus = (ad & bd) ^ cd;
+				3'd3:	bus = (ad & bd) + cd;
+				3'd4:	bus = (ad & bd) << cd;
+				3'd6:	bus = cd ? (ad & bd) : td;
+				3'd7:	bus = cd ? (ad & bd) : bd;
+				default:	bus = zero;
+				endcase
+			Qupls4_pkg::FN_OR:
+				case(ird.r3.op3)
+				3'd0: bus = (ad | bd) & cd;
+				3'd1: bus = (ad | bd) | cd;
+				3'd2: bus = (ad | bd) ^ cd;
+				3'd3:	bus = (ad | bd) + cd;
+				3'd4:	bus = (ad | bd) << cd;
+				3'd6:	bus = cd ? (ad | bd) : td;
+				3'd7:	bus = cd ? (ad | bd) : bd;
+				default:	bus = zero;
+				endcase
+			Qupls4_pkg::FN_XOR:
+				case(ird.r3.op3)
+				3'd0: bus = (ad ^ bd) & cd;
+				3'd1: bus = (ad ^ bd) | cd;
+				3'd2: bus = (ad ^ bd) ^ cd;
+				3'd3:	bus = (ad ^ bd) + cd;
+				3'd4:	bus = (ad ^ bd) << cd;
+				3'd6:	bus = cd ? (ad ^ bd) : td;
+				3'd7:	bus = cd ? (ad ^ bd) : bd;
+				default:	bus = zero;
+				endcase
+			default:	bus = zero;
+			endcase
 	Qupls4_pkg::OP_FLTH,Qupls4_pkg::OP_FLTS,Qupls4_pkg::OP_FLTD,Qupls4_pkg::OP_FLTQ,
 	Qupls4_pkg::OP_FLTPH,Qupls4_pkg::OP_FLTPS,Qupls4_pkg::OP_FLTPD,Qupls4_pkg::OP_FLTPQ,
 	Qupls4_pkg::OP_FLTP:
-		case(ir.f3.func)
+		case(ird.f3.func)
 		Qupls4_pkg::FLT_SCALEB:	bus = scaleo;
 		Qupls4_pkg::FLT_SGNJ:		bus = fsgnj;
 		Qupls4_pkg::FLT_SGNJN:	bus = fsgnjn;
@@ -372,12 +436,12 @@ end
 
 always_comb
 begin
-	stbus = s;
-	case(ir.any.opcode)
+	stbus = sd;
+	case(ird.any.opcode)
 	Qupls4_pkg::OP_FLTH,Qupls4_pkg::OP_FLTS,Qupls4_pkg::OP_FLTD,Qupls4_pkg::OP_FLTQ,
 	Qupls4_pkg::OP_FLTPH,Qupls4_pkg::OP_FLTPS,Qupls4_pkg::OP_FLTPD,Qupls4_pkg::OP_FLTPQ,
 	Qupls4_pkg::OP_FLTP:
-		case(ir.f3.func)
+		case(ird.f3.func)
 		Qupls4_pkg::FLT_SGNJ:
 			begin
 				stbus.inexact = FALSE;
@@ -610,8 +674,10 @@ begin
 			end
 		Qupls4_pkg::FLT_RM:
 			begin
-				stbus.rm = a3[2:0];
+				stbus.rm = fround_t'(a3[2:0]);
 			end
+		default:
+			stbus = sd;
 		endcase
 	default:	;
 	endcase
@@ -627,109 +693,6 @@ always_ff @(posedge clk)
 		exc <= Qupls4_pkg::FLT_FLOAT;
 	else
 		exc <= Qupls4_pkg::FLT_NONE;
-
-task tAdd;
-input Qupls4_pkg::micro_op_t ir;
-output [WID-1:0] bus;
-begin
-	if (Qupls4_pkg::PERFORMANCE) begin
-		if (ir[31])
-			bus = a + i;
-		else
-			case(ir.alu.op3)
-			3'd0:		// ADD
-				case(ir.alu.lx)
-				2'd0:	bus = a + b;
-				default:	bus = a + i;
-				endcase
-			3'd2:		// ABS
-				case(ir.alu.lx)
-				2'd0:
-					begin
-						tmp = a + b;
-						bus = tmp[WID-1] ? -tmp : tmp;
-					end
-				default:
-					begin
-						tmp = a + i;
-						bus = tmp[WID-1] ? -tmp : tmp;
-					end
-				endcase
-			default:	bus = zero;
-			endcase
-	end
-end
-endtask
-
-task tSubf;
-input Qupls4_pkg::micro_op_t ir;
-output [WID-1:0] bus;
-begin
-	if (Qupls4_pkg::PERFORMANCE) begin
-		if (ir[31])
-			bus = i - a;
-		else
-			case(ir.alu.op3)
-			3'd0:	bus = b - a;
-			default:	bus = zero;	
-			endcase
-	end
-end
-endtask
-
-task tAnd;
-input Qupls4_pkg::micro_op_t ir;
-output [WID-1:0] bus;
-begin
-	if (Qupls4_pkg::PERFORMANCE) begin
-		if (ir[31])
-			bus = a & i;
-		else
-			case(ir.alu.op3)
-			3'd0:	bus = a & b;
-			3'd1:	bus = ~(a & b);
-			3'd2:	bus = a & ~b;
-			default:	bus = zero;	
-			endcase
-	end
-end
-endtask
-
-task tOr;
-input Qupls4_pkg::micro_op_t ir;
-output [WID-1:0] bus;
-begin
-	if (Qupls4_pkg::PERFORMANCE) begin
-		if (ir[31])
-			bus = a | i;
-		else
-			case(ir.alu.op3)
-			3'd0:	bus = a | b;
-			3'd1:	bus = ~(a | b);
-			3'd2:	bus = a | ~b;
-			default:	bus = zero;	
-			endcase
-	end
-end
-endtask
-
-task tXor;
-input Qupls4_pkg::micro_op_t ir;
-output [WID-1:0] bus;
-begin
-	if (Qupls4_pkg::PERFORMANCE) begin
-		if (ir[31])
-			bus = a ^ i;
-		else
-			case(ir.alu.op3)
-			3'd0:	bus = a ^ b;
-			3'd1:	bus = ~(a ^ b);
-			3'd2:	bus = a ^ ~b;
-			default:	bus = zero;	
-			endcase
-	end
-end
-endtask
 
 task tMove;
 input Qupls4_pkg::micro_op_t ir;

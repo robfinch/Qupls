@@ -7,7 +7,7 @@ input clk_i;
 input wishbone_pkg::wb_cmd_request256_t [NPORT-1:0] req_i;
 output wishbone_pkg::wb_cmd_request256_t req_o;
 output wishbone_pkg::wb_cmd_response256_t [NPORT-1:0] resp_o;
-input wishbone_pkg::wb_cmd_response256_t [NPORT-1:0] resp_i;
+input wishbone_pkg::wb_cmd_response256_t resp_i;
 
 integer n1;
 reg [NPORT-1:0] req_cyc;

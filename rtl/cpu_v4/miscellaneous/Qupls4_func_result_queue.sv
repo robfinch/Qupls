@@ -75,6 +75,7 @@ reg [4:0] cnt;
 reg [4:0] wr_ptr;
 reg [4:0] rd_ptr;
 frq_entry_t [DEP-1:0] mem;
+rob_ndx_t rndx;
 wire data_valid;
 wire rd_rst_busy;
 wire wr_rst_busy;
@@ -102,7 +103,7 @@ always_comb
 	full = cnt > (DEP - 5);
 
 always_comb
-	{we_o,pRt_o,aRt_o,tag_o,argT_o,res_o,cp_o} = dout;
+	{we_o,pRt_o,aRt_o,tag_o,argT_o,res_o,rndx,cp_o} = dout;
 always_comb
 	rd_en = rd_i & ~rst;
 always_comb

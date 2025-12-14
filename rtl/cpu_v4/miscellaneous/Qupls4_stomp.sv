@@ -387,13 +387,13 @@ begin
         list[jj] = 0;
 		for (jj = 0; jj < BRANCH_LEVELS; jj = jj + 1) begin
 	    for (nn = 1; nn < XSTREAMS; nn = nn + 1)
-	      if (|dep_stream[kj][nn] && nn != kj)
+	      if (dep_stream[kj][nn] && (nn != kj))
 	        list[jj][nn] = list[jj][nn] | dep_stream[kj][nn];
 	    for (nn = 1; nn < XSTREAMS; nn = nn + 1) begin
 	    	kj = list[jj][nn]?nn:5'd0;
 	    	for (kk = 1; kk < XSTREAMS; kk = kk + 1)
-	      	if (|dep_stream[kj][kk] && kk != kj)
-		    		list[jj+1][kk] = list[jj+1][kk] | dep_stream[kj][kk];
+	      	if (dep_stream[kj][kk] && (kk != kj))
+		    		list[jj+1][kk] = list[jj][kk] | list[jj+1][kk] | dep_stream[kj][kk];
 	    end
   	end
   	fnComputeBranchDependencies = list[jj];

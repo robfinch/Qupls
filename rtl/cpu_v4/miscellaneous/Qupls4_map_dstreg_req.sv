@@ -58,6 +58,8 @@ kk = 0;
 for (n1 = 0; n1 < 4; n1 = n1 + 1) begin
 	ns_alloc_req[n1] = 1'b0;
 	ns_areg[n1] = 8'd0;
+	ns_whrndx[n1] = 8'd0;
+	ns_cndx[n1] = 5'd0;
 end
 for (n1 = 0; n1 < Qupls4_pkg::ROB_ENTRIES; n1 = n1 + 1) begin
 	if (rob[n1].v && kk < 4) begin

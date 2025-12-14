@@ -250,8 +250,8 @@ always_ff @(posedge clk)
 	rob_dispatched_v_o <= rob_dispatched_v;
 
 task tLoadRse;
-input rob_ndx_t nn;
 input integer kk;
+input rob_ndx_t nn;
 begin
 	rse[kk] = {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
 	rse[kk].om = rob[nn].om;

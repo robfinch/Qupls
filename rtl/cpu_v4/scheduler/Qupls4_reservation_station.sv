@@ -62,12 +62,12 @@ output reg issue;
 output Qupls4_pkg::reservation_station_entry_t rse_o;
 output aregno_t [3:0] req_aRn;
 
-integer kk,jj,nn,mm,rdy,pp,qq,n1;
+integer kk,jj,nn,mm,rdy,pp,qq,n1,n2;
 genvar g;
 reg idle;
 reg dispatch;
 reg pstall;
-Qupls4_pkg::operand_t [NRSE-1:0] arg [0:NSARG+RC];
+Qupls4_pkg::operand_t [NRSE-1:0] arg [0:5];
 
 wire [16:0] lfsro;
 Qupls4_pkg::reservation_station_entry_t [NRSE-1:0] rse;
@@ -91,7 +91,11 @@ begin
 end
 
 always_comb
-	busy = rse[0].busy & rse[1].busy & rse[2].busy;
+begin
+	busy = 1'b1;
+	for (n2 = 0; n2 < NRSE; n2 = n2 + 1)
+		busy = busy & rse[n2].busy;
+end
 always_comb
 	idle = !busy;
 
@@ -225,9 +229,8 @@ end
 */
 always_ff @(posedge clk)
 if (rst) begin
-  rse[0] <= {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
-  rse[1] <= {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
-  rse[2] <= {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
+	for (pp = 0; pp < NRSE; pp = pp + 1)
+  	rse[pp] <= {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
   rse_o <= {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
 	issue <= FALSE;
   pstall <= FALSE;

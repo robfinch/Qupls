@@ -26,6 +26,7 @@ output reg [63:0] q_wr_data;
 
 wire nanq_rdrdy;
 delay3 #(1) u1 (.clk(clk), .ce(1'b1), .i(q_rd[4'd14]), .o(nanq_rdrdy));
+delay1 #($bits(Qupls4_pkg::reservation_station_entry_t)) u2 (.clk(clk), .ce(1'b1), .i(rse_i), .o(rse_o));
 
 always_ff @(posedge clk)
 if (rst) begin

@@ -953,8 +953,7 @@ always_comb
 begin
 	nopi = {$bits(Qupls4_pkg::pipeline_reg_t){1'b0}};
 	nopi.pc = RSTPC;
-	nopi.pc.stream = 6'd1;
-	nopi.pc.bno_f = 6'd1;
+	nopi.pc.stream = 5'd1;
 	nopi.uop = {26'd0,Qupls4_pkg::OP_NOP};
 	nopi.uop.any.lead = 1'd1;
 	nopi.decbus.Rdz = 1'b1;
@@ -1279,6 +1278,7 @@ reg [7:0] irq_downcount_base;
 reg irq_in_pipe;
 reg irq_ack_ok;
 cpu_types_pkg::seqnum_t irq_sn;
+wire do_commit;
 
 always_comb
 	nmi = irq_i==6'd63;
@@ -1746,10 +1746,6 @@ Qupls4_btb ubtb1
 	.new_address_mux(new_address_mux),
 	.predicted_correctly_dec(predicted_correctly_dec),
 	.new_address_dec(new_address_dec),
-	.mip0v(mip0v),
-	.mip1v(mip1v),
-	.mip2v(mip2v),
-	.mip3v(mip3v),
 	.pc(pc),
 	.pc0(pc0),
 	.pc1(pc1),
@@ -1780,7 +1776,7 @@ Qupls4_btb ubtb1
 	.commit_brtgt3(commit_brtgt3),
 	.commit_takb3(commit_takb3),
 	.commit_grp3(commit_grp3),
-	.fet_stream(fet_stream),
+	.act_stream(fet_stream),
 	.new_stream(new_stream),
 	.alloc_stream(alloc_stream),
 	.free_stream(~used_streams),
@@ -2240,6 +2236,7 @@ wire [31:0] carry_mod_fet;
 wire [2:0] uop_num_fet;
 reg [511:0] inj_cline;
 reg irq_ic;
+seqnum_t irq_sn_fet;
 Qupls4_pkg::irq_info_packet_t irq_in_ic;
 reg irq_fet;
 Qupls4_pkg::irq_info_packet_t irq_in_fet;
@@ -2437,10 +2434,6 @@ Qupls4_pipeline_mux #(.MWIDTH(MWIDTH)) uiext1
 	.scale_regs_i(scale_regs),
 	.regcnt_i(8'd0),
 	.pg_mux(pg_mux),
-	.len0_i(len0),
-	.len1_i(len1),
-	.len2_i(len2),
-	.len3_i(len3),
 	.grp_o(grp_d),
 	.do_bsr(do_bsr),
 	.do_ret(do_ret),
@@ -2461,17 +2454,12 @@ Qupls4_pipeline_mux #(.MWIDTH(MWIDTH)) uiext1
 
 wire flush_dec;
 Qupls4_pkg::ex_instruction_t [3:0] instr;
-pregno_t Rt0_dec, Rt1_dec, Rt2_dec, Rt3_dec;
 pregno_t [3:0] tags2free;
 wire [3:0] freevals;
 wire [Qupls4_pkg::PREGS-1:0] avail_reg;						// available registers
 checkpt_ndx_t cndx0,cndx1,cndx2,cndx3,pcndx;		// checkpoint index for each queue slot
 wire restore;		// = branch_state==BS_CHKPT_RESTORE && restore_en;// && !fcu_cjb;
 wire restored;	// restore_chkpt delayed one clock.
-wire Rt0_decv;
-wire Rt1_decv;
-wire Rt2_decv;
-wire Rt3_decv;
 
 Qupls4_pipeline_dec #(.MWIDTH(MWIDTH)) udecstg1
 (
@@ -2498,14 +2486,6 @@ Qupls4_pipeline_dec #(.MWIDTH(MWIDTH)) udecstg1
 	.stomp_mux(stomp_mux),
 	.kept_stream(kept_stream),
 	.pg_mux(pg_mux),
-	.Rt0_dec(Rt0_dec),
-	.Rt1_dec(Rt1_dec),
-	.Rt2_dec(Rt2_dec),
-	.Rt3_dec(Rt3_dec),
-	.Rt0_decv(Rt0_decv),
-	.Rt1_decv(Rt1_decv),
-	.Rt2_decv(Rt2_decv),
-	.Rt3_decv(Rt3_decv),
 	.micro_machine_active_mux(1'b0),
 	.micro_machine_active_dec(),
 	.pg_dec(pg_dec),
@@ -2734,7 +2714,6 @@ assign stallq = !rstcnt[2] || rat_stallq || ren_stallq || !room_for_que || !bs_i
 reg signed [$clog2(Qupls4_pkg::ROB_ENTRIES):0] cmtlen;			// Will always be >= 0
 reg signed [$clog2(Qupls4_pkg::ROB_ENTRIES):0] group_len;		// Commit group length
 
-wire do_commit;
 reg cmttlb0, cmttlb1,cmttlb2,cmttlb3;
 reg htcolls;		// head <-> tail collision
 reg cmtbr;
@@ -2788,6 +2767,7 @@ assign stomps[3] = ((stomp3_r|stomp_ren|pg_ren.pr[0].op.decbus.macro|pg_ren.pr[1
 // Determine which instructions following a jsr/bsr should not be executed.
 reg [MWIDTH-1:0] ornops;
 reg [MWIDTH-1:0] jbsrnop;
+wire [3:0] jbsr_pos;
 flo12 unops1 (.i({11'd0,jbsrnop}), .o(jbsr_pos));	// find the first jsr/bsr
 
 always_comb
@@ -3203,9 +3183,6 @@ Qupls4_pkg::operating_mode_t sau0_omB2, sau1_omB2, fpu0_omB2, fpu1_omB2, dram0_o
 Qupls4_pkg::operating_mode_t sau0_omC2, sau1_omC2, fpu0_omC2, fpu1_omC2;
 
 // ALU #0 signals
-vtdl #(1) 							udlyal3A (.clk(clk), .ce(1'b1), .a(4'd0), .d(sau0_aRdzA), .q(sau0_aRdzA2) );
-vtdl #(1) 							udlyal3B (.clk(clk), .ce(1'b1), .a(4'd0), .d(sau0_aRdzB), .q(sau0_aRdzB2) );
-vtdl #(1) 							udlyal3C (.clk(clk), .ce(1'b1), .a(4'd0), .d(sau0_aRdzC), .q(sau0_aRdzC2) );
 
 vtdl #(1) 							udlyal5 (.clk(clk), .ce(1'b1), .a(4'd0), .d(sau0_sc_done), .q(sau0_sc_done2) );
 vtdl #($bits(rob_ndx_t))	udlyal6 (.clk(clk), .ce(1'b1), .a(4'd0), .d(sau0_id), .q(sau0_id2) );
@@ -3213,9 +3190,6 @@ vtdl #($bits(checkpt_ndx_t)) udlyal7 (.clk(clk), .ce(1'b1), .a(4'd0), .d(sau0_cp
 vtdl #($bits(Qupls4_pkg::operating_mode_t))	udlyal8 (.clk(clk), .ce(1'b1), .a(4'd0), .d(sau0_om), .q(sau0_om2) );
 
 // ALU #1 signals
-vtdl #(1) 							udlyal13A (.clk(clk), .ce(1'b1), .a(4'd0), .d(sau1_aRdzA), .q(sau1_aRdzA2) );
-vtdl #(1) 							udlyal13B (.clk(clk), .ce(1'b1), .a(4'd0), .d(sau1_aRdzB), .q(sau1_aRdzB2) );
-vtdl #(1) 							udlyal13C (.clk(clk), .ce(1'b1), .a(4'd0), .d(sau1_aRdzC), .q(sau1_aRdzC2) );
 
 vtdl #(1) 							udlyal15 (.clk(clk), .ce(1'b1), .a(4'd0), .d(sau1_sc_done), .q(sau1_sc_done2) );
 vtdl #($bits(rob_ndx_t))	udlyal16 (.clk(clk), .ce(1'b1), .a(4'd0), .d(sau1_id), .q(sau1_id2) );
@@ -3244,10 +3218,6 @@ vtdl #($bits(checkpt_ndx_t)) udlyfp71 (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu1_c
 vtdl #($bits(Qupls4_pkg::operating_mode_t))	udlyfp81 (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu1_om), .q(fpu1_om2) );
 
 // FCU signals
-vtdl #($bits(pregno_t)) udlyfc1A (.clk(clk), .ce(1'b1), .a(4'd0), .d(fcu_RtA), .q(fcu_pRtA2) );
-vtdl #($bits(aregno_t)) udlyfc2A (.clk(clk), .ce(1'b1), .a(4'd0), .d(fcu_aRtA), .q(fcu_aRtA2) );
-vtdl #(1) 							udlyfc3A (.clk(clk), .ce(1'b1), .a(4'd0), .d(fcu_aRtzA), .q(fcu_aRtzA2) );
-vtdl #($bits(value_t)) udlyfc1vA (.clk(clk), .ce(1'b1), .a(4'd0), .d(fcu_resA), .q(fcu_resA2) );
 
 vtdl #(1) 							udlyfc5 (.clk(clk), .ce(1'b1), .a(4'd0), .d(fcu_sc_done), .q(fcu_sc_done2) );
 vtdl #($bits(rob_ndx_t))	udlyfc6 (.clk(clk), .ce(1'b1), .a(4'd0), .d(fcu_rse.rndx), .q(fcu_id2) );
@@ -3600,7 +3570,7 @@ Qupls4_func_result_queue ufrq11
 	.res_o(fuq_res[11]),
 	.cp_o(fuq_cp[11]),
 	.empty(fuq_empty[11]),
-	.full(dram0_full)
+	.full(dram1_full)
 );
 end
 else begin
@@ -3848,7 +3818,7 @@ Qupls4_restore_flag urstf1
 (
 	.rst(irst),
 	.clk(clk),
-	.fcu_branch_resolved(fcu_branchmiss_resolved),
+	.fcu_branch_resolved(fcu_branch_resolved),
 	.rse(fcu_rse),
 	.fcu_found_destination(fcu_found_destination),
 	.branchmiss_det(branchmiss_det),
@@ -3885,8 +3855,7 @@ always_ff @(posedge clk)
 */
 always_comb
 if (irst) begin
-	misspc.stream = 6'd1;
-	misspc.bno_f = 6'd1;
+	misspc.stream = 5'd1;
 	misspc.pc = next_pc.pc;
 end
 else begin
@@ -4443,7 +4412,7 @@ endgenerate
 // =============================================================================
 
 wire agen0_v, agen1_v;
-
+wire dram0_more,dram1_more;
 wire tlb_miss;
 virtual_address_t tlb_missadr;
 asid_t tlb_missasid;
@@ -4487,11 +4456,11 @@ wire [1:0] dway [0:Qupls4_pkg::NDATA_PORTS-1];
 always_comb
 if (Qupls4_pkg::SUPPORT_CAPABILITIES) begin
 	dhit[0] = dhit2[0] & cap_tag_hit[0];
-	dhit[1] = dhit2[1] & cap_tag_hit[1];
+	if (NDATA_PORTS > 1) dhit[1] = dhit2[1] & cap_tag_hit[1];
 end
 else begin
 	dhit[0] = dhit2[0];
-	dhit[1] = dhit2[1];
+	if (NDATA_PORTS > 1) dhit[1] = dhit2[1];
 end
 
 generate begin : gDcache
@@ -4836,11 +4805,11 @@ Qupls4_dram_done udrdn1
 (
 	.rst(irst),
 	.clk(clk),
-	.load(dram0_load|dram0_vload|dram0_vload_ndx),
-	.store(dram0_store|dram0_vstore|dram0_vstore_ndx),
-	.cload(dram0_cload),
-	.cstore(dram0_cstore),
-	.cload_tags(dram0_cload_tags),
+	.load(dram0_work.load|dram0_work.vload|dram0_work.vload_ndx),
+	.store(dram0_work.store|dram0_work.vstore|dram0_work.vstore_ndx),
+	.cload(dram0_work.cload),
+	.cstore(dram0_work.cstore),
+	.cload_tags(dram0_work.cload_tags),
 	.ack(dram0_ack),
 	.dram_idv(dram0_idv),
 	.dram_id(dram0_work.rndx), 
@@ -4895,18 +4864,18 @@ Qupls4_mem_more ummore0
 	.rst_i(irst),
 	.clk_i(clk),
 	.state_i(dram0),
-	.sel_i(dram0_sel),
+	.sel_i(dram0_work.sel),
 	.more_o(dram0_more)
 );
 
 Qupls4_set_dram_work #(.CORENO(CORENO), .LSQNO(0)) usdr1 (
-	.rst_i(rsti),
+	.rst_i(irst),
 	.clk_i(clk),
 	.rob_i(rob),
 	.stomp_i(dram0_stomp),
 	.vb_i(lbndx0.vb),
 	.lsndxv_i(mem0_lsndxv),
-	.dram_state_i(dram0_state),
+	.dram_state_i(dram0),
 	.dram_done_i(dram0_done),
 	.dram_more_i(dram0_more),
 	.dram_idv_i(dram0_idv),
@@ -4929,16 +4898,16 @@ generate begin : gMemory2
 		(
 			.rst(irst),
 			.clk(clk),
-			.load(dram1_load|dram1_vload|dram1_vload_ndx),
-			.store(dram1_store|dram1_vstore|dram1_vstore_ndx),
-			.cload(dram1_cload),
-			.cstore(dram1_cstore),
-			.cload_tags(dram1_cload_tags),
+			.load(dram1_work.load|dram1_work.vload|dram1_work.vload_ndx),
+			.store(dram1_work.store|dram1_work.vstore|dram1_work.vstore_ndx),
+			.cload(dram1_work.cload),
+			.cstore(dram1_work.cstore),
+			.cload_tags(dram1_work.cload_tags),
 			.ack(dram1_ack),
 			.dram_idv(dram1_idv),
 			.dram_id(dram1_work.rndx), 
 			.dram_state(dram1),
-			.dram_more(dram1_more),
+			.dram_more(dram1_work.more),
 			.stomp(robentry_stomp),
 			.dram_stomp(dram1_stomp),
 			.done(dram1_done)
@@ -4974,7 +4943,7 @@ generate begin : gMemory2
 			.rst_i(irst),
 			.clk_i(clk),
 			.state_i(dram1),
-			.sel_i(dram1_sel),
+			.sel_i(dram1_work.sel),
 			.more_o(dram1_more)
 		);
 
@@ -4985,7 +4954,7 @@ generate begin : gMemory2
 			.stomp_i(dram1_stomp),
 			.vb_i(lbndx1.vb),
 			.lsndxv_i(mem1_lsndxv),
-			.dram_state_i(dram1_state),
+			.dram_state_i(dram1),
 			.dram_done_i(dram1_done),
 			.dram_more_i(dram1_more),
 			.dram_idv_i(dram1_idv),
@@ -7567,13 +7536,11 @@ begin
 	err_mask <= 64'd0;
 	excir <= {26'd0,Qupls4_pkg::OP_NOP};
 	excmiss <= FALSE;
-	excmisspc.stream <= 6'd1;
-	excmisspc.bno_f <= 6'd1;
+	excmisspc.stream <= 5'd1;
 	excmisspc.pc <= 32'hFFFFFFC0;
 	excret <= FALSE;
 	exc_ret_pc <= 32'hFFFFFFC0;
-	exc_ret_pc.stream <= 6'd1;
-	exc_ret_pc.bno_f <= 6'd1;
+	exc_ret_pc.stream <= 5'd1;
 	exc_ret_carry_mod <= 32'd0;
 	sr <= 64'd0;
 	sr.pl <= 8'hFF;					// highest priority
@@ -8165,11 +8132,11 @@ begin
 		16'h3080:	res = sr_stack[0];
 		(Qupls4_pkg::CSR_MEPC+0):	res = pc_stack[0];
 		16'b0011000000110???:	res = kernel_vectors[regno[2:0]];
-		16'h0010000000110???:	res = kernel_vectors[regno[2:0]];
-		16'h0001000000110???:	res = kernel_vectors[regno[2:0]];
+		16'b0010000000110???:	res = kernel_vectors[regno[2:0]];
+		16'b0001000000110???:	res = kernel_vectors[regno[2:0]];
 		16'b0011000000111???:	res = syscall_vectors[regno[2:0]];
-		16'h0010000000111???:	res = syscall_vectors[regno[2:0]];
-		16'h0001000000111???:	res = syscall_vectors[regno[2:0]];
+		16'b0010000000111???:	res = syscall_vectors[regno[2:0]];
+		16'b0001000000111???:	res = syscall_vectors[regno[2:0]];
 		/*
 		CSR_SCRATCH:	res = scratch[regno[13:12]];
 		CSR_MHARTID: res = hartid_i;
@@ -8252,11 +8219,11 @@ begin
 		16'h3080: sr_stack[0] <= val[31:0];
 		Qupls4_pkg::CSR_MEPC:	pc_stack[0] <= val;
 		16'b0011000000110???:	kernel_vectors[regno[2:0]] <= val;
-		16'h0010000000110???:	kernel_vectors[regno[2:0]] <= val;
-		16'h0001000000110???:	kernel_vectors[regno[2:0]] <= val;
+		16'b0010000000110???:	kernel_vectors[regno[2:0]] <= val;
+		16'b0001000000110???:	kernel_vectors[regno[2:0]] <= val;
 		16'b0011000000111???:	syscall_vectors[regno[2:0]] <= val;
-		16'h0010000000111???:	syscall_vectors[regno[2:0]] <= val;
-		16'h0001000000111???:	syscall_vectors[regno[2:0]] <= val;
+		16'b0010000000111???:	syscall_vectors[regno[2:0]] <= val;
+		16'b0001000000111???:	syscall_vectors[regno[2:0]] <= val;
 		/*
 		CSR_SCRATCH:	scratch[regno[13:12]] <= val;
 		CSR_MCR0:		cr0 <= val;

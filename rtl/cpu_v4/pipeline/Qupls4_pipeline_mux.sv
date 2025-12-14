@@ -53,7 +53,6 @@ module Qupls4_pipeline_mux(rst_i, clk_i, rstcnt, advance_fet, ihit, en_i,
 	takb_fet, pc_i, vl,
 	pc0_fet, uop_num_fet, uop_num_mux,
 	ls_bmf_i, pack_regs_i, scale_regs_i, regcnt_i,
-	len0_i, len1_i, len2_i, len3_i,
 	pg_mux, new_stream, alloc_stream,
 	do_bsr, bsr_tgt, do_ret, ret_pc, do_call, get, mux_stallq, fet_stallq, stall);
 parameter MWIDTH = 4;
@@ -99,10 +98,6 @@ input ls_bmf_i;
 input pack_regs_i;
 input [2:0] scale_regs_i;
 input cpu_types_pkg::aregno_t regcnt_i;
-input [4:0] len0_i;
-input [4:0] len1_i;
-input [4:0] len2_i;
-input [4:0] len3_i;
 output Qupls4_pkg::pipeline_group_reg_t pg_mux;
 /*
 output cpu_types_pkg::mc_address_t mcip0_o;
@@ -286,10 +281,10 @@ reg [4:0] po_bno2 [0:3];
 reg p_override_dummy;
 reg [6:0] po_bno_dummy;
 
-always_comb tExtractIns(pc0_fet, pt_mux[0], takb_fet[0], len0_i, pr_mux[0], ins_fet[0], p_override[0], po_bno[0]);
-always_comb tExtractIns(pc1_fet, pt_mux[1], takb_fet[1], len1_i, pr_mux[1], ins_fet[1], p_override[1], po_bno[1]);
-always_comb tExtractIns(pc2_fet, pt_mux[2], takb_fet[2], len2_i, pr_mux[2], ins_fet[2], p_override[2], po_bno[2]);
-always_comb tExtractIns(pc3_fet, pt_mux[3], takb_fet[3], len3_i, pr_mux[3], ins_fet[3], p_override[3], po_bno[3]);
+always_comb tExtractIns(pc0_fet, pt_mux[0], takb_fet[0], 5'd6, pr_mux[0], ins_fet[0], p_override[0], po_bno[0]);
+always_comb tExtractIns(pc1_fet, pt_mux[1], takb_fet[1], 5'd6, pr_mux[1], ins_fet[1], p_override[1], po_bno[1]);
+always_comb tExtractIns(pc2_fet, pt_mux[2], takb_fet[2], 5'd6, pr_mux[2], ins_fet[2], p_override[2], po_bno[2]);
+always_comb tExtractIns(pc3_fet, pt_mux[3], takb_fet[3], 5'd6, pr_mux[3], ins_fet[3], p_override[3], po_bno[3]);
 
 /* under construction
 always_ff @(posedge clk_i)

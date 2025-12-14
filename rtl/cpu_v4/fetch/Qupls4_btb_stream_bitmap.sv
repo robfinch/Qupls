@@ -81,13 +81,13 @@ generate begin : gStrmBitmap
 		if (clk_en) begin
 			for (n3 = 0; n3 < XSTREAMS; n3 = n3 + 1) begin
 				if (free_stream[n3])
-					dep_stream[n3] = 32'd0;
+					dep_stream[n3] <= 32'd0;
 				if (THREADS > 1 && free_stream[n3+32])
-					dep_stream[n3] = 32'd0;
+					dep_stream[n3] <= 32'd0;
 				if (THREADS > 2 && free_stream[n3+64])
-					dep_stream[n3] = 32'd0;
+					dep_stream[n3] <= 32'd0;
 				if (THREADS > 3 && free_stream[n3+96])
-					dep_stream[n3] = 32'd0;
+					dep_stream[n3] <= 32'd0;
 			end
 			strm_bitmap <= next_strm_bitmap & ~free_stream;
 		end
@@ -120,13 +120,13 @@ else if (XSTREAMS==16) begin
 		if (clk_en) begin
 			for (n3 = 0; n3 < XSTREAMS; n3 = n3 + 1) begin
 				if (free_stream[n3])
-					dep_stream[n3] = 32'd0;
+					dep_stream[n3] <= 32'd0;
 				if (THREADS > 1 && free_stream[n3+16])
-					dep_stream[n3] = 32'd0;
+					dep_stream[n3] <= 32'd0;
 				if (THREADS > 2 && free_stream[n3+32])
-					dep_stream[n3] = 32'd0;
+					dep_stream[n3] <= 32'd0;
 				if (THREADS > 3 && free_stream[n3+48])
-					dep_stream[n3] = 32'd0;
+					dep_stream[n3] <= 32'd0;
 			end
 			strm_bitmap <= next_strm_bitmap & ~free_stream;
 		end

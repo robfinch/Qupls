@@ -173,7 +173,7 @@ end
 
 always_ff @(posedge clk)
 if (rst) begin
-	misspc.stream <= pc_stream_t'(7'd1);
+	misspc_fet.stream <= pc_stream_t'(7'd1);
 	misspc_fet <= RSTPC;
 end
 else begin

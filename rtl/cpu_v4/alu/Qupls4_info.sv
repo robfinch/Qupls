@@ -38,7 +38,7 @@
 import const_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_info(ndx, coreno, o);
+module Qupls4_info(ndx, coreno, thread, o);
 input [63:0] coreno;
 input [2:0] thread;
 input [4:0] ndx;
