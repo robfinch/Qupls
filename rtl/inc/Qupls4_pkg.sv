@@ -108,8 +108,14 @@ parameter RENAMER = 4;
 // =============================================================================
 // =============================================================================
 
+// Number of threads supported. (Under construction)
 parameter THREADS = 2;
-parameter XSTREAMS = 16;
+
+// Number of streams of execution. Alternate branch paths create streams.
+parameter XSTREAMS = 32;
+
+// Number of levels of branches that can be speculated across.
+parameter BRANCH_LEVELS = 8;
 
 // 1=move interrupt to the start of the instruction (recommended).
 // 2=defer interrupts to the start of the next instruction.
@@ -411,7 +417,14 @@ typedef enum logic [2:0] {
 
 typedef struct packed
 {
+	logic [10:0] st_resv;	// reserved bits
+	logic inexact;	// inexact
+	logic dbz;			// divide by zero
+	logic under;		// underflow
+	logic over;			// overflow
+	logic invop;		// invalid operation
 	fround_t rm;
+	logic nanxe;		// any NaN exception enable
 	logic inexe;		// inexact exception enable
 	logic dbzxe;		// divide by zero exception enable
 	logic underxe;	// underflow exception enable
@@ -420,6 +433,7 @@ typedef struct packed
 	//- - - - - - - 
 	logic ns;
 	// Result status
+	logic [5:0] rs_resv;	// reserved bits
 	logic fractie;	// last instruction rounded intermediate result
 	logic rawayz;		// rounded away from zero
 	logic c;				// denormalized, negative zero, or quiet nan
@@ -428,6 +442,7 @@ typedef struct packed
 	logic zero;			// result is zero
 	logic inf;			// result is infinite
 	// Exception occurrance
+	logic [4:0] xo_resv;	// reserved bits
 	logic swt;			// set this bit to trigger an invalid operation
 	logic inerx;		// inexact result exception occurred (sticky)
 	logic dbzx;			// divide by zero exception occurred
@@ -437,6 +452,8 @@ typedef struct packed
 	logic gx;				// global exception indicator, set for any exception
 	logic sumx;			// summary exception
 	// Exception type resolution
+	logic xt_resv;	// reserved bit
+	logic [3:0] nan_cause;	// encoded cause of NaN
 	logic cvt;			// attempt to convert NaN or too large integer
 	logic sqrtx;		// square root of non-zero negative
 	logic nancmp;		// comparison of NaNs not using unordered comparisons
@@ -444,8 +461,8 @@ typedef struct packed
 	logic zerozero;	// divide zero by zero
 	logic infdiv;		// division of infinities
 	logic subinfx;	// subtraction of infinities
-	logic snanx;		// signalling nan
-} fp_status_reg_t;
+	logic snanx;		// signaling nan
+} fp_status_reg_t;	// 64 bits
 
 typedef enum logic [2:0] {
 	BTS_NONE = 3'd0,
@@ -682,15 +699,26 @@ typedef enum logic [5:0] {
 	FLT_SLT = 6'd10,
 	FLT_CMP = 6'd13,
 	FLT_SGNJ = 6'd16,
+	FLT_SGNJN = 6'd17,
+	FLT_SGNJX = 6'd18,
+	FLT_SCALEB = 6'd20,
 	FLT_STAT = 6'd22,
-	FLT_ABS = 6'd32,
-	FLT_NEG = 6'd33,
-	FLT_SQRT = 6'd40,
 	FLT_SIN = 6'd24,
 	FLT_COS = 6'd25,
 	FLT_TAN = 6'd26,
 	FLT_ATAN = 6'd27,
-	FLT_SIGMOID = 6'd56
+	FLT_ABS = 6'd32,
+	FLT_NEG = 6'd33,
+	FLT_SQRT = 6'd40,
+	FLT_CVTS2D = 6'd41,
+	FLT_ISNAN = 6'd46,
+	FLT_FINITE = 6'd47,
+	FLT_TRUNC = 6'd53,
+	FLT_RES = 6'd55,
+	FLT_SIGMOID = 6'd56,
+	FLT_CVTD2S = 6'd57,
+	FLT_CLASS = 6'd62,
+	FLT_RM = 6'd63
 } flt_e;
 
 typedef enum logic [3:0] {
@@ -1253,6 +1281,7 @@ parameter CSR_MHARTID = 16'h3001;
 parameter CSR_MCORENO = 16'h3001;
 parameter CSR_TICK	= 16'h3002;
 parameter CSR_MBADADDR	= 16'h3007;
+parameter CSR_THREAD_WEIGHT = 16'h3017;
 parameter CSR_MTVEC = 16'b00110000001100??;
 parameter CSR_MDBAD	= 16'b00110000000110??;
 parameter CSR_MDBAM	= 16'b00110000000111??;
@@ -1349,6 +1378,7 @@ typedef enum logic [7:0] {
 	FLT_RST		= 8'h0C,
 	FLT_ALT		= 8'h0D,
 	FLT_DBZ		= 8'h10,
+	FLT_FLOAT = 8'h11,
 	FLT_CHK		= 8'h43,
 	FLT_PRED  = 8'hDE,
 	FLT_BADREG = 8'hDF,

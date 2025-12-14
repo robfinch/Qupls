@@ -137,7 +137,6 @@ reg ssm_flag;
 // hirq squashes the pc increment if there's an irq.
 // Normally atom_count is zero.
 reg hirq;
-reg [2:0] exc_uop_num;
 pc_address_t ret_pc;
 pc_address_ex_t misspc;
 wire [$bits(pc_address_t)-1:6] missblock;
@@ -907,11 +906,9 @@ Qupls4_pkg::status_reg_t sr;
 Qupls4_pkg::fp_status_reg_t fpcsr;
 wire [2:0] swstk = sr.swstk;
 pc_address_t [ISTACK_DEPTH-1:0] pc_stack;
-// Stack for micro-code machine state number and micro-op number
-reg [15:0] upc_stack [0:15];
 reg [5:0] pending_ipl;				// pending interrupt level.
 wire [5:0] im = sr.ipl;
-reg [7:0] thread_probability [0:3];
+reg [7:0] thread_probability [0:7];
 
 always_comb
 	ipl = sr.ipl;
@@ -1595,12 +1592,13 @@ reg [63:0] vec_dat;
 always_comb vec_dat = ic_dline >> {icdp[4:0],3'd0};
 reg [31:0] ic_carry_mod;
 cpu_types_pkg::seqnum_t ic_irq_sn;
+reg get_next_pc;
 
 pc_stream_t new_stream;
 wire alloc_stream;
 reg [XSTREAMS*THREADS-1:0] used_streams;
 pc_address_ex_t [XSTREAMS*THREADS-1:0] pcs;
-pc_stream_t act_stream;
+pc_stream_t fet_stream;
 // Buffers the instruction cache line to allow fetching along alternate paths.
 reg [1023:0] ic_buf [0:3];
 pc_address_ex_t ic_buf_pc [0:3];
@@ -1636,7 +1634,7 @@ uic1
 	.nop_o(icnop),
 	.fetch_alt(1'b0 & ~alt_ihit),
 	.ip_asid(ip_asid),
-	.ip(pcs[act_stream]),
+	.ip(pcs[fet_stream]),
 //	.ip(pc),
 	.ip_o(icpc),
 	.ihit_o(ihito),
@@ -1728,6 +1726,8 @@ Qupls4_btb ubtb1
 	.clk_en(advance_f),
 	.en(1'b1),
 	.rclk(clk),
+	.advance_pc(advance_f & !ic_stallq),
+	.get_next_pc(get_next_pc),
 	.nmi(pe_nmi),
 	.nmi_addr(nmi_addr),
 	.irq(irq),
@@ -1780,7 +1780,7 @@ Qupls4_btb ubtb1
 	.commit_brtgt3(commit_brtgt3),
 	.commit_takb3(commit_takb3),
 	.commit_grp3(commit_grp3),
-	.act_stream(act_stream),
+	.fet_stream(fet_stream),
 	.new_stream(new_stream),
 	.alloc_stream(alloc_stream),
 	.free_stream(~used_streams),
@@ -2072,7 +2072,6 @@ if (advance_pipeline)
 always_comb
 	hold_ins = |reg_bitmask;
 
-reg get_next_pc;
 always_comb
 	get_next_pc = ((pe_allqd||allqd||&next_cqd) && !hold_ins) && ihit && ~hirq;
 
@@ -2093,12 +2092,12 @@ else if(advance_pipeline_seg2) begin
 	end
 end
 
-// Instruction pointer (program counter)
+// Instruction pointer (program counter) (Now in BTB)
 // Could use the lack of a IP change to fetch from an alternate path.
 // The IP will not change while micro-code is running except when a branch
 // instruction is performed. The branch instruction is used to exit the
 // micro-code.
-
+/*
 always_ff @(posedge clk)
 if (irst) begin
 	pc.stream <= 6'd1;
@@ -2143,7 +2142,7 @@ else begin
 	// Re-route the PC in event of prediction miss.
 	stomp_fet1 = FALSE;
 	stomp_mux1 = FALSE;
-	/*
+	
 	if (pt_dec[0]) begin
 		if (pt_dec[0] != pg_dec.pr[0].bt) begin
 			pc <= pt_dec[0] ? pg_dec.pr[0].brtgt : pg_dec.pr[0].pc + 5'd8;
@@ -2184,9 +2183,9 @@ else begin
 			stomp_mux1 = TRUE;
 		end
 	end
-	*/
-end
 
+end
+*/
 always_comb
 	hirq = irq && !int_commit && (irq_i > sr.ipl || irq_i==6'd63);	// NMI (63) is always recognized.
 
@@ -2198,7 +2197,7 @@ wire [2:0] igrp2;
 
 assign ihit_f = ihito;
 
-always_comb pc0 = pcs[act_stream];
+always_comb pc0 = pcs[fet_stream];
 always_comb 
 begin
 	pc1 = pc0;
@@ -2259,10 +2258,10 @@ begin
 	ic_line = {ic_clineh.data,ic_clinel.data};
 	pc_fet = icpc;
 	for (n43 = 0; n43 < 4; n43 = n43 + 1)
-		if (buffered[act_stream]) begin
-			if (pcs[act_stream].pc >= ic_buf_pc[n43].pc && pcs[act_stream].pc < ic_buf_pc[n43].pc + 8'd96) begin
+		if (buffered[fet_stream]) begin
+			if (pcs[fet_stream].pc >= ic_buf_pc[n43].pc && pcs[fet_stream].pc < ic_buf_pc[n43].pc + 8'd96) begin
 				ic_line = ic_buf[n43];
-				pc_fet = pcs[act_stream];
+				pc_fet = pcs[fet_stream];
 			end
 		end
 end
@@ -6907,7 +6906,7 @@ always_ff @(posedge clk) begin: clock_n_debug
 	$display("\n\n\n\n\n\n\n\n");
 	$display("TIME %0d", $time);
 	$display("----- Fetch -----");
-	$display("i$ pc input:  %h.%h stream:%d#", pcs[act_stream].stream,pcs[act_stream].pc, act_stream);
+	$display("i$ pc input:  %h.%h stream:%d#", pcs[fet_stream].stream,pcs[fet_stream].pc, fet_stream);
 	$display("i$ pc output: %h %s #", pc_fet.pc, ihito ? "ihit" : "    ");
 	$display("cacheL: %x", ic_line[511:0]);
 	$display("cacheH: %x", ic_line[1023:512]);
@@ -7735,6 +7734,10 @@ begin
 	thread_probability[1] = 8'h00;
 	thread_probability[2] = 8'h00;
 	thread_probability[3] = 8'h00;
+	thread_probability[4] = 8'h00;
+	thread_probability[5] = 8'h00;
+	thread_probability[6] = 8'h00;
+	thread_probability[7] = 8'h00;
 end
 endtask
 
@@ -8157,7 +8160,8 @@ begin
 		Qupls4_pkg::CSR_TICK:	res = tick;
 		Qupls4_pkg::CSR_ASID:	res = asid;
 		Qupls4_pkg::CSR_THREAD_WEIGHT:	
-			res = {32'd0,thread_probability[3],thread_probability[2],thread_probability[1],thread_probability[0]};
+			res = {thread_probability[7],thread_probability[6],thread_probability[5],thread_probability[4],
+						thread_probability[3],thread_probability[2],thread_probability[1],thread_probability[0]};
 		16'h3080:	res = sr_stack[0];
 		(Qupls4_pkg::CSR_MEPC+0):	res = pc_stack[0];
 		16'b0011000000110???:	res = kernel_vectors[regno[2:0]];
@@ -8224,10 +8228,26 @@ begin
 		Qupls4_pkg::CSR_ASID: 	asid <= val;
 		Qupls4_pkg::CSR_THREAD_WEIGHT:
 			begin
-				thread_probability[0] <= val[7:4]==4'h0 ? 8'h10 : val[7:0];
-				thread_probability[1] <= val[15:8];
-				thread_probability[2] <= val[23:16];
-				thread_probability[3] <= val[31:24];
+				if (val[31:0]==32'd0) begin
+					thread_probability[0] <= 8'h1F;
+					thread_probability[1] <= 8'h1F;
+					thread_probability[2] <= 8'h1F;
+					thread_probability[3] <= 8'h1F;
+					thread_probability[4] <= 8'h1F;
+					thread_probability[5] <= 8'h1F;
+					thread_probability[6] <= 8'h1F;
+					thread_probability[7] <= 8'h1F;
+				end
+				else begin
+					thread_probability[0] <= val[7:4];
+					thread_probability[1] <= val[15:8];
+					thread_probability[2] <= val[23:16];
+					thread_probability[3] <= val[31:24];
+					thread_probability[4] <= val[39:32];
+					thread_probability[5] <= val[47:40];
+					thread_probability[6] <= val[55:48];
+					thread_probability[7] <= val[63:56];
+				end
 			end
 		16'h3080: sr_stack[0] <= val[31:0];
 		Qupls4_pkg::CSR_MEPC:	pc_stack[0] <= val;
@@ -8332,11 +8352,6 @@ begin
 	for (nn = 1; nn < ISTACK_DEPTH; nn = nn + 1)
 		pc_stack[nn] <= pc_stack[nn-1];
 	pc_stack[0] <= retpc;
-	if (Qupls4_pkg::UOP_STRATEGY==2) begin
-		for (nn = 1; nn < ISTACK_DEPTH; nn = nn + 1)
-			upc_stack[nn] <= upc_stack[nn-1];
-		upc_stack[0] <= {1'b0,uop_num};
-	end
 	sr.pl <= 8'hFF;
 	sr.om <= fnNextOm(sr.om);
 	excir <= rob[id].op;
@@ -8391,11 +8406,6 @@ begin
 	for (nn = 1; nn < ISTACK_DEPTH; nn = nn + 1)
 		pc_stack[nn] <= pc_stack[nn-1];
 	pc_stack[0] <= retpc;
-	if (Qupls4_pkg::UOP_STRATEGY==2) begin
-		for (nn = 1; nn < ISTACK_DEPTH; nn = nn + 1)
-			upc_stack[nn] <= upc_stack[nn-1];
-		upc_stack[0] <= {1'b0,uop_num};
-	end
 	sr.pl <= 8'hFF;
 	sr.om <= fnNextOm(sr.om);
 	csr_carry_mod <= rob[id].op.carry_mod;
@@ -8453,11 +8463,6 @@ begin
 		pc_stack[nn] <=	pc_stack[nn+1];
 	exc_ret_pc <= pc_stack[0];
 	exc_ret_carry_mod <= csr_carry_mod;
-	if (Qupls4_pkg::UOP_STRATEGY==2) begin
-		for (nn = 0; nn < ISTACK_DEPTH-1; nn = nn + 1)
-			upc_stack[nn] <= upc_stack[nn+1];
-		exc_uop_num <= upc_stack[0][2:0];
-	end
 	csr_carry_mod <= 32'd0;
 end
 endtask

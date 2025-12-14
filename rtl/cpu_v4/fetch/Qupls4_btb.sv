@@ -38,19 +38,18 @@
 import Qupls4_pkg::*;
 
 module Qupls4_btb(rst, clk, en, clk_en, nmi, nmi_addr, irq, irq_addr,
-	rclk, micro_machine_active,
+	rclk, micro_machine_active, get_next_pc, advance_pc,
 	igrp, length_byte, predicted_correctly_dec, new_address_dec,
 	new_address_mux,
 	pc, pc0, pc1, pc2, pc3, pc4, next_pc, p_override, po_bno,
 	takb0, takb1, takb2, takb3, do_bsr, bsr_tgt, pe_bsdone, do_ret, ret_pc,
 	do_call,
-	branchmiss, bs_done_oh, misspc,
-	mip0v, mip1v, mip2v, mip3v,
+	branchmiss, bs_done_oh, misspc, excret, excretpc,
 	commit_pc0, commit_brtgt0, commit_takb0, commit_grp0,
 	commit_pc1, commit_brtgt1, commit_takb1, commit_grp1,
 	commit_pc2, commit_brtgt2, commit_takb2, commit_grp2,
 	commit_pc3, commit_brtgt3, commit_takb3, commit_grp3,
-	strm_bitmap, act_stream, fet_stream, pcs,
+	strm_bitmap, fet_stream, pcs,
 	new_stream, alloc_stream, free_stream, thread_probability, dep_stream
 );
 parameter DEP=1024;
@@ -64,8 +63,10 @@ input pc_address_t nmi_addr;
 input irq;
 input pc_address_t irq_addr;
 input rclk;
+input advance_pc;
 input micro_machine_active;
 output reg [2:0] igrp;
+input get_next_pc;
 input [7:0] length_byte;
 input cpu_types_pkg::pc_address_ex_t pc;
 input cpu_types_pkg::pc_address_ex_t pc0;
@@ -74,6 +75,8 @@ input cpu_types_pkg::pc_address_ex_t pc2;
 input cpu_types_pkg::pc_address_ex_t pc3;
 input cpu_types_pkg::pc_address_ex_t pc4;
 output cpu_types_pkg::pc_address_ex_t next_pc;
+input excret;
+input pc_address_ex_t excretpc;
 input [3:0] p_override;
 input [6:0] po_bno [0:3];
 output reg takb0;
@@ -83,10 +86,6 @@ output reg takb3;
 input pc_address_ex_t new_address_mux;
 input predicted_correctly_dec;
 input pc_address_ex_t new_address_dec;
-input mip0v;
-input mip1v;
-input mip2v;
-input mip3v;
 input pe_bsdone;
 input do_bsr;
 input do_ret;
@@ -114,14 +113,13 @@ input commit_takb3;
 input [2:0] commit_grp3;
 
 output [XSTREAMS*THREADS-1:0] strm_bitmap;
-output pc_stream_t act_stream;
 output pc_stream_t fet_stream;
 output pc_stream_t [3:0] new_stream;
 input alloc_stream;
 input [XSTREAMS*THREADS-1:0] free_stream;
 output pc_address_ex_t [XSTREAMS*THREADS-1:0] pcs;
 
-input [7:0] thread_probability [0:3];
+input [7:0] thread_probability [0:7];
 output [XSTREAMS-1:0] dep_stream [0:XSTREAMS-1];
 
 
@@ -155,19 +153,21 @@ genvar g;
 wire [26:0] lfsro;
 lfsr27 #(.WID(27)) ulfsr1(rst, clk, 1'b1, 1'b0, lfsro);
 
-wire [5:0] ffz0,ffz1,ffz2,ffz3;
+wire [5:0] ffz0,ffz1,ffz2,ffz3,ffz4;
 generate begin : gFFZ
 	if (XSTREAMS==32) begin
 ffz48 uffz0 (.i({16'hFFFF,strm_bitmap[ 31: 0]}), .o(ffz0));
 if (THREADS > 1) ffz48 uffz1 (.i({16'hFFFF,strm_bitmap[ 63:32]}), .o(ffz1));
 if (THREADS > 2) ffz48 uffz2 (.i({16'hFFFF,strm_bitmap[ 95:64]}), .o(ffz2));
 if (THREADS > 3) ffz48 uffz3 (.i({16'hFFFF,strm_bitmap[127:96]}), .o(ffz3));
+if (THREADS > 4) ffz48 uffz4 (.i({16'hFFFF,strm_bitmap[159:128]}), .o(ffz4));
 end
 else if (XSTREAMS==16) begin
 ffz24 uffz0 (.i({8'hFF,strm_bitmap[ 15: 0]}), .o(ffz0));
 if (THREADS > 1) ffz24 uffz1 (.i({8'hFF,strm_bitmap[ 31:16]}), .o(ffz1));
 if (THREADS > 2) ffz24 uffz2 (.i({8'hFF,strm_bitmap[ 47:32]}), .o(ffz2));
 if (THREADS > 3) ffz24 uffz3 (.i({8'hFF,strm_bitmap[ 63:48]}), .o(ffz3));
+if (THREADS > 4) ffz24 uffz4 (.i({8'hFF,strm_bitmap[ 79:64]}), .o(ffz4));
 end
 end
 endgenerate
@@ -506,7 +506,7 @@ Qupls4_btb_stream_bitmap usb1
 	.clk(clk),
 	.clk_en(clk_en),
 	.ffz0(ffz0),
-	.act_stream(act_stream),
+	.act_stream(fet_stream),
 	.free_stream(free_stream),
 	.alloc_stream(alloc_stream),
 	.new_stream(new_stream),
@@ -520,14 +520,14 @@ Qupls4_btb_stream_bitmap usb1
 reg [1:0] thrd;
 always_comb
 begin
-	fet_stream = {$bits(pc_stream_t){1'b0}};
+	next_fet_stream = {$bits(pc_stream_t){1'b0}};
 	for (n2 = 0; n2 < XSTREAMS*THREADS; n2 = n2 + 1) begin
 		thrd = n2 >> $clog2(XSTREAMS);
 		if (strm_bitmap[n2] && (lfsro[7:0] < thread_probability[thrd]))
-			fet_stream = pc_stream_t'(n2);
+			next_fet_stream = pc_stream_t'(n2);
 	end
-	if (fet_stream=={$bits(pc_stream_t){1'b0}})
-		fet_stream = act_stream;
+	if (next_fet_stream=={$bits(pc_stream_t){1'b0}})
+		next_fet_stream = fet_stream;
 end
 	
 	
@@ -549,7 +549,6 @@ always_comb
 
 always_comb
 if (rst) begin
-	next_fet_stream = {2'd0,ffz0[4:0]};
 	for (nn = 0; nn < XSTREAMS*THREADS; nn = nn + 1) begin
 		next_pcs[nn].stream.thread = (nn >> $clog2(XSTREAMS));
 		next_pcs[nn].stream.stream = 5'd1;
@@ -561,7 +560,6 @@ if (rst) begin
 	takb3 = 1'b0;
 end
 else begin
-	next_fet_stream = fet_stream;
 	takb0 = 1'b0;
 	takb1 = 1'b0;
 	takb2 = 1'b0;
@@ -613,12 +611,14 @@ else begin
 		next_pcs[fet_stream].stream = next_fet_stream;
 	end
 	else
+	if (excret)
+		next_pcs[fet_stream] = excretpc;
 	// Under construction: RAS
-	if (do_ret)
-		next_pcs[act_stream] = ras[ras_sp];
+	else if (do_ret)
+		next_pcs[fet_stream] = ras[ras_sp];
 	// Decode stage corrections override mux stage.
 	else if (!predicted_correctly_dec)
-		next_pcs[act_stream] = new_address_dec;
+		next_pcs[fet_stream] = new_address_dec;
 	else if (|p_override)
 		next_pcs[act_stream] = new_address_mux;
 	// bsr/jsr
@@ -665,8 +665,10 @@ generate begin : gPCs
 			pcs[g].stream.thread = g >> $clog2(XSTREAMS);
 			pcs[g].pc <= RSTPC;
 		end
-		else
-			pcs[g] <= next_pcs[g];
+		else if (advance_pc) begin
+			if (get_next_pc)
+				pcs[g] <= next_pcs[g];
+		end
 	end
 end
 endgenerate

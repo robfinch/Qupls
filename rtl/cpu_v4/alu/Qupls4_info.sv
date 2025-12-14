@@ -40,12 +40,14 @@ import Qupls4_pkg::*;
 
 module Qupls4_info(ndx, coreno, o);
 input [63:0] coreno;
+input [2:0] thread;
 input [4:0] ndx;
 output cpu_types_pkg::value_t o;
 
 always_comb
 	case(ndx)
 	5'd0:	o = coreno;
+	5'd1:	o = {61'd0,thread};
 	5'd2:	o = "Finitron";
 	5'd3:	o = 64'd0;
 	5'd4:	o = "64BitSS ";

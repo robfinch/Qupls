@@ -7,7 +7,8 @@
 //
 //
 // Qupls4_fpu64.sv
-//	- FPU ops with a two cycle latency
+//	- FPU ops with a two cycle latency, resulting in a unit with a three
+//    cycle latency.
 //
 // BSD 3-Clause License
 // Redistribution and use in source and binary forms, with or without
@@ -37,10 +38,11 @@
 //
 // ============================================================================
 
+import const_pkg::*;
 import Qupls4_pkg::*;
-//import fp64Pkg::*;
+import fp64Pkg::*;
 
-module Qupls4_fpu64(rst, clk, clk3x, om, idle, ir, rm, a, b, c, t, i, p, o, done, exc);
+module Qupls4_fpu64(rst, clk, clk3x, om, idle, ir, rm, a, b, c, t, s, i, p, o, sto, ust, done, exc);
 parameter WID=64;
 input rst;
 input clk;
@@ -53,9 +55,12 @@ input [WID-1:0] a;
 input [WID-1:0] b;
 input [WID-1:0] c;
 input [WID-1:0] t;
+input fp_status_reg_t s;
 input [WID-1:0] i;
 input [WID-1:0] p;
 output reg [WID-1:0] o;
+output fp_status_reg_t sto;
+output reg ust;			// update status
 output reg done;
 output Qupls4_pkg::cause_code_t exc;
 
@@ -63,11 +68,12 @@ reg [11:0] cnt;
 reg sincos_done, scale_done, f2i_done, i2f_done, sqrt_done, fres_done, trunc_done;
 wire div_done;
 reg [WID-1:0] bus;
+fp_status_reg_t stbus;
 reg [WID-1:0] fmao1, fmao2, fmao3, fmao4, fmao5, fmao6, fmao7;
 wire [WID-1:0] scaleo, f2io, i2fo, signo2, cmpo2, divo, sqrto, freso, trunco;
-wire [WID-1:0] fsgnj2,fsgnjn2,fsgnjx2;
-reg [WID-1:0] fsgnj1,fsgnjn1,fsgnjx1;
-reg [WID-1:0] fsgnj,fsgnjn,fsgnjx;
+FP64 fsgnj2,fsgnjn2,fsgnjx2;
+FP64 fsgnj1,fsgnjn1,fsgnjx1;
+FP64 fsgnj,fsgnjn,fsgnjx;
 reg [WID-1:0] cmpo,cmpo1;
 reg [WID-1:0] signo,signo1;
 wire [WID-1:0] cvtS2Do2;
@@ -77,6 +83,9 @@ reg [WID-1:0] ando1,oro1,xoro1,addo1;
 reg [WID-1:0] ando,oro,xoro,addo;
 reg [WID-1:0] subfo2,movo2;
 reg [WID-1:0] subfo,subfo1,movo,movo1,loadao,loadao1;
+wire scaleb_over, scaleb_under;
+wire f2iover;
+wire i2f_inexact;
 wire ce = 1'b1;
 wire cd_args;
 reg [WID-1:0] tmp;
@@ -89,6 +98,10 @@ wire aInf,bInf;
 wire aNan,bNan;
 wire asNan,bsNan;
 wire aqNan,bqNan;
+wire [2:0] a3;
+
+delay3 #(1) udlyust1 (.clk(clk), .ce(1'b1), .i(ir.f3.rc), .o(ust));
+delay2 #(3) udlyrm2 (.clk(clk), .ce(1'b1), .i(a[2:0]), .o(a3));
 
 fpDecomp64 udc1a (
 	.i(a),
@@ -150,7 +163,9 @@ fpScaleb64 uscal1
 	.ce(ce),
 	.a(a),
 	.b(b),
-	.o(scaleo)
+	.o(scaleo),
+	.over(scaleb_over),
+	.under(scaleb_under)
 );
 
 fpCvt64ToI64 uf2i641
@@ -160,7 +175,7 @@ fpCvt64ToI64 uf2i641
 	.op(1'b1),	// 1= signed, 0=unsigned
 	.i(a),
 	.o(f2io),
-	.overflow()
+	.overflow(f2iover)
 );
 
 fpCvtI64To64 ui2f1
@@ -171,7 +186,7 @@ fpCvtI64To64 ui2f1
 	.rm(rm),
 	.i(a),
 	.o(i2fo),
-	.inexact()
+	.inexact(i2f_inexact)
 );
 
 fpSign64 usign1
@@ -307,6 +322,16 @@ begin
 	Qupls4_pkg::OP_FLTPH,Qupls4_pkg::OP_FLTPS,Qupls4_pkg::OP_FLTPD,Qupls4_pkg::OP_FLTPQ,
 	Qupls4_pkg::OP_FLTP:
 		case(ir.f3.func)
+		Qupls4_pkg::FLT_SCALEB:	bus = scaleo;
+		Qupls4_pkg::FLT_SGNJ:		bus = fsgnj;
+		Qupls4_pkg::FLT_SGNJN:	bus = fsgnjn;
+		Qupls4_pkg::FLT_SGNJX:	bus = fsgnjx;
+		Qupls4_pkg::FLT_SIGN:		bus = signo;
+		Qupls4_pkg::FLT_FTOI:		bus = f2io;
+		Qupls4_pkg::FLT_ITOF:		bus = i2fo;
+		Qupls4_pkg::FLT_TRUNC:	bus = trunco;
+		Qupls4_pkg::FLT_RM:			bus = {61'd0,s.rm};
+		default:	bus = zero;
 		endcase
 	/*
 	OP_FLT:
@@ -345,10 +370,263 @@ begin
 	endcase
 end
 
-always_ff @(posedge clk)
-	o = bus;
 always_comb
-	exc = Qupls4_pkg::FLT_NONE;
+begin
+	stbus = s;
+	case(ir.any.opcode)
+	Qupls4_pkg::OP_FLTH,Qupls4_pkg::OP_FLTS,Qupls4_pkg::OP_FLTD,Qupls4_pkg::OP_FLTQ,
+	Qupls4_pkg::OP_FLTPH,Qupls4_pkg::OP_FLTPS,Qupls4_pkg::OP_FLTPD,Qupls4_pkg::OP_FLTPQ,
+	Qupls4_pkg::OP_FLTP:
+		case(ir.f3.func)
+		Qupls4_pkg::FLT_SGNJ:
+			begin
+				stbus.inexact = FALSE;
+				stbus.dbz = FALSE;
+				stbus.under = FALSE;
+				stbus.over = FALSE;
+				stbus.invop = FALSE;
+				stbus.fractie = FALSE;
+				stbus.rawayz = FALSE;
+				stbus.c =
+					(fsgnj.exp==11'd0 && fsgnj.sig != 52'd0) |	// denormal
+					(fsgnj.sign && fsgnj[62:0]==63'd0) |				// negative zero
+					(fsgnj.exp==11'h7ff && fsgnj.sig[51])				// quiet NaN
+					;
+				stbus.neg = fsgnj[WID-1] && fsgnj[WID-2:0]!=63'd0;
+				stbus.pos = ~fsgnj[WID-1] && fsgnj[WID-2:0]!=63'd0;
+				stbus.zero = fsgnj[WID-2:0]==63'd0;
+				stbus.inf = fsgnj.exp==11'h7FF && fsgnj[WID-2:0]==63'd0;
+				stbus.dbzx = FALSE;
+				stbus.underx = FALSE;
+				stbus.overx = FALSE;
+				stbus.giopx = FALSE;
+				stbus.gx = FALSE;
+				stbus.sumx = FALSE;									
+				stbus.nan_cause = 4'd0;
+				stbus.cvt = FALSE;
+				stbus.sqrtx = FALSE;
+				stbus.nancmp = FALSE;
+				stbus.infzero = FALSE;
+				stbus.zerozero = FALSE;
+				stbus.infdiv = FALSE;
+				stbus.subinfx = FALSE;
+				stbus.snanx = FALSE;
+			end
+		Qupls4_pkg::FLT_SGNJN:
+			begin
+				stbus.inexact = FALSE;
+				stbus.dbz = FALSE;
+				stbus.under = FALSE;
+				stbus.over = FALSE;
+				stbus.invop = FALSE;
+				stbus.fractie = FALSE;
+				stbus.rawayz = FALSE;
+				stbus.c =
+					(fsgnjn.exp==11'd0 && fsgnjn.sig != 52'd0) |	// denormal
+					(fsgnjn.sign && fsgnjn[62:0]==63'd0) |				// negative zero
+					(fsgnjn.exp==11'h7ff && fsgnjn.sig[51])				// quiet NaN
+					;
+				stbus.neg = fsgnjn[WID-1] && fsgnjn[WID-2:0]!=63'd0;
+				stbus.pos = ~fsgnjn[WID-1] && fsgnjn[WID-2:0]!=63'd0;
+				stbus.zero = fsgnjn[WID-2:0]==63'd0;
+				stbus.inf = fsgnjn.exp==11'h7FF && fsgnjn[WID-2:0]==63'd0;
+				stbus.dbzx = FALSE;
+				stbus.underx = FALSE;
+				stbus.overx = FALSE;
+				stbus.giopx = FALSE;
+				stbus.gx = FALSE;
+				stbus.sumx = FALSE;									
+				stbus.nan_cause = 4'd0;
+				stbus.cvt = FALSE;
+				stbus.sqrtx = FALSE;
+				stbus.nancmp = FALSE;
+				stbus.infzero = FALSE;
+				stbus.zerozero = FALSE;
+				stbus.infdiv = FALSE;
+				stbus.subinfx = FALSE;
+				stbus.snanx = FALSE;
+			end
+		Qupls4_pkg::FLT_SGNJX:
+			begin
+				stbus.inexact = FALSE;
+				stbus.dbz = FALSE;
+				stbus.under = FALSE;
+				stbus.over = FALSE;
+				stbus.invop = FALSE;
+				stbus.fractie = FALSE;
+				stbus.rawayz = FALSE;
+				stbus.c =
+					(fsgnjx.exp==11'd0 && fsgnjx.sig != 52'd0) |	// denormal
+					(fsgnjx.sign && fsgnjx[62:0]==63'd0) |				// negative zero
+					(fsgnjx.exp==11'h7ff && fsgnjx.sig[51])				// quiet NaN
+					;
+				stbus.neg = fsgnjx[WID-1] && fsgnjx[WID-2:0]!=63'd0;
+				stbus.pos = ~fsgnjx[WID-1] && fsgnjx[WID-2:0]!=63'd0;
+				stbus.zero = fsgnjx[WID-2:0]==63'd0;
+				stbus.inf = fsgnjx.exp==11'h7FF && fsgnjx[WID-2:0]==63'd0;
+				stbus.dbzx = FALSE;
+				stbus.underx = FALSE;
+				stbus.overx = FALSE;
+				stbus.giopx = FALSE;
+				stbus.gx = FALSE;
+				stbus.sumx = FALSE;									
+				stbus.nan_cause = 4'd0;
+				stbus.cvt = FALSE;
+				stbus.sqrtx = FALSE;
+				stbus.nancmp = FALSE;
+				stbus.infzero = FALSE;
+				stbus.zerozero = FALSE;
+				stbus.infdiv = FALSE;
+				stbus.subinfx = FALSE;
+				stbus.snanx = FALSE;
+			end
+		Qupls4_pkg::FLT_SCALEB:
+			begin
+				stbus.inexact = FALSE;
+				stbus.dbz = FALSE;
+				stbus.under = scaleb_under;
+				stbus.over = scaleb_over;
+				stbus.invop = FALSE;
+				stbus.fractie = FALSE;
+				stbus.rawayz = FALSE;
+				stbus.c =
+					(scaleo.exp==11'd0 && scaleo.sig != 52'd0) |	// denormal
+					(scaleo.sign && scaleo[62:0]==63'd0) |				// negative zero
+					(scaleo.exp==11'h7ff && scaleo.sig[51])				// quiet NaN
+					;
+				stbus.neg = scaleo[WID-1] && scaleo[WID-2:0]!=63'd0;
+				stbus.pos = ~scaleo[WID-1] && scaleo[WID-2:0]!=63'd0;
+				stbus.zero = scaleo[WID-2:0]==63'd0;
+				stbus.inf = scaleo.exp==11'h7FF && scaleo[WID-2:0]==63'd0;
+				stbus.dbzx = FALSE;
+				stbus.underx = s.underxe & scaleb_under;
+				stbus.overx = s.overxe & scaleb_over;
+				stbus.giopx = FALSE;
+				stbus.gx = FALSE;
+				stbus.sumx = FALSE;									
+				stbus.nan_cause = 4'd0;
+				stbus.cvt = FALSE;
+				stbus.sqrtx = FALSE;
+				stbus.nancmp = FALSE;
+				stbus.infzero = FALSE;
+				stbus.zerozero = FALSE;
+				stbus.infdiv = FALSE;
+				stbus.subinfx = FALSE;
+				stbus.snanx = FALSE;
+			end
+		Qupls4_pkg::FLT_SIGN:
+			begin
+				stbus.inexact = FALSE;
+				stbus.dbz = FALSE;
+				stbus.under = FALSE;
+				stbus.over = FALSE;
+				stbus.invop = FALSE;
+				stbus.fractie = FALSE;
+				stbus.rawayz = FALSE;
+				stbus.c =
+					(signo.exp==11'd0 && signo.sig != 52'd0) |	// denormal
+					(signo.sign && signo[62:0]==63'd0) |				// negative zero
+					(signo.exp==11'h7ff && signo.sig[51])				// quiet NaN
+					;
+				stbus.neg = signo[WID-1] && signo[WID-2:0]!=63'd0;
+				stbus.pos = ~signo[WID-1] && signo[WID-2:0]!=63'd0;
+				stbus.zero = signo[WID-2:0]==63'd0;
+				stbus.inf = signo.exp==11'h7FF && signo[WID-2:0]==63'd0;
+				stbus.dbzx = FALSE;
+				stbus.underx = FALSE;
+				stbus.overx = FALSE;
+				stbus.giopx = FALSE;
+				stbus.gx = FALSE;
+				stbus.sumx = FALSE;									
+				stbus.nan_cause = 4'd0;
+				stbus.cvt = FALSE;
+				stbus.sqrtx = FALSE;
+				stbus.nancmp = FALSE;
+				stbus.infzero = FALSE;
+				stbus.zerozero = FALSE;
+				stbus.infdiv = FALSE;
+				stbus.subinfx = FALSE;
+				stbus.snanx = FALSE;
+			end
+		Qupls4_pkg::FLT_FTOI:
+			begin
+				stbus.inexact = FALSE;
+				stbus.dbz = FALSE;
+				stbus.under = FALSE;
+				stbus.over = f2iover;
+				stbus.invop = FALSE;
+				stbus.fractie = FALSE;
+				stbus.rawayz = FALSE;
+				stbus.c = FALSE;
+				stbus.neg = f2io[WID-1];
+				stbus.pos = ~f2io[WID-1];
+				stbus.zero = f2io[WID-2:0]==64'd0;
+				stbus.inf = FALSE;
+				stbus.dbzx = FALSE;
+				stbus.underx = FALSE;
+				stbus.overx = s.overxe & f2iover;
+				stbus.giopx = FALSE;
+				stbus.gx = FALSE;
+				stbus.sumx = FALSE;									
+				stbus.nan_cause = 4'd0;
+				stbus.cvt = FALSE;
+				stbus.sqrtx = FALSE;
+				stbus.nancmp = FALSE;
+				stbus.infzero = FALSE;
+				stbus.zerozero = FALSE;
+				stbus.infdiv = FALSE;
+				stbus.subinfx = FALSE;
+				stbus.snanx = FALSE;
+			end
+		Qupls4_pkg::FLT_ITOF:
+			begin
+				stbus.inexact = i2f_inexact;
+				stbus.dbz = FALSE;
+				stbus.under = FALSE;
+				stbus.over = f2iover;
+				stbus.invop = FALSE;
+				stbus.fractie = FALSE;
+				stbus.rawayz = FALSE;
+				stbus.c = FALSE;
+				stbus.neg = i2fo[WID-1] && i2fo[WID-2:0]!=63'd0;
+				stbus.pos = ~i2fo[WID-1] && i2fo[WID-2:0]!=63'd0;
+				stbus.zero = i2fo[WID-2:0]==63'd0;
+				stbus.inf = FALSE;
+				stbus.dbzx = FALSE;
+				stbus.underx = FALSE;
+				stbus.overx = FALSE;
+				stbus.giopx = FALSE;
+				stbus.gx = FALSE;
+				stbus.sumx = FALSE;									
+				stbus.nan_cause = 4'd0;
+				stbus.cvt = FALSE;
+				stbus.sqrtx = FALSE;
+				stbus.nancmp = FALSE;
+				stbus.infzero = FALSE;
+				stbus.zerozero = FALSE;
+				stbus.infdiv = FALSE;
+				stbus.subinfx = FALSE;
+				stbus.snanx = FALSE;
+			end
+		Qupls4_pkg::FLT_RM:
+			begin
+				stbus.rm = a3[2:0];
+			end
+		endcase
+	default:	;
+	endcase
+end
+
+always_ff @(posedge clk)
+	o <= bus;
+always_ff @(posedge clk)
+	sto <= stbus;
+
+always_ff @(posedge clk)
+	if (stbus.overx|stbus.underx|stbus.dbzx|stbus.giopx|stbus.gx|stbus.sumx)
+		exc <= Qupls4_pkg::FLT_FLOAT;
+	else
+		exc <= Qupls4_pkg::FLT_NONE;
 
 task tAdd;
 input Qupls4_pkg::micro_op_t ir;

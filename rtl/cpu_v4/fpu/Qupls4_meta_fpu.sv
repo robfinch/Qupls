@@ -40,7 +40,7 @@ import const_pkg::*;
 import Qupls4_pkg::*;
 
 module Qupls4_meta_fpu(rst, clk, clk3x, idle, stomp, rse_i, rse_o, rm,
-	z, cptgt, o, otag, we_o, done, exc);
+	z, cptgt, o, sto, ust, otag, we_o, done, exc);
 parameter WID=Qupls4_pkg::SUPPORT_QUAD_PRECISION|Qupls4_pkg::SUPPORT_CAPABILITIES ? 128 : 64;
 input rst;
 input clk;
@@ -54,6 +54,8 @@ input z;
 input [WID-1:0] cptgt;
 output reg [WID-1:0] o;
 output reg otag;
+output reg [WID-1:0] sto;
+output reg ust;
 output reg [WID/8:0] we_o;
 output reg done;
 output Qupls4_pkg::cause_code_t exc;
@@ -66,6 +68,7 @@ reg [WID-1:0] a;
 reg [WID-1:0] b;
 reg [WID-1:0] c;
 reg [WID-1:0] t;
+reg [WID-1:0] s;
 reg [WID-1:0] i;
 aregno_t aRd_i;
 reg [1:0] stomp_con;	// stomp conveyor
@@ -75,13 +78,16 @@ always_comb ir = rse_i.uop;
 always_comb a = rse_i.arg[0].val;
 always_comb b = rse_i.arg[1].val;
 always_comb c = rse_i.arg[2].val;
-always_comb t = rse_i.arg[3].val;
+always_comb t = rse_i.arg[4].val;
+always_comb s = rse_i.arg[5].val;
 always_comb i = rse_i.argI;
 always_comb aRd_i = rse_i.aRd;
 
 Qupls4_pkg::cause_code_t exc128,exc64;
 reg [WID-1:0] o1;
 wire [WID-1:0] o16, o32, o64, o128;
+wire [WID-1:0] sto64;
+wire [0:0] ust64;
 wire [7:0] sr64, sr128;
 wire done16, done32, done64, done128;
 genvar g,mm;
@@ -206,6 +212,7 @@ if (Qupls4_pkg::SUPPORT_QUAD_PRECISION|Qupls4_pkg::SUPPORT_CAPABILITIES)
 		.b(b),
 		.c(c),
 		.t(t),
+		.s(s),
 		.i(i),
 		.p(p),
 		.atag(atag),
@@ -231,9 +238,12 @@ if (Qupls4_pkg::NFPU > 0 && !(Qupls4_pkg::SUPPORT_QUAD_PRECISION|Qupls4_pkg::SUP
 		.b(b[g*64+63:g*64]),
 		.c(c[g*64+63:g*64]),
 		.t(t[g*64+63:g*64]),
+		.s(s[g*64+63:g*64]),
 		.i(i),
 		.p(p),
 		.o(o64[g*64+63:g*64]),
+		.sto(sto64[g*64+63:g*64]),
+		.ust(ust64[g]),
 		.done(done64),
 		.exc(exc64)
 	);

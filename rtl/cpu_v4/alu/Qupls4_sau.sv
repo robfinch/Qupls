@@ -341,6 +341,7 @@ generate begin : gInfoBlend
 			Qupls4_info uinfo1 (
 				.ndx(a[4:0]+b[4:0]+ir[26:22]),
 				.coreno(coreno),
+				.thread(pc.stream.thread),
 				.o(info)
 			);
 		end
@@ -789,7 +790,7 @@ begin
 	Qupls4_pkg::OP_CSR:		bus = csr;
 
 	Qupls4_pkg::OP_ADDI:	bus = a + i;
-	Qupls4_pkg::OP_ADDIPI:	bus = a + i + pc.pc;
+//	Qupls4_pkg::OP_ADDIPI:	bus = a + i + pc.pc;
 	Qupls4_pkg::OP_ANDI:	bus = a & i;
 	Qupls4_pkg::OP_ORI:		bus = a | i;
 	Qupls4_pkg::OP_XORI:	bus = a ^ i;
@@ -830,6 +831,14 @@ begin
 			endcase	
 */
 	Qupls4_pkg::OP_LOADA:	bus = a + i + (b << ir[47:45]);
+	Qupls4_pkg::OP_LOADI:
+		begin
+			case(Ra)
+			6'd0:	bus = i;
+			6'd1:	bus = i + pc.pc;
+			default:	bus = zero;
+			endcase
+		end
 	Qupls4_pkg::OP_NOP:		bus = t;	// in case of copy target
 	default:	bus = {(WID/16){16'hDEAD}};
 	endcase
