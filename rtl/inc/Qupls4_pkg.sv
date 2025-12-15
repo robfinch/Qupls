@@ -2443,7 +2443,7 @@ begin
 	OP_BCCU8,OP_BCCU16,OP_BCCU32,OP_BCCU64:
 		fnSourceRs1v = fnConstReg(ir.ins.br.Rs1) || fnImma(ir);
 	OP_LOADA,
-	OP_LDB,,OP_LDBZ,OP_LDW,OP_LDWZ,OP_LDT,OP_LDTZ,OP_LOAD:
+	OP_LDB,OP_LDBZ,OP_LDW,OP_LDWZ,OP_LDT,OP_LDTZ,OP_LOAD:
 		fnSourceRs1v = fnConstReg(ir.ins.ls.Rs1);
 	OP_STB,OP_STW,OP_STT,OP_STORE,OP_STI,OP_STPTR:
 		fnSourceRs1v = fnConstReg(ir.ins.ls.Rs1);
@@ -2468,7 +2468,7 @@ begin
 	OP_BCCU8,OP_BCCU16,OP_BCCU32,OP_BCCU64:
 		fnSourceRs2v = fnConstReg(ir.ins.br.Rs2) || fnImmb(ir);
 	OP_LOADA,
-	OP_LDB,,OP_LDBZ,OP_LDW,OP_LDWZ,OP_LDT,OP_LDTZ,OP_LOAD:
+	OP_LDB,OP_LDBZ,OP_LDW,OP_LDWZ,OP_LDT,OP_LDTZ,OP_LOAD:
 		fnSourceRs2v = fnConstReg(ir.ins.ls.Rs2);
 	OP_STB,OP_STW,OP_STT,OP_STORE,OP_STI,OP_STPTR:
 		fnSourceRs2v = fnConstReg(ir.ins.ls.Rs2);

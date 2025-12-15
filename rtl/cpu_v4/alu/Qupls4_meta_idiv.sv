@@ -37,7 +37,7 @@
 import const_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_meta_idiv(rst, clk, clk2x, stomp, rse_i, rse_o, ld, lane, prc, ir, div,
+module Qupls4_meta_idiv(rst, clk, clk2x, stomp, rse_i, rse_o, ld, lane, prc, ir,
 	cptgt, z, qres, o, we_o, div_done, div_dbz, exc,
 		q_rst, q_trigger, q_rd, q_wr, q_addr, q_rd_data, q_wr_data);
 parameter ALU0 = 1'b0;
@@ -52,7 +52,6 @@ input ld;
 input [2:0] lane;
 input Qupls4_pkg::memsz_t prc;
 input Qupls4_pkg::micro_op_t ir;
-input div;
 input [7:0] cptgt;
 input z;
 input [WID-1:0] qres;
@@ -87,6 +86,7 @@ always_comb i = rse_i.argI;
 always_comb t = rse_i.arg[NOPER-1].val;
 always_comb aRd_i = rse_i.aRd;
 
+reg div;							// 1=signed divide, 0=unsigned
 reg [WID/8:0] we;
 reg [WID-1:0] t1;
 reg z1;
@@ -105,6 +105,9 @@ wire [WID/128-1:0] div_done128;
 wire que_done;
 integer n;
 genvar g,mm,xx;
+
+always_comb
+	div = rse_i.uop.r3.func==Qupls4_pkg::FN_DIV;
 
 generate begin : g16
 	if (Qupls4_pkg::SUPPORT_PREC)

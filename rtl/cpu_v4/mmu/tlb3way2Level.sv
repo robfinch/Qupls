@@ -55,6 +55,7 @@ import QuplsPkg::*;
 
 // These bits are used to select the TLB entry
 `define VADR_MBITS 22:13
+`undef VADR_L2_MBITS
 `define VADR_L2_MBITS 30:23
 // These bits are passed through verbatium
 `define VADR_PBITS_LVL1 12:0

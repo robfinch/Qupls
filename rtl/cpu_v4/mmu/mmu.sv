@@ -307,7 +307,7 @@ upci
 (
 	.rst_i(rst),
 	.clk_i(clk),
-	.irq_i({priv_err0|priv_err1|prive_err2,fault} & {2{irq_en}}),
+	.irq_i({priv_err0|priv_err1|priv_err2,fault} & {2{irq_en}}),
 	.irq_o(fault_o),
 	.cs_config_i(cs_configd),
 	.tid_i(sreqd.tid),
@@ -321,15 +321,13 @@ upci
 	.dat_o(cfg_out),
 	.cs_bar0_o(cs_tw),
 	.cs_bar1_o(cs_rgn),
-	.cs_bar2_o(cs_lot),
+	.cs_bar2_o(),	// cs_lot
 	.irq_en_o(irq_en)
 );
 
 wire [26:0] lfsr_o;
 lfsr27 #(.WID(27)) ulfsr1(rst, clk, 1'b1, 1'b0, lfsr_o);
 
-assign selector_cd = 1'b0;
-assign pc_selector_cd = 1'b0;
 
 // Pipelined signals to match BRAM access
 always_ff @(posedge clk)

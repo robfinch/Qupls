@@ -84,7 +84,7 @@ output reg [5:0] ipl;
 input irq;
 output reg irq_ack;
 input [5:0] irq_i;
-input [63:0] ivect_i;
+input [96:0] ivect_i;
 input [2:0] swstk_i;
 input [2:0] om_i;
 output wb_cmd_request256_t fta_req;
@@ -291,7 +291,7 @@ reg [1:0] robentry_islot [0:Qupls4_pkg::ROB_ENTRIES-1];
 wire [1:0] next_robentry_islot [0:Qupls4_pkg::ROB_ENTRIES-1];
 reg [1:0] lsq_islot [0:Qupls4_pkg::LSQ_ENTRIES*2-1];
 Qupls4_pkg::rob_bitmask_t robentry_stomp;
-Qupls4_pkg::rob_bitmask_t robentry_cpytgt;
+Qupls4_pkg::rob_bitmask_t robentry_cpydst;
 wire [4:0] kept_stream;
 wire stomp_fet, stomp_mux, stomp_x4;
 wire stomp_dec, stomp_ren, stomp_que, stomp_quem;
@@ -643,7 +643,6 @@ reg fpu1_available;
 reg fpu1_dataready;
 Qupls4_pkg::ex_instruction_t fpu1_instr;
 reg [2:0] fpu1_rmd;
-Qupls4_pkg::operating_mode_t fpu1_om;
 value_t fpu1_argA;
 value_t fpu1_argB;
 value_t fpu1_argC;
@@ -658,7 +657,6 @@ pregno_t fpu1_Rt, fpu1_Rt1;
 aregno_t fpu1_aRdA, fpu1_aRdB, fpu1_aRdC;
 pregno_t fpu1_RdA, fpu1_RdB, fpu1_RdC;
 reg fpu1_aRdz, fpu1_aRdz1;
-checkpt_ndx_t fpu1_cp;
 reg [2:0] fpu1_cs;
 reg fpu1_bank;
 pc_address_ex_t fpu1_pc;
@@ -693,8 +691,6 @@ value_t fcu_argI;
 wire fcu_aRtzA,fcu_aRtzB;
 reg fcu_done;
 pc_address_ex_t fcu_pc;
-Qupls4_pkg::operating_mode_t fcu_om;
-Qupls4_pkg::operating_mode_t fcu_omA2, fcu_omB2;
 reg fcu_wrA,fcu_wrB;
 reg fcu_idv;
 Qupls4_pkg::cause_code_t fcu_exc;
@@ -704,7 +700,6 @@ pc_address_ex_t fcu_misspc, fcu_misspc1;
 mc_address_t fcu_miss_mcip, fcu_miss_mcip1;
 reg [2:0] fcu_missgrp;
 reg [2:0] fcu_missino;
-checkpt_ndx_t fcu_cp;
 reg takb;
 rob_ndx_t fcu_rndx;
 reg fcu_new;						// new FCU operation is taking place
@@ -3173,7 +3168,7 @@ value_t fpu1_resA2;
 checkpt_ndx_t sau0_cp2, sau1_cp2, fpu0_cp2, fpu1_cp2, imul0_cp2;
 wire sau0_aRdz1, sau0_aRdz2, sau1_aRdz1, sau1_aRdz2, fpu0_aRdz2;
 rob_ndx_t sau0_id2, sau1_id2, fpu0_id2, imul0_id2;
-Qupls4_pkg::operating_mode_t sau0_om2, sau1_om2, fpu0_om2, fpu1_om2, dram0_om2, dram1_om2;
+Qupls4_pkg::operating_mode_t sau0_om2, sau1_om2, fpu0_om2, dram0_om2, dram1_om2;
 Qupls4_pkg::operating_mode_t sau0_omA2, sau1_omA2, fpu0_omA2, fpu1_omA2, dram0_omA2, dram1_omA2, imul0_omA2;
 Qupls4_pkg::operating_mode_t sau0_omB2, sau1_omB2, fpu0_omB2, fpu1_omB2, dram0_omB2, dram1_omB2;
 Qupls4_pkg::operating_mode_t sau0_omC2, sau1_omC2, fpu0_omC2, fpu1_omC2;
@@ -3199,20 +3194,6 @@ vtdl #(1) 							udlyfp5 (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu0_sc_done), .q(f
 vtdl #($bits(rob_ndx_t))	udlyfp6 (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu0_id), .q(fpu0_id2) );
 vtdl #($bits(checkpt_ndx_t)) udlyfp7 (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu0_cp), .q(fpu0_cp2) );
 vtdl #($bits(Qupls4_pkg::operating_mode_t))	udlyfp8 (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu0_om), .q(fpu0_om2) );
-
-// FPU #1 signals
-
-vtdl #(1) 							udlyfp51 (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu1_sc_done), .q(fpu1_sc_done2) );
-vtdl #($bits(rob_ndx_t))	udlyfp61 (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu1_id), .q(fpu1_id2) );
-vtdl #($bits(checkpt_ndx_t)) udlyfp71 (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu1_cp), .q(fpu1_cp2) );
-vtdl #($bits(Qupls4_pkg::operating_mode_t))	udlyfp81 (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu1_om), .q(fpu1_om2) );
-
-// FCU signals
-
-vtdl #(1) 							udlyfc5 (.clk(clk), .ce(1'b1), .a(4'd0), .d(fcu_sc_done), .q(fcu_sc_done2) );
-vtdl #($bits(rob_ndx_t))	udlyfc6 (.clk(clk), .ce(1'b1), .a(4'd0), .d(fcu_rse.rndx), .q(fcu_id2) );
-vtdl #($bits(checkpt_ndx_t)) udlyfc7 (.clk(clk), .ce(1'b1), .a(4'd0), .d(fcu_cp), .q(fcu_cp2) );
-vtdl #($bits(Qupls4_pkg::operating_mode_t))	udlyfc8 (.clk(clk), .ce(1'b1), .a(4'd0), .d(fcu_om), .q(fcu_om2) );
 
 
 // Compute write enable.
@@ -4211,6 +4192,9 @@ Stark_meta_imul uimul0
 	.mul_done()
 );
 */
+wire idiv0_dbz;
+wire [63:0] div0_exc;
+
 generate begin : gIDiv
 if (Qupls4_pkg::SUPPORT_IDIV)
 Qupls4_meta_idiv uidiv0
@@ -4221,7 +4205,6 @@ Qupls4_meta_idiv uidiv0
 	.ld(idiv0_ld),
 	.rse_i(idiv0_rse),
 	.rse_o(idiv0_rse2),
-	.div(idiv0_div),
 	.cptgt(idiv0_cptgt),
 	.z(idiv0_predz),
 	.o(idiv0_res),
@@ -5155,7 +5138,7 @@ uidivst0
 (
 	.rst(irst),
 	.clk(clk),
-	.available(idiv0_available),
+	.available(1'b1),
 	.busy(rs_busy[3]),
 	.stall(!idiv0_done||idiv0_full),
 	.stomp(robentry_stomp),
@@ -6517,8 +6500,8 @@ else begin
 	// Redo instruction as copy target.
 	// Invalidate false paths.
 	for (n3 = 0; n3 < Qupls4_pkg::ROB_ENTRIES; n3 = n3 + 1) begin
-		if (robentry_stomp[n3]|robentry_cpytgt[n3])	// || bno_bitmap[rob[n3].pc.stream]==1'b0)
-			tBranchInvalidate(n3,robentry_cpytgt[n3]);
+		if (robentry_stomp[n3]|robentry_cpydst[n3])	// || bno_bitmap[rob[n3].pc.stream]==1'b0)
+			tBranchInvalidate(n3,robentry_cpydst[n3]);
 	end
 
 	// This bit to aid the scheduler. There are a lot of bits that must be true

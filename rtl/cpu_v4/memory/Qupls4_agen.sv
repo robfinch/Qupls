@@ -88,11 +88,11 @@ begin
 	else if (load_store)
 		res1 = as + bs + rse_i.argI;
 	else
-		res1 <= 64'd0;
+		res1 = 64'd0;
 end
 
 always_ff @(posedge clk)
-	res = next ? {res1[$bits(cpu_types_pkg::address_t)-1:6] + 2'd1,6'd0} : res1;
+	res <= next ? {res1[$bits(cpu_types_pkg::address_t)-1:6] + 2'd1,6'd0} : res1;
 
 // Make Agen valid sticky
 // The agen takes a clock cycle to compute after the out signal is valid.

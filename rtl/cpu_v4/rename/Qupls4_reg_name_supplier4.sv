@@ -183,11 +183,11 @@ begin
 	ns_dstregv[n1] = INV;
 	ns_dstreg[n1] = 9'd0;
 	if (ns_alloc_req[n1]) begin
-		if (last_cndx==ns_cndx[n1]) begin
+//		if (last_cndx==ns_cndx[n1]) begin
 			ns_rndx[n1] = ns_whrndx[n1];
 			ns_dstreg[n1] = o[n1];
 			ns_dstregv[n1] = ov[n1];
-		end
+//		end
 	end
 end
 

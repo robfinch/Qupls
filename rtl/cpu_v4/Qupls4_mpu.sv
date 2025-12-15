@@ -81,7 +81,7 @@ wire [5:0] snoop_cid = 6'd0;
 reg [31:0] iirq;
 
 wire [5:0] ipl;
-wire [31:0] ivect;
+wire [96:0] ivect;
 wire [63:0] irq;
 wire [2:0] swstk;
 wire irq_ack;
@@ -237,7 +237,7 @@ assign log_req = {$bits(wb_cmd_request256_t){1'b0}};
 // Bus master multiplexor.
 wb_mux #(.NPORT(2)) utmrmux1
 (
-	.rst_i(rst-i),
+	.rst_i(rst_i),
 	.clk_i(clk_i),
 	.req_i(t3mreq),
 	.resp_o(t3mresp),

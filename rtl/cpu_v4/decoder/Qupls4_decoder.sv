@@ -54,7 +54,7 @@ wire [5:0] isz;
 wire excRs1, excRs2, excRs3, excRd, excRd2, excRd3;
 wire [3:0] pred_shadow_count;
 
-assign db = {$bits(decode_bus_t){1'b0}};
+//assign db = {$bits(decode_bus_t){1'b0}};	// Creates multi-driven nets
 assign db.v = 1'b1;
 
 Qupls4_decode_const udcimm
@@ -437,7 +437,7 @@ else begin
 		dbo.qfext <= 1'b0;//db.alu && ins.ins[28:27]==2'b10;
 		if (excRs1|excRs2|excRs3|excRd)
 			dbo.cause <= Qupls4_pkg::FLT_BADREG;
-		dbo.rc = instr.f3.rc;
+		dbo.rc <= instr.f3.rc;
 		// Is the predicate shadow count within range?
 		if (pred_shadow_count >= Qupls4_pkg::PRED_SHADOW)
 			dbo.cause <= Qupls4_pkg::FLT_UNIMP;

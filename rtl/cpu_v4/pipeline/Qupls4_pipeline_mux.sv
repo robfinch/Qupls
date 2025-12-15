@@ -557,14 +557,26 @@ always_comb ins_mux_o[0] = ins_mux[0];
 always_comb ins_mux_o[1] = ins_mux[1];
 always_comb ins_mux_o[2] = ins_mux[2];
 always_comb ins_mux_o[3] = ins_mux[3];
-always_comb pg_mux.hdr.irq_sn = irq_sn_mux;
-always_comb pg_mux.hdr.irq = irq_in_mux;
-always_comb pg_mux.hdr.old_ipl = ipl_mux;
-always_comb pg_mux.hdr.hwi = irq_mux;
-always_comb pg_mux.pr[0].op = ins_mux[0];
-always_comb pg_mux.pr[1].op = ins_mux[1];
-always_comb pg_mux.pr[2].op = ins_mux[2];
-always_comb pg_mux.pr[3].op = ins_mux[3];
+always_comb 
+begin
+	pg_mux.hdr = {$bits(pipeline_group_hdr_t){1'b0}};
+	pg_mux.hdr.v = !stomp_mux;
+	pg_mux.hdr.irq_sn = irq_sn_mux;
+	pg_mux.hdr.irq = irq_in_mux;
+	pg_mux.hdr.old_ipl = ipl_mux;
+	pg_mux.hdr.hwi = irq_mux;
+end
+always_comb
+begin
+	pg_mux.pr[0] = {$bits(pipeline_reg_t){1'b0}};
+	pg_mux.pr[0].op = ins_mux[0];
+	pg_mux.pr[1] = {$bits(pipeline_reg_t){1'b0}};
+	pg_mux.pr[1].op = ins_mux[1];
+	pg_mux.pr[2] = {$bits(pipeline_reg_t){1'b0}};
+	pg_mux.pr[2].op = ins_mux[2];
+	pg_mux.pr[3] = {$bits(pipeline_reg_t){1'b0}};
+	pg_mux.pr[3].op = ins_mux[3];
+end
 
 always_ff @(posedge clk) if (en) irq_sn_mux <= irq_sn_fet;
 always_ff @(posedge clk) if (en) irq_in_mux <= irq_in_fet;

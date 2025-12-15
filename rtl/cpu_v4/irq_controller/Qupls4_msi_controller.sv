@@ -107,7 +107,7 @@ wire wr_clk = clk;
 wire clka = clk;
 wire clkb = clk;
 reg ena,enb;
-reg [8:0] wea,web;
+reg [15:0] wea,web;
 reg [10:0] addra, addrb, addrbd;
 msi_vec_t douta, doutb;
 msi_vec_t dina, dinb;
@@ -130,7 +130,7 @@ wire [NQUES:1] empty;
 wire [NQUES:1] full;
 wire [NQUES:1] overflow;
 wire [NQUES:1] underflow;
-wire [4:0] data_count [1:NQUES];
+wire [5:0] data_count [1:NQUES];
 wire [5:0] wr_data_count [1:NQUES];
 wb_imessage_t [NQUES:1] fifo_din;
 wb_imessage_t [NQUES:1] fifo_dout;
@@ -629,7 +629,7 @@ devadr_ram udaram1 (
   .clkb(clkb),    // input wire clkb
   .enb(da_enb),   // input wire enb
   .web(1'b0),     // input wire [15 : 0] web
-  .addrb(addrb),  // input wire [10 : 0] addrb
+  .addrb(da_addrb),  // input wire [10 : 0] addrb
   .dinb(32'd0),    // input wire [79 : 0] dinb
   .doutb(da_doutb)  // output wire [79 : 0] doutb
 );

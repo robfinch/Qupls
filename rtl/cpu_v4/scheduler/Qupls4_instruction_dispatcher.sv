@@ -115,6 +115,10 @@ if (rst) begin
 	rse[5] = {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
 end
 else begin
+	rob_dispatched[0] <= 8'd0;
+	rob_dispatched[1] <= 8'd0;
+	rob_dispatched[2] <= 8'd0;
+	rob_dispatched[3] <= 8'd0;
 	kk = 0;
 	jj = 0;
 	sau_cnt = 4'd0;

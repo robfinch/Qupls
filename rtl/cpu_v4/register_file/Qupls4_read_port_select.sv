@@ -91,6 +91,12 @@ else begin
 		regAck_o[h] = 1'b1;
 		aReg_o[h] = aReg_i[h];
 	end
+	for (h = 0; h < NPORTO; h = h + 1) begin
+		if (h >= FIXEDPORTS) begin
+			regAck_o[h] = 1'b0;
+			aReg_o[h] = 8'd0;
+		end
+	end
 	for (j = 0; j < NPORTI-FIXEDPORTS; j = j + 1) begin
 		regAck_o[j+FIXEDPORTS] = 1'b0;
 		if (aReg_i[((j+m)%(NPORTI-FIXEDPORTS))+FIXEDPORTS]!=8'd0) begin

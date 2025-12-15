@@ -380,7 +380,7 @@ begin
 	exc = Qupls4_pkg::FLT_NONE;
 	bus = {(WID/16){16'h0000}};
 	base_eleno = {chunk,2'd0};
-	mask1 = mask >> base_eleno;
+	mask1 = c >> base_eleno;
 	case(ir.any.opcode)
 	Qupls4_pkg::OP_R3BP,Qupls4_pkg::OP_R3WP,Qupls4_pkg::OP_R3TP,Qupls4_pkg::OP_R3OP:
 		case(ir.r3.func)
