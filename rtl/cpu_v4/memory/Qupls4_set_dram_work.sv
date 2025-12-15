@@ -118,7 +118,7 @@ else begin
     dram_oper_o.rndx <= dram_work_o.rndx;
     dram_oper_o.exc <= dram_work_o.exc;
   	dram_oper_o.oper.val <= Qupls4_pkg::fnDati(1'b0,dram_work_o.op,(cpu_dat_i << (7'd64-lsq_i.shift))|dram_oper_o.oper.val);
-  	dram_oper_o.oper.flags <= dram_work_o.flags;
+  	dram_oper_o.oper.flags <= 8'h00;//dram_work_o.flags;
     if (dram_work_o.store) begin
     	dram_work_o.store <= 1'd0;
     	dram_work_o.sel <= 80'd0;
@@ -165,7 +165,7 @@ else begin
 	if (LSQNO==2'd0 && lsq_i.v2p && lsq_i.v) begin
 		if (lsq_i.agen) begin
 			dram_oper_o.oper.val <= lsq_i.padr;
-			dram_oper_o.oper.flags <= lsq_i.flags;
+			dram_oper_o.oper.flags <= 8'h00;//lsq_i.flags;
 			dram_oper_o.oper.pRn <= lsq_i.Rt;
 			dram_oper_o.oper.v <= VAL;
 			dram_oper_o.om <= lsq_i.om;
@@ -176,8 +176,8 @@ else begin
 	end
 	else if (Qupls4_pkg::SUPPORT_LOAD_BYPASSING && vb_i) begin
 		dram_oper_o.oper.val <= Qupls4_pkg::fnDati(1'b0,dram_work_o.op,lsq_i.res);
-		dram_oper_o.flags <= lsq_i.flags;
-		dram_oper_o.oper.pRd <= lsq_i.Rt;
+		dram_oper_o.oper.flags <= 8'h00;//lsq_i.flags;
+		dram_oper_o.oper.pRn <= lsq_i.Rt;
 		dram_oper_o.oper.v <= lsq_i.v;
 		dram_oper_o.om	<= lsq_i.om;
 		dram_oper_o.cndx <= rob_i[lsq_i.rndx].cndx;
@@ -231,7 +231,7 @@ else begin
 					dram_work_o.paddrh <= lsq_i.padr;
 					dram_work_o.data <= lsq_i.res << {lsq_i.shift,3'b0};
 					dram_work_o.datah <= lsq_i.res << {lsq_i.shift,3'b0};
-					dram_work_o.ctag <= lsq_i.flags.cap;
+					dram_work_o.ctag <= 8'h00;//lsq_i.flags.cap;
 				end
 				dram_work_o.memsz <= Qupls4_pkg::fnMemsz(rob_i[lsq_i.rndx].op);
 				dram_work_o.tid.core <= CORENO;

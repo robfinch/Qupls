@@ -44,6 +44,7 @@ import Qupls4_pkg::*;
 
 module Qupls4_microop_mem(clk, om, ir, num, carry_reg, carry_out, carry_in,
 	vlen_reg, velsz, count, uop, thread);
+parameter UOP_ARRAY_SIZE = 32;
 input clk;
 input Qupls4_pkg::operating_mode_t om;
 input [47:0] ir;
@@ -57,7 +58,7 @@ input [1:0] thread;
 output reg [5:0] count;
 output Qupls4_pkg::micro_op_t [31:0] uop;
 
-integer nn, kk;
+integer nn, kk, n1;
 reg [6:0] head0;
 reg [6:0] tail0, tail1, tail2, tail3;
 
@@ -335,14 +336,8 @@ always_comb vRs3i = (instr.r3.vn[3] & ~instr.r3.ms[2] & is_vector);
 always_comb
 begin
 	count = 3'd0;
-	uop[0] = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
-	uop[1] = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
-	uop[2] = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
-	uop[3] = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
-	uop[4] = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
-	uop[5] = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
-	uop[6] = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
-	uop[7] = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
+	for (n1 = 0; n1 < UOP_ARRAY_SIZE; n1 = n1 + 1)
+		uop[n1] = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
 	
 	case(ir[6:0])
 	Qupls4_pkg::OP_BRK:	begin uop[0] = {1'b1,1'b0,1'd1,5'd0,4'd0,ir}; count = 3'd1; end
@@ -986,6 +981,23 @@ begin
 		end
 	Qupls4_pkg::OP_FLTH,Qupls4_pkg::OP_FLTS,Qupls4_pkg::OP_FLTD,Qupls4_pkg::OP_FLTQ:
 		begin
+			// Add postfix for second write port if status recording is set.
+			if (instr.f3.rc) begin
+				count = 4'd2;
+				uop[0] = uop0;
+				// Select value 0 for all source regs.
+				uop[1] = uop1;
+				uop[1].f3.ms = 3'b111;
+				uop[1].f3.Rs1 = 8'd00;
+				uop[1].f3.Rs2 = 8'd00;
+				uop[1].f3.Rs3 = 8'd00;
+				uop[1].f3.Rd = 8'd33;		// FP status reg
+				uop[1].f3.opcode = Qupls4_pkg::OP_REXT;
+			end
+			else begin
+				count = 4'd1;
+				uop[0] = uop0;
+			end
 			/*
 			case(ir.fpu.op4)
 			FOP4_FMUL:

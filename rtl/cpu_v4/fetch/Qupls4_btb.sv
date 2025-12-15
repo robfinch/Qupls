@@ -32,7 +32,8 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 6500 LUTs / 350 FFs / 8 BRAMs                                                                          
+// 6500 LUTs / 350 FFs / 8 BRAMs    
+// 17200 / 3200                                                                      
 // ============================================================================
 
 import Qupls4_pkg::*;
@@ -50,7 +51,8 @@ module Qupls4_btb(rst, clk, en, clk_en, nmi, nmi_addr, irq, irq_addr,
 	commit_pc2, commit_brtgt2, commit_takb2, commit_grp2,
 	commit_pc3, commit_brtgt3, commit_takb3, commit_grp3,
 	strm_bitmap, act_stream, pcs,
-	new_stream, alloc_stream, free_stream, thread_probability, dep_stream
+	new_stream, alloc_stream, free_stream, thread_probability, dep_stream,
+	is_buffered
 );
 parameter DEP=1024;
 parameter MWIDTH = 4;
@@ -121,7 +123,7 @@ output pc_address_ex_t [XSTREAMS*THREADS-1:0] pcs;
 
 input [7:0] thread_probability [0:7];
 output [XSTREAMS-1:0] dep_stream [0:XSTREAMS-1];
-
+input is_buffered;
 
 typedef struct packed {
 	logic takb;
@@ -134,10 +136,10 @@ pc_address_ex_t [31:0] ras;
 reg [4:0] ras_sp;
 
 pc_address_ex_t [XSTREAMS*THREADS-1:0] next_pcs;
-pc_stream_t next_fet_stream;
+pc_stream_t next_act_stream;
 pc_stream_t next_alt_strm;
 reg [XSTREAMS*THREADS-1:0] next_strm_bitmap;
-pc_stream_t prev_fet_stream;
+pc_stream_t prev_act_stream;
 reg [9:0] addrb0;
 reg [9:0] addra;
 btb_entry_t doutb0;
@@ -148,10 +150,6 @@ reg w0,w1,w2,w3;
 btb_entry_t tmp0, tmp1, tmp2, tmp3;
 integer nn,mm,jj,n1,n2,n3;
 genvar g;
-
-// Used to select streams "randomly"
-wire [26:0] lfsro;
-lfsr27 #(.WID(27)) ulfsr1(rst, clk, 1'b1, 1'b0, lfsro);
 
 wire [5:0] ffz0,ffz1,ffz2,ffz3,ffz4;
 generate begin : gFFZ
@@ -506,7 +504,7 @@ Qupls4_btb_stream_bitmap usb1
 	.clk(clk),
 	.clk_en(clk_en),
 	.ffz0(ffz0),
-	.act_stream(fet_stream),
+	.act_stream(act_stream),
 	.free_stream(free_stream),
 	.alloc_stream(alloc_stream),
 	.new_stream(new_stream),
@@ -517,19 +515,18 @@ Qupls4_btb_stream_bitmap usb1
 
 // Choose a fetch stream
 // Threads may be disabled by setting the probability to zero.
-reg [1:0] thrd;
-always_comb
-begin
-	next_fet_stream = {$bits(pc_stream_t){1'b0}};
-	for (n2 = 0; n2 < XSTREAMS*THREADS; n2 = n2 + 1) begin
-		thrd = n2 >> $clog2(XSTREAMS);
-		if (strm_bitmap[n2] && (lfsro[7:0] < thread_probability[thrd]))
-			next_fet_stream = pc_stream_t'(n2);
-	end
-	if (next_fet_stream=={$bits(pc_stream_t){1'b0}})
-		next_fet_stream = fet_stream;
-end
-	
+Qupls4_btb_choose_stream ucs1
+(
+	.rst(rst), 
+	.clk(clk),
+	.thread_probability(thread_probability),
+	.is_buffered(is_buffered),
+	.act_stream(act_stream),
+	.next_act_stream(next_act_stream),
+	.strm_bitmap(strm_bitmap),
+	.pcs(pcs)
+);
+
 	
 // Make BS_DONE sticky
 /*
@@ -603,22 +600,22 @@ else begin
 
 	// Handle change of flow on interrupt.
 	if (nmi) begin
-		next_pcs[fet_stream].pc = nmi_addr;
-		next_pcs[fet_stream].stream = next_fet_stream;
+		next_pcs[act_stream].pc = nmi_addr;
+		next_pcs[act_stream].stream = next_act_stream;
 	end
 	else if (irq) begin
-		next_pcs[fet_stream].pc = irq_addr;
-		next_pcs[fet_stream].stream = next_fet_stream;
+		next_pcs[act_stream].pc = irq_addr;
+		next_pcs[act_stream].stream = next_act_stream;
 	end
 	else
 	if (excret)
-		next_pcs[fet_stream] = excretpc;
+		next_pcs[act_stream] = excretpc;
 	// Under construction: RAS
 	else if (do_ret)
-		next_pcs[fet_stream] = ras[ras_sp];
+		next_pcs[act_stream] = ras[ras_sp];
 	// Decode stage corrections override mux stage.
 	else if (!predicted_correctly_dec)
-		next_pcs[fet_stream] = new_address_dec;
+		next_pcs[act_stream] = new_address_dec;
 	else if (|p_override)
 		next_pcs[act_stream] = new_address_mux;
 	// bsr/jsr
@@ -630,22 +627,22 @@ else begin
 	// Note the stream cannot be recorded in the BTB table.
 	else if (en && pc0.pc==doutb0.pc && doutb0.takb) begin
 		next_pcs[pc0.stream].pc = doutb0.tgt;
-		next_pcs[pc0.stream].stream = next_fet_stream;
+		next_pcs[pc0.stream].stream = next_act_stream;
 		takb0 = 1'b1;		// record branch taken fact (for bt)
 	end
 	else if (en && pc1.pc==doutb1.pc && doutb1.takb) begin
 		next_pcs[pc1.stream].pc = doutb1.tgt;
-		next_pcs[pc1.stream].stream = next_fet_stream;
+		next_pcs[pc1.stream].stream = next_act_stream;
 		takb1 = 1'b1;
 	end
 	else if (en && pc2.pc==doutb2.pc && doutb2.takb) begin
 		next_pcs[pc2.stream].pc = doutb2.tgt;
-		next_pcs[pc2.stream].stream = next_fet_stream;
+		next_pcs[pc2.stream].stream = next_act_stream;
 		takb2 = 1'b1;
 	end
 	else if (en && pc3.pc==doutb3.pc && doutb3.takb) begin
 		next_pcs[pc3.stream].pc = doutb3.tgt;
-		next_pcs[pc3.stream].stream = next_fet_stream;
+		next_pcs[pc3.stream].stream = next_act_stream;
 		takb3 = 1'b1;
 	end
 	// Advance program counter.
@@ -676,15 +673,15 @@ endgenerate
 // Manage thread updates.
 always_ff @(posedge clk)
 if (rst) begin
-	prev_fet_stream.stream <= 5'd1;
-	prev_fet_stream.thread <= 2'd0;
+	prev_act_stream.stream <= 5'd1;
+	prev_act_stream.thread <= 2'd0;
 	act_stream.stream <= 5'd1;
 	act_stream.thread <= 2'd0;
 end
 else begin
 	if (clk_en) begin
-		prev_fet_stream <= act_stream;
-		act_stream <= next_fet_stream;
+		prev_act_stream <= act_stream;
+		act_stream <= next_act_stream;
 	end
 end
 
@@ -721,7 +718,7 @@ end
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-assign next_pc = next_pcs[next_fet_stream];
+assign next_pc = next_pcs[next_act_stream];
 
 always_ff @(posedge clk)
 if (rst) begin

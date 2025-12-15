@@ -54,6 +54,7 @@ wire [5:0] isz;
 wire excRs1, excRs2, excRs3, excRd, excRd2, excRd3;
 wire [3:0] pred_shadow_count;
 
+assign db = {$bits(decode_bus_t){1'b0}};
 assign db.v = 1'b1;
 
 Qupls4_decode_const udcimm
@@ -415,9 +416,9 @@ else begin
 			dbo.vstore <= FALSE;
 			dbo.vload_ndx <= FALSE;
 			dbo.vstore_ndx <= FALSE;
-			dbo.v2p = FALSE;
-			dbo.vv2p = FALSE;
-			dbo.vvn2p = FALSE;
+			dbo.v2p <= FALSE;
+			dbo.vv2p <= FALSE;
+			dbo.vvn2p <= FALSE;
 			dbo.mem <= FALSE;
 		end
 		dbo.boi <= instr.any.opcode==Qupls4_pkg::OP_BCCU64 && instr.br.cnd==Qupls4_pkg::CND_BOI;

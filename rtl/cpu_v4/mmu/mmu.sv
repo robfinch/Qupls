@@ -632,7 +632,7 @@ ptw_tran_buffer #(.CORENO(CORENO), .CHANNEL(CHANNEL)) utrbf1
 	.sel_tran(sel_tran),
 	.sel_qe(sel_qe),
 	.ftam_resp(ftam_resp),
-	.ftam_resp_ack(ftam_resp_ack),
+	.ftam_resp_ack(ftam_resp.ack),
 	.tid(tid),
 	.ptw_vadr(ptw_vadr),
 	.ptw_padr(padr2)

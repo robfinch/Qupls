@@ -237,8 +237,8 @@ assign log_req = {$bits(wb_cmd_request256_t){1'b0}};
 // Bus master multiplexor.
 wb_mux #(.NPORT(2)) utmrmux1
 (
-	.rst_i(irst),
-	.clk_i(clk),
+	.rst_i(rst-i),
+	.clk_i(clk_i),
 	.req_i(t3mreq),
 	.resp_o(t3mresp),
 	.req_o(cl_req),

@@ -153,8 +153,8 @@ ddbb32_config  #(
 )
 ucfg1
 (
-	.rst_i(rst),
-	.clk_i(clk),
+	.rst_i(rst_i),
+	.clk_i(clk_i),
 	.irq_i(1'b0),
 	.cs_i(cs_config),
 	.resp_busy_i(),

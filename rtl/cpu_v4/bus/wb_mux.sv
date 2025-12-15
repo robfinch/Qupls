@@ -12,7 +12,7 @@ input wishbone_pkg::wb_cmd_response256_t resp_i;
 integer n1;
 reg [NPORT-1:0] req_cyc;
 wire [NPORT-1:0] req_grant;
-reg [$clog2(NPORT):0] req_grant_enc;
+wire [$clog2(NPORT):0] req_grant_enc;
 reg hold, lock;
 reg [NPORT-1:0] holdn;
 reg [NPORT-1:0] lockn;

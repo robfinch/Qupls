@@ -311,8 +311,6 @@ pc_address_ex_t brtgt;
 reg pc_in_sync;
 reg advance_pipeline, advance_pipeline_seg2;
 reg advance_f;
-reg inc_chkpt;
-reg [2:0] chkpt_inc_amt;
 reg do_bsr_h;
 reg set_pending_ipl;
 reg [5:0] next_pending_ipl;
@@ -1782,7 +1780,8 @@ Qupls4_btb ubtb1
 	.free_stream(~used_streams),
 	.pcs(pcs),
 	.thread_probability(thread_probability),
-	.dep_stream(dep_stream)
+	.dep_stream(dep_stream),
+	.is_buffered(is_buffered)
 );
 
 wire pt0_mux, pt1_mux, pt2_mux, pt3_mux;
@@ -2543,7 +2542,6 @@ wire [MWIDTH-1:0] stomps;
 
 Qupls4_pkg::operand_t [NREG_RPORTS-1:0] rf_oper;
 aregno_t [NREG_RPORTS-1:0] arn;
-reg [NREG_RPORTS-1:0] arnt;
 reg [2:0] arng [0:NREG_RPORTS-1];
 wire [NREG_RPORTS-1:0] arnv;
 pregno_t [NREG_RPORTS-1:0] prn1;
@@ -2882,10 +2880,8 @@ Qupls4_pipeline_ren #(.NPORT(NREG_RPORTS)) uren1
 	.restore(restore),
 	.restored(restored),
 	.restore_list(restore_list),
-	.chkpt_amt(chkpt_inc_amt),
 	.tail0(tails[0]),
 	.rob(rob),
-	.robentry_stomp(robentry_stomp),
 	.stomp_ren(stomp_ren),
 	.kept_stream(kept_stream),
 	.branch_state(branch_state),
@@ -2893,7 +2889,6 @@ Qupls4_pipeline_ren #(.NPORT(NREG_RPORTS)) uren1
 	.sr(sr),
 	.arn(arn),
 	.arng(arng),
-	.arnt(arnt),
 	.arnv(arnv),
 	.rn_cp(rn_cp),
 	.store_argC_pReg(store_argC_pReg),
@@ -2966,7 +2961,6 @@ Qupls4_pipeline_ren #(.NPORT(NREG_RPORTS)) uren1
 	.freevals(freevals),
 	.fcu_id(fcu_rse.rndx),
 	.backout(backout),
-	.backout_st2(backout_st2),
 	.bo_wr(bo_wr),
 	.bo_areg(bo_areg),
 	.bo_preg(bo_preg),
@@ -2985,14 +2979,16 @@ wire pgh_setcp;
 wire [5:0] pgh_setcp_grp;
 wire [5:0] freecp_grp;
 
-Qupls4_checkpoint_manager ucpm1
+Qupls4_checkpoint_manager #(.MWIDTH(MWIDTH)) ucpm1
 (
 	.rst(irst),
 	.clk(clk),
 	.clk5x(clk5x),
 	.ph4(ph4),
-	.backout_st2(backout_st2),
 	.fcu_id(fcu_rse.rndx),
+	.mux_hdr_cndx(pg_mux.hdr.cndx),
+	.dec_hdr_cndx(pg_dec.hdr.cndx),
+	.ren_hdr_cndx(pg_ren.hdr.cndx),
 	.pgh(pgh),
 	.setcp(pgh_setcp),
 	.setcp_grp(pgh_setcp_grp),
@@ -3025,7 +3021,7 @@ Qupls4_reg_name_supplier4 uns4
 	.tags2free(tags2free),
 	.freevals(freevals),
 	.bo_wr(bo_wr),
-	.bo_preg(bo_reg),
+	.bo_preg(bo_preg),
 	.ns_alloc_req(ns_alloc_req),
 	.ns_whrndx(ns_whrndx),
 	.ns_rndx(ns_rndx),
@@ -3152,7 +3148,7 @@ reg fpu0_wrA, fpu0_wrB, fpu0_wrC;
 reg fma0_wrA, fma1_wrA;
 reg dram_wr0;
 reg dram_wr1;
-reg wt0A,wt1A,wt2A,wt3A,wt4A,wt5A,wt6A;
+reg wt0A,wt1A,wt2A,wt4A,wt5A,wt6A;
 reg wt7A,wt8A,wt9A,wt10A,wt11A,wt12A;
 
 // Do not update the register file if the architectural register is zero.
@@ -3198,9 +3194,6 @@ vtdl #($bits(Qupls4_pkg::operating_mode_t))	udlyal18 (.clk(clk), .ce(1'b1), .a(4
 
 //vtdl #($bits(value_t))  udlyal4 (.clk(clk), .ce(1'b1), .a(4'd0), .d(sau0_resA), .q(sau0_res2) );
 // FPU #0 signals
-vtdl #(1) 							udlyfp3A (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu0_aRdzA), .q(fpu0_aRdzA2) );
-vtdl #(1) 							udlyfp3B (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu0_aRdzB), .q(fpu0_aRdzB2) );
-vtdl #(1) 							udlyfp3C (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu0_aRdzC), .q(fpu0_aRdzC2) );
 
 vtdl #(1) 							udlyfp5 (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu0_sc_done), .q(fpu0_sc_done2) );
 vtdl #($bits(rob_ndx_t))	udlyfp6 (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu0_id), .q(fpu0_id2) );
@@ -3208,9 +3201,6 @@ vtdl #($bits(checkpt_ndx_t)) udlyfp7 (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu0_cp
 vtdl #($bits(Qupls4_pkg::operating_mode_t))	udlyfp8 (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu0_om), .q(fpu0_om2) );
 
 // FPU #1 signals
-vtdl #(1) 							udlyfp31A (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu1_aRdzA), .q(fpu1_aRdzA2) );
-vtdl #(1) 							udlyfp31B (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu1_aRdzB), .q(fpu1_aRdzB2) );
-vtdl #(1) 							udlyfp31C (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu1_aRdzC), .q(fpu1_aRdzC2) );
 
 vtdl #(1) 							udlyfp51 (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu1_sc_done), .q(fpu1_sc_done2) );
 vtdl #($bits(rob_ndx_t))	udlyfp61 (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu1_id), .q(fpu1_id2) );
@@ -3237,6 +3227,7 @@ always_comb fcu_wrA = 1'b0;
 wire [8:0] sau0_we;
 wire [8:0] sau1_we;
 wire [8:0] fpu0_we;
+wire [8:0] fpu1_we;
 reg [8:0] dram0_we;
 reg [8:0] dram1_we;
 reg [8:0] fcu_we;
@@ -3251,7 +3242,6 @@ always_ff @(posedge clk) fcu_we =
 
 always_comb wt0A = !sau0_rse2.aRdz;
 always_comb wt1A = !sau1_rse2.aRdz && Qupls4_pkg::NSAU > 1;
-always_comb wt3A = fpu1_done && !fpu1_aRdzA && !fpu1_idle && Qupls4_pkg::NFPU > 1;
 always_comb wt7A = fcu_done && !fcu_aRtzA;
 always_comb wt10A = dram0_oper.oper.v && !dram0_oper.oper.aRnz;
 always_comb wt11A = dram1_oper.oper.v && !dram1_oper.oper.aRnz && Qupls4_pkg::NDATA_PORTS > 1;
@@ -3532,6 +3522,8 @@ begin
 	dram1_rse.rndx = dram1_oper.rndx;
 	dram1_rse.cndx = dram1_oper.cndx;
 end
+
+wire dram0_full, dram1_full;
 
 Qupls4_func_result_queue ufrq10
 (
@@ -3994,6 +3986,9 @@ rob_ndx_t ratv1_rndx;
 rob_ndx_t ratv2_rndx;
 rob_ndx_t ratv3_rndx;
 
+wire agen0_idle = tlb0_v;
+wire agen1_idle = tlb1_v;
+
 /*
 Stark_sched uscd1
 (
@@ -4070,7 +4065,7 @@ rob_ndx_t [4:0] rob_dispatched;
 Qupls4_pkg::rob_bitmask_t rob_dispatched_stomped;
 wire [4:0] rob_dispatched_v;
 
-Qupls4_instruction_dispatcher uid1
+Qupls4_instruction_dispatcher #(.MWIDTH(MWIDTH)) uid1
 (
 	.rst(irst),
 	.clk(clk),
@@ -4456,11 +4451,11 @@ wire [1:0] dway [0:Qupls4_pkg::NDATA_PORTS-1];
 always_comb
 if (Qupls4_pkg::SUPPORT_CAPABILITIES) begin
 	dhit[0] = dhit2[0] & cap_tag_hit[0];
-	if (NDATA_PORTS > 1) dhit[1] = dhit2[1] & cap_tag_hit[1];
+	if (Qupls4_pkg::NDATA_PORTS > 1) dhit[1] = dhit2[1] & cap_tag_hit[1];
 end
 else begin
 	dhit[0] = dhit2[0];
-	if (NDATA_PORTS > 1) dhit[1] = dhit2[1];
+	if (Qupls4_pkg::NDATA_PORTS > 1) dhit[1] = dhit2[1];
 end
 
 generate begin : gDcache
@@ -4744,6 +4739,9 @@ begin
 	end
 end
 
+// ToDo: assign this to something
+Qupls4_pkg::operating_mode_t ic_miss_om;
+
 mmu #(.CORENO(CORENO), .CHANNEL(3)) ummu1
 (
 	.rst(irst),
@@ -4833,6 +4831,7 @@ endfunction
 wire dram0_setready, dram0_setavail;
 wire dram1_setready, dram1_setavail;
 reg dram0_idv2;
+reg dram1_idv2;
 
 Qupls4_calc_load_bypass_index uclbn0(lsq, mem0_lsndx, lbndx0);
 
@@ -4948,7 +4947,7 @@ generate begin : gMemory2
 		);
 
 		Qupls4_set_dram_work #(.CORENO(CORENO), .LSQNO(1)) usdr2 (
-			.rst_i(rsti),
+			.rst_i(irst),
 			.clk_i(clk),
 			.rob_i(rob),
 			.stomp_i(dram1_stomp),
@@ -5423,22 +5422,6 @@ always_comb
 //		&& (!stomp_que || stomp_quem)
 		;
 
-always_comb
-	inc_chkpt = (
-		(pg_dec.pr[0].op.decbus.br && !stomps[0]) ||
-		(pg_dec.pr[1].op.decbus.br && !stomps[1]) ||
-		(pg_dec.pr[2].op.decbus.br && !stomps[2]) ||
-		(pg_dec.pr[3].op.decbus.br && !stomps[3]) 
-		)
-		;
-always_comb
-	chkpt_inc_amt =
-		(pg_dec.pr[0].op.decbus.br && !stomps[0]) +
-		(pg_dec.pr[1].op.decbus.br && !stomps[1]) +
-		(pg_dec.pr[2].op.decbus.br && !stomps[2]) +
-		(pg_dec.pr[3].op.decbus.br && !stomps[3]) 
-		;
-
 edge_det uedbsi1 (.rst(irst), .clk(clk), .ce(1'b1), .i(bs_idle_oh), .pe(pe_bsidle), .ne(), .ee());
 
 always_comb
@@ -5496,11 +5479,11 @@ Qupls4_validate_operand uvLSsrcC
 // Compute which streams are in use, so that unused ones may be freed.
 always_comb
 begin
-	used_streams = 128'd0;
+	used_streams = {XSTREAMS*THREADS{1'b0}};
 	used_streams[0] = 1'b1;
-	used_streams[32] = 1'b1;
-	used_streams[64] = 1'b1;
-	used_streams[96] = 1'b1;
+	used_streams[XSTREAMS] = 1'b1;
+	used_streams[XSTREAMS*2] = 1'b1;
+	used_streams[XSTREAMS*3] = 1'b1;
 	for (n40 = 0; n40 < Qupls4_pkg::ROB_ENTRIES; n40 = n40 + 1)
 		used_streams[rob[n40].op.pc.stream] = 1'b1;
 	for (n40 = 0; n40 < MWIDTH; n40 = n40 + 1) begin
@@ -5631,7 +5614,7 @@ else begin
 	dram0_stomp <= FALSE;
 	dram1_stomp <= FALSE;
 	dram0_idv2 <= dram0_idv;
-//	inc_chkpt <= FALSE;
+	dram1_idv2 <= dram1_idv;
 
 	// This test in sync with PC update
 	if (!branchmiss && ihito && !hirq && ((pe_allqd|allqd) && !hold_ins && advance_pipeline_seg2))
@@ -7564,6 +7547,7 @@ begin
 	dram0_ldip <= FALSE;
 	dram1_stomp <= 32'd0;
 	dram1_idv <= INV;
+	dram1_idv2 <= INV;
 	panic <= `PANIC_NONE;
 	for (n14 = 0; n14 < Qupls4_pkg::ROB_ENTRIES; n14 = n14 + 1) begin
 		rob[n14] <= {$bits(Qupls4_pkg::rob_entry_t){1'd0}};
@@ -7664,7 +7648,6 @@ begin
 	agen1_idv <= INV;
 	stompstr <= "(stomped)";
 	no_stompstr <= "         ";
-//	inc_chkpt <= FALSE;
 	vgm <= 64'hFFFFFFFFFFFFFFFF;
 	for (n14 = 0; n14 < 4; n14 = n14 + 1) begin
 		vrm[n14] <= 64'hFFFFFFFFFFFFFFFF;
@@ -7861,10 +7844,6 @@ begin
 			brtgtv <= VAL;	// ToDo: Fix
 		end
 	end
-	/*
-	if (db.br && !stomp)
-		inc_chkpt <= TRUE;
-	*/
 	// Vector instructions are treated as NOPs as they expand into scalar ops.
 	// Should not see any vector instructions at queue time.
 	// If the instruction enqueues it must have been through the renamer.

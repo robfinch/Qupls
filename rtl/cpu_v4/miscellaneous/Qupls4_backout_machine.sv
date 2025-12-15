@@ -38,8 +38,8 @@ import const_pkg::*;
 import Qupls4_pkg::*;
 
 module Qupls4_backout_machine(rst, clk, backout, fcu_id, rob, tail,
-	restore, restore_ndx,
-	backout_state, backout_st2,
+	restore,
+	backout_state,
 	bo_wr, bo_areg, bo_preg, bo_nreg, stall);
 input rst;
 input clk;
@@ -48,9 +48,7 @@ input rob_ndx_t fcu_id;
 input Qupls4_pkg::rob_entry_t [Qupls4_pkg::ROB_ENTRIES-1:0] rob;
 input rob_ndx_t tail;
 input restore;
-input rob_ndx_t restore_ndx;
 output reg [1:0] backout_state;
-output reg [1:0] backout_st2;
 output reg bo_wr;
 output aregno_t bo_areg;
 output pregno_t bo_preg;
@@ -155,22 +153,35 @@ else begin
 	endcase
 end
 
+// State machine to search ROB for groups of instructions following the
+// backout location.
+/*
 always_ff @(posedge clk)
-if (rst)
+if (rst) begin
 	backout_st2 <= 2'd0;
+	gndx <= 6'd0;
+end
 else begin
 	case(backout_st2)
 	2'd0:
-		if (restore)
+		if (restore) begin
 			backout_st2 <= 2'd1;
+			gndx <= 6'd0;
+		end
 	2'd1:
-			if (rob[restore_ndx].sn <= rob[fcu_id].sn)
+		begin
+			if (gndx < Qupls4_pkg::ROB_ENTRIES/4)
+				gndx <= (gndx + 6'd1) % (Qupls4_pkg::ROB_ENTRIES/4);
+			else
 				backout_st2 <= 2'd0;
+		end
+	default:	backout_st2 <= 2'd0;
 	endcase
 end
+*/
 
 
-always_comb stall = backout || backout_state != 2'd0 || backout_st2 != 2'd0;
+always_comb stall = backout || backout_state != 2'd0;// || backout_st2 != 2'd0;
 
 always_ff @(posedge clk)
 if (rst) begin

@@ -47,6 +47,7 @@ begin
 	case(ir.any.opcode)
 	Qupls4_pkg::OP_BSR,Qupls4_pkg::OP_JSR,Qupls4_pkg::OP_JSRN:
 		fnIsCJB = 1'b1;
+	default:	fnIsCJB = 1'b0;
 	endcase
 end
 endfunction

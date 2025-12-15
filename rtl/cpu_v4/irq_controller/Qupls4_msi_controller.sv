@@ -177,11 +177,11 @@ always_comb
 always_ff @(posedge clk)
 	cs_ivtd <= cs_ivt;
 
-always_ff @(posedge clk_i)
+always_ff @(posedge clk)
 	erc <= req.cti==wishbone_pkg::ERC;
 
-vtdl #(.WID(1), .DEP(16)) urdyd2 (.clk(clk_i), .ce(1'b1), .a(4'd0), .d((cs_io)&(erc|~reqd.we)), .q(respack));
-vtdl #(.WID(1), .DEP(16)) urdyd3 (.clk(clk_i), .ce(1'b1), .a(4'd1), .d((cs_ivt)&(erc|~reqd.we)), .q(respackd));
+vtdl #(.WID(1), .DEP(16)) urdyd2 (.clk(clk), .ce(1'b1), .a(4'd0), .d((cs_io)&(erc|~reqd.we)), .q(respack));
+vtdl #(.WID(1), .DEP(16)) urdyd3 (.clk(clk), .ce(1'b1), .a(4'd1), .d((cs_ivt)&(erc|~reqd.we)), .q(respackd));
 
 reg [1:0] state;
 always_ff @(posedge clk)

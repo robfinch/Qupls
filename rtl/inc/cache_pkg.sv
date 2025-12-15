@@ -60,7 +60,7 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [ICacheLineWidth/ICacheBundleWidth-1:0] v;	// 1 valid bit per 128 bits data
+	logic [ICacheLineWidth/ICacheBundleWidth-1:0] v;	// 1 valid bit per 256 bits data
 	logic m;		// modified indicator
 	cpu_types_pkg::asid_t asid;
 	logic [$bits(cpu_types_pkg::address_t)-1:0] vtag;	// virtual tag

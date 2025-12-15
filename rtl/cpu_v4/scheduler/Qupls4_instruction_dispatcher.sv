@@ -52,6 +52,7 @@ module Qupls4_instruction_dispatcher(rst, clk, head, pgh, rob, stomp, busy, rse_
 	rob_dispatched_o, rob_dispatched_v_o);
 parameter WINDOW=8;
 parameter DISPATCH_COUNT=6;
+parameter MWIDTH=4;
 input rst;
 input clk;
 input cpu_types_pkg::rob_ndx_t head;
@@ -63,7 +64,7 @@ output Qupls4_pkg::reservation_station_entry_t [DISPATCH_COUNT-1:0] rse_o;
 output Qupls4_pkg::rob_entry_t [DISPATCH_COUNT-1:0] rob_dispatched_o;
 output reg [DISPATCH_COUNT-1:0] rob_dispatched_v_o;
 
-integer nn, kk, jj, xx, n1;
+integer nn, kk, jj, xx, n1, mm;
 Qupls4_pkg::reservation_station_entry_t [DISPATCH_COUNT-1:0] rse;
 Qupls4_pkg::rob_entry_t [DISPATCH_COUNT-1:0] rob_dispatched;
 reg [DISPATCH_COUNT-1:0] rob_dispatched_v;
@@ -106,6 +107,12 @@ if (rst) begin
 	fpu_cnt = 4'd0;
 	sqrt_cnt = 4'd0;
 	rob_dispatched_v = 4'd0;
+	rse[0] = {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
+	rse[1] = {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
+	rse[2] = {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
+	rse[3] = {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
+	rse[4] = {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
+	rse[5] = {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
 end
 else begin
 	kk = 0;
@@ -121,12 +128,19 @@ else begin
 	fpu_cnt = 4'd0;
 	sqrt_cnt = 4'd0;
 	rob_dispatched_v = 4'd0;
-	
+	rse[0] = {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
+	rse[1] = {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
+	rse[2] = {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
+	rse[3] = {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
+	rse[4] = {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
+	rse[5] = {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
+
+	mm = 0;	
 	for (nn = 0; nn < Qupls4_pkg::ROB_ENTRIES; nn = nn + 1) begin
 		// If valid ...
 		if (rob[nn].v &&
 			// and checkpoint index valid...
-			pgh[nn>>2].cndxv &&
+			pgh[mm].cndxv &&
 			// and not done already...
 		  !(&rob[nn].done) &&
 			// and not out already...
@@ -148,7 +162,7 @@ else begin
 			(nn != rob_dispatched[3] || !rob_dispatched_v[3])
 		) begin
 			if (rob[nn].op.decbus.sau && sau_cnt == 4'd0 && !busy[{3'd0,sau_cnt[0]}]) begin
-				tLoadRse(0,nn);
+				tLoadRse(0,nn,mm);
 				rse[0].funcunit = {3'd0,sau_cnt[0]};
 				rse[0].rndx = nn;
 				sau_cnt = sau_cnt + 1;
@@ -157,7 +171,7 @@ else begin
 				kk = kk + 1;
 			end
 			if (rob[nn].op.decbus.sau && sau_cnt > 4'd0 && sau_cnt < Qupls4_pkg::NSAU && !busy[{3'd0,sau_cnt[0]}]) begin
-				tLoadRse(5,nn);
+				tLoadRse(5,nn,mm);
 				rse[5].funcunit = {3'd0,sau_cnt[0]};
 				rse[5].rndx = nn;
 				sau_cnt = sau_cnt + 1;
@@ -166,7 +180,7 @@ else begin
 				kk = kk + 1;
 			end
 			if (rob[nn].op.decbus.mul && mul_cnt < 1 && !busy[2]) begin
-				tLoadRse(1,nn);
+				tLoadRse(1,nn,mm);
 				rse[1].funcunit = 4'd2;
 				rse[1].rndx = nn;
 				mul_cnt = mul_cnt + 1;
@@ -175,7 +189,7 @@ else begin
 				kk = kk + 1;
 			end
 			if ((rob[nn].op.decbus.div|rob[nn].op.decbus.sqrt) && div_cnt < 1 && !busy[3]) begin
-				tLoadRse(1,nn);
+				tLoadRse(1,nn,mm);
 				rse[1].funcunit = 4'd3;
 				rse[1].rndx = nn;
 				div_cnt = div_cnt + 1;
@@ -184,7 +198,7 @@ else begin
 				kk = kk + 1;
 			end
 			if (Qupls4_pkg::SUPPORT_FLOAT && kk < 4 && rob[nn].op.decbus.fma && fma_cnt < Qupls4_pkg::NFMA && !busy[4'd4+fma_cnt]) begin
-				tLoadRse(4,nn);
+				tLoadRse(4,nn,mm);
 				rse[4].funcunit = 4'd4 + fma_cnt; 
 				rse[4].rndx = nn;
 				fma_cnt = fma_cnt + 1;
@@ -193,7 +207,7 @@ else begin
 				kk = kk + 1;
 			end
 			if (Qupls4_pkg::SUPPORT_TRIG && kk < 4 && rob[nn].op.decbus.trig && trig_cnt < 1 && !busy[6]) begin
-				tLoadRse(4,nn);
+				tLoadRse(4,nn,mm);
 				rse[4].funcunit = 4'd6; 
 				rse[4].rndx = nn;
 				trig_cnt = trig_cnt + 1;
@@ -202,7 +216,7 @@ else begin
 				kk = kk + 1;
 			end
 			if (kk < 4 && rob[nn].op.decbus.fc && fcu_cnt < 1 && !busy[7]) begin
-				tLoadRse(2,nn);
+				tLoadRse(2,nn,mm);
 				rse[2].funcunit = 4'd7; 
 				rse[2].rndx = nn;
 				fcu_cnt = fcu_cnt + 1;
@@ -211,7 +225,7 @@ else begin
 				kk = kk + 1;
 			end
 			if (kk < 4 && rob[nn].op.decbus.mem && agen_cnt < Qupls4_pkg::NAGEN && !busy[4'd8 + agen_cnt]) begin
-				tLoadRse(3,nn);
+				tLoadRse(3,nn,mm);
 				rse[3].funcunit = 4'd8 + agen_cnt; 
 				rse[3].rndx = nn;
 				agen_cnt = agen_cnt + 1;
@@ -230,7 +244,7 @@ else begin
 			end
 			*/
 			if (Qupls4_pkg::SUPPORT_FLOAT && kk < 4 && rob[nn].op.decbus.fpu && fpu_cnt < 1 && !busy[4'd12]) begin
-				tLoadRse(4,nn);
+				tLoadRse(4,nn,mm);
 				rse[4].funcunit = 4'd12;
 				rse[4].rndx = nn;
 				fpu_cnt = fpu_cnt + 1;
@@ -239,6 +253,8 @@ else begin
 				kk = kk + 1;
 			end
 		end
+		if ((nn % MWIDTH)==MWIDTH-1)
+			mm = mm + 1;
 	end
 end
 
@@ -252,14 +268,15 @@ always_ff @(posedge clk)
 task tLoadRse;
 input integer kk;
 input rob_ndx_t nn;
+input [5:0] mm;
 begin
 	rse[kk] = {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
 	rse[kk].om = rob[nn].om;
 	rse[kk].rm = rob[nn].rm;
 	rse[kk].pc = rob[nn].op.pc.pc;
 	rse[kk].prc = rob[nn].op.decbus.prc;
-	rse[kk].cndx = pgh[nn>>2].cndx;
-	rse[kk].irq_sn = pgh[nn>>2].irq_sn;
+	rse[kk].cndx = pgh[mm].cndx;
+	rse[kk].irq_sn = pgh[mm].irq_sn;
 	rse[kk].aRdz = rob[nn].op.decbus.Rdz;
 	rse[kk].aRd = rob[nn].op.decbus.Rd;
 	rse[kk].nRd = rob[nn].op.nRd;

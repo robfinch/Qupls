@@ -40,12 +40,12 @@
 import const_pkg::*;
 //import Qupls4_pkg::SIM;
 
-module Qupls4_checkpoint_ram(rst, clka, ena, wea, addra, dina, douta, 
+module Qupls4_reg_map_ram(rst, clka, ena, wea, addra, dina, douta, 
 	clkb, enb, addrb, doutb);
-parameter NRDPORTS = 4; 
+parameter NRDPORTS = 4;
 localparam RBIT=$clog2(Qupls4_pkg::PREGS);
 localparam QBIT=$bits(cpu_types_pkg::pregno_t);
-localparam WID=$bits(Qupls4_pkg::checkpoint_t);
+localparam WID=$bits(Qupls4_pkg::reg_map_t);
 localparam AWID=$clog2(Qupls4_pkg::NCHECK);
 input rst;
 input clka;
@@ -61,55 +61,6 @@ output Qupls4_pkg::checkpoint_t doutb;
 
 Qupls4_pkg::checkpoint_t doutb1;
 Qupls4_pkg::checkpoint_t douta1;
-genvar g;
-integer n;
-// The following outside of generate to make it easier to reference in SIM code.
-// It should be stripped out for synthesis as it would not be referenced.
-/*
-(* RAM_STYLE="distributed" *)
-Qupls4_pkg::checkpoint_t mem [0:Qupls4_pkg::NCHECK-1];
-reg ena1;
-reg wea1;
-Qupls4_pkg::checkpoint_t dina1;
-reg [3:0] addra1;
-
-initial begin
-	if (Qupls4_pkg::SIM) begin
-		for (n = 0; n < Qupls4_pkg::NCHECK; n = n + 1) begin
-			mem[n] = {$bits(Qupls4_pkg::checkpoint_t){1'b0}};
-			mem[n].avail = {Qupls4_pkg::PREGS{1'b1}};
-			mem[n].avail[0] = 1'b0;
-		end
-	end
-end
-*/
-// Delay the write by a clock cycle to give a chance to read current map values
-// before they get updated.
-/*
-always_ff @(posedge clka) ena1 <= ena;
-always_ff @(posedge clka) wea1 <= wea;
-always_ff @(posedge clka) addra1 <= addra;
-always_ff @(posedge clka) dina1 <= dina;
-*/
-/*
-generate begin : gRegfileRam
-if (Qupls4_pkg::SIM) begin
-
-//	for (g = 0; g < AREGS; g = g + 1)
-		always_ff @(posedge clka)
-			if (ena & wea) mem[addra] <= dina;
-//			if (ena & wea[g]) mem[addra][g*QBIT+QBIT-1:g*QBIT] <= dina[g*QBIT+QBIT-1:g*QBIT];
-
-//	assign doutb = (ena & wea) ? dina : mem[addrb];
-		always_comb//ff @(posedge clka)
-//			if (enb)
-				doutb1 <= mem[addrb];
-	assign douta1 = mem[addra];
-
-end
-else begin
-*/
-
 
 // XPM_MEMORY instantiation template for Dual Port Distributed RAM configurations
 // Refer to the targeted device family architecture libraries guide for XPM_MEMORY documentation
@@ -189,103 +140,6 @@ else begin
 
    );
 
-   // End of xpm_memory_dpdistram_inst instantiation
-
-//	assign doutb = (ena & wea) ? dina : doutb1;
-
-/*
-// XPM_MEMORY instantiation template for Simple Dual Port RAM configurations
-// Refer to the targeted device family architecture libraries guide for XPM_MEMORY documentation
-// =======================================================================================================================
-
-
-   // xpm_memory_sdpram: Simple Dual Port RAM
-   // Xilinx Parameterized Macro, version 2022.2
-
-   xpm_memory_sdpram #(
-      .ADDR_WIDTH_A(6),               // DECIMAL
-      .ADDR_WIDTH_B(6),               // DECIMAL
-      .AUTO_SLEEP_TIME(0),            // DECIMAL
-      .BYTE_WRITE_WIDTH_A(RBIT),      // DECIMAL
-      .CASCADE_HEIGHT(0),             // DECIMAL
-      .CLOCKING_MODE("common_clock"), // String
-      .ECC_MODE("no_ecc"),            // String
-      .MEMORY_INIT_FILE("none"),      // String
-      .MEMORY_INIT_PARAM("0"),        // String
-      .MEMORY_OPTIMIZATION("true"),   // String
-      .MEMORY_PRIMITIVE("auto"),      // String
-      .MEMORY_SIZE(64*WID),             // DECIMAL
-      .MESSAGE_CONTROL(0),            // DECIMAL
-      .READ_DATA_WIDTH_B(WID),         // DECIMAL
-      .READ_LATENCY_B(1),             // DECIMAL
-      .READ_RESET_VALUE_B("0"),       // String
-      .RST_MODE_A("SYNC"),            // String
-      .RST_MODE_B("SYNC"),            // String
-      .SIM_ASSERT_CHK(0),             // DECIMAL; 0=disable simulation messages, 1=enable simulation messages
-      .USE_EMBEDDED_CONSTRAINT(0),    // DECIMAL
-      .USE_MEM_INIT(1),               // DECIMAL
-      .USE_MEM_INIT_MMI(0),           // DECIMAL
-      .WAKEUP_TIME("disable_sleep"),  // String
-      .WRITE_DATA_WIDTH_A(WID),        // DECIMAL
-      .WRITE_MODE_B("no_change"),     // String
-      .WRITE_PROTECT(1)               // DECIMAL
-   )
-   xpm_memory_sdpram_inst (
-      .dbiterrb(),             // 1-bit output: Status signal to indicate double bit error occurrence
-                                       // on the data output of port B.
-
-      .doutb(doutb),                   // READ_DATA_WIDTH_B-bit output: Data output for port B read operations.
-      .sbiterrb(),             // 1-bit output: Status signal to indicate single bit error occurrence
-                                       // on the data output of port B.
-
-      .addra(addra),                   // ADDR_WIDTH_A-bit input: Address for port A write operations.
-      .addrb(addrb),                   // ADDR_WIDTH_B-bit input: Address for port B read operations.
-      .clka(clka),                     // 1-bit input: Clock signal for port A. Also clocks port B when
-                                       // parameter CLOCKING_MODE is "common_clock".
-
-      .clkb(clkb),                     // 1-bit input: Clock signal for port B when parameter CLOCKING_MODE is
-                                       // "independent_clock". Unused when parameter CLOCKING_MODE is
-                                       // "common_clock".
-
-      .dina(dina),                     // WRITE_DATA_WIDTH_A-bit input: Data input for port A write operations.
-      .ena(ena),                       // 1-bit input: Memory enable signal for port A. Must be high on clock
-                                       // cycles when write operations are initiated. Pipelined internally.
-
-      .enb(enb),                       // 1-bit input: Memory enable signal for port B. Must be high on clock
-                                       // cycles when read operations are initiated. Pipelined internally.
-
-      .injectdbiterra(1'b0), // 1-bit input: Controls double bit error injection on input data when
-                                       // ECC enabled (Error injection capability is not available in
-                                       // "decode_only" mode).
-
-      .injectsbiterra(1'b0), // 1-bit input: Controls single bit error injection on input data when
-                                       // ECC enabled (Error injection capability is not available in
-                                       // "decode_only" mode).
-
-      .regceb(1'b1),                 // 1-bit input: Clock Enable for the last register stage on the output
-                                       // data path.
-
-      .rstb(1'b0),                     // 1-bit input: Reset signal for the final port B output register stage.
-                                       // Synchronously resets output port doutb to the value specified by
-                                       // parameter READ_RESET_VALUE_B.
-
-      .sleep(sleep),                   // 1-bit input: sleep signal to enable the dynamic power saving feature.
-      .wea(wea)                        // WRITE_DATA_WIDTH_A/BYTE_WRITE_WIDTH_A-bit input: Write enable vector
-                                       // for port A input data port dina. 1 bit wide when word-wide writes are
-                                       // used. In byte-wide write configurations, each bit controls the
-                                       // writing one byte of dina to address addra. For example, to
-                                       // synchronously write only bits [15-8] of dina when WRITE_DATA_WIDTH_A
-                                       // is 32, wea would be 4'b0010.
-
-   );
-
-   // End of xpm_memory_sdpram_inst instantiation
-*/								
-									
-//end
-//end
-//endgenerate
-
 always_comb
 	douta = douta1;
 //	douta = ena && wea && addra==addrb ? dina : douta1;
@@ -293,4 +147,3 @@ always_comb
 	doutb = doutb1;
 								
 endmodule
-

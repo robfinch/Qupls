@@ -43,9 +43,9 @@ import Qupls4_pkg::*;
 
 module Qupls4_pipeline_ren(
 	rst, clk, clk5x, ph4, en, nq, restore, restored, restore_list,
-	chkpt_amt, tail0, rob, robentry_stomp, avail_reg, sr,
+	chkpt_amt, tail0, rob, avail_reg, sr,
 	stomp_ren, kept_stream, branch_state, flush_dec, flush_ren,
-	arn, arng, arnt, arnv, rn_cp, store_argC_pReg, prn, prnv,
+	arn, arng, arnv, rn_cp, store_argC_pReg, prn, prnv,
 	ns_areg,
 	Rt0_dec, Rt1_dec, Rt2_dec, Rt3_dec, Rt0_decv, Rt1_decv, Rt2_decv, Rt3_decv, 
 	Rt0_ren, Rt1_ren, Rt2_ren, Rt3_ren, Rt0_renv, Rt1_renv, Rt2_renv, Rt3_renv, 
@@ -62,7 +62,7 @@ module Qupls4_pipeline_ren(
 	cmtaiv, cmtbiv, cmtciv, cmtdiv,
 
 	cmtbr,
-	tags2free, freevals, backout, backout_st2, fcu_id,
+	tags2free, freevals, backout, fcu_id,
 	bo_wr, bo_areg, bo_preg, bo_nreg,
 	rat_stallq,
 	micro_machine_active_dec, micro_machine_active_ren,
@@ -83,7 +83,6 @@ output [Qupls4_pkg::PREGS-1:0] restore_list;
 input [2:0] chkpt_amt;
 input rob_ndx_t tail0;
 input Qupls4_pkg::rob_entry_t [Qupls4_pkg::ROB_ENTRIES-1:0] rob;
-input [Qupls4_pkg::ROB_ENTRIES-1:0] robentry_stomp;
 input [Qupls4_pkg::PREGS-1:0] avail_reg;
 input Qupls4_pkg::status_reg_t sr;
 input stomp_ren;
@@ -91,7 +90,6 @@ input pc_stream_t kept_stream;
 input Qupls4_pkg::branch_state_t branch_state;
 input aregno_t [NPORT-1:0] arn;
 input [2:0] arng [0:NPORT-1];
-input [NPORT-1:0] arnt;
 input [NPORT-1:0] arnv;
 input checkpt_ndx_t [NPORT-1:0] rn_cp;
 output pregno_t [NPORT-1:0] prn;
@@ -160,7 +158,6 @@ input cmtbr;
 output pregno_t [3:0] tags2free;
 output [3:0] freevals;
 input backout;
-output [1:0] backout_st2;
 input rob_ndx_t fcu_id;
 output bo_wr;
 output aregno_t bo_areg;
@@ -392,11 +389,9 @@ Qupls4_rat #(.NPORT(NPORT)) urat1
 	.alloc_chkpt(alloc_chkpt),
 	.cndx(cndx),
 	.miss_cp(miss_cp),
-	.chkpt_inc_amt(chkpt_amt),
-	.stallq(rat_stallq),
+	.stall(rat_stallq),
 	.tail(tail0),
 	.rob(rob),
-	.stomp(robentry_stomp),// & {32{branch_state==BS_CAPTURE_MISSPC}}),
 	.avail_i(avail_reg),
 	.restore(restore),
 	.qbr0(pg_dec.pr[0].op.decbus.br|pg_dec.pr[0].op.decbus.cjb),
@@ -405,7 +400,6 @@ Qupls4_rat #(.NPORT(NPORT)) urat1
 	.qbr3(pg_dec.pr[3].op.decbus.br|pg_dec.pr[3].op.decbus.cjb),
 	.rn(arn),
 	.rng(arng),
-	.rnt(arnt),
 	.rnv(arnv),
 	.rn_cp(rn_cp),
 	.st_prn(store_argC_pReg),
@@ -473,7 +467,6 @@ Qupls4_rat #(.NPORT(NPORT)) urat1
 	.tags2free(tags2free),
 	.freevals(freevals),
 	.backout(backout),
-	.backout_st2(backout_st2),
 	.fcu_id(fcu_id),
 	.bo_wr(bo_wr),
 	.bo_areg(bo_areg),

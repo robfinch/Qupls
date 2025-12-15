@@ -293,6 +293,8 @@ always_comb
 if (rst_i)
 	next_req_state <= RESET;
 else begin
+	// Stay in same state unless overidden (prevent-a-latch)
+	next_req_state <= req_state;
 	case(req_state)
 	RESET:
 		next_req_state <= IDLE;

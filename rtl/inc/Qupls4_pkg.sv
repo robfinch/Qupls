@@ -51,12 +51,21 @@ parameter MWIDTH = 4;
 // Comment out to remove the sigmoid approximate function
 //`define SIGMOID	1
 
+// Number of threads supported. (Under construction)
+parameter THREADS = 4;
+
+// Number of streams of execution. Alternate branch paths create streams.
+parameter XSTREAMS = 16;
+
+// Number of levels of branches that can be speculated across.
+parameter BRANCH_LEVELS = 8;
+
 // Number of physical registers supporting the architectural ones and used in
 // register renaming. There must be significantly more physical registers than
 // architectural ones, or performance will suffer due to stalls.
 // Must be a multiple of four. If it is not 512 or 256 then the renamer logic will
 // need to be modified.
-parameter PREGS = 512;
+parameter PREGS = THREADS > 4 ? 1024 : 512;
 
 parameter IP_REG = 8'd31;
 
@@ -108,15 +117,6 @@ parameter RENAMER = 4;
 // =============================================================================
 // =============================================================================
 
-// Number of threads supported. (Under construction)
-parameter THREADS = 2;
-
-// Number of streams of execution. Alternate branch paths create streams.
-parameter XSTREAMS = 32;
-
-// Number of levels of branches that can be speculated across.
-parameter BRANCH_LEVELS = 8;
-
 // 1=move interrupt to the start of the instruction (recommended).
 // 2=defer interrupts to the start of the next instruction.
 // 3=record micro-op number for instruction restart (not recommended).
@@ -159,8 +159,8 @@ parameter SUPPORT_OOOFC = 1'b0;
 // Instruction Modifier Support
 // =============================================================================
 // The following parameter enables support for predicated logic in the core.
-parameter SUPPORT_PRED = 1'b0;
-parameter SUPPORT_ATOM = 1'b0;
+parameter SUPPORT_PRED = 1'b1;
+parameter SUPPORT_ATOM = 1'b1;
 parameter SUPPORT_CARRY = 1'b0;
 
 // The PRED_SHADOW parameter controls the maximum number of instructions
@@ -173,8 +173,8 @@ parameter PRED_SHADOW = 4;
 // =============================================================================
 // =============================================================================
 // Allowing unaligned memory access increases the size of the core.
-parameter SUPPORT_UNALIGNED_MEMORY = 1'b0;
-parameter SUPPORT_BUS_TO = 1'b0;
+parameter SUPPORT_UNALIGNED_MEMORY = 1'b1;
+parameter SUPPORT_BUS_TO = 1'b1;
 
 // This parameter enables support for quad (128-bit) precision operations.
 parameter SUPPORT_QUAD_PRECISION = 1'b0;
@@ -182,7 +182,7 @@ parameter SUPPORT_QUAD_PRECISION = 1'b0;
 // Supporting load bypassing may improve performance, but will also increase the
 // size of the core and make it more vulnerable to security attacks.
 // Loads are bypassed only when there is an exact match to a store.
-parameter SUPPORT_LOAD_BYPASSING = 1'b0;
+parameter SUPPORT_LOAD_BYPASSING = 1'b1;
 
 // Support mutiple precisions for SAU and FPU operations. If not supported only
 // 64-bit precision will be supported. Suppporting multiple precisions adds
@@ -222,12 +222,6 @@ parameter STOREQ_ENTRIES = 8;
 parameter LSQ_ENTRIES = 8;
 parameter LSQ2 = 1'b0;			// Queue two LSQ entries at once?
 
-// Number of architectural registers including registers to support vector
-// operations. Each vector register needs four registers.
-parameter NREGS = 64;
-parameter AREGS = 64;
-parameter REGFILE_LATENCY = 2;
-
 parameter pL1CacheLines = `L1CacheLines;
 parameter pL1LineSize = `L1CacheLineSize;
 parameter pL1ICacheLines = `L1CacheLines;
@@ -253,16 +247,23 @@ const cpu_types_pkg::address_t RSTSP = 32'hFFFF9000;
 parameter SUPPORT_CAPABILITIES = 1'b0;
 
 // Support for vector operations.
-parameter SUPPORT_VECTOR = 1'b0;
+parameter SUPPORT_VECTOR = 1'b1;
 
 parameter SUPPORT_IDIV = 1;
 parameter SUPPORT_TRIG = 0;
 parameter SUPPORT_FDP = 0;
-parameter SUPPORT_FLOAT = 0;
+parameter SUPPORT_FLOAT = 1;
 
 // =============================================================================
 // Resources
 // =============================================================================
+
+// Number of architectural registers including registers to support vector
+// operations. Each vector register needs four registers.
+parameter NREGS = 40*THREADS+(SUPPORT_VECTOR ? 128 : 0);
+parameter AREGS = 40*THREADS+(SUPPORT_VECTOR ? 128 : 0);
+parameter REGFILE_LATENCY = 2;
+
 
 // Number of register read ports. More ports allows more simultaneous reads
 // (obvious) and may increase performance. However, most instructions will
@@ -281,8 +282,8 @@ parameter NAGEN = 1;
 // Note that adding an FPU may also increase integer performance if PERFORMANCE
 // is set to 1.
 parameter NSAU = 2;			// 1 or 2
-parameter NFPU = 0;			// 0 or 1
-parameter NFMA = 0;			// 0, 1 or 2
+parameter NFPU = 1;			// 0 or 1
+parameter NFMA = 2;			// 0, 1 or 2
 parameter NDFPU = 0;		// 0 or 1
 parameter NLSQ_PORTS = 1;
 
@@ -355,6 +356,12 @@ typedef struct packed
 	logic [6:0] rg;
 } regspec_t;
 
+typedef enum logic [1:0] {
+	RL_NONE = 2'd0,
+	RL_SEQNUM = 2'd1,
+	RL_V = 2'd2
+} reglookup_t;
+
 typedef logic [NREGS-1:1] reg_bitmask_t;
 typedef logic [ROB_ENTRIES-1:0] rob_bitmask_t;
 typedef logic [LSQ_ENTRIES-1:0] lsq_bitmask_t;
@@ -367,6 +374,11 @@ typedef struct packed
 	cpu_types_pkg::pregno_t [Qupls4_pkg::AREGS-1:0] pregmap;
 	cpu_types_pkg::pregno_t [Qupls4_pkg::AREGS-1:0] regmap;
 } checkpoint_t;
+
+typedef struct packed
+{
+	cpu_types_pkg::pregno_t [Qupls4_pkg::AREGS-1:0] regmap;
+} reg_map_t;
 
 typedef struct packed
 {
@@ -709,6 +721,9 @@ typedef enum logic [5:0] {
 	FLT_ATAN = 6'd27,
 	FLT_ABS = 6'd32,
 	FLT_NEG = 6'd33,
+	FLT_FTOI = 6'd34,
+	FLT_ITOF = 6'd35,
+	FLT_SIGN = 6'd38,
 	FLT_SQRT = 6'd40,
 	FLT_CVTS2D = 6'd41,
 	FLT_ISNAN = 6'd46,
@@ -1745,6 +1760,16 @@ typedef struct packed
 */
 	cpu_types_pkg::pregno_t pRd;						// current Rd value
 	cpu_types_pkg::pregno_t nRd;						// new Rd
+	cpu_types_pkg::pregno_t pRd2;						// current Rd value
+	cpu_types_pkg::pregno_t nRd2;						// new Rd
+	reglookup_t pRs1st;
+	reglookup_t pRs2st;
+	reglookup_t pRs3st;
+	reglookup_t pSst;
+	reglookup_t pRdst;
+	reglookup_t pRd2st;
+	reglookup_t nRdst;
+	reglookup_t nRd2st;
 	logic pRs1v;
 	logic pRs2v;
 	logic pRs3v;
@@ -1752,6 +1777,8 @@ typedef struct packed
 	logic pSv;
 	logic pRdv;
 	logic nRdv;
+	logic pRd2v;							// second destination reg valid
+	logic nRd2v;
 	logic [5:0] cli;												// 16-bit parcel cache line index of instruction
 	cpu_types_pkg::pc_address_ex_t pc;			// PC of instruction
 	cpu_types_pkg::pc_address_ex_t hwipc;		// PC of instruction
@@ -2301,8 +2328,8 @@ begin
 	bsr = fnDecBsr(pr);
 	bcc = fnIsBranch(pr.uop);
 	case(1'b1)
-	jsr:	fnDecDest.pc = {{23{pr.uop.jsr.disp[40]}},pr.uop.jsr.disp,1'b0};
-	bsr: 	fnDecDest.pc = pr.pc.pc + {{23{pr.uop.jsr.disp[40]}},pr.uop.jsr.disp,1'b0};
+	jsr:	fnDecDest.pc = {{29{pr.uop.jsr.disp[34]}},pr.uop.jsr.disp,1'b0};
+	bsr: 	fnDecDest.pc = pr.pc.pc + {{29{pr.uop.jsr.disp[34]}},pr.uop.jsr.disp,1'b0};
 	bcc:	fnDecDest.pc = pr.pc.pc + {{44{pr.uop.br.disp[19]}},pr.uop.br.disp,1'b0};
 	default:	fnDecDest.pc = Qupls4_pkg::RSTPC;
 	endcase
@@ -2483,8 +2510,8 @@ function fnSourceArgSv;
 input ex_instruction_t ir;
 begin
 	case(ir.ins.any.opcode)
-	OP_FLTS,OP_FLTS,OP_FLTD,OP_FLTQ,
-	OP_FLTPS,OP_FLTPS,OP_FLTPD,OP_FLTPQ,
+	OP_FLTH,OP_FLTS,OP_FLTD,OP_FLTQ,
+	OP_FLTPH,OP_FLTPS,OP_FLTPD,OP_FLTPQ,
 	OP_FLTP:
 		fnSourceArgSv = ir.ins.f3.rm==3'd7;
 	default:

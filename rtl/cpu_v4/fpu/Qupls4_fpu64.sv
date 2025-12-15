@@ -42,7 +42,7 @@ import const_pkg::*;
 import Qupls4_pkg::*;
 import fp64Pkg::*;
 
-module Qupls4_fpu64(rst, clk, clk3x, om, idle, ir, rm, a, b, c, t, s, i, p, o, sto, ust, done, exc);
+module Qupls4_fpu64(rst, clk, clk3x, om, idle, ir, rm, a, b, c, t, s, i, o, sto, ust, done, exc);
 parameter WID=64;
 input rst;
 input clk;
@@ -57,7 +57,6 @@ input [WID-1:0] c;
 input [WID-1:0] t;
 input fp_status_reg_t s;
 input [WID-1:0] i;
-input [WID-1:0] p;
 output reg [WID-1:0] o;
 output fp_status_reg_t sto;
 output reg ust;			// update status
@@ -71,15 +70,15 @@ reg sincos_done, scale_done, f2i_done, i2f_done, sqrt_done, fres_done, trunc_don
 wire div_done;
 reg [WID-1:0] bus;
 fp_status_reg_t stbus;
-reg [WID-1:0] fmao1, fmao2, fmao3, fmao4, fmao5, fmao6, fmao7;
-wire [WID-1:0] scaleo, f2io, i2fo, signo2, cmpo2, divo, sqrto, freso, trunco;
+FP64 fmao1, fmao2, fmao3, fmao4, fmao5, fmao6, fmao7;
+FP64 scaleo, f2io, i2fo, signo2, cmpo2, divo, sqrto, freso, trunco;
 FP64 fsgnj2,fsgnjn2,fsgnjx2;
 FP64 fsgnj1,fsgnjn1,fsgnjx1;
 FP64 fsgnj,fsgnjn,fsgnjx;
 reg [WID-1:0] cmpo,cmpo1;
-reg [WID-1:0] signo,signo1;
-wire [WID-1:0] cvtS2Do2;
-reg [WID-1:0] cvtS2Do,cvtS2Do1;
+FP64 signo,signo1;
+FP64 cvtS2Do2;
+FP64 cvtS2Do,cvtS2Do1;
 reg [WID-1:0] ando2,oro2,xoro2,addo2;
 reg [WID-1:0] ando1,oro1,xoro1,addo1;
 reg [WID-1:0] ando,oro,xoro,addo;
@@ -102,6 +101,10 @@ wire aNan,bNan;
 wire asNan,bsNan;
 wire aqNan,bqNan;
 wire [2:0] a3;
+
+// Can issue every cycle, so...
+always_comb
+	done = 1'b1;
 
 delay3 #(1) udlyust1 (.clk(clk), .ce(1'b1), .i(ir.f3.rc), .o(ust));
 delay2 #(3) udlyrm2 (.clk(clk), .ce(1'b1), .i(a[2:0]), .o(a3));
@@ -251,7 +254,7 @@ always_ff @(posedge clk)
 // FSGNJN
 always_ff @(posedge clk)
 	if (ce)
-		fsgnj1 <= {~a[63],b[62:0]};
+		fsgnjn1 <= {~a[63],b[62:0]};
 always_ff @(posedge clk)
 	if (ce)
 		fsgnjn <= fsgnjn1;
@@ -263,53 +266,6 @@ always_ff @(posedge clk)
 	if (ce)
 		fsgnjx <= fsgnjx1;
 
-always_comb
-	tAdd(ir,addo2);
-always_ff @(posedge clk)
-	if (ce)
-		addo1 <= addo2;
-always_ff @(posedge clk)
-	if (ce)
-		addo <= addo1;
-
-always_comb
-	tSubf(ir,subfo2);
-always_ff @(posedge clk)
-	if (ce)
-		subfo1 <= subfo2;
-always_ff @(posedge clk)
-	if (ce)
-		subfo <= subfo1;
-
-always_comb
-	tAnd(ir,ando2);
-always_ff @(posedge clk)
-	if (ce)
-		ando1 <= ando2;
-always_ff @(posedge clk)
-	if (ce)
-		ando <= ando1;
-
-always_comb
-	tOr(ir,oro2);
-always_ff @(posedge clk)
-	if (ce)
-		oro1 <= oro2;
-always_ff @(posedge clk)
-	if (ce)
-		oro <= oro1;
-
-always_comb
-	tXor(ir,xoro2);
-always_ff @(posedge clk)
-	if (ce)
-		xoro1 <= xoro2;
-always_ff @(posedge clk)
-	if (ce)
-		xoro <= xoro1;
-
-always_comb
-	tMove(ir,movo2);
 always_ff @(posedge clk)
 	if (ce)
 		movo1 <= movo2;
@@ -333,6 +289,7 @@ begin
 	Qupls4_pkg::OP_ANDI:	if (PERFORMANCE) bus = ad & id; else bus = zero;
 	Qupls4_pkg::OP_ORI:		if (PERFORMANCE) bus = ad | id; else bus = zero;
 	Qupls4_pkg::OP_XORI:	if (PERFORMANCE) bus = ad ^ id; else bus = zero;
+	Qupls4_pkg::OP_CMPI:	if (PERFORMANCE) bus = cmpo; else bus = zero;
 	Qupls4_pkg::OP_R3O:
 		if (PERFORMANCE)
 			case(ird.r3.func)
@@ -345,6 +302,18 @@ begin
 				3'd4:	bus = (ad + bd) << cd;
 				3'd6:	bus = cd ? (ad + bd) : td;
 				3'd7:	bus = cd ? (ad + bd) : bd;
+				default:	bus = zero;
+				endcase
+			Qupls4_pkg::FN_CMP,
+			Qupls4_pkg::FN_CMPU:
+				case(ird.r3.op3)
+				3'd0: bus = cmpo & cd;
+				3'd1: bus = cmpo | cd;
+				3'd2: bus = cmpo ^ cd;
+				3'd3:	bus = cmpo + cd;
+				3'd4:	bus = cmpo << cd;
+				3'd6:	bus = cd ? cmpo : td;
+				3'd7:	bus = cd ? cmpo : bd;
 				default:	bus = zero;
 				endcase
 			Qupls4_pkg::FN_AND:
@@ -425,7 +394,6 @@ begin
 	Qupls4_pkg::OP_OR:		bus = oro;
 	Qupls4_pkg::OP_XOR:	bus = xoro;
 	Qupls4_pkg::OP_SUBF:	bus = subfo;
-	Qupls4_pkg::OP_CMP:	bus = cmpo;
 	Qupls4_pkg::OP_MOV:	bus = movo;
     */
 	Qupls4_pkg::OP_LOADA:	bus = loadao;

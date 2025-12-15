@@ -38,14 +38,18 @@
 import const_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_checkpoint_manager(rst, clk, clk5x, ph4, backout_st2, fcu_id,
-	pgh, setcp, setcp_grp, cndx, freecp, freecp_grp, alloc_chkpt, restore, miss_cp);
+module Qupls4_checkpoint_manager(rst, clk, clk5x, ph4, fcu_id,
+	mux_hdr_cndx, dec_hdr_cndx, ren_hdr_cndx, pgh,
+	setcp, setcp_grp, cndx, freecp, freecp_grp, alloc_chkpt, restore, miss_cp);
+parameter MWIDTH = 4;
 input rst;
 input clk;
 input clk5x;
 input [4:0] ph4;
-input [1:0] backout_st2;
 input rob_ndx_t fcu_id;
+input cpu_types_pkg::checkpt_ndx_t mux_hdr_cndx;
+input cpu_types_pkg::checkpt_ndx_t dec_hdr_cndx;
+input cpu_types_pkg::checkpt_ndx_t ren_hdr_cndx;
 input Qupls4_pkg::pipeline_group_hdr_t [Qupls4_pkg::ROB_ENTRIES/4-1:0] pgh;
 output reg setcp;
 output reg [5:0] setcp_grp;
@@ -65,8 +69,11 @@ reg ialloc_chkpt;
 wire free_chkpt;
 assign freecp = free_chkpt;
 reg free_chkpt2;
+reg [Qupls4_pkg::NCHECK-1:0] chkpts_to_free;
 checkpt_ndx_t fchkpt2;
 checkpt_ndx_t [3:0] avail_chkpt;
+reg [1:0] backout_st2;
+reg [5:0] grpcnt;
 
 integer n1;
 wire chkpt_stall;
@@ -93,6 +100,19 @@ typedef enum logic [1:0]
 } state_t;
 state_t state;
 
+// Free all the branch checkpoints no longer in use.
+// If it is not used anywhere in the pipeline free it.
+always_comb
+begin
+	chkpts_to_free = {Qupls4_pkg::NCHECK{1'b1}};	// Assume all freeable
+	gndx = 6'd0;
+	for (gndx = 0; gndx < Qupls4_pkg::ROB_ENTRIES/MWIDTH; gndx = gndx + 1)
+		chkpts_to_free[pgh[gndx].cndx] = 1'b0;	// can't free, its being used.
+	chkpts_to_free[mux_hdr_cndx] = 1'b0;
+	chkpts_to_free[dec_hdr_cndx] = 1'b0;
+	chkpts_to_free[ren_hdr_cndx] = 1'b0;
+end
+
 // Set checkpoint index
 // Backup the checkpoint on a branch miss.
 // Allocate checkpoint on a branch queue
@@ -104,6 +124,7 @@ if (rst) begin
 	ialloc_chkpt <= FALSE;
 	setcp <= FALSE;
 	cndx <= {$bits(checkpt_ndx_t){1'b0}};
+	setcp_grp <= 6'd0;
 end
 else begin
 	ialloc_chkpt <= FALSE;
@@ -189,11 +210,12 @@ uchkpta1
 	.fchkpt_i(fchkpt_is),
 	.free_chkpt2(free_chkpt2s),
 	.fchkpt2(fchkpt2s),
+	.chkpts_to_free(chkpts_to_free),
 	.stall(chkpt_stall)
 );
 
 // Free branch checkpoints once the branch is done.
-
+/*
 Qupls4_checkpoint_freer uchkptfr1
 (
 	.rst(rst),
@@ -203,13 +225,14 @@ Qupls4_checkpoint_freer uchkptfr1
 	.chkpt(fchkpt),
 	.chkpt_gndx(freecp_grp)
 );
-
-// Free all the branch checkpoints coming after a restore.
-
+*/
+/*
 always_ff @(posedge clk)
 if (rst) begin
 	gndx <= 6'd0;
 	free_chkpt2 <= FALSE;
+	backout_st2 <= 2'd0;
+	grpcnt <= 6'd0;
 end
 else begin
 	free_chkpt2 <= FALSE;
@@ -217,6 +240,8 @@ else begin
 	2'd0:
 		if (restore) begin
 			gndx <= ((fcu_id + 3'd4) % Qupls4_pkg::ROB_ENTRIES) >> 2;
+			backout_st2 <= 2'd1;
+			grpcnt <= 6'd0;
 		end
 	2'd1:
 		begin
@@ -228,5 +253,6 @@ else begin
 		end
 	endcase
 end
+*/
 
 endmodule

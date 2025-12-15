@@ -175,19 +175,19 @@ reg [NTIMER-1:0] irqf;
 
 wire cs_qit = reqd.cyc && cs_io;
 
-always_ff @(posedge clk)
+always_ff @(posedge clk_i)
 	reqd <= sreq;
 
-always_ff @(posedge clk)
+always_ff @(posedge clk_i)
 	cs_config <= cs_config_i;
 
 always_ff @(posedge clk_i)
-	erc <= sreq.cti==fta_bus_pkg::ERC;
+	erc <= sreq.cti==wishbone_pkg::ERC;
 
 vtdl #(.WID(1), .DEP(16)) urdyd2 (.clk(clk_i), .ce(1'b1), .a(4'd0), .d((cs_qit)&(erc|~reqd.we)), .q(respack));
 reg [1:0] state;
-always_ff @(posedge clk)
-if (rst) begin
+always_ff @(posedge clk_i)
+if (rst_i) begin
 	sresp <= {$bits(wb_cmd_response64_t){1'b0}};
 	state <= 2'd0;
 end
@@ -245,8 +245,8 @@ ddbb64_config #(
 )
 ucfg1
 (
-	.rst_i(rst),
-	.clk_i(clk),
+	.rst_i(rst_i),
+	.clk_i(clk_i),
 	.irq_i({3'd0,irq}),
 	.cs_i(cs_config), 
 	.req_i(reqd),

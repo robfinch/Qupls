@@ -74,6 +74,13 @@ for (n1 = 0; n1 < Qupls4_pkg::ROB_ENTRIES; n1 = n1 + 1) begin
 			ns_cndx[kk] = pgh[n1>>2].cndx;
 			kk = kk + 1;
 		end
+		if (!rob[n1].op.pRd2v && kk < 4 && !m1 && !m2 && !m3 && !m4) begin
+			ns_alloc_req[kk] = 1'b1;
+			ns_whrndx[kk] = n1;
+			ns_areg[kk] = rob[n1].op.decbus.Rd2;
+			ns_cndx[kk] = pgh[n1>>2].cndx;
+			kk = kk + 1;
+		end
 	end
 end
 end

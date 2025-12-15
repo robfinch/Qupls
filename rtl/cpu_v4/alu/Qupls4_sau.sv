@@ -364,34 +364,22 @@ generate begin : gElement
 end
 endgenerate
 
+// Vector element size in bits.
+always_comb
+	case(ir.any.opcode)
+	Qupls4_pkg::OP_R3BP:	elesz = 8'd8;
+	Qupls4_pkg::OP_R3WP,Qupls4_pkg::OP_FLTPH:	elesz = 8'd16;
+	Qupls4_pkg::OP_R3TP,Qupls4_pkg::OP_FLTPS:	elesz = 8'd32;
+	Qupls4_pkg::OP_R3OP,Qupls4_pkg::OP_FLTPD:	elesz = 8'd64;
+	Qupls4_pkg::OP_FLTPQ:	elesz = 8'd64;	// 2x64 in a pair
+	default:	elesz = 8'd64;
+	endcase
+
 always_comb
 begin
 	exc = Qupls4_pkg::FLT_NONE;
 	bus = {(WID/16){16'h0000}};
-	case(ir.any.opcode)
-	Qupls4_pkg::OP_R3BP:
-		begin
-			elesz = 7'd8;
-			base_eleno = {chunk,3'b0};
-		end
-	Qupls4_pkg::OP_R3WP:
-		begin
-			elesz = 7'd16;
-			base_eleno = {chunk,2'b0};
-		end
-	Qupls4_pkg::OP_R3TP:
-		begin
-			elesz = 7'd32;
-			base_eleno = {chunk,1'b0};
-		end
-	Qupls4_pkg::OP_R3OP:
-		begin
-			elesz = 7'd64;
-			base_eleno = chunk;
-		end
-	default:
-		mask1 = 64'd0;
-	endcase
+	base_eleno = {chunk,2'd0};
 	mask1 = mask >> base_eleno;
 	case(ir.any.opcode)
 	Qupls4_pkg::OP_R3BP,Qupls4_pkg::OP_R3WP,Qupls4_pkg::OP_R3TP,Qupls4_pkg::OP_R3OP:

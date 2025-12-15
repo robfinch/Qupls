@@ -170,15 +170,16 @@ always_comb
 		
 always_comb
 begin
-	cline_in.resv <= 'd0;
-	cline_in.v <= 1'b1;					// Whether updating the line or loading a new one, always valid.
-	cline_in.m <= ~cache_load;	// It is not modified if it is a fresh load.
+	cline_in.resv = 'd0;
+	cline_in.v = 1'b1;					// Whether updating the line or loading a new one, always valid.
+	cline_in.m = ~cache_load;	// It is not modified if it is a fresh load.
 //	cline_in.asid <= cpu_req_i.asid;
-	cline_in.tag <= cpu_req_vadr[32-1:T6];
+	cline_in.tag = cpu_req_vadr[32-1:T6];
+	cline_in.asid = 16'h0;
 	if (cache_load)
-		cline_in.data <= update_data_i.dat;
+		cline_in.data = update_data_i.dat;
 	else
-		cline_in.data <= cpu_req_i.dat;
+		cline_in.data = cpu_req_i.dat;
 end
 
 

@@ -378,22 +378,35 @@ always_comb
 always_comb//ff @(posedge clk)
 	iel2 <= iel;
 
+// Get even/odd lines and swap them into hi,lo based on address.
 always_comb
 if (rst) begin
 	ic_line_hi_o.data = {128{NOP}};
 	ic_line_hi_o.v = 4'hF;
+	ic_line_hi_o.m = 1'b0;
 	ic_line_hi_o.vtag = RSTPC;
+	ic_line_hi_o.ptag = RSTPC;
+	ic_line_hi_o.asid = 16'd0;
 	ic_line_lo_o.data = {128{NOP}};
 	ic_line_lo_o.v = 4'hF;
+	ic_line_lo_o.m = 1'b0;
 	ic_line_lo_o.vtag = RSTPC;
+	ic_line_lo_o.ptag = RSTPC;
+	ic_line_lo_o.asid = 16'd0;
 end
 else begin
 	ic_line_hi_o.data = {128{NOP}};
 	ic_line_hi_o.v = 4'hF;
+	ic_line_hi_o.m = 1'b0;
 	ic_line_hi_o.vtag = RSTPC;
+	ic_line_hi_o.ptag = RSTPC;
+	ic_line_hi_o.asid = 16'd0;
 	ic_line_lo_o.data = {128{NOP}};
 	ic_line_lo_o.v = 4'hF;
+	ic_line_lo_o.m = 1'b0;
 	ic_line_lo_o.vtag = RSTPC;
+	ic_line_lo_o.ptag = RSTPC;
+	ic_line_lo_o.asid = 16'd0;
 	case(iel2)
 	1'b0:	
 		begin

@@ -181,6 +181,7 @@ generate begin : g64
 			.exc_o(exc64[g*8+7:g*8])
 		);
 
+/* Not sure what this was to do. There are output queues in the mainline.
 	Qupls4_queue_manager uqm1 (
 		.rst(rst),
 		.clk(clk),
@@ -202,6 +203,7 @@ generate begin : g64
 		.q_rd_data(q_rd_data),
 		.q_wr_data(q_wr_data)
 	);
+*/
 	end
 end
 endgenerate

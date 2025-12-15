@@ -49,8 +49,6 @@ input [$clog2(DEP)-1:0] radr;
 input [WID:1] i;
 output reg [WID:1] o;
 
-reg wr1;
-reg [$clog2(DEP)-1:0] wadr1;
 reg [WID:1] i1;
 reg [WID:1] o1;
 
@@ -146,12 +144,6 @@ reg [WID:1] o1;
 // If reading and writing the same address at the same time, return the new data.
 // I do not think this can happen ^^^ the read address would need to be registered for performance.
 
-always_ff @(posedge clk)
-if (ce)
-	wr1 <= wr;
-always_ff @(posedge clk)
-if (ce)
-	wadr1 <= wadr;
 always_ff @(posedge clk)
 if (ce)
 	i1 <= i;
