@@ -119,7 +119,7 @@ real IPC,PIPC;
 integer nn,mm,n2,n3,n4,m4,n5,n6,n8,n9,n10,n11,n12,n13,n14,n15,n17;
 integer n16r, n16c, n12r, n12c, n14r, n14c, n17r, n17c, n18r, n18c;
 integer n19,n20,n21,n22,n23,n24,n25,n26,n27,n28,n29,i,n30,n31,n32,n33;
-integer n34,n35,n36,n37,n38,n39,n40,n41,n42,n43;
+integer n34,n35,n36,n37,n38,n39,n40,n41,n42,n43,n44,n45,n46;
 integer jj,kk;
 
 genvar g,h,gvg;
@@ -317,7 +317,7 @@ reg set_pending_ipl;
 reg [5:0] next_pending_ipl;
 wire stallq, rat_stallq, ren_stallq;
 
-rob_ndx_t head0, head1, head2, head3, head4, head5, head6, head7;
+rob_ndx_t [7:0] head;
 rob_ndx_t [11:0] tails;
 rob_ndx_t stail;
 Qupls4_pkg::reg_bitmask_t reg_bitmask;
@@ -352,13 +352,13 @@ always_comb tails[8] = (tails[0] + 8) % Qupls4_pkg::ROB_ENTRIES;
 always_comb tails[9] = (tails[0] + 9) % Qupls4_pkg::ROB_ENTRIES;
 always_comb tails[10] = (tails[0] + 10) % Qupls4_pkg::ROB_ENTRIES;
 always_comb tails[11] = (tails[0] + 11) % Qupls4_pkg::ROB_ENTRIES;
-always_comb head1 = (head0 + 1) % Qupls4_pkg::ROB_ENTRIES;
-always_comb head2 = (head0 + 2) % Qupls4_pkg::ROB_ENTRIES;
-always_comb head3 = (head0 + 3) % Qupls4_pkg::ROB_ENTRIES;
-always_comb head4 = (head0 + 4) % Qupls4_pkg::ROB_ENTRIES;
-always_comb head5 = (head0 + 5) % Qupls4_pkg::ROB_ENTRIES;
-always_comb head6 = (head0 + 6) % Qupls4_pkg::ROB_ENTRIES;
-always_comb head7 = (head0 + 7) % Qupls4_pkg::ROB_ENTRIES;
+always_comb head[1] = (head[0] + 1) % Qupls4_pkg::ROB_ENTRIES;
+always_comb head[2] = (head[0] + 2) % Qupls4_pkg::ROB_ENTRIES;
+always_comb head[3] = (head[0] + 3) % Qupls4_pkg::ROB_ENTRIES;
+always_comb head[4] = (head[0] + 4) % Qupls4_pkg::ROB_ENTRIES;
+always_comb head[5] = (head[0] + 5) % Qupls4_pkg::ROB_ENTRIES;
+always_comb head[6] = (head[0] + 6) % Qupls4_pkg::ROB_ENTRIES;
+always_comb head[7] = (head[0] + 7) % Qupls4_pkg::ROB_ENTRIES;
 
 Qupls4_pkg::ex_instruction_t [7:0] ex_ins;
 
@@ -1392,10 +1392,10 @@ always_comb
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 reg [8:0] nan_log_addr;
 reg do_log_nan = 1'b0;
-wire nan0 = |rob[head0].v && cmtcnt > 3'd0 && rob[head0].nan;
-wire nan1 = |rob[head1].v && cmtcnt > 3'd1 && rob[head1].nan;
-wire nan2 = |rob[head2].v && cmtcnt > 3'd2 && rob[head2].nan;
-wire nan3 = |rob[head3].v && cmtcnt > 3'd3 && rob[head3].nan;
+wire nan0 = |rob[head[0]].v && cmtcnt > 3'd0 && rob[head[0]].nan;
+wire nan1 = |rob[head[1]].v && cmtcnt > 3'd1 && rob[head[1]].nan;
+wire nan2 = |rob[head[2]].v && cmtcnt > 3'd2 && rob[head[2]].nan;
+wire nan3 = |rob[head[3]].v && cmtcnt > 3'd3 && rob[head[3]].nan;
 cpu_types_pkg::pc_address_t nan1e, nan2e;
 wire log_nan = (nan0|nan1|nan2|nan3) && do_commit && cmtcnt > 3'd0 && do_log_nan;
 
@@ -1410,60 +1410,60 @@ else if (log_nan) begin
 	4'b0000:	;
 	4'b0001:
 		begin
-			nan1e <= rob[head0].op.pc;
+			nan1e <= rob[head[0]].op.pc;
 			nan2e <= {$bits(cpu_types_pkg::pc_address_t){1'b0}};
 			nan_log_addr <= nan_log_addr + 2'd1;
 		end
 	4'b0010:
 		begin
-			nan1e <= rob[head1].op.pc;
+			nan1e <= rob[head[1]].op.pc;
 			nan2e <= {$bits(cpu_types_pkg::pc_address_t){1'b0}};
 			nan_log_addr <= nan_log_addr + 2'd1;
 		end
 	4'b0011,4'b0111,4'b1011,4'b1111:
 		begin
-			nan1e <= rob[head0].op.pc;
-			nan2e <= rob[head1].op.pc;
+			nan1e <= rob[head[0]].op.pc;
+			nan2e <= rob[head[1]].op.pc;
 			nan_log_addr <= nan_log_addr + 2'd1;
 		end
 	4'b0100:
 		begin
-			nan1e <= rob[head2].op.pc;
+			nan1e <= rob[head[2]].op.pc;
 			nan_log_addr <= nan_log_addr + 2'd1;
 		end
 	4'b0101,4'b1101:
 		begin
-			nan1e <= rob[head0].op.pc;
-			nan2e <= rob[head2].op.pc;
+			nan1e <= rob[head[0]].op.pc;
+			nan2e <= rob[head[2]].op.pc;
 			nan_log_addr <= nan_log_addr + 2'd1;
 		end
 	4'b0110,4'b1110:
 		begin
-			nan1e <= rob[head1].op.pc;
-			nan2e <= rob[head2].op.pc;
+			nan1e <= rob[head[1]].op.pc;
+			nan2e <= rob[head[2]].op.pc;
 			nan_log_addr <= nan_log_addr + 2'd1;
 		end
 	4'b1000:
 		begin
-			nan1e <= rob[head3].op.pc;
+			nan1e <= rob[head[3]].op.pc;
 			nan_log_addr <= nan_log_addr + 2'd1;
 		end
 	4'b1001:
 		begin
-			nan1e <= rob[head0].op.pc;
-			nan2e <= rob[head3].op.pc;
+			nan1e <= rob[head[0]].op.pc;
+			nan2e <= rob[head[3]].op.pc;
 			nan_log_addr <= nan_log_addr + 2'd1;
 		end
 	4'b1010:
 		begin
-			nan1e <= rob[head1].op.pc;
-			nan2e <= rob[head3].op.pc;
+			nan1e <= rob[head[1]].op.pc;
+			nan2e <= rob[head[3]].op.pc;
 			nan_log_addr <= nan_log_addr + 2'd1;
 		end
 	4'b1100:
 		begin
-			nan1e <= rob[head2].op.pc;
-			nan2e <= rob[head3].op.pc;
+			nan1e <= rob[head[2]].op.pc;
+			nan2e <= rob[head[3]].op.pc;
 			nan_log_addr <= nan_log_addr + 2'd1;
 		end
 	endcase
@@ -2495,44 +2495,23 @@ assign pc1_d = pg_dec.pr[1].op.pc;
 assign pc2_d = pg_dec.pr[2].op.pc;
 assign pc3_d = pg_dec.pr[3].op.pc;
 
-reg wrport0_v;
-reg wrport1_v;
-reg wrport2_v;
-reg wrport3_v;
+reg [MWIDTH-1:0] wrport0_v;
 reg wrport4_v;
 reg wrport5_v;
-reg [8:0] wrport0_we;
-reg [8:0] wrport1_we;
-reg [8:0] wrport2_we;
-reg [8:0] wrport3_we;
+reg [8:0] wrport0_we [0:MWIDTH-1];
 reg [8:0] wrport4_we;
 reg [8:0] wrport5_we;
-value_t wrport0_res;
-value_t wrport1_res;
-value_t wrport2_res;
-value_t wrport3_res;
+value_t [MWIDTH-1:0] wrport0_res;
 value_t wrport4_res;
 value_t wrport5_res;
-pregno_t wrport0_Rt;
-pregno_t wrport1_Rt;
-pregno_t wrport2_Rt;
-pregno_t wrport3_Rt;
+pregno_t [MWIDTH-1:0] wrport0_Rt;
 pregno_t wrport4_Rt;
 pregno_t wrport5_Rt;
-aregno_t wrport0_aRt;
-aregno_t wrport1_aRt;
-aregno_t wrport2_aRt;
-aregno_t wrport3_aRt;
+aregno_t [MWIDTH-1:0] wrport0_aRt;
 aregno_t wrport4_aRt;
 aregno_t wrport5_aRt;
-checkpt_ndx_t wrport0_cp;
-checkpt_ndx_t wrport1_cp;
-checkpt_ndx_t wrport2_cp;
-checkpt_ndx_t wrport3_cp;
-reg wrport0_tag;
-reg wrport1_tag;
-reg wrport2_tag;
-reg wrport3_tag;
+checkpt_ndx_t [MWIDTH-1:0] wrport0_cp;
+reg [MWIDTH-1:0] wrport0_tag;
 
 wire [MWIDTH-1:0] stomps;
 
@@ -2693,7 +2672,7 @@ wire [3:0] enqueue_room;
 Qupls4_queue_room uqroom1
 (
 	.rob(rob),
-	.head0(head0),
+	.head0(head[0]),
 	.tails(tails),
 	.room(enqueue_room)
 );
@@ -2812,14 +2791,8 @@ assign arnv[16] = 1'b1;
 */
 assign arnv = 16'hFFFF;
 wire [1:0] backout_st2;
-pregno_t Rt0_ren;
-pregno_t Rt1_ren;
-pregno_t Rt2_ren;
-pregno_t Rt3_ren;
-wire Rt0_renv;
-wire Rt1_renv;
-wire Rt2_renv;
-wire Rt3_renv;
+pregno_t [MWIDTH-1:0] Rt0_ren;
+wire [MWIDTH-1:0] Rt0_renv;
 
 /*
 always_ff @(posedge clk)
@@ -2862,6 +2835,18 @@ pregno_t [3:0] ns_dstreg;
 wire [3:0] ns_dstregv;
 aregno_t [3:0] ns_areg;
 checkpt_ndx_t [3:0] ns_cndx;
+reg [MWIDTH-1:0] cmtav,cmtaiv;
+aregno_t [MWIDTH-1:0] cmtaa;
+pregno_t [MWIDTH-1:0] cmtap;
+checkpt_ndx_t [MWIDTH-1:0] cmta_cp;
+always_comb
+	for (n46 = 0; n46 < MWIDTH; n46 = n46 + 1) begin
+		cmtav[n46] = do_commit && |rob[head[n46]].v && cmtcnt > n46;
+		cmtaiv[n46] = do_commit && rob[head[n46]].v==5'd0 && cmtcnt > n46;
+		cmtaa[n46] = rob[head[n46]].op.decbus.Rd;
+		cmtap[n46] = rob[head[n46]].op.nRd;
+		cmta_cp[n46] = rob[head[n46]].cndx;
+	end
 
 Qupls4_pipeline_ren #(.NPORT(NREG_RPORTS)) uren1
 (
@@ -2891,66 +2876,24 @@ Qupls4_pipeline_ren #(.NPORT(NREG_RPORTS)) uren1
 	.prn(prn),
 	.prnv(prnv),
 	.ns_areg(ns_areg),
-	.Rt0_dec(ns_dstreg[0]),
-	.Rt1_dec(ns_dstreg[1]),
-	.Rt2_dec(ns_dstreg[2]),
-	.Rt3_dec(ns_dstreg[3]),
-	.Rt0_decv(ns_dstregv[0]),
-	.Rt1_decv(ns_dstregv[1]),
-	.Rt2_decv(ns_dstregv[2]),
-	.Rt3_decv(ns_dstregv[3]),
+	.Rt0_dec(ns_dstreg),
+	.Rt_decv(ns_dstregv),
 	.Rt0_ren(Rt0_ren),
-	.Rt1_ren(Rt1_ren),
-	.Rt2_ren(Rt2_ren),
-	.Rt3_ren(Rt3_ren),
 	.Rt0_renv(Rt0_renv),
-	.Rt1_renv(Rt1_renv),
-	.Rt2_renv(Rt2_renv),
-	.Rt3_renv(Rt3_renv),
 	.pg_dec(pg_dec),
 	.pg_ren(pg_ren),
 	
 	.wrport0_v(wrport0_v),
-	.wrport1_v(wrport1_v),
-	.wrport2_v(wrport2_v),
-	.wrport3_v(wrport3_v),
 	.wrport0_aRt(wrport0_aRt),
-	.wrport1_aRt(wrport1_aRt),
-	.wrport2_aRt(wrport2_aRt),
-	.wrport3_aRt(wrport3_aRt),
 	.wrport0_Rt(wrport0_Rt),
-	.wrport1_Rt(wrport1_Rt),
-	.wrport2_Rt(wrport2_Rt),
-	.wrport3_Rt(wrport3_Rt),
 	.wrport0_res(wrport0_res),
-	.wrport1_res(wrport1_res),
-	.wrport2_res(wrport2_res),
-	.wrport3_res(wrport3_res),
 	.wrport0_cp(wrport0_cp),
-	.wrport1_cp(wrport1_cp),
-	.wrport2_cp(wrport2_cp),
-	.wrport3_cp(wrport3_cp),
 	
-	.cmtav(do_commit && |rob[head0].v && cmtcnt > 0),
-	.cmtbv(do_commit && |rob[head1].v && cmtcnt > 1),
-	.cmtcv(do_commit && |rob[head2].v && cmtcnt > 2),
-	.cmtdv(do_commit && |rob[head3].v && cmtcnt > 3),
-	.cmtaiv(do_commit && rob[head0].v==5'd0 && cmtcnt > 0),
-	.cmtbiv(do_commit && rob[head1].v==5'd0 && cmtcnt > 1),
-	.cmtciv(do_commit && rob[head2].v==5'd0 && cmtcnt > 2),
-	.cmtdiv(do_commit && rob[head3].v==5'd0 && cmtcnt > 3),
-	.cmtaa(rob[head0].op.decbus.Rd),
-	.cmtba(rob[head1].op.decbus.Rd),
-	.cmtca(rob[head2].op.decbus.Rd),
-	.cmtda(rob[head3].op.decbus.Rd),
-	.cmtap(rob[head0].op.nRd),
-	.cmtbp(rob[head1].op.nRd),
-	.cmtcp(rob[head2].op.nRd),
-	.cmtdp(rob[head3].op.nRd),
-	.cmta_cp(rob[head0].cndx),
-	.cmtb_cp(rob[head1].cndx),
-	.cmtc_cp(rob[head2].cndx),
-	.cmtd_cp(rob[head3].cndx),
+	.cmtav(cmtav),
+	.cmtaiv(cmtaiv),
+	.cmtaa(amtaa),
+	.cmtap(cmtap),
+	.cmta_cp(cmta_cp),
 
 	.cmtbr(cmtbr),
 	.tags2free(tags2free),
@@ -3596,37 +3539,47 @@ endgenerate
 
 
 // Mux the queue outputs onto the register file inputs.
-always_ff @(posedge clk) wrport0_v <= !fuq_empty[upd1];
-always_ff @(posedge clk) wrport0_we <= fuq_we[upd1]; 
-always_ff @(posedge clk) wrport0_Rt <= fuq_pRt[upd1]; 
-always_ff @(posedge clk) wrport0_aRt <= fuq_aRt[upd1]; 
-always_ff @(posedge clk) wrport0_res <= fuq_res[upd1]; 
-always_ff @(posedge clk) wrport0_cp <= fuq_cp[upd1]; 
-always_ff @(posedge clk) wrport0_tag <= fuq_tag[upd1]; 
+generate begin : gWrPort
+always_ff @(posedge clk) wrport0_v[0] <= !fuq_empty[upd1];
+always_ff @(posedge clk) wrport0_we[0] <= fuq_we[upd1]; 
+always_ff @(posedge clk) wrport0_Rt[0] <= fuq_pRt[upd1]; 
+always_ff @(posedge clk) wrport0_aRt[0] <= fuq_aRt[upd1]; 
+always_ff @(posedge clk) wrport0_res[0] <= fuq_res[upd1]; 
+always_ff @(posedge clk) wrport0_cp[0] <= fuq_cp[upd1]; 
+always_ff @(posedge clk) wrport0_tag[0] <= fuq_tag[upd1]; 
 
-always_ff @(posedge clk) wrport1_v <= !fuq_empty[upd2];
-always_ff @(posedge clk) wrport1_we <= fuq_we[upd2]; 
-always_ff @(posedge clk) wrport1_Rt <= fuq_pRt[upd2]; 
-always_ff @(posedge clk) wrport1_aRt <= fuq_aRt[upd2]; 
-always_ff @(posedge clk) wrport1_res <= fuq_res[upd2]; 
-always_ff @(posedge clk) wrport1_cp <= fuq_cp[upd2]; 
-always_ff @(posedge clk) wrport1_tag <= fuq_tag[upd2]; 
+if (MWIDTH > 1) begin
+always_ff @(posedge clk) wrport0_v[1] <= !fuq_empty[upd2];
+always_ff @(posedge clk) wrport0_we[1] <= fuq_we[upd2]; 
+always_ff @(posedge clk) wrport0_Rt[1] <= fuq_pRt[upd2]; 
+always_ff @(posedge clk) wrport0_aRt[1] <= fuq_aRt[upd2]; 
+always_ff @(posedge clk) wrport0_res[1] <= fuq_res[upd2]; 
+always_ff @(posedge clk) wrport0_cp[1] <= fuq_cp[upd2]; 
+always_ff @(posedge clk) wrport0_tag[1] <= fuq_tag[upd2]; 
+end
 
-always_ff @(posedge clk) wrport2_v <= !fuq_empty[upd3];
-always_ff @(posedge clk) wrport2_we <= fuq_we[upd3]; 
-always_ff @(posedge clk) wrport2_Rt <= fuq_pRt[upd3]; 
-always_ff @(posedge clk) wrport2_aRt <= fuq_aRt[upd3]; 
-always_ff @(posedge clk) wrport2_res <= fuq_res[upd3]; 
-always_ff @(posedge clk) wrport2_cp <= fuq_cp[upd3]; 
-always_ff @(posedge clk) wrport2_tag <= fuq_tag[upd3]; 
+if (MWIDTH > 2) begin
+always_ff @(posedge clk) wrport0_v[2] <= !fuq_empty[upd3];
+always_ff @(posedge clk) wrport0_we[2] <= fuq_we[upd3]; 
+always_ff @(posedge clk) wrport0_Rt[2] <= fuq_pRt[upd3]; 
+always_ff @(posedge clk) wrport0_aRt[2] <= fuq_aRt[upd3]; 
+always_ff @(posedge clk) wrport0_res[2] <= fuq_res[upd3]; 
+always_ff @(posedge clk) wrport0_cp[2] <= fuq_cp[upd3]; 
+always_ff @(posedge clk) wrport0_tag[2] <= fuq_tag[upd3]; 
+end
 
-always_ff @(posedge clk) wrport3_v <= !fuq_empty[upd4];
-always_ff @(posedge clk) wrport3_we <= fuq_we[upd4]; 
-always_ff @(posedge clk) wrport3_Rt <= fuq_pRt[upd4]; 
-always_ff @(posedge clk) wrport3_aRt <= fuq_aRt[upd4]; 
-always_ff @(posedge clk) wrport3_res <= fuq_res[upd4]; 
-always_ff @(posedge clk) wrport3_cp <= fuq_cp[upd4]; 
-always_ff @(posedge clk) wrport3_tag <= fuq_tag[upd4]; 
+if (MWIDTH > 3) begin
+always_ff @(posedge clk) wrport0_v[3] <= !fuq_empty[upd4];
+always_ff @(posedge clk) wrport0_we[3] <= fuq_we[upd4]; 
+always_ff @(posedge clk) wrport0_Rt[3] <= fuq_pRt[upd4]; 
+always_ff @(posedge clk) wrport0_aRt[3] <= fuq_aRt[upd4]; 
+always_ff @(posedge clk) wrport0_res[3] <= fuq_res[upd4]; 
+always_ff @(posedge clk) wrport0_cp[3] <= fuq_cp[upd4]; 
+always_ff @(posedge clk) wrport0_tag[3] <= fuq_tag[upd4]; 
+end
+
+end
+endgenerate
 
 `ifdef SIXPORT_FILE
 always_ff @(posedge clk) wrport4_v <= !fuq_empty[upd5];
@@ -3646,32 +3599,14 @@ always_ff @(posedge clk) wrport5_cp <= fuq_cp[upd6];
 always_ff @(posedge clk) wrport5_tag <= fuq_tag[upd6]; 
 `endif
 
-Qupls4_regfile4wNr #(.RPORTS(NREG_RPORTS)) urf1 (
+Qupls4_regfileMwNr #(.RPORTS(NREG_RPORTS), .WPORTS(MWIDTH)) urf1 (
 	.rst(irst),
 	.clk(clk), 
 	.wr0(wrport0_v),
-	.wr1(wrport1_v),
-	.wr2(wrport2_v),
-	.wr3(wrport3_v),
 	.we0(wrport0_we),
-	.we1(wrport1_we),
-	.we2(wrport2_we),
-	.we3(wrport3_we),
 	.wa0(wrport0_Rt),
-	.wa1(wrport1_Rt),
-	.wa2(wrport2_Rt),
-	.wa3(wrport3_Rt),
 	.i0(wrport0_res),
-	.i1(wrport1_res),
-	.i2(wrport2_res),
-	.i3(wrport3_res),
 	.ti0(wrport0_tag),
-	.ti1(wrport1_tag),
-	.ti2(wrport2_tag),
-	.ti3(wrport3_tag),
-//	.ti2(dram0_cload ? dram_ctag0 : 1'b0),
-//	.ti3(fpu0_ctag),
-//	.ti4(dram1_cload ? dram_ctag1 : 1'b0),
 	.ra(rf_reg),
 	.o(rfo),
 	.to(rfo_flags)
@@ -3679,10 +3614,9 @@ Qupls4_regfile4wNr #(.RPORTS(NREG_RPORTS)) urf1 (
 
 always_ff @(posedge clk)
 begin
-	$display("wr0:%d Rt=%d/%d res=%x sc_done=%d Rtz2=%d", wrport0_v, wrport0_aRt, wrport0_Rt, wrport0_res, sau0_sc_done2, sau0_aRdz2);
-	$display("wr1:%d Rt=%d/%d res=%x sc_done=%d Rtz2=%d", wrport1_v, wrport1_aRt, wrport1_Rt, wrport1_res, sau1_sc_done2, sau1_aRdz2);
-	$display("wr2:%d Rt=%d/%d res=%x", wrport2_v, wrport2_aRt, wrport2_Rt, wrport2_res);
-	$display("wr3:%d Rt=%d/%d res=%x", wrport3_v, wrport3_aRt, wrport3_Rt, wrport3_res);
+	for (n44 = 0; n44 < MWIDTH; n44 = n44 + 1)
+		$display("wr%d:%d Rt=%d/%d res=%x",// sc_done=%d Rtz2=%d",
+			n44[2:0], wrport0_v[n44], wrport0_aRt[n44], wrport0_Rt[n44], wrport0_res[n44]);//, sau0_sc_done2[n44], sau0_aRdz2[n44]);
 end
 
 Qupls4_copydst ucpydst1
@@ -3703,7 +3637,7 @@ Qupls4_copydst ucpydst1
 // Calc the location of the ROB tail pointer after a stomp.
 Qupls4_stail ustail1
 (
-	.head0(head0),
+	.head0(head[0]),
 	.tail0(tails[0]),
 	.robentry_stomp(robentry_stomp),
 	.rob(rob),
@@ -3988,7 +3922,7 @@ Stark_sched uscd1
 	.stomp_i(robentry_stomp),
 	.robentry_islot_i(robentry_islot),
 	.robentry_islot_o(robentry_islot),
-	.head(head0),
+	.head(head[0]),
 	.rob(rob),
 	.robentry_issue(robentry_issue),
 	.robentry_fpu_issue(robentry_fpu_issue),
@@ -4028,7 +3962,7 @@ Qupls4_mem_sched umems1
 (
 	.rst(irst),
 	.clk(clk),
-	.head(head0),
+	.head(head[0]),
 	.lsq_head(lsq_head),
 	.cancel(cpu_request_cancel),
 	.robentry_stomp(robentry_stomp),
@@ -4975,20 +4909,20 @@ endgenerate
 // and done. Do not commit invalid instructions at the tail of the queue.
 
 always_comb
-	if (head0 > tails[0])
-		cmtlen = head0-tails[0];
+	if (head[0] > tails[0])
+		cmtlen = head[0]-tails[0];
 	else
-		cmtlen = Qupls4_pkg::ROB_ENTRIES+head0-tails[0];
+		cmtlen = Qupls4_pkg::ROB_ENTRIES+head[0]-tails[0];
 
 /*
 										(
-											head0 == tails[0] || head0 == tails[1] || head0 == tails[2] || head0 == tails[3] ||
-											head0 == tails[4] || head0 == tails[5] || head0 == tails[6] || head0 == tails[7]);
+											head[0] == tails[0] || head[0] == tails[1] || head[0] == tails[2] || head[0] == tails[3] ||
+											head[0] == tails[4] || head[0] == tails[5] || head[0] == tails[6] || head[0] == tails[7]);
 */
-always_comb cmttlb0 = (|rob[head0].v && rob[head0].lsq && !lsq[rob[head0].lsqndx.row][rob[head0].lsqndx.col].agen);
-always_comb cmttlb1 = MWIDTH > 1 && (|rob[head1].v && rob[head1].lsq && !lsq[rob[head1].lsqndx.row][rob[head1].lsqndx.col].agen);
-always_comb cmttlb2 = MWIDTH > 2 && (|rob[head2].v && rob[head2].lsq && !lsq[rob[head2].lsqndx.row][rob[head2].lsqndx.col].agen);
-always_comb cmttlb3 = MWIDTH > 3 && (|rob[head3].v && rob[head3].lsq && !lsq[rob[head3].lsqndx.row][rob[head3].lsqndx.col].agen);
+always_comb cmttlb0 = (|rob[head[0]].v && rob[head[0]].lsq && !lsq[rob[head[0]].lsqndx.row][rob[head[0]].lsqndx.col].agen);
+always_comb cmttlb1 = MWIDTH > 1 && (|rob[head[1]].v && rob[head[1]].lsq && !lsq[rob[head[1]].lsqndx.row][rob[head[1]].lsqndx.col].agen);
+always_comb cmttlb2 = MWIDTH > 2 && (|rob[head[2]].v && rob[head[2]].lsq && !lsq[rob[head[2]].lsqndx.row][rob[head[2]].lsqndx.col].agen);
+always_comb cmttlb3 = MWIDTH > 3 && (|rob[head[3]].v && rob[head[3]].lsq && !lsq[rob[head[3]].lsqndx.row][rob[head[3]].lsqndx.col].agen);
 
 Qupls4_commit_count
 #(.XWID(MWIDTH))
@@ -4997,12 +4931,12 @@ ucmtcnt1
 	.rst(irst),
 	.next_cqd(next_cqd),
 	.rob(rob),
-	.head0(head0),
-	.head1(head1),
-	.head2(head2),
-	.head3(head3),
-	.head4(head4),
-	.head5(head5),
+	.head0(head[0]),
+	.head1(head[1]),
+	.head2(head[2]),
+	.head3(head[3]),
+	.head4(head[4]),
+	.head5(head[5]),
 	.tails(tails),
 	.cmtcnt(cmtcnt),
 	.do_commit(do_commit)
@@ -5010,28 +4944,28 @@ ucmtcnt1
 
 always_comb
 cmtbr = (
-	(rob[head0].op.decbus.br & rob[head0].v) ||
-	(MWIDTH > 1 && (rob[head1].op.decbus.br & rob[head1].v)) ||
-	(MWIDTH > 2 && (rob[head2].op.decbus.br & rob[head2].v)) ||
-	(MWIDTH > 3 && (rob[head3].op.decbus.br & rob[head3].v))) && do_commit
+	(rob[head[0]].op.decbus.br & rob[head[0]].v) ||
+	(MWIDTH > 1 && (rob[head[1]].op.decbus.br & rob[head[1]].v)) ||
+	(MWIDTH > 2 && (rob[head[2]].op.decbus.br & rob[head[2]].v)) ||
+	(MWIDTH > 3 && (rob[head[3]].op.decbus.br & rob[head[3]].v))) && do_commit
 	;
 
 always_comb
 begin
 	int_commit = 1'b0;
-	if (|rob[head0].v && &rob[head0].done && rob[head0].op.hwi_level > sr.ipl)//fnIsIrq(rob[head0].op.ins))
+	if (|rob[head[0]].v && &rob[head[0]].done && rob[head[0]].op.hwi_level > sr.ipl)//fnIsIrq(rob[head[0]].op.ins))
 		int_commit = 1'b1;
-	else if (((|rob[head0].v && &rob[head0].done) || ! (|rob[head0].v)) &&
-					(|rob[head1].v && &rob[head1].done && rob[head1].op.hwi_level > sr.ipl /*fnIsIrq(rob[head1].op.ins*/))
+	else if (((|rob[head[0]].v && &rob[head[0]].done) || ! (|rob[head[0]].v)) &&
+					(|rob[head[1]].v && &rob[head[1]].done && rob[head[1]].op.hwi_level > sr.ipl /*fnIsIrq(rob[head[1]].op.ins*/))
 		int_commit = MWIDTH > 1;
-	else if (((|rob[head0].v && &rob[head0].done) || ! (|rob[head0].v)) &&
-					 ((|rob[head1].v && &rob[head1].done) || ! (|rob[head1].v)) &&
-					(|rob[head2].v && &rob[head2].done && rob[head2].op.hwi_level > sr.ipl /*fnIsIrq(rob[head2].op.ins*/))
+	else if (((|rob[head[0]].v && &rob[head[0]].done) || ! (|rob[head[0]].v)) &&
+					 ((|rob[head[1]].v && &rob[head[1]].done) || ! (|rob[head[1]].v)) &&
+					(|rob[head[2]].v && &rob[head[2]].done && rob[head[2]].op.hwi_level > sr.ipl /*fnIsIrq(rob[head[2]].op.ins*/))
 		int_commit = MWIDTH > 2;
-	else if (((|rob[head0].v && &rob[head0].done) || ! (|rob[head0].v)) &&
-					 ((|rob[head1].v && &rob[head1].done) || ! (|rob[head1].v)) &&
-					 ((|rob[head2].v && &rob[head2].done) || ! (|rob[head2].v)) &&
-					(|rob[head3].v && &rob[head3].done && rob[head3].op.hwi_level > sr.ipl /*fnIsIrq(rob[head3].op.ins*/))
+	else if (((|rob[head[0]].v && &rob[head[0]].done) || ! (|rob[head[0]].v)) &&
+					 ((|rob[head[1]].v && &rob[head[1]].done) || ! (|rob[head[1]].v)) &&
+					 ((|rob[head[2]].v && &rob[head[2]].done) || ! (|rob[head[2]].v)) &&
+					(|rob[head[3]].v && &rob[head[3]].done && rob[head[3]].op.hwi_level > sr.ipl /*fnIsIrq(rob[head[3]].op.ins*/))
 		int_commit = MWIDTH > 3;
 end
 
@@ -5042,7 +4976,7 @@ edge_det edvs1 (
 	.rst(irst),
 	.clk(clk),
 	.ce(advance_pipeline_seg2),
-	.i(|rob[head0].v && (rob[head0].op.decbus.rex || rob[head0].excv)),
+	.i(|rob[head[0]].v && (rob[head[0]].op.decbus.rex || rob[head[0]].excv)),
 	.pe(pe_vec_stall),
 	.ne(),
 	.ee()
@@ -6016,30 +5950,12 @@ else begin
 	  		*/
 	  		// Make the store data value available one cycle earlier than can be 
 	  		// read from the register file.
-	  		begin
-		  		if (lsq[n3][n12].datav==INV && lsq[n3][n12].pRc==wrport0_Rt && wrport0_v==VAL) begin
-		  			$display("Qupls4: LSQ bypass from wrport0=%h r%d", wrport0_res, wrport0_Rt);
+	  		for (n45 = 0; n45 < MWIDTH; n45 = n45 + 1) begin
+		  		if (lsq[n3][n12].datav==INV && lsq[n3][n12].pRc==wrport0_Rt[n45] && wrport0_v[n45]==VAL) begin
+		  			$display("Qupls4: LSQ bypass from wrport0=%h r%d", wrport0_res[n45], wrport0_Rt[n45]);
 		  			lsq[n3][n12].datav <= VAL;
-		  			lsq[n3][n12].res <= {wrport0_tag,wrport0_res};
-		  			lsq[n3][n12].flags <= wrport0_tag;
-		  		end
-		  		if (lsq[n3][n12].datav==INV && lsq[n3][n12].pRc==wrport1_Rt && wrport1_v==VAL) begin
-		  			$display("Qupls4: LSQ bypass from wrport1=%h r%d", wrport1_res, wrport1_Rt);
-		  			lsq[n3][n12].datav <= VAL;
-		  			lsq[n3][n12].res <= {wrport1_tag,wrport1_res};
-		  			lsq[n3][n12].flags <= wrport1_tag;
-		  		end
-		  		if (lsq[n3][n12].datav==INV && lsq[n3][n12].pRc==wrport2_Rt && wrport2_v==VAL) begin
-		  			$display("Qupls4: LSQ bypass from wrport2=%h r%d", wrport2_res, wrport2_Rt);
-		  			lsq[n3][n12].datav <= VAL;
-		  			lsq[n3][n12].res <= {wrport2_tag,wrport2_res};
-		  			lsq[n3][n12].flags <= wrport2_tag;
-		  		end
-		  		if (lsq[n3][n12].datav==INV && lsq[n3][n12].pRc==wrport3_Rt && wrport3_v==VAL) begin
-		  			$display("Qupls4: LSQ bypass from wrport3=%h r%d", wrport3_res, wrport3_Rt);
-		  			lsq[n3][n12].datav <= VAL;
-		  			lsq[n3][n12].res <= {wrport3_tag,wrport3_res};
-		  			lsq[n3][n12].flags <= wrport3_tag;
+		  			lsq[n3][n12].res <= {wrport0_tag[n45],wrport0_res[n45]};
+		  			lsq[n3][n12].flags <= wrport0_tag[n45];
 		  		end
 	  		end
 	  	end
@@ -6150,129 +6066,129 @@ else begin
 // Clear the sync dependencies for any instructions dependent on a sync.
 
 	if (!htcolls) begin
-		commit0_id <= head0;
-		commit1_id <= head1;
-		commit2_id <= head2;
-		commit3_id <= head3;
+		commit0_id <= head[0];
+		commit1_id <= head[1];
+		commit2_id <= head[2];
+		commit3_id <= head[3];
 		commit0_idv <= cmttlb0;
 		commit1_idv <= cmttlb1;
 		commit2_idv <= cmttlb2;
 		commit3_idv <= cmttlb3;
 	end
 	if (do_commit) begin
-		commit_pc0 <= rob[head0].op.pc;
-		commit_pc1 <= rob[head1].op.pc;
-		commit_pc2 <= rob[head2].op.pc;
-		commit_pc3 <= rob[head3].op.pc;
-		commit_brtgt0 <= rob[head0].brtgt;
-		commit_brtgt1 <= rob[head1].brtgt;
-		commit_brtgt2 <= rob[head2].brtgt;
-		commit_brtgt3 <= rob[head3].brtgt;
-		commit_takb0 <= rob[head0].takb & rob[head0].op.decbus.br;
-		commit_takb1 <= rob[head1].takb & rob[head1].op.decbus.br;
-		commit_takb2 <= rob[head2].takb & rob[head2].op.decbus.br;
-		commit_takb3 <= rob[head3].takb & rob[head3].op.decbus.br;
-		commit_br0 <= rob[head0].op.decbus.br;
-		commit_br1 <= rob[head1].op.decbus.br && cmtcnt > 3'd1;
-		commit_br2 <= rob[head2].op.decbus.br && cmtcnt > 3'd2;
-		commit_br3 <= rob[head3].op.decbus.br && cmtcnt > 3'd3;
+		commit_pc0 <= rob[head[0]].op.pc;
+		commit_pc1 <= rob[head[1]].op.pc;
+		commit_pc2 <= rob[head[2]].op.pc;
+		commit_pc3 <= rob[head[3]].op.pc;
+		commit_brtgt0 <= rob[head[0]].brtgt;
+		commit_brtgt1 <= rob[head[1]].brtgt;
+		commit_brtgt2 <= rob[head[2]].brtgt;
+		commit_brtgt3 <= rob[head[3]].brtgt;
+		commit_takb0 <= rob[head[0]].takb & rob[head[0]].op.decbus.br;
+		commit_takb1 <= rob[head[1]].takb & rob[head[1]].op.decbus.br;
+		commit_takb2 <= rob[head[2]].takb & rob[head[2]].op.decbus.br;
+		commit_takb3 <= rob[head[3]].takb & rob[head[3]].op.decbus.br;
+		commit_br0 <= rob[head[0]].op.decbus.br;
+		commit_br1 <= rob[head[1]].op.decbus.br && cmtcnt > 3'd1;
+		commit_br2 <= rob[head[2]].op.decbus.br && cmtcnt > 3'd2;
+		commit_br3 <= rob[head[3]].op.decbus.br && cmtcnt > 3'd3;
 		group_len <= group_len - 1;
-		tCommits(head0);
-		if (rob[head0].flush) begin
+		tCommits(head[0]);
+		if (rob[head[0]].flush) begin
 			cp_stall <= 1'b1;
 			flush_pipeline <= 1'b0;
 		end
 		if (cmtcnt > 3'd1) begin
-			tCommits(head1);
+			tCommits(head[1]);
 			group_len <= group_len - 2;
 		end
 		if (cmtcnt > 3'd2) begin
-			tCommits(head2);
+			tCommits(head[2]);
 			group_len <= group_len - 3;
 		end
 		if (cmtcnt > 3'd3) begin
-			tCommits(head3);
+			tCommits(head[3]);
 			group_len <= group_len - 4;
 		end
 		if (cmtcnt > 3'd4) begin
-			tCommits(head4);
+			tCommits(head[4]);
 			group_len <= group_len - 5;
 		end
 		if (cmtcnt > 3'd5) begin
-			tCommits(head5);
+			tCommits(head[5]);
 			group_len <= group_len - 6;
 		end
-		head0 <= (head0 + cmtcnt) % Qupls4_pkg::ROB_ENTRIES;	
-//		head0 <= (head0 + 3'd4) % ROB_ENTRIES;	
+		head[0] <= (head[0] + cmtcnt) % Qupls4_pkg::ROB_ENTRIES;	
+//		head[0] <= (head[0] + 3'd4) % ROB_ENTRIES;	
 		if (group_len <= 0)
-			group_len <= rob[head0].group_len;
+			group_len <= rob[head[0]].group_len;
 		// Commit oddball instructions
-		if ((rob[head0].op.decbus.oddball && !rob[head0].excv) || rob[head0].op.hwi)
-			tOddballCommit(rob[head0].v, head0);
-		else if ((rob[head1].op.decbus.oddball && !rob[head1].excv && cmtcnt > 3'd1) || rob[head1].op.hwi)
-			tOddballCommit(rob[head1].v, head1);
-		else if ((rob[head2].op.decbus.oddball && !rob[head2].excv && cmtcnt > 3'd2) || rob[head2].op.hwi)
-			tOddballCommit(rob[head2].v, head2);
-		else if ((rob[head3].op.decbus.oddball && !rob[head3].excv && cmtcnt > 3'd3) || rob[head3].op.hwi)
-			tOddballCommit(rob[head3].v, head3);
+		if ((rob[head[0]].op.decbus.oddball && !rob[head[0]].excv) || rob[head[0]].op.hwi)
+			tOddballCommit(rob[head[0]].v, head[0]);
+		else if ((rob[head[1]].op.decbus.oddball && !rob[head[1]].excv && cmtcnt > 3'd1) || rob[head[1]].op.hwi)
+			tOddballCommit(rob[head[1]].v, head[1]);
+		else if ((rob[head[2]].op.decbus.oddball && !rob[head[2]].excv && cmtcnt > 3'd2) || rob[head[2]].op.hwi)
+			tOddballCommit(rob[head[2]].v, head[2]);
+		else if ((rob[head[3]].op.decbus.oddball && !rob[head[3]].excv && cmtcnt > 3'd3) || rob[head[3]].op.hwi)
+			tOddballCommit(rob[head[3]].v, head[3]);
 		// Trigger exception processing for last instruction in group.
-		if (rob[head0].excv && rob[head0].v)
-//			err_mask[head0] <= 1'b1;
-//			if (rob[head0].last)
-			tProcessExc(head0,rob[head0].op.pc,rob[head0].op.uop.any.num);
-		else if (rob[head1].excv && cmtcnt > 3'd1 && rob[head1].v)
-			tProcessExc(head1,rob[head1].op.pc,rob[head1].op.uop.any.num);
-		else if (rob[head2].excv && cmtcnt > 3'd2 && rob[head2].v)
-			tProcessExc(head2,rob[head2].op.pc,rob[head2].op.uop.any.num);
-		else if (rob[head3].excv && cmtcnt > 3'd3 && rob[head3].v)
-			tProcessExc(head3,rob[head3].op.pc,rob[head3].op.uop.any.num);
+		if (rob[head[0]].excv && rob[head[0]].v)
+//			err_mask[head[0]] <= 1'b1;
+//			if (rob[head[0]].last)
+			tProcessExc(head[0],rob[head[0]].op.pc,rob[head[0]].op.uop.any.num);
+		else if (rob[head[1]].excv && cmtcnt > 3'd1 && rob[head[1]].v)
+			tProcessExc(head[1],rob[head[1]].op.pc,rob[head[1]].op.uop.any.num);
+		else if (rob[head[2]].excv && cmtcnt > 3'd2 && rob[head[2]].v)
+			tProcessExc(head[2],rob[head[2]].op.pc,rob[head[2]].op.uop.any.num);
+		else if (rob[head[3]].excv && cmtcnt > 3'd3 && rob[head[3]].v)
+			tProcessExc(head[3],rob[head[3]].op.pc,rob[head[3]].op.uop.any.num);
 			
-		if (rob[head0].op.ssm)
-			tProcessExc(head0,Qupls4_pkg::SSM_DEBUG ? rob[head0].op.pc : rob[head0].op.hwipc,rob[head0].op.uop.any.num);
+		if (rob[head[0]].op.ssm)
+			tProcessExc(head[0],Qupls4_pkg::SSM_DEBUG ? rob[head[0]].op.pc : rob[head[0]].op.hwipc,rob[head[0]].op.uop.any.num);
 
 		/*
 		if (FALSE) begin
-			if (rob[head0].op.decbus.sync)
-				tZeroSyncDep(rob[head0].sync_no);
-			if (rob[head1].op.decbus.sync)
-				tZeroSyncDep(rob[head1].sync_no);
-			if (rob[head2].op.decbus.sync)
-				tZeroSyncDep(rob[head2].sync_no);
-			if (rob[head3].op.decbus.sync)
-				tZeroSyncDep(rob[head3].sync_no);
-			if (rob[head0].op.decbus.fc)
-				tZeroFcDep(rob[head0].fc_no);
-			if (rob[head1].op.decbus.fc)
-				tZeroFcDep(rob[head1].fc_no);
-			if (rob[head2].op.decbus.fc)
-				tZeroFcDep(rob[head2].fc_no);
-			if (rob[head3].op.decbus.fc)
-				tZeroFcDep(rob[head3].fc_no);
+			if (rob[head[0]].op.decbus.sync)
+				tZeroSyncDep(rob[head[0]].sync_no);
+			if (rob[head[1]].op.decbus.sync)
+				tZeroSyncDep(rob[head[1]].sync_no);
+			if (rob[head[2]].op.decbus.sync)
+				tZeroSyncDep(rob[head[2]].sync_no);
+			if (rob[head[3]].op.decbus.sync)
+				tZeroSyncDep(rob[head[3]].sync_no);
+			if (rob[head[0]].op.decbus.fc)
+				tZeroFcDep(rob[head[0]].fc_no);
+			if (rob[head[1]].op.decbus.fc)
+				tZeroFcDep(rob[head[1]].fc_no);
+			if (rob[head[2]].op.decbus.fc)
+				tZeroFcDep(rob[head[2]].fc_no);
+			if (rob[head[3]].op.decbus.fc)
+				tZeroFcDep(rob[head[3]].fc_no);
 		end
 		*/
-		if (rob[head0].op.decbus.pred) begin
-			pred_tf[rob[head0].op.decbus.pred_no] <= 2'b00;
-			pred_alloc_map[rob[head0].op.decbus.pred_no] <= 1'b0;
+		if (rob[head[0]].op.decbus.pred) begin
+			pred_tf[rob[head[0]].op.decbus.pred_no] <= 2'b00;
+			pred_alloc_map[rob[head[0]].op.decbus.pred_no] <= 1'b0;
 		end
-		if (rob[head1].op.decbus.pred && cmtcnt > 3'd1) begin
-			pred_tf[rob[head1].op.decbus.pred_no] <= 2'b00;
-			pred_alloc_map[rob[head1].op.decbus.pred_no] <= 1'b0;
+		if (rob[head[1]].op.decbus.pred && cmtcnt > 3'd1) begin
+			pred_tf[rob[head[1]].op.decbus.pred_no] <= 2'b00;
+			pred_alloc_map[rob[head[1]].op.decbus.pred_no] <= 1'b0;
 		end
-		if (rob[head2].op.decbus.pred && cmtcnt > 3'd2) begin
-			pred_tf[rob[head2].op.decbus.pred_no] <= 2'b00;
-			pred_alloc_map[rob[head2].op.decbus.pred_no] <= 1'b0;
+		if (rob[head[2]].op.decbus.pred && cmtcnt > 3'd2) begin
+			pred_tf[rob[head[2]].op.decbus.pred_no] <= 2'b00;
+			pred_alloc_map[rob[head[2]].op.decbus.pred_no] <= 1'b0;
 		end
-		if (rob[head3].op.decbus.pred && cmtcnt > 3'd3) begin
-			pred_tf[rob[head3].op.decbus.pred_no] <= 2'b00;
-			pred_alloc_map[rob[head3].op.decbus.pred_no] <= 1'b0;
+		if (rob[head[3]].op.decbus.pred && cmtcnt > 3'd3) begin
+			pred_tf[rob[head[3]].op.decbus.pred_no] <= 2'b00;
+			pred_alloc_map[rob[head[3]].op.decbus.pred_no] <= 1'b0;
 		end
-		if (rob[head4].op.decbus.pred && cmtcnt > 3'd4) begin
-			pred_tf[rob[head4].op.decbus.pred_no] <= 2'b00;
-			pred_alloc_map[rob[head4].op.decbus.pred_no] <= 1'b0;
+		if (rob[head[4]].op.decbus.pred && cmtcnt > 3'd4) begin
+			pred_tf[rob[head[4]].op.decbus.pred_no] <= 2'b00;
+			pred_alloc_map[rob[head[4]].op.decbus.pred_no] <= 1'b0;
 		end
-		if (rob[head5].op.decbus.pred && cmtcnt > 3'd5) begin
-			pred_tf[rob[head5].op.decbus.pred_no] <= 2'b00;
-			pred_alloc_map[rob[head5].op.decbus.pred_no] <= 1'b0;
+		if (rob[head[5]].op.decbus.pred && cmtcnt > 3'd5) begin
+			pred_tf[rob[head[5]].op.decbus.pred_no] <= 2'b00;
+			pred_alloc_map[rob[head[5]].op.decbus.pred_no] <= 1'b0;
 		end
 	end
 	// ToDo: fix LSQ head update.
@@ -6280,10 +6196,10 @@ else begin
 		lsq_head.row <= lsq_head.row + 1;
 
 	if (Qupls4_pkg::SUPPORT_QUAD_PRECISION) begin
-		tCheckQFExtDone(head0);	
-		tCheckQFExtDone(head1);	
-		tCheckQFExtDone(head2);	
-		tCheckQFExtDone(head3);	
+		tCheckQFExtDone(head[0]);	
+		tCheckQFExtDone(head[1]);	
+		tCheckQFExtDone(head[2]);	
+		tCheckQFExtDone(head[3]);	
 	end
 	
 	// There is a bypassing issue in the RAT, where a register is being marked
@@ -6295,32 +6211,32 @@ else begin
 	// are marked valid here. It prevents the machine from locking up.
 	begin
 		for (nn = 0; nn < Qupls4_pkg::ROB_ENTRIES; nn = nn + 1) begin
-			if (rob[head0].v) begin
-				if (!rob[head0].argA_v && !fnFindSource(head0, rob[head0].op.decbus.Rs1)) begin
-					rob[head0].argA_v <= VAL;
-					tAllArgsValid(head0, VAL, INV, INV, INV, INV);
-					$display("Qupls4: rob[%d]: argument A not possible to validate.", head0);
+			if (rob[head[0]].v) begin
+				if (!rob[head[0]].argA_v && !fnFindSource(head[0], rob[head[0]].op.decbus.Rs1)) begin
+					rob[head[0]].argA_v <= VAL;
+					tAllArgsValid(head[0], VAL, INV, INV, INV, INV);
+					$display("Qupls4: rob[%d]: argument A not possible to validate.", head[0]);
 				end		
-				if (!rob[head0].argB_v && !fnFindSource(head0, rob[head0].op.decbus.Rs2)) begin
-					$display("Qupls4: rob[%d]: argument B not possible to validate.", head0);
-					rob[head0].argB_v <= VAL;
-					tAllArgsValid(head0, INV, VAL, INV, INV, INV);
+				if (!rob[head[0]].argB_v && !fnFindSource(head[0], rob[head[0]].op.decbus.Rs2)) begin
+					$display("Qupls4: rob[%d]: argument B not possible to validate.", head[0]);
+					rob[head[0]].argB_v <= VAL;
+					tAllArgsValid(head[0], INV, VAL, INV, INV, INV);
 				end		
-				if (!rob[head0].argC_v && !fnFindSource(head0, rob[head0].op.decbus.Rs3)) begin
-					$display("Qupls4: rob[%d]: argument C not possible to validate.", head0);
-					rob[head0].argC_v <= VAL;
-					tAllArgsValid(head0, INV, INV, VAL, INV, INV);
+				if (!rob[head[0]].argC_v && !fnFindSource(head[0], rob[head[0]].op.decbus.Rs3)) begin
+					$display("Qupls4: rob[%d]: argument C not possible to validate.", head[0]);
+					rob[head[0]].argC_v <= VAL;
+					tAllArgsValid(head[0], INV, INV, VAL, INV, INV);
 				end		
-				if (!rob[head0].argD_v && !fnFindSource(head0, rob[head0].op.decbus.Rs4)) begin
-					$display("Qupls4: rob[%d]: argument D not possible to validate.", head0);
-					rob[head0].argD_v <= VAL;
-					tAllArgsValid(head0, INV, INV, INV, VAL, INV);
+				if (!rob[head[0]].argD_v && !fnFindSource(head[0], rob[head[0]].op.decbus.Rs4)) begin
+					$display("Qupls4: rob[%d]: argument D not possible to validate.", head[0]);
+					rob[head[0]].argD_v <= VAL;
+					tAllArgsValid(head[0], INV, INV, INV, VAL, INV);
 				end		
-				if (!rob[head0].argT_v) begin
-					if (!fnFindSource(head0, rob[head0].op.decbus.Rd)) begin
-						$display("Qupls4: rob[%d]: destination T not possible to validate.", head0);
-						rob[head0].argT_v <= VAL;
-						tAllArgsValid(head0, INV, INV, INV, INV, VAL);
+				if (!rob[head[0]].argT_v) begin
+					if (!fnFindSource(head[0], rob[head[0]].op.decbus.Rd)) begin
+						$display("Qupls4: rob[%d]: destination T not possible to validate.", head[0]);
+						rob[head[0]].argT_v <= VAL;
+						tAllArgsValid(head[0], INV, INV, INV, INV, VAL);
 					end
 				end
 			end
@@ -6424,16 +6340,16 @@ else begin
 	// the following code.
 	/*
 	for (nn = 0; nn < ROB_ENTRIES; nn = nn + 1) begin
-		if (rob[nn].argA_v && rob[nn].pRa==rob[head0].pRa && rob[nn].sn > rob[head0].sn)
-			rob[head0].argA_v <= VAL;
-		if (rob[nn].argB_v && rob[nn].pRa==rob[head0].pRa && rob[nn].sn > rob[head0].sn)
-			rob[head0].argB_v <= VAL;
-		if (rob[nn].argC_v && rob[nn].pRa==rob[head0].pRa && rob[nn].sn > rob[head0].sn)
-			rob[head0].argC_v <= VAL;
-		if (rob[nn].argD_v && rob[nn].pRa==rob[head0].pRa && rob[nn].sn > rob[head0].sn)
-			rob[head0].argD_v <= VAL;
-		if (rob[nn].argM_v && rob[nn].pRa==rob[head0].pRa && rob[nn].sn > rob[head0].sn)
-			rob[head0].argM_v <= VAL;
+		if (rob[nn].argA_v && rob[nn].pRa==rob[head[0]].pRa && rob[nn].sn > rob[head[0]].sn)
+			rob[head[0]].argA_v <= VAL;
+		if (rob[nn].argB_v && rob[nn].pRa==rob[head[0]].pRa && rob[nn].sn > rob[head[0]].sn)
+			rob[head[0]].argB_v <= VAL;
+		if (rob[nn].argC_v && rob[nn].pRa==rob[head[0]].pRa && rob[nn].sn > rob[head[0]].sn)
+			rob[head[0]].argC_v <= VAL;
+		if (rob[nn].argD_v && rob[nn].pRa==rob[head[0]].pRa && rob[nn].sn > rob[head[0]].sn)
+			rob[head[0]].argD_v <= VAL;
+		if (rob[nn].argM_v && rob[nn].pRa==rob[head[0]].pRa && rob[nn].sn > rob[head[0]].sn)
+			rob[head[0]].argM_v <= VAL;
 	end
 	*/
 	// Branchmiss stomping
@@ -6684,13 +6600,13 @@ if (irst)
 else begin
 	if (do_commit) begin
 		if (cmtcnt > 3)
-			IV <= IV + |rob[head0].v + |rob[head1].v + |rob[head2].v + |rob[head3].v;
+			IV <= IV + |rob[head[0]].v + |rob[head[1]].v + |rob[head[2]].v + |rob[head[3]].v;
 		else if (cmtcnt > 2)
-			IV <= IV + |rob[head0].v + |rob[head1].v + |rob[head2].v;
+			IV <= IV + |rob[head[0]].v + |rob[head[1]].v + |rob[head[2]].v;
 		else if (cmtcnt > 1)
-			IV <= IV + |rob[head0].v + |rob[head1].v;
+			IV <= IV + |rob[head[0]].v + |rob[head[1]].v;
 		else if (cmtcnt > 0)
-			IV <= IV + |rob[head0].v;
+			IV <= IV + |rob[head[0]].v;
 	end
 end
 
@@ -6702,25 +6618,25 @@ else begin
 		case (cmtcnt)
 		3'd4:
 			marked_insn_count = marked_insn_count +
-				(|rob[head0].v && rob[head0].op.decbus.nop) +
-				(|rob[head1].v && rob[head1].op.decbus.nop) +
-				(|rob[head2].v && rob[head2].op.decbus.nop) +
-				(|rob[head3].v && rob[head3].op.decbus.nop)
+				(|rob[head[0]].v && rob[head[0]].op.decbus.nop) +
+				(|rob[head[1]].v && rob[head[1]].op.decbus.nop) +
+				(|rob[head[2]].v && rob[head[2]].op.decbus.nop) +
+				(|rob[head[3]].v && rob[head[3]].op.decbus.nop)
 				;
 		3'd3:
 			marked_insn_count = marked_insn_count +
-				(|rob[head0].v && rob[head0].op.decbus.nop) +
-				(|rob[head1].v && rob[head1].op.decbus.nop) +
-				(|rob[head2].v && rob[head2].op.decbus.nop)
+				(|rob[head[0]].v && rob[head[0]].op.decbus.nop) +
+				(|rob[head[1]].v && rob[head[1]].op.decbus.nop) +
+				(|rob[head[2]].v && rob[head[2]].op.decbus.nop)
 				;
 		3'd2:
 			marked_insn_count = marked_insn_count +
-				(|rob[head0].v && rob[head0].op.decbus.nop) +
-				(|rob[head1].v && rob[head1].op.decbus.nop)
+				(|rob[head[0]].v && rob[head[0]].op.decbus.nop) +
+				(|rob[head[1]].v && rob[head[1]].op.decbus.nop)
 				;
 		3'd1:
 			marked_insn_count = marked_insn_count +
-				(|rob[head0].v && rob[head0].op.decbus.nop)
+				(|rob[head[0]].v && rob[head[0]].op.decbus.nop)
 				;
 		default:	;				
 		endcase
@@ -6744,25 +6660,25 @@ else begin
 	if (do_commit) begin
 		if (cmtcnt > 3)
 			cpytgts <= cpytgts 
-				+ rob[head0].op.decbus.cpytgt 
-				+ rob[head1].op.decbus.cpytgt
-				+ rob[head2].op.decbus.cpytgt
-				+ rob[head3].op.decbus.cpytgt
+				+ rob[head[0]].op.decbus.cpytgt 
+				+ rob[head[1]].op.decbus.cpytgt
+				+ rob[head[2]].op.decbus.cpytgt
+				+ rob[head[3]].op.decbus.cpytgt
 			;
 		else if (cmtcnt > 2)
 			cpytgts <= cpytgts 
-				+ rob[head0].op.decbus.cpytgt 
-				+ rob[head1].op.decbus.cpytgt
-				+ rob[head2].op.decbus.cpytgt
+				+ rob[head[0]].op.decbus.cpytgt 
+				+ rob[head[1]].op.decbus.cpytgt
+				+ rob[head[2]].op.decbus.cpytgt
 			;
 		else if (cmtcnt > 1)
 			cpytgts <= cpytgts 
-				+ rob[head0].op.decbus.cpytgt 
-				+ rob[head1].op.decbus.cpytgt
+				+ rob[head[0]].op.decbus.cpytgt 
+				+ rob[head[1]].op.decbus.cpytgt
 			;
 		else if (cmtcnt > 0)
 			cpytgts <= cpytgts 
-				+ rob[head0].op.decbus.cpytgt 
+				+ rob[head[0]].op.decbus.cpytgt 
 			;
 	end
 end
@@ -6935,7 +6851,7 @@ always_ff @(posedge clk) begin: clock_n_debug
 	$display("----- Queue %c ----- %h", ihit_que ? "h":" ", qd);
 	for (i = 0; i < Qupls4_pkg::ROB_ENTRIES; i = i + 1) begin
     $display("%c%c%c sn:%h %d: %c%c%c%c%c%c %c %c%c %d %c %c%d Rt%d/%d=%h %h Rs%d/%d %h%c Ra%d/%d=%h %c Rb%d/%d=%h %c Rc%d/%d=%h %c I=%h %h.%h cp:%h ins=%h #",
-			(i[4:0]==head0)?67:46, (i[4:0]==tails[0])?81:46, rob[i].rstp ? "r" : " ", rob[i].sn, i[5:0],
+			(i[4:0]==head[0])?67:46, (i[4:0]==tails[0])?81:46, rob[i].rstp ? "r" : " ", rob[i].sn, i[5:0],
 			rob[i].v?"v":"-", rob[i].done[0]?"d":"-", rob[i].done[1]?"d":"-", rob[i].out[0]?"o":"-", rob[i].out[1]?"o":"-", rob[i].bt?"t":"-", rob_memissue[i]?"i":"-", rob[i].lsq?"q":"-", (robentry_issue[i]|robentry_agen_issue[i])?"i":"-",
 			robentry_islot[i], robentry_stomp[i]?"s":"-",
 			(rob[i].op.decbus.cpytgt ? "c" : rob[i].op.decbus.fc ? "b" : rob[i].op.decbus.mem ? "m" : "a"),
@@ -7600,7 +7516,7 @@ begin
 	last[2] <= 1'b1;
 	last[3] <= 1'b1;
 	tails[0] <= 5'd0;
-	head0 <= 5'd0;
+	head[0] <= 5'd0;
 	rstcnt <= 4'd0;
 	lsq_head <= 3'd0;
 	lsq_tail <= 3'd0;

@@ -55,7 +55,7 @@ module Qupls4_rat(rst, clk,
 
 	// Which instructions being queued are branches
 	nq, 
-	qbr0, qbr1, qbr2, qbr3,
+	qbr,
 	
 	// From reservation read requests: 
 	rn,				// architectural register number
@@ -68,25 +68,25 @@ module Qupls4_rat(rst, clk,
 	prv, 			// map valid indicator
 
 	// From decode: destination register writes, one per instruction, four instructions.
-	wr0, wr1, wr2, wr3, 								// which port is aactive 
-	wra, wrb, wrc, wrd,							// architectural register number
-	wrra, wrrb, wrrc, wrrd,					// physical register number
-	wra_cp, wrb_cp, wrc_cp, wrd_cp,			// checkpoint in use
+	wr, 							// which port is aactive 
+	wra,							// architectural register number
+	wrra,							// physical register number
+	wra_cp,			// checkpoint in use
 
 	// Register file write signals.
-	wrport0_v, wrport1_v, wrport2_v, wrport3_v,		// which port is being written
-	wrport0_aRt, wrport1_aRt, wrport2_aRt, wrport3_aRt,	// the architectural register used
-	wrport0_Rt, wrport1_Rt, wrport2_Rt, wrport3_Rt,	// The physical register used
-	wrport0_cp, wrport1_cp, wrport2_cp, wrport3_cp,	// The checkpoint
-	wrport0_res, wrport1_res, wrport2_res, wrport3_res,	// and the value written
+	wrport0_v,		// which port is being written
+	wrport0_aRt,	// the architectural register used
+	wrport0_Rt,		// The physical register used
+	wrport0_cp,		// The checkpoint
+	wrport0_res,	// and the value written
 	
 	// Commit stage signals
-	cmtav, cmtbv, cmtcv, cmtdv,					// which commits are valid
-	cmtaiv, cmtbiv, cmtciv, cmtdiv,			// committing invalid instruction
-	cmta_cp, cmtb_cp, cmtc_cp, cmtd_cp,	// commit checkpoint
-	cmtaa, cmtba, cmtca, cmtda,					// architectural register committed
-	cmtap, cmtbp, cmtcp, cmtdp, 				// physical register committed.
-	cmtaval, cmtbval, cmtcval, cmtdval,	// value committed
+	cmtav,			// which commits are valid
+	cmtaiv,			// committing invalid instruction
+	cmta_cp,		// commit checkpoint
+	cmtaa,			// architectural register committed
+	cmtap, 			// physical register committed.
+	cmtaval,		// value committed
 	cmtbr,															// committing a branch
 
 	restore,			// signal to restore a checkpoint
@@ -109,89 +109,26 @@ input checkpt_ndx_t miss_cp;
 output reg stall;
 input rob_ndx_t tail;
 input Qupls4_pkg::rob_entry_t [Qupls4_pkg::ROB_ENTRIES-1:0] rob;
-input qbr0;		// enqueue branch, slot 0
-input qbr1;
-input qbr2;
-input qbr3;
+input [MWIDTH-1:0] qbr;		// enqueue branch, slot 0
 input [Qupls4_pkg::PREGS-1:0] avail_i;				// list of available registers from renamer
 input restore;										// checkpoint restore
 
-input wr0;
-input wr1;
-input wr2;
-input wr3;
-/*
-input wr01;
-input wr11;
-input wr21;
-input wr31;
-*/
-input checkpt_ndx_t wra_cp;
-input checkpt_ndx_t wrb_cp;
-input checkpt_ndx_t wrc_cp;
-input checkpt_ndx_t wrd_cp;
-input cpu_types_pkg::aregno_t wra;	// architectural register
-input cpu_types_pkg::aregno_t wrb;
-input cpu_types_pkg::aregno_t wrc;
-input cpu_types_pkg::aregno_t wrd;
-input cpu_types_pkg::pregno_t wrra;	// physical register
-input cpu_types_pkg::pregno_t wrrb;
-input cpu_types_pkg::pregno_t wrrc;
-input cpu_types_pkg::pregno_t wrrd;
-/*
-input cpu_types_pkg::aregno_t wra1;	// architectural register
-input cpu_types_pkg::aregno_t wrb1;
-input cpu_types_pkg::aregno_t wrc1;
-input cpu_types_pkg::aregno_t wrd1;
-input cpu_types_pkg::pregno_t wrra1;	// physical register
-input cpu_types_pkg::pregno_t wrrb1;
-input cpu_types_pkg::pregno_t wrrc1;
-input cpu_types_pkg::pregno_t wrrd1;
-*/
-input wrport0_v;
-input wrport1_v;
-input wrport2_v;
-input wrport3_v;
-input aregno_t wrport0_aRt;
-input aregno_t wrport1_aRt;
-input aregno_t wrport2_aRt;
-input aregno_t wrport3_aRt;
-input pregno_t wrport0_Rt;
-input pregno_t wrport1_Rt;
-input pregno_t wrport2_Rt;
-input pregno_t wrport3_Rt;
-input checkpt_ndx_t wrport0_cp;
-input checkpt_ndx_t wrport1_cp;
-input checkpt_ndx_t wrport2_cp;
-input checkpt_ndx_t wrport3_cp;
-input value_t wrport0_res;
-input value_t wrport1_res;
-input value_t wrport2_res;
-input value_t wrport3_res;
-input cmtav;							// commit valid
-input cmtbv;
-input cmtcv;
-input cmtdv;
-input cmtaiv;							// commit invalid instruction
-input cmtbiv;
-input cmtciv;
-input cmtdiv;
-input checkpt_ndx_t cmta_cp;
-input checkpt_ndx_t cmtb_cp;
-input checkpt_ndx_t cmtc_cp;
-input checkpt_ndx_t cmtd_cp;
-input cpu_types_pkg::aregno_t cmtaa;				// architectural register being committed
-input cpu_types_pkg::aregno_t cmtba;
-input cpu_types_pkg::aregno_t cmtca;
-input cpu_types_pkg::aregno_t cmtda;
-input cpu_types_pkg::pregno_t cmtap;				// physical register to commit
-input cpu_types_pkg::pregno_t cmtbp;
-input cpu_types_pkg::pregno_t cmtcp;
-input cpu_types_pkg::pregno_t cmtdp;
-input value_t cmtaval;
-input value_t cmtbval;
-input value_t cmtcval;
-input value_t cmtdval;
+input [MWIDTH-1:0] wr;
+
+input checkpt_ndx_t [MWIDTH-1:0] wra_cp;
+input cpu_types_pkg::aregno_t [MWIDTH-1:0] wra;		// architectural register
+input cpu_types_pkg::pregno_t [MWIDTH-1:0] wrra;	// physical register
+input [MWIDTH-1:0] wrport0_v;
+input aregno_t [MWIDTH-1:0] wrport0_aRt;
+input pregno_t [MWIDTH-1:0] wrport0_Rt;
+input checkpt_ndx_t [MWIDTH-1:0] wrport0_cp;
+input value_t [MWIDTH-1:0] wrport0_res;
+input [MWIDTH-1:0] cmtav;							// commit valid
+input [MWIDTH-1:0] cmtaiv;							// commit invalid instruction
+input checkpt_ndx_t [MWIDTH-1:0] cmta_cp;
+input cpu_types_pkg::aregno_t [MWIDTH-1:0] cmtaa;				// architectural register being committed
+input cpu_types_pkg::pregno_t [MWIDTH-1:0] cmtap;				// physical register to commit
+input value_t [MWIDTH-1:0] cmtaval;
 input cmtbr;								// comitting a branch
 input cpu_types_pkg::aregno_t [NPORT-1:0] rn;		// architectural register
 input cpu_types_pkg::pregno_t st_prn;
@@ -302,41 +239,17 @@ reg pbackout, pbackout2;
 cpu_types_pkg::pregno_t [NPORT-1:0] next_prn;	// physical register name
 cpu_types_pkg::pregno_t [NPORT-1:0] prnd;			// delayed physical register name
 cpu_types_pkg::aregno_t [NPORT-1:0] prev_rn;
-reg pwr00,p2wr0;
-reg pwr10,p2wr1;
-reg pwr20,p2wr2;
-reg pwr30,p2wr3;
-reg pwr01,p2wr01;
-reg pwr11,p2wr11;
-reg pwr21,p2wr21;
-reg pwr31,p2wr31;
-aregno_t pwra0,p2wra;
-aregno_t pwrb0,p2wrb;
-aregno_t pwrc0,p2wrc;
-aregno_t pwrd0,p2wrd;
-aregno_t pwra1,p2wra1;
-aregno_t pwrb1,p2wrb1;
-aregno_t pwrc1,p2wrc1;
-aregno_t pwrd1,p2wrd1;
-pregno_t pwrra0,p2wrra;
-pregno_t pwrrb0,p2wrrb;
-pregno_t pwrrc0,p2wrrc;
-pregno_t pwrrd0,p2wrrd;
-pregno_t pwrra1,p2wrra1;
-pregno_t pwrrb1,p2wrrb1;
-pregno_t pwrrc1,p2wrrc1;
-pregno_t pwrrd1,p2wrrd1;
-checkpt_ndx_t pwra_cp,p2wra_cp;
-checkpt_ndx_t pwrb_cp,p2wrb_cp;
-checkpt_ndx_t pwrc_cp,p2wrc_cp;
-checkpt_ndx_t pwrd_cp,p2wrd_cp;
+reg [MWIDTH-1:0] pwr00,p2wr0;
+reg [MWIDTH-1:0] pwr01,p2wr01;
+aregno_t [MWIDTH-1:0] pwra0,p2wra;
+aregno_t [MWIDTH-1:0] pwra1,p2wra1;
+pregno_t [MWIDTH-1:0] pwrra0,p2wrra;
+pregno_t [MWIDTH-1:0] pwrra1,p2wrra1;
+checkpt_ndx_t [MWIDTH-1:0] pwra_cp,p2wra_cp;
 
-integer n,m,n1,n2,n3,n4,n5,n6;
-reg [3:0] br;
-always_comb br[0] = qbr0;
-always_comb br[1] = qbr1;
-always_comb br[2] = qbr2;
-always_comb br[3] = qbr3;
+integer n,m,n1,n2,n3,n4,n5,n6,n7,n8,n9,n10,n11,n12,n13,kk,n14,n15,n16,n17;
+reg [MWIDTH-1:0] br;
+always_comb br = qbr;
 reg cpram_we;
 reg cpram_en;
 reg cpram_en1;
@@ -353,10 +266,7 @@ Qupls4_pkg::reg_map_t reg_map_out;
 Qupls4_pkg::reg_map_t reg_hist_out;
 reg [Qupls4_pkg::PREGS-1:0] avail [0:Qupls4_pkg::NCHECK-1];	// available registers at time of queue (for rollback)
 reg [Qupls4_pkg::PREGS-1:0] nextAvail,avail_out;
-Qupls4_pkg::checkpoint_t currentMap0;
-Qupls4_pkg::checkpoint_t currentMap1;
-Qupls4_pkg::checkpoint_t currentMap2;
-Qupls4_pkg::checkpoint_t currentMap3;
+Qupls4_pkg::checkpoint_t [MWIDTH-1:0] currentMap0;
 Qupls4_pkg::checkpoint_t cpram_out;
 Qupls4_pkg::checkpoint_t cpram_out1;
 Qupls4_pkg::checkpoint_t cpram_out2;
@@ -452,110 +362,48 @@ else begin
 	avail_out <= avail[miss_cp];
 end
 
-reg [9:0] cpv_wr;
-checkpt_ndx_t [9:0] cpv_wc;
-cpu_types_pkg::pregno_t [9:0] cpv_wa;
-cpu_types_pkg::aregno_t [9:0] cpv_awa;
-reg [9:0] cpv_i;
+reg [MWIDTH*2+2-1:0] cpv_wr;
+checkpt_ndx_t [MWIDTH*2+2-1:0] cpv_wc;
+cpu_types_pkg::pregno_t [MWIDTH*2+2-1:0] cpv_wa;
+cpu_types_pkg::aregno_t [MWIDTH*2+2-1:0] cpv_awa;
+reg [MWIDTH*2+2-1:0] cpv_i;
 wire [NPORT-1:0] cpv_o;
-wire cdwr0;
-wire cdwr1;
-wire cdwr2;
-wire cdwr3;
-wire cdcmtav;
-wire cdcmtbv;
-wire cdcmtcv;
-wire cdcmtdv;
-reg pcdwr0;
-reg pcdwr1;
-reg pcdwr2;
-reg pcdwr3;
-reg p2cdwr0;
-reg p2cdwr1;
-reg p2cdwr2;
-reg p2cdwr3;
+reg [MWIDTH-1:0] cdwr;
+wire [MWIDTH-1:0] cdcmtav;
+reg [MWIDTH-1:0] pcdwr0;
+reg [MWIDTH-1:0] p2cdwr0;
 
-always_comb cpv_wr[0] = cdcmtav;
-always_comb cpv_wr[1] = cdcmtbv;
-always_comb cpv_wr[2] = cdcmtcv;
-always_comb cpv_wr[3] = cdcmtdv;
-always_comb cpv_wr[4] = cdwr0;
-always_comb cpv_wr[5] = cdwr1;
-always_comb cpv_wr[6] = cdwr2;
-always_comb cpv_wr[7] = cdwr3;
-always_comb cpv_wr[8] = bo_wr;
-always_comb cpv_wr[9] = 1'b0;
-always_comb cpv_wc[0] = cmta_cp;
-always_comb cpv_wc[1] = cmtb_cp;
-always_comb cpv_wc[2] = cmtc_cp;
-always_comb cpv_wc[3] = cmtd_cp;
-always_comb cpv_wc[4] = wra_cp;
-always_comb cpv_wc[5] = wrb_cp;
-always_comb cpv_wc[6] = wrc_cp;
-always_comb cpv_wc[7] = wrd_cp;
-always_comb cpv_wc[8] = cndx;
-always_comb cpv_wc[9] = cndx;
-always_comb cpv_wa[0] = cmtap;
-always_comb cpv_wa[1] = cmtbp;
-always_comb cpv_wa[2] = cmtcp;
-always_comb cpv_wa[3] = cmtdp;
-always_comb cpv_wa[4] = wrra;
-always_comb cpv_wa[5] = wrrb;
-always_comb cpv_wa[6] = wrrc;
-always_comb cpv_wa[7] = wrrd;
-always_comb cpv_wa[8] = bo_preg;
-always_comb cpv_wa[9] = bo_preg;
-always_comb cpv_awa[0] = cmtaa;
-always_comb cpv_awa[1] = cmtba;
-always_comb cpv_awa[2] = cmtca;
-always_comb cpv_awa[3] = cmtda;
-always_comb cpv_awa[4] = wra;
-always_comb cpv_awa[5] = wrb;
-always_comb cpv_awa[6] = wrb;
-always_comb cpv_awa[7] = wrd;
-always_comb cpv_awa[8] = bo_areg;
-always_comb cpv_awa[9] = bo_areg;
-// Commit: write VAL for register
-// Assign Tgt: write INV for register
-always_comb cpv_i[0] = VAL;
-always_comb cpv_i[1] = VAL;
-always_comb cpv_i[2] = VAL;
-always_comb cpv_i[3] = VAL;
-always_comb cpv_i[4] = INV;//wra==8'd0;	// Usually works out to INV
-always_comb cpv_i[5] = INV;//wrb==8'd0;
-always_comb cpv_i[6] = INV;//wrc==8'd0;
-always_comb cpv_i[7] = INV;//wrd==8'd0;
-always_comb cpv_i[8] = VAL;
-always_comb cpv_i[9] = VAL;
-
-reg stall_same_reg;
 always_comb
-if (
-	(wrport0_Rt==wrra && wrport0_v && wr0 && en2) ||
-	(wrport0_Rt==wrrb && wrport0_v && wr1 && en2) ||
-	(wrport0_Rt==wrrc && wrport0_v && wr2 && en2) ||
-	(wrport0_Rt==wrrd && wrport0_v && wr3 && en2) ||
-	(wrport1_Rt==wrra && wrport1_v && wr0 && en2) ||
-	(wrport1_Rt==wrrb && wrport1_v && wr1 && en2) ||
-	(wrport1_Rt==wrrc && wrport1_v && wr2 && en2) ||
-	(wrport1_Rt==wrrd && wrport1_v && wr3 && en2) ||
-	// ToDo: fix the following checks
-	(cmtcp==wrra && cmtcv && wr0 && en2) ||
-	(cmtcp==wrrb && cmtcv && wr1 && en2) ||
-	(cmtcp==wrrc && cmtcv && wr2 && en2) ||
-	(cmtcp==wrrd && cmtcv && wr3 && en2) ||
-	(cmtdp==wrra && cmtdv && wr0 && en2) ||
-	(cmtdp==wrrb && cmtdv && wr1 && en2) ||
-	(cmtdp==wrrc && cmtdv && wr2 && en2) ||
-	(cmtdp==wrrd && cmtdv && wr3 && en2)
-	)
 begin
-//	$display("Qupls4CPU rat: register marked valid and invalid at same time");
-//	$finish;
-	stall_same_reg <= 1'b0;
+	kk = 0;
+	for (n13 = 0; n13 < MWIDTH; n13 = n13 + 1) begin
+		cpv_wr[kk] = cdcmtav[n13];
+		cpv_wc[kk] = cmta_cp[n13];
+		cpv_wa[kk] = cmtap[n13];
+		cpv_awa[kk] = cmtaa[n13];
+		cpv_i[kk] = VAL;							// Commit: write VAL for register
+		kk = kk + 1;
+		cpv_wr[kk] = cdwr[n13];
+		cpv_wc[kk] = wra_cp[n13];
+		cpv_wa[kk] = wrra[n13];
+		cpv_awa[kk] = wra[n13];				// Assign destination: write INV for register
+		cpv_i[kk] = INV;
+		kk = kk + 1;
+	end
+	cpv_wr[kk] = bo_wr;
+	cpv_wc[kk] = cndx;
+	cpv_wa[kk] = bo_preg;
+	cpv_awa[kk] = bo_areg;
+	cpv_i[kk] = VAL;
+	kk = kk + 1;
+	cpv_wr[kk] = 1'b0;
+	cpv_wc[kk] = cndx;
+	cpv_wa[kk] = bo_preg;
+	cpv_awa[kk] = bo_areg;
+	cpv_i[kk] = VAL;
 end
-else
-	stall_same_reg <= 1'b0;
+
+reg stall_same_reg = 1'b0;	// same register marked valid and invalid at same time.
 
 always_ff @(posedge clk)
 if (rst)
@@ -571,44 +419,19 @@ else begin
 			currentRegvalid[bo_nreg] = VAL;
 //			currentRegvalid[currentMap.regmap[bo_areg]] <= VAL;
 		end
-		if (wrport0_v)
-			currentRegvalid[wrport0_Rt] = VAL;
-		if (wrport1_v)
-			currentRegvalid[wrport1_Rt] = VAL;
-		if (wrport2_v)
-			currentRegvalid[wrport2_Rt] = VAL;
-		if (wrport3_v)
-			currentRegvalid[wrport3_Rt] = VAL;
+		for (n14 = 0; n14 < MWIDTH; n14 = n14 + 1)
+			if (wrport0_v[n14])
+				currentRegvalid[wrport0_Rt[n14]] = VAL;
 
 		if (en2 & ~stall_same_reg) begin
-			if (pwr00)
-				currentRegvalid[pwrra0] = INV;
-			if (pwr10)
-				currentRegvalid[pwrrb0] = INV;
-			if (pwr20)
-				currentRegvalid[pwrrc0] = INV;
-			if (pwr30)
-				currentRegvalid[pwrrd0] = INV;
-			/*
-			if (pwr01)
-				currentRegvalid[pwrra1] = INV;
-			if (pwr11)
-				currentRegvalid[pwrrb1] = INV;
-			if (pwr21)
-				currentRegvalid[pwrrc1] = INV;
-			if (pwr31)
-				currentRegvalid[pwrrd1] = INV;
-			*/
+			for (n14 = 0; n14 < MWIDTH; n14 = n14 + 1)
+				if (pwr00[n14])
+					currentRegvalid[pwrra0[n14]] = INV;
 		end
 		
-		if (cmtaiv)
-			currentRegvalid[cmtap] = VAL;
-		if (cmtbiv)
-			currentRegvalid[cmtbp] = VAL;
-		if (cmtciv)
-			currentRegvalid[cmtcp] = VAL;
-		if (cmtdiv)
-			currentRegvalid[cmtdp] = VAL;
+		for (n14 = 0; n14 < MWIDTH; n14 = n14 + 1)
+			if (cmtaiv[n14])
+				currentRegvalid[cmtap[n14]] = VAL;
 	end
 end
 
@@ -628,23 +451,13 @@ Qupls4_regvalid_ram urvram1
 genvar g;
 integer mndx,nn;
 
-wire qbr = qbr0|qbr1|qbr2|qbr3;
 // number of outstanding branches
 reg [5:0] nob;
-wire qbr_ok = nq && qbr && nob < 6'd15;
+wire qbr_ok = nq && |qbr && nob < 6'd15;
 wire bypass_en = !pbackout;
-reg [NPORT-1:0] bypass_pwrra00;
-reg [NPORT-1:0] bypass_pwrrb00;
-reg [NPORT-1:0] bypass_pwrrc00;
-reg [NPORT-1:0] bypass_pwrrd00;
-reg [NPORT-1:0] bypass_pwrra01;
-reg [NPORT-1:0] bypass_pwrrb01;
-reg [NPORT-1:0] bypass_pwrrc01;
-reg [NPORT-1:0] bypass_pwrrd01;
-reg [NPORT-1:0] bypass_p2wrra0;
-reg [NPORT-1:0] bypass_p2wrrb0;
-reg [NPORT-1:0] bypass_p2wrrc0;
-reg [NPORT-1:0] bypass_p2wrrd0;
+reg [NPORT-1:0] bypass_pwrra00 [0:MWIDTH-1];
+reg [NPORT-1:0] bypass_pwrra01 [0:MWIDTH-1];
+reg [NPORT-1:0] bypass_p2wrra0 [0:MWIDTH-1];
 wire [NPORT-1:0] cdrn;
 
 // Read register names from current checkpoint.
@@ -662,19 +475,19 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 				begin
 					// Do we need the checkpoint to match?
 					// Compute bypassing requirements.
-					bypass_pwrra00[g] = (rn[g]==pwra0) && pwr00 /*&& rn_cp[g]==pwra_cp*/;
+					bypass_pwrra00[0][g] = (rn[g]==pwra0[0]) && pwr00[0] /*&& rn_cp[g]==pwra_cp*/;
 //					bypass_pwrra01[g] = (rn[g]==pwra1) && pwr01 /*&& rn_cp[g]==pwra_cp*/;
-					bypass_pwrrb00[g] = (rn[g]==pwrb0) && pwr10 /*&& rn_cp[g]==pwrb_cp*/;
+					bypass_pwrra00[1][g] = (rn[g]==pwra0[1]) && pwr00[1] /*&& rn_cp[g]==pwrb_cp*/;
 //					bypass_pwrrb01[g] = (rn[g]==pwrb1) && pwr11 /*&& rn_cp[g]==pwrb_cp*/;
-					bypass_pwrrc00[g] = (rn[g]==pwrc0) && pwr20 /*&& rn_cp[g]==pwrc_cp*/;
+					bypass_pwrra00[2][g] = (rn[g]==pwra0[2]) && pwr00[2] /*&& rn_cp[g]==pwrc_cp*/;
 //					bypass_pwrrc01[g] = (rn[g]==pwrc1) && pwr21 /*&& rn_cp[g]==pwrc_cp*/;
-					bypass_pwrrd00[g] = (rn[g]==pwrd0) && pwr30 /*&& rn_cp[g]==pwrd_cp*/;
+					bypass_pwrra00[3][g] = (rn[g]==pwra0[3]) && pwr00[3] /*&& rn_cp[g]==pwrd_cp*/;
 //					bypass_pwrrd01[g] = (rn[g]==pwrd1) && pwr31 /*&& rn_cp[g]==pwrd_cp*/;
 
-					bypass_p2wrra0[g] =  (rn[g]==p2wrd) && p2wr3 /*&& rn_cp[g]==p2wrd_cp*/;
-					bypass_p2wrrb0[g] =	(rn[g]==p2wrc) && p2wr2 /*&& rn_cp[g]==p2wrc_cp*/;
-					bypass_p2wrrc0[g] =	(rn[g]==p2wrb) && p2wr1 /*&& rn_cp[g]==p2wrb_cp*/;
-					bypass_p2wrrd0[g] =	(rn[g]==p2wra) && p2wr0 /*&& rn_cp[g]==p2wra_cp*/;
+					bypass_p2wrra0[1][g] =  (rn[g]==p2wra[3]) && p2wr0[3] /*&& rn_cp[g]==p2wrd_cp*/;
+					bypass_p2wrra0[1][g] =	(rn[g]==p2wra[2]) && p2wr0[2] /*&& rn_cp[g]==p2wrc_cp*/;
+					bypass_p2wrra0[1][g] =	(rn[g]==p2wra[1]) && p2wr0[1] /*&& rn_cp[g]==p2wrb_cp*/;
+					bypass_p2wrra0[1][g] =	(rn[g]==p2wra[0]) && p2wr0[0] /*&& rn_cp[g]==p2wra_cp*/;
 					
 					// Bypass only for previous instruction in same group
 					case(rng[g])
@@ -684,13 +497,13 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 								// No intra-group bypass needed
 								// Intergroup bypass, needed as the map RAM has not updated in
 								// time for the next group of instructions.
-								(bypass_pwrrd00[g] && bypass_en) ? pwrrd0 :
+								(bypass_pwrra00[3][g] && bypass_en) ? pwrra0[3] :
 //								(bypass_pwrrd01[g] && bypass_en) ? pwrrd1 :
-								(bypass_pwrrc00[g] && bypass_en) ? pwrrc0 :
+								(bypass_pwrra00[2][g] && bypass_en) ? pwrra0[2] :
 //								(bypass_pwrrc01[g] && bypass_en) ? pwrrc1 :
-								(bypass_pwrrb00[g] && bypass_en) ? pwrrb0 :
+								(bypass_pwrra00[1][g] && bypass_en) ? pwrra0[1] :
 //								(bypass_pwrrb01[g] && bypass_en) ? pwrrb1 :
-								(bypass_pwrra00[g] && bypass_en) ? pwrra0 :
+								(bypass_pwrra00[0][g] && bypass_en) ? pwrra0[0] :
 //								(bypass_pwrra01[g] && bypass_en) ? pwrra1 :
 								currentMap.regmap[rn[g]];
 													/*
@@ -700,20 +513,20 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 													(bypass_p2wrra0[g] && bypass_en) ? p2wrra :
 													*/
 						end
-					3'd1: 
-						next_prn[g] = 
+					3'd1: if (MWIDTH > 1)
+							next_prn[g] = 
 								// Intra group bypass
-								(rn[g]==wra && wr0) ? wrra :
+								(rn[g]==wra && wr[0]) ? wrra :
 //								(rn[g]==wra1 && wr01) ? wrra1 :
 								// Intergroup bypass, needed as the map RAM has not updated in
 								// time for the next group of instructions.
-								(bypass_pwrrd00[g] && bypass_en) ? pwrrd0 :
-	//							(bypass_pwrrd01[g] && bypass_en) ? pwrrd1 :
-								(bypass_pwrrc00[g] && bypass_en) ? pwrrc0 :
+								(bypass_pwrra00[3][g] && bypass_en) ? pwrra0[3] :
+//								(bypass_pwrrd01[g] && bypass_en) ? pwrrd1 :
+								(bypass_pwrra00[2][g] && bypass_en) ? pwrra0[2] :
 //								(bypass_pwrrc01[g] && bypass_en) ? pwrrc1 :
-								(bypass_pwrrb00[g] && bypass_en) ? pwrrb0 :
+								(bypass_pwrra00[1][g] && bypass_en) ? pwrra0[1] :
 //								(bypass_pwrrb01[g] && bypass_en) ? pwrrb1 :
-								(bypass_pwrra00[g] && bypass_en) ? pwrra0 :
+								(bypass_pwrra00[0][g] && bypass_en) ? pwrra0[0] :
 //								(bypass_pwrra01[g] && bypass_en) ? pwrra1 :
 								currentMap.regmap[rn[g]];
 													/*
@@ -733,21 +546,22 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 													*/
 													//rn[g]==wra && wr0 ? wrra :	// One previous target
 													//qbr0 ? cpram_out1.regmap[rn[g]] :
-					3'd2: next_prn[g] = 
+					3'd2: 	if (MWIDTH > 2)
+							next_prn[g] = 
 								// Intra group bypass
-								(rn[g]==wrb && wr1) ? wrrb :
+								(rn[g]==wra[1] && wr[1]) ? wrra[1] :
 //								(rn[g]==wrb1 && wr11) ? wrrb1 :
-								(rn[g]==wra && wr0) ? wrra :
+								(rn[g]==wra[0] && wr[0]) ? wrra[0] :
 //								(rn[g]==wra1 && wr01) ? wrra1 :
 								// Intergroup bypass, needed as the map RAM has not updated in
 								// time for the next group of instructions.
-								(bypass_pwrrd00[g] && bypass_en) ? pwrrd0 :
+								(bypass_pwrra00[3][g] && bypass_en) ? pwrra0[3] :
 //								(bypass_pwrrd01[g] && bypass_en) ? pwrrd1 :
-								(bypass_pwrrc00[g] && bypass_en) ? pwrrc0 :
+								(bypass_pwrra00[2][g] && bypass_en) ? pwrra0[2] :
 //								(bypass_pwrrc01[g] && bypass_en) ? pwrrc1 :
-								(bypass_pwrrb00[g] && bypass_en) ? pwrrb0 :
+								(bypass_pwrra00[1][g] && bypass_en) ? pwrra0[1] :
 //								(bypass_pwrrb01[g] && bypass_en) ? pwrrb1 :
-								(bypass_pwrra00[g] && bypass_en) ? pwrra0 :
+								(bypass_pwrra00[0][g] && bypass_en) ? pwrra0[0] :
 //								(bypass_pwrra01[g] && bypass_en) ? pwrra1 :
 								currentMap.regmap[rn[g]];
 													/*
@@ -769,24 +583,24 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 												 	//rn[g]==wrb && wr1 ? wrrb :	// Two previous target
 													//rn[g]==wra && wr0 ? wrra :
 													//qbr0|qbr1 ? cpram_out1.regmap[rn[g]] :
-					3'd3:
+					3'd3:	if (MWIDTH > 3)
 						next_prn[g] = 
 							// Intra group bypass
-							(rn[g]==wrc && wr2) ? wrrc :
+							(rn[g]==wra[2] && wr[2]) ? wrra[2] :
 //							(rn[g]==wrc1 && wr21) ? wrrc1 :
-							(rn[g]==wrb && wr1) ? wrrb :
+							(rn[g]==wra[1] && wr[1]) ? wrra[1] :
 //							(rn[g]==wrb1 && wr11) ? wrrb1 :
-							(rn[g]==wra && wr0) ? wrra :
+							(rn[g]==wra[0] && wr[0]) ? wrra[0] :
 //							(rn[g]==wra1 && wr01) ? wrra1 :
 							// Intergroup bypass, needed as the map RAM has not updated in
 							// time for the next group of instructions.
-								(bypass_pwrrd00[g] && bypass_en) ? pwrrd0 :
+								(bypass_pwrra00[3][g] && bypass_en) ? pwrra0[3] :
 //								(bypass_pwrrd01[g] && bypass_en) ? pwrrd1 :
-								(bypass_pwrrc00[g] && bypass_en) ? pwrrc0 :
+								(bypass_pwrra00[2][g] && bypass_en) ? pwrra0[2] :
 //								(bypass_pwrrc01[g] && bypass_en) ? pwrrc1 :
-								(bypass_pwrrb00[g] && bypass_en) ? pwrrb0 :
+								(bypass_pwrra00[1][g] && bypass_en) ? pwrra0[1] :
 //								(bypass_pwrrb01[g] && bypass_en) ? pwrrb1 :
-								(bypass_pwrra00[g] && bypass_en) ? pwrra0 :
+								(bypass_pwrra00[0][g] && bypass_en) ? pwrra0[0] :
 //								(bypass_pwrra01[g] && bypass_en) ? pwrra1 :
 							currentMap.regmap[rn[g]];
 													/*													
@@ -871,23 +685,23 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 						case(rng[g])
 						// First instruction of group, no bypass needed.
 						3'd0:	
-							if (prn[g]==cmtdp && cmtdv)
+							if (prn[g]==cmtap[3] && cmtav[3])
 								prv[g] = VAL;
-							else if (prn[g]==cmtcp && cmtcv)
+							else if (prn[g]==cmtap[2] && cmtav[2])
 								prv[g] = VAL;
-							else if (prn[g]==cmtbp && cmtbv)
+							else if (prn[g]==cmtap[1] && cmtav[1])
 								prv[g] = VAL;
-							else if (prn[g]==cmtap && cmtav)
+							else if (prn[g]==cmtap[0] && cmtav[0])
 								prv[g] = VAL;
 							
 							
-							else if (prn[g]==pwrrd0 && pwr30)
+							else if (prn[g]==pwrra0[3] && pwr00[3])
 								prv[g] = INV;
-							else if (prn[g]==pwrrc0 && pwr20)
+							else if (prn[g]==pwrra0[2] && pwr00[2])
 								prv[g] = INV;
-							else if (prn[g]==pwrrb0 && pwr10)
+							else if (prn[g]==pwrra0[1] && pwr00[1])
 								prv[g] = INV;
-							else if (prn[g]==pwrra0 && pwr00)
+							else if (prn[g]==pwrra0[0] && pwr00[0])
 								prv[g] = INV;
 							
 							/*
@@ -935,31 +749,31 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 								prv[g] = currentRegvalid[prn[g]];//cpv_o[g];
 						// Second instruction of group, bypass only if first instruction target is same.
 						3'd1:
-						begin							
+						if (MWIDTH > 1) begin							
 							if (prn[g]==bo_nreg && bo_wr)
 								prv[g] = VAL;
-							else if (prn[g]==wrport0_Rt && wrport0_v)
+							else if (prn[g]==wrport0_Rt[0] && wrport0_v[0])
 								prv[g] = VAL;					
 								
-							else if (prn[g]==cmtdp && cmtdv)
+							else if (prn[g]==cmtap[3] && cmtav[3])
 								prv[g] = VAL;
-							else if (prn[g]==cmtcp && cmtcv)
+							else if (prn[g]==cmtap[2] && cmtav[2])
 								prv[g] = VAL;
-							else if (prn[g]==cmtbp && cmtbv)
+							else if (prn[g]==cmtap[1] && cmtav[1])
 								prv[g] = VAL;
-							else if (prn[g]==cmtap && cmtav)
+							else if (prn[g]==cmtap[0] && cmtav[0])
 								prv[g] = VAL;
 							
 							
-							else if (prn[g]==pwrrd0 && pwr30)
+							else if (prn[g]==pwrra0[3] && pwr00[3])
 								prv[g] = INV;
-							else if (prn[g]==pwrrc0 && pwr20)
+							else if (prn[g]==pwrra0[2] && pwr00[2])
 								prv[g] = INV;
-							else if (prn[g]==pwrrb0 && pwr10)
+							else if (prn[g]==pwrra0[1] && pwr00[1])
 								prv[g] = INV;
-							else if (prn[g]==pwrra0 && pwr00)
+							else if (prn[g]==pwrra0[0] && pwr00[0])
 								prv[g] = INV;
-							
+
 							/*
 							else if (prn[g]==p2wrrd && p2wr3 && rn_cp[g]==p2wrd_cp)
 								prv[g] = INV;
@@ -1013,32 +827,32 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 						end
 						// Third instruction, check two previous ones.
 						3'd2:
-						begin
+						if (MWIDTH > 2) begin
 							if (prn[g]==bo_nreg && bo_wr)
 								prv[g] = VAL;
-							else if (prn[g]==wrport1_Rt && wrport1_v)
+							else if (prn[g]==wrport0_Rt[1] && wrport0_v[1])
 								prv[g] = VAL;					
-							else if (prn[g]==wrport0_Rt && wrport0_v)
+							else if (prn[g]==wrport0_Rt[0] && wrport0_v[0])
 								prv[g] = VAL;					
 								
 								
-							else if (prn[g]==cmtdp && cmtdv)
+							else if (prn[g]==cmtap[3] && cmtav[3])
 								prv[g] = VAL;
-							else if (prn[g]==cmtcp && cmtcv)
+							else if (prn[g]==cmtap[2] && cmtav[2])
 								prv[g] = VAL;
-							else if (prn[g]==cmtbp && cmtbv)
+							else if (prn[g]==cmtap[1] && cmtav[1])
 								prv[g] = VAL;
-							else if (prn[g]==cmtap && cmtav)
+							else if (prn[g]==cmtap[0] && cmtav[0])
 								prv[g] = VAL;
 							
 							
-							else if (prn[g]==pwrrd0 && pwr30)
+							else if (prn[g]==pwrra0[3] && pwr00[3])
 								prv[g] = INV;
-							else if (prn[g]==pwrrc0 && pwr20)
+							else if (prn[g]==pwrra0[2] && pwr00[2])
 								prv[g] = INV;
-							else if (prn[g]==pwrrb0 && pwr10)
+							else if (prn[g]==pwrra0[1] && pwr00[1])
 								prv[g] = INV;
-							else if (prn[g]==pwrra0 && pwr00)
+							else if (prn[g]==pwrra0[0] && pwr00[0])
 								prv[g] = INV;
 							
 							/*
@@ -1087,33 +901,32 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 						end
 					// Fourth instruction, check three previous ones.						
 						3'd3:
-							begin
+						if (MWIDTH > 3) begin
 							if (prn[g]==bo_nreg && bo_wr)
 								prv[g] = VAL;
-							else if (prn[g]==wrport2_Rt && wrport2_v)
+							else if (prn[g]==wrport0_Rt[2] && wrport0_v[2])
 								prv[g] = VAL;					
-							else if (prn[g]==wrport1_Rt && wrport1_v)
+							else if (prn[g]==wrport0_Rt[1] && wrport0_v[1])
 								prv[g] = VAL;					
-							else if (prn[g]==wrport0_Rt && wrport0_v)
+							else if (prn[g]==wrport0_Rt[0] && wrport0_v[0])
 								prv[g] = VAL;					
 							
-							else if (prn[g]==cmtdp && cmtdv)
+							else if (prn[g]==cmtap[3] && cmtav[3])
 								prv[g] = VAL;
-							else if (prn[g]==cmtcp && cmtcv)
+							else if (prn[g]==cmtap[2] && cmtav[2])
 								prv[g] = VAL;
-							else if (prn[g]==cmtbp && cmtbv)
+							else if (prn[g]==cmtap[1] && cmtav[1])
 								prv[g] = VAL;
-							else if (prn[g]==cmtap && cmtav)
+							else if (prn[g]==cmtap[0] && cmtav[0])
 								prv[g] = VAL;
 							
-							
-							else if (prn[g]==pwrrd0 && pwr30)
+							else if (prn[g]==pwrra0[3] && pwr00[3])
 								prv[g] = INV;
-							else if (prn[g]==pwrrc0 && pwr20)
+							else if (prn[g]==pwrra0[2] && pwr00[2])
 								prv[g] = INV;
-							else if (prn[g]==pwrrb0 && pwr10)
+							else if (prn[g]==pwrra0[1] && pwr00[1])
 								prv[g] = INV;
-							else if (prn[g]==pwrra0 && pwr00)
+							else if (prn[g]==pwrra0[0] && pwr00[0])
 								prv[g] = INV;
 							
 							/*
@@ -1183,15 +996,40 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 	always_comb
 		prn[NPORT-1] <= st_prn;
 	always_comb//ff @(posedge clk)
-		if (prn[NPORT-1]==cmtdp && cmtdv)
-			prv[NPORT-1] = VAL;
-		else if (prn[NPORT-1]==cmtcp && cmtcv)
-			prv[NPORT-1] = VAL;
-		else if (prn[NPORT-1]==cmtbp && cmtbv)
-			prv[NPORT-1] = VAL;
-		else if (prn[NPORT-1]==cmtap && cmtav)
-			prv[NPORT-1] = VAL;
-		
+		case(MWIDTH)
+		1:
+			if (prn[NPORT-1]==cmtap[0] && cmtav[0])
+				prv[NPORT-1] = VAL;
+			else
+				prv[NPORT-1] = currentRegvalid[prn[NPORT-1]];//cpv_o[g];
+		2:
+			if (prn[NPORT-1]==cmtap[1] && cmtav[1])
+				prv[NPORT-1] = VAL;
+			else if (prn[NPORT-1]==cmtap[1] && cmtav[0])
+				prv[NPORT-1] = VAL;
+			else
+				prv[NPORT-1] = currentRegvalid[prn[NPORT-1]];//cpv_o[g];
+		3:
+			if (prn[NPORT-1]==cmtap[2] && cmtav[2])
+				prv[NPORT-1] = VAL;
+			else if (prn[NPORT-1]==cmtap[1] && cmtav[1])
+				prv[NPORT-1] = VAL;
+			else if (prn[NPORT-1]==cmtap[1] && cmtav[0])
+				prv[NPORT-1] = VAL;
+			else
+				prv[NPORT-1] = currentRegvalid[prn[NPORT-1]];//cpv_o[g];
+		default:
+			if (prn[NPORT-1]==cmtap[3] && cmtav[3])
+				prv[NPORT-1] = VAL;
+			else if (prn[NPORT-1]==cmtap[2] && cmtav[2])
+				prv[NPORT-1] = VAL;
+			else if (prn[NPORT-1]==cmtap[1] && cmtav[1])
+				prv[NPORT-1] = VAL;
+			else if (prn[NPORT-1]==cmtap[1] && cmtav[0])
+				prv[NPORT-1] = VAL;
+			else
+				prv[NPORT-1] = currentRegvalid[prn[NPORT-1]];//cpv_o[g];
+		endcase
 		/*
 		else if (prnd[NPORT-1]==wrrc && wr2)
 			prv[NPORT-1] = INV;
@@ -1220,8 +1058,6 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 			prv[NPORT-1] = INV;
 		else
 		*/
-		else
-			prv[NPORT-1] = currentRegvalid[prn[NPORT-1]];//cpv_o[g];
 //			prv[NPORT-1] = cpv_o[NPORT-1];
 end
 endgenerate
@@ -1279,7 +1115,6 @@ always_comb
 // Priorities are resolved by the time-multiplex so, priority logic is not 
 // needed.
 
-reg wr;
 aregno_t aregno;
 pregno_t pregno;
 aregno_t cmtareg;
@@ -1368,55 +1203,34 @@ else begin
 
 end
 */
-reg cmtav1;
-reg cmtbv1;
-reg cmtcv1;
-reg cmtdv1;
-checkpt_ndx_t cndxa1;
-checkpt_ndx_t cndxb1;
-checkpt_ndx_t cndxc1;
-checkpt_ndx_t cndxd1;
-pregno_t cmtapA1;
-pregno_t cmtbp1;
-pregno_t cmtcp1;
-pregno_t cmtdp1;
-wire cd_cmtav;
-wire cd_cmtbv;
-wire cd_cmtcv;
-wire cd_cmtdv;
+reg [MWIDTH-1:0] cmtav1;
+checkpt_ndx_t [MWIDTH-1:0]cndxa1;
+pregno_t [MWIDTH-1:0] cmtap1;
+wire [MWIDTH-1:0] cd_cmtav;
 
 // If the same value is going to the same register in two consecutive clock cycles,
 // only do one update. Prevents a register from being released for use too soon.
-change_det #($bits(aregno_t)+$bits(pregno_t)+$bits(value_t)+1) ucmta1 (.rst(rst), .clk(clk), .ce(1'b1), .i({cmtav|cmtaiv,cmtaa,cmtap,cmtaval}), .cd(cd_cmtav));
-change_det #($bits(aregno_t)+$bits(pregno_t)+$bits(value_t)+1) ucmtb1 (.rst(rst), .clk(clk), .ce(1'b1), .i({cmtbv|cmtbiv,cmtba,cmtbp,cmtbval}), .cd(cd_cmtbv));
-change_det #($bits(aregno_t)+$bits(pregno_t)+$bits(value_t)+1) ucmtc1 (.rst(rst), .clk(clk), .ce(1'b1), .i({cmtcv|cmtciv,cmtca,cmtcp,cmtcval}), .cd(cd_cmtcv));
-change_det #($bits(aregno_t)+$bits(pregno_t)+$bits(value_t)+1) ucmtd1 (.rst(rst), .clk(clk), .ce(1'b1), .i({cmtdv|cmtdiv,cmtda,cmtdp,cmtdval}), .cd(cd_cmtdv));
+generate begin : gChangeDet1
+	for (g = 0; g < MWIDTH; g = g + 1)
+		change_det #($bits(aregno_t)+$bits(pregno_t)+$bits(value_t)+1) ucmta1 (.rst(rst), .clk(clk), .ce(1'b1), .i({cmtav[g]|cmtaiv[g],cmtaa[g],cmtap[g],cmtaval[g]}), .cd(cd_cmtav[g]));
+end
+endgenerate
 
 // Make the write inputs sticky until en2 occurs.
-reg wr0r;
-reg wr1r;
-reg wr2r;
-reg wr3r;
-aregno_t wrar;
-aregno_t wrbr;
-aregno_t wrcr;
-aregno_t wrdr;
-pregno_t wrrar;
-pregno_t wrrbr;
-pregno_t wrrcr;
-pregno_t wrrdr;
-wire cd_wr0;
-wire cd_wr1;
-wire cd_wr2;
-wire cd_wr3;
+wire [MWIDTH-1:0] cd_wr;
 
 // We cannot have the same register tag being assigned to two different
 // architectural registers at the same time. The same register cannot be
 // assigned two clock cycles in a row. Only map once.
-change_det #($bits(aregno_t)+$bits(pregno_t)+1) uwrcda1 (.rst(rst), .clk(clk), .ce(en2d), .i({wr0,wra,wrra}), .cd(cd_wr0));
-change_det #($bits(aregno_t)+$bits(pregno_t)+1) uwrcdb1 (.rst(rst), .clk(clk), .ce(en2d), .i({wr1,wrb,wrrb}), .cd(cd_wr1));
-change_det #($bits(aregno_t)+$bits(pregno_t)+1) uwrcdc1 (.rst(rst), .clk(clk), .ce(en2d), .i({wr2,wrc,wrrc}), .cd(cd_wr2));
-change_det #($bits(aregno_t)+$bits(pregno_t)+1) uwrcdd1 (.rst(rst), .clk(clk), .ce(en2d), .i({wr3,wrd,wrrd}), .cd(cd_wr3));
+generate begin : gChangeDet
+	for (g = 0; g < MWIDTH; g = g + 1)
+		change_det #($bits(aregno_t)+$bits(pregno_t)+1) uwrcda1 (.rst(rst), .clk(clk), .ce(en2d), .i({wr[0],wra[0],wrra[0]}), .cd(cd_wr[0]));
+end
+endgenerate
+
+//change_det #($bits(aregno_t)+$bits(pregno_t)+1) uwrcdb1 (.rst(rst), .clk(clk), .ce(en2d), .i({wr[1],wrb,wrrb}), .cd(cd_wr1));
+//change_det #($bits(aregno_t)+$bits(pregno_t)+1) uwrcdc1 (.rst(rst), .clk(clk), .ce(en2d), .i({wr[2],wrc,wrrc}), .cd(cd_wr2));
+//change_det #($bits(aregno_t)+$bits(pregno_t)+1) uwrcdd1 (.rst(rst), .clk(clk), .ce(en2d), .i({wr[3],wrd,wrrd}), .cd(cd_wr3));
 
 always_comb//ff @(posedge clk)
 if (rst)
@@ -1425,143 +1239,18 @@ else
 	en2d <= en2;
 
 always_ff @(posedge clk)
-if (rst)
-	wr0r <= FALSE;
-else begin
-	if (wr0)
-		wr0r <= TRUE;
-	else if (en2)
-		wr0r <= FALSE;
-end
-always_ff @(posedge clk)
-if (rst)
-	wr1r <= FALSE;
-else begin
-	if (wr1)
-		wr1r <= TRUE;
-	else if (en2)
-		wr1r <= FALSE;
-end
-always_ff @(posedge clk)
-if (rst)
-	wr2r <= FALSE;
-else begin
-	if (wr2)
-		wr2r <= TRUE;
-	else if (en2)
-		wr2r <= FALSE;
-end
-always_ff @(posedge clk)
-if (rst)
-	wr3r <= FALSE;
-else begin
-	if (wr3)
-		wr3r <= TRUE;
-	else if (en2)
-		wr3r <= FALSE;
-end
-always_ff @(posedge clk)
-if (rst)
-	wrar <= 8'd0;
-else begin
-	if (wr0)
-		wrar <= wra;
-	else if (en2)
-		wrar <= 8'd0;
-end
-always_ff @(posedge clk)
-if (rst)
-	wrbr <= 8'd0;
-else begin
-	if (wr1)
-		wrbr <= wrb;
-	else if (en2)
-		wrbr <= 8'd0;
-end
-always_ff @(posedge clk)
-if (rst)
-	wrcr <= 8'd0;
-else begin
-	if (wr2)
-		wrcr <= wrc;
-	else if (en2)
-		wrcr <= 8'd0;
-end
-always_ff @(posedge clk)
-if (rst)
-	wrdr <= 8'd0;
-else begin
-	if (wr3)
-		wrdr <= wrd;
-	else if (en2)
-		wrdr <= 8'd0;
-end
-always_ff @(posedge clk)
-if (rst)
-	wrrar <= 9'd0;
-else begin
-	if (wr0)
-		wrrar <= wrra;
-	else if (en2)
-		wrrar <= 9'd0;
-end
-always_ff @(posedge clk)
-if (rst)
-	wrrbr <= 9'd0;
-else begin
-	if (wr1)
-		wrrbr <= wrrb;
-	else if (en2)
-		wrrbr <= 9'd0;
-end
-always_ff @(posedge clk)
-if (rst)
-	wrrcr <= 9'd0;
-else begin
-	if (wr2)
-		wrrcr <= wrrc;
-	else if (en2)
-		wrrcr <= 9'd0;
-end
-always_ff @(posedge clk)
-if (rst)
-	wrrdr <= 9'd0;
-else begin
-	if (wr3)
-		wrrdr <= wrrd;
-	else if (en2)
-		wrrdr <= 9'd0;
-end
-
-always_ff @(posedge clk)
 if (rst) begin
-	cmtav1 <= FALSE;
-	cmtbv1 <= FALSE;
-	cmtcv1 <= FALSE;
-	cmtdv1 <= FALSE;
-	cndxa1 <= 4'd0;
-	cndxb1 <= 4'd0;
-	cndxc1 <= 4'd0;
-	cndxd1 <= 4'd0;
-	cmtapA1 <= 9'd0;
-	cmtbp1 <= 9'd0;
-	cmtcp1 <= 9'd0;
-	cmtdp1 <= 9'd0;
+	for (n15 = 0; n15 < MWIDTH; n15 = n15 + 1) begin
+		cmtav1[n15] <= FALSE;
+		cndxa1[n15] <= 4'd0;
+		cmtap1[n15] <= 9'd0;
+	end
 end
 else begin
-	begin
-		cmtav1 <= cmtav;
-		cmtbv1 <= cmtbv;
-		cmtcv1 <= cmtcv;
-		cmtdv1 <= cmtdv;
-		cndxa1 <= cndx;
-		cndxb1 <= cndx;
-		cndxc1 <= cndx;
-		cndxd1 <= cndx;
-		cmtapA1 <= cmtap;
-		cmtbp1 <= cmtbp;
-		cmtcp1 <= cmtcp;
-		cmtdp1 <= cmtdp;
+	for (n15 = 0; n15 < MWIDTH; n15 = n15 + 1) begin
+		cmtav1[n15] <= cmtav[n15];
+		cndxa1[n15] <= cndx[n15];
+		cmtap1[n15] <= cmtap[n15];
 	end
 end
 
@@ -1575,48 +1264,39 @@ end
 
 always_ff @(posedge clk)
 if (rst) begin
-	tags2free[0] <= {$bits(pregno_t){1'b0}};
-	tags2free[1] <= {$bits(pregno_t){1'b0}};
-	tags2free[2] <= {$bits(pregno_t){1'b0}};
-	tags2free[3] <= {$bits(pregno_t){1'b0}};
+	for (n16 = 0; n16 < MWIDTH; n16 = n16 + 1)
+		tags2free[n16] <= {$bits(pregno_t){1'b0}};
 end
 else begin
-	tags2free[0] <= {$bits(pregno_t){1'b0}};
-	tags2free[1] <= {$bits(pregno_t){1'b0}};
-	tags2free[2] <= {$bits(pregno_t){1'b0}};
-	tags2free[3] <= {$bits(pregno_t){1'b0}};
+	for (n16 = 0; n16 < MWIDTH; n16 = n16 + 1)
+		tags2free[n16] <= {$bits(pregno_t){1'b0}};
 	
 	// For invalid frees we do not want to push the free pipeline.
+	for (n16 = 0; n16 < MWIDTH; n16 = n16 + 1)
+		if (cdcmtav[n16])
+			tags2free[n16] <= historyMap.regmap[cmtaa[n16]];
 	if (bo_wr)
 		tags2free[0] <= bo_nreg;
-	else if (cdcmtav)
-		tags2free[0] <= historyMap.regmap[cmtaa];
-	if (cdcmtbv)
-		tags2free[1] <= historyMap.regmap[cmtba];
-	if (cdcmtcv)
-		tags2free[2] <= historyMap.regmap[cmtca];
-	if (cdcmtdv)
-		tags2free[3] <= historyMap.regmap[cmtda];
 end
 
 always_ff @(posedge clk)
 if (rst)
 	freevals <= 4'd0;
 else begin
-	freevals[0] <= cdcmtav|bo_wr;
-	freevals[1] <= cdcmtbv;
-	freevals[2] <= cdcmtcv;
-	freevals[3] <= cdcmtdv;
+	for (n17 = 1; n17 < MWIDTH; n17 = n17 + 1)
+		freevals[n17] <= cdcmtav[n17];
+	freevals[0] <= cdcmtav[0]|bo_wr;
 end
 
-assign cdwr0 = cd_wr0 & wr0;
-assign cdwr1 = cd_wr1 & wr1;
-assign cdwr2 = cd_wr2 & wr2;
-assign cdwr3 = cd_wr3 & wr3;
-assign cdcmtav = cd_cmtav & (cmtav|cmtaiv);
-assign cdcmtbv = cd_cmtbv & (cmtbv|cmtbiv);
-assign cdcmtcv = cd_cmtcv & (cmtcv|cmtciv);
-assign cdcmtdv = cd_cmtdv & (cmtdv|cmtdiv);
+always_comb
+for (n9 = 0; n9 < MWIDTH; n9 = n9 + 1)
+	cdwr[n9] = cd_wr[n9] & wr[n9];
+
+generate begin : gCdCmt
+	for (g = 0; g < MWIDTH; g = g + 1)
+assign cdcmtav[g] = cd_cmtav[g] & (cmtav[g]|cmtaiv[g]);
+end
+endgenerate
 
 wire pe_bk, ne_bk;
 edge_det uedbckout1 (.rst(rst), .clk(clk), .ce(1'b1), .i(backout_state==2'd1), .pe(pe_bk), .ne(ne_bk), .ee());
@@ -1642,28 +1322,18 @@ else begin
 	// The branch instruction itself might need to update the checkpoint info.
 	// Even if a checkpoint is being allocated, we want to record new maps.
 	if (en2) begin
-		if (wr0)
-			nextCurrentMap.regmap[wra] = wrra;
-		if (wr1)
-			nextCurrentMap.regmap[wrb] = wrrb;
-		if (wr2)
-			nextCurrentMap.regmap[wrc] = wrrc;
-		if (wr3)
-			nextCurrentMap.regmap[wrd] = wrrd;
+		for (n10 = 0; n10 < MWIDTH; n10 = n10 + 1)
+			if (wr[n10])
+				nextCurrentMap.regmap[wra[n10]] = wrra[n10];
 	end
 
 	// Shift the physical register into a second spot.
 	// Note that .regmap[] ahould be the same as the physical register at commit.
 	// It is a little less logic just to use the physical register at commit,
 	// rather than referencing .regmap[]
-	if (cdcmtav)
-		nextHistoryMap.regmap[cmtaa] = cmtap;
-	if (cdcmtbv)
-		nextHistoryMap.regmap[cmtba] = cmtbp;
-	if (cdcmtcv)
-		nextHistoryMap.regmap[cmtca] = cmtcp;
-	if (cdcmtdv)
-		nextHistoryMap.regmap[cmtda] = cmtdp;
+	for (n10 = 0; n10 < MWIDTH; n10 = n10 + 1)
+		if (cdcmtav[n10])
+			nextHistoryMap.regmap[cmtaa[n10]] = cmtap[n10];
 
 	// Available registers are recorded in the checkpoint as supplied by the
 	// name supplier.
@@ -1709,20 +1379,10 @@ if (Qupls4_pkg::SIM) begin
 		if (bo_wr)
 			$display("Qupls4 CPU RAT: backout %d restored to %d", currentMap.regmap[bo_areg], bo_preg);
 
-		if (cd_wr0 & wr0) begin
-			$display("Qupls4 CPU RAT: tgta %d reg %d replaced with %d.", wra, currentMap.regmap[wra], wrra);
-		end
-		if (cd_wr1 & wr1) begin
-			$display("Qupls4 CPU RAT: tgtb %d reg %d replaced with %d.", wrb, currentMap.regmap[wrb], wrrb);
-		end
-		if (cd_wr2 & wr2) begin
-			$display("Qupls4 CPU RAT: tgtc %d reg %d replaced with %d.", wrc, currentMap.regmap[wrc], wrrc);
-		end
-		if (cd_wr3 & wr3) begin
-			$display("Qupls4 CPU RAT: tgtd %d reg %d replaced with %d.", wrd, currentMap.regmap[wrd], wrrd);
-		end
+		for (n11 = 0; n11 < MWIDTH; n11 = n11 + 1)
+			if (cd_wr[n11] & wr[n11])
+				$display("Qupls4 CPU RAT: tgta %d reg %d replaced with %d.", wra[n11], currentMap.regmap[wra[n11]], wrra[n11]);
 	end
-	
 end
 
 always_ff @(posedge clk) 
@@ -1737,371 +1397,82 @@ else begin
 	end
 end
 
-always_ff @(posedge clk) 
-if (rst) begin
-	pwr00 <= 1'b0;
-//	pwr01 <= 1'b0;
-end
-else begin
-	if (en2d) begin
-		pwr00 <= wr0 && !pbackout;
-//		pwr01 <= wr01 && !pbackout;
-    end
-end
-always_ff @(posedge clk) 
-if (rst) begin
-	pwr10 <= 1'b0;
-//	pwr11 <= 1'b0;
-end
-else begin
-	if (en2d) begin
-		pwr10 <= wr1 && !pbackout;
-//		pwr11 <= wr11 && !pbackout;
+generate begin : gPwr
+	for (g = 0; g < MWIDTH; g = g + 1) begin
+		always_ff @(posedge clk) 
+			if (rst)
+				pwr00[g] <= 1'b0;
+			else begin
+				if (en2d)
+					pwr00[g] <= wr[g] && !pbackout;
+			end
+		always_ff @(posedge clk) 
+		if (rst)
+			pwra0[g] <= 8'b0;
+		else begin
+			if (en2d)
+				pwra0[g] <= wra[g];
+		end
+		always_ff @(posedge clk) 
+		if (rst)
+			pcdwr0[g] <= 1'b0;
+		else begin
+			if (en2d)
+				pcdwr0[g] <= cdwr[g];
+		end
+		always_ff @(posedge clk) 
+		if (rst)
+			p2cdwr0[g] <= 1'b0;
+		else begin
+			if (en2d)
+				p2cdwr0[g] <= pcdwr0[g];
+		end
+		always_ff @(posedge clk) 
+		if (rst)
+			pwrra0[g] <= 10'b0;
+		else begin
+			if (en2d) begin
+				pwrra0[g] <= wrra[g];
+			end
+		end
+		always_ff @(posedge clk) 
+		if (rst)
+			pwra_cp[g] <= 4'b0;
+		else begin
+			if (en2d)
+				pwra_cp[g] <= wra_cp[g];
+		end
+		always_ff @(posedge clk) 
+		if (rst)
+			p2wr0[g] <= 1'b0;
+		else begin
+			if (en2d)
+				p2wr0[g] <= pwr00[g];
+		end
+		always_ff @(posedge clk) 
+		if (rst)
+			p2wra[g] <= 8'b0;
+		else begin
+			if (en2d)
+				p2wra[g] <= pwra0[g];
+		end
+		always_ff @(posedge clk) 
+		if (rst)
+			p2wrra[g] <= 10'b0;
+		else begin
+			if (en2d)
+				p2wrra[g] <= pwrra0[g];
+		end
+		always_ff @(posedge clk) 
+		if (rst)
+			p2wra_cp[g] <= 4'b0;
+		else begin
+			if (en2d)
+				p2wra_cp[g] <= pwra_cp[g];
+		end
 	end
 end
-always_ff @(posedge clk) 
-if (rst) begin
-	pwr20 <= 1'b0;
-//	pwr21 <= 1'b0;
-end
-else begin
-	if (en2d) begin
-		pwr20 <= wr2 && !pbackout;
-//		pwr21 <= wr21 && !pbackout;
-	end
-end
-always_ff @(posedge clk) 
-if (rst) begin
-	pwr30 <= 1'b0;
-//	pwr31 <= 1'b0;
-end
-else begin
-	if (en2d) begin
-		pwr30 <= wr3 && !pbackout;
-//		pwr31 <= wr31 && !pbackout;
-	end
-end
-
-always_ff @(posedge clk) 
-if (rst) begin
-	pwra0 <= 8'b0;
-//	pwra1 <= 8'b0;
-end
-else begin
-	if (en2d) begin
-		pwra0 <= wra;
-//		pwra1 <= wra1;
-	end
-end
-always_ff @(posedge clk) 
-if (rst) begin
-	pwrb0 <= 8'b0;
-//	pwrb1 <= 8'b0;
-end
-else begin
-	if (en2d) begin
-		pwrb0 <= wrb;
-//		pwrb1 <= wrb1;
-	end
-end
-always_ff @(posedge clk) 
-if (rst) begin
-	pwrc0 <= 8'b0;
-//	pwrc1 <= 8'b0;
-end
-else begin
-	if (en2d) begin
-		pwrc0 <= wrc;
-//		pwrc1 <= wrc1;
-	end
-end
-always_ff @(posedge clk) 
-if (rst) begin
-	pwrd0 <= 8'b0;
-//	pwrd1 <= 8'b0;
-end
-else begin
-	if (en2d) begin
-		pwrd0 <= wrd;
-//		pwrd1 <= wrd1;
-	end
-end
-
-always_ff @(posedge clk) 
-if (rst) begin
-	pcdwr0 <= 1'b0;
-end
-else begin
-	if (en2d)
-		pcdwr0 <= cdwr0;
-end
-always_ff @(posedge clk) 
-if (rst) begin
-	pcdwr1 <= 1'b0;
-end
-else begin
-	if (en2d)
-		pcdwr1 <= cdwr1;
-end
-always_ff @(posedge clk) 
-if (rst) begin
-	pcdwr2 <= 1'b0;
-end
-else begin
-	if (en2d)
-		pcdwr2 <= cdwr2;
-end
-always_ff @(posedge clk) 
-if (rst) begin
-	pcdwr3 <= 1'b0;
-end
-else begin
-	if (en2d)
-		pcdwr3 <= cdwr3;
-end
-
-always_ff @(posedge clk) 
-if (rst) begin
-	p2cdwr0 <= 1'b0;
-end
-else begin
-	if (en2d)
-		p2cdwr0 <= pcdwr0;
-end
-always_ff @(posedge clk) 
-if (rst) begin
-	p2cdwr1 <= 1'b0;
-end
-else begin
-	if (en2d)
-		p2cdwr1 <= pcdwr1;
-end
-always_ff @(posedge clk) 
-if (rst) begin
-	p2cdwr2 <= 1'b0;
-end
-else begin
-	if (en2d)
-		p2cdwr2 <= pcdwr2;
-end
-always_ff @(posedge clk) 
-if (rst) begin
-	p2cdwr3 <= 1'b0;
-end
-else begin
-	if (en2d)
-		p2cdwr3 <= pcdwr3;
-end
-
-always_ff @(posedge clk) 
-if (rst) begin
-	pwrra0 <= 10'b0;
-//	pwrra1 <= 10'b0;
-end
-else begin
-	if (en2d) begin
-		pwrra0 <= wrra;
-//		pwrra1 <= wrra1;
-	end
-end
-always_ff @(posedge clk) 
-if (rst) begin
-	pwrrb0 <= 10'b0;
-//	pwrrb1 <= 10'b0;
-end
-else begin
-	if (en2d) begin
-		pwrrb0 <= wrrb;
-//		pwrrb1 <= wrrb1;
-	end
-end
-always_ff @(posedge clk) 
-if (rst) begin
-	pwrrc0 <= 10'b0;
-//	pwrrc1 <= 10'b0;
-end
-else begin
-	if (en2d) begin
-		pwrrc0 <= wrrc;
-//		pwrrc1 <= wrrc1;
-	end
-end
-always_ff @(posedge clk) 
-if (rst) begin
-	pwrrd0 <= 10'b0;
-//	pwrrd1 <= 10'b0;
-end
-else begin
-	if (en2d) begin
-		pwrrd0 <= wrrd;
-//		pwrrd1 <= wrrd1;
-	end
-end
-
-always_ff @(posedge clk) 
-if (rst) begin
-	pwra_cp <= 4'b0;
-end
-else begin
-	if (en2d)
-		pwra_cp <= wra_cp;
-end
-always_ff @(posedge clk) 
-if (rst) begin
-	pwrb_cp <= 4'b0;
-end
-else begin
-	if (en2d)
-		pwrb_cp <= wrb_cp;
-end
-always_ff @(posedge clk) 
-if (rst) begin
-	pwrc_cp <= 4'b0;
-end
-else begin
-	if (en2d)
-		pwrc_cp <= wrc_cp;
-end
-always_ff @(posedge clk) 
-if (rst) begin
-	pwrd_cp <= 4'b0;
-end
-else begin
-	if (en2d)
-		pwrd_cp <= wrd_cp;
-end
-
-always_ff @(posedge clk) 
-if (rst) begin
-	p2wr0 <= 1'b0;
-end
-else begin
-	if (en2d)
-		p2wr0 <= pwr00;
-end
-always_ff @(posedge clk) 
-if (rst) begin
-	p2wr1 <= 1'b0;
-end
-else begin
-	if (en2d)
-		p2wr1 <= pwr10;
-end
-always_ff @(posedge clk) 
-if (rst) begin
-	p2wr2 <= 1'b0;
-end
-else begin
-	if (en2d)
-		p2wr2 <= pwr20;
-end
-always_ff @(posedge clk) 
-if (rst) begin
-	p2wr3 <= 1'b0;
-end
-else begin
-	if (en2d)
-		p2wr3 <= pwr30;
-end
-
-always_ff @(posedge clk) 
-if (rst) begin
-	p2wra <= 8'b0;
-end
-else begin
-	if (en2d)
-		p2wra <= pwra0;
-end
-always_ff @(posedge clk) 
-if (rst) begin
-	p2wrb <= 8'b0;
-end
-else begin
-	if (en2d)
-		p2wrb <= pwrb0;
-end
-always_ff @(posedge clk) 
-if (rst) begin
-	p2wrc <= 8'b0;
-end
-else begin
-	if (en2d)
-		p2wrc <= pwrc0;
-end
-always_ff @(posedge clk) 
-if (rst) begin
-	p2wrd <= 8'b0;
-end
-else begin
-	if (en2d)
-		p2wrd <= pwrd0;
-end
-
-always_ff @(posedge clk) 
-if (rst) begin
-	p2wrra <= 10'b0;
-end
-else begin
-	if (en2d)
-		p2wrra <= pwrra0;
-end
-always_ff @(posedge clk) 
-if (rst) begin
-	p2wrrb <= 10'b0;
-end
-else begin
-	if (en2d)
-		p2wrrb <= pwrrb0;
-end
-always_ff @(posedge clk) 
-if (rst) begin
-	p2wrrc <= 10'b0;
-end
-else begin
-	if (en2d)
-		p2wrrc <= pwrrc0;
-end
-always_ff @(posedge clk) 
-if (rst) begin
-	p2wrrd <= 10'b0;
-end
-else begin
-	if (en2d)
-		p2wrrd <= pwrrd0;
-end
-
-always_ff @(posedge clk) 
-if (rst) begin
-	p2wra_cp <= 4'b0;
-end
-else begin
-	if (en2d)
-		p2wra_cp <= pwra_cp;
-end
-always_ff @(posedge clk) 
-if (rst) begin
-	p2wrb_cp <= 4'b0;
-end
-else begin
-	if (en2d)
-		p2wrb_cp <= pwrb_cp;
-end
-always_ff @(posedge clk) 
-if (rst) begin
-	p2wrc_cp <= 4'b0;
-end
-else begin
-	if (en2d)
-		p2wrc_cp <= pwrc_cp;
-end
-always_ff @(posedge clk) 
-if (rst) begin
-	p2wrd_cp <= 4'b0;
-end
-else begin
-	if (en2d)
-		p2wrd_cp <= pwrd_cp;
-end
+endgenerate
 
 
 // RAM gets updated if any port writes, or there is a new checkpoint.
