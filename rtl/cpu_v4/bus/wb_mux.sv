@@ -9,7 +9,7 @@ output wishbone_pkg::wb_cmd_request256_t req_o;
 output wishbone_pkg::wb_cmd_response256_t [NPORT-1:0] resp_o;
 input wishbone_pkg::wb_cmd_response256_t resp_i;
 
-integer n1;
+integer n1,n2;
 reg [NPORT-1:0] req_cyc;
 wire [NPORT-1:0] req_grant;
 wire [$clog2(NPORT):0] req_grant_enc;
@@ -49,6 +49,12 @@ urrreq1
 always_comb
 	req_o = req_i[req_grant_enc];
 always_comb
+begin
+	// Endure all responses are set to something, otherwise a latch
+	// will be inferred.
+	for (n2 = 0; n2 < NPORT; n2 = n2 + 1)
+		resp_o[n2] = {$bits(wb_cmd_response256_t){1'b0}};
 	resp_o[req_grant_enc] = resp_i;
+end
 	
 endmodule

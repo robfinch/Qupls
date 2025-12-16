@@ -37,7 +37,7 @@
 // 2947 LUTs / 673 FFs / 20 BRAMs  64kB cache 16kB * 4 way
 // ============================================================================
 
-import fta_bus_pkg::*;
+import wishbone_pkg::*;
 import cache_pkg::*;
 
 module dcache(rst, clk, dce, snoop_adr, snoop_v, snoop_cid,
@@ -66,10 +66,10 @@ input cache_load;							// 1= load operation, 0=update
 output reg hit;
 output reg modified;
 output reg [LOG_WAYS:0] uway;	// way to use on a cache hit
-input fta_cmd_request512_t cpu_req_i;
-output fta_cmd_response512_t cpu_resp_o;
+input wb_cmd_request512_t cpu_req_i;
+output wb_cmd_response512_t cpu_resp_o;
 input cpu_types_pkg::physical_address_t cpu_req_vadr;
-input fta_cmd_response512_t update_data_i;
+input wb_cmd_response512_t update_data_i;
 
 output reg dump;
 output DCacheLine dump_o;
@@ -112,7 +112,7 @@ reg [CACHE_LINE_WIDTH/8-1:0] sel;
 wire cdvndx,cdvndx1;
 reg cdvndx2;
 reg [HIBIT:LOBIT] vndx;
-fta_cache_t cache_type;
+wb_cache_t cache_type;
 
 wire [16:0] lfsr_o;
 
@@ -218,7 +218,7 @@ for (g = 0; g < WAYS; g = g + 1) begin : gFor
 		.wr(wr && way==g && cache_load),
 		.wadr(vndx),
 		.radr(snoop_adr[HIBIT:LOBIT]),
-		.i(update_data_i.adr[32-1:T6]),
+		.i(cpu_req_vadr[32-1:T6]),
 		.o(snoop_ptags[g])
 	);
 
@@ -235,7 +235,7 @@ for (g = 0; g < WAYS; g = g + 1) begin : gFor
 			.wr(wr && way==g && cache_load),
 			.wadr(vndx),
 			.radr(vndx),
-			.i(update_data_i.adr[32-1:T6]),
+			.i(cpu_req_vadr[32-1:T6]),
 			.o(ptags[g])
 		);
 
@@ -248,11 +248,11 @@ reg read_allocate;
 
 always_comb
 	non_cacheable = !dce || 
-	cache_type==fta_bus_pkg::NC_NB ||
-	cache_type==fta_bus_pkg::NON_CACHEABLE
+	cache_type==wishbone_pkg::NC_NB ||
+	cache_type==wishbone_pkg::NON_CACHEABLE
 	;
 always_comb
-	read_allocate = fnFtaReadAllocate(cache_type);
+	read_allocate = fnWbReadAllocate(cache_type);
 
 // Pass through the incoming line back to the CPU when data cache is not enabled.
 // If a cache hit, the update way is the hit way.
@@ -316,7 +316,7 @@ end
 
 always_ff @(posedge clk)
 begin
-	cpu_resp_o = {$bits(fta_cmd_response512_t){1'd0}};
+	cpu_resp_o = {$bits(wb_cmd_response512_t){1'd0}};
 	if (non_cacheable|~read_allocate|~dce)
 		cpu_resp_o = update_data_i;
 	else
@@ -325,25 +325,21 @@ begin
 		4'b1???:
 			begin
 				cpu_resp_o.ack = cpu_req_i.cyc && (|cpu_req_i.tid);
-				cpu_resp_o.adr = {lines[3].tag[31:T15],vndx,{LOBIT{1'b0}}};
 				cpu_resp_o.dat = lines[3].data;
 			end
 		4'b01??:
 			begin
 				cpu_resp_o.ack = cpu_req_i.cyc && (|cpu_req_i.tid);
-				cpu_resp_o.adr = {lines[2].tag[31:T15],vndx,{LOBIT{1'b0}}};
 				cpu_resp_o.dat = lines[2].data;
 			end
 		4'b001?:
 			begin
 				cpu_resp_o.ack = cpu_req_i.cyc && (|cpu_req_i.tid);
-				cpu_resp_o.adr = {lines[1].tag[31:T15],vndx,{LOBIT{1'b0}}};
 				cpu_resp_o.dat = lines[1].data;
 			end
 		4'b0001:
 			begin
 				cpu_resp_o.ack = cpu_req_i.cyc && (|cpu_req_i.tid);
-				cpu_resp_o.adr = {lines[0].tag[31:T15],vndx,{LOBIT{1'b0}}};
 				cpu_resp_o.dat = lines[0].data;
 			end
 		default:
@@ -351,7 +347,6 @@ begin
 //				cpu_resp_o.cid = update_data_i.cid;
 				cpu_resp_o.tid = update_data_i.tid;
 				cpu_resp_o.ack = update_data_i.ack && (|update_data_i.tid);
-				cpu_resp_o.adr = update_data_i.adr;
 				cpu_resp_o.dat = update_data_i.dat;
 			end
 		endcase

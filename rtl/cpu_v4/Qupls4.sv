@@ -74,6 +74,7 @@ parameter CORENO = 6'd1;
 parameter CHANNEL = 6'd1;
 parameter MWIDTH = 4;
 parameter ISTACK_DEPTH = 16;
+parameter DISPATCH_WIDTH = 6;
 input [63:0] coreno_i;
 input rst_i;
 input clk_i;
@@ -385,7 +386,7 @@ wire [3:0] mc_regx1;
 wire [3:0] mc_regx2;
 wire [3:0] mc_regx3;
 wire [12:0] rs_busy;
-Qupls4_pkg::reservation_station_entry_t [4:0] rse;
+Qupls4_pkg::reservation_station_entry_t [DISPATCH_WIDTH-1:0] rse;
 
 // ALU done and idle are almost the same, but idle is sticky and set
 // if the ALU is not busy, whereas done pulses at the end of an ALU
@@ -1039,7 +1040,7 @@ reg branchmiss, branchmiss_next;
 reg branchmiss_h;
 rob_ndx_t missid;
 
-value_t agen0_res, agen1_res;
+cpu_types_pkg::address_t agen0_res, agen1_res;
 wire tlb_miss0, tlb_miss1;
 wire tlb_missack;
 tlb_entry_t tlb_entry1, tlb_entry;
@@ -4042,11 +4043,11 @@ Qupls4_mem_sched umems1
 	.ndx1v(mem1_lsndxv)
 );
 
-rob_ndx_t [4:0] rob_dispatched;
+rob_ndx_t [DISPATCH_WIDTH-1:0] rob_dispatched;
 Qupls4_pkg::rob_bitmask_t rob_dispatched_stomped;
-wire [4:0] rob_dispatched_v;
+wire [DISPATCH_WIDTH-1:0] rob_dispatched_v;
 
-Qupls4_instruction_dispatcher #(.MWIDTH(MWIDTH)) uid1
+Qupls4_instruction_dispatcher #(.MWIDTH(MWIDTH), .DISPATCH_WIDTH(DISPATCH_WIDTH)) uid1
 (
 	.rst(irst),
 	.clk(clk),

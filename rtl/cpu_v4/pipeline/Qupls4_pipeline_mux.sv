@@ -569,13 +569,13 @@ end
 always_comb
 begin
 	pg_mux.pr[0] = {$bits(pipeline_reg_t){1'b0}};
-	pg_mux.pr[0].op = ins_mux[0];
+	pg_mux.pr[0] = ins_mux[0];
 	pg_mux.pr[1] = {$bits(pipeline_reg_t){1'b0}};
-	pg_mux.pr[1].op = ins_mux[1];
+	pg_mux.pr[1] = ins_mux[1];
 	pg_mux.pr[2] = {$bits(pipeline_reg_t){1'b0}};
-	pg_mux.pr[2].op = ins_mux[2];
+	pg_mux.pr[2] = ins_mux[2];
 	pg_mux.pr[3] = {$bits(pipeline_reg_t){1'b0}};
-	pg_mux.pr[3].op = ins_mux[3];
+	pg_mux.pr[3] = ins_mux[3];
 end
 
 always_ff @(posedge clk) if (en) irq_sn_mux <= irq_sn_fet;

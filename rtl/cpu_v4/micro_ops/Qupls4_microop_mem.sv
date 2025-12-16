@@ -47,7 +47,7 @@ module Qupls4_microop_mem(clk, om, ir, num, carry_reg, carry_out, carry_in,
 parameter UOP_ARRAY_SIZE = 32;
 input clk;
 input Qupls4_pkg::operating_mode_t om;
-input [47:0] ir;
+input Qupls4_pkg::micro_op_t ir;
 input [4:0] num;
 input [7:0] carry_reg;
 input carry_out;
@@ -142,23 +142,23 @@ begin
 end
 always_comb
 begin
-	push1 = {6'd0,19'h7FFF8,8'd0,3'b0,sp[4:0],3'b0,ir[11: 7],Qupls4_pkg::OP_STORE};
-	push2 = {6'd0,19'h7FFF0,8'd0,3'b0,sp[4:0],3'b0,ir[16:12],Qupls4_pkg::OP_STORE};
-	push3 = {6'd0,19'h7FFE8,8'd0,3'b0,sp[4:0],3'b0,ir[21:17],Qupls4_pkg::OP_STORE};
-	push4 = {6'd0,19'h7FFE0,8'd0,3'b0,sp[4:0],3'b0,ir[26:22],Qupls4_pkg::OP_STORE};
-	push5 = {6'd0,19'h7FFD8,8'd0,3'b0,sp[4:0],3'b0,ir[31:27],Qupls4_pkg::OP_STORE};
-	push6 = {6'd0,19'h7FFD0,8'd0,3'b0,sp[4:0],3'b0,ir[36:32],Qupls4_pkg::OP_STORE};
-	push7 = {6'd0,19'h7FFC8,8'd0,3'b0,sp[4:0],3'b0,ir[41:37],Qupls4_pkg::OP_STORE};
+	push1 = {6'd0,19'h7FFF8,8'd0,3'b0,sp[4:0],3'b0,ir.any.payload[ 4: 0],Qupls4_pkg::OP_STORE};
+	push2 = {6'd0,19'h7FFF0,8'd0,3'b0,sp[4:0],3'b0,ir.any.payload[ 9: 5],Qupls4_pkg::OP_STORE};
+	push3 = {6'd0,19'h7FFE8,8'd0,3'b0,sp[4:0],3'b0,ir.any.payload[14:10],Qupls4_pkg::OP_STORE};
+	push4 = {6'd0,19'h7FFE0,8'd0,3'b0,sp[4:0],3'b0,ir.any.payload[19:15],Qupls4_pkg::OP_STORE};
+	push5 = {6'd0,19'h7FFD8,8'd0,3'b0,sp[4:0],3'b0,ir.any.payload[24:20],Qupls4_pkg::OP_STORE};
+	push6 = {6'd0,19'h7FFD0,8'd0,3'b0,sp[4:0],3'b0,ir.any.payload[29:25],Qupls4_pkg::OP_STORE};
+	push7 = {6'd0,19'h7FFC8,8'd0,3'b0,sp[4:0],3'b0,ir.any.payload[34:30],Qupls4_pkg::OP_STORE};
 end
 always_comb
 begin
-	pop1 = {6'd0,19'h00000,8'd0,3'b0,sp[4:0],3'b0,ir[11: 7],Qupls4_pkg::OP_LOAD};
-	pop2 = {6'd0,19'h00008,8'd0,3'b0,sp[4:0],3'b0,ir[16:12],Qupls4_pkg::OP_LOAD};
-	pop3 = {6'd0,19'h00010,8'd0,3'b0,sp[4:0],3'b0,ir[21:17],Qupls4_pkg::OP_LOAD};
-	pop4 = {6'd0,19'h00018,8'd0,3'b0,sp[4:0],3'b0,ir[26:22],Qupls4_pkg::OP_LOAD};
-	pop5 = {6'd0,19'h00020,8'd0,3'b0,sp[4:0],3'b0,ir[31:27],Qupls4_pkg::OP_LOAD};
-	pop6 = {6'd0,19'h00028,8'd0,3'b0,sp[4:0],3'b0,ir[36:32],Qupls4_pkg::OP_LOAD};
-	pop7 = {6'd0,19'h00030,8'd0,3'b0,sp[4:0],3'b0,ir[41:37],Qupls4_pkg::OP_LOAD};
+	pop1 = {6'd0,19'h00000,8'd0,3'b0,sp[4:0],3'b0,ir.any.payload[ 4: 0],Qupls4_pkg::OP_LOAD};
+	pop2 = {6'd0,19'h00008,8'd0,3'b0,sp[4:0],3'b0,ir.any.payload[ 9: 5],Qupls4_pkg::OP_LOAD};
+	pop3 = {6'd0,19'h00010,8'd0,3'b0,sp[4:0],3'b0,ir.any.payload[14:10],Qupls4_pkg::OP_LOAD};
+	pop4 = {6'd0,19'h00018,8'd0,3'b0,sp[4:0],3'b0,ir.any.payload[19:15],Qupls4_pkg::OP_LOAD};
+	pop5 = {6'd0,19'h00020,8'd0,3'b0,sp[4:0],3'b0,ir.any.payload[24:20],Qupls4_pkg::OP_LOAD};
+	pop6 = {6'd0,19'h00028,8'd0,3'b0,sp[4:0],3'b0,ir.any.payload[29:25],Qupls4_pkg::OP_LOAD};
+	pop7 = {6'd0,19'h00030,8'd0,3'b0,sp[4:0],3'b0,ir.any.payload[34:30],Qupls4_pkg::OP_LOAD};
 end
 always_comb
 begin
@@ -197,7 +197,7 @@ always_comb
 begin
 	case (instr.any.opcode)
 	Qupls4_pkg::OP_R3VS,Qupls4_pkg::OP_FLTVS:
-		is_vs = ir[37:35]==3'd1;
+		is_vs = ir.r3.op3==3'd1;
 	default:	is_vs = 1'b0;
 	endcase
 end
@@ -206,7 +206,7 @@ always_comb
 begin
 	case (instr.any.opcode)
 	Qupls4_pkg::OP_R3P,Qupls4_pkg::OP_R3VS,Qupls4_pkg::OP_FLTVS:
-		is_masked = ir[37:35]==3'd6;
+		is_masked = ir.r3.op3==3'd6;
 	default:	is_masked = 1'b0;
 	endcase
 end
@@ -215,7 +215,7 @@ always_comb
 begin
 	case (instr.any.opcode)
 	Qupls4_pkg::OP_R3P,Qupls4_pkg::OP_R3VS:
-		case(ir[47:41])
+		case(ir.r3.func)
 		Qupls4_pkg::FN_REDSUM,Qupls4_pkg::FN_REDAND,Qupls4_pkg::FN_REDOR,Qupls4_pkg::FN_REDEOR,
 		Qupls4_pkg::FN_REDMIN,Qupls4_pkg::FN_REDMAX,Qupls4_pkg::FN_REDMINU,Qupls4_pkg::FN_REDMAXU:
 			is_reduction = 1'b1;
@@ -240,33 +240,33 @@ begin
 	vsins = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
 	vls = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
 	vsins.extd.opcode = Qupls4_pkg::opcode_e'(ir[6:0]);
-	vsins.extd.Rd = thread*40+ir[12:7];
-	vsins.extd.Rs1 = thread*40+ir[18:13];
-	vsins.extd.Rs2 = thread*40+ir[24:19];
-	vsins.extd.Rs3 = thread*40+ir[30:25];
+	vsins.extd.Rd = thread*40+ir.r3.Rd;
+	vsins.extd.Rs1 = thread*40+ir.r3.Rs1;
+	vsins.extd.Rs2 = thread*40+ir.r3.Rs2;
+	vsins.extd.Rs3 = thread*40+ir.r3.Rs3;
 	vsins.extd.vn = ir[34:31];
 	vsins.extd.op3 = ir[37:35];
 	vsins.extd.ms = ir[40:38];
 	vsins.extd.Rs4 = ir[47:41];	//???
-	vls.vls.opcode = Qupls4_pkg::opcode_e'(ir[6:0]);
-	vls.vls.Rd = thread*40+ir[12:7];
-	vls.vls.Rs1 = thread*40+ir[18:13];
-	vls.vls.Rs2 = thread*40+ir[24:19];
-	vls.vls.Rs3 = thread*40+ir[30:25];
-	vls.vls.dt = ir[37:35];
-	vls.vls.disp = ir[43:38];
-	vls.vls.ms = ir[44];
-	vls.vls.sc = ir[47:45];
-	instr.any.opcode = Qupls4_pkg::opcode_e'(ir[6:0]);
-	instr.r3.Rd = thread*40+ir[12:7];
-	instr.r3.Rs1 = thread*40+ir[18:13];
-	instr.r3.Rs2 = thread*40+ir[24:19];
-	instr.r3.Rs3 = thread*40+ir[30:25];
-	instr.r3.vn = ir[34:31];
-	instr.r3.op3 = ir[37:35];
-	instr.r3.ms = ir[40:38];
-	instr.extd.Rs4 = ir[47:41];
-	case(ir[6:0])
+	vls.any.opcode = ir.any.opcode;
+	vls.r3.Rd = thread*40+ir.r3.Rd;
+	vls.r3.Rs1 = thread*40+ir.r3.Rs1;
+	vls.r3.Rs2 = thread*40+ir.r3.Rs2;
+	vls.r3.Rs3 = thread*40+ir.r3.Rs3;
+	vls.vls.dt = ir.vls.dt;
+	vls.vls.disp = ir.vls.disp;
+	vls.vls.ms = ir.vls.ms;
+	vls.vls.sc = ir.vls.sc;
+	instr.any.opcode = ir.any.opcode;
+	instr.r3.Rd = thread*40+ir.r3.Rd;
+	instr.r3.Rs1 = thread*40+ir.r3.Rs1;
+	instr.r3.Rs2 = thread*40+ir.r3.Rs2;
+	instr.r3.Rs3 = thread*40+ir.r3.Rs3;
+	instr.r3.vn = ir.r3.vn;
+	instr.r3.op3 = ir.r3.op3;
+	instr.r3.ms = ir.r3.ms;
+	instr.extd.Rs4 = ir.extd.Rs4;
+	case(ir.any.opcode)
 	Qupls4_pkg::OP_EXTD:
 		begin
 			vlen1 = vlen;	// use integer length
@@ -279,33 +279,33 @@ begin
 	Qupls4_pkg::OP_R3P:
 		begin
 			instr.any.opcode = Qupls4_pkg::OP_R3BP | velsz[1:0];
-			instr.r3.vn = ir[34:31];
-			instr.r3.op3 = ir[37:35];
-			instr.r3.func = Qupls4_pkg::func_e'(ir[47:41]);
+			instr.r3.vn = ir.r3.vn;
+			instr.r3.op3 = ir.r3.op3;
+			instr.r3.func = ir.r3.func;
 			vlen1 = vlen;
 		end
 	Qupls4_pkg::OP_FLTP:
 		begin
 			instr.any.opcode = Qupls4_pkg::OP_FLTPH | velsz[9:8];
-			instr.f3.vn = ir[34:31];
-			instr.f3.rm = ir[37:35];
-			instr.f3.func = Qupls4_pkg::flt_e'(ir[47:41]);
+			instr.f3.vn = ir.f3.vn;
+			instr.f3.rm = ir.f3.rm;
+			instr.f3.func = ir.f3.func;
 			vlen1 = fvlen;
 		end
 	Qupls4_pkg::OP_R3BP,Qupls4_pkg::OP_R3WP,Qupls4_pkg::OP_R3TP,Qupls4_pkg::OP_R3OP:
 		begin
-			instr.any.opcode = ir[6:0];
-			instr.r3.vn = ir[34:31];
-			instr.r3.op3 = ir[37:35];
-			instr.r3.func = Qupls4_pkg::func_e'(ir[47:41]);
+			instr.any.opcode = ir.any.opcode;
+			instr.r3.vn = ir.r3.vn;
+			instr.r3.op3 = ir.r3.op3;
+			instr.r3.func = ir.r3.func;
 			vlen1 = vlen;
 		end
 	Qupls4_pkg::OP_FLTPH,Qupls4_pkg::OP_FLTPS,Qupls4_pkg::OP_FLTPD,Qupls4_pkg::OP_FLTPQ:
 		begin
 			instr.any.opcode = ir[6:0];
-			instr.f3.vn = ir[34:31];
-			instr.f3.rm = ir[37:35];
-			instr.f3.func = Qupls4_pkg::flt_e'(ir[47:41]);
+			instr.f3.vn = ir.f3.vn;
+			instr.f3.rm = ir.f3.rm;
+			instr.f3.func = ir.f3.func;
 			vlen1 = fvlen;
 		end
 	Qupls4_pkg::OP_LDV,Qupls4_pkg::OP_STV,
@@ -338,18 +338,18 @@ begin
 	count = 3'd0;
 	for (n1 = 0; n1 < UOP_ARRAY_SIZE; n1 = n1 + 1)
 		uop[n1] = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
-	
-	case(ir[6:0])
+
+	case(ir.any.opcode)
 	Qupls4_pkg::OP_BRK:	begin uop[0] = {1'b1,1'b0,1'd1,5'd0,4'd0,ir}; count = 3'd1; end
 	Qupls4_pkg::OP_MOVMR:
 		begin
 			if (insert_boi) begin
 				kk = 1;
 				uop[0] = uop_boi;
-				if (ir[11: 7]!=5'd0) begin uop[kk] = {1'b1,1'b0,1'd0,5'd0,4'd0,Qupls4_pkg::FN_MOVE,3'd0,3'd4,4'd0,8'h00,8'h00,{8'(thread*40+ir[16:12])},{8'(thread*40+ir[11: 7])},Qupls4_pkg::OP_R3O}; kk = kk + 1; end
-				if (ir[21:17]!=5'd0) begin uop[kk] = {1'b1,1'b0,1'd0,5'd0,4'd0,Qupls4_pkg::FN_MOVE,3'd0,3'd4,4'd0,8'h00,8'h00,{8'(thread*40+ir[26:22])},{8'(thread*40+ir[21:17])},Qupls4_pkg::OP_R3O}; kk = kk + 1; end
-				if (ir[31:27]!=5'd0) begin uop[kk] = {1'b1,1'b0,1'd0,5'd0,4'd0,Qupls4_pkg::FN_MOVE,3'd0,3'd4,4'd0,8'h00,8'h00,{8'(thread*40+ir[36:32])},{8'(thread*40+ir[31:27])},Qupls4_pkg::OP_R3O}; kk = kk + 1; end
-				if (ir[41:37]!=5'd0) begin uop[kk] = {1'b1,1'b0,1'd0,5'd0,4'd0,Qupls4_pkg::FN_MOVE,3'd0,3'd4,4'd0,8'h00,8'h00,{8'(thread*40+ir[46:42])},{8'(thread*40+ir[41:37])},Qupls4_pkg::OP_R3O}; kk = kk + 1; end
+				if (ir.any.payload[ 4: 0]!=5'd0) begin uop[kk] = {1'b1,1'b0,1'd0,5'd0,4'd0,Qupls4_pkg::FN_MOVE,3'd0,3'd4,4'd0,8'h00,8'h00,{8'(thread*40+ir.any.payload[ 9: 5])},{8'(thread*40+ir.any.payload[ 4: 0])},Qupls4_pkg::OP_R3O}; kk = kk + 1; end
+				if (ir.any.payload[14:10]!=5'd0) begin uop[kk] = {1'b1,1'b0,1'd0,5'd0,4'd0,Qupls4_pkg::FN_MOVE,3'd0,3'd4,4'd0,8'h00,8'h00,{8'(thread*40+ir.any.payload[19:15])},{8'(thread*40+ir.any.payload[14:10])},Qupls4_pkg::OP_R3O}; kk = kk + 1; end
+				if (ir.any.payload[24:20]!=5'd0) begin uop[kk] = {1'b1,1'b0,1'd0,5'd0,4'd0,Qupls4_pkg::FN_MOVE,3'd0,3'd4,4'd0,8'h00,8'h00,{8'(thread*40+ir.any.payload[29:25])},{8'(thread*40+ir.any.payload[24:20])},Qupls4_pkg::OP_R3O}; kk = kk + 1; end
+				if (ir.any.payload[34:30]!=5'd0) begin uop[kk] = {1'b1,1'b0,1'd0,5'd0,4'd0,Qupls4_pkg::FN_MOVE,3'd0,3'd4,4'd0,8'h00,8'h00,{8'(thread*40+ir.any.payload[39:35])},{8'(thread*40+ir.any.payload[34:30])},Qupls4_pkg::OP_R3O}; kk = kk + 1; end
 				count = kk[3:0];
 				uop[0].any.lead = 1'd1;
 				uop[0].any.num = 5'd0;
@@ -360,10 +360,10 @@ begin
 			end
 			else begin
 				kk = 0;
-				if (ir[11: 7]!=5'd0) begin uop[kk] = {1'b1,1'b0,1'd0,5'd0,4'd0,Qupls4_pkg::FN_MOVE,3'd0,3'd4,4'd0,8'h00,8'h00,{8'(thread*40+ir[16:12])},{1'd0,8'(thread*40+ir[11: 7])},Qupls4_pkg::OP_R3O}; kk = kk + 1; end
-				if (ir[21:17]!=5'd0) begin uop[kk] = {1'b1,1'b0,1'd0,5'd0,4'd0,Qupls4_pkg::FN_MOVE,3'd0,3'd4,4'd0,8'h00,8'h00,{8'(thread*40+ir[26:22])},{1'd0,8'(thread*40+ir[21:17])},Qupls4_pkg::OP_R3O}; kk = kk + 1; end
-				if (ir[31:27]!=5'd0) begin uop[kk] = {1'b1,1'b0,1'd0,5'd0,4'd0,Qupls4_pkg::FN_MOVE,3'd0,3'd4,4'd0,8'h00,8'h00,{8'(thread*40+ir[36:32])},{1'd0,8'(thread*40+ir[31:27])},Qupls4_pkg::OP_R3O}; kk = kk + 1; end
-				if (ir[41:37]!=5'd0) begin uop[kk] = {1'b1,1'b0,1'd0,5'd0,4'd0,Qupls4_pkg::FN_MOVE,3'd0,3'd4,4'd0,8'h00,8'h00,{8'(thread*40+ir[46:42])},{1'd0,8'(thread*40+ir[41:37])},Qupls4_pkg::OP_R3O}; kk = kk + 1; end
+				if (ir.any.payload[ 4: 0]!=5'd0) begin uop[kk] = {1'b1,1'b0,1'd0,5'd0,4'd0,Qupls4_pkg::FN_MOVE,3'd0,3'd4,4'd0,8'h00,8'h00,{8'(thread*40+ir.any.payload[ 9: 5])},{8'(thread*40+ir.any.payload[ 4: 0])},Qupls4_pkg::OP_R3O}; kk = kk + 1; end
+				if (ir.any.payload[14:10]!=5'd0) begin uop[kk] = {1'b1,1'b0,1'd0,5'd0,4'd0,Qupls4_pkg::FN_MOVE,3'd0,3'd4,4'd0,8'h00,8'h00,{8'(thread*40+ir.any.payload[19:15])},{8'(thread*40+ir.any.payload[14:10])},Qupls4_pkg::OP_R3O}; kk = kk + 1; end
+				if (ir.any.payload[24:20]!=5'd0) begin uop[kk] = {1'b1,1'b0,1'd0,5'd0,4'd0,Qupls4_pkg::FN_MOVE,3'd0,3'd4,4'd0,8'h00,8'h00,{8'(thread*40+ir.any.payload[29:25])},{8'(thread*40+ir.any.payload[24:20])},Qupls4_pkg::OP_R3O}; kk = kk + 1; end
+				if (ir.any.payload[34:30]!=5'd0) begin uop[kk] = {1'b1,1'b0,1'd0,5'd0,4'd0,Qupls4_pkg::FN_MOVE,3'd0,3'd4,4'd0,8'h00,8'h00,{8'(thread*40+ir.any.payload[39:35])},{8'(thread*40+ir.any.payload[34:30])},Qupls4_pkg::OP_R3O}; kk = kk + 1; end
 				count = kk[3:0];
 				uop[0].any.lead = 1'd1;
 				uop[0].any.num = 5'd0;

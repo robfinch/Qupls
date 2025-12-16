@@ -66,9 +66,7 @@ state_t req_state;
 
 cpu_types_pkg::address_t madr, vadr, padr;
 reg [7:0] lfsr_cnt;
-reg [3:0] tid_cnt;
 wire [16:0] lfsr_o;
-reg [5:0] wait_cnt;
 reg [1:0] tid;
 
 lfsr17 #(.WID(17)) ulfsr1
@@ -83,12 +81,10 @@ lfsr17 #(.WID(17)) ulfsr1
 always_ff @(posedge clk)
 if (rst) begin
 	req_state <= RESET;
-	tid_cnt <= {CORENO,1'b0,4'h0};
 	wbm_req <= 'd0;
 	lfsr_cnt <= 'd0;
-	wait_cnt <= 'd0;
 	vtags <= 'd0;
-	tid <= 2'd0;
+	tid <= 4'd0;
 end
 else begin
 	case(req_state)
@@ -116,7 +112,6 @@ else begin
 		end
 	WAIT4MISS:
 		if (!hit & tlb_v) begin
-			tid_cnt <= 4'h0;
 			wbm_req.tid.core = CORENO;
 			wbm_req.tid.channel = CHANNEL;			
 			wbm_req.tid.tranid <= {tid,2'd0};
@@ -130,9 +125,9 @@ else begin
 			wbm_req.adr <= {miss_padr[$bits(cpu_types_pkg::physical_address_t)-1:cache_pkg::ICacheTagLoBit],{cache_pkg::ICacheTagLoBit{1'h0}}};
 			vtags[{tid,2'd0}] <= {miss_vadr[$bits(cpu_types_pkg::virtual_address_t)-1:cache_pkg::ICacheTagLoBit],{cache_pkg::ICacheTagLoBit{1'h0}}};
 			ptags[{tid,2'd0}] <= {miss_padr[$bits(cpu_types_pkg::physical_address_t)-1:cache_pkg::ICacheTagLoBit],{cache_pkg::ICacheTagLoBit{1'h0}}};
-			vadr <= {miss_vadr[$bits(fta_address_t)-1:cache_pkg::ICacheTagLoBit],{cache_pkg::ICacheTagLoBit{1'h0}}};
-			padr <= {miss_padr[$bits(fta_address_t)-1:cache_pkg::ICacheTagLoBit],{cache_pkg::ICacheTagLoBit{1'h0}}};
-			madr <= {miss_vadr[$bits(fta_address_t)-1:cache_pkg::ICacheTagLoBit],{cache_pkg::ICacheTagLoBit{1'h0}}};
+			vadr <= {miss_vadr[$bits(wb_address_t)-1:cache_pkg::ICacheTagLoBit],{cache_pkg::ICacheTagLoBit{1'h0}}};
+			padr <= {miss_padr[$bits(wb_address_t)-1:cache_pkg::ICacheTagLoBit],{cache_pkg::ICacheTagLoBit{1'h0}}};
+			madr <= {miss_vadr[$bits(wb_address_t)-1:cache_pkg::ICacheTagLoBit],{cache_pkg::ICacheTagLoBit{1'h0}}};
 			req_state <= STATE3;
 		end
 	STATE3:

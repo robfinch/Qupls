@@ -460,8 +460,11 @@ end
 always_comb
 begin
 	dc_line_o.v = {4{dhit2}};
+	dc_line_o.m = 1'b0;
 	dc_line_o.vtag = {dp2[$bits(cpu_types_pkg::address_t)-1:LOBIT-1],{LOBIT-1{1'b0}}};
+	dc_line_o.ptag = {dp2[$bits(cpu_types_pkg::address_t)-1:LOBIT-1],{LOBIT-1{1'b0}}};
 	dc_line_o.data = dc_line.data;
+	dc_line_o.asid = 16'h0;	// ToDo: remove asid
 end
 
 cache_tag

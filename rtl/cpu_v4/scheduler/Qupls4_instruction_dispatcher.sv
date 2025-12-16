@@ -61,7 +61,7 @@ input Qupls4_pkg::rob_entry_t [Qupls4_pkg::ROB_ENTRIES-1:0] rob;
 input [Qupls4_pkg::ROB_ENTRIES-1:0] stomp;
 input [15:0] busy;
 output Qupls4_pkg::reservation_station_entry_t [DISPATCH_COUNT-1:0] rse_o;
-output Qupls4_pkg::rob_entry_t [DISPATCH_COUNT-1:0] rob_dispatched_o;
+output Qupls4_pkg::rob_ndx_t [DISPATCH_COUNT-1:0] rob_dispatched_o;
 output reg [DISPATCH_COUNT-1:0] rob_dispatched_v_o;
 
 integer nn, kk, jj, xx, n1, mm;
@@ -90,10 +90,10 @@ end
 
 always_comb
 if (rst) begin
-	rob_dispatched[0] <= 8'd0;
-	rob_dispatched[1] <= 8'd0;
-	rob_dispatched[2] <= 8'd0;
-	rob_dispatched[3] <= 8'd0;
+	rob_dispatched[0] = 8'd0;
+	rob_dispatched[1] = 8'd0;
+	rob_dispatched[2] = 8'd0;
+	rob_dispatched[3] = 8'd0;
 	kk = 0;
 	jj = 0;
 	sau_cnt = 4'd0;
@@ -115,10 +115,10 @@ if (rst) begin
 	rse[5] = {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
 end
 else begin
-	rob_dispatched[0] <= 8'd0;
-	rob_dispatched[1] <= 8'd0;
-	rob_dispatched[2] <= 8'd0;
-	rob_dispatched[3] <= 8'd0;
+	rob_dispatched[0] = 8'd0;
+	rob_dispatched[1] = 8'd0;
+	rob_dispatched[2] = 8'd0;
+	rob_dispatched[3] = 8'd0;
 	kk = 0;
 	jj = 0;
 	sau_cnt = 4'd0;

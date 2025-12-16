@@ -92,7 +92,6 @@ reg [WID:0] bus;
 reg [WID-1:0] busx;
 wire bus_nan;
 reg [WID-1:0] blendo;
-reg [WID-1:0] res;
 reg [22:0] ii;
 reg [WID-1:0] sd;
 reg [WID-1:0] sum_ab;
@@ -147,7 +146,7 @@ Qupls4_cmp #(.WID(WID)) ualu_cmp
 	.o(cmpo)
 );
 
-reg [WID-1:0] locnt,lzcnt,popcnt,tzcnt;
+reg [$clog2(WID):0] locnt,lzcnt,popcnt,tzcnt;
 reg loz, lzz, tzz;
 reg [WID-1:0] t1;
 reg [WID-1:0] exto, extzo;
@@ -175,18 +174,15 @@ generate begin : gffz
   case(WID)
   16:	
   	begin
-  	wire [4:0] popcnt;
   	cntpop16 upopcnt16 (.i({a[WID-1:0]}),.o(popcnt));
   	end
   32:
   	begin
-  	wire [5:0] popcnt;
   	cntpop32 upopcnt32 (.i({a[WID-1:0]}),.o(popcnt));
   	end
   64:
   	begin
 		FP64 fa,fb;
-  	wire [6:0] popcnt;
   	wire fasig_hidden,fbsig_hidden;
   	cntpop64 upopcnt64 (.i({a[WID-1:0]}),.o(popcnt));
  
@@ -217,7 +213,7 @@ generate begin : gffz
 		);
 
 		fpDecomp64 udc1bus (
-			.i(bus),
+			.i(bus[63:0]),
 			.sgn(),
 			.exp(),
 			.fract(),
@@ -232,74 +228,73 @@ generate begin : gffz
   	end
   128:
   	begin
-  	wire [7:0] popcnt;
   	cntpop128 upopcnt128 (.i({a[WID-1:0]}),.o(popcnt));
   	end
 	endcase
   case(WID)
   16:	
   	begin
-  	wire [4:0] locnt;
   	ffz24 uffz16 (.i({8'hFF,a[WID-1:0]}),.o(locnt));
   	end
   32:
   	begin
-  	wire [5:0] locnt;
   	ffz48 uffz32 (.i({16'hFFFF,a[WID-1:0]}),.o(locnt));
   	end
   64:
   	begin
-  	wire [6:0] locnt;
   	ffz96 uffo64 (.i({32'hFFFFFFFF,a[WID-1:0]}),.o(locnt));
   	end
   128:
   	begin
-  	wire [7:0] locnt;
   	ffz144 uffo128 (.i({16'hFFFF,a[WID-1:0]}),.o(locnt));
+  	end
+  default:
+  	begin
+  	ffz96 uffo64 (.i({32'hFFFFFFFF,a[WID-1:0]}),.o(locnt));
   	end
 	endcase
   case(WID)
   16:	
   	begin
-  	wire [4:0] lzcnt;
   	ffo24 uffo16 (.i({8'h00,a[WID-1:0]}),.o(lzcnt));
   	end
   32:
   	begin
-  	wire [5:0] lzcnt;
   	ffo48 uffo32 (.i({16'h0000,a[WID-1:0]}),.o(lzcnt));
   	end
   64:
   	begin
-  	wire [6:0] lzcnt;
   	ffo96 uffo64 (.i({32'h00000000,a[WID-1:0]}),.o(lzcnt));
   	end
   128:
   	begin
-  	wire [7:0] lzcnt;
   	ffo144 uffo128 (.i({16'h0000,a[WID-1:0]}),.o(lzcnt));
+  	end
+  default:
+  	begin
+  	ffo96 uffo64 (.i({32'h00000000,a[WID-1:0]}),.o(lzcnt));
   	end
 	endcase
   case(WID)
   16:	
   	begin
-  	wire [4:0] tzcnt;
   	flo24 uflo16 (.i({8'hFF,a[WID-1:0]}),.o(tzcnt));
   	end
   32:
   	begin
-  	wire [5:0] tzcnt;
   	flo48 uflo32 (.i({16'hFFFF,a[WID-1:0]}),.o(tzcnt));
   	end
   64:
   	begin
-  	wire [6:0] tzcnt;
   	flo96 uflo64 (.i({32'hFFFFFFFF,a[WID-1:0]}),.o(tzcnt));
   	end
   128:
   	begin
-  	wire [7:0] tzcnt;
   	flo144 uflo128 (.i({16'hFFFF,a[WID-1:0]}),.o(tzcnt));
+  	end
+  default:
+  	begin
+  	flo96 uflo64 (.i({32'hFFFFFFFF,a[WID-1:0]}),.o(tzcnt));
   	end
 	endcase
 end
@@ -394,7 +389,6 @@ begin
 				3'd6: bus = mask1[LANE] ? cmpo : t;
 				default:	bus = zero;
 				endcase
-				bus = res;
 			end
 
 		Qupls4_pkg::FN_SEQ:

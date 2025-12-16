@@ -280,7 +280,7 @@ modTranLoadData utld1
 	.rst_i(rst_i),
 	.clk_i(clk_i),
 	.ftam_resp(ftam_resp),
-	.which_tran(which_tran),
+	.which_tran(which_tran[4:0]),
 	.completed_tran(completed_tran),
 	.last_out(last_out),
 	.cpu_req_queue(cpu_req_queue),

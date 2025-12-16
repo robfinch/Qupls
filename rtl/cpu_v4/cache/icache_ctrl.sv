@@ -69,6 +69,7 @@ output reg port_o;
 wire cpu_types_pkg::virtual_address_t [15:0] vtags;
 wire cpu_types_pkg::physical_address_t [15:0] ptags;
 wire ack;
+assign port_o = 1'b0;
 
 // Generate memory requests to fill cache line.
 // Filter out IRQs coming back.

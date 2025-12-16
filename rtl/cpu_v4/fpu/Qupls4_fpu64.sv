@@ -92,6 +92,7 @@ wire cd_args;
 reg [WID-1:0] tmp;
 wire [WID-1:0] ad,bd,id,cd,td;
 wire [WID-1:0] zero = {WID{1'b0}};
+reg [51:0] sigo;
 
 FP64 fa,fb;
 wire a_dn, b_dn;
@@ -101,6 +102,7 @@ wire aNan,bNan;
 wire asNan,bsNan;
 wire aqNan,bqNan;
 wire [2:0] a3;
+wire fa_hidden,fb_hidden;
 
 // Can issue every cycle, so...
 always_comb
@@ -116,11 +118,13 @@ delay2 #(WID) udlyi7 (.clk(clk), .ce(1'b1), .i(i), .o(id));
 delay2 #(WID) udlyc8 (.clk(clk), .ce(1'b1), .i(c), .o(cd));
 delay2 #(WID) udlyt9 (.clk(clk), .ce(1'b1), .i(t), .o(td));
 
-fpDecomp64 udc1a (
+fpDecomp64Reg udc1a (
+	.clk(clk),
+	.ce(ce),
 	.i(a),
 	.sgn(fa.sign),
 	.exp(fa.exp),
-	.fract(fa.sig),
+	.fract({fa_hidden,fa.sig}),
 	.xz(a_dn),
 	.vz(az),
 	.inf(aInf),
@@ -129,11 +133,16 @@ fpDecomp64 udc1a (
 	.qnan(aqNan)
 );
 
+always_ff @(posedge clk)
+	if (ce)
+		sigo <= fa.sig;
+
+
 fpDecomp64 udc1b (
 	.i(b),
 	.sgn(fb.sign),
 	.exp(fb.exp),
-	.fract(fb.sig),
+	.fract({fb_hidden,fb.sig}),
 	.xz(b_dn),
 	.vz(bz),
 	.inf(bInf),
@@ -360,6 +369,7 @@ begin
 		Qupls4_pkg::FLT_SGNJN:	bus = fsgnjn;
 		Qupls4_pkg::FLT_SGNJX:	bus = fsgnjx;
 		Qupls4_pkg::FLT_SIGN:		bus = signo;
+		Qupls4_pkg::FLT_SIG:		bus = sigo;
 		Qupls4_pkg::FLT_FTOI:		bus = f2io;
 		Qupls4_pkg::FLT_ITOF:		bus = i2fo;
 		Qupls4_pkg::FLT_TRUNC:	bus = trunco;

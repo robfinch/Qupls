@@ -45,7 +45,7 @@ input is_buffered;
 input pc_stream_t act_stream;
 output pc_stream_t next_act_stream;
 input [Qupls4_pkg::XSTREAMS*Qupls4_pkg::THREADS-1:0] strm_bitmap;
-input pc_stream_t [Qupls4_pkg::XSTREAMS*Qupls4_pkg::THREADS-1:0] pcs;
+input pc_address_ex_t [Qupls4_pkg::XSTREAMS*Qupls4_pkg::THREADS-1:0] pcs;
 
 // Used to select streams "randomly"
 wire [26:0] lfsro;
@@ -68,7 +68,7 @@ begin
 			next_act_stream = pc_stream_t'(n2);
 		// Choose the primary stream of the thread according to probability,
 		// this will override the selection of the alternate path.
-		if (strm_bitmap[n2] && pcs[thrd]==n2 &&
+		if (strm_bitmap[n2] && pcs[n2].stream==n2 &&
 			(lfsro[7:0] < thread_probability[thrd]))
 			next_act_stream = pc_stream_t'(n2);
 	end
