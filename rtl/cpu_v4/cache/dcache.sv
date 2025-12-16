@@ -86,7 +86,7 @@ input dc_invall;
 typedef logic [$bits(cpu_types_pkg::address_t)-1:T6] cache_tag_t;
 typedef struct packed
 {
-	logic resv;			// make struct a multiple of eight
+	logic [3:0] resv;			// make struct a multiple of eight
 	logic v;
 	logic m;
 	cpu_types_pkg::asid_t asid;

@@ -61,7 +61,7 @@ input Qupls4_pkg::rob_entry_t [Qupls4_pkg::ROB_ENTRIES-1:0] rob;
 input [Qupls4_pkg::ROB_ENTRIES-1:0] stomp;
 input [15:0] busy;
 output Qupls4_pkg::reservation_station_entry_t [DISPATCH_COUNT-1:0] rse_o;
-output Qupls4_pkg::rob_ndx_t [DISPATCH_COUNT-1:0] rob_dispatched_o;
+output cpu_types_pkg::rob_ndx_t [DISPATCH_COUNT-1:0] rob_dispatched_o;
 output reg [DISPATCH_COUNT-1:0] rob_dispatched_v_o;
 
 integer nn, kk, jj, xx, n1, mm;

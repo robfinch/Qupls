@@ -79,9 +79,9 @@ end
 
 generate begin : gAvail
 if (Qupls4_pkg::NCHECK==16)
-flo24 uflo0 (.i({23'd0,avail_chkpts[0]}), .o(avail_chkpt[0]));
+flo24 uflo0 (.i(avail_chkpts[0]), .o(avail_chkpt[0]));
 else if (Qupls4_pkg::NCHECK==32)
-flo48 uflo0 (.i({47'd0,avail_chkpts[0]}), .o(avail_chkpt[0]));
+flo48 uflo0 (.i(avail_chkpts[0]), .o(avail_chkpt[0]));
 end
 endgenerate
 

@@ -42,7 +42,7 @@ module Qupls4_branchmiss_pc(rse, pc_stack, bt, takb,
 	syscall_vector, kernel_vector);
 parameter ABITS=32;
 input Qupls4_pkg::reservation_station_entry_t rse;
-input pc_address_ex_t [8:0] pc_stack;
+input pc_address_ex_t [ISTACK_DEPTH-1:0] pc_stack;
 input [63:0] vector;
 input bt;
 input takb;

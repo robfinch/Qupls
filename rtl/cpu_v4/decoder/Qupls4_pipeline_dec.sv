@@ -428,7 +428,7 @@ Qupls4_decoder udeci0
 	.om(sr.om),
 	.ipl(sr.ipl),
 	.instr(tpr[g].uop),
-	.instr_raw(336'(}cline >> {tpr[g].cli,4'b0})),
+	.instr_raw(336'(cline >> {tpr[g].cli,4'b0})),
 	.dbo(dec[g])
 );
 end

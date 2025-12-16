@@ -293,7 +293,7 @@ wire [1:0] next_robentry_islot [0:Qupls4_pkg::ROB_ENTRIES-1];
 reg [1:0] lsq_islot [0:Qupls4_pkg::LSQ_ENTRIES*2-1];
 Qupls4_pkg::rob_bitmask_t robentry_stomp;
 Qupls4_pkg::rob_bitmask_t robentry_cpydst;
-wire [4:0] kept_stream;
+pc_stream_t kept_stream;
 wire stomp_fet, stomp_mux, stomp_x4;
 wire stomp_dec, stomp_ren, stomp_que, stomp_quem;
 reg stomp_fet1,stomp_mux1,stomp_mux2;
@@ -857,7 +857,7 @@ fta_tranid_t dramN_tid [0:Qupls4_pkg::NDATA_PORTS-1];
 Qupls4_pkg::memsz_t dramN_memsz;
 reg [Qupls4_pkg::NDATA_PORTS-1:0] dramN_ctago;
 wire [Qupls4_pkg::NDATA_PORTS-1:0] dramN_ctagi;
-wire [15:0] dramN_tagsi [0:Qupls4_pkg::NDATA_PORTS-1];
+wire [63:0] dramN_tagsi [0:Qupls4_pkg::NDATA_PORTS-1];
 rob_ndx_t [Qupls4_pkg::NDATA_PORTS-1:0] dramN_id;
 
 wire [2:0] cmtcnt;
@@ -1572,8 +1572,8 @@ endgenerate
 						
 
 wire predicted_correctly_dec;
-wire [63:0] new_address_dec;
-reg [63:0] new_address_mux;
+cpu_types_pkg::pc_address_t new_address_dec;
+cpu_types_pkg::pc_address_t new_address_mux;
 wire ic_port;
 wire ftaim_full, ftadm_full;
 reg ihit_fet, ihit_mux, ihit_dec, ihit_ren, ihit_que;
@@ -1588,7 +1588,7 @@ reg [31:0] ic_carry_mod;
 cpu_types_pkg::seqnum_t ic_irq_sn;
 reg get_next_pc;
 
-pc_stream_t new_stream;
+pc_stream_t [3:0] new_stream;
 wire alloc_stream;
 reg [XSTREAMS*THREADS-1:0] used_streams;
 pc_address_ex_t [XSTREAMS*THREADS-1:0] pcs;
@@ -4047,7 +4047,7 @@ rob_ndx_t [DISPATCH_WIDTH-1:0] rob_dispatched;
 Qupls4_pkg::rob_bitmask_t rob_dispatched_stomped;
 wire [DISPATCH_WIDTH-1:0] rob_dispatched_v;
 
-Qupls4_instruction_dispatcher #(.MWIDTH(MWIDTH), .DISPATCH_WIDTH(DISPATCH_WIDTH)) uid1
+Qupls4_instruction_dispatcher #(.MWIDTH(MWIDTH), .DISPATCH_COUNT(DISPATCH_WIDTH)) uid1
 (
 	.rst(irst),
 	.clk(clk),

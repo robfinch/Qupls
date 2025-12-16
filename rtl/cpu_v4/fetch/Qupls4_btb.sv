@@ -161,11 +161,17 @@ if (THREADS > 3) ffz48 uffz3 (.i({16'hFFFF,strm_bitmap[127:96]}), .o(ffz3));
 if (THREADS > 4) ffz48 uffz4 (.i({16'hFFFF,strm_bitmap[159:128]}), .o(ffz4));
 end
 else if (XSTREAMS==16) begin
-ffz24 uffz0 (.i({8'hFF,strm_bitmap[ 15: 0]}), .o(ffz0));
-if (THREADS > 1) ffz24 uffz1 (.i({8'hFF,strm_bitmap[ 31:16]}), .o(ffz1));
-if (THREADS > 2) ffz24 uffz2 (.i({8'hFF,strm_bitmap[ 47:32]}), .o(ffz2));
-if (THREADS > 3) ffz24 uffz3 (.i({8'hFF,strm_bitmap[ 63:48]}), .o(ffz3));
-if (THREADS > 4) ffz24 uffz4 (.i({8'hFF,strm_bitmap[ 79:64]}), .o(ffz4));
+wire [4:0] ffz0a,ffz1a,ffz2a,ffz3a,ffz4a;
+ffz24 uffz0 (.i({8'hFF,strm_bitmap[ 15: 0]}), .o(ffz0a));
+if (THREADS > 1) ffz24 uffz1 (.i({8'hFF,strm_bitmap[ 31:16]}), .o(ffz1a));
+if (THREADS > 2) ffz24 uffz2 (.i({8'hFF,strm_bitmap[ 47:32]}), .o(ffz2a));
+if (THREADS > 3) ffz24 uffz3 (.i({8'hFF,strm_bitmap[ 63:48]}), .o(ffz3a));
+if (THREADS > 4) ffz24 uffz4 (.i({8'hFF,strm_bitmap[ 79:64]}), .o(ffz4a));
+assign ffz0 = {1'b0,ffz0a};
+assign ffz1 = {1'b0,ffz1a};
+assign ffz2 = {1'b0,ffz2a};
+assign ffz3 = {1'b0,ffz3a};
+assign ffz4 = {1'b0,ffz4a};
 end
 end
 endgenerate

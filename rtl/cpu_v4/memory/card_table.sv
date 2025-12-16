@@ -37,7 +37,7 @@
 // 125 LUTs / 140 FFs / 1 BRAMs
 // ============================================================================
 //
-import fta_bus_pkg::*;
+import wishbone_pkg::*;
 
 module card_table(rst_i, clk_i, cs_config_i, cs_io_i, wbs_req, wbs_resp);
 parameter UPDATE_VALUE = 1'b1;
@@ -45,8 +45,8 @@ input rst_i;
 input clk_i;
 input cs_config_i;
 input cs_io_i;
-input fta_cmd_request32_t wbs_req;
-output fta_cmd_response32_t wbs_resp;
+input wb_cmd_request32_t wbs_req;
+output wb_cmd_response32_t wbs_resp;
 
 parameter IO_ADDR = 32'hFEE00001;
 parameter IO_ADDR_MASK = 32'h00FF8000;
@@ -76,8 +76,8 @@ localparam CFG_HEADER_TYPE = 8'h00;			// 00 = a general device
 wire cs_cards;
 wire cs_master_card;
 wire [31:0] douta;
-fta_cmd_request32_t wbs_reqd;
-fta_cmd_response32_t cfg_resp;
+wb_cmd_request32_t wbs_reqd;
+wb_cmd_response32_t cfg_resp;
 reg we;
 reg [3:0] sel;
 reg [31:0] adr;
@@ -297,7 +297,7 @@ always_comb
 	else begin
 		wbs_resp.dat = cs_io ? douta : cs_io2 ? master_card_table : 32'd0;
 		wbs_resp.adr = (cs_io|cs_io2) ? wbs_reqd.adr : 32'd0;
-		wbs_resp.err = fta_bus_pkg::OKAY;
+		wbs_resp.err = wishbone_pkg::OKAY;
 		wbs_resp.rty = 1'b0;
 		wbs_resp.stall = 1'b0;
 		wbs_resp.next = 1'b0;
