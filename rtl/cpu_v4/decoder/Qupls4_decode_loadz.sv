@@ -43,12 +43,12 @@ output loadz;
 function fnIsLoadz;
 input Qupls4_pkg::micro_op_t op;
 begin
-	case(op.any.opcode)
+	case(op.opcode)
 	Qupls4_pkg::OP_LDBZ,Qupls4_pkg::OP_LDWZ,
 	Qupls4_pkg::OP_LDTZ:
 		fnIsLoadz = 1'b1;
 	Qupls4_pkg::OP_LDIP:
-		fnIsLoadz = op.ls.Rs1[2];	// ToDO resolve this further
+		fnIsLoadz = op.Rs1[2];	// ToDO resolve this further
 	default:
 		fnIsLoadz = 1'b0;
 	endcase

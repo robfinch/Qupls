@@ -44,7 +44,7 @@ output has_imm;
 function fnHasImm;
 input Qupls4_pkg::micro_op_t op;
 begin
-	case(op.any.opcode)
+	case(op.opcode)
 	Qupls4_pkg::OP_ADDI,Qupls4_pkg::OP_SUBFI,Qupls4_pkg::OP_CMPI,Qupls4_pkg::OP_CMPUI,
 	Qupls4_pkg::OP_MULI,Qupls4_pkg::OP_MULUI,Qupls4_pkg::OP_DIVI,Qupls4_pkg::OP_DIVUI,
 	Qupls4_pkg::OP_ADDIPI,

@@ -44,7 +44,7 @@ function fnIsCJB;
 input Qupls4_pkg::micro_op_t ir;
 begin
 	fnIsCJB = 1'b0;
-	case(ir.any.opcode)
+	case(ir.opcode)
 	Qupls4_pkg::OP_BSR,Qupls4_pkg::OP_JSR,Qupls4_pkg::OP_JSRN:
 		fnIsCJB = 1'b1;
 	default:	fnIsCJB = 1'b0;

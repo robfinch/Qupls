@@ -239,7 +239,7 @@ else
 generate begin : gCptgt
 	for (mm = 0; mm < WID/8; mm = mm + 1) begin
     always_comb
-    	if (stomp_con[7]||rse_o.uop.any.opcode==Qupls4_pkg::OP_NOP)
+    	if (stomp_con[7]||rse_o.uop.opcode==Qupls4_pkg::OP_NOP)
         o[mm*8+7:mm*8] = t[mm*8+7:mm*8];
       else if (cptgt[mm])
         o[mm*8+7:mm*8] = z ? 8'h00 : t[mm*8+7:mm*8];

@@ -44,7 +44,7 @@ function fnIsSau;
 input Qupls4_pkg::micro_op_t ir;
 begin
 	fnIsSau = 1'b0;
-	case(ir.any.opcode)
+	case(ir.opcode)
 	Qupls4_pkg::OP_BFLD:
 		fnIsSau = 1'b1;
 	Qupls4_pkg::OP_R3B,Qupls4_pkg::OP_R3W,Qupls4_pkg::OP_R3T,Qupls4_pkg::OP_R3O,
@@ -54,7 +54,7 @@ begin
 	Qupls4_pkg::OP_FLTH,Qupls4_pkg::OP_FLTS,Qupls4_pkg::OP_FLTD,Qupls4_pkg::OP_FLTQ,
 	Qupls4_pkg::OP_FLTPH,Qupls4_pkg::OP_FLTPS,Qupls4_pkg::OP_FLTPD,Qupls4_pkg::OP_FLTPQ,
 	Qupls4_pkg::OP_FLTP:
-		case(ir.f3.func)
+		case(ir.func)
 		Qupls4_pkg::FLT_CMP,
 		Qupls4_pkg::FLT_ABS,Qupls4_pkg::FLT_NEG:
 			fnIsSau = 1'b1;

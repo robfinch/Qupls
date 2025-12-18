@@ -45,7 +45,7 @@ output vstore_ndx;
 function fnIsStore;
 input Qupls4_pkg::micro_op_t op;
 begin
-	case(op.any.opcode)
+	case(op.opcode)
 	Qupls4_pkg::OP_STB,Qupls4_pkg::OP_STW,
 	Qupls4_pkg::OP_STT,Qupls4_pkg::OP_STORE,
 	Qupls4_pkg::OP_STI,
@@ -61,7 +61,7 @@ endfunction
 function fnIsStoreVec;
 input Qupls4_pkg::micro_op_t op;
 begin
-	case(op.any.opcode)
+	case(op.opcode)
 	Qupls4_pkg::OP_STV:
 		fnIsStoreVec = 1'b1;
 	default:
@@ -73,7 +73,7 @@ endfunction
 function fnIsStoreVn;
 input Qupls4_pkg::micro_op_t op;
 begin
-	case(op.any.opcode)
+	case(op.opcode)
 	Qupls4_pkg::OP_STV:
 		fnIsStoreVn = 1'b1;
 	default:

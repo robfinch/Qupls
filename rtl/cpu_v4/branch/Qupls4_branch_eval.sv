@@ -46,9 +46,9 @@ input c;
 output reg takb;
 
 always_comb
-	case(instr.any.opcode)
+	case(instr.opcode)
 	Qupls4_pkg::OP_BCCU8,Qupls4_pkg::OP_BCCU16,Qupls4_pkg::OP_BCCU32,Qupls4_pkg::OP_BCCU64:	// integer unsigned branches
-		case(instr.br.cnd)
+		case(instr.cnd)
 		CND_EQ:	takb = a == b;
 		CND_NE:	takb = a != b;
 		CND_LT:	takb = a < b;
@@ -64,7 +64,7 @@ always_comb
 		default:	takb = 1'b0;
 		endcase
 	Qupls4_pkg::OP_BCC8,Qupls4_pkg::OP_BCC16,Qupls4_pkg::OP_BCC32,Qupls4_pkg::OP_BCC64:	// integer signed branches
-		case(instr.br.cnd)
+		case(instr.cnd)
 		CND_EQ:	takb = a == b;
 		CND_NE:	takb = a != b;
 		CND_LT:	takb = $signed(a) < $signed(b);

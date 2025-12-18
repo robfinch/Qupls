@@ -61,7 +61,7 @@ begin
 	if (has_imma)
 		fnRs1 = 8'd0;
 	else
-		case(ir.any.opcode)
+		case(ir.opcode)
 /*			
 		Qupls4_pkg::OP_MOV:
 			if (ir[28:26] < 3'd4)
@@ -70,17 +70,17 @@ begin
 				fnRs1 = {2'b00,ir[15:11]};
 */				
 		Qupls4_pkg::OP_FLTH,Qupls4_pkg::OP_FLTS,Qupls4_pkg::OP_FLTD,Qupls4_pkg::OP_FLTQ:
-			fnRs1 = has_rext ? instr_raw[61:55] : {1'b0,ir.fpu.Rs1};
+			fnRs1 = has_rext ? instr_raw[61:55] : {1'b0,ir.Rs1};
 		Qupls4_pkg::OP_CSR:
-			fnRs1 = has_rext ? instr_raw[61:55] : {1'b0,ir.csr.Rs1};
+			fnRs1 = has_rext ? instr_raw[61:55] : {1'b0,ir.Rs1};
 		Qupls4_pkg::OP_ADDI,Qupls4_pkg::OP_SUBFI,Qupls4_pkg::OP_CMPI,Qupls4_pkg::OP_CMPUI,
 		Qupls4_pkg::OP_ANDI,Qupls4_pkg::OP_ORI,Qupls4_pkg::OP_XORI,
 		Qupls4_pkg::OP_MULI,Qupls4_pkg::OP_MULUI,Qupls4_pkg::OP_DIVI,Qupls4_pkg::OP_DIVUI,
 		Qupls4_pkg::OP_SHIFT:
-			fnRs1 = has_rext ? instr_raw[61:55] : {1'b0,ir.alui.Rs1};
+			fnRs1 = has_rext ? instr_raw[61:55] : {1'b0,ir.Rs1};
 		Qupls4_pkg::OP_BCC8,Qupls4_pkg::OP_BCC16,Qupls4_pkg::OP_BCC32,Qupls4_pkg::OP_BCC64,
 		Qupls4_pkg::OP_BCCU8,Qupls4_pkg::OP_BCCU16,Qupls4_pkg::OP_BCCU32,Qupls4_pkg::OP_BCCU64:
-			fnRs1 = has_rext ? instr_raw[61:55] : {1'b0,ir.br.Rs1};
+			fnRs1 = has_rext ? instr_raw[61:55] : {1'b0,ir.Rs1};
 		Qupls4_pkg::OP_LDB,Qupls4_pkg::OP_LDBZ,
 		Qupls4_pkg::OP_LDW,Qupls4_pkg::OP_LDWZ,
 		Qupls4_pkg::OP_LDT,Qupls4_pkg::OP_LDTZ,
@@ -88,7 +88,7 @@ begin
 		Qupls4_pkg::OP_AMO,Qupls4_pkg::OP_CMPSWAP,
 		Qupls4_pkg::OP_STB,Qupls4_pkg::OP_STW,Qupls4_pkg::OP_STT,Qupls4_pkg::OP_STORE,Qupls4_pkg::OP_STI,
 		Qupls4_pkg::OP_STPTR:
-			fnRs1 = has_rext ? instr_raw[61:55] : {1'b0,ir.ls.Rs1};
+			fnRs1 = has_rext ? instr_raw[61:55] : {1'b0,ir.Rs1};
 
 		Qupls4_pkg::OP_PUSH,Qupls4_pkg::OP_POP:
 			fnRs1 = 7'd0;
@@ -102,7 +102,7 @@ always_comb
 begin
 	Rs1 = fnRs1(instr, instr_raw, has_imma);
 	/*
-	if (instr.ins.any.opcode==Qupls4_pkg::OP_MOV && instr.ins[28:26]==3'd1)	// MOVEMD?
+	if (instr.ins.opcode==Qupls4_pkg::OP_MOV && instr.ins[28:26]==3'd1)	// MOVEMD?
 		om1 = Qupls4_pkg::operating_mode_t'(instr.ins[24:23]);
     else
         om1 = om;

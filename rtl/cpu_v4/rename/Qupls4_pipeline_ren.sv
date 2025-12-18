@@ -45,7 +45,8 @@ module Qupls4_pipeline_ren(
 	rst, clk, clk5x, ph4, en, nq, restore, restored, restore_list,
 	chkpt_amt, tail0, rob, avail_reg, sr,
 	stomp_ren, kept_stream, branch_state, flush_dec, flush_ren,
-	arn, arng, arnv, rn_cp, store_argC_pReg, prn, prnv,
+//	arn, arng, arnv,
+	rn_cp, store_argC_pReg, prn_i, prnv,
 	ns_areg,
 	Rt0_dec, Rt_decv,
 	Rt0_ren, Rt0_renv, 
@@ -68,8 +69,8 @@ module Qupls4_pipeline_ren(
 	micro_machine_active_dec, micro_machine_active_ren,
 	alloc_chkpt, cndx, rcndx, miss_cp
 );
-parameter MWIDTH = 4;
-parameter NPORT = 12;
+parameter MWIDTH = Qupls4_pkg::MWIDTH;
+parameter NPORT = MWIDTH*4;
 input rst;
 input clk;
 input clk5x;
@@ -89,11 +90,11 @@ input Qupls4_pkg::status_reg_t sr;
 input stomp_ren;
 input pc_stream_t kept_stream;
 input Qupls4_pkg::branch_state_t branch_state;
-input aregno_t [NPORT-1:0] arn;
-input [2:0] arng [0:NPORT-1];
-input [NPORT-1:0] arnv;
+//input aregno_t [NPORT-1:0] arn;
+//input [2:0] arng [0:NPORT-1];
+//input [NPORT-1:0] arnv;
 input checkpt_ndx_t [NPORT-1:0] rn_cp;
-output pregno_t [NPORT-1:0] prn;
+input pregno_t [NPORT-1:0] prn_i;
 output [NPORT-1:0] prnv;
 input pregno_t store_argC_pReg;
 input aregno_t [MWIDTH-1:0] ns_areg;
@@ -131,7 +132,7 @@ input checkpt_ndx_t [3:0] rcndx;
 input checkpt_ndx_t miss_cp;
 
 genvar g;
-integer jj,n5,n6,n7;
+integer jj,n5,n6,n7,n8;
 
 Qupls4_pkg::pipeline_reg_t nopi;
 
@@ -142,11 +143,11 @@ begin
 	nopi.pc = RSTPC;
 	nopi.pc.stream = pc_stream_t'(7'd1);
 	nopi.uop = {26'd0,Qupls4_pkg::OP_NOP};
-	nopi.uop.any.lead = 1'd1;
-	nopi.uop.r3.Rs1 = 8'd0;
-	nopi.uop.r3.Rs2 = 8'd0;
-	nopi.uop.r3.Rs3 = 8'd0;
-	nopi.uop.r3.Rd = 8'd0;
+	nopi.uop.lead = 1'd1;
+	nopi.uop.Rs1 = 8'd0;
+	nopi.uop.Rs2 = 8'd0;
+	nopi.uop.Rs3 = 8'd0;
+	nopi.uop.Rd = 8'd0;
 	nopi.decbus.Rs1 = 8'd0;
 	nopi.decbus.Rs2 = 8'd0;
 	nopi.decbus.Rs3 = 8'd0;
@@ -183,6 +184,28 @@ generate begin : gRt_ren
 	end
 end
 endgenerate
+
+reg [MWIDTH*5-1:0] arnv;
+reg [2:0] arng [0:MWIDTH*5-1];
+aregno_t [MWIDTH*5-1:0] arn;
+pregno_t [MWIDTH*5-1:0] prn;
+
+always_comb
+begin
+	arnv = {MWIDTH*5{1'b1}};
+	for (n8 = 0; n8 < MWIDTH; n8 = n8 + 1) begin
+		arn[n8*5+0] = pg_dec.pr[n8].op.decbus.Rs1;
+		arn[n8*5+1] = pg_dec.pr[n8].op.decbus.Rs2;
+		arn[n8*5+2] = pg_dec.pr[n8].op.decbus.Rs3;
+		arn[n8*5+3] = pg_dec.pr[n8].op.decbus.Rs4;
+		arn[n8*5+4] = pg_dec.pr[n8].op.decbus.Rd;
+		arng[n8*5+0] = n8;
+		arng[n8*5+1] = n8;
+		arng[n8*5+2] = n8;
+		arng[n8*5+3] = n8;
+		arng[n8*5+4] = n8;
+	end
+end
 
 /*
 always_comb Rt0_q1 = Rt0_ren;// & {10{~pg_ren.pr[0].decbus.Rtz & ~stomp0}};
@@ -328,7 +351,7 @@ for (n6 = 0; n6 < MWIDTH; n6 = n6 + 1)
 	qbr[n6] = pg_dec.pr[n6].op.decbus.br|pg_dec.pr[n6].op.decbus.cjb;
 
 `ifdef SUPPORT_RAT
-Qupls4_rat #(.NPORT(NPORT)) urat1
+Qupls4_rat #(.MWIDTH(MWIDTH)) urat1
 (	
 	.rst(rst),
 	.clk(clk),
@@ -350,6 +373,7 @@ Qupls4_rat #(.NPORT(NPORT)) urat1
 	.rn_cp(rn_cp),
 	.st_prn(store_argC_pReg),
 	.prn(prn),
+	.prn_i(prn_i),
 	.prv(prnv),
 	.wr(Rt_decv),// && !stomp0 && ~pg_ren.pr[0].decbus.Rtz),
 	.wra(ns_areg),
@@ -576,6 +600,11 @@ else begin
 		pg_ren.pr[0] <= pg_dec.pr[0];
 		if (pg_dec.pr[0].v & ~stomp_ren) begin
 			pg_ren.pr[0].op.nRd <= Rt0_dec;
+			pg_ren.pr[0].op.pRs1 = prn[0];
+			pg_ren.pr[0].op.pRs2 = prn[1];
+			pg_ren.pr[0].op.pRs3 = prn[2];
+//			pg_ren.pr[0].op.uop.Rs4 = prn[3];
+			pg_ren.pr[0].op.pRd = prn[3];
 			case(MWIDTH)
 			1:
 				if (pg_ren.pr[0].op.decbus.bsr|pg_ren.pr[0].op.decbus.jsr)
@@ -619,6 +648,11 @@ else begin
 			pg_ren.pr[1] <= pg_dec.pr[1];
 			if (pg_dec.pr[1].v & ~stomp_ren) begin
 				pg_ren.pr[1].op.nRd <= Rt0_dec[1];
+				pg_ren.pr[1].op.pRs1 = prn[4];
+				pg_ren.pr[1].op.pRs2 = prn[5];
+				pg_ren.pr[1].op.pRs3 = prn[6];
+//				pg_ren.pr[1].op.uop.Rs4 = prn[8];
+				pg_ren.pr[1].op.pRd = prn[7];
 				if (pg_dec.pr[0].op.decbus.bsr|pg_dec.pr[0].op.decbus.jsr)
 					pg_ren.pr[1].v <= INV;
 				if (pg_ren.pr[3].op.decbus.bsr|pg_ren.pr[3].op.decbus.jsr)
@@ -642,6 +676,11 @@ else begin
 			pg_ren.pr[2] <= pg_dec.pr[2];
 			if (pg_dec.pr[2].v & ~stomp_ren) begin
 				pg_ren.pr[2].op.nRd <= Rt0_dec[2];
+				pg_ren.pr[2].op.pRs1 = prn[8];
+				pg_ren.pr[2].op.pRs2 = prn[9];
+				pg_ren.pr[2].op.pRs3 = prn[10];
+//				pg_ren.pr[2].op.uop.Rs4 = prn[13];
+				pg_ren.pr[2].op.pRd = prn[11];
 				if (pg_dec.pr[0].op.decbus.bsr || pg_dec.pr[1].op.decbus.bsr || pg_dec.pr[0].op.decbus.jsr || pg_dec.pr[1].op.decbus.jsr)
 					pg_ren.pr[2].v <= INV;
 				if (pg_ren.pr[3].op.decbus.bsr | pg_ren.pr[3].op.decbus.jsr)
@@ -665,6 +704,11 @@ else begin
 			pg_ren.pr[3] <= pg_dec.pr[3];
 			if (pg_dec.pr[3].v & ~stomp_ren) begin
 				pg_ren.pr[3].op.nRd <= Rt0_dec[3];
+				pg_ren.pr[3].op.pRs1 = prn[12];
+				pg_ren.pr[3].op.pRs2 = prn[13];
+				pg_ren.pr[3].op.pRs3 = prn[14];
+//				pg_ren.pr[3].op.uop.Rs4 = prn[18];
+				pg_ren.pr[3].op.pRd = prn[15];
 				if (pg_dec.pr[0].op.decbus.bsr || pg_dec.pr[1].op.decbus.bsr || pg_dec.pr[2].op.decbus.bsr ||
 					pg_dec.pr[0].op.decbus.jsr || pg_dec.pr[1].op.decbus.jsr || pg_dec.pr[2].op.decbus.jsr
 				)

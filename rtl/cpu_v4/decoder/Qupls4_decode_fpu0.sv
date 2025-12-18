@@ -43,11 +43,11 @@ output fpu0;
 function fnIsFpu0;
 input Qupls4_pkg::micro_op_t ir;
 begin
-	case(ir.any.opcode)
+	case(ir.opcode)
 	Qupls4_pkg::OP_FLTH,Qupls4_pkg::OP_FLTS,Qupls4_pkg::OP_FLTD,Qupls4_pkg::OP_FLTQ,
 	Qupls4_pkg::OP_FLTPH,Qupls4_pkg::OP_FLTPS,Qupls4_pkg::OP_FLTPD,Qupls4_pkg::OP_FLTPQ,
 	Qupls4_pkg::OP_FLTP:
-		case(ir.f3.func)
+		case(ir.func)
 		// ToDo:fix trig
 		Qupls4_pkg::FLT_SIN,Qupls4_pkg::FLT_COS,Qupls4_pkg::FLT_TAN,Qupls4_pkg::FLT_ATAN,
 		Qupls4_pkg::FLT_STAT,Qupls4_pkg::FLT_SQRT,

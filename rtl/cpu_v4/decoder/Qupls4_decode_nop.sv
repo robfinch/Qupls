@@ -43,7 +43,7 @@ output nop;
 function fnIsNop;
 input Qupls4_pkg::micro_op_t ir;
 begin
-	case(ir.any.opcode)
+	case(ir.opcode)
 	Qupls4_pkg::OP_NOP,Qupls4_pkg::OP_PUSH,Qupls4_pkg::OP_POP:
 		fnIsNop = 1'b1;
 	default:	fnIsNop = 1'b0;

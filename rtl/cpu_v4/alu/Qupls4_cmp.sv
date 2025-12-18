@@ -66,11 +66,11 @@ endgenerate
 always_comb
 begin
 	cb = 8'h00;
-	case(ir.any.opcode)
+	case(ir.opcode)
 	Qupls4_pkg::OP_R3B,Qupls4_pkg::OP_R3W,Qupls4_pkg::OP_R3T,Qupls4_pkg::OP_R3O,
 	Qupls4_pkg::OP_R3BP,Qupls4_pkg::OP_R3WP,Qupls4_pkg::OP_R3TP,Qupls4_pkg::OP_R3OP:
 		begin
-			case(ir.r3.func)
+			case(ir.func)
 			FN_CMP:
 				begin
 					cb.eq = a == b;

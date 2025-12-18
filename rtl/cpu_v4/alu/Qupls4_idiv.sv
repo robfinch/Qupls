@@ -89,9 +89,9 @@ always_comb
 begin
 	exc = Qupls4_pkg::FLT_NONE;
 	bus = {(WID/16){16'h0000}};
-	case(ir.any.opcode)
+	case(ir.opcode)
 	Qupls4_pkg::OP_DIVI:
-		case (ir.alu.op3)
+		case (ir.op3)
 		3'd0:	bus = div_q[WID-1:0];
 		3'd1: bus = div_q[WID-1:0];
 		3'd4:	bus = div_r[WID-1:0];

@@ -52,7 +52,7 @@ Qupls4_branch_eval #(.WID(32)) u32 (instr, a[31:0], b[31:0], c, takb32);
 Qupls4_branch_eval #(.WID(64)) u64 (instr, a[63:0], b[63:0], c, takb64);
 
 always_comb
-	case(instr.any.opcode)
+	case(instr.opcode)
 	Qupls4_pkg::OP_BCCU8,Qupls4_pkg::OP_BCC8:
 		takb = takb8;
 	Qupls4_pkg::OP_BCCU16,Qupls4_pkg::OP_BCC16:

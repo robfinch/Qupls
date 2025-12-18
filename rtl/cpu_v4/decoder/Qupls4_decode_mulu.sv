@@ -43,18 +43,18 @@ output mulu;
 function fnIsMulu;
 input Qupls4_pkg::micro_op_t ir;
 begin
-	fnIsMulu = ir.any.opcode==Qupls4_pkg::OP_MULUI || (
+	fnIsMulu = ir.opcode==Qupls4_pkg::OP_MULUI || (
 		(
-		ir.any.opcode==Qupls4_pkg::OP_R3B||
-		ir.any.opcode==Qupls4_pkg::OP_R3W||
-		ir.any.opcode==Qupls4_pkg::OP_R3T||
-		ir.any.opcode==Qupls4_pkg::OP_R3O||
-		ir.any.opcode==Qupls4_pkg::OP_R3BP||
-		ir.any.opcode==Qupls4_pkg::OP_R3WP||
-		ir.any.opcode==Qupls4_pkg::OP_R3TP||
-		ir.any.opcode==Qupls4_pkg::OP_R3OP||
-		ir.any.opcode==Qupls4_pkg::OP_R3P
-		) && ir.r3.func==FN_MULU)
+		ir.opcode==Qupls4_pkg::OP_R3B||
+		ir.opcode==Qupls4_pkg::OP_R3W||
+		ir.opcode==Qupls4_pkg::OP_R3T||
+		ir.opcode==Qupls4_pkg::OP_R3O||
+		ir.opcode==Qupls4_pkg::OP_R3BP||
+		ir.opcode==Qupls4_pkg::OP_R3WP||
+		ir.opcode==Qupls4_pkg::OP_R3TP||
+		ir.opcode==Qupls4_pkg::OP_R3OP||
+		ir.opcode==Qupls4_pkg::OP_R3P
+		) && ir.func==FN_MULU)
 		;
 end
 endfunction

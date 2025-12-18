@@ -56,14 +56,15 @@
 import cpu_types_pkg::aregno_t;
 import cpu_types_pkg::pc_address_t;
 
-module Qupls4_read_port_select(rst, clk, aReg_i, aReg_o, regAck_o);
+module Qupls4_read_port_select(rst, clk, pReg_i, pRegv_i, pReg_o, regAck_o);
 parameter NPORTI=64;
 parameter NPORTO=16;
 parameter FIXEDPORTS = 0;
 input rst;
 input clk;
-input aregno_t [NPORTI-1:0] aReg_i;
-output aregno_t [NPORTO-1:0] aReg_o;
+input pregno_t [NPORTI-1:0] pReg_i;
+input [NPORTI-1:0] pRegv_i;
+output pregno_t [NPORTO-1:0] pReg_o;
 output reg [NPORTI-1:0] regAck_o;
 
 integer j,k,h,x;
@@ -89,20 +90,20 @@ else begin
 	k = FIXEDPORTS;
 	for (h = 0; h < FIXEDPORTS; h = h + 1) begin
 		regAck_o[h] = 1'b1;
-		aReg_o[h] = aReg_i[h];
+		pReg_o[h] = pReg_i[h];
 	end
 	for (h = 0; h < NPORTO; h = h + 1) begin
 		if (h >= FIXEDPORTS) begin
 			regAck_o[h] = 1'b0;
-			aReg_o[h] = 8'd0;
+			pReg_o[h] = 8'd0;
 		end
 	end
 	for (j = 0; j < NPORTI-FIXEDPORTS; j = j + 1) begin
 		regAck_o[j+FIXEDPORTS] = 1'b0;
-		if (aReg_i[((j+m)%(NPORTI-FIXEDPORTS))+FIXEDPORTS]!=8'd0) begin
-			if (k < NPORTO) begin
+		if (k < NPORTO) begin
+			if (pRegv_i[((j+m)%(NPORTI-FIXEDPORTS))+FIXEDPORTS]) begin
 				regAck_o[((j+m)%(NPORTI-FIXEDPORTS))+FIXEDPORTS] = 1'b1;
-				aReg_o[k] = aReg_i[((j+m)%(NPORTI-FIXEDPORTS))+FIXEDPORTS];
+				pReg_o[k] = pReg_i[((j+m)%(NPORTI-FIXEDPORTS))+FIXEDPORTS];
 				k = k + 1;
 			end
 		end

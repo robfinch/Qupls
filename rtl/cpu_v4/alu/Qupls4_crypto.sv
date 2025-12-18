@@ -47,7 +47,7 @@ input cpu_types_pkg::value_t c;
 output cpu_types_pkg::value_t o;
 
 cpu_types_pkg::value_t o1, o2;
-//wire M = m | ~ir.any.v;
+//wire M = m | ~ir.v;
 reg [4:0] shamt;
 reg [7:0] sb_in;
 reg [31:0] x;
@@ -323,9 +323,9 @@ input [7:0] i;
 endfunction
 
 always_comb
-case(ir.any.opcode)
+case(ir.opcode)
 R2:
-	case (ir.r3.Rs2)
+	case (ir.Rs2)
 	R1_SHA256SIG0:
 		begin
 			o1 = {a[6:0],a[31:7]} ^ {a[17:0],a[31:18]} ^ a[31:3];
@@ -376,7 +376,7 @@ R2:
 	endcase
 /*	
 R3:
-	case(ir.r3.func)
+	case(ir.func)
 	SM4ED:
 		begin
 			shamt = {c[1:0],3'b0};

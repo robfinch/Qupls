@@ -75,7 +75,7 @@ if (rst_i) begin
 	dram_oper_o <= {$bits(Qupls4_pkg::dram_oper_t){1'b0}};
 	dram_work_o <= {$bits(Qupls4_pkg::dram_work_t){1'b0}};
 	dram_oper_o.exc <= Qupls4_pkg::FLT_NONE;
-	dram_oper_o.oper.aRnz <= TRUE;
+	dram_oper_o.oper.aRnv <= FALSE;
 end
 else begin
 	
@@ -112,7 +112,7 @@ else begin
     dram_oper_o.rndx <= dram_work_o.rndx;
     dram_oper_o.oper.pRn <= dram_work_o.pRd;
     dram_oper_o.oper.aRn <= dram_work_o.aRd;
-    dram_oper_o.oper.aRnz <= dram_work_o.aRdz;
+    dram_oper_o.oper.aRnv <= dram_work_o.aRdv;
     dram_oper_o.om <= dram_work_o.om;
     dram_oper_o.cndx <= dram_work_o.cndx;
     dram_oper_o.rndx <= dram_work_o.rndx;
@@ -137,7 +137,7 @@ else begin
     dram_oper_o.rndx <= dram_work_o.rndx;
     dram_oper_o.oper.pRn <= dram_work_o.pRd;
     dram_oper_o.oper.aRn <= dram_work_o.aRd;
-    dram_oper_o.oper.aRnz <= dram_work_o.aRdz;
+    dram_oper_o.oper.aRnv <= dram_work_o.aRdv;
     dram_oper_o.om <= dram_work_o.om;
     dram_oper_o.cndx <= dram_work_o.cndx;
     dram_oper_o.exc <= dram_work_o.exc;
@@ -209,7 +209,7 @@ else begin
 				dram_work_o.erc <= rob_i[lsq_i.rndx].op.decbus.erc;
 				dram_work_o.pRd	<= lsq_i.Rt;
 				dram_work_o.aRd	<= lsq_i.aRt;
-				dram_work_o.aRdz <= lsq_i.aRtz;
+				dram_work_o.aRdv <= !lsq_i.aRtz;	// ToDo: fix
 				dram_work_o.om <= lsq_i.om;
 				dram_work_o.bank <= lsq_i.om==2'd0 ? 1'b0 : 1'b1;
 				dram_work_o.cndx <= rob_i[lsq_i.rndx].cndx;

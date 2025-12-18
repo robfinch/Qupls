@@ -77,7 +77,7 @@ always_comb
 	as = rse_i.Rs1z ? value_zero : rse_i.iprel ? rse_i.pc : rse_i.arg[0].val;
 
 always_comb
-	bs = rse_i.Rs2z ? value_zero : (rse_i.arg[1].val << rse_i.uop.ls.sc);
+	bs = rse_i.Rs2z ? value_zero : (rse_i.arg[1].val << rse_i.uop.sc);
 
 always_comb
 begin

@@ -44,7 +44,7 @@ function fnIsSau0;
 input Qupls4_pkg::micro_op_t ir;
 begin
 	fnIsSau0 = 1'b0;
-	case(ir.any.opcode)
+	case(ir.opcode)
 	Qupls4_pkg::OP_BFLD:
 		fnIsSau0 = 1'b1;
 	Qupls4_pkg::OP_SHIFT:	fnIsSau0 = 1'b1;

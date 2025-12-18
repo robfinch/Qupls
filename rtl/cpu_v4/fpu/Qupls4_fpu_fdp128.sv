@@ -64,13 +64,13 @@ reg fdpop, fdp_done;
 FP128 fdpa,fdpb,fdpc,fdpd;
 /*
 always_comb
-	if (ir.f3.func==FN_FMS || ir.f3.func==FN_FNMS)
+	if (ir.func==FN_FMS || ir.func==FN_FNMS)
 		fmaop = 1'b1;
 	else
 		fmaop = 1'b0;
 */
 always_comb
-	case(ir.fpu.func)
+	case(ir.func)
 	Qupls4_pkg::FN_FADD,Qupls4_pkg::FN_FSUB:
 		begin
 			fdpa <= {a,b};

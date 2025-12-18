@@ -370,7 +370,7 @@ endgenerate
 
 // Vector element size in bits.
 always_comb
-	case(ir.any.opcode)
+	case(ir.opcode)
 	Qupls4_pkg::OP_R3BP:	elesz = 8'd8;
 	Qupls4_pkg::OP_R3WP,Qupls4_pkg::OP_FLTPH:	elesz = 8'd16;
 	Qupls4_pkg::OP_R3TP,Qupls4_pkg::OP_FLTPS:	elesz = 8'd32;
@@ -385,13 +385,13 @@ begin
 	bus = {(WID/16){16'h0000}};
 	base_eleno = {chunk,2'd0};
 	mask1 = c >> base_eleno;
-	case(ir.any.opcode)
+	case(ir.opcode)
 	Qupls4_pkg::OP_R3BP,Qupls4_pkg::OP_R3WP,Qupls4_pkg::OP_R3TP,Qupls4_pkg::OP_R3OP:
-		case(ir.r3.func)
+		case(ir.func)
 		Qupls4_pkg::FN_CMP,Qupls4_pkg::FN_CMPU:
 			begin
 				bus = t;
-				case(ir.r3.op3)
+				case(ir.op3)
 				3'd0:	bus = cmpo & c;
 				3'd1:	bus = cmpo | c;
 				3'd2:	bus = cmpo ^ c;
@@ -403,7 +403,7 @@ begin
 		Qupls4_pkg::FN_SEQ:
 			begin
 				bus = t;
-				case(ir.r3.op3)
+				case(ir.op3)
 				3'd0:	bus = ($signed(a) == $signed(b)) & c;
 				3'd1:	bus = ($signed(a) == $signed(b)) | c;
 				3'd2:	bus = ($signed(a) == $signed(b)) ^ c;
@@ -416,7 +416,7 @@ begin
 		Qupls4_pkg::FN_SNE:
 			begin
 				bus = t;
-				case(ir.r3.op3)
+				case(ir.op3)
 				3'd0:	bus = ($signed(a) != $signed(b)) & c;
 				3'd1:	bus = ($signed(a) != $signed(b)) | c;
 				3'd2:	bus = ($signed(a) != $signed(b)) ^ c;
@@ -429,7 +429,7 @@ begin
 		Qupls4_pkg::FN_SLT:
 			begin
 				bus = t;
-				case(ir.r3.op3)
+				case(ir.op3)
 				3'd0:	bus = ($signed(a) < $signed(b)) & c;
 				3'd1:	bus = ($signed(a) < $signed(b)) | c;
 				3'd2:	bus = ($signed(a) < $signed(b)) ^ c;
@@ -442,7 +442,7 @@ begin
 		Qupls4_pkg::FN_SLE:
 			begin
 				bus = t;
-				case(ir.r3.op3)
+				case(ir.op3)
 				3'd0:	bus = ($signed(a) <= $signed(b)) & c;
 				3'd1:	bus = ($signed(a) <= $signed(b)) | c;
 				3'd2:	bus = ($signed(a) <= $signed(b)) ^ c;
@@ -455,7 +455,7 @@ begin
 		Qupls4_pkg::FN_SLTU:
 			begin
 				bus = t;
-				case(ir.r3.op3)
+				case(ir.op3)
 				3'd0:	bus = (a < b) & c;
 				3'd1:	bus = (a < b) | c;
 				3'd2:	bus = (a < b) ^ c;
@@ -468,7 +468,7 @@ begin
 		Qupls4_pkg::FN_SLEU:
 			begin
 				bus = t;
-				case(ir.r3.op3)
+				case(ir.op3)
 				3'd0:	bus = (a <= b) & c;
 				3'd1:	bus = (a <= b) | c;
 				3'd2:	bus = (a <= b) ^ c;
@@ -480,7 +480,7 @@ begin
 
 		Qupls4_pkg::FN_ADD:
 			begin
-				case(ir.r3.op3)
+				case(ir.op3)
 				3'd0:	bus = (a + b) & c;
 				3'd1:	bus = (a + b) | c;
 				3'd2:	bus = (a + b) ^ c;
@@ -492,7 +492,7 @@ begin
 
 		Qupls4_pkg::FN_SUB:
 			begin
-				case(ir.r3.op3)
+				case(ir.op3)
 				3'd0:	bus = (a - b) & c;
 				3'd1:	bus = (a - b) | c;
 				3'd2:	bus = (a - b) ^ c;
@@ -504,7 +504,7 @@ begin
 
 		Qupls4_pkg::FN_AND:
 			begin
-				case(ir.r3.op3)
+				case(ir.op3)
 				3'd0:	bus = (a & b) & c;
 				3'd1:	bus = (a & b) | c;
 				3'd2:	bus = (a & b) ^ c;
@@ -516,7 +516,7 @@ begin
 
 		Qupls4_pkg::FN_OR:
 			begin
-				case(ir.r3.op3)
+				case(ir.op3)
 				3'd0:	bus = (a | b) & c;
 				3'd1:	bus = (a | b) | c;
 				3'd2:	bus = (a | b) ^ c;
@@ -528,7 +528,7 @@ begin
 
 		Qupls4_pkg::FN_XOR:
 			begin
-				case(ir.r3.op3)
+				case(ir.op3)
 				3'd0:	bus = (a ^ b) & c;
 				3'd1:	bus = (a ^ b) | c;
 				3'd2:	bus = (a ^ b) ^ c;
@@ -540,7 +540,7 @@ begin
 
 		Qupls4_pkg::FN_ASL:
 			begin
-				case(ir.r3.op3)
+				case(ir.op3)
 				3'd0:	bus = shl & c;
 				3'd1:	bus = shl | c;
 				3'd2:	bus = shl ^ c;
@@ -552,7 +552,7 @@ begin
 
 		Qupls4_pkg::FN_LSR:
 			begin
-				case(ir.r3.op3)
+				case(ir.op3)
 				3'd0:	bus = shr & c;
 				3'd1:	bus = shr | c;
 				3'd2:	bus = shr ^ c;
@@ -563,7 +563,7 @@ begin
 			end
 
 		Qupls4_pkg::FN_ASR:
-			case(ir.alu.op3)
+			case(ir.op3)
 			3'd0: bus = asr;
 			3'd1:	bus = asr;
 			3'd2:	bus = asr;
@@ -573,7 +573,7 @@ begin
 			endcase
 
 		Qupls4_pkg::FN_ROL:
-			case(ir.alu.op3)
+			case(ir.op3)
 			3'd0: bus = (shl | shl[WID*2-1:WID]) & c;
 			3'd1:	bus = (shl | shl[WID*2-1:WID]) | c;
 			3'd2:	bus = (shl | shl[WID*2-1:WID]) ^ c;
@@ -583,7 +583,7 @@ begin
 			endcase
 
 		Qupls4_pkg::FN_ROR:
-			case(ir.alu.op3)
+			case(ir.op3)
 			3'd0: bus = (shr | shr[WID*2-1:WID]) & c;
 			3'd1:	bus = (shr | shr[WID*2-1:WID]) | c;
 			3'd2:	bus = (shr | shr[WID*2-1:WID]) ^ c;
@@ -599,9 +599,9 @@ begin
 		endcase
 
 	Qupls4_pkg::OP_R3B,Qupls4_pkg::OP_R3W,Qupls4_pkg::OP_R3T,Qupls4_pkg::OP_R3O:
-		case(ir.r3.func)
+		case(ir.func)
 		Qupls4_pkg::FN_R1:
-			case(ir.r3.Rs3)
+			case(ir.Rs3)
 			Qupls4_pkg::R1_CNTLZ:	bus = lzcnt;
 			Qupls4_pkg::R1_CNTPOP:	bus = popcnt;
 			Qupls4_pkg::R1_CNTLO:	bus = locnt;
@@ -617,7 +617,7 @@ begin
 		Qupls4_pkg::FN_SLTU:	bus = a < b;
 		Qupls4_pkg::FN_SLEU:	bus = a <= b;
 		Qupls4_pkg::FN_ADD:
-			case(ir.alu.op3)
+			case(ir.op3)
 			3'd0: bus = (a + b) & c;
 			3'd1:	bus = (a + b) | c;
 			3'd2:	bus = (a + b) ^ c;
@@ -625,7 +625,7 @@ begin
 			default:	bus = zero;
 			endcase
 		Qupls4_pkg::FN_SUB:
-			case(ir.alu.op3)
+			case(ir.op3)
 			3'd0: bus = (a - b) & c;
 			3'd1:	bus = (a - b) | c;
 			3'd2:	bus = (a - b) ^ c;
@@ -633,7 +633,7 @@ begin
 			default:	bus = zero;
 			endcase
 		Qupls4_pkg::FN_AND:
-			case(ir.alu.op3)
+			case(ir.op3)
 			3'd0: bus = (a & b) & c;
 			3'd1:	bus = (a & b) | c;
 			3'd2:	bus = (a & b) ^ c;
@@ -641,7 +641,7 @@ begin
 			default:	bus = zero;
 			endcase
 		Qupls4_pkg::FN_OR:
-			case(ir.alu.op3)
+			case(ir.op3)
 			3'd0: bus = (a | b) & c;
 			3'd1:	bus = (a | b) | c;
 			3'd2:	bus = (a | b) ^ c;
@@ -649,7 +649,7 @@ begin
 			default:	bus = zero;
 			endcase
 		Qupls4_pkg::FN_XOR:
-			case(ir.alu.op3)
+			case(ir.op3)
 			3'd0: bus = (a ^ b) & c;
 			3'd1:	bus = (a ^ b) | c;
 			3'd2:	bus = (a ^ b) ^ c;
@@ -657,7 +657,7 @@ begin
 			default:	bus = zero;
 			endcase
 		Qupls4_pkg::FN_ASL:
-			case(ir.alu.op3)
+			case(ir.op3)
 			3'd0: bus = shl & c;
 			3'd1:	bus = shl | c;
 			3'd2:	bus = shl ^ c;
@@ -665,7 +665,7 @@ begin
 			default:	bus = zero;
 			endcase
 		Qupls4_pkg::FN_ASR:
-			case(ir.alu.op3)
+			case(ir.op3)
 			3'd0: bus = asr;
 			3'd1:	bus = asr;
 			3'd2:	bus = asr;
@@ -673,7 +673,7 @@ begin
 			default:	bus = zero;
 			endcase
 		Qupls4_pkg::FN_LSR:
-			case(ir.alu.op3)
+			case(ir.op3)
 			3'd0: bus = shr & c;
 			3'd1:	bus = shr | c;
 			3'd2:	bus = shr ^ c;
@@ -681,7 +681,7 @@ begin
 			default:	bus = zero;
 			endcase
 		Qupls4_pkg::FN_ROL:
-			case(ir.alu.op3)
+			case(ir.op3)
 			3'd0: bus = (shl | shl[WID*2-1:WID]) & c;
 			3'd1:	bus = (shl | shl[WID*2-1:WID]) | c;
 			3'd2:	bus = (shl | shl[WID*2-1:WID]) ^ c;
@@ -689,7 +689,7 @@ begin
 			default:	bus = zero;
 			endcase
 		Qupls4_pkg::FN_ROR:
-			case(ir.alu.op3)
+			case(ir.op3)
 			3'd0: bus = (shr | shr[WID*2-1:WID]) & c;
 			3'd1:	bus = (shr | shr[WID*2-1:WID]) | c;
 			3'd2:	bus = (shr | shr[WID*2-1:WID]) ^ c;
@@ -701,7 +701,7 @@ begin
 		endcase
 
 	Qupls4_pkg::OP_FLTH,Qupls4_pkg::OP_FLTS,Qupls4_pkg::OP_FLTD,Qupls4_pkg::OP_FLTQ:
-		case(ir.f3.func)
+		case(ir.func)
 		Qupls4_pkg::FLT_MIN:	bus = fmin;
 		Qupls4_pkg::FLT_MAX:	bus = fmax;
 		Qupls4_pkg::FLT_NEG:	bus = (aNan ? a : {~a[WID-1],a[WID-2:0]});
@@ -726,7 +726,7 @@ begin
 	
 	Qupls4_pkg::OP_FLTPH,Qupls4_pkg::OP_FLTPS,Qupls4_pkg::OP_FLTPD,Qupls4_pkg::OP_FLTPQ,
 	Qupls4_pkg::OP_FLTP:
-		case(ir.f3.func)
+		case(ir.func)
 		Qupls4_pkg::FLT_MIN:	bus = mask1[LANE] ? fmin : t;
 		Qupls4_pkg::FLT_MAX:	bus = mask1[LANE] ? fmax : t;
 		Qupls4_pkg::FLT_NEG:	bus = mask1[LANE] ? (aNan ? a : {~a[WID-1],a[WID-2:0]}) : t;
@@ -754,9 +754,9 @@ begin
 
 	/*
 	Qupls4_pkg::OP_FLTH,Qupls4_pkg::OP_FLTS,Qupls4_pkg::OP_FLTD,Qupls4_pkg::OP_FLTQ:
-		case(ir.fpu.op4)
+		case(ir.op4)
 		FOP4_G8:	
-			case (ir.fpu.op3)
+			case (ir.op3)
 			FG8_FSGNJ:	bus = {b[WID-1],a[WID-2:0]};
 			FG8_FSGNJN:	bus = {~b[WID-1],a[WID-2:0]};
 			FG8_FSGNJX:	bus = {b[WID-1]^a[WID-1],a[WID-2:0]};
@@ -766,7 +766,7 @@ begin
 		endcase
 	*/
 	Qupls4_pkg::OP_CHK:
-		case(ir.chk.Rd)
+		case(ir.Rd)
 		4'd0:	if (!(a >= b && a < c)) exc = Qupls4_pkg::FLT_CHK;
 		4'd1: if (!(a >= b && a <= c)) exc = Qupls4_pkg::FLT_CHK;
 		4'd2: if (!(a > b && a < c)) exc = Qupls4_pkg::FLT_CHK;

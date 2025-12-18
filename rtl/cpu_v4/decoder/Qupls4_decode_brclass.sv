@@ -41,11 +41,11 @@ input Qupls4_pkg::micro_op_t instr;
 output Qupls4_pkg::brclass_t brclass;
 
 always_comb
-	case(instr.any.opcode)
+	case(instr.opcode)
 	Qupls4_pkg::OP_BCC8,Qupls4_pkg::OP_BCC16,Qupls4_pkg::OP_BCC32,Qupls4_pkg::OP_BCC64,
 	Qupls4_pkg::OP_BCCU8,Qupls4_pkg::OP_BCCU16,Qupls4_pkg::OP_BCCU32,Qupls4_pkg::OP_BCCU64:
 		begin
-			if (instr.br.md)
+			if (instr.md)
 				brclass = Qupls4_pkg::BRC_BCCR;
 			else
 				brclass = Qupls4_pkg::BRC_BCCD;

@@ -44,7 +44,7 @@ output pred_mask;
 function fnIsPred;
 input Qupls4_pkg::micro_op_t ir;
 begin
-	case(ir.any.opcode)
+	case(ir.opcode)
 	Qupls4_pkg::OP_PRED:
 		fnIsPred = 1'b1;
 	default:	fnIsPred = 1'b0;
@@ -53,6 +53,6 @@ end
 endfunction
 
 assign pred = fnIsPred(instr);
-assign pred_mask = instr.pred.mask;
+assign pred_mask = instr.imm[15:0];
 
 endmodule

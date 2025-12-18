@@ -52,7 +52,7 @@ input [335:0] instr_raw;
 Qupls4_pkg::micro_op_t ir;
 begin
 	ir = instr;
-	case(ir.any.opcode)
+	case(ir.opcode)
 /*
 	Qupls4_pkg::OP_MOV:
 		if (ir[28:26] < 3'd4)
@@ -61,21 +61,21 @@ begin
 			fnRd = {2'b00,ir[10:6]};
 */			
 	Qupls4_pkg::OP_FLTH,Qupls4_pkg::OP_FLTS,Qupls4_pkg::OP_FLTD,Qupls4_pkg::OP_FLTQ:
-		fnRd = ir.fpu.Rd;
+		fnRd = ir.Rd;
 	Qupls4_pkg::OP_CSR:
-		fnRd = ir.csr.Rd;
+		fnRd = ir.Rd;
 	Qupls4_pkg::OP_ADDI,Qupls4_pkg::OP_SUBFI,Qupls4_pkg::OP_CMPI,Qupls4_pkg::OP_CMPUI,
 	Qupls4_pkg::OP_ANDI,Qupls4_pkg::OP_ORI,Qupls4_pkg::OP_XORI,
 	Qupls4_pkg::OP_MULI,Qupls4_pkg::OP_MULUI,Qupls4_pkg::OP_DIVI,Qupls4_pkg::OP_DIVUI,
 	Qupls4_pkg::OP_SHIFT:
-		fnRd = ir.alui.Rd;
+		fnRd = ir.Rd;
 	Qupls4_pkg::OP_BSR,Qupls4_pkg::OP_JSR:
-		fnRd = ir.bsr.Rd;
+		fnRd = ir.Rd;
 	Qupls4_pkg::OP_LDB,Qupls4_pkg::OP_LDBZ,Qupls4_pkg::OP_LDW,Qupls4_pkg::OP_LDWZ,
 	Qupls4_pkg::OP_LDT,Qupls4_pkg::OP_LDTZ,Qupls4_pkg::OP_LOAD,Qupls4_pkg::OP_LOADA,
 	Qupls4_pkg::OP_LDV,
 	Qupls4_pkg::OP_AMO,Qupls4_pkg::OP_CMPSWAP:
-		fnRd = ir.ls.Rsd;
+		fnRd = ir.Rd;
 	default:
 		fnRd = 7'd0;
 	endcase

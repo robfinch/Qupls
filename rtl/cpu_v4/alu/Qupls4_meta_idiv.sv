@@ -107,7 +107,7 @@ integer n;
 genvar g,mm,xx;
 
 always_comb
-	div = rse_i.uop.r3.func==Qupls4_pkg::FN_DIV;
+	div = rse_i.uop.func==Qupls4_pkg::FN_DIV;
 
 generate begin : g16
 	if (Qupls4_pkg::SUPPORT_PREC)
@@ -266,7 +266,7 @@ Qupls4_alu #(.WID(128), .ALU0(ALU0)) ualu128
 
 always_comb
 begin
-	if (WID==64 && ir.any.opcode==Qupls4_pkg::OP_R3O && ir.r3.func >= Qupls4_pkg::FN_PEEKQ && ir.r3.func <= Qupls4_pkg::FN_WRITEQ) begin
+	if (WID==64 && ir.opcode==Qupls4_pkg::OP_R3O && ir.func >= Qupls4_pkg::FN_PEEKQ && ir.func <= Qupls4_pkg::FN_WRITEQ) begin
 		o1 = oq;
 	end
 	else if (Qupls4_pkg::SUPPORT_PREC)
@@ -300,7 +300,7 @@ generate begin : gCptgt
 	for (mm = 0; mm < WID/8; mm = mm + 1) begin
     always_comb
     begin
-    	if (rse_o.uop.any.opcode==Qupls4_pkg::OP_NOP)
+    	if (rse_o.uop.opcode==Qupls4_pkg::OP_NOP)
         o[mm*8+7:mm*8] = t1[mm*8+7:mm*8];
       else if (cptgt1[mm])
         o[mm*8+7:mm*8] = z1 ? 8'h00 : t1[mm*8+7:mm*8];
@@ -340,7 +340,7 @@ always_comb
 generate begin : gExc
 	for (xx = 0; xx < WID/8; xx = xx + 1)
     always_comb
-      if (cptgt[xx]||rse_o.uop.any.opcode==Qupls4_pkg::OP_NOP)
+      if (cptgt[xx]||rse_o.uop.opcode==Qupls4_pkg::OP_NOP)
         exc[xx*8+7:xx*8] = Qupls4_pkg::FLT_NONE;
       else
         exc[xx*8+7:xx*8] = exc1[xx*8+7:xx*8];

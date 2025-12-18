@@ -43,10 +43,10 @@ output fma;
 function fnIsFMA;
 input Qupls4_pkg::micro_op_t ir;
 begin
-	case(ir.any.opcode)
+	case(ir.opcode)
 	Qupls4_pkg::OP_FLTH,Qupls4_pkg::OP_FLTS,Qupls4_pkg::OP_FLTD,Qupls4_pkg::OP_FLTQ,
 	Qupls4_pkg::OP_FLTPH,Qupls4_pkg::OP_FLTPS,Qupls4_pkg::OP_FLTPD,Qupls4_pkg::OP_FLTPQ:
-		fnIsFMA = ir.f3.func==FLT_FMA;
+		fnIsFMA = ir.func==FLT_FMA;
 	default:	fnIsFMA = 1'b0;
 	endcase
 end

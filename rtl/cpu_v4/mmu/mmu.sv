@@ -206,6 +206,7 @@ reg [63:0] stlb_adr;
 reg cs_config, cs_configd, cs_hwtw, cs_hwtwd;
 reg ptw_ppv;
 reg [5:0] sel_tran;
+reg transfer_ready;
 wire [5:0] sel_qe;
 wire virt_adr_cd;
 reg virt_adr_cdd;
@@ -303,7 +304,7 @@ ddbb256_config #(
 	.CFG_IRQ_LINE(CFG_IRQ_LINE),
 	.BUS_PROTOCOL(BUS_PROTOCOL)
 )
-upci
+uddbb1
 (
 	.rst_i(rst),
 	.clk_i(clk),
@@ -467,6 +468,7 @@ upbl2 (
   .wea({8{sreq.we}} & (sreq.sel >> {sreq.adr[4:3],3'b0}) ) 	// WRITE_DATA_WIDTH_A/BYTE_WRITE_WIDTH_A-bit input: Write enable vector
 );
 
+
 				
 change_det #(.WID(64)) cd3
 (
@@ -526,6 +528,8 @@ begin
 		if (tranbuf[n4].rdy)
 			sel_tran = n4;
 end
+always_comb
+	transfer_ready = ~sel_tran[5];
 
 region_tbl urgnt1
 (
@@ -611,6 +615,7 @@ ptw_miss_queue umsq1
 	.ptw_ppv(ptw_ppv),
 	.tranbuf(tranbuf),
 	.miss_queue(miss_queue),
+	.transfer_ready(transfer_ready),
 	.sel_tran(sel_tran),
 	.sel_qe(sel_qe)
 );
@@ -839,6 +844,7 @@ else begin
 				ftam_req.bte <= wishbone_pkg::LINEAR;
 				ftam_req.cti <= wishbone_pkg::CLASSIC;
 				ftam_req.cyc <= 1'b1;
+				ftam_req.stb <= 1'b1;
 				ftam_req.we <= 1'b0;
 				tSetSel(padr2);
 //				ftam_req.asid <= miss_queue[sel_qe].asid;
@@ -848,7 +854,28 @@ else begin
 				rty_wait <= 5'd0;
 				if (BUS_PROTOCOL==0)
 					access_state <= ptable_walker_pkg::TLB_PTE_ACK;
+				else
+					access_state <= ptable_walker_pkg::TLB_PTE_FETCH_DONE;
 			end
+		end
+	TLB_PTE_FETCH_DONE:
+		if (ftam_resp.rty) begin
+			ftam_req <= {$bits(wb_cmd_request256_t){1'd0}};		// clear all fields.
+			ftam_req.cmd <= wishbone_pkg::CMD_LOAD;
+			ftam_req.blen <= 6'd0;
+			ftam_req.bte <= wishbone_pkg::LINEAR;
+			ftam_req.cti <= wishbone_pkg::CLASSIC;
+			ftam_req.cyc <= 1'b1;
+			ftam_req.stb <= 1'b1;
+			ftam_req.we <= 1'b0;
+			ftam_req.pv <= 1'b0;
+			tSetSel(padr2);
+			ftam_req.adr <= padr2;
+			ftam_req.tid <= tid;
+		end
+		else begin
+			access_state <= ptable_walker_pkg::INACTIVE;
+			req_state <= ptable_walker_pkg::IDLE;
 		end
 	// Store old PMT back to memory. The access count or modified may have been updated.
 	/*
@@ -907,7 +934,7 @@ else begin
 	endcase
 
 	// Search for ready transfers and update the TLB.
-	if (~sel_tran[5]) begin
+	if (transfer_ready) begin
 		$display("PTW: selected tran:%d", sel_tran[4:0]);
 		case(tranbuf[sel_tran].access_state)
 		ptable_walker_pkg::INACTIVE:	;

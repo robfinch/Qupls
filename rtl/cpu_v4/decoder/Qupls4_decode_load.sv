@@ -45,7 +45,7 @@ output vload_ndx;
 function fnIsLoad;
 input Qupls4_pkg::micro_op_t op;
 begin
-	case(op.any.opcode)
+	case(op.opcode)
 	Qupls4_pkg::OP_LDB,Qupls4_pkg::OP_LDBZ,Qupls4_pkg::OP_LDW,Qupls4_pkg::OP_LDWZ,
 	Qupls4_pkg::OP_LDT,Qupls4_pkg::OP_LDTZ,Qupls4_pkg::OP_LOAD,Qupls4_pkg::OP_LDIP:
 		fnIsLoad = 1'b1;
@@ -58,7 +58,7 @@ endfunction
 function fnIsVLoad;
 input Qupls4_pkg::micro_op_t op;
 begin
-	case(op.any.opcode)
+	case(op.opcode)
 	Qupls4_pkg::OP_LDV:
 		fnIsVLoad = 1'b1;
 	default:
@@ -70,7 +70,7 @@ endfunction
 function fnIsVLoadNdx;
 input Qupls4_pkg::micro_op_t op;
 begin
-	case(op.any.opcode)
+	case(op.opcode)
 	Qupls4_pkg::OP_LDVN:
 		fnIsVLoadNdx = 1'b1;
 	default:

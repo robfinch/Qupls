@@ -72,7 +72,7 @@ reg [ABITS-1:0] rg;
 
 always_comb
 begin
-//	disp = {{38{instr.ins.br.dispHi[3]}},instr.ins.br.dispHi,instr.ins.br.dispLo};
+//	disp = {{38{instr.ins.immHi[3]}},instr.ins.immHi,instr.ins.immLo};
 	misspc.pc = Qupls4_pkg::RSTPC;
 	misspc.stream = 7'd1;
 //	misspc.bno_f = 6'd1;
@@ -83,44 +83,50 @@ begin
 	case(1'b1)
 
 	rse.boi:
-		if (ir.br.md) begin
+		/* ToDo:
+		if (ir.md) begin
 			dstpc.pc = ir.brr.Rs3==8'h00 ? vector : argC;
 			dstpc.stream = rse.pc.stream;
 		end
-		else begin
-			disp = {{44{ir.br.disp[19]}},ir.br.disp,1'b0};
+		else
+		*/
+		begin
+			disp = {{44{ir.imm[19]}},ir.imm,1'b0};
 			dstpc.pc = pc.pc + disp;
 			dstpc.stream = rse.pc.stream;
 		end
 
 	rse.bcc:
-		if (ir.br.md) begin
+		/*
+		if (ir.md) begin
 			dstpc.pc = argC;
 			dstpc.stream = rse.pc.stream;
 		end
-		else begin
-			disp = {{44{ir.br.disp[19]}},ir.br.disp,1'b0};
+		else
+		*/
+		begin
+			disp = {{44{ir.imm[19]}},ir.imm,1'b0};
 			dstpc.pc = pc.pc + disp;
 			dstpc.stream = rse.pc.stream;
 		end
 
 	rse.bsr:
 		begin
-			disp = {{29{ir.bsr.disp[34]}},ir.bsr.disp,1'b0};
+			disp = {{29{ir.imm[34]}},ir.imm,1'b0};
 			dstpc.pc = pc.pc + disp;
 			dstpc.stream = new_stream;
 			alloc_new_stream = 1'b1;
 		end
 	rse.jsr:
 		begin
-			disp = {{29{ir.jsr.disp[34]}},ir.jsr.disp,1'b0};
+			disp = {{29{ir.imm[34]}},ir.imm,1'b0};
 			dstpc.pc = disp;
 			dstpc.stream = new_stream;
 			alloc_new_stream = 1'b1;
 		end
 	rse.sys:
 		begin
-			case(ir.jsr.Rd)
+			case(ir.Rd)
 			6'h02,6'h22:
 				begin
 					dstpc.pc = syscall_vector[Qupls4_pkg::fnNextOm(rse.om)];

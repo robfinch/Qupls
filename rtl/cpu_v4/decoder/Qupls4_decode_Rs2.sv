@@ -58,7 +58,7 @@ begin
 	if (has_immb)
 		fnHas_Rs2 = 1'b0;
 	else
-		case(ir.any.opcode)
+		case(ir.opcode)
 /*		
 		Qupls4_pkg::OP_MOV:
 			if (ir[31]) begin
@@ -119,24 +119,24 @@ begin
 	if (has_immb)
 		fnRs2 = 8'd0;
 	else
-		case(ir.any.opcode)
+		case(ir.opcode)
 		Qupls4_pkg::OP_FLTH,Qupls4_pkg::OP_FLTS,Qupls4_pkg::OP_FLTD,Qupls4_pkg::OP_FLTQ:
-			fnRs2 = {2'b01,ir.fpu.Rs2};
+			fnRs2 = {2'b01,ir.Rs2};
 		Qupls4_pkg::OP_BCC8,Qupls4_pkg::OP_BCC16,Qupls4_pkg::OP_BCC32,Qupls4_pkg::OP_BCC64,
 		Qupls4_pkg::OP_BCCU8,Qupls4_pkg::OP_BCCU16,Qupls4_pkg::OP_BCCU32,Qupls4_pkg::OP_BCCU64:
-			fnRs2 = {1'b0,ir.br.Rs2};
+			fnRs2 = {1'b0,ir.Rs2};
 		Qupls4_pkg::OP_ADDI,Qupls4_pkg::OP_SUBFI,Qupls4_pkg::OP_CMPI,Qupls4_pkg::OP_CMPUI,
 		Qupls4_pkg::OP_ANDI,Qupls4_pkg::OP_ORI,Qupls4_pkg::OP_XORI,
 		Qupls4_pkg::OP_MULI,Qupls4_pkg::OP_MULUI,Qupls4_pkg::OP_DIVI,Qupls4_pkg::OP_DIVUI,
 		Qupls4_pkg::OP_SHIFT:
-			fnRs2 = {1'b0,ir.alu.Rs2};
+			fnRs2 = {1'b0,ir.Rs2};
 		Qupls4_pkg::OP_LDB,Qupls4_pkg::OP_LDBZ,Qupls4_pkg::OP_LDW,Qupls4_pkg::OP_LDWZ,
 		Qupls4_pkg::OP_LDT,Qupls4_pkg::OP_LDTZ,Qupls4_pkg::OP_LOAD,Qupls4_pkg::OP_LOADA,
 		Qupls4_pkg::OP_AMO,Qupls4_pkg::OP_CMPSWAP,
 		Qupls4_pkg::OP_STB,Qupls4_pkg::OP_STW,
 		Qupls4_pkg::OP_STT,Qupls4_pkg::OP_STORE,Qupls4_pkg::OP_STI,
 		Qupls4_pkg::OP_STPTR:
-			fnRs2 = {1'b0,ir.ls.Rs2};
+			fnRs2 = {1'b0,ir.Rs2};
 		default:
 			begin
 				fnRs2 = 7'd0;

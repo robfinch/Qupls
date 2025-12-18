@@ -41,9 +41,9 @@ else begin
 	q_rst <= 16'h0000;
 	q_rd <= 16'h0000;
 	
-	case(ir.any.opcode)
+	case(ir.opcode)
 	Qupls4_pkg::OP_R3O:
-		case(ir.r3.func)
+		case(ir.func)
 		Qupls4_pkg::FN_RESETQ:	q_rst[rse_i.arg[1].val[3:0]] <= 1'b1;
 		Qupls4_pkg::FN_READQ:
 			begin
@@ -80,9 +80,9 @@ begin
 	que_done <= 1'b0;
 	if (nanq_rdrdy)
 		que_done <= 1'b1;
-	case(ir.any.opcode)
+	case(ir.opcode)
 	Qupls4_pkg::OP_R3O:
-		case(ir.r3.func)
+		case(ir.func)
 		Qupls4_pkg::FN_RESETQ:
 			case(rse_i.arg[1].val[3:0])
 			4'd14:	// NaN queue

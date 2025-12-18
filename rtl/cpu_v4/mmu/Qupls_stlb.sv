@@ -1241,7 +1241,7 @@ usm2
 	.clk(clk_g),
 	.state(state),
 	.lookup_ack(htable_ack),
-	.rcount(rcount),
+	.func[6]ount(rcount),
 	.tlbadr_i(tlbadr_i),
 	.tlbadro(tlbadri), 
 	.tlbdat_rst(tlbdat_rst),

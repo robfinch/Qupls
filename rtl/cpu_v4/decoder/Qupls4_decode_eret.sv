@@ -44,9 +44,9 @@ function fnIsEret;
 input Qupls4_pkg::micro_op_t ir;
 begin
 	fnIsEret = 1'b0;
-	case(ir.any.opcode)
+	case(ir.opcode)
 	Qupls4_pkg::OP_RTD:
-		fnIsEret = ir.rtd.op3==3'd1 || ir.rtd.op3==3'd2;
+		fnIsEret = ir.op3==3'd1 || ir.op3==3'd2;
 	default:
 		fnIsEret = 1'b0;
 	endcase

@@ -346,7 +346,7 @@ begin
 	nopi = {$bits(Qupls4_pkg::pipeline_reg_t){1'b0}};
 	nopi.pc.pc = RSTPC;
 	nopi.uop = {26'd0,Qupls4_pkg::OP_NOP};
-	nopi.uop.any.count = 3'd1;
+	nopi.uop.count = 3'd1;
 	nopi.v = 1'b1;
 	nopi.decbus.Rdz = 1'b1;
 	nopi.decbus.nop = 1'b1;
@@ -921,21 +921,21 @@ begin
 	// correct address.
 	if (pr0_dec.decbus.bsr|pr0_dec.decbus.jsr) begin
 		pr1_dec.v = INV;
-		pr1_dec.uop.any.opcode = Qupls4_pkg::OP_NOP;
+		pr1_dec.uop.opcode = Qupls4_pkg::OP_NOP;
 		pr2_dec.v = INV;
-		pr2_dec.uop.any.opcode = Qupls4_pkg::OP_NOP;
+		pr2_dec.uop.opcode = Qupls4_pkg::OP_NOP;
 		pr3_dec.v = INV;
-		pr3_dec.uop.any.opcode = Qupls4_pkg::OP_NOP;
+		pr3_dec.uop.opcode = Qupls4_pkg::OP_NOP;
 	end
 	else if (pr1_dec.decbus.bsr|pr1_dec.decbus.jsr) begin
 		pr2_dec.v = INV;
-		pr2_dec.uop.any.opcode = Qupls4_pkg::OP_NOP;
+		pr2_dec.uop.opcode = Qupls4_pkg::OP_NOP;
 		pr3_dec.v = INV;
-		pr3_dec.uop.any.opcode = Qupls4_pkg::OP_NOP;
+		pr3_dec.uop.opcode = Qupls4_pkg::OP_NOP;
 	end
 	else if (pr2_dec.decbus.bsr|pr2_dec.decbus.jsr) begin
 		pr3_dec.v = INV;
-		pr3_dec.uop.any.opcode = Qupls4_pkg::OP_NOP;
+		pr3_dec.uop.opcode = Qupls4_pkg::OP_NOP;
 	end
 end
 
@@ -949,12 +949,12 @@ always_comb inso = prd;
 reg [63:0] bsr0_tgt, bsr1_tgt, bsr2_tgt;
 reg [63:0] jsr0_tgt, jsr1_tgt, jsr2_tgt;
 reg [63:0] new_address;
-always_comb bsr0_tgt = {{23{pr0_dec.uop.bsr.disp[40]}},pr0_dec.uop.bsr.disp,1'b0} + pr0_dec.pc.pc;
-always_comb bsr1_tgt = {{23{pr1_dec.uop.bsr.disp[40]}},pr1_dec.uop.bsr.disp,1'b0} + pr1_dec.pc.pc;
-always_comb bsr2_tgt = {{23{pr2_dec.uop.bsr.disp[40]}},pr2_dec.uop.bsr.disp,1'b0} + pr2_dec.pc.pc;
-always_comb jsr0_tgt = {{23{pr0_dec.uop.bsr.disp[40]}},pr0_dec.uop.bsr.disp,1'b0};
-always_comb jsr1_tgt = {{23{pr1_dec.uop.bsr.disp[40]}},pr1_dec.uop.bsr.disp,1'b0};
-always_comb jsr2_tgt = {{23{pr2_dec.uop.bsr.disp[40]}},pr2_dec.uop.bsr.disp,1'b0};
+always_comb bsr0_tgt = {{23{pr0_dec.uop.imm[40]}},pr0_dec.uop.imm,1'b0} + pr0_dec.pc.pc;
+always_comb bsr1_tgt = {{23{pr1_dec.uop.imm[40]}},pr1_dec.uop.imm,1'b0} + pr1_dec.pc.pc;
+always_comb bsr2_tgt = {{23{pr2_dec.uop.imm[40]}},pr2_dec.uop.imm,1'b0} + pr2_dec.pc.pc;
+always_comb jsr0_tgt = {{23{pr0_dec.uop.imm[40]}},pr0_dec.uop.imm,1'b0};
+always_comb jsr1_tgt = {{23{pr1_dec.uop.imm[40]}},pr1_dec.uop.imm,1'b0};
+always_comb jsr2_tgt = {{23{pr2_dec.uop.imm[40]}},pr2_dec.uop.imm,1'b0};
 
 reg predicted_correctly;
 
@@ -1012,13 +1012,13 @@ end
 always_comb
 begin
 /*
-	if (pr0_dec.ins.any.opcode==OP_Bcc)
+	if (pr0_dec.ins.opcode==OP_Bcc)
 		$finish;
-	if (pr1_dec.ins.any.opcode==OP_Bcc)
+	if (pr1_dec.ins.opcode==OP_Bcc)
 		$finish;
-	if (pr2_dec.ins.any.opcode==OP_Bcc)
+	if (pr2_dec.ins.opcode==OP_Bcc)
 		$finish;
-	if (pr3_dec.ins.any.opcode==OP_Bcc)
+	if (pr3_dec.ins.opcode==OP_Bcc)
 		$finish;
 */
 end
@@ -1026,13 +1026,13 @@ end
 always_comb
 begin
 /*
-	if (inso[0]_o.ins.any.opcode==OP_Bcc)
+	if (inso[0]_o.ins.opcode==OP_Bcc)
 		$finish;
-	if (inso[1]_o.ins.any.opcode==OP_Bcc)
+	if (inso[1]_o.ins.opcode==OP_Bcc)
 		$finish;
-	if (inso[2]_o.ins.any.opcode==OP_Bcc)
+	if (inso[2]_o.ins.opcode==OP_Bcc)
 		$finish;
-	if (inso[3]_o.ins.any.opcode==OP_Bcc)
+	if (inso[3]_o.ins.opcode==OP_Bcc)
 		$finish;
 */
 end

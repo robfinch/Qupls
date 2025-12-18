@@ -43,11 +43,11 @@ output bitwise;
 function fnIsBitwise;
 input Qupls4_pkg::micro_op_t ir;
 begin
-	case(ir.any.opcode)
+	case(ir.opcode)
 	Qupls4_pkg::OP_R3B,Qupls4_pkg::OP_R3W,Qupls4_pkg::OP_R3T,Qupls4_pkg::OP_R3O,
 	Qupls4_pkg::OP_R3BP,Qupls4_pkg::OP_R3WP,Qupls4_pkg::OP_R3TP,Qupls4_pkg::OP_R3OP,
 	Qupls4_pkg::OP_R3P:
-		case(ir.r3.func)
+		case(ir.func)
 		Qupls4_pkg::FN_AND:	fnIsBitwise = 1'b1;
 		Qupls4_pkg::FN_OR:	fnIsBitwise = 1'b1;
 		Qupls4_pkg::FN_XOR:	fnIsBitwise = 1'b1;

@@ -50,7 +50,7 @@ parameter WPORTS = 4;
 input rst;
 input clk;
 input [WPORTS-1:0] wr;
-input [WID/BWW:0] we [0:WPORTS-1];
+input [WID/BWW-1:0] we [0:WPORTS-1];
 input cpu_types_pkg::pregno_t [WPORTS-1:0] wa;
 input cpu_types_pkg::value_t [WPORTS-1:0] i;
 input Qupls4_pkg::flags_t [WPORTS-1:0] ti;

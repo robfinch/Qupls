@@ -100,10 +100,10 @@ begin
 	endcase
 	regx = 'd0;
 /*
-instr.aRs1 = ir.alu.Rs1;
-instr.aRs2 = ir.alu.Rs2;
-instr.aRs3 = ir.alu.Rd;
-instr.aRd = ir.alu.Rd;
+instr.aRs1 = ir.Rs1;
+instr.aRs2 = ir.Rs2;
+instr.aRs3 = ir.Rd;
+instr.aRd = ir.Rd;
 */
 instr.mcip = micro_ip;
 case(micro_ip)
@@ -808,8 +808,8 @@ case(micro_ip)
 	begin
 		next_ip=12'h129;
 		instr.ins=micro_ir.ins;
-		instr.ins.any.opcode = Qupls4_pkg::OP_LDx;
-		instr.ins.ls.prc = ir[18:17];
+		instr.ins.opcode = Qupls4_pkg::OP_LDx;
+		instr.ins.prc = ir[18:17];
 		instr.aRa=9'd0;
 		instr.aRb=9'd0;
 		instr.aRc=9'd0;
@@ -820,7 +820,7 @@ case(micro_ip)
 	begin
 		next_ip=12'h12A;
 		instr.ins=micro_ir.ins;
-		instr.ins.any.opcode = Qupls4_pkg::OP_JSR;
+		instr.ins.opcode = Qupls4_pkg::OP_JSR;
 		instr.ins[39:19]=21'd0;
 		instr.aRa=MC0;
 		instr.aRb=9'd0;
@@ -1777,51 +1777,51 @@ case(micro_ip)
 12'h240:
 	begin
 		next_ip = 12'h244;
-		instr.aRa = {4'd0,ir.ls.Ra};
+		instr.aRa = {4'd0,ir.Ra};
 		instr.aRb = 10'd0;
 		instr.aRc = {4'd0,S0};
 		instr.aRt = 10'd0;
-		instr.ins = {21'h000000,ir.ls.Ra,S0,Qupls4_pkg::OP_STx};
+		instr.ins = {21'h000000,ir.Ra,S0,Qupls4_pkg::OP_STx};
 		instr.pred_btst = 6'd0;
 	end
 12'h241:
 	begin
 		next_ip = 12'h244;
-		instr.aRa = {4'd0,ir.ls.Ra};
+		instr.aRa = {4'd0,ir.Ra};
 		instr.aRb = 10'd0;
 		instr.aRc = {4'd0,S1};
 		instr.aRt = 10'd0;
-		instr.ins = {21'h000008,ir.ls.Ra,S1,Qupls4_pkg::OP_STx};
+		instr.ins = {21'h000008,ir.Ra,S1,Qupls4_pkg::OP_STx};
 		instr.pred_btst = 6'd0;
 	end
 12'h242:
 	begin
 		next_ip = 12'h244;
-		instr.aRa = {4'd0,ir.ls.Ra};
+		instr.aRa = {4'd0,ir.Ra};
 		instr.aRb = 10'd0;
 		instr.aRc = {4'd0,S2};
 		instr.aRt = 10'd0;
-		instr.ins = {21'h000010,ir.ls.Ra,S2,Qupls4_pkg::OP_STx};
+		instr.ins = {21'h000010,ir.Ra,S2,Qupls4_pkg::OP_STx};
 		instr.pred_btst = 6'd0;
 	end
 12'h243:
 	begin
 		next_ip = 12'h244;
-		instr.aRa = {4'd0,ir.ls.Ra};
+		instr.aRa = {4'd0,ir.Ra};
 		instr.aRb = 10'd0;
 		instr.aRc = {4'd0,S3};
 		instr.aRt = 10'd0;
-		instr.ins = {21'h000018,ir.ls.Ra,S3,Qupls4_pkg::OP_STx};
+		instr.ins = {21'h000018,ir.Ra,S3,Qupls4_pkg::OP_STx};
 		instr.pred_btst = 6'd0;
 	end
 12'h244:
 	begin
 		next_ip = 12'h000;
-		instr.aRa = {4'd0,ir.ls.Ra};
+		instr.aRa = {4'd0,ir.Ra};
 		instr.aRb = 10'd0;
 		instr.aRc = {4'd0,S4};
 		instr.aRt = 10'd0;
-		instr.ins = {21'h000018,ir.ls.Ra,S4,Qupls4_pkg::OP_STx};
+		instr.ins = {21'h000018,ir.Ra,S4,Qupls4_pkg::OP_STx};
 		instr.pred_btst = 6'd0;
 	end
 12'h245:	begin next_ip = 12'h000; instr.ins = {41'd0,Qupls4_pkg::OP_NOP};	end
@@ -2954,7 +2954,7 @@ case(micro_ip)
 		instr.aRc={4'd0,ir[11:7]};
 		instr.aRt=9'd0;
 		instr.ins = {21'd0,2'd2,ir[16:12],ir[11:7],Qupls4_pkg::OP_STx};
-		instr.ins.ls.prc = ir[18:17];
+		instr.ins.prc = ir[18:17];
 	end
 12'h392:
 	begin
@@ -2999,8 +2999,8 @@ case(micro_ip)
 		instr.aRb=9'd0;
 		instr.aRc=9'd0;
 		instr.aRt=MC0;
-		instr.ins.any.opcode = Qupls4_pkg::OP_LDx;
-		instr.ins.ls.prc = ir[9:7];
+		instr.ins.opcode = Qupls4_pkg::OP_LDx;
+		instr.ins.prc = ir[9:7];
 	end
 12'h3A2:
 	begin
@@ -3010,8 +3010,8 @@ case(micro_ip)
 		instr.aRb=9'd0;
 		instr.aRc=MC0;
 		instr.aRt=9'd0;
-		instr.ins.any.opcode = Qupls4_pkg::OP_STx;
-		instr.ins.ls.prc = ir[9:7];
+		instr.ins.opcode = Qupls4_pkg::OP_STx;
+		instr.ins.prc = ir[9:7];
 	end
 12'h3A3:
 	begin
@@ -3063,8 +3063,8 @@ case(micro_ip)
 		instr.aRb=9'd0;
 		instr.aRc=9'd0;
 		instr.aRt=MC0;
-		instr.ins.any.opcode = Qupls4_pkg::OP_LDx;
-		instr.ins.ls.prc = ir[9:7];
+		instr.ins.opcode = Qupls4_pkg::OP_LDx;
+		instr.ins.prc = ir[9:7];
 	end
 12'h3B2:
 	begin
@@ -3074,8 +3074,8 @@ case(micro_ip)
 		instr.aRb=9'd0;
 		instr.aRc=9'd0;
 		instr.aRt=MC1;
-		instr.ins.any.opcode = Qupls4_pkg::OP_LDx;
-		instr.ins.ls.prc = ir[9:7];
+		instr.ins.opcode = Qupls4_pkg::OP_LDx;
+		instr.ins.prc = ir[9:7];
 	end
 12'h3B3:
 	begin
@@ -3086,13 +3086,13 @@ case(micro_ip)
 		instr.aRt=9'd0;
 		instr.ins = {18'd5,ir[21:17],ir[16:12],1'b0,4'h0,Qupls4_pkg::OP_Bcc};
 		case({ir[39],ir[11:10]})
-		3'd0:	begin instr.ins.any.opcode = Qupls4_pkg::OP_Bcc; instr.ins.br.fn = EQ; end
-		3'd1:	begin instr.ins.any.opcode = Qupls4_pkg::OP_Bcc; instr.ins.br.fn = NE; end
-		3'd2:	begin instr.ins.any.opcode = Qupls4_pkg::OP_Bcc; instr.ins.br.fn = LT; end
-		3'd3:	begin instr.ins.any.opcode = Qupls4_pkg::OP_Bcc; instr.ins.br.fn = LE; end
-		3'd4:	begin instr.ins.any.opcode = Qupls4_pkg::OP_BccU; instr.ins.br.fn = LT; end
-		3'd5:	begin instr.ins.any.opcode = Qupls4_pkg::OP_BccU; instr.ins.br.fn = LE; end
-		default:	begin instr.ins.any.opcode = Qupls4_pkg::OP_Bcc; instr.ins.br.fn = EQ; end
+		3'd0:	begin instr.ins.opcode = Qupls4_pkg::OP_Bcc; instr.ins.fn = EQ; end
+		3'd1:	begin instr.ins.opcode = Qupls4_pkg::OP_Bcc; instr.ins.fn = NE; end
+		3'd2:	begin instr.ins.opcode = Qupls4_pkg::OP_Bcc; instr.ins.fn = LT; end
+		3'd3:	begin instr.ins.opcode = Qupls4_pkg::OP_Bcc; instr.ins.fn = LE; end
+		3'd4:	begin instr.ins.opcode = Qupls4_pkg::OP_BccU; instr.ins.fn = LT; end
+		3'd5:	begin instr.ins.opcode = Qupls4_pkg::OP_BccU; instr.ins.fn = LE; end
+		default:	begin instr.ins.opcode = Qupls4_pkg::OP_Bcc; instr.ins.fn = EQ; end
 		endcase	
 	end
 12'h3B4:
@@ -3144,8 +3144,8 @@ case(micro_ip)
 		instr.aRb=9'd0;
 		instr.aRc=9'd0;
 		instr.aRt=MC0;
-		instr.ins.any.opcode = Qupls4_pkg::OP_LDx;
-		instr.ins.ls.prc = ir[9:7];
+		instr.ins.opcode = Qupls4_pkg::OP_LDx;
+		instr.ins.prc = ir[9:7];
 	end
 12'h3C2:
 	begin
@@ -3155,7 +3155,7 @@ case(micro_ip)
 		instr.aRb=MC0;
 		instr.aRc=9'd0;
 		instr.aRt=9'd0;
-		instr.ins.br.fn = branch_fn_t'(ir[36:33]);
+		instr.ins.fn = branch_fn_t'(ir[36:33]);
 	end
 12'h3C3:
 	begin

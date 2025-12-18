@@ -66,6 +66,7 @@ module Qupls4_rat(rst, clk,
 	rd_cp,
 	prn, 			// the mapped physical register number
 	prv, 			// map valid indicator
+	prn_i,		// register for valid bit lookup
 
 	// From decode: destination register writes, one per instruction, four instructions.
 	wr, 							// which port is aactive 
@@ -93,8 +94,9 @@ module Qupls4_rat(rst, clk,
 	restore_list, restored, tags2free, freevals, backout,
 	fcu_id,		// the ROB index of the instruction causing backout
 	bo_wr, bo_areg, bo_preg, bo_nreg);
-parameter MWIDTH = 4;
-parameter NPORT = 12;
+parameter MWIDTH = Qupls4_pkg::MWIDTH;
+localparam NPORT = MWIDTH*4;
+parameter NREG_RPORT = MWIDTH*4;
 localparam RBIT=$clog2(Qupls4_pkg::PREGS);
 input rst;
 input clk;
@@ -130,14 +132,15 @@ input cpu_types_pkg::aregno_t [MWIDTH-1:0] cmtaa;				// architectural register b
 input cpu_types_pkg::pregno_t [MWIDTH-1:0] cmtap;				// physical register to commit
 input value_t [MWIDTH-1:0] cmtaval;
 input cmtbr;								// comitting a branch
-input cpu_types_pkg::aregno_t [NPORT-1:0] rn;		// architectural register
+input cpu_types_pkg::aregno_t [MWIDTH*5-1:0] rn;		// architectural register
 input cpu_types_pkg::pregno_t st_prn;
-input [2:0] rng [0:NPORT-1];
-input [NPORT-1:0] rnv;
-input checkpt_ndx_t [NPORT-1:0] rn_cp;
+input [2:0] rng [0:MWIDTH*5-1];
+input [MWIDTH*5-1:0] rnv;
+input checkpt_ndx_t [MWIDTH*5-1:0] rn_cp;
 input checkpt_ndx_t [3:0] rd_cp;
-output cpu_types_pkg::pregno_t [NPORT-1:0] prn;	// physical register name
-output /*reglookup_t*/ reg [NPORT-1:0] prv;											// physical register valid
+output cpu_types_pkg::pregno_t [MWIDTH*5-1:0] prn;	// physical register name
+output cpu_types_pkg::pregno_t [NREG_RPORT-1:0] prn_i;	// physical register name
+output /*reglookup_t*/ reg [NREG_RPORT-1:0] prv;											// physical register valid
 output reg [Qupls4_pkg::PREGS-1:0] restore_list;	// bit vector of registers to free on branch miss
 output reg restored;
 output pregno_t [3:0] tags2free;
@@ -659,8 +662,9 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 			// If there is a pipeline bubble. The instruction will be a NOP. Mark all
 			// register ports as valid.
 			else begin
+				prv[g] = currentRegvalid[prn_i[g]];
 				//if (en2) 
-				begin			
+				if (0) begin			
 //					if (!rnv[g])
 //						prv[g] = VAL;
 //					else
@@ -681,10 +685,13 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 						else if (prn[g]==wrra && wr0 && rn_cp[g]==wra_cp)
 							prv[g] = INV;
 						else
+							prv[g] = currentRegvalid[prn[g]];
 						*/
+						
 						case(rng[g])
 						// First instruction of group, no bypass needed.
 						3'd0:	
+						
 							if (prn[g]==cmtap[3] && cmtav[3])
 								prv[g] = VAL;
 							else if (prn[g]==cmtap[2] && cmtav[2])
@@ -746,7 +753,7 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 							*/	
 							else
 														
-								prv[g] = currentRegvalid[prn[g]];//cpv_o[g];
+								prv[g] = currentRegvalid[prn_i[g]];//cpv_o[g];
 						// Second instruction of group, bypass only if first instruction target is same.
 						3'd1:
 						if (MWIDTH > 1) begin							

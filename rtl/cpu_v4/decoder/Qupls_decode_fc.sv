@@ -34,19 +34,19 @@
 //
 // ============================================================================
 
-import Stark_pkg::*;
+import Qupls4_pkg::*;
 
-module Stark_decode_fc(instr, fc);
-input Stark_pkg::instruction_t instr;
+module Qupls4_decode_fc(instr, fc);
+input Qupls4_pkg::micro_op_t instr;
 output fc;
 
 function fnIsFlowCtrl;
-input Stark_pkg::instruction_t ir;
+input Qupls4_pkg::micro_op_t ir;
 begin
-	case(ir.any.opcode)
-	Stark_pkg::OP_BRK,
-	Stark_pkg::OP_CHK:	fnIsFlowCtrl = 1'b1;
-	Stark_pkg::OP_BCC0,Stark_pkg::OP_BCC1,Stark_pkg::OP_B0,Stark_pkg::OP_B1,Stark_pkg::OP_TRAP:
+	case(ir.opcode)
+	Qupls4_pkg::OP_BRK,
+	Qupls4_pkg::OP_CHK:	fnIsFlowCtrl = 1'b1;
+	Qupls4_pkg::OP_BCC0,Qupls4_pkg::OP_BCC1,Qupls4_pkg::OP_B0,Qupls4_pkg::OP_B1,Qupls4_pkg::OP_TRAP:
 		fnIsFlowCtrl = 1'b1;	
 	default:
 		fnIsFlowCtrl = 1'b0;

@@ -44,9 +44,9 @@ output atom;
 function fnIsFence;
 input Qupls4_pkg::micro_op_t ir;
 begin
-	case(ir.any.opcode)
+	case(ir.opcode)
 	Qupls4_pkg::OP_FENCE:
-		case(ir.r3.func)
+		case(ir.func)
 		7'd0:	fnIsFence = 1'b1;
 		default:	fnIsFence = 1'b0;
 		endcase
@@ -58,9 +58,9 @@ endfunction
 function fnIsAtom;
 input Qupls4_pkg::micro_op_t ir;
 begin
-	case(ir.any.opcode)
+	case(ir.opcode)
 	Qupls4_pkg::OP_FENCE:
-		case(ir.r3.func)
+		case(ir.func)
 		7'd1:	fnIsAtom = 1'b1;
 		default:	fnIsAtom = 1'b0;
 		endcase

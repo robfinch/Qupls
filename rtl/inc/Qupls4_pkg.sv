@@ -46,16 +46,16 @@ package Qupls4_pkg;
 parameter SIM = 1'b0;
 //`define IS_SIM	1
 
-parameter MWIDTH = 4;
+parameter MWIDTH = 3;
 
 // Comment out to remove the sigmoid approximate function
 //`define SIGMOID	1
 
 // Number of threads supported. (Under construction)
-parameter THREADS = 4;
+parameter THREADS = 2;
 
 // Number of streams of execution. Alternate branch paths create streams.
-parameter XSTREAMS = 16;
+parameter XSTREAMS = 8;
 
 // Number of levels of branches that can be speculated across.
 parameter BRANCH_LEVELS = 8;
@@ -269,7 +269,7 @@ parameter REGFILE_LATENCY = 2;
 // (obvious) and may increase performance. However, most instructions will
 // have two or fewer arguments, and allowing for four instructions at once
 // means an average of eight ports per cycle.
-parameter NREG_RPORTS = 12;
+parameter NREG_RPORTS = MWIDTH*5;
 
 // Number of data ports should be 1 or 2. 2 ports will allow two simulataneous
 // reads, but still only a single write.
@@ -282,8 +282,8 @@ parameter NAGEN = 1;
 // Note that adding an FPU may also increase integer performance if PERFORMANCE
 // is set to 1.
 parameter NSAU = 2;			// 1 or 2
-parameter NFPU = 1;			// 0 or 1
-parameter NFMA = 2;			// 0, 1 or 2
+parameter NFPU = 0;			// 0 or 1
+parameter NFMA = 0;			// 0, 1 or 2
 parameter NDFPU = 0;		// 0 or 1
 parameter NLSQ_PORTS = 1;
 
@@ -291,6 +291,8 @@ parameter RAS_DEPTH	= 4;
 
 parameter SUPPORT_RSB = 0;
 
+// Depth of internal stack for exceptionb processing.
+parameter ISTACK_DEPTH = 16;
 
 // =============================================================================
 // define PANIC types
@@ -401,6 +403,11 @@ typedef struct packed
 
 typedef struct packed
 {
+	logic page_en;			// paging enable
+	logic [3:0] resv_state;
+	logic [1:0] vx;			// vector state
+	logic [1:0] fx;			// floating-point extension state
+	//------------------ 32
 	logic [7:0] pl;			// privilege level
 	logic [2:0] swstk;	// software stack
 	logic [2:0] mprv;		// memory access priv indicator	
@@ -445,7 +452,7 @@ typedef struct packed
 	//- - - - - - - 
 	logic ns;
 	// Result status
-	logic [5:0] rs_resv;	// reserved bits
+	logic [4:0] rs_resv;	// reserved bits
 	logic fractie;	// last instruction rounded intermediate result
 	logic rawayz;		// rounded away from zero
 	logic c;				// denormalized, negative zero, or quiet nan
@@ -551,6 +558,11 @@ typedef enum logic [6:0] {
 	OP_JSRN = 7'd36,
 	OP_RTD = 7'd35,
 	
+	OP_FBCC16 = 7'd40,
+	OP_FBCC32 = 7'd41,
+	OP_FBCC64 = 7'd42,
+	OP_FBCC128 = 7'd43,
+	
 	OP_CHK = 7'd47,
 
 	OP_FLTPH = 7'd48,
@@ -655,6 +667,7 @@ typedef enum logic [6:0] {
 	FN_R1 = 7'd26,
 	FN_MODU = 7'd28,
 	FN_MUX = 7'd33,
+	FN_BMAP = 7'd35,
 	FN_ROL = 7'd80,
 	FN_ROR = 7'd81,
 	FN_ASR = 7'd82,
@@ -724,6 +737,7 @@ typedef enum logic [5:0] {
 	FLT_FTOI = 6'd34,
 	FLT_ITOF = 6'd35,
 	FLT_SIGN = 6'd38,
+	FLT_SIG = 6'd39,
 	FLT_SQRT = 6'd40,
 	FLT_CVTS2D = 6'd41,
 	FLT_ISNAN = 6'd46,
@@ -780,8 +794,9 @@ typedef enum logic [3:0] {
 	CND_BOI = 4'd15
 } cnd_e;
 
-parameter NOP_INSN = {26'd0,OP_NOP};
+parameter NOP_INSN = {41'd0,OP_NOP};
 
+/*
 typedef struct packed
 {
 	logic v;
@@ -843,7 +858,6 @@ typedef struct packed
 
 typedef struct packed
 {
-/*
 	logic [15:0] mor;
 	logic zero;
 	logic [1:0] maskhi;
@@ -853,7 +867,7 @@ typedef struct packed
 	logic [2:0] seven;
 	logic [4:0] opcode;
 	logic m0;
-*/
+	
 	logic v;
 	logic exc;
 	logic lead;
@@ -1241,7 +1255,37 @@ typedef struct packed
 	regspec_t Rd;
 	opcode_e opcode;
 } rtd_inst_t;
+*/
 
+typedef struct packed		// 231 bits
+{
+	logic v;
+	logic exc;
+	logic lead;
+	logic [4:0] num;
+	logic [63:0] imm2;		// second immediate / CSR register numnber (14 bits))
+	logic [63:0] imm;			// immediate / displacement / mask
+	logic [2:0] sc;				// index scaling
+	logic [2:0] dt;				// data type, vector load / store
+	logic [1:0] prc;			// precision
+	logic [3:0] vn;				// vector or scalar register indicator
+	logic [3:0] ms;				// immediate override indicators
+	logic [7:0] Rs4;			// fourth source register (floating-point status)
+	logic [7:0] Rs3;			// Third source register
+	logic [7:0] Rs2;			// second source register
+	logic [7:0] Rs1;			// first source register
+	logic [7:0] Rd2;			// second destination register
+	logic [7:0] Rd;				// destination register
+	logic [6:0] src;			// which register fields are active sources, including dest.
+	logic dst;						// 1 if destination register active as dest
+	logic [2:0] rmd;			// round mode (floating-point)
+	logic [2:0] op3;			// op field found in some instructions / ar for AMO operations
+	logic [3:0] cnd;			// branch condition
+	logic [6:0] func;			// primary function code
+	logic [6:0] opcode;		// primary opcode
+} micro_op_t;
+
+/*
 typedef union packed
 {
 	alui_inst_t cmpi;
@@ -1277,6 +1321,7 @@ typedef union packed
 	rtd_inst_t rtd;
 	anyinst_t any;
 } micro_op_t;
+*/
 
 parameter CSR_SR		= 16'h?004;
 parameter CSR_CAUSE	= 16'h?006;
@@ -1480,7 +1525,7 @@ typedef union packed
 typedef struct packed
 {
 	logic v;
-	logic aRnz;
+	logic aRnv;
 	flags_t flags;
 	cpu_types_pkg::aregno_t aRn;
 	cpu_types_pkg::pregno_t pRn;
@@ -1604,6 +1649,7 @@ typedef struct packed
 	logic [4:0] pred_no;	// pipeline predicate register number
 	logic carry;
 	logic atom;
+	logic rext;					// REXT postfix
 	logic regs;
 	logic fregs;
 	regs_t xregs;				// "extra" registers from fregs/regs instruction
@@ -1701,7 +1747,7 @@ typedef struct packed
 	cpu_types_pkg::checkpt_ndx_t cndx;
 	cpu_types_pkg::aregno_t pRd;
 	cpu_types_pkg::aregno_t aRd;
-	logic aRdz;
+	logic aRdv;
 	logic bank;
 	micro_op_t op;
 	cpu_types_pkg::pc_address_t pc;
@@ -1752,12 +1798,13 @@ typedef struct packed
 	operating_mode_t om;			// operating mode
 	reg [31:0] carry_mod;			// carry modifier remnant
 	reg [3:0] atom_count;			// interrupt masking by ATOM instruction
-/*	
+
 	cpu_types_pkg::pregno_t pRs1;							// physical registers (see decode bus for arch. regs)
 	cpu_types_pkg::pregno_t pRs2;
 	cpu_types_pkg::pregno_t pRs3;
 	cpu_types_pkg::pregno_t pRs4;
-*/
+	cpu_types_pkg::pregno_t pS;
+
 	cpu_types_pkg::pregno_t pRd;						// current Rd value
 	cpu_types_pkg::pregno_t nRd;						// new Rd
 	cpu_types_pkg::pregno_t pRd2;						// current Rd value
@@ -1830,10 +1877,12 @@ typedef struct packed {
 	logic eret;
 
 	logic bt;												
+	
+	logic rext;				// extended register postfix
 	// - - - - - - - - - - - - - - - - 
 	memsz_t prc;
 	logic [$bits(cpu_types_pkg::value_t)/8-1:0] copydst;
-	logic aRdz;
+	logic aRdv;
 	logic Rs1z;
 	logic Rs2z;
 	cpu_types_pkg::aregno_t aRd;
@@ -1843,7 +1892,7 @@ typedef struct packed {
 	cpu_types_pkg::pc_address_ex_t pc;
 //	logic [63:0] pch;
 	cpu_types_pkg::value_t argI;
-	operand_t [NOPER:0] arg;			// +1 for status
+	operand_t [6:0] arg;						// +1 for status
 //	operand_t [NOPER:0] argH;			// high order 64-bits of 128-bit arg
 } reservation_station_entry_t;
 
@@ -1915,6 +1964,7 @@ typedef struct packed {
 	logic argD_v;
 	logic argS_v;							// status register valid
 	logic argT_v;
+	logic argT2_v;
 	logic rat_v;							// 1=checked with RAT for valid reg arg.
 	cpu_types_pkg::value_t arg;							// argument value for CSR instruction
 	// The following fields are loaded at enqueue time, but otherwise do not change.
@@ -2020,7 +2070,7 @@ endfunction
 function fnHasExConst;
 input micro_op_t ins;
 begin
-	case(ins.any.opcode)
+	case(ins.opcode)
 	OP_BRK,OP_SHIFT,OP_CSR,OP_CHK,
 	OP_PUSH,OP_POP,	// ENTER,LEAVE,PUSH,POP
 	OP_FENCE,OP_BLOCK,OP_FLTD,
@@ -2034,7 +2084,7 @@ endfunction
 function fnIsShift;
 input micro_op_t ins;
 begin
-	fnIsShift = ins.any.opcode == OP_SHIFT;
+	fnIsShift = ins.opcode == OP_SHIFT;
 end
 endfunction
 
@@ -2053,7 +2103,7 @@ endfunction
 function fnHasConstRs1;
 input micro_op_t ins;
 begin
-	case(ins.any.opcode)
+	case(ins.opcode)
 	OP_BRK,OP_SHIFT,OP_CSR,OP_CHK,
 	OP_PUSH,OP_POP,	// ENTER,LEAVE,PUSH,POP
 	OP_FENCE,OP_BLOCK,OP_FLTD,
@@ -2067,7 +2117,7 @@ endfunction
 function fnHasConstRs2;
 input micro_op_t ins;
 begin
-	case(ins.any.opcode)
+	case(ins.opcode)
 	OP_BRK,OP_SHIFT,OP_CSR,OP_CHK,
 	OP_PUSH,OP_POP,	// ENTER,LEAVE,PUSH,POP
 	OP_FENCE,OP_BLOCK,OP_FLTD,
@@ -2081,7 +2131,7 @@ endfunction
 function fnHasConstRs3;
 input micro_op_t ins;
 begin
-	case(ins.any.opcode)
+	case(ins.opcode)
 	OP_BRK,OP_SHIFT,OP_CSR,OP_CHK,
 	OP_PUSH,OP_POP,	// ENTER,LEAVE,PUSH,POP
 	OP_FENCE,OP_BLOCK,OP_FLTD,
@@ -2095,7 +2145,7 @@ endfunction
 function fnIsStimm;
 input micro_op_t ins;
 begin
-	case(ins.any.opcode)
+	case(ins.opcode)
 	OP_STI:
 		fnIsStimm = 1'b0;
 	default:
@@ -2118,18 +2168,18 @@ begin
 	fnConstPos = 8'd0;
 	if (Qupls4_pkg::fnHasConstRs1(ins)) begin	// does instruction have an extendable constant?
 		if (ms[0])
-			fnConstPos[3:0] = ins.alu.Rs1[3:0];
+			fnConstPos[3:0] = ins.Rs1[3:0];
 	end
 	if (Qupls4_pkg::fnHasConstRs2(ins)) begin	// does instruction have an extendable constant?
 		if (ms[1])
-			fnConstPos[7:4] = ins.alu.Rs2[3:0];
+			fnConstPos[7:4] = ins.Rs2[3:0];
 	end
 	if (Qupls4_pkg::fnHasConstRs3(ins)) begin	// does instruction have an extendable constant?
 		if (ms[2])
-			fnConstPos[11:8] = ins.alu.Rs3[3:0];
+			fnConstPos[11:8] = ins.Rs3[3:0];
 	end
 	if (fnIsStimm(ins))
-		fnConstPos[3:0] = ins.alu.Rd[3:0];
+		fnConstPos[3:0] = ins.Rd[3:0];
 end
 endfunction
 
@@ -2141,18 +2191,18 @@ begin
 	fnConstSize = 6'd0;
 	if (Qupls4_pkg::fnHasConstRs1(ins)) begin	// does instruction have an extendable constant?
 		if (ms[0])
-			fnConstSize[1:0] = ins.alu.Rs1[5:4];
+			fnConstSize[1:0] = ins.Rs1[5:4];
 	end
 	if (Qupls4_pkg::fnHasConstRs2(ins)) begin	// does instruction have an extendable constant?
 		if (ms[1])
-			fnConstSize[3:2] = ins.alu.Rs2[5:4];
+			fnConstSize[3:2] = ins.Rs2[5:4];
 	end
 	if (Qupls4_pkg::fnHasConstRs3(ins)) begin	// does instruction have an extendable constant?
 		if (ms[2])
-			fnConstSize[5:4] = ins.alu.Rs3[5:4];
+			fnConstSize[5:4] = ins.Rs3[5:4];
 	end
 	if (fnIsStimm(ins))
-		fnConstSize[1:0] = ins.alu.Rd[5:4];
+		fnConstSize[1:0] = ins.Rd[5:4];
 end
 endfunction
 
@@ -2160,14 +2210,14 @@ endfunction
 function fnIsAtom;
 input micro_op_t ir;
 begin
-	fnIsAtom = ir.any.opcode[5:1]==5'd12 && ir[8:6]==3'd7 && ir[31:29]==3'd0 && ir[28:26]==3'd1;
+	fnIsAtom = ir.opcode[5:1]==5'd12 && ir[8:6]==3'd7 && ir[31:29]==3'd0 && ir[28:26]==3'd1;
 end
 endfunction
 
 function fnIsCarry;
 input micro_op_t ir;
 begin
-	fnIsCarry = ir.any.opcode[5:1]==5'd12 && ir[8:6]==3'd7 && ir[31:29]==3'd0 && ir[28:26]==3'd2;
+	fnIsCarry = ir.opcode[5:1]==5'd12 && ir[8:6]==3'd7 && ir[31:29]==3'd0 && ir[28:26]==3'd2;
 end
 endfunction
 
@@ -2176,7 +2226,7 @@ function [63:0] fnDati;
 input more;
 input micro_op_t ins;
 input cpu_types_pkg::value_t dat;
-case(ins.any.opcode)
+case(ins.opcode)
 OP_LDB:		fnDati = {{56{dat[7]}},dat[7:0]};
 OP_LDBZ:	fnDati = {{56{1'b0}},dat[7:0]};
 OP_LDW:		fnDati = {{48{dat[15]}},dat[15:0]};
@@ -2191,13 +2241,13 @@ endfunction
 function memsz_t fnMemsz;
 input micro_op_t ir;
 begin
-	case(ir.any.opcode)
+	case(ir.opcode)
 	OP_LDB,OP_LDBZ,OP_STB:	fnMemsz = byt;
 	OP_LDW,OP_LDWZ,OP_STW:	fnMemsz = wyde;
 	OP_LDT,OP_LDTZ,OP_STT:	fnMemsz = tetra;
 	OP_LOAD,OP_STORE:				fnMemsz = octa;
 	OP_LDIP,OP_STIP:
-		case(ir.ls.Rs1[5:4])
+		case(ir.Rs1[5:4])
 		2'd0:	fnMemsz = byt;
 		2'd1:	fnMemsz = wyde;
 		2'd2:	fnMemsz = tetra;
@@ -2219,12 +2269,12 @@ endfunction
 function [31:0] fnSel;
 input micro_op_t ir;
 begin
-	case(ir.any.opcode)
+	case(ir.opcode)
 	OP_LDB,OP_LDBZ,OP_STB:	fnSel = 32'h01;
 	OP_LDW,OP_LDWZ,OP_STW:	fnSel = 32'h03;
 	OP_LDT,OP_LDTZ,OP_STT:	fnSel = 32'h0F;
 	OP_LDIP,OP_STIP:
-		case(ir.ls.Rs1[5:4])
+		case(ir.Rs1[5:4])
 		2'd0:	fnSel = 32'h01;
 		2'd1:	fnSel = 32'h03;
 		2'd2:	fnSel = 32'h0F;
@@ -2245,7 +2295,7 @@ endfunction
 function fnIsBranch;
 input micro_op_t ir;
 begin
-	case(ir.any.opcode)
+	case(ir.opcode)
 	OP_BCC8,OP_BCC16,OP_BCC32,OP_BCC64,
 	OP_BCCU8,OP_BCCU16,OP_BCCU32,OP_BCCU64:
 		fnIsBranch = 1'b1;
@@ -2258,21 +2308,21 @@ endfunction
 function fnDecBsr;
 input Qupls4_pkg::pipeline_reg_t mux;
 begin
-	fnDecBsr = mux.uop.any.opcode == OP_BSR && mux.uop.bsr.Rd!=8'd0;
+	fnDecBsr = mux.uop.opcode == OP_BSR && mux.uop.Rd!=8'd0;
 end
 endfunction
 
 function fnDecBra;
 input Qupls4_pkg::pipeline_reg_t mux;
 begin
-	fnDecBra = mux.uop.any.opcode == OP_BSR && mux.uop.bsr.Rd==8'd0;
+	fnDecBra = mux.uop.opcode == OP_BSR && mux.uop.Rd==8'd0;
 end
 endfunction
 
 function fnDecJmp;
 input Qupls4_pkg::pipeline_reg_t mux;
 begin
-	fnDecJmp = mux.uop.any.opcode==OP_JSR && mux.uop.jsr.Rd==8'd0;
+	fnDecJmp = mux.uop.opcode==OP_JSR && mux.uop.Rd==8'd0;
 end
 endfunction
 
@@ -2286,7 +2336,7 @@ endfunction
 function fnDecJsr;
 input Qupls4_pkg::pipeline_reg_t mux;
 begin
-	fnDecJsr = mux.uop.any.opcode==OP_JSR && mux.uop.jsr.Rd!=8'd0;
+	fnDecJsr = mux.uop.opcode==OP_JSR && mux.uop.Rd!=8'd0;
 end
 endfunction
 
@@ -2315,7 +2365,7 @@ function fnDecRet;
 input Qupls4_pkg::pipeline_reg_t mux;
 begin
 	fnDecRet =
-		mux.uop.any.opcode==OP_RTD;
+		mux.uop.opcode==OP_RTD;
 end
 endfunction
 
@@ -2328,9 +2378,9 @@ begin
 	bsr = fnDecBsr(pr);
 	bcc = fnIsBranch(pr.uop);
 	case(1'b1)
-	jsr:	fnDecDest.pc = {{29{pr.uop.jsr.disp[34]}},pr.uop.jsr.disp,1'b0};
-	bsr: 	fnDecDest.pc = pr.pc.pc + {{29{pr.uop.jsr.disp[34]}},pr.uop.jsr.disp,1'b0};
-	bcc:	fnDecDest.pc = pr.pc.pc + {{44{pr.uop.br.disp[19]}},pr.uop.br.disp,1'b0};
+	jsr:	fnDecDest.pc = {{29{pr.uop.imm[34]}},pr.uop.imm,1'b0};
+	bsr: 	fnDecDest.pc = pr.pc.pc + {{29{pr.uop.imm[34]}},pr.uop.imm,1'b0};
+	bcc:	fnDecDest.pc = pr.pc.pc + {{44{pr.uop.imm[19]}},pr.uop.imm,1'b0};
 	default:	fnDecDest.pc = Qupls4_pkg::RSTPC;
 	endcase
 end
@@ -2360,14 +2410,14 @@ endfunction
 function fnIsEret;
 input micro_op_t ir;
 begin
-	fnIsEret = ir.any.opcode==OP_BRK &&  ir[28:18]==11'd1;	// eret or eret2
+	fnIsEret = ir.opcode==OP_BRK &&  ir[28:18]==11'd1;	// eret or eret2
 end
 endfunction
 
 function fnIsRet;
 input micro_op_t ir;
 begin
-	fnIsRet = ir.any.opcode==OP_RTD;
+	fnIsRet = ir.opcode==OP_RTD;
 end
 endfunction
 
@@ -2382,11 +2432,11 @@ function fnImmb;
 input ex_instruction_t ir;
 begin
 	fnImmb = 1'b0;
-	case(ir.ins.any.opcode)
+	case(ir.ins.opcode)
 	OP_ADDI,OP_CMPI,OP_MULI,OP_DIVI,OP_SUBFI:
 		fnImmb = 1'b1;
 	OP_R3B,OP_R3W,OP_R3T,OP_R3O:
-		fnImmb = ir.ins.alu.ms[1] == 1'b1 && ir.ins.alu.Rs2[5] == 1'b1;
+		fnImmb = ir.ins.ms[1] == 1'b1 && ir.ins.Rs2[5] == 1'b1;
 //	OP_RTD:
 //		fnImmb = 1'b1;
 	default:	fnImmb = 1'b0;
@@ -2398,9 +2448,9 @@ function fnImmc;
 input ex_instruction_t ir;
 begin
 	fnImmc = 1'b0;
-	case(ir.ins.any.opcode)
+	case(ir.ins.opcode)
 	OP_R3B,OP_R3W,OP_R3T,OP_R3O:
-		fnImmc = ir.ins.alu.ms[2] == 1'b1 && ir.ins.alu.Rs3[5] == 1'b1;
+		fnImmc = ir.ins.ms[2] == 1'b1 && ir.ins.Rs3[5] == 1'b1;
 	OP_STI:
 		fnImmc = 1'b1;
 	default:	fnImmc = 1'b0;
@@ -2430,23 +2480,23 @@ endfunction
 function fnSourceRs1v;
 input ex_instruction_t ir;
 begin
-	case(ir.ins.any.opcode)
+	case(ir.ins.opcode)
 	OP_ADDI,OP_CMPI,OP_MULI,OP_DIVI,OP_SUBFI:	fnSourceRs1v = 1'b1;
-	OP_CHK:	fnSourceRs1v = fnConstReg(ir.ins.chk.Rs1) || fnImma(ir);
+	OP_CHK:	fnSourceRs1v = fnConstReg(ir.ins.Rs1) || fnImma(ir);
 //	OP_RTD:		fnSourceRs1v = fnConstReg(ir.ins.rtd.Ra.num) || fnImma(ir);
-//	OP_JSR:		fnSourceRs1v = fnConstReg(ir.ins.jsr.Ra.num) || fnImma(ir);
+//	OP_JSR:		fnSourceRs1v = fnConstReg(ir.ins.Ra.num) || fnImma(ir);
 	OP_R3B,OP_R3W,OP_R3T,OP_R3O:
-			fnSourceRs1v = fnConstReg(ir.ins.alu.Rs1) || fnImma(ir);
-	OP_SHIFT:	fnSourceRs1v = fnConstReg(ir.ins.sh.Rs1) || fnImma(ir);
+			fnSourceRs1v = fnConstReg(ir.ins.Rs1) || fnImma(ir);
+	OP_SHIFT:	fnSourceRs1v = fnConstReg(ir.ins.Rs1) || fnImma(ir);
 //	OP_MOV:		fnSourceRs1v = fnConstReg({ir.ins.move.Rs1h,ir.ins.move.Rs1}) || fnImma(ir);
 	OP_BCC8,OP_BCC16,OP_BCC32,OP_BCC64,
 	OP_BCCU8,OP_BCCU16,OP_BCCU32,OP_BCCU64:
-		fnSourceRs1v = fnConstReg(ir.ins.br.Rs1) || fnImma(ir);
+		fnSourceRs1v = fnConstReg(ir.ins.Rs1) || fnImma(ir);
 	OP_LOADA,
 	OP_LDB,OP_LDBZ,OP_LDW,OP_LDWZ,OP_LDT,OP_LDTZ,OP_LOAD:
-		fnSourceRs1v = fnConstReg(ir.ins.ls.Rs1);
+		fnSourceRs1v = fnConstReg(ir.ins.Rs1);
 	OP_STB,OP_STW,OP_STT,OP_STORE,OP_STI,OP_STPTR:
-		fnSourceRs1v = fnConstReg(ir.ins.ls.Rs1);
+		fnSourceRs1v = fnConstReg(ir.ins.Rs1);
 	default:	fnSourceRs1v = 1'b1;
 	endcase
 end
@@ -2455,23 +2505,23 @@ endfunction
 function fnSourceRs2v;
 input ex_instruction_t ir;
 begin
-	case(ir.ins.any.opcode)
-	OP_CHK:	fnSourceRs2v = fnConstReg(ir.ins.chk.Rs2) || fnImmb(ir);
+	case(ir.ins.opcode)
+	OP_CHK:	fnSourceRs2v = fnConstReg(ir.ins.Rs2) || fnImmb(ir);
 //	OP_RTD:		fnSourceRs2v = 1'b0;
 //	OP_JSR,OP_BSR,
 	OP_ADDI,OP_CMPI,OP_MULI,OP_DIVI,OP_SUBFI:
 		fnSourceRs2v = 1'b1;
 	OP_R3B,OP_R3W,OP_R3T,OP_R3O:
-			fnSourceRs2v = fnConstReg(ir.ins.alu.Rs2) || fnImmb(ir);
-	OP_SHIFT:	fnSourceRs2v = fnConstReg(ir.ins.alu.Rs2) || ir.ins[31];
+			fnSourceRs2v = fnConstReg(ir.ins.Rs2) || fnImmb(ir);
+	OP_SHIFT:	fnSourceRs2v = fnConstReg(ir.ins.Rs2) || ir.ins[31];
 	OP_BCC8,OP_BCC16,OP_BCC32,OP_BCC64,
 	OP_BCCU8,OP_BCCU16,OP_BCCU32,OP_BCCU64:
-		fnSourceRs2v = fnConstReg(ir.ins.br.Rs2) || fnImmb(ir);
+		fnSourceRs2v = fnConstReg(ir.ins.Rs2) || fnImmb(ir);
 	OP_LOADA,
 	OP_LDB,OP_LDBZ,OP_LDW,OP_LDWZ,OP_LDT,OP_LDTZ,OP_LOAD:
-		fnSourceRs2v = fnConstReg(ir.ins.ls.Rs2);
+		fnSourceRs2v = fnConstReg(ir.ins.Rs2);
 	OP_STB,OP_STW,OP_STT,OP_STORE,OP_STI,OP_STPTR:
-		fnSourceRs2v = fnConstReg(ir.ins.ls.Rs2);
+		fnSourceRs2v = fnConstReg(ir.ins.Rs2);
 	default:	fnSourceRs2v = 1'b1;
 	endcase
 end
@@ -2480,10 +2530,10 @@ endfunction
 function fnSourceRs3v;
 input ex_instruction_t ir;
 begin
-	case(ir.ins.any.opcode)
+	case(ir.ins.opcode)
 	OP_R3B,OP_R3W,OP_R3T,OP_R3O:
-			fnSourceRs3v = fnConstReg(ir.ins.alu.Rs3) || fnImmc(ir);
-	OP_CHK:	fnSourceRs3v = fnConstReg(ir.ins.chk.Rs3);
+			fnSourceRs3v = fnConstReg(ir.ins.Rs3) || fnImmc(ir);
+	OP_CHK:	fnSourceRs3v = fnConstReg(ir.ins.Rs3);
 //	OP_RTD:
 //		fnSourceRs3v = 1'd0;
 	OP_STI:
@@ -2497,9 +2547,9 @@ endfunction
 function fnSourceRs4v;
 input ex_instruction_t ir;
 begin
-	case(ir.ins.any.opcode)
+	case(ir.ins.opcode)
 	OP_EXTD:
-			fnSourceRs4v = fnConstReg(ir.ins.extd.Rs4) || fnImmd(ir);
+			fnSourceRs4v = fnConstReg(ir.ins.Rs4) || fnImmd(ir);
 	default:
 		fnSourceRs4v = 1'b1;
 	endcase
@@ -2509,11 +2559,11 @@ endfunction
 function fnSourceArgSv;
 input ex_instruction_t ir;
 begin
-	case(ir.ins.any.opcode)
+	case(ir.ins.opcode)
 	OP_FLTH,OP_FLTS,OP_FLTD,OP_FLTQ,
 	OP_FLTPH,OP_FLTPS,OP_FLTPD,OP_FLTPQ,
 	OP_FLTP:
-		fnSourceArgSv = ir.ins.f3.rm==3'd7;
+		fnSourceArgSv = ir.ins.rmd==3'd7;
 	default:
 		fnSourceArgSv = 1'b1;
 	endcase
@@ -2550,61 +2600,274 @@ endfunction
 
 // Not as complex as it looks. Mainly wires.
 // Some routing as fields in the micro-op may be wider than the raw instruction.
+//
+// Source bits
+// +---+---+---+---+---+---+---+
+// | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
+// +---+---+---+---+---+---+---+
+// |Rd2| S |Rs4|Rd |Rs3|Rs2|Rs1|
+// +---+---+---+---+---+---+---+
 
 function micro_op_t fnMapRawToUop;
 input [47:0] raw;
 begin
 	fnMapRawToUop = {$bits(micro_op_t){1'b0}};
+	fnMapRawToUop.opcode = raw[6:0];
 	case(raw[6:0])
 	// Immediate operate
 	Qupls4_pkg::OP_ADDI,Qupls4_pkg::OP_SUBFI,
 	Qupls4_pkg::OP_CMPI,Qupls4_pkg::OP_CMPUI,
 	Qupls4_pkg::OP_MULI,Qupls4_pkg::OP_MULUI,
-	Qupls4_pkg::OP_DIVI,Qupls4_pkg::OP_DIVUI:
+	Qupls4_pkg::OP_DIVI,Qupls4_pkg::OP_DIVUI,
+	Qupls4_pkg::OP_ANDI,Qupls4_pkg::OP_ORI,Qupls4_pkg::OP_XORI,
+	Qupls4_pkg::OP_LOADI:
 		begin
-			fnMapRawToUop.any.opcode = Qupls4_pkg::opcode_e'(raw[6:0]);
-			fnMapRawToUop.alui.Rd = {2'd0,raw[12:7]};
-			fnMapRawToUop.alui.Rs1 = {2'd0,raw[18:13]};
-			fnMapRawToUop.alui.imm = raw[45:19];
-			fnMapRawToUop.alui.pr = raw[47:46];
+			fnMapRawToUop.Rd = {2'd0,raw[12:7]};
+			fnMapRawToUop.Rs1 = {2'd0,raw[18:13]};
+			fnMapRawToUop.imm = raw[45:19];
+			fnMapRawToUop.prc = raw[47:46];
+			fnMapRawToUop.src = {6'b00100,raw[6:0]!=Qupls4_pkg::OP_LOADI};
+			fnMapRawToUop.dst = 1'b1;
 		end
 	// Loads and stores
 	Qupls4_pkg::OP_LDB,Qupls4_pkg::OP_LDW,Qupls4_pkg::OP_LDT,Qupls4_pkg::OP_LOAD,
-	Qupls4_pkg::OP_LDBZ,Qupls4_pkg::OP_LDWZ,Qupls4_pkg::OP_LDTZ,
+	Qupls4_pkg::OP_LDBZ,Qupls4_pkg::OP_LDWZ,Qupls4_pkg::OP_LDTZ:
+		begin
+			fnMapRawToUop.Rd = {2'd0,raw[12:7]};
+			fnMapRawToUop.Rs1 = {2'd0,raw[18:13]};
+			fnMapRawToUop.Rs2 = {2'd0,raw[24:19]};
+			fnMapRawToUop.imm = raw[43:25];
+			fnMapRawToUop.ms = raw[44];
+			fnMapRawToUop.sc = raw[47:45];
+			fnMapRawToUop.src = 7'b0001011;
+			fnMapRawToUop.dst = 1'b1;
+		end
 	Qupls4_pkg::OP_STB,Qupls4_pkg::OP_STW,Qupls4_pkg::OP_STT,Qupls4_pkg::OP_STORE:
 		begin
-			fnMapRawToUop.any.opcode = Qupls4_pkg::opcode_e'(raw[6:0]);
-			fnMapRawToUop.ls.Rsd = {2'd0,raw[12:7]};
-			fnMapRawToUop.ls.Rs1 = {2'd0,raw[18:13]};
-			fnMapRawToUop.ls.Rs2 = {2'd0,raw[24:19]};
-			fnMapRawToUop.ls.disp = raw[43:25];
-			fnMapRawToUop.ls.ms = raw[44];
-			fnMapRawToUop.ls.sc = raw[47:45];
+			fnMapRawToUop.Rd = {2'd0,raw[12:7]};
+			fnMapRawToUop.Rs1 = {2'd0,raw[18:13]};
+			fnMapRawToUop.Rs2 = {2'd0,raw[24:19]};
+			fnMapRawToUop.imm = raw[43:25];
+			fnMapRawToUop.ms = raw[44];
+			fnMapRawToUop.sc = raw[47:45];
+			fnMapRawToUop.src = 7'b0001011;
+			fnMapRawToUop.dst = 1'b0;
 		end
 	// Vector loads and stores
-	Qupls4_pkg::OP_LDV,Qupls4_pkg::OP_LDVN,
+	Qupls4_pkg::OP_LDV,Qupls4_pkg::OP_LDV:
+		begin
+			fnMapRawToUop.Rd = {2'd0,raw[12:7]};
+			fnMapRawToUop.Rs1 = {2'd0,raw[18:13]};
+			fnMapRawToUop.Rs2 = {2'd0,raw[24:19]};
+			fnMapRawToUop.Rs3 = {2'd0,raw[30:25]};
+			fnMapRawToUop.dt = raw[33:31];
+			fnMapRawToUop.imm = raw[43:34];
+			fnMapRawToUop.ms = raw[44];
+			fnMapRawToUop.sc = raw[47:45];
+			fnMapRawToUop.src = 7'b0001111;
+			fnMapRawToUop.dst = 1'b1;
+		end
+	Qupls4_pkg::OP_STV,Qupls4_pkg::OP_STV:
+		begin
+			fnMapRawToUop.Rd = {2'd0,raw[12:7]};
+			fnMapRawToUop.Rs1 = {2'd0,raw[18:13]};
+			fnMapRawToUop.Rs2 = {2'd0,raw[24:19]};
+			fnMapRawToUop.Rs3 = {2'd0,raw[30:25]};
+			fnMapRawToUop.dt = raw[33:31];
+			fnMapRawToUop.imm = raw[43:34];
+			fnMapRawToUop.ms = raw[44];
+			fnMapRawToUop.sc = raw[47:45];
+			fnMapRawToUop.src = 7'b0001111;
+			fnMapRawToUop.dst = 1'b0;
+		end
+	Qupls4_pkg::OP_LDV,Qupls4_pkg::OP_LDVN:
+		begin
+			fnMapRawToUop.Rd = {2'd0,raw[12:7]};
+			fnMapRawToUop.Rs1 = {2'd0,raw[18:13]};
+			fnMapRawToUop.Rs2 = {2'd0,raw[24:19]};
+			fnMapRawToUop.Rs3 = {2'd0,raw[30:25]};
+			fnMapRawToUop.dt = raw[33:31];
+			fnMapRawToUop.imm = raw[43:34];
+			fnMapRawToUop.ms = raw[44];
+			fnMapRawToUop.sc = raw[47:45];
+			fnMapRawToUop.src = 7'b0001111;
+			fnMapRawToUop.dst = 1'b1;
+		end
 	Qupls4_pkg::OP_STV,Qupls4_pkg::OP_STVN:
 		begin
-			fnMapRawToUop.vls.Rd = {2'd0,raw[12:7]};
-			fnMapRawToUop.vls.Rs1 = {2'd0,raw[18:13]};
-			fnMapRawToUop.vls.Rs2 = {2'd0,raw[24:19]};
-			fnMapRawToUop.vls.Rs3 = {2'd0,raw[30:25]};
-			fnMapRawToUop.vls.dt = raw[33:31];
-			fnMapRawToUop.vls.disp = raw[43:34];
-			fnMapRawToUop.vls.ms = raw[44];
-			fnMapRawToUop.vls.sc = raw[47:45];
+			fnMapRawToUop.Rd = {2'd0,raw[12:7]};
+			fnMapRawToUop.Rs1 = {2'd0,raw[18:13]};
+			fnMapRawToUop.Rs2 = {2'd0,raw[24:19]};
+			fnMapRawToUop.Rs3 = {2'd0,raw[30:25]};
+			fnMapRawToUop.dt = raw[33:31];
+			fnMapRawToUop.imm = raw[43:34];
+			fnMapRawToUop.ms = raw[44];
+			fnMapRawToUop.sc = raw[47:45];
+			fnMapRawToUop.src = 7'b0001111;
+			fnMapRawToUop.dst = 1'b0;
+		end
+	Qupls4_pkg::OP_AMO:
+		begin
+			fnMapRawToUop.Rd = {2'd0,raw[12:7]};
+			fnMapRawToUop.Rs1 = {2'd0,raw[18:13]};
+			fnMapRawToUop.Rs2 = {2'd0,raw[24:19]};
+			fnMapRawToUop.Rs3 = {2'd0,raw[30:25]};
+			fnMapRawToUop.vn = raw[34:31];
+			fnMapRawToUop.op3 = raw[37:35];
+			fnMapRawToUop.ms = raw[40:38];
+			fnMapRawToUop.func = raw[47:41];
+			fnMapRawToUop.src = 7'b0001111;
+			fnMapRawToUop.dst = 1'b1;
+		end
+	Qupls4_pkg::OP_CMPSWAP:
+		begin
+			fnMapRawToUop.Rd = {2'd0,raw[12:7]};
+			fnMapRawToUop.Rs1 = {2'd0,raw[18:13]};
+			fnMapRawToUop.Rs2 = {2'd0,raw[24:19]};
+			fnMapRawToUop.Rs3 = {2'd0,raw[30:25]};
+			fnMapRawToUop.vn = raw[34:31];
+			fnMapRawToUop.op3 = raw[37:35];
+			fnMapRawToUop.ms = raw[40:38];
+			fnMapRawToUop.func = raw[47:41];
+			fnMapRawToUop.src = 7'b0001111;
+			fnMapRawToUop.dst = 1'b1;
+		end
+	// R3 also includes shifts, BMAP
+	Qupls4_pkg::OP_R3B,Qupls4_pkg::OP_R3W,Qupls4_pkg::OP_R3T,Qupls4_pkg::OP_R3O,
+	Qupls4_pkg::OP_R3BP,Qupls4_pkg::OP_R3WP,Qupls4_pkg::OP_R3TP,Qupls4_pkg::OP_R3OP,
+	Qupls4_pkg::OP_R3P,Qupls4_pkg::OP_CHK:
+		begin
+			fnMapRawToUop.Rd = {2'd0,raw[12:7]};
+			fnMapRawToUop.Rs1 = {2'd0,raw[18:13]};
+			fnMapRawToUop.Rs2 = {2'd0,raw[24:19]};
+			fnMapRawToUop.Rs3 = {2'd0,raw[30:25]};
+			fnMapRawToUop.vn = raw[34:31];
+			fnMapRawToUop.op3 = raw[37:35];
+			fnMapRawToUop.rmd = raw[37:35];			// for ASR
+			fnMapRawToUop.ms = raw[40:38];
+			fnMapRawToUop.func = raw[47:41];
+			fnMapRawToUop.prc = raw[1:0];
+			fnMapRawToUop.src = 7'b0001111;
+			fnMapRawToUop.dst = 1'b1;
+		end
+	Qupls4_pkg::OP_SHIFT:
+		begin
+			fnMapRawToUop.Rd = {2'd0,raw[12:7]};
+			fnMapRawToUop.Rs1 = {2'd0,raw[18:13]};
+			fnMapRawToUop.Rs2 = {2'd0,raw[24:19]};
+			fnMapRawToUop.Rs3 = {2'd0,raw[30:25]};
+			fnMapRawToUop.vn = raw[34:31];
+			fnMapRawToUop.op3 = raw[37:35];
+			fnMapRawToUop.ms = raw[40:38];
+			fnMapRawToUop.func = raw[47:41];
+			fnMapRawToUop.prc = raw[1:0];
+			fnMapRawToUop.src = 7'b0001111;
+			fnMapRawToUop.dst = 1'b1;
+		end
+	Qupls4_pkg::OP_CSR:
+		begin
+			fnMapRawToUop.Rd = {2'd0,raw[12:7]};
+			fnMapRawToUop.Rs1 = {2'd0,raw[18:13]};
+			fnMapRawToUop.imm = {raw[44:42],raw[27:13]};
+			fnMapRawToUop.imm2 = raw[41:28];
+			fnMapRawToUop.ms = raw[44:42];
+			fnMapRawToUop.op3 = raw[47:45];
+			fnMapRawToUop.src = 7'b0001001;
+			fnMapRawToUop.dst = 1'b1;
+		end
+	Qupls4_pkg::OP_BRK:
+		begin
+			fnMapRawToUop.imm = raw[47:7];
+			fnMapRawToUop.src = 7'b0000000;
+			fnMapRawToUop.dst = 1'b0;
+		end
+	Qupls4_pkg::OP_EXTD:
+		begin
+			fnMapRawToUop.Rd = {2'd0,raw[12:7]};
+			fnMapRawToUop.Rs1 = {2'd0,raw[18:13]};
+			fnMapRawToUop.Rs2 = {2'd0,raw[24:19]};
+			fnMapRawToUop.Rs3 = {2'd0,raw[30:25]};
+			fnMapRawToUop.Rs4 = {2'd0,raw[46:41]};
+			fnMapRawToUop.vn = raw[34:31];
+			fnMapRawToUop.op3 = raw[37:35];
+			fnMapRawToUop.ms = raw[40:38];
+			fnMapRawToUop.src = 7'b0011111;
+			fnMapRawToUop.dst = 1'b1;
+		end
+	Qupls4_pkg::OP_FLTH,Qupls4_pkg::OP_FLTS,Qupls4_pkg::OP_FLTD,Qupls4_pkg::OP_FLTQ,
+	Qupls4_pkg::OP_FLTPH,Qupls4_pkg::OP_FLTPS,Qupls4_pkg::OP_FLTPD,Qupls4_pkg::OP_FLTPQ,
+	Qupls4_pkg::OP_FLTP:
+		begin
+			fnMapRawToUop.Rd = {2'd0,raw[12:7]};
+			fnMapRawToUop.Rs1 = {2'd0,raw[18:13]};
+			fnMapRawToUop.Rs2 = {2'd0,raw[24:19]};
+			fnMapRawToUop.Rs3 = {2'd0,raw[30:25]};
+			fnMapRawToUop.vn = raw[34:31];
+			fnMapRawToUop.rmd = raw[37:35];
+			fnMapRawToUop.ms = raw[40:38];
+			fnMapRawToUop.func = raw[46:41];
+			fnMapRawToUop.src = {1'b0,raw[37:35]==3'b111,5'b01111};	// read from fp status?
+			fnMapRawToUop.dst = 1'b1;
+		end
+	Qupls4_pkg::OP_BCC8,Qupls4_pkg::OP_BCC16,Qupls4_pkg::OP_BCC32,Qupls4_pkg::OP_BCC64,
+	Qupls4_pkg::OP_BCCU8,Qupls4_pkg::OP_BCCU16,Qupls4_pkg::OP_BCCU32,Qupls4_pkg::OP_BCCU64,
+	Qupls4_pkg::OP_FBCC16,Qupls4_pkg::OP_FBCC32,Qupls4_pkg::OP_FBCC64,Qupls4_pkg::OP_FBCC128:
+		begin
+			fnMapRawToUop.cnd = raw[10:7];
+			fnMapRawToUop.Rs1 = {2'd0,raw[18:13]};
+			fnMapRawToUop.Rs2 = {2'd0,raw[24:19]};
+			fnMapRawToUop.imm = raw[44:25];
+			fnMapRawToUop.prc = raw[1:0];
+			fnMapRawToUop.ms = raw[12:11];
+			fnMapRawToUop.vn = raw[47:46];
+			fnMapRawToUop.src = 7'b0000011;
+			fnMapRawToUop.dst = 1'b0;
+		end
+	Qupls4_pkg::OP_BSR:
+		begin
+			fnMapRawToUop.Rd = {3'd0,raw[11:7]};
+			fnMapRawToUop.imm = raw[47:13];
+			fnMapRawToUop.src = {3'b000,raw[12],3'b000};
+			fnMapRawToUop.dst = raw[12];
+		end
+	Qupls4_pkg::OP_RTD:
+		begin
+			fnMapRawToUop.Rd = {3'd0,raw[11:7]};
+			fnMapRawToUop.Rs1 = {3'd0,raw[17:13]};
+			fnMapRawToUop.imm = raw[45:19];
+			fnMapRawToUop.prc = 2'd3;
+			fnMapRawToUop.src = 7'b0001001;
+			fnMapRawToUop.dst = raw[12];
+		end
+	Qupls4_pkg::OP_FENCE:
+		begin
+			fnMapRawToUop.op3 = raw[26:24];
+			fnMapRawToUop.func = raw[47:41];
+			fnMapRawToUop.imm = raw[23:8];
+			fnMapRawToUop.src = 7'b0000000;
+			fnMapRawToUop.dst = 1'b0;
+		end
+	Qupls4_pkg::OP_PRED:
+		begin
+			fnMapRawToUop.Rs1 = {2'd0,raw[18:13]};
+			fnMapRawToUop.imm = raw[34:19];
+			fnMapRawToUop.ms = raw[40:38];
+			fnMapRawToUop.func = raw[47:41];
+			fnMapRawToUop.src = 7'b000001;
+			fnMapRawToUop.dst = 1'b0;
 		end
 	default:
 		begin
-			fnMapRawToUop.any.opcode = Qupls4_pkg::opcode_e'(raw[6:0]);
-			fnMapRawToUop.r3.Rd = {2'd0,raw[12:7]};
-			fnMapRawToUop.r3.Rs1 = {2'd0,raw[18:13]};
-			fnMapRawToUop.r3.Rs2 = {2'd0,raw[24:19]};
-			fnMapRawToUop.r3.Rs3 = {2'd0,raw[30:25]};
-			fnMapRawToUop.r3.vn = raw[34:31];
-			fnMapRawToUop.r3.op3 = raw[37:35];
-			fnMapRawToUop.r3.ms = raw[40:38];
-			fnMapRawToUop.r3.func = Qupls4_pkg::func_e'(raw[47:41]);
+			fnMapRawToUop.Rd = {2'd0,raw[12:7]};
+			fnMapRawToUop.Rs1 = {2'd0,raw[18:13]};
+			fnMapRawToUop.Rs2 = {2'd0,raw[24:19]};
+			fnMapRawToUop.Rs3 = {2'd0,raw[30:25]};
+			fnMapRawToUop.vn = raw[34:31];
+			fnMapRawToUop.op3 = raw[37:35];
+			fnMapRawToUop.ms = raw[40:38];
+			fnMapRawToUop.func = raw[47:41];
+			fnMapRawToUop.src = 7'b0001111;
+			fnMapRawToUop.dst = 1'b1;
 		end
 	endcase
 end

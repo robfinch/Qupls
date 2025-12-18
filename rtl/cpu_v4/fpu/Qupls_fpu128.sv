@@ -223,11 +223,11 @@ always_comb
 begin
 	bus = 128'd0;
 	exc = Qupls4_pkg::FLT_NONE;
-	case(ir.any.opcode)
+	case(ir.opcode)
 	/*
 	OP_FLT3:
 		if (Qupls4_pkg::SUPPORT_QUAD_PRECISION) begin
-			case(ir.f3.func)
+			case(ir.func)
 			FN_FLT1:
 				case(ir.f1.func)
 				FN_FABS:	bus = {1'b0,a[126:0]};
@@ -273,14 +273,14 @@ begin
 			if (ir[31])
 				bus = a + i;
 			else
-				case(ir.alu.op3)
+				case(ir.op3)
 				3'd0:		// ADD
-					case(ir.alu.lx)
+					case(ir.lx)
 					2'd0:	bus = a + b;
 					default:	bus = a + i;
 					endcase
 				3'd2:		// ABS
-					case(ir.alu.lx)
+					case(ir.lx)
 					2'd0:
 						begin
 							tmp = a + b;
@@ -300,7 +300,7 @@ begin
 			if (ir[31])
 				bus = a & i;
 			else
-				case(ir.alu.op3)
+				case(ir.op3)
 				3'd0:	bus = a & b;
 				3'd1:	bus = ~(a & b);
 				3'd2:	bus = a & ~b;
@@ -312,7 +312,7 @@ begin
 			if (ir[31])
 				bus = a | i;
 			else
-				case(ir.alu.op3)
+				case(ir.op3)
 				3'd0:	bus = a | b;
 				3'd1:	bus = ~(a | b);
 				3'd2:	bus = a | ~b;
@@ -324,7 +324,7 @@ begin
 			if (ir[31])
 				bus = a ^ i;
 			else
-				case(ir.alu.op3)
+				case(ir.op3)
 				3'd0:	bus = a ^ b;
 				3'd1:	bus = ~(a ^ b);
 				3'd2:	bus = a ^ ~b;
@@ -336,7 +336,7 @@ begin
 			if (ir[31])
 				bus = i - a;
 			else
-				case(ir.alu.op3)
+				case(ir.op3)
 				3'd0:	bus = b - a;
 				default:	bus = zero;	
 				endcase
@@ -647,12 +647,12 @@ begin
 end
 
 always_comb
-	case(ir.any.opcode)
+	case(ir.opcode)
 	/*
 	OP_CAP:	done = 1'b1;
 	OP_FLT3:
 		if (SUPPORT_QUAD_PRECISION) begin
-			case(ir.f3.func)
+			case(ir.func)
 			FN_FLT1:
 				case(ir.f1.func)
 				FN_FTOI: done = f2i_done;

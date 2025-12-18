@@ -40,7 +40,7 @@ import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
 module Qupls4_reservation_station(rst, clk, available, busy, issue, stall,
-	rse_i, rse_o, stomp, rf_oper_i, bypass_i, req_aRn
+	rse_i, rse_o, stomp, rf_oper_i, bypass_i, req_pRn, req_pRnv
 );
 parameter NRSE = 1;
 parameter FUNCUNIT = 4'd0;
@@ -60,7 +60,8 @@ input Qupls4_pkg::operand_t [NBPI-1:0] bypass_i;
 output reg busy;
 output reg issue;
 output Qupls4_pkg::reservation_station_entry_t rse_o;
-output aregno_t [3:0] req_aRn;
+output aregno_t [3:0] req_pRn;
+output reg [3:0] req_pRnv;
 
 integer kk,jj,nn,mm,rdy,pp,qq,n1,n2;
 genvar g;
@@ -317,19 +318,39 @@ end
 always_comb
 begin
 	kk = 0;
-	req_aRn[0] = 8'd0;
-	req_aRn[1] = 8'd0;
-	req_aRn[2] = 8'd0;
-	req_aRn[3] = 8'd0;
+	req_pRn[0] = 8'd0;
+	req_pRn[1] = 8'd0;
+	req_pRn[2] = 8'd0;
+	req_pRn[3] = 8'd0;
+	req_pRnv = 4'd0;
 	for (jj = 0; jj < NRSE; jj = jj + 1) begin
 		for (pp = 0; pp < NSARG+RC+1; pp = pp + 1) begin
-			if (rse[jj].busy && !rse[jj].arg[pp].v && kk < 4) begin
-				req_aRn[kk] = rse[jj].arg[pp].aRn;
-				kk = kk + 1;
+			if (fnSrc(rse[jj].uop,pp)) begin
+				if (rse[jj].busy && !rse[jj].arg[pp].v && kk < 4) begin
+					req_pRn[kk] = rse[jj].arg[pp].pRn;
+					req_pRnv = VAL;
+					kk = kk + 1;
+				end
 			end
 		end
 	end
 end
+
+function fnSrc;
+input micro_op_t op;
+input [2:0] n;
+begin
+	case(n)
+	3'd0:	fnSrc = op.src[1];
+	3'd1:	fnSrc = op.src[2];
+	3'd2:	fnSrc = op.src[3];
+	3'd3:	fnSrc = op.src[4];
+	3'd4:	fnSrc = op.src[0];
+	3'd5:	fnSrc = op.src[5];
+	default:	fnSrc = 1'b0;
+	endcase
+end
+endfunction
 
 function integer fnChooseReady;
 input Qupls4_pkg::reservation_station_entry_t [NRSE-1:0] rse;

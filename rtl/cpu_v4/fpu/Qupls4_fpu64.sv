@@ -108,7 +108,7 @@ wire fa_hidden,fb_hidden;
 always_comb
 	done = 1'b1;
 
-delay3 #(1) udlyust1 (.clk(clk), .ce(1'b1), .i(ir.f3.rc), .o(ust));
+delay3 #(1) udlyust1 (.clk(clk), .ce(1'b1), .i(ir.func[6]), .o(ust));
 delay2 #(3) udlyrm2 (.clk(clk), .ce(1'b1), .i(a[2:0]), .o(a3));
 delay2 #($bits(Qupls4_pkg::micro_op_t)) udlymo3 (.clk(clk), .ce(1'b1), .i(ir), .o(ird));
 delay2 #($bits(Qupls4_pkg::fp_status_reg_t)) udlysd4 (.clk(clk), .ce(1'b1), .i(s), .o(sd));
@@ -292,7 +292,7 @@ always_ff @(posedge clk)
 always_comb
 begin
 	bus = {WID{1'd0}};
-	case(ird.any.opcode)
+	case(ird.opcode)
 	Qupls4_pkg::OP_ADDI:	if (PERFORMANCE) bus = ad + id; else bus = zero;
 	Qupls4_pkg::OP_SUBFI:	if (PERFORMANCE) bus = id - ad; else bus = zero;
 	Qupls4_pkg::OP_ANDI:	if (PERFORMANCE) bus = ad & id; else bus = zero;
@@ -301,9 +301,9 @@ begin
 	Qupls4_pkg::OP_CMPI:	if (PERFORMANCE) bus = cmpo; else bus = zero;
 	Qupls4_pkg::OP_R3O:
 		if (PERFORMANCE)
-			case(ird.r3.func)
+			case(ird.func)
 			Qupls4_pkg::FN_ADD:
-				case(ird.r3.op3)
+				case(ird.op3)
 				3'd0: bus = (ad + bd) & cd;
 				3'd1: bus = (ad + bd) | cd;
 				3'd2: bus = (ad + bd) ^ cd;
@@ -315,7 +315,7 @@ begin
 				endcase
 			Qupls4_pkg::FN_CMP,
 			Qupls4_pkg::FN_CMPU:
-				case(ird.r3.op3)
+				case(ird.op3)
 				3'd0: bus = cmpo & cd;
 				3'd1: bus = cmpo | cd;
 				3'd2: bus = cmpo ^ cd;
@@ -326,7 +326,7 @@ begin
 				default:	bus = zero;
 				endcase
 			Qupls4_pkg::FN_AND:
-				case(ird.r3.op3)
+				case(ird.op3)
 				3'd0: bus = (ad & bd) & cd;
 				3'd1: bus = (ad & bd) | cd;
 				3'd2: bus = (ad & bd) ^ cd;
@@ -337,7 +337,7 @@ begin
 				default:	bus = zero;
 				endcase
 			Qupls4_pkg::FN_OR:
-				case(ird.r3.op3)
+				case(ird.op3)
 				3'd0: bus = (ad | bd) & cd;
 				3'd1: bus = (ad | bd) | cd;
 				3'd2: bus = (ad | bd) ^ cd;
@@ -348,7 +348,7 @@ begin
 				default:	bus = zero;
 				endcase
 			Qupls4_pkg::FN_XOR:
-				case(ird.r3.op3)
+				case(ird.op3)
 				3'd0: bus = (ad ^ bd) & cd;
 				3'd1: bus = (ad ^ bd) | cd;
 				3'd2: bus = (ad ^ bd) ^ cd;
@@ -363,7 +363,7 @@ begin
 	Qupls4_pkg::OP_FLTH,Qupls4_pkg::OP_FLTS,Qupls4_pkg::OP_FLTD,Qupls4_pkg::OP_FLTQ,
 	Qupls4_pkg::OP_FLTPH,Qupls4_pkg::OP_FLTPS,Qupls4_pkg::OP_FLTPD,Qupls4_pkg::OP_FLTPQ,
 	Qupls4_pkg::OP_FLTP:
-		case(ird.f3.func)
+		case(ird.func)
 		Qupls4_pkg::FLT_SCALEB:	bus = scaleo;
 		Qupls4_pkg::FLT_SGNJ:		bus = fsgnj;
 		Qupls4_pkg::FLT_SGNJN:	bus = fsgnjn;
@@ -378,9 +378,9 @@ begin
 		endcase
 	/*
 	OP_FLT:
-		case(ir.fpu.op4)
+		case(ir.op4)
 		FOP4_G8:
-		  case(ir.fpu.op3)
+		  case(ir.op3)
       FG8_FSGNJ:	bus = fsgnj;
       FG8_FSGNJN:	bus = fsgnjn;
       FG8_FSGNJX:	bus = fsgnjx;
@@ -388,7 +388,7 @@ begin
       default:	bus = 64'd0;
       endcase
     FOP4_G10:
-      case (ir.fpu.Rs2)
+      case (ir.Rs2)
 			FG10_FCVTF2I:	 bus = f2io;
 			FG10_FCVTI2F:	 bus = i2fo;
 			FG10_FSIGN:    bus = signo;
@@ -415,11 +415,11 @@ end
 always_comb
 begin
 	stbus = sd;
-	case(ird.any.opcode)
+	case(ird.opcode)
 	Qupls4_pkg::OP_FLTH,Qupls4_pkg::OP_FLTS,Qupls4_pkg::OP_FLTD,Qupls4_pkg::OP_FLTQ,
 	Qupls4_pkg::OP_FLTPH,Qupls4_pkg::OP_FLTPS,Qupls4_pkg::OP_FLTPD,Qupls4_pkg::OP_FLTPQ,
 	Qupls4_pkg::OP_FLTP:
-		case(ird.f3.func)
+		case(ird.func)
 		Qupls4_pkg::FLT_SGNJ:
 			begin
 				stbus.inexact = FALSE;

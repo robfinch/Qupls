@@ -65,13 +65,13 @@ reg [WID-1:0] fmac;
 reg [WID-1:0] fmab;
 /*
 always_comb
-	if (ir.f3.func==FN_FMS || ir.f3.func==FN_FNMS)
+	if (ir.func==FN_FMS || ir.func==FN_FNMS)
 		fmaop = 1'b1;
 	else
 		fmaop = 1'b0;
 */
 always_comb
-	if (ir.fpu.op4==Qupls4_pkg::FOP4_FADD || ir.fpu.op4==Qupls4_pkg::FOP4_FSUB) begin
+	if (ir.op4==Qupls4_pkg::FOP4_FADD || ir.op4==Qupls4_pkg::FOP4_FSUB) begin
 		fmab = 64'h3FF0000000000000;	// 1,0
 		fmad = 64'h3FF0000000000000;	// 1,0
 	end
@@ -81,7 +81,7 @@ always_comb
 	end
 
 always_comb
-	if (ir.fpu.op4==FOP4_FMUL || ir.fpu.op4==FOP4_FDIV) begin
+	if (ir.op4==FOP4_FMUL || ir.op4==FOP4_FDIV) begin
 		fmac = 64'd0;
 		fmad = 64'd0;
 	end

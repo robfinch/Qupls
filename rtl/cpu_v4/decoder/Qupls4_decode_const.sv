@@ -106,15 +106,15 @@ begin
 	finsB = 1'd0;
 	finsC = 1'd0;
 
-	case(ins.any.opcode)
+	case(ins.opcode)
 	// Quick immediate mode		Rd=Rs1+imm
 	Qupls4_pkg::OP_ADDI,Qupls4_pkg::OP_MULI,Qupls4_pkg::OP_DIVI,
 	Qupls4_pkg::OP_SUBFI,Qupls4_pkg::OP_CMPI:
 		begin
-			immb = {{37{ins.alui.imm[26]}},ins.alui.imm};
+			immb = {{37{ins.imm[26]}},ins.imm};
 			has_immb = TRUE;
 			/*
-			if (ins.alui.Rs1==8'd0) begin				
+			if (ins.Rs1==8'd0) begin				
 				imma = value_zero;
 				has_imma = TRUE;
 			end
@@ -123,10 +123,10 @@ begin
 	Qupls4_pkg::OP_MULUI,Qupls4_pkg::OP_DIVUI,Qupls4_pkg::OP_CMPUI,
 	Qupls4_pkg::OP_ORI,Qupls4_pkg::OP_XORI:
 		begin
-			immb = {{37{1'b0}},ins.alui.imm};
+			immb = {{37{1'b0}},ins.imm};
 			has_immb = TRUE;
 			/*
-			if (ins.alui.Rs1==8'd0) begin				
+			if (ins.Rs1==8'd0) begin				
 				imma = value_zero;
 				has_imma = TRUE;
 			end
@@ -134,10 +134,10 @@ begin
 		end
 	Qupls4_pkg::OP_ANDI:
 		begin
-			immb = {{37{1'b1}},ins.alui.imm};
+			immb = {{37{1'b1}},ins.imm};
 			has_immb = TRUE;
 			/*
-			if (ins.alui.Rs1==8'd0) begin				
+			if (ins.Rs1==8'd0) begin				
 				imma = value_zero;
 				has_imma = TRUE;
 			end
@@ -146,12 +146,12 @@ begin
 
 	Qupls4_pkg::OP_LOADI:
 		begin
-			immb = {{37{ins.alui.imm[26]}},ins.alui.imm};
+			immb = {{37{ins.imm[26]}},ins.imm};
 			has_immb = TRUE;
 			imma = value_zero;
 			has_imma = TRUE;
 			/*
-			if (ins.alui.Rs1==8'd0) begin				
+			if (ins.Rs1==8'd0) begin				
 				imma = value_zero;
 				has_imma = TRUE;
 			end
@@ -171,15 +171,15 @@ begin
 			immc = cnst3;
 			has_immc = Qupls4_pkg::fnHasConstRs3(ins);
 			/*
-			if (ins.r3.Rs1==8'd0 && !has_imma) begin
+			if (ins.Rs1==8'd0 && !has_imma) begin
 				imma = value_zero;
 				has_imma = TRUE;
 			end
-			if (ins.r3.Rs2==8'd0 && !has_immb) begin				
+			if (ins.Rs2==8'd0 && !has_immb) begin				
 				immb = value_zero;
 				has_immb = TRUE;
 			end
-			if (ins.r3.Rs3==8'd0 && !has_immc) begin				
+			if (ins.Rs3==8'd0 && !has_immc) begin				
 				immc = value_zero;
 				has_immc = TRUE;
 			end
@@ -209,15 +209,15 @@ begin
 			default:	immc = cnst3;
 			endcase
 			/*
-			if (ins.f3.Rs1==8'd0 && !has_imma) begin
+			if (ins.Rs1==8'd0 && !has_imma) begin
 				imma = value_zero;
 				has_imma = TRUE;
 			end
-			if (ins.f3.Rs2==8'd0 && !has_immb) begin				
+			if (ins.Rs2==8'd0 && !has_immb) begin				
 				immb = value_zero;
 				has_immb = TRUE;
 			end
-			if (ins.f3.Rs3==8'd0 && !has_immc) begin				
+			if (ins.Rs3==8'd0 && !has_immc) begin				
 				immc = value_zero;
 				has_immc = TRUE;
 			end
@@ -230,7 +230,7 @@ begin
 			immb = {57'd0,ins[22:16]};
 			has_immb = 1'b0;
 			/*
-			if (ins.alui.Rs1==8'd0) begin
+			if (ins.Rs1==8'd0) begin
 				imma = value_zero;
 				has_imma = TRUE;
 			end
@@ -240,20 +240,20 @@ begin
 	Qupls4_pkg::OP_BCCU8,Qupls4_pkg::OP_BCCU16,Qupls4_pkg::OP_BCCU32,Qupls4_pkg::OP_BCCU64:
 		begin
 			/*
-			if (ins.br.Rs1==8'd0) begin
+			if (ins.Rs1==8'd0) begin
 				imma = value_zero;
 				has_imma = TRUE;
 			end
-			if (ins.br.Rs2==8'd0) begin
+			if (ins.Rs2==8'd0) begin
 				immb = value_zero;
 				has_immb = TRUE;
 			end
 			*/
-			if (ins.br.ms[1]) begin
+			if (ins.ms[1]) begin
 				immb = cnst2;
 				has_immb = TRUE;
 			end
-			if (ins.br.ms[0]) begin
+			if (ins.ms[0]) begin
 				imma = cnst1;
 				has_imma = TRUE;
 			end
@@ -269,51 +269,51 @@ begin
 	Qupls4_pkg::OP_STT,
 	Qupls4_pkg::OP_STORE:
 		begin
-			if (ins.ls.Rs1==8'd0) begin
+			if (ins.Rs1==8'd0) begin
 				imma = value_zero;
 				has_imma = TRUE;
 			end
-			if (ins.ls.Rs2==8'd0) begin
+			if (ins.Rs2==8'd0) begin
 				immb = value_zero;
 				has_immb = TRUE;
 			end
 			has_immc = TRUE;
-			if (ins.ls.ms)
+			if (ins.ms)
 				immc = cnst3;
 			else
-				immc = {{45{ins.ls.disp[18]}},ins.ls.disp};
+				immc = {{45{ins.imm[18]}},ins.imm};
 		end
 	Qupls4_pkg::OP_LDIP,Qupls4_pkg::OP_STIP:
 		begin
 			imma = ip;
 			has_imma = TRUE;
-			if (ins.ls.Rs2==8'd0) begin
+			if (ins.Rs2==8'd0) begin
 				immb = value_zero;
 				has_immb = TRUE;
 			end
 			has_immc = TRUE;
-			if (ins.ls.ms)
+			if (ins.ms)
 				immc = cnst3;
 			else
-				immc = {{45{ins.ls.disp[18]}},ins.ls.disp};
+				immc = {{45{ins.imm[18]}},ins.imm};
 		end
 	Qupls4_pkg::OP_STI:
 		begin
-			if (ins.ls.Rs1==8'd0) begin
+			if (ins.Rs1==8'd0) begin
 				imma = value_zero;
 				has_imma = TRUE;
 			end
-			if (ins.ls.Rs2==8'd0) begin
+			if (ins.Rs2==8'd0) begin
 				immb = value_zero;
 				has_immb = TRUE;
 			end
 			has_immd = TRUE;
 			immd = cnst4;
 			has_immc = TRUE;
-			if (ins.ls.ms)
+			if (ins.ms)
 				immc = cnst3;
 			else
-				immc = {{45{ins.ls.disp[18]}},ins.ls.disp};
+				immc = {{45{ins.imm[18]}},ins.imm};
 		end
 	Qupls4_pkg::OP_FENCE:
 		begin

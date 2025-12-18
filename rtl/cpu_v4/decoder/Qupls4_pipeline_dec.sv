@@ -168,43 +168,6 @@ Qupls4_microop_mem uuop1
 end
 endgenerate
 
-/*
-Qupls4_microop_mem uuop2
-(
-	.om(pg_mux.pr[1].op.om),
-	.ir(pg_mux.pr[1].op.uop), 
-	.num(5'd0), 
-	.carry_reg(8'd0),
-	.carry_out(1'b0),
-	.carry_in(1'b0),
-	.count(uop_count[1]),
-	.uop(uop[1])
-);
-
-Qupls4_microop_mem uuop3
-(
-	.om(pg_mux.pr[2].op.om),
-	.ir(pg_mux.pr[2].op.uop), 
-	.num(5'd0), 
-	.carry_reg(8'd0),
-	.carry_out(1'b0),
-	.carry_in(1'b0),
-	.count(uop_count[2]),
-	.uop(uop[2])
-);
-
-Qupls4_microop_mem uuop4
-(
-	.om(pg_mux.pr[3].op.om),
-	.ir(pg_mux.pr[3].op.uop), 
-	.num(5'd0), 
-	.carry_reg(8'd0),
-	.carry_out(1'b0),
-	.carry_in(1'b0),
-	.count(uop_count[3]),
-	.uop(uop[3])
-);
-*/
 
 reg rd_mux;
 reg [2:0] uop_mark [0:MAX_MICROOPS-1];
@@ -328,8 +291,8 @@ always_comb
 begin
 	nopi = {$bits(Qupls4_pkg::pipeline_reg_t){1'b0}};
 	nopi.pc.pc = Qupls4_pkg::RSTPC;
-	nopi.uop = {26'd0,Qupls4_pkg::OP_NOP};
-	nopi.uop.any.lead = 3'd1;
+	nopi.uop = {41'd0,Qupls4_pkg::OP_NOP};
+	nopi.uop.lead = 3'd1;
 	nopi.v = 1'b1;
 	nopi.decbus.Rdz = 1'b1;
 	nopi.decbus.nop = 1'b1;
@@ -472,46 +435,14 @@ begin
 		pr_dec[3].decbus.cjb = FALSE;
 		*/
 		pr_dec[0].decbus.Rci = dec[0].Rci;
-		pr_dec[0].decbus.Rs1 = dec[0].Rs1;
-		pr_dec[0].decbus.Rs2 = dec[0].Rs2;
-		pr_dec[0].decbus.Rs3 = dec[0].Rs3;
-		pr_dec[0].decbus.Rd = dec[0].Rd;
-		pr_dec[1].decbus.Rs1 = dec[1].Rs1;
-		pr_dec[1].decbus.Rs2 = dec[1].Rs2;
-		pr_dec[1].decbus.Rs3 = dec[1].Rs3;
-		pr_dec[1].decbus.Rd = dec[1].Rd;
 		pr_dec[1].decbus.Rci = dec[1].Rci;
-		pr_dec[2].decbus.Rs1 = dec[2].Rs1;
-		pr_dec[2].decbus.Rs2 = dec[2].Rs2;
-		pr_dec[2].decbus.Rs3 = dec[2].Rs3;
-		pr_dec[2].decbus.Rd = dec[2].Rd;
 		pr_dec[2].decbus.Rci = dec[2].Rci;
-		pr_dec[3].decbus.Rs1 = dec[3].Rs1;
-		pr_dec[3].decbus.Rs2 = dec[3].Rs2;
-		pr_dec[3].decbus.Rs3 = dec[3].Rs3;
-		pr_dec[3].decbus.Rd = dec[3].Rd;
 		pr_dec[3].decbus.Rci = dec[3].Rci;
 	end
 	else begin
-		pr_dec[0].decbus.Rs1 = dec[0].Rs1;
-		pr_dec[0].decbus.Rs2 = dec[0].Rs2;
-		pr_dec[0].decbus.Rs3 = dec[0].Rs3;
-		pr_dec[0].decbus.Rd = dec[0].Rd;
 		pr_dec[0].decbus.Rci = dec[0].Rci;
-		pr_dec[1].decbus.Rs1 = dec[1].Rs1;
-		pr_dec[1].decbus.Rs2 = dec[1].Rs2;
-		pr_dec[1].decbus.Rs3 = dec[1].Rs3;
-		pr_dec[1].decbus.Rd = dec[1].Rd;
 		pr_dec[1].decbus.Rci = dec[1].Rci;
-		pr_dec[2].decbus.Rs1 = dec[2].Rs1;
-		pr_dec[2].decbus.Rs2 = dec[2].Rs2;
-		pr_dec[2].decbus.Rs3 = dec[2].Rs3;
-		pr_dec[2].decbus.Rd = dec[2].Rd;
 		pr_dec[2].decbus.Rci = dec[2].Rci;
-		pr_dec[3].decbus.Rs1 = dec[3].Rs1;
-		pr_dec[3].decbus.Rs2 = dec[3].Rs2;
-		pr_dec[3].decbus.Rs3 = dec[3].Rs3;
-		pr_dec[3].decbus.Rd = dec[3].Rd;
 		pr_dec[3].decbus.Rci = dec[3].Rci;
 	end
 	pr_dec[0].decbus = dec[0];
@@ -539,10 +470,10 @@ begin
 		end
 
 		if (dec[0].atom && pr_dec[0].v)
-			pr_dec[1].atom_count = insm[0].uop.atom.count;
+			pr_dec[1].atom_count = insm[0].uop.imm[3:0];
 		// Note to mask instructions not micro-ops, by detecting the lead micro-op
 		// of the instruction.
-		else if (!pr_dec[0].ssm && pr_dec[0].uop.any.lead && |pr_dec[0].atom_count)
+		else if (!pr_dec[0].ssm && pr_dec[0].uop.lead && |pr_dec[0].atom_count)
 			pr_dec[1].atom_count = pr_dec[0].atom_count - 4'd1;
 		else
 			pr_dec[1].atom_count = pr_dec[0].atom_count;
@@ -550,8 +481,8 @@ begin
 			pr_dec[1].v = INV;
 
 		if (dec[1].atom && pr_dec[1].v)
-			pr_dec[2].atom_count = insm[1].uop.atom.count;
-		else if (!pr_dec[1].ssm && pr_dec[1].uop.any.lead && |pr_dec[1].atom_count)
+			pr_dec[2].atom_count = insm[1].uop.imm[3:0];
+		else if (!pr_dec[1].ssm && pr_dec[1].uop.lead && |pr_dec[1].atom_count)
 			pr_dec[2].atom_count = pr_dec[1].atom_count - 4'd1;
 		else
 			pr_dec[2].atom_count = pr_dec[1].atom_count;
@@ -559,8 +490,8 @@ begin
 			pr_dec[2].v = INV;
 
 		if (dec[2].atom && pr_dec[2].v)
-			pr_dec[3].atom_count = insm[2].uop.atom.count;
-		else if (!pr_dec[2].ssm && pr_dec[2].uop.any.lead && |pr_dec[2].atom_count)
+			pr_dec[3].atom_count = insm[2].uop.imm[3:0];
+		else if (!pr_dec[2].ssm && pr_dec[2].uop.lead && |pr_dec[2].atom_count)
 			pr_dec[3].atom_count = pr_dec[2].atom_count - 4'd1;
 		else
 			pr_dec[3].atom_count = pr_dec[2].atom_count;
@@ -568,8 +499,8 @@ begin
 			pr_dec[3].v = INV;
 
 		if (dec[3].atom && pr_dec[3].v)
-			atom_count_o = insm[3].uop.atom.count;
-		else if (!pr_dec[3].ssm && pr_dec[3].uop.any.lead && |pr_dec[3].atom_count)
+			atom_count_o = insm[3].uop.imm[3:0];
+		else if (!pr_dec[3].ssm && pr_dec[3].uop.lead && |pr_dec[3].atom_count)
 			atom_count_o = pr_dec[3].atom_count - 4'd1;
 		else
 			atom_count_o = pr_dec[3].atom_count;
@@ -583,25 +514,25 @@ begin
 		pr_dec[0].decbus.pred_no = pred_no_i;
 		if (dec[0].pred && pr_dec[0].v) begin
 			pr_dec[0].decbus.pred_no = pr_dec[0].decbus.pred_no + 5'd1;
-			pr_dec[1].decbus.pred_mask = insm[0].uop.pred.mask;
+			pr_dec[1].decbus.pred_mask = insm[0].uop.imm[15:0];
 			pr_dec[1].decbus.pred_no = pr_dec[0].decbus.pred_no;
 		end
-		else if (!pr_dec[0].ssm && pr_dec[0].uop.any.lead && |pr_dec[0].pred_mask) begin
-			pr_dec[1].decbus.pred_mask = pr_dec[0].decbus.pred_mask >> 2'd2;
+		else if (!pr_dec[0].ssm && pr_dec[0].uop.lead && |pr_dec[0].pred_mask) begin
+			pr_dec[1].decbus.pred_mask = pr_dec[0].uop.imm[15:0] >> 2'd2;
 			pr_dec[1].decbus.pred_no = pr_dec[0].decbus.pred_no;
 		end
 		else begin
-			pr_dec[1].decbus.pred_mask = pr_dec[0].decbus.pred_mask;
+			pr_dec[1].decbus.pred_mask = pr_dec[0].uop.imm[15:0];
 			pr_dec[1].decbus.pred_no = pr_dec[0].decbus.pred_no;
 		end
 
 		if (dec[1].pred && pr_dec[1].v) begin
 			pr_dec[1].decbus.pred_no = pr_dec[1].decbus.pred_no + 5'd1;
-			pr_dec[2].decbus.pred_mask = insm[1].uop.pred.mask;
+			pr_dec[2].decbus.pred_mask = insm[1].uop.imm[15:0];
 			pr_dec[2].decbus.pred_no = pr_dec[1].decbus.pred_no;
 		end
-		else if (!pr_dec[1].ssm && pr_dec[1].uop.any.lead && |pr_dec[1].pred_mask) begin
-			pr_dec[2].decbus.pred_mask = pr_dec[1].decbus.pred_mask >> 2'd2;
+		else if (!pr_dec[1].ssm && pr_dec[1].uop.lead && |pr_dec[1].pred_mask) begin
+			pr_dec[2].decbus.pred_mask = pr_dec[1].uop.imm[15:0] >> 2'd2;
 			pr_dec[2].decbus.pred_no = pr_dec[1].decbus.pred_no;
 		end
 		else begin
@@ -611,15 +542,15 @@ begin
 
 		if (dec[2].pred && pr_dec[2].v) begin
 			pr_dec[2].decbus.pred_no = pr_dec[2].decbus.pred_no + 5'd1;
-			pr_dec[3].decbus.pred_mask = insm[2].uop.pred.mask;
+			pr_dec[3].decbus.pred_mask = insm[2].uop.imm[15:0];
 			pr_dec[3].decbus.pred_no = pr_dec[2].decbus.pred_no;
 		end
-		else if (!pr_dec[2].ssm && pr_dec[2].uop.any.lead && |pr_dec[2].pred_mask) begin
-			pr_dec[3].decbus.pred_mask = pr_dec[2].decbus.pred_mask >> 2'd2;
+		else if (!pr_dec[2].ssm && pr_dec[2].uop.lead && |pr_dec[2].pred_mask) begin
+			pr_dec[3].decbus.pred_mask = pr_dec[2].uop.imm[15:0] >> 2'd2;
 			pr_dec[3].decbus.pred_no = pr_dec[2].decbus.pred_no;
 		end
 		else begin
-			pr_dec[3].decbus.pred_mask = pr_dec[2].decbus.pred_mask;
+			pr_dec[3].decbus.pred_mask = pr_dec[2].uop.imm[15:0];
 			pr_dec[3].decbus.pred_no = pr_dec[2].decbus.pred_no;
 		end
 
@@ -627,7 +558,7 @@ begin
 			pred_no_o = pr_dec[3].decbus.pred_no + 5'd1;
 			pred_mask_o = insm[3].uop.pred.mask;
 		end
-		else if (!pr_dec[3].ssm && pr_dec[3].uop.any.lead && |pr_dec[3].pred_mask) begin
+		else if (!pr_dec[3].ssm && pr_dec[3].uop.lead && |pr_dec[3].pred_mask) begin
 			pred_mask_o = pr_dec[3].decbus.pred_mask >> 2'd2;
 			pred_no_o = pr_dec[3].decbus.pred_no;
 		end
@@ -729,6 +660,7 @@ begin
 	end
 
 	// Detect FREGS/REGS register additions
+	/*
 	if (fregs_i.v)
 		pr_dec[0].decbus.Rs3 = fregs_i.Rs3;
 	if (dec[0].xregs.v & pr_dec[0].v)
@@ -739,7 +671,7 @@ begin
 		pr_dec[3].decbus.Rs3 = dec[2].xregs.Rs3;
 	if (dec[3].xregs.v & pr_dec[3].v)
 		fregs_o = dec[3].xregs;
-
+*/
 /* insx_d_inv was always false in mainline
 	if (ins1_d_inv) pr_dec[1].v = FALSE;
 	if (ins2_d_inv) pr_dec[2].v = FALSE;
@@ -756,21 +688,21 @@ begin
 	// correct address.
 	if (pr_dec[0].decbus.bsr|pr_dec[0].decbus.jsr) begin
 		pr_dec[1].v = INV;
-		pr_dec[1].uop.any.opcode = Qupls4_pkg::OP_NOP;
+		pr_dec[1].uop.opcode = Qupls4_pkg::OP_NOP;
 		pr_dec[2].v = INV;
-		pr_dec[2].uop.any.opcode = Qupls4_pkg::OP_NOP;
+		pr_dec[2].uop.opcode = Qupls4_pkg::OP_NOP;
 		pr_dec[3].v = INV;
-		pr_dec[3].uop.any.opcode = Qupls4_pkg::OP_NOP;
+		pr_dec[3].uop.opcode = Qupls4_pkg::OP_NOP;
 	end
 	else if (pr_dec[1].decbus.bsr|pr_dec[1].decbus.jsr) begin
 		pr_dec[2].v = INV;
-		pr_dec[2].uop.any.opcode = Qupls4_pkg::OP_NOP;
+		pr_dec[2].uop.opcode = Qupls4_pkg::OP_NOP;
 		pr_dec[3].v = INV;
-		pr_dec[3].uop.any.opcode = Qupls4_pkg::OP_NOP;
+		pr_dec[3].uop.opcode = Qupls4_pkg::OP_NOP;
 	end
 	else if (pr_dec[2].decbus.bsr|pr_dec[2].decbus.jsr) begin
 		pr_dec[3].v = INV;
-		pr_dec[3].uop.any.opcode = Qupls4_pkg::OP_NOP;
+		pr_dec[3].uop.opcode = Qupls4_pkg::OP_NOP;
 	end
 end
 
@@ -784,12 +716,12 @@ always_comb inso = prd;
 reg [63:0] bsr0_tgt, bsr1_tgt, bsr2_tgt;
 reg [63:0] jsr0_tgt, jsr1_tgt, jsr2_tgt;
 reg [63:0] new_address;
-always_comb bsr0_tgt = {{29{pr_dec[0].uop.bsr.disp[34]}},pr_dec[0].uop.bsr.disp,1'b0} + pr_dec[0].pc.pc;
-always_comb bsr1_tgt = {{29{pr_dec[1].uop.bsr.disp[34]}},pr_dec[1].uop.bsr.disp,1'b0} + pr_dec[1].pc.pc;
-always_comb bsr2_tgt = {{29{pr_dec[2].uop.bsr.disp[34]}},pr_dec[2].uop.bsr.disp,1'b0} + pr_dec[2].pc.pc;
-always_comb jsr0_tgt = {{29{pr_dec[0].uop.bsr.disp[34]}},pr_dec[0].uop.bsr.disp,1'b0};
-always_comb jsr1_tgt = {{29{pr_dec[1].uop.bsr.disp[34]}},pr_dec[1].uop.bsr.disp,1'b0};
-always_comb jsr2_tgt = {{29{pr_dec[2].uop.bsr.disp[34]}},pr_dec[2].uop.bsr.disp,1'b0};
+always_comb bsr0_tgt = {{29{pr_dec[0].uop.imm[34]}},pr_dec[0].uop.imm,1'b0} + pr_dec[0].pc.pc;
+always_comb bsr1_tgt = {{29{pr_dec[1].uop.imm[34]}},pr_dec[1].uop.imm,1'b0} + pr_dec[1].pc.pc;
+always_comb bsr2_tgt = {{29{pr_dec[2].uop.imm[34]}},pr_dec[2].uop.imm,1'b0} + pr_dec[2].pc.pc;
+always_comb jsr0_tgt = {{29{pr_dec[0].uop.imm[34]}},pr_dec[0].uop.imm,1'b0};
+always_comb jsr1_tgt = {{29{pr_dec[1].uop.imm[34]}},pr_dec[1].uop.imm,1'b0};
+always_comb jsr2_tgt = {{29{pr_dec[2].uop.imm[34]}},pr_dec[2].uop.imm,1'b0};
 
 reg predicted_correctly;
 
@@ -847,13 +779,13 @@ end
 always_comb
 begin
 /*
-	if (pr_dec[0].ins.any.opcode==OP_Bcc)
+	if (pr_dec[0].ins.opcode==OP_Bcc)
 		$finish;
-	if (pr_dec[1].ins.any.opcode==OP_Bcc)
+	if (pr_dec[1].ins.opcode==OP_Bcc)
 		$finish;
-	if (pr_dec[2].ins.any.opcode==OP_Bcc)
+	if (pr_dec[2].ins.opcode==OP_Bcc)
 		$finish;
-	if (pr_dec[3].ins.any.opcode==OP_Bcc)
+	if (pr_dec[3].ins.opcode==OP_Bcc)
 		$finish;
 */
 end
@@ -861,13 +793,13 @@ end
 always_comb
 begin
 /*
-	if (inso[0]_o.ins.any.opcode==OP_Bcc)
+	if (inso[0]_o.ins.opcode==OP_Bcc)
 		$finish;
-	if (inso[1]_o.ins.any.opcode==OP_Bcc)
+	if (inso[1]_o.ins.opcode==OP_Bcc)
 		$finish;
-	if (inso[2]_o.ins.any.opcode==OP_Bcc)
+	if (inso[2]_o.ins.opcode==OP_Bcc)
 		$finish;
-	if (inso[3]_o.ins.any.opcode==OP_Bcc)
+	if (inso[3]_o.ins.opcode==OP_Bcc)
 		$finish;
 */
 end

@@ -64,19 +64,19 @@ reg [WID-1:0] fmac;
 reg [WID-1:0] fmab;
 /*
 always_comb
-	if (ir.f3.func==FN_FMS || ir.f3.func==FN_FNMS)
+	if (ir.func==FN_FMS || ir.func==FN_FNMS)
 		fmaop = 1'b1;
 	else
 		fmaop = 1'b0;
 */
 always_comb
-	if (ir.fpu.op4==Qupls4_pkg::FOP4_FADD || ir.fpu.op4==Qupls4_pkg::FOP4_FSUB)
+	if (ir.op4==Qupls4_pkg::FOP4_FADD || ir.op4==Qupls4_pkg::FOP4_FSUB)
 		fmab <= 64'h3FF0000000000000;	// 1,0
 	else
 		fmab <= b;
 
 always_comb
-	if (ir.fpu.op4==FOP4_FMUL || ir.fpu.op4==FOP4_FDIV)
+	if (ir.op4==FOP4_FMUL || ir.op4==FOP4_FDIV)
 		fmac = 64'd0;
 	else
 		fmac = c;

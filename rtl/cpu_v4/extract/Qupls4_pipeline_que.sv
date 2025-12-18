@@ -72,7 +72,7 @@ begin
 	nopi.pc = Qupls4_pkg::RSTPC;
 	nopi.pc.stream = 7'd1;
 	nopi.uop = {26'd0,Qupls4_pkg::OP_NOP};
-	nopi.uop.any.lead = 1'd1;
+	nopi.uop.lead = 1'd1;
 	nopi.decbus.Rdz = 1'b1;
 	nopi.decbus.nop = 1'b1;
 	nopi.decbus.alu = 1'b1;

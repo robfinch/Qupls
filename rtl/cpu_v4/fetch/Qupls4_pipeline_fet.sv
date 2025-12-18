@@ -43,8 +43,7 @@ module Qupls4_pipeline_fet(rst, clk, rstcnt, ihit, en, fet_stallq, ic_stallq,
 	irq_in_ic, irq_ic, irq_in_fet, irq_fet, irq_sn_ic, irq_sn_fet,
 	pc_i, misspc, misspc_fet, uop_num_ic, uop_num_fet, flush_i,flush_fet,
 	pc0_fet, pc1_fet, pc2_fet, pc3_fet, pc4_fet, stomp_fet, kept_stream, ic_carry_mod,
-	inject_cl, ic_line_i, inj_line_i, ic_line_fet, nmi_i, carry_mod_fet,
-	micro_machine_active, micro_machine_active_fet, mc_adr
+	inject_cl, ic_line_i, inj_line_i, ic_line_fet, nmi_i, carry_mod_fet
 );
 input rst;
 input clk;
@@ -80,9 +79,6 @@ input [511:0] inj_line_i;
 output reg [1023:0] ic_line_fet;
 input nmi_i;
 output reg [31:0] carry_mod_fet;
-input micro_machine_active;
-output reg micro_machine_active_fet;
-input pc_address_ex_t mc_adr;
 
 reg en2;
 always_comb
@@ -203,14 +199,6 @@ if (rst)
 else begin
 	if (en2)
 		carry_mod_fet <= ic_carry_mod;
-end
-
-always_ff @(posedge clk)
-if (rst)
-	micro_machine_active_fet <= 1'b0;
-else begin
-	if (en2)
-		micro_machine_active_fet <= micro_machine_active;
 end
 
 always_ff @(posedge clk)

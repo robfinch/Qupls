@@ -46,7 +46,8 @@ module ptw_miss_queue(rst, clk, state, ptbr, ptattr,
 	commit0_id, commit0_idv, commit1_id, commit1_idv, commit2_id, commit2_idv,
 	commit3_id, commit3_idv,
 	tlb_miss, tlb_missadr, tlb_miss_oadr, tlb_missasid, tlb_missid, tlb_missqn,
-	in_que, ptw_vv, ptw_pv, ptw_ppv, tranbuf, miss_queue, sel_tran, sel_qe, walk_level);
+	in_que, ptw_vv, ptw_pv, ptw_ppv, tranbuf, miss_queue, sel_tran, transfer_ready,
+	sel_qe, walk_level);
 
 input rst;
 input clk;
@@ -74,6 +75,7 @@ input ptw_ppv;
 input ptw_tran_buf_t [15:0] tranbuf;
 output ptw_miss_queue_t [MISSQ_SIZE-1:0] miss_queue;
 input [5:0] sel_tran;
+input transfer_ready;
 output reg [5:0] sel_qe;
 input walk_level;
 
@@ -141,13 +143,13 @@ end
 // Computer page index for a given page level.
 
 always_comb
-if (~sel_tran[5])
+if (transfer_ready)
 	lvla = miss_queue[tranbuf[sel_tran].mqndx].lvl+3'd1;
 else
 	lvla = 3'd0;
 
 always_comb
-if (~sel_tran[5]) begin
+if (transfer_ready) begin
 	case(ptattr.pgsz)
 `ifdef MMU_SUPPORT_4k_PAGES				
 	4'd6:	// 4k
@@ -350,7 +352,7 @@ else begin
 	endcase
 	
 	// Search for ready translations and update the TLB.
-	if (~sel_tran[5]) begin
+	if (transfer_ready) begin
 		$display("PTW: selected tran:%d", sel_tran[4:0]);
 		// We're done if level one processed.
 		if (miss_queue[tranbuf[sel_tran].mqndx].lvl==3'd0

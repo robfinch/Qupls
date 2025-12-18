@@ -406,26 +406,12 @@ else begin
 	if (en) begin
 		dbo <= {$bits(dbo){1'd0}};	// in case a signal was missed / unused.
 		dbo <= db;
-		if (!instr.any.v) begin
-			dbo.nop <= TRUE;
-			dbo.alu <= TRUE;
-			dbo.fpu <= FALSE;
-			dbo.load <= FALSE;
-			dbo.store <= FALSE;
-			dbo.vload <= FALSE;
-			dbo.vstore <= FALSE;
-			dbo.vload_ndx <= FALSE;
-			dbo.vstore_ndx <= FALSE;
-			dbo.v2p <= FALSE;
-			dbo.vv2p <= FALSE;
-			dbo.vvn2p <= FALSE;
-			dbo.mem <= FALSE;
-		end
-		dbo.boi <= instr.any.opcode==Qupls4_pkg::OP_BCCU64 && instr.br.cnd==Qupls4_pkg::CND_BOI;
-		dbo.bsr <= instr.any.opcode==Qupls4_pkg::OP_BSR;
-		dbo.jsr <= instr.any.opcode==Qupls4_pkg::OP_JSR;
-		dbo.sys <= instr.any.opcode==Qupls4_pkg::OP_SYS;
-		dbo.stptr <= instr.any.opcode==Qupls4_pkg::OP_STPTR;
+		dbo.rext <= instr.opcode==Qupls4_pkg::OP_REXT;
+		dbo.boi <= instr.opcode==Qupls4_pkg::OP_BCCU64 && instr.cnd==Qupls4_pkg::CND_BOI;
+		dbo.bsr <= instr.opcode==Qupls4_pkg::OP_BSR;
+		dbo.jsr <= instr.opcode==Qupls4_pkg::OP_JSR;
+		dbo.sys <= instr.opcode==Qupls4_pkg::OP_SYS;
+		dbo.stptr <= instr.opcode==Qupls4_pkg::OP_STPTR;
 		dbo.iprel <= 1'b0;//db.Rs1==8'd31;
 		dbo.cause <= Qupls4_pkg::FLT_NONE;
 		dbo.mem <= 
@@ -437,12 +423,17 @@ else begin
 		dbo.qfext <= 1'b0;//db.alu && ins.ins[28:27]==2'b10;
 		if (excRs1|excRs2|excRs3|excRd)
 			dbo.cause <= Qupls4_pkg::FLT_BADREG;
-		dbo.rc <= instr.f3.rc;
+		dbo.rc <= instr.func[6];
 		// Is the predicate shadow count within range?
 		if (pred_shadow_count >= Qupls4_pkg::PRED_SHADOW)
 			dbo.cause <= Qupls4_pkg::FLT_UNIMP;
 		else
 			dbo.pred_shadow_size <= pred_shadow_count;
+		if (!instr.v) begin
+			dbo <= {$bits(dbo){1'd0}};	// in case a signal was missed / unused.
+			dbo.nop <= TRUE;
+			dbo.alu <= TRUE;
+		end
 		// Check for unimplemented instruction, but not if it is being stomped on.
 		// If it is stomped on, we do not care.
 		if (!(db.nop|db.alu|db.fpu|db.fc|db.mem|db.macro

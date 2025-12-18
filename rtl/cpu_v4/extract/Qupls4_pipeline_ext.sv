@@ -44,7 +44,7 @@ import const_pkg::*;
 import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_pipeline_mux(rst_i, clk_i, rstcnt, advance_fet, ihit, en_i,
+module Qupls4_pipeline_ext(rst_i, clk_i, rstcnt, advance_fet, ihit, en_i,
 	kept_stream, stomp_mux, nop_o, carry_mod_fet, ssm_flag, hwipc_fet,
 	irq_fet, irq_in_fet, irq_sn_fet, ipl_fet, sr, pt_mux, pt_dec, p_override, po_bno,
 	branchmiss, misspc_fet, flush_fet, flush_mux,
@@ -55,7 +55,7 @@ module Qupls4_pipeline_mux(rst_i, clk_i, rstcnt, advance_fet, ihit, en_i,
 	ls_bmf_i, pack_regs_i, scale_regs_i, regcnt_i,
 	pg_mux, new_stream, alloc_stream,
 	do_bsr, bsr_tgt, do_ret, ret_pc, do_call, get, mux_stallq, fet_stallq, stall);
-parameter MWIDTH = 4;
+parameter MWIDTH = Qupls4_pkg::MWIDTH;
 input rst_i;
 input clk_i;
 input [2:0] rstcnt;
@@ -117,10 +117,9 @@ output stall;
 input [4:0] new_stream;
 output reg alloc_stream;
 
-integer nn,hh;
-pc_address_ex_t pc1_fet;
-pc_address_ex_t pc2_fet;
-pc_address_ex_t pc3_fet;
+genvar g;
+integer nn,hh,n1,n2,n3,n4;
+pc_address_ex_t [MWIDTH-1:0] pc_fet;
 reg [5:0] ipl_mux;
 Qupls4_pkg::irq_info_packet_t irq_in_mux;
 cpu_types_pkg::seqnum_t irq_sn_mux;
@@ -143,9 +142,13 @@ reg prev_ssm_flag;
 
 Qupls4_pkg::pipeline_reg_t nopi;
 
-always_comb pc1_fet = pc0_fet + 6'd6;
-always_comb pc2_fet = pc0_fet + 6'd12;
-always_comb pc3_fet = pc0_fet + 6'd18;
+always_comb
+begin
+ 	pc_fet[0] = pc0_fet + 6'd0;
+ 	pc_fet[1] = pc0_fet + 6'd6;
+	pc_fet[2] = pc0_fet + 6'd12;
+	pc_fet[3] = pc0_fet + 6'd18;
+end
 
 // Define a NOP instruction.
 always_comb
@@ -153,12 +156,8 @@ begin
 	nopi = {$bits(Qupls4_pkg::pipeline_reg_t){1'b0}};
 	nopi.exc = Qupls4_pkg::FLT_NONE;
 	nopi.pc.pc = Qupls4_pkg::RSTPC;
-	nopi.uop = {26'd0,Qupls4_pkg::OP_NOP};
-	nopi.uop.any.lead = 1'd1;
-	nopi.uop.r3.Rs1 = 8'd0;
-	nopi.uop.r3.Rs2 = 8'd0;
-	nopi.uop.r3.Rs3 = 8'd0;
-	nopi.uop.r3.Rd = 8'd0;
+	nopi.uop = {41'd0,Qupls4_pkg::OP_NOP};
+	nopi.uop.lead = 1'd1;
 	nopi.v = 1'b1;
 	/* NOP will be decoded later
 	nopi.decbus.Rdz = 1'b1;
@@ -208,46 +207,37 @@ else
 	redundant_group = FALSE;
 //wire redundant_group = {prev_pc0_fet,prev_ic_line_aligned}=={pc0_fet,ic_line_aligned};
 
+// Map instructions to micro-ops
+// Set instruction valid bit.
+
 Qupls4_pkg::pipeline_reg_t [MWIDTH-1:0] pr_mux;
 always_comb
 begin
-	pr_mux[0] = nopi;
-	pr_mux[1] = nopi;
-	pr_mux[2] = nopi;
-	pr_mux[3] = nopi;
+	for (n1 = 0; n1 < MWIDTH; n1 = n1 + 1)
+		pr_mux[n1] = nopi;
 	if (!redundant_group) begin
 		// Allow only one instruction through when single stepping.
 		if (ssm_flag & ~prev_ssm_flag) begin
 			pr_mux[0].cli = pc0_fet.pc[5:1];
 			pr_mux[0].uop = fnMapRawToUop(ic_line_aligned[ 47:  0]);
-			pr_mux[1] = nopi;
-			pr_mux[2] = nopi;
-			pr_mux[3] = nopi;
-			pr_mux[1].ssm = TRUE;
-			pr_mux[2].ssm = TRUE;
-			pr_mux[3].ssm = TRUE;
+			for (n1 = 1; n1 < MWIDTH; n1 = n1 + 1) begin
+				pr_mux[n1] = nopi;
+				pr_mux[n1].ssm = TRUE;
+			end
 		end
 		else if (ssm_flag) begin
-			pr_mux[0] = nopi;
-			pr_mux[1] = nopi;
-			pr_mux[2] = nopi;
-			pr_mux[3] = nopi;
-			pr_mux[0].ssm = TRUE;
-			pr_mux[1].ssm = TRUE;
-			pr_mux[2].ssm = TRUE;
-			pr_mux[3].ssm = TRUE;
+			for (n1 = 0; n1 < MWIDTH; n1 = n1 + 1) begin
+				pr_mux[n1] = nopi;
+				pr_mux[n1].ssm = TRUE;
+			end
 		end
 		else begin
 			// Compute index of instruction on cache-line.
 			// Note! the index is in terms of 16-bit parcels.
-			pr_mux[0].cli = pc0_fet.pc[5:1] + 6'd0;
-			pr_mux[1].cli = pc0_fet.pc[5:1] + 6'd3;
-			pr_mux[2].cli = pc0_fet.pc[5:1] + 6'd6;
-			pr_mux[3].cli = pc0_fet.pc[5:1] + 6'd9;
-			pr_mux[0].uop = fnMapRawToUop(ic_line_aligned[ 47:  0]);
-			pr_mux[1].uop = fnMapRawToUop(ic_line_aligned[ 95: 48]);
-			pr_mux[2].uop = fnMapRawToUop(ic_line_aligned[143: 96]);
-			pr_mux[3].uop = fnMapRawToUop(ic_line_aligned[191:144]);
+			for (n1 = 0; n1 < MWIDTH; n1 = n1 + 1) begin
+				pr_mux[n1].cli = pc0_fet.pc[5:1] + (n1*3);
+				pr_mux[n1].uop = fnMapRawToUop(48'(ic_line_aligned >> (n1*48)));
+			end
 		end
 	end
 /*
@@ -257,12 +247,11 @@ begin
 	pr_mux[3].hwi_level = irq_fet;
 	pr4_mux.hwi_level = irq_fet;
 */	
-	// If an NMI or IRQ is happening, invalidate instruction and mark as
-	// interrupted by external hardware.
+// If an NMI or IRQ is happening, invalidate instruction and mark as
+// interrupted by external hardware.
 	pr_mux[0].v = !(irq_fet) && !stomp_mux && !(ssm_flag && !(ssm_flag && !prev_ssm_flag));
-	pr_mux[1].v = !(irq_fet) && !stomp_mux && !ssm_flag;
-	pr_mux[2].v = !(irq_fet) && !stomp_mux && !ssm_flag;
-	pr_mux[3].v = !(irq_fet) && !stomp_mux && !ssm_flag;
+	for (n4 = 1; n4 < MWIDTH; n4 = n4 + 1)
+		pr_mux[n4].v = !(irq_fet) && !stomp_mux && !ssm_flag;
 /*	
 	pr_mux[0].hwi = nmi_i||irqf_fet;
 	pr_mux[1].hwi = nmi_i||irqf_fet;
@@ -281,10 +270,11 @@ reg [4:0] po_bno2 [0:3];
 reg p_override_dummy;
 reg [6:0] po_bno_dummy;
 
-always_comb tExtractIns(pc0_fet, pt_mux[0], takb_fet[0], 5'd6, pr_mux[0], ins_fet[0], p_override[0], po_bno[0]);
-always_comb tExtractIns(pc1_fet, pt_mux[1], takb_fet[1], 5'd6, pr_mux[1], ins_fet[1], p_override[1], po_bno[1]);
-always_comb tExtractIns(pc2_fet, pt_mux[2], takb_fet[2], 5'd6, pr_mux[2], ins_fet[2], p_override[2], po_bno[2]);
-always_comb tExtractIns(pc3_fet, pt_mux[3], takb_fet[3], 5'd6, pr_mux[3], ins_fet[3], p_override[3], po_bno[3]);
+generate begin : gExtins
+	for (g = 0; g < MWIDTH; g = g + 1)
+		always_comb tExtractIns(pc_fet[g], pt_mux[g], takb_fet[g], pr_mux[g], ins_fet[g], p_override[g], po_bno[g]);
+end
+endgenerate
 
 /* under construction
 always_ff @(posedge clk_i)
@@ -301,26 +291,27 @@ end
 
 // If there was a branch miss, instructions before the miss PC should not be
 // executed.
-reg nop0,nop1,nop2,nop3;
+reg [MWIDTH-1:0] nop;
 /*
 always_comb nop0 = (stomp_fet && pc0_fet.bno_t!=stomp_bno) || (branchmiss && misspc_fet.pc > pc0_fet.pc);
 always_comb nop1 = (stomp_fet && pc1_fet.bno_t!=stomp_bno) || (branchmiss && misspc_fet.pc > pc1_fet.pc);
 always_comb nop2 = (stomp_fet && pc2_fet.bno_t!=stomp_bno) || (branchmiss && misspc_fet.pc > pc2_fet.pc);
 always_comb nop3 = (stomp_fet && pc3_fet.bno_t!=stomp_bno) || (branchmiss && misspc_fet.pc > pc3_fet.pc);
 */
-always_comb nop0 = (branchmiss && misspc_fet.pc > pc0_fet.pc);
-always_comb nop1 = (branchmiss && misspc_fet.pc > pc1_fet.pc);
-always_comb nop2 = (branchmiss && misspc_fet.pc > pc2_fet.pc);
-always_comb nop3 = (branchmiss && misspc_fet.pc > pc3_fet.pc);
+generate begin : gNop
+	for (g = 0; g < MWIDTH; g = g + 1)
+		always_comb nop[g] = (branchmiss && misspc_fet.pc > pc_fet[g].pc);
+end
+endgenerate
 /*
 always_comb nop0 = FALSE;
 always_comb nop1 = FALSE;
 always_comb nop2 = FALSE;
 always_comb nop3 = FALSE;
 */
-reg bsr0,bsr1,bsr2,bsr3;
+reg [MWIDTH-1:0] bsr;
 reg bsr02,bsr12,bsr22,bsr32;
-reg jsr0,jsr1,jsr2,jsr3;
+reg [MWIDTH-1:0] jsr;
 reg jsrr0,jsrr1,jsrr2,jsrr3;
 reg jsri0,jsri1,jsri2,jsri3;
 reg bra0,bra1,bra2,bra3;
@@ -337,10 +328,10 @@ cpu_types_pkg::pc_address_ex_t bsr2_tgt;
 cpu_types_pkg::pc_address_ex_t bsr3_tgt;
 
 
-always_comb bsr0 = Qupls4_pkg::fnDecBsr(ins_mux[0]);
-always_comb bsr1 = Qupls4_pkg::fnDecBsr(ins_mux[1]);
-always_comb bsr2 = Qupls4_pkg::fnDecBsr(ins_mux[2]);
-always_comb bsr3 = Qupls4_pkg::fnDecBsr(ins_mux[3]);
+always_comb bsr[0] = Qupls4_pkg::fnDecBsr(ins_mux[0]);
+always_comb bsr[1] = Qupls4_pkg::fnDecBsr(ins_mux[1]);
+always_comb bsr[2] = Qupls4_pkg::fnDecBsr(ins_mux[2]);
+always_comb bsr[3] = Qupls4_pkg::fnDecBsr(ins_mux[3]);
 always_comb bra0 = Qupls4_pkg::fnDecBra(ins_mux[0]);
 always_comb bra1 = Qupls4_pkg::fnDecBra(ins_mux[1]);
 always_comb bra2 = Qupls4_pkg::fnDecBra(ins_mux[2]);
@@ -358,10 +349,10 @@ always_comb bra02 = Qupls4_pkg::fnDecBra2(ins_mux[0]);
 always_comb bra12 = Qupls4_pkg::fnDecBra2(ins_mux[1]);
 always_comb bra22 = Qupls4_pkg::fnDecBra2(ins_mux[2]);
 always_comb bra32 = Qupls4_pkg::fnDecBra2(ins_mux[3]);
-always_comb jsr0 = Qupls4_pkg::fnDecJsr(ins_mux[0]);
-always_comb jsr1 = Qupls4_pkg::fnDecJsr(ins_mux[1]);
-always_comb jsr2 = Qupls4_pkg::fnDecJsr(ins_mux[2]);
-always_comb jsr3 = Qupls4_pkg::fnDecJsr(ins_mux[3]);
+always_comb jsr[0] = Qupls4_pkg::fnDecJsr(ins_mux[0]);
+always_comb jsr[1] = Qupls4_pkg::fnDecJsr(ins_mux[1]);
+always_comb jsr[2] = Qupls4_pkg::fnDecJsr(ins_mux[2]);
+always_comb jsr[3] = Qupls4_pkg::fnDecJsr(ins_mux[3]);
 always_comb bsr02 = Qupls4_pkg::fnDecBsr2(ins_mux[0]);
 always_comb bsr12 = Qupls4_pkg::fnDecBsr2(ins_mux[1]);
 always_comb bsr22 = Qupls4_pkg::fnDecBsr2(ins_mux[2]);
@@ -379,14 +370,14 @@ always_comb jsrr1 = Qupls4_pkg::fnDecJsrr(ins_mux[1]);
 always_comb jsrr2 = Qupls4_pkg::fnDecJsrr(ins_mux[2]);
 always_comb jsrr3 = Qupls4_pkg::fnDecJsrr(ins_mux[3]);
 /*
-always_comb jmpi0 = ins_mux[0].ins.any.opcode==OP_JSRI && ins_mux[0].ins.bsr.Rt==3'd0;
-always_comb jmpi1 = ins_mux[1].ins.any.opcode==OP_JSRI && ins_mux[1].ins.bsr.Rt==3'd0;
-always_comb jmpi2 = ins_mux[2].ins.any.opcode==OP_JSRI && ins_mux[2].ins.bsr.Rt==3'd0;
-always_comb jmpi3 = ins_mux[3].ins.any.opcode==OP_JSRI && ins_mux[3].ins.bsr.Rt==3'd0;
-always_comb jsri0 = ins_mux[0].ins.any.opcode==OP_JSRI && ins_mux[0].ins.bsr.Rt!=3'd0;
-always_comb jsri1 = ins_mux[1].ins.any.opcode==OP_JSRI && ins_mux[1].ins.bsr.Rt!=3'd0;
-always_comb jsri2 = ins_mux[2].ins.any.opcode==OP_JSRI && ins_mux[2].ins.bsr.Rt!=3'd0;
-always_comb jsri3 = ins_mux[3].ins.any.opcode==OP_JSRI && ins_mux[3].ins.bsr.Rt!=3'd0;
+always_comb jmpi0 = ins_mux[0].ins.opcode==OP_JSRI && ins_mux[0].ins.Rt==3'd0;
+always_comb jmpi1 = ins_mux[1].ins.opcode==OP_JSRI && ins_mux[1].ins.Rt==3'd0;
+always_comb jmpi2 = ins_mux[2].ins.opcode==OP_JSRI && ins_mux[2].ins.Rt==3'd0;
+always_comb jmpi3 = ins_mux[3].ins.opcode==OP_JSRI && ins_mux[3].ins.Rt==3'd0;
+always_comb jsri0 = ins_mux[0].ins.opcode==OP_JSRI && ins_mux[0].ins.Rt!=3'd0;
+always_comb jsri1 = ins_mux[1].ins.opcode==OP_JSRI && ins_mux[1].ins.Rt!=3'd0;
+always_comb jsri2 = ins_mux[2].ins.opcode==OP_JSRI && ins_mux[2].ins.Rt!=3'd0;
+always_comb jsri3 = ins_mux[3].ins.opcode==OP_JSRI && ins_mux[3].ins.Rt!=3'd0;
 */
 
 always_comb
@@ -406,33 +397,33 @@ begin
 	do_ret = FALSE;
 	do_call = FALSE;
 	if (~stomp_mux) begin
-		if (bsr0|jsr0|bcc0) begin
+		if (bsr[0]|jsr[0]|bcc0) begin
 			do_bsr = TRUE;
-			if (bsr0|jsr0)
+			if (bsr[0]|jsr[0])
 				do_call = TRUE;
 		end
 		else if (rtd0)
 			do_ret = TRUE;
 
-		else if (bsr1|jsr1|bcc1) begin
+		else if (bsr[1]|jsr[1]|bcc1) begin
 			do_bsr = TRUE;
-			if (bsr1|jsr1)
+			if (bsr[1]|jsr[1])
 				do_call = TRUE;
 		end
 		else if (rtd1)
 			do_ret = TRUE;
 
-		else if (bsr2|jsr2|bcc2) begin
+		else if (bsr[2]|jsr[2]|bcc2) begin
 			do_bsr = TRUE;
-			if (bsr2|jsr2)
+			if (bsr[2]|jsr[2])
 				do_call = TRUE;
 		end
 		else if (rtd2)
 			do_ret = TRUE;
 
-		else if (bsr3|jsr3|bcc3) begin
+		else if (bsr[3]|jsr[3]|bcc3) begin
 			do_bsr = TRUE;
-			if (bsr3|jsr3)
+			if (bsr[3]|jsr[3])
 				do_call = TRUE;
 		end
 		else if (rtd3)
@@ -444,7 +435,7 @@ end
 always_comb
 begin
 	alloc_stream = 1'b0;
-	if (bsr0|jsr0|bcc0) begin
+	if (bsr[0]|jsr[0]|bcc0) begin
 		bsr_tgt.pc = bsr0_tgt;
 		if (pt_mux[0] || ~bcc0)
 			bsr_tgt.stream = pc0_fet.stream;
@@ -453,7 +444,7 @@ begin
 			alloc_stream = 1'b1;
 		end
 	end
-	else if (bsr1|jsr1|bcc1) begin
+	else if (bsr[1]|jsr[1]|bcc1) begin
 		bsr_tgt = bsr1_tgt;
 		if (pt_mux[1] || ~bcc1)
 			bsr_tgt.stream = pc0_fet.stream;
@@ -462,7 +453,7 @@ begin
 			alloc_stream = 1'b1;
 		end
 	end
-	else if (bsr2|jsr2|bcc2) begin
+	else if (bsr[2]|jsr[2]|bcc2) begin
 		bsr_tgt = bsr2_tgt;
 		if (pt_mux[2] || ~bcc2)
 			bsr_tgt.stream = pc0_fet.stream;
@@ -471,7 +462,7 @@ begin
 			alloc_stream = 1'b1;
 		end
 	end
-	else if (bsr3|jsr3|bcc3) begin
+	else if (bsr[3]|jsr[3]|bcc3) begin
 		bsr_tgt = bsr3_tgt;
 		if (pt_mux[3] || ~bcc3)
 			bsr_tgt.stream = pc0_fet.stream;
@@ -490,76 +481,42 @@ end
 always_comb
 begin
 	ret_pc.stream = pc0_fet.stream;
-	if (bsr0|jsr0)
-		ret_pc.pc = ins_mux[0].pc.pc + 4'd6;
-	else if (bsr1|jsr1)
-		ret_pc.pc = ins_mux[1].pc.pc + 4'd6;
-	else if (bsr2|jsr2)
-		ret_pc.pc = ins_mux[2].pc.pc + 4'd6;
-	else if (bsr3|jsr3)
-		ret_pc.pc = ins_mux[3].pc.pc + 4'd6;
-	else begin
-		ret_pc.pc = RSTPC;
-		ret_pc.stream = 5'd1;
-	end
+	ret_pc.pc = RSTPC;
+	ret_pc.stream = 5'd1;
+	for (n3 = MWIDTH-1; n3 >= 0; n3 = n3 - 1)
+		if (bsr[n3]|jsr[n3])
+			ret_pc.pc = ins_mux[n3].pc.pc + 4'd6;
 end
 
 always_comb
 	fet_stallq = mux_stallq;
 
-Qupls4_ins_extract_mux umux0
-(
-	.rst(rst_i),
-	.clk(clk_i),
-	.en(en),
-	.nop(nop0),
-	.ins0(ins_fet[0]),
-	.insi(ins_fet[0]),
-	.ins(ins_mux[0])
-);
-
-Qupls4_ins_extract_mux umux1
-(
-	.rst(rst_i),
-	.clk(clk_i),
-	.en(en),
-	.nop(nop1),
-	.ins0(ins_fet[0]),
-	.insi(ins_fet[1]),
-	.ins(ins_mux[1])
-);
-
-Qupls4_ins_extract_mux umux2
-(
-	.rst(rst_i),
-	.clk(clk_i),
-	.en(en),
-	.nop(nop2),
-	.ins0(ins_fet[0]),
-	.insi(ins_fet[2]),
-	.ins(ins_mux[2])
-);
-
-Qupls4_ins_extract_mux umux3
-(
-	.rst(rst_i),
-	.clk(clk_i),
-	.en(en),
-	.nop(nop3),
-	.ins0(ins_fet[0]),
-	.insi(ins_fet[3]),
-	.ins(ins_mux[3])
-);
+generate begin : gInsExtMux
+	for (g = 0; g < MWIDTH;	g = g + 1)
+		Qupls4_ins_extract_mux umux0
+		(
+			.rst(rst_i),
+			.clk(clk_i),
+			.en(en),
+			.nop(nop[g]),
+			.ins0(ins_fet[0]),
+			.insi(ins_fet[g]),
+			.ins(ins_mux[g])
+		);
+end
+endgenerate
 
 assign stall = 1'b0;
 
-always_comb ins_mux_o[0] = ins_mux[0];
-always_comb ins_mux_o[1] = ins_mux[1];
-always_comb ins_mux_o[2] = ins_mux[2];
-always_comb ins_mux_o[3] = ins_mux[3];
+generate begin : gInsMux
+	for (g = 0; g < MWIDTH; g = g + 1)
+		always_comb ins_mux_o[g] = ins_mux[g];
+end
+endgenerate
+
 always_comb 
 begin
-	pg_mux.hdr = {$bits(pipeline_group_hdr_t){1'b0}};
+	pg_mux.hdr = {$bits(Qupls4_pkg::pipeline_group_hdr_t){1'b0}};
 	pg_mux.hdr.v = !stomp_mux;
 	pg_mux.hdr.irq_sn = irq_sn_mux;
 	pg_mux.hdr.irq = irq_in_mux;
@@ -568,14 +525,10 @@ begin
 end
 always_comb
 begin
-	pg_mux.pr[0] = {$bits(pipeline_reg_t){1'b0}};
-	pg_mux.pr[0] = ins_mux[0];
-	pg_mux.pr[1] = {$bits(pipeline_reg_t){1'b0}};
-	pg_mux.pr[1] = ins_mux[1];
-	pg_mux.pr[2] = {$bits(pipeline_reg_t){1'b0}};
-	pg_mux.pr[2] = ins_mux[2];
-	pg_mux.pr[3] = {$bits(pipeline_reg_t){1'b0}};
-	pg_mux.pr[3] = ins_mux[3];
+	for (n2 = 0; n2 < MWIDTH; n2 = n2 + 1) begin
+		pg_mux.pr[n2] = {$bits(Qupls4_pkg::pipeline_reg_t){1'b0}};
+		pg_mux.pr[n2] = ins_mux[n2];
+	end
 end
 
 always_ff @(posedge clk) if (en) irq_sn_mux <= irq_sn_fet;
@@ -625,7 +578,6 @@ task tExtractIns;
 input pc_address_ex_t pc;
 input pt_mux;
 input takb;
-input [3:0] len;
 input Qupls4_pkg::pipeline_reg_t ins_i;
 output Qupls4_pkg::pipeline_reg_t ins_o;
 output p_override;
@@ -636,11 +588,11 @@ begin
 	ins_o.pc = pc;
 	ins_o.bt = takb;
 	/*
-  ins_o.aRs1 = {ins_i.uop.alu.Rs1};
-  ins_o.aRs2 = {ins_i.uop.alu.Rs2};
-  ins_o.aRs3 = {ins_i.uop.alu.Rs3};
-//  ins_o.aRs3 = {ins_i.ins.alu.Rs3};
-  ins_o.aRd = {ins_i.uop.alu.Rd};
+  ins_o.aRs1 = {ins_i.uop.Rs1};
+  ins_o.aRs2 = {ins_i.uop.Rs2};
+  ins_o.aRs3 = {ins_i.uop.Rs3};
+//  ins_o.aRs3 = {ins_i.ins.Rs3};
+  ins_o.aRd = {ins_i.uop.Rd};
   */
 //	ins_o.decbus.Rtz = ins_o.aRt==8'd0;
 	// Under construction
@@ -649,7 +601,7 @@ begin
 	if (pt_mux != takb) begin
 		ins_o.v = 1'b0;
 		ins_o.aRt = 8'd0;
-		ins_o.ins.any.opcode = OP_NOP;
+		ins_o.ins.opcode = OP_NOP;
 		p_override = 1'b1;
 	end
 	*/

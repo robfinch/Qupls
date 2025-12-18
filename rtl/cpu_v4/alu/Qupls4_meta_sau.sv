@@ -206,27 +206,27 @@ end
 endfunction
 
 always_comb
-	chunk = rse_i.uop.any.num;
+	chunk = rse_i.uop.num;
 
 always_comb
-	isflt = ir.any.opcode==Qupls4_pkg::OP_FLTH||
-		ir.any.opcode==Qupls4_pkg::OP_FLTS||
-		ir.any.opcode==Qupls4_pkg::OP_FLTD||
-		ir.any.opcode==Qupls4_pkg::OP_FLTQ ||
-		ir.any.opcode==Qupls4_pkg::OP_FLTPH ||
-		ir.any.opcode==Qupls4_pkg::OP_FLTPS ||
-		ir.any.opcode==Qupls4_pkg::OP_FLTPD ||
-		ir.any.opcode==Qupls4_pkg::OP_FLTPQ
+	isflt = ir.opcode==Qupls4_pkg::OP_FLTH||
+		ir.opcode==Qupls4_pkg::OP_FLTS||
+		ir.opcode==Qupls4_pkg::OP_FLTD||
+		ir.opcode==Qupls4_pkg::OP_FLTQ ||
+		ir.opcode==Qupls4_pkg::OP_FLTPH ||
+		ir.opcode==Qupls4_pkg::OP_FLTPS ||
+		ir.opcode==Qupls4_pkg::OP_FLTPD ||
+		ir.opcode==Qupls4_pkg::OP_FLTPQ
 		;
 always_comb
-	issimd = ir.any.opcode==Qupls4_pkg::OP_R3BP ||
-		ir.any.opcode==Qupls4_pkg::OP_R3WP ||
-		ir.any.opcode==Qupls4_pkg::OP_R3TP ||
-		ir.any.opcode==Qupls4_pkg::OP_R3OP ||
-		ir.any.opcode==Qupls4_pkg::OP_FLTPH ||
-		ir.any.opcode==Qupls4_pkg::OP_FLTPS ||
-		ir.any.opcode==Qupls4_pkg::OP_FLTPD ||
-		ir.any.opcode==Qupls4_pkg::OP_FLTPQ
+	issimd = ir.opcode==Qupls4_pkg::OP_R3BP ||
+		ir.opcode==Qupls4_pkg::OP_R3WP ||
+		ir.opcode==Qupls4_pkg::OP_R3TP ||
+		ir.opcode==Qupls4_pkg::OP_R3OP ||
+		ir.opcode==Qupls4_pkg::OP_FLTPH ||
+		ir.opcode==Qupls4_pkg::OP_FLTPS ||
+		ir.opcode==Qupls4_pkg::OP_FLTPD ||
+		ir.opcode==Qupls4_pkg::OP_FLTPQ
 		;
 reg [WID-1:0] t1;
 reg z1;
@@ -271,12 +271,12 @@ reg [WID-1:0] c1;
 	always_comb
 	begin
 		c1 = zero;
-		case(ir.any.opcode)
+		case(ir.opcode)
 			// ToDo: finish these off
 		Qupls4_pkg::OP_R3B:
 			begin
 			c1 = c >> {lane,3'b0};
-			case(ir.r3.func)
+			case(ir.func)
 			Qupls4_pkg::FN_REDSUM:	ro8 =
 				(c1[0] ? a[7:0] : 8'h00) +
 				(c1[1] ? a[15:8] : 8'h00) +
@@ -373,11 +373,11 @@ reg [WID-1:0] c1;
 	always_comb
 	begin
 		c1 = zero;
-		case(ir.any.opcode)
+		case(ir.opcode)
 		Qupls4_pkg::OP_R3W:
 			begin
 			c1 = c >> {lane,2'd0};
-			case(ir.r3.func)
+			case(ir.func)
 			Qupls4_pkg::FN_REDSUM:	ro16 =
 				(c1[0] ? a[15:0] : 16'h00) +
 				(c1[1] ? a[31:16] : 16'h00) +
@@ -452,13 +452,13 @@ reg [WID-1:0] c1;
 	always_comb
 	begin
 		c1 = zero;
-		case(ir.any.opcode)
+		case(ir.opcode)
 		Qupls4_pkg::OP_R3T:
 			begin
 			c1 = c >> {lane,1'b0};
-			case(ir.r3.func)
+			case(ir.func)
 			Qupls4_pkg::FN_REDSUM:
-				case(ir.r3.op3)
+				case(ir.op3)
 				3'd0:	ro32 = (c1[0] ? a[31:0] : 32'd0)+ (c1[1] ? a[63:32] : 32'd0) + b[31:0];
 				3'd1:	ro32 = (c1[0] ? {{32{a[31]}},a[31:0]} : 64'd0)+(c1[1] ? {{32{a[63]}},a[63:32]} : 64'd0) + {{32{b[31]}},b[31:0]};
 				3'd2:	ro32 = (c1[0] ? {32'd0,a[31:0]} : 64'd0)+(c1[1] ? {32'd0,a[63:32]} : 64'd0) + {32'd0,b[31:0]};
@@ -509,13 +509,13 @@ reg [WID-1:0] c1;
 	always_comb
 	begin
 		c1 = zero;
-		case(ir.any.opcode)
+		case(ir.opcode)
 		Qupls4_pkg::OP_R3T:
 			begin
 			c1 = c >> lane;
-			case(ir.r3.func)
+			case(ir.func)
 			Qupls4_pkg::FN_REDSUM:
-				case(ir.r3.op3)
+				case(ir.op3)
 				3'd0:	ro64 = (c1[0] ? a[63:0] : 64'd0) + b[63:0];
 				3'd1:	ro64 = (c1[0] ? a[63:0] : 64'd0) + b[63:0];
 				3'd2:	ro64 = (c1[0] ? a[63:0] : 64'd0) + b[63:0];

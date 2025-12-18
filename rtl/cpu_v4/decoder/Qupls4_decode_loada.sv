@@ -43,7 +43,7 @@ output loada;
 function fnIsLoada;
 input Qupls4_pkg::micro_op_t op;
 begin
-	case(op.any.opcode)
+	case(op.opcode)
 	Qupls4_pkg::OP_LOADA:	fnIsLoada = 1'b1;
 	default:
 		fnIsLoada = 1'b0;

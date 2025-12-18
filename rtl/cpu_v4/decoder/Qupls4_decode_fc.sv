@@ -43,7 +43,7 @@ output fc;
 function fnIsFlowCtrl;
 input Qupls4_pkg::micro_op_t ir;
 begin
-	case(ir.any.opcode)
+	case(ir.opcode)
 	Qupls4_pkg::OP_BRK,
 	Qupls4_pkg::OP_CHK:	fnIsFlowCtrl = 1'b1;
 	Qupls4_pkg::OP_BCC8,Qupls4_pkg::OP_BCC16,Qupls4_pkg::OP_BCC32,Qupls4_pkg::OP_BCC64,
