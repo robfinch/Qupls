@@ -35,6 +35,8 @@
 //
 // ============================================================================
 
+import mmu_pkg::*;
+
 package ptable_walker_pkg;
 
 parameter MISSQ_SIZE = 8;
@@ -53,10 +55,11 @@ typedef enum logic [3:0] {
 	SEG_LIMIT_FETCH = 4'd2,
 	SEG_FETCH_DONE = 4'd3,
 	TLB_PTE_FETCH = 4'd4,
-	TLB_PTE_CYC = 4'd5,
-	TLB_PTE_ACK = 4'd6,
-	TLB_PTE_NACK = 4'd7,
-	VIRT_ADR_XLAT = 4'd8
+	TLB_PTE_FETCH_DONE = 4'd5,
+	TLB_PTE_CYC = 4'd6,
+	TLB_PTE_ACK = 4'd7,
+	TLB_PTE_NACK = 4'd8,
+	VIRT_ADR_XLAT = 4'd9
 } ptw_access_state_t;
 
 typedef struct packed {
@@ -76,7 +79,7 @@ typedef struct packed {
 	logic v;
 	ptw_access_state_t access_state;
 	logic rdy;
-	fta_bus_pkg::fta_tranid_t tid;
+	wishbone_pkg::wb_tranid_t tid;
 	logic [4:0] mqndx;											// index of associated miss queue
 	cpu_types_pkg::asid_t asid;
 	cpu_types_pkg::virtual_address_t vadr;

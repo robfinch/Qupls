@@ -338,6 +338,7 @@ reg [WID-1:0] c1;
 			default:	ro8 = zero;
 			endcase
 			end
+		default:  ro8 = zero;
 		endcase
 	end
 end
@@ -417,6 +418,7 @@ reg [WID-1:0] c1;
 			default:	ro16 = zero;
 			endcase
 			end
+		default:  ro16 = zero;
 		endcase
 		end
 	end
@@ -474,6 +476,7 @@ reg [WID-1:0] c1;
 			default:	ro32 = zero;
 			endcase
 			end
+		default:  ro32 = zero;
 		endcase
 		end
 	end
@@ -531,6 +534,7 @@ reg [WID-1:0] c1;
 			default:	ro64 = zero;
 			endcase
 			end
+		default:  ro64 = zero;
 		endcase
 		end
 	end

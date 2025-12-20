@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2024  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -58,7 +58,6 @@ input [$clog2(LINES)-1:0] sndx;
 output cache_tag_t [WAYS-1:0] ptag;
 
 genvar g;
-integer n,n1;
 
 cache_tag_t [WAYS-1:0] ptags;	// physical tags
 

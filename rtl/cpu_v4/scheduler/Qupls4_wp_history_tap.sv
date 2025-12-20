@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023-2025 Robert Finch, Waterloo
+//   \\__/ o\    (C) 2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -32,95 +32,36 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
+//
+//	  Tracks the history of writes to the register file and outputs five
+// tap points.
 // ============================================================================
 
 import Qupls4_pkg::*;
-import fp64Pkg::*;
 
-module Qupls4_fpu_fdp64(rst, clk, clk3x, om, idle, ir, rm, a, b, c, d, t, i, p, o, done, exc);
-parameter WID=64;
-input rst;
+module Qupls4_wp_history_tap(clk, wp_i, wp_tap_o);
 input clk;
-input clk3x;
-input Qupls4_pkg::operating_mode_t om;
-input idle;
-input Qupls4_pkg::instruction_t ir;
-input [2:0] rm;
-input FP64 a;
-input FP64 b;
-input FP64 c;
-input FP64 d;
-input FP64 t;
-input FP64 i;
-input [WID-1:0] p;
-output reg [WID-1:0] o;
-output reg done;
-output Qupls4_pkg::cause_code_t exc;
+input Qupls4_pkg::operand_t [3:0] wp_i;
+output Qupls4_pkg::operand_t [3:0] wp_tap_o [0:4];
 
-wire [WID-1:0] bus;
-wire ce = 1'b1;
-
-reg fmaop, fma_done;
-FP64 fmaa;
-FP64 fmad;
-FP64 fmac;
-FP64 fmab;
-/*
-always_comb
-	if (ir.func==FN_FMS || ir.func==FN_FNMS)
-		fmaop = 1'b1;
-	else
-		fmaop = 1'b0;
-*/
-always_comb
-	if (ir.op4==Qupls4_pkg::FOP4_FADD || ir.op4==Qupls4_pkg::FOP4_FSUB) begin
-		fmab = 64'h3FF0000000000000;	// 1,0
-		fmad = 64'h3FF0000000000000;	// 1,0
-	end
-	else begin
-		fmab = b;
-		fmad = d;
-	end
-
-always_comb
-	if (ir.op4==FOP4_FMUL || ir.op4==FOP4_FDIV) begin
-		fmac = 64'd0;
-		fmad = 64'd0;
-	end
-	else begin
-		fmac = c;
-		fmad = d;
-	end
-
-fpFDP64nrL8 ufma1
-(
-	.clk(clk),
-	.ce(ce),
-	.op(fmaop),
-	.rm(rm),
-	.a(a),
-	.b(fmab),
-	.c(fmac),
-	.d(fmad),
-	.o(bus),
-	.inf(),
-	.zero(),
-	.overflow(),
-	.underflow(),
-	.inexact()
-);
+integer n3;
+Qupls4_pkg::operand_t [3:0] wp_oper_hist [0:127];
+Qupls4_pkg::operand_t [3:0] wp_oper_tap [0:4];
 
 always_ff @(posedge clk)
-if (rst) begin
-	fma_done <= 1'b0;
-end
-else begin
-	fma_done <= cnt>=12'h8;
+begin
+	wp_oper_hist[0] <= wp_i;
+	for (n3 = 1; n3 < 127; n3 = n3 + 1)
+		wp_oper_hist[n3] <= wp_oper_hist[n3-1];
 end
 
-always_ff @(posedge clk)
-	o = bus;
 always_comb
-	exc = Qupls4_pkg::FLT_NONE;
+begin
+	wp_tap_o[0] = wp_oper_hist[3];
+	wp_tap_o[1] = wp_oper_hist[6];
+	wp_tap_o[2] = wp_oper_hist[12];
+	wp_tap_o[3] = wp_oper_hist[24];
+	wp_tap_o[4] = wp_oper_hist[100];
+end
 
 endmodule

@@ -46,12 +46,13 @@ package Qupls4_pkg;
 parameter SIM = 1'b0;
 //`define IS_SIM	1
 
-parameter MWIDTH = 3;
-
 // Comment out to remove the sigmoid approximate function
 //`define SIGMOID	1
 
-// Number of threads supported. (Under construction)
+// 4 is the only setting (under construction)
+parameter MWIDTH = 4;
+
+// Number of threads supported. (Under construction < 5)
 parameter THREADS = 2;
 
 // Number of streams of execution. Alternate branch paths create streams.
@@ -116,6 +117,11 @@ parameter RENAMER = 4;
 
 // =============================================================================
 // =============================================================================
+
+// Register lookup strategy used by the reservation stations for missing data.
+// 0=use register file write port history
+// 1=use extra register file read ports
+parameter RL_STRATEGY = 1;
 
 // 1=move interrupt to the start of the instruction (recommended).
 // 2=defer interrupts to the start of the next instruction.
@@ -200,6 +206,9 @@ parameter SUPPORT_IRQ_POLLING = 1'b0;
 // 63 may require changing the sequence number type. For ideal construction 
 // should be a multiple of the machine width (4).
 parameter ROB_ENTRIES = 4 * MWIDTH;
+
+// Number of entries in dispatch buffer. Must be a multiple of machine width (4).
+parameter DBF_ENTRIES = 4 * MWIDTH;
 
 // Number of entries supporting block operate instructions.
 parameter BEB_ENTRIES = 4;
@@ -1900,6 +1909,7 @@ typedef struct packed {
 	// The following fields may change state while an instruction is processed.
 	logic [4:0] v;						// 0=entry is invalid, otherwise instruction stream number in use
 	cpu_types_pkg::seqnum_t sn;							// sequence number, decrements when instructions que
+	cpu_types_pkg::rob_ndx_t this_ndx;
 	logic flush;
 	cpu_types_pkg::rob_ndx_t sync_dep;			// sync instruction dependency
 	logic sync_depv;				// sync dependency valid
@@ -1925,14 +1935,14 @@ typedef struct packed {
 	cause_code_t exc;					// non-zero indicate exception
 	logic excv;								// 1=exception
 	logic nan;								// FP op generated a NaN
-	cpu_types_pkg::value_t argC;	// for stores
-`ifdef IS_SIM
 	cpu_types_pkg::value_t argA;
 	cpu_types_pkg::value_t argB;
-	cpu_types_pkg::value_t argI;
+	cpu_types_pkg::value_t argC;	// for stores
 	cpu_types_pkg::value_t argD;
-	cpu_types_pkg::value_t res;
-`endif
+	cpu_types_pkg::value_t argT;
+	cpu_types_pkg::value_t argS;
+	cpu_types_pkg::value_t argI;
+//	cpu_types_pkg::value_t res;
 	/*
 	logic updAv;
 	logic updBv;
@@ -1966,6 +1976,7 @@ typedef struct packed {
 	logic argT_v;
 	logic argT2_v;
 	logic rat_v;							// 1=checked with RAT for valid reg arg.
+	logic reg_read_done;
 	cpu_types_pkg::value_t arg;							// argument value for CSR instruction
 	// The following fields are loaded at enqueue time, but otherwise do not change.
 	logic last;								// 1=last instruction in group (not used)
@@ -2654,7 +2665,7 @@ begin
 			fnMapRawToUop.dst = 1'b0;
 		end
 	// Vector loads and stores
-	Qupls4_pkg::OP_LDV,Qupls4_pkg::OP_LDV:
+	Qupls4_pkg::OP_LDV:
 		begin
 			fnMapRawToUop.Rd = {2'd0,raw[12:7]};
 			fnMapRawToUop.Rs1 = {2'd0,raw[18:13]};
@@ -2667,7 +2678,7 @@ begin
 			fnMapRawToUop.src = 7'b0001111;
 			fnMapRawToUop.dst = 1'b1;
 		end
-	Qupls4_pkg::OP_STV,Qupls4_pkg::OP_STV:
+	Qupls4_pkg::OP_STV:
 		begin
 			fnMapRawToUop.Rd = {2'd0,raw[12:7]};
 			fnMapRawToUop.Rs1 = {2'd0,raw[18:13]};
@@ -2680,7 +2691,7 @@ begin
 			fnMapRawToUop.src = 7'b0001111;
 			fnMapRawToUop.dst = 1'b0;
 		end
-	Qupls4_pkg::OP_LDV,Qupls4_pkg::OP_LDVN:
+	Qupls4_pkg::OP_LDVN:
 		begin
 			fnMapRawToUop.Rd = {2'd0,raw[12:7]};
 			fnMapRawToUop.Rs1 = {2'd0,raw[18:13]};
@@ -2693,7 +2704,7 @@ begin
 			fnMapRawToUop.src = 7'b0001111;
 			fnMapRawToUop.dst = 1'b1;
 		end
-	Qupls4_pkg::OP_STV,Qupls4_pkg::OP_STVN:
+	Qupls4_pkg::OP_STVN:
 		begin
 			fnMapRawToUop.Rd = {2'd0,raw[12:7]};
 			fnMapRawToUop.Rs1 = {2'd0,raw[18:13]};
@@ -2823,7 +2834,7 @@ begin
 			fnMapRawToUop.src = 7'b0000011;
 			fnMapRawToUop.dst = 1'b0;
 		end
-	Qupls4_pkg::OP_BSR:
+	Qupls4_pkg::OP_BSR,Qupls4_pkg::OP_JSR:
 		begin
 			fnMapRawToUop.Rd = {3'd0,raw[11:7]};
 			fnMapRawToUop.imm = raw[47:13];

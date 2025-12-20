@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023-2025 Robert Finch, Waterloo
+//   \\__/ o\    (C) 2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -32,95 +32,75 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
+// Placeholder stage to capture the register rename outputs and use them to
+// index into the register file.
+//
+// LUTs /FFs / 0 BRAMs
 // ============================================================================
 
+import const_pkg::*;
+import cpu_types_pkg::*;
 import Qupls4_pkg::*;
-import fp64Pkg::*;
 
-module Qupls4_fpu_fdp64(rst, clk, clk3x, om, idle, ir, rm, a, b, c, d, t, i, p, o, done, exc);
-parameter WID=64;
+module Qupls4_pipeline_reg(rst, clk, pg_ren, tails_i, tails_o, rf_reg, rf_regv);
+parameter MWIDTH = 4;
 input rst;
 input clk;
-input clk3x;
-input Qupls4_pkg::operating_mode_t om;
-input idle;
-input Qupls4_pkg::instruction_t ir;
-input [2:0] rm;
-input FP64 a;
-input FP64 b;
-input FP64 c;
-input FP64 d;
-input FP64 t;
-input FP64 i;
-input [WID-1:0] p;
-output reg [WID-1:0] o;
-output reg done;
-output Qupls4_pkg::cause_code_t exc;
+input en;
+input Qupls4_pkg::pipeline_group_reg_t pg_ren;
+// Tails keeps track of which ROB entries are to be updated.
+input rob_ndx_t [11:0] tails_i;
+output rob_ndx_t [11:0] tails_o;
+output cpu_types_pkg::pregno_t [3:0] rf_reg [0:MWIDTH-1];
+output reg [3:0] rf_regv [0:MWIDTH-1];
 
-wire [WID-1:0] bus;
-wire ce = 1'b1;
+integer nn,n2,n3;
+Qupls4_pkg::pipeline_reg_t nopi;
+Qupls4_pkg::pipeline_group_reg_t pg_reg;
 
-reg fmaop, fma_done;
-FP64 fmaa;
-FP64 fmad;
-FP64 fmac;
-FP64 fmab;
-/*
+// Define a NOP instruction.
 always_comb
-	if (ir.func==FN_FMS || ir.func==FN_FNMS)
-		fmaop = 1'b1;
-	else
-		fmaop = 1'b0;
-*/
-always_comb
-	if (ir.op4==Qupls4_pkg::FOP4_FADD || ir.op4==Qupls4_pkg::FOP4_FSUB) begin
-		fmab = 64'h3FF0000000000000;	// 1,0
-		fmad = 64'h3FF0000000000000;	// 1,0
-	end
-	else begin
-		fmab = b;
-		fmad = d;
-	end
+begin
+	nopi = {$bits(Qupls4_pkg::pipeline_reg_t){1'b0}};
+	nopi.pc = Qupls4_pkg::RSTPC;
+	nopi.pc.stream = 7'd1;
+	nopi.uop = {26'd0,Qupls4_pkg::OP_NOP};
+	nopi.uop.lead = 1'd1;
+	nopi.decbus.Rdz = 1'b1;
+	nopi.decbus.nop = 1'b1;
+	nopi.decbus.alu = 1'b1;
+end
 
-always_comb
-	if (ir.op4==FOP4_FMUL || ir.op4==FOP4_FDIV) begin
-		fmac = 64'd0;
-		fmad = 64'd0;
-	end
-	else begin
-		fmac = c;
-		fmad = d;
-	end
-
-fpFDP64nrL8 ufma1
-(
-	.clk(clk),
-	.ce(ce),
-	.op(fmaop),
-	.rm(rm),
-	.a(a),
-	.b(fmab),
-	.c(fmac),
-	.d(fmad),
-	.o(bus),
-	.inf(),
-	.zero(),
-	.overflow(),
-	.underflow(),
-	.inexact()
-);
-
+// Load the output pipeline register
 always_ff @(posedge clk)
 if (rst) begin
-	fma_done <= 1'b0;
+	pg_reg <= {$bits(pipeline_group_reg_t){1'b0}};
+	foreach (pg_reg[n2])
+		for (n3 = 0; n3 < MWIDTH; n3 = n3 + 1)
+			pg_reg[n2].pr[n3].op = nopi;
 end
 else begin
-	fma_done <= cnt>=12'h8;
+	if (en)
+		pg_reg <= pg_ren;
 end
 
 always_ff @(posedge clk)
-	o = bus;
+	if (en)
+		tails_o <= tails_i;
+
+// Submit register file read requests
 always_comb
-	exc = Qupls4_pkg::FLT_NONE;
+begin
+	foreach (pg_reg.pr[nn]) begin
+		rf_reg[nn][0] = pg_reg.pr[nn].op.pRs1;
+		rf_reg[nn][1] = pg_reg.pr[nn].op.pRs2;
+		rf_reg[nn][2] = pg_reg.pr[nn].op.pRs3;
+		rf_reg[nn][3] = pg_reg.pr[nn].op.pRd;
+		rf_regv[nn][0] = pg_reg.pr[nn].op.pRs1v;
+		rf_regv[nn][1] = pg_reg.pr[nn].op.pRs2v;
+		rf_regv[nn][2] = pg_reg.pr[nn].op.pRs3v;
+		rf_regv[nn][3] = pg_reg.pr[nn].op.pRdv;
+	end
+end
 
 endmodule

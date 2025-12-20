@@ -34,41 +34,39 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
+//
+// Keeps track of the cache lines, tags, and victim cache.
+// Detects a miss
+//
 // The icache returns a hi/lo pair of cache lines. This is to allow instructions
 // to span cache lines.
 //
-// 2700 LUTs / 650 FFs / 22.5 BRAMs
+// 3700 LUTs / 1700 FFs / 37 BRAMs		32kB cache
 //
-//  5624 LUTs / 11213 FFs / 8 BRAMs   16kB cache
-//  6136 LUTs / 11469 FFs / 15 BRAMs  32kB cache
-// 10373 LUTs / 21699 FFs / 15 BRAMs  64kB cache
-//
-//  7720 LUTs / 14511 FFs / 29 BRAMs  32kB cache + victim cache
 // ============================================================================
 
 import const_pkg::*;
-import fta_bus_pkg::*;
+import wishbone_pkg::*;
 import cache_pkg::*;
 
-module icache(rst,clk,ce,invce,snoop_adr,snoop_v,snoop_cid,invall,invline,
-	nop,nop_o,ip_asid,fetch_alt,
-	ip,ip_o,ihit_o,ihit,alt_ihit_o,ic_line_hi_o,ic_line_lo_o,ic_valid,
-	miss_vadr,miss_asid,
+module icache(rst,clk,ce,invce,snoop_adr,snoop_v,snoop_tid,invall,invline,
+	nop,nop_o,
+	ip,ip_o,ihit_o,ihit,ic_line_hi_o,ic_line_lo_o,ic_valid,
+	miss_vadr,
 	ic_line_i,wway,wr_ic,
-	dp, dp_asid, dhit_o, dc_line_o, dc_valid, port, port_i
+	dp, dhit_o, dc_line_o, dc_valid, port, port_i
 	);
 parameter CORENO = 6'd1;
 parameter CHANNEL = 6'd0;
-parameter FALSE = 1'b0;
 parameter WAYS = 4;
 parameter LINES = 64;
 parameter LOBIT = 7;
-parameter NVICTIM = 0;
+parameter NVICTIM = 4;
 localparam HIBIT=$clog2(LINES)-1+LOBIT;
 localparam TAGBIT = HIBIT+2;	//14	+1 more for odd/even lines
 localparam LOG_WAYS = $clog2(WAYS)-1;
 // What to fill an empty cache line with.
-parameter NOP = 8'd127;
+parameter NOP = 8'd255;
 
 input rst;
 input clk;
@@ -76,68 +74,57 @@ input ce;
 input invce;
 input cpu_types_pkg::address_t snoop_adr;
 input snoop_v;
-input [5:0] snoop_cid;
+input wishbone_pkg::wb_tranid_t snoop_tid;
 input invall;
 input invline;
-input cpu_types_pkg::asid_t ip_asid;
 input cpu_types_pkg::pc_address_ex_t ip;
 output cpu_types_pkg::pc_address_ex_t ip_o;
 output reg ihit_o;
 output reg ihit;
-input fetch_alt;
-output reg alt_ihit_o;
 output ICacheLine ic_line_hi_o;
 output ICacheLine ic_line_lo_o;
 output reg ic_valid;
-output cpu_types_pkg::asid_t miss_asid;
 output cpu_types_pkg::code_address_t miss_vadr;
 input ICacheLine ic_line_i;
 input [LOG_WAYS:0] wway;
 input wr_ic;
 input nop;
 output nop_o;
+// Data port I/Os
 input cpu_types_pkg::code_address_t dp;
-input cpu_types_pkg::asid_t dp_asid;
 output reg dhit_o;
 output ICacheLine dc_line_o;
 output reg dc_valid;
 output reg port;
 input port_i;
 
-integer n, m;
-integer g, j;
 
-reg victim_wr;
-ICacheLine victim_line;
-
-reg icache_wre;
-reg icache_wro;
-reg icache_wrd;
+reg icache_wre;			// write the even line
+reg icache_wro;			// write the odd line
+reg icache_wrd;			// write the data port
+reg icache_wre2;
 ICacheLine ic_eline, ic_oline, dc_line;
 reg [LOG_WAYS:0] ic_rwaye,ic_rwayo,wway;
-always_comb icache_wre = wr_ic && !ic_line_i.vtag[LOBIT-1] && !port_i;
-always_comb icache_wro = wr_ic &&  ic_line_i.vtag[LOBIT-1] && !port_i;
-always_comb icache_wrd = wr_ic && port_i;
-cpu_types_pkg::pc_address_ex_t ip2;
 cpu_types_pkg::code_address_t dp2;
 cache_tag_t [WAYS-1:0] victage;
 cache_tag_t [WAYS-1:0] victago;
 cache_tag_t victagd;
-reg [LINES-1:0] valide [0:WAYS-1];
-reg [LINES-1:0] valido [0:WAYS-1];
+wire [LINES-1:0] valide [0:WAYS-1];
+wire [LINES-1:0] valido [0:WAYS-1];
 reg [LINES-1:0] validd [0:0];
-wire [1:0] snoop_waye, snoop_wayo;
 cache_tag_t [WAYS-1:0] ptagse;
 cache_tag_t [WAYS-1:0] ptagso;
 cache_tag_t ptagsd;
-reg [2:0] victim_count, vcne, vcno;
-ICacheLine [NVICTIM-1:0] victim_cache;
+
+// Victim cache signals
+reg victim_wr;
+ICacheLine victim_line;
+wire vce, vco;													// even, odd output is valid
 ICacheLine victim_eline, victim_oline;
-ICacheLine victim_cache_eline, victim_cache_oline;
-reg icache_wre2;
+ICacheLine victim_cache_eline, victim_cache_oline;	// output lines from cache
+
 reg icache_wrd2;
-reg vce,vco;
-reg iel,iel2;		// increment even line
+reg iel;					// increment even line
 
 wire ihit1e, ihit1o;
 wire dhit1;
@@ -147,34 +134,42 @@ wire ihit2;
 wire valid2e, valid2o, valid2d;
 reg nop2;
 
+// Write controls
+always_comb icache_wre = wr_ic && !ic_line_i.vtag[LOBIT-1] && !port_i;
+always_comb icache_wro = wr_ic &&  ic_line_i.vtag[LOBIT-1] && !port_i;
+always_comb icache_wrd = wr_ic && port_i;
+
+always_ff @(posedge clk)
+	icache_wre2 <= icache_wre;
+always_ff @(posedge clk)
+	icache_wrd2 <= icache_wrd;
+
+
 always_ff @(posedge clk)
 if (ce)
 	nop2 <= nop;
 assign nop_o = nop2;
+
+// Pipeline address inputs
 always_ff @(posedge clk)
 if (rst) begin
-	ip2.stream <= 7'd1;
-	ip2.pc <= RSTPC;
+	ip_o.stream <= 7'd1;
+	ip_o.pc <= RSTPC;
 end
 else begin
 	if (ce)
-		ip2 <= ip;
+		ip_o <= ip;
 end
+
 always_ff @(posedge clk)
 if (ce)
 	dp2 <= dp;
+
+// Cache hit signals
+// Valid hit only if both even and odd lines are hit.
 always_comb
-begin
-	/*
-	if (ip[9]==1'b0 && ip[8:0] < {3'd5,6'd0} && ihit1e && PERFORMANCE)
-		ihit = TRUE;
-	else
-	if (ip[9]==1'b1 && ip[8:0] < {3'd5,6'd0} && ihit1o && PERFORMANCE)
-		ihit = TRUE;
-	else
-	*/
-		ihit = ihit1e&ihit1o;
-end
+	ihit = ihit1e&ihit1o;
+
 always_ff @(posedge clk)
 if (rst)
 	ihit2e <= 1'b0;
@@ -196,6 +191,7 @@ else begin
 	if(ce)
 		ihit_o <= ihit;
 end
+
 always_ff @(posedge clk)
 if (rst)
 	dhit2 <= 1'b0;
@@ -211,32 +207,16 @@ else begin
 		dhit_o <= dhit1;
 end
 
-/*	
 always_comb
-	// *** The following causes the hit to tend to oscillate between hit
-	//     and miss.
-	// If cannot cross cache line can match on either odd or even.
-	if (FALSE && ip2[5:0] < 6'd54)
-		ihit_o <= ip2[LOBIT-1] ? ihit2o : ihit2e;
-	// Might span lines, need hit on both even and odd lines
-	else
-		ihit_o <= ihit2e&ihit2o;
-*/
-assign ip_o = ip2;
+	ic_valid = valid2o & valid2e;
 
-always_comb	//ff @(posedge clk)
-	// If cannot cross cache line can match on either odd or even.
-	if (FALSE && ip2.pc[5:0] < 6'd54)
-		ic_valid <= ip2.pc[LOBIT-1] ? valid2o : valid2e;
-	else
-		ic_valid <= valid2o & valid2e;
+always_comb
+	dc_valid = valid2d;
 
-always_comb	//ff @(posedge clk)
-	// If cannot cross cache line can match on either odd or even.
-	dc_valid <= valid2d;
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// Cache RAMs
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-generate begin : gCacheRam
-if (NVICTIM > 0) begin
 // 512 wide x 256 deep, 1 cycle read latency.
 sram_512x256_1rw1r uicme
 (
@@ -244,7 +224,7 @@ sram_512x256_1rw1r uicme
 	.clk(clk),
 	.ce(ce),
 	.wr(icache_wre),
-	.wadr({wway,ic_line_i.vadr[HIBIT:LOBIT]}),
+	.wadr({wway,ic_line_i.vtag[HIBIT:LOBIT]}),
 	.radr({ic_rwaye,ip.pc[HIBIT:LOBIT]+ip.pc[LOBIT-1]}),
 	.i(ic_line_i.data),
 	.o(ic_eline.data),
@@ -257,47 +237,11 @@ sram_512x256_1rw1r uicmo
 	.clk(clk),
 	.ce(ce),
 	.wr(icache_wro),
-	.wadr({wway,ic_line_i.vadr[HIBIT:LOBIT]}),
+	.wadr({wway,ic_line_i.vtag[HIBIT:LOBIT]}),
 	.radr({ic_rwayo,ip.pc[HIBIT:LOBIT]}),
 	.i(ic_line_i.data),
 	.o(ic_oline.data),
 	.wo(victim_oline.data)
-);
-end
-else begin
-//icache_sram_1r1w
-sram_1r1w
-#(
-	.WID(cache_pkg::ICacheLineWidth),
-	.DEP(LINES*WAYS)
-)
-uicme
-(
-	.rst(rst),
-	.clk(clk),
-	.ce(ce),
-	.wr(icache_wre),
-	.wadr({wway,ic_line_i.vtag[HIBIT:LOBIT]}),
-	.radr({ic_rwaye,ip.pc[HIBIT:LOBIT]+ip.pc[LOBIT-1]}),
-	.i(ic_line_i.data),
-	.o(ic_eline.data)
-);
-
-sram_1r1w
-#(
-	.WID(cache_pkg::ICacheLineWidth),
-	.DEP(LINES*WAYS)
-)
-uicmo
-(
-	.rst(rst),
-	.clk(clk),
-	.ce(ce),
-	.wr(icache_wro),
-	.wadr({wway,ic_line_i.vtag[HIBIT:LOBIT]}),
-	.radr({ic_rwayo,ip.pc[HIBIT:LOBIT]}),
-	.i(ic_line_i.data),
-	.o(ic_oline.data)
 );
 
 sram_1r1w
@@ -317,97 +261,108 @@ uicmd
 	.o(dc_line.data)
 );
 
-end
-end
-endgenerate
-
-always_ff @(posedge clk)
-	icache_wre2 <= icache_wre;
-always_ff @(posedge clk)
-	icache_wrd2 <= icache_wrd;
-
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// Victim Cache
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Address of the victim line is the address of the update line.
 // Write the victim cache if updating the cache and the victim line is valid.
 always_ff @(posedge clk)
-if ((icache_wre|icache_wro) && NVICTIM > 0) begin
+if (icache_wre|icache_wro) begin
 	victim_line.vtag <= ic_line_i.vtag;
 	victim_line.ptag <= ic_line_i.ptag;
-	if (icache_wre) begin
+end
+
+always_ff @(posedge clk)
+if (icache_wre|icache_wro) begin
+	if (icache_wre)
 		victim_line.v <= {4{valide[{wway,ic_line_i.vtag[HIBIT:LOBIT]}]}};
-		victim_wr <= valide[{wway,ic_line_i.vtag[HIBIT:LOBIT]}];
-	end
-	else begin
+	else
 		victim_line.v <= {4{valido[{wway,ic_line_i.vtag[HIBIT:LOBIT]}]}};
+end
+
+always_ff @(posedge clk)
+if ((icache_wre|icache_wro) && NVICTIM > 0) begin
+	if (icache_wre)
+		victim_wr <= valide[{wway,ic_line_i.vtag[HIBIT:LOBIT]}];
+	else
 		victim_wr <= valido[{wway,ic_line_i.vtag[HIBIT:LOBIT]}];
-	end
 end
 else
-	victim_wr <= 'd0;
+	victim_wr <= 1'b0;
 
 // Victim data comes from old data in the line that is being updated.
 always_ff @(posedge clk)
-if (NVICTIM > 0) begin
+begin
 	if (icache_wre2)
 		victim_line.data <= victim_eline.data;
 	else
 		victim_line.data <= victim_oline.data;
 end
 
-// Search the victim cache for the requested cache line.
-always_comb
+always_ff @(posedge clk)
 begin
-	vcne = NVICTIM;
-	vcno = NVICTIM;
-	for (n = 0; n < NVICTIM; n = n + 1) begin
-		if (victim_cache[n].vtag[$bits(cpu_types_pkg::address_t)-1:LOBIT-1]=={ip[$bits(cpu_types_pkg::address_t)-1:LOBIT]+ip[LOBIT-1],1'b0} && victim_cache[n].v==4'hF)
-			vcne = n;
-		if (victim_cache[n].vtag[$bits(cpu_types_pkg::address_t)-1:LOBIT-1]=={ip[$bits(cpu_types_pkg::address_t)-1:LOBIT],1'b1} && victim_cache[n].v==4'hF)
-			vcno = n;
-	end
+	if (icache_wre2)
+		victim_line.m <= FALSE;
+	else
+		victim_line.m <= FALSE;
 end
-always_comb//ff @(posedge clk)
-	vce <= vcne < NVICTIM;
-always_comb//ff @(posedge clk)
-	vco <= vcno < NVICTIM;
-always_comb//ff @(posedge clk)
-	victim_cache_eline <= victim_cache[vce];
-always_comb//ff @(posedge clk)
-	victim_cache_oline <= victim_cache[vco];
+
+victim_cache
+#(
+	.CORENO(CORENO),
+	.CHANNEL(CHANNEL),
+	.NVICTIM(NVICTIM),
+	.LOBIT(LOBIT)
+)
+uvc1
+(
+	.rst(rst),
+	.clk(clk),
+	.wr(victim_wr),
+	.line(victim_line),
+	.snoop_v(snoop_v),
+	.snoop_tid(snoop_tid),
+	.snoop_adr(snoop_adr),
+	.ip(ip.pc),
+	.vce(vce),
+	.vco(vco),
+	.eline_o(victim_cache_eline),
+	.oline_o(victim_cache_oline)
+);
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// Cache line outputs
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
 always_comb
-	iel <= ip2[LOBIT-1];
-always_comb//ff @(posedge clk)
-	iel2 <= iel;
+	iel <= ip_o[LOBIT-1];
 
 // Get even/odd lines and swap them into hi,lo based on address.
 always_comb
 if (rst) begin
-	ic_line_hi_o.data = {128{NOP}};
+	ic_line_hi_o.data = {64{NOP}};
 	ic_line_hi_o.v = 4'hF;
 	ic_line_hi_o.m = 1'b0;
 	ic_line_hi_o.vtag = RSTPC;
 	ic_line_hi_o.ptag = RSTPC;
-	ic_line_hi_o.asid = 16'd0;
-	ic_line_lo_o.data = {128{NOP}};
+	ic_line_lo_o.data = {64{NOP}};
 	ic_line_lo_o.v = 4'hF;
 	ic_line_lo_o.m = 1'b0;
 	ic_line_lo_o.vtag = RSTPC;
 	ic_line_lo_o.ptag = RSTPC;
-	ic_line_lo_o.asid = 16'd0;
 end
 else begin
-	ic_line_hi_o.data = {128{NOP}};
+	ic_line_hi_o.data = {64{NOP}};
 	ic_line_hi_o.v = 4'hF;
 	ic_line_hi_o.m = 1'b0;
 	ic_line_hi_o.vtag = RSTPC;
 	ic_line_hi_o.ptag = RSTPC;
-	ic_line_hi_o.asid = 16'd0;
-	ic_line_lo_o.data = {128{NOP}};
+	ic_line_lo_o.data = {64{NOP}};
 	ic_line_lo_o.v = 4'hF;
 	ic_line_lo_o.m = 1'b0;
 	ic_line_lo_o.vtag = RSTPC;
 	ic_line_lo_o.ptag = RSTPC;
-	ic_line_lo_o.asid = 16'd0;
-	case(iel2)
+	case(iel)
 	1'b0:	
 		begin
 			if (vco) begin
@@ -415,9 +370,9 @@ else begin
 				ic_line_hi_o.v = 4'hF;
 			end
 			else begin
-				ic_line_hi_o = 'd0;
+				ic_line_hi_o = {$bits(ICacheLine){1'b0}};
 				ic_line_hi_o.v = {4{ihit2o}};
-				ic_line_hi_o.vtag = {ip2[$bits(cpu_types_pkg::address_t)-1:LOBIT],1'b1,{LOBIT-1{1'b0}}};
+				ic_line_hi_o.vtag = {ip_o[$bits(cpu_types_pkg::address_t)-1:LOBIT],1'b1,{LOBIT-1{1'b0}}};
 				ic_line_hi_o.data = ic_oline.data;
 			end
 			if (vce) begin
@@ -425,9 +380,9 @@ else begin
 				ic_line_lo_o.v = 4'hF;
 			end
 			else begin
-				ic_line_lo_o = 'd0;
+				ic_line_lo_o = {$bits(ICacheLine){1'b0}};
 				ic_line_lo_o.v = {4{ihit2e}};
-				ic_line_lo_o.vtag = {ip2[$bits(cpu_types_pkg::address_t)-1:LOBIT],{LOBIT{1'b0}}};
+				ic_line_lo_o.vtag = {ip_o[$bits(cpu_types_pkg::address_t)-1:LOBIT],{LOBIT{1'b0}}};
 				ic_line_lo_o.data = ic_eline.data;
 			end
 		end
@@ -438,9 +393,9 @@ else begin
 				ic_line_hi_o = victim_cache_eline;
 			end
 			else begin
-				ic_line_hi_o = 'd0;
+				ic_line_hi_o = {$bits(ICacheLine){1'b0}};
 				ic_line_hi_o.v = {4{ihit2e}};
-				ic_line_hi_o.vtag = {ip2[$bits(cpu_types_pkg::address_t)-1:LOBIT]+1'b1,{LOBIT{1'b0}}};
+				ic_line_hi_o.vtag = {ip_o[$bits(cpu_types_pkg::address_t)-1:LOBIT]+1'b1,{LOBIT{1'b0}}};
 				ic_line_hi_o.data = ic_eline.data;
 			end
 			if (vco) begin
@@ -448,9 +403,9 @@ else begin
 				ic_line_lo_o.v = 4'hF;
 			end
 			else begin
-				ic_line_lo_o = 'd0;
+				ic_line_lo_o = {$bits(ICacheLine){1'b0}};
 				ic_line_lo_o.v = {4{ihit2o}};
-				ic_line_lo_o.vtag = {ip2[$bits(cpu_types_pkg::address_t)-1:LOBIT],1'b1,{LOBIT-1{1'b0}}};
+				ic_line_lo_o.vtag = {ip_o[$bits(cpu_types_pkg::address_t)-1:LOBIT],1'b1,{LOBIT-1{1'b0}}};
 				ic_line_lo_o.data = ic_oline.data;
 			end
 		end
@@ -464,7 +419,6 @@ begin
 	dc_line_o.vtag = {dp2[$bits(cpu_types_pkg::address_t)-1:LOBIT-1],{LOBIT-1{1'b0}}};
 	dc_line_o.ptag = {dp2[$bits(cpu_types_pkg::address_t)-1:LOBIT-1],{LOBIT-1{1'b0}}};
 	dc_line_o.data = dc_line.data;
-	dc_line_o.asid = 16'h0;	// ToDo: remove asid
 end
 
 cache_tag
@@ -528,7 +482,7 @@ uictagd
 	.wr(icache_wrd),
 	.vadr_i(ic_line_i.vtag),
 	.padr_i(ic_line_i.ptag),
-	.way(),
+	.way(1'b0),
 	.rclk(clk),
 	.ndx(dp[HIBIT-1:LOBIT-1]),	// virtual index (same bits as physical address)
 	.tag(victagd),
@@ -590,49 +544,68 @@ uichitd
 	.cv(valid2d)
 );
 
+icache_valid_bits
+#(
+	.CORENO(CORENO),
+	.CHANNEL(CHANNEL),
+	.LINES(LINES),
+	.WAYS(WAYS),
+	.HIBIT(HIBIT),
+	.LOBIT(LOBIT),
+	.TAGBIT(TAGBIT)
+)
+uicvbe 
+(
+	.rst(rst),
+	.clk(clk),
+	.invce(invce),
+	.invline(invline),
+	.invall(invall),
+	.wr(icache_wre),
+	.wway(wway),
+	.line(ic_line_i),
+	.ptags(ptagse),
+	.snoop_v(snoop_v),
+	.snoop_tid(snoop_tid),
+	.snoop_adr(snoop_adr),
+	.valid(valide)
+);
+
+icache_valid_bits
+#(
+	.CORENO(CORENO),
+	.CHANNEL(CHANNEL),
+	.LINES(LINES),
+	.WAYS(WAYS),
+	.HIBIT(HIBIT),
+	.LOBIT(LOBIT),
+	.TAGBIT(TAGBIT)
+)
+uicvbo
+(
+	.rst(rst),
+	.clk(clk),
+	.invce(invce),
+	.invline(invline),
+	.invall(invall),
+	.wr(icache_wro),
+	.wway(wway),
+	.line(ic_line_i),
+	.ptags(ptagso),
+	.snoop_v(snoop_v),
+	.snoop_tid(snoop_tid),
+	.snoop_adr(snoop_adr),
+	.valid(valido)
+);
+
 initial begin
-for (m = 0; m < WAYS; m = m + 1) begin
-  valide[m] = 'd0;
-  valido[m] = 'd0;
-end
 validd[0] = 'd0;
 end
 
 always_ff @(posedge clk)
 if (rst) begin
-	victim_count <= 'd0;
-	for (g = 0; g < WAYS; g = g + 1) begin
-		valide[g] <= 'd0;
-		valido[g] <= 'd0;
-	end
 end
 else begin
-	if (victim_wr) begin
-		victim_count <= victim_count + 2'd1;
-		if (victim_count>=NVICTIM-1)
-			victim_count <= 3'd0;
-		victim_cache[victim_count] <= victim_line;
-	end
-	if (icache_wre)
-		valide[wway][ic_line_i.vtag[HIBIT:LOBIT]] <= 1'b1;
-	else if (invce) begin
-		for (g = 0; g < WAYS; g = g + 1) begin
-			if (invline)
-				valide[g][ic_line_i.vtag[HIBIT:LOBIT]] <= 1'b0;
-			else if (invall)
-				valide[g] <= 'd0;
-		end
-	end
-	if (icache_wro)
-		valido[wway][ic_line_i.vtag[HIBIT:LOBIT]] <= 1'b1;
-	else if (invce) begin
-		for (g = 0; g < WAYS; g = g + 1) begin
-			if (invline)
-				valido[g][ic_line_i.vtag[HIBIT:LOBIT]] <= 1'b0;
-			else if (invall)
-				valido[g] <= 'd0;
-		end
-	end
 	if (icache_wrd)
 		validd[0][ic_line_i.vtag[HIBIT-1:LOBIT-1]] <= 1'b1;
 	else if (invce) begin
@@ -645,48 +618,15 @@ else begin
 	// end up in the same set as long as the cache is smaller than a memory page
 	// in size. So, there is no need to compare every physical address, just every
 	// address in a set will do.
-	if (snoop_v && snoop_cid != CHANNEL) begin
-		if (snoop_adr[$bits(cpu_types_pkg::address_t)-1:TAGBIT]==ptagse[0])
-			valide[0][snoop_adr[HIBIT:LOBIT]] <= 1'b0;
-		if (snoop_adr[$bits(cpu_types_pkg::address_t)-1:TAGBIT]==ptagse[1])
-			valide[1][snoop_adr[HIBIT:LOBIT]] <= 1'b0;
-		if (snoop_adr[$bits(cpu_types_pkg::address_t)-1:TAGBIT]==ptagse[2])
-			valide[2][snoop_adr[HIBIT:LOBIT]] <= 1'b0;
-		if (snoop_adr[$bits(cpu_types_pkg::address_t)-1:TAGBIT]==ptagse[3])
-			valide[3][snoop_adr[HIBIT:LOBIT]] <= 1'b0;
-
-		if (snoop_adr[$bits(cpu_types_pkg::address_t)-1:TAGBIT]==ptagso[0])
-			valido[0][snoop_adr[HIBIT:LOBIT]] <= 1'b0;
-		if (snoop_adr[$bits(cpu_types_pkg::address_t)-1:TAGBIT]==ptagso[1])
-			valido[1][snoop_adr[HIBIT:LOBIT]] <= 1'b0;
-		if (snoop_adr[$bits(cpu_types_pkg::address_t)-1:TAGBIT]==ptagso[2])
-			valido[2][snoop_adr[HIBIT:LOBIT]] <= 1'b0;
-		if (snoop_adr[$bits(cpu_types_pkg::address_t)-1:TAGBIT]==ptagso[3])
-			valido[3][snoop_adr[HIBIT:LOBIT]] <= 1'b0;
-
+	if (snoop_v && (snoop_tid.core!=CORENO || snoop_tid.channel != CHANNEL)) begin
 		/*
 		if (snoop_adr[$bits(cpu_types_pkg::address_t)-1:TAGBIT]==ptagsd)
 			validd[0][snoop_adr[HIBIT:LOBIT]] <= 1'b0;
 		*/
-	// Invalidate victim cache entries matching the snoop address
-		for (g = 0; g < NVICTIM; g = g + 1) begin
-			if (snoop_adr[$bits(cpu_types_pkg::address_t)-1:LOBIT]==victim_cache[g].ptag[$bits(cpu_types_pkg::address_t)-1:LOBIT])
-				victim_cache[g].v <= 4'h0;
-		end
 	end
 end
 
 // Set miss address
-
-always_comb
-	if (!ihit1e)
-		miss_asid = ip_asid;
-	else if (!ihit1o)
-		miss_asid = ip_asid;
-	else if (!dhit1)
-		miss_asid = dp_asid;
-	else
-		miss_asid = 'd0;
 
 always_comb
 	if (!ihit1e)

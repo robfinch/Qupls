@@ -43,8 +43,8 @@ import Qupls4_pkg::*;
 
 module Qupls4_pipeline_ren(
 	rst, clk, clk5x, ph4, en, nq, restore, restored, restore_list,
-	chkpt_amt, tail0, rob, avail_reg, sr,
-	stomp_ren, kept_stream, branch_state, flush_dec, flush_ren,
+	chkpt_amt, tail0, rob, avail_reg, sr, branch_resolved,
+	stomp_ren, kept_stream, flush_dec, flush_ren,
 //	arn, arng, arnv,
 	rn_cp, store_argC_pReg, prn_i, prnv,
 	ns_areg,
@@ -67,10 +67,12 @@ module Qupls4_pipeline_ren(
 	bo_wr, bo_areg, bo_preg, bo_nreg,
 	rat_stallq,
 	micro_machine_active_dec, micro_machine_active_ren,
-	alloc_chkpt, cndx, rcndx, miss_cp
+	alloc_chkpt, cndx, rcndx, miss_cp,
+	
+	args
 );
 parameter MWIDTH = Qupls4_pkg::MWIDTH;
-parameter NPORT = MWIDTH*4;
+localparam NPORT = MWIDTH*4;
 input rst;
 input clk;
 input clk5x;
@@ -87,9 +89,9 @@ input rob_ndx_t tail0;
 input Qupls4_pkg::rob_entry_t [Qupls4_pkg::ROB_ENTRIES-1:0] rob;
 input [Qupls4_pkg::PREGS-1:0] avail_reg;
 input Qupls4_pkg::status_reg_t sr;
+input branch_resolved;
 input stomp_ren;
 input pc_stream_t kept_stream;
-input Qupls4_pkg::branch_state_t branch_state;
 //input aregno_t [NPORT-1:0] arn;
 //input [2:0] arng [0:NPORT-1];
 //input [NPORT-1:0] arnv;
@@ -130,9 +132,11 @@ input alloc_chkpt;
 input checkpt_ndx_t cndx;
 input checkpt_ndx_t [3:0] rcndx;
 input checkpt_ndx_t miss_cp;
+input value_t [NPORT-1:0] args; 
+
 
 genvar g;
-integer jj,n5,n6,n7,n8;
+integer jj,n5,n6,n7,n8,n9;
 
 Qupls4_pkg::pipeline_reg_t nopi;
 
@@ -142,12 +146,14 @@ begin
 	nopi = {$bits(Qupls4_pkg::pipeline_reg_t){1'b0}};
 	nopi.pc = RSTPC;
 	nopi.pc.stream = pc_stream_t'(7'd1);
-	nopi.uop = {26'd0,Qupls4_pkg::OP_NOP};
+	nopi.uop = {41'd0,Qupls4_pkg::OP_NOP};
 	nopi.uop.lead = 1'd1;
 	nopi.uop.Rs1 = 8'd0;
 	nopi.uop.Rs2 = 8'd0;
 	nopi.uop.Rs3 = 8'd0;
+	nopi.uop.Rs4 = 8'd0;
 	nopi.uop.Rd = 8'd0;
+	nopi.uop.Rd2 = 8'd0;
 	nopi.decbus.Rs1 = 8'd0;
 	nopi.decbus.Rs2 = 8'd0;
 	nopi.decbus.Rs3 = 8'd0;
@@ -185,25 +191,23 @@ generate begin : gRt_ren
 end
 endgenerate
 
-reg [MWIDTH*5-1:0] arnv;
+reg [MWIDTH*4-1:0] arnv;
 reg [2:0] arng [0:MWIDTH*5-1];
-aregno_t [MWIDTH*5-1:0] arn;
-pregno_t [MWIDTH*5-1:0] prn;
+aregno_t [MWIDTH*4-1:0] arn;
+pregno_t [MWIDTH*4-1:0] prn;
 
 always_comb
 begin
-	arnv = {MWIDTH*5{1'b1}};
+	arnv = {MWIDTH*4{1'b1}};
 	for (n8 = 0; n8 < MWIDTH; n8 = n8 + 1) begin
-		arn[n8*5+0] = pg_dec.pr[n8].op.decbus.Rs1;
-		arn[n8*5+1] = pg_dec.pr[n8].op.decbus.Rs2;
-		arn[n8*5+2] = pg_dec.pr[n8].op.decbus.Rs3;
-		arn[n8*5+3] = pg_dec.pr[n8].op.decbus.Rs4;
-		arn[n8*5+4] = pg_dec.pr[n8].op.decbus.Rd;
-		arng[n8*5+0] = n8;
-		arng[n8*5+1] = n8;
-		arng[n8*5+2] = n8;
-		arng[n8*5+3] = n8;
-		arng[n8*5+4] = n8;
+		arn[n8*4+0] = pg_dec.pr[n8].op.decbus.Rs1;
+		arn[n8*4+1] = pg_dec.pr[n8].op.decbus.Rs2;
+		arn[n8*4+2] = pg_dec.pr[n8].op.decbus.Rs3;
+		arn[n8*4+3] = pg_dec.pr[n8].op.decbus.Rd;
+		arng[n8*4+0] = n8;
+		arng[n8*4+1] = n8;
+		arng[n8*4+2] = n8;
+		arng[n8*4+3] = n8;
 	end
 end
 
@@ -383,6 +387,7 @@ Qupls4_rat #(.MWIDTH(MWIDTH)) urat1
 	.wrport0_aRt(wrport0_aRt),
 	.wrport0_Rt(wrport0_Rt),
 	.wrport0_cp(wrport0_cp),
+	.wrport0_res(wrport0_res),
 	.cmtav(cmtav),
 	.cmtaiv(cmtaiv),
 	.cmtaa(cmtaa),
@@ -410,13 +415,13 @@ Qupls4_rat #(.MWIDTH(MWIDTH)) urat1
 	assign prnv = 24'hFFFFFF;
 	always_ff @(posedge clk)
 	if (rst) begin
-		for (n5 = 0; n5 < 24; n5 = n5 + 1)
+		for (n5 = 0; n5 < NPORT; n5 = n5 + 1)
 			prn[n5] <= 9'd0;
 	end
 	else begin
 		if (en)
 		begin
-			for (n5 = 0; n5 < 24; n5 = n5 + 1)
+			for (n5 = 0; n5 < NPORT; n5 = n5 + 1)
 				prn[n5] <= {1'b0,arn[n5]};
 		end
 	end
@@ -461,16 +466,6 @@ always_ff @(posedge clk) begin
 end
 */
 /*
-always_ff @(posedge clk) if (advance_pipeline_seg2) mcip0_ren <= mcip0_dec;
-always_ff @(posedge clk) if (advance_pipeline_seg2) mcip1_ren <= mcip1_dec;
-always_ff @(posedge clk) if (advance_pipeline_seg2) mcip2_ren <= mcip2_dec;
-always_ff @(posedge clk) if (advance_pipeline_seg2) mcip3_ren <= mcip3_dec;
-always_ff @(posedge clk) if (advance_pipeline_seg2) mcip0_que <= mcip0_ren;
-always_ff @(posedge clk) if (advance_pipeline_seg2) mcip1_que <= mcip1_ren;
-always_ff @(posedge clk) if (advance_pipeline_seg2) mcip2_que <= mcip2_ren;
-always_ff @(posedge clk) if (advance_pipeline_seg2) mcip3_que <= mcip3_ren;
-*/
-/*
 always_ff @(posedge clk)
 if (rst) begin
 	pc0_f.bno_t <= 6'd1;
@@ -481,48 +476,10 @@ else begin
 //	if (advance_f)
 	pc0_f <= icpc;//pc0;
 end
-always_comb mcip0_mux = micro_ip;
-always_comb mcip1_mux = micro_ip|4'd1;
-always_comb mcip2_mux = micro_ip|4'd2;
-always_comb mcip3_mux = micro_ip|4'd3;
-*/
-/*
-always_ff @(posedge clk)
-if (rst)
-	micro_machine_active_f <= TRUE;
-else begin
-	if (advance_pipeline)
-		micro_machine_active_f <= micro_machine_active;
-end
-*/
-/*
-always_ff @(posedge clk)
-if (rst)
-	micro_machine_active_x <= FALSE;
-else begin
-	if (advance_pipeline)
-		micro_machine_active_x <= micro_machine_active;
-end
 */
 /*
 always_comb
 	micro_machine_active_x = micro_machine_active;
-*/
-always_ff @(posedge clk)
-if (rst)
-	micro_machine_active_ren <= FALSE;
-else begin
-	if (en)
-		micro_machine_active_ren <= micro_machine_active_dec;
-end
-/*
-always_ff @(posedge clk)
-if (rst)
-	micro_machine_active_q <= FALSE;
-else begin
-	if (advance_pipeline_seg2)
-		micro_machine_active_q <= micro_machine_active_r;
-end
 */
 // The cycle after the length is calculated
 // instruction extract inputs
@@ -591,8 +548,11 @@ if (advance_pipeline_seg2)
 generate begin : gPg_ren
 always_ff @(posedge clk)
 if (rst) begin
-	for (n7 = 0; n7 < MWIDTH; n7 = n7 + 1)
+	for (n7 = 0; n7 < MWIDTH; n7 = n7 + 1) begin
+		pg_ren.hdr <= {$bits(Qupls4_pkg::pipeline_group_hdr_t){1'b0}};
+		pg_ren.pr[n7] <= {$bits(Qupls4_pkg::rob_entry_t){1'b0}};
 		pg_ren.pr[n7].op <= nopi;
+	end
 end
 else begin
 	if (en) begin
@@ -600,11 +560,11 @@ else begin
 		pg_ren.pr[0] <= pg_dec.pr[0];
 		if (pg_dec.pr[0].v & ~stomp_ren) begin
 			pg_ren.pr[0].op.nRd <= Rt0_dec;
-			pg_ren.pr[0].op.pRs1 = prn[0];
-			pg_ren.pr[0].op.pRs2 = prn[1];
-			pg_ren.pr[0].op.pRs3 = prn[2];
+			pg_ren.pr[0].op.pRs1 <= prn[0];
+			pg_ren.pr[0].op.pRs2 <= prn[1];
+			pg_ren.pr[0].op.pRs3 <= prn[2];
 //			pg_ren.pr[0].op.uop.Rs4 = prn[3];
-			pg_ren.pr[0].op.pRd = prn[3];
+			pg_ren.pr[0].op.pRd <= prn[3];
 			case(MWIDTH)
 			1:
 				if (pg_ren.pr[0].op.decbus.bsr|pg_ren.pr[0].op.decbus.jsr)
@@ -621,6 +581,8 @@ else begin
 		    endcase
 		end
 		else begin
+			// Even if stomped on, we want to retain the destination register for
+			// copy purposes.
 //			pg_ren.pr[0] <= nopi;
 			pg_ren.pr[0].v <= INV;
 //			pg_ren.pr[0].decbus.Rt <= pg_ren.pr[0].decbus.Rt;
@@ -648,11 +610,11 @@ else begin
 			pg_ren.pr[1] <= pg_dec.pr[1];
 			if (pg_dec.pr[1].v & ~stomp_ren) begin
 				pg_ren.pr[1].op.nRd <= Rt0_dec[1];
-				pg_ren.pr[1].op.pRs1 = prn[4];
-				pg_ren.pr[1].op.pRs2 = prn[5];
-				pg_ren.pr[1].op.pRs3 = prn[6];
+				pg_ren.pr[1].op.pRs1 <= prn[4];
+				pg_ren.pr[1].op.pRs2 <= prn[5];
+				pg_ren.pr[1].op.pRs3 <= prn[6];
 //				pg_ren.pr[1].op.uop.Rs4 = prn[8];
-				pg_ren.pr[1].op.pRd = prn[7];
+				pg_ren.pr[1].op.pRd <= prn[7];
 				if (pg_dec.pr[0].op.decbus.bsr|pg_dec.pr[0].op.decbus.jsr)
 					pg_ren.pr[1].v <= INV;
 				if (pg_ren.pr[3].op.decbus.bsr|pg_ren.pr[3].op.decbus.jsr)
@@ -676,11 +638,11 @@ else begin
 			pg_ren.pr[2] <= pg_dec.pr[2];
 			if (pg_dec.pr[2].v & ~stomp_ren) begin
 				pg_ren.pr[2].op.nRd <= Rt0_dec[2];
-				pg_ren.pr[2].op.pRs1 = prn[8];
-				pg_ren.pr[2].op.pRs2 = prn[9];
-				pg_ren.pr[2].op.pRs3 = prn[10];
+				pg_ren.pr[2].op.pRs1 <= prn[8];
+				pg_ren.pr[2].op.pRs2 <= prn[9];
+				pg_ren.pr[2].op.pRs3 <= prn[10];
 //				pg_ren.pr[2].op.uop.Rs4 = prn[13];
-				pg_ren.pr[2].op.pRd = prn[11];
+				pg_ren.pr[2].op.pRd <= prn[11];
 				if (pg_dec.pr[0].op.decbus.bsr || pg_dec.pr[1].op.decbus.bsr || pg_dec.pr[0].op.decbus.jsr || pg_dec.pr[1].op.decbus.jsr)
 					pg_ren.pr[2].v <= INV;
 				if (pg_ren.pr[3].op.decbus.bsr | pg_ren.pr[3].op.decbus.jsr)
@@ -704,11 +666,11 @@ else begin
 			pg_ren.pr[3] <= pg_dec.pr[3];
 			if (pg_dec.pr[3].v & ~stomp_ren) begin
 				pg_ren.pr[3].op.nRd <= Rt0_dec[3];
-				pg_ren.pr[3].op.pRs1 = prn[12];
-				pg_ren.pr[3].op.pRs2 = prn[13];
-				pg_ren.pr[3].op.pRs3 = prn[14];
+				pg_ren.pr[3].op.pRs1 <= prn[12];
+				pg_ren.pr[3].op.pRs2 <= prn[13];
+				pg_ren.pr[3].op.pRs3 <= prn[14];
 //				pg_ren.pr[3].op.uop.Rs4 = prn[18];
-				pg_ren.pr[3].op.pRd = prn[15];
+				pg_ren.pr[3].op.pRd <= prn[15];
 				if (pg_dec.pr[0].op.decbus.bsr || pg_dec.pr[1].op.decbus.bsr || pg_dec.pr[2].op.decbus.bsr ||
 					pg_dec.pr[0].op.decbus.jsr || pg_dec.pr[1].op.decbus.jsr || pg_dec.pr[2].op.decbus.jsr
 				)
@@ -730,8 +692,9 @@ else begin
 			end
 		end
 	end
-	if (branch_state==Qupls4_pkg::BS_DONE)
+	if (branch_resolved)
 		tInvalidateRen(kept_stream);//misspc.bno_t);
+
 end
 end
 endgenerate

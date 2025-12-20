@@ -46,12 +46,14 @@ import Qupls4_pkg::*;
 
 module Qupls4_pipeline_que(rst, clk, en,
 	ins0_ren, ins1_ren, ins2_ren, ins3_ren, 
-	ins0_que, ins1_que, ins2_que, ins3_que,
-	micro_machine_active_ren, micro_machine_active_que 
+	ins0_que, ins1_que, ins2_que, ins3_que
 );
 input rst;
 input clk;
 input en;
+input Qupls4_pkg::pipeline_group_reg_t pg_reg;
+output Qupls4_pkg::pipeline_group_reg_t pg_que;
+
 input Qupls4_pkg::pipeline_reg_t ins0_ren;
 input Qupls4_pkg::pipeline_reg_t ins1_ren;
 input Qupls4_pkg::pipeline_reg_t ins2_ren;
@@ -60,8 +62,6 @@ output Qupls4_pkg::pipeline_reg_t ins0_que;
 output Qupls4_pkg::pipeline_reg_t ins1_que;
 output Qupls4_pkg::pipeline_reg_t ins2_que;
 output Qupls4_pkg::pipeline_reg_t ins3_que;
-input micro_machine_active_ren;
-output reg micro_machine_active_que;
 
 Qupls4_pkg::pipeline_reg_t nopi;
 
@@ -78,6 +78,18 @@ begin
 	nopi.decbus.alu = 1'b1;
 end
 
+integer nn;
+
+always_ff @(posedge clk)
+if (rst)
+	foreach (pg_reg[nn])
+else begin
+	if (en) begin
+		foreach (pg_reg[nn])
+			pg_que[nn] <= pg_reg[nn];
+	end
+end
+		
 always_ff @(posedge clk)
 if (rst)
 	ins0_que <= nopi;
@@ -113,14 +125,6 @@ else begin
 		if (ins3_ren.v)
 			ins3_que <= ins3_ren;
 	end
-end
-
-always_ff @(posedge clk)
-if (rst)
-	micro_machine_active_que <= FALSE;
-else begin
-	if (en)
-		micro_machine_active_que <= micro_machine_active_ren;
 end
 
 endmodule

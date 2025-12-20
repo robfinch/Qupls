@@ -42,7 +42,7 @@ import Qupls4_pkg::*;
 module Qupls4_pipeline_dec(rst_i, rst, clk, en, clk5x, ph4, new_cline_mux, cline,
 	restored, restore_list, unavail_list, sr, uop_num, flush_mux, flush_dec,
 	tags2free, freevals, bo_wr, bo_preg,
-	stomp_dec, stomp_mux, kept_stream, pg_mux,
+	stomp_dec, stomp_mux, kept_stream, pg_ext,
 	micro_machine_active_mux, micro_machine_active_dec,
 	pg_dec,
 	mux_stallq, ren_stallq, ren_rst_busy, avail_reg,
@@ -69,7 +69,7 @@ input [4:0] uop_num;
 input stomp_dec;
 input stomp_mux;
 input pc_stream_t kept_stream;
-input Qupls4_pkg::pipeline_group_reg_t pg_mux;
+input Qupls4_pkg::pipeline_group_reg_t pg_ext;
 input pregno_t [3:0] tags2free;
 input [3:0] freevals;
 input bo_wr;
@@ -86,7 +86,7 @@ output reg [63:0] new_address_o;
 
 genvar g;
 integer n1,n2,n3,n4,n5,n6,n7,n8,n9;
-Qupls4_pkg::pipeline_group_reg_t pg_mux_r;
+Qupls4_pkg::pipeline_group_reg_t pg_ext_r;
 reg [31:0] carry_mod_i;
 reg [31:0] carry_mod_o;
 reg [3:0] atom_count_i;
@@ -145,7 +145,7 @@ Qupls4_pkg::pipeline_reg_t [MWIDTH-1:0] prd, inso;
 Qupls4_pkg::pipeline_reg_t [MWIDTH-1:0] tpr;
 
 always_ff @(posedge clk)
-	pg_mux_r <= pg_mux;
+	pg_ext_r <= pg_ext;
 
 wire [5:0] uop_count [0:MWIDTH-1];
 Qupls4_pkg::micro_op_t [MICROOPS_PER_INSTR-1:0] uop [0:MWIDTH-1];
@@ -155,15 +155,16 @@ generate begin : gMicroopMem
 	for (g = 0; g < MWIDTH; g = g + 1)
 Qupls4_microop_mem uuop1
 (
-	.om(pg_mux.pr[g].op.om),
-	.ir(pg_mux.pr[g].op.uop),
+    .clk(clk),
+	.om(pg_ext.pr[g].op.om),
+	.ir(pg_ext.pr[g].op.uop),
 	.num(5'd0), 
 	.carry_reg(8'd0),
 	.carry_out(1'b0),
 	.carry_in(1'b0),
 	.count(uop_count[g]),
 	.uop(uop[g]),
-	.thread(pg_mux.pr[g].op.pc.stream.thread)
+	.thread(pg_ext.pr[g].op.pc.stream.thread)
 );
 end
 endgenerate
@@ -279,7 +280,7 @@ assign mux_stallq = !rd_more;
 always_comb
 begin
 	for (n7 = 0; n7 < MWIDTH; n7 = n7 + 1) begin
-		tpr[n7] = pg_mux.pr[uop_mark[n7]].op;
+		tpr[n7] = pg_ext.pr[uop_mark[n7]].op;
 		tpr[n7].uop = uop_buf[head[n7]];
 	end
 end
@@ -391,7 +392,7 @@ Qupls4_decoder udeci0
 	.om(sr.om),
 	.ipl(sr.ipl),
 	.instr(tpr[g].uop),
-	.instr_raw(336'(cline >> {tpr[g].cli,4'b0})),
+	.instr_raw(432'(cline >> {tpr[g].cli,4'b0})),
 	.dbo(dec[g])
 );
 end
@@ -403,8 +404,8 @@ if (rst_i) begin
 end
 else begin
 	if (en_i)
-		insm[2] <= (stomp_dec && ((pg_mux.pr[0].bt|pg_mux.pr[1].bt|pg_mux.pr[2].bt|pg_mux.pr[3].bt) && branchmiss ? pg_mux.pr[3].pc.bno_t==stomp_bno : pg_mux.pr[3].pc.bno_f==stomp_bno )) ? nopi : pg_mux.pr[3];
-//		insm[3] <= (stomp_dec && pg_mux.pr[3].pc.bno_t==stomp_bno) ? nopi : pg_mux.pr[3];
+		insm[2] <= (stomp_dec && ((pg_ext.pr[0].bt|pg_ext.pr[1].bt|pg_ext.pr[2].bt|pg_ext.pr[3].bt) && branchmiss ? pg_ext.pr[3].pc.bno_t==stomp_bno : pg_ext.pr[3].pc.bno_f==stomp_bno )) ? nopi : pg_ext.pr[3];
+//		insm[3] <= (stomp_dec && pg_ext.pr[3].pc.bno_t==stomp_bno) ? nopi : pg_ext.pr[3];
 end
 */
 
@@ -556,7 +557,7 @@ begin
 
 		if (dec[3].pred && pr_dec[3].v) begin
 			pred_no_o = pr_dec[3].decbus.pred_no + 5'd1;
-			pred_mask_o = insm[3].uop.pred.mask;
+			pred_mask_o = insm[3].uop.imm[15:0];
 		end
 		else if (!pr_dec[3].ssm && pr_dec[3].uop.lead && |pr_dec[3].pred_mask) begin
 			pred_mask_o = pr_dec[3].decbus.pred_mask >> 2'd2;
@@ -732,19 +733,19 @@ begin
 	if (pr_dec[0].decbus.bsr|pr_dec[0].decbus.jsr) begin
 		predicted_correctly_o = FALSE;
 		new_address_o = pr_dec[0].decbus.bsr ? bsr0_tgt : jsr0_tgt;
-		if (pg_dec.pr[0].op.pc.pc==pg_mux.pr[0].op.pc.pc)
+		if (pg_dec.pr[0].op.pc.pc==pg_ext.pr[0].op.pc.pc)
 			predicted_correctly_o = TRUE;
 	end
 	else if (pr_dec[1].decbus.bsr|pr_dec[1].decbus.jsr) begin
 		predicted_correctly_o = FALSE;
 		new_address_o = pr_dec[1].decbus.bsr ? bsr1_tgt : jsr1_tgt;
-		if (pg_dec.pr[1].op.pc.pc==pg_mux.pr[0].op.pc.pc)
+		if (pg_dec.pr[1].op.pc.pc==pg_ext.pr[0].op.pc.pc)
 			predicted_correctly_o = TRUE;
 	end
 	else if (pr_dec[2].decbus.bsr|pr_dec[2].decbus.jsr) begin
 		predicted_correctly_o = FALSE;
 		new_address_o = pr_dec[2].decbus.bsr ? bsr2_tgt : jsr2_tgt;
-		if (pg_dec.pr[2].op.pc.pc==pg_mux.pr[0].op.pc.pc)
+		if (pg_dec.pr[2].op.pc.pc==pg_ext.pr[0].op.pc.pc)
 			predicted_correctly_o = TRUE;
 	end
 end
@@ -763,10 +764,10 @@ Stark_space_branches uspb1
 */
 always_comb
 begin
-	pg_dec = pg_mux_r;
-	pg_dec.pr[0].op.hwi_level = pg_mux_r.hdr.irq.level;
+	pg_dec = pg_ext_r;
+	pg_dec.pr[0].op.hwi_level = pg_ext_r.hdr.irq.level;
 	if (hwi_ignore) begin
-		if (pg_mux_r.hdr.irq.level != 6'd63) begin
+		if (pg_ext_r.hdr.irq.level != 6'd63) begin
 			pg_dec.hdr.hwi = 1'b0;
 			pg_dec.pr[0].op.hwi = 1'b0;
 		end

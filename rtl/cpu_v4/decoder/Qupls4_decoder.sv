@@ -45,7 +45,7 @@ input cpu_types_pkg::pc_address_t ip;
 input Qupls4_pkg::operating_mode_t om;
 input [5:0] ipl;
 input Qupls4_pkg::micro_op_t instr;
-input [335:0] instr_raw;
+input [431:0] instr_raw;
 output Qupls4_pkg::decode_bus_t dbo;
 
 Qupls4_pkg::decode_bus_t db;

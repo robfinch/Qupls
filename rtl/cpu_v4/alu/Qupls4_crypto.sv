@@ -321,59 +321,60 @@ function [7:0] sm4_sbox;
 input [7:0] i;
 	sm4_sbox = sm4_sbox_table[i];
 endfunction
-
+/*
 always_comb
 case(ir.opcode)
-R2:
-	case (ir.Rs2)
-	R1_SHA256SIG0:
+Qupls4_pkg::OP_R3O:
+	case (ir.func)
+	Qupls4_pkg::FN_SHA256SIG0:
 		begin
 			o1 = {a[6:0],a[31:7]} ^ {a[17:0],a[31:18]} ^ a[31:3];
 			o2 = {{32{o1[31]}},o1[31:0]};
 		end
-	R1_SHA256SIG1:
+	Qupls4_pkg::FN_SHA256SIG1:
 		begin
 			o1 = {a[16:0],a[31:17]} ^ {a[18:0],a[31:19]} ^ a[31:10];
 			o2 = {{32{o1[31]}},o1[31:0]};
 		end
-	R1_SHA256SUM0:
+	Qupls4_pkg::FN_SHA256SUM0:
 		begin
 			o1 = {a[1:0],a[31:2]} ^ {a[12:0],a[31:13]} ^ {a[21:0],a[31:22]};
 			o2 = {{32{o1[31]}},o1[31:0]};
 		end
-	R1_SHA256SUM1:
+	Qupls4_pkg::FN_SHA256SUM1:
 		begin
 			o1 = {a[5:0],a[31:6]} ^ {a[10:0],a[31:11]} ^ {a[24:0],a[31:25]};
 			o2 = {{32{o1[31]}},o1[31:0]};
 		end
-	R1_SHA512SIG0:
+	Qupls4_pkg::FN_SHA512SIG0:
 		begin
 			o2 = {a[0],a[63:1]} ^ {a[7:0],a[63:8]} ^ a[63:7];
 		end
-	R1_SHA512SIG1:
+	Qupls4_pkg::FN_SHA512SIG1:
 		begin
 			o2 = {a[18:0],a[63:19]} ^ {a[60:0],a[63:61]} ^ a[63:6];
 		end
-	R1_SHA512SUM0:
+	Qupls4_pkg::FN_SHA512SUM0:
 		begin
 			o2 = {a[27:0],a[63:28]} ^ {a[33:0],a[63:34]} ^ {a[38:0],a[63:39]};
 		end
-	R1_SHA512SUM1:
+	Qupls4_pkg::FN_SHA512SUM1:
 		begin
 			o2 = {a[13:0],a[63:14]} ^ {a[17:0],a[63:18]} ^ {a[40:0],a[63:41]};
 		end
-	R1_SM3P0:
+	Qupls4_pkg::FN_SM3P0:
 		begin
 			o1 = {a[8:0],a[31:9]} ^ {a[16:0],a[31:17]} ^ a[31:0];
 			o2 = {{32{o1[31]}},o1[31:0]};
 		end
-	R1_SM3P0:
+	Qupls4_pkg::FN_SM3P0:
 		begin
 			o1 = {a[14:0],a[31:15]} ^ {a[22:0],a[31:23]} ^ a[31:0];
 			o2 = {{32{o1[31]}},o1[31:0]};
 		end
 	default:	o2 = 64'd0;
 	endcase
+*/
 /*	
 R3:
 	case(ir.func)

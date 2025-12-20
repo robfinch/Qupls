@@ -40,27 +40,43 @@ import const_pkg::*;
 import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_validate_operand(rf_oper_i, oper_i, oper_o, bypass_i);
+module Qupls4_validate_operand(rf_oper_i, oper_i, oper_o, wp_hist_i, bypass_i);
+parameter MWIDTH = 4;
+parameter RL_STRATEGY = 1;
 parameter NBPI = 8;					// number of bypassing inputs
 parameter NENTRY = 3;
 parameter NREG_PORTS = 12;
+input Qupls4_pkg::operand_t [MWIDTH-1:0] wp_hist_i [0:4];
 input Qupls4_pkg::operand_t [NREG_RPORTS-1:0] rf_oper_i;
 input Qupls4_pkg::operand_t [NENTRY-1:0] oper_i;
 output Qupls4_pkg::operand_t [NENTRY-1:0] oper_o;
 input Qupls4_pkg::operand_t [NBPI-1:0] bypass_i;
 
-integer nn,jj;
+integer nn,jj,kk;
 
 always_comb
 begin
-	for (nn = 0; nn < NENTRY; nn = nn + 1) begin
+	foreach (oper_o[nn]) begin
 		oper_o[nn] = oper_i[nn];
 		oper_o[nn].val = value_zero;
 		oper_o[nn].flags = {$bits(flags_t){1'b0}};
-		for (jj = 0; jj < NREG_PORTS; jj = jj + 1) begin
-			if (oper_i[nn].pRn==rf_oper_i[jj].pRn && rf_oper_i[jj].v && !oper_i[nn].v) begin
-				oper_o[nn] = rf_oper_i[jj];
-				oper_o[nn].v = VAL;
+		if (RL_STRATEGY==1) begin
+			foreach (rf_oper_i[jj]) begin
+				if (oper_i[nn].pRn==rf_oper_i[jj].pRn && rf_oper_i[jj].v && !oper_i[nn].v) begin
+					oper_o[nn] = rf_oper_i[jj];
+					oper_o[nn].v = VAL;
+				end
+			end
+		end
+		// Check if operand matches incoming write port history.
+		if (RL_STRATEGY==0) begin
+			foreach (wp_hist_i[jj]) begin
+				for (kk = 0; kk < 4; kk = kk + 1) begin
+					if (oper_i[nn].pRn==wp_hist_i[jj][kk].pRn && wp_hist_i[jj][kk].v && !oper_i[nn].v) begin
+						oper_o[nn] = wp_hist_i[jj][kk];
+						oper_o[nn].v = VAL;
+					end
+				end
 			end
 		end
 	end

@@ -50,10 +50,10 @@ module Qupls4_pipeline_ext(rst_i, clk_i, rstcnt, advance_fet, ihit, en_i,
 	branchmiss, misspc_fet, flush_fet, flush_mux,
 	micro_machine_active, cline_fet, cline_mux, new_cline_mux,
 	reglist_active, grp_i, grp_o,
-	takb_fet, pc_i, vl,
+	takb_fet, vl,
 	pc0_fet, uop_num_fet, uop_num_mux,
 	ls_bmf_i, pack_regs_i, scale_regs_i, regcnt_i,
-	pg_mux, new_stream, alloc_stream,
+	pg_ext, new_stream, alloc_stream,
 	do_bsr, bsr_tgt, do_ret, ret_pc, do_call, get, mux_stallq, fet_stallq, stall);
 parameter MWIDTH = Qupls4_pkg::MWIDTH;
 input rst_i;
@@ -84,7 +84,7 @@ output reg [1023:0] cline_mux;
 output reg new_cline_mux;
 input [2:0] grp_i;
 output reg [2:0] grp_o;
-input pc_address_ex_t pc0_fet;
+input cpu_types_pkg::pc_address_ex_t pc0_fet;
 input [2:0] uop_num_fet;
 output reg [2:0] uop_num_mux;
 input [3:0] takb_fet;
@@ -92,13 +92,12 @@ input [3:0] pt_mux;
 output reg [3:0] pt_dec;
 output reg [3:0] p_override;
 output reg [6:0] po_bno [0:3];
-input cpu_types_pkg::pc_address_ex_t pc_i;
 input [4:0] vl;
 input ls_bmf_i;
 input pack_regs_i;
 input [2:0] scale_regs_i;
 input cpu_types_pkg::aregno_t regcnt_i;
-output Qupls4_pkg::pipeline_group_reg_t pg_mux;
+output Qupls4_pkg::pipeline_group_reg_t pg_ext;
 /*
 output cpu_types_pkg::mc_address_t mcip0_o;
 output cpu_types_pkg::mc_address_t mcip1_o;
@@ -516,18 +515,18 @@ endgenerate
 
 always_comb 
 begin
-	pg_mux.hdr = {$bits(Qupls4_pkg::pipeline_group_hdr_t){1'b0}};
-	pg_mux.hdr.v = !stomp_mux;
-	pg_mux.hdr.irq_sn = irq_sn_mux;
-	pg_mux.hdr.irq = irq_in_mux;
-	pg_mux.hdr.old_ipl = ipl_mux;
-	pg_mux.hdr.hwi = irq_mux;
+	pg_ext.hdr = {$bits(Qupls4_pkg::pipeline_group_hdr_t){1'b0}};
+	pg_ext.hdr.v = !stomp_mux;
+	pg_ext.hdr.irq_sn = irq_sn_mux;
+	pg_ext.hdr.irq = irq_in_mux;
+	pg_ext.hdr.old_ipl = ipl_mux;
+	pg_ext.hdr.hwi = irq_mux;
 end
 always_comb
 begin
 	for (n2 = 0; n2 < MWIDTH; n2 = n2 + 1) begin
-		pg_mux.pr[n2] = {$bits(Qupls4_pkg::pipeline_reg_t){1'b0}};
-		pg_mux.pr[n2] = ins_mux[n2];
+		pg_ext.pr[n2] = {$bits(Qupls4_pkg::pipeline_reg_t){1'b0}};
+		pg_ext.pr[n2] = ins_mux[n2];
 	end
 end
 

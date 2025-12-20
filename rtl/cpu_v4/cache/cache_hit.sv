@@ -54,12 +54,11 @@ output [1:0] rway;
 output reg cv;
 
 reg [1:0] prev_rway = 'd0;
-reg [WAYS-1:0] hit1, snoop_hit1;
-reg hit2;
+reg [WAYS-1:0] hit1;
 reg cv2, cv1;
 reg [1:0] rway1;
 
-integer k,ks;
+integer k;
 always_comb//ff @(posedge clk)
 begin
 	for (k = 0; k < WAYS; k = k + 1)

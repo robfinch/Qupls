@@ -43,9 +43,9 @@ module Qupls4_btb(rst, clk, en, clk_en, nmi, nmi_addr, irq, irq_addr,
 	igrp, length_byte, predicted_correctly_dec, new_address_dec,
 	new_address_mux,
 	pc, pc0, pc1, pc2, pc3, pc4, next_pc, p_override, po_bno,
-	takb0, takb1, takb2, takb3, do_bsr, bsr_tgt, pe_bsdone, do_ret, ret_pc,
+	takb0, takb1, takb2, takb3, do_bsr, bsr_tgt, do_ret, ret_pc,
 	do_call,
-	branchmiss, bs_done_oh, misspc, excret, excretpc,
+	branchmiss, misspc, excret, excretpc,
 	commit_pc0, commit_brtgt0, commit_takb0, commit_grp0,
 	commit_pc1, commit_brtgt1, commit_takb1, commit_grp1,
 	commit_pc2, commit_brtgt2, commit_takb2, commit_grp2,
@@ -88,14 +88,12 @@ output reg takb3;
 input pc_address_ex_t new_address_mux;
 input predicted_correctly_dec;
 input pc_address_ex_t new_address_dec;
-input pe_bsdone;
 input do_bsr;
 input do_ret;
 input do_call;
 input pc_address_ex_t ret_pc;
 input cpu_types_pkg::pc_address_ex_t bsr_tgt;
 input branchmiss;
-input bs_done_oh;
 input cpu_types_pkg::pc_address_ex_t misspc;
 input cpu_types_pkg::pc_address_ex_t commit_pc0;
 input cpu_types_pkg::pc_address_ex_t commit_brtgt0;
@@ -534,22 +532,6 @@ Qupls4_btb_choose_stream ucs1
 );
 
 	
-// Make BS_DONE sticky
-/*
-reg bs_done1, bs_done;
-always_ff @(posedge clk)
-if (rst)
-	bs_done1 <= FALSE;
-else begin
-	if (pe_bsdone)
-		bs_done1 <= TRUE;
-	else if (clk_en)
-		bs_done1 <= FALSE;
-end
-always_comb
-	bs_done = pe_bsdone|bs_done1;
-*/
-
 always_comb
 if (rst) begin
 	for (nn = 0; nn < XSTREAMS*THREADS; nn = nn + 1) begin

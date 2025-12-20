@@ -32,7 +32,8 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 4000 LUTs / 1450 FFs
+// 5101 LUTs / 1975 FFs (RL_STRATEGY 1)
+// 5101 LUTs / 1975 FFs (RL_STRATEGY 0)
 // ============================================================================
 
 import const_pkg::*;
@@ -40,15 +41,21 @@ import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
 module Qupls4_reservation_station(rst, clk, available, busy, issue, stall,
-	rse_i, rse_o, stomp, rf_oper_i, bypass_i, req_pRn, req_pRnv
+	rse_i, rse_o, stomp, rf_oper_i, bypass_i, wp_oper_tap_i, req_pRn, req_pRnv
 );
+parameter MWIDTH = 4;
 parameter NRSE = 1;
 parameter FUNCUNIT = 4'd0;
-parameter NBPI = 8;			// number of bypasssing inputs
+parameter NBPI = 4;			// number of bypasssing inputs
 parameter NSARG = 3;		// number of source operands
-parameter NREG_PORTS = 12;
+parameter RL_STRATEGY = 0;	// register lookup strategy
+parameter NREG_RPORTS = RL_STRATEGY==0 ? 0 : 12;
 parameter RC = 1'b0;
 parameter DISPATCH_COUNT=6;	// number of lanes of dispatching
+// The following controls which lanes to look at. It depends on which lanes are
+// setup in the instruction dispatcher. Specific lanes target specific functional
+// unit types. For instance lane #4 is used for floating-point.
+parameter DISPATCH_MAP=6'b100001;
 input rst;
 input clk;
 input available;
@@ -57,13 +64,14 @@ input Qupls4_pkg::reservation_station_entry_t [DISPATCH_COUNT-1:0] rse_i;
 input Qupls4_pkg::rob_bitmask_t stomp;
 input Qupls4_pkg::operand_t [NREG_RPORTS-1:0] rf_oper_i;
 input Qupls4_pkg::operand_t [NBPI-1:0] bypass_i;
+input Qupls4_pkg::operand_t [MWIDTH-1:0] wp_oper_tap_i [0:4];
 output reg busy;
 output reg issue;
 output Qupls4_pkg::reservation_station_entry_t rse_o;
-output aregno_t [3:0] req_pRn;
+output pregno_t [3:0] req_pRn;
 output reg [3:0] req_pRnv;
 
-integer kk,jj,nn,mm,rdy,pp,qq,n1,n2;
+integer kk,jj,nn,mm,rdy,pp,qq,n1,n2,n3;
 genvar g;
 reg idle;
 reg dispatch;
@@ -114,8 +122,10 @@ lfsr17 ulfsr1
 
 // Always assume at least one source operand.
 
-Qupls4_validate_operand #(.NBPI(NBPI), .NENTRY(NRSE), .NREG_PORTS(NREG_PORTS)) uvsrcA
+Qupls4_validate_operand #(.RL_STRATEGY(RL_STRATEGY),
+	.NBPI(NBPI), .NENTRY(NRSE), .NREG_PORTS(NREG_RPORTS)) uvsrcA
 (
+	.wp_hist_i(wp_oper_tap_i),
 	.rf_oper_i(rf_oper_i),
 	.oper_i(rse_argA),
 	.oper_o(arg[0]),
@@ -125,8 +135,10 @@ Qupls4_validate_operand #(.NBPI(NBPI), .NENTRY(NRSE), .NREG_PORTS(NREG_PORTS)) u
 generate begin : gOperands
 
 if (NSARG > 1)
-Qupls4_validate_operand #(.NBPI(NBPI), .NENTRY(NRSE), .NREG_PORTS(NREG_PORTS)) uvsrcB
+Qupls4_validate_operand #(.RL_STRATEGY(RL_STRATEGY),
+	.NBPI(NBPI), .NENTRY(NRSE), .NREG_PORTS(NREG_RPORTS)) uvsrcB
 (
+	.wp_hist_i(wp_oper_tap_i),
 	.rf_oper_i(rf_oper_i),
 	.oper_i(rse_argB),
 	.oper_o(arg[1]),
@@ -141,8 +153,10 @@ else begin
 end
 
 if (NSARG > 2)
-Qupls4_validate_operand #(.NBPI(NBPI), .NENTRY(NRSE), .NREG_PORTS(NREG_PORTS)) uvsrcC
+Qupls4_validate_operand #(.RL_STRATEGY(RL_STRATEGY),
+	.NBPI(NBPI), .NENTRY(NRSE), .NREG_PORTS(NREG_RPORTS)) uvsrcC
 (
+	.wp_hist_i(wp_oper_tap_i),
 	.rf_oper_i(rf_oper_i),
 	.oper_i(rse_argC),
 	.oper_o(arg[2]),
@@ -157,8 +171,10 @@ else begin
 end
 
 if (NSARG > 3)
-Qupls4_validate_operand #(.NBPI(NBPI), .NENTRY(NRSE), .NREG_PORTS(NREG_PORTS)) uvsrcD
+Qupls4_validate_operand #(.RL_STRATEGY(RL_STRATEGY),
+	.NBPI(NBPI), .NENTRY(NRSE), .NREG_PORTS(NREG_RPORTS)) uvsrcD
 (
+	.wp_hist_i(wp_oper_tap_i),
 	.rf_oper_i(rf_oper_i),
 	.oper_i(rse_argD),
 	.oper_o(arg[3]),
@@ -177,8 +193,10 @@ endgenerate
 
 // Destination operand which sometimes needs to be read.
 
-Qupls4_validate_operand #(.NBPI(NBPI), .NENTRY(NRSE)) uvsrcT
+Qupls4_validate_operand #(.RL_STRATEGY(RL_STRATEGY),
+	.NBPI(NBPI), .NENTRY(NRSE), .NREG_PORTS(NREG_RPORTS)) uvsrcT
 (
+	.wp_hist_i(wp_oper_tap_i),
 	.rf_oper_i(rf_oper_i),
 	.oper_i(rse_argT),
 	.oper_o(arg[4]),
@@ -188,8 +206,10 @@ Qupls4_validate_operand #(.NBPI(NBPI), .NENTRY(NRSE)) uvsrcT
 // Status operand which sometimes needs to be read.
 generate begin : gStat
 	if (RC > 0)
-Qupls4_validate_operand #(.NBPI(NBPI), .NENTRY(NRSE)) uvsrcS
+Qupls4_validate_operand #(.RL_STRATEGY(RL_STRATEGY),
+	.NBPI(NBPI), .NENTRY(NRSE), .NREG_PORTS(NREG_RPORTS)) uvsrcS
 (
+	.wp_hist_i(wp_oper_tap_i),
 	.rf_oper_i(rf_oper_i),
 	.oper_i(rse_argS),
 	.oper_o(arg[5]),
@@ -206,8 +226,8 @@ always_comb
 begin
 	rsei = {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
 	dispatch = FALSE;
-	for (n1 = 0; n1 < DISPATCH_COUNT; n1 = n1 + 1)
-		if (rse_i[n1].funcunit==FUNCUNIT) begin
+	foreach (rse_i[n1])
+		if (DISPATCH_MAP[n1] && rse_i[n1].funcunit==FUNCUNIT) begin
 			rsei = rse_i[n1];
 			dispatch = TRUE;
 		end
@@ -323,13 +343,15 @@ begin
 	req_pRn[2] = 8'd0;
 	req_pRn[3] = 8'd0;
 	req_pRnv = 4'd0;
-	for (jj = 0; jj < NRSE; jj = jj + 1) begin
-		for (pp = 0; pp < NSARG+RC+1; pp = pp + 1) begin
-			if (fnSrc(rse[jj].uop,pp)) begin
-				if (rse[jj].busy && !rse[jj].arg[pp].v && kk < 4) begin
-					req_pRn[kk] = rse[jj].arg[pp].pRn;
-					req_pRnv = VAL;
-					kk = kk + 1;
+	if (RL_STRATEGY==1) begin
+		for (jj = 0; jj < NRSE; jj = jj + 1) begin
+			for (pp = 0; pp < 6; pp = pp + 1) begin
+				if (fnSrc(rse[jj].uop,pp)) begin
+					if (rse[jj].busy && !rse[jj].arg[pp].v && kk < 4) begin
+						req_pRn[kk] = rse[jj].arg[pp].pRn;
+						req_pRnv = VAL;
+						kk = kk + 1;
+					end
 				end
 			end
 		end

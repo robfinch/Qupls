@@ -69,12 +69,15 @@ import Qupls4_pkg::*;
 
 module Qupls4(coreno_i, rst_i, clk_i, clk2x_i, clk3x_i, clk5x_i, ipl, irq, irq_ack,
 	irq_i, ivect_i, swstk_i, om_i, fta_cyc, fta_bg, fta_bgack, fta_resp_ack,
-	fta_req, fta_resp, snoop_adr, snoop_v, snoop_cid);
+	wb_req, wb_resp, snoop_adr, snoop_v, snoop_tid);
 parameter CORENO = 6'd1;
 parameter CHANNEL = 6'd1;
 parameter MWIDTH = Qupls4_pkg::MWIDTH;
 parameter ISTACK_DEPTH = 16;
 parameter DISPATCH_WIDTH = 6;
+parameter RL_STRATEGY = Qupls4_pkg::RL_STRATEGY;
+localparam NREG_RPORTS = RL_STRATEGY==1 ? 12 : MWIDTH*4;
+localparam RS_NREG_RPORTS = RL_STRATEGY==0 ? 0 : 12;
 input [63:0] coreno_i;
 input rst_i;
 input clk_i;
@@ -88,15 +91,15 @@ input [5:0] irq_i;
 input [96:0] ivect_i;
 input [2:0] swstk_i;
 input [2:0] om_i;
-output wb_cmd_request256_t fta_req;
-input wb_cmd_response256_t fta_resp;
+output wb_cmd_request256_t wb_req;
+input wb_cmd_response256_t wb_resp;
 output fta_cyc;
 input fta_bg;
 output reg fta_bgack;
 output fta_resp_ack;
 input cpu_types_pkg::address_t snoop_adr;
 input snoop_v;
-input [5:0] snoop_cid;
+input wb_tranid_t snoop_tid;
 
 Qupls4_pkg::irq_info_packet_t irq_in = {irq_i,om_i,swstk_i,ivect_i};
 
@@ -120,6 +123,7 @@ integer nn,mm,n2,n3,n4,m4,n5,n6,n8,n9,n10,n11,n12,n13,n14,n15,n17;
 integer n16r, n16c, n12r, n12c, n14r, n14c, n17r, n17c, n18r, n18c;
 integer n19,n20,n21,n22,n23,n24,n25,n26,n27,n28,n29,i,n30,n31,n32,n33;
 integer n34,n35,n36,n37,n38,n39,n40,n41,n42,n43,n44,n45,n46,n47,n48;
+integer n49;
 integer jj,kk;
 
 genvar g,h,gvg;
@@ -171,10 +175,17 @@ wire inject_cl = 1'b0;
 wire [Qupls4_pkg::PREGS-1:0] restore_list;
 rob_ndx_t agen0_rndx, agen1_rndx;
 reg [7:0] scan;
+rob_ndx_t nonNop;		// ROB index of the next non-NOP instruction.
 
 //op_src_t sau0_argA_src;
 //op_src_t sau0_argB_src;
 //op_src_t sau0_argC_src;
+
+// prn looks up the register value and causes the value from the register file
+// to be output within the same clock cycle.
+// prn comes from the renamer. (prn = physical register number)
+// rf_reg is an alias.
+pregno_t [NREG_RPORTS-1:0] prn;		// ports from the rename stage / reservation station request
 
 pregno_t [63:0] pRs = {8*64{1'b0}};
 reg [63:0] pRsv;
@@ -276,6 +287,7 @@ Qupls4_pkg::lsq_ndx_t store_argC_id;
 Qupls4_pkg::lsq_ndx_t store_argC_id1;
 
 pregno_t [NREG_RPORTS-1:0] rf_reg;
+reg [NREG_RPORTS-1:0] rf_regv;
 value_t [NREG_RPORTS-1:0] rfo;
 Qupls4_pkg::flags_t [NREG_RPORTS-1:0] rfo_flags;
 
@@ -283,7 +295,8 @@ rob_ndx_t mc_orid;
 pc_address_ex_t mc_adr;
 pc_address_ex_t tgtpc;
 Qupls4_pkg::rob_entry_t [Qupls4_pkg::ROB_ENTRIES-1:0] rob;
-Qupls4_pkg::pipeline_group_hdr_t [Qupls4_pkg::ROB_ENTRIES/4-1:0] pgh;
+Qupls4_pkg::rob_entry_t [Qupls4_pkg::ROB_ENTRIES-1:0] dbf;		// dispatch buffer
+Qupls4_pkg::pipeline_group_hdr_t [Qupls4_pkg::ROB_ENTRIES/MWIDTH-1:0] pgh;
 Qupls4_pkg::beb_entry_t beb_buf;
 reg [1:0] beb_status [0:63];
 
@@ -320,7 +333,7 @@ reg [5:0] next_pending_ipl;
 wire stallq, rat_stallq, ren_stallq;
 
 rob_ndx_t [7:0] head;
-rob_ndx_t [11:0] tails;
+rob_ndx_t [11:0] tails, reg_tails;
 rob_ndx_t stail;
 Qupls4_pkg::reg_bitmask_t reg_bitmask;
 Qupls4_pkg::reg_bitmask_t Ra_bitmask;
@@ -367,9 +380,7 @@ Qupls4_pkg::ex_instruction_t [7:0] ex_ins;
 Qupls4_pkg::decode_bus_t db0_r, db1_r, db2_r, db3_r;				// Regfetch/rename stage inputs
 Qupls4_pkg::pipeline_reg_t ins4_d, ins5_d, ins6_d, ins7_d, ins8_d;
 Qupls4_pkg::pipeline_reg_t ins0_que, ins1_que, ins2_que, ins3_que;
-Qupls4_pkg::pipeline_group_reg_t pg_mux;
-Qupls4_pkg::pipeline_group_reg_t pg_dec;
-Qupls4_pkg::pipeline_group_reg_t pg_ren;
+Qupls4_pkg::pipeline_group_reg_t pg_ext, pg_dec, pg_ren, pg_reg, pg_que;
 
 reg backout;
 wire bo_wr;
@@ -741,8 +752,6 @@ aregno_t agen0_aRa;
 aregno_t agen0_aRb;
 aregno_t agen0_aRc;
 aregno_t agen0_aRt;
-pregno_t agen0_Ra;
-pregno_t agen0_Rb;
 pregno_t agen0_Rc;
 pregno_t agen0_Rt;
 pregno_t agen0_pRc;
@@ -793,8 +802,6 @@ reg lsq1_idle = 1'b1;
 address_t tlb0_res, tlb1_res;
 
 pc_address_t icdp;
-Qupls4_pkg::branch_state_t branch_state;
-reg bs_done_oh;
 reg bs_idle_oh;
 reg [4:0] excid;
 pc_address_ex_t excmisspc;
@@ -823,7 +830,7 @@ reg  [4:0] dram_id0;
 reg  [4:0] dram_id1;
 reg dram0_ack;
 wire dram0_done;
-reg dram0_idv;
+reg dram0_work.rndxv;
 reg dram0_ctag;
 value_t dram0_argD;
 reg dram0_ldip;
@@ -831,7 +838,7 @@ reg dram0_stomp;
 
 reg dram1_ack;
 wire dram1_done;
-reg dram1_idv;
+reg dram1_work.rndxv;
 reg dram1_ctag;
 value_t dram1_argD;
 reg dram1_stomp;
@@ -984,11 +991,13 @@ initial begin: Init
 
 end
 
-pregno_t [NREG_RPORTS-1:0] prn;
-always_comb
-	rf_reg = prn;
-
-ICacheLine ic_dline;
+generate begin : gRf_reg
+	if (RL_STRATEGY==1) begin
+		always_comb
+			rf_reg = prn;
+	end
+end
+endgenerate
 
 //
 // FETCH
@@ -1013,6 +1022,7 @@ reg ic_invline = 1'b0;
 reg ic_invall = 1'b0;
 ICacheLine ic_clinel,ic_clineh;
 ICacheLine ic_line_o;
+ICacheLine ic_dline;
 
 wire wr_ic;
 wire ic_valid, ic_dvalid;
@@ -1040,7 +1050,6 @@ reg [3:0] takb_f;
 reg [3:0] takb_fet;
 
 reg branchmiss, branchmiss_next;
-reg branchmiss_h;
 rob_ndx_t missid;
 
 cpu_types_pkg::address_t agen0_res, agen1_res;
@@ -1088,6 +1097,14 @@ begin
 	end
 	if (Qupls4_pkg::ROB_ENTRIES < 12) begin
 		$display("Qupls4: Error: ROB has too few entries.");
+		$finish;
+	end
+	if (Qupls4_pkg::THREADS < 1) begin
+		$display("Qupls4: Error: Must be at least one thread.");
+		$finish;
+	end
+	if (Qupls4_pkg::THREADS > 8) begin
+		$display("Qupls4: Error: Too many threads configured.");
 		$finish;
 	end
 	if (Qupls4_pkg::ROB_ENTRIES > 63) begin
@@ -1624,29 +1641,24 @@ uic1
 	.invce(invce),
 	.snoop_adr(snoop_adr),
 	.snoop_v(snoop_v),
-	.snoop_cid(snoop_cid),
+	.snoop_tid(snoop_tid),
 	.invall(ic_invall),
 	.invline(ic_invline),
 	.nop(brtgtv),
 	.nop_o(icnop),
-	.fetch_alt(1'b0 & ~alt_ihit),
-	.ip_asid(ip_asid),
 	.ip(pcs[fet_stream]),
 //	.ip(pc),
 	.ip_o(icpc),
 	.ihit_o(ihito),
 	.ihit(ihit),
-	.alt_ihit_o(alt_ihit),
 	.ic_line_lo_o(ic_clinel),
 	.ic_line_hi_o(ic_clineh),
 	.ic_valid(ic_valid),
 	.miss_vadr(ic_miss_adr),
-	.miss_asid(ic_miss_asid),
 	.ic_line_i(ic_line_o),
 	.wway(ic_wway),
 	.wr_ic(wr_ic),
 	.dp(icdp),
-	.dp_asid(ip_asid),
 	.dhit_o(),//ic_dhit),
 	.dc_line_o(ic_dline),
 	.dc_valid(ic_dvalid),
@@ -1732,8 +1744,6 @@ Qupls4_btb ubtb1
 	.micro_machine_active(1'b0),
 	.igrp(igrp),
 	.length_byte(length_byte),
-	.pe_bsdone(pe_bsdone),
-	.bs_done_oh(bs_done_oh),
 	.do_bsr(do_bsr),
 	.do_ret(do_ret),
 	.do_call(do_call),
@@ -1755,7 +1765,7 @@ Qupls4_btb ubtb1
 	.takb1(ntakb[1]),
 	.takb2(ntakb[2]),
 	.takb3(ntakb[3]),
-	.branchmiss(branchmiss && fcu_rse.v),//branch_state == Qupls4_pkg::BS_CHKPT_RESTORED),
+	.branchmiss(branchmiss),//branch_state == Qupls4_pkg::BS_CHKPT_RESTORED),
 	.misspc(misspc),
 	.commit_pc0(commit_pc0),
 	.commit_brtgt0(commit_brtgt0),
@@ -1859,29 +1869,15 @@ else begin
 		ihit_que <= ihit_ren;
 end
 
-edge_det ued3 (
-	.rst(irst),
-	.clk(clk),
-	.ce(1'b1),
-	.i(bs_done_oh),
-	.pe(pe_bsdone),
-	.ne(),
-	.ee()
-);
-
 // Do not stomp on instructions is the PC matches the desired PC.
 // The PC might be correct if the BTB picked the correct PC.
 
 wire stomp_any = FALSE;//|robentry_stomp;
 reg pcf, alt_pcf;
-reg bms, bms2, ihit3, bms3, bms4;
+reg ihit3;
 reg do_bsr2,do_bsr3,do_bsr4,do_bsr5,do_bsr6,do_bsr7;
 always_ff @(posedge clk)
 if (irst) begin
-	bms <= FALSE;
-	bms2 <= FALSE;
-	bms3 <= FALSE;
-	bms4 <= FALSE;
 	ihit3 <= TRUE;
 	do_bsr2 <= FALSE;
 	do_bsr3 <= FALSE;		// only true while micro-code active
@@ -1893,17 +1889,9 @@ if (irst) begin
 end
 else begin
 	if (advance_pipeline) begin
-		if (pcf && branch_state==Qupls4_pkg::BS_CHKPT_RESTORE)
-			bms <= TRUE;
-		if (bms3)
-			bms <= FALSE;
-		bms <= (branch_state >= Qupls4_pkg::BS_CHKPT_RESTORE && branch_state <= Qupls4_pkg::BS_DONE2);
-		bms2 <= bms;
-		bms3 <= bms2;
 		ihit3 <= ihit_f;
 		do_bsr2 <= do_bsr|do_ret;
 		do_bsr3 <= FALSE;
-		bms4 <= bms3;
 		do_bsr4 <= do_bsr3;
 		do_bsr5 <= do_bsr4;
 		do_bsr6 <= do_bsr5;
@@ -1921,12 +1909,10 @@ Qupls4_stomp ustmp1
 	.ihit(ihit_f),
 	.advance_pipeline(advance_pipeline),
 	.advance_pipeline_seg2(advance_pipeline_seg2), 
-	.micro_machine_active(1'b0),
 	.found_destination(fcu_found_destination),
 	.destination_rndx(fcu_dst),
 	.branch_resolved(fcu_branch_resolved),
-	.branchmiss(branchmiss & fcu_rse.v),
-	.branch_state(branch_state), 
+	.branchmiss(branchmiss),
 	.do_bsr(do_bsr|do_ret),
 	.misspc(misspc),
 	.predicted_match_mux(~|p_override),
@@ -1934,7 +1920,7 @@ Qupls4_stomp ustmp1
 	.pc(pc),
 	.pc_f(pc0_f),
 	.pc_fet(pc0_fet),
-	.pc_mux(pg_mux.pr[0].op.pc),
+	.pc_mux(pg_ext.pr[0].op.pc),
 	.pc_dec(pg_dec.pr[0].op.pc),
 	.pc_ren(pg_ren.pr[0].op.pc),
 	.dep_stream(dep_stream),
@@ -1957,7 +1943,7 @@ Qupls4_stomp ustmp1
 always_comb
 begin
 	qd = {MWIDTH{1'd0}};
-	if (((branchmiss && !fcu_found_destination) || branch_state < Qupls4_pkg::BS_CAPTURE_MISSPC) && |robentry_stomp)
+	if (((branchmiss && !fcu_found_destination)) && |robentry_stomp)
 		;
 //	else if ((ihito || mipv || mipv2 || mipv3 || mipv4) && !stallq)
 	else if (advance_pipeline_seg2)
@@ -2373,13 +2359,13 @@ reg rob_hwi;
 always_comb
 begin
 	rob_hwi = FALSE;
-	for (n36 = 0; n36 < ROB_ENTRIES / MWIDTH; n36 = n36 + 1)
+	foreach (pgh[n36])
 		rob_hwi = rob_hwi | pgh[n36].hwi;
 end
 
 always_comb
 	irq_in_pipe = 
-		hirq | ic_irq | irq_fet | pg_mux.hdr.hwi | pg_dec.hdr.hwi | pg_ren.hdr.hwi | rob_hwi
+		hirq | ic_irq | irq_fet | pg_ext.hdr.hwi | pg_dec.hdr.hwi | pg_ren.hdr.hwi | rob_hwi
 		;
 
 // Latency of one.
@@ -2416,19 +2402,18 @@ Qupls4_pipeline_ext #(.MWIDTH(MWIDTH)) uiext1
 	.pc0_fet(pc0_fet),
 	.hwipc_fet(hwipc_fet),
 	.micro_machine_active(1'b0),
-	.branchmiss(branchmiss & fcu_rse.v),//branch_state > Qupls4_pkg::BS_STATE3),
+	.branchmiss(branchmiss),//branch_state > Qupls4_pkg::BS_STATE3),
 	.takb_fet(takb_fet),
 	.pt_mux(pt_mux),
 	.pt_dec(pt_dec),
 	.p_override(p_override),
 	.po_bno(po_bno),
-	.pc_i(pc_fet),
 	.vl(vl),
 	.ls_bmf_i(ls_bmf),
 	.pack_regs_i(pack_regs),
 	.scale_regs_i(scale_regs),
 	.regcnt_i(8'd0),
-	.pg_mux(pg_mux),
+	.pg_ext(pg_ext),
 	.grp_o(grp_d),
 	.do_bsr(do_bsr),
 	.do_ret(do_ret),
@@ -2480,7 +2465,7 @@ Qupls4_pipeline_dec #(.MWIDTH(MWIDTH)) udecstg1
 	.stomp_dec(stomp_dec),
 	.stomp_mux(stomp_mux),
 	.kept_stream(kept_stream),
-	.pg_mux(pg_mux),
+	.pg_ext(pg_ext),
 	.micro_machine_active_mux(1'b0),
 	.micro_machine_active_dec(),
 	.pg_dec(pg_dec),
@@ -2629,20 +2614,46 @@ assign arnbank[21] = 1'b0;
 assign arnbank[22] = 1'b0;
 assign arnbank[23] = 1'b0;
 */
-Qupls4_read_port_select #(.NPORTO(NREG_RPORTS), .NPORTI(NREG_RPORTS*4)) urps1
-(
-	.rst(irst),
-	.clk(clk),
-	.pReg_i(pRs),
-	.pRegv_i(pRsv),
-	.pReg_o(prn),
-	.regAck_o()
-);
+Qupls4_pkg::operand_t [MWIDTH-1:0] wp;
+Qupls4_pkg::operand_t [MWIDTH-1:0] wp_tap [0:4];
+
+generate begin : gRLStrategy
+if (RL_STRATEGY==0) begin
+	always_comb
+	begin
+		foreach (wp[n49]) begin
+			wp[n49].val = rfo[n49];
+			wp[n49].flags = rfo_flags[n49];
+			wp[n49].pRn = wrport0_Rt[n49];
+			wp[n49].v = wrport0_v[n49];
+			wp[n49].aRn = 8'd00;		// we don't know this one, but it is not needed
+			wp[n49].aRnv = FALSE;
+		end
+	end
+	Qupls4_wp_history_tap uwph1
+	(
+		.clk(clk),
+		.wp_i(wp),
+		.wp_tap_o(wp_tap)
+	);
+end	else
+	Qupls4_read_port_select #(.NPORTO(2*4), .NPORTI(16*4)) urps1
+	(
+		.rst(irst),
+		.clk(clk),
+		.pReg_i(pRs),
+		.pRegv_i(pRsv),
+		.pReg_o(prn),
+		.regAck_o()
+	);
+end
+endgenerate
 
 wire flush_ren;
 reg vec_stallq;
 reg vec_stall2;
-always_comb advance_pipeline = !stallq && !vec_stallq && !ext_stall && !ns_stall;
+reg room_for_que;
+always_comb advance_pipeline = !stallq && !vec_stallq && !ext_stall && !ns_stall && room_for_que;
 always_comb advance_pipeline_seg2 = advance_pipeline;// || dc_get;//(!stallq && !vec_stallq) || dc_get;
 always_comb vec_stallq = !ic_dhit || vec_stall2;
 always_comb advance_f = advance_pipeline;
@@ -2670,7 +2681,6 @@ else begin
 	end
 end
 
-reg room_for_que;
 wire [3:0] enqueue_room;
 
 Qupls4_queue_room uqroom1
@@ -2683,7 +2693,7 @@ Qupls4_queue_room uqroom1
 
 always_comb
 	room_for_que = enqueue_room > 4'd3;
-assign nq = !(branchmiss || (!bs_idle_oh && branch_state < Qupls4_pkg::BS_CAPTURE_MISSPC)) && advance_pipeline && room_for_que && (!stomp_que || stomp_quem);
+assign nq = !(branchmiss) && advance_pipeline && room_for_que && (!stomp_que || stomp_quem);
 
 assign stallq = !rstcnt[2] || rat_stallq || ren_stallq || !room_for_que || !bs_idle_oh;
 
@@ -2702,10 +2712,10 @@ reg stomp1_q;
 reg stomp2_q;
 reg stomp3_q;
 // Detect stomp on leading instructions due to a branch.
-wire stomp0b_r = branch_state > Qupls4_pkg::BS_STATE3 && misspc.pc > pg_ren.pr[0].op.pc.pc;
-wire stomp1b_r = branch_state > Qupls4_pkg::BS_STATE3 && misspc.pc > pg_ren.pr[1].op.pc.pc;
-wire stomp2b_r = branch_state > Qupls4_pkg::BS_STATE3 && misspc.pc > pg_ren.pr[2].op.pc.pc;
-wire stomp3b_r = branch_state > Qupls4_pkg::BS_STATE3 && misspc.pc > pg_ren.pr[3].op.pc.pc;
+wire stomp0b_r = FALSE;//branch_state > Qupls4_pkg::BS_STATE3 && misspc.pc > pg_ren.pr[0].op.pc.pc;
+wire stomp1b_r = FALSE;//branch_state > Qupls4_pkg::BS_STATE3 && misspc.pc > pg_ren.pr[1].op.pc.pc;
+wire stomp2b_r = FALSE;//branch_state > Qupls4_pkg::BS_STATE3 && misspc.pc > pg_ren.pr[2].op.pc.pc;
+wire stomp3b_r = FALSE;//branch_state > Qupls4_pkg::BS_STATE3 && misspc.pc > pg_ren.pr[3].op.pc.pc;
 wire stomp0_r = /*~qd_r[0]||stomp_ren||stomp0b_r*/stomp_ren && pg_ren.pr[0].op.pc.stream!=kept_stream;
 wire stomp1_r = /*~qd_r[1]||stomp_ren||stomp1b_r||*/(stomp_ren && pg_ren.pr[1].op.pc.stream!=kept_stream);// ||
 //							 (pg_ren.pr[0].decbus.br && pg_ren.pr[0].bt);//pt_r[0]||MWIDTH < 2;
@@ -2852,7 +2862,7 @@ always_comb
 		cmta_cp[n46] = rob[head[n46]].cndx;
 	end
 
-Qupls4_pipeline_ren #(.NPORT(NREG_RPORTS), .MWIDTH(MWIDTH)) uren1
+Qupls4_pipeline_ren #(.MWIDTH(MWIDTH)) uren1
 (
 	.rst(irst),
 	.clk(clk),
@@ -2869,9 +2879,9 @@ Qupls4_pipeline_ren #(.NPORT(NREG_RPORTS), .MWIDTH(MWIDTH)) uren1
 	.rob(rob),
 	.stomp_ren(stomp_ren),
 	.kept_stream(kept_stream),
-	.branch_state(branch_state),
 	.avail_reg(ns_avail),
 	.sr(sr),
+	.branch_resolved(branch_resolved),
 //	.arn(arn),
 //	.arng(arng),
 //	.arnv(arnv),
@@ -2915,7 +2925,9 @@ Qupls4_pipeline_ren #(.NPORT(NREG_RPORTS), .MWIDTH(MWIDTH)) uren1
 	.alloc_chkpt(alloc_chkpt),
 	.cndx(cndx),
 	.rcndx(ns_cndx),
-	.miss_cp(miss_cp)
+	.miss_cp(miss_cp),
+
+	.args(rfo)
 );
 
 wire pgh_setcp;
@@ -2929,7 +2941,7 @@ Qupls4_checkpoint_manager #(.MWIDTH(MWIDTH)) ucpm1
 	.clk5x(clk5x),
 	.ph4(ph4),
 	.fcu_id(fcu_rse.rndx),
-	.mux_hdr_cndx(pg_mux.hdr.cndx),
+	.mux_hdr_cndx(pg_ext.hdr.cndx),
 	.dec_hdr_cndx(pg_dec.hdr.cndx),
 	.ren_hdr_cndx(pg_ren.hdr.cndx),
 	.pgh(pgh),
@@ -3022,6 +3034,22 @@ else begin
 		pc0_x1 <= pc0_f;
 end
 
+generate begin : gPL_reg
+	if (RL_STRATEGY==0)
+		Qupls4_pipeline_reg uplr1
+		(
+			.rst(irst),
+			.clk(clk),
+			.en(advance_pipeline),
+			.pg_ren(pg_ren),
+			.tails_i(tails),
+			.tails_o(reg_tails),
+			.rf_reg(rf_reg),
+			.rf_regv(rf_regv)
+		);
+end
+endgenerate
+
 always_ff @(posedge clk)
 if (advance_pipeline)
 	qd_x <= qd;
@@ -3048,11 +3076,14 @@ always_ff @(posedge clk)
 if (advance_pipeline_seg2)
 	pt_r[3] <= pt_dec[3];
 
+/*
 Qupls4_pipeline_que uque1
 (
 	.rst(irst),
 	.clk(clk),
 	.en(advance_pipeline),
+	.pg_reg(pg_reg),
+	.pg_que(pg_que),
 	.ins0_ren(pg_ren.pr[0].op),
 	.ins1_ren(pg_ren.pr[1].op),
 	.ins2_ren(pg_ren.pr[2].op),
@@ -3060,10 +3091,9 @@ Qupls4_pipeline_que uque1
 	.ins0_que(ins0_que),
 	.ins1_que(ins1_que),
 	.ins2_que(ins2_que),
-	.ins3_que(ins3_que),
-	.micro_machine_active_ren(1'b0),
-	.micro_machine_active_que()
+	.ins3_que(ins3_que)
 );
+*/
 
 always_ff @(posedge clk)
 if (advance_pipeline_seg2)
@@ -3704,7 +3734,7 @@ end
 
 reg branchmiss_det;
 always_comb
-	branchmiss_det = ((takb && !fcu_rse.bt) || (!takb && fcu_rse.bt));
+	branchmiss_det = ((takb && !fcu_rse.bt) || (!takb && fcu_rse.bt)) && fcu_rse.v;
 
 // Branchmiss flag
 
@@ -3744,16 +3774,6 @@ Qupls4_restore_flag urstf1
 reg brtgtvr;
 always_comb
 	branchmiss = irst ? FALSE: (excmiss | fcu_branchmiss);// & ~branchmiss;
-
-always_ff @(posedge clk)
-if (irst)
-	branchmiss_h <= FALSE;
-else begin
-//	if (advance_pipeline)
-	branchmiss_h <= branchmiss_next | branchmiss_h;
-	if (advance_pipeline)
-		branchmiss_h <= FALSE;
-end
 
 always_comb//ff @(posedge clk)
 	missid = irst ? 8'd0 : excmiss ? excid : fcu_rse.rndx;
@@ -3840,6 +3860,9 @@ else begin
 	end
 end
 */
+always_ff @(posedge clk)
+if (irst)
+	bs_idle_oh <= TRUE;
 /*
 always_ff @(posedge clk)
 if (irst)
@@ -3989,7 +4012,9 @@ Qupls4_instruction_dispatcher #(.MWIDTH(MWIDTH), .DISPATCH_COUNT(DISPATCH_WIDTH)
 (
 	.rst(irst),
 	.clk(clk),
-	.rob(rob),
+	.stomp(robentry_stomp),
+	.pgh(pgh),
+	.dbf(rob),
 	.busy(rs_busy),
 	.rse_o(rse),
 	.rob_dispatched_o(rob_dispatched),
@@ -4701,7 +4726,7 @@ mmu #(.CORENO(CORENO), .CHANNEL(3)) ummu1
 	.commit2_idv(commit2_idv),
 	.commit3_id(commit3_id),
 	.commit3_idv(commit3_idv),
-	.ftas_req(ftadm_req),
+	.ftas_req(fta_req),
 	.ftas_resp(ptable_resp),
 	.ftam_req(ftatm_req),
 	.ftam_resp(ftatm_resp),
@@ -4731,7 +4756,8 @@ Qupls4_dram_done udrdn1
 	.cstore(dram0_work.cstore),
 	.cload_tags(dram0_work.cload_tags),
 	.ack(dram0_ack),
-	.dram_idv(dram0_idv),
+	.dram_v(dram0_oper.oper.v),
+	.dram_idv(dram0_work.rndxv),
 	.dram_id(dram0_work.rndx), 
 	.dram_state(dram0),
 	.dram_more(dram0_more),
@@ -4763,7 +4789,7 @@ Qupls4_mem_set_state usms0
 (
 	.state_i(dram0),
 	.lsndxv_i(mem0_lsndxv),
-	.idv_i(dram0_idv),
+	.idv_i(dram0_work.rndxv),
 	.lbndx_i(lbndx0),
 	.setavail_o(dram0_setavail),
 	.setready_o(dram0_setready)
@@ -4799,7 +4825,7 @@ Qupls4_set_dram_work #(.CORENO(CORENO), .LSQNO(0)) usdr1 (
 	.dram_state_i(dram0),
 	.dram_done_i(dram0_done),
 	.dram_more_i(dram0_more),
-	.dram_idv_i(dram0_idv),
+	.dram_idv_i(dram0_work.rndxv),
 	.dram_idv2_i(dram0_idv2),
 	.dram_ack_i(dram0_ack),
 	.dram_stomp_i(dram0_stomp),
@@ -4825,7 +4851,8 @@ generate begin : gMemory2
 			.cstore(dram1_work.cstore),
 			.cload_tags(dram1_work.cload_tags),
 			.ack(dram1_ack),
-			.dram_idv(dram1_idv),
+			.dram_v(dram1_oper.oper.v),
+			.dram_idv(dram1_work.rndxv),
 			.dram_id(dram1_work.rndx), 
 			.dram_state(dram1),
 			.dram_more(dram1_work.more),
@@ -4842,7 +4869,7 @@ generate begin : gMemory2
 		(
 			.state_i(dram1),
 			.lsndxv_i(mem1_lsndxv),
-			.idv_i(dram1_idv),
+			.idv_i(dram1_work.rndxv),
 			.lbndx_i(lbndx1),
 			.setavail_o(dram1_setavail),
 			.setready_o(dram1_setready)
@@ -4878,7 +4905,7 @@ generate begin : gMemory2
 			.dram_state_i(dram1),
 			.dram_done_i(dram1_done),
 			.dram_more_i(dram1_more),
-			.dram_idv_i(dram1_idv),
+			.dram_idv_i(dram1_work.rndxv),
 			.dram_idv2_i(dram1_idv2),
 			.dram_ack_i(dram1_ack),
 			.dram_stomp_i(dram1_stomp),
@@ -5011,11 +5038,14 @@ end
 reg load_lsq_argc;
 
 Qupls4_reservation_station #(
+	.MWIDTH(MWIDTH),
 	.FUNCUNIT(4'd0),
 	.NRSE(1),
 	.NSARG(3),
-	.NREG_PORTS(NREG_RPORTS),
-	.RC(0)
+	.NREG_RPORTS(RS_NREG_RPORTS),
+	.RC(0),
+	.DISPATCH_MAP(6'b100001),
+	.RL_STRATEGY(RL_STRATEGY)
 )
 usaust0
 (
@@ -5030,6 +5060,7 @@ usaust0
 	.rse_o(sau0_rse),
 	.rf_oper_i(rf_oper),
 	.bypass_i(),
+	.wp_oper_tap_i(wp_tap),
 	/*
 	.arn(arn),
 	.prnv(prnv),
@@ -5041,11 +5072,14 @@ usaust0
 );
 
 Qupls4_reservation_station #(
+	.MWIDTH(MWIDTH),
 	.FUNCUNIT(4'd2),
 	.NRSE(1),
 	.NSARG(3),
-	.NREG_PORTS(NREG_RPORTS),
-	.RC(0)
+	.NREG_RPORTS(RS_NREG_RPORTS),
+	.RC(0),
+	.DISPATCH_MAP(6'b000010),
+	.RL_STRATEGY(RL_STRATEGY)
 )
 uimulst0
 (
@@ -5060,6 +5094,7 @@ uimulst0
 	.rse_o(imul0_rse),
 	.rf_oper_i(rf_oper),
 	.bypass_i(),
+	.wp_oper_tap_i(wp_tap),
 	.req_pRn(bRs[2]),
 	.req_pRnv(bRsv[2])
 );
@@ -5069,11 +5104,14 @@ always_ff @(posedge clk) sau0_ldd <= sau0_ld;
 generate begin : gIDivStation
 if (Qupls4_pkg::SUPPORT_IDIV)
 Qupls4_reservation_station #(
+	.MWIDTH(MWIDTH),
 	.FUNCUNIT(4'd3),
 	.NRSE(1),
 	.NSARG(2),
-	.NREG_PORTS(NREG_RPORTS),
-	.RC(0)
+	.NREG_RPORTS(RS_NREG_RPORTS),
+	.RC(0),
+	.DISPATCH_MAP(6'b000010),
+	.RL_STRATEGY(RL_STRATEGY)
 )
 uidivst0
 (
@@ -5088,6 +5126,7 @@ uidivst0
 	.rse_o(idiv0_rse),
 	.rf_oper_i(rf_oper),
 	.bypass_i(),
+	.wp_oper_tap_i(wp_tap),
 	.req_pRn(bRs[3]),
 	.req_pRnv(bRsv[3])
 );
@@ -5099,11 +5138,14 @@ endgenerate
 generate begin : gSauStation
 	if (Qupls4_pkg::NSAU > 1) begin
 		Qupls4_reservation_station #(
+			.MWIDTH(MWIDTH),
 			.FUNCUNIT(4'd1),
 			.NRSE(1),
 			.NSARG(3),
-			.NREG_PORTS(NREG_RPORTS),
-			.RC(0)
+			.NREG_RPORTS(RS_NREG_RPORTS),
+			.RC(0),
+			.DISPATCH_MAP(6'b100001),
+			.RL_STRATEGY(RL_STRATEGY)
 		)
 		usaust1
 		(
@@ -5118,6 +5160,7 @@ generate begin : gSauStation
 			.rse_o(sau1_rse),
 			.rf_oper_i(rf_oper),
 			.bypass_i(),
+			.wp_oper_tap_i(wp_tap),
 			.req_pRn(bRs[1]),
 			.req_pRnv(bRsv[1])
 		);
@@ -5139,11 +5182,14 @@ generate begin : gFpuStat
 		0:
 			begin
 				Qupls4_reservation_station #(
+					.MWIDTH(MWIDTH),
 					.FUNCUNIT(4'd4),
 					.NRSE(1),
 					.NSARG(3+Qupls4_pkg::SUPPORT_FDP),
-					.NREG_PORTS(NREG_RPORTS),
-					.RC(1)
+					.NREG_RPORTS(RS_NREG_RPORTS),
+					.RC(1),
+					.DISPATCH_MAP(6'b010000),
+					.RL_STRATEGY(RL_STRATEGY)
 				)
 				ufmast1
 				(
@@ -5158,15 +5204,19 @@ generate begin : gFpuStat
 					.rse_o(fma0_rse),
 					.rf_oper_i(rf_oper),
 					.bypass_i(),
+					.wp_oper_tap_i(wp_tap),
 					.req_pRn(bRs[4]),
 					.req_pRnv(bRsv[4])
 				);
 				Qupls4_reservation_station #(
+					.MWIDTH(MWIDTH),
 					.FUNCUNIT(4'd12),
 					.NRSE(1),
 					.NSARG(3),
-					.NREG_PORTS(NREG_RPORTS),
-					.RC(1)
+					.NREG_RPORTS(NREG_RPORTS),
+					.RC(1),
+					.DISPATCH_MAP(6'b010000),
+					.RL_STRATEGY(RL_STRATEGY)
 				)
 				ufpust1
 				(
@@ -5181,17 +5231,21 @@ generate begin : gFpuStat
 					.rse_o(fpu0_rse),
 					.rf_oper_i(rf_oper),
 					.bypass_i(),
+					.wp_oper_tap_i(wp_tap),
 					.req_pRn(bRs[12]),
 					.req_pRnv(bRsv[12])
 				);
 			end
 		1:
 				Qupls4_reservation_station #(
+					.MWIDTH(MWIDTH),
 					.FUNCUNIT(4'd5),
 					.NRSE(1),
 					.NSARG(3+Qupls4_pkg::SUPPORT_FDP),
-					.NREG_PORTS(NREG_RPORTS),
-					.RC(1)
+					.NREG_RPORTS(RS_NREG_RPORTS),
+					.RC(1),
+					.DISPATCH_MAP(6'b010000),
+					.RL_STRATEGY(RL_STRATEGY)
 				)
 				ufmast2
 				(
@@ -5206,6 +5260,7 @@ generate begin : gFpuStat
 					.rse_o(fma1_rse),
 					.rf_oper_i(rf_oper),
 					.bypass_i(),
+					.wp_oper_tap_i(wp_tap),
 					.req_pRn(bRs[5]),
 					.req_pRnv(bRsv[5])
 				);
@@ -5217,11 +5272,14 @@ endgenerate
 generate begin : gDecimalFloat
 	if (NDFPU > 0) begin
 		Qupls4_pair_reservation_station #(
+			.MWIDTH(MWIDTH),
 			.FUNCUNIT(4'd13),
 			.NRSE(1),
 			.NSARG(3),
-			.NREG_PORTS(NREG_RPORTS),
-			.RC(1)
+			.NREG_RPORTS(RS_NREG_RPORTS),
+			.RC(1),
+			.DISPATCH_MAP(6'b010000),
+			.RL_STRATEGY(RL_STRATEGY)
 		)
 		udfpust1
 		(
@@ -5236,6 +5294,7 @@ generate begin : gDecimalFloat
 			.rse_o(dfpu0_rse),
 			.rf_oper_i(rf_oper),
 			.bypass_i(),
+			.wp_oper_tap_i(wp_tap),
 			.req_pRn(bRs[13]),
 			.req_pRnv(bRsv[13])
 		);
@@ -5244,11 +5303,14 @@ end
 endgenerate
 
 Qupls4_reservation_station #(
+	.MWIDTH(MWIDTH),
 	.FUNCUNIT(4'd7),
 	.NRSE(1),
 	.NSARG(3),
-	.NREG_PORTS(NREG_RPORTS),
-	.RC(0)
+	.NREG_RPORTS(RS_NREG_RPORTS),
+	.RC(0),
+	.DISPATCH_MAP(6'b000100),
+	.RL_STRATEGY(RL_STRATEGY)
 )
 ubrast1
 (
@@ -5263,16 +5325,20 @@ ubrast1
 	.rse_o(fcu_rse),
 	.rf_oper_i(rf_oper),
 	.bypass_i(),
+	.wp_oper_tap_i(wp_tap),
 	.req_pRn(bRs[7]),
 	.req_pRnv(bRsv[7])
 );
 
 Qupls4_reservation_station #(
+	.MWIDTH(MWIDTH),
 	.FUNCUNIT(4'd8),
 	.NRSE(1),
 	.NSARG(3),
-	.NREG_PORTS(NREG_RPORTS),
-	.RC(0)
+	.NREG_RPORTS(RS_NREG_RPORTS),
+	.RC(0),
+	.DISPATCH_MAP(6'b001000),
+	.RL_STRATEGY(RL_STRATEGY)
 )
 uagenst1
 (
@@ -5287,6 +5353,7 @@ uagenst1
 	.rse_o(agen0_rse),
 	.rf_oper_i(rf_oper),
 	.bypass_i(),
+	.wp_oper_tap_i(wp_tap),
 	.req_pRn(bRs[8]),
 	.req_pRnv(bRsv[8])
 );
@@ -5314,11 +5381,14 @@ Stark_agen_station uagen0stn
 generate begin : gAgen
 if (Qupls4_pkg::NDATA_PORTS > 1)
 Qupls4_reservation_station #(
+	.MWIDTH(MWIDTH),
 	.FUNCUNIT(4'd9),
 	.NRSE(1),
 	.NSARG(3),
-	.NREG_PORTS(NREG_RPORTS),
-	.RC(0)
+	.NREG_RPORTS(RS_NREG_RPORTS),
+	.RC(0),
+	.DISPATCH_MAP(6'b001000),
+	.RL_STRATEGY(RL_STRATEGY)
 )
 uagenst2
 (
@@ -5333,6 +5403,7 @@ uagenst2
 	.rse_o(agen1_rse),
 	.rf_oper_i(rf_oper),
 	.bypass_i(),
+	.wp_oper_tap_i(wp_tap),
 	.req_pRn(bRs[9]),
 	.req_pRnv(bRsv[9])
 );
@@ -5349,7 +5420,7 @@ always_comb
 		&& (bs_idle_oh||bs_done_oh||branch_state==Qupls4_pkg::BS_DONE2) && fcu_idv;
 */ 	
 always_comb
-	dc_get = !(branchmiss || (branch_state < Qupls4_pkg::BS_CAPTURE_MISSPC && !bs_idle_oh))
+	dc_get = !(branchmiss)// || (branch_state < Qupls4_pkg::BS_CAPTURE_MISSPC && !bs_idle_oh))
 //		&& advance_pipeline
 		&& room_for_que
 //		&& (!stomp_que || stomp_quem)
@@ -5379,12 +5450,18 @@ begin
 end
 assign rfo_store_argC_valid = store_opero.v;
 
-Qupls4_validate_operand uvLSsrcC
+Qupls4_validate_operand #(
+	.MWIDTH(MWIDTH),
+	.RL_STRATEGY(RL_STRATEGY),
+	.NENTRY(1)
+)
+uvLSsrcC
 (
 	.rf_oper_i(rf_oper),
 	.oper_i(store_operi),
 	.oper_o(store_opero),
-	.bypass_i({$bits(Qupls4_pkg::operand_t){1'b0}})
+	.bypass_i({$bits(Qupls4_pkg::operand_t){1'b0}}),
+	.wp_hist_i(wp_tap)
 );
 /*
 	.arn(arn),
@@ -5420,7 +5497,7 @@ begin
 	for (n40 = 0; n40 < Qupls4_pkg::ROB_ENTRIES; n40 = n40 + 1)
 		used_streams[rob[n40].op.pc.stream] = 1'b1;
 	for (n40 = 0; n40 < MWIDTH; n40 = n40 + 1) begin
-		used_streams[pg_mux.pr[n40].op.pc.stream] = 1'b1;
+		used_streams[pg_ext.pr[n40].op.pc.stream] = 1'b1;
 		used_streams[pg_dec.pr[n40].op.pc.stream] = 1'b1;
 		used_streams[pg_ren.pr[n40].op.pc.stream] = 1'b1;
 	end
@@ -5428,8 +5505,12 @@ begin
 		used_streams[pcs[n4].stream[4:0]] = 1'b1;
 end
 
+always_comb
+	if (fcu_branch_resolved)
+		tGetSkipList(fcu_rse.rndx, fcu_found_destination, fcu_skip_list, fcu_m1, fcu_dst);
+
 // ----------------------------------------------------------------------------
-// fet/mux/dec/ren/que
+// fet/ext/dec/ren/que
 // ----------------------------------------------------------------------------
 // =============================================================================
 // =============================================================================
@@ -5546,8 +5627,8 @@ else begin
 	fpu1_stomp <= FALSE;
 	dram0_stomp <= FALSE;
 	dram1_stomp <= FALSE;
-	dram0_idv2 <= dram0_idv;
-	dram1_idv2 <= dram1_idv;
+	dram0_idv2 <= dram0_work.rndxv;
+	dram1_idv2 <= dram1_work.rndxv;
 
 	// This test in sync with PC update
 	if (!branchmiss && ihito && !hirq && ((pe_allqd|allqd) && !hold_ins && advance_pipeline_seg2))
@@ -5564,7 +5645,7 @@ else begin
 	// invalidated (state 2), quing new instructions can begin.
 	// Only reset the tail if something was stomped on. It could be that there
 	// are no valid instructions following the branch in the queue.
-	if (branchmiss && fcu_rse.v)// || (branch_state < Qupls4_pkg::BS_CAPTURE_MISSPC && !bs_idle_oh)) begin
+	if (branchmiss)// || (branch_state < Qupls4_pkg::BS_CAPTURE_MISSPC && !bs_idle_oh)) begin
 		;
 //		if (|robentry_stomp)
 //			tails[0] <= stail;		// computed above
@@ -5690,6 +5771,103 @@ else begin
 			groupno <= groupno + 2'd1;
 			if (groupno >= Qupls4_pkg::ROB_ENTRIES / MWIDTH - 1)
 				groupno <= 8'd0;
+			// Shift the dispatch buffer. (under construction)
+//			for (nn = 4; nn < 8; nn = nn + 1)
+//				dbf[nn] <= dbf[nn-4];
+		end
+	end
+
+// ----------------------------------------------------------------------------
+// Dispatch
+// ----------------------------------------------------------------------------
+	foreach (rob_dispatched_v[nn]) begin
+		if (rob_dispatched_v[nn])
+			rob[rob_dispatched[nn]].out <= 2'b11;
+	end
+
+	// ----------------------------------------------------------------------------
+	// REXT Prefix
+	// REXT physical registers will already have been looked up or assigned.
+	// Copy the register specs to the micro-op following the REXT prefix then
+	// mark the prefix done. This will most likely be immediately after the
+	// following micro-op queues.
+	// ----------------------------------------------------------------------------
+	foreach (rob[nn]) begin
+		// find next instruction (put outside of condition to reduce logic)
+		nonNop = fnFindNextNonNop(nn);
+		if (!(&rob[nn].done) &&			// not done
+			rob[nn].op.decbus.rext		// and an extended register prefix
+		) begin
+			if (rob[nonNop].v && rob[nonNop].sn > rob[nn].sn) begin	// valid and in sequence?
+				rob[nonNop].op.pRs4 <= rob[nn].op.pRs1;
+				rob[nonNop].op.pRd2 <= rob[nn].op.pRd;
+				rob[nonNop].op.pS <= rob[nn].op.pRs2;
+				rob[nonNop].op.pRs4v <= VAL;
+				rob[nonNop].op.pRd2v <= VAL;
+				rob[nonNop].op.pSv <= VAL;
+				rob[nn].done <= 2'b11;
+			end
+			// The REXXT was not followed by a valid instruction. Treat as a NOP.
+			// Just mark it done. Note: the next instruction may not be queued yet,
+			// so test for a following instruction before marking.
+			else if (rob[(nn + 1) % Qupls4_pkg::ROB_ENTRIES].sn > rob[nn].sn)
+				rob[nn].done <= 2'b11;
+		end
+	end
+
+	// ----------------------------------------------------------------------------
+	// CNST Prefix
+	// Copy constant to relevant instruction.
+	// ----------------------------------------------------------------------------
+	foreach (rob[nn]) begin
+		nonNop = fnFindNextNonNop(nn);
+		if (!(&rob[nn].done) &&			// not done
+			rob[nn].op.decbus.cnst		// and an extended register prefix
+		) begin
+			if (rob[nonNop].v && rob[nonNop].sn > rob[nn].sn) begin
+				case(rob[nn].cnst_num)
+				2'd0:	rob[nonNop].op.decbus.imma <= rob[nn].op.decbus.imma;
+				2'd1:	rob[nonNop].op.decbus.immb <= rob[nn].op.decbus.imma;
+				2'd2:	rob[nonNop].op.decbus.immc <= rob[nn].op.decbus.imma;
+				2'd3:	rob[nonNop].op.decbus.immd <= rob[nn].op.decbus.imma;
+				endcase
+				case(rob[nn].cnst_num)
+				2'd0:	rob[nonNop].op.decbus.has_imma = TRUE;
+				2'd1:	rob[nonNop].op.decbus.has_immb = TRUE;
+				2'd2:	rob[nonNop].op.decbus.has_immc = TRUE;
+				2'd3:	rob[nonNop].op.decbus.has_immd = TRUE;
+				endcase
+			end
+			else if (rob[(nn + 1) % Qupls4_pkg::ROB_ENTRIES].sn > rob[nn].sn)
+				rob[nn].done <= 2'b11;
+		end
+	end
+
+// ----------------------------------------------------------------------------
+// Register file Read
+// ----------------------------------------------------------------------------
+	// For the first register lookup strategy which uses the register file write
+	// port history to fill in unknown values.
+	//
+	// Populate the argument values with values from register file. These values
+	// may not be the final values if the register was still invaiid. If the
+	// register was not valid, then the register tag is stored in the argument
+	// value so it may be validated later.
+	// In the case of a REXT prefix the values will be populated into the
+	// wrong values slots, but this will be corrected later.
+	// ----------------------------------------------------------------------------
+	if (RL_STRATEGY==0) begin
+		for (nn = 0; nn < MWIDTH; nn = nn + 1) begin
+			rob[reg_tails[nn]].argA <= (rf_regv[nn*4+0]) ? rfo[nn*4+0] : rf_reg[nn*4+0];
+			rob[reg_tails[nn]].argB <= (rf_regv[nn*4+1]) ? rfo[nn*4+1] : rf_reg[nn*4+1];
+			rob[reg_tails[nn]].argC <= (rf_regv[nn*4+2]) ? rfo[nn*4+2] : rf_reg[nn*4+2];
+			rob[reg_tails[nn]].argT <= (rf_regv[nn*4+3]) ? rfo[nn*4+3] : rf_reg[nn*4+3];
+			// Values may have already been marked as valid, sont set them invalid!
+			if (rf_regv[nn*4+0]) rob[reg_tails[nn]].argA_V <= VAL;
+			if (rf_regv[nn*4+1]) rob[reg_tails[nn]].argB_V <= VAL;
+			if (rf_regv[nn*4+2]) rob[reg_tails[nn]].argC_V <= VAL;
+			if (rf_regv[nn*4+3]) rob[reg_tails[nn]].argT_V <= VAL;
+			rob[reg_tails[nn]].reg_read_done <= TRUE;
 		end
 	end
 
@@ -5727,33 +5905,6 @@ else begin
 					lsq[lsq_tail0.row][0].sn <= 7'h7E;
 				end
 			end
-		end
-	end
-
-// ----------------------------------------------------------------------------
-// Dispatch
-// ----------------------------------------------------------------------------
-	foreach (rob_dispatched_v[nn]) begin
-		if (rob_dispatched_v[nn])
-			rob[rob_dispatched[nn]].out <= 2'b11;
-	end
-// ----------------------------------------------------------------------------
-// REXT Prefix
-// REXT physical registers will already have been looked up or assigned.
-// Copy the register specs to the micro-op following the REXT prefix then
-// mark the prefix done. This will most likely be immediately after the
-// following micro-op queues.
-// ----------------------------------------------------------------------------
-	foreach (rob[nn]) begin
-		if (!(&rob[nn].done) &&				// not done
-			rob[nn].op.decbus.rext &&		// and an extended register prefix
-			rob[(nn+1)%Qupls4_pkg::ROB_ENTRIES].v &&	// and next instr. is valid
-			rob[(nn+1)%Qupls4_pkg::ROB_ENTRIES].sn==(rob[nn].sn + 2'd1)%Qupls4_pkg::ROB_ENTRIES	// and in sequence
-		) begin
-			rob[(nn+1)%Qupls4_pkg::ROB_ENTRIES].op.pRs4 <= rob[nn].op.pRs1;
-			rob[(nn+1)%Qupls4_pkg::ROB_ENTRIES].op.pRd2 <= rob[nn].op.pRd;
-			rob[(nn+1)%Qupls4_pkg::ROB_ENTRIES].op.pS <= rob[nn].op.pRs2;
-			rob[nn].done <= 2'b11;
 		end
 	end
 
@@ -5850,9 +6001,6 @@ else begin
 	if (Qupls4_pkg::NFPU > 0)
 		tSetROBDone(fpu0_rse2,FALSE);
 
-	if (fcu_branch_resolved)
-		tGetSkipList(fcu_rse.rndx, fcu_found_destination, fcu_skip_list, fcu_m1, fcu_dst);
-
 	if (fcu_rse.v)
 		fcu_state1 <= VAL;
 	tSetROBDone(fcu_rse,takb);
@@ -5864,19 +6012,19 @@ else begin
 
 	// If data for stomped instruction, ignore
 	// dram_vn will be false for stomped data
-	if (dram0_done && |rob[ dram0_work.rndx ].v && dram0_idv) begin
+	if (dram0_done && |rob[ dram0_work.rndx ].v && dram0_work.rndxv) begin
 		tSetROBMemDone(dram0_work,dram0_oper.exc,dram0_oper.state);
 		if (dram0_oper.state==2'b11) begin
-			$display("Qupls4 set dram0_idv=INV at done");
-			dram0_idv <= INV;
+			$display("Qupls4 set dram0_work.rndxv=INV at done");
+			dram0_work.rndxv <= INV;
 		end
 	end
 
 	if (Qupls4_pkg::NDATA_PORTS > 1) begin
-		if (dram1_done && |rob[ dram1_work.rndx ].v && dram1_idv) begin
+		if (dram1_done && |rob[ dram1_work.rndx ].v && dram1_work.rndxv) begin
 			tSetROBMemDone(dram1_work,dram1_oper.exc,dram1_oper.state);
 			if (dram1_oper.state==2'b11)
-				dram1_idv <= INV;
+				dram1_work.rndxv <= INV;
 		end
 	end
 
@@ -6014,8 +6162,8 @@ else begin
 	// Reset out to trigger another access
 		if (dram0_work.tocnt[10]) begin
 			tSetROBMemDone(dram0_work,Qupls4_pkg::FLT_BERR,2'b11);
-			dram0_idv <= INV;
-			$display("Q+ set dram0_idv=INV at timeout");
+			dram0_work.rndxv <= INV;
+			$display("Q+ set dram0_work.rndxv=INV at timeout");
 			//lsq[rob[dram0_work.rndx].lsqndx.row][rob[dram0_work.rndx].lsqndx.col].v <= INV;
 		end
 		else if (dram0_work.tocnt[8]) begin
@@ -6024,7 +6172,7 @@ else begin
 		if (Qupls4_pkg::NDATA_PORTS > 1) begin
 			if (dram1_work.tocnt[10]) begin
 				tSetROBMemDone(dram1_work,Qupls4_pkg::FLT_BERR,2'b11);
-				dram1_idv <= INV;
+				dram1_work.rndxv <= INV;
 //				lsq[rob[dram1_work.rndx].lsqndx.row][rob[dram1_work.rndx].lsqndx.col].v <= INV;
 			end
 			else if (dram1_work.tocnt[8]) begin
@@ -6055,7 +6203,7 @@ else begin
 		tInvalidateLSQ(lsq[lbndx0.row][lbndx0.col].rndx,FALSE);
 		rob[lsq[lbndx0.row][lbndx0.col].rndx].done <= 2'b11;
 	end
-  else if (dram0 == Qupls4_pkg::DRAMSLOT_AVAIL && mem0_lsndxv && !robentry_stomp[lsq[mem0_lsndx.row][mem0_lsndx.col].rndx] && !dram0_idv && !dram0_idv2) begin
+  else if (dram0 == Qupls4_pkg::DRAMSLOT_AVAIL && mem0_lsndxv && !robentry_stomp[lsq[mem0_lsndx.row][mem0_lsndx.col].rndx] && !dram0_work.rndxv && !dram0_idv2) begin
 		rob[lsq[mem0_lsndx.row][mem0_lsndx.col].rndx].out <= {VAL,VAL};
 		dram0_stomp <= FALSE;
 	end
@@ -6074,16 +6222,16 @@ else begin
   for (n3 = 0; n3 < Qupls4_pkg::ROB_ENTRIES; n3 = n3 + 1) begin
 		if (robentry_stomp[n3] && rob[n3].lsqndx==mem0_lsndx && lsq[mem0_lsndx.row][mem0_lsndx.col].v)
 			dram0_stomp <= 1'b1;
-		if (!rob[n3].lsq && dram0_work.rndx==n3 && dram0_idv) begin
+		if (!rob[n3].lsq && dram0_work.rndx==n3 && dram0_work.rndxv) begin
 			dram0_stomp <= TRUE;
-			dram0_idv <= INV;
+			dram0_work.rndxv <= INV;
 		end
 		if (Qupls4_pkg::NDATA_PORTS > 1) begin
 			if (robentry_stomp[n3] && rob[n3].lsqndx==mem1_lsndx && lsq[mem1_lsndx.row][mem1_lsndx.col].v)
 				dram1_stomp <= 1'b1;
-			if (!rob[n3].lsq && dram1_work.rndx==n3 && dram1_idv) begin
+			if (!rob[n3].lsq && dram1_work.rndx==n3 && dram1_work.rndxv) begin
 				dram1_stomp <= TRUE;
-				dram1_idv <= INV;
+				dram1_work.rndxv <= INV;
 			end
 		end
 	end
@@ -6413,13 +6561,13 @@ else begin
 	end
 	if (robentry_stomp[dram0_work.rndx]) begin
 		dram0_stomp <= TRUE;
-		dram0_idv <= INV;
+		dram0_work.rndxv <= INV;
 		rob[dram0_work.rndx].done <= 2'b11;
 		rob[dram0_work.rndx].out <= 2'b00;
 	end
 	if (robentry_stomp[dram1_work.rndx]) begin
 		dram1_stomp <= TRUE;
-		dram1_idv <= INV;
+		dram1_work.rndxv <= INV;
 		rob[dram1_work.rndx].done <= 2'b11;
 		rob[dram1_work.rndx].out <= 2'b00;
 	end
@@ -6579,8 +6727,8 @@ wb_mux #(.NPORT(6)) utmrmux1
 	.rst_i(irst),
 	.clk_i(clk),
 	.req_i(cmds),
-	.req_o(fta_req),
-	.resp_i(ptable_resp.ack ? ptable_resp : fta_resp),
+	.req_o(wb_req),
+	.resp_i(ptable_resp.ack ? ptable_resp : wb_resp),
 	.resp_o(resps)
 );
 
@@ -6807,13 +6955,13 @@ always_ff @(posedge clk) begin: clock_n_debug
 	$display("align: %x", uiext1.ic_line_aligned);
 	$display("- - - - - - Multiplex %c - - - - - - %s", ihit_mux ? "h":" ", stomp_mux ? stompstr : no_stompstr);
 	/*
-	$display("pc0: %h.%h ins0: %h", uiext1.pg_mux.pr[0].pc.pc[23:0], uiext1.pg_mux.pr[0].mcip, uiext1.pg_mux.pr[0].uop[47:0]);
-	$display("pc1: %h.%h ins1: %h", uiext1.pg_mux.pr[1].pc.pc[23:0], uiext1.pg_mux.pr[1].mcip, uiext1.pg_mux.pr[1].uop[47:0]);
-	$display("pc2: %h.%h ins2: %h", uiext1.pg_mux.pr[2].pc.pc[23:0], uiext1.pg_mux.pr[2].mcip, uiext1.pg_mux.pr[2].uop[47:0]);
-	$display("pc3: %h.%h ins3: %h", uiext1.pg_mux.pr[3].pc.pc[23:0], uiext1.pg_mux.pr[3].mcip, uiext1.pg_mux.pr[3].uop[47:0]);
+	$display("pc0: %h.%h ins0: %h", uiext1.pg_ext.pr[0].pc.pc[23:0], uiext1.pg_ext.pr[0].mcip, uiext1.pg_ext.pr[0].uop[47:0]);
+	$display("pc1: %h.%h ins1: %h", uiext1.pg_ext.pr[1].pc.pc[23:0], uiext1.pg_ext.pr[1].mcip, uiext1.pg_ext.pr[1].uop[47:0]);
+	$display("pc2: %h.%h ins2: %h", uiext1.pg_ext.pr[2].pc.pc[23:0], uiext1.pg_ext.pr[2].mcip, uiext1.pg_ext.pr[2].uop[47:0]);
+	$display("pc3: %h.%h ins3: %h", uiext1.pg_ext.pr[3].pc.pc[23:0], uiext1.pg_ext.pr[3].mcip, uiext1.pg_ext.pr[3].uop[47:0]);
 	*/
 	if (do_bsr)
-		$display("BSR %h  pc0_fet=%h", bsr_tgt.pc, uiext1.pg_mux.pr[0].op.pc.pc[31:0]);
+		$display("BSR %h  pc0_fet=%h", bsr_tgt.pc, uiext1.pg_ext.pr[0].op.pc.pc[31:0]);
 	$display("----- Decode %c%c ----- %s", ihit_dec ? "h":" ", micro_machine_active_d ? "a": " ", stomp_dec ? stompstr : no_stompstr);
 	/*
 	$display("pc0: %h.%h ins0: %h", pg_dec.pr[0].pc.pc[23:0], pg_dec.pr[0].mcip, pg_dec.pr[0].uop[47:0]);
@@ -7144,6 +7292,34 @@ begin
 			fnValidate = TRUE;
 end
 endfunction
+
+// Find the next non-NOP. Used to skip over constant zones.
+
+function rob_ndx_t fnFindNextNonNop;
+input rob_ndx_t st;
+integer p1,p2,p3,p4,p5,p6;
+begin
+	p1 = (st + 1) % Qupls4_pkg::ROB_ENTRIES;
+	p2 = (st + 2) % Qupls4_pkg::ROB_ENTRIES;
+	p3 = (st + 3) % Qupls4_pkg::ROB_ENTRIES;
+	p4 = (st + 4) % Qupls4_pkg::ROB_ENTRIES;
+	p5 = (st + 5) % Qupls4_pkg::ROB_ENTRIES;
+	p6 = (st + 6) % Qupls4_pkg::ROB_ENTRIES;
+	if (!rob[p1].op.decbus.nop)
+		fnFindNextNonNop = p1;
+	else if (!rob[p2].op.decbus.nop)
+		fnFindNextNonNop = p2;
+	else if (!rob[p3].op.decbus.nop)
+		fnFindNextNonNop = p3;
+	else if (!rob[p4].op.decbus.nop)
+		fnFindNextNonNop = p4;
+	else if (!rob[p5].op.decbus.nop)
+		fnFindNextNonNop = p5;
+	else
+		fnFindNextNonNop = p6;
+end
+endfunction
+
 
 // Detect if there is a target register assignment acting as a source of data
 // for the specified register. Used at commit time to verify that it is possible
@@ -7476,11 +7652,11 @@ begin
 	ip_asid <= 16'd0;
 //	postfix_mask <= 'd0;
 	dram0_stomp <= 32'd0;
-	dram0_idv <= INV;
+	dram0_work.rndxv <= INV;
 	dram0_idv2 <= INV;
 	dram0_ldip <= FALSE;
 	dram1_stomp <= 32'd0;
-	dram1_idv <= INV;
+	dram1_work.rndxv <= INV;
 	dram1_idv2 <= INV;
 	panic <= `PANIC_NONE;
 	foreach (rob[n14]) begin
@@ -7666,9 +7842,12 @@ input last;
 integer n12;
 integer n13;
 Qupls4_pkg::decode_bus_t db;
+Qupls4_pkg::rob_entry_t next_robe;
 reg [5:0] next_sync_no;
 reg [5:0] next_fc_no;
+reg [2:0] dtail;
 begin
+	dtail = {1'b0,tail[1:0]};
 	db = robe.op.decbus;
 
 	/*
@@ -7692,58 +7871,76 @@ begin
 	end
 	*/
 	// Drop the in-order pipeline register onto the queue.
-	rob[tail] <= robe;
-	rob[tail].flush <= flush;
-	rob[tail].sync_dep <= sync_ndx;
-	rob[tail].sync_depv <= sync_ndxv;
-	rob[tail].fc_dep <= fc_ndx;
-	rob[tail].fc_depv <= fc_ndxv;
+	next_robe = robe;
+	next_robe.this_ndx = tail;
+	next_robe.flush = flush;
+	next_robe.sync_dep = sync_ndx;
+	next_robe.sync_depv = sync_ndxv;
+	next_robe.fc_dep = fc_ndx;
+	next_robe.fc_depv = fc_ndxv;
 
 	// "dynamic" fields, these fields may change after enqueue
-	rob[tail].sn <= sn;
-	rob[tail].pred_tf <= 2'b00;	// unknown
-//	rob[tail].pred_shadow_size <= db.pred_shadow_size;
+	next_robe.sn = sn;
+	next_robe.pred_tf = 2'b00;	// unknown
+//	next_robe.pred_shadow_size = db.pred_shadow_size;
 	// NOPs are valid regardless of predicate status
-	rob[tail].pred_bitv <= db.nop;
-	rob[tail].pred_bit <= db.nop;
+	next_robe.pred_bitv = db.nop;
+	next_robe.pred_bit = db.nop;
 	if (db.pred)
-		pred_tf[db.pred_no] <= 2'b00;
+		pred_tf[db.pred_no] = 2'b00;
 	
-	rob[tail].orid <= mc_orid;
-	rob[tail].br_cndx <= cndxq;
+	next_robe.orid = mc_orid;
+	next_robe.br_cndx = cndxq;
 
 	// NOP type instructions appear in the queue but they do not get scheduled or
 	// execute. They are marked done immediately.
-	rob[tail].done <= {2{db.nop}};
+	next_robe.done = {2{db.nop}};
 	// Unconditional branches and jumps are done already in the mux stage.
 	// Unconditional subroutine calls only need the target register updated.
 	if (db.bsr|db.jsr) begin
 		if (db.Rdz)
-			rob[tail].done <= {VAL,VAL};
+			next_robe.done = {VAL,VAL};
 		else
-			rob[tail].done <= {VAL,INV};
+			next_robe.done = {VAL,INV};
 	end
-	rob[tail].out <= {INV,INV};
-	rob[tail].lsq <= INV;
-	rob[tail].takb <= 1'b0;
+	next_robe.out = {INV,INV};
+	next_robe.lsq = INV;
+	next_robe.takb = 1'b0;
 
 	// Check for decode exception, but not if it is being stomped on.
 	// If it is stomped on, we do not care.
 	if (!(ornop|stomp)) begin
-		rob[tail].exc <= db.cause;
-		rob[tail].excv <= TRUE;
+		next_robe.exc = db.cause;
+		next_robe.excv = TRUE;
 	end
 	else begin
-		rob[tail].exc <= Qupls4_pkg::FLT_NONE;
-		rob[tail].excv <= FALSE;
+		next_robe.exc = Qupls4_pkg::FLT_NONE;
+		next_robe.excv = FALSE;
 	end
-	rob[tail].argA_v <= Qupls4_pkg::fnSourceRs1v(robe.op) | db.has_imma;
-	rob[tail].argB_v <= Qupls4_pkg::fnSourceRs2v(robe.op) | (db.has_Rs2 ? 1'b0 : db.has_immb);
-	rob[tail].argC_v <= Qupls4_pkg::fnSourceRs3v(robe.op) | db.has_immc;
-	rob[tail].argD_v <= Qupls4_pkg::fnSourceRs4v(robe.op);
-	rob[tail].argS_v <= Qupls4_pkg::fnSourceArgSv(robe.op);
-	rob[tail].argT_v <= Qupls4_pkg::fnSourceRdv(robe.op);
-	rob[tail].all_args_valid <= FALSE;
+	next_robe.argA_v = Qupls4_pkg::fnSourceRs1v(robe.op) | db.has_imma;
+	next_robe.argB_v = Qupls4_pkg::fnSourceRs2v(robe.op) | (db.has_Rs2 ? 1'b0 : db.has_immb);
+	next_robe.argC_v = Qupls4_pkg::fnSourceRs3v(robe.op) | db.has_immc;
+	next_robe.argD_v = Qupls4_pkg::fnSourceRs4v(robe.op);
+	next_robe.argS_v = Qupls4_pkg::fnSourceArgSv(robe.op);
+	next_robe.argT_v = Qupls4_pkg::fnSourceRdv(robe.op);
+	next_robe.argA = robe.argA;
+	next_robe.argB = robe.argB;
+	next_robe.argC = robe.argC;
+	next_robe.argD = robe.argD;
+	next_robe.argS = robe.argS;
+	next_robe.argT = robe.argT;
+	// In some cases all the register values are essentially valid already, so
+	// indicate that the register read is done. This lets dispatch dispatch the
+	// instruction sooner.
+	next_robe.reg_read_done = RL_STRATEGY == 1 ? TRUE : 
+		(Qupls4_pkg::fnSourceRs1v(robe.op) | db.has_imma) && 
+		(Qupls4_pkg::fnSourceRs2v(robe.op) | (db.has_Rs2 ? 1'b0 : db.has_immb)) && 
+		(Qupls4_pkg::fnSourceRs3v(robe.op) | db.has_immc) &&
+		Qupls4_pkg::fnSourceRs4v(robe.op) && 
+		Qupls4_pkg::fnSourceArgSv(robe.op) &&
+		Qupls4_pkg::fnSourceRdv(robe.op)
+		;
+	next_robe.all_args_valid = FALSE;
 	/*
 		(fnSourceRs1v(ins) | db.has_imma) &&
 		(fnSourceRs2v(ins) | (db.has_Rb ? 1'b0 : db.has_immb)) &&
@@ -7752,30 +7949,30 @@ begin
 		(fnSourceCiv(ins))
 		;
 	*/
-	rob[tail].could_issue <= FALSE;
-	rob[tail].could_issue_nm <= FALSE;
+	next_robe.could_issue = FALSE;
+	next_robe.could_issue_nm = FALSE;
 	// "static" fields, these fields remain constant after enqueue
-	rob[tail].grp <= grp;
-	rob[tail].brtgt <= Qupls4_pkg::fnTargetIP(robe.op.pc,db.immc);
-	rob[tail].om <= sr.om;
-	rob[tail].rm <= db.rm==3'd7 ? fpcsr.rm : db.rm;
+	next_robe.grp = grp;
+	next_robe.brtgt = Qupls4_pkg::fnTargetIP(robe.op.pc,db.immc);
+	next_robe.om = sr.om;
+	next_robe.rm = db.rm==3'd7 ? fpcsr.rm : db.rm;
 `ifdef IS_SIM
-	rob[tail].argI <= db.immb;
+	next_robe.argI = db.immb;
 `endif	
-//	rob[tail].rmd <= fpscr.rmd;
-//	rob[tail].op <= ins;
-	rob[tail].cndx <= cndxq;//db.br ? pndxq : cndxq;
+//	next_robe.rmd = fpscr.rmd;
+//	next_robe.op = ins;
+	next_robe.cndx = cndxq;//db.br ? pndxq : cndxq;
 	// Architectural register zero is not renamed, physical register zero is
 	// used which will always read as zero. The renamer will not assign
 	// physical register zero when registers are being renamed.
-//	rob[tail].op.nRt <= nRt;//db.Rtz ? 10'd0 : nRt;
-	rob[tail].group_len <= grplen;
-	rob[tail].last <= last;
-	rob[tail].v <= Qupls4_pkg::SUPPORT_BACKOUT ? (robe.op.v ? robe.op.pc.stream : 5'd0): (robe.op.v ? robe.op.pc.stream & ~{5{stomp}} : 5'd0);
+//	next_robe.op.nRt = nRt;//db.Rtz ? 10'd0 : nRt;
+	next_robe.group_len = grplen;
+	next_robe.last = last;
+	next_robe.v = Qupls4_pkg::SUPPORT_BACKOUT ? (robe.op.v ? robe.op.pc.stream : 5'd0): (robe.op.v ? robe.op.pc.stream & ~{5{stomp}} : 5'd0);
 	if (!stomp && db.v && !brtgtv) begin
 		if (db.br & pt) begin
-			brtgt <= Qupls4_pkg::fnTargetIP(pc,db.immc);
-			brtgtv <= VAL;	// ToDo: Fix
+			brtgt = Qupls4_pkg::fnTargetIP(pc,db.immc);
+			brtgtv = VAL;	// ToDo: Fix
 		end
 	end
 	// Vector instructions are treated as NOPs as they expand into scalar ops.
@@ -7784,53 +7981,57 @@ begin
 	// Propagate the target register to the new target by turning the instruction
 	// into a copy-target.
 	if (robe.op.uop.opcode==Qupls4_pkg::OP_NOP) begin
-		rob[tail].op.decbus.alu <= TRUE;
-		rob[tail].op.decbus.fpu <= FALSE;
-		rob[tail].op.decbus.fc <= FALSE;
-		rob[tail].op.decbus.load <= FALSE;
-		rob[tail].op.decbus.vload <= FALSE;
-		rob[tail].op.decbus.vload_ndx <= FALSE;
-		rob[tail].op.decbus.store <= FALSE;
-		rob[tail].op.decbus.vstore <= FALSE;
-		rob[tail].op.decbus.vstore_ndx <= FALSE;
-		rob[tail].op.decbus.mem <= FALSE;
-		rob[tail].op <= nopi;
-		rob[tail].argA_v <= VAL;
-		rob[tail].argB_v <= VAL;
-		rob[tail].argC_v <= VAL;
-		rob[tail].argD_v <= VAL;
-		rob[tail].argT_v <= VAL;
+		next_robe.op.decbus.alu = TRUE;
+		next_robe.op.decbus.fpu = FALSE;
+		next_robe.op.decbus.fc = FALSE;
+		next_robe.op.decbus.load = FALSE;
+		next_robe.op.decbus.vload = FALSE;
+		next_robe.op.decbus.vload_ndx = FALSE;
+		next_robe.op.decbus.store = FALSE;
+		next_robe.op.decbus.vstore = FALSE;
+		next_robe.op.decbus.vstore_ndx = FALSE;
+		next_robe.op.decbus.mem = FALSE;
+		next_robe.op = nopi;
+		next_robe.argA_v = VAL;
+		next_robe.argB_v = VAL;
+		next_robe.argC_v = VAL;
+		next_robe.argD_v = VAL;
+		next_robe.argT_v = VAL;
 	end
 	
 	if (ornop|(Qupls4_pkg::SUPPORT_BACKOUT ? 1'b0 : stomp)) begin
-		rob[tail].op.decbus.cpytgt <= TRUE;
-		rob[tail].op.decbus.alu <= TRUE;
-		rob[tail].op.decbus.fpu <= FALSE;
-		rob[tail].op.decbus.fc <= FALSE;
-		rob[tail].op.decbus.load <= FALSE;
-		rob[tail].op.decbus.vload <= FALSE;
-		rob[tail].op.decbus.vload_ndx <= FALSE;
-		rob[tail].op.decbus.store <= FALSE;
-		rob[tail].op.decbus.vstore <= FALSE;
-		rob[tail].op.decbus.vstore_ndx <= FALSE;
-		rob[tail].op.decbus.mem <= FALSE;
-//		rob[tail].op.ins <= {57'd0,OP_NOP};
-//		rob[tail].argA_v <= VAL;
-		rob[tail].argB_v <= VAL;
-		rob[tail].argC_v <= VAL;
-		rob[tail].argD_v <= VAL;
-		rob[tail].argT_v <= VAL;
-//		rob[tail].argD_v <= VAL;
-//		rob[tail].argM_v <= VAL;
-//		rob[tail].done <= {TRUE,TRUE};
+		next_robe.op.decbus.cpytgt = TRUE;
+		next_robe.op.decbus.alu = TRUE;
+		next_robe.op.decbus.fpu = FALSE;
+		next_robe.op.decbus.fc = FALSE;
+		next_robe.op.decbus.load = FALSE;
+		next_robe.op.decbus.vload = FALSE;
+		next_robe.op.decbus.vload_ndx = FALSE;
+		next_robe.op.decbus.store = FALSE;
+		next_robe.op.decbus.vstore = FALSE;
+		next_robe.op.decbus.vstore_ndx = FALSE;
+		next_robe.op.decbus.mem = FALSE;
+//		next_robe.op.ins = {57'd0,OP_NOP};
+//		next_robe.argA_v = VAL;
+		next_robe.argB_v = VAL;
+		next_robe.argC_v = VAL;
+		next_robe.argD_v = VAL;
+		next_robe.argT_v = VAL;
+//		next_robe.argD_v = VAL;
+//		next_robe.argM_v = VAL;
+//		next_robe.done = {TRUE,TRUE};
 	end
 	
 	// In the shadow of a BSR a target register may be assigned by the renamer.
 	// There is not an easy way to undo this assignment, so we keep it and modify
 	// the instruction to be a NOP operation.
 //	else if (stomp)
-//		rob[tail].op.decbus.cpytgt <= TRUE;
-	rob[tail].rat_v <= INV;
+//		next_robe.op.decbus.cpytgt = TRUE;
+	next_robe.rat_v = INV;
+	rob[tail] <= next_robe;
+	// under construction
+	// What gets put into the ROB gets put into the dispatch buffer.
+//	dbf[dtail] <= next_robe;
 end
 endtask
 

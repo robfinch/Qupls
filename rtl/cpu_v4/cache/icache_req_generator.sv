@@ -85,6 +85,9 @@ if (rst) begin
 	lfsr_cnt <= 'd0;
 	vtags <= 'd0;
 	tid <= 4'd0;
+	madr <= {$bits(wb_address_t){1'b0}};
+	padr <= {$bits(wb_address_t){1'b0}};
+	vadr <= {$bits(wb_address_t){1'b0}};
 end
 else begin
 	case(req_state)

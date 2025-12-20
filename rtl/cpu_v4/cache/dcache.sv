@@ -89,7 +89,6 @@ typedef struct packed
 	logic [3:0] resv;			// make struct a multiple of eight
 	logic v;
 	logic m;
-	cpu_types_pkg::asid_t asid;
 	cache_tag_t tag;
 	logic [cache_pkg::DCacheLineWidth-1:0] data;
 } cache_line_t;
@@ -175,7 +174,6 @@ begin
 	cline_in.m = ~cache_load;	// It is not modified if it is a fresh load.
 //	cline_in.asid <= cpu_req_i.asid;
 	cline_in.tag = cpu_req_vadr[32-1:T6];
-	cline_in.asid = 16'h0;
 	if (cache_load)
 		cline_in.data = update_data_i.dat;
 	else
@@ -385,7 +383,6 @@ else begin
 	if (dump1 & ~dump) begin
 		dump_o.v <= 1'b1;
 		dump_o.m <= 1'b0;
-		dump_o.asid <= lines[way].asid;
 		dump_o.vtag <= lines[way].tag;
 		dump_o.ptag <= ptags[way];
 		dump_o.data <= lines[way].data;

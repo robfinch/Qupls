@@ -58,7 +58,9 @@ output Qupls4_pkg::lsq_ndx_t ndx1;
 output reg ndx0v;
 output reg ndx1v;
 
-integer m,n9r,n10,col,row,q,i,n9c;
+integer m,n9r,n10,col,row,i,n9c;
+reg [3:0] q;
+
 Qupls4_pkg::rob_bitmask_t memready;
 rob_ndx_t [WINDOW_SIZE-1:0] heads;
 Qupls4_pkg::lsq_bitmask_t [1:0] memopsvalid;

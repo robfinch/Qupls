@@ -157,6 +157,7 @@ if (transfer_ready) begin
 		_4B_PTE:	pindex = miss_queue[tranbuf[sel_tran].mqndx].adr[31:12] >> (lvla * 6'd10);
 		_8B_PTE:	pindex = miss_queue[tranbuf[sel_tran].mqndx].adr[31:12] >> (lvla * 6'd9);
 		_16B_PTE:	pindex = miss_queue[tranbuf[sel_tran].mqndx].adr[31:12] >> (lvla * 6'd8);
+		default:	pindex = miss_queue[tranbuf[sel_tran].mqndx].adr[31:12] >> (lvla * 6'd9);
 		endcase
 `endif				
 `ifdef MMU_SUPPORT_8k_PAGES				
@@ -165,6 +166,7 @@ if (transfer_ready) begin
 		_4B_PTE:	pindex = miss_queue[tranbuf[sel_tran].mqndx].adr[31:13] >> (lvla * 6'd11);
 		_8B_PTE:	pindex = miss_queue[tranbuf[sel_tran].mqndx].adr[31:13] >> (lvla * 6'd10);
 		_16B_PTE:	pindex = miss_queue[tranbuf[sel_tran].mqndx].adr[31:13] >> (lvla * 6'd9);
+		default:	pindex = miss_queue[tranbuf[sel_tran].mqndx].adr[31:13] >> (lvla * 6'd10);
 		endcase
 `endif
 `ifdef MMU_SUPPORT_16k_PAGES				
@@ -173,6 +175,7 @@ if (transfer_ready) begin
 		_4B_PTE:	pindex = miss_queue[tranbuf[sel_tran].mqndx].adr[31:14] >> (lvla * 6'd12);
 		_8B_PTE:	pindex = miss_queue[tranbuf[sel_tran].mqndx].adr[31:14] >> (lvla * 6'd11);
 		_16B_PTE:	pindex = miss_queue[tranbuf[sel_tran].mqndx].adr[31:14] >> (lvla * 6'd10);
+		default:	pindex = miss_queue[tranbuf[sel_tran].mqndx].adr[31:14] >> (lvla * 6'd11);
 		endcase
 `endif				
 `ifdef MMU_SUPPORT_64k_PAGES
@@ -181,8 +184,10 @@ if (transfer_ready) begin
 		_4B_PTE:	pindex = miss_queue[tranbuf[sel_tran].mqndx].adr[31:16] >> (lvla * 6'd14);
 		_8B_PTE:	pindex = miss_queue[tranbuf[sel_tran].mqndx].adr[31:16] >> (lvla * 6'd13);
 		_16B_PTE:	pindex = miss_queue[tranbuf[sel_tran].mqndx].adr[31:16] >> (lvla * 6'd12);
+		default:    pindex = miss_queue[tranbuf[sel_tran].mqndx].adr[31:16] >> (lvla * 6'd13);
 		endcase
-`endif		
+`endif
+    default:		pindex = miss_queue[tranbuf[sel_tran].mqndx].adr[31:13] >> (lvla * 6'd10);
 	endcase
 end
 else

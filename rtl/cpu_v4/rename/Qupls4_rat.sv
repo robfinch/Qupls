@@ -139,7 +139,7 @@ input [MWIDTH*5-1:0] rnv;
 input checkpt_ndx_t [MWIDTH*5-1:0] rn_cp;
 input checkpt_ndx_t [3:0] rd_cp;
 output cpu_types_pkg::pregno_t [MWIDTH*5-1:0] prn;	// physical register name
-output cpu_types_pkg::pregno_t [NREG_RPORT-1:0] prn_i;	// physical register name
+input cpu_types_pkg::pregno_t [NREG_RPORT-1:0] prn_i;	// physical register name
 output /*reglookup_t*/ reg [NREG_RPORT-1:0] prv;											// physical register valid
 output reg [Qupls4_pkg::PREGS-1:0] restore_list;	// bit vector of registers to free on branch miss
 output reg restored;

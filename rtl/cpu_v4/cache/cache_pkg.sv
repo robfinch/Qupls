@@ -52,7 +52,6 @@ typedef struct packed
 {
 	logic v;		// valid indicator
 	logic m;		// modified indicator
-	cpu_types_pkg::asid_t asid;
 	logic [$bits(cpu_types_pkg::address_t)-1:0] vtag;	// virtual tag
 	logic [$bits(cpu_types_pkg::address_t)-1:0] ptag;	// physical tag
 	logic [DCacheLineWidth-1:0] data;
@@ -62,7 +61,6 @@ typedef struct packed
 {
 	logic [ICacheLineWidth/ICacheBundleWidth-1:0] v;	// 1 valid bit per 128 bits data
 	logic m;		// modified indicator
-	cpu_types_pkg::asid_t asid;
 	logic [$bits(cpu_types_pkg::address_t)-1:0] vtag;	// virtual tag
 	logic [$bits(cpu_types_pkg::address_t)-1:0] ptag;	// physical tag
 	logic [ICacheLineWidth-1:0] data;
