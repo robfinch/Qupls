@@ -39,11 +39,10 @@ import const_pkg::*;
 import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_pipeline_dec(rst_i, rst, clk, en, clk5x, ph4, new_cline_mux, cline,
-	restored, restore_list, unavail_list, sr, uop_num, flush_mux, flush_dec,
+module Qupls4_pipeline_dec(rst_i, rst, clk, en, clk5x, ph4, new_cline_ext, cline,
+	restored, restore_list, unavail_list, sr, uop_num, flush_ext, flush_dec,
 	tags2free, freevals, bo_wr, bo_preg,
-	stomp_dec, stomp_mux, kept_stream, pg_ext,
-	micro_machine_active_mux, micro_machine_active_dec,
+	stomp_dec, stomp_ext, kept_stream, pg_ext,
 	pg_dec,
 	mux_stallq, ren_stallq, ren_rst_busy, avail_reg,
 	predicted_correctly_o, new_address_o
@@ -55,11 +54,11 @@ input rst_i;
 input rst;
 input clk;
 input en;
-input flush_mux;
+input flush_ext;
 output reg flush_dec;
 input clk5x;
 input [4:0] ph4;
-input new_cline_mux;
+input new_cline_ext;
 input [1023:0] cline;
 input restored;
 input [Qupls4_pkg::PREGS-1:0] restore_list;
@@ -67,7 +66,7 @@ input [Qupls4_pkg::PREGS-1:0] unavail_list;
 input Qupls4_pkg::status_reg_t sr;
 input [4:0] uop_num;
 input stomp_dec;
-input stomp_mux;
+input stomp_ext;
 input pc_stream_t kept_stream;
 input Qupls4_pkg::pipeline_group_reg_t pg_ext;
 input pregno_t [3:0] tags2free;
@@ -78,14 +77,12 @@ output Qupls4_pkg::pipeline_group_reg_t pg_dec;
 output reg mux_stallq;
 output ren_stallq;
 output ren_rst_busy;
-input micro_machine_active_mux;
-output reg micro_machine_active_dec;
 output [Qupls4_pkg::PREGS-1:0] avail_reg;
 output reg predicted_correctly_o;
 output reg [63:0] new_address_o;
 
 genvar g;
-integer n1,n2,n3,n4,n5,n6,n7,n8,n9;
+integer n1,n2,n3,n4,n5,n6,n7,n8,n9,n10;
 Qupls4_pkg::pipeline_group_reg_t pg_ext_r;
 reg [31:0] carry_mod_i;
 reg [31:0] carry_mod_o;
@@ -170,7 +167,7 @@ end
 endgenerate
 
 
-reg rd_mux;
+reg rd_ext;
 reg [2:0] uop_mark [0:MAX_MICROOPS-1];
 reg [3:0] head [0:MWIDTH-1];
 reg [3:0] tail;
@@ -344,13 +341,6 @@ end
 always_comb
 	micro_machine_active_x = micro_machine_active;
 */
-always_ff @(posedge clk)
-if (rst)
-	micro_machine_active_dec <= FALSE;
-else begin
-	if (en)
-		micro_machine_active_dec <= micro_machine_active_mux;
-end
 
 /*
 always_ff @(posedge clk)
@@ -358,7 +348,7 @@ if (rst)
 	stomp_dec <= FALSE;
 else begin
 	if (en)
-		stomp_dec <= stomp_mux;
+		stomp_dec <= stomp_ext;
 end
 */
 
@@ -371,7 +361,7 @@ else begin
 	if (en) begin
 		for (n9 = 0; n9 < MWIDTH; n9 = n9 + 1) begin
 			insm[n9] <= tpr[n9];
-			if (stomp_mux && FALSE) begin
+			if (stomp_ext && FALSE) begin
 				if (tpr[n9].pc.stream!=kept_stream) begin
 					insm[n9] <= nopi;
 					insm[n9].pc.stream <= tpr[n9].pc.stream;
@@ -765,6 +755,8 @@ Stark_space_branches uspb1
 always_comb
 begin
 	pg_dec = pg_ext_r;
+	if (stomp_dec)
+		pg_dec.hdr.v <= INV;
 	pg_dec.pr[0].op.hwi_level = pg_ext_r.hdr.irq.level;
 	if (hwi_ignore) begin
 		if (pg_ext_r.hdr.irq.level != 6'd63) begin
@@ -772,37 +764,10 @@ begin
 			pg_dec.pr[0].op.hwi = 1'b0;
 		end
 	end
-	pg_dec.pr[0].op = inso[0];
-	pg_dec.pr[1].op = inso[1];
-	pg_dec.pr[2].op = inso[2];
-	pg_dec.pr[3].op = inso[3];
-end
-always_comb
-begin
-/*
-	if (pr_dec[0].ins.opcode==OP_Bcc)
-		$finish;
-	if (pr_dec[1].ins.opcode==OP_Bcc)
-		$finish;
-	if (pr_dec[2].ins.opcode==OP_Bcc)
-		$finish;
-	if (pr_dec[3].ins.opcode==OP_Bcc)
-		$finish;
-*/
-end
-
-always_comb
-begin
-/*
-	if (inso[0]_o.ins.opcode==OP_Bcc)
-		$finish;
-	if (inso[1]_o.ins.opcode==OP_Bcc)
-		$finish;
-	if (inso[2]_o.ins.opcode==OP_Bcc)
-		$finish;
-	if (inso[3]_o.ins.opcode==OP_Bcc)
-		$finish;
-*/
+	foreach (pg_dec.pr[n10]) begin
+		pg_dec.pr[n10].v = !stomp_dec;
+		pg_dec.pr[n10].op = inso[n10];
+	end
 end
 
 always_ff @(posedge clk)
@@ -810,7 +775,7 @@ if (rst)
 	flush_dec <= 1'b0;
 else begin
 	if (en)
-		flush_dec <= flush_mux;
+		flush_dec <= flush_ext;
 end
 
 endmodule

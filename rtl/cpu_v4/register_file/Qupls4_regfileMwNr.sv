@@ -120,13 +120,17 @@ generate begin : gRFO
 		end
 		always_comb
 		begin
-			o[g] = o0[WPORTS-1][g];
-			to[g] = to0[WPORTS-1][g];
 			for (n1 = 0; n1 < WPORTS*2-1; n1 = n1 + 1)
 				if (cnd[n1]) begin
 					o[g] = val[n1][g];
 					to[g] = tag[n1][g];
 				end
+				/* One condition is always valid.
+				else begin
+					o[g] = o0[WPORTS-1][g];
+					to[g] = to0[WPORTS-1][g];
+				end
+				*/
 			end
 		end
 	end

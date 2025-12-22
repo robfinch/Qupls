@@ -44,9 +44,9 @@ module Qupls4_stomp(rst, clk, ihit, advance_pipeline, advance_pipeline_seg2,
 //	irq_in_pipe, di_inst,
 	dep_stream,
 	branch_resolved, branchmiss, found_destination, destination_rndx,
-	do_bsr, misspc, predicted_correctly_dec, predicted_match_mux,
-	pc, pc_f, pc_fet, pc_mux, pc_dec, pc_ren,
-	stomp_fet, stomp_mux, stomp_dec, stomp_ren, stomp_que, stomp_quem,
+	do_bsr, misspc, predicted_correctly_dec, predicted_match_ext,
+	pc, pc_f, pc_fet, pc_ext, pc_dec, pc_ren,
+	stomp_fet, stomp_ext, stomp_dec, stomp_ren, stomp_que, stomp_quem,
 	fcu_idv, fcu_id, missid, kept_stream, takb, rob, robentry_stomp
 	);
 input rst;
@@ -63,16 +63,16 @@ input branchmiss;
 input do_bsr;
 input pc_address_ex_t misspc;
 input predicted_correctly_dec;
-input predicted_match_mux;
+input predicted_match_ext;
 input pc_address_ex_t pc;
 input pc_address_ex_t pc_f;
 input pc_address_ex_t pc_fet;
-input pc_address_ex_t pc_mux;
+input pc_address_ex_t pc_ext;
 input pc_address_ex_t pc_dec;
 input pc_address_ex_t pc_ren;
 input [XSTREAMS-1:0] dep_stream [0:XSTREAMS-1];
 output reg stomp_fet;
-output reg stomp_mux;			// IRQ / micro-code Mux stage
+output reg stomp_ext;			// IRQ / micro-code Mux stage
 output reg stomp_dec;
 output reg stomp_ren;
 output reg stomp_que;
@@ -90,13 +90,13 @@ pc_address_ex_t [4:0] misspcr;
 reg stomp_aln;
 reg stomp_alnr;
 reg stomp_fetr;
-reg stomp_muxr;
+reg stomp_extr;
 reg stomp_decr;
 reg stomp_renr;
 reg stomp_quer;
 reg stomp_rrr;
 reg stomp_quemr;
-reg do_bsr_mux;
+reg do_bsr_ext;
 reg do_bsr_dec;
 reg do_bsr_ren;
 reg do_bsr_que;
@@ -108,8 +108,8 @@ reg [3:0] spl;
 wire pe_stomp_pipeline;
 always_comb
 	stomp_pipeline = (branchmiss && !found_destination);
-wire next_stomp_mux = (stomp_fet) || stomp_pipeline || do_bsr;
-wire next_stomp_dec = (stomp_mux) || stomp_pipeline;
+wire next_stomp_ext = (stomp_fet) || stomp_pipeline || do_bsr;
+wire next_stomp_dec = (stomp_ext) || stomp_pipeline;
 wire next_stomp_ren = (stomp_dec) || stomp_pipeline;
 wire next_stomp_quem = (stomp_ren) || stomp_pipeline;
 
@@ -163,23 +163,23 @@ end
 /*
 wire hwi_at_ren = di_inst && pg_ren.hwi;
 wire hwi_at_dec = di_inst && pg_dec.hwi;
-wire hwi_at_mux = di_inst && pg_mux.hwi;
+wire hwi_at_ext = di_inst && pg_ext.hwi;
 wire hwi_at_fet = di_inst && ic_irq;
 wire hwi_at_aln = di_inst && hirq;
 */
 // kept_stream is the stream we want to keep.
 always_comb
 	stomp_aln = stomped[pc.stream] ||
-		(pe_stomp_pipeline || stomp_alnr || !predicted_match_mux || !predicted_correctly_dec) && (pc.pc != misspcr[0].pc);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_fet && !hwi_at_aln;
+		(pe_stomp_pipeline || stomp_alnr || !predicted_match_ext || !predicted_correctly_dec) && (pc.pc != misspcr[0].pc);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_fet && !hwi_at_aln;
 always_comb
 	stomp_fet = stomped[pc_f.stream] ||
-		(pe_stomp_pipeline || stomp_fetr || !predicted_match_mux || !predicted_correctly_dec) && (pc_f.pc != misspcr[1].pc);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_fet;
+		(pe_stomp_pipeline || stomp_fetr || !predicted_match_ext || !predicted_correctly_dec) && (pc_f.pc != misspcr[1].pc);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_fet;
 always_comb
-	stomp_mux = stomped[pc_fet.stream] ||
-		(pe_stomp_pipeline || stomp_muxr || !predicted_match_mux || !predicted_correctly_dec) && (pc_fet.pc != misspcr[2].pc);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_mux;
+	stomp_ext = stomped[pc_fet.stream] ||
+		(pe_stomp_pipeline || stomp_extr || !predicted_match_ext || !predicted_correctly_dec) && (pc_fet.pc != misspcr[2].pc);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_ext;
 always_comb
-	stomp_dec = stomped[pc_mux.stream] ||
-	 (pe_stomp_pipeline || stomp_decr || !predicted_correctly_dec) && (pc_mux.pc != misspcr[3].pc);// && !hwi_at_ren && !hwi_at_dec;
+	stomp_dec = stomped[pc_ext.stream] ||
+	 (pe_stomp_pipeline || stomp_decr || !predicted_correctly_dec) && (pc_ext.pc != misspcr[3].pc);// && !hwi_at_ren && !hwi_at_dec;
 always_comb
 	stomp_ren = stomped[pc_dec.stream] ||
 		(pe_stomp_pipeline || stomp_renr) && (pc_dec.pc != misspcr[4].pc);// && !hwi_at_ren;
@@ -194,7 +194,7 @@ always_ff @(posedge clk)
 if (rst) begin
 	stomp_alnr <= FALSE;
 	stomp_fetr <= TRUE;
-	stomp_muxr <= TRUE;
+	stomp_extr <= TRUE;
 	stomp_decr <= TRUE;
 	stomp_renr <= TRUE;
 	ff1 <= FALSE;
@@ -222,15 +222,15 @@ else begin
 	end
 
 	if (advance_pipeline|pe_stomp_pipeline) begin
-		do_bsr_mux <= do_bsr;
+		do_bsr_ext <= do_bsr;
 		if (pe_stomp_pipeline)
-			stomp_muxr <= TRUE;
-		else if (pc_fet.pc == misspcr[2].pc || !stomp_fet) // (next_stomp_mux)
-			stomp_muxr <= FALSE;
+			stomp_extr <= TRUE;
+		else if (pc_fet.pc == misspcr[2].pc || !stomp_fet) // (next_stomp_ext)
+			stomp_extr <= FALSE;
 //		else
-//			stomp_muxr <= stomp_fet;
+//			stomp_extr <= stomp_fet;
 		if (!ff1)
-			stomp_muxr <= stomp_fet;
+			stomp_extr <= stomp_fet;
 	end
 
 // If a micro-code instruction is decoded stomp on the next decode stage.
@@ -238,13 +238,13 @@ else begin
 // would be propagated to decode before the micro-code becomes active.
 
 	if (advance_pipeline|pe_stomp_pipeline) begin
-		do_bsr_dec <= do_bsr_mux;
+		do_bsr_dec <= do_bsr_ext;
 		if (pe_stomp_pipeline)
 			stomp_decr <= TRUE;
-		else if (pc_mux.pc == misspcr[3].pc || !stomp_mux)
+		else if (pc_ext.pc == misspcr[3].pc || !stomp_ext)
 			stomp_decr <= FALSE;
 		if (!ff1)
-			stomp_decr <= stomp_mux;
+			stomp_decr <= stomp_ext;
 	end
 
 	if (advance_pipeline_seg2|pe_stomp_pipeline) begin

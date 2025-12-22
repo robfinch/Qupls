@@ -82,10 +82,12 @@ fpCvt32To64 ucvt32x64b(cnst2[31:0], imm32x64b);
 fpCvt32To64 ucvt32x64C(cnst3[31:0], imm32x64c);
 */
 reg [47:0] cpfx [0:7];
+reg [1:0] wh, q;
 
 genvar g;
 generate begin : gCpfx
 	for (g = 0; g < 8; g = g + 1)
+	   always_comb
 		cpfx[g] = instr_raw[g*48+47:g*48];
 end
 endgenerate
@@ -195,20 +197,21 @@ begin
 	endcase
 
 	foreach (cpfx[n])
-		if (cpfx[n][7:0]==8'h127) begin
+		if (cpfx[n][7:0]==8'd127) begin
 			wh = cpfx[n][9:8];
 			q = cpfx[n][11:10];
 			case({q,wh})
-			4'b0000:	begin imma = {32{cpfx[n][47]}},cpfx[n][47:16]}; has_imma = TRUE; end
-			4'b0001:	begin immb = {32{cpfx[n][47]}},cpfx[n][47:16]}; has_immb = TRUE; end
-			4'b0010:	begin immc = {32{cpfx[n][47]}},cpfx[n][47:16]}; has_immc = TRUE; end
-			4'b0011:	begin immd = {32{cpfx[n][47]}},cpfx[n][47:16]}; has_immd = TRUE; end
+			4'b0000:	begin imma = {{32{cpfx[n][47]}},cpfx[n][47:16]}; has_imma = TRUE; end
+			4'b0001:	begin immb = {{32{cpfx[n][47]}},cpfx[n][47:16]}; has_immb = TRUE; end
+			4'b0010:	begin immc = {{32{cpfx[n][47]}},cpfx[n][47:16]}; has_immc = TRUE; end
+			4'b0011:	begin immd = {{32{cpfx[n][47]}},cpfx[n][47:16]}; has_immd = TRUE; end
 			4'b0100:	begin imma = {cpfx[n][47:16],imma[31:0]}; has_imma = TRUE; end
 			4'b0101:	begin immb = {cpfx[n][47:16],immb[31:0]}; has_immb = TRUE; end
 			4'b0110:	begin immc = {cpfx[n][47:16],immc[31:0]}; has_immc = TRUE; end
 			4'b0111:	begin immd = {cpfx[n][47:16],immd[31:0]}; has_immd = TRUE; end
 			default:	;
 			endcase
+		end
 
 end
 

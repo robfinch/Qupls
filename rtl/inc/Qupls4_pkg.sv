@@ -118,6 +118,10 @@ parameter RENAMER = 4;
 // =============================================================================
 // =============================================================================
 
+// 1=out of order dispatch, maybe better performance, but huge size
+// 0=in-order pipeline unit, much smaller but may stall
+parameter DISPATCH_STRATEGY = 0;
+
 // Register lookup strategy used by the reservation stations for missing data.
 // 0=use register file write port history
 // 1=use extra register file read ports
@@ -1723,7 +1727,8 @@ typedef struct packed {
 //	logic dchit;
 	memsz_t memsz;				// indicates size of data
 	logic [7:0] bytcnt;		// byte count of data to load/store
-	logic [6:0] shift;		// amount to shift data
+	logic [6:0] shift;		// amount to shift data (0 to 64)
+	logic [6:0] shift2;		// amount to shift data for second cycle.
 	cpu_types_pkg::pregno_t Rt;
 	cpu_types_pkg::aregno_t aRt;					// reference for freeing
 	logic aRtz;
@@ -1901,7 +1906,7 @@ typedef struct packed {
 	cpu_types_pkg::pc_address_ex_t pc;
 //	logic [63:0] pch;
 	cpu_types_pkg::value_t argI;
-	operand_t [6:0] arg;						// +1 for status
+	operand_t [6:0] arg;						// +1 for status A,B,C,T,D,T,S,T2
 //	operand_t [NOPER:0] argH;			// high order 64-bits of 128-bit arg
 } reservation_station_entry_t;
 

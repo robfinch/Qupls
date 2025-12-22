@@ -41,7 +41,7 @@ import Qupls4_pkg::*;
 module Qupls4_btb(rst, clk, en, clk_en, nmi, nmi_addr, irq, irq_addr,
 	rclk, micro_machine_active, get_next_pc, advance_pc,
 	igrp, length_byte, predicted_correctly_dec, new_address_dec,
-	new_address_mux,
+	new_address_ext,
 	pc, pc0, pc1, pc2, pc3, pc4, next_pc, p_override, po_bno,
 	takb0, takb1, takb2, takb3, do_bsr, bsr_tgt, do_ret, ret_pc,
 	do_call,
@@ -85,7 +85,7 @@ output reg takb0;
 output reg takb1;
 output reg takb2;
 output reg takb3;
-input pc_address_ex_t new_address_mux;
+input pc_address_ex_t new_address_ext;
 input predicted_correctly_dec;
 input pc_address_ex_t new_address_dec;
 input do_bsr;
@@ -605,7 +605,7 @@ else begin
 	else if (!predicted_correctly_dec)
 		next_pcs[act_stream] = new_address_dec;
 	else if (|p_override)
-		next_pcs[act_stream] = new_address_mux;
+		next_pcs[act_stream] = new_address_ext;
 	// bsr/jsr
 	else if (do_bsr)
 		next_pcs[bsr_tgt.stream] = bsr_tgt;

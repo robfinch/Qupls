@@ -548,7 +548,7 @@ if (advance_pipeline_seg2)
 generate begin : gPg_ren
 always_ff @(posedge clk)
 if (rst) begin
-	for (n7 = 0; n7 < MWIDTH; n7 = n7 + 1) begin
+	foreach (pg_ren.pr[n7]) begin
 		pg_ren.hdr <= {$bits(Qupls4_pkg::pipeline_group_hdr_t){1'b0}};
 		pg_ren.pr[n7] <= {$bits(Qupls4_pkg::rob_entry_t){1'b0}};
 		pg_ren.pr[n7].op <= nopi;
@@ -556,7 +556,11 @@ if (rst) begin
 end
 else begin
 	if (en) begin
+		pg_ren.hdr <= pg_dec.hdr;
 		pg_ren.hdr.cndx <= cndx;
+		pg_ren.hdr.cndxv <= VAL;
+		if (stomp_ren)
+			pg_ren.hdr.v <= INV;
 		pg_ren.pr[0] <= pg_dec.pr[0];
 		if (pg_dec.pr[0].v & ~stomp_ren) begin
 			pg_ren.pr[0].op.nRd <= Rt0_dec;
@@ -709,7 +713,7 @@ task tInvalidateRen;
 input pc_stream_t bno;
 integer nn;
 begin
-	for (nn = 0; nn < MWIDTH; nn = nn + 1) begin
+	foreach (pg_ren.pr[nn]) begin
 		if (pg_ren.pr[nn].op.pc.stream!=bno) begin
 			pg_ren.pr[nn].op.excv <= INV;
 			if (Qupls4_pkg::SUPPORT_BACKOUT)

@@ -179,7 +179,7 @@ end
 
 always_ff @(posedge clk)
 if (rst)
-	ic_line_fet <= {128{2'd3,Qupls4_pkg::OP_NOP}};
+	ic_line_fet <= {128{1'd1,Qupls4_pkg::OP_NOP}};
 else begin
 	if (!rstcnt[2])
 		ic_line_fet <= {128{1'd1,Qupls4_pkg::OP_NOP}};
@@ -187,7 +187,7 @@ else begin
 		if (inject_cl)
 			ic_line_fet <= {{64{2'd3,Qupls4_pkg::OP_NOP}},inj_line_i};
 		else if (!ihit || (stomp_fet && pc_i.stream!=kept_stream) || nmi_i || flush_i)
-			ic_line_fet <= {128{2'd3,Qupls4_pkg::OP_NOP}};
+			ic_line_fet <= {128{1'd1,Qupls4_pkg::OP_NOP}};
 		else
 			ic_line_fet <= ic_line_i;
 	end

@@ -41,7 +41,7 @@ import Qupls4_pkg::*;
 module Qupls4_decode_Rs1(om, instr, instr_raw, has_imma, Rs1, Rs1z, exc);
 input Qupls4_pkg::operating_mode_t om;
 input Qupls4_pkg::micro_op_t instr;
-input [335:0] instr_raw;
+input [431:0] instr_raw;
 input has_imma;
 output aregno_t Rs1;
 output reg Rs1z;
@@ -51,7 +51,7 @@ Qupls4_pkg::operating_mode_t om1;
 
 function aregno_t fnRs1;
 input Qupls4_pkg::micro_op_t ins;
-input [335:0] instr_raw;
+input [431:0] instr_raw;
 input has_imma;
 Qupls4_pkg::micro_op_t ir;
 reg has_rext;
