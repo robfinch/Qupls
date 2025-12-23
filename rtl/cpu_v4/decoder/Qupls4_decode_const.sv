@@ -83,12 +83,13 @@ fpCvt32To64 ucvt32x64C(cnst3[31:0], imm32x64c);
 */
 reg [47:0] cpfx [0:7];
 reg [1:0] wh, q;
+reg [7:0] vpfx;					// valid postfix indicator
 
 genvar g;
 generate begin : gCpfx
 	for (g = 0; g < 8; g = g + 1)
 	   always_comb
-		cpfx[g] = instr_raw[g*48+47:g*48];
+		cpfx[g] = instr_raw[g*48+47+48:g*48+48];
 end
 endgenerate
 
@@ -196,8 +197,23 @@ begin
 		immb = 64'd0;
 	endcase
 
+	// Limit of four postfixes
+	vpfx = 8'h00;
+	if (cpfx[0][7:0]==8'd127) begin
+		vpfx[0] = VAL;
+	if (cpfx[1][7:0]==8'd127) begin
+		vpfx[1] = VAL;
+	if (cpfx[2][7:0]==8'd127) begin
+		vpfx[2] = VAL;
+	if (cpfx[3][7:0]==8'd127) begin
+		vpfx[3] = VAL;
+	end
+	end
+	end
+	end
+
 	foreach (cpfx[n])
-		if (cpfx[n][7:0]==8'd127) begin
+		if (cpfx[n][7:0]==8'd127 && vpfx[n]) begin
 			wh = cpfx[n][9:8];
 			q = cpfx[n][11:10];
 			case({q,wh})

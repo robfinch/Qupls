@@ -77,6 +77,7 @@ parameter ISTACK_DEPTH = 16;
 parameter DISPATCH_WIDTH = 6;
 parameter RL_STRATEGY = Qupls4_pkg::RL_STRATEGY;
 localparam NREG_RPORTS = RL_STRATEGY==1 ? 12 : MWIDTH*4;
+parameter NREG_WPORTS = Qupls4_pkg::NREG_WPORTS;
 localparam RS_NREG_RPORTS = RL_STRATEGY==0 ? 0 : 12;
 input [63:0] coreno_i;
 input rst_i;
@@ -536,7 +537,7 @@ always_comb
 wire imul0_sc_done;		// single-cyle op done
 wire imul0_sc_done2;		// pipeline delayed version of above
 reg imul0_stomp;
-reg imul0_available;
+reg imul0_available = 1'b1;
 reg imul0_dataready;
 Qupls4_pkg::ex_instruction_t imul0_instr;
 wire imul0_div;
@@ -2628,7 +2629,7 @@ if (RL_STRATEGY==0) begin
 		.wp_tap_o(wp_tap)
 	);
 end	else
-	Qupls4_read_port_select #(.NPORTO(2*4), .NPORTI(16*4)) urps1
+	Qupls4_read_port_select #(.NPORTO(NREG_RPORTS), .NPORTI(16*4)) urps1
 	(
 		.rst(irst),
 		.clk(clk),
@@ -3204,45 +3205,10 @@ always_comb wt10A = dram0_oper.oper.v && dram0_oper.oper.aRnv;
 always_comb wt11A = dram1_oper.oper.v && dram1_oper.oper.aRnv && Qupls4_pkg::NDATA_PORTS > 1;
 always_comb wt12A = !fpu0_rse2.aRdv && !fpu0_idle && Qupls4_pkg::NFPU > 0;
 
-wire [4:0] upd1a,upd2a,upd3a,upd4a,upd5a,upd6a;
-reg [4:0] upd1, upd2, upd3, upd4, upd5, upd6;
-reg [4:0] fuq_rot;
 
-// Look for queues containing values, and select from a queue using a rotating selector.
-reg [12:0] fuq_empty, fuq_empty_rot;
-always_comb
-	fuq_empty_rot = ({fuq_empty,fuq_empty} << fuq_rot) >> 5'd13;
-
-ffo24 uffov1 (.i({11'h0,~fuq_empty_rot}), .o(upd1a));
-ffo24 uffov2 (.i({11'h0,~fuq_empty_rot} & ~(24'd1 << upd1a)), .o(upd2a));
-ffo24 uffov3 (.i({11'h0,~fuq_empty_rot} & ~(24'd1 << upd1a) & ~(24'd1 << upd2a)), .o(upd3a));
-ffo24 uffov4 (.i({11'h0,~fuq_empty_rot} & ~(24'd1 << upd1a) & ~(24'd1 << upd2a) & ~(24'd1 << upd3a)), .o(upd4a));
-`ifdef SIXPORT_FILE
-ffo24 uffov5 (.i({11'h0,~fuq_empty_rot} & ~(24'd1 << upd1a) & ~(24'd1 << upd2a) & ~(24'd1 << upd3a) & ~(24'd1 << upd4a)), .o(upd5a));
-ffo24 uffov6 (.i({11'h0,~fuq_empty_rot} & ~(24'd1 << upd1a) & ~(24'd1 << upd2a) & ~(24'd1 << upd3a) & ~(24'd1 << upd4a) & ~(24'd1 << upd5a)), .o(upd6a));
-`endif
-
-// mod 12 counter - rotate the queue selection
-always_ff @(posedge clk)
-if (irst)
-	fuq_rot <= 5'd0;
-else begin
-	fuq_rot <= fuq_rot + 2'd1;
-	if (fuq_rot == 5'd11)
-		fuq_rot <= 5'd0;
-end
-
-// If upd1a did not find anything to update, then neither will any of the subsequest ones.
-always_ff @(posedge clk) upd1 = upd1a==5'd31 ? 5'd31 : fuq_rot > upd1a ? 6'd13 + upd1a - fuq_rot : upd1a - fuq_rot;
-always_ff @(posedge clk) upd2 = upd2a==5'd31 ? 5'd31 : fuq_rot > upd2a ? 6'd13 + upd2a - fuq_rot : upd2a - fuq_rot;
-always_ff @(posedge clk) upd3 = upd3a==5'd31 ? 5'd31 : fuq_rot > upd3a ? 6'd13 + upd3a - fuq_rot : upd3a - fuq_rot;
-always_ff @(posedge clk) upd4 = upd4a==5'd31 ? 5'd31 : fuq_rot > upd4a ? 6'd13 + upd4a - fuq_rot : upd4a - fuq_rot;
-`ifdef SIXPORT_FILE
-always_ff @(posedge clk) upd5 = upd5a==5'd31 ? 5'd31 : fuq_rot > upd5a ? 6'd13 + upd5a - fuq_rot : upd5a - fuq_rot;
-always_ff @(posedge clk) upd6 = upd6a==5'd31 ? 5'd31 : fuq_rot > upd6a ? 6'd13 + upd6a - fuq_rot : upd6a - fuq_rot;
-`endif
-
-// Read the next queue entry for the queue jsut used to update the register file.
+// Functional unit result queues management variables.
+reg [12:0] fuq_empty;
+wire [4:0] frq_upd [0:MWIDTH-1];
 reg [12:0] fuq_rd;
 wire [8:0] fuq_we [0:12];
 pregno_t [12:0] fuq_pRt;
@@ -3251,19 +3217,22 @@ wire [7:0] fuq_tag [0:12];
 value_t [12:0] fuq_res;
 wire [3:0] fuq_cp [0:12];
 
-always_ff @(posedge clk)
-if (irst)
-	fuq_rd <= 13'd0;
-else begin
-	fuq_rd <= 13'b0;
-	
-	fuq_rd[upd1] <= upd1!=5'd31;
-	fuq_rd[upd2] <= upd2!=5'd31;
-	fuq_rd[upd3] <= upd3!=5'd31;
-	fuq_rd[upd4] <= upd4!=5'd31;
-//	fuq_rd[upd5] <= upd5!=5'd31;
-//	fuq_rd[upd6] <= upd6!=5'd31;
-end
+// Look for queues containing values, and select from a queue using a rotating selector.
+Qupls4_frq_select
+#(
+	.NFRQ(13),
+	.NWRITE_PORTS(NREG_WPORTS)
+)
+ufrqsel1
+(
+	.rst(irst),
+	.clk(clk),
+	.frq_empty(fuq_empty),
+	.upd(frq_upd),
+	.upd_bitmap(fuq_rd)
+);
+
+// Read the next queue entry for the queue just used to update the register file.
 
 // Queue the outputs of the functional units.
 // Results that have been stomped on are not queued.
@@ -3572,66 +3541,19 @@ endgenerate
 
 // Mux the queue outputs onto the register file inputs.
 generate begin : gWrPort
-always_ff @(posedge clk) wrport0_v[0] <= !fuq_empty[upd1];
-always_ff @(posedge clk) wrport0_we[0] <= fuq_we[upd1]; 
-always_ff @(posedge clk) wrport0_Rt[0] <= fuq_pRt[upd1]; 
-always_ff @(posedge clk) wrport0_aRt[0] <= fuq_aRt[upd1]; 
-always_ff @(posedge clk) wrport0_res[0] <= fuq_res[upd1]; 
-always_ff @(posedge clk) wrport0_cp[0] <= fuq_cp[upd1]; 
-always_ff @(posedge clk) wrport0_tag[0] <= fuq_tag[upd1]; 
-
-if (MWIDTH > 1) begin
-always_ff @(posedge clk) wrport0_v[1] <= !fuq_empty[upd2];
-always_ff @(posedge clk) wrport0_we[1] <= fuq_we[upd2]; 
-always_ff @(posedge clk) wrport0_Rt[1] <= fuq_pRt[upd2]; 
-always_ff @(posedge clk) wrport0_aRt[1] <= fuq_aRt[upd2]; 
-always_ff @(posedge clk) wrport0_res[1] <= fuq_res[upd2]; 
-always_ff @(posedge clk) wrport0_cp[1] <= fuq_cp[upd2]; 
-always_ff @(posedge clk) wrport0_tag[1] <= fuq_tag[upd2]; 
-end
-
-if (MWIDTH > 2) begin
-always_ff @(posedge clk) wrport0_v[2] <= !fuq_empty[upd3];
-always_ff @(posedge clk) wrport0_we[2] <= fuq_we[upd3]; 
-always_ff @(posedge clk) wrport0_Rt[2] <= fuq_pRt[upd3]; 
-always_ff @(posedge clk) wrport0_aRt[2] <= fuq_aRt[upd3]; 
-always_ff @(posedge clk) wrport0_res[2] <= fuq_res[upd3]; 
-always_ff @(posedge clk) wrport0_cp[2] <= fuq_cp[upd3]; 
-always_ff @(posedge clk) wrport0_tag[2] <= fuq_tag[upd3]; 
-end
-
-if (MWIDTH > 3) begin
-always_ff @(posedge clk) wrport0_v[3] <= !fuq_empty[upd4];
-always_ff @(posedge clk) wrport0_we[3] <= fuq_we[upd4]; 
-always_ff @(posedge clk) wrport0_Rt[3] <= fuq_pRt[upd4]; 
-always_ff @(posedge clk) wrport0_aRt[3] <= fuq_aRt[upd4]; 
-always_ff @(posedge clk) wrport0_res[3] <= fuq_res[upd4]; 
-always_ff @(posedge clk) wrport0_cp[3] <= fuq_cp[upd4]; 
-always_ff @(posedge clk) wrport0_tag[3] <= fuq_tag[upd4]; 
-end
-
-end
+	for (g = 0; g < NREG_WPORTS; g = g + 1) begin
+		always_ff @(posedge clk) wrport0_v[g] <= !fuq_empty[frq_upd[g]];
+		always_ff @(posedge clk) wrport0_we[g] <= fuq_we[frq_upd[g]]; 
+		always_ff @(posedge clk) wrport0_Rt[g] <= fuq_pRt[frq_upd[g]]; 
+		always_ff @(posedge clk) wrport0_aRt[g] <= fuq_aRt[frq_upd[g]]; 
+		always_ff @(posedge clk) wrport0_res[g] <= fuq_res[frq_upd[g]]; 
+		always_ff @(posedge clk) wrport0_cp[g] <= fuq_cp[frq_upd[g]]; 
+		always_ff @(posedge clk) wrport0_tag[g] <= fuq_tag[frq_upd[g]]; 
+	end
+end 
 endgenerate
 
-`ifdef SIXPORT_FILE
-always_ff @(posedge clk) wrport4_v <= !fuq_empty[upd5];
-always_ff @(posedge clk) wrport4_we <= fuq_we[upd5]; 
-always_ff @(posedge clk) wrport4_Rt <= fuq_pRt[upd5];
-always_ff @(posedge clk) wrport4_aRt <= fuq_aRt[upd5]; 
-always_ff @(posedge clk) wrport4_res <= fuq_res[upd5]; 
-always_ff @(posedge clk) wrport4_cp <= fuq_cp[upd5]; 
-always_ff @(posedge clk) wrport4_tag <= fuq_tag[upd5]; 
-
-always_ff @(posedge clk) wrport5_v <= !fuq_empty[upd6];
-always_ff @(posedge clk) wrport5_we <= fuq_we[upd6]; 
-always_ff @(posedge clk) wrport5_Rt <= fuq_pRt[upd6];
-always_ff @(posedge clk) wrport5_aRt <= fuq_aRt[upd6]; 
-always_ff @(posedge clk) wrport5_res <= fuq_res[upd6]; 
-always_ff @(posedge clk) wrport5_cp <= fuq_cp[upd6];
-always_ff @(posedge clk) wrport5_tag <= fuq_tag[upd6]; 
-`endif
-
-Qupls4_regfileMwNr #(.RPORTS(NREG_RPORTS), .WPORTS(MWIDTH)) urf1 (
+Qupls4_regfileMwNr #(.RPORTS(NREG_RPORTS), .WPORTS(NREG_WPORTS)) urf1 (
 	.rst(irst),
 	.clk(clk), 
 	.wr(wrport0_v),
@@ -3646,7 +3568,7 @@ Qupls4_regfileMwNr #(.RPORTS(NREG_RPORTS), .WPORTS(MWIDTH)) urf1 (
 
 always_ff @(posedge clk)
 begin
-	for (n44 = 0; n44 < MWIDTH; n44 = n44 + 1)
+	for (n44 = 0; n44 < NREG_WPORTS; n44 = n44 + 1)
 		$display("wr%d:%d Rt=%d/%d res=%x",// sc_done=%d Rtz2=%d",
 			n44[2:0], wrport0_v[n44], wrport0_aRt[n44], wrport0_Rt[n44], wrport0_res[n44]);//, sau0_sc_done2[n44], sau0_aRdv2[n44]);
 end
@@ -4169,6 +4091,7 @@ Qupls4_meta_imul uimul0
 (
 	.rst(irst),
 	.clk(clk),
+	.stomp(robentry_stomp),
 	.rse_i(imul0_rse),
 	.rse_o(imul0_rse2),
 	.lane(3'd0),

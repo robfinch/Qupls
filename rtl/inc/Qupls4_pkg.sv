@@ -284,6 +284,12 @@ parameter REGFILE_LATENCY = 2;
 // means an average of eight ports per cycle.
 parameter NREG_RPORTS = MWIDTH*5;
 
+// Number of register write ports. Mort ports allows more simultabeous writes
+// and may increase performance. The default is set to the machine width.
+// Note: not all instruction write the register file so it may be possible
+// to use fewer write ports without losing too much performance.
+parameter NREG_WPORTS = MWIDTH;
+
 // Number of data ports should be 1 or 2. 2 ports will allow two simulataneous
 // reads, but still only a single write.
 parameter NDATA_PORTS = 1;
