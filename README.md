@@ -10,7 +10,10 @@ Qupls4 is the most recently worked on version. Qupls4 is the 2025 version of the
 Qupls4 is the most recently worked on version beginning in November 2025. Work started on Qupls2 in February of 2025; then Qupls3 started in March. Work started on Qupls in November of 2023. Many years of work have gone into prior CPUs.
 
 ### Recent Additions
-Provision for capabilities instructions were added to the instruction set. The capabilities version of the core requires 128-bit registers as a 64-bit capability is part of the register. This increases the size of the core considerably and turns Qupls into a 128-bit machine.
+The more recent addition is multiple threads of execution, and multiple streams (branch paths) of execution.
+Provision for capabilities instructions were added to the instruction set.
+The capabilities version of the core requires 128-bit registers as a 64-bit capability is part of the register.
+This increases the size of the core considerably and turns Qupls into a 128-bit machine.
 
 ### Features Superscalar Out-of-Order version (Qupls4.sv)
 * Fixed 48-bit length instruction set.
@@ -30,6 +33,7 @@ Provision for capabilities instructions were added to the instruction set. The c
 * 4-way Out-of-order execution of instructions
 * 1024 entry, three way TLB for virtual memory support, shared between instruction and data
 * Message signaled interrupt handling.
+* Multiple threads/streams of execution.
 
 ## Out-of-Order Version
 ### Status
@@ -41,6 +45,18 @@ The most recent major change to the ISA was a switch back to fixed length instru
 r0 is now a general-purpose register except when used as a base or index register for an address calculation in which case the value zero is used.
 There should not be a signficant effect on the performance caused by reducing the number of registers.
 Micro-code has been removed.
+
+### Threads / Streams
+In the works is support for multiple threads and streams of execution.
+The core may support multiple threads of execution.
+* Each thread has its own set of registers.
+Increasing the number of threads beyond a small number will need to increase the physical register file size, potentially causing performance loss.
+* Number of threads supported is a core parameter.
+* Alternate path fetching (APF) for branches may be supported.
+* Currently the core chooses threads to run based on a thread weight (or probability) register. 
+* A randomly generated value must be less than the weight for the thread to be selected to run.
+* Any stream may be choosen to run at 1/8 probability estabished by the weights register to allow alternate paths to progress.
+This is overridden by the thread selection above.
 
 ### Register File
 The register file is 12r4w (12 read ports and 4 write ports). Previously the register file was 16r4w but the extra four ports are not needed most of the time.
@@ -259,3 +275,12 @@ All components germaine to Qupls begin with name prefix "Qupls" and are in the Q
 
 Qupls4.sv is the top level for the CPU. Minimum of about 200k LUTs.
 Qupls4_mpu.sv is the top level for the MPU which contains the CPU, timers, and interrupt controller.
+
+# Issues
+* Instructions are too wide. The instruction set has been simply designed, having almost some VLIW aspects to it.
+It would be better if instructions were 32-bit.
+48-bits is 50% wider than 32, however some instruction sequences requiring two instruction in a 32-bit ISA can be done using only a single instruction.
+So, code is somewhat less than 50% more.
+* Dual-operation instructions are not used very often. They consume LUT resources and likely extra power.
+* Core does not work yet, a long ways to go.
+* No software yet.
