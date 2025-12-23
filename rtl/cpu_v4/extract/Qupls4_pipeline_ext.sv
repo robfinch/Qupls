@@ -112,7 +112,7 @@ output reg do_call;
 input get;
 input mux_stallq;
 output reg fet_stallq;
-input [4:0] new_stream;
+input pc_stream_t [THREADS-1:0] new_stream;
 output reg alloc_stream;
 
 genvar g;
@@ -438,7 +438,7 @@ begin
 		if (pt_ext[0] || ~bcc0)
 			bsr_tgt.stream = pc0_fet.stream;
 		else begin
-			bsr_tgt.stream = new_stream;
+			bsr_tgt.stream = new_stream[bsr_tgt.stream.thread].stream;
 			alloc_stream = 1'b1;
 		end
 	end
@@ -447,7 +447,7 @@ begin
 		if (pt_ext[1] || ~bcc1)
 			bsr_tgt.stream = pc0_fet.stream;
 		else begin
-			bsr_tgt.stream = new_stream;
+			bsr_tgt.stream = new_stream[bsr_tgt.stream.thread].stream;
 			alloc_stream = 1'b1;
 		end
 	end
@@ -456,7 +456,7 @@ begin
 		if (pt_ext[2] || ~bcc2)
 			bsr_tgt.stream = pc0_fet.stream;
 		else begin
-			bsr_tgt.stream = new_stream;
+			bsr_tgt.stream = new_stream[bsr_tgt.stream.thread].stream;
 			alloc_stream = 1'b1;
 		end
 	end
@@ -465,7 +465,7 @@ begin
 		if (pt_ext[3] || ~bcc3)
 			bsr_tgt.stream = pc0_fet.stream;
 		else begin
-			bsr_tgt.stream = new_stream;
+			bsr_tgt.stream = new_stream[bsr_tgt.stream.thread].stream;
 			alloc_stream = 1'b1;
 		end
 	end

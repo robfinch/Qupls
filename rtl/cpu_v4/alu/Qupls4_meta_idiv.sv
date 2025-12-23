@@ -365,10 +365,7 @@ end
 assign div_done = ld ? 1'b0 : div_done1 | div_done2;
 
 always_ff @(posedge clk)
-	if (|aRd_i)
-		we <= 9'h1FF;
-	else
-		we <= 9'h000;
+	we <= 9'h1FF;
 
 assign we_o = ld ? 9'd0 : div_done1 ? we : 9'd0;
 

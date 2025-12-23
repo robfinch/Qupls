@@ -355,7 +355,13 @@ for (n6 = 0; n6 < MWIDTH; n6 = n6 + 1)
 	qbr[n6] = pg_dec.pr[n6].op.decbus.br|pg_dec.pr[n6].op.decbus.cjb;
 
 `ifdef SUPPORT_RAT
-Qupls4_rat #(.MWIDTH(MWIDTH)) urat1
+Qupls4_rat
+#(
+	.MWIDTH(MWIDTH),
+	.NPORT(NPORT),
+	.NREG_RPORT(NPORT)
+)
+urat1
 (	
 	.rst(rst),
 	.clk(clk),

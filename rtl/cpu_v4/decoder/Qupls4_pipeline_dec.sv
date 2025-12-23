@@ -756,7 +756,7 @@ always_comb
 begin
 	pg_dec = pg_ext_r;
 	if (stomp_dec)
-		pg_dec.hdr.v <= INV;
+		pg_dec.hdr.v = INV;
 	pg_dec.pr[0].op.hwi_level = pg_ext_r.hdr.irq.level;
 	if (hwi_ignore) begin
 		if (pg_ext_r.hdr.irq.level != 6'd63) begin

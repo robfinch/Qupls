@@ -19,7 +19,7 @@ Provision for capabilities instructions were added to the instruction set. The c
 * 32 general purpose registers, unified integer and float register file
 * 32 vector registers
 * Independent sign control for each register spec. for many instructions.
-* Constants may be substituted for registers, located in constant zones.
+* Constants may be substituted for registers, using constant postfix instructions.
 * Register renaming to remove dependencies.
 * Dual operation instructions: Rt = Ra op Rb op Rc
 * Standard suite of ALU operations, add, subtract, compare, multiply and divide.
@@ -44,6 +44,7 @@ Micro-code has been removed.
 
 ### Register File
 The register file is 12r4w (12 read ports and 4 write ports). Previously the register file was 16r4w but the extra four ports are not needed most of the time.
+(The number of read and write ports on the register file is configurable).
 There are now queues for writing and demultiplexing of read ports for reading.
 
 #### Scalar Register File
@@ -73,20 +74,29 @@ Code is relocatable at any wyde boundary; however, within a subroutine or functi
 
 ### Pipeline
 Yikes!
-There are roughly nine stages in the pipeline, fetch, extract (parse), decode, rename, queue, issue, execute and writeback. The first few stages (up to que) are in-order stages.
+There are roughly nine stages in the pipeline, fetch, extract (parse), decode, rename, dispatch, queue, issue, execute and writeback. The first few stages (up to dispatch) are in-order stages.
 #### Fetch / Extract Stages
 The first step for an instruction is instruction fetch.
 At instruction fetch two instruction cache lines are fetched to accomodate instructions spanning cache lines.
 That means up to 21 instructions are fetched, but only four are processed further.
+Instructions that were fetched from the cache are buffered, this helps to allow alternate patch fetching.
 Four instructions are extracted from the cache lines. The fetched instructions are right aligned as a block according to the instruction pointer value.
 A portion of the cache line following the instruction is also associated with the instruction so that constants may be decoded.
 If there is a hardware interrupt, it is flagged on the instruction where the interrupt occurred.
 #### Decode Stage
 After instruction fetch and extract the instructions are decoded. 
-Constants are also decoded from constant zones following the instruction.
+Constants are also decoded from constant postfxes following the instruction.
 ISA instructions are translated into micro-ops at this stage. Most instructions are a direct 1:1 translation but some instructions require more micro-ops.
 #### Rename Stage
-Target logical registers are assigned names from a name supplier component which can supply up to four names per clock cycle. Target name mappings are stored in the RAT. Decoded architectural registers are renamed to physical registers and register values are fetched. The instruction (micro-op) decodes are placed in the reorder buffer / queued.
+Target logical registers are assigned names from a name supplier component which can supply up to four names per clock cycle. Target name mappings are stored in the RAT.
+Decoded architectural registers are renamed to physical registers and register values are fetched.
+The instruction (micro-op) decodes are placed in the reorder buffer / queued.
+#### Dispatch
+Instructions are dispatched to reservation stations by this stage.
+Not every combination of four instructions is supported within a single clock cycle.
+The dispatcher may dispatch up to six micro-op instructions per clock cycle.
+Currently dispatch may dispatch: 2 ALU, 1 int multiply or divide, 1 Memory, 1 branch, 1 float with any given cycle.
+Disatch is currently configurable as in-order (preferred) or out-of-order. Out-of-order dispatch is huge.
 #### Queue Stage
 The queue stage is a place holder for the most recent instructions that have been queued in the reorder buffer.
 Instructions are queued from the rename stage. The queue state overlaps the contents of the ROB.
@@ -94,10 +104,6 @@ It is less expensive to process the instructions from the queue buffer rather th
 #### Issue Stage
 Once instructions are queued in the ROB they may be scheduled for execution.
 The instruction scheduler is now distributed amongst the reservation stations which become active when instructions with valid arguments are ready.
-##### Dispatch
-There is a separate instruction dispatcher which dispatches instructions to the reservation stations.
-The dispatcher may dispatch up to six micro-op instructions per clock cycle.
-Not every combination of instructions is allowed to dispatch in the same clock cycle.
 #### Execute Stage
 The next stage is execution. Note that the execute stage waits until all the instruction arguments are valid before trying to execute the instruction. (This is checked by the scheduler). The predicate register must be valid.
 Instruction arguments are made valid by the execution or writeback of prior instructions.
@@ -169,14 +175,14 @@ The even/odd pair is stored in the reservation station as a pair.
 The FPU can also perform many of the simpler ALU operations, this increases the number of instructions that can be handled in parallel.
 
 ### Large Constants
-Large constants are supported by embedding them on the cache line in constant zones following the instruction.
-The offset of the constant in the zone is encoded in the register spec for the register overridden with a constant.
-Constant zones are 40 bit areas that may be concatonated together to form a large zone of up to 240 bits.
-There may be multiple constants of multiple sizes stored in the zone as one instruction may have up to three constants.
+Large constants are supported by embedding them in the instruction stream using constant postfixes following the instruction.
+The constant postfix specifies which register is overridden.
+There is currently a maximum of four postfixes allowed which is enough for two 64-bit constants.
 Any of the three source registers may be turned into a constant.
 
 ### Branches
 Conditional branches are a fused compare-and-branch instruction. Values of two registers are compared, then a branch is made depending on the relationship between the two.
+Branches may work with different precisions.
 The branch displacement is 21 bits. Branch-to-register is also supported.
 
 ### Loads and Stores
@@ -233,7 +239,9 @@ A Qupls4 backend is being written for vasm.
 The Arpl compiler may be used for high-level work and compiles to vasm compatible source code.
 
 # Core Size
-The minimum core size including only basic integer instructions the core is about 200,000 LUTs or 320,000 LCs in size.
+The unoptimized minimum core size (done by selecting run-time-optimized with no heirarchy flatten) is around 400k LUTS (640k LC's).
+It looks like an area optimized core will be under 200k LUTs.
+The minimum core size includes only basic integer instructions.
 The minimum size does not allow for much parallelism.
 Better performance may be had using a pipelined in-order processor which is much smaller.
 *The core size seems to be constantly increasing as updates occur.

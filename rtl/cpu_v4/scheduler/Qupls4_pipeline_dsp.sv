@@ -150,14 +150,14 @@ else begin
 			// and checkpoint index valid...
 			pgh.cndxv &&
 			// and not a register prefix or nop
-			!pg_ren.pr[nn].op.decbus.nop ) begin/*&&
+			!pg_ren.pr[nn].op.decbus.nop &&
 			// if a store, then no previous flow control dependency
 //			(pg_ren.pr[nn].op.decbus.store ? !pg_ren.pr[nn].fc_depv : TRUE) &&
 			// if serializing the previous instruction must be done...
 //			(Qupls4_pkg::SERIALIZE ? &pg_ren.pr[(nn + Qupls4_pkg::ROB_ENTRIES-1)%Qupls4_pkg::ROB_ENTRIES].done || !dbf[(nn + Qupls4_pkg::ROB_ENTRIES-1)%Qupls4_pkg::ROB_ENTRIES].v : TRUE) &&
 			!dispatched[nn] &&
-			!stall_dsp)			
-		) begin */
+			!stall_dsp		
+		) begin
 
 			if (pg_ren.pr[nn].op.decbus.sau && !rob_dispatched_v[0] && !dispatched[nn]) begin
 				tLoadRse(0,nn,mm);
@@ -306,7 +306,7 @@ else begin
 end
 
 always_ff @(posedge clk)
-	rse_o <= rse;
+	if (ce)	rse_o <= rse;
 always_ff @(posedge clk)
 	if (ce) rob_dispatched_o <= rob_dispatched;
 always_ff @(posedge clk)

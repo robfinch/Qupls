@@ -114,7 +114,7 @@ input [2:0] commit_grp3;
 
 output [XSTREAMS*THREADS-1:0] strm_bitmap;
 output pc_stream_t act_stream;
-output pc_stream_t [3:0] new_stream;
+output pc_stream_t [THREADS-1:0] new_stream;
 input alloc_stream;
 input [XSTREAMS*THREADS-1:0] free_stream;
 output pc_address_ex_t [XSTREAMS*THREADS-1:0] pcs;

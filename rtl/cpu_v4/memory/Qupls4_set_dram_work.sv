@@ -94,7 +94,7 @@ else begin
 
 	if (Qupls4_pkg::SUPPORT_BUS_TO) begin
 		// Increment timeout counters while memory access is taking place.
-		if (dram_state_i==Qupls4_pkg::DRAMSLOT_ACTIVE)
+		if (dram_state_i==Qupls4_pkg::DRAMSLOT_ACTIVE || dram_state_i==Qupls4_pkg::DRAMSLOT_ACTIVE2)
 			dram_work_o.tocnt <= dram_work_o.tocnt + 2'd1;
 
 		// Bus timeout logic
@@ -105,60 +105,52 @@ else begin
 
 	// grab requests that have finished and put them on the dram_bus
 	// .hi runs the high half bus cycle for an unaligned access that does not cross a page boundary
-	if (dram_state_i == Qupls4_pkg::DRAMSLOT_ACTIVE && dram_ack_i && dram_work_o.hi && Qupls4_pkg::SUPPORT_UNALIGNED_MEMORY) begin
-		dram_work_o.hi <= 1'b0;
-    dram_oper_o.oper.v <= (dram_work_o.load|dram_work_o.cload|dram_work_o.cload_tags) & ~dram_stomp_i;
-    dram_oper_o.state <= 2'b11;
-    dram_oper_o.rndx <= dram_work_o.rndx;
-    dram_oper_o.oper.pRn <= dram_work_o.pRd;
-    dram_oper_o.oper.aRn <= dram_work_o.aRd;
-    dram_oper_o.oper.aRnv <= dram_work_o.aRdv;
-    dram_oper_o.om <= dram_work_o.om;
-    dram_oper_o.cndx <= dram_work_o.cndx;
-    dram_oper_o.rndx <= dram_work_o.rndx;
-    dram_oper_o.exc <= dram_work_o.exc;
-  	dram_oper_o.oper.val <= Qupls4_pkg::fnDati(1'b0,dram_work_o.op,(cpu_dat_i << {lsq_i.shift2,3'b0})|dram_oper_o.oper.val);
-  	dram_oper_o.oper.flags <= 8'h00;//dram_work_o.flags;
-    if (dram_work_o.store) begin
-    	dram_work_o.store <= 1'd0;
-    	dram_work_o.sel <= 80'd0;
-  	end
-    if (dram_work_o.cstore) begin
-    	dram_work_o.cstore <= 1'd0;
-    	dram_work_o.sel <= 80'd0;
-  	end
-    if (dram_work_o.store)
-    	$display("m[%h] <- %h", dram_work_o.vaddr, dram_work_o.data);
-	end
-	else if (dram_state_i == Qupls4_pkg::DRAMSLOT_ACTIVE && dram_ack_i) begin
-		// If there is more to do, trigger a second instruction issue.
-    dram_oper_o.oper.v <= (dram_work_o.load|dram_work_o.cload|dram_work_o.cload_tags) & ~dram_more_i & ~dram_stomp_i;
-    dram_oper_o.state <= dram_more_i ? 2'b01 : 2'b11;
-    dram_oper_o.rndx <= dram_work_o.rndx;
-    dram_oper_o.oper.pRn <= dram_work_o.pRd;
-    dram_oper_o.oper.aRn <= dram_work_o.aRd;
-    dram_oper_o.oper.aRnv <= dram_work_o.aRdv;
-    dram_oper_o.om <= dram_work_o.om;
-    dram_oper_o.cndx <= dram_work_o.cndx;
-    dram_oper_o.exc <= dram_work_o.exc;
-    // Note shift gets switched for second bus cycle.
-    if (dram_oper_o.state==2'b01)
+	case(dram_state_i)
+	Qupls4_pkg::DRAMSLOT_ACTIVE2:
+		if (dram_ack_i && dram_work_o.hi && Qupls4_pkg::SUPPORT_UNALIGNED_MEMORY) begin
+			dram_work_o.hi <= 1'b0;
+	    dram_oper_o.oper.v <= (dram_work_o.load|dram_work_o.cload|dram_work_o.cload_tags) & ~dram_stomp_i;
+	    dram_oper_o.state <= 2'b11;
+	    dram_oper_o.rndx <= dram_work_o.rndx;
+	    dram_oper_o.oper.pRn <= dram_work_o.pRd;
+	    dram_oper_o.oper.aRn <= dram_work_o.aRd;
+	    dram_oper_o.oper.aRnv <= dram_work_o.aRdv;
+	    dram_oper_o.om <= dram_work_o.om;
+	    dram_oper_o.cndx <= dram_work_o.cndx;
+	    dram_oper_o.rndx <= dram_work_o.rndx;
+	    dram_oper_o.exc <= dram_work_o.exc;
 	  	dram_oper_o.oper.val <= Qupls4_pkg::fnDati(1'b0,dram_work_o.op,(cpu_dat_i << {lsq_i.shift2,3'b0})|dram_oper_o.oper.val);
-    else
-  		dram_oper_o.oper.val <= Qupls4_pkg::fnDati(dram_more_i,dram_work_o.op,cpu_dat_i >> {lsq_i.shift,3'b0});
-    if (dram_work_o.store) begin
-    	dram_work_o.store <= 1'd0;
-    	dram_work_o.sel <= 80'd0;
-  	end
-    if (dram_work_o.cstore) begin
-    	dram_work_o.cstore <= 1'd0;
-    	dram_work_o.sel <= 80'd0;
-  	end
-    if (dram_work_o.store)
-    	$display("m[%h] <- %h", dram_work_o.vaddr, dram_work_o.data);
-	end
-	else
+	  	dram_oper_o.oper.flags <= 8'h00;//dram_work_o.flags;
+	    if (dram_work_o.store)
+	    	$display("m[%h] <- %h", dram_work_o.vaddr, dram_work_o.data);
+		end
+	Qupls4_pkg::DRAMSLOT_ACTIVE:
+		if (dram_state_i == Qupls4_pkg::DRAMSLOT_ACTIVE && dram_ack_i) begin
+			// If there is more to do, trigger a second instruction issue.
+	    dram_oper_o.oper.v <= (dram_work_o.load|dram_work_o.cload|dram_work_o.cload_tags) & ~dram_more_i & ~dram_stomp_i;
+	    dram_oper_o.state <= dram_more_i ? 2'b01 : 2'b11;
+	    dram_oper_o.rndx <= dram_work_o.rndx;
+	    dram_oper_o.oper.pRn <= dram_work_o.pRd;
+	    dram_oper_o.oper.aRn <= dram_work_o.aRd;
+	    dram_oper_o.oper.aRnv <= dram_work_o.aRdv;
+	    dram_oper_o.om <= dram_work_o.om;
+	    dram_oper_o.cndx <= dram_work_o.cndx;
+	    dram_oper_o.exc <= dram_work_o.exc;
+	    // Note shift gets switched for second bus cycle.
+	    if (dram_oper_o.state==2'b01)
+		  	dram_oper_o.oper.val <= Qupls4_pkg::fnDati(1'b0,dram_work_o.op,(cpu_dat_i << {lsq_i.shift2,3'b0})|dram_oper_o.oper.val);
+	    else
+	  		dram_oper_o.oper.val <= Qupls4_pkg::fnDati(dram_more_i,dram_work_o.op,cpu_dat_i >> {lsq_i.shift,3'b0});
+	    if (dram_work_o.store)
+	    	$display("m[%h] <- %h", dram_work_o.vaddr, dram_work_o.data);
+		end
+	Qupls4_pkg::DRAMSLOT_AVAIL:
 		dram_oper_o.oper.v <= INV;
+	Qupls4_pkg::DRAMSLOT_DELAY,
+	Qupls4_pkg::DRAMSLOT_DELAY2:
+		dram_oper_o.oper.v <= INV;
+	default:	;
+	endcase
 
 	// If just performing a virtual to physical translation....
 	// This is done only on port #0
@@ -213,20 +205,17 @@ else begin
 				dram_work_o.om <= lsq_i.om;
 				dram_work_o.bank <= lsq_i.om==2'd0 ? 1'b0 : 1'b1;
 				dram_work_o.cndx <= rob_i[lsq_i.rndx].cndx;
+				dram_work_o.hi <= 1'b0;
+				dram_work_o.vaddr <= lsq_i.vadr;	// bin recomputed.
+				dram_work_o.paddr <= lsq_i.padr;
 				// Did access cross page boundary?
 				if (lsq_i.state==2'b01 && Qupls4_pkg::SUPPORT_UNALIGNED_MEMORY) begin
-					dram_work_o.hi <= 1'b0;
 					dram_work_o.sel <= {64'd0,dram_work_o.selh[79:64]};
-					dram_work_o.vaddr <= lsq_i.vadr;	// bin recomputed.
-					dram_work_o.paddr <= lsq_i.padr;
 					dram_work_o.data <= lsq_i.res >> {lsq_i.shift2,3'b0};
 				end
 				else begin
-					dram_work_o.hi <= 1'b0;
 					dram_work_o.sel <= {64'd0,sel} << lsq_i.shift;
 					dram_work_o.selh <= {64'd0,sel} << lsq_i.shift;
-					dram_work_o.vaddr <= lsq_i.vadr;
-					dram_work_o.paddr <= lsq_i.padr;
 					dram_work_o.vaddrh <= lsq_i.vadr;
 					dram_work_o.paddrh <= lsq_i.padr;
 					dram_work_o.data <= lsq_i.res << {lsq_i.shift,3'b0};
@@ -250,6 +239,18 @@ else begin
 	//			if (page_cross)
 	//				dram_work_o.exc <= Qupls4_pkg::FLT_ALN;
 			end
+			else begin
+				dram_work_o.store <= 1'b0;
+				dram_work_o.sel <= 80'h0;
+			end
+		// End of second bus cycle, nothing to do.
+		Qupls4_pkg::DRAMSLOT_DELAY2:
+			begin
+				dram_work_o.store <= 1'b0;
+				dram_work_o.sel <= 80'h0;
+			end
+		Qupls4_pkg::DRAMSLOT_ACTIVE:	;
+		Qupls4_pkg::DRAMSLOT_ACTIVE2:	;
 		default:	;
 		endcase
   end

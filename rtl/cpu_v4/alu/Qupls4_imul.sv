@@ -65,7 +65,15 @@ wire [WID:0] dead = {1'b0,{WID/16{16'hdead}}};
 reg [3:0] mul_cnt;
 reg [WID*2-1:0] prod, prod1, prod2;
 reg [WID*2-1:0] produ, produ1, produ2;
+Qupls4_pkg::micro_op_t ir1, ir2, ir3;
 reg [WID:0] bus;
+
+always_ff @(posedge clk)
+begin
+	ir3 <= ir;
+	ir2 <= ir3;
+	ir1 <= ir3;
+end
 
 always_ff @(posedge clk)
 begin
@@ -95,11 +103,11 @@ end
 always_comb
 begin
 	bus = {(WID/16){16'h0000}};
-	case(ir.opcode)
+	case(ir1.opcode)
 	Qupls4_pkg::OP_R3B,Qupls4_pkg::OP_R3W,Qupls4_pkg::OP_R3T,Qupls4_pkg::OP_R3O,
 	Qupls4_pkg::OP_R3BP,Qupls4_pkg::OP_R3WP,Qupls4_pkg::OP_R3TP,Qupls4_pkg::OP_R3OP,
 	Qupls4_pkg::OP_R3P:
-		case(ir.func)
+		case(ir1.func)
 		Qupls4_pkg::FN_MUL: 	bus = prod[WID-1:0];
 		Qupls4_pkg::FN_MULU:	bus = produ[WID-1:0];
 		default:	bus = zero;

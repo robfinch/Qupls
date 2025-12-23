@@ -41,7 +41,7 @@ import Qupls4_pkg::*;
 module Qupls4_decode_Rs2(om, instr, instr_raw, has_immb, Rs2, Rs2z, has_Rs2, exc);
 input Qupls4_pkg::operating_mode_t om;
 input Qupls4_pkg::micro_op_t instr;
-input [335:0] instr_raw;
+input [431:0] instr_raw;
 input has_immb;
 output aregno_t Rs2;
 output reg Rs2z;

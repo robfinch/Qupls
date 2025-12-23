@@ -45,7 +45,7 @@ import fp32Pkg::*;
 import fp64Pkg::*;
 
 module Qupls4_decode_const(instr_raw, ip, ins, imma, immb, immc, immd,
-	has_imma, has_immb, has_immc, has_immd, pos, isz);
+	has_imma, has_immb, has_immc, has_immd);
 input cpu_types_pkg::pc_address_t ip;
 input [431:0] instr_raw;
 input Qupls4_pkg::micro_op_t ins;
@@ -57,8 +57,6 @@ output reg has_imma;
 output reg has_immb;
 output reg has_immc;
 output reg has_immd;
-output reg [11:0] pos;
-output reg [5:0] isz;
 
 integer n;
 Qupls4_pkg::micro_op_t insf;

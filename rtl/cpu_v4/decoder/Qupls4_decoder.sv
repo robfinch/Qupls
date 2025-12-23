@@ -49,8 +49,6 @@ input [431:0] instr_raw;
 output Qupls4_pkg::decode_bus_t dbo;
 
 Qupls4_pkg::decode_bus_t db;
-wire [11:0] const_pos;
-wire [5:0] isz;
 wire excRs1, excRs2, excRs3, excRd, excRd2, excRd3;
 wire [3:0] pred_shadow_count;
 
@@ -69,9 +67,7 @@ Qupls4_decode_const udcimm
 	.has_imma(db.has_imma),
 	.has_immb(db.has_immb),
 	.has_immc(db.has_immc),
-	.has_immd(db.has_immd),
-	.pos(const_pos),
-	.isz(isz)
+	.has_immd(db.has_immd)
 );
 
 Qupls4_decode_Rs1 udcra

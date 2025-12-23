@@ -143,7 +143,7 @@ reg ssm_flag;
 // hirq squashes the pc increment if there's an irq.
 // Normally atom_count is zero.
 reg hirq;
-pc_address_t ret_pc;
+pc_address_ex_t ret_pc;
 pc_address_ex_t misspc;
 wire [$bits(pc_address_t)-1:6] missblock;
 reg [2:0] missgrp;
@@ -2279,7 +2279,7 @@ Qupls4_pipeline_fet ufet1
 (
 	.rst(irst),
 	.clk(clk),
-	.rstcnt(rstcnt),
+	.rstcnt(rstcnt[2:0]),
 	.ihit(ihito),
 	.irq_in_ic(irq_in_ic),
 	.irq_ic(irq_ic),
@@ -2876,7 +2876,7 @@ Qupls4_pipeline_ren #(.MWIDTH(MWIDTH)) uren1
 	.kept_stream(kept_stream),
 	.avail_reg(ns_avail),
 	.sr(sr),
-	.branch_resolved(branch_resolved),
+	.branch_resolved(fcu_branch_resolved),
 //	.arn(arn),
 //	.arng(arng),
 //	.arnv(arnv),
@@ -3831,9 +3831,9 @@ rob_ndx_t fpu1_rndx;
 Qupls4_pkg::lsq_ndx_t mem0_lsndx, mem1_lsndx;
 Qupls4_pkg::beb_ndx_t beb_ndx;
 wire mem0_lsndxv, mem1_lsndxv;
-wire fpu0_rndxv, fpu1_rndxv, fcu_rndxv;
-wire sau0_rndxv, sau1_rndxv;
-wire agen0_rndxv, agen1_rndxv;
+reg fpu0_rndxv, fpu1_rndxv, fcu_rndxv;
+reg sau0_rndxv, sau1_rndxv;
+reg agen0_rndxv, agen1_rndxv;
 Qupls4_pkg::rob_bitmask_t rob_memissue;
 wire [3:0] beb_issue;
 Qupls4_pkg::lsq_ndx_t lsq_head;
@@ -3846,9 +3846,39 @@ rob_ndx_t ratv1_rndx;
 rob_ndx_t ratv2_rndx;
 rob_ndx_t ratv3_rndx;
 
+// Convenience names
+// ToDo: fix these duplicates
 wire agen0_idle = tlb0_v;
 wire agen1_idle = tlb1_v;
-
+always_comb
+	agen0_id = agen0_rse.rndx;
+always_comb
+	agen0_idv = agen0_rse.v;
+always_comb
+	agen0_rndx = agen0_rse.rndx;
+always_comb
+	agen0_rndxv = agen0_rse.v;
+always_comb
+	agen1_id = agen1_rse.rndx;
+always_comb
+	agen1_idv = agen1_rse.v;
+always_comb
+	sau0_id = sau0_rse.rndx;
+always_comb
+	sau0_rndx = sau0_rse.rndx;
+always_comb
+	sau0_rndxv = sau0_rse.v;
+always_comb
+	sau1_id = sau1_rse.rndx;
+always_comb
+	sau1_rndx = sau1_rse.rndx;
+always_comb
+	sau1_rndxv = sau1_rse.v;
+always_comb
+	fpu0_id = fpu0_rse.rndx;
+always_comb
+	fpu1_id = fpu1_rse.rndx;
+	
 /*
 Stark_sched uscd1
 (
@@ -4765,7 +4795,7 @@ Qupls4_set_dram_work #(.CORENO(CORENO), .LSQNO(0)) usdr1 (
 	.rst_i(irst),
 	.clk_i(clk),
 	.rob_i(rob),
-	.stomp_i(dram0_stomp),
+	.stomp_i(robentry_stomp),
 	.vb_i(lbndx0.vb),
 	.lsndxv_i(mem0_lsndxv),
 	.dram_state_i(dram0),
@@ -4845,7 +4875,7 @@ generate begin : gMemory2
 			.rst_i(irst),
 			.clk_i(clk),
 			.rob_i(rob),
-			.stomp_i(dram1_stomp),
+			.stomp_i(robentry_stomp),
 			.vb_i(lbndx1.vb),
 			.lsndxv_i(mem1_lsndxv),
 			.dram_state_i(dram1),
@@ -5436,9 +5466,9 @@ always_comb
 begin
 	used_streams = {XSTREAMS*THREADS{1'b0}};
 	used_streams[0] = 1'b1;
-	used_streams[XSTREAMS] = 1'b1;
-	used_streams[XSTREAMS*2] = 1'b1;
-	used_streams[XSTREAMS*3] = 1'b1;
+	if (THREADS > 1) used_streams[XSTREAMS] = 1'b1;
+	if (THREADS > 2) used_streams[XSTREAMS*2] = 1'b1;
+	if (THREADS > 3) used_streams[XSTREAMS*3] = 1'b1;
 	for (n40 = 0; n40 < Qupls4_pkg::ROB_ENTRIES; n40 = n40 + 1)
 		used_streams[rob[n40].op.pc.stream] = 1'b1;
 	for (n40 = 0; n40 < MWIDTH; n40 = n40 + 1) begin

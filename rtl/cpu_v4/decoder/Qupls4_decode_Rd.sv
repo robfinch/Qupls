@@ -41,7 +41,7 @@ import Qupls4_pkg::*;
 module Qupls4_decode_Rd(om, instr, instr_raw, Rd, Rdz, exc);
 input Qupls4_pkg::operating_mode_t om;
 input Qupls4_pkg::micro_op_t instr;
-input [335:0] instr_raw;
+input [431:0] instr_raw;
 output aregno_t Rd;
 output reg Rdz;
 output reg exc;

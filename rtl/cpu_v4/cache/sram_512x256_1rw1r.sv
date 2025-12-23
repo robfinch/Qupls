@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2022  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2022-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -61,8 +61,8 @@ ICacheLine o1;
       .ADDR_WIDTH_A(8),               // DECIMAL
       .ADDR_WIDTH_B(8),               // DECIMAL
       .AUTO_SLEEP_TIME(0),            // DECIMAL
-      .BYTE_WRITE_WIDTH_A(512),        // DECIMAL
-      .BYTE_WRITE_WIDTH_B(512),        // DECIMAL
+      .BYTE_WRITE_WIDTH_A($bits(ICacheLine)),        // DECIMAL
+      .BYTE_WRITE_WIDTH_B($bits(ICacheLine)),        // DECIMAL
       .CASCADE_HEIGHT(0),             // DECIMAL
       .CLOCKING_MODE("common_clock"), // String
       .ECC_MODE("no_ecc"),            // String
@@ -70,10 +70,10 @@ ICacheLine o1;
       .MEMORY_INIT_PARAM("0"),        // String
       .MEMORY_OPTIMIZATION("true"),   // String
       .MEMORY_PRIMITIVE("auto"),      // String
-      .MEMORY_SIZE(131072),             // DECIMAL
+      .MEMORY_SIZE($bits(ICacheLine)*256),             // DECIMAL
       .MESSAGE_CONTROL(0),            // DECIMAL
-      .READ_DATA_WIDTH_A(512),         // DECIMAL
-      .READ_DATA_WIDTH_B(512),         // DECIMAL
+      .READ_DATA_WIDTH_A($bits(ICacheLine)),         // DECIMAL
+      .READ_DATA_WIDTH_B($bits(ICacheLine)),         // DECIMAL
       .READ_LATENCY_A(1),             // DECIMAL
       .READ_LATENCY_B(1),             // DECIMAL
       .READ_RESET_VALUE_A("0"),       // String
@@ -85,8 +85,8 @@ ICacheLine o1;
       .USE_MEM_INIT(1),               // DECIMAL
       .USE_MEM_INIT_MMI(0),           // DECIMAL
       .WAKEUP_TIME("disable_sleep"),  // String
-      .WRITE_DATA_WIDTH_A(512),        // DECIMAL
-      .WRITE_DATA_WIDTH_B(512),        // DECIMAL
+      .WRITE_DATA_WIDTH_A($bits(ICacheLine)),        // DECIMAL
+      .WRITE_DATA_WIDTH_B($bits(ICacheLine)),        // DECIMAL
       .WRITE_MODE_A("read_first"),     // String
       .WRITE_MODE_B("read_first"),     // String
       .WRITE_PROTECT(1)               // DECIMAL

@@ -95,7 +95,7 @@ module Qupls4_rat(rst, clk,
 	fcu_id,		// the ROB index of the instruction causing backout
 	bo_wr, bo_areg, bo_preg, bo_nreg);
 parameter MWIDTH = Qupls4_pkg::MWIDTH;
-localparam NPORT = MWIDTH*4;
+parameter NPORT = MWIDTH*4;
 parameter NREG_RPORT = MWIDTH*4;
 localparam RBIT=$clog2(Qupls4_pkg::PREGS);
 input rst;
@@ -136,9 +136,9 @@ input cpu_types_pkg::aregno_t [MWIDTH*5-1:0] rn;		// architectural register
 input cpu_types_pkg::pregno_t st_prn;
 input [2:0] rng [0:MWIDTH*5-1];
 input [MWIDTH*5-1:0] rnv;
-input checkpt_ndx_t [MWIDTH*5-1:0] rn_cp;
+input checkpt_ndx_t [NPORT-1:0] rn_cp;
 input checkpt_ndx_t [3:0] rd_cp;
-output cpu_types_pkg::pregno_t [MWIDTH*5-1:0] prn;	// physical register name
+output cpu_types_pkg::pregno_t [NPORT-1:0] prn;	// physical register name
 input cpu_types_pkg::pregno_t [NREG_RPORT-1:0] prn_i;	// physical register name
 output /*reglookup_t*/ reg [NREG_RPORT-1:0] prv;											// physical register valid
 output reg [Qupls4_pkg::PREGS-1:0] restore_list;	// bit vector of registers to free on branch miss

@@ -41,7 +41,7 @@ import Qupls4_pkg::*;
 module Qupls4_decode_Rs3(om, instr, instr_raw, has_immc, Rs3, Rs3z, exc);
 input Qupls4_pkg::operating_mode_t om;
 input Qupls4_pkg::micro_op_t instr;
-input [335:0] instr_raw;
+input [431:0] instr_raw;
 input has_immc;
 output aregno_t Rs3;
 output reg Rs3z;
