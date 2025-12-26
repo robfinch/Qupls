@@ -718,7 +718,7 @@ input pc_stream_t bno;
 integer nn;
 begin
 	foreach (pg_ren.pr[nn]) begin
-		if (pg_ren.hdr.ip.stream!=bno) begin
+		if (pg_ren.pr[nn].ip_stream!=bno) begin
 			pg_ren.pr[nn].op.excv <= INV;
 			if (Qupls4_pkg::SUPPORT_BACKOUT)
 				pg_ren.pr[nn].v <= INV;

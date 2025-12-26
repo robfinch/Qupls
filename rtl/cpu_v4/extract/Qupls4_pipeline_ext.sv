@@ -44,7 +44,7 @@ import const_pkg::*;
 import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_pipeline_ext(rst_i, clk_i, rstcnt, advance_fet, ihit, en_i,
+module Qupls4_pipeline_ext(rst_i, clk_i, rstcnt, ihit, en_i,
 	kept_stream, stomp_ext, nop_o, carry_mod_fet, ssm_flag, hwipc_fet,
 	irq_fet, irq_in_fet, irq_sn_fet, ipl_fet, sr, pt_ext, pt_dec, p_override, po_bno,
 	branchmiss, misspc_fet, flush_fet, flush_ext,
@@ -59,7 +59,6 @@ parameter MWIDTH = Qupls4_pkg::MWIDTH;
 input rst_i;
 input clk_i;
 input [2:0] rstcnt;
-input advance_fet;
 input ihit;
 input irq_fet;
 input Qupls4_pkg::irq_info_packet_t irq_in_fet;
@@ -116,9 +115,9 @@ input pc_stream_t [THREADS-1:0] new_stream;
 output reg alloc_stream;
 
 genvar g;
-integer nn,hh,n1,n2,n3,n4;
+integer nn,hh,n1,n2,n3,n4,n5,n6;
 cpu_types_pkg::pc_address_ex_t [MWIDTH-1:0] pc_fet;
-cpu_types_pkg::pc_address_ex_t pc0_ext;
+cpu_types_pkg::pc_address_ex_t [MWIDTH-1:0] pc_ext;
 reg [5:0] ipl_ext;
 Qupls4_pkg::irq_info_packet_t irq_in_ext;
 cpu_types_pkg::seqnum_t irq_sn_ext;
@@ -143,11 +142,13 @@ Qupls4_pkg::pipeline_reg_t nopi;
 
 always_comb
 begin
- 	pc_fet[0] = pc0_fet + 6'd0;
- 	pc_fet[1] = pc0_fet + 6'd6;
-	pc_fet[2] = pc0_fet + 6'd12;
-	pc_fet[3] = pc0_fet + 6'd18;
+	foreach (pc_fet[n5])
+		pc_fet[n5].pc = pc0_fet.pc + n5*6;
 end
+
+always_ff @(posedge clk)
+	foreach(pc_ext[n6])
+		if (en) pc_ext[n6] <= pc_fet[n6];
 
 // Define a NOP instruction.
 always_comb
@@ -176,7 +177,7 @@ if (rst_i) begin
 	prev_pc0_fet <= {$bits(pc_address_ex_t){1'b0}};
 end
 else begin
-	if (advance_fet) begin
+	if (en) begin
 		prev_ic_line_aligned <= ic_line_aligned;
 		prev_pc0_fet <= pc0_fet;
 	end
@@ -189,7 +190,7 @@ if (rst_i) begin
 	cline_ext_r <= 1024'd0;
 end
 else begin
-	if (advance_fet) begin
+	if (en) begin
 		cline_ext_r <= cline_ext;
 		cline_ext <= cline_fet;
 	end
@@ -216,7 +217,7 @@ begin
 	if (!redundant_group) begin
 		// Allow only one instruction through when single stepping.
 		if (ssm_flag & ~prev_ssm_flag) begin
-			pr_ext[0].cli = pc0_fet.pc[5:1];
+			pr_ext[0].cli = pc_fet[0].pc[5:1];
 			pr_ext[0].uop = fnMapRawToUop(ic_line_aligned[ 47:  0]);
 			for (n1 = 1; n1 < MWIDTH; n1 = n1 + 1) begin
 				pr_ext[n1] = nopi;
@@ -233,7 +234,7 @@ begin
 			// Compute index of instruction on cache-line.
 			// Note! the index is in terms of 16-bit parcels.
 			for (n1 = 0; n1 < MWIDTH; n1 = n1 + 1) begin
-				pr_ext[n1].cli = pc0_fet.pc[5:1] + (n1*3);
+				pr_ext[n1].cli = pc_fet[n1].pc[5:1];
 				pr_ext[n1].uop = fnMapRawToUop(48'(ic_line_aligned >> (n1*48)));
 			end
 		end
@@ -270,7 +271,7 @@ reg [6:0] po_bno_dummy;
 
 generate begin : gExtins
 	for (g = 0; g < MWIDTH; g = g + 1)
-		always_comb tExtractIns(stomp_ext, pc_fet[g], pt_ext[g], takb_fet[g], pr_ext[g], ins_fet[g], p_override[g], po_bno[g]);
+		always_comb tExtractIns(g, stomp_ext, pc0_fet, pt_ext[g], takb_fet[g], pr_ext[g], ins_fet[g], p_override[g], po_bno[g]);
 end
 endgenerate
 
@@ -380,10 +381,10 @@ always_comb jsri3 = ins_ext[3].ins.opcode==OP_JSRI && ins_ext[3].ins.Rt!=3'd0;
 
 always_comb
 begin
-	bsr0_tgt = Qupls4_pkg::fnDecDest(pc0_ext,ins_ext[0]);
-	bsr1_tgt = Qupls4_pkg::fnDecDest(pc0_ext,ins_ext[1]);
-	bsr2_tgt = Qupls4_pkg::fnDecDest(pc0_ext,ins_ext[2]);
-	bsr3_tgt = Qupls4_pkg::fnDecDest(pc0_ext,ins_ext[3]);
+	bsr0_tgt = Qupls4_pkg::fnDecDest(pc_ext[0],ins_ext[0]);
+	bsr1_tgt = Qupls4_pkg::fnDecDest(pc_ext[1],ins_ext[1]);
+	bsr2_tgt = Qupls4_pkg::fnDecDest(pc_ext[2],ins_ext[2]);
+	bsr3_tgt = Qupls4_pkg::fnDecDest(pc_ext[3],ins_ext[3]);
 end
 
 // Figure whether a subroutine call, or return is being performed. Note
@@ -483,7 +484,7 @@ begin
 	ret_pc.stream = 5'd1;
 	for (n3 = MWIDTH-1; n3 >= 0; n3 = n3 - 1)
 		if (bsr[n3]|jsr[n3])
-			ret_pc.pc = pc0_ext.pc + {2'd0,ins_ext[n3].ip_offs,1'b0} + 4'd6;
+			ret_pc.pc = pc_ext[n3].pc + 4'd6;
 end
 
 always_comb
@@ -518,18 +519,18 @@ begin
 	pg_ext.hdr.irq = irq_in_ext;
 	pg_ext.hdr.old_ipl = ipl_ext;
 	pg_ext.hdr.hwi = irq_ext;
-	pg_ext.hdr.ip = pc0_ext;
+	pg_ext.hdr.ip = pc_ext[0].pc;
 end
 always_comb
 begin
 	foreach (pg_ext.pr[n2]) begin
 		pg_ext.pr[n2] = {$bits(Qupls4_pkg::pipeline_reg_t){1'b0}};
 		pg_ext.pr[n2] = ins_ext[n2];
+		pg_ext.pr[n2].ip_stream = pc_ext[n2].stream.stream;
 		pg_ext.pr[n2].ip_offs = n2 * 3;	// wyde offset
 	end
 end
 
-always_ff @(posedge clk) if (en) pc0_ext <= pc0_fet;
 always_ff @(posedge clk) if (en) irq_sn_ext <= irq_sn_fet;
 always_ff @(posedge clk) if (en) irq_in_ext <= irq_in_fet;
 always_ff @(posedge clk) if (en) irq_ext <= irq_fet;
@@ -574,6 +575,7 @@ always_comb mcip2_o <= |mcip1 ? mcip1 | 12'h002 : 12'h000;
 always_comb mcip3_o <= |mcip2 ? mcip2 | 12'h003 : 12'h000;
 */
 task tExtractIns;
+input integer g;
 input stomp_ext;
 input pc_address_ex_t pc;
 input pt_ext;
@@ -588,6 +590,8 @@ begin
 	ins_o.op.v = !stomp_ext;
 	ins_o.op = ins_i;
 	ins_o.op.bt = takb;
+	ins_o.ip_stream = pc.stream.stream;
+	ins_o.ip_offs = g * 3;
 	/*
   ins_o.aRs1 = {ins_i.uop.Rs1};
   ins_o.aRs2 = {ins_i.uop.Rs2};
@@ -607,7 +611,7 @@ begin
 	end
 	*/
 //	bno = takb ? ins_o.pc.stream : ins_o.pc.bno_f;
-	bno = pc.stream;
+	bno = pc.stream.stream;
 end
 endtask
 

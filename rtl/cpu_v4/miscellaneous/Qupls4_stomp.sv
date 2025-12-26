@@ -342,7 +342,7 @@ begin
 				if ((branchmiss) &&
 					rob[n4].sn > rob[missid].sn &&
 					fcu_idv	&& // miss_idv
-					pgh[rob[n4].pghn].ip.stream!=kept_stream
+					rob[n4].ip_stream!=kept_stream
 				)
 					robentry_stomp[n4] = TRUE;
 			end
@@ -365,7 +365,7 @@ begin
 		end
 
 		// Stomp on any dependent instructions.
-		if (stomped[pgh[rob[n4].pghn].ip.stream])
+		if (stomped[rob[n4].ip_stream])
 			robentry_stomp[n4] = TRUE;
 	end
 end

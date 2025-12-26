@@ -1927,6 +1927,7 @@ typedef struct packed {
 	cpu_types_pkg::seqnum_t sn;							// sequence number, decrements when instructions que
 	cpu_types_pkg::rob_ndx_t this_ndx;
 	logic [4:0] pghn;					// pipeline group header index
+	cpu_types_pkg::pc_stream_t ip_stream;		// stream associated with instruction
 	logic [4:0] ip_offs;			// offset in wydes from group IP (0, 3, 6 or 9)
 	logic flush;
 	cpu_types_pkg::rob_ndx_t sync_dep;			// sync instruction dependency
@@ -2023,7 +2024,7 @@ typedef struct packed
 	logic chkpt_freed;
 	logic has_branch;
 	logic done;
-	cpu_types_pkg::pc_address_ex_t ip;	// Instruction pointer of group + stream
+	cpu_types_pkg::pc_address_t ip;			// Instruction pointer of group
 } pipeline_group_hdr_t;
 
 typedef struct packed
@@ -2410,8 +2411,8 @@ begin
 	bcc = fnIsBranch(pr.op.uop);
 	case(1'b1)
 	jsr:	fnDecDest.pc = {{29{pr.op.uop.imm[34]}},pr.op.uop.imm,1'b0};
-	bsr: 	fnDecDest.pc = pc.pc + {pr.ip_offs,1'b0} + {{29{pr.op.uop.imm[34]}},pr.op.uop.imm,1'b0};
-	bcc:	fnDecDest.pc = pc.pc + {pr.ip_offs,1'b0} + {{44{pr.op.uop.imm[19]}},pr.op.uop.imm,1'b0};
+	bsr: 	fnDecDest.pc = pc.pc + {{29{pr.op.uop.imm[34]}},pr.op.uop.imm,1'b0};
+	bcc:	fnDecDest.pc = pc.pc + {{44{pr.op.uop.imm[19]}},pr.op.uop.imm,1'b0};
 	default:	fnDecDest.pc = Qupls4_pkg::RSTPC;
 	endcase
 end

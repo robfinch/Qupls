@@ -124,7 +124,7 @@ integer nn,mm,n2,n3,n4,m4,n5,n6,n8,n9,n10,n11,n12,n13,n14,n15,n17;
 integer n16r, n16c, n12r, n12c, n14r, n14c, n17r, n17c, n18r, n18c;
 integer n19,n20,n21,n22,n23,n24,n25,n26,n27,n28,n29,i,n30,n31,n32,n33;
 integer n34,n35,n36,n37,n38,n39,n40,n41,n42,n43,n44,n45,n46,n47,n48;
-integer n49;
+integer n49,n50;
 integer jj,kk;
 
 genvar g,h,gvg;
@@ -2369,7 +2369,6 @@ Qupls4_pipeline_ext #(.MWIDTH(MWIDTH)) uiext1
 	.rst_i(irst),
 	.clk_i(clk),
 	.rstcnt(rstcnt[2:0]),
-	.advance_fet(advance_f),
 	.flush_fet(flush_fet),
 	.flush_ext(flush_ext),
 	.en_i(advance_pipeline),
@@ -2466,10 +2465,10 @@ Qupls4_pipeline_dec #(.MWIDTH(MWIDTH)) udecstg1
 	.avail_reg(avail_reg)
 );
 
-assign pc0_d = pg_dec.hdr.ip.pc + {pg_dec.pr[0].ip_offs,1'b0};
-assign pc1_d = pg_dec.hdr.ip.pc + {pg_dec.pr[1].ip_offs,1'b0};
-assign pc2_d = pg_dec.hdr.ip.pc + {pg_dec.pr[2].ip_offs,1'b0};
-assign pc3_d = pg_dec.hdr.ip.pc + {pg_dec.pr[3].ip_offs,1'b0};
+assign pc0_d = pg_dec.hdr.ip + {pg_dec.pr[0].ip_offs,1'b0};
+assign pc1_d = pg_dec.hdr.ip + {pg_dec.pr[1].ip_offs,1'b0};
+assign pc2_d = pg_dec.hdr.ip + {pg_dec.pr[2].ip_offs,1'b0};
+assign pc3_d = pg_dec.hdr.ip + {pg_dec.pr[3].ip_offs,1'b0};
 
 reg [MWIDTH-1:0] wrport0_v;
 reg wrport4_v;
@@ -2711,14 +2710,14 @@ wire stomp0b_r = FALSE;//branch_state > Qupls4_pkg::BS_STATE3 && misspc.pc > pg_
 wire stomp1b_r = FALSE;//branch_state > Qupls4_pkg::BS_STATE3 && misspc.pc > pg_ren.pr[1].op.pc.pc;
 wire stomp2b_r = FALSE;//branch_state > Qupls4_pkg::BS_STATE3 && misspc.pc > pg_ren.pr[2].op.pc.pc;
 wire stomp3b_r = FALSE;//branch_state > Qupls4_pkg::BS_STATE3 && misspc.pc > pg_ren.pr[3].op.pc.pc;
-wire stomp0_r = /*~qd_r[0]||stomp_ren||stomp0b_r*/stomp_ren && pg_ren.hdr.ip.stream!=kept_stream;
-wire stomp1_r = /*~qd_r[1]||stomp_ren||stomp1b_r||*/(stomp_ren && pg_ren.hdr.ip.stream!=kept_stream);// ||
+wire stomp0_r = /*~qd_r[0]||stomp_ren||stomp0b_r*/stomp_ren && pg_ren.pr[0].ip_stream!=kept_stream;
+wire stomp1_r = /*~qd_r[1]||stomp_ren||stomp1b_r||*/(stomp_ren && pg_ren.pr[1].ip_stream!=kept_stream);// ||
 //							 (pg_ren.pr[0].decbus.br && pg_ren.pr[0].bt);//pt_r[0]||MWIDTH < 2;
-wire stomp2_r = /*~qd_r[2]||stomp_ren||stomp2b_r||*/(stomp_ren && pg_ren.hdr.ip.stream!=kept_stream);// ||
+wire stomp2_r = /*~qd_r[2]||stomp_ren||stomp2b_r||*/(stomp_ren && pg_ren.pr[2].ip_stream!=kept_stream);// ||
 //							 (pg_ren.pr[0].decbus.br && pg_ren.pr[0].bt) ||
 //							 (pg_ren.pr[1].decbus.br && pg_ren.pr[1].bt)
 //;//pt_r[0]||pt_r[1]||MWIDTH < 3;
-wire stomp3_r = /*~qd_r[3]||stomp_ren||stomp3b_r||*/(stomp_ren && pg_ren.hdr.ip.stream!=kept_stream);// ||
+wire stomp3_r = /*~qd_r[3]||stomp_ren||stomp3b_r||*/(stomp_ren && pg_ren.pr[3].ip_stream!=kept_stream);// ||
 //							 (pg_ren.pr[0].decbus.br && pg_ren.pr[0].bt) ||
 //							 (pg_ren.pr[1].decbus.br && pg_ren.pr[1].bt) ||
 //							 (pg_ren.pr[2].decbus.br && pg_ren.pr[2].bt)
@@ -5502,10 +5501,12 @@ begin
 	if (THREADS > 2) used_streams[XSTREAMS*2] = 1'b1;
 	if (THREADS > 3) used_streams[XSTREAMS*3] = 1'b1;
 	for (n40 = 0; n40 < Qupls4_pkg::ROB_ENTRIES; n40 = n40 + 1)
-		used_streams[pgh[rob[n40].pghn].ip.stream] = 1'b1;
-	used_streams[pg_ext.hdr.ip.stream] = 1'b1;
-	used_streams[pg_dec.hdr.ip.stream] = 1'b1;
-	used_streams[pg_ren.hdr.ip.stream] = 1'b1;
+		used_streams[rob[n40].ip_stream] = 1'b1;
+	foreach(pg_ext.pr[n50]) begin
+		used_streams[pg_ext.pr[n50].ip_stream] = 1'b1;
+		used_streams[pg_dec.pr[n50].ip_stream] = 1'b1;
+		used_streams[pg_ren.pr[n50].ip_stream] = 1'b1;
+	end
 	foreach (pcs[n40])
 		used_streams[pcs[n40].stream[4:0]] = 1'b1;
 end
@@ -6228,10 +6229,10 @@ else begin
 		commit3_idv <= cmttlb3;
 	end
 	if (do_commit) begin
-		commit_pc0 <= pgh[rob[head[0]].pghn].ip.pc + {rob[head[0]].ip_offs,1'b0};
-		commit_pc1 <= pgh[rob[head[1]].pghn].ip.pc + {rob[head[1]].ip_offs,1'b0};
-		commit_pc2 <= pgh[rob[head[2]].pghn].ip.pc + {rob[head[2]].ip_offs,1'b0};
-		commit_pc3 <= pgh[rob[head[3]].pghn].ip.pc + {rob[head[3]].ip_offs,1'b0};
+		commit_pc0 <= pgh[rob[head[0]].pghn].ip + {rob[head[0]].ip_offs,1'b0};
+		commit_pc1 <= pgh[rob[head[1]].pghn].ip + {rob[head[1]].ip_offs,1'b0};
+		commit_pc2 <= pgh[rob[head[2]].pghn].ip + {rob[head[2]].ip_offs,1'b0};
+		commit_pc3 <= pgh[rob[head[3]].pghn].ip + {rob[head[3]].ip_offs,1'b0};
 		commit_brtgt0 <= rob[head[0]].brtgt;
 		commit_brtgt1 <= rob[head[1]].brtgt;
 		commit_brtgt2 <= rob[head[2]].brtgt;
@@ -6287,16 +6288,16 @@ else begin
 		if (rob[head[0]].excv && rob[head[0]].v)
 //			err_mask[head[0]] <= 1'b1;
 //			if (rob[head[0]].last)
-			tProcessExc(head[0],pgh[rob[head[0]].pghn].ip.pc+{rob[head[0]].ip_offs,1'b0},rob[head[0]].op.uop.num);
+			tProcessExc(head[0],pgh[rob[head[0]].pghn].ip+{rob[head[0]].ip_offs,1'b0},rob[head[0]].op.uop.num);
 		else if (rob[head[1]].excv && cmtcnt > 3'd1 && rob[head[1]].v)
-			tProcessExc(head[1],pgh[rob[head[1]].pghn].ip.pc+{rob[head[1]].ip_offs,1'b0},rob[head[1]].op.uop.num);
+			tProcessExc(head[1],pgh[rob[head[1]].pghn].ip+{rob[head[1]].ip_offs,1'b0},rob[head[1]].op.uop.num);
 		else if (rob[head[2]].excv && cmtcnt > 3'd2 && rob[head[2]].v)
-			tProcessExc(head[2],pgh[rob[head[2]].pghn].ip.pc+{rob[head[2]].ip_offs,1'b0},rob[head[2]].op.uop.num);
+			tProcessExc(head[2],pgh[rob[head[2]].pghn].ip+{rob[head[2]].ip_offs,1'b0},rob[head[2]].op.uop.num);
 		else if (rob[head[3]].excv && cmtcnt > 3'd3 && rob[head[3]].v)
-			tProcessExc(head[3],pgh[rob[head[3]].pghn].ip.pc+{rob[head[3]].ip_offs,1'b0},rob[head[3]].op.uop.num);
+			tProcessExc(head[3],pgh[rob[head[3]].pghn].ip+{rob[head[3]].ip_offs,1'b0},rob[head[3]].op.uop.num);
 			
 		if (rob[head[0]].op.ssm)
-			tProcessExc(head[0],Qupls4_pkg::SSM_DEBUG ? pgh[rob[head[0]].pghn].ip.pc+{rob[head[0]].ip_offs,1'b0} : rob[head[0]].op.hwipc,rob[head[0]].op.uop.num);
+			tProcessExc(head[0],Qupls4_pkg::SSM_DEBUG ? pgh[rob[head[0]].pghn].ip+{rob[head[0]].ip_offs,1'b0} : rob[head[0]].op.hwipc,rob[head[0]].op.uop.num);
 
 		/*
 		if (FALSE) begin
@@ -7945,7 +7946,7 @@ begin
 	next_robe.could_issue_nm = FALSE;
 	// "static" fields, these fields remain constant after enqueue
 	next_robe.grp = grp;
-	next_robe.brtgt = Qupls4_pkg::fnTargetIP(pgh[robe.pghn].ip.pc + {robe.ip_offs,1'b0},db.immc);
+	next_robe.brtgt = Qupls4_pkg::fnTargetIP(pgh[robe.pghn].ip + {robe.ip_offs,1'b0},db.immc);
 	next_robe.om = sr.om;
 	next_robe.rm = db.rm==3'd7 ? fpcsr.rm : db.rm;
 `ifdef IS_SIM
@@ -7960,10 +7961,10 @@ begin
 //	next_robe.op.nRt = nRt;//db.Rtz ? 10'd0 : nRt;
 	next_robe.group_len = grplen;
 	next_robe.last = last;
-	next_robe.v = Qupls4_pkg::SUPPORT_BACKOUT ? (robe.op.v ? pgh[robe.pghn].ip.stream : 5'd0): (robe.op.v ? pgh[robe.pghn].ip.stream & ~{5{stomp}} : 5'd0);
+	next_robe.v = Qupls4_pkg::SUPPORT_BACKOUT ? (robe.op.v ? robe.ip_stream : 5'd0): (robe.op.v ? robe.ip_stream & ~{5{stomp}} : 5'd0);
 	if (!stomp && db.v && !brtgtv) begin
 		if (db.br & pt) begin
-			next_brtgt = Qupls4_pkg::fnTargetIP(pgh[robe.pghn].ip.pc,db.immc);
+			next_brtgt = Qupls4_pkg::fnTargetIP(pgh[robe.pghn].ip,db.immc);
 			next_brtgtv = VAL;	// ToDo: Fix
 		end
 	end
@@ -8069,7 +8070,7 @@ begin
 	lsq[ndx.row][ndx.col].v <= VAL;
 	lsq[ndx.row][ndx.col].state <= 2'b00;
 	lsq[ndx.row][ndx.col].agen <= FALSE;
-	lsq[ndx.row][ndx.col].pc <= pgh[rob.pghn].ip.pc + {rob.ip_offs,1'b0};
+	lsq[ndx.row][ndx.col].pc <= pgh[rob.pghn].ip + {rob.ip_offs,1'b0};
 	lsq[ndx.row][ndx.col].loadv <= INV;
 	lsq[ndx.row][ndx.col].load <= rob.op.decbus.load|rob.excv;
 	lsq[ndx.row][ndx.col].loadz <= rob.op.decbus.loadz|rob.excv;
@@ -8162,9 +8163,9 @@ begin
 			else if (rob[head].op.decbus.irq)
 				;
 			else if (rob[head].op.decbus.brk)
-				tProcessExc(head,pgh[rob[head].pghn].ip.pc+{rob[head].ip_offs,1'b0}+32'd6,rob[head].op.uop.num);
+				tProcessExc(head,pgh[rob[head].pghn].ip+{rob[head].ip_offs,1'b0}+32'd6,rob[head].op.uop.num);
 			else if (rob[head].op.decbus.sys)
-				tProcessExc(head,pgh[rob[head].pghn].ip.pc+{rob[head].ip_offs,1'b0}+32'd6,rob[head].op.uop.num);
+				tProcessExc(head,pgh[rob[head].pghn].ip+{rob[head].ip_offs,1'b0}+32'd6,rob[head].op.uop.num);
 			else if (rob[head].op.decbus.eret)
 				tProcessEret(rob[head].op[22:19]==5'd2,rob[head].op[23]==1'b1);
 			else if (rob[head].op.decbus.rex)
@@ -8172,9 +8173,9 @@ begin
 		end
 		// If interrupts are still enabled at commit, go do interrupt processing.
 		if (rob[head].op.hwi && pgh[rob[head].pghn].hwi && pgh[rob[head].pghn].irq.level == 6'd63)	// NMI
-			tProcessHwi(head,pgh[rob[head].pghn].ip.pc+{rob[head].ip_offs,1'b0},rob[head].op.uop.num,FALSE,TRUE);
+			tProcessHwi(head,pgh[rob[head].pghn].ip+{rob[head].ip_offs,1'b0},rob[head].op.uop.num,FALSE,TRUE);
 		else if (rob[head].op.hwi && pgh[rob[head].pghn].hwi && pgh[rob[head].pghn].irq.level > sr.ipl && sr.mie)
-			tProcessHwi(head,pgh[rob[head].pghn].ip.pc+{rob[head].ip_offs,1'b0},rob[head].op.uop.num,TRUE,FALSE);
+			tProcessHwi(head,pgh[rob[head].pghn].ip+{rob[head].ip_offs,1'b0},rob[head].op.uop.num,TRUE,FALSE);
 		// If interrupt turned out to be disabled reload the IRQ at the fetch stage,
 		// but only after loading some other instructions. Put the irq on a queue for
 		// later processing. Note that the interrupt enable level has been set to
@@ -8189,13 +8190,13 @@ begin
 			excir <= rob[head].op;
 			excid <= head;
 			excmissgrp <= rob[head].pghn;
-			excmisspc.pc <= pgh[rob[head].pghn].ip.pc+{rob[head].ip_offs,1'b0};
+			excmisspc.pc <= pgh[rob[head].pghn].ip+{rob[head].ip_offs,1'b0};
 			excmiss <= TRUE;
 			set_pending_ipl <= TRUE;
 			next_pending_ipl <= pgh[rob[head].pghn].old_ipl;	// restore IPL
 			sr.ipl <= pgh[rob[head].pghn].old_ipl;
 			if (irq_downcount_base[7])
-				tProcessExc(head,pgh[rob[head].pghn].ip.pc+{rob[head].ip_offs,1'b0},rob[head].op.uop.num);
+				tProcessExc(head,pgh[rob[head].pghn].ip+{rob[head].ip_offs,1'b0},rob[head].op.uop.num);
 		end
 	end
 	// If the instruction got invalidated (eg branch) there is not an easy way to
@@ -8208,7 +8209,7 @@ begin
 		irq_downcount <= irq_downcount_base;
 		irq_downcount_base <= {irq_downcount_base,1'b0} | 8'd8;
 		if (irq_downcount_base[7])
-			tProcessExc(head,pgh[rob[head].pghn].ip.pc+{rob[head].ip_offs,1'b0},rob[head].op.uop.num);
+			tProcessExc(head,pgh[rob[head].pghn].ip+{rob[head].ip_offs,1'b0},rob[head].op.uop.num);
 		set_pending_ipl <= TRUE;
 		next_pending_ipl <= pgh[rob[head].pghn].old_ipl;	// restore IPL
 		sr.ipl <= pgh[rob[head].pghn].old_ipl;
@@ -8769,17 +8770,17 @@ begin
 	m6 = (ndx + Qupls4_pkg::ROB_ENTRIES + 6) % Qupls4_pkg::ROB_ENTRIES;
 	m7 = (ndx + Qupls4_pkg::ROB_ENTRIES + 7) % Qupls4_pkg::ROB_ENTRIES;
 	dst = p1;	// the last ROB entry it could be
-	if (rob[m1].sn > rob[ndx].sn && rob[m1].v==rob[ndx].v && pgh[rob[m1].pghn].ip.pc + {rob[m1].ip_offs,1'b0} == rob[ndx].brtgt)
+	if (rob[m1].sn > rob[ndx].sn && rob[m1].v==rob[ndx].v && pgh[rob[m1].pghn].ip + {rob[m1].ip_offs,1'b0} == rob[ndx].brtgt)
 		found = 3'd1;
-	else if (rob[m2].sn > rob[ndx].sn && rob[m2].v==rob[ndx].v && pgh[rob[m2].pghn].ip.pc + {rob[m2].ip_offs,1'b0} == rob[ndx].brtgt)
+	else if (rob[m2].sn > rob[ndx].sn && rob[m2].v==rob[ndx].v && pgh[rob[m2].pghn].ip + {rob[m2].ip_offs,1'b0} == rob[ndx].brtgt)
 		found = 3'd2;
-	else if (rob[m3].sn > rob[ndx].sn && rob[m3].v==rob[ndx].v && pgh[rob[m3].pghn].ip.pc + {rob[m3].ip_offs,1'b0} == rob[ndx].brtgt)
+	else if (rob[m3].sn > rob[ndx].sn && rob[m3].v==rob[ndx].v && pgh[rob[m3].pghn].ip + {rob[m3].ip_offs,1'b0} == rob[ndx].brtgt)
 		found = 3'd3;
-	else if (rob[m4].sn > rob[ndx].sn && rob[m4].v==rob[ndx].v && pgh[rob[m4].pghn].ip.pc + {rob[m4].ip_offs,1'b0} == rob[ndx].brtgt)
+	else if (rob[m4].sn > rob[ndx].sn && rob[m4].v==rob[ndx].v && pgh[rob[m4].pghn].ip + {rob[m4].ip_offs,1'b0} == rob[ndx].brtgt)
 		found = 3'd4;
-	else if (rob[m5].sn > rob[ndx].sn && rob[m5].v==rob[ndx].v && pgh[rob[m5].pghn].ip.pc + {rob[m5].ip_offs,1'b0} == rob[ndx].brtgt)
+	else if (rob[m5].sn > rob[ndx].sn && rob[m5].v==rob[ndx].v && pgh[rob[m5].pghn].ip + {rob[m5].ip_offs,1'b0} == rob[ndx].brtgt)
 		found = 3'd5;
-	else if (rob[m6].sn > rob[ndx].sn && rob[m6].v==rob[ndx].v && pgh[rob[m6].pghn].ip.pc + {rob[m6].ip_offs,1'b0} == rob[ndx].brtgt)
+	else if (rob[m6].sn > rob[ndx].sn && rob[m6].v==rob[ndx].v && pgh[rob[m6].pghn].ip + {rob[m6].ip_offs,1'b0} == rob[ndx].brtgt)
 		found = 3'd6;
 
 	case(found)

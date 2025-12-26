@@ -133,13 +133,13 @@ else begin
 		fregs_i <= fregs_o;
 end
 
-Qupls4_pkg::pipeline_reg_t [MWIDTH-1:0] insm;
+Qupls4_pkg::rob_entry_t [MWIDTH-1:0] insm;
 Qupls4_pkg::pipeline_reg_t ins4d;
 Qupls4_pkg::pipeline_reg_t nopi;
 Qupls4_pkg::decode_bus_t [MWIDTH-1:0] dec;
 Qupls4_pkg::pipeline_reg_t [MWIDTH-1:0] pr_dec;
 Qupls4_pkg::pipeline_reg_t [MWIDTH-1:0] prd, inso;
-Qupls4_pkg::pipeline_reg_t [MWIDTH-1:0] tpr;
+Qupls4_pkg::rob_entry_t [MWIDTH-1:0] tpr;
 
 always_ff @(posedge clk)
 	pg_ext_r <= pg_ext;
@@ -152,7 +152,7 @@ generate begin : gMicroopMem
 	for (g = 0; g < MWIDTH; g = g + 1)
 Qupls4_microop_mem uuop1
 (
-    .clk(clk),
+   .clk(clk),
 	.om(pg_ext.pr[g].op.om),
 	.ir(pg_ext.pr[g].op.uop),
 	.num(5'd0), 
@@ -161,7 +161,7 @@ Qupls4_microop_mem uuop1
 	.carry_in(1'b0),
 	.count(uop_count[g]),
 	.uop(uop[g]),
-	.thread(pg_ext.hdr.ip.stream.thread)
+	.thread(pg_ext.pr[g].ip_stream.thread)
 );
 end
 endgenerate
@@ -277,8 +277,8 @@ assign mux_stallq = !rd_more;
 always_comb
 begin
 	for (n7 = 0; n7 < MWIDTH; n7 = n7 + 1) begin
-		tpr[n7] = pg_ext.pr[uop_mark[n7]].op;
-		tpr[n7].uop = uop_buf[head[n7]];
+		tpr[n7] = pg_ext.pr[uop_mark[n7]];
+		tpr[n7].op.uop = uop_buf[head[n7]];
 	end
 end
 
@@ -354,16 +354,15 @@ end
 always_ff @(posedge clk)
 if (rst) begin
 	for (n9 = 0; n9 < MWIDTH; n9 = n9 + 1)
-		insm[n9] <= {$bits(Qupls4_pkg::pipeline_reg_t){1'b0}};
+		insm[n9] <= {$bits(Qupls4_pkg::rob_entry_t){1'b0}};
 end
 else begin
 	if (en) begin
 		for (n9 = 0; n9 < MWIDTH; n9 = n9 + 1) begin
 			insm[n9] <= tpr[n9];
 			if (stomp_ext && FALSE) begin
-				if (tpr[n9].pc.stream!=kept_stream) begin
-					insm[n9] <= nopi;
-					insm[n9].pc.stream <= tpr[n9].pc.stream;
+				if (tpr[n9].ip_stream!=kept_stream) begin
+					insm[n9].op <= nopi;
 				end
 			end
 		end
@@ -377,11 +376,11 @@ Qupls4_decoder udeci0
 	.rst(rst),
 	.clk(clk),
 	.en(en),
-	.ip(pg_ext.hdr.ip.pc + {pg_ext.pr[g].ip_offs,1'b0}),
+	.ip(pg_ext.hdr.ip + {pg_ext.pr[g].ip_offs,1'b0}),
 	.om(sr.om),
 	.ipl(sr.ipl),
-	.instr(tpr[g].uop),
-	.instr_raw(432'(cline >> {tpr[g].cli,4'b0})),
+	.instr(tpr[g].op.uop),
+	.instr_raw(432'(cline >> {tpr[g].op.cli,4'b0})),
 	.dbo(dec[g])
 );
 end
@@ -706,9 +705,9 @@ always_comb inso = prd;
 reg [63:0] bsr0_tgt, bsr1_tgt, bsr2_tgt;
 reg [63:0] jsr0_tgt, jsr1_tgt, jsr2_tgt;
 reg [63:0] new_address;
-always_comb bsr0_tgt = {{29{pr_dec[0].uop.imm[34]}},pr_dec[0].uop.imm,1'b0} + pg_dec.hdr.ip.pc + {pg_dec.pr[0].ip_offs,1'b0};
-always_comb bsr1_tgt = {{29{pr_dec[1].uop.imm[34]}},pr_dec[1].uop.imm,1'b0} + pg_dec.hdr.ip.pc + {pg_dec.pr[1].ip_offs,1'b0};
-always_comb bsr2_tgt = {{29{pr_dec[2].uop.imm[34]}},pr_dec[2].uop.imm,1'b0} + pg_dec.hdr.ip.pc + {pg_dec.pr[2].ip_offs,1'b0};
+always_comb bsr0_tgt = {{29{pr_dec[0].uop.imm[34]}},pr_dec[0].uop.imm,1'b0} + pg_dec.hdr.ip + {pg_dec.pr[0].ip_offs,1'b0};
+always_comb bsr1_tgt = {{29{pr_dec[1].uop.imm[34]}},pr_dec[1].uop.imm,1'b0} + pg_dec.hdr.ip + {pg_dec.pr[1].ip_offs,1'b0};
+always_comb bsr2_tgt = {{29{pr_dec[2].uop.imm[34]}},pr_dec[2].uop.imm,1'b0} + pg_dec.hdr.ip + {pg_dec.pr[2].ip_offs,1'b0};
 always_comb jsr0_tgt = {{29{pr_dec[0].uop.imm[34]}},pr_dec[0].uop.imm,1'b0};
 always_comb jsr1_tgt = {{29{pr_dec[1].uop.imm[34]}},pr_dec[1].uop.imm,1'b0};
 always_comb jsr2_tgt = {{29{pr_dec[2].uop.imm[34]}},pr_dec[2].uop.imm,1'b0};
@@ -722,19 +721,19 @@ begin
 	if (pr_dec[0].decbus.bsr|pr_dec[0].decbus.jsr) begin
 		predicted_correctly_o = FALSE;
 		new_address_o = pr_dec[0].decbus.bsr ? bsr0_tgt : jsr0_tgt;
-		if (pg_dec.hdr.ip.pc + {pg_dec.pr[0].ip_offs,1'b0}==pg_ext.hdr.ip.pc + {pg_ext.pr[0].ip_offs,1'b0})
+		if (pg_dec.hdr.ip + {pg_dec.pr[0].ip_offs,1'b0}==pg_ext.hdr.ip + {pg_ext.pr[0].ip_offs,1'b0})
 			predicted_correctly_o = TRUE;
 	end
 	else if (pr_dec[1].decbus.bsr|pr_dec[1].decbus.jsr) begin
 		predicted_correctly_o = FALSE;
 		new_address_o = pr_dec[1].decbus.bsr ? bsr1_tgt : jsr1_tgt;
-		if (pg_dec.hdr.ip.pc + {pg_dec.pr[1].ip_offs,1'b0}==pg_ext.hdr.ip.pc + {pg_ext.pr[1].ip_offs,1'b0})
+		if (pg_dec.hdr.ip + {pg_dec.pr[1].ip_offs,1'b0}==pg_ext.hdr.ip + {pg_ext.pr[1].ip_offs,1'b0})
 			predicted_correctly_o = TRUE;
 	end
 	else if (pr_dec[2].decbus.bsr|pr_dec[2].decbus.jsr) begin
 		predicted_correctly_o = FALSE;
 		new_address_o = pr_dec[2].decbus.bsr ? bsr2_tgt : jsr2_tgt;
-		if (pg_dec.hdr.ip.pc + {pg_dec.pr[2].ip_offs,1'b0}==pg_ext.hdr.ip.pc + {pg_ext.pr[2].ip_offs,1'b0})
+		if (pg_dec.hdr.ip + {pg_dec.pr[2].ip_offs,1'b0}==pg_ext.hdr.ip + {pg_ext.pr[2].ip_offs,1'b0})
 			predicted_correctly_o = TRUE;
 	end
 end
