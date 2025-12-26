@@ -36,8 +36,8 @@
 // 2500 LUTs / 2500 FFs                                                                          
 // ============================================================================
 
-import fta_bus_pkg::*;
-import Stark_pkg::*;
+import wishbone_pkg::*;
+import Qupls4_pkg::*;
 import mmu_pkg::*;
 
 module region_tbl(rst, clk, cs_rgn, rgn0, rgn1, rgn2, ftas_req, region_dat,
@@ -48,7 +48,7 @@ input cs_rgn;
 input [2:0] rgn0;
 input [2:0] rgn1;
 input [2:0] rgn2;
-input fta_cmd_request256_t ftas_req;
+input wb_cmd_request256_t ftas_req;
 output reg [255:0] region_dat;
 output reg [3:0] region_num;
 output REGION region0;
@@ -60,7 +60,7 @@ output reg [7:0] sel2;
 output reg err0;
 output reg err1;
 output reg err2;
-localparam ABITS = $bits(fta_address_t);
+localparam ABITS = $bits(wb_address_t);
 
 integer n;
 REGION [7:0] pma_regions;
@@ -75,7 +75,7 @@ initial begin
 	pma_regions[7].at[1].rwx = 4'hD;
 	pma_regions[7].at[2].rwx = 4'hD;
 	pma_regions[7].at[3].rwx = 4'hD;
-	pma_regions[7].at[3].cache = fta_bus_pkg::WT_READ_ALLOCATE;
+	pma_regions[7].at[3].cache = wishbone_pkg::WT_READ_ALLOCATE;
 	pma_regions[7].lock = "LOCK";
 
 	// IO
@@ -87,7 +87,7 @@ initial begin
 	pma_regions[6].at[1].rwx = 4'hE;
 	pma_regions[6].at[2].rwx = 4'hE;
 	pma_regions[6].at[3].rwx = 4'hE;
-	pma_regions[6].at[3].cache = fta_bus_pkg::NC_NB;
+	pma_regions[6].at[3].cache = wishbone_pkg::NC_NB;
 //	pma_regions[6].at = 20'h00206;		// io, (screen) byte address table, read-write
 	pma_regions[6].lock = "LOCK";
 
@@ -111,7 +111,7 @@ initial begin
 	pma_regions[4].at[1].rwx = 4'hF;
 	pma_regions[4].at[2].rwx = 4'hF;
 	pma_regions[4].at[3].rwx = 4'hF;
-	pma_regions[4].at[3].cache = fta_bus_pkg::WT_READ_ALLOCATE;
+	pma_regions[4].at[3].cache = wishbone_pkg::WT_READ_ALLOCATE;
 //	pma_regions[4].at = 20'h0020F;		// byte address table, read-write-execute cacheable
 	pma_regions[4].lock = "LOCK";
 
@@ -151,7 +151,7 @@ initial begin
 	pma_regions[1].at[1].dev_type = 8'h01;		// no access
 	pma_regions[1].at[2].dev_type = 8'h01;		// no access
 	pma_regions[1].at[3].dev_type = 8'h01;		// no access
-	pma_regions[1].at[3].cache = fta_bus_pkg::WT_READ_ALLOCATE;
+	pma_regions[1].at[3].cache = wishbone_pkg::WT_READ_ALLOCATE;
 //	pma_regions[1].at = 20'h0010F;	// ram, byte address table, cache-read-write-execute
 	pma_regions[1].lock = "LOCK";
 
@@ -168,8 +168,8 @@ initial begin
 
 end
 
-fta_cmd_request256_t sreq;
-fta_cmd_response256_t sresp;
+wb_cmd_request256_t sreq;
+wb_cmd_response256_t sresp;
 wire sack;
 wire [255:0] cfg_out;
 wire cs_bar0;
@@ -183,19 +183,19 @@ always_ff @(posedge clk)
 			case(sreq.adr[5])
 			1'd0:	
 				begin
-					if (&sreq.sel[7:0]) pma_regions[sreq.adr[8:6]].start_adr[ABITS-1: 0] <= sreq.data1[ABITS-1:0];
-					if (&sreq.sel[15:8]) pma_regions[sreq.adr[8:6]].end_adr[ABITS-1: 0] <= sreq.data1[ABITS-1+64:64];
-					if (&sreq.sel[23:16]) pma_regions[sreq.adr[8:6]].pam[ABITS-1: 0] <= sreq.data1[ABITS-1+128:128];
-					if (&sreq.sel[31:24]) pma_regions[sreq.adr[8:6]].pmt[ABITS-1: 0] <= sreq.data1[ABITS-1+192:192];
+					if (&sreq.sel[7:0]) pma_regions[sreq.adr[8:6]].start_adr[ABITS-1: 0] <= sreq.dat[ABITS-1:0];
+					if (&sreq.sel[15:8]) pma_regions[sreq.adr[8:6]].end_adr[ABITS-1: 0] <= sreq.dat[ABITS-1+64:64];
+					if (&sreq.sel[23:16]) pma_regions[sreq.adr[8:6]].pam[ABITS-1: 0] <= sreq.dat[ABITS-1+128:128];
+					if (&sreq.sel[31:24]) pma_regions[sreq.adr[8:6]].pmt[ABITS-1: 0] <= sreq.dat[ABITS-1+192:192];
 				end
 			1'd1:
 				begin
-					if (&sreq.sel[7:0])	pma_regions[sreq.adr[8:6]].cta[ABITS-1: 0] <= sreq.data1[ABITS-1:0];
-					if (&sreq.sel[11:8]) pma_regions[sreq.adr[8:6]].lock <= sreq.data1[95:64];
-					if (&sreq.sel[19:16]) pma_regions[sreq.adr[8:6]].at[0] <= sreq.data1[159:128];
-					if (&sreq.sel[23:20]) pma_regions[sreq.adr[8:6]].at[1] <= sreq.data1[191:160];
-					if (&sreq.sel[27:24]) pma_regions[sreq.adr[8:6]].at[2] <= sreq.data1[223:192];
-					if (&sreq.sel[31:28]) pma_regions[sreq.adr[8:6]].at[3] <= sreq.data1[255:224];
+					if (&sreq.sel[7:0])	pma_regions[sreq.adr[8:6]].cta[ABITS-1: 0] <= sreq.dat[ABITS-1:0];
+					if (&sreq.sel[11:8]) pma_regions[sreq.adr[8:6]].lock <= sreq.dat[95:64];
+					if (&sreq.sel[19:16]) pma_regions[sreq.adr[8:6]].at[0] <= sreq.dat[159:128];
+					if (&sreq.sel[23:20]) pma_regions[sreq.adr[8:6]].at[1] <= sreq.dat[191:160];
+					if (&sreq.sel[27:24]) pma_regions[sreq.adr[8:6]].at[2] <= sreq.dat[223:192];
+					if (&sreq.sel[31:28]) pma_regions[sreq.adr[8:6]].at[3] <= sreq.dat[255:224];
 				end
 			endcase
 		end

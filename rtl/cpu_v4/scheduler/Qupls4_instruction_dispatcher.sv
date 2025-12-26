@@ -260,7 +260,8 @@ begin
 	rse[kk] = {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
 	rse[kk].om = dbf[nn].om;
 	rse[kk].rm = dbf[nn].rm;
-	rse[kk].pc = dbf[nn].op.pc.pc;
+	rse[kk].pc.pc = pg_ren.hdr.ip.pc + dbf[nn].ip_offs;
+	rse[kk].pc.stream = pg_ren.hdr.ip.stream;
 	rse[kk].prc = dbf[nn].op.decbus.prc;
 	rse[kk].cndx = pgh[mm].cndx;
 	rse[kk].rndx = nn;

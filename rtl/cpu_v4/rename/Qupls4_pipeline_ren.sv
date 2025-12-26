@@ -144,8 +144,6 @@ Qupls4_pkg::pipeline_reg_t nopi;
 always_comb
 begin
 	nopi = {$bits(Qupls4_pkg::pipeline_reg_t){1'b0}};
-	nopi.pc = RSTPC;
-	nopi.pc.stream = pc_stream_t'(7'd1);
 	nopi.uop = {41'd0,Qupls4_pkg::OP_NOP};
 	nopi.uop.lead = 1'd1;
 	nopi.uop.Rs1 = 8'd0;
@@ -720,7 +718,7 @@ input pc_stream_t bno;
 integer nn;
 begin
 	foreach (pg_ren.pr[nn]) begin
-		if (pg_ren.pr[nn].op.pc.stream!=bno) begin
+		if (pg_ren.hdr.ip.stream!=bno) begin
 			pg_ren.pr[nn].op.excv <= INV;
 			if (Qupls4_pkg::SUPPORT_BACKOUT)
 				pg_ren.pr[nn].v <= INV;

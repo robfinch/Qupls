@@ -243,7 +243,7 @@ genvar g,mm,xx;
 
 generate begin : g8
 reg [WID-1:0] c1;
-	if (Qupls4_pkg::SUPPORT_PREC)
+	if (Qupls4_pkg::SUPPORTED_PRECISIONS[7:0]=="B")
 	for (g = 0; g < WID/8; g = g + 1)
 		Qupls4_sau #(.WID(8), .SAU0(SAU0), .LANE(g)) ualu8
 		(
@@ -346,7 +346,7 @@ endgenerate
 
 generate begin : g16
 reg [WID-1:0] c1;
-	if (Qupls4_pkg::SUPPORT_PREC)
+	if (Qupls4_pkg::SUPPORTED_PRECISIONS[15:8]=="W")
 	for (g = 0; g < WID/16; g = g + 1)
 		Qupls4_sau #(.WID(16), .SAU0(SAU0), .LANE(g)) ualu16
 		(
@@ -426,7 +426,7 @@ endgenerate
 
 generate begin : g32
 reg [WID-1:0] c1;
-	if (Qupls4_pkg::SUPPORT_PREC)
+	if (Qupls4_pkg::SUPPORTED_PRECISIONS[23:16]=="T")
 	for (g = 0; g < WID/32; g = g + 1)
 		Qupls4_sau #(.WID(32), .SAU0(SAU0), .LANE(g)) usau32
 		(
@@ -542,7 +542,7 @@ endgenerate
 
 // Always supported.
 generate begin : g128
-	if (WID==128)
+	if (WID==128 || SUPPORTED_PRECISIONS[39:32]=="H")
 	for (g = 0; g < WID/128; g = g + 1)
 		Qupls4_sau #(.WID(128), .SAU0(SAU0), .LANE(g)) usau128
 		(

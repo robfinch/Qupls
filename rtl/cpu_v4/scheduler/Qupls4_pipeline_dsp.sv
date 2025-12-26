@@ -342,7 +342,8 @@ begin
 	rse[kk].v = !stomp[nn];
 	rse[kk].om = pg_ren.pr[nn].om;
 	rse[kk].rm = pg_ren.pr[nn].rm;
-	rse[kk].pc = pg_ren.pr[nn].op.pc.pc;
+	rse[kk].pc.pc = pg_ren.hdr.ip.pc + pg_ren.pr[nn].ip_offs;
+	rse[kk].pc.stream = pg_ren.hdr.ip.stream;
 	rse[kk].prc = pg_ren.pr[nn].op.decbus.prc;
 	rse[kk].cndx = pgh.cndx;
 	rse[kk].rndx = nn;

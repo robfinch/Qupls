@@ -1,6 +1,6 @@
 import const_pkg::*;
 import mmu_pkg::*;
-import fta_bus_pkg::*;
+import wishbone_pkg::*;
 
 module mmu_read_reg(rst, clk, cs_config, cs_regs, sreq, sresp, cfg_out,
 	cfg_tid, cfg_ack, fault_adr, fault_seg, fault_asid, ptbr, ptattr,
@@ -10,8 +10,8 @@ input rst;
 input clk;
 input cs_config;
 input cs_regs;
-input fta_cmd_request256_t sreq;
-output fta_cmd_response256_t sresp;
+input wb_cmd_request256_t sreq;
+output wb_cmd_response256_t sresp;
 input [255:0] cfg_out;
 input [15:0] cfg_tid;
 input cfg_ack;

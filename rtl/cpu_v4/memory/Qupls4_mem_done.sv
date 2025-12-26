@@ -1,10 +1,9 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
-//
 //
 // BSD 3-Clause License
 // Redistribution and use in source and binary forms, with or without
@@ -31,27 +30,47 @@
 // CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//                                                                          
 //
 // ============================================================================
-
+//
+import const_pkg::*;
+import cpu_types_pkg::*;
+import cache_pkg::*;
+import mmu_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_decode_fc(instr, fc);
-input Qupls4_pkg::micro_op_t instr;
-output fc;
+module Qupls4_mem_done(rst, clk, load, store, cload, cstore, cload_tags,
+	dram_v, dram_idv, dram_id, dram_state, dram_more, stomp, dram_stomp, done);
+input rst;
+input clk;
+input load;
+input store;
+input cload;
+input cstore;
+input cload_tags;
+input dram_v;
+input dram_idv;
+input rob_ndx_t dram_id;
+input Qupls4_pkg::dram_state_t dram_state;
+input dram_more;
+input Qupls4_pkg::rob_bitmask_t stomp;
+input dram_stomp;
+output reg done;
 
-function fnIsFlowCtrl;
-input Qupls4_pkg::micro_op_t ir;
-begin
-	case(ir.opcode)
-	Qupls4_pkg::OP_BRK,
-	Qupls4_pkg::OP_CHK:	fnIsFlowCtrl = 1'b1;
-	default:
-		fnIsFlowCtrl = 1'b0;
-	endcase
+// Stores are done as soon as they issue.
+// Loads are done when there is an ack back from the memory system.
+always_ff @(posedge clk)
+if (rst)
+	done <= FALSE;
+else begin
+	if (!(store|cstore|load|cload) && dram_idv)
+		done <= TRUE;
+	else if ((store|cstore) ? !stomp[dram_id] && dram_idv :
+		(dram_state == Qupls4_pkg::DRAMSLOT_DELAY || dram_state==Qupls4_pkg::DRAMSLOT_DELAY2) && dram_v)
+		done <= TRUE;
+	else
+		done <= FALSE;
 end
-endfunction
-
-assign fc = fnIsFlowCtrl(instr)|fnIsBranch(instr);
 
 endmodule

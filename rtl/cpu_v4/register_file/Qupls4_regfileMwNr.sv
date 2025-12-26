@@ -121,8 +121,9 @@ generate begin : gRFO
 		end
 		always_comb
 		begin
-			for (n1 = 0; n1 < WPORTS*2-1; n1 = n1 + 1)
-				
+			for (n1 = 0; n1 < WPORTS*2-1; n1 = n1 + 1) begin
+				o[g] = value_zero;
+				to[g] = 8'h00;
 				if (cnd[n1]) begin
 					o[g] = val[n1][g];
 					to[g] = tag[n1][g];
@@ -133,6 +134,7 @@ generate begin : gRFO
 					to[g] = to0[WPORTS-1][g];
 				end
 				*/
+			end
 		end
 	end
 end

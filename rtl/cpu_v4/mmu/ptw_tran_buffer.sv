@@ -36,10 +36,10 @@
 // ============================================================================
 
 import const_pkg::*;
-import fta_bus_pkg::*;
+import wishbone_pkg::*;
 import mmu_pkg::*;
 import cpu_types_pkg::*;
-import QuplsPkg::*;
+import Qupls4_pkg::*;
 import ptable_walker_pkg::*;
 
 module ptw_tran_buffer(rst, clk, ptattr, state, access_state, ptw_vv, ptw_pv, ptw_ppv, tranbuf,
@@ -58,9 +58,9 @@ output ptw_tran_buf_t [15:0] tranbuf;
 input ptw_miss_queue_t [MISSQ_SIZE-1:0] miss_queue;
 input [5:0] sel_tran;
 input [5:0] sel_qe;
-input fta_cmd_response256_t ftam_resp;
+input wb_cmd_response256_t ftam_resp;
 input ftam_resp_ack;
-output fta_tranid_t tid;
+output wb_tranid_t tid;
 input virtual_address_t ptw_vadr;
 input physical_address_t ptw_padr;
 

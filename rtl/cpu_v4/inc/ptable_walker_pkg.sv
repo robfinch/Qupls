@@ -1,6 +1,7 @@
+`timescale 1ns / 10ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2024-2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -34,24 +35,53 @@
 //
 // ============================================================================
 
-import Qupls4_pkg::*;
+package ptable_walker_pkg;
 
-module Qupls4_decode_fc(instr, fc);
-input Qupls4_pkg::micro_op_t instr;
-output fc;
+parameter MISSQ_SIZE = 8;
 
-function fnIsFlowCtrl;
-input Qupls4_pkg::micro_op_t ir;
-begin
-	case(ir.opcode)
-	Qupls4_pkg::OP_BRK,
-	Qupls4_pkg::OP_CHK:	fnIsFlowCtrl = 1'b1;
-	default:
-		fnIsFlowCtrl = 1'b0;
-	endcase
-end
-endfunction
+typedef enum logic [1:0] {
+	IDLE = 2'd0,
+	FAULT = 2'd1,
+	WAIT = 2'd2
+} ptw_state_t;
 
-assign fc = fnIsFlowCtrl(instr)|fnIsBranch(instr);
+typedef enum logic [3:0] {
+	INACTIVE = 4'd0,
+	SEG_BASE_FETCH = 4'd1,
+	SEG_LIMIT_FETCH = 4'd2,
+	SEG_FETCH_DONE = 4'd3,
+	TLB_PTE_FETCH = 4'd4,
+	TLB_PTE_FETCH_DONE = 4'd5,
+	TLB_PTE_CYC = 4'd6,
+	TLB_PTE_ACK = 4'd7,
+	TLB_PTE_NACK = 4'd8,
+	VIRT_ADR_XLAT = 4'd9
+} ptw_access_state_t;
 
-endmodule
+typedef struct packed {
+	logic v;					// valid
+	logic [2:0] lvl;	// level begin processed
+	logic o;					// out
+	logic [1:0] bc;		// 1=bus cycle complete
+	logic [1:0] qn;
+	cpu_types_pkg::rob_ndx_t id;
+	cpu_types_pkg::asid_t asid;
+	cpu_types_pkg::virtual_address_t oadr;	// original address to translate
+	cpu_types_pkg::virtual_address_t adr;		// linear address to translate
+	cpu_types_pkg::virtual_address_t tadr;	// temporary address
+} ptw_miss_queue_t;
+
+typedef struct packed {
+	logic v;
+	ptw_access_state_t access_state;
+	logic rdy;
+	wishbone_pkg::wb_tranid_t tid;
+	logic [4:0] mqndx;											// index of associated miss queue
+	cpu_types_pkg::asid_t asid;
+	cpu_types_pkg::virtual_address_t vadr;
+	cpu_types_pkg::physical_address_t padr;
+	mmu_pkg::pte_t pte;
+	logic [255:0] dat;
+} ptw_tran_buf_t;
+
+endpackage

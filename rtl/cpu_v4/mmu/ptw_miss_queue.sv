@@ -36,10 +36,10 @@
 // ============================================================================
 
 import const_pkg::*;
-import fta_bus_pkg::*;
+import wishbone_pkg::*;
 import mmu_pkg::*;
 import cpu_types_pkg::*;
-import QuplsPkg::*;
+import Qupls4_pkg::*;
 import ptable_walker_pkg::*;
 
 module ptw_miss_queue(rst, clk, state, ptbr, ptattr,

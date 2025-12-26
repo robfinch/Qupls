@@ -317,7 +317,7 @@ Qupls4_pkg::rob_bitmask_t robentry_issue;
 Qupls4_pkg::rob_bitmask_t robentry_fpu_issue;
 Qupls4_pkg::rob_bitmask_t robentry_fcu_issue;
 Qupls4_pkg::rob_bitmask_t robentry_agen_issue;
-Qupls4_pkg::lsq_entry_t [1:0] lsq [0:7];
+Qupls4_pkg::lsq_entry_t [1:0] lsq [0:Qupls4_pkg::LSQ_ENTRIES-1];
 Qupls4_pkg::lsq_ndx_t lq_tail, lq_head;
 wire nq;
 reg [3:0] wnq;
@@ -858,7 +858,7 @@ reg [Qupls4_pkg::NDATA_PORTS-1:0] dramN_cstore;
 reg [Qupls4_pkg::NDATA_PORTS-1:0] dramN_stptr;
 reg [Qupls4_pkg::NDATA_PORTS-1:0] dramN_ack;
 reg [Qupls4_pkg::NDATA_PORTS-1:0] dramN_erc;
-fta_tranid_t dramN_tid [0:Qupls4_pkg::NDATA_PORTS-1];
+wb_tranid_t dramN_tid [0:Qupls4_pkg::NDATA_PORTS-1];
 Qupls4_pkg::memsz_t dramN_memsz;
 reg [Qupls4_pkg::NDATA_PORTS-1:0] dramN_ctago;
 wire [Qupls4_pkg::NDATA_PORTS-1:0] dramN_ctagi;
@@ -952,9 +952,7 @@ always_comb
 always_comb
 begin
 	nopi = {$bits(Qupls4_pkg::pipeline_reg_t){1'b0}};
-	nopi.pc = RSTPC;
-	nopi.pc.stream = 5'd1;
-	nopi.uop = {26'd0,Qupls4_pkg::OP_NOP};
+	nopi.uop = {41'd0,Qupls4_pkg::OP_NOP};
 	nopi.uop.lead = 1'd1;
 	nopi.decbus.Rdz = 1'b1;
 	nopi.decbus.nop = 1'b1;
@@ -1916,9 +1914,9 @@ Qupls4_stomp ustmp1
 	.pc(pc),
 	.pc_f(pc0_f),
 	.pc_fet(pc0_fet),
-	.pc_ext(pg_ext.pr[0].op.pc),
-	.pc_dec(pg_dec.pr[0].op.pc),
-	.pc_ren(pg_ren.pr[0].op.pc),
+	.pc_ext(pg_ext.hdr.ip),
+	.pc_dec(pg_dec.hdr.ip),
+	.pc_ren(pg_ren.hdr.ip),
 	.dep_stream(dep_stream),
 	.stomp_fet(stomp_fet),
 	.stomp_ext(stomp_ext),
@@ -1931,6 +1929,7 @@ Qupls4_stomp ustmp1
 	.missid(missid),
 	.kept_stream(kept_stream),
 	.takb(takb),
+	.pgh(pgh),
 	.rob(rob),
 	.robentry_stomp(robentry_stomp)
 );
@@ -2467,10 +2466,10 @@ Qupls4_pipeline_dec #(.MWIDTH(MWIDTH)) udecstg1
 	.avail_reg(avail_reg)
 );
 
-assign pc0_d = pg_dec.pr[0].op.pc;
-assign pc1_d = pg_dec.pr[1].op.pc;
-assign pc2_d = pg_dec.pr[2].op.pc;
-assign pc3_d = pg_dec.pr[3].op.pc;
+assign pc0_d = pg_dec.hdr.ip.pc + {pg_dec.pr[0].ip_offs,1'b0};
+assign pc1_d = pg_dec.hdr.ip.pc + {pg_dec.pr[1].ip_offs,1'b0};
+assign pc2_d = pg_dec.hdr.ip.pc + {pg_dec.pr[2].ip_offs,1'b0};
+assign pc3_d = pg_dec.hdr.ip.pc + {pg_dec.pr[3].ip_offs,1'b0};
 
 reg [MWIDTH-1:0] wrport0_v;
 reg wrport4_v;
@@ -2712,14 +2711,14 @@ wire stomp0b_r = FALSE;//branch_state > Qupls4_pkg::BS_STATE3 && misspc.pc > pg_
 wire stomp1b_r = FALSE;//branch_state > Qupls4_pkg::BS_STATE3 && misspc.pc > pg_ren.pr[1].op.pc.pc;
 wire stomp2b_r = FALSE;//branch_state > Qupls4_pkg::BS_STATE3 && misspc.pc > pg_ren.pr[2].op.pc.pc;
 wire stomp3b_r = FALSE;//branch_state > Qupls4_pkg::BS_STATE3 && misspc.pc > pg_ren.pr[3].op.pc.pc;
-wire stomp0_r = /*~qd_r[0]||stomp_ren||stomp0b_r*/stomp_ren && pg_ren.pr[0].op.pc.stream!=kept_stream;
-wire stomp1_r = /*~qd_r[1]||stomp_ren||stomp1b_r||*/(stomp_ren && pg_ren.pr[1].op.pc.stream!=kept_stream);// ||
+wire stomp0_r = /*~qd_r[0]||stomp_ren||stomp0b_r*/stomp_ren && pg_ren.hdr.ip.stream!=kept_stream;
+wire stomp1_r = /*~qd_r[1]||stomp_ren||stomp1b_r||*/(stomp_ren && pg_ren.hdr.ip.stream!=kept_stream);// ||
 //							 (pg_ren.pr[0].decbus.br && pg_ren.pr[0].bt);//pt_r[0]||MWIDTH < 2;
-wire stomp2_r = /*~qd_r[2]||stomp_ren||stomp2b_r||*/(stomp_ren && pg_ren.pr[2].op.pc.stream!=kept_stream);// ||
+wire stomp2_r = /*~qd_r[2]||stomp_ren||stomp2b_r||*/(stomp_ren && pg_ren.hdr.ip.stream!=kept_stream);// ||
 //							 (pg_ren.pr[0].decbus.br && pg_ren.pr[0].bt) ||
 //							 (pg_ren.pr[1].decbus.br && pg_ren.pr[1].bt)
 //;//pt_r[0]||pt_r[1]||MWIDTH < 3;
-wire stomp3_r = /*~qd_r[3]||stomp_ren||stomp3b_r||*/(stomp_ren && pg_ren.pr[3].op.pc.stream!=kept_stream);// ||
+wire stomp3_r = /*~qd_r[3]||stomp_ren||stomp3b_r||*/(stomp_ren && pg_ren.hdr.ip.stream!=kept_stream);// ||
 //							 (pg_ren.pr[0].decbus.br && pg_ren.pr[0].bt) ||
 //							 (pg_ren.pr[1].decbus.br && pg_ren.pr[1].bt) ||
 //							 (pg_ren.pr[2].decbus.br && pg_ren.pr[2].bt)
@@ -3939,6 +3938,7 @@ Qupls4_mem_sched umems1
 	.head(head[0]),
 	.lsq_head(lsq_head),
 	.cancel(cpu_request_cancel),
+	.seq_consistency(1'b1),
 	.robentry_stomp(robentry_stomp),
 	.rob(rob),
 	.lsq(lsq),
@@ -4722,7 +4722,38 @@ begin
 	end
 end
 
-Qupls4_dram_done udrdn1
+wire dram0_setready, dram0_setavail;
+wire dram1_setready, dram1_setavail;
+reg dram0_idv;
+reg dram1_idv;
+reg dram0_idv2;
+reg dram1_idv2;
+rob_ndx_t dram0_id;
+rob_ndx_t dram1_id;
+wire [79:0] dram0_sel;
+wire [79:0] dram1_sel;
+
+always_comb
+	dram0_id = lbndx0.vb ? lsq[lbndx0.row][lbndx0.col].rndx : lsq[mem0_lsndx.row][mem0_lsndx.col].rndx;
+always_comb
+	dram1_id = lbndx1.vb ? lsq[lbndx1.row][lbndx1.col].rndx : lsq[mem1_lsndx.row][mem1_lsndx.col].rndx;
+always_comb
+	dram0_idv =	mem0_lsndxv && !robentry_stomp[dram0_id] && !dram0_idv2;
+always_comb
+	dram1_idv =	mem1_lsndxv && !robentry_stomp[dram1_id] && !dram1_idv2 && Qupls4_pkg::NDATA_PORTS > 1;
+
+always_ff @(posedge clk)
+if (irst)
+	dram0_idv2 <= INV;
+else
+	dram0_idv2 <= dram0_idv;
+always_ff @(posedge clk)
+if (irst)
+	dram1_idv2 <= INV;
+else
+	dram1_idv2 <= dram1_idv;
+
+Qupls4_mem_done udrdn1
 (
 	.rst(irst),
 	.clk(clk),
@@ -4731,10 +4762,9 @@ Qupls4_dram_done udrdn1
 	.cload(dram0_work.cload),
 	.cstore(dram0_work.cstore),
 	.cload_tags(dram0_work.cload_tags),
-	.ack(dram0_ack),
 	.dram_v(dram0_oper.oper.v),
-	.dram_idv(dram0_work.rndxv),
-	.dram_id(dram0_work.rndx), 
+	.dram_idv(dram0_idv),
+	.dram_id(dram0_id), 
 	.dram_state(dram0),
 	.dram_more(dram0_more),
 	.stomp(robentry_stomp),
@@ -4752,12 +4782,12 @@ begin
 end
 endfunction
 
-wire dram0_setready, dram0_setavail;
-wire dram1_setready, dram1_setavail;
-reg dram0_idv2;
-reg dram1_idv2;
-
-Qupls4_calc_load_bypass_index uclbn0(lsq, mem0_lsndx, lbndx0);
+Qupls4_calc_load_bypass_index uclbn0
+(
+	.lsq_i(lsq),
+	.lsndx_i(mem0_lsndx),
+	.ndx_o(lbndx0)
+);
 
 Qupls4_mem_timeout_flag umtf0(dram0_work, dram0_timeout);
 
@@ -4765,7 +4795,7 @@ Qupls4_mem_set_state usms0
 (
 	.state_i(dram0),
 	.lsndxv_i(mem0_lsndxv),
-	.idv_i(dram0_work.rndxv),
+	.idv_i(dram0_idv),
 	.lbndx_i(lbndx0),
 	.setavail_o(dram0_setavail),
 	.setready_o(dram0_setready)
@@ -4787,7 +4817,7 @@ Qupls4_mem_more ummore0
 	.rst_i(irst),
 	.clk_i(clk),
 	.state_i(dram0),
-	.sel_i(dram0_work.sel),
+	.sel_i(dram0_sel),
 	.more_o(dram0_more)
 );
 
@@ -4801,7 +4831,7 @@ Qupls4_set_dram_work #(.CORENO(CORENO), .LSQNO(0)) usdr1 (
 	.dram_state_i(dram0),
 	.dram_done_i(dram0_done),
 	.dram_more_i(dram0_more),
-	.dram_idv_i(dram0_work.rndxv),
+	.dram_idv_i(dram0_idv),
 	.dram_idv2_i(dram0_idv2),
 	.dram_ack_i(dram0_ack),
 	.dram_stomp_i(dram0_stomp),
@@ -4809,7 +4839,8 @@ Qupls4_set_dram_work #(.CORENO(CORENO), .LSQNO(0)) usdr1 (
 	.lsq_i(lbndx0.vb ? lsq[lbndx0.row][lbndx0.col] : lsq[mem0_lsndx.row][mem0_lsndx.col]),
 	.dram_oper_o(dram0_oper),
 	.dram_work_o(dram0_work),
-	.page_cross_o(page_cross0)
+	.page_cross_o(page_cross0),
+	.sel_o(dram0_sel)
 );
 
 // Modules for second memory port.
@@ -4817,7 +4848,7 @@ Qupls4_set_dram_work #(.CORENO(CORENO), .LSQNO(0)) usdr1 (
 generate begin : gMemory2
 	if (Qupls4_pkg::NDATA_PORTS > 1) begin
 
-		Qupls4_dram_done udrdn1
+		Qupls4_mem_done udrdn1
 		(
 			.rst(irst),
 			.clk(clk),
@@ -4828,8 +4859,8 @@ generate begin : gMemory2
 			.cload_tags(dram1_work.cload_tags),
 			.ack(dram1_ack),
 			.dram_v(dram1_oper.oper.v),
-			.dram_idv(dram1_work.rndxv),
-			.dram_id(dram1_work.rndx), 
+			.dram_idv(dram1_idv),
+			.dram_id(dram1_id), 
 			.dram_state(dram1),
 			.dram_more(dram1_work.more),
 			.stomp(robentry_stomp),
@@ -4845,7 +4876,7 @@ generate begin : gMemory2
 		(
 			.state_i(dram1),
 			.lsndxv_i(mem1_lsndxv),
-			.idv_i(dram1_work.rndxv),
+			.idv_i(dram1_idv),
 			.lbndx_i(lbndx1),
 			.setavail_o(dram1_setavail),
 			.setready_o(dram1_setready)
@@ -4867,7 +4898,7 @@ generate begin : gMemory2
 			.rst_i(irst),
 			.clk_i(clk),
 			.state_i(dram1),
-			.sel_i(dram1_work.sel),
+			.sel_i(dram1_sel),
 			.more_o(dram1_more)
 		);
 
@@ -4881,7 +4912,7 @@ generate begin : gMemory2
 			.dram_state_i(dram1),
 			.dram_done_i(dram1_done),
 			.dram_more_i(dram1_more),
-			.dram_idv_i(dram1_work.rndxv),
+			.dram_idv_i(dram1_idv),
 			.dram_idv2_i(dram1_idv2),
 			.dram_ack_i(dram1_ack),
 			.dram_stomp_i(dram1_stomp),
@@ -4889,7 +4920,8 @@ generate begin : gMemory2
 			.lsq_i(lbndx1.vb ? lsq[lbndx1.row][lbndx1.col] : lsq[mem1_lsndx.row][mem1_lsndx.col]),
 			.dram_oper_o(dram1_oper),
 			.dram_work_o(dram1_work),
-			.page_cross_o(page_cross1)
+			.page_cross_o(page_cross1),
+			.sel_o(dram1_sel)
 		);
 
 	end
@@ -5470,14 +5502,12 @@ begin
 	if (THREADS > 2) used_streams[XSTREAMS*2] = 1'b1;
 	if (THREADS > 3) used_streams[XSTREAMS*3] = 1'b1;
 	for (n40 = 0; n40 < Qupls4_pkg::ROB_ENTRIES; n40 = n40 + 1)
-		used_streams[rob[n40].op.pc.stream] = 1'b1;
-	for (n40 = 0; n40 < MWIDTH; n40 = n40 + 1) begin
-		used_streams[pg_ext.pr[n40].op.pc.stream] = 1'b1;
-		used_streams[pg_dec.pr[n40].op.pc.stream] = 1'b1;
-		used_streams[pg_ren.pr[n40].op.pc.stream] = 1'b1;
-	end
-	for (n40 = 0; n40 < 4; n40 = n40 + 1)
-		used_streams[pcs[n4].stream[4:0]] = 1'b1;
+		used_streams[pgh[rob[n40].pghn].ip.stream] = 1'b1;
+	used_streams[pg_ext.hdr.ip.stream] = 1'b1;
+	used_streams[pg_dec.hdr.ip.stream] = 1'b1;
+	used_streams[pg_ren.hdr.ip.stream] = 1'b1;
+	foreach (pcs[n40])
+		used_streams[pcs[n40].stream[4:0]] = 1'b1;
 end
 
 // The outputs should always be qualified with fcu_branch_resolved.
@@ -5604,8 +5634,6 @@ else begin
 	fpu1_stomp <= FALSE;
 	dram0_stomp <= FALSE;
 	dram1_stomp <= FALSE;
-	dram0_idv2 <= dram0_work.rndxv;
-	dram1_idv2 <= dram1_work.rndxv;
 
 	// This test in sync with PC update
 	if (!branchmiss && ihito && !hirq && ((pe_allqd|allqd) && !hold_ins && advance_pipeline_seg2))
@@ -5963,18 +5991,12 @@ else begin
 	// If data for stomped instruction, ignore
 	// dram_vn will be false for stomped data
 	if (dram0_done && |rob[ dram0_work.rndx ].v && dram0_work.rndxv) begin
-		tSetROBMemDone(dram0_work,dram0_oper.exc,dram0_oper.state);
-		if (dram0_oper.state==2'b11) begin
-			$display("Qupls4 set dram0_work.rndxv=INV at done");
-			dram0_work.rndxv <= INV;
-		end
+		tSetROBMemDone(dram0_work,dram0_oper,dram0_oper.exc,dram0_oper.state);
 	end
 
 	if (Qupls4_pkg::NDATA_PORTS > 1) begin
 		if (dram1_done && |rob[ dram1_work.rndx ].v && dram1_work.rndxv) begin
-			tSetROBMemDone(dram1_work,dram1_oper.exc,dram1_oper.state);
-			if (dram1_oper.state==2'b11)
-				dram1_work.rndxv <= INV;
+			tSetROBMemDone(dram1_work,dram1_oper,dram1_oper.exc,dram1_oper.state);
 		end
 	end
 
@@ -6111,7 +6133,7 @@ else begin
 	// Bus timeout logic
 	// Reset out to trigger another access
 		if (dram0_work.tocnt[10]) begin
-			tSetROBMemDone(dram0_work,Qupls4_pkg::FLT_BERR,2'b11);
+			tSetROBMemDone(dram0_work,dram0_oper,Qupls4_pkg::FLT_BERR,2'b11);
 			dram0_work.rndxv <= INV;
 			$display("Q+ set dram0_work.rndxv=INV at timeout");
 			//lsq[rob[dram0_work.rndx].lsqndx.row][rob[dram0_work.rndx].lsqndx.col].v <= INV;
@@ -6121,7 +6143,7 @@ else begin
 		end
 		if (Qupls4_pkg::NDATA_PORTS > 1) begin
 			if (dram1_work.tocnt[10]) begin
-				tSetROBMemDone(dram1_work,Qupls4_pkg::FLT_BERR,2'b11);
+				tSetROBMemDone(dram1_work,dram1_oper,Qupls4_pkg::FLT_BERR,2'b11);
 				dram1_work.rndxv <= INV;
 //				lsq[rob[dram1_work.rndx].lsqndx.row][rob[dram1_work.rndx].lsqndx.col].v <= INV;
 			end
@@ -6145,12 +6167,12 @@ else begin
 	if (lsq[mem0_lsndx.row][mem0_lsndx.col].v2p && lsq[mem0_lsndx.row][mem0_lsndx.col].v) begin
 		if (lsq[mem0_lsndx.row][mem0_lsndx.col].agen) begin
 			// Prevent multiple updates
-			tInvalidateLSQ(lsq[mem0_lsndx.row][mem0_lsndx.col].rndx,FALSE);
+			tInvalidateLSQ(lsq[mem0_lsndx.row][mem0_lsndx.col].rndx,FALSE,FALSE,dram0_oper.oper.val);
 			rob[lsq[mem0_lsndx.row][mem0_lsndx.col].rndx].done <= 2'b11;
 		end
 	end
 	else if (Qupls4_pkg::SUPPORT_LOAD_BYPASSING && lbndx0.vb) begin
-		tInvalidateLSQ(lsq[lbndx0.row][lbndx0.col].rndx,FALSE);
+		tInvalidateLSQ(lsq[lbndx0.row][lbndx0.col].rndx,FALSE,FALSE,dram0_oper.oper.val);
 		rob[lsq[lbndx0.row][lbndx0.col].rndx].done <= 2'b11;
 	end
   else if (dram0 == Qupls4_pkg::DRAMSLOT_AVAIL && mem0_lsndxv && !robentry_stomp[lsq[mem0_lsndx.row][mem0_lsndx.col].rndx] && !dram0_work.rndxv && !dram0_idv2) begin
@@ -6160,7 +6182,7 @@ else begin
 
   if (Qupls4_pkg::NDATA_PORTS > 1) begin
 		if (Qupls4_pkg::SUPPORT_LOAD_BYPASSING && lbndx1.vb) begin
-			tInvalidateLSQ(lsq[lbndx1.row][lbndx1.col].rndx,FALSE);
+			tInvalidateLSQ(lsq[lbndx1.row][lbndx1.col].rndx,FALSE,FALSE,dram1_oper.oper.val);
 			rob[lsq[lbndx1.row][lbndx1.col].rndx].done <= 2'b11;
 		end
 	  else if (dram1 == Qupls4_pkg::DRAMSLOT_AVAIL && Qupls4_pkg::NDATA_PORTS > 1 && mem1_lsndxv && !robentry_stomp[lsq[mem1_lsndx.row][mem1_lsndx.col].rndx]) begin
@@ -6174,14 +6196,12 @@ else begin
 			dram0_stomp <= 1'b1;
 		if (!rob[n3].lsq && dram0_work.rndx==n3 && dram0_work.rndxv) begin
 			dram0_stomp <= TRUE;
-			dram0_work.rndxv <= INV;
 		end
 		if (Qupls4_pkg::NDATA_PORTS > 1) begin
 			if (robentry_stomp[n3] && rob[n3].lsqndx==mem1_lsndx && lsq[mem1_lsndx.row][mem1_lsndx.col].v)
 				dram1_stomp <= 1'b1;
 			if (!rob[n3].lsq && dram1_work.rndx==n3 && dram1_work.rndxv) begin
 				dram1_stomp <= TRUE;
-				dram1_work.rndxv <= INV;
 			end
 		end
 	end
@@ -6208,10 +6228,10 @@ else begin
 		commit3_idv <= cmttlb3;
 	end
 	if (do_commit) begin
-		commit_pc0 <= rob[head[0]].op.pc;
-		commit_pc1 <= rob[head[1]].op.pc;
-		commit_pc2 <= rob[head[2]].op.pc;
-		commit_pc3 <= rob[head[3]].op.pc;
+		commit_pc0 <= pgh[rob[head[0]].pghn].ip.pc + {rob[head[0]].ip_offs,1'b0};
+		commit_pc1 <= pgh[rob[head[1]].pghn].ip.pc + {rob[head[1]].ip_offs,1'b0};
+		commit_pc2 <= pgh[rob[head[2]].pghn].ip.pc + {rob[head[2]].ip_offs,1'b0};
+		commit_pc3 <= pgh[rob[head[3]].pghn].ip.pc + {rob[head[3]].ip_offs,1'b0};
 		commit_brtgt0 <= rob[head[0]].brtgt;
 		commit_brtgt1 <= rob[head[1]].brtgt;
 		commit_brtgt2 <= rob[head[2]].brtgt;
@@ -6267,16 +6287,16 @@ else begin
 		if (rob[head[0]].excv && rob[head[0]].v)
 //			err_mask[head[0]] <= 1'b1;
 //			if (rob[head[0]].last)
-			tProcessExc(head[0],rob[head[0]].op.pc,rob[head[0]].op.uop.num);
+			tProcessExc(head[0],pgh[rob[head[0]].pghn].ip.pc+{rob[head[0]].ip_offs,1'b0},rob[head[0]].op.uop.num);
 		else if (rob[head[1]].excv && cmtcnt > 3'd1 && rob[head[1]].v)
-			tProcessExc(head[1],rob[head[1]].op.pc,rob[head[1]].op.uop.num);
+			tProcessExc(head[1],pgh[rob[head[1]].pghn].ip.pc+{rob[head[1]].ip_offs,1'b0},rob[head[1]].op.uop.num);
 		else if (rob[head[2]].excv && cmtcnt > 3'd2 && rob[head[2]].v)
-			tProcessExc(head[2],rob[head[2]].op.pc,rob[head[2]].op.uop.num);
+			tProcessExc(head[2],pgh[rob[head[2]].pghn].ip.pc+{rob[head[2]].ip_offs,1'b0},rob[head[2]].op.uop.num);
 		else if (rob[head[3]].excv && cmtcnt > 3'd3 && rob[head[3]].v)
-			tProcessExc(head[3],rob[head[3]].op.pc,rob[head[3]].op.uop.num);
+			tProcessExc(head[3],pgh[rob[head[3]].pghn].ip.pc+{rob[head[3]].ip_offs,1'b0},rob[head[3]].op.uop.num);
 			
 		if (rob[head[0]].op.ssm)
-			tProcessExc(head[0],Qupls4_pkg::SSM_DEBUG ? rob[head[0]].op.pc : rob[head[0]].op.hwipc,rob[head[0]].op.uop.num);
+			tProcessExc(head[0],Qupls4_pkg::SSM_DEBUG ? pgh[rob[head[0]].pghn].ip.pc+{rob[head[0]].ip_offs,1'b0} : rob[head[0]].op.hwipc,rob[head[0]].op.uop.num);
 
 		/*
 		if (FALSE) begin
@@ -7421,7 +7441,7 @@ begin
 	rob[ndx].lsq <= INV;
 	// Clear corresponding LSQ entries.
 	if (rob[ndx].lsq)
-		tInvalidateLSQ(ndx,TRUE);
+		tInvalidateLSQ(ndx,TRUE,TRUE,value_zero);
 	if (ndx==agen0_rse.rndx) begin
 		if (dram0_work.rndx==agen0_rse.rndx)
 			dram0_stomp <= TRUE;
@@ -7451,7 +7471,7 @@ begin
 	rob[ndx].done <= {INV,INV};
 	rob[ndx].out <= {INV,INV};
 	if (rob[ndx].lsq)
-		tInvalidateLSQ(ndx,FALSE);
+		tInvalidateLSQ(ndx,FALSE,TRUE,value_zero);
 	rob[ndx].lsq <= INV;
 end
 endtask
@@ -7488,6 +7508,8 @@ endtask
 task tInvalidateLSQ;
 input rob_ndx_t id;
 input can;
+input cmt;
+input value_t data;
 integer n18r, n18c;
 begin
 	for (n18r = 0; n18r < Qupls4_pkg::LSQ_ENTRIES; n18r = n18r + 1) begin
@@ -7503,6 +7525,19 @@ begin
 				lsq[n18r][n18c].load <= FALSE;
 				lsq[n18r][n18c].vload <= FALSE;
 				lsq[n18r][n18c].vload_ndx <= FALSE;
+				// If it was a load, then cache the data in the LSQ
+				if (!cmt & !rob[lsq[n18r][n18c].rndx].excv)
+					case(lsq[n18r][n18c].memsz)
+					Qupls4_pkg::byt,Qupls4_pkg::wyde,Qupls4_pkg::tetra,Qupls4_pkg::octa:
+						if (lsq[n18r][n18c].load)
+							lsq[n18r][n18c].loadv <= VAL;
+						else
+							lsq[n18r][n18c].loadv <= INV;
+					default:	lsq[n18r][n18c].loadv <= INV;
+					endcase
+				else
+					lsq[n18r][n18c].loadv <= INV;
+				lsq[n18r][n18c].res <= data;
 				// It is possible that a load operation already in progress got
 				// cancelled.
 				if (dram0_work.rndx==lsq[n18r][n18c].rndx)
@@ -7829,6 +7864,7 @@ begin
 	// Drop the in-order pipeline register onto the queue.
 	next_robe = robe;
 	next_robe.this_ndx = tail;
+	next_robe.pghn = tail/MWIDTH;
 	next_robe.flush = flush;
 	next_robe.sync_dep = sync_ndx;
 	next_robe.sync_depv = sync_ndxv;
@@ -7909,7 +7945,7 @@ begin
 	next_robe.could_issue_nm = FALSE;
 	// "static" fields, these fields remain constant after enqueue
 	next_robe.grp = grp;
-	next_robe.brtgt = Qupls4_pkg::fnTargetIP(robe.op.pc,db.immc);
+	next_robe.brtgt = Qupls4_pkg::fnTargetIP(pgh[robe.pghn].ip.pc + {robe.ip_offs,1'b0},db.immc);
 	next_robe.om = sr.om;
 	next_robe.rm = db.rm==3'd7 ? fpcsr.rm : db.rm;
 `ifdef IS_SIM
@@ -7924,10 +7960,10 @@ begin
 //	next_robe.op.nRt = nRt;//db.Rtz ? 10'd0 : nRt;
 	next_robe.group_len = grplen;
 	next_robe.last = last;
-	next_robe.v = Qupls4_pkg::SUPPORT_BACKOUT ? (robe.op.v ? robe.op.pc.stream : 5'd0): (robe.op.v ? robe.op.pc.stream & ~{5{stomp}} : 5'd0);
+	next_robe.v = Qupls4_pkg::SUPPORT_BACKOUT ? (robe.op.v ? pgh[robe.pghn].ip.stream : 5'd0): (robe.op.v ? pgh[robe.pghn].ip.stream & ~{5{stomp}} : 5'd0);
 	if (!stomp && db.v && !brtgtv) begin
 		if (db.br & pt) begin
-			next_brtgt = Qupls4_pkg::fnTargetIP(pc,db.immc);
+			next_brtgt = Qupls4_pkg::fnTargetIP(pgh[robe.pghn].ip.pc,db.immc);
 			next_brtgtv = VAL;	// ToDo: Fix
 		end
 	end
@@ -8033,7 +8069,8 @@ begin
 	lsq[ndx.row][ndx.col].v <= VAL;
 	lsq[ndx.row][ndx.col].state <= 2'b00;
 	lsq[ndx.row][ndx.col].agen <= FALSE;
-	lsq[ndx.row][ndx.col].pc <= rob.op.pc;
+	lsq[ndx.row][ndx.col].pc <= pgh[rob.pghn].ip.pc + {rob.ip_offs,1'b0};
+	lsq[ndx.row][ndx.col].loadv <= INV;
 	lsq[ndx.row][ndx.col].load <= rob.op.decbus.load|rob.excv;
 	lsq[ndx.row][ndx.col].loadz <= rob.op.decbus.loadz|rob.excv;
 	lsq[ndx.row][ndx.col].cload <= rob.excv;
@@ -8125,56 +8162,56 @@ begin
 			else if (rob[head].op.decbus.irq)
 				;
 			else if (rob[head].op.decbus.brk)
-				tProcessExc(head,rob[head].op.pc+32'd6,rob[head].op.uop.num);
+				tProcessExc(head,pgh[rob[head].pghn].ip.pc+{rob[head].ip_offs,1'b0}+32'd6,rob[head].op.uop.num);
 			else if (rob[head].op.decbus.sys)
-				tProcessExc(head,rob[head].op.pc+32'd6,rob[head].op.uop.num);
+				tProcessExc(head,pgh[rob[head].pghn].ip.pc+{rob[head].ip_offs,1'b0}+32'd6,rob[head].op.uop.num);
 			else if (rob[head].op.decbus.eret)
 				tProcessEret(rob[head].op[22:19]==5'd2,rob[head].op[23]==1'b1);
 			else if (rob[head].op.decbus.rex)
 				tRex(head,rob[head].op);
 		end
 		// If interrupts are still enabled at commit, go do interrupt processing.
-		if (rob[head].op.hwi && pgh[head[5:2]].hwi && pgh[head[5:2]].irq.level == 6'd63)	// NMI
-			tProcessHwi(head,rob[head].op.pc,rob[head].op.uop.num,FALSE,TRUE);
-		else if (rob[head].op.hwi && pgh[head[5:2]].hwi && pgh[head[5:2]].irq.level > sr.ipl && sr.mie)
-			tProcessHwi(head,rob[head].op.pc,rob[head].op.uop.num,TRUE,FALSE);
+		if (rob[head].op.hwi && pgh[rob[head].pghn].hwi && pgh[rob[head].pghn].irq.level == 6'd63)	// NMI
+			tProcessHwi(head,pgh[rob[head].pghn].ip.pc+{rob[head].ip_offs,1'b0},rob[head].op.uop.num,FALSE,TRUE);
+		else if (rob[head].op.hwi && pgh[rob[head].pghn].hwi && pgh[rob[head].pghn].irq.level > sr.ipl && sr.mie)
+			tProcessHwi(head,pgh[rob[head].pghn].ip.pc+{rob[head].ip_offs,1'b0},rob[head].op.uop.num,TRUE,FALSE);
 		// If interrupt turned out to be disabled reload the IRQ at the fetch stage,
 		// but only after loading some other instructions. Put the irq on a queue for
 		// later processing. Note that the interrupt enable level has been set to
 		// disable further interrupts. So, instruction fetch should be able to 
 		// continue with the desired stream.
 		// Instruction was valid, but interrupts were disabled.
-		else if (pgh[head[5:2]].hwi) begin
+		else if (pgh[rob[head].pghn].hwi) begin
 			irq_wr_en <= TRUE;
-			irq2_din <= pgh[head[5:2]].irq;
+			irq2_din <= pgh[rob[head].pghn].irq;
 			irq_downcount <= irq_downcount_base;
 			irq_downcount_base <= {irq_downcount_base,1'b0} | 8'd8;
 			excir <= rob[head].op;
 			excid <= head;
-			excmissgrp <= head>>2;
-			excmisspc.pc <= rob[head].op.pc;
+			excmissgrp <= rob[head].pghn;
+			excmisspc.pc <= pgh[rob[head].pghn].ip.pc+{rob[head].ip_offs,1'b0};
 			excmiss <= TRUE;
 			set_pending_ipl <= TRUE;
-			next_pending_ipl <= pgh[head[5:2]].old_ipl;	// restore IPL
-			sr.ipl <= pgh[head[5:2]].old_ipl;
+			next_pending_ipl <= pgh[rob[head].pghn].old_ipl;	// restore IPL
+			sr.ipl <= pgh[rob[head].pghn].old_ipl;
 			if (irq_downcount_base[7])
-				tProcessExc(head,rob[head].op.pc,rob[head].op.uop.num);
+				tProcessExc(head,pgh[rob[head].pghn].ip.pc+{rob[head].ip_offs,1'b0},rob[head].op.uop.num);
 		end
 	end
 	// If the instruction got invalidated (eg branch) there is not an easy way to
 	// know what address a hardware interrupt should change flow to. So,
 	// just put the interrupt into a FIFO to be redone later.
 	// The branch will have already reset the fetch pointer.
-	else if (pgh[head[5:2]].hwi) begin
+	else if (pgh[rob[head].pghn].hwi) begin
 		irq_wr_en <= TRUE;
-		irq2_din <= pgh[head[5:2]].irq;
+		irq2_din <= pgh[rob[head].pghn].irq;
 		irq_downcount <= irq_downcount_base;
 		irq_downcount_base <= {irq_downcount_base,1'b0} | 8'd8;
 		if (irq_downcount_base[7])
-			tProcessExc(head,rob[head].op.pc,rob[head].op.uop.num);
+			tProcessExc(head,pgh[rob[head].pghn].ip.pc+{rob[head].ip_offs,1'b0},rob[head].op.uop.num);
 		set_pending_ipl <= TRUE;
-		next_pending_ipl <= pgh[head[5:2]].old_ipl;	// restore IPL
-		sr.ipl <= pgh[head[5:2]].old_ipl;
+		next_pending_ipl <= pgh[rob[head].pghn].old_ipl;	// restore IPL
+		sr.ipl <= pgh[rob[head].pghn].old_ipl;
 	end
 	
 end
@@ -8732,17 +8769,17 @@ begin
 	m6 = (ndx + Qupls4_pkg::ROB_ENTRIES + 6) % Qupls4_pkg::ROB_ENTRIES;
 	m7 = (ndx + Qupls4_pkg::ROB_ENTRIES + 7) % Qupls4_pkg::ROB_ENTRIES;
 	dst = p1;	// the last ROB entry it could be
-	if (rob[m1].sn > rob[ndx].sn && rob[m1].v==rob[ndx].v && rob[m1].op.pc.pc == rob[ndx].brtgt)
+	if (rob[m1].sn > rob[ndx].sn && rob[m1].v==rob[ndx].v && pgh[rob[m1].pghn].ip.pc + {rob[m1].ip_offs,1'b0} == rob[ndx].brtgt)
 		found = 3'd1;
-	else if (rob[m2].sn > rob[ndx].sn && rob[m2].v==rob[ndx].v && rob[m2].op.pc.pc == rob[ndx].brtgt)
+	else if (rob[m2].sn > rob[ndx].sn && rob[m2].v==rob[ndx].v && pgh[rob[m2].pghn].ip.pc + {rob[m2].ip_offs,1'b0} == rob[ndx].brtgt)
 		found = 3'd2;
-	else if (rob[m3].sn > rob[ndx].sn && rob[m3].v==rob[ndx].v && rob[m3].op.pc.pc == rob[ndx].brtgt)
+	else if (rob[m3].sn > rob[ndx].sn && rob[m3].v==rob[ndx].v && pgh[rob[m3].pghn].ip.pc + {rob[m3].ip_offs,1'b0} == rob[ndx].brtgt)
 		found = 3'd3;
-	else if (rob[m4].sn > rob[ndx].sn && rob[m4].v==rob[ndx].v && rob[m4].op.pc.pc == rob[ndx].brtgt)
+	else if (rob[m4].sn > rob[ndx].sn && rob[m4].v==rob[ndx].v && pgh[rob[m4].pghn].ip.pc + {rob[m4].ip_offs,1'b0} == rob[ndx].brtgt)
 		found = 3'd4;
-	else if (rob[m5].sn > rob[ndx].sn && rob[m5].v==rob[ndx].v && rob[m5].op.pc.pc == rob[ndx].brtgt)
+	else if (rob[m5].sn > rob[ndx].sn && rob[m5].v==rob[ndx].v && pgh[rob[m5].pghn].ip.pc + {rob[m5].ip_offs,1'b0} == rob[ndx].brtgt)
 		found = 3'd5;
-	else if (rob[m6].sn > rob[ndx].sn && rob[m6].v==rob[ndx].v && rob[m6].op.pc.pc == rob[ndx].brtgt)
+	else if (rob[m6].sn > rob[ndx].sn && rob[m6].v==rob[ndx].v && pgh[rob[m6].pghn].ip.pc + {rob[m6].ip_offs,1'b0} == rob[ndx].brtgt)
 		found = 3'd6;
 
 	case(found)
@@ -8925,6 +8962,7 @@ endtask
 
 task tSetROBMemDone;
 input dram_work_t dram_work;
+input dram_oper_t dram_oper;
 input Qupls4_pkg::cause_code_t cause;
 input [1:0] done;
 begin
@@ -8935,7 +8973,7 @@ begin
   rob[ dram_work.rndx ].out <= {INV,INV};
   rob[ dram_work.rndx ].done <= done;
 	if (done==2'b11)
-  	tInvalidateLSQ(dram_work.rndx,FALSE);
+  	tInvalidateLSQ(dram_work.rndx,FALSE,FALSE,dram_oper.oper.val);
   else
   	tIncLSQAddr(dram_work.rndx);
 end

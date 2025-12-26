@@ -47,8 +47,9 @@ module Qupls4_stomp(rst, clk, ihit, advance_pipeline, advance_pipeline_seg2,
 	do_bsr, misspc, predicted_correctly_dec, predicted_match_ext,
 	pc, pc_f, pc_fet, pc_ext, pc_dec, pc_ren,
 	stomp_fet, stomp_ext, stomp_dec, stomp_ren, stomp_que, stomp_quem,
-	fcu_idv, fcu_id, missid, kept_stream, takb, rob, robentry_stomp
+	fcu_idv, fcu_id, missid, kept_stream, takb, pgh, rob, robentry_stomp
 	);
+parameter MWIDTH = Qupls4_pkg::MWIDTH;
 input rst;
 input clk;
 input ihit;
@@ -82,6 +83,7 @@ input rob_ndx_t fcu_id;
 input rob_ndx_t missid;
 input pc_stream_t kept_stream;
 input takb;
+input Qupls4_pkg::pipeline_group_hdr_t [Qupls4_pkg::ROB_ENTRIES/MWIDTH-1:0] pgh;
 input Qupls4_pkg::rob_entry_t [Qupls4_pkg::ROB_ENTRIES-1:0] rob;
 output reg [Qupls4_pkg::ROB_ENTRIES-1:0] robentry_stomp;
 
@@ -340,7 +342,7 @@ begin
 				if ((branchmiss) &&
 					rob[n4].sn > rob[missid].sn &&
 					fcu_idv	&& // miss_idv
-					rob[n4].op.pc.stream!=kept_stream
+					pgh[rob[n4].pghn].ip.stream!=kept_stream
 				)
 					robentry_stomp[n4] = TRUE;
 			end
@@ -363,7 +365,7 @@ begin
 		end
 
 		// Stomp on any dependent instructions.
-		if (stomped[rob[n4].op.pc.stream])
+		if (stomped[pgh[rob[n4].pghn].ip.stream])
 			robentry_stomp[n4] = TRUE;
 	end
 end

@@ -36,7 +36,7 @@
 import Qupls4_pkg::*;
 
 module Qupls4_calc_load_bypass_index(lsq_i, lsndx_i, ndx_o);
-input Qupls4_pkg::lsq_entry_t [1:0] lsq_i [0:7];
+input Qupls4_pkg::lsq_entry_t [1:0] lsq_i [0:Qupls4_pkg::LSQ_ENTRIES-1];
 input Qupls4_pkg::lsq_ndx_t lsndx_i;
 output Qupls4_pkg::lsq_ndx_t ndx_o;
 
@@ -47,23 +47,28 @@ always_comb
 begin
 	ndx_o = 0;
 	stsn = 8'hFF;
-	for (n15r = 0; n15r < Qupls4_pkg::LSQ_ENTRIES; n15r = n15r + 1) begin
-		for (n15c = 0; n15c < 2; n15c = n15c + 1) begin
-		if (
-			(lsq_i[lsndx_i.row][lsndx_i.col].memsz==lsq_i[n15r][n15c].memsz) &&		// memory size matches
-			(lsq_i[lsndx_i.row][lsndx_i.col].load && lsq_i[n15r][n15c].store) &&	// and trying to load
-			// The load must come after the store and the store data should be valid.
-			lsq_i[lsndx_i.row][lsndx_i.col].sn > lsq_i[n15r][n15c].sn && lsq_i[n15r][n15c].v && lsq_i[n15r][n15c].datav && 
-			// And it should be the store closest to the load.
-			stsn > lsq_i[n15r][n15c].sn &&
-			// And the address should match.
-			lsq_i[lsndx_i.row][lsndx_i.col].agen==1'b1 && lsq_i[n15r][n15c].agen==1'b1 &&	// must be physical addresses
-			lsq_i[lsndx_i.row][lsndx_i.col].padr == lsq_i[n15r][n15c].padr
-			) begin
-			 	stsn = lsq_i[n15r][n15c].sn;
-			 	ndx_o.row = n15r;
-			 	ndx_o.col = n15c;
-			 	ndx_o.vb = VAL;
+	if (lsq_i[lsndx_i.row][lsndx_i.col].v && lsq_i[lsndx_i.row][lsndx_i.col].load) begin	// valid load attempt
+		for (n15r = 0; n15r < Qupls4_pkg::LSQ_ENTRIES; n15r = n15r + 1) begin
+			for (n15c = 0; n15c < 2; n15c = n15c + 1) begin
+			if (
+				lsq_i[n15r][n15c].store &&																						// match with store
+				(lsq_i[lsndx_i.row][lsndx_i.col].memsz==lsq_i[n15r][n15c].memsz) &&		// memory size matches
+				// The load must come after the store...
+				lsq_i[lsndx_i.row][lsndx_i.col].sn > lsq_i[n15r][n15c].sn && lsq_i[n15r][n15c].v &&
+				// and the data should be valid.
+				lsq_i[n15r][n15c].datav && 
+				// And it should be the store closest to the load.
+				stsn > lsq_i[n15r][n15c].sn &&
+				// must be physical addresses
+				lsq_i[lsndx_i.row][lsndx_i.col].agen==1'b1 && lsq_i[n15r][n15c].agen==1'b1 &&
+				// And the address should match.
+				lsq_i[lsndx_i.row][lsndx_i.col].padr == lsq_i[n15r][n15c].padr
+				) begin
+				 	stsn = lsq_i[n15r][n15c].sn;
+				 	ndx_o.row = n15r;
+				 	ndx_o.col = n15c;
+				 	ndx_o.vb = VAL;
+				end
 			end
 		end
 	end

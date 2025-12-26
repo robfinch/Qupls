@@ -40,22 +40,20 @@ import cache_pkg::*;
 import mmu_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_dram_done(rst, clk, load, store, cload, cstore, cload_tags,
-	ack, dram_v, dram_idv, dram_id, dram_state, dram_more, stomp, dram_stomp, done);
-input rst;		// not used
+module Qupls4_dram_done(clk, load, store, cload, cstore, cload_tags,
+	dram_v, dram_idv, dram_id, dram_state, dram_more, stomp, dram_stomp, done);
 input clk;
 input load;
 input store;
 input cload;
 input cstore;
 input cload_tags;
-input ack;
 input dram_v;
 input dram_idv;
 input rob_ndx_t dram_id;
 input Qupls4_pkg::dram_state_t dram_state;
 input dram_more;
-input [Qupls4_pkg::ROB_ENTRIES-1:0] stomp;
+input Qupls4_pkg::rob_bitmask_t stomp;
 input dram_stomp;
 output reg done;
 
@@ -63,12 +61,13 @@ output reg done;
 // Loads are done when there is an ack back from the memory system.
 always_ff @(posedge clk)
 begin
-	done <= FALSE;
 	if (!(store|cstore|load|cload) && dram_idv)
 		done <= TRUE;
 	else if ((store|cstore) ? !stomp[dram_id] && dram_idv :
 		(dram_state == Qupls4_pkg::DRAMSLOT_DELAY || dram_state==Qupls4_pkg::DRAMSLOT_DELAY2) && dram_v)
 		done <= TRUE;
+	else
+		done <= FALSE;
 end
 
 endmodule

@@ -349,12 +349,6 @@ Stark_decode_brk ubrk1
 	.brk(db.brk)
 );
 
-Stark_decode_csr ucsr1
-(
-	.instr(instr),
-	.csr(db.csr)
-);
-
 Stark_decode_multicycle udmc1
 (
 	.instr(instr),
@@ -388,7 +382,15 @@ Stark_decode_prec udprec1
 	.prec(db.prc)
 );
 */
-
+always_comb
+begin
+	db.boi = instr.opcode==Qupls4_pkg::OP_BCCU64 && instr.cnd==Qupls4_pkg::CND_BOI;
+	db.bsr = instr.opcode==Qupls4_pkg::OP_BSR;
+	db.jsr = instr.opcode==Qupls4_pkg::OP_JSR;
+	db.sys = instr.opcode==Qupls4_pkg::OP_SYS;
+	db.stptr = instr.opcode==Qupls4_pkg::OP_STPTR;
+	db.csr = instr.opcode==Qupls4_pkg::OP_CSR;
+end
 
 always_ff @(posedge clk)
 if (rst) begin
@@ -403,17 +405,19 @@ else begin
 		dbo <= {$bits(dbo){1'd0}};	// in case a signal was missed / unused.
 		dbo <= db;
 		dbo.rext <= instr.opcode==Qupls4_pkg::OP_REXT;
-		dbo.boi <= instr.opcode==Qupls4_pkg::OP_BCCU64 && instr.cnd==Qupls4_pkg::CND_BOI;
-		dbo.bsr <= instr.opcode==Qupls4_pkg::OP_BSR;
-		dbo.jsr <= instr.opcode==Qupls4_pkg::OP_JSR;
-		dbo.sys <= instr.opcode==Qupls4_pkg::OP_SYS;
-		dbo.stptr <= instr.opcode==Qupls4_pkg::OP_STPTR;
+		dbo.boi <= db.boi;
+		dbo.bsr <= db.bsr;
+		dbo.jsr <= db.jsr;
+		dbo.sys <= db.sys;
+		dbo.stptr <= db.stptr;
+		dbo.csr <= db.csr;
 		dbo.iprel <= 1'b0;//db.Rs1==8'd31;
 		dbo.cause <= Qupls4_pkg::FLT_NONE;
 		dbo.mem <= 
 			 db.load|db.vload|db.vload_ndx
 			|db.store|db.vstore|db.vstore_ndx
 			|db.v2p|db.vv2p|db.vvn2p;
+		dbo.mem0 <= db.v2p|db.vv2p|db.vvn2p;
 		dbo.sync <= db.fence && instr[15:8]==8'hFF;
 		dbo.cpytgt <= 1'b0;
 		dbo.qfext <= 1'b0;//db.alu && ins.ins[28:27]==2'b10;
@@ -432,9 +436,15 @@ else begin
 		end
 		// Check for unimplemented instruction, but not if it is being stomped on.
 		// If it is stomped on, we do not care.
-		if (!(db.nop|db.alu|db.fpu|db.fc|db.mem|db.macro
+		if (!(db.nop|db.alu|db.fpu|db.fc|db.macro
 			|db.csr|db.loada|db.fence|db.carry|db.pred|db.atom|db.regs|db.fregs
 			|db.rex|db.oddball|db.qfext
+			|db.boi|db.bsr|db.jsr|db.sys|db.stptr
+			|db.csr
+			// db.mem
+			|db.load|db.vload|db.vload_ndx
+			|db.store|db.vstore|db.vstore_ndx
+			|db.v2p|db.vv2p|db.vvn2p			
 			)) begin
 			dbo.cause <= Qupls4_pkg::FLT_UNIMP;
 		end

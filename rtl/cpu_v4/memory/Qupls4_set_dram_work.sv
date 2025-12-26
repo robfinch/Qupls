@@ -40,7 +40,7 @@ import Qupls4_pkg::*;
 
 module Qupls4_set_dram_work(rst_i, clk_i, rob_i, stomp_i, vb_i, lsndxv_i,
 	dram_state_i, dram_done_i, dram_more_i, dram_idv_i, dram_idv2_i, dram_ack_i,
-	dram_stomp_i, cpu_dat_i, lsq_i, dram_oper_o, dram_work_o, page_cross_o
+	dram_stomp_i, cpu_dat_i, lsq_i, dram_oper_o, dram_work_o, page_cross_o, sel_o
 );
 parameter CORENO = 6'd1;
 parameter LSQNO = 2'd0;
@@ -62,29 +62,44 @@ input Qupls4_pkg::lsq_entry_t lsq_i;
 output dram_oper_t dram_oper_o;
 output dram_work_t dram_work_o;
 output page_cross_o;
+output reg [79:0] sel_o;
 
 cpu_types_pkg::virtual_address_t next_vaddr = {lsq_i.vadr[$bits(virtual_address_t)-1:6] + 2'd1,6'h0};
 cpu_types_pkg::physical_address_t next_paddr = {lsq_i.padr[$bits(physical_address_t)-1:6] + 2'd1,6'h0};
 // Compute and shift select lines into position.
 wire [31:0] sel = Qupls4_pkg::fnSel(rob_i[lsq_i.rndx].op);
 wire [79:0] selx = {64'd0,Qupls4_pkg::fnSel(rob_i[lsq_i.rndx].op)} << lsq_i.vadr[5:0];
+always_comb
+	sel_o = selx;
 assign page_cross_o = next_vaddr[$bits(virtual_address_t)-1:13] != lsq_i.vadr[$bits(virtual_address_t)-1:13] && |selx[79:64];
+
+Qupls4_set_dram_oper
+#(
+	.CORENO(CORENO),
+	.LSQNO(LSQNO)
+)
+usdo1
+(
+	.rst_i(rst_i),
+	.clk_i(clk_i),
+	.cpu_dat_i(cpu_dat_i),
+	.lsq_i(lsq_i),
+	.vb_i(vb_i),
+	.cndx_i(rob_i[lsq_i.rndx].cndx),
+	.dram_more_i(dram_more_i),
+	.dram_state_i(dram_state_i),
+	.dram_ack_i(dram_ack_i),
+	.dram_work_i(dram_work_o),
+	.dram_stomp_i(dram_stomp_i),
+	.dram_oper_o(dram_oper_o)
+);
 
 always_ff @(posedge clk_i)
 if (rst_i) begin
-	dram_oper_o <= {$bits(Qupls4_pkg::dram_oper_t){1'b0}};
 	dram_work_o <= {$bits(Qupls4_pkg::dram_work_t){1'b0}};
-	dram_oper_o.exc <= Qupls4_pkg::FLT_NONE;
-	dram_oper_o.oper.aRnv <= FALSE;
 end
 else begin
 	
-	if (dram_done_i) begin
-		dram_work_o.load <= FALSE;
-		dram_work_o.loadz <= FALSE;
-		dram_work_o.cload <= FALSE;
-	end
-
 	// Bus timeout logic.
 	// If the memory access has taken too long, then it is retried. This applies
 	// mainly to loads as stores will ack right away. Bit 8 of the counter is
@@ -105,80 +120,16 @@ else begin
 
 	// grab requests that have finished and put them on the dram_bus
 	// .hi runs the high half bus cycle for an unaligned access that does not cross a page boundary
-	case(dram_state_i)
-	Qupls4_pkg::DRAMSLOT_ACTIVE2:
-		if (dram_ack_i && dram_work_o.hi && Qupls4_pkg::SUPPORT_UNALIGNED_MEMORY) begin
-			dram_work_o.hi <= 1'b0;
-	    dram_oper_o.oper.v <= (dram_work_o.load|dram_work_o.cload|dram_work_o.cload_tags) & ~dram_stomp_i;
-	    dram_oper_o.state <= 2'b11;
-	    dram_oper_o.rndx <= dram_work_o.rndx;
-	    dram_oper_o.oper.pRn <= dram_work_o.pRd;
-	    dram_oper_o.oper.aRn <= dram_work_o.aRd;
-	    dram_oper_o.oper.aRnv <= dram_work_o.aRdv;
-	    dram_oper_o.om <= dram_work_o.om;
-	    dram_oper_o.cndx <= dram_work_o.cndx;
-	    dram_oper_o.rndx <= dram_work_o.rndx;
-	    dram_oper_o.exc <= dram_work_o.exc;
-	  	dram_oper_o.oper.val <= Qupls4_pkg::fnDati(1'b0,dram_work_o.op,(cpu_dat_i << {lsq_i.shift2,3'b0})|dram_oper_o.oper.val);
-	  	dram_oper_o.oper.flags <= 8'h00;//dram_work_o.flags;
-	    if (dram_work_o.store)
-	    	$display("m[%h] <- %h", dram_work_o.vaddr, dram_work_o.data);
-		end
-	Qupls4_pkg::DRAMSLOT_ACTIVE:
-		if (dram_state_i == Qupls4_pkg::DRAMSLOT_ACTIVE && dram_ack_i) begin
-			// If there is more to do, trigger a second instruction issue.
-	    dram_oper_o.oper.v <= (dram_work_o.load|dram_work_o.cload|dram_work_o.cload_tags) & ~dram_more_i & ~dram_stomp_i;
-	    dram_oper_o.state <= dram_more_i ? 2'b01 : 2'b11;
-	    dram_oper_o.rndx <= dram_work_o.rndx;
-	    dram_oper_o.oper.pRn <= dram_work_o.pRd;
-	    dram_oper_o.oper.aRn <= dram_work_o.aRd;
-	    dram_oper_o.oper.aRnv <= dram_work_o.aRdv;
-	    dram_oper_o.om <= dram_work_o.om;
-	    dram_oper_o.cndx <= dram_work_o.cndx;
-	    dram_oper_o.exc <= dram_work_o.exc;
-	    // Note shift gets switched for second bus cycle.
-	    if (dram_oper_o.state==2'b01)
-		  	dram_oper_o.oper.val <= Qupls4_pkg::fnDati(1'b0,dram_work_o.op,(cpu_dat_i << {lsq_i.shift2,3'b0})|dram_oper_o.oper.val);
-	    else
-	  		dram_oper_o.oper.val <= Qupls4_pkg::fnDati(dram_more_i,dram_work_o.op,cpu_dat_i >> {lsq_i.shift,3'b0});
-	    if (dram_work_o.store)
-	    	$display("m[%h] <- %h", dram_work_o.vaddr, dram_work_o.data);
-		end
-	Qupls4_pkg::DRAMSLOT_AVAIL:
-		dram_oper_o.oper.v <= INV;
-	Qupls4_pkg::DRAMSLOT_DELAY,
-	Qupls4_pkg::DRAMSLOT_DELAY2:
-		dram_oper_o.oper.v <= INV;
-	default:	;
-	endcase
 
-	// If just performing a virtual to physical translation....
-	// This is done only on port #0
-	if (LSQNO==2'd0 && lsq_i.v2p && lsq_i.v) begin
-		if (lsq_i.agen) begin
-			dram_oper_o.oper.val <= lsq_i.padr;
-			dram_oper_o.oper.flags <= 8'h00;//lsq_i.flags;
-			dram_oper_o.oper.pRn <= lsq_i.Rt;
-			dram_oper_o.oper.v <= VAL;
-			dram_oper_o.om <= lsq_i.om;
-			dram_oper_o.cndx <= rob_i[lsq_i.rndx].cndx;
-	    dram_oper_o.rndx <= lsq_i.rndx;
-	    dram_oper_o.state <= 2'b11;
-		end
-	end
-	else if (Qupls4_pkg::SUPPORT_LOAD_BYPASSING && vb_i) begin
-		dram_oper_o.oper.val <= Qupls4_pkg::fnDati(1'b0,dram_work_o.op,lsq_i.res);
-		dram_oper_o.oper.flags <= 8'h00;//lsq_i.flags;
-		dram_oper_o.oper.pRn <= lsq_i.Rt;
-		dram_oper_o.oper.v <= lsq_i.v;
-		dram_oper_o.om	<= lsq_i.om;
-		dram_oper_o.cndx <= rob_i[lsq_i.rndx].cndx;
-    dram_oper_o.rndx <= lsq_i.rndx;
-    dram_oper_o.state <= 2'b11;
-	end
-  else begin
-  	case(dram_state_i)
-  	Qupls4_pkg::DRAMSLOT_AVAIL:
+	case(dram_state_i)
+	Qupls4_pkg::DRAMSLOT_AVAIL:
+		// If just performing a virtual to physical translation....
+		// This is done only on port #0
+		if (LSQNO==2'd0 && lsq_i.v2p && lsq_i.v)
+			;
+		else if (Qupls4_pkg::SUPPORT_LOAD_BYPASSING && vb_i)
+			;
+	  else begin
   		if (lsndxv_i && !stomp_i[lsq_i.rndx] && !dram_idv_i && !dram_idv2_i) begin
 				dram_work_o.exc <= Qupls4_pkg::FLT_NONE;
 				dram_work_o.rndx <= lsq_i.rndx;
@@ -228,32 +179,50 @@ else begin
 				dram_work_o.tid.tranid <= dram_work_o.tid.tranid + 2'd1;
 		    dram_work_o.tocnt <= 12'd0;
 		  end
-		Qupls4_pkg::DRAMSLOT_DELAY:
-			if (dram_more_i && !page_cross_o && Qupls4_pkg::SUPPORT_UNALIGNED_MEMORY) begin
-				dram_work_o.hi <= 1'b1;
-				dram_work_o.sel <= {64'd0,dram_work_o.selh[79:64]};
-				dram_work_o.vaddr <= next_vaddr;
-				dram_work_o.paddr <= next_paddr;
-				dram_work_o.data <= lsq_i.res >> {lsq_i.shift2,3'b0};
-				// Cross page boundary?
-	//			if (page_cross)
-	//				dram_work_o.exc <= Qupls4_pkg::FLT_ALN;
+		end
+    Qupls4_pkg::DRAMSLOT_DELAY:
+      if (dram_more_i && !page_cross_o && Qupls4_pkg::SUPPORT_UNALIGNED_MEMORY) begin
+          dram_work_o.hi <= 1'b1;
+          dram_work_o.sel <= {64'd0,dram_work_o.selh[79:64]};
+          dram_work_o.vaddr <= next_vaddr;
+          dram_work_o.paddr <= next_paddr;
+          dram_work_o.data <= lsq_i.res >> {lsq_i.shift2,3'b0};
+          // Cross page boundary?
+//			if (page_cross)
+//				dram_work_o.exc <= Qupls4_pkg::FLT_ALN;
+      end
+      else begin
+          dram_work_o.store <= 1'b0;
+          dram_work_o.sel <= 80'h0;
+      end
+    // End of second bus cycle, nothing to do.
+	Qupls4_pkg::DRAMSLOT_DELAY2:
+		begin
+			dram_work_o.store <= 1'b0;
+			dram_work_o.sel <= 80'h0;
+		end
+	Qupls4_pkg::DRAMSLOT_ACTIVE:	;
+	Qupls4_pkg::DRAMSLOT_ACTIVE2:
+		if (dram_ack_i && dram_work_o.hi && Qupls4_pkg::SUPPORT_UNALIGNED_MEMORY)
+			dram_work_o.hi <= 1'b0;
+	default:	;
+	endcase
+
+	if (stomp_i[lsq_i.rndx] && dram_work_o.rndx==lsq_i.rndx && !rob_i[lsq_i.rndx].lsq)
+		dram_work_o.rndxv <= INV;
+
+	if (dram_done_i) begin
+		dram_work_o.load <= FALSE;
+		dram_work_o.loadz <= FALSE;
+		dram_work_o.cload <= FALSE;
+		if (|rob_i[ dram_work_o.rndx ].v) begin
+			if (dram_oper_o.state==2'b11) begin
+				$display("Qupls4 set dram0_work.rndxv=INV at done");
+				dram_work_o.rndxv <= INV;
 			end
-			else begin
-				dram_work_o.store <= 1'b0;
-				dram_work_o.sel <= 80'h0;
-			end
-		// End of second bus cycle, nothing to do.
-		Qupls4_pkg::DRAMSLOT_DELAY2:
-			begin
-				dram_work_o.store <= 1'b0;
-				dram_work_o.sel <= 80'h0;
-			end
-		Qupls4_pkg::DRAMSLOT_ACTIVE:	;
-		Qupls4_pkg::DRAMSLOT_ACTIVE2:	;
-		default:	;
-		endcase
-  end
+		end
+	end
+
 end
 
 endmodule
