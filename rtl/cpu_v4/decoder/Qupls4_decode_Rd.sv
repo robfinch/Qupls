@@ -35,20 +35,21 @@
 // 25 LUTs
 // ============================================================================
 
+import const_pkg::*;
 import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_decode_Rd(om, instr, instr_raw, Rd, Rdz, exc);
+module Qupls4_decode_Rd(om, instr, instr_raw, Rd, Rdv, exc);
 input Qupls4_pkg::operating_mode_t om;
 input Qupls4_pkg::micro_op_t instr;
 input [431:0] instr_raw;
 output aregno_t Rd;
-output reg Rdz;
+output reg Rdv;
 output reg exc;
 
 function aregno_t fnRd;
 input Qupls4_pkg::micro_op_t instr;
-input [335:0] instr_raw;
+input [431:0] instr_raw;
 Qupls4_pkg::micro_op_t ir;
 begin
 	ir = instr;
@@ -82,10 +83,48 @@ begin
 end
 endfunction
 
+// ToDo: Fix these
+function aregno_t fnRdv;
+input Qupls4_pkg::micro_op_t instr;
+input [431:0] instr_raw;
+Qupls4_pkg::micro_op_t ir;
+begin
+	fnRdv = INV;
+	ir = instr;
+	case(ir.opcode)
+/*
+	Qupls4_pkg::OP_MOV:
+		if (ir[28:26] < 3'd4)
+			fnRd = {ir[18:17],ir[10:6]};
+		else
+			fnRd = {2'b00,ir[10:6]};
+*/			
+	Qupls4_pkg::OP_FLTH,Qupls4_pkg::OP_FLTS,Qupls4_pkg::OP_FLTD,Qupls4_pkg::OP_FLTQ:
+		fnRdv = VAL;
+	Qupls4_pkg::OP_CSR:
+		fnRdv = VAL;
+	Qupls4_pkg::OP_ADDI,Qupls4_pkg::OP_SUBFI,Qupls4_pkg::OP_CMPI,Qupls4_pkg::OP_CMPUI,
+	Qupls4_pkg::OP_ANDI,Qupls4_pkg::OP_ORI,Qupls4_pkg::OP_XORI,
+	Qupls4_pkg::OP_MULI,Qupls4_pkg::OP_MULUI,Qupls4_pkg::OP_DIVI,Qupls4_pkg::OP_DIVUI,
+	Qupls4_pkg::OP_SHIFT:
+		fnRdv = VAL;
+	Qupls4_pkg::OP_BSR,Qupls4_pkg::OP_JSR:
+		fnRdv = VAL;
+	Qupls4_pkg::OP_LDB,Qupls4_pkg::OP_LDBZ,Qupls4_pkg::OP_LDW,Qupls4_pkg::OP_LDWZ,
+	Qupls4_pkg::OP_LDT,Qupls4_pkg::OP_LDTZ,Qupls4_pkg::OP_LOAD,Qupls4_pkg::OP_LOADA,
+	Qupls4_pkg::OP_LDV,
+	Qupls4_pkg::OP_AMO,Qupls4_pkg::OP_CMPSWAP:
+		fnRdv = VAL;
+	default:
+		fnRdv = INV;
+	endcase
+end
+endfunction
+
 always_comb
 begin
 	Rd = fnRd(instr, instr_raw);
-	Rdz = ~|Rd;
+	Rdv = fnRdv(instr, instr_raw);
 //	tRegmap(om1, Rd, Rd, exc);
 end
 

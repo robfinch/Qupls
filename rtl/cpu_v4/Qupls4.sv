@@ -130,10 +130,15 @@ integer jj,kk;
 genvar g,h,gvg;
 reg [127:0] message;
 reg [9*8-1:0] stompstr, no_stompstr;
+
+// Clocks
 wire clk;
 wire clk2x, clk3x;
 assign clk3x = clk3x_i;
 wire clk5x = clk5x_i;
+assign clk = clk_i;				// convenience
+assign clk2x = clk2x_i;
+
 reg [4:0] ph4;
 reg [3:0] rstcnt;
 reg [3:0] panic;
@@ -170,7 +175,6 @@ Qupls4_pkg::reg_bitmask_t [Qupls4_pkg::ROB_ENTRIES-1:0] rob_cumulative;
 Qupls4_pkg::reg_bitmask_t [Qupls4_pkg::ROB_ENTRIES-1:0] rob_out;
 wire [Qupls4_pkg::PREGS-1:0] unavail_list;			// list of registers made unavailable via copy-targets
 
-reg [Qupls4_pkg::ROB_ENTRIES-1:0] missidb;
 wire inject_cl = 1'b0;
 
 wire [Qupls4_pkg::PREGS-1:0] restore_list;
@@ -801,9 +805,9 @@ reg lsq1_idle = 1'b1;
 address_t tlb0_res, tlb1_res;
 
 pc_address_t icdp;
-reg [4:0] excid;
+rob_ndx_t excid;
 pc_address_ex_t excmisspc;
-reg [2:0] excmissgrp;
+reg [4:0] excmissgrp;
 reg excmiss;
 Qupls4_pkg::ex_instruction_t excir;
 reg excret;
@@ -923,7 +927,7 @@ Qupls4_pkg::rob_bitmask_t err_mask;
 reg ERC = 1'b0;
 reg [39:0] icache_cnt;
 reg [39:0] iact_cnt;
-wire ihito,ihit,ihit_f,ic_dhit;
+wire ihito,ihit,ic_dhit;
 wire alt_ihit;
 wire pe_bsdone;
 reg [4:0] vl;
@@ -933,9 +937,6 @@ pc_address_t [4:0] syscall_vectors;
 
 reg [31:0] carry_mod, csr_carry_mod, exc_ret_carry_mod, icarry_mod;
 wire [6:0] carry_reg = 7'd92|carry_mod[25:24];
-
-assign clk = clk_i;				// convenience
-assign clk2x = clk2x_i;
 
 reg flush_pipeline;
 wire copro_stall;
@@ -954,7 +955,7 @@ begin
 	nopi = {$bits(Qupls4_pkg::pipeline_reg_t){1'b0}};
 	nopi.uop = {41'd0,Qupls4_pkg::OP_NOP};
 	nopi.uop.lead = 1'd1;
-	nopi.decbus.Rdz = 1'b1;
+	nopi.decbus.Rdv = 1'b0;
 	nopi.decbus.nop = 1'b1;
 	nopi.decbus.alu = 1'b1;
 end
@@ -1024,7 +1025,7 @@ address_t ic_miss_adr;
 asid_t ic_miss_asid;
 wire [1:0] ic_wway;
 
-reg [1023:0] ic_line;
+wire [1023:0] ic_line;
 reg insnq0,insnq1,insnq2,insnq3;
 reg [MWIDTH-1:0] qd, cqd;
 reg [MWIDTH-1:0] qd_x,qd_d,qd_r,qd_q;
@@ -1045,6 +1046,7 @@ reg [3:0] takb_fet;
 
 reg branchmiss, branchmiss_next;
 rob_ndx_t missid;
+reg missid_v;
 
 cpu_types_pkg::address_t agen0_res, agen1_res;
 wire tlb_miss0, tlb_miss1;
@@ -1608,18 +1610,11 @@ reg [XSTREAMS*THREADS-1:0] used_streams;
 pc_address_ex_t [XSTREAMS*THREADS-1:0] pcs;
 pc_stream_t fet_stream;
 // Buffers the instruction cache line to allow fetching along alternate paths.
-reg [1023:0] ic_buf [0:3];
-pc_address_ex_t ic_buf_pc [0:3];
-reg is_buffered;
-reg [XSTREAMS*THREADS-1:0] buffered;
+wire is_buffered;
 wire [XSTREAMS-1:0] dep_stream [0:XSTREAMS-1];
 
 // Choose a stream of execution. Give precedence to streams that have
 // buffered cache lines.
-
-// Detect if a stream is buffered.
-always_comb
-	is_buffered = |buffered;
 
 icache
 #(
@@ -1883,7 +1878,7 @@ if (irst) begin
 end
 else begin
 	if (advance_pipeline) begin
-		ihit3 <= ihit_f;
+		ihit3 <= ihito;
 		do_bsr2 <= do_bsr|do_ret;
 		do_bsr3 <= FALSE;
 		do_bsr4 <= do_bsr3;
@@ -1900,9 +1895,9 @@ Qupls4_stomp ustmp1
 (
 	.rst(irst),
 	.clk(clk),
-	.ihit(ihit_f),
+	.ihit(ihito),
 	.advance_pipeline(advance_pipeline),
-	.advance_pipeline_seg2(advance_pipeline_seg2), 
+	.advance_pipeline_seg2(advance_pipeline_seg2), // currently same as above
 	.found_destination(fcu_found_destination),
 	.destination_rndx(fcu_dst),
 	.branch_resolved(fcu_branch_resolved),
@@ -1927,9 +1922,9 @@ Qupls4_stomp ustmp1
 	.fcu_idv(fcu_rse.v),
 	.fcu_id(fcu_rse.rndx),
 	.missid(missid),
+	.missid_v(missid_v),
 	.kept_stream(kept_stream),
 	.takb(takb),
-	.pgh(pgh),
 	.rob(rob),
 	.robentry_stomp(robentry_stomp)
 );
@@ -2170,8 +2165,6 @@ always_comb
 
 wire [2:0] igrp2;
 
-assign ihit_f = ihito;
-
 always_comb pc0 = pcs[fet_stream];
 always_comb 
 begin
@@ -2229,50 +2222,19 @@ always_ff @(posedge clk)
 
 pregno_t pred_reg;
 pc_address_ex_t pc_fet;
-always_comb
-begin
-	ic_line = {ic_clineh.data,ic_clinel.data};
-	pc_fet = icpc;
-	for (n43 = 0; n43 < 4; n43 = n43 + 1)
-		if (buffered[fet_stream]) begin
-			if (pcs[fet_stream].pc >= ic_buf_pc[n43].pc && pcs[fet_stream].pc < ic_buf_pc[n43].pc + 8'd96) begin
-				ic_line = ic_buf[n43];
-				pc_fet = pcs[fet_stream];
-			end
-		end
-end
 
-// If the cache line is not buffered, buffer it.
-always_ff @(posedge clk)
-if (irst) begin
-	ic_buf[0] = {1024{1'b1}};
-	ic_buf[1] = {1024{1'b1}};
-	ic_buf[2] = {1024{1'b1}};
-	ic_buf[3] = {1024{1'b1}};
-	ic_buf_pc[0].pc = 32'd0;
-	ic_buf_pc[1].pc = 32'd0;
-	ic_buf_pc[2].pc = 32'd0;
-	ic_buf_pc[3].pc = 32'd0;
-	ic_buf_pc[0].stream = 7'd0;
-	ic_buf_pc[1].stream = 7'd0;
-	ic_buf_pc[2].stream = 7'd0;
-	ic_buf_pc[3].stream = 7'd0;
-	buffered <= 128'd0;
-end
-else begin
-	if (~is_buffered) begin
-		buffered[ic_buf_pc[0].stream] <= 1'b0;
-		ic_buf[0] <= ic_buf[1];
-		ic_buf[1] <= ic_buf[2];
-		ic_buf[2] <= ic_buf[3];
-		ic_buf[3] <= ic_line;
-		ic_buf_pc[0] <= ic_buf_pc[1];
-		ic_buf_pc[1] <= ic_buf_pc[2];
-		ic_buf_pc[2] <= ic_buf_pc[3];
-		ic_buf_pc[3] <= {icpc.pc[$bits(pc_address_t)-1:6],6'd0};
-		buffered[icpc.stream] <= 1'b1;
-	end
-end
+Qupls4_instruction_buffer uib1
+(
+	.rst_i(irst),
+	.clk_i(clk),
+	.stream_i(fet_stream),
+	.ips_i(pcs),
+	.ip_i(icpc),
+	.line_i({ic_clineh.data,ic_clinel.data}),
+	.line_o(ic_line),
+	.ip_o(pc_fet),
+	.is_buffered_o(is_buffered)
+);
 
 Qupls4_pipeline_fet ufet1
 (
@@ -2646,14 +2608,16 @@ reg room_for_que;
 reg room_for_lsq_queue;
 Qupls4_pkg::lsq_ndx_t lsq_head;
 Qupls4_pkg::lsq_ndx_t lsq_tail, lsq_tail0;
-always_comb advance_pipeline = 
+always_comb advance_pipeline =
+
 	!rstcnt[2] &&			// not resetting
 	!sync_ndxv &&			// there is no sync instruction in the re-order buffer
 	!rat_stallq &&		// not stalled on register alias
 //	!vec_stallq &&		// I think this was on vector lookup
-	!ns_stall &&			// not stalled supplying register names
+//	!ns_stall &&			// not stalled supplying register names
 	room_for_que && 	// and there is room to queue
 	!stall_dsp;				// not stalled dispatching
+
 always_comb advance_pipeline_seg2 = advance_pipeline;// || dc_get;//(!stallq && !vec_stallq) || dc_get;
 always_comb vec_stallq = !ic_dhit || vec_stall2;
 always_comb advance_f = advance_pipeline;
@@ -2897,9 +2861,6 @@ Qupls4_pipeline_ren #(.MWIDTH(MWIDTH)) uren1
 	.store_argC_pReg(store_argC_pReg),
 	.prn_i(prn),
 	.prnv(prnv),
-	.ns_areg(ns_areg),
-	.Rt0_dec(ns_dstreg),
-	.Rt_decv(ns_dstregv),
 	.Rt0_ren(Rt0_ren),
 	.Rt0_renv(Rt0_renv),
 	.pg_dec(pg_dec),
@@ -2963,6 +2924,7 @@ Qupls4_checkpoint_manager #(.MWIDTH(MWIDTH)) ucpm1
 	.miss_cp(miss_cp)
 );
 
+/* Rename is handled in the rename pipeline stage
 Qupls4_map_dstreg_req umdr
 (
 	.pgh(pgh),
@@ -2994,6 +2956,7 @@ Qupls4_reg_name_supplier4 uns4
 	.stall(ns_stall),
 	.rst_busy()
 );
+*/
 
 /*
 always_ff @(posedge clk)
@@ -3554,7 +3517,7 @@ endgenerate
 
 // Mux the queue outputs onto the register file inputs.
 generate begin : gWrPort
-	for (g = 0; g < NREG_WPORTS; g = g + 1) begin
+	for (g = 0; g < $size(wrport0_v); g = g + 1) begin
 		always_ff @(posedge clk) wrport0_v[g] <= !fuq_empty[frq_upd[g]];
 		always_ff @(posedge clk) wrport0_we[g] <= fuq_we[frq_upd[g]]; 
 		always_ff @(posedge clk) wrport0_Rt[g] <= fuq_pRt[frq_upd[g]]; 
@@ -3710,14 +3673,10 @@ always_comb
 
 always_comb//ff @(posedge clk)
 	missid = irst ? 8'd0 : excmiss ? excid : fcu_rse.rndx;
+always_comb//ff @(posedge clk)
+	missid_v = irst ? 1'b0 : excmiss ? VAL : fcu_rse.v;
 
-/*
-always_ff @(posedge clk)
-	if (branch_state==BS_CHKPT_RESTORE) begin
-		for (n24 = 0; n24 < ROB_ENTRIES; n24 = n24 + 1)
-			missidb[n24] = (excmiss ? excid : fcu_rse.rndx)==n24;
-	end
-*/
+
 always_comb
 if (irst) begin
 	misspc.stream = 5'd1;
@@ -3732,7 +3691,7 @@ end
 
 always_comb
 if (irst)
-	missgrp <= 4'd0;
+	missgrp <= 5'd0;
 else
 	missgrp <= excmiss ? excmissgrp : fcu_missgrp;
 /*
@@ -6689,15 +6648,15 @@ else begin
 		
 		if (fcu_found_destination) begin
 			if (fnFindHwi(fcu_skip_list) < 8'hff) begin
-				pgh[((fcu_dst+3)>>2)%(Qupls4_pkg::ROB_ENTRIES/4)].hwi <= pgh[fnFindHwi(fcu_skip_list)>>2].hwi;
-				pgh[((fcu_dst+3)>>2)%(Qupls4_pkg::ROB_ENTRIES/4)].irq <= pgh[fnFindHwi(fcu_skip_list)>>2].irq;
-				pgh[fnFindHwi(fcu_skip_list)>>2].hwi <= FALSE;
+				pgh[rob[(fcu_dst+3)%(Qupls4_pkg::ROB_ENTRIES)].pghn].hwi <= pgh[fnFindHwi(fcu_skip_list)].hwi;
+				pgh[rob[(fcu_dst+3)%(Qupls4_pkg::ROB_ENTRIES)].pghn].irq <= pgh[fnFindHwi(fcu_skip_list)].irq;
+				pgh[fnFindHwi(fcu_skip_list)].hwi <= FALSE;
 			end
 		end
-		
-		for (n3 = 0; n3 < Qupls4_pkg::ROB_ENTRIES; n3 = n3 + 1) begin
+
+		foreach (rob[n3]) begin
 			if (fcu_skip_list[n3]) begin
-				pgh[n3>>2].irq <= {$bits(Qupls4_pkg::irq_info_packet_t){1'b0}};
+				pgh[rob[n3].pghn].irq <= {$bits(Qupls4_pkg::irq_info_packet_t){1'b0}};
 			end
 		end
 	end
@@ -6717,6 +6676,8 @@ else begin
 	
 	
 	// Mark the group done if all ROB entries in group are done.
+	// I think this is dead code.
+	// ???
 	for (n3 = 0; n3 < Qupls4_pkg::ROB_ENTRIES; n3 = n3 + 4) begin
 		if (&rob[n3].done && &rob[n3+1].done && &rob[n3+2].done && &rob[n3+3].done)
 			pgh[n3>>2].done <= TRUE;
@@ -7953,10 +7914,9 @@ begin
 	// Unconditional branches and jumps are done already in the mux stage.
 	// Unconditional subroutine calls only need the target register updated.
 	if (db.bsr|db.jsr) begin
-		if (db.Rdz)
-			next_robe.done = {VAL,VAL};
-		else
-			next_robe.done = {VAL,INV};
+		next_robe.done = {VAL,VAL};
+//		else
+//			next_robe.done = {VAL,INV};
 	end
 	next_robe.out = {INV,INV};
 	next_robe.lsq = INV;
@@ -8154,7 +8114,7 @@ begin
 	lsq[ndx.row][ndx.col].cndx <= rob.cndx;
 	lsq[ndx.row][ndx.col].Rt <= rob.op.nRd;
 	lsq[ndx.row][ndx.col].aRt <= rob.op.decbus.Rd;
-	lsq[ndx.row][ndx.col].aRtz <= rob.op.decbus.Rdz;
+	lsq[ndx.row][ndx.col].aRtz <= !rob.op.decbus.Rdv;
 	lsq[ndx.row][ndx.col].om <= rob.om;
 	lsq[ndx.row][ndx.col].memsz <= Qupls4_pkg::fnMemsz(rob.op);
 	for (n12r = 0; n12r < Qupls4_pkg::LSQ_ENTRIES; n12r = n12r + 1)
@@ -8495,7 +8455,7 @@ begin
 	sr.om <= fnNextOm(sr.om);
 	excir <= rob[id].op;
 	excid <= id;
-	excmissgrp <= id>>2;
+	excmissgrp <= rob[id].pghn;
 	excmiss <= FALSE;
 	csr_carry_mod <= rob[id].op.carry_mod;
 	// excmisspc.pc <= {kvec[sr.dbg ? 4 : 3][$bits(pc_address_t)-1:8] + 4'd10,8'h0};
@@ -8571,7 +8531,7 @@ begin
 	if (sr.om > ir.ins[9:8]) begin
 		sr.om <= Qupls4_pkg::operating_mode_t'(ir.ins[9:8]);
 		excid <= id;
-		excmissgrp <= id>>2;
+		excmissgrp <= rob[id].pghn;
 		excmiss <= TRUE;
 		/*
 		if (cause[3][7:0] < 8'd16)
@@ -8870,11 +8830,11 @@ integer kk;
 seqnum_t sn;
 begin
 	sn = 8'hff;
-	for (kk = 0; kk < Qupls4_pkg::ROB_ENTRIES; kk = kk + 1) begin
+	foreach (rob[kk]) begin
 		if (bmp[kk]) begin
-			if (pgh[kk>>2].hwi && rob[kk].sn < sn) begin
+			if (pgh[rob[kk].pghn].hwi && rob[kk].sn < sn) begin
 				sn = rob[kk].sn;
-				fnFindHwi = kk >> 2;
+				fnFindHwi = rob[kk].pghn;
 			end
 		end
 	end

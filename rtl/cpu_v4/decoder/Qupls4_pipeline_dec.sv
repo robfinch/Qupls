@@ -291,7 +291,7 @@ begin
 	nopi.uop = {41'd0,Qupls4_pkg::OP_NOP};
 	nopi.uop.lead = 3'd1;
 	nopi.v = 1'b1;
-	nopi.decbus.Rdz = 1'b1;
+	nopi.decbus.Rdv = 1'b0;
 	nopi.decbus.nop = 1'b1;
 	nopi.decbus.alu = 1'b1;
 end

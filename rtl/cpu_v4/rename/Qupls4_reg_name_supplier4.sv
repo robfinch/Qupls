@@ -177,7 +177,7 @@ always_comb o[3] = {2'd3,ffo[3][6:0] + rotcnt[3][6:0]};
 
 checkpt_ndx_t last_cndx;
 always_comb
-for (n1 = 0; n1 < 4; n1 = n1 + 1)
+foreach (ns_dstreg[n1])
 begin
 	last_cndx = ns_cndx[0];
 	ns_dstregv[n1] = INV;

@@ -573,24 +573,30 @@ begin
 			endcase
 
 		Qupls4_pkg::FN_ROL:
-			case(ir.op3)
-			3'd0: bus = (shl | shl[WID*2-1:WID]) & c;
-			3'd1:	bus = (shl | shl[WID*2-1:WID]) | c;
-			3'd2:	bus = (shl | shl[WID*2-1:WID]) ^ c;
-			3'd3:	bus = (shl | shl[WID*2-1:WID]) + c;
-			3'd6:	bus = mask1[LANE] ? (shl | shl[WID*2-1:WID]) : t;
-			default:	bus = zero;
-			endcase
+			if (Qupls4_pkg::SUPPORT_ROTATE)
+				case(ir.op3)
+				3'd0: bus = (shl | shl[WID*2-1:WID]) & c;
+				3'd1:	bus = (shl | shl[WID*2-1:WID]) | c;
+				3'd2:	bus = (shl | shl[WID*2-1:WID]) ^ c;
+				3'd3:	bus = (shl | shl[WID*2-1:WID]) + c;
+				3'd6:	bus = mask1[LANE] ? (shl | shl[WID*2-1:WID]) : t;
+				default:	bus = zero;
+				endcase
+			else
+				bus = zero;
 
 		Qupls4_pkg::FN_ROR:
-			case(ir.op3)
-			3'd0: bus = (shr | shr[WID*2-1:WID]) & c;
-			3'd1:	bus = (shr | shr[WID*2-1:WID]) | c;
-			3'd2:	bus = (shr | shr[WID*2-1:WID]) ^ c;
-			3'd3:	bus = (shr | shr[WID*2-1:WID]) + c;
-			3'd6:	bus = mask1[LANE] ? (shr | shr[WID*2-1:WID]) : t;
-			default:	bus = zero;
-			endcase
+			if (Qupls4_pkg::SUPPORT_ROTATE)
+				case(ir.op3)
+				3'd0: bus = (shr | shr[WID*2-1:WID]) & c;
+				3'd1:	bus = (shr | shr[WID*2-1:WID]) | c;
+				3'd2:	bus = (shr | shr[WID*2-1:WID]) ^ c;
+				3'd3:	bus = (shr | shr[WID*2-1:WID]) + c;
+				3'd6:	bus = mask1[LANE] ? (shr | shr[WID*2-1:WID]) : t;
+				default:	bus = zero;
+				endcase
+			else
+				bus = zero;
 			
 		Qupls4_pkg::FN_MOVE:
 			bus = b;
@@ -681,21 +687,27 @@ begin
 			default:	bus = zero;
 			endcase
 		Qupls4_pkg::FN_ROL:
-			case(ir.op3)
-			3'd0: bus = (shl | shl[WID*2-1:WID]) & c;
-			3'd1:	bus = (shl | shl[WID*2-1:WID]) | c;
-			3'd2:	bus = (shl | shl[WID*2-1:WID]) ^ c;
-			3'd3:	bus = (shl | shl[WID*2-1:WID]) + c;
-			default:	bus = zero;
-			endcase
+			if (Qupls4_pkg::SUPPORT_ROTATE)
+				case(ir.op3)
+				3'd0: bus = (shl | shl[WID*2-1:WID]) & c;
+				3'd1:	bus = (shl | shl[WID*2-1:WID]) | c;
+				3'd2:	bus = (shl | shl[WID*2-1:WID]) ^ c;
+				3'd3:	bus = (shl | shl[WID*2-1:WID]) + c;
+				default:	bus = zero;
+				endcase
+			else
+				bus = zero;
 		Qupls4_pkg::FN_ROR:
-			case(ir.op3)
-			3'd0: bus = (shr | shr[WID*2-1:WID]) & c;
-			3'd1:	bus = (shr | shr[WID*2-1:WID]) | c;
-			3'd2:	bus = (shr | shr[WID*2-1:WID]) ^ c;
-			3'd3:	bus = (shr | shr[WID*2-1:WID]) + c;
-			default:	bus = zero;
-			endcase
+			if (Qupls4_pkg::SUPPORT_ROTATE)
+				case(ir.op3)
+				3'd0: bus = (shr | shr[WID*2-1:WID]) & c;
+				3'd1:	bus = (shr | shr[WID*2-1:WID]) | c;
+				3'd2:	bus = (shr | shr[WID*2-1:WID]) ^ c;
+				3'd3:	bus = (shr | shr[WID*2-1:WID]) + c;
+				default:	bus = zero;
+				endcase
+			else
+				bus = zero;
 		Qupls4_pkg::FN_MOVE:	bus = b;
 		default:	bus = zero;
 		endcase

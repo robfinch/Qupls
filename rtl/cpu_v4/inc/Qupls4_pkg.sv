@@ -1585,7 +1585,7 @@ typedef struct packed
 	logic Rs2z;
 	logic Rs3z;
 	logic Rs4z;
-	logic Rdz;
+	logic Rdv;
 	logic Rd2z;
 	logic Rd3z;
 	logic has_Rs2;

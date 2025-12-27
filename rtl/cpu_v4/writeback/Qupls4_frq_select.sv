@@ -49,7 +49,7 @@ output reg [NFRQ-1:0] upd_bitmap;
 genvar g,k;
 wire [4:0] upda [0:NWRITE_PORTS-1];
 reg [4:0] fuq_rot;
-reg [23:0] excl;		// exclustion list
+reg [23:0] excl [0:NWRITE_PORTS-1];		// exclustion list
 
 // Look for queues containing values, and select from a queue using a rotating selector.
 reg [NFRQ-1:0] fuq_empty;
@@ -58,16 +58,16 @@ reg [NFRQ-1:0] fuq_empty_rot;
 always_comb
 	fuq_empty_rot1 = ({frq_empty,frq_empty} << fuq_rot);
 always_comb
-	fuq_empty_rot = fuq_empty_rot1[12:0] | fuq_empty_rot1[25:13];
+	fuq_empty_rot = fuq_empty_rot1[NFRQ-1:0] | fuq_empty_rot1[NFRQ*2-1:NFRQ];
 
 generate begin : gFFOs
-	for (g = 0; g < NWRITE_PORTS; g = g + 1) begin
-	   always_comb
-		if (g==0)
-			excl = 24'd0;
-		else
-    		excl = (24'd1 << upda[g-1]) | excl;
-		ffo24 uffov1 (.i({11'h0,~fuq_empty_rot} & ~excl), .o(upda[g]));
+	for (g = 0; g < $size(upda); g = g + 1) begin
+	  always_comb
+			if (g==0)
+				excl[g] = 24'd0;
+			else
+	    	excl[g] = (24'd1 << upda[g-1]) | excl[g-1];
+		ffo24 uffov1 (.i({11'h0,~fuq_empty_rot} & ~excl[g]), .o(upda[g]));
 	end
 end
 endgenerate
@@ -78,16 +78,16 @@ if (rst)
 	fuq_rot <= 5'd0;
 else begin
 	fuq_rot <= fuq_rot + 2'd1;
-	if (fuq_rot == NFRQ-1)
+	if (fuq_rot >= NFRQ-1)
 		fuq_rot <= 5'd0;
 end
 
 // If upda did not find anything to update, then neither will any of the subsequest ones.
 generate begin : gUpd
-	for (g = 0; g < NWRITE_PORTS; g = g + 1) begin
+	for (g = 0; g < $size(upd); g = g + 1) begin
 		always_ff @(posedge clk)
-			upd[g] = upda[g]==5'd31 ? 5'd31 : fuq_rot > upda[g] ? NFRQ + upda[g] - fuq_rot : upda[g] - fuq_rot;
-		for (k = 0; k < NFRQ; k = k + 1)
+			upd[g] <= upda[g]==5'd31 ? 5'd31 : fuq_rot > upda[g] ? NFRQ + upda[g] - fuq_rot : upda[g] - fuq_rot;
+		for (k = 0; k < $size(upd_bitmap); k = k + 1)
 			always_ff @(posedge clk) begin
 				upd_bitmap[k] <= 1'b0;
 				if (k==upda[g] && upda[g]!=5'd31) upd_bitmap[k] <= 1'b1;

@@ -46,11 +46,11 @@ output reg miss_flag;
 
 always_comb
 	case(1'b1)
-	rse.v & rse.br:		miss_flag <= miss_det;
-	rse.v & rse.cjb:	miss_flag <= TRUE;
-	rse.v & rse.ret:	miss_flag <= TRUE;
-	rse.v & rse.eret:	miss_flag <= TRUE;
-	default:	miss_flag <= FALSE;
+	rse.v & rse.br:		miss_flag = miss_det;
+	rse.v & rse.cjb:	miss_flag = TRUE;
+	rse.v & rse.ret:	miss_flag = TRUE;
+	rse.v & rse.eret:	miss_flag = TRUE;
+	default:	miss_flag = FALSE;
 	endcase
 
 endmodule

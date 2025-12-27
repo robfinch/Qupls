@@ -110,7 +110,7 @@ Qupls4_decode_Rd udcrt
 	.instr(instr),
 	.instr_raw(instr_raw),
 	.Rd(db.Rd),
-	.Rdz(db.Rdz),
+	.Rdv(db.Rdv),
 	.exc(excRd)
 );
 /*
@@ -397,7 +397,7 @@ if (rst) begin
 	dbo <= {$bits(dbo){1'd0}};
 	dbo.cause <= Qupls4_pkg::FLT_NONE;
 	dbo.nop <= 1'b1;
-	dbo.Rdz <= 1'b1;
+	dbo.Rdv <= 1'b0;
 	dbo.alu <= 1'b1;
 end
 else begin

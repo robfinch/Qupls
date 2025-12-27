@@ -61,7 +61,7 @@ for (n1 = 0; n1 < 4; n1 = n1 + 1) begin
 	ns_whrndx[n1] = 8'd0;
 	ns_cndx[n1] = 5'd0;
 end
-for (n1 = 0; n1 < Qupls4_pkg::ROB_ENTRIES; n1 = n1 + 1) begin
+foreach (rob[n1]) begin
 	if (rob[n1].v && kk < 4) begin
 		m1 = (n1==ns_rndx[0]);
 		m2 = (n1==ns_rndx[1]);

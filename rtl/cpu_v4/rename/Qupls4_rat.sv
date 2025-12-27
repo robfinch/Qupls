@@ -422,7 +422,7 @@ else begin
 			currentRegvalid[bo_nreg] = VAL;
 //			currentRegvalid[currentMap.regmap[bo_areg]] <= VAL;
 		end
-		for (n14 = 0; n14 < MWIDTH; n14 = n14 + 1)
+		foreach (wrport0_v[n14])
 			if (wrport0_v[n14])
 				currentRegvalid[wrport0_Rt[n14]] = VAL;
 
@@ -432,7 +432,7 @@ else begin
 					currentRegvalid[pwrra0[n14]] = INV;
 		end
 		
-		for (n14 = 0; n14 < MWIDTH; n14 = n14 + 1)
+		foreach (cmtap[n14])
 			if (cmtaiv[n14])
 				currentRegvalid[cmtap[n14]] = VAL;
 	end
@@ -1241,9 +1241,9 @@ endgenerate
 
 always_comb//ff @(posedge clk)
 if (rst)
-	en2d <= 1'b0;
+	en2d = 1'b0;
 else
-	en2d <= en2;
+	en2d = en2;
 
 always_ff @(posedge clk)
 if (rst) begin
@@ -1329,7 +1329,7 @@ else begin
 	// The branch instruction itself might need to update the checkpoint info.
 	// Even if a checkpoint is being allocated, we want to record new maps.
 	if (en2) begin
-		for (n10 = 0; n10 < MWIDTH; n10 = n10 + 1)
+		foreach (wrra[n10])
 			if (wr[n10])
 				nextCurrentMap.regmap[wra[n10]] = wrra[n10];
 	end
@@ -1338,7 +1338,7 @@ else begin
 	// Note that .regmap[] ahould be the same as the physical register at commit.
 	// It is a little less logic just to use the physical register at commit,
 	// rather than referencing .regmap[]
-	for (n10 = 0; n10 < MWIDTH; n10 = n10 + 1)
+	foreach (cmtap[n10])
 		if (cdcmtav[n10])
 			nextHistoryMap.regmap[cmtaa[n10]] = cmtap[n10];
 
