@@ -124,7 +124,7 @@ integer nn,mm,n2,n3,n4,m4,n5,n6,n8,n9,n10,n11,n12,n13,n14,n15,n17;
 integer n16r, n16c, n12r, n12c, n14r, n14c, n17r, n17c, n18r, n18c;
 integer n19,n20,n21,n22,n23,n24,n25,n26,n27,n28,n29,i,n30,n31,n32,n33;
 integer n34,n35,n36,n37,n38,n39,n40,n41,n42,n43,n44,n45,n46,n47,n48;
-integer n49,n50;
+integer n49,n50,n51,n52;
 integer jj,kk;
 
 genvar g,h,gvg;
@@ -2643,6 +2643,9 @@ wire flush_ren;
 reg vec_stallq;
 reg vec_stall2;
 reg room_for_que;
+reg room_for_lsq_queue;
+Qupls4_pkg::lsq_ndx_t lsq_head;
+Qupls4_pkg::lsq_ndx_t lsq_tail, lsq_tail0;
 always_comb advance_pipeline = 
 	!rstcnt[2] &&			// not resetting
 	!sync_ndxv &&			// there is no sync instruction in the re-order buffer
@@ -2688,14 +2691,26 @@ Qupls4_queue_room uqroom1
 	.room(enqueue_room)
 );
 
+wire [3:0] lsq_enqueue_room;
+
+Qupls4_lsq_queue_room uqroom2
+(
+	.lsq(lsq),
+	.head(lsq_head),
+	.tail(lsq_tail),
+	.room(lsq_enqueue_room)
+);
+
 always_comb
 	room_for_que = enqueue_room > 4'd3;
+always_comb
+	room_for_lsq_queue = lsq_enqueue_room > 4'd0;
 assign nq = !(branchmiss) && advance_pipeline && room_for_que && (!stomp_que || stomp_quem);
 
 reg signed [$clog2(Qupls4_pkg::ROB_ENTRIES):0] cmtlen;			// Will always be >= 0
 reg signed [$clog2(Qupls4_pkg::ROB_ENTRIES):0] group_len;		// Commit group length
 
-reg cmttlb0, cmttlb1,cmttlb2,cmttlb3;
+reg [MWIDTH-1:0] cmttlb;
 reg htcolls;		// head <-> tail collision
 reg cmtbr;
 
@@ -3834,7 +3849,6 @@ reg sau0_rndxv, sau1_rndxv;
 reg agen0_rndxv, agen1_rndxv;
 Qupls4_pkg::rob_bitmask_t rob_memissue;
 wire [3:0] beb_issue;
-Qupls4_pkg::lsq_ndx_t lsq_head;
 wire ratv0_rndxv;
 wire ratv1_rndxv;
 wire ratv2_rndxv;
@@ -4116,20 +4130,29 @@ Qupls4_meta_sau #(.SAU0(1'b1)) usau0
 	.exc(sau0_exc)
 );
 
-Qupls4_meta_imul uimul0
-(
-	.rst(irst),
-	.clk(clk),
-	.stomp(robentry_stomp),
-	.rse_i(imul0_rse),
-	.rse_o(imul0_rse2),
-	.lane(3'd0),
-	.cptgt(imul0_cptgt),
-	.z(imul0_predz),
-	.o(imul0_res),
-	.we_o(imul0_we),
-	.mul_done()
-);
+generate begin : gIMul
+if (Qupls4_pkg::SUPPORT_IMUL)
+	Qupls4_meta_imul uimul0
+	(
+		.rst(irst),
+		.clk(clk),
+		.stomp(robentry_stomp),
+		.rse_i(imul0_rse),
+		.rse_o(imul0_rse2),
+		.lane(3'd0),
+		.cptgt(imul0_cptgt),
+		.z(imul0_predz),
+		.o(imul0_res),
+		.we_o(imul0_we),
+		.mul_done()
+	);
+else begin
+	assign imul0_res2 = {$bits(reservation_station_entry_t){1'b0}};
+	assign imul0_we = FALSE;
+	assign imul0_res = value_zero;
+end
+end
+endgenerate
 
 wire idiv0_dbz;
 wire [63:0] div0_exc;
@@ -4344,7 +4367,6 @@ wire ptw_vv;
 wire ptw_pv;
 wire page_cross0, page_cross1;
 
-Qupls4_pkg::lsq_ndx_t lsq_tail, lsq_tail0;
 Qupls4_pkg::lsq_ndx_t lsq_heads [0:Qupls4_pkg::LSQ_ENTRIES];
 
 Qupls4_pkg::lsq_ndx_t lbndx0, lbndx1;
@@ -4958,10 +4980,9 @@ always_comb
 											head[0] == tails[0] || head[0] == tails[1] || head[0] == tails[2] || head[0] == tails[3] ||
 											head[0] == tails[4] || head[0] == tails[5] || head[0] == tails[6] || head[0] == tails[7]);
 */
-always_comb cmttlb0 = (|rob[head[0]].v && rob[head[0]].lsq && !lsq[rob[head[0]].lsqndx.row][rob[head[0]].lsqndx.col].agen);
-always_comb cmttlb1 = MWIDTH > 1 && (|rob[head[1]].v && rob[head[1]].lsq && !lsq[rob[head[1]].lsqndx.row][rob[head[1]].lsqndx.col].agen);
-always_comb cmttlb2 = MWIDTH > 2 && (|rob[head[2]].v && rob[head[2]].lsq && !lsq[rob[head[2]].lsqndx.row][rob[head[2]].lsqndx.col].agen);
-always_comb cmttlb3 = MWIDTH > 3 && (|rob[head[3]].v && rob[head[3]].lsq && !lsq[rob[head[3]].lsqndx.row][rob[head[3]].lsqndx.col].agen);
+always_comb
+	foreach(cmttlb[n51])
+		cmttlb[n51] = (|rob[head[n51]].v && rob[head[n51]].lsq && !lsq[rob[head[n51]].lsqndx.row][rob[head[n51]].lsqndx.col].agen);
 
 Qupls4_commit_count
 #(.XWID(MWIDTH))
@@ -4982,12 +5003,12 @@ ucmtcnt1
 );
 
 always_comb
-cmtbr = (
-	(rob[head[0]].op.decbus.br & rob[head[0]].v) ||
-	(MWIDTH > 1 && (rob[head[1]].op.decbus.br & rob[head[1]].v)) ||
-	(MWIDTH > 2 && (rob[head[2]].op.decbus.br & rob[head[2]].v)) ||
-	(MWIDTH > 3 && (rob[head[3]].op.decbus.br & rob[head[3]].v))) && do_commit
-	;
+begin
+	cmtbr = FALSE;
+	for (n52 = 0; n52 < MWIDTH; n52 = n52 + 1)
+		cmtbr = cmtbr | (rob[head[n52]].op.decbus.br & rob[head[n52]].v);
+	cmtbr = cmtbr & do_commit;
+end
 
 always_comb
 begin
@@ -5048,7 +5069,7 @@ reg load_lsq_argc;
 Qupls4_reservation_station #(
 	.MWIDTH(MWIDTH),
 	.FUNCUNIT(4'd0),
-	.NRSE(1),
+	.NRSE(NRSE_SAU0),
 	.NSARG(3),
 	.NREG_RPORTS(RS_NREG_RPORTS),
 	.RC(0),
@@ -5082,7 +5103,7 @@ usaust0
 Qupls4_reservation_station #(
 	.MWIDTH(MWIDTH),
 	.FUNCUNIT(4'd2),
-	.NRSE(1),
+	.NRSE(NRSE_IMUL),
 	.NSARG(3),
 	.NREG_RPORTS(RS_NREG_RPORTS),
 	.RC(0),
@@ -5114,7 +5135,7 @@ if (Qupls4_pkg::SUPPORT_IDIV)
 Qupls4_reservation_station #(
 	.MWIDTH(MWIDTH),
 	.FUNCUNIT(4'd3),
-	.NRSE(1),
+	.NRSE(NRSE_IDIV),
 	.NSARG(2),
 	.NREG_RPORTS(RS_NREG_RPORTS),
 	.RC(0),
@@ -5148,7 +5169,7 @@ generate begin : gSauStation
 		Qupls4_reservation_station #(
 			.MWIDTH(MWIDTH),
 			.FUNCUNIT(4'd1),
-			.NRSE(1),
+			.NRSE(NRSE_SAU),
 			.NSARG(3),
 			.NREG_RPORTS(RS_NREG_RPORTS),
 			.RC(0),
@@ -5192,7 +5213,7 @@ generate begin : gFpuStat
 				Qupls4_reservation_station #(
 					.MWIDTH(MWIDTH),
 					.FUNCUNIT(4'd4),
-					.NRSE(1),
+					.NRSE(NRSE_FMA),
 					.NSARG(3+Qupls4_pkg::SUPPORT_FDP),
 					.NREG_RPORTS(RS_NREG_RPORTS),
 					.RC(1),
@@ -5219,7 +5240,7 @@ generate begin : gFpuStat
 				Qupls4_reservation_station #(
 					.MWIDTH(MWIDTH),
 					.FUNCUNIT(4'd12),
-					.NRSE(1),
+					.NRSE(NRSE_FPU),
 					.NSARG(3),
 					.NREG_RPORTS(NREG_RPORTS),
 					.RC(1),
@@ -5248,7 +5269,7 @@ generate begin : gFpuStat
 				Qupls4_reservation_station #(
 					.MWIDTH(MWIDTH),
 					.FUNCUNIT(4'd5),
-					.NRSE(1),
+					.NRSE(NRSE_FMA),
 					.NSARG(3+Qupls4_pkg::SUPPORT_FDP),
 					.NREG_RPORTS(RS_NREG_RPORTS),
 					.RC(1),
@@ -5282,7 +5303,7 @@ generate begin : gDecimalFloat
 		Qupls4_pair_reservation_station #(
 			.MWIDTH(MWIDTH),
 			.FUNCUNIT(4'd13),
-			.NRSE(1),
+			.NRSE(NRSE_DFLT),
 			.NSARG(3),
 			.NREG_RPORTS(RS_NREG_RPORTS),
 			.RC(1),
@@ -5313,7 +5334,7 @@ endgenerate
 Qupls4_reservation_station #(
 	.MWIDTH(MWIDTH),
 	.FUNCUNIT(4'd7),
-	.NRSE(1),
+	.NRSE(NRSE_FCU),
 	.NSARG(3),
 	.NREG_RPORTS(RS_NREG_RPORTS),
 	.RC(0),
@@ -5341,7 +5362,7 @@ ubrast1
 Qupls4_reservation_station #(
 	.MWIDTH(MWIDTH),
 	.FUNCUNIT(4'd8),
-	.NRSE(1),
+	.NRSE(NRSE_AGEN),
 	.NSARG(3),
 	.NREG_RPORTS(RS_NREG_RPORTS),
 	.RC(0),
@@ -5391,7 +5412,7 @@ if (Qupls4_pkg::NDATA_PORTS > 1)
 Qupls4_reservation_station #(
 	.MWIDTH(MWIDTH),
 	.FUNCUNIT(4'd9),
-	.NRSE(1),
+	.NRSE(NRSE_AGEN),
 	.NSARG(3),
 	.NREG_RPORTS(RS_NREG_RPORTS),
 	.RC(0),
@@ -5783,6 +5804,7 @@ else begin
 		end
 	end
 
+
 // ----------------------------------------------------------------------------
 // Dispatch
 // ----------------------------------------------------------------------------
@@ -5822,6 +5844,82 @@ else begin
 	end
 
 
+	// This is really a result of dispatch
+	// Place up to two instructions into the load/store queue in order.	
+/*
+	if (lsq[lsq_tail0.row][0].v==INV && rob[agen0_id].out[0] && !rob[agen0_id].lsq && rob[agen0_id].op.decbus.mem && !rob[agen0_id].op.decbus.cpytgt ) begin	// Can an entry be queued?
+		if (!fnIsInLSQ(agen0_id)) begin
+			rob[agen0_id].lsq <= VAL;
+			rob[agen0_id].lsqndx <= lsq_tail0;
+		end
+		if (LSQ2 && lsq[lsq_tail0.row][1].v==INV && rob[agen1_id].out[0] && !rob[agen1_id].lsq && rob[agen1_id].op.decbus.mem && !rob[agen1_id].op.decbus.cpytgt ) begin	// Can a second entry be queued?
+			if (!fnIsInLSQ(agen1_id)) begin
+				rob[agen1_id].lsq <= VAL;
+				rob[agen1_id].lsqndx <= {lsq_tail0.row,1'b1};
+			end
+		end
+	end
+*/
+	// There must be room in the queue.
+	if (room_for_lsq_queue) begin
+		// and agen dispatched
+		if (agen0_idv &&
+		// and the instruction is valid (double-check - it should be, it got dispatched)
+		rob[agen0_id].v==VAL &&
+		// and it is a memory op (double-check)
+		rob[agen0_id].op.decbus.mem &&
+		// double-check LSQ row must be invalid
+		lsq[lsq_tail0.row][0].v==INV &&
+		// and the instruction is out
+		rob[agen0_id].out[0] &&
+		// and the instruction is not done
+		!(&rob[agen0_id].done) &&
+		// and not stomping on the instruction
+		!robentry_stomp[agen0_id] &&
+		// and there is no entry assigned yet
+		!rob[agen0_id].lsq &&
+		// and it is not a copy-target
+		!rob[agen0_id].op.decbus.cpytgt
+		) begin
+			if (!fnIsInLSQ(agen0_id)) begin
+				rob[agen0_id].lsq <= VAL;
+				rob[agen0_id].lsqndx <= lsq_tail0;
+				tEnqueLSE(7'h7F, lsq_tail0, agen0_id, rob[agen0_id], 2'd1);
+				lsq_tail.row <= (lsq_tail.row + 2'd1) % Qupls4_pkg::LSQ_ENTRIES;
+				lsq_tail.col <= 3'd0;
+			end
+		end
+		// It is allowed to queue two
+		if (Qupls4_pkg::LSQ2 && 
+			// and agen dispatched
+			agen1_idv && 
+			// and the instruction is valid (double-check - it should be, it got dispatched)
+			rob[agen1_id].v==VAL &&
+			// and it is a memory op (double-check)
+			rob[agen1_id].op.decbus.mem &&
+			// double-check LSQ row must be invalid
+			lsq[lsq_tail0.row][1].v==INV &&
+			// and the instruction is out
+			rob[agen1_id].out[0] &&
+			// and the instruction is not done
+			!(&rob[agen1_id].done) &&
+			// and not stomping on the instruction
+			!robentry_stomp[agen1_id] &&
+			// and there is no entry assigned yet
+			!rob[agen1_id].lsq &&
+			// and it is not a copy-target
+			!rob[agen1_id].op.decbus.cpytgt
+		) begin
+			if (!fnIsInLSQ(agen1_id)) begin
+				rob[agen1_id].lsq <= VAL;
+				rob[agen1_id].lsqndx <= {lsq_tail0.row,1'b1};
+				tEnqueLSE(7'h7F, {lsq_tail0.row,lsq_tail0.col|1}, agen1_id, rob[agen1_id], 2'd2);
+				lsq[lsq_tail0.row][0].sn <= 7'h7E;
+			end
+		end
+	end
+
+
 // ----------------------------------------------------------------------------
 // Register file Read
 // ----------------------------------------------------------------------------
@@ -5847,43 +5945,6 @@ else begin
 			if (rf_regv[nn*4+2]) rob[reg_tails[nn]].argC_V <= VAL;
 			if (rf_regv[nn*4+3]) rob[reg_tails[nn]].argT_V <= VAL;
 			rob[reg_tails[nn]].reg_read_done <= TRUE;
-		end
-	end
-
-	// Place up to two instructions into the load/store queue in order.	
-/*
-	if (lsq[lsq_tail0.row][0].v==INV && rob[agen0_id].out[0] && !rob[agen0_id].lsq && rob[agen0_id].op.decbus.mem && !rob[agen0_id].op.decbus.cpytgt ) begin	// Can an entry be queued?
-		if (!fnIsInLSQ(agen0_id)) begin
-			rob[agen0_id].lsq <= VAL;
-			rob[agen0_id].lsqndx <= lsq_tail0;
-		end
-		if (LSQ2 && lsq[lsq_tail0.row][1].v==INV && rob[agen1_id].out[0] && !rob[agen1_id].lsq && rob[agen1_id].op.decbus.mem && !rob[agen1_id].op.decbus.cpytgt ) begin	// Can a second entry be queued?
-			if (!fnIsInLSQ(agen1_id)) begin
-				rob[agen1_id].lsq <= VAL;
-				rob[agen1_id].lsqndx <= {lsq_tail0.row,1'b1};
-			end
-		end
-	end
-*/
-	if (lsq[lsq_tail0.row][0].v==INV && rob[agen0_id].out[0] && !rob[agen0_id].lsq && rob[agen0_id].op.decbus.mem && !rob[agen0_id].op.decbus.cpytgt && !(&rob[agen0_id].done)) begin	// Can an entry be queued?
-		if (!fnIsInLSQ(agen0_id)) begin
-			if (!robentry_stomp[agen0_id] && rob[agen0_id].v==VAL) begin
-				rob[agen0_id].lsq <= VAL;
-				rob[agen0_id].lsqndx <= lsq_tail0;
-				tEnqueLSE(7'h7F, lsq_tail0, agen0_id, rob[agen0_id], 2'd1);
-				lsq_tail.row <= (lsq_tail.row + 2'd1) % Qupls4_pkg::LSQ_ENTRIES;
-				lsq_tail.col <= 3'd0;
-			end
-		end
-		if (Qupls4_pkg::LSQ2 && lsq[lsq_tail0.row][1].v==INV && rob[agen1_id].out[0] && !rob[agen1_id].lsq && rob[agen1_id].op.decbus.mem && !rob[agen1_id].op.decbus.cpytgt && !(&rob[agen1_id].done)) begin	// Can a second entry be queued?
-			if (!fnIsInLSQ(agen1_id)) begin
-				if (!robentry_stomp[agen1_id] && rob[agen1_id].v==VAL) begin
-					rob[agen1_id].lsq <= VAL;
-					rob[agen1_id].lsqndx <= {lsq_tail0.row,1'b1};
-					tEnqueLSE(7'h7F, {lsq_tail0.row,lsq_tail0.col|1}, agen1_id, rob[agen1_id], 2'd2);
-					lsq[lsq_tail0.row][0].sn <= 7'h7E;
-				end
-			end
 		end
 	end
 
@@ -6219,14 +6280,15 @@ else begin
 // Clear the sync dependencies for any instructions dependent on a sync.
 
 	if (!htcolls) begin
+		// This commit_id and commit_idv used only to update the MMU for TLB access.
 		commit0_id <= head[0];
 		commit1_id <= head[1];
 		commit2_id <= head[2];
 		commit3_id <= head[3];
-		commit0_idv <= cmttlb0;
-		commit1_idv <= cmttlb1;
-		commit2_idv <= cmttlb2;
-		commit3_idv <= cmttlb3;
+		commit0_idv <= cmttlb[0];
+		commit1_idv <= cmttlb[1];
+		commit2_idv <= cmttlb[2];
+		commit3_idv <= cmttlb[3];
 	end
 	if (do_commit) begin
 		commit_pc0 <= pgh[rob[head[0]].pghn].ip + {rob[head[0]].ip_offs,1'b0};

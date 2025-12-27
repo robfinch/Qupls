@@ -159,7 +159,7 @@ else begin
 			!stall_dsp		
 		) begin
 
-			if (pg_ren.pr[nn].op.decbus.sau && !rob_dispatched_v[0] && !dispatched[nn]) begin
+			if (pg_ren.pr[nn].op.decbus.sau && !rob_dispatched_v[0] && !dispatched[nn] && kk < DISPATCH_COUNT) begin
 				tLoadRse(0,nn,mm);
 				// rse[0].funcunit = 4'd0; set to zero already above
 				rse[0].rndx = tail[kk];
@@ -172,7 +172,7 @@ else begin
 				!pg_ren.pr[nn].op.decbus.sau0 &&				// can only be dispatched to sau #0
 				!rob_dispatched_v[5] &&									// this slot is not already in use
 				!dispatched[nn] &&											// this instruction has not been dispatched
-				Qupls4_pkg::NSAU > 1) begin							// and there is an SAU available
+				Qupls4_pkg::NSAU > 1 && kk < DISPATCH_COUNT) begin							// and there is an SAU available
 				tLoadRse(kk,nn,mm);
 				rse[5].funcunit = 4'd1;
 				rse[5].rndx = tail[kk];
@@ -186,7 +186,7 @@ else begin
 				stall = 1'b1;
 			end
 
-			if (pg_ren.pr[nn].op.decbus.mul && !rob_dispatched_v[1] && !dispatched[nn]) begin
+			if (pg_ren.pr[nn].op.decbus.mul && !rob_dispatched_v[1] && !dispatched[nn] && kk < DISPATCH_COUNT) begin
 				tLoadRse(1,nn,mm);
 				rse[1].funcunit = 4'd2;
 				rse[1].rndx = tail[kk];
@@ -199,7 +199,7 @@ else begin
 				stall = 1'b1;
 			end
 
-			if ((pg_ren.pr[nn].op.decbus.div|pg_ren.pr[nn].op.decbus.sqrt) && !rob_dispatched[1] && !dispatched[nn]) begin
+			if ((pg_ren.pr[nn].op.decbus.div|pg_ren.pr[nn].op.decbus.sqrt) && !rob_dispatched[1] && !dispatched[nn] && kk < DISPATCH_COUNT) begin
 				tLoadRse(2,nn,mm);
 				rse[1].funcunit = 4'd3;
 				rse[1].rndx = tail[kk];
@@ -208,11 +208,11 @@ else begin
 				dispatched[nn] = TRUE;
 				kk = kk + 1;
 			end
-			else if (pg_ren.pr[nn].op.decbus.div|pg_ren.pr[nn].op.decbus.sqrt) begin
+			else if (pg_ren.pr[nn].op.decbus.div|pg_ren.pr[nn].op.decbus.sqrt && kk < DISPATCH_COUNT) begin
 				stall = 1'b1;
 			end
 
-			if (pg_ren.pr[nn].op.decbus.fc && !rob_dispatched[2] && !dispatched[nn]) begin
+			if (pg_ren.pr[nn].op.decbus.fc && !rob_dispatched[2] && !dispatched[nn] && kk < DISPATCH_COUNT) begin
 				tLoadRse(2,nn,mm);
 				rse[2].funcunit = 4'd7; 
 				rse[2].rndx = tail[kk];
@@ -225,7 +225,7 @@ else begin
 				stall = 1'b1;
 			end
 
-			if (pg_ren.pr[nn].op.decbus.mem && !rob_dispatched[3] && !dispatched[nn]) begin
+			if (pg_ren.pr[nn].op.decbus.mem && !rob_dispatched[3] && !dispatched[nn] && kk < DISPATCH_COUNT) begin
 				tLoadRse(3,nn,mm);
 				rse[3].funcunit = 4'd8; 
 				rse[3].rndx = tail[kk];
@@ -249,7 +249,7 @@ else begin
 				stall = 1'b1;
 			end
 
-			if (Qupls4_pkg::SUPPORT_FLOAT && pg_ren.pr[nn].op.decbus.fma && !rob_dispatched[4] && !dispatched[nn] && Qupls4_pkg::NFMA>0) begin
+			if (Qupls4_pkg::SUPPORT_FLOAT && pg_ren.pr[nn].op.decbus.fma && !rob_dispatched[4] && !dispatched[nn] && Qupls4_pkg::NFMA>0 && kk < DISPATCH_COUNT) begin
 				tLoadRse(kk,nn,mm);
 				rse[4].funcunit = 4'd4; 
 				rse[4].rndx = tail[kk];
@@ -276,7 +276,7 @@ else begin
 				stall = 1'b1;
 			end
 			*/
-			if (Qupls4_pkg::SUPPORT_TRIG && pg_ren.pr[nn].op.decbus.trig && !rob_dispatched[4] && !dispatched[nn]) begin
+			if (Qupls4_pkg::SUPPORT_TRIG && pg_ren.pr[nn].op.decbus.trig && !rob_dispatched[4] && !dispatched[nn] && kk < DISPATCH_COUNT) begin
 				tLoadRse(4,nn,mm);
 				rse[4].funcunit = 4'd6; 
 				rse[4].rndx = tail[kk];
@@ -289,7 +289,7 @@ else begin
 				stall = 1'b1;
 			end
 
-			if (Qupls4_pkg::SUPPORT_FLOAT && pg_ren.pr[nn].op.decbus.fpu && !rob_dispatched[4] && !dispatched[nn] && Qupls4_pkg::NFPU > 0) begin
+			if (Qupls4_pkg::SUPPORT_FLOAT && pg_ren.pr[nn].op.decbus.fpu && !rob_dispatched[4] && !dispatched[nn] && Qupls4_pkg::NFPU > 0 && kk < DISPATCH_COUNT) begin
 				tLoadRse(4,nn,mm);
 				rse[4].funcunit = 4'd12;
 				rse[4].rndx = tail[kk];

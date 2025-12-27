@@ -45,10 +45,10 @@ parameter MWIDTH = 4;
 parameter THREADS = 4;
 
 // Number of streams of execution. Alternate branch paths create streams.
-parameter XSTREAMS = 8;
+parameter XSTREAMS = 16;
 
 // Number of levels of branches that can be speculated across.
-parameter BRANCH_LEVELS = 8;
+parameter BRANCH_LEVELS = 16;
 
 // Number of physical registers supporting the architectural ones and used in
 // register renaming. There must be significantly more physical registers than
@@ -221,8 +221,6 @@ parameter NCHECK = 16;
 
 parameter LOADQ_ENTRIES = 8;
 parameter STOREQ_ENTRIES = 8;
-parameter LSQ_ENTRIES = 8;
-parameter LSQ2 = 1'b0;			// Queue two LSQ entries at once?
 
 parameter pL1CacheLines = `L1CacheLines;
 parameter pL1LineSize = `L1CacheLineSize;
@@ -251,6 +249,7 @@ parameter SUPPORT_CAPABILITIES = 1'b0;
 // Support for vector operations.
 parameter SUPPORT_VECTOR = 1'b1;
 
+parameter SUPPORT_IMUL = 1;
 parameter SUPPORT_IDIV = 1;
 parameter SUPPORT_TRIG = 0;
 parameter SUPPORT_FDP = 0;
@@ -285,6 +284,10 @@ parameter NDATA_PORTS = 1;
 // Number of AGENs should be 1 or 2. There is little value in having more agens
 // than there are data ports.
 parameter NAGEN = 1;
+
+parameter LSQ_ENTRIES = 8;
+parameter LSQ2 = NDATA_PORTS > 1;		// Queue two LSQ entries at once?
+
 // Increasing the number of SAUs will increase performance. There must be at
 // least one SAU.
 // Note that adding an FPU may also increase integer performance if PERFORMANCE
@@ -302,4 +305,14 @@ parameter SUPPORT_RSB = 0;
 // Depth of internal stack for exceptionb processing.
 parameter ISTACK_DEPTH = 16;
 
-parameter SUPPORTED_PRECISIONS = "__TO_";
+parameter NRSE_SAU0 = 1;
+parameter NRSE_SAU = 1;
+parameter NRSE_IMUL =1;
+parameter NRSE_IDIV =2;
+parameter NRSE_FMA =1;
+parameter NRSE_FPU =1;
+parameter NRSE_DFLT =2;
+parameter NRSE_FCU =1;
+parameter NRSE_AGEN =1;
+
+parameter SUPPORTED_PRECISIONS = "___O_";

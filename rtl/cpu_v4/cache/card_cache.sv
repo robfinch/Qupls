@@ -37,7 +37,7 @@
 // ============================================================================
 
 import const_pkg::*;
-import fta_bus_pkg::*;
+import wishbone_pkg::*;
 
 module card_cache(rst, clk, wr, wr_tag, adr, load_tags, hit, tagi, tago, tagso, req, resp);
 parameter WID=64;
@@ -53,8 +53,8 @@ output reg hit;
 input tagi;
 output reg tago;
 output reg [WID-1:0] tagso;
-output fta_cmd_request256_t req;
-input fta_cmd_response256_t resp;
+output wb_cmd_request256_t req;
+input wb_cmd_response256_t resp;
 parameter CORENO = 6'd1;
 parameter CID = 3'd4;
 localparam dram_tags = 32'h3FE00000;
@@ -157,12 +157,12 @@ if (rst) begin
 	set_mem <= 1'b0;
 	// Default fields for the bus.
 	reqw <= {$bits(fta_cmd_request256_t){1'b0}};
-	reqw.om <= fta_bus_pkg::MACHINE;
-	reqw.seg <= fta_bus_pkg::DATA;
+	reqw.om <= wishbone_pkg::MACHINE;
+	reqw.seg <= wishbone_pkg::DATA;
 	reqw.blen <= 6'd0;
-	reqw.bte <= fta_bus_pkg::LINEAR;
-	reqw.cti <= fta_bus_pkg::CLASSIC;
-	reqw.sz <= fta_bus_pkg::hexi;
+	reqw.bte <= wishbone_pkg::LINEAR;
+	reqw.cti <= wishbone_pkg::CLASSIC;
+	reqw.sz <= wishbone_pkg::hexi;
 	reqw.csr <= LOW;
 	reqw.pri <= 4'd7;
 	reqw.key[0] <= 20'd0;
@@ -170,7 +170,7 @@ if (rst) begin
 	reqw.key[2] <= 20'd0;
 	reqw.key[3] <= 20'd0;
 	reqw.pl <= 8'hFF;
-	reqw.cache <= fta_bus_pkg::NC_NB;
+	reqw.cache <= wishbone_pkg::NC_NB;
 	tid.core <= CORENO;
 	tid.channel <= CID;
 	tid.tranid <= 4'd1;
@@ -183,7 +183,7 @@ else begin
 	set_m <= 1'b0;
 	enb <= 1'b0;
 	web <= 1'b0;
-	req <= {$bits(fta_cmd_request256_t){1'b0}};
+	req <= {$bits(wb_cmd_request256_t){1'b0}};
 	hit <= ihit;
 	// We want to use addrb to write to the m file so there is only a single
 	// write port. Test to see if the contents changed.
@@ -283,7 +283,7 @@ IDLE:
 DUMP:
 	begin
 		req <= reqw;
-		req.cmd <= fta_bus_pkg::CMD_STORE;
+		req.cmd <= wishbone_pkg::CMD_STORE;
 		req.cyc <= HIGH;
 		req.we <= HIGH;
 		req.adr <= reqw.adr;
@@ -301,7 +301,7 @@ DUMP:
 DUMP_ACK:
 	if (resp.rty) begin
 		req <= reqw;
-		req.cmd <= fta_bus_pkg::CMD_STORE;
+		req.cmd <= wishbone_pkg::CMD_STORE;
 		req.cyc <= HIGH;
 		req.we <= HIGH;
 		req.adr <= reqw.adr;
@@ -318,7 +318,7 @@ DUMP_ACK:
 LOAD:
 	begin
 		req <= reqw;
-		req.cmd <= fta_bus_pkg::CMD_LOADZ;
+		req.cmd <= wishbone_pkg::CMD_LOADZ;
 		req.cyc <= HIGH;
 		req.we <= LOW;
 		req.sel <= 32'hFFFFFFFF;
@@ -344,7 +344,7 @@ LOAD_ACK:
 	end
 	else if (resp.rty) begin
 		req <= reqw;
-		req.cmd <= fta_bus_pkg::CMD_LOADZ;
+		req.cmd <= wishbone_pkg::CMD_LOADZ;
 		req.cyc <= HIGH;
 		req.we <= LOW;
 		req.sel <= 32'hFFFFFFFF;

@@ -217,12 +217,10 @@ parameter SCHED_WINDOW_SIZE = 8;
 // will result if there are insufficient checkpoints for the number of
 // outstanding branches. More checkpoints will only consume resources without
 // improving performance significantly.
-parameter NCHECK = %%NCHECK%%;			// number of checkpoints
+parameter NCHECK = 16;			// number of checkpoints
 
 parameter LOADQ_ENTRIES = 8;
 parameter STOREQ_ENTRIES = 8;
-parameter LSQ_ENTRIES = 8;
-parameter LSQ2 = 1'b0;			// Queue two LSQ entries at once?
 
 parameter pL1CacheLines = `L1CacheLines;
 parameter pL1LineSize = `L1CacheLineSize;
@@ -251,6 +249,7 @@ parameter SUPPORT_CAPABILITIES = 1'b0;
 // Support for vector operations.
 parameter SUPPORT_VECTOR = 1'b1;
 
+parameter SUPPORT_IMUL = 1;
 parameter SUPPORT_IDIV = 1;
 parameter SUPPORT_TRIG = 0;
 parameter SUPPORT_FDP = 0;
@@ -285,6 +284,10 @@ parameter NDATA_PORTS = 1;
 // Number of AGENs should be 1 or 2. There is little value in having more agens
 // than there are data ports.
 parameter NAGEN = 1;
+
+parameter LSQ_ENTRIES = 8;
+parameter LSQ2 = NDATA_PORTS > 1;		// Queue two LSQ entries at once?
+
 // Increasing the number of SAUs will increase performance. There must be at
 // least one SAU.
 // Note that adding an FPU may also increase integer performance if PERFORMANCE
@@ -301,4 +304,14 @@ parameter SUPPORT_RSB = 0;
 
 // Depth of internal stack for exceptionb processing.
 parameter ISTACK_DEPTH = 16;
+
+parameter NRSE_SAU0 = 1;
+parameter NRSE_SAU = 1;
+parameter NRSE_IMUL = 1;
+parameter NRSE_IDIV = 1;
+parameter NRSE_FMA = 1;
+parameter NRSE_FPU = 1;
+parameter NRSE_DFLT = 1;
+parameter NRSE_FCU = 1;
+parameter NRSE_AGEN = 1;
 

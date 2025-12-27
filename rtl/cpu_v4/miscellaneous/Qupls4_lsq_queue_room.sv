@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023-2025 Robert Finch, Waterloo
+//   \\__/ o\    (C) 2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -32,95 +32,40 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
+// Compute the amount of space available in the queue.
+// 160 LUTs
 // ============================================================================
 
 import Qupls4_pkg::*;
-import fp64Pkg::*;
 
-module Qupls4_fpu_fdp64(rst, clk, clk3x, om, idle, ir, rm, a, b, c, d, t, i, p, o, done, exc);
-parameter WID=64;
-input rst;
-input clk;
-input clk3x;
-input Qupls4_pkg::operating_mode_t om;
-input idle;
-input Qupls4_pkg::micro_op_t ir;
-input [2:0] rm;
-input FP64 a;
-input FP64 b;
-input FP64 c;
-input FP64 d;
-input FP64 t;
-input FP64 i;
-input [WID-1:0] p;
-output reg [WID-1:0] o;
-output reg done;
-output Qupls4_pkg::cause_code_t exc;
+module Qupls4_lsq_queue_room(lsq, head, tail, room);
+input lsq_entry_t [1:0] lsq [0:Qupls4_pkg::LSQ_ENTRIES-1];
+input lsq_ndx_t head;
+input lsq_ndx_t tail;
+output reg [3:0] room;
 
-wire [WID-1:0] bus;
-wire ce = 1'b1;
-
-reg fmaop, fma_done;
-FP64 fmaa;
-FP64 fmad;
-FP64 fmac;
-FP64 fmab;
-/*
-always_comb
-	if (ir.func==FN_FMS || ir.func==FN_FNMS)
-		fmaop = 1'b1;
-	else
-		fmaop = 1'b0;
-*/
-always_comb
-	if (ir.op4==Qupls4_pkg::FOP4_FADD || ir.op4==Qupls4_pkg::FOP4_FSUB) begin
-		fmab = 64'h3FF0000000000000;	// 1,0
-		fmad = 64'h3FF0000000000000;	// 1,0
-	end
-	else begin
-		fmab = b;
-		fmad = d;
-	end
+integer n;
+lsq_ndx_t t;
+reg [3:0] enqueue_room;
 
 always_comb
-	if (ir.op4==FOP4_FMUL || ir.op4==FOP4_FDIV) begin
-		fmac = 64'd0;
-		fmad = 64'd0;
+begin
+	enqueue_room = 4'd0;
+	t = tail;
+	// Check to make sure queue at tail is possible.
+	if (lsq[t.row][0].v==INV && lsq[t.row][1]==INV) begin
+		// If the head and tail are the same and pointing to invalid entries then
+		// the queue must be empty.
+		if (t.row==head.row)
+			enqueue_room = Qupls4_pkg::LSQ_ENTRIES;
+		else if (t.row > head.row)
+			enqueue_room = t.row - head.row;
+		else
+			enqueue_room = Qupls4_pkg::LSQ_ENTRIES + t.row - head.row;
 	end
-	else begin
-		fmac = c;
-		fmad = d;
-	end
+end		
 
-fpFDP64nrL8 ufma1
-(
-	.clk(clk),
-	.ce(ce),
-	.op(fmaop),
-	.rm(rm),
-	.a(a),
-	.b(fmab),
-	.c(fmac),
-	.d(fmad),
-	.o(bus),
-	.inf(),
-	.zero(),
-	.overflow(),
-	.underflow(),
-	.inexact()
-);
-
-always_ff @(posedge clk)
-if (rst) begin
-	fma_done <= 1'b0;
-end
-else begin
-	fma_done <= cnt>=12'h8;
-end
-
-always_ff @(posedge clk)
-	o = bus;
 always_comb
-	exc = Qupls4_pkg::FLT_NONE;
+	room = enqueue_room;
 
 endmodule

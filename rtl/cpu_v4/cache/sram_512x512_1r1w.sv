@@ -36,8 +36,8 @@
 //                                                                          
 // ============================================================================
 
-import Thor2024_cache_pkg::*;
-import Thor2024Pkg::*;
+import cache_pkg::*;
+import Qupls4_pkg::*;
 
 module sram_512x512_1r1w(rst, clk, wr, wadr, radr, i, o);
 input rst;

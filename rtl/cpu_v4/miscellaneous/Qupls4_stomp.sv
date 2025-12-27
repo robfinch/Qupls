@@ -85,7 +85,7 @@ input pc_stream_t kept_stream;
 input takb;
 input Qupls4_pkg::pipeline_group_hdr_t [Qupls4_pkg::ROB_ENTRIES/MWIDTH-1:0] pgh;
 input Qupls4_pkg::rob_entry_t [Qupls4_pkg::ROB_ENTRIES-1:0] rob;
-output reg [Qupls4_pkg::ROB_ENTRIES-1:0] robentry_stomp;
+output Qupls4_pkg::rob_bitmask_t robentry_stomp;
 
 integer nn, n4;
 pc_address_ex_t [4:0] misspcr;
@@ -327,13 +327,13 @@ always_comb stomp_que = do_bsr_rrr ? stomp_quer | stomp_rrr : stomp_quer;
 always_ff @(posedge clk)
 begin
 
-	for (n4 = 0; n4 < Qupls4_pkg::ROB_ENTRIES; n4 = n4 + 1) begin
-		robentry_stomp[n4] = FALSE;
+	foreach (robentry_stomp[n4]) begin
+		robentry_stomp[n4] <= FALSE;
 		// Stomp on instructions between the branch and the destination.
 		if (branch_resolved) begin
 			if (found_destination) begin
 				if (rob[n4].sn < rob[destination_rndx].sn && rob[n4].sn > rob[missid].sn)
-					robentry_stomp[n4] = TRUE;
+					robentry_stomp[n4] <= TRUE;
 			end
 			else begin
 				// The first three groups of instructions after miss needs to be stomped on 
@@ -344,7 +344,7 @@ begin
 					fcu_idv	&& // miss_idv
 					rob[n4].ip_stream!=kept_stream
 				)
-					robentry_stomp[n4] = TRUE;
+					robentry_stomp[n4] <= TRUE;
 			end
 		
 			if (Qupls4_pkg::SUPPORT_BACKOUT) begin
@@ -353,20 +353,20 @@ begin
 				// may have registers depending on the mappings.
 				if (fcu_idv && (rob[fcu_id].op.decbus.br || rob[fcu_id].op.decbus.cjb)) begin
 			 		if (rob[n4].grp==rob[fcu_id].grp && rob[n4].sn > rob[fcu_id].sn)
-			 			robentry_stomp[n4] = FALSE;
+			 			robentry_stomp[n4] <= FALSE;
 				end
 			end
 			else begin
 				if (fcu_idv && rob[fcu_id].op.decbus.br && !takb) begin
 			 		if (rob[n4].grp==rob[fcu_id].grp && rob[n4].sn > rob[fcu_id].sn)
-			 			robentry_stomp[n4] = FALSE;
+			 			robentry_stomp[n4] <= FALSE;
 				end
 			end
 		end
 
 		// Stomp on any dependent instructions.
 		if (stomped[rob[n4].ip_stream])
-			robentry_stomp[n4] = TRUE;
+			robentry_stomp[n4] <= TRUE;
 	end
 end
 

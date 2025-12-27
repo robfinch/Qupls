@@ -164,7 +164,7 @@ endfunction
 
 
 always_ff @(posedge clk)
-for (m = 0; m < WINDOW_SIZE; m = m + 1)
+foreach (heads[m])
 	heads[m] = (head + m) % Qupls4_pkg::ROB_ENTRIES;
 
 always_ff @(posedge clk)
@@ -177,7 +177,7 @@ end
 // The A,B operands must have been valid for the entry to be placed in the LSQ.
 // The C operand is only needed for stores.
 always_comb
-for (n9r = 0; n9r < Qupls4_pkg::LSQ_ENTRIES; n9r = n9r + 1)
+foreach (lsq[n9r])
 	for (n9c = 0; n9c < 2; n9c = n9c + 1)
 		memopsvalid[n9c][n9r] = lsq[n9r][n9c].v && lsq[n9r][n9c].agen && (lsq[n9r][n9c].load|lsq[n9r][n9c].datav);
 
@@ -208,17 +208,17 @@ begin
 		for (col = 0; col < 2; col = col + 1) begin
 			tmp_ndx.row = row;
 			tmp_ndx.col = col;
-			if (
+			if ((
 				// Instruction must be ready to go
-				memready[lsq[lsq_heads[row].row][col].rndx] &&
+//				memready[lsq[lsq_heads[row].row][col].rndx] &&
 				// and not already issued in previous cycle (takes a cycle for ROB to update)
 				!memissue[lsq[lsq_heads[row].row][col].rndx] && 
 				// and a valid entry
-				lsq[lsq_heads[row].row][col].v==VAL &&
+				//lsq[lsq_heads[row].row][col].v==VAL &&
 				// and not stomped on
 				!robentry_stomp[lsq[lsq_heads[row].row][col].rndx] &&
 				// The address must be generated
-				lsq[lsq_heads[row].row][col].agen &&
+				//lsq[lsq_heads[row].row][col].agen &&
 				/*
 				// ... and, if it is a store, there is no chance of it being undone
 				(lsq[lsq_heads[row].row][col].store ? !fnHasPreviousFc(lsq[lsq_heads[row].row][col].rndx) : TRUE) && 
@@ -228,10 +228,10 @@ begin
 				!fnHasPreviousOverlap(tmp_ndx) &&
 				*/
 				// ... and is not fenced out
-				!fnHasPreviousFence(lsq[lsq_heads[row].row][col].rndx) &&
+				//!fnHasPreviousFence(lsq[lsq_heads[row].row][col].rndx) &&
 				// not issued too many instructions.
 				issued < Qupls4_pkg::NDATA_PORTS
-			) begin
+			)) begin
 				// Check for issued on port #0 only. Might not need this check here.
 				if (rob[lsq[lsq_heads[row].row][col].rndx].op.decbus.mem0 ? issued==2'd0 : 1'b1) begin
 					/* Why the row 0 check?
