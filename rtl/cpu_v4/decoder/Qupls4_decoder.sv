@@ -77,8 +77,7 @@ Qupls4_decode_Rs1 udcra
 	.instr_raw(instr_raw),
 	.has_imma(db.has_imma),
 	.Rs1(db.Rs1),
-	.Rs1z(db.Rs1z),
-	.exc(excRs1)
+	.Rs1z(db.Rs1z)
 );
 
 Qupls4_decode_Rs2 udcrb
@@ -89,8 +88,7 @@ Qupls4_decode_Rs2 udcrb
 	.has_immb(db.has_immb),
 	.Rs2(db.Rs2),
 	.Rs2z(db.Rs2z),
-	.has_Rs2(db.has_Rs2),
-	.exc(excRs2)
+	.has_Rs2(db.has_Rs2)
 );
 
 Qupls4_decode_Rs3 udcrc
@@ -100,8 +98,7 @@ Qupls4_decode_Rs3 udcrc
 	.instr_raw(instr_raw),
 	.has_immc(db.has_immc),
 	.Rs3(db.Rs3),
-	.Rs3z(db.Rs3z),
-	.exc(excRs3)
+	.Rs3z(db.Rs3z)
 );
 
 Qupls4_decode_Rd udcrt
@@ -110,8 +107,7 @@ Qupls4_decode_Rd udcrt
 	.instr(instr),
 	.instr_raw(instr_raw),
 	.Rd(db.Rd),
-	.Rdv(db.Rdv),
-	.exc(excRd)
+	.Rdv(db.Rdv)
 );
 /*
 Stark_decode_Rd2 udcrd2
@@ -123,14 +119,6 @@ Stark_decode_Rd2 udcrd2
 	.exc(excRd2)
 );
 
-Stark_decode_Rd3 udcrd3
-(
-	.om(om),
-	.instr(instr),
-	.Rd3(db.Rd3),
-	.Rd3z(db.Rd3z),
-	.exc(excRd3)
-);
 */
 /*
 Stark_decode_macro umacro1
@@ -208,19 +196,7 @@ Stark_decode_branch_tgt_src udbts1
 	.bts(db.bts)
 );
 */
-/*
-Stark_decode_alu udcalu
-(
-	.instr(instr),
-	.alu(db.alu)
-);
 
-Stark_decode_alu0 udcalu0
-(
-	.instr(instr),
-	.alu0(db.alu0)
-);
-*/
 Qupls4_decode_sau usaudec1
 (
 	.instr(instr),
@@ -362,6 +338,11 @@ Stark_decode_irq udirq1
 	.irq(db.irq)
 );
 */
+Qupls4_decode_trig uderet1
+(
+	.instr(instr),
+	.eret(db.trig)
+);
 
 Qupls4_decode_eret uderet1
 (
@@ -388,8 +369,13 @@ begin
 	db.bsr = instr.opcode==Qupls4_pkg::OP_BSR;
 	db.jsr = instr.opcode==Qupls4_pkg::OP_JSR;
 	db.sys = instr.opcode==Qupls4_pkg::OP_SYS;
+	db.brk = instr.opcode==Qupls4_pkg::OP_BRK;
+	db.ret = instr.opcode==Qupls4_pkg::OP_RTD;
 	db.stptr = instr.opcode==Qupls4_pkg::OP_STPTR;
 	db.csr = instr.opcode==Qupls4_pkg::OP_CSR;
+	db.v2p = instr.opcode==Qupls4_pkg::OP_V2P;
+	db.vv2p = instr.opcode==Qupls4_pkg::OP_VV2P;
+	db.amo = instr.opcode==Qupls4_pkg::OP_AMO;
 end
 
 always_ff @(posedge clk)

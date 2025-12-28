@@ -38,16 +38,13 @@
 import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_decode_Rs3(om, instr, instr_raw, has_immc, Rs3, Rs3z, exc);
+module Qupls4_decode_Rs3(om, instr, instr_raw, has_immc, Rs3, Rs3z);
 input Qupls4_pkg::operating_mode_t om;
 input Qupls4_pkg::micro_op_t instr;
 input [431:0] instr_raw;
 input has_immc;
 output aregno_t Rs3;
 output reg Rs3z;
-output reg exc;
-
-reg exc2;
 
 function aregno_t fnRs3;
 input Qupls4_pkg::micro_op_t instr;
@@ -78,8 +75,6 @@ always_comb
 begin
 	Rs3 = fnRs3(instr, instr_raw, has_immc);
 	Rs3z = ~|Rs3;
-	exc = 1'b0;
-//	tRegmap(om, Rs3, Rs3, exc);
 end
 
 endmodule

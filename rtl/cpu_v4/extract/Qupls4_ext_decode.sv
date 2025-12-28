@@ -5,6 +5,7 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
+//
 // BSD 3-Clause License
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are met:
@@ -30,61 +31,51 @@
 // CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-//                                                                          
 //
+//
+// Decoding that takes place at the extract stage must be simple and fast.
+// It is using the output of the instruction aligned which is itself a mux.
+// The extract stage does not have micro-ops to work with, it must work with
+// raw instruction data. Fortunately all the instructions needing decoding
+// map 1:1 with micro-ops. Only jumps and branches are decoded as shown
+// below. These instructions are needed to feed the fetch stage.
+// Note the sign inversion bit is repurposed to indicate a call or jump.
+// Inverting the IP value to store as the return address has no use.
 // ============================================================================
 
 import const_pkg::*;
-import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_instruction_buffer(rst_i, clk_i, stream_i, ips_i, ip_i, line_i, line_o, ip_o, is_buffered_o);
-input rst_i;
-input clk_i;
-input cpu_types_pkg::pc_stream_t stream_i;
-input cpu_types_pkg::pc_address_ex_t ip_i;
-input [1023:0] line_i;
-output reg [1023:0] line_o;
-input pc_address_ex_t [Qupls4_pkg::XSTREAMS*Qupls4_pkg::THREADS-1:0] ips_i;
-output pc_address_ex_t ip_o;
-output reg is_buffered_o;
+module Qupls4_ext_decode(ip, instr, bsr, jsr, bra, jmp, bcc, rtd,
+	bsr_tgt, jsr_tgt, bcc_tgt);
+input cpu_types_pkg::pc_address_ex_t ip;
+input [47:0] instr;
+output reg bsr;
+output reg jsr;
+output reg bra;
+output reg jmp;
+output reg bcc;
+output reg rtd;
+output cpu_types_pkg::pc_address_ex_t bsr_tgt;
+output cpu_types_pkg::pc_address_ex_t jsr_tgt;
+output cpu_types_pkg::pc_address_ex_t bcc_tgt;
 
-integer n1,n43;
-reg [Qupls4_pkg::XSTREAMS*Qupls4_pkg::THREADS-1:0] buffered;
-// Buffers the instruction cache line to allow fetching along alternate paths.
-reg [1023:0] line_buf [0:3];
-cpu_types_pkg::pc_address_t ip_buf [0:3];
-
+always_comb bsr = instr[6:0]==Qupls4_pkg::OP_BSR &&  instr[12];
+always_comb bra = instr[6:0]==Qupls4_pkg::OP_BSR && ~instr[12];
+always_comb jsr = instr[6:0]==Qupls4_pkg::OP_JSR &&  instr[12];
+always_comb jmp = instr[6:0]==Qupls4_pkg::OP_JSR && ~instr[12];
 always_comb
-begin
-	line_o = line_i;
-	ip_o = ip_i;
-	is_buffered_o = FALSE;
-	foreach (ip_buf[n43])
-		if (ips_i[stream_i].pc >= ip_buf[n43] && ips_i[stream_i].pc < ip_buf[n43] + 8'd96) begin
-			line_o = line_buf[n43];
-			ip_o = ips_i[stream_i];
-			is_buffered_o = TRUE;
-		end
-end
-
-// If the cache line is not buffered, buffer it.
-always_ff @(posedge clk_i)
-if (rst_i) begin
-	foreach (line_buf[n1]) begin
-		line_buf[n1] = {1024{1'b1}};	// NOPs
-		ip_buf[n1] = 32'd0;
-	end
-end
-else begin
-	if (~is_buffered_o) begin
-		for (n1 = 0; n1 < $size(line_buf)-1; n1 = n1 + 1) begin
-			line_buf[n1] <= line_buf[n1+1];
-			ip_buf[n1] <= ip_buf[n1+1];
-		end
-		line_buf[$size(line_buf)-1] <= line_i;
-		ip_buf[$size(ip_buf)-1] <= {ip_i.pc[$bits(cpu_types_pkg::pc_address_t)-1:6],6'd0};
-	end
-end
+	case(instr[6:0])
+	Qupls4_pkg::OP_BCC8,Qupls4_pkg::OP_BCC16,Qupls4_pkg::OP_BCC32,Qupls4_pkg::OP_BCC64,
+	Qupls4_pkg::OP_BCCU8,Qupls4_pkg::OP_BCCU16,Qupls4_pkg::OP_BCCU32,Qupls4_pkg::OP_BCCU64,
+	Qupls4_pkg::OP_FBCC16,Qupls4_pkg::OP_FBCC32,Qupls4_pkg::OP_FBCC64,Qupls4_pkg::OP_FBCC128:
+		bcc = TRUE;
+	default:
+		bcc = FALSE;
+	endcase
+always_comb rtd = instr[6:0]==Qupls4_pkg::OP_RTD;
+always_comb begin bsr_tgt = ip; bsr_tgt.pc = ip.pc + {{29{instr[47]}},instr[47:13],1'b0}; end
+always_comb begin jsr_tgt = ip; jsr_tgt.pc = {{29{instr[47]}},instr[47:13],1'b0}; end
+always_comb begin bcc_tgt = ip; bcc_tgt.pc = ip.pc + {{41{instr[46]}},instr[46:25],1'b0}; end
 
 endmodule

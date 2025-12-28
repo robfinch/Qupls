@@ -1604,10 +1604,8 @@ typedef struct packed
 	logic backbr;			// backwards target branch
 	bts_t bts;				// branch target source
 	logic macro;			// true if macro instruction
-	logic alu;				// true if instruction must use alu (alu or mem)
-	logic alu0;				// true if instruction must use only alu #0
-	logic sau;
-	logic sau0;
+	logic sau;				// true if instruction must use sau (sau or mem)
+	logic sau0;				// true if instruction must use only sau #0
 	logic sqrt;
 	logic alu_pair;		// true if instruction requires pair of ALUs
 	logic fpu;				// FPU op
@@ -1639,19 +1637,15 @@ typedef struct packed
 	logic vstore;				// vector store
 	logic vstore_ndx;		// indexed vector store
 	logic bstore;
-	logic push;
-	logic pop;
-	logic [2:0] count;
 	logic cls;
 	logic loada;
 	logic erc;
 	logic fence;
 	logic mcb;					// micro-code branch
 
-	logic bcc;					// conditional branch
 	logic cjb;					// call, jmp, or bra
 	logic jsri;					// indirect subroutine call
-	logic br;
+	logic br;						// conditional branch
 	logic bsr;
 	logic jsr;
 	logic sys;

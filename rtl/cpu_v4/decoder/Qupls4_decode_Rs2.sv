@@ -38,14 +38,13 @@
 import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_decode_Rs2(om, instr, instr_raw, has_immb, Rs2, Rs2z, has_Rs2, exc);
+module Qupls4_decode_Rs2(om, instr, instr_raw, has_immb, Rs2, Rs2z, has_Rs2);
 input Qupls4_pkg::operating_mode_t om;
 input Qupls4_pkg::micro_op_t instr;
 input [431:0] instr_raw;
 input has_immb;
 output aregno_t Rs2;
 output reg Rs2z;
-output reg exc;
 output reg has_Rs2;
 
 function aregno_t fnHas_Rs2;
@@ -150,7 +149,6 @@ begin
 	has_Rs2 = fnHas_Rs2(instr, has_immb);
 	Rs2 = fnRs2(instr, instr_raw, has_immb);
 	Rs2z = ~|Rs2;
-//	tRegmap(om, Rs2, Rs2, exc);
 end
 
 endmodule

@@ -412,7 +412,7 @@ Qupls4_pkg::reservation_station_entry_t [DISPATCH_WIDTH-1:0] rse;
 reg sau0_idle;
 reg sau0_idle1;
 wire sau0_issue;
-wire sau0_idle_false;
+wire sau0_idle_false = FALSE;
 wire sau0_full;
 always_comb
 	if (sau0_idle_false)
@@ -469,7 +469,7 @@ Qupls4_pkg::reservation_station_entry_t sau0_rse, sau0_rse2;
 reg sau1_idle;
 reg sau1_idle1;
 wire sau1_full;
-wire sau1_idle_false;
+wire sau1_idle_false = FALSE;
 always_comb
 	if (sau1_idle_false)
 		sau1_idle = FALSE;
@@ -2840,7 +2840,7 @@ always_comb
 		cmta_cp[n46] = rob[head[n46]].cndx;
 	end
 
-Qupls4_pipeline_ren #(.MWIDTH(MWIDTH)) uren1
+Qupls4_pipeline_ren #(.MWIDTH(MWIDTH), .NPORT(NREG_RPORTS)) uren1
 (
 	.rst(irst),
 	.clk(clk),
@@ -3924,7 +3924,6 @@ Qupls4_pkg::rob_bitmask_t cpu_request_cancel;
 
 Qupls4_mem_sched umems1
 (
-	.rst(irst),
 	.clk(clk),
 	.head(head[0]),
 	.lsq_head(lsq_head),
@@ -4289,6 +4288,9 @@ if (Qupls4_pkg::NFPU > 0) begin
 		);
 	end
 end
+else begin
+	assign fpu0_rse = {$bits(reservation_station_entry_t){1'b0}};
+end
 if (Qupls4_pkg::NFPU > 1) begin
 	Qupls4_meta_fpu #(.WID(64)) ufpu2
 	(
@@ -4308,6 +4310,9 @@ if (Qupls4_pkg::NFPU > 1) begin
     .done(fpu1_done),
     .exc(fpu1_exc)
 );
+end
+else begin
+	assign fpu1_rse = {$bits(reservation_station_entry_t){1'b0}};
 end
 end
 endgenerate
@@ -4752,7 +4757,6 @@ Qupls4_mem_done udrdn1
 	.dram_idv(dram0_idv),
 	.dram_id(dram0_id), 
 	.dram_state(dram0),
-	.dram_more(dram0_more),
 	.stomp(robentry_stomp),
 	.dram_stomp(dram0_stomp),
 	.done(dram0_done)
@@ -4848,7 +4852,6 @@ generate begin : gMemory2
 			.dram_idv(dram1_idv),
 			.dram_id(dram1_id), 
 			.dram_state(dram1),
-			.dram_more(dram1_work.more),
 			.stomp(robentry_stomp),
 			.dram_stomp(dram1_stomp),
 			.done(dram1_done)

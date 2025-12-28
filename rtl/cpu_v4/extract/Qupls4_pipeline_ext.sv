@@ -308,58 +308,53 @@ always_comb nop1 = FALSE;
 always_comb nop2 = FALSE;
 always_comb nop3 = FALSE;
 */
-reg [MWIDTH-1:0] bsr;
+wire [MWIDTH-1:0] bsr;
+wire [MWIDTH-1:0] jsr;
+wire [MWIDTH-1:0] bra;
+wire [MWIDTH-1:0] jmp;
+wire [MWIDTH-1:0] bcc;
+wire [MWIDTH-1:0] rtd;
 reg bsr02,bsr12,bsr22,bsr32;
-reg [MWIDTH-1:0] jsr;
 reg jsrr0,jsrr1,jsrr2,jsrr3;
 reg jsri0,jsri1,jsri2,jsri3;
-reg bra0,bra1,bra2,bra3;
-reg bra02,bra12,bra22,bra32;
-reg jmp0,jmp1,jmp2,jmp3;
 reg jmpr0,jmpr1,jmpr2,jmpr3;
 reg jmpi0,jmpi1,jmpi2,jmpi3;
-reg rtd0,rtd1,rtd2,rtd3;
 reg do_bsr1;
-reg bcc0,bcc1,bcc2,bcc3;
-cpu_types_pkg::pc_address_ex_t bsr0_tgt;
-cpu_types_pkg::pc_address_ex_t bsr1_tgt;
-cpu_types_pkg::pc_address_ex_t bsr2_tgt;
-cpu_types_pkg::pc_address_ex_t bsr3_tgt;
+cpu_types_pkg::pc_address_ex_t [MWIDTH-1:0] bsr_tgts,jsr_tgts,bcc_tgts,btgts;
+
+generate begin : gExtDecode
+	for (g = 0; g < MWIDTH; g = g + 1) begin
+		Qupls4_ext_decode usd1
+			(
+				.pc(pc_ext[g]),
+				.instr(ic_line_aligned[g*48+47:g*48]),
+				.bsr(bsr[g]),
+				.jsr(jsr[g]),
+				.bra(bra[g]),
+				.jmp(jmp[g]),
+				.bcc(bcc[g]),
+				.rtd(rtd[g]),
+				.bsr_tgt(bsr_tgts[g]),
+				.jsr_tgt(jsr_tgts[g]),
+				.bcc_tgt(bcc_tgts[g])
+			);
+			
+		always_comb
+			case(1'b1)
+			bsr[g]:	btgts[g] = bsr_tgts[g];
+			jsr[g]: btgts[g] = jsr_tgts[g];
+			bcc[g]: btgts[g] = bcc_tgts[g];
+			default:	btgts[g] = RSTPC;
+			endcase
+	end
+end
+endgenerate
 
 
-always_comb bsr[0] = Qupls4_pkg::fnDecBsr(ins_ext[0].op);
-always_comb bsr[1] = Qupls4_pkg::fnDecBsr(ins_ext[1].op);
-always_comb bsr[2] = Qupls4_pkg::fnDecBsr(ins_ext[2].op);
-always_comb bsr[3] = Qupls4_pkg::fnDecBsr(ins_ext[3].op);
-always_comb bra0 = Qupls4_pkg::fnDecBra(ins_ext[0].op);
-always_comb bra1 = Qupls4_pkg::fnDecBra(ins_ext[1].op);
-always_comb bra2 = Qupls4_pkg::fnDecBra(ins_ext[2].op);
-always_comb bra3 = Qupls4_pkg::fnDecBra(ins_ext[3].op);
-always_comb bcc0 = Qupls4_pkg::fnIsBranch(ins_ext[0].op.uop);
-always_comb bcc1 = Qupls4_pkg::fnIsBranch(ins_ext[1].op.uop);
-always_comb bcc2 = Qupls4_pkg::fnIsBranch(ins_ext[2].op.uop);
-always_comb bcc3 = Qupls4_pkg::fnIsBranch(ins_ext[3].op.uop);
-
-always_comb jmp0 = Qupls4_pkg::fnDecJmp(ins_ext[0].op);
-always_comb jmp1 = Qupls4_pkg::fnDecJmp(ins_ext[1].op);
-always_comb jmp2 = Qupls4_pkg::fnDecJmp(ins_ext[2].op);
-always_comb jmp3 = Qupls4_pkg::fnDecJmp(ins_ext[3].op);
-always_comb bra02 = Qupls4_pkg::fnDecBra2(ins_ext[0].op);
-always_comb bra12 = Qupls4_pkg::fnDecBra2(ins_ext[1].op);
-always_comb bra22 = Qupls4_pkg::fnDecBra2(ins_ext[2].op);
-always_comb bra32 = Qupls4_pkg::fnDecBra2(ins_ext[3].op);
-always_comb jsr[0] = Qupls4_pkg::fnDecJsr(ins_ext[0].op);
-always_comb jsr[1] = Qupls4_pkg::fnDecJsr(ins_ext[1].op);
-always_comb jsr[2] = Qupls4_pkg::fnDecJsr(ins_ext[2].op);
-always_comb jsr[3] = Qupls4_pkg::fnDecJsr(ins_ext[3].op);
 always_comb bsr02 = Qupls4_pkg::fnDecBsr2(ins_ext[0].op);
 always_comb bsr12 = Qupls4_pkg::fnDecBsr2(ins_ext[1].op);
 always_comb bsr22 = Qupls4_pkg::fnDecBsr2(ins_ext[2].op);
 always_comb bsr32 = Qupls4_pkg::fnDecBsr2(ins_ext[3].op);
-always_comb rtd0 = Qupls4_pkg::fnDecRet(ins_ext[0].op);
-always_comb rtd1 = Qupls4_pkg::fnDecRet(ins_ext[1].op);
-always_comb rtd2 = Qupls4_pkg::fnDecRet(ins_ext[2].op);
-always_comb rtd3 = Qupls4_pkg::fnDecRet(ins_ext[3].op);
 always_comb jmpr0 = Qupls4_pkg::fnDecJmpr(ins_ext[0].op);
 always_comb jmpr1 = Qupls4_pkg::fnDecJmpr(ins_ext[1].op);
 always_comb jmpr2 = Qupls4_pkg::fnDecJmpr(ins_ext[2].op);
@@ -379,14 +374,6 @@ always_comb jsri2 = ins_ext[2].ins.opcode==OP_JSRI && ins_ext[2].ins.Rt!=3'd0;
 always_comb jsri3 = ins_ext[3].ins.opcode==OP_JSRI && ins_ext[3].ins.Rt!=3'd0;
 */
 
-always_comb
-begin
-	bsr0_tgt = Qupls4_pkg::fnDecDest(pc_ext[0],ins_ext[0]);
-	bsr1_tgt = Qupls4_pkg::fnDecDest(pc_ext[1],ins_ext[1]);
-	bsr2_tgt = Qupls4_pkg::fnDecDest(pc_ext[2],ins_ext[2]);
-	bsr3_tgt = Qupls4_pkg::fnDecDest(pc_ext[3],ins_ext[3]);
-end
-
 // Figure whether a subroutine call, or return is being performed. Note
 // precedence. Only the first one to be performed is detected.
 
@@ -396,36 +383,36 @@ begin
 	do_ret = FALSE;
 	do_call = FALSE;
 	if (~stomp_ext) begin
-		if (bsr[0]|jsr[0]|bcc0) begin
+		if (bsr[0]|jsr[0]|bcc[0]) begin
 			do_bsr = TRUE;
 			if (bsr[0]|jsr[0])
 				do_call = TRUE;
 		end
-		else if (rtd0)
+		else if (rtd[0])
 			do_ret = TRUE;
 
-		else if (bsr[1]|jsr[1]|bcc1) begin
+		else if (bsr[1]|jsr[1]|bcc[1]) begin
 			do_bsr = TRUE;
 			if (bsr[1]|jsr[1])
 				do_call = TRUE;
 		end
-		else if (rtd1)
+		else if (rtd[1])
 			do_ret = TRUE;
 
-		else if (bsr[2]|jsr[2]|bcc2) begin
+		else if (bsr[2]|jsr[2]|bcc[2]) begin
 			do_bsr = TRUE;
 			if (bsr[2]|jsr[2])
 				do_call = TRUE;
 		end
-		else if (rtd2)
+		else if (rtd[2])
 			do_ret = TRUE;
 
-		else if (bsr[3]|jsr[3]|bcc3) begin
+		else if (bsr[3]|jsr[3]|bcc[3]) begin
 			do_bsr = TRUE;
 			if (bsr[3]|jsr[3])
 				do_call = TRUE;
 		end
-		else if (rtd3)
+		else if (rtd[3])
 			do_ret = TRUE;
 	end
 end
@@ -434,36 +421,36 @@ end
 always_comb
 begin
 	alloc_stream = 1'b0;
-	if (bsr[0]|jsr[0]|bcc0) begin
-		bsr_tgt.pc = bsr0_tgt;
-		if (pt_ext[0] || ~bcc0)
+	if (bsr[0]|jsr[0]|bcc[0]) begin
+		bsr_tgt.pc = btgts[0].pc;
+		if (pt_ext[0] || ~bcc[0])
 			bsr_tgt.stream = pc0_fet.stream;
 		else begin
 			bsr_tgt.stream = new_stream[bsr_tgt.stream.thread].stream;
 			alloc_stream = 1'b1;
 		end
 	end
-	else if (bsr[1]|jsr[1]|bcc1) begin
-		bsr_tgt = bsr1_tgt;
-		if (pt_ext[1] || ~bcc1)
+	else if (bsr[1]|jsr[1]|bcc[1]) begin
+		bsr_tgt = btgts[1];
+		if (pt_ext[1] || ~bcc[1])
 			bsr_tgt.stream = pc0_fet.stream;
 		else begin
 			bsr_tgt.stream = new_stream[bsr_tgt.stream.thread].stream;
 			alloc_stream = 1'b1;
 		end
 	end
-	else if (bsr[2]|jsr[2]|bcc2) begin
-		bsr_tgt = bsr2_tgt;
-		if (pt_ext[2] || ~bcc2)
+	else if (bsr[2]|jsr[2]|bcc[2]) begin
+		bsr_tgt = btgts[2];
+		if (pt_ext[2] || ~bcc[2])
 			bsr_tgt.stream = pc0_fet.stream;
 		else begin
 			bsr_tgt.stream = new_stream[bsr_tgt.stream.thread].stream;
 			alloc_stream = 1'b1;
 		end
 	end
-	else if (bsr[3]|jsr[3]|bcc3) begin
-		bsr_tgt = bsr3_tgt;
-		if (pt_ext[3] || ~bcc3)
+	else if (bsr[3]|jsr[3]|bcc[3]) begin
+		bsr_tgt = btgts[3];
+		if (pt_ext[3] || ~bcc[3])
 			bsr_tgt.stream = pc0_fet.stream;
 		else begin
 			bsr_tgt.stream = new_stream[bsr_tgt.stream.thread].stream;

@@ -81,7 +81,7 @@ end
 generate begin : gRF
 	for (g = 0; g < RPORTS; g = g + 1) begin
 		for (gv = 0; gv < WPORTS; gv = gv + 1) begin
-			Qupls4_regfileRam #(.WID(WID)) urf0 (
+			Qupls4_regfile_ram #(.WID(WID)) urf0 (
 			  .clka(clk),
 			  .ena(wr[gv]),
 			  .wea(we[gv]),

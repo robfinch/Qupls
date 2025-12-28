@@ -35,7 +35,7 @@
 //
 // ============================================================================
 
-module Qupls4_regfileRam(clka, ena, wea, addra, dina, rstb, clkb, enb, addrb, doutb);
+module Qupls4_regfile_ram(clka, ena, wea, addra, dina, rstb, clkb, enb, addrb, doutb);
 parameter WID=$bits(cpu_types_pkg::value_t);
 parameter DEP=Qupls4_pkg::PREGS;
 parameter BWW=8;
@@ -88,7 +88,7 @@ else begin
       .CASCADE_HEIGHT(0),             // DECIMAL
       .CLOCKING_MODE("independent_clock"), // String
       .ECC_MODE("no_ecc"),            // String
-      .MEMORY_INIT_FILE("regfile_init.mem"),      // String
+      .MEMORY_INIT_FILE(""),      		// String
       .MEMORY_INIT_PARAM("0"),        // String
       .MEMORY_OPTIMIZATION("true"),   // String
       .MEMORY_PRIMITIVE("block"),     // String
@@ -101,7 +101,7 @@ else begin
       .RST_MODE_B("SYNC"),            // String
       .SIM_ASSERT_CHK(0),             // DECIMAL; 0=disable simulation messages, 1=enable simulation messages
       .USE_EMBEDDED_CONSTRAINT(0),    // DECIMAL
-      .USE_MEM_INIT(1),               // DECIMAL
+      .USE_MEM_INIT(0),               // DECIMAL
       .USE_MEM_INIT_MMI(0),           // DECIMAL
       .WAKEUP_TIME("disable_sleep"),  // String
       .WRITE_DATA_WIDTH_A(WID),        // DECIMAL

@@ -39,7 +39,7 @@ import Qupls4_pkg::*;
 module Qupls4_decode_pred(instr, pred, pred_mask);
 input Qupls4_pkg::micro_op_t instr;
 output pred;
-output pred_mask;
+output [15:0] pred_mask;
 
 function fnIsPred;
 input Qupls4_pkg::micro_op_t ir;

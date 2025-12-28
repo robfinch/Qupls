@@ -64,7 +64,6 @@ reg [WID-1:0] bi;
 reg [WID-1:0] c;
 reg [WID-1:0] i;
 reg [WID-1:0] t;
-aregno_t aRd_i;
 always_comb prc = rse_i.prc;
 always_comb ir = rse_i.uop;
 always_comb a = rse_i.arg[0].val;
@@ -73,7 +72,6 @@ always_comb c = rse_i.arg[2].val;
 always_comb t = rse_i.arg[3].val;
 always_comb bi = rse_i.arg[1].val|rse_i.argI;
 always_comb i = rse_i.argI;
-always_comb aRd_i = rse_i.aRd;
 reg [2:0] stomp_con;	// stomp conveyor
 reg [WID/8:0] we,we1,we2,we3;
 reg [WID-1:0] t1;
@@ -192,18 +190,27 @@ end
 delay3 #(.WID(WID)) udly1 (.clk(clk), .ce(1'b1), .i(t), .o(t1));
 delay3 #(.WID(1)) udly2 (.clk(clk), .ce(1'b1), .i(z), .o(z1));
 delay3 #(.WID(WID/8)) udly3 (.clk(clk), .ce(1'b1), .i(cptgt), .o(cptgt1));
-delay3 #(.WID($bits(pregno_t))) udly4 (.clk(clk), .ce(1'b1), .i(pRd_i), .o(pRd_o));
-delay3 #(.WID($bits(aregno_t))) udly5 (.clk(clk), .ce(1'b1), .i(aRd_i), .o(aRd_o));
 delay3 #(.WID(WID/8+1)) udly6 (.clk(clk), .ce(1'b1), .i(we), .o(we3));
-delay3 #(.WID($bits(checkpt_ndx_t))) udly7 (.clk(clk), .ce(1'b1), .i(cp_i), .o(cp_o));
 
 always_ff @(posedge clk)
+if (rst)
+	rse1 <= {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
+else
 	rse1 <= rse_i;
 always_ff @(posedge clk)
+if (rst)
+	rse2 <= {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
+else
 	rse2 <= rse1;
 always_ff @(posedge clk)
+if (rst)
+	rse3 <= {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
+else
 	rse3 <= rse2;
-always_comb
+always_ff @(posedge clk)
+if (rst)
+	rse_o <= {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
+else
 	rse_o = rse3;
 
 always_comb

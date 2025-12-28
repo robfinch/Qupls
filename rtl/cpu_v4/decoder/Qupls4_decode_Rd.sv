@@ -39,13 +39,12 @@ import const_pkg::*;
 import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_decode_Rd(om, instr, instr_raw, Rd, Rdv, exc);
+module Qupls4_decode_Rd(om, instr, instr_raw, Rd, Rdv);
 input Qupls4_pkg::operating_mode_t om;
 input Qupls4_pkg::micro_op_t instr;
 input [431:0] instr_raw;
 output aregno_t Rd;
 output reg Rdv;
-output reg exc;
 
 function aregno_t fnRd;
 input Qupls4_pkg::micro_op_t instr;
@@ -125,7 +124,6 @@ always_comb
 begin
 	Rd = fnRd(instr, instr_raw);
 	Rdv = fnRdv(instr, instr_raw);
-//	tRegmap(om1, Rd, Rd, exc);
 end
 
 endmodule

@@ -32,18 +32,17 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 5000 LUTs / 32 FFs
+// 5650 LUTs / 70 FFs
 // ============================================================================
 
 import const_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_mem_sched(rst, clk, head, lsq_head, cancel, seq_consistency,
+module Qupls4_mem_sched(clk, head, lsq_head, cancel, seq_consistency,
 	robentry_stomp, rob, lsq,
 	memissue, ndx0, ndx1, ndx0v, ndx1v, islot_i, islot_o);
 parameter WINDOW_SIZE = Qupls4_pkg::LSQ_ENTRIES;
 parameter LSQ_WINDOW_SIZE = Qupls4_pkg::LSQ_ENTRIES;
-input rst;
 input clk;
 input cpu_types_pkg::rob_ndx_t head;
 input Qupls4_pkg::lsq_ndx_t lsq_head;
@@ -66,9 +65,11 @@ reg [3:0] q;
 Qupls4_pkg::rob_bitmask_t memready;		// mask of ready to go instructions.
 rob_ndx_t [WINDOW_SIZE-1:0] heads;
 Qupls4_pkg::lsq_bitmask_t [1:0] memopsvalid;
-Qupls4_pkg::lsq_ndx_t [LSQ_WINDOW_SIZE-1:0] lsq_heads;
+Qupls4_pkg::lsq_ndx_t [LSQ_ENTRIES-1:0] lsq_heads;
 reg [1:0] issued;											// which data port instruction issued on.
 reg [1:0] stores;		// counts the number of stores issued.
+rob_ndx_t rndx;
+lsq_entry_t lsqe;
 
 Qupls4_pkg::lsq_ndx_t next_ndx0;
 Qupls4_pkg::lsq_ndx_t next_ndx1;
@@ -168,9 +169,9 @@ foreach (heads[m])
 	heads[m] = (head + m) % Qupls4_pkg::ROB_ENTRIES;
 
 always_ff @(posedge clk)
-for (q = 0; q < LSQ_WINDOW_SIZE; q = q + 1) begin
+foreach (lsq_heads[q]) begin
 	lsq_heads[q].row = (lsq_head.row + q) % Qupls4_pkg::LSQ_ENTRIES;
-	lsq_heads[q].col = 'd0;
+	lsq_heads[q].col = 1'd0;
 end
 
 // We need only check the LSQ for valid operands.
@@ -204,36 +205,38 @@ begin
 	tmp_ndx = 5'd0;
 	stores = 2'd0;
 	next_islot_o = islot_i;
-	for (row = 0; row < LSQ_WINDOW_SIZE; row = row + 1) begin
+	for (row = 0; row < LSQ_ENTRIES; row = row + 1) begin
 		for (col = 0; col < 2; col = col + 1) begin
 			tmp_ndx.row = row;
 			tmp_ndx.col = col;
+			lsqe = lsq[lsq_heads[row].row][col];
+			rndx = lsqe.rndx;
 			if ((
 				// Instruction must be ready to go
 //				memready[lsq[lsq_heads[row].row][col].rndx] &&
 				// and not already issued in previous cycle (takes a cycle for ROB to update)
-				!memissue[lsq[lsq_heads[row].row][col].rndx] && 
+				!memissue[rndx] && 
 				// and a valid entry
 				//lsq[lsq_heads[row].row][col].v==VAL &&
 				// and not stomped on
-				!robentry_stomp[lsq[lsq_heads[row].row][col].rndx] &&
+				!robentry_stomp[rndx] &&
 				// The address must be generated
-				//lsq[lsq_heads[row].row][col].agen &&
-				/*
+				lsqe.agen &&
+				
 				// ... and, if it is a store, there is no chance of it being undone
-				(lsq[lsq_heads[row].row][col].store ? !fnHasPreviousFc(lsq[lsq_heads[row].row][col].rndx) : TRUE) && 
+				(lsqe.store ? !fnHasPreviousFc(rndx) : TRUE) && 
 				// ... and previous mem op without an address yet, or not done
-				!fnHasPreviousMem(lsq[lsq_heads[row].row][col].rndx,seq_consistency) &&
+				!fnHasPreviousMem(rndx,seq_consistency) &&
 				// ... and there is no address-overlap with any preceding instruction
 				!fnHasPreviousOverlap(tmp_ndx) &&
-				*/
+				
 				// ... and is not fenced out
-				//!fnHasPreviousFence(lsq[lsq_heads[row].row][col].rndx) &&
+				!fnHasPreviousFence(rndx) &&
 				// not issued too many instructions.
 				issued < Qupls4_pkg::NDATA_PORTS
 			)) begin
 				// Check for issued on port #0 only. Might not need this check here.
-				if (rob[lsq[lsq_heads[row].row][col].rndx].op.decbus.mem0 ? issued==2'd0 : 1'b1) begin
+				if (rob[rndx].op.decbus.mem0 ? issued==2'd0 : 1'b1) begin
 					/* Why the row 0 check?
 					if (row==0) begin
 						if (memready[ lsq[lsq_heads[row].row][col].rndx ] &&
@@ -257,8 +260,8 @@ begin
 						end
 					end
 					*/
-					if (lsq[lsq_heads[row].row][col].store ? stores < 2'd1 : TRUE) begin
-						next_memissue[ lsq[lsq_heads[row].row][col].rndx ] = 1'b1;
+					if (lsqe.store ? stores < 2'd1 : TRUE) begin
+						next_memissue[ rndx ] = 1'b1;
 						if (issued==2'd1) begin
 							next_ndx1 = lsq_heads[row];
 							next_ndx1.col = col;
@@ -269,7 +272,7 @@ begin
 							next_ndx0.col = col;
 							next_ndx0v = 1'b1;
 						end
-						if (lsq[lsq_heads[row].row][col].store)
+						if (lsqe.store)
 							stores = stores + 2'd1;
 						next_islot_o[{row,col[0]}] = issued;
 						issued = issued + 2'd1;
@@ -281,6 +284,7 @@ begin
 end
 
 always_ff @(posedge clk)
+/*
 if (rst) begin
 	memissue <= 'd0;
 	ndx0 <= 'd0;
@@ -290,7 +294,9 @@ if (rst) begin
 	foreach(islot_o[i])
 		islot_o[i] <= 2'd0;
 end
-else begin
+else
+*/
+begin
 	memissue <= next_memissue;
 	ndx0 <= next_ndx0;
 	ndx1 <= next_ndx1;
