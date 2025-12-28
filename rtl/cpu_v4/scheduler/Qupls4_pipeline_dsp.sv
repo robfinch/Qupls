@@ -378,7 +378,15 @@ begin
 		rse[kk].uop = pg_ren.pr[nn].op.uop;
 		rse[kk].store = pg_ren.pr[nn].op.decbus.store;
 		rse[kk].rext = pg_ren.pr[nn].op.decbus.rext;
-
+/*
+		foreach (rse[kk].arg[xx]) begin
+			rse[kk].arg[xx].v = pg_ren.pr[nn].oper[xx].v;
+			rse[kk].arg[xx].aRnv = pg_ren.pr[nn].oper[xx].aRnv;
+			rse[kk].arg[xx].aRn = pg_ren.pr[nn].oper[xx].aRn;
+			rse[kk].arg[xx].pRn = pg_ren.pr[nn].oper[xx].pRn;
+		end
+*/	
+//		rse[kk].arg[0].v = pg_ren.pr[nn].operandA.v;
 		rse[kk].arg[0].v = pg_ren.pr[nn].argA_v;
 		rse[kk].arg[1].v = pg_ren.pr[nn].argB_v;
 		rse[kk].arg[2].v = pg_ren.pr[nn].argC_v;
@@ -409,6 +417,7 @@ begin
 		rse[kk].arg[4].pRn = pg_ren.pr[nn].op.pRs4;
 		rse[kk].arg[5].pRn = pg_ren.pr[nn].op.pS;
 		rse[kk].arg[6].pRn = pg_ren.pr[nn].op.pRd2;
+		
 		/*
 		rse[kk].argAh_v = !pg_ren.pr[nn].op.decbus.b128;
 		rse[kk].argBh_v = !pg_ren.pr[nn].op.decbus.b128;

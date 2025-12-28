@@ -41,7 +41,7 @@ import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
 module Qupls4_sau(rst, clk, clk2x, chunk, om, ld, ir, div, Ra, a, b, bi, c, i, t, qres,
-	mask, cs, pc, pcc, csr, cpl, coreno, canary, velsz, o, exc_o);
+	mask, pc, pcc, csr, cpl, coreno, canary, velsz, o, exc_o);
 parameter SAU0 = 1'b1;
 parameter WID=64;
 parameter LANE=0;
@@ -63,7 +63,6 @@ input [WID-1:0] i;
 input [WID-1:0] t;
 input [WID-1:0] qres;
 input [63:0] mask;
-input [2:0] cs;
 input cpu_types_pkg::pc_address_ex_t pc;
 input capability32_t pcc;
 input [WID-1:0] csr;

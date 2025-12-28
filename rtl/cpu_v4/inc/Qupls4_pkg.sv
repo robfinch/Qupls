@@ -1834,6 +1834,7 @@ typedef struct packed
 	cpu_types_pkg::pregno_t nRd;						// new Rd
 	cpu_types_pkg::pregno_t pRd2;						// current Rd value
 	cpu_types_pkg::pregno_t nRd2;						// new Rd
+/*	
 	reglookup_t pRs1st;
 	reglookup_t pRs2st;
 	reglookup_t pRs3st;
@@ -1842,6 +1843,7 @@ typedef struct packed
 	reglookup_t pRd2st;
 	reglookup_t nRdst;
 	reglookup_t nRd2st;
+*/
 	logic pRs1v;
 	logic pRs2v;
 	logic pRs3v;
@@ -1994,6 +1996,15 @@ typedef struct packed {
 	logic argS_v;							// status register valid
 	logic argT_v;
 	logic argT2_v;
+/* How they should be setup...
+	operand_t operA;
+	operand_t operB;
+	operand_t operC;
+	operand_t operD;
+	operand_t operS;
+	operand_t operT;
+	operand_t operT2;
+*/
 	logic rat_v;							// 1=checked with RAT for valid reg arg.
 	logic reg_read_done;
 	cpu_types_pkg::value_t arg;							// argument value for CSR instruction

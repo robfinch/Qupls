@@ -445,7 +445,6 @@ Qupls4_pkg::flags_t sau0_argA_flags;
 Qupls4_pkg::flags_t sau0_argB_flags;
 reg sau0_aRdv;
 checkpt_ndx_t sau0_cp;
-reg [2:0] sau0_cs;
 reg sau0_bank;
 value_t sau0_cmpo;
 pc_address_ex_t sau0_pc;
@@ -494,7 +493,6 @@ value_t sau1_argC;
 value_t sau1_argD;
 value_t sau1_argT;
 value_t sau1_argI;
-reg [2:0] sau1_cs;
 pregno_t sau1_Rt;
 aregno_t sau1_aRdA;
 aregno_t sau1_aRdB;
@@ -2466,15 +2464,13 @@ always_ff @(posedge clk)
 always_ff @(posedge clk)
 	prnvd <= prnv;
 
-always_comb
-begin
+always_ff @(posedge clk)
 	foreach (rf_oper[n37]) begin
-		rf_oper[n37].pRn = prn[n37];
-		rf_oper[n37].val = rfo[n37];
-		rf_oper[n37].flags = rfo_flags[n37];
-		rf_oper[n37].v = prnv[n37];
+		rf_oper[n37].pRn <= prn[n37];
+		rf_oper[n37].val <= rfo[n37];
+		rf_oper[n37].flags <= rfo_flags[n37];
+		rf_oper[n37].v <= prnv[n37];
 	end
-end
 /*
 always_comb
 begin
@@ -2589,9 +2585,19 @@ if (RL_STRATEGY==0) begin
 		.wp_tap_o(wp_tap)
 	);
 end	else
+	// Change 13 groups of four port requests into one big linear group.
+	always_comb
+	begin
+		pRs = {56*9{1'b0}};
+		pRsv = 64'd0;
+		for (jj = 0; jj < NREG_RPORTS*4; jj = jj + 1) begin
+			pRs[jj] = bRs[jj/4][jj % 4];
+			pRsv[jj] = bRsv[jj/4][jj % 4];
+		end
+	end
+	// Dynamic port selection.
 	Qupls4_read_port_select #(.NPORTO(NREG_RPORTS), .NPORTI(16*4)) urps1
 	(
-		.rst(irst),
 		.clk(clk),
 		.pReg_i(pRs),
 		.pRegv_i(pRsv),
@@ -2898,6 +2904,19 @@ Qupls4_pipeline_ren #(.MWIDTH(MWIDTH)) uren1
 
 	.args(rfo)
 );
+
+/*
+Qupls4_pipeline_reg #(.MWIDTH(MWIDTH)) uplreg1
+(
+	.rst(irst),
+	.clk(clk),
+	.pg_ren(pg_ren),
+	.tails_i(tails),
+	.tails_o(reg_tails),
+	.rf_reg(rf_reg),
+	.rf_regv(rf_regv)
+);
+*/
 
 wire pgh_setcp;
 wire [5:0] pgh_setcp_grp;
@@ -4004,17 +4023,6 @@ assign sau0_argD_reg = rob[sau0_rndx].op.pRt;
 assign sau1_argD_reg = rob[sau1_rndx].op.pRt;
 assign fpu0_argD_reg = rob[fpu0_rndx].op.pRt;
 */
-always_comb
-begin
-	kk = 0;
-	pRs = {56*9{1'b0}};
-	pRsv = 64'd0;
-	for (jj = 0; jj < NREG_RPORTS*4; jj = jj + 1) begin
-		pRs[kk] = bRs[jj/4][jj % 4];
-		pRsv[kk] = bRsv[jj/4][jj % 4];
-		kk = kk + 1;
-	end
-end
 /*
 assign aRs[0] = rob[sau0_rndx].op.decbus.Rs1;
 assign aRs[7] = rob[sau0_rndx].op.decbus.Rs2;
@@ -4079,7 +4087,6 @@ Qupls4_meta_sau #(.SAU0(1'b1)) usau0
 	.cptgt(sau0_cptgt),
 	.z(sau0_predz),
 	.stomp(robentry_stomp),
-	.cs(sau0_cs),
 	.csr(csr_res),
 	.canary(canary),
 	.cpl(sr.pl),
@@ -4166,7 +4173,6 @@ if (Qupls4_pkg::NSAU > 1) begin
 		.cptgt(sau1_cptgt),
 		.z(sau1_predz),
 		.stomp(robentry_stomp),
-		.cs(sau1_cs),
 		.csr(14'd0),
 		.canary(canary),
 		.cpl(sr.pl),
@@ -5039,11 +5045,11 @@ usaust0
 (
 	.rst(irst),
 	.clk(clk),
-	.available(sau0_available),
+	.available(1'b1),//sau0_available),
 	.busy(rs_busy[0]),
 	.stall(sau0_full),
 	.stomp(robentry_stomp),
-	.issue(sau0_issue),//robentry_issue[sau0_rndx]),
+	.issue(),//sau0_issue),//robentry_issue[sau0_rndx]),
 	.rse_i(rse),
 	.rse_o(sau0_rse),
 	.rf_oper_i(rf_oper),

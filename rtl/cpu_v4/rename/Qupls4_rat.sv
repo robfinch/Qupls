@@ -657,14 +657,12 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 
 		// Unless it us a target register, we want the old unbypassed value.
 		always_comb//ff @(posedge clk)
-			if (rst)
-				prv[g] = INV;
 			// If there is a pipeline bubble. The instruction will be a NOP. Mark all
 			// register ports as valid.
-			else begin
+			begin
 				prv[g] = currentRegvalid[prn_i[g]];
 				//if (en2) 
-				if (0) begin			
+				if (1) begin			
 //					if (!rnv[g])
 //						prv[g] = VAL;
 //					else

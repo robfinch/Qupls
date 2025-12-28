@@ -41,7 +41,7 @@ import const_pkg::*;
 import Qupls4_pkg::*;
 
 module Qupls4_meta_sau(rst, clk, rse_i, rse_o, lane, cptgt, z, stomp,
-	qres, cs, csr, cpl, canary, o, cp_o, we_o, exc);
+	qres, csr, cpl, canary, o, cp_o, we_o, exc);
 parameter SAU0 = 1'b0;
 parameter WID=$bits(cpu_types_pkg::value_t); 
 input rst;
@@ -53,7 +53,6 @@ input [7:0] cptgt;
 input z;
 input Qupls4_pkg::rob_bitmask_t stomp;
 input [WID-1:0] qres;
-input [2:0] cs;
 input [7:0] cpl;
 input [WID-1:0] canary;
 input [WID-1:0] csr;
@@ -260,7 +259,6 @@ reg [WID-1:0] c1;
 			.i(i),
 			.t(t[g*8+7:g*8]),
 			.qres(qres[g*8+7:g*8]),
-			.cs(cs),
 			.pc(pc),
 			.csr(csr),
 			.cpl(cpl),
@@ -363,7 +361,6 @@ reg [WID-1:0] c1;
 			.i(i),
 			.t(t[g*16+15:g*16]),
 			.qres(qres[g*16+15:g*16]),
-			.cs(cs),
 			.pc(pc),
 			.csr(csr),
 			.cpl(cpl),
@@ -443,7 +440,6 @@ reg [WID-1:0] c1;
 			.i(i),
 			.t(t[g*32+31:g*32]),
 			.qres(qres[g*32+31:g*32]),
-			.cs(cs),
 			.pc(pc),
 			.csr(csr),
 			.cpl(cpl),
@@ -501,7 +497,6 @@ reg [WID-1:0] c1;
 			.i(i),
 			.t(t[g*64+63:g*64]),
 			.qres(qres[g*64+63:g*64]),
-			.cs(cs),
 			.pc(pc),
 			.csr(csr),
 			.cpl(cpl),
@@ -559,7 +554,6 @@ generate begin : g128
 			.i(i),
 			.t(t[g*128+127:g*128]),
 			.qres(qres[g*128+127:g*128]),
-			.cs(cs),
 			.pc(pc),
 			.csr(csr),
 			.cpl(cpl),

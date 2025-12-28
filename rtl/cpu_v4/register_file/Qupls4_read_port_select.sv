@@ -56,11 +56,9 @@
 import cpu_types_pkg::aregno_t;
 import cpu_types_pkg::pc_address_t;
 
-module Qupls4_read_port_select(rst, clk, pReg_i, pRegv_i, pReg_o, regAck_o);
+module Qupls4_read_port_select(clk, pReg_i, pRegv_i, pReg_o, regAck_o);
 parameter NPORTI=64;
 parameter NPORTO=16;
-parameter FIXEDPORTS = 0;
-input rst;
 input clk;
 input pregno_t [NPORTI-1:0] pReg_i;
 input [NPORTI-1:0] pRegv_i;
@@ -68,42 +66,30 @@ output pregno_t [NPORTO-1:0] pReg_o;
 output reg [NPORTI-1:0] regAck_o;
 
 integer j,k,h,x;
-reg [5:0] m;
+reg [5:0] m = 6'd0;
 
 // m used to rotate the port selections every clock cycle.
 always_ff @(posedge clk)
-if (rst)
-	m <= 6'd0;
-else begin
-	if (m==NPORTI-FIXEDPORTS-1)
+begin
+	if (m>=NPORTI-1)
 		m <= 6'd0;
 	else
 		m <= m + 6'd1;
 end
 
 always_ff @(posedge clk)
-if (rst) begin
-	for (j = 0; j < NPORTI; j = j + 1)
-		regAck_o[j] = 1'b0;
-end
-else begin
-	k = FIXEDPORTS;
-	for (h = 0; h < FIXEDPORTS; h = h + 1) begin
-		regAck_o[h] = 1'b1;
-		pReg_o[h] = pReg_i[h];
-	end
-	for (h = 0; h < NPORTO; h = h + 1) begin
-		if (h >= FIXEDPORTS) begin
-			regAck_o[h] = 1'b0;
-			pReg_o[h] = 8'd0;
-		end
-	end
-	for (j = 0; j < NPORTI-FIXEDPORTS; j = j + 1) begin
-		regAck_o[j+FIXEDPORTS] = 1'b0;
+begin
+	k = 0;
+	foreach (regAck_o[h])
+		regAck_o[h] <= 1'b0;
+	foreach (pReg_o[h])
+		pReg_o[h] <= 10'd0;
+	for (j = 0; j < NPORTI; j = j + 1) begin
+		regAck_o[j] <= 1'b0;
 		if (k < NPORTO) begin
-			if (pRegv_i[((j+m)%(NPORTI-FIXEDPORTS))+FIXEDPORTS]) begin
-				regAck_o[((j+m)%(NPORTI-FIXEDPORTS))+FIXEDPORTS] = 1'b1;
-				pReg_o[k] = pReg_i[((j+m)%(NPORTI-FIXEDPORTS))+FIXEDPORTS];
+			if (pRegv_i[((j+m)%NPORTI)]) begin
+				regAck_o[((j+m)%NPORTI)] <= 1'b1;
+				pReg_o[k] <= pReg_i[((j+m)%NPORTI)];
 				k = k + 1;
 			end
 		end

@@ -98,42 +98,43 @@ generate begin : gRF
 end
 endgenerate
 
+reg [RPORTS-1:0] cnd [0:WPORTS*2-1];
+value_t [RPORTS-1:0] val [0:WPORTS*2-1];
+flags_t [RPORTS-1:0] tag [0:WPORTS*2-1];
+
 generate begin : gRFO
-	reg [WPORTS*2-1:0] cnd;
-	value_t [RPORTS-1:0] val [0:WPORTS*2-1];
-	flags_t [RPORTS-1:0] tag [0:WPORTS*2-1];
 
 	for (g = 0; g < RPORTS; g = g + 1) begin
 		for (gv = 0; gv < WPORTS*2; gv = gv + 1) begin
 		always_comb
 		begin
 			if (gv >= WPORTS) begin
-				cnd[gv] = wr[gv-WPORTS] && we[gv-WPORTS][WID/BWW-1:0] && ra[g]==wa[gv-WPORTS];
+				cnd[gv][g] = wr[gv-WPORTS] && we[gv-WPORTS][WID/BWW-1:0] && ra[g]==wa[gv-WPORTS];
 				val[gv][g] = i[gv-WPORTS];
 				tag[gv][g] = ti[gv-WPORTS];
 			end
 			else begin
-				cnd[gv] = lvt[ra[g]]==gv;
+				cnd[gv][g] = lvt[ra[g]]==gv;
 				val[gv][g] = o0[gv][g];
 				tag[gv][g] = to0[gv][g];
 			end
 		end
 		end
+	end
+end
+endgenerate
+
+generate begin : gRFO2
+	for (g = 0; g < RPORTS; g = g + 1) begin
 		always_comb
 		begin
+			o[g] = value_zero;
+			to[g] = 8'h00;
 			for (n1 = 0; n1 < WPORTS*2-1; n1 = n1 + 1) begin
-				o[g] = value_zero;
-				to[g] = 8'h00;
-				if (cnd[n1]) begin
+				if (cnd[n1][g]) begin
 					o[g] = val[n1][g];
 					to[g] = tag[n1][g];
 				end
-				/* One condition is always valid.
-				else begin
-					o[g] = o0[WPORTS-1][g];
-					to[g] = to0[WPORTS-1][g];
-				end
-				*/
 			end
 		end
 	end

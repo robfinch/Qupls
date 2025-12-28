@@ -102,14 +102,14 @@ begin
 	Qupls4_pkg::OP_FLTH,Qupls4_pkg::OP_FLTS,Qupls4_pkg::OP_FLTD,Qupls4_pkg::OP_FLTQ:
 		fnRdv = VAL;
 	Qupls4_pkg::OP_CSR:
-		fnRdv = VAL;
+		fnRdv = ir.Rd[5];
 	Qupls4_pkg::OP_ADDI,Qupls4_pkg::OP_SUBFI,Qupls4_pkg::OP_CMPI,Qupls4_pkg::OP_CMPUI,
 	Qupls4_pkg::OP_ANDI,Qupls4_pkg::OP_ORI,Qupls4_pkg::OP_XORI,
 	Qupls4_pkg::OP_MULI,Qupls4_pkg::OP_MULUI,Qupls4_pkg::OP_DIVI,Qupls4_pkg::OP_DIVUI,
 	Qupls4_pkg::OP_SHIFT:
 		fnRdv = VAL;
 	Qupls4_pkg::OP_BSR,Qupls4_pkg::OP_JSR:
-		fnRdv = VAL;
+		fnRdv = ir.Rd[5];
 	Qupls4_pkg::OP_LDB,Qupls4_pkg::OP_LDBZ,Qupls4_pkg::OP_LDW,Qupls4_pkg::OP_LDWZ,
 	Qupls4_pkg::OP_LDT,Qupls4_pkg::OP_LDTZ,Qupls4_pkg::OP_LOAD,Qupls4_pkg::OP_LOADA,
 	Qupls4_pkg::OP_LDV,
