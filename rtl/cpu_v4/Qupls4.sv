@@ -102,7 +102,7 @@ Qupls4_pkg::irq_info_packet_t irq_in = {irq_i,om_i,swstk_i,ivect_i};
 
 wire ren_rst_busy;
 reg irst;
-always_comb irst = rst_i|ren_rst_busy;
+always_comb irst = rst_i;//|ren_rst_busy;
 wb_cmd_request256_t ftatm_req;
 wb_cmd_response256_t ftatm_resp;
 wb_cmd_request256_t ftaim_req;
@@ -4492,6 +4492,10 @@ for (g = 0; g < Qupls4_pkg::NDATA_PORTS; g = g + 1) begin
 	);
 
 end
+if (NDATA_PORTS < 2) begin
+	always_comb ftadm_req[1] = {$bits(wb_cmd_request256_t){1'b0}};
+	always_comb cap_tag_req[1] = {$bits(wb_cmd_request256_t){1'b0}};
+end
 end
 endgenerate
 
@@ -4701,6 +4705,7 @@ begin
 	lsq_tail0 = lsq_tail;
 	lsq_heads[0] = lsq_head;
 	for (n2 = 1; n2 < Qupls4_pkg::LSQ_ENTRIES; n2 = n2 + 1) begin
+		lsq_heads[n2].vb = FALSE;
 		lsq_heads[n2].row = (lsq_heads[n2-1].row+1) % Qupls4_pkg::LSQ_ENTRIES;
 		lsq_heads[n2].col = 0;
 	end

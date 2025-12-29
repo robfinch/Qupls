@@ -58,7 +58,7 @@ output Qupls4_pkg::lsq_ndx_t ndx1;
 output reg ndx0v;
 output reg ndx1v;
 
-integer m,n9r,n10,col,row,i,n9c;
+integer col,row;
 reg [3:0] q;
 
 Qupls4_pkg::rob_bitmask_t memready;		// mask of ready to go instructions.
@@ -139,9 +139,13 @@ foreach (heads[m])
 	heads[m] = (head + m) % Qupls4_pkg::ROB_ENTRIES;
 
 always_ff @(posedge clk)
-foreach (lsq_heads[q]) begin
-	lsq_heads[q].row = (lsq_head.row + q) % Qupls4_pkg::LSQ_ENTRIES;
-	lsq_heads[q].col = 1'd0;
+if (rst)
+	q <= 4'd0;
+else begin
+	foreach (lsq_heads[q]) begin
+		lsq_heads[q].row = (lsq_head.row + q) % Qupls4_pkg::LSQ_ENTRIES;
+		lsq_heads[q].col = 1'd0;
+	end
 end
 
 // We need only check the LSQ for valid operands.
