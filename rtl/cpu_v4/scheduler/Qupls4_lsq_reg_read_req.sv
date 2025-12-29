@@ -39,7 +39,7 @@ import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
 module Qupls4_lsq_reg_read_req(rst, clk, lsq_head, lsq, aReg, pReg, cndx,
-	id, id1, bRs);
+	id, id1, bRs, bRsv);
 input rst;
 input clk;
 input Qupls4_pkg::lsq_ndx_t lsq_head;
@@ -50,7 +50,7 @@ output cpu_types_pkg::checkpt_ndx_t cndx;
 output Qupls4_pkg::lsq_ndx_t id;
 output Qupls4_pkg::lsq_ndx_t id1;
 output pregno_t [3:0] bRs;
-output [3:0] bRsv;
+output reg [3:0] bRsv;
 
 always_ff @(posedge clk)
 if (rst) begin

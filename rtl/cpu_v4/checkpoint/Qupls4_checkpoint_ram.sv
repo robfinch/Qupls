@@ -38,6 +38,7 @@
 // ============================================================================
 
 import const_pkg::*;
+import cpu_types_pkg::*;
 //import Qupls4_pkg::SIM;
 
 module Qupls4_checkpoint_ram(rst, clka, ena, wea, addra, dina, douta, 
@@ -51,12 +52,12 @@ input rst;
 input clka;
 input ena;
 input wea;
-input checkpt_ndx_t addra;
+input cpu_types_pkg::checkpt_ndx_t addra;
 input Qupls4_pkg::checkpoint_t dina;
 output Qupls4_pkg::checkpoint_t douta;
 input clkb;
 input enb;
-input checkpt_ndx_t addrb;
+input cpu_types_pkg::checkpt_ndx_t addrb;
 output Qupls4_pkg::checkpoint_t doutb;
 
 Qupls4_pkg::checkpoint_t doutb1;

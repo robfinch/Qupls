@@ -758,7 +758,7 @@ begin
 				pg_ren.pr[nn].v <= INV;
 			else begin
 				pg_ren.pr[nn].op.decbus.cpytgt <= TRUE;
-				pg_ren.pr[nn].op.decbus.alu <= TRUE;
+				pg_ren.pr[nn].op.decbus.sau <= TRUE;
 				pg_ren.pr[nn].op.decbus.fpu <= FALSE;
 				pg_ren.pr[nn].op.decbus.fc <= FALSE;
 				pg_ren.pr[nn].op.decbus.mem <= FALSE;

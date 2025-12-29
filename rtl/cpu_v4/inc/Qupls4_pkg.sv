@@ -43,11 +43,11 @@ package Qupls4_pkg;
 `define QUPLS4	1'b1
 `define STARK_PKG 1'b1
 `undef IS_SIM
-parameter SIM = 1'b0;
+parameter SIM = 1'b1;
+`define IS_SIM	1
 
 `include "Qupls4_config.sv"
 /*
-//`define IS_SIM	1
 
 // Comment out to remove the sigmoid approximate function
 //`define SIGMOID	1
@@ -1534,7 +1534,7 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [$bits(value_t)-($bits(aregno_t)+$bits(pregno_t))-1:0] resv;
+	logic [$bits(cpu_types_pkg::value_t)-($bits(cpu_types_pkg::aregno_t)+$bits(cpu_types_pkg::pregno_t))-1:0] resv;
 	cpu_types_pkg::aregno_t aRn;	// 8 bits
 	cpu_types_pkg::pregno_t pRn;	// 9 bits
 } aprpair_t;
@@ -2324,6 +2324,33 @@ begin
 		2'd3:	fnSel = 32'hFF;
 		endcase
 	default:	fnSel = 32'hFF;
+	endcase
+end
+endfunction
+
+function fnIsLoad;
+input micro_op_t ir;
+begin
+	case(ir.opcode)
+	OP_LDB,OP_LDW,OP_LDT,OP_LOAD,
+	OP_LDBZ,OP_LDWZ,OP_LDTZ,
+	OP_CLOAD:
+		fnIsLoad = 1'b1;
+	default:
+		fnIsLoad = 1'b0;
+	endcase
+end
+endfunction
+
+function fnIsStore;
+input micro_op_t ir;
+begin
+	case(ir.opcode)
+	OP_STB,OP_STW,OP_STT,OP_STORE,
+	OP_CSTORE:
+		fnIsStore = 1'b1;
+	default:
+		fnIsStore = 1'b0;
 	endcase
 end
 endfunction

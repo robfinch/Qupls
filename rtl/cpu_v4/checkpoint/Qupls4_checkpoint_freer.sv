@@ -42,7 +42,7 @@ input rst;
 input clk;
 input Qupls4_pkg::pipeline_group_hdr_t [Qupls4_pkg::ROB_ENTRIES/4-1:0] pgh;
 output reg free;
-output checkpt_ndx_t chkpt;
+output cpu_types_pkg::checkpt_ndx_t chkpt;
 output reg [5:0] chkpt_gndx;
 
 integer n3,n33,n333;

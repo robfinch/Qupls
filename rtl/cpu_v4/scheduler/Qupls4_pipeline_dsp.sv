@@ -56,7 +56,7 @@ input ce;
 input rob_ndx_t [11:0] tail;
 input Qupls4_pkg::pipeline_group_reg_t pg_ren;
 output Qupls4_pkg::pipeline_group_reg_t pg_dsp;
-input [Qupls4_pkg::DBF_ENTRIES-1:0] stomp;
+input [Qupls4_pkg::ROB_ENTRIES-1:0] stomp;
 input [15:0] busy;
 output reg stall_dsp;
 output Qupls4_pkg::reservation_station_entry_t [DISPATCH_COUNT-1:0] rse_o;
@@ -71,33 +71,6 @@ reg [3:0] prevNonNop;
 Qupls4_pkg::pipeline_group_hdr_t pgh;
 reg stall;
 reg [MWIDTH-1:0] dispatch_done, dispatched;
-
-// Find the next non-NOP. Used to skip over constant zones.
-
-function rob_ndx_t fnFindPrevNonNop;
-input rob_ndx_t st;
-integer p1,p2,p3,p4,p5,p6;
-begin
-	p1 = (st + Qupls4_pkg::DBF_ENTRIES - 1) % Qupls4_pkg::DBF_ENTRIES;
-	p2 = (st + Qupls4_pkg::DBF_ENTRIES - 2) % Qupls4_pkg::DBF_ENTRIES;
-	p3 = (st + Qupls4_pkg::DBF_ENTRIES - 3) % Qupls4_pkg::DBF_ENTRIES;
-	p4 = (st + Qupls4_pkg::DBF_ENTRIES - 4) % Qupls4_pkg::DBF_ENTRIES;
-	p5 = (st + Qupls4_pkg::DBF_ENTRIES - 5) % Qupls4_pkg::DBF_ENTRIES;
-	p6 = (st + Qupls4_pkg::DBF_ENTRIES - 6) % Qupls4_pkg::DBF_ENTRIES;
-	if (!dbf[p1].op.decbus.nop)
-		fnFindPrevNonNop = p1;
-	else if (!dbf[p2].op.decbus.nop)
-		fnFindPrevNonNop = p2;
-	else if (!dbf[p3].op.decbus.nop)
-		fnFindPrevNonNop = p3;
-	else if (!dbf[p4].op.decbus.nop)
-		fnFindPrevNonNop = p4;
-	else if (!dbf[p5].op.decbus.nop)
-		fnFindPrevNonNop = p5;
-	else
-		fnFindPrevNonNop = p6;
-end
-endfunction
 
 always_comb
 	pgh = pg_ren.hdr;

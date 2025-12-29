@@ -68,7 +68,7 @@ import Qupls4_pkg::*;
 `define PANIC_COMMIT 4'd13
 
 module Qupls4(coreno_i, rst_i, clk_i, clk2x_i, clk3x_i, clk5x_i, ipl, irq, irq_ack,
-	irq_i, ivect_i, swstk_i, om_i, fta_cyc, fta_bg, fta_bgack, fta_resp_ack,
+	irq_i, ivect_i, swstk_i, om_i,
 	wb_req, wb_resp, snoop_adr, snoop_v, snoop_tid);
 parameter CORENO = 6'd1;
 parameter CHANNEL = 6'd1;
@@ -94,10 +94,6 @@ input [2:0] swstk_i;
 input [2:0] om_i;
 output wb_cmd_request256_t wb_req;
 input wb_cmd_response256_t wb_resp;
-output fta_cyc;
-input fta_bg;
-output reg fta_bgack;
-output fta_resp_ack;
 input cpu_types_pkg::address_t snoop_adr;
 input snoop_v;
 input wb_tranid_t snoop_tid;
@@ -3140,7 +3136,7 @@ value_t fpu1_resA2;
 checkpt_ndx_t sau0_cp2, sau1_cp2, fpu0_cp2, fpu1_cp2, imul0_cp2;
 wire sau0_aRdv1, sau0_aRdv2, sau1_aRdv1, sau1_aRdv2, fpu0_aRdv2;
 rob_ndx_t sau0_id2, sau1_id2, fpu0_id2, imul0_id2;
-Qupls4_pkg::operating_mode_t sau0_om2, sau1_om2, fpu0_om2, dram0_om2, dram1_om2;
+Qupls4_pkg::operating_mode_t fpu0_om2, dram0_om2, dram1_om2;
 Qupls4_pkg::operating_mode_t sau0_omA2, sau1_omA2, fpu0_omA2, fpu1_omA2, dram0_omA2, dram1_omA2, imul0_omA2;
 Qupls4_pkg::operating_mode_t sau0_omB2, sau1_omB2, fpu0_omB2, fpu1_omB2, dram0_omB2, dram1_omB2;
 Qupls4_pkg::operating_mode_t sau0_omC2, sau1_omC2, fpu0_omC2, fpu1_omC2;
@@ -3150,14 +3146,12 @@ Qupls4_pkg::operating_mode_t sau0_omC2, sau1_omC2, fpu0_omC2, fpu1_omC2;
 vtdl #(1) 							udlyal5 (.clk(clk), .ce(1'b1), .a(4'd0), .d(sau0_sc_done), .q(sau0_sc_done2) );
 vtdl #($bits(rob_ndx_t))	udlyal6 (.clk(clk), .ce(1'b1), .a(4'd0), .d(sau0_id), .q(sau0_id2) );
 vtdl #($bits(checkpt_ndx_t)) udlyal7 (.clk(clk), .ce(1'b1), .a(4'd0), .d(sau0_cp), .q(sau0_cp2) );
-vtdl #($bits(Qupls4_pkg::operating_mode_t))	udlyal8 (.clk(clk), .ce(1'b1), .a(4'd0), .d(sau0_om), .q(sau0_om2) );
 
 // ALU #1 signals
 
 vtdl #(1) 							udlyal15 (.clk(clk), .ce(1'b1), .a(4'd0), .d(sau1_sc_done), .q(sau1_sc_done2) );
 vtdl #($bits(rob_ndx_t))	udlyal16 (.clk(clk), .ce(1'b1), .a(4'd0), .d(sau1_id), .q(sau1_id2) );
 vtdl #($bits(checkpt_ndx_t)) udlyal17 (.clk(clk), .ce(1'b1), .a(4'd0), .d(sau1_cp), .q(sau1_cp2) );
-vtdl #($bits(Qupls4_pkg::operating_mode_t))	udlyal18 (.clk(clk), .ce(1'b1), .a(4'd0), .d(sau1_om), .q(sau1_om2) );
 
 //vtdl #($bits(value_t))  udlyal4 (.clk(clk), .ce(1'b1), .a(4'd0), .d(sau0_resA), .q(sau0_res2) );
 // FPU #0 signals
@@ -5550,22 +5544,22 @@ else begin
 	// just for debugging in SIM. All values come from the register file.
 `ifdef IS_SIM
 	if (sau0_available && sau0_issue) begin
-		rob[sau0_rse.rndx].argA <= sau0_rse.argA;
-		rob[sau0_rse.rndx].argB <= sau0_rse.argB;
-		rob[sau0_rse.rndx].argT <= sau0_rse.argT;
+		rob[sau0_rse.rndx].argA <= sau0_rse.arg[0].val;
+		rob[sau0_rse.rndx].argB <= sau0_rse.arg[1].val;
+		rob[sau0_rse.rndx].argT <= sau0_rse.arg[4].val;
 	end
 	if (Qupls4_pkg::NSAU > 1) begin
 		if (sau1_available && sau1_rndxv && sau1_idle) begin
-			rob[sau1_rse.rndx].argA <= sau1_rse.argA;
-			rob[sau1_rse.rndx].argB <= sau1_rse.argB;
-			rob[sau1_rse.rndx].argT <= sau1_rse.argT;
+			rob[sau1_rse.rndx].argA <= sau1_rse.arg[0].val;
+			rob[sau1_rse.rndx].argB <= sau1_rse.arg[1].val;
+			rob[sau1_rse.rndx].argT <= sau1_rse.arg[4].val;
 		end
 	end
 	if (Qupls4_pkg::NFPU > 0) begin
 		if (fpu0_available && fpu0_rndxv && fpu0_idle) begin
-			rob[fpu0_rndx].argA <= rfo_fpu0_argA;
-			rob[fpu0_rndx].argB <= rfo_fpu0_argB;
-			rob[fpu0_rndx].argT <= rfo_fpu0_argT;
+			rob[fpu0_rndx].argA <= fpu0_rse.arg[0].val;
+			rob[fpu0_rndx].argB <= fpu0_rse.arg[1].val;
+			rob[fpu0_rndx].argT <= fpu0_rse.arg[4].val;
 		end
 	end
 	/*
@@ -5911,10 +5905,10 @@ else begin
 			rob[reg_tails[nn]].argC <= (rf_regv[nn*4+2]) ? rfo[nn*4+2] : rf_reg[nn*4+2];
 			rob[reg_tails[nn]].argT <= (rf_regv[nn*4+3]) ? rfo[nn*4+3] : rf_reg[nn*4+3];
 			// Values may have already been marked as valid, sont set them invalid!
-			if (rf_regv[nn*4+0]) rob[reg_tails[nn]].argA_V <= VAL;
-			if (rf_regv[nn*4+1]) rob[reg_tails[nn]].argB_V <= VAL;
-			if (rf_regv[nn*4+2]) rob[reg_tails[nn]].argC_V <= VAL;
-			if (rf_regv[nn*4+3]) rob[reg_tails[nn]].argT_V <= VAL;
+			if (rf_regv[nn*4+0]) rob[reg_tails[nn]].argA_v <= VAL;
+			if (rf_regv[nn*4+1]) rob[reg_tails[nn]].argB_v <= VAL;
+			if (rf_regv[nn*4+2]) rob[reg_tails[nn]].argC_v <= VAL;
+			if (rf_regv[nn*4+3]) rob[reg_tails[nn]].argT_v <= VAL;
 			rob[reg_tails[nn]].reg_read_done <= TRUE;
 		end
 	end
@@ -5968,14 +5962,6 @@ else begin
 // as idle. Record any exceptions that may have occurred.
 //
 	// Debug
-`ifdef IS_SIM	    
-	if (sau0_sc_done2|sau0_done)
-  		rob[sau0_id].res <= wrport0_v ? sau0_resA : value_zero;
-	if (sau1_sc_done2|sau1_done)
-  		rob[sau1_id].res <= wrport1_v ? sau1_resA : value_zero;
-	if (fpu0_sc_done2|fpu0_done)
-  		rob[sau0_id].res <= wrport3_v ? fpu0_resA : value_zero;
-`endif
 
 	// Handle single-cycle ops
 	// Whenever a result would be written, update the exception and done/out status.
@@ -6866,7 +6852,7 @@ end
 function value_t fnRegVal;
 input pregno_t regno;
 begin
-	fnRegVal = urf1.gRF.genblk1[0].urf0.mem[regno];
+	fnRegVal = urf1.gRF.genblk1[0].genblk1[0].urf0.mem[regno];
 	/*
 	case (urf1.lvt[regno])
 	2'd0:	fnRegVal = urf1.gRF.genblk1[0].urf0.mem[regno];
@@ -6934,14 +6920,14 @@ always_ff @(posedge clk) begin: clock_n_debug
 	$display("i$ pc output: %h %s #", pc_fet.pc, ihito ? "ihit" : "    ");
 	$display("cacheL: %x", ic_line[511:0]);
 	$display("cacheH: %x", ic_line[1023:512]);
-	$display("----- Instruction Extract %c%c ----- %s", ihit_fet ? "h":" ", micro_machine_active_x ? "a": " ", stomp_fet ? stompstr : no_stompstr);
+	$display("----- Instruction Extract %c ----- %s", ihit_fet ? "h":" ", stomp_fet ? stompstr : no_stompstr);
 	$display("pc 0: %h.%h  1: %h.%h  2: %h.%h  3: %h.%h",
-		uiext1.pc0_fet.stream, uiext1.pc0_fet.pc,
-		uiext1.pc1_fet.stream, uiext1.pc1_fet.pc,
-		uiext1.pc2_fet.stream, uiext1.pc2_fet.pc,
-		uiext1.pc3_fet.stream, uiext1.pc3_fet.pc);
-	$display("lineL: %h", uiext1.ic_line_fet[511:0]);
-	$display("lineH: %h", uiext1.ic_line_fet[1023:512]);
+		uiext1.pc_fet[0].stream, uiext1.pc_fet[0].pc,
+		uiext1.pc_fet[1].stream, uiext1.pc_fet[1].pc,
+		uiext1.pc_fet[2].stream, uiext1.pc_fet[2].pc,
+		uiext1.pc_fet[3].stream, uiext1.pc_fet[3].pc);
+	$display("lineL: %h", uiext1.cline_fet[511:0]);
+	$display("lineH: %h", uiext1.cline_fet[1023:512]);
 	$display("align: %x", uiext1.ic_line_aligned);
 	$display("- - - - - - Multiplex %c - - - - - - %s", ihit_ext ? "h":" ", stomp_ext ? stompstr : no_stompstr);
 	/*
@@ -6951,8 +6937,8 @@ always_ff @(posedge clk) begin: clock_n_debug
 	$display("pc3: %h.%h ins3: %h", uiext1.pg_ext.pr[3].pc.pc[23:0], uiext1.pg_ext.pr[3].mcip, uiext1.pg_ext.pr[3].uop[47:0]);
 	*/
 	if (do_bsr)
-		$display("BSR %h  pc0_fet=%h", bsr_tgt.pc, uiext1.pg_ext.pr[0].op.pc.pc[31:0]);
-	$display("----- Decode %c%c ----- %s", ihit_dec ? "h":" ", micro_machine_active_d ? "a": " ", stomp_dec ? stompstr : no_stompstr);
+		$display("BSR %h  pc0_fet=%h", bsr_tgt.pc, uiext1.pg_ext.hdr.ip+{uiext1.pg_ext.pr[0].ip_offs,1'b0});
+	$display("----- Decode %c ----- %s", ihit_dec ? "h":" ", stomp_dec ? stompstr : no_stompstr);
 	/*
 	$display("pc0: %h.%h ins0: %h", pg_dec.pr[0].pc.pc[23:0], pg_dec.pr[0].mcip, pg_dec.pr[0].uop[47:0]);
 	$display("pc1: %h.%h ins1: %h", pg_dec.pr[1].pc.pc[23:0], pg_dec.pr[1].mcip, pg_dec.pr[1].uop[47:0]);
@@ -7022,19 +7008,19 @@ always_ff @(posedge clk) begin: clock_n_debug
 //	$display("----- Queue Time ----- %s", (stomp_que && !stomp_quem) ? stompstr : no_stompstr);
 	$display("----- Queue %c ----- %h", ihit_que ? "h":" ", qd);
 	for (i = 0; i < Qupls4_pkg::ROB_ENTRIES; i = i + 1) begin
-    $display("%c%c%c sn:%h %d: %c%c%c%c%c%c %c %c%c %d %c %c%d Rt%d/%d=%h %h Rs%d/%d %h%c Ra%d/%d=%h %c Rb%d/%d=%h %c Rc%d/%d=%h %c I=%h %h.%h cp:%h ins=%h #",
+    $display("%c%c%c sn:%h %d: %c%c%c%c%c%c %c %c%c %d %c %c%d Rd%d/%d %h Rs%d/%d %h%c Rs1%d/%d=%h %c Rs2%d/%d=%h %c Rs3%d/%d=%h %c I=%h %h.%h cp:%h ins=%h #",
 			(i[4:0]==head[0])?67:46, (i[4:0]==tails[0])?81:46, rob[i].rstp ? "r" : " ", rob[i].sn, i[5:0],
 			rob[i].v?"v":"-", rob[i].done[0]?"d":"-", rob[i].done[1]?"d":"-", rob[i].out[0]?"o":"-", rob[i].out[1]?"o":"-", rob[i].bt?"t":"-", rob_memissue[i]?"i":"-", rob[i].lsq?"q":"-", (robentry_issue[i]|robentry_agen_issue[i])?"i":"-",
 			robentry_islot[i], robentry_stomp[i]?"s":"-",
 			(rob[i].op.decbus.cpytgt ? "c" : rob[i].op.decbus.fc ? "b" : rob[i].op.decbus.mem ? "m" : "a"),
 			rob[i].op.uop.opcode, 
-			rob[i].op.decbus.Rt, rob[i].op.nRt, rob[i].res, rob[i].exc,
-			rob[i].op.decbus.Rt, rob[i].op.pRt, rob[i].argT, rob[i].argT_v?"v":" ",
-			rob[i].op.decbus.Ra, rob[i].op.pRa, rob[i].argA, rob[i].argA_v?"v":" ",
-			rob[i].op.decbus.Rb, rob[i].op.pRb, rob[i].argB, rob[i].argB_v?"v":" ",
-			rob[i].op.decbus.Rc, rob[i].op.pRc, rob[i].argC, rob[i].argC_v?"v":" ",
+			rob[i].op.decbus.Rd, rob[i].op.nRd, rob[i].exc,
+			rob[i].op.decbus.Rd, rob[i].op.pRd, rob[i].argT, rob[i].argT_v?"v":" ",
+			rob[i].op.decbus.Rs1, rob[i].op.pRs1, rob[i].argA, rob[i].argA_v?"v":" ",
+			rob[i].op.decbus.Rs2, rob[i].op.pRs2, rob[i].argB, rob[i].argB_v?"v":" ",
+			rob[i].op.decbus.Rs3, rob[i].op.pRs3, rob[i].argC, rob[i].argC_v?"v":" ",
 			rob[i].argI,
-			rob[i].pc.stream, rob[i].pc.pc,
+			rob[i].ip_stream, pgh[rob[i].pghn].ip + {rob[i].ip_offs,1'b0},
 			rob[i].cndx, rob[i].op.uop[63:0]);
 	end
 	$display("----- LSQ -----");
@@ -7048,32 +7034,32 @@ always_ff @(posedge clk) begin: clock_n_debug
 	end
 	$display("----- AGEN -----");
 	$display(" I=%h A=%h B=%h %c%h pc:%h #",
-		agen0_rse.argI, agen0_rse.argA, agen0_rse.argB,
+		agen0_rse.argI, agen0_rse.arg[0].val, agen0_rse.arg[1].val,
 		 ((fnIsLoad(agen0_rse.uop) || fnIsStore(agen0_rse.uop)) ? 109 : 97),
 		agen0_op, agen0_pc);
 	$display("idle:%d res:%h rid:%d #", agen0_idle, agen0_res, agen0_rse.rndx);
 	if (Qupls4_pkg::NAGEN > 1) begin
 		$display(" I=%h A=%h B=%h %c%h pc:%h #",
-			agen1_rse.argI, agen1_rse.argA, agen1_rse.argB,
+			agen1_rse.argI, agen1_rse.arg[0].val, agen1_rse.arg[1].val,
 			 ((fnIsLoad(agen1_rse.uop) || fnIsStore(agen1_rse.uop)) ? 109 : 97),
 			agen1_op, agen1_pc);
 		$display("idle:%d res:%h rid:%d #", agen1_idle, agen1_res, agen1_rse.rndx);
 	end
 	$display("----- Memory -----");
 	$display("%d%c v%h p%h, %h %c%d %o #",
-	    dram0, dram0_ack?"A":" ", dram0_vaddr, dram0_paddr, dram0_data, ((dram0_load || dram0_cload || dram0_cload_tags || dram0_store || dram0_cstore) ? 109 : 97), dram0_op, dram0_work.rndx);
+	    dram0, dram0_ack?"A":" ", dram0_work.vaddr, dram0_work.paddr, dram0_work.data, ((dram0_work.load || dram0_work.cload || dram0_work.cload_tags || dram0_work.store || dram0_work.cstore) ? 109 : 97), dram0_work.op, dram0_work.rndx);
 	if (Qupls4_pkg::NDATA_PORTS > 1) begin
 	$display("%d v%h p%h %h %c%d %o #",
-	    dram1, dram1_vaddr, dram1_paddr, dram1_data, ((dram1_load || dram1_cload || dram1_cload_tags || dram1_store || dram1_cstore) ? 109 : 97), dram1_op, dram1_work.rndx);
+	    dram1, dram1_work.vaddr, dram1_work.paddr, dram1_work.data, ((dram1_work.load || dram1_work.cload || dram1_work.cload_tags || dram1_work.store || dram1_work.cstore) ? 109 : 97), dram1_work.op, dram1_work.rndx);
 	end
 //	$display("%d %h %h %c%d %o #",
 //	    dram2, dram2_addr, dram2_data, (fnIsFlowCtrl(dram2_op) ? 98 : (dram2_load || dram2_store) ? 109 : 97), 
 //	    dram2_op, dram2_id);
-	$display("%d %h %o %h #", dram_v0, dram_bus0, dram_id0, dram_exc0);
-	$display("%d %h %o %h #", dram_v1, dram_bus1, dram_id1, dram_exc1);
+	$display("%d %h %o %h #", dram0_oper.oper.v, dram0_work.data, dram0_work.rndx, dram0_oper.exc);
+	$display("%d %h %o %h #", dram1_oper.oper.v, dram1_work.data, dram1_work.rndx, dram1_oper.exc);
 
 	$display("----- FCU -----");
-	$display("eval:%c A=%h B=%h BI=%h I=%h", takb?"T":"F", fcu_rse.argA, fcu_rse.argB, fcu_argBr, fcu_rse.argI);
+	$display("eval:%c A=%h B=%h I=%h", takb?"T":"F", fcu_rse.arg[0].val, fcu_rse.arg[1].val, fcu_rse.argI);
 	$display("bt:%c pc=%h id=%d ", fcu_bt ? "T":"F", fcu_pc, fcu_rse.rndx);
 	$display("miss: %c misspc=%h.%h instr=%h disp=%h", (takb&~fcu_bt)|(~takb&fcu_bt)?"T":"F",fcu_misspc1.stream,fcu_misspc1.pc, fcu_instr.uop[63:0],
 		{{37{fcu_instr.uop[63]}},fcu_instr.uop[63:44],3'd0}
@@ -7081,17 +7067,17 @@ always_ff @(posedge clk) begin: clock_n_debug
 
 	$display("----- ALU -----");
 	$display("%d I=%h T=%h A=%h B=%h C=%h %c%d pc:%h #",
-		sau0_dataready, sau0_rse.argI, sau0_rse.argT, sau0_rse.argA, sau0_rse.argB, sau0_rse.argC,
+		sau0_dataready, sau0_rse.argI, sau0_rse.arg[4].val, sau0_rse.arg[0].val, sau0_rse.arg[1].val, sau0_rse.arg[2].val,
 		 ((fnIsLoad(sau0_rse.uop) || fnIsStore(sau0_rse.uop)) ? 109 : 97),
 		sau0_instr, sau0_pc);
-	$display("idle:%d res:%h rid:%d #", sau0_idle, sau0_rse.resA, sau0_rse.rndx);
+	$display("idle:%d res:%h rid:%d #", sau0_idle, sau0_resA, sau0_rse.rndx);
 
 	if (Qupls4_pkg::NSAU > 1) begin
 		$display("%d I=%h T=%h A=%h B=%h C=%h %c%d pc:%h #",
-			sau1_dataready, sau1_rse.argI, sau1_rse.argT, sau1_rse.argA, sau1_rse.argB, sau1_rse.argC, 
+			sau1_dataready, sau1_rse.argI, sau1_rse.arg[4].val, sau1_rse.arg[0].val, sau1_rse.arg[1].val, sau1_rse.arg[2].val, 
 			 ((fnIsLoad(sau1_rse.uop) || fnIsStore(sau1_rse.uop)) ? 109 : 97),
 			sau1_rse.uop, sau1_rse.pc);
-		$display("idle:%d res:%h rid:%d #", sau1_idle, sau1_rse.resA, sau1_rse.rndx);
+		$display("idle:%d res:%h rid:%d #", sau1_idle, sau1_resA, sau1_rse.rndx);
 	end
 
 	$display("----- Commit -----");
@@ -7753,8 +7739,6 @@ begin
 	commit3_id <= Qupls4_pkg::ROB_ENTRIES-1;
 	pack_regs <= FALSE;
 	scale_regs <= 3'd4;
-	store_argC_id <= 5'd0;
-	store_argC_id1 <= 5'd0;
 	sau0_stomp <= FALSE;
 	sau1_stomp <= FALSE;
 	fpu0_stomp <= FALSE;
@@ -7775,9 +7759,6 @@ begin
 	icdp <= 32'hFFFFFBC0;
 	predino = 4'd0;
 	predrndx = 5'd0;
-	store_argC_aReg <= 8'd0;
-	store_argC_pReg <= 9'd0;
-	store_argC_cndx <= 4'd0;
 	cpu_request_cancel <= {Qupls4_pkg::ROB_ENTRIES{1'b0}};
 	groupno <= {$bits(seqnum_t){1'b0}};
 	sync_no <= 6'd0;

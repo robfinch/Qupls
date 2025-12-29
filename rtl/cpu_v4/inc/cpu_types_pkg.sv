@@ -47,7 +47,7 @@ package cpu_types_pkg;
 
 typedef logic [7:0] seqnum_t;
 typedef logic [5:0] rob_ndx_t;
-typedef logic [3:0] checkpt_ndx_t;
+typedef logic [4:0] checkpt_ndx_t;
 typedef logic [15:0] asid_t;
 `ifdef TINY_MMU
 typedef logic [31:0] address_t;
@@ -65,8 +65,8 @@ typedef logic [31:0] physical_address_t;
 `endif
 typedef logic [11:0] mc_address_t;
 `ifdef QUPLS4
-typedef logic [8:0] pregno_t;
-typedef logic [7:0] aregno_t;
+typedef logic [9:0] pregno_t;
+typedef logic [8:0] aregno_t;
 typedef logic [127:0] value_pair_t;
 typedef logic [63:0] value_t;
 typedef logic [31:0] half_value_t;

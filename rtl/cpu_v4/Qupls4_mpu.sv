@@ -77,7 +77,7 @@ assign cs_io = ftam_req.adr[31:24]==8'hFE;
 
 wire snoop_v = 1'b0;
 cpu_types_pkg::address_t snoop_adr = 32'd0;
-wire [5:0] snoop_cid = 6'd0;
+wishbone_pkg::wb_tranid_t snoop_tid = {6'd0,3'd0,4'd0};
 reg [31:0] iirq;
 
 wire [5:0] ipl;
@@ -178,11 +178,11 @@ ucpu1
 	.ivect_i(ivect),
 	.swstk_i(swstk),
 	.om_i(2'd3),
-	.fta_req(cpu_req),
-	.fta_resp(cpu_resp),
+	.wb_req(cpu_req),
+	.wb_resp(cpu_resp),
 	.snoop_v(snoop_v),
 	.snoop_adr(snoop_adr),
-	.snoop_cid(snoop_cid)
+	.snoop_tid(snoop_tid)
 );
 
 wb_cmd_request256_t [1:0] t1mreq;

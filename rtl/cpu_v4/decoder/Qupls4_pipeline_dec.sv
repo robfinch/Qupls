@@ -459,7 +459,7 @@ begin
 		end
 
 		if (dec[0].atom && pr_dec[0].v)
-			pr_dec[1].atom_count = insm[0].uop.imm[3:0];
+			pr_dec[1].atom_count = insm[0].op.uop.imm[3:0];
 		// Note to mask instructions not micro-ops, by detecting the lead micro-op
 		// of the instruction.
 		else if (!pr_dec[0].ssm && pr_dec[0].uop.lead && |pr_dec[0].atom_count)
@@ -470,7 +470,7 @@ begin
 			pr_dec[1].v = INV;
 
 		if (dec[1].atom && pr_dec[1].v)
-			pr_dec[2].atom_count = insm[1].uop.imm[3:0];
+			pr_dec[2].atom_count = insm[1].op.uop.imm[3:0];
 		else if (!pr_dec[1].ssm && pr_dec[1].uop.lead && |pr_dec[1].atom_count)
 			pr_dec[2].atom_count = pr_dec[1].atom_count - 4'd1;
 		else
@@ -479,7 +479,7 @@ begin
 			pr_dec[2].v = INV;
 
 		if (dec[2].atom && pr_dec[2].v)
-			pr_dec[3].atom_count = insm[2].uop.imm[3:0];
+			pr_dec[3].atom_count = insm[2].op.uop.imm[3:0];
 		else if (!pr_dec[2].ssm && pr_dec[2].uop.lead && |pr_dec[2].atom_count)
 			pr_dec[3].atom_count = pr_dec[2].atom_count - 4'd1;
 		else
@@ -488,7 +488,7 @@ begin
 			pr_dec[3].v = INV;
 
 		if (dec[3].atom && pr_dec[3].v)
-			atom_count_o = insm[3].uop.imm[3:0];
+			atom_count_o = insm[3].op.uop.imm[3:0];
 		else if (!pr_dec[3].ssm && pr_dec[3].uop.lead && |pr_dec[3].atom_count)
 			atom_count_o = pr_dec[3].atom_count - 4'd1;
 		else
@@ -503,7 +503,7 @@ begin
 		pr_dec[0].decbus.pred_no = pred_no_i;
 		if (dec[0].pred && pr_dec[0].v) begin
 			pr_dec[0].decbus.pred_no = pr_dec[0].decbus.pred_no + 5'd1;
-			pr_dec[1].decbus.pred_mask = insm[0].uop.imm[15:0];
+			pr_dec[1].decbus.pred_mask = insm[0].op.uop.imm[15:0];
 			pr_dec[1].decbus.pred_no = pr_dec[0].decbus.pred_no;
 		end
 		else if (!pr_dec[0].ssm && pr_dec[0].uop.lead && |pr_dec[0].pred_mask) begin
@@ -517,7 +517,7 @@ begin
 
 		if (dec[1].pred && pr_dec[1].v) begin
 			pr_dec[1].decbus.pred_no = pr_dec[1].decbus.pred_no + 5'd1;
-			pr_dec[2].decbus.pred_mask = insm[1].uop.imm[15:0];
+			pr_dec[2].decbus.pred_mask = insm[1].op.uop.imm[15:0];
 			pr_dec[2].decbus.pred_no = pr_dec[1].decbus.pred_no;
 		end
 		else if (!pr_dec[1].ssm && pr_dec[1].uop.lead && |pr_dec[1].pred_mask) begin
@@ -531,7 +531,7 @@ begin
 
 		if (dec[2].pred && pr_dec[2].v) begin
 			pr_dec[2].decbus.pred_no = pr_dec[2].decbus.pred_no + 5'd1;
-			pr_dec[3].decbus.pred_mask = insm[2].uop.imm[15:0];
+			pr_dec[3].decbus.pred_mask = insm[2].op.uop.imm[15:0];
 			pr_dec[3].decbus.pred_no = pr_dec[2].decbus.pred_no;
 		end
 		else if (!pr_dec[2].ssm && pr_dec[2].uop.lead && |pr_dec[2].pred_mask) begin
@@ -545,7 +545,7 @@ begin
 
 		if (dec[3].pred && pr_dec[3].v) begin
 			pred_no_o = pr_dec[3].decbus.pred_no + 5'd1;
-			pred_mask_o = insm[3].uop.imm[15:0];
+			pred_mask_o = insm[3].op.uop.imm[15:0];
 		end
 		else if (!pr_dec[3].ssm && pr_dec[3].uop.lead && |pr_dec[3].pred_mask) begin
 			pred_mask_o = pr_dec[3].decbus.pred_mask >> 2'd2;
@@ -574,7 +574,7 @@ begin
 			end
 		endcase
 		if (dec[0].carry && pr_dec[0].v) begin
-			pr_dec[1].carry_mod = insm[0].uop;
+			pr_dec[1].carry_mod = insm[0].op.uop;
 		end
 		else begin
 			pr_dec[1].carry_mod = pr_dec[0].carry_mod;
@@ -595,7 +595,7 @@ begin
 			end
 		endcase
 		if (dec[1].carry && pr_dec[1].v) begin
-			pr_dec[2].carry_mod = insm[1].uop;
+			pr_dec[2].carry_mod = insm[1].op.uop;
 		end
 		else begin
 			pr_dec[2].carry_mod = pr_dec[1].carry_mod;
@@ -616,7 +616,7 @@ begin
 			end
 		endcase
 		if (dec[2].carry && pr_dec[2].v) begin
-			pr_dec[3].carry_mod = insm[2].uop;
+			pr_dec[3].carry_mod = insm[2].op.uop;
 		end
 		else begin
 			pr_dec[3].carry_mod = pr_dec[2].carry_mod;
@@ -637,7 +637,7 @@ begin
 			end
 		endcase
 		if (dec[3].carry & pr_dec[3].v) begin
-			carry_mod_o = insm[3].uop;
+			carry_mod_o = insm[3].op.uop;
 		end
 		else begin
 			carry_mod_o = pr_dec[3].carry_mod;
