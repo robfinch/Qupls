@@ -326,7 +326,7 @@ generate begin : gExtDecode
 	for (g = 0; g < MWIDTH; g = g + 1) begin
 		Qupls4_ext_decode usd1
 			(
-				.pc(pc_ext[g]),
+				.ip(pc_ext[g]),
 				.instr(ic_line_aligned[g*48+47:g*48]),
 				.bsr(bsr[g]),
 				.jsr(jsr[g]),

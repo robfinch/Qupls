@@ -338,10 +338,10 @@ Stark_decode_irq udirq1
 	.irq(db.irq)
 );
 */
-Qupls4_decode_trig uderet1
+Qupls4_decode_trig udtrig1
 (
 	.instr(instr),
-	.eret(db.trig)
+	.trig(db.trig)
 );
 
 Qupls4_decode_eret uderet1
@@ -384,7 +384,7 @@ if (rst) begin
 	dbo.cause <= Qupls4_pkg::FLT_NONE;
 	dbo.nop <= 1'b1;
 	dbo.Rdv <= 1'b0;
-	dbo.alu <= 1'b1;
+	dbo.sau <= 1'b1;
 end
 else begin
 	if (en) begin
@@ -418,11 +418,11 @@ else begin
 		if (!instr.v) begin
 			dbo <= {$bits(dbo){1'd0}};	// in case a signal was missed / unused.
 			dbo.nop <= TRUE;
-			dbo.alu <= TRUE;
+			dbo.sau <= TRUE;
 		end
 		// Check for unimplemented instruction, but not if it is being stomped on.
 		// If it is stomped on, we do not care.
-		if (!(db.nop|db.alu|db.fpu|db.fc|db.macro
+		if (!(db.nop|db.sau|db.fpu|db.fc|db.macro
 			|db.csr|db.loada|db.fence|db.carry|db.pred|db.atom|db.regs|db.fregs
 			|db.rex|db.oddball|db.qfext
 			|db.boi|db.bsr|db.jsr|db.sys|db.stptr

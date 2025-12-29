@@ -355,12 +355,9 @@ begin
 	rse[kk].load = pg_ren.pr[nn].op.decbus.load|pg_ren.pr[nn].op.decbus.loadz;
 	rse[kk].store = pg_ren.pr[nn].op.decbus.store;
 	rse[kk].amo = pg_ren.pr[nn].op.decbus.amo;
-	rse[kk].push = pg_ren.pr[nn].op.decbus.push;
-	rse[kk].pop = pg_ren.pr[nn].op.decbus.pop;
-	rse[kk].count = pg_ren.pr[nn].op.decbus.count;
 	// branch specific
 	rse[kk].bt = pg_ren.pr[nn].bt;
-	rse[kk].bcc = pg_ren.pr[nn].op.decbus.bcc;
+	rse[kk].bcc = pg_ren.pr[nn].op.decbus.br;
 	rse[kk].cjb = pg_ren.pr[nn].op.decbus.cjb;
 	rse[kk].bsr = pg_ren.pr[nn].op.decbus.bsr;
 	rse[kk].jsr = pg_ren.pr[nn].op.decbus.jsr;

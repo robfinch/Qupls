@@ -293,7 +293,7 @@ begin
 	nopi.v = 1'b1;
 	nopi.decbus.Rdv = 1'b0;
 	nopi.decbus.nop = 1'b1;
-	nopi.decbus.alu = 1'b1;
+	nopi.decbus.sau = 1'b1;
 end
 
 /*

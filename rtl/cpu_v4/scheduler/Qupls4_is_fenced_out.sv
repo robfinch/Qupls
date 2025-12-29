@@ -1,10 +1,9 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023-2026  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
-//
 //
 // BSD 3-Clause License
 // Redistribution and use in source and binary forms, with or without
@@ -31,61 +30,28 @@
 // CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//                                                                          
 //
-//
-// Multiplex a hardware interrupt into the instruction stream.
-// Multiplex micro-code instructions into the instruction stream.
-// Modify instructions for register bit lists.
-//
+// Detect if there is a previous fence.
 // ============================================================================
-
+//
+import const_pkg::*;
+import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_ins_extract_mux(rst, clk, en, nop, ins0, insi, ins);
-input rst;
-input clk;
-input en;
-input nop;
-input Qupls4_pkg::rob_entry_t ins0;
-input Qupls4_pkg::rob_entry_t insi;
-output Qupls4_pkg::rob_entry_t ins;
+module Qupls4_is_fenced_out(id, rob, is_fenced_out);
+input rob_ndx_t id;
+input Qupls4_pkg::rob_entry_t [Qupls4_pkg::ROB_ENTRIES-1:0] rob;
+output reg is_fenced_out;
 
-Qupls4_pkg::rob_entry_t nopi;
+integer n;
 
-// Define a NOP instruction.
 always_comb
 begin
-//	nopi = {$bits(pipeline_reg_t){1'b0}};
-	nopi = insi;
-//	nopi.v = 5'd0;
-	nopi.op.v = INV;
-	nopi.op.exc = Qupls4_pkg::FLT_NONE;
-//	nopi.v = 1'b1;
-/*
-	nopi.pc = insi.pc;
-	nopi.mcip = 12'h000;
-	nopi.len = 4'd8;
-	nopi.ins = {57'd0,OP_NOP};
-	nopi.pred_btst = 6'd0;
-	nopi.element = 'd0;
-	nopi.aRa = 8'd0;
-	nopi.aRb = 8'd0;
-	nopi.aRc = 8'd0;
-	nopi.aRt = 8'd0;
-	nopi.decbus.Rtz = 1'b1;
-	nopi.decbus.nop = 1'b1;
-	nopi.decbus.alu = 1'b1;
-*/
-end
-
-always_ff @(posedge clk)
-if (rst)
-	ins <= nopi;
-else begin
-	if (en)
-		ins <= nop ? nopi : insi;
-//	else
-//		ins <= {41'd0,OP_NOP};
-end
+	is_fenced_out = FALSE;
+	foreach(rob[n])
+		if (rob[n].v==VAL && rob[n].sn < rob[id].sn && rob[n].op.decbus.fence && rob[n].op.decbus.immb[15:0]==16'hFF00)
+			is_fenced_out = TRUE;
+end			
 
 endmodule

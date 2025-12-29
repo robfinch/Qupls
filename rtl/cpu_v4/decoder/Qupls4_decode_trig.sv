@@ -48,9 +48,9 @@ begin
 	Qupls4_pkg::OP_FLTPH,Qupls4_pkg::OP_FLTPS,Qupls4_pkg::OP_FLTPD,Qupls4_pkg::OP_FLTPQ,
 	Qupls4_pkg::OP_FLTP:
 		case(ir.func)
-		Qupls4_pkg::FN_SIN:	fnIsTrig = 1'b1;
-		Qupls4_pkg::FN_COS:	fnIsTrig = 1'b1;
-		Qupls4_pkg::FN_ATAN:	fnIsTrig = 1'b1;
+		Qupls4_pkg::FLT_SIN:	fnIsTrig = 1'b1;
+		Qupls4_pkg::FLT_COS:	fnIsTrig = 1'b1;
+		Qupls4_pkg::FLT_ATAN:	fnIsTrig = 1'b1;
 		default:	fnIsTrig = 1'b0;
 		endcase
 	default:	fnIsTrig = 1'b0;

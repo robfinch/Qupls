@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023-2026  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -32,60 +32,60 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-//
-// Multiplex a hardware interrupt into the instruction stream.
-// Multiplex micro-code instructions into the instruction stream.
-// Modify instructions for register bit lists.
-//
 // ============================================================================
 
+import const_pkg::*;
+import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_ins_extract_mux(rst, clk, en, nop, ins0, insi, ins);
+module Qupls4_lsq_reg_read_req(rst, clk, lsq_head, lsq, aReg, pReg, cndx,
+	id, id1, bRs);
 input rst;
 input clk;
-input en;
-input nop;
-input Qupls4_pkg::rob_entry_t ins0;
-input Qupls4_pkg::rob_entry_t insi;
-output Qupls4_pkg::rob_entry_t ins;
-
-Qupls4_pkg::rob_entry_t nopi;
-
-// Define a NOP instruction.
-always_comb
-begin
-//	nopi = {$bits(pipeline_reg_t){1'b0}};
-	nopi = insi;
-//	nopi.v = 5'd0;
-	nopi.op.v = INV;
-	nopi.op.exc = Qupls4_pkg::FLT_NONE;
-//	nopi.v = 1'b1;
-/*
-	nopi.pc = insi.pc;
-	nopi.mcip = 12'h000;
-	nopi.len = 4'd8;
-	nopi.ins = {57'd0,OP_NOP};
-	nopi.pred_btst = 6'd0;
-	nopi.element = 'd0;
-	nopi.aRa = 8'd0;
-	nopi.aRb = 8'd0;
-	nopi.aRc = 8'd0;
-	nopi.aRt = 8'd0;
-	nopi.decbus.Rtz = 1'b1;
-	nopi.decbus.nop = 1'b1;
-	nopi.decbus.alu = 1'b1;
-*/
-end
+input Qupls4_pkg::lsq_ndx_t lsq_head;
+input Qupls4_pkg::lsq_entry_t [1:0] lsq [0:Qupls4_pkg::LSQ_ENTRIES-1];
+output aregno_t aReg;
+output pregno_t pReg;
+output cpu_types_pkg::checkpt_ndx_t cndx;
+output Qupls4_pkg::lsq_ndx_t id;
+output Qupls4_pkg::lsq_ndx_t id1;
+output pregno_t [3:0] bRs;
+output [3:0] bRsv;
 
 always_ff @(posedge clk)
-if (rst)
-	ins <= nopi;
+if (rst) begin
+	aReg <= {$bits(aregno_t){1'b0}};
+	pReg <= {$bits(pregno_t){1'b0}};
+	cndx <= 5'd0;
+	id <= 8'd0;
+	id1 <= 8'd0;
+	bRsv <= 4'd0;
+end
 else begin
-	if (en)
-		ins <= nop ? nopi : insi;
-//	else
-//		ins <= {41'd0,OP_NOP};
+
+	// Issue register read request for store operand. The register value will
+	// appear on the prn bus and be picked up by the register validation module.
+	if (lsq[lsq_head.row][lsq_head.col].v==VAL) begin
+		aReg <= lsq[lsq_head.row][lsq_head.col].aRc;
+		pReg <= lsq[lsq_head.row][lsq_head.col].pRc;
+		cndx <= lsq[lsq_head.row][lsq_head.col].cndx;
+		id <= lsq_head;
+		id1 <= id;
+		bRs[0] <= 9'd0;
+		bRs[1] <= 9'd0;
+		bRs[3] <= 9'd0;
+		bRsv[0] <= INV;
+		bRsv[1] <= INV;
+		bRsv[3] <= INV;
+		if (lsq[lsq_head.row][lsq_head.col].store) begin
+			bRs[2] <= lsq[lsq_head.row][lsq_head.col].aRc;
+			bRsv[2] <= VAL;
+		end
+		else begin
+			bRs[2] <= 9'd0;
+			bRsv[2] <= INV;
+		end
+	end
 end
 
 endmodule

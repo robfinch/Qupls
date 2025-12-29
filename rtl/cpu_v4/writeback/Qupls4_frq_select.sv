@@ -46,7 +46,8 @@ input [NFRQ-1:0] frq_empty;
 output reg [4:0] upd [0:NWRITE_PORTS-1];
 output reg [NFRQ-1:0] upd_bitmap;
 
-genvar g,k;
+genvar g;
+integer j,k;
 wire [4:0] upda [0:NWRITE_PORTS-1];
 reg [4:0] fuq_rot;
 reg [23:0] excl [0:NWRITE_PORTS-1];		// exclustion list
@@ -87,13 +88,16 @@ generate begin : gUpd
 	for (g = 0; g < $size(upd); g = g + 1) begin
 		always_ff @(posedge clk)
 			upd[g] <= upda[g]==5'd31 ? 5'd31 : fuq_rot > upda[g] ? NFRQ + upda[g] - fuq_rot : upda[g] - fuq_rot;
-		for (k = 0; k < $size(upd_bitmap); k = k + 1)
-			always_ff @(posedge clk) begin
-				upd_bitmap[k] <= 1'b0;
-				if (k==upda[g] && upda[g]!=5'd31) upd_bitmap[k] <= 1'b1;
-			end
 	end
 end
 endgenerate
+
+always_ff @(posedge clk) begin
+	foreach (upda[j])
+		foreach (upd_bitmap[k])
+			upd_bitmap[k] <= 1'b0;
+			if (k==upda[j] && upda[j]!=5'd31)
+				upd_bitmap[k] <= 1'b1;
+end
 
 endmodule

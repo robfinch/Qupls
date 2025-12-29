@@ -38,11 +38,12 @@
 import const_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_mem_sched(clk, head, lsq_head, cancel, seq_consistency,
+module Qupls4_mem_sched(rst, clk, head, lsq_head, cancel, seq_consistency,
 	robentry_stomp, rob, lsq,
-	memissue, ndx0, ndx1, ndx0v, ndx1v, islot_i, islot_o);
+	memissue, ndx0, ndx1, ndx0v, ndx1v);
 parameter WINDOW_SIZE = Qupls4_pkg::LSQ_ENTRIES;
 parameter LSQ_WINDOW_SIZE = Qupls4_pkg::LSQ_ENTRIES;
+input rst;
 input clk;
 input cpu_types_pkg::rob_ndx_t head;
 input Qupls4_pkg::lsq_ndx_t lsq_head;
@@ -51,8 +52,6 @@ input Qupls4_pkg::rob_bitmask_t cancel;
 input seq_consistency;
 input Qupls4_pkg::rob_entry_t [Qupls4_pkg::ROB_ENTRIES-1:0] rob;
 input Qupls4_pkg::lsq_entry_t [1:0] lsq [0:Qupls4_pkg::LSQ_ENTRIES-1];
-input [1:0] islot_i [0:Qupls4_pkg::LSQ_ENTRIES*2-1];
-output reg [1:0] islot_o [0:Qupls4_pkg::LSQ_ENTRIES*2-1];
 output Qupls4_pkg::rob_bitmask_t memissue;
 output Qupls4_pkg::lsq_ndx_t ndx0;
 output Qupls4_pkg::lsq_ndx_t ndx1;
@@ -64,12 +63,13 @@ reg [3:0] q;
 
 Qupls4_pkg::rob_bitmask_t memready;		// mask of ready to go instructions.
 rob_ndx_t [WINDOW_SIZE-1:0] heads;
-Qupls4_pkg::lsq_bitmask_t [1:0] memopsvalid;
 Qupls4_pkg::lsq_ndx_t [LSQ_ENTRIES-1:0] lsq_heads;
 reg [1:0] issued;											// which data port instruction issued on.
 reg [1:0] stores;		// counts the number of stores issued.
 rob_ndx_t rndx;
 lsq_entry_t lsqe;
+wire is_fenced_out;
+wire has_previous_memop;
 
 Qupls4_pkg::lsq_ndx_t next_ndx0;
 Qupls4_pkg::lsq_ndx_t next_ndx1;
@@ -77,7 +77,8 @@ reg next_ndx0v;
 reg next_ndx1v;
 Qupls4_pkg::lsq_ndx_t tmp_ndx;
 Qupls4_pkg::rob_bitmask_t next_memissue;
-reg [1:0] next_islot_o [0:Qupls4_pkg::LSQ_ENTRIES*2-1];
+reg [1:0] islot [0:Qupls4_pkg::LSQ_ENTRIES*2-1];
+reg [1:0] next_islot [0:Qupls4_pkg::LSQ_ENTRIES*2-1];
 
 always_comb
 if (WINDOW_SIZE > Qupls4_pkg::LSQ_ENTRIES) begin
@@ -89,32 +90,24 @@ end
 // this as they cannot be done until it is guarenteed that the program flow
 // will not change.
 
-function fnHasPreviousFc;
-input rob_ndx_t id;
-integer n;
-begin
-	fnHasPreviousFc = FALSE;
-	foreach (rob[n])
-		if (rob[n].v==VAL && rob[n].sn < rob[id].sn && rob[n].op.decbus.fc && rob[n].done!=2'b11)
-			fnHasPreviousFc = TRUE;
-end
-endfunction
+Qupls4_has_previous_fc uhpfc1
+(
+	.id(rndx),
+	.rob(rob),
+	.has_previous_fc(has_previous_fc)
+);
 
 // Detect if there is a non finished memory operation outstanding previous to
 // this one. If sequential consistency is not necessary then the memory op
 // does not need to be completed.
 
-function fnHasPreviousMem;
-input rob_ndx_t id;
-input seq;		// Sequential consistency.
-integer n;
-begin
-	fnHasPreviousMem = FALSE;
-	foreach (rob[n])
-		if (rob[n].v==VAL && rob[n].sn < rob[id].sn && rob[n].op.decbus.mem && !rob[n].done[0] && (seq ? !rob[n].done[1]:1'b1))
-			fnHasPreviousMem = TRUE;
-end
-endfunction
+Qupls4_has_previous_memop uhpm1
+(
+	.id(rndx),
+	.rob(rob),
+	.seq(seq_consistency),
+	.has_previous_memop(has_previous_memop)
+);
 
 // Detect if a LSQ entry has an overlap with a previous LSQ entry. This need
 // only check the LSQ where the addresses are located.
@@ -125,44 +118,21 @@ endfunction
 // but for now, we use the alignment of the largest load / store, 16B.
 // Two loads are allowed to overlap.
 
-function fnHasPreviousOverlap;
-input Qupls4_pkg::lsq_ndx_t id;
-integer n,c;
-begin
-	fnHasPreviousOverlap = FALSE;
-	for (n = 0; n < Qupls4_pkg::LSQ_ENTRIES; n = n + 1) begin
-		for (c = 0; c < 2; c = c + 1) begin
-			// If the instruction is done already, we do not care if a new one overlaps.
-			if (!(&rob[lsq[n][c].rndx].done)) begin
-				// We do not care about instructions coming after the one checked.
-				if (lsq[n][c].sn < lsq[id.row][id.col].sn) begin
-					// If the address is not generated, play safe.
-					if (!lsq[n][c].agen)
-						fnHasPreviousOverlap = TRUE;
-					if (lsq[n][c].padr[$bits(physical_address_t)-1:4]==lsq[id.row][id.col].padr[$bits(physical_address_t)-1:4]) begin
-						// Two loads can overlap
-						if (!(lsq[n][c].load && lsq[id.row][id.col].load))
-							fnHasPreviousOverlap = TRUE;
-					end
-				end
-			end
-		end
-	end
-end
-endfunction
+Qupls4_has_overlapped_adr uhoa1
+(
+	.rob(rob),
+	.lsq(lsq),
+	.id(tmp_ndx),
+	.has_overlap(has_overlap)
+);
 
 // Detect if there is a previous fence.
-function fnHasPreviousFence;
-input rob_ndx_t id;
-integer n;
-begin
-	fnHasPreviousFence = FALSE;
-	foreach(rob[n])
-		if (rob[n].v==VAL && rob[n].sn < rob[id].sn && rob[n].op.decbus.fence && rob[n].op.decbus.immb[15:0]==16'hFF00)
-			fnHasPreviousFence = TRUE;
-end			
-endfunction
-
+Qupls4_is_fenced_out uifo1
+(
+	.id(rndx),
+	.rob(rob),
+	.is_fenced_out(is_fenced_out)
+);
 
 always_ff @(posedge clk)
 foreach (heads[m])
@@ -177,22 +147,17 @@ end
 // We need only check the LSQ for valid operands.
 // The A,B operands must have been valid for the entry to be placed in the LSQ.
 // The C operand is only needed for stores.
-always_comb
-foreach (lsq[n9r])
-	for (n9c = 0; n9c < 2; n9c = n9c + 1)
-		memopsvalid[n9c][n9r] = lsq[n9r][n9c].v && lsq[n9r][n9c].agen && (lsq[n9r][n9c].load|lsq[n9r][n9c].datav);
 
-always_ff @(posedge clk)
-foreach (memready[n10])
-  memready[n10] = (rob[n10].v
-  		&& memopsvalid[rob[n10].lsqndx.col][rob[n10].lsqndx.row] 
-//  		& ~robentry_memissue[n10] 
-  		&& (rob[n10].done==2'b01) 
-//  		& ~rob[n10].out
-  		&&  rob[n10].lsq
-  		&& !cancel[n10]
-  		&& !robentry_stomp[n10])
-  		;
+Qupls4_memready umr1
+(
+	.rst(rst),
+	.clk(clk),
+	.rob(rob),
+	.lsq(lsq),
+	.cancel(cancel),
+	.stomp(robentry_stomp),
+	.memready(memready)
+);
 
 always_comb
 begin
@@ -204,37 +169,32 @@ begin
 	next_ndx1v = 1'd0;
 	tmp_ndx = 5'd0;
 	stores = 2'd0;
-	next_islot_o = islot_i;
-	for (row = 0; row < LSQ_ENTRIES; row = row + 1) begin
+	next_islot = islot;
+	rndx = 8'd0;
+	for (row = 0; row < Qupls4_pkg::LSQ_ENTRIES; row = row + 1) begin
 		for (col = 0; col < 2; col = col + 1) begin
 			tmp_ndx.row = row;
 			tmp_ndx.col = col;
 			lsqe = lsq[lsq_heads[row].row][col];
 			rndx = lsqe.rndx;
-			if ((
+			if (
 				// Instruction must be ready to go
-//				memready[lsq[lsq_heads[row].row][col].rndx] &&
+				memready[rndx] &&
 				// and not already issued in previous cycle (takes a cycle for ROB to update)
 				!memissue[rndx] && 
-				// and a valid entry
-				//lsq[lsq_heads[row].row][col].v==VAL &&
 				// and not stomped on
 				!robentry_stomp[rndx] &&
-				// The address must be generated
-				lsqe.agen &&
-				
 				// ... and, if it is a store, there is no chance of it being undone
-				(lsqe.store ? !fnHasPreviousFc(rndx) : TRUE) && 
+				(lsqe.store ? !has_previous_fc : TRUE) && 
 				// ... and previous mem op without an address yet, or not done
-				!fnHasPreviousMem(rndx,seq_consistency) &&
+				!has_previous_memop &&
 				// ... and there is no address-overlap with any preceding instruction
-				!fnHasPreviousOverlap(tmp_ndx) &&
-				
+				!has_overlap &&
 				// ... and is not fenced out
-				!fnHasPreviousFence(rndx) &&
+				!is_fenced_out &&
 				// not issued too many instructions.
 				issued < Qupls4_pkg::NDATA_PORTS
-			)) begin
+			) begin
 				// Check for issued on port #0 only. Might not need this check here.
 				if (rob[rndx].op.decbus.mem0 ? issued==2'd0 : 1'b1) begin
 					/* Why the row 0 check?
@@ -274,7 +234,7 @@ begin
 						end
 						if (lsqe.store)
 							stores = stores + 2'd1;
-						next_islot_o[{row,col[0]}] = issued;
+						next_islot[{row,col[0]}] = issued;
 						issued = issued + 2'd1;
 					end
 				end
@@ -284,25 +244,25 @@ begin
 end
 
 always_ff @(posedge clk)
-/*
 if (rst) begin
-	memissue <= 'd0;
+	memissue <= {$bits(rob_entry_t){1'b0}};
+	/*
 	ndx0 <= 'd0;
 	ndx1 <= 'd0;
 	ndx0v <= 1'd0;
 	ndx1v <= 1'd0;
-	foreach(islot_o[i])
-		islot_o[i] <= 2'd0;
+	*/
+	foreach(islot[i])
+		islot[i] <= 2'd0;
 end
 else
-*/
 begin
 	memissue <= next_memissue;
 	ndx0 <= next_ndx0;
 	ndx1 <= next_ndx1;
 	ndx0v <= next_ndx0v;
 	ndx1v <= next_ndx1v;
-	islot_o <= next_islot_o;
+	islot <= next_islot;
 end
 
 endmodule

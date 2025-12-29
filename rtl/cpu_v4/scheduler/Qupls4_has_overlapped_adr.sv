@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023-2026  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -33,59 +33,49 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 //
-// Multiplex a hardware interrupt into the instruction stream.
-// Multiplex micro-code instructions into the instruction stream.
-// Modify instructions for register bit lists.
+// Detect if a LSQ entry has an overlap with a previous LSQ entry. This need
+// only check the LSQ where the addresses are located.
+// First the load / store must be before the tested one.
+// Then if the address is not generated yet, we do not know, so play it safe
+// and assume it overlaps.
+// Finally, check the physical address, this could be at cache-line alignment
+// but for now, we use the alignment of the largest load / store, 16B.
+// Two loads are allowed to overlap.
 //
 // ============================================================================
 
+import const_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_ins_extract_mux(rst, clk, en, nop, ins0, insi, ins);
-input rst;
-input clk;
-input en;
-input nop;
-input Qupls4_pkg::rob_entry_t ins0;
-input Qupls4_pkg::rob_entry_t insi;
-output Qupls4_pkg::rob_entry_t ins;
+module Qupls4_has_overlapped_adr(rob, lsq, id, has_overlap);
+input Qupls4_pkg::rob_entry_t [Qupls4_pkg::ROB_ENTRIES-1:0] rob;
+input Qupls4_pkg::lsq_entry_t [1:0] lsq [0:Qupls4_pkg::LSQ_ENTRIES-1];
+input Qupls4_pkg::lsq_ndx_t id;
+output reg has_overlap;
 
-Qupls4_pkg::rob_entry_t nopi;
+integer n,c;
 
-// Define a NOP instruction.
 always_comb
 begin
-//	nopi = {$bits(pipeline_reg_t){1'b0}};
-	nopi = insi;
-//	nopi.v = 5'd0;
-	nopi.op.v = INV;
-	nopi.op.exc = Qupls4_pkg::FLT_NONE;
-//	nopi.v = 1'b1;
-/*
-	nopi.pc = insi.pc;
-	nopi.mcip = 12'h000;
-	nopi.len = 4'd8;
-	nopi.ins = {57'd0,OP_NOP};
-	nopi.pred_btst = 6'd0;
-	nopi.element = 'd0;
-	nopi.aRa = 8'd0;
-	nopi.aRb = 8'd0;
-	nopi.aRc = 8'd0;
-	nopi.aRt = 8'd0;
-	nopi.decbus.Rtz = 1'b1;
-	nopi.decbus.nop = 1'b1;
-	nopi.decbus.alu = 1'b1;
-*/
-end
-
-always_ff @(posedge clk)
-if (rst)
-	ins <= nopi;
-else begin
-	if (en)
-		ins <= nop ? nopi : insi;
-//	else
-//		ins <= {41'd0,OP_NOP};
+	has_overlap = FALSE;
+	foreach (lsq[n]) begin
+		for (c = 0; c < 2; c = c + 1) begin
+			// If the instruction is done already, we do not care if a new one overlaps.
+			if (!(&rob[lsq[n][c].rndx].done)) begin
+				// We do not care about instructions coming after the one checked.
+				if (lsq[n][c].sn < lsq[id.row][id.col].sn) begin
+					// If the address is not generated, play safe.
+					if (!lsq[n][c].agen)
+						has_overlap = TRUE;
+					if (lsq[n][c].padr[$bits(physical_address_t)-1:4]==lsq[id.row][id.col].padr[$bits(physical_address_t)-1:4]) begin
+						// Two loads can overlap
+						if (!(lsq[n][c].load && lsq[id.row][id.col].load))
+							has_overlap = TRUE;
+					end
+				end
+			end
+		end
+	end
 end
 
 endmodule

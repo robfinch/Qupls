@@ -71,7 +71,7 @@ module Qupls4_pipeline_ren(
 	args
 );
 parameter MWIDTH = Qupls4_pkg::MWIDTH;
-localparam NPORT = MWIDTH*4;
+parameter NPORT = MWIDTH*4;
 input rst;
 input clk;
 input clk5x;
@@ -172,7 +172,7 @@ begin
 	nopi.decbus.Rs3z = 1'd0;
 	nopi.decbus.Rdv = 1'b0;
 	nopi.decbus.nop = 1'b1;
-	nopi.decbus.alu = 1'b1;
+	nopi.decbus.sau = 1'b1;
 end
 
 always_ff @(posedge clk)

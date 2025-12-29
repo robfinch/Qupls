@@ -287,6 +287,7 @@ pregno_t agen1_argM_reg;
 checkpt_ndx_t store_argC_cndx;
 aregno_t store_argC_aReg;
 pregno_t store_argC_pReg;
+reg store_aRegv;
 
 Qupls4_pkg::lsq_ndx_t store_argC_id;
 Qupls4_pkg::lsq_ndx_t store_argC_id1;
@@ -310,7 +311,6 @@ reg macro_queued;
 
 reg [1:0] robentry_islot [0:Qupls4_pkg::ROB_ENTRIES-1];
 wire [1:0] next_robentry_islot [0:Qupls4_pkg::ROB_ENTRIES-1];
-reg [1:0] lsq_islot [0:Qupls4_pkg::LSQ_ENTRIES*2-1];
 Qupls4_pkg::rob_bitmask_t robentry_stomp;
 Qupls4_pkg::rob_bitmask_t robentry_cpydst;
 pc_stream_t kept_stream;
@@ -955,7 +955,7 @@ begin
 	nopi.uop.lead = 1'd1;
 	nopi.decbus.Rdv = 1'b0;
 	nopi.decbus.nop = 1'b1;
-	nopi.decbus.alu = 1'b1;
+	nopi.decbus.sau = 1'b1;
 end
 
 
@@ -3924,6 +3924,7 @@ Qupls4_pkg::rob_bitmask_t cpu_request_cancel;
 
 Qupls4_mem_sched umems1
 (
+	.rst(irst),
 	.clk(clk),
 	.head(head[0]),
 	.lsq_head(lsq_head),
@@ -3932,8 +3933,6 @@ Qupls4_mem_sched umems1
 	.robentry_stomp(robentry_stomp),
 	.rob(rob),
 	.lsq(lsq),
-	.islot_i(lsq_islot),
-	.islot_o(lsq_islot),
 	.memissue(rob_memissue),
 	.ndx0(mem0_lsndx),
 	.ndx1(mem1_lsndx),
@@ -4811,6 +4810,12 @@ Qupls4_mem_more ummore0
 	.more_o(dram0_more)
 );
 
+Qupls4_pkg::lsq_entry_t lsqe0,lsqe1;
+always_comb
+	lsqe0 = lbndx0.vb ? lsq[lbndx0.row][lbndx0.col] : lsq[mem0_lsndx.row][mem0_lsndx.col];
+always_comb
+	lsqe1 = lbndx1.vb ? lsq[lbndx1.row][lbndx1.col] : lsq[mem1_lsndx.row][mem1_lsndx.col];
+
 Qupls4_set_dram_work #(.CORENO(CORENO), .LSQNO(0)) usdr1 (
 	.rst_i(irst),
 	.clk_i(clk),
@@ -4826,7 +4831,7 @@ Qupls4_set_dram_work #(.CORENO(CORENO), .LSQNO(0)) usdr1 (
 	.dram_ack_i(dram0_ack),
 	.dram_stomp_i(dram0_stomp),
 	.cpu_dat_i(cpu_resp_o[0].dat),
-	.lsq_i(lbndx0.vb ? lsq[lbndx0.row][lbndx0.col] : lsq[mem0_lsndx.row][mem0_lsndx.col]),
+	.lsq_i(lsqe0),
 	.dram_oper_o(dram0_oper),
 	.dram_work_o(dram0_work),
 	.page_cross_o(page_cross0),
@@ -4906,7 +4911,7 @@ generate begin : gMemory2
 			.dram_ack_i(dram1_ack),
 			.dram_stomp_i(dram1_stomp),
 			.cpu_dat_i(cpu_resp_o[1].dat),
-			.lsq_i(lbndx1.vb ? lsq[lbndx1.row][lbndx1.col] : lsq[mem1_lsndx.row][mem1_lsndx.col]),
+			.lsq_i(lsqe1),
 			.dram_oper_o(dram1_oper),
 			.dram_work_o(dram1_work),
 			.page_cross_o(page_cross1),
@@ -5355,26 +5360,6 @@ uagenst1
 	.req_pRnv(bRsv[8])
 );
 
-/*
-Stark_agen_station uagen0stn
-(
-	.argC_v(agen0_argC_v),
-	.we(agen0_we),
-	.op(agen0_op),
-	.virt2phys(agen0_virt2phys),
-	.load(agen0_load),
-	.store(agen0_store),
-	.amo(agen0_amo),
-	.excv(agen0_excv),
-	.ldip(agen0_ldip),
-	.idle_o(agen0_idle1),
-	.store_argC_pReg(agen0_pRc),
-	.beb_issue(beb_issue),
-	.bndx(beb_ndx),
-	.beb(beb_buf)
-);
-*/
-
 generate begin : gAgen
 if (Qupls4_pkg::NDATA_PORTS > 1)
 Qupls4_reservation_station #(
@@ -5439,11 +5424,29 @@ begin
 	store_operi.val = rfo_store_argC;
 	store_operi.flags = 8'h00;
 	store_operi.aRn = store_argC_aReg;
+	store_operi.pRn = store_argC_pReg;
 	store_operi.aRnv = |store_argC_aReg;	// ToDo: fix this detect aRegv
 	
 	rfo_store_argC = store_opero.val;
 end
 assign rfo_store_argC_valid = store_opero.v;
+
+// Issue register read request for store operand. The register value will
+// appear on the prn bus and be picked up by the register validation module.
+Qupls4_lsq_reg_read_req ulrrr1
+(
+	.rst(irst),
+	.clk(clk),
+	.lsq_head(lsq_head),
+	.lsq(lsq),
+	.aReg(store_argC_aReg),
+	.pReg(store_argC_pReg),
+	.cndx(store_argC_cndx),
+	.id(store_argC_id),
+	.id1(store_argC_id1),
+	.bRs(bRs[10]),
+	.bRsv(bRsv[10])
+);
 
 Qupls4_validate_operand #(
 	.MWIDTH(MWIDTH),
@@ -5941,22 +5944,6 @@ else begin
 			rob[fcu_rndx].all_args_valid <= VAL;
 	end
 	*/
-	// Issue register read request for store operand. The register value will
-	// appear on the prn bus and be picked up by the register validation module.
-	if (lsq[lsq_head.row][lsq_head.col].v==VAL) begin
-		store_argC_aReg <= lsq[lsq_head.row][lsq_head.col].aRc;
-		store_argC_pReg <= lsq[lsq_head.row][lsq_head.col].pRc;
-		store_argC_cndx <= lsq[lsq_head.row][lsq_head.col].cndx;
-		store_argC_id <= lsq_head;
-		store_argC_id1 <= store_argC_id;
-		bRs[10][0] <= 9'd0;
-		bRs[10][1] <= 9'd0;
-		bRs[10][3] <= 9'd0;
-		if (lsq[lsq_head.row][lsq_head.col].store)
-			bRs[10][2] <= lsq[lsq_head.row][lsq_head.col].aRc;
-		else
-			bRs[10][2] <= 9'd0;
-	end
 
 	// It takes a clock cycle for the register to be read once it is known to be
 	// valid. A flag, load_lsq_argc, is set to delay by a clock. This flag pulses
@@ -6134,7 +6121,7 @@ else begin
 	  		*/
 	  		// Make the store data value available one cycle earlier than can be 
 	  		// read from the register file.
-	  		for (n45 = 0; n45 < MWIDTH; n45 = n45 + 1) begin
+	  		foreach (wrport0_v[n45]) begin
 		  		if (lsq[n3][n12].datav==INV && lsq[n3][n12].pRc==wrport0_Rt[n45] && wrport0_v[n45]==VAL) begin
 		  			$display("Qupls4: LSQ bypass from wrport0=%h r%d", wrport0_res[n45], wrport0_Rt[n45]);
 		  			lsq[n3][n12].datav <= VAL;
@@ -7458,7 +7445,7 @@ begin
 	rob[ndx].excv <= INV;
 	rob[ndx].op.decbus.cpytgt <= cpytgt;
 	if (cpytgt) begin
-		rob[ndx].op.decbus.alu <= TRUE;
+		rob[ndx].op.decbus.sau <= TRUE;
 		rob[ndx].op.decbus.fpu <= FALSE;
 		rob[ndx].op.decbus.fc <= FALSE;
 		rob[ndx].op.decbus.mem <= FALSE;
@@ -7598,7 +7585,7 @@ begin
 				lsq[n18r][n18c].agen <= FALSE;	// cause agen again
 				lsq[n18r][n18c].vadr <= {lsq[n18r][n18c].vadr[$bits(virtual_address_t)-1:6]+2'd1,6'd0};
 				lsq[n18r][n18c].state <= 2'b01;
-				lsq[n18r][n18c].shift <= lsq[n18r][n18c].shift2;
+//				lsq[n18r][n18c].shift <= lsq[n18r][n18c].shift2;
 			end
 		end
 	end
@@ -7675,11 +7662,9 @@ begin
 //	postfix_mask <= 'd0;
 	dram0_stomp <= 32'd0;
 	dram0_work.rndxv <= INV;
-	dram0_idv2 <= INV;
 	dram0_ldip <= FALSE;
 	dram1_stomp <= 32'd0;
 	dram1_work.rndxv <= INV;
-	dram1_idv2 <= INV;
 	panic <= `PANIC_NONE;
 	foreach (rob[n14]) begin
 		rob[n14] <= {$bits(Qupls4_pkg::rob_entry_t){1'd0}};
@@ -8005,7 +7990,7 @@ begin
 	// Propagate the target register to the new target by turning the instruction
 	// into a copy-target.
 	if (robe.op.uop.opcode==Qupls4_pkg::OP_NOP) begin
-		next_robe.op.decbus.alu = TRUE;
+		next_robe.op.decbus.sau = TRUE;
 		next_robe.op.decbus.fpu = FALSE;
 		next_robe.op.decbus.fc = FALSE;
 		next_robe.op.decbus.load = FALSE;
@@ -8025,7 +8010,7 @@ begin
 	
 	if (ornop|(Qupls4_pkg::SUPPORT_BACKOUT ? 1'b0 : stomp)) begin
 		next_robe.op.decbus.cpytgt = TRUE;
-		next_robe.op.decbus.alu = TRUE;
+		next_robe.op.decbus.sau = TRUE;
 		next_robe.op.decbus.fpu = FALSE;
 		next_robe.op.decbus.fc = FALSE;
 		next_robe.op.decbus.load = FALSE;

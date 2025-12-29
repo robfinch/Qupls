@@ -1,10 +1,9 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023-2026  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2025  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
-//
 //
 // BSD 3-Clause License
 // Redistribution and use in source and binary forms, with or without
@@ -31,61 +30,48 @@
 // CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-//
-//
-// Multiplex a hardware interrupt into the instruction stream.
-// Multiplex micro-code instructions into the instruction stream.
-// Modify instructions for register bit lists.
+//                                                                          
 //
 // ============================================================================
-
+//
+import const_pkg::*;
+import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_ins_extract_mux(rst, clk, en, nop, ins0, insi, ins);
+module Qupls4_memready(rst, clk, rob, lsq, cancel, stomp, memready);
 input rst;
 input clk;
-input en;
-input nop;
-input Qupls4_pkg::rob_entry_t ins0;
-input Qupls4_pkg::rob_entry_t insi;
-output Qupls4_pkg::rob_entry_t ins;
+input Qupls4_pkg::rob_entry_t [Qupls4_pkg::ROB_ENTRIES-1:0] rob;
+input Qupls4_pkg::lsq_entry_t [1:0] lsq [0:Qupls4_pkg::LSQ_ENTRIES-1];
+input [Qupls4_pkg::ROB_ENTRIES-1:0] cancel;
+input [Qupls4_pkg::ROB_ENTRIES-1:0] stomp;
+output reg [Qupls4_pkg::ROB_ENTRIES-1:0] memready;
 
-Qupls4_pkg::rob_entry_t nopi;
+integer n9r,n9c;
+Qupls4_pkg::lsq_bitmask_t [1:0] memopsvalid;
 
-// Define a NOP instruction.
+// We need only check the LSQ for valid operands.
+// The A,B operands must have been valid for the entry to be placed in the LSQ.
+// The C operand is only needed for stores.
 always_comb
-begin
-//	nopi = {$bits(pipeline_reg_t){1'b0}};
-	nopi = insi;
-//	nopi.v = 5'd0;
-	nopi.op.v = INV;
-	nopi.op.exc = Qupls4_pkg::FLT_NONE;
-//	nopi.v = 1'b1;
-/*
-	nopi.pc = insi.pc;
-	nopi.mcip = 12'h000;
-	nopi.len = 4'd8;
-	nopi.ins = {57'd0,OP_NOP};
-	nopi.pred_btst = 6'd0;
-	nopi.element = 'd0;
-	nopi.aRa = 8'd0;
-	nopi.aRb = 8'd0;
-	nopi.aRc = 8'd0;
-	nopi.aRt = 8'd0;
-	nopi.decbus.Rtz = 1'b1;
-	nopi.decbus.nop = 1'b1;
-	nopi.decbus.alu = 1'b1;
-*/
-end
+foreach (lsq[n9r])
+	for (n9c = 0; n9c < 2; n9c = n9c + 1)
+		memopsvalid[n9c][n9r] = lsq[n9r][n9c].v && lsq[n9r][n9c].agen && (lsq[n9r][n9c].load|lsq[n9r][n9c].datav);
 
 always_ff @(posedge clk)
 if (rst)
-	ins <= nopi;
+	memready <= {Qupls4_pkg::ROB_ENTRIES{1'b0}};
 else begin
-	if (en)
-		ins <= nop ? nopi : insi;
-//	else
-//		ins <= {41'd0,OP_NOP};
+	foreach (memready[n10])
+  	memready[n10] = (rob[n10].v
+  		&& memopsvalid[rob[n10].lsqndx.col][rob[n10].lsqndx.row] 
+//  		& ~robentry_memissue[n10] 
+  		&& (rob[n10].done==2'b01) 
+//  		& ~rob[n10].out
+  		&&  rob[n10].lsq
+  		&& !cancel[n10]
+  		&& !stomp[n10])
+  		;
 end
 
 endmodule
