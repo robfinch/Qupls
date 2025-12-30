@@ -70,6 +70,8 @@ rob_ndx_t rndx;
 lsq_entry_t lsqe;
 wire is_fenced_out;
 wire has_previous_memop;
+wire has_previous_fc;
+wire has_overlap;
 
 Qupls4_pkg::lsq_ndx_t next_ndx0;
 Qupls4_pkg::lsq_ndx_t next_ndx1;
@@ -181,7 +183,8 @@ begin
 			tmp_ndx.col = col;
 			lsqe = lsq[lsq_heads[row].row][col];
 			rndx = lsqe.rndx;
-			if (
+			if (TRUE) begin
+			/*
 				// Instruction must be ready to go
 				memready[rndx] &&
 				// and not already issued in previous cycle (takes a cycle for ROB to update)
@@ -199,8 +202,9 @@ begin
 				// not issued too many instructions.
 				issued < Qupls4_pkg::NDATA_PORTS
 			) begin
+			*/
 				// Check for issued on port #0 only. Might not need this check here.
-				if (rob[rndx].op.decbus.mem0 ? issued==2'd0 : 1'b1) begin
+				if (rob[rndx].op.decbus.mem0 ? issued==2'd0 : TRUE) begin
 					/* Why the row 0 check?
 					if (row==0) begin
 						if (memready[ lsq[lsq_heads[row].row][col].rndx ] &&
@@ -226,16 +230,21 @@ begin
 					*/
 					if (lsqe.store ? stores < 2'd1 : TRUE) begin
 						next_memissue[ rndx ] = 1'b1;
-						if (issued==2'd1) begin
-							next_ndx1 = lsq_heads[row];
-							next_ndx1.col = col;
-							next_ndx1v = 1'b1;
-						end
-						else begin
-							next_ndx0 = lsq_heads[row];
-							next_ndx0.col = col;
-							next_ndx0v = 1'b1;
-						end
+						case(issued)
+						2'd0:
+							begin
+								next_ndx0 = lsq_heads[row];
+								next_ndx0.col = col;
+								next_ndx0v = 1'b1;
+							end
+						2'd1:
+						 	begin
+								next_ndx1 = lsq_heads[row];
+								next_ndx1.col = col;
+								next_ndx1v = 1'b1;
+							end
+						default:	;
+						endcase
 						if (lsqe.store)
 							stores = stores + 2'd1;
 						next_islot[{row,col[0]}] = issued;

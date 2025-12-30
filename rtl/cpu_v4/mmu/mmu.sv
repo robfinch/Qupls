@@ -49,7 +49,7 @@ import ptable_walker_pkg::*;
 `define VADR_L2_MBITS	29:23
 `define VADR_HBITS		31:16
 
-module mmu(rst, clk, paging_en, cpl,
+module mmu(rst, clk, paging_en, pebble_en, cpl,
 	tlb_pmt_base,	ic_miss_adr, ic_miss_asid, ic_miss_om,
 	vadr_ir, vadr, vadr_v, vadr_asid, vadr_id, vadr_om, vadr_we,
 	vadr2_ir, vadr2, vadr2_v, vadr2_asid, vadr2_id, vadr2_om, vadr2_we,
@@ -95,6 +95,7 @@ parameter BUS_WIDTH = 256;
 input rst;
 input clk;
 input paging_en;
+input pebble_en;
 input [7:0] cpl;
 input physical_address_t tlb_pmt_base;
 
@@ -175,12 +176,30 @@ rob_ndx_t tlb_missid;
 wire [1:0] tlb_missqn;
 wire tlb_missack;
 reg bound_exc;
-address_t tlb_miss_badr;
+
+virtual_address_t vadrd;					// vadr delayed one cycle.
+virtual_address_t pebbled_adr;
+reg vadr_vd;
+reg pebbled_v;
+
+always_ff @(posedge clk)
+	vadr_vd <= vadr_v;
+always_ff @(posedge clk)
+	vadrd <= vadr;
 always_comb
-	tlb_miss_badr = tlb_missadr_r + {pbl_outb.base,14'd0};
-//	tlb_miss_badr = tlb_missadr + (pbl[tlb_missadr[31:28]].base << (5'd6 + ptattr.pgsz));
+if (pebble_en)
+	pebbled_adr = {pbl_outb + vadrd[$bits(virtual_address_t)-1:13],vadrd[12:0]};
+else
+	pebbled_adr = vadr;
 always_comb
-	bound_exc = tlb_missadr_r > {pbl_outb.limit,14'h3fff};
+if (pebble_en)
+	pebbled_v = vadr_vd;
+else
+	pebbled_v = vadr_v;
+
+always_comb
+	bound_exc = pebble_en && vadrd > {pbl_outb.limit,13'h1fff};
+
 //	bound_exc = tlb_missadr > {pbl[tlb_missadr[31:28]].limit,{(5'd6 + ptattr.pgsz){1'h1}}};
 
 reg seg_base_v, pc_seg_base_v;
@@ -267,10 +286,10 @@ end
 
 always_ff @(posedge clk)
 	cs_config <= ftas_req.cyc &&
-		ftas_req.adr[31:30]==2'b10 &&
-		ftas_req.adr[29:22]==CFG_BUS &&
-		ftas_req.adr[21:17]==CFG_DEVICE &&
-		ftas_req.adr[16:14]==CFG_FUNC;
+		ftas_req.adr[31:28]==4'hD &&
+		ftas_req.adr[27:21]==CFG_BUS &&
+		ftas_req.adr[20:16]==CFG_DEVICE &&
+		ftas_req.adr[15:13]==CFG_FUNC;
 
 always_comb
 	cs_hwtw <= cs_tw && sreq.cyc;
@@ -391,13 +410,13 @@ always_ff @(posedge clk)
     .doutb(pbl_outb),                   // READ_DATA_WIDTH_B-bit output: Data output for port B read operations.
     .sbiterra(),             // 1-bit output: Status signal to indicate single bit error occurrence
     .sbiterrb(),             // 1-bit output: Status signal to indicate single bit error occurrence
-    .addra(sreq.adr[10:3]),          // ADDR_WIDTH_A-bit input: Address for port A write and read operations.
-    .addrb({pbl_regset,tlb_missadr[31:28]}),    // ADDR_WIDTH_B-bit input: Address for port B write and read operations.
+    .addra(sreq.adr[11:3]),          // ADDR_WIDTH_A-bit input: Address for port A write and read operations.
+    .addrb({pbl_regset,vadr[31:28]}),    // ADDR_WIDTH_B-bit input: Address for port B write and read operations.
     .clka(clk),                     // 1-bit input: Clock signal for port A. Also clocks port B when
     .clkb(clk),                     // 1-bit input: Clock signal for port B when parameter CLOCKING_MODE is
     .dina(sreq.dat >> {sreq.adr[4:3],6'b0}),	// WRITE_DATA_WIDTH_A-bit input: Data input for port A write operations.
     .dinb(64'd0),                     // WRITE_DATA_WIDTH_B-bit input: Data input for port B write operations.
-    .ena(sreq.adr[13:11]==3'b0 && cs_hwtw),  // 1-bit input: Memory enable signal for port A. Must be high on clock
+    .ena(sreq.adr[14:12]==3'b0 && cs_hwtw),  // 1-bit input: Memory enable signal for port A. Must be high on clock
     .enb(1'b1),                       // 1-bit input: Memory enable signal for port B. Must be high on clock
     .injectdbiterra(1'b0), // 1-bit input: Controls double bit error injection on input data when
     .injectdbiterrb(1'b0), // 1-bit input: Controls double bit error injection on input data when
@@ -416,7 +435,8 @@ always_ff @(posedge clk)
 
    // xpm_memory_sdpram: Simple Dual Port RAM
    // Xilinx Parameterized Macro, version 2024.1
-
+// ??? dead code
+/*
 xpm_memory_sdpram #(
   .ADDR_WIDTH_A(9),               // DECIMAL
   .ADDR_WIDTH_B(9),               // DECIMAL
@@ -453,12 +473,12 @@ upbl2 (
   .dbiterrb(),             // 1-bit output: Status signal to indicate double bit error occurrence
   .doutb(pbl_outc),              // READ_DATA_WIDTH_B-bit output: Data output for port B read operations.
   .sbiterrb(),             // 1-bit output: Status signal to indicate single bit error occurrence
-  .addra(sreq.adr[10:3]),          // ADDR_WIDTH_A-bit input: Address for port A write operations.
+  .addra(sreq.adr[11:3]),          // ADDR_WIDTH_A-bit input: Address for port A write operations.
   .addrb({pbl_regset,virt_adr[31:28]}), // ADDR_WIDTH_B-bit input: Address for port B read operations.
   .clka(clk),                     // 1-bit input: Clock signal for port A. Also clocks port B when
   .clkb(clk),                     // 1-bit input: Clock signal for port B when parameter CLOCKING_MODE is
   .dina(sreq.dat >> {sreq.adr[4:3],6'b0}),	// WRITE_DATA_WIDTH_A-bit input: Data input for port A write operations.
-  .ena(sreq.adr[13:11]==3'b0 && cs_hwtw), // 1-bit input: Memory enable signal for port A. Must be high on clock
+  .ena(sreq.adr[14:12]==3'b0 && cs_hwtw), // 1-bit input: Memory enable signal for port A. Must be high on clock
   .enb(1'b1),                       // 1-bit input: Memory enable signal for port B. Must be high on clock
   .injectdbiterra(1'b0), // 1-bit input: Controls double bit error injection on input data when
   .injectsbiterra(1'b0), // 1-bit input: Controls single bit error injection on input data when
@@ -467,7 +487,7 @@ upbl2 (
   .sleep(1'b0),                   // 1-bit input: sleep signal to enable the dynamic power saving feature.
   .wea({8{sreq.we}} & (sreq.sel >> {sreq.adr[4:3],3'b0}) ) 	// WRITE_DATA_WIDTH_A/BYTE_WRITE_WIDTH_A-bit input: Write enable vector
 );
-
+*/
 
 				
 change_det #(.WID(64)) cd3
@@ -604,8 +624,7 @@ ptw_miss_queue umsq1
 	.commit3_id(commit3_id),
 	.commit3_idv(commit3_idv),
 	.tlb_miss(tlb_miss_r & paging_en),
-	.tlb_missadr(tlb_miss_badr),
-	.tlb_miss_oadr(tlb_missadr_r),
+	.tlb_missadr(tlb_missadr_r),
 	.tlb_missasid(tlb_missasid_r),
 	.tlb_missid(tlb_missid_r),
 	.tlb_missqn(tlb_missqn_r),
@@ -656,7 +675,7 @@ tlb3way utlb1
 	.entry_o(tlb_replaced_entry),
 	.stall_tlb0(1'b0),
 	.stall_tlb1(1'b0),
-	.vadr0(vadr_v ? vadr : swt_vadr),
+	.vadr0(pebbled_v ? pebbled_adr : swt_vadr),
 	.vadr1(ptw_vv ? ptw_vadr : vadr2),
 	.swt_i(swt & ~vadr_v),
 	.swt_o(),
@@ -668,9 +687,9 @@ tlb3way utlb1
 	.agen1_rndx_i(vadr2_id),
 	.agen0_rndx_o(),
 	.agen1_rndx_o(),
-	.agen0_v(vadr_v),
+	.agen0_v(pebbled_v),
 	.agen1_v(ptw_vv),
-	.swt_v(swt & ~vadr_v),
+	.swt_v(swt & ~pebbled_v),
 	.load0_i(),
 	.load1_i(),
 	.store0_i(),
@@ -931,6 +950,7 @@ else begin
 			access_state <= ptable_walker_pkg::INACTIVE;
 			req_state <= ptable_walker_pkg::IDLE;
 		end
+	default:	access_state <= ptable_walker_pkg::INACTIVE;
 	endcase
 
 	// Search for ready transfers and update the TLB.
@@ -1014,6 +1034,14 @@ begin
 		_8B_PTE:	ftam_req.sel <= 64'h00FF << {adr[5:3],3'd0};
 		_16B_PTE:	ftam_req.sel <= 64'hFFFF << {adr[5:4],4'd0};
 		default: ftam_req.sel <= 64'h00FF << {adr[5:3],3'd0};
+		endcase
+	// 256
+	default:
+		case(pte_size)
+		_4B_PTE:	ftam_req.sel <= 32'h000F << {adr[4:2],2'd0};
+		_8B_PTE:	ftam_req.sel <= 32'h00FF << {adr[4:3],3'd0};
+		_16B_PTE:	ftam_req.sel <= 32'hFFFF << {adr[4],4'd0};
+		default: ftam_req.sel <= 32'h00FF << {adr[4:3],3'd0};
 		endcase
 	endcase
 end

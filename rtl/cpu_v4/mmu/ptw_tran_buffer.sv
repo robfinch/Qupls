@@ -94,7 +94,8 @@ else begin
 			if (miss_queue[sel_qe].lvl != 3'd7)
 				tAssignTranbuf(miss_queue[sel_qe].asid);
 		end
-	*/				
+	*/
+	default:	;
 	endcase
 
 	// Capture responses.
@@ -119,6 +120,7 @@ else begin
 				endcase
 //			TLB_PMT_FETCH:
 //				;
+			default:	;
 			endcase
 		end
 	end

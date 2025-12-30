@@ -45,7 +45,7 @@ import ptable_walker_pkg::*;
 module ptw_miss_queue(rst, clk, state, ptbr, ptattr,
 	commit0_id, commit0_idv, commit1_id, commit1_idv, commit2_id, commit2_idv,
 	commit3_id, commit3_idv,
-	tlb_miss, tlb_missadr, tlb_miss_oadr, tlb_missasid, tlb_missid, tlb_missqn,
+	tlb_miss, tlb_missadr, tlb_missasid, tlb_missid, tlb_missqn,
 	in_que, ptw_vv, ptw_pv, ptw_ppv, tranbuf, miss_queue, sel_tran, transfer_ready,
 	sel_qe, walk_level);
 
@@ -64,7 +64,6 @@ input rob_ndx_t commit3_id;
 input commit3_idv;
 input tlb_miss;
 input address_t tlb_missadr;
-input address_t tlb_miss_oadr;
 input asid_t tlb_missasid;
 input rob_ndx_t tlb_missid;
 input [1:0] tlb_missqn;
@@ -216,7 +215,6 @@ else begin
 			miss_queue[empty_qe].lvl <= ptbr.level;
 			miss_queue[empty_qe].asid <= tlb_missasid;
 			miss_queue[empty_qe].id <= tlb_missid;
-			miss_queue[empty_qe].adr <= tlb_miss_oadr;
 			miss_queue[empty_qe].adr <= tlb_missadr;
 			miss_queue[empty_qe].qn <= tlb_missqn;
 

@@ -319,6 +319,9 @@ Qupls4_pkg::rob_bitmask_t robentry_fcu_issue;
 Qupls4_pkg::rob_bitmask_t robentry_agen_issue;
 Qupls4_pkg::lsq_entry_t [1:0] lsq [0:Qupls4_pkg::LSQ_ENTRIES-1];
 Qupls4_pkg::lsq_ndx_t lq_tail, lq_head;
+integer lsq_cmd_ndx;
+Qupls4_pkg::lsq_cmd_t [11:0] lsq_cmd;
+
 wire nq;
 reg [3:0] wnq;
 
@@ -903,6 +906,7 @@ Qupls4_pkg::status_reg_t sr;
 Qupls4_pkg::fp_status_reg_t fpcsr;
 wire [2:0] swstk = sr.swstk;
 wire paging_en = sr.page_en;
+wire pebble_en = sr.pebble_en;
 pc_address_t [ISTACK_DEPTH-1:0] pc_stack;
 reg [5:0] pending_ipl;				// pending interrupt level.
 wire [5:0] im = sr.ipl;
@@ -3204,7 +3208,7 @@ pregno_t [12:0] fuq_pRt;
 aregno_t [12:0] fuq_aRt;
 wire [7:0] fuq_tag [0:12];
 value_t [12:0] fuq_res;
-wire [3:0] fuq_cp [0:12];
+cpu_types_pkg::checkpt_ndx_t fuq_cp [0:12];
 
 // Look for queues containing values, and select from a queue using a rotating selector.
 Qupls4_frq_select
@@ -3964,7 +3968,7 @@ udps1
 (
 	.rst(irst),
 	.clk(clk),
-	.ce(advance_pipeline),
+	.ce(1'b1),//advance_pipeline), stall_dsp causes a timing loop
 	.stomp(robentry_stomp),
 	.tail(tails),
 	.pg_ren(pg_ren),
@@ -4365,6 +4369,16 @@ else begin
 	if (Qupls4_pkg::NDATA_PORTS > 1) dhit[1] = dhit2[1];
 end
 
+Qupls4_lsq ulsq1
+(
+	.rst(irst),
+	.clk(clk),
+	.cmd(lsq_cmd),
+	.pgh(pgh),
+	.rob(rob),
+	.lsq(lsq)
+);
+
 generate begin : gDcache
 for (g = 0; g < Qupls4_pkg::NDATA_PORTS; g = g + 1) begin
 
@@ -4658,6 +4672,7 @@ mmu #(.CORENO(CORENO), .CHANNEL(3)) ummu1
 	.rst(irst),
 	.clk(clk), 
 	.paging_en(paging_en),
+	.pebble_en(pebble_en),
 	.tlb_pmt_base(32'hFFF80000),
 	.ic_miss_adr(ic_miss_adr),
 	.ic_miss_asid(ic_miss_asid),
@@ -4727,9 +4742,9 @@ always_comb
 always_comb
 	dram1_id = lbndx1.vb ? lsq[lbndx1.row][lbndx1.col].rndx : lsq[mem1_lsndx.row][mem1_lsndx.col].rndx;
 always_comb
-	dram0_idv =	mem0_lsndxv && !robentry_stomp[dram0_id] && !dram0_idv2;
+	dram0_idv =	(lbndx0.vb ? VAL : mem0_lsndxv) && !robentry_stomp[dram0_id] && !dram0_idv2;
 always_comb
-	dram1_idv =	mem1_lsndxv && !robentry_stomp[dram1_id] && !dram1_idv2 && Qupls4_pkg::NDATA_PORTS > 1;
+	dram1_idv =	(lbndx1.vb ? VAL : mem1_lsndxv) && !robentry_stomp[dram1_id] && !dram1_idv2 && Qupls4_pkg::NDATA_PORTS > 1;
 
 always_ff @(posedge clk)
 if (irst)
@@ -5525,8 +5540,13 @@ if (irst) begin
 	sync_ndxv = INV;
 	fc_ndx = 6'd63;
 	fc_ndxv = INV;
+	lsq_cmd_ndx = 0;
 end
 else begin
+
+	lsq_cmd_ndx = 0;
+	foreach (lsq_cmd[n12])
+		lsq_cmd[n12].cmd <= LSQ_CMD_NONE;
 
 	/*
 	advance_msi <= FALSE;
@@ -5849,12 +5869,14 @@ else begin
 		// and there is no entry assigned yet
 		!rob[agen0_id].lsq &&
 		// and it is not a copy-target
-		!rob[agen0_id].op.decbus.cpytgt
+		!rob[agen0_id].op.decbus.cpytgt &&
+		// and address is calculated
+		agen0_v
 		) begin
 			if (!fnIsInLSQ(agen0_id)) begin
 				rob[agen0_id].lsq <= VAL;
 				rob[agen0_id].lsqndx <= lsq_tail0;
-				tEnqueLSE(7'h7F, lsq_tail0, agen0_id, rob[agen0_id], 2'd1);
+				tEnqueLSE(lsq_tail0, agen0_id, 2'd1, agen0_res);
 				lsq_tail.row <= (lsq_tail.row + 2'd1) % Qupls4_pkg::LSQ_ENTRIES;
 				lsq_tail.col <= 3'd0;
 			end
@@ -5878,13 +5900,15 @@ else begin
 			// and there is no entry assigned yet
 			!rob[agen1_id].lsq &&
 			// and it is not a copy-target
-			!rob[agen1_id].op.decbus.cpytgt
+			!rob[agen1_id].op.decbus.cpytgt &&
+			// address is valid
+			agen1_v
 		) begin
 			if (!fnIsInLSQ(agen1_id)) begin
 				rob[agen1_id].lsq <= VAL;
 				rob[agen1_id].lsqndx <= {lsq_tail0.row,1'b1};
-				tEnqueLSE(7'h7F, {lsq_tail0.row,lsq_tail0.col|1}, agen1_id, rob[agen1_id], 2'd2);
-				lsq[lsq_tail0.row][0].sn <= 7'h7E;
+				tEnqueLSE({lsq_tail0.row,lsq_tail0.col|1}, agen1_id, 2'd2, agen1_res);
+//				lsq[lsq_tail0.row][0].sn <= 7'h7E;
 			end
 		end
 	end
@@ -5954,9 +5978,17 @@ else begin
 	if (lsq[store_argC_id1.row][store_argC_id1.col].v==VAL && lsq[store_argC_id1.row][store_argC_id1.col].store && lsq[store_argC_id1.row][store_argC_id1.col].datav==INV) begin
 	if (load_lsq_argc) begin//prnv[23]) begin
 		$display("Qupls4: LSQ Rc=%h from r%d/%d", rfo_store_argC, store_argC_aReg, store_argC_pReg);
-		lsq[store_argC_id1.row][store_argC_id1.col].res <= {rfo_store_argC_flags,rfo_store_argC};//prnv[23] ? rfo_store_argC : rob[lsq[store_argC_id1.row][store_argC_id1.col].rndx].argC;
-		lsq[store_argC_id1.row][store_argC_id1.col].flags <= rfo_store_argC_flags;
-		lsq[store_argC_id1.row][store_argC_id1.col].datav <= rfo_store_argC_valid;
+		lsq_cmd[lsq_cmd_ndx].cmd <= CMD_SETRES;
+		lsq_cmd[lsq_cmd_ndx].lndx <= {store_argC_id1.row,store_argC_id1.col};
+		lsq_cmd[lsq_cmd_ndx].rndx <= 0;
+		lsq_cmd[lsq_cmd_ndx].n <= 0;
+		lsq_cmd[lsq_cmd_ndx].data <= rfo_store_argC;
+		lsq_cmd[lsq_cmd_ndx].flags <= rfo_store_argC_flags;
+		lsq_cmd[lsq_cmd_ndx].datav <= rfo_store_argC_valid;
+		lsq_cmd_ndx = lsq_cmd_ndx + 2'd1;
+//		lsq[store_argC_id1.row][store_argC_id1.col].res <= {rfo_store_argC_flags,rfo_store_argC};//prnv[23] ? rfo_store_argC : rob[lsq[store_argC_id1.row][store_argC_id1.col].rndx].argC;
+//		lsq[store_argC_id1.row][store_argC_id1.col].flags <= rfo_store_argC_flags;
+//		lsq[store_argC_id1.row][store_argC_id1.col].datav <= rfo_store_argC_valid;
 	end
 	end
 
@@ -6115,9 +6147,17 @@ else begin
 	  		foreach (wrport0_v[n45]) begin
 		  		if (lsq[n3][n12].datav==INV && lsq[n3][n12].pRc==wrport0_Rt[n45] && wrport0_v[n45]==VAL) begin
 		  			$display("Qupls4: LSQ bypass from wrport0=%h r%d", wrport0_res[n45], wrport0_Rt[n45]);
-		  			lsq[n3][n12].datav <= VAL;
-		  			lsq[n3][n12].res <= {wrport0_tag[n45],wrport0_res[n45]};
-		  			lsq[n3][n12].flags <= wrport0_tag[n45];
+						lsq_cmd[lsq_cmd_ndx].cmd <= CMD_SETRES;
+						lsq_cmd[lsq_cmd_ndx].lndx <= {n3,n12[0]};
+						lsq_cmd[lsq_cmd_ndx].rndx <= 0;
+						lsq_cmd[lsq_cmd_ndx].n <= 0;
+						lsq_cmd[lsq_cmd_ndx].data <= wrport0_res[n45];
+						lsq_cmd[lsq_cmd_ndx].flags <= wrport0_tag[n45];
+						lsq_cmd[lsq_cmd_ndx].datav <= VAL;
+						lsq_cmd_ndx = lsq_cmd_ndx + 2'd1;
+//		  			lsq[n3][n12].datav <= VAL;
+//		  			lsq[n3][n12].res <= {wrport0_tag[n45],wrport0_res[n45]};
+//		  			lsq[n3][n12].flags <= wrport0_tag[n45];
 		  		end
 	  		end
 	  	end
@@ -7481,8 +7521,9 @@ begin
 	rob[ndx].v <= 5'd0;
 	rob[ndx].done <= {INV,INV};
 	rob[ndx].out <= {INV,INV};
-	if (rob[ndx].lsq)
+	if (rob[ndx].lsq) begin
 		tInvalidateLSQ(ndx,FALSE,TRUE,value_zero);
+	end
 	rob[ndx].lsq <= INV;
 end
 endtask
@@ -7526,34 +7567,21 @@ begin
 	for (n18r = 0; n18r < Qupls4_pkg::LSQ_ENTRIES; n18r = n18r + 1) begin
 		for (n18c = 0; n18c < 2; n18c = n18c + 1) begin
 			if (lsq[n18r][n18c].rndx==id && lsq[n18r][n18c].v==VAL) begin
-				lsq[n18r][n18c].v <= INV;
-				lsq[n18r][n18c].state <= 2'b00;
-				lsq[n18r][n18c].agen <= FALSE;
-				lsq[n18r][n18c].datav <= INV;
-				lsq[n18r][n18c].store <= FALSE;
-				lsq[n18r][n18c].vstore <= FALSE;
-				lsq[n18r][n18c].vstore_ndx <= FALSE;
-				lsq[n18r][n18c].load <= FALSE;
-				lsq[n18r][n18c].vload <= FALSE;
-				lsq[n18r][n18c].vload_ndx <= FALSE;
-				// If it was a load, then cache the data in the LSQ
-				if (!cmt & !rob[lsq[n18r][n18c].rndx].excv)
-					case(lsq[n18r][n18c].memsz)
-					Qupls4_pkg::byt,Qupls4_pkg::wyde,Qupls4_pkg::tetra,Qupls4_pkg::octa:
-						if (lsq[n18r][n18c].load)
-							lsq[n18r][n18c].loadv <= VAL;
-						else
-							lsq[n18r][n18c].loadv <= INV;
-					default:	lsq[n18r][n18c].loadv <= INV;
-					endcase
-				else
-					lsq[n18r][n18c].loadv <= INV;
-				lsq[n18r][n18c].res <= data;
+				lsq_cmd[lsq_cmd_ndx].cmd <= CMD_INV;
+				lsq_cmd[lsq_cmd_ndx].lndx <= {n18r,n18c[0]};
+				lsq_cmd[lsq_cmd_ndx].rndx <= id;
+				lsq_cmd[lsq_cmd_ndx].n <= 0;
+				lsq_cmd[lsq_cmd_ndx].cmt <= cmt;
+				lsq_cmd[lsq_cmd_ndx].can <= can;
+				lsq_cmd[lsq_cmd_ndx].data <= data;
+				lsq_cmd[lsq_cmd_ndx].flags <= 0;
+				lsq_cmd[lsq_cmd_ndx].datav <= INV;
+				lsq_cmd_ndx = lsq_cmd_ndx + 2'd1;
 				// It is possible that a load operation already in progress got
 				// cancelled.
 				if (dram0_work.rndx==lsq[n18r][n18c].rndx)
 					dram0_stomp <= TRUE;
-				if (Qupls4_pkg::NDATA_PORTS > 1 && dram0_work.rndx==lsq[n18r][n18c].rndx)
+				if (Qupls4_pkg::NDATA_PORTS > 1 && dram1_work.rndx==lsq[n18r][n18c].rndx)
 					dram1_stomp <= TRUE;
 				if (can)
 					cpu_request_cancel[lsq[n18r][n18c].rndx] <= 1'b1;
@@ -7573,9 +7601,16 @@ begin
 	for (n18r = 0; n18r < Qupls4_pkg::LSQ_ENTRIES; n18r = n18r + 1) begin
 		for (n18c = 0; n18c < 2; n18c = n18c + 1) begin
 			if (lsq[n18r][n18c].rndx==id && lsq[n18r][n18c].v==VAL) begin
-				lsq[n18r][n18c].agen <= FALSE;	// cause agen again
-				lsq[n18r][n18c].vadr <= {lsq[n18r][n18c].vadr[$bits(virtual_address_t)-1:6]+2'd1,6'd0};
-				lsq[n18r][n18c].state <= 2'b01;
+				lsq_cmd[lsq_cmd_ndx].cmd <= CMD_INCADR;
+				lsq_cmd[lsq_cmd_ndx].lndx <= {n18r,n18c[0]};
+				lsq_cmd[lsq_cmd_ndx].rndx <= id;
+				lsq_cmd[lsq_cmd_ndx].n <= 0;
+				lsq_cmd[lsq_cmd_ndx].cmt <= FALSE;
+				lsq_cmd[lsq_cmd_ndx].can <= FALSE;
+				lsq_cmd[lsq_cmd_ndx].data <= 0;
+				lsq_cmd[lsq_cmd_ndx].flags <= 0;
+				lsq_cmd[lsq_cmd_ndx].datav <= INV;
+				lsq_cmd_ndx = lsq_cmd_ndx + 2'd1;
 //				lsq[n18r][n18c].shift <= lsq[n18r][n18c].shift2;
 			end
 		end
@@ -7595,16 +7630,16 @@ begin
 	for (n18r = 0; n18r < Qupls4_pkg::LSQ_ENTRIES; n18r = n18r + 1) begin
 		for (n18c = 0; n18c < 2; n18c = n18c + 1) begin
 			if (lsq[n18r][n18c].rndx==id && lsq[n18r][n18c].v) begin
-				lsq[n18r][n18c].agen <= TRUE;
-				lsq[n18r][n18c].padr <= padr;//{tlbe.pte.ppn,adr[12:0]};
-				case(lsq[n18r][n18c].state)
-				2'b00:	
-					begin
-						lsq[n18r][n18c].shift <= padr[5:0];
-						lsq[n18r][n18c].shift2 <= 7'd64 - padr[5:0];
-					end
-				default:	;
-				endcase	
+				lsq_cmd[lsq_cmd_ndx].cmd <= CMD_INCADR;
+				lsq_cmd[lsq_cmd_ndx].lndx <= {n18r,n18c[0]};
+				lsq_cmd[lsq_cmd_ndx].rndx <= id;
+				lsq_cmd[lsq_cmd_ndx].n <= 0;
+				lsq_cmd[lsq_cmd_ndx].cmt <= FALSE;
+				lsq_cmd[lsq_cmd_ndx].can <= FALSE;
+				lsq_cmd[lsq_cmd_ndx].data <= padr;
+				lsq_cmd[lsq_cmd_ndx].flags <= 0;
+				lsq_cmd[lsq_cmd_ndx].datav <= INV;
+				lsq_cmd_ndx = lsq_cmd_ndx + 2'd1;
 			end
 		end
 	end
@@ -8061,54 +8096,17 @@ endtask
 // Queue to the load / store queue.
 
 task tEnqueLSE;
-input seqnum_t sn;
 input Qupls4_pkg::lsq_ndx_t ndx;
 input rob_ndx_t id;
-input Qupls4_pkg::rob_entry_t rob;
 input [1:0] n;
+input cpu_types_pkg::virtual_address_t vadr;
 begin
-	lsq[ndx.row][ndx.col] <= {$bits(Qupls4_pkg::lsq_entry_t){1'b0}};
-	lsq[ndx.row][ndx.col].rndx <= id;
-	lsq[ndx.row][ndx.col].v <= VAL;
-	lsq[ndx.row][ndx.col].state <= 2'b00;
-	lsq[ndx.row][ndx.col].agen <= FALSE;
-	lsq[ndx.row][ndx.col].pc <= pgh[rob.pghn].ip + {rob.ip_offs,1'b0};
-	lsq[ndx.row][ndx.col].loadv <= INV;
-	lsq[ndx.row][ndx.col].load <= rob.op.decbus.load|rob.excv;
-	lsq[ndx.row][ndx.col].loadz <= rob.op.decbus.loadz|rob.excv;
-	lsq[ndx.row][ndx.col].cload <= rob.excv;
-	lsq[ndx.row][ndx.col].cload_tags <= rob.excv;
-	lsq[ndx.row][ndx.col].store <= rob.op.decbus.store;
-	lsq[ndx.row][ndx.col].stptr <= rob.op.decbus.stptr;
-	lsq[ndx.row][ndx.col].cstore <= 1'b0;
-	lsq[ndx.row][ndx.col].vload <= rob.op.decbus.vload;
-	lsq[ndx.row][ndx.col].vload_ndx <= rob.op.decbus.vload_ndx;
-	lsq[ndx.row][ndx.col].vstore <= rob.op.decbus.vstore;
-	lsq[ndx.row][ndx.col].vstore_ndx <= rob.op.decbus.vstore_ndx;
-	lsq[ndx.row][ndx.col].vadr <= {$bits(cpu_types_pkg::virtual_address_t){1'b0}};
-	lsq[ndx.row][ndx.col].padr <= {$bits(cpu_types_pkg::physical_address_t){1'b0}};
-	lsq[ndx.row][ndx.col].shift <= 7'd0;
-//	store_argC_reg <= rob.pRc;
-	lsq[ndx.row][ndx.col].aRc <= rob.op.decbus.Rs3;
-//	lsq[ndx.row][ndx.col].pRc <= rob.op.pRs3;
-	lsq[ndx.row][ndx.col].cndx <= rob.cndx;
-	lsq[ndx.row][ndx.col].Rt <= rob.op.nRd;
-	lsq[ndx.row][ndx.col].aRt <= rob.op.decbus.Rd;
-	lsq[ndx.row][ndx.col].aRtz <= !rob.op.decbus.Rdv;
-	lsq[ndx.row][ndx.col].om <= rob.om;
-	lsq[ndx.row][ndx.col].memsz <= Qupls4_pkg::fnMemsz(rob.op);
-	for (n12r = 0; n12r < Qupls4_pkg::LSQ_ENTRIES; n12r = n12r + 1)
-		for (n12c = 0; n12c < 2; n12c = n12c + 1)
-			lsq[n12r][n12c].sn <= lsq[n12r][n12c].sn - n;
-	lsq[ndx.row][ndx.col].sn <= sn;
-	if (Qupls4_pkg::PERFORMANCE) begin
-		/* This seems not to work */
-		if (agen0_argC_v) begin
-			lsq[ndx.row][ndx.col].res <= {agen0_argC_flags,agen0_argC};
-			lsq[ndx.row][ndx.col].flags <= agen0_argC_flags;
-			lsq[ndx.row][ndx.col].datav <= VAL;
-		end
-	end
+	lsq_cmd[lsq_cmd_ndx].cmd <= CMD_ENQ;
+	lsq_cmd[lsq_cmd_ndx].lndx <= ndx;
+	lsq_cmd[lsq_cmd_ndx].rndx <= id;
+	lsq_cmd[lsq_cmd_ndx].n <= n;
+	lsq_cmd[lsq_cmd_ndx].data <= vadr;
+	lsq_cmd_ndx = lsq_cmd_ndx + 2'd1;
 end
 endtask
 

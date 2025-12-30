@@ -70,6 +70,11 @@ reg [2:0] ndx;
 reg flt;
 reg [1:0] fltpr;
 reg [47:0] finsA, finsB, finsC;
+reg [63:0] cnsta,cnstb,cnstc,cnstd;
+reg has_cnsta;
+reg has_cnstb;
+reg has_cnstc;
+reg has_cnstd;
 
 /*
 fpCvt16To64 ucvt16x64a(cnst1[15:0], imm16x64a);
@@ -98,37 +103,61 @@ begin
 	immb = 64'd0;
 	immc = 64'd0;
 	immd = 64'd0;
+	cnsta = 64'd0;
+	cnstb = 64'd0;
+	cnstc = 64'd0;
+	cnstd = 64'd0;
 	has_imma = 1'b0;
 	has_immb = 1'b0;
 	has_immc = 1'b0;
 	has_immd = 1'b0;
+	has_cnsta = 1'b0;
+	has_cnstb = 1'b0;
+	has_cnstc = 1'b0;
+	has_cnstd = 1'b0;
 	finsA = 1'd0;
 	finsB = 1'd0;
 	finsC = 1'd0;
 
 	case(ins.opcode)
+	Qupls4_pkg::OP_R3B,Qupls4_pkg::OP_R3W,Qupls4_pkg::OP_R3T,Qupls4_pkg::OP_R3O,
+	Qupls4_pkg::OP_R3BP,Qupls4_pkg::OP_R3WP,Qupls4_pkg::OP_R3TP,Qupls4_pkg::OP_R3OP,
+	Qupls4_pkg::OP_R3P,Qupls4_pkg::OP_CHK:
+		begin
+			if (has_cnsta) begin
+				imma = {cnsta,ins.Rs1[5:0]};
+				has_imma = TRUE;
+			end
+			if (has_cnstb) begin
+				immb = {cnstb,ins.Rs2[5:0]};
+				has_immb = TRUE;
+			end
+			if (has_cnstc) begin
+				immc = {cnstc,ins.Rs3[5:0]};
+				has_immc = TRUE;
+			end
+		end
+
 	// Quick immediate mode		Rd=Rs1+imm
 	Qupls4_pkg::OP_ADDI,Qupls4_pkg::OP_MULI,Qupls4_pkg::OP_DIVI,
-	Qupls4_pkg::OP_SUBFI,Qupls4_pkg::OP_CMPI:
-		begin
-			immb = {{37{ins.imm[26]}},ins.imm};
-			has_immb = TRUE;
-		end
+	Qupls4_pkg::OP_SUBFI,Qupls4_pkg::OP_CMPI,
 	Qupls4_pkg::OP_MULUI,Qupls4_pkg::OP_DIVUI,Qupls4_pkg::OP_CMPUI,
-	Qupls4_pkg::OP_ORI,Qupls4_pkg::OP_XORI:
-		begin
-			immb = {{37{1'b0}},ins.imm};
-			has_immb = TRUE;
-		end
+	Qupls4_pkg::OP_ORI,Qupls4_pkg::OP_XORI,
 	Qupls4_pkg::OP_ANDI:
 		begin
-			immb = {{37{1'b1}},ins.imm};
 			has_immb = TRUE;
+			if (has_cnstb)
+				immb = {cnstb,ins.imm[27:0]};
+			else
+				immb = {{36{ins.imm[27]}},ins.imm[27:0]};
 		end
 
 	Qupls4_pkg::OP_LOADI:
 		begin
-			immb = {{37{ins.imm[26]}},ins.imm};
+			if (has_cnstb)
+				immb = {cnstb,ins.imm[27:0]};
+			else
+				immb = {{36{ins.imm[27]}},ins.imm[27:0]};
 			has_immb = TRUE;
 			imma = value_zero;
 			has_imma = TRUE;
@@ -137,7 +166,10 @@ begin
 	Qupls4_pkg::OP_CSR:
 		begin
 			// ToDo: fix
-			immb = {57'd0,ins[22:16]};
+			if (has_cnstb)
+				immb = cnstb;
+			else
+				immb = {57'd0,ins[22:16]};
 			has_immb = 1'b0;
 		end
 
@@ -155,13 +187,25 @@ begin
 				imma = value_zero;
 				has_imma = TRUE;
 			end
+			if (has_cnsta) begin
+				imma = {cnsta,ins.Rs1[5:0]};
+				has_imma = TRUE;
+			end
 			if (ins.Rs2==8'd0) begin
 				immb = value_zero;
 				has_immb = TRUE;
 			end
+			if (has_cnstb) begin
+				immb = {cnstb,ins.Rs2[5:0]};
+				has_immb = TRUE;
+			end
 			has_immc = TRUE;
-			immc = {{45{ins.imm[18]}},ins.imm};
+			if (has_cnstc)
+				immc = {cnstc,ins.imm[19:0]};
+			else
+				immc = {{44{ins.imm[19]}},ins.imm[19:0]};
 		end
+
 	Qupls4_pkg::OP_LDIP,Qupls4_pkg::OP_STIP:
 		begin
 			imma = ip;
@@ -171,8 +215,12 @@ begin
 				has_immb = TRUE;
 			end
 			has_immc = TRUE;
-			immc = {{45{ins.imm[18]}},ins.imm};
+			if (has_cnstc)
+				immc = {cnstc,ins.imm};
+			else
+				immc = {{44{ins.imm[19]}},ins.imm[19:0]};
 		end
+
 	Qupls4_pkg::OP_STI:
 		begin
 			if (ins.Rs1==8'd0) begin
@@ -184,8 +232,9 @@ begin
 				has_immb = TRUE;
 			end
 			has_immc = TRUE;
-			immc = {{45{ins.imm[18]}},ins.imm};
+			immc = {{44{ins.imm[19]}},ins.imm[19:0]};
 		end
+
 	Qupls4_pkg::OP_FENCE:
 		begin
 			immb = {112'h0,ins[23:8]};
@@ -215,14 +264,14 @@ begin
 			wh = cpfx[n][9:8];
 			q = cpfx[n][11:10];
 			case({q,wh})
-			4'b0000:	begin imma = {{32{cpfx[n][47]}},cpfx[n][47:16]}; has_imma = TRUE; end
-			4'b0001:	begin immb = {{32{cpfx[n][47]}},cpfx[n][47:16]}; has_immb = TRUE; end
-			4'b0010:	begin immc = {{32{cpfx[n][47]}},cpfx[n][47:16]}; has_immc = TRUE; end
-			4'b0011:	begin immd = {{32{cpfx[n][47]}},cpfx[n][47:16]}; has_immd = TRUE; end
-			4'b0100:	begin imma = {cpfx[n][47:16],imma[31:0]}; has_imma = TRUE; end
-			4'b0101:	begin immb = {cpfx[n][47:16],immb[31:0]}; has_immb = TRUE; end
-			4'b0110:	begin immc = {cpfx[n][47:16],immc[31:0]}; has_immc = TRUE; end
-			4'b0111:	begin immd = {cpfx[n][47:16],immd[31:0]}; has_immd = TRUE; end
+			4'b0000:	begin cnsta = {{32{cpfx[n][47]}},cpfx[n][47:12]}; has_cnsta = TRUE; end
+			4'b0001:	begin cnstb = {{32{cpfx[n][47]}},cpfx[n][47:12]}; has_cnstb = TRUE; end
+			4'b0010:	begin cnstc = {{32{cpfx[n][47]}},cpfx[n][47:12]}; has_cnstc = TRUE; end
+			4'b0011:	begin cnstd = {{32{cpfx[n][47]}},cpfx[n][47:12]}; has_cnstd = TRUE; end
+			4'b0100:	begin cnsta = {cpfx[n][47:12],cnsta[35:0]}; has_cnsta = TRUE; end
+			4'b0101:	begin cnstb = {cpfx[n][47:12],cnstb[35:0]}; has_cnstb = TRUE; end
+			4'b0110:	begin cnstc = {cpfx[n][47:12],cnstc[35:0]}; has_cnstc = TRUE; end
+			4'b0111:	begin cnstd = {cpfx[n][47:12],cnstd[35:0]}; has_cnstd = TRUE; end
 			default:	;
 			endcase
 		end
