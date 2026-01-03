@@ -10,7 +10,7 @@
 #define HAVE_INSTRUCTION_EXTENSION	1
 
 /* maximum number of operands in one mnemonic */
-#define MAX_OPERANDS 5
+#define MAX_OPERANDS 7
 
 /* maximum number of mnemonic-qualifiers per mnemonic */
 #define MAX_QUALIFIERS 2
@@ -171,6 +171,7 @@ typedef struct {
 #define FLG_LSDISP	16	/* the constant is a load/store displacement */
 #define FLG_REGIND	32	/* displacement can be compressed to 5 bits */
 #define FLG_BZ			64	/* BEQZ / BNEZ shortcut */
+#define FLG_COMPOUND	128	/* dual-operation instruction */
 
 #define EXI8	0x46
 #define EXI24	0x48
@@ -257,22 +258,31 @@ typedef struct {
 #define JL4			76
 #define REGIND_DISP	77
 #define R2S			78
+#define R6			79
+#define R7			80
 
 #define LN(x)		((x) & 0LL)
 #define OPC(x)	(((x) & 0x7fLL) << 0LL)
+#define RD(x)		(((x) & 0x3fLL) << 7LL)
 #define RT(x)		(((x) & 0x3fLL) << 7LL)
 #define RTSR(x)	(((x) & 0x1fLL) << 7LL)
 #define INCDEC(x)	(((x) & 3LL) << 11LL)
 #define NRT(x)	(((x) & 1LL) << 15LL)
 #define RA(x)		(((x) & 0x3fLL) << 13LL)
+#define RS1(x)	(((x) & 0x3fLL) << 13LL)
 #define RAS(x)	(((x) & 0x1fLL) << 14LL)
 #define NRA(x)	(((x) & 1LL) << 24LL)
 #define RB(x)		(((x) & 0x3fLL) << 19LL)
+#define RS2(x)	(((x) & 0x3fLL) << 19LL)
 #define RBS(x)	(((x) & 0x1fLL) << 19LL)
 #define IPR(x)	(((x) & 3LL) << 23LL)
 #define NRB(x)	(((x) & 1LL) << 33LL)
 #define BRDISP(x)	(((x) & 0x3fffffLL) << 25LL)
 #define RC(x)		(((x) & 0x3fLL) << 25LL)
+#define RS3(x)	(((x) & 0x3fLL) << 24LL)
+#define RS4(x)	(((x) & 0x3fLL) << 29LL)
+#define RS5(x)	(((x) & 0x3fLL) << 34LL)
+#define RS6(x)	(((x) & 0x3fLL) << 39LL)
 #define MS3(x)	(((x) & 0x7LL) << 38LL)
 #define BRMS(x)	(((x) & 3LL) << 11LL)
 #define NRC(x)	(((x) & 1LL) << 42LL)

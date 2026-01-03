@@ -44,7 +44,7 @@ import const_pkg::*;
 import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_pipeline_ext(rst_i, clk_i, rstcnt, ihit, en_i,
+module Qupls4_pipeline_ext(rst_i, clk_i, ihit, en_i,
 	kept_stream, stomp_ext, nop_o, carry_mod_fet, ssm_flag, hwipc_fet,
 	irq_fet, irq_in_fet, irq_sn_fet, ipl_fet, sr, pt_ext, pt_dec, p_override, po_bno,
 	branchmiss, misspc_fet, flush_fet, flush_ext,
@@ -58,7 +58,6 @@ module Qupls4_pipeline_ext(rst_i, clk_i, rstcnt, ihit, en_i,
 parameter MWIDTH = Qupls4_pkg::MWIDTH;
 input rst_i;
 input clk_i;
-input [2:0] rstcnt;
 input ihit;
 input irq_fet;
 input Qupls4_pkg::irq_info_packet_t irq_in_fet;

@@ -270,7 +270,7 @@ parameter REGFILE_LATENCY = 2;
 // (obvious) and may increase performance. However, most instructions will
 // have two or fewer arguments, and allowing for four instructions at once
 // means an average of eight ports per cycle.
-parameter NREG_RPORTS = MWIDTH*5;
+parameter NREG_RPORTS = 24;
 
 // Number of register write ports. Mort ports allows more simultabeous writes
 // and may increase performance. The default is set to the machine width.

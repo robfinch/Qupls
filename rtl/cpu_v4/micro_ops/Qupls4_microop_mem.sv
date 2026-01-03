@@ -54,7 +54,7 @@ input carry_out;
 input carry_in;
 input [63:0] vlen_reg;
 input [63:0] velsz;
-input [1:0] thread;
+input [2:0] thread;
 output reg [5:0] count;
 output Qupls4_pkg::micro_op_t [31:0] uop;
 

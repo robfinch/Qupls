@@ -76,9 +76,9 @@ parameter MWIDTH = Qupls4_pkg::MWIDTH;
 parameter ISTACK_DEPTH = 16;
 parameter DISPATCH_WIDTH = 6;
 parameter RL_STRATEGY = Qupls4_pkg::RL_STRATEGY;
-localparam NREG_RPORTS = RL_STRATEGY==1 ? 12 : MWIDTH*4;
+localparam NREG_RPORTS = RL_STRATEGY==1 ? Qupls4_pkg::NREG_RPORTS : MWIDTH*4;
 parameter NREG_WPORTS = Qupls4_pkg::NREG_WPORTS;
-localparam RS_NREG_RPORTS = RL_STRATEGY==0 ? 0 : 12;
+localparam RS_NREG_RPORTS = RL_STRATEGY==0 ? 0 : Qupls4_pkg::NREG_RPORTS;
 input [63:0] coreno_i;
 input rst_i;
 input clk_i;
@@ -120,7 +120,7 @@ integer nn,mm,n2,n3,n4,m4,n5,n6,n8,n9,n10,n11,n12,n13,n14,n15,n17;
 integer n16r, n16c, n12r, n12c, n14r, n14c, n17r, n17c, n18r, n18c;
 integer n19,n20,n21,n22,n23,n24,n25,n26,n27,n28,n29,i,n30,n31,n32,n33;
 integer n34,n35,n36,n37,n38,n39,n40,n41,n42,n43,n44,n45,n46,n47,n48;
-integer n49,n50,n51,n52;
+integer n49,n50,n51,n52,n53;
 integer jj,kk;
 
 genvar g,h,gvg;
@@ -136,7 +136,7 @@ assign clk = clk_i;				// convenience
 assign clk2x = clk2x_i;
 
 reg [4:0] ph4;
-reg [3:0] rstcnt;
+reg [5:0] rstcnt;
 reg [3:0] panic;
 reg int_commit;		// IRQ committed
 reg next_step;		// do next step for single stepping
@@ -188,10 +188,14 @@ rob_ndx_t nonNop;		// ROB index of the next non-NOP instruction.
 // rf_reg is an alias.
 pregno_t [NREG_RPORTS-1:0] prn;		// ports from the rename stage / reservation station request
 
-pregno_t [63:0] pRs = {8*64{1'b0}};
+pregno_t [63:0] pRs = {10*128{1'b0}};
 reg [63:0] pRsv;
-pregno_t [3:0] bRs [0:13];// = {8*52{1'b0}};
-wire [3:0] bRsv [0:13];
+pregno_t [3:0] bRs [0:15];// = {8*52{1'b0}};
+wire [3:0] bRsv [0:15];
+pregno_t [3:0] bRs1 [0:3];
+pregno_t [3:0] bRs2 [0:3];
+reg [3:0] bRsv1 [0:3];
+reg [3:0] bRsv2 [0:3];
 
 value_t rfo_sau0_argA;
 value_t rfo_sau0_argB;
@@ -320,7 +324,7 @@ Qupls4_pkg::rob_bitmask_t robentry_agen_issue;
 Qupls4_pkg::lsq_entry_t [1:0] lsq [0:Qupls4_pkg::LSQ_ENTRIES-1];
 Qupls4_pkg::lsq_ndx_t lq_tail, lq_head;
 integer lsq_cmd_ndx;
-Qupls4_pkg::lsq_cmd_t [11:0] lsq_cmd;
+Qupls4_pkg::lsq_cmd_t [9:0] lsq_cmd;
 
 wire nq;
 reg [3:0] wnq;
@@ -2238,7 +2242,7 @@ Qupls4_pipeline_fet ufet1
 (
 	.rst(irst),
 	.clk(clk),
-	.rstcnt(rstcnt[2:0]),
+	.rstcnt(rstcnt),
 	.ihit(ihito),
 	.irq_in_ic(irq_in_ic),
 	.irq_ic(irq_ic),
@@ -2328,7 +2332,6 @@ Qupls4_pipeline_ext #(.MWIDTH(MWIDTH)) uiext1
 (
 	.rst_i(irst),
 	.clk_i(clk),
-	.rstcnt(rstcnt[2:0]),
 	.flush_fet(flush_fet),
 	.flush_ext(flush_ext),
 	.en_i(advance_pipeline),
@@ -2585,19 +2588,20 @@ if (RL_STRATEGY==0) begin
 		.wp_tap_o(wp_tap)
 	);
 end	else
-	// Change 13 groups of four port requests into one big linear group.
+	// Change 16 groups of four port requests into one big linear group.
 	always_comb
 	begin
-		pRs = {56*9{1'b0}};
+		pRs = {64*10{1'b0}};
 		pRsv = 64'd0;
-		for (jj = 0; jj < NREG_RPORTS*4; jj = jj + 1) begin
+		for (jj = 0; jj < 64; jj = jj + 1) begin
 			pRs[jj] = bRs[jj/4][jj % 4];
 			pRsv[jj] = bRsv[jj/4][jj % 4];
 		end
 	end
 	// Dynamic port selection.
-	Qupls4_read_port_select #(.NPORTO(NREG_RPORTS), .NPORTI(16*4)) urps1
+	Qupls4_read_port_select #(.FIXED_PORTS(16), .NPORTO(NREG_RPORTS), .NPORTI(64)) urps1
 	(
+		.rst(irst),
 		.clk(clk),
 		.pReg_i(pRs),
 		.pRegv_i(pRsv),
@@ -2616,7 +2620,7 @@ Qupls4_pkg::lsq_ndx_t lsq_head;
 Qupls4_pkg::lsq_ndx_t lsq_tail, lsq_tail0;
 always_comb advance_pipeline =
 
-	!rstcnt[2] &&			// not resetting
+	!rstcnt[5] &&			// not resetting
 	!sync_ndxv &&			// there is no sync instruction in the re-order buffer
 	!rat_stallq &&		// not stalled on register alias
 //	!vec_stallq &&		// I think this was on vector lookup
@@ -2905,14 +2909,70 @@ Qupls4_pipeline_ren #(.MWIDTH(MWIDTH), .NPORT(NREG_RPORTS)) uren1
 	.args(rfo)
 );
 
+always_comb
+begin
+	bRs1[0][0] = pg_ren.pr[0].op.pRs1;
+	bRs1[0][1] = pg_ren.pr[0].op.pRs2;
+	bRs1[0][2] = pg_ren.pr[0].op.pRs3;
+	bRs1[0][3] = pg_ren.pr[0].op.pRd;
+	bRs1[1][0] = pg_ren.pr[1].op.pRs1;
+	bRs1[1][1] = pg_ren.pr[1].op.pRs2;
+	bRs1[1][2] = pg_ren.pr[1].op.pRs3;
+	bRs1[1][3] = pg_ren.pr[1].op.pRd;
+	bRs1[2][0] = pg_ren.pr[2].op.pRs1;
+	bRs1[2][1] = pg_ren.pr[2].op.pRs2;
+	bRs1[2][2] = pg_ren.pr[2].op.pRs3;
+	bRs1[2][3] = pg_ren.pr[2].op.pRd;
+	bRs1[3][0] = pg_ren.pr[3].op.pRs1;
+	bRs1[3][1] = pg_ren.pr[3].op.pRs2;
+	bRs1[3][2] = pg_ren.pr[3].op.pRs3;
+	bRs1[3][3] = pg_ren.pr[3].op.pRd;
+	bRsv1[0][0] = pg_ren.pr[0].op.pRs1v;
+	bRsv1[0][1] = pg_ren.pr[0].op.pRs2v;
+	bRsv1[0][2] = pg_ren.pr[0].op.pRs3v;
+	bRsv1[0][3] = pg_ren.pr[0].op.pRdv;
+	bRsv1[1][0] = pg_ren.pr[1].op.pRs1v;
+	bRsv1[1][1] = pg_ren.pr[1].op.pRs2v;
+	bRsv1[1][2] = pg_ren.pr[1].op.pRs3v;
+	bRsv1[1][3] = pg_ren.pr[1].op.pRdv;
+	bRsv1[2][0] = pg_ren.pr[2].op.pRs1v;
+	bRsv1[2][1] = pg_ren.pr[2].op.pRs2v;
+	bRsv1[2][2] = pg_ren.pr[2].op.pRs3v;
+	bRsv1[2][3] = pg_ren.pr[2].op.pRdv;
+	bRsv1[3][0] = pg_ren.pr[3].op.pRs1v;
+	bRsv1[3][1] = pg_ren.pr[3].op.pRs2v;
+	bRsv1[3][2] = pg_ren.pr[3].op.pRs3v;
+	bRsv1[3][3] = pg_ren.pr[3].op.pRdv;
+end
+always_ff @(posedge clk)
+begin
+	bRs2[0] <= bRs1[0];
+	bRs2[1] <= bRs1[1];
+	bRs2[2] <= bRs1[2];
+	bRs2[3] <= bRs1[3];
+	bRsv2[0] <= bRsv1[0];
+	bRsv2[1] <= bRsv1[1];
+	bRsv2[2] <= bRsv1[2];
+	bRsv2[3] <= bRsv1[3];
+end
+assign bRs[0] = bRs2[0];
+assign bRs[1] = bRs2[1];
+assign bRs[2] = bRs2[2];
+assign bRs[3] = bRs2[3];
+assign bRsv[0] = bRsv2[0];
+assign bRsv[1] = bRsv2[1];
+assign bRsv[2] = bRsv2[2];
+assign bRsv[3] = bRsv2[3];
+
 /*
 Qupls4_pipeline_reg #(.MWIDTH(MWIDTH)) uplreg1
 (
 	.rst(irst),
 	.clk(clk),
 	.pg_ren(pg_ren),
-	.tails_i(tails),
-	.tails_o(reg_tails),
+	.pg_reg(pg_reg),
+//	.tails_i(tails),
+//	.tails_o(reg_tails),
 	.rf_reg(rf_reg),
 	.rf_regv(rf_regv)
 );
@@ -3924,7 +3984,6 @@ Qupls4_mem_sched umems1
 (
 	.rst(irst),
 	.clk(clk),
-	.head(head[0]),
 	.lsq_head(lsq_head),
 	.cancel(cpu_request_cancel),
 	.seq_consistency(1'b1),
@@ -4376,7 +4435,8 @@ Qupls4_lsq ulsq1
 	.cmd(lsq_cmd),
 	.pgh(pgh),
 	.rob(rob),
-	.lsq(lsq)
+	.lsq(lsq),
+	.lsq_tail(lsq_tail)
 );
 
 generate begin : gDcache
@@ -5068,7 +5128,7 @@ usaust0
 	.rst(irst),
 	.clk(clk),
 	.available(1'b1),//sau0_available),
-	.busy(rs_busy[0]),
+	.busy(rs_busy[4]),
 	.stall(sau0_full),
 	.stomp(robentry_stomp),
 	.issue(),//sau0_issue),//robentry_issue[sau0_rndx]),
@@ -5083,8 +5143,8 @@ usaust0
 	.rfo(rfo),
 	.rfo_tag(rfo_tag),
 	*/
-	.req_pRn(bRs[0]),
-	.req_pRnv(bRsv[0])
+	.req_pRn(bRs[4]),
+	.req_pRnv(bRsv[4])
 );
 
 Qupls4_reservation_station #(
@@ -5102,7 +5162,7 @@ uimulst0
 	.rst(irst),
 	.clk(clk),
 	.available(imul0_available),
-	.busy(rs_busy[2]),
+	.busy(rs_busy[6]),
 	.stall(imul0_full),
 	.stomp(robentry_stomp),
 	.issue(),
@@ -5111,8 +5171,8 @@ uimulst0
 	.rf_oper_i(rf_oper),
 	.bypass_i(),
 	.wp_oper_tap_i(wp_tap),
-	.req_pRn(bRs[2]),
-	.req_pRnv(bRsv[2])
+	.req_pRn(bRs[6]),
+	.req_pRnv(bRsv[6])
 );
 
 always_ff @(posedge clk) sau0_ldd <= sau0_ld;
@@ -5134,7 +5194,7 @@ uidivst0
 	.rst(irst),
 	.clk(clk),
 	.available(1'b1),
-	.busy(rs_busy[3]),
+	.busy(rs_busy[7]),
 	.stall(!idiv0_done||idiv0_full),
 	.stomp(robentry_stomp),
 	.issue(idiv0_ld),
@@ -5143,8 +5203,8 @@ uidivst0
 	.rf_oper_i(rf_oper),
 	.bypass_i(),
 	.wp_oper_tap_i(wp_tap),
-	.req_pRn(bRs[3]),
-	.req_pRnv(bRsv[3])
+	.req_pRn(bRs[7]),
+	.req_pRnv(bRsv[7])
 );
 else begin
 end
@@ -5168,7 +5228,7 @@ generate begin : gSauStation
 			.rst(irst),
 			.clk(clk),
 			.available(sau1_available),
-			.busy(rs_busy[1]),
+			.busy(rs_busy[5]),
 			.stall(sau1_full),
 			.stomp(robentry_stomp),
 			.issue(),//robentry_issue[sau0_rndx]),
@@ -5177,8 +5237,8 @@ generate begin : gSauStation
 			.rf_oper_i(rf_oper),
 			.bypass_i(),
 			.wp_oper_tap_i(wp_tap),
-			.req_pRn(bRs[1]),
-			.req_pRnv(bRsv[1])
+			.req_pRn(bRs[5]),
+			.req_pRnv(bRsv[5])
 		);
 	end
 end
@@ -5212,7 +5272,7 @@ generate begin : gFpuStat
 					.rst(irst),
 					.clk(clk),
 					.available(fma0_available),
-					.busy(rs_busy[4]),
+					.busy(rs_busy[8]),
 					.stall(fma0_full),
 					.stomp(robentry_stomp),
 					.issue(),//robentry_issue[sau0_rndx]),
@@ -5221,8 +5281,8 @@ generate begin : gFpuStat
 					.rf_oper_i(rf_oper),
 					.bypass_i(),
 					.wp_oper_tap_i(wp_tap),
-					.req_pRn(bRs[4]),
-					.req_pRnv(bRsv[4])
+					.req_pRn(bRs[8]),
+					.req_pRnv(bRsv[8])
 				);
 				Qupls4_reservation_station #(
 					.MWIDTH(MWIDTH),
@@ -5239,7 +5299,7 @@ generate begin : gFpuStat
 					.rst(irst),
 					.clk(clk),
 					.available(fpu0_available),
-					.busy(rs_busy[12]),
+					.busy(rs_busy[9]),
 					.stall(fpu0_full),
 					.stomp(robentry_stomp),
 					.issue(),//robentry_issue[sau0_rndx]),
@@ -5248,8 +5308,8 @@ generate begin : gFpuStat
 					.rf_oper_i(rf_oper),
 					.bypass_i(),
 					.wp_oper_tap_i(wp_tap),
-					.req_pRn(bRs[12]),
-					.req_pRnv(bRsv[12])
+					.req_pRn(bRs[9]),
+					.req_pRnv(bRsv[9])
 				);
 			end
 		1:
@@ -5268,7 +5328,7 @@ generate begin : gFpuStat
 					.rst(irst),
 					.clk(clk),
 					.available(fma1_available),
-					.busy(rs_busy[5]),
+					.busy(rs_busy[10]),
 					.stall(fma1_full),
 					.stomp(robentry_stomp),
 					.issue(),//robentry_issue[sau0_rndx]),
@@ -5277,13 +5337,22 @@ generate begin : gFpuStat
 					.rf_oper_i(rf_oper),
 					.bypass_i(),
 					.wp_oper_tap_i(wp_tap),
-					.req_pRn(bRs[5]),
-					.req_pRnv(bRsv[5])
+					.req_pRn(bRs[10]),
+					.req_pRnv(bRsv[10])
 				);
 		endcase
 	end
 end
 endgenerate
+
+// 0 to 3 = reg read stage
+// 4 to 6
+// 7 to 10 = reg read stage
+// 11 to 13
+// 14 to 17 = reg read stage
+// 18 to 20
+// 21 to 24 = reg read stage
+// 25 to 27
 
 generate begin : gDecimalFloat
 	if (NDFPU > 0) begin
@@ -5302,7 +5371,7 @@ generate begin : gDecimalFloat
 			.rst(irst),
 			.clk(clk),
 			.available(fpu0_available),
-			.busy(rs_busy[13]),
+			.busy(rs_busy[11]),
 			.stall(dfpu0_full),
 			.stomp(robentry_stomp),
 			.issue(),//robentry_issue[sau0_rndx]),
@@ -5311,8 +5380,8 @@ generate begin : gDecimalFloat
 			.rf_oper_i(rf_oper),
 			.bypass_i(),
 			.wp_oper_tap_i(wp_tap),
-			.req_pRn(bRs[13]),
-			.req_pRnv(bRsv[13])
+			.req_pRn(bRs[11]),
+			.req_pRnv(bRsv[11])
 		);
 	end
 end
@@ -5333,7 +5402,7 @@ ubrast1
 	.rst(irst),
 	.clk(clk),
 	.available(1'b1),
-	.busy(rs_busy[7]),
+	.busy(rs_busy[12]),
 	.stall(fcu_full),
 	.stomp(robentry_stomp),
 	.issue(),//robentry_issue[sau0_rndx]),
@@ -5342,8 +5411,8 @@ ubrast1
 	.rf_oper_i(rf_oper),
 	.bypass_i(),
 	.wp_oper_tap_i(wp_tap),
-	.req_pRn(bRs[7]),
-	.req_pRnv(bRsv[7])
+	.req_pRn(bRs[12]),
+	.req_pRnv(bRsv[12])
 );
 
 Qupls4_reservation_station #(
@@ -5361,7 +5430,7 @@ uagenst1
 	.rst(irst),
 	.clk(clk),
 	.available(1'b1),
-	.busy(rs_busy[8]),
+	.busy(rs_busy[13]),
 	.stall(!agen0_idle),
 	.stomp(robentry_stomp),
 	.issue(),//robentry_issue[sau0_rndx]),
@@ -5370,8 +5439,8 @@ uagenst1
 	.rf_oper_i(rf_oper),
 	.bypass_i(),
 	.wp_oper_tap_i(wp_tap),
-	.req_pRn(bRs[8]),
-	.req_pRnv(bRsv[8])
+	.req_pRn(bRs[13]),
+	.req_pRnv(bRsv[13])
 );
 
 generate begin : gAgen
@@ -5391,7 +5460,7 @@ uagenst2
 	.rst(irst),
 	.clk(clk),
 	.available(1'b1),
-	.busy(rs_busy[9]),
+	.busy(rs_busy[14]),
 	.stall(!agen1_idle),
 	.stomp(robentry_stomp),
 	.issue(),//robentry_issue[sau0_rndx]),
@@ -5400,8 +5469,8 @@ uagenst2
 	.rf_oper_i(rf_oper),
 	.bypass_i(),
 	.wp_oper_tap_i(wp_tap),
-	.req_pRn(bRs[9]),
-	.req_pRnv(bRsv[9])
+	.req_pRn(bRs[14]),
+	.req_pRnv(bRsv[14])
 );
 else begin
 	assign agen1_rse = {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
@@ -5458,8 +5527,8 @@ Qupls4_lsq_reg_read_req ulrrr1
 	.cndx(store_argC_cndx),
 	.id(store_argC_id),
 	.id1(store_argC_id1),
-	.bRs(bRs[10]),
-	.bRsv(bRsv[10])
+	.bRs(bRs[15]),
+	.bRsv(bRsv[15])
 );
 
 Qupls4_validate_operand #(
@@ -5544,7 +5613,7 @@ if (irst) begin
 end
 else begin
 
-	lsq_cmd_ndx = 0;
+	lsq_cmd_ndx = 2;
 	foreach (lsq_cmd[n12])
 		lsq_cmd[n12].cmd <= LSQ_CMD_NONE;
 
@@ -5624,7 +5693,7 @@ else begin
 		rob[agen0_rndx].argC <= rfo_agen0_argC;
 	end
 
-	if (!rstcnt[2])
+	if (!rstcnt[5])
 		rstcnt <= rstcnt + 1;
 
 	set_pending_ipl <= FALSE;
@@ -5877,8 +5946,6 @@ else begin
 				rob[agen0_id].lsq <= VAL;
 				rob[agen0_id].lsqndx <= lsq_tail0;
 				tEnqueLSE(lsq_tail0, agen0_id, 2'd1, agen0_res);
-				lsq_tail.row <= (lsq_tail.row + 2'd1) % Qupls4_pkg::LSQ_ENTRIES;
-				lsq_tail.col <= 3'd0;
 			end
 		end
 		// It is allowed to queue two
@@ -5978,7 +6045,7 @@ else begin
 	if (lsq[store_argC_id1.row][store_argC_id1.col].v==VAL && lsq[store_argC_id1.row][store_argC_id1.col].store && lsq[store_argC_id1.row][store_argC_id1.col].datav==INV) begin
 	if (load_lsq_argc) begin//prnv[23]) begin
 		$display("Qupls4: LSQ Rc=%h from r%d/%d", rfo_store_argC, store_argC_aReg, store_argC_pReg);
-		lsq_cmd[lsq_cmd_ndx].cmd <= CMD_SETRES;
+		lsq_cmd[lsq_cmd_ndx].cmd <= LSQ_CMD_SETRES;
 		lsq_cmd[lsq_cmd_ndx].lndx <= {store_argC_id1.row,store_argC_id1.col};
 		lsq_cmd[lsq_cmd_ndx].rndx <= 0;
 		lsq_cmd[lsq_cmd_ndx].n <= 0;
@@ -6147,7 +6214,7 @@ else begin
 	  		foreach (wrport0_v[n45]) begin
 		  		if (lsq[n3][n12].datav==INV && lsq[n3][n12].pRc==wrport0_Rt[n45] && wrport0_v[n45]==VAL) begin
 		  			$display("Qupls4: LSQ bypass from wrport0=%h r%d", wrport0_res[n45], wrport0_Rt[n45]);
-						lsq_cmd[lsq_cmd_ndx].cmd <= CMD_SETRES;
+						lsq_cmd[lsq_cmd_ndx].cmd <= LSQ_CMD_SETRES;
 						lsq_cmd[lsq_cmd_ndx].lndx <= {n3,n12[0]};
 						lsq_cmd[lsq_cmd_ndx].rndx <= 0;
 						lsq_cmd[lsq_cmd_ndx].n <= 0;
@@ -7567,7 +7634,7 @@ begin
 	for (n18r = 0; n18r < Qupls4_pkg::LSQ_ENTRIES; n18r = n18r + 1) begin
 		for (n18c = 0; n18c < 2; n18c = n18c + 1) begin
 			if (lsq[n18r][n18c].rndx==id && lsq[n18r][n18c].v==VAL) begin
-				lsq_cmd[lsq_cmd_ndx].cmd <= CMD_INV;
+				lsq_cmd[lsq_cmd_ndx].cmd <= LSQ_CMD_INV;
 				lsq_cmd[lsq_cmd_ndx].lndx <= {n18r,n18c[0]};
 				lsq_cmd[lsq_cmd_ndx].rndx <= id;
 				lsq_cmd[lsq_cmd_ndx].n <= 0;
@@ -7601,7 +7668,7 @@ begin
 	for (n18r = 0; n18r < Qupls4_pkg::LSQ_ENTRIES; n18r = n18r + 1) begin
 		for (n18c = 0; n18c < 2; n18c = n18c + 1) begin
 			if (lsq[n18r][n18c].rndx==id && lsq[n18r][n18c].v==VAL) begin
-				lsq_cmd[lsq_cmd_ndx].cmd <= CMD_INCADR;
+				lsq_cmd[lsq_cmd_ndx].cmd <= LSQ_CMD_INCADR;
 				lsq_cmd[lsq_cmd_ndx].lndx <= {n18r,n18c[0]};
 				lsq_cmd[lsq_cmd_ndx].rndx <= id;
 				lsq_cmd[lsq_cmd_ndx].n <= 0;
@@ -7630,7 +7697,7 @@ begin
 	for (n18r = 0; n18r < Qupls4_pkg::LSQ_ENTRIES; n18r = n18r + 1) begin
 		for (n18c = 0; n18c < 2; n18c = n18c + 1) begin
 			if (lsq[n18r][n18c].rndx==id && lsq[n18r][n18c].v) begin
-				lsq_cmd[lsq_cmd_ndx].cmd <= CMD_INCADR;
+				lsq_cmd[lsq_cmd_ndx].cmd <= LSQ_CMD_SETADR;
 				lsq_cmd[lsq_cmd_ndx].lndx <= {n18r,n18c[0]};
 				lsq_cmd[lsq_cmd_ndx].rndx <= id;
 				lsq_cmd[lsq_cmd_ndx].n <= 0;
@@ -7696,11 +7763,6 @@ begin
 		rob[n14] <= {$bits(Qupls4_pkg::rob_entry_t){1'd0}};
 		rob[n14].sn <= 8'd0;
 	end
-	for (n14r = 0; n14r < Qupls4_pkg::LSQ_ENTRIES; n14r = n14r + 1) begin
-		for (n14c = 0; n14c < 2; n14c = n14c + 1) begin
-			lsq[n14r][n14c] <= {$bits(Qupls4_pkg::lsq_entry_t){1'd0}};
-		end
-	end
 	/*
 	for (n14 = 0; n14 < BEB_ENTRIES; n14 = n14 + 1) begin
 		beb[n14] <= {$bits(beb_entry_t){1'd0}};
@@ -7760,9 +7822,8 @@ begin
 	last[3] <= 1'b1;
 	tails[0] <= 5'd0;
 	head[0] <= 5'd0;
-	rstcnt <= 4'd0;
+	rstcnt <= 6'd0;
 	lsq_head <= 3'd0;
-	lsq_tail <= 3'd0;
 	sau0_idle1 <= TRUE;
 	sau1_idle1 <= TRUE;
 	sau0_done <= TRUE;
@@ -8100,13 +8161,14 @@ input Qupls4_pkg::lsq_ndx_t ndx;
 input rob_ndx_t id;
 input [1:0] n;
 input cpu_types_pkg::virtual_address_t vadr;
+integer n1;
 begin
-	lsq_cmd[lsq_cmd_ndx].cmd <= CMD_ENQ;
-	lsq_cmd[lsq_cmd_ndx].lndx <= ndx;
-	lsq_cmd[lsq_cmd_ndx].rndx <= id;
-	lsq_cmd[lsq_cmd_ndx].n <= n;
-	lsq_cmd[lsq_cmd_ndx].data <= vadr;
-	lsq_cmd_ndx = lsq_cmd_ndx + 2'd1;
+	n1 = n - 2'd1;
+	lsq_cmd[n1].cmd <= LSQ_CMD_ENQ;
+	lsq_cmd[n1].lndx <= ndx;
+	lsq_cmd[n1].rndx <= id;
+	lsq_cmd[n1].n <= n;
+	lsq_cmd[n1].data <= vadr;
 end
 endtask
 

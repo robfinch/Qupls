@@ -36,30 +36,43 @@
 import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_lsq(rst, clk, cmd, pgh, rob, lsq);
+module Qupls4_lsq(rst, clk, cmd, pgh, rob, lsq, lsq_tail);
 parameter MWIDTH = Qupls4_pkg::MWIDTH;
-parameter CMD_NONE = 3'd0;
-parameter CMD_INV = 3'd1;
-parameter CMD_ENQ = 3'd2;
-parameter CMD_SETADR = 3'd3;
 input rst;
 input clk;
-input lsq_cmd_t [7:0] cmd;
+input lsq_cmd_t [9:0] cmd;
 input Qupls4_pkg::pipeline_group_hdr_t [Qupls4_pkg::ROB_ENTRIES/MWIDTH-1:0] pgh;
 input Qupls4_pkg::rob_entry_t [Qupls4_pkg::ROB_ENTRIES-1:0] rob;
 output Qupls4_pkg::lsq_entry_t [1:0] lsq [0:Qupls4_pkg::LSQ_ENTRIES-1];
+output Qupls4_pkg::lsq_ndx_t lsq_tail;
 
 integer n;
+integer n14r, n14c;
 
 always_ff @(posedge clk)
-begin
-	foreach (cmd[n]) begin
+if (rst) begin
+	lsq_tail <= {$bits(Qupls4_pkg::lsq_ndx_t){1'b0}};
+	for (n14r = 0; n14r < Qupls4_pkg::LSQ_ENTRIES; n14r = n14r + 1) begin
+		for (n14c = 0; n14c < Qupls4_pkg::NDATA_PORTS; n14c = n14c + 1) begin
+			lsq[n14r][n14c] <= {$bits(Qupls4_pkg::lsq_entry_t){1'd0}};
+		end
+	end
+end
+else begin
+	if (cmd[0]==LSQ_CMD_ENQ) begin
+	 	tEnqueLSE(7'h7F,cmd[0].lndx,cmd[0].rndx,rob[cmd[0].rndx],cmd[0].n,cmd[0].data);
+		lsq_tail.row <= (lsq_tail.row + 2'd1) % Qupls4_pkg::LSQ_ENTRIES;
+		lsq_tail.col <= 3'd0;
+	end
+	if (cmd[1]==LSQ_CMD_ENQ) begin
+		tEnqueLSE(7'h7F,cmd[1].lndx,cmd[1].rndx,rob[cmd[1].rndx],cmd[1].n,cmd[1].data);
+	end
+	for (n = 2; n < $size(cmd); n = n + 1) begin
 		case(cmd[n].cmd)
-		CMD_INV:	tInvalidateLSQ(cmd[n].rndx, cmd[n].can, cmd[n].cmt, cmd[n].data);
-		CMD_ENQ:	tEnqueLSE(cmd[n].n==2'd1 ? 7'h7F : 7'h7E,cmd[n].lndx,cmd[n].rndx,rob[cmd[n].rndx],cmd[n].n,cmd[n].data);
-		CMD_SETADR:	tSetLSQ(cmd[n].rndx,cmd[n].data);
-		CMD_INCADR: tIncLSQAddr(cmd[n].rndx);
-		CMD_SETRES:
+		LSQ_CMD_INV:	tInvalidateLSQ(cmd[n].rndx, cmd[n].can, cmd[n].cmt, cmd[n].data);
+		LSQ_CMD_SETADR:	tSetLSQ(cmd[n].rndx,cmd[n].data);
+		LSQ_CMD_INCADR: tIncLSQAddr(cmd[n].rndx);
+		LSQ_CMD_SETRES:
 			begin
 				lsq[cmd[n].lndx.row][cmd[n].lndx.col].res <= {cmd[n].flags,cmd[n].data};
 				lsq[cmd[n].lndx.row][cmd[n].lndx.col].datav <= cmd[n].datav;
@@ -114,6 +127,8 @@ begin
 		for (n12c = 0; n12c < 2; n12c = n12c + 1)
 			lsq[n12r][n12c].sn <= lsq[n12r][n12c].sn - n;
 	lsq[ndx.row][ndx.col].sn <= sn;
+	if (n==2'd2)
+		lsq[ndx.row][0].sn <= sn - 2'd1;
 	/*
 	if (Qupls4_pkg::PERFORMANCE) begin
 		// This seems not to work
@@ -135,6 +150,19 @@ input rob_ndx_t id;
 input address_t padr;
 integer n18r, n18c;
 begin
+	n18r = rob[id].lsqndx.row;
+	n18c = rob[id].lsqndx.col;
+	lsq[n18r][n18c].agen <= TRUE;
+	lsq[n18r][n18c].padr <= padr;
+	case(lsq[n18r][n18c].state)
+	2'b00:	
+		begin
+			lsq[n18r][n18c].shift <= padr[5:0];
+			lsq[n18r][n18c].shift2 <= 7'd64 - padr[5:0];
+		end
+	default:	;
+	endcase	
+/*	
 	for (n18r = 0; n18r < Qupls4_pkg::LSQ_ENTRIES; n18r = n18r + 1) begin
 		for (n18c = 0; n18c < 2; n18c = n18c + 1) begin
 			if (lsq[n18r][n18c].rndx==id && lsq[n18r][n18c].v) begin
@@ -151,6 +179,7 @@ begin
 			end
 		end
 	end
+*/
 end
 endtask
 
@@ -165,8 +194,35 @@ input rob_ndx_t id;
 input can;
 input cmt;
 input value_t data;
-integer n18r, n18c, n18b;
+integer n18r, n18c;
 begin
+	n18r = rob[id].lsqndx.row;
+	n18c = rob[id].lsqndx.col;
+	lsq[n18r][n18c].v <= INV;
+	lsq[n18r][n18c].state <= 2'b00;
+	lsq[n18r][n18c].agen <= FALSE;
+	lsq[n18r][n18c].datav <= INV;
+	lsq[n18r][n18c].store <= FALSE;
+	lsq[n18r][n18c].vstore <= FALSE;
+	lsq[n18r][n18c].vstore_ndx <= FALSE;
+	lsq[n18r][n18c].load <= FALSE;
+	lsq[n18r][n18c].vload <= FALSE;
+	lsq[n18r][n18c].vload_ndx <= FALSE;
+	// If it was a load, then cache the data in the LSQ
+	if (!cmt & !rob[lsq[n18r][n18c].rndx].excv)
+		case(lsq[n18r][n18c].memsz)
+		Qupls4_pkg::byt,Qupls4_pkg::wyde,Qupls4_pkg::tetra,Qupls4_pkg::octa:
+			if (lsq[n18r][n18c].load)
+				lsq[n18r][n18c].loadv <= VAL;
+			else
+				lsq[n18r][n18c].loadv <= INV;
+		default:	lsq[n18r][n18c].loadv <= INV;
+		endcase
+	else
+		lsq[n18r][n18c].loadv <= INV;
+	lsq[n18r][n18c].res <= data;
+
+	/*	
 	for (n18r = 0; n18r < Qupls4_pkg::LSQ_ENTRIES; n18r = n18r + 1) begin
 		for (n18c = 0; n18c < 2; n18c = n18c + 1) begin
 			if (lsq[n18r][n18c].rndx==id[n18b] && lsq[n18r][n18c].v==VAL) begin
@@ -195,6 +251,7 @@ begin
 				lsq[n18r][n18c].res <= data[n18b];
 				// It is possible that a load operation already in progress got
 				// cancelled.
+				*/
 				/*
 				if (dram0_work.rndx==lsq[n18r][n18c].rndx)
 					dram0_stomp <= TRUE;
@@ -203,9 +260,11 @@ begin
 				if (can[n18b])
 					cpu_request_cancel[lsq[n18r][n18c].rndx] <= 1'b1;
 				*/
+				/*
 			end
 		end
 	end
+	*/
 end
 endtask
 
@@ -216,6 +275,12 @@ task tIncLSQAddr;
 input rob_ndx_t id;
 integer n18r, n18c;
 begin
+	n18r = rob[id].lsqndx.row;
+	n18c = rob[id].lsqndx.col;
+	lsq[n18r][n18c].agen <= FALSE;	// cause agen again
+	lsq[n18r][n18c].vadr <= {lsq[n18r][n18c].vadr[$bits(virtual_address_t)-1:6]+2'd1,6'd0};
+	lsq[n18r][n18c].state <= 2'b01;
+/*	
 	for (n18r = 0; n18r < Qupls4_pkg::LSQ_ENTRIES; n18r = n18r + 1) begin
 		for (n18c = 0; n18c < 2; n18c = n18c + 1) begin
 			if (lsq[n18r][n18c].rndx==id && lsq[n18r][n18c].v==VAL) begin
@@ -226,6 +291,7 @@ begin
 			end
 		end
 	end
+*/
 end
 endtask
 

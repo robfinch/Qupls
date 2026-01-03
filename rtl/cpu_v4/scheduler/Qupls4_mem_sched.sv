@@ -38,14 +38,13 @@
 import const_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_mem_sched(rst, clk, head, lsq_head, cancel, seq_consistency,
+module Qupls4_mem_sched(rst, clk, lsq_head, cancel, seq_consistency,
 	robentry_stomp, rob, lsq,
 	memissue, ndx0, ndx1, ndx0v, ndx1v);
 parameter WINDOW_SIZE = Qupls4_pkg::LSQ_ENTRIES;
 parameter LSQ_WINDOW_SIZE = Qupls4_pkg::LSQ_ENTRIES;
 input rst;
 input clk;
-input cpu_types_pkg::rob_ndx_t head;
 input Qupls4_pkg::lsq_ndx_t lsq_head;
 input Qupls4_pkg::rob_bitmask_t robentry_stomp;
 input Qupls4_pkg::rob_bitmask_t cancel;
@@ -62,12 +61,11 @@ integer col,row;
 reg [3:0] q;
 
 Qupls4_pkg::rob_bitmask_t memready;		// mask of ready to go instructions.
-rob_ndx_t [WINDOW_SIZE-1:0] heads;
 Qupls4_pkg::lsq_ndx_t [LSQ_ENTRIES-1:0] lsq_heads;
-reg [1:0] issued;											// which data port instruction issued on.
-reg [1:0] stores;		// counts the number of stores issued.
+reg [7:0] issued;											// which data port instruction issued on.
+reg [7:0] stores;											// counts the number of stores issued.
 rob_ndx_t rndx;
-lsq_entry_t lsqe;
+Qupls4_pkg::lsq_entry_t lsqe;
 wire is_fenced_out;
 wire has_previous_memop;
 wire has_previous_fc;
@@ -118,7 +116,6 @@ Qupls4_has_previous_memop uhpm1
 // and assume it overlaps.
 // Finally, check the physical address, this could be at cache-line alignment
 // but for now, we use the alignment of the largest load / store, 16B.
-// Two loads are allowed to overlap.
 
 Qupls4_has_overlapped_adr uhoa1
 (
@@ -137,17 +134,9 @@ Qupls4_is_fenced_out uifo1
 );
 
 always_ff @(posedge clk)
-foreach (heads[m])
-	heads[m] = (head + m) % Qupls4_pkg::ROB_ENTRIES;
-
-always_ff @(posedge clk)
-if (rst)
-	q <= 4'd0;
-else begin
-	foreach (lsq_heads[q]) begin
-		lsq_heads[q].row = (lsq_head.row + q) % Qupls4_pkg::LSQ_ENTRIES;
-		lsq_heads[q].col = 1'd0;
-	end
+foreach (lsq_heads[q]) begin
+	lsq_heads[q].row <= (lsq_head.row + q) % Qupls4_pkg::LSQ_ENTRIES;
+	lsq_heads[q].col <= 1'd0;
 end
 
 // We need only check the LSQ for valid operands.
@@ -177,13 +166,14 @@ begin
 	stores = 2'd0;
 	next_islot = islot;
 	rndx = 8'd0;
+	lsqe = {$bits(lsq_entry_t){1'b0}};
 	for (row = 0; row < Qupls4_pkg::LSQ_ENTRIES; row = row + 1) begin
 		for (col = 0; col < 2; col = col + 1) begin
 			tmp_ndx.row = row;
 			tmp_ndx.col = col;
 			lsqe = lsq[lsq_heads[row].row][col];
 			rndx = lsqe.rndx;
-			if (TRUE) begin
+			if (
 			/*
 				// Instruction must be ready to go
 				memready[rndx] &&
@@ -199,10 +189,10 @@ begin
 				!has_overlap &&
 				// ... and is not fenced out
 				!is_fenced_out &&
+				*/
 				// not issued too many instructions.
 				issued < Qupls4_pkg::NDATA_PORTS
 			) begin
-			*/
 				// Check for issued on port #0 only. Might not need this check here.
 				if (rob[rndx].op.decbus.mem0 ? issued==2'd0 : TRUE) begin
 					/* Why the row 0 check?
@@ -231,13 +221,13 @@ begin
 					if (lsqe.store ? stores < 2'd1 : TRUE) begin
 						next_memissue[ rndx ] = 1'b1;
 						case(issued)
-						2'd0:
+						0:
 							begin
 								next_ndx0 = lsq_heads[row];
 								next_ndx0.col = col;
 								next_ndx0v = 1'b1;
 							end
-						2'd1:
+						1:
 						 	begin
 								next_ndx1 = lsq_heads[row];
 								next_ndx1.col = col;
@@ -259,12 +249,12 @@ end
 always_ff @(posedge clk)
 if (rst) begin
 	memissue <= {$bits(rob_entry_t){1'b0}};
-	/*
+	
 	ndx0 <= 'd0;
 	ndx1 <= 'd0;
-	ndx0v <= 1'd0;
-	ndx1v <= 1'd0;
-	*/
+	ndx0v <= INV;
+	ndx1v <= INV;
+	
 	foreach(islot[i])
 		islot[i] <= 2'd0;
 end

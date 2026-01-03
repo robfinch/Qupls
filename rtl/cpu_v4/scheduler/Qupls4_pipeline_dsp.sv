@@ -63,7 +63,7 @@ output Qupls4_pkg::reservation_station_entry_t [DISPATCH_COUNT-1:0] rse_o;
 output cpu_types_pkg::rob_ndx_t [DISPATCH_COUNT-1:0] rob_dispatched_o;
 output reg [DISPATCH_COUNT-1:0] rob_dispatched_v_o;
 
-integer nn,mm,kk,jj;
+integer nn,mm;
 Qupls4_pkg::reservation_station_entry_t [DISPATCH_COUNT-1:0] rse;
 cpu_types_pkg::rob_ndx_t [DISPATCH_COUNT-1:0] rob_dispatched;
 reg [DISPATCH_COUNT-1:0] rob_dispatched_v;
@@ -96,7 +96,6 @@ if (rst) begin
 	dispatched = {MWIDTH{1'b0}};
 	stall = 1'b0;
 	mm = 0;
-	kk = 0;
 end
 else begin
 	rob_dispatched_v = 6'd0;
@@ -114,7 +113,6 @@ else begin
 	rse[5] = {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
 	dispatched = dispatch_done;
 	
-	kk = jj;
 	mm = tail[0]/MWIDTH;
 	stall = 1'b0;
 	foreach (pg_ren.pr[nn]) begin
@@ -123,156 +121,143 @@ else begin
 			// and checkpoint index valid...
 			pgh.cndxv &&
 			// and not a register prefix or nop
-			!pg_ren.pr[nn].op.decbus.nop &&
+			!pg_ren.pr[nn].op.decbus.nop
 			// if a store, then no previous flow control dependency
 //			(pg_ren.pr[nn].op.decbus.store ? !pg_ren.pr[nn].fc_depv : TRUE) &&
 			// if serializing the previous instruction must be done...
 //			(Qupls4_pkg::SERIALIZE ? &pg_ren.pr[(nn + Qupls4_pkg::ROB_ENTRIES-1)%Qupls4_pkg::ROB_ENTRIES].done || !dbf[(nn + Qupls4_pkg::ROB_ENTRIES-1)%Qupls4_pkg::ROB_ENTRIES].v : TRUE) &&
-			!dispatched[nn] &&
-			!stall_dsp		
 		) begin
 
-			if (pg_ren.pr[nn].op.decbus.sau && !rob_dispatched_v[0] && !dispatched[nn] && kk < DISPATCH_COUNT) begin
+			if (pg_ren.pr[nn].op.decbus.sau && !rob_dispatched_v[0] && !dispatched[nn]) begin
 				tLoadRse(0,nn,mm);
 				// rse[0].funcunit = 4'd0; set to zero already above
-				rse[0].rndx = tail[kk];
-				rob_dispatched[0] = tail[kk];
+				rse[0].rndx = tail[0]+nn;
+				rob_dispatched[0] = tail[0]+nn;
 				rob_dispatched_v[0] = VAL;
 				dispatched[nn] = TRUE;
-				kk = kk + 1;
 			end
 			else if (pg_ren.pr[nn].op.decbus.sau &&		// must be SAU instruction
 				!pg_ren.pr[nn].op.decbus.sau0 &&				// can only be dispatched to sau #0
 				!rob_dispatched_v[5] &&									// this slot is not already in use
 				!dispatched[nn] &&											// this instruction has not been dispatched
-				Qupls4_pkg::NSAU > 1 && kk < DISPATCH_COUNT) begin							// and there is an SAU available
-				tLoadRse(kk,nn,mm);
+				Qupls4_pkg::NSAU > 1) begin							// and there is an SAU available
+				tLoadRse(5,nn,mm);
 				rse[5].funcunit = 4'd1;
-				rse[5].rndx = tail[kk];
-				rob_dispatched[5] = tail[kk];
+				rse[5].rndx = tail[0]+nn;
+				rob_dispatched[5] = tail[0]+nn;
 				rob_dispatched_v[5] = VAL;
 				dispatched[nn] = TRUE;
-				kk = kk + 1;
 			end
 			// If trying to dispatch SAU instruction and no unit available
 			else if (pg_ren.pr[nn].op.decbus.sau) begin
-				stall = 1'b1;
+				stall = !dispatched[nn];
 			end
 
-			if (pg_ren.pr[nn].op.decbus.mul && !rob_dispatched_v[1] && !dispatched[nn] && kk < DISPATCH_COUNT) begin
+			if (pg_ren.pr[nn].op.decbus.mul && !rob_dispatched_v[1] && !dispatched[nn]) begin
 				tLoadRse(1,nn,mm);
 				rse[1].funcunit = 4'd2;
-				rse[1].rndx = tail[kk];
-				rob_dispatched[1] = tail[kk];
+				rse[1].rndx = tail[0]+nn;
+				rob_dispatched[1] = tail[0]+nn;
 				rob_dispatched_v[1] = VAL;
 				dispatched[nn] = TRUE;
-				kk = kk + 1;
 			end
 			else if (pg_ren.pr[nn].op.decbus.mul) begin
-				stall = 1'b1;
+				stall = !dispatched[nn];
 			end
 
-			if ((pg_ren.pr[nn].op.decbus.div|pg_ren.pr[nn].op.decbus.sqrt) && !rob_dispatched[1] && !dispatched[nn] && kk < DISPATCH_COUNT) begin
+			if ((pg_ren.pr[nn].op.decbus.div|pg_ren.pr[nn].op.decbus.sqrt) && !rob_dispatched[1] && !dispatched[nn]) begin
 				tLoadRse(2,nn,mm);
 				rse[1].funcunit = 4'd3;
-				rse[1].rndx = tail[kk];
-				rob_dispatched[1] = tail[kk];
+				rse[1].rndx = tail[0]+nn;
+				rob_dispatched[1] = tail[0]+nn;
 				rob_dispatched_v[1] = VAL;
 				dispatched[nn] = TRUE;
-				kk = kk + 1;
 			end
-			else if (pg_ren.pr[nn].op.decbus.div|pg_ren.pr[nn].op.decbus.sqrt && kk < DISPATCH_COUNT) begin
-				stall = 1'b1;
+			else if (pg_ren.pr[nn].op.decbus.div|pg_ren.pr[nn].op.decbus.sqrt) begin
+				stall = !dispatched[nn];
 			end
 
-			if (pg_ren.pr[nn].op.decbus.fc && !rob_dispatched[2] && !dispatched[nn] && kk < DISPATCH_COUNT) begin
+			if (pg_ren.pr[nn].op.decbus.fc && !rob_dispatched[2] && !dispatched[nn]) begin
 				tLoadRse(2,nn,mm);
 				rse[2].funcunit = 4'd7; 
-				rse[2].rndx = tail[kk];
-				rob_dispatched[2] = tail[kk];
+				rse[2].rndx = tail[0]+nn;
+				rob_dispatched[2] = tail[0]+nn;
 				rob_dispatched_v[2] = VAL;
 				dispatched[nn] = TRUE;
-				kk = kk + 1;
 			end
 			else if (pg_ren.pr[nn].op.decbus.fc) begin
-				stall = 1'b1;
+				stall = !dispatched[nn];
 			end
 
-			if (pg_ren.pr[nn].op.decbus.mem && !rob_dispatched[3] && !dispatched[nn] && kk < DISPATCH_COUNT) begin
+			if (pg_ren.pr[nn].op.decbus.mem && !rob_dispatched[3] && !dispatched[nn]) begin
 				tLoadRse(3,nn,mm);
 				rse[3].funcunit = 4'd8; 
-				rse[3].rndx = tail[kk];
-				rob_dispatched[3] = tail[kk];
+				rse[3].rndx = tail[0]+nn;
+				rob_dispatched[3] = tail[0]+nn;
 				rob_dispatched_v[3] = VAL;
 				dispatched[nn] = TRUE;
-				kk = kk + 1;
 			end
 			/*
 			else if (pg_ren.pr[nn].op.decbus.mem && mem_cnt < 3'd2 && Qupls4_pkg::NDATA_PORTS > 1) begin
-				tLoadRse(kk,nn,mm);
+				tLoadRse(3,nn,mm);
 				rse[3].funcunit = 4'd9; 
 				rse[3].rndx = pg_ren.pr[nn].this_ndx;
 				rob_dispatched[3] = pg_ren.pr[nn].this_ndx;
 				rob_dispatched_v[3] = VAL;
 				mem_cnt = mem_cnt + 3'd1;
-				kk = kk + 1;
 			end
 			*/
 			else if (pg_ren.pr[nn].op.decbus.mem) begin
-				stall = 1'b1;
+				stall = !dispatched[nn];
 			end
 
-			if (Qupls4_pkg::SUPPORT_FLOAT && pg_ren.pr[nn].op.decbus.fma && !rob_dispatched[4] && !dispatched[nn] && Qupls4_pkg::NFMA>0 && kk < DISPATCH_COUNT) begin
-				tLoadRse(kk,nn,mm);
+			if (Qupls4_pkg::SUPPORT_FLOAT && pg_ren.pr[nn].op.decbus.fma && !rob_dispatched[4] && !dispatched[nn] && Qupls4_pkg::NFMA>0) begin
+				tLoadRse(4,nn,mm);
 				rse[4].funcunit = 4'd4; 
-				rse[4].rndx = tail[kk];
-				rob_dispatched[4] = tail[kk];
+				rse[4].rndx = tail[0]+nn;
+				rob_dispatched[4] = tail[0]+nn;
 				rob_dispatched_v[4] = VAL;
 				dispatched[nn] = TRUE;
-				kk = kk + 1;
 			end
 			else if (pg_ren.pr[nn].op.decbus.fma) begin
-				stall = 1'b1;
+				stall = !dispatched[nn];
 			end
 
 			/*
 			if (Qupls4_pkg::SUPPORT_FLOAT && pg_ren.pr[nn].op.decbus.fma && !rob_dispatched[4] && !dispatched[nn] && Qupls4_pkg::NFMA > 1) begin
 				tLoadRse(4,nn,mm);
 				rse[4].funcunit = 4'd5; 
-				rse[4].rndx = tail[kk];
-				rob_dispatched[4] = tail[kk];
+				rse[4].rndx = tail[0]+nn;
+				rob_dispatched[4] = tail[0]+nn;
 				rob_dispatched_v[4] = VAL;
 				fma_cnt = fma_cnt + 3'd1;
-				kk = kk + 1;
 			end
 			else if (pg_ren.pr[nn].op.decbus.fma) begin
 				stall = 1'b1;
 			end
 			*/
-			if (Qupls4_pkg::SUPPORT_TRIG && pg_ren.pr[nn].op.decbus.trig && !rob_dispatched[4] && !dispatched[nn] && kk < DISPATCH_COUNT) begin
+			if (Qupls4_pkg::SUPPORT_TRIG && pg_ren.pr[nn].op.decbus.trig && !rob_dispatched[4] && !dispatched[nn]) begin
 				tLoadRse(4,nn,mm);
 				rse[4].funcunit = 4'd6; 
-				rse[4].rndx = tail[kk];
-				rob_dispatched[4] = tail[kk];
+				rse[4].rndx = tail[0]+nn;
+				rob_dispatched[4] = tail[0]+nn;
 				rob_dispatched_v[4] = VAL;
 				dispatched[nn] = TRUE;
-				kk = kk + 1;
 			end
 			else if (pg_ren.pr[nn].op.decbus.trig) begin
-				stall = 1'b1;
+				stall = !dispatched[nn];
 			end
 
-			if (Qupls4_pkg::SUPPORT_FLOAT && pg_ren.pr[nn].op.decbus.fpu && !rob_dispatched[4] && !dispatched[nn] && Qupls4_pkg::NFPU > 0 && kk < DISPATCH_COUNT) begin
+			if (Qupls4_pkg::SUPPORT_FLOAT && pg_ren.pr[nn].op.decbus.fpu && !rob_dispatched[4] && !dispatched[nn] && Qupls4_pkg::NFPU > 0) begin
 				tLoadRse(4,nn,mm);
 				rse[4].funcunit = 4'd12;
-				rse[4].rndx = tail[kk];
-				rob_dispatched[4] = tail[kk];
+				rse[4].rndx = tail[0]+nn;
+				rob_dispatched[4] = tail[0]+nn;
 				rob_dispatched_v[4] = VAL;
 				dispatched[nn] = TRUE;
-				kk = kk + 1;
 			end
 			else if (pg_ren.pr[nn].op.decbus.fpu) begin
-				stall = 1'b1;
+				stall = !dispatched[nn];
 			end
 		end
 	end
@@ -294,15 +279,6 @@ always_ff @(posedge clk)
 			dispatch_done <= dispatched;
 		else
 			dispatch_done <= {MWIDTH{1'b0}};
-	end
-always_ff @(posedge clk)
-	if (rst)
-		jj <= 0;
-	else begin
-		if (stall)
-			jj <= kk;
-		else
-			jj <= 0;
 	end
 
 task tLoadRse;

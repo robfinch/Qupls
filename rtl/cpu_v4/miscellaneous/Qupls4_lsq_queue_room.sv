@@ -53,7 +53,7 @@ begin
 	enqueue_room = 4'd0;
 	t = tail;
 	// Check to make sure queue at tail is possible.
-	if (lsq[t.row][0].v==INV && lsq[t.row][1]==INV) begin
+	if (lsq[t.row][0].v==INV && lsq[t.row][1].v==INV) begin
 		// If the head and tail are the same and pointing to invalid entries then
 		// the queue must be empty.
 		if (t.row==head.row)

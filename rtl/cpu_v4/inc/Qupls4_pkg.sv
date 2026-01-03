@@ -393,11 +393,11 @@ typedef logic [LSQ_ENTRIES-1:0] lsq_bitmask_t;
 typedef logic [3:0] beb_ndx_t;
 
 parameter LSQ_CMD_NONE = 3'd0;
-parameter CMD_INV = 3'd1;
-parameter CMD_ENQ = 3'd2;
-parameter CMD_SETADR = 3'd3;
-parameter CMD_SETRES = 3'd4;
-parameter CMD_INCADR = 3'd5;
+parameter LSQ_CMD_INV = 3'd1;
+parameter LSQ_CMD_ENQ = 3'd2;
+parameter LSQ_CMD_SETADR = 3'd3;
+parameter LSQ_CMD_SETRES = 3'd4;
+parameter LSQ_CMD_INCADR = 3'd5;
 
 typedef struct packed {
 	logic [2:0] cmd;

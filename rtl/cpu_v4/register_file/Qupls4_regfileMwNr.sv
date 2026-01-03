@@ -45,7 +45,7 @@ parameter WID = $bits(cpu_types_pkg::value_t)+$bits(Qupls4_pkg::flags_t);
 parameter DEP = Qupls4_pkg::PREGS;
 parameter BWW = 8;
 parameter RBIT = $clog2(DEP)-1;
-parameter RPORTS = 12;
+parameter RPORTS = 24;
 parameter WPORTS = 4;
 input rst;
 input clk;

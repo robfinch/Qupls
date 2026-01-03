@@ -49,7 +49,7 @@ parameter FUNCUNIT = 4'd0;
 parameter NBPI = 4;			// number of bypasssing inputs
 parameter NSARG = 3;		// number of source operands
 parameter RL_STRATEGY = 0;	// register lookup strategy
-parameter NREG_RPORTS = RL_STRATEGY==0 ? 0 : 12;
+parameter NREG_RPORTS = RL_STRATEGY==0 ? 0 : 16;
 parameter RC = 1'b0;
 parameter DISPATCH_COUNT=6;	// number of lanes of dispatching
 // The following controls which lanes to look at. It depends on which lanes are
@@ -77,6 +77,8 @@ reg idle;
 reg dispatch;
 reg pstall;
 Qupls4_pkg::operand_t [NRSE-1:0] arg [0:5];
+pregno_t [3:0] req_pRnu;
+reg [3:0] req_pRnuv;
 
 wire [16:0] lfsro;
 Qupls4_pkg::reservation_station_entry_t [NRSE-1:0] rse;
@@ -338,18 +340,18 @@ end
 always_comb
 begin
 	kk = 0;
-	req_pRn[0] = 8'd0;
-	req_pRn[1] = 8'd0;
-	req_pRn[2] = 8'd0;
-	req_pRn[3] = 8'd0;
-	req_pRnv = 4'd0;
+	req_pRnu[0] = 8'd0;
+	req_pRnu[1] = 8'd0;
+	req_pRnu[2] = 8'd0;
+	req_pRnu[3] = 8'd0;
+	req_pRnuv = 4'd0;
 	if (RL_STRATEGY==1) begin
 		for (jj = 0; jj < NRSE; jj = jj + 1) begin
 			for (pp = 0; pp < 6; pp = pp + 1) begin
 				if (fnSrc(rse[jj].uop,pp)) begin
 					if (rse[jj].busy && !rse[jj].arg[pp].v && kk < 4) begin
-						req_pRn[kk] = rse[jj].arg[pp].pRn;
-						req_pRnv = VAL;
+						req_pRnu[kk] = rse[jj].arg[pp].pRn;
+						req_pRnuv = VAL;
 						kk = kk + 1;
 					end
 				end
@@ -357,6 +359,11 @@ begin
 		end
 	end
 end
+
+always_ff @(posedge clk)
+	req_pRn <= req_pRnu;
+always_ff @(posedge clk)
+	req_pRnv <= req_pRnuv;
 
 function fnSrc;
 input micro_op_t op;

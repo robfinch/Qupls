@@ -35,65 +35,113 @@
 // 1560 LUTs / 160 FFs
 // ============================================================================
 //
+// This comment is out-of-date.
 // The selector is organized around having seven functional units requesting
-// up to five registers each, or 35 register selections. Since most of the
+// up to seven registers each, or 49 register selections. Since most of the
 // time instructions will require 3 registers or less, it is wasteful to 
 // have a separate register file port for every possible register an 
 // instruction might need. Instead the selector goes with enough ports to
 // keep everybody happy most of the time.
 //
-// The first seven port selections are fixed 1:1. This is to reduce the amount
-// of logic required by the selector. Many instructions use a at least one
-// source register, so they are simply allocated one all the time. Instead
-// of requiring dynamic mapping for all 30 inputs, it is reduced to 24
-// inputs. This cuts the size of the component in half (1900 LUTs instead
-// of 4000) and likely helps with the timing as well.
+// The first sixteen port selections are fixed 1:1. These are for the 
+// register specs coming out of the rename stage.
 //
-// The port selection rotates for the 24 dynamically assigned ports to
-// ensure that no port goes unserviced.
 // ============================================================================
 
+import const_pkg::*;
 import cpu_types_pkg::aregno_t;
 import cpu_types_pkg::pc_address_t;
 
-module Qupls4_read_port_select(clk, pReg_i, pRegv_i, pReg_o, regAck_o);
+module Qupls4_read_port_select(rst, clk, advance, pReg_i, pRegv_i, pReg_o, pRegv_o, regAck_o);
+parameter FIXED_PORTS=16;
 parameter NPORTI=64;
-parameter NPORTO=16;
+parameter NPORTO=24;
+input rst;
 input clk;
+input advance;
 input pregno_t [NPORTI-1:0] pReg_i;
 input [NPORTI-1:0] pRegv_i;
 output pregno_t [NPORTO-1:0] pReg_o;
+output reg [NPORTO-1:0] pRegv_o;
 output reg [NPORTI-1:0] regAck_o;
 
-integer j,k,h,x;
-reg [5:0] m = 6'd0;
+integer j,k;
+genvar g;
+pregno_t [NPORTO-1:0] pReg1_o;
+reg [NPORTO-1:0] pRegv1_o;
+reg [NPORTI-1:0] regAck1_o;
+reg [7:0] bank_req;
+wire [7:0] bank_grant_oh;
 
-// m used to rotate the port selections every clock cycle.
+generate begin : gBankReq
+for (g = 0; g < NPORTI/8; g = g + 1)
+	always_comb
+		if (g >= FIXED_PORTS/8)
+			bank_req[g] = |pRegv_i[g*8+7:g*8];
+		else
+			bank_req[g] = 1'b0;
+end
+endgenerate
+
+RoundRobinArbiter #(.NumRequests(8))
+urr1
+(
+  .rst(rst),
+  .clk(clk),
+  .ce(1'b1),
+  .hold(1'b0),
+  .req(bank_req),
+  .grant(bank_grant_oh),
+  .grant_enc()
+);
+
 always_ff @(posedge clk)
-begin
-	if (m>=NPORTI-1)
-		m <= 6'd0;
-	else
-		m <= m + 6'd1;
+if (rst) begin
+	for (j = 0; j < 8; j = j + 1) begin
+		pRegv_o[j] <= INV;
+		pReg_o[j] <= 10'd0;
+		regAck_o[j] <= INV;
+	end
+end
+else begin
+	for (k = 0; k < 8; k = k + 1) begin
+		if (k < FIXED_PORTS/8) begin
+			for (j = 0; j < 8; j = j + 1) begin
+				pRegv_o[j+k*8] <= pRegv_i[j+k*8];
+				pReg_o[j+k*8] <= pReg_i[j+k*8];
+				regAck_o[j+k*8] <= pRegv_i[j+k*8];
+			end
+		end
+		else if (bank_grant_oh[k]) begin
+			for (j = 0; j < 8; j = j + 1) begin
+				pRegv_o[j+FIXED_PORTS] <= pRegv_i[j+k*8];
+				pReg_o[j+FIXED_PORTS] <= pReg_i[j+k*8];
+				regAck_o[j+FIXED_PORTS] <= pRegv_i[j+k*8];
+			end
+		end
+	end
 end
 
-always_ff @(posedge clk)
-begin
-	k = 0;
-	foreach (regAck_o[h])
-		regAck_o[h] <= 1'b0;
-	foreach (pReg_o[h])
-		pReg_o[h] <= 10'd0;
+/* Too slow...
 	for (j = 0; j < NPORTI; j = j + 1) begin
 		regAck_o[j] <= 1'b0;
 		if (k < NPORTO) begin
 			if (pRegv_i[((j+m)%NPORTI)]) begin
 				regAck_o[((j+m)%NPORTI)] <= 1'b1;
 				pReg_o[k] <= pReg_i[((j+m)%NPORTI)];
+				pRegv_o[k] <= VAL;
 				k = k + 1;
 			end
 		end
 	end
-end
+*/
+/*
+always_ff @(posedge clk)
+	pReg_o <= pReg1_o;
+always_ff @(posedge clk)
+	pRegv_o <= pRegv1_o;
+always_ff @(posedge clk)
+	regAck_o <= regAck1_o;
+*/
 
 endmodule

@@ -47,7 +47,7 @@ module Qupls4_pipeline_fet(rst, clk, rstcnt, ihit, en, fet_stallq, ic_stallq,
 );
 input rst;
 input clk;
-input [2:0] rstcnt;
+input [5:0] rstcnt;
 input ihit;
 input en;
 input fet_stallq;
@@ -181,9 +181,12 @@ always_ff @(posedge clk)
 if (rst)
 	ic_line_fet <= {128{1'd1,Qupls4_pkg::OP_NOP}};
 else begin
-	if (!rstcnt[2])
+	/*
+	if (!rstcnt[5])
 		ic_line_fet <= {128{1'd1,Qupls4_pkg::OP_NOP}};
-	else if (en2|inject_cl) begin
+	else
+	*/
+	if (en2|inject_cl) begin
 		if (inject_cl)
 			ic_line_fet <= {{64{2'd3,Qupls4_pkg::OP_NOP}},inj_line_i};
 		else if (!ihit || (stomp_fet && pc_i.stream!=kept_stream) || nmi_i || flush_i)

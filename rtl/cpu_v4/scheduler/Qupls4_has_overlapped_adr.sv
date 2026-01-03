@@ -67,11 +67,8 @@ begin
 					// If the address is not generated, play safe.
 					if (!lsq[n][c].agen)
 						has_overlap = TRUE;
-					if (lsq[n][c].padr[$bits(physical_address_t)-1:4]==lsq[id.row][id.col].padr[$bits(physical_address_t)-1:4]) begin
-						// Two loads can overlap
-						if (!(lsq[n][c].load && lsq[id.row][id.col].load))
-							has_overlap = TRUE;
-					end
+					if (lsq[n][c].padr[$bits(physical_address_t)-1:4]==lsq[id.row][id.col].padr[$bits(physical_address_t)-1:4])
+						has_overlap = TRUE;
 				end
 			end
 		end

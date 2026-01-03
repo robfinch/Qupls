@@ -70,7 +70,7 @@ reg [2:0] ndx;
 reg flt;
 reg [1:0] fltpr;
 reg [47:0] finsA, finsB, finsC;
-reg [63:0] cnsta,cnstb,cnstc,cnstd;
+reg [63:0] cnsta,cnstb,cnstc,cnstd,cnst;
 reg has_cnsta;
 reg has_cnstb;
 reg has_cnstc;
@@ -85,7 +85,8 @@ fpCvt32To64 ucvt32x64b(cnst2[31:0], imm32x64b);
 fpCvt32To64 ucvt32x64C(cnst3[31:0], imm32x64c);
 */
 reg [47:0] cpfx [0:7];
-reg [1:0] wh, q;
+reg [1:0] q;
+reg [1:0] wh;
 reg [7:0] vpfx;					// valid postfix indicator
 
 genvar g;
@@ -123,6 +124,24 @@ begin
 	Qupls4_pkg::OP_R3B,Qupls4_pkg::OP_R3W,Qupls4_pkg::OP_R3T,Qupls4_pkg::OP_R3O,
 	Qupls4_pkg::OP_R3BP,Qupls4_pkg::OP_R3WP,Qupls4_pkg::OP_R3TP,Qupls4_pkg::OP_R3OP,
 	Qupls4_pkg::OP_R3P,Qupls4_pkg::OP_CHK:
+		begin
+			if (has_cnsta) begin
+				imma = {cnsta,ins.Rs1[5:0]};
+				has_imma = TRUE;
+			end
+			if (has_cnstb) begin
+				immb = {cnstb,ins.Rs2[5:0]};
+				has_immb = TRUE;
+			end
+			if (has_cnstc) begin
+				immc = {cnstc,ins.Rs3[5:0]};
+				has_immc = TRUE;
+			end
+		end
+
+	Qupls4_pkg::OP_FLTH,Qupls4_pkg::OP_FLTS,Qupls4_pkg::OP_FLTD,Qupls4_pkg::OP_FLTQ,
+	Qupls4_pkg::OP_FLTPH,Qupls4_pkg::OP_FLTPS,Qupls4_pkg::OP_FLTPD,Qupls4_pkg::OP_FLTPQ,
+	Qupls4_pkg::OP_FLTP:
 		begin
 			if (has_cnsta) begin
 				imma = {cnsta,ins.Rs1[5:0]};
@@ -177,7 +196,31 @@ begin
 	Qupls4_pkg::OP_LDB,Qupls4_pkg::OP_LDBZ,
 	Qupls4_pkg::OP_LDW,Qupls4_pkg::OP_LDWZ,
 	Qupls4_pkg::OP_LDT,Qupls4_pkg::OP_LDTZ,
-	Qupls4_pkg::OP_LOAD,
+	Qupls4_pkg::OP_LOAD:
+		begin
+			if (ins.Rs1==8'd0) begin
+				imma = value_zero;
+				has_imma = TRUE;
+			end
+			if (has_cnsta) begin
+				imma = {cnsta,ins.Rs1[5:0]};
+				has_imma = TRUE;
+			end
+			if (ins.Rs2==8'd0) begin
+				immb = value_zero;
+				has_immb = TRUE;
+			end
+			if (has_cnstb) begin
+				immb = {cnstb,ins.Rs2[5:0]};
+				has_immb = TRUE;
+			end
+			has_immc = TRUE;
+			if (has_cnstc)
+				immc = {cnstc,ins.imm[19:0]};
+			else
+				immc = {{44{ins.imm[19]}},ins.imm[19:0]};
+		end
+
 	Qupls4_pkg::OP_STB,
 	Qupls4_pkg::OP_STW,
 	Qupls4_pkg::OP_STT,
@@ -204,6 +247,10 @@ begin
 				immc = {cnstc,ins.imm[19:0]};
 			else
 				immc = {{44{ins.imm[19]}},ins.imm[19:0]};
+			if (has_cnstd) begin
+				has_immd = TRUE;
+				immd = {cnstd,ins.Rd[5:0]};
+			end
 		end
 
 	Qupls4_pkg::OP_LDIP,Qupls4_pkg::OP_STIP:
@@ -233,6 +280,8 @@ begin
 			end
 			has_immc = TRUE;
 			immc = {{44{ins.imm[19]}},ins.imm[19:0]};
+			has_immd = TRUE;
+			immd = {{60{ins.Rd[3]}},ins.Rd[3:0]};
 		end
 
 	Qupls4_pkg::OP_FENCE:
