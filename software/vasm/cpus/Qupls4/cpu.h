@@ -135,6 +135,10 @@ typedef struct {
   uint64_t pfx3;
   uint64_t pfx2;
   uint64_t pfx1;
+  char pfx4v;
+  char pfx3v;
+  char pfx2v;
+  char pfx1v;
 	uint64_t opcode;
   uint64_t short_opcode;
 	thuge val;

@@ -131,10 +131,14 @@ typedef struct {
 typedef struct {
 	uint8_t size;
 	uint8_t opcode_size;
+  uint64_t pfx6;
+  uint64_t pfx5;
   uint64_t pfx4;
   uint64_t pfx3;
   uint64_t pfx2;
   uint64_t pfx1;
+  char pfx6v;
+  char pfx5v;
   char pfx4v;
   char pfx3v;
   char pfx2v;
@@ -142,9 +146,6 @@ typedef struct {
 	uint64_t opcode;
   uint64_t short_opcode;
 	thuge val;
-	postfix_buf pfxa;
-	postfix_buf pfxb;
-	postfix_buf pfxc;
 } instruction_buf;
 
 typedef struct {
@@ -264,6 +265,8 @@ typedef struct {
 #define R2S			78
 #define R6			79
 #define R7			80
+#define RIC			81
+#define RID			82
 
 #define LN(x)		((x) & 0LL)
 #define OPC(x)	(((x) & 0x7fLL) << 0LL)
