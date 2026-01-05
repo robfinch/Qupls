@@ -72,9 +72,6 @@ begin
 	Qupls4_pkg::OP_CSR:		fnIsSau = 1'b1;
 	Qupls4_pkg::OP_MOVMR:		fnIsSau = 1'b1;
 	Qupls4_pkg::OP_LOADA:	fnIsSau = 1'b1;
-	Qupls4_pkg::OP_NOP,
-	Qupls4_pkg::OP_PUSH,Qupls4_pkg::OP_POP:
-		fnIsSau = 1'b1;
 	Qupls4_pkg::OP_FENCE:
 		fnIsSau = 1'b1;
 	default:

@@ -38,13 +38,14 @@
 import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_decode_Rs1(om, instr, instr_raw, has_imma, Rs1, Rs1z);
+module Qupls4_decode_Rs1(om, instr, instr_raw, has_imma, Rs1, Rs1z, Rs1ip);
 input Qupls4_pkg::operating_mode_t om;
 input Qupls4_pkg::micro_op_t instr;
 input [431:0] instr_raw;
 input has_imma;
 output aregno_t Rs1;
 output reg Rs1z;
+output reg Rs1ip;
 
 Qupls4_pkg::operating_mode_t om1;
 
@@ -106,7 +107,8 @@ begin
     else
         om1 = om;
   */
-	Rs1z = ~|Rs1;
+	Rs1z = &Rs1;
+	Rs1ip = Rs1==6'd62;
 end
 
 endmodule

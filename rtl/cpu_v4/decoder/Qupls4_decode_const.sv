@@ -198,15 +198,19 @@ begin
 	Qupls4_pkg::OP_LDT,Qupls4_pkg::OP_LDTZ,
 	Qupls4_pkg::OP_LOAD:
 		begin
-			if (ins.Rs1==8'd0) begin
+			if (ins.Rs1==8'd63) begin
 				imma = value_zero;
+				has_imma = TRUE;
+			end
+			else if (ins.Rs1==8'd62) begin
+				imma = ip;
 				has_imma = TRUE;
 			end
 			if (has_cnsta) begin
 				imma = {cnsta,ins.Rs1[5:0]};
 				has_imma = TRUE;
 			end
-			if (ins.Rs2==8'd0) begin
+			if (ins.Rs2==8'd63) begin
 				immb = value_zero;
 				has_immb = TRUE;
 			end
@@ -226,15 +230,19 @@ begin
 	Qupls4_pkg::OP_STT,
 	Qupls4_pkg::OP_STORE:
 		begin
-			if (ins.Rs1==8'd0) begin
+			if (ins.Rs1==8'd63) begin
 				imma = value_zero;
+				has_imma = TRUE;
+			end
+			else if (ins.Rs1==8'd62) begin
+				imma = ip;
 				has_imma = TRUE;
 			end
 			if (has_cnsta) begin
 				imma = {cnsta,ins.Rs1[5:0]};
 				has_imma = TRUE;
 			end
-			if (ins.Rs2==8'd0) begin
+			if (ins.Rs2==8'd63) begin
 				immb = value_zero;
 				has_immb = TRUE;
 			end
@@ -253,21 +261,6 @@ begin
 			end
 		end
 
-	Qupls4_pkg::OP_LDIP,Qupls4_pkg::OP_STIP:
-		begin
-			imma = ip;
-			has_imma = TRUE;
-			if (ins.Rs2==8'd0) begin
-				immb = value_zero;
-				has_immb = TRUE;
-			end
-			has_immc = TRUE;
-			if (has_cnstc)
-				immc = {cnstc,ins.imm};
-			else
-				immc = {{44{ins.imm[19]}},ins.imm[19:0]};
-		end
-
 	Qupls4_pkg::OP_STI:
 		begin
 			if (ins.Rs1==8'd0) begin
@@ -284,6 +277,28 @@ begin
 			immd = {{60{ins.Rd[3]}},ins.Rd[3:0]};
 		end
 
+	Qupls4_pkg::OP_BCC8,Qupls4_pkg::OP_BCC16,Qupls4_pkg::OP_BCC32,Qupls4_pkg::OP_BCC64,
+	Qupls4_pkg::OP_BCCU8,Qupls4_pkg::OP_BCCU16,Qupls4_pkg::OP_BCCU32,Qupls4_pkg::OP_BCCU64,
+	Qupls4_pkg::OP_FBCC16,Qupls4_pkg::OP_FBCC32,Qupls4_pkg::OP_FBCC64,Qupls4_pkg::OP_FBCC128:
++		begin
+			if (ins.Rs1==8'd63) begin
+				imma = value_zero;
+				has_imma = TRUE;
+			end
+			if (has_cnsta) begin
+				imma = {cnsta,ins.Rs1[5:0]};
+				has_imma = TRUE;
+			end
+			if (ins.Rs2==8'd63) begin
+				immb = value_zero;
+				has_immb = TRUE;
+			end
+			if (has_cnstb) begin
+				immb = {cnstb,ins.Rs2[5:0]};
+				has_immb = TRUE;
+			end
+		end
+
 	Qupls4_pkg::OP_FENCE:
 		begin
 			immb = {112'h0,ins[23:8]};
@@ -293,7 +308,7 @@ begin
 		immb = 64'd0;
 	endcase
 
-	// Limit of four postfixes
+	// Limit of six postfixes
 	vpfx = 8'h00;
 	if (cpfx[0][7:0]==8'd127) begin
 		vpfx[0] = VAL;
@@ -303,6 +318,12 @@ begin
 		vpfx[2] = VAL;
 	if (cpfx[3][7:0]==8'd127) begin
 		vpfx[3] = VAL;
+	if (cpfx[4][7:0]==8'd127) begin
+		vpfx[4] = VAL;
+	if (cpfx[5][7:0]==8'd127) begin
+		vpfx[6] = VAL;
+	end
+	end
 	end
 	end
 	end

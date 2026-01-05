@@ -148,7 +148,7 @@ always_comb
 begin
 	has_Rs2 = fnHas_Rs2(instr, has_immb);
 	Rs2 = fnRs2(instr, instr_raw, has_immb);
-	Rs2z = ~|Rs2;
+	Rs2z = &Rs2;
 end
 
 endmodule

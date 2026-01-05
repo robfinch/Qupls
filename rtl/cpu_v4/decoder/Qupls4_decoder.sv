@@ -77,7 +77,8 @@ Qupls4_decode_Rs1 udcra
 	.instr_raw(instr_raw),
 	.has_imma(db.has_imma),
 	.Rs1(db.Rs1),
-	.Rs1z(db.Rs1z)
+	.Rs1z(db.Rs1z),
+	.Rs1ip(db.Rs1ip)
 );
 
 Qupls4_decode_Rs2 udcrb
@@ -376,6 +377,7 @@ begin
 	db.v2p = instr.opcode==Qupls4_pkg::OP_V2P;
 	db.vv2p = instr.opcode==Qupls4_pkg::OP_VV2P;
 	db.amo = instr.opcode==Qupls4_pkg::OP_AMO;
+	db.move = instr.opcode==Qupls4_pkg::OP_MOVE;
 end
 
 always_ff @(posedge clk)
@@ -427,6 +429,7 @@ else begin
 			|db.rex|db.oddball|db.qfext
 			|db.boi|db.bsr|db.jsr|db.sys|db.stptr
 			|db.csr
+			|db.move
 			// db.mem
 			|db.load|db.vload|db.vload_ndx
 			|db.store|db.vstore|db.vstore_ndx
