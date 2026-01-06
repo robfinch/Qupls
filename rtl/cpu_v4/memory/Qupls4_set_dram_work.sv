@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2025-2026  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -38,7 +38,7 @@
 import const_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_set_dram_work(rst_i, clk_i, rob_i, stomp_i, vb_i, lsndxv_i,
+module Qupls4_set_dram_work(rst_i, clk_i, rob_i, stomp_i, lsndxv_i,
 	dram_state_i, dram_done_i, dram_more_i, dram_idv_i, dram_idv2_i, dram_ack_i,
 	dram_stomp_i, cpu_dat_i, lsq_i, dram_oper_o, dram_work_o, page_cross_o, sel_o
 );
@@ -48,7 +48,6 @@ input rst_i;
 input clk_i;
 input Qupls4_pkg::rob_entry_t [ROB_ENTRIES-1:0] rob_i;
 input Qupls4_pkg::rob_bitmask_t stomp_i;
-input vb_i;
 input lsndxv_i;
 input Qupls4_pkg::dram_state_t dram_state_i;
 input dram_done_i;
@@ -84,7 +83,6 @@ usdo1
 	.clk_i(clk_i),
 	.cpu_dat_i(cpu_dat_i),
 	.lsq_i(lsq_i),
-	.vb_i(vb_i),
 	.cndx_i(rob_i[lsq_i.rndx].cndx),
 	.dram_more_i(dram_more_i),
 	.dram_state_i(dram_state_i),
@@ -127,7 +125,8 @@ else begin
 		// This is done only on port #0
 		if (LSQNO==2'd0 && lsq_i.v2p && lsq_i.v)
 			;
-		else if (Qupls4_pkg::SUPPORT_LOAD_BYPASSING && vb_i)
+		// Is a scheduled load already done? Store-to-load forwarding?
+		else if (Qupls4_pkg::SUPPORT_LOAD_BYPASSING && lsq_i.load && lsq_i.state==2'b11)
 			;
 	  else begin
   		if (lsndxv_i && !stomp_i[lsq_i.rndx] && !dram_idv_i && !dram_idv2_i) begin

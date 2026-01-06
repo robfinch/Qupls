@@ -1,7 +1,7 @@
 `timescale 1ns / 10ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2023-2026  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -109,7 +109,7 @@ parameter RENAMER = 4;
 
 // 1=out of order dispatch, maybe better performance, but huge size
 // 0=in-order pipeline unit, much smaller but may stall
-parameter DISPATCH_STRATEGY = 0;
+parameter DISPATCH_STRATEGY = 1;
 
 // Register lookup strategy used by the reservation stations for missing data.
 // 0=use register file write port history
@@ -270,7 +270,7 @@ parameter REGFILE_LATENCY = 2;
 // (obvious) and may increase performance. However, most instructions will
 // have two or fewer arguments, and allowing for four instructions at once
 // means an average of eight ports per cycle.
-parameter NREG_RPORTS = 24;
+parameter NREG_RPORTS = 12;
 
 // Number of register write ports. Mort ports allows more simultabeous writes
 // and may increase performance. The default is set to the machine width.

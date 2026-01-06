@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2024-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2024-2026  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -69,6 +69,7 @@ module Qupls4_rat(rst, clk,
 	prn_i,		// register for valid bit lookup
 
 	// From decode: destination register writes, one per instruction, four instructions.
+	is_move,
 	wr, 							// which port is aactive 
 	wra,							// architectural register number
 	wrra,							// physical register number
@@ -117,6 +118,7 @@ input restore;										// checkpoint restore
 
 input [MWIDTH-1:0] wr;
 
+input [MWIDTH-1:0] is_move;
 input checkpt_ndx_t [MWIDTH-1:0] wra_cp;
 input cpu_types_pkg::aregno_t [MWIDTH-1:0] wra;		// architectural register
 input cpu_types_pkg::pregno_t [MWIDTH-1:0] wrra;	// physical register
@@ -132,10 +134,10 @@ input cpu_types_pkg::aregno_t [MWIDTH-1:0] cmtaa;				// architectural register b
 input cpu_types_pkg::pregno_t [MWIDTH-1:0] cmtap;				// physical register to commit
 input value_t [MWIDTH-1:0] cmtaval;
 input cmtbr;								// comitting a branch
-input cpu_types_pkg::aregno_t [MWIDTH*5-1:0] rn;		// architectural register
+input cpu_types_pkg::aregno_t [NPORT-1:0] rn;		// architectural register
 input cpu_types_pkg::pregno_t st_prn;
-input [2:0] rng [0:MWIDTH*5-1];
-input [MWIDTH*5-1:0] rnv;
+input [2:0] rng [0:NPORT-1];
+input [NPORT-1:0] rnv;
 input checkpt_ndx_t [NPORT-1:0] rn_cp;
 input checkpt_ndx_t [3:0] rd_cp;
 output cpu_types_pkg::pregno_t [NPORT-1:0] prn;	// physical register name
@@ -1328,8 +1330,12 @@ else begin
 	// Even if a checkpoint is being allocated, we want to record new maps.
 	if (en2) begin
 		foreach (wrra[n10])
-			if (wr[n10])
-				nextCurrentMap.regmap[wra[n10]] = wrra[n10];
+			if (wr[n10]) begin
+				if (is_move[n10])
+					nextCurrentMap.regmap[wra[n10]] = next_prn[n10*4+1];
+				else
+					nextCurrentMap.regmap[wra[n10]] = wrra[n10];
+			end
 	end
 
 	// Shift the physical register into a second spot.

@@ -1308,6 +1308,7 @@ typedef struct packed		// 231 bits
 	logic [4:0] num;
 	logic [63:0] imm2;		// second immediate / CSR register numnber (14 bits))
 	logic [63:0] imm;			// immediate / displacement / mask
+	logic inc;						// increment / decrement for conditional branch
 	logic [2:0] sc;				// index scaling
 	logic [2:0] dt;				// data type, vector load / store
 	logic [1:0] prc;			// precision
@@ -1569,6 +1570,7 @@ typedef struct packed
 {
 	logic v;
 	logic aRnv;
+	logic z;											// operand should be zero
 	flags_t flags;
 	cpu_types_pkg::aregno_t aRn;
 	cpu_types_pkg::pregno_t pRn;
@@ -1602,6 +1604,7 @@ typedef struct packed
 	cpu_types_pkg::aregno_t Rd3;
 	cpu_types_pkg::aregno_t Rco;		// carry output
 	logic Rs1z;
+	logic Rs1ip;
 	logic Rs2z;
 	logic Rs3z;
 	logic Rs4z;
@@ -1620,6 +1623,7 @@ typedef struct packed
 	cpu_types_pkg::value_t immd;		// for store immediate
 	logic csr;				// CSR instruction
 	logic nop;				// NOP semantics
+	logic move;
 	logic fc;					// flow control op
 	logic backbr;			// backwards target branch
 	bts_t bts;				// branch target source
@@ -1862,6 +1866,7 @@ typedef struct packed
 	logic pRs2v;
 	logic pRs3v;
 	logic pRs4v;
+	logic Rs4z;								// Rs4 should be zero.
 	logic pSv;
 	logic pRdv;
 	logic nRdv;
@@ -1925,7 +1930,9 @@ typedef struct packed {
 	logic [$bits(cpu_types_pkg::value_t)/8-1:0] copydst;
 	logic aRdv;
 	logic Rs1z;
+	logic Rs1ip;
 	logic Rs2z;
+	logic Rs3z;
 	cpu_types_pkg::aregno_t aRd;
 	cpu_types_pkg::pregno_t nRd;
 	operating_mode_t om;						// needed for mem ops
@@ -1970,6 +1977,7 @@ typedef struct packed {
 	cause_code_t exc;					// non-zero indicate exception
 	logic excv;								// 1=exception
 	logic nan;								// FP op generated a NaN
+	/*
 	cpu_types_pkg::value_t argA;
 	cpu_types_pkg::value_t argB;
 	cpu_types_pkg::value_t argC;	// for stores
@@ -1977,6 +1985,7 @@ typedef struct packed {
 	cpu_types_pkg::value_t argT;
 	cpu_types_pkg::value_t argS;
 	cpu_types_pkg::value_t argI;
+	*/
 //	cpu_types_pkg::value_t res;
 	/*
 	logic updAv;
@@ -2010,6 +2019,7 @@ typedef struct packed {
 	logic argS_v;							// status register valid
 	logic argT_v;
 	logic argT2_v;
+	cpu_types_pkg::value_t argC;
 /* How they should be setup...
 	operand_t operA;
 	operand_t operB;
@@ -2708,6 +2718,8 @@ begin
 		begin
 			fnMapRawToUop.Rd = {3'd0,raw[11:7]};
 			fnMapRawToUop.Rs1 = {2'd0,raw[18:13]};
+			fnMapRawToUop.Rs2 = 8'd63;
+			fnMapRawToUop.Rs3 = 8'd63;
 			fnMapRawToUop.imm = {raw[12],raw[45:19]};
 			fnMapRawToUop.ms = 3'b0;
 			fnMapRawToUop.prc = raw[47:46];
@@ -2721,6 +2733,7 @@ begin
 			fnMapRawToUop.Rd = {2'd0,raw[12:7]};
 			fnMapRawToUop.Rs1 = {2'd0,raw[18:13]};
 			fnMapRawToUop.Rs2 = {2'd0,raw[24:19]};
+			fnMapRawToUop.Rs3 = 8'd63;
 			fnMapRawToUop.imm = raw[44:25];
 			fnMapRawToUop.ms = 3'b0;
 			fnMapRawToUop.sc = raw[47:45];
@@ -2732,6 +2745,7 @@ begin
 			fnMapRawToUop.Rd = {2'd0,raw[12:7]};
 			fnMapRawToUop.Rs1 = {2'd0,raw[18:13]};
 			fnMapRawToUop.Rs2 = {2'd0,raw[24:19]};
+			fnMapRawToUop.Rs3 = 8'd63;
 			fnMapRawToUop.imm = raw[44:25];
 			fnMapRawToUop.ms = 3'd0;
 			fnMapRawToUop.sc = raw[47:45];
@@ -2853,6 +2867,8 @@ begin
 		begin
 			fnMapRawToUop.Rd = {2'd0,raw[12:7]};
 			fnMapRawToUop.Rs1 = {2'd0,raw[18:13]};
+			fnMapRawToUop.Rs2 = 8'd63;
+			fnMapRawToUop.Rs3 = 8'd63;
 			fnMapRawToUop.imm = {raw[44:42],raw[27:13]};
 			fnMapRawToUop.imm2 = raw[41:28];
 			fnMapRawToUop.ms = raw[44:42];
@@ -2862,6 +2878,9 @@ begin
 		end
 	Qupls4_pkg::OP_BRK:
 		begin
+			fnMapRawToUop.Rs1 = 8'd63;
+			fnMapRawToUop.Rs2 = 8'd63;
+			fnMapRawToUop.Rs3 = 8'd63;
 			fnMapRawToUop.imm = raw[47:7];
 			fnMapRawToUop.src = 7'b0000000;
 			fnMapRawToUop.dst = 1'b0;
@@ -2901,15 +2920,19 @@ begin
 			fnMapRawToUop.cnd = raw[10:7];
 			fnMapRawToUop.Rs1 = {2'd0,raw[18:13]};
 			fnMapRawToUop.Rs2 = {2'd0,raw[24:19]};
+			fnMapRawToUop.Rs3 = raw[47] ? {2'd0,raw[30:25]} : 8'd63;
 			fnMapRawToUop.imm = raw[45:25];
 			fnMapRawToUop.prc = raw[1:0];
 			fnMapRawToUop.ms = raw[12:11];
-			fnMapRawToUop.vn = raw[47:46];
 			fnMapRawToUop.src = 7'b0000011;
 			fnMapRawToUop.dst = 1'b0;
+			fnMapRawToUop.inc = raw[46];
 		end
 	Qupls4_pkg::OP_BSR,Qupls4_pkg::OP_JSR:
 		begin
+			fnMapRawToUop.Rs1 = 8'd63;
+			fnMapRawToUop.Rs2 = 8'd63;
+			fnMapRawToUop.Rs3 = 8'd63;
 			fnMapRawToUop.Rd = {3'd0,raw[11:7]};
 			fnMapRawToUop.imm = raw[47:13];
 			fnMapRawToUop.src = {3'b000,raw[12],3'b000};
@@ -2919,6 +2942,8 @@ begin
 		begin
 			fnMapRawToUop.Rd = {3'd0,raw[11:7]};
 			fnMapRawToUop.Rs1 = {3'd0,raw[17:13]};
+			fnMapRawToUop.Rs2 = 8'd63;
+			fnMapRawToUop.Rs3 = 8'd63;
 			fnMapRawToUop.imm = raw[45:19];
 			fnMapRawToUop.prc = 2'd3;
 			fnMapRawToUop.src = 7'b0001001;
@@ -2926,6 +2951,9 @@ begin
 		end
 	Qupls4_pkg::OP_FENCE:
 		begin
+			fnMapRawToUop.Rs1 = 8'd63;
+			fnMapRawToUop.Rs2 = 8'd63;
+			fnMapRawToUop.Rs3 = 8'd63;
 			fnMapRawToUop.op3 = raw[26:24];
 			fnMapRawToUop.func = raw[47:41];
 			fnMapRawToUop.imm = raw[23:8];
@@ -2935,6 +2963,8 @@ begin
 	Qupls4_pkg::OP_PRED:
 		begin
 			fnMapRawToUop.Rs1 = {2'd0,raw[18:13]};
+			fnMapRawToUop.Rs2 = 8'd63;
+			fnMapRawToUop.Rs3 = 8'd63;
 			fnMapRawToUop.imm = raw[34:19];
 			fnMapRawToUop.ms = raw[40:38];
 			fnMapRawToUop.func = raw[47:41];

@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2024-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2024-2026  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -299,6 +299,10 @@ begin
 	rse[kk].irq_sn = pgh.irq_sn;
 	rse[kk].aRd = pg_ren.pr[nn].op.uop.Rd;
 	rse[kk].nRd = pg_ren.pr[nn].op.nRd;
+	rse[kk].Rs1z = pg_ren.pr[nn].op.decbus.Rs1z;
+	rse[kk].Rs1ip = pg_ren.pr[nn].op.decbus.Rs1ip;
+	rse[kk].Rs2z = pg_ren.pr[nn].op.decbus.Rs2z;
+	rse[kk].Rs3z = pg_ren.pr[nn].op.decbus.Rs3z;
 	// mem specific
 	rse[kk].virt2phys = pg_ren.pr[nn].op.decbus.v2p;
 	rse[kk].load = pg_ren.pr[nn].op.decbus.load|pg_ren.pr[nn].op.decbus.loadz;
@@ -355,6 +359,10 @@ begin
 		rse[kk].arg[4].aRn = pg_ren.pr[nn].op.uop.Rs4;
 		rse[kk].arg[5].aRn = 8'd33;
 		rse[kk].arg[6].aRn = pg_ren.pr[nn].op.uop.Rd2;
+
+		rse[kk].arg[0].z = pg_ren.pr[nn].op.uop.Rs1z;
+		rse[kk].arg[1].z = pg_ren.pr[nn].op.uop.Rs2z;
+		rse[kk].arg[2].z = pg_ren.pr[nn].op.uop.Rs3z;
 
 		rse[kk].arg[0].pRn = pg_ren.pr[nn].op.pRs1;
 		rse[kk].arg[1].pRn = pg_ren.pr[nn].op.pRs2;

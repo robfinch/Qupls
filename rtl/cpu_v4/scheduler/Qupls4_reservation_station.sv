@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2023-2026  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -345,15 +345,13 @@ begin
 	req_pRnu[2] = 8'd0;
 	req_pRnu[3] = 8'd0;
 	req_pRnuv = 4'd0;
-	if (RL_STRATEGY==1) begin
-		for (jj = 0; jj < NRSE; jj = jj + 1) begin
-			for (pp = 0; pp < 6; pp = pp + 1) begin
-				if (fnSrc(rse[jj].uop,pp)) begin
-					if (rse[jj].busy && !rse[jj].arg[pp].v && kk < 4) begin
-						req_pRnu[kk] = rse[jj].arg[pp].pRn;
-						req_pRnuv = VAL;
-						kk = kk + 1;
-					end
+	for (jj = 0; jj < NRSE; jj = jj + 1) begin
+		for (pp = 0; pp < 6; pp = pp + 1) begin
+			if (fnSrc(rse[jj].uop,pp)) begin
+				if (rse[jj].busy && !rse[jj].arg[pp].v && kk < 4) begin
+					req_pRnu[kk] = rse[jj].arg[pp].pRn;
+					req_pRnuv[kk] = VAL;
+					kk = kk + 1;
 				end
 			end
 		end

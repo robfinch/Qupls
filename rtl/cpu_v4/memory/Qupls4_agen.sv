@@ -41,13 +41,12 @@
 import const_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_agen(rst, clk, next, rse_i, rse_o, out,
+module Qupls4_agen(rst, clk, rse_i, rse_o, out,
 	tlb_v, page_fault, page_fault_v,
 	load_store, vlsndx, amo, laneno,
 	res, resv);
 input rst;
 input clk;
-input next;								// calculate for next cache line
 input Qupls4_pkg::reservation_station_entry_t rse_i;
 output Qupls4_pkg::reservation_station_entry_t rse_o;
 input out;
@@ -74,10 +73,10 @@ begin
 end
 
 always_comb
-	as = rse_i.Rs1z ? value_zero : rse_i.iprel ? rse_i.pc : rse_i.arg[0].val;
+	as = rse_i.Rs1z ? value_zero : rse_i.Rs1ip ? rse_i.pc : rse_i.arg[0].val;
 
 always_comb
-	bs = rse_i.Rs2z ? value_zero : (rse_i.arg[1].val << rse_i.uop.sc);
+	bs = rse_i.Rs2z ? value_zero : (rse_i.arg[1].val * ({rse_i.uop.sc==3'd0,rse_i.uop.sc}));
 
 always_comb
 begin
@@ -92,7 +91,7 @@ begin
 end
 
 always_ff @(posedge clk)
-	res <= next ? {res1[$bits(cpu_types_pkg::address_t)-1:6] + 2'd1,6'd0} : res1;
+	res <= res1;
 
 // Make Agen valid sticky
 // The agen takes a clock cycle to compute after the out signal is valid.

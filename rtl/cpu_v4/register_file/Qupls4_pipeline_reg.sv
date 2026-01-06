@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2025-2026  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -48,6 +48,7 @@ input rst;
 input clk;
 input en;
 input Qupls4_pkg::pipeline_group_reg_t pg_ren;
+
 // Tails keeps track of which ROB entries are to be updated.
 input rob_ndx_t [11:0] tails_i;
 output rob_ndx_t [11:0] tails_o;
@@ -75,9 +76,9 @@ end
 always_ff @(posedge clk)
 if (rst) begin
 	pg_reg <= {$bits(pipeline_group_reg_t){1'b0}};
-	foreach (pg_reg[n2])
-		for (n3 = 0; n3 < MWIDTH; n3 = n3 + 1)
-			pg_reg[n2].pr[n3].op = nopi;
+	foreach (pg_reg.pr[n3]) begin
+		pg_reg.pr[n3].op = nopi;
+	end
 end
 else begin
 	if (en)
@@ -91,15 +92,15 @@ always_ff @(posedge clk)
 // Submit register file read requests
 always_comb
 begin
-	foreach (pg_reg.pr[nn]) begin
-		rf_reg[nn][0] = pg_reg.pr[nn].op.pRs1;
-		rf_reg[nn][1] = pg_reg.pr[nn].op.pRs2;
-		rf_reg[nn][2] = pg_reg.pr[nn].op.pRs3;
-		rf_reg[nn][3] = pg_reg.pr[nn].op.pRd;
-		rf_regv[nn][0] = pg_reg.pr[nn].op.pRs1v;
-		rf_regv[nn][1] = pg_reg.pr[nn].op.pRs2v;
-		rf_regv[nn][2] = pg_reg.pr[nn].op.pRs3v;
-		rf_regv[nn][3] = pg_reg.pr[nn].op.pRdv;
+	foreach (pg_ren.pr[nn]) begin
+		rf_reg[nn][0] = pg_ren.pr[nn].op.pRs1;
+		rf_reg[nn][1] = pg_ren.pr[nn].op.pRs2;
+		rf_reg[nn][2] = pg_ren.pr[nn].op.pRs3;
+		rf_reg[nn][3] = pg_ren.pr[nn].op.pRd;
+		rf_regv[nn][0] = pg_ren.pr[nn].op.pRs1v;
+		rf_regv[nn][1] = pg_ren.pr[nn].op.pRs2v;
+		rf_regv[nn][2] = pg_ren.pr[nn].op.pRs3v;
+		rf_regv[nn][3] = pg_ren.pr[nn].op.pRdv;
 	end
 end
 

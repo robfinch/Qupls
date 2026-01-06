@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2024-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2024-2026  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -141,7 +141,7 @@ else begin
 			// and predicate is valid...
 			dbf[nn].pred_bitv &&
 			// and register must have been read
-			(RL_STRATEGY==0 ? dbf[nn].reg_read_done : TRUE) &&
+//			(RL_STRATEGY==0 ? dbf[nn].reg_read_done : TRUE) &&
 			// and no sync dependency
 			!dbf[nn].sync_dep &&
 			// and not a register prefix or nop
@@ -225,7 +225,7 @@ else begin
 					rob_dispatched[4] = dbf[nn].this_ndx;
 					rob_dispatched_v[4] = VAL;
 				end
-				if (Qupls4_pkg::SUPPORT_TRIG && dbf[nn].op.decbus.trig && !busy[6] && !rob_dispatched_v[4]) begin
+				if (Qupls4_pkg::SUPPORT_TRIG && dbf[nn].op.decbus.trig && !busy[4'd6] && !rob_dispatched_v[4]) begin
 					tLoadRse(4,nn,mm);
 					rse[4].funcunit = 4'd6; 
 					rse[4].rndx = dbf[nn].this_ndx;
@@ -260,8 +260,8 @@ begin
 	rse[kk] = {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
 	rse[kk].om = dbf[nn].om;
 	rse[kk].rm = dbf[nn].rm;
-	rse[kk].pc.pc = pg_ren.hdr.ip.pc + dbf[nn].ip_offs;
-	rse[kk].pc.stream = pg_ren.hdr.ip.stream;
+	rse[kk].pc.pc = pgh[mm].ip + dbf[nn].ip_offs;
+	rse[kk].pc.stream = dbf[nn].ip_stream;
 	rse[kk].prc = dbf[nn].op.decbus.prc;
 	rse[kk].cndx = pgh[mm].cndx;
 	rse[kk].rndx = nn;
@@ -273,12 +273,9 @@ begin
 	rse[kk].load = dbf[nn].op.decbus.load|dbf[nn].op.decbus.loadz;
 	rse[kk].store = dbf[nn].op.decbus.store;
 	rse[kk].amo = dbf[nn].op.decbus.amo;
-	rse[kk].push = dbf[nn].op.decbus.push;
-	rse[kk].pop = dbf[nn].op.decbus.pop;
-	rse[kk].count = dbf[nn].op.decbus.count;
 	// branch specific
 	rse[kk].bt = dbf[nn].bt;
-	rse[kk].bcc = dbf[nn].op.decbus.bcc;
+	rse[kk].bcc = dbf[nn].op.decbus.br;
 	rse[kk].cjb = dbf[nn].op.decbus.cjb;
 	rse[kk].bsr = dbf[nn].op.decbus.bsr;
 	rse[kk].jsr = dbf[nn].op.decbus.jsr;
@@ -319,6 +316,11 @@ begin
 		rse[kk].arg[4].aRn = dbf[nn].op.uop.Rs4;
 		rse[kk].arg[5].aRn = 8'd33;
 		rse[kk].arg[6].aRn = dbf[nn].op.uop.Rd2;
+
+		rse[kk].arg[0].z = dbf[nn].op.decbus.Rs1z;
+		rse[kk].arg[1].z = dbf[nn].op.decbus.Rs2z;
+		rse[kk].arg[2].z = dbf[nn].op.decbus.Rs3z;
+		rse[kk].arg[4].z = dbf[nn].op.Rs4z;
 
 		rse[kk].arg[0].pRn = dbf[nn].op.pRs1;
 		rse[kk].arg[1].pRn = dbf[nn].op.pRs2;

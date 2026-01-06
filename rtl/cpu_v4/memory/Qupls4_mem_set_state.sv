@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2023-2026  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -36,11 +36,10 @@
 import const_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_mem_set_state(state_i, lsndxv_i, idv_i, lbndx_i, setavail_o, setready_o);
+module Qupls4_mem_set_state(state_i, lsndxv_i, idv_i, setavail_o, setready_o);
 input Qupls4_pkg::dram_state_t state_i;
 input lsndxv_i;
 input idv_i;
-input Qupls4_pkg::lsq_ndx_t lbndx_i;
 output reg setavail_o;
 output reg setready_o;
 
@@ -48,8 +47,6 @@ always_comb
 begin
 	setready_o = FALSE;
 	setavail_o = FALSE;
-	if (Qupls4_pkg::SUPPORT_LOAD_BYPASSING && lbndx_i.vb)
-		setavail_o = TRUE;
 	else if (state_i == Qupls4_pkg::DRAMSLOT_AVAIL && lsndxv_i && idv_i)
 		setready_o = TRUE;
 end

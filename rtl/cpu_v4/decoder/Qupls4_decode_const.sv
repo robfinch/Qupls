@@ -280,7 +280,7 @@ begin
 	Qupls4_pkg::OP_BCC8,Qupls4_pkg::OP_BCC16,Qupls4_pkg::OP_BCC32,Qupls4_pkg::OP_BCC64,
 	Qupls4_pkg::OP_BCCU8,Qupls4_pkg::OP_BCCU16,Qupls4_pkg::OP_BCCU32,Qupls4_pkg::OP_BCCU64,
 	Qupls4_pkg::OP_FBCC16,Qupls4_pkg::OP_FBCC32,Qupls4_pkg::OP_FBCC64,Qupls4_pkg::OP_FBCC128:
-+		begin
+		begin
 			if (ins.Rs1==8'd63) begin
 				imma = value_zero;
 				has_imma = TRUE;

@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2025-2026  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -41,7 +41,7 @@ import mmu_pkg::*;
 import Qupls4_pkg::*;
 
 module Qupls4_mem_done(rst, clk, load, store, cload, cstore, cload_tags,
-	dram_v, dram_idv, dram_id, dram_state, stomp, dram_stomp, done);
+	dram_oper, dram_idv, dram_id, stomp, dram_stomp, done);
 input rst;
 input clk;
 input load;
@@ -49,10 +49,9 @@ input store;
 input cload;
 input cstore;
 input cload_tags;
-input dram_v;
+input Qupls4_pkg::dram_oper_t dram_oper;
 input dram_idv;
 input rob_ndx_t dram_id;
-input Qupls4_pkg::dram_state_t dram_state;
 input Qupls4_pkg::rob_bitmask_t stomp;
 input dram_stomp;
 output reg done;
@@ -66,7 +65,7 @@ else begin
 	if (!(store|cstore|load|cload) && dram_idv)
 		done <= TRUE;
 	else if (~(load|cload) ? !stomp[dram_id] && dram_idv :
-		(dram_state == Qupls4_pkg::DRAMSLOT_DELAY || dram_state==Qupls4_pkg::DRAMSLOT_DELAY2) && dram_v)
+		(dram_oper.state==2'b11) && dram_oper.v)
 		done <= TRUE;
 	else
 		done <= FALSE;

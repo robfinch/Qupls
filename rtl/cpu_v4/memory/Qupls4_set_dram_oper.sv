@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2025-2026  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -37,7 +37,7 @@
 import const_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_set_dram_oper(rst_i, clk_i, cpu_dat_i, lsq_i, vb_i, cndx_i,
+module Qupls4_set_dram_oper(rst_i, clk_i, cpu_dat_i, lsq_i, cndx_i,
 	dram_more_i, dram_state_i, dram_ack_i, dram_work_i, dram_stomp_i, dram_oper_o);
 parameter CORENO = 6'd1;
 parameter LSQNO = 2'd0;
@@ -45,7 +45,6 @@ input rst_i;
 input clk_i;
 input [511:0] cpu_dat_i;
 input Qupls4_pkg::lsq_entry_t lsq_i;
-input vb_i;				// valid bypass
 input checkpt_ndx_t cndx_i;
 input dram_more_i;
 input Qupls4_pkg::dram_state_t dram_state_i;
@@ -118,7 +117,8 @@ else begin
 		    dram_oper_o.state <= 2'b11;
 			end
 		end
-		else if (Qupls4_pkg::SUPPORT_LOAD_BYPASSING && vb_i) begin
+		// Has the a load already been done by store-to-load forwarding?
+		else if (Qupls4_pkg::SUPPORT_LOAD_BYPASSING && lsq_i.load && lsq_i.state==2'b11) begin
 			dram_oper_o.oper.val <= Qupls4_pkg::fnDati(1'b0,dram_work_i.op,lsq_i.res);
 			dram_oper_o.oper.flags <= 8'h00;//lsq_i.flags;
 			dram_oper_o.oper.pRn <= lsq_i.Rt;

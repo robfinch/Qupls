@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2024-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2024-2026  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -138,6 +138,7 @@ aregno_t [MWIDTH-1:0] aRd_dec;
 pregno_t [MWIDTH-1:0] pRd_dec;
 wire [MWIDTH-1:0] pRd_decv;
 reg [MWIDTH-1:0] aRd_decv;
+reg [MWIDTH-1:0] is_move;
 wire rat_stallq1;
 wire ns_stall;
 assign rat_stallq = rat_stallq1|ns_stall;
@@ -151,6 +152,10 @@ always_comb
 always_comb
 	foreach (pg_dec.pr[n1])
 		aRd_decv[n1] = pg_dec.pr[n1].op.decbus.Rdv;
+
+always_comb
+	foreach (pg_dec.pr[n1])
+		is_move[n1] = pg_dec.pr[n1].op.decbus.move;
 
 // Define a NOP instruction.
 always_comb
@@ -201,10 +206,10 @@ generate begin : gRt_ren
 end
 endgenerate
 
-reg [MWIDTH*4-1:0] arnv;
-reg [2:0] arng [0:MWIDTH*5-1];
-aregno_t [MWIDTH*4-1:0] arn;
-pregno_t [MWIDTH*4-1:0] prn;
+reg [NPORT-1:0] arnv;
+reg [2:0] arng [0:NPORT-1];
+aregno_t [NPORT-1:0] arn;
+pregno_t [NPORT-1:0] prn;
 
 always_comb
 begin
@@ -366,18 +371,14 @@ foreach (qbr[n6])
 
 
 `ifdef SUPPORT_RAT
-Qupls4_reg_name_supplier4 uns4
+Qupls4_reg_name_supplier5 uns4
 (
 	.rst(rst),
 	.clk(clk),
 	.en(en),
-	.restore(restore),
-	.restore_list(restore_list & ~unavail_list),
 	.tags2free(tags2free),
 	.freevals(freevals),
-	.bo_wr(bo_wr),
-	.bo_preg(bo_preg),
-	.ns_alloc_req(aRd_decv),
+	.ns_alloc_req(aRd_decv & ~is_move),
 	.ns_whrndx(6'd0),			// not used
 	.ns_rndx(),						// not used
 	.ns_dstreg(pRd_dec),
@@ -417,6 +418,7 @@ urat1
 	.prn(prn),
 	.prn_i(prn_i),
 	.prv(prnv),
+	.is_move(is_move),
 	.wr(pRd_decv & aRd_decv),// && !stomp0 && ~pg_ren.pr[0].decbus.Rtz),
 	.wra(aRd_dec),
 	.wrra(pRd_dec),

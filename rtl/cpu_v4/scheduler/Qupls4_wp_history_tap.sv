@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2025-2026  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -35,6 +35,11 @@
 //
 //	  Tracks the history of writes to the register file and outputs five
 // tap points.
+//	  Note that the write port history can be used only for a few cycles
+// as registers will be renamed. Periodically the same register tag could
+// be reused. We do not want stale data in the write port history to be
+// used. The renamer prevents the reuse of the same register tag too soon,
+// by rotating the register selection.
 // ============================================================================
 
 import Qupls4_pkg::*;
@@ -45,7 +50,7 @@ input Qupls4_pkg::operand_t [3:0] wp_i;
 output Qupls4_pkg::operand_t [3:0] wp_tap_o [0:4];
 
 integer n3;
-Qupls4_pkg::operand_t [3:0] wp_oper_hist [0:127];
+Qupls4_pkg::operand_t [3:0] wp_oper_hist [0:15];
 Qupls4_pkg::operand_t [3:0] wp_oper_tap [0:4];
 
 always_ff @(posedge clk)
@@ -57,11 +62,11 @@ end
 
 always_comb
 begin
-	wp_tap_o[0] = wp_oper_hist[3];
-	wp_tap_o[1] = wp_oper_hist[6];
-	wp_tap_o[2] = wp_oper_hist[12];
-	wp_tap_o[3] = wp_oper_hist[24];
-	wp_tap_o[4] = wp_oper_hist[100];
+	wp_tap_o[0] = wp_oper_hist[2];
+	wp_tap_o[1] = wp_oper_hist[3];
+	wp_tap_o[2] = wp_oper_hist[5];
+	wp_tap_o[3] = wp_oper_hist[8];
+	wp_tap_o[4] = wp_oper_hist[13];
 end
 
 endmodule

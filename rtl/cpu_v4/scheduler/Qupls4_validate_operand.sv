@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2025-2026  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -42,7 +42,6 @@ import Qupls4_pkg::*;
 
 module Qupls4_validate_operand(rf_oper_i, oper_i, oper_o, wp_hist_i, bypass_i);
 parameter MWIDTH = 4;
-parameter RL_STRATEGY = 1;
 parameter NBPI = 8;					// number of bypassing inputs
 parameter NENTRY = 3;
 parameter NREG_PORTS = 12;
@@ -60,22 +59,20 @@ begin
 		oper_o[nn] = oper_i[nn];
 		oper_o[nn].val = value_zero;
 		oper_o[nn].flags = {$bits(flags_t){1'b0}};
-		if (RL_STRATEGY==1) begin
-			foreach (rf_oper_i[jj]) begin
-				if (oper_i[nn].pRn==rf_oper_i[jj].pRn && rf_oper_i[jj].v && !oper_i[nn].v) begin
-					oper_o[nn] = rf_oper_i[jj];
-					oper_o[nn].v = VAL;
-				end
+		if (oper_i[nn].z)
+			oper_o[nn].v = VAL;
+		foreach (rf_oper_i[jj]) begin
+			if (oper_i[nn].pRn==rf_oper_i[jj].pRn && rf_oper_i[jj].v && !oper_i[nn].v) begin
+				oper_o[nn] = rf_oper_i[jj];
+				oper_o[nn].v = VAL;
 			end
 		end
 		// Check if operand matches incoming write port history.
-		if (RL_STRATEGY==0) begin
-			foreach (wp_hist_i[jj]) begin
-				for (kk = 0; kk < 4; kk = kk + 1) begin
-					if (oper_i[nn].pRn==wp_hist_i[jj][kk].pRn && wp_hist_i[jj][kk].v && !oper_i[nn].v) begin
-						oper_o[nn] = wp_hist_i[jj][kk];
-						oper_o[nn].v = VAL;
-					end
+		foreach (wp_hist_i[jj]) begin
+			for (kk = 0; kk < 4; kk = kk + 1) begin
+				if (oper_i[nn].pRn==wp_hist_i[jj][kk].pRn && wp_hist_i[jj][kk].v && !oper_i[nn].v) begin
+					oper_o[nn] = wp_hist_i[jj][kk];
+					oper_o[nn].v = VAL;
 				end
 			end
 		end

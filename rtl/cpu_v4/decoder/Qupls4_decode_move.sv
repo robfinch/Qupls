@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2026  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -36,11 +36,11 @@
 
 import Qupls4_pkg::*;
 
-module Qupls4_decode_nop(instr, nop);
+module Qupls4_decode_move(instr, move);
 input Qupls4_pkg::micro_op_t instr;
-output nop;
+output move;
 
-function fnIsNop;
+function fnMove;
 input Qupls4_pkg::micro_op_t ir;
 begin
 	case(ir.opcode)
@@ -49,17 +49,14 @@ begin
 	Qupls4_pkg::OP_R3P:
 	   case(ir.func)
      Qupls4_pkg::FN_MOVE:
-       fnIsNop = 1'b1;
-     default: fnIsNop = 1'b0;
+       fnMove = 1'b1;
+     default: fnMove = 1'b0;
 	   endcase
-	Qupls4_pkg::OP_NOP,Qupls4_pkg::OP_PUSH,Qupls4_pkg::OP_POP,
-	Qupls4_pkg::OP_REXT:
-		fnIsNop = 1'b1;
-	default:	fnIsNop = 1'b0;
+	default:	fnMove = 1'b0;
 	endcase
 end
 endfunction
 
-assign nop = fnIsNop(instr);
+assign move = fnMove(instr);
 
 endmodule

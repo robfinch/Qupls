@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2026  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -110,17 +110,7 @@ Qupls4_decode_Rd udcrt
 	.Rd(db.Rd),
 	.Rdv(db.Rdv)
 );
-/*
-Stark_decode_Rd2 udcrd2
-(
-	.om(om),
-	.instr(instr),
-	.Rd2(db.Rd2),
-	.Rd2z(db.Rd2z),
-	.exc(excRd2)
-);
 
-*/
 /*
 Stark_decode_macro umacro1
 (
@@ -139,6 +129,12 @@ Qupls4_decode_nop unop1
 (
 	.instr(instr),
 	.nop(db.nop)
+);
+
+Qupls4_decode_move umv1
+(
+	.instr(instr),
+	.move(db.move)
 );
 
 Qupls4_decode_fc ufc1
@@ -377,7 +373,7 @@ begin
 	db.v2p = instr.opcode==Qupls4_pkg::OP_V2P;
 	db.vv2p = instr.opcode==Qupls4_pkg::OP_VV2P;
 	db.amo = instr.opcode==Qupls4_pkg::OP_AMO;
-	db.move = instr.opcode==Qupls4_pkg::OP_MOVE;
+	db.rext <= instr.opcode==Qupls4_pkg::OP_REXT;
 end
 
 always_ff @(posedge clk)
@@ -392,14 +388,14 @@ else begin
 	if (en) begin
 		dbo <= {$bits(dbo){1'd0}};	// in case a signal was missed / unused.
 		dbo <= db;
-		dbo.rext <= instr.opcode==Qupls4_pkg::OP_REXT;
+		dbo.rext <= db.rext;
 		dbo.boi <= db.boi;
 		dbo.bsr <= db.bsr;
 		dbo.jsr <= db.jsr;
 		dbo.sys <= db.sys;
 		dbo.stptr <= db.stptr;
 		dbo.csr <= db.csr;
-		dbo.iprel <= 1'b0;//db.Rs1==8'd31;
+		dbo.iprel <= db.Rs1==8'd62;//1'b0;//db.Rs1==8'd31;
 		dbo.cause <= Qupls4_pkg::FLT_NONE;
 		dbo.mem <= 
 			 db.load|db.vload|db.vload_ndx
@@ -428,7 +424,7 @@ else begin
 			|db.csr|db.loada|db.fence|db.carry|db.pred|db.atom|db.regs|db.fregs
 			|db.rex|db.oddball|db.qfext
 			|db.boi|db.bsr|db.jsr|db.sys|db.stptr
-			|db.csr
+			|db.csr|db.rext
 			|db.move
 			// db.mem
 			|db.load|db.vload|db.vload_ndx

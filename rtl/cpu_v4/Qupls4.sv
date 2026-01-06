@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2023-2026  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -76,9 +76,9 @@ parameter MWIDTH = Qupls4_pkg::MWIDTH;
 parameter ISTACK_DEPTH = 16;
 parameter DISPATCH_WIDTH = 6;
 parameter RL_STRATEGY = Qupls4_pkg::RL_STRATEGY;
-localparam NREG_RPORTS = RL_STRATEGY==1 ? Qupls4_pkg::NREG_RPORTS : MWIDTH*4;
+localparam NREG_RPORTS = Qupls4_pkg::NREG_RPORTS;
 parameter NREG_WPORTS = Qupls4_pkg::NREG_WPORTS;
-localparam RS_NREG_RPORTS = RL_STRATEGY==0 ? 0 : Qupls4_pkg::NREG_RPORTS;
+localparam RS_NREG_RPORTS = Qupls4_pkg::NREG_RPORTS;
 input [63:0] coreno_i;
 input rst_i;
 input clk_i;
@@ -2569,7 +2569,6 @@ Qupls4_pkg::operand_t [MWIDTH-1:0] wp;
 Qupls4_pkg::operand_t [MWIDTH-1:0] wp_tap [0:4];
 
 generate begin : gRLStrategy
-if (RL_STRATEGY==0) begin
 	always_comb
 	begin
 		foreach (wp[n49]) begin
@@ -2587,7 +2586,7 @@ if (RL_STRATEGY==0) begin
 		.wp_i(wp),
 		.wp_tap_o(wp_tap)
 	);
-end	else
+
 	// Change 16 groups of four port requests into one big linear group.
 	always_comb
 	begin
@@ -2599,7 +2598,7 @@ end	else
 		end
 	end
 	// Dynamic port selection.
-	Qupls4_read_port_select #(.FIXED_PORTS(16), .NPORTO(NREG_RPORTS), .NPORTI(64)) urps1
+	Qupls4_read_port_select #(.FIXED_PORTS(0), .NPORTO(NREG_RPORTS), .NPORTI(64)) urps1
 	(
 		.rst(irst),
 		.clk(clk),
@@ -2911,6 +2910,7 @@ Qupls4_pipeline_ren #(.MWIDTH(MWIDTH), .NPORT(NREG_RPORTS)) uren1
 
 always_comb
 begin
+/*
 	bRs1[0][0] = pg_ren.pr[0].op.pRs1;
 	bRs1[0][1] = pg_ren.pr[0].op.pRs2;
 	bRs1[0][2] = pg_ren.pr[0].op.pRs3;
@@ -2927,23 +2927,25 @@ begin
 	bRs1[3][1] = pg_ren.pr[3].op.pRs2;
 	bRs1[3][2] = pg_ren.pr[3].op.pRs3;
 	bRs1[3][3] = pg_ren.pr[3].op.pRd;
-	bRsv1[0][0] = pg_ren.pr[0].op.pRs1v;
-	bRsv1[0][1] = pg_ren.pr[0].op.pRs2v;
-	bRsv1[0][2] = pg_ren.pr[0].op.pRs3v;
-	bRsv1[0][3] = pg_ren.pr[0].op.pRdv;
-	bRsv1[1][0] = pg_ren.pr[1].op.pRs1v;
-	bRsv1[1][1] = pg_ren.pr[1].op.pRs2v;
-	bRsv1[1][2] = pg_ren.pr[1].op.pRs3v;
-	bRsv1[1][3] = pg_ren.pr[1].op.pRdv;
-	bRsv1[2][0] = pg_ren.pr[2].op.pRs1v;
-	bRsv1[2][1] = pg_ren.pr[2].op.pRs2v;
-	bRsv1[2][2] = pg_ren.pr[2].op.pRs3v;
-	bRsv1[2][3] = pg_ren.pr[2].op.pRdv;
-	bRsv1[3][0] = pg_ren.pr[3].op.pRs1v;
-	bRsv1[3][1] = pg_ren.pr[3].op.pRs2v;
-	bRsv1[3][2] = pg_ren.pr[3].op.pRs3v;
-	bRsv1[3][3] = pg_ren.pr[3].op.pRdv;
+	bRsv1[0][0] = 1'b0;//pg_ren.pr[0].op.pRs1v;
+	bRsv1[0][1] = 1'b0;//pg_ren.pr[0].op.pRs2v;
+	bRsv1[0][2] = 1'b0;//pg_ren.pr[0].op.pRs3v;
+	bRsv1[0][3] = 1'b0;//pg_ren.pr[0].op.pRdv;
+	bRsv1[1][0] = 1'b0;//pg_ren.pr[1].op.pRs1v;
+	bRsv1[1][1] = 1'b0;//pg_ren.pr[1].op.pRs2v;
+	bRsv1[1][2] = 1'b0;//pg_ren.pr[1].op.pRs3v;
+	bRsv1[1][3] = 1'b0;//pg_ren.pr[1].op.pRdv;
+	bRsv1[2][0] = 1'b0;//pg_ren.pr[2].op.pRs1v;
+	bRsv1[2][1] = 1'b0;//pg_ren.pr[2].op.pRs2v;
+	bRsv1[2][2] = 1'b0;//pg_ren.pr[2].op.pRs3v;
+	bRsv1[2][3] = 1'b0;//pg_ren.pr[2].op.pRdv;
+	bRsv1[3][0] = 1'b0;//pg_ren.pr[3].op.pRs1v;
+	bRsv1[3][1] = 1'b0;//pg_ren.pr[3].op.pRs2v;
+	bRsv1[3][2] = 1'b0;//pg_ren.pr[3].op.pRs3v;
+	bRsv1[3][3] = 1'b0;//pg_ren.pr[3].op.pRdv;
+*/
 end
+/*
 always_ff @(posedge clk)
 begin
 	bRs2[0] <= bRs1[0];
@@ -2963,6 +2965,7 @@ assign bRsv[0] = bRsv2[0];
 assign bRsv[1] = bRsv2[1];
 assign bRsv[2] = bRsv2[2];
 assign bRsv[3] = bRsv2[3];
+*/
 
 /*
 Qupls4_pipeline_reg #(.MWIDTH(MWIDTH)) uplreg1
@@ -4002,8 +4005,6 @@ assign rs_busy[10] = FALSE;
 assign rs_busy[11] = FALSE;
 assign rs_busy[15:14] = 2'b00;
 
-generate begin : gDispatcher
-	if (DISPATCH_STRATEGY==1) begin
 // Out-of-order dispatch takes input from the ROB and dispatches to the 
 // reservation stations.
 Qupls4_instruction_dispatcher #(.MWIDTH(MWIDTH), .DISPATCH_COUNT(DISPATCH_WIDTH)) uid1
@@ -4019,7 +4020,9 @@ Qupls4_instruction_dispatcher #(.MWIDTH(MWIDTH), .DISPATCH_COUNT(DISPATCH_WIDTH)
 	.rob_dispatched_v_o(rob_dispatched_v)
 );
 assign stall_dsp = FALSE;
-	end else
+
+generate begin : gDispatcher
+	if (DISPATCH_STRATEGY==0) begin
 // In-order dispatch takes input from the pipeline and dispatches to the
 // reservations stations.
 Qupls4_pipeline_dsp #(.MWIDTH(MWIDTH), .DISPATCH_COUNT(DISPATCH_WIDTH))
@@ -4038,6 +4041,7 @@ udps1
 	.rob_dispatched_o(rob_dispatched),
 	.rob_dispatched_v_o(rob_dispatched_v)
 );
+end
 end
 endgenerate
 
@@ -4395,8 +4399,6 @@ wire page_cross0, page_cross1;
 
 Qupls4_pkg::lsq_ndx_t lsq_heads [0:Qupls4_pkg::LSQ_ENTRIES];
 
-Qupls4_pkg::lsq_ndx_t lbndx0, lbndx1;
-
 wire dram0_timeout;
 wire dram1_timeout;
 
@@ -4679,7 +4681,6 @@ Qupls4_agen uag0
 (
 	.rst(irst),
 	.clk(clk),
-	.next(1'b0),
 	.rse_i(agen0_rse),
 	.rse_o(agen0_rse2),
 	.out(rob[agen0_id].out[0]),
@@ -4697,7 +4698,6 @@ Qupls4_agen uag1
 (
 	.rst(irst),
 	.clk(clk),
-	.next(1'b0),
 	.rse_i(agen1_rse),
 	.rse_o(agen1_rse2),
 	.out(rob[agen1_id].out[0]),
@@ -4798,13 +4798,13 @@ wire [79:0] dram0_sel;
 wire [79:0] dram1_sel;
 
 always_comb
-	dram0_id = lbndx0.vb ? lsq[lbndx0.row][lbndx0.col].rndx : lsq[mem0_lsndx.row][mem0_lsndx.col].rndx;
+	dram0_id = lsq[mem0_lsndx.row][mem0_lsndx.col].rndx;
 always_comb
-	dram1_id = lbndx1.vb ? lsq[lbndx1.row][lbndx1.col].rndx : lsq[mem1_lsndx.row][mem1_lsndx.col].rndx;
+	dram1_id = lsq[mem1_lsndx.row][mem1_lsndx.col].rndx;
 always_comb
-	dram0_idv =	(lbndx0.vb ? VAL : mem0_lsndxv) && !robentry_stomp[dram0_id] && !dram0_idv2;
+	dram0_idv =	mem0_lsndxv && !robentry_stomp[dram0_id] && !dram0_idv2;
 always_comb
-	dram1_idv =	(lbndx1.vb ? VAL : mem1_lsndxv) && !robentry_stomp[dram1_id] && !dram1_idv2 && Qupls4_pkg::NDATA_PORTS > 1;
+	dram1_idv =	mem1_lsndxv && !robentry_stomp[dram1_id] && !dram1_idv2 && Qupls4_pkg::NDATA_PORTS > 1;
 
 always_ff @(posedge clk)
 if (irst)
@@ -4826,10 +4826,9 @@ Qupls4_mem_done udrdn1
 	.cload(dram0_work.cload),
 	.cstore(dram0_work.cstore),
 	.cload_tags(dram0_work.cload_tags),
-	.dram_v(dram0_oper.oper.v),
+	.dram_oper(dram0_oper),
 	.dram_idv(dram0_idv),
 	.dram_id(dram0_id), 
-	.dram_state(dram0),
 	.stomp(robentry_stomp),
 	.dram_stomp(dram0_stomp),
 	.done(dram0_done)
@@ -4845,13 +4844,6 @@ begin
 end
 endfunction
 
-Qupls4_calc_load_bypass_index uclbn0
-(
-	.lsq_i(lsq),
-	.lsndx_i(mem0_lsndx),
-	.ndx_o(lbndx0)
-);
-
 Qupls4_mem_timeout_flag umtf0(dram0_work, dram0_timeout);
 
 Qupls4_mem_set_state usms0
@@ -4859,7 +4851,6 @@ Qupls4_mem_set_state usms0
 	.state_i(dram0),
 	.lsndxv_i(mem0_lsndxv),
 	.idv_i(dram0_idv),
-	.lbndx_i(lbndx0),
 	.setavail_o(dram0_setavail),
 	.setready_o(dram0_setready)
 );
@@ -4886,16 +4877,15 @@ Qupls4_mem_more ummore0
 
 Qupls4_pkg::lsq_entry_t lsqe0,lsqe1;
 always_comb
-	lsqe0 = lbndx0.vb ? lsq[lbndx0.row][lbndx0.col] : lsq[mem0_lsndx.row][mem0_lsndx.col];
+	lsqe0 = lsq[mem0_lsndx.row][mem0_lsndx.col];
 always_comb
-	lsqe1 = lbndx1.vb ? lsq[lbndx1.row][lbndx1.col] : lsq[mem1_lsndx.row][mem1_lsndx.col];
+	lsqe1 = lsq[mem1_lsndx.row][mem1_lsndx.col];
 
 Qupls4_set_dram_work #(.CORENO(CORENO), .LSQNO(0)) usdr1 (
 	.rst_i(irst),
 	.clk_i(clk),
 	.rob_i(rob),
 	.stomp_i(robentry_stomp),
-	.vb_i(lbndx0.vb),
 	.lsndxv_i(mem0_lsndxv),
 	.dram_state_i(dram0),
 	.dram_done_i(dram0_done),
@@ -4926,17 +4916,13 @@ generate begin : gMemory2
 			.cload(dram1_work.cload),
 			.cstore(dram1_work.cstore),
 			.cload_tags(dram1_work.cload_tags),
-			.ack(dram1_ack),
-			.dram_v(dram1_oper.oper.v),
+			.dram_oper(dram1_oper),
 			.dram_idv(dram1_idv),
 			.dram_id(dram1_id), 
-			.dram_state(dram1),
 			.stomp(robentry_stomp),
 			.dram_stomp(dram1_stomp),
 			.done(dram1_done)
 		);
-
-		Qupls4_calc_load_bypass_index uclbn1(lsq, mem1_lsndx, lbndx1);
 
 		Qupls4_mem_timeout_flag umtf1(dram1_work, dram1_timeout);
 
@@ -4945,7 +4931,6 @@ generate begin : gMemory2
 			.state_i(dram1),
 			.lsndxv_i(mem1_lsndxv),
 			.idv_i(dram1_idv),
-			.lbndx_i(lbndx1),
 			.setavail_o(dram1_setavail),
 			.setready_o(dram1_setready)
 		);
@@ -4975,7 +4960,6 @@ generate begin : gMemory2
 			.clk_i(clk),
 			.rob_i(rob),
 			.stomp_i(robentry_stomp),
-			.vb_i(lbndx1.vb),
 			.lsndxv_i(mem1_lsndxv),
 			.dram_state_i(dram1),
 			.dram_done_i(dram1_done),
@@ -5128,7 +5112,7 @@ usaust0
 	.rst(irst),
 	.clk(clk),
 	.available(1'b1),//sau0_available),
-	.busy(rs_busy[4]),
+	.busy(rs_busy[0]),
 	.stall(sau0_full),
 	.stomp(robentry_stomp),
 	.issue(),//sau0_issue),//robentry_issue[sau0_rndx]),
@@ -5143,8 +5127,8 @@ usaust0
 	.rfo(rfo),
 	.rfo_tag(rfo_tag),
 	*/
-	.req_pRn(bRs[4]),
-	.req_pRnv(bRsv[4])
+	.req_pRn(bRs[0]),
+	.req_pRnv(bRsv[0])
 );
 
 Qupls4_reservation_station #(
@@ -5162,7 +5146,7 @@ uimulst0
 	.rst(irst),
 	.clk(clk),
 	.available(imul0_available),
-	.busy(rs_busy[6]),
+	.busy(rs_busy[2]),
 	.stall(imul0_full),
 	.stomp(robentry_stomp),
 	.issue(),
@@ -5171,8 +5155,8 @@ uimulst0
 	.rf_oper_i(rf_oper),
 	.bypass_i(),
 	.wp_oper_tap_i(wp_tap),
-	.req_pRn(bRs[6]),
-	.req_pRnv(bRsv[6])
+	.req_pRn(bRs[2]),
+	.req_pRnv(bRsv[2])
 );
 
 always_ff @(posedge clk) sau0_ldd <= sau0_ld;
@@ -5194,7 +5178,7 @@ uidivst0
 	.rst(irst),
 	.clk(clk),
 	.available(1'b1),
-	.busy(rs_busy[7]),
+	.busy(rs_busy[3]),
 	.stall(!idiv0_done||idiv0_full),
 	.stomp(robentry_stomp),
 	.issue(idiv0_ld),
@@ -5203,8 +5187,8 @@ uidivst0
 	.rf_oper_i(rf_oper),
 	.bypass_i(),
 	.wp_oper_tap_i(wp_tap),
-	.req_pRn(bRs[7]),
-	.req_pRnv(bRsv[7])
+	.req_pRn(bRs[3]),
+	.req_pRnv(bRsv[3])
 );
 else begin
 end
@@ -5228,7 +5212,7 @@ generate begin : gSauStation
 			.rst(irst),
 			.clk(clk),
 			.available(sau1_available),
-			.busy(rs_busy[5]),
+			.busy(rs_busy[1]),
 			.stall(sau1_full),
 			.stomp(robentry_stomp),
 			.issue(),//robentry_issue[sau0_rndx]),
@@ -5237,8 +5221,8 @@ generate begin : gSauStation
 			.rf_oper_i(rf_oper),
 			.bypass_i(),
 			.wp_oper_tap_i(wp_tap),
-			.req_pRn(bRs[5]),
-			.req_pRnv(bRsv[5])
+			.req_pRn(bRs[1]),
+			.req_pRnv(bRsv[1])
 		);
 	end
 end
@@ -5272,7 +5256,7 @@ generate begin : gFpuStat
 					.rst(irst),
 					.clk(clk),
 					.available(fma0_available),
-					.busy(rs_busy[8]),
+					.busy(rs_busy[4]),
 					.stall(fma0_full),
 					.stomp(robentry_stomp),
 					.issue(),//robentry_issue[sau0_rndx]),
@@ -5281,8 +5265,8 @@ generate begin : gFpuStat
 					.rf_oper_i(rf_oper),
 					.bypass_i(),
 					.wp_oper_tap_i(wp_tap),
-					.req_pRn(bRs[8]),
-					.req_pRnv(bRsv[8])
+					.req_pRn(bRs[4]),
+					.req_pRnv(bRsv[4])
 				);
 				Qupls4_reservation_station #(
 					.MWIDTH(MWIDTH),
@@ -5299,7 +5283,7 @@ generate begin : gFpuStat
 					.rst(irst),
 					.clk(clk),
 					.available(fpu0_available),
-					.busy(rs_busy[9]),
+					.busy(rs_busy[5]),
 					.stall(fpu0_full),
 					.stomp(robentry_stomp),
 					.issue(),//robentry_issue[sau0_rndx]),
@@ -5308,8 +5292,8 @@ generate begin : gFpuStat
 					.rf_oper_i(rf_oper),
 					.bypass_i(),
 					.wp_oper_tap_i(wp_tap),
-					.req_pRn(bRs[9]),
-					.req_pRnv(bRsv[9])
+					.req_pRn(bRs[5]),
+					.req_pRnv(bRsv[5])
 				);
 			end
 		1:
@@ -5328,7 +5312,7 @@ generate begin : gFpuStat
 					.rst(irst),
 					.clk(clk),
 					.available(fma1_available),
-					.busy(rs_busy[10]),
+					.busy(rs_busy[6]),
 					.stall(fma1_full),
 					.stomp(robentry_stomp),
 					.issue(),//robentry_issue[sau0_rndx]),
@@ -5337,8 +5321,8 @@ generate begin : gFpuStat
 					.rf_oper_i(rf_oper),
 					.bypass_i(),
 					.wp_oper_tap_i(wp_tap),
-					.req_pRn(bRs[10]),
-					.req_pRnv(bRsv[10])
+					.req_pRn(bRs[6]),
+					.req_pRnv(bRsv[6])
 				);
 		endcase
 	end
@@ -5371,7 +5355,7 @@ generate begin : gDecimalFloat
 			.rst(irst),
 			.clk(clk),
 			.available(fpu0_available),
-			.busy(rs_busy[11]),
+			.busy(rs_busy[7]),
 			.stall(dfpu0_full),
 			.stomp(robentry_stomp),
 			.issue(),//robentry_issue[sau0_rndx]),
@@ -5380,8 +5364,8 @@ generate begin : gDecimalFloat
 			.rf_oper_i(rf_oper),
 			.bypass_i(),
 			.wp_oper_tap_i(wp_tap),
-			.req_pRn(bRs[11]),
-			.req_pRnv(bRsv[11])
+			.req_pRn(bRs[7]),
+			.req_pRnv(bRsv[7])
 		);
 	end
 end
@@ -5402,7 +5386,7 @@ ubrast1
 	.rst(irst),
 	.clk(clk),
 	.available(1'b1),
-	.busy(rs_busy[12]),
+	.busy(rs_busy[8]),
 	.stall(fcu_full),
 	.stomp(robentry_stomp),
 	.issue(),//robentry_issue[sau0_rndx]),
@@ -5411,8 +5395,8 @@ ubrast1
 	.rf_oper_i(rf_oper),
 	.bypass_i(),
 	.wp_oper_tap_i(wp_tap),
-	.req_pRn(bRs[12]),
-	.req_pRnv(bRsv[12])
+	.req_pRn(bRs[8]),
+	.req_pRnv(bRsv[8])
 );
 
 Qupls4_reservation_station #(
@@ -5430,7 +5414,7 @@ uagenst1
 	.rst(irst),
 	.clk(clk),
 	.available(1'b1),
-	.busy(rs_busy[13]),
+	.busy(rs_busy[9]),
 	.stall(!agen0_idle),
 	.stomp(robentry_stomp),
 	.issue(),//robentry_issue[sau0_rndx]),
@@ -5439,8 +5423,8 @@ uagenst1
 	.rf_oper_i(rf_oper),
 	.bypass_i(),
 	.wp_oper_tap_i(wp_tap),
-	.req_pRn(bRs[13]),
-	.req_pRnv(bRsv[13])
+	.req_pRn(bRs[9]),
+	.req_pRnv(bRsv[9])
 );
 
 generate begin : gAgen
@@ -5460,7 +5444,7 @@ uagenst2
 	.rst(irst),
 	.clk(clk),
 	.available(1'b1),
-	.busy(rs_busy[14]),
+	.busy(rs_busy[10]),
 	.stall(!agen1_idle),
 	.stomp(robentry_stomp),
 	.issue(),//robentry_issue[sau0_rndx]),
@@ -5469,8 +5453,8 @@ uagenst2
 	.rf_oper_i(rf_oper),
 	.bypass_i(),
 	.wp_oper_tap_i(wp_tap),
-	.req_pRn(bRs[14]),
-	.req_pRnv(bRsv[14])
+	.req_pRn(bRs[10]),
+	.req_pRnv(bRsv[10])
 );
 else begin
 	assign agen1_rse = {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
@@ -5527,8 +5511,8 @@ Qupls4_lsq_reg_read_req ulrrr1
 	.cndx(store_argC_cndx),
 	.id(store_argC_id),
 	.id1(store_argC_id1),
-	.bRs(bRs[15]),
-	.bRsv(bRsv[15])
+	.bRs(bRs[11]),
+	.bRsv(bRsv[11])
 );
 
 Qupls4_validate_operand #(
@@ -5673,24 +5657,26 @@ else begin
 	end
 	*/
 `endif
+
+	// Not sure why this is being done. Arg for store?
 	if (sau0_available && sau0_rndxv && sau0_idle) begin
-		rob[sau0_rndx].argC <= rfo_sau0_argC;
+		rob[sau0_rndx].argC <= sau0_rse.arg[2].val;//rfo_sau0_argC;
 		rob[sau0_rndx].argC_v <= VAL;
 	end
 	if (Qupls4_pkg::NSAU > 1) begin
 		if (sau1_available && sau1_rndxv && sau1_idle) begin
-			rob[sau1_rndx].argC <= rfo_sau1_argC;
+			rob[sau1_rndx].argC <= sau1_rse.arg[2].val;//rfo_sau1_argC;
 			rob[sau1_rndx].argC_v <= VAL;
 		end
 	end
 	if (Qupls4_pkg::NFPU > 0) begin
 		if (fpu0_available && fpu0_rndxv && fpu0_idle) begin
-			rob[fpu0_rndx].argC <= rfo_fpu0_argC;
+			rob[fpu0_rndx].argC <= fpu0_rse.arg[2].val;//rfo_fpu0_argC;
 			rob[fpu0_rndx].argC_v <= VAL;
 		end
 	end
 	if (agen0_rndxv && agen0_idle && robentry_agen_issue[agen0_rndx]) begin
-		rob[agen0_rndx].argC <= rfo_agen0_argC;
+		rob[agen0_rndx].argC <= agen0_rse.arg[2].val;//rfo_agen0_argC;
 	end
 
 	if (!rstcnt[5])
@@ -5750,7 +5736,7 @@ else begin
 			tEnqueGroupHdr(
 				8'h7F,
 				groupno,//tails[0],
-				pg_dec
+				pg_ren
 			);
 			
 			// On a predicted taken branch the front end will continue to send
@@ -5759,7 +5745,7 @@ else begin
 			// occupy slots in the ROB. It takes extra logic to pack the ROB and
 			// the logic budget is tight, so we do not bother. There should be
 			// little impact on performance.
-			for (n39 = 0; n39 < MWIDTH; n39 = n39 + 1) begin
+			foreach (pg_ren.pr[n39]) begin
 				tEnque((8'h80|n39)-MWIDTH,groupno,pg_ren.pr[n39],pt_q[n39],tails[n39],flush_ren,
 					stomps[n39], ornops[n39], cndx_ren[n39], pcndx_ren, grplen[n39], last[n39]);
 
@@ -5863,7 +5849,6 @@ else begin
 		end
 	end
 
-
 // ----------------------------------------------------------------------------
 // Dispatch
 // ----------------------------------------------------------------------------
@@ -5887,6 +5872,7 @@ else begin
 		) begin
 			if (rob[nonNop].v && rob[nonNop].sn > rob[nn].sn) begin	// valid and in sequence?
 				rob[nonNop].op.pRs4 <= rob[nn].op.pRs1;
+				rob[nonNop].op.Rs4z <= rob[nn].op.decbus.Rs1z;
 				rob[nonNop].op.pRd2 <= rob[nn].op.pRd;
 				rob[nonNop].op.pS <= rob[nn].op.pRs2;
 				rob[nonNop].op.pRs4v <= VAL;
@@ -5894,7 +5880,7 @@ else begin
 				rob[nonNop].op.pSv <= VAL;
 				rob[nn].done <= 2'b11;
 			end
-			// The REXXT was not followed by a valid instruction. Treat as a NOP.
+			// The REXT was not followed by a valid instruction. Treat as a NOP.
 			// Just mark it done. Note: the next instruction may not be queued yet,
 			// so test for a following instruction before marking.
 			else if (rob[(nn + 1) % Qupls4_pkg::ROB_ENTRIES].sn > rob[nn].sn)
@@ -5994,6 +5980,7 @@ else begin
 	// In the case of a REXT prefix the values will be populated into the
 	// wrong values slots, but this will be corrected later.
 	// ----------------------------------------------------------------------------
+	/* Values are not stored in the ROB.
 	if (RL_STRATEGY==0) begin
 		for (nn = 0; nn < MWIDTH; nn = nn + 1) begin
 			rob[reg_tails[nn]].argA <= (rf_regv[nn*4+0]) ? rfo[nn*4+0] : rf_reg[nn*4+0];
@@ -6008,6 +5995,7 @@ else begin
 			rob[reg_tails[nn]].reg_read_done <= TRUE;
 		end
 	end
+*/
 
 // ----------------------------------------------------------------------------
 // ISSUE 
@@ -6043,15 +6031,15 @@ else begin
 			load_lsq_argc <= TRUE;
 	end
 	if (lsq[store_argC_id1.row][store_argC_id1.col].v==VAL && lsq[store_argC_id1.row][store_argC_id1.col].store && lsq[store_argC_id1.row][store_argC_id1.col].datav==INV) begin
-	if (load_lsq_argc) begin//prnv[23]) begin
+	if (store_opero.v) begin //load_lsq_argc) begin//prnv[23]) begin
 		$display("Qupls4: LSQ Rc=%h from r%d/%d", rfo_store_argC, store_argC_aReg, store_argC_pReg);
 		lsq_cmd[lsq_cmd_ndx].cmd <= LSQ_CMD_SETRES;
 		lsq_cmd[lsq_cmd_ndx].lndx <= {store_argC_id1.row,store_argC_id1.col};
 		lsq_cmd[lsq_cmd_ndx].rndx <= 0;
 		lsq_cmd[lsq_cmd_ndx].n <= 0;
-		lsq_cmd[lsq_cmd_ndx].data <= rfo_store_argC;
-		lsq_cmd[lsq_cmd_ndx].flags <= rfo_store_argC_flags;
-		lsq_cmd[lsq_cmd_ndx].datav <= rfo_store_argC_valid;
+		lsq_cmd[lsq_cmd_ndx].data <= store_opero.z ? value_zero : store_opero.val;//rfo_store_argC;
+		lsq_cmd[lsq_cmd_ndx].flags <= store_opero.flags;//rfo_store_argC_flags;
+		lsq_cmd[lsq_cmd_ndx].datav <= store_opero.v;//rfo_store_argC_valid;
 		lsq_cmd_ndx = lsq_cmd_ndx + 2'd1;
 //		lsq[store_argC_id1.row][store_argC_id1.col].res <= {rfo_store_argC_flags,rfo_store_argC};//prnv[23] ? rfo_store_argC : rob[lsq[store_argC_id1.row][store_argC_id1.col].rndx].argC;
 //		lsq[store_argC_id1.row][store_argC_id1.col].flags <= rfo_store_argC_flags;
@@ -6286,27 +6274,19 @@ else begin
 			rob[lsq[mem0_lsndx.row][mem0_lsndx.col].rndx].done <= 2'b11;
 		end
 	end
-	else if (Qupls4_pkg::SUPPORT_LOAD_BYPASSING && lbndx0.vb) begin
-		tInvalidateLSQ(lsq[lbndx0.row][lbndx0.col].rndx,FALSE,FALSE,dram0_oper.oper.val);
-		rob[lsq[lbndx0.row][lbndx0.col].rndx].done <= 2'b11;
-	end
   else if (dram0 == Qupls4_pkg::DRAMSLOT_AVAIL && mem0_lsndxv && !robentry_stomp[lsq[mem0_lsndx.row][mem0_lsndx.col].rndx] && !dram0_work.rndxv && !dram0_idv2) begin
 		rob[lsq[mem0_lsndx.row][mem0_lsndx.col].rndx].out <= {VAL,VAL};
 		dram0_stomp <= FALSE;
 	end
 
   if (Qupls4_pkg::NDATA_PORTS > 1) begin
-		if (Qupls4_pkg::SUPPORT_LOAD_BYPASSING && lbndx1.vb) begin
-			tInvalidateLSQ(lsq[lbndx1.row][lbndx1.col].rndx,FALSE,FALSE,dram1_oper.oper.val);
-			rob[lsq[lbndx1.row][lbndx1.col].rndx].done <= 2'b11;
-		end
-	  else if (dram1 == Qupls4_pkg::DRAMSLOT_AVAIL && Qupls4_pkg::NDATA_PORTS > 1 && mem1_lsndxv && !robentry_stomp[lsq[mem1_lsndx.row][mem1_lsndx.col].rndx]) begin
+	  if (dram1 == Qupls4_pkg::DRAMSLOT_AVAIL && Qupls4_pkg::NDATA_PORTS > 1 && mem1_lsndxv && !robentry_stomp[lsq[mem1_lsndx.row][mem1_lsndx.col].rndx]) begin
 			rob[lsq[mem1_lsndx.row][mem1_lsndx.col].rndx].out	<= {VAL,VAL};
 			dram1_stomp <= FALSE;
 		end
 	end
  
-  for (n3 = 0; n3 < Qupls4_pkg::ROB_ENTRIES; n3 = n3 + 1) begin
+  foreach (robentry_stomp[n3]) begin
 		if (robentry_stomp[n3] && rob[n3].lsqndx==mem0_lsndx && lsq[mem0_lsndx.row][mem0_lsndx.col].v)
 			dram0_stomp <= 1'b1;
 		if (!rob[n3].lsq && dram0_work.rndx==n3 && dram0_work.rndxv) begin
@@ -6519,7 +6499,7 @@ else begin
 			for (mm = 0; mm < 32; mm = mm + 1) begin
 				// If predication is ignored for this instruction, mark valid and true.
 				if (rob[nn].op.pred_mask[1:0]==2'b00) begin
-					rob[nn].pred_bit <= 1'b1;
+					rob[nn].pred_bit <= TRUE;
 					rob[nn].pred_bitv <= VAL;
 				end
 				else
@@ -6531,7 +6511,7 @@ else begin
 						// If predication matches result, mark valid and true.
 						if (rob[nn].op.pred_mask[1:0] == pred_tf[mm]) begin
 							rob[nn].op.pred_mask[1:0] <= 2'b00;
-							rob[nn].pred_bit <= 1'b1;
+							rob[nn].pred_bit <= TRUE;
 							rob[nn].pred_bitv <= VAL;
 						end
 						// Otherwise, result not matched, instruction should not be executed.
@@ -6576,11 +6556,9 @@ else begin
 	// in simulation, but the cause has not been traced. I think it may be due
 	// to bit errors. In any case we do not want the machine to hang.
 	// This case should not be possible with properly performing hardware.
-	begin
-		foreach (rob[nn]) begin
-			if (fnStuckOut(nn))
-				rob[nn].out <= 2'b00;
-		end
+	foreach (rob[nn]) begin
+		if (fnStuckOut(nn))
+			rob[nn].out <= 2'b00;
 	end
 
 	// For some reason, agen_idle gets stuck FALSE. It should only be false if
@@ -6684,7 +6662,7 @@ else begin
 
 	// Redo instruction as copy target.
 	// Invalidate false paths.
-	for (n3 = 0; n3 < Qupls4_pkg::ROB_ENTRIES; n3 = n3 + 1) begin
+	foreach (robentry_cpydst[n3]) begin
 		if (robentry_stomp[n3]|robentry_cpydst[n3])	// || bno_bitmap[rob[n3].pc.stream]==1'b0)
 			tBranchInvalidate(n3,robentry_cpydst[n3]);
 	end
@@ -6727,13 +6705,15 @@ else begin
 		end
 	end
 
-	// Update ROB with architectural to physical register names.
-
+	// Update ROB with architectural to physical register names.???
+	// This is done at rename stage.
+	/*
  	if (ns_dstregv[0]) begin rob[ns_rndx[0]].op.pRd <= ns_dstreg[0]; rob[ns_rndx[0]].op.pRdv <= VAL; end
  	if (ns_dstregv[1]) begin rob[ns_rndx[1]].op.pRd <= ns_dstreg[1]; rob[ns_rndx[1]].op.pRdv <= VAL; end
  	if (ns_dstregv[2]) begin rob[ns_rndx[2]].op.pRd <= ns_dstreg[2]; rob[ns_rndx[2]].op.pRdv <= VAL; end
  	if (ns_dstregv[3]) begin rob[ns_rndx[3]].op.pRd <= ns_dstreg[3]; rob[ns_rndx[3]].op.pRdv <= VAL; end
- 	
+ 	*/
+
 	// Defer an interupt in the predicate shadow until the first instruction
 	// not in the shadow. But otherwise disable all interrupts in the shadow.
 	// But only defer/disable interrupts if taking the branch, in which case it
@@ -8014,12 +7994,12 @@ begin
 	next_robe.argD_v = Qupls4_pkg::fnSourceRs4v(robe.op);
 	next_robe.argS_v = Qupls4_pkg::fnSourceArgSv(robe.op);
 	next_robe.argT_v = Qupls4_pkg::fnSourceRdv(robe.op);
-	next_robe.argA = robe.argA;
-	next_robe.argB = robe.argB;
-	next_robe.argC = robe.argC;
-	next_robe.argD = robe.argD;
-	next_robe.argS = robe.argS;
-	next_robe.argT = robe.argT;
+	if (db.Rs1z)
+		next_robe.argA_v = VAL;
+	if (db.Rs2z)
+		next_robe.argB_v = VAL;
+	if (db.Rs3z)
+		next_robe.argC_v = VAL;
 	// In some cases all the register values are essentially valid already, so
 	// indicate that the register read is done. This lets dispatch dispatch the
 	// instruction sooner.
