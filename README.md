@@ -42,7 +42,7 @@ The Qupls4 OoO machine is currently in development. A long way to go yet. Some s
 Qupls4 will have 32 GPRs instead of 64.
 ### Historic Changes
 The most recent major change to the ISA was a switch back to fixed length instructions.
-r0 is now a general-purpose register except when used as a base or index register for an address calculation in which case the value zero is used.
+r0 is now a completely general-purpose register. (r63 is specified to get a zero value for memory base / index registers).
 There should not be a signficant effect on the performance caused by reducing the number of registers.
 Micro-code has been removed.
 
