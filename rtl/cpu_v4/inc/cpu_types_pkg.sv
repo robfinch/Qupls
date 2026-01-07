@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2024-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2024-2026  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -66,7 +66,7 @@ typedef logic [31:0] physical_address_t;
 typedef logic [11:0] mc_address_t;
 `ifdef QUPLS4
 typedef logic [9:0] pregno_t;
-typedef logic [8:0] aregno_t;
+typedef logic [7:0] aregno_t;
 typedef logic [127:0] value_pair_t;
 typedef logic [63:0] value_t;
 typedef logic [31:0] half_value_t;

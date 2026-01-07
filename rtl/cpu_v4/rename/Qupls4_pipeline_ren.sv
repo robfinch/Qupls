@@ -42,7 +42,7 @@ import Qupls4_pkg::*;
 `define SUPPORT_RAT	1
 
 module Qupls4_pipeline_ren(
-	rst, clk, clk5x, ph4, en, nq, restore, restored, restore_list,
+	rst, clk, clk5x, ph4, en, nq, restore,
 	unavail_list,
 	chkpt_amt, tail0, rob, avail_reg, sr, branch_resolved,
 	stomp_ren, kept_stream, flush_dec, flush_ren,
@@ -81,8 +81,6 @@ input flush_dec;
 output reg flush_ren;
 input nq;
 input restore;
-output restored;
-output [Qupls4_pkg::PREGS-1:0] restore_list;
 input [Qupls4_pkg::PREGS-1:0] unavail_list;
 input [2:0] chkpt_amt;
 input rob_ndx_t tail0;
@@ -435,8 +433,6 @@ urat1
 	.cmtaval(64'd0),
 	.cmta_cp(cmta_cp),
 	.cmtbr(cmtbr),
-	.restore_list(restore_list),
-	.restored(restored),
 	.tags2free(tags2free),
 	.freevals(freevals),
 	.backout(backout),

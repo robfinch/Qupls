@@ -47,7 +47,7 @@ always_comb
 begin
 	setready_o = FALSE;
 	setavail_o = FALSE;
-	else if (state_i == Qupls4_pkg::DRAMSLOT_AVAIL && lsndxv_i && idv_i)
+	if (state_i == Qupls4_pkg::DRAMSLOT_AVAIL && lsndxv_i && idv_i)
 		setready_o = TRUE;
 end
 

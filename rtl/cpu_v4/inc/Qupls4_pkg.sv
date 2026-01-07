@@ -413,7 +413,6 @@ typedef struct packed {
 
 typedef struct packed
 {
-	logic [Qupls4_pkg::PREGS-1:0] avail;	// available registers at time of queue (for rollback)
 //	cpu_types_pkg::pregno_t [AREGS-1:0] p2regmap;
 	cpu_types_pkg::pregno_t [Qupls4_pkg::AREGS-1:0] pregmap;
 	cpu_types_pkg::pregno_t [Qupls4_pkg::AREGS-1:0] regmap;
@@ -1947,6 +1946,7 @@ typedef struct packed {
 typedef struct packed {
 	// The following fields may change state while an instruction is processed.
 	logic [4:0] v;						// 0=entry is invalid, otherwise instruction stream number in use
+	logic [2:0] wh;						// which instruction of group this is.
 	cpu_types_pkg::seqnum_t sn;							// sequence number, decrements when instructions que
 	cpu_types_pkg::rob_ndx_t this_ndx;
 	logic [4:0] pghn;					// pipeline group header index

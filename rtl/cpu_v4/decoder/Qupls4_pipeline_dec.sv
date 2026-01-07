@@ -40,7 +40,7 @@ import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
 module Qupls4_pipeline_dec(rst_i, rst, clk, en, clk5x, ph4, new_cline_ext, cline,
-	restored, restore_list, unavail_list, sr, uop_num, flush_ext, flush_dec,
+	sr, uop_num, flush_ext, flush_dec,
 	tags2free, freevals, bo_wr, bo_preg,
 	stomp_dec, stomp_ext, kept_stream, pg_ext,
 	pg_dec,
@@ -60,9 +60,6 @@ input clk5x;
 input [4:0] ph4;
 input new_cline_ext;
 input [1023:0] cline;
-input restored;
-input [Qupls4_pkg::PREGS-1:0] restore_list;
-input [Qupls4_pkg::PREGS-1:0] unavail_list;
 input Qupls4_pkg::status_reg_t sr;
 input [4:0] uop_num;
 input stomp_dec;

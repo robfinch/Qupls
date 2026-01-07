@@ -65,7 +65,7 @@ else begin
 	if (!(store|cstore|load|cload) && dram_idv)
 		done <= TRUE;
 	else if (~(load|cload) ? !stomp[dram_id] && dram_idv :
-		(dram_oper.state==2'b11) && dram_oper.v)
+		(dram_oper.state==2'b11) && dram_oper.oper.v)
 		done <= TRUE;
 	else
 		done <= FALSE;

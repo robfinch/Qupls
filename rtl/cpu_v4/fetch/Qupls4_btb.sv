@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2023-2026  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -46,15 +46,15 @@ module Qupls4_btb(rst, clk, en, clk_en, nmi, nmi_addr, irq, irq_addr,
 	takb0, takb1, takb2, takb3, do_bsr, bsr_tgt, do_ret, ret_pc,
 	do_call,
 	branchmiss, misspc, excret, excretpc,
-	commit_pc0, commit_brtgt0, commit_takb0, commit_grp0,
-	commit_pc1, commit_brtgt1, commit_takb1, commit_grp1,
-	commit_pc2, commit_brtgt2, commit_takb2, commit_grp2,
-	commit_pc3, commit_brtgt3, commit_takb3, commit_grp3,
+	commit_pc0, commit_brtgt0, commit_takb0, commit_grp0, commit_br0, commit_ret0, commit_jmp0,
+	commit_pc1, commit_brtgt1, commit_takb1, commit_grp1, commit_br1, commit_ret1, commit_jmp1,
+	commit_pc2, commit_brtgt2, commit_takb2, commit_grp2, commit_br2, commit_ret2, commit_jmp2,
+	commit_pc3, commit_brtgt3, commit_takb3, commit_grp3, commit_br3, commit_ret3, commit_jmp3,
 	strm_bitmap, act_stream, pcs,
 	new_stream, alloc_stream, free_stream, thread_probability, dep_stream,
 	is_buffered
 );
-parameter DEP=1024;
+parameter DEP=2048;
 parameter MWIDTH = 4;
 input rst;
 input clk;
@@ -98,18 +98,30 @@ input cpu_types_pkg::pc_address_ex_t misspc;
 input cpu_types_pkg::pc_address_ex_t commit_pc0;
 input cpu_types_pkg::pc_address_ex_t commit_brtgt0;
 input commit_takb0;
+input commit_br0;
+input commit_ret0;
+input commit_jmp0;
 input [2:0] commit_grp0;
 input cpu_types_pkg::pc_address_ex_t commit_pc1;
 input cpu_types_pkg::pc_address_ex_t commit_brtgt1;
 input commit_takb1;
+input commit_br1;
+input commit_ret1;
+input commit_jmp1;
 input [2:0] commit_grp1;
 input cpu_types_pkg::pc_address_ex_t commit_pc2;
 input cpu_types_pkg::pc_address_ex_t commit_brtgt2;
 input commit_takb2;
+input commit_br2;
+input commit_ret2;
+input commit_jmp2;
 input [2:0] commit_grp2;
 input cpu_types_pkg::pc_address_ex_t commit_pc3;
 input cpu_types_pkg::pc_address_ex_t commit_brtgt3;
 input commit_takb3;
+input commit_br3;
+input commit_ret3;
+input commit_jmp3;
 input [2:0] commit_grp3;
 
 output [XSTREAMS*THREADS-1:0] strm_bitmap;
@@ -125,12 +137,15 @@ input is_buffered;
 
 typedef struct packed {
 	logic takb;
-	logic [2:0] grp;
+	logic [2:0] grp;										// which instruction in group is a branch
+	logic ret;													// ret type instruction
+	logic jmp;													// jump
 	cpu_types_pkg::pc_address_t pc;
 	cpu_types_pkg::pc_address_t tgt;
 } btb_entry_t;
 
 pc_address_ex_t [31:0] ras;
+pc_address_ex_t ras_pc;
 reg [4:0] ras_sp;
 
 pc_address_ex_t [XSTREAMS*THREADS-1:0] next_pcs;
@@ -209,7 +224,7 @@ endgenerate
       .WRITE_MODE_B("no_change"),     // String
       .WRITE_PROTECT(1)               // DECIMAL
    )
-   xpm_memory_sdpram_inst0 (
+   btb_table (
       .dbiterrb(),             // 1-bit output: Status signal to indicate double bit error occurrence
                                        // on the data output of port B.
 
@@ -258,248 +273,9 @@ endgenerate
 
    );
 
-   // xpm_memory_sdpram: Simple Dual Port RAM
-   // Xilinx Parameterized Macro, version 2022.2
-
-   xpm_memory_sdpram #(
-      .ADDR_WIDTH_A($clog2(DEP)),               // DECIMAL
-      .ADDR_WIDTH_B($clog2(DEP)),               // DECIMAL
-      .AUTO_SLEEP_TIME(0),            // DECIMAL
-      .BYTE_WRITE_WIDTH_A($bits(btb_entry_t)),        // DECIMAL
-      .CASCADE_HEIGHT(0),             // DECIMAL
-      .CLOCKING_MODE("common_clock"), // String
-      .ECC_MODE("no_ecc"),            // String
-      .MEMORY_INIT_FILE("none"),      // String
-      .MEMORY_INIT_PARAM("0"),        // String
-      .MEMORY_OPTIMIZATION("true"),   // String
-      .MEMORY_PRIMITIVE("block"),      // String
-      .MEMORY_SIZE(DEP*$bits(btb_entry_t)),             // DECIMAL
-      .MESSAGE_CONTROL(0),            // DECIMAL
-      .READ_DATA_WIDTH_B($bits(btb_entry_t)),         // DECIMAL
-      .READ_LATENCY_B(1),             // DECIMAL
-      .READ_RESET_VALUE_B("0"),       // String
-      .RST_MODE_A("SYNC"),            // String
-      .RST_MODE_B("SYNC"),            // String
-      .SIM_ASSERT_CHK(0),             // DECIMAL; 0=disable simulation messages, 1=enable simulation messages
-      .USE_EMBEDDED_CONSTRAINT(0),    // DECIMAL
-      .USE_MEM_INIT(1),               // DECIMAL
-      .USE_MEM_INIT_MMI(0),           // DECIMAL
-      .WAKEUP_TIME("disable_sleep"),  // String
-      .WRITE_DATA_WIDTH_A($bits(btb_entry_t)),        // DECIMAL
-      .WRITE_MODE_B("no_change"),     // String
-      .WRITE_PROTECT(1)               // DECIMAL
-   )
-   xpm_memory_sdpram_inst1 (
-      .dbiterrb(),             // 1-bit output: Status signal to indicate double bit error occurrence
-                                       // on the data output of port B.
-
-      .doutb(doutb1),                   // READ_DATA_WIDTH_B-bit output: Data output for port B read operations.
-      .sbiterrb(),             // 1-bit output: Status signal to indicate single bit error occurrence
-                                       // on the data output of port B.
-
-      .addra(addra),                   // ADDR_WIDTH_A-bit input: Address for port A write operations.
-      .addrb(addrb0),                   // ADDR_WIDTH_B-bit input: Address for port B read operations.
-      .clka(clk),                     // 1-bit input: Clock signal for port A. Also clocks port B when
-                                       // parameter CLOCKING_MODE is "common_clock".
-
-      .clkb(rclk),                     // 1-bit input: Clock signal for port B when parameter CLOCKING_MODE is
-                                       // "common_clock". Unused when parameter CLOCKING_MODE is
-                                       // "common_clock".
-
-      .dina(tmp1),                     // WRITE_DATA_WIDTH_A-bit input: Data input for port A write operations.
-      .ena(1'b1),                       // 1-bit input: Memory enable signal for port A. Must be high on clock
-                                       // cycles when write operations are initiated. Pipelined internally.
-
-      .enb(1'b1),                       // 1-bit input: Memory enable signal for port B. Must be high on clock
-                                       // cycles when read operations are initiated. Pipelined internally.
-
-      .injectdbiterra(1'b0), // 1-bit input: Controls double bit error injection on input data when
-                                       // ECC enabled (Error injection capability is not available in
-                                       // "decode_only" mode).
-
-      .injectsbiterra(1'b0), // 1-bit input: Controls single bit error injection on input data when
-                                       // ECC enabled (Error injection capability is not available in
-                                       // "decode_only" mode).
-
-      .regceb(1'b1),                 // 1-bit input: Clock Enable for the last register stage on the output
-                                       // data path.
-
-      .rstb(1'b0),                     // 1-bit input: Reset signal for the final port B output register stage.
-                                       // Synchronously resets output port doutb to the value specified by
-                                       // parameter READ_RESET_VALUE_B.
-
-      .sleep(1'b0),                   // 1-bit input: sleep signal to enable the dynamic power saving feature.
-      .wea(w1)                        // WRITE_DATA_WIDTH_A/BYTE_WRITE_WIDTH_A-bit input: Write enable vector
-                                       // for port A input data port dina. 1 bit wide when word-wide writes are
-                                       // used. In byte-wide write configurations, each bit controls the
-                                       // writing one byte of dina to address addra. For example, to
-                                       // synchronously write only bits [15-8] of dina when WRITE_DATA_WIDTH_A
-                                       // is 32, wea would be 4'b0010.
-
-   );
-
-   // xpm_memory_sdpram: Simple Dual Port RAM
-   // Xilinx Parameterized Macro, version 2022.2
-
-   xpm_memory_sdpram #(
-      .ADDR_WIDTH_A($clog2(DEP)),               // DECIMAL
-      .ADDR_WIDTH_B($clog2(DEP)),               // DECIMAL
-      .AUTO_SLEEP_TIME(0),            // DECIMAL
-      .BYTE_WRITE_WIDTH_A($bits(btb_entry_t)),        // DECIMAL
-      .CASCADE_HEIGHT(0),             // DECIMAL
-      .CLOCKING_MODE("common_clock"), // String
-      .ECC_MODE("no_ecc"),            // String
-      .MEMORY_INIT_FILE("none"),      // String
-      .MEMORY_INIT_PARAM("0"),        // String
-      .MEMORY_OPTIMIZATION("true"),   // String
-      .MEMORY_PRIMITIVE("block"),      // String
-      .MEMORY_SIZE(DEP*$bits(btb_entry_t)),             // DECIMAL
-      .MESSAGE_CONTROL(0),            // DECIMAL
-      .READ_DATA_WIDTH_B($bits(btb_entry_t)),         // DECIMAL
-      .READ_LATENCY_B(1),             // DECIMAL
-      .READ_RESET_VALUE_B("0"),       // String
-      .RST_MODE_A("SYNC"),            // String
-      .RST_MODE_B("SYNC"),            // String
-      .SIM_ASSERT_CHK(0),             // DECIMAL; 0=disable simulation messages, 1=enable simulation messages
-      .USE_EMBEDDED_CONSTRAINT(0),    // DECIMAL
-      .USE_MEM_INIT(1),               // DECIMAL
-      .USE_MEM_INIT_MMI(0),           // DECIMAL
-      .WAKEUP_TIME("disable_sleep"),  // String
-      .WRITE_DATA_WIDTH_A($bits(btb_entry_t)),        // DECIMAL
-      .WRITE_MODE_B("no_change"),     // String
-      .WRITE_PROTECT(1)               // DECIMAL
-   )
-   xpm_memory_sdpram_inst2 (
-      .dbiterrb(),             // 1-bit output: Status signal to indicate double bit error occurrence
-                                       // on the data output of port B.
-
-      .doutb(doutb2),                   // READ_DATA_WIDTH_B-bit output: Data output for port B read operations.
-      .sbiterrb(),             // 1-bit output: Status signal to indicate single bit error occurrence
-                                       // on the data output of port B.
-
-      .addra(addra),                   // ADDR_WIDTH_A-bit input: Address for port A write operations.
-      .addrb(addrb0),                   // ADDR_WIDTH_B-bit input: Address for port B read operations.
-      .clka(clk),                     // 1-bit input: Clock signal for port A. Also clocks port B when
-                                       // parameter CLOCKING_MODE is "common_clock".
-
-      .clkb(rclk),                     // 1-bit input: Clock signal for port B when parameter CLOCKING_MODE is
-                                       // "common_clock". Unused when parameter CLOCKING_MODE is
-                                       // "common_clock".
-
-      .dina(tmp2),                     // WRITE_DATA_WIDTH_A-bit input: Data input for port A write operations.
-      .ena(1'b1),                       // 1-bit input: Memory enable signal for port A. Must be high on clock
-                                       // cycles when write operations are initiated. Pipelined internally.
-
-      .enb(1'b1),                       // 1-bit input: Memory enable signal for port B. Must be high on clock
-                                       // cycles when read operations are initiated. Pipelined internally.
-
-      .injectdbiterra(1'b0), // 1-bit input: Controls double bit error injection on input data when
-                                       // ECC enabled (Error injection capability is not available in
-                                       // "decode_only" mode).
-
-      .injectsbiterra(1'b0), // 1-bit input: Controls single bit error injection on input data when
-                                       // ECC enabled (Error injection capability is not available in
-                                       // "decode_only" mode).
-
-      .regceb(1'b1),                 // 1-bit input: Clock Enable for the last register stage on the output
-                                       // data path.
-
-      .rstb(1'b0),                     // 1-bit input: Reset signal for the final port B output register stage.
-                                       // Synchronously resets output port doutb to the value specified by
-                                       // parameter READ_RESET_VALUE_B.
-
-      .sleep(1'b0),                   // 1-bit input: sleep signal to enable the dynamic power saving feature.
-      .wea(w2)                        // WRITE_DATA_WIDTH_A/BYTE_WRITE_WIDTH_A-bit input: Write enable vector
-                                       // for port A input data port dina. 1 bit wide when word-wide writes are
-                                       // used. In byte-wide write configurations, each bit controls the
-                                       // writing one byte of dina to address addra. For example, to
-                                       // synchronously write only bits [15-8] of dina when WRITE_DATA_WIDTH_A
-                                       // is 32, wea would be 4'b0010.
-
-   );
-
-   // xpm_memory_sdpram: Simple Dual Port RAM
-   // Xilinx Parameterized Macro, version 2022.2
-
-   xpm_memory_sdpram #(
-      .ADDR_WIDTH_A($clog2(DEP)),               // DECIMAL
-      .ADDR_WIDTH_B($clog2(DEP)),               // DECIMAL
-      .AUTO_SLEEP_TIME(0),            // DECIMAL
-      .BYTE_WRITE_WIDTH_A($bits(btb_entry_t)),        // DECIMAL
-      .CASCADE_HEIGHT(0),             // DECIMAL
-      .CLOCKING_MODE("common_clock"), // String
-      .ECC_MODE("no_ecc"),            // String
-      .MEMORY_INIT_FILE("none"),      // String
-      .MEMORY_INIT_PARAM("0"),        // String
-      .MEMORY_OPTIMIZATION("true"),   // String
-      .MEMORY_PRIMITIVE("block"),      // String
-      .MEMORY_SIZE(DEP*$bits(btb_entry_t)),             // DECIMAL
-      .MESSAGE_CONTROL(0),            // DECIMAL
-      .READ_DATA_WIDTH_B($bits(btb_entry_t)),         // DECIMAL
-      .READ_LATENCY_B(1),             // DECIMAL
-      .READ_RESET_VALUE_B("0"),       // String
-      .RST_MODE_A("SYNC"),            // String
-      .RST_MODE_B("SYNC"),            // String
-      .SIM_ASSERT_CHK(0),             // DECIMAL; 0=disable simulation messages, 1=enable simulation messages
-      .USE_EMBEDDED_CONSTRAINT(0),    // DECIMAL
-      .USE_MEM_INIT(1),               // DECIMAL
-      .USE_MEM_INIT_MMI(0),           // DECIMAL
-      .WAKEUP_TIME("disable_sleep"),  // String
-      .WRITE_DATA_WIDTH_A($bits(btb_entry_t)),        // DECIMAL
-      .WRITE_MODE_B("no_change"),     // String
-      .WRITE_PROTECT(1)               // DECIMAL
-   )
-   xpm_memory_sdpram_inst3 (
-      .dbiterrb(),             // 1-bit output: Status signal to indicate double bit error occurrence
-                                       // on the data output of port B.
-
-      .doutb(doutb3),                   // READ_DATA_WIDTH_B-bit output: Data output for port B read operations.
-      .sbiterrb(),             // 1-bit output: Status signal to indicate single bit error occurrence
-                                       // on the data output of port B.
-
-      .addra(addra),                   // ADDR_WIDTH_A-bit input: Address for port A write operations.
-      .addrb(addrb0),                   // ADDR_WIDTH_B-bit input: Address for port B read operations.
-      .clka(clk),                     // 1-bit input: Clock signal for port A. Also clocks port B when
-                                       // parameter CLOCKING_MODE is "common_clock".
-
-      .clkb(rclk),                     // 1-bit input: Clock signal for port B when parameter CLOCKING_MODE is
-                                       // "common_clock". Unused when parameter CLOCKING_MODE is
-                                       // "common_clock".
-
-      .dina(tmp3),                     // WRITE_DATA_WIDTH_A-bit input: Data input for port A write operations.
-      .ena(1'b1),                       // 1-bit input: Memory enable signal for port A. Must be high on clock
-                                       // cycles when write operations are initiated. Pipelined internally.
-
-      .enb(1'b1),                       // 1-bit input: Memory enable signal for port B. Must be high on clock
-                                       // cycles when read operations are initiated. Pipelined internally.
-
-      .injectdbiterra(1'b0), // 1-bit input: Controls double bit error injection on input data when
-                                       // ECC enabled (Error injection capability is not available in
-                                       // "decode_only" mode).
-
-      .injectsbiterra(1'b0), // 1-bit input: Controls single bit error injection on input data when
-                                       // ECC enabled (Error injection capability is not available in
-                                       // "decode_only" mode).
-
-      .regceb(1'b1),                 // 1-bit input: Clock Enable for the last register stage on the output
-                                       // data path.
-
-      .rstb(1'b0),                     // 1-bit input: Reset signal for the final port B output register stage.
-                                       // Synchronously resets output port doutb to the value specified by
-                                       // parameter READ_RESET_VALUE_B.
-
-      .sleep(1'b0),                   // 1-bit input: sleep signal to enable the dynamic power saving feature.
-      .wea(w3)                        // WRITE_DATA_WIDTH_A/BYTE_WRITE_WIDTH_A-bit input: Write enable vector
-                                       // for port A input data port dina. 1 bit wide when word-wide writes are
-                                       // used. In byte-wide write configurations, each bit controls the
-                                       // writing one byte of dina to address addra. For example, to
-                                       // synchronously write only bits [15-8] of dina when WRITE_DATA_WIDTH_A
-                                       // is 32, wea would be 4'b0010.
-
-   );
 
 always_comb//ff @(posedge clk)
-	addrb0 = pc0.pc[10:1];
+	addrb0 = pc0.pc[11:1];
 
 
 Qupls4_btb_stream_bitmap usb1
@@ -551,42 +327,8 @@ else begin
 	takb3 = 1'b0;
 	for (nn = 0; nn < XSTREAMS*THREADS; nn = nn + 1)
 		next_pcs[nn] = pcs[nn];
-	/* Under construction
-	if (p_override[0])
-		next_bno_bitmap[po_bno[0]] = 1'b0;
-	if (p_override[1])
-		next_bno_bitmap[po_bno[1]] = 1'b0;
-	if (p_override[2])
-		next_bno_bitmap[po_bno[2]] = 1'b0;
-	if (p_override[3])
-		next_bno_bitmap[po_bno[3]] = 1'b0;
-	*/
-
-	// Assign alternate branch path if not already assigned.
-	/* under construction
-	if (pr0.decbus.br && pr0.pc.bno_f==5'd0) begin
-		dec_pc0 = pr.pc;
-		dec_pc0.bno_f = ffz0a;
-		next_bno_bitmap[ffz0a] = 1'b0;
-	end
-	if (pr1.decbus.br && pr1.pc.bno_f==5'd0) begin
-		dec_pc1 = pr.pc;
-		dec_pc1.bno_f = ffz0b;
-		next_bno_bitmap[ffz0b] = 1'b0;
-	end
-	if (pr2.decbus.br && pr2.pc.bno_f==5'd0) begin
-		dec_pc2 = pr.pc;
-		dec_pc2.bno_f = ffz0c;
-		next_bno_bitmap[ffz0c] = 1'b0;
-	end
-	if (pr3.decbus.br && pr3.pc.bno_f==5'd0) begin
-		dec_pc3 = pr.pc;
-		dec_pc3.bno_f = ffz0d;
-		next_bno_bitmap[ffz0d] = 1'b0;
-	end
-	*/
-
-	// Handle change of flow on interrupt.
+	// Handle change of flow on interrupt. (Too slow, due to added multiplexing)
+	/*
 	if (nmi) begin
 		next_pcs[act_stream].pc = nmi_addr;
 		next_pcs[act_stream].stream = next_act_stream;
@@ -596,42 +338,26 @@ else begin
 		next_pcs[act_stream].stream = next_act_stream;
 	end
 	else
-	if (excret)
-		next_pcs[act_stream] = excretpc;
-	// Under construction: RAS
-	else if (do_ret)
-		next_pcs[act_stream] = ras[ras_sp];
+	*/
 	// Decode stage corrections override mux stage.
+	if (branchmiss)
+		next_pcs[misspc.stream] = misspc;
 	else if (!predicted_correctly_dec)
 		next_pcs[act_stream] = new_address_dec;
 	else if (|p_override)
 		next_pcs[act_stream] = new_address_ext;
-	// bsr/jsr
-	else if (do_bsr)
-		next_pcs[bsr_tgt.stream] = bsr_tgt;
-	else if (branchmiss)	//(bs_done_oh||bs_done) begin
-		next_pcs[misspc.stream] = misspc;
 	// Now the target predictions
 	// Note the stream cannot be recorded in the BTB table.
-	else if (en && pc0.pc==doutb0.pc && doutb0.takb) begin
-		next_pcs[pc0.stream].pc = doutb0.tgt;
+	else if (en && pc0.pc==doutb0.pc) begin
+		if (doutb0.ret)
+			next_pcs[pc0.stream].pc = ras_pc;
+		else if (doutb0.jmp)
+			next_pcs[pc0.stream].pc = doutb0.tgt;
+		else begin
+			next_pcs[pc0.stream].pc = doutb0.tgt;
+			takb0 = doutb0.takb;		// record branch taken fact (for bt)
+		end
 		next_pcs[pc0.stream].stream = next_act_stream;
-		takb0 = 1'b1;		// record branch taken fact (for bt)
-	end
-	else if (en && pc1.pc==doutb1.pc && doutb1.takb) begin
-		next_pcs[pc1.stream].pc = doutb1.tgt;
-		next_pcs[pc1.stream].stream = next_act_stream;
-		takb1 = 1'b1;
-	end
-	else if (en && pc2.pc==doutb2.pc && doutb2.takb) begin
-		next_pcs[pc2.stream].pc = doutb2.tgt;
-		next_pcs[pc2.stream].stream = next_act_stream;
-		takb2 = 1'b1;
-	end
-	else if (en && pc3.pc==doutb3.pc && doutb3.takb) begin
-		next_pcs[pc3.stream].pc = doutb3.tgt;
-		next_pcs[pc3.stream].stream = next_act_stream;
-		takb3 = 1'b1;
 	end
 	// Advance program counter.
 	else begin
@@ -702,6 +428,15 @@ else begin
 		ras[ras_sp - 2'd1] <= ret_pc;
 end
 
+always_ff @(posedge clk)
+if (rst) begin
+	ras_pc.pc <= RSTPC;
+	ras_pc.stream.thread <= 2'd0;
+	ras_pc.stream.stream <= 5'd1;
+end
+else begin
+	ras_pc <= ras[ras_sp];
+end
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -711,38 +446,56 @@ assign next_pc = next_pcs[next_act_stream];
 always_ff @(posedge clk)
 if (rst) begin
 	w0 <= 1'd0;
-	w1 <= 1'd0;
-	w2 <= 1'd0;
-	w3 <= 1'd0;
-	addra <= 10'd0;
-	tmp0 <= 'd0;
-	tmp1 <= 'd0;
-	tmp2 <= 'd0;
-	tmp3 <= 'd0;
+	addra <= 11'd0;
+	tmp0 <= {$bits(btb_entry_t){1'b0}};
 end
 else begin
-	tmp0.pc <= commit_pc0.pc;
-	tmp0.takb <= commit_takb0;
-	tmp0.tgt <= commit_brtgt0.pc;
-	tmp0.grp <= commit_grp0;
-	tmp1.pc <= commit_pc1.pc;
-	tmp1.takb <= commit_takb1;
-	tmp1.tgt <= commit_brtgt1.pc;
-	tmp1.grp <= commit_grp1;
-	tmp2.pc <= commit_pc2.pc;
-	tmp2.takb <= commit_takb2;
-	tmp2.tgt <= commit_brtgt2.pc;
-	tmp2.grp <= commit_grp2;
-	tmp3.pc <= commit_pc3.pc;
-	tmp3.takb <= commit_takb3;
-	tmp3.tgt <= commit_brtgt3.pc;
-	tmp3.grp <= commit_grp3;
-	addra <= commit_pc0.pc[10:1];
-	w0 <= commit_takb0;
-	w1 <= commit_takb1;
-	w2 <= commit_takb2;
-	w3 <= commit_takb3;
-//	w <= commit_takb0|commit_takb1|commit_takb2|commit_takb3;
+	w0 <= FALSE;
+	tmp0.pc <= {$bits(cpu_types_pkg::pc_address_t){1'b0}};
+	tmp0.takb <= 1'b0;
+	tmp0.tgt <= {$bits(cpu_types_pkg::pc_address_t){1'b0}};
+	tmp0.grp <= 3'd0;
+	addra <= 11'd0;
+	if (commit_jmp0|commit_ret0|commit_br0) begin
+		tmp0.pc <= commit_pc0.pc;
+		tmp0.takb <= commit_takb0;
+		tmp0.tgt <= commit_brtgt0.pc;
+		tmp0.grp <= commit_grp0;
+		tmp0.jmp <= commit_jmp0;
+		tmp0.ret <= commit_ret0;
+		addra <= commit_pc0.pc[11:1];
+		w0 <= TRUE;
+	end
+	else if (commit_jmp1|commit_ret1|commit_br1) begin
+		tmp0.pc <= commit_pc1.pc;
+		tmp0.takb <= commit_takb1;
+		tmp0.tgt <= commit_brtgt1.pc;
+		tmp0.grp <= commit_grp1;
+		tmp0.jmp <= commit_jmp1;
+		tmp0.ret <= commit_ret1;
+		addra <= commit_pc1.pc[11:1];
+		w0 <= TRUE;
+	end
+	else if (commit_jmp2|commit_ret2|commit_br2) begin
+		tmp0.pc <= commit_pc2.pc;
+		tmp0.takb <= commit_takb2;
+		tmp0.tgt <= commit_brtgt2.pc;
+		tmp0.grp <= commit_grp2;
+		tmp0.jmp <= commit_jmp2;
+		tmp0.ret <= commit_ret2;
+		addra <= commit_pc2.pc[11:1];
+		w0 <= TRUE;
+	end
+	else if (commit_jmp3|commit_ret3|commit_br3) begin
+		tmp0.pc <= commit_pc3.pc;
+		tmp0.takb <= commit_takb3;
+		tmp0.tgt <= commit_brtgt3.pc;
+		tmp0.grp <= commit_grp3;
+		tmp0.jmp <= commit_jmp3;
+		tmp0.ret <= commit_ret3;
+		addra <= commit_pc3.pc[11:1];
+		w0 <= TRUE;
+	end
 end
 
 endmodule

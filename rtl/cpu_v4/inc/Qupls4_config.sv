@@ -42,7 +42,7 @@
 parameter MWIDTH = 4;
 
 // Number of threads supported. (Under construction < 5)
-parameter THREADS = 4;
+parameter THREADS = 2;
 
 // Number of streams of execution. Alternate branch paths create streams.
 parameter XSTREAMS = 16;

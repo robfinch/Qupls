@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2023-2026  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -511,6 +511,7 @@ always_comb
 begin
 	foreach (pg_ext.pr[n2]) begin
 		pg_ext.pr[n2] = {$bits(Qupls4_pkg::pipeline_reg_t){1'b0}};
+		pg_ext.pr[n2].wh = n2;
 		pg_ext.pr[n2] = ins_ext[n2];
 		pg_ext.pr[n2].ip_stream = pc_ext[n2].stream.stream;
 		pg_ext.pr[n2].ip_offs = n2 * 3;	// wyde offset

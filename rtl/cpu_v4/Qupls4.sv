@@ -173,7 +173,6 @@ wire [Qupls4_pkg::PREGS-1:0] unavail_list;			// list of registers made unavailab
 
 wire inject_cl = 1'b0;
 
-wire [Qupls4_pkg::PREGS-1:0] restore_list;
 rob_ndx_t agen0_rndx, agen1_rndx;
 reg [7:0] scan;
 rob_ndx_t nonNop;		// ROB index of the next non-NOP instruction.
@@ -880,6 +879,14 @@ reg commit_br0;
 reg commit_br1;
 reg commit_br2;
 reg commit_br3;
+reg commit_ret0;
+reg commit_ret1;
+reg commit_ret2;
+reg commit_ret3;
+reg commit_jmp0;
+reg commit_jmp1;
+reg commit_jmp2;
+reg commit_jmp3;
 reg commit_takb0;
 reg commit_takb1;
 reg commit_takb2;
@@ -1762,18 +1769,30 @@ Qupls4_btb ubtb1
 	.commit_brtgt0(commit_brtgt0),
 	.commit_takb0(commit_takb0),
 	.commit_grp0(commit_grp0),
+	.commit_br0(commit_br0),
+	.commit_ret0(commit_ret0),
+	.commit_jmp0(commit_jmp0),
 	.commit_pc1(commit_pc1),
 	.commit_brtgt1(commit_brtgt1),
 	.commit_takb1(commit_takb1),
 	.commit_grp1(commit_grp1),
+	.commit_br1(commit_br1),
+	.commit_ret1(commit_ret1),
+	.commit_jmp1(commit_jmp1),
 	.commit_pc2(commit_pc2),
 	.commit_brtgt2(commit_brtgt2),
 	.commit_takb2(commit_takb2),
 	.commit_grp2(commit_grp2),
+	.commit_br2(commit_br2),
+	.commit_ret2(commit_ret2),
+	.commit_jmp2(commit_jmp2),
 	.commit_pc3(commit_pc3),
 	.commit_brtgt3(commit_brtgt3),
 	.commit_takb3(commit_takb3),
 	.commit_grp3(commit_grp3),
+	.commit_br3(commit_br3),
+	.commit_ret3(commit_ret3),
+	.commit_jmp3(commit_jmp3),
 	.act_stream(fet_stream),
 	.new_stream(new_stream),
 	.alloc_stream(alloc_stream),
@@ -2394,7 +2413,6 @@ wire [3:0] freevals;
 wire [Qupls4_pkg::PREGS-1:0] avail_reg;						// available registers
 checkpt_ndx_t cndx0,cndx1,cndx2,cndx3,pcndx;		// checkpoint index for each queue slot
 wire restore;		// = branch_state==BS_CHKPT_RESTORE && restore_en;// && !fcu_cjb;
-wire restored;	// restore_chkpt delayed one clock.
 
 Qupls4_pipeline_dec #(.MWIDTH(MWIDTH)) udecstg1
 (
@@ -2408,9 +2426,6 @@ Qupls4_pipeline_dec #(.MWIDTH(MWIDTH)) udecstg1
 	.ph4(ph4),
 	.new_cline_ext(new_cline_ext),
 	.cline(cline_ext),
-	.restored(restored),
-	.restore_list(restore_list),
-	.unavail_list(unavail_list),
 	.sr(sr),
 	.uop_num(uop_num_ext),
 	.tags2free(tags2free),
@@ -2854,8 +2869,6 @@ Qupls4_pipeline_ren #(.MWIDTH(MWIDTH), .NPORT(NREG_RPORTS)) uren1
 	.flush_ren(flush_ren),
 	.nq(nq),
 	.restore(restore),
-	.restored(restored),
-	.restore_list(restore_list),
 	.tail0(tails[0]),
 	.rob(rob),
 	.stomp_ren(stomp_ren),
@@ -4979,7 +4992,6 @@ generate begin : gMemory2
 	end
 	else begin
 		assign dram1_done = TRUE;
-		assign lbndx1 = {$bits(Qupls4_pkg::lsq_ndx_t){1'b0}};
 		assign dram1_timeout = FALSE;
 		assign dram1 = Qupls4_pkg::DRAMSLOT_AVAIL;
 		assign dram1_more = FALSE;
@@ -5721,7 +5733,8 @@ else begin
 		;
 //		if (|robentry_stomp)
 //			tails[0] <= stail;		// computed above
-	else if (advance_pipeline) begin
+//	else
+	if (advance_pipeline) begin
 		//if (!stomp_que || stomp_quem) 
 		begin
 			// Decrement sequence numbers.
@@ -6340,6 +6353,19 @@ else begin
 		commit_br1 <= rob[head[1]].op.decbus.br && cmtcnt > 3'd1;
 		commit_br2 <= rob[head[2]].op.decbus.br && cmtcnt > 3'd2;
 		commit_br3 <= rob[head[3]].op.decbus.br && cmtcnt > 3'd3;
+		commit_ret0 = rob[head[0]].op.decbus.ret|rob[head[0]].op.decbus.eret;
+		commit_ret1 = (rob[head[1]].op.decbus.ret|rob[head[1]].op.decbus.eret) && cmtcnt > 3'd1;
+		commit_ret2 = (rob[head[2]].op.decbus.ret|rob[head[2]].op.decbus.eret) && cmtcnt > 3'd2;
+		commit_ret3 = (rob[head[3]].op.decbus.ret|rob[head[3]].op.decbus.eret) && cmtcnt > 3'd3;
+		commit_jmp0 = rob[head[0]].op.decbus.bsr|rob[head[0]].op.decbus.jsr;
+		commit_jmp1 = (rob[head[1]].op.decbus.bsr|rob[head[1]].op.decbus.jsr) && cmtcnt > 3'd1;
+		commit_jmp2 = (rob[head[2]].op.decbus.bsr|rob[head[2]].op.decbus.jsr) && cmtcnt > 3'd2;
+		commit_jmp3 = (rob[head[3]].op.decbus.bsr|rob[head[3]].op.decbus.jsr) && cmtcnt > 3'd3;
+		commit_grp0 = rob[head[0]].wh;
+		commit_grp1 = rob[head[1]].wh;
+		commit_grp2 = rob[head[2]].wh;
+		commit_grp3 = rob[head[3]].wh;
+
 		group_len <= group_len - 1;
 		tCommits(head[0]);
 		if (rob[head[0]].flush) begin

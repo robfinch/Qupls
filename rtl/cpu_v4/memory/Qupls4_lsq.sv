@@ -301,6 +301,37 @@ begin
 end
 endtask
 
+// Find the store closest to the load that has the same memory size
+// and address.
+
+task tForwardStoreHelper;
+input integer n18r, n18c;	// index of load
+output lsq_ndx_t sid;
+output seqnum_t ssn;
+integer n17r, n17c;
+begin
+	ssn = 0;
+	sid.row = 0;
+	sid.col = 0;
+	for (n17r = 0; n17r < Qupls4_pkg::LSQ_ENTRIES; n17r = n17r + 1) begin
+		for (n17c = 0; n17c < 2; n17c = n17c + 1) begin
+			if (
+				lsq[n17r][n17c].v==VAL &&
+				lsq[n17r][n17c].store &&
+				lsq[n17r][n17c].sn > lsq[n18r][n18c].sn &&
+				lsq[n17r][n17c].memsz == lsq[n18r][n18c].memsz &&
+				lsq[n17r][n17c].padr == lsq[n18r][n18c].padr &&
+				lsq[n17r][n17c].sn > ssn
+			) begin
+					ssn = lsq[n17r][n17c].sn;
+					sid.row = n17r;
+					sid.col = n17c;
+			end
+		end
+	end
+end
+endtask
+
 // When a store commits, search the LSQ for corresponding loads, and forward
 // the store value. The load must be valid and come after the store. It must
 // have the same size data and the same address.
@@ -309,10 +340,17 @@ task tForwardStore;
 input rob_ndx_t id;
 integer n17r, n17c;
 integer n18r, n18c;
+lsq_ndx_t sid;
+seqnum_t ssn;
 begin
 	n18r = rob[id].lsqndx.row;
 	n18c = rob[id].lsqndx.col;
+	ssn = 0;
+	sid.row = 0;
+	sid.col = 0;
 	if (lsq[n18r][n18c].store) begin
+		// Find the store closest to the load that has the same memory size
+		// and address.
 		for (n17r = 0; n17r < Qupls4_pkg::LSQ_ENTRIES; n17r = n17r + 1) begin
 			for (n17c = 0; n17c < 2; n17c = n17c + 1) begin
 				if (
@@ -322,8 +360,11 @@ begin
 					lsq[n17r][n17c].memsz == lsq[n18r][n18c].memsz &&
 					lsq[n17r][n17c].padr == lsq[n18r][n18c].padr
 				) begin
-					lsq[n17r][n17c].res <= lsq[n18r][n18c].res;
-					lsq[n17r][n17c].state <= 2'b11;
+					tForwardStoreHelper(n17r,n17c,sid,ssn);
+					if (ssn != 0 && sid.row==n18r && sid.col==n18c) begin
+						lsq[n17r][n17c].res <= lsq[sid.row][sid.col].res;
+						lsq[n17r][n17c].state <= 2'b11;
+					end
 				end
 			end
 		end

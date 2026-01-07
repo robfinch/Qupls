@@ -92,7 +92,7 @@ module Qupls4_rat(rst, clk,
 	cmtbr,															// committing a branch
 
 	restore,			// signal to restore a checkpoint
-	restore_list, restored, tags2free, freevals, backout,
+	tags2free, freevals, backout,
 	fcu_id,		// the ROB index of the instruction causing backout
 	bo_wr, bo_areg, bo_preg, bo_nreg);
 parameter MWIDTH = Qupls4_pkg::MWIDTH;
@@ -143,8 +143,6 @@ input checkpt_ndx_t [3:0] rd_cp;
 output cpu_types_pkg::pregno_t [NPORT-1:0] prn;	// physical register name
 input cpu_types_pkg::pregno_t [NREG_RPORT-1:0] prn_i;	// physical register name
 output /*reglookup_t*/ reg [NREG_RPORT-1:0] prv;											// physical register valid
-output reg [Qupls4_pkg::PREGS-1:0] restore_list;	// bit vector of registers to free on branch miss
-output reg restored;
 output pregno_t [3:0] tags2free;
 output reg [3:0] freevals;
 input backout;
@@ -235,6 +233,7 @@ else
 	stall_cyc <= stall & ~stall_cyc;
 */
 
+reg restored;
 reg en2d;
 reg [Qupls4_pkg::NCHECK-1:0] avail_chkpts;
 checkpt_ndx_t [3:0] chkptn;
@@ -269,8 +268,6 @@ Qupls4_pkg::reg_map_t historyMap;
 Qupls4_pkg::reg_map_t nextHistoryMap;
 Qupls4_pkg::reg_map_t reg_map_out;
 Qupls4_pkg::reg_map_t reg_hist_out;
-reg [Qupls4_pkg::PREGS-1:0] avail [0:Qupls4_pkg::NCHECK-1];	// available registers at time of queue (for rollback)
-reg [Qupls4_pkg::PREGS-1:0] nextAvail,avail_out;
 Qupls4_pkg::checkpoint_t [MWIDTH-1:0] currentMap0;
 Qupls4_pkg::checkpoint_t cpram_out;
 Qupls4_pkg::checkpoint_t cpram_out1;
@@ -290,18 +287,6 @@ reg pe_alloc_chkpt;
 wire pe_alloc_chkpt1;
 reg [Qupls4_pkg::PREGS-1:0] valid [0:Qupls4_pkg::NCHECK-1];
 
-/*
-reg [2:0] wcnt;
-always_ff @(posedge clk5x)
-if (rst)
-	wcnt <= 3'd0;
-else begin
-	if (ph4[1])
-		wcnt <= 3'd0;
-	else if (wcnt < 3'd4)
-		wcnt <= wcnt + 2'd1;
-end
-*/
 
 // There are four "extra" bits in the data to make the size work out evenly.
 // There is also an extra write bit. These are defaulted to prevent sim issues.
@@ -310,24 +295,7 @@ always_comb
 	cpram_en = en2|pe_alloc_chkpt|cpram_we;
 always_ff @(posedge clk)
 	cpram_en1 <= cpram_en;
-/*
-Qupls4_checkpoint_ram 
-# (.NRDPORTS(1))
-cpram1
-(
-	.rst(rst),
-	.clka(clk),
-	.ena(1'b1),
-	.wea(alloc_chkpt),
-	.addra(cndx),
-	.dina({4'd0,nextCurrentMap}),
-	.douta(),
-	.clkb(clk),
-	.enb(1'b1),
-	.addrb(miss_cp),
-	.doutb(cpram_out)
-);
-*/
+
 Qupls4_reg_map_ram #(.NRDPORTS(1)) rmr1
 (
 	.rst(rst),
@@ -357,15 +325,6 @@ Qupls4_reg_map_ram #(.NRDPORTS(1)) rmr2
 	.addrb(miss_cp),
 	.doutb(reg_hist_out)
 );
-
-always_ff @(posedge clk)
-if (rst)
-	avail_out <= {Qupls4_pkg::PREGS{1'b1}};
-else begin
-	if (alloc_chkpt)
-		avail[cndx] <= nextAvail;
-	avail_out <= avail[miss_cp];
-end
 
 reg [MWIDTH*2+2-1:0] cpv_wr;
 checkpt_ndx_t [MWIDTH*2+2-1:0] cpv_wc;
@@ -1307,7 +1266,6 @@ endgenerate
 
 wire pe_bk, ne_bk;
 edge_det uedbckout1 (.rst(rst), .clk(clk), .ce(1'b1), .i(backout_state==2'd1), .pe(pe_bk), .ne(ne_bk), .ee());
-reg [Qupls4_pkg::PREGS-1:0] unavail;
 
 // Set the checkpoint RAM input.
 // For checkpoint establishment the current read value is desired.
@@ -1320,7 +1278,6 @@ always_comb
 if (rst) begin
 	nextCurrentMap = {$bits(Qupls4_pkg::reg_map_t){1'b0}};
 	nextHistoryMap = {$bits(Qupls4_pkg::reg_map_t){1'b0}};
-	nextAvail = {Qupls4_pkg::PREGS{1'b1}};
 end
 else begin
 	nextCurrentMap = currentMap;
@@ -1346,10 +1303,6 @@ else begin
 		if (cdcmtav[n10])
 			nextHistoryMap.regmap[cmtaa[n10]] = cmtap[n10];
 
-	// Available registers are recorded in the checkpoint as supplied by the
-	// name supplier.
-//	if (!pe_alloc_chkpt1)
-	nextAvail = avail_i;
 end
 
 always_ff @(posedge clk)
@@ -1366,21 +1319,6 @@ begin
 		historyMap <= reg_hist_out;
 	else
 		historyMap <= nextHistoryMap;
-end
-
-always_ff @(posedge clk)
-if (rst)
-	unavail <= {Qupls4_pkg::PREGS{1'b0}};
-else begin
-
-	if (pe_bk)
-		unavail <= {Qupls4_pkg::PREGS{1'b0}};
-
-	// Backout update.
-	if (bo_wr) begin
-//	currentMap.regmap[bo_areg] <= bo_preg;
-//	unavail[bo_preg] <= 1'b1;
-	end
 end
 
 // Diags.
@@ -1507,18 +1445,7 @@ end
 // Add registers allocated since the branch miss instruction to the list of
 // registers to be freed.
 
-always_comb//ff @(posedge clk)
-	restored = restore;
-
-always_comb
-begin
-	// But not the registers allocated up to the branch miss
-	if (restored) begin	//(restored) begin
-		restore_list = avail_out;// & ~unavail;
-//		restore_list = {Qupls4_pkg::PREGS{1'b0}};
-	end
-	else
-		restore_list = {Qupls4_pkg::PREGS{1'b0}};
-end
+always_ff @(posedge clk)
+	restored <= restore;
 
 endmodule
