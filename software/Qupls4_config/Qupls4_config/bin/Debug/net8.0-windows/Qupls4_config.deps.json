@@ -1,0 +1,23 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v8.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v8.0": {
+      "Qupls4_config/1.0.0": {
+        "runtime": {
+          "Qupls4_config.dll": {}
+        }
+      }
+    }
+  },
+  "libraries": {
+    "Qupls4_config/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}

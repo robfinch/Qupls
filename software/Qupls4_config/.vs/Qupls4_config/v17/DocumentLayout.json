@@ -1,0 +1,88 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "C:\\Users\\Robert\\source\\repos\\Qupls4_config\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{C3E454A3-6E95-4F5F-B61B-226686F24E93}|Qupls4_config\\Qupls4_config.vbproj|c:\\users\\robert\\source\\repos\\qupls4_config\\qupls4_config\\form1.vb||{2C015C70-C72C-11D0-88C3-00A0C9110049}",
+      "RelativeMoniker": "D:0:0:{C3E454A3-6E95-4F5F-B61B-226686F24E93}|Qupls4_config\\Qupls4_config.vbproj|solutionrelative:qupls4_config\\form1.vb||{2C015C70-C72C-11D0-88C3-00A0C9110049}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{C3E454A3-6E95-4F5F-B61B-226686F24E93}|Qupls4_config\\Qupls4_config.vbproj|c:\\users\\robert\\source\\repos\\qupls4_config\\qupls4_config\\form1.vb||{2C015C70-C72C-11D0-88C3-00A0C9110049}|Form",
+      "RelativeMoniker": "D:0:0:{C3E454A3-6E95-4F5F-B61B-226686F24E93}|Qupls4_config\\Qupls4_config.vbproj|solutionrelative:qupls4_config\\form1.vb||{2C015C70-C72C-11D0-88C3-00A0C9110049}|Form"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{C3E454A3-6E95-4F5F-B61B-226686F24E93}|Qupls4_config\\Qupls4_config.vbproj|c:\\users\\robert\\source\\repos\\qupls4_config\\qupls4_config\\module1.vb||{2C015C70-C72C-11D0-88C3-00A0C9110049}",
+      "RelativeMoniker": "D:0:0:{C3E454A3-6E95-4F5F-B61B-226686F24E93}|Qupls4_config\\Qupls4_config.vbproj|solutionrelative:qupls4_config\\module1.vb||{2C015C70-C72C-11D0-88C3-00A0C9110049}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{C3E454A3-6E95-4F5F-B61B-226686F24E93}|Qupls4_config\\Qupls4_config.vbproj|c:\\users\\robert\\source\\repos\\qupls4_config\\qupls4_config\\qupls4_config.vbproj||{04B8AB82-A572-4FEF-95CE-5222444B6B64}|",
+      "RelativeMoniker": "D:0:0:{C3E454A3-6E95-4F5F-B61B-226686F24E93}|Qupls4_config\\Qupls4_config.vbproj|solutionrelative:qupls4_config\\qupls4_config.vbproj||{04B8AB82-A572-4FEF-95CE-5222444B6B64}|"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 2,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "Qupls4_config",
+              "DocumentMoniker": "C:\\Users\\Robert\\source\\repos\\Qupls4_config\\Qupls4_config\\Qupls4_config.vbproj",
+              "RelativeDocumentMoniker": "Qupls4_config\\Qupls4_config.vbproj",
+              "ToolTip": "C:\\Users\\Robert\\source\\repos\\Qupls4_config\\Qupls4_config\\Qupls4_config.vbproj",
+              "RelativeToolTip": "Qupls4_config\\Qupls4_config.vbproj",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003380|",
+              "WhenOpened": "2025-12-26T15:48:01.914Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "Module1.vb",
+              "DocumentMoniker": "C:\\Users\\Robert\\source\\repos\\Qupls4_config\\Qupls4_config\\Module1.vb",
+              "RelativeDocumentMoniker": "Qupls4_config\\Module1.vb",
+              "ToolTip": "C:\\Users\\Robert\\source\\repos\\Qupls4_config\\Qupls4_config\\Module1.vb",
+              "RelativeToolTip": "Qupls4_config\\Module1.vb",
+              "ViewState": "AgIAAAcAAAAAAAAAAAAUwB0AAAATAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003361|",
+              "WhenOpened": "2025-12-23T18:02:41.543Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "Form1.vb",
+              "DocumentMoniker": "C:\\Users\\Robert\\source\\repos\\Qupls4_config\\Qupls4_config\\Form1.vb",
+              "RelativeDocumentMoniker": "Qupls4_config\\Form1.vb",
+              "ToolTip": "C:\\Users\\Robert\\source\\repos\\Qupls4_config\\Qupls4_config\\Form1.vb",
+              "RelativeToolTip": "Qupls4_config\\Form1.vb",
+              "ViewState": "AgIAAIoAAAAAAAAAAAAYwBcAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003361|",
+              "WhenOpened": "2025-12-23T15:14:25.999Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "Form1.vb [Design]",
+              "DocumentMoniker": "C:\\Users\\Robert\\source\\repos\\Qupls4_config\\Qupls4_config\\Form1.vb",
+              "RelativeDocumentMoniker": "Qupls4_config\\Form1.vb",
+              "ToolTip": "C:\\Users\\Robert\\source\\repos\\Qupls4_config\\Qupls4_config\\Form1.vb [Design]",
+              "RelativeToolTip": "Qupls4_config\\Form1.vb [Design]",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003361|",
+              "WhenOpened": "2025-12-23T14:24:32.485Z",
+              "EditorCaption": " [Design]"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{cce594b6-0c39-4442-ba28-10c64ac7e89f}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+C:\Users\Robert\source\repos\Qupls4_config\Qupls4_config\bin\Debug\net8.0-windows\Qupls4_config.exe
+C:\Users\Robert\source\repos\Qupls4_config\Qupls4_config\bin\Debug\net8.0-windows\Qupls4_config.deps.json
+C:\Users\Robert\source\repos\Qupls4_config\Qupls4_config\bin\Debug\net8.0-windows\Qupls4_config.runtimeconfig.json
+C:\Users\Robert\source\repos\Qupls4_config\Qupls4_config\bin\Debug\net8.0-windows\Qupls4_config.dll
+C:\Users\Robert\source\repos\Qupls4_config\Qupls4_config\bin\Debug\net8.0-windows\Qupls4_config.pdb
+C:\Users\Robert\source\repos\Qupls4_config\Qupls4_config\obj\Debug\net8.0-windows\Qupls4_config.Form1.resources
+C:\Users\Robert\source\repos\Qupls4_config\Qupls4_config\obj\Debug\net8.0-windows\Qupls4_config.vbproj.GenerateResource.cache
+C:\Users\Robert\source\repos\Qupls4_config\Qupls4_config\obj\Debug\net8.0-windows\Qupls4_config.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\Robert\source\repos\Qupls4_config\Qupls4_config\obj\Debug\net8.0-windows\Qupls4_config.AssemblyInfoInputs.cache
+C:\Users\Robert\source\repos\Qupls4_config\Qupls4_config\obj\Debug\net8.0-windows\Qupls4_config.AssemblyInfo.vb
+C:\Users\Robert\source\repos\Qupls4_config\Qupls4_config\obj\Debug\net8.0-windows\Qupls4_config.vbproj.CoreCompileInputs.cache
+C:\Users\Robert\source\repos\Qupls4_config\Qupls4_config\obj\Debug\net8.0-windows\Qupls4_config.dll
+C:\Users\Robert\source\repos\Qupls4_config\Qupls4_config\obj\Debug\net8.0-windows\refint\Qupls4_config.dll
+C:\Users\Robert\source\repos\Qupls4_config\Qupls4_config\obj\Debug\net8.0-windows\Qupls4_config.pdb
+C:\Users\Robert\source\repos\Qupls4_config\Qupls4_config\obj\Debug\net8.0-windows\Qupls4_config.genruntimeconfig.cache
+C:\Users\Robert\source\repos\Qupls4_config\Qupls4_config\obj\Debug\net8.0-windows\ref\Qupls4_config.dll
