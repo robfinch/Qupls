@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2026  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -107,7 +107,7 @@ begin
     else
         om1 = om;
   */
-	Rs1z = &Rs1;
+	Rs1z = &Rs1[5:0];
 	Rs1ip = Rs1==6'd62;
 end
 

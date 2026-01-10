@@ -118,7 +118,7 @@ else begin
 			end
 		end
 		// Has the a load already been done by store-to-load forwarding?
-		else if (Qupls4_pkg::SUPPORT_LOAD_BYPASSING && lsq_i.load && lsq_i.state==2'b11) begin
+		else if (Qupls4_pkg::SUPPORT_STORE_FORWARDING && lsq_i.load && lsq_i.state==2'b11) begin
 			dram_oper_o.oper.val <= Qupls4_pkg::fnDati(1'b0,dram_work_i.op,lsq_i.res);
 			dram_oper_o.oper.flags <= 8'h00;//lsq_i.flags;
 			dram_oper_o.oper.pRn <= lsq_i.Rt;

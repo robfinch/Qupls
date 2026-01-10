@@ -108,7 +108,8 @@ Qupls4_decode_Rd udcrt
 	.instr(instr),
 	.instr_raw(instr_raw),
 	.Rd(db.Rd),
-	.Rdv(db.Rdv)
+	.Rdv(db.Rdv),
+	.Rdz(db.Rdz)
 );
 
 /*

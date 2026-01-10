@@ -178,10 +178,7 @@ parameter SUPPORT_BUS_TO = 1'b1;
 // This parameter enables support for quad (128-bit) precision operations.
 parameter SUPPORT_QUAD_PRECISION = 1'b0;
 
-// Supporting load bypassing may improve performance, but will also increase the
-// size of the core and make it more vulnerable to security attacks.
-// Loads are bypassed only when there is an exact match to a store.
-parameter SUPPORT_LOAD_BYPASSING = 1;
+parameter SUPPORT_STORE_FORWARDING = 0;
 
 // Support mutiple precisions for SAU and FPU operations. If not supported only
 // 64-bit precision will be supported. Suppporting multiple precisions adds
@@ -270,7 +267,7 @@ parameter REGFILE_LATENCY = 2;
 // (obvious) and may increase performance. However, most instructions will
 // have two or fewer arguments, and allowing for four instructions at once
 // means an average of eight ports per cycle.
-parameter NREG_RPORTS = 12;
+parameter NREG_RPORTS = 16;
 
 // Number of register write ports. Mort ports allows more simultabeous writes
 // and may increase performance. The default is set to the machine width.

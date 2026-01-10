@@ -43,7 +43,7 @@
 import const_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_rat(rst, clk,
+module Qupls4_copy_free_rat(rst, clk,
 	// Pipeline control
 	en, en2, stall,
 
@@ -95,7 +95,7 @@ module Qupls4_rat(rst, clk,
 	restore_list, restored, tags2free, freevals, backout,
 	fcu_id,		// the ROB index of the instruction causing backout
 	bo_wr, bo_areg, bo_preg, bo_nreg);
-parameter MWIDTH = Qupls4_pkg::MWIDTH;
+parameter MWIDTH = 1;//Qupls4_pkg::MWIDTH;
 parameter NPORT = MWIDTH*4;
 parameter NREG_RPORT = MWIDTH*4;
 localparam RBIT=$clog2(Qupls4_pkg::PREGS);
@@ -252,7 +252,7 @@ pregno_t [MWIDTH-1:0] pwrra0,p2wrra;
 pregno_t [MWIDTH-1:0] pwrra1,p2wrra1;
 checkpt_ndx_t [MWIDTH-1:0] pwra_cp,p2wra_cp;
 
-integer n,m,n1,n2,n3,n4,n5,n6,n7,n8,n9,n10,n11,n12,n13,kk,n14,n15,n16,n17;
+integer j,k,n,m,n1,n2,n3,n4,n5,n6,n7,n8,n9,n10,n11,n12,n13,kk,n14,n15,n16,n17;
 integer n18;
 reg [MWIDTH-1:0] br;
 always_comb br = qbr;
@@ -336,7 +336,7 @@ reg [NPORT-1:0] rr_found;
 reg [255:0] df_array [0:NCHECK-1];
 reg [$bits(cpu_types_pkg::checkpt_ndx_t)+$bits(cpu_types_pkg::aregno_t)-1:0] rr_rn [0:NPORT-1];
 
-Qupls4_rat_ram #(.RPORTS(NPORT)) urtrm1
+Qupls4_rat_ram #(.RPORTS(NPORT), .WPORTS(MWIDTH)) urtrm1
 (
 	.rst(rst),
 	.clk(clk),
@@ -356,7 +356,7 @@ end
 else begin
 	if (alloc_chkpt) begin
 		df_array[cndx+1] <= 256'd0;
-		cndx <= cndx + 2'd1;
+//		cndx <= cndx + 2'd1;
 	end
 	foreach(wr[n18])
 		if (wr[n18]) df_array[cndx][wra[n18]] <= 1'b1;

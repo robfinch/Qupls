@@ -33,20 +33,19 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // 
-// 7000 LUTs / 520 FFs / 96 BRAMs (4w16r) - 64 bit
-// 9275 LUTs / 1050 FFs / 72 BRAMs (4wr12) - 64 bit
+// 12800 LUTs / 2550 FFs / 96 BRAMs / 290 MHz (4w16r) - 64 bit
 // ============================================================================
 //
 import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_regfileMwNr(rst, clk, wr, we, wa, i, ti, ra, o, to);
+module Qupls4_regfileMwNr(rst, clk, wr, we, wa, i, ti, ra, rav, o, to, rao, ravo);
 parameter WID = $bits(cpu_types_pkg::value_t)+$bits(Qupls4_pkg::flags_t);
 parameter DEP = Qupls4_pkg::PREGS;
 parameter BWW = 8;
 parameter RBIT = $clog2(DEP)-1;
-parameter RPORTS = 24;
-parameter WPORTS = 4;
+parameter RPORTS = Qupls4_pkg::NREG_RPORTS;
+parameter WPORTS = Qupls4_pkg::NREG_WPORTS;
 input rst;
 input clk;
 input [WPORTS-1:0] wr;
@@ -55,22 +54,27 @@ input cpu_types_pkg::pregno_t [WPORTS-1:0] wa;
 input cpu_types_pkg::value_t [WPORTS-1:0] i;
 input Qupls4_pkg::flags_t [WPORTS-1:0] ti;
 input cpu_types_pkg::pregno_t [RPORTS-1:0] ra;
+input [RPORTS-1:0] rav;
 output cpu_types_pkg::value_t [RPORTS-1:0] o;
 output Qupls4_pkg::flags_t [RPORTS-1:0] to;
+output cpu_types_pkg::pregno_t [RPORTS-1:0] rao;
+output reg [RPORTS-1:0] ravo;
 
 cpu_types_pkg::value_t [RPORTS-1:0] o0 [0:WPORTS-1];
 Qupls4_pkg::flags_t [RPORTS-1:0] to0 [0:WPORTS-1];
+cpu_types_pkg::pregno_t [RPORTS-1:0] ra1;
+reg [RPORTS-1:0] rav1;
 
 integer n,n1;
 genvar g,gv;
 
 // Live value table
-reg [2:0] lvt [Qupls4_pkg::PREGS-1:0];
+reg [$clog2(WPORTS)-1:0] lvt [Qupls4_pkg::PREGS-1:0];
 
 always_ff @(posedge clk)
 if (rst) begin
 	for (n = 0; n < Qupls4_pkg::PREGS; n = n + 1)
-		lvt[n] <= 2'd0;
+		lvt[n] <= 3'd0;
 end
 else begin
 	for (n = 0; n < WPORTS; n = n + 1)
@@ -81,13 +85,13 @@ end
 generate begin : gRF
 	for (g = 0; g < RPORTS; g = g + 1) begin
 		for (gv = 0; gv < WPORTS; gv = gv + 1) begin
-			Qupls4_regfile_ram #(.WID(WID)) urf0 (
+			Qupls4_regfile_ram #(.WID(WID), .DEP(DEP)) urf0 (
 			  .clka(clk),
 			  .ena(wr[gv]),
 			  .wea(we[gv]),
 			  .addra(wa[gv]),
 			  .dina({ti[gv],i[gv]}),
-			  .clkb(~clk),
+			  .clkb(clk),
 			  .rstb(1'b0),
 			  .enb(1'b1),
 			  .addrb(ra[g]),
@@ -126,7 +130,7 @@ endgenerate
 
 generate begin : gRFO2
 	for (g = 0; g < RPORTS; g = g + 1) begin
-		always_comb
+		always_ff @(posedge clk)
 		begin
 			o[g] = value_zero;
 			to[g] = 8'h00;
@@ -140,5 +144,14 @@ generate begin : gRFO2
 	end
 end
 endgenerate
+
+always_ff @(posedge clk)
+	ra1 <= ra;
+always_ff @(posedge clk)
+	rao <= ra1;
+always_ff @(posedge clk)
+	rav1 <= rav;
+always_ff @(posedge clk)
+	ravo <= rav1;
 
 endmodule

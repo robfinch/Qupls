@@ -41,8 +41,10 @@ import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
 module Qupls4_rat_ram(rst, clk, head, wr, wa, i, ra, o);
+parameter NCHECK = Qupls4_pkg::NCHECK;
+parameter AREGS = Qupls4_pkg::AREGS;
 parameter WID = $bits(cpu_types_pkg::pregno_t);
-parameter DEP = 256*32;
+parameter DEP = AREGS*NCHECK;
 parameter BWW = 8;
 parameter RBIT = $clog2(DEP)-1;
 parameter RPORTS = 12;
@@ -81,7 +83,7 @@ generate begin : gRF
 			Qupls4_regfile_ram 
 			#(
 				.WID($bits(pregno_t)),
-				.DEP(256*32),
+				.DEP(AREGS*NCHECK),
 				.BWW($bits(pregno_t))
 			) urf0 (
 			  .clka(clk),

@@ -33,6 +33,7 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 // 21200 LUTs / 5800 FFs / 2 BRAMs	- 32 uops per instruction.
+// 4410 LUTs / 10790 FFs / 4 DSPs (185 MHz) - 32 uops per instruction
 // ============================================================================
 
 import const_pkg::*;
@@ -44,8 +45,8 @@ module Qupls4_pipeline_dec(rst_i, rst, clk, en, clk5x, ph4, new_cline_ext, cline
 	tags2free, freevals, bo_wr, bo_preg,
 	stomp_dec, stomp_ext, kept_stream, pg_ext,
 	pg_dec,
-	mux_stallq, ren_stallq, ren_rst_busy, avail_reg,
-	predicted_correctly_o, new_address_o
+	mux_stallq, ren_stallq, dec_stall, ren_rst_busy,
+	predicted_correctly_o, new_address_o, advance_ext_o
 );
 parameter MWIDTH = 4;		// Machine width, under construction
 parameter MAX_MICROOPS = 12;
@@ -73,13 +74,14 @@ input pregno_t bo_preg;
 output Qupls4_pkg::pipeline_group_reg_t pg_dec;
 output reg mux_stallq;
 output ren_stallq;
+output reg dec_stall;
 output ren_rst_busy;
-output [Qupls4_pkg::PREGS-1:0] avail_reg;
 output reg predicted_correctly_o;
 output reg [63:0] new_address_o;
+output reg advance_ext_o;
 
 genvar g;
-integer n1,n2,n3,n4,n5,n6,n7,n8,n9,n10;
+integer n1,n2,n3,n4,n5,n6,n7,n8,n9,n10,n11,n12,n13,n14;
 Qupls4_pkg::pipeline_group_reg_t pg_ext_r;
 reg [31:0] carry_mod_i;
 reg [31:0] carry_mod_o;
@@ -93,6 +95,8 @@ reg hwi_ignore;
 Qupls4_pkg::regs_t fregs_i;
 Qupls4_pkg::regs_t fregs_o;
 reg rd_more;
+Qupls4_pkg::pipeline_group_reg_t pg_dec1,pg_dec2,pg_dec3,pg_dec4;
+reg [1023:0] cline1,cline2,cline3,cline4;
 
 always @(posedge clk)
 if (rst)
@@ -139,17 +143,28 @@ Qupls4_pkg::pipeline_reg_t [MWIDTH-1:0] prd, inso;
 Qupls4_pkg::rob_entry_t [MWIDTH-1:0] tpr;
 
 always_ff @(posedge clk)
-	pg_ext_r <= pg_ext;
+	if (en) pg_dec1 <= pg_ext;
+always_ff @(posedge clk)
+	if (en) pg_dec2 <= pg_dec1;
+always_ff @(posedge clk)
+	if (en) cline1 <= cline;
+always_ff @(posedge clk)
+	if (en) cline2 <= cline1;
 
 wire [5:0] uop_count [0:MWIDTH-1];
 Qupls4_pkg::micro_op_t [MICROOPS_PER_INSTR-1:0] uop [0:MWIDTH-1];
+reg [2:0] uop_mark [0:MAX_MICROOPS-1];
 Qupls4_pkg::micro_op_t [MAX_MICROOPS-1:0] uop_buf;
+wire [3:0] head [0:MWIDTH-1];
+wire [3:0] tail;
 
 generate begin : gMicroopMem
 	for (g = 0; g < MWIDTH; g = g + 1)
 Qupls4_microop_mem uuop1
 (
-   .clk(clk),
+	.rst(rst),
+  .clk(clk),
+  .en(advance_ext_o),
 	.om(pg_ext.pr[g].op.om),
 	.ir(pg_ext.pr[g].op.uop),
 	.num(5'd0), 
@@ -163,33 +178,39 @@ Qupls4_microop_mem uuop1
 end
 endgenerate
 
+Qupls4_micro_op_queue umoq1
+(
+	.rst(rst),
+	.clk(clk),
+	.en(en),
+	.rd_more(rd_more),
+	.uop(uop),
+	.uop_count(uop_count),
+	.uop_buf(uop_buf),
+	.uop_mark(uop_mark),
+	.head(head)
+);
+
+always_comb
+	advance_ext_o = rd_more;
 
 reg rd_ext;
-reg [2:0] uop_mark [0:MAX_MICROOPS-1];
-reg [3:0] head [0:MWIDTH-1];
-reg [3:0] tail;
-reg [7:0] room;
-reg [7:0] sum_of_count;
-reg [7:0] rc_uop_count [0:MWIDTH-1];
-integer kk,jj;
+reg [2:0] uop_mark1 [0:MAX_MICROOPS-1];
+reg [2:0] uop_mark2 [0:MAX_MICROOPS-1];
 
-always_comb
-	if (head[0] > tail)
-		room = head[0] - tail;
-	else
-		room = MAX_MICROOPS + head[0] - tail;
-
+// Just wires, make linear buffer of micro-ops
+/*
 always_comb
 begin
-	for (n8 = 1; n8 < MWIDTH; n8 = n8 + 1)
-		head[n8] = head[n8-1] + 2'd1;
+	for (n12 = 0; n12 < MICROOPS_PER_INSTR; n12 = n12 + 1) begin
+		uop_buf1[n12] = uop[0][n12];
+		uop_buf1[MICROOPS_PER_INSTR+n12] = uop[1][n12];
+		uop_buf1[MICROOPS_PER_INSTR*2+n12] = uop[2][n12];
+		uop_buf1[MICROOPS_PER_INSTR*3+n12] = uop[3][n12];
+	end
 end
-
-
-// Copy micro-ops from the micro-op decoders into a buffer for further
-// processing. The micro-ops are in program order in the buffer. Which
-// instruction the micro-op belongs to is stored in an array called uop_mark.
-
+*/
+/*
 always_ff @(posedge clk)
 if (rst) begin
   for (n5 = 0; n5 < MAX_MICROOPS; n5 = n5 + 1)
@@ -266,7 +287,7 @@ else if (en) begin
 
 
 end
-
+*/
 
 // rd_more is a flag set when there is room in the buffer.
 assign mux_stallq = !rd_more;
@@ -274,7 +295,7 @@ assign mux_stallq = !rd_more;
 always_comb
 begin
 	for (n7 = 0; n7 < MWIDTH; n7 = n7 + 1) begin
-		tpr[n7] = pg_ext.pr[uop_mark[n7]];
+		tpr[n7] = pg_dec2.pr[uop_mark[head[n7]]];
 		tpr[n7].op.uop = uop_buf[head[n7]];
 	end
 end
@@ -373,11 +394,11 @@ Qupls4_decoder udeci0
 	.rst(rst),
 	.clk(clk),
 	.en(en),
-	.ip(pg_ext.hdr.ip + {pg_ext.pr[g].ip_offs,1'b0}),
+	.ip(pg_dec2.hdr.ip + {pg_dec2.pr[g].ip_offs,1'b0}),
 	.om(sr.om),
 	.ipl(sr.ipl),
 	.instr(tpr[g].op.uop),
-	.instr_raw(432'(cline >> {tpr[g].op.cli,4'b0})),
+	.instr_raw(432'(cline2 >> {tpr[g].op.cli,4'b0})),
 	.dbo(dec[g])
 );
 end
@@ -702,9 +723,9 @@ always_comb inso = prd;
 reg [63:0] bsr0_tgt, bsr1_tgt, bsr2_tgt;
 reg [63:0] jsr0_tgt, jsr1_tgt, jsr2_tgt;
 reg [63:0] new_address;
-always_comb bsr0_tgt = {{29{pr_dec[0].uop.imm[34]}},pr_dec[0].uop.imm,1'b0} + pg_dec.hdr.ip + {pg_dec.pr[0].ip_offs,1'b0};
-always_comb bsr1_tgt = {{29{pr_dec[1].uop.imm[34]}},pr_dec[1].uop.imm,1'b0} + pg_dec.hdr.ip + {pg_dec.pr[1].ip_offs,1'b0};
-always_comb bsr2_tgt = {{29{pr_dec[2].uop.imm[34]}},pr_dec[2].uop.imm,1'b0} + pg_dec.hdr.ip + {pg_dec.pr[2].ip_offs,1'b0};
+always_comb bsr0_tgt = {{29{pr_dec[0].uop.imm[34]}},pr_dec[0].uop.imm,1'b0} + pg_dec2.hdr.ip + {pg_dec2.pr[0].ip_offs,1'b0};
+always_comb bsr1_tgt = {{29{pr_dec[1].uop.imm[34]}},pr_dec[1].uop.imm,1'b0} + pg_dec2.hdr.ip + {pg_dec2.pr[1].ip_offs,1'b0};
+always_comb bsr2_tgt = {{29{pr_dec[2].uop.imm[34]}},pr_dec[2].uop.imm,1'b0} + pg_dec2.hdr.ip + {pg_dec2.pr[2].ip_offs,1'b0};
 always_comb jsr0_tgt = {{29{pr_dec[0].uop.imm[34]}},pr_dec[0].uop.imm,1'b0};
 always_comb jsr1_tgt = {{29{pr_dec[1].uop.imm[34]}},pr_dec[1].uop.imm,1'b0};
 always_comb jsr2_tgt = {{29{pr_dec[2].uop.imm[34]}},pr_dec[2].uop.imm,1'b0};
@@ -747,21 +768,25 @@ Stark_space_branches uspb1
 	.stall(stall)
 );
 */
-always_comb
-begin
-	pg_dec = pg_ext_r;
-	if (stomp_dec)
-		pg_dec.hdr.v = INV;
-	pg_dec.pr[0].op.hwi_level = pg_ext_r.hdr.irq.level;
-	if (hwi_ignore) begin
-		if (pg_ext_r.hdr.irq.level != 6'd63) begin
-			pg_dec.hdr.hwi = 1'b0;
-			pg_dec.pr[0].op.hwi = 1'b0;
+always_ff @(posedge clk)
+if (rst)
+	pg_dec <= {$bits(pipeline_group_reg_t){1'b0}};
+else begin
+	if (en) begin
+		pg_dec <= pg_dec2;
+		if (stomp_dec)
+			pg_dec.hdr.v <= INV;
+		pg_dec.pr[0].op.hwi_level <= pg_dec2.hdr.irq.level;
+		if (hwi_ignore) begin
+			if (pg_dec.hdr.irq.level != 6'd63) begin
+				pg_dec.hdr.hwi <= 1'b0;
+				pg_dec.pr[0].op.hwi <= 1'b0;
+			end
 		end
-	end
-	foreach (pg_dec.pr[n10]) begin
-		pg_dec.pr[n10].v = !stomp_dec;
-		pg_dec.pr[n10].op = inso[n10];
+		foreach (pg_dec.pr[n10]) begin
+			pg_dec.pr[n10].v <= !stomp_dec;
+			pg_dec.pr[n10].op <= inso[n10];
+		end
 	end
 end
 

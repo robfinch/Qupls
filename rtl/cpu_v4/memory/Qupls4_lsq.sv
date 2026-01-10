@@ -73,7 +73,7 @@ else begin
 		LSQ_CMD_INV:	
 			begin
 				tInvalidateLSQ(cmd[n].rndx, cmd[n].can, cmd[n].cmt, cmd[n].data);
-				if (cmd[n].cmt)
+				if (cmd[n].cmt && SUPPORT_STORE_FORWARDING)
 					tForwardStore(cmd[n].rndx);
 			end
 		LSQ_CMD_SETADR:	tSetLSQ(cmd[n].rndx,cmd[n].data);
@@ -301,37 +301,6 @@ begin
 end
 endtask
 
-// Find the store closest to the load that has the same memory size
-// and address.
-
-task tForwardStoreHelper;
-input integer n18r, n18c;	// index of load
-output lsq_ndx_t sid;
-output seqnum_t ssn;
-integer n17r, n17c;
-begin
-	ssn = 0;
-	sid.row = 0;
-	sid.col = 0;
-	for (n17r = 0; n17r < Qupls4_pkg::LSQ_ENTRIES; n17r = n17r + 1) begin
-		for (n17c = 0; n17c < 2; n17c = n17c + 1) begin
-			if (
-				lsq[n17r][n17c].v==VAL &&
-				lsq[n17r][n17c].store &&
-				lsq[n17r][n17c].sn > lsq[n18r][n18c].sn &&
-				lsq[n17r][n17c].memsz == lsq[n18r][n18c].memsz &&
-				lsq[n17r][n17c].padr == lsq[n18r][n18c].padr &&
-				lsq[n17r][n17c].sn > ssn
-			) begin
-					ssn = lsq[n17r][n17c].sn;
-					sid.row = n17r;
-					sid.col = n17c;
-			end
-		end
-	end
-end
-endtask
-
 // When a store commits, search the LSQ for corresponding loads, and forward
 // the store value. The load must be valid and come after the store. It must
 // have the same size data and the same address.
@@ -342,29 +311,53 @@ integer n17r, n17c;
 integer n18r, n18c;
 lsq_ndx_t sid;
 seqnum_t ssn;
+reg dis;
 begin
 	n18r = rob[id].lsqndx.row;
 	n18c = rob[id].lsqndx.col;
 	ssn = 0;
 	sid.row = 0;
 	sid.col = 0;
+	dis = FALSE;
 	if (lsq[n18r][n18c].store) begin
 		// Find the store closest to the load that has the same memory size
 		// and address.
 		for (n17r = 0; n17r < Qupls4_pkg::LSQ_ENTRIES; n17r = n17r + 1) begin
 			for (n17c = 0; n17c < 2; n17c = n17c + 1) begin
+				// If there is a load or a store in the same address range coming
+				// after the store commnitted.
 				if (
+					lsq[n17r][n17c].v==VAL &&
+					lsq[n17r][n17c].sn > lsq[n18r][n18c].sn &&
+					((lsq[n17r][n17c].padr[$bits(cpu_types_pkg::physical_address_t)-1:4] == lsq[n18r][n18c].padr[$bits(cpu_types_pkg::physical_address_t)-1:4]) || !lsq[n17r][n17c].agen)
+				)
+				begin
+					// If another later store was found in the same address range, then
+					// we do not want to forward yet, disable. The later store will 
+					// update the loads.
+					if (lsq[n17r][n17c].store)
+						dis = TRUE;
+					// Else if we found a load, ensure the operation size is the same.
+					else if (lsq[n17r][n17c].load) begin
+						if (lsq[n17r][n17c].memsz != lsq[n18r][n18c].memsz)
+							dis = TRUE;
+					end
+				end
+			end
+		end
+		for (n17r = 0; n17r < Qupls4_pkg::LSQ_ENTRIES; n17r = n17r + 1) begin
+			for (n17c = 0; n17c < 2; n17c = n17c + 1) begin
+				// Forward to the load(s) if criteria met.
+				if (
+				 	!dis &&
 					lsq[n17r][n17c].v==VAL &&
 					lsq[n17r][n17c].load &&
 					lsq[n17r][n17c].sn > lsq[n18r][n18c].sn &&
-					lsq[n17r][n17c].memsz == lsq[n18r][n18c].memsz &&
 					lsq[n17r][n17c].padr == lsq[n18r][n18c].padr
-				) begin
-					tForwardStoreHelper(n17r,n17c,sid,ssn);
-					if (ssn != 0 && sid.row==n18r && sid.col==n18c) begin
-						lsq[n17r][n17c].res <= lsq[sid.row][sid.col].res;
-						lsq[n17r][n17c].state <= 2'b11;
-					end
+				)
+				begin
+					lsq[n17r][n17c].res <= lsq[sid.row][sid.col].res;
+					lsq[n17r][n17c].state <= 2'b11;
 				end
 			end
 		end

@@ -1608,6 +1608,7 @@ typedef struct packed
 	logic Rs3z;
 	logic Rs4z;
 	logic Rdv;
+	logic Rdz;
 	logic Rd2z;
 	logic Rd3z;
 	logic has_Rs2;
@@ -1962,6 +1963,7 @@ typedef struct packed {
 	logic [1:0] pred_tf;			// true(1)/false(2)/unknown(0)
 	logic pred_bit;						// 1 once previous predicate is true or ignored
 	logic pred_bitv;					// 1 if predicate bitis valid
+	logic dispatchable;				// 1 if instruction can be dispatched
 
 	cpu_types_pkg::rob_ndx_t orid;						// ROB id of originating macro-instruction
 	logic lsq;								// 1=instruction has associated LSQ entry

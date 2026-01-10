@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2026  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -148,7 +148,7 @@ always_comb
 begin
 	has_Rs2 = fnHas_Rs2(instr, has_immb);
 	Rs2 = fnRs2(instr, instr_raw, has_immb);
-	Rs2z = &Rs2;
+	Rs2z = &Rs2[5:0];
 end
 
 endmodule

@@ -38,18 +38,17 @@
 
 import Qupls4_pkg::*;
 
-module Qupls4_btb(rst, clk, en, clk_en, nmi, nmi_addr, irq, irq_addr,
+module Qupls4_btb(rst, clk, en, clk_en,
 	rclk, micro_machine_active, get_next_pc, advance_pc,
-	igrp, length_byte, predicted_correctly_dec, new_address_dec,
+	igrp, predicted_correctly_dec, new_address_dec,
 	new_address_ext,
-	pc, pc0, pc1, pc2, pc3, pc4, next_pc, p_override, po_bno,
-	takb0, takb1, takb2, takb3, do_bsr, bsr_tgt, do_ret, ret_pc,
-	do_call,
-	branchmiss, misspc, excret, excretpc,
-	commit_pc0, commit_brtgt0, commit_takb0, commit_grp0, commit_br0, commit_ret0, commit_jmp0,
-	commit_pc1, commit_brtgt1, commit_takb1, commit_grp1, commit_br1, commit_ret1, commit_jmp1,
-	commit_pc2, commit_brtgt2, commit_takb2, commit_grp2, commit_br2, commit_ret2, commit_jmp2,
-	commit_pc3, commit_brtgt3, commit_takb3, commit_grp3, commit_br3, commit_ret3, commit_jmp3,
+	pc, pc0, next_pc, p_override, po_bno,
+	takb0, takb1, takb2, takb3,
+	branchmiss, misspc,
+	commit_pc0, commit_brtgt0, commit_takb0, commit_grp0, commit_br0, commit_ret0, commit_jmp0, commit_call0,
+	commit_pc1, commit_brtgt1, commit_takb1, commit_grp1, commit_br1, commit_ret1, commit_jmp1, commit_call1,
+	commit_pc2, commit_brtgt2, commit_takb2, commit_grp2, commit_br2, commit_ret2, commit_jmp2, commit_call2,
+	commit_pc3, commit_brtgt3, commit_takb3, commit_grp3, commit_br3, commit_ret3, commit_jmp3, commit_call3,
 	strm_bitmap, act_stream, pcs,
 	new_stream, alloc_stream, free_stream, thread_probability, dep_stream,
 	is_buffered
@@ -60,25 +59,14 @@ input rst;
 input clk;
 input en;
 input clk_en;										// enable group to advance
-input nmi;											// non-maskable interrupt
-input pc_address_t nmi_addr;
-input irq;
-input pc_address_t irq_addr;
 input rclk;
 input advance_pc;
 input micro_machine_active;
 output reg [2:0] igrp;
 input get_next_pc;
-input [7:0] length_byte;
 input cpu_types_pkg::pc_address_ex_t pc;
 input cpu_types_pkg::pc_address_ex_t pc0;
-input cpu_types_pkg::pc_address_ex_t pc1;
-input cpu_types_pkg::pc_address_ex_t pc2;
-input cpu_types_pkg::pc_address_ex_t pc3;
-input cpu_types_pkg::pc_address_ex_t pc4;
 output cpu_types_pkg::pc_address_ex_t next_pc;
-input excret;
-input pc_address_ex_t excretpc;
 input [3:0] p_override;
 input [6:0] po_bno [0:3];
 output reg takb0;
@@ -88,17 +76,13 @@ output reg takb3;
 input pc_address_ex_t new_address_ext;
 input predicted_correctly_dec;
 input pc_address_ex_t new_address_dec;
-input do_bsr;
-input do_ret;
-input do_call;
-input pc_address_ex_t ret_pc;
-input cpu_types_pkg::pc_address_ex_t bsr_tgt;
 input branchmiss;
 input cpu_types_pkg::pc_address_ex_t misspc;
 input cpu_types_pkg::pc_address_ex_t commit_pc0;
 input cpu_types_pkg::pc_address_ex_t commit_brtgt0;
 input commit_takb0;
 input commit_br0;
+input commit_call0;
 input commit_ret0;
 input commit_jmp0;
 input [2:0] commit_grp0;
@@ -106,6 +90,7 @@ input cpu_types_pkg::pc_address_ex_t commit_pc1;
 input cpu_types_pkg::pc_address_ex_t commit_brtgt1;
 input commit_takb1;
 input commit_br1;
+input commit_call1;
 input commit_ret1;
 input commit_jmp1;
 input [2:0] commit_grp1;
@@ -113,6 +98,7 @@ input cpu_types_pkg::pc_address_ex_t commit_pc2;
 input cpu_types_pkg::pc_address_ex_t commit_brtgt2;
 input commit_takb2;
 input commit_br2;
+input commit_call2;
 input commit_ret2;
 input commit_jmp2;
 input [2:0] commit_grp2;
@@ -120,6 +106,7 @@ input cpu_types_pkg::pc_address_ex_t commit_pc3;
 input cpu_types_pkg::pc_address_ex_t commit_brtgt3;
 input commit_takb3;
 input commit_br3;
+input commit_call3;
 input commit_ret3;
 input commit_jmp3;
 input [2:0] commit_grp3;
@@ -140,21 +127,23 @@ typedef struct packed {
 	logic [2:0] grp;										// which instruction in group is a branch
 	logic ret;													// ret type instruction
 	logic jmp;													// jump
+	logic call;													// call semantics
 	cpu_types_pkg::pc_address_t pc;
 	cpu_types_pkg::pc_address_t tgt;
 } btb_entry_t;
 
-pc_address_ex_t [31:0] ras;
+pc_address_t [31:0] ras;
 pc_address_ex_t ras_pc;
 reg [4:0] ras_sp;
+reg do_call, do_ret;
 
 pc_address_ex_t [XSTREAMS*THREADS-1:0] next_pcs;
 pc_stream_t next_act_stream;
 pc_stream_t next_alt_strm;
 reg [XSTREAMS*THREADS-1:0] next_strm_bitmap;
 pc_stream_t prev_act_stream;
-reg [9:0] addrb0;
-reg [9:0] addra;
+reg [10:0] addrb0;
+reg [10:0] addra;
 btb_entry_t doutb0;
 btb_entry_t doutb1;
 btb_entry_t doutb2;
@@ -309,6 +298,7 @@ Qupls4_btb_choose_stream ucs1
 
 	
 always_comb
+/*
 if (rst) begin
 	for (nn = 0; nn < XSTREAMS*THREADS; nn = nn + 1) begin
 		next_pcs[nn].stream.thread = (nn >> $clog2(XSTREAMS));
@@ -320,7 +310,9 @@ if (rst) begin
 	takb2 = 1'b0;
 	takb3 = 1'b0;
 end
-else begin
+else 
+*/
+begin
 	takb0 = 1'b0;
 	takb1 = 1'b0;
 	takb2 = 1'b0;
@@ -348,10 +340,10 @@ else begin
 		next_pcs[act_stream] = new_address_ext;
 	// Now the target predictions
 	// Note the stream cannot be recorded in the BTB table.
-	else if (en && pc0.pc==doutb0.pc) begin
+	else if (pc0.pc==doutb0.pc) begin
 		if (doutb0.ret)
 			next_pcs[pc0.stream].pc = ras_pc;
-		else if (doutb0.jmp)
+		else if (doutb0.call|doutb0.jmp)
 			next_pcs[pc0.stream].pc = doutb0.tgt;
 		else begin
 			next_pcs[pc0.stream].pc = doutb0.tgt;
@@ -403,6 +395,9 @@ end
 // The RAS
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
+always_comb do_ret = advance_pc && get_next_pc && pc0.pc==doutb0.pc && doutb0.ret;
+always_comb do_call = advance_pc && get_next_pc && pc0.pc==doutb0.pc && doutb0.call;
+
 always_ff @(posedge clk)
 if (rst)
 	ras_sp <= 5'd0;
@@ -417,15 +412,12 @@ end
 
 always_ff @(posedge clk)
 if (rst) begin
-	for (jj = 0; jj < 32; jj = jj + 1) begin
-		ras[jj].pc <= RSTPC;
-		ras[jj].stream.thread <= 2'd0;
-		ras[jj].stream.stream <= 5'd1;
-	end
+	for (jj = 0; jj < 32; jj = jj + 1)
+		ras[jj] <= RSTPC;
 end
 else begin
 	if (do_call)
-		ras[ras_sp - 2'd1] <= ret_pc;
+		ras[ras_sp - 2'd1] <= pc0.pc + 4'd6;
 end
 
 always_ff @(posedge clk)
@@ -435,10 +427,13 @@ if (rst) begin
 	ras_pc.stream.stream <= 5'd1;
 end
 else begin
-	ras_pc <= ras[ras_sp];
+	ras_pc.pc <= ras[ras_sp];
+	ras_pc.stream <= pc0.stream;
 end
 
+
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// Determine BTB table update values and index.
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 assign next_pc = next_pcs[next_act_stream];
@@ -456,42 +451,46 @@ else begin
 	tmp0.tgt <= {$bits(cpu_types_pkg::pc_address_t){1'b0}};
 	tmp0.grp <= 3'd0;
 	addra <= 11'd0;
-	if (commit_jmp0|commit_ret0|commit_br0) begin
+	if (commit_jmp0|commit_call0|commit_ret0|commit_br0) begin
 		tmp0.pc <= commit_pc0.pc;
 		tmp0.takb <= commit_takb0;
 		tmp0.tgt <= commit_brtgt0.pc;
 		tmp0.grp <= commit_grp0;
 		tmp0.jmp <= commit_jmp0;
+		tmp0.call <= commit_call0;
 		tmp0.ret <= commit_ret0;
 		addra <= commit_pc0.pc[11:1];
 		w0 <= TRUE;
 	end
-	else if (commit_jmp1|commit_ret1|commit_br1) begin
+	else if (commit_jmp1|commit_call1|commit_ret1|commit_br1) begin
 		tmp0.pc <= commit_pc1.pc;
 		tmp0.takb <= commit_takb1;
 		tmp0.tgt <= commit_brtgt1.pc;
 		tmp0.grp <= commit_grp1;
 		tmp0.jmp <= commit_jmp1;
+		tmp0.call <= commit_call1;
 		tmp0.ret <= commit_ret1;
 		addra <= commit_pc1.pc[11:1];
 		w0 <= TRUE;
 	end
-	else if (commit_jmp2|commit_ret2|commit_br2) begin
+	else if (commit_jmp2|commit_call2|commit_ret2|commit_br2) begin
 		tmp0.pc <= commit_pc2.pc;
 		tmp0.takb <= commit_takb2;
 		tmp0.tgt <= commit_brtgt2.pc;
 		tmp0.grp <= commit_grp2;
 		tmp0.jmp <= commit_jmp2;
+		tmp0.call <= commit_call2;
 		tmp0.ret <= commit_ret2;
 		addra <= commit_pc2.pc[11:1];
 		w0 <= TRUE;
 	end
-	else if (commit_jmp3|commit_ret3|commit_br3) begin
+	else if (commit_jmp3|commit_call3|commit_ret3|commit_br3) begin
 		tmp0.pc <= commit_pc3.pc;
 		tmp0.takb <= commit_takb3;
 		tmp0.tgt <= commit_brtgt3.pc;
 		tmp0.grp <= commit_grp3;
 		tmp0.jmp <= commit_jmp3;
+		tmp0.call <= commit_call3;
 		tmp0.ret <= commit_ret3;
 		addra <= commit_pc3.pc[11:1];
 		w0 <= TRUE;

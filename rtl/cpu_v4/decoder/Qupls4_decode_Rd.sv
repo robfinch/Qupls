@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2026  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -39,12 +39,13 @@ import const_pkg::*;
 import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_decode_Rd(om, instr, instr_raw, Rd, Rdv);
+module Qupls4_decode_Rd(om, instr, instr_raw, Rd, Rdv, Rdz);
 input Qupls4_pkg::operating_mode_t om;
 input Qupls4_pkg::micro_op_t instr;
 input [431:0] instr_raw;
 output aregno_t Rd;
 output reg Rdv;
+output reg Rdz;
 
 function aregno_t fnRd;
 input Qupls4_pkg::micro_op_t instr;
@@ -124,6 +125,7 @@ always_comb
 begin
 	Rd = fnRd(instr, instr_raw);
 	Rdv = fnRdv(instr, instr_raw);
+	Rdz = &Rd[5:0];
 end
 
 endmodule

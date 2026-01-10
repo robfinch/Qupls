@@ -39,7 +39,7 @@ import const_pkg::*;
 import Qupls4_pkg::*;
 
 module Qupls4_set_dram_work(rst_i, clk_i, rob_i, stomp_i, lsndxv_i,
-	dram_state_i, dram_done_i, dram_more_i, dram_idv_i, dram_idv2_i, dram_ack_i,
+	dram_state_i, dram_more_i, dram_idv_i, dram_idv2_i, dram_ack_i,
 	dram_stomp_i, cpu_dat_i, lsq_i, dram_oper_o, dram_work_o, page_cross_o, sel_o
 );
 parameter CORENO = 6'd1;
@@ -50,7 +50,7 @@ input Qupls4_pkg::rob_entry_t [ROB_ENTRIES-1:0] rob_i;
 input Qupls4_pkg::rob_bitmask_t stomp_i;
 input lsndxv_i;
 input Qupls4_pkg::dram_state_t dram_state_i;
-input dram_done_i;
+//input dram_done_i;
 input dram_more_i;
 input dram_idv_i;
 input dram_idv2_i;
@@ -126,7 +126,7 @@ else begin
 		if (LSQNO==2'd0 && lsq_i.v2p && lsq_i.v)
 			;
 		// Is a scheduled load already done? Store-to-load forwarding?
-		else if (Qupls4_pkg::SUPPORT_LOAD_BYPASSING && lsq_i.load && lsq_i.state==2'b11)
+		else if (Qupls4_pkg::SUPPORT_STORE_FORWARDING && lsq_i.load && lsq_i.state==2'b11)
 			;
 	  else begin
   		if (lsndxv_i && !stomp_i[lsq_i.rndx] && !dram_idv_i && !dram_idv2_i) begin
@@ -191,14 +191,14 @@ else begin
 //				dram_work_o.exc <= Qupls4_pkg::FLT_ALN;
       end
       else begin
-          dram_work_o.store <= 1'b0;
-          dram_work_o.sel <= 80'h0;
+//          dram_work_o.store <= 1'b0;
+//          dram_work_o.sel <= 80'h0;
       end
     // End of second bus cycle, nothing to do.
 	Qupls4_pkg::DRAMSLOT_DELAY2:
 		begin
-			dram_work_o.store <= 1'b0;
-			dram_work_o.sel <= 80'h0;
+//			dram_work_o.store <= 1'b0;
+//			dram_work_o.sel <= 80'h0;
 		end
 	Qupls4_pkg::DRAMSLOT_ACTIVE:	;
 	Qupls4_pkg::DRAMSLOT_ACTIVE2:
@@ -210,18 +210,21 @@ else begin
 	if (stomp_i[lsq_i.rndx] && dram_work_o.rndx==lsq_i.rndx && !rob_i[lsq_i.rndx].lsq)
 		dram_work_o.rndxv <= INV;
 
+/*
 	if (dram_done_i) begin
+		
 		dram_work_o.load <= FALSE;
 		dram_work_o.loadz <= FALSE;
 		dram_work_o.cload <= FALSE;
+		
 		if (|rob_i[ dram_work_o.rndx ].v) begin
 			if (dram_oper_o.state==2'b11) begin
 				$display("Qupls4 set dram0_work.rndxv=INV at done");
-				dram_work_o.rndxv <= INV;
+//				dram_work_o.rndxv <= INV;
 			end
 		end
 	end
-
+*/
 end
 
 endmodule

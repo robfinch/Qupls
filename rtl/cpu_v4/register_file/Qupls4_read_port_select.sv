@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2025-2026  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -35,16 +35,14 @@
 // 1560 LUTs / 160 FFs
 // ============================================================================
 //
-// This comment is out-of-date.
-// The selector is organized around having seven functional units requesting
-// up to seven registers each, or 49 register selections. Since most of the
-// time instructions will require 3 registers or less, it is wasteful to 
-// have a separate register file port for every possible register an 
-// instruction might need. Instead the selector goes with enough ports to
-// keep everybody happy most of the time.
-//
-// The first sixteen port selections are fixed 1:1. These are for the 
-// register specs coming out of the rename stage.
+// This module used to pack the port requests to the minimum number of
+// valid port requests, then select from among the valid ports. The port
+// selection priority was rotated to ensure all valid ports would be selected.
+// However, nice as it was the module was too slow.
+// 	So, now it is just a 4:1 group selector regardless of the valid port
+// requests. It is much faster, but ports may take more clock cycles to be
+// selected. The much faster clock timing more than makes up for the
+// difference.
 //
 // ============================================================================
 
@@ -53,9 +51,9 @@ import cpu_types_pkg::aregno_t;
 import cpu_types_pkg::pc_address_t;
 
 module Qupls4_read_port_select(rst, clk, advance, pReg_i, pRegv_i, pReg_o, pRegv_o, regAck_o);
-parameter FIXED_PORTS=16;
+parameter FIXED_PORTS=0;
 parameter NPORTI=64;
-parameter NPORTO=24;
+parameter NPORTO=16;
 input rst;
 input clk;
 input advance;
@@ -70,20 +68,20 @@ genvar g;
 pregno_t [NPORTO-1:0] pReg1_o;
 reg [NPORTO-1:0] pRegv1_o;
 reg [NPORTI-1:0] regAck1_o;
-reg [7:0] bank_req;
-wire [7:0] bank_grant_oh;
+reg [NPORTI/NPORTO-1:0] bank_req;
+wire [NPORTI/NPORTO-1:0] bank_grant_oh;
 
 generate begin : gBankReq
-for (g = 0; g < NPORTI/8; g = g + 1)
+for (g = 0; g < NPORTI/NPORTO; g = g + 1)
 	always_comb
 		if (g >= FIXED_PORTS/8)
-			bank_req[g] = |pRegv_i[g*8+7:g*8];
+			bank_req[g] = |pRegv_i[g*NPORTO+NPORTO-1:g*NPORTO];
 		else
 			bank_req[g] = 1'b0;
 end
 endgenerate
 
-RoundRobinArbiter #(.NumRequests(8))
+RoundRobinArbiter #(.NumRequests(NPORTI/NPORTO))
 urr1
 (
   .rst(rst),
@@ -97,14 +95,14 @@ urr1
 
 always_ff @(posedge clk)
 if (rst) begin
-	for (j = 0; j < 8; j = j + 1) begin
+	for (j = 0; j < NPORTO; j = j + 1) begin
 		pRegv_o[j] <= INV;
 		pReg_o[j] <= 10'd0;
 		regAck_o[j] <= INV;
 	end
 end
 else begin
-	for (k = 0; k < 8; k = k + 1) begin
+	for (k = 0; k < NPORTI/NPORTO; k = k + 1) begin
 		if (k < FIXED_PORTS/8) begin
 			for (j = 0; j < 8; j = j + 1) begin
 				pRegv_o[j+k*8] <= pRegv_i[j+k*8];
@@ -113,10 +111,10 @@ else begin
 			end
 		end
 		else if (bank_grant_oh[k]) begin
-			for (j = 0; j < 8; j = j + 1) begin
-				pRegv_o[j+FIXED_PORTS] <= pRegv_i[j+k*8];
-				pReg_o[j+FIXED_PORTS] <= pReg_i[j+k*8];
-				regAck_o[j+FIXED_PORTS] <= pRegv_i[j+k*8];
+			for (j = 0; j < NPORTO-FIXED_PORTS; j = j + 1) begin
+				pRegv_o[j+FIXED_PORTS] <= pRegv_i[j+k*NPORTO];
+				pReg_o[j+FIXED_PORTS] <= pReg_i[j+k*NPORTO];
+				regAck_o[j+FIXED_PORTS] <= pRegv_i[j+k*NPORTO];
 			end
 		end
 	end

@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2026  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -74,7 +74,7 @@ endfunction
 always_comb
 begin
 	Rs3 = fnRs3(instr, instr_raw, has_immc);
-	Rs3z = &Rs3;
+	Rs3z = &Rs3[5:0];
 end
 
 endmodule

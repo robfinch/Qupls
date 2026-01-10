@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2025-2026  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -165,8 +165,6 @@ else begin
 			setcp <= TRUE;
 			state <= CHKPT_IDLE;
 		end
-	default:
-		state <= CHKPT_IDLE;
 	endcase
 end
 

@@ -42,10 +42,12 @@
 import const_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_microop_mem(clk, om, ir, num, carry_reg, carry_out, carry_in,
+module Qupls4_microop_mem(rst, clk, en, om, ir, num, carry_reg, carry_out, carry_in,
 	vlen_reg, velsz, count, uop, thread);
 parameter UOP_ARRAY_SIZE = 32;
+input rst;
 input clk;
+input en;
 input Qupls4_pkg::operating_mode_t om;
 input Qupls4_pkg::micro_op_t ir;
 input [4:0] num;
@@ -347,8 +349,15 @@ always_comb vRs1i = (instr.vn[1] & ~instr.ms[0] & is_vector);
 always_comb vRs2i = (instr.vn[2] & ~instr.ms[1] & is_vector);
 always_comb vRs3i = (instr.vn[3] & ~instr.ms[2] & is_vector);
 
-always_comb
-begin
+always_ff @(posedge clk)
+if (rst) begin
+	count <= 3'd0;
+	for (n1 = 0; n1 < UOP_ARRAY_SIZE; n1 = n1 + 1) begin
+		uop[n1] = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
+		uop[n1].opcode = Qupls4_pkg::OP_NOP;
+	end
+end
+else if (en) begin
 	count = 3'd0;
 	for (n1 = 0; n1 < UOP_ARRAY_SIZE; n1 = n1 + 1)
 		uop[n1] = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
