@@ -1,13 +1,16 @@
 # Welcome to Qupls4 (Q+)
 
 ## Overview
-Qupls is an implementation of the Qupls instruction set architecture. The ISA is for a 64-bit general purpose machine. The Qupls ISA supports SIMD and vector operations.
+Qupls is an implementation of the Qupls instruction set architecture. The ISA is for a 64-bit general purpose machine.
+The Qupls ISA supports SIMD and vector operations.
 
 ### Versions
-Qupls4 is the most recently worked on version. Qupls4 is the 2025 version of the Thor processor which has evolved over the years. Different versions are completely incompatible with one another as the author has learned and gained more experience.
+Qupls4 is the most recently worked on version. Qupls4 is the 2025 version of the Thor processor which has evolved over the years.
+Different versions are completely incompatible with one another as the author has learned and gained more experience.
 
 ### History
-Qupls4 is the most recently worked on version beginning in November 2025. Work started on Qupls2 in February of 2025; then Qupls3 started in March. Work started on Qupls in November of 2023. Many years of work have gone into prior CPUs.
+Qupls4 is the most recently worked on version beginning in November 2025. Work started on Qupls2 in February of 2025; then Qupls3 started in March.
+Work started on Qupls in November of 2023. Many years of work have gone into prior CPUs.
 
 ### Recent Additions
 The more recent addition is multiple threads of execution, and multiple streams (branch paths) of execution.
@@ -16,7 +19,7 @@ The capabilities version of the core requires 128-bit registers as a 64-bit capa
 This increases the size of the core considerably and turns Qupls into a 128-bit machine.
 
 ### Features Superscalar Out-of-Order version (Qupls4.sv)
-* Fixed 48-bit length instruction set.
+* Fixed 48-bit parcel length instruction set. (postfixes may make it considered to be variable length).
 * 64-bit datapath / support for 128-bit floats (128-bit datapath for capabilities)
 * 16 entry (or more) reorder entry buffer (ROB)
 * 32 general purpose registers, unified integer and float register file
@@ -59,15 +62,17 @@ Increasing the number of threads beyond a small number will need to increase the
 This is overridden by the thread selection above.
 
 ### Register File
-The register file is 12r4w (12 read ports and 4 write ports). Previously the register file was 16r4w but the extra four ports are not needed most of the time.
+The register file is 16r4w (16 read ports and 4 write ports).
+Register file read ports are dynamically connected; up to 64 read port requests are fed into a 4:1 mux.
 (The number of read and write ports on the register file is configurable).
 There are now queues for writing and demultiplexing of read ports for reading.
 
 #### Scalar Register File
 The register file contains 32 architectural registers, and is unified, supporting integer and floating-point operations using the same set of registers. 
-All 32 registers may be assigned by the compiler without restriction excepting for r0 as noted above.
-There is only a suggested usage of r30 for the stack pointer. Any register may be used.
+All 32 registers may be assigned by the compiler without restriction.
+There is only a suggested usage of r31 for the stack pointer. Any register may be used.
 There is no longer a register dedicated to refer to the stack canary or instruction pointer.
+Instruction pointer may be selected as a base register for memory operations - register code 62.
 
 #### Vector Register File
 There are 32 vector 256-bit wide (4x64-bit chunks) registers and is unified, supporting integer and floating-point operations using the same set of registers.
@@ -75,15 +80,19 @@ The vector registers require 128 logical registers which are then mapped onto th
 
 #### Physical Register File
 The physical register file contains 512x64-bit registers.
+This is configurable as 256,512, or 1024 registers.
 Architectural registers are renamed using the physical registers to remove dependencies.
-There are approximaately 168 (32+128+8) architectural registers, giving about 3.0 physical registers for each architectural one.
+There are approximately 168 (32+128+8) architectural registers, giving about 3.0 physical registers for each architectural one.
 
 ### Instruction Length
-The author has found that in an FPGA the decode of variable length instruction length was on the critical timing path, limiting the maximum clock frequency and performance. Hence the move back to a fixed instruction length.
+The author has found that in an FPGA the decode of variable length instruction length was on the critical timing path, limiting the maximum clock frequency and performance.
+Hence the move back to a fixed instruction length.
 
 ### Instruction alignment
-Instructions are aligned on wyde (16-bit) boundaries. Conditional branch displacements are in terms of wydes. Conditional branches have effectively a 21 bit range. For software compatibility a critical 18 bits range was needed.
-Subroutines may be aligned on any wyde boundary, allowing position independent code placement. Unconditional branch and jump displacements are in terms of wydes to accomodate the location of subroutines.
+Instructions are aligned on wyde (16-bit) boundaries. Conditional branch displacements are in terms of wydes.
+Conditional branches have effectively a 20 bit range. For software compatibility a critical 18 bits range was needed.
+Subroutines may be aligned on any wyde boundary, allowing position independent code placement.
+Unconditional branch and jump displacements are in terms of wydes to accomodate the location of subroutines.
 
 ### Position Independant Code
 Code is relocatable at any wyde boundary; however, within a subroutine or function the instructions should be contiguous, a multiple of six bytes.
@@ -104,7 +113,8 @@ After instruction fetch and extract the instructions are decoded.
 Constants are also decoded from constant postfxes following the instruction.
 ISA instructions are translated into micro-ops at this stage. Most instructions are a direct 1:1 translation but some instructions require more micro-ops.
 #### Rename Stage
-Target logical registers are assigned names from a name supplier component which can supply up to four names per clock cycle. Target name mappings are stored in the RAT.
+Target logical registers are assigned names from a name supplier component which can supply up to four names per clock cycle.
+Target name mappings are stored in the RAT.
 Decoded architectural registers are renamed to physical registers and register values are fetched.
 The instruction (micro-op) decodes are placed in the reorder buffer / queued.
 #### Dispatch
@@ -112,7 +122,7 @@ Instructions are dispatched to reservation stations by this stage.
 Not every combination of four instructions is supported within a single clock cycle.
 The dispatcher may dispatch up to six micro-op instructions per clock cycle.
 Currently dispatch may dispatch: 2 ALU, 1 int multiply or divide, 1 Memory, 1 branch, 1 float with any given cycle.
-Disatch is currently configurable as in-order (preferred) or out-of-order. Out-of-order dispatch is huge.
+Disatch is currently out-of-order. Out-of-order dispatch is huge.
 #### Queue Stage
 The queue stage is a place holder for the most recent instructions that have been queued in the reorder buffer.
 Instructions are queued from the rename stage. The queue state overlaps the contents of the ROB.
@@ -121,7 +131,8 @@ It is less expensive to process the instructions from the queue buffer rather th
 Once instructions are queued in the ROB they may be scheduled for execution.
 The instruction scheduler is now distributed amongst the reservation stations which become active when instructions with valid arguments are ready.
 #### Execute Stage
-The next stage is execution. Note that the execute stage waits until all the instruction arguments are valid before trying to execute the instruction. (This is checked by the scheduler). The predicate register must be valid.
+The next stage is execution. Note that the execute stage waits until all the instruction arguments are valid before trying to execute the instruction.
+(This is checked by the scheduler). The predicate register must be valid.
 Instruction arguments are made valid by the execution or writeback of prior instructions.
 Note that while the instruction may not be able to execute, issue and execute are *not* stalled.
 Other instructions are issued and executed while waiting for an instruction missing arguments.
@@ -162,10 +173,9 @@ Most instructions apply for either scalar or vector operations.
 There is a bit (V) in the instruction to select either a vector or scalar register.
 
 ### Sign Control
-Each instruction operand may have a sign-control bit associated with it depending on the instruction.
-The sign of the operand may be negated or complemented when this bit is set.
+Each instruction source operand may have a sign-control bit associated with it depending on the instruction.
+The sign of the source operand may be negated or complemented when this bit is set.
 This is a simple enhancement of the instruction set which allows many more instructions without adding opcodes.
-For instance, a NAND operation is just and AND operation with the target register complement bit set.
 
 ### Dual Operation Instructions
 Many register-register operate instructions support dual operations on the registers.
@@ -199,7 +209,8 @@ Any of the three source registers may be turned into a constant.
 ### Branches
 Conditional branches are a fused compare-and-branch instruction. Values of two registers are compared, then a branch is made depending on the relationship between the two.
 Branches may work with different precisions.
-The branch displacement is 21 bits. Branch-to-register is also supported.
+The branch displacement is 20 bits. Branch-to-register is also supported.
+Some branches may increment or decrement the first source register. (iblt ibltu ible ibleu dbne dbnez).
 
 ### Loads and Stores
 Load and store operations are queued in a memory (load/store) queue.
@@ -207,7 +218,8 @@ Once the operation is queued execution of other instructions continues.
 The core currently allows only strict ordering of memory operations.
 Load and store instructions are queued in program order.
 Stores are allowed to proceed only if it is known that there are no prior instructions that can cause a change of program flow.
-Loads may bypass stores in some circumstances (the load and store must match exactly).
+Stores may forward results to loads in some circumstances (the load and store must match exactly).
+Store forwarding is a configuration option which is off by default as it increases the size of the load/store unit considerably.
 There are bits in control register zero assigned for future use to indicate more relaxed memory models.
 
 ### Unimplemented Instructions
@@ -260,10 +272,11 @@ It looks like an area optimized core will be under 200k LUTs.
 The minimum core size includes only basic integer instructions.
 The minimum size does not allow for much parallelism.
 Better performance may be had using a pipelined in-order processor which is much smaller.
-*The core size seems to be constantly increasing as updates occur.
+The core size seems to be constantly increasing as updates occur.
 
 # Performance
-The toolset indicates the core should be able to reach 40 MHz operation (in a -2 device).
+The new goal is 100+ MHz operation; components are being updated to reach the new target.
+The toolset indicates the core should be able to reach 45 MHz operation (in a -2 device).
 Under absolutely ideal conditions the core may execute four instructions or eight operations per clock.
 All stages support processing at least four instructions per clock.
 Realistically the core will typically execute less than one instruction per clock.
@@ -280,7 +293,6 @@ Qupls4_mpu.sv is the top level for the MPU which contains the CPU, timers, and i
 * Instructions are too wide. The instruction set has been simply designed, having almost some VLIW aspects to it.
 It would be better if instructions were 32-bit.
 48-bits is 50% wider than 32, however some instruction sequences requiring two instruction in a 32-bit ISA can be done using only a single instruction.
-So, code is somewhat less than 50% more.
+So, code is somewhat less than 50% more (35% larger would be a ballpark estimate).
 * Dual-operation instructions are not used very often. They consume LUT resources and likely extra power.
 * Core does not work yet, a long ways to go.
-* No software yet.
