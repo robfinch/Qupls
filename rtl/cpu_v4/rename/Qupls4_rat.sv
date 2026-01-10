@@ -36,8 +36,7 @@
 //
 // Research shows having 16 checkpoints is almost as good as infinity.
 //
-// 17350 LUTs / 2250 FFs / 00 BRAMs (512p regs, 16 checkpoints)
-// 48800 LUTs / 5710 FFs / 0 BRAMS (512p regs, 16 checkpoints)
+// 52000 LUTs / 5400 FFs / 0 BRAMS / 165 MHz (512p regs, 16 checkpoints)
 // ============================================================================
 //
 import const_pkg::*;
