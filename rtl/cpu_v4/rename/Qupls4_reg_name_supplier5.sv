@@ -40,14 +40,12 @@
 // parts. 
 // One available register is selected "popped" from each part of the bitmap
 // when needed using a find-first-one module.
-// The parts of the bitmap are rotated after a register is "popped" so that
-// registers are not reused too soon. This prevents pipelining issues.
 // Freeing the register, a "push", is simple, the register is just marked
 // available in the bitmap.
-// For a checkpoint restore, the available register map is simply copied from
-// the checkpoint.
 // 
-// 2600 LUTs / 520 FFs / 0 BRAMs (512 regs)
+// 4300 LUTs / 604 FFs / 0 BRAMs / 155 MHz (512 regs)
+// 2000 LUTs / 350 FFs / 0 BRAMs / 160 MHz (256 regs)
+// 1920 LUTs / 220 FFs / 0 BRAMs / 100 MHz (128 regs)
 // ============================================================================
 //
 import const_pkg::*;
@@ -102,10 +100,10 @@ end
 always_comb
 begin
 	// Not a stall if not allocating.
-	stalla0 = ~avail[o[0]] & ns_alloc_req[0];
-	stalla1 = ~avail[o[1]] & ns_alloc_req[1];
-	stalla2 = ~avail[o[2]] & ns_alloc_req[2];
-	stalla3 = ~avail[o[3]] & ns_alloc_req[3];
+	stalla0 = (~avail[o[0]] & ns_alloc_req[0]) || o[0]==o[2] || o[0]==o[3] || o[0]==o[1];
+	stalla1 = (~avail[o[1]] & ns_alloc_req[1]) || o[1]==o[2] || o[1]==o[3] || o[1]==o[0];
+	stalla2 = (~avail[o[2]] & ns_alloc_req[2]) || o[2]==o[0] || o[2]==o[1] || o[2]==o[3];
+	stalla3 = (~avail[o[3]] & ns_alloc_req[3]) || o[3]==o[0] || o[3]==o[1] || o[3]==o[2];
 	ov[0] = ((avail[o[0]] & ns_alloc_req[0]) | (ovr[0] & ~en));
 	ov[1] = ((avail[o[1]] & ns_alloc_req[1]) | (ovr[1] & ~en)) && ns_cndx[1]==ns_cndx[0];
 	ov[2] = ((avail[o[2]] & ns_alloc_req[2]) | (ovr[2] & ~en)) && ns_cndx[2]==ns_cndx[0];
@@ -175,16 +173,16 @@ case(Qupls4_pkg::PREGS)
 
 512:
  begin
-		wire [7:0] ffo [0:3];
-		ffo144 uffo0 (.i({16'd0,avail[127:  0]}), .o(ffo[0]));
-		ffo144 uffo1 (.i({16'd0,avail[255:128]}), .o(ffo[1]));
-		ffo144 uffo2 (.i({16'd0,avail[383:256]}), .o(ffo[2]));
-		ffo144 uffo3 (.i({16'd0,avail[511:384]}), .o(ffo[3]));
+		wire [8:0] ffo [0:3];
+		ffo288 uffo0 (.i({32'd0,avail[255:  0]}), .o(ffo[0]));
+		flo288 uffo1 (.i({32'd0,avail[255:  0]}), .o(ffo[1]));
+		ffo288 uffo2 (.i({32'd0,avail[511:256]}), .o(ffo[2]));
+		flo288 uffo3 (.i({32'd0,avail[511:256]}), .o(ffo[3]));
 
-		always_comb o[0] = {2'd0,ffo[0][6:0]};
-		always_comb o[1] = {2'd1,ffo[1][6:0]};
-		always_comb o[2] = {2'd2,ffo[2][6:0]};
-		always_comb o[3] = {2'd3,ffo[3][6:0]};
+		always_comb o[0] = {1'd0,ffo[0][7:0]};
+		always_comb o[1] = {1'd0,ffo[1][7:0]};
+		always_comb o[2] = {1'd1,ffo[2][7:0]};
+		always_comb o[3] = {1'd1,ffo[3][7:0]};
 
 		checkpt_ndx_t last_cndx;
 		always_comb
@@ -209,9 +207,9 @@ case(Qupls4_pkg::PREGS)
 
 		wire [7:0] ffo [0:3];
 		ffo144 uffo0 (.i({16'd0,avail[127:  0]}), .o(ffo[0]));
-		ffo144 uffo1 (.i({16'd0,avail[127:  0] & ~(128'd1 << ffo[0])}), .o(ffo[1]));
+		flo144 uffo1 (.i({16'd0,avail[127:  0]}), .o(ffo[1]));
 		ffo144 uffo2 (.i({16'd0,avail[255:128]}), .o(ffo[2]));
-		ffo144 uffo3 (.i({16'd0,avail[255:128] & ~(128'd1 << ffo[2])}), .o(ffo[3]));
+		flo144 uffo3 (.i({16'd0,avail[255:128]}), .o(ffo[3]));
 
 		always_comb o[0] = {1'd0,ffo[0][6:0]};
 		always_comb o[1] = {1'd0,ffo[1][6:0]};
@@ -234,17 +232,20 @@ case(Qupls4_pkg::PREGS)
 
 128:
 	begin
-		wire [5:0] ffo [0:3];
-		// ToDo: use 128 bit bitmap
-		ffo48 uffo0 (.i({16'd0,avail[ 31:  0]}), .o(ffo[0]));
-		ffo48 uffo1 (.i({16'd0,avail[ 63: 32]}), .o(ffo[1]));
-		ffo48 uffo2 (.i({16'd0,avail[ 95: 64]}), .o(ffo[2]));
-		ffo48 uffo3 (.i({16'd0,avail[127: 96]}), .o(ffo[3]));
+		wire [7:0] ffo [0:3];
+		wire [127:0] excl0 = (128'd1 << ffo[0]);
+		wire [127:0] excl1 = (128'd1 << ffo[1]);
+		wire [127:0] excl2 = (128'd1 << ffo[2]);
+		
+		ffo144 uffo0 (.i({16'd0,avail[127:  0]}), .o(ffo[0]));
+		ffo144 uffo1 (.i({16'd0,avail[127:  0]} & ~excl0), .o(ffo[1]));
+		flo144 uffo2 (.i({16'd0,avail[127:  0]}), .o(ffo[2]));
+		flo144 uffo3 (.i({16'd0,avail[127:  0]} & ~excl2), .o(ffo[3]));
 
-		always_comb o[0] = {2'd0,ffo[0][4:0]};
-		always_comb o[1] = {2'd1,ffo[1][4:0]};
-		always_comb o[2] = {2'd2,ffo[2][4:0]};
-		always_comb o[3] = {2'd3,ffo[3][4:0]};
+		always_comb o[0] = ffo[0][6:0];
+		always_comb o[1] = ffo[1][6:0];
+		always_comb o[2] = ffo[2][6:0];
+		always_comb o[3] = ffo[3][6:0];
 
 		always_comb
 		for (n1 = 0; n1 < 4; n1 = n1 + 1)

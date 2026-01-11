@@ -1063,6 +1063,7 @@ reg [3:0] takb_f;
 reg [3:0] takb_fet;
 
 reg branchmiss, branchmiss_next;
+reg branchmissd;
 rob_ndx_t missid;
 reg missid_v;
 
@@ -1758,7 +1759,7 @@ Qupls4_btb ubtb1
 	.takb1(ntakb[1]),
 	.takb2(ntakb[2]),
 	.takb3(ntakb[3]),
-	.branchmiss(branchmiss),//branch_state == Qupls4_pkg::BS_CHKPT_RESTORED),
+	.branchmiss(branchmissd),//branch_state == Qupls4_pkg::BS_CHKPT_RESTORED),
 	.misspc(misspc),
 	.commit_pc0(commit_pc0),
 	.commit_brtgt0(commit_brtgt0),
@@ -1921,7 +1922,7 @@ Qupls4_stomp ustmp1
 	.found_destination(fcu_found_destination),
 	.destination_rndx(fcu_dst),
 	.branch_resolved(fcu_branch_resolved),
-	.branchmiss(branchmiss),
+	.branchmiss(branchmissd),
 	.do_bsr(do_bsr|do_ret),
 	.misspc(misspc),
 	.predicted_match_ext(~|p_override),
@@ -2376,7 +2377,7 @@ Qupls4_pipeline_ext #(.MWIDTH(MWIDTH)) uiext1
 	.pc0_fet(pc0_fet),
 	.hwipc_fet(hwipc_fet),
 	.micro_machine_active(1'b0),
-	.branchmiss(branchmiss),//branch_state > Qupls4_pkg::BS_STATE3),
+	.branchmiss(branchmissd),//branch_state > Qupls4_pkg::BS_STATE3),
 	.takb_fet(takb_fet),
 	.pt_ext(pt_ext),
 	.pt_dec(pt_dec),
@@ -3693,14 +3694,16 @@ Qupls4_restore_flag urstf1
 reg brtgtvr;
 always_comb
 	branchmiss = irst ? FALSE: (excmiss | fcu_branchmiss);// & ~branchmiss;
+always_ff @(posedge clk)
+	branchmissd <= branchmiss;
 
-always_comb//ff @(posedge clk)
+always_ff @(posedge clk)
 	missid = irst ? 8'd0 : excmiss ? excid : fcu_rse.rndx;
-always_comb//ff @(posedge clk)
+always_ff @(posedge clk)
 	missid_v = irst ? 1'b0 : excmiss ? VAL : fcu_rse.v;
 
 
-always_comb
+always_ff @(posedge clk)
 /*
 if (irst) begin
 	misspc.stream = 5'd1;
@@ -5837,25 +5840,23 @@ else begin
 	// following micro-op queues.
 	// ----------------------------------------------------------------------------
 	foreach (rob[nn]) begin
-		// find next instruction (put outside of condition to reduce logic)
-		nonNop = fnFindNextNonNop(nn);
 		if (!(&rob[nn].done) &&			// not done
 			rob[nn].op.decbus.rext		// and an extended register prefix
 		) begin
-			if (rob[nonNop].v && rob[nonNop].sn > rob[nn].sn) begin	// valid and in sequence?
-				rob[nonNop].op.pRs4 <= rob[nn].op.pRs1;
-				rob[nonNop].op.Rs4z <= rob[nn].op.decbus.Rs1z;
-				rob[nonNop].op.pRd2 <= rob[nn].op.pRd;
-				rob[nonNop].op.pS <= rob[nn].op.pRs2;
-				rob[nonNop].op.pRs4v <= VAL;
-				rob[nonNop].op.pRd2v <= VAL;
-				rob[nonNop].op.pSv <= VAL;
+			if (|rob[(nn+1)%ROB_ENTRIES].v && rob[(nn+1)%ROB_ENTRIES].sn == (rob[nn].sn +1) % ROB_ENTRIES) begin	// valid and in sequence?
+				rob[(nn+1)%ROB_ENTRIES].op.pRs4 <= rob[nn].op.pRs1;
+				rob[(nn+1)%ROB_ENTRIES].op.Rs4z <= rob[nn].op.decbus.Rs1z;
+				rob[(nn+1)%ROB_ENTRIES].op.pRd2 <= rob[nn].op.pRd;
+				rob[(nn+1)%ROB_ENTRIES].op.pS <= rob[nn].op.pRs2;
+				rob[(nn+1)%ROB_ENTRIES].op.pRs4v <= VAL;
+				rob[(nn+1)%ROB_ENTRIES].op.pRd2v <= VAL;
+				rob[(nn+1)%ROB_ENTRIES].op.pSv <= VAL;
 				rob[nn].done <= 2'b11;
 			end
 			// The REXT was not followed by a valid instruction. Treat as a NOP.
 			// Just mark it done. Note: the next instruction may not be queued yet,
 			// so test for a following instruction before marking.
-			else if (rob[(nn + 1) % Qupls4_pkg::ROB_ENTRIES].sn > rob[nn].sn)
+			else if (|rob[(nn+1)%ROB_ENTRIES].v && rob[(nn + 1) % Qupls4_pkg::ROB_ENTRIES].sn > rob[nn].sn)
 				rob[nn].done <= 2'b11;
 		end
 	end
@@ -6209,7 +6210,6 @@ else begin
 	// Reset out to trigger another access
 		if (dram0_work.tocnt[10]) begin
 			tSetROBMemDone(dram0_work,dram0_oper,Qupls4_pkg::FLT_BERR,2'b11);
-			dram0_work.rndxv <= INV;
 			$display("Q+ set dram0_work.rndxv=INV at timeout");
 			//lsq[rob[dram0_work.rndx].lsqndx.row][rob[dram0_work.rndx].lsqndx.col].v <= INV;
 		end
@@ -6219,7 +6219,6 @@ else begin
 		if (Qupls4_pkg::NDATA_PORTS > 1) begin
 			if (dram1_work.tocnt[10]) begin
 				tSetROBMemDone(dram1_work,dram1_oper,Qupls4_pkg::FLT_BERR,2'b11);
-				dram1_work.rndxv <= INV;
 //				lsq[rob[dram1_work.rndx].lsqndx.row][rob[dram1_work.rndx].lsqndx.col].v <= INV;
 			end
 			else if (dram1_work.tocnt[8]) begin
@@ -6614,13 +6613,11 @@ else begin
 	end
 	if (robentry_stomp[dram0_work.rndx]) begin
 		dram0_stomp <= TRUE;
-		dram0_work.rndxv <= INV;
 		rob[dram0_work.rndx].done <= 2'b11;
 		rob[dram0_work.rndx].out <= 2'b00;
 	end
 	if (robentry_stomp[dram1_work.rndx]) begin
 		dram1_stomp <= TRUE;
-		dram1_work.rndxv <= INV;
 		rob[dram1_work.rndx].done <= 2'b11;
 		rob[dram1_work.rndx].out <= 2'b00;
 	end
@@ -7723,10 +7720,8 @@ begin
 	ip_asid <= 16'd0;
 //	postfix_mask <= 'd0;
 	dram0_stomp <= 32'd0;
-	dram0_work.rndxv <= INV;
 	dram0_ldip <= FALSE;
 	dram1_stomp <= 32'd0;
-	dram1_work.rndxv <= INV;
 	panic <= `PANIC_NONE;
 	foreach (rob[n14]) begin
 		rob[n14] <= {$bits(Qupls4_pkg::rob_entry_t){1'd0}};

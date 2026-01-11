@@ -139,7 +139,8 @@ reg [MWIDTH-1:0] aRd_decv;
 reg [MWIDTH-1:0] is_move;
 wire rat_stallq1;
 wire ns_stall;
-assign rat_stallq = rat_stallq1|ns_stall;
+wire rst_busy;
+assign rat_stallq = rat_stallq1|ns_stall|rst_busy;
 
 Qupls4_pkg::pipeline_reg_t nopi;
 
@@ -383,7 +384,7 @@ Qupls4_reg_name_supplier5 uns4
 	.ns_dstregv(pRd_decv),
 	.avail(),							// available registers list
 	.stall(ns_stall),
-	.rst_busy()
+	.rst_busy(rst_busy)
 );
 
 Qupls4_rat

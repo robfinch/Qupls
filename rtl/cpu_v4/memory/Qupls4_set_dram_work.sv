@@ -112,8 +112,10 @@ else begin
 
 		// Bus timeout logic
 		// Reset out to trigger another access
-		if (dram_work_o.tocnt[10])
+		if (dram_work_o.tocnt[10]) begin
 			dram_work_o.tocnt <= 12'd0;
+			dram_work_o.rndxv <= INV;
+		end
 	end
 
 	// grab requests that have finished and put them on the dram_bus
@@ -210,6 +212,8 @@ else begin
 	if (stomp_i[lsq_i.rndx] && dram_work_o.rndx==lsq_i.rndx && !rob_i[lsq_i.rndx].lsq)
 		dram_work_o.rndxv <= INV;
 
+	if (stomp_i[dram_work_o.rndx])
+		dram_work_o.rndxv <= INV;
 /*
 	if (dram_done_i) begin
 		

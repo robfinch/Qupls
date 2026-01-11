@@ -64,12 +64,12 @@ output Qupls4_pkg::rob_bitmask_t rob_dispatched_o;
 integer nn;
 Qupls4_pkg::reservation_station_entry_t [DISPATCH_COUNT-1:0] rse;
 Qupls4_pkg::rob_bitmask_t rob_dispatched;
-reg [DISPATCH_COUNT-1:0] rob_dispatched_v;
+reg [DISPATCH_COUNT-1:0] dispatch_slot_v;
 
 always_comb
 begin
 	rob_dispatched = {$bits(rob_bitmask_t){1'b0}};
-	rob_dispatched_v = {DISPATCH_COUNT{1'b0}};
+	dispatch_slot_v = {DISPATCH_COUNT{1'b0}};
 	rse[0] = {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
 	rse[1] = {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
 	rse[2] = {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
@@ -84,82 +84,82 @@ begin
 			// It takes a clock cycle to set flags.
 			!rob_dispatched_o[nn]
 		) begin
-			if (rob[nn].op.decbus.sau && !busy[4'd0] && !rob_dispatched_v[0]) begin
+			if (rob[nn].op.decbus.sau && !busy[4'd0] && !dispatch_slot_v[0]) begin
 				tLoadRse(0,nn);
 				// rse[0].funcunit = 4'd0; set to zero already above
 				rse[0].rndx = nn;
 				rob_dispatched[nn] = VAL;
-				rob_dispatched_v[0] = VAL;
+				dispatch_slot_v[0] = VAL;
 			end
-			if (rob[nn].op.decbus.sau && !busy[4'd1] && !rob_dispatched_v[5]) begin
+			if (rob[nn].op.decbus.sau && !busy[4'd1] && !dispatch_slot_v[5] && !rob[nn].op.decbus.sau0) begin
 				tLoadRse(5,nn);
 				rse[5].funcunit = 4'd1;
 				rse[5].rndx = nn;
 				rob_dispatched[nn] = VAL;
-				rob_dispatched_v[5] = VAL;
+				dispatch_slot_v[5] = VAL;
 			end
-			if (rob[nn].op.decbus.mul && !busy[2] && !rob_dispatched_v[1]) begin
+			if (rob[nn].op.decbus.mul && !busy[2] && !dispatch_slot_v[1]) begin
 				tLoadRse(1,nn);
 				rse[1].funcunit = 4'd2;
 				rse[1].rndx = nn;
 				rob_dispatched[nn] = VAL;
-				rob_dispatched_v[1] = VAL;
+				dispatch_slot_v[1] = VAL;
 			end
-			if ((rob[nn].op.decbus.div|rob[nn].op.decbus.sqrt) && !busy[3] && !rob_dispatched_v[1]) begin
+			if ((rob[nn].op.decbus.div|rob[nn].op.decbus.sqrt) && !busy[3] && !dispatch_slot_v[1]) begin
 				tLoadRse(1,nn);
 				rse[1].funcunit = 4'd3;
 				rse[1].rndx = nn;
 				rob_dispatched[nn] = VAL;
-				rob_dispatched_v[1] = VAL;
+				dispatch_slot_v[1] = VAL;
 			end
-			if (rob[nn].op.decbus.fc && !busy[7] && !rob_dispatched_v[2]) begin
+			if (rob[nn].op.decbus.fc && !busy[7] && !dispatch_slot_v[2]) begin
 				tLoadRse(2,nn);
 				rse[2].funcunit = 4'd7; 
 				rse[2].rndx = nn;
 				rob_dispatched[nn] = VAL;
-				rob_dispatched_v[2] = VAL;
+				dispatch_slot_v[2] = VAL;
 			end
-			if (rob[nn].op.decbus.mem && !busy[4'd8] & !rob_dispatched_v[3]) begin
+			if (rob[nn].op.decbus.mem && !busy[4'd8] & !dispatch_slot_v[3]) begin
 				tLoadRse(3,nn);
 				rse[3].funcunit = 4'd8; 
 				rse[3].rndx = nn;
 				rob_dispatched[nn] = VAL;
-				rob_dispatched_v[3] = VAL;
+				dispatch_slot_v[3] = VAL;
 			end
-			if (rob[nn].op.decbus.mem && !busy[4'd9] & !rob_dispatched_v[3]) begin
+			if (rob[nn].op.decbus.mem && !busy[4'd9] & !dispatch_slot_v[3]) begin
 				tLoadRse(3,nn);
 				rse[3].funcunit = 4'd9; 
 				rse[3].rndx = nn;
 				rob_dispatched[nn] = VAL;
-				rob_dispatched_v[3] = VAL;
+				dispatch_slot_v[3] = VAL;
 			end
-			if (Qupls4_pkg::SUPPORT_FLOAT && rob[nn].op.decbus.fma && !busy[4'd4] && !rob_dispatched_v[4]) begin
+			if (Qupls4_pkg::SUPPORT_FLOAT && rob[nn].op.decbus.fma && !busy[4'd4] && !dispatch_slot_v[4]) begin
 				tLoadRse(4,nn);
 				rse[4].funcunit = 4'd4; 
 				rse[4].rndx = nn;
 				rob_dispatched[nn] = VAL;
-				rob_dispatched_v[4] = VAL;
+				dispatch_slot_v[4] = VAL;
 			end
-			if (Qupls4_pkg::SUPPORT_FLOAT && rob[nn].op.decbus.fma && !busy[4'd5] && !rob_dispatched_v[4]) begin
-				tLoadRse(4,nn);
-				rse[4].funcunit = 4'd5; 
-				rse[4].rndx = nn;
+			if (Qupls4_pkg::SUPPORT_FLOAT && rob[nn].op.decbus.fma && !busy[4'd5] && !dispatch_slot_v[1]) begin
+				tLoadRse(1,nn);
+				rse[1].funcunit = 4'd5; 
+				rse[1].rndx = nn;
 				rob_dispatched[nn] = VAL;
-				rob_dispatched_v[4] = VAL;
+				dispatch_slot_v[1] = VAL;
 			end
-			if (Qupls4_pkg::SUPPORT_TRIG && rob[nn].op.decbus.trig && !busy[4'd6] && !rob_dispatched_v[4]) begin
+			if (Qupls4_pkg::SUPPORT_TRIG && rob[nn].op.decbus.trig && !busy[4'd6] && !dispatch_slot_v[4]) begin
 				tLoadRse(4,nn);
 				rse[4].funcunit = 4'd6; 
 				rse[4].rndx = nn;
 				rob_dispatched[nn] = VAL;
-				rob_dispatched_v[4] = VAL;
+				dispatch_slot_v[4] = VAL;
 			end
-			if (Qupls4_pkg::SUPPORT_FLOAT && rob[nn].op.decbus.fpu && !busy[4'd12] && !rob_dispatched_v[4]) begin
+			if (Qupls4_pkg::SUPPORT_FLOAT && rob[nn].op.decbus.fpu && !busy[4'd12] && !dispatch_slot_v[4]) begin
 				tLoadRse(4,nn);
 				rse[4].funcunit = 4'd12;
 				rse[4].rndx = nn;
 				rob_dispatched[nn] = VAL;
-				rob_dispatched_v[4] = VAL;
+				dispatch_slot_v[4] = VAL;
 			end
 		end
 	end
