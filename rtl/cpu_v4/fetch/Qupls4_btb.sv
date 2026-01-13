@@ -32,8 +32,7 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 6500 LUTs / 350 FFs / 8 BRAMs    
-// 17200 / 3200                                                                      
+// 7150 LUTs / 2850 FFs / 4 BRAMs / 195 MHz
 // ============================================================================
 
 import Qupls4_pkg::*;
@@ -67,7 +66,7 @@ input get_next_pc;
 input cpu_types_pkg::pc_address_ex_t pc;
 input cpu_types_pkg::pc_address_ex_t pc0;
 output cpu_types_pkg::pc_address_ex_t next_pc;
-input [3:0] p_override;
+input p_override;
 input [6:0] po_bno [0:3];
 output reg takb0;
 output reg takb1;
@@ -336,7 +335,7 @@ begin
 		next_pcs[misspc.stream] = misspc;
 	else if (!predicted_correctly_dec)
 		next_pcs[act_stream] = new_address_dec;
-	else if (|p_override)
+	else if (p_override)
 		next_pcs[act_stream] = new_address_ext;
 	// Now the target predictions
 	// Note the stream cannot be recorded in the BTB table.

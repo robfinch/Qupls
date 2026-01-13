@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2025-2026  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2026  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -21,7 +21,7 @@
 //    contributors may be used to endorse or promote products derived from
 //    this software without specific prior written permission.
 //
-// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+// THI+S SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 // AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 // IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
 // DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
@@ -32,50 +32,66 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
+// Micro-op Translation Stage
+// Translate raw instructions to micro-ops.
+// 4450 LUTs / 8200 FFs / 4 DSPs / 450 MHz
 // ============================================================================
 
 import const_pkg::*;
 import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_lsq_reg_read_req(rst, clk, lsq_head, lsqe, id, id1, bRs, bRsv);
+module Qupls4_pipeline_mot(rst, clk, en, stomp, cline_ext, cline_mot,
+    pg_ext, pg_mot, uop_count, uop);
+parameter MWIDTH = Qupls4_pkg::MWIDTH;
+parameter MICROOPS_PER_INSTR = 32;
 input rst;
 input clk;
-input Qupls4_pkg::lsq_ndx_t lsq_head;
-input Qupls4_pkg::lsq_entry_t lsqe;
-output Qupls4_pkg::lsq_ndx_t id;
-output Qupls4_pkg::lsq_ndx_t id1;
-output pregno_t [3:0] bRs;
-output reg [3:0] bRsv;
+input en;
+input stomp;
+input [1023:0] cline_ext;
+output reg [1023:0] cline_mot;
+input Qupls4_pkg::pipeline_group_reg_t pg_ext;
+output Qupls4_pkg::pipeline_group_reg_t pg_mot;
+output [5:0] uop_count [0:MWIDTH-1];
+output Qupls4_pkg::micro_op_t [MICROOPS_PER_INSTR-1:0] uop [0:MWIDTH-1];
+
+integer n1;
+genvar g;
 
 always_ff @(posedge clk)
-if (rst) begin
-	id <= 8'd0;
-	id1 <= 8'd0;
-	bRsv <= 4'd0;
-end
-else begin
+if (en) cline_mot <= cline_ext;
 
-	// Issue register read request for store operand. The register value will
-	// appear on the prn bus and be picked up by the register validation module.
-	if (lsqe.v==VAL) begin
-		id <= lsq_head;
-		id1 <= id;
-		bRs[0] <= 9'd0;
-		bRs[1] <= 9'd0;
-		bRs[3] <= 9'd0;
-		bRsv[0] <= INV;
-		bRsv[1] <= INV;
-		bRsv[3] <= INV;
-		if (lsqe.store) begin
-			bRs[2] <= lsqe.pRc;
-			bRsv[2] <= VAL;
-		end
-		else begin
-			bRs[2] <= 9'd0;
-			bRsv[2] <= INV;
-		end
+always_ff @(posedge clk)
+if (en) 
+	begin
+		pg_mot <= pg_ext;
+		if (stomp)
+			pg_mot.hdr.v <= INV;
+		foreach (pg_mot.pr[n1])
+			if (stomp)
+				pg_mot.pr[n1].v <= INV;
 	end
+
+generate begin : gMicroopMem
+	for (g = 0; g < MWIDTH; g = g + 1)
+Qupls4_microop_mem uuop1
+(
+	.rst(rst),
+  .clk(clk),
+  .en(en),
+	.om(pg_ext.pr[g].op.om),
+	.ir(pg_ext.pr[g].op.uop),
+	.num(5'd0), 
+	.carry_reg(8'd0),
+	.carry_out(1'b0),
+	.carry_in(1'b0),
+	.count(uop_count[g]),
+	.uop(uop[g]),
+	.thread(pg_ext.pr[g].ip_stream.thread)
+);
 end
+endgenerate
+
 
 endmodule

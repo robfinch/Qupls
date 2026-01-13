@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2025-2026  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -55,8 +55,10 @@ lfsr27 #(.WID(27)) ulfsr1(rst, clk, 1'b1, 1'b0, lfsro);
 // Threads may be disabled by setting the probability to zero.
 integer n2;
 reg [2:0] thrd;
-always_comb
-begin
+always_ff @(posedge clk)
+if (rst)
+	next_act_stream <= 5'd1;
+else begin
 	next_act_stream = {$bits(pc_stream_t){1'b0}};
 	thrd = 0;
 	for (n2 = 0; n2 < Qupls4_pkg::XSTREAMS*Qupls4_pkg::THREADS; n2 = n2 + 1) begin

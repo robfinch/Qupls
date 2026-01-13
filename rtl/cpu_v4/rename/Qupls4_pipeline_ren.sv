@@ -32,7 +32,7 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 16800 LUTs / 5325 FFs / 0 BRAMs
+// 50750 LUTs / 11000 FFs / 0 BRAMs / 105 MHz
 // ============================================================================
 
 import const_pkg::*;
@@ -47,7 +47,7 @@ module Qupls4_pipeline_ren(
 	chkpt_amt, tail0, rob, avail_reg, sr, branch_resolved,
 	stomp_ren, kept_stream, flush_dec, flush_ren,
 //	arn, arng, arnv,
-	rn_cp, store_argC_pReg, prn_i, prnv,
+	rn_cp, prn_i, prnv,
 	Rt0_ren, Rt0_renv, 
 	pg_dec, pg_ren,
 
@@ -96,7 +96,6 @@ input pc_stream_t kept_stream;
 input checkpt_ndx_t [NPORT-1:0] rn_cp;
 input pregno_t [NPORT-1:0] prn_i;
 output [NPORT-1:0] prnv;
-input pregno_t store_argC_pReg;
 input Qupls4_pkg::pipeline_group_reg_t pg_dec;
 output Qupls4_pkg::pipeline_group_reg_t pg_ren;
 output pregno_t [MWIDTH-1:0] Rt0_ren;
@@ -413,7 +412,6 @@ urat1
 	.rng(arng),
 	.rnv(arnv),
 	.rn_cp(rn_cp),
-	.st_prn(store_argC_pReg),
 	.prn(prn),
 	.prn_i(prn_i),
 	.prv(prnv),

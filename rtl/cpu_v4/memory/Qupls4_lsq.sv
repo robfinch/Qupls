@@ -30,7 +30,8 @@
 // CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-//                                                                          
+//
+// 11200 LUTs / 4250 FFs / 225 MHz (no store forwarding)                                                                          
 // ============================================================================
 //
 import const_pkg::*;
@@ -41,7 +42,7 @@ module Qupls4_lsq(rst, clk, cmd, pgh, rob, lsq, lsq_tail);
 parameter MWIDTH = Qupls4_pkg::MWIDTH;
 input rst;
 input clk;
-input lsq_cmd_t [9:0] cmd;
+input lsq_cmd_t [11:0] cmd;
 input Qupls4_pkg::pipeline_group_hdr_t [Qupls4_pkg::ROB_ENTRIES/MWIDTH-1:0] pgh;
 input Qupls4_pkg::rob_entry_t [Qupls4_pkg::ROB_ENTRIES-1:0] rob;
 output Qupls4_pkg::lsq_entry_t [1:0] lsq [0:Qupls4_pkg::LSQ_ENTRIES-1];
@@ -60,32 +61,59 @@ if (rst) begin
 	end
 end
 else begin
-	if (cmd[0]==LSQ_CMD_ENQ) begin
-	 	tEnqueLSE(7'h7F,cmd[0].lndx,cmd[0].rndx,rob[cmd[0].rndx],cmd[0].n,cmd[0].data);
-		lsq_tail.row <= (lsq_tail.row + 2'd1) % Qupls4_pkg::LSQ_ENTRIES;
-		lsq_tail.col <= 3'd0;
-	end
-	if (cmd[1]==LSQ_CMD_ENQ) begin
+	case(1'b1)
+	cmd[0]:	//LSQ_CMD_ENQ
+		begin
+		 	tEnqueLSE(7'h7F,cmd[0].lndx,cmd[0].rndx,rob[cmd[0].rndx],cmd[0].n,cmd[0].data);
+			lsq_tail.row <= (lsq_tail.row + 2'd1) % Qupls4_pkg::LSQ_ENTRIES;
+			lsq_tail.col <= 3'd0;
+		end
+	cmd[1]:	//==LSQ_CMD_ENQ) begin
 		tEnqueLSE(7'h7F,cmd[1].lndx,cmd[1].rndx,rob[cmd[1].rndx],cmd[1].n,cmd[1].data);
-	end
-	for (n = 2; n < $size(cmd); n = n + 1) begin
-		case(cmd[n].cmd)
-		LSQ_CMD_INV:	
+	cmd[2]:	// LSQ_CMD_SETRES:
 			begin
-				tInvalidateLSQ(cmd[n].rndx, cmd[n].can, cmd[n].cmt, cmd[n].data);
-				if (cmd[n].cmt && SUPPORT_STORE_FORWARDING)
-					tForwardStore(cmd[n].rndx);
+				lsq[cmd[2].lndx.row][cmd[2].lndx.col].res <= {cmd[2].flags,cmd[2].data};
+				lsq[cmd[2].lndx.row][cmd[2].lndx.col].datav <= cmd[2].datav;
 			end
-		LSQ_CMD_SETADR:	tSetLSQ(cmd[n].rndx,cmd[n].data);
-		LSQ_CMD_INCADR: tIncLSQAddr(cmd[n].rndx);
-		LSQ_CMD_SETRES:
+	cmd[3]:	// LSQ_CMD_SETRES:
 			begin
-				lsq[cmd[n].lndx.row][cmd[n].lndx.col].res <= {cmd[n].flags,cmd[n].data};
-				lsq[cmd[n].lndx.row][cmd[n].lndx.col].datav <= cmd[n].datav;
+				lsq[cmd[3].lndx.row][cmd[3].lndx.col].res <= {cmd[3].flags,cmd[3].data};
+				lsq[cmd[3].lndx.row][cmd[3].lndx.col].datav <= cmd[3].datav;
 			end
-		default:	;
-		endcase
-	end
+	cmd[4]:	// LSQ_CMD_SETADR:
+		tSetLSQ(cmd[4].rndx,cmd[4].data);
+	cmd[5]:	// LSQ_CMD_SETADR:
+		tSetLSQ(cmd[5].rndx,cmd[5].data);
+	cmd[6]:	// LSQ_CMD_INCADR:
+		tIncLSQAddr(cmd[6].rndx);
+	cmd[7]:	// LSQ_CMD_INCADR:
+		tIncLSQAddr(cmd[7].rndx);
+	cmd[8]:
+		begin
+			tInvalidateLSQ(cmd[8].rndx, cmd[8].can, cmd[8].cmt, cmd[8].data);
+			if (cmd[8].cmt && SUPPORT_STORE_FORWARDING)
+				tForwardStore(cmd[8].rndx);
+		end
+	cmd[9]:
+		begin
+			tInvalidateLSQ(cmd[9].rndx, cmd[9].can, cmd[9].cmt, cmd[9].data);
+			if (cmd[9].cmt && SUPPORT_STORE_FORWARDING)
+				tForwardStore(cmd[9].rndx);
+		end
+	cmd[10]:
+		begin
+			tInvalidateLSQ(cmd[10].rndx, cmd[10].can, cmd[10].cmt, cmd[10].data);
+			if (cmd[10].cmt && SUPPORT_STORE_FORWARDING)
+				tForwardStore(cmd[10].rndx);
+		end
+	cmd[11]:
+		begin
+			tInvalidateLSQ(cmd[11].rndx, cmd[11].can, cmd[11].cmt, cmd[11].data);
+			if (cmd[11].cmt && SUPPORT_STORE_FORWARDING)
+				tForwardStore(cmd[11].rndx);
+		end
+	default:	;
+	endcase
 end
 
 // Queue to the load / store queue.
@@ -122,7 +150,7 @@ begin
 	lsq[ndx.row][ndx.col].shift <= 7'd0;
 //	store_argC_reg <= rob.pRc;
 	lsq[ndx.row][ndx.col].aRc <= rob.op.decbus.Rs3;
-//	lsq[ndx.row][ndx.col].pRc <= rob.op.pRs3;
+	lsq[ndx.row][ndx.col].pRc <= rob.op.pRs3;
 	lsq[ndx.row][ndx.col].cndx <= rob.cndx;
 	lsq[ndx.row][ndx.col].Rt <= rob.op.nRd;
 	lsq[ndx.row][ndx.col].aRt <= rob.op.decbus.Rd;

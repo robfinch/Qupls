@@ -78,14 +78,9 @@ begin
 */
 end
 
-always_ff @(posedge clk)
-if (rst)
-	ins <= nopi;
-else begin
-	if (en)
-		ins <= nop ? nopi : insi;
-//	else
-//		ins <= {41'd0,OP_NOP};
+always_comb
+begin
+	ins <= nop ? nopi : insi;
 end
 
 endmodule

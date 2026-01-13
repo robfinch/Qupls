@@ -32,8 +32,7 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 21200 LUTs / 5800 FFs / 2 BRAMs	- 32 uops per instruction.
-// 4410 LUTs / 10790 FFs / 4 DSPs (185 MHz) - 32 uops per instruction
+// 3250 LUTs / 8600 FFs / 0 DSPs (180 MHz) - 32 uops per instruction
 // ============================================================================
 
 import const_pkg::*;
@@ -41,9 +40,9 @@ import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
 module Qupls4_pipeline_dec(rst_i, rst, clk, en, clk5x, ph4, new_cline_ext, cline,
-	sr, uop_num, flush_ext, flush_dec,
+	sr, uop_num, uop_count, uop,
 	tags2free, freevals, bo_wr, bo_preg,
-	stomp_dec, stomp_ext, kept_stream, pg_ext,
+	stomp_dec, stomp_ext, kept_stream, pg_mot,
 	pg_dec,
 	mux_stallq, ren_stallq, dec_stall, ren_rst_busy,
 	predicted_correctly_o, new_address_o, advance_ext_o
@@ -55,8 +54,6 @@ input rst_i;
 input rst;
 input clk;
 input en;
-input flush_ext;
-output reg flush_dec;
 input clk5x;
 input [4:0] ph4;
 input new_cline_ext;
@@ -66,11 +63,13 @@ input [4:0] uop_num;
 input stomp_dec;
 input stomp_ext;
 input pc_stream_t kept_stream;
-input Qupls4_pkg::pipeline_group_reg_t pg_ext;
+input Qupls4_pkg::pipeline_group_reg_t pg_mot;
 input pregno_t [3:0] tags2free;
 input [3:0] freevals;
 input bo_wr;
 input pregno_t bo_preg;
+input [5:0] uop_count [0:MWIDTH-1];
+input Qupls4_pkg::micro_op_t [MICROOPS_PER_INSTR-1:0] uop [0:MWIDTH-1];
 output Qupls4_pkg::pipeline_group_reg_t pg_dec;
 output reg mux_stallq;
 output ren_stallq;
@@ -143,7 +142,7 @@ Qupls4_pkg::pipeline_reg_t [MWIDTH-1:0] prd, inso;
 Qupls4_pkg::rob_entry_t [MWIDTH-1:0] tpr;
 
 always_ff @(posedge clk)
-	if (en) pg_dec1 <= pg_ext;
+	if (en) pg_dec1 <= pg_mot;
 always_ff @(posedge clk)
 	if (en) pg_dec2 <= pg_dec1;
 always_ff @(posedge clk)
@@ -151,32 +150,10 @@ always_ff @(posedge clk)
 always_ff @(posedge clk)
 	if (en) cline2 <= cline1;
 
-wire [5:0] uop_count [0:MWIDTH-1];
-Qupls4_pkg::micro_op_t [MICROOPS_PER_INSTR-1:0] uop [0:MWIDTH-1];
 reg [2:0] uop_mark [0:MAX_MICROOPS-1];
 Qupls4_pkg::micro_op_t [MAX_MICROOPS-1:0] uop_buf;
 wire [3:0] head [0:MWIDTH-1];
 wire [3:0] tail;
-
-generate begin : gMicroopMem
-	for (g = 0; g < MWIDTH; g = g + 1)
-Qupls4_microop_mem uuop1
-(
-	.rst(rst),
-  .clk(clk),
-  .en(advance_ext_o),
-	.om(pg_ext.pr[g].op.om),
-	.ir(pg_ext.pr[g].op.uop),
-	.num(5'd0), 
-	.carry_reg(8'd0),
-	.carry_out(1'b0),
-	.carry_in(1'b0),
-	.count(uop_count[g]),
-	.uop(uop[g]),
-	.thread(pg_ext.pr[g].ip_stream.thread)
-);
-end
-endgenerate
 
 Qupls4_micro_op_queue umoq1
 (
@@ -410,8 +387,8 @@ if (rst_i) begin
 end
 else begin
 	if (en_i)
-		insm[2] <= (stomp_dec && ((pg_ext.pr[0].bt|pg_ext.pr[1].bt|pg_ext.pr[2].bt|pg_ext.pr[3].bt) && branchmiss ? pg_ext.pr[3].pc.bno_t==stomp_bno : pg_ext.pr[3].pc.bno_f==stomp_bno )) ? nopi : pg_ext.pr[3];
-//		insm[3] <= (stomp_dec && pg_ext.pr[3].pc.bno_t==stomp_bno) ? nopi : pg_ext.pr[3];
+		insm[2] <= (stomp_dec && ((pg_mot.pr[0].bt|pg_mot.pr[1].bt|pg_mot.pr[2].bt|pg_mot.pr[3].bt) && branchmiss ? pg_mot.pr[3].pc.bno_t==stomp_bno : pg_mot.pr[3].pc.bno_f==stomp_bno )) ? nopi : pg_mot.pr[3];
+//		insm[3] <= (stomp_dec && pg_mot.pr[3].pc.bno_t==stomp_bno) ? nopi : pg_mot.pr[3];
 end
 */
 
@@ -739,35 +716,23 @@ begin
 	if (pr_dec[0].decbus.bsr|pr_dec[0].decbus.jsr) begin
 		predicted_correctly_o = FALSE;
 		new_address_o = pr_dec[0].decbus.bsr ? bsr0_tgt : jsr0_tgt;
-		if (pg_dec.hdr.ip + {pg_dec.pr[0].ip_offs,1'b0}==pg_ext.hdr.ip + {pg_ext.pr[0].ip_offs,1'b0})
+		if (pg_dec.hdr.ip + {pg_dec.pr[0].ip_offs,1'b0}==pg_mot.hdr.ip + {pg_mot.pr[0].ip_offs,1'b0})
 			predicted_correctly_o = TRUE;
 	end
 	else if (pr_dec[1].decbus.bsr|pr_dec[1].decbus.jsr) begin
 		predicted_correctly_o = FALSE;
 		new_address_o = pr_dec[1].decbus.bsr ? bsr1_tgt : jsr1_tgt;
-		if (pg_dec.hdr.ip + {pg_dec.pr[1].ip_offs,1'b0}==pg_ext.hdr.ip + {pg_ext.pr[1].ip_offs,1'b0})
+		if (pg_dec.hdr.ip + {pg_dec.pr[1].ip_offs,1'b0}==pg_mot.hdr.ip + {pg_mot.pr[1].ip_offs,1'b0})
 			predicted_correctly_o = TRUE;
 	end
 	else if (pr_dec[2].decbus.bsr|pr_dec[2].decbus.jsr) begin
 		predicted_correctly_o = FALSE;
 		new_address_o = pr_dec[2].decbus.bsr ? bsr2_tgt : jsr2_tgt;
-		if (pg_dec.hdr.ip + {pg_dec.pr[2].ip_offs,1'b0}==pg_ext.hdr.ip + {pg_ext.pr[2].ip_offs,1'b0})
+		if (pg_dec.hdr.ip + {pg_dec.pr[2].ip_offs,1'b0}==pg_mot.hdr.ip + {pg_mot.pr[2].ip_offs,1'b0})
 			predicted_correctly_o = TRUE;
 	end
 end
 
-/* under construction
-Stark_space_branches uspb1
-(
-	.rst(rst_i),
-	.clk(clk),
-	.en(en_i),
-	.get(get),
-	.ins_i(prd),
-	.ins_o(inso),
-	.stall(stall)
-);
-*/
 always_ff @(posedge clk)
 if (rst)
 	pg_dec <= {$bits(pipeline_group_reg_t){1'b0}};
@@ -788,14 +753,6 @@ else begin
 			pg_dec.pr[n10].op <= inso[n10];
 		end
 	end
-end
-
-always_ff @(posedge clk)
-if (rst)
-	flush_dec <= 1'b0;
-else begin
-	if (en)
-		flush_dec <= flush_ext;
 end
 
 endmodule

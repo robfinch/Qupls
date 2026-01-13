@@ -61,7 +61,6 @@ module Qupls4_rat(rst, clk,
 	rnv,			// reg number request valid
 	rng,			// instruction number within group
 	rn_cp, 		// checkpoint of requester
-	st_prn,
 	rd_cp,
 	prn, 			// the mapped physical register number
 	prv, 			// map valid indicator
@@ -134,7 +133,6 @@ input cpu_types_pkg::pregno_t [MWIDTH-1:0] cmtap;				// physical register to com
 input value_t [MWIDTH-1:0] cmtaval;
 input cmtbr;								// comitting a branch
 input cpu_types_pkg::aregno_t [NPORT-1:0] rn;		// architectural register
-input cpu_types_pkg::pregno_t st_prn;
 input [2:0] rng [0:NPORT-1];
 input [NPORT-1:0] rnv;
 input checkpt_ndx_t [NPORT-1:0] rn_cp;
@@ -426,7 +424,7 @@ wire [NPORT-1:0] cdrn;
 // Read register names from current checkpoint.
 // Bypass new register mappings if reg selected.
 generate begin : gRRN
-	for (g = 0; g < NPORT-1; g = g + 1) begin
+	for (g = 0; g < NPORT; g = g + 1) begin
 change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g]), .cd(cdrn[g]));
 
 		always_comb
@@ -948,18 +946,6 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 			end
 	end
 
-	always_ff @(posedge clk)
-		if (rst)
-			prnd[NPORT-1] <= 9'd0;
-		// If there is a pipeline bubble.
-		else begin
-			prnd[NPORT-1] <= prn[NPORT-1];
-		end
-
-	always_comb
-		next_prn[NPORT-1] = st_prn;
-	always_comb
-		prn[NPORT-1] <= st_prn;
 	always_comb//ff @(posedge clk)
 		case(MWIDTH)
 		1:

@@ -46,15 +46,15 @@ urrreq1
   .grant_enc(req_grant_enc)
 );
 
-always_comb
-	req_o = req_i[req_grant_enc];
-always_comb
+always_ff @(posedge clk_i)
+	req_o <= req_i[req_grant_enc];
+always_ff @(posedge clk_i)
 begin
 	// Endure all responses are set to something, otherwise a latch
 	// will be inferred.
 	for (n2 = 0; n2 < NPORT; n2 = n2 + 1)
-		resp_o[n2] = {$bits(wb_cmd_response256_t){1'b0}};
-	resp_o[req_grant_enc] = resp_i;
+		resp_o[n2] <= {$bits(wb_cmd_response256_t){1'b0}};
+	resp_o[req_grant_enc] <= resp_i;
 end
 	
 endmodule

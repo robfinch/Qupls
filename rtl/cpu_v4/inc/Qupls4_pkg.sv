@@ -1951,6 +1951,7 @@ typedef struct packed {
 	cpu_types_pkg::seqnum_t sn;							// sequence number, decrements when instructions que
 	cpu_types_pkg::rob_ndx_t this_ndx;
 	logic [4:0] pghn;					// pipeline group header index
+	logic [4:0] pghn_irq;			// pipeline group header index of interrupt (in case moved)
 	cpu_types_pkg::pc_stream_t ip_stream;		// stream associated with instruction
 	logic [4:0] ip_offs;			// offset in wydes from group IP (0, 3, 6 or 9)
 	logic flush;
@@ -1966,8 +1967,10 @@ typedef struct packed {
 	logic dispatchable;				// 1 if instruction can be dispatched
 
 	cpu_types_pkg::rob_ndx_t orid;						// ROB id of originating macro-instruction
+	logic cmt;								// 1=rROB entry was committed
 	logic lsq;								// 1=instruction has associated LSQ entry
 	lsq_ndx_t lsqndx;					// index to LSQ entry
+	cpu_types_pkg::value_t load_data;
 	logic [1:0] out;					// 1=instruction is being executed
 	logic [1:0] done;					// 2'b11=instruction is finished executing
 	logic rstp;								// indicate physical register reset required
@@ -2060,12 +2063,12 @@ typedef struct packed
 	cpu_types_pkg::checkpt_ndx_t cndx;	// checkpoint index
 	logic chkpt_freed;
 	logic has_branch;
-	logic done;
 	cpu_types_pkg::pc_address_t ip;			// Instruction pointer of group
 } pipeline_group_hdr_t;
 
 typedef struct packed
 {
+	logic flush;												// pipeline is being flushed
 	pipeline_group_hdr_t hdr;
 	rob_entry_t [MWIDTH-1:0] pr;
 } pipeline_group_reg_t;

@@ -37,10 +37,11 @@
 import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_branchmiss_pc(rse, pc_stack, bt, takb,
+module Qupls4_branchmiss_pc(clk, rse, pc_stack, bt, takb,
 	misspc, missgrp, dstpc, vector, kept_stream, new_stream, alloc_new_stream,
 	syscall_vector, kernel_vector);
 parameter ABITS=32;
+input clk;
 input Qupls4_pkg::reservation_station_entry_t rse;
 input pc_address_ex_t [Qupls4_pkg::ISTACK_DEPTH-1:0] pc_stack;
 input [63:0] vector;
@@ -70,7 +71,7 @@ reg [5:0] ino5;
 reg [63:0] disp;
 reg [ABITS-1:0] rg;
 
-always_comb
+always_ff @(posedge clk)
 begin
 //	disp = {{38{instr.ins.immHi[3]}},instr.ins.immHi,instr.ins.immLo};
 	misspc.pc = Qupls4_pkg::RSTPC;
