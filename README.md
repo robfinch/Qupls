@@ -5,7 +5,7 @@ Qupls is an implementation of the Qupls instruction set architecture. The ISA is
 The Qupls ISA supports SIMD and vector operations.
 
 ### Versions
-Qupls4 is the most recently worked on version. Qupls4 is the 2025 version of the Thor processor which has evolved over the years.
+Qupls4 is the most recently worked on version. Qupls4 is the 2026 version of the Thor processor which has evolved over the years.
 Different versions are completely incompatible with one another as the author has learned and gained more experience.
 
 ### History
@@ -31,7 +31,7 @@ This increases the size of the core considerably and turns Qupls into a 128-bit 
 * Standard suite of ALU operations, add, subtract, compare, multiply and divide.
 * Arithmetic right shift with round.
 * Bitfield operations.
-* Conditional relative branch instructions with 21-bit displacements
+* Conditional relative branch instructions with 20-bit displacements
 * Vector operations.
 * 4-way Out-of-order execution of instructions
 * 1024 entry, three way TLB for virtual memory support, shared between instruction and data
@@ -41,7 +41,8 @@ This increases the size of the core considerably and turns Qupls into a 128-bit 
 ## Out-of-Order Version
 ### Status
 Qupls4 is primarily begin designed with some code inherited from Qupls2 / Stark and other projects.
-The Qupls4 OoO machine is currently in development. A long way to go yet. Some synthesis runs have been performed to get a general idea of the size and timing. The goal is 40 MHz operation.
+The Qupls4 OoO machine is currently in development. A long way to go yet. Some synthesis runs have been performed to get a general idea of the size and timing.
+The goal is 100 MHz operation.
 Qupls4 will have 32 GPRs instead of 64.
 ### Historic Changes
 The most recent major change to the ISA was a switch back to fixed length instructions.
@@ -86,7 +87,7 @@ There are approximately 168 (32+128+8) architectural registers, giving about 3.0
 
 ### Instruction Length
 The author has found that in an FPGA the decode of variable length instruction length was on the critical timing path, limiting the maximum clock frequency and performance.
-Hence the move back to a fixed instruction length.
+Hence the move back to a fixed instruction length. However, the instruction set may be viewed as variable length once postfixes are considered.
 
 ### Instruction alignment
 Instructions are aligned on wyde (16-bit) boundaries. Conditional branch displacements are in terms of wydes.
@@ -99,7 +100,7 @@ Code is relocatable at any wyde boundary; however, within a subroutine or functi
 
 ### Pipeline
 Yikes!
-There are roughly nine stages in the pipeline, fetch, extract (parse), decode, rename, dispatch, queue, issue, execute and writeback. The first few stages (up to dispatch) are in-order stages.
+There are roughly ten stages in the pipeline, fetch, extract (parse), translate, decode, rename, dispatch, queue, issue, execute and writeback. The first few stages (up to rename) are in-order stages.
 #### Fetch / Extract Stages
 The first step for an instruction is instruction fetch.
 At instruction fetch two instruction cache lines are fetched to accomodate instructions spanning cache lines.
@@ -108,21 +109,24 @@ Instructions that were fetched from the cache are buffered, this helps to allow 
 Four instructions are extracted from the cache lines. The fetched instructions are right aligned as a block according to the instruction pointer value.
 A portion of the cache line following the instruction is also associated with the instruction so that constants may be decoded.
 If there is a hardware interrupt, it is flagged on the instruction where the interrupt occurred.
+#### Translate Stage
+At this stage ISA instructions are translated into groups of micro-ops. There is currently a maximum of 32 micro-ops for any instruction.
+Most instructions are a direct 1:1 translation but some instructions require more micro-ops.
+32 micro-ops should be enough to allow some FP iterative operations like NR-divide.
 #### Decode Stage
-After instruction fetch and extract the instructions are decoded. 
+After instruction fetch, extract and translate the instructions are decoded. 
 Constants are also decoded from constant postfxes following the instruction.
-ISA instructions are translated into micro-ops at this stage. Most instructions are a direct 1:1 translation but some instructions require more micro-ops.
 #### Rename Stage
 Target logical registers are assigned names from a name supplier component which can supply up to four names per clock cycle.
 Target name mappings are stored in the RAT.
-Decoded architectural registers are renamed to physical registers and register values are fetched.
+Decoded architectural registers are renamed to physical registers.
 The instruction (micro-op) decodes are placed in the reorder buffer / queued.
 #### Dispatch
 Instructions are dispatched to reservation stations by this stage.
 Not every combination of four instructions is supported within a single clock cycle.
 The dispatcher may dispatch up to six micro-op instructions per clock cycle.
-Currently dispatch may dispatch: 2 ALU, 1 int multiply or divide, 1 Memory, 1 branch, 1 float with any given cycle.
-Disatch is currently out-of-order. Out-of-order dispatch is huge.
+Currently dispatch may dispatch: 2 ALU, 1 int multiply or divide, 1 Memory, 1 branch, 2 float with any given cycle.
+Disatch is currently out-of-order. Out-of-order dispatch does not stall the pipeline.
 #### Queue Stage
 The queue stage is a place holder for the most recent instructions that have been queued in the reorder buffer.
 Instructions are queued from the rename stage. The queue state overlaps the contents of the ROB.
