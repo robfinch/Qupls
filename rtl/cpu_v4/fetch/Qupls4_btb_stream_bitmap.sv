@@ -50,7 +50,7 @@ input cpu_types_pkg::pc_stream_t act_stream;
 input alloc_stream;
 input [XSTREAMS*THREADS-1:0] free_stream;
 output cpu_types_pkg::pc_stream_t [THREADS-1:0] new_stream;
-output reg [XSTREAMS-1:0] dep_stream [0:XSTREAMS-1];
+output dep_stream_t [XSTREAMS-1:0] dep_stream;
 output reg [XSTREAMS*THREADS-1:0] strm_bitmap;
 output reg [XSTREAMS*THREADS-1:0] next_strm_bitmap;
 
@@ -90,15 +90,18 @@ always_ff @(posedge clk)
 	if (clk_en) begin
 		if (alloc_stream) begin
 			// The active stream has a new dependency.
-			dep_stream[act_stream.stream][ffz0] <= 1'b1;
+			dep_stream[act_stream.stream].deps[ffz0] <= 1'b1;
 			// new stream inherits all dependencies of the current one.
-			dep_stream[ffz0] <= dep_stream[act_stream.stream];
-			dep_stream[ffz0][ffz0] <= 1'b1;
+			dep_stream[ffz0].deps <= dep_stream[act_stream.stream].deps;
+			dep_stream[ffz0].deps[ffz0] <= 1'b1;
+			dep_stream[ffz0].parent <= act_stream.stream;
 		end
 		foreach (dep_stream[n3]) begin
 			for (n6 = 0; n6 < THREADS; n6 = n6 + 1)
-				if (free_stream[n3+XSTREAMS*n6])
-					dep_stream[n3] <= {XSTREAMS{1'b0}};
+				if (free_stream[n3+XSTREAMS*n6]) begin
+					dep_stream[n3].deps <= {XSTREAMS{1'b0}};
+					dep_stream[n3].parent <= 5'd0;
+				end
 		end
 	end
 end

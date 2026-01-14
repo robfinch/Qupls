@@ -38,10 +38,10 @@ set_property -dict {PACKAGE_PIN P27 IOSTANDARD LVCMOS33} [get_ports {sw[7]}]
 ## USB HIDs For Both Mouse and Keyboard
 set_property PACKAGE_PIN AD23 [get_ports ps2_clk_0]
 set_property IOSTANDARD LVCMOS33 [get_ports ps2_clk_0]
-set_property PULLUP true [get_ports ps2_clk_0]
+set_property PULLTYPE PULLUP [get_ports ps2_clk_0]
 set_property PACKAGE_PIN AE20 [get_ports ps2_data_0]
 set_property IOSTANDARD LVCMOS33 [get_ports ps2_data_0]
-set_property PULLUP true [get_ports ps2_data_0]
+set_property PULLTYPE PULLUP [get_ports ps2_data_0]
 
 ## UART
 set_property -dict {PACKAGE_PIN Y23 IOSTANDARD LVCMOS33} [get_ports uart_rx_out]
@@ -438,6 +438,7 @@ set_property -dict {PACKAGE_PIN AG17 IOSTANDARD LVCMOS18} [get_ports oled_vdd]
 #set_property -dict { PACKAGE_PIN AB14  IOSTANDARD LVCMOS18 } [get_ports { USB_OTG_RESETB }]; #IO_25_VRP_32 Sch=usb_otg_resetb
 #set_property -dict { PACKAGE_PIN AA17  IOSTANDARD LVCMOS18 } [get_ports { USB_OTG_STP }]; #IO_L23P_T3_32 Sch=usb_otg_stp
 #set_property -dict { PACKAGE_PIN AF16  IOSTANDARD LVCMOS18 } [get_ports { USB_OTG_VBUSOC }]; #IO_L6N_T0_VREF_32 Sch=usb_otg_vbusoc
+
 
 
 

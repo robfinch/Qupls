@@ -77,6 +77,7 @@ output reg rst_busy;									// not used
 
 integer n1,n2,n3;
 
+reg next_stall;
 cpu_types_pkg::pregno_t [NFTAGS-1:0] rtags2free;
 reg [3:0] fpop = 4'd0;
 reg stalla0 = 1'b0;
@@ -88,8 +89,10 @@ reg [Qupls4_pkg::PREGS-1:0] next_avail;
 reg [3:0] fpush;
 reg [3:0] ovr;
 
-always_comb stall = stalla0|stalla1|stalla2|stalla3;
+always_comb next_stall = stalla0|stalla1|stalla2|stalla3;
 always_comb rst_busy = 1'b0;
+always_ff @(posedge clk)
+	stall <= next_stall;
 
 always_comb
 if (Qupls4_pkg::PREGS != 1024 && Qupls4_pkg::PREGS != 512 && Qupls4_pkg::PREGS != 256 && Qupls4_pkg::PREGS != 128) begin
@@ -112,10 +115,10 @@ end
 
 // Do not do a pop if stalling on another slot.
 // Do a pop only if allocating
-always_comb fpop[0] = (ns_alloc_req[0] & en & ~stall) | (ns_alloc_req[0] & stalla0);
-always_comb fpop[1] = (ns_alloc_req[1] & en & ~stall) | (ns_alloc_req[1] & stalla1);
-always_comb fpop[2] = (ns_alloc_req[2] & en & ~stall) | (ns_alloc_req[2] & stalla2);
-always_comb fpop[3] = (ns_alloc_req[3] & en & ~stall) | (ns_alloc_req[3] & stalla3);
+always_comb fpop[0] = (ns_alloc_req[0] & en & ~next_stall) | (ns_alloc_req[0] & stalla0);
+always_comb fpop[1] = (ns_alloc_req[1] & en & ~next_stall) | (ns_alloc_req[1] & stalla1);
+always_comb fpop[2] = (ns_alloc_req[2] & en & ~next_stall) | (ns_alloc_req[2] & stalla2);
+always_comb fpop[3] = (ns_alloc_req[3] & en & ~next_stall) | (ns_alloc_req[3] & stalla3);
 
 reg [3:0] freevals1;
 reg [$clog2(Qupls4_pkg::PREGS)-3:0] freeCnt;
@@ -154,18 +157,18 @@ case(Qupls4_pkg::PREGS)
 		always_comb o[3] = ffo[3]==8'd255 ? {3'd7,ffo[7][6:0]}:{3'd3,ffo[3][6:0]};
 
 		checkpt_ndx_t last_cndx;
-		always_comb
+		always_ff @(posedge clk)
 		foreach (ns_dstreg[n1])
 		begin
-			last_cndx = ns_cndx[0];
-			ns_dstregv[n1] = INV;
-			ns_dstreg[n1] = 10'd0;
-			ns_rndx[n1] = 6'd0;
+			last_cndx <= ns_cndx[0];
+			ns_dstregv[n1] <= INV;
+			ns_dstreg[n1] <= 10'd0;
+			ns_rndx[n1] <= 6'd0;
 			if (ns_alloc_req[n1]) begin
 		//		if (last_cndx==ns_cndx[n1]) begin
-					ns_rndx[n1] = ns_whrndx[n1];
-					ns_dstreg[n1] = o[n1];
-					ns_dstregv[n1] = ov[n1];
+					ns_rndx[n1] <= ns_whrndx[n1];
+					ns_dstreg[n1] <= o[n1];
+					ns_dstregv[n1] <= ov[n1];
 		//		end
 			end
 		end
@@ -185,18 +188,18 @@ case(Qupls4_pkg::PREGS)
 		always_comb o[3] = {1'd1,ffo[3][7:0]};
 
 		checkpt_ndx_t last_cndx;
-		always_comb
+		always_ff @(posedge clk)
 		foreach (ns_dstreg[n1])
 		begin
-			last_cndx = ns_cndx[0];
-			ns_dstregv[n1] = INV;
-			ns_dstreg[n1] = 9'd0;
-			ns_rndx[n1] = 6'd0;
+			last_cndx <= ns_cndx[0];
+			ns_dstregv[n1] <= INV;
+			ns_dstreg[n1] <= 9'd0;
+			ns_rndx[n1] <= 6'd0;
 			if (ns_alloc_req[n1]) begin
 		//		if (last_cndx==ns_cndx[n1]) begin
-					ns_rndx[n1] = ns_whrndx[n1];
-					ns_dstreg[n1] = o[n1];
-					ns_dstregv[n1] = ov[n1];
+					ns_rndx[n1] <= ns_whrndx[n1];
+					ns_dstreg[n1] <= o[n1];
+					ns_dstregv[n1] <= ov[n1];
 		//		end
 			end
 		end
@@ -216,15 +219,15 @@ case(Qupls4_pkg::PREGS)
 		always_comb o[2] = {1'd1,ffo[2][6:0]};
 		always_comb o[3] = {1'd1,ffo[3][6:0]};
 
-		always_comb
+		always_ff @(posedge clk)
 		for (n1 = 0; n1 < 4; n1 = n1 + 1)
 		begin
-			ns_dstregv[n1] = INV;
-			ns_dstreg[n1] = 8'd0;
+			ns_dstregv[n1] <= INV;
+			ns_dstreg[n1] <= 8'd0;
 			if (ns_alloc_req[n1]) begin
-				ns_rndx[n1] = ns_whrndx[n1];
-				ns_dstreg[n1] = o[n1];
-				ns_dstregv[n1] = ov[n1];
+				ns_rndx[n1] <= ns_whrndx[n1];
+				ns_dstreg[n1] <= o[n1];
+				ns_dstregv[n1] <= ov[n1];
 			end
 		end
 
@@ -247,15 +250,15 @@ case(Qupls4_pkg::PREGS)
 		always_comb o[2] = ffo[2][6:0];
 		always_comb o[3] = ffo[3][6:0];
 
-		always_comb
+		always_ff @(posedge clk)
 		for (n1 = 0; n1 < 4; n1 = n1 + 1)
 		begin
-			ns_dstregv[n1] = INV;
-			ns_dstreg[n1] = 7'd0;
+			ns_dstregv[n1] <= INV;
+			ns_dstreg[n1] <= 7'd0;
 			if (ns_alloc_req[n1]) begin
-				ns_rndx[n1] = ns_whrndx[n1];
-				ns_dstreg[n1] = o[n1];
-				ns_dstregv[n1] = ov[n1];
+				ns_rndx[n1] <= ns_whrndx[n1];
+				ns_dstreg[n1] <= o[n1];
+				ns_dstregv[n1] <= ov[n1];
 			end
 		end
 	end

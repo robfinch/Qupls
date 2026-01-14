@@ -73,7 +73,7 @@ input pc_address_ex_t pc_ext;
 input pc_address_ex_t pc_mot;
 input pc_address_ex_t pc_dec;
 input pc_address_ex_t pc_ren;
-input [XSTREAMS-1:0] dep_stream [0:XSTREAMS-1];
+input dep_stream_t [XSTREAMS-1:0] dep_stream;
 output reg stomp_fet;
 output reg stomp_ext;			// IRQ / micro-code Mux stage
 output reg stomp_mot;
@@ -125,7 +125,7 @@ integer n5;
 reg [XSTREAMS-1:0] list;
 always_ff @(posedge clk)
 	// Compute dependencies to stomp.
-	stomped <= fnComputeBranchDependencies(kept_stream);
+	stomped <= fnComputeBranchDependencies(kept_stream.stream);
 
 always_ff @(posedge clk2x)
 if (rst) begin
@@ -377,9 +377,10 @@ end
 
 function [XSTREAMS-1:0] fnComputeBranchDependencies;
 input [4:0] ks;
-integer nn, jj, kk, kj;
-reg [XSTREAMS-1:0] list [0:BRANCH_LEVELS];
+//integer nn, jj, kk, kj;
+//reg [XSTREAMS-1:0] list [0:BRANCH_LEVELS];
 begin
+/*	
     kj = ks;
     for (jj = 0; jj < BRANCH_LEVELS; jj = jj + 1)
         list[jj] = 0;
@@ -394,7 +395,8 @@ begin
 		    		list[jj+1][kk] = list[jj][kk] | list[jj+1][kk] | dep_stream[kj][kk];
 	    end
   	end
-  	fnComputeBranchDependencies = list[jj];
+*/
+  	fnComputeBranchDependencies = |ks ? dep_stream[ks].deps & ~(32'd1 << ks) : 32'd0;
 end
 endfunction
 

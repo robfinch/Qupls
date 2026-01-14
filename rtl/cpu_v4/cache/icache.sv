@@ -51,8 +51,8 @@ import cache_pkg::*;
 
 module icache(rst,clk,ce,invce,snoop_adr,snoop_v,snoop_tid,invall,invline,
 	nop,nop_o,
-	ip,ip_o,ihit_o,ihit,ic_line_hi_o,ic_line_lo_o,ic_valid,
-	miss_vadr,
+	ip,ip_asid,ip_o,ihit_o,ihit,ic_line_hi_o,ic_line_lo_o,ic_valid,
+	miss_vadr,miss_asid,
 	ic_line_i,wway,wr_ic,
 	dp, dhit_o, dc_line_o, dc_valid, port, port_i
 	);
@@ -78,6 +78,7 @@ input wishbone_pkg::wb_tranid_t snoop_tid;
 input invall;
 input invline;
 input cpu_types_pkg::pc_address_ex_t ip;
+input cpu_types_pkg::asid_t ip_asid;
 output cpu_types_pkg::pc_address_ex_t ip_o;
 output reg ihit_o;
 output reg ihit;
@@ -85,6 +86,7 @@ output ICacheLine ic_line_hi_o;
 output ICacheLine ic_line_lo_o;
 output reg ic_valid;
 output cpu_types_pkg::code_address_t miss_vadr;
+output cpu_types_pkg::asid_t miss_asid;
 input ICacheLine ic_line_i;
 input [LOG_WAYS:0] wway;
 input wr_ic;
@@ -628,7 +630,8 @@ end
 
 // Set miss address
 
-always_comb
+always_ff @(posedge clk)
+if (ce) begin
 	if (!ihit1e)
 		miss_vadr = {ip.pc[$bits(cpu_types_pkg::address_t)-1:LOBIT]+ip.pc[LOBIT-1],1'b0,{LOBIT-1{1'b0}}};
 	else if (!ihit1o)
@@ -637,8 +640,13 @@ always_comb
 //		miss_vadr = {dp[$bits(cpu_types_pkg::address_t)-1:LOBIT-1],{LOBIT-1{1'b0}}};
 	else
 		miss_vadr = 32'hFFFD0000;
+end
 
-always_comb
+always_ff @(posedge clk)
+	if (ce) miss_asid <= ip_asid;
+
+always_ff @(posedge clk)
+if (ce) begin
 	if (!ihit1e)
 		port = 1'b0;
 	else if (!ihit1o)
@@ -647,5 +655,6 @@ always_comb
 //		port = 1'b1;
 	else
 		port = 1'b0;
+end
 
 endmodule

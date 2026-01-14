@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2024-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2024-2026  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -49,6 +49,7 @@ reg [3:0] enqueue_room;
 always_comb
 begin
 	enqueue_room = 4'd0;
+	/*
 	if (rob[tails[0]].v==INV && !rob[tails[0]].op.hwi &&
 	 		rob[tails[1]].v==INV && !rob[tails[1]].op.hwi &&
 	 		rob[tails[2]].v==INV && !rob[tails[2]].op.hwi &&
@@ -79,6 +80,20 @@ begin
 		rob[tails[2]].v==INV && !rob[tails[2]].op.hwi &&
 		rob[tails[3]].v==INV && !rob[tails[3]].op.hwi)
 		enqueue_room = 4'd3;
+	*/
+	if (
+			rob[tails[0]].v==INV && !rob[tails[0]].op.hwi &&
+			rob[tails[1]].v==INV && !rob[tails[1]].op.hwi &&
+			rob[tails[2]].v==INV && !rob[tails[2]].op.hwi &&
+			rob[tails[3]].v==INV && !rob[tails[3]].op.hwi
+		) begin
+		if (!(tails[0]==head0
+			|| tails[1]==head0
+			|| tails[2]==head0
+			|| tails[3]==head0
+			))
+			enqueue_room = 4'd4;
+	end
 	if (
 			rob[tails[0]].v==INV && !rob[tails[0]].op.hwi &&
 			rob[tails[1]].v==INV && !rob[tails[1]].op.hwi &&
@@ -100,6 +115,7 @@ begin
 			))
 			enqueue_room = 4'd8;
 	end
+	/*
 	if (
 			rob[tails[0]].v==INV && !rob[tails[0]].op.hwi &&
 			rob[tails[1]].v==INV && !rob[tails[1]].op.hwi &&
@@ -175,6 +191,7 @@ begin
 			))
 			enqueue_room = 4'd11;
 	end
+	*/
 	if (
 			rob[tails[0]].v==INV && !rob[tails[0]].op.hwi &&
 			rob[tails[1]].v==INV && !rob[tails[1]].op.hwi &&

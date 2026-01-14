@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2023-2026  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -170,7 +170,7 @@ end
 
 	
 generate begin : gffz
-	for (g = WID-1; g >= 0; g = g - 1)
+//	for (g = WID-1; g >= 0; g = g - 1)
   case(WID)
   16:	
   	begin

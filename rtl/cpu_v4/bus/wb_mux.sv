@@ -13,6 +13,8 @@ integer n1,n2;
 reg [NPORT-1:0] req_cyc;
 wire [NPORT-1:0] req_grant;
 wire [$clog2(NPORT):0] req_grant_enc;
+reg [NPORT-1:0] req_grant1;
+reg [$clog2(NPORT):0] req_grant_enc1;
 reg hold, lock;
 reg [NPORT-1:0] holdn;
 reg [NPORT-1:0] lockn;
@@ -26,11 +28,11 @@ always_comb
 	end
 
 always_comb
-	holdn = req_cyc & req_grant;
+	holdn = req_cyc & req_grant1;
 always_comb
 	hold = |holdn;
 always_comb
-	lock = lockn[req_grant_enc];
+	lock = lockn[req_grant_enc1];
 
 RoundRobinArbiter #(
   .NumRequests(NPORT)
@@ -45,6 +47,10 @@ urrreq1
   .grant(req_grant),
   .grant_enc(req_grant_enc)
 );
+always_ff @(posedge clk_i)
+	req_grant1 <= req_grant;
+always_ff @(posedge clk_i)
+	req_grant_enc1 <= req_grant_enc;
 
 always_ff @(posedge clk_i)
 	req_o <= req_i[req_grant_enc];

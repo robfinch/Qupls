@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2023-2026  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -32,7 +32,7 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 450 LUTs / 1200 FFs
+// 1150 LUTs / 2100 FFs / 340 MHz
 // ============================================================================
 
 import Qupls4_pkg::*;
@@ -77,25 +77,28 @@ reg [4:0] rd_ptr;
 frq_entry_t [DEP-1:0] mem;
 rob_ndx_t rndx;
 wire data_valid;
+reg wr_en;
+reg rd_en;
 wire rd_rst_busy;
 wire wr_rst_busy;
 wire wr_clk = clk_i;
 wire rst = rst_i;
 value_t argT_o;					// dummy placeholder
-frq_entry_t din = {
-	we_i,
-	rse_i.nRd,
-	rse_i.aRd,
-	tag_i,
-	rse_i.arg[NOPER-1],
-	res_i,
-	rse_i.rndx,
-	rse_i.cndx
-};
-frq_entry_t dout;
+frq_entry_t din;
 
-reg wr_en1, wr_en;
-reg rd_en;
+always_ff @(posedge clk_i)
+	din <= {
+		we_i,
+		rse_i.nRd,
+		rse_i.aRd,
+		tag_i,
+		rse_i.arg[NOPER-1],
+		res_i,
+		rse_i.rndx,
+		rse_i.cndx
+	};
+
+frq_entry_t dout;
 
 always_comb
 	empty = cnt == 5'd0;
@@ -106,23 +109,25 @@ always_comb
 	{we_o,pRt_o,aRt_o,tag_o,argT_o,res_o,rndx,cp_o} = dout;
 always_comb
 	rd_en = rd_i & ~rst;
-always_comb
-	wr_en1 = |we_i;
-always_comb
-	wr_en = wr_en1 & ~rst && cnt < DEP - 2;
+always_ff @(posedge clk_i)
+	wr_en <= |we_i & ~rst && cnt < DEP - 2;
+
+always_ff @(posedge clk_i)
+begin
+	if (wr_en)
+		mem[wr_ptr] <= din;
+	for (n1 = 0; n1 < DEP; n1 = n1 + 1) begin
+		if (stomp_i[mem[n1].rndx])
+			mem[n1].res <= mem[n1].argT;
+	end
+end
 
 always_ff @(posedge clk_i)
 begin
 	if (rst_i)
 		wr_ptr <= 5'd0;
-	else if (wr_en) begin
-		mem[wr_ptr] <= din;
+	else if (wr_en)
 		wr_ptr <= wr_ptr + 5'd1;
-	end
-	for (n1 = 0; n1 < DEP; n1 = n1 + 1) begin
-		if (stomp_i[mem[n1].rndx])
-			mem[n1].res <= mem[n1].argT;
-	end
 end
 
 always_ff @(posedge clk_i)
@@ -139,8 +144,8 @@ end
 
 always_comb
 	if (rd_ptr > wr_ptr)
-		cnt <= wr_ptr + (DEP - rd_ptr);
+		cnt = wr_ptr + (DEP - rd_ptr);
 	else
-		cnt <= wr_ptr - rd_ptr;
+		cnt = wr_ptr - rd_ptr;
 			
 endmodule

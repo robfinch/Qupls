@@ -1,7 +1,7 @@
 `timescale 1ns / 10ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2023-2026  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -65,7 +65,7 @@ parameter WXGA1366x768 = 1'b0;
 parameter HAS_CPU = 1'b1;
 parameter HAS_FRAME_BUFFER = 1'b0;
 parameter HAS_TEXTCTRL = 1'b1;
-parameter HAS_PRNG = 1'b0;
+parameter HAS_PRNG = 1'b1;
 parameter HAS_UART = 1'b1;
 parameter HAS_PS2KBD = 1'b1;
 parameter HAS_TEST_VIDEO = 1'b0;
@@ -169,7 +169,7 @@ wire clk10, clk20, clk17a, clk40, clk67, clk100, clk200;
 wire clk214,clk53,clk43,clk33,clk21,clk17,clk84;
 wire clk25, clk50, clk75, clk125;
 wire dot_clk = clk40;
-wire node_clk = clk40;
+wire node_clk = clk100;
 wire node_clk5x = clk100;
 wire fbm_clk = clk100;
 wire tc_clk = node_clk;
@@ -183,6 +183,7 @@ wb_cmd_request256_t ch7_areq;	// DRAM request
 wb_cmd_response256_t ch7resp;
 wb_cmd_response256_t ch7_aresp;
 wb_cmd_request256_t fb_req;
+wb_cmd_response256_t fb_resp;
 //fta_cmd_response256_t fb_resp, fb_resp1;
 //fta_cmd_request256_t fba_req;
 //fta_cmd_response256_t fba_resp;
@@ -238,6 +239,7 @@ wire [31:0] br3_dato;
 wire [3:0] br3_cido;
 wire [7:0] br3_tido;
 wire br3_cack;
+wb_cmd_request256_t br4_req;
 wb_cmd_response256_t br4_resp;
 wb_cmd_request32_t br4_mreq;
 
@@ -265,7 +267,7 @@ wire scr_ack;
 wire scr_next;
 wire [255:0] scr_dato;
 wire [31:0] scr_adro;
-fta_tranid_t scr_tido;
+wb_tranid_t scr_tido;
 wire [3:0] scr_cido;
 wire acia_ack;
 wire [31:0] acia_dato;
@@ -318,6 +320,7 @@ wb_bus_interface #(.DATA_WIDTH(64)) fta64_if();
 wb_bus_interface #(.DATA_WIDTH(32)) fta32_if();
 wb_bus_interface #(.DATA_WIDTH(32)) kbd_if();
 wb_bus_interface #(.DATA_WIDTH(32)) prng_if();
+wb_bus_interface #(.DATA_WIDTH(32)) uart_if();
 wb_bus_interface #(.DATA_WIDTH(64)) fbs_if();
 wb_bus_interface #(.DATA_WIDTH(64)) tc_if();
 wb_bus_interface #(.DATA_WIDTH(256)) ch1_if();
@@ -616,7 +619,7 @@ assign fb_vsync = 1'b0;
 assign fb_blank = 1'b0;
 assign fb_border = 1'b0;
 assign fb_rgb = 32'd0;
-assign fb_cresp = {$bits(fta_cmd_response64_t){1'b0}};
+assign fb_cresp = {$bits(wb_cmd_response64_t){1'b0}};
 assign memreq = 1'b0;
 end
 end
@@ -626,7 +629,7 @@ endgenerate
 
 generate begin : gTestVideo
 	if (HAS_TEST_VIDEO) begin
-		VideoTPG_fta256 uvtpg1
+		VideoTPG_wb256 uvtpg1
 		(
 			.rst(rst),
 			.clk(dot_clk),
@@ -653,7 +656,7 @@ fta_asynch2sync256 usas1
 	.resp_i(fba_resp)
 );
 */
-
+/*
 always_ff @(posedge fbm_clk)
 begin
 	fbt_mreq.blen = 6'd0;
@@ -668,7 +671,7 @@ begin
 		fbt_mreq.dat = fb_resp.dat[63:0];
 	end
 end
-
+*/
 assign tc_if.rst = rst;
 assign tc_if.clk = tc_clk;
 assign tc_if.req = br3_mreq;
@@ -703,13 +706,6 @@ endgenerate
 //assign fb_cresp = 'd0;
 //assign tc_cresp = 'd0;
 
-always_comb
-begin
-	br1_req = ch7req;
-	br1_req.cyc = ch7req.cyc & io_gate_en;
-	br1_req.we = ch7req.we & io_gate_en;
-end
-
 wb_cmd_response64_t [1:0] br1_chresp;
 always_comb br1_chresp[0] = tc_if.resp;
 always_comb br1_chresp[1] = fb_cresp;
@@ -724,8 +720,8 @@ wb_IOBridge256to64 #(.CHANNELS(2)) ubridge1
 	.chresp(br1_chresp)
 );
 
-fta_cmd_response32_t [3:0] br4_chresp;
-assign br4_chresp[3] = {$bits(fta_cmd_response32_t){1'b0}};//tc_cresp;
+wb_cmd_response32_t [3:0] br4_chresp;
+assign br4_chresp[3] = {$bits(wb_cmd_response32_t){1'b0}};//tc_cresp;
 wire ps2_clk_en, ps2_data_en;
 
 generate begin : gPS2Kbd
@@ -754,8 +750,8 @@ end
 else begin
 assign kbd_if.rst = 1'b0;
 assign kbd_if.clk = 1'b0;
-assign kbd_if.req = {$bits(fta_cmd_request32_t){1'b0}};
-assign br4_chresp[0] = {$bits(fta_cmd_response32_t){1'b0}};
+assign kbd_if.req = {$bits(wb_cmd_request32_t){1'b0}};
+assign br4_chresp[0] = {$bits(wb_cmd_response32_t){1'b0}};
 assign ps2_clk_0 = 1'bz;
 assign ps2_data_0 = 1'bz;
 end
@@ -768,7 +764,7 @@ if (HAS_PRNG) begin
 	assign prng_if.clk = node_clk;
 	assign prng_if.req = br4_mreq;
 	assign br4_chresp[1] = prng_if.resp;
-	random_fta32 urnd2
+	random_wb32 urnd2
 	(
 		.cs_config_i(br4_mreq.adr[31:28]==4'hD),
 		.s_bus_i(prng_if)
@@ -777,36 +773,41 @@ end
 else begin
 	assign prng_if.rst = 1'b0;
 	assign prng_if.clk = 1'b0;
-	assign prng_if.req = {$bits(fta_cmd_request32_t){1'b0}};
-	assign br4_chresp[1] = {$bits(fta_cmd_response32_t){1'b0}};
+	assign prng_if.req = {$bits(wb_cmd_request32_t){1'b0}};
+	assign br4_chresp[1] = {$bits(wb_cmd_response32_t){1'b0}};
 end
 end
 endgenerate
 
 generate begin : gUart
-if (HAS_UART)
-uart6551_wb32 #(.pClkFreq(25), .pClkDiv(24'd217)) uuart
-(
-	.rst_i(rst),
-	.clk_i(node_clk),
-	.cs_config_i(br4_mreq.adr[31:28]==4'hD),
-	.req(br4_mreq),
-	.resp(br4_chresp[2]),
-	.cts_ni(1'b0),
-	.rts_no(),
-	.dsr_ni(1'b0),
-	.dcd_ni(1'b0),
-	.dtr_no(),
-	.ri_ni(1'b1),
-	.rxd_i(uart_tx_in),
-	.txd_o(uart_rx_out),
-	.data_present(),
-	.rxDRQ_o(),
-	.txDRQ_o(),
-	.xclk_i(clk20),
-	.RxC_i(clk20)
-);
+if (HAS_UART) begin
+	assign uart_if.rst = rst;
+	assign uart_if.clk = node_clk;
+	assign uart_if.req = br4_mreq;
+	assign br4_chresp[2] = uart_if.resp;
+	uart6551_wb32 #(.pClkFreq(25), .pClkDiv(24'd217)) uuart
+	(
+		.cs_config_i(br4_mreq.adr[31:28]==4'hD),
+		.s_bus_i(uart_if),
+		.cts_ni(1'b0),
+		.rts_no(),
+		.dsr_ni(1'b0),
+		.dcd_ni(1'b0),
+		.dtr_no(),
+		.ri_ni(1'b1),
+		.rxd_i(uart_tx_in),
+		.txd_o(uart_rx_out),
+		.data_present(),
+		.rxDRQ_o(),
+		.txDRQ_o(),
+		.xclk_i(clk20),
+		.RxC_i(clk20)
+	);
+end
 else begin
+	assign uart_if.rst = 1'b0;
+	assign uart_if.clk = 1'b0;
+	assign br4_chresp[2] = {$bits(wb_cmd_response32_t){1'b0}};
 	assign uart_rx_out = 1'b0;
 end
 end
@@ -845,19 +846,6 @@ assign rtc_clk = 1'bz;
 assign rtc_data = 1'bz;
 
 /*
-always_comb
-begin
-	br3_req = ch7req;
-	br3_req.cyc = ch7req.cyc & io_gate_en;
-	br3_req.stb = ch7req.stb & io_gate_en;
-	br3_req.we = ch7req.we & io_gate_en;
-end
-*/
-always_comb
-begin
-	br3_req = cpu_req;
-end
-/*
 mem_gate #(
 	.SIZE(64),
 	.FUNC(2),
@@ -894,20 +882,20 @@ wb_IOBridge256to32 #(.CHANNELS(4)) ubridge4
 (
 	.rst_i(rst),
 	.clk_i(node_clk),
-	.s1_req(br3_req),
+	.s1_req(br4_req),
 	.s1_resp(br4_resp),
 	.m_req(br4_mreq),
 	.chresp(br4_chresp)
 );
 
-wb_cmd_request256_t [4:0] t1mreq;
+wb_cmd_request256_t t1mreq;
 wb_cmd_response256_t [4:0] t1mresp;
 
-assign br1_req = t1mreq[0];
-assign br3_req = t1mreq[1];
-assign br4_req = t1mreq[2];
-assign scr_if.req = t1mreq[3];
-assign ch7_if.req = t1mreq[4];
+assign br1_req = t1mreq;
+assign br3_req = t1mreq;
+assign br4_req = t1mreq;
+assign scr_if.req = t1mreq;
+assign ch7_if.req = t1mreq;
 assign t1mresp[0] = br1_resp;
 assign t1mresp[1] = br3_resp;
 assign t1mresp[2] = br4_resp;
@@ -1066,7 +1054,6 @@ MemoryRandomizer umr1
 
 assign ch7_if.rst = rst;
 assign ch7_if.clk = node_clk;
-assign ch7_if.req = ch7_areq;
 assign ch7_aresp = ch7_if.resp;
 assign ch1_if.rst = rst;
 assign ch2_if.rst = 1'b0;
@@ -1081,12 +1068,11 @@ assign ch4_if.clk = 1'b0;
 assign ch5_if.clk = 1'b0;
 assign ch6_if.clk = 1'b0;
 //assign ch1_if.req = {$bits(fta_cmd_request256_t){1'b0}};
-assign ch2_if.req = {$bits(fta_cmd_request256_t){1'b0}};
-assign ch3_if.req = {$bits(fta_cmd_request256_t){1'b0}};
-assign ch4_if.req = {$bits(fta_cmd_request256_t){1'b0}};
-assign ch5_if.req = {$bits(fta_cmd_request256_t){1'b0}};
-assign ch6_if.req = {$bits(fta_cmd_request256_t){1'b0}};
-assign ch7_if.req = {$bits(fta_cmd_request256_t){1'b0}};
+assign ch2_if.req = {$bits(wb_cmd_request256_t){1'b0}};
+assign ch3_if.req = {$bits(wb_cmd_request256_t){1'b0}};
+assign ch4_if.req = {$bits(wb_cmd_request256_t){1'b0}};
+assign ch5_if.req = {$bits(wb_cmd_request256_t){1'b0}};
+assign ch6_if.req = {$bits(wb_cmd_request256_t){1'b0}};
 
 generate begin : gMPMC
 	if (HAS_DRAM) begin
@@ -1139,6 +1125,7 @@ generate begin : gMPMC
 end
 endgenerate
 
+/*
 fta_asynch2sync256 usas7
 (
 	.rst(rst),
@@ -1152,6 +1139,7 @@ fta_asynch2sync256 usas7
 fta_cmd_response256_t [1:0] resps;
 fta_cmd_response256_t [3:0] resps1;
 fta_cmd_response256_t [1:0] resps2;
+*/
 
 /*
 binary_semamem_pci32 usema1
@@ -1194,8 +1182,7 @@ assign null_if.rst = 1'b0;
 assign null_if.req = {$bits(wb_cmd_request256_t){1'b0}};
 assign scr_if.rst = rst;
 assign scr_if.clk = node_clk;
-assign scr_if.req = cpu_req;
-assign resps2[0] = scr_if.resp;
+//assign resps2[0] = scr_if.resp;
 
 scratchmem256_wb
 #(
@@ -1414,7 +1401,7 @@ config_timout_ctr ucfgtoctr1
 	.cs(cs_config),
 	.o(config_to)
 );
-
+/*
 fta_respbuf256 #(.CHANNELS(4)) urspbuf1
 (
 	.rst(rst),
@@ -1438,40 +1425,7 @@ fta_respbuf256 #(.CHANNELS(2)) urspbuf3
 	.resp_i(resps),
 	.resp_o(cpu_resp)
 );
-
-wb_cmd_response256_t [1:0] fan256_resp;
-wb_cmd_response64_t [1:0] fan64_resp;
-wb_cmd_response32_t [1:0] fan32_resp;
-wb_cmd_request64_t [1:0] fan64_req;
-wb_cmd_request32_t [1:0] fan32_req;
-
-wb_slave_fanout ufo1
-(
-	.rst_i(rst),
-	.clk_i(node_clk),
-	.wb_req(cpu_req),
-	.wb_resp(cpu_resp),
-	.fan32_req(cpu_req),
-	.fan32_resp(fan32_resp),
-	.fan64_req(fan64_req),
-	.fan64_resp(fan64_resp),
-	.fan256_req(fan256_req),
-	.fan256_resp(fan256_resp)
-);
-
-assign fan256_resp[0] = ch7resp;
-assign fan256_resp[1] = br1_resp;
-assign fan64_resp[0] = br3_resp;
-assign fan32_resp[0] = br4_resp;
-assign fan32_resp[1].tid = fan32_req[1].tid;
-assign fan32_resp[1].ack = sema_ack;
-assign fan32_resp[1].next = 1'b0;
-assign fan32_resp[1].dat = {4{sema_dato}};
-assign ch7req = cpu_req;
-assign br1_mreq = fan64_req[1];
-assign br3_mreq = fan64_req[0];
-assign br4_mreq = fan32_req[0];
-
+*/
 //assign resps1[0] = wb_cmd_response256_t'(ch7resp);
 //assign resps1[1] = br1_resp;
 //assign resps1[2] = br3_resp;
@@ -1545,7 +1499,7 @@ Qupls4_mpu umpu1
 (
 	.rst_i(qp_reset),
 	.clk_i(node_clk),
-	.clk2x_i(clk40),
+	.clk2x_i(clk200),
 	.clk3x_i(clk53),
 	.clk5x_i(node_clk5x),
 	.ftam_req(cpu_req),
@@ -1576,13 +1530,13 @@ assign cpu_cyc = cpu_req.cyc;
 assign cpu_we = cpu_req.we;
 assign sel = cpu_req.sel;
 assign cpu_adr = cpu_req.adr;
-assign cpu_dato = cpu_req.data1;
+assign cpu_dato = cpu_req.dat;
 
 
 // -----------------------------------------------------------------------------
 // Debug
 // -----------------------------------------------------------------------------
-
+/*
 ila_0 uila1 (
 	.clk(mem_ui_clk), // input wire clk
 
@@ -1609,7 +1563,7 @@ ila_0 uila1 (
 	.probe19(umpmc1.app_rd_data_valid),
 	.probe20(umpmc1.state)
 );
-
+*/
 /*
 ila_0 uila1 (
 	.clk(clk100), // input wire clk

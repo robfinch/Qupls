@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023-2026  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2025-2026  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -32,87 +32,77 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// Note this is the only place register codes are bypassed for r0 and r31 to
-// allow the use of zero and the instruction pointer.
-//
-// 105 LUTs / 2300 FFs / 
+// 260 LUTs / 80 FFs / 270 MHz
 // ============================================================================
 
 import const_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_agen(rst, clk, rse_i, rse_o, out,
-	tlb_v, page_fault, page_fault_v,
-	load_store, vlsndx, amo, laneno,
-	res, resv);
+module Qupls4_frq_select(rst, clk, frq_empty, upd, upd_bitmap);
+parameter NFRQ=16;
+parameter NWRITE_PORTS=4;
 input rst;
 input clk;
-input Qupls4_pkg::reservation_station_entry_t rse_i;
-output Qupls4_pkg::reservation_station_entry_t rse_o;
-input out;
-input tlb_v;
-input page_fault;
-input page_fault_v;
-input load_store;
-input vlsndx;
-input amo;
-input [7:0] laneno;
-output cpu_types_pkg::address_t res;
-output reg resv;
+input [NFRQ-1:0] frq_empty;
+output reg [4:0] upd [0:NWRITE_PORTS-1];
+output reg [NFRQ-1:0] upd_bitmap;
 
-cpu_types_pkg::address_t as, bs;
-cpu_types_pkg::address_t res1;
-Qupls4_pkg::reservation_station_entry_t rse1;
+genvar g;
+integer j,k;
+wire [4:0] upda [0:NWRITE_PORTS-1];
+reg [4:0] fuq_rot,fuq_rot1,fuq_rot2;
+reg [23:0] excl [0:NWRITE_PORTS-1];		// exclustion list
 
-always_ff @(posedge clk) 
-begin
-	rse1 <= rse_i;
-	if (page_fault && !rse_i.excv) begin
-		rse1.exc <= Qupls4_pkg::FLT_PAGE;
-		rse1.excv <= page_fault_v;
+// Look for queues containing values, and select from a queue using a rotating selector.
+reg [NFRQ-1:0] fuq_empty;
+reg [NFRQ*2-1:0] fuq_empty_rot1;
+reg [NFRQ-1:0] fuq_empty_rot;
+always_ff @(posedge clk)
+	fuq_empty_rot1 = ({frq_empty,frq_empty} << fuq_rot);
+always_ff @(posedge clk)
+	fuq_empty_rot = fuq_empty_rot1[NFRQ-1:0] | fuq_empty_rot1[NFRQ*2-1:NFRQ];
+
+generate begin : gFFOs
+	for (g = 0; g < $size(upda); g = g + 1) begin
+	  always_comb
+			if (g==0)
+				excl[g] = 24'd0;
+			else
+	    	excl[g] = (24'd1 << upda[g-1]) | excl[g-1];
+		ffo24 uffov1 (.i({11'h0,~fuq_empty_rot} & ~excl[g]), .o(upda[g]));
 	end
 end
-always_ff @(posedge clk) 
-	rse_o <= rse1;
+endgenerate
 
+// mod NFRQ counter - rotate the queue selection
 always_ff @(posedge clk)
-	as = rse_i.Rs1z ? value_zero : rse_i.Rs1ip ? rse_i.pc : rse_i.arg[0].val;
-
-always_ff @(posedge clk)
-	bs = rse_i.Rs2z ? value_zero : (rse_i.arg[1].val * ({rse_i.uop.sc==3'd0,rse_i.uop.sc}));
-
-always_comb
-begin
-	if (vlsndx)
-		res1 = as + bs * laneno + rse_i.argI;
-	else if (amo)
-		res1 = as;				// just [Rs1]
-	else if (load_store)
-		res1 = as + bs + rse_i.argI;
-	else
-		res1 = 64'd0;
-end
-
-always_ff @(posedge clk)
-	res <= res1;
-
-// Make Agen valid sticky
-// The agen takes a clock cycle to compute after the out signal is valid.
-reg resv1;
-always_ff @(posedge clk) 
-if (rst) begin
-	resv <= INV;
-	resv1 <= INV;
-end
+if (rst)
+	fuq_rot <= 5'd0;
 else begin
-	if (out)
-		resv1 <= VAL;
-	resv <= resv1;
-	if (tlb_v) begin
-		resv1 <= INV;
-		resv <= INV;
+	fuq_rot <= fuq_rot + 2'd1;
+	if (fuq_rot >= NFRQ-1)
+		fuq_rot <= 5'd0;
+end
+always_ff @(posedge clk)
+	fuq_rot1 <= fuq_rot;
+always_ff @(posedge clk)
+	fuq_rot2 <= fuq_rot1;
+
+// If upda did not find anything to update, then neither will any of the subsequest ones.
+generate begin : gUpd
+	for (g = 0; g < $size(upd); g = g + 1) begin
+		always_ff @(posedge clk)
+			upd[g] <= upda[g]==5'd31 ? 5'd31 : fuq_rot2 > upda[g] ? NFRQ + upda[g] - fuq_rot2 : upda[g] - fuq_rot2;
 	end
 end
+endgenerate
 
+always_ff @(posedge clk) begin
+	foreach (upda[j])
+		foreach (upd_bitmap[k])
+			upd_bitmap[k] <= 1'b0;
+			if (k==upda[j] && upda[j]!=5'd31)
+				upd_bitmap[k] <= 1'b1;
+end
 
 endmodule

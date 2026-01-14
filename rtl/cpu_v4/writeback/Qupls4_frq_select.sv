@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2025-2026  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -32,13 +32,14 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
+// 260 LUTs / 80 FFs / 270 MHz
 // ============================================================================
 
 import const_pkg::*;
 import Qupls4_pkg::*;
 
 module Qupls4_frq_select(rst, clk, frq_empty, upd, upd_bitmap);
-parameter NFRQ=13;
+parameter NFRQ=16;
 parameter NWRITE_PORTS=4;
 input rst;
 input clk;
@@ -48,27 +49,29 @@ output reg [NFRQ-1:0] upd_bitmap;
 
 genvar g;
 integer j,k;
-wire [4:0] upda [0:NWRITE_PORTS-1];
-reg [4:0] fuq_rot;
+wire [4:0] updF [0:NWRITE_PORTS/2-1];
+wire [4:0] updL [0:NWRITE_PORTS/2-1];
+reg [4:0] fuq_rot,fuq_rot1,fuq_rot2;
 reg [23:0] excl [0:NWRITE_PORTS-1];		// exclustion list
 
 // Look for queues containing values, and select from a queue using a rotating selector.
 reg [NFRQ-1:0] fuq_empty;
 reg [NFRQ*2-1:0] fuq_empty_rot1;
 reg [NFRQ-1:0] fuq_empty_rot;
-always_comb
-	fuq_empty_rot1 = ({frq_empty,frq_empty} << fuq_rot);
-always_comb
-	fuq_empty_rot = fuq_empty_rot1[NFRQ-1:0] | fuq_empty_rot1[NFRQ*2-1:NFRQ];
+always_ff @(posedge clk)
+	fuq_empty_rot1 <= ({frq_empty,frq_empty} << fuq_rot);
+always_ff @(posedge clk)
+	fuq_empty_rot <= fuq_empty_rot1[NFRQ-1:0] | fuq_empty_rot1[NFRQ*2-1:NFRQ];
 
 generate begin : gFFOs
-	for (g = 0; g < $size(upda); g = g + 1) begin
+	for (g = 0; g < $size(updF); g = g + 1) begin
 	  always_comb
 			if (g==0)
 				excl[g] = 24'd0;
 			else
-	    	excl[g] = (24'd1 << upda[g-1]) | excl[g-1];
-		ffo24 uffov1 (.i({11'h0,~fuq_empty_rot} & ~excl[g]), .o(upda[g]));
+	    	excl[g] = (24'd1 << updF[g-1]) | (24'd1 << updL[g-1]) | excl[g-1];
+		ffo24 uffov1 (.i({11'h0,~fuq_empty_rot} & ~excl[g]), .o(updF[g]));
+		flo24 uflov1 (.i({11'h0,~fuq_empty_rot} & ~excl[g]), .o(updL[g]));
 	end
 end
 endgenerate
@@ -82,22 +85,31 @@ else begin
 	if (fuq_rot >= NFRQ-1)
 		fuq_rot <= 5'd0;
 end
+always_ff @(posedge clk)
+	fuq_rot1 <= fuq_rot;
+always_ff @(posedge clk)
+	fuq_rot2 <= fuq_rot1;
 
 // If upda did not find anything to update, then neither will any of the subsequest ones.
 generate begin : gUpd
-	for (g = 0; g < $size(upd); g = g + 1) begin
+	for (g = 0; g < $size(upd)/2; g = g + 1) begin
 		always_ff @(posedge clk)
-			upd[g] <= upda[g]==5'd31 ? 5'd31 : fuq_rot > upda[g] ? NFRQ + upda[g] - fuq_rot : upda[g] - fuq_rot;
+			upd[g] <= updF[g]==5'd31 ? 5'd31 : fuq_rot2 > updF[g] ? NFRQ + updF[g] - fuq_rot2 : updF[g] - fuq_rot2;
+		always_ff @(posedge clk)
+			upd[g+$size(upd)/2] <= updL[g]==5'd31 ? 5'd31 : fuq_rot2 > updL[g] ? NFRQ + updL[g] - fuq_rot2 : updL[g] - fuq_rot2;
 	end
 end
 endgenerate
 
 always_ff @(posedge clk) begin
-	foreach (upda[j])
-		foreach (upd_bitmap[k])
+	foreach (updF[j])
+		foreach (upd_bitmap[k]) begin
 			upd_bitmap[k] <= 1'b0;
-			if (k==upda[j] && upda[j]!=5'd31)
+			if (k==updF[j] && updF[j]!=5'd31)
 				upd_bitmap[k] <= 1'b1;
+			if (k==updL[j] && updL[j]!=5'd31)
+				upd_bitmap[k] <= 1'b1;
+		end
 end
 
 endmodule

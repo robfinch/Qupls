@@ -118,7 +118,7 @@ input [XSTREAMS*THREADS-1:0] free_stream;
 output pc_address_ex_t [XSTREAMS*THREADS-1:0] pcs;
 
 input [7:0] thread_probability [0:7];
-output [XSTREAMS-1:0] dep_stream [0:XSTREAMS-1];
+output dep_stream_t [XSTREAMS-1:0] dep_stream;
 input is_buffered;
 
 typedef struct packed {

@@ -1954,6 +1954,7 @@ typedef struct packed {
 	logic [4:0] pghn_irq;			// pipeline group header index of interrupt (in case moved)
 	cpu_types_pkg::pc_stream_t ip_stream;		// stream associated with instruction
 	logic [4:0] ip_offs;			// offset in wydes from group IP (0, 3, 6 or 9)
+	cpu_types_pkg::pc_address_t eip;				// exception return address
 	logic flush;
 	cpu_types_pkg::rob_ndx_t sync_dep;			// sync instruction dependency
 	logic sync_depv;				// sync dependency valid
@@ -2072,6 +2073,12 @@ typedef struct packed
 	pipeline_group_hdr_t hdr;
 	rob_entry_t [MWIDTH-1:0] pr;
 } pipeline_group_reg_t;
+
+typedef struct packed
+{
+	logic [4:0] parent;
+	logic [31:0] deps;
+} dep_stream_t;
 
 // ============================================================================
 // Support Functions

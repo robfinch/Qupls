@@ -927,6 +927,12 @@ pc_address_t [ISTACK_DEPTH-1:0] pc_stack;
 reg [5:0] pending_ipl;				// pending interrupt level.
 wire [5:0] im = sr.ipl;
 reg [7:0] thread_probability [0:7];
+reg [63:0] asid_reg;
+asid_t [3:0] asid;
+assign asid[0] = asid_reg[15:0];
+assign asid[1] = asid_reg[31:16];
+assign asid[2] = asid_reg[47:32];
+assign asid[3] = asid_reg[63:48];
 
 always_comb
 	ipl = sr.ipl;
@@ -935,7 +941,6 @@ reg [63:0] vgm;									// vector global mask
 value_t vrm [0:3];						// vector restart mask
 value_t vex [0:3];						// vector exception
 reg [1:0] vn;
-asid_t asid;
 asid_t ip_asid;
 Qupls4_pkg::rob_bitmask_t err_mask;
 reg ERC = 1'b0;
@@ -1625,7 +1630,7 @@ pc_address_ex_t [XSTREAMS*THREADS-1:0] pcs;
 pc_stream_t fet_stream;
 // Buffers the instruction cache line to allow fetching along alternate paths.
 wire is_buffered;
-wire [XSTREAMS-1:0] dep_stream [0:XSTREAMS-1];
+dep_stream_t [XSTREAMS-1:0] dep_stream;
 
 // Choose a stream of execution. Give precedence to streams that have
 // buffered cache lines.
@@ -1650,6 +1655,7 @@ uic1
 	.nop(brtgtv),
 	.nop_o(icnop),
 	.ip(pcs[fet_stream]),
+	.ip_asid(asid[pcs[fet_stream].stream.thread]),
 //	.ip(pc),
 	.ip_o(icpc),
 	.ihit_o(ihito),
@@ -1658,6 +1664,7 @@ uic1
 	.ic_line_hi_o(ic_clineh),
 	.ic_valid(ic_valid),
 	.miss_vadr(ic_miss_adr),
+	.miss_asid(ic_miss_asid),
 	.ic_line_i(ic_line_o),
 	.wway(ic_wway),
 	.wr_ic(wr_ic),
@@ -1689,6 +1696,7 @@ end
 
 // ic_miss_adr is one clock in front of the translation pc_tlb_res.
 // Add in a clock delay to line them up for the cache controller.
+// Now registered in icache.
 address_t ic_miss_adrd;
 always_ff @(posedge clk)
 	ic_miss_adrd <= ic_miss_adr;
@@ -1707,7 +1715,7 @@ icctrl1
 	.ftam_full(ftaim_resp.rty),
 	.hit(ihit),
 	.tlb_v(pc_tlb_v),
-	.miss_vadr(ic_miss_adrd),
+	.miss_vadr(ic_miss_adr),
 	.miss_padr(pc_tlb_res),
 	.miss_asid(tlb_pc_entry.vpn.asid),
 	.wr_ic(wr_ic),
@@ -1910,7 +1918,7 @@ Qupls4_stomp ustmp1
 (
 	.rst(irst),
 	.clk(clk),
-	.clk2x(clk2x),
+	.clk2x(clk),
 	.ihit(ihito),
 	.advance_pipeline(advance_pipeline),
 	.advance_pipeline_seg2(advance_pipeline_seg2), // currently same as above
@@ -2402,7 +2410,7 @@ wire [5:0] uop_count [0:MWIDTH-1];
 Qupls4_pkg::micro_op_t [MICROOPS_PER_INSTR-1:0] uop [0:MWIDTH-1];
 wire [1023:0] cline_mot;
 
-Qupls4_pipeline_mot umot1
+Qupls4_pipeline_mot #(.COMB(0)) umot1
 (
 	.rst(rst),
 	.clk(clk),
@@ -3225,7 +3233,7 @@ cpu_types_pkg::checkpt_ndx_t fuq_cp [0:12];
 // Look for queues containing values, and select from a queue using a rotating selector.
 Qupls4_frq_select
 #(
-	.NFRQ(13),
+	.NFRQ(14),
 	.NWRITE_PORTS(NREG_WPORTS)
 )
 ufrqsel1
@@ -4691,14 +4699,14 @@ mmu #(.CORENO(CORENO), .CHANNEL(3)) ummu1
 	.vadr_ir(agen0_op.ins),
 	.vadr(agen0_res),
 	.vadr_v(agen0_v),
-	.vadr_asid(asid),
+	.vadr_asid(asid[0]),
 	.vadr_id(agen0_id),
 	.vadr_om(agen0_om),
 	.vadr_we(agen0_we),
 	.vadr2_ir(agen1_op.ins),
 	.vadr2(agen1_res),
 	.vadr2_v(agen1_v),
-	.vadr2_asid(asid),
+	.vadr2_asid(asid[0]),
 	.vadr2_id(agen1_id),
 	.vadr2_om(agen1_om),
 	.vadr2_we(agen1_we),
@@ -4970,6 +4978,7 @@ Qupls4_commit_count
 ucmtcnt1
 (
 	.rst(irst),
+	.clk(clk),
 	.next_cqd(next_cqd),
 	.rob(rob),
 	.head0(head[0]),
@@ -5566,20 +5575,15 @@ begin
 			);
 	end
 
-	// Defer an interupt in the predicate shadow until the first instruction
-	// not in the shadow. But otherwise disable all interrupts in the shadow.
-	// But only defer/disable interrupts if taking the branch, in which case it
-	// is NOPs being skipped over, so it is only a couple of clock cycles.
-	hwi_ndx = fnFindHwi(fcu_skip_list);
+	// Set an interrupt occurring in the predicate shadow to return to the
+	// branch destination. This is faster than trying to move the interrupt
+	// to the next instruction.
 	if (resolved_takb) begin
 		if (fcu_found_destination) begin
-			if (hwi_ndx < 8'hff)
-				rob[(fcu_dst+3)%(Qupls4_pkg::ROB_ENTRIES)].pghn_irq <= hwi_ndx;
-		end
-
-		foreach (rob[n3]) begin
-			if (fcu_skip_list[n3])
-				rob[n3].op.hwi <= FALSE;
+			foreach (rob[n3]) begin
+				if (fcu_skip_list[n3])
+					rob[n3].eip <= fcu_misspc1;
+			end
 		end
 	end
 
@@ -5894,7 +5898,7 @@ else begin
 			if (!fnIsInLSQ(agen0_id)) begin
 				rob[agen0_id].lsq <= VAL;
 				rob[agen0_id].lsqndx <= lsq_tail0;
-				tEnqueLSE(lsq_tail0, agen0_id, 2'd1, agen0_res);
+				tEnqueLSE(lsq_tail0, agen0_id, 4'd0, agen0_res);
 			end
 		end
 		// It is allowed to queue two
@@ -5923,7 +5927,7 @@ else begin
 			if (!fnIsInLSQ(agen1_id)) begin
 				rob[agen1_id].lsq <= VAL;
 				rob[agen1_id].lsqndx <= {lsq_tail0.row,1'b1};
-				tEnqueLSE({lsq_tail0.row,lsq_tail0.col|1}, agen1_id, 2'd2, agen1_res);
+				tEnqueLSE({lsq_tail0.row,lsq_tail0.col|1}, agen1_id, 4'd1, agen1_res);
 //				lsq[lsq_tail0.row][0].sn <= 7'h7E;
 			end
 		end
@@ -6300,29 +6304,29 @@ else begin
 		commit_grp3 = rob[head[3]].wh;
 
 		group_len <= group_len - 1;
-		tCommits(head[0]);
+		tCommits(8, head[0]);
 		if (rob[head[0]].flush) begin
 			cp_stall <= 1'b1;
 			flush_pipeline <= 1'b0;
 		end
 		if (cmtcnt > 3'd1) begin
-			tCommits(head[1]);
+			tCommits(9, head[1]);
 			group_len <= group_len - 2;
 		end
 		if (cmtcnt > 3'd2) begin
-			tCommits(head[2]);
+			tCommits(10, head[2]);
 			group_len <= group_len - 3;
 		end
 		if (cmtcnt > 3'd3) begin
-			tCommits(head[3]);
+			tCommits(11, head[3]);
 			group_len <= group_len - 4;
 		end
 		if (cmtcnt > 3'd4) begin
-			tCommits(head[4]);
+			tCommits(12, head[4]);
 			group_len <= group_len - 5;
 		end
 		if (cmtcnt > 3'd5) begin
-			tCommits(head[5]);
+			tCommits(13, head[5]);
 			group_len <= group_len - 6;
 		end
 		head[0] <= (head[0] + cmtcnt) % Qupls4_pkg::ROB_ENTRIES;	
@@ -6410,16 +6414,13 @@ else begin
 	end
 
 	// Ivalidate load / store queue entries.	
-	n54 = 8;
+	// This does just one per clock cycle.
+	n54 = FALSE;
 	foreach (rob[nn]) begin
-		if (rob[nn].lsq && n54 < 12) begin
-			if (rob[nn].v==INV) begin
-				tInvalidateLSQ(n54, nn, FALSE, rob[nn].cmt, value_zero);
-				n54 = n54 + 1;
-			end
-			else if (&rob[nn].done) begin
-				tInvalidateLSQ(n54, nn, FALSE, FALSE, rob[nn].load_data);
-				n54 = n54 + 1;
+		if (rob[nn].lsq && !n54) begin
+			if (&rob[nn].done) begin
+				tInvalidateLSQ(14, nn, FALSE, FALSE, rob[nn].load_data);
+				n54 = TRUE;
 			end
 		end
 	end
@@ -7434,9 +7435,7 @@ end
 endtask
 
 
-// Invalidate LSQ entries associated with a ROB entry. This searches the LSQ
-// which is small in case multiple LSQ entries are associated. This is an
-// issue in the core's current operation.
+// Invalidate LSQ entries associated with a ROB entry.
 // Note that only valid entries are invalidated as invalid entries may be
 // about to be used by enqueue logic.
 
@@ -7451,9 +7450,9 @@ begin
 	n18r = rob[id].lsqndx.row;
 	n18c = rob[id].lsqndx.col;
 	rob[id].lsq <= FALSE;
-	if (lsq[n18r][n18c].rndx==id && lsq[n18r][n18c].v==VAL) begin
+//	if (lsq[n18r][n18c].v==VAL) begin
 		lsq_cmd[n].cmd <= LSQ_CMD_INV;
-		lsq_cmd[n].lndx <= {n18r,n18c[0]};
+		lsq_cmd[n].lndx <= rob[id].lsqndx;
 		lsq_cmd[n].rndx <= id;
 		lsq_cmd[n].n <= 0;
 		lsq_cmd[n].cmt <= cmt;
@@ -7464,13 +7463,13 @@ begin
 //				lsq_cmd_ndx = lsq_cmd_ndx + 2'd1;
 		// It is possible that a load operation already in progress got
 		// cancelled.
-		if (dram0_work.rndx==lsq[n18r][n18c].rndx)
+		if (dram0_work.rndx==id)
 			dram0_stomp <= TRUE;
-		if (Qupls4_pkg::NDATA_PORTS > 1 && dram1_work.rndx==lsq[n18r][n18c].rndx)
+		if (Qupls4_pkg::NDATA_PORTS > 1 && dram1_work.rndx==id)
 			dram1_stomp <= TRUE;
 		if (can)
-			cpu_request_cancel[lsq[n18r][n18c].rndx] <= 1'b1;
-	end
+			cpu_request_cancel[id] <= 1'b1;
+//	end
 end
 endtask
 
@@ -7480,22 +7479,17 @@ endtask
 task tIncLSQAddr;
 input integer n;
 input rob_ndx_t id;
-integer n18r, n18c;
 begin
-	n18r = rob[id].lsqndx.row;
-	n18c = rob[id].lsqndx.col;
-	if (lsq[n18r][n18c].rndx==id && lsq[n18r][n18c].v==VAL) begin
-		lsq_cmd[n].cmd <= LSQ_CMD_INCADR;
-		lsq_cmd[n].lndx <= {n18r,n18c[0]};
-		lsq_cmd[n].rndx <= id;
-		lsq_cmd[n].n <= 0;
-		lsq_cmd[n].cmt <= FALSE;
-		lsq_cmd[n].can <= FALSE;
-		lsq_cmd[n].data <= 0;
-		lsq_cmd[n].flags <= 0;
-		lsq_cmd[n].datav <= INV;
+	lsq_cmd[n].cmd <= LSQ_CMD_INCADR;
+	lsq_cmd[n].lndx <= rob[id].lsqndx;
+	lsq_cmd[n].rndx <= id;
+	lsq_cmd[n].n <= 0;
+	lsq_cmd[n].cmt <= FALSE;
+	lsq_cmd[n].can <= FALSE;
+	lsq_cmd[n].data <= 0;
+	lsq_cmd[n].flags <= 0;
+	lsq_cmd[n].datav <= INV;
 //				lsq[n18r][n18c].shift <= lsq[n18r][n18c].shift2;
-	end
 end
 endtask
 
@@ -7507,21 +7501,16 @@ task tSetLSQ;
 input integer n;
 input rob_ndx_t id;
 input address_t padr;
-integer n18r, n18c;
 begin
-	n18r = rob[id].lsqndx.row;
-	n18c = rob[id].lsqndx.col;
-	if (lsq[n18r][n18c].rndx==id && lsq[n18r][n18c].v) begin
-		lsq_cmd[n].cmd <= LSQ_CMD_SETADR;
-		lsq_cmd[n].lndx <= {n18r,n18c[0]};
-		lsq_cmd[n].rndx <= id;
-		lsq_cmd[n].n <= 0;
-		lsq_cmd[n].cmt <= FALSE;
-		lsq_cmd[n].can <= FALSE;
-		lsq_cmd[n].data <= padr;
-		lsq_cmd[n].flags <= 0;
-		lsq_cmd[n].datav <= INV;
-	end
+	lsq_cmd[n].cmd <= LSQ_CMD_SETADR;
+	lsq_cmd[n].lndx <= rob[id].lsqndx;
+	lsq_cmd[n].rndx <= id;
+	lsq_cmd[n].n <= 0;
+	lsq_cmd[n].cmt <= FALSE;
+	lsq_cmd[n].can <= FALSE;
+	lsq_cmd[n].data <= padr;
+	lsq_cmd[n].flags <= 0;
+	lsq_cmd[n].datav <= INV;
 end
 endtask
 
@@ -7562,7 +7551,10 @@ begin
 	sr_stack[0].ipl <= 6'd63;
 	pc_stack[0] <= 
 	*/
-	asid <= 16'd0;
+	asid[0] <= 16'd0;
+	asid[1] <= 16'd0;
+	asid[2] <= 16'd0;
+	asid[3] <= 16'd0;
 	ip_asid <= 16'd0;
 //	postfix_mask <= 'd0;
 	dram0_stomp <= 32'd0;
@@ -7862,6 +7854,8 @@ begin
 	// "static" fields, these fields remain constant after enqueue
 	next_robe.grp = grp;
 	next_robe.brtgt = Qupls4_pkg::fnTargetIP(pgh[robe.pghn].ip + {robe.ip_offs,1'b0},db.immc);
+	// Set the interrupt return address to this instruction.
+	next_robe.eip = pgh[robe.pghn].ip + {robe.ip_offs,1'b0};
 	next_robe.om = sr.om;
 	next_robe.rm = db.rm==3'd7 ? fpcsr.rm : db.rm;
 `ifdef IS_SIM
@@ -7973,16 +7967,15 @@ endtask
 task tEnqueLSE;
 input Qupls4_pkg::lsq_ndx_t ndx;
 input rob_ndx_t id;
-input [1:0] n;
+input [3:0] n;
 input cpu_types_pkg::virtual_address_t vadr;
 integer n1;
 begin
-	n1 = n - 2'd1;
-	lsq_cmd[n1].cmd <= LSQ_CMD_ENQ;
-	lsq_cmd[n1].lndx <= ndx;
-	lsq_cmd[n1].rndx <= id;
-	lsq_cmd[n1].n <= n;
-	lsq_cmd[n1].data <= vadr;
+	lsq_cmd[n].cmd <= LSQ_CMD_ENQ;
+	lsq_cmd[n].lndx <= ndx;
+	lsq_cmd[n].rndx <= id;
+	lsq_cmd[n].n <= n;
+	lsq_cmd[n].data <= vadr;
 end
 endtask
 
@@ -8049,9 +8042,9 @@ begin
 		end
 		// If interrupts are still enabled at commit, go do interrupt processing.
 		if (rob[head].op.hwi && pgh[rob[head].pghn_irq].hwi && pgh[rob[head].pghn_irq].irq.level == 6'd63)	// NMI
-			tProcessHwi(head,pgh[rob[head].pghn].ip+{rob[head].ip_offs,1'b0},rob[head].op.uop.num,FALSE,TRUE);
+			tProcessHwi(head,rob[head].op.uop.num,FALSE,TRUE);
 		else if (rob[head].op.hwi && pgh[rob[head].pghn_irq].hwi && pgh[rob[head].pghn_irq].irq.level > sr.ipl && sr.mie)
-			tProcessHwi(head,pgh[rob[head].pghn].ip+{rob[head].ip_offs,1'b0},rob[head].op.uop.num,TRUE,FALSE);
+			tProcessHwi(head,rob[head].op.uop.num,TRUE,FALSE);
 		// If interrupt turned out to be disabled reload the IRQ at the fetch stage,
 		// but only after loading some other instructions. Put the irq on a queue for
 		// later processing. Note that the interrupt enable level has been set to
@@ -8066,13 +8059,13 @@ begin
 			excir <= rob[head].op;
 			excid <= head;
 			excmissgrp <= rob[head].pghn;
-			excmisspc.pc <= pgh[rob[head].pghn].ip+{rob[head].ip_offs,1'b0};
+			excmisspc.pc <= rob[head].eip;
 			excmiss <= TRUE;
 			set_pending_ipl <= TRUE;
 			next_pending_ipl <= pgh[rob[head].pghn_irq].old_ipl;	// restore IPL
 			sr.ipl <= pgh[rob[head].pghn_irq].old_ipl;
 			if (irq_downcount_base[7])
-				tProcessExc(head,pgh[rob[head].pghn].ip+{rob[head].ip_offs,1'b0},rob[head].op.uop.num);
+				tProcessExc(head,rob[head].eip,rob[head].op.uop.num);
 		end
 	end
 	// If the instruction got invalidated (eg branch) there is not an easy way to
@@ -8085,7 +8078,7 @@ begin
 		irq_downcount <= irq_downcount_base;
 		irq_downcount_base <= {irq_downcount_base,1'b0} | 8'd8;
 		if (irq_downcount_base[7])
-			tProcessExc(head,pgh[rob[head].pghn].ip+{rob[head].ip_offs,1'b0},rob[head].op.uop.num);
+			tProcessExc(head,rob[head].eip,rob[head].op.uop.num);
 		set_pending_ipl <= TRUE;
 		next_pending_ipl <= pgh[rob[head].pghn_irq].old_ipl;	// restore IPL
 		sr.ipl <= pgh[rob[head].pghn_irq].old_ipl;
@@ -8111,7 +8104,7 @@ begin
 		Qupls4_pkg::CSR_MCORENO:	res = coreno_i;
 		Qupls4_pkg::CSR_SR:		res = sr;
 		Qupls4_pkg::CSR_TICK:	res = tick;
-		Qupls4_pkg::CSR_ASID:	res = asid;
+		Qupls4_pkg::CSR_ASID:	res = asid_reg;
 		Qupls4_pkg::CSR_THREAD_WEIGHT:	
 			res = {thread_probability[7],thread_probability[6],thread_probability[5],thread_probability[4],
 						thread_probability[3],thread_probability[2],thread_probability[1],thread_probability[0]};
@@ -8178,7 +8171,7 @@ begin
 				next_pending_ipl <= val[10:5];
 				irq_downcount_base <= 4'd8;
 			end
-		Qupls4_pkg::CSR_ASID: 	asid <= val;
+		Qupls4_pkg::CSR_ASID: 	asid_reg <= val;
 		Qupls4_pkg::CSR_THREAD_WEIGHT:
 			begin
 				if (val[31:0]==32'd0) begin
@@ -8347,7 +8340,6 @@ endtask
 
 task tProcessHwi;
 input rob_ndx_t id;
-input pc_address_t retpc;
 input [2:0] uop_num;
 input irq;
 input nmi;
@@ -8358,26 +8350,28 @@ begin
 	sr_stack[0] <= sr;
 	for (nn = 1; nn < ISTACK_DEPTH; nn = nn + 1)
 		pc_stack[nn] <= pc_stack[nn-1];
-	pc_stack[0] <= retpc;
+	pc_stack[0] <= rob[id].eip;
 	sr.pl <= 8'hFF;
 	sr.om <= fnNextOm(sr.om);
 	csr_carry_mod <= rob[id].op.carry_mod;
-	// Hardware interrupts automatically vector at the next_pc stage. There is no
-	// need to vector here.
 	if (nmi) begin
 		sr.ipl <= pgh[rob[id].pghn_irq].irq.level;
 		sr.ssm <= FALSE;
 		ssm_flag <= FALSE;
+		excmiss <= TRUE;
+		excmisspc.pc <= kernel_vectors[sr.dbg ? 3'd4 : {1'b0,fnNextOm(sr.om)}];//[$bits(pc_address_t)-1:8] + 4'd11,8'h0};
 	end
-		//	excmisspc.pc <= {kvec[sr.dbg ? 4 : 3][$bits(pc_address_t)-1:8] + 4'd11,8'h0};
 	else if (irq) begin
 		sr.ipl <= pgh[rob[id].pghn_irq].irq.level;
 		sr.ssm <= FALSE;
 		ssm_flag <= FALSE;
+		excmiss <= TRUE;
+		excmisspc.pc <= kernel_vectors[sr.dbg ? 3'd4 : {1'b0,fnNextOm(sr.om)}];//[$bits(pc_address_t)-1:8] + 4'd11,8'h0};
 	end
 end
 endtask
 
+// tRex needs updates, sb micro_op not instruction.
 task tRex;
 input rob_ndx_t id;
 input Qupls4_pkg::ex_instruction_t ir;
@@ -8675,26 +8669,6 @@ begin
 end
 endtask
 
-// Find any hardware interrupts occurring in the branch shadow.
-// Used to defer interrupts.
-
-function [5:0] fnFindHwi;
-input Qupls4_pkg::rob_bitmask_t bmp;
-integer kk;
-seqnum_t sn;
-begin
-	sn = 8'hff;
-	foreach (rob[kk]) begin
-		if (bmp[kk]) begin
-			if (pgh[rob[kk].pghn_irq].hwi && rob[kk].sn < sn) begin
-				sn = rob[kk].sn;
-				fnFindHwi = rob[kk].pghn_irq;
-			end
-		end
-	end
-end
-endfunction
-
 task tMoveIRQToInstructionStart;
 input rob_ndx_t ndx;
 integer kk;
@@ -8800,6 +8774,7 @@ endtask
 // Commit logic the same for every head.
 
 task tCommits;
+input integer head;
 input rob_ndx_t ndx;
 begin
 	tInvalidateQE(ndx);
@@ -8812,6 +8787,7 @@ begin
 	if (rob[ndx].op.decbus.fc)
 		tClearFcDep(ndx);
 	rob[ndx].cmt <= |rob[ndx].v;
+	tInvalidateLSQ(head, ndx, FALSE, |rob[ndx].v, value_zero);
 end
 endtask
 

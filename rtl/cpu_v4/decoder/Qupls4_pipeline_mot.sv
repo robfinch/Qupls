@@ -45,6 +45,7 @@ module Qupls4_pipeline_mot(rst, clk, en, stomp, cline_ext, cline_mot,
     pg_ext, pg_mot, uop_count, uop);
 parameter MWIDTH = Qupls4_pkg::MWIDTH;
 parameter MICROOPS_PER_INSTR = 32;
+parameter COMB = 1;
 input rst;
 input clk;
 input en;
@@ -59,23 +60,41 @@ output Qupls4_pkg::micro_op_t [MICROOPS_PER_INSTR-1:0] uop [0:MWIDTH-1];
 integer n1;
 genvar g;
 
-always_ff @(posedge clk)
-if (en) cline_mot <= cline_ext;
+generate begin : gComb
+	if (COMB) begin
+		always_comb
+			cline_mot = cline_ext;
 
-always_ff @(posedge clk)
-if (en) 
-	begin
-		pg_mot <= pg_ext;
-		if (stomp)
-			pg_mot.hdr.v <= INV;
-		foreach (pg_mot.pr[n1])
+		always_comb
+		begin
+			pg_mot = pg_ext;
 			if (stomp)
-				pg_mot.pr[n1].v <= INV;
+				pg_mot.hdr.v = INV;
+			foreach (pg_mot.pr[n1])
+				if (stomp)
+					pg_mot.pr[n1].v = INV;
+		end
 	end
+	else begin
+		always_ff @(posedge clk)
+			if (en) cline_mot <= cline_ext;
+
+		always_ff @(posedge clk)
+		if (en) begin
+			pg_mot <= pg_ext;
+			if (stomp)
+				pg_mot.hdr.v <= INV;
+			foreach (pg_mot.pr[n1])
+				if (stomp)
+					pg_mot.pr[n1].v <= INV;
+		end
+	end
+end
+endgenerate
 
 generate begin : gMicroopMem
 	for (g = 0; g < MWIDTH; g = g + 1)
-Qupls4_microop_mem uuop1
+Qupls4_microop_mem #(.COMB(COMB)) uuop1
 (
 	.rst(rst),
   .clk(clk),

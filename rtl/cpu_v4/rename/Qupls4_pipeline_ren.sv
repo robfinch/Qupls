@@ -32,7 +32,7 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 50750 LUTs / 11000 FFs / 0 BRAMs / 105 MHz
+// 55900 LUTs / 11500 FFs / 0 BRAMs / 160 MHz
 // ============================================================================
 
 import const_pkg::*;
@@ -416,7 +416,7 @@ urat1
 	.prn_i(prn_i),
 	.prv(prnv),
 	.is_move(is_move),
-	.wr(pRd_decv & aRd_decv),// && !stomp0 && ~pg_ren.pr[0].decbus.Rtz),
+	.wr(pRd_decv),		// && !stomp0 && ~pg_ren.pr[0].decbus.Rtz),
 	.wra(aRd_dec),
 	.wrra(pRd_dec),
 	.wra_cp(rcndx),

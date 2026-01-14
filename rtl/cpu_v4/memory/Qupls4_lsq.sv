@@ -112,6 +112,24 @@ else begin
 			if (cmd[11].cmt && SUPPORT_STORE_FORWARDING)
 				tForwardStore(cmd[11].rndx);
 		end
+	cmd[12]:
+		begin
+			tInvalidateLSQ(cmd[12].rndx, cmd[12].can, cmd[12].cmt, cmd[12].data);
+			if (cmd[12].cmt && SUPPORT_STORE_FORWARDING)
+				tForwardStore(cmd[12].rndx);
+		end
+	cmd[13]:
+		begin
+			tInvalidateLSQ(cmd[13].rndx, cmd[13].can, cmd[13].cmt, cmd[13].data);
+			if (cmd[13].cmt && SUPPORT_STORE_FORWARDING)
+				tForwardStore(cmd[13].rndx);
+		end
+	cmd[14]:
+		begin
+			tInvalidateLSQ(cmd[14].rndx, cmd[14].can, cmd[14].cmt, cmd[14].data);
+			if (cmd[14].cmt && SUPPORT_STORE_FORWARDING)
+				tForwardStore(cmd[14].rndx);
+		end
 	default:	;
 	endcase
 end
@@ -232,7 +250,8 @@ integer n18r, n18c;
 begin
 	n18r = rob[id].lsqndx.row;
 	n18c = rob[id].lsqndx.col;
-	lsq[n18r][n18c].v <= INV;
+	if (cmt)
+		lsq[n18r][n18c].v <= INV;
 	lsq[n18r][n18c].state <= 2'b00;
 	lsq[n18r][n18c].agen <= FALSE;
 	lsq[n18r][n18c].datav <= INV;

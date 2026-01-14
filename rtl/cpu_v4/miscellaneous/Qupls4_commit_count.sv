@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2024-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2024-2026  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -38,11 +38,12 @@
 import const_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_commit_count(rst, next_cqd, rob,
+module Qupls4_commit_count(rst, clk, next_cqd, rob,
 	head0, head1, head2, head3, head4, head5,
 	tails, cmtcnt, do_commit);
 parameter XWID = 4;
 input rst;
+input clk;
 input [XWID-1:0] next_cqd;
 input Qupls4_pkg::rob_entry_t [Qupls4_pkg::ROB_ENTRIES-1:0] rob;
 input rob_ndx_t head0;
@@ -101,10 +102,10 @@ always_comb htcolls = fnColls(head0, tails[0]);
 // Commit only by instructions with the same checkpoint index. The RAT can
 // currently handle only one checkpoint index spec for update.
 
-always_comb//ff @(posedge clk)
+always_ff @(posedge clk)
 if (rst) begin
-	cmtcnt = 3'd0;
-	do_commit = FALSE;
+	cmtcnt <= 3'd0;
+	do_commit <= FALSE;
 end
 else begin
 	cmtcnt = 3'd0;
@@ -115,18 +116,18 @@ else begin
 			cmt3 && rob[head3].cndx==rob[head0].cndx,
 			cmt4 && rob[head4].cndx==rob[head0].cndx,
 			cmt5 && rob[head5].cndx==rob[head0].cndx})
-		6'b111111:	cmtcnt = 3'd6;
-		6'b111110:	cmtcnt = 3'd5;
-		6'b11110?:	cmtcnt = 3'd4;
-		6'b1110??:	cmtcnt = 3'd3;
-		6'b110???:	cmtcnt = 3'd2;
-		6'b10????:	cmtcnt = 3'd1;
-		default:	cmtcnt = 3'd0;
+		6'b111111:	cmtcnt <= 3'd6;
+		6'b111110:	cmtcnt <= 3'd5;
+		6'b11110?:	cmtcnt <= 3'd4;
+		6'b1110??:	cmtcnt <= 3'd3;
+		6'b110???:	cmtcnt <= 3'd2;
+		6'b10????:	cmtcnt <= 3'd1;
+		default:	cmtcnt <= 3'd0;
 		endcase
-		do_commit = cmt0;
+		do_commit <= cmt0;
 	end
 	else
-		do_commit = FALSE;
+		do_commit <= FALSE;
 end
 
 endmodule
