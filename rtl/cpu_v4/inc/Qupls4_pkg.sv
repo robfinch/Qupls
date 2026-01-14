@@ -1670,6 +1670,8 @@ typedef struct packed
 	logic cjb;					// call, jmp, or bra
 	logic jsri;					// indirect subroutine call
 	logic br;						// conditional branch
+	logic ibr;					// inc conditional branch
+	logic dbr;					// dec conditional branch
 	logic bsr;
 	logic jsr;
 	logic sys;
@@ -1910,6 +1912,8 @@ typedef struct packed {
 	logic pop;
 	logic [2:0] count;
 	// decodes only needed for branch
+	logic ibcc;					// incrementing branch
+	logic dbcc;					// decrementing branch
 	logic bcc;					// conditional branch
 	logic cjb;					// call, jmp, or bra
 	logic jsri;					// indirect subroutine call

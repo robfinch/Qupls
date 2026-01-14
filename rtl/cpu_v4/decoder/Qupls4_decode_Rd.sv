@@ -77,6 +77,11 @@ begin
 	Qupls4_pkg::OP_LDV,
 	Qupls4_pkg::OP_AMO,Qupls4_pkg::OP_CMPSWAP:
 		fnRd = ir.Rd;
+	Qupls4_pkg::OP_BCCU8,Qupls4_pkg::OP_BCC8,
+	Qupls4_pkg::OP_BCCU16,Qupls4_pkg::OP_BCC16,
+	Qupls4_pkg::OP_BCCU32,Qupls4_pkg::OP_BCC32,
+	Qupls4_pkg::OP_BCCU64,Qupls4_pkg::OP_BCC64:
+		fnRd = ir.Rs1;
 	default:
 		fnRd = 7'd0;
 	endcase
@@ -115,6 +120,11 @@ begin
 	Qupls4_pkg::OP_LDV,
 	Qupls4_pkg::OP_AMO,Qupls4_pkg::OP_CMPSWAP:
 		fnRdv = VAL;
+	Qupls4_pkg::OP_BCCU8,Qupls4_pkg::OP_BCC8,
+	Qupls4_pkg::OP_BCCU16,Qupls4_pkg::OP_BCC16,
+	Qupls4_pkg::OP_BCCU32,Qupls4_pkg::OP_BCC32,
+	Qupls4_pkg::OP_BCCU64,Qupls4_pkg::OP_BCC64:
+		fnRdv = ir.inc;
 	default:
 		fnRdv = INV;
 	endcase

@@ -153,7 +153,9 @@ Qupls4_decode_cjb ucjb1
 Qupls4_decode_conditional_branch udecbr
 (
 	.instr(instr),
-	.branch(db.br)
+	.branch(db.br),
+	.ibranch(db.ibr),
+	.dbranch(db.dbr)
 );
 
 Qupls4_decode_pred upred1

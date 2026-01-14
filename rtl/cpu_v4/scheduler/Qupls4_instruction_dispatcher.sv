@@ -186,6 +186,7 @@ begin
 	rse[kk].rndx = nn;
 	rse[kk].irq_sn = pgh[mm].irq_sn;
 	rse[kk].aRd = rob[nn].op.uop.Rd;
+	rse[kk].aRdv = rob[nn].op.decbus.Rdv;
 	rse[kk].nRd = rob[nn].op.nRd;
 	// mem specific
 	rse[kk].virt2phys = rob[nn].op.decbus.v2p;
@@ -195,6 +196,8 @@ begin
 	// branch specific
 	rse[kk].bt = rob[nn].bt;
 	rse[kk].bcc = rob[nn].op.decbus.br;
+	rse[kk].ibcc = rob[nn].op.decbus.ibr;
+	rse[kk].dbcc = rob[nn].op.decbus.dbr;
 	rse[kk].cjb = rob[nn].op.decbus.cjb;
 	rse[kk].bsr = rob[nn].op.decbus.bsr;
 	rse[kk].jsr = rob[nn].op.decbus.jsr;

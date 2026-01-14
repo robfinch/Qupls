@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2023-2026  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -297,6 +297,15 @@ begin
 				immb = {cnstb,ins.Rs2[5:0]};
 				has_immb = TRUE;
 			end
+		end
+		
+	Qupls4_pkg::OP_RTD:
+		begin
+			has_immb = TRUE;
+			if (has_cnstb)
+				immb = {cnstb,ins.imm[27:3],3'd0};
+			else
+				immb = {{36{ins.imm[27]}},ins.imm[27:3],3'd0};
 		end
 
 	Qupls4_pkg::OP_FENCE:

@@ -728,6 +728,7 @@ Qupls4_pkg::rob_bitmask_t fcu_skip_list;
 wire fcu_args_valid;
 rob_ndx_t fcu_m1, fcu_dst;
 Qupls4_pkg::reservation_station_entry_t fcu_rse,fcu_rse2,fcu_rser;
+cpu_types_pkg::value_t fcu_res;
 reg [1:0] pred_tf [0:31];		// predicate was true (1) or false (2), unassigned (0)
 reg [31:0] pred_alloc_map;
 wire [5:0] pred_no [0:3];
@@ -3135,7 +3136,7 @@ reg fpu0_wrA, fpu0_wrB, fpu0_wrC;
 reg fma0_wrA, fma1_wrA;
 reg dram_wr0;
 reg dram_wr1;
-reg wt0A,wt1A,wt2A,wt4A,wt5A,wt6A;
+reg wt0A,wt1A,wt2A,wt4A,wt5A;
 reg wt7A,wt8A,wt9A,wt10A,wt11A,wt12A;
 
 // Do not update the register file if the architectural register is zero.
@@ -3201,15 +3202,10 @@ wire [8:0] fpu0_we;
 wire [8:0] fpu1_we;
 reg [8:0] dram0_we;
 reg [8:0] dram1_we;
-reg [8:0] fcu_we;
+wire [8:0] fcu_we;
 
 always_ff @(posedge clk) dram0_we = {wt10A,8'hFF} & {9{dram_wr0}};
 always_ff @(posedge clk) dram1_we = {wt11A,8'hFF} & {9{dram_wr1}} & {9{Qupls4_pkg::NDATA_PORTS > 1}};
-
-always_ff @(posedge clk) fcu_we =
-//	(fcu_rse.aRd >= 7'd56 && fcu_rse.aRd <= 7'd63) ?
-//	((fcu_rse.om==Qupls4_pkg::OM_SECURE ? 9'h0FF : fcu_rse.om==Qupls4_pkg::OM_HYPERVISOR ? 9'h0F : fcu_rse.om==Qupls4_pkg::OM_SUPERVISOR ? 9'h03 : 9'h01) & {9{fcu_wrA}}) :
-	{wt6A,8'hFF} & {9{fcu_wrA}};
 
 always_comb wt0A = !sau0_rse2.aRdv;
 always_comb wt1A = !sau1_rse2.aRdv && Qupls4_pkg::NSAU > 1;
@@ -3431,9 +3427,10 @@ Qupls4_func_result_queue ufrq7
 	.rst_i(irst),
 	.clk_i(clk),
 	.rd_i(fuq_rd[7]),
-	.rse_i(fcu_rse),
+	.we_i(fcu_we),
+	.rse_i(fcu_rse2),
 	.tag_i({8'd0}),
-	.res_i(fcu_rse.arg[0].val),//resA2),
+	.res_i(fcu_res),//rse.arg[0].val),//resA2),
 	.we_o(fuq_we[7]),
 	.pRt_o(fuq_pRt[7]),
 	.aRt_o(fuq_aRt[7]),
@@ -3636,16 +3633,20 @@ Qupls4_branchmiss_pc umisspc1
 always_comb
 	fcu_missir <= fcu_instr;
 
-Qupls4_meta_branch_eval ube1
+Qupls4_meta_fcu umfcu1
 (
 	.rst(irst),
 	.clk(clk),
-	.instr(fcu_rse.uop),
-	.a(fcu_rse.arg[0].val),
-	.b(fcu_rse.arg[1].val),
-	.c(ic_irq > sr.ipl && sr.mie && irq_sn!=fcu_rse.irq_sn || ic_irq==6'd63),
-	.takb(takb)
+	.rse_i(fcu_rse),
+	.rse_o(fcu_rse2),
+	.sr(sr),
+	.ic_irq(ic_irq),
+	.irq_sn(irq_sn),
+	.takb(takb),
+	.res(fcu_res),
+	.we_o(fcu_we)
 );
+
 /*
 Stark_branch_eval ube1
 (
