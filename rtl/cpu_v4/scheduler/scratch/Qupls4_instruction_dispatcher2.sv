@@ -41,7 +41,7 @@
 // given type. For example there is only one flow control unit, so dispatch
 // will not try and dispatch two flow controls in the same cycle.
 //
-// 2200 LUTs / 2400 FFs / 205 MHz
+// 25500 LUTs / 2400 FFs / 120 MHz
 // ============================================================================
 
 import const_pkg::*;
@@ -61,18 +61,10 @@ input [15:0] busy;
 output Qupls4_pkg::reservation_station_entry_t [DISPATCH_COUNT-1:0] rse_o;
 output Qupls4_pkg::rob_bitmask_t rob_dispatched_o;
 
-typedef struct packed
-{
-	reg [7:0] rob;
-	reg [3:0] rse;
-	reg [3:0] fu;
-} cpy_t;
-
-integer nn,mm;
-Qupls4_pkg::reservation_station_entry_t [Qupls4_pkg::ROB_ENTRIES:0] rse;
+integer nn;
+Qupls4_pkg::reservation_station_entry_t [DISPATCH_COUNT-1:0] rse;
 Qupls4_pkg::rob_bitmask_t rob_dispatched;
 reg [DISPATCH_COUNT-1:0] dispatch_slot_v;
-cpy_t [DISPATCH_COUNT-1:0] cpy;
 
 always_comb
 begin
@@ -85,13 +77,6 @@ begin
 	rse[4] = {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
 	rse[5] = {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
 
-	rse[Qupls4_pkg::ROB_ENTRIES] = {$bits(rob_entry_t){1'b0}};
-	foreach (cpy[nn]) begin
-		cpy[nn].rse = Qupls4_pkg::ROB_ENTRIES;
-		cpy[nn].rob = rob_ndx_t'(0);
-		cpy[nn].fu = 4'd0;
-	end
-
 	foreach (rob[nn]) begin
 		// If valid ...
 		if (rob[nn].dispatchable &&
@@ -100,97 +85,88 @@ begin
 			!rob_dispatched_o[nn]
 		) begin
 			if (rob[nn].op.decbus.sau && !busy[4'd0] && !dispatch_slot_v[0]) begin
-				cpy[0].rob = nn;
-				cpy[0].rse = 0;
-				cpy[0].fu = 4'd0;
+				tLoadRse(0,nn);
 				// rse[0].funcunit = 4'd0; set to zero already above
+				rse[0].rndx = nn;
 				rob_dispatched[nn] = VAL;
 				dispatch_slot_v[0] = VAL;
 			end
 			if (rob[nn].op.decbus.sau && !busy[4'd1] && !dispatch_slot_v[5] && !rob[nn].op.decbus.sau0) begin
-				cpy[5].rob = nn;
-				cpy[5].rse = 5;
-				cpy[5].fu = 4'd1;
+				tLoadRse(5,nn);
+				rse[5].funcunit = 4'd1;
+				rse[5].rndx = nn;
 				rob_dispatched[nn] = VAL;
 				dispatch_slot_v[5] = VAL;
 			end
 			if (rob[nn].op.decbus.mul && !busy[2] && !dispatch_slot_v[1]) begin
-				cpy[1].rob = nn;
-				cpy[1].rse = 1;
-				cpy[1].fu = 4'd2;
+				tLoadRse(1,nn);
+				rse[1].funcunit = 4'd2;
+				rse[1].rndx = nn;
 				rob_dispatched[nn] = VAL;
 				dispatch_slot_v[1] = VAL;
 			end
 			if ((rob[nn].op.decbus.div|rob[nn].op.decbus.sqrt) && !busy[3] && !dispatch_slot_v[1]) begin
-				cpy[1].rob = nn;
-				cpy[1].rse = 1;
-				cpy[1].fu = 4'd3;
+				tLoadRse(1,nn);
+				rse[1].funcunit = 4'd3;
+				rse[1].rndx = nn;
 				rob_dispatched[nn] = VAL;
 				dispatch_slot_v[1] = VAL;
 			end
 			if (rob[nn].op.decbus.fc && !busy[7] && !dispatch_slot_v[2]) begin
-				cpy[2].rob = nn;
-				cpy[2].rse = 2;
-				cpy[2].fu = 4'd7;
+				tLoadRse(2,nn);
+				rse[2].funcunit = 4'd7; 
+				rse[2].rndx = nn;
 				rob_dispatched[nn] = VAL;
 				dispatch_slot_v[2] = VAL;
 			end
 			if (rob[nn].op.decbus.mem && !busy[4'd8] & !dispatch_slot_v[3]) begin
-				cpy[3].rob = nn;
-				cpy[3].rse = 3;
-				cpy[3].fu = 4'd8;
+				tLoadRse(3,nn);
+				rse[3].funcunit = 4'd8; 
+				rse[3].rndx = nn;
 				rob_dispatched[nn] = VAL;
 				dispatch_slot_v[3] = VAL;
 			end
 			if (rob[nn].op.decbus.mem && !busy[4'd9] & !dispatch_slot_v[3]) begin
-				cpy[3].rob = nn;
-				cpy[3].rse = 3;
-				cpy[3].fu = 4'd9;
+				tLoadRse(3,nn);
+				rse[3].funcunit = 4'd9; 
+				rse[3].rndx = nn;
 				rob_dispatched[nn] = VAL;
 				dispatch_slot_v[3] = VAL;
 			end
 			if (Qupls4_pkg::SUPPORT_FLOAT && rob[nn].op.decbus.fma && !busy[4'd4] && !dispatch_slot_v[4]) begin
-				cpy[4].rob = nn;
-				cpy[4].rse = 4;
-				cpy[4].fu = 4'd4;
+				tLoadRse(4,nn);
+				rse[4].funcunit = 4'd4; 
+				rse[4].rndx = nn;
 				rob_dispatched[nn] = VAL;
 				dispatch_slot_v[4] = VAL;
 			end
 			if (Qupls4_pkg::SUPPORT_FLOAT && rob[nn].op.decbus.fma && !busy[4'd5] && !dispatch_slot_v[1]) begin
-				cpy[1].rob = nn;
-				cpy[1].rse = 1;
-				cpy[1].fu = 4'd5;
+				tLoadRse(1,nn);
+				rse[1].funcunit = 4'd5; 
+				rse[1].rndx = nn;
 				rob_dispatched[nn] = VAL;
 				dispatch_slot_v[1] = VAL;
 			end
 			if (Qupls4_pkg::SUPPORT_TRIG && rob[nn].op.decbus.trig && !busy[4'd6] && !dispatch_slot_v[4]) begin
-				cpy[4].rob = nn;
-				cpy[4].rse = 1;
-				cpy[4].fu = 4'd6;
+				tLoadRse(4,nn);
+				rse[4].funcunit = 4'd6; 
+				rse[4].rndx = nn;
 				rob_dispatched[nn] = VAL;
 				dispatch_slot_v[4] = VAL;
 			end
 			if (Qupls4_pkg::SUPPORT_FLOAT && rob[nn].op.decbus.fpu && !busy[4'd12] && !dispatch_slot_v[4]) begin
-				cpy[4].rob = nn;
-				cpy[4].rse = 1;
-				cpy[4].fu = 4'd12;
+				tLoadRse(4,nn);
+				rse[4].funcunit = 4'd12;
+				rse[4].rndx = nn;
 				rob_dispatched[nn] = VAL;
 				dispatch_slot_v[4] = VAL;
 			end
 		end
 	end
-
-	foreach (rob[nn])
-		tLoadRse(nn,nn);
 end
 
 always_ff @(posedge clk)
-begin
-	foreach (cpy[mm]) begin
-		rse_o[mm] <= rse[cpy[mm].rse];
-		rse_o[mm].funcunit <= cpy[mm].fu;
-	end
-end
+	rse_o <= rse;
 always_ff @(posedge clk)
 	rob_dispatched_o <= rob_dispatched;
 
@@ -201,7 +177,6 @@ integer xx,mm;
 begin
 	mm = rob[nn].pghn;
 	rse[kk] = {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
-	rse[kk].v = rob_dispatched[nn];
 	rse[kk].om = rob[nn].om;
 	rse[kk].rm = rob[nn].rm;
 	rse[kk].pc.pc = pgh[mm].ip + rob[nn].ip_offs;

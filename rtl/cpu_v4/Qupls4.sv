@@ -80,6 +80,7 @@ localparam NREG_RPORTS = Qupls4_pkg::NREG_RPORTS;
 parameter NREG_WPORTS = Qupls4_pkg::NREG_WPORTS;
 localparam RS_NREG_RPORTS = Qupls4_pkg::NREG_RPORTS;
 parameter MICROOPS_PER_INSTR = 32;
+parameter MAX_MICROOPS = 12;
 input [63:0] coreno_i;
 input rst_i;
 input clk_i;
@@ -297,7 +298,9 @@ Qupls4_pkg::flags_t [NREG_RPORTS-1:0] rfo_flags;
 rob_ndx_t mc_orid;
 pc_address_ex_t mc_adr;
 pc_address_ex_t tgtpc;
+(* keep *)
 Qupls4_pkg::rob_entry_t [Qupls4_pkg::ROB_ENTRIES-1:0] rob;
+(* keep *)
 Qupls4_pkg::pipeline_group_hdr_t [Qupls4_pkg::ROB_ENTRIES/MWIDTH-1:0] pgh;
 Qupls4_pkg::beb_entry_t beb_buf;
 reg [1:0] beb_status [0:63];
@@ -2355,7 +2358,7 @@ Qupls4_pipeline_ext #(.MWIDTH(MWIDTH)) uiext1
 	.rst_i(irst),
 	.clk_i(clk),
 	.flush_fet(flush_fet),
-	.en_i(advance_extract),
+	.en_i(advance_extract & rstcnt[5]),
 	.cline_fet(ic_line_fet),
 	.new_cline_ext(new_cline_ext),
 	.cline_ext(cline_ext),
@@ -2404,30 +2407,34 @@ Qupls4_pipeline_ext #(.MWIDTH(MWIDTH)) uiext1
 );
 
 // ----------------------------------------------------------------------------
-// Micro-op translate stage
+// Micro-op translate and queue stage
 // ----------------------------------------------------------------------------
 
-wire [5:0] uop_count [0:MWIDTH-1];
-Qupls4_pkg::micro_op_t [MICROOPS_PER_INSTR-1:0] uop [0:MWIDTH-1];
 wire [1023:0] cline_mot;
+Qupls4_pkg::micro_op_t [MAX_MICROOPS-1:0] uop_buf;
+wire [2:0] uop_mark [0:MAX_MICROOPS-1];
+wire [3:0] uop_head [0:MWIDTH-1];
 
-Qupls4_pipeline_mot #(.COMB(0)) umot1
+Qupls4_pipeline_mot #(
+	.COMB(1),
+	.MICROOPS_PER_INSTR(MICROOPS_PER_INSTR),
+	.MAX_MICROOPS(MAX_MICROOPS)
+)
+umot1
 (
 	.rst(rst),
 	.clk(clk),
-	.en(advance_extract),
+	.en(advance_decode),
 	.stomp(stomp_mot),
 	.cline_ext(cline_ext),
 	.cline_mot(cline_mot),
 	.pg_ext(pg_ext),
 	.pg_mot(pg_mot),
-	.uop_count(uop_count),
-	.uop(uop)
+	.uop_buf(uop_buf),
+	.uop_mark(uop_mark),
+	.advance_ext(advance_extract),
+	.head(uop_head)
 );
-
-// ----------------------------------------------------------------------------
-// Micro-op queue stage
-// ----------------------------------------------------------------------------
 
 // ----------------------------------------------------------------------------
 // DECODE stage
@@ -2439,20 +2446,21 @@ wire [3:0] freevals;
 checkpt_ndx_t cndx0,cndx1,cndx2,cndx3,pcndx;		// checkpoint index for each queue slot
 wire restore;		// = branch_state==BS_CHKPT_RESTORE && restore_en;// && !fcu_cjb;
 
-Qupls4_pipeline_dec #(.MWIDTH(MWIDTH)) udecstg1
+Qupls4_pipeline_dec #(
+	.MWIDTH(MWIDTH),
+	.MICROOPS_PER_INSTR(MICROOPS_PER_INSTR),
+	.MAX_MICROOPS(MAX_MICROOPS)
+)
+udecstg1
 (
 	.rst_i(rst_i),
 	.rst(irst),
 	.clk(clk),
 	.en(advance_decode),
-	.clk5x(clk5x),
-	.ph4(ph4),
 	.new_cline_ext(new_cline_ext),
 	.cline(cline_mot),
 	.sr(sr),
 	.uop_num(uop_num_ext),
-	.uop_count(uop_count),
-	.uop(uop),
 	.tags2free(tags2free),
 	.freevals(freevals),
 	.bo_wr(bo_wr),
@@ -2467,7 +2475,9 @@ Qupls4_pipeline_dec #(.MWIDTH(MWIDTH)) udecstg1
 	.ren_rst_busy(ren_rst_busy),
 	.predicted_correctly_o(predicted_correctly_dec),
 	.new_address_o(new_address_dec),
-	.advance_ext_o(advance_extract)
+	.uop_buf(uop_buf),
+	.uop_mark(uop_mark),
+	.uop_head(uop_head)
 );
 
 reg [MWIDTH-1:0] wrport0_v;
@@ -2654,7 +2664,8 @@ always_comb	advance_decode =
 // advance_extract set by decode stage
 
 always_comb advance_fetch =
-	advance_extract
+	advance_extract &
+	rstcnt[5]
 	;
 
 always_comb advance_pipeline =
@@ -5732,9 +5743,9 @@ else begin
 //			tBypassValid(tails[3], pg_ren.pr[3], pg_ren.pr[2]);
 		
 			tails[0] <= (tails[0] + MWIDTH) % Qupls4_pkg::ROB_ENTRIES;
-			groupno <= groupno + 2'd1;
-			if (groupno >= Qupls4_pkg::ROB_ENTRIES / MWIDTH - 1)
-				groupno <= 8'd0;
+			groupno <= ((tails[0] + MWIDTH) % Qupls4_pkg::ROB_ENTRIES) / MWIDTH;//groupno + 2'd1;
+//			if (groupno >= Qupls4_pkg::ROB_ENTRIES / MWIDTH - 1)
+//				groupno <= 8'd0;
 		end
 	end
 

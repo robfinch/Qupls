@@ -32,20 +32,21 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 3250 LUTs / 8600 FFs / 0 DSPs (180 MHz) - 32 uops per instruction
+// 7300 LUTs / 15000 FFs / 0 DSPs (230 MHz) - 32 uops per instruction
 // ============================================================================
 
 import const_pkg::*;
 import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_pipeline_dec(rst_i, rst, clk, en, clk5x, ph4, new_cline_ext, cline,
-	sr, uop_num, uop_count, uop,
+module Qupls4_pipeline_dec(rst_i, rst, clk, en, new_cline_ext, cline,
+	sr, uop_num,
 	tags2free, freevals, bo_wr, bo_preg,
 	stomp_dec, stomp_ext, kept_stream, pg_mot,
 	pg_dec,
 	mux_stallq, ren_stallq, dec_stall, ren_rst_busy,
-	predicted_correctly_o, new_address_o, advance_ext_o
+	predicted_correctly_o, new_address_o,
+	uop_buf, uop_mark, uop_head
 );
 parameter MWIDTH = 4;		// Machine width, under construction
 parameter MAX_MICROOPS = 12;
@@ -54,8 +55,6 @@ input rst_i;
 input rst;
 input clk;
 input en;
-input clk5x;
-input [4:0] ph4;
 input new_cline_ext;
 input [1023:0] cline;
 input Qupls4_pkg::status_reg_t sr;
@@ -68,8 +67,6 @@ input pregno_t [3:0] tags2free;
 input [3:0] freevals;
 input bo_wr;
 input pregno_t bo_preg;
-input [5:0] uop_count [0:MWIDTH-1];
-input Qupls4_pkg::micro_op_t [MICROOPS_PER_INSTR-1:0] uop [0:MWIDTH-1];
 output Qupls4_pkg::pipeline_group_reg_t pg_dec;
 output reg mux_stallq;
 output ren_stallq;
@@ -77,7 +74,9 @@ output reg dec_stall;
 output ren_rst_busy;
 output reg predicted_correctly_o;
 output reg [63:0] new_address_o;
-output reg advance_ext_o;
+input Qupls4_pkg::micro_op_t [MAX_MICROOPS-1:0] uop_buf;
+input [2:0] uop_mark [0:MAX_MICROOPS-1];
+input [3:0] uop_head [0:MWIDTH-1];
 
 genvar g;
 integer n1,n2,n3,n4,n5,n6,n7,n8,n9,n10,n11,n12,n13,n14;
@@ -149,27 +148,6 @@ always_ff @(posedge clk)
 	if (en) cline1 <= cline;
 always_ff @(posedge clk)
 	if (en) cline2 <= cline1;
-
-reg [2:0] uop_mark [0:MAX_MICROOPS-1];
-Qupls4_pkg::micro_op_t [MAX_MICROOPS-1:0] uop_buf;
-wire [3:0] head [0:MWIDTH-1];
-wire [3:0] tail;
-
-Qupls4_micro_op_queue umoq1
-(
-	.rst(rst),
-	.clk(clk),
-	.en(en),
-	.rd_more(rd_more),
-	.uop(uop),
-	.uop_count(uop_count),
-	.uop_buf(uop_buf),
-	.uop_mark(uop_mark),
-	.head(head)
-);
-
-always_comb
-	advance_ext_o = rd_more;
 
 reg rd_ext;
 reg [2:0] uop_mark1 [0:MAX_MICROOPS-1];
@@ -272,8 +250,8 @@ assign mux_stallq = !rd_more;
 always_comb
 begin
 	for (n7 = 0; n7 < MWIDTH; n7 = n7 + 1) begin
-		tpr[n7] = pg_dec2.pr[uop_mark[head[n7]]];
-		tpr[n7].op.uop = uop_buf[head[n7]];
+		tpr[n7] = pg_dec2.pr[uop_mark[uop_head[n7]]];
+		tpr[n7].op.uop = uop_buf[uop_head[n7]];
 	end
 end
 

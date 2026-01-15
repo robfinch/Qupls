@@ -34,7 +34,7 @@
 //
 // Micro-op Translation Stage
 // Translate raw instructions to micro-ops.
-// 4450 LUTs / 8200 FFs / 4 DSPs / 450 MHz
+// 4450 LUTs / 8200 FFs / 4 DSPs / 133 MHz
 // ============================================================================
 
 import const_pkg::*;
@@ -42,9 +42,10 @@ import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
 module Qupls4_pipeline_mot(rst, clk, en, stomp, cline_ext, cline_mot,
-    pg_ext, pg_mot, uop_count, uop);
+    pg_ext, pg_mot, advance_ext, uop_buf, uop_mark, head);
 parameter MWIDTH = Qupls4_pkg::MWIDTH;
 parameter MICROOPS_PER_INSTR = 32;
+parameter MAX_MICROOPS = 12;
 parameter COMB = 1;
 input rst;
 input clk;
@@ -54,14 +55,19 @@ input [1023:0] cline_ext;
 output reg [1023:0] cline_mot;
 input Qupls4_pkg::pipeline_group_reg_t pg_ext;
 output Qupls4_pkg::pipeline_group_reg_t pg_mot;
-output [5:0] uop_count [0:MWIDTH-1];
-output Qupls4_pkg::micro_op_t [MICROOPS_PER_INSTR-1:0] uop [0:MWIDTH-1];
+output reg advance_ext;
+output Qupls4_pkg::micro_op_t [MAX_MICROOPS-1:0] uop_buf;
+output [2:0] uop_mark [0:MAX_MICROOPS-1];
+output [3:0] head [0:MWIDTH-1];
 
 integer n1;
 genvar g;
+wire rd_more;
+reg [5:0] uop_count [0:MWIDTH-1];
+Qupls4_pkg::micro_op_t [MICROOPS_PER_INSTR-1:0] uop [0:MWIDTH-1];
 
 generate begin : gComb
-	if (COMB) begin
+	if (FALSE & COMB) begin
 		always_comb
 			cline_mot = cline_ext;
 
@@ -112,5 +118,20 @@ Qupls4_microop_mem #(.COMB(COMB)) uuop1
 end
 endgenerate
 
+Qupls4_micro_op_queue umoq1
+(
+	.rst(rst),
+	.clk(clk),
+	.en(en),
+	.rd_more(rd_more),
+	.uop(uop),
+	.uop_count(uop_count),
+	.uop_buf(uop_buf),
+	.uop_mark(uop_mark),
+	.head(head)
+);
+
+always_comb
+	advance_ext = rd_more;
 
 endmodule

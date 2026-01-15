@@ -78,15 +78,15 @@ Qupls4_meta_branch_eval ube1
 	.takb(takb)
 );
 
-always_comb
+always_ff @(posedge clk)
 	case(1'b1)
-	rse_i.bsr:	res = rse_i.pc.pc + 4'd6;
-	rse_i.jsr:	res = rse_i.pc.pc + 4'd6;
-	rse_i.cjb:	res = rse_i.pc.pc + 4'd6;
-	rse_i.ibcc:	res = a + 2'd1;		// destination is Rs1
-	rse_i.dbcc:	res = a - 2'd1;		// destination is Rs1
-	rse_i.ret:	res = t + i;			// destination is Rd	(SP)
-	default:	res = value_zero;
+	rse_i.bsr:	res <= rse_i.pc.pc + 4'd6;
+	rse_i.jsr:	res <= rse_i.pc.pc + 4'd6;
+	rse_i.cjb:	res <= rse_i.pc.pc + 4'd6;
+	rse_i.ibcc:	res <= a + 2'd1;		// destination is Rs1
+	rse_i.dbcc:	res <= a - 2'd1;		// destination is Rs1
+	rse_i.ret:	res <= t + i;			// destination is Rd	(SP)
+	default:	res <= value_zero;
 	endcase
 
 always_ff @(posedge clk)

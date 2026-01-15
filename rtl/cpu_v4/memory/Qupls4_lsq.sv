@@ -45,6 +45,7 @@ input clk;
 input lsq_cmd_t [11:0] cmd;
 input Qupls4_pkg::pipeline_group_hdr_t [Qupls4_pkg::ROB_ENTRIES/MWIDTH-1:0] pgh;
 input Qupls4_pkg::rob_entry_t [Qupls4_pkg::ROB_ENTRIES-1:0] rob;
+(* keep *)
 output Qupls4_pkg::lsq_entry_t [1:0] lsq [0:Qupls4_pkg::LSQ_ENTRIES-1];
 output Qupls4_pkg::lsq_ndx_t lsq_tail;
 
