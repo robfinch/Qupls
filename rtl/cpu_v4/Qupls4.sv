@@ -5587,18 +5587,6 @@ begin
 			);
 	end
 
-	// Set an interrupt occurring in the predicate shadow to return to the
-	// branch destination. This is faster than trying to move the interrupt
-	// to the next instruction.
-	if (resolved_takb) begin
-		if (fcu_found_destination) begin
-			foreach (rob[n3]) begin
-				if (fcu_skip_list[n3])
-					rob[n3].eip <= fcu_misspc1;
-			end
-		end
-	end
-
 	// Set the checkpoint index in the PGH.	
 	if (pgh_setcp) begin
 		pgh[pgh_setcp_grp].cndx <= cndx;
@@ -5746,6 +5734,18 @@ else begin
 			groupno <= ((tails[0] + MWIDTH) % Qupls4_pkg::ROB_ENTRIES) / MWIDTH;//groupno + 2'd1;
 //			if (groupno >= Qupls4_pkg::ROB_ENTRIES / MWIDTH - 1)
 //				groupno <= 8'd0;
+		end
+	end
+
+	// Set an interrupt occurring in the predicate shadow to return to the
+	// branch destination. This is faster than trying to move the interrupt
+	// to the next instruction.
+	if (resolved_takb) begin
+		if (fcu_found_destination) begin
+			foreach (rob[n3]) begin
+				if (fcu_skip_list[n3])
+					rob[n3].eip <= fcu_misspc1;
+			end
 		end
 	end
 
@@ -7563,10 +7563,7 @@ begin
 	sr_stack[0].ipl <= 6'd63;
 	pc_stack[0] <= 
 	*/
-	asid[0] <= 16'd0;
-	asid[1] <= 16'd0;
-	asid[2] <= 16'd0;
-	asid[3] <= 16'd0;
+	asid_reg <= 64'd0;
 	ip_asid <= 16'd0;
 //	postfix_mask <= 'd0;
 	dram0_stomp <= 32'd0;

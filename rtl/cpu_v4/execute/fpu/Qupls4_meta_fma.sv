@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2023-2026  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -149,7 +149,7 @@ for (g = 0; g < WID/64; g = g + 1)
 			.inexact()
 		);
 	else
-		fpFMA64nrL8 ufma64 (
+		fpFMA64nrL45 ufma64 (
 			.clk(clk),
 			.ce(ce),
 			.op(ir[30]),		// 0=add,1=sub c
@@ -203,7 +203,7 @@ if (Qupls4_pkg::NFPU > 0 && !(Qupls4_pkg::SUPPORT_QUAD_PRECISION|Qupls4_pkg::SUP
 				.inexact()
 			);
     else
-			fpFMA64nrL8 ufma64 (
+			fpFMA64nrL45 ufma64 (
 				.clk(clk),
 				.ce(1'b1),
 				.op(ir[30]),		// 0=add,1=sub c
