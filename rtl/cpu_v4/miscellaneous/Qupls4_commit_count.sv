@@ -56,6 +56,7 @@ input rob_ndx_t [11:0] tails;
 output reg [2:0] cmtcnt;
 output reg do_commit;
 
+integer n1;
 reg cmt0,cmt1,cmt2,cmt3,cmt4,cmt5;
 reg htcolls;
 wire nan0 = rob[head0].v && rob[head0].nan;
@@ -63,16 +64,16 @@ wire nan1 = rob[head1].v && rob[head1].nan;
 wire nan2 = rob[head2].v && rob[head2].nan;
 wire nan3 = rob[head3].v && rob[head3].nan;
 
-always_comb cmt0 = (rob[head0].v && &rob[head0].done) || (!rob[head0].v && ((head0 != tails[0]) || &next_cqd));
-always_comb cmt1 = XWID > 1 && ((rob[head1].v && &rob[head1].done) || (!rob[head1].v && head0 != tails[0] && head0 != tails[1])) &&
+always_comb cmt0 = (|rob[head0].v && &rob[head0].done);
+always_comb cmt1 = XWID > 1 && (|rob[head1].v && &rob[head1].done) &&
 										!rob[head0].op.decbus.oddball && !rob[head0].excv
 										;
-always_comb cmt2 = XWID > 2 && ((rob[head2].v && &rob[head2].done) || (!rob[head2].v && head0 != tails[0] && head0 != tails[1] && head0 != tails[2])) &&
+always_comb cmt2 = XWID > 2 && (|rob[head2].v && &rob[head2].done) &&
 										!rob[head0].op.decbus.oddball && !rob[head1].op.decbus.oddball &&
 										!rob[head0].excv && !rob[head1].excv &&
 										!(nan0 && nan1)
 										;
-always_comb cmt3 = XWID > 3 && ((rob[head3].v && &rob[head3].done) || (!rob[head3].v && head0 != tails[0] && head0 != tails[1] && head0 != tails[2] && head0 != tails[3])) &&
+always_comb cmt3 = XWID > 3 && (|rob[head3].v && &rob[head3].done) &&
 										!rob[head0].op.decbus.oddball && !rob[head1].op.decbus.oddball && !rob[head2].op.decbus.oddball &&
 										!rob[head0].excv && !rob[head1].excv && !rob[head2].excv &&
 										!((nan0 && nan1) || (nan0 && nan2) || (nan1 && nan2))
@@ -109,7 +110,7 @@ if (rst) begin
 end
 else begin
 	cmtcnt = 3'd0;
-	if (!htcolls) begin
+	if (TRUE || !htcolls) begin
 		casez({cmt0,
 			cmt1 && rob[head1].cndx==rob[head0].cndx,
 			cmt2 && rob[head2].cndx==rob[head0].cndx,

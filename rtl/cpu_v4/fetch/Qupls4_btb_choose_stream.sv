@@ -75,7 +75,7 @@ else begin
 			next_act_stream = pc_stream_t'(n2);
 	end
 	// If nothing got choosen, keep with the same stream.
-	if (next_act_stream=={$bits(pc_stream_t){1'b0}})
+	if (next_act_stream.stream==5'd0)
 		next_act_stream = act_stream;
 end
 

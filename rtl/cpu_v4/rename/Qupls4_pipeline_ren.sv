@@ -147,9 +147,10 @@ always_comb
 	foreach (pg_dec.pr[n1])
 		aRd_dec[n1] = pg_dec.pr[n1].op.decbus.Rd;
 
+// Disable renaming for non-dispatchable instructions at this point.
 always_comb
 	foreach (pg_dec.pr[n1])
-		aRd_decv[n1] = pg_dec.pr[n1].op.decbus.Rdv;
+		aRd_decv[n1] = pg_dec.pr[n1].op.decbus.Rdv & pg_dec[n1].dispatchable;
 
 always_comb
 	foreach (pg_dec.pr[n1])
@@ -159,6 +160,7 @@ always_comb
 always_comb
 begin
 	nopi = {$bits(Qupls4_pkg::pipeline_reg_t){1'b0}};
+	nopi.v = 1'b1;
 	nopi.uop = {41'd0,Qupls4_pkg::OP_NOP};
 	nopi.uop.lead = 1'd1;
 	nopi.uop.Rs1 = 8'd0;
@@ -176,6 +178,8 @@ begin
 	nopi.decbus.Rdv = 1'b0;
 	nopi.decbus.nop = 1'b1;
 	nopi.decbus.sau = 1'b1;
+	nopi.decbus.cause = Qupls4_pkg::FLT_NONE;
+	nopi.exc = Qupls4_pkg::FLT_NONE;
 end
 
 always_ff @(posedge clk)
@@ -583,56 +587,35 @@ if (advance_pipeline_seg2)
 generate begin : gPg_ren
 always_ff @(posedge clk)
 if (rst) begin
+	pg_ren <= {$bits(pipeline_group_reg_t){1'b0}};
+	pg_ren.hdr <= {$bits(Qupls4_pkg::pipeline_group_hdr_t){1'b0}};
 	foreach (pg_ren.pr[n7]) begin
-		pg_ren.hdr <= {$bits(Qupls4_pkg::pipeline_group_hdr_t){1'b0}};
 		pg_ren.pr[n7] <= {$bits(Qupls4_pkg::rob_entry_t){1'b0}};
+		pg_ren.pr[n7].v <= 5'd1;
 		pg_ren.pr[n7].op <= nopi;
+		pg_ren.pr[n7].exc <= Qupls4_pkg::FLT_NONE;
 	end
 end
 else begin
 	if (en) begin
-		pg_ren.hdr <= pg_dec.hdr;
+		pg_ren <= pg_dec;
 		pg_ren.hdr.cndx <= cndx;
 		pg_ren.hdr.cndxv <= VAL;
 		if (stomp_ren)
 			pg_ren.hdr.v <= INV;
 		pg_ren.pr[0] <= pg_dec.pr[0];
-		if (pg_dec.pr[0].v & ~stomp_ren) begin
-			pg_ren.pr[0].op.nRd <= pRd_dec[0];
-			pg_ren.pr[0].op.pRs1 <= prn[0];
-			pg_ren.pr[0].op.pRs2 <= prn[1];
-			pg_ren.pr[0].op.pRs3 <= prn[2];
-//			pg_ren.pr[0].op.uop.Rs4 = prn[3];
-			pg_ren.pr[0].op.pRd <= prn[3];
-			case(MWIDTH)
-			1:
-				if (pg_ren.pr[0].op.decbus.bsr|pg_ren.pr[0].op.decbus.jsr)
-					pg_ren.pr[0].v <= INV;
-			2:
-				if (pg_ren.pr[1].op.decbus.bsr|pg_ren.pr[1].op.decbus.jsr)
-					pg_ren.pr[0].v <= INV;
-			3:
-				if (pg_ren.pr[2].op.decbus.bsr|pg_ren.pr[2].op.decbus.jsr)
-					pg_ren.pr[0].v <= INV;
-			default:
-				if (pg_ren.pr[3].op.decbus.bsr|pg_ren.pr[3].op.decbus.jsr)
-					pg_ren.pr[0].v <= INV;
-		    endcase
-		end
-		else begin
-			// Even if stomped on, we want to retain the destination register for
-			// copy purposes.
-//			pg_ren.pr[0] <= nopi;
-			pg_ren.pr[0].v <= INV;
-//			pg_ren.pr[0].decbus.Rt <= pg_ren.pr[0].decbus.Rt;
-//			pg_ren.pr[0].decbus.Rtn <= pg_ren.pr[0].decbus.Rtn;
-//			pg_ren.pr[0].decbus.Rtz <= pg_ren.pr[0].decbus.Rtz;
-//			pg_ren.pr[0].aRt <= pg_ren.pr[0].aRt;
-			if (Qupls4_pkg::SUPPORT_BACKOUT)
-				pg_ren.pr[0].op.nRd <= 9'd0;//pg_ren.pr[0].nRt;
-			else
-				pg_ren.pr[0].op.nRd <= pRd_dec[0];
-		end
+			// These still need to update the regfile.
+//			if (pg_ren.pr[0].op.decbus.bsr|pg_ren.pr[0].op.decbus.jsr)
+//				pg_ren.pr[0].done <= 2'b11;
+		if (~|pg_dec.pr[0].v | stomp_ren)
+			pg_ren.pr[0].op <= nopi;
+		// Even if stomped on, we want to retain the destination register for
+		// copy purposes.
+		pg_ren.pr[0].op.nRd <= pRd_dec[0];
+		pg_ren.pr[0].op.pRs1 <= prn[0];
+		pg_ren.pr[0].op.pRs2 <= prn[1];
+		pg_ren.pr[0].op.pRs3 <= prn[2];
+		pg_ren.pr[0].op.pRd <= prn[3];
 	/*
 	if (bo_wr) begin
 		if (pg_dec.pr[0].aRa==bo_areg)
@@ -647,88 +630,49 @@ else begin
 	*/
 		if (MWIDTH > 1) begin
 			pg_ren.pr[1] <= pg_dec.pr[1];
-			if (pg_dec.pr[1].v & ~stomp_ren) begin
-				pg_ren.pr[1].op.nRd <= pRd_dec[1];
-				pg_ren.pr[1].op.pRs1 <= prn[4];
-				pg_ren.pr[1].op.pRs2 <= prn[5];
-				pg_ren.pr[1].op.pRs3 <= prn[6];
-//				pg_ren.pr[1].op.uop.Rs4 = prn[8];
-				pg_ren.pr[1].op.pRd <= prn[7];
-				if (pg_dec.pr[0].op.decbus.bsr|pg_dec.pr[0].op.decbus.jsr)
-					pg_ren.pr[1].v <= INV;
-				if (pg_ren.pr[3].op.decbus.bsr|pg_ren.pr[3].op.decbus.jsr)
-					pg_ren.pr[1].v <= INV;
-			end
-			else begin
-	//			pg_ren.pr[1] <= nopi;
-				pg_ren.pr[1].v <= INV;
-	//			pg_ren.pr[1].decbus.Rt <= pg_ren.pr[1].decbus.Rt;
-	//			pg_ren.pr[1].decbus.Rtn <= pg_ren.pr[1].decbus.Rtn;
-	//			pg_ren.pr[1].decbus.Rtz <= pg_ren.pr[1].decbus.Rtz;
-	//			pg_ren.pr[1].aRt <= pg_ren.pr[1].aRt;
-				if (Qupls4_pkg::SUPPORT_BACKOUT)
-					pg_ren.pr[1].op.nRd <= 9'd0;//pg_ren.pr[1].nRt;
-				else
-					pg_ren.pr[1].op.nRd <= pRd_dec[1];
-			end
+			if (~|pg_dec.pr[1].v | stomp_ren)
+				pg_ren.pr[1].op <= nopi;
+			if (pg_dec.pr[0].op.decbus.bsr|pg_dec.pr[0].op.decbus.jsr)
+				pg_ren.pr[1].op <= nopi;
+			if (pg_ren.pr[1].op.decbus.bsr|pg_ren.pr[1].op.decbus.jsr)
+				pg_ren.pr[1].op <= nopi;
+			pg_ren.pr[1].op.nRd <= pRd_dec[1];
+			pg_ren.pr[1].op.pRs1 <= prn[4];
+			pg_ren.pr[1].op.pRs2 <= prn[5];
+			pg_ren.pr[1].op.pRs3 <= prn[6];
+			pg_ren.pr[1].op.pRd <= prn[7];
 		end
 	
 		if (MWIDTH > 2) begin
 			pg_ren.pr[2] <= pg_dec.pr[2];
-			if (pg_dec.pr[2].v & ~stomp_ren) begin
-				pg_ren.pr[2].op.nRd <= pRd_dec[2];
-				pg_ren.pr[2].op.pRs1 <= prn[8];
-				pg_ren.pr[2].op.pRs2 <= prn[9];
-				pg_ren.pr[2].op.pRs3 <= prn[10];
+			if (~|pg_dec.pr[2].v | stomp_ren)
+				pg_ren.pr[2].op <= nopi;
+			if (pg_dec.pr[0].op.decbus.bsr || pg_dec.pr[1].op.decbus.bsr || pg_dec.pr[0].op.decbus.jsr || pg_dec.pr[1].op.decbus.jsr)
+				pg_ren.pr[2].op <= nopi;
+			if (pg_ren.pr[2].op.decbus.bsr | pg_ren.pr[2].op.decbus.jsr)
+				pg_ren.pr[2].op <= nopi;
+			pg_ren.pr[2].op.nRd <= pRd_dec[2];
+			pg_ren.pr[2].op.pRs1 <= prn[8];
+			pg_ren.pr[2].op.pRs2 <= prn[9];
+			pg_ren.pr[2].op.pRs3 <= prn[10];
 //				pg_ren.pr[2].op.uop.Rs4 = prn[13];
-				pg_ren.pr[2].op.pRd <= prn[11];
-				if (pg_dec.pr[0].op.decbus.bsr || pg_dec.pr[1].op.decbus.bsr || pg_dec.pr[0].op.decbus.jsr || pg_dec.pr[1].op.decbus.jsr)
-					pg_ren.pr[2].v <= INV;
-				if (pg_ren.pr[3].op.decbus.bsr | pg_ren.pr[3].op.decbus.jsr)
-					pg_ren.pr[2].v <= INV;
-			end
-			else begin
-	//			pg_ren.pr[2] <= nopi;
-				pg_ren.pr[2].v <= INV;
-	//			pg_ren.pr[2].decbus.Rt <= pg_ren.pr[2].decbus.Rt;
-	//			pg_ren.pr[2].decbus.Rtn <= pg_ren.pr[2].decbus.Rtn;
-	//			pg_ren.pr[2].decbus.Rtz <= pg_ren.pr[2].decbus.Rtz;
-	//			pg_ren.pr[2].aRt <= pg_ren.pr[2].aRt;
-				if (Qupls4_pkg::SUPPORT_BACKOUT)
-					pg_ren.pr[2].op.nRd <= 9'd0;//pg_ren.pr[2].nRt;
-				else
-					pg_ren.pr[2].op.nRd <= pRd_dec[2];
-			end
+			pg_ren.pr[2].op.pRd <= prn[11];
 		end
 
 		if (MWIDTH > 3) begin
 			pg_ren.pr[3] <= pg_dec.pr[3];
-			if (pg_dec.pr[3].v & ~stomp_ren) begin
-				pg_ren.pr[3].op.nRd <= pRd_dec[3];
-				pg_ren.pr[3].op.pRs1 <= prn[12];
-				pg_ren.pr[3].op.pRs2 <= prn[13];
-				pg_ren.pr[3].op.pRs3 <= prn[14];
-//				pg_ren.pr[3].op.uop.Rs4 = prn[18];
-				pg_ren.pr[3].op.pRd <= prn[15];
-				if (pg_dec.pr[0].op.decbus.bsr || pg_dec.pr[1].op.decbus.bsr || pg_dec.pr[2].op.decbus.bsr ||
-					pg_dec.pr[0].op.decbus.jsr || pg_dec.pr[1].op.decbus.jsr || pg_dec.pr[2].op.decbus.jsr
-				)
-					pg_ren.pr[3].v <= INV;
-				if (pg_ren.pr[3].op.decbus.bsr | pg_ren.pr[3].op.decbus.jsr)
-					pg_ren.pr[3].v <= INV;
-			end
-			else begin
-	//			pg_ren.pr[3] <= nopi;
-				pg_ren.pr[3].v <= INV;
-	//			pg_ren.pr[3].decbus.Rt <= pg_ren.pr[3].decbus.Rt;
-	//			pg_ren.pr[3].decbus.Rtn <= pg_ren.pr[3].decbus.Rtn;
-	//			pg_ren.pr[3].decbus.Rtz <= pg_ren.pr[3].decbus.Rtz;
-	//			pg_ren.pr[3].aRt <= pg_ren.pr[3].aRt;
-				if (Qupls4_pkg::SUPPORT_BACKOUT)
-					pg_ren.pr[3].op.nRd <= 9'd0;//pg_ren.pr[3].nRt;
-				else
-					pg_ren.pr[3].op.nRd <= pRd_dec[3];
-			end
+			if (~|pg_dec.pr[3].v | stomp_ren) begin
+				pg_ren.pr[3].op <= nopi;
+			if (pg_dec.pr[0].op.decbus.bsr || pg_dec.pr[1].op.decbus.bsr || pg_dec.pr[2].op.decbus.bsr ||
+				pg_dec.pr[0].op.decbus.jsr || pg_dec.pr[1].op.decbus.jsr || pg_dec.pr[2].op.decbus.jsr)
+				pg_ren.pr[3].op <= nopi;
+			if (pg_ren.pr[3].op.decbus.bsr | pg_ren.pr[3].op.decbus.jsr)
+				pg_ren.pr[3].op <= nopi;
+			pg_ren.pr[3].op.nRd <= pRd_dec[3];
+			pg_ren.pr[3].op.pRs1 <= prn[12];
+			pg_ren.pr[3].op.pRs2 <= prn[13];
+			pg_ren.pr[3].op.pRs3 <= prn[14];
+			pg_ren.pr[3].op.pRd <= prn[15];
 		end
 	end
 	if (branch_resolved)
@@ -752,7 +696,7 @@ begin
 		if (pg_ren.pr[nn].ip_stream!=bno) begin
 			pg_ren.pr[nn].op.excv <= INV;
 			if (Qupls4_pkg::SUPPORT_BACKOUT)
-				pg_ren.pr[nn].v <= INV;
+				pg_ren.pr[nn].op <= nopi;
 			else begin
 				pg_ren.pr[nn].op.decbus.cpytgt <= TRUE;
 				pg_ren.pr[nn].op.decbus.sau <= TRUE;

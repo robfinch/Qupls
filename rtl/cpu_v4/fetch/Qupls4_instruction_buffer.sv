@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2025-2026  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -38,9 +38,10 @@ import const_pkg::*;
 import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_instruction_buffer(rst_i, clk_i, stream_i, ips_i, ip_i, line_i, line_o, ip_o, is_buffered_o);
+module Qupls4_instruction_buffer(rst_i, clk_i, ihit_i, stream_i, ips_i, ip_i, line_i, line_o, ip_o, is_buffered_o);
 input rst_i;
 input clk_i;
+input ihit_i;
 input cpu_types_pkg::pc_stream_t stream_i;
 input cpu_types_pkg::pc_address_ex_t ip_i;
 input [1023:0] line_i;
@@ -61,9 +62,9 @@ begin
 	ip_o = ip_i;
 	is_buffered_o = FALSE;
 	foreach (ip_buf[n43])
-		if (ips_i[stream_i].pc >= ip_buf[n43] && ips_i[stream_i].pc < ip_buf[n43] + 8'd96) begin
+		if (ip_i.pc >= ip_buf[n43] && ip_i.pc < ip_buf[n43] + 8'd96) begin
 			line_o = line_buf[n43];
-			ip_o = ips_i[stream_i];
+			ip_o = ip_i;
 			is_buffered_o = TRUE;
 		end
 end
@@ -77,13 +78,17 @@ if (rst_i) begin
 	end
 end
 else begin
-	if (~is_buffered_o) begin
-		for (n1 = 0; n1 < $size(line_buf)-1; n1 = n1 + 1) begin
-			line_buf[n1] <= line_buf[n1+1];
-			ip_buf[n1] <= ip_buf[n1+1];
+	if (~is_buffered_o & ihit_i) begin
+		foreach (line_buf[n1]) begin
+			if (n1==$size(line_buf)-1) begin
+				line_buf[n1] <= line_i;
+				ip_buf[n1] <= {ip_i.pc[$bits(cpu_types_pkg::pc_address_t)-1:6],6'd0};
+			end
+			else begin
+				line_buf[n1] <= line_buf[n1+1];
+				ip_buf[n1] <= ip_buf[n1+1];
+			end
 		end
-		line_buf[$size(line_buf)-1] <= line_i;
-		ip_buf[$size(ip_buf)-1] <= {ip_i.pc[$bits(cpu_types_pkg::pc_address_t)-1:6],6'd0};
 	end
 end
 

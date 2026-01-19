@@ -76,20 +76,34 @@ always_comb
 begin
 	for (n11 = 0; n11 < MICROOPS_PER_INSTR*2; n11 = n11 + 1) begin
 		if (n11 < uop_count[0]) begin
-			uop_buf2a[n11] = uop_buf[0][n11];
+			uop_buf2a[n11] = uop[0][n11];
 			uop_mark2a[n11] = 3'd0;
 		end
-		else begin
-			uop_buf2a[n11] = uop_buf[1][n11-uop_count[0]];
+		else if (n11 < uop_count[0] + uop_count[1]) begin
+			uop_buf2a[n11] = uop[1][n11-uop_count[0]];
 			uop_mark2a[n11] = 3'd1;
 		end
+		else begin
+			uop_buf2a[n11] = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
+			uop_mark2a[n11] = 3'd1;
+			uop_buf2a[n12].v = VAL;
+			uop_buf2a[n12].lead = 1'b1;
+			uop_buf2a[n12].opcode = Qupls4_pkg::OP_NOP;
+		end
 		if (n11 < uop_count[2]) begin
-			uop_buf2b[n11] = uop_buf[2][n11];
+			uop_buf2b[n11] = uop[2][n11];
 			uop_mark2b[n11] = 3'd2;
 		end
-		else begin
-			uop_buf2b[n11] = uop_buf[3][n11-uop_count[2]];
+		else if (n11 < uop_count[2] + uop_count[3]) begin
+			uop_buf2b[n11] = uop[3][n11-uop_count[2]];
 			uop_mark2b[n11] = 3'd3;
+		end
+		else begin
+			uop_buf2b[n11] = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
+			uop_mark2b[n11] = 3'd3;
+			uop_buf2b[n12].v = VAL;
+			uop_buf2b[n12].lead = 1'b1;
+			uop_buf2b[n12].opcode = Qupls4_pkg::OP_NOP;
 		end
 	end
 end
@@ -130,102 +144,54 @@ end
 // processing. The micro-ops are in program order in the buffer. Which
 // instruction the micro-op belongs to is stored in an array called uop_mark.
 always_ff @(posedge clk)
+if (rst)
+	kk <= 0;
+else begin
+	if (en) begin
+		if (kk+4 < uop_count3)
+			kk <= kk + 4;
+		else
+			kk <= 0;
+	end
+end
+
+always_ff @(posedge clk)
 if (rst) begin
-  for (n5 = 0; n5 < MAX_MICROOPS; n5 = n5 + 1)
+  for (n5 = 0; n5 < MAX_MICROOPS; n5 = n5 + 1) begin
     uop_mark[n5] <= 2'b00;
+    uop_buf[n5] <= {$bits(Qupls4_pkg::micro_op_t){1'b0}};
+    uop_buf[n5].v <= VAL;
+    uop_buf[n5].lead <= 1'b1;
+		uop_buf[n5].opcode <= Qupls4_pkg::OP_NOP;
+  end
    // On reset fill buffer with NOPs (0xff).
-	uop_buf <= {$bits(Qupls4_pkg::micro_op_t)*MAX_MICROOPS{8'hFF}};
-	rd_more <= TRUE;
-	kk = 0;
 	for (n13 = 0; n13 < MWIDTH; n13 = n13 + 1)
 		head[n13] <= n13;
 	tail <= 0;
 end
-else if (en) begin
-/*
-	jj = tail;
-	rd_more = FALSE;
-	if (kk+6 >= uop_count3)
-		rd_more = TRUE;//room > 3;
-	if (kk < uop_count3) begin
-		uop_buf[jj] = uop_buf3[kk];
-		uop_mark[jj] = uop_mark3[kk];
-		jj = jj + 1;
-		kk = kk + 1;
+else begin
+	if (en) begin
+		uop_buf[0] <= uop_buf3[kk+0];
+		uop_buf[1] <= uop_buf3[kk+1];
+		uop_buf[2] <= uop_buf3[kk+2];
+		uop_buf[3] <= uop_buf3[kk+3];
+		uop_mark[0] <= uop_mark3[kk+0];
+		uop_mark[1] <= uop_mark3[kk+1];
+		uop_mark[2] <= uop_mark3[kk+2];
+		uop_mark[3] <= uop_mark3[kk+3];
 	end
-	if (kk < uop_count3) begin
-		uop_buf[jj] = uop_buf3[kk];
-		uop_mark[jj] = uop_mark3[kk];
-		jj = jj + 1;
-		kk = kk + 1;
-	end
-	if (kk < uop_count3) begin
-		uop_buf[jj] = uop_buf3[kk];
-		uop_mark[jj] = uop_mark3[kk];
-		jj = jj + 1;
-		kk = kk + 1;
-	end
-	if (kk < uop_count3) begin
-		uop_buf[jj] = uop_buf3[kk];
-		uop_mark[jj] = uop_mark3[kk];
-		jj = jj + 1;
-		kk = kk + 1;
-	end
-	if (kk < uop_count3) begin
-		uop_buf[jj] = uop_buf3[kk];
-		uop_mark[jj] = uop_mark3[kk];
-		jj = jj + 1;
-		kk = kk + 1;
-	end
-	if (kk < uop_count3) begin
-		uop_buf[jj] = uop_buf3[kk];
-		uop_mark[jj] = uop_mark3[kk];
-		jj = jj + 1;
-		kk = kk + 1;
-	end
-	else
-		kk = 0;
-	tail = jj % MAX_MICROOPS;
-	for (n13 = 0; n13 < MWIDTH; n13 = n13 + 1)
-		head[n13] = (head[n13] + MWIDTH + n13) % MAX_MICROOPS;
-*/
-/*
-	if (rc_uop_count[kk] < uop_count[kk] && kk < MWIDTH) begin
-		uop_buf[jj] = uop[kk][rc_uop_count[kk]];
-		uop_mark[jj] = jj;
-		jj = jj + 1;
-		rc_uop_count[kk] = rc_uop_count[kk] + 4'd1;
-	end
-	else if (kk < MWIDTH)
-		kk = kk + 1;
-	tail = tail + jj;
-	head[0] = head[0] + MWIDTH;
-	if (kk >= MWIDTH) begin
-		kk = 0;
-		for (n5 = 0; n5 < MWIDTH; n5 = n5 + 1)
-			rc_uop_count[n5] = 8'd0;
-		rd_more = TRUE;//room > 3;
-	end
-*/
-
-	rd_more <= FALSE;
-	uop_buf[0] <= uop_buf3[kk+0];
-	uop_buf[1] <= uop_buf3[kk+1];
-	uop_buf[2] <= uop_buf3[kk+2];
-	uop_buf[3] <= uop_buf3[kk+3];
-	uop_mark[0] <= uop_mark3[kk+0];
-	uop_mark[1] <= uop_mark3[kk+1];
-	uop_mark[2] <= uop_mark3[kk+2];
-	uop_mark[3] <= uop_mark3[kk+3];
-	if (kk+4 < uop_count3)
-		kk = kk + 4;
-	else begin
-		kk = 0;
-		rd_more <= TRUE;
-	end
-
 end
 
+always_ff @(posedge clk)
+if (rst)
+	rd_more <= FALSE;
+else begin
+	rd_more <= FALSE;
+	if (en) begin
+		if (kk+4 >= uop_count3)
+			rd_more <= TRUE;
+	end
+end
 
 endmodule
 

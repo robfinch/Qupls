@@ -1,0 +1,40 @@
+#
+PATH = $PATH;C:\Users\Robert\OneDrive\documents\Cores2026\Qupls\software\CC64\cc64\cc64\debug;"C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\VC\Tools\MSVC\14.28.29333\bin\Hostx64\x64\bin\Hostx64\x64\"
+INC = C:\Users\Robert\OneDrive\documents\cores2026\Qupls\software\source\;C:\Users\Robert\OneDrive\documents\cores2026\Qupls\software\Femtiki\source\kernel\;C:\Users\Robert\OneDrive\documents\cores2026\Qupls\software\Femtiki\source\inc\;C:\Users\Robert\OneDrive\documents\cores2026\Qupls\software\inc\
+INCLUDE = C:\Users\Robert\OneDrive\documents\cores2026\Qupls\software\source\;C:\Users\Robert\OneDrive\documents\cores2026\Qupls\software\Femtiki\source\inc\;C:\Users\Robert\OneDrive\documents\cores2026\Qupls\software\Femtiki\source\kernel\;C:\Users\Robert\OneDrive\documents\cores2026\Qupls\software\inc\
+FPPINC  = C:\Users\Robert\OneDrive\documents\cores2026\Qupls\software\source\;C:\Users\Robert\OneDrive\documents\cores2026\Qupls\software\Femtiki\source\inc\;C:\Users\Robert\OneDrive\documents\cores2026\Qupls\software\Femtiki\source\kernel\;C:\Users\Robert\OneDrive\documents\cores2026\Qupls\software\inc\
+CXX = arpl_qupls4
+#CXX = opt
+CFLAGS = -c99 -IC:\Users\Robert\OneDrive\documents\cores2025\Qupls\software\inc\ -O=31
+#CFLAGS = -w -S -fno-exceptions
+AFLAGS = -w -fno-exceptions -a21 -finline0
+
+
+#
+
+ROM:
+	del boot_rom.bin
+	del boot_rom.lst
+	arpl $(AFLAGS) bootrom.c
+	arpl $(AFLAGS) Fibonacci.c
+	arpl $(AFLAGS) serial.c
+	arpl $(AFLAGS) xmodem.c
+	arpl $(AFLAGS) SIEVE.c
+	arpl $(AFLAGS) ..\Femtiki\source\kernel\console.c
+	vasmQupls4_std.exe -Fvobj -Lbpl=12 -L fibonacci.lst fibonacci.qp4 -o fibonacci.o
+	vasmQupls4_std.exe -Fvobj -Lbpl=12 -L bootrom.lst bootrom.qp4 -o bootrom.o
+	vasmQupls4_std.exe -Fvobj -Lbpl=12 -L xmodem.lst xmodem.qp4 -o xmodem.o
+	vasmQupls4_std.exe -Fvobj -Lbpl=12 -L serial.lst serial.qp4 -o serial.o
+	vasmQupls4_std.exe -Fvobj -Lbpl=12 -L  boot.lst boot.qp4 -o boot.o
+	vasmQupls4_std.exe -Fvobj -Lbpl=12 -L reset_vector.lst reset_vector.asm -o reset_vector.o
+	vasmQupls4_std.exe -Fvobj -Lbpl=12 -L sieve.lst sieve.qp4 -o sieve.o
+	vasmQupls4_std.exe -Fvobj -Lbpl=12 -L printf_again.lst printf_again.qp4 -o printf_again.o
+	vasmQupls4_std.exe -Fvobj -Lbpl=12 -L ..\cc64rt\source\cc64rt.lst ..\cc64rt\source\cc64rt.asm -o cc64rt.o
+	vasmQupls4_std.exe -Fvobj -Lbpl=12 -L ..\cc64rt\source\__store.lst ..\cc64rt\source\__store.asm -o __store.o
+	vasmQupls4_std.exe -Fvobj -Lbpl=12 -L ..\cc64rt\source\__load.lst ..\cc64rt\source\__load.asm -o __load.o
+	vasmQupls4_std.exe -Fvobj -Lbpl=12 -L ..\Femtiki\source\kernel\console.lst ..\Femtiki\source\kernel\console.qp4 -o console.o
+	vlink -M -T rom_bios.cmd -brawbin1 boot.o cc64rt.o __store.o __load.o reset_vector.o -o boot.bin
+	vlink -T rom_bios.cmd -brawbin1 fibonacci.o -o fibonacci.bin
+	bin2ver boot.bin -b256 m -mod65536
+	bin2ver boot.bin -b256 -mod65536
+

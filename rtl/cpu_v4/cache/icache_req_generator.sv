@@ -106,6 +106,7 @@ else begin
 			wbm_req.bte <= wishbone_pkg::LINEAR;
 			wbm_req.cti <= wishbone_pkg::CLASSIC;
 			wbm_req.cyc <= 1'b0;
+			wbm_req.stb <= 1'b0;
 			wbm_req.sel <= 32'h00000000;
 			wbm_req.we <= 1'b0;
 			if (lfsr_cnt=={CHANNEL,2'b0})
@@ -121,6 +122,7 @@ else begin
 			wbm_req.blen <= 6'd1;
 			wbm_req.cti <= wishbone_pkg::FIXED;
 			wbm_req.cyc <= 1'b1;
+			wbm_req.stb <= 1'b1;
 			wbm_req.sel <= 32'hFFFFFFFF;
 			wbm_req.we <= 1'b0;
 //			wbm_req.vadr <= {miss_vadr[$bits(fta_address_t)-1:cache_pkg::ICacheTagLoBit],{cache_pkg::ICacheTagLoBit{1'h0}}};
@@ -135,13 +137,14 @@ else begin
 		end
 	STATE3:
 		if (ack_i) begin
-			wbm_req.cyc <= 1'b0;
+			wbm_req.stb <= 1'b0;
 			req_state <= STATE3a;
 		end
 	STATE3a:
-		begin
+		if (!ack_i) begin
 			wbm_req.tid.tranid <= {tid,2'd1};
 			wbm_req.cyc <= 1'b1;
+			wbm_req.stb <= 1'b1;
 //			wbm_req.vadr <= vadr + 6'd32;
 			wbm_req.adr <= padr + 6'd32;
 			vtags[{tid,2'd1}] <= madr + 6'd32;
@@ -214,12 +217,13 @@ else begin
 			req_state <= WAIT_UPD1;
 		end
 	WAIT_UPD1:
-		req_state <= WAIT_UPD2;
+		if (!ack_i)
+			req_state <= WAIT_UPD2;
 	WAIT_UPD2:
 		begin
 			tid <= tid + 2'd1;
 			if (&tid)
-				tid <= 2'd1;
+				tid <= 2'd0;
 			req_state <= WAIT4MISS;
 		end
 	default:

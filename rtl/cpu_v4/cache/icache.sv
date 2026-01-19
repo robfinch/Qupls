@@ -631,7 +631,7 @@ end
 // Set miss address
 
 always_ff @(posedge clk)
-if (ce) begin
+begin
 	if (!ihit1e)
 		miss_vadr = {ip.pc[$bits(cpu_types_pkg::address_t)-1:LOBIT]+ip.pc[LOBIT-1],1'b0,{LOBIT-1{1'b0}}};
 	else if (!ihit1o)
@@ -643,10 +643,10 @@ if (ce) begin
 end
 
 always_ff @(posedge clk)
-	if (ce) miss_asid <= ip_asid;
+	miss_asid <= ip_asid;
 
 always_ff @(posedge clk)
-if (ce) begin
+begin
 	if (!ihit1e)
 		port = 1'b0;
 	else if (!ihit1o)

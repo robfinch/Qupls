@@ -1,7 +1,7 @@
 `timescale 1ns / 10ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2023-2026  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -43,8 +43,8 @@ package Qupls4_pkg;
 `define QUPLS4	1'b1
 `define STARK_PKG 1'b1
 `undef IS_SIM
-parameter SIM = 1'b0;
-//`define IS_SIM	1
+parameter SIM = 1'b1;
+`define IS_SIM	1
 
 `include "Qupls4_config.sv"
 /*
@@ -1987,6 +1987,12 @@ typedef struct packed {
 	cause_code_t exc;					// non-zero indicate exception
 	logic excv;								// 1=exception
 	logic nan;								// FP op generated a NaN
+`ifdef IS_SIM
+	cpu_types_pkg::value_t argA;
+	cpu_types_pkg::value_t argB;
+	cpu_types_pkg::value_t argT;
+	cpu_types_pkg::value_t argI;
+`endif
 	/*
 	cpu_types_pkg::value_t argA;
 	cpu_types_pkg::value_t argB;
@@ -2068,7 +2074,7 @@ typedef struct packed
 	cpu_types_pkg::checkpt_ndx_t cndx;	// checkpoint index
 	logic chkpt_freed;
 	logic has_branch;
-	cpu_types_pkg::pc_address_t ip;			// Instruction pointer of group
+	cpu_types_pkg::pc_address_ex_t ip;			// Instruction pointer of group
 } pipeline_group_hdr_t;
 
 typedef struct packed

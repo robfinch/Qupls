@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2025-2026  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -510,7 +510,7 @@ always_comb
 always_comb
 	swstk = doutb.swstk;
 always_ff @(posedge clk)
-	ipri2 <= que_sel;
+	ipri2 <= que_sel==7'h7f ? 6'd0 : que_sel;
 always_ff @(posedge clk)
 	ipri <= ipri2;
 always_ff @(posedge clk)

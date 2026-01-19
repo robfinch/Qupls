@@ -39,7 +39,7 @@ import const_pkg::*;
 import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_pipeline_fet(rst, clk, ihit, en, fet_stallq, ic_stallq,
+module Qupls4_pipeline_fet(rst, clk, ihit, en,
 	irq_in_ic, irq_ic, irq_in_fet, irq_fet, irq_sn_ic, irq_sn_fet,
 	pc_i, misspc, misspc_fet, uop_num_ic, uop_num_fet, flush_i,flush_fet,
 	pc0_fet, pc1_fet, pc2_fet, pc3_fet, pc4_fet, stomp_fet, kept_stream, ic_carry_mod,
@@ -49,14 +49,12 @@ input rst;
 input clk;
 input ihit;
 input en;
-input fet_stallq;
 input irq_ic;
 output reg irq_fet;
 input cpu_types_pkg::seqnum_t irq_sn_ic;
 output cpu_types_pkg::seqnum_t irq_sn_fet;
 input Qupls4_pkg::irq_info_packet_t irq_in_ic;
 output Qupls4_pkg::irq_info_packet_t irq_in_fet;
-output reg ic_stallq;
 input pc_address_ex_t pc_i;
 input pc_address_ex_t misspc;
 output pc_address_ex_t misspc_fet;
@@ -78,10 +76,6 @@ input [511:0] inj_line_i;
 output reg [1023:0] ic_line_fet;
 input nmi_i;
 output reg [31:0] carry_mod_fet;
-
-reg en2;
-always_comb
-	en2 = en & !fet_stallq;
 
 pc_address_ex_t pc0_f;
 pc_address_ex_t pc1_f;
@@ -120,7 +114,7 @@ if (rst) begin
 	pc0_fet.pc <= RSTPC;
 end
 else begin
-	if (en2)
+	if (en)
 		pc0_fet <= pc0_f;
 end
 always_ff @(posedge clk)
@@ -129,7 +123,7 @@ if (rst) begin
 	pc1_fet.pc <= RSTPC + 6'd8;
 end
 else begin
-	if (en2) begin
+	if (en) begin
 		pc1_fet <= pc_i;
 		pc1_fet.pc <= pc1_f;
 	end
@@ -140,7 +134,7 @@ if (rst) begin
 	pc2_fet.pc <= RSTPC + 6'd16;
 end
 else begin
-	if (en2) begin
+	if (en) begin
 		pc2_fet <= pc_i;
 		pc2_fet.pc <= pc2_f;
 	end
@@ -151,7 +145,7 @@ if (rst) begin
 	pc3_fet.pc <= RSTPC + 6'd24;
 end
 else begin
-	if (en2) begin
+	if (en) begin
 		pc3_fet <= pc_i;
 		pc3_fet.pc <= pc3_f;
 	end
@@ -162,7 +156,7 @@ if (rst) begin
 	pc4_fet.pc <= RSTPC + 6'd32;
 end
 else begin
-	if (en2)
+	if (en)
 		pc4_fet.pc <= pc4_f;
 end
 
@@ -172,23 +166,22 @@ if (rst) begin
 	misspc_fet <= RSTPC;
 end
 else begin
-	if (en2)
+	if (en)
 		misspc_fet <= misspc;
 end
+
+reg en2;
+always_comb
+	en2 = !ihit || (stomp_fet && pc_i.stream!=kept_stream) || nmi_i || flush_i;
 
 always_ff @(posedge clk)
 if (rst)
 	ic_line_fet <= {128{1'd1,Qupls4_pkg::OP_NOP}};
 else begin
-	/*
-	if (!rstcnt[5])
-		ic_line_fet <= {128{1'd1,Qupls4_pkg::OP_NOP}};
-	else
-	*/
-	if (en2|inject_cl) begin
+	if (en|inject_cl) begin
 		if (inject_cl)
 			ic_line_fet <= {{64{2'd3,Qupls4_pkg::OP_NOP}},inj_line_i};
-		else if (!ihit || (stomp_fet && pc_i.stream!=kept_stream) || nmi_i || flush_i)
+		else if (en2)
 			ic_line_fet <= {128{1'd1,Qupls4_pkg::OP_NOP}};
 		else
 			ic_line_fet <= ic_line_i;
@@ -199,7 +192,7 @@ always_ff @(posedge clk)
 if (rst)
 	carry_mod_fet <= 32'd0;
 else begin
-	if (en2)
+	if (en)
 		carry_mod_fet <= ic_carry_mod;
 end
 
@@ -207,7 +200,7 @@ always_ff @(posedge clk)
 if (rst)
 	uop_num_fet <= 3'd0;
 else begin
-	if (en2)
+	if (en)
 		uop_num_fet <= uop_num_ic;
 end
 
@@ -215,7 +208,7 @@ always_ff @(posedge clk)
 if (rst)
 	flush_fet <= 1'b0;
 else begin
-	if (en2)
+	if (en)
 		flush_fet <= flush_i;
 end
 
@@ -223,7 +216,7 @@ always_ff @(posedge clk)
 if (rst)
 	irq_in_fet <= 1'b0;
 else begin
-	if (en2)
+	if (en)
 		irq_in_fet <= irq_in_ic;
 end
 
@@ -231,7 +224,7 @@ always_ff @(posedge clk)
 if (rst)
 	irq_fet <= 1'b0;
 else begin
-	if (en2)
+	if (en)
 		irq_fet <= irq_ic;
 end
 
@@ -239,11 +232,8 @@ always_ff @(posedge clk)
 if (rst)
 	irq_sn_fet <= 8'd0;
 else begin
-	if (en2)
+	if (en)
 		irq_sn_fet <= irq_sn_ic;
 end
-
-always_comb
-	ic_stallq = fet_stallq;
 
 endmodule

@@ -65,6 +65,27 @@ genvar g;
 wire rd_more;
 reg [5:0] uop_count [0:MWIDTH-1];
 Qupls4_pkg::micro_op_t [MICROOPS_PER_INSTR-1:0] uop [0:MWIDTH-1];
+Qupls4_pkg::rob_entry_t nopi;
+
+// Define a NOP instruction.
+always_comb
+begin
+	nopi = {$bits(Qupls4_pkg::rob_entry_t){1'b0}};
+	nopi.op.exc = Qupls4_pkg::FLT_NONE;
+	nopi.op.uop = {41'd0,Qupls4_pkg::OP_NOP};
+	nopi.op.decbus.nop = TRUE;
+	nopi.op.decbus.cause = Qupls4_pkg::FLT_NONE;
+	nopi.op.uop.lead = 1'd1;
+	nopi.op.v = 1'b1;
+	nopi.v = 5'd1;
+	nopi.exc = Qupls4_pkg::FLT_NONE;
+	nopi.excv = INV;
+	/* NOP will be decoded later
+	nopi.decbus.Rdz = 1'b1;
+	nopi.decbus.nop = 1'b1;
+	nopi.decbus.alu = 1'b1;
+	*/
+end
 
 generate begin : gComb
 	if (FALSE & COMB) begin
@@ -86,13 +107,22 @@ generate begin : gComb
 			if (en) cline_mot <= cline_ext;
 
 		always_ff @(posedge clk)
-		if (en) begin
+		if (rst) begin
+			pg_mot <= {$bits(pipeline_group_reg_t){1'b0}};
+			foreach(pg_mot.pr[n1])
+				pg_mot.pr[n1] <= nopi;
+		end
+		else if (en) begin
 			pg_mot <= pg_ext;
 			if (stomp)
 				pg_mot.hdr.v <= INV;
 			foreach (pg_mot.pr[n1])
-				if (stomp)
-					pg_mot.pr[n1].v <= INV;
+				if (stomp) begin
+//					pg_mot.pr[n1].v <= {5{INV}};
+					pg_mot.pr[n1] <= nopi;
+					pg_mot.pr[n1].done <= 2'b11;
+					pg_mot.pr[n1].dispatchable <= FALSE;
+				end
 		end
 	end
 end

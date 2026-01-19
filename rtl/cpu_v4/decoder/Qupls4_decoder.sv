@@ -376,50 +376,52 @@ begin
 	db.v2p = instr.opcode==Qupls4_pkg::OP_V2P;
 	db.vv2p = instr.opcode==Qupls4_pkg::OP_VV2P;
 	db.amo = instr.opcode==Qupls4_pkg::OP_AMO;
-	db.rext <= instr.opcode==Qupls4_pkg::OP_REXT;
+	db.rext = instr.opcode==Qupls4_pkg::OP_REXT;
+	db.cause = Qupls4_pkg::FLT_NONE;
 end
 
-always_ff @(posedge clk)
+always_comb//ff @(posedge clk)
 if (rst) begin
-	dbo <= {$bits(dbo){1'd0}};
-	dbo.cause <= Qupls4_pkg::FLT_NONE;
-	dbo.nop <= 1'b1;
-	dbo.Rdv <= 1'b0;
-	dbo.sau <= 1'b1;
+	dbo = {$bits(dbo){1'd0}};
+	dbo.cause = Qupls4_pkg::FLT_NONE;
+	dbo.nop = 1'b1;
+	dbo.Rdv = 1'b0;
+	dbo.sau = 1'b1;
 end
 else begin
-	if (en) begin
-		dbo <= {$bits(dbo){1'd0}};	// in case a signal was missed / unused.
-		dbo <= db;
-		dbo.rext <= db.rext;
-		dbo.boi <= db.boi;
-		dbo.bsr <= db.bsr;
-		dbo.jsr <= db.jsr;
-		dbo.sys <= db.sys;
-		dbo.stptr <= db.stptr;
-		dbo.csr <= db.csr;
-		dbo.iprel <= db.Rs1==8'd62;//1'b0;//db.Rs1==8'd31;
-		dbo.cause <= Qupls4_pkg::FLT_NONE;
-		dbo.mem <= 
+	begin
+		dbo = {$bits(dbo){1'd0}};	// in case a signal was missed / unused.
+		dbo = db;
+		dbo.rext = db.rext;
+		dbo.boi = db.boi;
+		dbo.bsr = db.bsr;
+		dbo.jsr = db.jsr;
+		dbo.sys = db.sys;
+		dbo.stptr = db.stptr;
+		dbo.csr = db.csr;
+		dbo.iprel = db.Rs1==8'd62;//1'b0;//db.Rs1==8'd31;
+		dbo.cause = Qupls4_pkg::FLT_NONE;
+		dbo.mem = 
 			 db.load|db.vload|db.vload_ndx
 			|db.store|db.vstore|db.vstore_ndx
 			|db.v2p|db.vv2p|db.vvn2p;
-		dbo.mem0 <= db.v2p|db.vv2p|db.vvn2p;
-		dbo.sync <= db.fence && instr[15:8]==8'hFF;
-		dbo.cpytgt <= 1'b0;
-		dbo.qfext <= 1'b0;//db.alu && ins.ins[28:27]==2'b10;
+		dbo.mem0 = db.v2p|db.vv2p|db.vvn2p;
+		dbo.sync = db.fence && instr[15:8]==8'hFF;
+		dbo.cpytgt = 1'b0;
+		dbo.qfext = 1'b0;//db.alu && ins.ins[28:27]==2'b10;
 		if (excRs1|excRs2|excRs3|excRd)
-			dbo.cause <= Qupls4_pkg::FLT_BADREG;
-		dbo.rc <= instr.func[6];
+			dbo.cause = Qupls4_pkg::FLT_BADREG;
+		dbo.rc = instr.func[6];
 		// Is the predicate shadow count within range?
 		if (pred_shadow_count >= Qupls4_pkg::PRED_SHADOW)
-			dbo.cause <= Qupls4_pkg::FLT_UNIMP;
+			dbo.cause = Qupls4_pkg::FLT_UNIMP;
 		else
-			dbo.pred_shadow_size <= pred_shadow_count;
+			dbo.pred_shadow_size = pred_shadow_count;
 		if (!instr.v) begin
-			dbo <= {$bits(dbo){1'd0}};	// in case a signal was missed / unused.
-			dbo.nop <= TRUE;
-			dbo.sau <= TRUE;
+			dbo = {$bits(dbo){1'd0}};	// in case a signal was missed / unused.
+			dbo.nop = TRUE;
+			dbo.sau = TRUE;
+			dbo.cause = Qupls4_pkg::FLT_NONE;
 		end
 		// Check for unimplemented instruction, but not if it is being stomped on.
 		// If it is stomped on, we do not care.
@@ -434,7 +436,7 @@ else begin
 			|db.store|db.vstore|db.vstore_ndx
 			|db.v2p|db.vv2p|db.vvn2p			
 			)) begin
-			dbo.cause <= Qupls4_pkg::FLT_UNIMP;
+			dbo.cause = Qupls4_pkg::FLT_UNIMP;
 		end
 	end
 end

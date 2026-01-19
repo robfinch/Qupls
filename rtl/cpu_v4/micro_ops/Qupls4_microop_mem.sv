@@ -358,6 +358,7 @@ begin
 	for (n1 = 0; n1 < UOP_ARRAY_SIZE; n1 = n1 + 1) begin
 		next_uop[n1] = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
 		next_uop[n1].opcode = Qupls4_pkg::OP_NOP;
+		next_uop[n1].v = VAL;
 	end
 
 	case(ir.opcode)
@@ -1110,6 +1111,7 @@ generate begin : gComb
 			foreach (uop[n1]) begin
 				uop[n1] = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
 				uop[n1].opcode = Qupls4_pkg::OP_NOP;
+				uop[n1].v = VAL;
 			end
 		end
 		else begin
@@ -1125,6 +1127,7 @@ generate begin : gComb
 			foreach (uop[n1]) begin
 				uop[n1] <= {$bits(Qupls4_pkg::micro_op_t){1'b0}};
 				uop[n1].opcode <= Qupls4_pkg::OP_NOP;
+				uop[n1].v = VAL;
 			end
 		end
 		else if (en) begin

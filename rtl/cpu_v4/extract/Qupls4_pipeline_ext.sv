@@ -54,7 +54,7 @@ module Qupls4_pipeline_ext(rst_i, clk_i, ihit, en_i,
 	pc0_fet, uop_num_fet, uop_num_ext,
 	ls_bmf_i, pack_regs_i, scale_regs_i, regcnt_i,
 	pg_ext, new_stream, alloc_stream,
-	new_address_o, do_ret, ret_pc, do_call, get, mux_stallq, fet_stallq);
+	new_address_o, do_ret, ret_pc, do_call, get);
 parameter MWIDTH = Qupls4_pkg::MWIDTH;
 input rst_i;
 input clk_i;
@@ -106,8 +106,6 @@ output reg do_ret;
 output pc_address_ex_t ret_pc;
 output reg do_call;
 input get;
-input mux_stallq;
-output reg fet_stallq;
 input pc_stream_t [THREADS-1:0] new_stream;
 output reg alloc_stream;
 
@@ -138,13 +136,24 @@ Qupls4_pkg::rob_entry_t nopi;
 
 always_comb
 begin
-	foreach (pc_fet[n5])
+	foreach (pc_fet[n5]) begin
+		pc_fet[n5].stream = pc0_fet.stream;
 		pc_fet[n5].pc = pc0_fet.pc + n5*6;
+	end
 end
 
 always_ff @(posedge clk)
+if (rst_i) begin
+	foreach(pc_ext[n6]) begin
+		pc_ext[n6].pc <= Qupls4_pkg::RSTPC;
+		pc_ext[n6].stream.stream <= 5'd1;
+		pc_ext[n6].stream.thread <= 3'd0;
+	end
+end
+else begin
 	foreach(pc_ext[n6])
 		if (en) pc_ext[n6] <= pc_fet[n6];
+end
 
 // Define a NOP instruction.
 always_comb
@@ -153,8 +162,12 @@ begin
 	nopi.op.exc = Qupls4_pkg::FLT_NONE;
 	nopi.op.uop = {41'd0,Qupls4_pkg::OP_NOP};
 	nopi.op.decbus.nop = TRUE;
+	nopi.op.decbus.cause = Qupls4_pkg::FLT_NONE;
 	nopi.op.uop.lead = 1'd1;
-	nopi.v = 1'b1;
+	nopi.op.v = 1'b1;
+	nopi.v = 5'd1;
+	nopi.exc = Qupls4_pkg::FLT_NONE;
+	nopi.excv = INV;
 	/* NOP will be decoded later
 	nopi.decbus.Rdz = 1'b1;
 	nopi.decbus.nop = 1'b1;
@@ -432,11 +445,13 @@ begin
 			ret_pc.pc = pc_ext[n3].pc + 4'd6;
 end
 
-always_comb
-	fet_stallq = mux_stallq;
-
 always_ff @(posedge clk)
-if (en) begin
+if (rst_i) begin
+	pg_ext <= {$bits(Qupls4_pkg::pipeline_group_reg_t){1'b0}};
+	foreach (pg_ext.pr[n2])
+		pg_ext.pr[n2] <= nopi;
+end
+else if (en) begin
 	pg_ext.flush <= flush_fet;
 	pg_ext.hdr <= {$bits(Qupls4_pkg::pipeline_group_hdr_t){1'b0}};
 	pg_ext.hdr.v <= !stomp_ext;
@@ -444,13 +459,17 @@ if (en) begin
 	pg_ext.hdr.irq <= irq_in_ext;
 	pg_ext.hdr.old_ipl <= ipl_ext;
 	pg_ext.hdr.hwi <= irq_ext;
-	pg_ext.hdr.ip <= pc_ext[0].pc;
+	pg_ext.hdr.ip <= pc_ext[0];
 	foreach (pg_ext.pr[n2]) begin
-		pg_ext.pr[n2] <= {$bits(Qupls4_pkg::pipeline_reg_t){1'b0}};
-		pg_ext.pr[n2] <= nop[n2] ? nopi : ins_fet[n2];
+		pg_ext.pr[n2] <= {$bits(Qupls4_pkg::rob_entry_t){1'b0}};
+		pg_ext.pr[n2] <= nop[n2]|stomp_ext ? nopi : ins_fet[n2];
+		pg_ext.pr[n2].v <= pc_ext[n2].stream.stream;
 		pg_ext.pr[n2].wh <= n2;
-		pg_ext.pr[n2].ip_stream <= pc_ext[n2].stream.stream;
+		pg_ext.pr[n2].ip_stream <= pc_ext[n2].stream;
 		pg_ext.pr[n2].ip_offs <= n2 * 3;	// wyde offset
+		pg_ext.pr[n2].eip <= pc_ext[0].pc + (n2*6);
+		pg_ext.pr[n2].done <= stomp_ext ? 2'b11 : 2'b00;
+		pg_ext.pr[n2].dispatchable <= stomp_ext ? FALSE : TRUE;
 	end
 end
 
@@ -484,7 +503,7 @@ else begin
 end
 
 always_comb
-	p_override = (|bsr) | (|jsr) | (|bcc) | (!bra) | (|jmp) ? pc0_fet.pc != new_address_o.pc : FALSE;
+	p_override = ((|bsr) | (|jsr) | (|bcc) | (|bra) | (|jmp)) ? pc0_fet != new_address_o : FALSE;
 
 /*
 always_comb mcip0_o <= mcip0;
@@ -502,12 +521,15 @@ input Qupls4_pkg::pipeline_reg_t ins_i;
 output Qupls4_pkg::rob_entry_t ins_o;
 output [6:0] bno;
 begin
-	ins_o.v = !stomp_ext;
-	ins_o.op.v = !stomp_ext;
+	ins_o = {$bits(rob_entry_t){1'b0}};
+	ins_o.v = pc.stream.stream;
+	ins_o.done = stomp_ext ? 2'b11 : 2'b00;
+	ins_o.op.v = ~stomp_ext;
 	ins_o.op = ins_i;
 	ins_o.op.bt = takb;
 	ins_o.ip_stream = pc.stream.stream;
 	ins_o.ip_offs = g * 3;
+	ins_o.op.decbus.cause = Qupls4_pkg::FLT_NONE;
 	/*
   ins_o.aRs1 = {ins_i.uop.Rs1};
   ins_o.aRs2 = {ins_i.uop.Rs2};

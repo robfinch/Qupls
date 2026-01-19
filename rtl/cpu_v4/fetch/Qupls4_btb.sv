@@ -63,7 +63,7 @@ input advance_pc;
 input micro_machine_active;
 output reg [2:0] igrp;
 input get_next_pc;
-input cpu_types_pkg::pc_address_ex_t pc;
+output cpu_types_pkg::pc_address_ex_t pc;
 input cpu_types_pkg::pc_address_ex_t pc0;
 output cpu_types_pkg::pc_address_ex_t next_pc;
 input p_override;
@@ -332,11 +332,11 @@ begin
 	*/
 	// Decode stage corrections override mux stage.
 	if (branchmiss)
-		next_pcs[misspc.stream] = misspc;
+		next_pcs[misspc.stream.stream] = misspc;
 	else if (!predicted_correctly_dec)
-		next_pcs[act_stream] = new_address_dec;
+		next_pcs[new_address_dec.stream.stream] = new_address_dec;
 	else if (p_override)
-		next_pcs[act_stream] = new_address_ext;
+		next_pcs[new_address_ext.stream.stream] = new_address_ext;
 	// Now the target predictions
 	// Note the stream cannot be recorded in the BTB table.
 	else if (pc0.pc==doutb0.pc) begin
@@ -352,8 +352,8 @@ begin
 	end
 	// Advance program counter.
 	else begin
-		next_pcs[act_stream] = pc;
-		next_pcs[act_stream].pc = pc.pc + MWIDTH*6;	// four instructions
+		next_pcs[pc.stream.stream] = pc;
+		next_pcs[pc.stream.stream].pc = pc.pc + MWIDTH*6;	// four instructions
 	end
 end
 
@@ -374,6 +374,16 @@ generate begin : gPCs
 	end
 end
 endgenerate
+
+always_ff @(posedge clk)
+	if (rst) begin
+		pc.pc <= Qupls4_pkg::RSTPC;
+		pc.stream <= act_stream;
+	end
+	else if (advance_pc) begin
+		if (get_next_pc)
+			pc <= next_pcs[next_act_stream];
+	end
 
 // Manage thread updates.
 always_ff @(posedge clk)

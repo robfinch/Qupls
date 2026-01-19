@@ -81,6 +81,7 @@ parameter NREG_WPORTS = Qupls4_pkg::NREG_WPORTS;
 localparam RS_NREG_RPORTS = Qupls4_pkg::NREG_RPORTS;
 parameter MICROOPS_PER_INSTR = 32;
 parameter MAX_MICROOPS = 12;
+parameter XSTREAMS = Qupls4_pkg::XSTREAMS;
 input [63:0] coreno_i;
 input rst_i;
 input clk_i;
@@ -122,7 +123,7 @@ integer nn,mm,n2,n3,n4,m4,n5,n6,n8,n9,n10,n11,n12,n13,n14,n15,n17;
 integer n16r, n16c, n12r, n12c, n14r, n14c, n17r, n17c, n18r, n18c;
 integer n19,n20,n21,n22,n23,n24,n25,n26,n27,n28,n29,i,n30,n31,n32,n33;
 integer n34,n35,n36,n37,n38,n39,n40,n41,n42,n43,n44,n45,n46,n47,n48;
-integer n49,n50,n51,n52,n53,n54,n55;
+integer n49,n50,n51,n52,n53,n54,n55,n56,n57;
 integer jj,kk;
 
 genvar g,h,gvg;
@@ -315,7 +316,6 @@ Qupls4_pkg::rob_bitmask_t robentry_cpydst;
 pc_stream_t kept_stream;
 wire stomp_fet, stomp_ext, stomp_mot, stomp_x4;
 wire stomp_dec, stomp_ren, stomp_que, stomp_quem;
-reg stomp_fet1,stomp_ext1,stomp_ext2;
 Qupls4_pkg::rob_bitmask_t robentry_issue;
 Qupls4_pkg::rob_bitmask_t robentry_fpu_issue;
 Qupls4_pkg::rob_bitmask_t robentry_fcu_issue;
@@ -401,6 +401,17 @@ pregno_t bo_nreg;
 
 reg [3:0] predino;
 rob_ndx_t predrndx;
+reg [1:0] pred_tf [0:XSTREAMS-1][0:31];	// predicate was true (1) or false (2), unassigned (0)
+reg [31:0] pred_alloc_map;
+wire [5:0] pred_no [0:3];
+reg [63:0] pred_buf [0:XSTREAMS-1];			// holds the predicate value
+reg [XSTREAMS-1:0] pred_done;						// tracks if predicate is done on stream
+reg [7:0] pred_ins_done [0:XSTREAMS-1];	// tracks if predicated instruction is done
+always_comb
+	foreach (pred_tf[n56])
+		for (n57 = 0; n57 < 32; n57 = n57 + 1)
+			pred_tf[n56][n57] = pred_buf[n56] >> {n57[4:0],1'b0};
+
 reg [3:0] regx0;
 reg [3:0] regx1;
 reg [3:0] regx2;
@@ -732,9 +743,6 @@ wire fcu_args_valid;
 rob_ndx_t fcu_m1, fcu_dst;
 Qupls4_pkg::reservation_station_entry_t fcu_rse,fcu_rse2,fcu_rser;
 cpu_types_pkg::value_t fcu_res;
-reg [1:0] pred_tf [0:31];		// predicate was true (1) or false (2), unassigned (0)
-reg [31:0] pred_alloc_map;
-wire [5:0] pred_no [0:3];
 
 wire tlb0_v, tlb1_v;
 
@@ -1301,7 +1309,6 @@ always_comb
 pc_address_t nmi_addr, irq_addr, next_hwipc, hwipc;
 reg nmi, ic_nmi, nmi_fet;
 reg [5:0] ic_irq, ipl_ic, ipl_fet;
-wire ic_stallq;
 reg irq_trig;
 wire pe_nmi;
 reg exe_nmi, exe_irq;
@@ -1611,8 +1618,8 @@ endgenerate
 						
 
 wire predicted_correctly_dec;
-cpu_types_pkg::pc_address_t new_address_dec;
-cpu_types_pkg::pc_address_t new_address_ext;
+cpu_types_pkg::pc_address_ex_t new_address_dec;
+cpu_types_pkg::pc_address_ex_t new_address_ext;
 wire ic_port;
 wire ftaim_full, ftadm_full;
 reg ihit_fet, ihit_ext, ihit_dec, ihit_ren, ihit_que;
@@ -1750,7 +1757,7 @@ Qupls4_btb ubtb1
 	.clk_en(advance_fetch),
 	.en(1'b1),
 	.rclk(clk),
-	.advance_pc(advance_fetch & !ic_stallq),
+	.advance_pc(advance_fetch),
 	.get_next_pc(get_next_pc),
 	.micro_machine_active(1'b0),
 	.igrp(igrp),
@@ -1915,7 +1922,6 @@ else begin
 end
 
 reg branch_resolved;
-always_ff @(posedge clk) stomp_ext2 <= stomp_fet1;
 always_ff @(posedge clk) branch_resolved <= fcu_branch_resolved;
 
 Qupls4_stomp ustmp1
@@ -2227,7 +2233,6 @@ end
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
 
-wire fet_stallq;
 wire flush_fet;
 pc_address_ex_t misspc_fet;
 wire [1023:0] ic_line_fet;
@@ -2256,6 +2261,7 @@ Qupls4_instruction_buffer uib1
 (
 	.rst_i(irst),
 	.clk_i(clk),
+	.ihit_i(ihito),
 	.stream_i(fet_stream),
 	.ips_i(pcs),
 	.ip_i(icpc),
@@ -2269,7 +2275,7 @@ Qupls4_pipeline_fet ufet1
 (
 	.rst(irst),
 	.clk(clk),
-	.ihit(ihito),
+	.ihit(is_buffered),
 	.irq_in_ic(irq_in_ic),
 	.irq_ic(irq_ic),
 	.irq_in_fet(irq_in_fet),
@@ -2295,16 +2301,13 @@ Qupls4_pipeline_fet ufet1
 	.ic_line_fet(ic_line_fet),
 	.nmi_i(pe_nmi),
 	.flush_i(flush_pipeline),
-	.flush_fet(flush_fet),
-	.fet_stallq(fet_stallq),
-	.ic_stallq(ic_stallq)
+	.flush_fet(flush_fet)
 );
 
 // -----------------------------------------------------------------------------
 // Instruction extract stage
 // -----------------------------------------------------------------------------
 
-wire mux_stallq;
 wire exti_nop;	
 pc_address_ex_t pc0_f1;
 pc_address_ex_t pc0_f2;
@@ -2370,7 +2373,7 @@ Qupls4_pipeline_ext #(.MWIDTH(MWIDTH)) uiext1
 	.uop_num_ext(uop_num_ext),
 	.carry_mod_fet(carry_mod_fet),
 	.kept_stream(kept_stream),
-	.stomp_ext(stomp_ext|stomp_ext1|stomp_ext2/*icnop||brtgtv||fetch_new_block_x*/),
+	.stomp_ext(stomp_ext),/*icnop||brtgtv||fetch_new_block_x*/
 	.nop_o(exti_nop),
 //	.nmi_i(pe_nmi),
 	.irq_sn_fet(irq_sn_fet),
@@ -2399,8 +2402,6 @@ Qupls4_pipeline_ext #(.MWIDTH(MWIDTH)) uiext1
 	.do_call(do_call),
 	.ret_pc(ret_pc),
 	.new_address_o(new_address_ext),
-	.mux_stallq(mux_stallq),
-	.fet_stallq(fet_stallq),
 	.get(dc_get),
 	.new_stream(new_stream),
 	.alloc_stream(alloc_stream)
@@ -2422,7 +2423,7 @@ Qupls4_pipeline_mot #(
 )
 umot1
 (
-	.rst(rst),
+	.rst(irst),
 	.clk(clk),
 	.en(advance_decode),
 	.stomp(stomp_mot),
@@ -2470,7 +2471,6 @@ udecstg1
 	.kept_stream(kept_stream),
 	.pg_mot(pg_mot),
 	.pg_dec(pg_dec),
-	.mux_stallq(mux_stallq),
 	.ren_stallq(ren_stallq),
 	.ren_rst_busy(ren_rst_busy),
 	.predicted_correctly_o(predicted_correctly_dec),
@@ -2704,10 +2704,12 @@ else begin
 	end
 end
 
-wire [3:0] enqueue_room;
+wire [7:0] enqueue_room;
 
 Qupls4_queue_room uqroom1
 (
+	.rst(irst),
+	.clk(clk),
 	.rob(rob),
 	.head0(head[0]),
 	.tails(tails),
@@ -2725,7 +2727,7 @@ Qupls4_lsq_queue_room uqroom2
 );
 
 always_comb
-	room_for_que = enqueue_room > 4'd3;
+	room_for_que = enqueue_room > 8'd3;
 always_comb
 	room_for_lsq_queue = lsq_enqueue_room > 4'd0;
 assign nq = !(branchmiss) && advance_pipeline && room_for_que && (!stomp_que || stomp_quem);
@@ -4964,6 +4966,15 @@ endgenerate
 // Commit stage combo logic
 // =============================================================================
 
+Qupls4_pkg::rob_bitmask_t empty_bmp;
+reg rob_empty;
+always_comb
+foreach (rob[n1])
+	empty_bmp[n1] = ~|rob[n1].v;
+always_comb
+	rob_empty = &empty_bmp;
+
+
 // Figure out how many instructions can be committed.
 // If there is an oddball instruction (eg. CSR, RTE) then only commit up until
 // the oddball. Also, if there is an exception, commit only up until the 
@@ -5756,22 +5767,38 @@ else begin
 	// Set the predicate bits for an instruction. The instruction must be queued
 	// already. An instruction is queued with its predicate bits set FALSE. If
 	// there is no prior predicate then the flag is automatically set TRUE.
-	begin
+	if (FALSE) begin
+		// Check each stream to see if all predicated instructions are done.
+		foreach (pred_done[nn])
+			if (pred_ins_done[nn]==8'hFF)
+				pred_done[nn] <= TRUE;
 		foreach (rob[nn]) begin
+			// Predicate resolved?
+			if (|rob[nn].v && rob[nn].op.decbus.pred) begin
+				if (rob[nn].out!=2'b00 && pred_done[rob[nn].ip_stream.stream]) begin
+					pred_buf[rob[nn].ip_stream.stream] <= value_zero;
+					pred_done[rob[nn].ip_stream.stream] <= FALSE;
+					pred_ins_done[rob[nn].ip_stream.stream] <= 8'd0;
+				end
+			end
+			// Track which predicated instructions are done.
+			if (|rob[nn].v && rob[nn].done==2'b11)
+				pred_ins_done[rob[nn].ip_stream.stream][rob[nn].op.decbus.pred_no] <= TRUE;
+
 			for (mm = 0; mm < 32; mm = mm + 1) begin
 				// If predication is ignored for this instruction, mark valid and true.
 				if (rob[nn].op.pred_mask[1:0]==2'b00) begin
 					rob[nn].pred_bit <= TRUE;
 					rob[nn].pred_bitv <= VAL;
 				end
-				else
-				case(pred_tf[mm])
+				else if (pred_done[rob[nn].ip_stream.stream]==FALSE)
+				case(pred_tf[rob[nn].ip_stream.stream][mm])
 				2'b00:	;	// predicate not resolved yet, leave alone.
 				2'b11:	; // reserved, not used
 				2'b10,2'b01:
 					if (rob[nn].op.decbus.pred_no==mm) begin
 						// If predication matches result, mark valid and true.
-						if (rob[nn].op.pred_mask[1:0] == pred_tf[mm]) begin
+						if (rob[nn].op.pred_mask[1:0] == pred_tf[rob[nn].ip_stream.stream][mm]) begin
 							rob[nn].op.pred_mask[1:0] <= 2'b00;
 							rob[nn].pred_bit <= TRUE;
 							rob[nn].pred_bitv <= VAL;
@@ -5784,15 +5811,9 @@ else begin
 					end
 				endcase
 
-				// Predicate resolved?
-				if (rob[nn].v && rob[nn].op.decbus.pred) begin
-					if (rob[nn].done==2'b11)
-						pred_tf[rob[nn].op.decbus.pred_no] <= rob[nn].pred_tf;
-					else
-						pred_tf[rob[nn].op.decbus.pred_no] <= 2'b00;
-				end
 			end
 		end
+		/*
 		// Detect hardware fault if predicate is no longer active and there are
 		// still outstanding ROB entries waiting for it to resolve.
 		foreach (rob[nn]) begin
@@ -5809,6 +5830,7 @@ else begin
 				end
 			end
 		end
+		*/
 	end
 
 	// Compute dispatchability of instruction.
@@ -6036,25 +6058,25 @@ else begin
 	// Handle single-cycle ops
 	// Whenever a result would be written, update the exception and done/out status.
 	// Although no result may be written, the done/out status still needs to be set.
-	tSetROBDone(sau0_rse2,FALSE);
+	tSetROBDone(sau0_rse2,FALSE, sau0_resA);
 	if (Qupls4_pkg::NSAU > 1)
-		tSetROBDone(sau1_rse2,FALSE);
+		tSetROBDone(sau1_rse2,FALSE, sau1_resA);
 
   // Handle multi-cycle mul/div ops
-	tSetROBDone(imul0_rse2,FALSE);
+	tSetROBDone(imul0_rse2,FALSE,value_zero);
 	if (idiv0_done)
-		tSetROBDone(idiv0_rse2,FALSE);
+		tSetROBDone(idiv0_rse2,FALSE,value_zero);
 
 	if (Qupls4_pkg::NFMA > 0)
-		tSetROBDone(fma0_rse2,FALSE);
+		tSetROBDone(fma0_rse2,FALSE,value_zero);
 	if (Qupls4_pkg::NFMA > 0)
-		tSetROBDone(fma1_rse2,FALSE);
+		tSetROBDone(fma1_rse2,FALSE,value_zero);
 	if (Qupls4_pkg::NFPU > 0)
-		tSetROBDone(fpu0_rse2,FALSE);
+		tSetROBDone(fpu0_rse2,FALSE,value_zero);
 
 	if (fcu_rse.v)
 		fcu_state1 <= VAL;
-	tSetROBDone(fcu_rser,takb);
+	tSetROBDone(fcu_rser,takb,value_zero);
 
 	// Causes issues vvv
 	// If the operation is not multi-cycle assume it will complete within one
@@ -6282,10 +6304,10 @@ else begin
 		commit3_idv <= cmttlb[3];
 	end
 	if (do_commit) begin
-		commit_pc0 <= pgh[rob[head[0]].pghn].ip + {rob[head[0]].ip_offs,1'b0};
-		commit_pc1 <= pgh[rob[head[1]].pghn].ip + {rob[head[1]].ip_offs,1'b0};
-		commit_pc2 <= pgh[rob[head[2]].pghn].ip + {rob[head[2]].ip_offs,1'b0};
-		commit_pc3 <= pgh[rob[head[3]].pghn].ip + {rob[head[3]].ip_offs,1'b0};
+		commit_pc0 <= pgh[rob[head[0]].pghn].ip.pc + {rob[head[0]].ip_offs,1'b0};
+		commit_pc1 <= pgh[rob[head[1]].pghn].ip.pc + {rob[head[1]].ip_offs,1'b0};
+		commit_pc2 <= pgh[rob[head[2]].pghn].ip.pc + {rob[head[2]].ip_offs,1'b0};
+		commit_pc3 <= pgh[rob[head[3]].pghn].ip.pc + {rob[head[3]].ip_offs,1'b0};
 		commit_brtgt0 <= rob[head[0]].brtgt;
 		commit_brtgt1 <= rob[head[1]].brtgt;
 		commit_brtgt2 <= rob[head[2]].brtgt;
@@ -6358,16 +6380,16 @@ else begin
 		if (rob[head[0]].excv && rob[head[0]].v)
 //			err_mask[head[0]] <= 1'b1;
 //			if (rob[head[0]].last)
-			tProcessExc(head[0],pgh[rob[head[0]].pghn].ip+{rob[head[0]].ip_offs,1'b0},rob[head[0]].op.uop.num);
+			tProcessExc(head[0],pgh[rob[head[0]].pghn].ip.pc+{rob[head[0]].ip_offs,1'b0},rob[head[0]].op.uop.num);
 		else if (rob[head[1]].excv && cmtcnt > 3'd1 && rob[head[1]].v)
-			tProcessExc(head[1],pgh[rob[head[1]].pghn].ip+{rob[head[1]].ip_offs,1'b0},rob[head[1]].op.uop.num);
+			tProcessExc(head[1],pgh[rob[head[1]].pghn].ip.pc+{rob[head[1]].ip_offs,1'b0},rob[head[1]].op.uop.num);
 		else if (rob[head[2]].excv && cmtcnt > 3'd2 && rob[head[2]].v)
-			tProcessExc(head[2],pgh[rob[head[2]].pghn].ip+{rob[head[2]].ip_offs,1'b0},rob[head[2]].op.uop.num);
+			tProcessExc(head[2],pgh[rob[head[2]].pghn].ip.pc+{rob[head[2]].ip_offs,1'b0},rob[head[2]].op.uop.num);
 		else if (rob[head[3]].excv && cmtcnt > 3'd3 && rob[head[3]].v)
-			tProcessExc(head[3],pgh[rob[head[3]].pghn].ip+{rob[head[3]].ip_offs,1'b0},rob[head[3]].op.uop.num);
+			tProcessExc(head[3],pgh[rob[head[3]].pghn].ip.pc+{rob[head[3]].ip_offs,1'b0},rob[head[3]].op.uop.num);
 			
 		if (rob[head[0]].op.ssm)
-			tProcessExc(head[0],Qupls4_pkg::SSM_DEBUG ? pgh[rob[head[0]].pghn].ip+{rob[head[0]].ip_offs,1'b0} : rob[head[0]].op.hwipc,rob[head[0]].op.uop.num);
+			tProcessExc(head[0],Qupls4_pkg::SSM_DEBUG ? pgh[rob[head[0]].pghn].ip.pc+{rob[head[0]].ip_offs,1'b0} : rob[head[0]].op.hwipc,rob[head[0]].op.uop.num);
 
 		/*
 		if (FALSE) begin
@@ -6389,31 +6411,49 @@ else begin
 				tZeroFcDep(rob[head[3]].fc_no);
 		end
 		*/
+		/*
 		if (rob[head[0]].op.decbus.pred) begin
-			pred_tf[rob[head[0]].op.decbus.pred_no] <= 2'b00;
+			pred_tf[rob[head[0]].ip_stream.stream][rob[head[0]].op.decbus.pred_no] <= 2'b00;
 			pred_alloc_map[rob[head[0]].op.decbus.pred_no] <= 1'b0;
 		end
 		if (rob[head[1]].op.decbus.pred && cmtcnt > 3'd1) begin
-			pred_tf[rob[head[1]].op.decbus.pred_no] <= 2'b00;
+			pred_tf[rob[head[1]].ip_stream.stream][rob[head[1]].op.decbus.pred_no] <= 2'b00;
 			pred_alloc_map[rob[head[1]].op.decbus.pred_no] <= 1'b0;
 		end
 		if (rob[head[2]].op.decbus.pred && cmtcnt > 3'd2) begin
-			pred_tf[rob[head[2]].op.decbus.pred_no] <= 2'b00;
+			pred_tf[rob[head[2]].ip_stream.stream][rob[head[2]].op.decbus.pred_no] <= 2'b00;
 			pred_alloc_map[rob[head[2]].op.decbus.pred_no] <= 1'b0;
 		end
 		if (rob[head[3]].op.decbus.pred && cmtcnt > 3'd3) begin
-			pred_tf[rob[head[3]].op.decbus.pred_no] <= 2'b00;
+			pred_tf[rob[head[3]].ip_stream.stream][rob[head[3]].op.decbus.pred_no] <= 2'b00;
 			pred_alloc_map[rob[head[3]].op.decbus.pred_no] <= 1'b0;
 		end
 		if (rob[head[4]].op.decbus.pred && cmtcnt > 3'd4) begin
-			pred_tf[rob[head[4]].op.decbus.pred_no] <= 2'b00;
+			pred_tf[rob[head[4]].ip_stream.stream][rob[head[4]].op.decbus.pred_no] <= 2'b00;
 			pred_alloc_map[rob[head[4]].op.decbus.pred_no] <= 1'b0;
 		end
 		if (rob[head[5]].op.decbus.pred && cmtcnt > 3'd5) begin
-			pred_tf[rob[head[5]].op.decbus.pred_no] <= 2'b00;
+			pred_tf[rob[head[5]].ip_stream.stream][rob[head[5]].op.decbus.pred_no] <= 2'b00;
 			pred_alloc_map[rob[head[5]].op.decbus.pred_no] <= 1'b0;
 		end
+		*/
 	end
+
+	// If the re-order buffer is empty, the the commit pointer should remain
+	// where it is until new instructions are queued. Otherwise, if the commit
+	// pointer is not pointing at a valid instruction something must have gone
+	// wrong with hardware.
+	if (!rob_empty) begin
+		if (rob[head[0]].v==5'd0)
+			head[0] <= (head[0] + 4'd1) % Qupls4_pkg::ROB_ENTRIES;	
+		if (rob[head[0]].v==5'd0 && rob[head[1]].v==5'd0)
+			head[0] <= (head[0] + 4'd2) % Qupls4_pkg::ROB_ENTRIES;	
+		if (rob[head[0]].v==5'd0 && rob[head[1]].v==5'd0 && rob[head[2]].v==5'd0)
+			head[0] <= (head[0] + 4'd3) % Qupls4_pkg::ROB_ENTRIES;	
+		if (rob[head[0]].v==5'd0 && rob[head[1]].v==5'd0 && rob[head[2]].v==5'd0 && rob[head[3]].v==5'd0)
+			head[0] <= (head[0] + 4'd4) % Qupls4_pkg::ROB_ENTRIES;	
+	end
+	
 	// ToDo: fix LSQ head update.
 	if (lsq[lsq_head.row][lsq_head.col].v==INV && lsq_head != lsq_tail)
 		lsq_head.row <= lsq_head.row + 1;
@@ -6575,9 +6615,6 @@ else begin
 	// is likely done before the instruction comes into consideration by the
 	// scheduler. The latency is hidden.
 	begin : gSchedPrecalc
-		for (n3 = 0; n3 < Qupls4_pkg::ROB_ENTRIES; n3 = n3 + 1) begin
-			tSetPredBit(n3);
-		end
 
 		foreach (rob[n3]) begin
 			rob[n3].could_issue <=
@@ -6590,7 +6627,7 @@ else begin
 				//&& !fnPriorFalsePred(g)
 				&& !rob[n3].sync_depv
 	//			&& |rob[n3].pred_bits
-				&& rob[n3].pred_bitv
+//				&& rob[n3].pred_bitv
 				;
 
 			rob[n3].could_issue_nm <= 
@@ -6600,8 +6637,8 @@ else begin
 				&& rob[n3].argT_v 
 				//&& fnPredFalse(g)
 				&& !robentry_issue[n3]
-				&& ~rob[n3].pred_bit
-		    && rob[n3].pred_bitv
+//				&& ~rob[n3].pred_bit
+//		    && rob[n3].pred_bitv
 				&& Qupls4_pkg::SUPPORT_PRED
 				;
 		end
@@ -6863,20 +6900,33 @@ always_ff @(posedge clk) begin: clock_n_debug
 
 	$display("\n\n\n\n\n\n\n\n");
 	$display("TIME %0d", $time);
+	$display("Instruction sequence");
+	$display("--------------------");
+	$display("FET:");
+	$display("   cacheL: %x", ic_line[511:0]);
+	$display("   cacheH: %x", ic_line[1023:512]);
+	$display("EXT: 0:%h  1:%h  2:%h  3:%h", pg_ext.pr[0].op.uop, pg_ext.pr[1].op.uop, pg_ext.pr[2].op.uop, pg_ext.pr[3].op.uop);
+	$display("MOT: 0:%h  1:%h  2:%h  3:%h", pg_mot.pr[0].op.uop, pg_mot.pr[1].op.uop, pg_mot.pr[2].op.uop, pg_mot.pr[3].op.uop);
+	$display("DEC: 0:%h  1:%h  2:%h  3:%h", pg_dec.pr[0].op.uop, pg_dec.pr[1].op.uop, pg_dec.pr[2].op.uop, pg_dec.pr[3].op.uop);
+	$display("REN: 0:%h  1:%h  2:%h  3:%h", pg_ren.pr[0].op.uop, pg_ren.pr[1].op.uop, pg_ren.pr[2].op.uop, pg_ren.pr[3].op.uop);
 	$display("----- Fetch -----");
 	$display("i$ pc input:  %h.%h stream:%d#", pcs[fet_stream].stream,pcs[fet_stream].pc, fet_stream);
 	$display("i$ pc output: %h %s #", pc_fet.pc, ihito ? "ihit" : "    ");
 	$display("cacheL: %x", ic_line[511:0]);
 	$display("cacheH: %x", ic_line[1023:512]);
 	$display("----- Instruction Extract %c ----- %s", ihit_fet ? "h":" ", stomp_fet ? stompstr : no_stompstr);
-	$display("pc 0: %h.%h  1: %h.%h  2: %h.%h  3: %h.%h",
+	$display("ip 0: %h.%h  1: %h.%h  2: %h.%h  3: %h.%h",
 		uiext1.pc_fet[0].stream, uiext1.pc_fet[0].pc,
 		uiext1.pc_fet[1].stream, uiext1.pc_fet[1].pc,
 		uiext1.pc_fet[2].stream, uiext1.pc_fet[2].pc,
 		uiext1.pc_fet[3].stream, uiext1.pc_fet[3].pc);
-	$display("lineL: %h", uiext1.cline_fet[511:0]);
-	$display("lineH: %h", uiext1.cline_fet[1023:512]);
+	$display("lineL: %h", ic_line_fet[511:0]);
+	$display("lineH: %h", ic_line_fet[1023:512]);
 	$display("align: %x", uiext1.ic_line_aligned);
+	$display("----- Micro-op Translate ----- %s", stomp_mot ? stompstr : no_stompstr);
+	$display("ip: %h.%h", pg_ext.hdr.ip.stream.stream, pg_ext.hdr.ip.pc);
+	$display("Raw instructions");
+	$display("0:%h  1:%h  2:%h  3:%h", pg_ext.pr[0].op.uop, pg_ext.pr[1].op.uop, pg_ext.pr[2].op.uop, pg_ext.pr[3].op.uop);
 	$display("- - - - - - Multiplex %c - - - - - - %s", ihit_ext ? "h":" ", stomp_ext ? stompstr : no_stompstr);
 	/*
 	$display("pc0: %h.%h ins0: %h", uiext1.pg_ext.pr[0].pc.pc[23:0], uiext1.pg_ext.pr[0].mcip, uiext1.pg_ext.pr[0].uop[47:0]);
@@ -6885,8 +6935,10 @@ always_ff @(posedge clk) begin: clock_n_debug
 	$display("pc3: %h.%h ins3: %h", uiext1.pg_ext.pr[3].pc.pc[23:0], uiext1.pg_ext.pr[3].mcip, uiext1.pg_ext.pr[3].uop[47:0]);
 	*/
 	if (p_override)
-		$display("BSR %h  pc0_fet=%h", new_address_ext.pc, uiext1.pg_ext.hdr.ip+{uiext1.pg_ext.pr[0].ip_offs,1'b0});
+		$display("BSR %h  pc0_fet=%h", new_address_ext, uiext1.pg_ext.hdr.ip.pc+{uiext1.pg_ext.pr[0].ip_offs,1'b0});
 	$display("----- Decode %c ----- %s", ihit_dec ? "h":" ", stomp_dec ? stompstr : no_stompstr);
+	$display("ip:%h.%h", pg_mot.hdr.ip.stream.stream,pg_mot.hdr.ip.pc);
+	$display("0:%h  1:%h  2:%h  3:%h", pg_mot.pr[0].op.uop, pg_mot.pr[1].op.uop, pg_mot.pr[2].op.uop, pg_mot.pr[3].op.uop);
 	/*
 	$display("pc0: %h.%h ins0: %h", pg_dec.pr[0].pc.pc[23:0], pg_dec.pr[0].mcip, pg_dec.pr[0].uop[47:0]);
 	$display("pc1: %h.%h ins1: %h", pg_dec.pr[1].pc.pc[23:0], pg_dec.pr[1].mcip, pg_dec.pr[1].uop[47:0]);
@@ -6926,6 +6978,8 @@ always_ff @(posedge clk) begin: clock_n_debug
 			);
 
 	$display("----- Rename %c ----- %s", ihit_ren ? "h":" ", stomp_ren ? stompstr : no_stompstr);
+	$display("ip:%h.%h", pg_ren.hdr.ip.stream.stream,pg_ren.hdr.ip.pc);
+	$display("REN: 0:%h  1:%h  2:%h  3:%h", pg_ren.pr[0].op.uop, pg_ren.pr[1].op.uop, pg_ren.pr[2].op.uop, pg_ren.pr[3].op.uop);
 	/*
 	$display("pc0: %x.%x ins0: %x  Rt: %d->%d%c  Rs: %d->%d%c  Ra: %d->%d%c  Rb: %d->%d%c  Rc: %d->%d%c",
 		pg_ren.pr[0].pc.pc[23:0], pg_ren.pr[0].mcip, pg_ren.pr[0].uop[63:0],
@@ -6968,7 +7022,7 @@ always_ff @(posedge clk) begin: clock_n_debug
 			rob[i].op.decbus.Rs2, rob[i].op.pRs2, rob[i].argB, rob[i].argB_v?"v":" ",
 			rob[i].op.decbus.Rs3, rob[i].op.pRs3, rob[i].argC, rob[i].argC_v?"v":" ",
 			rob[i].argI,
-			rob[i].ip_stream, pgh[rob[i].pghn].ip + {rob[i].ip_offs,1'b0},
+			rob[i].ip_stream, pgh[rob[i].pghn].ip.pc + {rob[i].ip_offs,1'b0},
 			rob[i].cndx, rob[i].op.uop[63:0]);
 	end
 	$display("----- LSQ -----");
@@ -7008,8 +7062,8 @@ always_ff @(posedge clk) begin: clock_n_debug
 
 	$display("----- FCU -----");
 	$display("eval:%c A=%h B=%h I=%h", takb?"T":"F", fcu_rse.arg[0].val, fcu_rse.arg[1].val, fcu_rse.argI);
-	$display("bt:%c pc=%h id=%d ", fcu_bt ? "T":"F", fcu_pc, fcu_rse.rndx);
-	$display("miss: %c misspc=%h.%h instr=%h disp=%h", (takb&~fcu_bt)|(~takb&fcu_bt)?"T":"F",fcu_misspc1.stream,fcu_misspc1.pc, fcu_instr.uop[63:0],
+	$display("bt:%c pc=%h id=%d ", fcu_bt ? "T":"F", fcu_rse.pc, fcu_rse.rndx);
+	$display("miss: %c misspc=%h.%h instr=%h disp=%h", branchmiss_det?"T":"F",fcu_misspc1.stream,fcu_misspc1.pc, fcu_rse.uop[63:0],
 		{{37{fcu_instr.uop[63]}},fcu_instr.uop[63:44],3'd0}
 	);
 
@@ -7375,7 +7429,7 @@ input rob_ndx_t ndx;
 input cpytgt;
 integer nn;
 begin
-	rob[ndx].v <= cpytgt ? rob[ndx].v : 5'd0;
+//	rob[ndx].v <= cpytgt ? rob[ndx].v : 5'd0;
 	rob[ndx].excv <= INV;
 	rob[ndx].op.decbus.cpytgt <= cpytgt;
 	if (cpytgt) begin
@@ -7573,6 +7627,9 @@ begin
 	foreach (rob[n14]) begin
 		rob[n14] <= {$bits(Qupls4_pkg::rob_entry_t){1'd0}};
 		rob[n14].sn <= 8'd0;
+		rob[n14].exc <= Qupls4_pkg::FLT_NONE;
+		rob[n14].op.decbus.cause <= Qupls4_pkg::FLT_NONE;
+		rob[n14].op.exc <= Qupls4_pkg::FLT_NONE;
 	end
 	/*
 	for (n14 = 0; n14 < BEB_ENTRIES; n14 = n14 + 1) begin
@@ -7705,14 +7762,20 @@ begin
 	cp_stall <= 1'b0;
 	loadflags_buf <= 256'd0;
 	storeflags_buf <= 256'd0;
-	thread_probability[0] = 8'hFF;
-	thread_probability[1] = 8'h00;
-	thread_probability[2] = 8'h00;
-	thread_probability[3] = 8'h00;
-	thread_probability[4] = 8'h00;
-	thread_probability[5] = 8'h00;
-	thread_probability[6] = 8'h00;
-	thread_probability[7] = 8'h00;
+	thread_probability[0] <= 8'hFF;
+	thread_probability[1] <= 8'h00;
+	thread_probability[2] <= 8'h00;
+	thread_probability[3] <= 8'h00;
+	thread_probability[4] <= 8'h00;
+	thread_probability[5] <= 8'h00;
+	thread_probability[6] <= 8'h00;
+	thread_probability[7] <= 8'h00;
+	foreach (pred_done[n14])
+		pred_done[n14] <= TRUE;
+	foreach (pred_ins_done[n14])
+		pred_ins_done[n14] <= 8'hFF;
+	foreach (pred_buf[n14])
+		pred_buf[n14] <= value_zero;
 end
 endtask
 
@@ -7804,8 +7867,8 @@ begin
 	// NOPs are valid regardless of predicate status
 	next_robe.pred_bitv = db.nop;
 	next_robe.pred_bit = db.nop;
-	if (db.pred)
-		pred_tf[db.pred_no] <= 2'b00;
+//	if (db.pred)
+//		pred_tf[db.pred_no] <= 2'b00;
 	
 	next_robe.orid = mc_orid;
 	next_robe.br_cndx = cndxq;
@@ -7820,7 +7883,7 @@ begin
 	// If it is stomped on, we do not care.
 	if (!(ornop|stomp)) begin
 		next_robe.exc = db.cause;
-		next_robe.excv = TRUE;
+		next_robe.excv = db.cause != Qupls4_pkg::FLT_NONE;
 	end
 	else begin
 		next_robe.exc = Qupls4_pkg::FLT_NONE;
@@ -7862,9 +7925,9 @@ begin
 	next_robe.could_issue_nm = FALSE;
 	// "static" fields, these fields remain constant after enqueue
 	next_robe.grp = grp;
-	next_robe.brtgt = Qupls4_pkg::fnTargetIP(pgh[robe.pghn].ip + {robe.ip_offs,1'b0},db.immc);
+	next_robe.brtgt = Qupls4_pkg::fnTargetIP(pgh[robe.pghn].ip.pc + {robe.ip_offs,1'b0},db.immc);
 	// Set the interrupt return address to this instruction.
-	next_robe.eip = pgh[robe.pghn].ip + {robe.ip_offs,1'b0};
+	next_robe.eip = pgh[robe.pghn].ip.pc + {robe.ip_offs,1'b0};
 	next_robe.om = sr.om;
 	next_robe.rm = db.rm==3'd7 ? fpcsr.rm : db.rm;
 `ifdef IS_SIM
@@ -7879,10 +7942,12 @@ begin
 //	next_robe.op.nRt = nRt;//db.Rtz ? 10'd0 : nRt;
 	next_robe.group_len = grplen;
 	next_robe.last = last;
-	next_robe.v = Qupls4_pkg::SUPPORT_BACKOUT ? (robe.op.v ? robe.ip_stream : 5'd0): (robe.op.v ? robe.ip_stream & ~{5{stomp}} : 5'd0);
+//	next_robe.v = Qupls4_pkg::SUPPORT_BACKOUT ? (robe.op.v ? robe.ip_stream : 5'd0): (robe.op.v ? robe.ip_stream & ~{8{stomp}} : 5'd0);
+	next_robe.v = robe.v;
+//	next_robe.v = 5'd1;
 	if (!stomp && db.v && !brtgtv) begin
 		if (db.br & pt) begin
-			next_brtgt = Qupls4_pkg::fnTargetIP(pgh[robe.pghn].ip,db.immc);
+			next_brtgt = Qupls4_pkg::fnTargetIP(pgh[robe.pghn].ip.pc,db.immc);
 			next_brtgtv = VAL;	// ToDo: Fix
 		end
 	end
@@ -8041,9 +8106,9 @@ begin
 			else if (rob[head].op.decbus.irq)
 				;
 			else if (rob[head].op.decbus.brk)
-				tProcessExc(head,pgh[rob[head].pghn].ip+{rob[head].ip_offs,1'b0}+32'd6,rob[head].op.uop.num);
+				tProcessExc(head,pgh[rob[head].pghn].ip.pc+{rob[head].ip_offs,1'b0}+32'd6,rob[head].op.uop.num);
 			else if (rob[head].op.decbus.sys)
-				tProcessExc(head,pgh[rob[head].pghn].ip+{rob[head].ip_offs,1'b0}+32'd6,rob[head].op.uop.num);
+				tProcessExc(head,pgh[rob[head].pghn].ip.pc+{rob[head].ip_offs,1'b0}+32'd6,rob[head].op.uop.num);
 			else if (rob[head].op.decbus.eret)
 				tProcessEret(rob[head].op[22:19]==5'd2,rob[head].op[23]==1'b1);
 			else if (rob[head].op.decbus.rex)
@@ -8424,200 +8489,6 @@ end
 endtask
 
 
-/* Searches the ROB backwards up to seven instructions looking for a predicate.
-	 If no predicate is found, then the predBit is marked TRUE allowing the 
-	 instruction to issue if other args are valid. Otherwise if there is a
-	 predicate, then the predBit will only be marked true if the predicate
-	 was true. Otherwise once the pred instruction has resolved the valid bit
-	 of instructions in the predicate window will be set according to the status
-	 of the predicate.
-*/
-task tSetPredBit;
-input rob_ndx_t ndx;
-rob_ndx_t m1;
-rob_ndx_t m2;
-rob_ndx_t m3;
-rob_ndx_t m4;
-rob_ndx_t m5;
-rob_ndx_t m6;
-rob_ndx_t m7;
-rob_ndx_t m8;
-begin
-	if (Qupls4_pkg::SUPPORT_PRED) begin
-		m1 = (ndx + Qupls4_pkg::ROB_ENTRIES - 1) % Qupls4_pkg::ROB_ENTRIES;
-		m2 = (ndx + Qupls4_pkg::ROB_ENTRIES - 2) % Qupls4_pkg::ROB_ENTRIES;
-		m3 = (ndx + Qupls4_pkg::ROB_ENTRIES - 3) % Qupls4_pkg::ROB_ENTRIES;
-		m4 = (ndx + Qupls4_pkg::ROB_ENTRIES - 4) % Qupls4_pkg::ROB_ENTRIES;
-		m5 = (ndx + Qupls4_pkg::ROB_ENTRIES - 5) % Qupls4_pkg::ROB_ENTRIES;
-		m6 = (ndx + Qupls4_pkg::ROB_ENTRIES - 6) % Qupls4_pkg::ROB_ENTRIES;
-		m7 = (ndx + Qupls4_pkg::ROB_ENTRIES - 7) % Qupls4_pkg::ROB_ENTRIES;
-		m8 = (ndx + Qupls4_pkg::ROB_ENTRIES - 8) % Qupls4_pkg::ROB_ENTRIES;
-		if (rob[m1].v==rob[ndx].v && rob[m1].sn < rob[ndx].sn && rob[m1].op.decbus.pred) begin
-			if (rob[m1].op.decbus.pred_mask[1:0]==2'd0) begin
-				rob[ndx].pred_bit <= TRUE;
-				rob[ndx].pred_bitv <= VAL;
-			end
-			else if (rob[m1].done==2'b11 && rob[m1].op.decbus.pred_mask[1:0]!=2'b00) begin
-				rob[ndx].v <= 5'd0;
-			end
-		end
-		else if (rob[m2].v==rob[ndx].v && rob[m2].sn < rob[ndx].sn && rob[m2].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 1) begin
-			if (rob[m2].op.decbus.pred_mask[3:2]==2'd0) begin
-				rob[ndx].pred_bit <= TRUE;
-				rob[ndx].pred_bitv <= VAL;
-			end
-			else if (rob[m2].done==2'b11 && rob[m2].op.decbus.pred_mask[3:2]!=2'b00) begin
-				rob[ndx].v <= 5'd0;
-			end
-		end
-		else if (rob[m3].v==rob[ndx].v && rob[m3].sn < rob[ndx].sn && rob[m3].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 2) begin
-			if (rob[m3].op.decbus.pred_mask[5:4]==2'd0) begin
-				rob[ndx].pred_bit <= TRUE;
-				rob[ndx].pred_bitv <= VAL;
-			end
-			else if (rob[m3].done==2'b11 && rob[m3].op.decbus.pred_mask[5:4]!=2'b00) begin
-				rob[ndx].v <= 5'd0;
-			end
-		end
-		else if (rob[m4].v==rob[ndx].v && rob[m4].sn < rob[ndx].sn && rob[m4].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 3) begin
-			if (rob[m4].op.decbus.pred_mask[7:6]==2'd0) begin
-				rob[ndx].pred_bit <= TRUE;
-				rob[ndx].pred_bitv <= VAL;
-			end
-			else if (rob[m4].done==2'b11 && rob[m4].op.decbus.pred_mask[7:6]!=2'b00) begin
-				rob[ndx].v <= 5'd0;
-			end
-		end
-		else if (rob[m5].v==rob[ndx].v && rob[m5].sn < rob[ndx].sn && rob[m5].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 4) begin
-			if (rob[m5].op.decbus.pred_mask[9:8]==2'd0) begin
-				rob[ndx].pred_bit <= TRUE;
-				rob[ndx].pred_bitv <= VAL;
-			end
-			else if (rob[m5].done==2'b11 && rob[m5].op.decbus.pred_mask[9:8]!=2'b00) begin
-				rob[ndx].v <= 5'd0;
-			end
-		end
-		else if (rob[m6].v==rob[ndx].v && rob[m6].sn < rob[ndx].sn && rob[m6].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 5) begin
-			if (rob[m6].op.decbus.pred_mask[11:10]==2'd0) begin
-				rob[ndx].pred_bit <= TRUE;
-				rob[ndx].pred_bitv <= VAL;
-			end
-			else if (rob[m6].done==2'b11 && rob[m6].op.decbus.pred_mask[11:10]!=2'b00) begin
-				rob[ndx].v <= 5'd0;
-			end
-		end
-		else if (rob[m7].v==rob[ndx].v && rob[m6].sn < rob[ndx].sn && rob[m7].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 6) begin
-			if (rob[m7].op.decbus.pred_mask[13:12]==2'd0) begin
-				rob[ndx].pred_bit <= TRUE;
-				rob[ndx].pred_bitv <= VAL;
-			end
-			else if (rob[m7].done==2'b11 && rob[m7].op.decbus.pred_mask[13:12]!=2'b00) begin
-				rob[ndx].v <= 5'd0;
-			end
-		end
-		else if (rob[m8].v==rob[ndx].v && rob[m8].sn < rob[ndx].sn) begin
-			rob[ndx].pred_bit <= TRUE;
-			rob[ndx].pred_bitv <= VAL;
-		end
-	end
-	else begin
-		rob[ndx].pred_bit <= TRUE;
-		rob[ndx].pred_bitv <= VAL;
-	end
-end
-endtask
-
-/* Clears the predicate mask and sets all the predicate bits valid and true
-	for all instructions in the predicate's shadow. Used when a branch is done
-	in the predicate shadow.
-*/
-task tClearPredMask;
-input rob_ndx_t ndx;
-rob_ndx_t m1;
-rob_ndx_t m2;
-rob_ndx_t m3;
-rob_ndx_t m4;
-rob_ndx_t m5;
-rob_ndx_t m6;
-rob_ndx_t m7;
-rob_ndx_t m8;
-begin
-	if (Qupls4_pkg::SUPPORT_PRED) begin
-		m1 = (ndx + Qupls4_pkg::ROB_ENTRIES - 1) % Qupls4_pkg::ROB_ENTRIES;
-		m2 = (ndx + Qupls4_pkg::ROB_ENTRIES - 2) % Qupls4_pkg::ROB_ENTRIES;
-		m3 = (ndx + Qupls4_pkg::ROB_ENTRIES - 3) % Qupls4_pkg::ROB_ENTRIES;
-		m4 = (ndx + Qupls4_pkg::ROB_ENTRIES - 4) % Qupls4_pkg::ROB_ENTRIES;
-		m5 = (ndx + Qupls4_pkg::ROB_ENTRIES - 5) % Qupls4_pkg::ROB_ENTRIES;
-		m6 = (ndx + Qupls4_pkg::ROB_ENTRIES - 6) % Qupls4_pkg::ROB_ENTRIES;
-		m7 = (ndx + Qupls4_pkg::ROB_ENTRIES - 7) % Qupls4_pkg::ROB_ENTRIES;
-		m8 = (ndx + Qupls4_pkg::ROB_ENTRIES - 8) % Qupls4_pkg::ROB_ENTRIES;
-		if (rob[m1].v==rob[ndx].v && rob[m1].sn < rob[ndx].sn && rob[m1].op.decbus.pred) begin
-			rob[m1].op.decbus.pred_mask <= 14'd0;
-		end
-		else if (rob[m2].v==rob[ndx].v && rob[m2].sn < rob[ndx].sn && rob[m2].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 1) begin
-			rob[m1].pred_bit <= TRUE;
-			rob[m1].pred_bitv <= VAL;
-			rob[m2].op.decbus.pred_mask <= 14'd0;
-		end
-		else if (rob[m3].v==rob[ndx].v && rob[m3].sn < rob[ndx].sn && rob[m3].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 2) begin
-			rob[m1].pred_bit <= TRUE;
-			rob[m1].pred_bitv <= VAL;
-			rob[m2].pred_bit <= TRUE;
-			rob[m2].pred_bitv <= VAL;
-			rob[m3].op.decbus.pred_mask <= 14'd0;
-		end
-		else if (rob[m4].v==rob[ndx].v && rob[m4].sn < rob[ndx].sn && rob[m4].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 3) begin
-			rob[m1].pred_bit <= TRUE;
-			rob[m1].pred_bitv <= VAL;
-			rob[m2].pred_bit <= TRUE;
-			rob[m2].pred_bitv <= VAL;
-			rob[m3].pred_bit <= TRUE;
-			rob[m3].pred_bitv <= VAL;
-			rob[m4].op.decbus.pred_mask <= 14'd0;
-		end
-		else if (rob[m5].v==rob[ndx].v && rob[m5].sn < rob[ndx].sn && rob[m5].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 4) begin
-			rob[m1].pred_bit <= TRUE;
-			rob[m1].pred_bitv <= VAL;
-			rob[m2].pred_bit <= TRUE;
-			rob[m2].pred_bitv <= VAL;
-			rob[m3].pred_bit <= TRUE;
-			rob[m3].pred_bitv <= VAL;
-			rob[m4].pred_bit <= TRUE;
-			rob[m4].pred_bitv <= VAL;
-			rob[m5].op.decbus.pred_mask <= 14'd0;
-		end
-		else if (rob[m6].v==rob[ndx].v && rob[m6].sn < rob[ndx].sn && rob[m6].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 5) begin
-			rob[m1].pred_bit <= TRUE;
-			rob[m1].pred_bitv <= VAL;
-			rob[m2].pred_bit <= TRUE;
-			rob[m2].pred_bitv <= VAL;
-			rob[m3].pred_bit <= TRUE;
-			rob[m3].pred_bitv <= VAL;
-			rob[m4].pred_bit <= TRUE;
-			rob[m4].pred_bitv <= VAL;
-			rob[m5].pred_bit <= TRUE;
-			rob[m5].pred_bitv <= VAL;
-			rob[m6].op.decbus.pred_mask <= 14'd0;
-		end
-		else if (rob[m7].v==rob[ndx].v && rob[m7].sn < rob[ndx].sn && rob[m7].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 6) begin
-			rob[m1].pred_bit <= TRUE;
-			rob[m1].pred_bitv <= VAL;
-			rob[m2].pred_bit <= TRUE;
-			rob[m2].pred_bitv <= VAL;
-			rob[m3].pred_bit <= TRUE;
-			rob[m3].pred_bitv <= VAL;
-			rob[m4].pred_bit <= TRUE;
-			rob[m4].pred_bitv <= VAL;
-			rob[m5].pred_bit <= TRUE;
-			rob[m5].pred_bitv <= VAL;
-			rob[m6].pred_bit <= TRUE;
-			rob[m6].pred_bitv <= VAL;
-			rob[m7].op.decbus.pred_mask <= 14'd0;
-		end
-	end
-end
-endtask
-
 // Search for the branch destination following the branch (forward search). If
 // the branch destination is found in the ROB within six instructions, then
 // predicate: mark the instructions as copy targets (done above)
@@ -8649,17 +8520,17 @@ begin
 	m6 = (ndx + Qupls4_pkg::ROB_ENTRIES + 6) % Qupls4_pkg::ROB_ENTRIES;
 	m7 = (ndx + Qupls4_pkg::ROB_ENTRIES + 7) % Qupls4_pkg::ROB_ENTRIES;
 	dst <= p1;	// the last ROB entry it could be
-	if (rob[m1].sn > rob[ndx].sn && rob[m1].v==rob[ndx].v && pgh[rob[m1].pghn].ip + {rob[m1].ip_offs,1'b0} == rob[ndx].brtgt)
+	if (rob[m1].sn > rob[ndx].sn && rob[m1].v==rob[ndx].v && pgh[rob[m1].pghn].ip.pc + {rob[m1].ip_offs,1'b0} == rob[ndx].brtgt)
 		found = 3'd1;
-	else if (rob[m2].sn > rob[ndx].sn && rob[m2].v==rob[ndx].v && pgh[rob[m2].pghn].ip + {rob[m2].ip_offs,1'b0} == rob[ndx].brtgt)
+	else if (rob[m2].sn > rob[ndx].sn && rob[m2].v==rob[ndx].v && pgh[rob[m2].pghn].ip.pc + {rob[m2].ip_offs,1'b0} == rob[ndx].brtgt)
 		found = 3'd2;
-	else if (rob[m3].sn > rob[ndx].sn && rob[m3].v==rob[ndx].v && pgh[rob[m3].pghn].ip + {rob[m3].ip_offs,1'b0} == rob[ndx].brtgt)
+	else if (rob[m3].sn > rob[ndx].sn && rob[m3].v==rob[ndx].v && pgh[rob[m3].pghn].ip.pc + {rob[m3].ip_offs,1'b0} == rob[ndx].brtgt)
 		found = 3'd3;
-	else if (rob[m4].sn > rob[ndx].sn && rob[m4].v==rob[ndx].v && pgh[rob[m4].pghn].ip + {rob[m4].ip_offs,1'b0} == rob[ndx].brtgt)
+	else if (rob[m4].sn > rob[ndx].sn && rob[m4].v==rob[ndx].v && pgh[rob[m4].pghn].ip.pc + {rob[m4].ip_offs,1'b0} == rob[ndx].brtgt)
 		found = 3'd4;
-	else if (rob[m5].sn > rob[ndx].sn && rob[m5].v==rob[ndx].v && pgh[rob[m5].pghn].ip + {rob[m5].ip_offs,1'b0} == rob[ndx].brtgt)
+	else if (rob[m5].sn > rob[ndx].sn && rob[m5].v==rob[ndx].v && pgh[rob[m5].pghn].ip.pc + {rob[m5].ip_offs,1'b0} == rob[ndx].brtgt)
 		found = 3'd5;
-	else if (rob[m6].sn > rob[ndx].sn && rob[m6].v==rob[ndx].v && pgh[rob[m6].pghn].ip + {rob[m6].ip_offs,1'b0} == rob[ndx].brtgt)
+	else if (rob[m6].sn > rob[ndx].sn && rob[m6].v==rob[ndx].v && pgh[rob[m6].pghn].ip.pc + {rob[m6].ip_offs,1'b0} == rob[ndx].brtgt)
 		found = 3'd6;
 
 	case(found)
@@ -8685,7 +8556,8 @@ rob_ndx_t ih;
 begin
 	ih = (ndx + Qupls4_pkg::ROB_ENTRIES - rob[ndx].op.uop.num) % Qupls4_pkg::ROB_ENTRIES;
 	if (ih != ndx && rob[ih].sn < rob[ndx].sn) begin
-		rob[ih].v <= 5'd0;							// instruction is no longer valid.
+//		rob[ih].v <= 5'd0;							// instruction is no longer valid.
+		rob[ih].done <= 2'b11;
 		rob[ih].op.hwi <= TRUE;
 		rob[ih].pghn_irq <= rob[ndx].pghn_irq;
 		rob[ndx].op.hwi <= FALSE;
@@ -8746,8 +8618,10 @@ begin
 	if (ih != ndx) begin
 		rob[ih].op.hwi <= TRUE;
 		// If the lead instruction was found, invalidate it.
-		if (inv)
-			rob[ih].v <= 5'd0;
+		if (inv) begin
+//			rob[ih].v <= 5'd0;
+			rob[ih].done <= 2'b11;
+		end
 		rob[ndx].op.hwi <= FALSE;
 		rob[ih].pghn_irq <= rob[ndx].pghn_irq;
 	end
@@ -8803,6 +8677,7 @@ endtask
 task tSetROBDone;
 input Qupls4_pkg::reservation_station_entry_t rse;
 input takb;
+input cpu_types_pkg::value_t val;
 begin
 	if (rse.v) begin
 		if (!rob[rse.rndx].excv) begin
@@ -8813,6 +8688,8 @@ begin
 		rob[ rse.rndx ].done <= {TRUE,TRUE};
 		rob[ rse.rndx ].out <= {FALSE,FALSE};
     rob[ rse.rndx ].takb <= takb;
+//    if (rob[rse.rndx].op.decbus.pred)
+//    	pred_buf[rob[rse.rndx].ip_stream.stream] <= val;
 	end
 end
 endtask
