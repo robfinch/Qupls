@@ -12,7 +12,7 @@ initial begin
 	clk = 1'b0;
 end
 always
- #0.05 clk = ~clk;
+ #2.5 clk = ~clk;
  
 always_ff @(posedge clk)
 if (!rstcnt[6])
