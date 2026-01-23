@@ -38,7 +38,8 @@ import const_pkg::*;
 import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_instruction_buffer(rst_i, clk_i, ihit_i, stream_i, ips_i, ip_i, line_i, line_o, ip_o, is_buffered_o);
+module Qupls4_instruction_buffer(rst_i, clk_i, ihit_i, stream_i, ips_i, ip_i,
+	line_i, line_o, ip_o, is_buffered_o, next_is_buffered_o);
 input rst_i;
 input clk_i;
 input ihit_i;
@@ -49,8 +50,9 @@ output reg [1023:0] line_o;
 input pc_address_ex_t [Qupls4_pkg::XSTREAMS*Qupls4_pkg::THREADS-1:0] ips_i;
 output pc_address_ex_t ip_o;
 output reg is_buffered_o;
+output reg next_is_buffered_o;
 
-integer n1,n43;
+integer n1,n43,n44;
 reg [Qupls4_pkg::XSTREAMS*Qupls4_pkg::THREADS-1:0] buffered;
 // Buffers the instruction cache line to allow fetching along alternate paths.
 reg [1023:0] line_buf [0:3];
@@ -62,11 +64,19 @@ begin
 	ip_o = ip_i;
 	is_buffered_o = FALSE;
 	foreach (ip_buf[n43])
-		if (ip_i.pc >= ip_buf[n43] && ip_i.pc < ip_buf[n43] + 8'd96) begin
+		if (ip_i.pc >= ip_buf[n43] && ip_i.pc < ip_buf[n43] + 8'd64) begin
 			line_o = line_buf[n43];
 			ip_o = ip_i;
 			is_buffered_o = TRUE;
 		end
+end
+
+always_comb
+begin
+	next_is_buffered_o = FALSE;
+	for (n44 = 1; n44 < 4; n44 = n44 + 1)
+		if (ips_i[stream_i].pc >= ip_buf[n44] && ips_i[stream_i].pc < ip_buf[n44] + 8'd64)
+			next_is_buffered_o = TRUE;
 end
 
 // If the cache line is not buffered, buffer it.

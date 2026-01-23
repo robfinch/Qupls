@@ -246,7 +246,7 @@ end
 // rd_more is a flag set when there is room in the buffer.
 always_comb
 begin
-	for (n7 = 0; n7 < MWIDTH; n7 = n7 + 1) begin
+	foreach (tpr[n7]) begin
 		tpr[n7] = pg_mot.pr[uop_mark[uop_head[n7]]];
 		tpr[n7].op.uop = uop_buf[uop_head[n7]];
 	end
@@ -282,6 +282,7 @@ begin
 	nopi2.v = 5'd1;
 	nopi2.exc = Qupls4_pkg::FLT_NONE;
 	nopi2.excv = INV;
+	nopi2.done = 2'b11;
 end
 
 
@@ -340,22 +341,23 @@ else begin
 end
 */
 
-always_ff @(posedge clk)
+always_comb//ff @(posedge clk)
 if (rst) begin
 	for (n9 = 0; n9 < MWIDTH; n9 = n9 + 1) begin
-		insm[n9] <= {$bits(Qupls4_pkg::rob_entry_t){1'b0}};
-		insm[n9].op.decbus.cause <= Qupls4_pkg::FLT_NONE;
-		insm[n9].op.exc <= Qupls4_pkg::FLT_NONE;
+		insm[n9] = {$bits(Qupls4_pkg::rob_entry_t){1'b0}};
+		insm[n9].op = nopi;
+		insm[n9].done = 2'b11;
+		insm[n9].stomped = TRUE;
 	end
 end
 else begin
-	if (en) begin
-		for (n9 = 0; n9 < MWIDTH; n9 = n9 + 1) begin
-			insm[n9] <= tpr[n9];
-			if (stomp_ext && FALSE) begin
-				if (tpr[n9].ip_stream!=kept_stream) begin
-					insm[n9].op <= nopi;
-				end
+	for (n9 = 0; n9 < MWIDTH; n9 = n9 + 1) begin
+		insm[n9] = tpr[n9];
+		if (stomp_ext && FALSE) begin
+			if (tpr[n9].ip_stream!=kept_stream) begin
+				insm[n9].op = nopi;
+				insm[n9].done = 2'b11;
+				insm[n9].stomped = TRUE;
 			end
 		end
 	end
@@ -402,6 +404,12 @@ begin
 	pr_dec[1].v = !stomp_dec;
 	pr_dec[2].v = !stomp_dec;
 	pr_dec[3].v = !stomp_dec;
+
+	pr_dec[0].decbus = dec[0];
+	pr_dec[1].decbus = dec[1];
+	pr_dec[2].decbus = dec[2];
+	pr_dec[3].decbus = dec[3];
+
 	if (stomp_dec) begin
 		// Clear the branch flags so that a new checkpoint is not assigned and
 		// the checkpoint will not be freed.
@@ -426,10 +434,6 @@ begin
 		pr_dec[2].decbus.Rci = dec[2].Rci;
 		pr_dec[3].decbus.Rci = dec[3].Rci;
 	end
-	pr_dec[0].decbus = dec[0];
-	pr_dec[1].decbus = dec[1];
-	pr_dec[2].decbus = dec[2];
-	pr_dec[3].decbus = dec[3];
 
 	// Apply interrupt masking.
 	// Done by clearing the hardware interrupt flag.
@@ -670,20 +674,26 @@ begin
 	if (pr_dec[0].decbus.bsr|pr_dec[0].decbus.jsr) begin
 		pr_dec[1].v = INV;
 		pr_dec[1].uop.opcode = Qupls4_pkg::OP_NOP;
+		pr_dec[1].decbus.nop = TRUE;
 		pr_dec[2].v = INV;
 		pr_dec[2].uop.opcode = Qupls4_pkg::OP_NOP;
+		pr_dec[2].decbus.nop = TRUE;
 		pr_dec[3].v = INV;
 		pr_dec[3].uop.opcode = Qupls4_pkg::OP_NOP;
+		pr_dec[3].decbus.nop = TRUE;
 	end
 	else if (pr_dec[1].decbus.bsr|pr_dec[1].decbus.jsr) begin
 		pr_dec[2].v = INV;
 		pr_dec[2].uop.opcode = Qupls4_pkg::OP_NOP;
+		pr_dec[2].decbus.nop = TRUE;
 		pr_dec[3].v = INV;
 		pr_dec[3].uop.opcode = Qupls4_pkg::OP_NOP;
+		pr_dec[3].decbus.nop = TRUE;
 	end
 	else if (pr_dec[2].decbus.bsr|pr_dec[2].decbus.jsr) begin
 		pr_dec[3].v = INV;
 		pr_dec[3].uop.opcode = Qupls4_pkg::OP_NOP;
+		pr_dec[3].decbus.nop = TRUE;
 	end
 end
 
@@ -751,10 +761,13 @@ else begin
 		foreach (pg_dec.pr[n10]) begin
 //			pg_dec.pr[n10].v <= stomp_dec ? 5'd0 : pg_mot.pr[n10].v;
 			pg_dec.pr[n10].op <= inso[n10];
-			if (stomp_dec) begin
+			if (stomp_dec||inso[n10].decbus.nop) begin
+				pg_dec.pr[n10].stomped <= TRUE;
 				pg_dec.pr[n10].done <= 2'b11;
-				pg_dec.pr[n10].op <= nopi2;
-				pg_dec.pr[n10].dispatchable <= FALSE;
+			end
+			if (inso[n10].uop.opcode==Qupls4_pkg::OP_NOP && !inso[n10].decbus.nop) begin
+				$display("Missed flagging NOP as NOP");
+				$finish;
 			end
 		end
 	end

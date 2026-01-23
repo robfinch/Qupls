@@ -252,7 +252,7 @@ end
 */
 always_ff @(posedge clk)
 if (rst) begin
-	for (pp = 0; pp < NRSE; pp = pp + 1)
+	foreach (rse[pp])
   	rse[pp] <= {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
   rse_o <= {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
 	issue <= FALSE;

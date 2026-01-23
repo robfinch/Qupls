@@ -41,7 +41,7 @@ import cpu_types_pkg::*;
 import cache_pkg::*;
 
 module icache_ctrl(rst, clk, wbm_req, wbm_resp, ftam_full,
-	hit, tlb_v, miss_vadr, miss_padr, miss_asid, port, port_o,
+	hit, tlb_v, miss_v, miss_vadr, miss_padr, miss_asid, port, port_o,
 	wr_ic, way, line_o, snoop_adr, snoop_v, snoop_cid);
 parameter WAYS = 4;
 parameter CORENO = 6'd1;
@@ -54,6 +54,7 @@ input wb_cmd_response256_t wbm_resp;
 input ftam_full;
 input hit;
 input tlb_v;
+input miss_v;
 input cpu_types_pkg::virtual_address_t miss_vadr;
 input cpu_types_pkg::physical_address_t miss_padr;
 input cpu_types_pkg::asid_t miss_asid;
@@ -85,6 +86,7 @@ icrq1
 	.clk(clk),
 	.hit(hit), 
 	.tlb_v(tlb_v),
+	.miss_v(miss_v),
 	.miss_vadr(miss_vadr),
 	.miss_padr(miss_padr),
 	.wbm_req(wbm_req),

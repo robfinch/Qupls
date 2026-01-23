@@ -123,7 +123,7 @@ integer nn,mm,n2,n3,n4,m4,n5,n6,n8,n9,n10,n11,n12,n13,n14,n15,n17;
 integer n16r, n16c, n12r, n12c, n14r, n14c, n17r, n17c, n18r, n18c;
 integer n19,n20,n21,n22,n23,n24,n25,n26,n27,n28,n29,i,n30,n31,n32,n33;
 integer n34,n35,n36,n37,n38,n39,n40,n41,n42,n43,n44,n45,n46,n47,n48;
-integer n49,n50,n51,n52,n53,n54,n55,n56,n57;
+integer n49,n50,n51,n52,n53,n54,n55,n56,n57,n58;
 integer jj,kk;
 
 genvar g,h,gvg;
@@ -313,6 +313,8 @@ reg [1:0] robentry_islot [0:Qupls4_pkg::ROB_ENTRIES-1];
 wire [1:0] next_robentry_islot [0:Qupls4_pkg::ROB_ENTRIES-1];
 Qupls4_pkg::rob_bitmask_t robentry_stomp;
 Qupls4_pkg::rob_bitmask_t robentry_cpydst;
+stream_state_t [XSTREAMS-1:0] stream_states;
+wire [XSTREAMS-1:0] dead_streams;
 pc_stream_t kept_stream;
 wire stomp_fet, stomp_ext, stomp_mot, stomp_x4;
 wire stomp_dec, stomp_ren, stomp_que, stomp_quem;
@@ -333,8 +335,11 @@ pc_address_ex_t pc0_f;
 pc_address_ex_t brtgt;
 reg pc_in_sync;
 reg advance_pipeline, advance_pipeline_seg2;
+reg advance_icache;
 reg advance_fetch;
 reg advance_extract;
+wire advance_extract2;
+reg advance_mot;
 reg advance_decode;
 reg advance_rename;
 reg advance_enqueue;
@@ -351,7 +356,6 @@ Qupls4_pkg::reg_bitmask_t Ra_bitmask;
 Qupls4_pkg::reg_bitmask_t Rt_bitmask;
 reg ls_bmf;		// load or store bitmask flag
 Qupls4_pkg::ex_instruction_t hold_ir;
-reg hold_ins;
 reg pack_regs;
 reg [2:0] scale_regs;
 rob_ndx_t [MWIDTH-1:0] grplen;
@@ -411,6 +415,7 @@ always_comb
 	foreach (pred_tf[n56])
 		for (n57 = 0; n57 < 32; n57 = n57 + 1)
 			pred_tf[n56][n57] = pred_buf[n56] >> {n57[4:0],1'b0};
+reg [XSTREAMS-1:0] stream_resolved;
 
 reg [3:0] regx0;
 reg [3:0] regx1;
@@ -973,23 +978,11 @@ reg flush_pipeline;
 wire copro_stall;
 reg copro_stall1;
 reg cp_stall;
-Qupls4_pkg::pipeline_reg_t nopi;
 reg [5:0] sync_no;
 reg [5:0] fc_no;
 
 always_ff @(posedge clk)
 	fcu_branch_resolved = fcu_rse.v;
-
-// Define a NOP instruction.
-always_comb
-begin
-	nopi = {$bits(Qupls4_pkg::pipeline_reg_t){1'b0}};
-	nopi.uop = {41'd0,Qupls4_pkg::OP_NOP};
-	nopi.uop.lead = 1'd1;
-	nopi.decbus.Rdv = 1'b0;
-	nopi.decbus.nop = 1'b1;
-	nopi.decbus.sau = 1'b1;
-end
 
 
 initial begin: Init
@@ -1616,7 +1609,7 @@ else
 end
 endgenerate
 						
-
+wire ic_miss_v;
 wire predicted_correctly_dec;
 cpu_types_pkg::pc_address_ex_t new_address_dec;
 cpu_types_pkg::pc_address_ex_t new_address_ext;
@@ -1640,7 +1633,9 @@ reg [XSTREAMS*THREADS-1:0] used_streams;
 pc_address_ex_t [XSTREAMS*THREADS-1:0] pcs;
 pc_stream_t fet_stream;
 // Buffers the instruction cache line to allow fetching along alternate paths.
+reg first_icache;
 wire is_buffered;
+wire next_is_buffered;
 dep_stream_t [XSTREAMS-1:0] dep_stream;
 
 // Choose a stream of execution. Give precedence to streams that have
@@ -1656,7 +1651,7 @@ uic1
 (
 	.rst(irst),
 	.clk(clk),
-	.ce(advance_fetch),
+	.ce(advance_icache),
 	.invce(invce),
 	.snoop_adr(snoop_adr),
 	.snoop_v(snoop_v),
@@ -1676,6 +1671,7 @@ uic1
 	.ic_valid(ic_valid),
 	.miss_vadr(ic_miss_adr),
 	.miss_asid(ic_miss_asid),
+	.miss_v(ic_miss_v),
 	.ic_line_i(ic_line_o),
 	.wway(ic_wway),
 	.wr_ic(wr_ic),
@@ -1687,6 +1683,14 @@ uic1
 	.port_i(1'b0)
 );
 assign ic_dhit = 1'b1;
+always_ff @(posedge clk)
+if (irst)
+	first_icache <= TRUE;
+else begin
+	if (ihito)
+		first_icache <= FALSE;
+end
+
 always_ff @(posedge clk)
 if (advance_fetch) begin
 	ic_carry_mod <= icarry_mod;
@@ -1726,6 +1730,7 @@ icctrl1
 	.ftam_full(ftaim_resp.rty),
 	.hit(ihit),
 	.tlb_v(pc_tlb_v),
+	.miss_v(ic_miss_v),
 	.miss_vadr(ic_miss_adr),
 	.miss_padr(pc_tlb_res),
 	.miss_asid(tlb_pc_entry.vpn.asid),
@@ -1924,12 +1929,37 @@ end
 reg branch_resolved;
 always_ff @(posedge clk) branch_resolved <= fcu_branch_resolved;
 
+// Stream state manager
+always_ff @(posedge clk)
+if (irst) begin
+	foreach(stream_states[n58])
+		stream_states[n58] <= Qupls4_pkg::STR_UNKNOWN;
+	stream_states[5'd1] <= Qupls4_pkg::STR_ALIVE;
+end
+else begin
+	foreach (dead_streams[n58])
+		stream_states[n58] <= Qupls4_pkg::STR_DEAD;
+	stream_states[kept_stream] <= Qupls4_pkg::STR_ALIVE;
+	foreach (new_stream[n58])
+		stream_states[new_stream[n58].stream] <= Qupls4_pkg::STR_UNKNOWN;
+	foreach (stream_states[n58])
+		if (stream_states[n58]==Qupls4_pkg::STR_DEAD)
+			stream_states[n58] <= Qupls4_pkg::STR_UNKNOWN;
+end
+
 Qupls4_stomp ustmp1
 (
 	.rst(irst),
 	.clk(clk),
 	.clk2x(clk),
-	.ihit(ihito),
+	.ihit(is_buffered),
+	.advance_icache(advance_icache),
+	.advance_fetch(advance_fetch),
+	.advance_extract(advance_extract),
+	.advance_mot(advance_mot),
+	.advance_decode(advance_decode),
+	.advance_rename(advance_rename),
+	.advance_enqueue(advance_enqueue),
 	.advance_pipeline(advance_pipeline),
 	.advance_pipeline_seg2(advance_pipeline_seg2), // currently same as above
 	.found_destination(fcu_found_destination),
@@ -1959,6 +1989,7 @@ Qupls4_stomp ustmp1
 	.missid(missid),
 	.missid_v(missid_v),
 	.kept_stream(kept_stream),
+	.stomped(dead_streams),
 	.takb(takb),
 	.rob(rob),
 	.robentry_stomp(robentry_stomp)
@@ -2074,11 +2105,8 @@ if (advance_pipeline)
 	fetch_new_block_x <= fetch_new_block;
 */
 
-always_comb
-	hold_ins = |reg_bitmask;
-
-always_comb
-	get_next_pc = ((pe_allqd||allqd||&next_cqd) && !hold_ins) && ihit && ~hirq;
+always_ff @(posedge clk)
+	get_next_pc <= (pe_allqd||allqd||&next_cqd) && is_buffered && ~hirq;
 
 // All queued flag.
 
@@ -2192,7 +2220,7 @@ else begin
 end
 */
 always_comb
-	hirq = irq && !int_commit && (irq_i > sr.ipl || irq_i==6'd63);	// NMI (63) is always recognized.
+	hirq = FALSE;//irq && !int_commit && (irq_i > sr.ipl || irq_i==6'd63);	// NMI (63) is always recognized.
 
 // -----------------------------------------------------------------------------
 // PARSE stage (length decode)
@@ -2268,7 +2296,8 @@ Qupls4_instruction_buffer uib1
 	.line_i({ic_clineh.data,ic_clinel.data}),
 	.line_o(ic_line),
 	.ip_o(pc_fet),
-	.is_buffered_o(is_buffered)
+	.is_buffered_o(is_buffered),
+	.next_is_buffered_o(next_is_buffered)
 );
 
 Qupls4_pipeline_fet ufet1
@@ -2282,7 +2311,7 @@ Qupls4_pipeline_fet ufet1
 	.irq_fet(irq_fet),
 	.irq_sn_ic(ic_irq_sn),
 	.irq_sn_fet(irq_sn_fet),
-	.en(advance_fetch),
+	.en(advance_fetch & is_buffered),
 	.uop_num_ic(uop_num_ic),
 	.uop_num_fet(uop_num_fet),
 	.pc_i(pc_fet),
@@ -2361,12 +2390,12 @@ Qupls4_pipeline_ext #(.MWIDTH(MWIDTH)) uiext1
 	.rst_i(irst),
 	.clk_i(clk),
 	.flush_fet(flush_fet),
-	.en_i(advance_extract & rstcnt[5]),
+	.en_i(advance_extract),
 	.cline_fet(ic_line_fet),
 	.new_cline_ext(new_cline_ext),
 	.cline_ext(cline_ext),
 	.ssm_flag(ssm_flag),
-	.ihit(ihito),
+	.ihit(is_buffered),
 	.sr(sr),
 	.ipl_fet(ipl_fet),
 	.uop_num_fet(uop_num_fet),
@@ -2425,7 +2454,7 @@ umot1
 (
 	.rst(irst),
 	.clk(clk),
-	.en(advance_decode),
+	.en(advance_mot),
 	.stomp(stomp_mot),
 	.cline_ext(cline_ext),
 	.cline_mot(cline_mot),
@@ -2433,7 +2462,7 @@ umot1
 	.pg_mot(pg_mot),
 	.uop_buf(uop_buf),
 	.uop_mark(uop_mark),
-	.advance_ext(advance_extract),
+	.advance_ext(advance_extract2),
 	.head(uop_head)
 );
 
@@ -2661,10 +2690,24 @@ always_comb	advance_decode =
 	advance_rename
 	;	
 
-// advance_extract set by decode stage
+always_comb	advance_mot =
+	rstcnt[5] &&
+	advance_decode
+	;
+
+always_comb advance_extract =
+	ihit & 
+	advance_extract2 &		// advance_extract set by mot stage
+	rstcnt[5]
+	;
 
 always_comb advance_fetch =
-	advance_extract &
+	advance_extract
+	;
+
+always_comb advance_icache =
+	(first_icache | ihit) & 
+	advance_extract2 &		// advance_extract set by mot stage
 	rstcnt[5]
 	;
 
@@ -2944,8 +2987,6 @@ Qupls4_pipeline_ren #(.MWIDTH(MWIDTH), .NPORT(NREG_RPORTS)) uren1
 	.bo_preg(bo_preg),
 	.bo_nreg(bo_nreg),
 	.rat_stallq(rat_stallq),
-	.micro_machine_active_dec(1'b0),
-	.micro_machine_active_ren(),
 	
 	.alloc_chkpt(alloc_chkpt),
 	.cndx(cndx),
@@ -3242,7 +3283,7 @@ cpu_types_pkg::checkpt_ndx_t fuq_cp [0:12];
 // Look for queues containing values, and select from a queue using a rotating selector.
 Qupls4_frq_select
 #(
-	.NFRQ(14),
+	.NFRQ(13),
 	.NWRITE_PORTS(NREG_WPORTS)
 )
 ufrqsel1
@@ -3435,6 +3476,14 @@ end
 end
 endgenerate
 
+assign fuq_empty[6] = TRUE;
+assign fuq_pRt[6] = 10'd0;
+assign fuq_aRt[6] = 8'd0;
+assign fuq_we[6] = 9'd0;
+assign fuq_tag[6] = 8'd0;
+assign fuq_res[6] = value_zero;
+assign fuq_cp[6] = 4'd0;
+
 Qupls4_func_result_queue ufrq7
 (
 	.rst_i(irst),
@@ -3471,6 +3520,22 @@ begin
 	dram1_rse.rndx = dram1_oper.rndx;
 	dram1_rse.cndx = dram1_oper.cndx;
 end
+
+assign fuq_empty[8] = TRUE;
+assign fuq_pRt[8] = 10'd0;
+assign fuq_aRt[8] = 8'd0;
+assign fuq_we[8] = 9'd0;
+assign fuq_tag[8] = 8'd0;
+assign fuq_res[8] = value_zero;
+assign fuq_cp[8] = 4'd0;
+
+assign fuq_empty[9] = TRUE;
+assign fuq_pRt[9] = 10'd0;
+assign fuq_aRt[9] = 8'd0;
+assign fuq_we[9] = 9'd0;
+assign fuq_tag[9] = 8'd0;
+assign fuq_res[9] = value_zero;
+assign fuq_cp[9] = 4'd0;
 
 wire dram0_full, dram1_full;
 
@@ -5678,7 +5743,7 @@ else begin
 		fpu1_done1 <= FALSE;
 	// Fcu op may have been stomped on after issue, so check valid flag.
   if (~hirq) begin
-  	if ((pe_allqd|allqd) && !hold_ins && advance_pipeline_seg2)
+  	if ((pe_allqd|allqd) && advance_pipeline_seg2)
   		excret <= FALSE;
 	end
 	sau0_stomp <= FALSE;
@@ -5689,7 +5754,7 @@ else begin
 	dram1_stomp <= FALSE;
 
 	// This test in sync with PC update
-	if (!branchmiss && ihito && !hirq && ((pe_allqd|allqd) && !hold_ins && advance_pipeline_seg2))
+	if (!branchmiss && ihito && !hirq && ((pe_allqd|allqd) && advance_pipeline_seg2))
 		brtgtv <= FALSE;	// PC has been updated
 
 	load_lsq_argc <= FALSE;
@@ -5845,20 +5910,31 @@ else begin
 			// and not out already...
 			!(|rob[nn].out) &&
 			// and predicate is valid...
-			rob[nn].pred_bitv &&
+//			rob[nn].pred_bitv &&
 			// and no sync dependency
-			!rob[nn].sync_dep &&
+			!rob[nn].sync_depv &&
 			// if a store, then no previous flow control dependency
-			(rob[nn].op.decbus.store ? !rob[nn].fc_depv : TRUE) &&
+			(rob[nn].op.decbus.store ? |rob[nn].fc_dep : TRUE) &&
 			// if serializing the previous instruction must be done...
 			(Qupls4_pkg::SERIALIZE ? &rob[(nn + Qupls4_pkg::ROB_ENTRIES-1)%Qupls4_pkg::ROB_ENTRIES].done || ~|rob[(nn + Qupls4_pkg::ROB_ENTRIES-1)%Qupls4_pkg::ROB_ENTRIES].v : TRUE) &&
 			// A REXT prefix must be done
 			(rob[(nn + Qupls4_pkg::ROB_ENTRIES - 1) % Qupls4_pkg::ROB_ENTRIES].op.decbus.rext ? &rob[(nn + Qupls4_pkg::ROB_ENTRIES - 1) % Qupls4_pkg::ROB_ENTRIES].done : TRUE)
 			;
 
+
 	foreach (rob[nn])
 		if (rob_dispatched[nn])
 			rob[nn].out <= {2{VAL}};
+
+	foreach (rob[nn])
+		if (rob[nn].op.decbus.nop)
+			rob[nn].done <= 2'b11;
+
+	// If branch resolved, clear dependencies.
+	foreach (rob[nn])
+		if (stream_states[rob[nn].fc_dep]!=Qupls4_pkg::STR_UNKNOWN)
+			rob[nn].fc_dep <= 5'd0;
+
 
 	// ----------------------------------------------------------------------------
 	// REXT Prefix
@@ -6622,7 +6698,7 @@ else begin
 				&& !robentry_stomp[n3]
 				&& !(&rob[n3].done)
 				&& (rob[n3].op.decbus.cpytgt ? (rob[n3].argT_v /*|| rob[g].op.nRt==9'd0*/) : rob[n3].all_args_valid && rob[n3].pred_bit)
-				&& (rob[n3].op.decbus.mem ? !rob[n3].fc_depv : 1'b1)
+				&& (rob[n3].op.decbus.mem ? |rob[n3].fc_dep : TRUE)
 				&& (Qupls4_pkg::SERIALIZE ? (rob[(n3+Qupls4_pkg::ROB_ENTRIES-1)%Qupls4_pkg::ROB_ENTRIES].done==2'b11 || rob[(n3+Qupls4_pkg::ROB_ENTRIES-1)%Qupls4_pkg::ROB_ENTRIES].v==INV) : 1'b1)
 				//&& !fnPriorFalsePred(g)
 				&& !rob[n3].sync_depv
@@ -7431,7 +7507,8 @@ integer nn;
 begin
 //	rob[ndx].v <= cpytgt ? rob[ndx].v : 5'd0;
 	rob[ndx].excv <= INV;
-	rob[ndx].op.decbus.cpytgt <= cpytgt;
+	if (cpytgt)
+		rob[ndx].op.decbus.cpytgt <= TRUE;
 	if (cpytgt) begin
 		rob[ndx].op.decbus.sau <= TRUE;
 		rob[ndx].op.decbus.fpu <= FALSE;
@@ -7776,6 +7853,7 @@ begin
 		pred_ins_done[n14] <= 8'hFF;
 	foreach (pred_buf[n14])
 		pred_buf[n14] <= value_zero;
+	stream_resolved <= 32'hFFFFFFFF;
 end
 endtask
 
@@ -7857,8 +7935,7 @@ begin
 	next_robe.flush = flush;
 	next_robe.sync_dep = sync_ndx;
 	next_robe.sync_depv = sync_ndxv;
-	next_robe.fc_dep = fc_ndx;
-	next_robe.fc_depv = fc_ndxv;
+	next_robe.fc_dep = robe.ip_stream.stream;
 
 	// "dynamic" fields, these fields may change after enqueue
 	next_robe.sn = sn;
@@ -7889,12 +7966,12 @@ begin
 		next_robe.exc = Qupls4_pkg::FLT_NONE;
 		next_robe.excv = FALSE;
 	end
-	next_robe.argA_v = Qupls4_pkg::fnSourceRs1v(robe.op) | db.has_imma;
-	next_robe.argB_v = Qupls4_pkg::fnSourceRs2v(robe.op) | (db.has_Rs2 ? 1'b0 : db.has_immb);
-	next_robe.argC_v = Qupls4_pkg::fnSourceRs3v(robe.op) | db.has_immc;
-	next_robe.argD_v = Qupls4_pkg::fnSourceRs4v(robe.op);
-	next_robe.argS_v = Qupls4_pkg::fnSourceArgSv(robe.op);
-	next_robe.argT_v = Qupls4_pkg::fnSourceRdv(robe.op);
+	next_robe.argA_v = Qupls4_pkg::fnSourceRs1v(robe.op.uop) | db.has_imma;
+	next_robe.argB_v = Qupls4_pkg::fnSourceRs2v(robe.op.uop) | (db.has_Rs2 ? 1'b0 : db.has_immb);
+	next_robe.argC_v = Qupls4_pkg::fnSourceRs3v(robe.op.uop) | db.has_immc;
+	next_robe.argD_v = Qupls4_pkg::fnSourceRs4v(robe.op.uop);
+	next_robe.argS_v = Qupls4_pkg::fnSourceArgSv(robe.op.uop);
+	next_robe.argT_v = Qupls4_pkg::fnSourceRdv(robe.op.uop);
 	if (db.Rs1z)
 		next_robe.argA_v = VAL;
 	if (db.Rs2z)
@@ -8492,6 +8569,7 @@ endtask
 // Search for the branch destination following the branch (forward search). If
 // the branch destination is found in the ROB within six instructions, then
 // predicate: mark the instructions as copy targets (done above)
+// Note the stream must match as well as the IP.
 
 task tGetSkipList;
 input rob_ndx_t ndx;
@@ -8520,17 +8598,17 @@ begin
 	m6 = (ndx + Qupls4_pkg::ROB_ENTRIES + 6) % Qupls4_pkg::ROB_ENTRIES;
 	m7 = (ndx + Qupls4_pkg::ROB_ENTRIES + 7) % Qupls4_pkg::ROB_ENTRIES;
 	dst <= p1;	// the last ROB entry it could be
-	if (rob[m1].sn > rob[ndx].sn && rob[m1].v==rob[ndx].v && pgh[rob[m1].pghn].ip.pc + {rob[m1].ip_offs,1'b0} == rob[ndx].brtgt)
+	if (rob[m1].sn > rob[ndx].sn && rob[m1].v==rob[ndx].v && pgh[rob[m1].pghn].ip.pc + {rob[m1].ip_offs,1'b0} == rob[ndx].brtgt && rob[m1].ip_stream==rob[ndx].ip_stream)
 		found = 3'd1;
-	else if (rob[m2].sn > rob[ndx].sn && rob[m2].v==rob[ndx].v && pgh[rob[m2].pghn].ip.pc + {rob[m2].ip_offs,1'b0} == rob[ndx].brtgt)
+	else if (rob[m2].sn > rob[ndx].sn && rob[m2].v==rob[ndx].v && pgh[rob[m2].pghn].ip.pc + {rob[m2].ip_offs,1'b0} == rob[ndx].brtgt && rob[m2].ip_stream==rob[ndx].ip_stream)
 		found = 3'd2;
-	else if (rob[m3].sn > rob[ndx].sn && rob[m3].v==rob[ndx].v && pgh[rob[m3].pghn].ip.pc + {rob[m3].ip_offs,1'b0} == rob[ndx].brtgt)
+	else if (rob[m3].sn > rob[ndx].sn && rob[m3].v==rob[ndx].v && pgh[rob[m3].pghn].ip.pc + {rob[m3].ip_offs,1'b0} == rob[ndx].brtgt && rob[m3].ip_stream==rob[ndx].ip_stream)
 		found = 3'd3;
-	else if (rob[m4].sn > rob[ndx].sn && rob[m4].v==rob[ndx].v && pgh[rob[m4].pghn].ip.pc + {rob[m4].ip_offs,1'b0} == rob[ndx].brtgt)
+	else if (rob[m4].sn > rob[ndx].sn && rob[m4].v==rob[ndx].v && pgh[rob[m4].pghn].ip.pc + {rob[m4].ip_offs,1'b0} == rob[ndx].brtgt && rob[m4].ip_stream==rob[ndx].ip_stream)
 		found = 3'd4;
-	else if (rob[m5].sn > rob[ndx].sn && rob[m5].v==rob[ndx].v && pgh[rob[m5].pghn].ip.pc + {rob[m5].ip_offs,1'b0} == rob[ndx].brtgt)
+	else if (rob[m5].sn > rob[ndx].sn && rob[m5].v==rob[ndx].v && pgh[rob[m5].pghn].ip.pc + {rob[m5].ip_offs,1'b0} == rob[ndx].brtgt && rob[m5].ip_stream==rob[ndx].ip_stream)
 		found = 3'd5;
-	else if (rob[m6].sn > rob[ndx].sn && rob[m6].v==rob[ndx].v && pgh[rob[m6].pghn].ip.pc + {rob[m6].ip_offs,1'b0} == rob[ndx].brtgt)
+	else if (rob[m6].sn > rob[ndx].sn && rob[m6].v==rob[ndx].v && pgh[rob[m6].pghn].ip.pc + {rob[m6].ip_offs,1'b0} == rob[ndx].brtgt && rob[m6].ip_stream==rob[ndx].ip_stream)
 		found = 3'd6;
 
 	case(found)
@@ -8641,19 +8719,6 @@ begin
 end
 endtask
 
-// Clear any sync dependencies, used when a sync instruction commits.
-
-task tClearFcDep;
-input rob_ndx_t ndx;
-integer nn;
-begin
-	foreach (rob[nn]) begin
-		if (rob[nn].fc_depv && rob[nn].fc_dep==ndx)
-			rob[nn].fc_depv <= INV;
-	end
-end
-endtask
-
 // Commit logic the same for every head.
 
 task tCommits;
@@ -8667,8 +8732,6 @@ begin
 		fc_ndxv = INV;
 	if (rob[ndx].op.decbus.sync)
 		tClearSyncDep(ndx);
-	if (rob[ndx].op.decbus.fc)
-		tClearFcDep(ndx);
 	rob[ndx].cmt <= |rob[ndx].v;
 	tInvalidateLSQ(head, ndx, FALSE, |rob[ndx].v, value_zero);
 end

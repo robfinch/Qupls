@@ -40,7 +40,7 @@ import cpu_types_pkg::*;
 import wishbone_pkg::*;
 import cache_pkg::*;
 
-module icache_req_generator(rst, clk, hit, tlb_v, miss_vadr, miss_padr,
+module icache_req_generator(rst, clk, hit, tlb_v, miss_v, miss_vadr, miss_padr,
 	wbm_req, ack_i, vtags, ptags, ack);
 parameter CORENO = 6'd1;
 parameter CHANNEL = 6'd0;
@@ -49,6 +49,7 @@ input rst;
 input clk;
 input hit;
 input tlb_v;
+input miss_v;
 input cpu_types_pkg::virtual_address_t miss_vadr;
 input cpu_types_pkg::physical_address_t miss_padr;
 output wb_cmd_request256_t wbm_req;
@@ -64,7 +65,9 @@ typedef enum logic [3:0] {
 } state_t;
 state_t req_state;
 
+integer n1;
 cpu_types_pkg::address_t madr, vadr, padr;
+wire cd_miss_vadr;
 reg [7:0] lfsr_cnt;
 wire [16:0] lfsr_o;
 reg [1:0] tid;
@@ -78,12 +81,21 @@ lfsr17 #(.WID(17)) ulfsr1
 	.o(lfsr_o)
 );
 
+// The TLB will return valid as long as the address stays on the same page, but
+// we want the miss to be triggered by a new address. Transitioning from the
+// WAIT4MISS stage needs to be delayed a cycle.
+
+change_det #($bits(cpu_types_pkg::virtual_address_t)) ucd1 (.rst(rst), .clk(clk), .ce(1'b1), .i(miss_vadr), .cd(cd_miss_vadr));
+
 always_ff @(posedge clk)
 if (rst) begin
 	req_state <= RESET;
 	wbm_req <= 'd0;
 	lfsr_cnt <= 'd0;
-	vtags <= 'd0;
+	foreach (vtags[n1])
+		vtags[n1] <= {$bits(virtual_address_t){1'b0}};
+	foreach (vtags[n1])
+		ptags[n1] <= {$bits(physical_address_t){1'b0}};
 	tid <= 4'd0;
 	madr <= {$bits(wb_address_t){1'b0}};
 	padr <= {$bits(wb_address_t){1'b0}};
@@ -115,7 +127,7 @@ else begin
 			tid <= 4'h0;
 		end
 	WAIT4MISS:
-		if (!hit & tlb_v) begin
+		if (!hit & tlb_v & !cd_miss_vadr & miss_v) begin
 			wbm_req.tid.core = CORENO;
 			wbm_req.tid.channel = CHANNEL;			
 			wbm_req.tid.tranid <= {tid,2'd0};
@@ -136,9 +148,11 @@ else begin
 			req_state <= STATE3;
 		end
 	STATE3:
-		if (ack_i) begin
-			wbm_req.stb <= 1'b0;
-			req_state <= STATE3a;
+		begin
+			if (ack_i) begin
+				wbm_req.stb <= 1'b0;
+				req_state <= STATE3a;
+			end
 		end
 	STATE3a:
 		if (!ack_i) begin
@@ -148,9 +162,7 @@ else begin
 //			wbm_req.vadr <= vadr + 6'd32;
 			wbm_req.adr <= padr + 6'd32;
 			vtags[{tid,2'd1}] <= madr + 6'd32;
-			vadr <= vadr + 6'd32;
-			padr <= padr + 6'd32;
-			madr <= madr + 6'd32;
+			ptags[{tid,2'd1}] <= padr + 6'd32;
 			req_state <= WAIT_ACK;
 //				req_state <= STATE4;
 		end
@@ -212,9 +224,11 @@ else begin
 		end
 	// Wait some random number of clocks before trying again.
 	WAIT_ACK:
-		if (ack_i) begin
-			tBusClear();
-			req_state <= WAIT_UPD1;
+		begin
+			if (ack_i) begin
+				tBusClear();
+				req_state <= WAIT_UPD1;
+			end
 		end
 	WAIT_UPD1:
 		if (!ack_i)
@@ -235,6 +249,7 @@ task tBusClear;
 begin
 	wbm_req.cti <= wishbone_pkg::CLASSIC;
 	wbm_req.cyc <= 1'b0;
+	wbm_req.stb <= 1'b0;
 	wbm_req.sel <= 32'h00000000;
 	wbm_req.we <= 1'b0;
 end

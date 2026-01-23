@@ -78,12 +78,8 @@ always_comb
 begin
 	rob_dispatched = {$bits(rob_bitmask_t){1'b0}};
 	dispatch_slot_v = {DISPATCH_COUNT{1'b0}};
-	rse[0] = {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
-	rse[1] = {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
-	rse[2] = {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
-	rse[3] = {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
-	rse[4] = {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
-	rse[5] = {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
+	foreach (rse[nn])
+		rse[nn] = {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
 
 	rse[Qupls4_pkg::ROB_ENTRIES] = {$bits(rob_entry_t){1'b0}};
 	foreach (cpy[nn]) begin
@@ -187,8 +183,8 @@ end
 always_ff @(posedge clk)
 begin
 	foreach (cpy[mm]) begin
-		rse_o[mm] <= rse[cpy[mm].rse];
-		rse_o[mm].funcunit <= cpy[mm].fu;
+		rse_o[cpy[mm].rse] <= rse[cpy[mm].rob];
+		rse_o[cpy[mm].rse].funcunit <= cpy[mm].fu;
 	end
 end
 always_ff @(posedge clk)
@@ -227,7 +223,7 @@ begin
 	rse[kk].bsr = rob[nn].op.decbus.bsr;
 	rse[kk].jsr = rob[nn].op.decbus.jsr;
 	rse[kk].sys = rob[nn].op.decbus.sys;
-	if (rob[nn].op.decbus.cpytgt|stomp[nn]|~rob[nn].pred_bit) begin
+	if (rob[nn].op.decbus.cpytgt|stomp[nn]) begin
 		rse[kk].uop = {41'd0,Qupls4_pkg::OP_NOP};
 		rse[kk].store = FALSE;
 		for (xx = 0; xx < 4; xx = xx + 1) begin

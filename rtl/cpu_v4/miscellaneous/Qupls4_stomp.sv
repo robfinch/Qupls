@@ -42,13 +42,16 @@ import const_pkg::*;
 import Qupls4_pkg::*;
 
 module Qupls4_stomp(rst, clk, clk2x, ihit, advance_pipeline, advance_pipeline_seg2, 
+	advance_icache, advance_fetch, advance_extract, advance_mot, advance_decode,
+	advance_rename, advance_enqueue,
 //	irq_in_pipe, di_inst,
 	dep_stream,
 	branch_resolved, branchmiss, found_destination, destination_rndx,
 	misspc, predicted_correctly_dec, predicted_match_ext,
 	pc, pc_f, pc_fet, pc_ext, pc_mot, pc_dec, pc_ren,
 	stomp_fet, stomp_ext, stomp_mot, stomp_dec, stomp_ren, stomp_que, stomp_quem,
-	fcu_idv, fcu_id, missid, missid_v, kept_stream, takb, rob, robentry_stomp
+	fcu_idv, fcu_id, missid, missid_v, kept_stream, takb, rob, robentry_stomp,
+	stomped
 	);
 parameter MWIDTH = Qupls4_pkg::MWIDTH;
 input rst;
@@ -57,6 +60,14 @@ input clk2x;
 input ihit;
 //input irq_in_pipe;
 //input di_inst;
+input advance_icache;
+input advance_fetch;
+input advance_extract;
+input advance_mot;
+input advance_decode;
+input advance_rename;
+input advance_enqueue;
+
 input advance_pipeline;
 input advance_pipeline_seg2;
 input found_destination;	// true if destination was found in ROB
@@ -86,6 +97,7 @@ input rob_ndx_t fcu_id;
 input rob_ndx_t missid;
 input missid_v;
 input pc_stream_t kept_stream;
+output reg [XSTREAMS-1:0] stomped;
 input takb;
 input Qupls4_pkg::rob_entry_t [Qupls4_pkg::ROB_ENTRIES-1:0] rob;
 output Qupls4_pkg::rob_bitmask_t robentry_stomp;
@@ -102,7 +114,6 @@ reg stomp_renr;
 reg stomp_quer;
 reg stomp_rrr;
 reg stomp_quemr;
-reg [XSTREAMS-1:0] stomped;
 
 reg stomp_pipeline;
 reg [3:0] spl;
@@ -119,7 +130,7 @@ wire next_stomp_dec = (stomp_mot) || stomp_pipeline;
 wire next_stomp_ren = (stomp_dec) || stomp_pipeline;
 wire next_stomp_quem = (stomp_ren) || stomp_pipeline;
 
-edge_det ued1 (.rst(rst), .clk(clk2x), .ce(advance_pipeline), .i(stomp_pipeline), .pe(pe_stomp_pipeline), .ne(), .ee());	
+edge_det ued1 (.rst(rst), .clk(clk2x), .ce(advance_icache), .i(stomp_pipeline), .pe(pe_stomp_pipeline), .ne(), .ee());	
 
 integer n5;
 reg [XSTREAMS-1:0] list;
@@ -137,13 +148,16 @@ end
 else begin
 	if (pe_stomp_pipeline)
 		misspcr[0] <= misspc;
-	if (advance_pipeline|pe_stomp_pipeline) begin
+	if (advance_fetch|pe_stomp_pipeline)
 		misspcr[1] <= misspcr[0];
+	if (advance_extract|pe_stomp_pipeline)
 		misspcr[2] <= misspcr[1];
+	if (advance_mot|pe_stomp_pipeline)
 		misspcr[3] <= misspcr[2];
+	if (advance_decode|pe_stomp_pipeline)
 		misspcr[4] <= misspcr[3];
+	if (advance_rename|pe_stomp_pipeline)
 		misspcr[5] <= misspcr[4];
-	end
 end
 
 always_ff @(posedge clk2x)
@@ -172,10 +186,10 @@ always_comb
 		(pe_stomp_pipeline || stomp_fetr || !predicted_match_ext || !predicted_correctly_dec) && (pc_f.pc != misspcr[1].pc);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_fet;
 always_comb
 	stomp_ext = stomped[pc_fet.stream] ||
-		(pe_stomp_pipeline || stomp_extr || !predicted_match_ext || !predicted_correctly_dec) && (pc_fet.pc != misspcr[2].pc);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_ext;
+		(pe_stomp_pipeline || stomp_extr || !predicted_correctly_dec) && (pc_fet.pc != misspcr[2].pc);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_ext;
 always_comb
 	stomp_mot = stomped[pc_ext.stream] ||
-		(pe_stomp_pipeline || stomp_motr || !predicted_match_ext || !predicted_correctly_dec) && (pc_ext.pc != misspcr[3].pc);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_ext;
+		(pe_stomp_pipeline || stomp_motr || !predicted_correctly_dec) && (pc_ext.pc != misspcr[3].pc);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_ext;
 always_comb
 	stomp_dec = stomped[pc_mot.stream] ||
 	 (pe_stomp_pipeline || stomp_decr || !predicted_correctly_dec) && (pc_mot.pc != misspcr[4].pc);// && !hwi_at_ren && !hwi_at_dec;
@@ -201,7 +215,7 @@ if (rst) begin
 end
 else begin
 	
-	if (advance_pipeline|pe_stomp_pipeline) begin
+	if (advance_icache|pe_stomp_pipeline) begin
 		if (pe_stomp_pipeline) begin
 //			stomp_alnr <= TRUE;
 			ff1 <= TRUE;
@@ -212,7 +226,7 @@ else begin
 			stomp_alnr <= FALSE;
 	end
 
-	if (advance_pipeline|pe_stomp_pipeline) begin
+	if (advance_fetch|pe_stomp_pipeline) begin
 		if (pe_stomp_pipeline)
 			stomp_fetr <= TRUE;
 		else if (pc_f.pc == misspcr[1].pc || !stomp_aln)
@@ -221,7 +235,7 @@ else begin
 			stomp_fetr <= stomp_aln;
 	end
 
-	if (advance_pipeline|pe_stomp_pipeline) begin
+	if (advance_extract|pe_stomp_pipeline) begin
 		if (pe_stomp_pipeline)
 			stomp_extr <= TRUE;
 		else if (pc_fet.pc == misspcr[2].pc || !stomp_fet) // (next_stomp_ext)
@@ -236,7 +250,7 @@ else begin
 // An instruction group following the micro-code was at the fetch stage and
 // would be propagated to decode before the micro-code becomes active.
 
-	if (advance_pipeline|pe_stomp_pipeline) begin
+	if (advance_mot|pe_stomp_pipeline) begin
 		if (pe_stomp_pipeline)
 			stomp_motr <= TRUE;
 		else if (pc_ext.pc == misspcr[3].pc || !stomp_ext)
@@ -245,7 +259,7 @@ else begin
 			stomp_motr <= stomp_ext;
 	end
 
-	if (advance_pipeline|pe_stomp_pipeline) begin
+	if (advance_decode|pe_stomp_pipeline) begin
 		if (pe_stomp_pipeline)
 			stomp_decr <= TRUE;
 		else if (pc_mot.pc == misspcr[4].pc || !stomp_mot)
@@ -254,7 +268,7 @@ else begin
 			stomp_decr <= stomp_mot;
 	end
 
-	if (advance_pipeline_seg2|pe_stomp_pipeline) begin
+	if (advance_rename|pe_stomp_pipeline) begin
 		if (pe_stomp_pipeline)
 			stomp_renr <= TRUE;
 		else if (pc_dec.pc == misspcr[5].pc || !stomp_dec) begin
@@ -276,7 +290,7 @@ always_ff @(posedge clk2x)
 if (rst)
 	stomp_quer <= TRUE;
 else begin
-	if (advance_pipeline_seg2|pe_stomp_pipeline) begin
+	if (advance_enqueue|pe_stomp_pipeline) begin
 		if (stomp_ren)
 			stomp_quer <= TRUE;
 		else
@@ -288,7 +302,7 @@ always_ff @(posedge clk2x)
 if (rst)
 	stomp_quemr <= TRUE;
 else begin
-	if (advance_pipeline_seg2|pe_stomp_pipeline) begin
+	if (advance_enqueue|pe_stomp_pipeline) begin
 		if (next_stomp_quem)
 			stomp_quemr <= TRUE;
 		else
@@ -302,7 +316,7 @@ always_ff @(posedge clk2x)
 if (rst)
 	stomp_rrr <= TRUE;
 else begin
-	if (advance_pipeline_seg2|pe_stomp_pipeline) begin
+	if (advance_enqueue|pe_stomp_pipeline) begin
 		if (stomp_que)
 			stomp_rrr <= TRUE;
 		else

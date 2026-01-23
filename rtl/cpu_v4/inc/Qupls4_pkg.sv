@@ -352,6 +352,12 @@ parameter REG_USHM = REG_U|REG_S|REG_H|REG_M;
 // Type declarations
 // =============================================================================
 
+typedef enum logic [1:0] {
+	STR_UNKNOWN = 2'd0,
+	STR_ALIVE = 2'd1,
+	STR_DEAD = 2'd2
+} stream_state_t;
+
 typedef enum logic [2:0] {
 	DRAMSLOT_AVAIL = 3'd0,
 	DRAMSLOT_READY = 3'd1,
@@ -1307,7 +1313,7 @@ typedef struct packed		// 231 bits
 	logic [4:0] num;
 	logic [63:0] imm2;		// second immediate / CSR register numnber (14 bits))
 	logic [63:0] imm;			// immediate / displacement / mask
-	logic inc;						// increment / decrement for conditional branch
+	logic inc;						// increment / decrement for conditional branch, record bit for floats
 	logic [2:0] sc;				// index scaling
 	logic [2:0] dt;				// data type, vector load / store
 	logic [1:0] prc;			// precision
@@ -1950,6 +1956,7 @@ typedef struct packed {
 
 typedef struct packed {
 	// The following fields may change state while an instruction is processed.
+	logic stomped;
 	logic [4:0] v;						// 0=entry is invalid, otherwise instruction stream number in use
 	logic [2:0] wh;						// which instruction of group this is.
 	cpu_types_pkg::seqnum_t sn;							// sequence number, decrements when instructions que
@@ -2538,21 +2545,21 @@ end
 endfunction
 
 function fnImma;
-input ex_instruction_t ir;
+input micro_op_t ir;
 begin
 	fnImma = 1'b0;
 end
 endfunction
 
 function fnImmb;
-input ex_instruction_t ir;
+input micro_op_t ir;
 begin
 	fnImmb = 1'b0;
-	case(ir.ins.opcode)
+	case(ir.opcode)
 	OP_ADDI,OP_CMPI,OP_MULI,OP_DIVI,OP_SUBFI:
 		fnImmb = 1'b1;
 	OP_R3B,OP_R3W,OP_R3T,OP_R3O:
-		fnImmb = ir.ins.ms[1] == 1'b1 && ir.ins.Rs2[5] == 1'b1;
+		fnImmb = ir.ms[1] == 1'b1 && ir.Rs2[5] == 1'b1;
 //	OP_RTD:
 //		fnImmb = 1'b1;
 	default:	fnImmb = 1'b0;
@@ -2561,12 +2568,12 @@ end
 endfunction
 
 function fnImmc;
-input ex_instruction_t ir;
+input micro_op_t ir;
 begin
 	fnImmc = 1'b0;
-	case(ir.ins.opcode)
+	case(ir.opcode)
 	OP_R3B,OP_R3W,OP_R3T,OP_R3O:
-		fnImmc = ir.ins.ms[2] == 1'b1 && ir.ins.Rs3[5] == 1'b1;
+		fnImmc = ir.ms[2] == 1'b1 && ir.Rs3[5] == 1'b1;
 	OP_STI:
 		fnImmc = 1'b1;
 	default:	fnImmc = 1'b0;
@@ -2575,7 +2582,7 @@ end
 endfunction
 
 function fnImmd;
-input ex_instruction_t ir;
+input micro_op_t ir;
 begin
 	fnImmd = 1'b0;
 end
@@ -2594,62 +2601,62 @@ endfunction
 // 1 if the the operand is automatically valid, 
 // 0 if we need a RF value
 function fnSourceRs1v;
-input ex_instruction_t ir;
+input micro_op_t ir;
 begin
-	case(ir.ins.opcode)
+	case(ir.opcode)
 	OP_ADDI,OP_CMPI,OP_MULI,OP_DIVI,OP_SUBFI:	fnSourceRs1v = 1'b1;
-	OP_CHK:	fnSourceRs1v = fnConstReg(ir.ins.Rs1) || fnImma(ir);
+	OP_CHK:	fnSourceRs1v = fnConstReg(ir.Rs1) || fnImma(ir);
 //	OP_RTD:		fnSourceRs1v = fnConstReg(ir.ins.rtd.Ra.num) || fnImma(ir);
 //	OP_JSR:		fnSourceRs1v = fnConstReg(ir.ins.Ra.num) || fnImma(ir);
 	OP_R3B,OP_R3W,OP_R3T,OP_R3O:
-			fnSourceRs1v = fnConstReg(ir.ins.Rs1) || fnImma(ir);
-	OP_SHIFT:	fnSourceRs1v = fnConstReg(ir.ins.Rs1) || fnImma(ir);
+			fnSourceRs1v = fnConstReg(ir.Rs1) || fnImma(ir);
+	OP_SHIFT:	fnSourceRs1v = fnConstReg(ir.Rs1) || fnImma(ir);
 //	OP_MOV:		fnSourceRs1v = fnConstReg({ir.ins.move.Rs1h,ir.ins.move.Rs1}) || fnImma(ir);
 	OP_BCC8,OP_BCC16,OP_BCC32,OP_BCC64,
 	OP_BCCU8,OP_BCCU16,OP_BCCU32,OP_BCCU64:
-		fnSourceRs1v = fnConstReg(ir.ins.Rs1) || fnImma(ir);
+		fnSourceRs1v = fnConstReg(ir.Rs1) || fnImma(ir);
 	OP_LOADA,
 	OP_LDB,OP_LDBZ,OP_LDW,OP_LDWZ,OP_LDT,OP_LDTZ,OP_LOAD:
-		fnSourceRs1v = fnConstReg(ir.ins.Rs1);
+		fnSourceRs1v = fnConstReg(ir.Rs1);
 	OP_STB,OP_STW,OP_STT,OP_STORE,OP_STI,OP_STPTR:
-		fnSourceRs1v = fnConstReg(ir.ins.Rs1);
+		fnSourceRs1v = fnConstReg(ir.Rs1);
 	default:	fnSourceRs1v = 1'b1;
 	endcase
 end
 endfunction
 
 function fnSourceRs2v;
-input ex_instruction_t ir;
+input micro_op_t ir;
 begin
-	case(ir.ins.opcode)
-	OP_CHK:	fnSourceRs2v = fnConstReg(ir.ins.Rs2) || fnImmb(ir);
+	case(ir.opcode)
+	OP_CHK:	fnSourceRs2v = fnConstReg(ir.Rs2) || fnImmb(ir);
 //	OP_RTD:		fnSourceRs2v = 1'b0;
 //	OP_JSR,OP_BSR,
 	OP_ADDI,OP_CMPI,OP_MULI,OP_DIVI,OP_SUBFI:
 		fnSourceRs2v = 1'b1;
 	OP_R3B,OP_R3W,OP_R3T,OP_R3O:
-			fnSourceRs2v = fnConstReg(ir.ins.Rs2) || fnImmb(ir);
-	OP_SHIFT:	fnSourceRs2v = fnConstReg(ir.ins.Rs2) || ir.ins[31];
+			fnSourceRs2v = fnConstReg(ir.Rs2) || fnImmb(ir);
+	OP_SHIFT:	fnSourceRs2v = fnConstReg(ir.Rs2) || ir[31];
 	OP_BCC8,OP_BCC16,OP_BCC32,OP_BCC64,
 	OP_BCCU8,OP_BCCU16,OP_BCCU32,OP_BCCU64:
-		fnSourceRs2v = fnConstReg(ir.ins.Rs2) || fnImmb(ir);
+		fnSourceRs2v = fnConstReg(ir.Rs2) || fnImmb(ir);
 	OP_LOADA,
 	OP_LDB,OP_LDBZ,OP_LDW,OP_LDWZ,OP_LDT,OP_LDTZ,OP_LOAD:
-		fnSourceRs2v = fnConstReg(ir.ins.Rs2);
+		fnSourceRs2v = fnConstReg(ir.Rs2);
 	OP_STB,OP_STW,OP_STT,OP_STORE,OP_STI,OP_STPTR:
-		fnSourceRs2v = fnConstReg(ir.ins.Rs2);
+		fnSourceRs2v = fnConstReg(ir.Rs2);
 	default:	fnSourceRs2v = 1'b1;
 	endcase
 end
 endfunction
 
 function fnSourceRs3v;
-input ex_instruction_t ir;
+input micro_op_t ir;
 begin
-	case(ir.ins.opcode)
+	case(ir.opcode)
 	OP_R3B,OP_R3W,OP_R3T,OP_R3O:
-			fnSourceRs3v = fnConstReg(ir.ins.Rs3) || fnImmc(ir);
-	OP_CHK:	fnSourceRs3v = fnConstReg(ir.ins.Rs3);
+			fnSourceRs3v = fnConstReg(ir.Rs3) || fnImmc(ir);
+	OP_CHK:	fnSourceRs3v = fnConstReg(ir.Rs3);
 //	OP_RTD:
 //		fnSourceRs3v = 1'd0;
 	OP_STI:
@@ -2661,11 +2668,11 @@ end
 endfunction
 
 function fnSourceRs4v;
-input ex_instruction_t ir;
+input micro_op_t ir;
 begin
-	case(ir.ins.opcode)
+	case(ir.opcode)
 	OP_EXTD:
-			fnSourceRs4v = fnConstReg(ir.ins.Rs4) || fnImmd(ir);
+			fnSourceRs4v = fnConstReg(ir.Rs4) || fnImmd(ir);
 	default:
 		fnSourceRs4v = 1'b1;
 	endcase
@@ -2673,13 +2680,13 @@ end
 endfunction
 
 function fnSourceArgSv;
-input ex_instruction_t ir;
+input micro_op_t ir;
 begin
-	case(ir.ins.opcode)
+	case(ir.opcode)
 	OP_FLTH,OP_FLTS,OP_FLTD,OP_FLTQ,
 	OP_FLTPH,OP_FLTPS,OP_FLTPD,OP_FLTPQ,
 	OP_FLTP:
-		fnSourceArgSv = ir.ins.rmd==3'd7;
+		fnSourceArgSv = ir.rmd!=3'd7 && !ir.inc;
 	default:
 		fnSourceArgSv = 1'b1;
 	endcase
@@ -2687,7 +2694,7 @@ end
 endfunction
 
 function fnSourceRdv;
-input ex_instruction_t ir;
+input micro_op_t ir;
 begin
 	fnSourceRdv = 1'b1;
 end
@@ -2934,6 +2941,7 @@ begin
 			fnMapRawToUop.func = raw[46:41];
 			fnMapRawToUop.src = {1'b0,raw[37:35]==3'b111,5'b01111};	// read from fp status?
 			fnMapRawToUop.dst = 1'b1;
+			fnMapRawToUop.inc = raw[47];
 		end
 	Qupls4_pkg::OP_BCC8,Qupls4_pkg::OP_BCC16,Qupls4_pkg::OP_BCC32,Qupls4_pkg::OP_BCC64,
 	Qupls4_pkg::OP_BCCU8,Qupls4_pkg::OP_BCCU16,Qupls4_pkg::OP_BCCU32,Qupls4_pkg::OP_BCCU64,

@@ -404,7 +404,7 @@ else begin
 		dbo.mem = 
 			 db.load|db.vload|db.vload_ndx
 			|db.store|db.vstore|db.vstore_ndx
-			|db.v2p|db.vv2p|db.vvn2p;
+			|db.v2p|db.vv2p;
 		dbo.mem0 = db.v2p|db.vv2p|db.vvn2p;
 		dbo.sync = db.fence && instr[15:8]==8'hFF;
 		dbo.cpytgt = 1'b0;

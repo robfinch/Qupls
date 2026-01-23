@@ -46,7 +46,7 @@
 import const_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_ext_decode(ip, instr, bsr, jsr, bra, jmp, bcc, rtd,
+module Qupls4_ext_decode(ip, instr, bsr, jsr, bra, jmp, bcc, rtd, nop,
 	bsr_tgt, jsr_tgt, bcc_tgt);
 input cpu_types_pkg::pc_address_ex_t ip;
 input [47:0] instr;
@@ -56,14 +56,16 @@ output reg bra;
 output reg jmp;
 output reg bcc;
 output reg rtd;
+output reg nop;
 output cpu_types_pkg::pc_address_ex_t bsr_tgt;
 output cpu_types_pkg::pc_address_ex_t jsr_tgt;
 output cpu_types_pkg::pc_address_ex_t bcc_tgt;
 
-always_comb bsr = instr[6:0]==Qupls4_pkg::OP_BSR &&  instr[12];
-always_comb bra = instr[6:0]==Qupls4_pkg::OP_BSR && ~instr[12];
-always_comb jsr = instr[6:0]==Qupls4_pkg::OP_JSR &&  instr[12];
-always_comb jmp = instr[6:0]==Qupls4_pkg::OP_JSR && ~instr[12];
+always_comb nop = instr[6:0]==Qupls4_pkg::OP_NOP;
+always_comb bsr = instr[6:0]==Qupls4_pkg::OP_BSR && ~&instr[12:7];
+always_comb bra = instr[6:0]==Qupls4_pkg::OP_BSR &&  &instr[12:7];
+always_comb jsr = instr[6:0]==Qupls4_pkg::OP_JSR && ~&instr[12:7];
+always_comb jmp = instr[6:0]==Qupls4_pkg::OP_JSR &&  &instr[12:7];
 always_comb
 	case(instr[6:0])
 	Qupls4_pkg::OP_BCC8,Qupls4_pkg::OP_BCC16,Qupls4_pkg::OP_BCC32,Qupls4_pkg::OP_BCC64,

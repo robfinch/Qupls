@@ -70,7 +70,7 @@ typedef struct packed
 	cpu_types_pkg::checkpt_ndx_t cndx;
 } frq_entry_t;
 
-integer n1;
+integer n1,n2;
 reg [4:0] cnt;
 reg [4:0] wr_ptr;
 reg [4:0] rd_ptr;
@@ -85,6 +85,11 @@ wire wr_clk = clk_i;
 wire rst = rst_i;
 value_t argT_o;					// dummy placeholder
 frq_entry_t din;
+
+initial begin
+	foreach (mem[n2])
+		mem[n2] = {$bits(frq_entry_t){1'b0}};
+end
 
 always_ff @(posedge clk_i)
 	din <= {

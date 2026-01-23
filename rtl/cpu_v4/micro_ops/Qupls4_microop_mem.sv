@@ -137,6 +137,7 @@ always_ff @(posedge clk)
 always_comb
 begin
 	floadi1 = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
+	floadi1.v = VAL;
 	floadi1[30:29] = 3'd1;
 //	floadi1.op4 = 4'd10;
 	floadi1.Rd = 5'd15;
@@ -155,6 +156,7 @@ end
 always_comb
 begin
 	uop_boi = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
+	uop_boi.v = VAL;
 	uop_boi.opcode = Qupls4_pkg::OP_BCCU64;
 	uop_boi.cnd = Qupls4_pkg::CND_BOI;
 	uop_boi.lead = 1'd1;
@@ -259,6 +261,7 @@ begin
 	vsins = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
 	vls = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
 	vsins.opcode = Qupls4_pkg::opcode_e'(ir[6:0]);
+	vsins.v = VAL;
 	vsins.Rd = thread*40+ir.Rd;
 	vsins.Rs1 = thread*40+ir.Rs1;
 	vsins.Rs2 = thread*40+ir.Rs2;
@@ -267,6 +270,7 @@ begin
 	vsins.op3 = ir.op3;
 	vsins.ms = ir.ms;
 	vsins.Rs4 = ir.Rs4;	//???
+	vls.v = VAL;
 	vls.opcode = ir.opcode;
 	vls.Rd = thread*40+ir.Rd;
 	vls.Rs1 = thread*40+ir.Rs1;
@@ -276,6 +280,7 @@ begin
 	vls.imm = ir.imm;
 	vls.ms = ir.ms;
 	vls.sc = ir.sc;
+	instr.v = VAL;
 	instr.opcode = ir.opcode;
 	instr.Rd = thread*40+ir.Rd;
 	instr.Rs1 = thread*40+ir.Rs1;
@@ -357,6 +362,7 @@ begin
 	next_count = 3'd0;
 	for (n1 = 0; n1 < UOP_ARRAY_SIZE; n1 = n1 + 1) begin
 		next_uop[n1] = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
+		next_uop[n1].lead = n1==0;
 		next_uop[n1].opcode = Qupls4_pkg::OP_NOP;
 		next_uop[n1].v = VAL;
 	end

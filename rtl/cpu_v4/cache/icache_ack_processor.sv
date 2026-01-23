@@ -124,7 +124,7 @@ else begin
 	for (n = 0; n < 2; n = n + 1) begin
 		if (v[n]==2'b11) begin
 			v[n] <= 2'b00;
-			tran_line[n].data <= {512{1'b1}};
+//			tran_line[n].data <= {512{1'b1}};
 		end
 	end
 end

@@ -65,7 +65,6 @@ module Qupls4_pipeline_ren(
 	tags2free, freevals, backout, fcu_id,
 	bo_wr, bo_areg, bo_preg, bo_nreg,
 	rat_stallq,
-	micro_machine_active_dec, micro_machine_active_ren,
 	alloc_chkpt, cndx, rcndx, miss_cp,
 	
 	args
@@ -120,8 +119,6 @@ output aregno_t bo_areg;
 output pregno_t bo_preg;
 output pregno_t bo_nreg;
 output rat_stallq;
-input micro_machine_active_dec;
-output reg micro_machine_active_ren;
 input alloc_chkpt;
 input checkpt_ndx_t cndx;
 input checkpt_ndx_t [3:0] rcndx;
@@ -147,10 +144,12 @@ always_comb
 	foreach (pg_dec.pr[n1])
 		aRd_dec[n1] = pg_dec.pr[n1].op.decbus.Rd;
 
+// Instructions that have aleady been stomped on before the rename stage do
+// not need register renames. They are already done.
 // Disable renaming for non-dispatchable instructions at this point.
 always_comb
 	foreach (pg_dec.pr[n1])
-		aRd_decv[n1] = pg_dec.pr[n1].op.decbus.Rdv & pg_dec[n1].dispatchable;
+		aRd_decv[n1] = pg_dec.pr[n1].op.decbus.Rdv & ~pg_dec.pr[n1].stomped;
 
 always_comb
 	foreach (pg_dec.pr[n1])
@@ -162,6 +161,7 @@ begin
 	nopi = {$bits(Qupls4_pkg::pipeline_reg_t){1'b0}};
 	nopi.v = 1'b1;
 	nopi.uop = {41'd0,Qupls4_pkg::OP_NOP};
+	nopi.uop.v = VAL;
 	nopi.uop.lead = 1'd1;
 	nopi.uop.Rs1 = 8'd0;
 	nopi.uop.Rs2 = 8'd0;
@@ -169,6 +169,7 @@ begin
 	nopi.uop.Rs4 = 8'd0;
 	nopi.uop.Rd = 8'd0;
 	nopi.uop.Rd2 = 8'd0;
+	nopi.decbus.v = VAL;
 	nopi.decbus.Rs1 = 8'd0;
 	nopi.decbus.Rs2 = 8'd0;
 	nopi.decbus.Rs3 = 8'd0;
@@ -516,10 +517,6 @@ else begin
 	pc0_f <= icpc;//pc0;
 end
 */
-/*
-always_comb
-	micro_machine_active_x = micro_machine_active;
-*/
 // The cycle after the length is calculated
 // instruction extract inputs
 /*
@@ -594,6 +591,8 @@ if (rst) begin
 		pg_ren.pr[n7].v <= 5'd1;
 		pg_ren.pr[n7].op <= nopi;
 		pg_ren.pr[n7].exc <= Qupls4_pkg::FLT_NONE;
+		pg_ren.pr[n7].stomped <= TRUE;
+		pg_ren.pr[n7].done <= 2'b11;
 	end
 end
 else begin
@@ -607,8 +606,10 @@ else begin
 			// These still need to update the regfile.
 //			if (pg_ren.pr[0].op.decbus.bsr|pg_ren.pr[0].op.decbus.jsr)
 //				pg_ren.pr[0].done <= 2'b11;
-		if (~|pg_dec.pr[0].v | stomp_ren)
-			pg_ren.pr[0].op <= nopi;
+		if (~|pg_dec.pr[0].v | stomp_ren) begin
+			pg_ren.pr[0].stomped <= TRUE;
+			pg_ren.pr[0].op.decbus.cpytgt <= TRUE;
+		end
 		// Even if stomped on, we want to retain the destination register for
 		// copy purposes.
 		pg_ren.pr[0].op.nRd <= pRd_dec[0];
@@ -630,12 +631,18 @@ else begin
 	*/
 		if (MWIDTH > 1) begin
 			pg_ren.pr[1] <= pg_dec.pr[1];
-			if (~|pg_dec.pr[1].v | stomp_ren)
-				pg_ren.pr[1].op <= nopi;
-			if (pg_dec.pr[0].op.decbus.bsr|pg_dec.pr[0].op.decbus.jsr)
-				pg_ren.pr[1].op <= nopi;
-			if (pg_ren.pr[1].op.decbus.bsr|pg_ren.pr[1].op.decbus.jsr)
-				pg_ren.pr[1].op <= nopi;
+			if (~|pg_dec.pr[1].v | stomp_ren) begin
+				pg_ren.pr[1].stomped <= TRUE;
+				pg_ren.pr[1].op.decbus.cpytgt <= TRUE;
+			end
+			if (pg_dec.pr[0].op.decbus.bsr|pg_dec.pr[0].op.decbus.jsr) begin
+				pg_ren.pr[1].stomped <= TRUE;
+				pg_ren.pr[1].op.decbus.cpytgt <= TRUE;
+			end
+			if (pg_ren.pr[1].op.decbus.bsr|pg_ren.pr[1].op.decbus.jsr) begin
+				pg_ren.pr[1].stomped <= TRUE;
+				pg_ren.pr[1].op.decbus.cpytgt <= TRUE;
+			end
 			pg_ren.pr[1].op.nRd <= pRd_dec[1];
 			pg_ren.pr[1].op.pRs1 <= prn[4];
 			pg_ren.pr[1].op.pRs2 <= prn[5];
@@ -645,12 +652,18 @@ else begin
 	
 		if (MWIDTH > 2) begin
 			pg_ren.pr[2] <= pg_dec.pr[2];
-			if (~|pg_dec.pr[2].v | stomp_ren)
-				pg_ren.pr[2].op <= nopi;
-			if (pg_dec.pr[0].op.decbus.bsr || pg_dec.pr[1].op.decbus.bsr || pg_dec.pr[0].op.decbus.jsr || pg_dec.pr[1].op.decbus.jsr)
-				pg_ren.pr[2].op <= nopi;
-			if (pg_ren.pr[2].op.decbus.bsr | pg_ren.pr[2].op.decbus.jsr)
-				pg_ren.pr[2].op <= nopi;
+			if (~|pg_dec.pr[2].v | stomp_ren) begin
+				pg_ren.pr[2].stomped <= TRUE;
+				pg_ren.pr[2].op.decbus.cpytgt <= TRUE;
+			end
+			if (pg_dec.pr[0].op.decbus.bsr || pg_dec.pr[1].op.decbus.bsr || pg_dec.pr[0].op.decbus.jsr || pg_dec.pr[1].op.decbus.jsr) begin
+				pg_ren.pr[2].stomped <= TRUE;
+				pg_ren.pr[2].op.decbus.cpytgt <= TRUE;
+			end
+			if (pg_ren.pr[2].op.decbus.bsr | pg_ren.pr[2].op.decbus.jsr) begin
+				pg_ren.pr[2].stomped <= TRUE;
+				pg_ren.pr[2].op.decbus.cpytgt <= TRUE;
+			end
 			pg_ren.pr[2].op.nRd <= pRd_dec[2];
 			pg_ren.pr[2].op.pRs1 <= prn[8];
 			pg_ren.pr[2].op.pRs2 <= prn[9];
@@ -662,12 +675,18 @@ else begin
 		if (MWIDTH > 3) begin
 			pg_ren.pr[3] <= pg_dec.pr[3];
 			if (~|pg_dec.pr[3].v | stomp_ren) begin
-				pg_ren.pr[3].op <= nopi;
+				pg_ren.pr[3].stomped <= TRUE;
+				pg_ren.pr[3].op.decbus.cpytgt <= TRUE;
+			end
 			if (pg_dec.pr[0].op.decbus.bsr || pg_dec.pr[1].op.decbus.bsr || pg_dec.pr[2].op.decbus.bsr ||
-				pg_dec.pr[0].op.decbus.jsr || pg_dec.pr[1].op.decbus.jsr || pg_dec.pr[2].op.decbus.jsr)
-				pg_ren.pr[3].op <= nopi;
-			if (pg_ren.pr[3].op.decbus.bsr | pg_ren.pr[3].op.decbus.jsr)
-				pg_ren.pr[3].op <= nopi;
+				pg_dec.pr[0].op.decbus.jsr || pg_dec.pr[1].op.decbus.jsr || pg_dec.pr[2].op.decbus.jsr) begin
+				pg_ren.pr[3].stomped <= TRUE;
+				pg_ren.pr[3].op.decbus.cpytgt <= TRUE;
+			end
+			if (pg_ren.pr[3].op.decbus.bsr | pg_ren.pr[3].op.decbus.jsr) begin
+				pg_ren.pr[3].stomped <= TRUE;
+				pg_ren.pr[3].op.decbus.cpytgt <= TRUE;
+			end
 			pg_ren.pr[3].op.nRd <= pRd_dec[3];
 			pg_ren.pr[3].op.pRs1 <= prn[12];
 			pg_ren.pr[3].op.pRs2 <= prn[13];
@@ -695,8 +714,10 @@ begin
 	foreach (pg_ren.pr[nn]) begin
 		if (pg_ren.pr[nn].ip_stream!=bno) begin
 			pg_ren.pr[nn].op.excv <= INV;
-			if (Qupls4_pkg::SUPPORT_BACKOUT)
+			if (Qupls4_pkg::SUPPORT_BACKOUT) begin
+				pg_ren.pr[nn].stomped <= TRUE;
 				pg_ren.pr[nn].op <= nopi;
+			end
 			else begin
 				pg_ren.pr[nn].op.decbus.cpytgt <= TRUE;
 				pg_ren.pr[nn].op.decbus.sau <= TRUE;

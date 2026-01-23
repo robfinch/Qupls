@@ -131,6 +131,7 @@ reg [319:0] ic_line_aligned;
 reg [319:0] prev_ic_line_aligned;
 reg ld;
 reg prev_ssm_flag;
+reg [2:0] override_pos;
 
 Qupls4_pkg::rob_entry_t nopi;
 
@@ -168,6 +169,8 @@ begin
 	nopi.v = 5'd1;
 	nopi.exc = Qupls4_pkg::FLT_NONE;
 	nopi.excv = INV;
+	nopi.done = 2'b11;
+	nopi.stomped = TRUE;
 	/* NOP will be decoded later
 	nopi.decbus.Rdz = 1'b1;
 	nopi.decbus.nop = 1'b1;
@@ -219,33 +222,37 @@ else
 // Map instructions to micro-ops
 // Set instruction valid bit.
 
-Qupls4_pkg::pipeline_reg_t [MWIDTH-1:0] pr_ext;
+Qupls4_pkg::rob_entry_t [MWIDTH-1:0] pr_ext;
 always_comb
 begin
-	for (n1 = 0; n1 < MWIDTH; n1 = n1 + 1)
+	for (n1 = 0; n1 < MWIDTH; n1 = n1 + 1) begin
 		pr_ext[n1] = nopi;
+		pr_ext[n1].v = pc_fet[n1].stream.stream;
+	end
 	if (!redundant_group) begin
 		// Allow only one instruction through when single stepping.
 		if (ssm_flag & ~prev_ssm_flag) begin
-			pr_ext[0].cli = pc_fet[0].pc[5:1];
-			pr_ext[0].uop = fnMapRawToUop(ic_line_aligned[ 47:  0]);
+			pr_ext[0].op.cli = pc_fet[0].pc[5:1];
+			pr_ext[0].op.uop = fnMapRawToUop(ic_line_aligned[ 47:  0]);
 			for (n1 = 1; n1 < MWIDTH; n1 = n1 + 1) begin
 				pr_ext[n1] = nopi;
-				pr_ext[n1].ssm = TRUE;
+				pr_ext[n1].op.ssm = TRUE;
+				pr_ext[n1].done = 2'b11;
 			end
 		end
 		else if (ssm_flag) begin
 			for (n1 = 0; n1 < MWIDTH; n1 = n1 + 1) begin
 				pr_ext[n1] = nopi;
-				pr_ext[n1].ssm = TRUE;
+				pr_ext[n1].op.ssm = TRUE;
+				pr_ext[n1].done = 2'b11;
 			end
 		end
 		else begin
 			// Compute index of instruction on cache-line.
 			// Note! the index is in terms of 16-bit parcels.
 			for (n1 = 0; n1 < MWIDTH; n1 = n1 + 1) begin
-				pr_ext[n1].cli = pc_fet[n1].pc[5:1];
-				pr_ext[n1].uop = fnMapRawToUop(48'(ic_line_aligned >> (n1*48)));
+				pr_ext[n1].op.cli = pc_fet[n1].pc[5:1];
+				pr_ext[n1].op.uop = fnMapRawToUop(48'(ic_line_aligned >> (n1*48)));
 			end
 		end
 	end
@@ -258,9 +265,15 @@ begin
 */	
 // If an NMI or IRQ is happening, invalidate instruction and mark as
 // interrupted by external hardware.
-	pr_ext[0].v = !(irq_fet) && !stomp_ext && !(ssm_flag && !(ssm_flag && !prev_ssm_flag));
+	if (!(!(irq_fet) && !stomp_ext && !(ssm_flag && !(ssm_flag && !prev_ssm_flag)))) begin
+		pr_ext[0].v = 5'd0;
+		pr_ext[0].stomped = TRUE;
+	end
 	for (n4 = 1; n4 < MWIDTH; n4 = n4 + 1)
-		pr_ext[n4].v = !(irq_fet) && !stomp_ext && !ssm_flag;
+		if (!(!(irq_fet) && !stomp_ext && !ssm_flag)) begin
+			pr_ext[n4].v = 5'd0;
+			pr_ext[n4].stomped = TRUE;
+		end
 /*	
 	pr_ext[0].hwi = nmi_i||irqf_fet;
 	pr_ext[1].hwi = nmi_i||irqf_fet;
@@ -268,7 +281,7 @@ begin
 	pr_ext[3].hwi = nmi_i||irqf_fet;
 	pr4_ext.hwi = nmi_i||irqf_fet;
 */
-	pr_ext[0].carry_mod = carry_mod_fet;
+	pr_ext[0].op.carry_mod = carry_mod_fet;
 end
 
 /* Under construction
@@ -307,9 +320,10 @@ always_comb nop1 = (stomp_fet && pc1_fet.bno_t!=stomp_bno) || (branchmiss && mis
 always_comb nop2 = (stomp_fet && pc2_fet.bno_t!=stomp_bno) || (branchmiss && misspc_fet.pc > pc2_fet.pc);
 always_comb nop3 = (stomp_fet && pc3_fet.bno_t!=stomp_bno) || (branchmiss && misspc_fet.pc > pc3_fet.pc);
 */
+// Stomp on instructions in the same instruction group following the overrride location.
 generate begin : gNop
 	for (g = 0; g < MWIDTH; g = g + 1)
-		always_comb nop[g] = (branchmiss && misspc_fet.pc > pc_fet[g].pc);
+		always_comb nop[g] = (branchmiss && misspc_fet.pc > pc_fet[g].pc) || (p_override && override_pos < g);
 end
 endgenerate
 /*
@@ -324,6 +338,7 @@ wire [MWIDTH-1:0] bra;
 wire [MWIDTH-1:0] jmp;
 wire [MWIDTH-1:0] bcc;
 wire [MWIDTH-1:0] rtd;
+wire [MWIDTH-1:0] nop2;
 reg bsr02,bsr12,bsr22,bsr32;
 reg jsrr0,jsrr1,jsrr2,jsrr3;
 reg jsri0,jsri1,jsri2,jsri3;
@@ -335,7 +350,7 @@ generate begin : gExtDecode
 	for (g = 0; g < MWIDTH; g = g + 1) begin
 		Qupls4_ext_decode usd1
 			(
-				.ip(pc_ext[g]),
+				.ip(pc_fet[g]),
 				.instr(ic_line_aligned[g*48+47:g*48]),
 				.bsr(bsr[g]),
 				.jsr(jsr[g]),
@@ -343,6 +358,7 @@ generate begin : gExtDecode
 				.jmp(jmp[g]),
 				.bcc(bcc[g]),
 				.rtd(rtd[g]),
+				.nop(nop2[g]),
 				.bsr_tgt(bsr_tgts[g]),
 				.jsr_tgt(jsr_tgts[g]),
 				.bcc_tgt(bcc_tgts[g])
@@ -392,6 +408,7 @@ always_comb jsri3 = ins_ext[3].ins.opcode==OP_JSRI && ins_ext[3].ins.Rt!=3'd0;
 always_comb
 begin
 	alloc_stream = 1'b0;
+	override_pos = 3'd0;
 	if (bsr[0]|jsr[0]|bcc[0]|bra[0]|jmp[0]) begin
 		new_address_o.pc = btgts[0].pc;
 		if (pt_ext[0] || ~bcc[0])
@@ -400,6 +417,7 @@ begin
 			new_address_o.stream = new_stream[new_address_o.stream.thread].stream;
 			alloc_stream = 1'b1;
 		end
+		override_pos = 3'd0;
 	end
 	else if (bsr[1]|jsr[1]|bcc[1]|bra[1]|jmp[1]) begin
 		new_address_o = btgts[1];
@@ -409,6 +427,7 @@ begin
 			new_address_o.stream = new_stream[new_address_o.stream.thread].stream;
 			alloc_stream = 1'b1;
 		end
+		override_pos = 3'd1;
 	end
 	else if (bsr[2]|jsr[2]|bcc[2]|bra[2]|jmp[2]) begin
 		new_address_o = btgts[2];
@@ -418,6 +437,7 @@ begin
 			new_address_o.stream = new_stream[new_address_o.stream.thread].stream;
 			alloc_stream = 1'b1;
 		end
+		override_pos = 3'd2;
 	end
 	else if (bsr[3]|jsr[3]|bcc[3]|bra[3]|jmp[3]) begin
 		new_address_o = btgts[3];
@@ -427,6 +447,7 @@ begin
 			new_address_o.stream = new_stream[new_address_o.stream.thread].stream;
 			alloc_stream = 1'b1;
 		end
+		override_pos = 3'd3;
 	end
 	else begin
 		new_address_o.pc = RSTPC;
@@ -462,14 +483,16 @@ else if (en) begin
 	pg_ext.hdr.ip <= pc_ext[0];
 	foreach (pg_ext.pr[n2]) begin
 		pg_ext.pr[n2] <= {$bits(Qupls4_pkg::rob_entry_t){1'b0}};
-		pg_ext.pr[n2] <= nop[n2]|stomp_ext ? nopi : ins_fet[n2];
+		pg_ext.pr[n2] <= ins_fet[n2];
 		pg_ext.pr[n2].v <= pc_ext[n2].stream.stream;
+		pg_ext.pr[n2].stomped <= stomp_ext || nop[n2] || nop2[n2] || bra[n2] || jmp[n2];
 		pg_ext.pr[n2].wh <= n2;
 		pg_ext.pr[n2].ip_stream <= pc_ext[n2].stream;
 		pg_ext.pr[n2].ip_offs <= n2 * 3;	// wyde offset
 		pg_ext.pr[n2].eip <= pc_ext[0].pc + (n2*6);
-		pg_ext.pr[n2].done <= stomp_ext ? 2'b11 : 2'b00;
-		pg_ext.pr[n2].dispatchable <= stomp_ext ? FALSE : TRUE;
+		// Jumps and branches are done as they do not need to update the regfile.
+		if (bra[n2]|jmp[n2]|stomp_ext|nop[n2]|nop2[n2])
+			pg_ext.pr[n2].done <= 2'b11;
 	end
 end
 
@@ -503,7 +526,11 @@ else begin
 end
 
 always_comb
-	p_override = ((|bsr) | (|jsr) | (|bcc) | (|bra) | (|jmp)) ? pc0_fet != new_address_o : FALSE;
+	p_override = ((|(bsr & ~nop)) |
+								(|(jsr & ~nop)) |
+								(|(bcc & ~nop)) |
+								(|(bra & ~nop)) |
+								(|(jmp & ~nop))) ? pc0_fet != new_address_o : FALSE;
 
 /*
 always_comb mcip0_o <= mcip0;
@@ -517,15 +544,15 @@ input stomp_ext;
 input pc_address_ex_t pc;
 input pt_ext;
 input takb;
-input Qupls4_pkg::pipeline_reg_t ins_i;
+input Qupls4_pkg::rob_entry_t ins_i;
 output Qupls4_pkg::rob_entry_t ins_o;
 output [6:0] bno;
 begin
 	ins_o = {$bits(rob_entry_t){1'b0}};
+	ins_o = ins_i;
 	ins_o.v = pc.stream.stream;
 	ins_o.done = stomp_ext ? 2'b11 : 2'b00;
 	ins_o.op.v = ~stomp_ext;
-	ins_o.op = ins_i;
 	ins_o.op.bt = takb;
 	ins_o.ip_stream = pc.stream.stream;
 	ins_o.ip_offs = g * 3;

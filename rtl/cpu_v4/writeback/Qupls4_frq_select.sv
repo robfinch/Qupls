@@ -102,14 +102,11 @@ end
 endgenerate
 
 always_ff @(posedge clk) begin
+	upd_bitmap <= {NFRQ{1'b0}};
 	foreach (updF[j])
-		foreach (upd_bitmap[k]) begin
-			upd_bitmap[k] <= 1'b0;
-			if (k==updF[j] && updF[j]!=5'd31)
-				upd_bitmap[k] <= 1'b1;
-			if (k==updL[j] && updL[j]!=5'd31)
-				upd_bitmap[k] <= 1'b1;
-		end
+		upd_bitmap[updF[j]] <= 1'b1;
+	foreach (updL[j])
+		upd_bitmap[updL[j]] <= 1'b1;
 end
 
 endmodule

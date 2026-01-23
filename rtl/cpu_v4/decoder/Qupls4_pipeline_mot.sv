@@ -80,6 +80,7 @@ begin
 	nopi.v = 5'd1;
 	nopi.exc = Qupls4_pkg::FLT_NONE;
 	nopi.excv = INV;
+	nopi.done = 2'b11;
 	/* NOP will be decoded later
 	nopi.decbus.Rdz = 1'b1;
 	nopi.decbus.nop = 1'b1;
@@ -118,10 +119,8 @@ generate begin : gComb
 				pg_mot.hdr.v <= INV;
 			foreach (pg_mot.pr[n1])
 				if (stomp) begin
-//					pg_mot.pr[n1].v <= {5{INV}};
-					pg_mot.pr[n1] <= nopi;
+					pg_mot.pr[n1].stomped <= TRUE;
 					pg_mot.pr[n1].done <= 2'b11;
-					pg_mot.pr[n1].dispatchable <= FALSE;
 				end
 		end
 	end

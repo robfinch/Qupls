@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2026  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -70,6 +70,7 @@ begin
 	Qupls4_pkg::OP_XORI:		fnIsSau = 1'b1;
 	Qupls4_pkg::OP_SHIFT:	fnIsSau = 1'b1;
 	Qupls4_pkg::OP_CSR:		fnIsSau = 1'b1;
+	Qupls4_pkg::OP_LOADI:		fnIsSau = 1'b1;
 	Qupls4_pkg::OP_MOVMR:		fnIsSau = 1'b1;
 	Qupls4_pkg::OP_LOADA:	fnIsSau = 1'b1;
 	Qupls4_pkg::OP_FENCE:

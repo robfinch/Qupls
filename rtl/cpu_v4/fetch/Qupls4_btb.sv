@@ -368,7 +368,7 @@ generate begin : gPCs
 			pcs[g].pc <= RSTPC;
 		end
 		else if (advance_pc) begin
-			if (get_next_pc)
+//			if (get_next_pc)
 				pcs[g] <= next_pcs[g];
 		end
 	end
@@ -381,7 +381,7 @@ always_ff @(posedge clk)
 		pc.stream <= act_stream;
 	end
 	else if (advance_pc) begin
-		if (get_next_pc)
+//		if (get_next_pc)
 			pc <= next_pcs[next_act_stream];
 	end
 
