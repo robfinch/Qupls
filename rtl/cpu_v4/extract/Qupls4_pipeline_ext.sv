@@ -132,6 +132,24 @@ reg [319:0] prev_ic_line_aligned;
 reg ld;
 reg prev_ssm_flag;
 reg [2:0] override_pos;
+reg [MWIDTH-1:0] nop;
+
+wire [MWIDTH-1:0] bsr;
+wire [MWIDTH-1:0] jsr;
+wire [MWIDTH-1:0] bra;
+wire [MWIDTH-1:0] jmp;
+wire [MWIDTH-1:0] bcc;
+wire [MWIDTH-1:0] rtd;
+wire [MWIDTH-1:0] nop2;
+reg chgflow;
+
+always_comb
+	chgflow = ((|(bsr & ~nop)) |
+				     (|(jsr & ~nop)) |
+						 (|(bcc & ~nop)) |
+						 (|(bra & ~nop)) |
+						 (|(jmp & ~nop)))
+						 ;
 
 Qupls4_pkg::rob_entry_t nopi;
 
@@ -153,7 +171,11 @@ if (rst_i) begin
 end
 else begin
 	foreach(pc_ext[n6])
-		if (en) pc_ext[n6] <= pc_fet[n6];
+		if (en) begin
+			pc_ext[n6] <= pc_fet[n6];
+			if (chgflow)
+				pc_ext[n6].stream = new_stream[new_address_o.stream.thread].stream;
+		end
 end
 
 // Define a NOP instruction.
@@ -313,7 +335,6 @@ end
 
 // If there was a branch miss, instructions before the miss PC should not be
 // executed.
-reg [MWIDTH-1:0] nop;
 /*
 always_comb nop0 = (stomp_fet && pc0_fet.bno_t!=stomp_bno) || (branchmiss && misspc_fet.pc > pc0_fet.pc);
 always_comb nop1 = (stomp_fet && pc1_fet.bno_t!=stomp_bno) || (branchmiss && misspc_fet.pc > pc1_fet.pc);
@@ -332,13 +353,6 @@ always_comb nop1 = FALSE;
 always_comb nop2 = FALSE;
 always_comb nop3 = FALSE;
 */
-wire [MWIDTH-1:0] bsr;
-wire [MWIDTH-1:0] jsr;
-wire [MWIDTH-1:0] bra;
-wire [MWIDTH-1:0] jmp;
-wire [MWIDTH-1:0] bcc;
-wire [MWIDTH-1:0] rtd;
-wire [MWIDTH-1:0] nop2;
 reg bsr02,bsr12,bsr22,bsr32;
 reg jsrr0,jsrr1,jsrr2,jsrr3;
 reg jsri0,jsri1,jsri2,jsri3;
@@ -526,11 +540,7 @@ else begin
 end
 
 always_comb
-	p_override = ((|(bsr & ~nop)) |
-								(|(jsr & ~nop)) |
-								(|(bcc & ~nop)) |
-								(|(bra & ~nop)) |
-								(|(jmp & ~nop))) ? pc0_fet != new_address_o : FALSE;
+	p_override = chgflow ? pc0_fet != new_address_o : FALSE;
 
 /*
 always_comb mcip0_o <= mcip0;

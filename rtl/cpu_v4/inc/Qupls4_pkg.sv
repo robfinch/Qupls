@@ -1969,8 +1969,7 @@ typedef struct packed {
 	logic flush;
 	cpu_types_pkg::rob_ndx_t sync_dep;			// sync instruction dependency
 	logic sync_depv;				// sync dependency valid
-	cpu_types_pkg::rob_ndx_t fc_dep;				// flow control dependency - relevant only for mem ops
-	logic fc_depv;					// flow control dependency valid
+	logic fc_dep;						// flow control dependency - relevant only for mem ops
 	logic [3:0] predino;			// predicated instruction number (1 to 8)
 	cpu_types_pkg::rob_ndx_t predrndx;				// ROB index of associate PRED instruction
 	logic [1:0] pred_tf;			// true(1)/false(2)/unknown(0)

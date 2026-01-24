@@ -76,11 +76,8 @@ reg [4:0] wr_ptr;
 reg [4:0] rd_ptr;
 frq_entry_t [DEP-1:0] mem;
 rob_ndx_t rndx;
-wire data_valid;
 reg wr_en;
 reg rd_en;
-wire rd_rst_busy;
-wire wr_rst_busy;
 wire wr_clk = clk_i;
 wire rst = rst_i;
 value_t argT_o;					// dummy placeholder
@@ -113,7 +110,7 @@ always_comb
 always_comb
 	{we_o,pRt_o,aRt_o,tag_o,argT_o,res_o,rndx,cp_o} = dout;
 always_comb
-	rd_en = rd_i & ~rst;
+	rd_en = rd_i & ~rst & ~empty;
 always_ff @(posedge clk_i)
 	wr_en <= |we_i & ~rst && cnt < DEP - 2;
 
@@ -131,15 +128,21 @@ always_ff @(posedge clk_i)
 begin
 	if (rst_i)
 		wr_ptr <= 5'd0;
-	else if (wr_en)
+	else if (wr_en) begin
 		wr_ptr <= wr_ptr + 5'd1;
+		if (wr_ptr==DEP-1)
+			wr_ptr <= 5'd0;
+	end
 end
 
 always_ff @(posedge clk_i)
 	if (rst_i)
 		rd_ptr <= 5'd0;
-	else if (rd_en)
+	else if (rd_en) begin
 		rd_ptr <= rd_ptr + 5'd1;
+		if (rd_ptr==DEP-1)
+			rd_ptr <= 5'd0;
+	end
 
 always_comb
 begin

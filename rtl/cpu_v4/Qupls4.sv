@@ -325,7 +325,7 @@ Qupls4_pkg::rob_bitmask_t robentry_agen_issue;
 Qupls4_pkg::lsq_entry_t [1:0] lsq [0:Qupls4_pkg::LSQ_ENTRIES-1];
 Qupls4_pkg::lsq_ndx_t lq_tail, lq_head;
 integer lsq_cmd_ndx;
-Qupls4_pkg::lsq_cmd_t [11:0] lsq_cmd;
+Qupls4_pkg::lsq_cmd_t [14:0] lsq_cmd;
 
 wire nq;
 reg [3:0] wnq;
@@ -1930,22 +1930,16 @@ reg branch_resolved;
 always_ff @(posedge clk) branch_resolved <= fcu_branch_resolved;
 
 // Stream state manager
-always_ff @(posedge clk)
-if (irst) begin
-	foreach(stream_states[n58])
-		stream_states[n58] <= Qupls4_pkg::STR_UNKNOWN;
-	stream_states[5'd1] <= Qupls4_pkg::STR_ALIVE;
-end
-else begin
-	foreach (dead_streams[n58])
-		stream_states[n58] <= Qupls4_pkg::STR_DEAD;
-	stream_states[kept_stream] <= Qupls4_pkg::STR_ALIVE;
-	foreach (new_stream[n58])
-		stream_states[new_stream[n58].stream] <= Qupls4_pkg::STR_UNKNOWN;
-	foreach (stream_states[n58])
-		if (stream_states[n58]==Qupls4_pkg::STR_DEAD)
-			stream_states[n58] <= Qupls4_pkg::STR_UNKNOWN;
-end
+Qupls4_stream_manager usm1
+(
+	.rst(irst),
+	.clk(clk),
+	.alloc(alloc_stream),
+	.kept_stream(kept_stream),
+	.new_stream(new_stream),
+	.dead_streams(dead_streams),
+	.stream_states(stream_states)
+);
 
 Qupls4_stomp ustmp1
 (
@@ -3938,8 +3932,8 @@ rob_ndx_t ratv3_rndx;
 
 // Convenience names
 // ToDo: fix these duplicates
-wire agen0_idle = tlb0_v;
-wire agen1_idle = tlb1_v;
+wire agen0_idle = tlb0_v|~agen0_rse.v;
+wire agen1_idle = tlb1_v|~agen1_rse.v;
 always_comb
 	agen0_id = agen0_rse.rndx;
 always_comb
@@ -4508,7 +4502,7 @@ for (g = 0; g < Qupls4_pkg::NDATA_PORTS; g = g + 1) begin
 		cpu_request_i[g].seg = wishbone_pkg::DATA;
 //		cpu_request_i[g].asid = asid;
 		cpu_request_i[g].cyc = dramN[g]==Qupls4_pkg::DRAMSLOT_READY;
-//		cpu_request_i[g].stb = dramN[g]==DRAMSLOT_READY;
+		cpu_request_i[g].stb = dramN[g]==Qupls4_pkg::DRAMSLOT_READY;
 		cpu_request_i[g].we = dramN_store[g];
 //		cpu_request_i[g].vadr = dramN_vaddr[g];
     cpu_request_vadr[g] <= dramN_vaddr[g];
@@ -5690,7 +5684,7 @@ else begin
 
 	lsq_cmd_ndx = 8;
 	foreach (lsq_cmd[n12])
-		lsq_cmd[n12].cmd <= LSQ_CMD_NONE;
+		lsq_cmd[n12] <= {$bits(lsq_cmd_t){1'b0}};
 
 	/*
 	advance_msi <= FALSE;
@@ -5914,7 +5908,7 @@ else begin
 			// and no sync dependency
 			!rob[nn].sync_depv &&
 			// if a store, then no previous flow control dependency
-			(rob[nn].op.decbus.store ? |rob[nn].fc_dep : TRUE) &&
+			(rob[nn].op.decbus.store ? !rob[nn].fc_dep : TRUE) &&
 			// if serializing the previous instruction must be done...
 			(Qupls4_pkg::SERIALIZE ? &rob[(nn + Qupls4_pkg::ROB_ENTRIES-1)%Qupls4_pkg::ROB_ENTRIES].done || ~|rob[(nn + Qupls4_pkg::ROB_ENTRIES-1)%Qupls4_pkg::ROB_ENTRIES].v : TRUE) &&
 			// A REXT prefix must be done
@@ -5932,8 +5926,8 @@ else begin
 
 	// If branch resolved, clear dependencies.
 	foreach (rob[nn])
-		if (stream_states[rob[nn].fc_dep]!=Qupls4_pkg::STR_UNKNOWN)
-			rob[nn].fc_dep <= 5'd0;
+		if (stream_states[rob[nn].ip_stream.stream]!=Qupls4_pkg::STR_UNKNOWN)
+			rob[nn].fc_dep <= FALSE;
 
 
 	// ----------------------------------------------------------------------------
@@ -6698,7 +6692,7 @@ else begin
 				&& !robentry_stomp[n3]
 				&& !(&rob[n3].done)
 				&& (rob[n3].op.decbus.cpytgt ? (rob[n3].argT_v /*|| rob[g].op.nRt==9'd0*/) : rob[n3].all_args_valid && rob[n3].pred_bit)
-				&& (rob[n3].op.decbus.mem ? |rob[n3].fc_dep : TRUE)
+				&& (rob[n3].op.decbus.mem ? !rob[n3].fc_dep : TRUE)
 				&& (Qupls4_pkg::SERIALIZE ? (rob[(n3+Qupls4_pkg::ROB_ENTRIES-1)%Qupls4_pkg::ROB_ENTRIES].done==2'b11 || rob[(n3+Qupls4_pkg::ROB_ENTRIES-1)%Qupls4_pkg::ROB_ENTRIES].v==INV) : 1'b1)
 				//&& !fnPriorFalsePred(g)
 				&& !rob[n3].sync_depv
@@ -7089,7 +7083,7 @@ always_ff @(posedge clk) begin: clock_n_debug
     $display("%c%c%c sn:%h %d: %c%c%c%c%c%c %c %c%c %d %c %c%d Rd%d/%d %h Rs%d/%d %h%c Rs1%d/%d=%h %c Rs2%d/%d=%h %c Rs3%d/%d=%h %c I=%h %h.%h cp:%h ins=%h #",
 			(i[4:0]==head[0])?67:46, (i[4:0]==tails[0])?81:46, rob[i].rstp ? "r" : " ", rob[i].sn, i[5:0],
 			rob[i].v?"v":"-", rob[i].done[0]?"d":"-", rob[i].done[1]?"d":"-", rob[i].out[0]?"o":"-", rob[i].out[1]?"o":"-", rob[i].bt?"t":"-", rob_memissue[i]?"i":"-", rob[i].lsq?"q":"-", (robentry_issue[i]|robentry_agen_issue[i])?"i":"-",
-			robentry_islot[i], robentry_stomp[i]?"s":"-",
+			robentry_islot[i], rob[i].stomped ? "S" : robentry_stomp[i]?"s":"-",
 			(rob[i].op.decbus.cpytgt ? "c" : rob[i].op.decbus.fc ? "b" : rob[i].op.decbus.mem ? "m" : "a"),
 			rob[i].op.uop.opcode, 
 			rob[i].op.decbus.Rd, rob[i].op.nRd, rob[i].exc,
@@ -7935,7 +7929,7 @@ begin
 	next_robe.flush = flush;
 	next_robe.sync_dep = sync_ndx;
 	next_robe.sync_depv = sync_ndxv;
-	next_robe.fc_dep = robe.ip_stream.stream;
+	next_robe.fc_dep = TRUE;
 
 	// "dynamic" fields, these fields may change after enqueue
 	next_robe.sn = sn;
@@ -8733,7 +8727,8 @@ begin
 	if (rob[ndx].op.decbus.sync)
 		tClearSyncDep(ndx);
 	rob[ndx].cmt <= |rob[ndx].v;
-	tInvalidateLSQ(head, ndx, FALSE, |rob[ndx].v, value_zero);
+	if (rob[ndx].lsq)
+		tInvalidateLSQ(head, ndx, FALSE, |rob[ndx].v, value_zero);
 end
 endtask
 

@@ -86,17 +86,6 @@ if (WINDOW_SIZE > Qupls4_pkg::LSQ_ENTRIES) begin
 	$finish;
 end
 
-// Detect if there is a previous flow control operation. Stores need to know
-// this as they cannot be done until it is guarenteed that the program flow
-// will not change.
-
-Qupls4_has_previous_fc uhpfc1
-(
-	.id(rn),
-	.rob(rob),
-	.has_previous_fc(has_previous_fc)
-);
-
 // Detect if there is a non finished memory operation outstanding previous to
 // this one. If sequential consistency is not necessary then the memory op
 // does not need to be completed.
@@ -174,7 +163,7 @@ begin
 				// ... and is not fenced out
 				!is_fenced_out &&
 				// ... and, if it is a store, there is no chance of it being undone
-				(lsq[rob[rn].lsqndx.row][rob[rn].lsqndx.col].store ? !has_previous_fc : TRUE)
+				(lsq[rob[rn].lsqndx.row][rob[rn].lsqndx.col].store ? !rob[rn].fc_dep : TRUE)
 				)
 			begin
 				can_issue[rob[rn].lsqndx.row][rob[rn].lsqndx.col] <= TRUE;

@@ -71,7 +71,8 @@ output Qupls4_pkg::reservation_station_entry_t rse_o;
 output pregno_t [3:0] req_pRn;
 output reg [3:0] req_pRnv;
 
-integer kk,jj,nn,mm,rdy,pp,qq,n1,n2,n3;
+integer kk,jj,nn,mm,pp,qq,n1,n2,n3;
+wire [3:0] rdy;
 genvar g;
 reg idle;
 reg dispatch;
@@ -104,7 +105,7 @@ end
 always_comb
 begin
 	busy = 1'b1;
-	for (n2 = 0; n2 < NRSE; n2 = n2 + 1)
+	foreach (rse[n2])
 		busy = busy & rse[n2].busy;
 end
 always_comb
@@ -273,13 +274,13 @@ else begin
 		end
 	end
 	for (pp = 0; pp < 6; pp = pp + 1) begin
-		for (mm = 0; mm < NRSE; mm = mm + 1)
+		foreach (rse[mm])
 			if (arg[pp][mm].v) begin
 				rse[mm].arg[pp] <= arg[pp][mm];
 				rse[mm].arg[pp].v <= VAL;
 			end
 	end
-	for (mm = 0; mm < NRSE; mm = mm + 1) begin
+	foreach (rse[mm]) begin
 		rse[mm].ready <= FALSE;
 		if (rse[mm].arg[0].v && rse[mm].arg[1].v && (rse[mm].arg[2].v|rse[mm].store) && rse[mm].arg[3].v && rse[mm].arg[4].v && rse[mm].arg[5].v)
 			rse[mm].ready <= TRUE;
@@ -322,8 +323,7 @@ else begin
 	2'b11:	;
 	default:
 		begin
-			rdy = fnChooseReady(rse);
-			if (rdy >= 0) begin
+			if (~&rdy) begin
 				issue <= TRUE;
 				rse_o <= rse[rdy];
 				rse_o.v <= !stomp[rse[rdy].rndx] & rse[rdy].v;
@@ -379,17 +379,11 @@ begin
 end
 endfunction
 
-function integer fnChooseReady;
-input Qupls4_pkg::reservation_station_entry_t [NRSE-1:0] rse;
-integer nn;
-begin
-	fnChooseReady = -1;
-	for (nn = 0; nn < NRSE; nn = nn + 1) begin
-		if (rse[nn].ready)
-			fnChooseReady = nn;
-	end
-end
-endfunction
+Qupls4_choose_ready_rse #(.NRSE(NRSE)) uchrdy1
+(
+	.rse(rse),
+	.rdy(rdy)
+);
 
 function integer fnChooseIdle;
 input Qupls4_pkg::reservation_station_entry_t [NRSE-1:0] rse;
@@ -397,7 +391,7 @@ integer nn;
 begin
 	fnChooseIdle = -1;
 	for (nn = 0; nn < NRSE; nn = nn + 1) begin
-		if (!rse[nn].busy)
+		if (!rse[nn].busy && rse[nn].v)
 			fnChooseIdle = nn;
 	end
 end

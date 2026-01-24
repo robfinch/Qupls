@@ -566,6 +566,7 @@ else begin
 		begin
 			cpu_trans_queued <= FALSE;
 			cpu_request_i2.cyc <= LOW;
+			cpu_request_i2.stb <= LOW;
 		end
 	default:	;
 	endcase
@@ -711,6 +712,7 @@ end
 task tBusClear;
 begin
 	ftam_req.cyc <= 1'b0;
+	ftam_req.stb <= 1'b0;
 	ftam_req.sel <= 32'h00000000;
 	ftam_req.we <= 1'b0;
 end

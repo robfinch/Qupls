@@ -42,7 +42,7 @@ module Qupls4_lsq(rst, clk, cmd, pgh, rob, lsq, lsq_tail);
 parameter MWIDTH = Qupls4_pkg::MWIDTH;
 input rst;
 input clk;
-input lsq_cmd_t [11:0] cmd;
+input lsq_cmd_t [14:0] cmd;
 input Qupls4_pkg::pipeline_group_hdr_t [Qupls4_pkg::ROB_ENTRIES/MWIDTH-1:0] pgh;
 input Qupls4_pkg::rob_entry_t [Qupls4_pkg::ROB_ENTRIES-1:0] rob;
 (* keep *)
@@ -50,7 +50,13 @@ output Qupls4_pkg::lsq_entry_t [1:0] lsq [0:Qupls4_pkg::LSQ_ENTRIES-1];
 output Qupls4_pkg::lsq_ndx_t lsq_tail;
 
 integer n;
-integer n14r, n14c;
+integer n14r, n14c, n1r, n1c;
+
+initial begin
+	for (n1r = 0; n1r < Qupls4_pkg::LSQ_ENTRIES; n1r = n1r + 1)
+		for (n1c = 0; n1c < 2; n1c = n1c + 1)
+			lsq[n1r][n1c] = {$bits(lsq_entry_t){1'b0}};
+end
 
 always_ff @(posedge clk)
 if (rst) begin
@@ -62,77 +68,89 @@ if (rst) begin
 	end
 end
 else begin
-	case(1'b1)
-	cmd[0]:	//LSQ_CMD_ENQ
+	if (cmd[0]!=Qupls4_pkg::LSQ_CMD_NONE)	//LSQ_CMD_ENQ
 		begin
-		 	tEnqueLSE(7'h7F,cmd[0].lndx,cmd[0].rndx,rob[cmd[0].rndx],cmd[0].n,cmd[0].data);
+		 	tEnqueLSE(
+		 		.sn(7'h7F),
+		 		.ndx(cmd[0].lndx),
+		 		.id(cmd[0].rndx),
+		 		.rob(rob[cmd[0].rndx]),
+		 		.n(cmd[0].n),
+		 		.vadr(cmd[0].data)
+		 	);
 			lsq_tail.row <= (lsq_tail.row + 2'd1) % Qupls4_pkg::LSQ_ENTRIES;
 			lsq_tail.col <= 3'd0;
 		end
-	cmd[1]:	//==LSQ_CMD_ENQ) begin
-		tEnqueLSE(7'h7F,cmd[1].lndx,cmd[1].rndx,rob[cmd[1].rndx],cmd[1].n,cmd[1].data);
-	cmd[2]:	// LSQ_CMD_SETRES:
+	if (cmd[1]!=Qupls4_pkg::LSQ_CMD_NONE)	//==LSQ_CMD_ENQ) begin
+		 	tEnqueLSE(
+		 		.sn(7'h7F),
+		 		.ndx(cmd[1].lndx),
+		 		.id(cmd[1].rndx),
+		 		.rob(rob[cmd[1].rndx]),
+		 		.n(cmd[1].n),
+		 		.vadr(cmd[1].data)
+		 	);
+//		tEnqueLSE(7'h7F,cmd[1].lndx,cmd[1].rndx,rob[cmd[1].rndx],cmd[1].n,cmd[1].data);
+	if (cmd[2]!=Qupls4_pkg::LSQ_CMD_NONE)	// SETRES
 			begin
 				lsq[cmd[2].lndx.row][cmd[2].lndx.col].res <= {cmd[2].flags,cmd[2].data};
 				lsq[cmd[2].lndx.row][cmd[2].lndx.col].datav <= cmd[2].datav;
 			end
-	cmd[3]:	// LSQ_CMD_SETRES:
+	if (cmd[3]!=Qupls4_pkg::LSQ_CMD_NONE)	// SETRES
 			begin
 				lsq[cmd[3].lndx.row][cmd[3].lndx.col].res <= {cmd[3].flags,cmd[3].data};
 				lsq[cmd[3].lndx.row][cmd[3].lndx.col].datav <= cmd[3].datav;
 			end
-	cmd[4]:	// LSQ_CMD_SETADR:
+	if (cmd[4]!=Qupls4_pkg::LSQ_CMD_NONE)	// SETADR
 		tSetLSQ(cmd[4].rndx,cmd[4].data);
-	cmd[5]:	// LSQ_CMD_SETADR:
+	if (cmd[5]!=Qupls4_pkg::LSQ_CMD_NONE)	// SETADR
 		tSetLSQ(cmd[5].rndx,cmd[5].data);
-	cmd[6]:	// LSQ_CMD_INCADR:
+	if (cmd[6]!=Qupls4_pkg::LSQ_CMD_NONE)	// INCADR
 		tIncLSQAddr(cmd[6].rndx);
-	cmd[7]:	// LSQ_CMD_INCADR:
+	if (cmd[7]!=Qupls4_pkg::LSQ_CMD_NONE)	// INCADR
 		tIncLSQAddr(cmd[7].rndx);
-	cmd[8]:
+	if (cmd[8]!=Qupls4_pkg::LSQ_CMD_NONE)
 		begin
 			tInvalidateLSQ(cmd[8].rndx, cmd[8].can, cmd[8].cmt, cmd[8].data);
 			if (cmd[8].cmt && SUPPORT_STORE_FORWARDING)
 				tForwardStore(cmd[8].rndx);
 		end
-	cmd[9]:
+	if (cmd[9]!=Qupls4_pkg::LSQ_CMD_NONE)
 		begin
 			tInvalidateLSQ(cmd[9].rndx, cmd[9].can, cmd[9].cmt, cmd[9].data);
 			if (cmd[9].cmt && SUPPORT_STORE_FORWARDING)
 				tForwardStore(cmd[9].rndx);
 		end
-	cmd[10]:
+	if (cmd[10]!=Qupls4_pkg::LSQ_CMD_NONE)
 		begin
 			tInvalidateLSQ(cmd[10].rndx, cmd[10].can, cmd[10].cmt, cmd[10].data);
 			if (cmd[10].cmt && SUPPORT_STORE_FORWARDING)
 				tForwardStore(cmd[10].rndx);
 		end
-	cmd[11]:
+	if (cmd[11]!=Qupls4_pkg::LSQ_CMD_NONE)
 		begin
 			tInvalidateLSQ(cmd[11].rndx, cmd[11].can, cmd[11].cmt, cmd[11].data);
 			if (cmd[11].cmt && SUPPORT_STORE_FORWARDING)
 				tForwardStore(cmd[11].rndx);
 		end
-	cmd[12]:
+	if (cmd[12]!=Qupls4_pkg::LSQ_CMD_NONE)
 		begin
 			tInvalidateLSQ(cmd[12].rndx, cmd[12].can, cmd[12].cmt, cmd[12].data);
 			if (cmd[12].cmt && SUPPORT_STORE_FORWARDING)
 				tForwardStore(cmd[12].rndx);
 		end
-	cmd[13]:
+	if (cmd[13]!=Qupls4_pkg::LSQ_CMD_NONE)
 		begin
 			tInvalidateLSQ(cmd[13].rndx, cmd[13].can, cmd[13].cmt, cmd[13].data);
 			if (cmd[13].cmt && SUPPORT_STORE_FORWARDING)
 				tForwardStore(cmd[13].rndx);
 		end
-	cmd[14]:
+	if (cmd[14]!=Qupls4_pkg::LSQ_CMD_NONE)
 		begin
 			tInvalidateLSQ(cmd[14].rndx, cmd[14].can, cmd[14].cmt, cmd[14].data);
 			if (cmd[14].cmt && SUPPORT_STORE_FORWARDING)
 				tForwardStore(cmd[14].rndx);
 		end
-	default:	;
-	endcase
 end
 
 // Queue to the load / store queue.
@@ -145,43 +163,46 @@ input Qupls4_pkg::rob_entry_t rob;
 input [1:0] n;
 input cpu_types_pkg::virtual_address_t vadr;
 integer n12r, n12c;
+integer n13r, n13c;
 begin
-	lsq[ndx.row][ndx.col] <= {$bits(Qupls4_pkg::lsq_entry_t){1'b0}};
-	lsq[ndx.row][ndx.col].rndx <= id;
-	lsq[ndx.row][ndx.col].v <= VAL;
-	lsq[ndx.row][ndx.col].state <= 2'b00;
-	lsq[ndx.row][ndx.col].agen <= FALSE;
-	lsq[ndx.row][ndx.col].pc <= pgh[rob.pghn].ip + {rob.ip_offs,1'b0};
-	lsq[ndx.row][ndx.col].loadv <= INV;
-	lsq[ndx.row][ndx.col].load <= rob.op.decbus.load|rob.excv;
-	lsq[ndx.row][ndx.col].loadz <= rob.op.decbus.loadz|rob.excv;
-	lsq[ndx.row][ndx.col].cload <= rob.excv;
-	lsq[ndx.row][ndx.col].cload_tags <= rob.excv;
-	lsq[ndx.row][ndx.col].store <= rob.op.decbus.store;
-	lsq[ndx.row][ndx.col].stptr <= rob.op.decbus.stptr;
-	lsq[ndx.row][ndx.col].cstore <= 1'b0;
-	lsq[ndx.row][ndx.col].vload <= rob.op.decbus.vload;
-	lsq[ndx.row][ndx.col].vload_ndx <= rob.op.decbus.vload_ndx;
-	lsq[ndx.row][ndx.col].vstore <= rob.op.decbus.vstore;
-	lsq[ndx.row][ndx.col].vstore_ndx <= rob.op.decbus.vstore_ndx;
-	lsq[ndx.row][ndx.col].vadr <= vadr;
-	lsq[ndx.row][ndx.col].padr <= {$bits(cpu_types_pkg::physical_address_t){1'b0}};
-	lsq[ndx.row][ndx.col].shift <= 7'd0;
+	n12r = ndx.row;
+	n12c = ndx.col;
+	lsq[n12r][n12c] <= {$bits(Qupls4_pkg::lsq_entry_t){1'b0}};
+	lsq[n12r][n12c].rndx <= id;
+	lsq[n12r][n12c].v <= VAL;
+	lsq[n12r][n12c].state <= 2'b00;
+	lsq[n12r][n12c].agen <= FALSE;
+	lsq[n12r][n12c].pc <= pgh[rob.pghn].ip + {rob.ip_offs,1'b0};
+	lsq[n12r][n12c].loadv <= INV;
+	lsq[n12r][n12c].load <= rob.op.decbus.load|rob.excv;
+	lsq[n12r][n12c].loadz <= rob.op.decbus.loadz|rob.excv;
+	lsq[n12r][n12c].cload <= rob.excv;
+	lsq[n12r][n12c].cload_tags <= rob.excv;
+	lsq[n12r][n12c].store <= rob.op.decbus.store;
+	lsq[n12r][n12c].stptr <= rob.op.decbus.stptr;
+	lsq[n12r][n12c].cstore <= 1'b0;
+	lsq[n12r][n12c].vload <= rob.op.decbus.vload;
+	lsq[n12r][n12c].vload_ndx <= rob.op.decbus.vload_ndx;
+	lsq[n12r][n12c].vstore <= rob.op.decbus.vstore;
+	lsq[n12r][n12c].vstore_ndx <= rob.op.decbus.vstore_ndx;
+	lsq[n12r][n12c].vadr <= vadr;
+	lsq[n12r][n12c].padr <= {$bits(cpu_types_pkg::physical_address_t){1'b0}};
+	lsq[n12r][n12c].shift <= 7'd0;
 //	store_argC_reg <= rob.pRc;
-	lsq[ndx.row][ndx.col].aRc <= rob.op.decbus.Rs3;
-	lsq[ndx.row][ndx.col].pRc <= rob.op.pRs3;
-	lsq[ndx.row][ndx.col].cndx <= rob.cndx;
-	lsq[ndx.row][ndx.col].Rt <= rob.op.nRd;
-	lsq[ndx.row][ndx.col].aRt <= rob.op.decbus.Rd;
-	lsq[ndx.row][ndx.col].aRtz <= !rob.op.decbus.Rdv;
-	lsq[ndx.row][ndx.col].om <= rob.om;
-	lsq[ndx.row][ndx.col].memsz <= Qupls4_pkg::fnMemsz(rob.op);
-	for (n12r = 0; n12r < Qupls4_pkg::LSQ_ENTRIES; n12r = n12r + 1)
-		for (n12c = 0; n12c < 2; n12c = n12c + 1)
-			lsq[n12r][n12c].sn <= lsq[n12r][n12c].sn - n;
-	lsq[ndx.row][ndx.col].sn <= sn;
+	lsq[n12r][n12c].aRc <= rob.op.decbus.Rs3;
+	lsq[n12r][n12c].pRc <= rob.op.pRs3;
+	lsq[n12r][n12c].cndx <= rob.cndx;
+	lsq[n12r][n12c].Rt <= rob.op.nRd;
+	lsq[n12r][n12c].aRt <= rob.op.decbus.Rd;
+	lsq[n12r][n12c].aRtz <= !rob.op.decbus.Rdv;
+	lsq[n12r][n12c].om <= rob.om;
+	lsq[n12r][n12c].memsz <= Qupls4_pkg::fnMemsz(rob.op);
+	for (n13r = 0; n13r < Qupls4_pkg::LSQ_ENTRIES; n13r = n13r + 1)
+		for (n13c = 0; n13c < 2; n13c = n13c + 1)
+			lsq[n13r][n13c].sn <= lsq[n13r][n13c].sn - n;
+	lsq[n12r][n12c].sn <= sn;
 	if (n==2'd2)
-		lsq[ndx.row][0].sn <= sn - 2'd1;
+		lsq[n12r][n12c].sn <= sn - 2'd1;
 	/*
 	if (Qupls4_pkg::PERFORMANCE) begin
 		// This seems not to work

@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2025-2026  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2026  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -32,40 +32,24 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// Compute the amount of space available in the queue.
-// 160 LUTs
 // ============================================================================
 
 import Qupls4_pkg::*;
 
-module Qupls4_lsq_queue_room(lsq, head, tail, room);
-input lsq_entry_t [1:0] lsq [0:Qupls4_pkg::LSQ_ENTRIES-1];
-input lsq_ndx_t head;
-input lsq_ndx_t tail;
-output reg [3:0] room;
+module Qupls4_choose_ready_rse(rse, rdy);
+parameter NRSE = 1;
+input Qupls4_pkg::reservation_station_entry_t [NRSE-1:0] rse;
+output reg [3:0] rdy;
 
-integer n;
-lsq_ndx_t t;
-reg [3:0] enqueue_room;
+integer nn;
 
 always_comb
 begin
-	enqueue_room = 4'd0;
-	t = tail;
-	// Check to make sure queue at tail is possible.
-	if (lsq[t.row][0].v==INV && lsq[t.row][1].v==INV) begin
-		// If the head and tail are the same and pointing to invalid entries then
-		// the queue must be empty.
-		if (t.row==head.row)
-			enqueue_room = Qupls4_pkg::LSQ_ENTRIES;
-		else if (t.row > head.row)
-			enqueue_room = t.row - head.row;
-		else
-			enqueue_room = Qupls4_pkg::LSQ_ENTRIES + t.row - head.row;
+	rdy <= 4'hF;
+	for (nn = 0; nn < NRSE; nn = nn + 1) begin
+		if (rse[nn].ready)
+			rdy <= nn;
 	end
-end		
-
-always_comb
-	room = enqueue_room;
+end
 
 endmodule

@@ -181,7 +181,11 @@ begin
 end
 
 always_ff @(posedge clk)
-begin
+if (rst) begin
+	foreach (rse_o[mm])
+		rse_o[mm] <= {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
+end
+else begin
 	foreach (cpy[mm]) begin
 		rse_o[cpy[mm].rse] <= rse[cpy[mm].rob];
 		rse_o[cpy[mm].rse].funcunit <= cpy[mm].fu;
