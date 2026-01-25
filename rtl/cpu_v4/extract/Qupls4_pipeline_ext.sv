@@ -44,7 +44,7 @@ import const_pkg::*;
 import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_pipeline_ext(rst_i, clk_i, ihit, en_i,
+module Qupls4_pipeline_ext(rst_i, clk_i, ihit_fet, ihit_ext, en_i,
 	kept_stream, stomp_ext, nop_o, carry_mod_fet, ssm_flag, hwipc_fet,
 	irq_fet, irq_in_fet, irq_sn_fet, ipl_fet, sr, pt_ext, pt_dec, p_override, po_bno,
 	branchmiss, misspc_fet, flush_fet,
@@ -58,7 +58,8 @@ module Qupls4_pipeline_ext(rst_i, clk_i, ihit, en_i,
 parameter MWIDTH = Qupls4_pkg::MWIDTH;
 input rst_i;
 input clk_i;
-input ihit;
+input ihit_fet;
+output reg ihit_ext;
 input irq_fet;
 input Qupls4_pkg::irq_info_packet_t irq_in_fet;
 input cpu_types_pkg::seqnum_t irq_sn_fet;
@@ -254,7 +255,7 @@ begin
 	if (!redundant_group) begin
 		// Allow only one instruction through when single stepping.
 		if (ssm_flag & ~prev_ssm_flag) begin
-			pr_ext[0].op.cli = pc_fet[0].pc[5:1];
+			pr_ext[0].op.cli = pc_fet[0].pc[6:1];
 			pr_ext[0].op.uop = fnMapRawToUop(ic_line_aligned[ 47:  0]);
 			for (n1 = 1; n1 < MWIDTH; n1 = n1 + 1) begin
 				pr_ext[n1] = nopi;
@@ -273,7 +274,7 @@ begin
 			// Compute index of instruction on cache-line.
 			// Note! the index is in terms of 16-bit parcels.
 			for (n1 = 0; n1 < MWIDTH; n1 = n1 + 1) begin
-				pr_ext[n1].op.cli = pc_fet[n1].pc[5:1];
+				pr_ext[n1].op.cli = pc_fet[n1].pc[6:1];
 				pr_ext[n1].op.uop = fnMapRawToUop(48'(ic_line_aligned >> (n1*48)));
 			end
 		end
@@ -537,6 +538,14 @@ if (rst_i)
 else begin
 	if (en)
 		pt_dec <= pt_ext;
+end
+
+always_ff @(posedge clk)
+if (rst_i)
+	ihit_ext <= FALSE;
+else begin
+	if (en)
+		ihit_ext <= ihit_fet;
 end
 
 always_comb

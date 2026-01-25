@@ -1576,6 +1576,7 @@ typedef struct packed
 	logic v;
 	logic aRnv;
 	logic z;											// operand should be zero
+	logic is_const;								// operand is a constant value in val
 	flags_t flags;
 	cpu_types_pkg::aregno_t aRn;
 	cpu_types_pkg::pregno_t pRn;
@@ -1900,6 +1901,7 @@ typedef struct packed {
 	logic busy;
 	logic ready;
 	logic [3:0] funcunit;							// functional unit dispatched to
+	logic [2:0] age;
 	cpu_types_pkg::seqnum_t irq_sn;
 	cpu_types_pkg::rob_ndx_t rndx;		// associated ROB entry
 	cpu_types_pkg::checkpt_ndx_t cndx;

@@ -61,6 +61,10 @@ begin
 		oper_o[nn].flags = {$bits(flags_t){1'b0}};
 		if (oper_i[nn].z)
 			oper_o[nn].v = VAL;
+		else if (oper_i[nn].is_const) begin
+			oper_o[nn].v = VAL;
+			oper_o[nn].val = oper_i[nn].val;
+		end
 		foreach (rf_oper_i[jj]) begin
 			if (oper_i[nn].pRn==rf_oper_i[jj].pRn && rf_oper_i[jj].v && !oper_i[nn].v) begin
 				oper_o[nn] = rf_oper_i[jj];

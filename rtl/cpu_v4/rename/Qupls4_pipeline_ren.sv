@@ -42,7 +42,7 @@ import Qupls4_pkg::*;
 `define SUPPORT_RAT	1
 
 module Qupls4_pipeline_ren(
-	rst, clk, clk5x, ph4, en, nq, restore,
+	rst, clk, clk5x, ph4, en, ihit_dec, ihit_ren, nq, restore,
 	unavail_list,
 	chkpt_amt, tail0, rob, avail_reg, sr, branch_resolved,
 	stomp_ren, kept_stream, flush_dec, flush_ren,
@@ -76,6 +76,8 @@ input clk;
 input clk5x;
 input [4:0] ph4;
 input en;
+input ihit_dec;
+output reg ihit_ren;
 input flush_dec;
 output reg flush_ren;
 input nq;
@@ -729,6 +731,14 @@ begin
 	end
 end
 endtask
+
+always_ff @(posedge clk)
+if (rst)
+	ihit_ren <= FALSE;
+else begin
+	if (en)
+		ihit_ren <= ihit_dec;
+end
 
 endmodule
 

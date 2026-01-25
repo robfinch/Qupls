@@ -1615,7 +1615,8 @@ cpu_types_pkg::pc_address_ex_t new_address_dec;
 cpu_types_pkg::pc_address_ex_t new_address_ext;
 wire ic_port;
 wire ftaim_full, ftadm_full;
-reg ihit_fet, ihit_ext, ihit_dec, ihit_ren, ihit_que;
+reg ihit_que;
+wire ihit_fet, ihit_ext, ihit_mot, ihit_dec, ihit_ren; 
 reg fetch_alt;
 wire icnop;
 pc_address_ex_t icpc;
@@ -1631,6 +1632,7 @@ pc_stream_t [THREADS-1:0] new_stream;
 wire alloc_stream;
 reg [XSTREAMS*THREADS-1:0] used_streams;
 pc_address_ex_t [XSTREAMS*THREADS-1:0] pcs;
+pc_address_ex_t ip;
 pc_stream_t fet_stream;
 // Buffers the instruction cache line to allow fetching along alternate paths.
 reg first_icache;
@@ -1640,6 +1642,9 @@ dep_stream_t [XSTREAMS-1:0] dep_stream;
 
 // Choose a stream of execution. Give precedence to streams that have
 // buffered cache lines.
+
+always_comb
+	ip = pcs[fet_stream];
 
 icache
 #(
@@ -1660,7 +1665,7 @@ uic1
 	.invline(ic_invline),
 	.nop(brtgtv),
 	.nop_o(icnop),
-	.ip(pcs[fet_stream]),
+	.ip(ip),
 	.ip_asid(asid[pcs[fet_stream].stream.thread]),
 //	.ip(pc),
 	.ip_o(icpc),
@@ -1861,37 +1866,9 @@ gselectPredictor ugsp1
 
 always_ff @(posedge clk)
 if (irst)
-	ihit_fet <= FALSE;
-else begin
-	if (advance_fetch)
-		ihit_fet <= ihito;
-end
-always_ff @(posedge clk)
-if (irst)
-	ihit_ext <= FALSE;
-else begin
-	if (advance_pipeline)
-		ihit_ext <= ihit_fet;
-end
-always_ff @(posedge clk)
-if (irst)
-	ihit_dec <= FALSE;
-else begin
-	if (advance_pipeline)
-		ihit_dec <= ihit_ext;
-end
-always_ff @(posedge clk)
-if (irst)
-	ihit_ren <= FALSE;
-else begin
-	if (advance_pipeline)
-		ihit_ren <= ihit_dec;
-end
-always_ff @(posedge clk)
-if (irst)
 	ihit_que <= FALSE;
 else begin
-	if (advance_pipeline)
+	if (advance_enqueue)
 		ihit_que <= ihit_ren;
 end
 
@@ -2286,7 +2263,8 @@ Qupls4_instruction_buffer uib1
 	.ihit_i(ihito),
 	.stream_i(fet_stream),
 	.ips_i(pcs),
-	.ip_i(icpc),
+	.ip_i(ip),
+	.icip_i(icpc),
 	.line_i({ic_clineh.data,ic_clinel.data}),
 	.line_o(ic_line),
 	.ip_o(pc_fet),
@@ -2299,6 +2277,7 @@ Qupls4_pipeline_fet ufet1
 	.rst(irst),
 	.clk(clk),
 	.ihit(is_buffered),
+	.ihit_fet(ihit_fet),
 	.irq_in_ic(irq_in_ic),
 	.irq_ic(irq_ic),
 	.irq_in_fet(irq_in_fet),
@@ -2385,11 +2364,12 @@ Qupls4_pipeline_ext #(.MWIDTH(MWIDTH)) uiext1
 	.clk_i(clk),
 	.flush_fet(flush_fet),
 	.en_i(advance_extract),
+	.ihit_fet(ihit_fet),
+	.ihit_ext(ihit_ext),
 	.cline_fet(ic_line_fet),
 	.new_cline_ext(new_cline_ext),
 	.cline_ext(cline_ext),
 	.ssm_flag(ssm_flag),
-	.ihit(is_buffered),
 	.sr(sr),
 	.ipl_fet(ipl_fet),
 	.uop_num_fet(uop_num_fet),
@@ -2449,6 +2429,8 @@ umot1
 	.rst(irst),
 	.clk(clk),
 	.en(advance_mot),
+	.ihit_ext(ihit_ext),
+	.ihit_mot(ihit_mot),
 	.stomp(stomp_mot),
 	.cline_ext(cline_ext),
 	.cline_mot(cline_mot),
@@ -2481,6 +2463,8 @@ udecstg1
 	.rst(irst),
 	.clk(clk),
 	.en(advance_decode),
+	.ihit_mot(ihit_mot),
+	.ihit_dec(ihit_dec),
 	.new_cline_ext(new_cline_ext),
 	.cline(cline_mot),
 	.sr(sr),
@@ -2519,7 +2503,7 @@ aregno_t [MWIDTH-1:0] wrport0_aRt;
 aregno_t wrport4_aRt;
 aregno_t wrport5_aRt;
 checkpt_ndx_t [MWIDTH-1:0] wrport0_cp;
-reg [MWIDTH-1:0] wrport0_tag;
+Qupls4_pkg::flags_t [MWIDTH-1:0] wrport0_tag;
 
 wire [MWIDTH-1:0] stomps;
 
@@ -2690,7 +2674,7 @@ always_comb	advance_mot =
 	;
 
 always_comb advance_extract =
-	ihit & 
+	is_buffered & 
 	advance_extract2 &		// advance_extract set by mot stage
 	rstcnt[5]
 	;
@@ -2939,6 +2923,8 @@ Qupls4_pipeline_ren #(.MWIDTH(MWIDTH), .NPORT(NREG_RPORTS)) uren1
 	.clk5x(clk5x),
 	.ph4(ph4),
 	.en(advance_rename),
+	.ihit_dec(ihit_dec),
+	.ihit_ren(ihit_ren),
 	.nq(nq),
 	.restore(restore),
 	.tail0(tails[0]),
@@ -3624,13 +3610,13 @@ endgenerate
 // Mux the queue outputs onto the register file inputs.
 generate begin : gWrPort
 	for (g = 0; g < $size(wrport0_v); g = g + 1) begin
-		always_ff @(posedge clk) wrport0_v[g] <= !fuq_empty[frq_upd[g]];
-		always_ff @(posedge clk) wrport0_we[g] <= fuq_we[frq_upd[g]]; 
-		always_ff @(posedge clk) wrport0_Rt[g] <= fuq_pRt[frq_upd[g]]; 
-		always_ff @(posedge clk) wrport0_aRt[g] <= fuq_aRt[frq_upd[g]]; 
-		always_ff @(posedge clk) wrport0_res[g] <= fuq_res[frq_upd[g]]; 
-		always_ff @(posedge clk) wrport0_cp[g] <= fuq_cp[frq_upd[g]]; 
-		always_ff @(posedge clk) wrport0_tag[g] <= fuq_tag[frq_upd[g]]; 
+		always_ff @(posedge clk) wrport0_v[g] <= frq_upd[g]==5'd31 ? 1'b0 : ~fuq_empty[frq_upd[g]];
+		always_ff @(posedge clk) wrport0_we[g] <= frq_upd[g]==5'd31 ? 9'b0 : fuq_we[frq_upd[g]]; 
+		always_ff @(posedge clk) wrport0_Rt[g] <= frq_upd[g]==5'd31 ? 10'd0 : fuq_pRt[frq_upd[g]]; 
+		always_ff @(posedge clk) wrport0_aRt[g] <= frq_upd[g]==5'd31 ? 8'd0 : fuq_aRt[frq_upd[g]]; 
+		always_ff @(posedge clk) wrport0_res[g] <= frq_upd[g]==5'd31 ? value_zero : fuq_res[frq_upd[g]]; 
+		always_ff @(posedge clk) wrport0_cp[g] <= frq_upd[g]==5'd31 ? 4'd0 : fuq_cp[frq_upd[g]]; 
+		always_ff @(posedge clk) wrport0_tag[g] <= frq_upd[g]==5'd31 ? 8'd0 : fuq_tag[frq_upd[g]]; 
 	end
 end 
 endgenerate
@@ -3745,6 +3731,7 @@ begin
 	end
 end
 
+// Conditional branches are the only ones detected here.
 reg branchmiss_det;
 always_comb
 	branchmiss_det = ((takb && !fcu_rser.bt) || (!takb && fcu_rser.bt)) && fcu_rser.v;
@@ -6595,10 +6582,11 @@ else begin
 	// in simulation, but the cause has not been traced. I think it may be due
 	// to bit errors. In any case we do not want the machine to hang.
 	// This case should not be possible with properly performing hardware.
-	foreach (rob[nn]) begin
-		if (fnStuckOut(nn))
-			rob[nn].out <= 2'b00;
-	end
+	if (FALSE)
+		foreach (rob[nn]) begin
+			if (fnStuckOut(nn))
+				rob[nn].out <= 2'b00;
+		end
 
 	// Unstick:
 	// If the same physical register is valid in a later instruction, then it should
@@ -6979,12 +6967,12 @@ always_ff @(posedge clk) begin: clock_n_debug
 	$display("MOT: 0:%h  1:%h  2:%h  3:%h", pg_mot.pr[0].op.uop, pg_mot.pr[1].op.uop, pg_mot.pr[2].op.uop, pg_mot.pr[3].op.uop);
 	$display("DEC: 0:%h  1:%h  2:%h  3:%h", pg_dec.pr[0].op.uop, pg_dec.pr[1].op.uop, pg_dec.pr[2].op.uop, pg_dec.pr[3].op.uop);
 	$display("REN: 0:%h  1:%h  2:%h  3:%h", pg_ren.pr[0].op.uop, pg_ren.pr[1].op.uop, pg_ren.pr[2].op.uop, pg_ren.pr[3].op.uop);
-	$display("----- Fetch -----");
+	$display("----- Fetch %c----- %s", ihit_fet ? "h":" ", stomp_fet ? stompstr : no_stompstr);
 	$display("i$ pc input:  %h.%h stream:%d#", pcs[fet_stream].stream,pcs[fet_stream].pc, fet_stream);
 	$display("i$ pc output: %h %s #", pc_fet.pc, ihito ? "ihit" : "    ");
 	$display("cacheL: %x", ic_line[511:0]);
 	$display("cacheH: %x", ic_line[1023:512]);
-	$display("----- Instruction Extract %c ----- %s", ihit_fet ? "h":" ", stomp_fet ? stompstr : no_stompstr);
+	$display("----- Instruction Extract %c ----- %s", ihit_ext ? "h":" ", stomp_ext ? stompstr : no_stompstr);
 	$display("ip 0: %h.%h  1: %h.%h  2: %h.%h  3: %h.%h",
 		uiext1.pc_fet[0].stream, uiext1.pc_fet[0].pc,
 		uiext1.pc_fet[1].stream, uiext1.pc_fet[1].pc,
@@ -6993,11 +6981,12 @@ always_ff @(posedge clk) begin: clock_n_debug
 	$display("lineL: %h", ic_line_fet[511:0]);
 	$display("lineH: %h", ic_line_fet[1023:512]);
 	$display("align: %x", uiext1.ic_line_aligned);
-	$display("----- Micro-op Translate ----- %s", stomp_mot ? stompstr : no_stompstr);
+	$display("----- Micro-op Translate %c ----- %s", ihit_mot ? "h":" ", stomp_mot ? stompstr : no_stompstr);
 	$display("ip: %h.%h", pg_ext.hdr.ip.stream.stream, pg_ext.hdr.ip.pc);
+	$display("lineL: %h", cline_ext[511:0]);
+	$display("lineH: %h", cline_ext[1023:512]);
 	$display("Raw instructions");
 	$display("0:%h  1:%h  2:%h  3:%h", pg_ext.pr[0].op.uop, pg_ext.pr[1].op.uop, pg_ext.pr[2].op.uop, pg_ext.pr[3].op.uop);
-	$display("- - - - - - Multiplex %c - - - - - - %s", ihit_ext ? "h":" ", stomp_ext ? stompstr : no_stompstr);
 	/*
 	$display("pc0: %h.%h ins0: %h", uiext1.pg_ext.pr[0].pc.pc[23:0], uiext1.pg_ext.pr[0].mcip, uiext1.pg_ext.pr[0].uop[47:0]);
 	$display("pc1: %h.%h ins1: %h", uiext1.pg_ext.pr[1].pc.pc[23:0], uiext1.pg_ext.pr[1].mcip, uiext1.pg_ext.pr[1].uop[47:0]);
@@ -7008,7 +6997,11 @@ always_ff @(posedge clk) begin: clock_n_debug
 		$display("BSR %h  pc0_fet=%h", new_address_ext, uiext1.pg_ext.hdr.ip.pc+{uiext1.pg_ext.pr[0].ip_offs,1'b0});
 	$display("----- Decode %c ----- %s", ihit_dec ? "h":" ", stomp_dec ? stompstr : no_stompstr);
 	$display("ip:%h.%h", pg_mot.hdr.ip.stream.stream,pg_mot.hdr.ip.pc);
-	$display("0:%h  1:%h  2:%h  3:%h", pg_mot.pr[0].op.uop, pg_mot.pr[1].op.uop, pg_mot.pr[2].op.uop, pg_mot.pr[3].op.uop);
+	$display("lineL: %h", cline_mot[511:0]);
+	$display("lineH: %h", cline_mot[1023:512]);
+	$display("MOT 0:%h  1:%h  2:%h  3:%h", pg_mot.pr[0].op.uop, pg_mot.pr[1].op.uop, pg_mot.pr[2].op.uop, pg_mot.pr[3].op.uop);
+	$display("DEC 0:%h  1:%h  2:%h  3:%h", pg_dec.pr[0].op.uop, pg_dec.pr[1].op.uop, pg_dec.pr[2].op.uop, pg_dec.pr[3].op.uop);
+	$display("TPR 0:%h  1:%h  2:%h  3:%h", udecstg1.tpr[0].op.uop, udecstg1.tpr[1].op.uop, udecstg1.tpr[2].op.uop, udecstg1.tpr[3].op.uop);
 	/*
 	$display("pc0: %h.%h ins0: %h", pg_dec.pr[0].pc.pc[23:0], pg_dec.pr[0].mcip, pg_dec.pr[0].uop[47:0]);
 	$display("pc1: %h.%h ins1: %h", pg_dec.pr[1].pc.pc[23:0], pg_dec.pr[1].mcip, pg_dec.pr[1].uop[47:0]);
@@ -7091,9 +7084,22 @@ always_ff @(posedge clk) begin: clock_n_debug
 			rob[i].op.decbus.Rs1, rob[i].op.pRs1, rob[i].argA, rob[i].argA_v?"v":" ",
 			rob[i].op.decbus.Rs2, rob[i].op.pRs2, rob[i].argB, rob[i].argB_v?"v":" ",
 			rob[i].op.decbus.Rs3, rob[i].op.pRs3, rob[i].argC, rob[i].argC_v?"v":" ",
-			rob[i].argI,
+			rob[i].op.decbus.immb,//argI,
 			rob[i].ip_stream, pgh[rob[i].pghn].ip.pc + {rob[i].ip_offs,1'b0},
 			rob[i].cndx, rob[i].op.uop[63:0]);
+	end
+	$display("----- Dispatch -----");
+	foreach (rse[i]) begin
+		$display("%d%c rob[%d]: IP:%h.%h.%h Ins=%h Rd%d/%d Rs1%d/%d Rs2%d/%d Rs3%d/%d Imm=%h", 
+			i[2:0],rse[i].v?"v":" ",rse[i].rndx,
+			rse[i].pc.stream.thread,rse[i].pc.stream.stream,rse[i].pc.pc[31:0],
+			rse[i].uop.opcode,
+			rse[i].arg[3].aRn, rse[i].arg[3].pRn,
+			rse[i].arg[0].aRn, rse[i].arg[0].pRn,
+			rse[i].arg[1].aRn, rse[i].arg[1].pRn,
+			rse[i].arg[2].aRn, rse[i].arg[2].pRn,
+			rse[i].arg[1].val
+		);
 	end
 	$display("----- LSQ -----");
 	for (i = 0; i < Qupls4_pkg::LSQ_ENTRIES; i = i + 1) begin
@@ -7133,7 +7139,7 @@ always_ff @(posedge clk) begin: clock_n_debug
 	$display("----- FCU -----");
 	$display("eval:%c A=%h B=%h I=%h", takb?"T":"F", fcu_rse.arg[0].val, fcu_rse.arg[1].val, fcu_rse.argI);
 	$display("bt:%c pc=%h id=%d ", fcu_bt ? "T":"F", fcu_rse.pc, fcu_rse.rndx);
-	$display("miss: %c misspc=%h.%h instr=%h disp=%h", branchmiss_det?"T":"F",fcu_misspc1.stream,fcu_misspc1.pc, fcu_rse.uop[63:0],
+	$display("miss: %c misspc=%h.%h instr=%h disp=%h", fcu_branchmiss?"T":"F",fcu_misspc1.stream,fcu_misspc1.pc, fcu_rse.uop[63:0],
 		{{37{fcu_instr.uop[63]}},fcu_instr.uop[63:44],3'd0}
 	);
 
@@ -7150,6 +7156,13 @@ always_ff @(posedge clk) begin: clock_n_debug
 			 ((fnIsLoad(sau1_rse.uop) || fnIsStore(sau1_rse.uop)) ? 109 : 97),
 			sau1_rse.uop, sau1_rse.pc);
 		$display("idle:%d res:%h rid:%d #", sau1_idle, sau1_resA, sau1_rse.rndx);
+	end
+	$display("----- Writeback -----");
+	$display("frq rd=%b empty=%b", fuq_rd, fuq_empty);
+	foreach(wrport0_v[i]) begin
+		$display("%d: %c we%h R%d=%h %h",
+			i[3:0], wrport0_v[i] ? "v" : " ", wrport0_we[i], wrport0_Rt[i], wrport0_res[i], wrport0_tag[i]
+		);
 	end
 
 	$display("----- Commit -----");

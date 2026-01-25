@@ -260,36 +260,27 @@ begin
 	instr = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
 	vsins = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
 	vls = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
+	vsins = ir;
 	vsins.opcode = Qupls4_pkg::opcode_e'(ir[6:0]);
 	vsins.v = VAL;
 	vsins.Rd = thread*40+ir.Rd;
 	vsins.Rs1 = thread*40+ir.Rs1;
 	vsins.Rs2 = thread*40+ir.Rs2;
 	vsins.Rs3 = thread*40+ir.Rs3;
-	vsins.vn = ir.vn;
-	vsins.op3 = ir.op3;
-	vsins.ms = ir.ms;
-	vsins.Rs4 = ir.Rs4;	//???
+	vls = ir;
 	vls.v = VAL;
 	vls.opcode = ir.opcode;
 	vls.Rd = thread*40+ir.Rd;
 	vls.Rs1 = thread*40+ir.Rs1;
 	vls.Rs2 = thread*40+ir.Rs2;
 	vls.Rs3 = thread*40+ir.Rs3;
-	vls.dt = ir.dt;
-	vls.imm = ir.imm;
-	vls.ms = ir.ms;
-	vls.sc = ir.sc;
+	instr = ir;
 	instr.v = VAL;
 	instr.opcode = ir.opcode;
 	instr.Rd = thread*40+ir.Rd;
 	instr.Rs1 = thread*40+ir.Rs1;
 	instr.Rs2 = thread*40+ir.Rs2;
 	instr.Rs3 = thread*40+ir.Rs3;
-	instr.vn = ir.vn;
-	instr.op3 = ir.op3;
-	instr.ms = ir.ms;
-	instr.Rs4 = ir.Rs4;
 	case(ir.opcode)
 	Qupls4_pkg::OP_EXTD:
 		begin
@@ -482,32 +473,6 @@ begin
 						next_uop[0] = uop0;
 					end
 				endcase
-			end
-			else begin
-				next_count = 4'd1;
-				next_uop[0] = uop0;
-			end
-		end
-	Qupls4_pkg::OP_CMPI,
-	Qupls4_pkg::OP_CMPUI:
-		begin
-			if (insert_boi) begin
-				next_count = 4'd2;
-				next_uop[0] = uop_boi;
-				next_uop[1] = uop1;
-			end
-			else begin
-				next_count = 4'd1;
-				next_uop[0] = uop0;
-			end
-		end
-	Qupls4_pkg::OP_ADDI,
-	Qupls4_pkg::OP_SUBFI:
-		begin
-			if (insert_boi) begin
-				next_count = 4'd2;
-				next_uop[0] = uop_boi;
-				next_uop[1] = uop1;
 			end
 			else begin
 				next_count = 4'd1;
@@ -810,10 +775,15 @@ begin
 			endcase
 		end
 	*/
+	Qupls4_pkg::OP_ADDI,
+	Qupls4_pkg::OP_SUBFI,
+	Qupls4_pkg::OP_CMPI,
+	Qupls4_pkg::OP_CMPUI,
 	Qupls4_pkg::OP_CSR,
 	Qupls4_pkg::OP_ANDI,
 	Qupls4_pkg::OP_ORI,
 	Qupls4_pkg::OP_XORI,
+	Qupls4_pkg::OP_LOADI,
 	Qupls4_pkg::OP_LDB,Qupls4_pkg::OP_LDBZ,Qupls4_pkg::OP_LDW,Qupls4_pkg::OP_LDWZ,
 	Qupls4_pkg::OP_LDT,Qupls4_pkg::OP_LDTZ,Qupls4_pkg::OP_LOAD,Qupls4_pkg::OP_LOADA,
 	Qupls4_pkg::OP_AMO,Qupls4_pkg::OP_CMPSWAP:
@@ -821,18 +791,14 @@ begin
 			if (insert_boi) begin
 				next_count = 4'd2;
 				next_uop[0] = uop_boi;
-				next_uop[1] = instr;
-				next_uop[1].v = 1'b1;
-				next_uop[1].num = 5'd1;
+				next_uop[1] = uop1;
 			end
 			else begin
 				next_count = 4'd1;
-				next_uop[0] = instr;
-				next_uop[0].v = 1'b1;
-				next_uop[0].lead = 1'b1;
-				next_uop[0].num = 5'd0;
+				next_uop[0] = uop0;
 			end
 		end
+
 /*		
 	Qupls4_pkg::OP_MOV:
 		begin
@@ -1104,7 +1070,7 @@ begin
 		end
 	endcase
 	for (nn = 0; nn < 32; nn = nn + 1) begin
-		if (nn < num)
+		if (nn >= num)
 			next_uop[nn].v = 1'b0;
 	end	
 end

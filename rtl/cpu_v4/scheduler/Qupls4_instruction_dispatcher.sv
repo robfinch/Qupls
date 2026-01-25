@@ -70,7 +70,7 @@ typedef struct packed
 
 integer nn,mm;
 Qupls4_pkg::reservation_station_entry_t [Qupls4_pkg::ROB_ENTRIES:0] rse;
-Qupls4_pkg::rob_bitmask_t rob_dispatched;
+Qupls4_pkg::rob_bitmask_t rob_dispatched, rob_dispatched2;
 reg [DISPATCH_COUNT-1:0] dispatch_slot_v;
 cpy_t [DISPATCH_COUNT-1:0] cpy;
 
@@ -93,7 +93,9 @@ begin
 		if (rob[nn].dispatchable &&
 			// and was not dispatched in the last cycle
 			// It takes a clock cycle to set flags.
-			!rob_dispatched_o[nn]
+			!rob_dispatched[nn] &&
+			!rob_dispatched_o[nn] &&
+			!rob_dispatched2[nn]
 		) begin
 			if (rob[nn].op.decbus.sau && !busy[4'd0] && !dispatch_slot_v[0]) begin
 				cpy[0].rob = nn;
@@ -193,6 +195,8 @@ else begin
 end
 always_ff @(posedge clk)
 	rob_dispatched_o <= rob_dispatched;
+always_ff @(posedge clk)
+	rob_dispatched2 <= rob_dispatched_o;
 
 task tLoadRse;
 input integer kk;
@@ -202,6 +206,8 @@ begin
 	mm = rob[nn].pghn;
 	rse[kk] = {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
 	rse[kk].v = rob_dispatched[nn];
+	rse[kk].exc = rob[nn].exc;
+	rse[kk].excv = rob[nn].excv;
 	rse[kk].om = rob[nn].om;
 	rse[kk].rm = rob[nn].rm;
 	rse[kk].pc.pc = pgh[mm].ip + rob[nn].ip_offs;
@@ -290,7 +296,24 @@ begin
 	if (!rob[nn].argCh_v) begin rse[kk].argCh[8:0] = rob[nn].op.pRs3; rse[kk].argC[23:16] = rob[nn].op.uop.Rs3; end
 	if (!rob[nn].argDh_v) begin rse[kk].argDh[8:0] = rob[nn].op.pRd; rse[kk].argD[23:16] = rob[nn].op.uop.Rd; end
 	*/
-	rse[kk].argI = rob[nn].op.decbus.has_immb ? rob[nn].op.decbus.immb : rob[nn].op.decbus.immc;
+//	rse[kk].argI = rob[nn].op.decbus.has_immb ? rob[nn].op.decbus.immb : rob[nn].op.decbus.immc;
+	rse[kk].argI = rob[nn].op.uop.imm;
+	if (rob[nn].op.decbus.has_imma) begin
+		rse[kk].arg[0].is_const = TRUE;
+		rse[kk].arg[0].val = rob[nn].op.decbus.imma;
+	end
+	if (rob[nn].op.decbus.has_immb) begin
+		rse[kk].arg[1].is_const = TRUE;
+		rse[kk].arg[1].val = rob[nn].op.decbus.immb;
+	end
+	if (rob[nn].op.decbus.has_immc) begin
+		rse[kk].arg[2].is_const = TRUE;
+		rse[kk].arg[2].val = rob[nn].op.decbus.immc;
+	end
+	if (rob[nn].op.decbus.has_immd) begin
+		rse[kk].arg[4].is_const = TRUE;
+		rse[kk].arg[4].val = rob[nn].op.decbus.immd;
+	end
 //	rse[kk].funcunit = 4'd15;???
 end
 endtask

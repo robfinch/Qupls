@@ -48,7 +48,7 @@ parameter NRSE = 1;
 parameter FUNCUNIT = 4'd0;
 parameter NBPI = 4;			// number of bypasssing inputs
 parameter NSARG = 3;		// number of source operands
-parameter RL_STRATEGY = 0;	// register lookup strategy
+parameter RL_STRATEGY = 1;	// register lookup strategy
 parameter NREG_RPORTS = RL_STRATEGY==0 ? 0 : 16;
 parameter RC = 1'b0;
 parameter DISPATCH_COUNT=6;	// number of lanes of dispatching
@@ -266,11 +266,14 @@ else begin
 		// Load up the reservation stations.
 		qq = fnChooseIdle(rse);
 		if (qq >= 0) begin
+			foreach (rse[mm])
+				rse[mm].age <= rse[mm].age + 2'd1;
 			rse[qq] <= rsei;
-			rse[qq].busy <= TRUE;
+			rse[qq].age <= 3'd0;
+			rse[qq].busy <= rsei.v;
 			rse[qq].ready <= rsei.arg[0].v && rsei.arg[1].v && (rsei.arg[2].v||rsei.store) && rsei.arg[3].v && rsei.arg[4].v && rsei.arg[5].v;
 			if (stomp[rsei.rndx])
-				rse[qq].uop <= {26'd0,Qupls4_pkg::OP_NOP};
+				rse[qq].uop.opcode <= Qupls4_pkg::OP_NOP;
 		end
 	end
 	for (pp = 0; pp < 6; pp = pp + 1) begin
@@ -391,7 +394,7 @@ integer nn;
 begin
 	fnChooseIdle = -1;
 	for (nn = 0; nn < NRSE; nn = nn + 1) begin
-		if (!rse[nn].busy && rse[nn].v)
+		if (!rse[nn].busy || !rse[nn].v)
 			fnChooseIdle = nn;
 	end
 end

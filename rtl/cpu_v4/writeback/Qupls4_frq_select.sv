@@ -101,12 +101,10 @@ generate begin : gUpd
 end
 endgenerate
 
-always_ff @(posedge clk) begin
-	upd_bitmap <= {NFRQ{1'b0}};
-	foreach (updF[j])
-		upd_bitmap[updF[j]] <= 1'b1;
-	foreach (updL[j])
-		upd_bitmap[updL[j]] <= 1'b1;
+always_comb begin
+	upd_bitmap = {NFRQ{1'b0}};
+	foreach (upd[j])
+		upd_bitmap[upd[j]] = 1'b1;
 end
 
 endmodule

@@ -32,6 +32,8 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
+//
+// 	Chooses which reservation station entry gets issued based on age.
 // ============================================================================
 
 import Qupls4_pkg::*;
@@ -42,13 +44,17 @@ input Qupls4_pkg::reservation_station_entry_t [NRSE-1:0] rse;
 output reg [3:0] rdy;
 
 integer nn;
+reg [2:0] age;
 
 always_comb
 begin
-	rdy <= 4'hF;
+	rdy = 4'hF;
+	age = 3'd0;
 	for (nn = 0; nn < NRSE; nn = nn + 1) begin
-		if (rse[nn].ready)
-			rdy <= nn;
+		if (rse[nn].ready && rse[nn].age >= age) begin
+			rdy = nn;
+			age = rse[nn].age;
+		end
 	end
 end
 

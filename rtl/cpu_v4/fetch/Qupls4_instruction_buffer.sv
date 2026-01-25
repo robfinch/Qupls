@@ -39,12 +39,13 @@ import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
 module Qupls4_instruction_buffer(rst_i, clk_i, ihit_i, stream_i, ips_i, ip_i,
-	line_i, line_o, ip_o, is_buffered_o, next_is_buffered_o);
+	icip_i, line_i, line_o, ip_o, is_buffered_o, next_is_buffered_o);
 input rst_i;
 input clk_i;
 input ihit_i;
 input cpu_types_pkg::pc_stream_t stream_i;
 input cpu_types_pkg::pc_address_ex_t ip_i;
+input cpu_types_pkg::pc_address_ex_t icip_i;
 input [1023:0] line_i;
 output reg [1023:0] line_o;
 input pc_address_ex_t [Qupls4_pkg::XSTREAMS*Qupls4_pkg::THREADS-1:0] ips_i;
@@ -92,7 +93,7 @@ else begin
 		foreach (line_buf[n1]) begin
 			if (n1==$size(line_buf)-1) begin
 				line_buf[n1] <= line_i;
-				ip_buf[n1] <= {ip_i.pc[$bits(cpu_types_pkg::pc_address_t)-1:6],6'd0};
+				ip_buf[n1] <= {icip_i.pc[$bits(cpu_types_pkg::pc_address_t)-1:6],6'd0};
 			end
 			else begin
 				line_buf[n1] <= line_buf[n1+1];

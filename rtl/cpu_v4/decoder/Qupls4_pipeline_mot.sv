@@ -42,6 +42,7 @@ import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
 module Qupls4_pipeline_mot(rst, clk, en, stomp, cline_ext, cline_mot,
+	ihit_ext, ihit_mot,
     pg_ext, pg_mot, advance_ext, uop_buf, uop_mark, head);
 parameter MWIDTH = Qupls4_pkg::MWIDTH;
 parameter MICROOPS_PER_INSTR = 32;
@@ -50,6 +51,8 @@ parameter COMB = 1;
 input rst;
 input clk;
 input en;
+input ihit_ext;
+output reg ihit_mot;
 input stomp;
 input [1023:0] cline_ext;
 output reg [1023:0] cline_mot;
@@ -128,7 +131,7 @@ end
 endgenerate
 
 generate begin : gMicroopMem
-	for (g = 0; g < MWIDTH; g = g + 1)
+	for (g = 0; g < $size(uop); g = g + 1)
 Qupls4_microop_mem #(.COMB(COMB)) uuop1
 (
 	.rst(rst),
@@ -162,5 +165,13 @@ Qupls4_micro_op_queue umoq1
 
 always_comb
 	advance_ext = rd_more;
+
+always_ff @(posedge clk)
+if (rst)
+	ihit_mot <= FALSE;
+else begin
+	if (en)
+		ihit_mot <= ihit_ext;
+end
 
 endmodule

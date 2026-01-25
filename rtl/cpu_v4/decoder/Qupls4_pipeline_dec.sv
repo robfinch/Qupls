@@ -40,7 +40,7 @@ import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
 module Qupls4_pipeline_dec(rst_i, rst, clk, en, new_cline_ext, cline,
-	sr, uop_num,
+	sr, uop_num, ihit_mot, ihit_dec,
 	tags2free, freevals, bo_wr, bo_preg,
 	stomp_dec, stomp_ext, kept_stream, pg_mot,
 	pg_dec,
@@ -55,6 +55,8 @@ input rst_i;
 input rst;
 input clk;
 input en;
+input ihit_mot;
+output reg ihit_dec;
 input new_cline_ext;
 input [1023:0] cline;
 input Qupls4_pkg::status_reg_t sr;
@@ -136,7 +138,6 @@ Qupls4_pkg::pipeline_reg_t nopi;
 Qupls4_pkg::rob_entry_t nopi2;
 Qupls4_pkg::decode_bus_t [MWIDTH-1:0] dec;
 Qupls4_pkg::pipeline_reg_t [MWIDTH-1:0] pr_dec;
-Qupls4_pkg::pipeline_reg_t [MWIDTH-1:0] prd, inso;
 Qupls4_pkg::rob_entry_t [MWIDTH-1:0] tpr;
 
 always_ff @(posedge clk)
@@ -343,7 +344,7 @@ end
 
 always_comb//ff @(posedge clk)
 if (rst) begin
-	for (n9 = 0; n9 < MWIDTH; n9 = n9 + 1) begin
+	foreach (insm[n9]) begin
 		insm[n9] = {$bits(Qupls4_pkg::rob_entry_t){1'b0}};
 		insm[n9].op = nopi;
 		insm[n9].done = 2'b11;
@@ -351,7 +352,7 @@ if (rst) begin
 	end
 end
 else begin
-	for (n9 = 0; n9 < MWIDTH; n9 = n9 + 1) begin
+	foreach (insm[n9]) begin
 		insm[n9] = tpr[n9];
 		if (stomp_ext && FALSE) begin
 			if (tpr[n9].ip_stream!=kept_stream) begin
@@ -364,7 +365,7 @@ else begin
 end
 
 generate begin : gDecoders
-	for (g = 0; g < MWIDTH; g = g + 1)
+	for (g = 0; g < $size(tpr); g = g + 1)
 Qupls4_decoder udeci0
 (
 	.rst(rst),
@@ -697,22 +698,15 @@ begin
 	end
 end
 
-always_comb prd[0] = pr_dec[0];
-always_comb prd[1] = pr_dec[1];
-always_comb prd[2] = pr_dec[2];
-always_comb prd[3] = pr_dec[3];
-
-always_comb inso = prd;
-
 reg [63:0] bsr0_tgt, bsr1_tgt, bsr2_tgt;
 reg [63:0] jsr0_tgt, jsr1_tgt, jsr2_tgt;
 reg [63:0] new_address;
-always_comb bsr0_tgt = {{29{pr_dec[0].uop.imm[34]}},pr_dec[0].uop.imm,1'b0} + pg_dec2.hdr.ip.pc + {pg_dec2.pr[0].ip_offs,1'b0};
-always_comb bsr1_tgt = {{29{pr_dec[1].uop.imm[34]}},pr_dec[1].uop.imm,1'b0} + pg_dec2.hdr.ip.pc + {pg_dec2.pr[1].ip_offs,1'b0};
-always_comb bsr2_tgt = {{29{pr_dec[2].uop.imm[34]}},pr_dec[2].uop.imm,1'b0} + pg_dec2.hdr.ip.pc + {pg_dec2.pr[2].ip_offs,1'b0};
-always_comb jsr0_tgt = {{29{pr_dec[0].uop.imm[34]}},pr_dec[0].uop.imm,1'b0};
-always_comb jsr1_tgt = {{29{pr_dec[1].uop.imm[34]}},pr_dec[1].uop.imm,1'b0};
-always_comb jsr2_tgt = {{29{pr_dec[2].uop.imm[34]}},pr_dec[2].uop.imm,1'b0};
+always_comb bsr0_tgt = {pr_dec[0].decbus.imma,1'b0} + pg_dec2.hdr.ip.pc + {pg_dec2.pr[0].ip_offs,1'b0};
+always_comb bsr1_tgt = {pr_dec[1].decbus.imma,1'b0} + pg_dec2.hdr.ip.pc + {pg_dec2.pr[1].ip_offs,1'b0};
+always_comb bsr2_tgt = {pr_dec[2].decbus.imma,1'b0} + pg_dec2.hdr.ip.pc + {pg_dec2.pr[2].ip_offs,1'b0};
+always_comb jsr0_tgt = {pr_dec[0].decbus.imma,1'b0};
+always_comb jsr1_tgt = {pr_dec[1].decbus.imma,1'b0};
+always_comb jsr2_tgt = {pr_dec[2].decbus.imma,1'b0};
 
 reg predicted_correctly;
 
@@ -760,17 +754,26 @@ else begin
 		end
 		foreach (pg_dec.pr[n10]) begin
 //			pg_dec.pr[n10].v <= stomp_dec ? 5'd0 : pg_mot.pr[n10].v;
-			pg_dec.pr[n10].op <= inso[n10];
-			if (stomp_dec||inso[n10].decbus.nop) begin
+			pg_dec.pr[n10].op <= pr_dec[n10];
+			pg_dec.pr[n10].op.decbus = insm[n10].op.decbus;
+			if (stomp_dec||pr_dec[n10].decbus.nop) begin
 				pg_dec.pr[n10].stomped <= TRUE;
 				pg_dec.pr[n10].done <= 2'b11;
 			end
-			if (inso[n10].uop.opcode==Qupls4_pkg::OP_NOP && !inso[n10].decbus.nop) begin
+			if (pr_dec[n10].uop.opcode==Qupls4_pkg::OP_NOP && !pr_dec[n10].decbus.nop) begin
 				$display("Missed flagging NOP as NOP");
 				$finish;
 			end
 		end
 	end
+end
+
+always_ff @(posedge clk)
+if (rst)
+	ihit_dec <= FALSE;
+else begin
+	if (en)
+		ihit_dec <= ihit_mot;
 end
 
 endmodule

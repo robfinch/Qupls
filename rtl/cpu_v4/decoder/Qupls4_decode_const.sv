@@ -298,6 +298,14 @@ begin
 				has_immb = TRUE;
 			end
 		end
+
+	Qupls4_pkg::OP_BSR,Qupls4_pkg::OP_JSR:
+		begin
+			has_imma = TRUE;
+			imma = {{29{ins.imm[34]}},ins.imm};
+			if (has_cnsta)
+				imma = {cnsta,ins.imm[34:0]};
+		end
 		
 	Qupls4_pkg::OP_RTD:
 		begin
