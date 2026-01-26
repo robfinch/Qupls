@@ -608,9 +608,14 @@ else begin
 			// These still need to update the regfile.
 //			if (pg_ren.pr[0].op.decbus.bsr|pg_ren.pr[0].op.decbus.jsr)
 //				pg_ren.pr[0].done <= 2'b11;
-		if (~|pg_dec.pr[0].v | stomp_ren) begin
+		if (stomp_ren) begin
 			pg_ren.pr[0].stomped <= TRUE;
 			pg_ren.pr[0].op.decbus.cpytgt <= TRUE;
+		end
+		if (~|pg_dec.pr[0].v) begin
+			pg_ren.pr[0].stomped <= TRUE;
+			pg_ren.pr[0].op.decbus.cpytgt <= FALSE;
+			pg_ren.pr[0].done <= 2'b11;
 		end
 		// Even if stomped on, we want to retain the destination register for
 		// copy purposes.
@@ -633,9 +638,14 @@ else begin
 	*/
 		if (MWIDTH > 1) begin
 			pg_ren.pr[1] <= pg_dec.pr[1];
-			if (~|pg_dec.pr[1].v | stomp_ren) begin
+			if (stomp_ren) begin
 				pg_ren.pr[1].stomped <= TRUE;
 				pg_ren.pr[1].op.decbus.cpytgt <= TRUE;
+			end
+			if (~|pg_dec.pr[1].v) begin
+				pg_ren.pr[1].stomped <= TRUE;
+				pg_ren.pr[1].op.decbus.cpytgt <= FALSE;
+				pg_ren.pr[1].done <= 2'b11;
 			end
 			if (pg_dec.pr[0].op.decbus.bsr|pg_dec.pr[0].op.decbus.jsr) begin
 				pg_ren.pr[1].stomped <= TRUE;
@@ -654,9 +664,14 @@ else begin
 	
 		if (MWIDTH > 2) begin
 			pg_ren.pr[2] <= pg_dec.pr[2];
-			if (~|pg_dec.pr[2].v | stomp_ren) begin
+			if (stomp_ren) begin
 				pg_ren.pr[2].stomped <= TRUE;
 				pg_ren.pr[2].op.decbus.cpytgt <= TRUE;
+			end
+			if (~|pg_dec.pr[2].v) begin
+				pg_ren.pr[2].stomped <= TRUE;
+				pg_ren.pr[2].op.decbus.cpytgt <= FALSE;
+				pg_ren.pr[2].done <= 2'b11;
 			end
 			if (pg_dec.pr[0].op.decbus.bsr || pg_dec.pr[1].op.decbus.bsr || pg_dec.pr[0].op.decbus.jsr || pg_dec.pr[1].op.decbus.jsr) begin
 				pg_ren.pr[2].stomped <= TRUE;
@@ -676,9 +691,14 @@ else begin
 
 		if (MWIDTH > 3) begin
 			pg_ren.pr[3] <= pg_dec.pr[3];
-			if (~|pg_dec.pr[3].v | stomp_ren) begin
+			if (stomp_ren) begin
 				pg_ren.pr[3].stomped <= TRUE;
 				pg_ren.pr[3].op.decbus.cpytgt <= TRUE;
+			end
+			if (~|pg_dec.pr[3].v) begin
+				pg_ren.pr[3].stomped <= TRUE;
+				pg_ren.pr[3].op.decbus.cpytgt <= FALSE;
+				pg_ren.pr[3].done <= 2'b11;
 			end
 			if (pg_dec.pr[0].op.decbus.bsr || pg_dec.pr[1].op.decbus.bsr || pg_dec.pr[2].op.decbus.bsr ||
 				pg_dec.pr[0].op.decbus.jsr || pg_dec.pr[1].op.decbus.jsr || pg_dec.pr[2].op.decbus.jsr) begin
@@ -719,6 +739,7 @@ begin
 			if (Qupls4_pkg::SUPPORT_BACKOUT) begin
 				pg_ren.pr[nn].stomped <= TRUE;
 				pg_ren.pr[nn].op <= nopi;
+				pg_ren.pr[nn].op.decbus.cpytgt <= TRUE;
 			end
 			else begin
 				pg_ren.pr[nn].op.decbus.cpytgt <= TRUE;

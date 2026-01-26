@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2025-2026  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2026  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -32,39 +32,29 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// Restore flag:
-//
-// A restore will trigger a backout.
-// Almost the same as backout except a restore is not needed for correctly
-// predicated branches.
 // ============================================================================
 
-import const_pkg::*;
-import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_restore_flag(rst, clk, fcu_branch_resolved, rse,
-	fcu_found_destination, branchmiss_det, restore);
-input rst;	// not used
-input clk;
-input fcu_branch_resolved;
-input Qupls4_pkg::reservation_station_entry_t rse;
-input fcu_found_destination;
-input branchmiss_det;
-output reg restore;
+// Instructions specific to ALU #0
 
-always_ff @(posedge clk)
+module Qupls4_decode_oddball(instr, oddball);
+input Qupls4_pkg::micro_op_t instr;
+output oddball;
+
+function fnIsOddball;
+input Qupls4_pkg::micro_op_t ir;
 begin
-	restore <= FALSE;
-	if (fcu_branch_resolved) begin
-		case(1'b1)
-		rse.bcc:
-			if (branchmiss_det)
-				restore <= !fcu_found_destination;
-		default:
-			;		
-		endcase
-	end
+	case(ir.opcode)
+	Qupls4_pkg::OP_CSR:	fnIsOddball = 1'b1;
+	Qupls4_pkg::OP_BRK:	fnIsOddball = 1'b1;
+	Qupls4_pkg::OP_RTD:	fnIsOddball = ir.imm[2:0]==3'd1 || ir.imm[2:0]==3'd2;	// RTE ERET
+	Qupls4_pkg::OP_SYS:	fnIsOddball = 1'b1;	// TRAP, REX, ECALL
+	default:	fnIsOddball = 1'b0;
+	endcase
 end
+endfunction
+
+assign oddball = fnIsOddball(instr);
 
 endmodule

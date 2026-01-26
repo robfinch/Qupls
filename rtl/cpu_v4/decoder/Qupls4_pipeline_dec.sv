@@ -754,8 +754,8 @@ else begin
 		end
 		foreach (pg_dec.pr[n10]) begin
 //			pg_dec.pr[n10].v <= stomp_dec ? 5'd0 : pg_mot.pr[n10].v;
+//			pg_dec.pr[n10].op <= insm[n10].op;
 			pg_dec.pr[n10].op <= pr_dec[n10];
-			pg_dec.pr[n10].op.decbus = insm[n10].op.decbus;
 			if (stomp_dec||pr_dec[n10].decbus.nop) begin
 				pg_dec.pr[n10].stomped <= TRUE;
 				pg_dec.pr[n10].done <= 2'b11;

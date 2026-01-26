@@ -1070,7 +1070,7 @@ begin
 		end
 	endcase
 	for (nn = 0; nn < 32; nn = nn + 1) begin
-		if (nn >= num)
+		if (nn >= next_count)
 			next_uop[nn].v = 1'b0;
 	end	
 end

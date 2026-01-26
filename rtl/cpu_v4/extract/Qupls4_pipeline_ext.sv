@@ -291,11 +291,13 @@ begin
 	if (!(!(irq_fet) && !stomp_ext && !(ssm_flag && !(ssm_flag && !prev_ssm_flag)))) begin
 		pr_ext[0].v = 5'd0;
 		pr_ext[0].stomped = TRUE;
+		pr_ext[0].done = 2'b11;
 	end
 	for (n4 = 1; n4 < MWIDTH; n4 = n4 + 1)
 		if (!(!(irq_fet) && !stomp_ext && !ssm_flag)) begin
 			pr_ext[n4].v = 5'd0;
 			pr_ext[n4].stomped = TRUE;
+			pr_ext[n4].done = 2'b11;
 		end
 /*	
 	pr_ext[0].hwi = nmi_i||irqf_fet;
@@ -423,7 +425,7 @@ always_comb jsri3 = ins_ext[3].ins.opcode==OP_JSRI && ins_ext[3].ins.Rt!=3'd0;
 always_comb
 begin
 	alloc_stream = 1'b0;
-	override_pos = 3'd0;
+	override_pos = 3'd7;
 	if (bsr[0]|jsr[0]|bcc[0]|bra[0]|jmp[0]) begin
 		new_address_o.pc = btgts[0].pc;
 		if (pt_ext[0] || ~bcc[0])

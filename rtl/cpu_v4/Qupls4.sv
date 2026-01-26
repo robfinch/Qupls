@@ -164,8 +164,8 @@ wire [63:0] q_wr_data;
 
 Qupls4_pkg::ex_instruction_t missir;
 
-reg [39:0] I;		// Committed instructions
-reg [39:0] IV;	// Valid committed instructions
+reg [39:0] TotInsn;		// Committed instructions
+reg [39:0] TotValidInsn;	// Valid committed instructions
 
 Qupls4_pkg::reg_bitmask_t livetarget;
 Qupls4_pkg::reg_bitmask_t [Qupls4_pkg::ROB_ENTRIES-1:0] rob_livetarget;
@@ -3284,6 +3284,7 @@ Qupls4_func_result_queue ufrq1
 (
 	.rst_i(irst),
 	.clk_i(clk),
+	.stomp_i(robentry_stomp),
 	.rd_i(fuq_rd[0]),
 	.we_i(sau0_we),
 	.rse_i(sau0_rse2),
@@ -3305,6 +3306,7 @@ Qupls4_func_result_queue ufrq4
 (
 	.rst_i(irst),
 	.clk_i(clk),
+	.stomp_i(robentry_stomp),
 	.rd_i(fuq_rd[1]),
 	.we_i(sau1_we),
 	.rse_i(sau1_rse2),
@@ -3340,6 +3342,7 @@ Qupls4_func_result_queue ufrq2
 (
 	.rst_i(irst),
 	.clk_i(clk),
+	.stomp_i(robentry_stomp),
 	.rd_i(fuq_rd[2]),
 	.we_i(imul0_we),
 	.rse_i(imul0_rse2),
@@ -3364,6 +3367,7 @@ Qupls4_func_result_queue ufrq3
 (
 	.rst_i(irst),
 	.clk_i(clk),
+	.stomp_i(robentry_stomp),
 	.rd_i(fuq_rd[3]),
 	.we_i(idiv0_we),
 	.rse_i(idiv0_rse2),
@@ -3400,6 +3404,7 @@ Qupls4_func_result_queue ufrq4
 (
 	.rst_i(irst),
 	.clk_i(clk),
+	.stomp_i(robentry_stomp),
 	.rd_i(fuq_rd[4]),
 	.we_i(fma0_we),
 	.rse_i(fma0_rse2),
@@ -3429,6 +3434,7 @@ Qupls4_func_result_queue ufrq5
 (
 	.rst_i(irst),
 	.clk_i(clk),
+	.stomp_i(robentry_stomp),
 	.rd_i(fuq_rd[5]),
 	.we_i(fma1_we),
 	.rse_i(fma1_rse2),
@@ -3468,6 +3474,7 @@ Qupls4_func_result_queue ufrq7
 (
 	.rst_i(irst),
 	.clk_i(clk),
+	.stomp_i(robentry_stomp),
 	.rd_i(fuq_rd[7]),
 	.we_i(fcu_we),
 	.rse_i(fcu_rse2),
@@ -3523,6 +3530,7 @@ Qupls4_func_result_queue ufrq10
 (
 	.rst_i(irst),
 	.clk_i(clk),
+	.stomp_i(robentry_stomp),
 	.rd_i(fuq_rd[10]),
 	.we_i(dram0_we & {9{dram0_oper.oper.v & dram0_oper.state==2'b11}}),
 	.rse_i(dram0_rse),
@@ -3544,6 +3552,7 @@ Qupls4_func_result_queue ufrq11
 (
 	.rst_i(irst),
 	.clk_i(clk),
+	.stomp_i(robentry_stomp),
 	.rd_i(fuq_rd[11]),
 	.we_i(dram1_we & {9{dram1_oper.oper.v & dram1_oper.state==2'b11}}),
 	.rse_i(dram1_rse),
@@ -3579,6 +3588,7 @@ Qupls4_func_result_queue ufrq12
 (
 	.rst_i(irst),
 	.clk_i(clk),
+	.stomp_i(robentry_stomp),
 	.rd_i(fuq_rd[12]),
 	.we_i(fpu0_we),
 	.rse_i(fpu0_rse2),
@@ -5311,7 +5321,7 @@ generate begin : gFpuStat
 					.rst(irst),
 					.clk(clk),
 					.available(fpu0_available),
-					.busy(rs_busy[5]),
+					.busy(rs_busy[12]),
 					.stall(fpu0_full),
 					.stomp(robentry_stomp),
 					.issue(),//robentry_issue[sau0_rndx]),
@@ -5320,8 +5330,8 @@ generate begin : gFpuStat
 					.rf_oper_i(rf_oper),
 					.bypass_i(),
 					.wp_oper_tap_i(wp_tap),
-					.req_pRn(bRs[5]),
-					.req_pRnv(bRsv[5])
+					.req_pRn(bRs[12]),
+					.req_pRnv(bRsv[12])
 				);
 			end
 		1:
@@ -5340,7 +5350,7 @@ generate begin : gFpuStat
 					.rst(irst),
 					.clk(clk),
 					.available(fma1_available),
-					.busy(rs_busy[6]),
+					.busy(rs_busy[5]),
 					.stall(fma1_full),
 					.stomp(robentry_stomp),
 					.issue(),//robentry_issue[sau0_rndx]),
@@ -5349,8 +5359,8 @@ generate begin : gFpuStat
 					.rf_oper_i(rf_oper),
 					.bypass_i(),
 					.wp_oper_tap_i(wp_tap),
-					.req_pRn(bRs[6]),
-					.req_pRnv(bRsv[6])
+					.req_pRn(bRs[5]),
+					.req_pRnv(bRsv[5])
 				);
 		endcase
 	end
@@ -5383,7 +5393,7 @@ generate begin : gDecimalFloat
 			.rst(irst),
 			.clk(clk),
 			.available(fpu0_available),
-			.busy(rs_busy[7]),
+			.busy(rs_busy[13]),
 			.stall(dfpu0_full),
 			.stomp(robentry_stomp),
 			.issue(),//robentry_issue[sau0_rndx]),
@@ -5392,8 +5402,8 @@ generate begin : gDecimalFloat
 			.rf_oper_i(rf_oper),
 			.bypass_i(),
 			.wp_oper_tap_i(wp_tap),
-			.req_pRn(bRs[7]),
-			.req_pRnv(bRsv[7])
+			.req_pRn(bRs[13]),
+			.req_pRnv(bRsv[13])
 		);
 	end
 end
@@ -5414,7 +5424,7 @@ ubrast1
 	.rst(irst),
 	.clk(clk),
 	.available(1'b1),
-	.busy(rs_busy[8]),
+	.busy(rs_busy[7]),
 	.stall(fcu_full),
 	.stomp(robentry_stomp),
 	.issue(),//robentry_issue[sau0_rndx]),
@@ -5423,8 +5433,8 @@ ubrast1
 	.rf_oper_i(rf_oper),
 	.bypass_i(),
 	.wp_oper_tap_i(wp_tap),
-	.req_pRn(bRs[8]),
-	.req_pRnv(bRsv[8])
+	.req_pRn(bRs[7]),
+	.req_pRnv(bRsv[7])
 );
 
 Qupls4_reservation_station #(
@@ -5442,7 +5452,7 @@ uagenst1
 	.rst(irst),
 	.clk(clk),
 	.available(1'b1),
-	.busy(rs_busy[9]),
+	.busy(rs_busy[8]),
 	.stall(!agen0_idle),
 	.stomp(robentry_stomp),
 	.issue(),//robentry_issue[sau0_rndx]),
@@ -5451,8 +5461,8 @@ uagenst1
 	.rf_oper_i(rf_oper),
 	.bypass_i(),
 	.wp_oper_tap_i(wp_tap),
-	.req_pRn(bRs[9]),
-	.req_pRnv(bRsv[9])
+	.req_pRn(bRs[8]),
+	.req_pRnv(bRsv[8])
 );
 
 generate begin : gAgen
@@ -5472,7 +5482,7 @@ uagenst2
 	.rst(irst),
 	.clk(clk),
 	.available(1'b1),
-	.busy(rs_busy[10]),
+	.busy(rs_busy[9]),
 	.stall(!agen1_idle),
 	.stomp(robentry_stomp),
 	.issue(),//robentry_issue[sau0_rndx]),
@@ -5481,8 +5491,8 @@ uagenst2
 	.rf_oper_i(rf_oper),
 	.bypass_i(),
 	.wp_oper_tap_i(wp_tap),
-	.req_pRn(bRs[10]),
-	.req_pRnv(bRsv[10])
+	.req_pRn(bRs[9]),
+	.req_pRnv(bRsv[9])
 );
 else begin
 	assign agen1_rse = {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
@@ -6788,26 +6798,26 @@ else
 // Total instructions committed.
 always_ff @(posedge clk)
 if (irst)
-	I <= 0;
+	TotInsn <= 40'd0;
 else begin
 	if (do_commit)
-		I <= I + cmtcnt;
+		TotInsn <= TotInsn + cmtcnt;
 end
 
 // Valid instructions committed.
 always_ff @(posedge clk)
 if (irst)
-	IV <= 0;
+	TotValidInsn <= 0;
 else begin
 	if (do_commit) begin
 		if (cmtcnt > 3)
-			IV <= IV + |rob[head[0]].v + |rob[head[1]].v + |rob[head[2]].v + |rob[head[3]].v;
+			TotValidInsn <= TotValidInsn + |rob[head[0]].v + |rob[head[1]].v + |rob[head[2]].v + |rob[head[3]].v;
 		else if (cmtcnt > 2)
-			IV <= IV + |rob[head[0]].v + |rob[head[1]].v + |rob[head[2]].v;
+			TotValidInsn <= TotValidInsn + |rob[head[0]].v + |rob[head[1]].v + |rob[head[2]].v;
 		else if (cmtcnt > 1)
-			IV <= IV + |rob[head[0]].v + |rob[head[1]].v;
+			TotValidInsn <= TotValidInsn + |rob[head[0]].v + |rob[head[1]].v;
 		else if (cmtcnt > 0)
-			IV <= IV + |rob[head[0]].v;
+			TotValidInsn <= TotValidInsn + |rob[head[0]].v;
 	end
 end
 
@@ -7010,7 +7020,8 @@ always_ff @(posedge clk) begin: clock_n_debug
 	*/
 	if (1) begin	
 	$display("----- Physical Registers -----");
-	for (i=0; i< 16; i=i+8)
+	for (i=0; i< 511; i=i+8)
+		if (i < 16 || i >= 240 && i < 256)
 	    $display("%d: %h %d: %h %d: %h %d: %h %d: %h %d: %h %d: %h %d: %h #",
 	    	i[9:0]+10'd0, fnRegVal(i+0), i[9:0]+10'd1, fnRegVal(i+1), i[9:0]+10'd2, fnRegVal(i+2), i[9:0]+10'd3, fnRegVal(i+3),
 	    	i[9:0]+10'd4, fnRegVal(i+4), i[9:0]+10'd5, fnRegVal(i+5), i[9:0]+10'd6, fnRegVal(i+6), i[9:0]+10'd7, fnRegVal(i+7)
@@ -7172,9 +7183,9 @@ always_ff @(posedge clk) begin: clock_n_debug
 	$display("3: %h #", commit3_id);
 
 	$display("----- Stats -----");	
-	IPC = real'(I)/real'(/*iact_cnt*/tick);
+	IPC = real'(TotInsn)/real'(/*iact_cnt*/tick);
 	PIPC = PIPC > IPC ? PIPC : IPC;
-	$display("Clock ticks: %d Instructions: %d:%d IPC: %f Peak: %f", tick, I, IV, IPC, PIPC);
+	$display("Clock ticks: %d Instructions: %d:%d IPC: %f Peak: %f", tick, TotInsn, TotValidInsn, IPC, PIPC);
 	$display("Copy targets: %d", cpytgts);
 	$display("Stomped instructions: %d", stomped_insn);
 	$display("Stalls for checkpoints: %d", rat_stalls);
@@ -7670,8 +7681,6 @@ endtask
 
 task tReset;
 begin
-	I <= 0;
-	IV <= 0;
 	vl <= 5'd8;
 	macro_queued <= FALSE;
 	for (n14 = 0; n14 < 5; n14 = n14 + 1) begin
@@ -8308,6 +8317,8 @@ begin
 //		CSR_DSTUFF0:	res = stuff0;
 //		CSR_DSTUFF1:	res = stuff1;
 		*/
+		Qupls4_pkg::CSR_TOTINSN:	res = TotInsn;
+		Qupls4_pkg::CSR_TOTVALIDINSN:	res = TotValidInsn;
 		default:	res = 64'd0;
 		endcase
 	end

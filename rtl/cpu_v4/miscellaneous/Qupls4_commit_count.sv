@@ -112,11 +112,11 @@ else begin
 	cmtcnt = 3'd0;
 	if (TRUE || !htcolls) begin
 		casez({cmt0,
-			cmt1 && rob[head1].cndx==rob[head0].cndx,
-			cmt2 && rob[head2].cndx==rob[head0].cndx,
-			cmt3 && rob[head3].cndx==rob[head0].cndx,
-			cmt4 && rob[head4].cndx==rob[head0].cndx,
-			cmt5 && rob[head5].cndx==rob[head0].cndx})
+			cmt1 && rob[head1].ip_stream.stream==rob[head0].ip_stream.stream,
+			cmt2 && rob[head2].ip_stream.stream==rob[head0].ip_stream.stream,
+			cmt3 && rob[head3].ip_stream.stream==rob[head0].ip_stream.stream,
+			cmt4 && rob[head4].ip_stream.stream==rob[head0].ip_stream.stream,
+			cmt5 && rob[head5].ip_stream.stream==rob[head0].ip_stream.stream})
 		6'b111111:	cmtcnt <= 3'd6;
 		6'b111110:	cmtcnt <= 3'd5;
 		6'b11110?:	cmtcnt <= 3'd4;

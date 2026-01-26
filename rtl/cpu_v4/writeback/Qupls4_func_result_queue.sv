@@ -89,16 +89,16 @@ initial begin
 end
 
 always_ff @(posedge clk_i)
-	din <= {
-		we_i,
-		rse_i.nRd,
-		rse_i.aRd,
-		tag_i,
-		rse_i.arg[NOPER-1],
-		res_i,
-		rse_i.rndx,
-		rse_i.cndx
-	};
+begin
+	din.we <= we_i;
+	din.pRd <= rse_i.nRd;
+	din.aRd <= rse_i.aRd;
+	din.tag <= tag_i;
+	din.argT <= rse_i.arg[4].val; 
+	din.res <= res_i;
+	din.rndx <= rse_i.rndx;
+	din.cndx <= rse_i.cndx;
+end
 
 frq_entry_t dout;
 

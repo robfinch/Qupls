@@ -234,6 +234,7 @@ begin
 	rse[kk].jsr = rob[nn].op.decbus.jsr;
 	rse[kk].sys = rob[nn].op.decbus.sys;
 	if (rob[nn].op.decbus.cpytgt|stomp[nn]) begin
+		rse[kk].copydst <= 8'hFF;
 		rse[kk].uop = {41'd0,Qupls4_pkg::OP_NOP};
 		rse[kk].store = FALSE;
 		for (xx = 0; xx < 4; xx = xx + 1) begin
@@ -243,6 +244,7 @@ begin
 		end
 	end
 	else begin
+		rse[kk].copydst <= 8'h00;
 		rse[kk].uop = rob[nn].op.uop;
 		rse[kk].store = rob[nn].op.decbus.store;
 		rse[kk].rext = rob[nn].op.decbus.rext;

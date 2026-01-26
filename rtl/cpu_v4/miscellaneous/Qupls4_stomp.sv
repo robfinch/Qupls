@@ -180,22 +180,22 @@ wire hwi_at_aln = di_inst && hirq;
 // kept_stream is the stream we want to keep.
 always_comb
 	stomp_aln = stomped[pc.stream] ||
-		(pe_stomp_pipeline || stomp_alnr || !predicted_match_ext || !predicted_correctly_dec) && (pc.pc != misspcr[0].pc);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_fet && !hwi_at_aln;
+		(pe_stomp_pipeline || stomp_alnr || !predicted_match_ext || !predicted_correctly_dec) && (pc != misspcr[0]);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_fet && !hwi_at_aln;
 always_comb
 	stomp_fet = stomped[pc_f.stream] ||
-		(pe_stomp_pipeline || stomp_fetr || !predicted_match_ext || !predicted_correctly_dec) && (pc_f.pc != misspcr[1].pc);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_fet;
+		(pe_stomp_pipeline || stomp_fetr || !predicted_match_ext || !predicted_correctly_dec) && (pc_f != misspcr[1]);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_fet;
 always_comb
 	stomp_ext = stomped[pc_fet.stream] ||
-		(pe_stomp_pipeline || stomp_extr || !predicted_correctly_dec) && (pc_fet.pc != misspcr[2].pc);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_ext;
+		(pe_stomp_pipeline || stomp_extr || !predicted_correctly_dec) && (pc_fet != misspcr[2]);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_ext;
 always_comb
 	stomp_mot = stomped[pc_ext.stream] ||
-		(pe_stomp_pipeline || stomp_motr || !predicted_correctly_dec) && (pc_ext.pc != misspcr[3].pc);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_ext;
+		(pe_stomp_pipeline || stomp_motr || !predicted_correctly_dec) && (pc_ext != misspcr[3]);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_ext;
 always_comb
 	stomp_dec = stomped[pc_mot.stream] ||
-	 (pe_stomp_pipeline || stomp_decr || !predicted_correctly_dec) && (pc_mot.pc != misspcr[4].pc);// && !hwi_at_ren && !hwi_at_dec;
+	 (pe_stomp_pipeline || stomp_decr || !predicted_correctly_dec) && (pc_mot != misspcr[4]);// && !hwi_at_ren && !hwi_at_dec;
 always_comb
 	stomp_ren = stomped[pc_dec.stream] ||
-		(pe_stomp_pipeline || stomp_renr) && (pc_dec.pc != misspcr[5].pc);// && !hwi_at_ren;
+		(pe_stomp_pipeline || stomp_renr) && (pc_dec != misspcr[5]);// && !hwi_at_ren;
 
 // On a cache miss, the fetch stage is stomped on, but not if micro-code is
 // active. Micro-code does not require the cache-line data.
@@ -218,9 +218,9 @@ else begin
 	if (advance_icache|pe_stomp_pipeline) begin
 		if (pe_stomp_pipeline) begin
 //			stomp_alnr <= TRUE;
-			ff1 <= TRUE;
+			ff1 <= pc.stream==misspcr[0].stream;
 		end
-		else if (pc.pc == misspcr[0].pc)
+		else if (pc == misspcr[0])
 			stomp_alnr <= FALSE;
 		else if (!ff1)
 			stomp_alnr <= FALSE;
@@ -228,8 +228,8 @@ else begin
 
 	if (advance_fetch|pe_stomp_pipeline) begin
 		if (pe_stomp_pipeline)
-			stomp_fetr <= TRUE;
-		else if (pc_f.pc == misspcr[1].pc || !stomp_aln)
+			stomp_fetr <= pc.stream==misspcr[1].stream;
+		else if (pc_f == misspcr[1] || !stomp_aln)
 			stomp_fetr <= FALSE;
 		else if (!ff1)
 			stomp_fetr <= stomp_aln;
@@ -237,8 +237,8 @@ else begin
 
 	if (advance_extract|pe_stomp_pipeline) begin
 		if (pe_stomp_pipeline)
-			stomp_extr <= TRUE;
-		else if (pc_fet.pc == misspcr[2].pc || !stomp_fet) // (next_stomp_ext)
+			stomp_extr <= pc_fet.stream==misspcr[2].stream;
+		else if (pc_fet == misspcr[2] || !stomp_fet) // (next_stomp_ext)
 			stomp_extr <= FALSE;
 //		else
 //			stomp_extr <= stomp_fet;
@@ -252,8 +252,8 @@ else begin
 
 	if (advance_mot|pe_stomp_pipeline) begin
 		if (pe_stomp_pipeline)
-			stomp_motr <= TRUE;
-		else if (pc_ext.pc == misspcr[3].pc || !stomp_ext)
+			stomp_motr <= pc_ext.stream==misspcr[3].stream;
+		else if (pc_ext == misspcr[3] || !stomp_ext)
 			stomp_motr <= FALSE;
 		if (!ff1)
 			stomp_motr <= stomp_ext;
@@ -261,8 +261,8 @@ else begin
 
 	if (advance_decode|pe_stomp_pipeline) begin
 		if (pe_stomp_pipeline)
-			stomp_decr <= TRUE;
-		else if (pc_mot.pc == misspcr[4].pc || !stomp_mot)
+			stomp_decr <= pc_mot.stream==misspcr[4].stream;
+		else if (pc_mot == misspcr[4] || !stomp_mot)
 			stomp_decr <= FALSE;
 		if (!ff1)
 			stomp_decr <= stomp_mot;
@@ -270,8 +270,8 @@ else begin
 
 	if (advance_rename|pe_stomp_pipeline) begin
 		if (pe_stomp_pipeline)
-			stomp_renr <= TRUE;
-		else if (pc_dec.pc == misspcr[5].pc || !stomp_dec) begin
+			stomp_renr <= pc_dec.stream==misspcr[5].stream;
+		else if (pc_dec == misspcr[5] || !stomp_dec) begin
 			stomp_renr <= FALSE;
 			ff1 <= FALSE;
 		end

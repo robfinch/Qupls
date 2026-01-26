@@ -306,13 +306,13 @@ Qupls4_decode_fpu0 ufpu0
 	.fpu0(db.fpu0)
 );
 
-/*
-Stark_decode_oddball uob0
+
+Qupls4_decode_oddball uob0
 (
 	.instr(instr),
 	.oddball(db.oddball)
 );
-
+/*
 Stark_decode_regs uregs0
 (
 	.instr(instr),
