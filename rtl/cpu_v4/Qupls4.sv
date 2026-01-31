@@ -164,8 +164,8 @@ wire [63:0] q_wr_data;
 
 Qupls4_pkg::ex_instruction_t missir;
 
-reg [39:0] TotInsn;		// Committed instructions
-reg [39:0] TotValidInsn;	// Valid committed instructions
+wire [39:0] TotInsn;		// Committed instructions
+wire [39:0] TotValidInsn;	// Valid committed instructions
 
 Qupls4_pkg::reg_bitmask_t livetarget;
 Qupls4_pkg::reg_bitmask_t [Qupls4_pkg::ROB_ENTRIES-1:0] rob_livetarget;
@@ -927,12 +927,12 @@ reg commit2_idv;
 reg commit3_idv;
 
 // CSRs
-reg [63:0] tick;
+wire [63:0] tick;
 reg [63:0] canary;
-reg [39:0] ren_stalls, rat_stalls;
-reg [39:0] cpytgts;
-reg [39:0] marked_insn_count;
-reg [39:0] stomped_insn;
+wire [39:0] ren_stalls, rat_stalls;
+wire [39:0] cpytgts;
+wire [39:0] marked_insn_count;
+wire [39:0] stomped_insn;
 Qupls4_pkg::cause_code_t [3:0] cause;
 Qupls4_pkg::status_reg_t [ISTACK_DEPTH-1:0] sr_stack;
 Qupls4_pkg::status_reg_t sr;
@@ -961,8 +961,8 @@ reg [1:0] vn;
 asid_t ip_asid;
 Qupls4_pkg::rob_bitmask_t err_mask;
 reg ERC = 1'b0;
-reg [39:0] icache_cnt;
-reg [39:0] iact_cnt;
+wire [39:0] icache_cnt;
+wire [39:0] iact_cnt;
 wire ihito,ihit,ic_dhit;
 wire alt_ihit;
 wire pe_bsdone;
@@ -4378,7 +4378,7 @@ if (Qupls4_pkg::NFPU > 0) begin
 	end
 end
 else begin
-	assign fpu0_rse = {$bits(reservation_station_entry_t){1'b0}};
+	assign fpu0_rse2 = {$bits(reservation_station_entry_t){1'b0}};
 end
 if (Qupls4_pkg::NFPU > 1) begin
 	Qupls4_meta_fpu #(.WID(64)) ufpu2
@@ -4401,7 +4401,7 @@ if (Qupls4_pkg::NFPU > 1) begin
 );
 end
 else begin
-	assign fpu1_rse = {$bits(reservation_station_entry_t){1'b0}};
+	assign fpu1_rse2 = {$bits(reservation_station_entry_t){1'b0}};
 end
 end
 endgenerate
@@ -6765,134 +6765,122 @@ wb_mux #(.NPORT(6)) utmrmux1
 // Performance statistics
 // ----------------------------------------------------------------------------
 
-always_ff @(posedge clk)
-if (irst)
-	tick <= 64'd0;
-else
-	tick <= tick + 2'd1;
+counter #(.WID(64)) utick1
+(
+	.rst(irst),
+	.clk(clk),
+	.ce(1'b1),
+	.ld(1'b0),
+	.d(64'd0),
+	.q(tick),
+	.tc()
+);
 
-always_ff @(posedge clk)
-if (irst)
-	icache_cnt <= 64'd0;
-else
-	icache_cnt <= icache_cnt + ihito;
+counter #(.WID(40)) uicact1
+(
+	.rst(irst),
+	.clk(clk),
+	.ce(ihito),
+	.ld(1'b0),
+	.d(40'd0),
+	.q(icache_cnt),
+	.tc()
+);
 
-always_ff @(posedge clk)
-if (irst)
-	iact_cnt <= 40'd0;
-else
-	iact_cnt <= iact_cnt + ihito;
+counter #(.WID(40)) uiact1
+(
+	.rst(irst),
+	.clk(clk),
+	.ce(ihito),
+	.ld(1'b0),
+	.d(40'd0),
+	.q(iact_cnt),
+	.tc()
+);
 
-always_ff @(posedge clk)
-if (irst)
-	rat_stalls <= 0;
-else
-	rat_stalls <= rat_stalls + rat_stallq;
+count_accum #(.WID($bits(TotInsn))) uratstall1
+(
+	.rst(irst),
+	.clk(clk),
+	.ce(rat_stallq),
+	.ld(1'b0),
+	.d(40'd0),
+	.a(40'd1),
+	.q(rat_stalls),
+	.tc()
+);
 
-always_ff @(posedge clk)
-if (irst)
-	ren_stalls <= 0;
-else
-	ren_stalls <= ren_stalls + ren_stallq;
+count_accum #(.WID($bits(TotInsn))) urenstall1
+(
+	.rst(irst),
+	.clk(clk),
+	.ce(ren_stallq),
+	.ld(1'b0),
+	.d(40'd0),
+	.a(40'd1),
+	.q(ren_stalls),
+	.tc()
+);
 
 // Total instructions committed.
-always_ff @(posedge clk)
-if (irst)
-	TotInsn <= 40'd0;
-else begin
-	if (do_commit)
-		TotInsn <= TotInsn + cmtcnt;
-end
+count_accum #(.WID($bits(TotInsn))) utotins1
+(
+	.rst(irst),
+	.clk(clk),
+	.ce(do_commit),
+	.ld(1'b0),
+	.d(40'd0),
+	.a({40'd0,cmtcnt}),
+	.q(TotInsn),
+	.tc()
+);
 
 // Valid instructions committed.
-always_ff @(posedge clk)
-if (irst)
-	TotValidInsn <= 0;
-else begin
-	if (do_commit) begin
-		if (cmtcnt > 3)
-			TotValidInsn <= TotValidInsn + |rob[head[0]].v + |rob[head[1]].v + |rob[head[2]].v + |rob[head[3]].v;
-		else if (cmtcnt > 2)
-			TotValidInsn <= TotValidInsn + |rob[head[0]].v + |rob[head[1]].v + |rob[head[2]].v;
-		else if (cmtcnt > 1)
-			TotValidInsn <= TotValidInsn + |rob[head[0]].v + |rob[head[1]].v;
-		else if (cmtcnt > 0)
-			TotValidInsn <= TotValidInsn + |rob[head[0]].v;
-	end
-end
+Qupls4_tot_valid_insn #(.WID(40)) utvi1
+(
+	.rst(irst),
+	.clk(clk),
+	.ce(do_commit),
+	.head(head),
+	.rob(rob),
+	.cmtcnt(cmtcnt),
+	.count(TotValidInsn)
+);
 
-always_ff @(posedge clk)
-if (irst)
-	marked_insn_count = 64'd0;
-else begin
-	if (do_commit) begin
-		case (cmtcnt)
-		3'd4:
-			marked_insn_count = marked_insn_count +
-				(|rob[head[0]].v && rob[head[0]].op.decbus.nop) +
-				(|rob[head[1]].v && rob[head[1]].op.decbus.nop) +
-				(|rob[head[2]].v && rob[head[2]].op.decbus.nop) +
-				(|rob[head[3]].v && rob[head[3]].op.decbus.nop)
-				;
-		3'd3:
-			marked_insn_count = marked_insn_count +
-				(|rob[head[0]].v && rob[head[0]].op.decbus.nop) +
-				(|rob[head[1]].v && rob[head[1]].op.decbus.nop) +
-				(|rob[head[2]].v && rob[head[2]].op.decbus.nop)
-				;
-		3'd2:
-			marked_insn_count = marked_insn_count +
-				(|rob[head[0]].v && rob[head[0]].op.decbus.nop) +
-				(|rob[head[1]].v && rob[head[1]].op.decbus.nop)
-				;
-		3'd1:
-			marked_insn_count = marked_insn_count +
-				(|rob[head[0]].v && rob[head[0]].op.decbus.nop)
-				;
-		default:	;				
-		endcase
-	end
-end
+Qupls4_count_nops #(.WID(40)) ucnops1
+(
+	.rst(irst),
+	.clk(clk),
+	.ce(do_commit),
+	.cmtcnt(cmtcnt),
+	.head(head),
+	.rob(rob),
+	.count(marked_insn_count)
+);
 
-// How is this going to work? What if stomped is active for more than one
-// cycle?
-always_ff @(posedge clk)
-if (irst)
-	stomped_insn = 64'd0;
-else begin
-	for (n31 = 0; n31 < Qupls4_pkg::ROB_ENTRIES; n31 = n31 + 1)
-		stomped_insn = stomped_insn + robentry_stomp[n31];
-end
+Qupls4_count_stomped ucs1
+(
+	.rst(irst),
+	.clk(clk),
+	.ce(do_commit),
+	.cmtcnt(cmtcnt), 
+	.head(head),
+	.rob(rob),
+	.stomp(robentry_stomp),
+	.count(stomped_insn)
+);
 
-always_ff @(posedge clk)
-if (irst)
-	cpytgts <= 0;
-else begin
-	if (do_commit) begin
-		if (cmtcnt > 3)
-			cpytgts <= cpytgts 
-				+ rob[head[0]].op.decbus.cpytgt 
-				+ rob[head[1]].op.decbus.cpytgt
-				+ rob[head[2]].op.decbus.cpytgt
-				+ rob[head[3]].op.decbus.cpytgt
-			;
-		else if (cmtcnt > 2)
-			cpytgts <= cpytgts 
-				+ rob[head[0]].op.decbus.cpytgt 
-				+ rob[head[1]].op.decbus.cpytgt
-				+ rob[head[2]].op.decbus.cpytgt
-			;
-		else if (cmtcnt > 1)
-			cpytgts <= cpytgts 
-				+ rob[head[0]].op.decbus.cpytgt 
-				+ rob[head[1]].op.decbus.cpytgt
-			;
-		else if (cmtcnt > 0)
-			cpytgts <= cpytgts 
-				+ rob[head[0]].op.decbus.cpytgt 
-			;
-	end
-end
+Qupls4_cpytgt_count #(.WID(40)) uctc1
+(
+	.rst(irst),
+	.clk(clk),
+	.ce(do_commit),
+	.cmtcnt(cmtcnt), 
+	.head(head),
+	.rob(rob),
+	.count(cpytgts)
+);
+
 
 // ============================================================================
 // DEBUG
@@ -8319,6 +8307,7 @@ begin
 		*/
 		Qupls4_pkg::CSR_TOTINSN:	res = TotInsn;
 		Qupls4_pkg::CSR_TOTVALIDINSN:	res = TotValidInsn;
+		Qupls4_pkg::CSR_CPYDST: res = cpytgts;
 		default:	res = 64'd0;
 		endcase
 	end

@@ -32,7 +32,7 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 6796 LUTs / 2169 FFs / 27 BRAMs (Tiny 3 way)
+// 8500 LUTs / 2950 FFs / 27 BRAMs / 170 MHz (Tiny 3 way)
 // 9568 LUTs / 2474 FFs / 31.5 BRAMs (Small 3 way)
 // ============================================================================
 

@@ -129,7 +129,7 @@ input value_t [NPORT-1:0] args;
 
 
 genvar g;
-integer jj,n1,n5,n6,n7,n8,n9;
+integer jj,n1,n2,n3,n5,n6,n7,n8,n9;
 aregno_t [MWIDTH-1:0] aRd_dec;
 pregno_t [MWIDTH-1:0] pRd_dec;
 wire [MWIDTH-1:0] pRd_decv;
@@ -137,8 +137,7 @@ reg [MWIDTH-1:0] aRd_decv;
 reg [MWIDTH-1:0] is_move;
 wire rat_stallq1;
 wire ns_stall;
-wire rst_busy;
-assign rat_stallq = rat_stallq1|ns_stall|rst_busy;
+assign rat_stallq = rat_stallq1|ns_stall;
 
 Qupls4_pkg::pipeline_reg_t nopi;
 
@@ -231,139 +230,6 @@ begin
 	end
 end
 
-/*
-always_comb Rt0_q1 = Rt0_ren;// & {10{~pg_ren.pr[0].decbus.Rtz & ~stomp0}};
-always_comb Rt1_q1 = Rt1_ren;// & {10{~pg_ren.pr[1].decbus.Rtz & ~stomp1}};
-always_comb Rt2_q1 = Rt2_ren;// & {10{~pg_ren.pr[2].decbus.Rtz & ~stomp2}};
-always_comb Rt3_q1 = Rt3_ren;// & {10{~pg_ren.pr[3].decbus.Rtz & ~stomp3}};
-always_comb Rt0_que = Rt0_ren;
-always_comb Rt1_que = Rt1_ren;
-always_comb Rt2_que = Rt2_ren;
-always_comb Rt3_que = Rt3_ren;
-*/
-/*
-always_ff @(posedge clk)
-if (rst)
-	Rt0_que <= 8'd0;
-else begin
-	if (advance_pipeline_seg2)
-		Rt0_que <= Rt0_ren;
-end
-always_ff @(posedge clk)
-if (rst)
-	Rt1_que <= 8'd0;
-else begin
-	if (advance_pipeline_seg2)
-		Rt1_que <= Rt1_ren;
-end
-always_ff @(posedge clk)
-if (rst)
-	Rt2_que <= 8'd0;
-else begin
-	if (advance_pipeline_seg2)
-		Rt2_que <= Rt2_ren;
-end
-always_ff @(posedge clk)
-if (rst)
-	Rt3_que <= 8'd0;
-else begin
-	if (advance_pipeline_seg2)
-		Rt3_que <= Rt3_ren;
-end
-always_ff @(posedge clk)
-if (rst)
-	Rt0_q1 <= 8'd0;
-else begin
-	if (advance_pipeline_seg2)
-		Rt0_q1 <= Rt0_ren;
-end
-always_ff @(posedge clk)
-if (rst)
-	Rt1_q1 <= 8'd0;
-else begin
-	if (advance_pipeline_seg2)
-		Rt1_q1 <= Rt1_ren;
-end
-always_ff @(posedge clk)
-if (rst)
-	Rt2_q1 <= 8'd0;
-else begin
-	if (advance_pipeline_seg2)
-		Rt2_q1 <= Rt2_ren;
-end
-always_ff @(posedge clk)
-if (rst)
-	Rt3_q1 <= 8'd0;
-else begin
-	if (advance_pipeline_seg2)
-		Rt3_q1 <= Rt3_ren;
-end
-*/
-/*
-always_ff @(posedge clk)
-if (rst)
-	Rt0_pq <= 11'd0;
-else begin
-	if (advance_pipeline_seg2)
-		Rt0_pq <= Rt0_ren;
-end
-always_ff @(posedge clk)
-if (rst)
-	Rt1_pq <= 11'd0;
-else begin
-	if (advance_pipeline_seg2)
-		Rt1_pq <= Rt1_ren;
-end
-always_ff @(posedge clk)
-if (rst)
-	Rt2_pq <= 11'd0;
-else begin
-	if (advance_pipeline_seg2)
-		Rt2_pq <= Rt2_ren;
-end
-always_ff @(posedge clk)
-if (rst)
-	Rt3_pq <= 11'd0;
-else begin
-	if (advance_pipeline_seg2)
-		Rt3_pq <= Rt3_ren;
-end
-*/
-/*
-always_ff @(posedge clk)
-if (advance_pipeline) begin
-	if (alloc0 && pg_ren.pr[0].decbus.Rt==0) begin
-		$display("alloced r0");
-		$finish;
-	end
-	if (alloc1 && pg_ren.pr[1].decbus.Rt==0) begin
-		$display("alloced r0");
-		$finish;
-	end
-	if (alloc2 && pg_ren.pr[2].decbus.Rt==0) begin
-		$display("alloced r0");
-		$finish;
-	end
-	if (alloc3 && pg_ren.pr[3].decbus.Rt==0) begin
-		$display("alloced r0");
-		$finish;
-	end
-end
-*/
-/*
-always_ff @(posedge clk)
-begin
-	if (!stallq && (pg_ren.pr[0].decbus.Rt==7'd63 ||
-		pg_ren.pr[1].decbus.Rt==7'd63 ||
-		pg_ren.pr[2].decbus.Rt==7'd63 ||
-		pg_ren.pr[3].decbus.Rt==7'd63
-	))
-		$finish;
-	for (n19 = 0; n19 < 16; n19 = n19 + 1)
-		if (arn[n19]==7'd63)
-			$finish;
-end
-*/
 checkpt_ndx_t cndx1, cndx2, cndx3;
 assign cndx1 = cndx;
 assign cndx2 = cndx;
@@ -374,7 +240,6 @@ always_comb
 foreach (qbr[n6])
 	qbr[n6] = pg_dec.pr[n6].op.decbus.br|pg_dec.pr[n6].op.decbus.cjb;
 
-
 `ifdef SUPPORT_RAT
 Qupls4_reg_name_supplier5 uns4
 (
@@ -384,13 +249,10 @@ Qupls4_reg_name_supplier5 uns4
 	.tags2free(tags2free),
 	.freevals(freevals),
 	.ns_alloc_req(aRd_decv & ~is_move),
-	.ns_whrndx(6'd0),			// not used
-	.ns_rndx(),						// not used
 	.ns_dstreg(pRd_dec),
 	.ns_dstregv(pRd_decv),
 	.avail(),							// available registers list
-	.stall(ns_stall),
-	.rst_busy(rst_busy)
+	.stall(ns_stall)
 );
 
 Qupls4_rat
@@ -483,107 +345,6 @@ urat1
 	*/
 `endif
 
-/*
-always_ff @(posedge clk)
-begin
-	db0r <= db0;
-	if (brtgtv)
-		db0r.v <= FALSE;
-end
-always_ff @(posedge clk)
-begin
-	db1r <= db1;
-	if (brtgtv)
-		db1r.v <= FALSE;
-end
-always_ff @(posedge clk) begin
-	db2r <= db2;
-	if (brtgtv)
-		db2r.v <= FALSE;
-end
-always_ff @(posedge clk) begin
-	db3r <= db3;
-	if (brtgtv)
-		db3r.v <= FALSE;
-end
-*/
-/*
-always_ff @(posedge clk)
-if (rst) begin
-	pc0_f.bno_t <= 6'd1;
-	pc0_f.bno_f <= 6'd1;
-	pc0_f.pc <= RSTPC;
-end
-else begin
-//	if (advance_f)
-	pc0_f <= icpc;//pc0;
-end
-*/
-// The cycle after the length is calculated
-// instruction extract inputs
-/*
-pc_address_ex_t pc0_x1;
-always_ff @(posedge clk)
-if (rst) begin
-	pc0_x1.bno_t <= 6'd1;
-	pc0_x1.bno_f <= 6'd1;
-	pc0_x1.pc <= RSTPC;
-end
-else begin
-	if (advance_pipeline)
-		pc0_x1 <= pc0_f;
-end
-
-always_comb
-begin
- 	pc0_fet = micro_machine_active ? mc_adr : pc0_x1;
-end
-always_comb 
-begin
-	pc1_fet = pc0_fet;
-	pc1_fet.pc = micro_machine_active ? pc0_fet.pc : pc0_fet.pc + 6'd8;
-end
-always_comb
-begin
-	pc2_fet = pc0_fet;
-	pc2_fet.pc = micro_machine_active ? pc0_fet.pc : pc0_fet.pc + 6'd16;
-end
-always_comb
-begin
-	pc3_fet = pc0_fet;
-	pc3_fet.pc = micro_machine_active ? pc0_fet.pc : pc0_fet.pc + 6'd24;
-end
-*/
-/*
-always_ff @(posedge clk)
-if (advance_pipeline)
-	qd_x <= qd;
-always_ff @(posedge clk)
-if (advance_pipeline)
-	qd_d <= qd_x;
-always_ff @(posedge clk)
-if (advance_pipeline_seg2)
-	qd_r <= qd_d;
-always_ff @(posedge clk)
-if (advance_pipeline_seg2)
-	qd_q <= qd_r;
-*/
-// Register fetch/rename stage inputs
-/*
-always_ff @(posedge clk)
-if (advance_pipeline_seg2)
-	pc0_r <= pg_dec.pr[0].pc;//pc0_d;
-always_ff @(posedge clk)
-if (advance_pipeline_seg2)
-	pc1_r <= pg_dec.pr[1].pc;//pc1_d;
-always_ff @(posedge clk)
-if (advance_pipeline_seg2)
-	pc2_r <= pg_dec.pr[2].pc;//pc2_d;
-always_ff @(posedge clk)
-if (advance_pipeline_seg2)
-	pc3_r <= pg_dec.pr[3].pc;//pc3_d;
-*/
-generate begin : gPg_ren
 always_ff @(posedge clk)
 if (rst) begin
 	pg_ren <= {$bits(pipeline_group_reg_t){1'b0}};
@@ -720,8 +481,6 @@ else begin
 		tInvalidateRen(kept_stream);//misspc.bno_t);
 
 end
-end
-endgenerate
 
 // fet/mux/dec stages can be invalidated by turning the instruction in the
 // pipeline into a NOP operation. That is handled in the pipeline_seg1

@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2022-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2022-2026  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -256,7 +256,7 @@ typedef struct packed
 typedef struct packed
 {
 	logic v;									// 1=valid
-	logic [1:0] lvl;					// level
+	logic [2:0] lvl;					// level
 	logic s;									// 1=shortcut
 	logic [2:0] rgn;					// memory region
 	logic m;									// 1=modified
@@ -266,14 +266,15 @@ typedef struct packed
 	logic u;									// 1=user page
 	logic [2:0] rwx;					// read-write-execute
 	logic [7:0] pl;						// privilege level
-	logic [21:0] ppn;					// 35 bit address space (22 bit page number)
-} spte_lvl1_t;							// 40 bits
+	logic [13:0] resv;				// reserved bits
+	logic [22:0] ppn;					// 36 bit address space (23 bit page number)
+} spte_lvl1_t;							// 64 bits
 
 // Small page table entry. Physical memory <= 2^35B.
 typedef struct packed
 {
 	logic v;									// 1=valid
-	logic [1:0] lvl;					// valid
+	logic [2:0] lvl;					// valid
 	logic s;									// 1=shortcut
 	logic [2:0] rgn;					// memory region
 	logic m;									// 1=modified
@@ -283,9 +284,9 @@ typedef struct packed
 	logic u;									// 1=user page
 	logic [2:0] rwx;					// read-write-execute
 	logic [7:0] pl;						// privilege level
-	logic [11:0] ppn;					// 35 bit address space (22 bit page number)
-	logic [9:0] limit;
-} spte_lvl2_t;							// 40 bits
+	logic [13:0] resv;
+	logic [22:0] ppn;					// 36 bit address space (23 bit page number)
+} spte_lvl2_t;							// 64 bits
 
 `ifdef SMALL_MMU
 

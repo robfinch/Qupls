@@ -53,9 +53,7 @@ import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
 module Qupls4_reg_name_supplier5(rst,clk,en,tags2free,freevals,
-	o, ov,
-	ns_alloc_req, ns_whrndx, ns_cndx, ns_rndx, ns_dstreg, ns_dstregv,
-	avail,stall,rst_busy
+	ns_alloc_req, ns_dstreg, ns_dstregv,avail,stall
 );
 parameter NFTAGS = 4;			// Number of register freed per clock.
 input rst;
@@ -63,20 +61,16 @@ input clk;
 input en;
 input cpu_types_pkg::pregno_t [NFTAGS-1:0] tags2free;		// register tags to free
 input [NFTAGS-1:0] freevals;					// bitmnask indicating which tags to free
-output pregno_t [3:0] o;
-output reg [3:0] ov;
 input [3:0] ns_alloc_req;
-input rob_ndx_t [3:0] ns_whrndx;
-input checkpt_ndx_t [3:0] ns_cndx;
-output rob_ndx_t [3:0] ns_rndx;
 output cpu_types_pkg::pregno_t [3:0] ns_dstreg;
 output reg [3:0] ns_dstregv;
 output reg [Qupls4_pkg::PREGS-1:0] avail = {Qupls4_pkg::PREGS{1'b1}};
 output reg stall;											// stall enqueue while waiting for register availability
-output reg rst_busy;									// not used
 
 integer n1,n2,n3;
 
+pregno_t [3:0] o;
+reg [3:0] ov;
 reg next_stall;
 cpu_types_pkg::pregno_t [NFTAGS-1:0] rtags2free;
 reg [3:0] fpop = 4'd0;
@@ -85,12 +79,16 @@ reg stalla1 = 1'b0;
 reg stalla2 = 1'b0;
 reg stalla3 = 1'b0;
 reg [Qupls4_pkg::PREGS-1:0] next_avail;
-
+reg [3:0] freevals1;
+reg [$clog2(Qupls4_pkg::PREGS)-3:0] freeCnt;
+reg [2:0] ffreeCnt;
+reg [Qupls4_pkg::PREGS-1:0] next_toFreeList;
+reg [Qupls4_pkg::PREGS-1:0] toFreeList;
+reg [3:0] ffree;
 reg [3:0] fpush;
 reg [3:0] ovr;
 
 always_comb next_stall = stalla0|stalla1|stalla2|stalla3;
-always_comb rst_busy = 1'b0;
 always_ff @(posedge clk)
 	stall <= next_stall;
 
@@ -103,14 +101,16 @@ end
 always_comb
 begin
 	// Not a stall if not allocating.
+	// Stall if same register name choosen on more than one port. It means there
+	// were not enough register names available.
 	stalla0 = (~avail[o[0]] & ns_alloc_req[0]) || o[0]==o[2] || o[0]==o[3] || o[0]==o[1];
 	stalla1 = (~avail[o[1]] & ns_alloc_req[1]) || o[1]==o[2] || o[1]==o[3] || o[1]==o[0];
 	stalla2 = (~avail[o[2]] & ns_alloc_req[2]) || o[2]==o[0] || o[2]==o[1] || o[2]==o[3];
 	stalla3 = (~avail[o[3]] & ns_alloc_req[3]) || o[3]==o[0] || o[3]==o[1] || o[3]==o[2];
 	ov[0] = ((avail[o[0]] & ns_alloc_req[0]) | (ovr[0] & ~en));
-	ov[1] = ((avail[o[1]] & ns_alloc_req[1]) | (ovr[1] & ~en)) && ns_cndx[1]==ns_cndx[0];
-	ov[2] = ((avail[o[2]] & ns_alloc_req[2]) | (ovr[2] & ~en)) && ns_cndx[2]==ns_cndx[0];
-	ov[3] = ((avail[o[3]] & ns_alloc_req[3]) | (ovr[3] & ~en)) && ns_cndx[3]==ns_cndx[0];
+	ov[1] = ((avail[o[1]] & ns_alloc_req[1]) | (ovr[1] & ~en));
+	ov[2] = ((avail[o[2]] & ns_alloc_req[2]) | (ovr[2] & ~en));
+	ov[3] = ((avail[o[3]] & ns_alloc_req[3]) | (ovr[3] & ~en));
 end
 
 // Do not do a pop if stalling on another slot.
@@ -120,21 +120,14 @@ always_comb fpop[1] = (ns_alloc_req[1] & en & ~next_stall) | (ns_alloc_req[1] & 
 always_comb fpop[2] = (ns_alloc_req[2] & en & ~next_stall) | (ns_alloc_req[2] & stalla2);
 always_comb fpop[3] = (ns_alloc_req[3] & en & ~next_stall) | (ns_alloc_req[3] & stalla3);
 
-reg [3:0] freevals1;
-reg [$clog2(Qupls4_pkg::PREGS)-3:0] freeCnt;
-reg [2:0] ffreeCnt;
-reg [Qupls4_pkg::PREGS-1:0] next_toFreeList;
-reg [Qupls4_pkg::PREGS-1:0] toFreeList;
-reg [3:0] ffree;
-
 always_ff @(posedge clk)
-begin
-	if (en) begin
+if (rst)
+	ovr <= 4'h0;
+else begin
+	if (en)
 		ovr <= 4'h0;
-	end
-	else begin
+	else
 		ovr <= ov;
-	end
 end
 
 generate begin : gAvail
@@ -156,20 +149,14 @@ case(Qupls4_pkg::PREGS)
 		always_comb o[2] = ffo[2]==8'd255 ? {3'd6,ffo[6][6:0]}:{3'd2,ffo[2][6:0]};
 		always_comb o[3] = ffo[3]==8'd255 ? {3'd7,ffo[7][6:0]}:{3'd3,ffo[3][6:0]};
 
-		checkpt_ndx_t last_cndx;
 		always_ff @(posedge clk)
 		foreach (ns_dstreg[n1])
 		begin
-			last_cndx <= ns_cndx[0];
 			ns_dstregv[n1] <= INV;
 			ns_dstreg[n1] <= 10'd0;
-			ns_rndx[n1] <= 6'd0;
 			if (ns_alloc_req[n1]) begin
-		//		if (last_cndx==ns_cndx[n1]) begin
-					ns_rndx[n1] <= ns_whrndx[n1];
-					ns_dstreg[n1] <= o[n1];
-					ns_dstregv[n1] <= ov[n1];
-		//		end
+				ns_dstreg[n1] <= o[n1];
+				ns_dstregv[n1] <= ov[n1];
 			end
 		end
 	end
@@ -187,20 +174,14 @@ case(Qupls4_pkg::PREGS)
 		always_comb o[2] = {1'd1,ffo[2][7:0]};
 		always_comb o[3] = {1'd1,ffo[3][7:0]};
 
-		checkpt_ndx_t last_cndx;
 		always_ff @(posedge clk)
 		foreach (ns_dstreg[n1])
 		begin
-			last_cndx <= ns_cndx[0];
 			ns_dstregv[n1] <= INV;
 			ns_dstreg[n1] <= 9'd0;
-			ns_rndx[n1] <= 6'd0;
 			if (ns_alloc_req[n1]) begin
-		//		if (last_cndx==ns_cndx[n1]) begin
-					ns_rndx[n1] <= ns_whrndx[n1];
-					ns_dstreg[n1] <= o[n1];
-					ns_dstregv[n1] <= ov[n1];
-		//		end
+				ns_dstreg[n1] <= o[n1];
+				ns_dstregv[n1] <= ov[n1];
 			end
 		end
 	end
@@ -225,7 +206,6 @@ case(Qupls4_pkg::PREGS)
 			ns_dstregv[n1] <= INV;
 			ns_dstreg[n1] <= 8'd0;
 			if (ns_alloc_req[n1]) begin
-				ns_rndx[n1] <= ns_whrndx[n1];
 				ns_dstreg[n1] <= o[n1];
 				ns_dstregv[n1] <= ov[n1];
 			end
@@ -256,7 +236,6 @@ case(Qupls4_pkg::PREGS)
 			ns_dstregv[n1] <= INV;
 			ns_dstreg[n1] <= 7'd0;
 			if (ns_alloc_req[n1]) begin
-				ns_rndx[n1] <= ns_whrndx[n1];
 				ns_dstreg[n1] <= o[n1];
 				ns_dstregv[n1] <= ov[n1];
 			end
@@ -271,15 +250,15 @@ endgenerate
 always_comb
 if (0) begin
 	if (o[0]==o[1] || o[0]==o[2] || o[0]==o[3]) begin
-		$display("Qupls4CPU: matching rename registers");
+		$display("Qupls4 CPU: matching rename registers");
 		$finish;
 	end
 	if (o[1]==o[2] || o[1]==o[3]) begin
-		$display("Qupls4CPU: matching rename registers");
+		$display("Qupls4 CPU: matching rename registers");
 		$finish;
 	end
 	if (o[2]==o[3]) begin
-		$display("Qupls4CPU: matching rename registers");
+		$display("Qupls4 CPU: matching rename registers");
 		$finish;
 	end
 end

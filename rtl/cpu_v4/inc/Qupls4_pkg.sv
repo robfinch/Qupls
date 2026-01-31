@@ -43,8 +43,8 @@ package Qupls4_pkg;
 `define QUPLS4	1'b1
 `define STARK_PKG 1'b1
 `undef IS_SIM
-parameter SIM = 1'b1;
-`define IS_SIM	1
+parameter SIM = 1'b0;
+//`define IS_SIM	1
 
 `include "Qupls4_config.sv"
 /*
@@ -1427,6 +1427,7 @@ parameter CSR_MCIR_STACK 	= 16'h309?;
 parameter CSR_MEPC	= 16'h3108;
 parameter CSR_TOTINSN = 16'h3F00;
 parameter CSR_TOTVALIDINSN = 16'h3F01;
+parameter CSR_CPYDST = 16'h3F02;
 parameter CSR_TIME	= 16'h?FE0;
 parameter CSR_MTIME	= 16'h3FE0;
 parameter CSR_MTIMECMP	= 16'h3FE1;

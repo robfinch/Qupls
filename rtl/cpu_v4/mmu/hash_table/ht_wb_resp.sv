@@ -1,0 +1,83 @@
+`timescale 1ns / 1ps
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2026  Robert Finch, Waterloo
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+// BSD 3-Clause License
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are met:
+//
+// 1. Redistributions of source code must retain the above copyright notice, this
+//    list of conditions and the following disclaimer.
+//
+// 2. Redistributions in binary form must reproduce the above copyright notice,
+//    this list of conditions and the following disclaimer in the documentation
+//    and/or other materials provided with the distribution.
+//
+// 3. Neither the name of the copyright holder nor the names of its
+//    contributors may be used to endorse or promote products derived from
+//    this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+// FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+// DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+// SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+// CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+// OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+// ============================================================================
+//
+import const_pkg::*;
+import wishbone_pkg::*;
+import hash_table_pkg::*;
+
+module ht_wb_resp(rst, clk, state, douta, cs, req, resp);
+input rst;
+input clk;
+input [1:0] state;
+input ptg_t douta;
+input cs;
+input wb_cmd_request64_t req;
+output wb_cmd_response64_t resp;
+
+always_ff @(posedge clk)
+if (rst)
+	resp <= {$bits(wb_cmd_response64_t){1'b0}};
+else begin
+	case(state)
+	2'd0:	;
+	2'd1:
+		begin
+			resp.tid <= req.tid;
+			resp.pri <= req.pri;
+			resp.dat <= 64'd0;
+			resp.ack <= TRUE;
+			resp.err <= wishbone_pkg::OKAY;
+		end
+	2'd2:
+		begin
+			resp.tid <= req.tid;
+			resp.pri <= req.pri;
+			resp.dat <= douta.ptge[req.adr[5:3]];	
+			resp.ack <= TRUE;
+			resp.err <= wishbone_pkg::OKAY;
+		end
+	2'd3:
+		if (~(cs & req.cyc & req.stb)) begin
+			resp.tid <= req.tid;
+			resp.pri <= req.pri;
+			resp.dat <= 64'd0;
+			resp.ack <= FALSE;
+			resp.err <= wishbone_pkg::OKAY;
+		end
+	endcase
+end
+
+endmodule

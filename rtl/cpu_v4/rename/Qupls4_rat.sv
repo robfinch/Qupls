@@ -68,7 +68,7 @@ module Qupls4_rat(rst, clk,
 
 	// From decode: destination register writes, one per instruction, four instructions.
 	is_move,
-	wr, 							// which port is aactive 
+	wr, 							// which port is active 
 	wra,							// architectural register number
 	wrra,							// physical register number
 	wra_cp,			// checkpoint in use
