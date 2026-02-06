@@ -38,27 +38,25 @@ import const_pkg::*;
 import wishbone_pkg::*;
 import hash_table_pkg::*;
 
-module ht_dinb(rst, clk, xlat, found, which, req, doutb, dinb);
-input rst;
-input clk;
+module ht_dinb(bus, xlat, found, which, doutb, dinb);
+wb_bus_interface.slave bus;
 input xlat;
 input found;
 input [2:0] which;
-input wb_cmd_request64_t req;
-input ptg_t doutb;
-output ptg_t dinb;
+input htg_t doutb;
+output htg_t dinb;
 
-always_ff @(posedge clk)
-if (rst)
+always_ff @(posedge bus.clk)
+if (bus.rst)
 	dinb <= 512'd0;
 else begin
 	dinb <= doutb;
 	if (xlat) begin
 		if (found) begin
-			if (req.cyc & req.stb) begin
-				dinb.ptge[which].a <= TRUE;
-				if (req.we)
-					dinb.ptge[which].m <= TRUE;
+			if (bus.req.cyc & bus.req.stb) begin
+				dinb.hte[which].a <= TRUE;
+				if (bus.req.we)
+					dinb.hte[which].m <= TRUE;
 			end
 		end
 	end

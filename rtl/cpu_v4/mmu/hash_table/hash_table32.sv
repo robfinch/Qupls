@@ -43,7 +43,6 @@ import hash_table_pkg::*;
 module hash_table(cs,bus,padr,padrv,page_fault);
 parameter WID=32;
 parameter TAB_SIZE=8192;
-parameter SIM=0;
 input cs;
 wb_bus_interface.slave bus;
 output reg [31:0] padr;
@@ -68,13 +67,10 @@ wire [7:0] bounce;
 reg [7:0] empty;
 wire [9:0] asid;
 wire [7:0] max_bounce;
-reg [31:0] fault_adr;
-reg [9:0] fault_asid;
-reg [9:0] fault_group;
-wire [7:0] fault_valid;
+wire [31:0] fault_adr;
+wire [9:0] fault_asid;
+wire [17:0] fault_group;
 wire [WID-1:0] vb [0:TAB_SIZE/WID-1];
-wire cd_vadr;
-reg [31:0] vadr;
 
 // xpm_memory_tdpram: True Dual Port RAM
 // Xilinx Parameterized Macro, version 2025.1
@@ -173,16 +169,14 @@ xpm_memory_tdpram_inst (
 
 // End of xpm_memory_tdpram_inst instantiation
 
-always_comb
-	fnd <= fnFind(doutb,vadr,asid) & {xlat,3'b0};
+always_ff @(posedge clk)
+	fnd <= fnFind(doutb,bus.req.adr,asid) & {xlat,3'b0};
 always_comb
 	for (n = 0; n < 8; n = n + 1)
 		empty[n] = ~doutb.hte[n].v;
 
-always_ff @(posedge clk)
-	vadr <=  bus.req.adr;
-always_ff @(posedge clk)
-	xlat <= ~bus.req.adr[31];
+always_comb
+	xlat = ~bus.req.adr[31];
 always_comb
 	found = ~fnd[3];
 always_ff @(posedge clk)
@@ -272,7 +266,7 @@ ht_padr upa1
 (
 	.rst(bus.rst),
 	.clk(bus.clk),
-	.vadr(vadr),
+	.vadr(bus.req.adr),
 	.xlat(xlat),
 	.found(found),
 	.which(fnd[2:0]),
@@ -286,7 +280,6 @@ ht_page_fault upf1
 (
 	.rst(rst),
 	.clk(clk),
-	.cd_vadr(cd_vadr),
 	.xlat(xlat),
 	.found(found),
 	.empty(empty),
@@ -295,7 +288,6 @@ ht_page_fault upf1
 	.current_group(hash),
 	.page_group(page_group),
 	.fault_group(fault_group),
-	.fault_valid(fault_valid),
 	.page_fault(page_fault)
 );
 
@@ -323,19 +315,14 @@ ht_bounce_counter uhtbc1
 	.xlat(xlat),
 	.found(found| (|empty)),
 	.vadr(bus.req.adr),
-	.count(bounce),
-	.cd_vadr(cd_vadr)
+	.count(bounce)
 );
 
-generate begin : gValidBits
-	if (SIM)
 ht_valid #(.WID(WID), .DEP(TAB_SIZE/WID)) uhtv1
 (
 	.bus(bus),
 	.state(state),
 	.vb(vb)
 );
-end
-endgenerate
 
 endmodule

@@ -1,3 +1,4 @@
+`timescale 1ns / 1ps
 // ============================================================================
 //        __
 //   \\__/ o\    (C) 2026  Robert Finch, Waterloo
@@ -33,54 +34,36 @@
 //
 // ============================================================================
 //
-package hash_table_pkg;
+import wishbone_pkg::*;
+import hash_table_pkg::*;
 
-typedef struct packed {
-	logic v;							// valid entry
-	logic d;							// deleted
-	logic [2:0] resv;
-	logic [2:0] rgn;			// memory region (DRAM)
-	logic m;							// modified
-	logic a;							// accessed
-	logic t;							//
-	logic s;							// shared
-	logic g;							// global page
-	logic [2:0] sw;
-	logic [1:0] cache;		// 0=none,1=L1,2=L2,3=LLC
-	logic [9:0] asid;
-	logic u;							// 1= user space
-	logic [2:0] rwx;
-	logic [15:0] ppn;			// physcial page number
-	logic [15:0] vpn;			// virtual page number
-} hte_t;								// 64-bits
+module ht_dina(rst, clk, state, asid_to_free, req, douta, dina);
+input rst;
+input clk;
+input [2:0] state;
+input [9:0] asid_to_free;
+input wb_cmd_request64_t req;
+input ptg_t douta;
+output ptg_t dina;
 
-typedef struct packed {
-	hte_t [7:0] hte;
-} htg_t;
-
-function [9:0] fnHash;
-input [31:0] vadr;
-input [9:0] asid;
-begin
-	fnHash = vadr[27:18]^asid;
+always_ff @(posedge clk)
+if (rst)
+	dina <= 512'd0;
+else begin
+	case(state)
+	3'd3:
+		begin
+			dina <= douta;
+			dina.ptge[req.adr[5:3]] <= req.dat;
+		end
+	3'd6:
+		begin
+			dina <= douta;
+			if (douta.ptge[req.adr[5:3]].asid==asid_to_free)
+				dina.ptge[req.adr[5:3]].v <= INV;
+		end
+	default:	;
+	endcase
 end
-endfunction
 
-// Find an entry in a page table group register.
-
-function [3:0] fnFind;
-input htg_t rec;
-input [31:0] vadr;
-input [9:0] asid;
-integer n;
-begin
-	fnFind = 4'hF;
-	for (n = 0; n < 8; n = n + 1) begin
-		if (rec.hte[n].v && !rec.hte[n].d && rec.hte[n].vpn==vadr[29:18] && (rec.hte[n].g ? 1'b1 : rec.hte[n].asid == asid))
-			fnFind = {1'b0,n[2:0]};
-	end
-end
-endfunction
-
-endpackage
-
+endmodule

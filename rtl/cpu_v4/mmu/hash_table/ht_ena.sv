@@ -37,25 +37,23 @@
 import const_pkg::*;
 import wishbone_pkg::*;
 
-module ht_ena(rst, clk, state, cs, req, ena);
-input rst;
-input clk;
-input [1:0] state;
+module ht_ena(cs, bus, state, ena);
 input cs;
-input wb_cmd_request64_t req;
+wb_bus_interface.slave bus;
+input [1:0] state;
 output reg ena;
 
-always_ff @(posedge clk)
-if (rst)
+always_ff @(posedge bus.clk)
+if (bus.rst)
 	ena <= FALSE;
 else begin
 	case(state)
 	2'd0:
-		if (cs & req.cyc & req.stb)
-			ena <= TRUE;
+		if (cs & bus.req.cyc & bus.req.stb)
+			ena <= ~bus.req.adr[16];
 		else
 			ena <= FALSE;
-	2'd2:	ena <= FALSE;
+	2'd2:	ena <= bus.req.we;
 	2'd3:	ena <= FALSE;
 	default:	;
 	endcase

@@ -1,3 +1,4 @@
+`timescale 1ns / 1ps
 // ============================================================================
 //        __
 //   \\__/ o\    (C) 2026  Robert Finch, Waterloo
@@ -33,54 +34,66 @@
 //
 // ============================================================================
 //
-package hash_table_pkg;
+import const_pkg::*;
 
-typedef struct packed {
-	logic v;							// valid entry
-	logic d;							// deleted
-	logic [2:0] resv;
-	logic [2:0] rgn;			// memory region (DRAM)
-	logic m;							// modified
-	logic a;							// accessed
-	logic t;							//
-	logic s;							// shared
-	logic g;							// global page
-	logic [2:0] sw;
-	logic [1:0] cache;		// 0=none,1=L1,2=L2,3=LLC
-	logic [9:0] asid;
-	logic u;							// 1= user space
-	logic [2:0] rwx;
-	logic [15:0] ppn;			// physcial page number
-	logic [15:0] vpn;			// virtual page number
-} hte_t;								// 64-bits
+module ht_page_fault(rst, clk, max_bounce, xlat, found, empty, bounce,
+	current_group, page_group, fault_group, page_fault);
+input rst;
+input clk;
+input [7:0] max_bounce;
+input xlat;
+input found;
+input [7:0] empty;
+input [7:0] bounce;
+input [9:0] current_group;
+input [9:0] page_group;
+output reg [17:0] fault_group = 18'd0;
+output reg page_fault = 1'b0;
 
-typedef struct packed {
-	hte_t [7:0] hte;
-} htg_t;
+reg [17:0] fault_group1;
 
-function [9:0] fnHash;
-input [31:0] vadr;
-input [9:0] asid;
-begin
-	fnHash = vadr[27:18]^asid;
-end
-endfunction
-
-// Find an entry in a page table group register.
-
-function [3:0] fnFind;
-input htg_t rec;
-input [31:0] vadr;
-input [9:0] asid;
-integer n;
-begin
-	fnFind = 4'hF;
-	for (n = 0; n < 8; n = n + 1) begin
-		if (rec.hte[n].v && !rec.hte[n].d && rec.hte[n].vpn==vadr[29:18] && (rec.hte[n].g ? 1'b1 : rec.hte[n].asid == asid))
-			fnFind = {1'b0,n[2:0]};
+always_ff @(posedge clk)
+if (rst)
+	fault_group <= 18'h0ff;
+else begin
+	if (xlat) begin
+		if (!found & ~|empty) begin	// and not found and no empty slot
+			if (bounce==max_bounce) begin	// and bounced too many times
+				fault_group <= {page_group,8'h00};
+			end
+		end
+		if (!found & |empty) begin
+			fault_group <= {current_group,empty};
+		end
 	end
 end
-endfunction
+/*
+always_ff @(posedge clk)
+	if (page_fault)
+		fault_group <= fault_group1;
+*/
+always_comb//ff @(posedge clk)
+/*
+if (rst) begin
+	page_fault <= FALSE;
+end
+else 
+*/
+begin
+	if (xlat) begin
+		page_fault = FALSE;
+		if (!found & ~|empty) begin	// and not found and no empty slot
+			if (bounce==max_bounce) begin	// and bounced too many times
+				page_fault = TRUE;
+			end
+		end
+		if (!found & |empty) begin
+			page_fault = TRUE;
+		end
+	end
+	else begin
+		page_fault = FALSE;
+	end
+end
 
-endpackage
-
+endmodule

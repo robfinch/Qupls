@@ -37,21 +37,22 @@
 import wishbone_pkg::*;
 import hash_table_pkg::*;
 
-module ht_dina(rst, clk, state, req, douta, dina);
-input rst;
-input clk;
+module ht_dina(bus, state, douta, dina);
+wb_bus_interface.slave bus;
 input [1:0] state;
-input wb_cmd_request64_t req;
-input ptg_t douta;
-output ptg_t dina;
+input htg_t douta;
+output htg_t dina;
 
-always_ff @(posedge clk)
-if (rst)
+always_ff @(posedge bus.clk)
+if (bus.rst)
 	dina <= 512'd0;
 else begin
 	if (state==2'd1) begin
 		dina <= douta;
-		dina.ptge[req.adr[5:3]] <= req.dat;
+		if (bus.req.adr[2])
+			dina.hte[bus.req.adr[5:3]][63:32] <= bus.req.dat;
+		else
+			dina.hte[bus.req.adr[5:3]][31: 0] <= bus.req.dat;
 	end
 end
 

@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2026  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -37,33 +37,24 @@
 // ============================================================================
 
 import wishbone_pkg::*;
-import Qupls4_pkg::*;
 import mmu_pkg::*;
 
-module region_tbl(rst, clk, cs_rgn, rgn0, rgn1, rgn2, ftas_req, region_dat,
-	region_num, region0, region1, region2, sel0, sel1, sel2, err0, err1, err2);
+module region_tbl(rst, clk, cs_rgn, rgn, req, region_dat,
+	region_num, region, sel, err);
 input rst;
 input clk;
 input cs_rgn;
-input [2:0] rgn0;
-input [2:0] rgn1;
-input [2:0] rgn2;
-input wb_cmd_request256_t ftas_req;
+input [2:0] rgn;
+input wb_cmd_request256_t req;
 output reg [255:0] region_dat;
 output reg [3:0] region_num;
-output REGION region0;
-output REGION region1;
-output REGION region2;
-output reg [7:0] sel0;
-output reg [7:0] sel1;
-output reg [7:0] sel2;
-output reg err0;
-output reg err1;
-output reg err2;
+output region_t region;
+output reg [7:0] sel;
+output reg err;
 localparam ABITS = $bits(wb_address_t);
 
 integer n;
-REGION [7:0] pma_regions;
+region_t [7:0] pma_regions;
 
 initial begin
 	// ROM
@@ -175,7 +166,7 @@ wire [255:0] cfg_out;
 wire cs_bar0;
 
 always_comb
-	sreq <= ftas_req;
+	sreq <= req;
 
 always_ff @(posedge clk)
 	if (cs_rgn && sreq.we && sreq.cyc && (sreq.adr[13:8]==6'h3C || sreq.adr[13:8]==6'h3D)) begin
@@ -226,29 +217,11 @@ always_ff @(posedge clk)
 
 always_comb
 begin
-	err0 = 1'b1;
-	region_num = 4'd0;
-	region0 = pma_regions[0];
-	sel0 = 1'd0;
-	region0 = pma_regions[rgn0];
-	region_num = rgn0;
-	sel0[rgn0] = 1'b1;
-	err0 = 1'b0;
-
-	err1 = 1'b1;
-	region1 = pma_regions[0];
-	sel1 = 1'd0;
-	region1 = pma_regions[rgn1];
-	sel1[rgn1] = 1'b1;
-	err1 = 1'b0;
-
-	err2 = 1'b1;
-	region2 = pma_regions[0];
-	sel2 = 1'd0;
-	region2 = pma_regions[rgn2];
-	sel2[rgn2] = 1'b1;
-	err2 = 1'b0;
+	region = pma_regions[rgn];
+	region_num = rgn;
+	sel = 8'd0;
+	sel[rgn] = 1'b1;
+	err = 1'b0;
 end    	
     	
 endmodule
-

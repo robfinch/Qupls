@@ -36,33 +36,41 @@
 //
 import const_pkg::*;
 
-module ht_page_fault(rst, clk, xlat, found, empty, bounce,
-	current_group, page_group, fault_group, page_fault);
+module ht_page_fault(rst, clk, max_bounce, xlat, found, empty, bounce, cd_vadr,
+	current_group, page_group, fault_group, fault_valid, page_fault);
 input rst;
 input clk;
+input [7:0] max_bounce;
 input xlat;
 input found;
 input [7:0] empty;
-input [4:0] bounce;
+input [7:0] bounce;
+input cd_vadr;
 input [9:0] current_group;
 input [9:0] page_group;
-output reg [17:0] fault_group;
-output reg page_fault;
+output reg [10:0] fault_group = 10'd0;
+output reg [7:0] fault_valid = 8'd0;
+output reg page_fault = 1'b0;
 
-reg [17:0] fault_group1;
+reg cd;
+
+always_ff @(posedge clk)
+	cd <= FALSE;//cd_vadr;
 
 always_ff @(posedge clk)
 if (rst)
 	fault_group <= 18'h0ff;
 else begin
-	if (xlat) begin
+	if (xlat & ~cd) begin
 		if (!found & ~|empty) begin	// and not found and no empty slot
-			if (bounce==5'd30) begin	// and bounced too many times
-				fault_group <= {page_group,8'h00};
+			if (bounce==max_bounce) begin	// and bounced too many times
+				fault_group <= page_group;
+				fault_valid <= 8'hFF;
 			end
 		end
 		if (!found & |empty) begin
-			fault_group <= {current_group,empty};
+			fault_group <= current_group;
+			fault_valid <= ~empty;
 		end
 	end
 end
@@ -79,10 +87,10 @@ end
 else 
 */
 begin
-	if (xlat) begin
+	if (xlat & ~cd) begin
 		page_fault = FALSE;
 		if (!found & ~|empty) begin	// and not found and no empty slot
-			if (bounce==5'd30) begin	// and bounced too many times
+			if (bounce==max_bounce) begin	// and bounced too many times
 				page_fault = TRUE;
 			end
 		end

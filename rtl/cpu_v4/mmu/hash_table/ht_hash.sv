@@ -43,25 +43,32 @@ input found;
 input [7:0] empty;
 input [31:0] vadr;
 input [9:0] asid;
-input [4:0] bounce;
+input [7:0] bounce;
 output reg [9:0] hash;
 output reg [9:0] page_group;
 
-reg [9:0] hash2;
+reg [9:0] hash2, next_hash2;
 
 always_comb
 	page_group = fnHash(vadr,asid);
 always_comb
-	hash = |bounce ? hash2 : page_group;
+	hash = |bounce ? next_hash2 : page_group;
+
+always_comb
+begin
+	next_hash2 = page_group + bounce * bounce + 10'd1;
+	if (xlat) begin
+		if (~found & ~|empty) begin
+			if (|bounce[7:5])
+				next_hash2 = hash2 + 10'd1;
+		end
+	end
+end
 
 always_ff @(posedge clk)
 if (rst)
 	hash2 <= 12'd0;
-else begin
-	if (xlat) begin
-		if (~found & ~|empty)
-			hash2 <= page_group + bounce * bounce + 12'd1;
-	end
-end
+else
+	hash2 <= next_hash2;
 
 endmodule

@@ -5,9 +5,9 @@ import hash_table_pkg::*;
 module hash_table_tb();
 reg rst;
 reg clk;
-reg [5:0] state;
+integer state;
 reg [12:0] count;
-integer cnt,ecnt,bcnt;
+integer cnt,ecnt,bcnt,bncnt,ma,pcnt;
 real f,fb;
 reg cs;
 wire [31:0] padr;
@@ -15,12 +15,12 @@ reg [9:0] asid;
 wire page_fault;
 wire [31:0] fault_adr;
 wire [9:0] fault_asid;
-wire [17:0] fault_group;
-wb_cmd_request64_t req;
-wb_cmd_response64_t resp;
-wb_cmd_request64_t vreq;
-wb_cmd_response64_t vresp;
-ptge_t ptge;
+reg [9:0] fault_group;
+reg [7:0] fault_valid;
+reg [31:0] vadr;
+wb_bus_interface #(.DATA_WIDTH(32)) bus();
+hte_t hte;
+wire [63:0] vb [0:127];
 
 initial begin
 	clk = 1'b0;
@@ -32,25 +32,19 @@ end
 always
 	#2.5 clk = ~clk;
 
-wire [3:0] ffo;
-ffo12 uffo1 (.i({4'h0,fault_group[7:0]}), .o(ffo));
+assign bus.clk = clk;
+assign bus.rst = rst;
 
-hash_table uht1
+wire [3:0] ffo;
+ffo12 uffo1 (.i({4'h0,~fault_valid}), .o(ffo));
+
+hash_table #(.SIM(1)) uht1
 (
-	.rst(rst),
-	.clk(clk),
 	.cs(cs),
-	.req(req),
-	.resp(resp),
-	.asid(asid),
-	.vreq(vreq),
-	.vresp(vresp),
+	.bus(bus),
 	.padr(padr),
 	.padrv(padrv),
-	.page_fault(page_fault),
-	.fault_group(fault_group),
-	.fault_adr(fault_adr),
-	.fault_asid(fault_asid)
+	.page_fault(page_fault)
 );
 
 always_ff @(posedge clk)
@@ -58,14 +52,15 @@ if (rst) begin
 	state <= 6'd0;
 	count <= 10'd0;
 	cs <= LOW;
-	req <= {$bits(wb_cmd_request64_t){1'b0}};
-	vreq <= {$bits(wb_cmd_request64_t){1'b0}};
-	ptge <= {$bits(ptge_t){1'b0}};
+	bus.req <= {$bits(wb_cmd_request32_t){1'b0}};
+	hte <= {$bits(hte_t){1'b0}};
 	asid <= 10'h0;
 	cnt <= $urandom(0);
 	cnt <= 0;
 	bcnt <= 0;
 	ecnt <= 0;
+	bncnt <= 0;
+	ma <= 0;
 end
 else begin
 	// First fill table with 1:1 translation
@@ -73,38 +68,56 @@ else begin
 	6'd0:
 		begin
 			cs <= LOW;
-			ptge.v <= VAL;
-			ptge.a <= FALSE;
-			ptge.m <= FALSE;
-			ptge.s <= FALSE;
-			ptge.u <= count[9];
-			ptge.rwx <= count[2:0];
-			ptge.ppn <= count;
-			ptge.vpn <= count;
-			ptge.cache <= $urandom() & 3;
-			ptge.rgn <= $urandom() & 7;
-			ptge.asid <= count;
+			hte.v <= VAL;
+			hte.a <= FALSE;
+			hte.m <= FALSE;
+			hte.s <= FALSE;
+			hte.u <= count[9];
+			hte.rwx <= count[2:0];
+			hte.ppn <= count >> 21;
+			hte.vpn <= count >> 21;
+			hte.cache <= $urandom() & 3;
+			hte.rgn <= $urandom() & 7;
+			hte.asid <= 0;//count;
 			ecnt <= ecnt + 1;
 			state <= 6'd1;
 		end
 	6'd1:
 		begin
 			cs <= HIGH;
-			req.cyc <= HIGH;
-			req.stb <= HIGH;
-			req.we <= HIGH;
-			req.dat <= ptge;
-			req.sel <= 8'hFF;
-			req.adr <= count;
+			bus.req.cyc <= HIGH;
+			bus.req.stb <= HIGH;
+			bus.req.we <= HIGH;
+			bus.req.sel <= 4'hF;
+			bus.req.dat <= hte[31:0];
+			bus.req.adr <= {count,3'b0};
 			state <= 6'd2;
 		end
 	6'd2:
-		if (resp.ack) begin
+		if (bus.resp.ack) begin
 			cs <= LOW;
-			req.cyc <= LOW;
-			req.stb <= LOW;
-			req.we <= LOW;
-			req.sel <= 8'h00;
+			bus.req.cyc <= LOW;
+			bus.req.stb <= LOW;
+			bus.req.we <= LOW;
+			count <= count + 1;
+			state <= 6'd20;
+		end
+	6'd20:
+		begin
+			cs <= HIGH;
+			bus.req.cyc <= HIGH;
+			bus.req.stb <= HIGH;
+			bus.req.we <= HIGH;
+			bus.req.dat <= hte[63:32];
+			bus.req.adr <= {count,3'b100};
+			state <= 6'd21;
+		end
+	6'd21:
+		if (bus.resp.ack) begin
+			cs <= LOW;
+			bus.req.cyc <= LOW;
+			bus.req.stb <= LOW;
+			bus.req.we <= LOW;
 			count <= count + 1;
 			if (count==10'h3FF)
 				state <= 6'd3;
@@ -118,21 +131,24 @@ else begin
 			end
 			else begin
 				// pick a random address
-				vreq.cyc <= HIGH;
-				vreq.stb <= HIGH;
-				vreq.adr <= (($urandom() & 10'h3ff) << 18) | ($urandom() & 18'h3FFFF);
-				vreq.we <= $urandom() & 1;
-				asid <= $urandom() & 10'h3ff;
+				ma <= ma + 1;
+				bus.req.cyc <= HIGH;
+				bus.req.stb <= HIGH;
+				vadr = (($urandom() & 10'h1ff) << 18) | ($urandom() & 18'h3FFFF);
+				bus.req.adr <= vadr;
+				bus.req.we <= $urandom() & 1;
+//				asid <= $urandom() & 10'h3ff;
 				// First ten addresses should not be translated.
 				if (cnt < 10)
-					vreq.adr[31] <= 1'b1;
+					bus.req.adr[31] <= 1'b1;
 				state <= 6'd4;
 			end
 		end
 	6'd4:
 		if (padrv) begin
-			vreq.cyc <= LOW;
-			vreq.stb <= LOW;
+			bus.req.cyc <= LOW;
+			bus.req.stb <= LOW;
+			bus.req.we <= LOW;
 			cnt <= cnt + 1;
 			state <= 6'd3;
 		end
@@ -145,15 +161,17 @@ else begin
 				cnt <= cnt + 1;
 				// stay on the same page for a while
 				if (cnt < 50) begin
-					vreq.cyc <= HIGH;
-					vreq.stb <= HIGH;
-					vreq.adr[17:0] <= $urandom() & 32'h3ffff;
+					ma <= ma + 1;
+					bus.req.cyc <= HIGH;
+					bus.req.stb <= HIGH;
+					bus.req.adr[17:0] <= $urandom() & 32'h3ffff;
 				end
 				else begin
-					vreq.cyc <= HIGH;
-					vreq.stb <= HIGH;
-					vreq.adr <= $urandom() & 32'h3fffffff;
-					asid <= $urandom() & 10'h3ff;
+					ma <= ma + 1;
+					bus.req.cyc <= HIGH;
+					bus.req.stb <= HIGH;
+					bus.req.adr <= $urandom() & 32'h1fffffff;
+//					asid <= $urandom() & 10'h3ff;
 				end
 			end
 			state <= 6'd6;
@@ -161,53 +179,74 @@ else begin
 	// On a page fault, add the page.
 	6'd6:
 		begin
-			vreq.cyc <= LOW;
-			vreq.stb <= LOW;
+			vadr <= bus.req.adr;
+			bus.req.cyc <= LOW;
+			bus.req.stb <= LOW;
 			if (page_fault) begin
-				bcnt <= bcnt + uht1.bounce;
+				bncnt <= bncnt + uht1.bounce;
 				cs <= LOW;
-				ptge.v <= VAL;
-				ptge.a <= FALSE;
-				ptge.m <= FALSE;
-				ptge.s <= FALSE;
-				ptge.u <= $urandom() & 1;
-				ptge.rwx <= $urandom() & 7;
-				ptge.ppn <= $urandom() >> 18;
-				ptge.vpn <= vreq.adr >> 18;
-				ptge.cache <= $urandom() & 3;
-				ptge.rgn <= $urandom() & 7;
-				ptge.asid <= asid;
+				hte.v <= VAL;
+				hte.a <= FALSE;
+				hte.m <= FALSE;
+				hte.s <= FALSE;
+				hte.u <= $urandom() & 1;
+				hte.rwx <= $urandom() & 7;
+				hte.ppn <= $urandom() >> 18;
+				hte.vpn <= vadr >> 18;
+				hte.cache <= $urandom() & 3;
+				hte.rgn <= $urandom() & 7;
+				hte.asid <= 0;//asid;
 				ecnt <= ecnt + 1;
-				state <= 6'd13;
-				vreq.adr[31] <= 1'b1;	// clear page fault
+				state <= 13;
+				bus.req.adr[31] <= 1'b1;	// clear page fault
 			end
 			else if (padrv)
 				state <= 6'd5;
 		end
 	// read the fault group, fault group is not valid until a cycle later
-	6'd13:	state <= 6'd7;
-	6'd7:
+	13:	state <= 70;
+	70:
 		begin
-			if (~|fault_group[7:0]) begin
-				state <= 6'd59;	// table full
+			cs <= HIGH;
+			bus.req.cyc <= HIGH;
+			bus.req.stb <= HIGH;
+			bus.req.we <= LOW;
+			bus.req.sel <= 8'hFF;
+			bus.req.adr <= 32'hFFF10408;	// fault group register
+			state <= 71;
+		end
+	71:
+		if (bus.resp.ack) begin
+			cs <= LOW;
+			bus.req.cyc <= LOW;
+			bus.req.stb <= LOW;
+			bus.req.we <= LOW;
+			fault_group <= bus.resp.dat[17:8];
+			fault_valid <= bus.resp.dat[7:0];
+			state <= 7;
+		end
+	7:
+		begin
+			if (&fault_valid[7:0]) begin
+				state <= 59;	// table full
 			end
 			else begin
 				cs <= HIGH;
-				req.cyc <= HIGH;
-				req.stb <= HIGH;
-				req.we <= LOW;
-				req.sel <= 8'hFF;
-				req.adr <= {fault_group[17:8],ffo[2:0],3'b0};
-				state <= 6'd8;
+				bus.req.cyc <= HIGH;
+				bus.req.stb <= HIGH;
+				bus.req.we <= LOW;
+				bus.req.sel <= 8'hFF;
+				bus.req.adr <= {16'hFFFE,fault_group,ffo[2:0],3'b000};
+				state <= 8;
 			end
 		end
-	6'd8:
-		if (resp.ack) begin
+	8:
+		if (bus.resp.ack) begin
 			cs <= LOW;
-			req.cyc <= LOW;
-			req.stb <= LOW;
-			req.we <= LOW;
-			req.sel <= 8'h00;
+			bus.req.cyc <= LOW;
+			bus.req.stb <= LOW;
+			bus.req.we <= LOW;
+//			hte[31:0] <= bus.resp.dat;
 			/*
 			ptge.v <= VAL;
 			ptge.a <= FALSE;
@@ -221,42 +260,133 @@ else begin
 			ptge.rgn <= $urandom() & 7;
 			ptge.asid <= asid;
 			*/
-			state <= 6'd9;
+			state <= 81;
 		end
-	6'd9:
+	81:
 		begin
 			cs <= HIGH;
-			req.cyc <= HIGH;
-			req.stb <= HIGH;
-			req.we <= HIGH;
-			req.dat <= ptge;
-			req.sel <= 8'hFF;
-			req.adr <= {fault_group[17:8],ffo[2:0],3'b0};
-			state <= 6'd10;
-		end		
-	6'd10:
-		if (resp.ack) begin
+			bus.req.cyc <= HIGH;
+			bus.req.stb <= HIGH;
+			bus.req.we <= LOW;
+			bus.req.sel <= 8'hFF;
+			bus.req.adr <= {16'hFFFE,fault_group,ffo[2:0],3'b100};
+			state <= 82;
+		end
+	82:
+		if (bus.resp.ack) begin
 			cs <= LOW;
-			req.cyc <= LOW;
-			req.stb <= LOW;
-			req.we <= LOW;
-			req.sel <= 8'h00;
-			state <= 6'd11;
+			bus.req.cyc <= LOW;
+			bus.req.stb <= LOW;
+			bus.req.we <= LOW;
+//			hte[63:32] <= bus.resp.dat;
+			/*
+			ptge.v <= VAL;
+			ptge.a <= FALSE;
+			ptge.m <= FALSE;
+			ptge.s <= FALSE;
+			ptge.u <= $urandom() & 1;
+			ptge.rwx <= $urandom() & 7;
+			ptge.ppn <= $urandom() >> 18;
+			ptge.vpn <= (vreq.adr & 32'h3fffffff) >> 18;
+			ptge.cache <= $urandom() & 3;
+			ptge.rgn <= $urandom() & 7;
+			ptge.asid <= asid;
+			*/
+			state <= 9;
 		end
-	6'd11:
+	9:
 		begin
-			vreq.adr[31] <= 1'b0;
-			state <= 6'd12;
+			cs <= HIGH;
+			bus.req.cyc <= HIGH;
+			bus.req.stb <= HIGH;
+			bus.req.we <= HIGH;
+			bus.req.dat <= hte[31:0];
+			bus.req.sel <= 8'hFF;
+			bus.req.adr <= {16'hFFFE,fault_group,ffo[2:0],3'b000};
+			state <= 90;
+		end		
+	90:
+		if (bus.resp.ack) begin
+			cs <= LOW;
+			bus.req.cyc <= LOW;
+			bus.req.stb <= LOW;
+			bus.req.we <= LOW;
+			state <= 91;
 		end
-	6'd12:
+	91:
 		begin
-			if (page_fault)
-				state <= 6'd6;
-			else if (padrv)
-				state <= 6'd5;
+			cs <= HIGH;
+			bus.req.cyc <= HIGH;
+			bus.req.stb <= HIGH;
+			bus.req.we <= HIGH;
+			bus.req.dat <= hte[63:32];
+			bus.req.adr <= {16'hFFFE,fault_group,ffo[2:0],3'b100};
+			state <= 10;
+		end		
+	10:
+		if (bus.resp.ack) begin
+			cs <= LOW;
+			bus.req.cyc <= LOW;
+			bus.req.stb <= LOW;
+			bus.req.we <= LOW;
+			state <= 11;
 		end
-	6'd59:
-		$finish;
+	// It takes a couple of cycle to  update
+	11:
+		begin
+			state <= 12;
+		end
+	12:
+		begin
+			state <= 121;
+		end
+	121:
+		begin
+			state <= 122;
+		end
+	122:
+		begin
+			state <= 123;
+		end
+	// Retry faulted address.
+	123:
+		begin
+			// pick a random address
+			ma <= ma + 1;
+			bus.req.cyc <= HIGH;
+			bus.req.stb <= HIGH;
+			bus.req.adr <= vadr;
+			bus.req.adr[31] <= 1'b0;
+			bus.req.we <= $urandom() & 1;
+//				asid <= $urandom() & 10'h3ff;
+			// First ten addresses should not be translated.
+			state <= 120;
+		end
+	120:
+		if (bus.resp.ack) begin
+			bus.req.cyc <= LOW;
+			bus.req.stb <= LOW;
+			bus.req.we <= LOW;
+		end
+		else if (page_fault) begin
+			state <= 6;
+		end
+		else
+			state <= 5;
+	59:
+		begin
+			bcnt = 0;
+			for (cnt = 0; cnt < 128; cnt = cnt + 1)
+				for (pcnt = 0; pcnt < 64; pcnt = pcnt + 1)
+					bcnt = bcnt + uht1.vb[cnt][pcnt];
+			state <= 60;
+		end
+	60:
+		begin
+			$display("Used entries: %d", bcnt);
+			$display("Bounces per accesss: %f", real'(bncnt)/real'(ma));
+			$finish;
+		end
 	default:	;
 	endcase
 end

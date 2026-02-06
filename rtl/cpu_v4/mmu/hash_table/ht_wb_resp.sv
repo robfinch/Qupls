@@ -38,45 +38,57 @@ import const_pkg::*;
 import wishbone_pkg::*;
 import hash_table_pkg::*;
 
-module ht_wb_resp(rst, clk, state, douta, cs, req, resp);
-input rst;
-input clk;
+module ht_wb_resp(bus, state, douta, cs, asid, max_bounce,
+	fault_adr, fault_asid, fault_group, fault_valid, vb);
+parameter WID=32;
+parameter TAB_SIZE=8192;
+wb_bus_interface.slave bus;
 input [1:0] state;
-input ptg_t douta;
+input htg_t douta;
 input cs;
-input wb_cmd_request64_t req;
-output wb_cmd_response64_t resp;
+input [9:0] asid;
+input [7:0] max_bounce;
+input [31:0] fault_adr;
+input [7:0] fault_asid;
+input [9:0] fault_group;
+input [7:0] fault_valid;
+input [WID-1:0] vb [0:TAB_SIZE/WID-1];
 
-always_ff @(posedge clk)
-if (rst)
-	resp <= {$bits(wb_cmd_response64_t){1'b0}};
+always_ff @(posedge bus.clk)
+if (bus.rst)
+	bus.resp <= {$bits(wb_cmd_response64_t){1'b0}};
 else begin
 	case(state)
 	2'd0:	;
 	2'd1:
 		begin
-			resp.tid <= req.tid;
-			resp.pri <= req.pri;
-			resp.dat <= 64'd0;
-			resp.ack <= TRUE;
-			resp.err <= wishbone_pkg::OKAY;
+			bus.resp.tid <= bus.req.tid;
+			bus.resp.pri <= bus.req.pri;
+			bus.resp.dat <= 64'd0;
+			bus.resp.ack <= TRUE;
+			bus.resp.err <= wishbone_pkg::OKAY;
 		end
 	2'd2:
 		begin
-			resp.tid <= req.tid;
-			resp.pri <= req.pri;
-			resp.dat <= douta.ptge[req.adr[5:3]];	
-			resp.ack <= TRUE;
-			resp.err <= wishbone_pkg::OKAY;
+			bus.resp.tid <= bus.req.tid;
+			bus.resp.pri <= bus.req.pri;
+			casez(bus.req.adr[16:0])
+			17'b0?????????????000:	bus.resp.dat <= douta.hte[bus.req.adr[5:3]][31: 0];
+			17'b0?????????????100:	bus.resp.dat <= douta.hte[bus.req.adr[5:3]][63:32];
+			17'b1000000????????00:	bus.resp.dat <= vb[bus.req.adr[9:2]];
+			17'b10000010000000000:	bus.resp.dat <= fault_adr;
+			17'b10000010000000100:	bus.resp.dat <= fault_asid;
+			17'b10000_0100_0000_1000:	bus.resp.dat <= {fault_group,fault_valid};
+			17'b10000010000001100:	bus.resp.dat <= asid;
+			17'b10000010000010000:	bus.resp.dat <= max_bounce;
+			default:	;
+			endcase
+			bus.resp.ack <= TRUE;
+			bus.resp.err <= wishbone_pkg::OKAY;
 		end
 	2'd3:
-		if (~(cs & req.cyc & req.stb)) begin
-			resp.tid <= req.tid;
-			resp.pri <= req.pri;
-			resp.dat <= 64'd0;
-			resp.ack <= FALSE;
-			resp.err <= wishbone_pkg::OKAY;
-		end
+		if (~(cs & bus.req.cyc & bus.req.stb))
+			bus.resp <= {$bits(wb_cmd_response64_t){1'b0}};
 	endcase
 end
 

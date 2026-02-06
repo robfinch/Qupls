@@ -42,16 +42,16 @@ input clk;
 input xlat;
 input found;
 input [2:0] which;
-input ptg_t rec;
+input htg_t rec;
 input [31:0] vadr;
 output reg [31:0] padr;
 output reg padrv;
 
 always_comb
 begin
-	padr[17: 0] = vadr[17:0];
+	padr[17:0] = vadr[17:0];
 	if (xlat) begin
-		padr[31:18] = rec.ptge[which].ppn[13:0];
+		padr[31:18] = rec.hte[which].ppn[13:0];
 		padrv = found;
 	end
 	else begin

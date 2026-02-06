@@ -40,8 +40,9 @@ import wishbone_pkg::*;
 import mmu_pkg::*;
 import cpu_types_pkg::*;
 
-module tlb (clk, bus, stall, paging_en, cs_tlb, iv_count, store_i, id, asid, vadr, vadr_v, padr, padr_v, tlb_v,
-	missack, miss_adr_o, miss_asid_o, miss_id_o, miss_o);
+module tlb (clk, bus, stall, idle, paging_en, cs_tlb, iv_count, store_i, id,
+	asid, vadr, vadr_v, padr, padr_v, tlb_v,
+	missack, miss_adr_o, miss_asid_o, miss_id_o, miss_o, tlb_entry, rst_busy);
 parameter TLB_ENTRIES=512;
 parameter TLB_ASSOC=4;
 parameter LOG_PAGESIZE=13;
@@ -50,6 +51,7 @@ localparam TLB_WBITS=$clog2(TLB_ASSOC);
 input clk;
 wb_bus_interface.slave bus;
 input stall;
+input idle;
 input paging_en;
 input cs_tlb;
 input [5:0] iv_count;
@@ -66,8 +68,11 @@ output address_t miss_adr_o;
 output asid_t miss_asid_o;
 output reg [7:0] miss_id_o;
 output reg miss_o;
+output tlb_entry_t tlb_entry;
+output reg rst_busy;
 
 
+integer n1;
 genvar g;
 
 wire [TLB_ABITS:0] rstcnt;
@@ -98,6 +103,14 @@ tlb_entry_t [TLB_ASSOC-1:0] doutb;
 tlb_entry_t [TLB_ASSOC-1:0] dina;
 tlb_entry_t [TLB_ASSOC-1:0] dinb;
 
+always_comb
+begin
+	tlb_entry = {$bits(tlb_entry_t){1'b0}};
+	foreach(douta[n1])
+		if (hit[n1])
+			tlb_entry = douta[n1];
+end
+
 // update access counts, count is saturating, and shifted right every so often.
 task tam;
 input hit;
@@ -112,6 +125,9 @@ begin
 		o.pte.m = 1'b1;
 end
 endtask
+
+always_comb
+	rst_busy = ~rstcnt[TLB_ABITS];
 
 delay2 #(.WID(1)) udly1 (.clk(clk), .ce(1'b1), .i(cs_tlb & bus.req.cyc & bus.req.stb), .o(dly));
 
@@ -151,10 +167,15 @@ always_comb
 	web[g] = hit[g] & !cd_vadr;
 
 always_comb
-	hit[g] = (douta[g].vpn.vpn[$bits(virtual_address_t)-LOG_PAGESIZE-TLB_ABITS-1:0]==miss_adr[$bits(virtual_address_t)-1:LOG_PAGESIZE+TLB_ABITS] &&
-		(douta[g].pte.g ? TRUE : douta[g].vpn.asid==miss_asid) && douta[g].pte.v && douta[g].count==iv_count);
+	hit[g] = douta[g].pte.v &&
+		(douta[g].vpn.vpn[$bits(virtual_address_t)-LOG_PAGESIZE-TLB_ABITS-1:0]==vadr[$bits(virtual_address_t)-1:LOG_PAGESIZE+TLB_ABITS] &&
+		(douta[g].pte.g ? TRUE : douta[g].vpn.asid==miss_asid && douta[g].count==iv_count));
 
-
+always_ff @(posedge clk)
+begin
+	$display("vadr=%h", vadr);	
+  $display("%d: hit[]=%d douta[]=%h", g, hit[g], douta[g]);
+end
 
 // xpm_memory_spram: Single Port RAM
 // Xilinx Parameterized Macro, version 2025.1
@@ -214,8 +235,9 @@ tlb_adr_mux
 )
 utlba1
 (
-	.rst(rst),
+	.rst(rst|rst_busy),
 	.clk(clk),
+	.idle(idle),
 	.paging_en(paging_en), 
 	.hit(hit),
 	.tlbe(douta),
@@ -235,7 +257,8 @@ utlba1
 tlb_reset_machine
 #(
 	.WID(TLB_ABITS),
-	.TLB_ENTRIES(TLB_ENTRIES)
+	.TLB_ENTRIES(TLB_ENTRIES),
+	.LOG_PAGESIZE(LOG_PAGESIZE)
 )
 utrst1
 (

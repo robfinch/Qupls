@@ -35,41 +35,47 @@
 // ============================================================================
 //
 
-module ht_bounce_counter(rst, clk, xlat, found, vadr, count);
+module ht_bounce_counter(rst, clk, max_bounce, xlat, found, vadr, count, cd_vadr);
 input rst;
 input clk;
+input [7:0] max_bounce;
 input xlat;
 input found;
 input [31:0] vadr;
-output reg [4:0] count;
+output reg [7:0] count;
+output reg cd_vadr;
 
 // Bounce counter
 
-reg [4:0] count1;
+reg [7:0] count1;
 reg [31:0] vadr1;
 always_ff @(posedge clk)
 	vadr1 <= vadr;
 always_comb
-	if (vadr1 != vadr)
-		count = 5'd0;
-	else
+	if (vadr1 != vadr) begin
+		count = 8'd0;
+		cd_vadr = TRUE;
+	end
+	else begin
 		count = count1;
+		cd_vadr = FALSE;
+	end
 
 always_ff @(posedge clk)
 if (rst)
-	count1 <= 5'd0;
+	count1 <= 8'd0;
 else begin
 	if (xlat) begin
 		if (!found) begin	// not found
-			count1 <= count1 + 5'd1;
-			if (count1==5'd30)
-				count1 <= 5'd0;
+			count1 <= count1 + 8'd1;
+			if (count1==max_bounce)
+				count1 <= 8'd0;
 		end
-		else
-			count1 <= 5'd0;
+//		else
+//			count1 <= 8'd0;
 	end
 	if (vadr1 != vadr)
-		count1 <= 5'd0;
+		count1 <= 8'd0;
 end
 
 endmodule

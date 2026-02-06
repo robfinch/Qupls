@@ -37,22 +37,20 @@
 import const_pkg::*;
 import wishbone_pkg::*;
 
-module ht_wea(rst, clk, state, cs, req, wea);
-input rst;
-input clk;
-input [1:0] state;
+module ht_wea(cs, bus, state, wea);
 input cs;
-input wb_cmd_request64_t req;
+wb_bus_interface.slave bus;
+input [1:0] state;
 output reg wea;
 
-always_ff @(posedge clk)
-if (rst)
+always_ff @(posedge bus.clk)
+if (bus.rst)
 	wea <= FALSE;
 else begin
 	case(state)
-	2'd1:	wea <= TRUE;
+	2'd1:	wea <= ~bus.req.adr[16];
 	2'd3:
-		if (~(cs & req.cyc & req.stb))
+		if (~(cs & bus.req.cyc & bus.req.stb))
 			wea <= FALSE;
 	default:	;
 	endcase

@@ -1,3 +1,4 @@
+`timescale 1ns / 1ps
 // ============================================================================
 //        __
 //   \\__/ o\    (C) 2026  Robert Finch, Waterloo
@@ -33,54 +34,30 @@
 //
 // ============================================================================
 //
-package hash_table_pkg;
+import hash_table_pkg::*;
 
-typedef struct packed {
-	logic v;							// valid entry
-	logic d;							// deleted
-	logic [2:0] resv;
-	logic [2:0] rgn;			// memory region (DRAM)
-	logic m;							// modified
-	logic a;							// accessed
-	logic t;							//
-	logic s;							// shared
-	logic g;							// global page
-	logic [2:0] sw;
-	logic [1:0] cache;		// 0=none,1=L1,2=L2,3=LLC
-	logic [9:0] asid;
-	logic u;							// 1= user space
-	logic [2:0] rwx;
-	logic [15:0] ppn;			// physcial page number
-	logic [15:0] vpn;			// virtual page number
-} hte_t;								// 64-bits
-
-typedef struct packed {
-	hte_t [7:0] hte;
-} htg_t;
-
-function [9:0] fnHash;
+module ht_padr(rst, clk, xlat, found, which, rec, vadr, padr, padrv);
+input rst;
+input clk;
+input xlat;
+input found;
+input [2:0] which;
+input ptg_t rec;
 input [31:0] vadr;
-input [9:0] asid;
-begin
-	fnHash = vadr[27:18]^asid;
-end
-endfunction
+output reg [31:0] padr = 32'd0;
+output reg padrv = 1'b0;
 
-// Find an entry in a page table group register.
-
-function [3:0] fnFind;
-input htg_t rec;
-input [31:0] vadr;
-input [9:0] asid;
-integer n;
+always_comb
 begin
-	fnFind = 4'hF;
-	for (n = 0; n < 8; n = n + 1) begin
-		if (rec.hte[n].v && !rec.hte[n].d && rec.hte[n].vpn==vadr[29:18] && (rec.hte[n].g ? 1'b1 : rec.hte[n].asid == asid))
-			fnFind = {1'b0,n[2:0]};
+	padr[17: 0] = vadr[17:0];
+	if (xlat) begin
+		padr[31:18] = rec.ptge[which].ppn[13:0];
+		padrv = found;
+	end
+	else begin
+		padr[31:18] = vadr[31:18];
+		padrv = VAL;
 	end
 end
-endfunction
 
-endpackage
-
+endmodule

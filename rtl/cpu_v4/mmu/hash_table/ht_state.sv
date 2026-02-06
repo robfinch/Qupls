@@ -36,32 +36,32 @@
 //
 import wishbone_pkg::*;
 
-module ht_state(rst, clk, cs, req, state);
-input rst;
-input clk;
+module ht_state(cs, bus, state);
 input cs;
-input wb_cmd_request64_t req;
+wb_bus_interface.slave bus;
 output reg [1:0] state;
 
 // Update state machine
-always_ff @(posedge clk)
-if (rst)
+always_ff @(posedge bus.clk)
+if (bus.rst)
 	state <= 2'd0;
 else begin
 	case(state)
 	2'd0:
-		if (cs & req.cyc & req.stb) begin
-			if (req.we)
-				state <= 2'd1;
-			else
-				state <= 2'd2;
+		if (cs & bus.req.cyc & bus.req.stb) begin
+			state <= 2'd2;
 		end
 	2'd1:
 		state <= 2'd3;
 	2'd2:
-		state <= 2'd3;
+		begin
+			if (bus.req.we)
+				state <= 2'd1;
+			else
+				state <= 2'd3;
+		end
 	2'd3:
-		if (~(cs & req.cyc & req.stb))
+		if (~(cs & bus.req.cyc & bus.req.stb))
 			state <= 2'd0;
 	endcase
 end

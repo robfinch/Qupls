@@ -242,7 +242,7 @@ reg swt;			// software translation request
 wire pswt_v;	// physical software translation valid
 wire cs_rgn;
 wire [255:0] region_dat;
-REGION region0, region1, region2;
+region_t region0, region1, region2;
 wire [7:0] rgn_sel0, rgn_sel1, rgn_sel2;
 reg priv_err0, priv_err1,priv_err2;
 Qupls4_pkg::operating_mode_t om;
@@ -556,21 +556,41 @@ region_tbl urgnt1
 	.rst(rst),
 	.clk(clk),
 	.cs_rgn(cs_rgn),
-	.rgn0(tlb_entry0.pte.l1.rgn),
-	.rgn1(tlb_entry1.pte.l1.rgn),
-	.rgn2(tlb_pc_entry.pte.l1.rgn),
+	.rgn(tlb_entry0.pte.l1.rgn),
 	.ftas_req(sreqd),
 	.region_dat(region_dat),
 	.region_num(),
-	.region0(region0),
-	.region1(region1),
-	.region2(region2),
-	.sel0(rgn_sel0),
-	.sel1(rgn_sel1),
-	.sel2(rgn_sel2),
-	.err0(),
-	.err1(),
-	.err2()
+	.region(region0),
+	.sel(rgn_sel0),
+	.err()
+);
+
+region_tbl urgnt2
+(
+	.rst(rst),
+	.clk(clk),
+	.cs_rgn(cs_rgn),
+	.rgn(tlb_entry1.pte.l1.rgn),
+	.ftas_req(sreqd),
+	.region_dat(),
+	.region_num(),
+	.region(region1),
+	.sel(rgn_sel1),
+	.err()
+);
+
+region_tbl urgnt3
+(
+	.rst(rst),
+	.clk(clk),
+	.cs_rgn(cs_rgn),
+	.rgn(tlb_pc_entry.pte.l1.rgn),
+	.ftas_req(sreqd),
+	.region_dat(),
+	.region_num(),
+	.region(region2),
+	.sel(rgn_sel2),
+	.err()
 );
 
 //`ifdef 0

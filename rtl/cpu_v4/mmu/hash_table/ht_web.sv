@@ -36,22 +36,20 @@
 //
 import wishbone_pkg::*;
 
-module ht_web(rst, clk, xlat, found, req, web);
-input rst;
-input clk;
+module ht_web(bus, xlat, found, web);
+wb_bus_interface.slave bus;
 input xlat;
 input found;
-input wb_cmd_request64_t req;
 output reg web;
 
-always_ff @(posedge clk)
-if (rst)
+always_ff @(posedge bus.clk)
+if (bus.rst)
 	web <= 1'd0;
 else begin
 	web <= 1'b0;
 	if (xlat) begin
 		if (found) begin
-			if (req.cyc & req.stb)
+			if (bus.req.cyc & bus.req.stb)
 				web <= 1'b1;
 		end
 	end

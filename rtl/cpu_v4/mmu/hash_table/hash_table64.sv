@@ -40,41 +40,42 @@ import const_pkg::*;
 import wishbone_pkg::*;
 import hash_table_pkg::*;
 
-module hash_table(cs,bus,padr,padrv,page_fault);
-parameter WID=32;
+module hash_table(rst,clk,cs,req,resp,vreq,vresp,asid,padr,padrv,
+	max_bounce,page_fault,fault_adr,fault_asid,fault_group,vb);
+parameter WID=64;
 parameter TAB_SIZE=8192;
-parameter SIM=0;
+input rst;
+input clk;
 input cs;
-wb_bus_interface.slave bus;
+input wb_cmd_request64_t req;
+output wb_cmd_response64_t resp;
+input wb_cmd_request64_t vreq;
+output wb_cmd_response64_t vresp;
+input [9:0] asid;
 output reg [31:0] padr;
 output reg padrv;
+input [7:0] max_bounce;
 output reg page_fault;
+output reg [31:0] fault_adr;
+output reg [9:0] fault_asid;
+output reg [17:0] fault_group;
+output [63:0] vb [0:127];
 
 integer n;
-wire rst = bus.rst;
-wire clk = bus.clk;
 wire [1:0] state;
 reg xlat;
 reg found;
 wire wea,ena;
 wire web;
-htg_t dina, dinb;
-htg_t douta,doutb;
+ptg_t dina, dinb;
+ptg_t douta,doutb;
 reg [3:0] fnd;
-htg_t rec;
+ptg_t hold;
+ptg_t rec;
 wire [9:0] page_group;
 wire [9:0] hash;
 wire [7:0] bounce;
 reg [7:0] empty;
-wire [9:0] asid;
-wire [7:0] max_bounce;
-reg [31:0] fault_adr;
-reg [9:0] fault_asid;
-reg [9:0] fault_group;
-wire [7:0] fault_valid;
-wire [WID-1:0] vb [0:TAB_SIZE/WID-1];
-wire cd_vadr;
-reg [31:0] vadr;
 
 // xpm_memory_tdpram: True Dual Port RAM
 // Xilinx Parameterized Macro, version 2025.1
@@ -95,7 +96,7 @@ xpm_memory_tdpram #(
   .MEMORY_INIT_PARAM("0"),        // String
   .MEMORY_OPTIMIZATION("true"),   // String
   .MEMORY_PRIMITIVE("auto"),      // String
-  .MEMORY_SIZE(512*TAB_SIZE/8),   // DECIMAL
+  .MEMORY_SIZE(512*1024),          // DECIMAL
   .MESSAGE_CONTROL(0),            // DECIMAL
   .RAM_DECOMP("auto"),            // String
   .READ_DATA_WIDTH_A(512),         // DECIMAL
@@ -124,7 +125,7 @@ xpm_memory_tdpram_inst (
   .doutb(doutb),                   // READ_DATA_WIDTH_B-bit output: Data output for port B read operations.
   .sbiterra(),             // 1-bit output: Status signal to indicate single bit error occurrence on the data output of port A.
   .sbiterrb(),             // 1-bit output: Status signal to indicate single bit error occurrence on the data output of port B.
-  .addra(bus.req.adr[15:6]),          // ADDR_WIDTH_A-bit input: Address for port A write and read operations.
+  .addra(req.adr[15:6]),          // ADDR_WIDTH_A-bit input: Address for port A write and read operations.
   .addrb(hash),                   // ADDR_WIDTH_B-bit input: Address for port B write and read operations.
   .clka(clk),                     // 1-bit input: Clock signal for port A. Also clocks port B when parameter CLOCKING_MODE is "common_clock".
   .clkb(clk),                     // 1-bit input: Clock signal for port B when parameter CLOCKING_MODE is "independent_clock". Unused when
@@ -173,76 +174,70 @@ xpm_memory_tdpram_inst (
 
 // End of xpm_memory_tdpram_inst instantiation
 
-always_comb
-	fnd <= fnFind(doutb,vadr,asid) & {xlat,3'b0};
+always_ff @(posedge clk)
+	fnd <= fnFind(doutb,vreq.adr,asid) & {xlat,3'b0};
 always_comb
 	for (n = 0; n < 8; n = n + 1)
-		empty[n] = ~doutb.hte[n].v;
+		empty[n] = ~doutb.ptge[n].v;
 
-always_ff @(posedge clk)
-	vadr <=  bus.req.adr;
-always_ff @(posedge clk)
-	xlat <= ~bus.req.adr[31];
+always_comb
+	xlat = ~vreq.adr[31];
 always_comb
 	found = ~fnd[3];
 always_ff @(posedge clk)
 	if (page_fault)
-		fault_adr <= {2'b0,bus.req.adr[29:0]};
+		fault_adr <= {1'b0,vreq.adr[30:0]};
 always_ff @(posedge clk)
 	if (page_fault)
 		fault_asid <= asid;
 
-ht_bus_interface ubi1
-(
-	.cs(cs),
-	.bus(bus),
-	.asid(asid),
-	.max_bounce(max_bounce)
-);
-
 // Update state machine
 ht_state ustate1
 (
+	.rst(rst), 
+	.clk(clk),
 	.cs(cs),
-	.bus(bus),
+	.req(req),
 	.state(state)
 );
 
-ht_wb_resp #(.WID(WID), .TAB_SIZE(TAB_SIZE)) uresp1
+ht_wb_resp uresp1
 (
-	.cs(cs),
-	.bus(bus),
+	.rst(rst),
+	.clk(clk),
 	.state(state),
 	.douta(douta),
-	.fault_adr(fault_adr),
-	.fault_asid(fault_asid),
-	.fault_group(fault_group),
-	.fault_valid(fault_valid),
-	.vb(vb),
-	.asid(asid),
-	.max_bounce(max_bounce)
+	.cs(cs),
+	.req(req),
+	.resp(resp)
 );
 
 ht_ena uena1(
-	.cs(cs),
-	.bus(bus),
+	.rst(rst),
+	.clk(clk),
 	.state(state),
+	.cs(cs),
+	.req(req),
 	.ena(ena)
 );
 
 ht_wea uwea1
 (
-	.cs(cs),
-	.bus(bus),
+	.rst(rst),
+	.clk(clk),
 	.state(state),
+	.cs(cs),
+	.req(req),
 	.wea(wea)
 );
 
 // table record to update, CPU side
 ht_dina udina1
 (
-	.bus(bus),
+	.rst(rst),
+	.clk(clk),
 	.state(state),
+	.req(req),
 	.douta(douta),
 	.dina(dina)
 );
@@ -250,9 +245,11 @@ ht_dina udina1
 // write strobe to update a,m
 ht_web uws1
 (
-	.bus(bus),
+	.rst(rst),
+	.clk(clk),
 	.xlat(xlat),
 	.found(found),
+	.req(vreq),
 	.web(web)
 );
 
@@ -260,23 +257,25 @@ ht_web uws1
 // table record to update, hash Table side
 ht_dinb udinb1
 (
-	.bus(bus),
+	.rst(rst),
+	.clk(clk),
 	.xlat(xlat),
 	.found(found),
 	.which(fnd[2:0]),
+	.req(vreq),
 	.doutb(doutb),
 	.dinb(dinb)
 );
 
 ht_padr upa1
 (
-	.rst(bus.rst),
-	.clk(bus.clk),
-	.vadr(vadr),
+	.rst(rst),
+	.clk(clk),
 	.xlat(xlat),
 	.found(found),
 	.which(fnd[2:0]),
 	.rec(doutb),
+	.vadr(vreq.adr),
 	.padr(padr),
 	.padrv(padrv)
 );
@@ -286,7 +285,6 @@ ht_page_fault upf1
 (
 	.rst(rst),
 	.clk(clk),
-	.cd_vadr(cd_vadr),
 	.xlat(xlat),
 	.found(found),
 	.empty(empty),
@@ -295,7 +293,6 @@ ht_page_fault upf1
 	.current_group(hash),
 	.page_group(page_group),
 	.fault_group(fault_group),
-	.fault_valid(fault_valid),
 	.page_fault(page_fault)
 );
 
@@ -307,7 +304,7 @@ ht_hash uhash1
 	.xlat(xlat),
 	.found(found),
 	.empty(empty),
-	.vadr(bus.req.adr),
+	.vadr(vreq.adr),
 	.asid(asid),
 	.bounce(bounce),
 	.hash(hash),
@@ -322,20 +319,17 @@ ht_bounce_counter uhtbc1
 	.max_bounce(max_bounce),
 	.xlat(xlat),
 	.found(found| (|empty)),
-	.vadr(bus.req.adr),
-	.count(bounce),
-	.cd_vadr(cd_vadr)
+	.vadr(vreq.adr),
+	.count(bounce)
 );
 
-generate begin : gValidBits
-	if (SIM)
 ht_valid #(.WID(WID), .DEP(TAB_SIZE/WID)) uhtv1
 (
-	.bus(bus),
+	.rst(rst),
+	.clk(clk),
 	.state(state),
+	.req(req),
 	.vb(vb)
 );
-end
-endgenerate
 
 endmodule
