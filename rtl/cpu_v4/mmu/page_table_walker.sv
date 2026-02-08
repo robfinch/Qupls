@@ -37,6 +37,7 @@
 // ============================================================================
 
 import cpu_types_pkg::*;
+import mmu_pkg::*;
 
 module page_table_walker (rst, clk,
 	flush_cnt, flush_en, flush_done,
@@ -50,6 +51,7 @@ module page_table_walker (rst, clk,
 	tlb_entry, tlb_v,
 	rst_busy);
 parameter SHORTCUT = 1;
+parameter LRU = 1;
 parameter TLB_ENTRIES = 512;
 parameter TLB2_ENTRIES = 128;
 parameter LOG_PAGESIZE = 13;
@@ -58,6 +60,10 @@ parameter TLB_ASSOC = 4;
 parameter TLB2_ASSOC = 2;
 localparam TLB_ABITS=$clog2(TLB_ENTRIES);
 localparam TLB2_ABITS=$clog2(TLB2_ENTRIES);
+// Log2 of the number of PTE entries per page of memory.
+localparam LOG_PTE_ENTRIES = LOG_PAGESIZE-3;
+localparam TLB_NDX_MASK = ((32'd1 << LOG_PAGESIZE)-1);
+localparam TLB2_NDX_MASK = ((32'd1 << LOG_PAGESIZE2)-1);
 input rst;
 input clk;
 input [11:0] flush_cnt;
@@ -94,6 +100,9 @@ output reg rst_busy;
 typedef enum logic [5:0]
 {
 	st_idle = 0,
+	st_search2,
+	st_search3,
+	st_search4,
 	st_read_lev1,
 	st_read_lev1_2,
 	st_read_lev1_3,
@@ -184,6 +193,11 @@ wire nsc_rst_busy;
 wire sc_tlb_v;
 wire nsc_tlb_v;
 reg [2:0] retry;
+address_t pt_adr_plus_index;
+wire [TLB_ASSOC-1:0] nsc_empty;
+wire [TLB2_ASSOC-1:0] sc_empty;
+address_t cmp_mask;
+address_t pg_offset;
 
 pte_adr_t [3:0] level1;
 pte_adr_t level2;
@@ -214,6 +228,7 @@ lfsr27 #(.WID(27)) ulfsr1(rst, clk, 1'b1, 1'b0, lfsro);
 
 tlb
 #(
+	.LRU(LRU),
 	.TLB_ENTRIES(TLB_ENTRIES),
 	.TLB_ASSOC(TLB_ASSOC),
 	.LOG_PAGESIZE(LOG_PAGESIZE)
@@ -241,7 +256,8 @@ utlb1
 	.miss_id_o(miss_id_o),
 	.miss_o(nsc_miss_o),
 	.tlb_entry(nsc_tlb_entry),
-	.rst_busy(nsc_rst_busy)
+	.rst_busy(nsc_rst_busy),
+	.empty(nsc_empty)
 );
 
 generate begin : gTLB2
@@ -275,7 +291,8 @@ utlb2
 	.miss_id_o(sc_miss_id_o),
 	.miss_o(sc_miss_o),
 	.tlb_entry(sc_tlb_entry),
-	.rst_busy(sc_rst_busy)
+	.rst_busy(sc_rst_busy),
+	.empty(sc_empty)
 );
 
 counter #(.WID(12)) uflctr2 (
@@ -305,10 +322,14 @@ always_comb
 always_comb
 	tlb_v = nsc_tlb_v|sc_tlb_v;
 
+//always_comb
+//	pg_offset = miss_adr & (sc ? TLB2_NDX_MASK:TLB_NDX_MASK);
 always_comb
-	pt_index = (((miss_adr >> (LOG_PAGESIZE * level)) % TLB_ENTRIES) << 4'h3);
+	pt_index = (((miss_adr1 >> (LOG_PTE_ENTRIES * level + LOG_PAGESIZE)) % TLB_ENTRIES) << 4'h3);
 always_comb
-	next_pt_index = (((miss_adr >> (LOG_PAGESIZE * (level-1))) % TLB_ENTRIES) << 4'h3);
+	pt_adr_plus_index = pt_adr + pt_index;
+always_comb
+	next_pt_index = (((miss_adr1 >> (LOG_PTE_ENTRIES * (level-1)) + LOG_PAGESIZE) % TLB_ENTRIES) << 4'h3);
 always_comb
 	pte = mbus.resp.dat;
 
@@ -358,8 +379,8 @@ else begin
 				miss_adr1 <= miss_adr;
 				missack <= TRUE;
 				case(pt_attr.level)
-				1:	tGosub(st_read_lev1);
-				2:	tGosub(st_read_lev2);
+				0:	tCall(st_read_lev1,st_idle);
+				1:	tCall(st_read_lev2,st_idle);
 	//			3:	state <= st_read_lev3;
 				// ToDo implement other levels
 				default:	;
@@ -394,7 +415,7 @@ else begin
 	// read or write a specific TLB entry.
 	st_readwrite_pte:
 		// aborted cycle?
-		if (!((cs_tlb|cs_tlb2) & sbus.req.cyc & sbus.req.stb))) begin
+		if (!((cs_tlb|cs_tlb2) & sbus.req.cyc & sbus.req.stb)) begin
 			paging_en <= TRUE;
 			ics_tlb <= LOW;
 			ics_tlb2 <= LOW;
@@ -428,31 +449,31 @@ else begin
 	// Read lowest level page table.
 	st_read_lev1:
 		begin
-			$display("miss address=%h", miss_adr);
+			$display("PTW: miss address=%h", miss_adr);
 			if (fndLevel1[2] && level1[fndLevel1[1:0]].pte.v) begin
-				$display("Level2 cached read of %h", level1[fndLevel1[1:0]].adr);
+				$display("PTW: Level2 cached read of %h", level1[fndLevel1[1:0]].adr);
 				pt_adr <= (level1[fndLevel1[1:0]].pte.ppn << LOG_PAGESIZE) + next_pt_index;
 				tlbe <= {$bits(tlb_entry_t){1'b0}};
 				tlbe.pte <= level1[fndLevel1[1:0]].pte;
 				tlbe.pte.a <= FALSE;
 				tlbe.pte.m <= FALSE;
-				tlbe.vpn.vpn <= miss_adr >> (LOG_PAGESIZE + TLB_ABITS);
-				tlbe.vpn.asid <= miss_asid;
+				tlbe.vpn <= miss_adr >> (LOG_PAGESIZE + TLB_ABITS);
+				tlbe.asid <= miss_asid;
 				tlbe.count <= iv_count;
-				read_adr <= (((miss_adr >> LOG_PAGESIZE) % TLB_ENTRIES) << 4'd4) + tlb_base_adr;
+				read_adr <= (((miss_adr1 >> LOG_PAGESIZE) % TLB_ENTRIES) << 4'd4) + tlb_base_adr;
 				pte_adr <= level1[fndLevel1[1:0]].adr;
-				way <= lfsro[1:0];
+				way <= LRU ? 0 : lfsro[7:0];
 				retry <= 3'd0;
 				all_ways_locked <= FALSE;
 				tCall(st_read_tlb,st_read_lev1_4);
 			end
 			else begin
-				$display("Level1 read of %h", pt_adr + pt_index);
+				$display("PTW: Level1 read of %h", pt_adr_plus_index);
 				mbus.req.cyc <= HIGH;
 				mbus.req.stb <= HIGH;
 				mbus.req.sel <= 32'hFF << {pt_index[4:3],3'h0};
-				mbus.req.adr <= pt_adr + pt_index;
-				pte_adr <= pt_adr + pt_index;
+				mbus.req.adr <= pt_adr_plus_index;
+				pte_adr <= pt_adr_plus_index;
 				tGoto(st_read_lev1_2);
 			end
 			level <= 3'd0;
@@ -460,14 +481,14 @@ else begin
 	st_read_lev1_2:
 		if (mbus.resp.ack) begin
 			mbus.req <= {$bits(wb_cmd_request256_t){1'b0}};
-			$display("Level1 PTE=%h", pte);
+			$display("PTW: Level1 PTE=%h", pte);
 			if (pte.v) begin
 				tlbe <= {$bits(tlb_entry_t){1'b0}};
 				tlbe.pte <= pte;
 				tlbe.pte.a <= FALSE;
 				tlbe.pte.m <= FALSE;
-				tlbe.vpn.vpn <= miss_adr >> (LOG_PAGESIZE + TLB_ABITS);
-				tlbe.vpn.asid <= miss_asid;
+				tlbe.vpn <= miss_adr1 >> (LOG_PAGESIZE + TLB_ABITS);
+				tlbe.asid <= miss_asid;
 				tlbe.count <= iv_count;
 				// Cache lookup
 				level1[3].pte <= pte;
@@ -477,8 +498,8 @@ else begin
 				level1[2] <= level1[3];
 				level1[1] <= level1[2];
 				level1[0] <= level1[1];
-				read_adr <= (((miss_adr >> LOG_PAGESIZE) % TLB_ENTRIES) << 4'd4) + tlb_base_adr;
-				way <= lfsro[1:0];
+				read_adr <= (((miss_adr1 >> LOG_PAGESIZE) % TLB_ENTRIES) << 4'd4) + tlb_base_adr;
+				way <= LRU ? 8'd0 : lfsro[7:0];
 				retry <= 3'd0;
 				all_ways_locked <= FALSE;
 				tCall(st_read_tlb,st_read_lev1_4);
@@ -496,6 +517,9 @@ else begin
 				tRet();
 			else begin
 				update_adr <= read_adr;
+				// Switch to highest way for LRU updates
+				if (LRU)
+					way <= TLB_ASSOC-1;
 				tCall(st_update_tlb,st_idle);
 			end
 		end
@@ -503,36 +527,39 @@ else begin
 	// Read level 2 of the page tables.
 	st_read_lev2:
 		begin
-			$display("miss address=%h", miss_adr);
+			$display("PTW: miss address=%h", miss_adr1);
 			if (level2.adr==pt_adr + pt_index && level2.pte.v) begin
-				$display("Level2 cached read of %h", level2.adr);
+				$display("PTW: Level2 cached read of %h", level2.adr);
 				tlbe <= {$bits(tlb_entry_t){1'b0}};
 				tlbe.pte <= pte;
-				tlbe.pte.a <= TRUE;
+				tlbe.pte.a <= FALSE;
 				tlbe.pte.m <= FALSE;
-				tlbe.vpn.vpn <= miss_adr >> (LOG_PAGESIZE2 + TLB2_ABITS);
-				$display("Setting VPN=%h for %h", miss_adr >> (LOG_PAGESIZE2 + TLB2_ABITS), miss_adr);
-				tlbe.vpn.asid <= miss_asid;
+				tlbe.asid <= miss_asid;
 				tlbe.count <= iv_count;
 				pte_adr <= level2.adr;
 				pt_adr <= (level2.pte.ppn << LOG_PAGESIZE) + next_pt_index;
-				if (level2.pte.s & SHORTCUT) begin
-					read_adr <= (((miss_adr >> LOG_PAGESIZE2) % TLB2_ENTRIES) << 4'd4) + tlb2_base_adr;
-					way <= lfsro[1:0];
+				if (level2.pte.typ==PTP_SHORTCUT & SHORTCUT) begin
+					$display("PTW: Setting VPN=%h for %h", (miss_adr & 64'hFFFFFFFFFF800000) >> (LOG_PAGESIZE + TLB_ABITS), miss_adr);
+					tlbe.vpn <= (miss_adr1 & 64'hFFFFFFFFFF800000) >> (LOG_PAGESIZE + TLB_ABITS);
+					read_adr <= (((miss_adr1 >> LOG_PAGESIZE2) % TLB2_ENTRIES) << 4'd4) + tlb2_base_adr;
+					way <= LRU ? 0 : lfsro[7:0];
 					retry <= 3'd0;
 					all_ways_locked <= FALSE;
 					tCall(st_read_tlb2a,st_read_lev2_4);
 				end
-				else
+				else begin
+					$display("PTW: Setting VPN=%h for %h", miss_adr >> (LOG_PAGESIZE + TLB_ABITS), miss_adr);
+					tlbe.vpn <= miss_adr >> (LOG_PAGESIZE + TLB_ABITS);
 					tGoto(st_read_lev1);
+				end
 			end
 			else begin
 				mbus.req.cyc <= HIGH;
 				mbus.req.stb <= HIGH;
 				mbus.req.sel <= 32'hFF << {pt_index[4:3],3'h0};
-				mbus.req.adr <= pt_adr + pt_index;
-				pte_adr <= pt_adr + pt_index;
-				$display("Level2 read of %h", pt_adr + pt_index);
+				mbus.req.adr <= pt_adr_plus_index;
+				pte_adr <= pt_adr_plus_index;
+				$display("PTW: Level2 read of %h", pt_adr_plus_index);
 				tGoto(st_read_lev2_2);
 			end
 			level <= level - 2'd1;
@@ -540,36 +567,46 @@ else begin
 	st_read_lev2_2:
 		if (mbus.resp.ack) begin
 			mbus.req <= {$bits(wb_cmd_request256_t){1'b0}};
-			$display("Level2 PTE=%h", pte);
+			$display("PTW: Level2 PTE=%h", pte);
 			if (pte.v) begin
 				// Cache lookup
 				level2.pte <= pte;
 				level2.pte.a <= FALSE;
 				level2.pte.m <= FALSE;
 				level2.adr <= pte_adr;
-				pt_adr <= (pte.ppn << LOG_PAGESIZE) + pt_index;
-				read_adr <= (((miss_adr >> LOG_PAGESIZE) % TLB_ENTRIES) << 4'd4) + tlb_base_adr;
+				pt_adr <= (pte.ppn << LOG_PAGESIZE);// + pt_index;
 				way <= lfsro[1:0];
-				if (pte.s & SHORTCUT) begin
-					read_adr <= (((miss_adr >> LOG_PAGESIZE2) % TLB2_ENTRIES) << 4'd4) + tlb2_base_adr;
+				if (pte.typ==PTP_SHORTCUT & SHORTCUT) begin
+					read_adr <= ((((miss_adr1 & 64'hFFFFFFFFFF800000)>> LOG_PAGESIZE2) % TLB2_ENTRIES) << 4'd4) + tlb2_base_adr;
 					tlbe <= {$bits(tlb_entry_t){1'b0}};
 					tlbe.pte <= pte;
-					tlbe.pte.a <= TRUE;
+					tlbe.pte.a <= FALSE;
 					tlbe.pte.m <= FALSE;
-					tlbe.vpn.vpn <= miss_adr >> (LOG_PAGESIZE2 + TLB2_ABITS);
-					$display("Setting VPN=%h for %h", miss_adr >> (LOG_PAGESIZE2 + TLB2_ABITS), miss_adr);
-					tlbe.vpn.asid <= miss_asid;
+					tlbe.vpn <= (miss_adr & 64'hFFFFFFFFFF800000)>> (LOG_PAGESIZE + TLB2_ABITS);
+					$display("PTW: Setting VPN=%h for %h", miss_adr1 >> (LOG_PAGESIZE2 + TLB2_ABITS), miss_adr1);
+					tlbe.asid <= miss_asid;
 					tlbe.count <= iv_count;
 					way <= lfsro[1:0];
 					retry <= 3'd0;
 					all_ways_locked <= FALSE;
 					tCall(st_read_tlb2a,st_read_lev2_4);
 				end
-				else
+				else begin
+					read_adr <= (((miss_adr1 >> LOG_PAGESIZE) % TLB_ENTRIES) << 4'd4) + tlb_base_adr;
+					$display("PTW: Setting VPN=%h for %h", miss_adr >> (LOG_PAGESIZE + TLB_ABITS), miss_adr1);
+					tlbe <= {$bits(tlb_entry_t){1'b0}};
+					tlbe.pte <= pte;
+					tlbe.pte.a <= FALSE;
+					tlbe.pte.m <= FALSE;
+					tlbe.vpn <= miss_adr >> (LOG_PAGESIZE + TLB_ABITS);
+					$display("PTW: Setting VPN=%h for %h", miss_adr1 >> (LOG_PAGESIZE + TLB_ABITS), miss_adr1);
+					tlbe.asid <= miss_asid;
+					tlbe.count <= iv_count;
 					tGoto(st_read_lev2_3);
+				end
 			end
 			else begin
-				$display("Level2 Page fault");
+				$display("PTE: Level2 Page fault");
 				page_fault <= TRUE;
 				tRet();
 			end
@@ -582,15 +619,18 @@ else begin
 				tRet();
 			else begin
 				update_adr <= read_adr;
+				// Switch to highest way for LRU updates
+				if (LRU)
+					way <= TLB2_ASSOC-1;
 				tCall(st_update_tlb2a,st_idle);
 			end
 		end
 
-	// Read the TLB (or TLB2) to see if the entry being overwritten should be copied to
+	// Read the TLB to see if the entry being overwritten should be flushed to
 	// memory first.
 	st_read_tlb:
 		begin
-			$display("ReadTLB: %h", read_adr);
+			$display("PTW: ReadTLB: %h:%h", read_adr, way);
 			ics_tlb <= HIGH;
 			tlb_bus.req.cyc <= HIGH;
 			tlb_bus.req.stb <= HIGH;
@@ -623,11 +663,12 @@ else begin
 		end
 	st_read_tlb5:
 		begin
-			$display("ReadTLB TLBE=%h", tlbe_tmp);
+			// For LRU the way will not be locked as way zero is read.
+			$display("PTW: ReadTLB TLBE=%h", tlbe_tmp);
 			if (tlbe_tmp.lock) begin
 				retry <= retry + 1;
-				way <= way + 1;
-				if (retry==3'd3) begin
+				way <= way - 1;
+				if (retry==TLB_ASSOC-1) begin
 					all_ways_locked <= TRUE;
 					page_fault <= TRUE;
 					tRet();
@@ -646,7 +687,7 @@ else begin
 	// memory first.
 	st_read_tlb2a:
 		begin
-			$display("ReadTLB2: %h", read_adr);
+			$display("PTW: ReadTLB2: %h:%h", read_adr, way);
 			ics_tlb2 <= HIGH;
 			tlb2_bus.req.cyc <= HIGH;
 			tlb2_bus.req.stb <= HIGH;
@@ -679,10 +720,11 @@ else begin
 		end
 	st_read_tlb2a5:
 		begin
-			$display("ReadTLB2 TLBE=%h", tlbe_tmp);
+			// For LRU the way will not be locked as way zero is read.
+			$display("PTW: ReadTLB2 TLBE=%h", tlbe_tmp);
 			if (tlbe_tmp.lock) begin
 				retry <= retry + 1;
-				way <= way + 1;
+				way <= way - 1;
 				if (retry==3'd3) begin
 					all_ways_locked <= TRUE;
 					page_fault <= TRUE;
@@ -702,7 +744,7 @@ else begin
 	// The modified / accessed bits may have been set.
 	st_store_pte:
 		begin
-			$display("Store PTE: adr=%h pte=%h", pte_adr, tlbe_tmp.pte);
+			$display("PTW: Store PTE: adr=%h pte=%h", pte_adr, tlbe_tmp.pte);
 			mbus.req.cyc <= HIGH;
 			mbus.req.stb <= HIGH;
 			mbus.req.we <= HIGH;
@@ -722,7 +764,7 @@ else begin
 	// Write the TLB entry to the TLB
 	st_update_tlb:
 		begin
-			$display("Update TLB: adr=%h tlbe=%h", update_adr, tlbe);
+			$display("PTW: Update TLB: adr=%h tlbe=%h", update_adr, tlbe);
 			paging_en <= FALSE;
 			ics_tlb <= HIGH;
 			tlb_bus.req.cyc <= HIGH;
@@ -744,7 +786,7 @@ else begin
 			tlb_bus.req.stb <= HIGH;
 			tlb_bus.req.we <= HIGH;
 			tlb_bus.req.sel <= 8'hFF;
-			tlb_bus.req.adr <= update_adr + 4'h8;
+			tlb_bus.req.adr <= update_adr | 4'h8;
 			tlb_bus.req.dat <= tlbe[127:64];
 			tGoto(st_update_tlb4);
 		end
@@ -761,7 +803,7 @@ else begin
 	// Write the TLB entry to the TLB
 	st_update_tlb2a:
 		begin
-			$display("Update TLB2: adr=%h tlbe=%h", update_adr, tlbe);
+			$display("PTW: Update TLB2: adr=%h tlbe=%h", update_adr, tlbe);
 			paging_en <= FALSE;
 			ics_tlb2 <= HIGH;
 			tlb2_bus.req.cyc <= HIGH;
@@ -783,7 +825,7 @@ else begin
 			tlb2_bus.req.stb <= HIGH;
 			tlb2_bus.req.we <= HIGH;
 			tlb2_bus.req.sel <= 8'hFF;
-			tlb2_bus.req.adr <= update_adr + 4'h8;
+			tlb2_bus.req.adr <= update_adr | 4'h8;
 			tlb2_bus.req.dat <= tlbe[127:64];
 			tGoto(st_update_tlb2a4);
 		end
@@ -798,14 +840,14 @@ else begin
 	// Perform a flush cycle.
 	st_flush_tlb:
 		begin
-			$display("Flush TLB %h", flush_adr);
+			$display("PTW: Flush TLB %h", flush_adr);
 			read_adr <= flush_adr;
 			way <= flush_way;
-			tCall(st_read_tlb,st_flush_tlb2);			
+			tCall(st_read_tlb,st_flush_tlb2);
 		end
 	st_flush_tlb2:
 		begin
-			if ((~iv_all ? iv_asid == tlbe_tmp.vpn.asid : tlbe_tmp.count != iv_count) &&
+			if ((~iv_all ? iv_asid == tlbe_tmp.asid : tlbe_tmp.count != iv_count) &&
 				tlbe_tmp.pte.v && !tlbe_tmp.pte.g) begin
 				tlbe <= tlbe_tmp;
 				tlbe.pte.v <= INV;
@@ -825,14 +867,14 @@ else begin
 
 	st_flush_tlb2a:
 		begin
-			$display("Flush TLB2 %h", flush_adr);
+			$display("PTW: Flush TLB2 %h", flush_adr);
 			read_adr <= flush_adr;
 			way <= flush_way;
 			tCall(st_read_tlb2a,st_flush_tlb2a2);			
 		end
 	st_flush_tlb2a2:
 		begin
-			if ((~iv_all ? iv_asid == tlbe_tmp.vpn.asid : tlbe_tmp.count != iv_count) &&
+			if ((~iv_all ? iv_asid == tlbe_tmp.asid : tlbe_tmp.count != iv_count) &&
 				tlbe_tmp.pte.v && !tlbe_tmp.pte.g) begin
 				tlbe <= tlbe_tmp;
 				tlbe.pte.v <= INV;

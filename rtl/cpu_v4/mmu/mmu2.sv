@@ -45,7 +45,11 @@ module mmu2 (rst, clk, g_paging_en, nsc_tlb_base_adr, sc_tlb_base_adr,
 	padr, padr_v, tlb_v, page_fault, all_ways_locked, priv_err, rst_busy);
 parameter SHORTCUT = 0;
 parameter TLB_ENTRIES = 512;
+parameter TLB_ASSOC = 4;
 parameter LOG_PAGESIZE = 13;
+parameter TLB2_ENTRIES = 128;
+parameter TLB2_ASSOC = 2;
+parameter LOG_PAGESIZE2 = 23;
 input rst;
 input clk;
 input g_paging_en;
@@ -68,7 +72,7 @@ wb_bus_interface.master mbus;
 input address_t vadr;
 input vadr_v;
 input asid_t asid;
-input [5:0] iv_count;
+input [3:0] iv_count;
 output address_t padr;
 output reg padr_v;
 output tlb_v;
@@ -79,31 +83,12 @@ input [7:0] cpl;
 input [1:0] om;
 input rst_busy;
 
-typedef enum logic [5:0]
-{
-	st_idle = 0
-} state_t;
-state_t state;
-
-wb_bus_interface #(.DATA_WIDTH(256)) nsc_mbus();
-wb_bus_interface #(.DATA_WIDTH(256)) sc_mbus();
-wb_bus_interface #(.DATA_WIDTH(256)) nsc_sbus();
-wb_bus_interface #(.DATA_WIDTH(256)) sc_sbus();
-
 tlb_entry_t tlb_entry;
 reg paging_en;
 region_t region;
-address_t sc_padr;
-address_t nsc_padr;
-wire sc_padr_v;
-wire nsc_padr_v;
-wire nsc_page_fault;
-wire sc_page_fault;
 wb_cmd_request256_t sreqd;
 wire [7:0] rgn_sel;
 wire [2:0] grant;
-wire nsc_miss;
-wire sc_miss;
 
 always_ff @(posedge clk)
 	sreqd <= sbus.req;
@@ -139,10 +124,10 @@ page_table_walker
 	.SHORTCUT(SHORTCUT),
 	.TLB_ENTRIES(TLB_ENTRIES),
 	.LOG_PAGESIZE(LOG_PAGESIZE),
-	.TLB_ASSOC(4),
-	.TLB2_ENTRIES(128),
-	.LOG_PAGESIZE2(23),
-	.TLB2_ASSOC(2)
+	.TLB_ASSOC(TLB_ASSOC),
+	.TLB2_ENTRIES(TLB2_ENTRIES),
+	.LOG_PAGESIZE2(LOG_PAGESIZE2),
+	.TLB2_ASSOC(TLB2_ASSOC)
 )
 uptw1
 (
@@ -179,10 +164,5 @@ uptw1
 	.tlb_v(tlb_v),
 	.rst_busy(rst_busy)
 );
-
-assign mbus.clk = clk;
-assign mbus.rst = rst;
-assign sbus.clk = clk;
-assign sbus.rst = rst;
 
 endmodule

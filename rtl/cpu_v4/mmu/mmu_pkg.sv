@@ -92,16 +92,21 @@ typedef struct packed
 	cpu_types_pkg::physical_address_t start_adr;
 } region_t;
 
+typedef enum logic [1:0] {
+	PTE = 0,
+	PTP = 1,
+	PTP_SHORTCUT = 2
+} pte_type_t;
+
 typedef struct packed {
 	logic v;								// valid
 	logic resv;							// reserved
 	logic [2:0] lvl;
 	logic [2:0] rgn;
-	logic m;
-	logic a;
-	logic t;
-	logic s;								// shortcut page
-	logic g;								// shortcut page
+	logic m;								// page was modified
+	logic a;								// page was accessed
+	pte_type_t typ;					// entry type 0=PTE,1=PTP,2=shortcut PTE
+	logic g;								// global
 	logic [2:0] sw;
 	logic [1:0] cache;
 	logic u;
@@ -109,17 +114,13 @@ typedef struct packed {
 	logic [41:0] ppn;				// 42+13 = 55 bit physical address
 } pte_t;									// 64 bits
 
-typedef struct packed {
-	cpu_types_pkg::asid_t asid;	// 16 bits
-	logic [39:0] vpn;       // 40+9+13 = 62 bit virtual address space
-} vpn_t;									// 56 bits
-
 typedef struct packed
 {
-	logic [5:0] count;		// 6
-	logic nru;						// 1
+	cpu_types_pkg::asid_t asid;	// 16 bits
 	logic lock;						// 1=entry locked
-	vpn_t vpn;						// 56
+	logic nru;						// 1
+	logic [3:0] count;		// 4
+	logic [41:0] vpn;			// 42+9+13 = 64 bit virtual address space
 	pte_t pte;						// 64
 } tlb_entry_t;					// 128 bits
 

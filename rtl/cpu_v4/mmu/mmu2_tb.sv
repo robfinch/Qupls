@@ -5,16 +5,19 @@ import wishbone_pkg::*;
 module mmu2_tb();
 reg rst;
 reg clk;
+reg sm_clk;
 
 initial begin
 	rst = 0;
 	clk = 0;
+	sm_clk = 0;
 	#1 rst = 1;
 	#100 rst = 0;
 end
 
 always
-	#5 clk = ~clk;
+	#10 sm_clk = ~sm_clk;
+assign clk = sm_clk;
 
 typedef enum logic [7:0] {
 	st_idle = 0,
@@ -73,14 +76,18 @@ end
 
 assign sbus.rst = rst;
 assign mbus.rst = rst;
-assign sbus.clk = clk;
-assign mbus.clk = clk;
+assign sbus.clk = sm_clk;
+assign mbus.clk = sm_clk;
 
 mmu2
 #(
 	.SHORTCUT(1),
 	.TLB_ENTRIES(512),
-	.LOG_PAGESIZE(13)
+	.TLB_ASSOC(4),
+	.LOG_PAGESIZE(13),
+	.TLB_ENTRIES(128),
+	.TLB_ASSOC(2),
+	.LOG_PAGESIZE(23)
 )
 ummu21
 (
@@ -118,17 +125,17 @@ ummu21
 	.rst_busy(rst_busy)
 );
 
-always_ff @(posedge clk)
+always_ff @(posedge sm_clk)
 if (rst|rst_busy) begin
 	pt_attr = {$bits(ptattr_t){1'b0}};
-	pt_attr.level = 3'd2;
+	pt_attr.level = 3'd1;
 	asid <= 0;//$urandom(0) & 16'hffff;
 	sbus.req <= {$bits(wb_cmd_request256_t){1'b0}};
 	mbus.req <= {$bits(wb_cmd_request256_t){1'b0}};
 	count <= 0;
 	vadr <= 32'h0;
 	vadr_v <= INV;
-	ptbr <= 32'hFFF80000;
+	ptbr <= 32'hFF800000;
 	tGoto(st_idle);
 end
 else begin
@@ -136,7 +143,7 @@ else begin
 	// Try an easy translation that should be present after a reset.
 	st_idle:
 		begin
-			vadr <= 32'hFFF80000;
+			vadr <= 32'hFF800000;
 			vadr_v <= VAL;
 			tGoto(st_xlat1);
 		end
@@ -145,7 +152,7 @@ else begin
 		if (padr_v & tlb_v) begin
 			vadr <= 32'hD0000000;
 			vadr_v <= VAL;
-			tGoto(st_xlat1a);
+			tGoto(st_xlat2);
 		end
 		else if (page_fault) begin
 			$finish;
@@ -156,7 +163,7 @@ else begin
 		end
 	st_xlat2:
 		if (padr_v & tlb_v) begin
-			vadr = 32'hFFF80000 | ($urandom() & 32'h7ffff);
+			vadr = 32'hFF800000 | ($urandom() & 32'h7fffff);
 			vadr_v <= VAL;
 			count <= count + 1;
 			if (count > 30) begin
@@ -194,7 +201,7 @@ else begin
 end
 
 reg [7:0] mbus_state;
-always_ff @(posedge clk)
+always_ff @(posedge sm_clk)
 if (rst|rst_busy) begin
 	mbus_state <= 0;
 end
