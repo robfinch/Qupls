@@ -33,7 +33,8 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 4650 LUTs / 2500 FFs / 8 BRAMs / 160 MHz
+// 5225 LUTs / 1700 FFs / 8 BRAMs / 160 MHz	(default synth)
+// 5075 LUTs / 1700 FFs / 8 BRAMs / 145 MHz	(area synth)
 // ============================================================================
 
 import const_pkg::*;
@@ -43,6 +44,8 @@ import wishbone_pkg::*;
 module Qupls4_copro(rst, clk, sbus, mbus, vmbus, cs_copro, miss, miss_adr, miss_asid,
   paging_en, page_fault, iv_count,
   vclk, hsync_i, vsync_i, gfx_que_empty_i);
+parameter UNALIGNED_CONSTANTS = 0;
+parameter JUMP_INDIRECT = 0;
 input rst;
 input clk;
 wb_bus_interface.slave sbus;
@@ -67,9 +70,9 @@ typedef enum logic [4:0]
 	OP_SKIP,
 	OP_LOAD_CONFIG,
 	OP_JCC,
+	OP_ADD64,
 	OP_JMP = 9,
-	OP_RET = 11,
-	OP_CALC_INDEX,
+	OP_CALC_INDEX = 12,
 	OP_CALC_ADR,
 	OP_BUILD_ENTRY_NO,
 	OP_BUILD_VPN,
@@ -83,8 +86,7 @@ typedef enum logic [4:0]
 	OP_AND64,
 	OP_AND,
 	OP_OR,
-	OP_XOR,
-	OP_SET_PAGE_FAULT
+	OP_XOR
 } opcode_t;
 
 typedef enum logic [3:0] {
@@ -103,8 +105,7 @@ typedef enum logic [3:0] {
 
 typedef struct packed 
 {
-	logic [13:0] imm;
-	logic i;
+	logic [14:0] imm;
 	logic [3:0] Rs2;
 	logic [3:0] Rs1;
 	logic [3:0] Rd;
@@ -120,7 +121,10 @@ typedef enum logic [3:0]
 	st_mem_load,
 	st_mem_store,
 	st_wakeup,
-	st_wakeup2
+	st_wakeup2,
+	st_even64,
+	st_even64a,
+	st_odd64
 } state_t;
 
 state_t state;
@@ -130,12 +134,12 @@ instruction_t vir;
 
 // register file
 reg [63:0] r1,r2,r3,r4,r5,r6,r7,r8,r9,r10,r11,r12,r13,r14,r15,tmp;
-reg [63:0] ir1,ir2,ir3,ir4,ir5,ir6,ir7;
-reg [63:0] vir1,vir2,vir3,vir4,vir5,vir6,vir7;
 // Operands
+reg [31:0] imm;
 reg [63:0] a,b;
-reg [12:0] ip;						// instruction pointer
-reg [12:0] stack [0:7];
+reg [15:0] ip;						// instruction pointer
+(* ram_style="distributed" *)
+reg [512+17:0] stack [0:15];
 reg [3:0] sp;
 reg [14:0] roma;
 wire local_sel = (state==st_mem_load|state==st_mem_store) & roma[14:8]==7'h7F;
@@ -154,7 +158,6 @@ wire [63:0] dinb = sbus.req.dat;
 wire [63:0] douta;
 wire [63:0] doutb;
 wire [31:0] romo = ip[0] ? douta[63:32] : douta[31:0];
-reg in_irq;
 reg sleep;
 reg cs;
 wire dly2;
@@ -392,7 +395,6 @@ if (rst) begin
 	miss_asid1 <= 16'h0;
 	miss_adr1 <= {$bits(address_t){1'b0}};
 	mbus.req <= {$bits(wb_cmd_request256_t){1'b0}};
-	in_irq <= FALSE;
   tGoto(st_execute);
 end
 else begin
@@ -418,58 +420,34 @@ st_execute:
 		ip <= ip + 1;
 		if (pe_vsync2) begin
 			sleep <= FALSE;
-			in_irq <= TRUE;
-			stack[sp-1] <= ip;
+			stack[sp-1] <= {2'b01,ip,r8,r7,r6,r5,r4,r3,r2,r1};
 			sp <= sp - 1;
 			ip <= 13'h10;
-			r1 <= vir1;
-			r2 <= vir2;
-			r3 <= vir3;
-			r4 <= vir4;
-			r5 <= vir5;
-			r6 <= vir6;
-			r7 <= vir7;
-			vir1 <= r1;
-			vir2 <= r2;
-			vir3 <= r3;
-			vir4 <= r4;
-			vir5 <= r5;
-			vir6 <= r6;
-			vir7 <= r7;
 			if (sleep)
 				tGoto(st_wakeup);
 		end
 		else if (|miss & paging_en) begin
 			sleep <= FALSE;
-			in_irq <= TRUE;
 			miss_adr1 <= miss_adr;
 			miss_asid1 <= miss_asid;
 			paging_en <= FALSE;
-			stack[sp-1] <= ip;
+			stack[sp-1] <= {2'b10,ip,r8,r7,r6,r5,r4,r3,r2,r1};
 			sp <= sp - 1;
 			ip <= 13'h8;
-			r1 <= ir1;
-			r2 <= ir2;
-			r3 <= ir3;
-			r4 <= ir4;
-			r5 <= ir5;
-			r6 <= ir6;
-			r7 <= ir7;
-			ir1 <= r1;
-			ir2 <= r2;
-			ir3 <= r3;
-			ir4 <= r4;
-			ir5 <= r5;
-			ir6 <= r6;
-			ir7 <= r7;
 			if (sleep)
 				tGoto(st_wakeup);
 		end
 		else
+		// WAIT
+		// WAIT stops waiting when:
+		// a) the scan address is greater than the specified one (if this condition is set)
+		// b) an interrupt occurred
+		// c) a write cycle to a specified location occurred.
+		// While waiting the local memory is put in low power mode.
 		case(ir.opcode)
 		OP_WAIT:
 			begin
-				case(ir.Rd)
+				case(ir.imm[3:0])
 				JGEP:
 					if (hpos_masked >= hpos_wait && vpos_masked >= vpos_wait && (b[48] ? gfx_que_empty_i : 1'b1)) begin
 						ip <= ip;
@@ -478,7 +456,15 @@ st_execute:
 					else
 						tGoto(st_wakeup);
 				default:
-					begin
+					// Wait at address
+					if (ir.Rd != 4'd0 && 
+						sbus.req.cyc && sbus.req.stb && sbus.req.we &&
+						sbus.req.adr[13:3]==ir.imm[14:4] && cs_copro
+					) begin
+						tWriteback(sbus.req.dat);
+						tGoto(st_wakeup);
+					end
+					else begin
 						ip <= ip;
 						sleep <= TRUE;
 					end
@@ -486,13 +472,14 @@ st_execute:
 			end
 		OP_LOAD_CONFIG:
 			begin
-				r1 <= miss_adr;
+				r1 <= miss_adr1;
 				r2 <= ptbr[0];
 				r3 <= ptattr[0].pgsz;
 				r4 <= ptattr[0].level;
-				r5 <= miss_asid;
+				r5 <= miss_asid1;
 				r6 <= iv_count;
 			end
+		// Conditional jumps
 		OP_JCC:
 			case(ir.Rd)
 			JEQ:
@@ -541,55 +528,53 @@ st_execute:
 			default:	;
 			endcase
 
+		// Unconditional jumps / calls / return.
 		OP_JMP:
 			begin
-				if (|ir.Rd) begin	// JSR?
-					stack[sp-1] <= ip;
-					sp <= sp - 1;
-				end
-				if (ir.Rd[3]) begin
-					tmp = a + {{17{ir.imm[14]}},ir.imm};
-					mbus.req.cyc <= ~&tmp[11:4];
-					mbus.req.stb <= ~&tmp[11:4];
-					mbus.req.we <= LOW;
-					mbus.req.sel <= 32'hFF << {tmp[4:3],3'b0};
-					mbus.req.adr <= tmp;
-					roma <= tmp;
-					tGoto (st_ip_load);
-				end
-				else
-					ip <= a + {{17{ir.imm[14]}},ir.imm};
 				tGoto(st_jmp);
+				case(ir.Rd)
+				4'd0:	ip <= a + {{17{ir.imm[14]}},ir.imm};
+				4'd1:	// JSR
+					begin
+						stack[sp-1] <= {2'b00,ip,r8,r7,r6,r5,r4,r3,r2,r1};
+						sp <= sp - 1;
+					end
+				4'd2:	// RET
+					begin
+						case(stack[sp][529:528])
+						2'b10:	paging_en <= TRUE;
+						default:	;
+						endcase
+						ip <= stack[sp][527:512];
+						if (ir.imm[0]) r1 <= stack[sp][ 63:  0];
+						if (ir.imm[1]) r2 <= stack[sp][127: 64];
+						if (ir.imm[2]) r3 <= stack[sp][191:128];
+						if (ir.imm[3]) r4 <= stack[sp][255:192];
+						if (ir.imm[4]) r5 <= stack[sp][319:256];
+						if (ir.imm[5]) r6 <= stack[sp][383:320];
+						if (ir.imm[6]) r7 <= stack[sp][447:384];
+						if (ir.imm[7]) r8 <= stack[sp][511:448];
+						sp <= sp + 1;
+						tGoto(st_jmp);
+					end
+
+				4'd8:	// JMP [d[Rn]]	(memory indirect)
+					if (JUMP_INDIRECT) begin
+						tmp = a + {{17{ir.imm[14]}},ir.imm};
+						mbus.req.cyc <= ~&tmp[14:8];
+						mbus.req.stb <= ~&tmp[14:8];
+						mbus.req.we <= LOW;
+						mbus.req.sel <= 32'hFF << {tmp[4:3],3'b0};
+						mbus.req.adr <= tmp;
+						roma <= tmp;
+						tGoto (st_ip_load);
+					end
+
+				default:	;
+				endcase
 			end
 
-		OP_RET:
-			begin
-				ip <= stack[sp];
-				sp <= sp + 1;
-				if (ir.Rd==1) begin
-					in_irq <= FALSE;
-					r1 <= vir1;
-					r2 <= vir2;
-					r3 <= vir3;
-					r4 <= vir4;
-					r5 <= vir5;
-					r6 <= vir6;
-					r7 <= vir7;
-				end
-				else if (ir.Rd==2) begin
-					in_irq <= FALSE;
-					r1 <= ir1;
-					r2 <= ir2;
-					r3 <= ir3;
-					r4 <= ir4;
-					r5 <= ir5;
-					r6 <= ir6;
-					r7 <= ir7;
-					paging_en <= TRUE;
-				end
-				tGoto(st_jmp);
-			end
-
+		// Accelerator instructions
 		OP_CALC_INDEX:
 			begin
 				tmp = ptattr[0].pgsz - 64'd3;
@@ -617,11 +602,13 @@ st_execute:
 				tmp = tmp | ({64'd0,iv_count} << 42);	// put count into position
 				tWriteback(tmp);
 			end
+
+		// Memory ops
 		OP_LOAD:
 			begin
 				tmp = a + {{17{ir.imm[14]}},ir.imm};
-				mbus.req.cyc <= ~&tmp[11:4];
-				mbus.req.stb <= ~&tmp[11:4];
+				mbus.req.cyc <= ~&tmp[14:8];
+				mbus.req.stb <= ~&tmp[14:8];
 				mbus.req.we <= LOW;
 				mbus.req.sel <= 32'hFF << {tmp[4:3],3'b0};
 				mbus.req.adr <= tmp;
@@ -631,8 +618,8 @@ st_execute:
 		OP_STORE:
 			begin
 				tmp = a + {{17{ir.imm[14]}},ir.imm};
-				mbus.req.cyc <= ~&tmp[11:4];
-				mbus.req.stb <= ~&tmp[11:4];
+				mbus.req.cyc <= ~&tmp[14:8];
+				mbus.req.stb <= ~&tmp[14:8];
 				mbus.req.we <= HIGH;
 				mbus.req.sel <= 32'hFF << {tmp[4:3],3'b0};
 				mbus.req.adr <= tmp;
@@ -643,49 +630,111 @@ st_execute:
 			end
 		OP_STOREI:
 			begin
-				ip <= ip + 3;
-				tmp = a + {{17{ir.imm[14]}},ir.imm};
-				mbus.req.cyc <= HIGH;
-				mbus.req.stb <= HIGH;
-				mbus.req.we <= HIGH;
-				mbus.req.sel <= 32'hFF << {tmp[4:3],3'b0};
-				mbus.req.adr <= tmp;
-				mbus.req.dat <= {4{romo}};
-				if (!local_sel)
-					tGoto(st_mem_store);
+				if (ir.Rd > 4'd14) begin
+					// Was instruction at an odd address?
+					if (ip[0] & UNALIGNED_CONSTANTS)
+						tGoto(st_even64);
+					else
+						tGoto(st_odd64);
+				end
+				else begin
+					tmp = a + {{17{ir.imm[14]}},ir.imm};
+					mbus.req.cyc <= ~&tmp[14:8];
+					mbus.req.stb <= ~&tmp[14:8];
+					mbus.req.we <= HIGH;
+					mbus.req.sel <= 32'hFF << {tmp[4:3],3'b0};
+					mbus.req.adr <= tmp;
+					mbus.req.dat <= {4{60'd0,ir.Rd}};
+					roma <= tmp;
+					if (!local_sel)
+					    tGoto(st_mem_store);
+				end
 			end
 //		OP_MOVE: tWriteback(a);
+		// ALU ops
 		OP_SHL:
 			tWriteback(a << (b[4:0]|ir.imm[4:0]));
 		OP_SHR:
 			tWriteback(a >> (b[4:0]|ir.imm[4:0]));
 		OP_ADD:
 			tWriteback(a + b + {{17{ir.imm[14]}},ir.imm});
-		OP_AND64:
-			begin
-				tWriteback(a & b & romo);
-				ip <= ip + 3;
-			end
+		OP_ADD64,OP_AND64:
+			// Was instruction at an odd address?
+			if (ip[0] & UNALIGNED_CONSTANTS)
+				tGoto(st_even64);
+			else
+				tGoto(st_odd64);
 		OP_AND:
 			tWriteback(a & b & {{17{ir.imm[14]}},ir.imm});
 		OP_OR:
 			tWriteback(a | b | {{17{ir.imm[14]}},ir.imm});
 		OP_XOR:
 			tWriteback(a ^ b ^ {{17{ir.imm[14]}},ir.imm});
-		OP_SET_PAGE_FAULT:	page_fault <= 1;
 		default:;
 		endcase
 	end
 
+// This state will be stripped out unless unaligned constants are allowed.
+st_even64:
+	begin
+		ip <= ip + 1;
+		imm <= douta[63:32];
+		tGoto(st_even64a);
+	end
+st_even64a:
+	begin
+		ip <= ip + 1;
+		tGoto(st_execute);
+		case(ir.opcode)
+		OP_ADD64:	tWriteback(a + b + {douta[31:0],imm});
+		OP_AND64:	tWriteback(a & b & {douta[31:0],imm});
+		OP_STOREI:
+			begin
+				tmp = a + {{17{ir.imm[14]}},ir.imm};
+				mbus.req.cyc <= ~&tmp[14:8];
+				mbus.req.stb <= ~&tmp[14:8];
+				mbus.req.we <= HIGH;
+				mbus.req.sel <= 32'hFF << {tmp[4:3],3'b0};
+				mbus.req.adr <= tmp;
+				mbus.req.dat <= {4{douta[31:0],imm}};
+				if (!local_sel)
+					tGoto(st_mem_store);
+			end
+		default:	;
+		endcase
+	end
+
+st_odd64:
+	begin
+		ip <= ip + 2;
+		tGoto(st_execute);
+		case(ir.opcode)
+		OP_ADD64:	tWriteback(a + b + douta);
+		OP_AND64:	tWriteback(a & b & douta);
+		OP_STOREI:
+			begin
+				tmp = a + {{17{ir.imm[14]}},ir.imm};
+				mbus.req.cyc <= ~&tmp[14:8];
+				mbus.req.stb <= ~&tmp[14:8];
+				mbus.req.we <= HIGH;
+				mbus.req.sel <= 32'hFF << {tmp[4:3],3'b0};
+				mbus.req.adr <= tmp;
+				mbus.req.dat <= {4{douta}};
+				if (!local_sel)
+					tGoto(st_mem_store);
+			end
+		default:	;
+		endcase
+	end
+// Wakeup stages for the BRAM after a WAIT operation.
 st_wakeup:
 	tGoto(st_wakeup2);
 st_wakeup2:
 	tGoto(st_jmp);
 st_jmp:
-	begin
-		tGoto(st_execute);
-	end
+	tGoto(st_execute);
 
+// Memory states
 st_ip_load:
 	if (mbus.resp.ack) begin
 		mbus.req <= {$bits(wb_cmd_request256_t){1'b0}};
