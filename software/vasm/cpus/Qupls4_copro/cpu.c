@@ -26,7 +26,7 @@
 #define TRACE(x)		/*printf(x)*/
 #define TRACE2(x,y)	/*printf((x),(y))*/
 
-const char *cpu_copyright="vasm Qupls4_copro cpu backend v0.02 (c) in 2026 Robert Finch";
+const char *cpu_copyright="vasm Qupls4_copro cpu backend v0.08 (c) in 2026 Robert Finch";
 
 const char *cpuname="Qupls4_copro";
 int bitsperbyte=8;
@@ -72,33 +72,35 @@ mnemonic mnemonics[]={
 	"calc_adr",		{OP_REG,OP_REG,OP_REG,0,0,0}, {R3,CPU_ALL,0,0,OPC(13LL),4,SZ_UNSIZED},
 	"calc_index",	{OP_REG,OP_REG,0,0,0,0}, {RI,CPU_ALL,0,0,OPC(12LL),4,SZ_UNSIZED},
 	"com", 		{OP_REG,OP_REG,0,0,0,0}, {R3,CPU_ALL,0,0,0xFFFE0000LL|OPC(26LL),4,SZ_UNSIZED},
-	"djne", 	{OP_REG,OP_REG,OP_IMM,0,0,0}, {RI,CPU_ALL,0,0,COND(6LL)|OPC(4LL),4,SZ_UNSIZED},
-	"djnez", 	{OP_REG,OP_IMM,0,0,0,0}, {RI,CPU_ALL,0,0,COND(6LL)|OPC(4LL),4,SZ_UNSIZED},
-	"jeq", 		{OP_REG,OP_REG,OP_IMM,0,0,0}, {RI,CPU_ALL,0,0,OPC(4LL),4,SZ_UNSIZED},
-	"jeqz",		{OP_REG,OP_IMM,0,0,0,0}, {RI,CPU_ALL,0,0,OPC(4LL),4,SZ_UNSIZED},
-	"jge", 		{OP_REG,OP_REG,OP_IMM,0,0,0}, {RI,CPU_ALL,0,0,COND(4LL)|OPC(4LL),4,SZ_UNSIZED},
-	"jgez",		{OP_REG,OP_IMM,0,0,0,0}, {RI,CPU_ALL,0,0,COND(4LL)|OPC(4LL),4,SZ_UNSIZED},
-	"jgep",		{OP_REG,OP_REG,OP_IMM,0,0,0}, {RI,CPU_ALL,0,0,COND(9LL)|OPC(4LL),4,SZ_UNSIZED},
-	"jgqe",		{OP_REG,OP_REG,OP_IMM,0,0,0}, {RI,CPU_ALL,0,0,COND(10LL)|OPC(4LL),4,SZ_UNSIZED},
-	"jgqne",	{OP_REG,OP_REG,OP_IMM,0,0,0}, {RI,CPU_ALL,0,0,COND(11LL)|OPC(4LL),4,SZ_UNSIZED},
-	"jgt", 		{OP_REG,OP_REG,OP_IMM,0,0,0}, {RI,CPU_ALL,0,0,COND(5LL)|OPC(4LL),4,SZ_UNSIZED},
-	"jgtz", 	{OP_REG,OP_IMM,0,0,0,0}, {RI,CPU_ALL,0,0,COND(5LL)|OPC(4LL),4,SZ_UNSIZED},
-	"jle", 		{OP_REG,OP_REG,OP_IMM,0,0,0}, {RI,CPU_ALL,0,0,COND(3LL)|OPC(4LL),4,SZ_UNSIZED},
-	"jlez",		{OP_REG,OP_IMM,0,0,0,0}, {RI,CPU_ALL,0,0,COND(3LL)|OPC(4LL),4,SZ_UNSIZED},
-	"jlep",		{OP_REG,OP_REG,OP_IMM,0,0,0}, {RI,CPU_ALL,0,0,COND(8LL)|OPC(4LL),4,SZ_UNSIZED},
-	"jlt", 		{OP_REG,OP_REG,OP_IMM,0,0,0}, {RI,CPU_ALL,0,0,COND(2LL)|OPC(4LL),4,SZ_UNSIZED},
-	"jltz",		{OP_REG,OP_IMM,0,0,0,0}, {RI,CPU_ALL,0,0,COND(2LL)|OPC(4LL),4,SZ_UNSIZED},
+	"djne", 	{OP_REG,OP_REG,OP_IMM,0,0,0}, {DIRECT,CPU_ALL,0,0,COND(6LL)|OPC(4LL),4,SZ_UNSIZED,0,FLG_BRANCH},
+	"djnez", 	{OP_REG,OP_IMM,0,0,0,0}, {DIRECT,CPU_ALL,0,0,COND(6LL)|OPC(4LL),4,SZ_UNSIZED,0,FLG_BRANCH},
+	"jeq", 		{OP_REG,OP_REG,OP_IMM,0,0,0}, {DIRECT,CPU_ALL,0,0,OPC(4LL),4,SZ_UNSIZED,0,FLG_BRANCH},
+	"jeqz",		{OP_REG,OP_IMM,0,0,0,0}, {DIRECT,CPU_ALL,0,0,OPC(4LL),4,SZ_UNSIZED,0,FLG_BRANCH},
+	"jge", 		{OP_REG,OP_REG,OP_IMM,0,0,0}, {DIRECT,CPU_ALL,0,0,COND(4LL)|OPC(4LL),4,SZ_UNSIZED,0,FLG_BRANCH},
+	"jgez",		{OP_REG,OP_IMM,0,0,0,0}, {DIRECT,CPU_ALL,0,0,COND(4LL)|OPC(4LL),4,SZ_UNSIZED,0,FLG_BRANCH},
+	"jgep",		{OP_REG,OP_REG,OP_IMM,0,0,0}, {DIRECT,CPU_ALL,0,0,COND(9LL)|OPC(4LL),4,SZ_UNSIZED,0,FLG_BRANCH},
+	"jgqe",		{OP_REG,OP_REG,OP_IMM,0,0,0}, {DIRECT,CPU_ALL,0,0,COND(10LL)|OPC(4LL),4,SZ_UNSIZED,0,FLG_BRANCH},
+	"jgqne",	{OP_REG,OP_REG,OP_IMM,0,0,0}, {DIRECT,CPU_ALL,0,0,COND(11LL)|OPC(4LL),4,SZ_UNSIZED,0,FLG_BRANCH},
+	"jgt", 		{OP_REG,OP_REG,OP_IMM,0,0,0}, {DIRECT,CPU_ALL,0,0,COND(5LL)|OPC(4LL),4,SZ_UNSIZED,0,FLG_BRANCH},
+	"jgtz", 	{OP_REG,OP_IMM,0,0,0,0}, {DIRECT,CPU_ALL,0,0,COND(5LL)|OPC(4LL),4,SZ_UNSIZED,0,FLG_BRANCH},
+	"jle", 		{OP_REG,OP_REG,OP_IMM,0,0,0}, {DIRECT,CPU_ALL,0,0,COND(3LL)|OPC(4LL),4,SZ_UNSIZED,0,FLG_BRANCH},
+	"jlez",		{OP_REG,OP_IMM,0,0,0,0}, {DIRECT,CPU_ALL,0,0,COND(3LL)|OPC(4LL),4,SZ_UNSIZED,0,FLG_BRANCH},
+	"jlep",		{OP_REG,OP_REG,OP_IMM,0,0,0}, {DIRECT,CPU_ALL,0,0,COND(8LL)|OPC(4LL),4,SZ_UNSIZED,0,FLG_BRANCH},
+	"jlt", 		{OP_REG,OP_REG,OP_IMM,0,0,0}, {DIRECT,CPU_ALL,0,0,COND(2LL)|OPC(4LL),4,SZ_UNSIZED,0,FLG_BRANCH},
+	"jltz",		{OP_REG,OP_IMM,0,0,0,0}, {DIRECT,CPU_ALL,0,0,COND(2LL)|OPC(4LL),4,SZ_UNSIZED,0,FLG_BRANCH},
 	"jmp", 		{OP_IMM,0,0,0,0,0}, {DIRECT,CPU_ALL,0,0,OPC(9LL),4,SZ_UNSIZED},
 	"jmp", 		{OP_REGIND,0,0,0,0,0}, {REGIND,CPU_ALL,0,0,OPC(9LL),4,SZ_UNSIZED},
-	"jne", 		{OP_REG,OP_REG,OP_IMM,0,0,0}, {RI,CPU_ALL,0,0,COND(1LL)|OPC(4LL),4,SZ_UNSIZED},
-	"jnez",		{OP_REG,OP_IMM,0,0,0,0}, {RI,CPU_ALL,0,0,COND(1LL)|OPC(4LL),4,SZ_UNSIZED},
+	"jne", 		{OP_REG,OP_REG,OP_IMM,0,0,0}, {DIRECT,CPU_ALL,0,0,COND(1LL)|OPC(4LL),4,SZ_UNSIZED,0,FLG_BRANCH},
+	"jnez",		{OP_REG,OP_IMM,0,0,0,0}, {DIRECT,CPU_ALL,0,0,COND(1LL)|OPC(4LL),4,SZ_UNSIZED,0,FLG_BRANCH},
 	"jsr", 		{OP_IMM,0,0,0,0,0}, {DIRECT,CPU_ALL,0,0,RD(1LL)|OPC(9LL),4,SZ_UNSIZED},
-	"jsr", 		{OP_REGIND,0,0,0,0,0}, {REGIND,CPU_ALL,0,0,RD(1LL)|OPC(9LL),4,SZ_UNSIZED},
+	"jsr", 		{OP_IMM,0,0,0,0,0}, {REGIND,CPU_ALL,0,0,RD(1LL)|OPC(9LL),4,SZ_UNSIZED},
 	"load", 	{OP_REG,OP_IMM,0,0,0,0}, {DIRECT,CPU_ALL,0,0,OPC(16LL),4,SZ_UNSIZED},
 	"load", 	{OP_REG,OP_REGIND,0,0,0,0}, {REGIND,CPU_ALL,0,0,OPC(16LL),4,SZ_UNSIZED},
 	"load_config", 	{0,0,0,0,0,0}, {BITS16,CPU_ALL,0,0,OPC(3LL),4,SZ_UNSIZED},
 	"loada", 	{OP_REG,OP_IMM,0,0,0,0}, {DIRECT,CPU_ALL,0,0,OPC(22LL),4,SZ_UNSIZED},
 	"loada", 	{OP_REG,OP_REGIND,0,0,0,0}, {REGIND,CPU_ALL,0,0,OPC(22LL),4,SZ_UNSIZED},
+	"loada64", 	{OP_REG,OP_IMM,0,0,0,0}, {DIRECT,CPU_ALL,0,0,OPC(5LL),4,SZ_UNSIZED},
+	"loada64",	{OP_REG,OP_REGIND,0,0,0,0}, {REGIND,CPU_ALL,0,0,OPC(5LL),4,SZ_UNSIZED},
 	"loadi", 	{OP_REG,OP_IMM,0,0,0,0}, {RI,CPU_ALL,0,0,OPC(22LL),4,SZ_UNSIZED},
 	"loadi64",{OP_REG,OP_IMM,0,0,0,0}, {RI64,CPU_ALL,0,0,OPC(5LL),4,SZ_UNSIZED},
 	"mov", 		{OP_REG,OP_REG,OP_REG,0,0,0}, {R3,CPU_ALL,0,0,OPC(22LL),4,SZ_UNSIZED},
@@ -118,11 +120,12 @@ mnemonic mnemonics[]={
 	"srl", 		{OP_REG,OP_REG,OP_REG,0,0,0}, {R3,CPU_ALL,0,0,OPC(21LL),4,SZ_UNSIZED},
 	"srl", 		{OP_REG,OP_REG,OP_REG,OP_IMM,0,0}, {RI,CPU_ALL,0,0,OPC(21LL),4,SZ_UNSIZED},
 	"srl", 		{OP_REG,OP_REG,OP_IMM,0,0}, {RI,CPU_ALL,0,0,OPC(21LL),4,SZ_UNSIZED},
-	"store", 	{OP_REG,OP_IMM,0,0,0,0}, {DIRECT,CPU_ALL,0,0,OPC(17LL),4,SZ_UNSIZED},
-	"store", 	{OP_REG,OP_REGIND,0,0,0,0}, {REGIND,CPU_ALL,0,0,OPC(17LL),4,SZ_UNSIZED},
-	"storei",	{OP_IMM,OP_IMM,0,0,0,0}, {STOREI,CPU_ALL,0,0,OPC(18LL),4,SZ_UNSIZED},
-	"storei",	{OP_IMM,OP_REGIND,0,0,0,0}, {STOREI,CPU_ALL,0,0,OPC(18LL),4,SZ_UNSIZED},
-	"wait", 	{OP_REG,OP_IMM,0,0,0,0}, {RI,CPU_ALL,0,0,OPC(1LL),4,SZ_UNSIZED},
+	"store", 	{OP_REG,OP_IMM,0,0,0,0}, {DIRECT,CPU_ALL,0,0,OPC(17LL),4,SZ_UNSIZED,0,FLG_STORE},
+	"store", 	{OP_REG,OP_REGIND,0,0,0,0}, {REGIND,CPU_ALL,0,0,OPC(17LL),4,SZ_UNSIZED,0,FLG_STORE},
+	"storei",	{OP_IMM,OP_IMM,0,0,0,0}, {STOREI,CPU_ALL,0,0,OPC(18LL),4,SZ_UNSIZED,0,FLG_STORE},
+	"storei",	{OP_IMM,OP_REGIND,0,0,0,0}, {STOREI,CPU_ALL,0,0,OPC(18LL),4,SZ_UNSIZED,0,FLG_STORE},
+	"wait", 	{OP_REG,OP_IMM,0,0,0,0}, {WAIT,CPU_ALL,0,0,WCOND(10LL)|OPC(1LL),4,SZ_UNSIZED},
+	"waitgep",{OP_REG,OP_REG,OP_REG,OP_REGIND_DISP,0,0}, {WAIT,CPU_ALL,0,0,WCOND(9LL)|OPC(1LL),4,SZ_UNSIZED},
 	"xor", 		{OP_REG,OP_REG,OP_REG,OP_IMM,0,0}, {RI,CPU_ALL,0,0,OPC(26LL),4,SZ_UNSIZED}
 };
 
@@ -778,7 +781,7 @@ static thuge make_reloc(int reloctype,operand *op,section *sec,
       	switch(op->format) {
       	case J:
 		      add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
-                         17,15,0,0xefffLL);
+                         17,15,0,0x1fffcLL);
       		break;
       	case B:
       	case BZ:
@@ -799,7 +802,7 @@ static thuge make_reloc(int reloctype,operand *op,section *sec,
       	/* Unconditional jump */
         case J2:
 		      add_extnreloc_masked(reloclist,base,val.lo,reloctype,
-                           11,37,0,0x1fffffffffLL);
+                           17,15,0,0x7fffLL);
           break;
           
         case J4:
@@ -816,7 +819,12 @@ static thuge make_reloc(int reloctype,operand *op,section *sec,
 
         case RI:
 	      	add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
-                        17,15,0,0xefffLL);
+                        17,15,0,0x7fffLL);
+        	break;
+
+        case WAIT:
+	      	add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
+                        21,11,0,0x1ffcLL);
         	break;
 
         case RI64:
@@ -826,7 +834,7 @@ static thuge make_reloc(int reloctype,operand *op,section *sec,
 
         case DIRECT:
 	      	add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
-                        17,15,0,0xefffLL);
+                        17,15,0,0x1ffffcLL);
           // Assume a postfix is present.
         	break;
 
@@ -835,7 +843,7 @@ static thuge make_reloc(int reloctype,operand *op,section *sec,
         	if (op->basereg==sdreg)
         		reloctype = REL_SD;
 	      	add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
-                      17,15,0,0xefffLL);
+                      17,15,0,0x1fffcLL);
         	break;
 
         default:
@@ -920,12 +928,24 @@ static void encode_reg(instruction_buf* insn, operand *op, mnemonic* mnemo, int 
 				insn->opcode |= RD(op->basereg);
 			else if (i==1)
 				insn->opcode = insn->opcode | RS1(op->basereg);
+			else if (i==2)
+				insn->opcode = insn->opcode | RS2(op->basereg);
+			break;
+		case WAIT:
+			if (i==0)
+				insn->opcode |= RS1(op->basereg);
+			else if (i==1)
+				insn->opcode = insn->opcode | RS2(op->basereg);
 			break;
 
 		case STOREI:
 		case REGIND:
-			if (i==0)
-				insn->opcode |= RD(op->basereg);
+			if (i==0) {
+				if (mnemo->ext.flags & FLG_STORE)
+					insn->opcode |= RS2(op->basereg);
+				else
+					insn->opcode |= RD(op->basereg);
+			}
 			else if (i==1)
 				insn->opcode = insn->opcode | RS1(op->basereg);
 			else if (i==2)
@@ -933,8 +953,20 @@ static void encode_reg(instruction_buf* insn, operand *op, mnemonic* mnemo, int 
 			break;
 
 		case DIRECT:
-			if (i==0)
-				insn->opcode |= RD(op->basereg);
+			if (i==0) {
+				if (mnemo->ext.flags & FLG_STORE)
+					insn->opcode |= RS2(op->basereg);
+				else if (mnemo->ext.flags & FLG_BRANCH)
+					insn->opcode |= RS1(op->basereg);
+				else
+					insn->opcode |= RD(op->basereg);
+			}
+			else if (i==1) {
+				if (mnemo->ext.flags & FLG_STORE)
+					insn->opcode |= RS1(op->basereg);
+				else if (mnemo->ext.flags & FLG_BRANCH)
+					insn->opcode |= RS2(op->basereg);
+			}
 			break;
 		}				
 	}
@@ -962,10 +994,10 @@ static size_t encode_immed_RI(instruction_buf* insn, thuge hval, int i, taddr pc
 			insn->pfxb.size = 0;
 //			insn->opcodeH = 0;
 			if (mnemo->ext.flags & FLG_LSDISP) {
-				insn->opcode = insn->opcode | ((hval.lo & 0xefffLL) << 17LL);
+				insn->opcode = insn->opcode | ((hval.lo & 0x7fffLL) << 17LL);
 			}
 			else {
-				insn->opcode = insn->opcode | ((hval.lo & 0xefffLL) << 17LL);
+				insn->opcode = insn->opcode | ((hval.lo & 0x7fffLL) << 17LL);
 			}
 		}
 	}
@@ -974,10 +1006,10 @@ static size_t encode_immed_RI(instruction_buf* insn, thuge hval, int i, taddr pc
 			insn->pfxb.size = 0;
 //			insn->opcodeH = 0;
 			if (mnemo->ext.flags & FLG_LSDISP) {
-				insn->opcode = insn->opcode | ((hval.lo & 0xefffLL) << 17LL);
+				insn->opcode = insn->opcode | ((hval.lo & 0x7fffLL) << 17LL);
 			}
 			else {
-				insn->opcode = insn->opcode | ((hval.lo & 0xefffLL) << 17LL);
+				insn->opcode = insn->opcode | ((hval.lo & 0x7fffLL) << 17LL);
 			}
 		}
 	}
@@ -986,10 +1018,82 @@ static size_t encode_immed_RI(instruction_buf* insn, thuge hval, int i, taddr pc
 			insn->pfxb.size = 0;
 //			insn->opcodeH = 0;
 			if (mnemo->ext.flags & FLG_LSDISP) {
-				insn->opcode = insn->opcode | ((hval.lo & 0xefffLL) << 17LL);
+				insn->opcode = insn->opcode | ((hval.lo & 0x7fffLL) << 17LL);
 			}
 			else {
-				insn->opcode = insn->opcode | ((hval.lo & 0xefffLL) << 17LL);
+				insn->opcode = insn->opcode | ((hval.lo & 0x7fffLL) << 17LL);
+			}
+		}
+	}
+	else if (i==3) {
+		if (insn) {
+			insn->pfxb.size = 0;
+//			insn->opcodeH = 0;
+			if (mnemo->ext.flags & FLG_LSDISP) {
+				insn->opcode = insn->opcode | ((hval.lo & 0x7fffLL) << 17LL);
+			}
+			else {
+				insn->opcode = insn->opcode | ((hval.lo & 0x7fffLL) << 17LL);
+			}
+		}
+	}
+	/*
+	if (((insn->opcode >> 2LL) & 0x3FLL)==0x4LL) {
+		printf("opcode:%I64x, Prc=%I64d\r\n", (insn->opcode >> 2LL) & 0x7fLL, (insn->opcode>>23LL) & 3LL);
+		printf("opcode:%I64x, opcodeH=%I32d\r\n", insn->opcode, insn->opcodeH);
+		printf("hval.lo=%I64x hval.hi=%I64x\n", hval.lo, hval.hi);
+	}
+	*/
+	return (isize);
+}
+
+static size_t encode_immed_WAIT(instruction_buf* insn, thuge hval, int i, taddr pc, section* sec, instruction *ip)
+{
+  mnemonic *mnemo = &mnemonics[ip->code];
+	size_t isize = insn->opcode_size;
+	int64_t sc;
+	int64_t reg = (insn->opcode >> 7LL) & 0x3fLL;
+	int is_s = 0;
+
+//	if ((insn->opcode & 0x3FLL)==0x4LL)
+//		printf("In: opcode:%I64x, Prc=%I64d\r\n", insn->opcode, (insn->opcode>>22LL) & 3LL);
+
+	if (hval.lo & 0x8000000000000000LL)
+		hval.hi = 0xffffffffffffffffLL;
+
+	if (i==0) {
+		if (insn) {
+			insn->pfxb.size = 0;
+//			insn->opcodeH = 0;
+			if (mnemo->ext.flags & FLG_LSDISP) {
+				insn->opcode = insn->opcode | ((hval.lo & 0xeffLL) << 21LL);
+			}
+			else {
+				insn->opcode = insn->opcode | ((hval.lo & 0xeffLL) << 21LL);
+			}
+		}
+	}
+	else if (i==1) {
+		if (insn) {
+			insn->pfxb.size = 0;
+//			insn->opcodeH = 0;
+			if (mnemo->ext.flags & FLG_LSDISP) {
+				insn->opcode = insn->opcode | ((hval.lo & 0xeffLL) << 21LL);
+			}
+			else {
+				insn->opcode = insn->opcode | ((hval.lo & 0xeffLL) << 21LL);
+			}
+		}
+	}
+	else if (i==2) {
+		if (insn) {
+			insn->pfxb.size = 0;
+//			insn->opcodeH = 0;
+			if (mnemo->ext.flags & FLG_LSDISP) {
+				insn->opcode = insn->opcode | ((hval.lo & 0xeffLL) << 21LL);
+			}
+			else {
+				insn->opcode = insn->opcode | ((hval.lo & 0xeffLL) << 21LL);
 			}
 		}
 	}
@@ -1047,9 +1151,7 @@ static size_t encode_direct(instruction* ip, instruction_buf* insn, thuge val, i
   mnemonic *mnemo = &mnemonics[ip->code];
 
 	TRACE("endir ");
-	if (i==1) {
-		insn->opcode = insn->opcode | ((val.lo & 0xefffLL) << 17LL);
-	}
+	insn->opcode = insn->opcode | (((val.lo) & 0x7fffLL) << 17LL);
 	return (isize);
 }
 
@@ -1059,11 +1161,11 @@ static size_t encode_immed_LDI(instruction_buf* insn, thuge hval, int i)
 	int minbits = 32LL;
 
 	if (insn) {
-		insn->opcode = insn->opcode | ((hval.lo & 0xefffLL) << 17LL);
+		insn->opcode = insn->opcode | ((hval.lo & 0x7fffLL) << 17LL);
 	}
 	if (i==1) {
 		if (insn) {
-			insn->opcode = insn->opcode | ((hval.lo & 0xefffLL) << 17LL);
+			insn->opcode = insn->opcode | ((hval.lo & 0x7fffLL) << 17LL);
 		}
 	}
 	return (isize);
@@ -1112,6 +1214,9 @@ static size_t encode_immed (
 					insn->opcode = (insn->opcode & 0xffffffe0LL) | 6LL;
 				}
 			}
+			else if (i==1) {
+				isize = encode_immed_RI(insn, val, i, pc, sec, ip);
+			}
 			return (isize);
 		case REGIND:
 			if (i==0)
@@ -1119,6 +1224,9 @@ static size_t encode_immed (
 			return (isize);
 		case RI:
 			isize = encode_immed_RI(insn, val, i, pc, sec, ip);
+			return (isize);
+		case WAIT:
+			isize = encode_immed_WAIT(insn, val, i, pc, sec, ip);
 			return (isize);
 		case RI64:
 			isize = encode_immed_RI64(insn, val, i, pc, sec, ip);
@@ -1143,7 +1251,7 @@ static size_t encode_immed (
 		}
 		else if (mnemo->ext.format==J2) {
 			if (insn)
-				insn->opcode = insn->opcode | (((val.lo) & 0xffffffffLL) << 32LL);
+				insn->opcode = insn->opcode | (((val.lo) & 0x7fffLL) << 17LL);
 		}
 		else {
 			if (insn)
@@ -1157,7 +1265,7 @@ static size_t encode_immed (
 		}
 		else if (mnemo->ext.format==J2) {
 			if (insn)
-				insn->opcode = insn->opcode | ((val.lo & 0xffffffLL) << 24LL) | (2LL << 22LL);
+				insn->opcode = insn->opcode | ((val.lo & 0x7fffLL) << 17LL);
 		}
 		else if (mnemo->ext.format==J4) {
 			if (insn)
@@ -1169,6 +1277,10 @@ static size_t encode_immed (
 		}
 		else if (mnemo->ext.format==RI) {
 			isize = encode_immed_RI(insn, val, i, pc, sec, ip);
+			return(isize);
+		}
+		else if (mnemo->ext.format==WAIT) {
+			isize = encode_immed_WAIT(insn, val, i, pc, sec, ip);
 			return(isize);
 		}
 		else if (mnemo->ext.format==RI64) {
@@ -1183,7 +1295,7 @@ static size_t encode_immed (
 				if (!is_nbit(val,15LL))
 					goto j2;
 				if (insn)
-					insn->opcode = insn->opcode | ((val.lo & 0xefffLL) << 17LL);
+					insn->opcode = insn->opcode | ((val.lo & 0x7fffLL) << 17LL);
 				return (isize);
 			}
 			else {
@@ -1216,10 +1328,10 @@ static size_t encode_branch_B(instruction_buf* insn, operand* op, int64_t val, i
 		switch(i) {
 		case 1:
 	  	if (flags & FLG_BZ) {
-  			insn->opcode |= ((val & 0xefffLL) << 17LL);
+  			insn->opcode |= ((val & 0x7fffLL) << 17LL);
 	  	}
 	  	else {
-  			insn->opcode |= ((val & 0xefffLL) << 17LL);
+  			insn->opcode |= ((val & 0x7fffLL) << 17LL);
 			}
 			break;
 
@@ -1254,7 +1366,7 @@ static size_t encode_branch_B(instruction_buf* insn, operand* op, int64_t val, i
 	  	if (insn) {
 				// BNEZ / BEQZ shortcuts have a maximum of nine-bits displacement
 				// If displacement is too large convert to larger branch format
-  			insn->opcode |= ((val & 0xefffLL) << 17LL);
+  			insn->opcode |= ((val & 0x7fffLL) << 17LL);
   		}
 			break;
 #endif			
@@ -1281,7 +1393,7 @@ static size_t encode_branch_BL2(instruction_buf* insn, operand* op, int64_t val,
 		if (insn) {
 			switch(i) {
 			case 1:
-  			tgt = ((0xefffLL) << 17LL);
+  			tgt = ((0x7fffLL) << 17LL);
   			insn->opcode |= tgt;
 		  	break;
 			}
@@ -1301,7 +1413,7 @@ static int encode_J2(instruction_buf* insn, operand* op, int64_t val, int i, int
   		uint64_t tgt;
   		//*insn |= CA(mnemo->ext.format==B2 ? 0x7 : 0x0);
     	//tgt = ((val & 0xffffffLL) << 24LL) | (2LL << 22LL);
- 			tgt = ((val & 0xefffLL) << 17LL);
+ 			tgt = (((val >> 2LL) & 0x7fffLL) << 17LL);
   		insn->opcode |= tgt;
   	}
   	return (1);
@@ -1310,7 +1422,7 @@ static int encode_J2(instruction_buf* insn, operand* op, int64_t val, int i, int
   	if (insn) {
   		uint64_t tgt;
   		insn->opcode |= RS1(op->basereg);
-    	tgt = ((val & 0xefffLL) << 17LL);
+    	tgt = (((val >> 2LL) & 0x7fffLL) << 17LL);
   		insn->opcode |= tgt;
   	}
   	return (1);

@@ -61,7 +61,7 @@ typedef struct {
 #define OP_IMM46					0x00000010L
 #define OP_IMM64					0x00000020L
 #define OP_VMSTR					0x00000040L
-#define OP_PREDSTR				0x00000080L
+#define OP_DIRECT					0x00000080L
 #define OP_REG6						0x00000100L
 #define OP_VMREG					0x00000200L
 #define OP_UIMM6					0x00000400L
@@ -176,6 +176,8 @@ typedef struct {
 #define FLG_REGIND	32	/* displacement can be compressed to 5 bits */
 #define FLG_BZ			64	/* BEQZ / BNEZ shortcut */
 #define FLG_CONST64	128	/* 64-bit constant follows */
+#define FLG_STORE		256
+#define FLG_BRANCH	512
 
 #define EXI8	0x46
 #define EXI24	0x48
@@ -195,7 +197,7 @@ typedef struct {
 #define BL		9
 #define JL2		10
 #define REGIND	11
-#define SCNDX		12
+#define WAIT	12
 #define J			13
 #define JL		14
 #define BL2		15
@@ -270,6 +272,7 @@ typedef struct {
 #define RS1(x)	(((x) & 0xfLL) << 9LL)
 #define RS2(x)	(((x) & 0xfLL) << 13LL)
 #define COND(x)	(((x) & 0xfLL) << 5LL)
+#define WCOND(x)	(((x) & 0xfLL) << 17LL)
 
 /* special data operand types: */
 #define OP_D8  0x1001
