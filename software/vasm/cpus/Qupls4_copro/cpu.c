@@ -26,7 +26,7 @@
 #define TRACE(x)		/*printf(x)*/
 #define TRACE2(x,y)	/*printf((x),(y))*/
 
-const char *cpu_copyright="vasm Qupls4_copro cpu backend v0.01 (c) in 2026 Robert Finch";
+const char *cpu_copyright="vasm Qupls4_copro cpu backend v0.02 (c) in 2026 Robert Finch";
 
 const char *cpuname="Qupls4_copro";
 int bitsperbyte=8;
@@ -957,7 +957,19 @@ static size_t encode_immed_RI(instruction_buf* insn, thuge hval, int i, taddr pc
 	if (hval.lo & 0x8000000000000000LL)
 		hval.hi = 0xffffffffffffffffLL;
 
-	if (i==1) {
+	if (i==0) {
+		if (insn) {
+			insn->pfxb.size = 0;
+//			insn->opcodeH = 0;
+			if (mnemo->ext.flags & FLG_LSDISP) {
+				insn->opcode = insn->opcode | ((hval.lo & 0xefffLL) << 17LL);
+			}
+			else {
+				insn->opcode = insn->opcode | ((hval.lo & 0xefffLL) << 17LL);
+			}
+		}
+	}
+	else if (i==1) {
 		if (insn) {
 			insn->pfxb.size = 0;
 //			insn->opcodeH = 0;
