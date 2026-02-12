@@ -71,6 +71,7 @@ typedef enum logic [4:0]
 	OP_LOAD_CONFIG,
 	OP_JCC,
 	OP_ADD64,
+	OP_STOREI64,
 	OP_JMP = 9,
 	OP_CALC_INDEX = 12,
 	OP_CALC_ADR,
@@ -422,7 +423,7 @@ st_execute:
 			sleep <= FALSE;
 			stack[sp-1] <= {2'b01,ip,r8,r7,r6,r5,r4,r3,r2,r1};
 			sp <= sp - 1;
-			ip <= 13'h10;
+			ip <= 13'h0080;
 			if (sleep)
 				tGoto(st_wakeup);
 		end
@@ -433,7 +434,7 @@ st_execute:
 			paging_en <= FALSE;
 			stack[sp-1] <= {2'b10,ip,r8,r7,r6,r5,r4,r3,r2,r1};
 			sp <= sp - 1;
-			ip <= 13'h8;
+			ip <= 13'h0004;
 			if (sleep)
 				tGoto(st_wakeup);
 		end
@@ -630,26 +631,23 @@ st_execute:
 			end
 		OP_STOREI:
 			begin
-				if (ir.Rd > 4'd14) begin
-					// Was instruction at an odd address?
-					if (ip[0] & UNALIGNED_CONSTANTS)
-						tGoto(st_even64);
-					else
-						tGoto(st_odd64);
-				end
-				else begin
-					tmp = a + {{17{ir.imm[14]}},ir.imm};
-					mbus.req.cyc <= ~&tmp[14:8];
-					mbus.req.stb <= ~&tmp[14:8];
-					mbus.req.we <= HIGH;
-					mbus.req.sel <= 32'hFF << {tmp[4:3],3'b0};
-					mbus.req.adr <= tmp;
-					mbus.req.dat <= {4{60'd0,ir.Rd}};
-					roma <= tmp;
-					if (!local_sel)
-					    tGoto(st_mem_store);
-				end
+				tmp = a + {{17{ir.imm[14]}},ir.imm};
+				mbus.req.cyc <= ~&tmp[14:8];
+				mbus.req.stb <= ~&tmp[14:8];
+				mbus.req.we <= HIGH;
+				mbus.req.sel <= 32'hFF << {tmp[4:3],3'b0};
+				mbus.req.adr <= tmp;
+				mbus.req.dat <= {4{60'd0,ir.Rd}};
+				roma <= tmp;
+				if (!local_sel)
+				    tGoto(st_mem_store);
 			end
+		OP_STOREI64:
+			// Was instruction at an odd address?
+			if (ip[0] & UNALIGNED_CONSTANTS)
+				tGoto(st_even64);
+			else
+				tGoto(st_odd64);
 //		OP_MOVE: tWriteback(a);
 		// ALU ops
 		OP_SHL:
