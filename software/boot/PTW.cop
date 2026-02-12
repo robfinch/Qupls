@@ -1,0 +1,141 @@
+;===============================================================================
+;===============================================================================
+; wait - turns paging on, waits for a miss, then turns paging off
+; load config - loads registers r1 to r6 with the TLB config info
+; calc_pte_index - calculates the index portion of the PTE address
+; calc_pte_adr	- calculates the PTE address
+;
+	.set cmd_adr,0x7E00
+	.set entryno,0x7F00
+	.set tlbeL,0x7F10
+	.set tlbeH,0x7F18
+	.set page_fault_flag,0x7F20
+	; the mask for the number of TLB entries is stored in the upper 16 bits
+	; of the base address value. The hardware does not recognize more than
+	; a 48-bit physical address space (or 32 bits for the test system).
+	.set tlb_base_adr,0x01FFFFFFFFFF4000
+	.set tlb2_base_adr,0x007FFFFFFFFF4400
+
+	.text
+	.org 0x0000
+start:
+	jmp idle_state
+
+; TLB miss ISR
+; Uses only the first eight registers which are automatically swapped with the
+; GPRs.
+;
+; Register usage:
+; r1 = miss address
+;	r2 = current page table base address
+; r3 = log2 page size (13)
+;	r4 = current page table level being processed
+; r5 = miss asid
+; r6 = current invalidation count
+; r7 = temp: index into table / address of PTE
+; r8 = base I/O address of TLB registers
+
+	.org 0x0010
+tlb_miss_isr:
+	loadi64 %r8,tlb2_base_adr		; assume shortcut TLB
+	load_config								; load registers r1 to r6 with config
+	jeqz %r4,read_level0			; starting with a single level page table?
+
+read_leveln:
+	calc_index %r7,%r4
+	calc_adr %r7,%r2,%r7
+	load %r2,[%r7]					; r2 = fetch PTE
+	jgez %r2,page_fault			; check for valid page
+	shl %r7,%r2,$10					; get bit 53 status
+	jltz %r7,read_level0a		; if a shortcut page...
+	and %r2,%r2,%r2,$0x7fffffffff		; extract PPN
+	shl %r2,%r2,%r3					; r2 = address of page table
+	djnez %r4,read_leveln	; go down a level
+
+read_level0:
+	loadi64 %r8,tlb_base_adr	; non-shortcut TLB
+	calc_index %r7,%r4
+	calc_adr %r4,%r2,%r7
+	load %r3,[%r4]					; r3 = fetch PTE
+	jgez %r3,page_fault			; check for valid page
+read_level0a:
+	build_vpn %r4						; r4 = TLBE high
+	shr %r5,%r8,%r0,$24			; r5 = mask for configured number of TLB entries
+	shr %r5,%r5,%r0,$24
+	and %r1,%r7,%r5,$-1			; r1 = read_adr masked for N TLB entries
+;	loadi %r2,$3						; r2 = way to set (3 for LRU) (the way is ignored on a set)
+;	jsr set_tlbe
+	store %r3,0x00[%r8]			; set low order TLBE
+	store %r4,0x08[%r8]			; set high order TLBE
+	build_entry_no %r5,%r1,%r0,$31
+	store %r5,0x20[%r8]		; set entry number field
+	ret $0xFF								; return and restore registers
+
+page_fault:
+	storei $1,page_fault_flag
+	ret $0xFF								; return and restore registers
+
+; Parameters:
+;		r1 = entry number
+;		r2 = way to get
+;		r8 = base I/O address of TLB control regs
+; Returns:
+;		r1 = TLBE low (PTE)
+;		r2 = TLBE high
+
+get_tlbe:
+	build_entry_no %r3,%r1,%r0,$30
+	store %r3,0x20[%r8]			; set entry number field
+	nop											; wait a bit
+	load %r1,0x00[%r8]			; get low order TLBE
+	load %r2,0x08[%r8]			; get high order TLBE
+	ret $0xFC								; do not restore r1,r2
+
+; Parameters:
+;		r1 = entry number
+;		r2 = way to get
+;		r3 = TLBE low (PTE)
+;		r4 = TLBE high
+;		r8 = base I/O address of TLB control regs
+; Returns:
+
+set_tlbe:
+	store %r3,0x00[%r8]		; set low order TLBE
+	store %r4,0x08[%r8]		; set high order TLBE
+	build_entry_no %r5,%r1,%r0,$31
+	store %r5,0x20[%r8]		; set entry number field
+	ret $0xFF							; restore registers
+
+;
+
+process_cmd:
+	shl %r7,%r7,$1						; test bit 62
+	jltz %r7,.flush
+	shl %r7,%r7,$1						; test bit 61
+	jltz %r7,.get_pte
+	shl %r7,%r7,$1						; test bit 60
+	jltz %r7,.set_pte
+	jmp idle_state
+.get_pte:
+	load %r1,entryno					; r1 = entry number and way
+	jsr get_tlbe
+	store %r1,tlbeL						; set TLBE in arg area
+	store %r2,tlbeH
+	jmp idle_state
+.set_pte:
+	load %r1,entryno
+	load %r3,tlbeL						; get TLBE arg into r3,r4
+	load %r4,tlbeH
+	jsr set_tlbe
+	jmp idle_state
+.flush:
+	jmp idle_state
+
+; Go to low power wait mode.
+idle_state:
+	wait %r7,cmd_adr					; wait for a miss signal or command
+	jmp process_cmd						; jump if command present
+
+	.org 0x0200
+frame_isr:
+	ret $0xFF

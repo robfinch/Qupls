@@ -5,7 +5,7 @@ INCLUDE = C:\Users\Robert\OneDrive\documents\cores2026\Qupls\software\source\;C:
 FPPINC  = C:\Users\Robert\OneDrive\documents\cores2026\Qupls\software\source\;C:\Users\Robert\OneDrive\documents\cores2026\Qupls\software\Femtiki\source\inc\;C:\Users\Robert\OneDrive\documents\cores2026\Qupls\software\Femtiki\source\kernel\;C:\Users\Robert\OneDrive\documents\cores2026\Qupls\software\inc\
 CXX = arpl_qupls4
 #CXX = opt
-CFLAGS = -c99 -IC:\Users\Robert\OneDrive\documents\cores2025\Qupls\software\inc\ -O=31
+CFLAGS = -c99 -IC:\Users\Robert\OneDrive\documents\cores2026\Qupls\software\inc\ -O=31
 #CFLAGS = -w -S -fno-exceptions
 AFLAGS = -w -fno-exceptions -a21 -finline0
 
@@ -17,10 +17,13 @@ ROM:
 	del boot_rom.lst
 	arpl $(AFLAGS) bootrom.c
 	arpl $(AFLAGS) Fibonacci.c
-	arpl $(AFLAGS) serial.c
+	arpl $(AFLAGS) -S serial.c
 	arpl $(AFLAGS) xmodem.c
 	arpl $(AFLAGS) SIEVE.c
+	arpl $(AFLAGS) ..\Femtiki\source\kernel\Femtiki_stub.c
+	arpl $(AFLAGS) ..\Femtiki\source\kernel\Femtiki_glo.c
 	arpl $(AFLAGS) ..\Femtiki\source\kernel\console.c
+	vasmQupls4_copro_std.exe -Fvobj -Lbpl=8 -L PTW.lst PTW.cop -o PTW.o
 	vasmQupls4_std.exe -Fvobj -Lbpl=12 -L fibonacci.lst fibonacci.qp4 -o fibonacci.o
 	vasmQupls4_std.exe -Fvobj -Lbpl=12 -L bootrom.lst bootrom.qp4 -o bootrom.o
 	vasmQupls4_std.exe -Fvobj -Lbpl=12 -L xmodem.lst xmodem.qp4 -o xmodem.o
@@ -32,8 +35,15 @@ ROM:
 	vasmQupls4_std.exe -Fvobj -Lbpl=12 -L ..\cc64rt\source\cc64rt.lst ..\cc64rt\source\cc64rt.asm -o cc64rt.o
 	vasmQupls4_std.exe -Fvobj -Lbpl=12 -L ..\cc64rt\source\__store.lst ..\cc64rt\source\__store.asm -o __store.o
 	vasmQupls4_std.exe -Fvobj -Lbpl=12 -L ..\cc64rt\source\__load.lst ..\cc64rt\source\__load.asm -o __load.o
+	vasmQupls4_std.exe -Fvobj -Lbpl=12 -L ..\Femtiki\source\kernel\Femtiki_stub.lst ..\Femtiki\source\kernel\Femtiki_stub.qp4 -o Femtiki_stub.o
+	vasmQupls4_std.exe -Fvobj -Lbpl=12 -L ..\Femtiki\source\kernel\Femtiki_glo.lst ..\Femtiki\source\kernel\Femtiki_glo.qp4 -o Femtiki_glo.o
 	vasmQupls4_std.exe -Fvobj -Lbpl=12 -L ..\Femtiki\source\kernel\console.lst ..\Femtiki\source\kernel\console.qp4 -o console.o
-	vlink -M -T rom_bios.cmd -brawbin1 boot.o cc64rt.o __store.o __load.o reset_vector.o -o boot.bin
+	vlink -M -T PTW.cmd -brawbin1 PTW.o -o PTW.bin
+	bin2ver PTW.bin -b64 m -mod65536
+	bin2ver PTW.bin -b64 -mod65536
+	del ptw.mem
+	ren rom.mem ptw.mem
+	vlink -M -T rom_bios.cmd -brawbin1 boot.o Femtiki_stub.o Femtiki_glo.o cc64rt.o __store.o __load.o reset_vector.o -o boot.bin
 	vlink -T rom_bios.cmd -brawbin1 fibonacci.o -o fibonacci.bin
 	bin2ver boot.bin -b256 m -mod65536
 	bin2ver boot.bin -b256 -mod65536
