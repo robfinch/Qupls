@@ -1,4 +1,36 @@
 ;===============================================================================
+;        __
+;   \\__/ o\    (C) 2026  Robert Finch, Waterloo
+;    \  __ /    All rights reserved.
+;     \/_;     robfinch<remove>@finitron.ca
+;       ||
+;
+;
+; BSD 3-Clause License
+; Redistribution and use in source and binary forms, with or without
+; modification, are permitted provided that the following conditions are met:
+;
+; 1. Redistributions of source code must retain the above copyright notice, this
+;    list of conditions and the following disclaimer.
+;
+; 2. Redistributions in binary form must reproduce the above copyright notice,
+;    this list of conditions and the following disclaimer in the documentation
+;    and/or other materials provided with the distribution.
+;
+; 3. Neither the name of the copyright holder nor the names of its
+;    contributors may be used to endorse or pnext_irte products derived from
+;    this software without specific prior written permission.
+;
+; THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+; AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+; IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+; DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+; FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+; DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+; SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+; CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+; OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+; OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ;===============================================================================
 ; wait - turns paging on, waits for a miss, then turns paging off
 ; load config - loads registers r1 to r6 with the TLB config info
@@ -13,8 +45,9 @@
 	; the mask for the number of TLB entries is stored in the upper 16 bits
 	; of the base address value. The hardware does not recognize more than
 	; a 48-bit physical address space (or 32 bits for the test system).
-	.set tlb_base_adr,0x01FFFFFFFFFF4000
-	.set tlb2_base_adr,0x007FFFFFFFFF4400
+	.set tlb_base_adr,0x01FFFFFFFFF40000
+	.set tlb2_base_adr,0x007FFFFFFFF44000
+	.set tlb_base_adr_reg,0x7F80
 
 	.text
 	.org 0x0000
@@ -33,33 +66,38 @@ start:
 ; r5 = miss asid
 ; r6 = current invalidation count
 ; r7 = temp: index into table / address of PTE
-; r8 = base I/O address of TLB registers
+; r8 = TLB select, base I/O address of TLB registers
 
 	.org 0x0010
 tlb_miss_isr:
-	loadi64 %r8,tlb2_base_adr		; assume shortcut TLB
-	load_config								; load registers r1 to r6 with config
-	jeqz %r4,read_level0			; starting with a single level page table?
+	loadi %r8,0							; r8 = largest page size TLB
+; Walk all TLBs from largest page size to smallest
+tlb_miss1:
+	load_config	%r8					; load registers r1 to r6 with config
+	jeqz %r4,read_level0		; starting with a single level page table?
 
+; Walk all the levels of the page table until a page fault occurs or the PTE
+; is found.
 read_leveln:
 	calc_index %r7,%r4
 	calc_adr %r7,%r2,%r7
 	load %r2,[%r7]					; r2 = fetch PTE
 	jgez %r2,page_fault			; check for valid page
 	shl %r7,%r2,$10					; get bit 53 status
-	jltz %r7,read_level0a		; if a shortcut page...
-	and %r2,%r2,%r2,$0x7fffffffff		; extract PPN
+;	jltz %r7,read_level0a		; if a shortcut page...
+	and64 %r2,%r2,%r2,$0x7fffffffff		; extract PPN
 	shl %r2,%r2,%r3					; r2 = address of page table
 	djnez %r4,read_leveln	; go down a level
 
 read_level0:
-	loadi64 %r8,tlb_base_adr	; non-shortcut TLB
 	calc_index %r7,%r4
 	calc_adr %r4,%r2,%r7
 	load %r3,[%r4]					; r3 = fetch PTE
 	jgez %r3,page_fault			; check for valid page
 read_level0a:
 	build_vpn %r4						; r4 = TLBE high
+	shl %r8,%r8,%r0,$3			; r8 = index to base address table
+	load %r8,tlb_regs_adr[%r8]	; r8 = base address of page table
 	shr %r5,%r8,%r0,$24			; r5 = mask for configured number of TLB entries
 	shr %r5,%r5,%r0,$24
 	and %r1,%r7,%r5,$-1			; r1 = read_adr masked for N TLB entries
@@ -68,10 +106,16 @@ read_level0a:
 	store %r3,0x00[%r8]			; set low order TLBE
 	store %r4,0x08[%r8]			; set high order TLBE
 	build_entry_no %r5,%r1,%r0,$31
-	store %r5,0x20[%r8]		; set entry number field
+	store %r5,0x20[%r8]			; set entry number field, causes update
 	ret $0xFF								; return and restore registers
 
+; Just becasue there is a page fault on a table does not mean that some other
+; table of smaller pages does not have a translation. Check the next smallest
+; table. When we run out of TLBs to check, then page fault.
 page_fault:
+	jeqz %r8,page_fault1
+	djnez %r8,tlb_miss1
+page_fault1:
 	storei $1,page_fault_flag
 	ret $0xFF								; return and restore registers
 
@@ -136,6 +180,15 @@ idle_state:
 	wait %r7,cmd_adr					; wait for a miss signal or command
 	jmp process_cmd						; jump if command present
 
-	.org 0x0200
+	.org 0x0100
 frame_isr:
 	ret $0xFF
+
+	.rodata
+	; Location of TLB registers for each TLB ordered from TLBs
+	; with the largest page sizes first.
+	; Only the lower 48-bits are used.
+	; The number of TLB entries-1 is stuffed in the upper 16 bits
+tlb_regs_adr:
+;	.8byte	0x007FFFFFFFF44000
+	.8byte 	0x01FFFFFFFFF40000	; smallest page size TLB
