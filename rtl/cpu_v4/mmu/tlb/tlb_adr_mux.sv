@@ -1,3 +1,4 @@
+`timescale 1ns / 1ps
 // ============================================================================
 //        __
 //   \\__/ o\    (C) 2026  Robert Finch, Waterloo
@@ -61,13 +62,16 @@ output virtual_address_t miss_adr = 32'h0;
 output asid_t miss_asid;
 output reg miss_v;
 
-reg miss1;
+reg miss1,miss2;
+reg tlb;
 reg pe;
 reg pe_ne, pe_pe;
-reg padrv;
 wire cd_vadr;
 physical_address_t adr;
 wire pe_vadr_v;
+address_t ppn;
+virtual_address_t vadr1;
+reg vadrv1;
 
 // If the address is changing we do not want to trigger a miss until the 
 // translation has had time to be looked up (1 cycle). This only effects things
@@ -93,57 +97,83 @@ always_comb
 	pe_pe = (paging_en & ~pe);
 	
 always_comb
-	padr_v = padrv & !pe_pe;
+	padr_v = |hit & vadrv1 & !pe_pe;// & !cd_vadr;
+
+always_ff @(posedge clk)
+	vadr1 <= vadr;
+always_ff @(posedge clk)
+	vadrv1 <= vadr_v;
 
 // The TLB is multi-way associative. The address comes from whichever way has
 // a valid translation.
 integer n1;
 always_comb
 begin
-	adr = {$bits(physical_address_t){1'b0}};
+	padr = {$bits(physical_address_t){1'b0}};
 	for (n1 = 0; n1 < TLB_ASSOC; n1 = n1 + 1)
 		if (hit[n1])
-			adr = {tlbe[n1].pte.ppn,vadr[LOG_PAGESIZE-1:0]};
-end
-
-always_ff @(posedge clk)
-if (rst) begin
-	padr <= {$bits(physical_address_t){1'd0}};
-	padrv <= 1'b0;
-	miss_id <= 8'd0;
-	miss_asid <= 16'h0;
-	miss_adr <= {$bits(virtual_address_t){1'd0}};
-	miss1 <= INV;
-	tlb_v <= VAL;
-end
-else begin
-	miss_adr <= miss_adr;
-	if (paging_en) begin
-		tlb_v <= INV;
-		padr <= adr;
-		$display("adr=%h", adr); 
-		padrv <= |hit & vadr_v & !cd_vadr;
-		if (!(|hit & vadr_v & !cd_vadr)) begin
-			miss_adr <= vadr;
-			miss_asid <= asid;
-			miss_id <= id;
-		end
-		miss1 <= !cd_vadr;
-		if (|hit & vadr_v & !cd_vadr) begin
-			tlb_v <= idle;
-			miss1 <= INV;
-		end
-	end
-	else begin
-		padr <= vadr;
- 		padrv <= vadr_v & !pe_ne;
-		tlb_v <= idle;
-		miss1 <= INV;
-	end
-
+			padr = {tlbe[n1].pte.ppn,vadr1[LOG_PAGESIZE-1:0]};
 end
 
 always_comb
-	miss_v = miss1 & !cd_vadr;
+begin
+	if (paging_en) begin
+		if (|hit & vadrv1 & !pe_pe)
+			tlb_v = idle;
+		else
+			tlb_v = FALSE;
+	end
+	else
+		tlb_v = FALSE;
+end
+
+always_ff @(posedge clk)
+if (rst)
+	miss_id <= 8'd0;
+else begin
+	if (paging_en)
+		if (!(|hit & vadrv1 & !cd_vadr))
+			miss_id <= id;
+end
+
+always_ff @(posedge clk)
+if (rst)
+	miss_asid <= 16'h0;
+else begin
+	if (paging_en) begin
+		if (!(|hit & vadrv1 & !cd_vadr))
+			miss_asid <= asid;
+	end
+end
+
+always_ff @(posedge clk)
+if (rst)
+	miss_adr <= {$bits(virtual_address_t){1'd0}};
+else begin
+	miss_adr <= miss_adr;
+	if (paging_en) begin
+		if (!(|hit & vadrv1 & !cd_vadr))
+			miss_adr <= vadr;
+	end
+end
+
+always_ff @(posedge clk)
+if (rst)
+	miss1 <= INV;
+else begin
+	if (paging_en) begin
+		miss1 <= !cd_vadr;
+		if (!(|hit & vadrv1))// & !pe_pe))
+			miss1 <= vadrv1;
+	end
+	else
+		miss1 <= INV;
+end
+
+// We can only have a miss for a valid address.
+always_ff @(posedge clk)
+	miss2 <= miss1 & !tlb_v & vadr_v;
+always_comb
+	miss_v = miss2 & !tlb_v & vadr_v;
 
 endmodule

@@ -1,3 +1,4 @@
+`timescale 1ns / 1ps
 // ============================================================================
 //        __
 //   \\__/ o\    (C) 2023-2026  Robert Finch, Waterloo
@@ -32,7 +33,9 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 1050 LUTs / 850 FFs / 8 BRAMs / 190 MHz
+// 3000 LUTs / 500 FFs / 8 BRAMs / 205 MHz RANDOM
+// 2900 LUTs / 500 FFs / 8 BRAMs / 205 MHz LRU
+// 2000 LUTs / 475 FFs / 8 BRAMs / 205 MHz NRU
 // ============================================================================
 
 import const_pkg::*;
@@ -42,19 +45,23 @@ import cpu_types_pkg::*;
 
 module tlb (clk, bus, stall, idle, paging_en, cs_tlb, iv_count, store_i, id,
 	asid, vadr, vadr_v, padr, padr_v, tlb_v,
-	missack, miss_adr_o, miss_asid_o, miss_id_o, miss_o, tlb_entry, rst_busy);
+	missack, miss_adr_o, miss_asid_o, miss_id_o, miss_o, tlb_entry, rst_busy, empty);
 parameter TLB_ENTRIES=512;
 parameter TLB_ASSOC=4;
 parameter LOG_PAGESIZE=13;
+parameter UPDATE_STRATEGY = 2;
 localparam TLB_ABITS=$clog2(TLB_ENTRIES);
 localparam TLB_WBITS=$clog2(TLB_ASSOC);
+localparam LFSR_MASK = (16'd1 << (TLB_ASSOC-1)) - 1;
+localparam LRU = UPDATE_STRATEGY==1;
+localparam NRU = UPDATE_STRATEGY==2;
 input clk;
 wb_bus_interface.slave bus;
 input stall;
 input idle;
 input paging_en;
 input cs_tlb;
-input [5:0] iv_count;
+input [3:0] iv_count;
 input store_i;
 input [7:0] id;
 input asid_t asid;
@@ -70,15 +77,17 @@ output reg [7:0] miss_id_o;
 output reg miss_o;
 output tlb_entry_t tlb_entry;
 output reg rst_busy;
-
+output reg [TLB_ASSOC-1:0] empty;
 
 integer n1;
 genvar g;
 
 wire [TLB_ABITS:0] rstcnt;
 wire [TLB_ABITS-1:0] rst_entry_no;
-tlb_entry_t rst_entry;
-reg [1:0] way;
+wire [TLB_ABITS-1:0] hold_entry_no;
+tlb_entry_t rst_entry, hold_entry;
+reg [7:0] way;
+wire [7:0] hold_way;
 reg dly;
 virtual_address_t miss_adr;
 asid_t miss_asid;
@@ -92,6 +101,8 @@ wire clkb = clk;
 
 wire cd_vadr;
 reg [TLB_ASSOC-1:0] hit;
+reg [TLB_ASSOC-1:0] nru;
+reg nru_reset;
 reg [TLB_ASSOC-1:0] ena,enb;
 reg [15:0] wea [0:TLB_ASSOC-1];
 reg [15:0] web [0:TLB_ASSOC-1];
@@ -102,6 +113,11 @@ tlb_entry_t [TLB_ASSOC-1:0] douta;
 tlb_entry_t [TLB_ASSOC-1:0] doutb;
 tlb_entry_t [TLB_ASSOC-1:0] dina;
 tlb_entry_t [TLB_ASSOC-1:0] dinb;
+wire update_bit;
+wire [63:0] lock_map;
+wire [3:0] nrun;
+
+wire [26:0] lfsro;
 
 always_comb
 begin
@@ -114,53 +130,96 @@ end
 // update access counts, count is saturating, and shifted right every so often.
 task tam;
 input hit;
+input nru_reset;
 input store;
 input tlb_entry_t i;
 output tlb_entry_t o;
 reg of;
 begin
 	o = i;
+	if (nru_reset)
+		o.nru = 1'b0;
 	o.pte.a = 1'b1;
 	if (hit & store)
 		o.pte.m = 1'b1;
 end
 endtask
 
+tlb_bi
+#(
+	.TLB_ASSOC(TLB_ASSOC)
+)
+ubi1
+(
+	.clk(clk),
+	.cs_tlb(cs_tlb),
+	.bus(bus),
+	.dly(dly),
+	.douta(douta),
+	.hold_entry(hold_entry),
+	.hold_entry_no(hold_entry_no),
+	.hold_way(hold_way),
+	.lock_map(lock_map)
+);
+
 always_comb
 	rst_busy = ~rstcnt[TLB_ABITS];
 
 delay2 #(.WID(1)) udly1 (.clk(clk), .ce(1'b1), .i(cs_tlb & bus.req.cyc & bus.req.stb), .o(dly));
 
-always_ff @(posedge clk)
-	bus.resp.dat <= bus.req.adr[3] ? douta[0][127:64] : douta[0][63:0];
-always_ff @(posedge clk)
-	bus.resp.ack <= cs_tlb & bus.req.cyc & bus.req.stb & dly;
+lfsr27 #(.WID(27)) ulfsr1(rst, clk, 1'b1, 1'b0, lfsro);
 
 change_det #(.WID($bits(virtual_address_t)-LOG_PAGESIZE+1))
 	ucd1 (.rst(rst), .clk(clk), .ce(1'b1), .i({vadr[$bits(virtual_address_t)-1:LOG_PAGESIZE-1],paging_en}), .cd(cd_vadr));
 
 always_comb
-	way = bus.req.adr[TLB_ABITS+TLB_WBITS-1:TLB_ABITS];
+	way = hold_way;
+always_comb
+	nru_reset = &nru;
 
 generate begin : gAssoc
+    
 	for (g = 0; g < TLB_ASSOC; g = g + 1) begin
 
 always_comb
-	addra[g] = rstcnt[TLB_ABITS] ? (paging_en ? addrb[g] : bus.req.adr[TLB_ABITS+3:4]): rst_entry_no;
+	addra[g] = rstcnt[TLB_ABITS] ? (paging_en ? addrb[g] : hold_entry_no): rst_entry_no;
+
+tlb_dina_mux
+#(
+	.UPDATE_STRATEGY(UPDATE_STRATEGY),
+	.TLB_ASSOC(TLB_ASSOC),
+	.TLB_ABITS(TLB_ABITS),
+	.LFSR_MASK(LFSR_MASK)
+)
+udinam1
+(
+	.rstcnt(rstcnt),
+	.paging_en(paging_en),
+	.lfsro(lfsro),
+	.dinb(dinb),
+	.hold_entry(hold_entry),
+	.rst_entry(rst_entry),
+	.nru(nru),
+	.nrun(nrun),
+	.dina(dina),
+	.lock(lock_map[hold_entry_no[TLB_ABITS-1:TLB_ABITS-6 < 0 ? 0 : TLB_ABITS-6]])
+);
+
 always_comb
-	dina[g] = rstcnt[TLB_ABITS] ? (paging_en ? dinb[g] : {bus.req.dat,bus.req.dat}) : rst_entry;
-always_comb
-	wea[g] = rstcnt[TLB_ABITS] ? (paging_en ? {16{web[g]}} : {
-		{8{bus.req.we &  bus.req.adr[3]}} & bus.req.sel,
-		{8{bus.req.we & ~bus.req.adr[3]}} & bus.req.sel}) :
+	wea[g] = rstcnt[TLB_ABITS] ? (paging_en ? {16{web[g]}} :
+			{16{bus.req.we && bus.req.adr[5:3]==3'd4 && bus.req.dat[31] && cs_tlb &&
+			!(lock_map[hold_entry_no[TLB_ABITS-1:TLB_ABITS-6 < 0 ? 0 : TLB_ABITS-6]] && g==TLB_ASSOC-1)}}) :
 		{16{1'b1}};
 always_comb
-	ena[g] = rstcnt[TLB_ABITS] ? (paging_en ? enb[g] : bus.req.cyc & bus.req.stb & cs_tlb && g==way) : g==0;
+	ena[g] = rstcnt[TLB_ABITS] ? (paging_en ? enb[g] : bus.req.cyc & bus.req.stb & cs_tlb && (
+		LRU ? !(lock_map[hold_entry_no[TLB_ABITS-1:TLB_ABITS-6 < 0 ? 0 : TLB_ABITS-6]] && g==TLB_ASSOC-1) :
+		NRU ? g[3:0]==nrun :
+		g==way)) : g==TLB_ASSOC-1;
 
 always_comb
 	addrb[g] = vadr[LOG_PAGESIZE+TLB_ABITS-1:LOG_PAGESIZE];
 always_comb
-	tam(.hit(hit[g]), .store(store_i), .i(douta[g]), .o(dinb[g]));
+	tam(.hit(hit[g]), .nru_reset(nru_reset), .store(store_i), .i(douta[g]), .o(dinb[g]));
 always_comb
 	enb[g] = 1'b1;
 always_comb
@@ -168,9 +227,14 @@ always_comb
 
 always_comb
 	hit[g] = douta[g].pte.v &&
-		(douta[g].vpn.vpn[$bits(virtual_address_t)-LOG_PAGESIZE-TLB_ABITS-1:0]==vadr[$bits(virtual_address_t)-1:LOG_PAGESIZE+TLB_ABITS] &&
-		(douta[g].pte.g ? TRUE : douta[g].vpn.asid==miss_asid && douta[g].count==iv_count));
+		(douta[g].vpn[$bits(virtual_address_t)-LOG_PAGESIZE-TLB_ABITS-1:0]==vadr[$bits(virtual_address_t)-1:LOG_PAGESIZE+TLB_ABITS] &&
+		(douta[g].pte.g ? TRUE : douta[g].asid==asid && douta[g].count==iv_count));
 
+always_comb
+	empty[g] = ~douta[g].pte.v;
+always_comb
+	nru[g] = douta[g].nru;
+	
 always_ff @(posedge clk)
 begin
 	$display("vadr=%h", vadr);	
@@ -205,7 +269,7 @@ xpm_memory_spram #(
   .USE_MEM_INIT_MMI(0),          // DECIMAL
   .WAKEUP_TIME("disable_sleep"), // String
   .WRITE_DATA_WIDTH_A($bits(tlb_entry_t)),       // DECIMAL
-  .WRITE_MODE_A("read_first"),   // String
+  .WRITE_MODE_A("write_first"),   // String
   .WRITE_PROTECT(1)              // DECIMAL
 )
 xpm_memory_spram_inst (
