@@ -26,7 +26,7 @@
 #define TRACE(x)		/*printf(x)*/
 #define TRACE2(x,y)	/*printf((x),(y))*/
 
-const char *cpu_copyright="vasm Qupls4_copro cpu backend v0.08 (c) in 2026 Robert Finch";
+const char *cpu_copyright="vasm Qupls4_copro cpu backend v0.10 (c) in 2026 Robert Finch";
 
 const char *cpuname="Qupls4_copro";
 int bitsperbyte=8;
@@ -96,7 +96,9 @@ mnemonic mnemonics[]={
 	"jsr", 		{OP_IMM,0,0,0,0,0}, {REGIND,CPU_ALL,0,0,RD(1LL)|OPC(9LL),4,SZ_UNSIZED},
 	"load", 	{OP_REG,OP_IMM,0,0,0,0}, {DIRECT,CPU_ALL,0,0,OPC(16LL),4,SZ_UNSIZED},
 	"load", 	{OP_REG,OP_REGIND,0,0,0,0}, {REGIND,CPU_ALL,0,0,OPC(16LL),4,SZ_UNSIZED},
-	"load_config", 	{0,0,0,0,0,0}, {BITS16,CPU_ALL,0,0,OPC(3LL),4,SZ_UNSIZED},
+	"load_config", 	{OP_IMM,0,0,0,0,0}, {RI,CPU_ALL,0,0,OPC(3LL),4,SZ_UNSIZED},
+	"load_config", 	{OP_REG,0,0,0,0,0}, {R3,CPU_ALL,0,0,OPC(3LL),4,SZ_UNSIZED},
+	"load_config", 	{OP_REG,OP_IMM,0,0,0,0}, {RI,CPU_ALL,0,0,OPC(3LL),4,SZ_UNSIZED},
 	"loada", 	{OP_REG,OP_IMM,0,0,0,0}, {DIRECT,CPU_ALL,0,0,OPC(22LL),4,SZ_UNSIZED},
 	"loada", 	{OP_REG,OP_REGIND,0,0,0,0}, {REGIND,CPU_ALL,0,0,OPC(22LL),4,SZ_UNSIZED},
 	"loada64", 	{OP_REG,OP_IMM,0,0,0,0}, {DIRECT,CPU_ALL,0,0,OPC(5LL),4,SZ_UNSIZED},
@@ -1126,6 +1128,14 @@ static size_t encode_immed_RI64(instruction_buf* insn, thuge hval, int i, taddr 
 		}
 	}
 	else if (i==2) {
+		if (insn) {
+			insn->pfxb.size = 0;
+//			insn->opcodeH = 0;
+			insn->pfx1v = 1;
+			insn->pfx1 = hval.lo;
+		}
+	}
+	else if (i==3) {
 		if (insn) {
 			insn->pfxb.size = 0;
 //			insn->opcodeH = 0;
