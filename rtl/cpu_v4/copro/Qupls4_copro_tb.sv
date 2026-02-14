@@ -1,14 +1,53 @@
+`timescale 1ns / 1ps
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2026  Robert Finch, Waterloo
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+//
+// BSD 3-Clause License
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are met:
+//
+// 1. Redistributions of source code must retain the above copyright notice, this
+//    list of conditions and the following disclaimer.
+//
+// 2. Redistributions in binary form must reproduce the above copyright notice,
+//    this list of conditions and the following disclaimer in the documentation
+//    and/or other materials provided with the distribution.
+//
+// 3. Neither the name of the copyright holder nor the names of its
+//    contributors may be used to endorse or pnext_irte products derived from
+//    this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+// FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+// DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+// SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+// CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+// OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+// ============================================================================
+
 import cpu_types_pkg::*;
 import wishbone_pkg::*;
 
 module Qupls4_copro_tb();
 parameter LOG_PAGESIZE = 13;
+parameter LOG_TLB_ENTRIES = 9;
 reg rst;
 reg clk;
 reg vclk;
 integer state;
 
 integer n1;
+integer count;
 wb_bus_interface #(.DATA_WIDTH(64)) bus();
 wb_bus_interface #(.DATA_WIDTH(64)) sbus();
 wb_bus_interface #(.DATA_WIDTH(256)) mbus();
@@ -18,17 +57,17 @@ reg [7:0] id = 8'h00;
 address_t vadr;
 reg vadr_v;
 reg store;
-address_t padr;
-wire padr_v;
-wire tlb_v;
+address_t [2:0] padr;
+wire [2:0] padr_v;
+wire [2:0] tlb_v;
 wire missack;
 wire idle;
 reg cs_tlb;
-reg [3:0] iv_count = 4'h0;
-wire miss;
-address_t miss_adr;
-asid_t miss_asid;
-wire [7:0] miss_id;
+reg [3:0] iv_count [0:2];
+wire [2:0] miss;
+address_t [2:0] miss_adr;
+asid_t [2:0] miss_asid;
+wire [7:0] miss_id [0:2];
 wire paging_en;
 wire page_fault;
 wire rst_busy;
@@ -48,6 +87,8 @@ initial begin
 	mem[0] = {8{test_pte}};
 	for (n1 = 0; n1 < $size(mem); n1 = n1 + 1)
 		mem[n1] = {8{$urandom()|32'h80000000}};
+	foreach (iv_count[n1])
+		iv_count[n1] = 4'h0;
 end
 
 
@@ -84,7 +125,8 @@ always_comb
 
 tlb
 #(
-	.LOG_PAGESIZE(LOG_PAGESIZE)
+	.LOG_PAGESIZE(LOG_PAGESIZE),
+	.LOG_TLB_ENTRIES(LOG_TLB_ENTRIES)
 )
 utlb1
 (
@@ -94,30 +136,34 @@ utlb1
 	.stall(1'b0),
 	.paging_en(paging_en),
 	.cs_tlb(cs_tlb),
-	.iv_count(iv_count),
+	.iv_count(iv_count[0]),
 	.store_i(store),
 	.id(id),
 	.asid(asid),
 	.vadr(vadr),
 	.vadr_v(vadr_v),
-	.padr(padr),
-	.padr_v(padr_v),
-	.tlb_v(tlb_v),
+	.padr(padr[0]),
+	.padr_v(padr_v[0]),
+	.tlb_v(tlb_v[0]),
 	.missack(missack),
-	.miss_adr_o(miss_adr),
-	.miss_asid_o(miss_asid),
-	.miss_id_o(miss_id),
-	.miss_o(miss),
+	.miss_adr_o(miss_adr[0]),
+	.miss_asid_o(miss_asid[0]),
+	.miss_id_o(miss_id[0]),
+	.miss_o(miss[0]),
 	.rst_busy(rst_busy)
 );
 
-Qupls4_copro ucopro1
+Qupls4_copro
+#(
+	.LOG_PAGESIZE(LOG_PAGESIZE),
+	.LOG_TLB_ENTRIES(LOG_TLB_ENTRIES)
+)
+ucopro1
 (
 	.rst(rst),
 	.clk(clk),
 	.sbus(sbus),
 	.mbus(mbus),
-	.vmbus(vmbus),
 	.cs_copro(1'b0),
 	.miss(miss),
 	.miss_adr(miss_adr),
@@ -126,7 +172,7 @@ Qupls4_copro ucopro1
 	.idle(idle),
   .paging_en(paging_en),
   .page_fault(page_fault),
-  .iv_count(4'h0),
+  .iv_count(iv_count),
   .vclk(vclk),
   .hsync_i(hsync),
   .vsync_i(vsync),
@@ -136,6 +182,7 @@ Qupls4_copro ucopro1
 always_ff @(posedge clk)
 if (rst) begin
 	state <= 1;
+	count <= 0;
 end
 else begin
 	case(state)
@@ -144,6 +191,51 @@ else begin
 			vadr <= 32'h12340000;
 			vadr_v <= VAL;
 			store <= FALSE;
+			state <= 2;
+		end
+	2:
+		begin
+			if (tlb_v[0]) begin
+				vadr_v <= FALSE;
+			end
+			count <= count + 1;
+			if (count > 200) begin
+				count <= 0;
+				state <= 3;
+				vadr <= 32'h8887654;
+				vadr_v <= VAL;
+				store <= FALSE;
+			end
+		end
+	3:
+		begin
+			count <= 0;
+			vadr[12:0] <= $urandom();
+			state <= 4;
+		end
+	4:
+		begin
+			count <= count + 1;
+			if (count > 0) begin
+				if (tlb_v[0])
+					state <= 3;
+				else begin
+					if (!miss[0]) begin
+						if (paging_en)
+							$finish;
+					end
+					else
+						state <= 5;
+					count <= 0;
+				end
+			end
+		end
+	5:
+		begin
+			count <= count + 1;
+			if (count > ($urandom() % 200) + 50) begin
+				state <= 3;
+			end
 		end
 	default:	state <= 1;
 	endcase

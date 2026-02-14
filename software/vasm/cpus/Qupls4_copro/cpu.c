@@ -26,7 +26,7 @@
 #define TRACE(x)		/*printf(x)*/
 #define TRACE2(x,y)	/*printf((x),(y))*/
 
-const char *cpu_copyright="vasm Qupls4_copro cpu backend v0.10 (c) in 2026 Robert Finch";
+const char *cpu_copyright="vasm Qupls4_copro cpu backend v0.13 (c) in 2026 Robert Finch";
 
 const char *cpuname="Qupls4_copro";
 int bitsperbyte=8;
@@ -67,13 +67,24 @@ mnemonic mnemonics[]={
 	"and", 		{OP_REG,OP_REG,OP_REG,OP_IMM,0,0}, {RI,CPU_ALL,0,0,OPC(24LL),4,SZ_UNSIZED},
 	"and64", 	{OP_REG,OP_REG,OP_REG,OP_IMM,0,0}, {RI64,CPU_ALL,0,0,OPC(23LL),4,SZ_UNSIZED},
 	"and", 		{OP_REG,OP_REG,OP_REG,OP_IMM,0,0}, {RI,CPU_ALL,0,0,OPC(24LL),4,SZ_UNSIZED},
+	"bmchg",	{OP_REG,OP_DIRECT,0,0,0}, {DIRECT,CPU_ALL,0,0,RD(3LL)|OPC(7LL),4,SZ_UNSIZED},
+	"bmchg",	{OP_REG,OP_REGIND,0,0,0}, {REGIND,CPU_ALL,0,0,RD(3LL)|OPC(7LL),4,SZ_UNSIZED},
+	"bmclr",	{OP_REG,OP_DIRECT,0,0,0}, {DIRECT,CPU_ALL,0,0,RD(0LL)|OPC(7LL),4,SZ_UNSIZED},
+	"bmclr",	{OP_REG,OP_REGIND,0,0,0}, {REGIND,CPU_ALL,0,0,RD(0LL)|OPC(7LL),4,SZ_UNSIZED},
+	"bmset",	{OP_REG,OP_DIRECT,0,0,0}, {DIRECT,CPU_ALL,0,0,RD(1LL)|OPC(7LL),4,SZ_UNSIZED},
+	"bmset",	{OP_REG,OP_REGIND,0,0,0}, {REGIND,CPU_ALL,0,0,RD(1LL)|OPC(7LL),4,SZ_UNSIZED},
+	"bmtst",	{OP_REG,OP_DIRECT,0,0,0}, {DIRECT,CPU_ALL,0,0,RD(2LL)|OPC(7LL),4,SZ_UNSIZED},
+	"bmtst",	{OP_REG,OP_REGIND,0,0,0}, {REGIND,CPU_ALL,0,0,RD(2LL)|OPC(7LL),4,SZ_UNSIZED},
 	"build_entry_no", 	{OP_REG,OP_REG,OP_REG,OP_IMM,0,0}, {RI,CPU_ALL,0,0,OPC(14LL),4,SZ_UNSIZED},
 	"build_vpn", 	{OP_REG,0,0,0,0,0}, {R3,CPU_ALL,0,0,OPC(15LL),4,SZ_UNSIZED},
 	"calc_adr",		{OP_REG,OP_REG,OP_REG,0,0,0}, {R3,CPU_ALL,0,0,OPC(13LL),4,SZ_UNSIZED},
 	"calc_index",	{OP_REG,OP_REG,0,0,0,0}, {RI,CPU_ALL,0,0,OPC(12LL),4,SZ_UNSIZED},
+	"call",		{OP_IMM,0,0,0,0,0}, {DIRECT,CPU_ALL,0,0,RD(1LL)|OPC(9LL),4,SZ_UNSIZED},
+	"call",		{OP_REGIND,0,0,0,0,0}, {REGIND,CPU_ALL,0,0,RD(1LL)|OPC(9LL),4,SZ_UNSIZED},
 	"com", 		{OP_REG,OP_REG,0,0,0,0}, {R3,CPU_ALL,0,0,0xFFFE0000LL|OPC(26LL),4,SZ_UNSIZED},
 	"djne", 	{OP_REG,OP_REG,OP_IMM,0,0,0}, {DIRECT,CPU_ALL,0,0,COND(6LL)|OPC(4LL),4,SZ_UNSIZED,0,FLG_BRANCH},
 	"djnez", 	{OP_REG,OP_IMM,0,0,0,0}, {DIRECT,CPU_ALL,0,0,COND(6LL)|OPC(4LL),4,SZ_UNSIZED,0,FLG_BRANCH},
+	"flush",	{OP_REG,OP_REG,OP_IMM,0,0}, {RI,CPU_ALL,0,0,OPC(8LL),4,SZ_UNSIZED},
 	"jeq", 		{OP_REG,OP_REG,OP_IMM,0,0,0}, {DIRECT,CPU_ALL,0,0,OPC(4LL),4,SZ_UNSIZED,0,FLG_BRANCH},
 	"jeqz",		{OP_REG,OP_IMM,0,0,0,0}, {DIRECT,CPU_ALL,0,0,OPC(4LL),4,SZ_UNSIZED,0,FLG_BRANCH},
 	"jge", 		{OP_REG,OP_REG,OP_IMM,0,0,0}, {DIRECT,CPU_ALL,0,0,COND(4LL)|OPC(4LL),4,SZ_UNSIZED,0,FLG_BRANCH},
@@ -93,7 +104,9 @@ mnemonic mnemonics[]={
 	"jne", 		{OP_REG,OP_REG,OP_IMM,0,0,0}, {DIRECT,CPU_ALL,0,0,COND(1LL)|OPC(4LL),4,SZ_UNSIZED,0,FLG_BRANCH},
 	"jnez",		{OP_REG,OP_IMM,0,0,0,0}, {DIRECT,CPU_ALL,0,0,COND(1LL)|OPC(4LL),4,SZ_UNSIZED,0,FLG_BRANCH},
 	"jsr", 		{OP_IMM,0,0,0,0,0}, {DIRECT,CPU_ALL,0,0,RD(1LL)|OPC(9LL),4,SZ_UNSIZED},
-	"jsr", 		{OP_IMM,0,0,0,0,0}, {REGIND,CPU_ALL,0,0,RD(1LL)|OPC(9LL),4,SZ_UNSIZED},
+	"jsr", 		{OP_REGIND,0,0,0,0,0}, {REGIND,CPU_ALL,0,0,RD(1LL)|OPC(9LL),4,SZ_UNSIZED},
+	"jump",		{OP_IMM,0,0,0,0,0}, {DIRECT,CPU_ALL,0,0,OPC(9LL),4,SZ_UNSIZED},
+	"jump",		{OP_REGIND,0,0,0,0,0}, {REGIND,CPU_ALL,0,0,OPC(9LL),4,SZ_UNSIZED},
 	"load", 	{OP_REG,OP_IMM,0,0,0,0}, {DIRECT,CPU_ALL,0,0,OPC(16LL),4,SZ_UNSIZED},
 	"load", 	{OP_REG,OP_REGIND,0,0,0,0}, {REGIND,CPU_ALL,0,0,OPC(16LL),4,SZ_UNSIZED},
 	"load_config", 	{OP_IMM,0,0,0,0,0}, {RI,CPU_ALL,0,0,OPC(3LL),4,SZ_UNSIZED},
@@ -105,8 +118,8 @@ mnemonic mnemonics[]={
 	"loada64",	{OP_REG,OP_REGIND,0,0,0,0}, {REGIND,CPU_ALL,0,0,OPC(5LL),4,SZ_UNSIZED},
 	"loadi", 	{OP_REG,OP_IMM,0,0,0,0}, {RI,CPU_ALL,0,0,OPC(22LL),4,SZ_UNSIZED},
 	"loadi64",{OP_REG,OP_IMM,0,0,0,0}, {RI64,CPU_ALL,0,0,OPC(5LL),4,SZ_UNSIZED},
-	"mov", 		{OP_REG,OP_REG,OP_REG,0,0,0}, {R3,CPU_ALL,0,0,OPC(22LL),4,SZ_UNSIZED},
-	"move",		{OP_REG,OP_REG,OP_REG,0,0,0}, {R3,CPU_ALL,0,0,OPC(22LL),4,SZ_UNSIZED},
+	"mov", 		{OP_REG,OP_REG,0,0,0,0}, {R3,CPU_ALL,0,0,OPC(22LL),4,SZ_UNSIZED},
+	"move",		{OP_REG,OP_REG,0,0,0,0}, {R3,CPU_ALL,0,0,OPC(22LL),4,SZ_UNSIZED},
 	"nop",		{0,0,0,0,0,0}, {BITS16,CPU_ALL,0,0,0x0LL,4, SZ_UNSIZED, 0},
 	"or", 		{OP_REG,OP_REG,OP_REG,OP_IMM,0,0}, {RI,CPU_ALL,0,0,OPC(25LL),4,SZ_UNSIZED},
 	"ret", 		{OP_IMM,0,0,0,0,0}, {RI,CPU_ALL,0,0,RD(2LL)|OPC(9LL),4,SZ_UNSIZED},
@@ -124,10 +137,13 @@ mnemonic mnemonics[]={
 	"srl", 		{OP_REG,OP_REG,OP_IMM,0,0}, {RI,CPU_ALL,0,0,OPC(21LL),4,SZ_UNSIZED},
 	"store", 	{OP_REG,OP_IMM,0,0,0,0}, {DIRECT,CPU_ALL,0,0,OPC(17LL),4,SZ_UNSIZED,0,FLG_STORE},
 	"store", 	{OP_REG,OP_REGIND,0,0,0,0}, {REGIND,CPU_ALL,0,0,OPC(17LL),4,SZ_UNSIZED,0,FLG_STORE},
+	"store",	{OP_IMM,OP_IMM,0,0,0,0}, {STOREI,CPU_ALL,0,0,OPC(18LL),4,SZ_UNSIZED,0,FLG_STORE},
+	"store",	{OP_IMM,OP_REGIND,0,0,0,0}, {STOREI,CPU_ALL,0,0,OPC(18LL),4,SZ_UNSIZED,0,FLG_STORE},
 	"storei",	{OP_IMM,OP_IMM,0,0,0,0}, {STOREI,CPU_ALL,0,0,OPC(18LL),4,SZ_UNSIZED,0,FLG_STORE},
 	"storei",	{OP_IMM,OP_REGIND,0,0,0,0}, {STOREI,CPU_ALL,0,0,OPC(18LL),4,SZ_UNSIZED,0,FLG_STORE},
 	"wait", 	{OP_REG,OP_IMM,0,0,0,0}, {WAIT,CPU_ALL,0,0,WCOND(10LL)|OPC(1LL),4,SZ_UNSIZED},
 	"waitgep",{OP_REG,OP_REG,OP_REG,OP_REGIND_DISP,0,0}, {WAIT,CPU_ALL,0,0,WCOND(9LL)|OPC(1LL),4,SZ_UNSIZED},
+	"xor", 		{OP_REG,OP_REG,OP_REG,0,0,0}, {R3,CPU_ALL,0,0,OPC(26LL),4,SZ_UNSIZED},
 	"xor", 		{OP_REG,OP_REG,OP_REG,OP_IMM,0,0}, {RI,CPU_ALL,0,0,OPC(26LL),4,SZ_UNSIZED}
 };
 
@@ -584,7 +600,7 @@ static int get_reloc_type(operand *op)
   			rtype = REL_ABS;
   			break;
   		}
- 			rtype = REL_PC;
+ 			rtype = REL_ABS;
       break;
 
 		/* BEQZ r2,.target */
@@ -599,7 +615,7 @@ static int get_reloc_type(operand *op)
 
 		/* BRA target */		
   	case B2:
-    	rtype = REL_PC;
+    	rtype = REL_ABS;
       break;
   		
 		/* JMP target */

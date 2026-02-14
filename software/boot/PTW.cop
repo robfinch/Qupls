@@ -53,10 +53,12 @@
 	.set tlb2_base_adr,0x007FFFFFFFF44000
 	.set tlb_base_adr_reg,0x7F80
 	.set PAM,0x4000
+	.set PAM_avail,0x3FF8
 
 	.text
 	.org 0x0000
 start:
+	store $131072,PAM_avail
 	jump idle_state
 
 ; TLB miss ISR
@@ -121,7 +123,7 @@ page_fault:
 	jeqz %r8,page_fault1
 	djnez %r8,tlb_miss1
 page_fault1:
-	storei $1,page_fault_flag
+	store $1,page_fault_flag
 	ret $0xFF								; return and restore registers
 
 ; Parameters:
@@ -170,17 +172,17 @@ idle_state:
 	wait %r7,cmd_adr					; wait for a miss signal or command
 
 process_cmd:
-	loadi %r1,$6							; number of commands
+	loadi %r1,$7							; number of commands
 	jge %r7,%r1,.bad_cmd			; return error if command out of range
 	shl %r7,%r7,%r0,$3				; command to table index
 	load %r7,CMD_table[%r7]		; get command function address
 	call [%r7]								; go exeute the command
 	store %r1,cmd_stat				; set status (error number)
-	storei $1,sig							; trigger the command done signal (interrupt?)
+	store $1,sig							; trigger the command done signal (interrupt?)
 	jump idle_state						; go back for the next command
 .bad_cmd:
-	storei $1,cmd_stat				; set 'bad' command status in command RAM area
-	storei $1,sig							; trigger the command done signal (interrupt?)
+	store $1,cmd_stat				; set 'bad' command status in command RAM area
+	store $1,sig							; trigger the command done signal (interrupt?)
 	jump idle_state						; go back for the next command
 
 cmd_get_tlbe:
@@ -190,7 +192,7 @@ cmd_get_tlbe:
 	store %r2,tlbeH
 cmd_ok:
 	move %r1,%r0							; everything OK
-	ret
+	ret $0xFF
 
 cmd_set_tlbe:
 	load %r1,entryno
@@ -212,6 +214,9 @@ alloc_page:
 .0001:
 	bmset %r2,PAM[%r1]				; set PAM bit and return previous setting
 	jnez %r2,.0002						; was bit already set?
+	load %r2,PAM_avail				; derement PAM available
+	add %r2,%r2,%r0,$-1
+	store %r2,PAM_avail
 	store %r1,PAM_index				; update index for next time
 	store %r1,cmd_resp				; save page number in arg area
 	jump cmd_ok								; signal main CPU page selection is ready
@@ -223,24 +228,53 @@ alloc_page:
 	djnez %r4,.0001
 	; Here the entire bitmap was searched and no free page was found.
 	; Report out-of-memory condition
-	storei $-1,cmd_resp
+	store $-1,cmd_resp
 	loadi %r1,$2							; 'out-of-memory' error
-	ret
+	ret $0xFF
 
 ; Free a page of memory
 free_page:
 	loadi %r4,$131072					; number of bits in PAM
 	load %r1,cmd_arg1					; get page number to free
 	jge %r1,%r4,cmd_ok				; ignore bad request
-	bmclr %r0,PAM[%r1]				; clear the bit in the PAM
+	bmclr %r1,PAM[%r1]				; clear the bit in the PAM
+	load %r4,PAM_avail
+	add %r4,%r4,%r1,$0				; increment pages available by free status
+	store %r4,PAM_avail
 	jump cmd_ok
 
+; Get available page count
+get_free_page_count:
+	load %r1,PAM_avail
+	store %r1,cmd_resp
+	jmp cmd_ok
+
+; Flush the TLB
+; It can take a few cycles to flush the TLB, for example 512x4=2048 cycles.
+; So that the main CPU is able to proceed, flushing is turned on and off
+; periodically. Otherwise the TLB is disabled while flushing.
 flush_all:
-	jump cmd_ok
-flush_asid:
-	load %r1,cmd_arg1
+	loadi %r2,$0							; r2 = asid = 0
+flush1:											; entry point for flush by asid
+	flush %r0,%r2,$3					; trigger a flush operation
+	loadi %r1,32							; wait a few cycles
+.0001:
+	djnez %r1,.0001
+	flush %r3,%r2,$0					; turn flush off to allow translations
+	jltz %r3,cmd_ok						; was the flush done?
+	loadi %r1,32							; wait a few cycles
+.0002:
+	djnez %r1,.0002
+	flush %r3,%r2,$1					; turn flush on to allow a few flushes
+	jgtz %r3,.0001
 	jump cmd_ok
 
+; Flush TLB of a specific ASID
+flush_asid:
+	load %r2,cmd_arg1
+	jump flush1
+
+	.align 3
 CMD_table:
 	.2byte flush_all
 	.2byte 0,0,0
@@ -253,6 +287,8 @@ CMD_table:
 	.2byte alloc_page
 	.2byte 0,0,0
 	.2byte free_page
+	.2byte 0,0,0
+	.2byte get_free_page_count
 	.2byte 0,0,0
 
 	.data

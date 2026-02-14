@@ -33,34 +33,42 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 5225 LUTs / 1700 FFs / 8 BRAMs / 160 MHz	(default synth)
-// 5075 LUTs / 1700 FFs / 8 BRAMs / 145 MHz	(area synth)
+// 7250 LUTs / 10500 FFs / 8 BRAMs / 170 MHz	(default synth)
+// 6850 LUTs / 10500 FFs / 8 BRAMs / 145 MHz	(area synth)
 // ============================================================================
 
 import const_pkg::*;
 import cpu_types_pkg::*;
 import wishbone_pkg::*;
+import mmu_pkg::*;
 import Qupls4_copro_pkg::*;
 
-module Qupls4_copro(rst, clk, sbus, mbus, vmbus, cs_copro, miss, miss_adr, miss_asid,
+module Qupls4_copro(rst, clk, sbus, mbus, cs_copro, miss, miss_adr, miss_asid,
   missack, paging_en, page_fault, iv_count, missack, idle,
-  vclk, hsync_i, vsync_i, gfx_que_empty_i);
+  vclk, hsync_i, vsync_i, gfx_que_empty_i,
+  flush_en, flush_trig, flush_asid, flush_done);
 parameter UNALIGNED_CONSTANTS = 0;
 parameter JUMP_INDIRECT = 0;
+parameter NUM_PAGESIZES = 1;
+parameter LOG_PAGESIZE = 13;	// log2 of size of page
+parameter LOG_TLB_ENTRIES = 9;
 input rst;
 input clk;
 wb_bus_interface.slave sbus;
 wb_bus_interface.master mbus;
-wb_bus_interface.master vmbus;
 input cs_copro;
-input [1:0] miss;
-input address_t miss_adr;
-input asid_t miss_asid;
+input [2:0] miss;
+input address_t [2:0] miss_adr;
+input asid_t [2:0] miss_asid;
 output reg missack;
 output reg idle;
 output reg paging_en;
 output reg page_fault;
-input [3:0] iv_count;
+output reg flush_en;
+output asid_t flush_asid;
+output reg flush_trig;
+input flush_done;
+input [3:0] iv_count [0:2];
 input vclk;
 input hsync_i;
 input vsync_i;
@@ -102,6 +110,7 @@ wire [63:0] dinb = sbus.req.dat;
 wire [63:0] douta;
 wire [63:0] doutb;
 reg [31:0] next_ir;
+reg [63:0] mem_val;
 always_comb
 	next_ir = ip2 ? douta[63:32] : douta[31:0];
 reg sleep;
@@ -113,14 +122,36 @@ wire takb;
 reg [31:0] entry_no;
 reg [63:0] cmd,stat;
 tlb_entry_t tlbe,tlbe2;
-ptattr_t [1:0] ptattr;
-address_t [1:0] ptbr;
+ptattr_t [2:0] ptattr;
+address_t [2:0] ptbr;
 reg clear_page_fault;
-address_t miss_adr1;
-asid_t miss_asid1;
+reg [2:0] miss1;
+address_t [2:0] miss_adr1;
+asid_t [2:0] miss_asid1;
+reg [3:0] flush_trig1;
 reg [63:0] arg_dat;
-reg [31:0] icnt;
-reg [31:0] tick;
+reg wait_active;
+reg [3:0] wait_cond;
+wire [31:0] icnt;			// count with one decimal point
+reg [31:0] icnta;			// How much to increment by
+wire [31:0] tick;			// running count of clocks since reset
+
+// Validate parameters
+always_comb
+begin
+	if (NUM_PAGESIZES < 1) begin
+		$display("Q4 Copro: must have at least one page size.");
+		$finish;
+	end
+	if (NUM_PAGESIZES > 8) begin
+		$display("Q4 Copro: too many page sizes.");
+		$finish;
+	end
+	if (LOG_TLB_ENTRIES > 16) begin
+		$display("Q4 Copro: too many TLB entries.");
+		$finish;
+	end
+end
 
 always_ff @(posedge clk)
 	ip2 <= ip[2];
@@ -135,12 +166,16 @@ if (sbus.rst) begin
 	ptbr[1] <= 64'hFFFFFFFFFF802000;
 	ptattr[0] <= 64'd0;
 	ptattr[0].level <= 3'd1;
-	ptattr[0].pgsz <= 5'd13;
-	ptattr[0].log_te <= 5'd9;
+	ptattr[0].pgsz <= LOG_PAGESIZE;
+	ptattr[0].log_te <= LOG_TLB_ENTRIES;
 	ptattr[1] <= 64'd0;
 	ptattr[1].level <= 3'd1;
 	ptattr[1].pgsz <= 5'd23;
-	ptattr[1].log_te <= 5'd9;
+	ptattr[1].log_te <= 5'd7;
+	ptattr[2] <= 64'd0;
+	ptattr[2].level <= 3'd1;
+	ptattr[2].pgsz <= 5'd23;
+	ptattr[2].log_te <= 5'd7;
 	sbus.resp <= {$bits(wb_cmd_response64_t){1'b0}};
 	clear_page_fault <= FALSE;
 	entry_no <= 32'd0;
@@ -152,28 +187,41 @@ else begin
 		sbus.resp.tid <= sbus.req.tid;	
 		sbus.resp.pri <= sbus.req.pri;
 		if (sbus.req.we)
-			casez(sbus.req.adr[12:3])
-			10'h3E0:	entry_no <= sbus.req.dat[31:0];
-			10'h3E1:	cmd <= sbus.req.dat;
-			10'h3E2:	tlbe[63:0] <= sbus.req.dat;
-			10'h3E3:	tlbe[127:64] <= sbus.req.dat;
-			10'h3F0:	ptbr[0] <= sbus.req.dat;
-			10'h3F2:	ptattr[0] <= sbus.req.dat;
-			10'h3F4:	ptbr[1] <= sbus.req.dat;
-			10'h3F6:	ptattr[1] <= sbus.req.dat;
-			10'h3FC:	clear_page_fault <= TRUE;
+			casez(sbus.req.adr[14:3])
+			// FC0 to FCF read-only
+			12'hFD0:	entry_no <= sbus.req.dat[31:0];
+			12'hFD1:	cmd <= sbus.req.dat;
+			12'hFD2:	tlbe[63:0] <= sbus.req.dat;
+			12'hFD3:	tlbe[127:64] <= sbus.req.dat;
+			12'hFD7:	clear_page_fault <= TRUE;
+			12'hFE0:	ptbr[0] <= sbus.req.dat;
+			12'hFE2:	ptattr[0] <= sbus.req.dat;
+			12'hFE4:	ptbr[1] <= sbus.req.dat;
+			12'hFE6:	ptattr[1] <= sbus.req.dat;
+			12'hFE8:	ptbr[2] <= sbus.req.dat;
+			12'hFEA:	ptattr[2] <= sbus.req.dat;
 			default:	;
 			endcase
-		casez(sbus.req.adr[12:3])
-		10'h3E1:	sbus.resp.dat <= stat;
-		10'h3E2:	sbus.resp.dat <= tlbe2[63:0];
-		10'h3E3:	sbus.resp.dat <= tlbe2[127:64];
-		10'h3E4:	sbus.resp.dat <= miss_adr1;
-		10'h3E5:	sbus.resp.dat <= miss_asid1;
-		10'h3F0:	sbus.resp.dat <= ptbr[0];
-		10'h3F2:	sbus.resp.dat <= ptattr[1];
-		10'h3F4:	sbus.resp.dat <= ptbr[1];
-		10'h3F6:	sbus.resp.dat <= ptattr[1];
+		ptattr[0].pgsz <= LOG_PAGESIZE;
+		ptattr[0].log_te <= LOG_TLB_ENTRIES;
+		casez(sbus.req.adr[14:3])
+		12'hFC0:	sbus.resp.dat <= miss_adr1[0];
+		12'hFC1:	sbus.resp.dat <= miss_asid1[0];
+		12'hFC2:	sbus.resp.dat <= miss_adr1[1];
+		12'hFC3:	sbus.resp.dat <= miss_asid1[1];
+		12'hFC4:	sbus.resp.dat <= miss_adr1[2];
+		12'hFC5:	sbus.resp.dat <= miss_asid1[2];
+		// To 12'hFCF
+		12'hFD0:	sbus.resp.dat <= entry_no;
+		12'hFD1:	sbus.resp.dat <= stat;
+		12'hFD2:	sbus.resp.dat <= tlbe2[63:0];
+		12'hFD3:	sbus.resp.dat <= tlbe2[127:64];
+		12'hFE0:	sbus.resp.dat <= ptbr[0];
+		12'hFE2:	sbus.resp.dat <= ptattr[0];
+		12'hFE4:	sbus.resp.dat <= ptbr[1];
+		12'hFE6:	sbus.resp.dat <= ptattr[1];
+		12'hFE8:	sbus.resp.dat <= ptbr[2];
+		12'hFEA:	sbus.resp.dat <= ptattr[2];
 		default:	sbus.resp.dat <= doutb;
 		endcase
 		sbus.resp.ack <= dly2;
@@ -301,7 +349,7 @@ urom1 (
 
 // End of xpm_memory_tdpram_inst instantiation
 				
-
+// Source operand multiplexers.
 always_comb
 	case(ir.Rs1)
 	4'd1:	a = r1;
@@ -351,8 +399,8 @@ Qupls4_copro_branch_eval ube1
 	.ir(ir),
 	.a(a),
 	.b(b),
-	.after_pos(after_pos),
-	.before_pos(before_pos),
+	.after_pos(scan_is_after_pos),
+	.before_pos(scan_is_before_pos),
 	.takb(takb)
 );
 
@@ -365,6 +413,7 @@ unip1
 (
 	.rst(rst),
 	.state(state),
+	.wait_active(wait_active),
 	.pe_vsync(pe_vsync2),
 	.miss(miss),
 	.paging_en(paging_en),
@@ -385,17 +434,37 @@ unip1
 	.next_ip(next_ip)
 );
 
-always_ff @(posedge clk)
-if (rst)
-	tick <= 32'd0;
-else
-	tick <= tick + 1;
+counter #(.WID(32)) utck1
+(
+	.rst(rst),
+	.clk(clk),
+	.ce(1'b1),
+	.ld(1'b0),
+	.d(32'd0),
+	.q(tick),
+	.tc()
+);
+
+count_accum #(.WID(32)) uca1
+(
+	.rst(rst),
+	.clk(clk),
+	.ce(1'b1),
+	.ld(1'b0),
+	.d(32'd0),
+	.a(icnta),
+	.q(icnt),
+	.tc()
+);
 
 always_ff @(posedge clk)
 if (rst)
 	ip <= 16'd0;
 else
 	ip <= next_ip;
+
+always_comb
+	flush_trig = flush_trig1[0];
 
 always @(posedge clk)
 if (rst) begin
@@ -407,15 +476,21 @@ if (rst) begin
 	missack <= FALSE;
 	idle <= FALSE;
 	paging_en <= TRUE;
+	flush_en <= FALSE;
 	rfwr <= FALSE;
 	foreach(stack[n1])
 		stack[n1] <= 530'd0;
 	sp <= 4'd0;
-	icnt <= 32'd0;
+	icnta <= 32'd0;
+	wait_active <= FALSE;
+	wait_cond <= 4'h0;
+	flush_trig1 <= 4'h0;
   tGoto(st_reset);
 end
 else begin
+	icnta <= 32'd0;
 	missack <= FALSE;
+	flush_trig1 <= {1'b0,flush_trig1[3:1]};
 	if (clear_page_fault)
 		page_fault <= FALSE;
 	
@@ -442,21 +517,20 @@ st_reset2:
 		ir <= next_ir;
 		tGoto(st_execute);
 	end
+
+// Check for interrupts and handle WAIT logic.
 st_ifetch:
 	begin
-		icnt <= icnt + 2;
+		icnta <= 2;
 		ipr <= ip;
 		rfwr <= FALSE;
 		ir <= next_ir;
 		tGoto(st_execute);
-	end
-st_execute:	
-	begin
-		tGoto(st_writeback);
 		if (pe_vsync2) begin
 			sleep <= FALSE;
 			stack[(sp+15) % 16] <= {2'b01,ipr,r8,r7,r6,r5,r4,r3,r2,r1};
 			sp <= sp - 1;
+			wait_active <= FALSE;
 			if (sleep)
 				tCall(st_wakeup,st_ifetch);
 			else
@@ -464,65 +538,87 @@ st_execute:
 		end
 		else if (|miss & paging_en) begin
 			sleep <= FALSE;
-			miss_adr1 <= miss_adr;
-			miss_asid1 <= miss_asid;
+			miss1 <= miss;
+			miss_adr1 <= miss_adr[0];
+			miss_asid1 <= miss_asid[0];
 			paging_en <= FALSE;
 			missack <= TRUE;
 			stack[(sp+15) % 16] <= {2'b10,ipr,r8,r7,r6,r5,r4,r3,r2,r1};
 			sp <= sp - 1;
+			wait_active <= FALSE;
 			if (sleep)
 				tCall(st_wakeup,st_ifetch);
 			else
 				tGoto(st_ifetch);
 		end
-		else
+		else if (wait_active) begin
 		// WAIT
 		// WAIT stops waiting when:
 		// a) the scan address is greater than the specified one (if this condition is set)
 		// b) an interrupt occurred
 		// c) a write cycle to a specified location occurred.
 		// While waiting the local memory is put in low power mode.
+			case(wait_cond)
+			JGEP:
+				if (hpos_masked >= hpos_wait && vpos_masked >= vpos_wait && (b[48] ? gfx_que_empty_i : 1'b1)) begin
+					idle <= TRUE;
+					sleep <= TRUE;
+					icnta <= 1;
+				end
+				else begin
+					wait_active <= FALSE;
+					tCall(st_wakeup,st_ifetch);
+				end
+			default:
+				// Wait at address
+				if (ir.Rd != 4'd0 && 
+					sbus.req.cyc && sbus.req.stb && sbus.req.we &&
+					sbus.req.adr[13:3]==ir.imm[14:4] && cs_copro
+				) begin
+					rfwr <= TRUE;
+					res <= sbus.req.dat;
+					wait_active <= FALSE;
+					tCall(st_wakeup,st_ifetch);
+				end
+				else begin
+					ir <= ir;
+					idle <= TRUE;
+					sleep <= TRUE;
+					icnta <= 1;
+				end
+			endcase
+		end
+	end
+
+st_execute:	
+	begin
+		tGoto(st_writeback);
 		case(ir.opcode)
+		// The guts of wait needs to be in the ifetch state.
+		// This is just a trigger here.
 		OP_WAIT:
 			begin
-				tGoto(st_execute);
-				case(ir.imm[3:0])
-				JGEP:
-					if (hpos_masked >= hpos_wait && vpos_masked >= vpos_wait && (b[48] ? gfx_que_empty_i : 1'b1)) begin
-						idle <= TRUE;
-						sleep <= TRUE;
-						icnt <= icnt + 1;
-					end
-					else
-						tCall(st_wakeup,st_ifetch);
-				default:
-					// Wait at address
-					if (ir.Rd != 4'd0 && 
-						sbus.req.cyc && sbus.req.stb && sbus.req.we &&
-						sbus.req.adr[13:3]==ir.imm[14:4] && cs_copro
-					) begin
-						rfwr <= TRUE;
-						res <= sbus.req.dat;
-						tCall(st_wakeup,st_ifetch);
-					end
-					else begin
-						ir <= ir;
-						idle <= TRUE;
-						sleep <= TRUE;
-						icnt <= icnt + 1;
-					end
-				endcase
+				wait_active <= TRUE;
+				wait_cond <= ir.imm[3:0];
+				tGoto(st_ifetch);
 			end
 		OP_LOAD_CONFIG:
 			begin
-				r1 <= miss_adr1;
-				r2 <= ptbr[0];
-				r3 <= ptattr[0].pgsz;
-				r4 <= ptattr[0].level;
-				r5 <= miss_asid1;
-				r6 <= iv_count;
+				tmp = a[2:0]|imm[2:0];
+				// Which TLB missed?
+				r2 <= ptbr[tmp];
+				r3 <= ptattr[tmp].pgsz;
+				r4 <= ptattr[tmp].level;
+				r1 <= miss_adr1[tmp];
+				r5 <= miss_asid1[tmp];
+				r6 <= iv_count[tmp];
 			end
+
 		// Conditional jumps
+		// Conditional jumps need an exta state to allow the BRAM to be accessed
+		// after the address change. So, we go to prefetch instead of ifetch.
+		// We also do not want to go through writeback which would increment the
+		// address.
 		OP_JCC:
 			case(ir.Rd)
 			JEQ:	if (takb) tGoto(st_prefetch);
@@ -533,8 +629,7 @@ st_execute:
 			JGT:	if (takb) tGoto(st_prefetch);
 			DJNE:
 				begin
-//					rfwr <= TRUE;
-//					res <= a-1;
+					// Ugh, this update must be done here.
 					tWriteback(ir.Rs1,a-1);
 					if (takb)
 						tGoto(st_prefetch);
@@ -588,12 +683,11 @@ st_execute:
 			end
 
 		// Accelerator instructions
+		// We writeback results here to trim a clock cycle off of timing.
 		OP_CALC_INDEX:
 			begin
 				tmp = ptattr[0].pgsz - 64'd3;
 				tmp = tmp[5:0] * a[2:0] + ptattr[0].pgsz;
-//				rfwr <= TRUE;
-				res <= miss_adr1 >> tmp;
 				tWriteback(ir.Rd,miss_adr1 >> tmp);
 				tGoto(st_ifetch);
 			end
@@ -602,8 +696,6 @@ st_execute:
 				tmp = (64'd1 << ptattr[0].pgsz) - 1;	// tmp = page size mask
 				tmp = b & tmp;										// tmp = PTE index masked for 1024 entries in page
 				tmp = tmp << 3;										// tmp = word index
-//				rfwr <= TRUE;
-				res <= a | tmp;										// r8 = page table address plus index
 				tWriteback(ir.Rd,a|tmp);
 				tGoto(st_ifetch);
 			end
@@ -612,19 +704,24 @@ st_execute:
 				tmp = {56'd0,b[7:0]} << 16;					// put way into position
 				tmp = tmp | (64'h1 << ir.imm[5:0]);	// set TLBE set bit
 				tmp = tmp | a[15:0];								// put read_adr into position
-//				rfwr <= TRUE;
-				res <= tmp;
 				tWriteback(ir.Rd,tmp);
 				tGoto(st_ifetch);
 			end
 		OP_BUILD_VPN:
 			begin
-				tmp = miss_adr >> (ptattr[0].pgsz + ptattr[0].log_te);	// VPN = miss_adr >> (LOG_PAGESIZE + TLB_ABITS)
-				tmp = tmp | ({64'd0,miss_asid} << 48);// put ASID into position
-				tmp = tmp | ({64'd0,iv_count} << 42);	// put count into position
-//				rfwr <= TRUE;
-				res <= tmp;
+				tmp = miss_adr1 >> (ptattr[0].pgsz + ptattr[0].log_te);	// VPN = miss_adr >> (LOG_PAGESIZE + TLB_ABITS)
+				tmp = tmp | ({64'd0,miss_asid1} << 48);// put ASID into position
+				tmp = tmp | ({64'd0,iv_count[0]} << 42);	// put count into position
 				tWriteback(ir.Rd,tmp);
+				tGoto(st_ifetch);
+			end
+		OP_FLUSH:
+			begin
+				flush_asid <= a[15:0];
+				flush_en <= ir.imm[0];
+				flush_trig1 <= {4{ir.imm[1]}};
+				rfwr <= TRUE;
+				tWriteback(ir.Rd,{flush_done,63'd0});
 				tGoto(st_ifetch);
 			end
 
@@ -632,6 +729,7 @@ st_execute:
 		OP_LOAD:
 			begin
 				tmp = a + {{17{ir.imm[14]}},ir.imm};
+				// ToDo fix cyc/stb
 				mbus.req.cyc <= ~&tmp[14:8];
 				mbus.req.stb <= ~&tmp[14:8];
 				mbus.req.we <= LOW;
@@ -676,11 +774,24 @@ st_execute:
 				else
 					tGoto(st_odd64);
 			end
-//		OP_MOVE: tWriteback(a);
+		OP_BMP:
+			begin
+				tmp = (a >> 4'd6) + {{17{ir.imm[14]}},ir.imm};
+				// ToDo fix cyc/stb
+				mbus.req.cyc <= ~&tmp[14:8];
+				mbus.req.stb <= ~&tmp[14:8];
+				mbus.req.we <= LOW;
+				mbus.req.sel <= 32'hFF << {tmp[4:3],3'b0};
+				mbus.req.adr <= tmp;
+				roma <= tmp;
+				tGoto (st_mem_load);
+			end
+
 		// ALU ops
-		OP_SHL: begin res <= a << (b[4:0]+ir.imm[4:0]); tWriteback(ir.Rd, a << (b[4:0]+ir.imm[4:0])); tGoto(st_ifetch); end
-		OP_SHR:	begin res <= a >> (b[4:0]+ir.imm[4:0]); tWriteback(ir.Rd, a >> (b[4:0]+ir.imm[4:0])); tGoto(st_ifetch); end
-		OP_ADD: begin res <= a + b + {{17{ir.imm[14]}},ir.imm};  tWriteback(ir.Rd, a + b + {{17{ir.imm[14]}},ir.imm}); tGoto(st_ifetch); end
+		// ALU ops also writeback here to trim a cycle from timing.
+		OP_SHL: begin tWriteback(ir.Rd, a << (b[4:0]+ir.imm[4:0])); tGoto(st_ifetch); end
+		OP_SHR:	begin tWriteback(ir.Rd, a >> (b[4:0]+ir.imm[4:0])); tGoto(st_ifetch); end
+		OP_ADD: begin tWriteback(ir.Rd, a + b + {{17{ir.imm[14]}},ir.imm}); tGoto(st_ifetch); end
 		OP_ADD64,OP_AND64:
 			begin
 				// Was instruction at an odd address?
@@ -689,9 +800,9 @@ st_execute:
 				else
 					tGoto(st_odd64);
 			end
-		OP_AND: begin res <= a & b & {{17{ir.imm[14]}},ir.imm}; tWriteback(ir.Rd, a & b & {{17{ir.imm[14]}},ir.imm}); tGoto(st_ifetch); end
-		OP_OR:	begin res <= a | b | {{17{ir.imm[14]}},ir.imm}; tWriteback(ir.Rd, a | b | {{17{ir.imm[14]}},ir.imm}); tGoto(st_ifetch); end
-		OP_XOR:	begin res <= a ^ b ^ {{17{ir.imm[14]}},ir.imm}; tWriteback(ir.Rd, a ^ b ^ {{17{ir.imm[14]}},ir.imm}); tGoto(st_ifetch); end
+		OP_AND: begin tWriteback(ir.Rd, a & b & {{17{ir.imm[14]}},ir.imm}); tGoto(st_ifetch); end
+		OP_OR:	begin tWriteback(ir.Rd, a | b | {{17{ir.imm[14]}},ir.imm}); tGoto(st_ifetch); end
+		OP_XOR:	begin tWriteback(ir.Rd, a ^ b ^ {{17{ir.imm[14]}},ir.imm}); tGoto(st_ifetch); end
 		default:;
 		endcase
 	end
@@ -765,8 +876,6 @@ st_wakeup:
 	end
 st_wakeup2:
 	tRet();
-//st_jmp:
-//	tGoto(st_jmp2);
 st_jmp:
 	tGoto(st_writeback);
 
@@ -782,21 +891,144 @@ st_ip_load:
 st_mem_load:
 	begin
 		if (mbus.resp.ack) begin
-			mbus.req <= {$bits(wb_cmd_request256_t){1'b0}};
-			if (local_sel) begin
-				casez(roma[12:3])
-				10'h3??:	begin rfwr <= TRUE; res <= arg_dat; end
-			  default:	begin rfwr <= TRUE; res <= douta; end
-				endcase
-			end
-			else begin
-				rfwr <= TRUE;
-			  res <= mbus.resp.dat >> {mbus.req.adr[5:4],6'd0};
-			end
 			tGoto (st_writeback);
+			mbus.req <= {$bits(wb_cmd_request256_t){1'b0}};
+			case(ir.opcode)
+			OP_BMP:
+				case(ir.Rs2)
+				4'd0:	// BMCLR
+					begin
+						if (local_sel) begin
+							casez(roma[14:3])
+							12'hF??:	
+								begin
+									mem_val <= arg_dat & ~(64'd1 << mbus.req.adr[5:0]);
+						  		rfwr <= TRUE;
+									res <= arg_dat >> mbus.req.adr[5:0] & 64'd1;
+									tGoto(st_bit_store);
+								end
+						  default:
+						  	begin
+						  		mem_val <= douta & ~(64'd1 << mbus.req.adr[5:0]);
+						  		rfwr <= TRUE;
+						  		res <= mbus.req.adr[5:0] & 64'd1;
+									tGoto(st_bit_store);
+						  	end
+							endcase
+						end
+						else begin
+							mem_val <= (mbus.resp.dat >> {mbus.req.adr[7:6],6'd0}) & ~(64'd1 << mbus.req.adr[5:0]);
+							res <= mbus.resp.dat >> mbus.req.adr[7:0] & 64'd1;
+							tGoto(st_bit_store);
+						end
+					end
+				4'd1:	// BMSET
+					begin
+						if (local_sel) begin
+							casez(roma[14:3])
+							12'hF??:	
+								begin
+									mem_val <= arg_dat | (64'd1 << mbus.req.adr[5:0]);
+						  		rfwr <= TRUE;
+									res <= arg_dat >> mbus.req.adr[5:0] & 64'd1;
+									tGoto(st_bit_store);
+								end
+						  default:
+						  	begin
+						  		mem_val <= douta | (64'd1 << mbus.req.adr[5:0]);
+						  		rfwr <= TRUE;
+						  		res <= mbus.req.adr[5:0] & 64'd1;
+									tGoto(st_bit_store);
+						  	end
+							endcase
+						end
+						else begin
+							mem_val <= mbus.resp.dat >> {mbus.req.adr[7:6],6'd0} | (64'd1 << mbus.req.adr[5:0]);
+							res <= mbus.resp.dat >> mbus.req.adr[7:0] & 64'd1;
+							tGoto(st_bit_store);
+						end
+					end
+				4'd2:	// BMTST
+					begin
+						if (local_sel) begin
+							casez(roma[14:3])
+							12'hF??:	
+								begin
+									mem_val <= arg_dat | (64'd1 << mbus.req.adr[5:0]);
+						  		rfwr <= TRUE;
+									res <= arg_dat >> mbus.req.adr[5:0] & 64'd1;
+								end
+						  default:
+						  	begin
+						  		mem_val <= douta | (64'd1 << mbus.req.adr[5:0]);
+						  		rfwr <= TRUE;
+						  		res <= mbus.req.adr[5:0] & 64'd1;
+						  	end
+							endcase
+						end
+						else begin
+							mem_val <= mbus.resp.dat >> {mbus.req.adr[7:6],6'd0} | (64'd1 << mbus.req.adr[5:0]);
+							res <= mbus.resp.dat >> mbus.req.adr[7:0] & 64'd1;
+						end
+					end
+				4'd3:	// BMCHG
+					begin
+						if (local_sel) begin
+							casez(roma[14:3])
+							12'hF??:	
+								begin
+									mem_val <= arg_dat ^ (64'd1 << mbus.req.adr[5:0]);
+						  		rfwr <= TRUE;
+									res <= arg_dat >> mbus.req.adr[5:0] & 64'd1;
+									tGoto(st_bit_store);
+								end
+						  default:
+						  	begin
+						  		mem_val <= douta ^ (64'd1 << mbus.req.adr[5:0]);
+						  		rfwr <= TRUE;
+						  		res <= mbus.req.adr[5:0] & 64'd1;
+									tGoto(st_bit_store);
+						  	end
+							endcase
+						end
+						else begin
+							mem_val <= mbus.resp.dat >> {mbus.req.adr[7:6],6'd0} ^ (64'd1 << mbus.req.adr[5:0]);
+							res <= mbus.resp.dat >> mbus.req.adr[7:0] & 64'd1;
+							tGoto(st_bit_store);
+						end
+					end
+				default:	tGoto(st_ifetch);
+				endcase
+			default:
+				if (local_sel) begin
+					casez(roma[12:3])
+					10'h3??:	begin rfwr <= TRUE; res <= arg_dat; end
+				  default:	begin rfwr <= TRUE; res <= douta; end
+					endcase
+				end
+				else begin
+					rfwr <= TRUE;
+				  res <= mbus.resp.dat >> {mbus.req.adr[5:4],6'd0};
+				end
+			endcase
 		end
 	end
 	
+st_bit_store:
+	if (!mbus.resp.ack) begin
+		tmp = (a >> 4'd6) + {{17{ir.imm[14]}},ir.imm};
+		mbus.req.cyc <= ~&tmp[14:8];
+		mbus.req.stb <= ~&tmp[14:8];
+		mbus.req.we <= HIGH;
+		mbus.req.sel <= 32'hFF << {tmp[4:3],3'b0};
+		mbus.req.adr <= tmp;
+		mbus.req.dat <= {4{mem_val}};
+		roma <= tmp;
+		if (!local_sel) begin
+		  tGoto(st_mem_store);
+		end
+	end
+
 st_mem_store:
 	begin
 		if (mbus.resp.ack) begin

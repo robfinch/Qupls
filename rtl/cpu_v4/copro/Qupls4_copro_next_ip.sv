@@ -41,7 +41,7 @@ import wishbone_pkg::*;
 import Qupls4_copro_pkg::*;
 
 module Qupls4_copro_next_ip(rst, state, pe_vsync, miss, paging_en, ir,
-	takb, after_pos, adr_hit, a, stack, sp,
+	takb, after_pos, adr_hit, a, stack, sp, wait_active,
 	req, resp, local_sel, roma, douta, arg_dat,
 	ip, next_ip);
 parameter UNALIGNED_CONSTANTS = 0;
@@ -58,6 +58,7 @@ input [63:0] a;
 input [15:2] ip;
 input [529:0] stack [0:15];
 input [3:0] sp;
+input wait_active;
 input wb_cmd_request256_t req;
 input wb_cmd_response256_t resp;
 input local_sel;
@@ -73,14 +74,16 @@ else begin
 	next_ip = ip;
 	case(state)
 st_ifetch:
-	next_ip = ip + 1;
-st_execute:	
 	begin
+		if (!wait_active)
+			next_ip = ip + 1;
 		if (pe_vsync)
 			next_ip = 13'h0080;
 		else if (|miss & paging_en)
 			next_ip = 13'h0004;
-		else
+	end
+st_execute:	
+	begin
 		// WAIT
 		// WAIT stops waiting when:
 		// a) the scan address is greater than the specified one (if this condition is set)
