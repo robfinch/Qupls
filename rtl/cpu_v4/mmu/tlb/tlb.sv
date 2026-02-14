@@ -33,9 +33,9 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 3000 LUTs / 500 FFs / 8 BRAMs / 205 MHz RANDOM
-// 2900 LUTs / 500 FFs / 8 BRAMs / 205 MHz LRU
-// 2000 LUTs / 475 FFs / 8 BRAMs / 205 MHz NRU
+// 1800 LUTs / 450 FFs / 8 BRAMs / 185 MHz RANDOM
+// 1325 LUTs / 500 FFs / 8 BRAMs / 190 MHz LRU
+// 1525 LUTs / 425 FFs / 8 BRAMs / 190 MHz NRU
 // ============================================================================
 
 import const_pkg::*;
@@ -44,12 +44,12 @@ import mmu_pkg::*;
 import cpu_types_pkg::*;
 
 module tlb (clk, bus, stall, idle, paging_en, cs_tlb, iv_count, store_i, id,
-	asid, vadr, vadr_v, padr, padr_v, tlb_v,
+	asid, vadr, vadr_v, padr, padr_v, tlb_v, flush_asid, flush_trig, flush_en, flush_done,
 	missack, miss_adr_o, miss_asid_o, miss_id_o, miss_o, tlb_entry, rst_busy, empty);
 parameter TLB_ENTRIES=512;
 parameter TLB_ASSOC=4;
 parameter LOG_PAGESIZE=13;
-parameter UPDATE_STRATEGY = 2;
+parameter UPDATE_STRATEGY = 0;
 localparam TLB_ABITS=$clog2(TLB_ENTRIES);
 localparam TLB_WBITS=$clog2(TLB_ASSOC);
 localparam LFSR_MASK = (16'd1 << (TLB_ASSOC-1)) - 1;
@@ -70,6 +70,10 @@ input vadr_v;
 output physical_address_t padr;
 output padr_v;
 output tlb_v;
+input asid_t flush_asid;
+input flush_trig;
+input flush_en;
+output flush_done;
 input missack;
 output address_t miss_adr_o;
 output asid_t miss_asid_o;
@@ -83,10 +87,11 @@ integer n1;
 genvar g;
 
 wire [TLB_ABITS:0] rstcnt;
-wire [TLB_ABITS-1:0] rst_entry_no;
+wire [TLB_ABITS-1:0] flush_entry_no;
 wire [TLB_ABITS-1:0] hold_entry_no;
 tlb_entry_t rst_entry, hold_entry;
 reg [7:0] way;
+wire [TLB_ASSOC-1:0] flush_way;
 wire [7:0] hold_way;
 reg dly;
 virtual_address_t miss_adr;
@@ -100,7 +105,7 @@ wire clka = clk;
 wire clkb = clk;
 
 wire cd_vadr;
-reg [TLB_ASSOC-1:0] hit;
+reg [TLB_ASSOC-1:0] hit, asid_hit, count_hit;
 reg [TLB_ASSOC-1:0] nru;
 reg nru_reset;
 reg [TLB_ASSOC-1:0] ena,enb;
@@ -117,7 +122,12 @@ wire update_bit;
 wire [63:0] lock_map;
 wire [3:0] nrun;
 
+reg flush_count;
+reg flush_by_asid;
 wire [26:0] lfsro;
+
+always_comb
+	flush_by_asid = flush_asid != 16'h0 && flush_en;
 
 always_comb
 begin
@@ -177,13 +187,6 @@ always_comb
 always_comb
 	nru_reset = &nru;
 
-generate begin : gAssoc
-    
-	for (g = 0; g < TLB_ASSOC; g = g + 1) begin
-
-always_comb
-	addra[g] = rstcnt[TLB_ABITS] ? (paging_en ? addrb[g] : hold_entry_no): rst_entry_no;
-
 tlb_dina_mux
 #(
 	.UPDATE_STRATEGY(UPDATE_STRATEGY),
@@ -195,6 +198,7 @@ udinam1
 (
 	.rstcnt(rstcnt),
 	.paging_en(paging_en),
+	.flush({TLB_ASSOC{flush_asid}} & asid_hit),
 	.lfsro(lfsro),
 	.dinb(dinb),
 	.hold_entry(hold_entry),
@@ -205,13 +209,42 @@ udinam1
 	.lock(lock_map[hold_entry_no[TLB_ABITS-1:TLB_ABITS-6 < 0 ? 0 : TLB_ABITS-6]])
 );
 
+generate begin : gAssoc
+    
+	for (g = 0; g < TLB_ASSOC; g = g + 1) begin
+
 always_comb
+	addra[g] = rstcnt[TLB_ABITS] ? (paging_en ? addrb[g] : flush_en ? flush_entry_no : hold_entry_no): flush_entry_no;
+
+tlb_wea 
+#(
+	.TLB_ABITS(TLB_ABITS),
+	.TLB_ASSOC(TLB_ASSOC)
+)
+uwea1
+(
+	.rstcnt(rstcnt),
+	.paging_en(paging_en),
+	.cs_tlb(cs_tlb),
+	.req(bus.req),
+	.web(web[g]),
+	.lock_map(lock_map),
+	.hold_entry_no(hold_entry_no), 
+	.flush_en(flush_en),
+	.flush_by_asid(flush_by_asid),
+	.asid_hit(asid_hit[g]),
+	.count_hit(count_hit[g]),
+	.wea(wea[g])
+);
+/*
 	wea[g] = rstcnt[TLB_ABITS] ? (paging_en ? {16{web[g]}} :
 			{16{bus.req.we && bus.req.adr[5:3]==3'd4 && bus.req.dat[31] && cs_tlb &&
 			!(lock_map[hold_entry_no[TLB_ABITS-1:TLB_ABITS-6 < 0 ? 0 : TLB_ABITS-6]] && g==TLB_ASSOC-1)}}) :
 		{16{1'b1}};
+*/
 always_comb
-	ena[g] = rstcnt[TLB_ABITS] ? (paging_en ? enb[g] : bus.req.cyc & bus.req.stb & cs_tlb && (
+	ena[g] = rstcnt[TLB_ABITS] ? (paging_en ? enb[g] : (flush_en | (bus.req.cyc & bus.req.stb & cs_tlb)) && (
+		flush_en ? flush_way==g[3:0] :
 		LRU ? !(lock_map[hold_entry_no[TLB_ABITS-1:TLB_ABITS-6 < 0 ? 0 : TLB_ABITS-6]] && g==TLB_ASSOC-1) :
 		NRU ? g[3:0]==nrun :
 		g==way)) : g==TLB_ASSOC-1;
@@ -226,9 +259,14 @@ always_comb
 	web[g] = hit[g] & !cd_vadr;
 
 always_comb
+	asid_hit[g] = douta[g].asid==flush_asid;
+always_comb
+	count_hit[g] = douta[g].count==iv_count;
+always_comb
 	hit[g] = douta[g].pte.v &&
 		(douta[g].vpn[$bits(virtual_address_t)-LOG_PAGESIZE-TLB_ABITS-1:0]==vadr[$bits(virtual_address_t)-1:LOG_PAGESIZE+TLB_ABITS] &&
 		(douta[g].pte.g ? TRUE : douta[g].asid==asid && douta[g].count==iv_count));
+
 
 always_comb
 	empty[g] = ~douta[g].pte.v;
@@ -318,7 +356,7 @@ utlba1
 	.miss_v(miss_v)
 );
 
-tlb_reset_machine
+tlb_flush_machine
 #(
 	.WID(TLB_ABITS),
 	.TLB_ENTRIES(TLB_ENTRIES),
@@ -329,8 +367,12 @@ utrst1
 	.rst(rst),
 	.clk(clk),
 	.rstcnt(rstcnt),
-	.entry_no(rst_entry_no),
-	.entry(rst_entry)
+	.entry_no(flush_entry_no),
+	.way(flush_way),
+	.entry(flush_entry),
+	.flush_en(flush_en),
+	.flush_trig(flush_trig),
+	.flush_done(flush_done)
 );
 /*
 tlb_miss_queue

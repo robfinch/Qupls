@@ -34,69 +34,48 @@
 //
 // ============================================================================
 
-import mmu_pkg::*;
+import wishbone_pkg::*;
 
-module tlb_dina_mux(rstcnt, paging_en, flush, lfsro,
-	dinb, hold_entry, rst_entry, nru, nrun, dina, lock);
-parameter TLB_ASSOC = 4;
+module tlb_wea(rstcnt, g, paging_en, cs_tlb, req, web, lock_map, hold_entry_no, 
+	flush_en, flush_by_asid, asid_hit, count_hit, wea);
 parameter TLB_ABITS = 9;
-parameter UPDATE_STRATEGY=2;
-localparam LRU = UPDATE_STRATEGY==1;
-localparam NRU = UPDATE_STRATEGY==2;
-parameter LFSR_MASK = 16'h3;
+parameter TLB_ASSOC = 4;
 input [TLB_ABITS:0] rstcnt;
+input integer g;
 input paging_en;
-input [TLB_ASSOC-1:0] flush;
-input [26:0] lfsro;
-input tlb_entry_t [TLB_ASSOC-1:0] dinb;
-input tlb_entry_t hold_entry;
-input tlb_entry_t rst_entry;
-input [TLB_ASSOC-1:0] nru;
-output [3:0] nrun;
-output tlb_entry_t [TLB_ASSOC-1:0] dina;
-input lock;
+input cs_tlb;
+input wb_cmd_request64_t req;
+input [15:0] web;
+input [63:0] lock_map;
+input [TLB_ABITS-1:0] hold_entry_no;
+input flush_en;
+input flush_by_asid;
+input asid_hit;
+input count_hit;
+output reg [15:0] wea;
 
-genvar g;
 
-ffz12 uffo61 (.i({12'hFFF,nru}), .o(nrun));
-
-generate begin : gDinaMux
-	for (g = 0; g < TLB_ASSOC; g = g + 1)
-		always_comb
-			if (rstcnt[TLB_ABITS]) begin
-				if (paging_en)
-					dina[g] = dinb[g];
-				else begin
-					if (NRU) begin
-						dina[g] = dinb[g];
-						if (nrun==4'hF || (lock && nrun==TLB_ASSOC-1)) begin
-							dina[0] = hold_entry;
-							dina[0].nru = 1'b1;
-						end
-						else if(g[3:0]==nrun) begin
-							dina[g] = hold_entry;
-							dina[g].nru = 1'b1;
-						end
-					end
-					else if (LRU) begin
-						case({g,lock})
-						{TLB_ASSOC-1,1'b1}:	dina[g] = dinb[g];
-						{TLB_ASSOC-2,1'b1}:	dina[g] = hold_entry;
-						{TLB_ASSOC-1,1'b0}:	dina[g] = hold_entry;
-						default:	dina[g] = dinb[g+1];
-						endcase
-					end
-					else begin
-						dina[g] = dinb[g];
-						dina[(lfsro^(lock ? lfsro==TLB_ASSOC-1 : 0)) & LFSR_MASK] = hold_entry;
-					end
-					if (flush[g])
-						dina[g] = {$bits(tlb_entry_t){1'b0}};
-				end
-			end
-			else
-				dina[g] = rst_entry;
+always_comb
+// On reset the TLB is initialized, so enable writing.
+if (~rstcnt[TLB_ABITS])
+	wea <= {16{1'b1}};
+else begin
+	// If paging is enabled, the TLB entry is copied verbatim except for the
+	// modified and accessed bits, which need to be updated.
+	if (paging_en)
+		wea <= {16{web}};
+	else begin
+		// The entry must not be locked.
+		if (!(lock_map[hold_entry_no[TLB_ABITS-1:TLB_ABITS-6 < 0 ? 0 : TLB_ABITS-6]] && g==TLB_ASSOC-1)) begin
+			// If the TLB is being updated by external process
+			if (cs_tlb & req.we && req.adr[5:3]==3'd4 && req.dat[31])
+				wea <= {16{1'b1}};
+			else if (flush_by_asid && asid_hit)
+				wea <= {16{1'b1}};
+			else if (flush_en & ~count_hit)
+				wea <= {16{1'b1}};
+		end
+	end
 end
-endgenerate
 
 endmodule

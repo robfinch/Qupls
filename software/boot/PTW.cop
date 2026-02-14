@@ -38,21 +38,26 @@
 ; calc_pte_adr	- calculates the PTE address
 ;
 	.set cmd_adr,0x7E00
+	.set cmd_arg1,0x7E08
+	.set cmd_stat,0x7E10
+	.set cmd_resp,0x7E18
 	.set entryno,0x7F00
 	.set tlbeL,0x7F10
 	.set tlbeH,0x7F18
 	.set page_fault_flag,0x7F20
+	.set sig,0x7F28
 	; the mask for the number of TLB entries is stored in the upper 16 bits
 	; of the base address value. The hardware does not recognize more than
 	; a 48-bit physical address space (or 32 bits for the test system).
 	.set tlb_base_adr,0x01FFFFFFFFF40000
 	.set tlb2_base_adr,0x007FFFFFFFF44000
 	.set tlb_base_adr_reg,0x7F80
+	.set PAM,0x4000
 
 	.text
 	.org 0x0000
 start:
-	jmp idle_state
+	jump idle_state
 
 ; TLB miss ISR
 ; Uses only the first eight registers which are automatically swapped with the
@@ -70,7 +75,7 @@ start:
 
 	.org 0x0010
 tlb_miss_isr:
-	loadi %r8,0							; r8 = largest page size TLB
+	loadi %r8,0							; r8 = largest page size TLB index
 ; Walk all TLBs from largest page size to smallest
 tlb_miss1:
 	load_config	%r8					; load registers r1 to r6 with config
@@ -87,7 +92,7 @@ read_leveln:
 ;	jltz %r7,read_level0a		; if a shortcut page...
 	and64 %r2,%r2,%r2,$0x7fffffffff		; extract PPN
 	shl %r2,%r2,%r3					; r2 = address of page table
-	djnez %r4,read_leveln	; go down a level
+	djnez %r4,read_leveln		; go down a level
 
 read_level0:
 	calc_index %r7,%r4
@@ -102,7 +107,7 @@ read_level0a:
 	shr %r5,%r5,%r0,$24
 	and %r1,%r7,%r5,$-1			; r1 = read_adr masked for N TLB entries
 ;	loadi %r2,$3						; r2 = way to set (3 for LRU) (the way is ignored on a set)
-;	jsr set_tlbe
+;	call set_tlbe						; inline set
 	store %r3,0x00[%r8]			; set low order TLBE
 	store %r4,0x08[%r8]			; set high order TLBE
 	build_entry_no %r5,%r1,%r0,$31
@@ -152,43 +157,115 @@ set_tlbe:
 
 ;
 
+; Go to low power wait mode.
+; Wait for either an interrupt or the posting of a command to the command
+; address. Capture the command in r7.
+; If there was an interrupt, then the interrupt will return to the WAIT
+; instruction, not the next line of code. So, WAIT forms an interrupt
+; waiting loop all by itself. No need to loop back.
+; On the other hand, if there is a command posted WAIT will transfer
+; to the next instruction so the command can be processed.
+
+idle_state:
+	wait %r7,cmd_adr					; wait for a miss signal or command
+
 process_cmd:
-	shl %r7,%r7,$1						; test bit 62
-	jltz %r7,.flush
-	shl %r7,%r7,$1						; test bit 61
-	jltz %r7,.get_pte
-	shl %r7,%r7,$1						; test bit 60
-	jltz %r7,.set_pte
-	jmp idle_state
-.get_pte:
+	loadi %r1,$6							; number of commands
+	jge %r7,%r1,.bad_cmd			; return error if command out of range
+	shl %r7,%r7,%r0,$3				; command to table index
+	load %r7,CMD_table[%r7]		; get command function address
+	call [%r7]								; go exeute the command
+	store %r1,cmd_stat				; set status (error number)
+	storei $1,sig							; trigger the command done signal (interrupt?)
+	jump idle_state						; go back for the next command
+.bad_cmd:
+	storei $1,cmd_stat				; set 'bad' command status in command RAM area
+	storei $1,sig							; trigger the command done signal (interrupt?)
+	jump idle_state						; go back for the next command
+
+cmd_get_tlbe:
 	load %r1,entryno					; r1 = entry number and way
-	jsr get_tlbe
+	call get_tlbe
 	store %r1,tlbeL						; set TLBE in arg area
 	store %r2,tlbeH
-	jmp idle_state
-.set_pte:
+cmd_ok:
+	move %r1,%r0							; everything OK
+	ret
+
+cmd_set_tlbe:
 	load %r1,entryno
 	load %r3,tlbeL						; get TLBE arg into r3,r4
 	load %r4,tlbeH
-	jsr set_tlbe
-	jmp idle_state
-.flush:
-	jmp idle_state
+	call set_tlbe
+	jump cmd_ok
 
-; Go to low power wait mode.
-idle_state:
-	wait %r7,cmd_adr					; wait for a miss signal or command
-	jmp process_cmd						; jump if command present
-
-	.org 0x0100
+	.org 0x0200
 frame_isr:
 	ret $0xFF
 
-	.rodata
+; Allocate a page of memory.
+; Sets the PAM bit for the page of memory allocated.
+alloc_page:
+	loadi %r4,$131072					; number of bits in PAM
+	move %r2,%r4							; r4 = max bit
+	loadi %r1,PAM_index
+.0001:
+	bmset %r2,PAM[%r1]				; set PAM bit and return previous setting
+	jnez %r2,.0002						; was bit already set?
+	store %r1,PAM_index				; update index for next time
+	store %r1,cmd_resp				; save page number in arg area
+	jump cmd_ok								; signal main CPU page selection is ready
+.0002:
+	add %r1,%r1,%r0,$1				; set up to check next bit bnumber
+	jlt %r1,%r4,.0003
+	xor %r1,%r1,%r1						; r1 = index zero
+.0003:
+	djnez %r4,.0001
+	; Here the entire bitmap was searched and no free page was found.
+	; Report out-of-memory condition
+	storei $-1,cmd_resp
+	loadi %r1,$2							; 'out-of-memory' error
+	ret
+
+; Free a page of memory
+free_page:
+	loadi %r4,$131072					; number of bits in PAM
+	load %r1,cmd_arg1					; get page number to free
+	jge %r1,%r4,cmd_ok				; ignore bad request
+	bmclr %r0,PAM[%r1]				; clear the bit in the PAM
+	jump cmd_ok
+
+flush_all:
+	jump cmd_ok
+flush_asid:
+	load %r1,cmd_arg1
+	jump cmd_ok
+
+CMD_table:
+	.2byte flush_all
+	.2byte 0,0,0
+	.2byte flush_asid
+	.2byte 0,0,0
+	.2byte cmd_get_tlbe
+	.2byte 0,0,0
+	.2byte cmd_set_tlbe
+	.2byte 0,0,0
+	.2byte alloc_page
+	.2byte 0,0,0
+	.2byte free_page
+	.2byte 0,0,0
+
+	.data
+	; Current index into the PAM
+PAM_index:
+	.8byte	0x0000
+
 	; Location of TLB registers for each TLB ordered from TLBs
 	; with the largest page sizes first.
 	; Only the lower 48-bits are used.
 	; The number of TLB entries-1 is stuffed in the upper 16 bits
+	.rodata
 tlb_regs_adr:
-;	.8byte	0x007FFFFFFFF44000
 	.8byte 	0x01FFFFFFFFF40000	; smallest page size TLB
+;	.8byte	0x007FFFFFFFF44000
+;	.8byte	0x007FFFFFFFF48000
