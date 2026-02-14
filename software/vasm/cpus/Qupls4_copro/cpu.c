@@ -26,7 +26,7 @@
 #define TRACE(x)		/*printf(x)*/
 #define TRACE2(x,y)	/*printf((x),(y))*/
 
-const char *cpu_copyright="vasm Qupls4_copro cpu backend v0.13 (c) in 2026 Robert Finch";
+const char *cpu_copyright="vasm Qupls4_copro cpu backend v0.14 (c) in 2026 Robert Finch";
 
 const char *cpuname="Qupls4_copro";
 int bitsperbyte=8;
@@ -63,10 +63,11 @@ static int regop[16] = {
 
 mnemonic mnemonics[]={
 	"add", 		{OP_REG,OP_REG,OP_REG,OP_IMM,0,0}, {RI,CPU_ALL,0,0,OPC(22LL),4,SZ_UNSIZED},
+	"add", 		{OP_REG,OP_REG,OP_REG,0,0,0}, {R3,CPU_ALL,0,0,OPC(22LL),4,SZ_UNSIZED},
 	"add64", 	{OP_REG,OP_REG,OP_REG,OP_IMM,0,0}, {RI64,CPU_ALL,0,0,OPC(5LL),4,SZ_UNSIZED},
 	"and", 		{OP_REG,OP_REG,OP_REG,OP_IMM,0,0}, {RI,CPU_ALL,0,0,OPC(24LL),4,SZ_UNSIZED},
+	"and", 		{OP_REG,OP_REG,OP_REG,0,0,0}, {R3,CPU_ALL,0,0,0xFFFE0000LL|OPC(24LL),4,SZ_UNSIZED},
 	"and64", 	{OP_REG,OP_REG,OP_REG,OP_IMM,0,0}, {RI64,CPU_ALL,0,0,OPC(23LL),4,SZ_UNSIZED},
-	"and", 		{OP_REG,OP_REG,OP_REG,OP_IMM,0,0}, {RI,CPU_ALL,0,0,OPC(24LL),4,SZ_UNSIZED},
 	"bmchg",	{OP_REG,OP_DIRECT,0,0,0}, {DIRECT,CPU_ALL,0,0,RD(3LL)|OPC(7LL),4,SZ_UNSIZED},
 	"bmchg",	{OP_REG,OP_REGIND,0,0,0}, {REGIND,CPU_ALL,0,0,RD(3LL)|OPC(7LL),4,SZ_UNSIZED},
 	"bmclr",	{OP_REG,OP_DIRECT,0,0,0}, {DIRECT,CPU_ALL,0,0,RD(0LL)|OPC(7LL),4,SZ_UNSIZED},
@@ -1136,28 +1137,10 @@ static size_t encode_immed_RI64(instruction_buf* insn, thuge hval, int i, taddr 
 	if (hval.lo & 0x8000000000000000LL)
 		hval.hi = 0xffffffffffffffffLL;
 
-	if (i==1) {
-		if (insn) {
-			insn->pfx1v = 1;
-			insn->pfx1 = hval.lo;
-			insn->pfxb.size = 0;
-		}
-	}
-	else if (i==2) {
-		if (insn) {
-			insn->pfxb.size = 0;
-//			insn->opcodeH = 0;
-			insn->pfx1v = 1;
-			insn->pfx1 = hval.lo;
-		}
-	}
-	else if (i==3) {
-		if (insn) {
-			insn->pfxb.size = 0;
-//			insn->opcodeH = 0;
-			insn->pfx1v = 1;
-			insn->pfx1 = hval.lo;
-		}
+	if (insn) {
+		insn->pfx1v = 1;
+		insn->pfx1 = hval.lo;
+		insn->pfxb.size = 0;
 	}
 	/*
 	if (((insn->opcode >> 2LL) & 0x3FLL)==0x4LL) {
@@ -1866,7 +1849,7 @@ size_t encode_qupls_instruction(instruction *ip,section *sec,taddr pc,
 //	encode_size_bits(insn, isize);
 	// Adjust the instruction to be aligned at an odd address.
 	if (has_const64(insn->opcode & 0x1fLL)) {
-		if (!(pc & 4)) {
+		if (!(pc & 4LL)) {
 			isize += 4;
 			insn->opcode_size = 8;
 			insn->opcode = insn->opcode << 32LL;
@@ -1965,7 +1948,7 @@ dblock *eval_instruction(instruction *ip,section *sec,taddr pc)
 
 		// Output the code bytes.
    	d = setval(0,d,(int64_t)4LL,insn.opcode);
-   	if (insn.opcode >> 32LL)
+   	if (insn.opcode_size > 4LL)
 	   	d = setval(0,d,(int64_t)4LL,insn.opcode >> 32LL);
 		if (insn.pfx1v)
     	d = setval(0,d,(int64_t)8LL,insn.pfx1);

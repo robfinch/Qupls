@@ -37,28 +37,10 @@
 ; calc_pte_index - calculates the index portion of the PTE address
 ; calc_pte_adr	- calculates the PTE address
 ;
-	.set cmd_adr,0x7E00
-	.set cmd_arg1,0x7E08
-	.set cmd_stat,0x7E10
-	.set cmd_resp,0x7E18
-	.set entryno,0x7F00
-	.set tlbeL,0x7F10
-	.set tlbeH,0x7F18
-	.set page_fault_flag,0x7F20
-	.set sig,0x7F28
-	; the mask for the number of TLB entries is stored in the upper 16 bits
-	; of the base address value. The hardware does not recognize more than
-	; a 48-bit physical address space (or 32 bits for the test system).
-	.set tlb_base_adr,0x01FFFFFFFFF40000
-	.set tlb2_base_adr,0x007FFFFFFFF44000
-	.set tlb_base_adr_reg,0x7F80
-	.set PAM,0x4000
-	.set PAM_avail,0x3FF8
-
-	.text
+	.section .bram
 	.org 0x0000
 start:
-	store $131072,PAM_avail
+	call initialize	
 	jump idle_state
 
 ; TLB miss ISR
@@ -123,7 +105,7 @@ page_fault:
 	jeqz %r8,page_fault1
 	djnez %r8,tlb_miss1
 page_fault1:
-	store $1,page_fault_flag
+	bmset %r0,signal[%r0]		; set page fault output
 	ret $0xFF								; return and restore registers
 
 ; Parameters:
@@ -169,7 +151,7 @@ set_tlbe:
 ; to the next instruction so the command can be processed.
 
 idle_state:
-	wait %r7,cmd_adr					; wait for a miss signal or command
+	wait %r7,cmd_cmd					; wait for a miss signal or command
 
 process_cmd:
 	loadi %r1,$7							; number of commands
@@ -178,26 +160,59 @@ process_cmd:
 	load %r7,CMD_table[%r7]		; get command function address
 	call [%r7]								; go exeute the command
 	store %r1,cmd_stat				; set status (error number)
-	store $1,sig							; trigger the command done signal (interrupt?)
+	loadi %r1,1
+	bmset %r0,signal[%r1]			; trigger the command done signal (interrupt?)
 	jump idle_state						; go back for the next command
 .bad_cmd:
-	store $1,cmd_stat				; set 'bad' command status in command RAM area
-	store $1,sig							; trigger the command done signal (interrupt?)
+	store $1,cmd_stat					; set 'bad' command status in command RAM area
+	loadi %r1,1
+	bmset %r0,signal[%r1]			; trigger the command done signal (interrupt?)
 	jump idle_state						; go back for the next command
 
+; Get a TLB entry
+;
+; Parameters:
+;		cmd_arg1 = entry number in bits 0-15, TLB number in bits 24-31 
+; Returns:
+;		cmd_arg2 = TLBE low
+;		cmd_arg3 = TLBE high
+;		cmd_stat = 0 (okay)
+
 cmd_get_tlbe:
-	load %r1,entryno					; r1 = entry number and way
+	load %r1,cmd_arg1						; r1 = entry number and way
+	shr %r8,%r1,%r0,$24					; get TLB number
+	shl %r8,%r8,%r0,$3					; r8 = word index
+	load %r8,tlb_regs_adr[%r8]	; r8 = base address of TLB regset
+	shr %r2,%r8,%r0,$24					; r2 = number of TLB entries-1
+	shr %r2,%r8,%r0,$24
+	and %r1,%r1,%r2							; r1 = entry number masked to limit
 	call get_tlbe
-	store %r1,tlbeL						; set TLBE in arg area
-	store %r2,tlbeH
+	store %r1,cmd_arg2					; set TLBE in arg area
+	store %r2,cmd_arg3
 cmd_ok:
-	move %r1,%r0							; everything OK
-	ret $0xFF
+	move %r1,%r0
+	ret $0xFE
+
+; Set a TLB entry
+;
+; Parameters:
+;		cmd_arg1 = entry number in bits 0-15, TLB number in bits 24-31 
+;		cmd_arg2 = TLBE low
+;		cmd_arg3 = TLBE high
+; Returns:
+;		cmd_stat = 0 (okay)
 
 cmd_set_tlbe:
-	load %r1,entryno
-	load %r3,tlbeL						; get TLBE arg into r3,r4
-	load %r4,tlbeH
+	load %r1,cmd_arg1						; arg1 = entry number
+	shr %r8,%r1,%r0,$24					; get TLB number
+	shl %r8,%r8,%r0,$3					; r8 = word index
+	load %r8,tlb_regs_adr[%r8]	; r8 = base address of TLB regset
+	shr %r2,%r8,%r0,$24					; r2 = number of TLB entries-1
+	shr %r2,%r2,%r0,$24
+	and %r1,%r1,%r2							; r1 = entry number masked to limit
+	xor %r2,%r2,%r2							; r2 = way = 0 (ignored on a set)
+	load %r3,cmd_arg2						; get TLBE arg into r3,r4
+	load %r4,cmd_arg3
 	call set_tlbe
 	jump cmd_ok
 
@@ -205,8 +220,19 @@ cmd_set_tlbe:
 frame_isr:
 	ret $0xFF
 
+initialize:
+	storei $131072,PAM_avail
+	ret $0x00
+
 ; Allocate a page of memory.
 ; Sets the PAM bit for the page of memory allocated.
+;
+; Parameters:
+;		none
+; Returns:
+;		cmd_arg1 = page number, -1 if out of memory
+;		cmd_stat = 0 (okay) 2 = out of memory
+
 alloc_page:
 	loadi %r4,$131072					; number of bits in PAM
 	move %r2,%r4							; r4 = max bit
@@ -218,7 +244,7 @@ alloc_page:
 	add %r2,%r2,%r0,$-1
 	store %r2,PAM_avail
 	store %r1,PAM_index				; update index for next time
-	store %r1,cmd_resp				; save page number in arg area
+	store %r1,cmd_arg1				; save page number in arg area
 	jump cmd_ok								; signal main CPU page selection is ready
 .0002:
 	add %r1,%r1,%r0,$1				; set up to check next bit bnumber
@@ -228,11 +254,16 @@ alloc_page:
 	djnez %r4,.0001
 	; Here the entire bitmap was searched and no free page was found.
 	; Report out-of-memory condition
-	store $-1,cmd_resp
+	store $-1,cmd_arg1
 	loadi %r1,$2							; 'out-of-memory' error
-	ret $0xFF
+	ret $0xFE
 
 ; Free a page of memory
+; Parameters:
+;		cmd_arg1 = page number to free
+; Returns:
+;		cmd_stat = 0 (okay)
+
 free_page:
 	loadi %r4,$131072					; number of bits in PAM
 	load %r1,cmd_arg1					; get page number to free
@@ -244,9 +275,15 @@ free_page:
 	jump cmd_ok
 
 ; Get available page count
+; Parameters:
+;		none
+; Returns:
+;		cmd_arg1 = available page count
+;		cmd_stat = 0 (okay)
+
 get_free_page_count:
 	load %r1,PAM_avail
-	store %r1,cmd_resp
+	store %r1,cmd_arg1
 	jmp cmd_ok
 
 ; Flush the TLB
@@ -257,12 +294,12 @@ flush_all:
 	loadi %r2,$0							; r2 = asid = 0
 flush1:											; entry point for flush by asid
 	flush %r0,%r2,$3					; trigger a flush operation
-	loadi %r1,32							; wait a few cycles
+	loadi %r1,$32							; wait a few cycles
 .0001:
 	djnez %r1,.0001
 	flush %r3,%r2,$0					; turn flush off to allow translations
 	jltz %r3,cmd_ok						; was the flush done?
-	loadi %r1,32							; wait a few cycles
+	loadi %r1,$32							; wait a few cycles
 .0002:
 	djnez %r1,.0002
 	flush %r3,%r2,$1					; turn flush on to allow a few flushes
@@ -291,17 +328,50 @@ CMD_table:
 	.2byte get_free_page_count
 	.2byte 0,0,0
 
-	.data
-	; Current index into the PAM
-PAM_index:
-	.8byte	0x0000
-
 	; Location of TLB registers for each TLB ordered from TLBs
 	; with the largest page sizes first.
 	; Only the lower 48-bits are used.
 	; The number of TLB entries-1 is stuffed in the upper 16 bits
-	.rodata
 tlb_regs_adr:
 	.8byte 	0x01FFFFFFFFF40000	; smallest page size TLB
 ;	.8byte	0x007FFFFFFFF44000
 ;	.8byte	0x007FFFFFFFF48000
+
+	; PAM area
+	.org 0x3000
+PAM:
+	.rept 2048
+	.8byte	0
+	.endr
+	; Current index into the PAM
+	; 0x4000
+PAM_index:
+	.8byte	0x0000
+PAM_avail:
+	.8byte	131072
+
+	.org 0x7F00
+miss_info:
+	.rept 8
+	.8byte 0	; miss address
+	.8byte 0	; miss asid
+	.endr
+	; 0x7F80
+cmd_cmd:
+	.8byte 0
+cmd_arg1:
+	.8byte 0
+cmd_arg2:
+	.8byte 0
+cmd_arg3:
+	.8byte 0
+cmd_stat:
+	.8byte 0
+	; 7FC0
+
+	; The last word of memory
+	; Special signal memory location, a write to here by the co-processor updates
+	; the signaling I/O ports as well as the RAM
+	.org 0x7FF8
+signal:
+	.8byte 0
