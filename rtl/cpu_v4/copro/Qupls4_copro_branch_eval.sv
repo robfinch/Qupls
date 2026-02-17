@@ -54,7 +54,7 @@ always_comb
 	JLE:	takb = $signed(a) <= $signed(b);
 	JGE:	takb = $signed(a) >= $signed(b);
 	JGT:	takb = $signed(a) > $signed(b);
-	DJNE:	takb = a-1!=b;
+	DJNE:	takb = (a-1)!=b;
 	JGEP:	takb = after_pos;
 	JLEP:	takb = before_pos;
 	default:	takb = FALSE;

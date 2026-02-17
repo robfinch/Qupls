@@ -43,7 +43,7 @@ import Qupls4_copro_pkg::*;
 module Qupls4_copro_next_ip(rst, state, pe_vsync, miss, paging_en, ir,
 	takb, after_pos, adr_hit, a, stack, sp, wait_active,
 	req, resp, local_sel, roma, douta, arg_dat,
-	ip, next_ip);
+	ip, ipr, cmdq_empty, next_ip);
 parameter UNALIGNED_CONSTANTS = 0;
 input rst;
 input copro_state_t state;
@@ -55,9 +55,11 @@ input takb;
 input after_pos;
 input adr_hit;
 input [63:0] a;
-input [15:2] ip;
+input [19:2] ip;
+input [19:2] ipr;
 input [529:0] stack [0:15];
 input [3:0] sp;
+input cmdq_empty;
 input wait_active;
 input wb_cmd_request256_t req;
 input wb_cmd_response256_t resp;
@@ -65,11 +67,11 @@ input local_sel;
 input [12:0] roma;
 input [63:0] douta;
 input [63:0] arg_dat;
-output reg [15:2] next_ip;
+output reg [19:2] next_ip;
 
 always_comb
 if (rst)
-	next_ip = 13'd0;
+	next_ip = 19'd0;
 else begin
 	next_ip = ip;
 	case(state)
@@ -78,9 +80,11 @@ st_ifetch:
 		if (!wait_active)
 			next_ip = ip + 1;
 		if (pe_vsync)
-			next_ip = 13'h0080;
+			next_ip = 19'h0080;
 		else if (|miss & paging_en)
-			next_ip = 13'h0004;
+			next_ip = 19'h0004;
+//		else if (!cmdq_empty)
+//			next_ip <= ip;
 	end
 st_execute:	
 	begin
@@ -112,17 +116,17 @@ st_execute:
 		// Unconditional jumps / calls / return.
 		OP_JMP:
 			case(ir.Rd)
-			4'd0:	next_ip = a + {{17{ir.imm[14]}},ir.imm};
-			4'd2:	// RET
-					next_ip = stack[sp][527:512];
+			4'd0:	next_ip = a + {{17{ir.imm[14]}},ir.imm};	// JMP
+			4'd1:	next_ip = a + {{17{ir.imm[14]}},ir.imm};	// CALL
+			4'd2:	next_ip = stack[sp][527:512];	//RET
 			default:	;
 			endcase
 		OP_ADD64,OP_AND64:
 			begin
-				if (ip[0] & UNALIGNED_CONSTANTS)
+				if (ip[2] & UNALIGNED_CONSTANTS)
 					;
 				else
-					next_ip = ip + 1;
+					next_ip = ip + 0;
 			end
 		default:;
 		endcase
@@ -135,7 +139,7 @@ st_even64a:
 	next_ip = ip + 1;
 
 st_odd64:
-	next_ip = ip + 1;
+	next_ip = ip + 2;
 
 // Memory states
 st_ip_load:

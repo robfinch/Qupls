@@ -45,7 +45,7 @@ There are very few instructon formats.
 * STORE - always a 64-bit value
 * JUMP - unconditional jump
 * Jcc - conditional branches, signed branches only, plus branch on scan position
-* JSR - subroutine call, stores to internal stack, max depth <16
+* CALL - subroutine call, stores to internal stack, max depth <16
 * RET - pops selected registers from stack
 * ADD - addition, two registers and a constant, 64-bit constant possible
 * AND - bitwise AND, 64-bit constant possible
@@ -57,6 +57,7 @@ There are very few instructon formats.
 
 ### Custom Instructions for TLB miss support.
 These instruction enhance the performance of the miss routine by performing several operations within two clock cycles.
+* LOAD_CONFIG - load the TLB configuration information into registers r1 to r6
 * CALC_INDEX - computes the table index part given the miss address, table level and page size
 * CALC_ADR - computes a PTE address given page table address and index
 * BUILD_VPN - puts together the VPN, ASID and COUNT fields for the upper 64-bits of a TLB entry
@@ -68,7 +69,7 @@ There are currently two sources of interrupt, a TLB miss interrupt, and a video 
 The WAIT instruction may also wait conditionally for a video scan position to be reached.
 While waiting the SCP's local RAM/ROM is placed in low power mode.
 
-There is a subroutine jump instruction, JSR, which places the return address on an internal 16-entry stack.
+There is a subroutine jump instruction, CALL, which places the return address on an internal 16-entry stack.
 When subroutines are called, or for interrupts, the first eight registers are automatically stored on an internal stack.
 This happens very quickly within a clock cycle or two.
 
@@ -88,3 +89,4 @@ There is currently no subtract instruction, it must be synthesized.
 # Performance
 Current timing is for 150 MHz in a -2 device.
 Average instructions per clock is about 0.4.
+Core size is about 7500 LUTs, 8RAMs

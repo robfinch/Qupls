@@ -48,6 +48,7 @@ typedef enum logic [4:0]
 	OP_BMP,
 	OP_FLUSH,
 	OP_JMP = 9,
+	OP_PLOT,
 	OP_CALC_INDEX = 12,
 	OP_CALC_ADR,
 	OP_BUILD_ENTRY_NO,
@@ -88,7 +89,7 @@ typedef struct packed
 	copro_opcode_t opcode;
 } copro_instruction_t;
 
-typedef enum logic [4:0]
+typedef enum logic [5:0]
 {
 	st_reset,
 	st_reset2,
@@ -100,14 +101,54 @@ typedef enum logic [4:0]
 	st_jmp2,
 	st_ip_load,
 	st_mem_load,
-	st_mem_store,
+	st_mem_store,	//10
 	st_bit_store,
 	st_wakeup,
 	st_wakeup2,
 	st_even64,
 	st_even64a,
 	st_odd64,
-	st_odd64a
+	st_odd64a,
+
+	st_latch_data,
+	st_aud0,
+	st_aud1,		//20
+	st_aud2,
+	st_aud3,
+	st_audi,
+	
+	st_gr_cmd,
+
+	st_read_font_tbl,
+
+	st_plot,
+	st_plot_read,
+	st_plot_write,
+	
+	st_dl_precalc,
+	st_fillrect,	//30
+	st_dt_start,
+	st_bc0,
+	st_ff1,
+
+	st_hl_line,
+	st_hl_getpixel,
+	st_hl_getpixel_nack,
+	st_hl_setpixel,
+	st_hl_setpixel_nack,
+
+	st_bltdma2,
+	st_bltdma2_nack,
+	st_bltdma4,
+	st_bltdma4_nack,
+	st_bltdma6,
+	st_bltdma6_nack,
+	st_bltdma8,
+	st_bltdma8_nack,
+	
+	st_wait_ack,
+	st_delay1,
+	st_delay2
 } copro_state_t;
 
 endpackage
