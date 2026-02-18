@@ -43,7 +43,7 @@ import Qupls4_copro_pkg::*;
 module Qupls4_copro_next_ip(rst, state, pe_vsync, miss, paging_en, ir,
 	takb, after_pos, adr_hit, a, stack, sp, wait_active,
 	req, resp, local_sel, roma, douta, arg_dat,
-	ip, ipr, cmdq_empty, next_ip);
+	ip, ipr, tblit_ip, cmdq_empty, next_ip);
 parameter UNALIGNED_CONSTANTS = 0;
 input rst;
 input copro_state_t state;
@@ -67,6 +67,7 @@ input local_sel;
 input [12:0] roma;
 input [63:0] douta;
 input [63:0] arg_dat;
+input address_t tblit_ip;
 output reg [19:2] next_ip;
 
 always_comb
@@ -75,6 +76,8 @@ if (rst)
 else begin
 	next_ip = ip;
 	case(state)
+st_tblit_iret:
+	next_ip = tblit_ip;
 st_ifetch:
 	begin
 		if (!wait_active)
@@ -121,9 +124,9 @@ st_execute:
 			4'd2:	next_ip = stack[sp][527:512];	//RET
 			default:	;
 			endcase
-		OP_ADD64,OP_AND64:
+		OP_ADD64,OP_AND64,OP_STOREI64:
 			begin
-				if (ip[2] & UNALIGNED_CONSTANTS)
+				if (~ipr[2] & UNALIGNED_CONSTANTS)
 					;
 				else
 					next_ip = ip + 0;
@@ -152,7 +155,7 @@ st_ip_load:
 				endcase
 			end
 			else
-				next_ip = resp.dat >> {req.adr[5:4],6'd0};
+				next_ip = resp.dat;
 		end
 	end
 endcase

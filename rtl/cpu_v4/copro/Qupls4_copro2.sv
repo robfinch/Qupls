@@ -62,6 +62,7 @@ parameter JUMP_INDIRECT = 0;
 parameter NUM_PAGESIZES = 1;
 parameter LOG_PAGESIZE = 13;	// log2 of size of page
 parameter LOG_TLB_ENTRIES = 9;
+parameter BUSTO = 8'd9;
 input rst;
 input clk;
 wb_bus_interface.slave sbus;
@@ -91,6 +92,12 @@ output reg [15:0] aud3_out;
 input [15:0] aud_in;
 output reg [23:0] vid_out;
 
+// The bus timeout depends on the clock frequency (clk) of the core
+// relative to the memory controller's clock frequency (100MHz). So it's
+// been made a core parameter.
+reg [7:0] busto = BUSTO;
+reg [7:0] tocnt;
+
 reg [`ABITS] TargetBase = 32'h00100000;
 reg [15:0] TargetWidth = 16'd400;
 reg [15:0] TargetHeight = 16'd300;
@@ -98,10 +105,12 @@ reg [23:0] offset;
 
 reg [31:0] ctrl = 32'd0;
 reg [15:0] alpha;
-reg [23:0] penColor, fillColor;
+reg [23:0] pen_color, fill_color;
 reg [23:0] missColor = 24'h7c0000;	// med red
 reg clipEnable;
 reg [15:0] clipX0, clipY0, clipX1, clipY1;
+reg zbuf;
+reg [3:0] zlayer;
 
 copro_state_t pushstate;
 reg [11:0] retsp;
@@ -163,7 +172,7 @@ integer n1;
 copro_state_t state, ngs = st_ifetch;
 copro_state_t [3:0] state_stack;
 
-copro_instruction_t ir,ir2;
+copro_instruction_t ir,ir2,next_ir;
 wb_cmd_response64_t imresp;
 reg rdy1, rdy2, rdy3, rdy4;
 
@@ -172,6 +181,7 @@ reg [63:0] idat;
 always_comb
 	mcs = mbus.req.cyc && mbus.req.stb && (
 		mbus.req.adr[31:20]==12'h000 ||
+		mbus.req.adr[31:20]==12'h001 ||
 		mbus.req.adr[31:16]==16'hFE00
 	);
 always_comb
@@ -202,7 +212,7 @@ lfsr27 #(.WID(27)) ulfsr1(rst, vclk, 1'b1, 1'b0, lfsro);
 reg [63:0] r1=0,r2=0,r3=0,r4=0,r5=0,r6=0,r7=0;
 reg [63:0] r8=0,r9=0,r10=0,r11=0,r12=0,r13=0,r14=0,r15=0,tmp=0;
 // Operands
-reg [31:0] imm;
+reg [63:0] imm;
 reg [63:0] a,b;
 reg [63:0] res;
 wire [19:2] next_ip;
@@ -225,12 +235,12 @@ wire clkb2 = sbus.clk;
 wire ena = 1'b1;
 wire ena2 = 1'b1;
 wire enb = sbus.req.cyc && sbus.req.stb && cs_copro && sbus.req.adr[31:20]==12'hD00;
-wire wea = mbus.req.cyc && mbus.req.stb && mbus.req.we && mbus.req.adr[31:20]==12'h000;
+wire wea = 1'b0;//mbus.req.cyc && mbus.req.stb && mbus.req.we && mbus.req.adr[31:20]==12'h000;
 wire wea2 = mbus.req.we && mbus.req.adr[31:16]==16'hFE00;
 wire web = sbus.req.we && cs_copro && sbus.req.adr[31:20]==12'hD00;
 wire web2 = sbus.req.we && cs_copro && sbus.req.adr[31:16]==16'hFE00;
-wire [16:0] addra = local_sel ? roma[19:3] : ip[19:3];
-wire [12:0] addra2 = roma[15:3];
+wire [16:0] addra = local_sel ? mbus.req.adr[19:3] : ip[19:3];
+wire [12:0] addra2 = mbus.req.adr[15:3];
 wire [16:0] addrb = sbus.req.adr[19:3];
 wire [12:0] addrb2 = sbus.req.adr[15:3];
 wire [63:0] dina = mbus.req.dat;
@@ -269,7 +279,6 @@ reg [18:0] vid_addrb;
 wire [15:0] vid_dinb = lfsro[15:0];
 wire [15:0] vid_doutb;
 
-reg [31:0] next_ir;
 reg [63:0] mem_val;
 always_comb
 	next_ir = ip2 ? douta[63:32] : douta[31:0];
@@ -414,7 +423,7 @@ reg font_fixed;
 reg [5:0] font_width;
 reg [5:0] font_height;
 reg tblit_active;
-reg [7:0] tblit_state;
+copro_state_t tblit_state;
 reg [`ABITS] tblit_adr;
 reg [`ABITS] tgtaddr, tgtadr;
 reg [15:0] tgtindex;
@@ -425,6 +434,8 @@ reg [31:0] charbmpr;
 reg [`ABITS] charBmpBase;
 reg [5:0] pixhc, pixvc;
 reg [31:0] charBoxX0, charBoxY0;
+copro_instruction_t tblit_ir;
+address_t tblit_ip;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Drawing
@@ -533,7 +544,7 @@ always_ff @(posedge clk)
 	p2z <= transform ? z2_prime[47:16] : up2z;
 
 always_ff @(posedge clk)
-	offset <= {8'd0,gcy} * TargetWidth + {gcx,1'b0};
+	offset <= {{({16'd0,gcy} * TargetWidth) + gcx},1'b0};
 always_ff @(posedge clk)
 	ma <= TargetBase + offset;
 
@@ -567,6 +578,21 @@ reg [7:0] spriteColorNdx [0:31];
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 reg [27:0] vndx;
+// Line draw vars
+reg signed [15:0] dx,dy;
+reg signed [15:0] sx,sy;
+reg signed [15:0] err;
+wire signed [15:0] e2 = err << 1;
+// Anti-aliased line draw
+reg steep;
+reg [31:0] openColor;
+reg [31:0] xend, yend, gradient, xgap;
+reg [31:0] xpxl1, ypxl1, xpxl2, ypxl2;
+reg [31:0] intery;
+reg signed [31:0] dxa,dya;
+
+reg [`ABITS] rdadr;
+
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // blitter vars
@@ -743,24 +769,24 @@ wire peBltCdatx;
 wire peBltDdatx;
 wire peBltDbadrx,peBltDmodx,peBltDcntx;
 wire peBltDstWidx;
-wire cs_bltCtrl = (cs & mbus.req.we & (rdy2|rdy3) & ~rdy4) && mbus.req.adr[11:3]==9'b110_1100_11 && |mbus.req.sel[1:0];
-wire cs_bltAdatx = (cs & mbus.req.we & (rdy2|rdy3) & ~rdy4) && mbus.req.adr[11:3]==9'b110_1000_11 && |mbus.req.sel[1:0];
-wire cs_bltBdatx = (cs & mbus.req.we & (rdy2|rdy3) & ~rdy4) && mbus.req.adr[11:3]==9'b110_1001_11 && |mbus.req.sel[1:0];
-wire cs_bltCdatx = (cs & mbus.req.we & (rdy2|rdy3) & ~rdy4) && mbus.req.adr[11:3]==9'b110_1010_11 && |mbus.req.sel[1:0];
-wire cs_bltDdatx = (cs & mbus.req.we & (rdy2|rdy3) & ~rdy4) && mbus.req.adr[11:3]==9'b110_1011_11 && |mbus.req.sel[1:0];
-wire cs_bltDbadrx = (cs & mbus.req.we & (rdy2|rdy3) & ~rdy4) && mbus.req.adr[11:3]==9'b110_1011_00 && |mbus.req.sel[1:0];
-wire cs_bltDbmodx = (cs & mbus.req.we & (rdy2|rdy3) & ~rdy4) && mbus.req.adr[11:3]==9'b110_1011_01 && |mbus.req.sel[1:0];
-wire cs_bltDbcntx = (cs & mbus.req.we & (rdy2|rdy3) & ~rdy4) && mbus.req.adr[11:3]==9'b110_1011_10 && |mbus.req.sel[1:0];
-wire cs_bltDstWidx = (cs & mbus.req.we & (rdy2|rdy3) & ~rdy4) && mbus.req.adr[11:3]==9'b110_1100_01 && |mbus.req.sel[1:0];
-edge_det ed2(.rst(rst_i), .clk(clk), .ce(1'b1), .i(cs_bltCtrl), .pe(peBltCtrl), .ne(), .ee());
-edge_det ed3(.rst(rst_i), .clk(clk), .ce(1'b1), .i(cs_bltAdatx), .pe(peBltAdatx), .ne(), .ee());
-edge_det ed4(.rst(rst_i), .clk(clk), .ce(1'b1), .i(cs_bltBdatx), .pe(peBltBdatx), .ne(), .ee());
-edge_det ed5(.rst(rst_i), .clk(clk), .ce(1'b1), .i(cs_bltCdatx), .pe(peBltCdatx), .ne(), .ee());
-edge_det ed6(.rst(rst_i), .clk(clk), .ce(1'b1), .i(cs_bltDdatx), .pe(peBltDdatx), .ne(), .ee());
-edge_det ed7(.rst(rst_i), .clk(clk), .ce(1'b1), .i(cs_bltDbadrx), .pe(peBltDbadrx), .ne(), .ee());
-edge_det ed8(.rst(rst_i), .clk(clk), .ce(1'b1), .i(cs_bltDmodx), .pe(peBltDmodx), .ne(), .ee());
-edge_det ed9(.rst(rst_i), .clk(clk), .ce(1'b1), .i(cs_bltDcntx), .pe(peBltDcntx), .ne(), .ee());
-edge_det ed10(.rst(rst_i), .clk(clk), .ce(1'b1), .i(cs_bltDstWidx), .pe(peBltDstWidx), .ne(), .ee());
+wire cs_bltCtrl = (cs & sbus.req.we & (rdy2|rdy3) & ~rdy4) && sbus.req.adr[14:3]==12'b00_0110_1100_11 && |sbus.req.sel[1:0];
+wire cs_bltAdatx = (cs & sbus.req.we & (rdy2|rdy3) & ~rdy4) && sbus.req.adr[14:3]==12'b00_0110_1000_11 && |sbus.req.sel[1:0];
+wire cs_bltBdatx = (cs & sbus.req.we & (rdy2|rdy3) & ~rdy4) && sbus.req.adr[14:3]==12'b00_0110_1001_11 && |sbus.req.sel[1:0];
+wire cs_bltCdatx = (cs & sbus.req.we & (rdy2|rdy3) & ~rdy4) && sbus.req.adr[14:3]==12'b00_0110_1010_11 && |sbus.req.sel[1:0];
+wire cs_bltDdatx = (cs & sbus.req.we & (rdy2|rdy3) & ~rdy4) && sbus.req.adr[14:3]==12'b00_0110_1011_11 && |sbus.req.sel[1:0];
+wire cs_bltDbadrx = (cs & sbus.req.we & (rdy2|rdy3) & ~rdy4) && sbus.req.adr[14:3]==12'b00_0110_1011_00 && |sbus.req.sel[1:0];
+wire cs_bltDbmodx = (cs & sbus.req.we & (rdy2|rdy3) & ~rdy4) && sbus.req.adr[14:3]==12'b00_0110_1011_01 && |sbus.req.sel[1:0];
+wire cs_bltDbcntx = (cs & sbus.req.we & (rdy2|rdy3) & ~rdy4) && sbus.req.adr[14:3]==12'b00_0110_1011_10 && |sbus.req.sel[1:0];
+wire cs_bltDstWidx = (cs & sbus.req.we & (rdy2|rdy3) & ~rdy4) && sbus.req.adr[14:3]==12'b00_0110_1100_01 && |sbus.req.sel[1:0];
+edge_det ed2(.rst(rst), .clk(clk), .ce(1'b1), .i(cs_bltCtrl), .pe(peBltCtrl), .ne(), .ee());
+edge_det ed3(.rst(rst), .clk(clk), .ce(1'b1), .i(cs_bltAdatx), .pe(peBltAdatx), .ne(), .ee());
+edge_det ed4(.rst(rst), .clk(clk), .ce(1'b1), .i(cs_bltBdatx), .pe(peBltBdatx), .ne(), .ee());
+edge_det ed5(.rst(rst), .clk(clk), .ce(1'b1), .i(cs_bltCdatx), .pe(peBltCdatx), .ne(), .ee());
+edge_det ed6(.rst(rst), .clk(clk), .ce(1'b1), .i(cs_bltDdatx), .pe(peBltDdatx), .ne(), .ee());
+edge_det ed7(.rst(rst), .clk(clk), .ce(1'b1), .i(cs_bltDbadrx), .pe(peBltDbadrx), .ne(), .ee());
+edge_det ed8(.rst(rst), .clk(clk), .ce(1'b1), .i(cs_bltDmodx), .pe(peBltDmodx), .ne(), .ee());
+edge_det ed9(.rst(rst), .clk(clk), .ce(1'b1), .i(cs_bltDcntx), .pe(peBltDcntx), .ne(), .ee());
+edge_det ed10(.rst(rst), .clk(clk), .ce(1'b1), .i(cs_bltDstWidx), .pe(peBltDstWidx), .ne(), .ee());
 
 always_ff @(posedge clk)
 	dat_ix <= sbus.req.dat;
@@ -781,9 +807,9 @@ reg [15:0] vid_row,vid_col;
 always_ff @(posedge vclk)
 	vid_row <= (vpos - 16'd28) >> 1; 
 always_ff @(posedge vclk)
-	vid_col <= (hpos - 16'd128) >> 1;
+	vid_col <= (hpos - 16'd208) >> 1;
 always_ff @(posedge vclk)
-	vid_addrb <= {4'd0,vid_row} * 400 + vid_col;
+	vid_addrb <= {4'd0,vid_row} * 16'd400 + vid_col;
 always_ff @(posedge vclk)
 	vid_out <= {vid_doutb[14:10],3'b0,vid_doutb[9:5],3'b0,vid_doutb[4:0],3'b0};
 
@@ -820,8 +846,28 @@ end
 always_comb
 	ip2 = ip[2];
 
+reg csm,csc;
+reg [7:0] sel;
+reg we;
+reg [63:0] dat,dato;
+address_t adr;
 always_comb
-	cs = cs_copro & sbus.req.cyc & sbus.req.stb;
+	csm = mbus.req.cyc && mbus.req.stb && mbus.req.adr[31:16]==16'hFE00;
+always_comb
+	csc = cs_copro & sbus.req.cyc & sbus.req.stb;
+always_comb
+	cs = csc | csm;
+always_comb
+	we = csm ? mbus.req.we : sbus.req.we;
+always_comb
+	sel = csm ? mbus.req.sel : sbus.req.sel;
+always_comb
+	adr = csm ? mbus.req.adr : sbus.req.adr;
+always_comb
+	dat = csm ? mbus.req.dat : sbus.req.dat;
+always_comb
+	sbus.resp.dat = csc ? dato : 64'd0;
+
 delay2 udly2 (.clk(clk), .ce(1'b1), .i(cs), .o(dly2));
 
 always_ff @(posedge clk)
@@ -847,113 +893,140 @@ if (rst) begin
 end
 else begin
 	clear_page_fault <= FALSE;
-	if (cs_copro & sbus.req.cyc & sbus.req.stb) begin
-		sbus.resp.tid <= sbus.req.tid;	
-		sbus.resp.pri <= sbus.req.pri;
-		if (|web2) begin// 31:16==16'hFE00
-			casez(sbus.req.adr[14:3])
+	if (cs) begin
+		if (csc) begin
+			sbus.resp.tid <= sbus.req.tid;	
+			sbus.resp.pri <= sbus.req.pri;
+		end
+		if (we) begin// 31:16==16'hFE00
+			casez(adr[14:3])
 			// Sprite color palette $000 to $7F8
-			12'b000_0???_????_?:	sprite_color[sbus.req.adr[10:3]] <= sbus.req.dat;
+			12'b000_0???_????_?:	sprite_color[adr[10:3]] <= dat;
 			// Sprite $800 to $9F8
-			12'b000_100?_????_0:	spriteAddr[sbus.req.adr[8:4]] <= sbus.req.dat[`ABITS];
+			12'b000_100?_????_0:	spriteAddr[adr[8:4]] <= dat[`ABITS];
 			12'b000_100?_????_1:
 				begin
-					if (|sbus.req.sel[1:0]) spriteMcnt[sbus.req.adr[8:4]] <= sbus.req.dat[15:0];
-					if ( sbus.req.sel[3]) sprite_pz[sbus.req.adr[8:4]] <= sbus.req.dat[31:24];
-					if (|sbus.req.sel[5:4]) sprite_ph[sbus.req.adr[8:4]] <= sbus.req.dat[43:32];
-					if (|sbus.req.sel[7:6]) sprite_pv[sbus.req.adr[8:4]] <= sbus.req.dat[59:48];
+					if (&sel[1:0]) spriteMcnt[adr[8:4]] <= dat[15:0];
+					if ( sel[3]) sprite_pz[adr[8:4]] <= dat[31:24];
+					if (&sel[5:4]) sprite_ph[adr[8:4]] <= dat[43:32];
+					if (&sel[7:6]) sprite_pv[adr[8:4]] <= dat[59:48];
 				end
 			// Reserved Area $A00 to $BF8
 			12'b000_101?_????_?:	;
 							
 			// Audio $C00 to $CB8
-	    12'b000_1100_0000_0:   aud0_adr <= sbus.req.dat[`ABITS];
+	    12'b000_1100_0000_0:   aud0_adr <= dat[`ABITS];
 	    12'b000_1100_0000_1:
 	    	begin 
-	    		if (|sbus.req.sel[1:0]) aud0_length <= sbus.req.dat[15:0];
-	    		if (|sbus.req.sel[7:4]) aud0_period <= sbus.req.dat[41:32];
+	    		if (&sel[1:0]) aud0_length <= dat[15:0];
+	    		if (&sel[7:4]) aud0_period <= dat[41:32];
 	    	end
 	    12'b000_1100_0001_0:
 	      begin
-		      if (|sbus.req.sel[1:0]) aud0_volume <= sbus.req.dat[15:0];
-		      if (|sbus.req.sel[3:2]) aud0_dat <= sbus.req.dat[31:16];
+		      if (&sel[1:0]) aud0_volume <= dat[15:0];
+		      if (&sel[3:2]) aud0_dat <= dat[31:16];
 	      end
-	    12'b000_1100_0010_0:   aud1_adr <= sbus.req.dat[`ABITS];
+	    12'b000_1100_0010_0:   aud1_adr <= dat[`ABITS];
 	    12'b000_1100_0010_1:
 	    	begin
-	    		if (|sbus.req.sel[1:0]) aud1_length <= sbus.req.dat[15:0];
-	    		if (|sbus.req.sel[7:4]) aud1_period <= sbus.req.dat[41:32];
+	    		if (&sel[1:0]) aud1_length <= dat[15:0];
+	    		if (&sel[7:4]) aud1_period <= dat[41:32];
 	    	end
 	    12'b000_1100_0011_0:
 	       begin
-	        if (|sbus.req.sel[1:0]) aud1_volume <= sbus.req.dat[15:0];
-	        if (|sbus.req.sel[3:2]) aud1_dat <= sbus.req.dat[31:16];
+	        if (&sel[1:0]) aud1_volume <= dat[15:0];
+	        if (&sel[3:2]) aud1_dat <= dat[31:16];
 	      end
-	    12'b000_1100_0100_0:   aud2_adr <= sbus.req.dat[`ABITS];
+	    12'b000_1100_0100_0:   aud2_adr <= dat[`ABITS];
 	    12'b000_1100_0100_1:
 	    	begin
-	    		if (|sbus.req.sel[1:0]) aud2_length <= sbus.req.dat[15:0];
-	    		if (|sbus.req.sel[7:4]) aud2_period <= sbus.req.dat[41:32];
+	    		if (&sel[1:0]) aud2_length <= dat[15:0];
+	    		if (&sel[7:4]) aud2_period <= dat[41:32];
 	    	end
 	    12'b000_1100_0101_0:
 	      begin
-	        if (|sbus.req.sel[1:0]) aud2_volume <= sbus.req.dat[15:0];
-	        if (|sbus.req.sel[3:2]) aud2_dat <= sbus.req.dat[31:16];
+	        if (&sel[1:0]) aud2_volume <= dat[15:0];
+	        if (&sel[3:2]) aud2_dat <= dat[31:16];
 	      end
-	    12'b000_1100_0110_0:   aud3_adr <= sbus.req.dat[`ABITS];
+	    12'b000_1100_0110_0:   aud3_adr <= dat[`ABITS];
 	    12'b000_1100_0110_1:
 	    	begin
-	    		if (|sbus.req.sel[1:0]) aud3_length <= sbus.req.dat[15:0];
-	    		if (|sbus.req.sel[7:4]) aud3_period <= sbus.req.dat[41:32];
+	    		if (&sel[1:0]) aud3_length <= dat[15:0];
+	    		if (&sel[7:4]) aud3_period <= dat[41:32];
 	    	end
 	    12'b000_1100_0111_0:
 	      begin
-	        if (|sbus.req.sel[1:0]) aud3_volume <= sbus.req.dat[15:0];
-	        if (|sbus.req.sel[3:2]) aud3_dat <= sbus.req.dat[31:16];
+	        if (&sel[1:0]) aud3_volume <= dat[15:0];
+	        if (&sel[3:2]) aud3_dat <= dat[31:16];
 	      end
-	    12'b000_1100_1000_0:   audi_adr <= sbus.req.dat[`ABITS];
+	    12'b000_1100_1000_0:   audi_adr <= dat[`ABITS];
 	    12'b000_1100_1000_1:
 	    	begin
-	    		if (|sbus.req.sel[1:0]) audi_length <= sbus.req.dat[15:0];
-	    		if (|sbus.req.sel[7:4]) audi_period <= sbus.req.dat[41:32];
+	    		if (&sel[1:0]) audi_length <= dat[15:0];
+	    		if (&sel[7:4]) audi_period <= dat[41:32];
 	    	end
 	    12'b000_1100_1001_0:
 				begin
-	        if (|sbus.req.sel[1:0]) audi_volume <= sbus.req.dat[15:0];
+	        if (&sel[1:0]) audi_volume <= dat[15:0];
 	        //if (|sel[3:2]) audi_dat <= dat[31:16];
 	      end
-	    12'b000_1100_1010_0:    aud_ctrl <= sbus.req.dat;
+	    12'b000_1100_1010_0:    aud_ctrl <= dat;
+
+			// Blitter: $D00 to $D98
+			12'b000_1101_0000_0:	bltA_badr <= dat[`ABITS];
+			12'b000_1101_0000_1:	bltA_mod <= dat;
+			12'b000_1101_0001_0:	bltA_cnt <= dat;
+			12'b000_1101_0010_0:	bltB_badr <= dat[`ABITS];
+			12'b000_1101_0010_1:	bltB_mod <= dat;
+			12'b000_1101_0011_0:	bltB_cnt <= dat;
+			12'b000_1101_0100_0:	bltC_badr <= dat[`ABITS];
+			12'b000_1101_0100_1:	bltC_mod <= dat;
+			12'b000_1101_0101_0:	bltC_cnt <= dat;
+			12'b000_1101_0110_0:	bltD_badr <= dat[`ABITS];
+			12'b000_1101_0110_1:	bltD_mod <= dat;
+			12'b000_1101_0111_0:	bltD_cnt <= dat;
+			12'b000_1101_0111_1:	bltD_dat <= dat[15:0];
+
+			12'b000_1101_1000_0:	bltSrcWid <= dat;
+			12'b000_1101_1000_1:	bltDstWid <= dat;
+
+			12'b000_1101_1001_0:	blt_op <= dat[15:0];
+			12'b000_1101_1001_1:	
+								begin
+//								if (sel[3]) bltPipedepth <= dat[29:24];
+								if (&sel[1:0]) bltCtrl <= dat[15:0];
+								end
 
 			// FC0 to FCF read-only
 			12'hFA0:	clear_page_fault <= TRUE;
-			12'hFC0:	ptbr[0] <= sbus.req.dat;
-			12'hFC2:	ptattr[0] <= sbus.req.dat;
-			12'hFC4:	ptbr[1] <= sbus.req.dat;
-			12'hFC6:	ptattr[1] <= sbus.req.dat;
-			12'hFC8:	ptbr[2] <= sbus.req.dat;
-			12'hFCA:	ptattr[2] <= sbus.req.dat;
+			12'hFC0:	ptbr[0] <= dat;
+			12'hFC2:	ptattr[0] <= dat;
+			12'hFC4:	ptbr[1] <= dat;
+			12'hFC6:	ptattr[1] <= dat;
+			12'hFC8:	ptbr[2] <= dat;
+			12'hFCA:	ptattr[2] <= dat;
 			default:	;
 			endcase
 			sbus.resp.ack <= dly2;
 		end
 		ptattr[0].pgsz <= LOG_PAGESIZE;
 		ptattr[0].log_te <= LOG_TLB_ENTRIES;
-		if (sbus.req.adr[31:16]==16'hFE00) begin
-			casez(sbus.req.adr[14:3])
+		if (adr[31:16]==16'hFE00) begin
+			casez(adr[14:3])
 			// To 12'hFDF
-			12'hFC0:	sbus.resp.dat <= ptbr[0];
-			12'hFC2:	sbus.resp.dat <= ptattr[0];
-			12'hFC4:	sbus.resp.dat <= ptbr[1];
-			12'hFC6:	sbus.resp.dat <= ptattr[1];
-			12'hFC8:	sbus.resp.dat <= ptbr[2];
-			12'hFCA:	sbus.resp.dat <= ptattr[2];
-			12'hFE0:	sbus.resp.dat <= miss_adr1[0];
-			12'hFE1:	sbus.resp.dat <= miss_asid1[0];
-			12'hFE2:	sbus.resp.dat <= miss_adr1[1];
-			12'hFE3:	sbus.resp.dat <= miss_asid1[1];
-			12'hFE4:	sbus.resp.dat <= miss_adr1[2];
-			12'hFE5:	sbus.resp.dat <= miss_asid1[2];
-			default:	sbus.resp.dat <= doutb2;
+			12'hFC0:	dato <= ptbr[0];
+			12'hFC2:	dato <= ptattr[0];
+			12'hFC4:	dato <= ptbr[1];
+			12'hFC6:	dato <= ptattr[1];
+			12'hFC8:	dato <= ptbr[2];
+			12'hFCA:	dato <= ptattr[2];
+			12'hFE0:	dato <= miss_adr1[0];
+			12'hFE1:	dato <= miss_asid1[0];
+			12'hFE2:	dato <= miss_adr1[1];
+			12'hFE3:	dato <= miss_asid1[1];
+			12'hFE4:	dato <= miss_adr1[2];
+			12'hFE5:	dato <= miss_asid1[2];
+			default:	dato <= doutb2;
 			endcase
 			sbus.resp.ack <= dly2;
 		end
@@ -979,6 +1052,8 @@ else begin
 			default:	idat <= douta2;
 			endcase
 		end
+		else if (mbus.req.adr[31:20]==12'h001)
+			idat <= vid_douta;
 end
 
 always_ff @(posedge clk)
@@ -1070,7 +1145,7 @@ always_comb
 fifo
 #(
 	.WIDTH(64),
-	.DEPTH(1034)
+	.DEPTH(1024)
 )
 ucmdfifo1
 (
@@ -1130,8 +1205,8 @@ vid_counter #(6) u_fctr (.rst(rst), .clk(vclk), .ce(pe_vsync), .ld(1'b0), .d(6'd
 // Xilinx Parameterized Macro, version 2025.1
 
 xpm_memory_tdpram #(
-  .ADDR_WIDTH_A(12),              // DECIMAL
-  .ADDR_WIDTH_B(12),              // DECIMAL
+  .ADDR_WIDTH_A(13),              // DECIMAL
+  .ADDR_WIDTH_B(13),              // DECIMAL
   .AUTO_SLEEP_TIME(0),            // DECIMAL
   .BYTE_WRITE_WIDTH_A(64),        // DECIMAL
   .BYTE_WRITE_WIDTH_B(64),        // DECIMAL
@@ -1145,7 +1220,7 @@ xpm_memory_tdpram #(
   .MEMORY_INIT_PARAM("0"),        // String
   .MEMORY_OPTIMIZATION("true"),   // String
   .MEMORY_PRIMITIVE("auto"),      // String
-  .MEMORY_SIZE(4096*64),          // DECIMAL
+  .MEMORY_SIZE(8192*64),          // DECIMAL
   .MESSAGE_CONTROL(0),            // DECIMAL
   .RAM_DECOMP("auto"),            // String
   .READ_DATA_WIDTH_A(64),         // DECIMAL
@@ -1346,6 +1421,7 @@ unip1
 	.arg_dat(arg_dat),
 	.ip(ip),
 	.ipr(ipr),
+	.tblit_ip(tblit_ip),
 	.cmdq_empty(cmdq_empty),
 	.next_ip(next_ip)
 );
@@ -1375,7 +1451,7 @@ count_accum #(.WID(32)) uca1
 
 always_ff @(posedge clk)
 if (rst)
-	ip <= 16'd0;
+	ip <= 19'd0;
 else
 	ip <= next_ip;
 
@@ -1384,6 +1460,7 @@ always_comb
 
 always @(posedge clk)
 if (rst) begin
+	tmp = 64'd0;
 	ir <= {$bits(copro_instruction_t){1'b0}};
 	stat <= 64'd0;
 	miss_asid1 <= 16'h0;
@@ -1413,11 +1490,32 @@ if (rst) begin
 	clipX1 <= 16'd400;
 	clipY1 <= 16'd300;
 	transform <= FALSE;
+	aa <= 32'h00010000;
+	ab <= 32'h00000000;
+	ac <= 32'h00000000;
+	at <= 32'h00000000;
+	ba <= 32'h00000000;
+	bb <= 32'h00010000;
+	bc <= 32'h00000000;
+	bt <= 32'h00000000;
+	ca <= 32'h00000000;
+	cb <= 32'h00000000;
+	cc <= 32'h00010000;
+	ct <= 32'h00000000;
 	alpha <= 16'h8000;
 	bltCtrl <= 16'd0;
+	bltCtrlx <= 16'd0;
+	bltCtrlx[13] <= 1'b1;	// Blitter is "done" to begin with.
+	pen_color <= 24'h0003e0;
+	fill_color <= 24'h007c00;
+	tblit_active <= FALSE;
+	tblit_state <= st_ifetch;
+	font_tbl_adr <= 32'h00008000;
+	font_id <= 16'h0000;
   tGoto(st_reset);
 end
 else begin
+	tmp = 64'd0;
 	rstst <= FALSE;
 	pushst <= FALSE;
 	popst <= FALSE;
@@ -1452,11 +1550,6 @@ else begin
 		bltD_cntx <= dat_ix;
 	if (peBltDstWidx)
 		bltDstWidx <= dat_ix;
-
-	p0x <= up0x;
-	p0y <= up0y;
-	p1x <= up1x;
-	p1y <= up1y;
 
 	// Channel reset
 	if (aud_ctrl[8])
@@ -1506,6 +1599,11 @@ st_reset:
 st_reset2:
 	begin
 		ir <= next_ir;
+		tGoto(st_execute);
+	end
+st_tblit_iret:
+	begin
+		ir <= tblit_ir;
 		tGoto(st_execute);
 	end
 
@@ -1610,7 +1708,7 @@ st_ifetch:
 		end
 		else if (pe_vsync2) begin
 			sleep <= FALSE;
-			stack[(sp+15) % 16] <= {2'b01,ipr,r8,r7,r6,r5,r4,r3,r2,r1};
+			stack[(sp+15) % 16] <= {2'b01,ip,r8,r7,r6,r5,r4,r3,r2,r1};
 			sp <= sp - 1;
 			wait_active <= FALSE;
 			if (sleep)
@@ -1625,13 +1723,18 @@ st_ifetch:
 			miss_asid1 <= miss_asid[0];
 			paging_en <= FALSE;
 			missack <= TRUE;
-			stack[(sp+15) % 16] <= {2'b10,ipr,r8,r7,r6,r5,r4,r3,r2,r1};
+			stack[(sp+15) % 16] <= {2'b10,ip,r8,r7,r6,r5,r4,r3,r2,r1};
 			sp <= sp - 1;
 			wait_active <= FALSE;
 			if (sleep)
 				tCall(st_wakeup,st_ifetch);
 			else
 				tGoto(st_ifetch);
+		end
+		else if (tblit_active) begin
+			tblit_ir <= ir;
+			tblit_ip <= ip;
+			tCall(tblit_state,st_tblit_iret);
 		end
 		else if (bltCtrlx[14]) begin
 			if ((bltCtrlx[7:0] & 8'hAA)!=8'h00)
@@ -1687,7 +1790,7 @@ st_ifetch:
 		end
 		else if (!cmdq_empty) begin
 			rd_cmd_fifo <= TRUE;
-			tCall(st_gr_cmd,st_ifetch);
+			tCall(st_gr_cmd,st_execute);
 		end
 		else if (wait_active) begin
 		// WAIT
@@ -1742,7 +1845,7 @@ st_execute:
 			end
 		OP_LOAD_CONFIG:
 			begin
-				tmp = a[2:0]|imm[2:0];
+				tmp = a[2:0]|ir.imm[2:0];
 				// Which TLB missed?
 				r2 <= ptbr[tmp];
 				r3 <= ptattr[tmp].pgsz;
@@ -1810,7 +1913,7 @@ st_execute:
 						mbus.req.cyc <= tmp[31:16]!=16'h0000;
 						mbus.req.stb <= tmp[31:16]!=16'h0000;
 						mbus.req.we <= LOW;
-						mbus.req.sel <= 32'hFF << {tmp[4:3],3'b0};
+						mbus.req.sel <= 8'hFF;
 						mbus.req.adr <= tmp;
 						roma <= tmp;
 						tGoto (st_ip_load);
@@ -1907,7 +2010,7 @@ st_execute:
 		OP_STOREI64:
 			begin
 				// Was instruction at an odd address?
-				if (ip[0] & UNALIGNED_CONSTANTS)
+				if (~ipr[2] & UNALIGNED_CONSTANTS)
 					tGoto(st_even64);
 				else
 					tGoto(st_odd64);
@@ -1932,7 +2035,7 @@ st_execute:
 		OP_ADD64,OP_AND64:
 			begin
 				// Was instruction at an odd address?
-				if (ip[0] & UNALIGNED_CONSTANTS)
+				if (~ipr[2] & UNALIGNED_CONSTANTS)
 					tGoto(st_even64);
 				else
 					tGoto(st_odd64);
@@ -1968,13 +2071,17 @@ st_even64a:
 				mbus.req.dat <= {4{douta[31:0],imm}};
 				if (tmp[31:16]!=16'h0000 && tmp[31:20]!=12'h001)
 					tGoto(st_mem_store);
+				else
+					tGoto(st_prefetch);
 			end
 		default:	;
 		endcase
 	end
 
 st_odd64:
-	tGoto(st_odd64a);
+	begin
+		tGoto(st_odd64a);
+	end
 st_odd64a:
 	begin
 		tGoto(st_writeback);
@@ -1989,9 +2096,11 @@ st_odd64a:
 				mbus.req.we <= HIGH;
 				mbus.req.sel <= 8'hFF;// << {tmp[4:3],3'b0};
 				mbus.req.adr <= tmp;
-				mbus.req.dat <= {4{douta}};
+				mbus.req.dat <= douta;
 				if (tmp[31:16]!=16'h0000 && tmp[31:20]!=12'h001)
 					tGoto(st_mem_store);
+				else
+					tGoto(st_prefetch);
 			end
 		default:	;
 		endcase
@@ -2004,7 +2113,10 @@ st_writeback:
 		tGoto(st_ifetch);
 	end
 st_prefetch:
-	tGoto(st_ifetch);
+	begin
+		mbus.req <= {$bits(wb_cmd_request64_t){1'b0}};
+		tGoto(st_ifetch);
+	end
 
 // Wakeup stages for the BRAM after a WAIT operation.
 st_wakeup:
@@ -2021,7 +2133,9 @@ st_jmp:
 st_ip_load:
 	begin
 		local_sel <= mbus.req.adr[31:16]==16'h0000;
-		if (imresp.ack) begin
+		tocnt <= tocnt - 1;
+		if (imresp.ack||tocnt==0) begin
+			tocnt <= busto;
 			local_sel <= FALSE;
 			mbus.req <= {$bits(wb_cmd_request256_t){1'b0}};
 			tGoto (st_jmp);
@@ -2031,7 +2145,9 @@ st_ip_load:
 st_mem_load:
 	begin
 		local_sel <= mbus.req.adr[31:16]==16'h0000;
-		if (imresp.ack) begin
+		tocnt <= tocnt - 1;
+		if (imresp.ack||tocnt==0) begin
+			tocnt <= busto;
 			local_sel <= FALSE;
 			tGoto (st_writeback);
 			mbus.req <= {$bits(wb_cmd_request256_t){1'b0}};
@@ -2177,8 +2293,10 @@ st_bit_store:
 
 st_mem_store:
 	begin
+		tocnt <= tocnt - 1;
 		local_sel <= mbus.req.adr[31:16]==16'h0000;
-		if (imresp.ack|cmdq_wr_ack) begin
+		if (imresp.ack||cmdq_wr_ack||tocnt==0) begin
+			tocnt <= busto;
 			local_sel <= FALSE;
 			mbus.req <= {$bits(wb_cmd_request256_t){1'b0}};
 			tGoto (st_writeback);
@@ -2207,8 +2325,9 @@ st_aud3:
 	end
 st_audi:
 	begin
-//		tocnt <= tocnt - 8'd1;
-		if (imresp.ack||!mbus.req.cyc) begin
+		tocnt <= tocnt - 8'd1;
+		if (imresp.ack||!mbus.req.cyc||tocnt==0) begin
+			tocnt <= busto;
 			mbus.req <= {$bits(wb_cmd_request256_t){1'b0}};
 			tRet();
 		end
@@ -2282,11 +2401,11 @@ st_gr_cmd:
 /*
 		8'd11:	transform <= cmdq_out[0];
 */
-		8'd12:	begin penColor <= cmdq_out[`CMDDAT]; tRet(); $display("Set pen color"); end
-		8'd13:	begin fillColor <= cmdq_out[`CMDDAT]; tRet(); $display("Set fill color"); end
+		8'd12:	begin pen_color <= cmdq_out[`CMDDAT]; tRet(); end
+		8'd13:	begin fill_color <= cmdq_out[`CMDDAT]; tRet(); end
 		8'd14:	begin alpha <= cmdq_out[`CMDDAT]; tRet(); end
-		8'd16:	begin up0x <= cmdq_out[`CMDDAT]; tRet(); $display ("Set X0=%h", cmdq_out[`CMDDAT]); end
-		8'd17:	begin up0y <= cmdq_out[`CMDDAT]; tRet(); $display ("Set Y0=%h", cmdq_out[`CMDDAT]); end
+		8'd16:	begin up0x <= cmdq_out[`CMDDAT]; tRet(); end
+		8'd17:	begin up0y <= cmdq_out[`CMDDAT]; tRet(); end
 		8'd18:	begin up0z <= cmdq_out[`CMDDAT]; tRet(); end
 		8'd19:	begin up1x <= cmdq_out[`CMDDAT]; tRet(); end
 		8'd20:	begin up1y <= cmdq_out[`CMDDAT]; tRet(); end
@@ -2314,55 +2433,207 @@ st_gr_cmd:
 		8'd42:	begin cc <= cmdq_out[`CMDDAT]; tRet(); end
 		8'd43:	begin ct <= cmdq_out[`CMDDAT]; tRet(); end
 
-		8'd44:	begin bltCtrl <= cmdq_out[`CMDDAT]; tRet(); end
-		8'd45:	begin bltA_badr <= cmdq_out[`CMDDAT]; tRet(); end
-		8'd46:	begin bltA_mod <= cmdq_out[`CMDDAT]; tRet(); end
-		8'd47:	begin bltA_cnt <= cmdq_out[`CMDDAT]; tRet(); end
-		8'd48:	begin bltA_badrx <= cmdq_out[`CMDDAT]; tRet(); end
-		8'd49:	begin bltA_modx <= cmdq_out[`CMDDAT]; tRet(); end
-		8'd50:	begin bltA_cntx <= cmdq_out[`CMDDAT]; tRet(); end
-		8'd51:	begin bltA_wadr <= cmdq_out[`CMDDAT]; tRet(); end
-		8'd52:	begin bltA_wcnt <= cmdq_out[`CMDDAT]; tRet(); end
-		8'd53:	begin bltA_dcnt <= cmdq_out[`CMDDAT]; tRet(); end
-		8'd54:	begin bltA_hcnt <= cmdq_out[`CMDDAT]; tRet(); end
-
-		8'd55:	begin bltB_badr <= cmdq_out[`CMDDAT]; tRet(); end
-		8'd56:	begin bltB_mod <= cmdq_out[`CMDDAT]; tRet(); end
-		8'd57:	begin bltB_cnt <= cmdq_out[`CMDDAT]; tRet(); end
-		8'd58:	begin bltB_badrx <= cmdq_out[`CMDDAT]; tRet(); end
-		8'd59:	begin bltB_modx <= cmdq_out[`CMDDAT]; tRet(); end
-		8'd60:	begin bltB_cntx <= cmdq_out[`CMDDAT]; tRet(); end
-		8'd61:	begin bltB_wadr <= cmdq_out[`CMDDAT]; tRet(); end
-		8'd62:	begin bltB_wcnt <= cmdq_out[`CMDDAT]; tRet(); end
-		8'd63:	begin bltB_dcnt <= cmdq_out[`CMDDAT]; tRet(); end
-		8'd64:	begin bltB_hcnt <= cmdq_out[`CMDDAT]; tRet(); end
-
-		8'd65:	begin bltC_badr <= cmdq_out[`CMDDAT]; tRet(); end
-		8'd66:	begin bltC_mod <= cmdq_out[`CMDDAT]; tRet(); end
-		8'd67:	begin bltC_cnt <= cmdq_out[`CMDDAT]; tRet(); end
-		8'd68:	begin bltC_badrx <= cmdq_out[`CMDDAT]; tRet(); end
-		8'd69:	begin bltC_modx <= cmdq_out[`CMDDAT]; tRet(); end
-		8'd70:	begin bltC_cntx <= cmdq_out[`CMDDAT]; tRet(); end
-		8'd71:	begin bltC_wadr <= cmdq_out[`CMDDAT]; tRet(); end
-		8'd72:	begin bltC_wcnt <= cmdq_out[`CMDDAT]; tRet(); end
-		8'd73:	begin bltC_dcnt <= cmdq_out[`CMDDAT]; tRet(); end
-		8'd74:	begin bltC_hcnt <= cmdq_out[`CMDDAT]; tRet(); end
-
-		8'd75:	begin bltD_badr <= cmdq_out[`CMDDAT]; tRet(); end
-		8'd76:	begin bltD_mod <= cmdq_out[`CMDDAT]; tRet(); end
-		8'd77:	begin bltD_cnt <= cmdq_out[`CMDDAT]; tRet(); end
-		8'd78:	begin bltD_badrx <= cmdq_out[`CMDDAT]; tRet(); end
-		8'd79:	begin bltD_modx <= cmdq_out[`CMDDAT]; tRet(); end
-		8'd80:	begin bltD_cntx <= cmdq_out[`CMDDAT]; tRet(); end
-		8'd81:	begin bltD_wadr <= cmdq_out[`CMDDAT]; tRet(); end
-		8'd82:	begin bltD_wcnt <= cmdq_out[`CMDDAT]; tRet(); end
-		8'd84:	begin bltD_hcnt <= cmdq_out[`CMDDAT]; tRet(); end
+		8'd73:	begin font_tbl_adr <= cmdq_out[`CMDDAT]; tRet(); end
+		8'd74:	begin font_id <= cmdq_out[`CMDDAT]; tRet(); end
 
 		8'd254:	begin rst_cmdq <= TRUE; tRet(); end
 		8'd255:	tRet();	// NOP
 		default:	tRet();
 		endcase
 		end
+	end
+
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+// Character draw acceleration states
+//
+// Font Table - An entry for each font
+// fwwwwwhhhhh-aaaa		- width and height
+// aaaaaaaaaaaaaaaa		- char bitmap address
+// ------------aaaa		- address offset of gylph width table
+// aaaaaaaaaaaaaaaa		- low order address offset bits
+//
+// 10100001000-aaaa_aaaaaaaaaaaaaaaa_------------aaaaaaaaaaaaaaaaaaaa
+// A1008008
+//
+// Glyph Table Entry
+// ---wwwww---wwwww		- width
+// ---wwwww---wwwww
+// ---wwwww---wwwww
+// ---wwwww---wwwww
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+st_read_font_tbl:
+	begin
+		pixhc <= 5'd0;
+		pixvc <= 5'd0;
+		local_sel <= TRUE;
+    mbus.req.cyc <= HIGH;
+    mbus.req.stb <= HIGH;
+    mbus.req.sel <= 8'hFF;
+		mbus.req.adr <= {font_tbl_adr[31:3],3'b0} + {font_id,4'b00};
+		tocnt <= busto;
+		tblit_adr <= {font_tbl_adr[31:3],3'b0} + {font_id,4'b00};
+		tCall(st_latch_data,st_read_font_tbl_nack);
+	end
+st_read_font_tbl_nack:
+	if (~imresp.ack) begin
+		charBmpBase <= latched_data[63:32];
+		glyph_tbl_adr <= latched_data[31:0];
+		tblit_state <= st_read_font_tbl2;
+		tRet();
+	end
+st_read_font_tbl2:
+	begin
+		pixhc <= 5'd0;
+		pixvc <= 5'd0;
+		local_sel <= TRUE;
+    mbus.req.cyc <= HIGH;
+    mbus.req.stb <= HIGH;
+    mbus.req.sel <= 8'hFF;
+		mbus.req.adr <= {font_tbl_adr[31:3],3'b0} + {font_id,4'b00} + 8'd8;
+		tocnt <= busto;
+		tblit_adr <= {font_tbl_adr[31:3],3'b0} + {font_id,4'b00} + 8'd8;
+		tCall(st_latch_data,st_read_font_tbl2_nack);
+	end
+st_read_font_tbl2_nack:
+	if (~imresp.ack) begin
+		font_fixed <= latched_data[63];
+		font_width <= latched_data[61:56];
+		font_height <= latched_data[53:48];
+		tblit_state <= st_read_glyph_entry;
+		tRet();
+	end
+st_read_glyph_entry:
+	begin
+		charBoxX0 <= p0x;
+		charBoxY0 <= p0y;
+		charBmpBase <= charBmpBase + charndx;
+		if (font_fixed) begin
+			tblit_state <= st_read_char_bitmap;
+			tRet();
+		end
+		else begin
+			local_sel <= TRUE;
+			mbus.req.cyc <= HIGH;
+		  mbus.req.sel <= 8'hFF;
+			mbus.req.adr <= {glyph_tbl_adr[31:3],3'h0} + {charcode[8:4],4'h0};
+			tocnt <= busto;
+			tCall(st_latch_data,st_read_glyph_entry_nack);
+		end
+	end
+st_read_glyph_entry_nack:
+	if (~imresp.ack) begin
+		font_width <= latched_data >> {charcode[3:0],3'b0};
+		tblit_state <= st_read_char_bitmap;
+		tRet();
+	end
+st_read_char_bitmap:
+	begin
+		local_sel <= TRUE;
+		mbus.req.cyc <= HIGH;
+	  mbus.req.sel <= 8'hFF;
+		mbus.req.adr <= charBmpBase + (pixvc << font_width[4:3]);
+		tocnt <= busto;
+		tCall(st_latch_data,st_read_char_bitmap_nack);
+	end
+st_read_char_bitmap_nack:
+	if (~imresp.ack) begin
+		case(font_width[4:3])
+		2'd0:	charbmp <= (latched_data >> {mbus.req.adr[2:0],3'b0}) & 32'h0ff;
+		2'd1:	charbmp <= (latched_data >> {mbus.req.adr[2:1],4'b0}) & 32'h0ffff;
+		2'd2:	charbmp <= latched_data >> {mbus.req.adr[2],5'b0};
+		2'd3:	charbmp <= latched_data;
+		endcase
+		tgtaddr <= {8'h00,fixToInt(charBoxY0)} * {4'h00,TargetWidth,1'b0} + TargetBase + {fixToInt(charBoxX0),1'b0};
+		tgtindex <= {14'h00,pixvc} * {4'h00,TargetWidth,1'b0};
+		tblit_state <= st_write_char;
+		tRet();
+	end
+st_write_char:
+	tGoto(st_write_char1);
+st_write_char1:
+	begin
+		tgtadr <= tgtaddr + tgtindex + {14'h00,pixhc,1'b0};
+		tGoto(st_write_char2);
+	end
+st_write_char2:
+	begin
+		if (~fill_color[`A]) begin
+			if ((clipEnable && (fixToInt(charBoxX0) + pixhc < clipX0) || (fixToInt(charBoxX0) + pixhc >= clipX1) || (fixToInt(charBoxY0) + pixvc < clipY0)))
+				;
+			else if (fixToInt(charBoxX0) + pixhc >= TargetWidth)
+				;
+			else begin
+				local_sel <= TRUE;
+				mbus.req.cyc <= HIGH;
+				mbus.req.stb <= HIGH;
+				mbus.req.we <= HIGH;
+				mbus.req.sel <= 8'd3 << {tgtadr[2:1],1'b0};
+				mbus.req.adr <= tgtadr;
+				mbus.req.dat <= {4{charbmp[0] ? pen_color[15:0] : fill_color[15:0]}};
+				tocnt <= busto;
+			end
+		end
+		else begin
+			if (charbmp[0]) begin
+				if (zbuf) begin
+					if (clipEnable && (fixToInt(charBoxX0) + pixhc < clipX0 || fixToInt(charBoxX0) + pixhc >= clipX1 || fixToInt(charBoxY0) + pixvc < clipY0))
+						;
+					else if (fixToInt(charBoxX0) + pixhc >= TargetWidth)
+						;
+					else begin
+						local_sel <= TRUE;
+						mbus.req.cyc <= HIGH;
+						mbus.req.stb <= HIGH;
+						mbus.req.sel <= 8'd3 << {tgtadr[2:1],1'b0};
+/*
+						mbus.req.we <= HIGH;
+						mbus.req.adr <= tgtadr;
+						mbus.req.dat <= {32{zlayer}};
+*/				
+						tocnt <= busto;
+					end
+				end
+				else begin
+					if (clipEnable && (fixToInt(charBoxX0) + pixhc < clipX0 || fixToInt(charBoxX0) + pixhc >= clipX1 || fixToInt(charBoxY0) + pixvc < clipY0))
+						;
+					else if (fixToInt(charBoxX0) + pixhc >= TargetWidth)
+						;
+					else begin
+						local_sel <= TRUE;
+						mbus.req.cyc <= HIGH;
+						mbus.req.stb <= HIGH;
+						mbus.req.sel <= 8'd3 << {tgtadr[2:1],1'b0};
+						mbus.req.we <= HIGH;
+						mbus.req.adr <= tgtadr;
+						mbus.req.dat <= {4{pen_color[15:0]}};
+						tocnt <= busto;
+					end
+				end
+			end
+		end
+		charbmp <= {1'b0,charbmp[31:1]};
+		pixhc <= pixhc + 5'd1;
+		if (pixhc==font_width) begin
+			tblit_state <= st_read_char_bitmap;
+	    pixhc <= 5'd0;
+	    pixvc <= pixvc + 5'd1;
+	    if (clipEnable && (fixToInt(charBoxY0) + pixvc + 16'd1 >= clipY1))
+	    	tblit_active <= FALSE;
+	    else if (fixToInt(charBoxY0) + pixvc + 16'd1 >= TargetHeight)
+	    	tblit_active <= FALSE;
+	    else if (pixvc==font_height)
+	    	tblit_active <= FALSE;
+		end
+		else
+			tblit_state <= st_write_char;
+		tCall(st_latch_data,st_write_char2_nack);
+	end
+st_write_char2_nack:
+	if (~imresp.ack) begin
+		if (!tblit_active)
+			tblit_state <= st_ifetch;
+		tRet();
 	end
 
 // -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
@@ -2375,15 +2646,16 @@ st_plot:
 		gcx <= fixToInt(p0x);
 		gcy <= fixToInt(p0y);
 		if (IsBinaryROP(ctrl[11:8]))
-			tCall(st_delay2,st_plot_read);
+			tCall(st_delay3,st_plot_read);
 		else
-			tCall(st_delay2,st_plot_write);
+			tCall(st_delay3,st_plot_write);
 	end
 st_plot_read:
 	begin
 		local_sel <= TRUE;
 		mbus.req.cyc <= HIGH;
 		mbus.req.stb <= HIGH;
+		mbus.req.sel <= 8'hFF;
 		mbus.req.adr <= ma;
 		// The memory address doesn't change from read to write so
 		// there's no need to wait for it to update, it's already
@@ -2393,15 +2665,15 @@ st_plot_read:
 st_plot_write:
 	begin
 		tGoto(st_wait_ack);
-		set_pixel(penColor[15:0],alpha,ctrl[11:8]);
+		t_set_pixel(pen_color[15:0],alpha,ctrl[11:8]);
 	end
 
 st_wait_ack:
 	// If setpixel avoided the bus transaction cyc and stb will not be present.
-	if ((imbus.resp.ack|local_sel) || !(mbus.cyc & mbus.stb)) begin
+	if ((imresp.ack|local_sel) || !(mbus.req.cyc & mbus.req.stb)) begin
 		local_sel <= FALSE;
 		mbus.req <= {$bits(wb_cmd_request256_t){1'b0}};
-		tRet();
+		tGoto(st_delay1);
 	end
 
 // -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
@@ -2437,7 +2709,7 @@ st_hl_getpixel_nack:
 		tGoto(st_hl_setpixel);
 st_hl_setpixel:
 	begin
-		set_pixel(fillColor,0,ctrl[11:8]);
+		t_set_pixel(fill_color,0,ctrl[11:8]);
 		gcx <= gcx + 16'd1;
 		tCall(st_wait_ack,st_hl_setpixel_nack);
 	end
@@ -2453,6 +2725,42 @@ st_hl_setpixel_nack:
       else
       	tPause(st_hl_setpixel);
 		end
+	end
+
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+// Draw a filled rectangle, uses the blitter.
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+st_fillrect:
+	begin
+		// Switching the points around will have the side effect
+		// of switching the transformed points around as well.
+		if (p1y < p0y) up0y <= up1y;
+		if (p1x < p0x) up0x <= up1x;
+		dx <= fixToInt(absx1mx0) + 16'd1;	// Order of points doesn't matter here.
+		dy <= fixToInt(absy1my0) + 16'd1;
+		// Wait for previous blit to finish
+		// then delay 1 cycle for point switching
+		if (bltCtrlx[13]||!(bltCtrlx[15]||bltCtrlx[14]))
+			tCall(st_delay1,st_fillrect_clip);
+	end
+st_fillrect_clip:
+	begin
+		if (fixToInt(p0x) + dx > TargetWidth)
+			dx <= TargetWidth - fixToInt(p0x);
+		if (fixToInt(p0y) + dy > TargetHeight)
+			dy <= TargetHeight - fixToInt(p0y);
+		tGoto(st_fillrect2);
+	end
+st_fillrect2:
+	begin
+		bltD_badrx <= {8'h00,fixToInt(p0y)} * {TargetWidth,1'b0} + TargetBase + {fixToInt(p0x),1'b0};
+		bltD_modx <= {TargetWidth - dx,1'b0};
+		bltD_cntx <= dx * dy;
+		bltDstWidx <= dx;
+		bltD_datx <= fill_color[15:0];
+		bltCtrlx[15:0] <= 16'h8080;
+		tRet();
 	end
 
 // -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
@@ -2625,14 +2933,18 @@ st_bltdma8_nack:
 
 st_latch_data:
 	begin
-		if (imresp.ack|local_sel) begin
+		tocnt <= tocnt - 1;
+		if (imresp.ack|local_sel|tocnt==0) begin
+			tocnt <= busto;
 			local_sel <= FALSE;
 			latched_data <= imresp.dat;
 			mbus.req <= {$bits(wb_cmd_request256_t){1'b0}};
-			tRet();
+			tGoto(st_delay1);
 		end
 	end
 
+st_delay3:
+	tGoto(st_delay2);
 st_delay2:
 	tGoto(st_delay1);
 st_delay1:
@@ -2642,17 +2954,6 @@ default:	tGoto(st_execute);
 endcase
 $display("Tick: %d I-count: %d  %f instructions per clock", tick, icnt>>1, real'(icnt>>1)/real'(tick));
 end
-
-typedef enum logic [7:0]
-{
-	st_gr_idle = 0,
-	st_plot = 1,
-	st_plot_read,
-	st_plot_write,
-	st_latch_data,
-	st_wait_ack
-} gr_state_t;
-
 
 // +---------------------------------------------------------------------------------------------------------------------+
 // | USE_ADV_FEATURES     | String             | Default value = 0707.                                                   |
@@ -3025,12 +3326,12 @@ end
 always_ff @(posedge clk)
   if (pushst)
     retstack[retsp-12'd1] <= pushstate;
-copro_state_t retstacko = retstack[retsp];
+copro_state_t retstacko = pushst ? pushstate : retstack[retsp];
 
 always_ff @(posedge clk)
   if (pushpt)
     pointstack[pointsp-12'd1] <= pointToPush;
-wire [31:0] pointstacko = pointstack[pointsp];
+wire [31:0] pointstacko = pushpt ? pointToPush : pointstack[pointsp];
 wire [15:0] lgcx = pointstacko[31:16];
 wire [15:0] lgcy = pointstacko[15:0];
 
@@ -3092,7 +3393,7 @@ st_plot_read:
     end
 st_plot_write:
 	begin
-		set_pixel(penColor[15:0],alpha,ctrl[11:8]);
+		t_set_pixel(pen_color[15:0],alpha,ctrl[11:8]);
 		tGoto(st_wait_ack);
 	end
 
@@ -3113,8 +3414,10 @@ end
 task tGoto;
 input copro_state_t dst;
 begin
-	if (dst==st_execute)
-		ir <= next_ir;
+//	if (dst==st_execute)
+//		ir <= next_ir;
+	if (dst==st_ifetch)
+		rstst <= TRUE;
 	state <= dst;
 end
 endtask
@@ -3222,7 +3525,7 @@ begin
 end
 endtask
 
-task set_pixel;
+task t_set_pixel;
 input [15:0] color;
 input [15:0] alpha;
 input [3:0] rop;
@@ -3231,8 +3534,8 @@ begin
 	mbus.req.stb <= LOW;
 	mbus.req.we <= LOW;
 	mbus.req.sel <= 8'h00;
-	if (fnClip(gcx,gcy))
-		;
+//	if (FALSE||fnClip(gcx,gcy))
+//		;
 /*
 	else if (zbuf) begin
 		m_cyc_o <= `HIGH;
@@ -3242,7 +3545,8 @@ begin
 		m_dat_o <= latched_data & ~{128'b1111 << {ma[4:0],2'b0}} | ({124'b0,zlayer} << {ma[4:0],2'b0});
 	end
 */
-	else begin
+//	else
+	begin
 		// The same operation is performed on all pixels, however the
 		// data mask is set so that only the desired pixel is updated
 		// in memory.
@@ -3252,7 +3556,7 @@ begin
 		mbus.req.we <= HIGH;
 		mbus.req.sel <= 8'b11 << {ma[2:1],1'b0};
 		mbus.req.adr <= ma;
-		case(rop)
+		case(4'd1)//rop)
 		4'd0:	mbus.req.dat <= {4{16'h0000}};
 		4'd1:	mbus.req.dat <= {4{color}};
 		4'd3:	mbus.req.dat <= {4{blend(color,latched_data>>{ma[2:1],4'h0},alpha)}};
