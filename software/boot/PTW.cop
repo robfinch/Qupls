@@ -37,6 +37,7 @@
 ; calc_pte_index - calculates the index portion of the PTE address
 ; calc_pte_adr	- calculates the PTE address
 ;
+	.set gr_cmdq,$0xFE010000
 	.section .bram
 	.org 0x0000
 start:
@@ -222,6 +223,59 @@ frame_isr:
 
 initialize:
 	storei $131072,PAM_avail
+	store %r0,PAM_index
+	; Clear screen
+	loadi64 %r1,$30000
+	loadi64 %r2,$0x7c007c007c007c00
+	loadi64 %r3,$0x00100000
+.0001:
+	store %r2,[%r3]
+	add %r3,%r3,%r0,$8
+	djnez %r1,.0001
+
+;	loadi64 %r3,$0x00100000
+;	loadi %r5,$300	
+;	loadi64 %r2,$0x03e003e003e003e0
+.0004:
+;	store %r2,[%r3]
+;	add %r3,%r3,%r0,$802
+;	djnez %r5,.0004
+	
+	loadi64 %r7,$0xFE010000
+	
+;	loadi %r1,$12			; set pen color
+	loadi64 %r2,$0x0c000003e0	; set green pencolor
+	loadi64 %r3,$0x1000000000	;	set x0 = 0
+	loadi64 %r4,$0x1100000000	;	set y0 = 0
+	loadi %r5,$300						; 30000 times
+	loadi64 %r6,$0x0100000010	; plot command copy
+;	store %r1,[%r7]
+	loadi64 %r2,$0x0d00007FFF	; set white fill color
+	store %r2,[%r7]
+	loadi64 %r1,$0x1000000080		; x0 = 128
+	store %r1,[%r7]
+	loadi64 %r1,$0x1000000040		; y0 = 64
+	store %r1,[%r7]
+	loadi64 %r1,$0x1000000100		; x1 = 256
+	store %r1,[%r7]
+	loadi64 %r1,$0x1000000080		; y0 = 128
+	store %r1,[%r7]
+;	loadi64 %r1,$0x0300000000		; fillrect
+;	store %r1,[%r7]
+	loadi64 %r2,$0x0c000003e0	; set green pencolor
+	store %r2,[%r7]
+	loadi64 %r1,$0x10000	; increment
+.0002:
+	store %r3,[%r7]
+	store %r4,[%r7]
+	store %r6,[%r7]
+;	loadi %r2,$0x41
+;	store %r2,[%r7]
+	add %r3,%r3,%r1,$0	; increment x0
+	add %r4,%r4,%r1,$0	; increment y0
+	djnez %r5,.0002
+.0003:
+	jmp .0003
 	ret $0x00
 
 ; Allocate a page of memory.
@@ -350,6 +404,18 @@ PAM_index:
 PAM_avail:
 	.8byte	131072
 
+	.org 0x7D00
+clear_page_fault:
+	.8byte 0
+
+	.org 0x7E00
+pgtbl_info:
+	.rept 8
+	.8byte 0
+	.8byte 0
+	.8byte 0
+	.8byte 0
+	.endr
 	.org 0x7F00
 miss_info:
 	.rept 8
