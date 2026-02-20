@@ -2,6 +2,7 @@
 
 ## Overview
 The system co-processor (SCP) is capable of performing small tasks including MMU TLB miss handling.
+The co-processor also handles audio / video tasks.
 
 ## History
 The co-processor project was started in February 2026.
@@ -16,6 +17,10 @@ The co-processor project was started in February 2026.
 * about 25 instructions
 * fast interrupt servicing
 * 16-entry internal stack
+* 32 hardware cursors
+* text blitting
+* 3 source, 1 destination blitter
+* 4 output, 1 input audio channel
 
 ## Programming Model
 There are 15 general-purpose registers r1 to r15 plus r0 which is always zero.
@@ -33,6 +38,11 @@ An internal 16-entry stack is used for interrupt servicing.
 The stack can hold the first eight registers plus the instruction pointer in each entry.
 On interrupt, the IP and registers r1 to r8 are automatically stored on the stack within a clock cycle or two.
 The local RAM / ROM is moved out of low power mode (this requires two clock cycles).
+### Hardware Cursors
+Cursor data is fetched during the horizontal sync. This is a hardware ISR (HISR).
+Data is fetched only for cursors that are visible on the scan-line.
+### Audio I/O
+Audio interrupts are serviced via HISR according to the timing specified in the audio control registers.
 
 ## Anticipated Usage
 A program will sit in a waiting loop waiting to service either the TLB miss or the video frame interrupt.
@@ -86,7 +96,10 @@ This is useful for updating registers (audio / video) from a video frame handler
 As above.
 There is currently no subtract instruction, it must be synthesized.
 
+## Text Blitting
+There is a dedicated blitter specifically to display text.
+
 # Performance
-Current timing is for 150 MHz in a -2 device.
+Current timing is for 100 MHz in a -2 device.
 Average instructions per clock is about 0.4.
-Core size is about 7500 LUTs, 8RAMs
+Core size is about 30000 LUTs
