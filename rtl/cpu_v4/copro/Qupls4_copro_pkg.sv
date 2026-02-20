@@ -48,7 +48,7 @@ typedef enum logic [4:0]
 	OP_BMP,
 	OP_FLUSH,
 	OP_JMP = 9,
-	OP_PLOT,
+	OP_STOREW,
 	OP_CALC_INDEX = 12,
 	OP_CALC_ADR,
 	OP_BUILD_ENTRY_NO,
@@ -127,27 +127,42 @@ typedef enum logic [6:0]
 	st_read_glyph_entry_nack,	//30
 	st_read_char_bitmap,
 	st_read_char_bitmap_nack,
+	st_read_char,
+	st_read_char2,
 	st_write_char,
 	st_write_char1,
 	st_write_char2,
 	st_write_char2_nack,
 
 	st_plot,
-	st_plot_read,
+	st_plot_read,		//40
 	st_plot_write,
 	
-	st_dl_precalc,	//40
+	st_dl_precalc,
 	st_fillrect,
 	st_fillrect_clip,
 	st_fillrect2,
+
 	st_dt_start,
+	st_dt_sort,
+	st_dt_slope1,
+	st_dt_slope1a,
+	st_dt_slope2,		//50
+	st_dt_incy,
+	st_dt1,
+	st_dt2,
+	st_dt3,
+	st_dt4,
+	st_dt5,
+	st_dt6,
+
 	st_bc0,
 	st_ff1,
 
-	st_hl_line,
+	st_hl_line,			//60
 	st_hl_getpixel,
 	st_hl_getpixel_nack,
-	st_hl_setpixel,	//50
+	st_hl_setpixel,
 	st_hl_setpixel_nack,
 
 	st_bltdma2,
@@ -155,16 +170,21 @@ typedef enum logic [6:0]
 	st_bltdma4,
 	st_bltdma4_nack,
 	st_bltdma6,
- 	st_bltdma6_nack,
+ 	st_bltdma6_nack,	//70
 	st_bltdma8,
 	st_bltdma8_nack,
 	
-	st_wait_ack,	//60
+	st_wait_ack,
 	st_delay1,
 	st_delay2,
 	st_delay3,
 	
-	st_tblit_iret
+	st_hsync,
+	st_sprite_acc,
+	st_sprite_nack,
+	
+	st_tblit_iret,
+	st_hsync_iret
 } copro_state_t;
 
 endpackage

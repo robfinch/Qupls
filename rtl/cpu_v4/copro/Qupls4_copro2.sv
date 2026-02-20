@@ -53,9 +53,9 @@ import Qupls4_copro_pkg::*;
 
 module Qupls4_copro2(rst, clk, sbus, mbus, cs_copro, miss, miss_adr, miss_asid,
   missack, paging_en, page_fault, iv_count, missack, idle,
-  vclk, hsync_i, vsync_i, gfx_que_empty_i,
+  vclk, hsync_i, vsync_i, blank_i, border_i, gfx_que_empty_i,
   aud0_out, aud1_out, aud2_out, aud3_out, aud_in,
-  vid_out,
+  vid_out, de,
   flush_en, flush_trig, flush_asid, flush_done, cmd_done);
 parameter UNALIGNED_CONSTANTS = 0;
 parameter JUMP_INDIRECT = 0;
@@ -63,6 +63,9 @@ parameter NUM_PAGESIZES = 1;
 parameter LOG_PAGESIZE = 13;	// log2 of size of page
 parameter LOG_TLB_ENTRIES = 9;
 parameter BUSTO = 8'd9;
+parameter NSPR = 32;
+parameter CMD_FIFO_DEPTH = 1024;
+parameter phTotal = 1056;
 input rst;
 input clk;
 wb_bus_interface.slave sbus;
@@ -84,6 +87,8 @@ input [3:0] iv_count [0:2];
 input vclk;
 input hsync_i;
 input vsync_i;
+input blank_i;
+input border_i;
 input gfx_que_empty_i;
 output reg [15:0] aud0_out;
 output reg [15:0] aud1_out;
@@ -91,7 +96,9 @@ output reg [15:0] aud2_out;
 output reg [15:0] aud3_out;
 input [15:0] aud_in;
 output reg [23:0] vid_out;
+output reg de;
 
+integer n,n1,n2,n3,n4,n5,n6,n7,n8;
 // The bus timeout depends on the clock frequency (clk) of the core
 // relative to the memory controller's clock frequency (100MHz). So it's
 // been made a core parameter.
@@ -105,8 +112,9 @@ reg [23:0] offset;
 
 reg [31:0] ctrl = 32'd0;
 reg [15:0] alpha;
-reg [23:0] pen_color, fill_color;
-reg [23:0] missColor = 24'h7c0000;	// med red
+reg [31:0] pen_color;
+reg [31:0] fill_color;
+reg [31:0] missColor = 43'h007c0000;	// med red
 reg clipEnable;
 reg [15:0] clipX0, clipY0, clipX1, clipY1;
 reg zbuf;
@@ -117,12 +125,14 @@ reg [11:0] retsp;
 reg [11:0] pointsp;
 copro_state_t retstack [0:4095];
 reg [31:0] pointstack [0:4095];
+copro_state_t retstacko;
 
 reg [5:0] flashcnt;
 
 reg [3:0] htask;
-reg [1:0] lowres = 2'b00;
+reg [1:0] lowres = 2'b01;
 reg [23:0] borderColor = 24'h000000;
+reg [23:0] rgb;
 wire [23:0] rgb_i;
 reg lrst;						// line reset
 
@@ -168,14 +178,19 @@ IsBinaryROP =  (((rop != 4'h1) &&
 			(rop != 4'hF)));
 endfunction
 
-integer n1;
 copro_state_t state, ngs = st_ifetch;
 copro_state_t [3:0] state_stack;
 
 copro_instruction_t ir,ir2,next_ir;
 wb_cmd_response64_t imresp;
 reg rdy1, rdy2, rdy3, rdy4;
+reg csc;
+reg [7:0] sel;
+reg we;
+reg [63:0] dat,dato;
+address_t adr;
 
+reg cs;
 reg mcs,gr_cmdq_cs;
 reg [63:0] idat;
 always_comb
@@ -185,9 +200,7 @@ always_comb
 		mbus.req.adr[31:16]==16'hFE00
 	);
 always_comb
-	gr_cmdq_cs = mbus.req.cyc && mbus.req.stb && (
-		mbus.req.adr[31:16]==16'hFE01
-	);
+	gr_cmdq_cs = cs && adr[31:0]==32'hFE000DC0;
 
 delay2 udly3 (.clk(clk), .ce(1'b1), .i(mcs), .o(mdly2));
 
@@ -205,8 +218,8 @@ begin
 	end
 end
 
-wire [26:0] lfsro;
-lfsr27 #(.WID(27)) ulfsr1(rst, vclk, 1'b1, 1'b0, lfsro);
+wire [30:0] lfsro;
+lfsr31 #(.WID(31)) ulfsr1(rst, vclk, 1'b1, 1'b0, lfsro);
 
 // register file
 reg [63:0] r1=0,r2=0,r3=0,r4=0,r5=0,r6=0,r7=0;
@@ -240,9 +253,9 @@ wire wea2 = mbus.req.we && mbus.req.adr[31:16]==16'hFE00;
 wire web = sbus.req.we && cs_copro && sbus.req.adr[31:20]==12'hD00;
 wire web2 = sbus.req.we && cs_copro && sbus.req.adr[31:16]==16'hFE00;
 wire [16:0] addra = local_sel ? mbus.req.adr[19:3] : ip[19:3];
-wire [12:0] addra2 = mbus.req.adr[15:3];
+wire [9:0] addra2 = mbus.req.adr[12:3];
 wire [16:0] addrb = sbus.req.adr[19:3];
-wire [12:0] addrb2 = sbus.req.adr[15:3];
+wire [9:0] addrb2 = sbus.req.adr[12:3];
 wire [63:0] dina = mbus.req.dat;
 wire [63:0] dina2 = mbus.req.dat;
 wire [63:0] dinb = sbus.req.dat;
@@ -284,7 +297,6 @@ always_comb
 	next_ir = ip2 ? douta[63:32] : douta[31:0];
 reg sleep;
 reg rfwr;
-reg cs;
 wire dly2;
 wire takb;
 
@@ -409,33 +421,33 @@ wire cmdq_empty = cmdq_cnt==10'd0;
 wire cmdq_wr_ack = rdy1;
 //wire cs = cs_i & sbus.req.cyc & sbus.req.stb;
 //wire cs_cmdq = cs && sbus.req.adr[11:3]==9'b1101_1101_0 && sbus.req.we;
-wire wr_cmd_fifo = gr_cmdq_cs && mbus.req.cyc && mbus.req.stb && mbus.req.we && !cmdq_wr_ack;
+wire wr_cmd_fifo = gr_cmdq_cs && we && !cmdq_wr_ack;
 
 reg rd_cmd_fifo = 1'b0;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Text Blitting
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-reg [`ABITS] font_tbl_adr;
+address_t font_tbl_adr;
 reg [15:0] font_id;
-reg [`ABITS] glyph_tbl_adr;
+address_t glyph_tbl_adr;
 reg font_fixed;
 reg [5:0] font_width;
 reg [5:0] font_height;
 reg tblit_active;
 copro_state_t tblit_state;
-reg [`ABITS] tblit_adr;
-reg [`ABITS] tgtaddr, tgtadr;
-reg [15:0] tgtindex;
+address_t tblit_adr;
+address_t tgtaddr, tgtadr;
+reg [23:0] tgtindex;
 reg [15:0] charcode;
 reg [31:0] charndx;
-reg [31:0] charbmp;
-reg [31:0] charbmpr;
-reg [`ABITS] charBmpBase;
+reg [63:0] charbmp;
+reg [63:0] charbmpr;
+address_t charBmpBase;
 reg [5:0] pixhc, pixvc;
 reg [31:0] charBoxX0, charBoxY0;
-copro_instruction_t tblit_ir;
-address_t tblit_ip;
+copro_instruction_t tblit_ir, hsync_ir;
+address_t tblit_ip, hsync_ip;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Drawing
@@ -555,7 +567,8 @@ reg [31:0] collision;
 reg [4:0] spriteno;
 reg sprite;
 reg [31:0] spriteEnable;
-reg [31:0] spriteActive;
+reg [31:0] spriteActive, spriteActiveB;
+wire [5:0] nxtSprite;
 reg [11:0] sprite_pv [0:31];
 reg [11:0] sprite_ph [0:31];
 reg [3:0] sprite_pz [0:31];
@@ -609,7 +622,7 @@ reg [31:0] bltDstWid, bltDstWidx;
 //  ||+-------------- done indicator
 //  |+--------------- busy indicator
 //  +---------------- trigger bit
-reg [15:0] bltCtrl,bltCtrlx;
+reg [15:0] bltCtrlx;
 reg [15:0] bltA_shift, bltB_shift, bltC_shift;
 reg [15:0] bltLWMask = 16'hFFFF;
 reg [15:0] bltFWMask = 16'hFFFF;
@@ -617,9 +630,11 @@ reg [15:0] bltFWMask = 16'hFFFF;
 reg [`ABITS] bltA_badr;               // base address
 reg [31:0] bltA_mod;                // modulo
 reg [31:0] bltA_cnt;
+reg [7:0] bltA_inc;
 reg [`ABITS] bltA_badrx;               // base address
 reg [31:0] bltA_modx;                // modulo
 reg [31:0] bltA_cntx;
+reg [7:0] bltA_incx;
 reg [`ABITS] bltA_wadr;				// working address
 reg [31:0] bltA_wcnt;				// working count
 reg [31:0] bltA_dcnt;				// working count
@@ -628,9 +643,11 @@ reg [31:0] bltA_hcnt;
 reg [`ABITS] bltB_badr;
 reg [31:0] bltB_mod;
 reg [31:0] bltB_cnt;
+reg [7:0] bltB_inc;
 reg [`ABITS] bltB_badrx;
 reg [31:0] bltB_modx;
 reg [31:0] bltB_cntx;
+reg [7:0] bltB_incx;
 reg [`ABITS] bltB_wadr;				// working address
 reg [31:0] bltB_wcnt;				// working count
 reg [31:0] bltB_dcnt;				// working count
@@ -639,9 +656,11 @@ reg [31:0] bltB_hcnt;
 reg [`ABITS] bltC_badr;
 reg [31:0] bltC_mod;
 reg [31:0] bltC_cnt;
+reg [7:0] bltC_inc;
 reg [`ABITS] bltC_badrx;
 reg [31:0] bltC_modx;
 reg [31:0] bltC_cntx;
+reg [7:0] bltC_incx;
 reg [`ABITS] bltC_wadr;				// working address
 reg [31:0] bltC_wcnt;				// working count
 reg [31:0] bltC_dcnt;				// working count
@@ -650,9 +669,11 @@ reg [31:0] bltC_hcnt;
 reg [`ABITS] bltD_badr;
 reg [31:0] bltD_mod;
 reg [31:0] bltD_cnt;
+reg [7:0] bltD_inc;
 reg [`ABITS] bltD_badrx;
 reg [31:0] bltD_modx;
 reg [31:0] bltD_cntx;
+reg [7:0] bltD_incx;
 reg [`ABITS] bltD_wadr;				// working address
 reg [31:0] bltD_wcnt;				// working count
 reg [31:0] bltD_hcnt;
@@ -681,8 +702,8 @@ reg [15:0] bltD_residue;
 
 wire [15:0] bltA_out, bltB_out, bltC_out;
 wire [15:0] bltA_out1, bltB_out1, bltC_out1;
-reg  [15:0] bltA_dat, bltB_dat, bltC_dat, bltD_dat;
-reg  [15:0] bltA_datx, bltB_datx, bltC_datx, bltD_datx;
+reg  [63:0] bltA_dat, bltB_dat, bltC_dat, bltD_dat;
+reg  [63:0] bltA_datx, bltB_datx, bltC_datx, bltD_datx;
 // Convert an input bit into a color (black or white) to allow use as a mask.
 wire [15:0] bltA_in = bltCtrlx[0] ? (blt_bmpA[bitcnt] ? 16'h7FFF : 16'h0000) : blt_bmpA;
 wire [15:0] bltB_in = bltCtrlx[2] ? (blt_bmpB[bitcnt] ? 16'h7FFF : 16'h0000) : blt_bmpB;
@@ -761,7 +782,7 @@ always_ff @(posedge clk)
 always_ff @(posedge clk)
 	bltPipedepthx <= bltPipedepth;
 
-reg [31:0] dat_ix;
+reg [63:0] dat_ix;
 wire peBltCtrl;
 wire peBltAdatx;
 wire peBltBdatx;
@@ -794,7 +815,6 @@ always_ff @(posedge clk)
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
 
-reg [19:0] vid_addr;
 wire [15:0] hpos, vpos;
 wire [15:0] hpos_mask = b[15: 0];
 wire [15:0] vpos_mask = b[31:16];
@@ -807,11 +827,11 @@ reg [15:0] vid_row,vid_col;
 always_ff @(posedge vclk)
 	vid_row <= (vpos - 16'd28) >> 1; 
 always_ff @(posedge vclk)
-	vid_col <= (hpos - 16'd208) >> 1;
+	vid_col <= (hpos - 16'd212) >> 1;
 always_ff @(posedge vclk)
 	vid_addrb <= {4'd0,vid_row} * 16'd400 + vid_col;
 always_ff @(posedge vclk)
-	vid_out <= {vid_doutb[14:10],3'b0,vid_doutb[9:5],3'b0,vid_doutb[4:0],3'b0};
+	vid_out <= rgb;
 
 function fnClip;
 input [15:0] x;
@@ -843,28 +863,51 @@ begin
 	end
 end
 
+reg signed [31:0] div_a, div_b;
+wire signed [63:0] div_qo;
+wire div_idle;
+
+AVICDivider #(.WID(64)) udiv1
+(
+	.rst(rst),
+	.clk(clk),
+	.ld(div_ld),
+	.abort(1'b0),
+	.sgn(1'b1),
+	.sgnus(1'b0),
+	.a({{16{div_a[31]}},div_a,16'h0}),
+	.b({{32{div_b[31]}},div_b}),
+	.qo(div_qo),
+	.ro(),
+	.dvByZr(),
+	.done(),
+	.idle(div_idle)
+);
+
+wire [63:0] trimult;
+AVICTriMult umul3
+(
+  .CLK(clk),
+  .A(div_qo[31:0]),
+  .B(v2x-v0x),
+  .P(trimult)
+);
+
 always_comb
 	ip2 = ip[2];
 
-reg csm,csc;
-reg [7:0] sel;
-reg we;
-reg [63:0] dat,dato;
-address_t adr;
-always_comb
-	csm = mbus.req.cyc && mbus.req.stb && mbus.req.adr[31:16]==16'hFE00;
 always_comb
 	csc = cs_copro & sbus.req.cyc & sbus.req.stb;
 always_comb
-	cs = csc | csm;
+	cs = csc | mcs;
 always_comb
-	we = csm ? mbus.req.we : sbus.req.we;
+	we = mcs ? mbus.req.we : sbus.req.we;
 always_comb
-	sel = csm ? mbus.req.sel : sbus.req.sel;
+	sel = mcs ? mbus.req.sel : sbus.req.sel;
 always_comb
-	adr = csm ? mbus.req.adr : sbus.req.adr;
+	adr = mcs ? mbus.req.adr : sbus.req.adr;
 always_comb
-	dat = csm ? mbus.req.dat : sbus.req.dat;
+	dat = mcs ? mbus.req.dat : sbus.req.dat;
 always_comb
 	sbus.resp.dat = csc ? dato : 64'd0;
 
@@ -890,6 +933,26 @@ if (rst) begin
 	clear_page_fault <= FALSE;
 	entry_no <= 32'd0;
 	cmd <= 64'd0;
+	idat <= 64'd0;
+	spriteEnable <= 32'hFFFFFFFF;
+	foreach (sprite_color[n1])
+		sprite_color[n1] <= {2{lfsro}};
+	foreach (spriteAddr[n1])
+		spriteAddr[n1] <= 32'h00101000 + 256 * n1;
+	foreach (sprite_ph[n1])
+		sprite_ph[n1] <= 16'd208 + (n1 % 8) * 34;
+	foreach (sprite_pv[n1])
+		sprite_pv[n1] <= 16'd128 + (n1 >> 3) * 34;
+	foreach (sprite_pv[n1])
+		sprite_pz[n1] <= 16'h0;
+	foreach (spriteMcnt[n1])
+		spriteMcnt[n1] <= 32*32;
+	lowres <= 2'b01;
+	cmdq_in <= 64'd0;
+	bltA_inc <= 8'd2;
+	bltB_inc <= 8'd2;
+	bltC_inc <= 8'd2;
+	bltD_inc <= 8'd2;
 end
 else begin
 	clear_page_fault <= FALSE;
@@ -898,7 +961,7 @@ else begin
 			sbus.resp.tid <= sbus.req.tid;	
 			sbus.resp.pri <= sbus.req.pri;
 		end
-		if (we) begin// 31:16==16'hFE00
+		if (we && adr[31:16]==16'hFE00) begin// 31:16==16'hFE00
 			casez(adr[14:3])
 			// Sprite color palette $000 to $7F8
 			12'b000_0???_????_?:	sprite_color[adr[10:3]] <= dat;
@@ -985,7 +1048,7 @@ else begin
 			12'b000_1101_0110_0:	bltD_badr <= dat[`ABITS];
 			12'b000_1101_0110_1:	bltD_mod <= dat;
 			12'b000_1101_0111_0:	bltD_cnt <= dat;
-			12'b000_1101_0111_1:	bltD_dat <= dat[15:0];
+			12'b000_1101_0111_1:	bltD_dat <= dat;
 
 			12'b000_1101_1000_0:	bltSrcWid <= dat;
 			12'b000_1101_1000_1:	bltDstWid <= dat;
@@ -994,17 +1057,36 @@ else begin
 			12'b000_1101_1001_1:	
 								begin
 //								if (sel[3]) bltPipedepth <= dat[29:24];
-								if (&sel[1:0]) bltCtrl <= dat[15:0];
+								if (sel[4]) bltA_inc <= dat[39:32];
+								if (sel[5]) bltB_inc <= dat[47:40];
+								if (sel[6]) bltC_inc <= dat[55:48];
+								if (sel[7]) bltD_inc <= dat[63:56];
 								end
+			// Command queue $DC0
+			12'b000_1101_1100_0:	
+				begin
+					if (&sel[5:4]) cmdq_in[47:32] <= dat[47:32];
+					if (sel[0]) cmdq_in[7:0] <= dat[7:0];
+					if (sel[1]) cmdq_in[15:8] <= dat[15:8];
+					if (sel[2]) cmdq_in[23:16] <= dat[23:16];
+					if (sel[3]) cmdq_in[31:24] <= dat[31:24];
+				end
 
+			12'b000_1111_0110_0:	spriteEnable <= dat[31:0];
+			12'b000_1111_0110_1:	spriteLink1 <= dat[31:0];
+
+	    12'b000_1111_0111_0:
+	     	begin
+					if (sel[0]) lowres <= dat[1:0];   
+				end
 			// FC0 to FCF read-only
-			12'hFA0:	clear_page_fault <= TRUE;
-			12'hFC0:	ptbr[0] <= dat;
-			12'hFC2:	ptattr[0] <= dat;
-			12'hFC4:	ptbr[1] <= dat;
-			12'hFC6:	ptattr[1] <= dat;
-			12'hFC8:	ptbr[2] <= dat;
-			12'hFCA:	ptattr[2] <= dat;
+			12'b001_1101_0000_0:	clear_page_fault <= TRUE;
+			12'b001_0000_0000_0:	ptbr[0] <= dat;
+			12'b001_0000_0001_0:	ptattr[0] <= dat;
+			12'b001_0000_0010_0:	ptbr[1] <= dat;
+			12'b001_0000_0011_0:	ptattr[1] <= dat;
+			12'b001_0000_0100_0:	ptbr[2] <= dat;
+			12'b001_0000_0101_0:	ptattr[2] <= dat;
 			default:	;
 			endcase
 			sbus.resp.ack <= dly2;
@@ -1013,19 +1095,21 @@ else begin
 		ptattr[0].log_te <= LOG_TLB_ENTRIES;
 		if (adr[31:16]==16'hFE00) begin
 			casez(adr[14:3])
+			12'b000_1101_1100_1:	dato <= CMD_FIFO_DEPTH-cmdq_cnt;
+			12'hF00:	dato <= lfsro;
 			// To 12'hFDF
-			12'hFC0:	dato <= ptbr[0];
-			12'hFC2:	dato <= ptattr[0];
-			12'hFC4:	dato <= ptbr[1];
-			12'hFC6:	dato <= ptattr[1];
-			12'hFC8:	dato <= ptbr[2];
-			12'hFCA:	dato <= ptattr[2];
-			12'hFE0:	dato <= miss_adr1[0];
-			12'hFE1:	dato <= miss_asid1[0];
-			12'hFE2:	dato <= miss_adr1[1];
-			12'hFE3:	dato <= miss_asid1[1];
-			12'hFE4:	dato <= miss_adr1[2];
-			12'hFE5:	dato <= miss_asid1[2];
+			12'b111_1110_0000_0:	dato <= ptbr[0];
+			12'b111_1110_0001_0:	dato <= ptattr[0];
+			12'b111_1110_0010_0:	dato <= ptbr[1];
+			12'b111_1110_0011_0:	dato <= ptattr[1];
+			12'b111_1110_0100_0:	dato <= ptbr[2];
+			12'b111_1110_0101_0:	dato <= ptattr[2];
+			12'b111_1111_0000_0:	dato <= miss_adr1[0];
+			12'b111_1111_0000_1:	dato <= miss_asid1[0];
+			12'b111_1111_0001_0:	dato <= miss_adr1[1];
+			12'b111_1111_0001_1:	dato <= miss_asid1[1];
+			12'b111_1111_0010_0:	dato <= miss_adr1[2];
+			12'b111_1111_0010_1:	dato <= miss_asid1[2];
 			default:	dato <= doutb2;
 			endcase
 			sbus.resp.ack <= dly2;
@@ -1033,27 +1117,34 @@ else begin
 	end
 	else
 		sbus.resp.ack <= LOW;
-	if (mcs)
-		if (mbus.req.adr[31:16]==16'hFE00) begin
-			casez(mbus.req.adr[14:3])
+	if (mcs) begin
+		if (adr[31:16]==16'hFE00) begin
+			casez(adr[14:3])
+			12'b000_1101_1001_1:	idat <= bltCtrlx;
+			12'b000_1101_1100_1:	idat <= CMD_FIFO_DEPTH-cmdq_cnt;
+			12'b000_1111_0111_0:	idat <= collision;
+			12'b111_1000_0000_0:	idat <= lfsro;
 			// To 12'hFDF
-			12'hFC0:	idat <= ptbr[0];
-			12'hFC2:	idat <= ptattr[0];
-			12'hFC4:	idat <= ptbr[1];
-			12'hFC6:	idat <= ptattr[1];
-			12'hFC8:	idat <= ptbr[2];
-			12'hFCA:	idat <= ptattr[2];
-			12'hFE0:	idat <= miss_adr1[0];
-			12'hFE1:	idat <= miss_asid1[0];
-			12'hFE2:	idat <= miss_adr1[1];
-			12'hFE3:	idat <= miss_asid1[1];
-			12'hFE4:	idat <= miss_adr1[2];
-			12'hFE5:	idat <= miss_asid1[2];
+			12'b111_1110_0000_0:	idat <= ptbr[0];
+			12'b111_1110_0001_0:	idat <= ptattr[0];
+			12'b111_1110_0010_0:	idat <= ptbr[1];
+			12'b111_1110_0011_0:	idat <= ptattr[1];
+			12'b111_1110_0100_0:	idat <= ptbr[2];
+			12'b111_1110_0101_0:	idat <= ptattr[2];
+			12'b111_1111_0000_0:	idat <= miss_adr1[0];
+			12'b111_1111_0000_1:	idat <= miss_asid1[0];
+			12'b111_1111_0001_0:	idat <= miss_adr1[1];
+			12'b111_1111_0001_1:	idat <= miss_asid1[1];
+			12'b111_1111_0010_0:	idat <= miss_adr1[2];
+			12'b111_1111_0010_1:	idat <= miss_asid1[2];
 			default:	idat <= douta2;
 			endcase
 		end
-		else if (mbus.req.adr[31:20]==12'h001)
+		else if (adr[31:20]==12'h001)
 			idat <= vid_douta;
+		else if (adr[31:20]==12'h000)
+			idat <= douta;
+	end
 end
 
 always_ff @(posedge clk)
@@ -1069,8 +1160,8 @@ always_ff @(posedge clk)
 // Xilinx Parameterized Macro, version 2025.1
 
 xpm_memory_tdpram #(
-  .ADDR_WIDTH_A(9),               // DECIMAL
-  .ADDR_WIDTH_B(9),               // DECIMAL
+  .ADDR_WIDTH_A(10),               // DECIMAL
+  .ADDR_WIDTH_B(10),               // DECIMAL
   .AUTO_SLEEP_TIME(0),            // DECIMAL
   .BYTE_WRITE_WIDTH_A(8),        // DECIMAL
   .BYTE_WRITE_WIDTH_B(8),        // DECIMAL
@@ -1084,7 +1175,7 @@ xpm_memory_tdpram #(
   .MEMORY_INIT_PARAM("0"),        // String
   .MEMORY_OPTIMIZATION("true"),   // String
   .MEMORY_PRIMITIVE("auto"),      // String
-  .MEMORY_SIZE(512*64),           // DECIMAL
+  .MEMORY_SIZE(1024*64),           // DECIMAL
   .MESSAGE_CONTROL(0),            // DECIMAL
   .RAM_DECOMP("auto"),            // String
   .READ_DATA_WIDTH_A(64),         // DECIMAL
@@ -1139,13 +1230,10 @@ ureg_shadow1
 // Command queue
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-always_comb
-	cmdq_in = mbus.req.dat;
-
 fifo
 #(
 	.WIDTH(64),
-	.DEPTH(1024)
+	.DEPTH(CMD_FIFO_DEPTH)
 )
 ucmdfifo1
 (
@@ -1161,6 +1249,7 @@ ucmdfifo1
 edge_det ued20 (.rst(rst), .clk(clk), .ce(1'b1), .i(rdy1), .pe(cmdp), .ne(), .ee());
 
 wire pe_hsync;
+wire pe_hsync2;
 wire pe_vsync;
 wire pe_vsync2;
 edge_det edh1
@@ -1170,6 +1259,17 @@ edge_det edh1
 	.ce(1'b1),
 	.i(hsync_i),
 	.pe(pe_hsync),
+	.ne(),
+	.ee()
+);
+
+edge_det edh2
+(
+	.rst(rst),
+	.clk(clk),
+	.ce(1'b1),
+	.i(hsync_i),
+	.pe(pe_hsync2),
 	.ne(),
 	.ee()
 );
@@ -1422,6 +1522,7 @@ unip1
 	.ip(ip),
 	.ipr(ipr),
 	.tblit_ip(tblit_ip),
+	.hsync_ip(hsync_ip),
 	.cmdq_empty(cmdq_empty),
 	.next_ip(next_ip)
 );
@@ -1457,6 +1558,8 @@ else
 
 always_comb
 	flush_trig = flush_trig1[0];
+
+reg hsync_det,vsync_det;
 
 always @(posedge clk)
 if (rst) begin
@@ -1503,15 +1606,19 @@ if (rst) begin
 	cc <= 32'h00010000;
 	ct <= 32'h00000000;
 	alpha <= 16'h8000;
-	bltCtrl <= 16'd0;
 	bltCtrlx <= 16'd0;
 	bltCtrlx[13] <= 1'b1;	// Blitter is "done" to begin with.
 	pen_color <= 24'h0003e0;
 	fill_color <= 24'h007c00;
-	tblit_active <= FALSE;
-	tblit_state <= st_ifetch;
 	font_tbl_adr <= 32'h00008000;
 	font_id <= 16'h0000;
+	tblit_active <= FALSE;
+	tblit_state <= st_ifetch;
+	hsync_det <= FALSE;
+	vsync_det <= FALSE;
+	spriteno <= 5'd31;
+	div_ld <= FALSE;
+	zbuf <= FALSE;
   tGoto(st_reset);
 end
 else begin
@@ -1524,8 +1631,13 @@ else begin
 	icnta <= 32'd0;
 	missack <= FALSE;
 	flush_trig1 <= {1'b0,flush_trig1[3:1]};
+	div_ld <= FALSE;
 	if (clear_page_fault)
 		page_fault <= FALSE;
+	if (pe_hsync2)
+		hsync_det <= TRUE;
+	if (pe_vsync2)
+		vsync_det <= TRUE;
 	
 	wr_aud0 <= FALSE;
 	wr_aud1 <= FALSE;
@@ -1599,6 +1711,11 @@ st_reset:
 st_reset2:
 	begin
 		ir <= next_ir;
+		tGoto(st_execute);
+	end
+st_hsync_iret:
+	begin
+		ir <= hsync_ir;
 		tGoto(st_execute);
 	end
 st_tblit_iret:
@@ -1706,7 +1823,15 @@ st_ifetch:
 				irq_status[3] <= 1'b1;
 			tGoto(st_audi);
 		end
-		else if (pe_vsync2) begin
+		else if (hsync_det) begin
+			hsync_det <= FALSE;
+			hsync_ir <= ir;
+			hsync_ip <= ip;
+			sleep <= FALSE;
+			tCall(st_hsync,st_hsync_iret);
+		end
+		else if (vsync_det) begin
+			vsync_det <= FALSE;
 			sleep <= FALSE;
 			stack[(sp+15) % 16] <= {2'b01,ip,r8,r7,r6,r5,r4,r3,r2,r1};
 			sp <= sp - 1;
@@ -1784,10 +1909,12 @@ st_ifetch:
 			end
 			tGoto(st_ifetch);
 		end
-//		else if (ctrl[14]) begin
-		else if (ngs != st_ifetch) begin
+		else if (ctrl[14]) begin
+//		else if (ngs != st_ifetch) begin
 			tGoto(ngs);
 		end
+		// Command queue is read only if a previous blitter or shape draw operation
+		// is complete.
 		else if (!cmdq_empty) begin
 			rd_cmd_fifo <= TRUE;
 			tCall(st_gr_cmd,st_execute);
@@ -1857,26 +1984,26 @@ st_execute:
 
 		// Conditional jumps
 		// Conditional jumps need an exta state to allow the BRAM to be accessed
-		// after the address change. So, we go to prefetch instead of ifetch.
-		// We also do not want to go through writeback which would increment the
-		// address.
+		// after the address change. So, we go to prefetch instead of ifetch but
+		// only if the branch is taken. Branches thus take 2 clock cycles if not
+		// taken, and 3 clock cycles if taken.
 		OP_JCC:
 			case(ir.Rd)
-			JEQ:	if (takb) tGoto(st_prefetch);
-			JNE:	if (takb) tGoto(st_prefetch);
-			JLT:	if (takb) tGoto(st_prefetch);
-			JLE:	if (takb) tGoto(st_prefetch);
-			JGE:	if (takb) tGoto(st_prefetch);
-			JGT:	if (takb) tGoto(st_prefetch);
+			JEQ:	if (takb) tGoto(st_prefetch); else tGoto(st_ifetch);
+			JNE:	if (takb) tGoto(st_prefetch); else tGoto(st_ifetch);
+			JLT:	if (takb) tGoto(st_prefetch); else tGoto(st_ifetch);
+			JLE:	if (takb) tGoto(st_prefetch); else tGoto(st_ifetch);
+			JGE:	if (takb) tGoto(st_prefetch); else tGoto(st_ifetch);
+			JGT:	if (takb) tGoto(st_prefetch); else tGoto(st_ifetch);
 			DJNE:
 				begin
 					// Ugh, this update must be done here.
+					// We also do not want to exit through the writeback state.
 					tWriteback(ir.Rs1,a-1);
-					if (takb)
-						tGoto(st_prefetch);
+					tGoto(st_prefetch);
 				end
-			JGEP:	if (takb) tGoto(st_prefetch);
-			JLEP:	if (takb) tGoto(st_prefetch);
+			JGEP:	if (takb) tGoto(st_prefetch); else tGoto(st_ifetch);
+			JLEP:	if (takb) tGoto(st_prefetch); else tGoto(st_ifetch);
 			default:	;
 			endcase
 
@@ -1987,11 +2114,27 @@ st_execute:
 				mbus.req.we <= HIGH;
 				mbus.req.sel <= 8'hFF;// << {tmp[4:3],3'b0};
 				mbus.req.adr <= tmp;
-				mbus.req.dat <= {4{b}};
+				mbus.req.dat <= b;
 				roma <= tmp;
-				if (tmp[31:16]!=16'h0000 && tmp[31:20]!=12'h001) begin
+				if (tmp[31:16]!=16'h0000 && tmp[31:20]!=12'h001)
 				  tGoto(st_mem_store);
-				end
+				else
+					tGoto(st_prefetch);
+			end
+		OP_STOREW:
+			begin
+				tmp = a + {{17{ir.imm[14]}},ir.imm};
+				mbus.req.cyc <= tmp[31:16]!=16'h0000;
+				mbus.req.stb <= tmp[31:16]!=16'h0000;
+				mbus.req.we <= HIGH;
+				mbus.req.sel <= 8'h03 << {tmp[2:1],1'b0};
+				mbus.req.adr <= tmp;
+				mbus.req.dat <= {4{b[15:0]}};
+				roma <= tmp;
+				if (tmp[31:16]!=16'h0000 && tmp[31:20]!=12'h001)
+				  tGoto(st_mem_store);
+				else
+					tGoto(st_prefetch);
 			end
 		OP_STOREI:
 			begin
@@ -2003,9 +2146,10 @@ st_execute:
 				mbus.req.adr <= tmp;
 				mbus.req.dat <= {4{60'd0,ir.Rd}};
 				roma <= tmp;
-				if (tmp[31:16]!=16'h0000 && tmp[31:20]!=12'h001) begin
+				if (tmp[31:16]!=16'h0000 && tmp[31:20]!=12'h001)
 				  tGoto(st_mem_store);
-				end
+				else
+					tGoto(st_prefetch);
 			end
 		OP_STOREI64:
 			begin
@@ -2043,7 +2187,6 @@ st_execute:
 		OP_AND: begin tWriteback(ir.Rd, a & b & {{17{ir.imm[14]}},ir.imm}); tGoto(st_ifetch); end
 		OP_OR:	begin tWriteback(ir.Rd, a | b | {{17{ir.imm[14]}},ir.imm}); tGoto(st_ifetch); end
 		OP_XOR:	begin tWriteback(ir.Rd, a ^ b ^ {{17{ir.imm[14]}},ir.imm}); tGoto(st_ifetch); end
-		
 		default:;
 		endcase
 	end
@@ -2175,8 +2318,8 @@ st_mem_load:
 							endcase
 						end
 						else begin
-							mem_val <= (imresp.dat >> {mbus.req.adr[7:6],6'd0}) & ~(64'd1 << mbus.req.adr[5:0]);
-							res <= imresp.dat >> mbus.req.adr[7:0] & 64'd1;
+							mem_val <= imresp.dat & ~(64'd1 << mbus.req.adr[5:0]);
+							res <= imresp.dat >> mbus.req.adr[5:0] & 64'd1;
 							tGoto(st_bit_store);
 						end
 					end
@@ -2201,8 +2344,8 @@ st_mem_load:
 							endcase
 						end
 						else begin
-							mem_val <= imresp.dat >> {mbus.req.adr[7:6],6'd0} | (64'd1 << mbus.req.adr[5:0]);
-							res <= imresp.dat >> mbus.req.adr[7:0] & 64'd1;
+							mem_val <= imresp.dat | (64'd1 << mbus.req.adr[5:0]);
+							res <= imresp.dat >> mbus.req.adr[5:0] & 64'd1;
 							tGoto(st_bit_store);
 						end
 					end
@@ -2225,8 +2368,8 @@ st_mem_load:
 							endcase
 						end
 						else begin
-							mem_val <= imresp.dat >> {mbus.req.adr[7:6],6'd0} | (64'd1 << mbus.req.adr[5:0]);
-							res <= imresp.dat >> mbus.req.adr[7:0] & 64'd1;
+							mem_val <= imresp.dat | (64'd1 << mbus.req.adr[5:0]);
+							res <= imresp.dat >> mbus.req.adr[5:0] & 64'd1;
 						end
 					end
 				4'd3:	// BMCHG
@@ -2250,8 +2393,8 @@ st_mem_load:
 							endcase
 						end
 						else begin
-							mem_val <= imresp.dat >> {mbus.req.adr[7:6],6'd0} ^ (64'd1 << mbus.req.adr[5:0]);
-							res <= imresp.dat >> mbus.req.adr[7:0] & 64'd1;
+							mem_val <= imresp.dat ^ (64'd1 << mbus.req.adr[5:0]);
+							res <= imresp.dat >> mbus.req.adr[5:0] & 64'd1;
 							tGoto(st_bit_store);
 						end
 					end
@@ -2266,7 +2409,7 @@ st_mem_load:
 				end
 				else begin
 					rfwr <= TRUE;
-				  res <= imresp.dat >> {mbus.req.adr[5:4],6'd0};
+				  res <= imresp.dat;
 				end
 			endcase
 		end
@@ -2275,8 +2418,9 @@ st_mem_load:
 st_bit_store:
 	if (!imresp.ack) begin
 		tmp = (a >> 4'd6) + {{17{ir.imm[14]}},ir.imm};
-		mbus.req.cyc <= tmp[31:16]!=16'h0000;
-		mbus.req.stb <= tmp[31:16]!=16'h0000;
+		local_sel <= tmp[31:20] <= 12'h001;
+		mbus.req.cyc <= HIGH;
+		mbus.req.stb <= HIGH;
 		mbus.req.we <= HIGH;
 		mbus.req.sel <= 8'hFF;// << {tmp[4:3],3'b0};
 		mbus.req.adr <= tmp;
@@ -2286,9 +2430,10 @@ st_bit_store:
 			cmd_done <= mem_val[1];
 		end
 		roma <= tmp;
-		if (tmp[31:16]!=16'h0000 && tmp[31:20]!=12'h001) begin
+		if (tmp[31:20]>12'h001)
 		  tGoto(st_mem_store);
-		end
+		else
+			tGoto(st_prefetch);
 	end
 
 st_mem_store:
@@ -2433,8 +2578,8 @@ st_gr_cmd:
 		8'd42:	begin cc <= cmdq_out[`CMDDAT]; tRet(); end
 		8'd43:	begin ct <= cmdq_out[`CMDDAT]; tRet(); end
 
-		8'd73:	begin font_tbl_adr <= cmdq_out[`CMDDAT]; tRet(); end
-		8'd74:	begin font_id <= cmdq_out[`CMDDAT]; tRet(); end
+		8'd44:	begin font_tbl_adr <= cmdq_out[`CMDDAT]; tRet(); end
+		8'd45:	begin font_id <= cmdq_out[`CMDDAT]; tRet(); end
 
 		8'd254:	begin rst_cmdq <= TRUE; tRet(); end
 		8'd255:	tRet();	// NOP
@@ -2464,8 +2609,10 @@ st_gr_cmd:
 
 st_read_font_tbl:
 	begin
-		pixhc <= 5'd0;
-		pixvc <= 5'd0;
+		pixhc <= 6'd0;
+		pixvc <= 6'd0;
+		charBoxX0 <= p0x;
+		charBoxY0 <= p0y;
 		local_sel <= TRUE;
     mbus.req.cyc <= HIGH;
     mbus.req.stb <= HIGH;
@@ -2484,8 +2631,8 @@ st_read_font_tbl_nack:
 	end
 st_read_font_tbl2:
 	begin
-		pixhc <= 5'd0;
-		pixvc <= 5'd0;
+		pixhc <= 6'd0;
+		pixvc <= 6'd0;
 		local_sel <= TRUE;
     mbus.req.cyc <= HIGH;
     mbus.req.stb <= HIGH;
@@ -2505,8 +2652,6 @@ st_read_font_tbl2_nack:
 	end
 st_read_glyph_entry:
 	begin
-		charBoxX0 <= p0x;
-		charBoxY0 <= p0y;
 		charBmpBase <= charBmpBase + charndx;
 		if (font_fixed) begin
 			tblit_state <= st_read_char_bitmap;
@@ -2516,14 +2661,14 @@ st_read_glyph_entry:
 			local_sel <= TRUE;
 			mbus.req.cyc <= HIGH;
 		  mbus.req.sel <= 8'hFF;
-			mbus.req.adr <= {glyph_tbl_adr[31:3],3'h0} + {charcode[8:4],4'h0};
+			mbus.req.adr <= {glyph_tbl_adr[31:3],3'h0} + {charcode[8:3],3'h0};
 			tocnt <= busto;
 			tCall(st_latch_data,st_read_glyph_entry_nack);
 		end
 	end
 st_read_glyph_entry_nack:
 	if (~imresp.ack) begin
-		font_width <= latched_data >> {charcode[3:0],3'b0};
+		font_width <= latched_data >> {charcode[2:0],3'b0};
 		tblit_state <= st_read_char_bitmap;
 		tRet();
 	end
@@ -2532,7 +2677,7 @@ st_read_char_bitmap:
 		local_sel <= TRUE;
 		mbus.req.cyc <= HIGH;
 	  mbus.req.sel <= 8'hFF;
-		mbus.req.adr <= charBmpBase + (pixvc << font_width[4:3]);
+		mbus.req.adr <= charBmpBase + (16'(pixvc) << font_width[4:3]);
 		tocnt <= busto;
 		tCall(st_latch_data,st_read_char_bitmap_nack);
 	end
@@ -2541,19 +2686,39 @@ st_read_char_bitmap_nack:
 		case(font_width[4:3])
 		2'd0:	charbmp <= (latched_data >> {mbus.req.adr[2:0],3'b0}) & 32'h0ff;
 		2'd1:	charbmp <= (latched_data >> {mbus.req.adr[2:1],4'b0}) & 32'h0ffff;
-		2'd2:	charbmp <= latched_data >> {mbus.req.adr[2],5'b0};
+		2'd2:	charbmp <= latched_data >> {mbus.req.adr[2],5'b0} & 32'hffffffff;
 		2'd3:	charbmp <= latched_data;
 		endcase
-		tgtaddr <= {8'h00,fixToInt(charBoxY0)} * {4'h00,TargetWidth,1'b0} + TargetBase + {fixToInt(charBoxX0),1'b0};
-		tgtindex <= {14'h00,pixvc} * {4'h00,TargetWidth,1'b0};
-		tblit_state <= st_write_char;
+		tgtaddr <= fixToInt(charBoxY0) * {TargetWidth,1'b0} + TargetBase + {fixToInt(charBoxX0),1'b0};
+		tgtindex <= {TargetWidth,1'b0} * pixvc + {pixhc,1'b0};
+		tblit_state <= fill_color[31] ? st_read_char : st_write_char;
 		tRet();
 	end
+st_read_char:
+	begin
+		tgtadr <= tgtaddr + tgtindex;
+		tGoto(st_read_char2);
+	end
+st_read_char2:
+	begin
+		local_sel <= TRUE;
+		mbus.req.cyc <= HIGH;
+		mbus.req.stb <= HIGH;
+		mbus.req.we <= LOW;
+		mbus.req.sel <= 8'd3 << {tgtadr[2:1],1'b0};
+		mbus.req.adr <= tgtadr;
+		mbus.req.dat <= 64'd0;
+		tocnt <= busto;
+		tCall(st_latch_data,st_write_char);
+	end
 st_write_char:
-	tGoto(st_write_char1);
+	begin
+		latched_data <= latched_data >> {tgtadr[2:1],4'b0};
+		tGoto(st_write_char1);
+	end
 st_write_char1:
 	begin
-		tgtadr <= tgtaddr + tgtindex + {14'h00,pixhc,1'b0};
+		tgtadr <= tgtaddr + tgtindex;
 		tGoto(st_write_char2);
 	end
 st_write_char2:
@@ -2570,7 +2735,9 @@ st_write_char2:
 				mbus.req.we <= HIGH;
 				mbus.req.sel <= 8'd3 << {tgtadr[2:1],1'b0};
 				mbus.req.adr <= tgtadr;
-				mbus.req.dat <= {4{charbmp[0] ? pen_color[15:0] : fill_color[15:0]}};
+				mbus.req.dat <= {4{charbmp[0] ? pen_color[15:0] :
+					fill_color[31] ? latched_data[15:0] :
+					fill_color[15:0]}};
 				tocnt <= busto;
 			end
 		end
@@ -2612,12 +2779,13 @@ st_write_char2:
 				end
 			end
 		end
-		charbmp <= {1'b0,charbmp[31:1]};
-		pixhc <= pixhc + 5'd1;
+		charbmp <= {1'b0,charbmp[63:1]};
+		pixhc <= pixhc + 6'd1;
 		if (pixhc==font_width) begin
 			tblit_state <= st_read_char_bitmap;
-	    pixhc <= 5'd0;
-	    pixvc <= pixvc + 5'd1;
+	    pixhc <= 6'd0;
+	    pixvc <= pixvc + 6'd1;
+			tgtindex <= ({TargetWidth,1'b0}) * (pixvc + 6'd1);
 	    if (clipEnable && (fixToInt(charBoxY0) + pixvc + 16'd1 >= clipY1))
 	    	tblit_active <= FALSE;
 	    else if (fixToInt(charBoxY0) + pixvc + 16'd1 >= TargetHeight)
@@ -2625,9 +2793,11 @@ st_write_char2:
 	    else if (pixvc==font_height)
 	    	tblit_active <= FALSE;
 		end
-		else
-			tblit_state <= st_write_char;
-		tCall(st_latch_data,st_write_char2_nack);
+		else begin
+			tblit_state <= fill_color[31] ? st_read_char : st_write_char;
+			tgtindex <= {TargetWidth,1'b0} * pixvc + {pixhc+6'd1,1'b0};
+		end
+		tCall(st_wait_ack,st_write_char2_nack);
 	end
 st_write_char2_nack:
 	if (~imresp.ack) begin
@@ -2669,11 +2839,15 @@ st_plot_write:
 	end
 
 st_wait_ack:
-	// If setpixel avoided the bus transaction cyc and stb will not be present.
-	if ((imresp.ack|local_sel) || !(mbus.req.cyc & mbus.req.stb)) begin
-		local_sel <= FALSE;
-		mbus.req <= {$bits(wb_cmd_request256_t){1'b0}};
-		tGoto(st_delay1);
+	begin
+		tocnt <= tocnt - 1;
+		// If setpixel avoided the bus transaction cyc and stb will not be present.
+		if (imresp.ack || !(mbus.req.cyc & mbus.req.stb) || tocnt==8'd0) begin
+			tocnt <= busto;
+			local_sel <= FALSE;
+			mbus.req <= {$bits(wb_cmd_request256_t){1'b0}};
+			tGoto(st_delay1);
+		end
 	end
 
 // -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
@@ -2743,6 +2917,10 @@ st_fillrect:
 		// then delay 1 cycle for point switching
 		if (bltCtrlx[13]||!(bltCtrlx[15]||bltCtrlx[14]))
 			tCall(st_delay1,st_fillrect_clip);
+		else begin
+			ngs <= st_fillrect;
+			tRet();
+		end
 	end
 st_fillrect_clip:
 	begin
@@ -2758,9 +2936,308 @@ st_fillrect2:
 		bltD_modx <= {TargetWidth - dx,1'b0};
 		bltD_cntx <= dx * dy;
 		bltDstWidx <= dx;
-		bltD_datx <= fill_color[15:0];
+		bltD_datx <= {4{fill_color[15:0]}};
 		bltCtrlx[15:0] <= 16'h8080;
+		ngs <= st_ifetch;
 		tRet();
+	end
+
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+// Filled Triangle drawing
+// Uses the standard method for drawing filled triangles.
+// Requires some fixed point math and division / multiplication.
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+// Save off the original set of points defining the triangle. The points are
+// manipulated later by the anti-aliasing outline draw.
+
+st_dt_start:								// allows p?? to update
+  begin
+    up0xs <= up0x;
+    up0ys <= up0y;
+    up0zs <= up0z;
+    up1xs <= up1x;
+    up1ys <= up1y;
+    up1zs <= up1z;
+    up2xs <= up2x;
+    up2ys <= up2y;
+    up2zs <= up2z;
+		tGoto(st_dt_sort);
+	end
+
+// First step - sort vertices
+// Sort points in order of Y coordinate. Also find the minimum and maximum
+// extent of the triangle.
+st_dt_sort:
+	begin
+		ctrl[14] <= 1'b1;				// set busy indicator
+		// Just draw a horizontal line if all vertices have the same y co-ord.
+		if (p0y == p1y && p0y == p2y) begin
+		   if (p0x < p1x && p0x < p2x)
+		       curx0 <= p0x;
+		   else if (p1x < p2x)
+		       curx0 <= p1x;
+		   else
+		       curx0 <= p2x;
+		   if (p0x > p1x && p0x > p2x)
+		       curx1 <= p0x;
+		   else if (p1x > p2x)
+		       curx1 <= p1x;
+		   else
+		       curx1 <= p2x;
+		   gcy <= fixToInt(p0y);
+       tGoto(st_hl_line);
+		end
+		else if (p0y <= p1y && p0y <= p2y) begin
+		  minY <= p0y;
+			v0x <= p0x;
+			v0y <= p0y;
+			if (p1y <= p2y) begin
+				v1x <= p1x;
+				v1y <= p1y;
+				v2x <= p2x;
+				v2y <= p2y;
+				maxY <= p2y;
+			end
+			else begin
+				v1x <= p2x;
+				v1y <= p2y;
+				v2x <= p1x;
+				v2y <= p1y;
+				maxY <= p1y;
+			end
+		end
+		else if (p1y <= p2y) begin
+		  minY <= p1y;
+			v0y <= p1y;
+			v0x <= p1x;
+			if (p0y <= p2y) begin
+				v1y <= p0y;
+				v1x <= p0x;
+				v2y <= p2y;
+				v2x <= p2x;
+				maxY <= p2y;
+			end
+			else begin
+				v1y <= p2y;
+				v1x <= p2x;
+				v2y <= p0y;
+				v2x <= p0x;
+				maxY <= p0y;
+			end
+		end
+		// y2 < y0 && y2 < y1
+		else begin
+			v0y <= p2y;
+			v0x <= p2x;
+			minY <= p2y;
+			if (p0y <= p1y) begin
+				v1y <= p0y;
+				v1x <= p0x;
+				v2y <= p1y;
+				v2x <= p1x;
+				maxY <= p1y;
+			end
+			else begin
+				v1y <= p1y;
+				v1x <= p1x;
+				v2y <= p0y;
+				v2x <= p0x;
+				maxY <= p0y;
+			end
+		end
+		// Determine minium and maximum X coord.
+		if (p0x <= p1x && p0x <= p2x) begin
+		    minX <= p0x;
+		    if (p1x <= p2x)
+		        maxX <= p2x;
+		    else
+		        maxX <= p1x;
+		end
+		else if (p1x <= p2x) begin
+		    minX <= p1x;
+		    if (p0x <= p2x)
+		        maxX <= p2x;
+		    else
+		        maxX <= p0x;
+		end
+		else begin
+		    minX <= p2x;
+		    if (p0x < p1x)
+		        maxX <= p1x;
+		    else
+		        maxX <= p0x;
+		end
+		    
+		tGoto(st_dt1);
+	end
+
+// Flat bottom (FB) or flat top (FT) triangle drawing
+// Calc inv slopes
+st_dt_slope1:
+	begin
+		div_ld <= TRUE;
+		if (fbt) begin
+			div_a <= w1x - w0x;
+			div_b <= w1y - w0y;
+		end
+		else begin
+			div_a <= w2x - w0x;
+			div_b <= w2y - w0y;
+		end
+		tPause(st_dt_slope1a);
+	end
+st_dt_slope1a:
+	if (div_idle) begin
+		invslope0 <= div_qo[31:0];
+		if (fbt) begin
+			div_a <= w2x - w0x;
+			div_b <= w2y - w0y;
+		end
+		else begin
+			div_a <= w2x - w1x;
+			div_b <= w2y - w1y;
+		end
+		div_ld <= TRUE;
+		tPause(st_dt_slope2);
+	end
+st_dt_slope2:
+	if (div_idle) begin
+		invslope1 <= div_qo[31:0];
+	    if (fbt) begin
+		    curx0 <= w0x;
+	   	    curx1 <= w0x;
+			gcy <= fixToInt(w0y);
+			tCall(st_hl_line,st_dt_incy);
+		end
+		else begin
+		    curx0 <= w2x;
+	        curx1 <= w2x;
+	        gcy <= fixToInt(w2y);
+			tCall(st_hl_line,st_dt_incy);
+		end
+	end
+st_dt_incy:
+	begin
+		if (fbt) begin
+		    if (curx0 + invslope0 < minX)
+		        curx0 <= minX;
+		    else if (curx0 + invslope0 > maxX)
+		        curx0 <= maxX;
+		    else
+			    curx0 <= curx0 + invslope0;
+			if (curx1 + invslope1 < minX)
+			    curx1 <= minX;
+			else if (curx1 + invslope1 > maxX)
+			    curx1 <= maxX;
+			else
+			    curx1 <= curx1 + invslope1;
+			gcy <= gcy + 16'd1;
+			if (gcy>=fixToInt(w1y))
+				tRet();
+			else
+				tCall(st_hl_line,st_dt_incy);
+		end
+		else begin
+	    if (curx0 - invslope0 < minX)
+        curx0 <= minX;
+      else if (curx0 - invslope0 > maxX)
+        curx0 <= maxX;
+      else
+        curx0 <= curx0 - invslope0;
+      if (curx1 - invslope1 < minX)
+        curx1 <= minX;
+      else if (curx1 - invslope1 > maxX)
+        curx1 <= maxX;
+      else
+        curx1 <= curx1 - invslope1;
+			gcy <= gcy - 16'd1;
+			if (gcy<fixToInt(w0y))
+				tRet();
+			else
+				tCall(st_hl_line,st_dt_incy);
+		end
+	end
+
+st_dt1:
+	begin
+		// Simple case of flat bottom
+		if (v1y==v2y) begin
+			fbt <= 1'b1;
+			w0x <= v0x;
+			w0y <= v0y;
+			w1x <= v1x;
+			w1y <= v1y;
+			w2x <= v2x;
+			w2y <= v2y;
+			tCall(st_dt_slope1,st_dt6);
+		end
+		// Simple case of flat top
+		else if (v0y==v1y) begin
+			fbt <= 1'b0;
+			w0x <= v0x;
+			w0y <= v0y;
+			w1x <= v1x;
+			w1y <= v1y;
+			w2x <= v2x;
+			w2y <= v2y;
+			tCall(st_dt_slope1,st_dt6);
+		end
+		// Need to calculte 4th vertice
+		else begin
+			div_ld <= TRUE;
+			div_a <= v1y - v0y;
+			div_b <= v2y - v0y;
+			tPause(st_dt2);
+		end
+	end
+st_dt2:
+	if (div_idle) begin
+		trimd <= 8'b11111111;
+		v3y <= v1y;
+		tGoto(st_dt3);
+	end
+st_dt3:
+	begin
+		trimd <= {trimd[6:0],1'b0};
+		if (trimd==8'h00) begin
+			v3x <= v0x + trimult[47:16];
+			v3x[15:0] <= 16'h0000;
+			tGoto(st_dt4);
+		end
+	end
+st_dt4:
+	begin
+		fbt <= 1'b1;
+		w0x <= v0x;
+		w0y <= v0y;
+		w1x <= v1x;
+		w1y <= v1y;
+		w2x <= v3x;
+		w2y <= v3y;
+		tCall(st_dt_slope1,st_dt5);
+	end
+st_dt5:
+	begin
+		fbt <= 1'b0;
+		w0x <= v1x;
+		w0y <= v1y;
+		w1x <= v3x;
+		w1y <= v3y;
+		w2x <= v2x;
+		w2y <= v2y;
+		tCall(st_dt_slope1,st_dt6);
+	end
+st_dt6:
+	begin
+		ngs <= st_ifetch;
+		if (retstacko==st_ifetch) begin
+      ctrl[14] <= 1'b0;
+      tRet();
+	    //tGoto(DT7);
+		end
+		else
+	    tRet();
 	end
 
 // -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
@@ -2775,7 +3252,7 @@ st_bltdma2:
 	  mbus.req.cyc <= HIGH;
 	  mbus.req.stb <= HIGH;
 		mbus.req.adr <= bltA_wadr;
-		bltinc <= bltCtrl[8] ? 32'hFFFFFFFE : 32'd2;
+		bltinc <= bltCtrlx[8] ? -32'(bltA_inc) : bltA_inc;
 		tCall(st_latch_data,st_bltdma2_nack);
     end
 st_bltdma2_nack:
@@ -2814,7 +3291,7 @@ st_bltdma4:
 		mbus.req.stb <= HIGH;
 		mbus.req.sel <= 8'h03 << {bltB_wadr[2:1],1'b0};
 		mbus.req.adr <= bltB_wadr;
-		bltinc <= bltCtrlx[9] ? 32'hFFFFFFFE : 32'd2;
+		bltinc <= bltCtrlx[9] ? -32'(bltB_inc) : bltB_inc;
 		tCall(st_latch_data,st_bltdma4_nack);
 	end
 st_bltdma4_nack:
@@ -2853,7 +3330,7 @@ st_bltdma6:
 		mbus.req.stb <= HIGH;
 		mbus.req.sel <= 8'h3 << {bltC_wadr[2:1],1'b0};
 		mbus.req.adr <= bltC_wadr;
-		bltinc <= bltCtrlx[10] ? 32'hFFFFFFFE : 32'd2;
+		bltinc <= bltCtrlx[10] ? -32'(bltC_inc) : bltC_inc;
 		tCall(st_latch_data,st_bltdma6_nack);		
 	end
 st_bltdma6_nack:
@@ -2888,21 +3365,33 @@ st_bltdma6_nack:
 	// Blit channel D
 st_bltdma8:
 	begin
+		if (bltD_wadr[31:20] <= 12'h001) begin
+			local_sel <= TRUE;
+			tGoto(st_bltdma8_nack);
+		end
+		else
+			tCall(st_wait_ack,st_bltdma8_nack);
 		mbus.req.cyc <= HIGH;
 		mbus.req.stb <= HIGH;
 		mbus.req.we <= HIGH;
-		mbus.req.sel <= 8'h03 << {bltD_wadr[2:1],1'b0};
+		case(bltD_inc)
+		8'd1:	mbus.req.sel <= 8'h01 << bltD_wadr[2:0];
+		8'd2:	mbus.req.sel <= 8'h03 << {bltD_wadr[2:1],1'b0};
+		8'd4:	mbus.req.sel <= 8'h0F << {bltD_wadr[2],2'b0};
+		default:	mbus.req.sel <= 8'hFF;
+		endcase
 		mbus.req.adr <= bltD_wadr;
 		// If there's no source then a fill operation must be taking place.
 		if (bltCtrlx[1]|bltCtrlx[3]|bltCtrlx[5])
-			mbus.req.dat <= {16{bltabc}};
+			mbus.req.dat <= {4{bltabc}};
 		else
-			mbus.req.dat <= {16{bltD_datx}};	// fill color
-		bltinc <= bltCtrlx[11] ? 32'hFFFFFFFE : 32'd2;
-		tCall(st_wait_ack,st_bltdma8_nack);
+			mbus.req.dat <= bltD_datx;	// fill color
+		bltinc <= bltCtrlx[11] ? -32'(bltD_inc) : bltD_inc;
 	end
 st_bltdma8_nack:
-	if (~mbus.resp.ack) begin
+	if (~imresp.ack|local_sel) begin
+		local_sel <= FALSE;
+		mbus.req <= {$bits(wb_cmd_request256_t){1'b0}};
 		bltD_wadr <= bltD_wadr + bltinc;
 		bltD_wcnt <= bltD_wcnt + 32'd1;
 		bltD_hcnt <= bltD_hcnt + 32'd1;
@@ -2925,6 +3414,106 @@ st_bltdma8_nack:
 			blt_nch <= 2'b11;
 		tRet();
 	end
+/*
+st_line_reset:
+	begin
+		lrst <= FALSE;
+//		strip_cnt <= 8'd0;
+		rac <= 8'd0;
+		if (rst_fifo)
+			tGoto(st_line_reset);
+		else if (vblank)
+			tCall(OTHERS,st_line_reset);
+		else begin
+			mbus.req.cyc <= LOW;
+			mbus.req.stb <= LOW;
+			mbus.req.sel <= 8'h00;
+			mbus.req.adr <= TargetBase + vndx;
+			rdadr <= TargetBase + vndx;
+			tGoto(READ_ACC);
+		end
+	end
+	// Add a couple of extra cycles to the bus timeout since the memory
+	// controller is fetching four lines on a cache miss rather than
+	// just a single line for other accesses.
+READ_ACC:
+	begin
+		mbus.req.cyc <= HIGH;
+		mbus.req.stb <= HIGH;
+		mbus.req.sel <= 8'hFF;
+		mbus.req.adr <= rdadr;
+		tocnt <= busto + 8'd2;
+		tCall(ST_LATCH_DATA,READ_NACK);
+	end
+READ_NACK:
+	if (~mbus.resp.ack) begin
+		strip_cnt <= strip_cnt + 8'd1;
+		rac <= rac + 8'd1;
+		rdadr <= rdadr + 32'd8;
+		// If we read all the strips we needed to, then start reading sprite
+		// data.
+		tGoto(READ_ACC);
+		if (strip_cnt==num_strips) begin
+			spriteno <= 5'd0;
+			for (n = 0; n < NSPR; n = n + 1)
+				m_spriteBmp[n] <= 64'd0;
+			tGoto(SPRITE_ACC);
+		end
+		// Check for too many consecutive memory accesses. Be nice to other
+		// bus masters.
+//			else if (rac < rac_limit)
+//				tGoto(READ_ACC);
+//			else begin
+//				rac <= 8'd0;
+//				tCall(OTHERS,READ_ACC);
+//			end
+	end
+*/
+
+// Assume the sprite data is in high-speed RAM accessible in a single clock.
+// Data is fetched only for the sprites that are displayed on the scan line.
+st_hsync:
+	begin
+		spriteno <= 5'd0;
+		spriteActiveB <= spriteActive;
+		for (n = 0; n < NSPR; n = n + 1)
+			m_spriteBmp[n] <= 64'd0;
+		tGoto(st_sprite_acc);
+	end
+st_sprite_acc:
+	if (spriteActiveB[spriteno]) begin
+		spriteActiveB[spriteno] <= FALSE;
+		tGoto(st_sprite_nack);
+		local_sel <= TRUE;
+		mbus.req.cyc <= HIGH;
+		mbus.req.stb <= HIGH;
+		mbus.req.sel <= 8'hFF;
+		mbus.req.adr <= spriteWaddr[spriteno];
+	end
+	else begin
+		spriteno <= nxtSprite;
+		if (nxtSprite == 6'd63) begin
+			local_sel <= FALSE;
+			mbus.req <= {$bits(wb_cmd_request256_t){1'b0}};
+			tRet();
+		end
+	end
+st_sprite_nack:
+	begin
+		local_sel <= FALSE;
+		if (tocnt==8'd1)
+			m_spriteBmp[spriteno] <= 64'hFFFFFFFFFFFFFFFF;
+		else			
+			m_spriteBmp[spriteno] <= imresp.dat;
+		spriteno <= nxtSprite;
+		if (nxtSprite==6'd63) begin
+			local_sel <= FALSE;
+			mbus.req <= {$bits(wb_cmd_request256_t){1'b0}};
+			tRet();
+		end
+		else
+			tGoto (st_sprite_acc);
+	end
 
 // -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 // Generic data latching state.
@@ -2934,7 +3523,7 @@ st_bltdma8_nack:
 st_latch_data:
 	begin
 		tocnt <= tocnt - 1;
-		if (imresp.ack|local_sel|tocnt==0) begin
+		if (imresp.ack|tocnt==0) begin
 			tocnt <= busto;
 			local_sel <= FALSE;
 			latched_data <= imresp.dat;
@@ -2952,7 +3541,44 @@ st_delay1:
 
 default:	tGoto(st_execute);
 endcase
-$display("Tick: %d I-count: %d  %f instructions per clock", tick, icnt>>1, real'(icnt>>1)/real'(tick));
+	case(sprite_on)
+	32'b00000000000000000000000000000000,
+	32'b00000000000000000000000000000001,
+	32'b00000000000000000000000000000010,
+	32'b00000000000000000000000000000100,
+	32'b00000000000000000000000000001000,
+	32'b00000000000000000000000000010000,
+	32'b00000000000000000000000000100000,
+	32'b00000000000000000000000001000000,
+	32'b00000000000000000000000010000000,
+	32'b00000000000000000000000100000000,
+	32'b00000000000000000000001000000000,
+	32'b00000000000000000000010000000000,
+	32'b00000000000000000000100000000000,
+	32'b00000000000000000001000000000000,
+	32'b00000000000000000010000000000000,
+	32'b00000000000000000100000000000000,
+	32'b00000000000000001000000000000000,
+	32'b00000000000000010000000000000000,
+	32'b00000000000000100000000000000000,
+	32'b00000000000001000000000000000000,
+	32'b00000000000010000000000000000000,
+	32'b00000000000100000000000000000000,
+	32'b00000000001000000000000000000000,
+	32'b00000000010000000000000000000000,
+	32'b00000000100000000000000000000000,
+	32'b00000001000000000000000000000000,
+	32'b00000010000000000000000000000000,
+	32'b00000100000000000000000000000000,
+	32'b00001000000000000000000000000000,
+	32'b00010000000000000000000000000000,
+	32'b00100000000000000000000000000000,
+	32'b01000000000000000000000000000000,
+	32'b10000000000000000000000000000000:   ;
+	default:	collision <= collision | sprite_on;
+	endcase
+
+	$display("Tick: %d I-count: %d  %f instructions per clock", tick, icnt>>1, real'(icnt>>1)/real'(tick));
 end
 
 // +---------------------------------------------------------------------------------------------------------------------+
@@ -3326,7 +3952,8 @@ end
 always_ff @(posedge clk)
   if (pushst)
     retstack[retsp-12'd1] <= pushstate;
-copro_state_t retstacko = pushst ? pushstate : retstack[retsp];
+always_comb
+	retstacko = pushst ? pushstate : retstack[retsp];
 
 always_ff @(posedge clk)
   if (pushpt)
@@ -3351,66 +3978,249 @@ always_ff @(posedge clk)
   else if (poppt)
     pointsp <= pointsp + 12'd1;
 
-/*
-always_ff @(posedge clk)
-if (rst) begin
-	gcx <= 16'h0;
-	gcy <= 16'h0;
-	rstst <= TRUE;
-	popst <= FALSE;
-	pushst <= FALSE;
-end
-else begin
-	rstst <= FALSE;
-	popst <= FALSE;
-	pushst <= FALSE;
-case (gr_state)
 // -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
-// Pixel plot acceleration states
-// For binary raster operations a back-to-back read then write is performed.
+// clock edge #-1
 // -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+// Compute when to shift sprite bitmaps.
+// Set sprite active flag
+// Increment working count and address
 
-st_plot:
-	begin
-		gcx <= fixToInt(p0x);
-		gcy <= fixToInt(p0y);
-		if (IsBinaryROP(ctrl[11:8]))
-			tGoto(st_plot_read);
-//			call(st_delay3,st_plot_read);
-		else
-			tGoto(st_plot_write);
-//			call(st_delay3,st_plot_write);
+reg [31:0] spriteShift;
+always_ff @(posedge vclk)
+for (n = 0; n < NSPR; n = n + 1)
+  begin
+  	spriteShift[n] <= FALSE;
+	  case(lowres)
+	  2'd0,2'd3:	if (hpos >= sprite_ph[n]) spriteShift[n] <= TRUE;
+		2'd1:		if (hpos[11:1] >= sprite_ph[n]) spriteShift[n] <= TRUE;
+		2'd2:		if (hpos[11:2] >= sprite_ph[n]) spriteShift[n] <= TRUE;
+		endcase
 	end
-st_plot_read:
-    begin
-    	gm.req.cyc <= HIGH;
-    	gm.req.stb <= HIGH;
-    	gm.req.adr <= ma;
-			// The memory address doesn't change from read to write so
-			// there's no need to wait for it to update, it's already
-			// correct.
-			call(st_latch_data,st_plot_write);
+
+always_ff @(posedge vclk)
+for (n = 0; n < NSPR; n = n + 1)
+	case(lowres)
+	2'd0,2'd3:	spriteActive[n] <= (spriteWcnt[n] <= spriteMcnt[n]) && spriteEnable[n] && vpos >= sprite_pv[n];
+	2'd1:	spriteActive[n] <= (spriteWcnt[n] <= spriteMcnt[n]) && spriteEnable[n] && vpos[11:1] >= sprite_pv[n];
+	2'd2:	spriteActive[n] <= (spriteWcnt[n] <= spriteMcnt[n]) && spriteEnable[n] && vpos[11:2] >= sprite_pv[n];
+	endcase
+
+ffo48 uffospr1 (.i({16'd0,spriteActiveB}), .o(nxtSprite));
+
+always_ff @(posedge vclk)
+for (n = 0; n < NSPR; n = n + 1)
+	begin
+	  case(lowres)
+	  2'd0,2'd3:	if ((vpos == sprite_pv[n]) && (hpos == 12'h005)) spriteWcnt[n] <= 16'd0;
+		2'd1:		if ((vpos[11:1] == sprite_pv[n]) && (hpos == 12'h005)) spriteWcnt[n] <= 16'd0;
+		2'd2:		if ((vpos[11:2] == sprite_pv[n]) && (hpos == 12'h005)) spriteWcnt[n] <= 16'd0;
+		endcase
+		if (hpos==phTotal-12'd4)	// must be after image data fetch
+    		if (spriteActive[n])
+    		case(lowres)
+    		2'd0,2'd3:	spriteWcnt[n] <= spriteWcnt[n] + 16'd32;
+    		2'd1:		if (vpos[0]) spriteWcnt[n] <= spriteWcnt[n] + 16'd32;
+    		2'd2:		if (vpos[1:0]==2'b11) spriteWcnt[n] <= spriteWcnt[n] + 16'd32;
+    		endcase
+	end
+
+always_ff @(posedge vclk)
+for (n = 0; n < NSPR; n = n + 1)
+	begin
+    case(lowres)
+    2'd0,2'd3:	if ((vpos == sprite_pv[n]) && (hpos == 12'h005)) spriteWaddr[n] <= spriteAddr[n];
+		2'd1:		if ((vpos[11:1] == sprite_pv[n]) && (hpos == 12'h005)) spriteWaddr[n] <= spriteAddr[n];
+		2'd2:		if ((vpos[11:2] == sprite_pv[n]) && (hpos == 12'h005)) spriteWaddr[n] <= spriteAddr[n];
+		endcase
+	if (hpos==phTotal-12'd4)	// must be after image data fetch
+		case(lowres)
+   		2'd0,2'd3:	spriteWaddr[n] <= spriteWaddr[n] + 32'd8;
+   		2'd1:		if (vpos[0]) spriteWaddr[n] <= spriteWaddr[n] + 32'd8;
+   		2'd2:		if (vpos[1:0]==2'b11) spriteWaddr[n] <= spriteWaddr[n] + 32'd8;
+   		endcase
+	end
+
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+// clock edge #0
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+// Get the sprite display status
+// Load the sprite bitmap from ram
+// Determine when sprite output should appear
+// Shift the sprite bitmap
+// Compute color indexes for all sprites
+
+always_ff @(posedge vclk)
+begin
+  for (n = 0; n < NSPR; n = n + 1)
+    if (spriteActive[n] & spriteShift[n]) begin
+      sprite_on[n] <=
+        spriteLink1[n] ? |{ spriteBmp[(n+1)&31][63:62],spriteBmp[n][63:62]} : 
+        |spriteBmp[n][63:62];
     end
-st_plot_write:
-	begin
-		t_set_pixel(pen_color[15:0],alpha,ctrl[11:8]);
-		tGoto(st_wait_ack);
-	end
-
-st_wait_ack:
-	begin
-		if (gm.resp.ack) begin
-			gm.req.cyc <= LOW;
-			gm.req.stb <= LOW;
-			gm.req.we <= LOW;
-			gm.req.sel <= LOW;
-			return();
-		end
-	end
-
-endcase
+    else
+        sprite_on[n] <= 1'b0;
 end
-*/
+
+// Load / shift sprite bitmap
+// Register sprite data back to vclk domain
+always_ff @(posedge vclk)
+begin
+	if (hpos==12'h5)
+		for (n = 0; n < NSPR; n = n + 1)
+			spriteBmp[n] <= m_spriteBmp[n];
+    for (n = 0; n < NSPR; n = n + 1)
+      if (spriteShift[n])
+      	case(lowres)
+      	2'd0,2'd3:	spriteBmp[n] <= {spriteBmp[n][61:0],2'h0};
+      	2'd1:	if (hpos[0]) spriteBmp[n] <= {spriteBmp[n][61:0],2'h0};
+      	2'd2:	if (&hpos[1:0]) spriteBmp[n] <= {spriteBmp[n][61:0],2'h0};
+  		endcase
+end
+
+always_ff @(posedge vclk)
+for (n = 0; n < NSPR; n = n + 1)
+if (spriteLink1[n])
+    spriteColorNdx[n] <= {n[3:0],spriteBmp[(n+1)&31][63:62],spriteBmp[n][63:62]};
+else
+    spriteColorNdx[n] <= {n[4:0],spriteBmp[n][63:62]};
+
+// Compute index into sprite color palette
+// If none of the sprites are linked, each sprite has it's own set of colors.
+// If the sprites are linked once the colors are available in groups.
+// If the sprites are linked twice they all share the same set of colors.
+// Pipelining register
+reg blank1, blank2, blank3, blank4;
+reg border1, border2, border3, border4;
+reg any_sprite_on2, any_sprite_on3, any_sprite_on4;
+reg [14:0] rgb_i3, rgb_i4;
+reg [3:0] zb_i3, zb_i4;
+reg [3:0] sprite_z1, sprite_z2, sprite_z3, sprite_z4;
+reg [3:0] sprite_pzx;
+// The color index from each sprite can be mux'ed into a single value used to
+// access the color palette because output color is a priority chain. This
+// saves having mulriple read ports on the color palette.
+reg [31:0] spriteColorOut2; 
+reg [31:0] spriteColorOut3;
+reg [7:0] spriteClrNdx;
+
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+// clock edge #1
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+// Mux color index
+// Fetch sprite Z order
+
+always_ff @(posedge vclk)
+  sprite_on_d1 <= sprite_on;
+always_ff @(posedge vclk)
+  blank1 <= blank_i;
+always_ff @(posedge vclk)
+  border1 <= border_i;
+
+always_ff @(posedge vclk)
+begin
+	spriteClrNdx <= 8'd0;
+	for (n = NSPR-1; n >= 0; n = n -1)
+		if (sprite_on[n])
+			spriteClrNdx <= spriteColorNdx[n];
+end
+        
+always_ff @(posedge vclk)
+begin
+	sprite_z1 <= 4'hF;
+	for (n = NSPR-1; n >= 0; n = n -1)
+		if (sprite_on[n])
+			sprite_z1 <= sprite_pz[n]; 
+end
+
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+// clock edge #2
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+// Lookup color from palette
+
+always_ff @(posedge vclk)
+  sprite_on_d2 <= sprite_on_d1;
+always_ff @(posedge vclk)
+  any_sprite_on2 <= |sprite_on_d1;
+always_ff @(posedge vclk)
+  blank2 <= blank1;
+always_ff @(posedge vclk)
+  border2 <= border1;
+always_ff @(posedge vclk)
+  spriteColorOut2 <= sprite_color[spriteClrNdx];
+always_ff @(posedge vclk)
+  sprite_z2 <= sprite_z1;
+
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+// clock edge #3
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+// Compute alpha blending
+
+wire [12:0] alphaRed = (rgb_i[`R] * spriteColorOut2[31:24]) + (spriteColorOut2[`R] * (9'h100 - spriteColorOut2[31:24]));
+wire [12:0] alphaGreen = (rgb_i[`G] * spriteColorOut2[31:24]) + (spriteColorOut2[`G]  * (9'h100 - spriteColorOut2[31:24]));
+wire [12:0] alphaBlue = (rgb_i[`B] * spriteColorOut2[31:24]) + (spriteColorOut2[`B]  * (9'h100 - spriteColorOut2[31:24]));
+reg [14:0] alphaOut;
+
+always_ff @(posedge vclk)
+  alphaOut <= {alphaRed[12:8],alphaGreen[12:8],alphaBlue[12:8]};
+always_ff @(posedge vclk)
+  sprite_z3 <= sprite_z2;
+always_ff @(posedge vclk)
+  any_sprite_on3 <= any_sprite_on2;
+always_ff @(posedge vclk)
+	rgb_i3 <= vid_doutb;
+//  rgb_i3 <= rgb_i;
+always_ff @(posedge vclk)
+  zb_i3 <= 4'hF;//zb_i;
+always_ff @(posedge vclk)
+  blank3 <= blank2;
+always_ff @(posedge vclk)
+  border3 <= border2;
+always_ff @(posedge vclk)
+  spriteColorOut3 <= spriteColorOut2;
+
+reg [14:0] flashOut;
+wire [14:0] reverseVideoOut = spriteColorOut2[21] ? alphaOut ^ 15'h7FFF : alphaOut;
+
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+// clock edge #4
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+// Compute flash output
+
+always_ff @(posedge vclk)
+  flashOut <= spriteColorOut3[20] ? (((flashcnt[5:2] & spriteColorOut3[19:16])!=4'b000) ? reverseVideoOut : rgb_i3) : reverseVideoOut;
+always_ff @(posedge vclk)
+  rgb_i4 <= rgb_i3;
+always_ff @(posedge vclk)
+  sprite_z4 <= sprite_z3;
+always_ff @(posedge vclk)
+  any_sprite_on4 <= any_sprite_on3;
+always_ff @(posedge vclk)
+  zb_i4 <= zb_i3;
+always_ff @(posedge vclk)
+  blank4 <= blank3;
+always_ff @(posedge vclk)
+  border4 <= border3;
+
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+// clock edge #5
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+// final output registration
+
+always_ff @(posedge vclk)
+	casez({blank4,border4,any_sprite_on4})
+	3'b1??:		rgb <= 24'h0000;
+	3'b01?:		rgb <= borderColor;
+	3'b001:		rgb <= ((zb_i4 < sprite_z4) ? {rgb_i4[14:10],3'b0,rgb_i4[9:5],3'b0,rgb_i4[4:0],3'b0} :
+											{flashOut[14:10],3'b0,flashOut[9:5],3'b0,flashOut[4:0],3'b0});
+	3'b000:		rgb <= {rgb_i4[14:10],3'b0,rgb_i4[9:5],3'b0,rgb_i4[4:0],3'b0};
+	endcase
+always_ff @(posedge vclk)
+    de <= ~blank4;
+
+// -----------------------------------------------------------------------------
+// Support tasks
+// -----------------------------------------------------------------------------
+
 task tGoto;
 input copro_state_t dst;
 begin
@@ -3534,8 +4344,8 @@ begin
 	mbus.req.stb <= LOW;
 	mbus.req.we <= LOW;
 	mbus.req.sel <= 8'h00;
-//	if (FALSE||fnClip(gcx,gcy))
-//		;
+	if (fnClip(gcx,gcy))
+		;
 /*
 	else if (zbuf) begin
 		m_cyc_o <= `HIGH;
@@ -3545,7 +4355,7 @@ begin
 		m_dat_o <= latched_data & ~{128'b1111 << {ma[4:0],2'b0}} | ({124'b0,zlayer} << {ma[4:0],2'b0});
 	end
 */
-//	else
+	else
 	begin
 		// The same operation is performed on all pixels, however the
 		// data mask is set so that only the desired pixel is updated
@@ -3556,7 +4366,7 @@ begin
 		mbus.req.we <= HIGH;
 		mbus.req.sel <= 8'b11 << {ma[2:1],1'b0};
 		mbus.req.adr <= ma;
-		case(4'd1)//rop)
+		case(rop)
 		4'd0:	mbus.req.dat <= {4{16'h0000}};
 		4'd1:	mbus.req.dat <= {4{color}};
 		4'd3:	mbus.req.dat <= {4{blend(color,latched_data>>{ma[2:1],4'h0},alpha)}};

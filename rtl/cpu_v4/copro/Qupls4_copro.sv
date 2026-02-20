@@ -46,7 +46,7 @@ import Qupls4_copro_pkg::*;
 module Qupls4_copro(rst, clk, sbus, mbus, cs_copro, miss, miss_adr, miss_asid,
   missack, paging_en, page_fault, iv_count, missack, idle,
   vclk, hsync_i, vsync_i, gfx_que_empty_i,
-  flush_en, flush_trig, flush_asid, flush_done);
+  flush_en, flush_trig, flush_asid, flush_done, cmd_done);
 parameter UNALIGNED_CONSTANTS = 0;
 parameter JUMP_INDIRECT = 0;
 parameter NUM_PAGESIZES = 1;
@@ -68,6 +68,7 @@ output reg flush_en;
 output asid_t flush_asid;
 output reg flush_trig;
 input flush_done;
+output reg cmd_done;
 input [3:0] iv_count [0:2];
 input vclk;
 input hsync_i;
@@ -93,8 +94,8 @@ reg ip2;
 (* ram_style="distributed" *)
 reg [512+17:0] stack [0:15];
 reg [3:0] sp;
-reg [14:0] roma;
-wire local_sel = (state==st_mem_load|state==st_mem_store) & roma[14:8]==7'h7F;
+reg [31:0] roma;
+reg local_sel;// = (state==st_mem_load|state==st_mem_store) & roma[31:16]==16'h0000;
 wire rsta = rst;
 wire rstb = sbus.rst;
 wire clka = clk;
@@ -103,7 +104,7 @@ wire ena = 1'b1;
 wire enb = sbus.req.cyc & sbus.req.stb & cs_copro & ~sbus.req.adr[16];
 wire wea = mbus.req.we & local_sel & ~mbus.req.adr[16];
 wire web = sbus.req.we & cs_copro & ~sbus.req.adr[16];
-wire [11:0] addra = local_sel ? roma : ip[14:3];
+wire [11:0] addra = local_sel ? roma[14:3] : ip[14:3];
 wire [11:0] addrb = sbus.req.adr[14:3];
 wire [63:0] dina = mbus.req.dat;
 wire [63:0] dinb = sbus.req.dat;
@@ -189,39 +190,31 @@ else begin
 		if (sbus.req.we)
 			casez(sbus.req.adr[14:3])
 			// FC0 to FCF read-only
-			12'hFD0:	entry_no <= sbus.req.dat[31:0];
-			12'hFD1:	cmd <= sbus.req.dat;
-			12'hFD2:	tlbe[63:0] <= sbus.req.dat;
-			12'hFD3:	tlbe[127:64] <= sbus.req.dat;
-			12'hFD7:	clear_page_fault <= TRUE;
-			12'hFE0:	ptbr[0] <= sbus.req.dat;
-			12'hFE2:	ptattr[0] <= sbus.req.dat;
-			12'hFE4:	ptbr[1] <= sbus.req.dat;
-			12'hFE6:	ptattr[1] <= sbus.req.dat;
-			12'hFE8:	ptbr[2] <= sbus.req.dat;
-			12'hFEA:	ptattr[2] <= sbus.req.dat;
+			12'hFA0:	clear_page_fault <= TRUE;
+			12'hFC0:	ptbr[0] <= sbus.req.dat;
+			12'hFC2:	ptattr[0] <= sbus.req.dat;
+			12'hFC4:	ptbr[1] <= sbus.req.dat;
+			12'hFC6:	ptattr[1] <= sbus.req.dat;
+			12'hFC8:	ptbr[2] <= sbus.req.dat;
+			12'hFCA:	ptattr[2] <= sbus.req.dat;
 			default:	;
 			endcase
 		ptattr[0].pgsz <= LOG_PAGESIZE;
 		ptattr[0].log_te <= LOG_TLB_ENTRIES;
 		casez(sbus.req.adr[14:3])
-		12'hFC0:	sbus.resp.dat <= miss_adr1[0];
-		12'hFC1:	sbus.resp.dat <= miss_asid1[0];
-		12'hFC2:	sbus.resp.dat <= miss_adr1[1];
-		12'hFC3:	sbus.resp.dat <= miss_asid1[1];
-		12'hFC4:	sbus.resp.dat <= miss_adr1[2];
-		12'hFC5:	sbus.resp.dat <= miss_asid1[2];
-		// To 12'hFCF
-		12'hFD0:	sbus.resp.dat <= entry_no;
-		12'hFD1:	sbus.resp.dat <= stat;
-		12'hFD2:	sbus.resp.dat <= tlbe2[63:0];
-		12'hFD3:	sbus.resp.dat <= tlbe2[127:64];
-		12'hFE0:	sbus.resp.dat <= ptbr[0];
-		12'hFE2:	sbus.resp.dat <= ptattr[0];
-		12'hFE4:	sbus.resp.dat <= ptbr[1];
-		12'hFE6:	sbus.resp.dat <= ptattr[1];
-		12'hFE8:	sbus.resp.dat <= ptbr[2];
-		12'hFEA:	sbus.resp.dat <= ptattr[2];
+		// To 12'hFDF
+		12'hFC0:	sbus.resp.dat <= ptbr[0];
+		12'hFC2:	sbus.resp.dat <= ptattr[0];
+		12'hFC4:	sbus.resp.dat <= ptbr[1];
+		12'hFC6:	sbus.resp.dat <= ptattr[1];
+		12'hFC8:	sbus.resp.dat <= ptbr[2];
+		12'hFCA:	sbus.resp.dat <= ptattr[2];
+		12'hFE0:	sbus.resp.dat <= miss_adr1[0];
+		12'hFE1:	sbus.resp.dat <= miss_asid1[0];
+		12'hFE2:	sbus.resp.dat <= miss_adr1[1];
+		12'hFE3:	sbus.resp.dat <= miss_asid1[1];
+		12'hFE4:	sbus.resp.dat <= miss_adr1[2];
+		12'hFE5:	sbus.resp.dat <= miss_asid1[2];
 		default:	sbus.resp.dat <= doutb;
 		endcase
 		sbus.resp.ack <= dly2;
@@ -473,6 +466,7 @@ if (rst) begin
 	miss_asid1 <= 16'h0;
 	miss_adr1 <= {$bits(address_t){1'b0}};
 	mbus.req <= {$bits(wb_cmd_request256_t){1'b0}};
+	local_sel <= FALSE;
 	missack <= FALSE;
 	idle <= FALSE;
 	paging_en <= TRUE;
@@ -524,6 +518,7 @@ st_ifetch:
 		icnta <= 2;
 		ipr <= ip;
 		rfwr <= FALSE;
+		local_sel <= FALSE;
 		ir <= next_ir;
 		tGoto(st_execute);
 		if (pe_vsync2) begin
@@ -669,8 +664,9 @@ st_execute:
 				4'd8:	// JMP [d[Rn]]	(memory indirect)
 					if (JUMP_INDIRECT) begin
 						tmp = a + {{17{ir.imm[14]}},ir.imm};
-						mbus.req.cyc <= ~&tmp[14:8];
-						mbus.req.stb <= ~&tmp[14:8];
+						local_sel <= tmp[31:16]==16'h0000;
+						mbus.req.cyc <= tmp[31:16]!=16'h0000;
+						mbus.req.stb <= tmp[31:16]!=16'h0000;
 						mbus.req.we <= LOW;
 						mbus.req.sel <= 32'hFF << {tmp[4:3],3'b0};
 						mbus.req.adr <= tmp;
@@ -729,9 +725,10 @@ st_execute:
 		OP_LOAD:
 			begin
 				tmp = a + {{17{ir.imm[14]}},ir.imm};
+				local_sel <= tmp[31:16]==16'h0000;
 				// ToDo fix cyc/stb
-				mbus.req.cyc <= ~&tmp[14:8];
-				mbus.req.stb <= ~&tmp[14:8];
+				mbus.req.cyc <= tmp[31:16]!=16'h0000;
+				mbus.req.stb <= tmp[31:16]!=16'h0000;
 				mbus.req.we <= LOW;
 				mbus.req.sel <= 32'hFF << {tmp[4:3],3'b0};
 				mbus.req.adr <= tmp;
@@ -741,28 +738,30 @@ st_execute:
 		OP_STORE:
 			begin
 				tmp = a + {{17{ir.imm[14]}},ir.imm};
-				mbus.req.cyc <= ~&tmp[14:8];
-				mbus.req.stb <= ~&tmp[14:8];
+				local_sel <= tmp[31:16]==16'h0000;
+				mbus.req.cyc <= tmp[31:16]!=16'h0000;
+				mbus.req.stb <= tmp[31:16]!=16'h0000;
 				mbus.req.we <= HIGH;
 				mbus.req.sel <= 32'hFF << {tmp[4:3],3'b0};
 				mbus.req.adr <= tmp;
 				mbus.req.dat <= {4{b}};
 				roma <= tmp;
-				if (!local_sel) begin
+				if (tmp[31:16]!=16'h0000) begin
 				  tGoto(st_mem_store);
 				end
 			end
 		OP_STOREI:
 			begin
 				tmp = a + {{17{ir.imm[14]}},ir.imm};
-				mbus.req.cyc <= ~&tmp[14:8];
-				mbus.req.stb <= ~&tmp[14:8];
+				local_sel <= tmp[31:16]==16'h0000;
+				mbus.req.cyc <= tmp[31:16]!=16'h0000;
+				mbus.req.stb <= tmp[31:16]!=16'h0000;
 				mbus.req.we <= HIGH;
 				mbus.req.sel <= 32'hFF << {tmp[4:3],3'b0};
 				mbus.req.adr <= tmp;
 				mbus.req.dat <= {4{60'd0,ir.Rd}};
 				roma <= tmp;
-				if (!local_sel) begin
+				if (tmp[31:16]!=16'h0000) begin
 				  tGoto(st_mem_store);
 				end
 			end
@@ -777,9 +776,9 @@ st_execute:
 		OP_BMP:
 			begin
 				tmp = (a >> 4'd6) + {{17{ir.imm[14]}},ir.imm};
-				// ToDo fix cyc/stb
-				mbus.req.cyc <= ~&tmp[14:8];
-				mbus.req.stb <= ~&tmp[14:8];
+				local_sel <= tmp[31:16]==16'h0000;
+				mbus.req.cyc <= tmp[31:16]!=16'h0000;
+				mbus.req.stb <= tmp[31:16]!=16'h0000;
 				mbus.req.we <= LOW;
 				mbus.req.sel <= 32'hFF << {tmp[4:3],3'b0};
 				mbus.req.adr <= tmp;
@@ -822,13 +821,14 @@ st_even64a:
 		OP_STOREI:
 			begin
 				tmp = a + {{17{ir.imm[14]}},ir.imm};
-				mbus.req.cyc <= ~&tmp[14:8];
-				mbus.req.stb <= ~&tmp[14:8];
+				local_sel <= tmp[31:16]==16'h0000;
+				mbus.req.cyc <= tmp[31:16]!=16'h0000;
+				mbus.req.stb <= tmp[31:16]!=16'h0000;
 				mbus.req.we <= HIGH;
 				mbus.req.sel <= 32'hFF << {tmp[4:3],3'b0};
 				mbus.req.adr <= tmp;
 				mbus.req.dat <= {4{douta[31:0],imm}};
-				if (!local_sel)
+				if (tmp[31:16]!=16'h0000)
 					tGoto(st_mem_store);
 			end
 		default:	;
@@ -846,13 +846,14 @@ st_odd64a:
 		OP_STOREI:
 			begin
 				tmp = a + {{17{ir.imm[14]}},ir.imm};
-				mbus.req.cyc <= ~&tmp[14:8];
-				mbus.req.stb <= ~&tmp[14:8];
+				local_sel <= tmp[31:16]==16'h0000;
+				mbus.req.cyc <= tmp[31:16]!=16'h0000;
+				mbus.req.stb <= tmp[31:16]!=16'h0000;
 				mbus.req.we <= HIGH;
 				mbus.req.sel <= 32'hFF << {tmp[4:3],3'b0};
 				mbus.req.adr <= tmp;
 				mbus.req.dat <= {4{douta}};
-				if (!local_sel)
+				if (tmp[31:16]!=16'h0000)
 					tGoto(st_mem_store);
 			end
 		default:	;
@@ -1001,8 +1002,8 @@ st_mem_load:
 				endcase
 			default:
 				if (local_sel) begin
-					casez(roma[12:3])
-					10'h3??:	begin rfwr <= TRUE; res <= arg_dat; end
+					casez(roma[14:3])
+					12'hF??:	begin rfwr <= TRUE; res <= arg_dat; end
 				  default:	begin rfwr <= TRUE; res <= douta; end
 					endcase
 				end
@@ -1017,14 +1018,19 @@ st_mem_load:
 st_bit_store:
 	if (!mbus.resp.ack) begin
 		tmp = (a >> 4'd6) + {{17{ir.imm[14]}},ir.imm};
-		mbus.req.cyc <= ~&tmp[14:8];
-		mbus.req.stb <= ~&tmp[14:8];
+		local_sel <= tmp[31:16]==16'h0000;
+		mbus.req.cyc <= tmp[31:16]!=16'h0000;
+		mbus.req.stb <= tmp[31:16]!=16'h0000;
 		mbus.req.we <= HIGH;
 		mbus.req.sel <= 32'hFF << {tmp[4:3],3'b0};
 		mbus.req.adr <= tmp;
 		mbus.req.dat <= {4{mem_val}};
+		if (tmp[31:0]==32'h00007ff8) begin
+			page_fault <= mem_val[0];
+			cmd_done <= mem_val[1];
+		end
 		roma <= tmp;
-		if (!local_sel) begin
+		if (tmp[31:16]!=16'h0000) begin
 		  tGoto(st_mem_store);
 		end
 	end

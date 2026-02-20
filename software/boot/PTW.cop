@@ -37,7 +37,36 @@
 ; calc_pte_index - calculates the index portion of the PTE address
 ; calc_pte_adr	- calculates the PTE address
 ;
-	.set gr_cmdq,$0xFE010000
+	.set gr_cmdq,$0xFE000DC0
+
+.macro macRandCoord n
+	loadi64 %r2,$0xFE007800
+	load %r2,[%r2]
+	and %r2,%r2,%r2,$255
+	shl %r2,%r2,%r0,$16
+	loadi64 %r1,\n
+	or %r1,%r1,%r2,$0
+	store %r1,[%r7]
+.endm
+
+.macro macRandColor n
+	loadi64 %r2,$0xFE007800
+	load %r2,[%r2]
+	loadi64 %r1,$0x32767
+	and %r2,%r2,%r1,$-1
+	loadi64 %r1,\n
+	or %r1,%r1,%r2,$0
+	store %r1,[%r7]
+.endm
+
+.macro macWaitForQueue n
+.0007\@:
+	loadi64 %r7,$0xFE000DC8		; status reg
+	load %r7,[%r7]						; get status
+	loadi %r11,\n							; number of entries we want available
+	jlt %r7,%r11,.0007\@
+.endm
+
 	.section .bram
 	.org 0x0000
 start:
@@ -110,7 +139,7 @@ page_fault1:
 	ret $0xFF								; return and restore registers
 
 ; Parameters:
-;		r1 = entry number
+;		r1 entry number
 ;		r2 = way to get
 ;		r8 = base I/O address of TLB control regs
 ; Returns:
@@ -141,6 +170,12 @@ set_tlbe:
 	ret $0xFF							; restore registers
 
 ;
+
+initialize:
+	call ResetPAM
+	call ClearScreen
+	call DrawCharacters
+	; fall through into idle state
 
 ; Go to low power wait mode.
 ; Wait for either an interrupt or the posting of a command to the command
@@ -220,18 +255,15 @@ cmd_set_tlbe:
 	.org 0x0200
 frame_isr:
 	ret $0xFF
+	nop
 
-initialize:
+; Clear PAM memory
+ResetPAM:
 	storei $131072,PAM_avail
 	store %r0,PAM_index
-	; Clear screen
-	loadi64 %r1,$30000
-	loadi64 %r2,$0x7c007c007c007c00
-	loadi64 %r3,$0x00100000
-.0001:
-	store %r2,[%r3]
-	add %r3,%r3,%r0,$8
-	djnez %r1,.0001
+	ret $0xff
+
+;	call RandomizeScreen
 
 ;	loadi64 %r3,$0x00100000
 ;	loadi %r5,$300	
@@ -240,43 +272,159 @@ initialize:
 ;	store %r2,[%r3]
 ;	add %r3,%r3,%r0,$802
 ;	djnez %r5,.0004
+plot25k:
+;	call PlotRandomPoints
+;	call DrawRandomRectangles
+;	call DrawRandomTriangles
+;	call DrawDownDiagonal
 	
-	loadi64 %r7,$0xFE010000
+; Clear screen
+ClearScreen:
+	loadi64 %r1,$30000
+;	loadi64 %r2,$0x7c007c007c007c00		; RED
+	loadi64 %r3,$0x00100000
+	loadi64 %r2,$0x7FCE7FCE7FCE7FCE		; RED
+.0001:
+	store %r2,[%r3]	; Pale yellow
+	add %r3,%r3,%r0,$8
+	djnez %r1,.0001
+	ret $0xff
+
+	; Randomize screen
+RandomizeScreen:
+	loadi64 %r1,$120000
+	loadi64 %r3,$0x00100000
+.0010:
+	loadi64 %r2,$0xFE007800	; get random number
+	load %r2,[%r2]
+	storew %r2,[%r3]				; store as pixel
+	add %r3,%r3,%r0,$2			; advance to next pixel
+	djnez %r1,.0010
+	ret $0xff
+
+PlotRandomPoints:
+	loadi64 %r7,$0xFE000DC0		; graphics command queue address
+
+;	loadi64 %r2,$0x0c000003e0	; set green pencolor
+;	store %r2,[%r7]
+	loadi %r5,$15000					; repeat 25000 times
+.0007:
+	macWaitForQueue $5
 	
-;	loadi %r1,$12			; set pen color
-	loadi64 %r2,$0x0c000003e0	; set green pencolor
-	loadi64 %r3,$0x1000000000	;	set x0 = 0
-	loadi64 %r4,$0x1100000000	;	set y0 = 0
-	loadi %r5,$300						; 30000 times
+	loadi64 %r7,$0xFE000DC0		; graphics command queue address
+	; set random X0
+	macRandCoord $0x1000000000
+	; set random Y0
+	macRandCoord $0x1100000000
+	; set random pen color
+	macRandColor $0x0c00000000
 	loadi64 %r6,$0x0100000010	; plot command copy
-;	store %r1,[%r7]
-	loadi64 %r2,$0x0d00007FFF	; set white fill color
-	store %r2,[%r7]
-	loadi64 %r1,$0x1000000080		; x0 = 128
-	store %r1,[%r7]
-	loadi64 %r1,$0x1000000040		; y0 = 64
-	store %r1,[%r7]
-	loadi64 %r1,$0x1000000100		; x1 = 256
-	store %r1,[%r7]
-	loadi64 %r1,$0x1000000080		; y0 = 128
-	store %r1,[%r7]
-;	loadi64 %r1,$0x0300000000		; fillrect
-;	store %r1,[%r7]
-	loadi64 %r2,$0x0c000003e0	; set green pencolor
-	store %r2,[%r7]
+	store %r6,[%r7]						; queue command
+	djnez %r5,.0007
+	ret $0xff
+
+DrawDownDiagonal:
+	loadi %r3,$0x1000000000
+	loadi %r4,$0x1100000000
+	loadi %r5,$300
 	loadi64 %r1,$0x10000	; increment
 .0002:
+	loadi %r10,$1000
+	macWaitForQueue $4
 	store %r3,[%r7]
 	store %r4,[%r7]
 	store %r6,[%r7]
-;	loadi %r2,$0x41
-;	store %r2,[%r7]
 	add %r3,%r3,%r1,$0	; increment x0
 	add %r4,%r4,%r1,$0	; increment y0
 	djnez %r5,.0002
-.0003:
-	jmp .0003
-	ret $0x00
+	ret $0xff
+
+DrawRandomRectangles:
+	loadi %r5,$3000
+.0008:
+	; Check if previous blit was done
+	loadi64 %r9,$0xFE000D98		; blt control
+	load %r2,[%r9]
+	shr %r2,%r2,%r0,$13				; bit 13
+	and %r2,%r2,%r2,$1				; =1?
+	jeqz %r2,.0008						; go back if not done
+	loadi64 %r7,$0xFE000DC0		; graphics command queue address
+	macWaitForQueue $6
+	; random fill color
+	macRandColor $0x0d00000000
+	; set random X0
+	macRandCoord $0x1000000000
+	; set random Y0
+	macRandCoord $0x1100000000
+	; set random X1
+	macRandCoord $0x1300000000
+	; set random Y1
+	macRandCoord $0x1400000000
+	loadi64 %r1,$0x0300000010		; fillrect
+	store %r1,[%r7]
+	djnez %r5,.0008
+	ret $0xff
+
+DrawRandomTriangles:
+	loadi %r5,$1000
+.0006:
+	loadi64 %r7,$0xFE000DC0		; graphics command queue address
+	macWaitForQueue $8
+	loadi %r10,$10000
+	; set random X0
+	macRandCoord $0x1000000000
+	; set random Y0
+	macRandCoord $0x1100000000
+	; set random X1
+	macRandCoord $0x1300000000
+	; set random Y1
+	macRandCoord $0x1400000000
+	; set random X2
+	macRandCoord $0x1600000000
+	; set random Y2
+	macRandCoord $0x1700000000
+	; set random color
+	macRandColor $0x0d00000000	; fill color
+	loadi64 %r1,$0x0600000010		; draw triangle
+	store %r1,[%r7]
+	djnez %r5,.0006
+	ret $0xff
+
+; Draw characters on screen.
+DrawCharacters:
+	loadi64 %r7,$0xFE000DC0		; graphics command queue address
+	; set random pen color
+	macRandColor $0x0c00000000
+	loadi64 %r3,$0x1000400000		; x0 = 64
+	loadi64 %r4,$0x1100280000		; y0 = 40
+	store %r4,[%r7]
+	loadi %r5,$32
+	loadi64 %r1,$0x90000	; increment
+	loadi64 %r2,$0x0d00007FFF	; set transparent fill color
+	store %r2,[%r7]
+	loadi %r2,$0x20
+.0005:
+	loadi64 %r7,$0xFE000DC0		; graphics command queue address
+	macWaitForQueue $3
+	loadi64 %r7,$0xFE000DC0		; graphics command queue address
+	store %r3,[%r7]						; set X position
+	store %r2,[%r7]						; store character
+	add %r2,%r2,%r0,$1				; next character
+	add %r3,%r3,%r1,$0				; increment x0
+	djnez %r5,.0005
+	ret $0xff
+
+; Delay a little bit.
+; Parameters:
+;		r10 = amount of delay
+; Returns:
+;		none
+
+delay:
+	move %r1,%r10
+.0001:
+	djnez %r1,.0001
+	ret $0xFF
 
 ; Allocate a page of memory.
 ; Sets the PAM bit for the page of memory allocated.
