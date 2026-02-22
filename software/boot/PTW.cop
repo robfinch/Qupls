@@ -39,13 +39,9 @@
 ;
 	.set gr_cmdq,$0xFE000DC0
 
-.macro macRandCoord n
-	loadi64 %r2,$0xFE007800
-	load %r2,[%r2]
-	and %r2,%r2,%r2,$255
-	shl %r2,%r2,%r0,$16
-	loadi64 %r1,\n
-	or %r1,%r1,%r2,$0
+.macro macRandCoord n,m
+	loadi64 %r10,\m
+	call Random\n
 	store %r1,[%r7]
 .endm
 
@@ -89,6 +85,7 @@ start:
 
 	.org 0x0010
 tlb_miss_isr:
+	ret $0xff
 	loadi %r8,0							; r8 = largest page size TLB index
 ; Walk all TLBs from largest page size to smallest
 tlb_miss1:
@@ -106,7 +103,8 @@ read_leveln:
 ;	jltz %r7,read_level0a		; if a shortcut page...
 	and64 %r2,%r2,%r2,$0x7fffffffff		; extract PPN
 	shl %r2,%r2,%r3					; r2 = address of page table
-	djnez %r4,read_leveln		; go down a level
+	add %r4,%r4,%r0,$-1
+	jgtz %r4,read_leveln		; go down a level
 
 read_level0:
 	calc_index %r7,%r4
@@ -128,12 +126,13 @@ read_level0a:
 	store %r5,0x20[%r8]			; set entry number field, causes update
 	ret $0xFF								; return and restore registers
 
-; Just becasue there is a page fault on a table does not mean that some other
+; Just because there is a page fault on a table does not mean that some other
 ; table of smaller pages does not have a translation. Check the next smallest
 ; table. When we run out of TLBs to check, then page fault.
 page_fault:
 	jeqz %r8,page_fault1
-	djnez %r8,tlb_miss1
+	add %r8,%r8,%r0,$-1
+	jgtz %r8,tlb_miss1
 page_fault1:
 	bmset %r0,signal[%r0]		; set page fault output
 	ret $0xFF								; return and restore registers
@@ -174,7 +173,14 @@ set_tlbe:
 initialize:
 	call ResetPAM
 	call ClearScreen
-	call DrawCharacters
+	call DrawDownDiagonal
+	call WhiteRect
+;	call PlotRandomPoints
+;	call InitCursors
+;	call DrawCharacters
+;	call DrawRandomRectangles
+	call DrawRandomTriangles
+
 	; fall through into idle state
 
 ; Go to low power wait mode.
@@ -287,7 +293,8 @@ ClearScreen:
 .0001:
 	store %r2,[%r3]	; Pale yellow
 	add %r3,%r3,%r0,$8
-	djnez %r1,.0001
+	add %r1,%r1,%r0,$-1
+	jgtz %r1,.0001
 	ret $0xff
 
 	; Randomize screen
@@ -299,7 +306,8 @@ RandomizeScreen:
 	load %r2,[%r2]
 	storew %r2,[%r3]				; store as pixel
 	add %r3,%r3,%r0,$2			; advance to next pixel
-	djnez %r1,.0010
+	add %r1,%r1,%r0,$-1
+	jgtz %r1,.0010
 	ret $0xff
 
 PlotRandomPoints:
@@ -313,31 +321,53 @@ PlotRandomPoints:
 	
 	loadi64 %r7,$0xFE000DC0		; graphics command queue address
 	; set random X0
-	macRandCoord $0x1000000000
+	macRandCoord X,$0x1000000000
 	; set random Y0
-	macRandCoord $0x1100000000
+	macRandCoord Y,$0x1100000000
 	; set random pen color
 	macRandColor $0x0c00000000
 	loadi64 %r6,$0x0100000010	; plot command copy
 	store %r6,[%r7]						; queue command
-	djnez %r5,.0007
+	add %r5,%r5,%r0,$-1
+	jgtz %r5,.0007
 	ret $0xff
 
 DrawDownDiagonal:
-	loadi %r3,$0x1000000000
-	loadi %r4,$0x1100000000
+	loadi64 %r3,$0x1000000000
+	loadi64 %r4,$0x1100000000
 	loadi %r5,$300
-	loadi64 %r1,$0x10000	; increment
+	loadi64 %r6,$0x0100000010	; plot command copy
 .0002:
-	loadi %r10,$1000
 	macWaitForQueue $4
+	loadi64 %r7,$0xFE000DC0		; graphics command queue address
 	store %r3,[%r7]
 	store %r4,[%r7]
 	store %r6,[%r7]
-	add %r3,%r3,%r1,$0	; increment x0
-	add %r4,%r4,%r1,$0	; increment y0
-	djnez %r5,.0002
+	loadi %r1,$0x100			; set increment = 0x10000
+	shl %r1,%r1,%r0,$8
+	add %r3,%r3,%r1,$0		; increment x0
+	add %r4,%r4,%r1,$0		; increment y0
+	add %r5,%r5,%r0,$-1
+	jgtz %r5,.0002
 	ret $0xff
+
+WhiteRect:
+	loadi64 %r7,$0xFE000DC0		; graphics command queue address
+	macWaitForQueue $7
+	loadi64 %r7,$0xFE000DC0		; graphics command queue address
+	loadi64 %r1,$0x0d00007FFF	; WHITE fill color
+	store %r1,[%r7]
+	loadi64 %r1,$0x1000200000		; X0 = 32
+	store %r1,[%r7]
+	loadi64 %r1,$0x1100200000		; Y0 = 32
+	store %r1,[%r7]
+	loadi64 %r1,$0x1301000000		; X1 = 256
+	store %r1,[%r7]
+	loadi64 %r1,$0x1400960000		; Y1 = 100
+	store %r1,[%r7]
+	loadi64 %r1,$0x0300000010		; fillrect
+	store %r1,[%r7]
+	ret $0xff	
 
 DrawRandomRectangles:
 	loadi %r5,$3000
@@ -349,20 +379,23 @@ DrawRandomRectangles:
 	and %r2,%r2,%r2,$1				; =1?
 	jeqz %r2,.0008						; go back if not done
 	loadi64 %r7,$0xFE000DC0		; graphics command queue address
-	macWaitForQueue $6
+	macWaitForQueue $7
+	loadi64 %r7,$0xFE000DC0		; graphics command queue address
 	; random fill color
 	macRandColor $0x0d00000000
 	; set random X0
-	macRandCoord $0x1000000000
+	macRandCoord X,$0x1000000000
 	; set random Y0
-	macRandCoord $0x1100000000
+	macRandCoord Y,$0x1100000000
 	; set random X1
-	macRandCoord $0x1300000000
+	macRandCoord X,$0x1300000000
 	; set random Y1
-	macRandCoord $0x1400000000
+	macRandCoord Y,$0x1400000000
 	loadi64 %r1,$0x0300000010		; fillrect
 	store %r1,[%r7]
-	djnez %r5,.0008
+	store %r1,[%r7]
+	add %r5,%r5,%r0,$-1
+	jgtz %r5,.0008
 	ret $0xff
 
 DrawRandomTriangles:
@@ -371,49 +404,194 @@ DrawRandomTriangles:
 	loadi64 %r7,$0xFE000DC0		; graphics command queue address
 	macWaitForQueue $8
 	loadi %r10,$10000
+	loadi64 %r7,$0xFE000DC0		; graphics command queue address
 	; set random X0
-	macRandCoord $0x1000000000
+	macRandCoord X,$0x1000000000
 	; set random Y0
-	macRandCoord $0x1100000000
+	macRandCoord Y,$0x1100000000
 	; set random X1
-	macRandCoord $0x1300000000
+	macRandCoord X,$0x1300000000
 	; set random Y1
-	macRandCoord $0x1400000000
+	macRandCoord Y,$0x1400000000
 	; set random X2
-	macRandCoord $0x1600000000
+	macRandCoord X,$0x1600000000
 	; set random Y2
-	macRandCoord $0x1700000000
+	macRandCoord Y,$0x1700000000
 	; set random color
 	macRandColor $0x0d00000000	; fill color
+	loadi64 %r7,$0xFE000DC0		; graphics command queue address
 	loadi64 %r1,$0x0600000010		; draw triangle
 	store %r1,[%r7]
-	djnez %r5,.0006
+	add %r5,%r5,%r0,$-1
+	jgtz %r5,.0006
 	ret $0xff
 
 ; Draw characters on screen.
 DrawCharacters:
 	loadi64 %r7,$0xFE000DC0		; graphics command queue address
 	; set random pen color
-	macRandColor $0x0c00000000
-	loadi64 %r3,$0x1000400000		; x0 = 64
+;	macRandColor $0x0c00000000
+	loadi64 %r2,$0x0c00007C00	; set RED pen color
+	store %r2,[%r7]
+	loadi64 %r3,$0x1000200000		; x0 = 32
 	loadi64 %r4,$0x1100280000		; y0 = 40
 	store %r4,[%r7]
-	loadi %r5,$32
+	loadi %r5,$40
 	loadi64 %r1,$0x90000	; increment
-	loadi64 %r2,$0x0d00007FFF	; set transparent fill color
+	loadi64 %r2,$0x0d00007FFF	; set WHITE fill color
 	store %r2,[%r7]
-	loadi %r2,$0x20
+	loadi64 %r2,$0x3e00000041	; start with 'A' character
 .0005:
 	loadi64 %r7,$0xFE000DC0		; graphics command queue address
 	macWaitForQueue $3
 	loadi64 %r7,$0xFE000DC0		; graphics command queue address
 	store %r3,[%r7]						; set X position
+	store %r4,[%r7]						; set Y position
 	store %r2,[%r7]						; store character
 	add %r2,%r2,%r0,$1				; next character
+	loadi64 %r1,$0x90000			; increment
 	add %r3,%r3,%r1,$0				; increment x0
-	djnez %r5,.0005
+	add %r5,%r5,%r0,$-1
+	jgtz %r5,.0005
 	ret $0xff
 
+InitCursors:
+	; initialize cursor color regs with random data
+	loadi64 %r3,$0xFE000000		; cursor color regs
+	loadi %r5,$256						; 256 regs
+.0003:
+	loadi64 %r2,$0xFE007800		; get random number
+	load %r2,[%r2]
+	store %r2,[%r3]
+	add %r3,%r3,%r0,$8
+	djnez %r5,.0003
+
+	loadi64 %r3,$0xFE000800		; cursor control regs
+	loadi %r1,$0
+	loada %r2,sprdat
+	loadi %r5,$32*2						; 32 cursors, 2 words each
+.0001:
+	load %r4,[%r2]						; get info from table
+	store %r4,[%r3]						; store in cursor register
+	add %r3,%r3,%r0,$0x08			; advance to next reg
+	add %r2,%r2,%r0,$0x08			; advance to next table value
+	add %r5,%r5,%r0,$-1
+	jgtz %r5,.0001
+
+	; Set random cursor image data
+	loadi %r5,$512						; 512 words to set
+	loadi64 %r3,$0x00140000
+.0002:
+	loadi64 %r2,$0xFE007800		; get random number
+	load %r2,[%r2]
+	store %r2,[%r3]						; store as image
+	add %r3,%r3,%r0,$8				; move to next word
+	add %r5,%r5,%r0,$-1
+	jgtz %r5,.0002
+	ret $0xff
+
+; Get a random fixed point number between 0 and the value in r9
+;
+; Modifies:
+;		none
+; Parameters:
+;		r9 = max value (16.16) fixed point
+; Returns:
+;		r1 = fixed point (16.16) random number
+
+Random:
+	; Fetch a random number and treat it as a fraction less than one.
+	; This number has 31 fractional digits.
+	loadi64 %r1,$0xFE007800
+	load %r1,[%r1]
+;	and64 %r1,%r1,%r1,$0xffffff
+;	ret $0xfe
+	and64 %r1,%r1,%r1,$0x7fffffff
+	mul %r1,%r9,%r1,$0
+	; We multiplied by a 31-bit number, so now scale back
+	shr %r1,%r1,%r0,$31
+;	and64 %r1,%r1,%r1,$0xffffffff
+	ret $0xfe
+
+RandomX:
+	loadi64 %r9,$400<<16
+	call Random
+	or %r1,%r1,%r10,$0
+	ret $0xfe
+
+RandomY:
+	loadi64 %r9,$300<<16
+	call Random
+	or %r1,%r1,%r10,$0
+	ret $0xfe
+
+	.align 3
+sprdat:
+	.8byte 0x00140000
+	.8byte 0x0000000000000400
+	.8byte 0x00140400
+	.8byte 0x0000003000000400
+	.8byte 0x00140800
+	.8byte 0x0000006000000400
+	.8byte 0x00140C00
+	.8byte 0x0000009000000400
+	.8byte 0x00141000
+	.8byte 0x000000C000000400
+	.8byte 0x00141400
+	.8byte 0x000000F000000400
+	.8byte 0x00141800
+	.8byte 0x0000012000000400
+	.8byte 0x00141C00
+	.8byte 0x0000015000000400
+	.8byte 0x00142000
+	.8byte 0x0030000000000400
+	.8byte 0x00142400
+	.8byte 0x0030003000000400
+	.8byte 0x00142800
+	.8byte 0x0030006000000400
+	.8byte 0x00142C00
+	.8byte 0x0030009000000400
+	.8byte 0x00143000
+	.8byte 0x003000C000000400
+	.8byte 0x00143400
+	.8byte 0x003000F000000400
+	.8byte 0x00143800
+	.8byte 0x0030012000000400
+	.8byte 0x00143C00
+	.8byte 0x0030015000000400
+	.8byte 0x00144000
+	.8byte 0x0060000000000400
+	.8byte 0x00144400
+	.8byte 0x0060003000000400
+	.8byte 0x00144800
+	.8byte 0x0060006000000400
+	.8byte 0x00144C00
+	.8byte 0x0060009000000400
+	.8byte 0x00145000
+	.8byte 0x006000C000000400
+	.8byte 0x00145400
+	.8byte 0x006000F000000400
+	.8byte 0x00145800
+	.8byte 0x0060012000000400
+	.8byte 0x00145C00
+	.8byte 0x0060015000000400
+	.8byte 0x00146000
+	.8byte 0x0090000000000400
+	.8byte 0x00146400
+	.8byte 0x0090003000000400
+	.8byte 0x00146800
+	.8byte 0x0090006000000400
+	.8byte 0x00146C00
+	.8byte 0x0090009000000400
+	.8byte 0x00147000
+	.8byte 0x009000C000000400
+	.8byte 0x00147400
+	.8byte 0x009000F000000400
+	.8byte 0x00147800
+	.8byte 0x0090012000000400
+	.8byte 0x00147C00
+	.8byte 0x0090015000000400
+	
 ; Delay a little bit.
 ; Parameters:
 ;		r10 = amount of delay
@@ -453,7 +631,8 @@ alloc_page:
 	jlt %r1,%r4,.0003
 	xor %r1,%r1,%r1						; r1 = index zero
 .0003:
-	djnez %r4,.0001
+	add %r4,%r4,%r0,$-1
+	jgtz %r4,.0001
 	; Here the entire bitmap was searched and no free page was found.
 	; Report out-of-memory condition
 	store $-1,cmd_arg1
@@ -503,7 +682,8 @@ flush1:											; entry point for flush by asid
 	jltz %r3,cmd_ok						; was the flush done?
 	loadi %r1,$32							; wait a few cycles
 .0002:
-	djnez %r1,.0002
+	add %r1,%r1,%r0,$-1
+	jgtz %r1,.0002
 	flush %r3,%r2,$1					; turn flush on to allow a few flushes
 	jgtz %r3,.0001
 	jump cmd_ok
