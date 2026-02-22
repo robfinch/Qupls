@@ -49,6 +49,7 @@ typedef enum logic [4:0]
 	OP_FLUSH,
 	OP_JMP = 9,
 	OP_STOREW,
+	OP_MUL,
 	OP_CALC_INDEX = 12,
 	OP_CALC_ADR,
 	OP_BUILD_ENTRY_NO,
@@ -183,8 +184,29 @@ typedef enum logic [6:0]
 	st_sprite_acc,
 	st_sprite_nack,
 	
-	st_tblit_iret,
-	st_hsync_iret
+	st_tblit_iret,	// 80
+	st_hsync_iret,
+	st_set_pixel,
+	st_set_pixel1,
+	st_set_pixel2,
+	st_set_pixel3,
+	st_write_delay,
+
+	st_bc1,
+	st_bc2,
+	st_bc3,
+	st_bc4,					// 90
+	st_bc5,
+	st_bc6,
+	st_bc7,
+	st_bc8,
+	st_bc9,
+	st_bc10,
+	
+	st_dl_get_pixel,
+	st_dl_set_pixel,
+	st_dl_test,
+	st_dl_ret
 } copro_state_t;
 
 endpackage

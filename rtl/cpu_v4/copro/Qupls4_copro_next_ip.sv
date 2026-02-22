@@ -40,14 +40,14 @@ import cpu_types_pkg::*;
 import wishbone_pkg::*;
 import Qupls4_copro_pkg::*;
 
-module Qupls4_copro_next_ip(rst, state, pe_vsync, miss, paging_en, ir,
-	takb, after_pos, adr_hit, a, stack, sp, wait_active,
+module Qupls4_copro_next_ip(rst, state, vsync_det, miss, paging_en, ir,
+	takb, after_pos, adr_hit, a, stk_ip, wait_active,
 	req, resp, local_sel, roma, douta, arg_dat,
 	ip, ipr, tblit_ip, hsync_ip, cmdq_empty, next_ip);
 parameter UNALIGNED_CONSTANTS = 0;
 input rst;
 input copro_state_t state;
-input pe_vsync;
+input vsync_det;
 input [1:0] miss;
 input paging_en;
 input copro_instruction_t ir;
@@ -57,14 +57,13 @@ input adr_hit;
 input [63:0] a;
 input [19:2] ip;
 input [19:2] ipr;
-input [529:0] stack [0:15];
-input [3:0] sp;
+input [19:2] stk_ip;
 input cmdq_empty;
 input wait_active;
 input wb_cmd_request256_t req;
 input wb_cmd_response256_t resp;
 input local_sel;
-input [12:0] roma;
+input [31:0] roma;
 input [63:0] douta;
 input [63:0] arg_dat;
 input address_t tblit_ip;
@@ -85,10 +84,12 @@ st_ifetch:
 	begin
 		if (!wait_active)
 			next_ip = ip + 1;
-		if (pe_vsync)
+		/*
+		if (vsync_det)
 			next_ip = 19'h0080;
 		else if (|miss & paging_en)
 			next_ip = 19'h0004;
+		*/
 //		else if (!cmdq_empty)
 //			next_ip <= ip;
 	end
@@ -124,7 +125,7 @@ st_execute:
 			case(ir.Rd)
 			4'd0:	next_ip = a + {{17{ir.imm[14]}},ir.imm};	// JMP
 			4'd1:	next_ip = a + {{17{ir.imm[14]}},ir.imm};	// CALL
-			4'd2:	next_ip = stack[sp][527:512];	//RET
+			4'd2:	next_ip = stk_ip;	//RET
 			default:	;
 			endcase
 		OP_ADD64,OP_AND64,OP_STOREI64:
