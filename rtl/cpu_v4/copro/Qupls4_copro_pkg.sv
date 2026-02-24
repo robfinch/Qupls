@@ -43,8 +43,7 @@ typedef enum logic [4:0]
 	OP_SKIP,
 	OP_LOAD_CONFIG,
 	OP_JCC,
-	OP_ADD64,
-	OP_STOREI64,
+	OP_STOREI64 = 6,
 	OP_BMP,
 	OP_FLUSH,
 	OP_JMP = 9,
@@ -61,8 +60,7 @@ typedef enum logic [4:0]
 	OP_SHL = 20,
 	OP_SHR,
 	OP_ADD,
-	OP_AND64,
-	OP_AND,
+	OP_AND = 24,
 	OP_OR,
 	OP_XOR
 } copro_opcode_t;
@@ -106,10 +104,10 @@ typedef enum logic [6:0]
 	st_bit_store,
 	st_wakeup,
 	st_wakeup2,
-	st_even64,
-	st_even64a,
 	st_odd64,
 	st_odd64a,
+	st_odd64b,
+	st_odd64c,
 
 	st_latch_data,
 	st_aud0,
@@ -208,5 +206,11 @@ typedef enum logic [6:0]
 	st_dl_test,
 	st_dl_ret
 } copro_state_t;
+
+typedef enum logic [1:0] {
+	rgb111 = 2'd0,
+	rgb332,
+	rgb555
+} color_depth_t;
 
 endpackage

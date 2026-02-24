@@ -55,9 +55,9 @@ input takb;
 input after_pos;
 input adr_hit;
 input [63:0] a;
-input [19:2] ip;
-input [19:2] ipr;
-input [19:2] stk_ip;
+input [19:0] ip;
+input [19:0] ipr;
+input [19:0] stk_ip;
 input cmdq_empty;
 input wait_active;
 input wb_cmd_request256_t req;
@@ -68,11 +68,11 @@ input [63:0] douta;
 input [63:0] arg_dat;
 input address_t tblit_ip;
 input address_t hsync_ip;
-output reg [19:2] next_ip;
+output reg [19:0] next_ip;
 
 always_comb
 if (rst)
-	next_ip = 19'd0;
+	next_ip = 20'd0;
 else begin
 	next_ip = ip;
 	case(state)
@@ -83,7 +83,7 @@ st_tblit_iret:
 st_ifetch:
 	begin
 		if (!wait_active)
-			next_ip = ip + 1;
+			next_ip = ip + 4;
 		/*
 		if (vsync_det)
 			next_ip = 19'h0080;
@@ -118,35 +118,39 @@ st_execute:
 		// Conditional jumps
 		OP_JCC:
 			if (takb)
-				next_ip = ir.imm;
+				next_ip = {ir.imm,2'b00};
 
 		// Unconditional jumps / calls / return.
 		OP_JMP:
 			case(ir.Rd)
-			4'd0:	next_ip = a + {{17{ir.imm[14]}},ir.imm};	// JMP
-			4'd1:	next_ip = a + {{17{ir.imm[14]}},ir.imm};	// CALL
+			4'd0:	next_ip = a + {{17{ir.imm[14]}},ir.imm,2'b00};	// JMP
+			4'd1:	next_ip = a + {{17{ir.imm[14]}},ir.imm,2'b00};	// CALL
 			4'd2:	next_ip = stk_ip;	//RET
 			default:	;
 			endcase
-		OP_ADD64,OP_AND64,OP_STOREI64:
+		OP_ADD,OP_AND,OP_OR,OP_XOR,OP_MUL:
+			case(ir.imm)
+			15'h4001: next_ip = ip; 
+			15'h4000: next_ip = ip;
+			default:  next_ip = ip;
+			endcase
+		OP_STOREI64:
 			begin
+/*				
 				if (~ipr[2] & UNALIGNED_CONSTANTS)
 					;
 				else
-					next_ip = ip + 0;
+*/				
+				next_ip = ip;
 			end
 		default:;
 		endcase
 	end
 
-// This state will be stripped out unless unaligned constants are allowed.
-st_even64:
-	next_ip = ip + 1;
-st_even64a:
-	next_ip = ip + 1;
-
 st_odd64:
-	next_ip = ip + 2;
+	next_ip = ip + 4;
+st_odd64b:
+	next_ip = ip + 4;
 
 // Memory states
 st_ip_load:

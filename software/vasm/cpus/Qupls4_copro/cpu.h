@@ -178,6 +178,7 @@ typedef struct {
 #define FLG_CONST64	128	/* 64-bit constant follows */
 #define FLG_STORE		256
 #define FLG_BRANCH	512
+#define FLG_JUMP		1024
 
 #define EXI8	0x46
 #define EXI24	0x48

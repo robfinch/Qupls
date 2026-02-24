@@ -6,12 +6,12 @@
 st_plot:
 	begin
 		ngs <= st_ifetch;
-		gcx <= p0x[31:16];//fixToInt(p0x);
-		gcy <= p0y[31:16];//fixToInt(p0y);
+		gcx <= fixToInt(p0x);
+		gcy <= fixToInt(p0y);
 		if (IsBinaryROP(ctrl[11:8]))
-			tCall(st_delay2,st_plot_read);
+			tCall(st_delay3,st_plot_read);
 		else
-			tCall(st_delay2,st_plot_write);
+			tCall(st_delay3,st_plot_write);
 	end
 st_plot_read:
 	tMemRead(ma,st_plot_write);

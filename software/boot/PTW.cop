@@ -40,24 +40,24 @@
 	.set gr_cmdq,$0xFE000DC0
 
 .macro macRandCoord n,m
-	loadi64 %r10,\m
+	loadi %r10,\m
 	call Random\n
 	store %r1,[%r7]
 .endm
 
 .macro macRandColor n
-	loadi64 %r2,$0xFE007800
+	loadi %r2,$0xFE007800
 	load %r2,[%r2]
-	loadi64 %r1,$0x32767
+	loadi %r1,$0x32767
 	and %r2,%r2,%r1,$-1
-	loadi64 %r1,\n
+	loadi %r1,\n
 	or %r1,%r1,%r2,$0
 	store %r1,[%r7]
 .endm
 
 .macro macWaitForQueue n
 .0007\@:
-	loadi64 %r7,$0xFE000DC8		; status reg
+	loadi %r7,$0xFE000DC8		; status reg
 	load %r7,[%r7]						; get status
 	loadi %r11,\n							; number of entries we want available
 	jlt %r7,%r11,.0007\@
@@ -101,7 +101,7 @@ read_leveln:
 	jgez %r2,page_fault			; check for valid page
 	shl %r7,%r2,$10					; get bit 53 status
 ;	jltz %r7,read_level0a		; if a shortcut page...
-	and64 %r2,%r2,%r2,$0x7fffffffff		; extract PPN
+	and %r2,%r2,%r2,$0x7fffffffff		; extract PPN
 	shl %r2,%r2,%r3					; r2 = address of page table
 	add %r4,%r4,%r0,$-1
 	jgtz %r4,read_leveln		; go down a level
@@ -173,13 +173,44 @@ set_tlbe:
 initialize:
 	call ResetPAM
 	call ClearScreen
-	call DrawDownDiagonal
-	call WhiteRect
-;	call PlotRandomPoints
-;	call InitCursors
-;	call DrawCharacters
-;	call DrawRandomRectangles
-	call DrawRandomTriangles
+.0001:
+	call PlotRandomPoints
+	call DrawRandomRectangles
+	jmp .0001
+.menu:
+;	loadi %r12,$0xFE007808		; buttons and switches
+;	load %r13,[%r12]
+;	shr %r13,%r13,%r0,$8			; shift over to buttons
+;	and %r13,%r13,%r13,$0x1f	; there are only five buttons
+;	jeqz %r13,.menu
+;	loadi %r12,$9							; max 
+;	jgt %r13,%r12,.menu
+;	shl %r13,%r13,%r0,$3			; make word index
+;	load %r13,main_menu[%r13]
+;	call [%r13]
+;	jmp .menu
+
+	.align 3
+main_menu:
+;	.8byte 0
+;	.2byte ClearScreen
+;	.2byte 0,0,0
+;	.2byte PlotRandomPoints
+;	.2byte 0,0,0
+;	.2byte DrawDownDiagonal
+;	.2byte 0,0,0
+;	.2byte DrawUpDiagonal
+;	.2byte 0,0,0
+;	.2byte WhiteRect
+;	.2byte 0,0,0
+;	.2byte DrawRandomRectangles
+;	.2byte 0,0,0
+;	.2byte DrawRandomTriangles
+;	.2byte 0,0,0
+;	.2byte DrawCharacters
+;	.2byte 0,0,0
+;	.2byte InitCursors
+;	.2byte 0,0,0
 
 	; fall through into idle state
 
@@ -271,9 +302,9 @@ ResetPAM:
 
 ;	call RandomizeScreen
 
-;	loadi64 %r3,$0x00100000
+;	loadi %r3,$0x00100000
 ;	loadi %r5,$300	
-;	loadi64 %r2,$0x03e003e003e003e0
+;	loadi %r2,$0x03e003e003e003e0
 .0004:
 ;	store %r2,[%r3]
 ;	add %r3,%r3,%r0,$802
@@ -286,10 +317,10 @@ plot25k:
 	
 ; Clear screen
 ClearScreen:
-	loadi64 %r1,$30000
-;	loadi64 %r2,$0x7c007c007c007c00		; RED
-	loadi64 %r3,$0x00100000
-	loadi64 %r2,$0x7FCE7FCE7FCE7FCE		; RED
+	loadi %r1,$30000
+;	loadi %r2,$0x7c007c007c007c00		; RED
+	loadi %r3,$0x00100000
+	loadi %r2,$0x7FCE7FCE7FCE7FCE		; RED
 .0001:
 	store %r2,[%r3]	; Pale yellow
 	add %r3,%r3,%r0,$8
@@ -299,10 +330,10 @@ ClearScreen:
 
 	; Randomize screen
 RandomizeScreen:
-	loadi64 %r1,$120000
-	loadi64 %r3,$0x00100000
+	loadi %r1,$120000
+	loadi %r3,$0x00100000
 .0010:
-	loadi64 %r2,$0xFE007800	; get random number
+	loadi %r2,$0xFE007800	; get random number
 	load %r2,[%r2]
 	storew %r2,[%r3]				; store as pixel
 	add %r3,%r3,%r0,$2			; advance to next pixel
@@ -311,76 +342,105 @@ RandomizeScreen:
 	ret $0xff
 
 PlotRandomPoints:
-	loadi64 %r7,$0xFE000DC0		; graphics command queue address
+	loadi %r7,$0xFE000DC0		; graphics command queue address
 
-;	loadi64 %r2,$0x0c000003e0	; set green pencolor
+;	loadi %r2,$0x0c000003e0	; set green pencolor
 ;	store %r2,[%r7]
 	loadi %r5,$15000					; repeat 25000 times
 .0007:
 	macWaitForQueue $5
 	
-	loadi64 %r7,$0xFE000DC0		; graphics command queue address
+	loadi %r7,$0xFE000DC0		; graphics command queue address
 	; set random X0
 	macRandCoord X,$0x1000000000
 	; set random Y0
 	macRandCoord Y,$0x1100000000
 	; set random pen color
 	macRandColor $0x0c00000000
-	loadi64 %r6,$0x0100000010	; plot command copy
+	loadi %r6,$0x0100000010	; plot command copy
 	store %r6,[%r7]						; queue command
 	add %r5,%r5,%r0,$-1
 	jgtz %r5,.0007
 	ret $0xff
 
+; Basic test for point plotting and co-ordinates, draw a diagonal line from one
+; corner of the screen to another. This will cause a number of issues to show up
+; if everything is not working.
+
 DrawDownDiagonal:
-	loadi64 %r3,$0x1000000000
-	loadi64 %r4,$0x1100000000
-	loadi %r5,$300
-	loadi64 %r6,$0x0100000010	; plot command copy
+	loadi %r3,$0x1000000000
+	loadi %r4,$0x1100000000
+	loadi %r5,$400
+	loadi %r6,$0x0100000010	; plot command copy
 .0002:
 	macWaitForQueue $4
-	loadi64 %r7,$0xFE000DC0		; graphics command queue address
+	loadi %r7,$0xFE000DC0		; graphics command queue address
 	store %r3,[%r7]
 	store %r4,[%r7]
 	store %r6,[%r7]
-	loadi %r1,$0x100			; set increment = 0x10000
-	shl %r1,%r1,%r0,$8
+	loadi %r1,$0x10000		; set x increment = 0x10000 (1.0)
+	loadi %r2,$0x0C000		; set y increment = 0x0c000	(0.75)
 	add %r3,%r3,%r1,$0		; increment x0
-	add %r4,%r4,%r1,$0		; increment y0
+	add %r4,%r4,%r2,$0		; increment y0
 	add %r5,%r5,%r0,$-1
 	jgtz %r5,.0002
 	ret $0xff
 
+DrawUpDiagonal:
+	loadi %r3,$0x1000000190	; x = 400
+	loadi %r4,$0x1100000000	; y = 0
+	loadi %r5,$400
+	loadi %r6,$0x0100000010	; plot command copy
+.0002:
+	macWaitForQueue $4
+	loadi %r7,$0xFE000DC0		; graphics command queue address
+	store %r3,[%r7]
+	store %r4,[%r7]
+	store %r6,[%r7]
+	loadi %r1,$0xFFFF0000	; set x increment = -1.0
+	loadi %r2,$0x0c000		; set y increment = 0.75
+	add %r3,%r3,%r1,$0		; increment x0
+	add %r4,%r4,%r2,$0		; increment y0
+	add %r5,%r5,%r0,$-1
+	jgtz %r5,.0002
+	ret $0xff
+
+; Basic test for rectangle drawing, draw a white rectangle at a fixed location.
+; Tests blitter drawing.
+
 WhiteRect:
-	loadi64 %r7,$0xFE000DC0		; graphics command queue address
+	loadi %r7,$0xFE000DC0		; graphics command queue address
 	macWaitForQueue $7
-	loadi64 %r7,$0xFE000DC0		; graphics command queue address
-	loadi64 %r1,$0x0d00007FFF	; WHITE fill color
+	loadi %r7,$0xFE000DC0		; graphics command queue address
+	loadi %r1,$0x0d00007FFF	; WHITE fill color
 	store %r1,[%r7]
-	loadi64 %r1,$0x1000200000		; X0 = 32
+	loadi %r1,$0x1000200000		; X0 = 32
 	store %r1,[%r7]
-	loadi64 %r1,$0x1100200000		; Y0 = 32
+	loadi %r1,$0x1100200000		; Y0 = 32
 	store %r1,[%r7]
-	loadi64 %r1,$0x1301000000		; X1 = 256
+	loadi %r1,$0x1301000000		; X1 = 256
 	store %r1,[%r7]
-	loadi64 %r1,$0x1400960000		; Y1 = 100
+	loadi %r1,$0x1400960000		; Y1 = 100
 	store %r1,[%r7]
-	loadi64 %r1,$0x0300000010		; fillrect
+	loadi %r1,$0x0300000010		; fillrect
 	store %r1,[%r7]
 	ret $0xff	
+
+; Demo
+; Draw a bunch of rectangles.
 
 DrawRandomRectangles:
 	loadi %r5,$3000
 .0008:
 	; Check if previous blit was done
-	loadi64 %r9,$0xFE000D98		; blt control
+	loadi %r9,$0xFE000D98		; blt control
 	load %r2,[%r9]
 	shr %r2,%r2,%r0,$13				; bit 13
 	and %r2,%r2,%r2,$1				; =1?
 	jeqz %r2,.0008						; go back if not done
-	loadi64 %r7,$0xFE000DC0		; graphics command queue address
+	loadi %r7,$0xFE000DC0		; graphics command queue address
 	macWaitForQueue $7
-	loadi64 %r7,$0xFE000DC0		; graphics command queue address
+	loadi %r7,$0xFE000DC0		; graphics command queue address
 	; random fill color
 	macRandColor $0x0d00000000
 	; set random X0
@@ -391,8 +451,7 @@ DrawRandomRectangles:
 	macRandCoord X,$0x1300000000
 	; set random Y1
 	macRandCoord Y,$0x1400000000
-	loadi64 %r1,$0x0300000010		; fillrect
-	store %r1,[%r7]
+	loadi %r1,$0x0300000010		; fillrect
 	store %r1,[%r7]
 	add %r5,%r5,%r0,$-1
 	jgtz %r5,.0008
@@ -401,10 +460,10 @@ DrawRandomRectangles:
 DrawRandomTriangles:
 	loadi %r5,$1000
 .0006:
-	loadi64 %r7,$0xFE000DC0		; graphics command queue address
+	loadi %r7,$0xFE000DC0		; graphics command queue address
 	macWaitForQueue $8
 	loadi %r10,$10000
-	loadi64 %r7,$0xFE000DC0		; graphics command queue address
+	loadi %r7,$0xFE000DC0		; graphics command queue address
 	; set random X0
 	macRandCoord X,$0x1000000000
 	; set random Y0
@@ -419,54 +478,57 @@ DrawRandomTriangles:
 	macRandCoord Y,$0x1700000000
 	; set random color
 	macRandColor $0x0d00000000	; fill color
-	loadi64 %r7,$0xFE000DC0		; graphics command queue address
-	loadi64 %r1,$0x0600000010		; draw triangle
+	loadi %r7,$0xFE000DC0		; graphics command queue address
+	loadi %r1,$0x0600000010		; draw triangle
 	store %r1,[%r7]
 	add %r5,%r5,%r0,$-1
 	jgtz %r5,.0006
 	ret $0xff
 
 ; Draw characters on screen.
+; Tests text blitter
+
 DrawCharacters:
-	loadi64 %r7,$0xFE000DC0		; graphics command queue address
+	loadi %r7,$0xFE000DC0		; graphics command queue address
 	; set random pen color
 ;	macRandColor $0x0c00000000
-	loadi64 %r2,$0x0c00007C00	; set RED pen color
+	loadi %r2,$0x0c00007C00	; set RED pen color
 	store %r2,[%r7]
-	loadi64 %r3,$0x1000200000		; x0 = 32
-	loadi64 %r4,$0x1100280000		; y0 = 40
+	loadi %r3,$0x1000200000		; x0 = 32
+	loadi %r4,$0x1100280000		; y0 = 40
 	store %r4,[%r7]
 	loadi %r5,$40
-	loadi64 %r1,$0x90000	; increment
-	loadi64 %r2,$0x0d00007FFF	; set WHITE fill color
+	loadi %r1,$0x90000	; increment
+	loadi %r2,$0x0d00007FFF	; set WHITE fill color
 	store %r2,[%r7]
-	loadi64 %r2,$0x3e00000041	; start with 'A' character
+	loadi %r2,$0x3e00000041	; start with 'A' character
 .0005:
-	loadi64 %r7,$0xFE000DC0		; graphics command queue address
+	loadi %r7,$0xFE000DC0		; graphics command queue address
 	macWaitForQueue $3
-	loadi64 %r7,$0xFE000DC0		; graphics command queue address
+	loadi %r7,$0xFE000DC0		; graphics command queue address
 	store %r3,[%r7]						; set X position
 	store %r4,[%r7]						; set Y position
 	store %r2,[%r7]						; store character
 	add %r2,%r2,%r0,$1				; next character
-	loadi64 %r1,$0x90000			; increment
+	loadi %r1,$0x90000			; increment
 	add %r3,%r3,%r1,$0				; increment x0
 	add %r5,%r5,%r0,$-1
 	jgtz %r5,.0005
 	ret $0xff
 
+; Initialize cursor color regs with random data
+
 InitCursors:
-	; initialize cursor color regs with random data
-	loadi64 %r3,$0xFE000000		; cursor color regs
+	loadi %r3,$0xFE000000		; cursor color regs
 	loadi %r5,$256						; 256 regs
 .0003:
-	loadi64 %r2,$0xFE007800		; get random number
+	loadi %r2,$0xFE007800		; get random number
 	load %r2,[%r2]
 	store %r2,[%r3]
 	add %r3,%r3,%r0,$8
 	djnez %r5,.0003
 
-	loadi64 %r3,$0xFE000800		; cursor control regs
+	loadi %r3,$0xFE000800		; cursor control regs
 	loadi %r1,$0
 	loada %r2,sprdat
 	loadi %r5,$32*2						; 32 cursors, 2 words each
@@ -480,9 +542,9 @@ InitCursors:
 
 	; Set random cursor image data
 	loadi %r5,$512						; 512 words to set
-	loadi64 %r3,$0x00140000
+	loadi %r3,$0x00140000
 .0002:
-	loadi64 %r2,$0xFE007800		; get random number
+	loadi %r2,$0xFE007800		; get random number
 	load %r2,[%r2]
 	store %r2,[%r3]						; store as image
 	add %r3,%r3,%r0,$8				; move to next word
@@ -502,28 +564,44 @@ InitCursors:
 Random:
 	; Fetch a random number and treat it as a fraction less than one.
 	; This number has 31 fractional digits.
-	loadi64 %r1,$0xFE007800
+	loadi %r1,$0xFE007800
 	load %r1,[%r1]
 ;	and64 %r1,%r1,%r1,$0xffffff
 ;	ret $0xfe
-	and64 %r1,%r1,%r1,$0x7fffffff
+	and %r1,%r1,%r1,$0x7fffffff
 	mul %r1,%r9,%r1,$0
 	; We multiplied by a 31-bit number, so now scale back
 	shr %r1,%r1,%r0,$31
 ;	and64 %r1,%r1,%r1,$0xffffffff
 	ret $0xfe
 
+; Get a random X co-ordinate
+;
+; Parameters:
+;		r10 = point set command (for x0,x1 or x2)
+; Returns:
+;		r1 = point set command for random co-ord.
+
 RandomX:
-	loadi64 %r9,$400<<16
+	loadi %r9,$400<<16
 	call Random
 	or %r1,%r1,%r10,$0
 	ret $0xfe
 
+; Get a random Y co-ordinate
+;
+; Parameters:
+;		r10 = point set command (for y0,y1 or y2)
+; Returns:
+;		r1 = point set command for random co-ord.
+
 RandomY:
-	loadi64 %r9,$300<<16
+	loadi %r9,$300<<16
 	call Random
 	or %r1,%r1,%r10,$0
 	ret $0xfe
+
+; Table of data to initialize hardware cursors.
 
 	.align 3
 sprdat:

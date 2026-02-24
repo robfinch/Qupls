@@ -53,6 +53,7 @@ import Qupls4_copro_pkg::*;
 
 module Qupls4_copro2(rst, clk, sbus, mbus, cs_copro, miss, miss_adr, miss_asid,
   missack, paging_en, page_fault, iv_count, missack, idle,
+  sw, btnu, btnd, btnl, btnr, btnc, 
   vclk, hsync_i, vsync_i, blank_i, border_i, gfx_que_empty_i,
   aud0_out, aud1_out, aud2_out, aud3_out, aud_in,
   vid_out, de,
@@ -66,6 +67,7 @@ parameter BUSTO = 8'd9;
 parameter NSPR = 32;
 parameter CMD_FIFO_DEPTH = 1024;
 parameter phTotal = 1056;
+parameter RGB332 = 0;
 input rst;
 input clk;
 wb_bus_interface.slave sbus;
@@ -76,6 +78,12 @@ input address_t [2:0] miss_adr;
 input asid_t [2:0] miss_asid;
 output reg missack;
 output reg idle;
+input [7:0] sw;
+input btnu;
+input btnd;
+input btnl;
+input btnr;
+input btnc;
 output reg paging_en;
 output reg page_fault;
 output reg flush_en;
@@ -138,6 +146,7 @@ reg [5:0] flashcnt;
 
 reg [3:0] htask;
 reg [1:0] lowres = 2'b01;
+color_depth_t color_depth = rgb555;
 reg [23:0] borderColor = 24'h000000;
 reg [23:0] rgb;
 wire [23:0] rgb_i;
@@ -191,7 +200,7 @@ endfunction
 copro_state_t state, ngs = st_ifetch;
 copro_state_t [3:0] state_stack;
 
-copro_instruction_t ir,ir2,next_ir;
+copro_instruction_t ir,ir2,ir3,next_ir;
 wb_cmd_response64_t imresp;
 reg rdy1, rdy2, rdy3, rdy4;
 reg csc;
@@ -241,8 +250,8 @@ reg [63:0] r8=0,r9=0,r10=0,r11=0,r12=0,r13=0,r14=0,r15=0,tmp=0;
 reg [63:0] imm;
 reg [63:0] a,b;
 reg [63:0] res;
-wire [19:2] next_ip;
-reg [19:2] ip,ipr;					// instruction pointer
+wire [19:0] next_ip;
+reg [19:0] ip,ipr;					// instruction pointer
 reg ip2;
 reg [31:0] roma;
 reg local_sel;// = (state==st_mem_load|state==st_mem_store) & roma[31:16]==16'h0000;
@@ -303,8 +312,10 @@ wire [15:0] vid_dinb = lfsro[15:0];
 wire [15:0] vid_doutb;
 
 reg [63:0] mem_val;
+always_ff @(posedge clk)
+	ipr <= ip;
 always_comb
-	next_ir = ip2 ? douta[63:32] : douta[31:0];
+	next_ir = ip[2] ? douta[63:32] : douta[31:0];
 reg sleep;
 reg rfwr;
 wire dly2;
@@ -462,6 +473,8 @@ reg [63:0] charbmpr;
 address_t charBmpBase;
 reg [5:0] pixhc, pixvc;
 reg [31:0] charBoxX0, charBoxY0;
+reg [31:0] tblit_up0x, tblit_up0y;	// original co-ordinates
+reg [15:0] tblit_color;
 copro_instruction_t tblit_ir, hsync_ir;
 address_t tblit_ip, hsync_ip;
 
@@ -703,7 +716,7 @@ reg [1:0] blt_nch;
 // May need to set the pipeline depth to zero if copying neighbouring pixels
 // during a blit. So the app is allowed to control the pipeline depth. Depth
 // should not be set >28.
-reg [4:0] bltPipedepth = 5'd15;
+reg [4:0] bltPipedepth = 5'd0;	// Not used in this implementation.
 reg [4:0] bltPipedepthx;
 reg [31:0] bltinc;
 reg [4:0] bltAa,bltBa,bltCa;
@@ -912,7 +925,7 @@ AVICTriMult umul3
 
 reg [63:0] P1,P2,P3,P4,P5,P6;
 always_ff @(posedge clk)
-	P1 <= a * (b + {{49{ir.imm[14]}},ir.imm});
+	P1 <= a * (b + imm);
 always_ff @(posedge clk)
 	P2 <= P1;
 always_ff @(posedge clk)
@@ -979,6 +992,7 @@ if (rst) begin
 	foreach (spriteMcnt[n1])
 		spriteMcnt[n1] <= 32*32;
 	lowres <= 2'b01;
+	color_depth <= rgb555;
 	cmdq_in <= 40'hFFFFFFFFFF;
 	bltA_inc <= 8'd2;
 	bltB_inc <= 8'd2;
@@ -1106,9 +1120,10 @@ else begin
 			12'b000_1111_0110_0:	spriteEnable <= dat[31:0];
 			12'b000_1111_0110_1:	spriteLink1 <= dat[31:0];
 
-	    12'b000_1111_0111_0:
+	    12'b000_1111_0111_1:
 	     	begin
 					if (sel[0]) lowres <= dat[1:0];   
+					if (sel[1]) color_depth <= color_depth_t'(dat[1:0]);
 				end
 			// FC0 to FCF read-only
 			12'b001_1101_0000_0:	clear_page_fault <= TRUE;
@@ -1128,6 +1143,7 @@ else begin
 			casez(adr[14:3])
 			12'b000_1101_1100_1:	dato <= CMD_FIFO_DEPTH-cmdq_cnt;
 			12'hF00:	dato <= lfsro;
+			12'b111_1000_0000_1:	dato <= {51'd0,btnc,btnr,btnl,btnd,btnu,sw};
 			// To 12'hFDF
 			12'b111_1110_0000_0:	dato <= ptbr[0];
 			12'b111_1110_0001_0:	dato <= ptattr[0];
@@ -1155,6 +1171,7 @@ else begin
 			12'b000_1101_1100_1:	idat <= CMD_FIFO_DEPTH-cmdq_cnt;
 			12'b000_1111_0111_0:	idat <= collision;
 			12'b111_1000_0000_0:	idat <= lfsro;
+			12'b111_1000_0000_1:	idat <= {51'd0,btnc,btnr,btnl,btnd,btnu,sw};
 			// To 12'hFDF
 			12'b111_1110_0000_0:	idat <= ptbr[0];
 			12'b111_1110_0001_0:	idat <= ptattr[0];
@@ -1494,7 +1511,7 @@ wire rstk_enb = TRUE;
 reg rstk_wea;
 reg [4:0] rstk_addra, rstk_addrb;
 wire [21:0] rstk_douta, rstk_doutb;
-wire [19:2] stk_ip = rstk_doutb[19:2];
+wire [19:0] stk_ip = rstk_doutb[19:0];
 reg [21:0] rstk_dina;
 always_comb
 	rstk_addra = ret_sp - 5'd1;
@@ -1503,9 +1520,9 @@ always_comb
 always_ff @(posedge clk)
 	case(1'b1)
 	/*
-	(state==st_ifetch && vsync_det):	rstk_dina <= {2'b01,ip,2'b00};
-	(state==st_ifetch && (|miss & paging_en)):	rstk_dina <= {2'b10,ip,2'b00}; */
-	(state==st_execute && ir.opcode==OP_JMP && ir.Rd==4'd1):	rstk_dina <= {2'b00,ip,2'b00};
+	(state==st_ifetch && vsync_det):	rstk_dina <= {2'b01,ip};
+	(state==st_ifetch && (|miss & paging_en)):	rstk_dina <= {2'b10,ip}; */
+	(state==st_execute && ir.opcode==OP_JMP && ir.Rd==4'd1):	rstk_dina <= {2'b00,ip};
 	default:	;
 	endcase
 always_ff @(posedge clk)
@@ -1804,7 +1821,7 @@ count_accum #(.WID(32)) uca1
 
 always_ff @(posedge clk)
 if (rst)
-	ip <= 19'd0;
+	ip <= 20'd0;
 else
 	ip <= next_ip;
 
@@ -1968,21 +1985,18 @@ st_reset:
 st_reset2:
 	begin
 		ir <= next_ir;
-		ipr <= ip;
 		tGoto(st_execute);
 	end
 
 st_hsync_iret:
 	begin
 		ir <= hsync_ir;
-		ipr <= ip;
 		tGoto(st_execute);
 	end
 
 st_tblit_iret:
 	begin
 		ir <= tblit_ir;
-		ipr <= ip;
 		tGoto(st_execute);
 	end
 
@@ -1991,7 +2005,6 @@ st_ifetch:
 	begin
 		mulcnt <= 4'd0;
 		icnta <= 2;
-		ipr <= ip;
 		rfwr <= FALSE;
 		local_sel <= FALSE;
 		ir <= next_ir;
@@ -2391,13 +2404,7 @@ st_execute:
 				);
 			end
 		OP_STOREI64:
-			begin
-				// Was instruction at an odd address?
-				if (~ipr[2] & UNALIGNED_CONSTANTS)
-					tGoto(st_even64);
-				else
-					tGoto(st_odd64);
-			end
+			tGoto(st_odd64);
 		OP_BMP:
 			begin
 				tmp = (a >> 4'd6) + {{49{ir.imm[14]}},ir.imm};
@@ -2414,18 +2421,38 @@ st_execute:
 		// ALU ops also writeback here to trim a cycle from timing.
 		OP_SHL: begin tWriteback(ir.Rd, a << (b[4:0]+ir.imm[4:0])); tGoto(st_ifetch); end
 		OP_SHR:	begin tWriteback(ir.Rd, a >> (b[4:0]+ir.imm[4:0])); tGoto(st_ifetch); end
-		OP_ADD: begin tWriteback(ir.Rd, a + b + {{49{ir.imm[14]}},ir.imm}); tGoto(st_ifetch); end
-		OP_ADD64,OP_AND64:
+		OP_ADD:
 			begin
-				// Was instruction at an odd address?
-				if (~ipr[2] & UNALIGNED_CONSTANTS)
-					tGoto(st_even64);
-				else
-					tGoto(st_odd64);
+				case(ir.imm)
+				15'h4001:	tGoto(st_odd64);
+				15'h4000:	tGoto(st_odd64);
+				default:  begin tWriteback(ir.Rd, a + b + {{49{ir.imm[14]}},ir.imm}); tGoto(st_ifetch); end
+				endcase
 			end
-		OP_AND: begin tWriteback(ir.Rd, a & b & {{49{ir.imm[14]}},ir.imm}); tGoto(st_ifetch); end
-		OP_OR:	begin tWriteback(ir.Rd, a | b | {{49{ir.imm[14]}},ir.imm}); tGoto(st_ifetch); end
-		OP_XOR:	begin tWriteback(ir.Rd, a ^ b ^ {{49{ir.imm[14]}},ir.imm}); tGoto(st_ifetch); end
+		OP_AND:
+			begin
+				case(ir.imm)
+				15'h4001:	tGoto(st_odd64);
+				15'h4000:	tGoto(st_odd64);
+				default:  begin tWriteback(ir.Rd, a & b & {{49{ir.imm[14]}},ir.imm}); tGoto(st_ifetch); end
+				endcase
+			end
+		OP_OR:
+			begin
+				case(ir.imm)
+				15'h4001:	tGoto(st_odd64);
+				15'h4000:	tGoto(st_odd64);
+				default:  begin tWriteback(ir.Rd, a | b | {{49{ir.imm[14]}},ir.imm}); tGoto(st_ifetch); end
+				endcase
+			end
+		OP_XOR:
+			begin
+				case(ir.imm)
+				15'h4001:	tGoto(st_odd64);
+				15'h4000:	tGoto(st_odd64);
+				default:  begin tWriteback(ir.Rd, a ^ b ^ {{49{ir.imm[14]}},ir.imm}); tGoto(st_ifetch); end
+				endcase
+			end
 		OP_MUL:
 			begin
 				mulcnt <= mulcnt + 4'd1;
@@ -2435,30 +2462,78 @@ st_execute:
 				end
 				else
 					tGoto(st_execute);
+				case(ir.imm)
+				15'h4001:	tGoto(st_odd64);
+				15'h4000:	tGoto(st_odd64);
+				default:  begin imm <= {{49{ir.imm[14]}},ir.imm}; end
+				endcase
 			end
 		default:;
 		endcase
 	end
 
-// This state will be stripped out unless unaligned constants are allowed.
-st_even64:
+st_odd64:
 	begin
-		imm <= douta[63:32];
-		tGoto(st_even64a);
+		imm <= {{32{next_ir[31]}},next_ir};
+		tGoto(ir.imm==15'h4001 && ir.opcode!=OP_STOREI64 ? st_odd64c : st_odd64a);
 	end
-st_even64a:
+st_odd64a:
+	tGoto(st_odd64b);
+st_odd64b:
+	begin
+		imm[63:32] <= next_ir;
+		tGoto(st_odd64c);
+	end
+st_odd64c:
 	begin
 		tGoto(st_writeback);
 		case(ir.opcode)
-		OP_ADD64:	begin rfwr <= TRUE; res <= a + b + {douta[31:0],imm}; end
-		OP_AND64:	begin rfwr <= TRUE; res <= a & b & {douta[31:0],imm}; end
-		OP_STOREI:
+		OP_ADD:
+			case(ir.imm)
+			15'h4001: begin rfwr <= TRUE; res <= a + b + imm; end
+			15'h4000: begin rfwr <= TRUE; res <= a + b + imm; end
+			default:  ;
+			endcase
+		OP_AND:
+			case(ir.imm)
+			15'h4001: begin rfwr <= TRUE; res <= a & b & imm; end
+			15'h4000: begin rfwr <= TRUE; res <= a & b & imm; end
+			default:  ;
+			endcase
+		OP_OR:
+			case(ir.imm)
+			15'h4001: begin rfwr <= TRUE; res <= a | b | imm; end
+			15'h4000: begin rfwr <= TRUE; res <= a | b | imm; end
+			default:  ;
+			endcase
+		OP_XOR:
+			case(ir.imm)
+			15'h4001: begin rfwr <= TRUE; res <= a ^ b ^ imm; end
+			15'h4000: begin rfwr <= TRUE; res <= a ^ b ^ imm; end
+			default:  ;
+			endcase
+		OP_MUL:
+			case(ir.imm)
+			15'h4000,
+			15'h4001:
+				begin
+					mulcnt <= mulcnt + 1;
+					if (mulcnt > 6) begin
+						rfwr <= TRUE;
+						res <= P6;
+					end
+					else
+						tGoto(st_odd64a);
+				end
+			default:  ;
+			endcase
+		OP_STOREI64:
 			begin
 				tmp = a + {{49{ir.imm[14]}},ir.imm};
 				tMemWrite(
 					tmp,
 					8'hFF,
-					{douta[31:0],imm[31:0]},
+					imm,
 					tmp[31:20]<=12'h001 ? st_prefetch : st_mem_store
 				);
 			end
@@ -2466,29 +2541,6 @@ st_even64a:
 		endcase
 	end
 
-st_odd64:
-	begin
-		tGoto(st_odd64a);
-	end
-st_odd64a:
-	begin
-		tGoto(st_writeback);
-		case(ir.opcode)
-		OP_ADD64:	begin rfwr <= TRUE; res <= a + b + douta; end
-		OP_AND64:	begin rfwr <= TRUE; res <= a & b & douta; end
-		OP_STOREI:
-			begin
-				tmp = a + {{49{ir.imm[14]}},ir.imm};
-				tMemWrite(
-					tmp,
-					8'hFF,
-					douta,
-					tmp[31:20]<=12'h001 ? st_prefetch : st_mem_store
-				);
-			end
-		default:	;
-		endcase
-	end
 st_writeback:
 	begin
 		if (rfwr)
@@ -2824,16 +2876,33 @@ st_gr_cmd:
 		end
 	end
 
+`include "textblit_states.sv"
+`include "plot_states.sv"
+`include "hline_states.sv"
+`include "line_states.sv"
+`include "fillrect_states.sv"
+`include "triangle_states.sv"
+`include "curve_states.sv"
+`include "blitter_states.sv"
+`include "sprite_states.sv"
+
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+// Generic wait acknowledgment.
+//
+// Wait for an ack signal, the complement of the data latching state.
+// Used by write cycles.
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 
 st_wait_ack:
 	begin
 		mbus.req <= mbus.req;
 		local_sel <= local_sel;
 		roma <= roma;
-		if (ma[31:20]<=12'h001) begin
+		if (mbus.req.adr[31:20]<=12'h001) begin
 			local_sel <= FALSE;
 			mbus.req <= {$bits(wb_cmd_request256_t){1'b0}};
-			tRet();
+			tGoto(st_delay1);
+//			tRet();
 		end
 		else begin
 			tocnt <= tocnt - 1;
@@ -2847,30 +2916,6 @@ st_wait_ack:
 		end
 	end
 
-/*
-// Waits one cycle less than st_wait_ack
-st_wait_ack1:
-	begin
-		tocnt <= tocnt - 1;
-		// If setpixel avoided the bus transaction cyc and stb will not be present.
-		if (imresp.ack || !(mbus.req.cyc & mbus.req.stb) || tocnt==8'd0) begin
-			tocnt <= busto;
-			local_sel <= FALSE;
-			mbus.req <= {$bits(wb_cmd_request256_t){1'b0}};
-			tRet();
-		end
-	end
-*/
-
-`include "textblit_states.sv"
-`include "plot_states.sv"
-`include "hline_states.sv"
-`include "line_states.sv"
-`include "fillrect_states.sv"
-`include "triangle_states.sv"
-`include "curve_states.sv"
-`include "blitter_states.sv"
-`include "sprite_states.sv"
 
 // -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 // Generic data latching state.
@@ -2879,6 +2924,9 @@ st_wait_ack1:
 
 st_latch_data:
 	begin
+		mbus.req <= mbus.req;
+		local_sel <= local_sel;
+		roma <= roma;
 		tocnt <= tocnt - 1;
 		if (imresp.ack|tocnt==0) begin
 			tocnt <= busto;
@@ -2889,14 +2937,22 @@ st_latch_data:
 		end
 	end
 
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+// set_pixel:
+//
+// Used by point plot and line draw states to plot a pixel.
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
 st_set_pixel:
 	begin
 		mbus.req.cyc <= LOW;
 		mbus.req.stb <= LOW;
-		mbus.req.we <= LOW;
-		mbus.req.sel <= 8'h00;
-		latched_pixel <= latched_data>>{ma[2:1],4'h0};
-		
+//		mbus.req.we <= LOW;
+//		mbus.req.sel <= 8'h00;
+		case(color_depth)
+		rgb332:		latched_pixel <= latched_data>>{ma[2:0],3'h0};
+		default:	latched_pixel <= latched_data>>{ma[2:1],4'h0};
+		endcase
 //		if (fnClip(gcx,gcy))
 //			tGoto(dst);
 //		else
@@ -2928,18 +2984,34 @@ st_set_pixel1:
 	end
 st_set_pixel2:
 	begin
-		tMemWrite(
-			ma,
-			8'b11 << {ma[2:1],1'b0},
-			{4{pixel_dat}},
-			dst				
-		);
+		case(color_depth)
+		rgb332:
+			tMemWrite(
+				ma,
+				8'b01 << ma[2:0],
+				{8{pixel_dat[7:0]}},
+				dst				
+			);
+		default:
+			tMemWrite(
+				ma,
+				8'b11 << {ma[2:1],1'b0},
+				{4{pixel_dat}},
+				dst				
+			);
+		endcase
 	end
 st_set_pixel3:
 	begin
 		pixel_dat <= pixel_blend;
 		tGoto(st_set_pixel2);
 	end
+
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+// st_write_delay:
+//		Adds an additional clock cycle into the memory write operation to allow
+// time for devices to update.
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 
 st_write_delay:
 	begin
@@ -2948,6 +3020,13 @@ st_write_delay:
 		roma <= roma;
 		tCall(st_wait_ack,dst);
 	end
+
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+// st_delay1 to 3
+//		Adds cycles into the timing path. Required for some operations, for
+// instance the graphics cursor may be set, but the address calc takes two
+// more cycles to update.
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 
 st_delay3:
 	tGoto(st_delay2);
@@ -2958,45 +3037,10 @@ st_delay1:
 
 default:	tGoto(st_execute);
 endcase
-	case(sprite_on)
-	32'b00000000000000000000000000000000,
-	32'b00000000000000000000000000000001,
-	32'b00000000000000000000000000000010,
-	32'b00000000000000000000000000000100,
-	32'b00000000000000000000000000001000,
-	32'b00000000000000000000000000010000,
-	32'b00000000000000000000000000100000,
-	32'b00000000000000000000000001000000,
-	32'b00000000000000000000000010000000,
-	32'b00000000000000000000000100000000,
-	32'b00000000000000000000001000000000,
-	32'b00000000000000000000010000000000,
-	32'b00000000000000000000100000000000,
-	32'b00000000000000000001000000000000,
-	32'b00000000000000000010000000000000,
-	32'b00000000000000000100000000000000,
-	32'b00000000000000001000000000000000,
-	32'b00000000000000010000000000000000,
-	32'b00000000000000100000000000000000,
-	32'b00000000000001000000000000000000,
-	32'b00000000000010000000000000000000,
-	32'b00000000000100000000000000000000,
-	32'b00000000001000000000000000000000,
-	32'b00000000010000000000000000000000,
-	32'b00000000100000000000000000000000,
-	32'b00000001000000000000000000000000,
-	32'b00000010000000000000000000000000,
-	32'b00000100000000000000000000000000,
-	32'b00001000000000000000000000000000,
-	32'b00010000000000000000000000000000,
-	32'b00100000000000000000000000000000,
-	32'b01000000000000000000000000000000,
-	32'b10000000000000000000000000000000:   ;
-	default:	collision <= collision | sprite_on;
-	endcase
-
-	$display("Tick: %d I-count: %d  %f instructions per clock", tick, icnt>>1, real'(icnt>>1)/real'(tick));
 end
+
+//always_ff @(posedge clk)
+//	$display("Tick: %d I-count: %d  %f instructions per clock", tick, icnt>>1, real'(icnt>>1)/real'(tick));
 
 // +---------------------------------------------------------------------------------------------------------------------+
 // | USE_ADV_FEATURES     | String             | Default value = 0707.                                                   |
@@ -3395,6 +3439,10 @@ always_ff @(posedge clk)
   else if (poppt)
     pointsp <= pointsp + 12'd1;
 
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// Hardware cursor logic.
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
 // -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 // clock edge #-1
 // -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
@@ -3633,6 +3681,59 @@ always_ff @(posedge vclk)
 	endcase
 always_ff @(posedge vclk)
     de <= ~blank4;
+
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+// Hardware cursor collision detector. Pretty simple, if there is more than
+// one sprite active then there must have been a collision. The first part of
+// the code can only set bits. So, there is also register access that allows
+// bits to be cleared.
+//
+// Could use a population count >1 here.
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+always_ff @(posedge clk)
+begin
+	case(sprite_on)
+	32'b00000000000000000000000000000000,
+	32'b00000000000000000000000000000001,
+	32'b00000000000000000000000000000010,
+	32'b00000000000000000000000000000100,
+	32'b00000000000000000000000000001000,
+	32'b00000000000000000000000000010000,
+	32'b00000000000000000000000000100000,
+	32'b00000000000000000000000001000000,
+	32'b00000000000000000000000010000000,
+	32'b00000000000000000000000100000000,
+	32'b00000000000000000000001000000000,
+	32'b00000000000000000000010000000000,
+	32'b00000000000000000000100000000000,
+	32'b00000000000000000001000000000000,
+	32'b00000000000000000010000000000000,
+	32'b00000000000000000100000000000000,
+	32'b00000000000000001000000000000000,
+	32'b00000000000000010000000000000000,
+	32'b00000000000000100000000000000000,
+	32'b00000000000001000000000000000000,
+	32'b00000000000010000000000000000000,
+	32'b00000000000100000000000000000000,
+	32'b00000000001000000000000000000000,
+	32'b00000000010000000000000000000000,
+	32'b00000000100000000000000000000000,
+	32'b00000001000000000000000000000000,
+	32'b00000010000000000000000000000000,
+	32'b00000100000000000000000000000000,
+	32'b00001000000000000000000000000000,
+	32'b00010000000000000000000000000000,
+	32'b00100000000000000000000000000000,
+	32'b01000000000000000000000000000000,
+	32'b10000000000000000000000000000000:   ;
+	default:	collision <= collision | sprite_on;
+	endcase
+
+	// Allow clearing the collision register.
+	if (cs & we && adr[31:0]==32'hFE000F70)
+			collision <= dat;
+end
 
 // -----------------------------------------------------------------------------
 // Support tasks
