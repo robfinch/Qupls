@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2026  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -44,9 +44,19 @@ function fnIsFpu;
 input Qupls4_pkg::micro_op_t ir;
 begin
 	case(ir.opcode)
+	Qupls4_pkg::OP_R3B,Qupls4_pkg::OP_R3W,Qupls4_pkg::OP_R3T,Qupls4_pkg::OP_R3O,
+	Qupls4_pkg::OP_R3BP,Qupls4_pkg::OP_R3WP,Qupls4_pkg::OP_R3TP,Qupls4_pkg::OP_R3OP,
+	Qupls4_pkg::OP_R3VVV,Qupls4_pkg::OP_R3VVS:
+		case(ir.func)
+		Qupls4_pkg::FN_MUL: 	fnIsFpu = 1'b1;
+		Qupls4_pkg::FN_MULU:	fnIsFpu = 1'b1;
+		default:	fnIsFpu = 1'b0;
+		endcase
+	Qupls4_pkg::OP_MULI:	fnIsFpu = 1'b1;
+	Qupls4_pkg::OP_MULUI:	fnIsFpu = 1'b1;
 	Qupls4_pkg::OP_FLTH,Qupls4_pkg::OP_FLTS,Qupls4_pkg::OP_FLTD,Qupls4_pkg::OP_FLTQ,
 	Qupls4_pkg::OP_FLTPH,Qupls4_pkg::OP_FLTPS,Qupls4_pkg::OP_FLTPD,Qupls4_pkg::OP_FLTPQ,
-	Qupls4_pkg::OP_FLTP:
+	Qupls4_pkg::OP_FLTVVV,Qupls4_pkg::OP_FLTVVS:
 		fnIsFpu = 1'b1;
 	Qupls4_pkg::OP_ADDI:	fnIsFpu = Qupls4_pkg::PERFORMANCE;
 	Qupls4_pkg::OP_CMPI:	fnIsFpu = Qupls4_pkg::PERFORMANCE;

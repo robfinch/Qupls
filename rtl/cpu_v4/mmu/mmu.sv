@@ -556,8 +556,8 @@ region_tbl urgnt1
 	.rst(rst),
 	.clk(clk),
 	.cs_rgn(cs_rgn),
-	.rgn(tlb_entry0.pte.l1.rgn),
-	.ftas_req(sreqd),
+	.rgn(tlb_entry0.pte.rgn),
+	.req(sreqd),
 	.region_dat(region_dat),
 	.region_num(),
 	.region(region0),
@@ -570,8 +570,8 @@ region_tbl urgnt2
 	.rst(rst),
 	.clk(clk),
 	.cs_rgn(cs_rgn),
-	.rgn(tlb_entry1.pte.l1.rgn),
-	.ftas_req(sreqd),
+	.rgn(tlb_entry1.pte.rgn),
+	.req(sreqd),
 	.region_dat(),
 	.region_num(),
 	.region(region1),
@@ -584,8 +584,8 @@ region_tbl urgnt3
 	.rst(rst),
 	.clk(clk),
 	.cs_rgn(cs_rgn),
-	.rgn(tlb_pc_entry.pte.l1.rgn),
-	.ftas_req(sreqd),
+	.rgn(tlb_pc_entry.pte.rgn),
+	.req(sreqd),
 	.region_dat(),
 	.region_num(),
 	.region(region2),
@@ -803,13 +803,13 @@ else begin
 		upd_req2 <= 1'b1;
 		tlb_wr <= 1'b1;
 		tlb_way <= way;
-		if (pte.l2.lvl==3'd2 && Qupls4_pkg::SUPPORT_TLBLVL2)
+		if (pte.lvl==3'd2 && Qupls4_pkg::SUPPORT_TLBLVL2)
 			tlb_entryno <= {3'd0,miss_adr[`VADR_L2_MBITS]};
 		else
 			tlb_entryno <= miss_adr[`VADR_MBITS];
 		tlb_entry.pte <= pte;
-		tlb_entry.vpn.vpn <= {{48{miss_adr[31]}},miss_adr[`VADR_HBITS]};
-		tlb_entry.vpn.asid <= miss_asid;
+		tlb_entry.vpn <= {{48{miss_adr[31]}},miss_adr[`VADR_HBITS]};
+		tlb_entry.asid <= miss_asid;
 	end
 	if (upd_req2) begin
 		upd_req2 <= 1'b0;
@@ -985,7 +985,7 @@ else begin
 				pte <= tranbuf[sel_tran].pte;
 				pte_v <= TRUE;
 				// If translation is not valid, cause a page fault.
-				if (~tranbuf[sel_tran].pte.l1.v) begin
+				if (~tranbuf[sel_tran].pte.v) begin
 					$display("PTW: page fault");
 					faultq_o <= miss_queue[tranbuf[sel_tran].mqndx].qn;
 					fault <= 1'b1;
@@ -997,7 +997,7 @@ else begin
 				// Otherwise translation was valid, update it in the TLB
 				// when level zero reached, or a shortcut page.
 				else if (miss_queue[tranbuf[sel_tran].mqndx].lvl==3'd0 ||
-					(tranbuf[sel_tran].pte.l2.s==1'b1 && Qupls4_pkg::SUPPORT_TLBLVL2)) begin
+					(tranbuf[sel_tran].pte.typ==PTP_SHORTCUT && Qupls4_pkg::SUPPORT_TLBLVL2)) begin
 					upd_req <= 1'b1;
 					$display("PTW: TLB update request triggered.");
 				end

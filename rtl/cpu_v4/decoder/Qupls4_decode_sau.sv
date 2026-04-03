@@ -49,11 +49,11 @@ begin
 		fnIsSau = 1'b1;
 	Qupls4_pkg::OP_R3B,Qupls4_pkg::OP_R3W,Qupls4_pkg::OP_R3T,Qupls4_pkg::OP_R3O,
 	Qupls4_pkg::OP_R3BP,Qupls4_pkg::OP_R3WP,Qupls4_pkg::OP_R3TP,Qupls4_pkg::OP_R3OP,
-	Qupls4_pkg::OP_R3P:
+	Qupls4_pkg::OP_R3VVV,Qupls4_pkg::OP_R3VVS:
 		fnIsSau = 1'b1;
 	Qupls4_pkg::OP_FLTH,Qupls4_pkg::OP_FLTS,Qupls4_pkg::OP_FLTD,Qupls4_pkg::OP_FLTQ,
 	Qupls4_pkg::OP_FLTPH,Qupls4_pkg::OP_FLTPS,Qupls4_pkg::OP_FLTPD,Qupls4_pkg::OP_FLTPQ,
-	Qupls4_pkg::OP_FLTP:
+	Qupls4_pkg::OP_FLTVVV,Qupls4_pkg::OP_FLTVVS:
 		case(ir.func)
 		Qupls4_pkg::FLT_CMP,
 		Qupls4_pkg::FLT_ABS,Qupls4_pkg::FLT_NEG:

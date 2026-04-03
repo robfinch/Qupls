@@ -41,27 +41,27 @@ import const_pkg::*;
 import cpu_types_pkg::*;
 //import Qupls4_pkg::SIM;
 
-module Qupls4_reg_map_ram(rst, clka, ena, wea, addra, dina, douta, 
+module Qupls4_reg_map_ram2(rst, clka, ena, wea, addra, dina, douta, 
 	clkb, enb, addrb, doutb);
 parameter NRDPORTS = 4;
 localparam RBIT=$clog2(Qupls4_pkg::PREGS);
-localparam QBIT=$bits(cpu_types_pkg::pregno_t);
-localparam WID=$bits(Qupls4_pkg::reg_map_t);
+localparam QBIT=$bits(cpu_types_pkg::pregndx_t);
+localparam WID=$bits(Qupls4_pkg::reg_map2_t);
 localparam AWID=$clog2(Qupls4_pkg::NCHECK);
 input rst;
 input clka;
 input ena;
 input wea;
 input checkpt_ndx_t addra;
-input Qupls4_pkg::reg_map_t dina;
-output Qupls4_pkg::reg_map_t douta;
+input Qupls4_pkg::reg_map2_t dina;
+output Qupls4_pkg::reg_map2_t douta;
 input clkb;
 input enb;
 input checkpt_ndx_t addrb;
-output Qupls4_pkg::reg_map_t doutb;
+output Qupls4_pkg::reg_map2_t doutb;
 
-Qupls4_pkg::reg_map_t doutb1;
-Qupls4_pkg::reg_map_t douta1;
+Qupls4_pkg::reg_map2_t doutb1;
+Qupls4_pkg::reg_map2_t douta1;
 
 // XPM_MEMORY instantiation template for Dual Port Distributed RAM configurations
 // Refer to the targeted device family architecture libraries guide for XPM_MEMORY documentation

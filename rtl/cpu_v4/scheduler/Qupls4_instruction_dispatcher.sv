@@ -48,12 +48,13 @@ import const_pkg::*;
 import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_instruction_dispatcher(rst, clk, pgh, rob, stomp, busy, rse_o,
+module Qupls4_instruction_dispatcher(rst, clk, regFPCSR, pgh, rob, stomp, busy, rse_o,
 	rob_dispatched_o);
 parameter DISPATCH_COUNT=6;
 parameter MWIDTH=Qupls4_pkg::MWIDTH;
 input rst;
 input clk;
+input aregno_t regFPCSR;
 input Qupls4_pkg::pipeline_group_hdr_t [Qupls4_pkg::ROB_ENTRIES/MWIDTH-1:0] pgh;
 input Qupls4_pkg::rob_entry_t [Qupls4_pkg::ROB_ENTRIES-1:0] rob;
 input [Qupls4_pkg::ROB_ENTRIES-1:0] stomp;
@@ -168,12 +169,19 @@ begin
 				rob_dispatched[nn] = VAL;
 				dispatch_slot_v[4] = VAL;
 			end
-			if (Qupls4_pkg::SUPPORT_FLOAT && rob[nn].op.decbus.fpu && !busy[4'd12] && !dispatch_slot_v[4]) begin
+			if (Qupls4_pkg::SUPPORT_FLOAT && rob[nn].op.decbus.fpu && !busy[8] && !dispatch_slot_v[3]) begin
 				cpy[4].rob = nn;
-				cpy[4].rse = 1;
-				cpy[4].fu = 4'd12;
+				cpy[4].rse = 3;
+				cpy[4].fu = 4'd8;
 				rob_dispatched[nn] = VAL;
-				dispatch_slot_v[4] = VAL;
+				dispatch_slot_v[3] = VAL;
+			end
+			if (Qupls4_pkg::SUPPORT_FLOAT && rob[nn].op.decbus.fpu && !busy[9] && !dispatch_slot_v[3]) begin
+				cpy[4].rob = nn;
+				cpy[4].rse = 3;
+				cpy[4].fu = 4'd9;
+				rob_dispatched[nn] = VAL;
+				dispatch_slot_v[3] = VAL;
 			end
 		end
 	end
@@ -219,11 +227,13 @@ begin
 	rse[kk].aRd = rob[nn].op.uop.Rd;
 	rse[kk].aRdv = rob[nn].op.decbus.Rdv;
 	rse[kk].nRd = rob[nn].op.nRd;
+	rse[kk].we = rob[nn].op.decbus.we;
 	// mem specific
 	rse[kk].virt2phys = rob[nn].op.decbus.v2p;
 	rse[kk].load = rob[nn].op.decbus.load|rob[nn].op.decbus.loadz;
 	rse[kk].store = rob[nn].op.decbus.store;
 	rse[kk].amo = rob[nn].op.decbus.amo;
+	rse[kk].mem = rob[nn].op.decbus.mem;
 	// branch specific
 	rse[kk].bt = rob[nn].bt;
 	rse[kk].bcc = rob[nn].op.decbus.br;
@@ -269,7 +279,7 @@ begin
 		rse[kk].arg[2].aRn = rob[nn].op.uop.Rs3;
 		rse[kk].arg[3].aRn = rob[nn].op.uop.Rd;
 		rse[kk].arg[4].aRn = rob[nn].op.uop.Rs4;
-		rse[kk].arg[5].aRn = 8'd33;
+		rse[kk].arg[5].aRn = regFPCSR;
 		rse[kk].arg[6].aRn = rob[nn].op.uop.Rd2;
 
 		rse[kk].arg[0].z = rob[nn].op.decbus.Rs1z;

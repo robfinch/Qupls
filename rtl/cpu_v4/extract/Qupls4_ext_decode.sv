@@ -68,9 +68,9 @@ always_comb jsr = instr[6:0]==Qupls4_pkg::OP_JSR && ~&instr[12:7];
 always_comb jmp = instr[6:0]==Qupls4_pkg::OP_JSR &&  &instr[12:7];
 always_comb
 	case(instr[6:0])
-	Qupls4_pkg::OP_BCC8,Qupls4_pkg::OP_BCC16,Qupls4_pkg::OP_BCC32,Qupls4_pkg::OP_BCC64,
-	Qupls4_pkg::OP_BCCU8,Qupls4_pkg::OP_BCCU16,Qupls4_pkg::OP_BCCU32,Qupls4_pkg::OP_BCCU64,
-	Qupls4_pkg::OP_FBCC16,Qupls4_pkg::OP_FBCC32,Qupls4_pkg::OP_FBCC64,Qupls4_pkg::OP_FBCC128:
+	Qupls4_pkg::OP_BCC,
+	Qupls4_pkg::OP_BCCU,
+	Qupls4_pkg::OP_FBCC:
 		bcc = TRUE;
 	default:
 		bcc = FALSE;

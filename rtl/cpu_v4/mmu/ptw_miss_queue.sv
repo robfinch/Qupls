@@ -212,7 +212,7 @@ else begin
 			miss_queue[empty_qe].v <= 1'b1;
 			miss_queue[empty_qe].o <= 1'b0;
 			miss_queue[empty_qe].bc <= 2'b0;
-			miss_queue[empty_qe].lvl <= ptbr.level;
+			miss_queue[empty_qe].lvl <= ptattr.level;
 			miss_queue[empty_qe].asid <= tlb_missasid;
 			miss_queue[empty_qe].id <= tlb_missid;
 			miss_queue[empty_qe].adr <= tlb_missadr;
@@ -223,20 +223,20 @@ else begin
 			4'd6:	// 4k
 				case(ptattr.pte_size)
 				_4B_PTE:
-					case(ptbr.level)
+					case(ptattr.level)
 					3'd0:	miss_queue[empty_qe].tadr <= {ptbr[31:12],12'd0} + {tlb_missadr[21:12],2'h0};
 					3'd1:	miss_queue[empty_qe].tadr <= {ptbr[31:12],12'd0} + {tlb_missadr[31:22],2'h0};
 					default:	miss_queue[empty_qe].tadr <= 'd0;
 					endcase
 				_8B_PTE:
-					case(ptbr.level)
+					case(ptattr.level)
 					3'd0:	miss_queue[empty_qe].tadr <= {ptbr[31:12],12'd0} + {tlb_missadr[20:12],3'h0};
 					3'd1:	miss_queue[empty_qe].tadr <= {ptbr[31:12],12'd0} + {tlb_missadr[29:21],3'h0};
 					3'd2:	miss_queue[empty_qe].tadr <= {ptbr[31:12],12'd0} + {tlb_missadr[31:30],3'h0};
 					default:	miss_queue[empty_qe].tadr <= 'd0;
 					endcase
 				_16B_PTE:
-					case(ptbr.level)
+					case(ptattr.level)
 					3'd0:	miss_queue[empty_qe].tadr <= {ptbr[31:12],12'd0} + {tlb_missadr[19:12],4'h0};
 					3'd1:	miss_queue[empty_qe].tadr <= {ptbr[31:12],12'd0} + {tlb_missadr[27:20],4'h0};
 					3'd2:	miss_queue[empty_qe].tadr <= {ptbr[31:12],12'd0} + {tlb_missadr[31:28],4'h0};
@@ -249,19 +249,19 @@ else begin
 			4'd7:	// 8k
 				case(ptattr.pte_size)
 				_4B_PTE:
-					case(ptbr.level)
+					case(ptattr.level)
 					3'd0:	miss_queue[empty_qe].tadr <= {ptbr[31:13],13'd0} + {tlb_missadr[23:13],2'h0};
 					3'd1:	miss_queue[empty_qe].tadr <= {ptbr[31:13],13'd0} + {tlb_missadr[31:24],2'h0};
 					default:	miss_queue[empty_qe].tadr <= 'd0;
 					endcase
 				_8B_PTE:
-					case(ptbr.level)
+					case(ptattr.level)
 					3'd0:	miss_queue[empty_qe].tadr <= {ptbr[31:13],13'd0} + {tlb_missadr[22:13],3'h0};
 					3'd1:	miss_queue[empty_qe].tadr <= {ptbr[31:13],13'd0} + {tlb_missadr[31:23],3'h0};
 					default:	miss_queue[empty_qe].tadr <= 'd0;
 					endcase
 				_16B_PTE:
-					case(ptbr.level)
+					case(ptattr.level)
 					3'd0:	miss_queue[empty_qe].tadr <= {ptbr[31:13],13'd0} + {tlb_missadr[21:13],4'h0};
 					3'd1:	miss_queue[empty_qe].tadr <= {ptbr[31:13],13'd0} + {tlb_missadr[30:22],4'h0};
 					3'd2:	miss_queue[empty_qe].tadr <= {ptbr[31:13],13'd0} + {tlb_missadr[31],4'h0};
@@ -274,19 +274,19 @@ else begin
 			4'd8:	// 16k
 				case(ptattr.pte_size)
 				_4B_PTE:
-					case(ptbr.level)
+					case(ptattr.level)
 					3'd0:	miss_queue[empty_qe].tadr <= {ptbr[31:14],14'd0} + {tlb_missadr[25:14],2'h0};
 					3'd1:	miss_queue[empty_qe].tadr <= {ptbr[31:14],14'd0} + {tlb_missadr[31:26],2'h0};
 					default:	miss_queue[empty_qe].tadr <= 'd0;
 					endcase
 				_8B_PTE:
-					case(ptbr.level)
+					case(ptattr.level)
 					3'd0:	miss_queue[empty_qe].tadr <= {ptbr[31:14],14'd0} + {tlb_missadr[24:14],3'h0};
 					3'd1:	miss_queue[empty_qe].tadr <= {ptbr[31:14],14'd0} + {tlb_missadr[31:25],3'h0};
 					default:	miss_queue[empty_qe].tadr <= 'd0;
 					endcase
 				_16B_PTE:
-					case(ptbr.level)
+					case(ptattr.level)
 					3'd0:	miss_queue[empty_qe].tadr <= {ptbr[31:14],14'd0} + {tlb_missadr[23:14],4'h0};
 					3'd1:	miss_queue[empty_qe].tadr <= {ptbr[31:14],14'd0} + {tlb_missadr[31:24],4'h0};
 					default:	miss_queue[empty_qe].tadr <= 'd0;
@@ -298,19 +298,19 @@ else begin
 			4'd10:	// 64k
 				case(ptattr.pte_size)
 				_4B_PTE:
-					case(ptbr.level)
+					case(ptattr.level)
 					3'd0:	miss_queue[empty_qe].tadr <= {ptbr[31:16],16'd0} + {tlb_missadr[29:16],2'h0};
 					3'd1:	miss_queue[empty_qe].tadr <= {ptbr[31:16],16'd0} + {tlb_missadr[31:30],2'h0};
 					default:	miss_queue[empty_qe].tadr <= 'd0;
 					endcase
 				_8B_PTE:
-					case(ptbr.level)
+					case(ptattr.level)
 					3'd0:	miss_queue[empty_qe].tadr <= {ptbr[31:16],16'd0} + {tlb_missadr[28:16],3'h0};
 					3'd1:	miss_queue[empty_qe].tadr <= {ptbr[31:16],16'd0} + {tlb_missadr[31:29],3'h0};
 					default:	miss_queue[empty_qe].tadr <= 'd0;
 					endcase
 				_16B_PTE:
-					case(ptbr.level)
+					case(ptattr.level)
 					3'd0:	miss_queue[empty_qe].tadr <= {ptbr[31:16],16'd0} + {tlb_missadr[27:16],4'h0};
 					3'd1:	miss_queue[empty_qe].tadr <= {ptbr[31:16],16'd0} + {tlb_missadr[31:28],4'h0};
 					default:	miss_queue[empty_qe].tadr <= 'd0;
@@ -320,7 +320,7 @@ else begin
 `endif				
 			// 8k pages with 8B PTEs
 			default:
-				case(ptbr.level)
+				case(ptattr.level)
 				3'd0:	miss_queue[empty_qe].tadr <= {ptbr.adr,3'd0} + {tlb_missadr[22:13],3'h0};
 				3'd1:	miss_queue[empty_qe].tadr <= {ptbr.adr,3'd0} + {tlb_missadr[31:23],3'h0};
 				default:	miss_queue[empty_qe].tadr <= 'd0;
@@ -342,7 +342,7 @@ else begin
 					$display("PTW: walk level=%d", miss_queue[sel_qe].lvl);
 					miss_queue[sel_qe].o <= 1'b1;
 					miss_queue[sel_qe].lvl <= miss_queue[sel_qe].lvl - 1;
-					if (tranbuf[sel_tran].pte.l1.s==1'b1 && Qupls4_pkg::SUPPORT_TLBLVL2)
+					if (tranbuf[sel_tran].pte.typ==PTP_SHORTCUT && Qupls4_pkg::SUPPORT_TLBLVL2)
 						miss_queue[sel_qe].lvl <= 3'd0;
 				end
 				else if (miss_queue[sel_qe].bc < 3'd2) begin
@@ -366,47 +366,47 @@ else begin
 		// Which means the lower bits of the translated address need to be cleared
 		// then updated with the bits from the PTE's PPN.
 		// This does not need to be done for higher level pages.
-		else if (miss_queue[tranbuf[sel_tran].mqndx].lvl==3'd1 || tranbuf[sel_tran].pte.l1.s==1'b1) begin
+		else if (miss_queue[tranbuf[sel_tran].mqndx].lvl==3'd1 || tranbuf[sel_tran].pte.typ==PTP_SHORTCUT) begin
 			case(ptattr.pgsz)
 `ifdef MMU_SUPPORT_4k_PAGES				
 			4'd6:	// 4k
 				case(ptattr.pte_size)
-				_4B_PTE:	miss_queue[tranbuf[sel_tran].mqndx].tadr <= {tranbuf[sel_tran].pte.l1.ppn,pindex[9:0],2'b0} | (miss_queue[tranbuf[sel_tran].mqndx].tadr & {$bits({tranbuf[sel_tran].pte.l1.ppn,pindex[9:0],2'b0}){1'b0}});
-				_8B_PTE:	miss_queue[tranbuf[sel_tran].mqndx].tadr <= {tranbuf[sel_tran].pte.l1.ppn,pindex[8:0],3'b0} | (miss_queue[tranbuf[sel_tran].mqndx].tadr & {$bits({tranbuf[sel_tran].pte.l1.ppn,pindex[8:0],3'b0}){1'b0}});
-				_16B_PTE:	miss_queue[tranbuf[sel_tran].mqndx].tadr <= {tranbuf[sel_tran].pte.l1.ppn,pindex[7:0],4'b0} | (miss_queue[tranbuf[sel_tran].mqndx].tadr & {$bits({tranbuf[sel_tran].pte.l1.ppn,pindex[7:0],4'b0}){1'b0}});
+				_4B_PTE:	miss_queue[tranbuf[sel_tran].mqndx].tadr <= {tranbuf[sel_tran].pte.ppn,pindex[9:0],2'b0} | (miss_queue[tranbuf[sel_tran].mqndx].tadr & {$bits({tranbuf[sel_tran].pte.ppn,pindex[9:0],2'b0}){1'b0}});
+				_8B_PTE:	miss_queue[tranbuf[sel_tran].mqndx].tadr <= {tranbuf[sel_tran].pte.ppn,pindex[8:0],3'b0} | (miss_queue[tranbuf[sel_tran].mqndx].tadr & {$bits({tranbuf[sel_tran].pte.ppn,pindex[8:0],3'b0}){1'b0}});
+				_16B_PTE:	miss_queue[tranbuf[sel_tran].mqndx].tadr <= {tranbuf[sel_tran].pte.ppn,pindex[7:0],4'b0} | (miss_queue[tranbuf[sel_tran].mqndx].tadr & {$bits({tranbuf[sel_tran].pte.ppn,pindex[7:0],4'b0}){1'b0}});
 				default:	;
 				endcase
 `endif				
 `ifdef MMU_SUPPORT_8k_PAGES
 			4'd7:	// 8k
 				case(ptattr.pte_size)
-				_4B_PTE:	miss_queue[tranbuf[sel_tran].mqndx].tadr <= {tranbuf[sel_tran].pte.l1.ppn,pindex[10:0],2'b0} | (miss_queue[tranbuf[sel_tran].mqndx].tadr & {$bits({tranbuf[sel_tran].pte.l1.ppn,pindex[10:0],2'b0}){1'b0}});
-				_8B_PTE:	miss_queue[tranbuf[sel_tran].mqndx].tadr <= {tranbuf[sel_tran].pte.l1.ppn,pindex[9:0],3'b0} | (miss_queue[tranbuf[sel_tran].mqndx].tadr & {$bits({tranbuf[sel_tran].pte.l1.ppn,pindex[9:0],3'b0}){1'b0}});
-				_16B_PTE:	miss_queue[tranbuf[sel_tran].mqndx].tadr <= {tranbuf[sel_tran].pte.l1.ppn,pindex[8:0],4'b0} | (miss_queue[tranbuf[sel_tran].mqndx].tadr & {$bits({tranbuf[sel_tran].pte.l1.ppn,pindex[8:0],4'b0}){1'b0}});
+				_4B_PTE:	miss_queue[tranbuf[sel_tran].mqndx].tadr <= {tranbuf[sel_tran].pte.ppn,pindex[10:0],2'b0} | (miss_queue[tranbuf[sel_tran].mqndx].tadr & {$bits({tranbuf[sel_tran].pte.ppn,pindex[10:0],2'b0}){1'b0}});
+				_8B_PTE:	miss_queue[tranbuf[sel_tran].mqndx].tadr <= {tranbuf[sel_tran].pte.ppn,pindex[9:0],3'b0} | (miss_queue[tranbuf[sel_tran].mqndx].tadr & {$bits({tranbuf[sel_tran].pte.ppn,pindex[9:0],3'b0}){1'b0}});
+				_16B_PTE:	miss_queue[tranbuf[sel_tran].mqndx].tadr <= {tranbuf[sel_tran].pte.ppn,pindex[8:0],4'b0} | (miss_queue[tranbuf[sel_tran].mqndx].tadr & {$bits({tranbuf[sel_tran].pte.ppn,pindex[8:0],4'b0}){1'b0}});
 				default:	;
 				endcase
 `endif				
 `ifdef MMU_SUPPORT_8k_PAGES
 			4'd8:	// 16k
 				case(ptattr.pte_size)
-				_4B_PTE:	miss_queue[tranbuf[sel_tran].mqndx].tadr <= {tranbuf[sel_tran].pte.l1.ppn,pindex[11:0],2'b0} | (miss_queue[tranbuf[sel_tran].mqndx].tadr & {$bits({tranbuf[sel_tran].pte.l1.ppn,pindex[11:0],2'b0}){1'b0}});
-				_8B_PTE:	miss_queue[tranbuf[sel_tran].mqndx].tadr <= {tranbuf[sel_tran].pte.l1.ppn,pindex[10:0],3'b0} | (miss_queue[tranbuf[sel_tran].mqndx].tadr & {$bits({tranbuf[sel_tran].pte.l1.ppn,pindex[10:0],3'b0}){1'b0}});
-				_16B_PTE:	miss_queue[tranbuf[sel_tran].mqndx].tadr <= {tranbuf[sel_tran].pte.l1.ppn,pindex[9:0],4'b0} | (miss_queue[tranbuf[sel_tran].mqndx].tadr & {$bits({tranbuf[sel_tran].pte.l1.ppn,pindex[9:0],4'b0}){1'b0}});
+				_4B_PTE:	miss_queue[tranbuf[sel_tran].mqndx].tadr <= {tranbuf[sel_tran].pte.ppn,pindex[11:0],2'b0} | (miss_queue[tranbuf[sel_tran].mqndx].tadr & {$bits({tranbuf[sel_tran].pte.ppn,pindex[11:0],2'b0}){1'b0}});
+				_8B_PTE:	miss_queue[tranbuf[sel_tran].mqndx].tadr <= {tranbuf[sel_tran].pte.ppn,pindex[10:0],3'b0} | (miss_queue[tranbuf[sel_tran].mqndx].tadr & {$bits({tranbuf[sel_tran].pte.ppn,pindex[10:0],3'b0}){1'b0}});
+				_16B_PTE:	miss_queue[tranbuf[sel_tran].mqndx].tadr <= {tranbuf[sel_tran].pte.ppn,pindex[9:0],4'b0} | (miss_queue[tranbuf[sel_tran].mqndx].tadr & {$bits({tranbuf[sel_tran].pte.ppn,pindex[9:0],4'b0}){1'b0}});
 				default:	;
 				endcase
 `endif				
 `ifdef MMU_SUPPORT_64k_PAGES
 			4'd10:	// 64k
 				case(ptattr.pte_size)
-				_4B_PTE:	miss_queue[tranbuf[sel_tran].mqndx].tadr <= {tranbuf[sel_tran].pte.l1.ppn,pindex[13:0],2'b0} | (miss_queue[tranbuf[sel_tran].mqndx].tadr & {$bits({tranbuf[sel_tran].pte.l1.ppn,pindex[13:0],2'b0}){1'b0}});
-				_8B_PTE:	miss_queue[tranbuf[sel_tran].mqndx].tadr <= {tranbuf[sel_tran].pte.l1.ppn,pindex[12:0],3'b0} | (miss_queue[tranbuf[sel_tran].mqndx].tadr & {$bits({tranbuf[sel_tran].pte.l1.ppn,pindex[12:0],3'b0}){1'b0}});
-				_16B_PTE:	miss_queue[tranbuf[sel_tran].mqndx].tadr <= {tranbuf[sel_tran].pte.l1.ppn,pindex[11:0],4'b0} | (miss_queue[tranbuf[sel_tran].mqndx].tadr & {$bits({tranbuf[sel_tran].pte.l1.ppn,pindex[11:0],4'b0}){1'b0}});
+				_4B_PTE:	miss_queue[tranbuf[sel_tran].mqndx].tadr <= {tranbuf[sel_tran].pte.ppn,pindex[13:0],2'b0} | (miss_queue[tranbuf[sel_tran].mqndx].tadr & {$bits({tranbuf[sel_tran].pte.ppn,pindex[13:0],2'b0}){1'b0}});
+				_8B_PTE:	miss_queue[tranbuf[sel_tran].mqndx].tadr <= {tranbuf[sel_tran].pte.ppn,pindex[12:0],3'b0} | (miss_queue[tranbuf[sel_tran].mqndx].tadr & {$bits({tranbuf[sel_tran].pte.ppn,pindex[12:0],3'b0}){1'b0}});
+				_16B_PTE:	miss_queue[tranbuf[sel_tran].mqndx].tadr <= {tranbuf[sel_tran].pte.ppn,pindex[11:0],4'b0} | (miss_queue[tranbuf[sel_tran].mqndx].tadr & {$bits({tranbuf[sel_tran].pte.ppn,pindex[11:0],4'b0}){1'b0}});
 				default:	;
 				endcase
 `endif				
 			// 8k pages, 8B pte
 			default:
-				miss_queue[tranbuf[sel_tran].mqndx].tadr <= {tranbuf[sel_tran].pte.l1.ppn,pindex[9:0],3'b0} | (miss_queue[tranbuf[sel_tran].mqndx].tadr & {$bits({tranbuf[sel_tran].pte.l1.ppn,pindex[9:0],3'b0}){1'b0}});
+				miss_queue[tranbuf[sel_tran].mqndx].tadr <= {tranbuf[sel_tran].pte.ppn,pindex[9:0],3'b0} | (miss_queue[tranbuf[sel_tran].mqndx].tadr & {$bits({tranbuf[sel_tran].pte.ppn,pindex[9:0],3'b0}){1'b0}});
 			endcase
 		end
 		else begin
@@ -414,42 +414,42 @@ else begin
 `ifdef MMU_SUPPORT_4k_PAGES				
 			4'd6:	// 4k
 				case(ptattr.pte_size)
-				_4B_PTE:	miss_queue[tranbuf[sel_tran].mqndx].tadr <= {tranbuf[sel_tran].pte.l2.ppn,pindex[9:0],2'b0};
-				_8B_PTE:	miss_queue[tranbuf[sel_tran].mqndx].tadr <= {tranbuf[sel_tran].pte.l2.ppn,pindex[8:0],3'b0};
-				_16B_PTE:	miss_queue[tranbuf[sel_tran].mqndx].tadr <= {tranbuf[sel_tran].pte.l2.ppn,pindex[7:0],4'b0};
+				_4B_PTE:	miss_queue[tranbuf[sel_tran].mqndx].tadr <= {tranbuf[sel_tran].pte.ppn,pindex[9:0],2'b0};
+				_8B_PTE:	miss_queue[tranbuf[sel_tran].mqndx].tadr <= {tranbuf[sel_tran].pte.ppn,pindex[8:0],3'b0};
+				_16B_PTE:	miss_queue[tranbuf[sel_tran].mqndx].tadr <= {tranbuf[sel_tran].pte.ppn,pindex[7:0],4'b0};
 				default:	;
 				endcase
 `endif				
 `ifdef MMU_SUPPORT_8k_PAGES
 			4'd7:	// 8k
 				case(ptattr.pte_size)
-				_4B_PTE:	miss_queue[tranbuf[sel_tran].mqndx].tadr <= {tranbuf[sel_tran].pte.l2.ppn,pindex[10:0],2'b0};
-				_8B_PTE:	miss_queue[tranbuf[sel_tran].mqndx].tadr <= {tranbuf[sel_tran].pte.l2.ppn,pindex[9:0],3'b0};
-				_16B_PTE:	miss_queue[tranbuf[sel_tran].mqndx].tadr <= {tranbuf[sel_tran].pte.l2.ppn,pindex[8:0],4'b0};
+				_4B_PTE:	miss_queue[tranbuf[sel_tran].mqndx].tadr <= {tranbuf[sel_tran].pte.ppn,pindex[10:0],2'b0};
+				_8B_PTE:	miss_queue[tranbuf[sel_tran].mqndx].tadr <= {tranbuf[sel_tran].pte.ppn,pindex[9:0],3'b0};
+				_16B_PTE:	miss_queue[tranbuf[sel_tran].mqndx].tadr <= {tranbuf[sel_tran].pte.ppn,pindex[8:0],4'b0};
 				default:	;
 				endcase
 `endif				
 `ifdef MMU_SUPPORT_8k_PAGES
 			4'd8:	// 16k
 				case(ptattr.pte_size)
-				_4B_PTE:	miss_queue[tranbuf[sel_tran].mqndx].tadr <= {tranbuf[sel_tran].pte.l2.ppn,pindex[11:0],2'b0};
-				_8B_PTE:	miss_queue[tranbuf[sel_tran].mqndx].tadr <= {tranbuf[sel_tran].pte.l2.ppn,pindex[10:0],3'b0};
-				_16B_PTE:	miss_queue[tranbuf[sel_tran].mqndx].tadr <= {tranbuf[sel_tran].pte.l2.ppn,pindex[9:0],4'b0};
+				_4B_PTE:	miss_queue[tranbuf[sel_tran].mqndx].tadr <= {tranbuf[sel_tran].pte.ppn,pindex[11:0],2'b0};
+				_8B_PTE:	miss_queue[tranbuf[sel_tran].mqndx].tadr <= {tranbuf[sel_tran].pte.ppn,pindex[10:0],3'b0};
+				_16B_PTE:	miss_queue[tranbuf[sel_tran].mqndx].tadr <= {tranbuf[sel_tran].pte.ppn,pindex[9:0],4'b0};
 				default:	;
 				endcase
 `endif				
 `ifdef MMU_SUPPORT_64k_PAGES
 			4'd10:	// 64k
 				case(ptattr.pte_size)
-				_4B_PTE:	miss_queue[tranbuf[sel_tran].mqndx].tadr <= {tranbuf[sel_tran].pte.l2.ppn,pindex[13:0],2'b0};
-				_8B_PTE:	miss_queue[tranbuf[sel_tran].mqndx].tadr <= {tranbuf[sel_tran].pte.l2.ppn,pindex[12:0],3'b0};
-				_16B_PTE:	miss_queue[tranbuf[sel_tran].mqndx].tadr <= {tranbuf[sel_tran].pte.l2.ppn,pindex[11:0],4'b0};
+				_4B_PTE:	miss_queue[tranbuf[sel_tran].mqndx].tadr <= {tranbuf[sel_tran].pte.ppn,pindex[13:0],2'b0};
+				_8B_PTE:	miss_queue[tranbuf[sel_tran].mqndx].tadr <= {tranbuf[sel_tran].pte.ppn,pindex[12:0],3'b0};
+				_16B_PTE:	miss_queue[tranbuf[sel_tran].mqndx].tadr <= {tranbuf[sel_tran].pte.ppn,pindex[11:0],4'b0};
 				default:	;
 				endcase
 `endif				
 			// 8k pages, 8B pte
 			default:
-				miss_queue[tranbuf[sel_tran].mqndx].tadr <= {tranbuf[sel_tran].pte.l2.ppn,pindex[9:0],3'b0};
+				miss_queue[tranbuf[sel_tran].mqndx].tadr <= {tranbuf[sel_tran].pte.ppn,pindex[9:0],3'b0};
 			endcase
 		end
 	end

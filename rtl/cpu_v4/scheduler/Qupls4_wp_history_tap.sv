@@ -45,18 +45,19 @@
 import Qupls4_pkg::*;
 
 module Qupls4_wp_history_tap(clk, wp_i, wp_tap_o);
+parameter NR_WPORTS = 8;
 input clk;
-input Qupls4_pkg::operand_t [3:0] wp_i;
-output Qupls4_pkg::operand_t [3:0] wp_tap_o [0:4];
+input Qupls4_pkg::operand_t [NR_WPORTS-1:0] wp_i;
+output Qupls4_pkg::operand_t [NR_WPORTS-1:0] wp_tap_o [0:4];
 
 integer n3;
-Qupls4_pkg::operand_t [3:0] wp_oper_hist [0:15];
-Qupls4_pkg::operand_t [3:0] wp_oper_tap [0:4];
+Qupls4_pkg::operand_t [NR_WPORTS-1:0] wp_oper_hist [0:15];
+Qupls4_pkg::operand_t [NR_WPORTS-1:0] wp_oper_tap [0:4];
 
 always_ff @(posedge clk)
 begin
 	wp_oper_hist[0] <= wp_i;
-	for (n3 = 1; n3 < 127; n3 = n3 + 1)
+	for (n3 = 1; n3 < 16; n3 = n3 + 1)
 		wp_oper_hist[n3] <= wp_oper_hist[n3-1];
 end
 

@@ -48,8 +48,8 @@ module Qupls4_stomp(rst, clk, clk2x, ihit, advance_pipeline, advance_pipeline_se
 	dep_stream,
 	branch_resolved, branchmiss, found_destination, destination_rndx,
 	misspc, predicted_correctly_dec, predicted_match_ext,
-	pc, pc_f, pc_fet, pc_ext, pc_mot, pc_dec, pc_ren,
-	stomp_fet, stomp_ext, stomp_mot, stomp_dec, stomp_ren, stomp_que, stomp_quem,
+	pc, pc_f, pc_fet, pc_ext, pc_mot, pc_mot2, pc_dec, pc_ren,
+	stomp_fet, stomp_ext, stomp_mot, stomp_mot2, stomp_dec, stomp_ren, stomp_que, stomp_quem,
 	fcu_idv, fcu_id, missid, missid_v, kept_stream, takb, rob, robentry_stomp,
 	stomped
 	);
@@ -82,12 +82,14 @@ input pc_address_ex_t pc_f;
 input pc_address_ex_t pc_fet;
 input pc_address_ex_t pc_ext;
 input pc_address_ex_t pc_mot;
+input pc_address_ex_t pc_mot2;
 input pc_address_ex_t pc_dec;
 input pc_address_ex_t pc_ren;
 input dep_stream_t [XSTREAMS-1:0] dep_stream;
 output reg stomp_fet;
 output reg stomp_ext;			// IRQ / micro-code Mux stage
 output reg stomp_mot;
+output reg stomp_mot2;
 output reg stomp_dec;
 output reg stomp_ren;
 output reg stomp_que;
@@ -103,12 +105,13 @@ input Qupls4_pkg::rob_entry_t [Qupls4_pkg::ROB_ENTRIES-1:0] rob;
 output Qupls4_pkg::rob_bitmask_t robentry_stomp;
 
 integer nn, n4;
-pc_address_ex_t [5:0] misspcr;
+pc_address_ex_t [6:0] misspcr;
 reg stomp_aln;
 reg stomp_alnr;
 reg stomp_fetr;
 reg stomp_extr;
 reg stomp_motr;
+reg stomp_mot2r;
 reg stomp_decr;
 reg stomp_renr;
 reg stomp_quer;
@@ -126,7 +129,8 @@ always_comb
 	stomp_pipeline = (branchmiss && !found_destination);
 wire next_stomp_ext = (stomp_fet) || stomp_pipeline;
 wire next_stomp_mot = (stomp_ext) || stomp_pipeline;
-wire next_stomp_dec = (stomp_mot) || stomp_pipeline;
+wire next_stomp_mot2 = (stomp_mot) || stomp_pipeline;
+wire next_stomp_dec = (stomp_mot2) || stomp_pipeline;
 wire next_stomp_ren = (stomp_dec) || stomp_pipeline;
 wire next_stomp_quem = (stomp_ren) || stomp_pipeline;
 
@@ -154,10 +158,12 @@ else begin
 		misspcr[2] <= misspcr[1];
 	if (advance_mot|pe_stomp_pipeline)
 		misspcr[3] <= misspcr[2];
-	if (advance_decode|pe_stomp_pipeline)
+	if (advance_mot|pe_stomp_pipeline)
 		misspcr[4] <= misspcr[3];
-	if (advance_rename|pe_stomp_pipeline)
+	if (advance_decode|pe_stomp_pipeline)
 		misspcr[5] <= misspcr[4];
+	if (advance_rename|pe_stomp_pipeline)
+		misspcr[6] <= misspcr[5];
 end
 
 always_ff @(posedge clk2x)
@@ -191,11 +197,14 @@ always_comb
 	stomp_mot = stomped[pc_ext.stream] ||
 		(pe_stomp_pipeline || stomp_motr || !predicted_correctly_dec) && (pc_ext != misspcr[3]);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_ext;
 always_comb
-	stomp_dec = stomped[pc_mot.stream] ||
-	 (pe_stomp_pipeline || stomp_decr || !predicted_correctly_dec) && (pc_mot != misspcr[4]);// && !hwi_at_ren && !hwi_at_dec;
+	stomp_mot2 = stomped[pc_mot.stream] ||
+		(pe_stomp_pipeline || stomp_mot2r || !predicted_correctly_dec) && (pc_mot != misspcr[4]);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_ext;
+always_comb
+	stomp_dec = stomped[pc_mot2.stream] ||
+	 (pe_stomp_pipeline || stomp_decr || !predicted_correctly_dec) && (pc_mot2 != misspcr[5]);// && !hwi_at_ren && !hwi_at_dec;
 always_comb
 	stomp_ren = stomped[pc_dec.stream] ||
-		(pe_stomp_pipeline || stomp_renr) && (pc_dec != misspcr[5]);// && !hwi_at_ren;
+		(pe_stomp_pipeline || stomp_renr) && (pc_dec != misspcr[6]);// && !hwi_at_ren;
 
 // On a cache miss, the fetch stage is stomped on, but not if micro-code is
 // active. Micro-code does not require the cache-line data.
@@ -209,6 +218,7 @@ if (rst) begin
 	stomp_fetr <= TRUE;
 	stomp_extr <= TRUE;
 	stomp_motr <= TRUE;
+	stomp_mot2r <= TRUE;
 	stomp_decr <= TRUE;
 	stomp_renr <= TRUE;
 	ff1 <= FALSE;
@@ -259,19 +269,28 @@ else begin
 			stomp_motr <= stomp_ext;
 	end
 
+	if (advance_mot|pe_stomp_pipeline) begin
+		if (pe_stomp_pipeline)
+			stomp_mot2r <= pc_mot.stream==misspcr[4].stream;
+		else if (pc_mot == misspcr[4] || !stomp_mot)
+			stomp_mot2r <= FALSE;
+		if (!ff1)
+			stomp_mot2r <= stomp_mot;
+	end
+
 	if (advance_decode|pe_stomp_pipeline) begin
 		if (pe_stomp_pipeline)
-			stomp_decr <= pc_mot.stream==misspcr[4].stream;
-		else if (pc_mot == misspcr[4] || !stomp_mot)
+			stomp_decr <= pc_mot2.stream==misspcr[5].stream;
+		else if (pc_mot2 == misspcr[5] || !stomp_mot2)
 			stomp_decr <= FALSE;
 		if (!ff1)
-			stomp_decr <= stomp_mot;
+			stomp_decr <= stomp_mot2;
 	end
 
 	if (advance_rename|pe_stomp_pipeline) begin
 		if (pe_stomp_pipeline)
-			stomp_renr <= pc_dec.stream==misspcr[5].stream;
-		else if (pc_dec == misspcr[5] || !stomp_dec) begin
+			stomp_renr <= pc_dec.stream==misspcr[6].stream;
+		else if (pc_dec == misspcr[6] || !stomp_dec) begin
 			stomp_renr <= FALSE;
 			ff1 <= FALSE;
 		end

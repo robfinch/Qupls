@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023-2025 Robert Finch, Waterloo
+//   \\__/ o\    (C) 2023-2026 Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -57,6 +57,7 @@ input [WID-1:0] c;
 input [WID-1:0] t;
 input fp_status_reg_t s;
 input [WID-1:0] i;
+(* retiming_backward=2 *)
 output reg [WID-1:0] o;
 output fp_status_reg_t sto;
 output reg ust;			// update status
@@ -93,6 +94,10 @@ reg [WID-1:0] tmp;
 wire [WID-1:0] ad,bd,id,cd,td;
 wire [WID-1:0] zero = {WID{1'b0}};
 reg [51:0] sigo;
+reg [WID*2-1:0] prod, prod1;
+reg [WID*2-1:0] produ, produ1;
+reg [WID*2-1:0] prodi, prodi1;
+reg [WID*2-1:0] produi, produi1;
 
 FP64 fa,fb;
 wire a_dn, b_dn;
@@ -169,6 +174,28 @@ always_ff @(posedge clk)
 always_ff @(posedge clk)
 	if (ce)
 		cmpo <= cmpo1;
+
+always_ff @(posedge clk)
+begin
+	prod1 <= $signed(a) * $signed(b);
+	prod <= prod1;
+end
+always_ff @(posedge clk)
+begin
+	produ1 <= a * b;
+	produ <= produ1;
+end
+always_ff @(posedge clk)
+begin
+	prodi1 <= $signed(a) * $signed(i);
+	prodi <= prodi1;
+end
+always_ff @(posedge clk)
+begin
+	produi1 <= a * i;
+	produi <= produi1;
+end
+
 
 // A change in arguments is used to load the divider.
 change_det #(.WID(128)) uargcd0 (
@@ -293,6 +320,16 @@ always_comb
 begin
 	bus = {WID{1'd0}};
 	case(ird.opcode)
+	Qupls4_pkg::OP_R3B,Qupls4_pkg::OP_R3W,Qupls4_pkg::OP_R3T,Qupls4_pkg::OP_R3O,
+	Qupls4_pkg::OP_R3BP,Qupls4_pkg::OP_R3WP,Qupls4_pkg::OP_R3TP,Qupls4_pkg::OP_R3OP,
+	Qupls4_pkg::OP_R3P:
+		case(ird.func)
+		Qupls4_pkg::FN_MUL: 	bus = prod[WID-1:0];
+		Qupls4_pkg::FN_MULU:	bus = produ[WID-1:0];
+		default:	bus = zero;
+		endcase
+	Qupls4_pkg::OP_MULI:	bus = prodi[WID-1:0];
+	Qupls4_pkg::OP_MULUI:	bus = produi[WID-1:0];
 	Qupls4_pkg::OP_ADDI:	if (PERFORMANCE) bus = ad + id; else bus = zero;
 	Qupls4_pkg::OP_SUBFI:	if (PERFORMANCE) bus = id - ad; else bus = zero;
 	Qupls4_pkg::OP_ANDI:	if (PERFORMANCE) bus = ad & id; else bus = zero;
@@ -362,7 +399,7 @@ begin
 			endcase
 	Qupls4_pkg::OP_FLTH,Qupls4_pkg::OP_FLTS,Qupls4_pkg::OP_FLTD,Qupls4_pkg::OP_FLTQ,
 	Qupls4_pkg::OP_FLTPH,Qupls4_pkg::OP_FLTPS,Qupls4_pkg::OP_FLTPD,Qupls4_pkg::OP_FLTPQ,
-	Qupls4_pkg::OP_FLTP:
+	Qupls4_pkg::OP_FLTVVV,Qupls4_pkg::OP_FLTVVS:
 		case(ird.func)
 		Qupls4_pkg::FLT_SCALEB:	bus = scaleo;
 		Qupls4_pkg::FLT_SGNJ:		bus = fsgnj;
@@ -418,7 +455,7 @@ begin
 	case(ird.opcode)
 	Qupls4_pkg::OP_FLTH,Qupls4_pkg::OP_FLTS,Qupls4_pkg::OP_FLTD,Qupls4_pkg::OP_FLTQ,
 	Qupls4_pkg::OP_FLTPH,Qupls4_pkg::OP_FLTPS,Qupls4_pkg::OP_FLTPD,Qupls4_pkg::OP_FLTPQ,
-	Qupls4_pkg::OP_FLTP:
+	Qupls4_pkg::OP_FLTVVV,Qupls4_pkg::OP_FLTVVS:
 		case(ird.func)
 		Qupls4_pkg::FLT_SGNJ:
 			begin

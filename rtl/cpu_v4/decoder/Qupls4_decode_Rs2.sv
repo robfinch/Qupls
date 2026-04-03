@@ -83,8 +83,8 @@ begin
 			fnHas_Rs2 = 1'b1;
 		Qupls4_pkg::OP_CSR:
 			fnHas_Rs2 = ir[31:29]==3'd0 ? 1'b1 : 1'b0;
-		Qupls4_pkg::OP_BCC8,Qupls4_pkg::OP_BCC16,Qupls4_pkg::OP_BCC32,Qupls4_pkg::OP_BCC64,
-		Qupls4_pkg::OP_BCCU8,Qupls4_pkg::OP_BCCU16,Qupls4_pkg::OP_BCCU32,Qupls4_pkg::OP_BCCU64:
+		Qupls4_pkg::OP_BCC,
+		Qupls4_pkg::OP_BCCU:
 			fnHas_Rs2 = 1'b1;
 		Qupls4_pkg::OP_ADDI,Qupls4_pkg::OP_SUBFI,Qupls4_pkg::OP_CMPI,Qupls4_pkg::OP_CMPUI,
 		Qupls4_pkg::OP_ANDI,Qupls4_pkg::OP_ORI,Qupls4_pkg::OP_XORI,
@@ -121,8 +121,8 @@ begin
 		case(ir.opcode)
 		Qupls4_pkg::OP_FLTH,Qupls4_pkg::OP_FLTS,Qupls4_pkg::OP_FLTD,Qupls4_pkg::OP_FLTQ:
 			fnRs2 = {2'b01,ir.Rs2};
-		Qupls4_pkg::OP_BCC8,Qupls4_pkg::OP_BCC16,Qupls4_pkg::OP_BCC32,Qupls4_pkg::OP_BCC64,
-		Qupls4_pkg::OP_BCCU8,Qupls4_pkg::OP_BCCU16,Qupls4_pkg::OP_BCCU32,Qupls4_pkg::OP_BCCU64:
+		Qupls4_pkg::OP_BCC,
+		Qupls4_pkg::OP_BCCU:
 			fnRs2 = {1'b0,ir.Rs2};
 		Qupls4_pkg::OP_ADDI,Qupls4_pkg::OP_SUBFI,Qupls4_pkg::OP_CMPI,Qupls4_pkg::OP_CMPUI,
 		Qupls4_pkg::OP_ANDI,Qupls4_pkg::OP_ORI,Qupls4_pkg::OP_XORI,
@@ -148,7 +148,7 @@ always_comb
 begin
 	has_Rs2 = fnHas_Rs2(instr, has_immb);
 	Rs2 = fnRs2(instr, instr_raw, has_immb);
-	Rs2z = &Rs2[5:0];
+	Rs2z = ~|Rs2[6:0];
 end
 
 endmodule

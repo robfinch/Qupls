@@ -46,9 +46,9 @@ begin
 	case(ir.opcode)
 	Qupls4_pkg::OP_BRK,
 	Qupls4_pkg::OP_CHK:	fnIsFlowCtrl = 1'b1;
-	Qupls4_pkg::OP_BCC8,Qupls4_pkg::OP_BCC16,Qupls4_pkg::OP_BCC32,Qupls4_pkg::OP_BCC64,
-	Qupls4_pkg::OP_BCCU8,Qupls4_pkg::OP_BCCU16,Qupls4_pkg::OP_BCCU32,Qupls4_pkg::OP_BCCU64,
-	Qupls4_pkg::OP_FBCC16,Qupls4_pkg::OP_FBCC32,Qupls4_pkg::OP_FBCC64,Qupls4_pkg::OP_FBCC128:
+	Qupls4_pkg::OP_BCC,
+	Qupls4_pkg::OP_BCCU,
+	Qupls4_pkg::OP_FBCC:
 //	Qupls4_pkg::OP_TRAP:
 		fnIsFlowCtrl = 1'b1;	
 	Qupls4_pkg::OP_BSR,Qupls4_pkg::OP_JSR,

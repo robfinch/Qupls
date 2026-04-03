@@ -40,7 +40,8 @@ import const_pkg::*;
 import Qupls4_pkg::*;
 
 module Qupls4_meta_fpu(rst, clk, clk3x, idle, stomp, rse_i, rse_o, rm,
-	z, cptgt, o, sto, ust, otag, we_o, done, exc);
+	z, cptgt, o, sto, ust, otag, we_o, done, exc,
+	out, tlb_v, page_fault, page_fault_v, load_store, vlsndx, amo, res, resv);
 parameter WID=Qupls4_pkg::SUPPORT_QUAD_PRECISION|Qupls4_pkg::SUPPORT_CAPABILITIES ? 128 : 64;
 input rst;
 input clk;
@@ -59,6 +60,15 @@ output reg ust;
 output reg [WID/8:0] we_o;
 output reg done;
 output Qupls4_pkg::cause_code_t exc;
+input out;
+input tlb_v;
+input page_fault;
+input page_fault_v;
+input load_store;
+input vlsndx;
+input amo;
+output cpu_types_pkg::address_t res;
+output reg resv;
 
 Qupls4_pkg::reservation_station_entry_t rse1,rse2;
 Qupls4_pkg::operating_mode_t om;
@@ -73,6 +83,11 @@ reg [WID-1:0] i;
 aregno_t aRd_i;
 reg [1:0] stomp_con;	// stomp conveyor
 reg [WID/8:0] we,we1,we2;
+
+cpu_types_pkg::address_t as, bs;
+cpu_types_pkg::address_t res1;
+reg [5:0] shift;
+
 always_comb om = rse_i.om;
 always_comb ir = rse_i.uop;
 always_comb a = rse_i.arg[0].val;
@@ -91,6 +106,75 @@ wire [0:0] ust64;
 wire [7:0] sr64, sr128;
 wire done16, done32, done64, done128;
 genvar g,mm;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// AGEN logic
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+always_ff @(posedge clk) 
+begin
+	rse1 <= rse_i;
+	if (page_fault && !rse_i.excv) begin
+		rse1.exc <= Qupls4_pkg::FLT_PAGE;
+		rse1.excv <= page_fault_v;
+	end
+end
+always_ff @(posedge clk)
+	rse2 <= rse1;
+always_comb
+	rse_o = rse2;
+
+always_ff @(posedge clk)
+	as = rse_i.Rs1z ? value_zero : rse_i.Rs1ip ? rse_i.pc : rse_i.arg[0].val;
+
+always_ff @(posedge clk)
+	bs = rse_i.Rs2z ? value_zero : (rse_i.arg[1].val * ({rse_i.uop.sc==3'd0,rse_i.uop.sc}));
+
+always_comb
+	case(rse_i.velesz)
+	2'd0:	shift = {rse_i.laneno,3'd0};
+	2'd1:	shift = {rse_i.laneno,4'd0};
+	2'd2:	shift = {rse_i.laneno,5'd0};
+	2'd3:	shift = 6'd0;
+	endcase
+
+always_comb
+begin
+	if (vlsndx)
+		res1 = as + (bs >> shift) + rse_i.argI;
+	else if (amo)
+		res1 = as;				// just [Rs1]
+	// Lane number is 1 for non-vector load/store
+	else if (load_store)
+		res1 = as + bs * rse_i.laneno + rse_i.argI;
+	else
+		res1 = 64'd0;
+end
+
+always_ff @(posedge clk)
+	res <= res1;
+
+// Make Agen valid sticky
+// The agen takes a clock cycle to compute after the out signal is valid.
+reg resv1;
+always_ff @(posedge clk) 
+if (rst) begin
+	resv <= INV;
+	resv1 <= INV;
+end
+else begin
+	if (out)
+		resv1 <= VAL;
+	resv <= resv1;
+	if (tlb_v) begin
+		resv1 <= INV;
+		resv <= INV;
+	end
+end
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
 
 generate begin : gPrec
 if (Qupls4_pkg::SUPPORT_PREC) begin
@@ -278,15 +362,8 @@ endgenerate
 
 delay2 #(.WID(WID/8+1)) udly6 (.clk(clk), .ce(1'b1), .i(we), .o(we2));
 
-always_ff @(posedge clk)
-	rse1 <= rse_i;
-always_ff @(posedge clk)
-	rse2 <= rse1;
 always_comb
-	rse_o = rse2;
-
-always_comb
-	we = 9'h1FF;
+	we = {9{rse_i.we}};
 
 always_ff @(posedge clk)
 begin

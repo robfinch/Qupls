@@ -41,7 +41,8 @@ import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
 module Qupls4_reservation_station(rst, clk, available, busy, issue, stall,
-	rse_i, rse_o, stomp, rf_oper_i, bypass_i, wp_oper_tap_i, req_pRn, req_pRnv
+	rse_i, rse_o, stomp, rf_oper_i, bypass_i, wp_oper_tap_i, req_pRn, req_pRnv,
+	fp_sync, req_FPCSRndx, req_FPCSRv, FPCSR, FPCSRv
 );
 parameter MWIDTH = 4;
 parameter NRSE = 1;
@@ -50,12 +51,14 @@ parameter NBPI = 4;			// number of bypasssing inputs
 parameter NSARG = 3;		// number of source operands
 parameter RL_STRATEGY = 1;	// register lookup strategy
 parameter NREG_RPORTS = RL_STRATEGY==0 ? 0 : 16;
+parameter NREG_WPORTS = 13;
 parameter RC = 1'b0;
 parameter DISPATCH_COUNT=6;	// number of lanes of dispatching
 // The following controls which lanes to look at. It depends on which lanes are
 // setup in the instruction dispatcher. Specific lanes target specific functional
 // unit types. For instance lane #4 is used for floating-point.
 parameter DISPATCH_MAP=6'b100001;
+parameter FPUNIT = FALSE;
 input rst;
 input clk;
 input available;
@@ -64,14 +67,19 @@ input Qupls4_pkg::reservation_station_entry_t [DISPATCH_COUNT-1:0] rse_i;
 input Qupls4_pkg::rob_bitmask_t stomp;
 input Qupls4_pkg::operand_t [NREG_RPORTS-1:0] rf_oper_i;
 input Qupls4_pkg::operand_t [NBPI-1:0] bypass_i;
-input Qupls4_pkg::operand_t [MWIDTH-1:0] wp_oper_tap_i [0:4];
+input Qupls4_pkg::operand_t [NREG_WPORTS-1:0] wp_oper_tap_i [0:4];
 output reg busy;
 output reg issue;
 output Qupls4_pkg::reservation_station_entry_t rse_o;
 output pregno_t [3:0] req_pRn;
 output reg [3:0] req_pRnv;
+output rob_ndx_t req_FPCSRndx;
+output reg req_FPCSRv;
+input fp_sync;
+input Qupls4_pkg::fp_status_reg_t FPCSR;
+input FPCSRv;
 
-integer kk,jj,nn,mm,pp,qq,n1,n2,n3;
+integer kk,jj,nn,mm,pp,qq,n1,n2,n3,n4;
 wire [3:0] rdy;
 genvar g;
 reg idle;
@@ -90,6 +98,16 @@ Qupls4_pkg::operand_t [NRSE-1:0] rse_argD;
 Qupls4_pkg::operand_t [NRSE-1:0] rse_argT;
 Qupls4_pkg::operand_t [NRSE-1:0] rse_argS;		// status (for round mode)
 Qupls4_pkg::reservation_station_entry_t rsei;
+Qupls4_pkg::operand_t [NREG_RPORTS-1:0] rf_fpcsr_i;
+
+always_comb
+begin
+	for (n4 = 0; n4 < NREG_RPORTS; n4 = n4 + 1)
+		rf_fpcsr_i[n4].val = FPCSR;
+		rf_fpcsr_i[n4].pRn = 9'd0;
+		rf_fpcsr_i[n4].fpcsr = TRUE;
+		rf_fpcsr_i[n4].v = FPCSRv;
+end
 
 always_comb
 for (nn = 0; nn < NRSE; nn = nn + 1)
@@ -125,8 +143,9 @@ lfsr17 ulfsr1
 
 // Always assume at least one source operand.
 
-Qupls4_validate_operand #(.RL_STRATEGY(RL_STRATEGY),
-	.NBPI(NBPI), .NENTRY(NRSE), .NREG_PORTS(NREG_RPORTS)) uvsrcA
+Qupls4_validate_operand #(
+	.NBPI(NBPI), .NENTRY(NRSE), .NREG_PORTS(NREG_RPORTS),
+	.NREG_WPORTS(NREG_WPORTS)) uvsrcA
 (
 	.wp_hist_i(wp_oper_tap_i),
 	.rf_oper_i(rf_oper_i),
@@ -138,8 +157,11 @@ Qupls4_validate_operand #(.RL_STRATEGY(RL_STRATEGY),
 generate begin : gOperands
 
 if (NSARG > 1)
-Qupls4_validate_operand #(.RL_STRATEGY(RL_STRATEGY),
-	.NBPI(NBPI), .NENTRY(NRSE), .NREG_PORTS(NREG_RPORTS)) uvsrcB
+Qupls4_validate_operand #(
+	.NBPI(NBPI), .NENTRY(NRSE),
+	.NREG_PORTS(NREG_RPORTS),
+	.NREG_WPORTS(NREG_WPORTS)
+) uvsrcB
 (
 	.wp_hist_i(wp_oper_tap_i),
 	.rf_oper_i(rf_oper_i),
@@ -156,8 +178,9 @@ else begin
 end
 
 if (NSARG > 2)
-Qupls4_validate_operand #(.RL_STRATEGY(RL_STRATEGY),
-	.NBPI(NBPI), .NENTRY(NRSE), .NREG_PORTS(NREG_RPORTS)) uvsrcC
+Qupls4_validate_operand #(
+	.NBPI(NBPI), .NENTRY(NRSE), .NREG_PORTS(NREG_RPORTS),
+	.NREG_WPORTS(NREG_WPORTS)) uvsrcC
 (
 	.wp_hist_i(wp_oper_tap_i),
 	.rf_oper_i(rf_oper_i),
@@ -174,8 +197,10 @@ else begin
 end
 
 if (NSARG > 3)
-Qupls4_validate_operand #(.RL_STRATEGY(RL_STRATEGY),
-	.NBPI(NBPI), .NENTRY(NRSE), .NREG_PORTS(NREG_RPORTS)) uvsrcD
+Qupls4_validate_operand #(
+	.NBPI(NBPI), .NENTRY(NRSE), .NREG_PORTS(NREG_RPORTS),
+	.NREG_WPORTS(NREG_WPORTS)
+) uvsrcD
 (
 	.wp_hist_i(wp_oper_tap_i),
 	.rf_oper_i(rf_oper_i),
@@ -196,8 +221,10 @@ endgenerate
 
 // Destination operand which sometimes needs to be read.
 
-Qupls4_validate_operand #(.RL_STRATEGY(RL_STRATEGY),
-	.NBPI(NBPI), .NENTRY(NRSE), .NREG_PORTS(NREG_RPORTS)) uvsrcT
+Qupls4_validate_operand #(
+	.NBPI(NBPI), .NENTRY(NRSE), .NREG_PORTS(NREG_RPORTS),
+	.NREG_WPORTS(NREG_WPORTS)
+) uvsrcT
 (
 	.wp_hist_i(wp_oper_tap_i),
 	.rf_oper_i(rf_oper_i),
@@ -209,11 +236,14 @@ Qupls4_validate_operand #(.RL_STRATEGY(RL_STRATEGY),
 // Status operand which sometimes needs to be read.
 generate begin : gStat
 	if (RC > 0)
-Qupls4_validate_operand #(.RL_STRATEGY(RL_STRATEGY),
-	.NBPI(NBPI), .NENTRY(NRSE), .NREG_PORTS(NREG_RPORTS)) uvsrcS
+Qupls4_validate_operand #(
+	.NBPI(NBPI), .NENTRY(NRSE), .NREG_PORTS(NREG_RPORTS),
+	.NREG_WPORTS(NREG_WPORTS),
+	.pFPCSR(TRUE)
+) uvsrcS
 (
-	.wp_hist_i(wp_oper_tap_i),
-	.rf_oper_i(rf_oper_i),
+	.wp_hist_i(),
+	.rf_oper_i(rf_fpcsr_i),
 	.oper_i(rse_argS),
 	.oper_o(arg[5]),
 	.bypass_i(bypass_i)
@@ -319,18 +349,37 @@ else begin
 	*/
 	// Issue scheduling: if there is only one ready easy: pick the ready one.
 	// If there are ties: pick one at random.
+	// If it is an FP unit and there is an FP sync instruction in the pipeline,
+	// the refuse to issue.
 	rse_o.v <= INV;
-	casez({pstall,stall})
-	2'b10:	;
-	2'b01:	;
-	2'b11:	;
+	casez({FPUNIT&fp_sync,pstall,stall})
+	3'b1??:	;
+	3'b010:	;
+	3'b001:	;
+	3'b011:	;
 	default:
 		begin
 			if (~&rdy) begin
-				issue <= TRUE;
-				rse_o <= rse[rdy];
-				rse_o.v <= !stomp[rse[rdy].rndx] & rse[rdy].v;
-				rse[rdy].busy <= FALSE;
+				// For a vector load / store only issue for when mask indicates so.
+				if (rse[rdy].vls) begin
+					if (rse[rdy].arg[2][rse[rdy].laneno]) begin
+						issue <= TRUE;
+						rse_o <= rse[rdy];
+						rse_o.v <= !stomp[rse[rdy].rndx] & rse[rdy].v;
+					end
+				end
+				else begin
+					issue <= TRUE;
+					rse_o <= rse[rdy];
+					rse_o.v <= !stomp[rse[rdy].rndx] & rse[rdy].v;
+				end
+				if (rse[rdy].vcount==6'd0) begin
+					rse[rdy].busy <= FALSE;
+				end
+				else begin
+					rse[rdy].vcount <= rse[rdy].vcount - 6'd1;
+					rse[rdy].laneno <= rse[rdy].laneno + 6'd1;
+				end
 				if (stomp[rse[rdy].rndx])
 					rse_o.uop <= {26'd0,Qupls4_pkg::OP_NOP};
 			end
@@ -348,13 +397,20 @@ begin
 	req_pRnu[2] = 8'd0;
 	req_pRnu[3] = 8'd0;
 	req_pRnuv = 4'd0;
+	req_FPCSRv = INV;
 	for (jj = 0; jj < NRSE; jj = jj + 1) begin
 		for (pp = 0; pp < 6; pp = pp + 1) begin
 			if (fnSrc(rse[jj].uop,pp)) begin
-				if (rse[jj].busy && !rse[jj].arg[pp].v && kk < 4) begin
-					req_pRnu[kk] = rse[jj].arg[pp].pRn;
-					req_pRnuv[kk] = VAL;
-					kk = kk + 1;
+				if (rse[jj].busy && !rse[jj].arg[pp].v) begin
+					if(kk < 4) begin
+						req_pRnu[kk] = rse[jj].arg[pp].pRn;
+						req_pRnuv[kk] = VAL;
+						kk = kk + 1;
+					end
+					if (pp==5) begin
+						req_FPCSRndx = rse[jj].rndx;
+						req_FPCSRv = VAL;
+					end
 				end
 			end
 		end

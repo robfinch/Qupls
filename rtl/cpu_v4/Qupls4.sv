@@ -138,6 +138,9 @@ wire clk5x = clk5x_i;
 assign clk = clk_i;				// convenience
 assign clk2x = clk2x_i;
 
+aregno_t regFPCSR = 7'd125;
+aregno_t regSSP = 7'd126;
+aregno_t regIP = 7'd127;
 reg [4:0] ph4;
 reg [5:0] rstcnt;
 reg [3:0] panic;
@@ -198,6 +201,8 @@ pregno_t [3:0] bRs1 [0:3];
 pregno_t [3:0] bRs2 [0:3];
 reg [3:0] bRsv1 [0:3];
 reg [3:0] bRsv2 [0:3];
+rob_ndx_t bFPCSRndx;
+wire [15:0] bFPCSRv;
 
 value_t rfo_sau0_argA;
 value_t rfo_sau0_argB;
@@ -316,7 +321,7 @@ Qupls4_pkg::rob_bitmask_t robentry_cpydst;
 stream_state_t [XSTREAMS-1:0] stream_states;
 wire [XSTREAMS-1:0] dead_streams;
 pc_stream_t kept_stream;
-wire stomp_fet, stomp_ext, stomp_mot, stomp_x4;
+wire stomp_fet, stomp_ext, stomp_mot, stomp_mot2, stomp_x4;
 wire stomp_dec, stomp_ren, stomp_que, stomp_quem;
 Qupls4_pkg::rob_bitmask_t robentry_issue;
 Qupls4_pkg::rob_bitmask_t robentry_fpu_issue;
@@ -936,7 +941,7 @@ wire [39:0] stomped_insn;
 Qupls4_pkg::cause_code_t [3:0] cause;
 Qupls4_pkg::status_reg_t [ISTACK_DEPTH-1:0] sr_stack;
 Qupls4_pkg::status_reg_t sr;
-Qupls4_pkg::fp_status_reg_t fpcsr;
+Qupls4_pkg::fp_status_reg_t fpcsr, fpcsr_value;
 wire [2:0] swstk = sr.swstk;
 wire paging_en = sr.page_en;
 wire pebble_en = sr.pebble_en;
@@ -1738,7 +1743,7 @@ icctrl1
 	.miss_v(ic_miss_v),
 	.miss_vadr(ic_miss_adr),
 	.miss_padr(pc_tlb_res),
-	.miss_asid(tlb_pc_entry.vpn.asid),
+	.miss_asid(tlb_pc_entry.asid),
 	.wr_ic(wr_ic),
 	.way(ic_wway),
 	.line_o(ic_line_o),
@@ -1903,6 +1908,7 @@ else begin
 	end
 end
 
+pc_address_ex_t pc_mot;
 reg branch_resolved;
 always_ff @(posedge clk) branch_resolved <= fcu_branch_resolved;
 
@@ -1944,13 +1950,15 @@ Qupls4_stomp ustmp1
 	.pc_f(pc0_f),
 	.pc_fet(pc0_fet),
 	.pc_ext(pg_ext.hdr.ip),
-	.pc_mot(pg_mot.hdr.ip),
+	.pc_mot(pc_mot),
+	.pc_mot2(pg_mot.hdr.ip),
 	.pc_dec(pg_dec.hdr.ip),
 	.pc_ren(pg_ren.hdr.ip),
 	.dep_stream(dep_stream),
 	.stomp_fet(stomp_fet),
 	.stomp_ext(stomp_ext),
 	.stomp_mot(stomp_mot),
+	.stomp_mot2(stomp_mot2),
 	.stomp_dec(stomp_dec),
 	.stomp_ren(stomp_ren),
 	.stomp_que(stomp_que),
@@ -2431,7 +2439,9 @@ umot1
 	.en(advance_mot),
 	.ihit_ext(ihit_ext),
 	.ihit_mot(ihit_mot),
+	.pc_mot(pc_mot),
 	.stomp(stomp_mot),
+	.stomp2(stomp_mot2),
 	.cline_ext(cline_ext),
 	.cline_mot(cline_mot),
 	.pg_ext(pg_ext),
@@ -2463,6 +2473,7 @@ udecstg1
 	.rst(irst),
 	.clk(clk),
 	.en(advance_decode),
+	.regFPCSR(regFPCSR),
 	.ihit_mot(ihit_mot),
 	.ihit_dec(ihit_dec),
 	.new_cline_ext(new_cline_ext),
@@ -2487,23 +2498,23 @@ udecstg1
 	.uop_head(uop_head)
 );
 
-reg [MWIDTH-1:0] wrport0_v;
+reg [NREG_WPORTS-1:0] wrport0_v;
 reg wrport4_v;
 reg wrport5_v;
-reg [8:0] wrport0_we [0:MWIDTH-1];
+reg [8:0] wrport0_we [0:NREG_WPORTS-1];
 reg [8:0] wrport4_we;
 reg [8:0] wrport5_we;
-value_t [MWIDTH-1:0] wrport0_res;
+value_t [NREG_WPORTS-1:0] wrport0_res;
 value_t wrport4_res;
 value_t wrport5_res;
-pregno_t [MWIDTH-1:0] wrport0_Rt;
+pregno_t [NREG_WPORTS-1:0] wrport0_Rt;
 pregno_t wrport4_Rt;
 pregno_t wrport5_Rt;
-aregno_t [MWIDTH-1:0] wrport0_aRt;
+aregno_t [NREG_WPORTS-1:0] wrport0_aRt;
 aregno_t wrport4_aRt;
 aregno_t wrport5_aRt;
-checkpt_ndx_t [MWIDTH-1:0] wrport0_cp;
-Qupls4_pkg::flags_t [MWIDTH-1:0] wrport0_tag;
+checkpt_ndx_t [NREG_WPORTS-1:0] wrport0_cp;
+Qupls4_pkg::flags_t [NREG_WPORTS-1:0] wrport0_tag;
 
 wire [MWIDTH-1:0] stomps;
 
@@ -2595,8 +2606,8 @@ begin
 
 end
 */
-Qupls4_pkg::operand_t [MWIDTH-1:0] wp;
-Qupls4_pkg::operand_t [MWIDTH-1:0] wp_tap [0:4];
+Qupls4_pkg::operand_t [NREG_WPORTS-1:0] wp;
+Qupls4_pkg::operand_t [NREG_WPORTS-1:0] wp_tap [0:4];
 
 always_comb
 begin
@@ -2609,7 +2620,7 @@ begin
 		wp[n49].aRnv = FALSE;
 	end
 end
-Qupls4_wp_history_tap uwph1
+Qupls4_wp_history_tap #(.NR_WPORTS(NREG_WPORTS)) uwph1
 (
 	.clk(clk),
 	.wp_i(wp),
@@ -3251,7 +3262,7 @@ always_comb wt12A = !fpu0_rse2.aRdv && !fpu0_idle && Qupls4_pkg::NFPU > 0;
 
 // Functional unit result queues management variables.
 reg [12:0] fuq_empty;
-wire [4:0] frq_upd [0:MWIDTH-1];
+wire [4:0] frq_upd [0:NREG_WPORTS-1];
 reg [12:0] fuq_rd;
 wire [8:0] fuq_we [0:12];
 pregno_t [12:0] fuq_pRt;
@@ -3261,19 +3272,27 @@ value_t [12:0] fuq_res;
 cpu_types_pkg::checkpt_ndx_t fuq_cp [0:12];
 
 // Look for queues containing values, and select from a queue using a rotating selector.
-Qupls4_frq_select
-#(
-	.NFRQ(13),
-	.NWRITE_PORTS(NREG_WPORTS)
-)
-ufrqsel1
-(
-	.rst(irst),
-	.clk(clk),
-	.frq_empty(fuq_empty),
-	.upd(frq_upd),
-	.upd_bitmap(fuq_rd)
-);
+generate begin : gFrqSelect
+	if (NFRQ > NREG_WPORTS)
+		Qupls4_frq_select
+		#(
+			.NFRQ(13),
+			.NWRITE_PORTS(NREG_WPORTS)
+		)
+		ufrqsel1
+		(
+			.rst(irst),
+			.clk(clk),
+			.frq_empty(fuq_empty),
+			.upd(frq_upd),
+			.upd_bitmap(fuq_rd)
+		);
+	else begin
+		assign fuq_rd = {NREG_WPORTS{1'b1}};
+	end
+end
+endgenerate
+
 
 // Read the next queue entry for the queue just used to update the register file.
 
@@ -3338,6 +3357,7 @@ endgenerate
 // When doing a multiply we know the result will not be a capability, so the
 // tag is simply defaulted to zero.
 
+/*
 Qupls4_func_result_queue ufrq2
 (
 	.rst_i(irst),
@@ -3357,6 +3377,14 @@ Qupls4_func_result_queue ufrq2
 	.empty(fuq_empty[2]),
 	.full(imul0_full)
 );
+*/
+assign fuq_we[2] = 9'd0;
+assign fuq_pRt[2] = 8'd0;
+assign fuq_aRt[2] = 7'd0;
+assign fuq_tag[2] = 8'b0;
+assign fuq_res[2] = 64'd0;
+assign fuq_cp[2] = 4'd0;
+assign fuq_empty[2] = 1'b1;
 
 // IDIV
 // When doing a divide we know the result will not be a capability, so the
@@ -3620,13 +3648,24 @@ endgenerate
 // Mux the queue outputs onto the register file inputs.
 generate begin : gWrPort
 	for (g = 0; g < $size(wrport0_v); g = g + 1) begin
-		always_ff @(posedge clk) wrport0_v[g] <= frq_upd[g]==5'd31 ? 1'b0 : ~fuq_empty[frq_upd[g]];
-		always_ff @(posedge clk) wrport0_we[g] <= frq_upd[g]==5'd31 ? 9'b0 : fuq_we[frq_upd[g]]; 
-		always_ff @(posedge clk) wrport0_Rt[g] <= frq_upd[g]==5'd31 ? 10'd0 : fuq_pRt[frq_upd[g]]; 
-		always_ff @(posedge clk) wrport0_aRt[g] <= frq_upd[g]==5'd31 ? 8'd0 : fuq_aRt[frq_upd[g]]; 
-		always_ff @(posedge clk) wrport0_res[g] <= frq_upd[g]==5'd31 ? value_zero : fuq_res[frq_upd[g]]; 
-		always_ff @(posedge clk) wrport0_cp[g] <= frq_upd[g]==5'd31 ? 4'd0 : fuq_cp[frq_upd[g]]; 
-		always_ff @(posedge clk) wrport0_tag[g] <= frq_upd[g]==5'd31 ? 8'd0 : fuq_tag[frq_upd[g]]; 
+		if (NREG_WPORTS >= NFRQ) begin
+			always_ff @(posedge clk) wrport0_v[g] <= ~fuq_empty[g];
+			always_ff @(posedge clk) wrport0_we[g] <= fuq_we[g]; 
+			always_ff @(posedge clk) wrport0_Rt[g] <= fuq_pRt[g]; 
+			always_ff @(posedge clk) wrport0_aRt[g] <= fuq_aRt[g]; 
+			always_ff @(posedge clk) wrport0_res[g] <= fuq_res[g]; 
+			always_ff @(posedge clk) wrport0_cp[g] <= fuq_cp[g]; 
+			always_ff @(posedge clk) wrport0_tag[g] <= fuq_tag[g]; 
+		end
+		else begin
+			always_ff @(posedge clk) wrport0_v[g] <= frq_upd[g]==5'd31 ? 1'b0 : ~fuq_empty[frq_upd[g]];
+			always_ff @(posedge clk) wrport0_we[g] <= frq_upd[g]==5'd31 ? 9'b0 : fuq_we[frq_upd[g]]; 
+			always_ff @(posedge clk) wrport0_Rt[g] <= frq_upd[g]==5'd31 ? 10'd0 : fuq_pRt[frq_upd[g]]; 
+			always_ff @(posedge clk) wrport0_aRt[g] <= frq_upd[g]==5'd31 ? 8'd0 : fuq_aRt[frq_upd[g]]; 
+			always_ff @(posedge clk) wrport0_res[g] <= frq_upd[g]==5'd31 ? value_zero : fuq_res[frq_upd[g]]; 
+			always_ff @(posedge clk) wrport0_cp[g] <= frq_upd[g]==5'd31 ? 4'd0 : fuq_cp[frq_upd[g]]; 
+			always_ff @(posedge clk) wrport0_tag[g] <= frq_upd[g]==5'd31 ? 8'd0 : fuq_tag[frq_upd[g]]; 
+		end
 	end
 end 
 endgenerate
@@ -4353,7 +4392,16 @@ if (Qupls4_pkg::NFPU > 0) begin
 			.z(fpu0_predz),
 			.cptgt(fpu0_cptgt),
 			.done(fpu0_done),
-			.exc(fpu0_exc)
+			.exc(fpu0_exc),
+			.out(rob[agen0_id].out[0]),
+			.tlb_v(tlb0_v),
+			.page_fault(|pg_fault),
+			.page_fault_v(pg_faultq==2'd0),
+			.load_store(agen0_load_store),
+			.vlsndx(agen0_vlsndx),
+			.amo(agen0_amo),
+			.res(agen0_res),
+			.resv(agen0_v)
 		);
 	end
 	else begin
@@ -4373,7 +4421,16 @@ if (Qupls4_pkg::NFPU > 0) begin
 			.otag(),
 			.we_o(fpu0_we),
 			.done(fpu0_done),
-			.exc(fpu0_exc)
+			.exc(fpu0_exc),
+			.out(rob[agen0_id].out[0]),
+			.tlb_v(tlb0_v),
+			.page_fault(|pg_fault),
+			.page_fault_v(pg_faultq==2'd0),
+			.load_store(agen0_load_store),
+			.vlsndx(agen0_vlsndx),
+			.amo(agen0_amo),
+			.res(agen0_res),
+			.resv(agen0_v)
 		);
 	end
 end
@@ -4397,7 +4454,16 @@ if (Qupls4_pkg::NFPU > 1) begin
 		.we_o(fpu1_we),
     .otag(),
     .done(fpu1_done),
-    .exc(fpu1_exc)
+    .exc(fpu1_exc),
+		.out(rob[agen1_id].out[0]),
+		.tlb_v(tlb1_v),
+		.page_fault(|pg_fault),
+		.page_fault_v(pg_faultq==2'd1),
+		.load_store(agen1_load_store),
+		.vlsndx(agen1_vlsndx),
+		.amo(agen1_amo),
+		.res(agen1_res),
+		.resv(agen1_v)
 );
 end
 else begin
@@ -4705,40 +4771,6 @@ always_ff @(posedge clk)
 		rob[agen1_rndx].op.decbus.vload_ndx|
 		rob[agen1_rndx].op.decbus.vstore_ndx
 		;
-
-Qupls4_agen uag0
-(
-	.rst(irst),
-	.clk(clk),
-	.rse_i(agen0_rse),
-	.rse_o(agen0_rse2),
-	.out(rob[agen0_id].out[0]),
-	.tlb_v(tlb0_v),
-	.page_fault(|pg_fault),
-	.page_fault_v(pg_faultq==2'd0),
-	.load_store(agen0_load_store),
-	.vlsndx(agen0_vlsndx),
-	.amo(agen0_amo),
-	.res(agen0_res),
-	.resv(agen0_v)
-);
-
-Qupls4_agen uag1
-(
-	.rst(irst),
-	.clk(clk),
-	.rse_i(agen1_rse),
-	.rse_o(agen1_rse2),
-	.out(rob[agen1_id].out[0]),
-	.tlb_v(tlb1_v),
-	.page_fault(|pg_fault),
-	.page_fault_v(pg_faultq==2'd1),
-	.load_store(agen1_load_store),
-	.vlsndx(agen1_vlsndx),
-	.amo(agen1_amo),
-	.res(agen1_res),
-	.resv(agen1_v)
-);
 
 reg cantlsq0, cantlsq1;
 always_comb
@@ -5141,6 +5173,7 @@ Qupls4_reservation_station #(
 	.NRSE(NRSE_SAU0),
 	.NSARG(3),
 	.NREG_RPORTS(RS_NREG_RPORTS),
+	.NREG_WPORTS(NREG_WPORTS),
 	.RC(0),
 	.DISPATCH_MAP(6'b100001),
 	.RL_STRATEGY(RL_STRATEGY)
@@ -5166,15 +5199,21 @@ usaust0
 	.rfo_tag(rfo_tag),
 	*/
 	.req_pRn(bRs[0]),
-	.req_pRnv(bRsv[0])
+	.req_pRnv(bRsv[0]),
+	.req_FPCSRndx(),
+	.req_FPCSRv(),
+	.fp_sync(1'b0),
+	.FPCSR(64'd0),
+	.FPCSRv(INV)
 );
-
+/*
 Qupls4_reservation_station #(
 	.MWIDTH(MWIDTH),
 	.FUNCUNIT(4'd2),
 	.NRSE(NRSE_IMUL),
 	.NSARG(3),
 	.NREG_RPORTS(RS_NREG_RPORTS),
+	.NREG_WPORTS(NREG_WPORTS),
 	.RC(0),
 	.DISPATCH_MAP(6'b000010),
 	.RL_STRATEGY(RL_STRATEGY)
@@ -5194,8 +5233,16 @@ uimulst0
 	.bypass_i(),
 	.wp_oper_tap_i(wp_tap),
 	.req_pRn(bRs[2]),
-	.req_pRnv(bRsv[2])
+	.req_pRnv(bRsv[2]),
+	.req_FPCSRndx(),
+	.req_FPCSRv(),
+	.fp_sync(1'b0),
+	.FPCSR(64'd0),
+	.FPCSRv(INV)
 );
+*/
+assign bRs[2] = 9'd0;
+assign bRsv[2] = 1'b0;
 
 always_ff @(posedge clk) sau0_ldd <= sau0_ld;
 
@@ -5207,6 +5254,7 @@ Qupls4_reservation_station #(
 	.NRSE(NRSE_IDIV),
 	.NSARG(2),
 	.NREG_RPORTS(RS_NREG_RPORTS),
+	.NREG_WPORTS(NREG_WPORTS),
 	.RC(0),
 	.DISPATCH_MAP(6'b000010),
 	.RL_STRATEGY(RL_STRATEGY)
@@ -5226,7 +5274,8 @@ uidivst0
 	.bypass_i(),
 	.wp_oper_tap_i(wp_tap),
 	.req_pRn(bRs[3]),
-	.req_pRnv(bRsv[3])
+	.req_pRnv(bRsv[3]),
+	.fp_sync(1'b0)
 );
 else begin
 end
@@ -5241,6 +5290,7 @@ generate begin : gSauStation
 			.NRSE(NRSE_SAU),
 			.NSARG(3),
 			.NREG_RPORTS(RS_NREG_RPORTS),
+			.NREG_WPORTS(NREG_WPORTS),
 			.RC(0),
 			.DISPATCH_MAP(6'b100001),
 			.RL_STRATEGY(RL_STRATEGY)
@@ -5260,7 +5310,12 @@ generate begin : gSauStation
 			.bypass_i(),
 			.wp_oper_tap_i(wp_tap),
 			.req_pRn(bRs[1]),
-			.req_pRnv(bRsv[1])
+			.req_pRnv(bRsv[1]),
+			.fp_sync(1'b0),
+			.req_FPCSRndx(),
+			.req_FPCSRv(),
+			.FPCSR(64'd0),
+			.FPCSRv(INV)
 		);
 	end
 end
@@ -5285,9 +5340,11 @@ generate begin : gFpuStat
 					.NRSE(NRSE_FMA),
 					.NSARG(3+Qupls4_pkg::SUPPORT_FDP),
 					.NREG_RPORTS(RS_NREG_RPORTS),
+					.NREG_WPORTS(NREG_WPORTS),
 					.RC(1),
 					.DISPATCH_MAP(6'b010000),
-					.RL_STRATEGY(RL_STRATEGY)
+					.RL_STRATEGY(RL_STRATEGY),
+					.FPUNIT(TRUE)
 				)
 				ufmast1
 				(
@@ -5304,34 +5361,12 @@ generate begin : gFpuStat
 					.bypass_i(),
 					.wp_oper_tap_i(wp_tap),
 					.req_pRn(bRs[4]),
-					.req_pRnv(bRsv[4])
-				);
-				Qupls4_reservation_station #(
-					.MWIDTH(MWIDTH),
-					.FUNCUNIT(4'd12),
-					.NRSE(NRSE_FPU),
-					.NSARG(3),
-					.NREG_RPORTS(NREG_RPORTS),
-					.RC(1),
-					.DISPATCH_MAP(6'b010000),
-					.RL_STRATEGY(RL_STRATEGY)
-				)
-				ufpust1
-				(
-					.rst(irst),
-					.clk(clk),
-					.available(fpu0_available),
-					.busy(rs_busy[12]),
-					.stall(fpu0_full),
-					.stomp(robentry_stomp),
-					.issue(),//robentry_issue[sau0_rndx]),
-					.rse_i(rse),
-					.rse_o(fpu0_rse),
-					.rf_oper_i(rf_oper),
-					.bypass_i(),
-					.wp_oper_tap_i(wp_tap),
-					.req_pRn(bRs[12]),
-					.req_pRnv(bRsv[12])
+					.req_pRnv(bRsv[4]),
+					.req_FPCSRndx(bFPCSRndx[4]),
+					.req_FPCSRv(bFPCSRv[4]),
+					.fp_sync(fnFPSync(1)),
+					.FPCSR(fnFPCSR(bFPCSRndx[4])),
+					.FPCSRv(fnFPCSRv(bFPCSRndx[4])&bFPCSRv[4])
 				);
 			end
 		1:
@@ -5341,9 +5376,11 @@ generate begin : gFpuStat
 					.NRSE(NRSE_FMA),
 					.NSARG(3+Qupls4_pkg::SUPPORT_FDP),
 					.NREG_RPORTS(RS_NREG_RPORTS),
+					.NREG_WPORTS(NREG_WPORTS),
 					.RC(1),
 					.DISPATCH_MAP(6'b010000),
-					.RL_STRATEGY(RL_STRATEGY)
+					.RL_STRATEGY(RL_STRATEGY),
+					.FPUNIT(TRUE)
 				)
 				ufmast2
 				(
@@ -5360,8 +5397,88 @@ generate begin : gFpuStat
 					.bypass_i(),
 					.wp_oper_tap_i(wp_tap),
 					.req_pRn(bRs[5]),
-					.req_pRnv(bRsv[5])
+					.req_pRnv(bRsv[5]),
+					.fp_sync(fnFPSync(1)),
+					.req_FPCSRndx(bFPCSRndx[5]),
+					.req_FPCSRv(bFPCSRv[5]),
+					.FPCSR(fnFPCSR(bFPCSRndx[5])),
+					.FPCSRv(fnFPCSRv(bFPCSRndx[5])&bFPCSRv[5])
 				);
+		endcase
+	end
+	for (g = 0; g < Qupls4_pkg::NFPU; g = g + 1) begin
+		case (g)
+		0,1:
+				Qupls4_reservation_station #(
+					.MWIDTH(MWIDTH),
+					.FUNCUNIT(4'd8),
+					.NRSE(NRSE_FPU),
+					.NSARG(3),
+					.NREG_RPORTS(NREG_RPORTS),
+					.NREG_WPORTS(NREG_WPORTS),
+					.RC(1),
+					.DISPATCH_MAP(6'b001000),
+					.RL_STRATEGY(RL_STRATEGY),
+					.FPUNIT(TRUE)
+				)
+				ufpust1
+				(
+					.rst(irst),
+					.clk(clk),
+					.available(fpu0_available),
+					.busy(rs_busy[8]),
+					.stall(fpu0_full),
+					.stomp(robentry_stomp),
+					.issue(),//robentry_issue[sau0_rndx]),
+					.rse_i(rse),
+					.rse_o(fpu0_rse),
+					.rf_oper_i(rf_oper),
+					.bypass_i(),
+					.wp_oper_tap_i(wp_tap),
+					.req_pRn(bRs[8]),
+					.req_pRnv(bRsv[8]),
+					.fp_sync(fnFPSync(1)),
+					.req_FPCSRndx(bFPCSRndx[8]),
+					.req_FPCSRv(bFPCSRv[8]),
+					.FPCSR(fnFPCSR(bFPCSRndx[8])),
+					.FPCSRv(fnFPCSRv(bFPCSRndx[8])&bFPCSRv[8])
+				);
+		2:
+				Qupls4_reservation_station #(
+					.MWIDTH(MWIDTH),
+					.FUNCUNIT(4'd9),
+					.NRSE(NRSE_FPU),
+					.NSARG(3),
+					.NREG_RPORTS(NREG_RPORTS),
+					.NREG_WPORTS(NREG_WPORTS),
+					.RC(1),
+					.DISPATCH_MAP(6'b001000),
+					.RL_STRATEGY(RL_STRATEGY),
+					.FPUNIT(TRUE)
+				)
+				ufpust2
+				(
+					.rst(irst),
+					.clk(clk),
+					.available(fpu1_available),
+					.busy(rs_busy[9]),
+					.stall(fpu1_full),
+					.stomp(robentry_stomp),
+					.issue(),//robentry_issue[sau0_rndx]),
+					.rse_i(rse),
+					.rse_o(fpu1_rse),
+					.rf_oper_i(rf_oper),
+					.bypass_i(),
+					.wp_oper_tap_i(wp_tap),
+					.req_pRn(bRs[9]),
+					.req_pRnv(bRsv[9]),
+					.fp_sync(fnFPSync(1)),
+					.req_FPCSRndx(bFPCSRndx[9]),
+					.req_FPCSRv(bFPCSRv[9]),
+					.FPCSR(fnFPCSR(bFPCSRndx[9])),
+					.FPCSRv(fnFPCSRv(bFPCSRndx[9])&bFPCSRv[9])
+				);
+		default:	;
 		endcase
 	end
 end
@@ -5384,6 +5501,7 @@ generate begin : gDecimalFloat
 			.NRSE(NRSE_DFLT),
 			.NSARG(3),
 			.NREG_RPORTS(RS_NREG_RPORTS),
+			.NREG_WPORTS(NREG_WPORTS),
 			.RC(1),
 			.DISPATCH_MAP(6'b010000),
 			.RL_STRATEGY(RL_STRATEGY)
@@ -5393,7 +5511,7 @@ generate begin : gDecimalFloat
 			.rst(irst),
 			.clk(clk),
 			.available(fpu0_available),
-			.busy(rs_busy[13]),
+			.busy(rs_busy[10]),
 			.stall(dfpu0_full),
 			.stomp(robentry_stomp),
 			.issue(),//robentry_issue[sau0_rndx]),
@@ -5402,8 +5520,13 @@ generate begin : gDecimalFloat
 			.rf_oper_i(rf_oper),
 			.bypass_i(),
 			.wp_oper_tap_i(wp_tap),
-			.req_pRn(bRs[13]),
-			.req_pRnv(bRsv[13])
+			.req_pRn(bRs[10]),
+			.req_pRnv(bRsv[10]),
+			.req_FPCSRndx(),
+			.req_FPCSRv(),
+			.fp_sync(1'b0),
+			.FPCSR(64'd0),
+			.FPCSRv(INV)
 		);
 	end
 end
@@ -5415,6 +5538,7 @@ Qupls4_reservation_station #(
 	.NRSE(NRSE_FCU),
 	.NSARG(3),
 	.NREG_RPORTS(RS_NREG_RPORTS),
+	.NREG_WPORTS(NREG_WPORTS),
 	.RC(0),
 	.DISPATCH_MAP(6'b000100),
 	.RL_STRATEGY(RL_STRATEGY)
@@ -5434,15 +5558,22 @@ ubrast1
 	.bypass_i(),
 	.wp_oper_tap_i(wp_tap),
 	.req_pRn(bRs[7]),
-	.req_pRnv(bRsv[7])
+	.req_pRnv(bRsv[7]),
+	.fp_sync(1'b0),
+	.req_FPCSRndx(),
+	.req_FPCSRv(),
+	.FPCSR(64'd0),
+	.FPCSRv(INV)
 );
 
+/*
 Qupls4_reservation_station #(
 	.MWIDTH(MWIDTH),
 	.FUNCUNIT(4'd8),
 	.NRSE(NRSE_AGEN),
 	.NSARG(3),
 	.NREG_RPORTS(RS_NREG_RPORTS),
+	.NREG_WPORTS(NREG_WPORTS),
 	.RC(0),
 	.DISPATCH_MAP(6'b001000),
 	.RL_STRATEGY(RL_STRATEGY)
@@ -5462,9 +5593,18 @@ uagenst1
 	.bypass_i(),
 	.wp_oper_tap_i(wp_tap),
 	.req_pRn(bRs[8]),
-	.req_pRnv(bRsv[8])
+	.req_pRnv(bRsv[8]),
+	.fp_sync(1'b0),
+	.req_FPCSRndx(),
+	.req_FPCSRv(),
+	.FPCSR(64'd0),
+	.FPCSRv(INV)
 );
+*/
+assign agen0_rse = fpu0_rse;
+assign agen1_rse = fpu1_rse;
 
+/*
 generate begin : gAgen
 if (Qupls4_pkg::NDATA_PORTS > 1)
 Qupls4_reservation_station #(
@@ -5473,6 +5613,7 @@ Qupls4_reservation_station #(
 	.NRSE(NRSE_AGEN),
 	.NSARG(3),
 	.NREG_RPORTS(RS_NREG_RPORTS),
+	.NREG_WPORTS(NREG_WPORTS),
 	.RC(0),
 	.DISPATCH_MAP(6'b001000),
 	.RL_STRATEGY(RL_STRATEGY)
@@ -5492,13 +5633,19 @@ uagenst2
 	.bypass_i(),
 	.wp_oper_tap_i(wp_tap),
 	.req_pRn(bRs[9]),
-	.req_pRnv(bRsv[9])
+	.req_pRnv(bRsv[9]),
+	.fp_sync(1'b0),
+	.req_FPCSRndx(),
+	.req_FPCSRv(),
+	.FPCSR(64'd0),
+	.FPCSRv(INV)
 );
 else begin
 	assign agen1_rse = {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
 end
 end
 endgenerate
+*/
 
 /*
 reg fcu_reset_state;
@@ -5548,7 +5695,7 @@ Qupls4_lsq_reg_read_req ulrrr1
 
 Qupls4_validate_operand #(
 	.MWIDTH(MWIDTH),
-	.RL_STRATEGY(RL_STRATEGY),
+	.NREG_WPORTS(NREG_WPORTS),
 	.NENTRY(1)
 )
 uvLSsrcC
@@ -7189,6 +7336,17 @@ endgenerate
 // Support functions and tasks
 // ============================================================================
 
+function fnFPSync;
+input ndx;
+integer n;
+begin
+	fnFPSync = FALSE;
+	foreach (rob[n])
+		if (rob[n].v && rob[n].op.decbus.fence && rob[n].op.decbus.immb[7:0]==8'h22)
+			fnFPSync = TRUE;
+end
+endfunction
+
 // Search for a prior flow control op. This forces flow control op to be performed
 // in program order.
 
@@ -7222,6 +7380,45 @@ begin
 	foreach (rob[n])
 		if (rob[n].v==rob[ndx].v && rob[n].sn < rob[ndx].sn && rob[n].op.decbus.sync)
 			fnPriorSync = TRUE;
+end
+endfunction
+
+// Select the FPCSR
+// This comes directly from the register if not found in the ROB.
+
+function Qupls4_pkg::fp_status_reg_t fnFPCSR;
+input rob_ndx_t ndx;
+integer n;
+integer closest;
+begin
+	fnFPCSR = fpcsr;		// read from FPCSR register by default
+	closest = 65535;		// really far away
+`ifdef SUPPORT_STATIC_RM	
+	foreach (rob[n])
+		// if valid and comes before ndx and closer than previous closest
+		if (rob[n].v && rob[n].sn < rob[ndx].sn && rob[n].sn < rob[closest].sn && rob[n].argFPCSR_vv) begin
+			closest = n;
+			fnFPCSR = rob[n].argFPCSR;
+		end
+`endif
+end
+endfunction
+
+function fnFPCSRv;
+input rob_ndx_t ndx;
+integer n;
+integer closest;
+begin
+	fnFPCSRv = TRUE;		// automatically valid by default
+	closest = 65535;		// really far away
+`ifdef SUPPORT_STATIC_RM	
+	foreach (rob[n])
+		// if valid and comes before ndx and closer than previous closest
+		if (rob[n].v && rob[n].sn < rob[ndx].sn && rob[n].sn < rob[closest].sn && rob[n].argFPCSR_v) begin
+			closest = n;
+			fnFPCSRv = rob[n].argFPCSR_vv;
+		end
+`endif
 end
 endfunction
 
@@ -7976,6 +8173,8 @@ begin
 	next_robe.argD_v = Qupls4_pkg::fnSourceRs4v(robe.op.uop);
 	next_robe.argS_v = Qupls4_pkg::fnSourceArgSv(robe.op.uop);
 	next_robe.argT_v = Qupls4_pkg::fnSourceRdv(robe.op.uop);
+	next_robe.argFPCSR_v = Qupls4_pkg::fnSourceArgSv(robe.op.uop);
+	next_robe.argFPCSR_vv = FALSE;
 	if (db.Rs1z)
 		next_robe.argA_v = VAL;
 	if (db.Rs2z)
@@ -8175,6 +8374,9 @@ begin
 	end
 	*/
 	if (v) begin
+		// FPCSR update?
+		if (rob[head].argFPCSR_v && rob[head].argFPCSR_vv)
+			fpcsr <= rob[head].argFPCSR;
 		if (!rob[head].op.decbus.cpytgt) begin
 			if (rob[head].op.decbus.csr) begin
 				case(rob[head].op.uop.op3[1:0])

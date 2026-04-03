@@ -151,18 +151,18 @@ typedef struct packed
 	logic [2:0] gran;
 	logic [3:0] cache;
 	logic [3:0] rwx;
-} REGION_ATTR;
+} region_attr_t;
 
 typedef struct packed
 {
-	REGION_ATTR [3:0] at;
+	logic [31:0] lock;
+	region_attr_t [3:0] at;
 	cpu_types_pkg::physical_address_t cta;
 	cpu_types_pkg::physical_address_t pmt;
 	cpu_types_pkg::physical_address_t pam;
 	cpu_types_pkg::physical_address_t end_adr;
 	cpu_types_pkg::physical_address_t start_adr;
-	logic [31:0] lock;
-} REGION;
+} region_t;
 
 typedef struct packed
 {
@@ -307,22 +307,31 @@ typedef struct packed
 typedef struct packed
 {
 	logic v;									// 1=valid
-	logic lvl;								//
+	logic [1:0] lvl;					//
+	logic resv;
+	logic [27:0] ppn;					// page number
+} pde_t;										// 32 bits
+
+typedef struct packed
+{
+	logic v;									// 1=valid
+	logic [1:0] lvl;					//
 	logic [2:0] rgn;					// memory region
 	logic m;									// 1=modified
 	logic a;									// 1=accessed
 	logic [1:0] avl;					// available for OS use
-	logic cache;							// cache location (none,L1)
+	logic [1:0] cache;				// cache location (none,L1)
 	logic u;									// 1=user page
 	logic [2:0] rwx;					// read-write-execute
-	logic [9:0] ppn;					// 26 bit address space (10 bit page number)
-} pte_t;										// 24 bits
+	logic [15:0] ppn;					// 29 bit address space (16 bit page number)
+} pte_t;										// 32 bits
 // Tiny VPN, Virtual memory <= 2^32B
 typedef struct packed
 {
-	cpu_types_pkg::asid_t asid;	// 16 bits
+	cpu_types_pkg::asid12_t asid;	// 12 bits
+	logic resv;									// reserved
 	logic [18:0] vpn;						// bits 13 to 31 of address
-} vpn_t;											// 35 bits
+} vpn_t;											// 32 bits
 
 `endif
 

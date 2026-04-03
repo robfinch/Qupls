@@ -60,13 +60,7 @@ if (rst) begin
 end
 else begin
 	case(instr.opcode)
-	Qupls4_pkg::OP_BCCU8,Qupls4_pkg::OP_BCC8:
-		takb <= takb8;
-	Qupls4_pkg::OP_BCCU16,Qupls4_pkg::OP_BCC16:
-		takb <= takb16;
-	Qupls4_pkg::OP_BCCU32,Qupls4_pkg::OP_BCC32:
-		takb <= takb32;
-	Qupls4_pkg::OP_BCCU64,Qupls4_pkg::OP_BCC64:
+	Qupls4_pkg::OP_BCCU,Qupls4_pkg::OP_BCC:
 		takb <= takb64;
 	default:	takb <= FALSE;
 	endcase

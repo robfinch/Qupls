@@ -78,8 +78,8 @@ begin
 		Qupls4_pkg::OP_MULI,Qupls4_pkg::OP_MULUI,Qupls4_pkg::OP_DIVI,Qupls4_pkg::OP_DIVUI,
 		Qupls4_pkg::OP_SHIFT:
 			fnRs1 = has_rext ? instr_raw[61:55] : {1'b0,ir.Rs1};
-		Qupls4_pkg::OP_BCC8,Qupls4_pkg::OP_BCC16,Qupls4_pkg::OP_BCC32,Qupls4_pkg::OP_BCC64,
-		Qupls4_pkg::OP_BCCU8,Qupls4_pkg::OP_BCCU16,Qupls4_pkg::OP_BCCU32,Qupls4_pkg::OP_BCCU64:
+		Qupls4_pkg::OP_BCC,
+		Qupls4_pkg::OP_BCCU:
 			fnRs1 = has_rext ? instr_raw[61:55] : {1'b0,ir.Rs1};
 		Qupls4_pkg::OP_LDB,Qupls4_pkg::OP_LDBZ,
 		Qupls4_pkg::OP_LDW,Qupls4_pkg::OP_LDWZ,
@@ -107,8 +107,8 @@ begin
     else
         om1 = om;
   */
-	Rs1z = &Rs1[5:0];
-	Rs1ip = Rs1==6'd62;
+	Rs1z = ~|Rs1[6:0];
+	Rs1ip = Rs1==7'd127;
 end
 
 endmodule

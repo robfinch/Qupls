@@ -43,6 +43,8 @@ import Qupls4_pkg::*;
 
 //`define USE_GATED_CLOCK	1'b1
 //`define HAS_MMU 1'b1
+//`define DRAM	1'b1
+`define SVGA800x600_72	1'b1
 
 module Qupls4_soc(cpu_reset_n, sysclk_p, sysclk_n, led, sw, btnl, btnr, btnc, btnd, btnu, 
   ps2_clk_0, ps2_data_0, uart_rx_out, uart_tx_in,
@@ -168,7 +170,8 @@ wire clk429,clk86,clk43v,clk21v;
 wire clk10, clk20, clk17a, clk40, clk67, clk100, clk200;
 wire clk214,clk53,clk43,clk33,clk21,clk17,clk84;
 wire clk25, clk50, clk75, clk125;
-wire dot_clk = clk40;
+wire dot5_clk;
+wire dot_clk = clk50;
 wire node_clk = clk100;
 wire node_clk5x = clk100;
 wire fbm_clk = clk100;
@@ -311,7 +314,7 @@ wire [3:0] bus_struct_reset;
 wire [7:0] peripheral_reset;
 wire interconnect_aresetn;
 wire peripheral_aresetn;
-assign dcm_locked = locked;// & locked2;
+assign dcm_locked = locked & locked2;
 
 wb_bus_interface #(.DATA_WIDTH(256)) scr_if();
 wb_bus_interface #(.DATA_WIDTH(256)) fbm_if();
@@ -423,6 +426,63 @@ endcase
 end
 endgenerate
 
+   // PLLE2_BASE: Base Phase Locked Loop (PLL)
+   //             Artix-7
+   // Xilinx HDL Language Template, version 2025.1
+wire CLKFBOUT;
+
+PLLE2_BASE #(
+  .BANDWIDTH("OPTIMIZED"),  // OPTIMIZED, HIGH, LOW
+  .CLKFBOUT_MULT(25),       // Multiply value for all CLKOUT, (2-64)
+  .CLKFBOUT_PHASE(0.0),     // Phase offset in degrees of CLKFB, (-360.000-360.000).
+  .CLKIN1_PERIOD(20.000),   // Input clock period in ns to ps resolution (i.e. 33.333 is 30 MHz).
+  // CLKOUT0_DIVIDE - CLKOUT5_DIVIDE: Divide amount for each CLKOUT (1-128)
+  .CLKOUT0_DIVIDE(5),
+  .CLKOUT1_DIVIDE(5),
+  .CLKOUT2_DIVIDE(5),
+  .CLKOUT3_DIVIDE(5),
+  .CLKOUT4_DIVIDE(5),
+  .CLKOUT5_DIVIDE(5),
+  // CLKOUT0_DUTY_CYCLE - CLKOUT5_DUTY_CYCLE: Duty cycle for each CLKOUT (0.001-0.999).
+  .CLKOUT0_DUTY_CYCLE(0.5),
+  .CLKOUT1_DUTY_CYCLE(0.5),
+  .CLKOUT2_DUTY_CYCLE(0.5),
+  .CLKOUT3_DUTY_CYCLE(0.5),
+  .CLKOUT4_DUTY_CYCLE(0.5),
+  .CLKOUT5_DUTY_CYCLE(0.5),
+  // CLKOUT0_PHASE - CLKOUT5_PHASE: Phase offset for each CLKOUT (-360.000-360.000).
+  .CLKOUT0_PHASE(0.0),
+  .CLKOUT1_PHASE(0.0),
+  .CLKOUT2_PHASE(0.0),
+  .CLKOUT3_PHASE(0.0),
+  .CLKOUT4_PHASE(0.0),
+  .CLKOUT5_PHASE(0.0),
+  .DIVCLK_DIVIDE(1),        // Master division value, (1-56)
+  .REF_JITTER1(0.0),        // Reference input jitter in UI, (0.000-0.999).
+  .STARTUP_WAIT("FALSE")    // Delay DONE until PLL Locks, ("TRUE"/"FALSE")
+)
+PLLE2_BASE_inst (
+  // Clock Outputs: 1-bit (each) output: User configurable clock outputs
+  .CLKOUT0(dot5_clk),   // 1-bit output: CLKOUT0
+  .CLKOUT1(),   // 1-bit output: CLKOUT1
+  .CLKOUT2(),   // 1-bit output: CLKOUT2
+  .CLKOUT3(),   // 1-bit output: CLKOUT3
+  .CLKOUT4(),   // 1-bit output: CLKOUT4
+  .CLKOUT5(),   // 1-bit output: CLKOUT5
+  // Feedback Clocks: 1-bit (each) output: Clock feedback ports
+  .CLKFBOUT(CLKFBOUT), // 1-bit output: Feedback clock
+  .LOCKED(locked2),     // 1-bit output: LOCK
+  .CLKIN1(dot_clk),     // 1-bit input: Input clock
+  // Control Ports: 1-bit (each) input: PLL control ports
+  .PWRDWN(1'b0),     // 1-bit input: Power-down
+  .RST(xrst),           // 1-bit input: Reset
+  // Feedback Clocks: 1-bit (each) input: Clock feedback ports
+  .CLKFBIN(CLKFBOUT)    // 1-bit input: Feedback clock
+);
+
+// End of PLLE2_BASE_inst instantiation
+					
+
 // -----------------------------------------------------------------------------
 // Address decode
 // -----------------------------------------------------------------------------
@@ -504,13 +564,13 @@ rgb2dvi ur2d1
 (
 	.rst(rst),
 	.PixelClk(dot_clk),
-	.SerialClk(clk200),
+	.SerialClk(dot5_clk),
 	.red(red[9:2]),
 	.green(green[9:2]),
 	.blue(blue[9:2]),
 	.de(~blank),
-	.hSync(hSync),	// ~ for 640x480 100 Hz
-	.vSync(vSync),
+	.hSync(hSync),	// ~ for 640x480 100 Hz, -,- for 1920x1080, - for 1368x768
+	.vSync(vSync),	// +,+ for 800x600, -,+ for 1368x768, +,- for 1024x768
 	.TMDS_Clk_p(hdmi_tx_clk_p),
 	.TMDS_Clk_n(hdmi_tx_clk_n),
 	.TMDS_Data_p(hdmi_tx_p),
@@ -531,6 +591,7 @@ assign fb_video_i.blank = blank;
 assign fb_video_i.border = border;
 assign fb_video_i.data = 32'd0;
 
+`ifdef SVGA800x600
 parameter phSyncOn  = 40;		//   40 front porch
 parameter phSyncOff = 168;		//  128 sync
 parameter phBlankOff = 252;	//256	//   88 back porch
@@ -549,6 +610,30 @@ parameter pvBorderOn = 628;		//  600 display
 //parameter pvBorderOn = 584;		//  512 display
 parameter pvBlankOn = 628;  	//   44 border	0
 parameter pvTotal = 628;		//  628 total scan lines
+`endif
+
+// Sync Generator defaults: 800x600 72Hz
+// Driven by a 50MHz clock
+
+`ifdef SVGA800x600_72
+parameter phSyncOn  = 56;		//  56 front porch
+parameter phSyncOff = 176;		//  120 sync
+parameter phBlankOff = 240;	//256	//   64 back porch
+//parameter phBorderOff = 336;	//   80 border
+parameter phBorderOff = 240;	//   80 border
+//parameter phBorderOn = 976;		//  640 display
+parameter phBorderOn = 1040;		//  800 display
+parameter phBlankOn = 1040;		//   4 border
+parameter phTotal = 1040;		// 1056 total clocks
+parameter pvSyncOn  = 37;		//    37 front porch
+parameter pvSyncOff = 43;		//    6 vertical sync
+parameter pvBlankOff = 66;		//   23 back porch (28)
+parameter pvBorderOff = 66;		//   44 border	0
+//parameter pvBorderOff = 72;		//   44 border	0
+parameter pvBorderOn = 666;		//  600 display
+parameter pvBlankOn = 666;  	//   44 border	0
+parameter pvTotal = 666;		//  666 total scan lines
+`endif
 
 
 generate begin : gFrameBuffer
@@ -585,6 +670,7 @@ assign border = fb_border;
 
 end
 else begin
+	assign fbm_if.req = {$bits(wb_cmd_request256_t){1'b0}};
 	VGASyncGen usg1
 	(
 		.rst(rst),
@@ -1074,9 +1160,10 @@ assign ch4_if.req = {$bits(wb_cmd_request256_t){1'b0}};
 assign ch5_if.req = {$bits(wb_cmd_request256_t){1'b0}};
 assign ch6_if.req = {$bits(wb_cmd_request256_t){1'b0}};
 
+`ifdef DRAM
 generate begin : gMPMC
 	if (HAS_DRAM) begin
-		mpmc11_fta
+		mpmc11_wb
 		#(
 			.PORT_PRESENT(8'h83),
 			.STREAM(8'h21)
@@ -1124,6 +1211,7 @@ generate begin : gMPMC
 	end
 end
 endgenerate
+`endif
 
 /*
 fta_asynch2sync256 usas7

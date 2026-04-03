@@ -32,10 +32,8 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-//  1170 LUTs / 12 FFs / 1 DSP (with 512-bit vectors)
-//  790 LUTs / 12 FFs / 1 DSP (with 256-bit vectors)
-//	200 LUTs / 0 FFs (no vectors)
-//
+//  2100 LUTs / 12 FFs / 1 DSP (with 512-bit vectors)
+//  1050 LUTs / 0 FFs / 0 DSP (no vectors)
 // Work to do: fix register fields, check widths, make sure thread included.
 // ============================================================================
 
@@ -44,7 +42,7 @@ import Qupls4_pkg::*;
 
 module Qupls4_microop_mem(rst, clk, en, om, ir, num, carry_reg, carry_out, carry_in,
 	vlen_reg, velsz, count, uop, thread);
-parameter UOP_ARRAY_SIZE = 32;
+parameter MICROOPS_PER_INSTR = 16;
 parameter COMB = 1;
 input rst;
 input clk;
@@ -59,7 +57,7 @@ input [63:0] vlen_reg;
 input [63:0] velsz;
 input [2:0] thread;
 output reg [5:0] count;
-output Qupls4_pkg::micro_op_t [31:0] uop;
+output Qupls4_pkg::micro_op_t [MICROOPS_PER_INSTR-1:0] uop;
 
 integer nn, kk, n1;
 reg [6:0] head0;
@@ -97,6 +95,7 @@ wire [8:0] ip_reg = 9'd62;
 wire [8:0] zero_reg = 9'd63;
 wire [8:0] num_scalar_reg = 9'd25;
 wire [8:0] mot0_reg = 9'd34;
+wire [8:0] mot1_reg = 9'd35;
 reg [8:0] vRd, vRs1, vRs2, vRs3;
 reg [8:0] Rd, Rs1, Rs2, Rs3;
 reg vRdi, vRs1i, vRs2i, vRs3i;		// whether to increment the register spec or not.
@@ -161,7 +160,7 @@ always_comb
 begin
 	uop_boi = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
 	uop_boi.v = VAL;
-	uop_boi.opcode = Qupls4_pkg::OP_BCCU64;
+	uop_boi.opcode = Qupls4_pkg::OP_BCCU;
 	uop_boi.cnd = Qupls4_pkg::CND_BOI;
 	uop_boi.lead = 1'd1;
 end
@@ -171,8 +170,8 @@ begin
 	push1 = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
 	push1.v = VAL;
 	push1.opcode = Qupls4_pkg::OP_STORE;
-	push1.Rd = {3'b0,ir[18:13]};
-	push1.Rs1 = {3'b0,ir[12:7]};
+	push1.Rd = {2'b0,ir[20:14]};
+	push1.Rs1 = {2'b0,ir[13:7]};
 	push1.Rs2 = zero_reg;
 	push1.imm = -64'd8;
 	push1.sc = 3'd0;
@@ -180,8 +179,8 @@ begin
 	push2 = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
 	push2.v = VAL;
 	push2.opcode = Qupls4_pkg::OP_STORE;
-	push2.Rd = {3'b0,ir[24:19]};
-	push2.Rs1 = {3'b0,ir[12:7]};
+	push2.Rd = {2'b0,ir[27:21]};
+	push2.Rs1 = {2'b0,ir[13:7]};
 	push2.Rs2 = zero_reg;
 	push2.imm = -64'd16;
 	push2.sc = 3'd0;
@@ -189,8 +188,8 @@ begin
 	push3 = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
 	push3.v = VAL;
 	push3.opcode = Qupls4_pkg::OP_STORE;
-	push3.Rd = {3'b0,ir[30:25]};
-	push3.Rs1 = {3'b0,ir[12:7]};
+	push3.Rd = {2'b0,ir[34:28]};
+	push3.Rs1 = {2'b0,ir[13:7]};
 	push3.Rs2 = zero_reg;
 	push3.imm = -64'd24;
 	push3.sc = 3'd0;
@@ -198,20 +197,11 @@ begin
 	push4 = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
 	push4.v = VAL;
 	push4.opcode = Qupls4_pkg::OP_STORE;
-	push4.Rd = {3'b0,ir[36:31]};
-	push4.Rs1 = {3'b0,ir[12:7]};
+	push4.Rd = {2'b0,ir[41:35]};
+	push4.Rs1 = {2'b0,ir[13:7]};
 	push4.Rs2 = zero_reg;
 	push4.imm = -64'd32;
 	push4.sc = 3'd0;
-
-	push5 = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
-	push5.v = VAL;
-	push5.opcode = Qupls4_pkg::OP_STORE;
-	push5.Rd = {3'b0,ir[42:37]};
-	push5.Rs1 = {3'b0,ir[12:7]};
-	push5.Rs2 = zero_reg;
-	push5.imm = -64'd40;
-	push5.sc = 3'd0;
 
 end
 always_comb
@@ -219,8 +209,8 @@ begin
 	pop1 = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
 	pop1.v = VAL;
 	pop1.opcode = Qupls4_pkg::OP_LOAD;
-	pop1.Rd = {3'b0,ir[18:13]};
-	pop1.Rs1 = {3'b0,ir[12:7]};
+	pop1.Rd = {2'b0,ir[20:14]};
+	pop1.Rs1 = {2'b0,ir[13:7]};
 	pop1.Rs2 = zero_reg;
 	pop1.imm = 64'd0;
 	pop1.sc = 3'd0;
@@ -228,8 +218,8 @@ begin
 	pop2 = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
 	pop2.v = VAL;
 	pop2.opcode = Qupls4_pkg::OP_LOAD;
-	pop2.Rd = {3'b0,ir[24:19]};
-	pop2.Rs1 = {3'b0,ir[12:7]};
+	pop2.Rd = {2'b0,ir[27:21]};
+	pop2.Rs1 = {2'b0,ir[13:7]};
 	pop2.Rs2 = zero_reg;
 	pop2.imm = 64'd8;
 	pop2.sc = 3'd0;
@@ -237,8 +227,8 @@ begin
 	pop3 = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
 	pop3.v = VAL;
 	pop3.opcode = Qupls4_pkg::OP_LOAD;
-	pop3.Rd = {3'b0,ir[30:25]};
-	pop3.Rs1 = {3'b0,ir[12:7]};
+	pop3.Rd = {2'b0,ir[34:28]};
+	pop3.Rs1 = {2'b0,ir[13:7]};
 	pop3.Rs2 = zero_reg;
 	pop3.imm = 64'd16;
 	pop3.sc = 3'd0;
@@ -246,20 +236,11 @@ begin
 	pop4 = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
 	pop4.v = VAL;
 	pop4.opcode = Qupls4_pkg::OP_LOAD;
-	pop4.Rd = {3'b0,ir[36:31]};
-	pop4.Rs1 = {3'b0,ir[12:7]};
+	pop4.Rd = {2'b0,ir[41:35]};
+	pop4.Rs1 = {2'b0,ir[13:7]};
 	pop4.Rs2 = zero_reg;
 	pop4.imm = 64'd24;
 	pop4.sc = 3'd0;
-	
-	pop5 = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
-	pop5.v = VAL;
-	pop5.opcode = Qupls4_pkg::OP_LOAD;
-	pop5.Rd = {3'b0,ir[42:37]};
-	pop5.Rs1 = {3'b0,ir[12:7]};
-	pop5.Rs2 = zero_reg;
-	pop5.imm = 64'd32;
-	pop5.sc = 3'd0;
 	
 end
 
@@ -533,9 +514,9 @@ begin
 	fp_eq_sp = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
 	fp_eq_sp.v = VAL;
 	fp_eq_sp.opcode = Qupls4_pkg::OP_ORI;
-	fp_eq_sp.Rd = {3'b0,ir[18:13]};
-	fp_eq_sp.Rs1 = {3'b0,ir[12:7]};
-	fp_eq_sp.RS2 = zero_reg;
+	fp_eq_sp.Rd = {2'b0,ir[20:14]};
+	fp_eq_sp.Rs1 = {2'b0,ir[13:7]};
+	fp_eq_sp.Rs2 = zero_reg;
 	fp_eq_sp.imm = 64'd0;
 	fp_eq_sp.prc = 2'd3;
 
@@ -562,8 +543,8 @@ begin
 	sp_eq_fp = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
 	sp_eq_fp.v = VAL;
 	sp_eq_fp.opcode = Qupls4_pkg::OP_ORI;
-	sp_eq_fp.Rd = {3'b0,ir[12:7]};
-	sp_eq_fp.Rs1 = {3'b0,ir[18:13]};
+	sp_eq_fp.Rd = {2'b0,ir[13:7]};
+	sp_eq_fp.Rs1 = {2'b0,ir[20:14]};
 	sp_eq_fp.Rs2 = zero_reg;
 	sp_eq_fp.imm = 64'd0;
 	sp_eq_fp.prc = 2'd3;
@@ -590,7 +571,7 @@ end
 always_comb
 begin
 	case (instr.opcode)
-	Qupls4_pkg::OP_R3VS,Qupls4_pkg::OP_FLTVS:
+	Qupls4_pkg::OP_R3VVS,Qupls4_pkg::OP_FLTVVS:
 		is_vs = ir.op3==3'd1;
 	default:	is_vs = 1'b0;
 	endcase
@@ -599,7 +580,7 @@ end
 always_comb
 begin
 	case (instr.opcode)
-	Qupls4_pkg::OP_R3P,Qupls4_pkg::OP_R3VS,Qupls4_pkg::OP_FLTVS:
+	Qupls4_pkg::OP_R3VVV,Qupls4_pkg::OP_R3VVS,Qupls4_pkg::OP_FLTVVS:
 		is_masked = ir.op3==3'd6;
 	default:	is_masked = 1'b0;
 	endcase
@@ -608,7 +589,7 @@ end
 always_comb
 begin
 	case (instr.opcode)
-	Qupls4_pkg::OP_R3P,Qupls4_pkg::OP_R3VS:
+	Qupls4_pkg::OP_R3VVV,Qupls4_pkg::OP_R3VVS:
 		case(ir.func)
 		Qupls4_pkg::FN_REDSUM,Qupls4_pkg::FN_REDAND,Qupls4_pkg::FN_REDOR,Qupls4_pkg::FN_REDEOR,
 		Qupls4_pkg::FN_REDMIN,Qupls4_pkg::FN_REDMAX,Qupls4_pkg::FN_REDMINU,Qupls4_pkg::FN_REDMAXU:
@@ -622,7 +603,8 @@ end
 always_comb
 begin
 	case (instr.opcode)
-	Qupls4_pkg::OP_R3P,Qupls4_pkg::OP_FLTP:
+	Qupls4_pkg::OP_R3VVV,Qupls4_pkg::OP_R3VVS,
+	Qupls4_pkg::OP_FLTVVV,Qupls4_pkg::OP_FLTVVS:
 		is_vector = 1'b1;
 	default:	is_vector = 1'b0;
 	endcase
@@ -664,7 +646,7 @@ begin
 			default:	;
 			endcase
 		end
-	Qupls4_pkg::OP_R3P:
+	Qupls4_pkg::OP_R3VVV:
 		begin
 			instr.opcode = Qupls4_pkg::OP_R3BP | velsz[1:0];
 			instr.vn = ir.vn;
@@ -672,7 +654,7 @@ begin
 			instr.func = ir.func;
 			vlen1 = vlen;
 		end
-	Qupls4_pkg::OP_FLTP:
+	Qupls4_pkg::OP_FLTVVV:
 		begin
 			instr.opcode = Qupls4_pkg::OP_FLTPH | velsz[9:8];
 			instr.vn = ir.vn;
@@ -711,20 +693,21 @@ begin
 	endcase
 end
 
-always_comb vRd = (instr.vn[0] & is_vector) ? (VREGS > 4 ? {1'b0,instr.Rd,3'b00}: {1'b0,instr.Rd,2'b00}) + num_scalar_reg : {3'b0,instr.Rd};
-always_comb vRs1 = (instr.vn[1] & is_vector) ? (VREGS > 4 ? {1'b0,instr.Rs1,3'b00} : {1'b0,instr.Rs1,2'b00}) + num_scalar_reg : {3'b0,instr.Rs1};
-always_comb vRs2 = (instr.vn[2] & is_vector) ? (VREGS > 4 ? {1'b0,instr.Rs2,3'b00} : {1'b0,instr.Rs2,2'b00}) + num_scalar_reg : {3'b0,instr.Rs2};
-always_comb vRs3 = (instr.vn[3] & is_vector) ? (VREGS > 4 ? {1'b0,instr.Rs3,3'b00} : {1'b0,instr.Rs3,2'b00}) + num_scalar_reg : {3'b0,instr.Rs3};
-always_comb vRdi = (instr.vn[0] & is_vector);
+always_comb vRd = {3'b0,instr.Rd};
+always_comb vRs1 = {3'b0,instr.Rs1};
+always_comb vRs2 = {3'b0,instr.Rs2};
+always_comb vRs3 = {3'b0,instr.Rs3};
+always_comb vRdi = instr.vn[0];
+
 // Don't increment a constant field.
-always_comb vRs1i = (instr.vn[1] & ~instr.ms[0] & is_vector);
-always_comb vRs2i = (instr.vn[2] & ~instr.ms[1] & is_vector);
-always_comb vRs3i = (instr.vn[3] & ~instr.ms[2] & is_vector);
+always_comb vRs1i = (instr.vn[1] & ~instr.ms[0]);
+always_comb vRs2i = (instr.vn[2] & ~instr.ms[1]);
+always_comb vRs3i = (instr.vn[3] & ~instr.ms[2]);
 
 always_comb
 begin
 	next_count = 3'd0;
-	for (n1 = 0; n1 < UOP_ARRAY_SIZE; n1 = n1 + 1) begin
+	for (n1 = 0; n1 < MICROOPS_PER_INSTR; n1 = n1 + 1) begin
 		next_uop[n1] = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
 		next_uop[n1].lead = n1==0;
 		next_uop[n1].opcode = Qupls4_pkg::OP_NOP;
@@ -1041,8 +1024,8 @@ begin
 			end
 		end
 
-	Qupls4_pkg::OP_R3P,Qupls4_pkg::OP_R3VS,
-	Qupls4_pkg::OP_FLTP,Qupls4_pkg::OP_FLTVS,
+	Qupls4_pkg::OP_R3VVV,Qupls4_pkg::OP_R3VVS,
+	Qupls4_pkg::OP_FLTVVV,Qupls4_pkg::OP_FLTVVS,
 	Qupls4_pkg::OP_R3BP,Qupls4_pkg::OP_R3WP,Qupls4_pkg::OP_R3TP,Qupls4_pkg::OP_R3OP,
 	Qupls4_pkg::OP_FLTPH,Qupls4_pkg::OP_FLTPS,Qupls4_pkg::OP_FLTPD,Qupls4_pkg::OP_FLTPQ:
 		if (SUPPORT_VECTOR) begin
@@ -1906,7 +1889,7 @@ begin
 	Qupls4_pkg::OP_XORI,
 	Qupls4_pkg::OP_LOADI,
 	Qupls4_pkg::OP_LDB,Qupls4_pkg::OP_LDBZ,Qupls4_pkg::OP_LDW,Qupls4_pkg::OP_LDWZ,
-	Qupls4_pkg::OP_LDT,Qupls4_pkg::OP_LDTZ,Qupls4_pkg::OP_LDO,Qupls4_pkg::OP_LDOZ,
+	Qupls4_pkg::OP_LDT,Qupls4_pkg::OP_LDTZ,Qupls4_pkg::OP_LOAD,
 	Qupls4_pkg::OP_LOADA,
 	Qupls4_pkg::OP_AMO,Qupls4_pkg::OP_CMPSWAP:
 		begin
@@ -1920,7 +1903,7 @@ begin
 				next_uop[0] = uop0;
 			end
 		end
-
+/*
 	Qupls4_pkg::OP_LOAD:
 		if (insert_boi) begin
 			next_count = 4'd3;
@@ -1939,10 +1922,11 @@ begin
 			next_uop[1].Rd[0] = 1'b1;
 			next_uop[1].imm = next_uop[0].imm + 4'd8;
 		end
-
+*/
 	Qupls4_pkg::OP_CHK,
 	Qupls4_pkg::OP_STB,Qupls4_pkg::OP_STW,
-	Qupls4_pkg::OP_STT,Qupls4_pkg::OP_STO,
+	Qupls4_pkg::OP_STT,Qupls4_pkg::OP_STORE,
+	Qupls4_pkg::OP_STPTR,
 	Qupls4_pkg::OP_STI,
 	Qupls4_pkg::OP_FENCE:
 		if (insert_boi) begin
@@ -1954,7 +1938,7 @@ begin
 			next_count = 4'd1;
 			next_uop[0] = uop0;
 		end
-
+/*
 	Qupls4_pkg::OP_STORE,Qupls4_pkg::OP_STPTR:
 		if (insert_boi) begin
 			next_count = 4'd3;
@@ -1973,7 +1957,7 @@ begin
 			next_uop[1].Rd[0] = 1'b1;
 			next_uop[1].imm = next_uop[0].imm + 4'd8;
 		end
-
+*/
 /*		
 	Qupls4_pkg::OP_MOV:
 		begin
@@ -1990,7 +1974,7 @@ begin
 			next_uop[1].num = 5'd1;
 			next_uop[2] = enter_st_lr;
 			next_uop[2].num = 5'd2;
-			next_uop[3] = decssp64;
+			next_uop[3] = decssp32;
 			next_uop[3].num = 5'd3;
 			next_uop[4].opcode = Qupls4_pkg::OP_ENTER;
 			next_uop[4].num = 5'd4;
@@ -2005,12 +1989,12 @@ begin
 			next_uop[1].num = 5'd1;
 			next_uop[2] = exit_ld_lr;
 			next_uop[2].num = 5'd2;
-			next_uop[3] = incssp64;
+			next_uop[3] = incssp32;
 			next_uop[3].num = 5'd3;
 			next_uop[4].opcode = Qupls4_pkg::OP_RTD;	// change LEAVE into RTD
-			next_uop[4].Rd = ir[12:7];
-			next_uop[4].Rs1 = ir[24:19];					// link register
-			next_uop[4].imm = {ir[47:25],3'h0};
+			next_uop[4].Rd = ir[13:7];
+			next_uop[4].Rs1 = ir[27:21];					// link register
+			next_uop[4].imm = {ir[47:28],3'h0};
 			next_uop[4].num = 5'd4;
 		end
 
@@ -2022,7 +2006,7 @@ begin
 				begin
 					next_uop[0] = push1;
 					next_uop[0].lead = TRUE;
-					next_uop[1] = decsp16;
+					next_uop[1] = decsp8;
 					next_uop[1].num = 5'd1;
 				end
 			4'd2:
@@ -2031,7 +2015,7 @@ begin
 					next_uop[0].lead = TRUE;
 					next_uop[1] = push2;
 					next_uop[1].num = 5'd1;
-					next_uop[2] = decsp32;
+					next_uop[2] = decsp16;
 					next_uop[2].num = 5'd2;
 				end
 			4'd3:
@@ -2042,7 +2026,7 @@ begin
 					next_uop[1].num = 5'd1;
 					next_uop[2] = push3;
 					next_uop[2].num = 5'd2;
-					next_uop[3] = decsp48;
+					next_uop[3] = decsp24;
 					next_uop[3].num = 5'd3;
 				end
 			4'd4:
@@ -2055,23 +2039,8 @@ begin
 					next_uop[2].num = 5'd2;
 					next_uop[3] = push4;
 					next_uop[3].num = 5'd3;
-					next_uop[4] = decsp64;
+					next_uop[4] = decsp32;
 					next_uop[4].num = 5'd4;
-				end
-			4'd5:
-				begin
-					next_uop[0] = push1;
-					next_uop[0].lead = TRUE;
-					next_uop[1] = push2;
-					next_uop[1].num = 5'd1;
-					next_uop[2] = push3;
-					next_uop[2].num = 5'd2;
-					next_uop[3] = push4;
-					next_uop[3].num = 5'd3;
-					next_uop[4] = push5;
-					next_uop[4].num = 5'd4;
-					next_uop[5] = decsp80;
-					next_uop[5].num = 5'd5;
 				end
 			default:	
 				begin
@@ -2089,7 +2058,7 @@ begin
 				begin
 					next_uop[0] = pop1;
 					next_uop[0].lead = TRUE;
-					next_uop[1] = incsp16;
+					next_uop[1] = incsp8;
 					next_uop[1].num = 5'd1;
 				end
 			4'd2:
@@ -2098,7 +2067,7 @@ begin
 					next_uop[0].lead = TRUE;
 					next_uop[1] = pop2;
 					next_uop[1].num = 5'd1;
-					next_uop[2] = incsp32;
+					next_uop[2] = incsp16;
 					next_uop[2].num = 5'd2;
 				end
 			4'd3:
@@ -2109,7 +2078,7 @@ begin
 					next_uop[1].num = 5'd1;
 					next_uop[2] = pop3;
 					next_uop[2].num = 5'd2;
-					next_uop[3] = incsp48;
+					next_uop[3] = incsp24;
 					next_uop[3].num = 5'd3;
 				end
 			4'd4:
@@ -2122,23 +2091,8 @@ begin
 					next_uop[2].num = 5'd2;
 					next_uop[3] = pop4;
 					next_uop[3].num = 5'd3;
-					next_uop[4] = incsp64;
+					next_uop[4] = incsp32;
 					next_uop[4].num = 5'd4;
-				end
-			4'd5:
-				begin
-					next_uop[0] = pop1;
-					next_uop[0].lead = TRUE;
-					next_uop[1] = pop2;
-					next_uop[1].num = 5'd1;
-					next_uop[2] = pop3;
-					next_uop[2].num = 5'd2;
-					next_uop[3] = pop4;
-					next_uop[3].num = 5'd3;
-					next_uop[4] = pop5;
-					next_uop[4].num = 5'd4;
-					next_uop[5] = incsp80;
-					next_uop[5].num = 5'd5;
 				end
 			default:	
 				begin
@@ -2167,6 +2121,115 @@ begin
 				next_count = 4'd1;
 				next_uop[0] = uop0;
 			end
+			case(instr.func[5:0])
+			FLT_DIV:
+				begin
+					next_count = 4'd13;
+					next_uop[0].lead = TRUE;
+					next_uop[0].num = 5'd0;
+					next_uop[0].opcode = instr.opcode;
+					next_uop[0].Rd = instr.Rd;					
+					next_uop[0].Rs1 = instr.Rs1;					
+					next_uop[0].Rs2 = instr.Rs2;	
+					next_uop[0].func = FLT_RES;
+
+					next_uop[1].num = 5'd1;
+					next_uop[1].opcode = instr.opcode;
+					next_uop[1].Rd = instr.Rs2;					
+					next_uop[1].Rs1 = instr.Rs2;					
+					next_uop[1].Rs2 = zero_reg;	
+					next_uop[1].func = FLT_NEG;
+
+					next_uop[2].num = 5'd2;
+					next_uop[2].opcode = instr.opcode;
+					next_uop[2].Rd = mot0_reg;
+					next_uop[2].Rs1 = 8'd2;			// 2.0
+					next_uop[2].Rs2 = zero_reg;
+					next_uop[2].func = FLT_CONST;
+					
+					// NR Iter #1
+					// FMA tmp2,Rd,Rs2,tmp1
+					next_uop[3].num = 5'd3;
+					next_uop[3].opcode = instr.opcode;
+					next_uop[3].Rd = mot1_reg;
+					next_uop[3].Rs1 = instr.Rd;
+					next_uop[3].Rs2 = instr.Rs2;
+					next_uop[3].Rs3 = mot0_reg;
+					next_uop[3].func = FLT_FMA;
+
+					next_uop[4].num = 5'd4;
+					next_uop[4].opcode = instr.opcode;
+					next_uop[4].Rd = instr.Rd;
+					next_uop[4].Rs1 = instr.Rd;
+					next_uop[4].Rs2 = mot1_reg;
+					next_uop[4].Rs3 = zero_reg;
+					next_uop[4].func = FLT_FMA;
+
+					// NR Iter #2
+					next_uop[5].num = 5'd5;
+					next_uop[5].opcode = instr.opcode;
+					next_uop[5].Rd = mot1_reg;
+					next_uop[5].Rs1 = instr.Rd;
+					next_uop[5].Rs2 = instr.Rs2;
+					next_uop[5].Rs3 = mot0_reg;
+					next_uop[5].func = FLT_FMA;
+
+					next_uop[6].num = 5'd6;
+					next_uop[6].opcode = instr.opcode;
+					next_uop[6].Rd = instr.Rd;
+					next_uop[6].Rs1 = instr.Rd;
+					next_uop[6].Rs2 = mot1_reg;
+					next_uop[6].Rs3 = zero_reg;
+					next_uop[6].func = FLT_FMA;
+
+					// NR Iter #3
+					next_uop[7].num = 5'd7;
+					next_uop[7].opcode = instr.opcode;
+					next_uop[7].Rd = mot1_reg;
+					next_uop[7].Rs1 = instr.Rd;
+					next_uop[7].Rs2 = instr.Rs2;
+					next_uop[7].Rs3 = mot0_reg;
+					next_uop[7].func = FLT_FMA;
+
+					next_uop[8].num = 5'd8;
+					next_uop[8].opcode = instr.opcode;
+					next_uop[8].Rd = instr.Rd;
+					next_uop[8].Rs1 = instr.Rd;
+					next_uop[8].Rs2 = mot1_reg;
+					next_uop[8].Rs3 = zero_reg;
+					next_uop[8].func = FLT_FMA;
+
+					next_uop[9].num = 5'd9;
+					next_uop[9].opcode = instr.opcode;
+					next_uop[9].Rd = instr.Rs2;					
+					next_uop[9].Rs1 = instr.Rs2;					
+					next_uop[9].Rs2 = zero_reg;	
+					next_uop[9].func = FLT_NEG;
+
+					next_uop[10].num = 5'd10;
+					next_uop[10].opcode = instr.opcode;
+					next_uop[10].Rd = instr.Rd;
+					next_uop[10].Rs1 = instr.Rd;
+					next_uop[10].Rs2 = instr.Rs2;
+					next_uop[10].Rs3 = zero_reg;
+					next_uop[10].func = FLT_FMA;
+
+				end
+			FLT_RM:
+				begin
+					next_count = 4'd2;
+					next_uop[0] = uop0;
+					// Select value 0 for all source regs.
+					next_uop[1] = uop1;
+					next_uop[1].ms = 3'b111;
+					next_uop[1].Rs1 = 9'd00;
+					next_uop[1].Rs2 = 9'd00;
+					next_uop[1].Rs3 = 9'd00;
+					next_uop[1].Rd = 9'd000;
+					next_uop[1].opcode = Qupls4_pkg::OP_FENCE;
+					next_uop[1].imm = 8'h22;	// FP sync
+				end
+			endcase
 			/*
 			case(ir.op4)
 			FOP4_FMUL:

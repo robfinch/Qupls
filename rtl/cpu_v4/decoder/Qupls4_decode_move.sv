@@ -46,7 +46,7 @@ begin
 	case(ir.opcode)
 	Qupls4_pkg::OP_R3B,Qupls4_pkg::OP_R3W,Qupls4_pkg::OP_R3T,Qupls4_pkg::OP_R3O,
 	Qupls4_pkg::OP_R3BP,Qupls4_pkg::OP_R3WP,Qupls4_pkg::OP_R3TP,Qupls4_pkg::OP_R3OP,
-	Qupls4_pkg::OP_R3P:
+	Qupls4_pkg::OP_R3VVV,Qupls4_pkg::OP_R3VVS:
 	   case(ir.func)
      Qupls4_pkg::FN_MOVE:
        fnMove = 1'b1;

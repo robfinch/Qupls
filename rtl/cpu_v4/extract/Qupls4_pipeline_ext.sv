@@ -37,7 +37,7 @@
 // Multiplex micro-code instructions into the instruction stream.
 // Modify instructions for register bit lists.
 //
-// 3260 LUTs / 3400 FFs / 270 MHz
+// 3350 LUTs / 3525 FFs / 270 MHz
 // ============================================================================
 
 import const_pkg::*;
@@ -131,7 +131,6 @@ Qupls4_pkg::rob_entry_t [MWIDTH-1:0] ins_fet;
 reg [319:0] ic_line_aligned;
 reg [319:0] prev_ic_line_aligned;
 reg ld;
-reg prev_ssm_flag;
 reg [2:0] override_pos;
 reg [MWIDTH-1:0] nop;
 
@@ -246,68 +245,21 @@ else
 // Set instruction valid bit.
 
 Qupls4_pkg::rob_entry_t [MWIDTH-1:0] pr_ext;
-always_comb
-begin
-	for (n1 = 0; n1 < MWIDTH; n1 = n1 + 1) begin
-		pr_ext[n1] = nopi;
-		pr_ext[n1].v = pc_fet[n1].stream.stream;
-	end
-	if (!redundant_group) begin
-		// Allow only one instruction through when single stepping.
-		if (ssm_flag & ~prev_ssm_flag) begin
-			pr_ext[0].op.cli = pc_fet[0].pc[6:1];
-			pr_ext[0].op.uop = fnMapRawToUop(ic_line_aligned[ 47:  0]);
-			for (n1 = 1; n1 < MWIDTH; n1 = n1 + 1) begin
-				pr_ext[n1] = nopi;
-				pr_ext[n1].op.ssm = TRUE;
-				pr_ext[n1].done = 2'b11;
-			end
-		end
-		else if (ssm_flag) begin
-			for (n1 = 0; n1 < MWIDTH; n1 = n1 + 1) begin
-				pr_ext[n1] = nopi;
-				pr_ext[n1].op.ssm = TRUE;
-				pr_ext[n1].done = 2'b11;
-			end
-		end
-		else begin
-			// Compute index of instruction on cache-line.
-			// Note! the index is in terms of 16-bit parcels.
-			for (n1 = 0; n1 < MWIDTH; n1 = n1 + 1) begin
-				pr_ext[n1].op.cli = pc_fet[n1].pc[6:1];
-				pr_ext[n1].op.uop = fnMapRawToUop(48'(ic_line_aligned >> (n1*48)));
-			end
-		end
-	end
-/*
-	pr_ext[0].hwi_level = irq_fet;
-	pr_ext[1].hwi_level = irq_fet;
-	pr_ext[2].hwi_level = irq_fet;
-	pr_ext[3].hwi_level = irq_fet;
-	pr4_ext.hwi_level = irq_fet;
-*/	
-// If an NMI or IRQ is happening, invalidate instruction and mark as
-// interrupted by external hardware.
-	if (!(!(irq_fet) && !stomp_ext && !(ssm_flag && !(ssm_flag && !prev_ssm_flag)))) begin
-		pr_ext[0].v = 5'd0;
-		pr_ext[0].stomped = TRUE;
-		pr_ext[0].done = 2'b11;
-	end
-	for (n4 = 1; n4 < MWIDTH; n4 = n4 + 1)
-		if (!(!(irq_fet) && !stomp_ext && !ssm_flag)) begin
-			pr_ext[n4].v = 5'd0;
-			pr_ext[n4].stomped = TRUE;
-			pr_ext[n4].done = 2'b11;
-		end
-/*	
-	pr_ext[0].hwi = nmi_i||irqf_fet;
-	pr_ext[1].hwi = nmi_i||irqf_fet;
-	pr_ext[2].hwi = nmi_i||irqf_fet;
-	pr_ext[3].hwi = nmi_i||irqf_fet;
-	pr4_ext.hwi = nmi_i||irqf_fet;
-*/
-	pr_ext[0].op.carry_mod = carry_mod_fet;
-end
+
+Qupls4_ext_set_pr usetpr1
+(
+	.rst(rst_i),
+	.clk(clk_i),
+	.en(en),
+	.irq(irq_fet),
+	.stomp(stomp_ext),
+	.carry_mod(carry_mod_fet),
+	.ic_line(ic_line_aligned[MWIDTH*48-1:0]),
+	.redundant_group(redundant_group),
+	.ssm_flag(ssm_flag),
+	.pc(pc_fet),
+	.pr(pr_ext)
+);
 
 /* Under construction
 reg [3:0] p_override1, p_override2;
@@ -518,13 +470,6 @@ always_ff @(posedge clk) if (en) irq_in_ext <= irq_in_fet;
 always_ff @(posedge clk) if (en) irq_ext <= irq_fet;
 always_ff @(posedge clk) if (en) ipl_ext <= ipl_fet;
 always_ff @(posedge clk) if (en) nop_o <= stomp_ext;
-always_ff @(posedge clk)
-if (rst_i)
-	prev_ssm_flag <= 1'b0;
-else begin
-	if (en)
-		prev_ssm_flag <= ssm_flag;
-end
 
 always_ff @(posedge clk)
 if (rst_i)

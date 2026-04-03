@@ -58,6 +58,8 @@ region_t [7:0] pma_regions;
 
 initial begin
 	// ROM
+	pma_regions[7].start_adr = 64'hFFFFFFFFFF000000;
+	pma_regions[7].end_adr = 64'hFFFFFFFFFFFFFFFF;
 	pma_regions[7].pam	= 48'h00000000;
 	pma_regions[7].pmt	= 48'h00000000;
 	pma_regions[7].cta	= 48'h00000000;
@@ -70,6 +72,8 @@ initial begin
 	pma_regions[7].lock = "LOCK";
 
 	// IO
+	pma_regions[0].start_adr = 64'hFFFFFFFFFD000000;
+	pma_regions[0].end_adr = 64'hFFFFFFFFFEFFFFFF;
 	pma_regions[6].pam	= 48'h00000000;
 	pma_regions[6].pmt	 = 48'h00000300;
 	pma_regions[6].cta	= 48'h00000000;
@@ -83,6 +87,8 @@ initial begin
 	pma_regions[6].lock = "LOCK";
 
 	// Config space
+	pma_regions[5].start_adr = 64'hFFFFFFFFD0000000;
+	pma_regions[5].end_adr = 64'hFFFFFFFFDFFFFFFF;
 	pma_regions[5].pam	= 48'h00000000;
 	pma_regions[5].pmt	= 48'h00000000;
 	pma_regions[5].cta	= 48'h00000000;
@@ -94,6 +100,8 @@ initial begin
 	pma_regions[5].lock = "LOCK";
 
 	// Scratchpad RAM
+	pma_regions[4].start_adr = 64'h0000000000100000;
+	pma_regions[4].end_adr = 64'h00000000001FFFFF;
 	pma_regions[4].pam	= 48'h00000000;
 	pma_regions[4].pmt	= 48'h00002300;
 	pma_regions[4].cta	= 48'h00000000;
@@ -107,6 +115,8 @@ initial begin
 	pma_regions[4].lock = "LOCK";
 
 	// vacant
+	pma_regions[3].start_adr = 64'h0000000000000000;
+	pma_regions[3].end_adr = 64'h0000000000000000;
 	pma_regions[3].pam	= 48'h00000000;
 	pma_regions[3].pmt	 = 48'h00000000;
 	pma_regions[3].cta	= 48'h00000000;
@@ -118,6 +128,8 @@ initial begin
 	pma_regions[3].lock = "LOCK";
 
 	// vacant
+	pma_regions[2].start_adr = 64'h0000000000000000;
+	pma_regions[2].end_adr = 64'h0000000000000000;
 	pma_regions[2].pam	= 48'h00000000;
 	pma_regions[2].pmt	 = 48'h00000000;
 	pma_regions[2].cta	= 48'h00000000;
@@ -130,6 +142,8 @@ initial begin
 	pma_regions[2].lock = "LOCK";
 
 	// DRAM
+	pma_regions[1].start_adr = 64'h0000000040000000;
+	pma_regions[1].end_adr = 64'h000000007FFFFFFF;
 	pma_regions[1].pam	= 48'h00000000;
 	pma_regions[1].pmt	 = 48'h00002400;
 	pma_regions[1].cta	= 48'h00000000;
@@ -147,6 +161,8 @@ initial begin
 	pma_regions[1].lock = "LOCK";
 
 	// vacant
+	pma_regions[0].start_adr = 64'h0000000000000000;
+	pma_regions[0].end_adr = 64'h0000000000000000;
 	pma_regions[0].pam	= 48'h00000000;
 	pma_regions[0].pmt	 = 48'h00000000;
 	pma_regions[0].cta	= 48'h00000000;

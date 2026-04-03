@@ -267,17 +267,18 @@ parameter REGFILE_LATENCY = 2;
 // (obvious) and may increase performance. However, most instructions will
 // have two or fewer arguments, and allowing for four instructions at once
 // means an average of eight ports per cycle.
-parameter NREG_RPORTS = 16;
+parameter NREG_RPORTS = 12;
 
 // Number of register write ports. Mort ports allows more simultabeous writes
 // and may increase performance. The default is set to the machine width.
 // Note: not all instruction write the register file so it may be possible
 // to use fewer write ports without losing too much performance.
-parameter NREG_WPORTS = MWIDTH;
+parameter NREG_WPORTS = 10;//MWIDTH;
 
 // Number of data ports should be 1 or 2. 2 ports will allow two simulataneous
 // reads, but still only a single write.
 parameter NDATA_PORTS = 1;
+// The following is now defunct, AGEN is in the FPU.
 // Number of AGENs should be 1 or 2. There is little value in having more agens
 // than there are data ports.
 parameter NAGEN = 1;
@@ -290,10 +291,11 @@ parameter LSQ2 = NDATA_PORTS > 1;		// Queue two LSQ entries at once?
 // Note that adding an FPU may also increase integer performance if PERFORMANCE
 // is set to 1.
 parameter NSAU = 2;			// 1 or 2
-parameter NFPU = 0;			// 0 or 1
+parameter NFPU = 1;			// 1 or 2
 parameter NFMA = 0;			// 0, 1 or 2
 parameter NDFPU = 0;		// 0 or 1
 parameter NLSQ_PORTS = 1;
+parameter NFRQ = 10;
 
 parameter RAS_DEPTH	= 4;
 

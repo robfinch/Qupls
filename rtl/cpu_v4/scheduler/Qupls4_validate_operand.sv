@@ -45,8 +45,10 @@ parameter MWIDTH = 4;
 parameter NBPI = 8;					// number of bypassing inputs
 parameter NENTRY = 3;
 parameter NREG_PORTS = 12;
-input Qupls4_pkg::operand_t [MWIDTH-1:0] wp_hist_i [0:4];
-input Qupls4_pkg::operand_t [NREG_RPORTS-1:0] rf_oper_i;
+parameter NREG_WPORTS = 13;
+parameter pFPCSR = FALSE;
+input Qupls4_pkg::operand_t [NREG_WPORTS-1:0] wp_hist_i [0:4];
+input Qupls4_pkg::operand_t [NREG_PORTS-1:0] rf_oper_i;
 input Qupls4_pkg::operand_t [NENTRY-1:0] oper_i;
 output Qupls4_pkg::operand_t [NENTRY-1:0] oper_o;
 input Qupls4_pkg::operand_t [NBPI-1:0] bypass_i;
@@ -67,6 +69,10 @@ begin
 		end
 		foreach (rf_oper_i[jj]) begin
 			if (oper_i[nn].pRn==rf_oper_i[jj].pRn && rf_oper_i[jj].v && !oper_i[nn].v) begin
+				oper_o[nn] = rf_oper_i[jj];
+				oper_o[nn].v = VAL;
+			end
+			else if ((pFPCSR & rf_oper_i[jj].fpcsr) && rf_oper_i[jj].v && !oper_i[nn].v) begin
 				oper_o[nn] = rf_oper_i[jj];
 				oper_o[nn].v = VAL;
 			end

@@ -37,9 +37,10 @@
 import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_decoder(rst, clk, en, ip, om, ipl, instr, instr_raw, dbo);
+module Qupls4_decoder(rst, clk, regFPCSR, en, ip, om, ipl, instr, instr_raw, dbo);
 input rst;
 input clk;
+input aregno_t regFPCSR;
 input en;
 input cpu_types_pkg::pc_address_t ip;
 input Qupls4_pkg::operating_mode_t om;
@@ -110,6 +111,17 @@ Qupls4_decode_Rd udcrt
 	.Rd(db.Rd),
 	.Rdv(db.Rdv),
 	.Rdz(db.Rdz)
+);
+
+Qupls4_decode_Rd2 udcrd2
+(
+	.om(om),
+	.regFPCSR(regFPCSR),
+	.instr(instr),
+	.instr_raw(instr_raw),
+	.Rd2(db.Rd2),
+	.Rd2v(db.Rd2v),
+	.Rd2z(db.Rd2z)
 );
 
 /*
@@ -365,7 +377,7 @@ Stark_decode_prec udprec1
 */
 always_comb
 begin
-	db.boi = instr.opcode==Qupls4_pkg::OP_BCCU64 && instr.cnd==Qupls4_pkg::CND_BOI;
+	db.boi = instr.opcode==Qupls4_pkg::OP_BCCU && instr.cnd==Qupls4_pkg::CND_BOI;
 	db.bsr = instr.opcode==Qupls4_pkg::OP_BSR;
 	db.jsr = instr.opcode==Qupls4_pkg::OP_JSR;
 	db.sys = instr.opcode==Qupls4_pkg::OP_SYS;
@@ -438,6 +450,7 @@ else begin
 			)) begin
 			dbo.cause = Qupls4_pkg::FLT_UNIMP;
 		end
+		dbo.we = (|db.Rd) || (|db.Rd2);
 	end
 end
 

@@ -241,11 +241,12 @@ foreach (qbr[n6])
 	qbr[n6] = pg_dec.pr[n6].op.decbus.br|pg_dec.pr[n6].op.decbus.cjb;
 
 `ifdef SUPPORT_RAT
-Qupls4_reg_name_supplier5 uns4
+Qupls4_reg_name_supplier9 uns4
 (
 	.rst(rst),
 	.clk(clk),
 	.en(en),
+	.aregno(aRd_dec),
 	.tags2free(tags2free),
 	.freevals(freevals),
 	.ns_alloc_req(aRd_decv & ~is_move),
@@ -255,7 +256,7 @@ Qupls4_reg_name_supplier5 uns4
 	.stall(ns_stall)
 );
 
-Qupls4_rat
+Qupls4_rat2
 #(
 	.MWIDTH(MWIDTH),
 	.NPORT(NPORT),

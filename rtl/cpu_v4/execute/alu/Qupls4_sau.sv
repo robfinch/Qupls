@@ -43,6 +43,7 @@ import Qupls4_pkg::*;
 module Qupls4_sau(rst, clk, clk2x, chunk, om, ld, ir, div, Ra, a, b, bi, c, i, t, qres,
 	mask, cs, pc, pcc, csr, cpl, coreno, canary, velsz, o, exc_o);
 parameter SAU0 = 1'b1;
+parameter SAU1 = 1'b0;
 parameter WID=64;
 parameter LANE=0;
 parameter NUM_LANES=1;
@@ -102,6 +103,7 @@ reg [WID-1:0] chrndxv;
 wire [WID-1:0] info;
 wire [WID-1:0] vmasko;
 reg [WID-1:0] tmp;
+wire [63:0] cryptoo;
 
 function [WID-1:0] fnBitRev;
 input [WID-1:0] i;
@@ -175,16 +177,31 @@ generate begin : gffz
   16:	
   	begin
   	cntpop16 upopcnt16 (.i({a[WID-1:0]}),.o(popcnt));
+		assign cryptoo = 64'd0;
   	end
   32:
   	begin
   	cntpop32 upopcnt32 (.i({a[WID-1:0]}),.o(popcnt));
+		assign cryptoo = 64'd0;
   	end
   64:
   	begin
 		FP64 fa,fb;
   	wire fasig_hidden,fbsig_hidden;
   	cntpop64 upopcnt64 (.i({a[WID-1:0]}),.o(popcnt));
+
+		if (SAU1) begin
+			Qupls4_crypto uCrypto1
+			(
+				.ir(ir),
+				.a(a),
+				.b(b),
+				.c(c),
+				.o(cryptoo)
+			);
+		end
+		else
+			assign cryptoo = 64'd0;
  
 		fpDecomp64 udc1a (
 			.i(a),
@@ -238,6 +255,7 @@ generate begin : gffz
   128:
   	begin
   	cntpop128 upopcnt128 (.i({a[WID-1:0]}),.o(popcnt));
+		assign cryptoo = 64'd0;
   	end
 	endcase
   case(WID)
@@ -386,7 +404,8 @@ begin
 	base_eleno = {chunk,2'd0};
 	mask1 = c >> base_eleno;
 	case(ir.opcode)
-	Qupls4_pkg::OP_R3BP,Qupls4_pkg::OP_R3WP,Qupls4_pkg::OP_R3TP,Qupls4_pkg::OP_R3OP:
+	Qupls4_pkg::OP_R3BP,Qupls4_pkg::OP_R3WP,Qupls4_pkg::OP_R3TP,Qupls4_pkg::OP_R3OP,
+	Qupls4_pkg::OP_R3VVV,Qupls4_pkg::OP_R3VVS:
 		case(ir.func)
 		Qupls4_pkg::FN_CMP,Qupls4_pkg::FN_CMPU:
 			begin
@@ -725,7 +744,7 @@ begin
 		endcase
 	
 	Qupls4_pkg::OP_FLTPH,Qupls4_pkg::OP_FLTPS,Qupls4_pkg::OP_FLTPD,Qupls4_pkg::OP_FLTPQ,
-	Qupls4_pkg::OP_FLTP:
+	Qupls4_pkg::OP_FLTVVV,Qupls4_pkg::OP_FLTVVS:
 		case(ir.func)
 		Qupls4_pkg::FLT_MIN:	bus = mask1[LANE] ? fmin : t;
 		Qupls4_pkg::FLT_MAX:	bus = mask1[LANE] ? fmax : t;

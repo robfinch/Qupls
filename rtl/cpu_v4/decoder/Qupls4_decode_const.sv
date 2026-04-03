@@ -92,8 +92,8 @@ reg [7:0] vpfx;					// valid postfix indicator
 genvar g;
 generate begin : gCpfx
 	for (g = 0; g < 8; g = g + 1)
-	   always_comb
-		cpfx[g] = instr_raw[g*48+47+48:g*48+48];
+	  always_comb
+			cpfx[g] = instr_raw[g*48+47+48:g*48+48];
 end
 endgenerate
 
@@ -123,7 +123,8 @@ begin
 	case(ins.opcode)
 	Qupls4_pkg::OP_R3B,Qupls4_pkg::OP_R3W,Qupls4_pkg::OP_R3T,Qupls4_pkg::OP_R3O,
 	Qupls4_pkg::OP_R3BP,Qupls4_pkg::OP_R3WP,Qupls4_pkg::OP_R3TP,Qupls4_pkg::OP_R3OP,
-	Qupls4_pkg::OP_R3P,Qupls4_pkg::OP_CHK:
+	Qupls4_pkg::OP_R3VVV,Qupls4_pkg::OP_R3VVS,
+	Qupls4_pkg::OP_CHK:
 		begin
 			if (has_cnsta) begin
 				imma = {cnsta,ins.Rs1[5:0]};
@@ -141,7 +142,7 @@ begin
 
 	Qupls4_pkg::OP_FLTH,Qupls4_pkg::OP_FLTS,Qupls4_pkg::OP_FLTD,Qupls4_pkg::OP_FLTQ,
 	Qupls4_pkg::OP_FLTPH,Qupls4_pkg::OP_FLTPS,Qupls4_pkg::OP_FLTPD,Qupls4_pkg::OP_FLTPQ,
-	Qupls4_pkg::OP_FLTP:
+	Qupls4_pkg::OP_FLTVVV,Qupls4_pkg::OP_FLTVVS:
 		begin
 			if (has_cnsta) begin
 				imma = {cnsta,ins.Rs1[5:0]};
@@ -277,9 +278,9 @@ begin
 			immd = {{60{ins.Rd[3]}},ins.Rd[3:0]};
 		end
 
-	Qupls4_pkg::OP_BCC8,Qupls4_pkg::OP_BCC16,Qupls4_pkg::OP_BCC32,Qupls4_pkg::OP_BCC64,
-	Qupls4_pkg::OP_BCCU8,Qupls4_pkg::OP_BCCU16,Qupls4_pkg::OP_BCCU32,Qupls4_pkg::OP_BCCU64,
-	Qupls4_pkg::OP_FBCC16,Qupls4_pkg::OP_FBCC32,Qupls4_pkg::OP_FBCC64,Qupls4_pkg::OP_FBCC128:
+	Qupls4_pkg::OP_BCC,
+	Qupls4_pkg::OP_BCCU,
+	Qupls4_pkg::OP_FBCC:
 		begin
 			if (ins.Rs1==8'd63) begin
 				imma = value_zero;
@@ -326,6 +327,7 @@ begin
 	endcase
 
 	// Limit of six postfixes
+	// A postfix is not valid unless there is a valid postfix before it.
 	vpfx = 8'h00;
 	if (cpfx[0][7:0]==8'd127) begin
 		vpfx[0] = VAL;
@@ -338,7 +340,7 @@ begin
 	if (cpfx[4][7:0]==8'd127) begin
 		vpfx[4] = VAL;
 	if (cpfx[5][7:0]==8'd127) begin
-		vpfx[6] = VAL;
+		vpfx[5] = VAL;
 	end
 	end
 	end
@@ -347,7 +349,7 @@ begin
 	end
 
 	foreach (cpfx[n])
-		if (cpfx[n][7:0]==8'd127 && vpfx[n]) begin
+		if (vpfx[n]) begin
 			wh = cpfx[n][9:8];
 			q = cpfx[n][11:10];
 			case({q,wh})

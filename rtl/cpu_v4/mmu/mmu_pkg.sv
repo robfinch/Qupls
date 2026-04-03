@@ -34,8 +34,14 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //                                                                          
 // ============================================================================
+import cpu_types_pkg::*;
 
 package mmu_pkg;
+
+parameter PAGE_SIZE = 8192;
+parameter ENTRIES = 1024;
+parameter LOG_PAGE_SIZE = $clog2(PAGE_SIZE);
+parameter LOG_ENTRIES = $clog2(ENTRIES);
 
 typedef enum logic [1:0] {
     _4B_PTE,
@@ -50,6 +56,35 @@ typedef enum logic [2:0] {
 	I386 = 3'd7
 } e_pt_type;
 
+// Program base and limit
+typedef struct packed
+{
+	logic [31:0] limit;
+	logic [31:0] base;
+} pebble_t;
+
+typedef struct packed
+{
+	logic vm;						// 
+	logic pm;						//page modified 1=modified
+	logic [29:0] access_count;
+
+	logic compressed;		// 1= compressed
+	logic e;						// 1= encrypted
+	logic [1:0] al;
+	
+	logic [3:0] cache;
+	logic [7:0] resv2;
+	logic [3:0] urwx;	// w=1 = conforming executable page when x=1
+
+	logic [9:0] resv1;
+	logic [1:0] content;	// 0=data,2=stack,3=executable
+	logic [15:0] acl;
+	logic [15:0] share_count;
+	logic [7:0] pl;
+	logic [23:0] key;
+} pmte_t;	// 128 bits
+
 typedef struct packed
 {
 	logic [63:3] adr;		// page table address, bits 3 to 63
@@ -58,14 +93,16 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic [31:0] adr_hi;	// page table address, bits 64 to 95
+	logic [23:0] adr_hi;// page table address, bits 64 to 95
 	logic [15:0] limit;	// root page table limit (# of entries)
+	logic [1:0] resv;
 	logic [2:0] level;	// entry level of hierarchical page table
 	logic [1:0] al;			// replacement algorithm, 0=fixed,1=LRU,2=random
 	logic s;						// 1=software,0=hardware managed TLB
 	logic pa;						// 1=physical addressing,0=virtual (page table location)
 	e_pte_size pte_size;	// size of PTEs (0=4,1=8,2=16)
-	logic [3:0] pgsz;		// page size, 6+pgsz bits (6 to 21 bits).
+	logic [4:0] log_te;	// log2 entries per TLB
+	logic [4:0] pgsz;		// page size, (0 to 31 bits).
 	e_pt_type typ;			// 0=native hierarchical,1=native hash,2=i386
 } ptattr_t;						// 64 bits
 
@@ -83,6 +120,7 @@ typedef struct packed
 
 typedef struct packed
 {
+	logic [31:0] resv;
 	logic [31:0] lock;
 	region_attr_t [3:0] at;
 	cpu_types_pkg::physical_address_t cta;

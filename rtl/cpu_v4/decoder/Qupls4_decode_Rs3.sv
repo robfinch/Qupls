@@ -74,7 +74,7 @@ endfunction
 always_comb
 begin
 	Rs3 = fnRs3(instr, instr_raw, has_immc);
-	Rs3z = &Rs3[5:0];
+	Rs3z = ~|Rs3[6:0];
 end
 
 endmodule

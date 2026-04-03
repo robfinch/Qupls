@@ -53,7 +53,8 @@ begin
 		ir.opcode==Qupls4_pkg::OP_R3WP||
 		ir.opcode==Qupls4_pkg::OP_R3TP||
 		ir.opcode==Qupls4_pkg::OP_R3OP||
-		ir.opcode==Qupls4_pkg::OP_R3P
+		ir.opcode==Qupls4_pkg::OP_R3VVV ||
+		ir.opcode==Qupls4_pkg::OP_R3VVS
 		) && ir.func==FN_DIV)
 		;
 end

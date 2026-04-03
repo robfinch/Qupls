@@ -39,7 +39,8 @@ import const_pkg::*;
 import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_pipeline_dec(rst_i, rst, clk, en, new_cline_ext, cline,
+module Qupls4_pipeline_dec(rst_i, rst, clk, en, regFPCSR,
+	new_cline_ext, cline,
 	sr, uop_num, ihit_mot, ihit_dec,
 	tags2free, freevals, bo_wr, bo_preg,
 	stomp_dec, stomp_ext, kept_stream, pg_mot,
@@ -55,6 +56,7 @@ input rst_i;
 input rst;
 input clk;
 input en;
+input aregno_t regFPCSR;
 input ihit_mot;
 output reg ihit_dec;
 input new_cline_ext;
@@ -370,6 +372,7 @@ Qupls4_decoder udeci0
 (
 	.rst(rst),
 	.clk(clk),
+	.regFPCSR(regFPCSR),
 	.en(en),
 	.ip(pg_mot.hdr.ip.pc + {pg_mot.pr[g].ip_offs,1'b0}),
 	.om(sr.om),

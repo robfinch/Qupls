@@ -426,7 +426,21 @@ wire [NPORT-1:0] cdrn;
 generate begin : gRRN
 	for (g = 0; g < NPORT; g = g + 1) begin
 change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g]), .cd(cdrn[g]));
+		always_comb
+ 			if (rst)
+				next_prn[g] = 10'd0;
+			else
+     		next_prn[g] = currentMap.regmap[rn[g]];
+		always_ff @(posedge clk)
+			if (rst) begin
+				prn[g] <= 9'd0;
+			end
+			else begin
+				if (en2)
+					prn[g] = next_prn[g];
+			end
 
+`ifdef BYPASS
 		always_comb
 			if (rst)
 				next_prn[g] = 10'd0;
@@ -589,7 +603,8 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 					endcase
 				end
 			end
-
+`endif
+`ifdef BYPASS
 		always_ff @(posedge clk)
 			if (rst) begin
 				prn[g] <= 9'd0;
@@ -604,7 +619,7 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 					prev_rn[g] <= rn[g];
 				end
 			end
-
+`endif
 		always_ff @(posedge clk)
 			if (rst)
 				prnd[g] <= 9'd0;

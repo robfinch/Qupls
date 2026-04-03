@@ -35,6 +35,7 @@
 // ============================================================================
 //
 import const_pkg::*;
+import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
 module Qupls4_backout_machine(rst, clk, backout, fcu_id, rob, tail,

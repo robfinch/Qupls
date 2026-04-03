@@ -273,7 +273,7 @@ parameter NREG_RPORTS = 16;
 // and may increase performance. The default is set to the machine width.
 // Note: not all instruction write the register file so it may be possible
 // to use fewer write ports without losing too much performance.
-parameter NREG_WPORTS = MWIDTH;
+parameter NREG_WPORTS = 8;//MWIDTH;
 
 // Number of data ports should be 1 or 2. 2 ports will allow two simulataneous
 // reads, but still only a single write.
@@ -294,6 +294,7 @@ parameter NFPU = 0;			// 0 or 1
 parameter NFMA = 0;			// 0, 1 or 2
 parameter NDFPU = 0;		// 0 or 1
 parameter NLSQ_PORTS = 1;
+parameter NFRQ = 8;
 
 parameter RAS_DEPTH	= 4;
 

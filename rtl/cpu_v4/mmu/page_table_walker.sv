@@ -32,8 +32,8 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 1100 LUTs / 780 FFs / 8 BRAMs / 140 MHz
-// 2100 LUTs / 1600 FFs / 12 BRAMs / 140 MHz	- with shortcut pages
+// 4000 LUTs / 1600 FFs / 8 BRAMs / 140 MHz - no shortcut pages
+// 5300 LUTs / 2050 FFs / 12 BRAMs / 140 MHz	- with shortcut pages
 // ============================================================================
 
 import cpu_types_pkg::*;
@@ -48,11 +48,12 @@ module page_table_walker (rst, clk,
 	ptbr, pt_attr,
 	store, vadr, vadr_v, asid, padr, padr_v,
 	page_fault, all_ways_locked, clear_fault,
-	tlb_entry, tlb_v,
+	tlb_entry, tlb_v, miss_o,
 	rst_busy);
 parameter SHORTCUT = 1;
 parameter LRU = 1;
 parameter TLB_ENTRIES = 512;
+parameter PTE_ENTRIES = 1024;		// entries per memory page
 parameter TLB2_ENTRIES = 128;
 parameter LOG_PAGESIZE = 13;
 parameter LOG_PAGESIZE2 = 23;
@@ -64,6 +65,8 @@ localparam TLB2_ABITS=$clog2(TLB2_ENTRIES);
 localparam LOG_PTE_ENTRIES = LOG_PAGESIZE-3;
 localparam TLB_NDX_MASK = ((32'd1 << LOG_PAGESIZE)-1);
 localparam TLB2_NDX_MASK = ((32'd1 << LOG_PAGESIZE2)-1);
+localparam WAY_MASK = ((8'd1 << TLB_ASSOC)-1);
+localparam WAY_MASK2 = ((8'd1 << TLB2_ASSOC)-1);
 input rst;
 input clk;
 input [11:0] flush_cnt;
@@ -95,6 +98,7 @@ output reg all_ways_locked;
 input clear_fault;
 output tlb_entry_t tlb_entry;
 output reg tlb_v;
+output reg miss_o;
 output reg rst_busy;
 
 typedef enum logic [5:0]
@@ -118,11 +122,15 @@ typedef enum logic [5:0]
 	st_read_tlb3,
 	st_read_tlb4,
 	st_read_tlb5,
+	st_read_tlb6,
+	st_read_tlb7,
 	st_read_tlb2a,
 	st_read_tlb2a2,
 	st_read_tlb2a3,
 	st_read_tlb2a4,
 	st_read_tlb2a5,
+	st_read_tlb2a6,
+	st_read_tlb2a7,
 	st_store_pte,
 	st_store_pte2,
 	st_store_pte3,
@@ -131,10 +139,14 @@ typedef enum logic [5:0]
 	st_update_tlb3,
 	st_update_tlb4,
 	st_update_tlb5,
+	st_update_tlb6,
+	st_update_tlb7,
 	st_update_tlb2a,
 	st_update_tlb2a2,
 	st_update_tlb2a3,
 	st_update_tlb2a4,
+	st_update_tlb2a5,
+	st_update_tlb2a6,
 	st_flush_tlb,
 	st_flush_tlb2,
 	st_flush_tlb2a,
@@ -180,7 +192,7 @@ address_t flush_adr;
 wire flush,flush2;
 reg [2:0] flush_way;
 wire [26:0] lfsro;
-reg [1:0] way;
+reg [7:0] way;
 reg [5:0] iv_count;
 reg [2:0] fndLevel1;
 wire nsc_miss_o;
@@ -321,15 +333,17 @@ always_comb
 	tlb_entry = sc_padr_v ? sc_tlb_entry : nsc_tlb_entry;
 always_comb
 	tlb_v = nsc_tlb_v|sc_tlb_v;
+always_comb
+	miss_o = (nsc_miss_o & sc_miss_o) & ~tlb_v;
 
 //always_comb
 //	pg_offset = miss_adr & (sc ? TLB2_NDX_MASK:TLB_NDX_MASK);
 always_comb
-	pt_index = (((miss_adr1 >> (LOG_PTE_ENTRIES * level + LOG_PAGESIZE)) % TLB_ENTRIES) << 4'h3);
+	pt_index = (((miss_adr1 >> (LOG_PTE_ENTRIES * level + LOG_PAGESIZE)) % PTE_ENTRIES) << 4'h3);
 always_comb
 	pt_adr_plus_index = pt_adr + pt_index;
 always_comb
-	next_pt_index = (((miss_adr1 >> (LOG_PTE_ENTRIES * (level-1)) + LOG_PAGESIZE) % TLB_ENTRIES) << 4'h3);
+	next_pt_index = (((miss_adr1 >> (LOG_PTE_ENTRIES * (level-1)) + LOG_PAGESIZE) % PTE_ENTRIES) << 4'h3);
 always_comb
 	pte = mbus.resp.dat;
 
@@ -373,7 +387,7 @@ else begin
 	st_idle:
 		begin
 			state_sp <= 3'd0;
-			if (nsc_miss_o & sc_miss_o & vadr_v) begin
+			if (miss_o & vadr_v) begin
 				pt_adr <= ptbr;
 				level <= pt_attr.level;
 				miss_adr1 <= miss_adr;
@@ -455,14 +469,14 @@ else begin
 				pt_adr <= (level1[fndLevel1[1:0]].pte.ppn << LOG_PAGESIZE) + next_pt_index;
 				tlbe <= {$bits(tlb_entry_t){1'b0}};
 				tlbe.pte <= level1[fndLevel1[1:0]].pte;
-				tlbe.pte.a <= FALSE;
-				tlbe.pte.m <= FALSE;
-				tlbe.vpn <= miss_adr >> (LOG_PAGESIZE + TLB_ABITS);
+//				tlbe.pte.a <= FALSE;
+//				tlbe.pte.m <= FALSE;
+				tlbe.vpn <= miss_adr1 >> (LOG_PAGESIZE + TLB_ABITS);
 				tlbe.asid <= miss_asid;
 				tlbe.count <= iv_count;
-				read_adr <= (((miss_adr1 >> LOG_PAGESIZE) % TLB_ENTRIES) << 4'd4) + tlb_base_adr;
+				read_adr <= ((miss_adr1 >> LOG_PAGESIZE) % TLB_ENTRIES);
 				pte_adr <= level1[fndLevel1[1:0]].adr;
-				way <= LRU ? 0 : lfsro[7:0];
+				way <= LRU ? 0 : lfsro[7:0] & WAY_MASK;
 				retry <= 3'd0;
 				all_ways_locked <= FALSE;
 				tCall(st_read_tlb,st_read_lev1_4);
@@ -485,8 +499,8 @@ else begin
 			if (pte.v) begin
 				tlbe <= {$bits(tlb_entry_t){1'b0}};
 				tlbe.pte <= pte;
-				tlbe.pte.a <= FALSE;
-				tlbe.pte.m <= FALSE;
+//				tlbe.pte.a <= FALSE;
+//				tlbe.pte.m <= FALSE;
 				tlbe.vpn <= miss_adr1 >> (LOG_PAGESIZE + TLB_ABITS);
 				tlbe.asid <= miss_asid;
 				tlbe.count <= iv_count;
@@ -498,8 +512,8 @@ else begin
 				level1[2] <= level1[3];
 				level1[1] <= level1[2];
 				level1[0] <= level1[1];
-				read_adr <= (((miss_adr1 >> LOG_PAGESIZE) % TLB_ENTRIES) << 4'd4) + tlb_base_adr;
-				way <= LRU ? 8'd0 : lfsro[7:0];
+				read_adr <= ((miss_adr1 >> LOG_PAGESIZE) % TLB_ENTRIES);
+				way <= LRU ? 8'd0 : lfsro[7:0] & WAY_MASK;
 				retry <= 3'd0;
 				all_ways_locked <= FALSE;
 				tCall(st_read_tlb,st_read_lev1_4);
@@ -532,8 +546,8 @@ else begin
 				$display("PTW: Level2 cached read of %h", level2.adr);
 				tlbe <= {$bits(tlb_entry_t){1'b0}};
 				tlbe.pte <= pte;
-				tlbe.pte.a <= FALSE;
-				tlbe.pte.m <= FALSE;
+//				tlbe.pte.a <= FALSE;
+//				tlbe.pte.m <= FALSE;
 				tlbe.asid <= miss_asid;
 				tlbe.count <= iv_count;
 				pte_adr <= level2.adr;
@@ -541,8 +555,8 @@ else begin
 				if (level2.pte.typ==PTP_SHORTCUT & SHORTCUT) begin
 					$display("PTW: Setting VPN=%h for %h", (miss_adr & 64'hFFFFFFFFFF800000) >> (LOG_PAGESIZE + TLB_ABITS), miss_adr);
 					tlbe.vpn <= (miss_adr1 & 64'hFFFFFFFFFF800000) >> (LOG_PAGESIZE + TLB_ABITS);
-					read_adr <= (((miss_adr1 >> LOG_PAGESIZE2) % TLB2_ENTRIES) << 4'd4) + tlb2_base_adr;
-					way <= LRU ? 0 : lfsro[7:0];
+					read_adr <= ((miss_adr1 >> LOG_PAGESIZE2) % TLB2_ENTRIES);
+					way <= LRU ? 0 : lfsro[7:0] & WAY_MASK2;
 					retry <= 3'd0;
 					all_ways_locked <= FALSE;
 					tCall(st_read_tlb2a,st_read_lev2_4);
@@ -571,33 +585,33 @@ else begin
 			if (pte.v) begin
 				// Cache lookup
 				level2.pte <= pte;
-				level2.pte.a <= FALSE;
-				level2.pte.m <= FALSE;
+//				level2.pte.a <= FALSE;
+//				level2.pte.m <= FALSE;
 				level2.adr <= pte_adr;
 				pt_adr <= (pte.ppn << LOG_PAGESIZE);// + pt_index;
-				way <= lfsro[1:0];
+				way <= LRU ? 0 : lfsro[7:0] & WAY_MASK;
 				if (pte.typ==PTP_SHORTCUT & SHORTCUT) begin
-					read_adr <= ((((miss_adr1 & 64'hFFFFFFFFFF800000)>> LOG_PAGESIZE2) % TLB2_ENTRIES) << 4'd4) + tlb2_base_adr;
+					read_adr <= (((miss_adr1 & 64'hFFFFFFFFFF800000)>> LOG_PAGESIZE2) % TLB2_ENTRIES);
 					tlbe <= {$bits(tlb_entry_t){1'b0}};
 					tlbe.pte <= pte;
-					tlbe.pte.a <= FALSE;
-					tlbe.pte.m <= FALSE;
-					tlbe.vpn <= (miss_adr & 64'hFFFFFFFFFF800000)>> (LOG_PAGESIZE + TLB2_ABITS);
+//					tlbe.pte.a <= FALSE;
+//					tlbe.pte.m <= FALSE;
+					tlbe.vpn <= (miss_adr1 & 64'hFFFFFFFFFF800000)>> (LOG_PAGESIZE2 + TLB2_ABITS);
 					$display("PTW: Setting VPN=%h for %h", miss_adr1 >> (LOG_PAGESIZE2 + TLB2_ABITS), miss_adr1);
 					tlbe.asid <= miss_asid;
 					tlbe.count <= iv_count;
-					way <= lfsro[1:0];
+					way <= LRU ? 0 : lfsro[7:0] & WAY_MASK2;
 					retry <= 3'd0;
 					all_ways_locked <= FALSE;
 					tCall(st_read_tlb2a,st_read_lev2_4);
 				end
 				else begin
-					read_adr <= (((miss_adr1 >> LOG_PAGESIZE) % TLB_ENTRIES) << 4'd4) + tlb_base_adr;
+					read_adr <= ((miss_adr1 >> LOG_PAGESIZE) % TLB_ENTRIES);
 					$display("PTW: Setting VPN=%h for %h", miss_adr >> (LOG_PAGESIZE + TLB_ABITS), miss_adr1);
 					tlbe <= {$bits(tlb_entry_t){1'b0}};
 					tlbe.pte <= pte;
-					tlbe.pte.a <= FALSE;
-					tlbe.pte.m <= FALSE;
+//					tlbe.pte.a <= FALSE;
+//					tlbe.pte.m <= FALSE;
 					tlbe.vpn <= miss_adr >> (LOG_PAGESIZE + TLB_ABITS);
 					$display("PTW: Setting VPN=%h for %h", miss_adr1 >> (LOG_PAGESIZE + TLB_ABITS), miss_adr1);
 					tlbe.asid <= miss_asid;
@@ -630,38 +644,54 @@ else begin
 	// memory first.
 	st_read_tlb:
 		begin
-			$display("PTW: ReadTLB: %h:%h", read_adr, way);
+			paging_en <= FALSE;
 			ics_tlb <= HIGH;
 			tlb_bus.req.cyc <= HIGH;
 			tlb_bus.req.stb <= HIGH;
-			tlb_bus.req.we <= LOW;
+			tlb_bus.req.we <= HIGH;
 			tlb_bus.req.sel <= 8'hFF;
-			tlb_bus.req.adr <= read_adr;
+			tlb_bus.req.adr <= tlb_base_adr | 8'h20;
+			tlb_bus.req.dat <= read_adr|32'h40000000|(way<<16);
 			tGoto(st_read_tlb2);
 		end
 	st_read_tlb2:
 		if (tlb_bus.resp.ack) begin
-			tlbe_tmp[63:0] <= tlb_bus.resp.dat;
 			tlb_bus.req <= {$bits(wb_cmd_request64_t){1'b0}}; 
 			tGoto(st_read_tlb3);
 		end
 	st_read_tlb3:
 		begin
+			$display("PTW: ReadTLB: %h:%h", read_adr, way);
 			tlb_bus.req.cyc <= HIGH;
 			tlb_bus.req.stb <= HIGH;
 			tlb_bus.req.we <= LOW;
 			tlb_bus.req.sel <= 8'hFF;
-			tlb_bus.req.adr <= read_adr + 4'h8;
+			tlb_bus.req.adr <= tlb_base_adr;
 			tGoto(st_read_tlb4);
 		end
 	st_read_tlb4:
 		if (tlb_bus.resp.ack) begin
-			tlbe_tmp[127:64] <= tlb_bus.resp.dat;
-			ics_tlb <= LOW;
+			tlbe_tmp[63:0] <= tlb_bus.resp.dat;
 			tlb_bus.req <= {$bits(wb_cmd_request64_t){1'b0}}; 
 			tGoto(st_read_tlb5);
 		end
 	st_read_tlb5:
+		begin
+			tlb_bus.req.cyc <= HIGH;
+			tlb_bus.req.stb <= HIGH;
+			tlb_bus.req.we <= LOW;
+			tlb_bus.req.sel <= 8'hFF;
+			tlb_bus.req.adr <= tlb_base_adr | 4'h8;
+			tGoto(st_read_tlb6);
+		end
+	st_read_tlb6:
+		if (tlb_bus.resp.ack) begin
+			tlbe_tmp[127:64] <= tlb_bus.resp.dat;
+			ics_tlb <= LOW;
+			tlb_bus.req <= {$bits(wb_cmd_request64_t){1'b0}}; 
+			tGoto(st_read_tlb7);
+		end
+	st_read_tlb7:
 		begin
 			// For LRU the way will not be locked as way zero is read.
 			$display("PTW: ReadTLB TLBE=%h", tlbe_tmp);
@@ -687,38 +717,55 @@ else begin
 	// memory first.
 	st_read_tlb2a:
 		begin
+			paging_en <= FALSE;
+			ics_tlb2 <= HIGH;
+			tlb2_bus.req.cyc <= HIGH;
+			tlb2_bus.req.stb <= HIGH;
+			tlb2_bus.req.we <= HIGH;
+			tlb2_bus.req.sel <= 8'hFF;
+			tlb2_bus.req.adr <= tlb2_base_adr | 8'h20;
+			tlb2_bus.req.dat <= read_adr|32'h40000000|(way<<16);
+			tGoto(st_read_tlb2a2);
+		end
+	st_read_tlb2a2:
+		if (tlb2_bus.resp.ack) begin
+			tlb2_bus.req <= {$bits(wb_cmd_request64_t){1'b0}}; 
+			tGoto(st_read_tlb2a3);
+		end
+	st_read_tlb2a3:
+		begin
 			$display("PTW: ReadTLB2: %h:%h", read_adr, way);
 			ics_tlb2 <= HIGH;
 			tlb2_bus.req.cyc <= HIGH;
 			tlb2_bus.req.stb <= HIGH;
 			tlb2_bus.req.we <= LOW;
 			tlb2_bus.req.sel <= 8'hFF;
-			tlb2_bus.req.adr <= read_adr;
-			tGoto(st_read_tlb2a2);
+			tlb2_bus.req.adr <= tlb2_base_adr;
+			tGoto(st_read_tlb2a4);
 		end
-	st_read_tlb2a2:
+	st_read_tlb2a4:
 		if (tlb2_bus.resp.ack) begin
 			tlbe_tmp[63:0] <= tlb2_bus.resp.dat;
 			tlb2_bus.req <= {$bits(wb_cmd_request64_t){1'b0}}; 
-			tGoto(st_read_tlb2a3);
+			tGoto(st_read_tlb2a5);
 		end
-	st_read_tlb2a3:
+	st_read_tlb2a5:
 		begin
 			tlb2_bus.req.cyc <= HIGH;
 			tlb2_bus.req.stb <= HIGH;
 			tlb2_bus.req.we <= LOW;
 			tlb2_bus.req.sel <= 8'hFF;
-			tlb2_bus.req.adr <= read_adr + 4'h8;
-			tGoto(st_read_tlb2a4);
+			tlb2_bus.req.adr <= tlb2_base_adr|4'h8;
+			tGoto(st_read_tlb2a6);
 		end
-	st_read_tlb2a4:
+	st_read_tlb2a6:
 		if (tlb2_bus.resp.ack) begin
 			tlbe_tmp[127:64] <= tlb2_bus.resp.dat;
 			ics_tlb2 <= LOW;
 			tlb2_bus.req <= {$bits(wb_cmd_request64_t){1'b0}}; 
-			tGoto(st_read_tlb2a5);
+			tGoto(st_read_tlb2a7);
 		end
-	st_read_tlb2a5:
+	st_read_tlb2a7:
 		begin
 			// For LRU the way will not be locked as way zero is read.
 			$display("PTW: ReadTLB2 TLBE=%h", tlbe_tmp);
@@ -771,7 +818,7 @@ else begin
 			tlb_bus.req.stb <= HIGH;
 			tlb_bus.req.we <= HIGH;
 			tlb_bus.req.sel <= 8'hFF;
-			tlb_bus.req.adr <= update_adr;
+			tlb_bus.req.adr <= tlb_base_adr;
 			tlb_bus.req.dat <= tlbe[63:0];
 			tGoto(st_update_tlb2);
 		end
@@ -786,18 +833,33 @@ else begin
 			tlb_bus.req.stb <= HIGH;
 			tlb_bus.req.we <= HIGH;
 			tlb_bus.req.sel <= 8'hFF;
-			tlb_bus.req.adr <= update_adr | 4'h8;
+			tlb_bus.req.adr <= tlb_base_adr | 4'h8;
 			tlb_bus.req.dat <= tlbe[127:64];
 			tGoto(st_update_tlb4);
 		end
 	st_update_tlb4:
 		if (tlb_bus.resp.ack) begin
-			ics_tlb <= LOW;
-			paging_en <= g_paging_en;
 			tlb_bus.req <= {$bits(wb_cmd_request64_t){1'b0}}; 
 			tGoto(st_update_tlb5);
 		end
 	st_update_tlb5:
+		begin
+			tlb_bus.req.cyc <= HIGH;
+			tlb_bus.req.stb <= HIGH;
+			tlb_bus.req.we <= HIGH;
+			tlb_bus.req.sel <= 8'hFF;
+			tlb_bus.req.adr <= tlb_base_adr | 8'h20;
+			tlb_bus.req.dat <= update_adr|32'h80000000|(way<<16);
+			tGoto(st_update_tlb6);
+		end
+	st_update_tlb6:
+		if (tlb_bus.resp.ack) begin
+			ics_tlb <= LOW;
+			paging_en <= g_paging_en;
+			tlb_bus.req <= {$bits(wb_cmd_request64_t){1'b0}}; 
+			tGoto(st_update_tlb7);
+		end
+	st_update_tlb7:
 		tRet();
 
 	// Write the TLB entry to the TLB
@@ -810,7 +872,7 @@ else begin
 			tlb2_bus.req.stb <= HIGH;
 			tlb2_bus.req.we <= HIGH;
 			tlb2_bus.req.sel <= 8'hFF;
-			tlb2_bus.req.adr <= update_adr;
+			tlb2_bus.req.adr <= tlb2_base_adr;
 			tlb2_bus.req.dat <= tlbe[63:0];
 			tGoto(st_update_tlb2a2);
 		end
@@ -825,16 +887,31 @@ else begin
 			tlb2_bus.req.stb <= HIGH;
 			tlb2_bus.req.we <= HIGH;
 			tlb2_bus.req.sel <= 8'hFF;
-			tlb2_bus.req.adr <= update_adr | 4'h8;
+			tlb2_bus.req.adr <= tlb2_base_adr | 4'h8;
 			tlb2_bus.req.dat <= tlbe[127:64];
 			tGoto(st_update_tlb2a4);
 		end
 	st_update_tlb2a4:
 		if (tlb2_bus.resp.ack) begin
+			tlb2_bus.req <= {$bits(wb_cmd_request64_t){1'b0}}; 
+			tGoto(st_update_tlb2a5);
+		end
+	st_update_tlb2a5:
+		begin
+			tlb2_bus.req.cyc <= HIGH;
+			tlb2_bus.req.stb <= HIGH;
+			tlb2_bus.req.we <= HIGH;
+			tlb2_bus.req.sel <= 8'hFF;
+			tlb2_bus.req.adr <= tlb2_base_adr | 8'h20;
+			tlb2_bus.req.dat <= update_adr|32'h80000000|(way<<16);
+			tGoto(st_update_tlb2a6);
+		end
+	st_update_tlb2a6:
+		if (tlb2_bus.resp.ack) begin
 			ics_tlb2 <= LOW;
 			paging_en <= g_paging_en;
 			tlb2_bus.req <= {$bits(wb_cmd_request64_t){1'b0}}; 
-			tGoto(st_update_tlb5);
+			tGoto(st_update_tlb7);
 		end
 
 	// Perform a flush cycle.
