@@ -247,7 +247,7 @@ parameter SUPPORT_CAPABILITIES = 1'b0;
 parameter SUPPORT_VECTOR = 1'b1;
 
 parameter SUPPORT_IMUL = 1;
-parameter SUPPORT_IDIV = 1;
+parameter SUPPORT_IDIV = 0;
 parameter SUPPORT_TRIG = 0;
 parameter SUPPORT_FDP = 0;
 parameter SUPPORT_FLOAT = 0;
@@ -273,7 +273,7 @@ parameter NREG_RPORTS = 12;
 // and may increase performance. The default is set to the machine width.
 // Note: not all instruction write the register file so it may be possible
 // to use fewer write ports without losing too much performance.
-parameter NREG_WPORTS = 10;//MWIDTH;
+parameter NREG_WPORTS = 8;//MWIDTH;
 
 // Number of data ports should be 1 or 2. 2 ports will allow two simulataneous
 // reads, but still only a single write.
@@ -295,7 +295,7 @@ parameter NFPU = 1;			// 1 or 2
 parameter NFMA = 0;			// 0, 1 or 2
 parameter NDFPU = 0;		// 0 or 1
 parameter NLSQ_PORTS = 1;
-parameter NFRQ = 10;
+parameter NFRQ = 8;
 
 parameter RAS_DEPTH	= 4;
 
@@ -313,5 +313,7 @@ parameter NRSE_FPU =1;
 parameter NRSE_DFLT =2;
 parameter NRSE_FCU =1;
 parameter NRSE_AGEN =1;
+
+parameter MICROOPS_PER_INSTR = 16;
 
 parameter SUPPORTED_PRECISIONS = "___O_";

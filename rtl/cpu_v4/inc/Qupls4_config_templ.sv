@@ -313,3 +313,4 @@ parameter NRSE_DFLT = 1;
 parameter NRSE_FCU = 1;
 parameter NRSE_AGEN = 1;
 
+parameter MICROOPS_PER_INSTR = 16;

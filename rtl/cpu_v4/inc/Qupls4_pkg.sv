@@ -712,6 +712,14 @@ typedef enum logic [6:0] {
 	FN_EXG = 7'd31,
 	FN_MUX = 7'd33,
 	FN_BMAP = 7'd35,
+
+	FN_NNA_MTWT = 7'd40,
+	FN_NNA_MTIN = 7'd41,
+	FN_NNA_MTBIAS = 7'd42,
+	FN_NNA_MTFB = 7'd43,
+	FN_NNA_MTMC = 7'd44,
+	FN_NNA_MTBC = 7'd45,
+	
 	FN_ROL = 7'd80,
 	FN_ROR = 7'd81,
 	FN_ASR = 7'd82,
@@ -1638,6 +1646,7 @@ typedef struct packed
 	cpu_types_pkg::value_t immc;
 	cpu_types_pkg::value_t immd;		// for store immediate
 	logic we;
+	logic [2:0] fclass;		// class of instruction for FENCE
 	logic csr;				// CSR instruction
 	logic nop;				// NOP semantics
 	logic move;
@@ -1926,11 +1935,13 @@ typedef struct packed {
 	logic load;
 	logic store;
 	logic vls;					// vector load / store
+	logic vlsndx;				// indexed vector load / store
 	logic amo;
 	logic push;
 	logic pop;
 	logic mem;
 	logic [2:0] count;
+	logic [2:0] fclass;
 	// decodes only needed for branch
 	logic ibcc;					// incrementing branch
 	logic dbcc;					// decrementing branch
