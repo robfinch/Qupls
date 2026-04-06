@@ -402,10 +402,10 @@ R3:
 		end
 	default:	o2 = 'd0;
 	endcase
-*/	
 default:	o2 = 'd0;
 endcase
+*/	
 
-assign o = o2;
+assign o = 64'd0;//o2;
 
 endmodule

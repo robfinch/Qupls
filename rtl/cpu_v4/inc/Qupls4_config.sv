@@ -251,6 +251,7 @@ parameter SUPPORT_IDIV = 0;
 parameter SUPPORT_TRIG = 0;
 parameter SUPPORT_FDP = 0;
 parameter SUPPORT_FLOAT = 0;
+parameter SUPPORT_NNA = 0;
 
 // =============================================================================
 // Resources
@@ -273,7 +274,7 @@ parameter NREG_RPORTS = 12;
 // and may increase performance. The default is set to the machine width.
 // Note: not all instruction write the register file so it may be possible
 // to use fewer write ports without losing too much performance.
-parameter NREG_WPORTS = 8;//MWIDTH;
+parameter NREG_WPORTS = 6;//MWIDTH;
 
 // Number of data ports should be 1 or 2. 2 ports will allow two simulataneous
 // reads, but still only a single write.
@@ -295,7 +296,14 @@ parameter NFPU = 1;			// 1 or 2
 parameter NFMA = 0;			// 0, 1 or 2
 parameter NDFPU = 0;		// 0 or 1
 parameter NLSQ_PORTS = 1;
-parameter NFRQ = 8;
+parameter NFRQ = 6;
+
+parameter SUPPORT_XPIPE0 = 1'b1;
+parameter SUPPORT_XPIPE1 = 1'b1;
+parameter SUPPORT_XPIPE2 = 1'b1;
+parameter SUPPORT_XPIPE3 = 1'b0;
+parameter SUPPORT_XPIPE4 = 1'b1;
+parameter SUPPORT_XPIPE5 = 1'b0;
 
 parameter RAS_DEPTH	= 4;
 
@@ -303,6 +311,13 @@ parameter SUPPORT_RSB = 0;
 
 // Depth of internal stack for exceptionb processing.
 parameter ISTACK_DEPTH = 16;
+
+parameter NRSE_XPIPE0 = 1;
+parameter NRSE_XPIPE1 = 1;
+parameter NRSE_XPIPE2 = 1;
+parameter NRSE_XPIPE3 = 1;
+parameter NRSE_XPIPE4 = 1;
+parameter NRSE_XPIPE5 = 1;
 
 parameter NRSE_SAU0 = 1;
 parameter NRSE_SAU = 1;

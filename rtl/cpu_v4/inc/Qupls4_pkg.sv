@@ -800,8 +800,8 @@ typedef enum logic [5:0] {
 	FLT_ISNAN = 6'd46,
 	FLT_FINITE = 6'd47,
 	FLT_TRUNC = 6'd53,
-	FLT_RSQRTE = 6'd54,
-	FLT_RES = 6'd55,
+	FLT_RSQRTA = 6'd54,
+	FLT_RCPA = 6'd55,
 	FLT_SIGMOID = 6'd56,
 	FLT_CVTD2S = 6'd57,
 	FLT_CLASS = 6'd62,
@@ -1646,6 +1646,7 @@ typedef struct packed
 	cpu_types_pkg::value_t immc;
 	cpu_types_pkg::value_t immd;		// for store immediate
 	logic we;
+	logic [5:0] expipe;		// execution pipe
 	logic [2:0] fclass;		// class of instruction for FENCE
 	logic csr;				// CSR instruction
 	logic nop;				// NOP semantics

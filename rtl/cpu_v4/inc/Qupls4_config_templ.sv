@@ -251,6 +251,7 @@ parameter SUPPORT_IDIV = 1;
 parameter SUPPORT_TRIG = 0;
 parameter SUPPORT_FDP = 0;
 parameter SUPPORT_FLOAT = 1;
+parameter SUPPORT_NNA = 0;
 
 // =============================================================================
 // Resources
@@ -302,6 +303,13 @@ parameter SUPPORT_RSB = 0;
 
 // Depth of internal stack for exceptionb processing.
 parameter ISTACK_DEPTH = 16;
+
+parameter NRSE_XPIPE0 = 1;
+parameter NRSE_XPIPE1 = 1;
+parameter NRSE_XPIPE2 = 1;
+parameter NRSE_XPIPE3 = 1;
+parameter NRSE_XPIPE4 = 1;
+parameter NRSE_XPIPE5 = 1;
 
 parameter NRSE_SAU0 = 1;
 parameter NRSE_SAU = 1;

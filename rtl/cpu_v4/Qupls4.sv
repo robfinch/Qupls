@@ -79,7 +79,7 @@ parameter RL_STRATEGY = Qupls4_pkg::RL_STRATEGY;
 localparam NREG_RPORTS = Qupls4_pkg::NREG_RPORTS;
 parameter NREG_WPORTS = Qupls4_pkg::NREG_WPORTS;
 localparam RS_NREG_RPORTS = Qupls4_pkg::NREG_RPORTS;
-parameter MICROOPS_PER_INSTR = 32;
+parameter MICROOPS_PER_INSTR = Qupls4_pkg::MICROOPS_PER_INSTR;
 parameter MAX_MICROOPS = 12;
 parameter XSTREAMS = Qupls4_pkg::XSTREAMS;
 input [63:0] coreno_i;
@@ -440,7 +440,12 @@ reg sau0_idle;
 reg sau0_idle1;
 wire sau0_issue;
 wire sau0_idle_false = FALSE;
-wire sau0_full;
+wire xpipe0_full;
+wire xpipe1_full;
+wire xpipe2_full;
+wire xpipe3_full;
+wire xpipe4_full;
+wire xpipe5_full;
 always_comb
 	if (sau0_idle_false)
 		sau0_idle = FALSE;
@@ -475,12 +480,15 @@ checkpt_ndx_t sau0_cp;
 reg sau0_bank;
 value_t sau0_cmpo;
 pc_address_ex_t sau0_pc;
-value_t sau0_resA;
-value_t sau0_resB;
-value_t sau0_resC;
+value_t xpipe0_resA;
+value_t xpipe1_resA;
+value_t xpipe2_resA;
+value_t xpipe3_resA;
+value_t xpipe4_resA;
+value_t xpipe5_resA;
 rob_ndx_t sau0_id;
 reg sau0_idv;
-wire [63:0] sau0_exc;
+wire [63:0] xpipe0_exc;
 reg sau0_out;
 wire sau0_ld;
 reg sau0_ldd;
@@ -491,11 +499,15 @@ wire [7:0] sau0_cptgt;
 Qupls4_pkg::memsz_t sau0_prc;
 Qupls4_pkg::flags_t sau0_flags;
 wire sau0_args_valid;
-Qupls4_pkg::reservation_station_entry_t sau0_rse, sau0_rse2;
+Qupls4_pkg::reservation_station_entry_t xpipe0_rse, xpipe0_rse2;
+Qupls4_pkg::reservation_station_entry_t xpipe1_rse, xpipe1_rse2;
+Qupls4_pkg::reservation_station_entry_t xpipe2_rse, xpipe2_rse2;
+Qupls4_pkg::reservation_station_entry_t xpipe3_rse, xpipe3_rse2;
+Qupls4_pkg::reservation_station_entry_t xpipe4_rse, xpipe4_rse2;
+Qupls4_pkg::reservation_station_entry_t xpipe5_rse, xpipe5_rse2;
 
 reg sau1_idle;
 reg sau1_idle1;
-wire sau1_full;
 wire sau1_idle_false = FALSE;
 always_comb
 	if (sau1_idle_false)
@@ -533,12 +545,9 @@ checkpt_ndx_t sau1_cp;
 reg sau1_bank;
 value_t sau1_cmpo;
 pc_address_ex_t sau1_pc;
-value_t sau1_resA;
-value_t sau1_resB;
-value_t sau1_resC;
 rob_ndx_t sau1_id;
 reg sau1_idv;
-wire [63:0] sau1_exc;
+wire [63:0] xpipe1_exc;
 reg sau1_out;
 wire mul1_done;
 value_t div1_q,div1_r;
@@ -552,7 +561,6 @@ wire [7:0] sau1_cptgt;
 Qupls4_pkg::memsz_t sau1_prc;
 Qupls4_pkg::flags_t sau1_flags;
 wire sau1_args_valid;
-Qupls4_pkg::reservation_station_entry_t sau1_rse, sau1_rse2;
 
 reg imul0_idle;
 reg imul0_idle1;
@@ -1077,7 +1085,7 @@ reg branchmissd;
 rob_ndx_t missid;
 reg missid_v;
 
-cpu_types_pkg::address_t agen0_res, agen1_res;
+cpu_types_pkg::address_t agen0_adr, agen1_adr;
 wire tlb_miss0, tlb_miss1;
 wire tlb_missack;
 tlb_entry_t tlb_entry1, tlb_entry;
@@ -3223,7 +3231,7 @@ vtdl #(1) 							udlyal15 (.clk(clk), .ce(1'b1), .a(4'd0), .d(sau1_sc_done), .q(
 vtdl #($bits(rob_ndx_t))	udlyal16 (.clk(clk), .ce(1'b1), .a(4'd0), .d(sau1_id), .q(sau1_id2) );
 vtdl #($bits(checkpt_ndx_t)) udlyal17 (.clk(clk), .ce(1'b1), .a(4'd0), .d(sau1_cp), .q(sau1_cp2) );
 
-//vtdl #($bits(value_t))  udlyal4 (.clk(clk), .ce(1'b1), .a(4'd0), .d(sau0_resA), .q(sau0_res2) );
+//vtdl #($bits(value_t))  udlyal4 (.clk(clk), .ce(1'b1), .a(4'd0), .d(xpipe0_resA), .q(sau0_res2) );
 // FPU #0 signals
 
 vtdl #(1) 							udlyfp5 (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu0_sc_done), .q(fpu0_sc_done2) );
@@ -3241,8 +3249,13 @@ always_comb dram_wr0 = dram0_oper.oper.v && dram0_oper.oper.aRnv;
 always_comb dram_wr1 = dram1_oper.oper.v && dram1_oper.oper.aRnv && Qupls4_pkg::NDATA_PORTS > 1;
 always_comb fcu_wrA = 1'b0;
 
-wire [8:0] sau0_we;
-wire [8:0] sau1_we;
+wire [8:0] xpipe0_we;
+wire [8:0] xpipe1_we;
+wire [8:0] xpipe2_we;
+wire [8:0] xpipe3_we;
+wire [8:0] xpipe4_we;
+wire [8:0] xpipe5_we;
+
 wire [8:0] fpu0_we;
 wire [8:0] fpu1_we;
 reg [8:0] dram0_we;
@@ -3252,8 +3265,8 @@ wire [8:0] fcu_we;
 always_ff @(posedge clk) dram0_we = {wt10A,8'hFF} & {9{dram_wr0}};
 always_ff @(posedge clk) dram1_we = {wt11A,8'hFF} & {9{dram_wr1}} & {9{Qupls4_pkg::NDATA_PORTS > 1}};
 
-always_comb wt0A = !sau0_rse2.aRdv;
-always_comb wt1A = !sau1_rse2.aRdv && Qupls4_pkg::NSAU > 1;
+always_comb wt0A = !xpipe0_rse2.aRdv;
+always_comb wt1A = !xpipe1_rse2.aRdv && Qupls4_pkg::NSAU > 1;
 always_comb wt7A = fcu_done && !fcu_aRtzA;
 always_comb wt10A = dram0_oper.oper.v && dram0_oper.oper.aRnv;
 always_comb wt11A = dram1_oper.oper.v && dram1_oper.oper.aRnv && Qupls4_pkg::NDATA_PORTS > 1;
@@ -3276,7 +3289,7 @@ generate begin : gFrqSelect
 	if (NFRQ > NREG_WPORTS)
 		Qupls4_frq_select
 		#(
-			.NFRQ(13),
+			.NFRQ(NREG_WPORTS),
 			.NWRITE_PORTS(NREG_WPORTS)
 		)
 		ufrqsel1
@@ -3299,16 +3312,16 @@ endgenerate
 // Queue the outputs of the functional units.
 // Results that have been stomped on are not queued.
 
-Qupls4_func_result_queue ufrq1
+Qupls4_func_result_queue ufrq0
 (
 	.rst_i(irst),
 	.clk_i(clk),
 	.stomp_i(robentry_stomp),
 	.rd_i(fuq_rd[0]),
-	.we_i(sau0_we),
-	.rse_i(sau0_rse2),
-	.tag_i(sau0_rse2.arg[3].flags),
-	.res_i(sau0_resA),
+	.we_i(xpipe0_we),
+	.rse_i(xpipe0_rse2),
+	.tag_i(xpipe0_rse2.arg[3].flags),
+	.res_i(xpipe0_resA),
 	.we_o(fuq_we[0]),
 	.pRt_o(fuq_pRt[0]),
 	.aRt_o(fuq_aRt[0]),
@@ -3316,21 +3329,19 @@ Qupls4_func_result_queue ufrq1
 	.res_o(fuq_res[0]),
 	.cp_o(fuq_cp[0]),
 	.empty(fuq_empty[0]),
-	.full(sau0_full)
+	.full(xpipe0_full)
 );
 
-generate begin : gSAU1q
-	if (Qupls4_pkg::NSAU > 1) begin
-Qupls4_func_result_queue ufrq4
+Qupls4_func_result_queue ufrq1
 (
 	.rst_i(irst),
 	.clk_i(clk),
 	.stomp_i(robentry_stomp),
 	.rd_i(fuq_rd[1]),
-	.we_i(sau1_we),
-	.rse_i(sau1_rse2),
-	.tag_i(sau1_rse2.arg[3].flags),
-	.res_i(sau1_resA),
+	.we_i(xpipe1_we),
+	.rse_i(xpipe1_rse2),
+	.tag_i(xpipe1_rse2.arg[3].flags),
+	.res_i(xpipe1_resA),
 	.we_o(fuq_we[1]),
 	.pRt_o(fuq_pRt[1]),
 	.aRt_o(fuq_aRt[1]),
@@ -3338,18 +3349,102 @@ Qupls4_func_result_queue ufrq4
 	.res_o(fuq_res[1]),
 	.cp_o(fuq_cp[1]),
 	.empty(fuq_empty[1]),
-	.full(sau1_full)
+	.full(xpipe1_full)
+);
+
+generate begin : gFRQ2
+	if (SUPPORT_XPIPE2)
+Qupls4_func_result_queue ufrq2
+(
+	.rst_i(irst),
+	.clk_i(clk),
+	.stomp_i(robentry_stomp),
+	.rd_i(fuq_rd[2]),
+	.we_i(xpipe2_we),
+	.rse_i(xpipe2_rse2),
+	.tag_i(xpipe2_rse2.arg[3].flags),
+	.res_i(xpipe2_resA),
+	.we_o(fuq_we[2]),
+	.pRt_o(fuq_pRt[2]),
+	.aRt_o(fuq_aRt[2]),
+	.tag_o(fuq_tag[2]),
+	.res_o(fuq_res[2]),
+	.cp_o(fuq_cp[2]),
+	.empty(fuq_empty[2]),
+	.full(xpipe2_full)
 );
 end
-else begin
-	assign fuq_we[1] = 9'd0;
-	assign fuq_pRt[1] = 8'd0;
-	assign fuq_aRt[1] = 7'd0;
-	assign fuq_tag[1] = 8'b0;
-	assign fuq_res[1] = 64'd0;
-	assign fuq_cp[1] = 4'd0;
-	assign fuq_empty[1] = 1'b1;
+endgenerate
+
+generate begin : gFRQ3
+	if (SUPPORT_XPIPE3)
+Qupls4_func_result_queue ufrq3
+(
+	.rst_i(irst),
+	.clk_i(clk),
+	.stomp_i(robentry_stomp),
+	.rd_i(fuq_rd[3]),
+	.we_i(xpipe3_we),
+	.rse_i(xpipe3_rse2),
+	.tag_i(xpipe3_rse2.arg[3].flags),
+	.res_i(xpipe3_resA),
+	.we_o(fuq_we[3]),
+	.pRt_o(fuq_pRt[3]),
+	.aRt_o(fuq_aRt[3]),
+	.tag_o(fuq_tag[3]),
+	.res_o(fuq_res[3]),
+	.cp_o(fuq_cp[3]),
+	.empty(fuq_empty[3]),
+	.full(xpipe3_full)
+);
 end
+endgenerate
+
+generate begin : gFRQ4
+	if (SUPPORT_XPIPE4)
+Qupls4_func_result_queue ufrq4
+(
+	.rst_i(irst),
+	.clk_i(clk),
+	.stomp_i(robentry_stomp),
+	.rd_i(fuq_rd[4]),
+	.we_i(xpipe4_we),
+	.rse_i(xpipe4_rse2),
+	.tag_i(xpipe4_rse2.arg[3].flags),
+	.res_i(xpipe4_resA),
+	.we_o(fuq_we[4]),
+	.pRt_o(fuq_pRt[4]),
+	.aRt_o(fuq_aRt[4]),
+	.tag_o(fuq_tag[4]),
+	.res_o(fuq_res[4]),
+	.cp_o(fuq_cp[4]),
+	.empty(fuq_empty[4]),
+	.full(xpipe4_full)
+);
+end
+endgenerate
+
+generate begin : gFRQ5
+	if (SUPPORT_XPIPE5)
+Qupls4_func_result_queue ufrq5
+(
+	.rst_i(irst),
+	.clk_i(clk),
+	.stomp_i(robentry_stomp),
+	.rd_i(fuq_rd[5]),
+	.we_i(xpipe5_we),
+	.rse_i(xpipe5_rse2),
+	.tag_i(xpipe5_rse2.arg[3].flags),
+	.res_i(xpipe5_resA),
+	.we_o(fuq_we[5]),
+	.pRt_o(fuq_pRt[5]),
+	.aRt_o(fuq_aRt[5]),
+	.tag_o(fuq_tag[5]),
+	.res_o(fuq_res[5]),
+	.cp_o(fuq_cp[5]),
+	.empty(fuq_empty[5]),
+	.full(xpipe5_full)
+);
 end
 endgenerate
 
@@ -3378,6 +3473,7 @@ Qupls4_func_result_queue ufrq2
 	.full(imul0_full)
 );
 */
+/*
 assign fuq_we[2] = 9'd0;
 assign fuq_pRt[2] = 8'd0;
 assign fuq_aRt[2] = 7'd0;
@@ -3385,10 +3481,11 @@ assign fuq_tag[2] = 8'b0;
 assign fuq_res[2] = 64'd0;
 assign fuq_cp[2] = 4'd0;
 assign fuq_empty[2] = 1'b1;
-
+*/
 // IDIV
 // When doing a divide we know the result will not be a capability, so the
 // tag is simply defaulted to zero.
+/*
 generate begin : gDivFRQ
 if (Qupls4_pkg::SUPPORT_IDIV) begin
 Qupls4_func_result_queue ufrq3
@@ -3422,10 +3519,10 @@ else begin
 end
 end
 endgenerate
-
+*/
 // When doing a multiply we know the result will not be a capability, so the
 // tag is simply defaulted to zero.
-
+/*
 generate begin : gFMAFRQ
 if (Qupls4_pkg::NFMA > 0) begin
 Qupls4_func_result_queue ufrq4
@@ -3489,7 +3586,8 @@ else begin
 end
 end
 endgenerate
-
+*/
+/*
 assign fuq_empty[6] = TRUE;
 assign fuq_pRt[6] = 10'd0;
 assign fuq_aRt[6] = 8'd0;
@@ -3497,7 +3595,8 @@ assign fuq_we[6] = 9'd0;
 assign fuq_tag[6] = 8'd0;
 assign fuq_res[6] = value_zero;
 assign fuq_cp[6] = 4'd0;
-
+*/
+/*
 Qupls4_func_result_queue ufrq7
 (
 	.rst_i(irst),
@@ -3517,6 +3616,16 @@ Qupls4_func_result_queue ufrq7
 	.empty(fuq_empty[7]),
 	.full(fcu_full)
 );
+*/
+/*
+assign fuq_empty[7] = TRUE;
+assign fuq_pRt[7] = 10'd0;
+assign fuq_aRt[7] = 8'd0;
+assign fuq_we[7] = 9'd0;
+assign fuq_tag[7] = 8'd0;
+assign fuq_res[7] = value_zero;
+assign fuq_cp[7] = 4'd0;
+*/
 
 Qupls4_pkg::reservation_station_entry_t dram0_rse;
 always_comb
@@ -3535,7 +3644,7 @@ begin
 	dram1_rse.rndx = dram1_oper.rndx;
 	dram1_rse.cndx = dram1_oper.cndx;
 end
-
+/*
 assign fuq_empty[8] = TRUE;
 assign fuq_pRt[8] = 10'd0;
 assign fuq_aRt[8] = 8'd0;
@@ -3551,29 +3660,30 @@ assign fuq_we[9] = 9'd0;
 assign fuq_tag[9] = 8'd0;
 assign fuq_res[9] = value_zero;
 assign fuq_cp[9] = 4'd0;
-
+*/
 wire dram0_full, dram1_full;
-
-Qupls4_func_result_queue ufrq10
+/*
+Qupls4_func_result_queue ufrq2
 (
 	.rst_i(irst),
 	.clk_i(clk),
 	.stomp_i(robentry_stomp),
-	.rd_i(fuq_rd[10]),
+	.rd_i(fuq_rd[2]),
 	.we_i(dram0_we & {9{dram0_oper.oper.v & dram0_oper.state==2'b11}}),
 	.rse_i(dram0_rse),
 	.tag_i(dram0_oper.oper.flags),
 	.res_i(dram0_oper.oper.val),
-	.we_o(fuq_we[10]),
-	.pRt_o(fuq_pRt[10]),
-	.aRt_o(fuq_aRt[10]),
-	.tag_o(fuq_tag[10]),
-	.res_o(fuq_res[10]),
-	.cp_o(fuq_cp[10]),
-	.empty(fuq_empty[10]),
+	.we_o(fuq_we[2]),
+	.pRt_o(fuq_pRt[2]),
+	.aRt_o(fuq_aRt[2]),
+	.tag_o(fuq_tag[2]),
+	.res_o(fuq_res[2]),
+	.cp_o(fuq_cp[2]),
+	.empty(fuq_empty[2]),
 	.full(dram0_full)
 );
-
+*/
+/*
 generate begin : gDRAM1q
 	if (Qupls4_pkg::NDATA_PORTS > 1) begin
 Qupls4_func_result_queue ufrq11
@@ -3607,44 +3717,79 @@ else begin
 end
 end
 endgenerate
-
+*/
 // When doing floating-point we know the result will not be a capability, so
 // the tag is simply defaulted to zero.
+/*
 generate begin : gFPU0q
 	if (Qupls4_pkg::NFPU > 0) begin
-Qupls4_func_result_queue ufrq12
+Qupls4_func_result_queue ufrq8
 (
 	.rst_i(irst),
 	.clk_i(clk),
 	.stomp_i(robentry_stomp),
-	.rd_i(fuq_rd[12]),
+	.rd_i(fuq_rd[6]),
 	.we_i(fpu0_we),
 	.rse_i(fpu0_rse2),
 	.tag_i(8'd0),
 	.res_i(fpu0_resA),
-	.we_o(fuq_we[12]),
-	.pRt_o(fuq_pRt[12]),
-	.aRt_o(fuq_aRt[12]),
-	.tag_o(fuq_tag[12]),
-	.res_o(fuq_res[12]),
-	.cp_o(fuq_cp[12]),
-	.empty(fuq_empty[12]),
+	.we_o(fuq_we[6]),
+	.pRt_o(fuq_pRt[6]),
+	.aRt_o(fuq_aRt[6]),
+	.tag_o(fuq_tag[6]),
+	.res_o(fuq_res[6]),
+	.cp_o(fuq_cp[6]),
+	.empty(fuq_empty[6]),
 	.full(fpu0_full)
 );
 end
 else begin
-	assign fuq_we[12] = 9'd0;
-	assign fuq_pRt[12] = 8'd0;
-	assign fuq_aRt[12] = 7'd0;
-	assign fuq_tag[12] = 8'b0;
-	assign fuq_res[12] = 64'd0;
-	assign fuq_cp[12] = 4'd0;
-	assign fuq_empty[12] = 1'b1;
+	assign fuq_we[6] = 9'd0;
+	assign fuq_pRt[6] = 8'd0;
+	assign fuq_aRt[6] = 7'd0;
+	assign fuq_tag[6] = 8'b0;
+	assign fuq_res[6] = 64'd0;
+	assign fuq_cp[6] = 4'd0;
+	assign fuq_empty[6] = 1'b1;
 end
 end
 endgenerate
-
-
+*/
+/*
+generate begin : gFPU1q
+	if (Qupls4_pkg::NFPU > 1) begin
+Qupls4_func_result_queue ufrq9
+(
+	.rst_i(irst),
+	.clk_i(clk),
+	.stomp_i(robentry_stomp),
+	.rd_i(fuq_rd[7]),
+	.we_i(fpu0_we),
+	.rse_i(fpu0_rse2),
+	.tag_i(8'd0),
+	.res_i(fpu0_resA),
+	.we_o(fuq_we[7]),
+	.pRt_o(fuq_pRt[7]),
+	.aRt_o(fuq_aRt[7]),
+	.tag_o(fuq_tag[7]),
+	.res_o(fuq_res[7]),
+	.cp_o(fuq_cp[7]),
+	.empty(fuq_empty[7]),
+	.full(fpu0_full)
+);
+end
+else begin
+	assign fuq_we[7] = 9'd0;
+	assign fuq_pRt[7] = 8'd0;
+	assign fuq_aRt[7] = 7'd0;
+	assign fuq_tag[7] = 8'b0;
+	assign fuq_res[7] = 64'd0;
+	assign fuq_cp[7] = 4'd0;
+	assign fuq_empty[7] = 1'b1;
+end
+end
+endgenerate
+*/
 // Mux the queue outputs onto the register file inputs.
 generate begin : gWrPort
 	for (g = 0; g < $size(wrport0_v); g = g + 1) begin
@@ -3739,7 +3884,7 @@ Qupls4_branchmiss_pc umisspc1
 
 always_comb
 	fcu_missir <= fcu_instr;
-
+/* now in ALU #1
 Qupls4_meta_fcu umfcu1
 (
 	.rst(irst),
@@ -3753,6 +3898,7 @@ Qupls4_meta_fcu umfcu1
 	.res(fcu_res),
 	.we_o(fcu_we)
 );
+*/
 
 /*
 Stark_branch_eval ube1
@@ -3983,17 +4129,17 @@ always_comb
 always_comb
 	agen1_idv = agen1_rse.v;
 always_comb
-	sau0_id = sau0_rse.rndx;
+	sau0_id = xpipe0_rse.rndx;
 always_comb
-	sau0_rndx = sau0_rse.rndx;
+	sau0_rndx = xpipe0_rse.rndx;
 always_comb
-	sau0_rndxv = sau0_rse.v;
+	sau0_rndxv = xpipe0_rse.v;
 always_comb
-	sau1_id = sau1_rse.rndx;
+	sau1_id = xpipe1_rse.rndx;
 always_comb
-	sau1_rndx = sau1_rse.rndx;
+	sau1_rndx = xpipe1_rse.rndx;
 always_comb
-	sau1_rndxv = sau1_rse.v;
+	sau1_rndxv = xpipe1_rse.v;
 always_comb
 	fpu0_id = fpu0_rse.rndx;
 always_comb
@@ -4205,12 +4351,187 @@ wire div_dbz;
 always_comb
 	tReadCSR(csr_res,sau0_argI[15:0]);
 
-Qupls4_meta_sau #(.SAU0(1'b1)) usau0
+Qupls4_expipe01 #(.PIPE(3'd0)) uxpipe0
 (
 	.rst(irst),
 	.clk(clk),
-	.rse_i(sau0_rse),
-	.rse_o(sau0_rse2),
+	.clk3x(clk2x),
+	.idle(),
+	.stomp(robentry_stomp),
+	.rse_i(xpipe0_rse),
+	.rse_o(xpipe0_rse2),
+	.rm(),
+	.z(sau0_predz),
+	.cptgt(sau0_cptgt),
+	.o(xpipe0_resA),
+	.csr(csr_res),
+	.cpl(sr.pl),
+	.sto(),
+	.ust(),
+	.otag(),
+	.we_o(xpipe0_we),
+	.done(),
+	.exc(xpipe0_exc),
+	.tlb_v(1'b0),
+	.adr(),
+	.adrv(),
+	.agen_rse(),
+	.fcu_rse(),
+	.sr(64'd0),
+	.ic_irq(6'd0),	
+	.irq_sn(8'h00),
+	.takb(),
+	.fcu_adr()
+);
+
+Qupls4_expipe01 #(.PIPE(3'd1)) uxpipe1
+(
+	.rst(irst),
+	.clk(clk),
+	.clk3x(clk2x),
+	.idle(),
+	.stomp(robentry_stomp),
+	.rse_i(xpipe1_rse),
+	.rse_o(xpipe1_rse2),
+	.rm(),
+	.z(sau1_predz),
+	.cptgt(sau1_cptgt),
+	.o(xpipe1_resA),
+	.csr(csr_res),
+	.cpl(sr.pl),
+	.sto(),
+	.ust(),
+	.otag(),
+	.we_o(xpipe1_we),
+	.done(),
+	.exc(xpipe1_exc),
+	.tlb_v(1'b0),
+	.adr(),
+	.adrv(),
+	.agen_rse(),
+	.fcu_rse(fcu_rse),
+	.sr(sr),
+	.ic_irq(ic_irq),	
+	.irq_sn(irq_sn),
+	.takb(takb),
+	.fcu_adr(fcu_adr)
+);
+
+Qupls4_expipe23 #(.PIPE(3'd2)) uxpipe2
+(
+	.rst(irst),
+	.clk(clk),
+	.clk3x(clk2x),
+	.idle(),
+	.stomp(robentry_stomp),
+	.rse_i(xpipe2_rse),
+	.rse_o(xpipe2_rse2),
+	.rm(),
+	.z(),
+	.cptgt(sau1_cptgt),
+	.o(xpipe2_resA),
+	.sto(),
+	.ust(),
+	.otag(),
+	.we_o(xpipe2_we),
+	.done(),
+	.exc(xpipe2_exc),
+	.tlb_v(1'b0),
+	.adr(),
+	.adrv(),
+	.agen_rse()
+);
+
+Qupls4_expipe23 #(.PIPE(3'd3)) uxpipe3
+(
+	.rst(irst),
+	.clk(clk),
+	.clk3x(clk2x),
+	.idle(),
+	.stomp(robentry_stomp),
+	.rse_i(xpipe3_rse),
+	.rse_o(xpipe3_rse2),
+	.rm(),
+	.z(),
+	.cptgt(sau1_cptgt),
+	.o(xpipe3_resA),
+	.sto(),
+	.ust(),
+	.otag(),
+	.we_o(xpipe3_we),
+	.done(),
+	.exc(xpipe3_exc),
+	.tlb_v(1'b0),
+	.adr(),
+	.adrv(),
+	.agen_rse()
+);
+
+Qupls4_expipe45 #(.PIPE(3'd4)) uxpipe4
+(
+	.rst(irst),
+	.clk(clk),
+	.clk3x(clk2x),
+	.idle(),
+	.stomp(robentry_stomp),
+	.rse_i(xpipe4_rse),
+	.rse_o(xpipe4_rse2),
+	.rm(),
+	.z(),
+	.cptgt(sau1_cptgt),
+	.o(xpipe4_resA),
+	.sto(),
+	.ust(),
+	.otag(),
+	.we_o(xpipe4_we),
+	.done(),
+	.exc(xpipe4_exc),
+	.tlb_v(tlb0_v),
+	.adr(agen0_adr),
+	.adrv(agen0_adrv),
+	.agen_rse(agen0_rse),
+	.mem_rse_i(dram0_rse),
+	.mem_done_i(dram0_oper.oper.v && dram0_oper.state==2'b11),
+	.mem_res_i(dram0_oper.oper.val),
+	.mem_flags_i(dram0_oper.oper.flags)
+);
+
+Qupls4_expipe45 #(.PIPE(3'd5)) uxpipe5
+(
+	.rst(irst),
+	.clk(clk),
+	.clk3x(clk2x),
+	.idle(),
+	.stomp(robentry_stomp),
+	.rse_i(xpipe5_rse),
+	.rse_o(xpipe5_rse2),
+	.rm(),
+	.z(),
+	.cptgt(sau1_cptgt),
+	.o(xpipe5_resA),
+	.sto(),
+	.ust(),
+	.otag(),
+	.we_o(xpipe5_we),
+	.done(),
+	.exc(xpipe5_exc),
+	.tlb_v(tlb1_v),
+	.adr(agen1_adr),
+	.adrv(agen1_adrv),
+	.agen_rse(agen1_rse),
+	.mem_rse_i(dram1_rse),
+	.mem_done_i(dram1_oper.oper.v && dram1_oper.state==2'b11),
+	.mem_res_i(dram1_oper.oper.val),
+	.mem_flags_i(dram1_oper.oper.flags)
+);
+
+/*
+Qupls4_meta_alu #(.SAU0(1'b1)) ualu0
+(
+	.rst(irst),
+	.clk(clk),
+	.rse_i(xpipe0_rse),
+	.rse_o(xpipe0_rse2),
 	.cptgt(sau0_cptgt),
 	.z(sau0_predz),
 	.stomp(robentry_stomp),
@@ -4218,11 +4539,18 @@ Qupls4_meta_sau #(.SAU0(1'b1)) usau0
 	.canary(canary),
 	.cpl(sr.pl),
 	.qres(fpu0_resH),
-	.o(sau0_resA),
-	.we_o(sau0_we),
-	.exc(sau0_exc)
+	.o(xpipe0_resA),
+	.we_o(xpipe0_we),
+	.exc(xpipe0_exc),
+	.fcu_rse_o(),
+	.sr(64'd0),
+	.ic_irq(6'd0),	
+	.irq_sn(8'h00),
+	.takb(),
+	.adr()
 );
-
+*/
+/*
 generate begin : gIMul
 if (Qupls4_pkg::SUPPORT_IMUL)
 	Qupls4_meta_imul uimul0
@@ -4246,10 +4574,10 @@ else begin
 end
 end
 endgenerate
-
+*/
 wire idiv0_dbz;
 wire [63:0] div0_exc;
-
+/*
 generate begin : gIDiv
 if (Qupls4_pkg::SUPPORT_IDIV)
 Qupls4_meta_idiv uidiv0
@@ -4288,15 +4616,16 @@ else begin
 end
 end
 endgenerate
-
-generate begin : gSau1
+*/
+/*
+generate begin : gALU1
 if (Qupls4_pkg::NSAU > 1) begin
-	Qupls4_meta_sau #(.SAU0(1'b0)) usau1
+	Qupls4_meta_alu #(.SAU0(1'b0),.SAU1(1'b1)) ualu1
 	(
 		.rst(irst),
 		.clk(clk),
-		.rse_i(sau1_rse),
-		.rse_o(sau1_rse2),
+		.rse_i(xpipe1_rse),
+		.rse_o(xpipe1_rse2),
 		.cptgt(sau1_cptgt),
 		.z(sau1_predz),
 		.stomp(robentry_stomp),
@@ -4304,19 +4633,25 @@ if (Qupls4_pkg::NSAU > 1) begin
 		.canary(canary),
 		.cpl(sr.pl),
 		.qres(64'd0),
-		.o(sau1_resA),
-		.we_o(sau1_we),
-		.exc(sau1_exc)
+		.o(xpipe1_resA),
+		.we_o(xpipe1_we),
+		.exc(xpipe1_exc),
+		.fcu_rse_o(fcu_rse),
+		.sr(sr),
+		.ic_irq(ic_irq),	
+		.irq_sn(irq_sn),
+		.takb(takb),
+		.adr(fcu_res)
 	);
 end
 end
 endgenerate
-
+*/
 //assign sau0_out = sau0_dataready;
 //assign sau1_out = sau1_dataready;
 
 //assign  fcu_state1 = fcu_dataready;
-
+/*
 generate begin : gFMA
 if (Qupls4_pkg::NFMA > 0) begin
 	Qupls4_meta_fma umfma1
@@ -4371,8 +4706,9 @@ else begin
 end
 end
 endgenerate
-
+*/
 // ToDo: add result exception 
+/*
 generate begin : gFpu
 if (Qupls4_pkg::NFPU > 0) begin
 	if (Qupls4_pkg::SUPPORT_QUAD_PRECISION||Qupls4_pkg::SUPPORT_CAPABILITIES) begin
@@ -4393,15 +4729,10 @@ if (Qupls4_pkg::NFPU > 0) begin
 			.cptgt(fpu0_cptgt),
 			.done(fpu0_done),
 			.exc(fpu0_exc),
-			.out(rob[agen0_id].out[0]),
 			.tlb_v(tlb0_v),
-			.page_fault(|pg_fault),
-			.page_fault_v(pg_faultq==2'd0),
-			.load_store(agen0_load_store),
-			.vlsndx(agen0_vlsndx),
-			.amo(agen0_amo),
-			.res(agen0_res),
-			.resv(agen0_v)
+			.adr(agen0_adr),
+			.adrv(agen0_v),
+			.agen_rse(agen0_rse)
 		);
 	end
 	else begin
@@ -4422,15 +4753,10 @@ if (Qupls4_pkg::NFPU > 0) begin
 			.we_o(fpu0_we),
 			.done(fpu0_done),
 			.exc(fpu0_exc),
-			.out(rob[agen0_id].out[0]),
 			.tlb_v(tlb0_v),
-			.page_fault(|pg_fault),
-			.page_fault_v(pg_faultq==2'd0),
-			.load_store(agen0_load_store),
-			.vlsndx(agen0_vlsndx),
-			.amo(agen0_amo),
-			.res(agen0_res),
-			.resv(agen0_v)
+			.adr(agen0_adr),
+			.adrv(agen0_v),
+			.agen_rse(agen0_rse)
 		);
 	end
 end
@@ -4455,15 +4781,10 @@ if (Qupls4_pkg::NFPU > 1) begin
     .otag(),
     .done(fpu1_done),
     .exc(fpu1_exc),
-		.out(rob[agen1_id].out[0]),
 		.tlb_v(tlb1_v),
-		.page_fault(|pg_fault),
-		.page_fault_v(pg_faultq==2'd1),
-		.load_store(agen1_load_store),
-		.vlsndx(agen1_vlsndx),
-		.amo(agen1_amo),
-		.res(agen1_res),
-		.resv(agen1_v)
+		.adr(agen1_adr),
+		.adrv(agen1_v),
+		.agen_rse(agen1_rse)
 );
 end
 else begin
@@ -4471,7 +4792,7 @@ else begin
 end
 end
 endgenerate
-
+*/
 // =============================================================================
 // MEMORY stage
 // =============================================================================
@@ -4486,6 +4807,7 @@ Qupls4_pkg::ex_instruction_t tlb0_op, tlb1_op;
 wire [1:0] tlb_missqn;
 wire [31:0] pg_fault;
 wire [1:0] pg_faultq;
+rob_ndx_t pg_fault_rndx;
 virtual_address_t ptw_vadr;
 physical_address_t ptw_padr;
 wire ptw_vv;
@@ -4799,14 +5121,14 @@ mmu #(.CORENO(CORENO), .CHANNEL(3)) ummu1
 	.ic_miss_asid(ic_miss_asid),
 	.ic_miss_om(ic_miss_om),
 	.vadr_ir(agen0_op.ins),
-	.vadr(agen0_res),
+	.vadr(agen0_adr),
 	.vadr_v(agen0_v),
 	.vadr_asid(asid[0]),
 	.vadr_id(agen0_id),
 	.vadr_om(agen0_om),
 	.vadr_we(agen0_we),
 	.vadr2_ir(agen1_op.ins),
-	.vadr2(agen1_res),
+	.vadr2(agen1_adr),
 	.vadr2_v(agen1_v),
 	.vadr2_asid(asid[0]),
 	.vadr2_id(agen1_id),
@@ -4832,6 +5154,7 @@ mmu #(.CORENO(CORENO), .CHANNEL(3)) ummu1
 	.ftam_resp(ftatm_resp),
 	.fault_o(pg_fault),
 	.faultq_o(pg_faultq),
+	.fault_rndx(pg_fault_rndx),
 	.pe_fault_o()
 );
 
@@ -5170,12 +5493,12 @@ reg load_lsq_argc;
 Qupls4_reservation_station #(
 	.MWIDTH(MWIDTH),
 	.FUNCUNIT(4'd0),
-	.NRSE(NRSE_SAU0),
+	.NRSE(NRSE_XPIPE0),
 	.NSARG(3),
 	.NREG_RPORTS(RS_NREG_RPORTS),
 	.NREG_WPORTS(NREG_WPORTS),
 	.RC(0),
-	.DISPATCH_MAP(6'b100001),
+	.DISPATCH_MAP(6'b000001),
 	.RL_STRATEGY(RL_STRATEGY)
 )
 usaust0
@@ -5184,20 +5507,14 @@ usaust0
 	.clk(clk),
 	.available(1'b1),//sau0_available),
 	.busy(rs_busy[0]),
-	.stall(sau0_full),
+	.stall(xpipe0_full),
 	.stomp(robentry_stomp),
 	.issue(),//sau0_issue),//robentry_issue[sau0_rndx]),
 	.rse_i(rse),
-	.rse_o(sau0_rse),
+	.rse_o(xpipe0_rse),
 	.rf_oper_i(rf_oper),
 	.bypass_i(),
 	.wp_oper_tap_i(wp_tap),
-	/*
-	.arn(arn),
-	.prnv(prnv),
-	.rfo(rfo),
-	.rfo_tag(rfo_tag),
-	*/
 	.req_pRn(bRs[0]),
 	.req_pRnv(bRsv[0]),
 	.req_FPCSRndx(),
@@ -5241,11 +5558,9 @@ uimulst0
 	.FPCSRv(INV)
 );
 */
-assign bRs[2] = 9'd0;
-assign bRsv[2] = 1'b0;
 
 always_ff @(posedge clk) sau0_ldd <= sau0_ld;
-
+/*
 generate begin : gIDivStation
 if (Qupls4_pkg::SUPPORT_IDIV)
 Qupls4_reservation_station #(
@@ -5281,31 +5596,31 @@ else begin
 end
 end
 endgenerate
-
-generate begin : gSauStation
-	if (Qupls4_pkg::NSAU > 1) begin
+*/
+generate begin : gXpipe1Station
+	if (Qupls4_pkg::SUPPORT_XPIPE1) begin
 		Qupls4_reservation_station #(
 			.MWIDTH(MWIDTH),
 			.FUNCUNIT(4'd1),
-			.NRSE(NRSE_SAU),
+			.NRSE(NRSE_XPIPE1),
 			.NSARG(3),
 			.NREG_RPORTS(RS_NREG_RPORTS),
 			.NREG_WPORTS(NREG_WPORTS),
 			.RC(0),
-			.DISPATCH_MAP(6'b100001),
+			.DISPATCH_MAP(6'b000010),
 			.RL_STRATEGY(RL_STRATEGY)
 		)
-		usaust1
+		uxpipe1st1
 		(
 			.rst(irst),
 			.clk(clk),
 			.available(sau1_available),
 			.busy(rs_busy[1]),
-			.stall(sau1_full),
+			.stall(xpipe1_full),
 			.stomp(robentry_stomp),
 			.issue(),//robentry_issue[sau0_rndx]),
 			.rse_i(rse),
-			.rse_o(sau1_rse),
+			.rse_o(xpipe1_rse),
 			.rf_oper_i(rf_oper),
 			.bypass_i(),
 			.wp_oper_tap_i(wp_tap),
@@ -5318,6 +5633,96 @@ generate begin : gSauStation
 			.FPCSRv(INV)
 		);
 	end
+	else begin
+		assign bRs[1] = 9'd0;
+		assign bRsv[1] = 1'b0;
+	end
+end
+endgenerate
+
+generate begin : gXpipe2Station
+	if (Qupls4_pkg::SUPPORT_XPIPE2) begin
+		Qupls4_reservation_station #(
+			.MWIDTH(MWIDTH),
+			.FUNCUNIT(4'd2),
+			.NRSE(NRSE_XPIPE2),
+			.NSARG(3),
+			.NREG_RPORTS(RS_NREG_RPORTS),
+			.NREG_WPORTS(NREG_WPORTS),
+			.RC(0),
+			.DISPATCH_MAP(6'b000100),
+			.RL_STRATEGY(RL_STRATEGY)
+		)
+		uxpipe2st1
+		(
+			.rst(irst),
+			.clk(clk),
+			.available(1'b1),
+			.busy(rs_busy[2]),
+			.stall(xpipe2_full),
+			.stomp(robentry_stomp),
+			.issue(),//robentry_issue[sau0_rndx]),
+			.rse_i(rse),
+			.rse_o(xpipe2_rse),
+			.rf_oper_i(rf_oper),
+			.bypass_i(),
+			.wp_oper_tap_i(wp_tap),
+			.req_pRn(bRs[2]),
+			.req_pRnv(bRsv[2]),
+			.fp_sync(1'b0),
+			.req_FPCSRndx(),
+			.req_FPCSRv(),
+			.FPCSR(64'd0),
+			.FPCSRv(INV)
+		);
+	end
+	else begin
+		assign bRs[2] = 9'd0;
+		assign bRsv[2] = 1'b0;
+	end
+end
+endgenerate
+
+generate begin : gXpipe3Station
+	if (Qupls4_pkg::SUPPORT_XPIPE3) begin
+		Qupls4_reservation_station #(
+			.MWIDTH(MWIDTH),
+			.FUNCUNIT(4'd3),
+			.NRSE(NRSE_XPIPE3),
+			.NSARG(3),
+			.NREG_RPORTS(RS_NREG_RPORTS),
+			.NREG_WPORTS(NREG_WPORTS),
+			.RC(0),
+			.DISPATCH_MAP(6'b001000),
+			.RL_STRATEGY(RL_STRATEGY)
+		)
+		uxpipe3st1
+		(
+			.rst(irst),
+			.clk(clk),
+			.available(1'b1),
+			.busy(rs_busy[3]),
+			.stall(xpipe3_full),
+			.stomp(robentry_stomp),
+			.issue(),//robentry_issue[sau0_rndx]),
+			.rse_i(rse),
+			.rse_o(xpipe3_rse),
+			.rf_oper_i(rf_oper),
+			.bypass_i(),
+			.wp_oper_tap_i(wp_tap),
+			.req_pRn(bRs[3]),
+			.req_pRnv(bRsv[3]),
+			.fp_sync(1'b0),
+			.req_FPCSRndx(),
+			.req_FPCSRv(),
+			.FPCSR(64'd0),
+			.FPCSRv(INV)
+		);
+	end
+	else begin
+		assign bRs[3] = 9'd0;
+		assign bRsv[3] = 1'b0;
+	end
 end
 endgenerate
 
@@ -5329,6 +5734,7 @@ wire fpu0_iq_underflow;
 wire fpu0_iq_wr_en = fpu0_rndxv;
 wire fpu0_iq_rd_en = fpu0_idle;
 
+/*
 generate begin : gFpuStat
 	for (g = 0; g < Qupls4_pkg::NFMA; g = g + 1) begin
 		case (g)
@@ -5406,18 +5812,19 @@ generate begin : gFpuStat
 				);
 		endcase
 	end
+
 	for (g = 0; g < Qupls4_pkg::NFPU; g = g + 1) begin
 		case (g)
 		0,1:
 				Qupls4_reservation_station #(
 					.MWIDTH(MWIDTH),
-					.FUNCUNIT(4'd8),
+					.FUNCUNIT(4'd2),
 					.NRSE(NRSE_FPU),
 					.NSARG(3),
 					.NREG_RPORTS(NREG_RPORTS),
 					.NREG_WPORTS(NREG_WPORTS),
 					.RC(1),
-					.DISPATCH_MAP(6'b001000),
+					.DISPATCH_MAP(6'b000100),
 					.RL_STRATEGY(RL_STRATEGY),
 					.FPUNIT(TRUE)
 				)
@@ -5426,7 +5833,7 @@ generate begin : gFpuStat
 					.rst(irst),
 					.clk(clk),
 					.available(fpu0_available),
-					.busy(rs_busy[8]),
+					.busy(rs_busy[2]),
 					.stall(fpu0_full),
 					.stomp(robentry_stomp),
 					.issue(),//robentry_issue[sau0_rndx]),
@@ -5435,18 +5842,18 @@ generate begin : gFpuStat
 					.rf_oper_i(rf_oper),
 					.bypass_i(),
 					.wp_oper_tap_i(wp_tap),
-					.req_pRn(bRs[8]),
-					.req_pRnv(bRsv[8]),
+					.req_pRn(bRs[2]),
+					.req_pRnv(bRsv[2]),
 					.fp_sync(fnFPSync(1)),
-					.req_FPCSRndx(bFPCSRndx[8]),
-					.req_FPCSRv(bFPCSRv[8]),
-					.FPCSR(fnFPCSR(bFPCSRndx[8])),
-					.FPCSRv(fnFPCSRv(bFPCSRndx[8])&bFPCSRv[8])
+					.req_FPCSRndx(bFPCSRndx[2]),
+					.req_FPCSRv(bFPCSRv[2]),
+					.FPCSR(fnFPCSR(bFPCSRndx[2])),
+					.FPCSRv(fnFPCSRv(bFPCSRndx[2])&bFPCSRv[2])
 				);
 		2:
 				Qupls4_reservation_station #(
 					.MWIDTH(MWIDTH),
-					.FUNCUNIT(4'd9),
+					.FUNCUNIT(4'd3),
 					.NRSE(NRSE_FPU),
 					.NSARG(3),
 					.NREG_RPORTS(NREG_RPORTS),
@@ -5461,7 +5868,7 @@ generate begin : gFpuStat
 					.rst(irst),
 					.clk(clk),
 					.available(fpu1_available),
-					.busy(rs_busy[9]),
+					.busy(rs_busy[3]),
 					.stall(fpu1_full),
 					.stomp(robentry_stomp),
 					.issue(),//robentry_issue[sau0_rndx]),
@@ -5470,20 +5877,20 @@ generate begin : gFpuStat
 					.rf_oper_i(rf_oper),
 					.bypass_i(),
 					.wp_oper_tap_i(wp_tap),
-					.req_pRn(bRs[9]),
-					.req_pRnv(bRsv[9]),
+					.req_pRn(bRs[3]),
+					.req_pRnv(bRsv[3]),
 					.fp_sync(fnFPSync(1)),
-					.req_FPCSRndx(bFPCSRndx[9]),
-					.req_FPCSRv(bFPCSRv[9]),
-					.FPCSR(fnFPCSR(bFPCSRndx[9])),
-					.FPCSRv(fnFPCSRv(bFPCSRndx[9])&bFPCSRv[9])
+					.req_FPCSRndx(bFPCSRndx[3]),
+					.req_FPCSRv(bFPCSRv[3]),
+					.FPCSR(fnFPCSR(bFPCSRndx[3])),
+					.FPCSRv(fnFPCSRv(bFPCSRndx[3])&bFPCSRv[3])
 				);
 		default:	;
 		endcase
 	end
 end
 endgenerate
-
+*/
 // 0 to 3 = reg read stage
 // 4 to 6
 // 7 to 10 = reg read stage
@@ -5492,7 +5899,7 @@ endgenerate
 // 18 to 20
 // 21 to 24 = reg read stage
 // 25 to 27
-
+/*
 generate begin : gDecimalFloat
 	if (NDFPU > 0) begin
 		Qupls4_pair_reservation_station #(
@@ -5531,7 +5938,8 @@ generate begin : gDecimalFloat
 	end
 end
 endgenerate
-
+*/
+/*
 Qupls4_reservation_station #(
 	.MWIDTH(MWIDTH),
 	.FUNCUNIT(4'd7),
@@ -5565,25 +5973,27 @@ ubrast1
 	.FPCSR(64'd0),
 	.FPCSRv(INV)
 );
+*/
 
-/*
+generate begin : gXpipe4RS
+if (Qupls4_pkg::SUPPORT_XPIPE4)
 Qupls4_reservation_station #(
 	.MWIDTH(MWIDTH),
-	.FUNCUNIT(4'd8),
-	.NRSE(NRSE_AGEN),
+	.FUNCUNIT(4'd4),
+	.NRSE(NRSE_XPIPE4),
 	.NSARG(3),
 	.NREG_RPORTS(RS_NREG_RPORTS),
 	.NREG_WPORTS(NREG_WPORTS),
 	.RC(0),
-	.DISPATCH_MAP(6'b001000),
+	.DISPATCH_MAP(6'b010000),
 	.RL_STRATEGY(RL_STRATEGY)
 )
-uagenst1
+uxpipe4st1
 (
 	.rst(irst),
 	.clk(clk),
 	.available(1'b1),
-	.busy(rs_busy[8]),
+	.busy(rs_busy[4]),
 	.stall(!agen0_idle),
 	.stomp(robentry_stomp),
 	.issue(),//robentry_issue[sau0_rndx]),
@@ -5592,38 +6002,42 @@ uagenst1
 	.rf_oper_i(rf_oper),
 	.bypass_i(),
 	.wp_oper_tap_i(wp_tap),
-	.req_pRn(bRs[8]),
-	.req_pRnv(bRsv[8]),
+	.req_pRn(bRs[4]),
+	.req_pRnv(bRsv[4]),
 	.fp_sync(1'b0),
 	.req_FPCSRndx(),
 	.req_FPCSRv(),
 	.FPCSR(64'd0),
 	.FPCSRv(INV)
 );
-*/
-assign agen0_rse = fpu0_rse;
-assign agen1_rse = fpu1_rse;
+else begin
+	assign agen0_rse = {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
+	assign bRs[4] = 9'd0;
+	assign bRsv[4] = 1'b0;
+end
+end
+endgenerate
 
-/*
-generate begin : gAgen
-if (Qupls4_pkg::NDATA_PORTS > 1)
+
+generate begin : gXpipe5RS
+if (Qupls4_pkg::SUPPORT_XPIPE5)
 Qupls4_reservation_station #(
 	.MWIDTH(MWIDTH),
-	.FUNCUNIT(4'd9),
-	.NRSE(NRSE_AGEN),
+	.FUNCUNIT(4'd5),
+	.NRSE(NRSE_XPIPE5),
 	.NSARG(3),
 	.NREG_RPORTS(RS_NREG_RPORTS),
 	.NREG_WPORTS(NREG_WPORTS),
 	.RC(0),
-	.DISPATCH_MAP(6'b001000),
+	.DISPATCH_MAP(6'b100000),
 	.RL_STRATEGY(RL_STRATEGY)
 )
-uagenst2
+uxpipe5st2
 (
 	.rst(irst),
 	.clk(clk),
 	.available(1'b1),
-	.busy(rs_busy[9]),
+	.busy(rs_busy[5]),
 	.stall(!agen1_idle),
 	.stomp(robentry_stomp),
 	.issue(),//robentry_issue[sau0_rndx]),
@@ -5632,8 +6046,8 @@ uagenst2
 	.rf_oper_i(rf_oper),
 	.bypass_i(),
 	.wp_oper_tap_i(wp_tap),
-	.req_pRn(bRs[9]),
-	.req_pRnv(bRsv[9]),
+	.req_pRn(bRs[5]),
+	.req_pRnv(bRsv[5]),
 	.fp_sync(1'b0),
 	.req_FPCSRndx(),
 	.req_FPCSRv(),
@@ -5642,10 +6056,11 @@ uagenst2
 );
 else begin
 	assign agen1_rse = {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
+	assign bRs[5] = 9'd0;
+	assign bRsv[5] = 1'b0;
 end
 end
 endgenerate
-*/
 
 /*
 reg fcu_reset_state;
@@ -5851,15 +6266,15 @@ else begin
 	// just for debugging in SIM. All values come from the register file.
 `ifdef IS_SIM
 	if (sau0_available && sau0_issue) begin
-		rob[sau0_rse.rndx].argA <= sau0_rse.arg[0].val;
-		rob[sau0_rse.rndx].argB <= sau0_rse.arg[1].val;
-		rob[sau0_rse.rndx].argT <= sau0_rse.arg[4].val;
+		rob[xpipe0_rse.rndx].argA <= xpipe0_rse.arg[0].val;
+		rob[xpipe0_rse.rndx].argB <= xpipe0_rse.arg[1].val;
+		rob[xpipe0_rse.rndx].argT <= xpipe0_rse.arg[4].val;
 	end
 	if (Qupls4_pkg::NSAU > 1) begin
 		if (sau1_available && sau1_rndxv && sau1_idle) begin
-			rob[sau1_rse.rndx].argA <= sau1_rse.arg[0].val;
-			rob[sau1_rse.rndx].argB <= sau1_rse.arg[1].val;
-			rob[sau1_rse.rndx].argT <= sau1_rse.arg[4].val;
+			rob[xpipe1_rse.rndx].argA <= xpipe1_rse.arg[0].val;
+			rob[xpipe1_rse.rndx].argB <= xpipe1_rse.arg[1].val;
+			rob[xpipe1_rse.rndx].argT <= xpipe1_rse.arg[4].val;
 		end
 	end
 	if (Qupls4_pkg::NFPU > 0) begin
@@ -6146,7 +6561,7 @@ else begin
 			if (!fnIsInLSQ(agen0_id)) begin
 				rob[agen0_id].lsq <= VAL;
 				rob[agen0_id].lsqndx <= lsq_tail0;
-				tEnqueLSE(lsq_tail0, agen0_id, 4'd0, agen0_res);
+				tEnqueLSE(lsq_tail0, agen0_id, 4'd0, agen0_adr);
 			end
 		end
 		// It is allowed to queue two
@@ -6175,7 +6590,7 @@ else begin
 			if (!fnIsInLSQ(agen1_id)) begin
 				rob[agen1_id].lsq <= VAL;
 				rob[agen1_id].lsqndx <= {lsq_tail0.row,1'b1};
-				tEnqueLSE({lsq_tail0.row,lsq_tail0.col|1}, agen1_id, 4'd1, agen1_res);
+				tEnqueLSE({lsq_tail0.row,lsq_tail0.col|1}, agen1_id, 4'd1, agen1_adr);
 //				lsq[lsq_tail0.row][0].sn <= 7'h7E;
 			end
 		end
@@ -6272,9 +6687,9 @@ else begin
 	// Handle single-cycle ops
 	// Whenever a result would be written, update the exception and done/out status.
 	// Although no result may be written, the done/out status still needs to be set.
-	tSetROBDone(sau0_rse2,FALSE, sau0_resA);
+	tSetROBDone(xpipe0_rse2,FALSE, xpipe0_resA);
 	if (Qupls4_pkg::NSAU > 1)
-		tSetROBDone(sau1_rse2,FALSE, sau1_resA);
+		tSetROBDone(xpipe1_rse2,FALSE, xpipe1_resA);
 
   // Handle multi-cycle mul/div ops
 	tSetROBDone(imul0_rse2,FALSE,value_zero);
@@ -7261,13 +7676,13 @@ always_ff @(posedge clk) begin: clock_n_debug
 		agen0_rse.argI, agen0_rse.arg[0].val, agen0_rse.arg[1].val,
 		 ((fnIsLoad(agen0_rse.uop) || fnIsStore(agen0_rse.uop)) ? 109 : 97),
 		agen0_op, agen0_pc);
-	$display("idle:%d res:%h rid:%d #", agen0_idle, agen0_res, agen0_rse.rndx);
+	$display("idle:%d res:%h rid:%d #", agen0_idle, agen0_adr, agen0_rse.rndx);
 	if (Qupls4_pkg::NAGEN > 1) begin
 		$display(" I=%h A=%h B=%h %c%h pc:%h #",
 			agen1_rse.argI, agen1_rse.arg[0].val, agen1_rse.arg[1].val,
 			 ((fnIsLoad(agen1_rse.uop) || fnIsStore(agen1_rse.uop)) ? 109 : 97),
 			agen1_op, agen1_pc);
-		$display("idle:%d res:%h rid:%d #", agen1_idle, agen1_res, agen1_rse.rndx);
+		$display("idle:%d res:%h rid:%d #", agen1_idle, agen1_adr, agen1_rse.rndx);
 	end
 	$display("----- Memory -----");
 	$display("%d%c v%h p%h, %h %c%d %o #",
@@ -7291,17 +7706,17 @@ always_ff @(posedge clk) begin: clock_n_debug
 
 	$display("----- ALU -----");
 	$display("%d I=%h T=%h A=%h B=%h C=%h %c%d pc:%h #",
-		sau0_dataready, sau0_rse.argI, sau0_rse.arg[4].val, sau0_rse.arg[0].val, sau0_rse.arg[1].val, sau0_rse.arg[2].val,
-		 ((fnIsLoad(sau0_rse.uop) || fnIsStore(sau0_rse.uop)) ? 109 : 97),
+		sau0_dataready, xpipe0_rse.argI, xpipe0_rse.arg[4].val, xpipe0_rse.arg[0].val, xpipe0_rse.arg[1].val, xpipe0_rse.arg[2].val,
+		 ((fnIsLoad(xpipe0_rse.uop) || fnIsStore(xpipe0_rse.uop)) ? 109 : 97),
 		sau0_instr, sau0_pc);
-	$display("idle:%d res:%h rid:%d #", sau0_idle, sau0_resA, sau0_rse.rndx);
+	$display("idle:%d res:%h rid:%d #", sau0_idle, xpipe0_resA, xpipe0_rse.rndx);
 
 	if (Qupls4_pkg::NSAU > 1) begin
 		$display("%d I=%h T=%h A=%h B=%h C=%h %c%d pc:%h #",
-			sau1_dataready, sau1_rse.argI, sau1_rse.arg[4].val, sau1_rse.arg[0].val, sau1_rse.arg[1].val, sau1_rse.arg[2].val, 
-			 ((fnIsLoad(sau1_rse.uop) || fnIsStore(sau1_rse.uop)) ? 109 : 97),
-			sau1_rse.uop, sau1_rse.pc);
-		$display("idle:%d res:%h rid:%d #", sau1_idle, sau1_resA, sau1_rse.rndx);
+			sau1_dataready, xpipe1_rse.argI, xpipe1_rse.arg[4].val, xpipe1_rse.arg[0].val, xpipe1_rse.arg[1].val, xpipe1_rse.arg[2].val, 
+			 ((fnIsLoad(xpipe1_rse.uop) || fnIsStore(xpipe1_rse.uop)) ? 109 : 97),
+			xpipe1_rse.uop, xpipe1_rse.pc);
+		$display("idle:%d res:%h rid:%d #", sau1_idle, xpipe1_resA, xpipe1_rse.rndx);
 	end
 	$display("----- Writeback -----");
 	$display("frq rd=%b empty=%b", fuq_rd, fuq_empty);

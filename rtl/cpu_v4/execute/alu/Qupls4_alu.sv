@@ -40,10 +40,15 @@ import fp64Pkg::*;
 import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_sau(rst, clk, clk2x, chunk, om, ld, ir, div, Ra, a, b, bi, c, i, t, qres,
-	mask, cs, pc, pcc, csr, cpl, coreno, canary, velsz, o, exc_o);
-parameter SAU0 = 1'b1;
-parameter SAU1 = 1'b0;
+module Qupls4_alu(rst, clk, clk2x, chunk, om, ld, ir, div, Ra, a, b, bi, c, i, t, qres,
+	mask, cs, pc, pcc, csr, cpl, coreno, canary, velsz, o, exc_o, did_op);
+parameter PIPE = 3'd0;
+parameter SUPPORT_SHIFT = PIPE==3'd0;
+parameter SUPPORT_COUNT = PIPE==3'd0;
+parameter SUPPORT_CRYPTO = PIPE==3'd1;
+parameter SUPPORT_INFO = PIPE==3'd0;
+parameter SUPPORT_CSR = PIPE==3'd0;
+parameter SUPPORT_BRANCH = PIPE==3'd1;
 parameter WID=64;
 parameter LANE=0;
 parameter NUM_LANES=1;
@@ -74,6 +79,7 @@ input [WID-1:0] canary;
 input [2:0] velsz;
 output reg [WID-1:0] o;
 output Qupls4_pkg::cause_code_t exc_o;
+output reg did_op;
 
 genvar g;
 integer nn,kk,jj;
@@ -190,7 +196,7 @@ generate begin : gffz
   	wire fasig_hidden,fbsig_hidden;
   	cntpop64 upopcnt64 (.i({a[WID-1:0]}),.o(popcnt));
 
-		if (SAU1) begin
+		if (SUPPORT_CRYPTO) begin
 			Qupls4_crypto uCrypto1
 			(
 				.ir(ir),
@@ -360,7 +366,7 @@ generate begin : gInfoBlend
 		assign info = {WID{1'b0}};
 	end
 	else begin
-		if (SAU0) begin
+		if (SUPPORT_INFO) begin
 			Qupls4_info uinfo1 (
 				.ndx(a[4:0]+b[4:0]+ir[26:22]),
 				.coreno(coreno),
@@ -399,6 +405,7 @@ always_comb
 
 always_comb
 begin
+	did_op = FALSE;
 	exc = Qupls4_pkg::FLT_NONE;
 	bus = {(WID/16){16'h0000}};
 	base_eleno = {chunk,2'd0};
@@ -417,6 +424,7 @@ begin
 				3'd6: bus = mask1[LANE] ? cmpo : t;
 				default:	bus = zero;
 				endcase
+				did_op = TRUE;
 			end
 
 		Qupls4_pkg::FN_SEQ:
@@ -430,6 +438,7 @@ begin
 				3'd6:	bus[base_eleno + LANE] = mask1[LANE] ? $signed(a) == $signed(b) : t;
 				default:	bus = zero;
 				endcase
+				did_op = TRUE;
 			end
 
 		Qupls4_pkg::FN_SNE:
@@ -443,6 +452,7 @@ begin
 				3'd6:	bus[base_eleno + LANE] = mask1[LANE] ? $signed(a) != $signed(b) : t;
 				default:	bus = zero;
 				endcase
+				did_op = TRUE;
 			end
 
 		Qupls4_pkg::FN_SLT:
@@ -456,6 +466,7 @@ begin
 				3'd6:	bus[base_eleno + LANE] = mask1[LANE] ? $signed(a) < $signed(b) : t;
 				default:	bus = zero;
 				endcase
+				did_op = TRUE;
 			end
 
 		Qupls4_pkg::FN_SLE:
@@ -469,6 +480,7 @@ begin
 				3'd6:	bus[base_eleno + LANE] = mask1[LANE] ? $signed(a) <= $signed(b) : t;
 				default:	bus = zero;
 				endcase
+				did_op = TRUE;
 			end
 
 		Qupls4_pkg::FN_SLTU:
@@ -482,6 +494,7 @@ begin
 				3'd6:	bus[base_eleno + LANE] = mask1[LANE] ? a < b : t;
 				default:	bus = zero;
 				endcase
+				did_op = TRUE;
 			end
 
 		Qupls4_pkg::FN_SLEU:
@@ -495,6 +508,7 @@ begin
 				3'd6:	bus[base_eleno + LANE] = mask1[LANE] ? a <= b : t;
 				default:	bus = zero;
 				endcase
+				did_op = TRUE;
 			end
 
 		Qupls4_pkg::FN_ADD:
@@ -507,6 +521,7 @@ begin
 				3'd6:	bus = mask1[LANE] ? a + b : t;
 				default:	bus = zero;
 				endcase
+				did_op = TRUE;
 			end
 
 		Qupls4_pkg::FN_SUB:
@@ -519,6 +534,7 @@ begin
 				3'd6:	bus = mask1[LANE] ? a - b : t;
 				default:	bus = zero;
 				endcase
+				did_op = TRUE;
 			end
 
 		Qupls4_pkg::FN_AND:
@@ -531,6 +547,7 @@ begin
 				3'd6:	bus = mask1[LANE] ? a & b : t;
 				default:	bus = zero;
 				endcase
+				did_op = TRUE;
 			end
 
 		Qupls4_pkg::FN_OR:
@@ -543,6 +560,7 @@ begin
 				3'd6:	bus = mask1[LANE] ? a | b : t;
 				default:	bus = zero;
 				endcase
+				did_op = TRUE;
 			end
 
 		Qupls4_pkg::FN_XOR:
@@ -555,10 +573,11 @@ begin
 				3'd6:	bus = mask1[LANE] ? a ^ b : t;
 				default:	bus = zero;
 				endcase
+				did_op = TRUE;
 			end
 
 		Qupls4_pkg::FN_ASL:
-			begin
+			if (SUPPORT_SHIFT) begin
 				case(ir.op3)
 				3'd0:	bus = shl & c;
 				3'd1:	bus = shl | c;
@@ -567,10 +586,11 @@ begin
 				3'd6:	bus = mask1[LANE] ? shl : t;
 				default:	bus = zero;
 				endcase
+				did_op = TRUE;
 			end
 
 		Qupls4_pkg::FN_LSR:
-			begin
+			if (SUPPORT_SHIFT) begin
 				case(ir.op3)
 				3'd0:	bus = shr & c;
 				3'd1:	bus = shr | c;
@@ -579,40 +599,53 @@ begin
 				3'd6:	bus = mask1[LANE] ? shr : t;
 				default:	bus = zero;
 				endcase
+				did_op = TRUE;
 			end
 
 		Qupls4_pkg::FN_ASR:
-			case(ir.op3)
-			3'd0: bus = asr;
-			3'd1:	bus = asr;
-			3'd2:	bus = asr;
-			3'd3:	bus = asr;
-			3'd6:	bus = mask1[LANE] ? asr : t;
-			default:	bus = zero;
-			endcase
+			if (SUPPORT_SHIFT) begin
+				case(ir.op3)
+				3'd0: bus = asr;
+				3'd1:	bus = asr;
+				3'd2:	bus = asr;
+				3'd3:	bus = asr;
+				3'd6:	bus = mask1[LANE] ? asr : t;
+				default:	bus = zero;
+				endcase
+				did_op = TRUE;
+			end
 
 		Qupls4_pkg::FN_ROL:
-			case(ir.op3)
-			3'd0: bus = (shl | shl[WID*2-1:WID]) & c;
-			3'd1:	bus = (shl | shl[WID*2-1:WID]) | c;
-			3'd2:	bus = (shl | shl[WID*2-1:WID]) ^ c;
-			3'd3:	bus = (shl | shl[WID*2-1:WID]) + c;
-			3'd6:	bus = mask1[LANE] ? (shl | shl[WID*2-1:WID]) : t;
-			default:	bus = zero;
-			endcase
+			if (SUPPORT_SHIFT) begin
+				case(ir.op3)
+				3'd0: bus = (shl | shl[WID*2-1:WID]) & c;
+				3'd1:	bus = (shl | shl[WID*2-1:WID]) | c;
+				3'd2:	bus = (shl | shl[WID*2-1:WID]) ^ c;
+				3'd3:	bus = (shl | shl[WID*2-1:WID]) + c;
+				3'd6:	bus = mask1[LANE] ? (shl | shl[WID*2-1:WID]) : t;
+				default:	bus = zero;
+				endcase
+				did_op = TRUE;
+			end
 
 		Qupls4_pkg::FN_ROR:
-			case(ir.op3)
-			3'd0: bus = (shr | shr[WID*2-1:WID]) & c;
-			3'd1:	bus = (shr | shr[WID*2-1:WID]) | c;
-			3'd2:	bus = (shr | shr[WID*2-1:WID]) ^ c;
-			3'd3:	bus = (shr | shr[WID*2-1:WID]) + c;
-			3'd6:	bus = mask1[LANE] ? (shr | shr[WID*2-1:WID]) : t;
-			default:	bus = zero;
-			endcase
+			if (SUPPORT_SHIFT) begin
+				case(ir.op3)
+				3'd0: bus = (shr | shr[WID*2-1:WID]) & c;
+				3'd1:	bus = (shr | shr[WID*2-1:WID]) | c;
+				3'd2:	bus = (shr | shr[WID*2-1:WID]) ^ c;
+				3'd3:	bus = (shr | shr[WID*2-1:WID]) + c;
+				3'd6:	bus = mask1[LANE] ? (shr | shr[WID*2-1:WID]) : t;
+				default:	bus = zero;
+				endcase
+				did_op = TRUE;
+			end
 			
 		Qupls4_pkg::FN_MOVE:
-			bus = b;
+			begin
+				bus = b;
+				did_op = TRUE;
+			end
 
 		default:	bus = zero;
 		endcase
@@ -620,125 +653,174 @@ begin
 	Qupls4_pkg::OP_R3B,Qupls4_pkg::OP_R3W,Qupls4_pkg::OP_R3T,Qupls4_pkg::OP_R3O:
 		case(ir.func)
 		Qupls4_pkg::FN_R1:
-			case(ir.Rs3)
-			Qupls4_pkg::R1_CNTLZ:	bus = lzcnt;
-			Qupls4_pkg::R1_CNTPOP:	bus = popcnt;
-			Qupls4_pkg::R1_CNTLO:	bus = locnt;
-			Qupls4_pkg::R1_CNTTZ:	bus = tzcnt;
-			default:	;
-			endcase
-		Qupls4_pkg::FN_CMP:	bus = cmpo;
-		Qupls4_pkg::FN_CMPU:	bus = cmpo;
-		Qupls4_pkg::FN_SEQ:	bus = a==b;
-		Qupls4_pkg::FN_SNE:	bus = a != b;
-		Qupls4_pkg::FN_SLT:	bus = $signed(a) < $signed(b);
-		Qupls4_pkg::FN_SLE:	bus = $signed(a) <= $signed(b);
-		Qupls4_pkg::FN_SLTU:	bus = a < b;
-		Qupls4_pkg::FN_SLEU:	bus = a <= b;
+			if (SUPPORT_COUNT) begin
+				case(ir.Rs3)
+				Qupls4_pkg::R1_CNTLZ:	bus = lzcnt;
+				Qupls4_pkg::R1_CNTPOP:	bus = popcnt;
+				Qupls4_pkg::R1_CNTLO:	bus = locnt;
+				Qupls4_pkg::R1_CNTTZ:	bus = tzcnt;
+				default:	;
+				endcase
+				did_op = TRUE;
+			end
+			else
+				bus = zero;
+		Qupls4_pkg::FN_CMP:	begin bus = cmpo; did_op = TRUE; end
+		Qupls4_pkg::FN_CMPU:	begin bus = cmpo; did_op = TRUE; end
+		Qupls4_pkg::FN_SEQ:	begin bus = a==b; did_op = TRUE; end
+		Qupls4_pkg::FN_SNE:	begin bus = a != b; did_op = TRUE; end
+		Qupls4_pkg::FN_SLT:	begin bus = $signed(a) < $signed(b); did_op = TRUE; end
+		Qupls4_pkg::FN_SLE:	begin bus = $signed(a) <= $signed(b); did_op = TRUE; end
+		Qupls4_pkg::FN_SLTU:	begin bus = a < b; did_op = TRUE; end
+		Qupls4_pkg::FN_SLEU:	begin bus = a <= b; did_op = TRUE; end
 		Qupls4_pkg::FN_ADD:
-			case(ir.op3)
-			3'd0: bus = (a + b) & c;
-			3'd1:	bus = (a + b) | c;
-			3'd2:	bus = (a + b) ^ c;
-			3'd3:	bus = a + b + c;
-			default:	bus = zero;
-			endcase
+			begin
+				case(ir.op3)
+				3'd0: bus = (a + b) & c;
+				3'd1:	bus = (a + b) | c;
+				3'd2:	bus = (a + b) ^ c;
+				3'd3:	bus = a + b + c;
+				default:	bus = zero;
+				endcase
+				did_op = TRUE;
+			end
 		Qupls4_pkg::FN_SUB:
-			case(ir.op3)
-			3'd0: bus = (a - b) & c;
-			3'd1:	bus = (a - b) | c;
-			3'd2:	bus = (a - b) ^ c;
-			3'd3:	bus = a - b - c;
-			default:	bus = zero;
-			endcase
+			begin
+				case(ir.op3)
+				3'd0: bus = (a - b) & c;
+				3'd1:	bus = (a - b) | c;
+				3'd2:	bus = (a - b) ^ c;
+				3'd3:	bus = a - b - c;
+				default:	bus = zero;
+				endcase
+				did_op = TRUE;
+			end
 		Qupls4_pkg::FN_AND:
-			case(ir.op3)
-			3'd0: bus = (a & b) & c;
-			3'd1:	bus = (a & b) | c;
-			3'd2:	bus = (a & b) ^ c;
-			3'd3:	bus = (a & b) + c;
-			default:	bus = zero;
-			endcase
+			begin
+				case(ir.op3)
+				3'd0: bus = (a & b) & c;
+				3'd1:	bus = (a & b) | c;
+				3'd2:	bus = (a & b) ^ c;
+				3'd3:	bus = (a & b) + c;
+				default:	bus = zero;
+				endcase
+				did_op = TRUE;
+			end
 		Qupls4_pkg::FN_OR:
-			case(ir.op3)
-			3'd0: bus = (a | b) & c;
-			3'd1:	bus = (a | b) | c;
-			3'd2:	bus = (a | b) ^ c;
-			3'd3:	bus = (a | b) + c;
-			default:	bus = zero;
-			endcase
+			begin
+				case(ir.op3)
+				3'd0: bus = (a | b) & c;
+				3'd1:	bus = (a | b) | c;
+				3'd2:	bus = (a | b) ^ c;
+				3'd3:	bus = (a | b) + c;
+				default:	bus = zero;
+				endcase
+				did_op = TRUE;
+			end
 		Qupls4_pkg::FN_XOR:
-			case(ir.op3)
-			3'd0: bus = (a ^ b) & c;
-			3'd1:	bus = (a ^ b) | c;
-			3'd2:	bus = (a ^ b) ^ c;
-			3'd3:	bus = (a ^ b) + c;
-			default:	bus = zero;
-			endcase
+			begin
+				case(ir.op3)
+				3'd0: bus = (a ^ b) & c;
+				3'd1:	bus = (a ^ b) | c;
+				3'd2:	bus = (a ^ b) ^ c;
+				3'd3:	bus = (a ^ b) + c;
+				default:	bus = zero;
+				endcase
+				did_op = TRUE;
+			end
 		Qupls4_pkg::FN_ASL:
-			case(ir.op3)
-			3'd0: bus = shl & c;
-			3'd1:	bus = shl | c;
-			3'd2:	bus = shl ^ c;
-			3'd3:	bus = shl + c;
-			default:	bus = zero;
-			endcase
+			if (SUPPORT_SHIFT) begin
+				case(ir.op3)
+				3'd0: bus = shl & c;
+				3'd1:	bus = shl | c;
+				3'd2:	bus = shl ^ c;
+				3'd3:	bus = shl + c;
+				default:	bus = zero;
+				endcase
+				did_op = TRUE;
+			end
+			else
+				bus = zero;
 		Qupls4_pkg::FN_ASR:
-			case(ir.op3)
-			3'd0: bus = asr;
-			3'd1:	bus = asr;
-			3'd2:	bus = asr;
-			3'd3:	bus = asr;
-			default:	bus = zero;
-			endcase
+			if (SUPPORT_SHIFT) begin
+				case(ir.op3)
+				3'd0: bus = asr;
+				3'd1:	bus = asr;
+				3'd2:	bus = asr;
+				3'd3:	bus = asr;
+				default:	bus = zero;
+				endcase
+				did_op = TRUE;
+			end
+			else
+				bus = zero;
 		Qupls4_pkg::FN_LSR:
-			case(ir.op3)
-			3'd0: bus = shr & c;
-			3'd1:	bus = shr | c;
-			3'd2:	bus = shr ^ c;
-			3'd3:	bus = shr + c;
-			default:	bus = zero;
-			endcase
+			if (SUPPORT_SHIFT) begin
+				case(ir.op3)
+				3'd0: bus = shr & c;
+				3'd1:	bus = shr | c;
+				3'd2:	bus = shr ^ c;
+				3'd3:	bus = shr + c;
+				default:	bus = zero;
+				endcase
+				did_op = TRUE;
+			end
+			else
+				bus = zero;
 		Qupls4_pkg::FN_ROL:
-			case(ir.op3)
-			3'd0: bus = (shl | shl[WID*2-1:WID]) & c;
-			3'd1:	bus = (shl | shl[WID*2-1:WID]) | c;
-			3'd2:	bus = (shl | shl[WID*2-1:WID]) ^ c;
-			3'd3:	bus = (shl | shl[WID*2-1:WID]) + c;
-			default:	bus = zero;
-			endcase
+			if (SUPPORT_SHIFT) begin
+				case(ir.op3)
+				3'd0: bus = (shl | shl[WID*2-1:WID]) & c;
+				3'd1:	bus = (shl | shl[WID*2-1:WID]) | c;
+				3'd2:	bus = (shl | shl[WID*2-1:WID]) ^ c;
+				3'd3:	bus = (shl | shl[WID*2-1:WID]) + c;
+				default:	bus = zero;
+				endcase
+				did_op = TRUE;
+			end
+			else
+				bus = zero;
 		Qupls4_pkg::FN_ROR:
-			case(ir.op3)
-			3'd0: bus = (shr | shr[WID*2-1:WID]) & c;
-			3'd1:	bus = (shr | shr[WID*2-1:WID]) | c;
-			3'd2:	bus = (shr | shr[WID*2-1:WID]) ^ c;
-			3'd3:	bus = (shr | shr[WID*2-1:WID]) + c;
-			default:	bus = zero;
-			endcase
-		Qupls4_pkg::FN_MOVE:	bus = b;
+			if (SUPPORT_SHIFT) begin
+				case(ir.op3)
+				3'd0: bus = (shr | shr[WID*2-1:WID]) & c;
+				3'd1:	bus = (shr | shr[WID*2-1:WID]) | c;
+				3'd2:	bus = (shr | shr[WID*2-1:WID]) ^ c;
+				3'd3:	bus = (shr | shr[WID*2-1:WID]) + c;
+				default:	bus = zero;
+				endcase
+				did_op = TRUE;
+			end
+			else
+				bus = zero;
+		Qupls4_pkg::FN_MOVE:	begin bus = b; did_op = TRUE; end
 		default:	bus = zero;
 		endcase
 
 	Qupls4_pkg::OP_FLTH,Qupls4_pkg::OP_FLTS,Qupls4_pkg::OP_FLTD,Qupls4_pkg::OP_FLTQ:
 		case(ir.func)
-		Qupls4_pkg::FLT_MIN:	bus = fmin;
-		Qupls4_pkg::FLT_MAX:	bus = fmax;
-		Qupls4_pkg::FLT_NEG:	bus = (aNan ? a : {~a[WID-1],a[WID-2:0]});
+		Qupls4_pkg::FLT_MIN:	begin bus = fmin; did_op = TRUE; end
+		Qupls4_pkg::FLT_MAX:	begin bus = fmax; did_op = TRUE; end
+		Qupls4_pkg::FLT_NEG:	begin bus = (aNan ? a : {~a[WID-1],a[WID-2:0]}); did_op = TRUE; end
 		Qupls4_pkg::FLT_SEQ:
 			begin	
 				bus = ((aNan|bNan) ? 1'b0 : cmpo[0]);
+				did_op = TRUE;
 			end
 		Qupls4_pkg::FLT_SNE:
 			begin	
 				bus = ((aNan|bNan) ? 1'b0 : cmpo[8]);
+				did_op = TRUE;
 			end
 		Qupls4_pkg::FLT_SLT:
 			begin	
 				bus = ((aNan|bNan) ? 1'b0 : cmpo[1]);
+				did_op = TRUE;
 			end
 		Qupls4_pkg::FLT_SGNJ:
 			begin	
 				bus = (aNan ? a : bNan ? b : {a[WID-1],b[WID-2:0]});
+				did_op = TRUE;
 			end
 		default:	bus = zero;
 		endcase
@@ -746,27 +828,31 @@ begin
 	Qupls4_pkg::OP_FLTPH,Qupls4_pkg::OP_FLTPS,Qupls4_pkg::OP_FLTPD,Qupls4_pkg::OP_FLTPQ,
 	Qupls4_pkg::OP_FLTVVV,Qupls4_pkg::OP_FLTVVS:
 		case(ir.func)
-		Qupls4_pkg::FLT_MIN:	bus = mask1[LANE] ? fmin : t;
-		Qupls4_pkg::FLT_MAX:	bus = mask1[LANE] ? fmax : t;
-		Qupls4_pkg::FLT_NEG:	bus = mask1[LANE] ? (aNan ? a : {~a[WID-1],a[WID-2:0]}) : t;
+		Qupls4_pkg::FLT_MIN:	begin bus = mask1[LANE] ? fmin : t; did_op = TRUE; end
+		Qupls4_pkg::FLT_MAX:	begin bus = mask1[LANE] ? fmax : t; did_op = TRUE; end
+		Qupls4_pkg::FLT_NEG:	begin bus = mask1[LANE] ? (aNan ? a : {~a[WID-1],a[WID-2:0]}) : t; did_op = TRUE; end
 		Qupls4_pkg::FLT_SEQ:
 			begin	
 				bus = t;
 				bus[base_eleno + LANE] = mask1[LANE] ? ((aNan|bNan) ? 1'b0 : cmpo[0]) : t[LANE];
+				did_op = TRUE;
 			end
 		Qupls4_pkg::FLT_SNE:
 			begin	
 				bus = t;
 				bus[base_eleno + LANE] = mask1[LANE] ? ((aNan|bNan) ? 1'b0 : cmpo[8]) : t[LANE];
+				did_op = TRUE;
 			end
 		Qupls4_pkg::FLT_SLT:
 			begin	
 				bus = t;
 				bus[base_eleno + LANE] = mask1[LANE] ? ((aNan|bNan) ? 1'b0 : cmpo[1]) : t[LANE];
+				did_op = TRUE;
 			end
 		Qupls4_pkg::FLT_SGNJ:
 			begin	
 				bus = mask1[LANE] ? (aNan ? a : bNan ? b : {a[WID-1],b[WID-2:0]}) : t;
+				did_op = TRUE;
 			end
 		default:	bus = zero;
 		endcase
@@ -785,30 +871,39 @@ begin
 		endcase
 	*/
 	Qupls4_pkg::OP_CHK:
-		case(ir.Rd)
-		4'd0:	if (!(a >= b && a < c)) exc = Qupls4_pkg::FLT_CHK;
-		4'd1: if (!(a >= b && a <= c)) exc = Qupls4_pkg::FLT_CHK;
-		4'd2: if (!(a > b && a < c)) exc = Qupls4_pkg::FLT_CHK;
-		4'd3: if (!(a > b && a <= c)) exc = Qupls4_pkg::FLT_CHK;
-		4'd4:	if (a >= b && a < c) exc = Qupls4_pkg::FLT_CHK;
-		4'd5: if (a >= b && a <= c) exc = Qupls4_pkg::FLT_CHK;
-		4'd6: if (a > b && a < c) exc = Qupls4_pkg::FLT_CHK;
-		4'd7: if (a > b && a <= c) exc = Qupls4_pkg::FLT_CHK;
-		4'd8:	if (!(a >= cpl)) exc = Qupls4_pkg::FLT_CHK;
-		4'd9:	if (!(a <= cpl)) exc = Qupls4_pkg::FLT_CHK;
-		4'd10:	if (!(a==canary)) exc = Qupls4_pkg::FLT_CHK;
-		default:	exc = Qupls4_pkg::FLT_UNIMP;
-		endcase
-	Qupls4_pkg::OP_CSR:		bus = csr;
+		begin
+			case(ir.Rd)
+			4'd0:	if (!(a >= b && a < c)) exc = Qupls4_pkg::FLT_CHK;
+			4'd1: if (!(a >= b && a <= c)) exc = Qupls4_pkg::FLT_CHK;
+			4'd2: if (!(a > b && a < c)) exc = Qupls4_pkg::FLT_CHK;
+			4'd3: if (!(a > b && a <= c)) exc = Qupls4_pkg::FLT_CHK;
+			4'd4:	if (a >= b && a < c) exc = Qupls4_pkg::FLT_CHK;
+			4'd5: if (a >= b && a <= c) exc = Qupls4_pkg::FLT_CHK;
+			4'd6: if (a > b && a < c) exc = Qupls4_pkg::FLT_CHK;
+			4'd7: if (a > b && a <= c) exc = Qupls4_pkg::FLT_CHK;
+			4'd8:	if (!(a >= cpl)) exc = Qupls4_pkg::FLT_CHK;
+			4'd9:	if (!(a <= cpl)) exc = Qupls4_pkg::FLT_CHK;
+			4'd10:	if (!(a==canary)) exc = Qupls4_pkg::FLT_CHK;
+			default:	exc = Qupls4_pkg::FLT_UNIMP;
+			endcase
+			did_op = TRUE;
+		end
+	Qupls4_pkg::OP_CSR:	
+		if (SUPPORT_CSR) begin
+			bus = csr;
+			did_op = TRUE;
+		end
+		else
+			bus = zero;
 
-	Qupls4_pkg::OP_ADDI:	bus = a + i;
+	Qupls4_pkg::OP_ADDI:	begin bus = a + i; did_op = TRUE; end
 //	Qupls4_pkg::OP_ADDIPI:	bus = a + i + pc.pc;
-	Qupls4_pkg::OP_ANDI:	bus = a & i;
-	Qupls4_pkg::OP_ORI:		bus = a | i;
-	Qupls4_pkg::OP_XORI:	bus = a ^ i;
-	Qupls4_pkg::OP_SUBFI:	bus = i - a;
-	Qupls4_pkg::OP_CMPI:	bus = cmpo;
-	Qupls4_pkg::OP_CMPUI:	bus = cmpo;
+	Qupls4_pkg::OP_ANDI:	begin bus = a & i; did_op = TRUE; end
+	Qupls4_pkg::OP_ORI:		begin bus = a | i; did_op = TRUE; end
+	Qupls4_pkg::OP_XORI:	begin bus = a ^ i; did_op = TRUE; end
+	Qupls4_pkg::OP_SUBFI:	begin bus = i - a; did_op = TRUE; end
+	Qupls4_pkg::OP_CMPI:	begin bus = cmpo; did_op = TRUE; end
+	Qupls4_pkg::OP_CMPUI:	begin bus = cmpo; did_op = TRUE; end
 /*	
 	Qupls4_pkg::OP_MOV:
 		if (ir[31]) begin
@@ -842,7 +937,7 @@ begin
 				end
 			endcase	
 */
-	Qupls4_pkg::OP_LOADA:	bus = a + i + (b << ir[47:45]);
+	Qupls4_pkg::OP_LOADA:	begin bus = a + i + (b << ir[47:45]); did_op = TRUE; end
 	Qupls4_pkg::OP_LOADI:
 		begin
 			case(Ra)
@@ -850,16 +945,20 @@ begin
 			6'd1:	bus = i + pc.pc;
 			default:	bus = zero;
 			endcase
+			did_op = TRUE;
 		end
-	Qupls4_pkg::OP_NOP:		bus = t;	// in case of copy target
+	Qupls4_pkg::OP_NOP:		begin bus = t; did_op = TRUE; end	// in case of copy target
 	// Branches
 	Qupls4_pkg::OP_BCC,Qupls4_pkg::OP_BCCU,Qupls4_pkg::OP_FBCC:
-		begin
+		if (SUPPORT_BRANCH) begin
 			if (ir[47])
 				bus = a - 2'd1;
 			else
 				bus = t;
+			did_op = TRUE;
 		end
+		else
+			bus = zero;
 	default:	bus = {(WID/16){16'hDEAD}};
 	endcase
 end

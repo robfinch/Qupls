@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2023-2026  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -72,7 +72,7 @@ always_comb c = rse_i.arg[2].val;
 always_comb t = rse_i.arg[3].val;
 always_comb bi = rse_i.arg[1].val|rse_i.argI;
 always_comb i = rse_i.argI;
-reg [2:0] stomp_con;	// stomp conveyor
+reg [4:0] stomp_con;	// stomp conveyor
 reg [WID/8:0] we,we1,we2,we3;
 reg [WID-1:0] t1;
 reg z1;
@@ -187,10 +187,10 @@ begin
 end
 
 // Copy only the lanes specified in the mask to the target.
-delay3 #(.WID(WID)) udly1 (.clk(clk), .ce(1'b1), .i(t), .o(t1));
-delay3 #(.WID(1)) udly2 (.clk(clk), .ce(1'b1), .i(z), .o(z1));
-delay3 #(.WID(WID/8)) udly3 (.clk(clk), .ce(1'b1), .i(cptgt), .o(cptgt1));
-delay3 #(.WID(WID/8+1)) udly6 (.clk(clk), .ce(1'b1), .i(we), .o(we3));
+delay5 #(.WID(WID)) udly1 (.clk(clk), .ce(1'b1), .i(t), .o(t1));
+delay5 #(.WID(1)) udly2 (.clk(clk), .ce(1'b1), .i(z), .o(z1));
+delay5 #(.WID(WID/8)) udly3 (.clk(clk), .ce(1'b1), .i(cptgt), .o(cptgt1));
+delay5 #(.WID(WID/8+1)) udly6 (.clk(clk), .ce(1'b1), .i(we), .o(we3));
 
 always_ff @(posedge clk)
 if (rst)
@@ -207,6 +207,11 @@ if (rst)
 	rse3 <= {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
 else
 	rse3 <= rse2;
+always_ff @(posedge clk)
+if (rst)
+	rse4 <= {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
+else
+	rse4 <= rse3;
 always_ff @(posedge clk)
 if (rst)
 	rse_o <= {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
@@ -230,6 +235,14 @@ begin
 		stomp_con[2] <= 1'b1;
 	else
 		stomp_con[2] <= stomp_con[1];
+	if (stomp[rse3.rndx])
+		stomp_con[3] <= 1'b1;
+	else
+		stomp_con[3] <= stomp_con[2];
+	if (stomp[rse4.rndx])
+		stomp_con[4] <= 1'b1;
+	else
+		stomp_con[4] <= stomp_con[3];
 end
 
 always_comb
@@ -239,7 +252,7 @@ generate begin : gCptgt
 	for (mm = 0; mm < WID/8; mm = mm + 1) begin
     always_comb
     begin
-    	if (stomp_con[2]||rse3.uop.opcode==Qupls4_pkg::OP_NOP)
+    	if (stomp_con[4]||rse_o.uop.opcode==Qupls4_pkg::OP_NOP)
         o[mm*8+7:mm*8] = t1[mm*8+7:mm*8];
       else if (cptgt1[mm])
         o[mm*8+7:mm*8] = z1 ? 8'h00 : t1[mm*8+7:mm*8];
