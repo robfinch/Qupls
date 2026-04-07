@@ -56,6 +56,7 @@ Public Class Form1
 		' Decode
 		UpdateFld("SUPPORT_FLOAT = ", IIf(CheckBox3.Checked = True, 1, 0))
 		UpdateFld("SUPPORT_IMUL = ", IIf(CheckBox28.Checked = True, 1, 0))
+		UpdateFld("SUPPORT_ISQRT = ", IIf(CheckBox31.Checked = True, 1, 0))
 		UpdateFld("SUPPORT_IDIV = ", IIf(CheckBox2.Checked = True, 1, 0))
 		UpdateFld("SUPPORT_TRIG = ", IIf(CheckBox4.Checked = True, 1, 0))
 		UpdateFld("SUPPORT_PRED = ", IIf(CheckBox7.Checked = True, 1, 0))
@@ -63,6 +64,47 @@ Public Class Form1
 		UpdateFld("SUPPORT_CARRY = ", IIf(CheckBox9.Checked = True, 1, 0))
 		UpdateFld("SUPPORT_BITFIELD = ", IIf(CheckBox29.Checked = True, 1, 0))
 		UpdateFld("SUPPORT_ROTATE = ", IIf(CheckBox30.Checked = True, 1, 0))
+		UpdateFld("SUPPORT_CSR0 = ", IIf(CheckedListBox1.GetItemChecked(1) = True, 1, 0))
+		UpdateFld("SUPPORT_BRANCH0 = ", IIf(CheckedListBox1.GetItemChecked(2) = True, 1, 0))
+		UpdateFld("SUPPORT_COUNT0 = ", IIf(CheckedListBox1.GetItemChecked(3) = True, 1, 0))
+		UpdateFld("SUPPORT_SHIFT0 = ", IIf(CheckedListBox1.GetItemChecked(4) = True, 1, 0))
+		UpdateFld("SUPPORT_BITFIELD0 = ", IIf(CheckedListBox1.GetItemChecked(5) = True, 1, 0))
+		UpdateFld("SUPPORT_CRYPTO0 = ", IIf(CheckedListBox1.GetItemChecked(6) = True, 1, 0))
+		UpdateFld("SUPPORT_CSR1 = ", IIf(CheckedListBox2.GetItemChecked(1) = True, 1, 0))
+		UpdateFld("SUPPORT_BRANCH1 = ", IIf(CheckedListBox2.GetItemChecked(2) = True, 1, 0))
+		UpdateFld("SUPPORT_COUNT1 = ", IIf(CheckedListBox2.GetItemChecked(3) = True, 1, 0))
+		UpdateFld("SUPPORT_SHIFT1 = ", IIf(CheckedListBox2.GetItemChecked(4) = True, 1, 0))
+		UpdateFld("SUPPORT_BITFIELD1 = ", IIf(CheckedListBox2.GetItemChecked(5) = True, 1, 0))
+		UpdateFld("SUPPORT_CRYPTO1 = ", IIf(CheckedListBox2.GetItemChecked(6) = True, 1, 0))
+		UpdateFld("SUPPORT_IMUL2 = ", IIf(CheckedListBox3.GetItemChecked(1) = True, 1, 0))
+		UpdateFld("SUPPORT_FMA2 = ", IIf(CheckedListBox3.GetItemChecked(2) = True, 1, 0))
+		UpdateFld("SUPPORT_FRCPA2 = ", IIf(CheckedListBox3.GetItemChecked(3) = True, 1, 0))
+		UpdateFld("SUPPORT_NNA2 = ", IIf(CheckedListBox3.GetItemChecked(4) = True, 1, 0))
+		UpdateFld("SUPPORT_GRAPHICS2 = ", IIf(CheckedListBox3.GetItemChecked(5) = True, 1, 0))
+		UpdateFld("SUPPORT_QUEUES2 = ", IIf(CheckedListBox3.GetItemChecked(6) = True, 1, 0))
+		UpdateFld("SUPPORT_IMUL3 = ", IIf(CheckedListBox4.GetItemChecked(1) = True, 1, 0))
+		UpdateFld("SUPPORT_FMA3 = ", IIf(CheckedListBox4.GetItemChecked(2) = True, 1, 0))
+		UpdateFld("SUPPORT_FRCPA3 = ", IIf(CheckedListBox4.GetItemChecked(3) = True, 1, 0))
+		UpdateFld("SUPPORT_NNA3 = ", IIf(CheckedListBox4.GetItemChecked(4) = True, 1, 0))
+		UpdateFld("SUPPORT_GRAPHICS3 = ", IIf(CheckedListBox4.GetItemChecked(5) = True, 1, 0))
+		UpdateFld("SUPPORT_QUEUES3 = ", IIf(CheckedListBox4.GetItemChecked(6) = True, 1, 0))
+		UpdateFld("SUPPORT_IDIV4 = ", IIf(CheckedListBox5.GetItemChecked(1) = True, 1, 0))
+		UpdateFld("SUPPORT_ISQRT4 = ", IIf(CheckedListBox5.GetItemChecked(2) = True, 1, 0))
+		UpdateFld("SUPPORT_IMEM4 = ", IIf(CheckedListBox5.GetItemChecked(3) = True, 1, 0))
+		UpdateFld("SUPPORT_FMA4 = ", IIf(CheckedListBox5.GetItemChecked(4) = True, 1, 0))
+		UpdateFld("SUPPORT_TRIG4 = ", IIf(CheckedListBox5.GetItemChecked(5) = True, 1, 0))
+		UpdateFld("SUPPORT_IDIV5 = ", IIf(CheckedListBox6.GetItemChecked(1) = True, 1, 0))
+		UpdateFld("SUPPORT_ISQRT5 = ", IIf(CheckedListBox6.GetItemChecked(2) = True, 1, 0))
+		UpdateFld("SUPPORT_IMEM5 = ", IIf(CheckedListBox6.GetItemChecked(3) = True, 1, 0))
+		UpdateFld("SUPPORT_FMA5 = ", IIf(CheckedListBox6.GetItemChecked(4) = True, 1, 0))
+		UpdateFld("SUPPORT_TRIG5 = ", IIf(CheckedListBox6.GetItemChecked(5) = True, 1, 0))
+		UpdateFld("SUPPORT_XPIPE0 = ", IIf(CheckBox32.Checked() = True, 1, 0))
+		UpdateFld("SUPPORT_XPIPE1 = ", IIf(CheckBox33.Checked() = True, 1, 0))
+		UpdateFld("SUPPORT_XPIPE2 = ", IIf(CheckBox34.Checked() = True, 1, 0))
+		UpdateFld("SUPPORT_XPIPE3 = ", IIf(CheckBox35.Checked() = True, 1, 0))
+		UpdateFld("SUPPORT_XPIPE4 = ", IIf(CheckBox36.Checked() = True, 1, 0))
+		UpdateFld("SUPPORT_XPIPE5 = ", IIf(CheckBox37.Checked() = True, 1, 0))
+
 		' Debug
 		UpdateFld("SERIALIZE = ", IIf(CheckBox1.Checked = True, 1, 0))
 		UpdateFld("SUPPORT_NAN_TRACE = ", IIf(CheckBox21.Checked = True, 1, 0))
@@ -220,16 +262,19 @@ Public Class Form1
 
 	Private Sub OpenToolStripMenuItem_Click(sender As Object, e As EventArgs) Handles OpenToolStripMenuItem.Click
 		Dim fname As String
-		Dim FSO
+		Dim iline As String
 		Dim n As Integer
+		Dim FSO
 
 		OpenFileDialog1.ShowDialog()
 		fname = OpenFileDialog1.FileName
 		FSO = CreateObject("Scripting.FileSystemObject")
 		nrows = 0
+		ReDim Preserve cfgFile(2000)
 		FileIn = FSO.OpenTextFile(fname, 1) ' 1=for reading
 		Do Until FileIn.AtEndOfStream
-			cfgFile(nrows) = FileIn.Readline
+			iline = FileIn.Readline
+			cfgFile(nrows) = New String(iline)
 			nrows += 1
 		Loop
 		FileIn.close
@@ -352,5 +397,17 @@ Public Class Form1
 
 	Private Sub Timer1_Tick(sender As Object, e As EventArgs) Handles Timer1.Tick
 		UpdateFields()
+	End Sub
+
+	Private Sub CheckBox31_CheckedChanged(sender As Object, e As EventArgs) Handles CheckBox31.CheckedChanged
+
+	End Sub
+
+	Private Sub CheckedListBox1_SelectedIndexChanged(sender As Object, e As EventArgs) Handles CheckedListBox1.SelectedIndexChanged
+
+	End Sub
+
+	Private Sub TabPage13_Click(sender As Object, e As EventArgs) Handles TabPage13.Click
+
 	End Sub
 End Class

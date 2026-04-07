@@ -16,7 +16,7 @@ Imports System.Reflection
 <Assembly: System.Reflection.AssemblyCompanyAttribute("Qupls4_config"),  _
  Assembly: System.Reflection.AssemblyConfigurationAttribute("Debug"),  _
  Assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0"),  _
- Assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0"),  _
+ Assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+850a88f3aeff380914e7afe84e36449c88e56f98"),  _
  Assembly: System.Reflection.AssemblyProductAttribute("Qupls4_config"),  _
  Assembly: System.Reflection.AssemblyTitleAttribute("Qupls4_config"),  _
  Assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0"),  _

@@ -73,6 +73,7 @@ Partial Class Form1
 		TabPage7 = New TabPage()
 		TabPage9 = New TabPage()
 		GroupBox8 = New GroupBox()
+		CheckBox31 = New CheckBox()
 		CheckBox30 = New CheckBox()
 		CheckBox29 = New CheckBox()
 		CheckBox28 = New CheckBox()
@@ -134,6 +135,26 @@ Partial Class Form1
 		NumericUpDown16 = New NumericUpDown()
 		Label12 = New Label()
 		NumericUpDown15 = New NumericUpDown()
+		TabPage13 = New TabPage()
+		CheckedListBox6 = New CheckedListBox()
+		CheckedListBox5 = New CheckedListBox()
+		CheckedListBox4 = New CheckedListBox()
+		CheckedListBox3 = New CheckedListBox()
+		CheckedListBox2 = New CheckedListBox()
+		CheckedListBox1 = New CheckedListBox()
+		Label39 = New Label()
+		NumericUpDown37 = New NumericUpDown()
+		NumericUpDown36 = New NumericUpDown()
+		NumericUpDown35 = New NumericUpDown()
+		NumericUpDown34 = New NumericUpDown()
+		NumericUpDown33 = New NumericUpDown()
+		NumericUpDown32 = New NumericUpDown()
+		CheckBox37 = New CheckBox()
+		CheckBox36 = New CheckBox()
+		CheckBox35 = New CheckBox()
+		CheckBox34 = New CheckBox()
+		CheckBox33 = New CheckBox()
+		CheckBox32 = New CheckBox()
 		TabPage11 = New TabPage()
 		Label19 = New Label()
 		NumericUpDown12 = New NumericUpDown()
@@ -206,6 +227,13 @@ Partial Class Form1
 		CType(NumericUpDown17, ComponentModel.ISupportInitialize).BeginInit()
 		CType(NumericUpDown16, ComponentModel.ISupportInitialize).BeginInit()
 		CType(NumericUpDown15, ComponentModel.ISupportInitialize).BeginInit()
+		TabPage13.SuspendLayout()
+		CType(NumericUpDown37, ComponentModel.ISupportInitialize).BeginInit()
+		CType(NumericUpDown36, ComponentModel.ISupportInitialize).BeginInit()
+		CType(NumericUpDown35, ComponentModel.ISupportInitialize).BeginInit()
+		CType(NumericUpDown34, ComponentModel.ISupportInitialize).BeginInit()
+		CType(NumericUpDown33, ComponentModel.ISupportInitialize).BeginInit()
+		CType(NumericUpDown32, ComponentModel.ISupportInitialize).BeginInit()
 		TabPage11.SuspendLayout()
 		CType(NumericUpDown12, ComponentModel.ISupportInitialize).BeginInit()
 		CType(NumericUpDown2, ComponentModel.ISupportInitialize).BeginInit()
@@ -227,12 +255,13 @@ Partial Class Form1
 		TabControl1.Controls.Add(TabPage10)
 		TabControl1.Controls.Add(TabPage2)
 		TabControl1.Controls.Add(TabPage12)
+		TabControl1.Controls.Add(TabPage13)
 		TabControl1.Controls.Add(TabPage11)
 		TabControl1.Controls.Add(TabPage3)
 		TabControl1.Location = New Point(54, 60)
 		TabControl1.Name = "TabControl1"
 		TabControl1.SelectedIndex = 0
-		TabControl1.Size = New Size(735, 589)
+		TabControl1.Size = New Size(795, 589)
 		TabControl1.TabIndex = 0
 		' 
 		' TabPage1
@@ -243,7 +272,7 @@ Partial Class Form1
 		TabPage1.Location = New Point(4, 34)
 		TabPage1.Name = "TabPage1"
 		TabPage1.Padding = New Padding(3)
-		TabPage1.Size = New Size(727, 551)
+		TabPage1.Size = New Size(787, 551)
 		TabPage1.TabIndex = 0
 		TabPage1.Text = "Debugging"
 		TabPage1.UseVisualStyleBackColor = True
@@ -290,7 +319,7 @@ Partial Class Form1
 		TabPage4.Location = New Point(4, 34)
 		TabPage4.Name = "TabPage4"
 		TabPage4.Padding = New Padding(3)
-		TabPage4.Size = New Size(727, 551)
+		TabPage4.Size = New Size(787, 551)
 		TabPage4.TabIndex = 3
 		TabPage4.Text = "Arch. Features"
 		TabPage4.UseVisualStyleBackColor = True
@@ -572,7 +601,7 @@ Partial Class Form1
 		TabPage5.Location = New Point(4, 34)
 		TabPage5.Name = "TabPage5"
 		TabPage5.Padding = New Padding(3)
-		TabPage5.Size = New Size(727, 551)
+		TabPage5.Size = New Size(787, 551)
 		TabPage5.TabIndex = 4
 		TabPage5.Text = "Interrupts"
 		TabPage5.UseVisualStyleBackColor = True
@@ -669,7 +698,7 @@ Partial Class Form1
 		TabPage6.Location = New Point(4, 34)
 		TabPage6.Name = "TabPage6"
 		TabPage6.Padding = New Padding(3)
-		TabPage6.Size = New Size(727, 551)
+		TabPage6.Size = New Size(787, 551)
 		TabPage6.TabIndex = 5
 		TabPage6.Text = "Fetch"
 		TabPage6.UseVisualStyleBackColor = True
@@ -699,7 +728,7 @@ Partial Class Form1
 		TabPage7.Location = New Point(4, 34)
 		TabPage7.Name = "TabPage7"
 		TabPage7.Padding = New Padding(3)
-		TabPage7.Size = New Size(727, 551)
+		TabPage7.Size = New Size(787, 551)
 		TabPage7.TabIndex = 6
 		TabPage7.Text = "Extract"
 		TabPage7.UseVisualStyleBackColor = True
@@ -714,13 +743,14 @@ Partial Class Form1
 		TabPage9.Location = New Point(4, 34)
 		TabPage9.Name = "TabPage9"
 		TabPage9.Padding = New Padding(3)
-		TabPage9.Size = New Size(727, 551)
+		TabPage9.Size = New Size(787, 551)
 		TabPage9.TabIndex = 8
 		TabPage9.Text = "Decode"
 		TabPage9.UseVisualStyleBackColor = True
 		' 
 		' GroupBox8
 		' 
+		GroupBox8.Controls.Add(CheckBox31)
 		GroupBox8.Controls.Add(CheckBox30)
 		GroupBox8.Controls.Add(CheckBox29)
 		GroupBox8.Controls.Add(CheckBox28)
@@ -732,6 +762,16 @@ Partial Class Form1
 		GroupBox8.TabStop = False
 		GroupBox8.Text = "Integer"
 		ToolTip1.SetToolTip(GroupBox8, "Select instructions to include in the core. Leaving instructions out" & vbCrLf & "may reduce core size.")
+		' 
+		' CheckBox31
+		' 
+		CheckBox31.AutoSize = True
+		CheckBox31.Location = New Point(135, 30)
+		CheckBox31.Name = "CheckBox31"
+		CheckBox31.Size = New Size(136, 29)
+		CheckBox31.TabIndex = 26
+		CheckBox31.Text = "Square Root"
+		CheckBox31.UseVisualStyleBackColor = True
 		' 
 		' CheckBox30
 		' 
@@ -985,7 +1025,7 @@ Partial Class Form1
 		TabPage8.Location = New Point(4, 34)
 		TabPage8.Name = "TabPage8"
 		TabPage8.Padding = New Padding(3)
-		TabPage8.Size = New Size(727, 551)
+		TabPage8.Size = New Size(787, 551)
 		TabPage8.TabIndex = 7
 		TabPage8.Text = "Rename"
 		TabPage8.UseVisualStyleBackColor = True
@@ -1051,7 +1091,7 @@ Partial Class Form1
 		TabPage10.Location = New Point(4, 34)
 		TabPage10.Name = "TabPage10"
 		TabPage10.Padding = New Padding(3)
-		TabPage10.Size = New Size(727, 551)
+		TabPage10.Size = New Size(787, 551)
 		TabPage10.TabIndex = 10
 		TabPage10.Text = "Register"
 		TabPage10.UseVisualStyleBackColor = True
@@ -1127,7 +1167,7 @@ Partial Class Form1
 		TabPage2.Location = New Point(4, 34)
 		TabPage2.Name = "TabPage2"
 		TabPage2.Padding = New Padding(3)
-		TabPage2.Size = New Size(727, 551)
+		TabPage2.Size = New Size(787, 551)
 		TabPage2.TabIndex = 9
 		TabPage2.Text = "Dispatch"
 		TabPage2.UseVisualStyleBackColor = True
@@ -1166,22 +1206,22 @@ Partial Class Form1
 		' RadioButton2
 		' 
 		RadioButton2.AutoSize = True
+		RadioButton2.Checked = True
 		RadioButton2.Location = New Point(6, 65)
 		RadioButton2.Name = "RadioButton2"
 		RadioButton2.Size = New Size(210, 29)
 		RadioButton2.TabIndex = 26
+		RadioButton2.TabStop = True
 		RadioButton2.Text = "out-of-order dispatch"
 		RadioButton2.UseVisualStyleBackColor = True
 		' 
 		' RadioButton1
 		' 
 		RadioButton1.AutoSize = True
-		RadioButton1.Checked = True
 		RadioButton1.Location = New Point(6, 30)
 		RadioButton1.Name = "RadioButton1"
 		RadioButton1.Size = New Size(203, 29)
 		RadioButton1.TabIndex = 25
-		RadioButton1.TabStop = True
 		RadioButton1.Text = "in-order pipeline unit"
 		RadioButton1.UseVisualStyleBackColor = True
 		' 
@@ -1191,7 +1231,7 @@ Partial Class Form1
 		TabPage12.Location = New Point(4, 34)
 		TabPage12.Name = "TabPage12"
 		TabPage12.Padding = New Padding(3)
-		TabPage12.Size = New Size(727, 551)
+		TabPage12.Size = New Size(787, 551)
 		TabPage12.TabIndex = 13
 		TabPage12.Text = "Issue"
 		TabPage12.UseVisualStyleBackColor = True
@@ -1401,6 +1441,230 @@ Partial Class Form1
 		NumericUpDown15.TabIndex = 2
 		NumericUpDown15.Value = New Decimal(New Integer() {1, 0, 0, 0})
 		' 
+		' TabPage13
+		' 
+		TabPage13.Controls.Add(CheckedListBox6)
+		TabPage13.Controls.Add(CheckedListBox5)
+		TabPage13.Controls.Add(CheckedListBox4)
+		TabPage13.Controls.Add(CheckedListBox3)
+		TabPage13.Controls.Add(CheckedListBox2)
+		TabPage13.Controls.Add(CheckedListBox1)
+		TabPage13.Controls.Add(Label39)
+		TabPage13.Controls.Add(NumericUpDown37)
+		TabPage13.Controls.Add(NumericUpDown36)
+		TabPage13.Controls.Add(NumericUpDown35)
+		TabPage13.Controls.Add(NumericUpDown34)
+		TabPage13.Controls.Add(NumericUpDown33)
+		TabPage13.Controls.Add(NumericUpDown32)
+		TabPage13.Controls.Add(CheckBox37)
+		TabPage13.Controls.Add(CheckBox36)
+		TabPage13.Controls.Add(CheckBox35)
+		TabPage13.Controls.Add(CheckBox34)
+		TabPage13.Controls.Add(CheckBox33)
+		TabPage13.Controls.Add(CheckBox32)
+		TabPage13.Location = New Point(4, 34)
+		TabPage13.Name = "TabPage13"
+		TabPage13.Padding = New Padding(3)
+		TabPage13.Size = New Size(787, 551)
+		TabPage13.TabIndex = 14
+		TabPage13.Text = "Execute"
+		TabPage13.UseVisualStyleBackColor = True
+		' 
+		' CheckedListBox6
+		' 
+		CheckedListBox6.FormattingEnabled = True
+		CheckedListBox6.Items.AddRange(New Object() {"ALU", "IDIV", "ISQRT", "MEM", "FMA", "TRIG."})
+		CheckedListBox6.Location = New Point(661, 115)
+		CheckedListBox6.Name = "CheckedListBox6"
+		CheckedListBox6.Size = New Size(109, 228)
+		CheckedListBox6.TabIndex = 24
+		' 
+		' CheckedListBox5
+		' 
+		CheckedListBox5.FormattingEnabled = True
+		CheckedListBox5.Items.AddRange(New Object() {"ALU", "IDIV", "ISQRT", "MEM", "FMA", "TRIG."})
+		CheckedListBox5.Location = New Point(546, 115)
+		CheckedListBox5.Name = "CheckedListBox5"
+		CheckedListBox5.Size = New Size(109, 228)
+		CheckedListBox5.TabIndex = 23
+		' 
+		' CheckedListBox4
+		' 
+		CheckedListBox4.FormattingEnabled = True
+		CheckedListBox4.Items.AddRange(New Object() {"ALU", "IMUL", "FMA", "FRCPA", "N.NET", "GRAPHICS", "QUEUES"})
+		CheckedListBox4.Location = New Point(420, 115)
+		CheckedListBox4.Name = "CheckedListBox4"
+		CheckedListBox4.Size = New Size(120, 228)
+		CheckedListBox4.TabIndex = 22
+		' 
+		' CheckedListBox3
+		' 
+		CheckedListBox3.FormattingEnabled = True
+		CheckedListBox3.Items.AddRange(New Object() {"ALU", "IMUL", "FMA", "FRCPA", "N. NET", "GRAPHICS", "QUEUES"})
+		CheckedListBox3.Location = New Point(287, 115)
+		CheckedListBox3.Name = "CheckedListBox3"
+		CheckedListBox3.Size = New Size(127, 228)
+		CheckedListBox3.TabIndex = 21
+		' 
+		' CheckedListBox2
+		' 
+		CheckedListBox2.FormattingEnabled = True
+		CheckedListBox2.Items.AddRange(New Object() {"ALU", "CSRs", "BRANCH", "COUNT", "SHIFT", "BITFIELD", "CRYPTO", "CAPAB."})
+		CheckedListBox2.Location = New Point(157, 115)
+		CheckedListBox2.Name = "CheckedListBox2"
+		CheckedListBox2.Size = New Size(117, 228)
+		CheckedListBox2.TabIndex = 20
+		' 
+		' CheckedListBox1
+		' 
+		CheckedListBox1.FormattingEnabled = True
+		CheckedListBox1.Items.AddRange(New Object() {"ALU", "CSRs", "BRANCH", "COUNT", "SHIFT", "BITFIELD", "CRYPTO", "CAPAB."})
+		CheckedListBox1.Location = New Point(39, 115)
+		CheckedListBox1.Name = "CheckedListBox1"
+		CheckedListBox1.Size = New Size(104, 228)
+		CheckedListBox1.TabIndex = 19
+		' 
+		' Label39
+		' 
+		Label39.AutoSize = True
+		Label39.Location = New Point(-4, 62)
+		Label39.Name = "Label39"
+		Label39.Size = New Size(64, 50)
+		Label39.TabIndex = 18
+		Label39.Text = "Queue" & vbCrLf & "Entries"
+		' 
+		' NumericUpDown37
+		' 
+		NumericUpDown37.Location = New Point(708, 74)
+		NumericUpDown37.Maximum = New Decimal(New Integer() {16, 0, 0, 0})
+		NumericUpDown37.Minimum = New Decimal(New Integer() {1, 0, 0, 0})
+		NumericUpDown37.Name = "NumericUpDown37"
+		NumericUpDown37.Size = New Size(62, 31)
+		NumericUpDown37.TabIndex = 17
+		NumericUpDown37.Value = New Decimal(New Integer() {1, 0, 0, 0})
+		' 
+		' NumericUpDown36
+		' 
+		NumericUpDown36.Location = New Point(593, 74)
+		NumericUpDown36.Maximum = New Decimal(New Integer() {16, 0, 0, 0})
+		NumericUpDown36.Minimum = New Decimal(New Integer() {1, 0, 0, 0})
+		NumericUpDown36.Name = "NumericUpDown36"
+		NumericUpDown36.Size = New Size(62, 31)
+		NumericUpDown36.TabIndex = 16
+		NumericUpDown36.Value = New Decimal(New Integer() {1, 0, 0, 0})
+		' 
+		' NumericUpDown35
+		' 
+		NumericUpDown35.Location = New Point(478, 74)
+		NumericUpDown35.Maximum = New Decimal(New Integer() {16, 0, 0, 0})
+		NumericUpDown35.Minimum = New Decimal(New Integer() {1, 0, 0, 0})
+		NumericUpDown35.Name = "NumericUpDown35"
+		NumericUpDown35.Size = New Size(62, 31)
+		NumericUpDown35.TabIndex = 15
+		NumericUpDown35.Value = New Decimal(New Integer() {1, 0, 0, 0})
+		' 
+		' NumericUpDown34
+		' 
+		NumericUpDown34.Location = New Point(352, 74)
+		NumericUpDown34.Maximum = New Decimal(New Integer() {16, 0, 0, 0})
+		NumericUpDown34.Minimum = New Decimal(New Integer() {1, 0, 0, 0})
+		NumericUpDown34.Name = "NumericUpDown34"
+		NumericUpDown34.Size = New Size(62, 31)
+		NumericUpDown34.TabIndex = 14
+		NumericUpDown34.Value = New Decimal(New Integer() {1, 0, 0, 0})
+		' 
+		' NumericUpDown33
+		' 
+		NumericUpDown33.Location = New Point(212, 74)
+		NumericUpDown33.Maximum = New Decimal(New Integer() {16, 0, 0, 0})
+		NumericUpDown33.Minimum = New Decimal(New Integer() {1, 0, 0, 0})
+		NumericUpDown33.Name = "NumericUpDown33"
+		NumericUpDown33.Size = New Size(62, 31)
+		NumericUpDown33.TabIndex = 13
+		NumericUpDown33.Value = New Decimal(New Integer() {1, 0, 0, 0})
+		' 
+		' NumericUpDown32
+		' 
+		NumericUpDown32.Location = New Point(86, 74)
+		NumericUpDown32.Maximum = New Decimal(New Integer() {16, 0, 0, 0})
+		NumericUpDown32.Minimum = New Decimal(New Integer() {1, 0, 0, 0})
+		NumericUpDown32.Name = "NumericUpDown32"
+		NumericUpDown32.Size = New Size(62, 31)
+		NumericUpDown32.TabIndex = 12
+		NumericUpDown32.Value = New Decimal(New Integer() {1, 0, 0, 0})
+		' 
+		' CheckBox37
+		' 
+		CheckBox37.AutoSize = True
+		CheckBox37.Checked = True
+		CheckBox37.CheckState = CheckState.Checked
+		CheckBox37.Location = New Point(661, 30)
+		CheckBox37.Name = "CheckBox37"
+		CheckBox37.Size = New Size(109, 29)
+		CheckBox37.TabIndex = 11
+		CheckBox37.Text = "XPIPE #5"
+		CheckBox37.UseVisualStyleBackColor = True
+		' 
+		' CheckBox36
+		' 
+		CheckBox36.AutoSize = True
+		CheckBox36.Checked = True
+		CheckBox36.CheckState = CheckState.Checked
+		CheckBox36.Location = New Point(546, 30)
+		CheckBox36.Name = "CheckBox36"
+		CheckBox36.Size = New Size(109, 29)
+		CheckBox36.TabIndex = 9
+		CheckBox36.Text = "XPIPE #4"
+		CheckBox36.UseVisualStyleBackColor = True
+		' 
+		' CheckBox35
+		' 
+		CheckBox35.AutoSize = True
+		CheckBox35.Checked = True
+		CheckBox35.CheckState = CheckState.Checked
+		CheckBox35.Location = New Point(431, 30)
+		CheckBox35.Name = "CheckBox35"
+		CheckBox35.Size = New Size(109, 29)
+		CheckBox35.TabIndex = 7
+		CheckBox35.Text = "XPIPE #3"
+		CheckBox35.UseVisualStyleBackColor = True
+		' 
+		' CheckBox34
+		' 
+		CheckBox34.AutoSize = True
+		CheckBox34.Checked = True
+		CheckBox34.CheckState = CheckState.Checked
+		CheckBox34.Location = New Point(305, 30)
+		CheckBox34.Name = "CheckBox34"
+		CheckBox34.Size = New Size(109, 29)
+		CheckBox34.TabIndex = 5
+		CheckBox34.Text = "XPIPE #2"
+		CheckBox34.UseVisualStyleBackColor = True
+		' 
+		' CheckBox33
+		' 
+		CheckBox33.AutoSize = True
+		CheckBox33.Checked = True
+		CheckBox33.CheckState = CheckState.Checked
+		CheckBox33.Location = New Point(165, 30)
+		CheckBox33.Name = "CheckBox33"
+		CheckBox33.Size = New Size(109, 29)
+		CheckBox33.TabIndex = 3
+		CheckBox33.Text = "XPIPE #1"
+		CheckBox33.UseVisualStyleBackColor = True
+		' 
+		' CheckBox32
+		' 
+		CheckBox32.AutoSize = True
+		CheckBox32.Checked = True
+		CheckBox32.CheckState = CheckState.Checked
+		CheckBox32.Location = New Point(39, 30)
+		CheckBox32.Name = "CheckBox32"
+		CheckBox32.Size = New Size(109, 29)
+		CheckBox32.TabIndex = 1
+		CheckBox32.Text = "XPIPE #0"
+		CheckBox32.UseVisualStyleBackColor = True
+		' 
 		' TabPage11
 		' 
 		TabPage11.Controls.Add(Label19)
@@ -1415,7 +1679,7 @@ Partial Class Form1
 		TabPage11.Location = New Point(4, 34)
 		TabPage11.Name = "TabPage11"
 		TabPage11.Padding = New Padding(3)
-		TabPage11.Size = New Size(727, 551)
+		TabPage11.Size = New Size(787, 551)
 		TabPage11.TabIndex = 11
 		TabPage11.Text = "Memory"
 		TabPage11.UseVisualStyleBackColor = True
@@ -1525,7 +1789,7 @@ Partial Class Form1
 		TabPage3.Location = New Point(4, 34)
 		TabPage3.Name = "TabPage3"
 		TabPage3.Padding = New Padding(3)
-		TabPage3.Size = New Size(727, 551)
+		TabPage3.Size = New Size(787, 551)
 		TabPage3.TabIndex = 12
 		TabPage3.Text = "Branch"
 		TabPage3.UseVisualStyleBackColor = True
@@ -1548,7 +1812,7 @@ Partial Class Form1
 		NumericUpDown10.Size = New Size(61, 31)
 		NumericUpDown10.TabIndex = 31
 		ToolTip1.SetToolTip(NumericUpDown10, resources.GetString("NumericUpDown10.ToolTip"))
-		NumericUpDown10.Value = New Decimal(New Integer() {16, 0, 0, 0})
+		NumericUpDown10.Value = New Decimal(New Integer() {8, 0, 0, 0})
 		' 
 		' CheckBox26
 		' 
@@ -1609,7 +1873,7 @@ Partial Class Form1
 		MenuStrip1.Items.AddRange(New ToolStripItem() {FileToolStripMenuItem})
 		MenuStrip1.Location = New Point(0, 0)
 		MenuStrip1.Name = "MenuStrip1"
-		MenuStrip1.Size = New Size(829, 33)
+		MenuStrip1.Size = New Size(902, 33)
 		MenuStrip1.TabIndex = 1
 		MenuStrip1.Text = "MenuStrip1"
 		' 
@@ -1642,9 +1906,9 @@ Partial Class Form1
 		' 
 		' Form1
 		' 
-		AutoScaleDimensions = New SizeF(10F, 25F)
+		AutoScaleDimensions = New SizeF(10.0F, 25.0F)
 		AutoScaleMode = AutoScaleMode.Font
-		ClientSize = New Size(829, 694)
+		ClientSize = New Size(902, 694)
 		Controls.Add(TabControl1)
 		Controls.Add(MenuStrip1)
 		MainMenuStrip = MenuStrip1
@@ -1709,6 +1973,14 @@ Partial Class Form1
 		CType(NumericUpDown17, ComponentModel.ISupportInitialize).EndInit()
 		CType(NumericUpDown16, ComponentModel.ISupportInitialize).EndInit()
 		CType(NumericUpDown15, ComponentModel.ISupportInitialize).EndInit()
+		TabPage13.ResumeLayout(False)
+		TabPage13.PerformLayout()
+		CType(NumericUpDown37, ComponentModel.ISupportInitialize).EndInit()
+		CType(NumericUpDown36, ComponentModel.ISupportInitialize).EndInit()
+		CType(NumericUpDown35, ComponentModel.ISupportInitialize).EndInit()
+		CType(NumericUpDown34, ComponentModel.ISupportInitialize).EndInit()
+		CType(NumericUpDown33, ComponentModel.ISupportInitialize).EndInit()
+		CType(NumericUpDown32, ComponentModel.ISupportInitialize).EndInit()
 		TabPage11.ResumeLayout(False)
 		TabPage11.PerformLayout()
 		CType(NumericUpDown12, ComponentModel.ISupportInitialize).EndInit()
@@ -1861,5 +2133,47 @@ Partial Class Form1
 	Friend WithEvents Timer1 As Timer
 	Friend WithEvents Label38 As Label
 	Friend WithEvents TextBox4 As TextBox
+	Friend WithEvents CheckBox31 As CheckBox
+	Friend WithEvents TabPage13 As TabPage
+	Friend WithEvents CheckBox34 As CheckBox
+	Friend WithEvents CheckBox33 As CheckBox
+	Friend WithEvents CheckBox32 As CheckBox
+	Friend WithEvents CheckBox37 As CheckBox
+	Friend WithEvents CheckBox36 As CheckBox
+	Friend WithEvents CheckBox35 As CheckBox
+	Friend WithEvents Label39 As Label
+	Friend WithEvents NumericUpDown37 As NumericUpDown
+	Friend WithEvents NumericUpDown36 As NumericUpDown
+	Friend WithEvents NumericUpDown35 As NumericUpDown
+	Friend WithEvents NumericUpDown34 As NumericUpDown
+	Friend WithEvents NumericUpDown33 As NumericUpDown
+	Friend WithEvents NumericUpDown32 As NumericUpDown
+	Friend WithEvents CheckedListBox1 As CheckedListBox
+	Friend WithEvents CheckedListBox3 As CheckedListBox
+	Friend WithEvents CheckedListBox2 As CheckedListBox
+	Friend WithEvents CheckedListBox4 As CheckedListBox
+	Friend WithEvents CheckedListBox6 As CheckedListBox
+	Friend WithEvents CheckedListBox5 As CheckedListBox
 
+	Public Sub New()
+
+		' This call is required by the designer.
+		InitializeComponent()
+
+		' Add any initialization after the InitializeComponent() call.
+		CheckedListBox1.SetItemChecked(0, True)
+		CheckedListBox1.SetItemChecked(1, True)
+		CheckedListBox1.SetItemChecked(2, True)
+		CheckedListBox1.SetItemChecked(3, True)
+		CheckedListBox1.SetItemChecked(4, True)
+		CheckedListBox1.SetItemChecked(5, True)
+		CheckedListBox3.SetItemChecked(0, True)
+		CheckedListBox3.SetItemChecked(1, True)
+		CheckedListBox3.SetItemChecked(2, True)
+		CheckedListBox3.SetItemChecked(3, True)
+		CheckedListBox5.SetItemChecked(0, True)
+		CheckedListBox5.SetItemChecked(1, True)
+		CheckedListBox5.SetItemChecked(3, True)
+
+	End Sub
 End Class

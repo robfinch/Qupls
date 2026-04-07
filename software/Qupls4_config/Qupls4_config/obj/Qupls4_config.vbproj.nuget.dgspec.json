@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\Robert\\source\\repos\\Qupls4_config\\Qupls4_config\\Qupls4_config.vbproj": {}
+    "C:\\Users\\Robert\\OneDrive\\Documents\\GitHub\\Qupls\\software\\Qupls4_config\\Qupls4_config\\Qupls4_config.vbproj": {}
   },
   "projects": {
-    "C:\\Users\\Robert\\source\\repos\\Qupls4_config\\Qupls4_config\\Qupls4_config.vbproj": {
+    "C:\\Users\\Robert\\OneDrive\\Documents\\GitHub\\Qupls\\software\\Qupls4_config\\Qupls4_config\\Qupls4_config.vbproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\Robert\\source\\repos\\Qupls4_config\\Qupls4_config\\Qupls4_config.vbproj",
+        "projectUniqueName": "C:\\Users\\Robert\\OneDrive\\Documents\\GitHub\\Qupls\\software\\Qupls4_config\\Qupls4_config\\Qupls4_config.vbproj",
         "projectName": "Qupls4_config",
-        "projectPath": "C:\\Users\\Robert\\source\\repos\\Qupls4_config\\Qupls4_config\\Qupls4_config.vbproj",
+        "projectPath": "C:\\Users\\Robert\\OneDrive\\Documents\\GitHub\\Qupls\\software\\Qupls4_config\\Qupls4_config\\Qupls4_config.vbproj",
         "packagesPath": "C:\\Users\\Robert\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\Robert\\source\\repos\\Qupls4_config\\Qupls4_config\\obj\\",
+        "outputPath": "C:\\Users\\Robert\\OneDrive\\Documents\\GitHub\\Qupls\\software\\Qupls4_config\\Qupls4_config\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"

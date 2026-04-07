@@ -26,12 +26,8 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 3,
+          "SelectedChildIndex": 2,
           "Children": [
-            {
-              "$type": "Bookmark",
-              "Name": "ST:0:0:{cce594b6-0c39-4442-ba28-10c64ac7e89f}"
-            },
             {
               "$type": "Document",
               "DocumentIndex": 3,
@@ -41,8 +37,7 @@
               "ToolTip": "C:\\Users\\Robert\\source\\repos\\Qupls4_config\\Qupls4_config\\Qupls4_config.vbproj",
               "RelativeToolTip": "Qupls4_config\\Qupls4_config.vbproj",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003380|",
-              "WhenOpened": "2025-12-26T15:48:01.914Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-12-26T15:48:01.914Z"
             },
             {
               "$type": "Document",
@@ -54,8 +49,7 @@
               "RelativeToolTip": "Qupls4_config\\Module1.vb",
               "ViewState": "AgIAAAcAAAAAAAAAAAAUwB0AAAATAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003361|",
-              "WhenOpened": "2025-12-23T18:02:41.543Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-12-23T18:02:41.543Z"
             },
             {
               "$type": "Document",
@@ -81,6 +75,10 @@
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003361|",
               "WhenOpened": "2025-12-23T14:24:32.485Z",
               "EditorCaption": " [Design]"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{cce594b6-0c39-4442-ba28-10c64ac7e89f}"
             }
           ]
         }
