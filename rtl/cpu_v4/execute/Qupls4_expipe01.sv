@@ -40,7 +40,7 @@ import const_pkg::*;
 import Qupls4_pkg::*;
 
 module Qupls4_expipe01(rst, clk, clk3x, idle, stomp, rse_i, rse_o, rm,
-	z, cptgt, o, csr, cpl, canary, sto, ust, otag, we_o, done, exc,
+	z, cptgt, o, csr, cpl, canary, sto, ust, otag, we_o, exc,
 	tlb_v, adr, adrv, agen_rse,
 	fcu_rse, sr, ic_irq, irq_sn, takb, fcu_adr);
 parameter WID=Qupls4_pkg::SUPPORT_QUAD_PRECISION|Qupls4_pkg::SUPPORT_CAPABILITIES ? 128 : 64;
@@ -63,7 +63,6 @@ output reg otag;
 output reg [WID-1:0] sto;
 output reg ust;
 output reg [WID/8:0] we_o;
-output reg done;
 output Qupls4_pkg::cause_code_t exc;
 input tlb_v;
 output cpu_types_pkg::address_t adr;
@@ -78,7 +77,6 @@ output cpu_types_pkg::value_t fcu_adr;
 
 Qupls4_pkg::reservation_station_entry_t rse1,rse2;
 Qupls4_pkg::operating_mode_t om;
-reg [1:0] prc;
 Qupls4_pkg::micro_op_t ir;
 reg [WID-1:0] a;
 reg [WID-1:0] b,bi;
@@ -90,6 +88,10 @@ aregno_t aRd_i;
 reg [1:0] stomp_con;	// stomp conveyor
 reg [WID/8:0] we,we1,we2;
 wire [WID-1:0] alu_o64, alu_o64d, fma_o64;
+wire [127:0] alu_o;
+wire [WID/8:0] alu_we;
+wire [WID/8-1:0] alu_exc;
+Qupls4_pkg::memsz_t prc;
 
 cpu_types_pkg::address_t as, bs;
 cpu_types_pkg::address_t res1;
@@ -105,6 +107,7 @@ always_comb s = rse_i.arg[5].val;
 always_comb i = rse_i.argI;
 always_comb bi = rse_i.arg[1].val|rse_i.argI;
 always_comb aRd_i = rse_i.aRd;
+always_comb prc = Qupls4_pkg::memsz_t'(rse_i.prc);
 
 Qupls4_pkg::cause_code_t exc128,exc64;
 reg [WID-1:0] o1;
@@ -199,8 +202,14 @@ endgenerate
 // FCU logic
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
+always_comb
+	if (SUPPORT_BRANCH0==0 && SUPPORT_BRANCH1==0) begin
+		$display("Qupls4 CPU: At least one unit must have branch logic.");
+		$finish;
+	end
+
 generate begin : gFCU
-	if (PIPE==3'd1)
+	if (PIPE==3'd1 ? SUPPORT_BRANCH1 : SUPPORT_BRANCH0)
 Qupls4_meta_fcu ufcu1
 (
 	.rst(rst),
@@ -215,159 +224,46 @@ Qupls4_meta_fcu ufcu1
 	.we_o(fcu_we)
 );
 else begin
-end
 	assign fcu_rse = {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
 	assign fcu_adr = 64'd0;
 	assign fcu_we = 9'd0;
 	assign takb = 1'b0;
 end
+end
 endgenerate
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-generate begin : gPrec
-if (Qupls4_pkg::SUPPORT_PREC) begin
-for (g = 0; g < WID/64; g = g + 1)
-	Qupls4_alu #(
-		.WID(64), .PIPE(PIPE)
-	) ualu4
-	(
-		.rst(rst),
-		.clk(clk),
-		.clk2x(clk3x),
-		.chunk(rse_i.uop.num),
-		.om(rse_i.om),
-		.ld(),
-		.ir(ir),
-		.div(1'b0),
-		.Ra(),
-		.a(a[g*64+63:g*64]),
-		.b(b[g*64+63:g*64]),
-		.c(c[g*64+63:g*64]),
-		.t(t[g*64+63:g*64]),
-		.bi(bi[g*64+63:g*64]),
-		.i(i),
-		.qres(),
-		.mask(c), 
-		.cs(),
-		.pc(64'd0),
-		.pcc(128'd0),
-		.csr(csr),
-		.cpl(cpl),
-		.coreno(64'd0),
-		.canary(canary),
-		.velsz(velsz),
-		.o(alu_o64),
-		.exc_o(),
-		.did_op(did_op)
-	);
-end
-else begin
-	for (g = 0; g < WID/64; g = g + 1) begin
-	Qupls4_alu #(
-		.WID(64), .PIPE(PIPE)
-	)
-	ualu4
-	(
-		.rst(rst),
-		.clk(clk),
-		.clk2x(clk3x),
-		.chunk(rse_i.uop.num),
-		.om(rse_i.om),
-		.ld(),
-		.ir(ir),
-		.div(1'b0),
-		.Ra(),
-		.a(a[g*64+63:g*64]),
-		.b(b[g*64+63:g*64]),
-		.c(c[g*64+63:g*64]),
-		.t(t[g*64+63:g*64]),
-		.bi(bi[g*64+63:g*64]),
-		.i(i),
-		.qres(),
-		.mask(c), 
-		.cs(),
-		.pc(64'd0),
-		.pcc(128'd0),
-		.csr(csr),
-		.cpl(cpl),
-		.coreno(64'd0),
-		.canary(canary),
-		.velsz(velsz),
-		.o(alu_o64),
-		.exc_o(),
-		.did_op(did_op)
-	);
-	if (PIPE==3'd3 || PIPE==3'd4)
-	fpFMA64LN ufma64 (
-		.clk(clk),
-		.op(ir[30]),		// 0=add,1=sub c
-		.rm(rse_i.rm),
-		.a(a[g*64+63:g*64]),
-		.b(b[g*64+63:g*64]),
-		.c(c[g*64+63:g*64]),
-		.o(fma_o64[g*64+63:g*64]),
-		.inf(),
-		.zero(), 
-		.overflow(),
-		.underflow(),
-		.inexact()
-	);
-end
-end
-end
-endgenerate
+Qupls4_meta_alu #(.PIPE(PIPE)) umalu1
+(
+	.rst(rst),
+	.clk(clk),
+	.rse_i(rse_i),
+	.rse_o(),
+	.lane(rse_i.uop.num),
+	.cptgt(8'h00),
+	.z(1'b0),
+	.stomp(stomp),
+	.qres(),
+	.cs(),
+	.csr(csr),
+	.cpl(cpl),
+	.canary(canary),
+	.o(alu_o),
+	.cp_o(),
+	.we_o(alu_we),
+	.exc(alu_exc),
+	.fcu_rse_o(),
+	.sr(64'd0),
+	.ic_irq(6'd0),
+	.irq_sn(8'h00),
+	.takb(),
+	.adr()
+);
 
 always_comb
-if (Qupls4_pkg::SUPPORT_PREC)
-	case(prc)
-	2'd0:	o1 = o16;
-	2'd1:	o1 = o32;
-	2'd2:	o1 = o64;
-	2'd3:	o1 = o128;
-	endcase
-else if (Qupls4_pkg::SUPPORT_CAPABILITIES)
-	o1 = o128;
-else begin
-	done64 = FALSE;
-	case(ir.opcode)
-	Qupls4_pkg::OP_FLTH,Qupls4_pkg::OP_FLTS,Qupls4_pkg::OP_FLTD,
-	Qupls4_pkg::OP_FLTPH,Qupls4_pkg::OP_FLTPS,Qupls4_pkg::OP_FLTPD,
-	Qupls4_pkg::OP_FLTVVV,Qupls4_pkg::OP_FLTVVS:
-		case(ir.func)
-		Qupls4_pkg::FLT_FMA,Qupls4_pkg::FLT_FMS,Qupls4_pkg::FLT_FNMA,Qupls4_pkg::FLT_FNMS:
-			begin
-				o1 = fma_o64;
-				done64 = TRUE;
-			end
-		default:
-			begin
-				o1 = alu_o64d;
-				done64 = alu_did_opd;
-			end
-		endcase
-	Qupls4_pkg::OP_LDB,Qupls4_pkg::OP_LDBZ,Qupls4_pkg::OP_LDW,Qupls4_pkg::OP_LDWZ,
-	Qupls4_pkg::OP_LDT,Qupls4_pkg::OP_LDTZ,Qupls4_pkg::OP_LOAD,
-	Qupls4_pkg::OP_STB,Qupls4_pkg::OP_STW,
-	Qupls4_pkg::OP_STT,Qupls4_pkg::OP_STORE,
-	Qupls4_pkg::OP_STI,
-	Qupls4_pkg::OP_STPTR,
-	Qupls4_pkg::OP_V2P,
-	Qupls4_pkg::OP_VV2P,
-	Qupls4_pkg::OP_AMO:
-		done64 = FALSE;
-	default:
-		begin
-			o1 = alu_o64;
-			done64 = alu_did_op;
-		end
-	endcase
-end
-
-always_comb done16 = TRUE;
-always_comb done32 = TRUE;
-always_comb done128 = TRUE;
+	o1 = alu_o;
 
 // Copy only the lanes specified in the mask to the target.
 
@@ -376,8 +272,8 @@ generate begin : gCptgt
     always_comb
     	if (stomp_con[1]||rse2.uop.opcode==Qupls4_pkg::OP_NOP)
         o[mm*8+7:mm*8] = t[mm*8+7:mm*8];
-      else if (cptgt[mm])
-        o[mm*8+7:mm*8] = z ? 8'h00 : t[mm*8+7:mm*8];
+//      else if (cptgt[mm])
+//        o[mm*8+7:mm*8] = z ? 8'h00 : t[mm*8+7:mm*8];
       else
         o[mm*8+7:mm*8] = o1[mm*8+7:mm*8];
     end
@@ -402,21 +298,7 @@ end
 always_comb
 	we_o = rse_o.v ? we|fcu_we : 9'h000;
 
-
 always_comb
-if (Qupls4_pkg::SUPPORT_PREC)
-	case(prc)
-	2'd0:	done = done16;
-	2'd1:	done = done32;
-	2'd2:	done = done64|fcu_rse.v;
-	2'd3: done = done128;
-	endcase
-else if (Qupls4_pkg::SUPPORT_CAPABILITIES)
-	done = done128;
-else
-	done = done64|fcu_rse.v;
-//	done = ~sr64[6];
-always_comb
-	exc = exc64;
+	exc = cause_code_t'(alu_exc);
 
 endmodule

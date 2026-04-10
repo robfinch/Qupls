@@ -44,6 +44,9 @@ module Qupls4_expipe45(rst, clk, clk3x, idle, stomp, rse_i, rse_o, rm,
 	mem_rse_i, mem_done_i, mem_res_i, mem_flags_i);
 parameter WID=Qupls4_pkg::SUPPORT_QUAD_PRECISION|Qupls4_pkg::SUPPORT_CAPABILITIES ? 128 : 64;
 parameter PIPE = 3'd4;
+parameter SUPPORT_ISQRT = (PIPE==3'd4 && SUPPORT_ISQRT4) || (PIPE==3'd5 && SUPPORT_ISQRT5);
+parameter SUPPORT_FMA = (PIPE==3'd4 && SUPPORT_FMA4) || (PIPE==3'd5 && SUPPORT_FMA5);
+parameter SUPPORT_IDIV = (PIPE==3'd4 && SUPPORT_IDIV4) || (PIPE==3'd5 && SUPPORT_IDIV5);
 input rst;
 input clk;
 input clk3x;
@@ -77,18 +80,29 @@ Qupls4_pkg::micro_op_t ir,ir5;
 reg [WID-1:0] a;
 reg [WID-1:0] b,bi;
 reg [WID-1:0] c;
+reg [WID*4-1:0] lastarg;
 reg [WID-1:0] t;
 reg [WID-1:0] s;
 reg [WID-1:0] i;
 aregno_t aRd_i;
 reg [1:0] stomp_con;	// stomp conveyor
 reg [WID/8:0] we,we1,we2;
-wire [WID-1:0] alu_o64, alu_o64d, fma_o64;
+wire [WID-1:0] alu_o64, alu_o64d, fma_o64, fma_o16, fma_o32;
+wire [WID-1:0] isqrt_o, idiv_o;
+wire [WID/8:0] alu_we, isqrt_we, idiv_we;
+wire [WID/8-1:0] alu_exc;
+reg idiv_ld;
+wire idiv_done;
 
 cpu_types_pkg::address_t as, bs;
 cpu_types_pkg::address_t res1;
 reg [5:0] shift;
 
+always_ff @(posedge clk)
+	lastarg <= {a,b,bi,c};
+always_ff @(posedge clk)
+	idiv_ld <= lastarg != {a,b,bi,c};
+	
 always_comb om = rse_i.om;
 always_comb ir = rse_i.uop;
 always_comb a = rse_i.arg[0].val;
@@ -108,6 +122,7 @@ wire [WID-1:0] sto64;
 wire [0:0] ust64;
 wire [7:0] sr64, sr128;
 reg done16, done32, done64, done128;
+wire isqrt_done;
 wire alu_did_op, alu_did_opd;
 genvar g,mm;
 
@@ -124,8 +139,8 @@ always_ff @(posedge clk)
 always_comb
 	rse_o = rse2;
 
-generate begin : gAgen
-	if (PIPE==3'd4 || PIPE==3'd5) begin
+//generate begin : gAgen
+//	if (PIPE==3'd4 || PIPE==3'd5) begin
 always_ff @(posedge clk)
 	as <= rse_i.Rs1z ? value_zero : rse_i.Rs1ip ? rse_i.pc : rse_i.arg[0].val;
 
@@ -183,87 +198,98 @@ else begin
 		adrv <= INV;
 end
 
-end
-end
-endgenerate
+//end
+//end
+//endgenerate
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Qupls4_meta_alu #(.PIPE(PIPE)) umalu1
+(
+	.rst(rst),
+	.clk(clk),
+	.rse_i(rse_i),
+	.rse_o(),
+	.lane(rse_i.uop.num),
+	.cptgt(8'h00),
+	.z(1'b0),
+	.stomp(stomp),
+	.qres(),
+	.cs(),
+	.csr(csr),
+	.cpl(cpl),
+	.canary(canary),
+	.o(alu_o64),
+	.cp_o(),
+	.we_o(alu_we),
+	.exc(alu_exc),
+	.fcu_rse_o(),
+	.sr(64'd0),
+	.ic_irq(6'd0),
+	.irq_sn(8'h00),
+	.takb(),
+	.adr()
+);
+
 
 generate begin : gPrec
 if (Qupls4_pkg::SUPPORT_PREC) begin
-for (g = 0; g < WID/64; g = g + 1)
-	Qupls4_alu #(
-		.WID(64), .PIPE(PIPE)
-	) ualu4
-	(
-		.rst(rst),
-		.clk(clk),
-		.clk2x(clk3x),
-		.chunk(rse_i.uop.num),
-		.om(rse_i.om),
-		.ld(),
-		.ir(ir),
-		.div(1'b0),
-		.Ra(),
-		.a(a[g*64+63:g*64]),
-		.b(b[g*64+63:g*64]),
-		.c(c[g*64+63:g*64]),
-		.t(t[g*64+63:g*64]),
-		.bi(bi[g*64+63:g*64]),
-		.i(i),
-		.qres(),
-		.mask(c), 
-		.cs(),
-		.pc(64'd0),
-		.pcc(128'd0),
-		.csr(64'd0),
-		.cpl(8'h00),
-		.coreno(64'd0),
-		.canary(),
-		.velsz(velsz),
-		.o(alu_o64),
-		.exc_o(),
-		.did_op(did_op)
-	);
+		for (g = 0; g < WID/16; g = g + 1)
+			if (PIPE==3'd3 || PIPE==3'd4)
+			/*
+			fpFMA16LN ufma16 (
+				.clk(clk),
+				.op(ir[30]),		// 0=add,1=sub c
+				.rm(rse_i.rm),
+				.a(a[g*16+15:g*16]),
+				.b(b[g*16+15:g*16]),
+				.c(c[g*16+15:g*16]),
+				.o(fma_o16[g*16+15:g*16]),
+				.inf(),
+				.zero(), 
+				.overflow(),
+				.underflow(),
+				.inexact()
+			)
+			*/
+			;
+			for (g = 0; g < WID/32; g = g + 1)
+				if (SUPPORT_FMA)
+				fpFMA32LN ufma32 (
+					.clk(clk),
+					.op(ir[30]),		// 0=add,1=sub c
+					.rm(rse_i.rm),
+					.a(a[g*32+31:g*32]),
+					.b(b[g*32+31:g*32]),
+					.c(c[g*32+31:g*32]),
+					.o(fma_o32[g*32+31:g*32]),
+					.inf(),
+					.zero(), 
+					.overflow(),
+					.underflow(),
+					.inexact()
+				);
+			for (g = 0; g < WID/64; g = g + 1)
+				if (SUPPORT_FMA)
+					fpFMA64LN ufma64 (
+						.clk(clk),
+						.op(ir[30]),		// 0=add,1=sub c
+						.rm(rse_i.rm),
+						.a(a[g*64+63:g*64]),
+						.b(b[g*64+63:g*64]),
+						.c(c[g*64+63:g*64]),
+						.o(fma_o64[g*64+63:g*64]),
+						.inf(),
+						.zero(), 
+						.overflow(),
+						.underflow(),
+						.inexact()
+					);
 end
 else begin
 	for (g = 0; g < WID/64; g = g + 1) begin
-	Qupls4_alu #(
-		.WID(64), .PIPE(PIPE)
-	)
-	ualu4
-	(
-		.rst(rst),
-		.clk(clk),
-		.clk2x(clk3x),
-		.chunk(rse_i.uop.num),
-		.om(rse_i.om),
-		.ld(),
-		.ir(ir),
-		.div(1'b0),
-		.Ra(),
-		.a(a[g*64+63:g*64]),
-		.b(b[g*64+63:g*64]),
-		.c(c[g*64+63:g*64]),
-		.t(t[g*64+63:g*64]),
-		.bi(bi[g*64+63:g*64]),
-		.i(i),
-		.qres(),
-		.mask(c), 
-		.cs(),
-		.pc(64'd0),
-		.pcc(128'd0),
-		.csr(64'd0),
-		.cpl(8'h00),
-		.coreno(64'd0),
-		.canary(),
-		.velsz(velsz),
-		.o(alu_o64),
-		.exc_o(),
-		.did_op(did_op)
-	);
-	if (PIPE==3'd3 || PIPE==3'd4)
+	if (SUPPORT_FMA)
 	fpFMA64LN ufma64 (
 		.clk(clk),
 		.op(ir[30]),		// 0=add,1=sub c
@@ -283,41 +309,141 @@ end
 end
 endgenerate
 
+generate begin : gIDiv
+if (SUPPORT_IDIV)
+Qupls4_meta_idiv uidiv0
+(
+	.rst(irst),
+	.clk(clk),
+	.clk2x(clk3x),
+	.ld(idiv_ld),
+	.rse_i(rse_i),
+	.rse_o(),
+	.cptgt(8'h00),
+	.z(1'b0),
+	.o(idiv_o),
+	.we_o(idiv_we),
+	.div_done(idiv_done),
+	.div_dbz(idiv_dbz),
+	.exc(div_exc)
+	/*
+	.q_rst(q_rst),
+	.q_trigger(q_trigger),
+	.q_rd(q_rd),
+	.q_wr(q_wr),
+	.q_addr(q_addr),
+	.q_rd_data(q_rd_data),
+	.q_wr_data(q_wr_data)
+	*/
+);
+else begin
+	assign idiv0_done = TRUE;
+	assign idiv0_dbz = FALSE;
+	assign idiv0_res = value_zero;
+	assign q_rst = 16'd0;
+	assign q_trigger = 16'd0;
+	assign q_rd = 16'd0;
+	assign q_wr = 16'd0;
+	assign q_addr = 16'd0;
+	assign q_wr_data = 64'd0;
+end
+end
+endgenerate
+
+generate begin : gISqrt
+if (SUPPORT_ISQRT)
+	Qupls4_meta_isqrt uimul0
+	(
+		.rst(irst),
+		.clk(clk),
+		.stomp(stomp),
+		.rse_i(rse_i),
+		.rse_o(),
+		.lane(rse_i.uop.num),
+		.cptgt(cptgt),
+		.z(1'b0),//isqrt_predz),
+		.o(isqrt_o),
+		.we_o(),
+		.done(isqrt_done)
+	);
+else begin
+	assign isqrt_we = FALSE;
+	assign isqrt_res = value_zero;
+end
+end
+endgenerate
 
 delay4 #(.WID(WID)) udly1 (.clk(clk), .ce(1'b1), .i(alu_o64), .o(aluo_64d));
-delay4 #(.WID(  1)) udly2 (.clk(clk), .ce(1'b1), .i(alu_did_op), .o(alu_did_opd));
 delay5 #(.WID($bits(Qupls4_pkg::micro_op_t))) udly3 (.clk(clk), .ce(1'b1), .i(ir), .o(ir5));
 delay5 #(.WID($bits(Qupls4_pkg::memsz_t))) udly4 (.clk(clk), .ce(1'b1), .i(prc), .o(prc5));
 
 
 always_comb
-if (Qupls4_pkg::SUPPORT_PREC)
-	case(prc)
-	2'd0:	o1 = o16;
-	2'd1:	o1 = o32;
-	2'd2:	o1 = o64;
-	2'd3:	o1 = o128;
-	endcase
-else if (Qupls4_pkg::SUPPORT_CAPABILITIES)
-	o1 = o128;
-else begin
+begin
 	done64 = FALSE;
 	case(ir5.opcode)
+	Qupls4_pkg::OP_R3BP,Qupls4_pkg::OP_R3WP,Qupls4_pkg::OP_R3TP,Qupls4_pkg::OP_R3OP,
+	Qupls4_pkg::OP_R3VVV,Qupls4_pkg::OP_R3VVS,
+	Qupls4_pkg::OP_R3B,Qupls4_pkg::OP_R3W,Qupls4_pkg::OP_R3T,Qupls4_pkg::OP_R3O:
+		case(ir5.func)
+		Qupls4_pkg::FN_DIV,Qupls4_pkg::FN_DIVU:
+			if (SUPPORT_IDIV) begin
+				o1 = idiv_o;
+				done64 = idiv_done;
+			end
+			else begin
+				o1 = value_zero;
+				done64 = TRUE;
+			end
+		Qupls4_pkg::FN_R1:
+			case(ir5.Rs2)
+			R1_SQRT:
+				begin
+					o1 = isqrt_o;
+					done64 = isqrt_done;
+				end
+			default:	
+				begin
+					o1 = value_zero;
+					done64 = TRUE;
+				end
+			endcase
+		default:	
+			begin
+				o1 = value_zero;
+				done64 = TRUE;
+			end
+		endcase
+
 	Qupls4_pkg::OP_FLTH,Qupls4_pkg::OP_FLTS,Qupls4_pkg::OP_FLTD,
 	Qupls4_pkg::OP_FLTPH,Qupls4_pkg::OP_FLTPS,Qupls4_pkg::OP_FLTPD,
 	Qupls4_pkg::OP_FLTVVV,Qupls4_pkg::OP_FLTVVS:
 		case(ir5.func)
 		Qupls4_pkg::FLT_FMA,Qupls4_pkg::FLT_FMS,Qupls4_pkg::FLT_FNMA,Qupls4_pkg::FLT_FNMS:
 			begin
-				o1 = fma_o64;
+				case(prc)
+				2'd0:	 o1 = fma_o16;
+				2'd1:	 o1 = fma_o32;
+				2'd2:	 o1 = fma_o64;
+				2'd3:   ;
+				endcase
 				done64 = TRUE;
 			end
 		default:
 			begin
 				o1 = alu_o64d;
-				done64 = alu_did_opd;
+				done64 = TRUE;
 			end
 		endcase
+	Qupls4_pkg::OP_DIVI,Qupls4_pkg::OP_DIVUI:
+		if (SUPPORT_IDIV) begin
+			o1 = idiv_o;
+			done64 = idiv_done;
+		end
+		else begin
+			o1 = value_zero;
+			done64 = TRUE;
+		end
 	Qupls4_pkg::OP_LDB,Qupls4_pkg::OP_LDBZ,Qupls4_pkg::OP_LDW,Qupls4_pkg::OP_LDWZ,
 	Qupls4_pkg::OP_LDT,Qupls4_pkg::OP_LDTZ,Qupls4_pkg::OP_LOAD,
 	Qupls4_pkg::OP_STB,Qupls4_pkg::OP_STW,
@@ -350,8 +476,8 @@ generate begin : gCptgt
     always_comb
     	if (stomp_con[1]||rse2.uop.opcode==Qupls4_pkg::OP_NOP)
         o[mm*8+7:mm*8] = t[mm*8+7:mm*8];
-      else if (cptgt[mm])
-        o[mm*8+7:mm*8] = z ? 8'h00 : t[mm*8+7:mm*8];
+//      else if (cptgt[mm])
+//        o[mm*8+7:mm*8] = z ? 8'h00 : t[mm*8+7:mm*8];
       else
         o[mm*8+7:mm*8] = o1[mm*8+7:mm*8];
     end
@@ -380,16 +506,6 @@ always_comb
 
 
 always_comb
-if (Qupls4_pkg::SUPPORT_PREC)
-	case(prc5)
-	2'd0:	done = done16;
-	2'd1:	done = done32;
-	2'd2:	done = done64;
-	2'd3: done = done128;
-	endcase
-else if (Qupls4_pkg::SUPPORT_CAPABILITIES)
-	done = done128;
-else
 	done = done64;
 //	done = ~sr64[6];
 always_comb
