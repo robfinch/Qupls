@@ -17,3 +17,5 @@ Pairs of pipelines can handle identical sets of instructions.
 |CAPAB     |          |          |
 |----------|----------|----------|
 | Lat. 1   |    5     | 2 to 70  |
+
+![Default Pipeline Configuration](./ExecConfig.png)
