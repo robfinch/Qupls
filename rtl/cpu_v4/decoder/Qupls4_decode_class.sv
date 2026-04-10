@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023-2026  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2026  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -32,97 +32,65 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 3600 LUTs / 1100 FFs	ALU0
-// 3100 LUTs / 700 FFs
-// 13.5k LUTs	/ 710 FFs ALU0 with capabilities
-//  7.5 kLUTs / 710 FFs ALU0 without capabilities
-// 14.5k LUTs / 1420 FFs ALU0 128-bit without capabilities
 // ============================================================================
 
-import const_pkg::*;
-import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_imul(rst, clk, issue, ir, a, b, bi, c, i, t, o, mul_done);
-parameter ALU0 = 1'b1;
-parameter WID=64;
-parameter LANE=0;
-input rst;
-input clk;
-input issue;
+module Qupls4_decode_class(instr, fclass);
+input Qupls4_pkg::micro_op_t instr;
+output [2:0] fclass;
+
+function [2:0] fnClass;
 input Qupls4_pkg::micro_op_t ir;
-input [WID-1:0] a;
-input [WID-1:0] b;
-input [WID-1:0] bi;
-input [WID-1:0] c;
-input [WID-1:0] i;
-input [WID-1:0] t;
-output reg [WID-1:0] o;
-output reg mul_done;
-
-wire [WID:0] zero = {WID+1{1'b0}};
-wire [WID:0] dead = {1'b0,{WID/16{16'hdead}}};
-reg [3:0] mul_cnt;
-reg [WID*2-1:0] prod, prod1, prod2;
-reg [WID*2-1:0] produ, produ1, produ2;
-(* retiming_forward=4 *)
-reg [WID:0] bus;
-reg [WID:0] o2, o3, o4;
-
-Qupls4_pkg::micro_op_t ir1;
-always_ff @(posedge clk)
-	ir1 <= ir;
-
-always_ff @(posedge clk)
 begin
-	prod2 <= $signed(a) * $signed(bi);
-	prod1 <= prod2;
-	prod <= prod1;
-end
-always_ff @(posedge clk)
-begin
-	produ2 <= a * bi;
-	produ1 <= produ2;
-	produ <= produ1;
-end
-
-always_ff @(posedge clk)
-if (rst) begin
-	mul_cnt <= 4'hF;
-	mul_done <= 1'b0;
-end
-else begin
-	mul_cnt <= {mul_cnt[2:0],1'b1};
-	if (issue)
-		mul_cnt <= 4'd0;
-	mul_done <= mul_cnt[3];
-end
-
-always_comb
-begin
-	bus = {(WID/16){16'h0000}};
-	case(ir1.opcode)
+	case(ir.opcode)
+	Qupls4_pkg::OP_LDB,Qupls4_pkg::OP_LDBZ,Qupls4_pkg::OP_LDW,Qupls4_pkg::OP_LDWZ,
+	Qupls4_pkg::OP_LDT,Qupls4_pkg::OP_LDTZ,Qupls4_pkg::OP_LOAD,
+	Qupls4_pkg::OP_STB,Qupls4_pkg::OP_STW,
+	Qupls4_pkg::OP_STT,Qupls4_pkg::OP_STORE,
+	Qupls4_pkg::OP_STI,
+	Qupls4_pkg::OP_STPTR,
+	Qupls4_pkg::OP_V2P,
+	Qupls4_pkg::OP_VV2P,
+	Qupls4_pkg::OP_AMO:
+		fnClass = 3'd0;
+	Qupls4_pkg::OP_BFLD:
+		fnClass = 3'd1;
 	Qupls4_pkg::OP_R3B,Qupls4_pkg::OP_R3W,Qupls4_pkg::OP_R3T,Qupls4_pkg::OP_R3O,
 	Qupls4_pkg::OP_R3BP,Qupls4_pkg::OP_R3WP,Qupls4_pkg::OP_R3TP,Qupls4_pkg::OP_R3OP,
-	Qupls4_pkg::OP_R3P:
-		case(ir1.func)
-		Qupls4_pkg::FN_MUL: 	bus = prod[WID-1:0];
-		Qupls4_pkg::FN_MULU:	bus = produ[WID-1:0];
-		default:	bus = zero;
-		endcase
-	Qupls4_pkg::OP_MULI:	bus = prod[WID-1:0];
-	Qupls4_pkg::OP_MULUI:	bus = produ[WID-1:0];
-	default:	bus = zero;
+	Qupls4_pkg::OP_R3VVV,Qupls4_pkg::OP_R3VVS:
+		fnClass = 3'd1;
+	Qupls4_pkg::OP_FLTH,Qupls4_pkg::OP_FLTS,Qupls4_pkg::OP_FLTD,Qupls4_pkg::OP_FLTQ,
+	Qupls4_pkg::OP_FLTPH,Qupls4_pkg::OP_FLTPS,Qupls4_pkg::OP_FLTPD,Qupls4_pkg::OP_FLTPQ,
+	Qupls4_pkg::OP_FLTVVV,Qupls4_pkg::OP_FLTVVS:
+		fnClass = 3'd2;
+	Qupls4_pkg::OP_CHK:	fnClass = 3'd1;
+	Qupls4_pkg::OP_ADDI:		fnClass = 3'd1;
+	Qupls4_pkg::OP_SUBFI:	fnClass = 3'd1;
+	Qupls4_pkg::OP_CMPI:		fnClass = 3'd1;
+	Qupls4_pkg::OP_CMPUI:		fnClass = 3'd1;
+	Qupls4_pkg::OP_ANDI:		fnClass = 3'd1;
+	Qupls4_pkg::OP_ORI:		fnClass = 3'd1;
+	Qupls4_pkg::OP_XORI:		fnClass = 3'd1;
+	Qupls4_pkg::OP_SHIFT:	fnClass = 3'd1;
+	Qupls4_pkg::OP_CSR:		fnClass = 3'd1;
+	Qupls4_pkg::OP_LOADI:		fnClass = 3'd1;
+	Qupls4_pkg::OP_MOVMR:		fnClass = 3'd1;
+	Qupls4_pkg::OP_LOADA:	fnClass = 3'd1;
+	Qupls4_pkg::OP_FENCE:
+		fnClass = 3'd1;
+	Qupls4_pkg::OP_BCC,Qupls4_pkg::OP_BCCU,Qupls4_pkg::OP_FBCC,
+	Qupls4_pkg::OP_BSR,Qupls4_pkg::OP_JSR,Qupls4_pkg::OP_JSRN,
+	Qupls4_pkg::OP_SYS,
+	Qupls4_pkg::OP_BRK,
+	Qupls4_pkg::OP_RTD:
+		fnClass = 3'd3;
+	default:
+		fnClass = 3'd7;
 	endcase
 end
+endfunction
 
-always_ff @(posedge clk)
-	o2 = bus;
-always_ff @(posedge clk)
-	o3 = o2;
-always_ff @(posedge clk)
-	o4 = o3;
-always_ff @(posedge clk)
-	o = o4;
+assign fclass = fnClass(instr);
 
 endmodule

@@ -35,36 +35,54 @@
 // 60 LUTs
 // ============================================================================
 //
-import const_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_meta_branch_eval(rst, clk, instr, a, b, c, takb);
+module Qupls4_branch_eval(instr, a, b, c, takb);
 parameter WID=64;
-input rst;
-input clk;
 input Qupls4_pkg::micro_op_t instr;
-input [WID-1:0] a;
+input [WID-1+8:0] a;
 input [WID-1:0] b;
 input c;
 output reg takb;
 
-wire takb8, takb16, takb32, takb64;
-Qupls4_branch_eval #(.WID( 8))  u8 (instr, a[7: 0], b[7: 0], c, takb8);
-Qupls4_branch_eval #(.WID(16)) u16 (instr, a[15:0], b[15:0], c, takb16);
-Qupls4_branch_eval #(.WID(32)) u32 (instr, a[31:0], b[31:0], c, takb32);
-Qupls4_branch_eval #(.WID(64)) u64 (instr, a[63:0], b[63:0], c, takb64);
-
-always_ff @(posedge clk)
-if (rst) begin
-	takb <= FALSE;
-end
-else begin
+always_comb
 	case(instr.opcode)
-	Qupls4_pkg::OP_BCCU,Qupls4_pkg::OP_BCC:
-		takb <= takb64;
-	default:	takb <= FALSE;
+	Qupls4_pkg::OP_BCCU:	// integer unsigned branches
+		case(instr.cnd)
+		CND_EQ:	takb = a[WID-1:0] == b;
+		CND_NE:	takb = a[WID-1:0] != b;
+		CND_LT:	takb = a[WID-1:0] < b;
+		CND_LE:	takb = a[WID-1:0] <= b;
+		CND_GE: takb = a[WID-1:0] >= b;
+		CND_GT:	takb = a[WID-1:0] > b;
+		// Bit set or clear
+		CND_BBC:	takb = ~a[b[6:0]];
+		CND_BBS:	takb =  a[b[6:0]];
+		// Logical 0 or 1
+		CND_NAND:	takb = ~(|a[WID-1:0] & |b);
+		CND_AND:	takb = |a[WID-1:0] & |b;
+		CND_NOR:	takb = ~(|a[WID-1:0] | |b);
+		CND_OR:	takb = |a[WID-1:0] | |b;
+		CND_BOI:	takb = c;
+		default:	takb = 1'b0;
+		endcase
+	Qupls4_pkg::OP_BCC:	// integer signed branches
+		case(instr.cnd)
+		CND_EQ:	takb = a[WID-1:0] == b;
+		CND_NE:	takb = a[WID-1:0] != b;
+		CND_LT:	takb = $signed(a[WID-1:0]) < $signed(b);
+		CND_LE:	takb = $signed(a[WID-1:0]) <= $signed(b);
+		CND_GE: takb = $signed(a[WID-1:0]) >= $signed(b);
+		CND_GT:	takb = $signed(a[WID-1:0]) > $signed(b);
+		// Bitwise 0 or 1
+		CND_NAND:	takb = ~|(a[WID-1:0] & b);
+		CND_AND:	takb = |(a[WID-1:0] & b);
+		CND_NOR:	takb = ~|(a[WID-1:0] | b);
+		CND_OR:	takb = |(a[WID-1:0] | b);
+		default:	takb = 1'b0;
+		endcase
+	default:	takb = 1'b0;
 	endcase
-end
 
 endmodule
 

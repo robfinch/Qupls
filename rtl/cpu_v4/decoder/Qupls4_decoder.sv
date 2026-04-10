@@ -56,6 +56,12 @@ wire [3:0] pred_shadow_count;
 //assign db = {$bits(decode_bus_t){1'b0}};	// Creates multi-driven nets
 assign db.v = 1'b1;
 
+Qupls4_decode_expipe uexpipe1
+(
+	.instr(instr),
+	.expipe(db.expipe)
+);
+
 Qupls4_decode_const udcimm
 (
 	.ins(instr),
@@ -103,7 +109,14 @@ Qupls4_decode_Rs3 udcrc
 	.Rs3z(db.Rs3z)
 );
 
-Qupls4_decode_Rd udcrt
+Qupls4_decode_Rm udcrt
+(
+	.instr(instr),
+	.Rm(db.Rm),
+	.Rmz(db.Rmz)
+);
+
+Qupls4_decode_Rd udcrm
 (
 	.om(om),
 	.instr(instr),
@@ -360,6 +373,12 @@ Qupls4_decode_eret uderet1
 (
 	.instr(instr),
 	.eret(db.eret)
+);
+
+Qupls4_decode_class udecfclss
+(
+	.instr(instr),
+	.fclass(db.fclass)
 );
 /*
 Stark_decode_rex udrex1

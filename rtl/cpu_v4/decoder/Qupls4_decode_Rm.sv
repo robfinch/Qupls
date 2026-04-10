@@ -32,86 +32,39 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
+// 15 LUTs
 // ============================================================================
 
-import const_pkg::*;
+import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
+module Qupls4_decode_Rm(instr, Rm, Rmz);
+input Qupls4_pkg::micro_op_t instr;
+output aregno_t Rm;
+output reg Rmz;
 
-module Qupls4_meta_fcu(rst, clk, rse_i, rse_o, sr, ic_irq, irq_sn, takb, res, we_o);
-parameter WID = 64;
-input rst;
-input clk;
-input Qupls4_pkg::reservation_station_entry_t rse_i;
-output Qupls4_pkg::reservation_station_entry_t rse_o;
-input status_reg_t sr;
-input [5:0] ic_irq;
-input [7:0] irq_sn;
-output takb;
-output cpu_types_pkg::value_t res;
-output reg [8:0] we_o;
-
-reg [WID-1+8:0] a;
-reg [WID-1:0] b;
-reg [WID-1:0] c;
-reg [WID-1:0] i;
-reg [WID-1:0] t;
-cpu_types_pkg::pc_address_t pc;
+function aregno_t fnRm;
+input Qupls4_pkg::micro_op_t instr;
 Qupls4_pkg::micro_op_t ir;
-
-always_comb ir = rse_i.uop;
-always_comb a = {rse_i.arg[0].flags,rse_i.arg[0].val};
-always_comb b = rse_i.arg[1].val;
-always_comb c = rse_i.arg[2].val;
-always_comb t = rse_i.arg[3].val;
-always_comb i = rse_i.argI;
-always_comb pc = rse_i.pc;
-
-Qupls4_meta_branch_eval ube1
-(
-	.rst(rst),
-	.clk(clk),
-	.instr(ir),
-	.a(a),
-	.b(b),
-	.c(ic_irq > sr.ipl && sr.mie && irq_sn!=rse_i.irq_sn || ic_irq==6'd63),
-	.takb(takb)
-);
-
-always_ff @(posedge clk)
-	case(1'b1)
-	rse_i.bsr:	res <= rse_i.pc.pc + 4'd6;
-	rse_i.jsr:	res <= rse_i.pc.pc + 4'd6;
-	rse_i.cjb:	res <= rse_i.pc.pc + 4'd6;
-	rse_i.ibcc:	res <= a + 2'd1;		// destination is Rs1
-	rse_i.dbcc:	res <= a - 2'd1;		// destination is Rs1
-	rse_i.ret:	res <= t + i;			// destination is Rd	(SP)
-	default:	res <= value_zero;
-	endcase
-
-// Filter out branches
-always_ff @(posedge clk)
-if (rst)
-	rse_o <= {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
-else begin
-	if (rse_i.fclass==3'd3)
-		rse_o <= rse_i;
-	else
-		rse_o <= {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
-end
-
-always_ff @(posedge clk)
+reg has_rext;
 begin
-	case(1'b1)
-	rse_i.ibcc:	we_o <= {9{rse_i.we}};
-	rse_i.dbcc:	we_o <= {9{rse_i.we}};
-	rse_i.ret:	we_o <= {9{rse_i.we}};
-	rse_i.bsr:	we_o <= {9{rse_i.we}};
-	rse_i.jsr:	we_o <= {9{rse_i.we}};
-	rse_i.cjb:	we_o <= {9{rse_i.we}};
-	default:	we_o <= {9{FALSE}};
+	ir = instr;
+	case(ir.opcode)
+	Qupls4_pkg::OP_FLTH,Qupls4_pkg::OP_FLTS,Qupls4_pkg::OP_FLTD,Qupls4_pkg::OP_FLTQ,
+	Qupls4_pkg::OP_FLTPH,Qupls4_pkg::OP_FLTPS,Qupls4_pkg::OP_FLTPD,Qupls4_pkg::OP_FLTPQ,
+	Qupls4_pkg::OP_FLTVVV,Qupls4_pkg::OP_FLTVVS:
+		fnRm = ir.rmd==3'b111 ? 7'd125 : 7'd0;
+	// ToDo: ASR round mode
+	default:
+		fnRm = 7'd0;
 	endcase
+end
+endfunction
+
+always_comb
+begin
+	Rm = fnRm(instr);
+	Rmz = ~|Rm[6:0];
 end
 
 endmodule
-

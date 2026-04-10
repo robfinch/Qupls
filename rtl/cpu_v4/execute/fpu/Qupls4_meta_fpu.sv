@@ -41,7 +41,7 @@ import Qupls4_pkg::*;
 
 module Qupls4_meta_fpu(rst, clk, clk3x, idle, stomp, rse_i, rse_o, rm,
 	z, cptgt, o, sto, ust, otag, we_o, done, exc,
-	out, tlb_v, page_fault, page_fault_v, load_store, vlsndx, amo, res, resv);
+	tlb_v, adr, adrv, agen_rse);
 parameter WID=Qupls4_pkg::SUPPORT_QUAD_PRECISION|Qupls4_pkg::SUPPORT_CAPABILITIES ? 128 : 64;
 input rst;
 input clk;
@@ -60,15 +60,10 @@ output reg ust;
 output reg [WID/8:0] we_o;
 output reg done;
 output Qupls4_pkg::cause_code_t exc;
-input out;
 input tlb_v;
-input page_fault;
-input page_fault_v;
-input load_store;
-input vlsndx;
-input amo;
-output cpu_types_pkg::address_t res;
-output reg resv;
+output cpu_types_pkg::address_t adr;
+output reg adrv;
+output Qupls4_pkg::reservation_station_entry_t agen_rse;
 
 Qupls4_pkg::reservation_station_entry_t rse1,rse2;
 Qupls4_pkg::operating_mode_t om;
@@ -111,24 +106,20 @@ genvar g,mm;
 // AGEN logic
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
+reg resv1;
+
 always_ff @(posedge clk) 
-begin
 	rse1 <= rse_i;
-	if (page_fault && !rse_i.excv) begin
-		rse1.exc <= Qupls4_pkg::FLT_PAGE;
-		rse1.excv <= page_fault_v;
-	end
-end
 always_ff @(posedge clk)
 	rse2 <= rse1;
 always_comb
 	rse_o = rse2;
 
 always_ff @(posedge clk)
-	as = rse_i.Rs1z ? value_zero : rse_i.Rs1ip ? rse_i.pc : rse_i.arg[0].val;
+	as <= rse_i.Rs1z ? value_zero : rse_i.Rs1ip ? rse_i.pc : rse_i.arg[0].val;
 
 always_ff @(posedge clk)
-	bs = rse_i.Rs2z ? value_zero : (rse_i.arg[1].val * ({rse_i.uop.sc==3'd0,rse_i.uop.sc}));
+	bs <= rse_i.Rs2z ? value_zero : (rse_i.arg[1].val * ({rse_i.uop.sc==3'd0,rse_i.uop.sc}));
 
 always_comb
 	case(rse_i.velesz)
@@ -140,36 +131,45 @@ always_comb
 
 always_comb
 begin
-	if (vlsndx)
-		res1 = as + (bs >> shift) + rse_i.argI;
-	else if (amo)
+	if (rse1.vlsndx)
+		res1 = as + (bs >> shift) + rse1.argI;
+	else if (rse1.amo)
 		res1 = as;				// just [Rs1]
 	// Lane number is 1 for non-vector load/store
-	else if (load_store)
-		res1 = as + bs * rse_i.laneno + rse_i.argI;
+	else if (rse1.load|rse1.store)
+		res1 = as + bs * rse1.laneno + rse1.argI;
 	else
 		res1 = 64'd0;
 end
 
 always_ff @(posedge clk)
-	res <= res1;
+	if (resv1)
+		adr <= res1;
+
+always_ff @(posedge clk)
+	if (rse1.vlsndx|rse1.amo|rse1.load|rse1.store)
+		agen_rse <= rse1;
 
 // Make Agen valid sticky
 // The agen takes a clock cycle to compute after the out signal is valid.
-reg resv1;
 always_ff @(posedge clk) 
 if (rst) begin
-	resv <= INV;
 	resv1 <= INV;
 end
 else begin
-	if (out)
+	if (rse_i.vlsndx|rse_i.amo|rse_i.load|rse_i.store)
 		resv1 <= VAL;
-	resv <= resv1;
-	if (tlb_v) begin
+	if (tlb_v)
 		resv1 <= INV;
-		resv <= INV;
-	end
+end
+
+always_ff @(posedge clk) 
+if (rst)
+	adrv <= INV;
+else begin
+	adrv <= resv1;
+	if (tlb_v)
+		adrv <= INV;
 end
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

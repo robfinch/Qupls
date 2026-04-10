@@ -43,8 +43,7 @@ import Qupls4_pkg::*;
 module Qupls4_meta_alu(rst, clk, rse_i, rse_o, lane, cptgt, z, stomp,
 	qres, cs, csr, cpl, canary, o, cp_o, we_o, exc,
 	fcu_rse_o, sr, ic_irq, irq_sn, takb, adr);
-parameter SAU0 = 1'b0;
-parameter SAU1 = 1'b0;
+parameter PIPE = 3'd0;	
 parameter WID=$bits(cpu_types_pkg::value_t); 
 input rst;
 input clk;
@@ -268,7 +267,7 @@ generate begin : g8
 reg [WID-1:0] c1;
 	if (Qupls4_pkg::SUPPORT_PREC)
 	for (g = 0; g < WID/8; g = g + 1)
-		Qupls4_sau #(.WID(8), .SAU0(SAU0), .LANE(g)) ualu8
+		Qupls4_alu #(.WID(8), .PIPE(PIPE), .LANE(g)) ualu8
 		(
 			.rst(rst),
 			.clk(clk),
@@ -282,6 +281,11 @@ reg [WID-1:0] c1;
 			.c(c[g*8+7:g*8]),
 			.i(i),
 			.t(t[g*8+7:g*8]),
+			.a_flags(8'h00),
+			.b_flags(8'h00),
+			.c_flags(8'h00),
+			.t_flags(8'h00),
+			.flags_o(),
 			.qres(qres[g*8+7:g*8]),
 			.cs(cs),
 			.pc(pc),
@@ -371,7 +375,7 @@ generate begin : g16
 reg [WID-1:0] c1;
 	if (Qupls4_pkg::SUPPORT_PREC)
 	for (g = 0; g < WID/16; g = g + 1)
-		Qupls4_sau #(.WID(16), .SAU0(SAU0), .LANE(g)) ualu16
+		Qupls4_alu #(.WID(16), .PIPE(PIPE), .LANE(g)) ualu16
 		(
 			.rst(rst),
 			.clk(clk),
@@ -385,6 +389,11 @@ reg [WID-1:0] c1;
 			.c(c[g*16+15:g*16]),
 			.i(i),
 			.t(t[g*16+15:g*16]),
+			.a_flags(8'h00),
+			.b_flags(8'h00),
+			.c_flags(8'h00),
+			.t_flags(8'h00),
+			.flags_o(),
 			.qres(qres[g*16+15:g*16]),
 			.cs(cs),
 			.pc(pc),
@@ -451,7 +460,7 @@ generate begin : g32
 reg [WID-1:0] c1;
 	if (Qupls4_pkg::SUPPORT_PREC)
 	for (g = 0; g < WID/32; g = g + 1)
-		Qupls4_sau #(.WID(32), .SAU0(SAU0), .LANE(g)) usau32
+		Qupls4_alu #(.WID(32), .PIPE(PIPE), .LANE(g)) usau32
 		(
 			.rst(rst),
 			.clk(clk),
@@ -465,6 +474,11 @@ reg [WID-1:0] c1;
 			.c(c[g*32+31:g*32]),
 			.i(i),
 			.t(t[g*32+31:g*32]),
+			.a_flags(8'h00),
+			.b_flags(8'h00),
+			.c_flags(8'h00),
+			.t_flags(8'h00),
+			.flags_o(),
 			.qres(qres[g*32+31:g*32]),
 			.cs(cs),
 			.pc(pc),
@@ -509,7 +523,7 @@ generate begin : g64
 reg [WID-1:0] c1;
 	if (Qupls4_pkg::SUPPORT_PREC || WID==64)
 	for (g = 0; g < WID/64; g = g + 1)
-		Qupls4_sau #(.WID(64), .SAU0(SAU0), .SAU1(SAU1), .LANE(g)) usau64
+		Qupls4_alu #(.WID(64), .PIPE(PIPE), .LANE(g)) usau64
 		(
 			.rst(rst),
 			.clk(clk),
@@ -523,6 +537,11 @@ reg [WID-1:0] c1;
 			.c(c[g*64+63:g*64]),
 			.i(i),
 			.t(t[g*64+63:g*64]),
+			.a_flags(8'h00),
+			.b_flags(8'h00),
+			.c_flags(8'h00),
+			.t_flags(8'h00),
+			.flags_o(),
 			.qres(qres[g*64+63:g*64]),
 			.cs(cs),
 			.pc(pc),
@@ -567,7 +586,7 @@ endgenerate
 generate begin : g128
 	if (WID==128)
 	for (g = 0; g < WID/128; g = g + 1)
-		Qupls4_sau #(.WID(128), .SAU0(SAU0), .LANE(g)) usau128
+		Qupls4_alu #(.WID(128), .PIPE(PIPE), .LANE(g)) usau128
 		(
 			.rst(rst),
 			.clk(clk),
@@ -581,6 +600,11 @@ generate begin : g128
 			.c(c[g*128+127:g*128]),
 			.i(i),
 			.t(t[g*128+127:g*128]),
+			.a_flags(8'h00),
+			.b_flags(8'h00),
+			.c_flags(8'h00),
+			.t_flags(8'h00),
+			.flags_o(),
 			.qres(qres[g*128+127:g*128]),
 			.cs(cs),
 			.pc(pc),
@@ -680,8 +704,8 @@ generate begin : gCptgt
     begin
     	if (stompo[rse_o.rndx])
     		o[mm*8+7:mm*8] = t1[mm*8+7:mm*8];
-      else if (cptgt1[mm])
-        o[mm*8+7:mm*8] = z1 ? 8'h00 : t1[mm*8+7:mm*8];
+//      else if (cptgt1[mm])
+//        o[mm*8+7:mm*8] = z1 ? 8'h00 : t1[mm*8+7:mm*8];
       else
         o[mm*8+7:mm*8] = o1[mm*8+7:mm*8];
     end
@@ -694,9 +718,9 @@ endgenerate
 generate begin : gExc
 	for (xx = 0; xx < WID/8; xx = xx + 1)
     always_comb
-      if (cptgt[xx])
-        exc[xx*8+7:xx*8] = Qupls4_pkg::FLT_NONE;
-      else
+//      if (cptgt[xx])
+//        exc[xx*8+7:xx*8] = Qupls4_pkg::FLT_NONE;
+//      else
         exc[xx*8+7:xx*8] = exc1[xx*8+7:xx*8];
 end
 endgenerate

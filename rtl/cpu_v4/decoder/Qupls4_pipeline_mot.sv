@@ -47,7 +47,7 @@ module Qupls4_pipeline_mot(rst, clk, en, stomp, stomp2, cline_ext, cline_mot,
 parameter MWIDTH = Qupls4_pkg::MWIDTH;
 parameter MICROOPS_PER_INSTR = 16;
 parameter MAX_MICROOPS = 12;
-parameter COMB = 1;
+parameter COMB = 0;
 input rst;
 input clk;
 input en;

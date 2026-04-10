@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2023-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2026  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -32,54 +32,67 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 60 LUTs
 // ============================================================================
-//
+
+import const_pkg::*;
+import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_branch_eval(instr, a, b, c, takb);
+module Qupls4_isqrt(rst, clk, issue, ir, a, c, i, t, o, mul_done);
+parameter ALU0 = 1'b1;
 parameter WID=64;
-input Qupls4_pkg::micro_op_t instr;
+parameter LANE=0;
+input rst;
+input clk;
+input issue;
+input Qupls4_pkg::micro_op_t ir;
 input [WID-1:0] a;
-input [WID-1:0] b;
-input c;
-output reg takb;
+input [WID-1:0] c;
+input [WID-1:0] i;
+input [WID-1:0] t;
+output reg [WID-1:0] o;
+output reg mul_done;
+
+wire [WID:0] zero = {WID+1{1'b0}};
+wire [WID:0] dead = {1'b0,{WID/16{16'hdead}}};
+reg [3:0] mul_cnt;
+reg [WID*2-1:0] prod, prod1, prod2;
+reg [WID*2-1:0] produ, produ1, produ2;
+(* retiming_forward=4 *)
+reg [WID:0] bus;
+reg [WID:0] sqrto;
+
+isqrt #(.WID(WID)) usqrt1
+(
+	.rst(rst),
+	.clk(clk),
+	.ce(1'b1),
+	.ld(issue),
+	.a(a),
+	.o(sqrto),
+	.done(done)
+);
 
 always_comb
-	case(instr.opcode)
-	Qupls4_pkg::OP_BCCU:	// integer unsigned branches
-		case(instr.cnd)
-		CND_EQ:	takb = a == b;
-		CND_NE:	takb = a != b;
-		CND_LT:	takb = a < b;
-		CND_LE:	takb = a <= b;
-		CND_GE: takb = a >= b;
-		CND_GT:	takb = a > b;
-		// Logical 0 or 1
-		CND_NAND:	takb = ~(|a & |b);
-		CND_AND:	takb = |a & |b;
-		CND_NOR:	takb = ~(|a | |b);
-		CND_OR:	takb = |a | |b;
-		CND_BOI:	takb = c;
-		default:	takb = 1'b0;
+begin
+	bus = {(WID/16){16'h0000}};
+	case(ir.opcode)
+	Qupls4_pkg::OP_R3B,Qupls4_pkg::OP_R3W,Qupls4_pkg::OP_R3T,Qupls4_pkg::OP_R3O,
+	Qupls4_pkg::OP_R3BP,Qupls4_pkg::OP_R3WP,Qupls4_pkg::OP_R3TP,Qupls4_pkg::OP_R3OP,
+	Qupls4_pkg::OP_R3P:
+		case(ir.func)
+		FN_R1:
+			case(ir.Rs2)
+			R1_SQRT:	bus = sqrto;
+			default:	bus = zero;
+			endcase
+		default:	bus = zero;
 		endcase
-	Qupls4_pkg::OP_BCC:	// integer signed branches
-		case(instr.cnd)
-		CND_EQ:	takb = a == b;
-		CND_NE:	takb = a != b;
-		CND_LT:	takb = $signed(a) < $signed(b);
-		CND_LE:	takb = $signed(a) <= $signed(b);
-		CND_GE: takb = $signed(a) >= $signed(b);
-		CND_GT:	takb = $signed(a) > $signed(b);
-		// Bitwise 0 or 1
-		CND_NAND:	takb = ~|(a & b);
-		CND_AND:	takb = |(a & b);
-		CND_NOR:	takb = ~|(a | b);
-		CND_OR:	takb = |(a | b);
-		default:	takb = 1'b0;
-		endcase
-	default:	takb = 1'b0;
+	default:	bus = zero;
 	endcase
+end
+
+always_ff @(posedge clk)
+	o = bus;
 
 endmodule
-

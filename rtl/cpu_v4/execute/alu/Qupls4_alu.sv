@@ -32,7 +32,7 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 4000 LUTs / 70 FFs	SAU0
+// 4000 LUTs / 70 FFs	ALU
 // ============================================================================
 
 import const_pkg::*;
@@ -40,14 +40,15 @@ import fp64Pkg::*;
 import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_alu(rst, clk, clk2x, chunk, om, ld, ir, div, Ra, a, b, bi, c, i, t, qres,
-	mask, cs, pc, pcc, csr, cpl, coreno, canary, velsz, o, exc_o, did_op);
+module Qupls4_alu(rst, clk, clk2x, chunk, om, ld, ir, div, Ra, a, b, bi, c,
+	a_flags, b_flags, c_flags, t_flags, i, t, qres,
+	mask, cs, pc, pcc, csr, cpl, coreno, canary, velsz, o, o_flags, exc_o, did_op);
 parameter PIPE = 3'd0;
-parameter SUPPORT_SHIFT = PIPE==3'd0;
-parameter SUPPORT_COUNT = PIPE==3'd0;
-parameter SUPPORT_CRYPTO = PIPE==3'd1;
-parameter SUPPORT_INFO = PIPE==3'd0;
-parameter SUPPORT_CSR = PIPE==3'd0;
+parameter SUPPORT_SHIFT = (PIPE==3'd0 && SUPPORT_SHIFT0) || (PIPE==3'd1 && SUPPORT_SHIFT1);
+parameter SUPPORT_COUNT = (PIPE==3'd0 && SUPPORT_COUNT0) || (PIPE==3'd1 && SUPPORT_COUNT1);
+parameter SUPPORT_CRYPTO = (PIPE==3'd1 && SUPPORT_CRYPTO1) || (PIPE==3'd0 && SUPPORT_CRYPTO0);
+parameter SUPPORT_INFO = (PIPE==3'd0 && SUPPORT_INFO0) || (PIPE==3'd1 && SUPPORT_INFO1);
+parameter SUPPORT_CSR = (PIPE==3'd0 && SUPPORT_CSR0) || (PIPE==3'd1 && SUPPORT_CSR1);
 parameter SUPPORT_BRANCH = PIPE==3'd1;
 parameter WID=64;
 parameter LANE=0;
@@ -67,6 +68,10 @@ input [WID-1:0] bi;
 input [WID-1:0] c;
 input [WID-1:0] i;
 input [WID-1:0] t;
+input flags_t a_flags;
+input flags_t b_flags;
+input flags_t c_flags;
+input flags_t t_flags;
 input [WID-1:0] qres;
 input [63:0] mask;
 input [2:0] cs;
@@ -78,6 +83,7 @@ input [WID-1:0] coreno;
 input [WID-1:0] canary;
 input [2:0] velsz;
 output reg [WID-1:0] o;
+output reg flags_t o_flags;
 output Qupls4_pkg::cause_code_t exc_o;
 output reg did_op;
 
@@ -86,6 +92,7 @@ integer nn,kk,jj;
 integer element_number;
 reg [7:0] cm;
 reg [63:0] mask1;
+reg [WID-1:0] mask2;
 reg [5:0] base_eleno;
 reg [6:0] elesz;
 Qupls4_pkg::cause_code_t exc;
@@ -119,6 +126,40 @@ begin
 		fnBitRev[nn] = i[WID-1-nn];
 end
 endfunction
+
+// If the signs of the operands are the same, and the sign of the result does
+// not match the operands sign.
+function fnAddOverflow;
+input r;
+input a;
+input b;
+	fnAddOverflow = (r ^ b) & (1'b1 ^ a ^ b);
+endfunction
+
+// If the signs of the operands are different and sign of the result does not
+// match the first operand.
+function fnSubOverflow;
+input r;
+input a;
+input b;
+	fnSubOverflow = (r ^ a) & (a ^ b);
+endfunction
+
+reg ibranch;
+reg dbranch;
+
+always_comb
+begin
+	ibranch = FALSE;
+	dbranch = FALSE;
+	case(ir.cnd)
+	CND_NE:	dbranch = ir.inc;
+	CND_LT:	ibranch = ir.inc;
+	CND_LE:	ibranch = ir.inc;
+	default:	;
+	endcase
+end
+
 
 always_comb
 	ii = {{6{i[WID-1]}},i};
@@ -405,11 +446,21 @@ always_comb
 
 always_comb
 begin
+	case(elesz)
+	8'd8:	base_eleno = {chunk,3'd0};
+	8'd16:base_eleno = {chunk,2'd0};
+	8'd32:base_eleno = {chunk,1'd0};
+	8'd64:base_eleno = chunk;
+	endcase
+	mask1 = c >> base_eleno;
+end
+
+always_comb
+begin
 	did_op = FALSE;
 	exc = Qupls4_pkg::FLT_NONE;
 	bus = {(WID/16){16'h0000}};
-	base_eleno = {chunk,2'd0};
-	mask1 = c >> base_eleno;
+	o_flags = t_flags;
 	case(ir.opcode)
 	Qupls4_pkg::OP_R3BP,Qupls4_pkg::OP_R3WP,Qupls4_pkg::OP_R3TP,Qupls4_pkg::OP_R3OP,
 	Qupls4_pkg::OP_R3VVV,Qupls4_pkg::OP_R3VVS:
@@ -425,6 +476,14 @@ begin
 				default:	bus = zero;
 				endcase
 				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
 			end
 
 		Qupls4_pkg::FN_SEQ:
@@ -439,6 +498,14 @@ begin
 				default:	bus = zero;
 				endcase
 				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
 			end
 
 		Qupls4_pkg::FN_SNE:
@@ -453,6 +520,14 @@ begin
 				default:	bus = zero;
 				endcase
 				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
 			end
 
 		Qupls4_pkg::FN_SLT:
@@ -467,6 +542,14 @@ begin
 				default:	bus = zero;
 				endcase
 				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
 			end
 
 		Qupls4_pkg::FN_SLE:
@@ -481,6 +564,14 @@ begin
 				default:	bus = zero;
 				endcase
 				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
 			end
 
 		Qupls4_pkg::FN_SLTU:
@@ -495,6 +586,14 @@ begin
 				default:	bus = zero;
 				endcase
 				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
 			end
 
 		Qupls4_pkg::FN_SLEU:
@@ -509,6 +608,14 @@ begin
 				default:	bus = zero;
 				endcase
 				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
 			end
 
 		Qupls4_pkg::FN_ADD:
@@ -522,6 +629,14 @@ begin
 				default:	bus = zero;
 				endcase
 				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = fnAddOverflow(bus[WID-1],a[WID-1],b[WID-1]);
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = bus[WID];
+				o_flags.ptr = a_flags.ptr ^ b_flags.ptr;
+				o_flags.cap = FALSE;
 			end
 
 		Qupls4_pkg::FN_SUB:
@@ -535,6 +650,14 @@ begin
 				default:	bus = zero;
 				endcase
 				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = fnSubOverflow(bus[WID-1],a[WID-1],b[WID-1]);
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = bus[WID];
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
 			end
 
 		Qupls4_pkg::FN_AND:
@@ -548,6 +671,14 @@ begin
 				default:	bus = zero;
 				endcase
 				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
 			end
 
 		Qupls4_pkg::FN_OR:
@@ -561,6 +692,14 @@ begin
 				default:	bus = zero;
 				endcase
 				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
 			end
 
 		Qupls4_pkg::FN_XOR:
@@ -574,6 +713,14 @@ begin
 				default:	bus = zero;
 				endcase
 				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
 			end
 
 		Qupls4_pkg::FN_ASL:
@@ -587,32 +734,59 @@ begin
 				default:	bus = zero;
 				endcase
 				did_op = TRUE;
+				mask2 = ({{WID-1{1'b0}},1'b1} << b[5:0]) - 1;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				// Overflow: if any of the bits shifted out are not equal to the sign bit.
+				o_flags.ovf = bus[WID-1] ? (shl[WID*2-1:WID] & mask2) != ({WID{1'b1}} & mask2) :
+																	(shl[WID*2-1:WID] & mask2) != {WID{1'b0}};
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = |shl[WID*2-1:WID];
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
 			end
 
 		Qupls4_pkg::FN_LSR:
 			if (SUPPORT_SHIFT) begin
 				case(ir.op3)
-				3'd0:	bus = shr & c;
-				3'd1:	bus = shr | c;
-				3'd2:	bus = shr ^ c;
-				3'd3:	bus = shr + c;
-				3'd6:	bus = mask1[LANE] ? shr : t;
+				3'd0:	bus = shr[WID*2-1:WID] & c;
+				3'd1:	bus = shr[WID*2-1:WID] | c;
+				3'd2:	bus = shr[WID*2-1:WID] ^ c;
+				3'd3:	bus = shr[WID*2-1:WID] + c;
+				3'd6:	bus = mask1[LANE] ? shr[WID*2-1:WID] : t;
 				default:	bus = zero;
 				endcase
 				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = |shr[WID-1:0];
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
 			end
 
 		Qupls4_pkg::FN_ASR:
 			if (SUPPORT_SHIFT) begin
 				case(ir.op3)
-				3'd0: bus = asr;
-				3'd1:	bus = asr;
-				3'd2:	bus = asr;
-				3'd3:	bus = asr;
-				3'd6:	bus = mask1[LANE] ? asr : t;
+				3'd0: bus = asr[WID*2-1:WID];
+				3'd1:	bus = asr[WID*2-1:WID];
+				3'd2:	bus = asr[WID*2-1:WID];
+				3'd3:	bus = asr[WID*2-1:WID];
+				3'd6:	bus = mask1[LANE] ? asr[WID*2-1:WID] : t;
 				default:	bus = zero;
 				endcase
 				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = |asr[WID-1:0];
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
 			end
 
 		Qupls4_pkg::FN_ROL:
@@ -626,6 +800,14 @@ begin
 				default:	bus = zero;
 				endcase
 				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = |shl[WID*2-1:WID];
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
 			end
 
 		Qupls4_pkg::FN_ROR:
@@ -639,12 +821,21 @@ begin
 				default:	bus = zero;
 				endcase
 				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = |shr[WID-1:0];
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
 			end
 			
 		Qupls4_pkg::FN_MOVE:
 			begin
 				bus = b;
 				did_op = TRUE;
+				o_flags = b_flags;
 			end
 
 		default:	bus = zero;
@@ -662,17 +853,121 @@ begin
 				default:	;
 				endcase
 				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
 			end
 			else
 				bus = zero;
-		Qupls4_pkg::FN_CMP:	begin bus = cmpo; did_op = TRUE; end
-		Qupls4_pkg::FN_CMPU:	begin bus = cmpo; did_op = TRUE; end
-		Qupls4_pkg::FN_SEQ:	begin bus = a==b; did_op = TRUE; end
-		Qupls4_pkg::FN_SNE:	begin bus = a != b; did_op = TRUE; end
-		Qupls4_pkg::FN_SLT:	begin bus = $signed(a) < $signed(b); did_op = TRUE; end
-		Qupls4_pkg::FN_SLE:	begin bus = $signed(a) <= $signed(b); did_op = TRUE; end
-		Qupls4_pkg::FN_SLTU:	begin bus = a < b; did_op = TRUE; end
-		Qupls4_pkg::FN_SLEU:	begin bus = a <= b; did_op = TRUE; end
+		Qupls4_pkg::FN_CMP:	
+			begin
+				bus = cmpo;
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+		Qupls4_pkg::FN_CMPU:
+			begin
+				bus = cmpo;
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+		Qupls4_pkg::FN_SEQ:
+			begin
+				bus = a==b;
+				did_op = TRUE; 
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+		Qupls4_pkg::FN_SNE:
+			begin
+				bus = a != b;
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+		Qupls4_pkg::FN_SLT:
+			begin
+				bus = $signed(a) < $signed(b);
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+		Qupls4_pkg::FN_SLE:
+			begin
+				bus = $signed(a) <= $signed(b);
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+		Qupls4_pkg::FN_SLTU:
+			begin
+				bus = a < b;
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+		Qupls4_pkg::FN_SLEU:
+			begin
+				bus = a <= b;
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
 		Qupls4_pkg::FN_ADD:
 			begin
 				case(ir.op3)
@@ -683,6 +978,14 @@ begin
 				default:	bus = zero;
 				endcase
 				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = fnAddOverflow(bus[WID-1],a[WID-1],b[WID-1]);
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = bus[WID];
+				o_flags.ptr = a_flags.ptr ^ b_flags.ptr;
+				o_flags.cap = FALSE;
 			end
 		Qupls4_pkg::FN_SUB:
 			begin
@@ -694,6 +997,14 @@ begin
 				default:	bus = zero;
 				endcase
 				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = fnSubOverflow(bus[WID-1],a[WID-1],b[WID-1]);
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = bus[WID];
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
 			end
 		Qupls4_pkg::FN_AND:
 			begin
@@ -705,6 +1016,14 @@ begin
 				default:	bus = zero;
 				endcase
 				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
 			end
 		Qupls4_pkg::FN_OR:
 			begin
@@ -716,6 +1035,14 @@ begin
 				default:	bus = zero;
 				endcase
 				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
 			end
 		Qupls4_pkg::FN_XOR:
 			begin
@@ -727,6 +1054,14 @@ begin
 				default:	bus = zero;
 				endcase
 				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
 			end
 		Qupls4_pkg::FN_ASL:
 			if (SUPPORT_SHIFT) begin
@@ -738,6 +1073,16 @@ begin
 				default:	bus = zero;
 				endcase
 				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				// Overflow: if any of the bits shifted out are not equal to the sign bit.
+				o_flags.ovf = bus[WID-1] ? (shl[WID*2-1:WID] & mask2) != ({WID{1'b1}} & mask2) :
+																	(shl[WID*2-1:WID] & mask2) != {WID{1'b0}};
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = |shl[WID*2-1:WID];
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
 			end
 			else
 				bus = zero;
@@ -751,6 +1096,14 @@ begin
 				default:	bus = zero;
 				endcase
 				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = |asr[WID-1:0];
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
 			end
 			else
 				bus = zero;
@@ -764,6 +1117,14 @@ begin
 				default:	bus = zero;
 				endcase
 				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = |shr[WID-1:0];
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
 			end
 			else
 				bus = zero;
@@ -777,6 +1138,14 @@ begin
 				default:	bus = zero;
 				endcase
 				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = |shl[WID*2-1:WID];
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
 			end
 			else
 				bus = zero;
@@ -790,37 +1159,118 @@ begin
 				default:	bus = zero;
 				endcase
 				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = |shr[WID-1:0];
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
 			end
 			else
 				bus = zero;
-		Qupls4_pkg::FN_MOVE:	begin bus = b; did_op = TRUE; end
+		Qupls4_pkg::FN_MOVE:
+			begin
+				bus = b;
+				did_op = TRUE;
+				o_flags = b_flags;
+			end
 		default:	bus = zero;
 		endcase
 
 	Qupls4_pkg::OP_FLTH,Qupls4_pkg::OP_FLTS,Qupls4_pkg::OP_FLTD,Qupls4_pkg::OP_FLTQ:
 		case(ir.func)
-		Qupls4_pkg::FLT_MIN:	begin bus = fmin; did_op = TRUE; end
-		Qupls4_pkg::FLT_MAX:	begin bus = fmax; did_op = TRUE; end
-		Qupls4_pkg::FLT_NEG:	begin bus = (aNan ? a : {~a[WID-1],a[WID-2:0]}); did_op = TRUE; end
+		Qupls4_pkg::FLT_MIN:
+			begin
+				bus = fmin;
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+		Qupls4_pkg::FLT_MAX:
+			begin
+				bus = fmax;
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+		Qupls4_pkg::FLT_NEG:
+			begin
+				bus = (aNan ? a : {~a[WID-1],a[WID-2:0]});
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
 		Qupls4_pkg::FLT_SEQ:
 			begin	
 				bus = ((aNan|bNan) ? 1'b0 : cmpo[0]);
 				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
 			end
 		Qupls4_pkg::FLT_SNE:
 			begin	
 				bus = ((aNan|bNan) ? 1'b0 : cmpo[8]);
 				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
 			end
 		Qupls4_pkg::FLT_SLT:
 			begin	
 				bus = ((aNan|bNan) ? 1'b0 : cmpo[1]);
 				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
 			end
 		Qupls4_pkg::FLT_SGNJ:
 			begin	
 				bus = (aNan ? a : bNan ? b : {a[WID-1],b[WID-2:0]});
 				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
 			end
 		default:	bus = zero;
 		endcase
@@ -828,31 +1278,127 @@ begin
 	Qupls4_pkg::OP_FLTPH,Qupls4_pkg::OP_FLTPS,Qupls4_pkg::OP_FLTPD,Qupls4_pkg::OP_FLTPQ,
 	Qupls4_pkg::OP_FLTVVV,Qupls4_pkg::OP_FLTVVS:
 		case(ir.func)
-		Qupls4_pkg::FLT_MIN:	begin bus = mask1[LANE] ? fmin : t; did_op = TRUE; end
-		Qupls4_pkg::FLT_MAX:	begin bus = mask1[LANE] ? fmax : t; did_op = TRUE; end
-		Qupls4_pkg::FLT_NEG:	begin bus = mask1[LANE] ? (aNan ? a : {~a[WID-1],a[WID-2:0]}) : t; did_op = TRUE; end
+		Qupls4_pkg::FLT_MIN:
+			begin
+				bus = mask1[LANE] ? fmin : t;
+				did_op = TRUE;
+				if (mask1[LANE]) begin
+					o_flags.inx = FALSE;
+					o_flags.unf = FALSE;
+					o_flags.ovf = FALSE;
+					o_flags.dbz = FALSE;
+					o_flags.inv = FALSE;
+					o_flags.cry = FALSE;
+					o_flags.ptr = FALSE;
+					o_flags.cap = FALSE;
+				end
+				else
+					o_flags = t_flags;
+			end
+		Qupls4_pkg::FLT_MAX:
+			begin
+				bus = mask1[LANE] ? fmax : t;
+				did_op = TRUE;
+				if (mask1[LANE]) begin
+					o_flags.inx = FALSE;
+					o_flags.unf = FALSE;
+					o_flags.ovf = FALSE;
+					o_flags.dbz = FALSE;
+					o_flags.inv = FALSE;
+					o_flags.cry = FALSE;
+					o_flags.ptr = FALSE;
+					o_flags.cap = FALSE;
+				end
+				else
+					o_flags = t_flags;
+			end
+		Qupls4_pkg::FLT_NEG:
+			begin
+				bus = mask1[LANE] ? (aNan ? a : {~a[WID-1],a[WID-2:0]}) : t;
+				did_op = TRUE;
+				if (mask1[LANE]) begin
+					o_flags.inx = FALSE;
+					o_flags.unf = FALSE;
+					o_flags.ovf = FALSE;
+					o_flags.dbz = FALSE;
+					o_flags.inv = FALSE;
+					o_flags.cry = FALSE;
+					o_flags.ptr = FALSE;
+					o_flags.cap = FALSE;
+				end
+				else
+					o_flags = t_flags;
+			end
 		Qupls4_pkg::FLT_SEQ:
 			begin	
 				bus = t;
 				bus[base_eleno + LANE] = mask1[LANE] ? ((aNan|bNan) ? 1'b0 : cmpo[0]) : t[LANE];
 				did_op = TRUE;
+				if (mask1[LANE]) begin
+					o_flags.inx = FALSE;
+					o_flags.unf = FALSE;
+					o_flags.ovf = FALSE;
+					o_flags.dbz = FALSE;
+					o_flags.inv = FALSE;
+					o_flags.cry = FALSE;
+					o_flags.ptr = FALSE;
+					o_flags.cap = FALSE;
+				end
+				else
+					o_flags = t_flags;
 			end
 		Qupls4_pkg::FLT_SNE:
 			begin	
 				bus = t;
 				bus[base_eleno + LANE] = mask1[LANE] ? ((aNan|bNan) ? 1'b0 : cmpo[8]) : t[LANE];
 				did_op = TRUE;
+				if (mask1[LANE]) begin
+					o_flags.inx = FALSE;
+					o_flags.unf = FALSE;
+					o_flags.ovf = FALSE;
+					o_flags.dbz = FALSE;
+					o_flags.inv = FALSE;
+					o_flags.cry = FALSE;
+					o_flags.ptr = FALSE;
+					o_flags.cap = FALSE;
+				end
+				else
+					o_flags = t_flags;
 			end
 		Qupls4_pkg::FLT_SLT:
 			begin	
 				bus = t;
 				bus[base_eleno + LANE] = mask1[LANE] ? ((aNan|bNan) ? 1'b0 : cmpo[1]) : t[LANE];
 				did_op = TRUE;
+				if (mask1[LANE]) begin
+					o_flags.inx = FALSE;
+					o_flags.unf = FALSE;
+					o_flags.ovf = FALSE;
+					o_flags.dbz = FALSE;
+					o_flags.inv = FALSE;
+					o_flags.cry = FALSE;
+					o_flags.ptr = FALSE;
+					o_flags.cap = FALSE;
+				end
+				else
+					o_flags = t_flags;
 			end
 		Qupls4_pkg::FLT_SGNJ:
 			begin	
 				bus = mask1[LANE] ? (aNan ? a : bNan ? b : {a[WID-1],b[WID-2:0]}) : t;
 				did_op = TRUE;
+				if (mask1[LANE]) begin
+					o_flags.inx = FALSE;
+					o_flags.unf = FALSE;
+					o_flags.ovf = FALSE;
+					o_flags.dbz = FALSE;
+					o_flags.inv = FALSE;
+					o_flags.cry = FALSE;
+					o_flags.ptr = FALSE;
+					o_flags.cap = FALSE;
+				end
+				else
+					o_flags = t_flags;
 			end
 		default:	bus = zero;
 		endcase
@@ -892,18 +1438,110 @@ begin
 		if (SUPPORT_CSR) begin
 			bus = csr;
 			did_op = TRUE;
+			o_flags.inx = FALSE;
+			o_flags.unf = FALSE;
+			o_flags.ovf = FALSE;
+			o_flags.dbz = FALSE;
+			o_flags.inv = FALSE;
+			o_flags.cry = FALSE;
+			o_flags.ptr = FALSE;
+			o_flags.cap = FALSE;
 		end
 		else
 			bus = zero;
 
-	Qupls4_pkg::OP_ADDI:	begin bus = a + i; did_op = TRUE; end
+	Qupls4_pkg::OP_ADDI:
+		begin
+			bus = a + i;
+			did_op = TRUE;
+			o_flags.inx = FALSE;
+			o_flags.unf = FALSE;
+			o_flags.ovf = fnAddOverflow(bus[WID-1],a[WID-1],i[WID-1]);
+			o_flags.dbz = FALSE;
+			o_flags.inv = FALSE;
+			o_flags.cry = bus[WID];
+			o_flags.ptr = a_flags.ptr;
+			o_flags.cap = FALSE;
+		end
 //	Qupls4_pkg::OP_ADDIPI:	bus = a + i + pc.pc;
-	Qupls4_pkg::OP_ANDI:	begin bus = a & i; did_op = TRUE; end
-	Qupls4_pkg::OP_ORI:		begin bus = a | i; did_op = TRUE; end
-	Qupls4_pkg::OP_XORI:	begin bus = a ^ i; did_op = TRUE; end
-	Qupls4_pkg::OP_SUBFI:	begin bus = i - a; did_op = TRUE; end
-	Qupls4_pkg::OP_CMPI:	begin bus = cmpo; did_op = TRUE; end
-	Qupls4_pkg::OP_CMPUI:	begin bus = cmpo; did_op = TRUE; end
+	Qupls4_pkg::OP_ANDI:
+		begin
+			bus = a & i;
+			did_op = TRUE;
+			o_flags.inx = FALSE;
+			o_flags.unf = FALSE;
+			o_flags.ovf = FALSE;
+			o_flags.dbz = FALSE;
+			o_flags.inv = FALSE;
+			o_flags.cry = FALSE;
+			o_flags.ptr = FALSE;
+			o_flags.cap = FALSE;
+		end
+	Qupls4_pkg::OP_ORI:	
+		begin
+			bus = a | i;
+			did_op = TRUE;
+			o_flags.inx = FALSE;
+			o_flags.unf = FALSE;
+			o_flags.ovf = FALSE;
+			o_flags.dbz = FALSE;
+			o_flags.inv = FALSE;
+			o_flags.cry = FALSE;
+			o_flags.ptr = FALSE;
+			o_flags.cap = FALSE;
+		end
+	Qupls4_pkg::OP_XORI:
+		begin
+			bus = a ^ i;
+			did_op = TRUE;
+			o_flags.inx = FALSE;
+			o_flags.unf = FALSE;
+			o_flags.ovf = FALSE;
+			o_flags.dbz = FALSE;
+			o_flags.inv = FALSE;
+			o_flags.cry = FALSE;
+			o_flags.ptr = FALSE;
+			o_flags.cap = FALSE;
+		end
+	Qupls4_pkg::OP_SUBFI:
+		begin
+			bus = i - a;
+			did_op = TRUE;
+			o_flags.inx = FALSE;
+			o_flags.unf = FALSE;
+			o_flags.ovf = fnSubOverflow(bus[WID-1],i[WID-1],a[WID-1]);
+			o_flags.dbz = FALSE;
+			o_flags.inv = FALSE;
+			o_flags.cry = bus[WID];
+			o_flags.ptr = a_flags.ptr;
+			o_flags.cap = FALSE;
+		end
+	Qupls4_pkg::OP_CMPI:
+		begin
+			bus = cmpo;
+			did_op = TRUE;
+			o_flags.inx = FALSE;
+			o_flags.unf = FALSE;
+			o_flags.ovf = FALSE;
+			o_flags.dbz = FALSE;
+			o_flags.inv = FALSE;
+			o_flags.cry = FALSE;
+			o_flags.ptr = FALSE;
+			o_flags.cap = FALSE;
+		end
+	Qupls4_pkg::OP_CMPUI:
+		begin
+			bus = cmpo;
+			did_op = TRUE;
+			o_flags.inx = FALSE;
+			o_flags.unf = FALSE;
+			o_flags.ovf = FALSE;
+			o_flags.dbz = FALSE;
+			o_flags.inv = FALSE;
+			o_flags.cry = FALSE;
+			o_flags.ptr = FALSE;
+			o_flags.cap = FALSE;
+		end
 /*	
 	Qupls4_pkg::OP_MOV:
 		if (ir[31]) begin
@@ -937,7 +1575,19 @@ begin
 				end
 			endcase	
 */
-	Qupls4_pkg::OP_LOADA:	begin bus = a + i + (b << ir[47:45]); did_op = TRUE; end
+	Qupls4_pkg::OP_LOADA:
+		begin
+			bus = a + i + (b * {~|ir[47:44],ir[47:44]});
+			did_op = TRUE;
+			o_flags.inx = FALSE;
+			o_flags.unf = FALSE;
+			o_flags.ovf = FALSE;
+			o_flags.dbz = FALSE;
+			o_flags.inv = FALSE;
+			o_flags.cry = FALSE;
+			o_flags.ptr = FALSE;
+			o_flags.cap = FALSE;
+		end
 	Qupls4_pkg::OP_LOADI:
 		begin
 			case(Ra)
@@ -946,15 +1596,42 @@ begin
 			default:	bus = zero;
 			endcase
 			did_op = TRUE;
+			o_flags.inx = FALSE;
+			o_flags.unf = FALSE;
+			o_flags.ovf = FALSE;
+			o_flags.dbz = FALSE;
+			o_flags.inv = FALSE;
+			o_flags.cry = FALSE;
+			o_flags.ptr = FALSE;
+			o_flags.cap = FALSE;
 		end
-	Qupls4_pkg::OP_NOP:		begin bus = t; did_op = TRUE; end	// in case of copy target
+	Qupls4_pkg::OP_NOP:
+		begin
+			bus = t;
+			o_flags = t_flags;
+			did_op = TRUE;
+		end	// in case of copy target
 	// Branches
 	Qupls4_pkg::OP_BCC,Qupls4_pkg::OP_BCCU,Qupls4_pkg::OP_FBCC:
 		if (SUPPORT_BRANCH) begin
-			if (ir[47])
-				bus = a - 2'd1;
-			else
+			if (ir.inc) begin
+				if (ibranch)
+					bus = a + 2'd1;
+				else
+					bus = a - 2'd1;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+			else begin
 				bus = t;
+				o_flags = t_flags;
+			end
 			did_op = TRUE;
 		end
 		else

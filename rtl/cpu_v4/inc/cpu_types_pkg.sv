@@ -66,6 +66,19 @@ typedef logic [31:0] physical_address_t;
 `endif
 typedef logic [11:0] mc_address_t;
 `ifdef QUPLS4
+typedef struct packed
+{
+	logic cap;		// capabilities tag
+	logic ptr;		// register contains a pointer
+	logic cry;		// carry
+	logic inv;		// invalid operation
+	logic dbz;		// divide by zero
+	logic ovf;		// overflow
+	logic unf;		// underflow
+	logic inx;		// inexact
+//	logic [7:0] ecc;	// error correcting bits
+} flags_t;
+
 typedef logic [2:0] pregndx_t;
 typedef logic [9:0] pregno_t;
 typedef logic [6:0] aregno_t;

@@ -536,6 +536,15 @@ typedef struct packed
 	logic snanx;		// signaling nan
 } fp_status_reg_t;	// 64 bits
 
+typedef struct packed
+{
+	logic invop;		// invalid operation
+	logic dbz;			// divide by zero
+	logic over;			// overflow
+	logic under;		// underflow
+	logic inexact;	// inexact
+} fp_status_t;
+
 typedef enum logic [2:0] {
 	BTS_NONE = 3'd0,
 	BTS_BCC = 3'd1,
@@ -845,6 +854,8 @@ typedef enum logic [3:0] {
 	CND_LE = 4'd3,
 	CND_GE = 4'd4,
 	CND_GT = 4'd5,
+	CND_BBC = 4'd6,
+	CND_BBS = 4'd7,
 	CND_NAND = 4'd8,
 	CND_AND = 4'd9,
 	CND_NOR = 4'd10,
@@ -1329,7 +1340,8 @@ typedef struct packed		// 237 bits
 	logic [1:0] prc;			// precision
 	logic [3:0] vn;				// vector or scalar register indicator
 	logic [3:0] ms;				// immediate override indicators
-	logic [8:0] Rs4;			// fourth source register (floating-point status)
+	logic [8:0] Rm;				// round mode
+	logic [8:0] Rs4;			// fourth source register
 	logic [8:0] Rs3;			// Third source register
 	logic [8:0] Rs2;			// second source register
 	logic [8:0] Rs1;			// first source register
@@ -1385,6 +1397,7 @@ typedef union packed
 parameter CSR_SR		= 16'h?004;
 parameter CSR_CAUSE	= 16'h?006;
 parameter CSR_REPBUF = 16'h0008;
+parameter CSR_FPCSR = 16'h0009;
 parameter CSR_MAXVL	= 16'h0200;
 parameter CSR_MAXVLB= 16'h0201;
 parameter CSR_SEMA	= 16'h?00C;
@@ -1563,16 +1576,6 @@ typedef struct packed
 
 typedef struct packed
 {
-	logic cap;		// capabilities tag
-	logic ptr;		// register contains a pointer
-	logic cry;		// carry
-	logic ovf;		// overflow
-	logic [3:0] user;
-//	logic [7:0] ecc;	// error correcting bits
-} flags_t;
-
-typedef struct packed
-{
 	logic [$bits(cpu_types_pkg::value_t)-($bits(cpu_types_pkg::aregno_t)+$bits(cpu_types_pkg::pregno_t))-1:0] resv;
 	cpu_types_pkg::aregno_t aRn;	// 8 bits
 	cpu_types_pkg::pregno_t pRn;	// 9 bits
@@ -1621,6 +1624,7 @@ typedef struct packed
 	cpu_types_pkg::aregno_t Rs2;
 	cpu_types_pkg::aregno_t Rs3;
 	cpu_types_pkg::aregno_t Rs4;
+	cpu_types_pkg::aregno_t Rm;
 	cpu_types_pkg::aregno_t Rd;
 	cpu_types_pkg::aregno_t Rd2;
 	cpu_types_pkg::aregno_t Rd3;
@@ -1630,6 +1634,7 @@ typedef struct packed
 	logic Rs2z;
 	logic Rs3z;
 	logic Rs4z;
+	logic Rmz;
 	logic Rdv;
 	logic Rdz;
 	logic Rd2v;
@@ -1875,7 +1880,7 @@ typedef struct packed
 	cpu_types_pkg::pregno_t pRs2;
 	cpu_types_pkg::pregno_t pRs3;
 	cpu_types_pkg::pregno_t pRs4;
-	cpu_types_pkg::pregno_t pS;
+	cpu_types_pkg::pregno_t pRm;
 
 	cpu_types_pkg::pregno_t pRd;						// current Rd value
 	cpu_types_pkg::pregno_t nRd;						// new Rd
@@ -1896,7 +1901,7 @@ typedef struct packed
 	logic pRs3v;
 	logic pRs4v;
 	logic Rs4z;								// Rs4 should be zero.
-	logic pSv;
+	logic pRmv;
 	logic pRdv;
 	logic nRdv;
 	logic pRd2v;							// second destination reg valid
@@ -3089,10 +3094,10 @@ begin
 			fnMapRawToUop.Rs1 = 9'd0;
 			fnMapRawToUop.Rs2 = 9'd0;
 			fnMapRawToUop.Rs3 = 9'd0;
-			fnMapRawToUop.Rd = {2'd0,raw[13:7]};
-			fnMapRawToUop.imm = raw[47:15];
-			fnMapRawToUop.src = {3'b000,raw[14],3'b000};
-			fnMapRawToUop.dst = |raw[13:7];
+			fnMapRawToUop.Rd = {7'd0,raw[8:7]};
+			fnMapRawToUop.imm = {raw[47:9],1'b0};
+			fnMapRawToUop.src = 7'h00;
+			fnMapRawToUop.dst = |raw[8:7];
 		end
 // Source bits
 // +---+---+---+---+---+---+---+
@@ -3106,7 +3111,7 @@ begin
 			fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
 			fnMapRawToUop.Rs2 = 9'd0;
 			fnMapRawToUop.Rs3 = 9'd0;
-			fnMapRawToUop.imm = {raw[45:25],3'd0};
+			fnMapRawToUop.imm = {raw[45:24],3'd0};
 			fnMapRawToUop.prc = 2'd3;
 			fnMapRawToUop.src = 7'b0001001;
 			fnMapRawToUop.dst = |raw[13:7];

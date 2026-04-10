@@ -65,13 +65,15 @@ module Qupls4_soc(cpu_reset_n, sysclk_p, sysclk_n, led, sw, btnl, btnr, btnc, bt
 parameter WXGA800x600 = 1'b1;
 parameter WXGA1366x768 = 1'b0;
 parameter HAS_CPU = 1'b1;
-parameter HAS_FRAME_BUFFER = 1'b0;
+parameter HAS_FRAME_BUFFER = 1'b1;
 parameter HAS_TEXTCTRL = 1'b1;
 parameter HAS_PRNG = 1'b1;
 parameter HAS_UART = 1'b1;
 parameter HAS_PS2KBD = 1'b1;
 parameter HAS_TEST_VIDEO = 1'b0;
-parameter HAS_DRAM = 1'b0;
+parameter HAS_DRAM = 1'b1;
+parameter HAS_MPMC = 1'b0;
+parameter HAS_DRAM_BRIDGE = 1'b1;
 
 input cpu_reset_n;
 input sysclk_p;
@@ -172,9 +174,9 @@ wire clk214,clk53,clk43,clk33,clk21,clk17,clk84;
 wire clk25, clk50, clk75, clk125;
 wire dot5_clk;
 wire dot_clk = clk50;
-wire node_clk = clk100;
-wire node_clk5x = clk100;
-wire fbm_clk = clk100;
+wire node_clk;// = clk100;	89.29MHz
+wire node_clk5x = node_clk;//clk100;
+wire fbm_clk = node_clk;//clk100;
 wire tc_clk = node_clk;
 wb_cmd_request256_t cpu_req;
 wb_cmd_response256_t cpu_resp;
@@ -291,6 +293,7 @@ wire io_gate, io_gate_en;
 wire config_to;
 wire node_clk1, node_clk2, node_clk3;
 wire mem_ui_rst;
+wire mem_en;
 
 wire leds_ack;
 reg [7:0] rst_reg;
@@ -438,7 +441,7 @@ PLLE2_BASE #(
   .CLKIN1_PERIOD(20.000),   // Input clock period in ns to ps resolution (i.e. 33.333 is 30 MHz).
   // CLKOUT0_DIVIDE - CLKOUT5_DIVIDE: Divide amount for each CLKOUT (1-128)
   .CLKOUT0_DIVIDE(5),
-  .CLKOUT1_DIVIDE(5),
+  .CLKOUT1_DIVIDE(14),
   .CLKOUT2_DIVIDE(5),
   .CLKOUT3_DIVIDE(5),
   .CLKOUT4_DIVIDE(5),
@@ -464,7 +467,7 @@ PLLE2_BASE #(
 PLLE2_BASE_inst (
   // Clock Outputs: 1-bit (each) output: User configurable clock outputs
   .CLKOUT0(dot5_clk),   // 1-bit output: CLKOUT0
-  .CLKOUT1(),   // 1-bit output: CLKOUT1
+  .CLKOUT1(node_clk),   // 1-bit output: CLKOUT1
   .CLKOUT2(),   // 1-bit output: CLKOUT2
   .CLKOUT3(),   // 1-bit output: CLKOUT3
   .CLKOUT4(),   // 1-bit output: CLKOUT4
@@ -645,7 +648,7 @@ assign fb_border = fb_video_o.border;
 assign fb_rgb = fb_video_o.data;
 assign fb_cresp = fbs_if.resp;
 
-rfFrameBuffer_fta64 #(
+rfFrameBuffer_wb64 #(
 	.INTERNAL_SYNCGEN(1'b1)) 
 uframebuf1
 (
@@ -660,7 +663,8 @@ uframebuf1
 	.xal_o(),
 	.video_i(fb_video_i),
 	.video_o(fb_video_o),
-	.vblank_o()
+	.vblank_o(),
+	.mem_en_i(mem_en)
 );
 assign memreq = uframebuf1.memreq;
 assign vSync = fb_vsync;
@@ -1039,7 +1043,7 @@ else
 wb_ledport64 uleds1
 (
 	.rst(rst),
-	.clk(clk100),
+	.clk(node_clk),
 	.cs(cs_br3_leds),
 	.req(br3_mreq),
 	.resp(leds_cresp),
@@ -1054,7 +1058,6 @@ wb_ledport64 uleds1
 wire calib_complete;
 wire [29:0] mem_addr;
 wire [2:0] mem_cmd;
-wire mem_en;
 wire [255:0] mem_wdf_data;
 wire [31:0] mem_wdf_mask;
 wire mem_wdf_end;
@@ -1160,9 +1163,105 @@ assign ch4_if.req = {$bits(wb_cmd_request256_t){1'b0}};
 assign ch5_if.req = {$bits(wb_cmd_request256_t){1'b0}};
 assign ch6_if.req = {$bits(wb_cmd_request256_t){1'b0}};
 
+
+generate begin : gDRAMBridge
+	if (HAS_DRAM_BRIDGE) begin
+reg [7:0] rr_cyc;
+reg [7:0] rr_stb;
+reg [7:0] rr_we;
+wire [7:0] rr_ack;
+reg [31:0] rr_sel [0:7];
+reg [31:0] rr_adr [0:7];
+reg [255:0] rr_dato [0:7];
+
+reg [7:0] req;
+wire [7:0] grant;
+always_comb
+begin
+	req[0] = fbm_if.req.cyc;
+	req[1] = ch7_if.req.cyc;
+	req[7:2] = 6'h00;
+	rr_cyc[0] = fbm_if.req.cyc;
+	rr_stb[0] = fbm_if.req.stb;
+	rr_we[0] = fbm_if.req.we;
+	rr_sel[0] = fbm_if.req.sel;
+	rr_adr[0] = fbm_if.req.adr;
+	rr_dato[0] = fbm_if.req.dat;
+	rr_cyc[1] = ch7_if.req.cyc;
+	rr_stb[1] = ch7_if.req.stb;
+	rr_we[1] = ch7_if.req.we;
+	rr_sel[1] = ch7_if.req.sel;
+	rr_adr[1] = ch7_if.req.adr;
+	rr_dato[1] = ch7_if.req.dat;
+end
+
+round_robin_arbiter #(8) urra1
+(
+	.clk(node_clk),
+	.rst_n(~rst),
+	.req(req),
+	.hold(|(grant & req)),
+  .grant(grant)
+);
+
+reg mem_cyc,mem_stb,mem_we;
+reg [31:0] mem_sel,mem_adr;
+wire mem_ack;
+reg [255:0] mem_dato;
+wire [255:0] mem_dati;
+
+always_comb
+begin
+	mem_cyc = rr_cyc[grant];
+	mem_stb = rr_stb[grant];
+	mem_we = rr_we[grant];
+	mem_sel = rr_sel[grant];	
+	mem_adr = rr_adr[grant];
+	mem_dato = rr_dato[grant];
+	fbm_if.resp.dat = mem_dati;
+	ch7_if.resp.dat = mem_dati;
+	fbm_if.resp.ack = grant[0] & mem_ack;
+	ch7_if.resp.ack = grant[1] & mem_ack;
+end
+
+		dram_bridge udrb1 (
+			.rst(rst),
+			.clk200(clk200),
+			.ui_rst_sync(mem_ui_rst),
+			.ui_clk(mem_ui_clk),
+			.sys_rst(),
+			.init_calib_complete(calib_complete),
+			.mem_cyc(mem_cyc),
+			.mem_stb(mem_stb),
+			.mem_ack(mem_ack),
+			.mem_we(mem_we),
+			.mem_sel(mem_sel),
+			.mem_adr(mem_adr),
+			.mem_din(mem_dato),
+			.mem_dout(mem_dati),
+			.app_rdy(mem_rdy),
+			.app_en(mem_en),
+			.app_cmd(mem_cmd),
+			.app_addr(mem_addr),
+			.app_rd_data_valid(mem_rd_data_valid),
+			.app_wdf_mask(mem_wdf_mask),
+			.app_wdf_data(mem_wdf_data),
+			.app_wdf_rdy(mem_wdf_rdy),
+			.app_wdf_wren(mem_wdf_wren),
+			.app_wdf_end(mem_wdf_end),
+			.app_rd_data(mem_rd_data),
+			.app_rd_data_end(mem_rd_data_end),
+			.app_zq_ack(1'b0),
+			.app_ref_ack(app_ref_ack),
+			.device_temp(ddr3_temp)
+		);
+end
+end
+endgenerate
+
 `ifdef DRAM
 generate begin : gMPMC
-	if (HAS_DRAM) begin
+	if (HAS_MPMC) begin
 		mpmc11_wb
 		#(
 			.PORT_PRESENT(8'h83),

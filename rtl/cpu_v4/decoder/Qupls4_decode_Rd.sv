@@ -78,7 +78,7 @@ begin
 	Qupls4_pkg::OP_AMO,Qupls4_pkg::OP_CMPSWAP:
 		fnRd = ir.Rd;
 	Qupls4_pkg::OP_BCCU,Qupls4_pkg::OP_BCC:
-		fnRd = ir.Rs1;
+		fnRd = ir.inc ? ir.Rs1 : 7'd0;
 	default:
 		fnRd = 7'd0;
 	endcase
