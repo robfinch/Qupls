@@ -183,6 +183,8 @@ Partial Class Form1
 		SaveFileDialog1 = New SaveFileDialog()
 		ToolTip2 = New ToolTip(components)
 		Timer1 = New Timer(components)
+		CheckBox38 = New CheckBox()
+		CheckBox39 = New CheckBox()
 		TabControl1.SuspendLayout()
 		TabPage1.SuspendLayout()
 		TabPage4.SuspendLayout()
@@ -886,13 +888,15 @@ Partial Class Form1
 		' 
 		' GroupBox6
 		' 
+		GroupBox6.Controls.Add(CheckBox39)
+		GroupBox6.Controls.Add(CheckBox38)
 		GroupBox6.Controls.Add(CheckBox10)
 		GroupBox6.Controls.Add(CheckBox9)
 		GroupBox6.Controls.Add(CheckBox8)
 		GroupBox6.Controls.Add(CheckBox7)
-		GroupBox6.Location = New Point(381, 302)
+		GroupBox6.Location = New Point(381, 252)
 		GroupBox6.Name = "GroupBox6"
-		GroupBox6.Size = New Size(305, 201)
+		GroupBox6.Size = New Size(305, 277)
 		GroupBox6.TabIndex = 24
 		GroupBox6.TabStop = False
 		GroupBox6.Text = "Modifiers, Prefixes and Postfixes"
@@ -902,7 +906,7 @@ Partial Class Form1
 		CheckBox10.AutoSize = True
 		CheckBox10.Checked = True
 		CheckBox10.CheckState = CheckState.Checked
-		CheckBox10.Location = New Point(22, 144)
+		CheckBox10.Location = New Point(22, 231)
 		CheckBox10.Name = "CheckBox10"
 		CheckBox10.Size = New Size(171, 29)
 		CheckBox10.TabIndex = 16
@@ -1473,7 +1477,7 @@ Partial Class Form1
 		' CheckedListBox6
 		' 
 		CheckedListBox6.FormattingEnabled = True
-		CheckedListBox6.Items.AddRange(New Object() {"ALU", "IDIV", "ISQRT", "MEM", "FMA", "TRIG."})
+		CheckedListBox6.Items.AddRange(New Object() {"ALU", "IMUL", "IDIV", "ISQRT", "MEM", "FMA", "TRIG."})
 		CheckedListBox6.Location = New Point(661, 115)
 		CheckedListBox6.Name = "CheckedListBox6"
 		CheckedListBox6.Size = New Size(109, 228)
@@ -1482,7 +1486,7 @@ Partial Class Form1
 		' CheckedListBox5
 		' 
 		CheckedListBox5.FormattingEnabled = True
-		CheckedListBox5.Items.AddRange(New Object() {"ALU", "IDIV", "ISQRT", "MEM", "FMA", "TRIG."})
+		CheckedListBox5.Items.AddRange(New Object() {"ALU", "IMUL", "IDIV", "ISQRT", "MEM", "FMA", "TRIG."})
 		CheckedListBox5.Location = New Point(546, 115)
 		CheckedListBox5.Name = "CheckedListBox5"
 		CheckedListBox5.Size = New Size(109, 228)
@@ -1904,9 +1908,29 @@ Partial Class Form1
 		' 
 		Timer1.Interval = 200
 		' 
+		' CheckBox38
+		' 
+		CheckBox38.AutoSize = True
+		CheckBox38.Location = New Point(22, 144)
+		CheckBox38.Name = "CheckBox38"
+		CheckBox38.Size = New Size(169, 29)
+		CheckBox38.TabIndex = 17
+		CheckBox38.Text = "VMASK modifier"
+		CheckBox38.UseVisualStyleBackColor = True
+		' 
+		' CheckBox39
+		' 
+		CheckBox39.AutoSize = True
+		CheckBox39.Location = New Point(21, 182)
+		CheckBox39.Name = "CheckBox39"
+		CheckBox39.Size = New Size(173, 29)
+		CheckBox39.TabIndex = 18
+		CheckBox39.Text = "ROUND modifier"
+		CheckBox39.UseVisualStyleBackColor = True
+		' 
 		' Form1
 		' 
-		AutoScaleDimensions = New SizeF(10.0F, 25.0F)
+		AutoScaleDimensions = New SizeF(10F, 25F)
 		AutoScaleMode = AutoScaleMode.Font
 		ClientSize = New Size(902, 694)
 		Controls.Add(TabControl1)
@@ -2176,4 +2200,7 @@ Partial Class Form1
 		CheckedListBox5.SetItemChecked(3, True)
 
 	End Sub
+
+	Friend WithEvents CheckBox39 As CheckBox
+	Friend WithEvents CheckBox38 As CheckBox
 End Class
