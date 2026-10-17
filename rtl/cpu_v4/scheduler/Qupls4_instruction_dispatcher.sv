@@ -41,7 +41,8 @@
 // given type. For example there is only one flow control unit, so dispatch
 // will not try and dispatch two flow controls in the same cycle.
 //
-// 2200 LUTs / 2400 FFs / 205 MHz
+// 2200 LUTs / 2400 FFs / 205 MHz (old)
+//	LUTs / FFs / 120 MHz
 // ============================================================================
 
 import const_pkg::*;
@@ -49,9 +50,11 @@ import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
 module Qupls4_instruction_dispatcher(rst, clk, regFPCSR, pgh, rob, stomp, busy, rse_o,
-	rob_dispatched_o);
+	rob_dispatched_o, rob_unimplemented_o);
 parameter DISPATCH_COUNT=6;
 parameter MWIDTH=Qupls4_pkg::MWIDTH;
+parameter SUPPORT_XPIPE = {Qupls4_pkg::SUPPORT_XPIPE5[0],Qupls4_pkg::SUPPORT_XPIPE4[0],Qupls4_pkg::SUPPORT_XPIPE3[0],
+	Qupls4_pkg::SUPPORT_XPIPE2[0],Qupls4_pkg::SUPPORT_XPIPE1[0],Qupls4_pkg::SUPPORT_XPIPE0[0]};
 input rst;
 input clk;
 input aregno_t regFPCSR;
@@ -61,23 +64,25 @@ input [Qupls4_pkg::ROB_ENTRIES-1:0] stomp;
 input [15:0] busy;
 output Qupls4_pkg::reservation_station_entry_t [DISPATCH_COUNT-1:0] rse_o;
 output Qupls4_pkg::rob_bitmask_t rob_dispatched_o;
+output Qupls4_pkg::rob_bitmask_t rob_unimplemented_o;
 
 typedef struct packed
 {
 	reg [7:0] rob;
-	reg [3:0] rse;
-	reg [3:0] fu;
+	reg [2:0] rse;
+	reg [2:0] fu;
 } cpy_t;
 
-integer nn,mm;
+integer nn,mm,pipe;
 Qupls4_pkg::reservation_station_entry_t [Qupls4_pkg::ROB_ENTRIES:0] rse;
-Qupls4_pkg::rob_bitmask_t rob_dispatched, rob_dispatched2;
+Qupls4_pkg::rob_bitmask_t rob_dispatched, rob_dispatched2, rob_unimplemented;
 reg [DISPATCH_COUNT-1:0] dispatch_slot_v;
 cpy_t [DISPATCH_COUNT-1:0] cpy;
 
 always_comb
 begin
 	rob_dispatched = {$bits(rob_bitmask_t){1'b0}};
+	rob_unimplemented = {$bits(rob_bitmask_t){1'b0}};
 	dispatch_slot_v = {DISPATCH_COUNT{1'b0}};
 	foreach (rse[nn])
 		rse[nn] = {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
@@ -98,91 +103,22 @@ begin
 			!rob_dispatched_o[nn] &&
 			!rob_dispatched2[nn]
 		) begin
-			if (rob[nn].op.decbus.sau && !busy[4'd0] && !dispatch_slot_v[0]) begin
-				cpy[0].rob = nn;
-				cpy[0].rse = 0;
-				cpy[0].fu = 4'd0;
+			for (pipe = 0; pipe < 6; pipe = pipe + 1)
+			if ((rob[nn].op.decbus.expipe[pipe] & SUPPORT_XPIPE[pipe]) && !busy[pipe] && !dispatch_slot_v[pipe] && !rob_dispatched[nn]) begin
+				cpy[pipe].rob = nn;
+				cpy[pipe].rse = pipe;
+				cpy[pipe].fu = pipe;
 				// rse[0].funcunit = 4'd0; set to zero already above
 				rob_dispatched[nn] = VAL;
-				dispatch_slot_v[0] = VAL;
+				dispatch_slot_v[pipe] = VAL;
 			end
-			if (rob[nn].op.decbus.sau && !busy[4'd1] && !dispatch_slot_v[5] && !rob[nn].op.decbus.sau0) begin
-				cpy[5].rob = nn;
-				cpy[5].rse = 5;
-				cpy[5].fu = 4'd1;
+			// Ensure instruction is supported in a pipe somewhere.
+			// Mark the instruction as unimplemented if not supported in any pipe.
+			if ((rob[nn].op.decbus.expipe & SUPPORT_XPIPE)==6'd0)	begin	// Is it supported?
+				rob_unimplemented[nn] = TRUE;
 				rob_dispatched[nn] = VAL;
-				dispatch_slot_v[5] = VAL;
 			end
-			if (rob[nn].op.decbus.mul && !busy[2] && !dispatch_slot_v[1]) begin
-				cpy[1].rob = nn;
-				cpy[1].rse = 1;
-				cpy[1].fu = 4'd2;
-				rob_dispatched[nn] = VAL;
-				dispatch_slot_v[1] = VAL;
-			end
-			if ((rob[nn].op.decbus.div|rob[nn].op.decbus.sqrt) && !busy[3] && !dispatch_slot_v[1]) begin
-				cpy[1].rob = nn;
-				cpy[1].rse = 1;
-				cpy[1].fu = 4'd3;
-				rob_dispatched[nn] = VAL;
-				dispatch_slot_v[1] = VAL;
-			end
-			if (rob[nn].op.decbus.fc && !busy[7] && !dispatch_slot_v[2]) begin
-				cpy[2].rob = nn;
-				cpy[2].rse = 2;
-				cpy[2].fu = 4'd7;
-				rob_dispatched[nn] = VAL;
-				dispatch_slot_v[2] = VAL;
-			end
-			if (rob[nn].op.decbus.mem && !busy[4'd8] & !dispatch_slot_v[3]) begin
-				cpy[3].rob = nn;
-				cpy[3].rse = 3;
-				cpy[3].fu = 4'd8;
-				rob_dispatched[nn] = VAL;
-				dispatch_slot_v[3] = VAL;
-			end
-			if (rob[nn].op.decbus.mem && !busy[4'd9] & !dispatch_slot_v[3]) begin
-				cpy[3].rob = nn;
-				cpy[3].rse = 3;
-				cpy[3].fu = 4'd9;
-				rob_dispatched[nn] = VAL;
-				dispatch_slot_v[3] = VAL;
-			end
-			if (Qupls4_pkg::SUPPORT_FLOAT && rob[nn].op.decbus.fma && !busy[4'd4] && !dispatch_slot_v[4]) begin
-				cpy[4].rob = nn;
-				cpy[4].rse = 4;
-				cpy[4].fu = 4'd4;
-				rob_dispatched[nn] = VAL;
-				dispatch_slot_v[4] = VAL;
-			end
-			if (Qupls4_pkg::SUPPORT_FLOAT && rob[nn].op.decbus.fma && !busy[4'd5] && !dispatch_slot_v[1]) begin
-				cpy[1].rob = nn;
-				cpy[1].rse = 1;
-				cpy[1].fu = 4'd5;
-				rob_dispatched[nn] = VAL;
-				dispatch_slot_v[1] = VAL;
-			end
-			if (Qupls4_pkg::SUPPORT_TRIG && rob[nn].op.decbus.trig && !busy[4'd6] && !dispatch_slot_v[4]) begin
-				cpy[4].rob = nn;
-				cpy[4].rse = 1;
-				cpy[4].fu = 4'd6;
-				rob_dispatched[nn] = VAL;
-				dispatch_slot_v[4] = VAL;
-			end
-			if (Qupls4_pkg::SUPPORT_FLOAT && rob[nn].op.decbus.fpu && !busy[8] && !dispatch_slot_v[3]) begin
-				cpy[4].rob = nn;
-				cpy[4].rse = 3;
-				cpy[4].fu = 4'd8;
-				rob_dispatched[nn] = VAL;
-				dispatch_slot_v[3] = VAL;
-			end
-			if (Qupls4_pkg::SUPPORT_FLOAT && rob[nn].op.decbus.fpu && !busy[9] && !dispatch_slot_v[3]) begin
-				cpy[4].rob = nn;
-				cpy[4].rse = 3;
-				cpy[4].fu = 4'd9;
-				rob_dispatched[nn] = VAL;
-				dispatch_slot_v[3] = VAL;
-			end
+			
 		end
 	end
 
@@ -205,6 +141,8 @@ always_ff @(posedge clk)
 	rob_dispatched_o <= rob_dispatched;
 always_ff @(posedge clk)
 	rob_dispatched2 <= rob_dispatched_o;
+always_ff @(posedge clk)
+	rob_unimplemented_o <= rob_unimplemented;
 
 task tLoadRse;
 input integer kk;
@@ -228,11 +166,14 @@ begin
 	rse[kk].aRdv = rob[nn].op.decbus.Rdv;
 	rse[kk].nRd = rob[nn].op.nRd;
 	rse[kk].we = rob[nn].op.decbus.we;
+	rse[kk].fclass = rob[nn].op.decbus.fclass;
 	// mem specific
 	rse[kk].virt2phys = rob[nn].op.decbus.v2p;
-	rse[kk].load = rob[nn].op.decbus.load|rob[nn].op.decbus.loadz;
-	rse[kk].store = rob[nn].op.decbus.store;
+	rse[kk].load = rob[nn].op.decbus.load|rob[nn].op.decbus.loadz|rob[nn].op.decbus.vload;
+	rse[kk].store = rob[nn].op.decbus.store|rob[nn].op.decbus.vstore;
 	rse[kk].amo = rob[nn].op.decbus.amo;
+	rse[kk].vls = rob[nn].op.decbus.vload|rob[nn].op.decbus.vload_ndx|rob[nn].op.decbus.vstore|rob[nn].op.decbus.vstore_ndx;
+	rse[kk].vlsndx = rob[nn].op.decbus.vload_ndx|rob[nn].op.decbus.vstore_ndx;
 	rse[kk].mem = rob[nn].op.decbus.mem;
 	// branch specific
 	rse[kk].bt = rob[nn].bt;
@@ -244,7 +185,7 @@ begin
 	rse[kk].jsr = rob[nn].op.decbus.jsr;
 	rse[kk].sys = rob[nn].op.decbus.sys;
 	if (rob[nn].op.decbus.cpytgt|stomp[nn]) begin
-		rse[kk].copydst <= 8'hFF;
+		rse[kk].copydst = 8'hFF;
 		rse[kk].uop = {41'd0,Qupls4_pkg::OP_NOP};
 		rse[kk].store = FALSE;
 		for (xx = 0; xx < 4; xx = xx + 1) begin
@@ -254,7 +195,7 @@ begin
 		end
 	end
 	else begin
-		rse[kk].copydst <= 8'h00;
+		rse[kk].copydst = 8'h00;
 		rse[kk].uop = rob[nn].op.uop;
 		rse[kk].store = rob[nn].op.decbus.store;
 		rse[kk].rext = rob[nn].op.decbus.rext;
@@ -279,7 +220,7 @@ begin
 		rse[kk].arg[2].aRn = rob[nn].op.uop.Rs3;
 		rse[kk].arg[3].aRn = rob[nn].op.uop.Rd;
 		rse[kk].arg[4].aRn = rob[nn].op.uop.Rs4;
-		rse[kk].arg[5].aRn = regFPCSR;
+		rse[kk].arg[5].aRn = rob[nn].op.uop.Rm;
 		rse[kk].arg[6].aRn = rob[nn].op.uop.Rd2;
 
 		rse[kk].arg[0].z = rob[nn].op.decbus.Rs1z;
@@ -292,7 +233,7 @@ begin
 		rse[kk].arg[2].pRn = rob[nn].op.pRs3;
 		rse[kk].arg[3].pRn = rob[nn].op.pRd;
 		rse[kk].arg[4].pRn = rob[nn].op.pRs4;
-		rse[kk].arg[5].pRn = rob[nn].op.pS;
+		rse[kk].arg[5].pRn = rob[nn].op.pRm;
 		rse[kk].arg[6].pRn = rob[nn].op.pRd2;
 		/*
 		rse[kk].argAh_v = !rob[nn].op.decbus.b128;
