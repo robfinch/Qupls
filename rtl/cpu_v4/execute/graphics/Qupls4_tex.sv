@@ -66,7 +66,7 @@ fpScaleb32 u3
 	.clk(clk),
 	.ce(ce),
 	.a(a[31:0]),
-	.b(cx),
+	.b(dx),
 	.o(txu)
 );
 
@@ -75,7 +75,7 @@ fpScaleb32 u4
 	.clk(clk),
 	.ce(ce),
 	.a(a[63:32]),
-	.b(cy),
+	.b(dy),
 	.o(txv)
 );
 
@@ -84,7 +84,7 @@ fpScaleb32 u5
 	.clk(clk),
 	.ce(ce),
 	.a(b[31:0]),
-	.b(cz),
+	.b(dz),
 	.o(txw)
 );
 
