@@ -143,24 +143,31 @@ localparam PERFORMANCE = 1'b0;
 //		2 = g select predictor
 localparam BRANCH_PREDICTOR = 0;
 
-// The following indicates whether to support postfix instructions or not.
-// Supporting postfix instructions increases the size of the core and reduces
-// the code density. (Deprecated - the core does not support POSTFIXES).
-localparam SUPPORT_POSTFIX = 0;
-
 // The following allows the core to process flow control ops in any order
 // to reduce the size of the core. Set to zero to restrict flow control ops
 // to be processed in order. If processed out of order a branch may 
 // speculate incorrectly leading to lower performance.
 localparam SUPPORT_OOOFC = 1'b0;
 
+// The following indicates  to support shifted immediate values for the
+// immediate mode instructions.
+
+localparam SUPPORT_SHIFTED_IMMED = 1'b0;
+
+// The following indicates whether to support postfix instructions or not.
+// Supporting postfix instructions increases the size of the core and reduces
+// the code density. (Deprecated - the core does not support POSTFIXES).
+localparam SUPPORT_POSTFIX = 1;
+
 // =============================================================================
 // Instruction Modifier Support
 // =============================================================================
 // The following localparam enables support for predicated logic in the core.
-localparam SUPPORT_PRED = 1'b1;
-localparam SUPPORT_ATOM = 1'b1;
+localparam SUPPORT_PRED = 1'b0;
+localparam SUPPORT_ATOM = 1'b0;
 localparam SUPPORT_CARRY = 1'b0;
+localparam SUPPORT_REXT = 1'b0;
+localparam SUPPORT_VMASK = 0;
 
 // The PRED_SHADOW localparam controls the maximum number of instructions
 // following the predicate that are affected by it. Increasing the shadow
@@ -277,6 +284,10 @@ localparam SUPPORT_ISQRT4 = 0;
 localparam SUPPORT_ISQRT5 = 0;
 localparam SUPPORT_TRIG4 = 0;
 localparam SUPPORT_TRIG5 = 0;
+localparam SUPPORT_MEM4 = 1;
+localparam SUPPORT_MEM5 = 0;
+
+localparam SUPPORT_PFX3 = 0;
 
 // =============================================================================
 // Resources
@@ -284,8 +295,10 @@ localparam SUPPORT_TRIG5 = 0;
 
 // Number of architectural registers including registers to support vector
 // operations. Each vector register needs four registers.
-localparam NREGS = 40*THREADS+(SUPPORT_VECTOR ? 128 : 0);
-localparam AREGS = 40*THREADS+(SUPPORT_VECTOR ? 128 : 0);
+//localparam NREGS = 40*THREADS+(SUPPORT_VECTOR ? 128 : 0);
+//localparam AREGS = 40*THREADS+(SUPPORT_VECTOR ? 128 : 0);
+localparam NREGS = 128;
+localparam AREGS = 128;
 localparam REGFILE_LATENCY = 2;
 
 

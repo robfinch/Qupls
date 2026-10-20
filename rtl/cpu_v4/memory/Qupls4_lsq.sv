@@ -76,7 +76,8 @@ else begin
 		 		.id(cmd[0].rndx),
 		 		.rob(rob[cmd[0].rndx]),
 		 		.n(cmd[0].n),
-		 		.vadr(cmd[0].data)
+		 		.vadr(cmd[0].data),
+		 		.mask(cmd[0].mask)
 		 	);
 			lsq_tail.row <= (lsq_tail.row + 2'd1) % Qupls4_pkg::LSQ_ENTRIES;
 			lsq_tail.col <= 3'd0;
@@ -88,7 +89,8 @@ else begin
 		 		.id(cmd[1].rndx),
 		 		.rob(rob[cmd[1].rndx]),
 		 		.n(cmd[1].n),
-		 		.vadr(cmd[1].data)
+		 		.vadr(cmd[1].data),
+		 		.mask(cmd[1].mask)
 		 	);
 //		tEnqueLSE(7'h7F,cmd[1].lndx,cmd[1].rndx,rob[cmd[1].rndx],cmd[1].n,cmd[1].data);
 	if (cmd[2]!=Qupls4_pkg::LSQ_CMD_NONE)	// SETRES
@@ -162,6 +164,7 @@ input rob_ndx_t id;
 input Qupls4_pkg::rob_entry_t rob;
 input [1:0] n;
 input cpu_types_pkg::virtual_address_t vadr;
+input cpu_types_pkg::value_t mask;
 integer n12r, n12c;
 integer n13r, n13c;
 begin
@@ -187,6 +190,7 @@ begin
 	lsq[n12r][n12c].vstore_ndx <= rob.op.decbus.vstore_ndx;
 	lsq[n12r][n12c].vadr <= vadr;
 	lsq[n12r][n12c].padr <= {$bits(cpu_types_pkg::physical_address_t){1'b0}};
+	lsq[n12r][n12c].mask <= mask;
 	lsq[n12r][n12c].shift <= 7'd0;
 //	store_argC_reg <= rob.pRc;
 	lsq[n12r][n12c].aRc <= rob.op.decbus.Rs3;

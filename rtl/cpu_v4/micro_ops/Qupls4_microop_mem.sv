@@ -32,7 +32,7 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-//  2100 LUTs / 12 FFs / 1 DSP (with 512-bit vectors)
+//  2800 LUTs / 2200 FFs (with 512-bit vectors)
 //  1050 LUTs / 0 FFs / 0 DSP (no vectors)
 // Work to do: fix register fields, check widths, make sure thread included.
 // ============================================================================
@@ -43,7 +43,7 @@ import Qupls4_pkg::*;
 module Qupls4_microop_mem(rst, clk, en, om, ir, num, carry_reg, carry_out, carry_in,
 	vlen_reg, velsz, count, uop, thread);
 parameter MICROOPS_PER_INSTR = 16;
-parameter COMB = 1;
+parameter COMB = 0;
 input rst;
 input clk;
 input en;
@@ -83,8 +83,13 @@ Qupls4_pkg::micro_op_t vls;
 reg is_vector;
 reg is_reduction;
 reg is_vs, is_masked;
-reg [9:0] vlen, fvlen, xvlen, cvlen, avlen;
-reg [3:0] vlen1;
+reg [8:0] ble;		// byte lane enable
+reg [7:0] vlen, fvlen, xvlen, cvlen, avlen, tvlen;
+reg [7:0] vln;
+reg [2:0] vlen2, fvlen2, xvlen2, cvlen2, avlen2, tvlen2;
+reg [7:0] vlen1;
+reg [2:0] vlen3;
+reg [3:0] velsz1;
 //wire [8:0] mo0 = 9'd40;		// micro-op temporary
 wire [8:0] sp = 9'd31;
 wire [8:0] ssp = 9'd32;
@@ -94,8 +99,9 @@ wire [8:0] lr1 = 9'd38;
 wire [8:0] ip_reg = 9'd62;
 wire [8:0] zero_reg = 9'd63;
 wire [8:0] num_scalar_reg = 9'd25;
-wire [8:0] mot0_reg = 9'd34;
-wire [8:0] mot1_reg = 9'd35;
+wire [8:0] mot0_reg = 9'd121;
+wire [8:0] mot1_reg = 9'd122;
+wire [8:0] mot2_reg = 9'd123;
 reg [8:0] vRd, vRs1, vRs2, vRs3;
 reg [8:0] Rd, Rs1, Rs2, Rs3;
 reg vRdi, vRs1i, vRs2i, vRs3i;		// whether to increment the register spec or not.
@@ -126,6 +132,19 @@ always_comb
 // chunks of the vector to process.
 // These values are essentially static, so they can be registered to improve
 // timing.
+always_ff @(posedge clk)  vlen <= (vlen_reg[ 7: 0] + 3'd7) >> 3;
+always_ff @(posedge clk) fvlen <= (vlen_reg[15: 8] + 3'd7) >> 3;
+always_ff @(posedge clk) xvlen <= (vlen_reg[23:16] + 3'd7) >> 3;
+always_ff @(posedge clk) cvlen <= (vlen_reg[31:24] + 3'd7) >> 3;
+always_ff @(posedge clk) avlen <= (vlen_reg[39:32] + 3'd7) >> 3;
+always_ff @(posedge clk) tvlen <= (vlen_reg[47:40] + 3'd7) >> 3;
+always_ff @(posedge clk)  vlen2 <= vlen_reg[ 2: 0];
+always_ff @(posedge clk) fvlen2 <= vlen_reg[10: 8];
+always_ff @(posedge clk) xvlen2 <= vlen_reg[18:16];
+always_ff @(posedge clk) cvlen2 <= vlen_reg[26:24];
+always_ff @(posedge clk) avlen2 <= vlen_reg[34:32];
+always_ff @(posedge clk) tvlen2 <= vlen_reg[42:40];
+/*
 always_ff @(posedge clk)
 	vlen = (vlen_reg[7:0] * (7'd1 << velsz[1:0])) >> 4'd6;
 always_ff @(posedge clk)
@@ -136,7 +155,7 @@ always_ff @(posedge clk)
 	cvlen = (vlen_reg[23:16] * (7'd1 << velsz[17:16])) >> 4'd6;
 always_ff @(posedge clk)
 	avlen = (vlen_reg[31:24] * (7'd1 << velsz[25:24])) >> 4'd6;
-
+*/
 always_comb
 begin
 	floadi1 = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
@@ -618,24 +637,24 @@ begin
 	vsins = ir;
 	vsins.opcode = Qupls4_pkg::opcode_e'(ir[6:0]);
 	vsins.v = VAL;
-	vsins.Rd = thread*40+ir.Rd;
-	vsins.Rs1 = thread*40+ir.Rs1;
-	vsins.Rs2 = thread*40+ir.Rs2;
-	vsins.Rs3 = thread*40+ir.Rs3;
+	vsins.Rd = ir.Rd;
+	vsins.Rs1 = ir.Rs1;
+	vsins.Rs2 = ir.Rs2;
+	vsins.Rs3 = ir.Rs3;
 	vls = ir;
 	vls.v = VAL;
 	vls.opcode = ir.opcode;
-	vls.Rd = thread*40+ir.Rd;
-	vls.Rs1 = thread*40+ir.Rs1;
-	vls.Rs2 = thread*40+ir.Rs2;
-	vls.Rs3 = thread*40+ir.Rs3;
+	vls.Rd = ir.Rd;
+	vls.Rs1 = ir.Rs1;
+	vls.Rs2 = ir.Rs2;
+	vls.Rs3 = ir.Rs3;
 	instr = ir;
 	instr.v = VAL;
 	instr.opcode = ir.opcode;
-	instr.Rd = {thread*40+ir.Rd};
-	instr.Rs1 = {thread*40+ir.Rs1};
-	instr.Rs2 = {thread*40+ir.Rs2};
-	instr.Rs3 = {thread*40+ir.Rs3};
+	instr.Rd = {ir.Rd};
+	instr.Rs1 = {ir.Rs1};
+	instr.Rs2 = {ir.Rs2};
+	instr.Rs3 = {ir.Rs3};
 	case(ir.opcode)
 	Qupls4_pkg::OP_EXTD:
 		begin
@@ -680,17 +699,51 @@ begin
 		end
 	Qupls4_pkg::OP_LDV,Qupls4_pkg::OP_STV,
 	Qupls4_pkg::OP_LDVN,Qupls4_pkg::OP_STVN:
+	   begin
 		case(vls.dt)
 		3'd0:	vlen1 = vlen;
 		3'd1:	vlen1 = fvlen;
 		3'd2:	vlen1 = xvlen;
 		3'd3:	vlen1 = cvlen;
 		3'd4:	vlen1 = avlen;
+		3'd5:	vlen1 = tvlen;
 		default:	vlen1 = vlen;
 		endcase
-	default:
-		vlen1 = 10'd0;
-	endcase
+		case(vls.dt)
+		3'd0:	vlen3 = vlen2;
+		3'd1:	vlen3 = fvlen2;
+		3'd2:	vlen3 = xvlen2;
+		3'd3:	vlen3 = cvlen2;
+		3'd4:	vlen3 = avlen2;
+		3'd5:	vlen3 = tvlen2;
+		default:	vlen3 = vlen2;
+		endcase
+		case(vls.dt)
+		3'd0:	velsz1 = velsz[ 3: 0];
+		3'd1:	velsz1 = velsz[11: 8];
+		3'd2:	velsz1 = velsz[19:16];
+		3'd3:	velsz1 = velsz[27:24];
+		3'd4:	velsz1 = velsz[35:32];
+		3'd5:	velsz1 = velsz[43:40];
+		default:	velsz1 = velsz[ 3: 0];
+   	endcase
+		case(vls.dt)
+		3'd0:	vln = vlen_reg[ 7: 0];
+		3'd1:	vln = vlen_reg[11: 8];
+		3'd2:	vln = vlen_reg[23:16];
+		3'd3:	vln = vlen_reg[31:24];
+		3'd4:	vln = vlen_reg[39:32];
+		3'd5:	vln = vlen_reg[47:40];
+		default:	vln = vlen_reg[ 7: 0];
+   	endcase
+    end
+    default:
+        begin
+        vlen1 = 10'd0;
+        vlen3 = 3'd0;
+        velsz1 = 4'd8;
+        end
+    endcase
 end
 
 always_comb vRd = {3'b0,instr.Rd};
@@ -707,10 +760,12 @@ always_comb vRs3i = (instr.vn[3] & ~instr.ms[2]);
 always_comb
 begin
 	next_count = 3'd0;
+	ble = 9'd0;
 	for (n1 = 0; n1 < MICROOPS_PER_INSTR; n1 = n1 + 1) begin
 		next_uop[n1] = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
 		next_uop[n1].lead = n1==0;
 		next_uop[n1].opcode = Qupls4_pkg::OP_NOP;
+		next_uop[n1].ble = 9'b011111111;
 		next_uop[n1].v = VAL;
 	end
 
@@ -1029,7 +1084,7 @@ begin
 	Qupls4_pkg::OP_R3BP,Qupls4_pkg::OP_R3WP,Qupls4_pkg::OP_R3TP,Qupls4_pkg::OP_R3OP,
 	Qupls4_pkg::OP_FLTPH,Qupls4_pkg::OP_FLTPS,Qupls4_pkg::OP_FLTPD,Qupls4_pkg::OP_FLTPQ:
 		if (SUPPORT_VECTOR) begin
-			case({VREGS > 4,vlen1[3:0]})
+			case({VREGS > 4,vlen1[6:3]})
 			5'd1:
 				begin
 			next_count = 4'd1;
@@ -1509,166 +1564,262 @@ begin
 
 	Qupls4_pkg::OP_LDV,Qupls4_pkg::OP_STV:
 		if (SUPPORT_VECTOR) begin
-			case({VREGS > 4,vlen1[3:0]})
+			case(velsz1)
+			4'd1:
+				case(vlen3)
+				3'd1:	ble = 8'b00000001;
+				3'd2:	ble = 8'b00000011;
+				3'd3:	ble = 8'b00000111;
+				3'd4:	ble = 8'b00001111;
+				3'd5:	ble = 8'b00011111;
+				3'd6:	ble = 8'b00111111;
+				3'd7:	ble = 8'b01111111;
+				3'd0:	ble = 8'b11111111;
+				endcase
+			4'd2:
+				case(vlen3[2:1])
+				2'd1:	ble = 8'b00000011;
+				2'd2:	ble = 8'b00001111;
+				2'd3:	ble = 8'b00111111;
+				2'd0:	ble = 8'b11111111;
+				endcase
+			4'd4:	ble = vlen3[2] ? 8'b00001111: 8'b11111111;
+			4'd8:	ble = 8'b11111111;
+			endcase
+			case({VREGS > 4,vlen1})
+			5'd0:	next_uop[0].ble = 8'b00000000;
 			5'd1:
 				begin
 			next_count = 4'd1;
 			next_uop[0] = vls;
 			next_uop[0].lead = TRUE;
+			next_uop[0].ble = ble;
+			next_uop[0].imm2[5:0] = vlen;
+			next_uop[0].byteno = 6'd0;
 				end
 			5'd2:
 				begin
 			next_count = 4'd2;
 			next_uop[0] = vls;
 			next_uop[0].lead = TRUE;
+			next_uop[0].ble = 8'b11111111;
+			next_uop[0].byteno = 6'd0;
 			next_uop[1] = vls;
 			next_uop[1].num = 5'd1;
 			next_uop[1].Rd = vls.Rd + 2'd1;
 			next_uop[1].imm = vls.imm + 6'd8;
+			next_uop[1].ble = ble;
+			next_uop[1].byteno = 6'd8;
 				end
 			5'd3:
 				begin
 			next_count = 4'd3;
 			next_uop[0] = vls;
 			next_uop[0].lead = TRUE;
+			next_uop[0].ble = 8'b11111111;
+			next_uop[0].byteno = 6'd0;
 			next_uop[1] = vls;
 			next_uop[1].num = 5'd1;
 			next_uop[1].Rd = vls.Rd + 2'd1;
 			next_uop[1].imm = vls.imm + 6'd8;
+			next_uop[1].ble = 8'b11111111;
+			next_uop[1].byteno = 6'd8;
 			next_uop[2] = vls;
 			next_uop[2].num = 5'd2;
 			next_uop[2].Rd = vls.Rd + 2'd2;
 			next_uop[2].imm = vls.imm + 6'd16;
+			next_uop[2].ble = ble;
+			next_uop[2].byteno = 6'd16;
 				end
 			5'd4:
 				begin
 			next_count = 4'd4;
 			next_uop[0] = vls;
 			next_uop[0].lead = TRUE;
+			next_uop[0].ble = 8'b11111111;
+			next_uop[0].byteno = 6'd0;
 			next_uop[1] = vls;
 			next_uop[1].num = 5'd1;
 			next_uop[1].Rd = vls.Rd + 2'd1;
 			next_uop[1].imm = vls.imm + 6'd8;
+			next_uop[1].ble = 8'b11111111;
+			next_uop[1].byteno = 6'd8;
 			next_uop[2] = vls;
 			next_uop[2].num = 5'd2;
 			next_uop[2].Rd = vls.Rd + 2'd2;
 			next_uop[2].imm = vls.imm + 6'd16;
+			next_uop[2].ble = 8'b11111111;
+			next_uop[2].byteno = 6'd16;
 			next_uop[3] = vls;
 			next_uop[3].num = 5'd3;
 			next_uop[3].Rd = vls.Rd + 2'd3;
 			next_uop[3].imm = vls.imm + 6'd24;
+			next_uop[3].ble = ble;
+			next_uop[3].byteno = 6'd24;
 				end
 			5'd21:
 				begin
 			next_count = 4'd5;
 			next_uop[0] = vls;
 			next_uop[0].lead = TRUE;
+			next_uop[0].ble = 8'b11111111;
+			next_uop[0].byteno = 6'd0;
 			next_uop[1] = vls;
 			next_uop[1].num = 5'd1;
 			next_uop[1].Rd = vls.Rd + 2'd1;
 			next_uop[1].imm = vls.imm + 6'd8;
+			next_uop[1].ble = 8'b11111111;
+			next_uop[1].byteno = 6'd8;
 			next_uop[2] = vls;
 			next_uop[2].num = 5'd2;
 			next_uop[2].Rd = vls.Rd + 2'd2;
 			next_uop[2].imm = vls.imm + 6'd16;
+			next_uop[2].ble = 8'b11111111;
+			next_uop[2].byteno = 6'd16;
 			next_uop[3] = vls;
 			next_uop[3].num = 5'd3;
 			next_uop[3].Rd = vls.Rd + 2'd3;
 			next_uop[3].imm = vls.imm + 6'd24;
+			next_uop[3].ble = 8'b11111111;
+			next_uop[3].byteno = 6'd24;
 			next_uop[4] = vls;
 			next_uop[4].num = 5'd4;
 			next_uop[4].Rd = vls.Rd + 3'd4;
 			next_uop[4].imm = vls.imm + 6'd32;
+			next_uop[4].ble = ble;
+			next_uop[4].byteno = 6'd32;
 				end
 			5'd22:
 				begin
 			next_count = 4'd6;
 			next_uop[0] = vls;
 			next_uop[0].lead = TRUE;
+			next_uop[0].ble = 8'b11111111;
+			next_uop[0].byteno = 6'd0;
 			next_uop[1] = vls;
 			next_uop[1].num = 5'd1;
 			next_uop[1].Rd = vls.Rd + 2'd1;
 			next_uop[1].imm = vls.imm + 6'd8;
+			next_uop[1].ble = 8'b11111111;
+			next_uop[1].byteno = 6'd8;
 			next_uop[2] = vls;
 			next_uop[2].num = 5'd2;
 			next_uop[2].Rd = vls.Rd + 2'd2;
 			next_uop[2].imm = vls.imm + 6'd16;
+			next_uop[2].ble = 8'b11111111;
+			next_uop[2].byteno = 6'd16;
 			next_uop[3] = vls;
 			next_uop[3].num = 5'd3;
 			next_uop[3].Rd = vls.Rd + 2'd3;
 			next_uop[3].imm = vls.imm + 6'd24;
+			next_uop[3].ble = 8'b11111111;
+			next_uop[3].byteno = 6'd24;
 			next_uop[4] = vls;
 			next_uop[4].num = 5'd4;
 			next_uop[4].Rd = vls.Rd + 3'd4;
 			next_uop[4].imm = vls.imm + 6'd32;
+			next_uop[4].ble = 8'b11111111;
+			next_uop[4].byteno = 6'd32;
 			next_uop[5] = vls;
 			next_uop[5].num = 5'd5;
 			next_uop[5].Rd = vls.Rd + 3'd5;
 			next_uop[5].imm = vls.imm + 6'd40;
+			next_uop[5].ble = ble;
+			next_uop[5].byteno = 6'd40;
 				end
 			5'd23:
 				begin
 			next_count = 4'd7;
 			next_uop[0] = vls;
 			next_uop[0].lead = TRUE;
+			next_uop[0].ble = 8'b11111111;
+			next_uop[0].byteno = 6'd0;
 			next_uop[1] = vls;
 			next_uop[1].num = 5'd1;
 			next_uop[1].Rd = vls.Rd + 2'd1;
 			next_uop[1].imm = vls.imm + 6'd8;
+			next_uop[1].ble = 8'b11111111;
+			next_uop[1].byteno = 6'd8;
 			next_uop[2] = vls;
 			next_uop[2].num = 5'd2;
 			next_uop[2].Rd = vls.Rd + 2'd2;
 			next_uop[2].imm = vls.imm + 6'd16;
+			next_uop[2].ble = 8'b11111111;
+			next_uop[2].byteno = 6'd16;
 			next_uop[3] = vls;
 			next_uop[3].num = 5'd3;
 			next_uop[3].Rd = vls.Rd + 2'd3;
 			next_uop[3].imm = vls.imm + 6'd24;
+			next_uop[3].ble = 8'b11111111;
+			next_uop[3].byteno = 6'd24;
 			next_uop[4] = vls;
 			next_uop[4].num = 5'd4;
 			next_uop[4].Rd = vls.Rd + 3'd4;
 			next_uop[4].imm = vls.imm + 6'd32;
+			next_uop[4].ble = 8'b11111111;
+			next_uop[4].byteno = 6'd32;
 			next_uop[5] = vls;
 			next_uop[5].num = 5'd5;
 			next_uop[5].Rd = vls.Rd + 3'd5;
 			next_uop[5].imm = vls.imm + 6'd40;
+			next_uop[5].ble = 8'b11111111;
+			next_uop[5].byteno = 6'd40;
 			next_uop[6] = vls;
 			next_uop[6].num = 5'd6;
 			next_uop[6].Rd = vls.Rd + 3'd6;
 			next_uop[6].imm = vls.imm + 6'd48;
+			next_uop[6].ble = ble;
+			next_uop[6].byteno = 6'd48;
 				end
 			5'd24:
 				begin
 			next_count = 4'd8;
 			next_uop[0] = vls;
 			next_uop[0].lead = TRUE;
+			next_uop[0].ble = 8'b11111111;
+			next_uop[0].byteno = 6'd0;
 			next_uop[1] = vls;
 			next_uop[1].num = 5'd1;
 			next_uop[1].Rd = vls.Rd + 2'd1;
 			next_uop[1].imm = vls.imm + 6'd8;
+			next_uop[1].ble = 8'b11111111;
+			next_uop[1].byteno = 6'd8;
 			next_uop[2] = vls;
 			next_uop[2].num = 5'd2;
 			next_uop[2].Rd = vls.Rd + 2'd2;
 			next_uop[2].imm = vls.imm + 6'd16;
+			next_uop[2].ble = 8'b11111111;
+			next_uop[2].byteno = 6'd16;
 			next_uop[3] = vls;
 			next_uop[3].num = 5'd3;
 			next_uop[3].Rd = vls.Rd + 2'd3;
 			next_uop[3].imm = vls.imm + 6'd24;
+			next_uop[3].ble = 8'b11111111;
+			next_uop[3].byteno = 6'd24;
 			next_uop[4] = vls;
 			next_uop[4].num = 5'd4;
 			next_uop[4].Rd = vls.Rd + 3'd4;
 			next_uop[4].imm = vls.imm + 6'd32;
+			next_uop[4].ble = 8'b11111111;
+			next_uop[4].byteno = 6'd32;
 			next_uop[5] = vls;
 			next_uop[5].num = 5'd5;
 			next_uop[5].Rd = vls.Rd + 3'd5;
 			next_uop[5].imm = vls.imm + 6'd40;
+			next_uop[5].ble = 8'b11111111;
+			next_uop[5].byteno = 6'd40;
 			next_uop[6] = vls;
 			next_uop[6].num = 5'd6;
 			next_uop[6].Rd = vls.Rd + 3'd6;
 			next_uop[6].imm = vls.imm + 6'd48;
+			next_uop[6].ble = 8'b11111111;
+			next_uop[6].byteno = 6'd48;
 			next_uop[7] = vls;
 			next_uop[7].num = 5'd7;
 			next_uop[7].Rd = vls.Rd + 3'd7;
 			next_uop[7].imm = vls.imm + 6'd56;
+			next_uop[7].ble = ble;
+			next_uop[7].byteno = 6'd56;
 				end
 			default:	
 				begin
@@ -1683,168 +1834,941 @@ begin
 			next_uop[0] = nopi;
 		end
 
+	// Indexed loads / stores need to handle the register in pieces.
+	// For example, the second load may still belong in the first register if
+	// the element size is less than the register width. We cannot simply
+	// increment the register number between loads.
 	Qupls4_pkg::OP_LDVN,Qupls4_pkg::OP_STVN:
 		if (SUPPORT_VECTOR) begin
+			next_uop[0].imm2 = vln;
+			next_uop[1].imm2 = vln;
+			next_uop[2].imm2 = vln;
+			next_uop[3].imm2 = vln;
+			next_uop[4].imm2 = vln;
+			next_uop[5].imm2 = vln;
+			next_uop[6].imm2 = vln;
+			next_uop[7].imm2 = vln;
 			case({VREGS > 4,vlen1[3:0]})
+			5'd0:	next_uop[0].ble = 8'b00000000;
 			5'd1:
 				begin
 			next_count = 4'd1;
 			next_uop[0] = vls;
 			next_uop[0].lead = TRUE;
+			next_uop[0].byteno = 6'd0;
+			case(velsz1)
+			4'd1:	next_uop[0].ble = 8'b1;
+			4'd2:	next_uop[0].ble = 8'b11;
+			4'd4:	next_uop[0].ble = 8'b1111;
+			4'd8:	next_uop[0].ble = 8'b11111111;
+			endcase
 				end
 			5'd2:
 				begin
 			next_count = 4'd2;
 			next_uop[0] = vls;
 			next_uop[0].lead = TRUE;
+			next_uop[0].byteno = 6'd0;
+			case(velsz1)
+			4'd1:	next_uop[0].ble = 8'b1;
+			4'd2:	next_uop[0].ble = 8'b11;
+			4'd4:	next_uop[0].ble = 8'b1111;
+			4'd8:	next_uop[0].ble = 8'b11111111;
+			endcase
 			next_uop[1] = vls;
 			next_uop[1].num = 5'd1;
-			next_uop[1].Rd = vls.Rd + 2'd1;
 			next_uop[1].Rs2 = vls.Rs2 + 2'd1;
+			case(velsz1)
+			4'd1:
+				begin
+					next_uop[1].Rd = vls.Rd;
+					next_uop[1].ble = 8'b00000010;
+					next_uop[1].byteno = 6'd1;
+				end
+			4'd2:
+				begin
+					next_uop[1].Rd = vls.Rd;
+					next_uop[1].ble = 8'b00001100;
+					next_uop[1].byteno = 6'd2;
+				end
+			4'd4:
+				begin
+					next_uop[1].Rd = vls.Rd;
+					next_uop[1].ble = 8'b11110000;
+					next_uop[1].byteno = 6'd4;
+				end
+			4'd8:
+				begin
+					next_uop[1].Rd = vls.Rd + 2'd1;
+					next_uop[1].ble = 8'b11111111;
+					next_uop[1].byteno = 6'd8;
+				end
+			endcase
 				end
 			5'd3:
 				begin
 			next_count = 4'd3;
 			next_uop[0] = vls;
 			next_uop[0].lead = TRUE;
+			next_uop[0].byteno = 6'd0;
+			case(velsz1)
+			4'd1:	next_uop[0].ble = 8'b1;
+			4'd2:	next_uop[0].ble = 8'b11;
+			4'd4:	next_uop[0].ble = 8'b1111;
+			4'd8:	next_uop[0].ble = 8'b11111111;
+			endcase
 			next_uop[1] = vls;
 			next_uop[1].num = 5'd1;
-			next_uop[1].Rd = vls.Rd + 2'd1;
 			next_uop[1].Rs2 = vls.Rs2 + 2'd1;
+			case(velsz1)
+			4'd1:
+				begin
+					next_uop[1].Rd = vls.Rd;
+					next_uop[1].ble = 8'b00000010;
+					next_uop[1].byteno = 6'd1;
+				end
+			4'd2:
+				begin
+					next_uop[1].Rd = vls.Rd;
+					next_uop[1].ble = 8'b00001100;
+					next_uop[1].byteno = 6'd2;
+				end
+			4'd4:
+				begin
+					next_uop[1].Rd = vls.Rd;
+					next_uop[1].ble = 8'b11110000;
+					next_uop[1].byteno = 6'd4;
+				end
+			4'd8:
+				begin
+					next_uop[1].Rd = vls.Rd + 2'd1;
+					next_uop[1].ble = 8'b11111111;
+					next_uop[1].byteno = 6'd8;
+				end
+			endcase
 			next_uop[2] = vls;
 			next_uop[2].num = 5'd2;
-			next_uop[2].Rd = vls.Rd + 2'd2;
 			next_uop[2].Rs2 = vls.Rs2 + 2'd2;
+			case(velsz1)
+			4'd1:
+				begin
+					next_uop[2].Rd = vls.Rd;
+					next_uop[2].ble = 8'b00000100;
+					next_uop[2].byteno = 6'd2;
+				end
+			4'd2:
+				begin
+					next_uop[2].Rd = vls.Rd;
+					next_uop[2].ble = 8'b00110000;
+					next_uop[2].byteno = 6'd4;
+				end
+			4'd4:
+				begin
+					next_uop[2].Rd = vls.Rd + 2'd1;
+					next_uop[2].ble = 8'b00001111;
+					next_uop[2].byteno = 6'd8;
+				end
+			4'd8:
+				begin
+					next_uop[2].Rd = vls.Rd + 2'd2;
+					next_uop[2].ble = 8'b11111111;
+					next_uop[2].byteno = 6'd16;
+				end
+			endcase
 				end
 			5'd4:
 				begin
 			next_count = 4'd4;
 			next_uop[0] = vls;
 			next_uop[0].lead = TRUE;
+			next_uop[0].byteno = 6'd0;
+			case(velsz1)
+			4'd1:	next_uop[0].ble = 8'b1;
+			4'd2:	next_uop[0].ble = 8'b11;
+			4'd4:	next_uop[0].ble = 8'b1111;
+			4'd8:	next_uop[0].ble = 8'b11111111;
+			endcase
 			next_uop[1] = vls;
 			next_uop[1].num = 5'd1;
-			next_uop[1].Rd = vls.Rd + 2'd1;
 			next_uop[1].Rs2 = vls.Rs2 + 2'd1;
+			case(velsz1)
+			4'd1:
+				begin
+					next_uop[1].Rd = vls.Rd;
+					next_uop[1].ble = 8'b00000010;
+					next_uop[1].byteno = 6'd1;
+				end
+			4'd2:
+				begin
+					next_uop[1].Rd = vls.Rd;
+					next_uop[1].ble = 8'b00001100;
+					next_uop[1].byteno = 6'd2;
+				end
+			4'd4:
+				begin
+					next_uop[1].Rd = vls.Rd;
+					next_uop[1].ble = 8'b11110000;
+					next_uop[1].byteno = 6'd4;
+				end
+			4'd8:
+				begin
+					next_uop[1].Rd = vls.Rd + 2'd1;
+					next_uop[1].ble = 8'b11111111;
+					next_uop[1].byteno = 6'd8;
+				end
+			endcase
 			next_uop[2] = vls;
 			next_uop[2].num = 5'd2;
-			next_uop[2].Rd = vls.Rd + 2'd2;
 			next_uop[2].Rs2 = vls.Rs2 + 2'd2;
+			case(velsz1)
+			4'd1:
+				begin
+					next_uop[2].Rd = vls.Rd;
+					next_uop[2].ble = 8'b00000100;
+					next_uop[2].byteno = 6'd2;
+				end
+			4'd2:
+				begin
+					next_uop[2].Rd = vls.Rd;
+					next_uop[2].ble = 8'b00110000;
+					next_uop[2].byteno = 6'd4;
+				end
+			4'd4:
+				begin
+					next_uop[2].Rd = vls.Rd + 2'd1;
+					next_uop[2].ble = 8'b00001111;
+					next_uop[2].byteno = 6'd8;
+				end
+			4'd8:
+				begin
+					next_uop[2].Rd = vls.Rd + 2'd2;
+					next_uop[2].ble = 8'b11111111;
+					next_uop[2].byteno = 6'd16;
+				end
+			endcase
 			next_uop[3] = vls;
 			next_uop[3].num = 5'd3;
-			next_uop[3].Rd = vls.Rd + 2'd3;
 			next_uop[3].Rs2 = vls.Rs2 + 2'd3;
+			case(velsz1)
+			4'd1:
+				begin
+					next_uop[3].Rd = vls.Rd;
+					next_uop[3].ble = 8'b00001000;
+					next_uop[3].byteno = 6'd3;
 				end
-			5'd21:
+			4'd2:
+				begin
+					next_uop[3].Rd = vls.Rd;
+					next_uop[3].ble = 8'b11000000;
+					next_uop[3].byteno = 6'd6;
+				end
+			4'd4:
+				begin
+					next_uop[3].Rd = vls.Rd + 2'd1;
+					next_uop[3].ble = 8'b11110000;
+					next_uop[3].byteno = 6'd12;
+				end
+			4'd8:
+				begin
+					next_uop[3].Rd = vls.Rd + 2'd3;
+					next_uop[3].ble = 8'b11111111;
+					next_uop[3].byteno = 6'd24;
+				end
+			endcase
+				end
+			
+			5'd21:	// 5
 				begin
 			next_count = 4'd5;
 			next_uop[0] = vls;
 			next_uop[0].lead = TRUE;
+			next_uop[0].byteno = 6'd0;
+			case(velsz1)
+			4'd1:	next_uop[0].ble = 8'b1;
+			4'd2:	next_uop[0].ble = 8'b11;
+			4'd4:	next_uop[0].ble = 8'b1111;
+			4'd8:	next_uop[0].ble = 8'b11111111;
+			endcase
 			next_uop[1] = vls;
 			next_uop[1].num = 5'd1;
-			next_uop[1].Rd = vls.Rd + 2'd1;
 			next_uop[1].Rs2 = vls.Rs2 + 2'd1;
+			case(velsz1)
+			4'd1:
+				begin
+					next_uop[1].Rd = vls.Rd;
+					next_uop[1].ble = 8'b00000010;
+					next_uop[1].byteno = 6'd1;
+				end
+			4'd2:
+				begin
+					next_uop[1].Rd = vls.Rd;
+					next_uop[1].ble = 8'b00001100;
+					next_uop[1].byteno = 6'd2;
+				end
+			4'd4:
+				begin
+					next_uop[1].Rd = vls.Rd;
+					next_uop[1].ble = 8'b11110000;
+					next_uop[1].byteno = 6'd4;
+				end
+			4'd8:
+				begin
+					next_uop[1].Rd = vls.Rd + 2'd1;
+					next_uop[1].ble = 8'b11111111;
+					next_uop[1].byteno = 6'd8;
+				end
+			endcase
 			next_uop[2] = vls;
 			next_uop[2].num = 5'd2;
-			next_uop[2].Rd = vls.Rd + 2'd2;
 			next_uop[2].Rs2 = vls.Rs2 + 2'd2;
+			case(velsz1)
+			4'd1:
+				begin
+					next_uop[2].Rd = vls.Rd;
+					next_uop[2].ble = 8'b00000100;
+					next_uop[2].byteno = 6'd2;
+				end
+			4'd2:
+				begin
+					next_uop[2].Rd = vls.Rd;
+					next_uop[2].ble = 8'b00110000;
+					next_uop[2].byteno = 6'd4;
+				end
+			4'd4:
+				begin
+					next_uop[2].Rd = vls.Rd + 2'd1;
+					next_uop[2].ble = 8'b00001111;
+					next_uop[2].byteno = 6'd8;
+				end
+			4'd8:
+				begin
+					next_uop[2].Rd = vls.Rd + 2'd2;
+					next_uop[2].ble = 8'b11111111;
+					next_uop[2].byteno = 6'd16;
+				end
+			endcase
 			next_uop[3] = vls;
 			next_uop[3].num = 5'd3;
-			next_uop[3].Rd = vls.Rd + 2'd3;
 			next_uop[3].Rs2 = vls.Rs2 + 2'd3;
+			case(velsz1)
+			4'd1:
+				begin
+					next_uop[3].Rd = vls.Rd;
+					next_uop[3].ble = 8'b00001000;
+					next_uop[3].byteno = 6'd3;
+				end
+			4'd2:
+				begin
+					next_uop[3].Rd = vls.Rd;
+					next_uop[3].ble = 8'b11000000;
+					next_uop[3].byteno = 6'd6;
+				end
+			4'd4:
+				begin
+					next_uop[3].Rd = vls.Rd + 2'd1;
+					next_uop[3].ble = 8'b11110000;
+					next_uop[3].byteno = 6'd12;
+				end
+			4'd8:
+				begin
+					next_uop[3].Rd = vls.Rd + 2'd3;
+					next_uop[3].ble = 8'b11111111;
+					next_uop[3].byteno = 6'd24;
+				end
+			endcase
 			next_uop[4] = vls;
 			next_uop[4].num = 5'd4;
-			next_uop[4].Rd = vls.Rd + 4'd4;
 			next_uop[4].Rs2 = vls.Rs2 + 4'd4;
+			case(velsz1)
+			4'd1:
+				begin
+					next_uop[4].Rd = vls.Rd;
+					next_uop[4].ble = 8'b00010000;
+					next_uop[4].byteno = 6'd4;
 				end
-			5'd22:
+			4'd2:
+				begin
+					next_uop[4].Rd = vls.Rd + 2'd1;
+					next_uop[4].ble = 8'b00000011;
+					next_uop[4].byteno = 6'd8;
+				end
+			4'd4:
+				begin
+					next_uop[4].Rd = vls.Rd + 2'd2;
+					next_uop[4].ble = 8'b00001111;
+					next_uop[4].byteno = 6'd16;
+				end
+			4'd8:
+				begin
+					next_uop[4].Rd = vls.Rd + 3'd4;
+					next_uop[4].ble = 8'b11111111;
+					next_uop[4].byteno = 6'd32;
+				end
+			endcase
+				end
+
+			5'd22:	// 6
 				begin
 			next_count = 4'd6;
 			next_uop[0] = vls;
 			next_uop[0].lead = TRUE;
+			next_uop[0].byteno = 6'd0;
+			case(velsz1)
+			4'd1:	next_uop[0].ble = 8'b1;
+			4'd2:	next_uop[0].ble = 8'b11;
+			4'd4:	next_uop[0].ble = 8'b1111;
+			4'd8:	next_uop[0].ble = 8'b11111111;
+			endcase
 			next_uop[1] = vls;
 			next_uop[1].num = 5'd1;
-			next_uop[1].Rd = vls.Rd + 2'd1;
 			next_uop[1].Rs2 = vls.Rs2 + 2'd1;
+			case(velsz1)
+			4'd1:
+				begin
+					next_uop[1].Rd = vls.Rd;
+					next_uop[1].ble = 8'b00000010;
+					next_uop[1].byteno = 6'd1;
+				end
+			4'd2:
+				begin
+					next_uop[1].Rd = vls.Rd;
+					next_uop[1].ble = 8'b00001100;
+					next_uop[1].byteno = 6'd2;
+				end
+			4'd4:
+				begin
+					next_uop[1].Rd = vls.Rd;
+					next_uop[1].ble = 8'b11110000;
+					next_uop[1].byteno = 6'd4;
+				end
+			4'd8:
+				begin
+					next_uop[1].Rd = vls.Rd + 2'd1;
+					next_uop[1].ble = 8'b11111111;
+					next_uop[1].byteno = 6'd8;
+				end
+			endcase
 			next_uop[2] = vls;
 			next_uop[2].num = 5'd2;
-			next_uop[2].Rd = vls.Rd + 2'd2;
 			next_uop[2].Rs2 = vls.Rs2 + 2'd2;
+			case(velsz1)
+			4'd1:
+				begin
+					next_uop[2].Rd = vls.Rd;
+					next_uop[2].ble = 8'b00000100;
+					next_uop[2].byteno = 6'd2;
+				end
+			4'd2:
+				begin
+					next_uop[2].Rd = vls.Rd;
+					next_uop[2].ble = 8'b00110000;
+					next_uop[2].byteno = 6'd4;
+				end
+			4'd4:
+				begin
+					next_uop[2].Rd = vls.Rd + 2'd1;
+					next_uop[2].ble = 8'b00001111;
+					next_uop[2].byteno = 6'd8;
+				end
+			4'd8:
+				begin
+					next_uop[2].Rd = vls.Rd + 2'd2;
+					next_uop[2].ble = 8'b11111111;
+					next_uop[2].byteno = 6'd16;
+				end
+			endcase
 			next_uop[3] = vls;
 			next_uop[3].num = 5'd3;
-			next_uop[3].Rd = vls.Rd + 2'd3;
 			next_uop[3].Rs2 = vls.Rs2 + 2'd3;
+			case(velsz1)
+			4'd1:
+				begin
+					next_uop[3].Rd = vls.Rd;
+					next_uop[3].ble = 8'b00001000;
+					next_uop[3].byteno = 6'd3;
+				end
+			4'd2:
+				begin
+					next_uop[3].Rd = vls.Rd;
+					next_uop[3].ble = 8'b11000000;
+					next_uop[3].byteno = 6'd6;
+				end
+			4'd4:
+				begin
+					next_uop[3].Rd = vls.Rd + 2'd1;
+					next_uop[3].ble = 8'b11110000;
+					next_uop[3].byteno = 6'd12;
+				end
+			4'd8:
+				begin
+					next_uop[3].Rd = vls.Rd + 2'd3;
+					next_uop[3].ble = 8'b11111111;
+					next_uop[3].byteno = 6'd24;
+				end
+			endcase
 			next_uop[4] = vls;
 			next_uop[4].num = 5'd4;
-			next_uop[4].Rd = vls.Rd + 4'd4;
 			next_uop[4].Rs2 = vls.Rs2 + 4'd4;
+			case(velsz1)
+			4'd1:
+				begin
+					next_uop[4].Rd = vls.Rd;
+					next_uop[4].ble = 8'b00010000;
+					next_uop[4].byteno = 6'd4;
+				end
+			4'd2:
+				begin
+					next_uop[4].Rd = vls.Rd + 2'd1;
+					next_uop[4].ble = 8'b00000011;
+					next_uop[4].byteno = 6'd8;
+				end
+			4'd4:
+				begin
+					next_uop[4].Rd = vls.Rd + 2'd2;
+					next_uop[4].ble = 8'b00001111;
+					next_uop[4].byteno = 6'd16;
+				end
+			4'd8:
+				begin
+					next_uop[4].Rd = vls.Rd + 3'd4;
+					next_uop[4].ble = 8'b11111111;
+					next_uop[4].byteno = 6'd32;
+				end
+			endcase
 			next_uop[5] = vls;
 			next_uop[5].num = 5'd5;
-			next_uop[5].Rd = vls.Rd + 4'd5;
 			next_uop[5].Rs2 = vls.Rs2 + 4'd5;
+			case(velsz1)
+			4'd1:
+				begin
+					next_uop[5].Rd = vls.Rd;
+					next_uop[5].ble = 8'b00100000;
+					next_uop[5].byteno = 6'd5;
 				end
-			5'd23:
+			4'd2:
+				begin
+					next_uop[5].Rd = vls.Rd + 2'd1;
+					next_uop[5].ble = 8'b00001100;
+					next_uop[5].byteno = 6'd10;
+				end
+			4'd4:
+				begin
+					next_uop[5].Rd = vls.Rd + 2'd2;
+					next_uop[5].ble = 8'b11110000;
+					next_uop[5].byteno = 6'd20;
+				end
+			4'd8:
+				begin
+					next_uop[5].Rd = vls.Rd + 3'd5;
+					next_uop[5].ble = 8'b11111111;
+					next_uop[5].byteno = 6'd40;
+				end
+			endcase
+				end
+
+			5'd23:	// 7
 				begin
 			next_count = 4'd7;
 			next_uop[0] = vls;
 			next_uop[0].lead = TRUE;
+			next_uop[0].byteno = 6'd0;
+			case(velsz1)
+			4'd1:	next_uop[0].ble = 8'b1;
+			4'd2:	next_uop[0].ble = 8'b11;
+			4'd4:	next_uop[0].ble = 8'b1111;
+			4'd8:	next_uop[0].ble = 8'b11111111;
+			endcase
 			next_uop[1] = vls;
 			next_uop[1].num = 5'd1;
-			next_uop[1].Rd = vls.Rd + 2'd1;
 			next_uop[1].Rs2 = vls.Rs2 + 2'd1;
+			case(velsz1)
+			4'd1:
+				begin
+					next_uop[1].Rd = vls.Rd;
+					next_uop[1].ble = 8'b00000010;
+					next_uop[1].byteno = 6'd1;
+				end
+			4'd2:
+				begin
+					next_uop[1].Rd = vls.Rd;
+					next_uop[1].ble = 8'b00001100;
+					next_uop[1].byteno = 6'd2;
+				end
+			4'd4:
+				begin
+					next_uop[1].Rd = vls.Rd;
+					next_uop[1].ble = 8'b11110000;
+					next_uop[1].byteno = 6'd4;
+				end
+			4'd8:
+				begin
+					next_uop[1].Rd = vls.Rd + 2'd1;
+					next_uop[1].ble = 8'b11111111;
+					next_uop[1].byteno = 6'd8;
+				end
+			endcase
 			next_uop[2] = vls;
 			next_uop[2].num = 5'd2;
-			next_uop[2].Rd = vls.Rd + 2'd2;
 			next_uop[2].Rs2 = vls.Rs2 + 2'd2;
+			case(velsz1)
+			4'd1:
+				begin
+					next_uop[2].Rd = vls.Rd;
+					next_uop[2].ble = 8'b00000100;
+					next_uop[2].byteno = 6'd2;
+				end
+			4'd2:
+				begin
+					next_uop[2].Rd = vls.Rd;
+					next_uop[2].ble = 8'b00110000;
+					next_uop[2].byteno = 6'd4;
+				end
+			4'd4:
+				begin
+					next_uop[2].Rd = vls.Rd + 2'd1;
+					next_uop[2].ble = 8'b00001111;
+					next_uop[2].byteno = 6'd8;
+				end
+			4'd8:
+				begin
+					next_uop[2].Rd = vls.Rd + 2'd2;
+					next_uop[2].ble = 8'b11111111;
+					next_uop[2].byteno = 6'd16;
+				end
+			endcase
 			next_uop[3] = vls;
 			next_uop[3].num = 5'd3;
-			next_uop[3].Rd = vls.Rd + 2'd3;
 			next_uop[3].Rs2 = vls.Rs2 + 2'd3;
+			case(velsz1)
+			4'd1:
+				begin
+					next_uop[3].Rd = vls.Rd;
+					next_uop[3].ble = 8'b00001000;
+					next_uop[3].byteno = 6'd3;
+				end
+			4'd2:
+				begin
+					next_uop[3].Rd = vls.Rd;
+					next_uop[3].ble = 8'b11000000;
+					next_uop[3].byteno = 6'd6;
+				end
+			4'd4:
+				begin
+					next_uop[3].Rd = vls.Rd + 2'd1;
+					next_uop[3].ble = 8'b11110000;
+					next_uop[3].byteno = 6'd12;
+				end
+			4'd8:
+				begin
+					next_uop[3].Rd = vls.Rd + 2'd3;
+					next_uop[3].ble = 8'b11111111;
+					next_uop[3].byteno = 6'd24;
+				end
+			endcase
 			next_uop[4] = vls;
 			next_uop[4].num = 5'd4;
-			next_uop[4].Rd = vls.Rd + 4'd4;
 			next_uop[4].Rs2 = vls.Rs2 + 4'd4;
+			case(velsz1)
+			4'd1:
+				begin
+					next_uop[4].Rd = vls.Rd;
+					next_uop[4].ble = 8'b00010000;
+					next_uop[4].byteno = 6'd4;
+				end
+			4'd2:
+				begin
+					next_uop[4].Rd = vls.Rd + 2'd1;
+					next_uop[4].ble = 8'b00000011;
+					next_uop[4].byteno = 6'd8;
+				end
+			4'd4:
+				begin
+					next_uop[4].Rd = vls.Rd + 2'd2;
+					next_uop[4].ble = 8'b00001111;
+					next_uop[4].byteno = 6'd16;
+				end
+			4'd8:
+				begin
+					next_uop[4].Rd = vls.Rd + 3'd4;
+					next_uop[4].ble = 8'b11111111;
+					next_uop[4].byteno = 6'd32;
+				end
+			endcase
 			next_uop[5] = vls;
 			next_uop[5].num = 5'd5;
-			next_uop[5].Rd = vls.Rd + 4'd5;
 			next_uop[5].Rs2 = vls.Rs2 + 4'd5;
+			case(velsz1)
+			4'd1:
+				begin
+					next_uop[5].Rd = vls.Rd;
+					next_uop[5].ble = 8'b00100000;
+					next_uop[5].byteno = 6'd5;
+				end
+			4'd2:
+				begin
+					next_uop[5].Rd = vls.Rd + 2'd1;
+					next_uop[5].ble = 8'b00001100;
+					next_uop[5].byteno = 6'd10;
+				end
+			4'd4:
+				begin
+					next_uop[5].Rd = vls.Rd + 2'd2;
+					next_uop[5].ble = 8'b11110000;
+					next_uop[5].byteno = 6'd20;
+				end
+			4'd8:
+				begin
+					next_uop[5].Rd = vls.Rd + 3'd5;
+					next_uop[5].ble = 8'b11111111;
+					next_uop[5].byteno = 6'd40;
+				end
+			endcase
 			next_uop[6] = vls;
 			next_uop[6].num = 5'd6;
-			next_uop[6].Rd = vls.Rd + 4'd6;
 			next_uop[6].Rs2 = vls.Rs2 + 4'd6;
+			case(velsz1)
+			4'd1:
+				begin
+					next_uop[6].Rd = vls.Rd;
+					next_uop[6].ble = 8'b01000000;
+					next_uop[6].byteno = 6'd6;
 				end
+			4'd2:
+				begin
+					next_uop[6].Rd = vls.Rd + 2'd1;
+					next_uop[6].ble = 8'b00110000;
+					next_uop[6].byteno = 6'd12;
+				end
+			4'd4:
+				begin
+					next_uop[6].Rd = vls.Rd + 2'd3;
+					next_uop[6].ble = 8'b00001111;
+					next_uop[6].byteno = 6'd24;
+				end
+			4'd8:
+				begin
+					next_uop[6].Rd = vls.Rd + 3'd6;
+					next_uop[6].ble = 8'b11111111;
+					next_uop[6].byteno = 6'd48;
+				end
+			endcase
+				end
+
 			5'd24:
 				begin
 			next_count = 4'd8;
 			next_uop[0] = vls;
 			next_uop[0].lead = TRUE;
+			next_uop[0].byteno = 6'd0;
+			case(velsz1)
+			4'd1:	next_uop[0].ble = 8'b1;
+			4'd2:	next_uop[0].ble = 8'b11;
+			4'd4:	next_uop[0].ble = 8'b1111;
+			4'd8:	next_uop[0].ble = 8'b11111111;
+			endcase
 			next_uop[1] = vls;
 			next_uop[1].num = 5'd1;
-			next_uop[1].Rd = vls.Rd + 2'd1;
 			next_uop[1].Rs2 = vls.Rs2 + 2'd1;
+			case(velsz1)
+			4'd1:
+				begin
+					next_uop[1].Rd = vls.Rd;
+					next_uop[1].ble = 8'b00000010;
+					next_uop[1].byteno = 6'd1;
+				end
+			4'd2:
+				begin
+					next_uop[1].Rd = vls.Rd;
+					next_uop[1].ble = 8'b00001100;
+					next_uop[1].byteno = 6'd2;
+				end
+			4'd4:
+				begin
+					next_uop[1].Rd = vls.Rd;
+					next_uop[1].ble = 8'b11110000;
+					next_uop[1].byteno = 6'd4;
+				end
+			4'd8:
+				begin
+					next_uop[1].Rd = vls.Rd + 2'd1;
+					next_uop[1].ble = 8'b11111111;
+					next_uop[1].byteno = 6'd8;
+				end
+			endcase
 			next_uop[2] = vls;
 			next_uop[2].num = 5'd2;
-			next_uop[2].Rd = vls.Rd + 2'd2;
 			next_uop[2].Rs2 = vls.Rs2 + 2'd2;
+			case(velsz1)
+			4'd1:
+				begin
+					next_uop[2].Rd = vls.Rd;
+					next_uop[2].ble = 8'b00000100;
+					next_uop[2].byteno = 6'd2;
+				end
+			4'd2:
+				begin
+					next_uop[2].Rd = vls.Rd;
+					next_uop[2].ble = 8'b00110000;
+					next_uop[2].byteno = 6'd4;
+				end
+			4'd4:
+				begin
+					next_uop[2].Rd = vls.Rd + 2'd1;
+					next_uop[2].ble = 8'b00001111;
+					next_uop[2].byteno = 6'd8;
+				end
+			4'd8:
+				begin
+					next_uop[2].Rd = vls.Rd + 2'd2;
+					next_uop[2].ble = 8'b11111111;
+					next_uop[2].byteno = 6'd16;
+				end
+			endcase
 			next_uop[3] = vls;
 			next_uop[3].num = 5'd3;
-			next_uop[3].Rd = vls.Rd + 2'd3;
 			next_uop[3].Rs2 = vls.Rs2 + 2'd3;
+			case(velsz1)
+			4'd1:
+				begin
+					next_uop[3].Rd = vls.Rd;
+					next_uop[3].ble = 8'b00001000;
+					next_uop[3].byteno = 6'd3;
+				end
+			4'd2:
+				begin
+					next_uop[3].Rd = vls.Rd;
+					next_uop[3].ble = 8'b11000000;
+					next_uop[3].byteno = 6'd6;
+				end
+			4'd4:
+				begin
+					next_uop[3].Rd = vls.Rd + 2'd1;
+					next_uop[3].ble = 8'b11110000;
+					next_uop[3].byteno = 6'd12;
+				end
+			4'd8:
+				begin
+					next_uop[3].Rd = vls.Rd + 2'd3;
+					next_uop[3].ble = 8'b11111111;
+					next_uop[3].byteno = 6'd24;
+				end
+			endcase
 			next_uop[4] = vls;
 			next_uop[4].num = 5'd4;
-			next_uop[4].Rd = vls.Rd + 4'd4;
 			next_uop[4].Rs2 = vls.Rs2 + 4'd4;
+			case(velsz1)
+			4'd1:
+				begin
+					next_uop[4].Rd = vls.Rd;
+					next_uop[4].ble = 8'b00010000;
+					next_uop[4].byteno = 6'd4;
+				end
+			4'd2:
+				begin
+					next_uop[4].Rd = vls.Rd + 2'd1;
+					next_uop[4].ble = 8'b00000011;
+					next_uop[4].byteno = 6'd8;
+				end
+			4'd4:
+				begin
+					next_uop[4].Rd = vls.Rd + 2'd2;
+					next_uop[4].ble = 8'b00001111;
+					next_uop[4].byteno = 6'd16;
+				end
+			4'd8:
+				begin
+					next_uop[4].Rd = vls.Rd + 3'd4;
+					next_uop[4].ble = 8'b11111111;
+					next_uop[4].byteno = 6'd32;
+				end
+			endcase
 			next_uop[5] = vls;
 			next_uop[5].num = 5'd5;
-			next_uop[5].Rd = vls.Rd + 4'd5;
 			next_uop[5].Rs2 = vls.Rs2 + 4'd5;
+			case(velsz1)
+			4'd1:
+				begin
+					next_uop[5].Rd = vls.Rd;
+					next_uop[5].ble = 8'b00100000;
+					next_uop[5].byteno = 6'd5;
+				end
+			4'd2:
+				begin
+					next_uop[5].Rd = vls.Rd + 2'd1;
+					next_uop[5].ble = 8'b00001100;
+					next_uop[5].byteno = 6'd10;
+				end
+			4'd4:
+				begin
+					next_uop[5].Rd = vls.Rd + 2'd2;
+					next_uop[5].ble = 8'b11110000;
+					next_uop[5].byteno = 6'd20;
+				end
+			4'd8:
+				begin
+					next_uop[5].Rd = vls.Rd + 3'd5;
+					next_uop[5].ble = 8'b11111111;
+					next_uop[5].byteno = 6'd40;
+				end
+			endcase
 			next_uop[6] = vls;
 			next_uop[6].num = 5'd6;
-			next_uop[6].Rd = vls.Rd + 4'd6;
 			next_uop[6].Rs2 = vls.Rs2 + 4'd6;
+			case(velsz1)
+			4'd1:
+				begin
+					next_uop[6].Rd = vls.Rd;
+					next_uop[6].ble = 8'b01000000;
+					next_uop[6].byteno = 6'd6;
+				end
+			4'd2:
+				begin
+					next_uop[6].Rd = vls.Rd + 2'd1;
+					next_uop[6].ble = 8'b00110000;
+					next_uop[6].byteno = 6'd12;
+				end
+			4'd4:
+				begin
+					next_uop[6].Rd = vls.Rd + 2'd3;
+					next_uop[6].ble = 8'b00001111;
+					next_uop[6].byteno = 6'd24;
+				end
+			4'd8:
+				begin
+					next_uop[6].Rd = vls.Rd + 3'd6;
+					next_uop[6].ble = 8'b11111111;
+					next_uop[6].byteno = 6'd48;
+				end
+			endcase
 			next_uop[7] = vls;
 			next_uop[7].num = 5'd7;
-			next_uop[7].Rd = vls.Rd + 4'd7;
 			next_uop[7].Rs2 = vls.Rs2 + 4'd7;
+			case(velsz1)
+			4'd1:
+				begin
+					next_uop[7].Rd = vls.Rd;
+					next_uop[7].ble = 8'b10000000;
+					next_uop[7].byteno = 6'd7;
+				end
+			4'd2:
+				begin
+					next_uop[7].Rd = vls.Rd + 2'd1;
+					next_uop[7].ble = 8'b11000000;
+					next_uop[7].byteno = 6'd14;
+				end
+			4'd4:
+				begin
+					next_uop[7].Rd = vls.Rd + 2'd3;
+					next_uop[7].ble = 8'b11110000;
+					next_uop[7].byteno = 6'd28;
+				end
+			4'd8:
+				begin
+					next_uop[7].Rd = vls.Rd + 3'd7;
+					next_uop[7].ble = 8'b11111111;
+					next_uop[7].byteno = 6'd56;
+				end
+			endcase
 				end
 			default:	
 				begin
@@ -2131,7 +3055,7 @@ begin
 					next_uop[0].Rd = instr.Rd;					
 					next_uop[0].Rs1 = instr.Rs1;					
 					next_uop[0].Rs2 = instr.Rs2;	
-					next_uop[0].func = FLT_RES;
+					next_uop[0].func = FLT_RCPA;
 
 					next_uop[1].num = 5'd1;
 					next_uop[1].opcode = instr.opcode;
@@ -2215,6 +3139,40 @@ begin
 					next_uop[10].func = FLT_FMA;
 
 				end
+			FLT_RSQRTA:
+				case(ir.opcode)
+				OP_FLTD:
+					begin
+						// t2 = i>>1;
+						next_count = 4'd3;
+						next_uop[0].lead = TRUE;
+						next_uop[0].num = 5'd0;
+						next_uop[0].opcode = OP_R3O;
+						next_uop[0].func = FN_LSR;
+						next_uop[0].Rd = mot2_reg;
+						next_uop[0].Rs1 = instr.Rs1;
+						next_uop[0].Rs2 = 7'd1;
+						next_uop[0].ms = 3'b010;
+						
+						// t0 = lomont magic number
+						next_uop[1].num = 5'd1;
+						next_uop[1].opcode = OP_FLTD;
+						next_uop[1].func = FLT_CONST;
+						next_uop[1].Rd = mot0_reg;
+						next_uop[1].Rs1 = 7'd4;			// Lomont reciprocal square root magic number
+						next_uop[1].ms = 3'b001;
+						
+						// y = MAGIC * 1.0 - t2
+						next_uop[2].num = 5'd2;
+						next_uop[2].opcode = OP_FLTD;
+						next_uop[2].func = FLT_FMS;
+						next_uop[2].Rd = instr.Rd;
+						next_uop[2].Rs1 = mot0_reg;	
+						next_uop[2].Rs2 = 7'b0011000;	// +1.0
+						next_uop[2].Rs3 = mot2_reg;
+						next_uop[2].ms = 3'b010;
+					end
+				endcase
 			FLT_RM:
 				begin
 					next_count = 4'd2;
@@ -2228,6 +3186,100 @@ begin
 					next_uop[1].Rd = 9'd000;
 					next_uop[1].opcode = Qupls4_pkg::OP_FENCE;
 					next_uop[1].imm = 8'h22;	// FP sync
+				end
+			FLT_POLY:
+				begin
+					next_count = ((uop0.Rs3 & 5'd7) +2'd1);
+					next_uop[0].lead = 1'b1;
+					next_uop[0].num = 5'd0;
+					next_uop[0].opcode = uop0.Rs3[6] ? Qupls4_pkg::OP_NOP : Qupls4_pkg::OP_R3O;
+					next_uop[0].func = FN_OR;
+					next_uop[0].Rd = uop0.Rd;
+					next_uop[0].Rs1 = uop0.Rs2;	// a0
+					next_uop[0].Rs2 = 7'd0;
+					next_uop[0].Rs3 = 7'd0;
+					next_uop[0].op3 = 3'd1;			// OR_OR
+					next_uop[0].ms = 3'd6;			// Rs2,Rs3 are constants
+					
+					next_uop[1].num = 5'd1;
+					next_uop[1].opcode = uop0.opcode;
+					next_uop[1].func = FLT_FMA;
+					next_uop[1].Rd = uop0.Rd;
+					next_uop[1].Rs1 = uop0.Rd;
+					next_uop[1].Rs2 = uop0.Rs1;
+					next_uop[1].Rs3 = uop0.Rs2+2'd1;	// a1
+					next_uop[1].ms = 3'd0;
+					next_uop[1].rmd = uop0.rmd;
+
+					next_uop[2].num = 5'd2;
+					next_uop[2].opcode = uop0.opcode;
+					next_uop[2].func = FLT_FMA;
+					next_uop[2].Rd = uop0.Rd;
+					next_uop[2].Rs1 = uop0.Rd;
+					next_uop[2].Rs2 = uop0.Rs1;
+					next_uop[2].Rs3 = uop0.Rs2+2'd2;	// a2
+					next_uop[2].ms = 3'd0;
+					next_uop[2].rmd = uop0.rmd;
+
+					next_uop[3].num = 5'd3;
+					next_uop[3].opcode = uop0.opcode;
+					next_uop[3].func = FLT_FMA;
+					next_uop[3].Rd = uop0.Rd;
+					next_uop[3].Rs1 = uop0.Rd;
+					next_uop[3].Rs2 = uop0.Rs1;
+					next_uop[3].Rs3 = uop0.Rs2+2'd3;	// a3
+					next_uop[3].ms = 3'd0;
+					next_uop[3].rmd = uop0.rmd;
+
+					next_uop[4].num = 5'd4;
+					next_uop[4].opcode = uop0.opcode;
+					next_uop[4].func = FLT_FMA;
+					next_uop[4].Rd = uop0.Rd;
+					next_uop[4].Rs1 = uop0.Rd;
+					next_uop[4].Rs2 = uop0.Rs1;
+					next_uop[4].Rs3 = uop0.Rs2+3'd4;	// a3
+					next_uop[4].ms = 3'd0;
+					next_uop[4].rmd = uop0.rmd;
+
+					next_uop[5].num = 5'd5;
+					next_uop[5].opcode = uop0.opcode;
+					next_uop[5].func = FLT_FMA;
+					next_uop[5].Rd = uop0.Rd;
+					next_uop[5].Rs1 = uop0.Rd;
+					next_uop[5].Rs2 = uop0.Rs1;
+					next_uop[5].Rs3 = uop0.Rs2+3'd5;	// a3
+					next_uop[5].ms = 3'd0;
+					next_uop[5].rmd = uop0.rmd;
+
+					next_uop[6].num = 5'd6;
+					next_uop[6].opcode = uop0.opcode;
+					next_uop[6].func = FLT_FMA;
+					next_uop[6].Rd = uop0.Rd;
+					next_uop[6].Rs1 = uop0.Rd;
+					next_uop[6].Rs2 = uop0.Rs1;
+					next_uop[6].Rs3 = uop0.Rs2+3'd6;	// a3
+					next_uop[6].ms = 3'd0;
+					next_uop[6].rmd = uop0.rmd;
+
+					next_uop[7].num = 5'd7;
+					next_uop[7].opcode = uop0.opcode;
+					next_uop[7].func = FLT_FMA;
+					next_uop[7].Rd = uop0.Rd;
+					next_uop[7].Rs1 = uop0.Rd;
+					next_uop[7].Rs2 = uop0.Rs1;
+					next_uop[7].Rs3 = uop0.Rs2+3'd7;	// a3
+					next_uop[7].ms = 3'd0;
+					next_uop[7].rmd = uop0.rmd;
+
+					next_uop[8].num = 5'd8;
+					next_uop[8].opcode = uop0.opcode;
+					next_uop[8].func = FLT_FMA;
+					next_uop[8].Rd = uop0.Rd;
+					next_uop[8].Rs1 = uop0.Rd;
+					next_uop[8].Rs2 = uop0.Rs1;
+					next_uop[8].Rs3 = uop0.Rs2+4'd8;	// a3
+					next_uop[8].ms = 3'd0;
+					next_uop[8].rmd = uop0.rmd;
 				end
 			endcase
 			/*
@@ -2379,7 +3431,7 @@ begin
 end
 
 generate begin : gComb
-	if (COMB) begin
+	if (COMB && FALSE) begin
 		always_comb
 		if (rst) begin
 			count = 3'd0;

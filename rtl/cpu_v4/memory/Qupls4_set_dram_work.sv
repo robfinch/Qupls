@@ -66,8 +66,11 @@ output reg [79:0] sel_o;
 cpu_types_pkg::virtual_address_t next_vaddr = {lsq_i.vadr[$bits(virtual_address_t)-1:6] + 2'd1,6'h0};
 cpu_types_pkg::physical_address_t next_paddr = {lsq_i.padr[$bits(physical_address_t)-1:6] + 2'd1,6'h0};
 // Compute and shift select lines into position.
-wire [31:0] sel = Qupls4_pkg::fnSel(rob_i[lsq_i.rndx].op);
-wire [79:0] selx = {64'd0,Qupls4_pkg::fnSel(rob_i[lsq_i.rndx].op)} << lsq_i.vadr[5:0];
+reg [7:0] mask;
+always_comb
+	mask = (lsq_i.mask >> rob_i[lsq_i.rndx].op.uop.byteno);
+wire [31:0] sel = Qupls4_pkg::fnSel(rob_i[lsq_i.rndx].op, mask);
+wire [79:0] selx = {64'd0,Qupls4_pkg::fnSel(rob_i[lsq_i.rndx].op, mask)} << lsq_i.vadr[5:0];
 always_comb
 	sel_o = selx;
 assign page_cross_o = next_vaddr[$bits(virtual_address_t)-1:13] != lsq_i.vadr[$bits(virtual_address_t)-1:13] && |selx[79:64];

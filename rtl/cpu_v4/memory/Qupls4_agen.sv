@@ -39,11 +39,12 @@
 // ============================================================================
 
 import const_pkg::*;
+import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
 module Qupls4_agen(rst, clk, rse_i, rse_o, out,
 	tlb_v, page_fault, page_fault_v,
-	load_store, vlsndx, amo, laneno,
+	load_store, vlsndx, amo,
 	res, resv);
 input rst;
 input clk;
@@ -56,13 +57,13 @@ input page_fault_v;
 input load_store;
 input vlsndx;
 input amo;
-input [7:0] laneno;
 output cpu_types_pkg::address_t res;
 output reg resv;
 
-cpu_types_pkg::address_t as, bs;
+cpu_types_pkg::address_t as, bs, bsv;
 cpu_types_pkg::address_t res1;
 Qupls4_pkg::reservation_station_entry_t rse1;
+reg [5:0] shift;
 
 always_ff @(posedge clk) 
 begin
@@ -81,12 +82,31 @@ always_ff @(posedge clk)
 always_ff @(posedge clk)
 	bs = rse_i.Rs2z ? value_zero : (rse_i.arg[1].val * ({rse_i.uop.sc==3'd0,rse_i.uop.sc}));
 
+always_ff @(posedge clk)
+	bsv = rse_i.Rs2z ? value_zero : (rse_i.arg[1].val * rse_i.uop.vlen);
+
+always_comb
+	case(rse_i.velesz)
+	2'd0:	shift = {rse_i.laneno,3'd0};
+	2'd1:	shift = {rse_i.laneno,4'd0};
+	2'd2:	shift = {rse_i.laneno,5'd0};
+	2'd3:	shift = 6'd0;
+	endcase
+
 always_comb
 begin
-	if (vlsndx)
-		res1 = as + bs * laneno + rse_i.argI;
+	// Vector indexed vector load / store.
+	if (rse_i.vlsndx)
+		res1 = as + (bs >> shift) + rse_i.argI;
+	// A vector load/store address is calculated almost the same way as an
+	// ordinary load/store except that the offset associated with the set
+	// of lanes to load/store must be added in. This is done when the 
+	// micro-op is built by modifying the immediate constant.
+	else if (rse_i.vls)
+		res1 = as + bsv + rse_i.argI;
 	else if (amo)
 		res1 = as;				// just [Rs1]
+	// Lane number is 1 for non-vector load/store
 	else if (load_store)
 		res1 = as + bs + rse_i.argI;
 	else

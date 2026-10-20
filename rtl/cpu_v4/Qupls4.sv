@@ -6647,7 +6647,7 @@ else begin
 			if (!fnIsInLSQ(agen0_id)) begin
 				rob[agen0_id].lsq <= VAL;
 				rob[agen0_id].lsqndx <= lsq_tail0;
-				tEnqueLSE(lsq_tail0, agen0_id, 4'd0, agen0_adr);
+				tEnqueLSE(lsq_tail0, agen0_id, 4'd0, agen0_adr, agen0_rse.arg[2]);
 			end
 		end
 		// It is allowed to queue two
@@ -6676,7 +6676,7 @@ else begin
 			if (!fnIsInLSQ(agen1_id)) begin
 				rob[agen1_id].lsq <= VAL;
 				rob[agen1_id].lsqndx <= {lsq_tail0.row,1'b1};
-				tEnqueLSE({lsq_tail0.row,lsq_tail0.col|1}, agen1_id, 4'd1, agen1_adr);
+				tEnqueLSE({lsq_tail0.row,lsq_tail0.col|1}, agen1_id, 4'd1, agen1_adr, agen1_rse.arg[2]);
 //				lsq[lsq_tail0.row][0].sn <= 7'h7E;
 			end
 		end
@@ -8880,6 +8880,7 @@ input Qupls4_pkg::lsq_ndx_t ndx;
 input rob_ndx_t id;
 input [3:0] n;
 input cpu_types_pkg::virtual_address_t vadr;
+input cpu_types_pkg::value_t mask;
 integer n1;
 begin
 	lsq_cmd[n].cmd <= LSQ_CMD_ENQ;
@@ -8887,6 +8888,7 @@ begin
 	lsq_cmd[n].rndx <= id;
 	lsq_cmd[n].n <= n;
 	lsq_cmd[n].data <= vadr;
+	lsq_cmd[n].mask <= mask;
 end
 endtask
 

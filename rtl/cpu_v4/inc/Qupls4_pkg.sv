@@ -413,6 +413,7 @@ typedef struct packed {
 	lsq_ndx_t lndx;
 	cpu_types_pkg::rob_ndx_t rndx;
 	cpu_types_pkg::value_t data;
+	cpu_types_pkg::value_t mask;
 	logic [7:0] flags;
 	logic datav;
 } lsq_cmd_t;
@@ -749,6 +750,8 @@ typedef enum logic [6:0] {
 	FN_STATQ = 7'd108,
 	FN_READQ = 7'd110,
 	FN_WRITEQ = 7'd111,
+	FN_ANDC = 7'd114,
+	FN_ORC = 7'd115,
 	FN_SEQ = 7'd120,
 	FN_SNE = 7'd121,
 	FN_SLT = 7'd122,
@@ -777,11 +780,9 @@ typedef enum logic [6:0] {
 } r1_e;
 
 typedef enum logic [5:0] {
-	FLT_FMA = 6'd1,
+	FLT_POLY = 6'd1,
 	FLT_MIN = 6'd2,
 	FLT_MAX = 6'd3,
-	FLT_FNMA = 6'd4,
-	FLT_FNMS = 6'd5,
 	FLT_DIV = 6'd7,
 	FLT_SEQ = 6'd8,
 	FLT_SNE = 6'd9,
@@ -790,13 +791,16 @@ typedef enum logic [5:0] {
 	FLT_SGNJ = 6'd16,
 	FLT_SGNJN = 6'd17,
 	FLT_SGNJX = 6'd18,
-	FLT_FMS = 6'd19,
 	FLT_SCALEB = 6'd20,
 	FLT_STAT = 6'd22,
 	FLT_SIN = 6'd24,
 	FLT_COS = 6'd25,
 	FLT_TAN = 6'd26,
 	FLT_ATAN = 6'd27,
+	FLT_FMA = 6'd28,
+	FLT_FMS = 6'd29,
+	FLT_FNMA = 6'd30,
+	FLT_FNMS = 6'd31,
 	FLT_ABS = 6'd32,
 	FLT_NEG = 6'd33,
 	FLT_FTOI = 6'd34,
@@ -1332,7 +1336,9 @@ typedef struct packed		// 237 bits
 	logic exc;
 	logic lead;
 	logic [4:0] num;
-	logic [63:0] imm2;		// second immediate / CSR register numnber (14 bits))
+	logic [8:0] ble;			// byte lane enable
+	logic [5:0] byteno;		// byte number uop begins at
+	logic [63:0] imm2;		// second immediate / CSR register numnber (14 bits)) / lane number
 	logic [63:0] imm;			// immediate / displacement / mask
 	logic inc;						// increment / decrement for conditional branch, record bit for floats
 	logic [3:0] sc;				// index scaling
@@ -1595,7 +1601,7 @@ typedef struct packed
 	logic is_const;								// operand is a constant value in val
 	logic from_fu;
 	logic fpcsr;
-	flags_t flags;
+	cpu_types_pkg::flags_t flags;
 	cpu_types_pkg::aregno_t aRn;
 	// pRn[8:5]=FU id pRn[4:0]=tag
 	cpu_types_pkg::pregno_t pRn;
@@ -1625,6 +1631,7 @@ typedef struct packed
 	cpu_types_pkg::aregno_t Rs3;
 	cpu_types_pkg::aregno_t Rs4;
 	cpu_types_pkg::aregno_t Rm;
+	cpu_types_pkg::aregno_t Vm;			// vector mask register
 	cpu_types_pkg::aregno_t Rd;
 	cpu_types_pkg::aregno_t Rd2;
 	cpu_types_pkg::aregno_t Rd3;
@@ -1635,6 +1642,7 @@ typedef struct packed
 	logic Rs3z;
 	logic Rs4z;
 	logic Rmz;
+	logic Vmz;
 	logic Rdv;
 	logic Rdz;
 	logic Rd2v;
@@ -1718,6 +1726,8 @@ typedef struct packed
 	logic pfx;
 	logic sync;
 	logic oddball;
+	logic vmask;						// vmask modifier
+	logic [7:0] vect_mask;	// bitmap
 	logic pred;					// predicate instruction
 	logic [15:0] pred_mask;
 	logic [4:0] pred_shadow_size;
@@ -1798,9 +1808,10 @@ typedef struct packed {
 	cpu_types_pkg::pregno_t pRc;					// 'C' register for store
 	cpu_types_pkg::checkpt_ndx_t cndx;
 	operating_mode_t om;	// operating mode
-	flags_t flags;	// capabilities tag / carry / overflow / parity
+	cpu_types_pkg::flags_t flags;	// capabilities tag / carry / overflow / parity
 	logic loadv;					// load data is valid
 	logic datav;					// store data is valid
+	logic [63:0] mask;		// load / store mask for vector operations
 	logic [511:0] res;		// stores unaligned data as well (must be last field)
 } lsq_entry_t;
 
@@ -2400,6 +2411,7 @@ endfunction
 
 function [31:0] fnSel;
 input micro_op_t ir;
+input [7:0] mask;
 begin
 	case(ir.opcode)
 	OP_LDB,OP_LDBZ,OP_STB:	fnSel = 32'h01;
@@ -2419,6 +2431,9 @@ begin
 		2'd2:	fnSel = 32'h0F;
 		2'd3:	fnSel = 32'hFF;
 		endcase
+	OP_LDV,OP_STV,
+	OP_LDVN,OP_STVN:
+		fnSel = {24'd0,ir.ble[7:0] & mask};
 	default:	fnSel = 32'hFF;
 	endcase
 end
@@ -2779,17 +2794,35 @@ begin
 	Qupls4_pkg::OP_CMPI,Qupls4_pkg::OP_CMPUI,
 	Qupls4_pkg::OP_MULI,Qupls4_pkg::OP_MULUI,
 	Qupls4_pkg::OP_DIVI,Qupls4_pkg::OP_DIVUI,
-	Qupls4_pkg::OP_ANDI,Qupls4_pkg::OP_ORI,Qupls4_pkg::OP_XORI,
-	Qupls4_pkg::OP_LOADI:
+	Qupls4_pkg::OP_ORI,Qupls4_pkg::OP_XORI:
 		begin
 			fnMapRawToUop.Rd = {2'd0,raw[13:7]};
 			fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
 			fnMapRawToUop.Rs2 = 9'd0;
 			fnMapRawToUop.Rs3 = 9'd0;
-			fnMapRawToUop.imm = raw[45:21];
+			if (SUPPORT_SHIFTED_IMMED)
+				fnMapRawToUop.imm = {{44{raw[45]}},raw[45:23]} << ({raw[22:21],1'b0,raw[22:21],1'b0} + {raw[22:21],2'h0});
+			else
+				fnMapRawToUop.imm = {{44{raw[45]}},raw[45:21]};
 			fnMapRawToUop.ms = 3'b0;
 			fnMapRawToUop.prc = raw[47:46];
-			fnMapRawToUop.src = {6'b00100,raw[6:0]!=Qupls4_pkg::OP_LOADI};
+			fnMapRawToUop.src = {6'b001001};
+			fnMapRawToUop.dst = 1'b1;
+		end
+	Qupls4_pkg::OP_ANDI:
+		begin
+			fnMapRawToUop.Rd = {2'd0,raw[13:7]};
+			fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
+			fnMapRawToUop.Rs2 = 9'd0;
+			fnMapRawToUop.Rs3 = 9'd0;
+			if (SUPPORT_SHIFTED_IMMED)
+				fnMapRawToUop.imm = ({{44{raw[45]}},raw[45:23]} << ({raw[22:21],1'b0,raw[22:21],1'b0} + {raw[22:21],2'h0})) |
+							((64'd1 << ({raw[22:21],1'b0,raw[22:21],1'b0} + {raw[22:21],2'h0})) - 64'd1);
+			else
+				fnMapRawToUop.imm = {{44{raw[45]}},raw[45:21]};
+			fnMapRawToUop.ms = 3'b0;
+			fnMapRawToUop.prc = raw[47:46];
+			fnMapRawToUop.src = {6'b001001};
 			fnMapRawToUop.dst = 1'b1;
 		end
 	// Loads and stores
@@ -3083,7 +3116,7 @@ begin
 			fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
 			fnMapRawToUop.Rs2 = {2'd0,raw[27:21]};
 			fnMapRawToUop.Rs3 = raw[13] ? 9'd0 : {2'd0,raw[34:28]};
-			fnMapRawToUop.imm = raw[46:28];
+			fnMapRawToUop.imm = {raw[46:28],1'b0};
 			fnMapRawToUop.ms = raw[13:11];
 			fnMapRawToUop.src = 7'b0000011;
 			fnMapRawToUop.dst = 1'b0;
@@ -3111,7 +3144,10 @@ begin
 			fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
 			fnMapRawToUop.Rs2 = 9'd0;
 			fnMapRawToUop.Rs3 = 9'd0;
-			fnMapRawToUop.imm = {raw[45:24],3'd0};
+			if (SUPPORT_SHIFTED_IMMED)
+				fnMapRawToUop.imm = {{44{raw[45]}},raw[45:26],3'b0} << ({raw[22:21],1'b0,raw[22:21],1'b0} + {raw[22:21],2'h0});
+			else
+				fnMapRawToUop.imm = {{44{raw[45]}},raw[45:26],3'b0};
 			fnMapRawToUop.prc = 2'd3;
 			fnMapRawToUop.src = 7'b0001001;
 			fnMapRawToUop.dst = |raw[13:7];

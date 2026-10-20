@@ -71,7 +71,7 @@ output Qupls4_pkg::reservation_station_entry_t agen_rse;
 input Qupls4_pkg::reservation_station_entry_t mem_rse_i;
 input mem_done_i;
 input [WID-1:0] mem_res_i;
-input Qupls4_pkg::flags_t mem_flags_i;
+input cpu_types_pkg::flags_t mem_flags_i;
 
 Qupls4_pkg::reservation_station_entry_t rse1,rse2;
 Qupls4_pkg::operating_mode_t om;
@@ -487,7 +487,7 @@ endgenerate
 delay5 #(.WID(WID/8+1)) udly6 (.clk(clk), .ce(1'b1), .i(we), .o(we2));
 
 always_comb
-	we = {9{rse_i.we}};
+	we = rse_i.vlsndx|rse_i.vls ? {rse_i.uop.ble & {9{rse_i.we}}} : {9{rse_i.we}};
 
 always_ff @(posedge clk)
 begin
