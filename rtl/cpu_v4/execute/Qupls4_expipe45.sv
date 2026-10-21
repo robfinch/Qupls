@@ -94,7 +94,7 @@ wire [WID/8-1:0] alu_exc;
 reg idiv_ld;
 wire idiv_done;
 
-cpu_types_pkg::address_t as, bs;
+cpu_types_pkg::address_t as, bs, bsv;
 cpu_types_pkg::address_t res1;
 reg [5:0] shift;
 
@@ -147,33 +147,46 @@ always_ff @(posedge clk)
 always_ff @(posedge clk)
 	bs <= rse_i.Rs2z ? value_zero : (rse_i.arg[1].val * ({rse_i.uop.sc==3'd0,rse_i.uop.sc}));
 
+// imm2 = vlen
+always_ff @(posedge clk)
+	bsv <= rse_i.Rs2z ? value_zero : (rse_i.arg[1].val * rse_i.uop.imm2[5:0]);
+
+
 always_comb
-	case(rse_i.velesz)
-	2'd0:	shift = {rse_i.laneno,3'd0};
-	2'd1:	shift = {rse_i.laneno,4'd0};
-	2'd2:	shift = {rse_i.laneno,5'd0};
+	case(rse1.velesz)
+	2'd0:	shift = {rse1.laneno,3'd0};
+	2'd1:	shift = {rse1.laneno,4'd0};
+	2'd2:	shift = {rse1.laneno,5'd0};
 	2'd3:	shift = 6'd0;
 	endcase
 
 always_comb
 begin
-	if (rse1.vlsndx)
+	// Vector indexed vector load / store.
+	if (SUPPORT_VECTOR && rse1.vlsndx)
 		res1 = as + (bs >> shift) + rse1.argI;
+	// A vector load/store address is calculated almost the same way as an
+	// ordinary load/store except that the offset associated with the set
+	// of lanes to load/store must be added in. This is done when the 
+	// micro-op is built by modifying the immediate constant.
+	else if (SUPPORT_VECTOR && rse1.vls)
+		res1 = as + bsv + rse1.argI;
 	else if (rse1.amo)
 		res1 = as;				// just [Rs1]
 	// Lane number is 1 for non-vector load/store
 	else if (rse1.load|rse1.store)
-		res1 = as + bs * rse1.laneno + rse1.argI;
+		res1 = as + bs + rse1.argI;
 	else
 		res1 = 64'd0;
 end
+
 
 always_ff @(posedge clk)
 	if (resv1)
 		adr <= res1;
 
 always_ff @(posedge clk)
-	if (rse1.vlsndx|rse1.amo|rse1.load|rse1.store)
+	if (rse1.vlsndx|rse1.vls|rse1.amo|rse1.load|rse1.store)
 		agen_rse <= rse1;
 
 // Make Agen valid sticky
@@ -183,7 +196,7 @@ if (rst) begin
 	resv1 <= INV;
 end
 else begin
-	if (rse_i.vlsndx|rse_i.amo|rse_i.load|rse_i.store)
+	if (rse_i.vlsndx|rse_i.vls|rse_i.amo|rse_i.load|rse_i.store)
 		resv1 <= VAL;
 	if (tlb_v)
 		resv1 <= INV;
