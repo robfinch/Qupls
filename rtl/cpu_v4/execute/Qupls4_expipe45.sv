@@ -73,6 +73,7 @@ input mem_done_i;
 input [WID-1:0] mem_res_i;
 input cpu_types_pkg::flags_t mem_flags_i;
 
+integer n;
 Qupls4_pkg::reservation_station_entry_t rse1,rse2;
 Qupls4_pkg::operating_mode_t om;
 Qupls4_pkg::memsz_t prc,prc5;
@@ -80,7 +81,8 @@ Qupls4_pkg::micro_op_t ir,ir5;
 reg [WID-1:0] a;
 reg [WID-1:0] b,bi;
 reg [WID-1:0] c;
-reg [WID*4-1:0] lastarg;
+reg [WID-1:0] d;
+reg [WID*4-1:0] lastarg, lastargd;
 reg [WID-1:0] t;
 reg [WID-1:0] s;
 reg [WID-1:0] i;
@@ -88,11 +90,13 @@ aregno_t aRd_i;
 reg [1:0] stomp_con;	// stomp conveyor
 reg [WID/8:0] we,we1,we2;
 wire [WID-1:0] alu_o64, alu_o64d, fma_o64, fma_o16, fma_o32;
-wire [WID-1:0] isqrt_o, idiv_o;
+wire [WID-1:0] isqrt_o, idiv_o, tex_o;
 wire [WID/8:0] alu_we, isqrt_we, idiv_we;
-wire [WID/8-1:0] alu_exc;
-reg idiv_ld;
-wire idiv_done;
+wire [WID/8-1:0] alu_exc, div_exc;
+reg [WID/8-1:0] exc_mask;
+reg idiv_ld, tex_ld;
+wire idiv_done, tex_done1;
+reg tex_done;
 
 cpu_types_pkg::address_t as, bs, bsv;
 cpu_types_pkg::address_t res1;
@@ -101,13 +105,18 @@ reg [5:0] shift;
 always_ff @(posedge clk)
 	lastarg <= {a,b,bi,c};
 always_ff @(posedge clk)
+	lastargd <= {a,b,c,d};
+always_ff @(posedge clk)
 	idiv_ld <= lastarg != {a,b,bi,c};
+always_ff @(posedge clk)
+	tex_ld <= lastargd != {a,b,c,d};
 	
 always_comb om = rse_i.om;
 always_comb ir = rse_i.uop;
 always_comb a = rse_i.arg[0].val;
 always_comb b = rse_i.arg[1].val;
 always_comb c = rse_i.arg[2].val;
+always_comb d = rse_i.arg[3].val;
 always_comb t = rse_i.arg[4].val;
 always_comb s = rse_i.arg[5].val;
 always_comb i = rse_i.argI;
@@ -115,7 +124,7 @@ always_comb bi = rse_i.arg[1].val|rse_i.argI;
 always_comb aRd_i = rse_i.aRd;
 always_comb prc = rse_i.prc;
 
-Qupls4_pkg::cause_code_t exc128,exc64;
+reg [WID/8-1:0] exc128,exc64;
 reg [WID-1:0] o1;
 wire [WID-1:0] o16, o32, o64, o128;
 wire [WID-1:0] sto64;
@@ -386,6 +395,33 @@ end
 end
 endgenerate
 
+generate begin : gGraphics
+	if (SUPPORT_GRAPHICS) begin
+		Qupls4_tex utex1
+		(
+			.clk(clk),
+			.ce(TRUE),
+			.a(a),
+			.b(b),
+			.c(c),
+			.d(d),
+			.o(tex_o)
+		);
+	ft_delay #(.WID(1), .DEP(24)) utex2 (.clk(clk), .ce(ce), .i(tex_ld), .o(tex_done1));
+	Qupls4_blend ublend1
+	(
+		.a(a),
+		.b(b),
+		.c(c),
+		.o(blend_o)
+	);
+end
+end
+endgenerate
+
+always_comb
+	tex_done = !tex_ld ? lastargd=={a,b,c,d} : tex_done1;
+
 delay4 #(.WID(WID)) udly1 (.clk(clk), .ce(1'b1), .i(alu_o64), .o(aluo_64d));
 delay5 #(.WID($bits(Qupls4_pkg::micro_op_t))) udly3 (.clk(clk), .ce(1'b1), .i(ir), .o(ir5));
 delay5 #(.WID($bits(Qupls4_pkg::memsz_t))) udly4 (.clk(clk), .ce(1'b1), .i(prc), .o(prc5));
@@ -394,6 +430,7 @@ delay5 #(.WID($bits(Qupls4_pkg::memsz_t))) udly4 (.clk(clk), .ce(1'b1), .i(prc),
 always_comb
 begin
 	done64 = FALSE;
+	exc64 = {8{FLT_NONE}};
 	case(ir5.opcode)
 	Qupls4_pkg::OP_R3BP,Qupls4_pkg::OP_R3WP,Qupls4_pkg::OP_R3TP,Qupls4_pkg::OP_R3OP,
 	Qupls4_pkg::OP_R3VVV,Qupls4_pkg::OP_R3VVS,
@@ -403,6 +440,7 @@ begin
 			if (SUPPORT_IDIV) begin
 				o1 = idiv_o;
 				done64 = idiv_done;
+				exc64 = div_exc;
 			end
 			else begin
 				o1 = value_zero;
@@ -419,12 +457,14 @@ begin
 				begin
 					o1 = value_zero;
 					done64 = TRUE;
+					exc64 = alu_exc;
 				end
 			endcase
 		default:	
 			begin
 				o1 = value_zero;
 				done64 = TRUE;
+				exc64 = alu_exc;
 			end
 		endcase
 
@@ -452,6 +492,7 @@ begin
 		if (SUPPORT_IDIV) begin
 			o1 = idiv_o;
 			done64 = idiv_done;
+			exc64 = div_exc;
 		end
 		else begin
 			o1 = value_zero;
@@ -469,6 +510,25 @@ begin
 		begin
 			o1 = mem_res_i;
 			done64 = mem_done_i;
+		end
+	Qupls4_pkg::OP_GRAPHICS:
+		if (SUPPORT_GRAPHICS) begin
+			case(ir5.func)
+			GR_TEX0,GR_TEX1:
+				begin
+					o1 = tex_o;
+					done64 = tex_done;
+				end
+			default:
+				begin
+					o1 = value_zero;
+					done64 = TRUE;
+				end
+			endcase
+		end
+		else begin
+			o1 = value_zero;
+			done64 = TRUE;
 		end
 	default:
 		begin
@@ -517,11 +577,25 @@ end
 always_comb
 	we_o = rse_o.v ? we2 : 9'h000;
 
+// Do not allow exceptioned lanes to update the register file.
+always_comb
+	we_o = rse_o.v ? we2 & {1'b1,exc_mask} : 9'h000;
+
+// Detect the first exception from the ALU.
+always_comb
+begin
+	exc = FLT_NONE;
+	exc_mask = {WID/8{1'b1}};
+	for (n = WID-8; n >= 0; n = n - 8)
+		if (cause_code_t'(exc64 >> n) != FLT_NONE) begin
+			exc = cause_code_t'(exc64 >> n);
+			exc_mask = ~((32'd2 << (n >> 3)) - 32'd1);
+		end
+end
+
 
 always_comb
 	done = done64;
 //	done = ~sr64[6];
-always_comb
-	exc = exc64;
 
 endmodule

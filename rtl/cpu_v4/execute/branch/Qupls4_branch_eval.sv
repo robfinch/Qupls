@@ -37,13 +37,17 @@
 //
 import Qupls4_pkg::*;
 
-module Qupls4_branch_eval(instr, a, b, c, takb);
+module Qupls4_branch_eval(instr, a, b, c, irq, takb);
 parameter WID=64;
 input Qupls4_pkg::micro_op_t instr;
 input [WID-1+8:0] a;
 input [WID-1:0] b;
-input c;
+input [WID-1:0] c;
+input irq;
 output reg takb;
+
+wire [WID-1:0] ac = a[WID-1:0] & c;
+wire [WID-1:0] bc = b & c;
 
 always_comb
 	case(instr.opcode)
@@ -63,7 +67,7 @@ always_comb
 		CND_AND:	takb = |a[WID-1:0] & |b;
 		CND_NOR:	takb = ~(|a[WID-1:0] | |b);
 		CND_OR:	takb = |a[WID-1:0] | |b;
-		CND_BOI:	takb = c;
+		CND_BOI:	takb = irq;
 		default:	takb = 1'b0;
 		endcase
 	Qupls4_pkg::OP_BCC:	// integer signed branches
@@ -79,6 +83,24 @@ always_comb
 		CND_AND:	takb = |(a[WID-1:0] & b);
 		CND_NOR:	takb = ~|(a[WID-1:0] | b);
 		CND_OR:	takb = |(a[WID-1:0] | b);
+		default:	takb = 1'b0;
+		endcase
+	Qupls4_pkg::OP_MBCC:
+		case(instr.cnd)
+		CND_EQ:	takb = (ac[WID-1:0] & c) == bc;
+		CND_NE:	takb = (ac[WID-1:0] & c) != bc;
+		CND_LT:	takb = $signed(ac[WID-1:0]) < $signed(bc);
+		CND_LE:	takb = $signed(ac[WID-1:0]) <= $signed(bc);
+		CND_GE: takb = $signed(ac[WID-1:0]) >= $signed(bc);
+		CND_GT:	takb = $signed(ac[WID-1:0]) > $signed(bc);
+		// Bit set or clear
+		CND_BBC:	takb = ~ac[b[6:0]];
+		CND_BBS:	takb =  ac[b[6:0]];
+		// Bitwise 0 or 1
+		CND_NAND:	takb = ~|(ac[WID-1:0] & bc);
+		CND_AND:	takb = |(ac[WID-1:0] & bc);
+		CND_NOR:	takb = ~|(ac[WID-1:0] | bc);
+		CND_OR:	takb = |(ac[WID-1:0] | bc);
 		default:	takb = 1'b0;
 		endcase
 	default:	takb = 1'b0;

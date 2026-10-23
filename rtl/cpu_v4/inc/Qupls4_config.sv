@@ -57,7 +57,7 @@ localparam BRANCH_LEVELS = 16;
 // need to be modified.
 localparam PREGS = 512;
 
-localparam IP_REG = 8'd63;
+localparam IP_REG = 8'd127;
 
 // Number of operands (including destination) a micro-op can have.
 localparam NOPER = 5;
@@ -204,9 +204,6 @@ localparam SUPPORT_IRQ_POLLING = 1'b0;
 // should be a multiple of the machine width (4).
 localparam ROB_ENTRIES = 16;
 
-// Number of entries in dispatch buffer. Must be a multiple of machine width (4).
-localparam DBF_ENTRIES = 4 * MWIDTH;
-
 // Number of entries supporting block operate instructions.
 localparam BEB_ENTRIES = 4;
 
@@ -250,8 +247,10 @@ const cpu_types_pkg::address_t RSTSP = 32'hFFFF9000;
 // size of the core. An FPU must also be enabled.
 localparam SUPPORT_CAPABILITIES = 1'b0;
 
+localparam SUPPORT_SIMD = 1;
 // Support for vector operations.
-localparam SUPPORT_VECTOR = 1'b0;
+localparam SUPPORT_VECTOR = 1;
+localparam SUPPORT_GRAPHICS = 1;
 localparam SUPPORT_FDP = 0;
 localparam SUPPORT_FLOAT = 1;
 localparam SUPPORT_CSR = 1;

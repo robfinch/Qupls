@@ -55,9 +55,9 @@ localparam BRANCH_LEVELS = 8;
 // architectural ones, or performance will suffer due to stalls.
 // Must be a multiple of four. If it is not 512 or 256 then the renamer logic will
 // need to be modified.
-localparam PREGS = 512;
+localparam PREGS = 256;
 
-localparam IP_REG = 8'd31;
+localparam IP_REG = 8'd127;
 
 // Number of operands (including destination) a micro-op can have.
 localparam NOPER = 5;
@@ -250,8 +250,10 @@ const cpu_types_pkg::address_t RSTSP = 32'hFFFF9000;
 // size of the core. An FPU must also be enabled.
 localparam SUPPORT_CAPABILITIES = 1'b0;
 
+localparam SUPPORT_SIMD = 1;
 // Support for vector operations.
-localparam SUPPORT_VECTOR = 1'b1;
+localparam SUPPORT_VECTOR = 1;
+localparam SUPPORT_GRAPHICS = 1;
 
 localparam SUPPORT_FDP = 0;
 localparam SUPPORT_FLOAT = 1;
@@ -297,8 +299,8 @@ localparam SUPPORT_PFX3 = 0;
 // operations. Each vector register needs four registers.
 //localparam NREGS = 40*THREADS+(SUPPORT_VECTOR ? 128 : 0);
 //localparam AREGS = 40*THREADS+(SUPPORT_VECTOR ? 128 : 0);
-localparam NREGS = 128;
-localparam AREGS = 128;
+localparam NREGS = 64;
+localparam AREGS = 64;
 localparam REGFILE_LATENCY = 2;
 
 

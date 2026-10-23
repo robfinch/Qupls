@@ -53,7 +53,7 @@ output reg [8:0] we_o;
 
 reg [WID-1+8:0] a;
 reg [WID-1:0] b;
-reg [WID-1:0] c;
+reg [WID-1:0] d;
 reg [WID-1:0] i;
 reg [WID-1:0] t;
 cpu_types_pkg::pc_address_t pc;
@@ -62,7 +62,7 @@ Qupls4_pkg::micro_op_t ir;
 always_comb ir = rse_i.uop;
 always_comb a = {rse_i.arg[0].flags,rse_i.arg[0].val};
 always_comb b = rse_i.arg[1].val;
-always_comb c = rse_i.arg[2].val;
+always_comb d = rse_i.arg[4].val;
 always_comb t = rse_i.arg[3].val;
 always_comb i = rse_i.argI;
 always_comb pc = rse_i.pc;
@@ -74,7 +74,8 @@ Qupls4_meta_branch_eval ube1
 	.instr(ir),
 	.a(a),
 	.b(b),
-	.c(ic_irq > sr.ipl && sr.mie && irq_sn!=rse_i.irq_sn || ic_irq==6'd63),
+	.c(d),
+	.irq(ic_irq > sr.ipl && sr.mie && irq_sn!=rse_i.irq_sn || ic_irq==6'd63),
 	.takb(takb)
 );
 

@@ -598,7 +598,7 @@ typedef enum logic [6:0] {
 	OP_EXTD = 7'd12,
 	OP_DIVI = 7'd13,
 	OP_MULUI = 7'd14,
-	OP_ADDIPI = 7'd15,
+	OP_GRAPHICS = 7'd15,
 	OP_SHIFT = 7'd16,
 	OP_CMPUI = 7'd19,
 	OP_LOADA = 7'd20,
@@ -615,6 +615,7 @@ typedef enum logic [6:0] {
 	OP_BCCU = 7'd40,
 	OP_BCC = 7'd41,
 	OP_FBCC = 7'd42,
+	OP_MBCC = 7'd43,
 	
 	OP_CHK = 7'd47,
 
@@ -636,12 +637,12 @@ typedef enum logic [6:0] {
 	OP_MOD = 7'd62,
 
 	OP_LDB = 7'd64,
-	OP_LDBZ = 7'd65,
-	OP_LDW = 7'd66,
-	OP_LDWZ = 7'd67,
-	OP_LDT = 7'd68,
-	OP_LDTZ = 7'd69,
-	OP_LOAD = 7'd70,
+	OP_LDW = 7'd65,
+	OP_LDT = 7'd66,
+	OP_LOAD = 7'd67,
+	OP_LDBZ = 7'd68,
+	OP_LDWZ = 7'd69,
+	OP_LDTZ = 7'd70,
 	OP_LDV = 7'd71,
 	OP_LDIP = 7'd72,
 	OP_CLOAD = 7'd73,
@@ -729,6 +730,8 @@ typedef enum logic [6:0] {
 	FN_NNA_MTFB = 7'd43,
 	FN_NNA_MTMC = 7'd44,
 	FN_NNA_MTBC = 7'd45,
+	
+	FN_BMAPH = 7'd72,
 	
 	FN_ROL = 7'd80,
 	FN_ROR = 7'd81,
@@ -866,6 +869,18 @@ typedef enum logic [3:0] {
 	CND_OR = 4'd11,
 	CND_BOI = 4'd15
 } cnd_e;
+
+typedef enum logic [6:0] {
+	GR_BLEND = 7'd0,
+	GR_TRANSFORM_NEWX = 7'd1,
+	GR_TRANSFORM_NEWY = 7'd2,
+	GR_TRANSFORM_NEWZ = 7'd3,
+	GR_TRANSFORM_GETCOEFF = 7'd4,
+	GR_TRANSFORM_SETCOEFF = 7'd5,
+	GR_TEX0 = 7'd8,
+	GR_TEX1 = 7'd9,
+	GR_RGBCVT = 7'd10
+} graphics_e;
 
 parameter NOP_INSN = {41'd0,OP_NOP};
 
@@ -2369,14 +2384,29 @@ function [63:0] fnDati;
 input more;
 input micro_op_t ins;
 input cpu_types_pkg::value_t dat;
-case(ins.opcode)
-OP_LDB:		fnDati = {{56{dat[7]}},dat[7:0]};
-OP_LDBZ:	fnDati = {{56{1'b0}},dat[7:0]};
-OP_LDW:		fnDati = {{48{dat[15]}},dat[15:0]};
-OP_LDWZ:	fnDati = {{48{1'b0}},dat[15:0]};
-OP_LDT:		fnDati = {{32{dat[31]}},dat[31:0]};
-OP_LDTZ:	fnDati = {{32{1'b0}},dat[31:0]};
-OP_LOAD:	fnDati = dat[63:0];
+case(ins.opcode[2])
+1'b0:
+	case(ins.byteno[5:0])
+	6'd1:	fnDati = {{56{dat[ 7]}},dat[ 7:0]};
+	6'd2:	fnDati = {{48{dat[15]}},dat[15:0]};
+	6'd3:	fnDati = {{40{dat[23]}},dat[23:0]};
+	6'd4:	fnDati = {{32{dat[31]}},dat[31:0]};
+	6'd5:	fnDati = {{24{dat[39]}},dat[39:0]};
+	6'd6:	fnDati = {{16{dat[47]}},dat[47:0]};
+	6'd7:	fnDati = {{ 8{dat[55]}},dat[55:0]};
+	default:	fnDati = dat[63:0];
+	endcase
+1'b1:
+	case(ins.byteno[5:0])
+	6'd1:	fnDati = {56'd0,dat[ 7:0]};
+	6'd2:	fnDati = {48'd0,dat[15:0]};
+	6'd3:	fnDati = {40'd0,dat[23:0]};
+	6'd4:	fnDati = {32'd0,dat[31:0]};
+	6'd5:	fnDati = {24'd0,dat[39:0]};
+	6'd6:	fnDati = {16'd0,dat[47:0]};
+	6'd7:	fnDati = { 8'd0,dat[55:0]};
+	default:	fnDati = dat[63:0];
+	endcase
 default:    fnDati = dat;
 endcase
 endfunction
@@ -2385,26 +2415,23 @@ function memsz_t fnMemsz;
 input micro_op_t ir;
 begin
 	case(ir.opcode)
-	OP_LDB,OP_LDBZ,OP_STB:	fnMemsz = byt;
-	OP_LDW,OP_LDWZ,OP_STW:	fnMemsz = wyde;
-	OP_LDT,OP_LDTZ,OP_STT:	fnMemsz = tetra;
-	OP_LOAD,OP_STORE:				fnMemsz = octa;
-	OP_LDIP,OP_STIP:
-		case(ir.Rs1[5:4])
-		2'd0:	fnMemsz = byt;
-		2'd1:	fnMemsz = wyde;
-		2'd2:	fnMemsz = tetra;
-		2'd3:	fnMemsz = octa;
-		endcase
-	OP_STI:
-		case(ir[12:11])
-		2'd0:	fnMemsz = byt;
-		2'd1:	fnMemsz = wyde;
-		2'd2:	fnMemsz = tetra;
-		2'd3:	fnMemsz = octa;
-		endcase
-	default:
+	OP_LDV,OP_STV,
+	OP_LDVN,OP_STVN:
 		fnMemsz = octa;
+	default:
+		case(ir.byteno[5:0])
+		6'd0:	fnMemsz = nul;
+		6'd1:	fnMemsz = byt;
+		6'd2:	fnMemsz = wyde;
+		6'd3:	fnMemsz = tetra;
+		6'd4:	fnMemsz = tetra;
+		6'd5:	fnMemsz = octa;
+		6'd6:	fnMemsz = octa;
+		6'd7:	fnMemsz = octa;
+		6'd8:	fnMemsz = octa;
+		6'd16:	fnMemsz = hexi;
+		default:	fnMemsz = octa;
+		endcase
 	endcase
 end
 endfunction
@@ -2414,27 +2441,10 @@ input micro_op_t ir;
 input [7:0] mask;
 begin
 	case(ir.opcode)
-	OP_LDB,OP_LDBZ,OP_STB:	fnSel = 32'h01;
-	OP_LDW,OP_LDWZ,OP_STW:	fnSel = 32'h03;
-	OP_LDT,OP_LDTZ,OP_STT:	fnSel = 32'h0F;
-	OP_LDIP,OP_STIP:
-		case(ir.Rs1[5:4])
-		2'd0:	fnSel = 32'h01;
-		2'd1:	fnSel = 32'h03;
-		2'd2:	fnSel = 32'h0F;
-		2'd3:	fnSel = 32'hFF;
-		endcase
-	OP_STI:
-		case(ir[12:11])
-		2'd0:	fnSel = 32'h01;
-		2'd1:	fnSel = 32'h03;
-		2'd2:	fnSel = 32'h0F;
-		2'd3:	fnSel = 32'hFF;
-		endcase
 	OP_LDV,OP_STV,
 	OP_LDVN,OP_STVN:
 		fnSel = {24'd0,ir.ble[7:0] & mask};
-	default:	fnSel = 32'hFF;
+	default:	fnSel = (32'd2 << ir.byteno) - 32'd1;
 	endcase
 end
 endfunction
@@ -2444,7 +2454,7 @@ input micro_op_t ir;
 begin
 	case(ir.opcode)
 	OP_LDB,OP_LDW,OP_LDT,OP_LOAD,
-	OP_LDBZ,OP_LDWZ,OP_LDTZ,
+	OP_LDBZ,OP_LDWZ,OP_LDTZ,7'd71,
 	OP_CLOAD:
 		fnIsLoad = 1'b1;
 	default:
@@ -2471,7 +2481,9 @@ input micro_op_t ir;
 begin
 	case(ir.opcode)
 	OP_BCC,
-	OP_BCCU:
+	OP_BCCU,
+	OP_FBCC,
+	OP_MBCC:
 		fnIsBranch = 1'b1;
 	default:
 		fnIsBranch = 1'b0;
@@ -2833,11 +2845,21 @@ begin
 			fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
 			fnMapRawToUop.Rs2 = {2'd0,raw[27:21]};
 			fnMapRawToUop.Rs3 = 9'd0;
-			fnMapRawToUop.imm = raw[43:28];
+			fnMapRawToUop.imm = raw[43:29];
 			fnMapRawToUop.ms = 3'b0;
 			fnMapRawToUop.sc = raw[47:44];
 			fnMapRawToUop.src = 7'b0001011;
 			fnMapRawToUop.dst = 1'b1;
+			case({raw[28],raw[1:0]})
+			3'b000:	fnMapRawToUop.byteno = 6'd1;
+			3'b001:	fnMapRawToUop.byteno = 6'd2;
+			3'b010:	fnMapRawToUop.byteno = 6'd4;
+			3'b011:	fnMapRawToUop.byteno = 6'd8;
+			3'b100:	fnMapRawToUop.byteno = 6'd3;
+			3'b101:	fnMapRawToUop.byteno = 6'd5;
+			3'b110:	fnMapRawToUop.byteno = 6'd6;
+			3'b111:	fnMapRawToUop.byteno = 6'd7;
+			endcase
 		end
 	Qupls4_pkg::OP_STB,Qupls4_pkg::OP_STW,Qupls4_pkg::OP_STT,Qupls4_pkg::OP_STORE:
 		begin
@@ -2845,11 +2867,21 @@ begin
 			fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
 			fnMapRawToUop.Rs2 = {2'd0,raw[27:21]};
 			fnMapRawToUop.Rs3 = 9'd0;
-			fnMapRawToUop.imm = raw[43:28];
+			fnMapRawToUop.imm = raw[43:29];
 			fnMapRawToUop.ms = 3'd0;
 			fnMapRawToUop.sc = raw[47:44];
 			fnMapRawToUop.src = 7'b0001011;
 			fnMapRawToUop.dst = 1'b0;
+			case({raw[28],raw[1:0]})
+			3'b000:	fnMapRawToUop.byteno = 6'd1;
+			3'b001:	fnMapRawToUop.byteno = 6'd2;
+			3'b010:	fnMapRawToUop.byteno = 6'd4;
+			3'b011:	fnMapRawToUop.byteno = 6'd8;
+			3'b100:	fnMapRawToUop.byteno = 6'd3;
+			3'b101:	fnMapRawToUop.byteno = 6'd5;
+			3'b110:	fnMapRawToUop.byteno = 6'd6;
+			3'b111:	fnMapRawToUop.byteno = 6'd7;
+			endcase
 		end
 	// Vector loads and stores
 	Qupls4_pkg::OP_LDV:
@@ -2943,6 +2975,7 @@ begin
 			fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
 			fnMapRawToUop.Rs2 = {2'd0,raw[27:21]};
 			fnMapRawToUop.Rs3 = {2'd0,raw[34:28]};
+			fnMapRawToUop.Rs4 = {2'd0,raw[41:35]};	// graphics
 			fnMapRawToUop.vn = 4'd0;
 			fnMapRawToUop.op3 = raw[37:35];
 			fnMapRawToUop.rmd = raw[37:35];			// for ASR
@@ -2958,6 +2991,7 @@ begin
 			fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
 			fnMapRawToUop.Rs2 = {2'd0,raw[27:21]};
 			fnMapRawToUop.Rs3 = {2'd0,raw[34:28]};
+			fnMapRawToUop.Rs4 = {2'd0,raw[41:35]};	// graphics
 			fnMapRawToUop.op3 = raw[37:35];
 			fnMapRawToUop.rmd = raw[37:35];			// for ASR
 			fnMapRawToUop.ms = raw[40:38];
@@ -2975,6 +3009,7 @@ begin
 			fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
 			fnMapRawToUop.Rs2 = {2'd0,raw[27:21]};
 			fnMapRawToUop.Rs3 = {2'd0,raw[34:28]};
+			fnMapRawToUop.Rs4 = {2'd0,raw[41:35]};	// graphics
 			fnMapRawToUop.op3 = raw[37:35];
 			fnMapRawToUop.rmd = raw[37:35];			// for ASR
 			fnMapRawToUop.ms = raw[40:38];

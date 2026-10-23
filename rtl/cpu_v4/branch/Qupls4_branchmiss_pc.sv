@@ -92,21 +92,18 @@ begin
 		else
 		*/
 		begin
-			disp = {{44{ir.imm[19]}},ir.imm,1'b0};
+			disp = {{47{ir.imm[16]}},ir.imm,1'b0};
 			dstpc.pc = pc.pc + disp;
 			dstpc.stream = rse.pc.stream;
 		end
 
 	rse.bcc:
-		/*
-		if (ir.md) begin
+		if (ir.ms[2]) begin
 			dstpc.pc = argC;
 			dstpc.stream = rse.pc.stream;
 		end
-		else
-		*/
-		begin
-			disp = {{44{ir.imm[19]}},ir.imm,1'b0};
+		else begin
+			disp = {{47{ir.imm[16]}},ir.imm,1'b0};
 			dstpc.pc = pc.pc + disp;
 			dstpc.stream = rse.pc.stream;
 		end

@@ -38,18 +38,19 @@
 import const_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_meta_branch_eval(rst, clk, instr, a, b, c, takb);
+module Qupls4_meta_branch_eval(rst, clk, instr, a, b, c, irq, takb);
 parameter WID=64;
 input rst;
 input clk;
 input Qupls4_pkg::micro_op_t instr;
 input [WID-1+8:0] a;
 input [WID-1:0] b;
-input c;
+input [WID-1:0] c;
+input irq;
 output reg takb;
 
 wire takb8, takb16, takb32, takb64;
-Qupls4_branch_eval #(.WID(64)) u64 (instr, a[71:0], b[63:0], c, takb64);
+Qupls4_branch_eval #(.WID(64)) u64 (instr, a[71:0], b[63:0], c[63:0], irq, takb64);
 
 always_ff @(posedge clk)
 if (rst) begin
@@ -57,7 +58,7 @@ if (rst) begin
 end
 else begin
 	case(instr.opcode)
-	Qupls4_pkg::OP_BCCU,Qupls4_pkg::OP_BCC:
+	Qupls4_pkg::OP_BCCU,Qupls4_pkg::OP_BCC,Qupls4_pkg::OP_MBCC:
 		takb <= takb64;
 	default:	takb <= FALSE;
 	endcase

@@ -285,7 +285,7 @@ reg [WID-1:0] c1;
 			.b_flags(8'h00),
 			.c_flags(8'h00),
 			.t_flags(8'h00),
-			.flags_o(),
+			.o_flags(),
 			.qres(qres[g*8+7:g*8]),
 			.cs(cs),
 			.pc(pc),
@@ -393,7 +393,7 @@ reg [WID-1:0] c1;
 			.b_flags(8'h00),
 			.c_flags(8'h00),
 			.t_flags(8'h00),
-			.flags_o(),
+			.o_flags(),
 			.qres(qres[g*16+15:g*16]),
 			.cs(cs),
 			.pc(pc),
@@ -478,7 +478,7 @@ reg [WID-1:0] c1;
 			.b_flags(8'h00),
 			.c_flags(8'h00),
 			.t_flags(8'h00),
-			.flags_o(),
+			.o_flags(),
 			.qres(qres[g*32+31:g*32]),
 			.cs(cs),
 			.pc(pc),
@@ -541,7 +541,7 @@ reg [WID-1:0] c1;
 			.b_flags(8'h00),
 			.c_flags(8'h00),
 			.t_flags(8'h00),
-			.flags_o(),
+			.o_flags(),
 			.qres(qres[g*64+63:g*64]),
 			.cs(cs),
 			.pc(pc),
@@ -604,7 +604,7 @@ generate begin : g128
 			.b_flags(8'h00),
 			.c_flags(8'h00),
 			.t_flags(8'h00),
-			.flags_o(),
+			.o_flags(),
 			.qres(qres[g*128+127:g*128]),
 			.cs(cs),
 			.pc(pc),
@@ -619,6 +619,8 @@ endgenerate
 
 always_comb
 begin
+	o1 = zero;
+	exc1 = FLT_NONE;
 	if (Qupls4_pkg::SUPPORT_PREC) begin
 		case({isflt,issimd})
 		2'b00:
@@ -631,11 +633,11 @@ begin
 			endcase
 		2'b01:
 			case(prc)
-			Qupls4_pkg::byt:		begin o1 = o8|ro8; exc1 = exc8; end
-			Qupls4_pkg::wyde:	begin o1 = o16|ro16; exc1 = exc16; end
-			Qupls4_pkg::tetra:		begin o1 = o32|ro32; exc1 = exc32; end
-			Qupls4_pkg::octa:		begin o1 = o64; exc1 = exc64; end
-			default:	begin o1 = o128; exc1 = exc128; end
+			Qupls4_pkg::byt:		if (SUPPORTED_PRECISIONS[39:32]=="B") begin o1 = o8|ro8; exc1 = exc8; end
+			Qupls4_pkg::wyde:		if (SUPPORTED_PRECISIONS[31:24]=="W") begin o1 = o16|ro16; exc1 = exc16; end
+			Qupls4_pkg::tetra:	if (SUPPORTED_PRECISIONS[23:16]=="T") begin o1 = o32|ro32; exc1 = exc32; end
+			Qupls4_pkg::octa:		if (SUPPORTED_PRECISIONS[15: 8]=="O") begin o1 = o64|ro64; exc1 = exc64; end
+			default:	if (SUPPORTED_PRECISIONS[7:0]=="H") begin o1 = o128; exc1 = exc128; end
 			endcase
 		2'b10:
 			case(prc)
@@ -657,7 +659,7 @@ begin
 	end
 	else begin
 		if (WID==64) begin
-			o1 = o64;
+			o1 = o64|ro64;
 			exc1 = exc64;
 		end
 		else begin
@@ -718,10 +720,13 @@ endgenerate
 generate begin : gExc
 	for (xx = 0; xx < WID/8; xx = xx + 1)
     always_comb
+    begin
+    	exc = {8{FLT_NONE}};
 //      if (cptgt[xx])
 //        exc[xx*8+7:xx*8] = Qupls4_pkg::FLT_NONE;
 //      else
         exc[xx*8+7:xx*8] = exc1[xx*8+7:xx*8];
+    end
 end
 endgenerate
 

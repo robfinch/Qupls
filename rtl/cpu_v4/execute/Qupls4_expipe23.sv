@@ -69,6 +69,7 @@ output cpu_types_pkg::address_t adr;
 output reg adrv;
 output Qupls4_pkg::reservation_station_entry_t agen_rse;
 
+integer n;
 Qupls4_pkg::reservation_station_entry_t rse1,rse2;
 Qupls4_pkg::operating_mode_t om;
 Qupls4_pkg::memsz_t prc,prc5;
@@ -79,7 +80,7 @@ reg [WID-1:0] c;
 reg [WID-1:0] t;
 reg [WID-1:0] s;
 reg [WID-1:0] i;
-Qupls4_pkg::flags_t flags;
+cpu_types_pkg::flags_t flags;
 aregno_t aRd_i;
 reg [1:0] stomp_con;	// stomp conveyor
 reg [WID/8:0] we,we1,we2;
@@ -88,6 +89,7 @@ wire [WID-1:0] imul_res;
 wire [WID-1:0] alu_o;
 wire [WID/8:0] alu_we;
 wire [WID/8-1:0] alu_exc;
+reg [WID/8-1:0] exc_mask;
 
 cpu_types_pkg::address_t as, bs;
 cpu_types_pkg::address_t res1;
@@ -526,10 +528,20 @@ begin
 		stomp_con[1] <= stomp_con[0];
 end
 
+// Do not allow exceptioned lanes to update the register file.
 always_comb
-	we_o = rse_o.v ? we2 : 9'h000;
+	we_o = rse_o.v ? we2 & {1'b1,exc_mask} : 9'h000;
 
+// Detect the first exception from the ALU.
 always_comb
-	exc = cause_code_t'(alu_exc);
+begin
+	exc = FLT_NONE;
+	exc_mask = {WID/8{1'b1}};
+	for (n = WID-8; n >= 0; n = n - 8)
+		if (cause_code_t'(alu_exc >> n) != FLT_NONE) begin
+			exc = cause_code_t'(alu_exc >> n);
+			exc_mask = ~((32'd2 << (n >> 3)) - 32'd1);
+		end
+end
 
 endmodule

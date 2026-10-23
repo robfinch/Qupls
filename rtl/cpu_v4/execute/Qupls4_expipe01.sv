@@ -75,6 +75,7 @@ input [7:0] irq_sn;
 output takb;
 output cpu_types_pkg::value_t fcu_adr;
 
+integer n;
 Qupls4_pkg::reservation_station_entry_t rse1,rse2;
 Qupls4_pkg::operating_mode_t om;
 Qupls4_pkg::micro_op_t ir;
@@ -91,6 +92,7 @@ wire [WID-1:0] alu_o64, alu_o64d, fma_o64;
 wire [127:0] alu_o;
 wire [WID/8:0] alu_we;
 wire [WID/8-1:0] alu_exc;
+reg [WID/8-1:0] exc_mask;
 Qupls4_pkg::memsz_t prc;
 
 cpu_types_pkg::address_t as, bs;
@@ -295,10 +297,20 @@ begin
 		stomp_con[1] <= stomp_con[0];
 end
 
+// DO not allow exceptioned lanes to update the register file.
 always_comb
-	we_o = rse_o.v ? we|fcu_we : 9'h000;
+	we_o = rse_o.v ? (we|fcu_we) & {1'b1,exc_mask} : 9'h000;
 
+// Detect the first exception from the ALU.
 always_comb
-	exc = cause_code_t'(alu_exc);
+begin
+	exc = FLT_NONE;
+	exc_mask = {WID/8{1'b1}};
+	for (n = WID-8; n >= 0; n = n - 8)
+		if (cause_code_t'(alu_exc >> n) != FLT_NONE) begin
+			exc = cause_code_t'(alu_exc >> n);
+			exc_mask = ~((32'd2 << (n >> 3)) - 32'd1);
+		end
+end
 
 endmodule

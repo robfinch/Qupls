@@ -83,13 +83,15 @@ input [WID-1:0] coreno;
 input [WID-1:0] canary;
 input [2:0] velsz;
 output reg [WID-1:0] o;
-output reg flags_t o_flags;
+output flags_t o_flags;
 output Qupls4_pkg::cause_code_t exc_o;
 output reg did_op;
 
 genvar g;
 integer nn,kk,jj;
 integer element_number;
+wire [5:0] lane = LANE;
+reg [63:0] c1;
 reg [7:0] cm;
 reg [63:0] mask1;
 reg [WID-1:0] mask2;
@@ -105,7 +107,6 @@ wire [WID-1:0] cmpo;
 reg [WID:0] bus;
 reg [WID-1:0] busx;
 wire bus_nan;
-reg [WID-1:0] blendo;
 reg [22:0] ii;
 reg [WID-1:0] sd;
 reg [WID-1:0] sum_ab;
@@ -113,11 +114,18 @@ reg [WID+1:0] sum_gc;
 reg [WID-1:0] chndx;
 reg [WID-1:0] chndx2;
 reg [WID-1:0] chrndxv;
+reg [WID-1:0] bmap;
 wire [WID-1:0] info;
 wire [WID-1:0] vmasko;
+wire [WID-1:0] blendo;
 reg [WID-1:0] tmp;
 wire [63:0] cryptoo;
-
+/*
+wire [63:0] txu = (a[35:0] * c[17:0]) >> 18;
+wire [63:0] txv = (b[35:0] * c[41:24]) >> 18;
+wire [63:0] txv1 = txv * c[17:0];
+wire [63:0] txn = (txu+txv1) * c[63:60];
+*/
 function [WID-1:0] fnBitRev;
 input [WID-1:0] i;
 integer nn;
@@ -194,6 +202,22 @@ Qupls4_cmp #(.WID(WID)) ualu_cmp
 	.i(i),
 	.o(cmpo)
 );
+
+generate begin : gBlend
+	if (WID==64) begin
+Qupls4_blend ublend1
+(
+	.a(a),
+	.b(b),
+	.c(c),
+	.o(blendo)
+);
+	end
+	else begin
+		assign blendo = zero;
+	end
+end
+endgenerate
 
 reg [$clog2(WID):0] locnt,lzcnt,popcnt,tzcnt;
 reg loz, lzz, tzz;
@@ -403,7 +427,6 @@ always_comb
 
 generate begin : gInfoBlend
 	if (WID != 64) begin
-		assign blendo = {WID{1'b0}};
 		assign info = {WID{1'b0}};
 	end
 	else begin
@@ -465,6 +488,105 @@ begin
 	Qupls4_pkg::OP_R3BP,Qupls4_pkg::OP_R3WP,Qupls4_pkg::OP_R3TP,Qupls4_pkg::OP_R3OP,
 	Qupls4_pkg::OP_R3VVV,Qupls4_pkg::OP_R3VVS:
 		case(ir.func)
+		Qupls4_pkg::FN_BMAP:
+			begin
+				case(WID)
+				64:
+					begin
+						bus = zero;
+						bmap[ 7: 0] = a >> {b[ 2: 0],3'b0};
+						bmap[15: 8] = a >> {b[ 6: 4],3'b0};
+						bmap[23:16] = a >> {b[10: 8],3'b0};
+						bmap[31:24] = a >> {b[14:12],3'b0};
+						bmap[39:32] = a >> {b[18:16],3'b0};
+						bmap[47:40] = a >> {b[22:20],3'b0};
+						bmap[55:48] = a >> {b[26:24],3'b0};
+						bmap[63:56] = a >> {b[30:28],3'b0};
+					end
+				32:
+					begin
+						bus = zero;
+						bmap[ 7: 0] = a >> {b[ 2: 0],3'b0};
+						bmap[15: 8] = a >> {b[ 6: 4],3'b0};
+						bmap[23:16] = a >> {b[10: 8],3'b0};
+						bmap[31:24] = a >> {b[14:12],3'b0};
+					end
+				16:
+					begin
+						bus = zero;
+						bmap[ 7: 0] = a >> {b[ 2: 0],3'b0};
+						bmap[15: 8] = a >> {b[ 6: 4],3'b0};
+					end
+				8:
+					begin
+						bus = zero;
+						bmap[ 7: 0] = a >> {b[ 2: 0],3'b0};
+					end
+				endcase
+				case(ir.op3)
+				3'd0:	bus = bmap & c;
+				3'd1:	bus = bmap | c;
+				3'd2: bus = bmap ^ c;
+				3'd3:	bus = bmap + c;
+				3'd4:	bus = bmap << c[5:0];
+				default:	bus = zero;
+				endcase
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+		Qupls4_pkg::FN_BMAPH:
+			begin
+				case(WID)
+				64:
+					begin
+						bus = zero;
+						bmap[ 7: 0] = {b,a} >> {c[ 3: 0],3'b0};
+						bmap[15: 8] = {b,a} >> {c[ 7: 4],3'b0};
+						bmap[23:16] = {b,a} >> {c[11: 8],3'b0};
+						bmap[31:24] = {b,a} >> {c[15:12],3'b0};
+						bmap[39:32] = {b,a} >> {c[19:16],3'b0};
+						bmap[47:40] = {b,a} >> {c[23:20],3'b0};
+						bmap[55:48] = {b,a} >> {c[27:24],3'b0};
+						bmap[63:56] = {b,a} >> {c[31:28],3'b0};
+					end
+				32:
+					begin
+						bus = zero;
+						bmap[ 7: 0] = {b,a} >> {c[ 3: 0],3'b0};
+						bmap[15: 8] = {b,a} >> {c[ 7: 4],3'b0};
+						bmap[23:16] = {b,a} >> {c[11: 8],3'b0};
+						bmap[31:24] = {b,a} >> {c[15:12],3'b0};
+					end
+				16:
+					begin
+						bus = zero;
+						bmap[ 7: 0] = {b,a} >> {c[ 3: 0],3'b0};
+						bmap[15: 8] = {b,a} >> {c[ 7: 4],3'b0};
+					end
+				8:
+					begin
+						bus = zero;
+						bmap[ 7: 0] = {b,a} >> {c[ 3: 0],3'b0};
+					end
+				endcase
+				bus = bmap;
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
 		Qupls4_pkg::FN_CMP,Qupls4_pkg::FN_CMPU:
 			begin
 				bus = t;
@@ -722,7 +844,7 @@ begin
 				o_flags.ptr = FALSE;
 				o_flags.cap = FALSE;
 			end
-
+			
 		Qupls4_pkg::FN_ASL:
 			if (SUPPORT_SHIFT) begin
 				case(ir.op3)
@@ -1463,7 +1585,6 @@ begin
 			o_flags.ptr = a_flags.ptr;
 			o_flags.cap = FALSE;
 		end
-//	Qupls4_pkg::OP_ADDIPI:	bus = a + i + pc.pc;
 	Qupls4_pkg::OP_ANDI:
 		begin
 			bus = a & i;
@@ -1636,12 +1757,61 @@ begin
 		end
 		else
 			bus = zero;
+	Qupls4_pkg::OP_GRAPHICS:
+		case(ir.func)
+		GR_BLEND:
+			if (SUPPORT_GRAPHICS) begin
+				bus = blendo;
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+		GR_RGBCVT:
+			if (SUPPORT_GRAPHICS) begin
+				if (WID>=64)
+				case(b[6:0])
+				// To 16.16.16.16
+				7'd0:	bus = {a[31:24],8'h00,a[23:16],8'h00,a[15:8],8'h00,a[7:0],8'h00};	// from 8.8.8.8
+				7'd1:	bus = {16'h00,a[23:16],8'h00,a[15:8],8'h00,a[7:0],8'h00};					// from 8.8.8
+				7'd2:	bus = {16'h00,a[15:11],11'h00,a[10:5],10'h00,a[4:0],11'h00};			// from 5.6.5
+				7'd3:	bus = {a[15],15'h00,a[14:10],11'h00,a[9:5],11'h0,a[4:0],11'h00};	// from 1.5.5.5
+				7'd4:	bus = {16'h00,a[14:10],11'h00,a[9:5],11'h0,a[4:0],11'h00};				// from 5.5.5
+				7'd5:	bus = {16'h0,a[7:5],13'h0,a[4:2],13'h0,a[1:0],14'h0};							// from 3.3.2
+				7'd6:	bus = {a[15:11],12'h00,a[11:8],12'h00,a[7:4],12'h0,a[3:0],12'h00};// from 4,4.4.4
+				7'd7:	bus = {16'h00,a[11:8],12'h00,a[7:4],12'h0,a[3:0],12'h00};					// from 4.4.4
+				// From 16.16.16.16
+				7'd64:	bus = {a[63:56],a[47:40],a[31:24],a[15:8]};	// to 8.8.8.8
+				7'd65:	bus = {8'h00,a[47:40],a[31:24],a[15:8]};		// to 8.8.8
+				7'd66:	bus = {a[47:43],a[31:26],a[15:11]};					// to 5.6.5
+				7'd67:	bus = {a[63],a[47:43],a[31:25],a[15:11]};		// to 1.5.5.5
+				7'd68:	bus = {1'b0,a[47:43],a[31:25],a[15:11]};		// to 5.5.5
+				7'd69:	bus = {a[47:45],a[31:29],a[15:14]};					// to 3.2.2
+				default:	bus = a;
+				endcase					
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end			
+		endcase
 	default:	bus = {(WID/16){16'hDEAD}};
 	endcase
 end
 
 always_ff @(posedge clk)
 	case(WID)
+	8: o = bus;
 	16:	o = bus;
 	32:	o = bus_nan ? bus | (fnBitRev(pc) >> 6'd48) : bus;
 	64:	o = bus_nan ? bus | (fnBitRev(pc) >> 6'd20) : bus;
