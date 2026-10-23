@@ -3149,6 +3149,7 @@ begin
 	Qupls4_pkg::OP_FBCC:
 		begin
 			fnMapRawToUop.cnd = raw[10:7];
+			fnMapRawToUop.Rd = raw[47] ? {2'd0,raw[20:14]} : 9'd0;
 			fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
 			fnMapRawToUop.Rs2 = {2'd0,raw[27:21]};
 			fnMapRawToUop.Rs3 = raw[13] ? 9'd0 : {2'd0,raw[34:28]};
@@ -3157,12 +3158,13 @@ begin
 			fnMapRawToUop.ms = raw[13:11];
 			fnMapRawToUop.src = 7'b0000011;
 			fnMapRawToUop.src[2] = ~raw[13];
-			fnMapRawToUop.dst = 1'b0;
+			fnMapRawToUop.dst = raw[47];
 			fnMapRawToUop.inc = raw[47];
 		end
 	Qupls4_pkg::OP_MBCC:
 		begin
 			fnMapRawToUop.cnd = raw[10:7];
+			fnMapRawToUop.Rd = raw[47] ? {2'd0,raw[20:14]} : 9'd0;
 			fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
 			fnMapRawToUop.Rs2 = {2'd0,raw[27:21]};
 			fnMapRawToUop.Rs3 = raw[13] ? 9'd0 : {2'd0,raw[34:28]};
@@ -3171,7 +3173,7 @@ begin
 			fnMapRawToUop.ms = raw[13:11];
 			fnMapRawToUop.src = 7'b0010011;
 			fnMapRawToUop.src[2] = ~raw[13];
-			fnMapRawToUop.dst = 1'b0;
+			fnMapRawToUop.dst = raw[47];
 			fnMapRawToUop.inc = raw[47];
 		end
 	Qupls4_pkg::OP_BSR,Qupls4_pkg::OP_JSR:
@@ -3179,10 +3181,10 @@ begin
 			fnMapRawToUop.Rs1 = 9'd0;
 			fnMapRawToUop.Rs2 = 9'd0;
 			fnMapRawToUop.Rs3 = 9'd0;
-			fnMapRawToUop.Rd = {7'd0,raw[8:7]};
-			fnMapRawToUop.imm = {raw[47:9],1'b0};
+			fnMapRawToUop.Rd = {2'd0,raw[13:7]};
+			fnMapRawToUop.imm = {raw[47:14],1'b0};
 			fnMapRawToUop.src = 7'h00;
-			fnMapRawToUop.dst = |raw[8:7];
+			fnMapRawToUop.dst = |raw[13:7];
 		end
 // Source bits
 // +---+---+---+---+---+---+---+
