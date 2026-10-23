@@ -29,7 +29,7 @@ This increases the size of the core considerably and turns Qupls into a 128-bit 
 * Standard suite of ALU operations, add, subtract, compare, multiply and divide.
 * Arithmetic right shift with round.
 * Bitfield operations.
-* Conditional relative branch instructions with 18-bit displacements
+* Conditional relative branch instructions with 17-bit displacements
 * Vector operations.
 * 4-way Out-of-order execution of instructions
 * 1024 entry, three way TLB for virtual memory support, shared between instruction and data
@@ -43,6 +43,7 @@ The Qupls4 OoO machine is currently in development. A long way to go yet. Some s
 The goal is 100 MHz operation.
 Qupls4 will have 128 GPRs instead of 64.
 ### Historic Changes
+Masked value branches were added.
 The most recent major change was to the register organization.
 There are now 128 GPRs instead of 32 and no explicit vector registers.
 r0 is once again the value zero.
@@ -65,21 +66,22 @@ Increasing the number of threads beyond a small number will need to increase the
 This is overridden by the thread selection above.
 
 ### Register File
-The register file is 12r8w (12 read ports and 8 write ports).
+The register file is 12r6w (12 read ports and 6 write ports).
 Register file read ports are dynamically connected; up to 48 read port requests are fed into a 4:1 mux.
 (The number of read and write ports on the register file is configurable).
-There are now queues for writing and demultiplexing of read ports for reading.
+There is now demultiplexing of read ports for reading.
 
 The register file contains 128 architectural registers, and is unified, supporting integer and floating-point operations using the same set of registers. 
 126 registers may be assigned by the compiler without restriction.
-Register #0 always reads as the value +0.0.
+Register #0 always reads as the value +0.0 for float operations and as a memory base or index register.
+Register #1 reads as +1.0 for float operations.
 Instruction pointer may be selected as a base register for memory operations - register code 127.
 
 #### Physical Register File
 The physical register file is configurable as 256,512, or 1024 registers.
 For the default configuration the physical register file contains 512x64-bit registers.
 Architectural registers are renamed using the physical registers to remove dependencies.
-There are approximately 128 architectural registers, giving 4.0 physical registers for each architectural one.
+There are 128 architectural registers, giving 4.0 physical registers for each architectural one.
 
 ### Instruction Length
 The author has found that in an FPGA the decode of variable length instruction length was on the critical timing path, limiting the maximum clock frequency and performance.
@@ -87,7 +89,7 @@ Hence the move back to a fixed instruction length. However, the instruction set 
 
 ### Instruction alignment
 Instructions are aligned on wyde (16-bit) boundaries. Conditional branch displacements are in terms of wydes.
-Conditional branches have effectively a 18 bit range. For software compatibility a critical 18 bits range was needed.
+Conditional branches have effectively a 17 bit range. For software compatibility a critical 18 bits range was needed.
 Subroutines may be aligned on any wyde boundary, allowing position independent code placement.
 Unconditional branch and jump displacements are in terms of wydes to accomodate the location of subroutines.
 
@@ -122,7 +124,6 @@ The instruction (micro-op) decodes are placed in the reorder buffer / queued.
 Instructions are dispatched to reservation stations by this stage.
 Not every combination of four instructions is supported within a single clock cycle.
 The dispatcher may dispatch up to six micro-op instructions per clock cycle.
-Currently dispatch may dispatch: 2 ALU, 1 int multiply or divide, 1 Memory, 1 branch, 2 float with any given cycle.
 Disatch is currently out-of-order. Out-of-order dispatch does not stall the pipeline.
 #### Queue Stage
 The queue stage is a place holder for the most recent instructions that have been queued in the reorder buffer.
@@ -139,12 +140,16 @@ Note that while the instruction may not be able to execute, issue and execute ar
 Other instructions are issued and executed while waiting for an instruction missing arguments.
 This is the out-of-order feature of the processor.
 Execution of instructions can be multi-cycle as for loads, stores, multiplies and divides.
-Many instructions may be in the process of being executed at the same time, for example 14.
+Many instructions may be in the process of being executed at the same time, for example 6.
+There are six execution pipelines. They are organized as three pairs of pipelines. Each pipeline in a pair is identical.
+The pipelines are organized according to instruction latency. The first pair supports instruction of single cycle latency.
+The second pair supports instruction requiring up to five cycles of latency. The last pair of pipelines supports variable latency instructions.
+Note that many simpler instructions can execute on any pipeline.
 #### Writeback / Commit Stage
 At the end of instruction execution the result is placed into the register file.
 There may be a lot of instructions being executed at the same time depending on the availability of functional units.
 The results of instructions executed are fed to queues. Many queues may all be loaded during the same clock cycle.
-Eight results per clock cycle are selected from the execution pipes to update the register file.
+Six results per clock cycle are selected from the execution pipes to update the register file.
 Writeback reorders instructions into program order reading the oldest instructions from the ROB.
 The core may writeback or commit six instructions per clock cycle.
 Exceptions and several other oddball instructions like CSR updates are also processed at the commit stage.
@@ -171,7 +176,7 @@ The QMSI controller snoops the response bus for interrupt messages, which are si
 
 ### Overview
 Most instructions apply for either scalar or vector operations.
-There is a bit (V) in the instruction to select either a vector or scalar register.
+Vector or scalar registers are selected depending on the opcode.
 
 ### Dual Operation Instructions
 Many register-register operate instructions support dual operations on the registers.
@@ -204,8 +209,10 @@ Any of the three source registers may be turned into a constant.
 ### Branches
 Conditional branches are a fused compare-and-branch instruction. Values of two registers are compared, then a branch is made depending on the relationship between the two.
 Branches may work with different precisions.
-The branch displacement is 18 bits. Branch-to-register is also supported.
+The branch displacement is 17 bits. Branch-to-register is also supported.
 Some branches may increment or decrement the first source register. (iblt ibltu ible ibleu dbne dbnez).
+A masked value form of branches is supported where the values to be compared are first masked against the contents of another register.
+Masked value branches allow selection of the bits significant to the branch operation.
 
 ### Loads and Stores
 Load and store operations are queued in a memory (load/store) queue.
@@ -221,6 +228,7 @@ There are bits in control register zero assigned for future use to indicate more
 There are a handful of vector instructions that are not implemented due to the implementation.
 For instance, a vector slide instruction may slide the operand a maximum of 64-bits.
 How many elements are slid depends on the element size.
+The CPU has logic to trap on unimplemented instructions.
 
 ## Memory Management
 The core uses virtual addresses which are translated by a TLB.
@@ -271,7 +279,7 @@ The core size seems to be constantly increasing as updates occur.
 
 # Performance
 The new goal is 100+ MHz operation; components are being updated to reach the new target.
-The toolset indicates the core should be able to reach 45 MHz operation (in a -2 device).
+The toolset indicates the core should be able to reach 100 MHz operation (in a -2 device).
 Under absolutely ideal conditions the core may execute four instructions or eight operations per clock.
 All stages support processing at least four instructions per clock.
 Realistically the core will typically execute less than one instruction per clock.
@@ -281,7 +289,7 @@ There are many components to the CPU core.
 Some components are generic library components found elsewhere in Github repositories.
 All components germaine to Qupls begin with name prefix "Qupls" and are in the Qupls repository.
 
-Qupls4.sv is the top level for the CPU. Minimum of about 230k LUTs.
+Qupls4.sv is the top level for the CPU. Minimum of about 200k LUTs.
 Qupls4_mpu.sv is the top level for the MPU which contains the CPU, timers, and interrupt controller.
 
 # Issues
