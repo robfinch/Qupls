@@ -88,7 +88,7 @@ wire [WID-1:0] alu_o64, alu_od, fma_o64, fma_o16, fma_o32;
 wire [WID-1:0] imul_res;
 wire [WID-1:0] alu_o;
 wire [WID/8:0] alu_we;
-wire [WID/8-1:0] alu_exc;
+wire [WID-1:0] alu_exc;
 reg [WID/8-1:0] exc_mask;
 
 cpu_types_pkg::address_t as, bs;

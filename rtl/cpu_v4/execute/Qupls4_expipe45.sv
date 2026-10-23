@@ -92,7 +92,7 @@ reg [WID/8:0] we,we1,we2;
 wire [WID-1:0] alu_o64, alu_o64d, fma_o64, fma_o16, fma_o32;
 wire [WID-1:0] isqrt_o, idiv_o, tex_o;
 wire [WID/8:0] alu_we, isqrt_we, idiv_we;
-wire [WID/8-1:0] alu_exc, div_exc;
+wire [WID-1:0] alu_exc, div_exc;
 reg [WID/8-1:0] exc_mask;
 reg idiv_ld, tex_ld;
 wire idiv_done, tex_done1;

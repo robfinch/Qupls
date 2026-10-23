@@ -91,7 +91,7 @@ reg [WID/8:0] we,we1,we2;
 wire [WID-1:0] alu_o64, alu_o64d, fma_o64;
 wire [127:0] alu_o;
 wire [WID/8:0] alu_we;
-wire [WID/8-1:0] alu_exc;
+wire [WID-1:0] alu_exc;
 reg [WID/8-1:0] exc_mask;
 Qupls4_pkg::memsz_t prc;
 
