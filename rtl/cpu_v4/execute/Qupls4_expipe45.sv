@@ -574,9 +574,6 @@ begin
 		stomp_con[1] <= stomp_con[0];
 end
 
-always_comb
-	we_o = rse_o.v ? we2 : 9'h000;
-
 // Do not allow exceptioned lanes to update the register file.
 always_comb
 	we_o = rse_o.v ? we2 & {1'b1,exc_mask} : 9'h000;
