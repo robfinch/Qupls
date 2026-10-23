@@ -1358,7 +1358,7 @@ typedef struct packed		// 237 bits
 	logic inc;						// increment / decrement for conditional branch, record bit for floats
 	logic [3:0] sc;				// index scaling
 	logic [2:0] dt;				// data type, vector load / store
-	logic [1:0] prc;			// precision
+	logic [2:0] prc;			// precision
 	logic [3:0] vn;				// vector or scalar register indicator
 	logic [3:0] ms;				// immediate override indicators
 	logic [8:0] Rm;				// round mode
@@ -1978,6 +1978,7 @@ typedef struct packed {
 	logic ibcc;					// incrementing branch
 	logic dbcc;					// decrementing branch
 	logic bcc;					// conditional branch
+	logic mbcc;					// masked branch
 	logic cjb;					// call, jmp, or bra
 	logic jsri;					// indirect subroutine call
 	logic bsr;
@@ -3151,9 +3152,25 @@ begin
 			fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
 			fnMapRawToUop.Rs2 = {2'd0,raw[27:21]};
 			fnMapRawToUop.Rs3 = raw[13] ? 9'd0 : {2'd0,raw[34:28]};
-			fnMapRawToUop.imm = {raw[46:28],1'b0};
+			fnMapRawToUop.prc = raw[46:44];
+			fnMapRawToUop.imm = {raw[43:28],1'b0};
 			fnMapRawToUop.ms = raw[13:11];
 			fnMapRawToUop.src = 7'b0000011;
+			fnMapRawToUop.src[2] = ~raw[13];
+			fnMapRawToUop.dst = 1'b0;
+			fnMapRawToUop.inc = raw[47];
+		end
+	Qupls4_pkg::OP_MBCC:
+		begin
+			fnMapRawToUop.cnd = raw[10:7];
+			fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
+			fnMapRawToUop.Rs2 = {2'd0,raw[27:21]};
+			fnMapRawToUop.Rs3 = raw[13] ? 9'd0 : {2'd0,raw[34:28]};
+			fnMapRawToUop.Rs4 = raw[41:35];
+			fnMapRawToUop.imm = raw[13] ? {raw[46:42],raw[34:28],1'b0} : 64'd0;
+			fnMapRawToUop.ms = raw[13:11];
+			fnMapRawToUop.src = 7'b0010011;
+			fnMapRawToUop.src[2] = ~raw[13];
 			fnMapRawToUop.dst = 1'b0;
 			fnMapRawToUop.inc = raw[47];
 		end

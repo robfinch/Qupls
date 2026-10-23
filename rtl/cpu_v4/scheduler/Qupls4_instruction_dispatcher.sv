@@ -178,6 +178,7 @@ begin
 	// branch specific
 	rse[kk].bt = rob[nn].bt;
 	rse[kk].bcc = rob[nn].op.decbus.br;
+	rse[kk].mbcc = rob[nn].op.decbus.br & rob[nn].op.uop.opcode==Qupls4_pkg::OP_MBCC;
 	rse[kk].ibcc = rob[nn].op.decbus.ibr;
 	rse[kk].dbcc = rob[nn].op.decbus.dbr;
 	rse[kk].cjb = rob[nn].op.decbus.cjb;

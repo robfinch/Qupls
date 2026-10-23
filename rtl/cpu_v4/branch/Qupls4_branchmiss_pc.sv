@@ -92,7 +92,20 @@ begin
 		else
 		*/
 		begin
-			disp = {{47{ir.imm[16]}},ir.imm,1'b0};
+			disp = {{47{ir.imm[16]}},ir.imm[16:0]};
+			dstpc.pc = pc.pc + disp;
+			dstpc.stream = rse.pc.stream;
+		end
+
+	// Note: zero has already been appended to the imm constant for branches by
+	// the raw micro-op translation code.
+	rse.mbcc:
+		if (ir.ms[2]) begin
+			dstpc.pc = argC;
+			dstpc.stream = rse.pc.stream;
+		end
+		else begin
+			disp = {{51{ir.imm[12]}},ir.imm[12:0]};
 			dstpc.pc = pc.pc + disp;
 			dstpc.stream = rse.pc.stream;
 		end
@@ -103,25 +116,26 @@ begin
 			dstpc.stream = rse.pc.stream;
 		end
 		else begin
-			disp = {{47{ir.imm[16]}},ir.imm,1'b0};
+			disp = {{47{ir.imm[16]}},ir.imm[16:0]};
 			dstpc.pc = pc.pc + disp;
 			dstpc.stream = rse.pc.stream;
 		end
 
 	rse.bsr:
 		begin
-			disp = {{29{ir.imm[34]}},ir.imm,1'b0};
+			disp = {{29{ir.imm[34]}},ir.imm[34:0]};
 			dstpc.pc = pc.pc + disp;
 			dstpc.stream = new_stream;
 			alloc_new_stream = 1'b1;
 		end
 	rse.jsr:
 		begin
-			disp = {{29{ir.imm[34]}},ir.imm,1'b0};
+			disp = {{29{ir.imm[34]}},ir.imm[34:0]};
 			dstpc.pc = disp;
 			dstpc.stream = new_stream;
 			alloc_new_stream = 1'b1;
 		end
+
 	rse.sys:
 		begin
 			case(ir.Rd)
