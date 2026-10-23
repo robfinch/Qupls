@@ -37,11 +37,11 @@
 import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_stream_manager(rst, clk, alloc, kept_stream, new_stream, dead_streams, stream_states);
+module Qupls4_stream_manager(rst, clk, alloc, live_stream, new_stream, dead_streams, stream_states);
 input rst;
 input clk;
 input alloc;
-input cpu_types_pkg::pc_stream_t kept_stream;
+input cpu_types_pkg::pc_stream_t live_stream;
 input cpu_types_pkg::pc_stream_t [THREADS-1:0] new_stream;
 input [XSTREAMS-1:0] dead_streams;
 output Qupls4_pkg::stream_state_t [XSTREAMS-1:0] stream_states;
@@ -59,7 +59,8 @@ end
 else begin
 	foreach (dead_streams[n58])
 		stream_states[n58] <= Qupls4_pkg::STR_DEAD;
-	stream_states[kept_stream] <= Qupls4_pkg::STR_ALIVE;
+	if (live_stream != 5'd0)
+		stream_states[live_stream] <= Qupls4_pkg::STR_ALIVE;
 	foreach (new_stream[n58])
 		if (alloc)
 			stream_states[new_stream[n58].stream] <= Qupls4_pkg::STR_UNKNOWN;

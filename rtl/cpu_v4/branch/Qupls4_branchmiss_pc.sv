@@ -37,8 +37,8 @@
 import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_branchmiss_pc(clk, rse, pc_stack, bt, takb,
-	misspc, missgrp, dstpc, vector, kept_stream, new_stream, alloc_new_stream,
+module Qupls4_branchmiss_pc(clk, rse, pc_stack, bt, takb, current_pc,
+	misspc, missgrp, dstpc, vector, live_stream, new_stream,
 	syscall_vector, kernel_vector);
 parameter ABITS=32;
 input clk;
@@ -47,14 +47,14 @@ input pc_address_ex_t [Qupls4_pkg::ISTACK_DEPTH-1:0] pc_stack;
 input [63:0] vector;
 input bt;
 input takb;
+input pc_address_ex_t current_pc;
 input pc_address_t [4:0] syscall_vector;
 input pc_address_t [4:0] kernel_vector;
 output pc_address_ex_t misspc;
 output reg [2:0] missgrp;
 output pc_address_ex_t dstpc;
-output pc_stream_t kept_stream;
+output pc_stream_t live_stream;
 input pc_stream_t new_stream;
-output reg alloc_new_stream;
 
 Qupls4_pkg::micro_op_t ir;
 pc_address_ex_t pc = rse.pc;
@@ -71,15 +71,11 @@ reg [5:0] ino5;
 reg [63:0] disp;
 reg [ABITS-1:0] rg;
 
-always_ff @(posedge clk)
+always_comb
 begin
 //	disp = {{38{instr.ins.immHi[3]}},instr.ins.immHi,instr.ins.immLo};
-	misspc.pc = Qupls4_pkg::RSTPC;
-	misspc.stream = 7'd1;
 //	misspc.bno_f = 6'd1;
 	dstpc = pc;					// copy bno fields
-	kept_stream = 7'd0;
-	alloc_new_stream = 1'b0;
 
 	case(1'b1)
 
@@ -92,8 +88,7 @@ begin
 		else
 		*/
 		begin
-			disp = {{47{ir.imm[16]}},ir.imm[16:0]};
-			dstpc.pc = pc.pc + disp;
+			dstpc.pc = pc.pc + {{47{ir.imm[16]}},ir.imm[16:0]};
 			dstpc.stream = rse.pc.stream;
 		end
 
@@ -105,8 +100,7 @@ begin
 			dstpc.stream = rse.pc.stream;
 		end
 		else begin
-			disp = {{51{ir.imm[12]}},ir.imm[12:0]};
-			dstpc.pc = pc.pc + disp;
+			dstpc.pc = pc.pc + {{51{ir.imm[12]}},ir.imm[12:0]};
 			dstpc.stream = rse.pc.stream;
 		end
 
@@ -116,24 +110,19 @@ begin
 			dstpc.stream = rse.pc.stream;
 		end
 		else begin
-			disp = {{47{ir.imm[16]}},ir.imm[16:0]};
-			dstpc.pc = pc.pc + disp;
+			dstpc.pc = pc.pc + {{47{ir.imm[16]}},ir.imm[16:0]};
 			dstpc.stream = rse.pc.stream;
 		end
 
 	rse.bsr:
 		begin
-			disp = {{29{ir.imm[34]}},ir.imm[34:0]};
-			dstpc.pc = pc.pc + disp;
-			dstpc.stream = new_stream;
-			alloc_new_stream = 1'b1;
+			dstpc.pc = pc.pc + {{29{ir.imm[34]}},ir.imm[34:0]};
+			dstpc.stream = rse.pc.stream;
 		end
 	rse.jsr:
 		begin
-			disp = {{29{ir.imm[34]}},ir.imm[34:0]};
-			dstpc.pc = disp;
-			dstpc.stream = new_stream;
-			alloc_new_stream = 1'b1;
+			dstpc.pc = {{29{ir.imm[34]}},ir.imm[34:0]};
+			dstpc.stream = rse.pc.stream;
 		end
 
 	rse.sys:
@@ -142,79 +131,95 @@ begin
 			6'h02,6'h22:
 				begin
 					dstpc.pc = syscall_vector[Qupls4_pkg::fnNextOm(rse.om)];
-					dstpc.stream = new_stream;
-					alloc_new_stream = 1'b1;
+					dstpc.stream = rse.pc.stream;
 				end
 			6'h03,6'h23:
 				begin
 					dstpc.pc = kernel_vector[Qupls4_pkg::fnNextOm(rse.om)];
-					dstpc.stream = new_stream;
-					alloc_new_stream = 1'b1;
+					dstpc.stream = rse.pc.stream;
 				end
 			default:
 				begin
 					dstpc.pc = kernel_vector[Qupls4_pkg::fnNextOm(rse.om)];
-					dstpc.stream = new_stream;
-					alloc_new_stream = 1'b1;
+					dstpc.stream = rse.pc.stream;
 				end
 			endcase
 		end
 	// Must be tested before Ret
 	rse.eret:
-		dstpc.pc = (ir[28:17]==12'd3 ? pc_stack[1].pc : pc_stack[0].pc) + (ir[10:7] * 3'd6);
+		begin
+			dstpc.pc = (ir[28:17]==12'd3 ? pc_stack[1].pc : pc_stack[0].pc) + (ir[10:7] * 3'd6);
+			dstpc.stream = rse.pc.stream;
+		end
 	rse.ret:
-		dstpc.pc = argA;
+		begin
+			dstpc.pc = argA;
+			dstpc.stream = rse.pc.stream;
+		end
 	default:
-		dstpc.pc = RSTPC;
+		begin
+			dstpc.pc = RSTPC;
+			dstpc.stream = 5'd1;
+		end
 	endcase
+end
 
+always_ff @(posedge clk)
+begin
+	live_stream <= 7'd0;
+	misspc.pc <= Qupls4_pkg::RSTPC;
+	misspc.stream <= 7'd1;
 	case(1'b1)
-	/*
+	/*+
 	BTS_REG:
 		 begin
 			misspc = bt ? tpc : argC + {{53{instr[39]}},instr[39:31],instr[12:11]};
 		end
 	*/
+	// rse.bcc also includes rse.mbcc
 	rse.boi,rse.bcc:
 		begin
 			case({bt,takb})
-			2'b00:
+			// Predicted as not taken, and resolved as not taken:
+			// 		stay in the same stream. We had the right stream to begin with. No
+			//    branch is taking place. Nothing missed.
+			// Predicted as taken, and resolved as taken:
+			//   Nothing missed.
+			//	 it was a branch so it will have been assigned a new stream. We will
+			//   not be keeping the current stream. We want the next PC along the 
+			//   taken path.
+			// Transition the current PC from unknown to live.
+			2'b00,2'b11:
 				begin
-					misspc.pc = dstpc;
-//					kept_stream = pc.bno_t;
-					kept_stream = 7'd0;
+					live_stream <= current_pc.stream;
 				end
+			// Predicted as not taken, but resolved as taken:
+			//	 we need to update the PC to the new destination and allocate a new
+			//   stream. We are not keeping the current stream.
+			//   Consumed a new stream, so allocate the next one.
 			2'b01:
 				begin
-					misspc.pc = dstpc;
-					misspc.stream = new_stream;
-					alloc_new_stream = 1'b1;
-					kept_stream = pc.stream;
-//					kept_stream = 5'd0;
+					misspc <= dstpc;
+					live_stream <= dstpc.stream;
 				end
+			// Predicted as taken, but resolved as not taken:
+			//   we need to back up to the last PC (the instruction after the branch).
+			//   Switch stream back to the old one. The stream of the current PC which
+			//   was assigned as a new stream for the branch is no longer valid.
 			2'b10:
 				begin
-					misspc.pc = pc + 4'd6;
-					misspc.stream = new_stream;
-					alloc_new_stream = 1'b1;
-					kept_stream = dstpc.stream;
-//					kept_stream = 5'd0;
-				end
-			2'b11:
-				begin
-					misspc.pc = pc + 4'd6;
-					misspc.stream = pc.stream;
-//					kept_stream = dstpc.bno_t;
-					kept_stream = 7'd0;
+					misspc.pc <= pc.pc + 4'd6;
+					misspc.stream <= dstpc.stream;
+					live_stream <= dstpc.stream;
 				end
 			endcase
 //			misspc = bt ? pc + 4'd5 : pc + {{47{instr[39]}},instr[39:25],instr[12:11]};
 		end
+	// Unconditional branches will always allocate a new stream.
 	default:
 		begin
-			misspc = dstpc;
-//			kept_stream = dstpc.bno_t;
-			kept_stream = 7'd0;
+			misspc.pc <= dstpc.pc;
+			misspc.stream = dstpc.stream;
 		end
 	endcase
 end

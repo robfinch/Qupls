@@ -320,7 +320,9 @@ Qupls4_pkg::rob_bitmask_t robentry_stomp;
 Qupls4_pkg::rob_bitmask_t robentry_cpydst;
 stream_state_t [XSTREAMS-1:0] stream_states;
 wire [XSTREAMS-1:0] dead_streams;
-pc_stream_t kept_stream;
+pc_stream_t kept_stream, live_stream;
+always_comb
+	kept_stream = pc.stream;
 wire stomp_fet, stomp_ext, stomp_mot, stomp_mot2, stomp_x4;
 wire stomp_dec, stomp_ren, stomp_que, stomp_quem;
 Qupls4_pkg::rob_bitmask_t robentry_issue;
@@ -1933,7 +1935,7 @@ Qupls4_stream_manager usm1
 	.rst(irst),
 	.clk(clk),
 	.alloc(alloc_stream),
-	.kept_stream(kept_stream),
+	.live_stream(live_stream),
 	.new_stream(new_stream),
 	.dead_streams(dead_streams),
 	.stream_states(stream_states)
@@ -3876,11 +3878,14 @@ pc_address_t tpc;
 always_comb
 	tpc = fcu_pc + 4'd6;
 
+// The branchmiss_pc works when the branch has been resolved. Mark the
+// appropriate stream live.
 Qupls4_branchmiss_pc umisspc1
 (
 	.clk(clk),
 	.rse(fcu_rse),
 	.pc_stack(pc_stack),
+	.current_pc(pc),
 	.takb(takb),
 	.misspc(fcu_misspc1),
 	.vector(irq_in.vector),
@@ -3888,7 +3893,7 @@ Qupls4_branchmiss_pc umisspc1
 	.kernel_vector(kernel_vectors),
 	.missgrp(fcu_missgrp),
 	.dstpc(tgtpc),
-	.kept_stream(kept_stream)
+	.live_stream(live_stream)
 );
 
 always_comb
