@@ -87,6 +87,7 @@ reg [Qupls4_pkg::PREGS-1:0] toFreeList;
 reg [3:0] ffree;
 reg [3:0] fpush;
 reg [3:0] ovr;
+reg [3:0] nofree;
 
 always_comb next_stall = stalla0|stalla1|stalla2|stalla3;
 always_ff @(posedge clk)
@@ -103,10 +104,10 @@ begin
 	// Not a stall if not allocating.
 	// Stall if same register name choosen on more than one port. It means there
 	// were not enough register names available.
-	stalla0 = (~avail[o[0][8:3]][o[0][2:0]] & ns_alloc_req[0]) || o[0]==o[2] || o[0]==o[3] || o[0]==o[1];
-	stalla1 = (~avail[o[1][8:3]][o[1][2:0]] & ns_alloc_req[1]) || o[1]==o[2] || o[1]==o[3] || o[1]==o[0];
-	stalla2 = (~avail[o[2][8:3]][o[2][2:0]] & ns_alloc_req[2]) || o[2]==o[0] || o[2]==o[1] || o[2]==o[3];
-	stalla3 = (~avail[o[3][8:3]][o[3][2:0]] & ns_alloc_req[3]) || o[3]==o[0] || o[3]==o[1] || o[3]==o[2];
+	stalla0 = ((~avail[o[0][8:3]][o[0][2:0]]|nofree[0]) & ns_alloc_req[0]);// || (ns_alloc_req[0] && (o[0]==o[2] || o[0]==o[3] || o[0]==o[1]));
+	stalla1 = ((~avail[o[1][8:3]][o[1][2:0]]|nofree[1]) & ns_alloc_req[1]);// || (ns_alloc_req[1] && (o[1]==o[2] || o[1]==o[3] || o[1]==o[0]));
+	stalla2 = ((~avail[o[2][8:3]][o[2][2:0]]|nofree[2]) & ns_alloc_req[2]);// || (ns_alloc_req[2] && (o[2]==o[0] || o[2]==o[1] || o[2]==o[3]));
+	stalla3 = ((~avail[o[3][8:3]][o[3][2:0]]|nofree[3]) & ns_alloc_req[3]);// || (ns_alloc_req[3] && (o[3]==o[0] || o[3]==o[1] || o[3]==o[2]));
 	ov[0] = ((avail[o[0][8:3]][o[0][2:0]] & ns_alloc_req[0]) | (ovr[0] & ~en));
 	ov[1] = ((avail[o[1][8:3]][o[1][2:0]] & ns_alloc_req[1]) | (ovr[1] & ~en));
 	ov[2] = ((avail[o[2][8:3]][o[2][2:0]] & ns_alloc_req[2]) | (ovr[2] & ~en));
@@ -164,15 +165,57 @@ case(Qupls4_pkg::PREGS)
 */
 512:
  begin
-		wire [3:0] ffo [0:63];
+		wire [3:0] ffo0 [0:63];
+		wire [3:0] ffo1 [0:63];
+		wire [3:0] ffo2 [0:63];
+		wire [3:0] ffo3 [0:63];
 		for (g = 0; g < 64; g = g + 1) begin
-			ffo12 uffo0 (.i({4'h0,avail[g]}), .o(ffo[g]));
+			ffo12 uffo0 (.i({4'h0,avail[g]}), .o(ffo0[g]));
+			ffo12 uffo1 (.i({4'h0,avail[g] & ~(12'd1 << ffo0[g])}), .o(ffo1[g]));
+			ffo12 uffo2 (.i({4'h0,avail[g] & ~(12'd1 << ffo1[g])}), .o(ffo2[g]));
+			ffo12 uffo3 (.i({4'h0,avail[g] & ~(12'd1 << ffo2[g])}), .o(ffo3[g]));
 		end
 
-		always_comb o[0] = {aregno[0][6:1],ffo[aregno[0]][2:0]};
-		always_comb o[1] = {aregno[1][6:1],ffo[aregno[1]][2:0]};
-		always_comb o[2] = {aregno[2][6:1],ffo[aregno[2]][2:0]};
-		always_comb o[3] = {aregno[3][6:1],ffo[aregno[3]][2:0]};
+		always_comb o[0] = {aregno[0][6:1],ffo0[aregno[0][6:1]][2:0]};
+		always_comb o[1] = {aregno[1][6:1],ffo1[aregno[1][6:1]][2:0]};
+		always_comb o[2] = {aregno[2][6:1],ffo2[aregno[2][6:1]][2:0]};
+		always_comb o[3] = {aregno[3][6:1],ffo3[aregno[3][6:1]][2:0]};
+		always_comb nofree[0] = ffo0[aregno[0][6:1]]==4'd15;
+		always_comb nofree[1] = ffo1[aregno[1][6:1]]==4'd15;
+		always_comb nofree[2] = ffo2[aregno[2][6:1]]==4'd15;
+		always_comb nofree[3] = ffo3[aregno[3][6:1]]==4'd15;
+
+		always_ff @(posedge clk)
+		foreach (ns_dstreg[n1])
+		begin
+			ns_dstregv[n1] <= INV;
+			ns_dstreg[n1] <= 9'd0;
+			if (ns_alloc_req[n1]) begin
+				ns_dstreg[n1] <= o[n1];
+				ns_dstregv[n1] <= ov[n1];
+			end
+		end
+	end
+
+// Each pair of registers has a pool of eight physical registers assigned to it
+// for renaming.
+256:
+ begin
+		wire [3:0] ffo0 [0:31];
+		wire [3:0] ffo1 [0:31];
+		wire [3:0] ffo2 [0:31];
+		wire [3:0] ffo3 [0:31];
+		for (g = 0; g < 32; g = g + 1) begin
+			ffo12 uffo0 (.i({4'h0,avail[g]}), .o(ffo0[g]));
+			ffo12 uffo1 (.i({4'h0,avail[g] & ~(12'd1 << ffo0[g])}), .o(ffo1[g]));
+			ffo12 uffo2 (.i({4'h0,avail[g] & ~(12'd1 << ffo1[g])}), .o(ffo2[g]));
+			ffo12 uffo3 (.i({4'h0,avail[g] & ~(12'd1 << ffo2[g])}), .o(ffo3[g]));
+		end
+
+		always_comb o[0] = {aregno[0][6:1],ffo0[aregno[0][6:1]][2:0]};
+		always_comb o[1] = {aregno[1][6:1],ffo1[aregno[1][6:1]][2:0]};
+		always_comb o[2] = {aregno[2][6:1],ffo2[aregno[2][6:1]][2:0]};
+		always_comb o[3] = {aregno[3][6:1],ffo3[aregno[3][6:1]][2:0]};
 
 		always_ff @(posedge clk)
 		foreach (ns_dstreg[n1])

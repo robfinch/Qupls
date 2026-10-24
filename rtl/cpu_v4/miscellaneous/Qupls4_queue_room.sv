@@ -63,17 +63,17 @@ begin
 	enqueue_room = 8'd0;
 	if (empty)
 		enqueue_room = Qupls4_pkg::ROB_ENTRIES-4;
-	else if (rob[tails[0]].v==INV && !rob[tails[0]].op.hwi &&
- 		rob[tails[1]].v==INV && !rob[tails[1]].op.hwi &&
- 		rob[tails[2]].v==INV && !rob[tails[2]].op.hwi &&
- 		rob[tails[3]].v==INV && !rob[tails[3]].op.hwi &&
- 		rob[tails[4]].v==INV && !rob[tails[4]].op.hwi)
+	else if (rob[tails[0]].v==5'd0 && !rob[tails[0]].op.hwi &&
+ 		rob[tails[1]].v==5'd0 && !rob[tails[1]].op.hwi &&
+ 		rob[tails[2]].v==5'd0 && !rob[tails[2]].op.hwi &&
+ 		rob[tails[3]].v==5'd0 && !rob[tails[3]].op.hwi &&
+ 		rob[tails[4]].v==5'd0 && !rob[tails[4]].op.hwi)
 		enqueue_room = 8'd4;
 	if (
-			rob[tails[0]].v==INV && !rob[tails[0]].op.hwi &&
-			rob[tails[1]].v==INV && !rob[tails[1]].op.hwi &&
-			rob[tails[2]].v==INV && !rob[tails[2]].op.hwi &&
-			rob[tails[3]].v==INV && !rob[tails[3]].op.hwi
+			rob[tails[0]].v==5'd0 && !rob[tails[0]].op.hwi &&
+			rob[tails[1]].v==5'd0 && !rob[tails[1]].op.hwi &&
+			rob[tails[2]].v==5'd0 && !rob[tails[2]].op.hwi &&
+			rob[tails[3]].v==5'd0 && !rob[tails[3]].op.hwi
 		) begin
 		if (!(tails[0]==head0
 			|| tails[1]==head0
@@ -83,14 +83,14 @@ begin
 			enqueue_room = 8'd4;
 	end
 	if (
-			rob[tails[0]].v==INV && !rob[tails[0]].op.hwi &&
-			rob[tails[1]].v==INV && !rob[tails[1]].op.hwi &&
-			rob[tails[2]].v==INV && !rob[tails[2]].op.hwi &&
-			rob[tails[3]].v==INV && !rob[tails[3]].op.hwi &&
-			rob[tails[4]].v==INV && !rob[tails[4]].op.hwi &&
-			rob[tails[5]].v==INV && !rob[tails[5]].op.hwi &&
-			rob[tails[6]].v==INV && !rob[tails[6]].op.hwi &&
-			rob[tails[7]].v==INV && !rob[tails[7]].op.hwi
+			rob[tails[0]].v==5'd0 && !rob[tails[0]].op.hwi &&
+			rob[tails[1]].v==5'd0 && !rob[tails[1]].op.hwi &&
+			rob[tails[2]].v==5'd0 && !rob[tails[2]].op.hwi &&
+			rob[tails[3]].v==5'd0 && !rob[tails[3]].op.hwi &&
+			rob[tails[4]].v==5'd0 && !rob[tails[4]].op.hwi &&
+			rob[tails[5]].v==5'd0 && !rob[tails[5]].op.hwi &&
+			rob[tails[6]].v==5'd0 && !rob[tails[6]].op.hwi &&
+			rob[tails[7]].v==5'd0 && !rob[tails[7]].op.hwi
 		) begin
 		if (!(tails[0]==head0
 			|| tails[1]==head0
@@ -104,18 +104,18 @@ begin
 			enqueue_room = 8'd8;
 	end
 	if (
-			rob[tails[0]].v==INV && !rob[tails[0]].op.hwi &&
-			rob[tails[1]].v==INV && !rob[tails[1]].op.hwi &&
-			rob[tails[2]].v==INV && !rob[tails[2]].op.hwi &&
-			rob[tails[3]].v==INV && !rob[tails[3]].op.hwi &&
-			rob[tails[4]].v==INV && !rob[tails[4]].op.hwi &&
-			rob[tails[5]].v==INV && !rob[tails[5]].op.hwi &&
-			rob[tails[6]].v==INV && !rob[tails[6]].op.hwi &&
-			rob[tails[7]].v==INV && !rob[tails[7]].op.hwi &&
-			rob[tails[8]].v==INV && !rob[tails[8]].op.hwi &&
-			rob[tails[9]].v==INV && !rob[tails[9]].op.hwi &&
-			rob[tails[10]].v==INV && !rob[tails[10]].op.hwi &&
-			rob[tails[11]].v==INV && !rob[tails[11]].op.hwi
+			rob[tails[0]].v==5'd0 && !rob[tails[0]].op.hwi &&
+			rob[tails[1]].v==5'd0 && !rob[tails[1]].op.hwi &&
+			rob[tails[2]].v==5'd0 && !rob[tails[2]].op.hwi &&
+			rob[tails[3]].v==5'd0 && !rob[tails[3]].op.hwi &&
+			rob[tails[4]].v==5'd0 && !rob[tails[4]].op.hwi &&
+			rob[tails[5]].v==5'd0 && !rob[tails[5]].op.hwi &&
+			rob[tails[6]].v==5'd0 && !rob[tails[6]].op.hwi &&
+			rob[tails[7]].v==5'd0 && !rob[tails[7]].op.hwi &&
+			rob[tails[8]].v==5'd0 && !rob[tails[8]].op.hwi &&
+			rob[tails[9]].v==5'd0 && !rob[tails[9]].op.hwi &&
+			rob[tails[10]].v==5'd0 && !rob[tails[10]].op.hwi &&
+			rob[tails[11]].v==5'd0 && !rob[tails[11]].op.hwi
 		) begin
 		if (!(tails[0]==head0
 			|| tails[1]==head0

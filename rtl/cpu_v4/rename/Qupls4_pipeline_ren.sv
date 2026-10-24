@@ -70,7 +70,8 @@ module Qupls4_pipeline_ren(
 	args
 );
 parameter MWIDTH = Qupls4_pkg::MWIDTH;
-parameter NPORT = MWIDTH*4;
+parameter NREG_RPORT = Qupls4_pkg::NREG_RPORTS;
+localparam NRENAME = MWIDTH*6;
 input rst;
 input clk;
 input clk5x;
@@ -94,9 +95,9 @@ input pc_stream_t kept_stream;
 //input aregno_t [NPORT-1:0] arn;
 //input [2:0] arng [0:NPORT-1];
 //input [NPORT-1:0] arnv;
-input checkpt_ndx_t [NPORT-1:0] rn_cp;
-input pregno_t [NPORT-1:0] prn_i;
-output [NPORT-1:0] prnv;
+input checkpt_ndx_t [NRENAME-1:0] rn_cp;
+input pregno_t [NRENAME-1:0] prn_i;
+output [NRENAME-1:0] prnv;
 input Qupls4_pkg::pipeline_group_reg_t pg_dec;
 output Qupls4_pkg::pipeline_group_reg_t pg_ren;
 output pregno_t [MWIDTH-1:0] Rt0_ren;
@@ -125,7 +126,7 @@ input alloc_chkpt;
 input checkpt_ndx_t cndx;
 input checkpt_ndx_t [3:0] rcndx;
 input checkpt_ndx_t miss_cp;
-input value_t [NPORT-1:0] args; 
+input value_t [NRENAME-1:0] args; 
 
 
 genvar g;
@@ -161,7 +162,8 @@ always_comb
 begin
 	nopi = {$bits(Qupls4_pkg::pipeline_reg_t){1'b0}};
 	nopi.v = 1'b1;
-	nopi.uop = {41'd0,Qupls4_pkg::OP_NOP};
+	nopi.uop = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
+	nopi.uop.opcode = Qupls4_pkg::OP_NOP;
 	nopi.uop.v = VAL;
 	nopi.uop.lead = 1'd1;
 	nopi.uop.Rs1 = 8'd0;
@@ -170,6 +172,7 @@ begin
 	nopi.uop.Rs4 = 8'd0;
 	nopi.uop.Rd = 8'd0;
 	nopi.uop.Rd2 = 8'd0;
+	nopi.decbus = {$bits(Qupls4_pkg::decode_bus_t){1'b0}};
 	nopi.decbus.v = VAL;
 	nopi.decbus.Rs1 = 8'd0;
 	nopi.decbus.Rs2 = 8'd0;
@@ -210,23 +213,27 @@ generate begin : gRt_ren
 end
 endgenerate
 
-reg [NPORT-1:0] arnv;
-reg [2:0] arng [0:NPORT-1];
-aregno_t [NPORT-1:0] arn;
-pregno_t [NPORT-1:0] prn;
+reg [NRENAME-1:0] arnv;
+reg [2:0] arng [0:NRENAME-1];
+aregno_t [NRENAME-1:0] arn;
+pregno_t [NRENAME-1:0] prn;
 
 always_comb
 begin
-	arnv = {MWIDTH*4{1'b1}};
+	arnv = {MWIDTH*6{1'b1}};
 	for (n8 = 0; n8 < MWIDTH; n8 = n8 + 1) begin
-		arn[n8*4+0] = pg_dec.pr[n8].op.decbus.Rs1;
-		arn[n8*4+1] = pg_dec.pr[n8].op.decbus.Rs2;
-		arn[n8*4+2] = pg_dec.pr[n8].op.decbus.Rs3;
-		arn[n8*4+3] = pg_dec.pr[n8].op.decbus.Rd;
-		arng[n8*4+0] = n8;
-		arng[n8*4+1] = n8;
-		arng[n8*4+2] = n8;
-		arng[n8*4+3] = n8;
+		arn[n8*6+0] = pg_dec.pr[n8].op.decbus.Rs1;
+		arn[n8*6+1] = pg_dec.pr[n8].op.decbus.Rs2;
+		arn[n8*6+2] = pg_dec.pr[n8].op.decbus.Rs3;
+		arn[n8*6+3] = pg_dec.pr[n8].op.decbus.Rs4;
+		arn[n8*6+4] = pg_dec.pr[n8].op.decbus.Rm;
+		arn[n8*6+5] = pg_dec.pr[n8].op.decbus.Rd;
+		arng[n8*6+0] = n8;
+		arng[n8*6+1] = n8;
+		arng[n8*6+2] = n8;
+		arng[n8*6+3] = n8;
+		arng[n8*6+4] = n8;
+		arng[n8*6+5] = n8;
 	end
 end
 
@@ -259,8 +266,8 @@ Qupls4_reg_name_supplier9 uns4
 Qupls4_rat2
 #(
 	.MWIDTH(MWIDTH),
-	.NPORT(NPORT),
-	.NREG_RPORT(NPORT)
+	.NRENAME(NRENAME),
+	.NREG_RPORT(NREG_RPORT)
 )
 urat1
 (	
@@ -290,11 +297,11 @@ urat1
 	.wra(aRd_dec),
 	.wrra(pRd_dec),
 	.wra_cp(rcndx),
-	.wrport0_v(wrport0_v),
-	.wrport0_aRt(wrport0_aRt),
-	.wrport0_Rt(wrport0_Rt),
-	.wrport0_cp(wrport0_cp),
-	.wrport0_res(wrport0_res),
+	.wrport_v(wrport0_v),
+	.wrport_aRt(wrport0_aRt),
+	.wrport_Rt(wrport0_Rt),
+	.wrport_cp(wrport0_cp),
+	.wrport_res(wrport0_res),
 	.cmtav(cmtav),
 	.cmtaiv(cmtaiv),
 	.cmtaa(cmtaa),
@@ -385,7 +392,9 @@ else begin
 		pg_ren.pr[0].op.pRs1 <= prn[0];
 		pg_ren.pr[0].op.pRs2 <= prn[1];
 		pg_ren.pr[0].op.pRs3 <= prn[2];
-		pg_ren.pr[0].op.pRd <= prn[3];
+		pg_ren.pr[0].op.pRs4 <= prn[3];
+		pg_ren.pr[0].op.pRm <= prn[4];
+		pg_ren.pr[0].op.pRd <= prn[5];
 	/*
 	if (bo_wr) begin
 		if (pg_dec.pr[0].aRa==bo_areg)
@@ -418,10 +427,12 @@ else begin
 				pg_ren.pr[1].op.decbus.cpytgt <= TRUE;
 			end
 			pg_ren.pr[1].op.nRd <= pRd_dec[1];
-			pg_ren.pr[1].op.pRs1 <= prn[4];
-			pg_ren.pr[1].op.pRs2 <= prn[5];
-			pg_ren.pr[1].op.pRs3 <= prn[6];
-			pg_ren.pr[1].op.pRd <= prn[7];
+			pg_ren.pr[1].op.pRs1 <= prn[6];
+			pg_ren.pr[1].op.pRs2 <= prn[7];
+			pg_ren.pr[1].op.pRs3 <= prn[8];
+			pg_ren.pr[1].op.pRs4 <= prn[9];
+			pg_ren.pr[1].op.pRm <= prn[10];
+			pg_ren.pr[1].op.pRd <= prn[11];
 		end
 	
 		if (MWIDTH > 2) begin
@@ -444,11 +455,13 @@ else begin
 				pg_ren.pr[2].op.decbus.cpytgt <= TRUE;
 			end
 			pg_ren.pr[2].op.nRd <= pRd_dec[2];
-			pg_ren.pr[2].op.pRs1 <= prn[8];
-			pg_ren.pr[2].op.pRs2 <= prn[9];
-			pg_ren.pr[2].op.pRs3 <= prn[10];
+			pg_ren.pr[2].op.pRs1 <= prn[12];
+			pg_ren.pr[2].op.pRs2 <= prn[13];
+			pg_ren.pr[2].op.pRs3 <= prn[14];
+			pg_ren.pr[2].op.pRs4 <= prn[15];
+			pg_ren.pr[2].op.pRm <= prn[16];
 //				pg_ren.pr[2].op.uop.Rs4 = prn[13];
-			pg_ren.pr[2].op.pRd <= prn[11];
+			pg_ren.pr[2].op.pRd <= prn[17];
 		end
 
 		if (MWIDTH > 3) begin
@@ -472,10 +485,12 @@ else begin
 				pg_ren.pr[3].op.decbus.cpytgt <= TRUE;
 			end
 			pg_ren.pr[3].op.nRd <= pRd_dec[3];
-			pg_ren.pr[3].op.pRs1 <= prn[12];
-			pg_ren.pr[3].op.pRs2 <= prn[13];
-			pg_ren.pr[3].op.pRs3 <= prn[14];
-			pg_ren.pr[3].op.pRd <= prn[15];
+			pg_ren.pr[3].op.pRs1 <= prn[18];
+			pg_ren.pr[3].op.pRs2 <= prn[19];
+			pg_ren.pr[3].op.pRs3 <= prn[20];
+			pg_ren.pr[3].op.pRs4 <= prn[21];
+			pg_ren.pr[3].op.pRm <= prn[22];
+			pg_ren.pr[3].op.pRd <= prn[23];
 		end
 	end
 	if (branch_resolved)
