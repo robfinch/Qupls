@@ -86,7 +86,14 @@ always_ff @(posedge clk)
 			new_stream[act_stream.thread] <= ffz0;
 	end
 
+// The dependent stream array must be reset to zeros on a reset for proper
+// operation.
 always_ff @(posedge clk)
+if (rst) begin
+	foreach (dep_stream[n3])
+		dep_stream[n3] <= {$bits(dep_stream_t){1'b0}};
+end
+else begin
 	if (clk_en) begin
 		if (alloc_stream) begin
 			// The active stream has a new dependency.
@@ -104,6 +111,7 @@ always_ff @(posedge clk)
 				end
 		end
 	end
+end
 end
 endgenerate
 
