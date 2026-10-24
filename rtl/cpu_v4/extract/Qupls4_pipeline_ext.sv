@@ -140,16 +140,15 @@ wire [MWIDTH-1:0] bra;
 wire [MWIDTH-1:0] jmp;
 wire [MWIDTH-1:0] bcc;
 wire [MWIDTH-1:0] rtd;
+reg [MWIDTH-1:0] nop_lead;	// NOP out leading instructions
 wire [MWIDTH-1:0] nop2;
-reg chgflow;
+reg chgflow,chgflow0,chgflow1,chgflow2,chgflow3;
+reg p_override123,p_override23,p_override3;
 
-always_comb
-	chgflow = ((|(bsr & ~nop)) |
-				     (|(jsr & ~nop)) |
-						 (|(bcc & ~nop)) |
-						 (|(bra & ~nop)) |
-						 (|(jmp & ~nop)))
-						 ;
+always_comb chgflow0 = bsr[0] | jsr[0] | bcc[0] | bra[0] | jmp[0];
+always_comb chgflow1 = bsr[1] | jsr[1] | bcc[1] | bra[1] | jmp[1];
+always_comb chgflow2 = bsr[2] | jsr[2] | bcc[2] | bra[2] | jmp[2];
+always_comb chgflow3 = bsr[3] | jsr[3] | bcc[3] | bra[3] | jmp[3];
 
 Qupls4_pkg::rob_entry_t nopi;
 
@@ -299,7 +298,7 @@ always_comb nop3 = (stomp_fet && pc3_fet.bno_t!=stomp_bno) || (branchmiss && mis
 // Stomp on instructions in the same instruction group following the overrride location.
 generate begin : gNop
 	for (g = 0; g < MWIDTH; g = g + 1)
-		always_comb nop[g] = (branchmiss && misspc_fet.pc > pc_fet[g].pc) || (p_override && override_pos < g);
+		always_comb nop_lead[g] = (branchmiss && misspc_fet.pc > pc_fet[g].pc);
 end
 endgenerate
 /*
@@ -442,6 +441,7 @@ if (rst_i) begin
 		pg_ext.pr[n2] <= nopi;
 end
 else if (en) begin
+	pg_ext <= {$bits(Qupls4_pkg::pipeline_group_reg_t){1'b0}};
 	pg_ext.flush <= flush_fet;
 	pg_ext.hdr <= {$bits(Qupls4_pkg::pipeline_group_hdr_t){1'b0}};
 	pg_ext.hdr.v <= !stomp_ext;
@@ -454,7 +454,7 @@ else if (en) begin
 		pg_ext.pr[n2] <= {$bits(Qupls4_pkg::rob_entry_t){1'b0}};
 		pg_ext.pr[n2] <= ins_fet[n2];
 		pg_ext.pr[n2].v <= pc_ext[n2].stream.stream;
-		pg_ext.pr[n2].stomped <= stomp_ext || nop[n2] || nop2[n2] || bra[n2] || jmp[n2];
+		pg_ext.pr[n2].stomped <= stomp_ext || nop_lead[n2] || nop2[n2] || bra[n2] || jmp[n2];
 		pg_ext.pr[n2].wh <= n2;
 		pg_ext.pr[n2].ip_stream <= pc_ext[n2].stream;
 		pg_ext.pr[n2].ip_offs <= n2 * 3;	// wyde offset
@@ -465,11 +465,11 @@ else if (en) begin
 	end
 end
 
-always_ff @(posedge clk) if (en) irq_sn_ext <= irq_sn_fet;
-always_ff @(posedge clk) if (en) irq_in_ext <= irq_in_fet;
-always_ff @(posedge clk) if (en) irq_ext <= irq_fet;
-always_ff @(posedge clk) if (en) ipl_ext <= ipl_fet;
-always_ff @(posedge clk) if (en) nop_o <= stomp_ext;
+always_ff @(posedge clk) if (rst_i) irq_sn_ext <= {$bits(cpu_types_pkg::seqnum_t){1'b0}}; else if (en) irq_sn_ext <= irq_sn_fet;
+always_ff @(posedge clk) if (rst_i) irq_in_ext <= {$bits(Qupls4_pkg::irq_info_packet_t){1'b0}}; else if (en) irq_in_ext <= irq_in_fet;
+always_ff @(posedge clk) if (rst_i) irq_ext <= 1'b0; else if (en) irq_ext <= irq_fet;
+always_ff @(posedge clk) if (rst_i) ipl_ext <= 6'd0; else if (en) ipl_ext <= ipl_fet;
+always_ff @(posedge clk) if (rst_i) nop_o <= TRUE; else if (en) nop_o <= stomp_ext;
 
 always_ff @(posedge clk)
 if (rst_i)
@@ -496,7 +496,13 @@ else begin
 end
 
 always_comb
-	p_override = chgflow ? pc0_fet != new_address_o : FALSE;
+	p_override123 = chgflow0 & ~nop_lead[0] ? pc_fet[1].pc != new_address_o : FALSE;
+always_comb
+	p_override23 = chgflow1 & ~nop_lead[1] ? pc_fet[2].pc != new_address_o : FALSE;
+always_comb
+	p_override3 = chgflow2 & !nop_lead[2] ? pc_fet[3].pc != new_address_o : FALSE;
+always_comb
+	p_override = p_override123|p_override23|p_override3|chgflow3;
 
 /*
 always_comb mcip0_o <= mcip0;
