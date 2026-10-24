@@ -109,6 +109,16 @@ Qupls4_decode_Rs3 udcrc
 	.Rs3z(db.Rs3z)
 );
 
+Qupls4_decode_Rs4 udcr4
+(
+	.om(om),
+	.instr(instr),
+	.instr_raw(instr_raw),
+	.has_immd(db.has_immd),
+	.Rs4(db.Rs4),
+	.Rs4z(db.Rs4z)
+);
+
 Qupls4_decode_Rm udcrt
 (
 	.instr(instr),
@@ -331,6 +341,17 @@ Qupls4_decode_fpu0 ufpu0
 	.fpu0(db.fpu0)
 );
 
+Qupls4_decode_rmd urmd0
+(
+	.instr(instr),
+	.rmd(db.rm)
+);
+
+Qupls4_decode_prc uprc0
+(
+	.instr(instr),
+	.prc(db.prc)
+);
 
 Qupls4_decode_oddball uob0
 (
@@ -394,6 +415,12 @@ Stark_decode_prec udprec1
 	.prec(db.prc)
 );
 */
+Qupls4_decode_macro udecmacro
+(
+	.instr(instr),
+	.macro(db.macro)
+);
+
 always_comb
 begin
 	db.boi = instr.opcode==Qupls4_pkg::OP_BCCU && instr.cnd==Qupls4_pkg::CND_BOI;
@@ -409,6 +436,7 @@ begin
 	db.amo = instr.opcode==Qupls4_pkg::OP_AMO;
 	db.rext = instr.opcode==Qupls4_pkg::OP_REXT;
 	db.cause = Qupls4_pkg::FLT_NONE;
+	db.we = (|db.Rd) || (|db.Rd2);
 end
 
 always_comb//ff @(posedge clk)
@@ -469,7 +497,6 @@ else begin
 			)) begin
 			dbo.cause = Qupls4_pkg::FLT_UNIMP;
 		end
-		dbo.we = (|db.Rd) || (|db.Rd2);
 	end
 end
 

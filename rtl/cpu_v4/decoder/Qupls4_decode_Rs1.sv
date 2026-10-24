@@ -108,7 +108,7 @@ begin
         om1 = om;
   */
 	Rs1z = ~|Rs1[6:0];
-	Rs1ip = Rs1==7'd127;
+	Rs1ip = Rs1==IP_REG;
 end
 
 endmodule

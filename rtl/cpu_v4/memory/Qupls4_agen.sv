@@ -35,6 +35,8 @@
 // Note this is the only place register codes are bypassed for r0 and r31 to
 // allow the use of zero and the instruction pointer.
 //
+// AGEN logic is now in expipe45.sv
+//
 // 105 LUTs / 2300 FFs / 
 // ============================================================================
 

@@ -58,12 +58,12 @@ begin
 		FN_MUL,FN_MULU,FN_MULSU:
 			fnExPipe = 6'b001100;
 		FN_DIV,FN_DIVU,FN_DIVSU:
-			fnExPipe = 6'b010000;
+			fnExPipe = 6'b110000;
 		FN_NNA_MTWT,FN_NNA_MTIN,FN_NNA_MTBIAS,
 		FN_NNA_MTFB,FN_NNA_MTMC,FN_NNA_MTBC:
 			fnExPipe = 6'b000100;
 		FN_ROL,FN_ROR,FN_ASR,FN_ASL,FN_LSR:
-			fnExPipe = 6'b000001;
+			fnExPipe = 6'b000011;
 		FN_REDAND,FN_REDOR,FN_REDEOR,
 		FN_REDMINU,FN_REDSUM,FN_REDMAXU,FN_REDMIN,FN_REDMAX:
 			fnExPipe = 6'b000001;
@@ -118,7 +118,7 @@ begin
 	Qupls4_pkg::OP_SYS,
 	Qupls4_pkg::OP_BRK,
 	Qupls4_pkg::OP_RTD:
-		fnExPipe = 6'b000010;
+		fnExPipe = SUPPORT_BRANCH1 ? 6'b000010 : 6'b000001;
 	default:
 		fnExPipe = 6'b000000;
 	endcase

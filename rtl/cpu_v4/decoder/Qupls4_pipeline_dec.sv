@@ -51,7 +51,7 @@ module Qupls4_pipeline_dec(rst_i, rst, clk, en, regFPCSR,
 );
 parameter MWIDTH = 4;		// Machine width, under construction
 parameter MAX_MICROOPS = 12;
-parameter MICROOPS_PER_INSTR = 32;
+parameter MICROOPS_PER_INSTR = 16;
 input rst_i;
 input rst;
 input clk;
@@ -92,6 +92,13 @@ reg [15:0] pred_mask_i;
 reg [15:0] pred_mask_o;
 reg [4:0] pred_no_i;
 reg [4:0] pred_no_o;
+reg [7:0] vect_mask_i;
+reg [7:0] vect_mask_o;
+reg [8:0] Vm_i;
+reg [8:0] Vm_o;
+reg pfx3_i,pfx3_o;
+reg [2:0] pfx3_cnt,pfx3_cnt_o, pfx3_cnt_i;
+reg [31:0] pfx3_payload,pfx3_payload_i,pfx3_payload_o;
 reg hwi_ignore;
 Qupls4_pkg::regs_t fregs_i;
 Qupls4_pkg::regs_t fregs_o;
@@ -132,6 +139,43 @@ if (rst)
 else begin
 	if (en)
 		fregs_i <= fregs_o;
+end
+
+always @(posedge clk)
+if (rst)
+	vect_mask_i <= 8'h00;
+else begin
+	if (en)
+		vect_mask_i <= vect_mask_o;
+end
+always @(posedge clk)
+if (rst)
+	Vm_i <= 9'h000;
+else begin
+	if (en)
+		Vm_i <= Vm_o;
+end
+
+always @(posedge clk)
+if (rst)
+	pfx3_i <= 1'b0;
+else begin
+	if (en)
+		pfx3_i <= pfx3_o;
+end
+always @(posedge clk)
+if (rst)
+	pfx3_cnt_i <= 3'h0;
+else begin
+	if (en)
+		pfx3_cnt_i <= pfx3_cnt_o;
+end
+always @(posedge clk)
+if (rst)
+	pfx3_payload_i <= 9'h000;
+else begin
+	if (en)
+		pfx3_payload_i <= pfx3_payload_o;
 end
 
 Qupls4_pkg::rob_entry_t [MWIDTH-1:0] insm;
@@ -397,6 +441,7 @@ end
 
 always_comb
 begin
+	hwi_ignore = FALSE;
 	fregs_o = 15'd0;
 	
 	pr_dec[0] = insm[0].op;
@@ -556,6 +601,155 @@ begin
 			pred_no_o = pr_dec[3].decbus.pred_no;
 		end
 	end
+
+	// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+	// VMASK modifier support
+	// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+	if (SUPPORT_VMASK) begin
+		pr_dec[0].decbus.vect_mask = vect_mask_i;
+		pr_dec[0].decbus.Vm = Vm_i;
+		if (dec[0].vmask && pr_dec[0].v) begin
+			pr_dec[1].decbus.Vm = pr_dec[0].decbus.Rs1;
+			pr_dec[1].decbus.vect_mask = insm[0].op.uop.imm[7:0];
+		end
+		else if (|pr_dec[0].decbus.vect_mask) begin
+			if (pr_dec[1].uop.lead) begin
+//				pr_dec[1].decbus.Vm = pr_dec[0].vect_mask[0] ? pr_dec[0].decbus.Vm : 9'h000;
+				pr_dec[1].decbus.Vm = pr_dec[0].decbus.Vm;
+				pr_dec[1].decbus.vect_mask = pr_dec[0].decbus.vect_mask >> 2'd1;
+			end
+			else begin
+				pr_dec[1].decbus.Vm = pr_dec[0].decbus.Vm;
+				pr_dec[1].decbus.vect_mask = pr_dec[0].decbus.vect_mask;
+			end
+		end
+		else begin
+			pr_dec[1].decbus.Vm = 9'd0;
+			pr_dec[1].decbus.vect_mask = 8'h00;
+		end
+		
+		if (dec[1].vmask && pr_dec[1].v) begin
+			pr_dec[2].decbus.Vm = pr_dec[1].decbus.Vm;
+			pr_dec[2].decbus.vect_mask = insm[1].op.uop.imm[7:0];
+		end
+		else if (|pr_dec[1].decbus.vect_mask) begin
+			if (pr_dec[2].uop.lead) begin
+				pr_dec[2].decbus.Vm = pr_dec[1].decbus.Vm;
+				pr_dec[2].decbus.vect_mask = pr_dec[1].decbus.vect_mask >> 2'd1;
+			end
+			else begin
+				pr_dec[2].decbus.Vm = pr_dec[1].decbus.Vm;
+				pr_dec[2].decbus.vect_mask = pr_dec[1].decbus.vect_mask;
+			end
+		end
+		else begin
+			pr_dec[2].decbus.Vm = 9'd0;
+			pr_dec[2].decbus.vect_mask = 8'h00;
+		end
+
+		if (dec[2].vmask && pr_dec[2].v) begin
+			pr_dec[3].decbus.Vm = pr_dec[2].decbus.Vm;
+			pr_dec[3].decbus.vect_mask = insm[2].op.uop.imm[7:0];
+		end
+		else if (|pr_dec[2].decbus.vect_mask) begin
+			if (pr_dec[3].uop.lead) begin
+				pr_dec[3].decbus.Vm = pr_dec[2].decbus.Vm;
+				pr_dec[3].decbus.vect_mask = pr_dec[2].decbus.vect_mask >> 2'd1;
+			end
+			else begin
+				pr_dec[3].decbus.Vm = pr_dec[2].decbus.Vm;
+				pr_dec[3].decbus.vect_mask = pr_dec[2].decbus.vect_mask;
+			end
+		end
+		else begin
+			pr_dec[3].decbus.Vm = 9'd0;
+			pr_dec[3].decbus.vect_mask = 8'h00;
+		end
+
+		if (dec[3].vmask && pr_dec[3].v) begin
+			Vm_o = pr_dec[3].decbus.Vm;
+			vect_mask_o = insm[3].op.uop.imm[7:0];
+		end
+		else if (|pr_dec[3].decbus.vect_mask) begin
+			Vm_o = pr_dec[3].decbus.Vm;
+			vect_mask_o = pr_dec[3].decbus.vect_mask;
+		end
+		else begin
+			Vm_o = 9'h000;
+			vect_mask_o = 8'h00;
+		end
+	end
+
+	// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+	// PFX3 modifier support
+	// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+	/*
+	if (SUPPORT_PFX3) begin
+		pfx3_o = FALSE;
+		pfx3_cnt_o = 3'b000;
+		pfx3_payload_o = 32'h0;
+		if (pfx3_i) begin
+			pfx3_cnt = pfx3_cnt_i;
+			pfx3_payload = pfx3_payload_i;
+		end
+		if (dec[0].pfx3 && pr_dec[0].v && |insm[0].op.uop.imm[29:27]) begin
+			pfx3_cnt = insm[0].op.uop.imm[29:27];
+			pfx3_payload = insm[0].op.uop.imm[31:0];
+			pr_dec[1].decbus.Vm = pfx3_payload[2:0];
+			pr_dec[1].decbus.rm = fround_t'(pfx3_payload[5:3]);
+		end
+		else if (|pfx3_cnt) begin
+			if (pfx3_cnt[0]) begin
+				pr_dec[1].decbus.Vm = pfx3_payload[2:0];
+				pr_dec[1].decbus.rm = fround_t'(pfx3_payload[5:3]);
+			end
+		end
+		pfx3_cnt = pfx3_cnt >> 2'd1;
+		pfx3_payload[26:0] = pfx3_payload[26:0] >> 4'd9;
+		
+		if (dec[1].pfx3 && pr_dec[1].v && |insm[1].op.uop.imm[29:27]) begin
+			pfx3_cnt = insm[1].op.uop.imm[29:27];
+			pfx3_payload = insm[1].op.uop.imm[31:0];
+			pr_dec[2].decbus.Vm = pfx3_payload[2:0];
+			pr_dec[2].decbus.rm = fround_t'(pfx3_payload[5:3]);
+		end
+		else if (|pfx3_cnt) begin
+			if (pfx3_cnt[0]) begin
+				pr_dec[2].decbus.Vm = pfx3_payload[2:0];
+				pr_dec[2].decbus.rm = fround_t'(pfx3_payload[5:3]);
+			end
+		end
+		pfx3_cnt = pfx3_cnt >> 2'd1;
+		pfx3_payload[26:0] = pfx3_payload[26:0] >> 4'd9;
+
+		if (dec[2].pfx3 && pr_dec[2].v && |insm[2].op.uop.imm[29:27]) begin
+			pfx3_cnt = insm[2].op.uop.imm[29:27];
+			pfx3_payload = insm[2].op.uop.imm[31:0];
+			pr_dec[3].decbus.Vm = pfx3_payload[2:0];
+			pr_dec[3].decbus.rm = fround_t'(pfx3_payload[5:3]);
+		end
+		else if (|pfx3_cnt) begin
+			if (pfx3_cnt[0]) begin
+				pr_dec[3].decbus.Vm = pfx3_payload[2:0];
+				pr_dec[3].decbus.rm = fround_t'(pfx3_payload[5:3]);
+			end
+		end
+		pfx3_cnt = pfx3_cnt >> 2'd1;
+		pfx3_payload[26:0] = pfx3_payload[26:0] >> 4'd9;
+
+		if (dec[3].pfx3 && pr_dec[3].v && |insm[3].op.uop.imm[29:27]) begin
+			pfx3_o = TRUE;
+			pfx3_cnt_o = insm[3].op.uop.imm[29:27];
+			pfx3_payload_o = insm[3].op.uop.imm[31:0];
+		end
+		else if (|pfx3_cnt) begin
+			pfx3_o = TRUE;
+			pfx3_cnt_o = pfx3_cnt;
+			pfx3_payload_o = pfx3_payload;
+		end
+
+	end
+	*/
 
 	// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 	// Apply carry mod to instructions in same group, and adjust
@@ -751,8 +945,8 @@ else begin
 		pg_dec.pr[0].op.hwi_level <= pg_mot.hdr.irq.level;
 		if (hwi_ignore) begin
 			if (pg_dec.hdr.irq.level != 6'd63) begin
-				pg_dec.hdr.hwi <= 1'b0;
-				pg_dec.pr[0].op.hwi <= 1'b0;
+				pg_dec.hdr.hwi <= FALSE;
+				pg_dec.pr[0].op.hwi <= FALSE;
 			end
 		end
 		foreach (pg_dec.pr[n10]) begin
