@@ -53,7 +53,7 @@ end
 
 always_comb
 begin
-	for (n1 = 0; n1 < MWIDTH; n1 = n1 + 1) begin
+	foreach(pr[n1]) begin
 		pr[n1] = nopi;
 		pr[n1].v = pc[n1].stream.stream;
 	end
@@ -69,7 +69,7 @@ begin
 			end
 		end
 		else if (ssm_flag) begin
-			for (n1 = 0; n1 < MWIDTH; n1 = n1 + 1) begin
+			foreach(pr[n1]) begin
 				pr[n1] = nopi;
 				pr[n1].op.ssm = TRUE;
 				pr[n1].done = 2'b11;
@@ -78,7 +78,7 @@ begin
 		else begin
 			// Compute index of instruction on cache-line.
 			// Note! the index is in terms of 16-bit parcels.
-			for (n1 = 0; n1 < MWIDTH; n1 = n1 + 1) begin
+			foreach(pr[n1]) begin
 				pr[n1].op.cli = pc[n1].pc[6:1];
 				pr[n1].op.uop = fnMapRawToUop(48'(ic_line >> (n1*48)));
 			end

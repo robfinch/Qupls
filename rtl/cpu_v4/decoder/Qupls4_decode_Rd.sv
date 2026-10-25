@@ -39,13 +39,14 @@ import const_pkg::*;
 import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_decode_Rd(om, instr, instr_raw, Rd, Rdv, Rdz);
+module Qupls4_decode_Rd(om, instr, instr_raw, Rd, Rdv, Rdz, we);
 input Qupls4_pkg::operating_mode_t om;
 input Qupls4_pkg::micro_op_t instr;
 input [431:0] instr_raw;
 output aregno_t Rd;
 output reg Rdv;
 output reg Rdz;
+output reg we;
 
 function aregno_t fnRd;
 input Qupls4_pkg::micro_op_t instr;
@@ -130,6 +131,7 @@ begin
 	Rd = fnRd(instr, instr_raw);
 	Rdv = fnRdv(instr, instr_raw);
 	Rdz = ~|Rd[6:0];
+	we = |Rd[6:0] & Rdv;
 end
 
 endmodule

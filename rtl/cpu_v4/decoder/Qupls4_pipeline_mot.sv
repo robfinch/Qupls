@@ -42,7 +42,7 @@ import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
 module Qupls4_pipeline_mot(rst, clk, en, stomp, stomp2, cline_ext, cline_mot,
-	ihit_ext, ihit_mot, pc_mot,
+	ihit_ext, ihit_mot, pc_mot, branch_resolved, live_stream,
     pg_ext, pg_mot, advance_ext, uop_buf, uop_mark, head);
 parameter MWIDTH = Qupls4_pkg::MWIDTH;
 parameter MICROOPS_PER_INSTR = 16;
@@ -51,6 +51,8 @@ parameter COMB = 0;
 input rst;
 input clk;
 input en;
+input branch_resolved;
+input cpu_types_pkg::pc_stream_t live_stream;
 input ihit_ext;
 output reg ihit_mot;
 output pc_address_ex_t pc_mot;
@@ -126,11 +128,18 @@ generate begin : gComb
 			pg_mot1 <= pg_ext;
 			if (stomp)
 				pg_mot1.hdr.v <= INV;
-			foreach (pg_mot1.pr[n1])
+			foreach (pg_mot1.pr[n1]) begin
 				if (stomp) begin
 					pg_mot1.pr[n1].stomped <= TRUE;
 					pg_mot1.pr[n1].done <= 2'b11;
 				end
+				if (branch_resolved) begin
+					if (pg_ext.pr[n1].ip_stream.thread==live_stream.thread && pg_ext.pr[n1].ip_stream.stream != live_stream.stream) begin
+						pg_mot1.pr[n1].stomped <= TRUE;
+						pg_mot1.pr[n1].done <= 2'b11;
+					end
+				end
+			end
 		end
 
 		always_ff @(posedge clk)
@@ -146,11 +155,18 @@ generate begin : gComb
 			pg_mot <= pg_mot1;
 			if (stomp2)
 				pg_mot.hdr.v <= INV;
-			foreach (pg_mot.pr[n1])
+			foreach (pg_mot.pr[n1]) begin
 				if (stomp2) begin
 					pg_mot.pr[n1].stomped <= TRUE;
 					pg_mot.pr[n1].done <= 2'b11;
 				end
+				if (branch_resolved) begin
+					if (pg_mot1.pr[n1].ip_stream.thread==live_stream.thread && pg_mot1.pr[n1].ip_stream.stream != live_stream.stream) begin
+						pg_mot.pr[n1].stomped <= TRUE;
+						pg_mot.pr[n1].done <= 2'b11;
+					end
+				end
+			end
 		end
 	end
 end

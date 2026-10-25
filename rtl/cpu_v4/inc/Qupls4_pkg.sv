@@ -43,8 +43,8 @@ package Qupls4_pkg;
 `define QUPLS4	1'b1
 `define STARK_PKG 1'b1
 `undef IS_SIM
-parameter SIM = 1'b0;
-//`define IS_SIM	1
+parameter SIM = 1'b1;
+`define IS_SIM	1
 
 `include "Qupls4_config.sv"
 /*
@@ -643,11 +643,12 @@ typedef enum logic [6:0] {
 	OP_LDBZ = 7'd68,
 	OP_LDWZ = 7'd69,
 	OP_LDTZ = 7'd70,
-	OP_LDV = 7'd71,
 	OP_LDIP = 7'd72,
 	OP_CLOAD = 7'd73,
 	OP_FLDH = 7'd74,
 	OP_FLDS = 7'd76,
+	OP_FLDD = 7'd77,
+	OP_LDV = 7'd78,
 	OP_LDVN = 7'd79,
 	
 	OP_STB = 7'd80,
@@ -670,6 +671,7 @@ typedef enum logic [6:0] {
 	
 	OP_R3VVS = 7'd100,
 	OP_FLTVVS = 7'd101,
+	OP_PUSHC = 7'd102,
 
 	OP_R3B = 7'd104,
 	OP_R3W = 7'd105,
@@ -879,7 +881,9 @@ typedef enum logic [6:0] {
 	GR_TRANSFORM_SETCOEFF = 7'd5,
 	GR_TEX0 = 7'd8,
 	GR_TEX1 = 7'd9,
-	GR_RGBCVT = 7'd10
+	GR_RGBCVT = 7'd10,
+	GR_PACK64160 = 7'd12,
+	GR_PACK64161 = 7'd13
 } graphics_e;
 
 parameter NOP_INSN = {41'd0,OP_NOP};

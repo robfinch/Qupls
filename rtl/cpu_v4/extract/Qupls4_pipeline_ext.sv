@@ -50,7 +50,7 @@ module Qupls4_pipeline_ext(rst_i, clk_i, ihit_fet, ihit_ext, en_i,
 	branchmiss, misspc_fet, flush_fet,
 	micro_machine_active, cline_fet, cline_ext, new_cline_ext,
 	reglist_active, grp_i, grp_o,
-	takb_fet, vl,
+	takb_fet, vl, branch_resolved, live_stream,
 	pc0_fet, uop_num_fet, uop_num_ext,
 	ls_bmf_i, pack_regs_i, scale_regs_i, regcnt_i,
 	pg_ext, new_stream, alloc_stream,
@@ -65,6 +65,8 @@ input Qupls4_pkg::irq_info_packet_t irq_in_fet;
 input cpu_types_pkg::seqnum_t irq_sn_fet;
 input [5:0] ipl_fet;
 input en_i;
+input branch_resolved;
+input pc_stream_t live_stream;
 input pc_stream_t kept_stream;
 input stomp_ext;
 output reg nop_o;
@@ -270,7 +272,11 @@ reg [6:0] po_bno_dummy;
 
 generate begin : gExtins
 	for (g = 0; g < MWIDTH; g = g + 1)
-		always_comb tExtractIns(g, stomp_ext, pc0_fet, pt_ext[g], takb_fet[g], pr_ext[g], ins_fet[g], po_bno[g]);
+		always_comb
+			tExtractIns(
+				g, 
+				stomp_ext || (branch_resolved && (pc0_fet.stream.thread == live_stream.thread && pc0_fet.stream.stream != live_stream.stream)),
+				pc0_fet, pt_ext[g], takb_fet[g], pr_ext[g], ins_fet[g], po_bno[g]);
 end
 endgenerate
 
@@ -462,6 +468,12 @@ else if (en) begin
 		// Jumps and branches are done as they do not need to update the regfile.
 		if (bra[n2]|jmp[n2]|stomp_ext|nop[n2]|nop2[n2])
 			pg_ext.pr[n2].done <= 2'b11;
+		if (branch_resolved) begin
+			if (pc_ext[n2].stream.thread==live_stream.thread && pc_ext[n2].stream.stream != live_stream.stream) begin
+				pg_ext.pr[n2].stomped <= TRUE;
+				pg_ext.pr[n2].done <= 2'b11;
+			end
+		end
 	end
 end
 

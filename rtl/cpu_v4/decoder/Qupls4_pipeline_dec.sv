@@ -40,7 +40,7 @@ import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
 module Qupls4_pipeline_dec(rst_i, rst, clk, en, regFPCSR,
-	new_cline_ext, cline,
+	new_cline_ext, cline, branch_resolved, live_stream,
 	sr, uop_num, ihit_mot, ihit_dec,
 	tags2free, freevals, bo_wr, bo_preg,
 	stomp_dec, stomp_ext, kept_stream, pg_mot,
@@ -66,11 +66,13 @@ input [4:0] uop_num;
 input stomp_dec;
 input stomp_ext;
 input pc_stream_t kept_stream;
+input pc_stream_t live_stream;
 input Qupls4_pkg::pipeline_group_reg_t pg_mot;
 input pregno_t [3:0] tags2free;
 input [3:0] freevals;
 input bo_wr;
 input pregno_t bo_preg;
+input branch_resolved;
 output Qupls4_pkg::pipeline_group_reg_t pg_dec;
 output ren_stallq;
 output reg dec_stall;
@@ -960,6 +962,13 @@ else begin
 			if (pr_dec[n10].uop.opcode==Qupls4_pkg::OP_NOP && !pr_dec[n10].decbus.nop) begin
 				$display("Missed flagging NOP as NOP");
 				$finish;
+			end
+			if (branch_resolved) begin
+				if (pg_mot.pr[n10].ip_stream.stream!=live_stream.stream && pg_mot.pr[n10].ip_stream.thread==live_stream.thread) begin
+					pg_dec.pr[n10].op.excv <= INV;
+					pg_dec.pr[n10].stomped <= TRUE;
+					pg_dec.pr[n10].done <= 2'b11;
+				end
 			end
 		end
 	end

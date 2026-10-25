@@ -53,13 +53,11 @@ Qupls4_pkg::decode_bus_t db;
 wire excRs1, excRs2, excRs3, excRd, excRd2, excRd3;
 wire [3:0] pred_shadow_count;
 
-//assign db = {$bits(decode_bus_t){1'b0}};	// Creates multi-driven nets
-assign db.v = 1'b1;
 
 Qupls4_decode_expipe uexpipe1
 (
 	.instr(instr),
-	.expipe(db.expipe)
+	.expipe(dbo.expipe)
 );
 
 Qupls4_decode_const udcimm
@@ -67,14 +65,14 @@ Qupls4_decode_const udcimm
 	.ins(instr),
 	.instr_raw(instr_raw),
 	.ip(ip),
-	.imma(db.imma),
-	.immb(db.immb),
-	.immc(db.immc),
-	.immd(db.immd),
-	.has_imma(db.has_imma),
-	.has_immb(db.has_immb),
-	.has_immc(db.has_immc),
-	.has_immd(db.has_immd)
+	.imma(dbo.imma),
+	.immb(dbo.immb),
+	.immc(dbo.immc),
+	.immd(dbo.immd),
+	.has_imma(dbo.has_imma),
+	.has_immb(dbo.has_immb),
+	.has_immc(dbo.has_immc),
+	.has_immd(dbo.has_immd)
 );
 
 Qupls4_decode_Rs1 udcra
@@ -82,10 +80,10 @@ Qupls4_decode_Rs1 udcra
 	.om(om),
 	.instr(instr),
 	.instr_raw(instr_raw),
-	.has_imma(db.has_imma),
-	.Rs1(db.Rs1),
-	.Rs1z(db.Rs1z),
-	.Rs1ip(db.Rs1ip)
+	.has_imma(dbo.has_imma),
+	.Rs1(dbo.Rs1),
+	.Rs1z(dbo.Rs1z),
+	.Rs1ip(dbo.Rs1ip)
 );
 
 Qupls4_decode_Rs2 udcrb
@@ -93,10 +91,10 @@ Qupls4_decode_Rs2 udcrb
 	.om(om),
 	.instr(instr),
 	.instr_raw(instr_raw),
-	.has_immb(db.has_immb),
-	.Rs2(db.Rs2),
-	.Rs2z(db.Rs2z),
-	.has_Rs2(db.has_Rs2)
+	.has_immb(dbo.has_immb),
+	.Rs2(dbo.Rs2),
+	.Rs2z(dbo.Rs2z),
+	.has_Rs2(dbo.has_Rs2)
 );
 
 Qupls4_decode_Rs3 udcrc
@@ -104,9 +102,9 @@ Qupls4_decode_Rs3 udcrc
 	.om(om),
 	.instr(instr),
 	.instr_raw(instr_raw),
-	.has_immc(db.has_immc),
-	.Rs3(db.Rs3),
-	.Rs3z(db.Rs3z)
+	.has_immc(dbo.has_immc),
+	.Rs3(dbo.Rs3),
+	.Rs3z(dbo.Rs3z)
 );
 
 Qupls4_decode_Rs4 udcr4
@@ -114,16 +112,16 @@ Qupls4_decode_Rs4 udcr4
 	.om(om),
 	.instr(instr),
 	.instr_raw(instr_raw),
-	.has_immd(db.has_immd),
-	.Rs4(db.Rs4),
-	.Rs4z(db.Rs4z)
+	.has_immd(dbo.has_immd),
+	.Rs4(dbo.Rs4),
+	.Rs4z(dbo.Rs4z)
 );
 
 Qupls4_decode_Rm udcrt
 (
 	.instr(instr),
-	.Rm(db.Rm),
-	.Rmz(db.Rmz)
+	.Rm(dbo.Rm),
+	.Rmz(dbo.Rmz)
 );
 
 Qupls4_decode_Rd udcrm
@@ -131,9 +129,10 @@ Qupls4_decode_Rd udcrm
 	.om(om),
 	.instr(instr),
 	.instr_raw(instr_raw),
-	.Rd(db.Rd),
-	.Rdv(db.Rdv),
-	.Rdz(db.Rdz)
+	.Rd(dbo.Rd),
+	.Rdv(dbo.Rdv),
+	.Rdz(dbo.Rdz),
+	.we(dbo.we)
 );
 
 Qupls4_decode_Rd2 udcrd2
@@ -142,71 +141,63 @@ Qupls4_decode_Rd2 udcrd2
 	.regFPCSR(regFPCSR),
 	.instr(instr),
 	.instr_raw(instr_raw),
-	.Rd2(db.Rd2),
-	.Rd2v(db.Rd2v),
-	.Rd2z(db.Rd2z)
+	.Rd2(dbo.Rd2),
+	.Rd2v(dbo.Rd2v),
+	.Rd2z(dbo.Rd2z)
 );
-
-/*
-Stark_decode_macro umacro1
-(
-	.instr(instr),
-	.macro(db.macro)
-);
-*/
 
 Qupls4_decode_has_imm uhi
 (
 	.instr(instr),
-	.has_imm(db.has_imm)
+	.has_imm(dbo.has_imm)
 );
 
 Qupls4_decode_nop unop1
 (
 	.instr(instr),
-	.nop(db.nop)
+	.nop(dbo.nop)
 );
 
 Qupls4_decode_move umv1
 (
 	.instr(instr),
-	.move(db.move)
+	.move(dbo.move)
 );
 
 Qupls4_decode_fc ufc1
 (
 	.instr(instr),
-	.fc(db.fc)
+	.fc(dbo.fc)
 );
 
 Qupls4_decode_cjb ucjb1
 (
 	.instr(instr),
-	.cjb(db.cjb)
+	.cjb(dbo.cjb)
 );
 
 Qupls4_decode_conditional_branch udecbr
 (
 	.instr(instr),
-	.branch(db.br),
-	.ibranch(db.ibr),
-	.dbranch(db.dbr)
+	.branch(dbo.br),
+	.ibranch(dbo.ibr),
+	.dbranch(dbo.dbr)
 );
 
 Qupls4_decode_pred upred1
 (
 	.instr(instr),
-	.pred(db.pred),
-	.pred_mask(db.pred_mask)
+	.pred(dbo.pred),
+	.pred_mask(dbo.pred_mask)
 );
 
 /*
 Stark_decode_predicate_branch udecpbr
 (
 	.instr(instr),
-	.branch(db.pbr),
-	.mask(db.pred_mask),
-	.atom_mask(db.pred_atom_mask),
+	.branch(dbo.pbr),
+	.mask(dbo.pred_mask),
+	.atom_mask(dbo.pred_atom_mask),
 	.count(pred_shadow_count)
 );
 */
@@ -214,290 +205,254 @@ Stark_decode_predicate_branch udecpbr
 Stark_decode_mcb udecmcb
 (
 	.instr(instr),
-	.mcb(db.mcb)
+	.mcb(dbo.mcb)
 );
 */
 /*
 Stark_decode_backbr ubkbr1
 (
 	.instr(instr),
-	.backbr(db.backbr)
+	.backbr(dbo.backbr)
 );
 */
 /*
 Stark_decode_branch_tgt_src udbts1
 (
 	.ins(instr),
-	.bts(db.bts)
+	.bts(dbo.bts)
 );
 */
 
 Qupls4_decode_sau usaudec1
 (
 	.instr(instr),
-	.sau(db.sau)
+	.sau(dbo.sau)
 );
 
 Qupls4_decode_sau0 udcsau0
 (
 	.instr(instr),
-	.sau0(db.sau0)
+	.sau0(dbo.sau0)
 );
 
 /*
 Stark_decode_alu_pair udcalup0
 (
 	.instr(instr),
-	.alu_pair(db.alu_pair)
+	.alu_pair(dbo.alu_pair)
 );
 */
 Qupls4_decode_bitwise udcbitwise
 (
 	.instr(instr),
-	.bitwise(db.bitwise)
+	.bitwise(dbo.bitwise)
 );
 
 Qupls4_decode_mul umul1
 (
 	.instr(instr),
-	.mul(db.mul)
+	.mul(dbo.mul)
 );
 
 Qupls4_decode_mulu umulu1
 (
 	.instr(instr),
-	.mulu(db.mula)
+	.mulu(dbo.mula)
 );
 
 Qupls4_decode_div udiv1
 (
 	.instr(instr),
-	.div(db.div)
+	.div(dbo.div)
 );
 
 Qupls4_decode_divu udivu1
 (
 	.instr(instr),
-	.divu(db.diva)
+	.divu(dbo.diva)
 );
 
 Qupls4_decode_load udecld1
 (
 	.instr(instr),
-	.load(db.load),
-	.vload(db.vload),
-	.vload_ndx(db.vload_ndx)
+	.load(dbo.load),
+	.vload(dbo.vload),
+	.vload_ndx(dbo.vload_ndx)
 );
 
 Qupls4_decode_loadz udecldz1
 (
 	.instr(instr),
-	.loadz(db.loadz)
+	.loadz(dbo.loadz)
 );
 
 Qupls4_decode_store udecst1
 (
 	.instr(instr),
-	.store(db.store),
-	.vstore(db.vstore),
-	.vstore_ndx(db.vstore_ndx)
+	.store(dbo.store),
+	.vstore(dbo.vstore),
+	.vstore_ndx(dbo.vstore_ndx)
 );
 
 Qupls4_decode_loada udeclda1
 (
 	.instr(instr),
-	.loada(db.loada)
+	.loada(dbo.loada)
+);
+
+Qupls4_decode_mem umem1
+(
+	.instr(instr),
+	.mem(dbo.mem)
 );
 
 Qupls4_decode_fence udfence1
 (
 	.instr(instr),
-	.fence(db.fence),
-	.atom(db.atom)
+	.fence(dbo.fence),
+	.atom(dbo.atom)
 );
 
-/*
-Stark_decode_pfx udecpfx1
-(
-	.instr(instr),
-	.pfx(db.pfx)
-);
-*/
 Qupls4_decode_fma ufma
 (
 	.instr(instr),
-	.fma(db.fma)
+	.fma(dbo.fma)
 );
 
 Qupls4_decode_fpu ufpu
 (
 	.instr(instr),
-	.fpu(db.fpu)
+	.fpu(dbo.fpu)
 );
 
 Qupls4_decode_fpu0 ufpu0
 (
 	.instr(instr),
-	.fpu0(db.fpu0)
+	.fpu0(dbo.fpu0)
 );
 
 Qupls4_decode_rmd urmd0
 (
 	.instr(instr),
-	.rmd(db.rm)
+	.rmd(dbo.rm)
 );
 
 Qupls4_decode_prc uprc0
 (
 	.instr(instr),
-	.prc(db.prc)
+	.prc(dbo.prc)
 );
 
 Qupls4_decode_oddball uob0
 (
 	.instr(instr),
-	.oddball(db.oddball)
+	.oddball(dbo.oddball)
 );
 /*
 Stark_decode_regs uregs0
 (
 	.instr(instr),
-	.regs(db.regs)
-);
-
-Stark_decode_brk ubrk1
-(
-	.instr(instr),
-	.brk(db.brk)
+	.regs(dbo.regs)
 );
 
 Stark_decode_multicycle udmc1
 (
 	.instr(instr),
-	.multicycle(db.multicycle)
+	.multicycle(dbo.multicycle)
 );
 */
 /*
 Stark_decode_irq udirq1
 (
 	.instr(instr),
-	.irq(db.irq)
+	.irq(dbo.irq)
 );
 */
 Qupls4_decode_trig udtrig1
 (
 	.instr(instr),
-	.trig(db.trig)
+	.trig(dbo.trig)
 );
 
 Qupls4_decode_eret uderet1
 (
 	.instr(instr),
-	.eret(db.eret)
+	.eret(dbo.eret)
 );
 
 Qupls4_decode_class udecfclss
 (
 	.instr(instr),
-	.fclass(db.fclass)
+	.fclass(dbo.fclass)
 );
 /*
 Stark_decode_rex udrex1
 (
 	.instr(instr),
-	.rex(db.rex)
-);
-*/
-/*
-Stark_decode_prec udprec1
-(
-	.instr(instr),
-	.prec(db.prc)
+	.rex(dbo.rex)
 );
 */
 Qupls4_decode_macro udecmacro
 (
 	.instr(instr),
-	.macro(db.macro)
+	.macro(dbo.macro)
 );
 
-always_comb
-begin
-	db.boi = instr.opcode==Qupls4_pkg::OP_BCCU && instr.cnd==Qupls4_pkg::CND_BOI;
-	db.bsr = instr.opcode==Qupls4_pkg::OP_BSR;
-	db.jsr = instr.opcode==Qupls4_pkg::OP_JSR;
-	db.sys = instr.opcode==Qupls4_pkg::OP_SYS;
-	db.brk = instr.opcode==Qupls4_pkg::OP_BRK;
-	db.ret = instr.opcode==Qupls4_pkg::OP_RTD;
-	db.stptr = instr.opcode==Qupls4_pkg::OP_STPTR;
-	db.csr = instr.opcode==Qupls4_pkg::OP_CSR;
-	db.v2p = instr.opcode==Qupls4_pkg::OP_V2P;
-	db.vv2p = instr.opcode==Qupls4_pkg::OP_VV2P;
-	db.amo = instr.opcode==Qupls4_pkg::OP_AMO;
-	db.rext = instr.opcode==Qupls4_pkg::OP_REXT;
-	db.cause = Qupls4_pkg::FLT_NONE;
-	db.we = (|db.Rd) || (|db.Rd2);
-end
-
+// Some of the simpler decodes are done directly in this always block. More
+// complex decodes are done by modules above.
 always_comb//ff @(posedge clk)
-if (rst) begin
-	dbo = {$bits(dbo){1'd0}};
+begin
+	dbo.v = VAL;
+	dbo.rext = instr.opcode==Qupls4_pkg::OP_REXT;
+	dbo.boi = instr.opcode==Qupls4_pkg::OP_BCCU && instr.cnd==Qupls4_pkg::CND_BOI;
+	dbo.bsr = instr.opcode==Qupls4_pkg::OP_BSR;
+	dbo.jsr = instr.opcode==Qupls4_pkg::OP_JSR;
+	dbo.sys = instr.opcode==Qupls4_pkg::OP_SYS;
+	dbo.brk = instr.opcode==Qupls4_pkg::OP_BRK;
+	dbo.ret = instr.opcode==Qupls4_pkg::OP_RTD;
+	dbo.stptr = instr.opcode==Qupls4_pkg::OP_STPTR;
+	dbo.csr = instr.opcode==Qupls4_pkg::OP_CSR;
+	dbo.iprel = FALSE;
 	dbo.cause = Qupls4_pkg::FLT_NONE;
-	dbo.nop = 1'b1;
-	dbo.Rdv = 1'b0;
-	dbo.sau = 1'b1;
-end
-else begin
-	begin
-		dbo = {$bits(dbo){1'd0}};	// in case a signal was missed / unused.
-		dbo = db;
-		dbo.rext = db.rext;
-		dbo.boi = db.boi;
-		dbo.bsr = db.bsr;
-		dbo.jsr = db.jsr;
-		dbo.sys = db.sys;
-		dbo.stptr = db.stptr;
-		dbo.csr = db.csr;
-		dbo.iprel = db.Rs1==8'd62;//1'b0;//db.Rs1==8'd31;
+//	dbo.mem0 = db.v2p|db.vv2p|db.vvn2p;
+	dbo.v2p = instr.opcode==Qupls4_pkg::OP_V2P;
+	dbo.vv2p = instr.opcode==Qupls4_pkg::OP_VV2P;
+	dbo.amo = instr.opcode==Qupls4_pkg::OP_AMO;
+	dbo.sync = instr.opcode==Qupls4_pkg::OP_FENCE && instr.func==7'd0 && instr[15:8]==8'hFF;
+	dbo.cpytgt = 1'b0;
+	dbo.qfext = 1'b0;//db.alu && ins.ins[28:27]==2'b10;
+	if (excRs1|excRs2|excRs3|excRd)
+		dbo.cause = Qupls4_pkg::FLT_BADREG;
+	dbo.rc = instr.func[6];
 		dbo.cause = Qupls4_pkg::FLT_NONE;
-		dbo.mem = 
-			 db.load|db.vload|db.vload_ndx
-			|db.store|db.vstore|db.vstore_ndx
-			|db.v2p|db.vv2p;
-		dbo.mem0 = db.v2p|db.vv2p|db.vvn2p;
-		dbo.sync = db.fence && instr[15:8]==8'hFF;
-		dbo.cpytgt = 1'b0;
-		dbo.qfext = 1'b0;//db.alu && ins.ins[28:27]==2'b10;
-		if (excRs1|excRs2|excRs3|excRd)
-			dbo.cause = Qupls4_pkg::FLT_BADREG;
-		dbo.rc = instr.func[6];
-		// Is the predicate shadow count within range?
-		if (pred_shadow_count >= Qupls4_pkg::PRED_SHADOW)
-			dbo.cause = Qupls4_pkg::FLT_UNIMP;
-		else
-			dbo.pred_shadow_size = pred_shadow_count;
-		if (!instr.v) begin
-			dbo = {$bits(dbo){1'd0}};	// in case a signal was missed / unused.
-			dbo.nop = TRUE;
-			dbo.sau = TRUE;
-			dbo.cause = Qupls4_pkg::FLT_NONE;
-		end
-		// Check for unimplemented instruction, but not if it is being stomped on.
-		// If it is stomped on, we do not care.
-		if (!(db.nop|db.sau|db.fpu|db.fc|db.macro
-			|db.csr|db.loada|db.fence|db.carry|db.pred|db.atom|db.regs|db.fregs
-			|db.rex|db.oddball|db.qfext
-			|db.boi|db.bsr|db.jsr|db.sys|db.stptr
-			|db.csr|db.rext
-			|db.move
-			// db.mem
-			|db.load|db.vload|db.vload_ndx
-			|db.store|db.vstore|db.vstore_ndx
-			|db.v2p|db.vv2p|db.vvn2p			
-			)) begin
-			dbo.cause = Qupls4_pkg::FLT_UNIMP;
-		end
+	// Is the predicate shadow count within range?
+	if (pred_shadow_count >= Qupls4_pkg::PRED_SHADOW)
+		dbo.cause = Qupls4_pkg::FLT_UNIMP;
+	else
+		dbo.pred_shadow_size = pred_shadow_count;
+	if (!instr.v) begin
+		dbo = {$bits(dbo){1'd0}};	// in case a signal was missed / unused.
+		dbo.nop = TRUE;
+		dbo.sau = TRUE;
+		dbo.cause = Qupls4_pkg::FLT_NONE;
 	end
+	/*
+	// Check for unimplemented instruction, but not if it is being stomped on.
+	// If it is stomped on, we do not care.
+	if (!(db.nop|db.sau|db.fpu|db.fc|db.macro
+		|db.csr|db.loada|db.fence|db.carry|db.pred|db.atom|db.regs|db.fregs
+		|db.rex|db.oddball|db.qfext
+		|db.boi|db.bsr|db.jsr|db.sys|db.stptr
+		|db.csr|db.rext
+		|db.move
+		// db.mem
+		|db.load|db.vload|db.vload_ndx
+		|db.store|db.vstore|db.vstore_ndx
+		|db.v2p|db.vv2p|db.vvn2p			
+		)) begin
+		dbo.cause = Qupls4_pkg::FLT_UNIMP;
+	end
+	*/
 end
 
 endmodule
