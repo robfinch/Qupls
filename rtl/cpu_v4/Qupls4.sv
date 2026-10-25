@@ -2389,6 +2389,8 @@ Qupls4_pipeline_ext #(.MWIDTH(MWIDTH)) uiext1
 	.clk_i(clk),
 	.flush_fet(flush_fet),
 	.en_i(advance_extract),
+	.branch_resolved(branch_resolved),
+	.live_stream(live_stream),
 	.ihit_fet(ihit_fet),
 	.ihit_ext(ihit_ext),
 	.cline_fet(ic_line_fet),
@@ -2454,6 +2456,8 @@ umot1
 	.rst(irst),
 	.clk(clk),
 	.en(advance_mot),
+	.branch_resolved(branch_resolved),
+	.live_stream(live_stream),
 	.ihit_ext(ihit_ext),
 	.ihit_mot(ihit_mot),
 	.pc_mot(pc_mot),
@@ -2490,6 +2494,7 @@ udecstg1
 	.rst(irst),
 	.clk(clk),
 	.en(advance_decode),
+	.branch_resolved(branch_resolved),
 	.regFPCSR(regFPCSR),
 	.ihit_mot(ihit_mot),
 	.ihit_dec(ihit_dec),
@@ -2503,6 +2508,7 @@ udecstg1
 	.bo_preg(bo_preg),
 	.stomp_dec(stomp_dec),
 	.stomp_ext(stomp_ext),
+	.live_stream(live_stream),
 	.kept_stream(kept_stream),
 	.pg_mot(pg_mot),
 	.pg_dec(pg_dec),
@@ -2735,6 +2741,9 @@ always_comb nq1 = TRUE;
 always_comb nq2 = TRUE;
 always_comb nq3 = TRUE;
 
+always_comb
+	cndx0 = cndx;
+
 always_ff @(posedge clk)
 if (irst) begin
 	cndx_ren[0] <= {$bits(checkpt_ndx_t){1'b0}};
@@ -2785,7 +2794,7 @@ reg signed [$clog2(Qupls4_pkg::ROB_ENTRIES):0] cmtlen;			// Will always be >= 0
 reg signed [$clog2(Qupls4_pkg::ROB_ENTRIES):0] group_len;		// Commit group length
 
 reg [MWIDTH-1:0] cmttlb;
-reg htcolls;		// head <-> tail collision
+wire htcolls;		// head <-> tail collision
 reg cmtbr;
 
 // When to stomp on instructions enqueuing.
@@ -2958,7 +2967,7 @@ Qupls4_pipeline_ren #(.MWIDTH(MWIDTH)) uren1
 	.tail0(tails[0]),
 	.rob(rob),
 	.stomp_ren(stomp_ren),
-	.kept_stream(kept_stream),
+	.live_stream(live_stream),
 	.avail_reg(ns_avail),
 	.sr(sr),
 	.branch_resolved(fcu_branch_resolved),
@@ -5502,7 +5511,8 @@ ucmtcnt1
 	.head5(head[5]),
 	.tails(tails),
 	.cmtcnt(cmtcnt),
-	.do_commit(do_commit)
+	.do_commit(do_commit),
+	.htcolls(htcolls)
 );
 
 always_comb
@@ -6276,8 +6286,9 @@ always_ff @(posedge clk)
 // =============================================================================
 
 always_ff @(posedge clk)
-if (irst)
+if (irst) begin
 	rstcnt <= 6'd0;
+end
 else begin
 	if (!rstcnt[5])
 		rstcnt <= rstcnt + 2'd1;
@@ -6534,10 +6545,13 @@ else begin
 	end
 
 	// Compute dispatchability of instruction.
+	// Stomped on instructions are dispatchable if they are not done yet. This
+	// could be the case for copy targets which we want to be processed in a
+	// pipeline.
 	foreach (rob[nn])
 		rob[nn].dispatchable <= 
-			// Valid stream
-			|rob[nn].v &&
+			// Valid stream or stomped on
+			(|rob[nn].v || rob[nn].stomped) &&
 			// and checkpoint index valid...
 			pgh[rob[nn].pghn].cndxv &&
 			// and not done already...
@@ -7880,9 +7894,9 @@ always_ff @(posedge clk) begin: clock_n_debug
 	$display("3: %h #", commit3_id);
 
 	$display("----- Stats -----");	
-	IPC = real'(TotInsn)/real'(/*iact_cnt*/tick);
+//	IPC = real'(TotInsn)/real'(/*iact_cnt*/tick);
 	PIPC = PIPC > IPC ? PIPC : IPC;
-	$display("Clock ticks: %d Instructions: %d:%d IPC: %f Peak: %f", tick, TotInsn, TotValidInsn, IPC, PIPC);
+	$display("Clock ticks: %d Instructions: %d:%d IPC: %d.%d Peak: %f", tick, TotInsn, TotValidInsn, TotInsn/tick, TotInsn%tick, PIPC);
 	$display("Copy targets: %d", cpytgts);
 	$display("Stomped instructions: %d", stomped_insn);
 	$display("Stalls for checkpoints: %d", rat_stalls);
@@ -8470,6 +8484,7 @@ begin
 		rob[n14].exc <= Qupls4_pkg::FLT_NONE;
 		rob[n14].op.decbus.cause <= Qupls4_pkg::FLT_NONE;
 		rob[n14].op.exc <= Qupls4_pkg::FLT_NONE;
+		rob[n14].op.hwi <= 1'b0;
 	end
 	/*
 	for (n14 = 0; n14 < BEB_ENTRIES; n14 = n14 + 1) begin
@@ -8692,6 +8707,7 @@ begin
 	*/
 	// Drop the in-order pipeline register onto the queue.
 	next_robe = robe;
+	next_robe.op = robe.op;
 	next_robe.this_ndx = tail;
 	next_robe.pghn = tail/MWIDTH;
 	next_robe.pghn_irq = tail/MWIDTH;
@@ -8844,6 +8860,7 @@ begin
 //		next_robe.op.decbus.cpytgt = TRUE;
 	next_robe.rat_v = INV;
 	rob[tail] <= next_robe;
+	rob[tail].op <= next_robe.op;
 	brtgt <= next_brtgt;
 	brtgtv <= next_brtgtv;
 	// under construction

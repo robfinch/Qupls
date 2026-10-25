@@ -40,7 +40,7 @@ import Qupls4_pkg::*;
 
 module Qupls4_commit_count(rst, clk, next_cqd, rob,
 	head0, head1, head2, head3, head4, head5,
-	tails, cmtcnt, do_commit);
+	tails, cmtcnt, do_commit, htcolls);
 parameter XWID = 4;
 input rst;
 input clk;
@@ -55,25 +55,25 @@ input rob_ndx_t head5;
 input rob_ndx_t [11:0] tails;
 output reg [2:0] cmtcnt;
 output reg do_commit;
+output reg htcolls;
 
 integer n1;
 reg cmt0,cmt1,cmt2,cmt3,cmt4,cmt5;
-reg htcolls;
 wire nan0 = rob[head0].v && rob[head0].nan;
 wire nan1 = rob[head1].v && rob[head1].nan;
 wire nan2 = rob[head2].v && rob[head2].nan;
 wire nan3 = rob[head3].v && rob[head3].nan;
 
-always_comb cmt0 = (|rob[head0].v && &rob[head0].done);
-always_comb cmt1 = XWID > 1 && (|rob[head1].v && &rob[head1].done) &&
+always_comb cmt0 = ((|rob[head0].v|rob[head0].stomped) && &rob[head0].done);
+always_comb cmt1 = XWID > 1 && ((|rob[head1].v|rob[head1].stomped) && &rob[head1].done) &&
 										!rob[head0].op.decbus.oddball && !rob[head0].excv
 										;
-always_comb cmt2 = XWID > 2 && (|rob[head2].v && &rob[head2].done) &&
+always_comb cmt2 = XWID > 2 && ((|rob[head2].v|rob[head2].stomped) && &rob[head2].done) &&
 										!rob[head0].op.decbus.oddball && !rob[head1].op.decbus.oddball &&
 										!rob[head0].excv && !rob[head1].excv &&
 										!(nan0 && nan1)
 										;
-always_comb cmt3 = XWID > 3 && (|rob[head3].v && &rob[head3].done) &&
+always_comb cmt3 = XWID > 3 && ((|rob[head3].v|rob[head3].stomped) && &rob[head3].done) &&
 										!rob[head0].op.decbus.oddball && !rob[head1].op.decbus.oddball && !rob[head2].op.decbus.oddball &&
 										!rob[head0].excv && !rob[head1].excv && !rob[head2].excv &&
 										!((nan0 && nan1) || (nan0 && nan2) || (nan1 && nan2))
@@ -109,14 +109,14 @@ if (rst) begin
 	do_commit <= FALSE;
 end
 else begin
-	cmtcnt = 3'd0;
+	cmtcnt <= 3'd0;
 	if (TRUE || !htcolls) begin
 		casez({cmt0,
-			cmt1 && rob[head1].ip_stream.stream==rob[head0].ip_stream.stream,
-			cmt2 && rob[head2].ip_stream.stream==rob[head0].ip_stream.stream,
-			cmt3 && rob[head3].ip_stream.stream==rob[head0].ip_stream.stream,
-			cmt4 && rob[head4].ip_stream.stream==rob[head0].ip_stream.stream,
-			cmt5 && rob[head5].ip_stream.stream==rob[head0].ip_stream.stream})
+			cmt1 && ((rob[head1].ip_stream.stream==rob[head0].ip_stream.stream)|rob[head1].stomped),
+			cmt2 && ((rob[head2].ip_stream.stream==rob[head0].ip_stream.stream)|rob[head2].stomped),
+			cmt3 && ((rob[head3].ip_stream.stream==rob[head0].ip_stream.stream)|rob[head3].stomped),
+			cmt4 && ((rob[head4].ip_stream.stream==rob[head0].ip_stream.stream)|rob[head4].stomped),
+			cmt5 && ((rob[head5].ip_stream.stream==rob[head0].ip_stream.stream)|rob[head5].stomped)})
 		6'b111111:	cmtcnt <= 3'd6;
 		6'b111110:	cmtcnt <= 3'd5;
 		6'b11110?:	cmtcnt <= 3'd4;
