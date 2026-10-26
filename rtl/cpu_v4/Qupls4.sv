@@ -73,6 +73,7 @@ module Qupls4(coreno_i, rst_i, clk_i, clk2x_i, clk3x_i, clk5x_i, ipl, irq, irq_a
 parameter CORENO = 6'd1;
 parameter CHANNEL = 6'd1;
 parameter MWIDTH = Qupls4_pkg::MWIDTH;
+parameter COMMIT_WIDTH = Qupls4_pkg::COMMIT_WIDTH;
 parameter ISTACK_DEPTH = 16;
 parameter DISPATCH_WIDTH = 6;
 parameter RL_STRATEGY = Qupls4_pkg::RL_STRATEGY;
@@ -5496,12 +5497,11 @@ always_comb
 		cmttlb[n51] = (|rob[head[n51]].v && rob[head[n51]].lsq && !lsq[rob[head[n51]].lsqndx.row][rob[head[n51]].lsqndx.col].agen);
 
 Qupls4_commit_count
-#(.XWID(MWIDTH))
+#(.COMMIT_WIDTH(COMMIT_WIDTH))
 ucmtcnt1
 (
 	.rst(irst),
 	.clk(clk),
-	.next_cqd(next_cqd),
 	.rob(rob),
 	.head0(head[0]),
 	.head1(head[1]),
@@ -7050,22 +7050,22 @@ else begin
 		commit_takb1 <= rob[head[1]].takb & rob[head[1]].op.decbus.br;
 		commit_takb2 <= rob[head[2]].takb & rob[head[2]].op.decbus.br;
 		commit_takb3 <= rob[head[3]].takb & rob[head[3]].op.decbus.br;
-		commit_br0 <= rob[head[0]].op.decbus.br;
-		commit_br1 <= rob[head[1]].op.decbus.br && cmtcnt > 3'd1;
-		commit_br2 <= rob[head[2]].op.decbus.br && cmtcnt > 3'd2;
-		commit_br3 <= rob[head[3]].op.decbus.br && cmtcnt > 3'd3;
-		commit_ret0 = rob[head[0]].op.decbus.ret|rob[head[0]].op.decbus.eret;
-		commit_ret1 = (rob[head[1]].op.decbus.ret|rob[head[1]].op.decbus.eret) && cmtcnt > 3'd1;
-		commit_ret2 = (rob[head[2]].op.decbus.ret|rob[head[2]].op.decbus.eret) && cmtcnt > 3'd2;
-		commit_ret3 = (rob[head[3]].op.decbus.ret|rob[head[3]].op.decbus.eret) && cmtcnt > 3'd3;
-		commit_call0 = rob[head[0]].op.decbus.bsr|rob[head[0]].op.decbus.jsr && !rob[head[0]].op.decbus.Rdz;
-		commit_call1 = (rob[head[1]].op.decbus.bsr|rob[head[1]].op.decbus.jsr) && !rob[head[0]].op.decbus.Rdz && cmtcnt > 3'd1;
-		commit_call2 = (rob[head[2]].op.decbus.bsr|rob[head[2]].op.decbus.jsr) && !rob[head[0]].op.decbus.Rdz && cmtcnt > 3'd2;
-		commit_call3 = (rob[head[3]].op.decbus.bsr|rob[head[3]].op.decbus.jsr) && !rob[head[0]].op.decbus.Rdz && cmtcnt > 3'd3;
-		commit_jmp0 = (rob[head[0]].op.decbus.bsr|rob[head[0]].op.decbus.jsr) && rob[head[0]].op.decbus.Rdz;
-		commit_jmp1 = (rob[head[1]].op.decbus.bsr|rob[head[1]].op.decbus.jsr) && rob[head[0]].op.decbus.Rdz && cmtcnt > 3'd1;
-		commit_jmp2 = (rob[head[2]].op.decbus.bsr|rob[head[2]].op.decbus.jsr) && rob[head[0]].op.decbus.Rdz && cmtcnt > 3'd2;
-		commit_jmp3 = (rob[head[3]].op.decbus.bsr|rob[head[3]].op.decbus.jsr) && rob[head[0]].op.decbus.Rdz && cmtcnt > 3'd3;
+		commit_br0 <= rob[head[0]].op.decbus.br && !rob[head[0]].stomped;
+		commit_br1 <= rob[head[1]].op.decbus.br && !rob[head[1]].stomped && cmtcnt > 3'd1;
+		commit_br2 <= rob[head[2]].op.decbus.br && !rob[head[2]].stomped && cmtcnt > 3'd2;
+		commit_br3 <= rob[head[3]].op.decbus.br && !rob[head[3]].stomped && cmtcnt > 3'd3;
+		commit_ret0 = (rob[head[0]].op.decbus.ret|rob[head[0]].op.decbus.eret) && !rob[head[0]].stomped;
+		commit_ret1 = (rob[head[1]].op.decbus.ret|rob[head[1]].op.decbus.eret) && !rob[head[1]].stomped && cmtcnt > 3'd1;
+		commit_ret2 = (rob[head[2]].op.decbus.ret|rob[head[2]].op.decbus.eret) && !rob[head[2]].stomped && cmtcnt > 3'd2;
+		commit_ret3 = (rob[head[3]].op.decbus.ret|rob[head[3]].op.decbus.eret) && !rob[head[3]].stomped && cmtcnt > 3'd3;
+		commit_call0 = (rob[head[0]].op.decbus.bsr|rob[head[0]].op.decbus.jsr && !rob[head[0]].op.decbus.Rdz) && !rob[head[0]].stomped;
+		commit_call1 = (rob[head[1]].op.decbus.bsr|rob[head[1]].op.decbus.jsr) && !rob[head[0]].op.decbus.Rdz && !rob[head[1]].stomped && cmtcnt > 3'd1;
+		commit_call2 = (rob[head[2]].op.decbus.bsr|rob[head[2]].op.decbus.jsr) && !rob[head[0]].op.decbus.Rdz && !rob[head[2]].stomped && cmtcnt > 3'd2;
+		commit_call3 = (rob[head[3]].op.decbus.bsr|rob[head[3]].op.decbus.jsr) && !rob[head[0]].op.decbus.Rdz && !rob[head[3]].stomped && cmtcnt > 3'd3;
+		commit_jmp0 = (rob[head[0]].op.decbus.bsr|rob[head[0]].op.decbus.jsr) && rob[head[0]].op.decbus.Rdz && !rob[head[0]].stomped;
+		commit_jmp1 = (rob[head[1]].op.decbus.bsr|rob[head[1]].op.decbus.jsr) && rob[head[0]].op.decbus.Rdz && !rob[head[1]].stomped && cmtcnt > 3'd1;
+		commit_jmp2 = (rob[head[2]].op.decbus.bsr|rob[head[2]].op.decbus.jsr) && rob[head[0]].op.decbus.Rdz && !rob[head[2]].stomped && cmtcnt > 3'd2;
+		commit_jmp3 = (rob[head[3]].op.decbus.bsr|rob[head[3]].op.decbus.jsr) && rob[head[0]].op.decbus.Rdz && !rob[head[3]].stomped && cmtcnt > 3'd3;
 		commit_grp0 = rob[head[0]].wh;
 		commit_grp1 = rob[head[1]].wh;
 		commit_grp2 = rob[head[2]].wh;
@@ -8327,6 +8327,7 @@ endtask
 task tInvalidateQE;
 input rob_ndx_t ndx;
 begin
+	rob[ndx].stomped <= FALSE;
 	rob[ndx].v <= 5'd0;
 	rob[ndx].done <= {INV,INV};
 	rob[ndx].out <= {INV,INV};

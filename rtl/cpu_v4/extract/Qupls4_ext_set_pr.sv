@@ -52,9 +52,27 @@ else begin
 end
 
 always_comb
-begin
+if (rst) begin
+	for (n1 = 0; n1 < MWIDTH; n1 = n1 + 1) begin
+		pr[n1] = {$bits(rob_entry_t){1'b0}};
+		pr[n1].op = {$bits(Qupls4_pkg::pipeline_reg_t){1'b0}};
+	end
+end
+else begin
+	n1 = 0;
 	foreach(pr[n1]) begin
-		pr[n1] = nopi;
+		pr[n1] = {$bits(Qupls4_pkg::rob_entry_t){1'b0}};
+		pr[n1].op = {$bits(Qupls4_pkg::pipeline_reg_t){1'b0}};
+		pr[n1].op.exc = Qupls4_pkg::FLT_NONE;
+		pr[n1].op.uop = {41'd0,Qupls4_pkg::OP_NOP};
+		pr[n1].op.decbus.nop = TRUE;
+		pr[n1].op.decbus.cause = Qupls4_pkg::FLT_NONE;
+		pr[n1].op.uop.lead = 1'd1;
+		pr[n1].op.v = 1'b1;
+		pr[n1].exc = Qupls4_pkg::FLT_NONE;
+		pr[n1].excv = INV;
+		pr[n1].done = 2'b11;
+		pr[n1].stomped = TRUE;
 		pr[n1].v = pc[n1].stream.stream;
 	end
 	if (!redundant_group) begin
@@ -63,14 +81,38 @@ begin
 			pr[0].op.cli = pc[0].pc[6:1];
 			pr[0].op.uop = fnMapRawToUop(ic_line[ 47:  0]);
 			for (n1 = 1; n1 < MWIDTH; n1 = n1 + 1) begin
-				pr[n1] = nopi;
+				pr[n1] = {$bits(Qupls4_pkg::rob_entry_t){1'b0}};
+				pr[n1].op = {$bits(Qupls4_pkg::pipeline_reg_t){1'b0}};
+				pr[n1].op.exc = Qupls4_pkg::FLT_NONE;
+				pr[n1].op.uop = {41'd0,Qupls4_pkg::OP_NOP};
+				pr[n1].op.decbus.nop = TRUE;
+				pr[n1].op.decbus.cause = Qupls4_pkg::FLT_NONE;
+				pr[n1].op.uop.lead = 1'd1;
+				pr[n1].op.v = 1'b1;
+				pr[n1].exc = Qupls4_pkg::FLT_NONE;
+				pr[n1].excv = INV;
+				pr[n1].done = 2'b11;
+				pr[n1].stomped = TRUE;
+//				pr[n1] = nopi;
 				pr[n1].op.ssm = TRUE;
 				pr[n1].done = 2'b11;
 			end
 		end
 		else if (ssm_flag) begin
 			foreach(pr[n1]) begin
-				pr[n1] = nopi;
+				pr[n1] = {$bits(Qupls4_pkg::rob_entry_t){1'b0}};
+				pr[n1].op = {$bits(Qupls4_pkg::pipeline_reg_t){1'b0}};
+				pr[n1].op.exc = Qupls4_pkg::FLT_NONE;
+				pr[n1].op.uop = {41'd0,Qupls4_pkg::OP_NOP};
+				pr[n1].op.decbus.nop = TRUE;
+				pr[n1].op.decbus.cause = Qupls4_pkg::FLT_NONE;
+				pr[n1].op.uop.lead = 1'd1;
+				pr[n1].op.v = 1'b1;
+				pr[n1].exc = Qupls4_pkg::FLT_NONE;
+				pr[n1].excv = INV;
+				pr[n1].done = 2'b11;
+				pr[n1].stomped = TRUE;
+//				pr[n1] = nopi;
 				pr[n1].op.ssm = TRUE;
 				pr[n1].done = 2'b11;
 			end

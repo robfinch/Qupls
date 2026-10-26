@@ -247,7 +247,7 @@ else
 
 Qupls4_pkg::rob_entry_t [MWIDTH-1:0] pr_ext;
 
-Qupls4_ext_set_pr usetpr1
+Qupls4_ext_set_pr #(.MWIDTH(MWIDTH)) usetpr1
 (
 	.rst(rst_i),
 	.clk(clk_i),
