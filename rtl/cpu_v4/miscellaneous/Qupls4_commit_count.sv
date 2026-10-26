@@ -38,13 +38,12 @@
 import const_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_commit_count(rst, clk, next_cqd, rob,
+module Qupls4_commit_count(rst, clk, rob,
 	head0, head1, head2, head3, head4, head5,
 	tails, cmtcnt, do_commit, htcolls);
-parameter XWID = 4;
+parameter COMMIT_WIDTH = 4;
 input rst;
 input clk;
-input [XWID-1:0] next_cqd;
 input Qupls4_pkg::rob_entry_t [Qupls4_pkg::ROB_ENTRIES-1:0] rob;
 input rob_ndx_t head0;
 input rob_ndx_t head1;
@@ -59,27 +58,27 @@ output reg htcolls;
 
 integer n1;
 reg cmt0,cmt1,cmt2,cmt3,cmt4,cmt5;
-wire nan0 = rob[head0].v && rob[head0].nan;
-wire nan1 = rob[head1].v && rob[head1].nan;
-wire nan2 = rob[head2].v && rob[head2].nan;
-wire nan3 = rob[head3].v && rob[head3].nan;
+wire nan0 = |rob[head0].v && rob[head0].nan && !rob[head0].stomped;
+wire nan1 = |rob[head1].v && rob[head1].nan && !rob[head1].stomped;
+wire nan2 = |rob[head2].v && rob[head2].nan && !rob[head2].stomped;
+wire nan3 = |rob[head3].v && rob[head3].nan && !rob[head3].stomped;
 
-always_comb cmt0 = ((|rob[head0].v|rob[head0].stomped) && &rob[head0].done);
-always_comb cmt1 = XWID > 1 && ((|rob[head1].v|rob[head1].stomped) && &rob[head1].done) &&
-										!rob[head0].op.decbus.oddball && !rob[head0].excv
+always_comb cmt0 = (rob[head0].stomped || &rob[head0].done);
+always_comb cmt1 = COMMIT_WIDTH > 1 && (rob[head1].stomped || (&rob[head1].done &&
+										!rob[head0].op.decbus.oddball && !rob[head0].excv))
 										;
-always_comb cmt2 = XWID > 2 && ((|rob[head2].v|rob[head2].stomped) && &rob[head2].done) &&
+always_comb cmt2 = COMMIT_WIDTH > 2 && (rob[head2].stomped || (&rob[head2].done &&
 										!rob[head0].op.decbus.oddball && !rob[head1].op.decbus.oddball &&
 										!rob[head0].excv && !rob[head1].excv &&
-										!(nan0 && nan1)
+										!(nan0 && nan1)))
 										;
-always_comb cmt3 = XWID > 3 && ((|rob[head3].v|rob[head3].stomped) && &rob[head3].done) &&
+always_comb cmt3 = COMMIT_WIDTH > 3 && (rob[head3].stomped || (&rob[head3].done &&
 										!rob[head0].op.decbus.oddball && !rob[head1].op.decbus.oddball && !rob[head2].op.decbus.oddball &&
 										!rob[head0].excv && !rob[head1].excv && !rob[head2].excv &&
-										!((nan0 && nan1) || (nan0 && nan2) || (nan1 && nan2))
+										!((nan0 && nan1) || (nan0 && nan2) || (nan1 && nan2))))
 										;
-always_comb	cmt4 = FALSE;//!rob[head4].v && (head0 != tails[0] && head0 != tails[1] && head0 != tails[2] && head0 != tails[3] && head0 != tails[4]);
-always_comb	cmt5 = FALSE;//!rob[head5].v && (head0 != tails[0] && head0 != tails[1] && head0 != tails[2] && head0 != tails[3] && head0 != tails[4] && head0 != tails[5]);
+always_comb	cmt4 = COMMIT_WIDTH > 3 && (rob[head4].stomped || !(|rob[head4].v));//!rob[head4].v && (head0 != tails[0] && head0 != tails[1] && head0 != tails[2] && head0 != tails[3] && head0 != tails[4]);
+always_comb	cmt5 = COMMIT_WIDTH > 3 && (rob[head5].stomped || !(|rob[head5].v));//!rob[head5].v && (head0 != tails[0] && head0 != tails[1] && head0 != tails[2] && head0 != tails[3] && head0 != tails[4] && head0 != tails[5]);
 
 // Figure out how many instructions can be committed.
 // If there is an oddball instruction (eg. CSR, RTE) then only commit up until
