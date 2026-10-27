@@ -40,7 +40,7 @@ module Qupls4_decode_expipe(instr, expipe);
 input Qupls4_pkg::micro_op_t instr;
 output [5:0] expipe;
 
-function fnExPipe;
+function [5:0] fnExPipe;
 input Qupls4_pkg::micro_op_t ir;
 begin
 	case(ir.opcode)
@@ -80,19 +80,20 @@ begin
 	Qupls4_pkg::OP_FLTVVV,Qupls4_pkg::OP_FLTVVS:
 		case(ir.func)
 		Qupls4_pkg::FLT_FMA,Qupls4_pkg::FLT_FMS,Qupls4_pkg::FLT_FNMA,Qupls4_pkg::FLT_FNMS:
-			fnExPipe = 6'b011000;
+			fnExPipe = 6'b111100;
 		Qupls4_pkg::FLT_CMP,
 		Qupls4_pkg::FLT_ABS,Qupls4_pkg::FLT_NEG:
 			fnExPipe = 6'b111111;
 		default:	fnExPipe = 6'b000000;
 		endcase
+	Qupls4_pkg::OP_FADDI:
+		fnExPipe = 6'b111100;
 	Qupls4_pkg::OP_CHK:
 		fnExPipe = 6'b000001;
 	Qupls4_pkg::OP_ADDI,
 	Qupls4_pkg::OP_SUBFI,
 	Qupls4_pkg::OP_CMPI,
 	Qupls4_pkg::OP_CMPUI,
-	Qupls4_pkg::OP_LOADI,
 	Qupls4_pkg::OP_LOADA,
 	Qupls4_pkg::OP_ANDI,
 	Qupls4_pkg::OP_ORI,

@@ -617,6 +617,7 @@ begin
 				3'd2:	bus = ($signed(a) == $signed(b)) ^ c;
 				3'd3:	bus = ($signed(a) == $signed(b)) + c;
 				3'd6:	bus[base_eleno + LANE] = mask1[LANE] ? $signed(a) == $signed(b) : t;
+				3'd7:	bus[base_eleno + LANE] = mask1[LANE] && $signed(a) == $signed(b) ? 1 : t;
 				default:	bus = zero;
 				endcase
 				did_op = TRUE;
@@ -639,6 +640,7 @@ begin
 				3'd2:	bus = ($signed(a) != $signed(b)) ^ c;
 				3'd3:	bus = ($signed(a) != $signed(b)) + c;
 				3'd6:	bus[base_eleno + LANE] = mask1[LANE] ? $signed(a) != $signed(b) : t;
+				3'd7:	bus[base_eleno + LANE] = mask1[LANE] && $signed(a) != $signed(b) ? 1 : t;
 				default:	bus = zero;
 				endcase
 				did_op = TRUE;
@@ -661,6 +663,7 @@ begin
 				3'd2:	bus = ($signed(a) < $signed(b)) ^ c;
 				3'd3:	bus = ($signed(a) < $signed(b)) + c;
 				3'd6:	bus[base_eleno + LANE] = mask1[LANE] ? $signed(a) < $signed(b) : t;
+				3'd7:	bus[base_eleno + LANE] = mask1[LANE] && $signed(a) < $signed(b) ? 1 : t;
 				default:	bus = zero;
 				endcase
 				did_op = TRUE;
@@ -683,6 +686,7 @@ begin
 				3'd2:	bus = ($signed(a) <= $signed(b)) ^ c;
 				3'd3:	bus = ($signed(a) <= $signed(b)) + c;
 				3'd6:	bus[base_eleno + LANE] = mask1[LANE] ? $signed(a) <= $signed(b) : t;
+				3'd7:	bus[base_eleno + LANE] = mask1[LANE] && $signed(a) <= $signed(b) ? 1 : t;
 				default:	bus = zero;
 				endcase
 				did_op = TRUE;
@@ -705,6 +709,7 @@ begin
 				3'd2:	bus = (a < b) ^ c;
 				3'd3:	bus = (a < b) + c;
 				3'd6:	bus[base_eleno + LANE] = mask1[LANE] ? a < b : t;
+				3'd7:	bus[base_eleno + LANE] = mask1[LANE] && a < b ? 1 : t;
 				default:	bus = zero;
 				endcase
 				did_op = TRUE;
@@ -727,6 +732,7 @@ begin
 				3'd2:	bus = (a <= b) ^ c;
 				3'd3:	bus = (a <= b) + c;
 				3'd6:	bus[base_eleno + LANE] = mask1[LANE] ? a <= b : t;
+				3'd7:	bus[base_eleno + LANE] = mask1[LANE] && a <= b ? 1 : t;
 				default:	bus = zero;
 				endcase
 				did_op = TRUE;
@@ -1709,6 +1715,7 @@ begin
 			o_flags.ptr = FALSE;
 			o_flags.cap = FALSE;
 		end
+/*
 	Qupls4_pkg::OP_LOADI:
 		begin
 			case(Ra)
@@ -1726,6 +1733,7 @@ begin
 			o_flags.ptr = FALSE;
 			o_flags.cap = FALSE;
 		end
+*/
 	Qupls4_pkg::OP_NOP:
 		begin
 			bus = t;

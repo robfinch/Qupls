@@ -603,7 +603,7 @@ typedef enum logic [6:0] {
 	OP_CMPUI = 7'd19,
 	OP_LOADA = 7'd20,
 	OP_DIVUI = 7'd21,
-	OP_LOADI = 7'd22,
+	OP_FADDI = 7'd22,
 	OP_MOVMR = 7'd23,
 //	OP_TRAP = 7'd28,
 

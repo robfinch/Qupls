@@ -63,6 +63,7 @@ begin
 	Qupls4_pkg::OP_ANDI:	fnIsFpu = Qupls4_pkg::PERFORMANCE;
 	Qupls4_pkg::OP_ORI:	fnIsFpu = Qupls4_pkg::PERFORMANCE;
 	Qupls4_pkg::OP_XORI:	fnIsFpu = Qupls4_pkg::PERFORMANCE;
+	Qupls4_pkg::OP_FADDI:	fnIsFpu = 1'b1;
 //	Qupls4_pkg::OP_MOV:	fnIsFpu = Qupls4_pkg::PERFORMANCE;
 	Qupls4_pkg::OP_NOP:	fnIsFpu = 1'b1;
 	default:	fnIsFpu = 1'b0;

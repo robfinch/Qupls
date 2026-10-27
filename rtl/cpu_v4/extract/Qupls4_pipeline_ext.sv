@@ -120,7 +120,6 @@ reg [5:0] ipl_ext;
 Qupls4_pkg::irq_info_packet_t irq_in_ext;
 cpu_types_pkg::seqnum_t irq_sn_ext;
 reg irq_ext;
-reg [1023:0] cline_fet;
 wire [5:0] jj;
 reg [5:0] kk;
 wire clk = clk_i;

@@ -70,7 +70,6 @@ begin
 	Qupls4_pkg::OP_XORI:		fnIsSau = 1'b1;
 	Qupls4_pkg::OP_SHIFT:	fnIsSau = 1'b1;
 	Qupls4_pkg::OP_CSR:		fnIsSau = 1'b1;
-	Qupls4_pkg::OP_LOADI:		fnIsSau = 1'b1;
 	Qupls4_pkg::OP_MOVMR:		fnIsSau = 1'b1;
 	Qupls4_pkg::OP_LOADA:	fnIsSau = 1'b1;
 	Qupls4_pkg::OP_FENCE:

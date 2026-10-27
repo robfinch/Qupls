@@ -293,14 +293,23 @@ end
 */
 
 // rd_more is a flag set when there is room in the buffer.
+/*
 always_comb
 begin
 	foreach (tpr[n7]) begin
+*/
+	/*
 		tpr[n7] = pg_mot.pr[uop_mark[uop_head[n7]]];
 		tpr[n7].op.uop = uop_buf[uop_head[n7]];
+    */
+    // For now, there are only four fixed buffers to choose from so we can
+    // simplify things here.
+/*
+        tpr[n7] = pg_mot.pr[n7];
+        tpr[n7].op.uop = uop_buf[n7];
 	end
 end
-
+*/
 //reg stomp_dec;
 
 // Define a NOP instruction.
@@ -389,7 +398,7 @@ else begin
 		stomp_dec <= stomp_ext;
 end
 */
-
+/*
 always_comb//ff @(posedge clk)
 if (rst) begin
 	foreach (insm[n9]) begin
@@ -411,7 +420,7 @@ else begin
 		end
 	end
 end
-
+*/
 generate begin : gDecoders
 	for (g = 0; g < $size(tpr); g = g + 1)
 Qupls4_decoder udeci0
@@ -442,10 +451,44 @@ end
 */
 
 always_comb
-begin
+if (rst) begin
+	foreach (tpr[n7]) begin
+		tpr[n7] = {$bits(Qupls4_pkg::rob_entry_t){1'b0}};
+		tpr[n7].op = nopi;
+		tpr[n7].done = 2'b11;
+		tpr[n7].stomped = TRUE;
+	end
+	foreach (insm[n9]) begin
+		insm[n9] = {$bits(Qupls4_pkg::rob_entry_t){1'b0}};
+		insm[n9].op = nopi;
+		insm[n9].done = 2'b11;
+		insm[n9].stomped = TRUE;
+	end
+end
+else begin
 	hwi_ignore = FALSE;
 	fregs_o = 15'd0;
 	
+	foreach (tpr[n7]) begin
+	/*
+		tpr[n7] = pg_mot.pr[uop_mark[uop_head[n7]]];
+		tpr[n7].op.uop = uop_buf[uop_head[n7]];
+    */
+    // For now, there are only four fixed buffers to choose from so we can
+    // simplify things here.
+        tpr[n7] = pg_mot.pr[n7];
+        tpr[n7].op.uop = uop_buf[n7];
+	end
+	foreach (insm[n9]) begin
+		insm[n9] = tpr[n9];
+		if (stomp_ext && FALSE) begin
+			if (tpr[n9].ip_stream!=kept_stream) begin
+				insm[n9].op = nopi;
+				insm[n9].done = 2'b11;
+				insm[n9].stomped = TRUE;
+			end
+		end
+	end
 	pr_dec[0] = insm[0].op;
 	pr_dec[1] = insm[1].op;
 	pr_dec[2] = insm[2].op;

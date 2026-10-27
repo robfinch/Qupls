@@ -75,17 +75,18 @@ end
 always_comb
 begin
 	next_is_buffered_o = FALSE;
-	for (n44 = 1; n44 < 4; n44 = n44 + 1)
-		if (ips_i[stream_i].pc >= ip_buf[n44] && ips_i[stream_i].pc < ip_buf[n44] + 8'd64)
+	foreach (ip_buf[n44])
+		if (ips_i[stream_i.stream].pc >= ip_buf[n44] && ips_i[stream_i.stream].pc < ip_buf[n44] + 8'd64)
 			next_is_buffered_o = TRUE;
 end
 
 // If the cache line is not buffered, buffer it.
+// Fill buffer with NOPs at reset.
 always_ff @(posedge clk_i)
 if (rst_i) begin
 	foreach (line_buf[n1]) begin
 		line_buf[n1] = {1024{1'b1}};	// NOPs
-		ip_buf[n1] = 32'd0;
+		ip_buf[n1] = 32'h0;
 	end
 end
 else begin

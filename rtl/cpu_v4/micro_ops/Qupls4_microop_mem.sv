@@ -1128,7 +1128,7 @@ begin
 	Qupls4_pkg::OP_ANDI,
 	Qupls4_pkg::OP_ORI,
 	Qupls4_pkg::OP_XORI,
-	Qupls4_pkg::OP_LOADI,
+	Qupls4_pkg::OP_FADDI,
 	Qupls4_pkg::OP_LDB,Qupls4_pkg::OP_LDBZ,Qupls4_pkg::OP_LDW,Qupls4_pkg::OP_LDWZ,
 	Qupls4_pkg::OP_LDT,Qupls4_pkg::OP_LDTZ,Qupls4_pkg::OP_LOAD,
 	Qupls4_pkg::OP_LOADA,
