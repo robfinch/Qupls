@@ -60,10 +60,8 @@ output reg [5:0] count;
 output Qupls4_pkg::micro_op_t [MICROOPS_PER_INSTR-1:0] uop;
 
 integer nn, kk, n1;
-reg [6:0] head0;
-reg [6:0] tail0, tail1, tail2, tail3;
 reg [5:0] next_count;
-Qupls4_pkg::micro_op_t [31:0] next_uop;
+Qupls4_pkg::micro_op_t [MICROOPS_PER_INSTR-1:0] next_uop;
 
 reg insert_boi;
 reg [7:0] boi_count = 8'd0;
@@ -106,20 +104,8 @@ reg [8:0] vRd, vRs1, vRs2, vRs3;
 reg [8:0] Rd, Rs1, Rs2, Rs3;
 reg vRdi, vRs1i, vRs2i, vRs3i;		// whether to increment the register spec or not.
 
-// Copy instruction to micro-op verbatium. The register fields need to be
-// expanded by two bits each.
 Qupls4_pkg::micro_op_t uop0;
-always_comb
-begin
-  uop0 = instr;
-  uop0.lead = 1'b1;
-end
 Qupls4_pkg::micro_op_t uop1;
-always_comb
-begin
-  uop1 = instr;
-  uop1.num = 5'd1;
-end
 
 always_ff @(posedge clk)
 	boi_count <= boi_count + 2'd1;
@@ -744,6 +730,12 @@ begin
         velsz1 = 4'd8;
         end
     endcase
+	// Copy instruction to micro-op verbatium. The register fields need to be
+	// expanded by two bits each.
+  uop0 = instr;
+  uop0.lead = 1'b1;
+  uop1 = instr;
+  uop1.num = 5'd1;
 end
 
 always_comb vRd = {3'b0,instr.Rd};
@@ -758,14 +750,27 @@ always_comb vRs2i = (instr.vn[2] & ~instr.ms[1]);
 always_comb vRs3i = (instr.vn[3] & ~instr.ms[2]);
 
 always_comb
-begin
+if (rst) begin
 	next_count = 3'd0;
 	ble = 9'd0;
-	for (n1 = 0; n1 < MICROOPS_PER_INSTR; n1 = n1 + 1) begin
+	kk = 0;
+	foreach (next_uop[n1]) begin
 		next_uop[n1] = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
 		next_uop[n1].lead = n1==0;
 		next_uop[n1].opcode = Qupls4_pkg::OP_NOP;
-		next_uop[n1].ble = 9'b011111111;
+		next_uop[n1].ble = 9'b0;
+		next_uop[n1].v = VAL;
+	end
+end
+else begin
+	next_count = 3'd0;
+	ble = 9'd0;
+	kk = 0;
+	foreach (next_uop[n1]) begin
+		next_uop[n1] = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
+		next_uop[n1].lead = n1==0;
+		next_uop[n1].opcode = Qupls4_pkg::OP_NOP;
+		next_uop[n1].ble = 9'b0;
 		next_uop[n1].v = VAL;
 	end
 
@@ -1330,7 +1335,7 @@ begin
 			end
 		end
 	endcase
-	for (nn = 0; nn < 32; nn = nn + 1) begin
+	foreach (next_uop[nn]) begin
 		if (nn >= next_count)
 			next_uop[nn].v = 1'b0;
 	end	
@@ -1356,12 +1361,9 @@ generate begin : gComb
 	else begin
 		always_ff @(posedge clk)
 		if (rst) begin
-			count <= 3'd0;
-			foreach (uop[n1]) begin
-				uop[n1] <= {$bits(Qupls4_pkg::micro_op_t){1'b0}};
-				uop[n1].opcode <= Qupls4_pkg::OP_NOP;
-				uop[n1].v = VAL;
-			end
+			count <= 5'd0;
+			foreach (uop[n1])
+				uop[n1] <= next_uop[n1];
 		end
 		else if (en) begin
 			count <= next_count;

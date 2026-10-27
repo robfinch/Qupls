@@ -464,6 +464,8 @@ if (rst) begin
 		insm[n9].done = 2'b11;
 		insm[n9].stomped = TRUE;
 	end
+	foreach (pr_dec[n9])
+		pr_dec[n9] = nopi;
 end
 else begin
 	hwi_ignore = FALSE;

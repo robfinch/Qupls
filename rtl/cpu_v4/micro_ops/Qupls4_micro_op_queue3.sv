@@ -52,24 +52,18 @@ output Qupls4_pkg::micro_op_t [MAX_MICROOPS-1:0] uop_buf;
 output reg [2:0] uop_mark [0:MAX_MICROOPS-1];
 output reg [3:0] head [0:MWIDTH-1];
 
-integer jj,kk,n1,n2,n3,n4,n5,n11,n12,n13;
+integer kk,n2,n3,n4,n5,n11,n12,n13;
 integer ul;		// use upper or lower half of buf4
 integer rul;
-integer k0,k1,k2,k3;
 reg [3:0] tail;
 reg [5:0] uop_count1 [0:MWIDTH-1];
 reg [7:0] uop_count3;
 Qupls4_pkg::micro_op_t [MICROOPS_PER_INSTR*4-1:0] uop_buf2;
 Qupls4_pkg::micro_op_t [MICROOPS_PER_INSTR*8-1:0] uop_buf3;
 reg [6:0] uop_ndx2 [0:MICROOPS_PER_INSTR*8-1];
-reg [6:0] uop_ndx4 [0:MICROOPS_PER_INSTR*8-1];
-Qupls4_pkg::micro_op_t [MICROOPS_PER_INSTR*8-1:0] uop_buf4;
 reg [2:0] uop_mark2 [0:MICROOPS_PER_INSTR*8-1];
 reg [2:0] uop_mark3 [0:MICROOPS_PER_INSTR*8-1];
-reg [2:0] uop_mark4 [0:MICROOPS_PER_INSTR*8-1];
 reg [6:0] ndx0,ndx1,ndx2,ndx3;
-//Qupls4_pkg::micro_op_t [MAX_MICROOPS-1:0] uop_buf4;
-//reg [2:0] uop_mark4 [0:MAX_MICROOPS-1];
 reg [5:0] room;
 
 always_comb
@@ -182,20 +176,23 @@ end
 
 always_ff @(posedge clk)
 if (rst) begin
-  for (n5 = 0; n5 < MAX_MICROOPS; n5 = n5 + 1) begin
-    uop_mark[n5] <= 2'b00;
+  foreach (uop_buf[n5]) begin
     uop_buf[n5] <= {$bits(Qupls4_pkg::micro_op_t){1'b0}};
     uop_buf[n5].v <= VAL;
     uop_buf[n5].lead <= 1'b1;
 		uop_buf[n5].opcode <= Qupls4_pkg::OP_NOP;
   end
-	foreach (uop_buf[n5]) begin
-		uop_buf4[n5] <= {$bits(Qupls4_pkg::micro_op_t){1'b0}};
-    uop_buf4[n5].lead <= 1'b1;
-		uop_buf4[n5].opcode <= Qupls4_pkg::OP_NOP;
-		uop_mark4[n5] <= 2'b00;
-	end
+	foreach (uop_mark[n5])
+    uop_mark[n5] <= 2'b00;
    // On reset fill buffer with NOPs (0xff).
+	foreach (uop_buf3[n5]) begin
+    uop_buf3[n5] <= {$bits(Qupls4_pkg::micro_op_t){1'b0}};
+    uop_buf3[n5].v <= VAL;
+    uop_buf3[n5].lead <= 1'b1;
+		uop_buf3[n5].opcode <= Qupls4_pkg::OP_NOP;
+	end
+	foreach (uop_mark3[n5])
+    uop_mark3[n5] <= 2'b00;
 	foreach (head[n13])
 		head[n13] <= n13;
 	tail <= 0;
