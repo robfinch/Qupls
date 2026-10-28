@@ -76,33 +76,33 @@ always_comb
 // micro-ops. Referencing via the index will pack the micro-op stream.
 
 function [6:0] fnNdxVal;
-input [6:0] n11;
-input [4:0] count0;
-input [4:0] count1;
-input [4:0] count2;
+input [6:0] a;
+input [5:0] count0;
+input [5:0] count1;
+input [5:0] count2;
 begin
-	if (n11 < count0)
-		fnNdxVal = n11;
-	else if (n11 < count0 + count1)
-		fnNdxVal = n11 - count0;
-	else if (n11 < count0 + count1 + count2)
-		fnNdxVal = n11 - count0 - count1;
+	if (a < count0)
+		fnNdxVal = a;
+	else if (a < count0 + count1)
+		fnNdxVal = (a - count0) + MICROOPS_PER_INSTR;
+	else if (a < count0 + count1 + count2)
+		fnNdxVal = (a - (count0 + count1)) + MICROOPS_PER_INSTR*2;
 	else
-		fnNdxVal = n11 - count0 - count1 - count2;
+		fnNdxVal = (a - (count0 + count1 + count2)) + MICROOPS_PER_INSTR*3;
 end
 endfunction
 
 function [2:0] fnMark;
-input [6:0] n11;
-input [4:0] count0;
-input [4:0] count1;
-input [4:0] count2;
+input [6:0] a;
+input [5:0] count0;
+input [5:0] count1;
+input [5:0] count2;
 begin
-	if (n11 < count0)
+	if (a < count0)
 		fnMark = 3'd0;
-	else if (n11 < count0 + count1)
+	else if (a < count0 + count1)
 		fnMark = 3'd1;
-	else if (n11 < count0 + count1 + count2)
+	else if (a < count0 + count1 + count2)
 		fnMark = 3'd2;
 	else
 		fnMark = 3'd3;
@@ -130,8 +130,8 @@ else begin
 		end
 
 		for (n11 = 0; n11 < MICROOPS_PER_INSTR*MWIDTH; n11 = n11 + 1) begin
-			uop_ndx2[n11+ul] <= fnNdxVal(n11,uop_count[0],uop_count[1],uop_count[2]);
-			uop_mark2[n11+ul] <= fnMark(n11,uop_count[0],uop_count[1],uop_count[2]);
+			uop_ndx2[n11+ul] <= fnNdxVal(n11[6:0],uop_count[0],uop_count[1],uop_count[2]);
+			uop_mark2[n11+ul] <= fnMark(n11[6:0],uop_count[0],uop_count[1],uop_count[2]);
 		end
 	end
 end
@@ -163,13 +163,13 @@ end
 always_ff @(posedge clk)
 if (rst) begin
 	ul <= 0;
-	rul <= 64;
+	rul <= MICROOPS_PER_INSTR*MWIDTH;
 end
 else begin
 	if (en) begin
 		if (kk+4 >= uop_count3) begin
-			ul <= ul > 0 ? 0 : 64;
-			rul <= ul > 0 ? 64 : 0;
+			ul <= ul > 0 ? 0 : MICROOPS_PER_INSTR*MWIDTH;
+			rul <= ul > 0 ? MICROOPS_PER_INSTR*MWIDTH : 0;
 		end
 	end
 end
