@@ -101,16 +101,15 @@ Qupls4_pkg::reservation_station_entry_t rsei;
 Qupls4_pkg::operand_t [NREG_RPORTS-1:0] rf_fpcsr_i;
 
 always_comb
-begin
-	for (n4 = 0; n4 < NREG_RPORTS; n4 = n4 + 1)
-		rf_fpcsr_i[n4].val = FPCSR;
-		rf_fpcsr_i[n4].pRn = 9'd0;
-		rf_fpcsr_i[n4].fpcsr = TRUE;
-		rf_fpcsr_i[n4].v = FPCSRv;
+foreach (rf_fpcsr_i[n4]) begin
+	rf_fpcsr_i[n4].val = FPCSR;
+	rf_fpcsr_i[n4].pRn = 9'd0;
+	rf_fpcsr_i[n4].fpcsr = TRUE;
+	rf_fpcsr_i[n4].v = FPCSRv;
 end
 
 always_comb
-for (nn = 0; nn < NRSE; nn = nn + 1)
+foreach (rse[nn])
 begin
 	rse_argA[nn] = rse[nn].arg[0];
 	rse_argB[nn] = rse[nn].arg[1];
@@ -316,7 +315,7 @@ else begin
 	foreach (rse[mm]) begin
 		rse[mm].ready <= FALSE;
 		if (rse[mm].arg[0].v && rse[mm].arg[1].v && (rse[mm].arg[2].v|rse[mm].store) && rse[mm].arg[3].v && rse[mm].arg[4].v && rse[mm].arg[5].v)
-			rse[mm].ready <= TRUE;
+			rse[mm].ready <= rse[mm].v;
 	end
 
 	// Unused stations are never ready.
@@ -348,40 +347,48 @@ else begin
 	end
 	*/
 	// Issue scheduling: if there is only one ready easy: pick the ready one.
-	// If there are ties: pick one at random.
+	// If there are ties: pick oldest one.
+	// Once choosen, the RSE entry is no longer valid.
 	// If it is an FP unit and there is an FP sync instruction in the pipeline,
 	// the refuse to issue.
 	rse_o.v <= INV;
-	casez({FPUNIT&fp_sync,pstall,stall})
-	3'b1??:	;
-	3'b010:	;
-	3'b001:	;
-	3'b011:	;
+	casez({pstall,stall})
+	2'b10:	;
+	2'b01:	;
+	2'b11:	;
 	default:
 		begin
 			if (~&rdy) begin
 				// For a vector load / store only issue for when mask indicates so.
-				if (rse[rdy].vls) begin
-					if (rse[rdy].arg[2][rse[rdy].laneno]) begin
+				if (!(fp_sync && rse[rdy].fclass==3'd2)) begin
+					if (rse[rdy].vls) begin
+						if (rse[rdy].arg[2][rse[rdy].laneno]) begin
+							issue <= TRUE;
+							rse_o <= rse[rdy];
+							rse_o.v <= !stomp[rse[rdy].rndx] & rse[rdy].v;
+							rse[rdy].arg[2][rse[rdy].laneno] <= 1'b0;
+						end
+						if (rse[rdy].arg[2]==value_zero) begin
+							rse[rdy].v <= INV;
+							rse_o.uop <= {26'd0,Qupls4_pkg::OP_NOP};
+						end
+					end
+					else begin
 						issue <= TRUE;
 						rse_o <= rse[rdy];
+						rse[rdy].v <= INV;
 						rse_o.v <= !stomp[rse[rdy].rndx] & rse[rdy].v;
 					end
+					if (rse[rdy].vcount==6'd0) begin
+						rse[rdy].busy <= FALSE;
+					end
+					else begin
+						rse[rdy].vcount <= rse[rdy].vcount - 6'd1;
+						rse[rdy].laneno <= rse[rdy].laneno + 6'd1;
+					end
+					if (stomp[rse[rdy].rndx])
+						rse_o.uop <= {26'd0,Qupls4_pkg::OP_NOP};
 				end
-				else begin
-					issue <= TRUE;
-					rse_o <= rse[rdy];
-					rse_o.v <= !stomp[rse[rdy].rndx] & rse[rdy].v;
-				end
-				if (rse[rdy].vcount==6'd0) begin
-					rse[rdy].busy <= FALSE;
-				end
-				else begin
-					rse[rdy].vcount <= rse[rdy].vcount - 6'd1;
-					rse[rdy].laneno <= rse[rdy].laneno + 6'd1;
-				end
-				if (stomp[rse[rdy].rndx])
-					rse_o.uop <= {26'd0,Qupls4_pkg::OP_NOP};
 			end
 		end
 	endcase

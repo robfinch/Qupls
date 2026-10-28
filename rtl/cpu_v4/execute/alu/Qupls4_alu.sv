@@ -1741,7 +1741,7 @@ begin
 			did_op = TRUE;
 		end	// in case of copy target
 	// Branches
-	Qupls4_pkg::OP_BCC,Qupls4_pkg::OP_BCCU,Qupls4_pkg::OP_FBCC:
+	Qupls4_pkg::OP_BCC,Qupls4_pkg::OP_BCCU,Qupls4_pkg::OP_FBCC,Qupls4_pkg::OP_MBCC:
 		if (SUPPORT_BRANCH) begin
 			if (ir.inc) begin
 				if (ibranch)
@@ -1821,9 +1821,9 @@ always_ff @(posedge clk)
 	case(WID)
 	8: o = bus;
 	16:	o = bus;
-	32:	o = bus_nan ? bus | (fnBitRev(pc) >> 6'd48) : bus;
-	64:	o = bus_nan ? bus | (fnBitRev(pc) >> 6'd20) : bus;
-	128:	o = bus_nan ? bus | fnBitRev(pc) : bus;
+	32:	o = bus_nan ? bus | (fnBitRev({64'd0,pc.pc}) >> 6'd48) : bus;
+	64:	o = bus_nan ? bus | (fnBitRev({64'd0,pc.pc}) >> 6'd20) : bus;
+	128:	o = bus_nan ? bus | fnBitRev({64'd0,pc.pc}) : bus;
 	default:	o = zero;
 	endcase
 

@@ -45,7 +45,7 @@ input Qupls4_pkg::micro_op_t ir;
 begin
 	case(ir.opcode)
 	Qupls4_pkg::OP_BFLD:
-		fnExPipe = 6'b000001;
+		fnExPipe = {4'b0000,Qupls4_pkg::SUPPORT_BFLD1[0],Qupls4_pkg::SUPPORT_BFLD1[0]};
 	Qupls4_pkg::OP_R3B,Qupls4_pkg::OP_R3W,Qupls4_pkg::OP_R3T,Qupls4_pkg::OP_R3O,
 	Qupls4_pkg::OP_R3BP,Qupls4_pkg::OP_R3WP,Qupls4_pkg::OP_R3TP,Qupls4_pkg::OP_R3OP,
 	Qupls4_pkg::OP_R3VVV,Qupls4_pkg::OP_R3VVS:
@@ -99,9 +99,10 @@ begin
 	Qupls4_pkg::OP_ORI,
 	Qupls4_pkg::OP_XORI:
 		fnExPipe = 6'b111111;
-	Qupls4_pkg::OP_SHIFT,
+	Qupls4_pkg::OP_SHIFT:
+		fnExPipe = {4'b0000,Qupls4_pkg::SUPPORT_SHIFT1[0],Qupls4_pkg::SUPPORT_SHIFT0[0]};
 	Qupls4_pkg::OP_CSR:
-		fnExPipe = 6'b000001;
+		fnExPipe = {4'b0000,Qupls4_pkg::SUPPORT_CSR1[0],Qupls4_pkg::SUPPORT_CSR0[0]};
 	Qupls4_pkg::OP_FENCE:
 		fnExPipe = 6'b000001;
 	Qupls4_pkg::OP_LDB,Qupls4_pkg::OP_LDBZ,Qupls4_pkg::OP_LDW,Qupls4_pkg::OP_LDWZ,
@@ -114,12 +115,13 @@ begin
 	Qupls4_pkg::OP_VV2P,
 	Qupls4_pkg::OP_AMO:
 		fnExPipe = 6'b110000;
-	Qupls4_pkg::OP_BCC,Qupls4_pkg::OP_BCCU,Qupls4_pkg::OP_FBCC,
+	// Branches must be supported on at least one pipe.
+	Qupls4_pkg::OP_BCC,Qupls4_pkg::OP_BCCU,Qupls4_pkg::OP_FBCC,Qupls4_pkg::OP_MBCC,
 	Qupls4_pkg::OP_BSR,Qupls4_pkg::OP_JSR,Qupls4_pkg::OP_JSRN,
 	Qupls4_pkg::OP_SYS,
 	Qupls4_pkg::OP_BRK,
 	Qupls4_pkg::OP_RTD:
-		fnExPipe = SUPPORT_BRANCH1 ? 6'b000010 : 6'b000001;
+		fnExPipe = Qupls4_pkg::SUPPORT_BRANCH1 ? 6'b000010 : 6'b000001;
 	default:
 		fnExPipe = 6'b000000;
 	endcase

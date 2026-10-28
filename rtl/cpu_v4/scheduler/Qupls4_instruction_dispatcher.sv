@@ -53,8 +53,8 @@ module Qupls4_instruction_dispatcher(rst, clk, regFPCSR, pgh, rob, stomp, busy, 
 	rob_dispatched_o, rob_unimplemented_o);
 parameter DISPATCH_COUNT=6;
 parameter MWIDTH=Qupls4_pkg::MWIDTH;
-parameter SUPPORT_XPIPE = {Qupls4_pkg::SUPPORT_XPIPE5[0],Qupls4_pkg::SUPPORT_XPIPE4[0],Qupls4_pkg::SUPPORT_XPIPE3[0],
-	Qupls4_pkg::SUPPORT_XPIPE2[0],Qupls4_pkg::SUPPORT_XPIPE1[0],Qupls4_pkg::SUPPORT_XPIPE0[0]};
+parameter SUPPORT_XPIPE = {Qupls4_pkg::SUPPORT_XPIPE5,Qupls4_pkg::SUPPORT_XPIPE4,Qupls4_pkg::SUPPORT_XPIPE3,
+	Qupls4_pkg::SUPPORT_XPIPE2,Qupls4_pkg::SUPPORT_XPIPE1,Qupls4_pkg::SUPPORT_XPIPE0};
 input rst;
 input clk;
 input aregno_t regFPCSR;
@@ -104,14 +104,14 @@ begin
 			!rob_dispatched2[nn]
 		) begin
 			for (pipe = 0; pipe < 6; pipe = pipe + 1)
-			if ((rob[nn].op.decbus.expipe[pipe] & SUPPORT_XPIPE[pipe]) && !busy[pipe] && !dispatch_slot_v[pipe] && !rob_dispatched[nn]) begin
-				cpy[pipe].rob = nn;
-				cpy[pipe].rse = pipe;
-				cpy[pipe].fu = pipe;
-				// rse[0].funcunit = 4'd0; set to zero already above
-				rob_dispatched[nn] = VAL;
-				dispatch_slot_v[pipe] = VAL;
-			end
+				if ((rob[nn].op.decbus.expipe[pipe] & SUPPORT_XPIPE[pipe]) && !busy[pipe] && !dispatch_slot_v[pipe] && !rob_dispatched[nn]) begin
+					cpy[pipe].rob = nn;
+					cpy[pipe].rse = pipe;
+					cpy[pipe].fu = pipe;
+					// rse[0].funcunit = 4'd0; set to zero already above
+					rob_dispatched[nn] = VAL;
+					dispatch_slot_v[pipe] = VAL;
+				end
 			// Ensure instruction is supported in a pipe somewhere.
 			// Mark the instruction as unimplemented if not supported in any pipe.
 			if ((rob[nn].op.decbus.expipe & SUPPORT_XPIPE)==6'd0)	begin	// Is it supported?

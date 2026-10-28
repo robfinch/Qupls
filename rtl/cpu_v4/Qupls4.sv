@@ -83,6 +83,8 @@ localparam RS_NREG_RPORTS = Qupls4_pkg::NREG_RPORTS;
 parameter MICROOPS_PER_INSTR = Qupls4_pkg::MICROOPS_PER_INSTR;
 parameter MAX_MICROOPS = 12;
 parameter XSTREAMS = Qupls4_pkg::XSTREAMS;
+parameter SUPPORT_XPIPE = {Qupls4_pkg::SUPPORT_XPIPE5,Qupls4_pkg::SUPPORT_XPIPE4,Qupls4_pkg::SUPPORT_XPIPE3,
+	Qupls4_pkg::SUPPORT_XPIPE2,Qupls4_pkg::SUPPORT_XPIPE1,Qupls4_pkg::SUPPORT_XPIPE0};
 input [63:0] coreno_i;
 input rst_i;
 input clk_i;
@@ -483,12 +485,7 @@ checkpt_ndx_t sau0_cp;
 reg sau0_bank;
 value_t sau0_cmpo;
 pc_address_ex_t sau0_pc;
-value_t xpipe0_resA;
-value_t xpipe1_resA;
-value_t xpipe2_resA;
-value_t xpipe3_resA;
-value_t xpipe4_resA;
-value_t xpipe5_resA;
+value_t [5:0] xpipe_res;
 rob_ndx_t sau0_id;
 reg sau0_idv;
 wire [63:0] xpipe0_exc;
@@ -514,6 +511,8 @@ Qupls4_pkg::reservation_station_entry_t xpipe2_rse, xpipe2_rse2;
 Qupls4_pkg::reservation_station_entry_t xpipe3_rse, xpipe3_rse2;
 Qupls4_pkg::reservation_station_entry_t xpipe4_rse, xpipe4_rse2;
 Qupls4_pkg::reservation_station_entry_t xpipe5_rse, xpipe5_rse2;
+Qupls4_pkg::reservation_station_entry_t [5:0] xpipe_rse;//, xpipe0_rse2;
+Qupls4_pkg::reservation_station_entry_t [5:0] xpipe_rseo;//, xpipe0_rse2;
 
 reg sau1_idle;
 reg sau1_idle1;
@@ -993,6 +992,8 @@ reg [4:0] vl;
 // 16 vectors for 5 operating modes (debug has its own set))
 pc_address_t [4:0] kernel_vectors;
 pc_address_t [4:0] syscall_vectors;
+pc_address_t active_irq_vector;
+assign active_irq_vector = kernel_vectors[sr.dbg ? 3'd4 : {1'b0,fnNextOm(sr.om)}];
 
 reg [31:0] carry_mod, csr_carry_mod, exc_ret_carry_mod, icarry_mod;
 wire [6:0] carry_reg = 7'd92|carry_mod[25:24];
@@ -1653,6 +1654,7 @@ reg get_next_pc;
 
 pc_stream_t [THREADS-1:0] new_stream;
 wire alloc_stream;
+reg alloc_irq_stream;
 reg [XSTREAMS*THREADS-1:0] used_streams;
 pc_address_ex_t [XSTREAMS*THREADS-1:0] pcs;
 pc_address_ex_t ip;
@@ -1927,15 +1929,15 @@ else begin
 end
 
 pc_address_ex_t pc_mot;
-reg branch_resolved;
-always_ff @(posedge clk) branch_resolved <= fcu_branch_resolved;
+reg branch_resolved, irq_resolved;
+always_ff @(posedge clk) branch_resolved <= fcu_branch_resolved|irq_resolved;
 
 // Stream state manager
 Qupls4_stream_manager usm1
 (
 	.rst(irst),
 	.clk(clk),
-	.alloc(alloc_stream),
+	.alloc(alloc_stream|alloc_irq_stream),
 	.live_stream(live_stream),
 	.new_stream(new_stream),
 	.dead_streams(dead_streams),
@@ -2399,7 +2401,9 @@ Qupls4_pipeline_ext #(.MWIDTH(MWIDTH)) uiext1
 	.cline_ext(cline_ext),
 	.ssm_flag(ssm_flag),
 	.sr(sr),
+	.irq_i(irq_i),
 	.ipl_fet(ipl_fet),
+	.active_irq_vector(active_irq_vector),
 	.uop_num_fet(uop_num_fet),
 	.uop_num_ext(uop_num_ext),
 	.carry_mod_fet(carry_mod_fet),
@@ -2719,9 +2723,10 @@ always_comb advance_fetch =
 	;
 
 always_comb advance_icache =
-	(first_icache | ihit) & 
+	first_icache | (
+	ihit & 
 	advance_extract2 &		// advance_extract set by mot stage
-	rstcnt[5]
+	rstcnt[5])
 	;
 
 always_comb advance_pipeline =
@@ -3250,7 +3255,7 @@ vtdl #(1) 							udlyal15 (.clk(clk), .ce(1'b1), .a(4'd0), .d(sau1_sc_done), .q(
 vtdl #($bits(rob_ndx_t))	udlyal16 (.clk(clk), .ce(1'b1), .a(4'd0), .d(sau1_id), .q(sau1_id2) );
 vtdl #($bits(checkpt_ndx_t)) udlyal17 (.clk(clk), .ce(1'b1), .a(4'd0), .d(sau1_cp), .q(sau1_cp2) );
 
-//vtdl #($bits(value_t))  udlyal4 (.clk(clk), .ce(1'b1), .a(4'd0), .d(xpipe0_resA), .q(sau0_res2) );
+//vtdl #($bits(value_t))  udlyal4 (.clk(clk), .ce(1'b1), .a(4'd0), .d(xpipe_res[0]), .q(sau0_res2) );
 // FPU #0 signals
 
 vtdl #(1) 							udlyfp5 (.clk(clk), .ce(1'b1), .a(4'd0), .d(fpu0_sc_done), .q(fpu0_sc_done2) );
@@ -3286,8 +3291,8 @@ wire [8:0] fcu_we;
 always_ff @(posedge clk) dram0_we = {wt10A,8'hFF} & {9{dram_wr0}};
 always_ff @(posedge clk) dram1_we = {wt11A,8'hFF} & {9{dram_wr1}} & {9{Qupls4_pkg::NDATA_PORTS > 1}};
 
-always_comb wt0A = !xpipe0_rse2.aRdv;
-always_comb wt1A = !xpipe1_rse2.aRdv && Qupls4_pkg::NSAU > 1;
+always_comb wt0A = !xpipe_rseo[0].aRdv;
+always_comb wt1A = !xpipe_rseo[1].aRdv && Qupls4_pkg::NSAU > 1;
 always_comb wt7A = fcu_done && !fcu_aRtzA;
 always_comb wt10A = dram0_oper.oper.v && dram0_oper.oper.aRnv;
 always_comb wt11A = dram1_oper.oper.v && dram1_oper.oper.aRnv && Qupls4_pkg::NDATA_PORTS > 1;
@@ -3340,9 +3345,9 @@ Qupls4_func_result_queue ufrq0
 	.stomp_i(robentry_stomp),
 	.rd_i(fuq_rd[0]),
 	.we_i(xpipe0_we),
-	.rse_i(xpipe0_rse2),
-	.tag_i(xpipe0_rse2.arg[3].flags),
-	.res_i(xpipe0_resA),
+	.rse_i(xpipe_rseo[0]),
+	.tag_i(xpipe_rseo[0].arg[3].flags),
+	.res_i(xpipe_res[0]),
 	.we_o(fuq_we[0]),
 	.pRt_o(fuq_pRt[0]),
 	.aRt_o(fuq_aRt[0]),
@@ -3360,9 +3365,9 @@ Qupls4_func_result_queue ufrq1
 	.stomp_i(robentry_stomp),
 	.rd_i(fuq_rd[1]),
 	.we_i(xpipe1_we),
-	.rse_i(xpipe1_rse2),
-	.tag_i(xpipe1_rse2.arg[3].flags),
-	.res_i(xpipe1_resA),
+	.rse_i(xpipe_rseo[1]),
+	.tag_i(xpipe_rseo[1].arg[3].flags),
+	.res_i(xpipe_res[1]),
 	.we_o(fuq_we[1]),
 	.pRt_o(fuq_pRt[1]),
 	.aRt_o(fuq_aRt[1]),
@@ -3382,9 +3387,9 @@ Qupls4_func_result_queue ufrq2
 	.stomp_i(robentry_stomp),
 	.rd_i(fuq_rd[2]),
 	.we_i(xpipe2_we),
-	.rse_i(xpipe2_rse2),
-	.tag_i(xpipe2_rse2.arg[3].flags),
-	.res_i(xpipe2_resA),
+	.rse_i(xpipe_rseo[2]),
+	.tag_i(xpipe_rseo[2].arg[3].flags),
+	.res_i(xpipe_res[2]),
 	.we_o(fuq_we[2]),
 	.pRt_o(fuq_pRt[2]),
 	.aRt_o(fuq_aRt[2]),
@@ -3406,9 +3411,9 @@ Qupls4_func_result_queue ufrq3
 	.stomp_i(robentry_stomp),
 	.rd_i(fuq_rd[3]),
 	.we_i(xpipe3_we),
-	.rse_i(xpipe3_rse2),
-	.tag_i(xpipe3_rse2.arg[3].flags),
-	.res_i(xpipe3_resA),
+	.rse_i(xpipe_rseo[3]),
+	.tag_i(xpipe_rseo[3].arg[3].flags),
+	.res_i(xpipe_res[3]),
 	.we_o(fuq_we[3]),
 	.pRt_o(fuq_pRt[3]),
 	.aRt_o(fuq_aRt[3]),
@@ -3430,9 +3435,9 @@ Qupls4_func_result_queue ufrq4
 	.stomp_i(robentry_stomp),
 	.rd_i(fuq_rd[4]),
 	.we_i(xpipe4_we),
-	.rse_i(xpipe4_rse2),
-	.tag_i(xpipe4_rse2.arg[3].flags),
-	.res_i(xpipe4_resA),
+	.rse_i(xpipe_rseo[4]),
+	.tag_i(xpipe_rseo[4].arg[3].flags),
+	.res_i(xpipe_res[4]),
 	.we_o(fuq_we[4]),
 	.pRt_o(fuq_pRt[4]),
 	.aRt_o(fuq_aRt[4]),
@@ -3454,9 +3459,9 @@ Qupls4_func_result_queue ufrq5
 	.stomp_i(robentry_stomp),
 	.rd_i(fuq_rd[5]),
 	.we_i(xpipe5_we),
-	.rse_i(xpipe5_rse2),
-	.tag_i(xpipe5_rse2.arg[3].flags),
-	.res_i(xpipe5_resA),
+	.rse_i(xpipe_rseo[5]),
+	.tag_i(xpipe_rseo[5].arg[3].flags),
+	.res_i(xpipe_res[5]),
 	.we_o(fuq_we[5]),
 	.pRt_o(fuq_pRt[5]),
 	.aRt_o(fuq_aRt[5]),
@@ -4153,17 +4158,17 @@ always_comb
 always_comb
 	agen1_idv = agen1_rse.v;
 always_comb
-	sau0_id = xpipe0_rse.rndx;
+	sau0_id = xpipe_rse[0].rndx;
 always_comb
-	sau0_rndx = xpipe0_rse.rndx;
+	sau0_rndx = xpipe_rse[0].rndx;
 always_comb
-	sau0_rndxv = xpipe0_rse.v;
+	sau0_rndxv = xpipe_rse[0].v;
 always_comb
-	sau1_id = xpipe1_rse.rndx;
+	sau1_id = xpipe_rse[1].rndx;
 always_comb
-	sau1_rndx = xpipe1_rse.rndx;
+	sau1_rndx = xpipe_rse[1].rndx;
 always_comb
-	sau1_rndxv = xpipe1_rse.v;
+	sau1_rndxv = xpipe_rse[1].v;
 always_comb
 	fpu0_id = fpu0_rse.rndx;
 always_comb
@@ -4385,12 +4390,12 @@ Qupls4_expipe01 #(.PIPE(3'd0)) uxpipe0
 	.clk3x(clk2x),
 	.idle(),
 	.stomp(robentry_stomp),
-	.rse_i(xpipe0_rse),
-	.rse_o(xpipe0_rse2),
+	.rse_i(xpipe_rse[0]),
+	.rse_o(xpipe_rseo[0]),
 	.rm(),
 	.z(sau0_predz),
 	.cptgt(xpipe0_cptgt),
-	.o(xpipe0_resA),
+	.o(xpipe_res[0]),
 	.csr(csr_res),
 	.cpl(sr.pl),
 	.sto(),
@@ -4410,9 +4415,9 @@ Qupls4_expipe01 #(.PIPE(3'd0)) uxpipe0
 	.fcu_adr(fcu_res0)
 );
 else begin
-	assign xpipe0_rse2 = {$bits(reservation_station_entry_t){1'b0}};
+	assign xpipe_rseo[0] = {$bits(reservation_station_entry_t){1'b0}};
 	assign xpipe0_we = 9'd0;
-	assign xpipe0_resA = 64'd0;
+	assign xpipe_res[0] = 64'd0;
 	assign fcu_rse0 = {$bits(reservation_station_entry_t){1'b0}};
 	assign fcu_res0 = 64'd0;
 end
@@ -4428,12 +4433,12 @@ Qupls4_expipe01 #(.PIPE(3'd1)) uxpipe1
 	.clk3x(clk2x),
 	.idle(),
 	.stomp(robentry_stomp),
-	.rse_i(xpipe1_rse),
-	.rse_o(xpipe1_rse2),
+	.rse_i(xpipe_rse[1]),
+	.rse_o(xpipe_rseo[1]),
 	.rm(),
 	.z(sau1_predz),
 	.cptgt(xpipe1_cptgt),
-	.o(xpipe1_resA),
+	.o(xpipe_res[1]),
 	.csr(csr_res),
 	.cpl(sr.pl),
 	.sto(),
@@ -4453,9 +4458,9 @@ Qupls4_expipe01 #(.PIPE(3'd1)) uxpipe1
 	.fcu_adr(fcu_res1)
 );
 else begin
-	assign xpipe1_rse2 = {$bits(reservation_station_entry_t){1'b0}};
+	assign xpipe_rseo[1] = {$bits(reservation_station_entry_t){1'b0}};
 	assign xpipe1_we = 9'd0;
-	assign xpipe1_resA = 64'd0;
+	assign xpipe_res[1] = 64'd0;
 	assign fcu_rse1 = {$bits(reservation_station_entry_t){1'b0}};
 	assign fcu_res1 = 64'd0;
 end
@@ -4475,12 +4480,12 @@ Qupls4_expipe23 #(.PIPE(3'd2)) uxpipe2
 	.clk3x(clk2x),
 	.idle(),
 	.stomp(robentry_stomp),
-	.rse_i(xpipe2_rse),
-	.rse_o(xpipe2_rse2),
+	.rse_i(xpipe_rse[2]),
+	.rse_o(xpipe_rseo[2]),
 	.rm(),
 	.z(),
 	.cptgt(xpipe2_cptgt),
-	.o(xpipe2_resA),
+	.o(xpipe_res[2]),
 	.sto(),
 	.ust(),
 	.otag(),
@@ -4492,9 +4497,9 @@ Qupls4_expipe23 #(.PIPE(3'd2)) uxpipe2
 	.agen_rse()
 );
 else begin
-	assign xpipe2_rse2 = {$bits(reservation_station_entry_t){1'b0}};
+	assign xpipe_rseo[2] = {$bits(reservation_station_entry_t){1'b0}};
 	assign xpipe2_we = 9'd0;
-	assign xpipe2_resA = 64'd0;
+	assign xpipe_res[2] = 64'd0;
 end
 end
 endgenerate
@@ -4508,12 +4513,12 @@ Qupls4_expipe23 #(.PIPE(3'd3)) uxpipe3
 	.clk3x(clk2x),
 	.idle(),
 	.stomp(robentry_stomp),
-	.rse_i(xpipe3_rse),
-	.rse_o(xpipe3_rse2),
+	.rse_i(xpipe_rse[3]),
+	.rse_o(xpipe_rseo[3]),
 	.rm(),
 	.z(),
 	.cptgt(xpipe3_cptgt),
-	.o(xpipe3_resA),
+	.o(xpipe_res[3]),
 	.sto(),
 	.ust(),
 	.otag(),
@@ -4525,9 +4530,9 @@ Qupls4_expipe23 #(.PIPE(3'd3)) uxpipe3
 	.agen_rse()
 );
 else begin
-	assign xpipe3_rse2 = {$bits(reservation_station_entry_t){1'b0}};
+	assign xpipe_rseo[3] = {$bits(reservation_station_entry_t){1'b0}};
 	assign xpipe3_we = 9'd0;
-	assign xpipe3_resA = 64'd0;
+	assign xpipe_res[3] = 64'd0;
 end
 end
 endgenerate
@@ -4541,12 +4546,12 @@ Qupls4_expipe45 #(.PIPE(3'd4)) uxpipe4
 	.clk3x(clk2x),
 	.idle(),
 	.stomp(robentry_stomp),
-	.rse_i(xpipe4_rse),
-	.rse_o(xpipe4_rse2),
+	.rse_i(xpipe_rse[4]),
+	.rse_o(xpipe_rseo[4]),
 	.rm(),
 	.z(),
 	.cptgt(xpipe4_cptgt),
-	.o(xpipe4_resA),
+	.o(xpipe_res[4]),
 	.sto(),
 	.ust(),
 	.otag(),
@@ -4563,9 +4568,9 @@ Qupls4_expipe45 #(.PIPE(3'd4)) uxpipe4
 	.mem_flags_i(dram0_oper.oper.flags)
 );
 else begin
-	assign xpipe4_rse2 = {$bits(reservation_station_entry_t){1'b0}};
+	assign xpipe_rseo[4] = {$bits(reservation_station_entry_t){1'b0}};
 	assign xpipe4_we = 9'd0;
-	assign xpipe4_resA = 64'd0;
+	assign xpipe_res[4] = 64'd0;
 	assign agen0_adr = 64'd0;
 	assign agen0_adrv = INV;
 	assign agen0_rse = {$bits(reservation_station_entry_t){1'b0}};
@@ -4582,12 +4587,12 @@ Qupls4_expipe45 #(.PIPE(3'd5)) uxpipe5
 	.clk3x(clk2x),
 	.idle(),
 	.stomp(robentry_stomp),
-	.rse_i(xpipe5_rse),
-	.rse_o(xpipe5_rse2),
+	.rse_i(xpipe_rse[5]),
+	.rse_o(xpipe_rseo[5]),
 	.rm(),
 	.z(),
 	.cptgt(xpipe5_cptgt),
-	.o(xpipe5_resA),
+	.o(xpipe_res[5]),
 	.sto(),
 	.ust(),
 	.otag(),
@@ -4604,9 +4609,9 @@ Qupls4_expipe45 #(.PIPE(3'd5)) uxpipe5
 	.mem_flags_i(dram1_oper.oper.flags)
 );
 else begin
-	assign xpipe5_rse2 = {$bits(reservation_station_entry_t){1'b0}};
+	assign xpipe_rseo[5] = {$bits(reservation_station_entry_t){1'b0}};
 	assign xpipe5_we = 9'd0;
-	assign xpipe5_resA = 64'd0;
+	assign xpipe_res[5] = 64'd0;
 	assign agen1_adr = 64'd0;
 	assign agen1_adrv = INV;
 	assign agen1_rse = {$bits(reservation_station_entry_t){1'b0}};
@@ -4619,8 +4624,8 @@ Qupls4_meta_alu #(.SAU0(1'b1)) ualu0
 (
 	.rst(irst),
 	.clk(clk),
-	.rse_i(xpipe0_rse),
-	.rse_o(xpipe0_rse2),
+	.rse_i(xpipe_rse[0]),
+	.rse_o(xpipe_rseo[0]),
 	.cptgt(sau0_cptgt),
 	.z(sau0_predz),
 	.stomp(robentry_stomp),
@@ -4628,7 +4633,7 @@ Qupls4_meta_alu #(.SAU0(1'b1)) ualu0
 	.canary(canary),
 	.cpl(sr.pl),
 	.qres(fpu0_resH),
-	.o(xpipe0_resA),
+	.o(xpipe_res[0]),
 	.we_o(xpipe0_we),
 	.exc(xpipe0_exc),
 	.fcu_rse_o(),
@@ -4713,8 +4718,8 @@ if (Qupls4_pkg::NSAU > 1) begin
 	(
 		.rst(irst),
 		.clk(clk),
-		.rse_i(xpipe1_rse),
-		.rse_o(xpipe1_rse2),
+		.rse_i(xpipe_rse[1]),
+		.rse_o(xpipe_rseo[1]),
 		.cptgt(sau1_cptgt),
 		.z(sau1_predz),
 		.stomp(robentry_stomp),
@@ -4722,7 +4727,7 @@ if (Qupls4_pkg::NSAU > 1) begin
 		.canary(canary),
 		.cpl(sr.pl),
 		.qres(64'd0),
-		.o(xpipe1_resA),
+		.o(xpipe_res[1]),
 		.we_o(xpipe1_we),
 		.exc(xpipe1_exc),
 		.fcu_rse_o(fcu_rse),
@@ -4821,7 +4826,7 @@ if (Qupls4_pkg::NFPU > 0) begin
 			.tlb_v(tlb0_v),
 			.adr(agen0_adr),
 			.adrv(agen0_v),
-			.agen_rse(xpipe4_rse)
+			.agen_rse(xpipe_rse[4])
 		);
 	end
 	else begin
@@ -4845,7 +4850,7 @@ if (Qupls4_pkg::NFPU > 0) begin
 			.tlb_v(tlb0_v),
 			.adr(agen0_adr),
 			.adrv(agen0_v),
-			.agen_rse(xpipe4_rse)
+			.agen_rse(xpipe_rse[4])
 		);
 	end
 end
@@ -4873,7 +4878,7 @@ if (Qupls4_pkg::NFPU > 1) begin
 		.tlb_v(tlb1_v),
 		.adr(agen1_adr),
 		.adrv(agen1_v),
-		.agen_rse(xpipe5_rse)
+		.agen_rse(xpipe_rse[5])
 );
 end
 else begin
@@ -5602,7 +5607,7 @@ uxpipe0st
 	.stomp(robentry_stomp),
 	.issue(),//sau0_issue),//robentry_issue[sau0_rndx]),
 	.rse_i(rse),
-	.rse_o(xpipe0_rse),
+	.rse_o(xpipe_rse[0]),
 	.rf_oper_i(rf_oper),
 	.bypass_i(),
 	.wp_oper_tap_i(wp_tap),
@@ -5718,7 +5723,7 @@ generate begin : gXpipe1Station
 			.stomp(robentry_stomp),
 			.issue(),//robentry_issue[sau0_rndx]),
 			.rse_i(rse),
-			.rse_o(xpipe1_rse),
+			.rse_o(xpipe_rse[1]),
 			.rf_oper_i(rf_oper),
 			.bypass_i(),
 			.wp_oper_tap_i(wp_tap),
@@ -5761,7 +5766,7 @@ generate begin : gXpipe2Station
 			.stomp(robentry_stomp),
 			.issue(),//robentry_issue[sau0_rndx]),
 			.rse_i(rse),
-			.rse_o(xpipe2_rse),
+			.rse_o(xpipe_rse[2]),
 			.rf_oper_i(rf_oper),
 			.bypass_i(),
 			.wp_oper_tap_i(wp_tap),
@@ -5804,7 +5809,7 @@ generate begin : gXpipe3Station
 			.stomp(robentry_stomp),
 			.issue(),//robentry_issue[sau0_rndx]),
 			.rse_i(rse),
-			.rse_o(xpipe3_rse),
+			.rse_o(xpipe_rse[3]),
 			.rf_oper_i(rf_oper),
 			.bypass_i(),
 			.wp_oper_tap_i(wp_tap),
@@ -6096,7 +6101,7 @@ uxpipe4st
 	.stomp(robentry_stomp),
 	.issue(),//robentry_issue[sau0_rndx]),
 	.rse_i(rse),
-	.rse_o(xpipe4_rse),
+	.rse_o(xpipe_rse[4]),
 	.rf_oper_i(rf_oper),
 	.bypass_i(),
 	.wp_oper_tap_i(wp_tap),
@@ -6109,7 +6114,7 @@ uxpipe4st
 	.FPCSRv(INV)
 );
 else begin
-	assign xpipe4_rse = {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
+	assign xpipe_rse[4] = {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
 	assign bRs[4] = 36'd0;
 	assign bRsv[4] = 4'b0;
 end
@@ -6140,7 +6145,7 @@ uxpipe5st2
 	.stomp(robentry_stomp),
 	.issue(),//robentry_issue[sau0_rndx]),
 	.rse_i(rse),
-	.rse_o(xpipe5_rse),
+	.rse_o(xpipe_rse[5]),
 	.rf_oper_i(rf_oper),
 	.bypass_i(),
 	.wp_oper_tap_i(wp_tap),
@@ -6153,7 +6158,7 @@ uxpipe5st2
 	.FPCSRv(INV)
 );
 else begin
-	assign xpipe5_rse = {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
+	assign xpipe_rse[5] = {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
 	assign bRs[5] = 36'd0;
 	assign bRsv[5] = 4'b0;
 end
@@ -6339,7 +6344,8 @@ if (irst) begin
 	lsq_cmd_ndx = 0;
 end
 else begin
-
+	
+	alloc_irq_stream <= FALSE;
 	lsq_cmd_ndx = 8;
 	foreach (lsq_cmd[n12])
 		lsq_cmd[n12] <= {$bits(lsq_cmd_t){1'b0}};
@@ -6365,15 +6371,15 @@ else begin
 	// just for debugging in SIM. All values come from the register file.
 `ifdef IS_SIM
 	if (xpipe0_available && sau0_issue) begin
-		rob[xpipe0_rse.rndx].argA <= xpipe0_rse.arg[0].val;
-		rob[xpipe0_rse.rndx].argB <= xpipe0_rse.arg[1].val;
-		rob[xpipe0_rse.rndx].argT <= xpipe0_rse.arg[4].val;
+		rob[xpipe_rse[0].rndx].argA <= xpipe_rse[0].arg[0].val;
+		rob[xpipe_rse[0].rndx].argB <= xpipe_rse[0].arg[1].val;
+		rob[xpipe_rse[0].rndx].argT <= xpipe_rse[0].arg[4].val;
 	end
 	if (Qupls4_pkg::NSAU > 1) begin
 		if (xpipe1_available && sau1_rndxv && sau1_idle) begin
-			rob[xpipe1_rse.rndx].argA <= xpipe1_rse.arg[0].val;
-			rob[xpipe1_rse.rndx].argB <= xpipe1_rse.arg[1].val;
-			rob[xpipe1_rse.rndx].argT <= xpipe1_rse.arg[4].val;
+			rob[xpipe_rse[1].rndx].argA <= xpipe_rse[1].arg[0].val;
+			rob[xpipe_rse[1].rndx].argB <= xpipe_rse[1].arg[1].val;
+			rob[xpipe_rse[1].rndx].argT <= xpipe_rse[1].arg[4].val;
 		end
 	end
 	if (Qupls4_pkg::NFPU > 0) begin
@@ -6582,10 +6588,6 @@ else begin
 			rob[nn].done <= 2'b11;
 		end
 
-	foreach (rob[nn])
-		if (rob[nn].op.decbus.nop)
-			rob[nn].done <= 2'b11;
-
 	// If branch resolved, clear dependencies.
 	foreach (rob[nn])
 		if (stream_states[rob[nn].ip_stream.stream]!=Qupls4_pkg::STR_UNKNOWN)
@@ -6793,17 +6795,17 @@ else begin
 	// Whenever a result would be written, update the exception and done/out status.
 	// Although no result may be written, the done/out status still needs to be set.
 	if (Qupls4_pkg::SUPPORT_XPIPE0)
-		tSetROBDone(xpipe0_rse2,FALSE, xpipe0_resA);
+		tSetROBDone(xpipe_rseo[0],FALSE, xpipe_res[0]);
 	if (Qupls4_pkg::SUPPORT_XPIPE1)
-		tSetROBDone(xpipe1_rse2,FALSE, xpipe1_resA);
+		tSetROBDone(xpipe_rseo[1],FALSE, xpipe_res[1]);
 	if (Qupls4_pkg::SUPPORT_XPIPE2)
-		tSetROBDone(xpipe2_rse2,FALSE, xpipe2_resA);
+		tSetROBDone(xpipe_rseo[2],FALSE, xpipe_res[2]);
 	if (Qupls4_pkg::SUPPORT_XPIPE3)
-		tSetROBDone(xpipe3_rse2,FALSE, xpipe3_resA);
+		tSetROBDone(xpipe_rseo[3],FALSE, xpipe_res[3]);
 	if (Qupls4_pkg::SUPPORT_XPIPE4 & xpipe4_done)
-		tSetROBDone(xpipe4_rse2,FALSE, xpipe4_resA);
+		tSetROBDone(xpipe_rseo[4],FALSE, xpipe_res[4]);
 	if (Qupls4_pkg::SUPPORT_XPIPE5 & xpipe5_done)
-		tSetROBDone(xpipe5_rse2,FALSE, xpipe5_resA);
+		tSetROBDone(xpipe_rseo[5],FALSE, xpipe_res[5]);
 
 	if (fcu_rse.v)
 		fcu_state1 <= VAL;
@@ -7638,7 +7640,7 @@ endfunction
 function pregno_t fnPreg;
 input aregno_t regno;
 begin
-	fnPreg = uren1.urat1.currentMap.regmap[regno];
+	fnPreg = {regno[6:2],uren1.urat1.currentMap.regmap[regno]};
 end
 endfunction
 `else
@@ -7812,16 +7814,17 @@ always_ff @(posedge clk) begin: clock_n_debug
 	end
 	$display("----- Dispatch -----");
 	foreach (rse[i]) begin
-		$display("%d%c rob[%d]: IP:%h.%h.%h Ins=%h Rd%d/%d Rs1%d/%d Rs2%d/%d Rs3%d/%d Imm=%h", 
-			i[2:0],rse[i].v?"v":" ",rse[i].rndx,
-			rse[i].pc.stream.thread,rse[i].pc.stream.stream,rse[i].pc.pc[31:0],
-			rse[i].uop.opcode,
-			rse[i].arg[3].aRn, rse[i].arg[3].pRn,
-			rse[i].arg[0].aRn, rse[i].arg[0].pRn,
-			rse[i].arg[1].aRn, rse[i].arg[1].pRn,
-			rse[i].arg[2].aRn, rse[i].arg[2].pRn,
-			rse[i].arg[1].val
-		);
+		if (SUPPORT_XPIPE[i])
+			$display("%d%c rob[%d]: IP:%h.%h.%h Ins=%h Rd%d/%d Rs1%d/%d Rs2%d/%d Rs3%d/%d Imm=%h", 
+				i[2:0],rse[i].v?"v":" ",rse[i].rndx,
+				rse[i].pc.stream.thread,rse[i].pc.stream.stream,rse[i].pc.pc[31:0],
+				rse[i].uop.opcode,
+				rse[i].arg[3].aRn, rse[i].arg[3].pRn,
+				rse[i].arg[0].aRn, rse[i].arg[0].pRn,
+				rse[i].arg[1].aRn, rse[i].arg[1].pRn,
+				rse[i].arg[2].aRn, rse[i].arg[2].pRn,
+				rse[i].arg[1].val
+			);
 	end
 	$display("----- LSQ -----");
 	for (i = 0; i < Qupls4_pkg::LSQ_ENTRIES; i = i + 1) begin
@@ -7865,26 +7868,24 @@ always_ff @(posedge clk) begin: clock_n_debug
 		{{37{fcu_instr.uop[63]}},fcu_instr.uop[63:44],3'd0}
 	);
 
-	$display("----- ALU -----");
-	$display("%d I=%h T=%h A=%h B=%h C=%h %c%d pc:%h #",
-		sau0_dataready, xpipe0_rse.argI, xpipe0_rse.arg[4].val, xpipe0_rse.arg[0].val, xpipe0_rse.arg[1].val, xpipe0_rse.arg[2].val,
-		 ((fnIsLoad(xpipe0_rse.uop) || fnIsStore(xpipe0_rse.uop)) ? 109 : 97),
-		sau0_instr, sau0_pc);
-	$display("idle:%d res:%h rid:%d #", sau0_idle, xpipe0_resA, xpipe0_rse.rndx);
-
-	if (Qupls4_pkg::NSAU > 1) begin
-		$display("%d I=%h T=%h A=%h B=%h C=%h %c%d pc:%h #",
-			sau1_dataready, xpipe1_rse.argI, xpipe1_rse.arg[4].val, xpipe1_rse.arg[0].val, xpipe1_rse.arg[1].val, xpipe1_rse.arg[2].val, 
-			 ((fnIsLoad(xpipe1_rse.uop) || fnIsStore(xpipe1_rse.uop)) ? 109 : 97),
-			xpipe1_rse.uop, xpipe1_rse.pc);
-		$display("idle:%d res:%h rid:%d #", sau1_idle, xpipe1_resA, xpipe1_rse.rndx);
+	$display("----- XPIPE -----");
+	for (i = 0; i < 6; i = i + 1) begin
+		if (SUPPORT_XPIPE[i]) begin
+			$display("I=%h T=%h A=%h B=%h C=%h %c%d pc:%h #",
+				xpipe_rseo[i].argI, xpipe_rseo[i].arg[4].val, xpipe_rseo[i].arg[0].val, xpipe_rseo[i].arg[1].val, xpipe_rseo[i].arg[2].val,
+				 ((fnIsLoad(xpipe_rseo[i].uop) || fnIsStore(xpipe_rseo[i].uop)) ? 109 : 97),
+				xpipe_rseo[i].uop.opcode, xpipe_rseo[i].pc);
+			$display("res:%h rid:%d #", xpipe_res[i], xpipe_rseo[i].rndx);
+		end
 	end
+
 	$display("----- Writeback -----");
 	$display("frq rd=%b empty=%b", fuq_rd, fuq_empty);
 	foreach(wrport0_v[i]) begin
-		$display("%d: %c we%h R%d=%h %h",
-			i[3:0], wrport0_v[i] ? "v" : " ", wrport0_we[i], wrport0_Rt[i], wrport0_res[i], wrport0_tag[i]
-		);
+		if (SUPPORT_XPIPE[i])
+			$display("%d: %c we%h R%d=%h %h",
+				i[3:0], wrport0_v[i] ? "v" : " ", wrport0_we[i], wrport0_Rt[i], wrport0_res[i], wrport0_tag[i]
+			);
 	end
 
 	$display("----- Commit -----");
@@ -8611,6 +8612,8 @@ begin
 	
 	irq_downcount <= 8'd00;
 	irq_downcount_base <= 8'd10;
+	irq_resolved <= FALSE;
+	alloc_irq_stream <= FALSE;
 	
 	ssm_flag <= FALSE;
 	pred_alloc_map <= 32'h0;
@@ -8981,47 +8984,14 @@ begin
 		end
 		// If interrupts are still enabled at commit, go do interrupt processing.
 		if (rob[head].op.hwi && pgh[rob[head].pghn_irq].hwi && pgh[rob[head].pghn_irq].irq.level == 6'd63)	// NMI
-			tProcessHwi(head,rob[head].op.uop.num,FALSE,TRUE);
+			tProcessHwi(head,rob[head].op.uop.num,4'b0001);
 		else if (rob[head].op.hwi && pgh[rob[head].pghn_irq].hwi && pgh[rob[head].pghn_irq].irq.level > sr.ipl && sr.mie)
-			tProcessHwi(head,rob[head].op.uop.num,TRUE,FALSE);
-		// If interrupt turned out to be disabled reload the IRQ at the fetch stage,
-		// but only after loading some other instructions. Put the irq on a queue for
-		// later processing. Note that the interrupt enable level has been set to
-		// disable further interrupts. So, instruction fetch should be able to 
-		// continue with the desired stream.
-		// Instruction was valid, but interrupts were disabled.
-		else if (pgh[rob[head].pghn_irq].hwi) begin
-			irq_wr_en <= TRUE;
-			irq2_din <= pgh[rob[head].pghn_irq].irq;
-			irq_downcount <= irq_downcount_base;
-			irq_downcount_base <= {irq_downcount_base,1'b0} | 8'd8;
-			excir <= rob[head].op;
-			excid <= head;
-			excmissgrp <= rob[head].pghn;
-			excmisspc.pc <= rob[head].eip;
-			excmiss <= TRUE;
-			set_pending_ipl <= TRUE;
-			next_pending_ipl <= pgh[rob[head].pghn_irq].old_ipl;	// restore IPL
-			sr.ipl <= pgh[rob[head].pghn_irq].old_ipl;
-			if (irq_downcount_base[7])
-				tProcessExc(head,rob[head].eip,rob[head].op.uop.num);
-		end
+			tProcessHwi(head,rob[head].op.uop.num,4'b0010);
+		else if (pgh[rob[head].pghn_irq].hwi)
+			tProcessHwi(head,rob[head].op.uop.num,4'b0100);
 	end
-	// If the instruction got invalidated (eg branch) there is not an easy way to
-	// know what address a hardware interrupt should change flow to. So,
-	// just put the interrupt into a FIFO to be redone later.
-	// The branch will have already reset the fetch pointer.
-	else if (pgh[rob[head].pghn_irq].hwi) begin
-		irq_wr_en <= TRUE;
-		irq2_din <= pgh[rob[head].pghn_irq].irq;
-		irq_downcount <= irq_downcount_base;
-		irq_downcount_base <= {irq_downcount_base,1'b0} | 8'd8;
-		if (irq_downcount_base[7])
-			tProcessExc(head,rob[head].eip,rob[head].op.uop.num);
-		set_pending_ipl <= TRUE;
-		next_pending_ipl <= pgh[rob[head].pghn_irq].old_ipl;	// restore IPL
-		sr.ipl <= pgh[rob[head].pghn_irq].old_ipl;
-	end
+	else if (pgh[rob[head].pghn_irq].hwi)
+		tProcessHwi(head,rob[head].op.uop.num,4'b1000);
 	
 end
 endtask
@@ -9278,38 +9248,96 @@ endtask
 
 // HWI processing
 // Since interrupts immediately change the IP at the fetch stage there is no
-// need to vector here.
+// need to vector here unless the wrong vector was used due to a change in 
+// the operating mode.
 
 task tProcessHwi;
 input rob_ndx_t id;
 input [2:0] uop_num;
-input irq;
-input nmi;
+input [3:0] opt;
 integer nn;
 begin
-	for (nn = 1; nn < ISTACK_DEPTH; nn = nn + 1)
-		sr_stack[nn] <= sr_stack[nn-1];
-	sr_stack[0] <= sr;
-	for (nn = 1; nn < ISTACK_DEPTH; nn = nn + 1)
-		pc_stack[nn] <= pc_stack[nn-1];
-	pc_stack[0] <= rob[id].eip;
-	sr.pl <= 8'hFF;
-	sr.om <= fnNextOm(sr.om);
-	csr_carry_mod <= rob[id].op.carry_mod;
-	if (nmi) begin
-		sr.ipl <= pgh[rob[id].pghn_irq].irq.level;
-		sr.ssm <= FALSE;
-		ssm_flag <= FALSE;
-		excmiss <= TRUE;
-		excmisspc.pc <= kernel_vectors[sr.dbg ? 3'd4 : {1'b0,fnNextOm(sr.om)}];//[$bits(pc_address_t)-1:8] + 4'd11,8'h0};
-	end
-	else if (irq) begin
-		sr.ipl <= pgh[rob[id].pghn_irq].irq.level;
-		sr.ssm <= FALSE;
-		ssm_flag <= FALSE;
-		excmiss <= TRUE;
-		excmisspc.pc <= kernel_vectors[sr.dbg ? 3'd4 : {1'b0,fnNextOm(sr.om)}];//[$bits(pc_address_t)-1:8] + 4'd11,8'h0};
-	end
+	case(opt)
+	4'b0000:	;
+	4'b0001,4'b0010,4'b0011:
+		begin
+			for (nn = 1; nn < ISTACK_DEPTH; nn = nn + 1)
+				sr_stack[nn] <= sr_stack[nn-1];
+			sr_stack[0] <= sr;
+			for (nn = 1; nn < ISTACK_DEPTH; nn = nn + 1)
+				pc_stack[nn] <= pc_stack[nn-1];
+			pc_stack[0] <= rob[id].eip;
+			sr.pl <= 8'hFF;
+			sr.om <= fnNextOm(sr.om);
+			csr_carry_mod <= rob[id].op.carry_mod;
+			if (opt[1]) begin
+				sr.ipl <= pgh[rob[id].pghn_irq].irq.level;
+				sr.ssm <= FALSE;
+				ssm_flag <= FALSE;
+				irq_resolved <= TRUE;
+				if (pgh[rob[id].pghn].ip.pc + {rob[id].ip_offs,1'b0} != kernel_vectors[sr.dbg ? 3'd4 : {1'b0,fnNextOm(sr.om)}]) begin
+					excmiss <= TRUE;
+					excmisspc.pc <= kernel_vectors[sr.dbg ? 3'd4 : {1'b0,fnNextOm(sr.om)}];//[$bits(pc_address_t)-1:8] + 4'd11,8'h0};
+					excmisspc.stream <= new_stream[rob[id].ip_stream.thread].stream;
+					alloc_irq_stream <= TRUE;
+				end
+			end
+			else if (opt[0]) begin
+				sr.ipl <= pgh[rob[id].pghn_irq].irq.level;
+				sr.ssm <= FALSE;
+				ssm_flag <= FALSE;
+				irq_resolved <= TRUE;
+				if (pgh[rob[id].pghn].ip.pc + {rob[id].ip_offs,1'b0} != kernel_vectors[sr.dbg ? 3'd4 : {1'b0,fnNextOm(sr.om)}]) begin
+					excmiss <= TRUE;
+					excmisspc.pc <= kernel_vectors[sr.dbg ? 3'd4 : {1'b0,fnNextOm(sr.om)}];//[$bits(pc_address_t)-1:8] + 4'd11,8'h0};
+					excmisspc.stream <= new_stream[rob[id].ip_stream.thread].stream;
+					alloc_irq_stream <= TRUE;
+				end
+			end
+		end
+	// If interrupt turned out to be disabled reload the IRQ at the fetch stage,
+	// but only after loading some other instructions. Put the irq on a queue for
+	// later processing. Note that the interrupt enable level has been set to
+	// disable further interrupts. So, instruction fetch should be able to 
+	// continue with the desired stream.
+	// Instruction was valid, but interrupts were disabled.
+	4'b0100:
+		begin
+			irq_wr_en <= TRUE;
+			irq2_din <= pgh[rob[id].pghn_irq].irq;
+			irq_downcount <= irq_downcount_base;
+			irq_downcount_base <= {irq_downcount_base,1'b0} | 8'd8;
+			excir <= rob[id].op;
+			excid <= id;
+			excmissgrp <= rob[id].pghn;
+			excmisspc.pc <= rob[id].eip;
+			excmiss <= TRUE;
+			irq_resolved <= TRUE;
+			set_pending_ipl <= TRUE;
+			next_pending_ipl <= pgh[rob[id].pghn_irq].old_ipl;	// restore IPL
+			sr.ipl <= pgh[rob[id].pghn_irq].old_ipl;
+			if (irq_downcount_base[7])
+				tProcessExc(id,rob[id].eip,rob[id].op.uop.num);
+		end
+	// If the instruction got invalidated (eg branch) there is not an easy way to
+	// know what address a hardware interrupt should change flow to. So,
+	// just put the interrupt into a FIFO to be redone later.
+	// The branch will have already reset the fetch pointer.
+	4'b1000:
+		begin
+			irq_wr_en <= TRUE;
+			irq2_din <= pgh[rob[id].pghn_irq].irq;
+			irq_downcount <= irq_downcount_base;
+			irq_downcount_base <= {irq_downcount_base,1'b0} | 8'd8;
+			irq_resolved <= TRUE;
+			set_pending_ipl <= TRUE;
+			next_pending_ipl <= pgh[rob[id].pghn_irq].old_ipl;	// restore IPL
+			sr.ipl <= pgh[rob[id].pghn_irq].old_ipl;
+			if (irq_downcount_base[7])
+				tProcessExc(id,rob[id].eip,rob[id].op.uop.num);
+		end
+	default:	;
+	endcase
 end
 endtask
 

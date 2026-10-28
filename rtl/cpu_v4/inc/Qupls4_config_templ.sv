@@ -295,6 +295,8 @@ localparam SUPPORT_TRIG4 = 0;
 localparam SUPPORT_TRIG5 = 0;
 localparam SUPPORT_MEM4 = 1;
 localparam SUPPORT_MEM5 = 0;
+localparam SUPPORT_BFLD0 = 0;
+localparam SUPPORT_BFLD1 = 0;
 
 localparam SUPPORT_PFX3 = 0;
 localparam SUPPORT_CANARY = 0;
