@@ -179,6 +179,7 @@ begin
 	lsq[n12r][n12c].loadv <= INV;
 	lsq[n12r][n12c].load <= rob.op.decbus.load|rob.excv;
 	lsq[n12r][n12c].loadz <= rob.op.decbus.loadz|rob.excv;
+	lsq[n12r][n12c].load_canary <= rob.op.decbus.load_canary;
 	lsq[n12r][n12c].cload <= rob.excv;
 	lsq[n12r][n12c].cload_tags <= rob.excv;
 	lsq[n12r][n12c].store <= rob.op.decbus.store;
@@ -285,6 +286,7 @@ begin
 	lsq[n18r][n18c].vstore <= FALSE;
 	lsq[n18r][n18c].vstore_ndx <= FALSE;
 	lsq[n18r][n18c].load <= FALSE;
+	lsq[n18r][n18c].load_canary <= FALSE;
 	lsq[n18r][n18c].vload <= FALSE;
 	lsq[n18r][n18c].vload_ndx <= FALSE;
 	// If it was a load, then cache the data in the LSQ

@@ -415,6 +415,7 @@ begin
 	dbo.iprel = FALSE;
 	dbo.cause = Qupls4_pkg::FLT_NONE;
 //	dbo.mem0 = db.v2p|db.vv2p|db.vvn2p;
+	dbo.load_canary = SUPPORT_CANARY && instr.opcode==Qupls4_pkg::OP_LOAD && instr.byteno[2];
 	dbo.v2p = instr.opcode==Qupls4_pkg::OP_V2P;
 	dbo.vv2p = instr.opcode==Qupls4_pkg::OP_VV2P;
 	dbo.amo = instr.opcode==Qupls4_pkg::OP_AMO;

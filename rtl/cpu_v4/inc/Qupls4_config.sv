@@ -302,6 +302,7 @@ localparam SUPPORT_NNA = 0;
 */
 
 localparam SUPPORT_PFX3 = 0;
+localparam SUPPORT_CANARY = 0;
 
 // =============================================================================
 // Resources
@@ -370,16 +371,6 @@ localparam NRSE_XPIPE2 = 1;
 localparam NRSE_XPIPE3 = 1;
 localparam NRSE_XPIPE4 = 1;
 localparam NRSE_XPIPE5 = 1;
-
-localparam NRSE_SAU0 = 1;
-localparam NRSE_SAU = 1;
-localparam NRSE_IMUL =1;
-localparam NRSE_IDIV =2;
-localparam NRSE_FMA =1;
-localparam NRSE_FPU =1;
-localparam NRSE_DFLT =2;
-localparam NRSE_FCU =1;
-localparam NRSE_AGEN =1;
 
 localparam MICROOPS_PER_INSTR = 16;
 

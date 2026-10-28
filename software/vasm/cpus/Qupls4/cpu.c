@@ -29,7 +29,7 @@
 extern char* qual[MAX_QUALIFIERS];
 extern int qual_len[MAX_QUALIFIERS];
 
-const char *cpu_copyright="vasm Qupls4 cpu backend v0.12 (c) in 2025-2026 Robert Finch";
+const char *cpu_copyright="vasm Qupls4 cpu backend v0.13 (c) in 2025-2026 Robert Finch";
 
 const char *cpuname="Qupls4";
 int bitsperbyte=8;
@@ -343,7 +343,7 @@ mnemonic mnemonics[]={
 	"ldh",	{OP_REG,OP_REGIND,0,0}, {REGIND,CPU_ALL,0,0,OPC(72LL),8, SZ_UNSIZED, SZ_HEXI, FLG_LSDISP|FLG_REGIND},	
 	"ldh",	{OP_REG,OP_SCNDX,0,0,0}, {SCNDX,CPU_ALL,0,0,LSFUNC(8LL)|OPC(79LL),8, SZ_UNSIZED, SZ_HEXI, FLG_LSDISP},	
 
-	"ldi", {OP_REG,OP_NEXTREG,OP_IMM,0,0}, {RI,CPU_ALL,0,0,OPC(4LL),6,SZ_UNSIZED, 0},	
+	"ldi", {OP_REG,OP_NEXTREG,OP_IMM,0,0}, {RI,CPU_ALL,0,0,OPC(4LL),6,SZ_UNSIZED, 3},	
 
 	"ldo",	{OP_REG,OP_IMM,0,0,0}, {DIRECT,CPU_ALL,0,0,OPC(67LL),6, SZ_UNSIZED, SZ_OCTA, FLG_LSDISP|FLG_REGIND},	
 	"ldo",	{OP_REG,OP_REGIND,0,0}, {REGIND,CPU_ALL,0,0,OPC(67LL),6, SZ_UNSIZED, SZ_OCTA, FLG_LSDISP|FLG_REGIND},	
@@ -384,7 +384,7 @@ mnemonic mnemonics[]={
 	"loada",	{OP_REG,OP_REGIND,0,0}, {REGIND,CPU_ALL,0,0,OPC(20LL),6, SZ_UNSIZED, 0, FLG_LSDISP},	
 	"loada",	{OP_REG,OP_SCNDX,0,0,0}, {SCNDX,CPU_ALL,0,0,OPC(20LL),6, SZ_UNSIZED, 0, FLG_LSDISP},	
 
-	"loadi", {OP_REG,OP_NEXTREG,OP_IMM,0,0}, {RI,CPU_ALL,0,0,OPC(4LL),6,SZ_INTI,3},	
+	"loadi", {OP_REG,OP_NEXTREG,OP_IMM,0,0}, {RI,CPU_ALL,0,0,OPC(4LL),6,SZ_UNSIZED,3},	
 
 	"lsr", {OP_REG,OP_REG,OP_REG,0,0}, {R3,CPU_ALL,0,0,R3FUNC(84LL)|OP3(1LL)|OPC(104LL),6,SZ_INT,3},	
 	"lsr", {OP_REG,OP_REG,OP_IMM,0,0}, {R3,CPU_ALL,0,0,R3FUNC(84LL)|OP3(1LL)|OPC(104LL),6,SZ_INT,3},	
@@ -1905,21 +1905,21 @@ static thuge make_reloc(int reloctype,operand *op,section *sec,
                         21,25,0,0x1ffffffLL);
         	if (!is_nbit(addend,25)) {
 		      	add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
-                        9,39,0,0xfffffffffe000000LL);
+                        9,39,6,0xfffffffffe000000LL);
         	}
         	break;
 
 				case RIA:
         case RIB:
-        	if (is_nbit(addend,42)) {
+        	if (is_nbit(addend,46)) {
 		      	add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
-                          12,36,6,0x3ffffffffe0LL);
+                          9,39,6,0x3fffffffff80LL);
         	}
-        	else if (is_nbit(addend,78)) {
+        	else if (is_nbit(addend,85)) {
 		      	add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
-                          12,36,6,0x3ffffffffe0LL);
+                          9,39,6,0x3fffffffff80LL);
 		      	add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
-                          12,36,12,0xfffffc0000000000LL);
+                          9,39,12,0xffffc00000000000LL);
         	}
         	break;
 
@@ -1935,12 +1935,12 @@ static thuge make_reloc(int reloctype,operand *op,section *sec,
 
         case DIRECT:
 	      	add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
-                        25,20,0,0xfffffLL);
+                        29,15,0,0x7fffLL);
           // Assume a postfix is present.
-          if (!is_nbit(addend,20))
+          if (!is_nbit(addend,15))
 		      	add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
-  	                      12,36,6,0xfffffffff00000LL);
-        	if (!is_nbit(addend,56))
+  	                      9,39,6,0x3fffffffff8000LL);
+        	if (!is_nbit(addend,54))
 	          goto illreloc;
         	break;
 
@@ -1951,21 +1951,21 @@ static thuge make_reloc(int reloctype,operand *op,section *sec,
 			      	add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
 	                          19,5,0,0xf8LL);
 	        	}
-	        	else if (is_nbit(addend,16)) {
+	        	else if (is_nbit(addend,15)) {
 			      	add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
-	                          32,16,0,0xffffLL);
+	                          29,15,0,0x7fffLL);
 	        	}
-	        	else if (is_nbit(addend,40)) {
+	        	else if (is_nbit(addend,54)) {
 			      	add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
-	                          32,32,0,0xffffffffLL);
+	                          29,15,0,0x7fffLL);
 			      	add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
-	                          0,8,8,0xff00000000LL);
+	                          9,39,6,0x3fffffffff8000LL);
 	        	}
 	        	else {	// abits > 64
 			      	add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
-	                          32,32,0,0xffffffffLL);
+	                          29,15,0,0x7fffLL);
 			      	add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
-	                          0,32,8,0xffffffff00000000LL);
+	                          9,39,6,0x3fffffffff8000LL);
 	        	}
         	}
         	else {
@@ -1973,50 +1973,50 @@ static thuge make_reloc(int reloctype,operand *op,section *sec,
 			      	add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
 	                          19,5,0,0xf8LL);
 	        	}
-	        	else if (is_nbit(addend,16)) {
+	        	else if (is_nbit(addend,15)) {
 			      	add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
-	                          32,16,0,0xffffLL);
+	                          29,15,0,0x7fffLL);
 	        	}
-	        	else if (is_nbit(addend,40)) {
+	        	else if (is_nbit(addend,54)) {
 			      	add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
-	                          32,32,0,0xffffffffLL);
+	                          29,15,0,0x7fffLL);
 			      	add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
-	                          0,8,8,0xff00000000LL);
+	                          9,39,6,0x3fffffffff8000LL);
 	        	}
 	        	else {	// abits > 64
 			      	add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
-	                          32,32,0,0xffffffffLL);
+	                          29,15,0,0x7fffLL);
 			      	add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
-	                          0,32,8,0xffffffff00000000LL);
+	                          9,39,6,0x3fffffffff8000LL);
 	        	}
         	}
         	break;
 
         case SCNDX:
-        	if (is_nbit(addend,16)) {
+        	if (is_nbit(addend,15)) {
 		      	add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
-                          32,16,0,0xffffLL);
+                          29,15,0,0x7fffLL);
         	}
-        	else if (is_nbit(addend,40)) {
+        	else if (is_nbit(addend,54)) {
 		      	add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
-                          32,32,0,0xffffffffLL);
+                          29,15,0,0x7fffLL);
 		      	add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
-                          0,8,8,0xff00000000LL);
+                          9,39,6,0x3fffffffff8000LL);
         	}
-        	else {
+        	else {	// abits > 64
 		      	add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
-                          32,32,0,0xffffffffLL);
+                          29,15,0,0x7fffLL);
 		      	add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
-                          0,8,32,0xffffffff00000000LL);
+                          9,39,6,0x3fffffffff8000LL);
         	}
 	       	break;
 
         case JSCNDX:
-        	if (is_nbit(addend,21)) {
+        	if (is_nbit(addend,15)) {
 		      	add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
-                          37,16,0,0xffffLL);
+                          29,15,0,0x7fffLL);
 		      	add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
-                          57,7,0,0x7f000LL);
+                          9,39,6,0x3fffffffff8000LL);
         	}
         	else {	// abits > 64
 	          goto illreloc;
@@ -2120,7 +2120,7 @@ static void encode_reg(instruction_buf* insn, operand *op, mnemonic* mnemo, int 
 
 		case RIA:
 			if (i==0)
-				insn->opcode |= RD(op->basereg & 0x1f);
+				insn->opcode |= RD(op->basereg & 0x7f);
 			else if (i==1)
 				;
 			else if (i==2)
@@ -2421,9 +2421,9 @@ static void encode_vreg(uint64_t* insn, operand *op, mnemonic* mnemo, int i)
 		case RII:
 		case RI6:
 			if (i==0)
-				*insn = *insn| (RT(op->basereg));
+				*insn = *insn| (RD(op->basereg));
 			else if (i==1)
-				*insn = *insn| (RA(op->basereg));
+				*insn = *insn| (RS1(op->basereg));
 			else if (i==2)
 				*insn = *insn| (RK(op->basereg));
 			break;
@@ -2587,7 +2587,7 @@ static size_t encode_immed_RI(instruction_buf* insn, thuge hval, int i, taddr pc
   mnemonic *mnemo = ip ? &mnemonics[ip->code] : NULL;
 	size_t isize = insn->opcode_size;
 	int64_t sc;
-	int64_t reg = (insn->opcode >> 7LL) & 0x3fLL;
+	int64_t reg = (insn->opcode >> 7LL) & 0x7fLL;
 	int is_s = 0;
 
 //	if ((insn->opcode & 0x3FLL)==0x4LL)
@@ -2774,7 +2774,7 @@ static size_t encode_direct(instruction* ip, instruction_buf* insn, thuge val, i
 		if (is_nbit(val,16)) {
 			insn->opcode = insn->opcode | ((val.lo & 0xffffLL) << 28LL);
 		}
-		else if (is_nbit(val,48)) {
+		else if (is_nbit(val,55)) {
 			insn->opcode = insn->opcode | ((val.lo & 0xffffLL) << 28LL);
 			insn->pfx1 = (((val.lo >> 16LL) & 0x7fffffffffLL) << 9LL) | 62LL;
 		}
@@ -2791,7 +2791,7 @@ static size_t encode_immed_LDI(instruction_buf* insn, thuge hval, int i)
 {
 	size_t isize = 6;
 
-	return (encode_immed_RI(insn, hval, i+1, 0, NULL, NULL));
+	return (encode_immed_RI(insn, hval, i, 0, NULL, NULL));
 }
 
 static void encode_ipfx(postfix_buf* postfix, thuge hval, int i)

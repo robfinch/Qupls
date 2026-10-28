@@ -1713,6 +1713,7 @@ typedef struct packed
 	logic iprel;
 	logic load;
 	logic loadz;
+	logic load_canary;
 	logic vload;				// vector load
 	logic vload_ndx;		// indexed vector load
 	logic store;
@@ -1797,6 +1798,7 @@ typedef struct packed {
 	logic v2p;						// 1=doing a virtual to physical address translation
 	logic load;						// 1=load
 	logic loadz;
+	logic load_canary;
 	logic cload;					// 1=cload
 	logic cload_tags;
 	logic store;
@@ -1860,6 +1862,7 @@ typedef struct packed
 	cpu_types_pkg::pc_address_t pc;
 	logic load;
 	logic loadz;
+	logic load_canary;
 	logic vload;
 	logic vload_ndx;
 	logic cload;

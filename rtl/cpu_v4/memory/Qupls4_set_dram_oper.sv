@@ -54,6 +54,27 @@ input dram_stomp_i;
 (* keep *)
 output dram_oper_t dram_oper_o;
 
+cpu_types_pkg::value_t val;
+
+// Determine value to return.
+always_comb
+	case(dram_state_i)
+	Qupls4_pkg::DRAMSLOT_ACTIVE2:
+		val = Qupls4_pkg::fnDati(1'b0,dram_work_i.op,(cpu_dat_i << {lsq_i.shift2,3'b0})|dram_oper_o.oper.val);
+	Qupls4_pkg::DRAMSLOT_ACTIVE:
+    // Note shift gets switched for second bus cycle.
+    if (dram_oper_o.state==2'b01)
+	  	val = Qupls4_pkg::fnDati(1'b0,dram_work_i.op,(cpu_dat_i << {lsq_i.shift2,3'b0})|dram_oper_o.oper.val);
+    else
+  		val = Qupls4_pkg::fnDati(dram_more_i,dram_work_i.op,cpu_dat_i >> {lsq_i.shift,3'b0});
+	Qupls4_pkg::DRAMSLOT_AVAIL:
+		if (LSQNO==2'd0 && lsq_i.v2p && lsq_i.v)
+			val = lsq_i.padr;
+		else
+			val = Qupls4_pkg::fnDati(1'b0,dram_work_i.op,lsq_i.res);
+	default:
+		val = value_zero;
+	endcase
 
 always_ff @(posedge clk_i)
 if (rst_i) begin
@@ -76,8 +97,15 @@ else begin
 	    dram_oper_o.om <= dram_work_i.om;
 	    dram_oper_o.cndx <= dram_work_i.cndx;
 	    dram_oper_o.rndx <= dram_work_i.rndx;
-	    dram_oper_o.exc <= dram_work_i.exc;
-	  	dram_oper_o.oper.val <= Qupls4_pkg::fnDati(1'b0,dram_work_i.op,(cpu_dat_i << {lsq_i.shift2,3'b0})|dram_oper_o.oper.val);
+	    if (SUPPORT_CANARY && (dram_work_i.exc==Qupls4_pkg::FLT_NONE || dram_work_i.exc==Qupls4_pkg::FLT_CHK) && dram_oper_o.exc==Qupls4_pkg::FLT_NONE) begin
+				if (dram_work_i.load_canary && val != lsq_i.res[63:0])
+					dram_oper_o.exc <= Qupls4_pkg::FLT_CHK;
+				else
+					dram_oper_o.exc <= Qupls4_pkg::FLT_NONE;
+			end
+			else if (dram_oper_o.exc==Qupls4_pkg::FLT_NONE)
+	    	dram_oper_o.exc <= dram_work_i.exc;
+	  	dram_oper_o.oper.val <= val;
 	  	dram_oper_o.oper.flags <= 8'h00;//dram_work_i.flags;
 	    if (dram_work_i.store)
 	    	$display("m[%h] <- %h", dram_work_i.vaddr, dram_work_i.data);
@@ -94,11 +122,11 @@ else begin
 	    dram_oper_o.om <= dram_work_i.om;
 	    dram_oper_o.cndx <= dram_work_i.cndx;
 	    dram_oper_o.exc <= dram_work_i.exc;
-	    // Note shift gets switched for second bus cycle.
-	    if (dram_oper_o.state==2'b01)
-		  	dram_oper_o.oper.val <= Qupls4_pkg::fnDati(1'b0,dram_work_i.op,(cpu_dat_i << {lsq_i.shift2,3'b0})|dram_oper_o.oper.val);
-	    else
-	  		dram_oper_o.oper.val <= Qupls4_pkg::fnDati(dram_more_i,dram_work_i.op,cpu_dat_i >> {lsq_i.shift,3'b0});
+	    if (SUPPORT_CANARY && dram_work_i.exc==Qupls4_pkg::FLT_NONE) begin
+				if (dram_work_i.load_canary && val != lsq_i.res[63:0])
+					dram_oper_o.exc <= Qupls4_pkg::FLT_CHK;
+			end
+		  dram_oper_o.oper.val <= val;
 	    if (dram_work_i.store)
 	    	$display("m[%h] <- %h", dram_work_i.vaddr, dram_work_i.data);
 		end
@@ -119,7 +147,7 @@ else begin
 		end
 		// Has the a load already been done by store-to-load forwarding?
 		else if (Qupls4_pkg::SUPPORT_STORE_FORWARDING && lsq_i.load && lsq_i.state==2'b11) begin
-			dram_oper_o.oper.val <= Qupls4_pkg::fnDati(1'b0,dram_work_i.op,lsq_i.res);
+			dram_oper_o.oper.val <= val;
 			dram_oper_o.oper.flags <= 8'h00;//lsq_i.flags;
 			dram_oper_o.oper.pRn <= lsq_i.Rt;
 			dram_oper_o.oper.v <= lsq_i.v;

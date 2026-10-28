@@ -961,19 +961,19 @@ begin
 	if (pr_dec[0].decbus.bsr|pr_dec[0].decbus.jsr) begin
 		predicted_correctly_o = FALSE;
 		new_address_o = pr_dec[0].decbus.bsr ? bsr0_tgt : jsr0_tgt;
-		if (pg_dec.hdr.ip.pc + {pg_dec.pr[0].ip_offs,1'b0}==pg_mot.hdr.ip.pc + {pg_mot.pr[0].ip_offs,1'b0})
+		if (new_address_o==pg_mot.hdr.ip.pc + {pg_mot.pr[0].ip_offs,1'b0})
 			predicted_correctly_o = TRUE;
 	end
 	else if (pr_dec[1].decbus.bsr|pr_dec[1].decbus.jsr) begin
 		predicted_correctly_o = FALSE;
 		new_address_o = pr_dec[1].decbus.bsr ? bsr1_tgt : jsr1_tgt;
-		if (pg_dec.hdr.ip.pc + {pg_dec.pr[1].ip_offs,1'b0}==pg_mot.hdr.ip.pc + {pg_mot.pr[1].ip_offs,1'b0})
+		if (new_address_o==pg_mot.hdr.ip.pc + {pg_mot.pr[0].ip_offs,1'b0})
 			predicted_correctly_o = TRUE;
 	end
 	else if (pr_dec[2].decbus.bsr|pr_dec[2].decbus.jsr) begin
 		predicted_correctly_o = FALSE;
 		new_address_o = pr_dec[2].decbus.bsr ? bsr2_tgt : jsr2_tgt;
-		if (pg_dec.hdr.ip.pc + {pg_dec.pr[2].ip_offs,1'b0}==pg_mot.hdr.ip.pc + {pg_mot.pr[2].ip_offs,1'b0})
+		if (new_address_o==pg_mot.hdr.ip.pc + {pg_mot.pr[0].ip_offs,1'b0})
 			predicted_correctly_o = TRUE;
 	end
 end
