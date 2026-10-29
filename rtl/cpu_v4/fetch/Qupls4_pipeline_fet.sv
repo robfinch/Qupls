@@ -121,7 +121,7 @@ end
 always_ff @(posedge clk)
 if (rst) begin
 	pc1_fet.stream <= pc_stream_t'(7'd1);
-	pc1_fet.pc <= RSTPC + 6'd8;
+	pc1_fet.pc <= RSTPC + 6'd6;
 end
 else begin
 	if (en) begin
@@ -132,7 +132,7 @@ end
 always_ff @(posedge clk)
 if (rst) begin
 	pc2_fet.stream <= pc_stream_t'(7'd1);
-	pc2_fet.pc <= RSTPC + 6'd16;
+	pc2_fet.pc <= RSTPC + 6'd12;
 end
 else begin
 	if (en) begin
@@ -143,7 +143,7 @@ end
 always_ff @(posedge clk)
 if (rst) begin
 	pc3_fet.stream <= pc_stream_t'(7'd1);
-	pc3_fet.pc <= RSTPC + 6'd24;
+	pc3_fet.pc <= RSTPC + 6'd18;
 end
 else begin
 	if (en) begin
@@ -154,7 +154,7 @@ end
 always_ff @(posedge clk)
 if (rst) begin
 	pc4_fet.stream <= pc_stream_t'(7'd1);
-	pc4_fet.pc <= RSTPC + 6'd32;
+	pc4_fet.pc <= RSTPC + 6'd24;
 end
 else begin
 	if (en)

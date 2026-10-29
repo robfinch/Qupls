@@ -39,18 +39,23 @@ import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
 module Qupls4_instruction_buffer(rst_i, clk_i, ihit_i, stream_i, ips_i, ip_i,
-	icip_i, line_i, line_o, ip_o, is_buffered_o, next_is_buffered_o);
+	invce, invalidate,
+	icip_i, line_i, line_o, ip_o, is_buffered_o, is_icip_buffered_o,
+	next_is_buffered_o);
 input rst_i;
 input clk_i;
 input ihit_i;
 input cpu_types_pkg::pc_stream_t stream_i;
 input cpu_types_pkg::pc_address_ex_t ip_i;
 input cpu_types_pkg::pc_address_ex_t icip_i;
+input invce;
+input invalidate;
 input [1023:0] line_i;
 output reg [1023:0] line_o;
 input pc_address_ex_t [Qupls4_pkg::XSTREAMS*Qupls4_pkg::THREADS-1:0] ips_i;
 output pc_address_ex_t ip_o;
 output reg is_buffered_o;
+output reg is_icip_buffered_o;
 output reg next_is_buffered_o;
 
 integer n1,n43,n44;
@@ -74,6 +79,14 @@ end
 
 always_comb
 begin
+	is_icip_buffered_o = FALSE;
+	foreach (ip_buf[n43])
+		if (icip_i.pc >= ip_buf[n43] && icip_i.pc < ip_buf[n43] + 8'd64)
+			is_icip_buffered_o = TRUE;
+end
+
+always_comb
+begin
 	next_is_buffered_o = FALSE;
 	foreach (ip_buf[n44])
 		if (ips_i[stream_i.stream].pc >= ip_buf[n44] && ips_i[stream_i.stream].pc < ip_buf[n44] + 8'd64)
@@ -90,7 +103,7 @@ if (rst_i) begin
 	end
 end
 else begin
-	if (~is_buffered_o & ihit_i) begin
+	if (~is_icip_buffered_o & ihit_i) begin
 		foreach (line_buf[n1]) begin
 			if (n1==$size(line_buf)-1) begin
 				line_buf[n1] <= line_i;
@@ -102,6 +115,11 @@ else begin
 			end
 		end
 	end
+	if (invce & invalidate)
+		foreach (line_buf[n1]) begin
+			line_buf[n1] = {1024{1'b1}};	// NOPs
+			ip_buf[n1] = 32'h0;
+		end
 end
 
 endmodule

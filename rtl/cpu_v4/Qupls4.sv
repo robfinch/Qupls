@@ -1661,7 +1661,7 @@ pc_address_ex_t ip;
 pc_stream_t fet_stream;
 // Buffers the instruction cache line to allow fetching along alternate paths.
 reg first_icache;
-wire is_buffered;
+wire is_buffered, is_icip_buffered;
 wire next_is_buffered;
 dep_stream_t [XSTREAMS-1:0] dep_stream;
 
@@ -1681,7 +1681,7 @@ uic1
 (
 	.rst(irst),
 	.clk(clk),
-	.ce(advance_icache),
+	.ce(1'b1),
 	.invce(invce),
 	.snoop_adr(snoop_adr),
 	.snoop_v(snoop_v),
@@ -2288,6 +2288,8 @@ Qupls4_instruction_buffer uib1
 (
 	.rst_i(irst),
 	.clk_i(clk),
+	.invce(invce),
+	.invalidate(ic_invall|ic_invline),
 	.ihit_i(ihito),
 	.stream_i(fet_stream),
 	.ips_i(pcs),
@@ -2297,6 +2299,7 @@ Qupls4_instruction_buffer uib1
 	.line_o(ic_line),
 	.ip_o(pc_fet),
 	.is_buffered_o(is_buffered),
+	.is_icip_buffered_o(is_icip_buffered),
 	.next_is_buffered_o(next_is_buffered)
 );
 
@@ -2304,7 +2307,7 @@ Qupls4_pipeline_fet ufet1
 (
 	.rst(irst),
 	.clk(clk),
-	.ihit(is_buffered),
+	.ihit(is_icip_buffered),
 	.ihit_fet(ihit_fet),
 	.irq_in_ic(irq_in_ic),
 	.irq_ic(irq_ic),
@@ -2312,7 +2315,7 @@ Qupls4_pipeline_fet ufet1
 	.irq_fet(irq_fet),
 	.irq_sn_ic(ic_irq_sn),
 	.irq_sn_fet(irq_sn_fet),
-	.en(advance_fetch & is_buffered),
+	.en(advance_fetch & is_icip_buffered),
 	.uop_num_ic(uop_num_ic),
 	.uop_num_fet(uop_num_fet),
 	.pc_i(pc_fet),
@@ -2417,6 +2420,7 @@ Qupls4_pipeline_ext #(.MWIDTH(MWIDTH)) uiext1
 	.reglist_active(1'b0),
 	.grp_i(igrp2),
 	.misspc_fet(misspc_fet),
+	.btb_pc(pc),	// predicted from BTB
 	.pc0_fet(pc0_fet),
 	.hwipc_fet(hwipc_fet),
 	.micro_machine_active(1'b0),
@@ -2713,7 +2717,7 @@ always_comb	advance_mot =
 	;
 
 always_comb advance_extract =
-	is_buffered & 
+	is_icip_buffered & 
 	advance_extract2 &		// advance_extract set by mot stage
 	rstcnt[5]
 	;
@@ -7815,8 +7819,8 @@ always_ff @(posedge clk) begin: clock_n_debug
 	$display("----- Dispatch -----");
 	foreach (rse[i]) begin
 		if (SUPPORT_XPIPE[i])
-			$display("%d%c rob[%d]: IP:%h.%h.%h Ins=%h Rd%d/%d Rs1%d/%d Rs2%d/%d Rs3%d/%d Imm=%h", 
-				i[2:0],rse[i].v?"v":" ",rse[i].rndx,
+			$display("%d%c%c rob[%d]: IP:%h.%h.%h Ins=%h Rd%d/%d Rs1%d/%d Rs2%d/%d Rs3%d/%d Imm=%h", 
+				i[2:0],rse[i].v?"v":" ",xpipe_rse[i].v?"v":" ",rse[i].rndx,
 				rse[i].pc.stream.thread,rse[i].pc.stream.stream,rse[i].pc.pc[31:0],
 				rse[i].uop.opcode,
 				rse[i].arg[3].aRn, rse[i].arg[3].pRn,
