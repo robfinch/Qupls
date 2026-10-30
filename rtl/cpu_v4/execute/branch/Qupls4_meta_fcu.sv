@@ -35,6 +35,8 @@
 // ============================================================================
 
 import const_pkg::*;
+import cpu_types_pkg::*;
+import capability_pkg::*;
 import Qupls4_pkg::*;
 
 
@@ -53,19 +55,27 @@ output reg [8:0] we_o;
 
 reg [WID-1+8:0] a;
 reg [WID-1:0] b;
+reg [WID-1:0] c;
 reg [WID-1:0] d;
 reg [WID-1:0] i;
 reg [WID-1:0] t;
+cpu_types_pkg::capability_high64_t ch, dh;
 cpu_types_pkg::pc_address_t pc;
 Qupls4_pkg::micro_op_t ir;
+cpu_types_pkg::flags_t c_flags, d_flags;
 
 always_comb ir = rse_i.uop;
 always_comb a = {rse_i.arg[0].flags,rse_i.arg[0].val};
 always_comb b = rse_i.arg[1].val;
+always_comb c = rse_i.arg[2].val;
 always_comb d = rse_i.arg[4].val;
+always_comb c_flags = rse_i.arg[2].flags;
+always_comb d_flags = rse_i.arg[4].flags;
 always_comb t = rse_i.arg[3].val;
 always_comb i = rse_i.argI;
 always_comb pc = rse_i.pc;
+always_comb ch = cpu_types_pkg::capability_high64_t'(c);
+always_comb dh = cpu_types_pkg::capability_high64_t'(d);
 
 Qupls4_meta_branch_eval ube1
 (
@@ -95,8 +105,35 @@ always_ff @(posedge clk)
 if (rst)
 	rse_o <= {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
 else begin
-	if (rse_i.fclass==3'd3)
+	if (rse_i.fclass==3'd3) begin
 		rse_o <= rse_i;
+		if (SUPPORT_CAPABILITIES && rse_i.cinvoke) begin
+			if (~c_flags.cap|~d_flags.cap) begin
+				rse_o.excv <= TRUE;
+				rse_o.exc <= FLT_CTAG;
+			end
+			else if (fnIsReserved(ch) || fnIsReserved(dh)) begin
+				rse_o.excv <= TRUE;
+				rse_o.exc <= FLT_CSEAL;
+			end
+			else if (ch.otype != dh.otype) begin
+				rse_o.excv <= TRUE;
+				rse_o.exc <= FLT_CTYPE;
+			end
+			else if (~ch.perms[8]|~dh.perms[8]) begin
+				rse_o.excv <= TRUE;
+				rse_o.exc <= FLT_CPINVOKE;
+			end
+			else if (~ch.perms[1]|dh.perms[1]) begin
+				rse_o.excv <= TRUE;
+				rse_o.exc <= FLT_CPEXEC;
+			end
+			else if (a[0]) begin
+				rse_o.excv <= TRUE;
+				rse_o.exc <= FLT_CALGN;
+			end 
+		end
+	end
 	else
 		rse_o <= {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
 end

@@ -585,6 +585,7 @@ typedef enum logic [2:0] {
 
 typedef enum logic [6:0] {
 	OP_BRK = 7'd0,
+	OP_CAP = 7'd1,
 	OP_R3H = 7'd2,
 	OP_BFLD = 7'd3,
 	OP_ADDI = 7'd4,
@@ -885,6 +886,34 @@ typedef enum logic [6:0] {
 	GR_PACK64160 = 7'd12,
 	GR_PACK64161 = 7'd13
 } graphics_e;
+
+typedef enum logic [6:0] {
+	CAP_CHKINVOKE = 7'd4,
+	CAP_CHKBOUNDS = 7'd6,
+	CAP_ANDPERM = 7'd32,
+	CAP_COPYTYPE = 7'd34,
+	CAP_INCOFFSET = 7'd35,
+	CAP_SEAL = 7'd36,
+	CAP_SETADDR = 7'd37,
+	CAP_SETBOUNDS = 7'd38,
+	CAP_SETFLAGS = 7'd39,
+	CAP_INCOFFSETI = 7'd45,
+	CAP_CLEARTAG = 7'd64,
+	CAP_GETFLAGS = 7'd65,
+	CAP_GETHIGH = 7'd66,
+	CAP_GETLENGTH = 7'd67,
+	CAP_GETOFFSET = 7'd68,
+	CAP_GETPERMS = 7'd69,
+	CAP_GETTAG = 7'd70,
+	CAP_GETTOP = 7'd71,
+	CAP_GETTYPE = 7'd72,
+	CAP_LOADTAGS = 7'd73,
+	CAP_ALGNMASK = 7'd74,
+	CAP_SEALENTRY = 7'd76,
+	CAP_GETBASE = 7'd77,
+	CAP_GETSEALED = 7'd78,
+	CAP_MOVE = 7'd79
+} capability_e;
 
 parameter NOP_INSN = {41'd0,OP_NOP};
 
@@ -1540,6 +1569,13 @@ typedef enum logic [7:0] {
 	FLT_DBZ		= 8'h10,
 	FLT_FLOAT = 8'h11,
 	FLT_CHK		= 8'h43,
+	FLT_CTAG	= 8'hC0,
+	FLT_CSEAL	= 8'hC1,
+	FLT_CTYPE	= 8'hC2,
+	FLT_CPINVOKE = 8'hC3,
+	FLT_CPEXEC	= 8'hC4,
+	FLT_CALGN		= 8'hC5,
+	FLT_CLENGTH	= 8'hC6,
 	FLT_PRED  = 8'hDE,
 	FLT_BADREG = 8'hDF,
 	FLT_CAPTAG = 8'hE0,
@@ -1714,10 +1750,13 @@ typedef struct packed
 	logic load;
 	logic loadz;
 	logic load_canary;
+	logic cload;
+	logic cload_tags;
 	logic vload;				// vector load
 	logic vload_ndx;		// indexed vector load
 	logic store;
 	logic stptr;
+	logic cstore;
 	logic vstore;				// vector store
 	logic vstore_ndx;		// indexed vector store
 	logic bstore;
@@ -1996,6 +2035,7 @@ typedef struct packed {
 	logic boi;
 	logic sys;
 	logic eret;
+	logic cinvoke;
 
 	logic bt;												
 	
@@ -3234,6 +3274,28 @@ begin
 			fnMapRawToUop.func = raw[47:41];
 			fnMapRawToUop.src = 7'b000001;
 			fnMapRawToUop.dst = 1'b0;
+		end
+	Qupls4_pkg::OP_CAP:
+		begin
+			case(raw[47:41])	// func code
+			CAP_ANDPERM:
+				begin
+					fnMapRawToUop.Rd = {2'd0,raw[13:7]};
+					fnMapRawToUop.Rd2 = {2'd0,raw[13:7]+1};
+					fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
+					fnMapRawToUop.Rs2 = {2'd0,raw[27:21]};
+					fnMapRawToUop.Rs3 = {2'd0,raw[20:14]+1};
+					fnMapRawToUop.Rs4 = {2'd0,raw[27:21]+1};
+					fnMapRawToUop.op3 = raw[37:35];
+					fnMapRawToUop.rmd = raw[37:35];			// for ASR
+					fnMapRawToUop.ms = raw[40:38];
+					fnMapRawToUop.func = raw[47:41];
+					fnMapRawToUop.prc = raw[1:0];
+					fnMapRawToUop.src = 7'b1011111;
+					fnMapRawToUop.dst = 1'b1;
+					fnMapRawToUop.vn = 4'b0000;
+				end
+			endcase
 		end
 	default:
 		begin

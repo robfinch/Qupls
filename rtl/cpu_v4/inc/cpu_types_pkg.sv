@@ -103,16 +103,6 @@ typedef logic [31:0] half_value_t;
 //typedef logic [63:0] segment_reg_t;
 
 typedef struct packed {
-	logic [2:0] thread;
-	logic [4:0] stream;
-} pc_stream_t;
-
-typedef struct packed {
-	pc_stream_t stream;				// instruction fetch stream number
-	pc_address_t pc;
-} pc_address_ex_t;
-
-typedef struct packed {
 	value_t V1;
 	value_t V0;
 } double_value_t;
@@ -176,7 +166,31 @@ typedef struct packed
 	logic [2:0] Te;
 	logic [10:0] B;
 	logic [2:0] Be;
+} capability_high64_t;
+
+typedef struct packed
+{
+	logic [15:0] perms;
+	logic flags;
+	logic [1:0] resv;
+	logic [17:0] otype;
+	logic Ie;
+	logic [8:0] T;
+	logic [2:0] Te;
+	logic [10:0] B;
+	logic [2:0] Be;
 	logic [63:0] a;
 } capability64_t;
+
+typedef struct packed {
+	logic [2:0] thread;
+	logic [4:0] stream;
+} pc_stream_t;
+
+typedef struct packed {
+//	capability_high64_t caphi;
+	pc_stream_t stream;				// instruction fetch stream number
+	pc_address_t pc;
+} pc_address_ex_t;
 
 endpackage

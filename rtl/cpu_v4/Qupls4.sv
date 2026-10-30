@@ -5073,6 +5073,7 @@ for (g = 0; g < Qupls4_pkg::NDATA_PORTS; g = g + 1) begin
 		.clk(clk),
 		.wr(dramN_store[g]),
 		.wr_tag(dramN_cstore[g]),
+		.load_tags(dramN_cload_tags[g]),
 		.adr(dramN_paddr[g]),
 		.hit(cap_tag_hit[g]),
 		.tagi(dramN_ctago[g]),
