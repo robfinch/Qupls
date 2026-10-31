@@ -3385,14 +3385,14 @@ static size_t encode_branch_BL2(instruction_buf* insn, operand* op, int64_t val,
 		if (insn) {
 			switch(i) {
 			case 1:
-				if (is_nbit(hval,40)) {
-  				tgt = (((val >> 1LL) & 0x7fffffffffLL) << 9LL);
+				if (is_nbit(hval,35)) {
+  				tgt = (((val >> 1LL) & 0x7ffffffffLL) << 14LL);
   				insn->opcode |= tgt;
   			}
   			else {
-  				tgt = (((val >> 1LL) & 0x7fffffffffLL) << 9LL);
+  				tgt = (((val >> 1LL) & 0x7ffffffffLL) << 14LL);
   				insn->opcode |= tgt;
-					encode_cpfx(insn,((val >> 40LL) << 9LL) | 60LL);
+					encode_cpfx(insn,((val >> 35LL) << 9LL) | 60LL);
 				}
 		  	break;
 			}
