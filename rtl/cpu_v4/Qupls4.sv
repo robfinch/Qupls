@@ -304,6 +304,11 @@ reg [NREG_RPORTS-1:0] rf_regv;
 value_t [NREG_RPORTS-1:0] rfo;
 cpu_types_pkg::flags_t [NREG_RPORTS-1:0] rfo_flags;
 
+capability_pkg::uc64_capability_t [2:0] cap_rfo;
+cpu_types_pkg::flags_t [2:0] cap_rfo_flags;
+pregno_t [2:0] cap_rf_rego;
+reg [2:0] cap_rf_regv;
+
 rob_ndx_t mc_orid;
 pc_address_ex_t mc_adr;
 pc_address_ex_t tgtpc;
@@ -479,6 +484,7 @@ reg sau0_bank;
 value_t sau0_cmpo;
 pc_address_ex_t sau0_pc;
 value_t [5:0] xpipe_res;
+wire [255:0] cap_xpipe_res;
 rob_ndx_t sau0_id;
 reg sau0_idv;
 wire [63:0] xpipe0_exc;
@@ -506,6 +512,9 @@ Qupls4_pkg::reservation_station_entry_t xpipe4_rse, xpipe4_rse2;
 Qupls4_pkg::reservation_station_entry_t xpipe5_rse, xpipe5_rse2;
 Qupls4_pkg::reservation_station_entry_t [5:0] xpipe_rse;//, xpipe0_rse2;
 Qupls4_pkg::reservation_station_entry_t [5:0] xpipe_rseo;//, xpipe0_rse2;
+Qupls4_pkg::reservation_station_entry_t cap_xpipe_rseo;
+reg sel_cap_xpipe;
+reg stall_cap_xpipe;
 
 reg sau1_idle;
 reg sau1_idle1;
@@ -1466,60 +1475,60 @@ else if (log_nan) begin
 	4'b0000:	;
 	4'b0001:
 		begin
-			nan1e <= rob[head[0]].op.pc;
+			nan1e <= rob[head[0]].op.pc.cap.offset;
 			nan2e <= {$bits(cpu_types_pkg::pc_address_t){1'b0}};
 			nan_log_addr <= nan_log_addr + 2'd1;
 		end
 	4'b0010:
 		begin
-			nan1e <= rob[head[1]].op.pc;
+			nan1e <= rob[head[1]].op.pc.cap.offset;
 			nan2e <= {$bits(cpu_types_pkg::pc_address_t){1'b0}};
 			nan_log_addr <= nan_log_addr + 2'd1;
 		end
 	4'b0011,4'b0111,4'b1011,4'b1111:
 		begin
-			nan1e <= rob[head[0]].op.pc;
-			nan2e <= rob[head[1]].op.pc;
+			nan1e <= rob[head[0]].op.pc.cap.offset;
+			nan2e <= rob[head[1]].op.pc.cap.offset;
 			nan_log_addr <= nan_log_addr + 2'd1;
 		end
 	4'b0100:
 		begin
-			nan1e <= rob[head[2]].op.pc;
+			nan1e <= rob[head[2]].op.pc.cap.offset;
 			nan_log_addr <= nan_log_addr + 2'd1;
 		end
 	4'b0101,4'b1101:
 		begin
-			nan1e <= rob[head[0]].op.pc;
-			nan2e <= rob[head[2]].op.pc;
+			nan1e <= rob[head[0]].op.pc.cap.offset;
+			nan2e <= rob[head[2]].op.pc.cap.offset;
 			nan_log_addr <= nan_log_addr + 2'd1;
 		end
 	4'b0110,4'b1110:
 		begin
-			nan1e <= rob[head[1]].op.pc;
-			nan2e <= rob[head[2]].op.pc;
+			nan1e <= rob[head[1]].op.pc.cap.offset;
+			nan2e <= rob[head[2]].op.pc.cap.offset;
 			nan_log_addr <= nan_log_addr + 2'd1;
 		end
 	4'b1000:
 		begin
-			nan1e <= rob[head[3]].op.pc;
+			nan1e <= rob[head[3]].op.pc.cap.offset;
 			nan_log_addr <= nan_log_addr + 2'd1;
 		end
 	4'b1001:
 		begin
-			nan1e <= rob[head[0]].op.pc;
-			nan2e <= rob[head[3]].op.pc;
+			nan1e <= rob[head[0]].op.pc.cap.offset;
+			nan2e <= rob[head[3]].op.pc.cap.offset;
 			nan_log_addr <= nan_log_addr + 2'd1;
 		end
 	4'b1010:
 		begin
-			nan1e <= rob[head[1]].op.pc;
-			nan2e <= rob[head[3]].op.pc;
+			nan1e <= rob[head[1]].op.pc.cap.offset;
+			nan2e <= rob[head[3]].op.pc.cap.offset;
 			nan_log_addr <= nan_log_addr + 2'd1;
 		end
 	4'b1100:
 		begin
-			nan1e <= rob[head[2]].op.pc;
-			nan2e <= rob[head[3]].op.pc;
+			nan1e <= rob[head[2]].op.pc.cap.offset;
+			nan2e <= rob[head[3]].op.pc.cap.offset;
 			nan_log_addr <= nan_log_addr + 2'd1;
 		end
 	endcase
@@ -1628,8 +1637,8 @@ endgenerate
 						
 wire ic_miss_v;
 wire predicted_correctly_dec;
-cpu_types_pkg::pc_address_ex_t new_address_dec;
-cpu_types_pkg::pc_address_ex_t new_address_ext;
+Qupls4_pkg::pc_address_ex_t new_address_dec;
+Qupls4_pkg::pc_address_ex_t new_address_ext;
 wire ic_port;
 wire ftaim_full, ftadm_full;
 reg ihit_que;
@@ -1767,9 +1776,9 @@ icctrl1
 
 // Executing NMI handler?
 always_comb
-	exe_nmi = pc.pc[$bits(pc_address_t)-1:8]==nmi_addr[$bits(pc_address_t)-1:8];
+	exe_nmi = pc.cap.offset[$bits(pc_address_t)-1:8]==nmi_addr[$bits(pc_address_t)-1:8];
 always_comb
-	exe_irq = pc.pc[$bits(pc_address_t)-1:8]==irq_addr[$bits(pc_address_t)-1:8];
+	exe_irq = pc.cap.offset[$bits(pc_address_t)-1:8]==irq_addr[$bits(pc_address_t)-1:8];
 
 // Executing IRQ handler?
 always_comb
@@ -1777,6 +1786,10 @@ always_comb
 		irq_trig = FALSE;
 	else
 		irq_trig = irq;
+
+wire btb_excv,excv_fet,excv_ext;
+reg ic_excv;
+Qupls4_pkg::cause_code_t btb_exc, ic_exc, exc_fet, exc_ext;
 
 Qupls4_btb ubtb1
 (
@@ -1842,8 +1855,22 @@ Qupls4_btb ubtb1
 	.pcs(pcs),
 	.thread_probability(thread_probability),
 	.dep_stream(dep_stream),
-	.is_buffered(is_buffered)
+	.is_buffered(is_buffered),
+	.excv(btb_excv),
+	.exc(btb_exc)
 );
+
+always_ff @(posedge clk)
+if (irst) begin
+	ic_excv <= FALSE;
+	ic_exc <= FLT_NONE;
+end
+else begin
+	if (advance_pipeline) begin
+		ic_excv <= btb_excv;
+		ic_exc <= btb_exc;
+	end
+end
 
 wire pt0_ext, pt1_ext, pt2_ext, pt3_ext;
 reg [3:0] pt_ext;
@@ -1864,21 +1891,21 @@ gselectPredictor ugsp1
 	.xbr1(commit_br1),
 	.xbr2(commit_br2),
 	.xbr3(commit_br3),
-	.xip0(commit_pc0.pc), 
-	.xip1(commit_pc1.pc),
-	.xip2(commit_pc2.pc),
-	.xip3(commit_pc3.pc),
+	.xip0(commit_pc0.cap.offset), 
+	.xip1(commit_pc1.cap.offset),
+	.xip2(commit_pc2.cap.offset),
+	.xip3(commit_pc3.cap.offset),
 	.takb0(commit_takb0),
 	.takb1(commit_takb1),
 	.takb2(commit_takb2),
 	.takb3(commit_takb3),
-	.ip0(pc0_f.pc),
+	.ip0(pc0_f.cap.offset),
 	.predict_taken0(pt0_ext),
-	.ip1(pc0_f.pc + 6'd6),
+	.ip1(pc0_f.cap.offset + 6'd6),
 	.predict_taken1(pt1_ext),
-	.ip2(pc0_f.pc + 6'd12),
+	.ip2(pc0_f.cap.offset + 6'd12),
 	.predict_taken2(pt2_ext),
-	.ip3(pc0_f.pc + 6'd18),
+	.ip3(pc0_f.cap.offset + 6'd18),
 	.predict_taken3(pt3_ext)
 );
 
@@ -2224,22 +2251,22 @@ always_comb pc0 = pcs[fet_stream];
 always_comb 
 begin
 	pc1 = pc0;
-	pc1.pc = pc0.pc + 6'd6;
+	pc1.cap.offset = pc0.cap.offset + 6'd6;
 end
 always_comb
 begin
 	pc2 = pc0;
-	pc2.pc = pc0.pc + 6'd12;
+	pc2.cap.offset = pc0.cap.offset + 6'd12;
 end
 always_comb
 begin
 	pc3 = pc0;
-	pc3.pc = pc0.pc + 6'd18;
+	pc3.cap.offset = pc0.cap.offset + 6'd18;
 end
 always_comb
 begin
 	pc4 = pc0;
-	pc4.pc = pc0.pc + 6'd24;
+	pc4.cap.offset = pc0.cap.offset + 6'd24;
 end
 
 // -----------------------------------------------------------------------------
@@ -2276,7 +2303,7 @@ always_ff @(posedge clk)
 always_ff @(posedge clk)
 if (irst) begin
 	prev_ip.stream <= 7'd1;
-	prev_ip.pc <= RSTPC;
+	prev_ip.cap.offset <= RSTPC;
 end
 else begin
 	if (advance_pipeline)
@@ -2340,7 +2367,11 @@ Qupls4_pipeline_fet ufet1
 	.ic_line_fet(ic_line_fet),
 	.nmi_i(pe_nmi),
 	.flush_i(flush_pipeline),
-	.flush_fet(flush_fet)
+	.flush_fet(flush_fet),
+	.exc_i(ic_exc),
+	.excv_i(ic_excv),
+	.exc_o(exc_fet),
+	.excv_o(excv_fet)
 );
 
 // -----------------------------------------------------------------------------
@@ -2358,17 +2389,17 @@ wire [2:0] uop_num_ext;
 always_comb
 begin
 	pc0_f1 = pc0_f;
-	pc0_f1.pc = pc0_f.pc + 6'd6;
+	pc0_f1.cap.offset = pc0_f.cap.offset + 6'd6;
 end
 always_comb
 begin
 	pc0_f2 = pc0_f;
-	pc0_f2.pc = pc0_f.pc + 6'd12;
+	pc0_f2.cap.offset = pc0_f.cap.offset + 6'd12;
 end
 always_comb
 begin
 	pc0_f3 = pc0_f;
-	pc0_f3.pc = pc0_f.pc + 6'd18;
+	pc0_f3.cap.offset = pc0_f.cap.offset + 6'd18;
 end
 
 always_ff @(posedge clk)
@@ -2449,7 +2480,11 @@ Qupls4_pipeline_ext #(.MWIDTH(MWIDTH)) uiext1
 	.new_address_o(new_address_ext),
 	.get(dc_get),
 	.new_stream(new_stream),
-	.alloc_stream(alloc_stream)
+	.alloc_stream(alloc_stream),
+	.exc_i(exc_fet),
+	.excv_i(excv_fet),
+	.exc_o(exc_ext),
+	.excv_o(excv_ext)
 );
 
 // ----------------------------------------------------------------------------
@@ -2485,7 +2520,9 @@ umot1
 	.uop_buf(uop_buf),
 	.uop_mark(uop_mark),
 	.advance_ext(advance_extract2),	// rd_more , should maybe rename
-	.head(uop_head)
+	.head(uop_head),
+	.exc_i(exc_ext),
+	.excv_i(excv_ext)
 );
 
 // ----------------------------------------------------------------------------
@@ -3087,7 +3124,7 @@ end
 always_ff @(posedge clk)
 if (irst) begin
 	pc0_f.stream <= 7'd1;
-	pc0_f.pc <= Qupls4_pkg::RSTPC;
+	pc0_f.cap.offset <= Qupls4_pkg::RSTPC;
 end
 else begin
 //	if (advance_f)
@@ -3103,7 +3140,7 @@ pc_address_ex_t pc0_x1;
 always_ff @(posedge clk)
 if (irst) begin
 	pc0_x1.stream <= 7'd1;
-	pc0_x1.pc <= Qupls4_pkg::RSTPC;
+	pc0_x1.cap.offset <= Qupls4_pkg::RSTPC;
 end
 else begin
 	if (advance_pipeline)
@@ -3247,6 +3284,7 @@ wire [8:0] xpipe2_we;
 wire [8:0] xpipe3_we;
 wire [8:0] xpipe4_we;
 wire [8:0] xpipe5_we;
+wire [32:0] cap_xpipe_we;
 wire xpipe4_done;
 wire xpipe5_done;
 
@@ -3278,7 +3316,18 @@ wire [7:0] fuq_tag [0:12];
 value_t [12:0] fuq_res;
 cpu_types_pkg::checkpt_ndx_t fuq_cp [0:12];
 
+reg cap_fuq_rd;
+wire cap_fuq_empty;
+wire [32:0] cap_fuq_we;
+pregno_t cap_fuq_pRt;
+aregno_t cap_fuq_aRt;
+wire [7:0] cap_fuq_tag;
+wire [255:0] cap_fuq_res;
+cpu_types_pkg::checkpt_ndx_t cap_fuq_cp;
+wire cap_xpipe_full;
+
 // Look for queues containing values, and select from a queue using a rotating selector.
+// DEAD code
 generate begin : gFrqSelect
 	if (NFRQ > NREG_WPORTS)
 		Qupls4_frq_select
@@ -3439,6 +3488,40 @@ Qupls4_func_result_queue ufrq5
 	.empty(fuq_empty[5]),
 	.full(xpipe5_full)
 );
+end
+endgenerate
+
+generate begin : gCAPFRQ
+	if (SUPPORT_CAPABILITIES)
+Qupls4_cap_func_result_queue ucapfrq1
+(
+	.rst_i(irst),
+	.clk_i(clk),
+	.stomp_i(robentry_stomp),
+	.rd_i(cap_fuq_rd),
+	.we_i(cap_xpipe_we),
+	.rse_i(cap_xpipe_rseo),
+	.tag_i(cap_xpipe_rseo.arg[3].flags),
+	.res_i(cap_xpipe_res),
+	.we_o(cap_fuq_we),
+	.pRt_o(cap_fuq_pRt),
+	.aRt_o(cap_fuq_aRt),
+	.tag_o(cap_fuq_tag),
+	.res_o(cap_fuq_res),
+	.cp_o(cap_fuq_cp),
+	.empty(cap_fuq_empty),
+	.full(cap_xpipe_full)
+);
+	else begin
+		assign cap_fuq_we = 33'd0;
+		assign cap_fuq_pRt = 9'd0;
+		assign cap_fuq_aRt = 9'd0;
+		assign cap_fuq_tag = 8'b0;
+		assign cap_fuq_res = 256'd0;
+		assign cap_fuq_cp = 1'b0;
+		assign cap_fuq_empty = TRUE;
+		assign cap_xpipe_full = FALSE;
+	end
 end
 endgenerate
 
@@ -3784,17 +3867,43 @@ end
 end
 endgenerate
 */
+// Detect when it is needed to update the GPR from the capabilities pipeline.
+always_comb
+begin
+	if (cap_fuq_we==33'hFF || cap_fuq_we==33'h1FF)
+		sel_cap_xpipe = TRUE;
+	else
+		sel_cap_xpipe = FALSE;
+end
+
+// Detect when a stall is needed because there is no available write port on 
+// the GPR file.
+always_comb
+begin
+	if (sel_cap_xpipe && !(
+		SUPPORT_XPIPE0 && (fuq_we[0]==9'd0)	||	
+		SUPPORT_XPIPE1 && (fuq_we[1]==9'd0)	||	
+		SUPPORT_XPIPE2 && (fuq_we[2]==9'd0)	||	
+		SUPPORT_XPIPE3 && (fuq_we[3]==9'd0)	||	
+		SUPPORT_XPIPE4 && (fuq_we[4]==9'd0)	||	
+		SUPPORT_XPIPE5 && (fuq_we[5]==9'd0)
+	))
+		stall_cap_xpipe = TRUE;
+	else
+		stall_cap_xpipe = FALSE;
+end
+
 // Mux the queue outputs onto the register file inputs.
 generate begin : gWrPort
 	for (g = 0; g < $size(wrport0_v); g = g + 1) begin
 		if (NREG_WPORTS >= NFRQ) begin
-			always_ff @(posedge clk) wrport0_v[g] <= ~fuq_empty[g];
-			always_ff @(posedge clk) wrport0_we[g] <= fuq_we[g]; 
-			always_ff @(posedge clk) wrport0_Rt[g] <= fuq_pRt[g]; 
-			always_ff @(posedge clk) wrport0_aRt[g] <= fuq_aRt[g]; 
-			always_ff @(posedge clk) wrport0_res[g] <= fuq_res[g]; 
-			always_ff @(posedge clk) wrport0_cp[g] <= fuq_cp[g]; 
-			always_ff @(posedge clk) wrport0_tag[g] <= fuq_tag[g]; 
+			always_ff @(posedge clk) wrport0_v[g] <= ~(sel_cap_xpipe & ~stall_cap_xpipe ? cap_fuq_empty : fuq_empty[g]);
+			always_ff @(posedge clk) wrport0_we[g] <= sel_cap_xpipe & ~stall_cap_xpipe  ? cap_fuq_we : fuq_we[g]; 
+			always_ff @(posedge clk) wrport0_Rt[g] <= sel_cap_xpipe & ~stall_cap_xpipe  ? cap_fuq_pRt : fuq_pRt[g]; 
+			always_ff @(posedge clk) wrport0_aRt[g] <= sel_cap_xpipe & ~stall_cap_xpipe  ? cap_fuq_aRt : fuq_aRt[g]; 
+			always_ff @(posedge clk) wrport0_res[g] <= sel_cap_xpipe & ~stall_cap_xpipe  ? cap_fuq_res : fuq_res[g]; 
+			always_ff @(posedge clk) wrport0_cp[g] <= sel_cap_xpipe & ~stall_cap_xpipe  ? cap_fuq_cp : fuq_cp[g]; 
+			always_ff @(posedge clk) wrport0_tag[g] <= sel_cap_xpipe & ~stall_cap_xpipe  ? cap_fuq_tag : fuq_tag[g]; 
 		end
 		else begin
 			always_ff @(posedge clk) wrport0_v[g] <= frq_upd[g]==5'd31 ? 1'b0 : ~fuq_empty[frq_upd[g]];
@@ -3824,6 +3933,32 @@ Qupls4_regfileMwNr #(.RPORTS(NREG_RPORTS), .WPORTS(NREG_WPORTS)) urf1 (
 	.rao(rf_rego),
 	.ravo(rf_regvo)
 );
+
+generate begin : gCapRegfile
+	if (SUPPORT_CAPABILITIES)
+Qupls4_cap_regfileMwNr #(.RPORTS(3), .WPORTS(1)) ucaprf1 (
+	.rst(irst),
+	.clk(clk), 
+	.wr(~cap_fuq_empty),
+	.we(cap_fuq_we),
+	.wa(cap_fuq_pRt),
+	.i(cap_fuq_res),
+	.ti(cap_fuq_tag),
+	.ra(prn),
+	.rav(prnv),
+	.o(cap_rfo),
+	.to(cap_rfo_flags),
+	.rao(cap_rf_rego),
+	.ravo(cap_rf_regvo)
+);
+else begin
+	assign cap_rfo = 'd0;
+	assign cap_rfo_flags = 'd0;
+	assign cap_rf_rego = 'd0;
+	assign cap_rd_regov = 'd0;
+end
+end
+endgenerate
 
 always_ff @(posedge clk)
 begin
@@ -4142,57 +4277,6 @@ always_comb
 always_comb
 	fpu1_id = fpu1_rse.rndx;
 	
-/*
-Stark_sched uscd1
-(
-	.rst(irst),
-	.clk(clk),
-	.sau0_idle(sau0_idle),
-	.sau1_idle(Qupls4_pkg::NSAU > 1 ? sau1_idle : 1'd0),
-	.fpu0_idle(Qupls4_pkg::NFPU > 0 ? !fpu0_iq_prog_full : 1'd0),
-	.fpu1_idle(Qupls4_pkg::NFPU > 1 ? fpu1_idle : 1'd0),
-	.fcu_idle(fcu_idle),
-	.agen0_idle(agen0_idle1),
-	.agen1_idle(1'b0),
-	.lsq0_idle(lsq0_idle),
-	.lsq1_idle(lsq1_idle),
-	.stomp_i(robentry_stomp),
-	.robentry_islot_i(robentry_islot),
-	.robentry_islot_o(robentry_islot),
-	.head(head[0]),
-	.rob(rob),
-	.robentry_issue(robentry_issue),
-	.robentry_fpu_issue(robentry_fpu_issue),
-	.robentry_fcu_issue(robentry_fcu_issue),
-	.robentry_agen_issue(robentry_agen_issue),
-	.sau0_rndx(sau0_rndx),
-	.sau0_rndxv(sau0_rndxv),
-	.sau1_rndx(sau1_rndx),
-	.sau1_rndxv(sau1_rndxv),
-	.fpu0_rndx(fpu0_rndx),
-	.fpu0_rndxv(fpu0_rndxv),
-	.fpu1_rndx(),
-	.fpu1_rndxv(),
-	.fcu_rndx(fcu_rndx),
-	.fcu_rndxv(fcu_rndxv),
-	.agen0_rndx(agen0_rndx),
-	.agen0_rndxv(agen0_rndxv),
-	.agen1_rndx(agen1_rndx),
-	.agen1_rndxv(agen1_rndxv),
-	.ratv0_rndx(ratv0_rndx),
-	.ratv1_rndx(ratv1_rndx),
-	.ratv2_rndx(ratv2_rndx),
-	.ratv3_rndx(ratv3_rndx),
-	.ratv0_rndxv(ratv0_rndxv),
-	.ratv1_rndxv(ratv1_rndxv),
-	.ratv2_rndxv(ratv2_rndxv),
-	.ratv3_rndxv(ratv3_rndxv),
-	.cpytgt0(sau0_cpytgt),
-	.cpytgt1(sau1_cpytgt),
-	.beb_buf(beb_buf),
-	.beb_issue(beb_issue)
-);
-*/
 Qupls4_pkg::rob_bitmask_t cpu_request_cancel;
 
 Qupls4_mem_sched umems1
@@ -6317,7 +6401,6 @@ begin
 		
 end
 
-
 // =============================================================================
 // =============================================================================
 
@@ -6818,6 +6901,8 @@ else begin
 		tSetROBDone(xpipe_rseo[4],FALSE, xpipe_res[4]);
 	if (Qupls4_pkg::SUPPORT_XPIPE5 & xpipe5_done)
 		tSetROBDone(xpipe_rseo[5],FALSE, xpipe_res[5]);
+	if (Qupls4_pkg::SUPPORT_CAPABILITIES)
+		tSetROBDone(cap_xpipe_rseo,FALSE, 64'd0);
 
 	if (fcu_rse.v)
 		fcu_state1 <= VAL;
@@ -7052,10 +7137,10 @@ else begin
 		commit3_idv <= cmttlb[3];
 	end
 	if (do_commit) begin
-		commit_pc0 <= pgh[rob[head[0]].pghn].ip.pc + {rob[head[0]].ip_offs,1'b0};
-		commit_pc1 <= pgh[rob[head[1]].pghn].ip.pc + {rob[head[1]].ip_offs,1'b0};
-		commit_pc2 <= pgh[rob[head[2]].pghn].ip.pc + {rob[head[2]].ip_offs,1'b0};
-		commit_pc3 <= pgh[rob[head[3]].pghn].ip.pc + {rob[head[3]].ip_offs,1'b0};
+		commit_pc0 <= pgh[rob[head[0]].pghn].ip.cap.offset + {rob[head[0]].ip_offs,1'b0};
+		commit_pc1 <= pgh[rob[head[1]].pghn].ip.cap.offset + {rob[head[1]].ip_offs,1'b0};
+		commit_pc2 <= pgh[rob[head[2]].pghn].ip.cap.offset + {rob[head[2]].ip_offs,1'b0};
+		commit_pc3 <= pgh[rob[head[3]].pghn].ip.cap.offset + {rob[head[3]].ip_offs,1'b0};
 		commit_brtgt0 <= rob[head[0]].brtgt;
 		commit_brtgt1 <= rob[head[1]].brtgt;
 		commit_brtgt2 <= rob[head[2]].brtgt;
@@ -7128,16 +7213,16 @@ else begin
 		if (rob[head[0]].excv && rob[head[0]].v)
 //			err_mask[head[0]] <= 1'b1;
 //			if (rob[head[0]].last)
-			tProcessExc(head[0],pgh[rob[head[0]].pghn].ip.pc+{rob[head[0]].ip_offs,1'b0},rob[head[0]].op.uop.num);
+			tProcessExc(head[0],pgh[rob[head[0]].pghn].ip.cap.offset+{rob[head[0]].ip_offs,1'b0},rob[head[0]].op.uop.num);
 		else if (rob[head[1]].excv && cmtcnt > 3'd1 && rob[head[1]].v)
-			tProcessExc(head[1],pgh[rob[head[1]].pghn].ip.pc+{rob[head[1]].ip_offs,1'b0},rob[head[1]].op.uop.num);
+			tProcessExc(head[1],pgh[rob[head[1]].pghn].ip.cap.offset+{rob[head[1]].ip_offs,1'b0},rob[head[1]].op.uop.num);
 		else if (rob[head[2]].excv && cmtcnt > 3'd2 && rob[head[2]].v)
-			tProcessExc(head[2],pgh[rob[head[2]].pghn].ip.pc+{rob[head[2]].ip_offs,1'b0},rob[head[2]].op.uop.num);
+			tProcessExc(head[2],pgh[rob[head[2]].pghn].ip.cap.offset+{rob[head[2]].ip_offs,1'b0},rob[head[2]].op.uop.num);
 		else if (rob[head[3]].excv && cmtcnt > 3'd3 && rob[head[3]].v)
-			tProcessExc(head[3],pgh[rob[head[3]].pghn].ip.pc+{rob[head[3]].ip_offs,1'b0},rob[head[3]].op.uop.num);
+			tProcessExc(head[3],pgh[rob[head[3]].pghn].ip.cap.offset+{rob[head[3]].ip_offs,1'b0},rob[head[3]].op.uop.num);
 			
 		if (rob[head[0]].op.ssm)
-			tProcessExc(head[0],Qupls4_pkg::SSM_DEBUG ? pgh[rob[head[0]].pghn].ip.pc+{rob[head[0]].ip_offs,1'b0} : rob[head[0]].op.hwipc,rob[head[0]].op.uop.num);
+			tProcessExc(head[0],Qupls4_pkg::SSM_DEBUG ? pgh[rob[head[0]].pghn].ip.cap.offset+{rob[head[0]].ip_offs,1'b0} : rob[head[0]].op.hwipc,rob[head[0]].op.uop.num);
 
 		/*
 		if (FALSE) begin
@@ -7703,21 +7788,21 @@ always_ff @(posedge clk) begin: clock_n_debug
 	$display("DEC: 0:%h  1:%h  2:%h  3:%h", pg_dec.pr[0].op.uop, pg_dec.pr[1].op.uop, pg_dec.pr[2].op.uop, pg_dec.pr[3].op.uop);
 	$display("REN: 0:%h  1:%h  2:%h  3:%h", pg_ren.pr[0].op.uop, pg_ren.pr[1].op.uop, pg_ren.pr[2].op.uop, pg_ren.pr[3].op.uop);
 	$display("----- Fetch %c----- %s", ihit_fet ? "h":" ", stomp_fet ? stompstr : no_stompstr);
-	$display("i$ pc input:  %h.%h stream:%d#", pcs[fet_stream].stream,pcs[fet_stream].pc, fet_stream);
-	$display("i$ pc output: %h %s #", pc_fet.pc, ihito ? "ihit" : "    ");
+	$display("i$ pc input:  %h.%h stream:%d#", pcs[fet_stream].stream,pcs[fet_stream].cap.offset, fet_stream);
+	$display("i$ pc output: %h %s #", pc_fet.cap.offset, ihito ? "ihit" : "    ");
 	$display("cacheL: %x", ic_line[511:0]);
 	$display("cacheH: %x", ic_line[1023:512]);
 	$display("----- Instruction Extract %c ----- %s", ihit_ext ? "h":" ", stomp_ext ? stompstr : no_stompstr);
 	$display("ip 0: %h.%h  1: %h.%h  2: %h.%h  3: %h.%h",
-		uiext1.pc_fet[0].stream, uiext1.pc_fet[0].pc,
-		uiext1.pc_fet[1].stream, uiext1.pc_fet[1].pc,
-		uiext1.pc_fet[2].stream, uiext1.pc_fet[2].pc,
-		uiext1.pc_fet[3].stream, uiext1.pc_fet[3].pc);
+		uiext1.pc_fet[0].stream, uiext1.pc_fet[0].cap.offset,
+		uiext1.pc_fet[1].stream, uiext1.pc_fet[1].cap.offset,
+		uiext1.pc_fet[2].stream, uiext1.pc_fet[2].cap.offset,
+		uiext1.pc_fet[3].stream, uiext1.pc_fet[3].cap.offset);
 	$display("lineL: %h", ic_line_fet[511:0]);
 	$display("lineH: %h", ic_line_fet[1023:512]);
 	$display("align: %x", uiext1.ic_line_aligned);
 	$display("----- Micro-op Translate %c ----- %s", ihit_mot ? "h":" ", stomp_mot ? stompstr : no_stompstr);
-	$display("ip: %h.%h", pg_ext.hdr.ip.stream.stream, pg_ext.hdr.ip.pc);
+	$display("ip: %h.%h", pg_ext.hdr.ip.stream.stream, pg_ext.hdr.ip.cap.offset);
 	$display("lineL: %h", cline_ext[511:0]);
 	$display("lineH: %h", cline_ext[1023:512]);
 	$display("Raw instructions");
@@ -7729,9 +7814,9 @@ always_ff @(posedge clk) begin: clock_n_debug
 	$display("pc3: %h.%h ins3: %h", uiext1.pg_ext.pr[3].pc.pc[23:0], uiext1.pg_ext.pr[3].mcip, uiext1.pg_ext.pr[3].uop[47:0]);
 	*/
 	if (p_override)
-		$display("BSR %h  pc0_fet=%h", new_address_ext, uiext1.pg_ext.hdr.ip.pc+{uiext1.pg_ext.pr[0].ip_offs,1'b0});
+		$display("BSR %h  pc0_fet=%h", new_address_ext, uiext1.pg_ext.hdr.ip.cap.offset+{uiext1.pg_ext.pr[0].ip_offs,1'b0});
 	$display("----- Decode %c ----- %s", ihit_dec ? "h":" ", stomp_dec ? stompstr : no_stompstr);
-	$display("ip:%h.%h", pg_mot.hdr.ip.stream.stream,pg_mot.hdr.ip.pc);
+	$display("ip:%h.%h", pg_mot.hdr.ip.stream.stream,pg_mot.hdr.ip.cap.offset);
 	$display("lineL: %h", cline_mot[511:0]);
 	$display("lineH: %h", cline_mot[1023:512]);
 	$display("MOT 0:%h  1:%h  2:%h  3:%h", pg_mot.pr[0].op.uop, pg_mot.pr[1].op.uop, pg_mot.pr[2].op.uop, pg_mot.pr[3].op.uop);
@@ -7777,7 +7862,7 @@ always_ff @(posedge clk) begin: clock_n_debug
 			);
 
 	$display("----- Rename %c ----- %s", ihit_ren ? "h":" ", stomp_ren ? stompstr : no_stompstr);
-	$display("ip:%h.%h", pg_ren.hdr.ip.stream.stream,pg_ren.hdr.ip.pc);
+	$display("ip:%h.%h", pg_ren.hdr.ip.stream.stream,pg_ren.hdr.ip.cap.offset);
 	$display("REN: 0:%h  1:%h  2:%h  3:%h", pg_ren.pr[0].op.uop, pg_ren.pr[1].op.uop, pg_ren.pr[2].op.uop, pg_ren.pr[3].op.uop);
 	/*
 	$display("pc0: %x.%x ins0: %x  Rt: %d->%d%c  Rs: %d->%d%c  Ra: %d->%d%c  Rb: %d->%d%c  Rc: %d->%d%c",
@@ -7821,7 +7906,7 @@ always_ff @(posedge clk) begin: clock_n_debug
 			rob[i].op.decbus.Rs2, rob[i].op.pRs2, rob[i].argB, rob[i].argB_v?"v":" ",
 			rob[i].op.decbus.Rs3, rob[i].op.pRs3, rob[i].argC, rob[i].argC_v?"v":" ",
 			rob[i].op.decbus.immb,//argI,
-			rob[i].ip_stream, pgh[rob[i].pghn].ip.pc + {rob[i].ip_offs,1'b0},
+			rob[i].ip_stream, pgh[rob[i].pghn].ip.cap.offset + {rob[i].ip_offs,1'b0},
 			rob[i].cndx, rob[i].op.uop[63:0]);
 	end
 	$display("----- Dispatch -----");
@@ -7829,7 +7914,7 @@ always_ff @(posedge clk) begin: clock_n_debug
 		if (SUPPORT_XPIPE[i])
 			$display("%d%c%c rob[%d]: IP:%h.%h.%h Ins=%h Rd%d/%d Rs1%d/%d Rs2%d/%d Rs3%d/%d Imm=%h", 
 				i[2:0],rse[i].v?"v":" ",xpipe_rse[i].v?"v":" ",rse[i].rndx,
-				rse[i].pc.stream.thread,rse[i].pc.stream.stream,rse[i].pc.pc[31:0],
+				rse[i].pc.stream.thread,rse[i].pc.stream.stream,rse[i].pc.cap.offset[31:0],
 				rse[i].uop.opcode,
 				rse[i].arg[3].aRn, rse[i].arg[3].pRn,
 				rse[i].arg[0].aRn, rse[i].arg[0].pRn,
@@ -7875,8 +7960,8 @@ always_ff @(posedge clk) begin: clock_n_debug
 
 	$display("----- FCU -----");
 	$display("eval:%c A=%h B=%h I=%h", takb?"T":"F", fcu_rse.arg[0].val, fcu_rse.arg[1].val, fcu_rse.argI);
-	$display("bt:%c pc=%h id=%d ", fcu_bt ? "T":"F", fcu_rse.pc, fcu_rse.rndx);
-	$display("miss: %c misspc=%h.%h instr=%h disp=%h", fcu_branchmiss?"T":"F",fcu_misspc1.stream,fcu_misspc1.pc, fcu_rse.uop[63:0],
+	$display("bt:%c pc=%h id=%d ", fcu_bt ? "T":"F", fcu_rse.pc.cap.offset, fcu_rse.rndx);
+	$display("miss: %c misspc=%h.%h instr=%h disp=%h", fcu_branchmiss?"T":"F",fcu_misspc1.stream,fcu_misspc1.cap.offset, fcu_rse.uop[63:0],
 		{{37{fcu_instr.uop[63]}},fcu_instr.uop[63:44],3'd0}
 	);
 
@@ -7886,7 +7971,7 @@ always_ff @(posedge clk) begin: clock_n_debug
 			$display("I=%h T=%h A=%h B=%h C=%h %c%d pc:%h #",
 				xpipe_rseo[i].argI, xpipe_rseo[i].arg[4].val, xpipe_rseo[i].arg[0].val, xpipe_rseo[i].arg[1].val, xpipe_rseo[i].arg[2].val,
 				 ((fnIsLoad(xpipe_rseo[i].uop) || fnIsStore(xpipe_rseo[i].uop)) ? 109 : 97),
-				xpipe_rseo[i].uop.opcode, xpipe_rseo[i].pc);
+				xpipe_rseo[i].uop.opcode, xpipe_rseo[i].pc.cap.offset);
 			$display("res:%h rid:%d #", xpipe_res[i], xpipe_rseo[i].rndx);
 		end
 	end
@@ -8467,7 +8552,7 @@ begin
 	excir <= {26'd0,Qupls4_pkg::OP_NOP};
 	excmiss <= FALSE;
 	excmisspc.stream <= 5'd1;
-	excmisspc.pc <= 32'hFFFFFFC0;
+	excmisspc.cap.offset <= 32'hFFFFFFC0;
 	excret <= FALSE;
 	exc_ret_pc <= 32'hFFFFFFC0;
 	exc_ret_pc.stream <= 5'd1;
@@ -8695,7 +8780,7 @@ Qupls4_pkg::rob_entry_t next_robe;
 reg [5:0] next_sync_no;
 reg [5:0] next_fc_no;
 reg [2:0] dtail;
-cpu_types_pkg::pc_address_ex_t next_brtgt;
+Qupls4_pkg::pc_address_ex_t next_brtgt;
 reg next_brtgtv;
 begin
 	dtail = {1'b0,tail[1:0]};
@@ -8799,9 +8884,9 @@ begin
 	next_robe.could_issue_nm = FALSE;
 	// "static" fields, these fields remain constant after enqueue
 	next_robe.grp = grp;
-	next_robe.brtgt = Qupls4_pkg::fnTargetIP(pgh[robe.pghn].ip.pc + {robe.ip_offs,1'b0},db.immc);
+	next_robe.brtgt = Qupls4_pkg::fnTargetIP(pgh[robe.pghn].ip.cap.offset + {robe.ip_offs,1'b0},db.immc);
 	// Set the interrupt return address to this instruction.
-	next_robe.eip = pgh[robe.pghn].ip.pc + {robe.ip_offs,1'b0};
+	next_robe.eip = pgh[robe.pghn].ip.cap.offset + {robe.ip_offs,1'b0};
 	next_robe.om = sr.om;
 	next_robe.rm = db.rm==3'd7 ? fpcsr.rm : db.rm;
 `ifdef IS_SIM
@@ -8821,7 +8906,7 @@ begin
 //	next_robe.v = 5'd1;
 	if (!stomp && db.v && !brtgtv) begin
 		if (db.br & pt) begin
-			next_brtgt = Qupls4_pkg::fnTargetIP(pgh[robe.pghn].ip.pc,db.immc);
+			next_brtgt = Qupls4_pkg::fnTargetIP(pgh[robe.pghn].ip.cap.offset,db.immc);
 			next_brtgtv = VAL;	// ToDo: Fix
 		end
 	end
@@ -8986,9 +9071,9 @@ begin
 			else if (rob[head].op.decbus.irq)
 				;
 			else if (rob[head].op.decbus.brk)
-				tProcessExc(head,pgh[rob[head].pghn].ip.pc+{rob[head].ip_offs,1'b0}+32'd6,rob[head].op.uop.num);
+				tProcessExc(head,pgh[rob[head].pghn].ip.cap.offset+{rob[head].ip_offs,1'b0}+32'd6,rob[head].op.uop.num);
 			else if (rob[head].op.decbus.sys)
-				tProcessExc(head,pgh[rob[head].pghn].ip.pc+{rob[head].ip_offs,1'b0}+32'd6,rob[head].op.uop.num);
+				tProcessExc(head,pgh[rob[head].pghn].ip.cap.offset+{rob[head].ip_offs,1'b0}+32'd6,rob[head].op.uop.num);
 			else if (rob[head].op.decbus.eret)
 				tProcessEret(rob[head].op[22:19]==5'd2,rob[head].op[23]==1'b1);
 			else if (rob[head].op.decbus.rex)
@@ -9233,23 +9318,23 @@ begin
 	if (rob[id].op.ssm) begin
 		sr.ssm <= FALSE;
 		ssm_flag <= FALSE;
-		excmisspc.pc <= kernel_vectors[sr.dbg ? 3'd4:{1'b0,fnNextOm(sr.om)}];
+		excmisspc.cap.offset <= kernel_vectors[sr.dbg ? 3'd4:{1'b0,fnNextOm(sr.om)}];
 		excmiss <= TRUE;
 //		excmisspc.pc <= {kvec[sr.dbg ? 4 : nom][$bits(pc_address_t)-1:8] + 4'd1,8'h0};
 //		excmiss <= TRUE;
 	end
 	else if (rob[id].op.decbus.sys) begin
 		case(rob[id].op.decbus.Rd)
-		6'h00,6'h20: excmisspc.pc <= rob[id].brtgt;
-		6'h01,6'h21: excmisspc.pc <= rob[id].brtgt;
-		6'h02,6'h22:	excmisspc.pc <= syscall_vectors[{1'b0,fnNextOm(sr.om)}];
-		6'h03,6'h23:	excmisspc.pc <= kernel_vectors[{1'b0,fnNextOm(sr.om)}];
-		default:	excmisspc.pc <= kernel_vectors[{1'b0,fnNextOm(sr.om)}];
+		6'h00,6'h20: excmisspc.cap.offset <= rob[id].brtgt;
+		6'h01,6'h21: excmisspc.cap.offset <= rob[id].brtgt;
+		6'h02,6'h22:	excmisspc.cap.offset <= syscall_vectors[{1'b0,fnNextOm(sr.om)}];
+		6'h03,6'h23:	excmisspc.cap.offset <= kernel_vectors[{1'b0,fnNextOm(sr.om)}];
+		default:	excmisspc.cap.offset <= kernel_vectors[{1'b0,fnNextOm(sr.om)}];
 		endcase
 		excmiss <= TRUE;
 	end
 	else begin
-		excmisspc.pc <= kernel_vectors[{1'b0,fnNextOm(sr.om)}];
+		excmisspc.cap.offset <= kernel_vectors[{1'b0,fnNextOm(sr.om)}];
 		excmiss <= TRUE;
 		//excmisspc.pc <= {kvec[sr.dbg ? 4 : nom][$bits(pc_address_t)-1:8] + 4'd13,8'h0};
 		//excmiss <= TRUE;
@@ -9287,9 +9372,9 @@ begin
 				sr.ssm <= FALSE;
 				ssm_flag <= FALSE;
 				irq_resolved <= TRUE;
-				if (pgh[rob[id].pghn].ip.pc + {rob[id].ip_offs,1'b0} != kernel_vectors[sr.dbg ? 3'd4 : {1'b0,fnNextOm(sr.om)}]) begin
+				if (pgh[rob[id].pghn].ip.cap.offset + {rob[id].ip_offs,1'b0} != kernel_vectors[sr.dbg ? 3'd4 : {1'b0,fnNextOm(sr.om)}]) begin
 					excmiss <= TRUE;
-					excmisspc.pc <= kernel_vectors[sr.dbg ? 3'd4 : {1'b0,fnNextOm(sr.om)}];//[$bits(pc_address_t)-1:8] + 4'd11,8'h0};
+					excmisspc.cap.offset <= kernel_vectors[sr.dbg ? 3'd4 : {1'b0,fnNextOm(sr.om)}];//[$bits(pc_address_t)-1:8] + 4'd11,8'h0};
 					excmisspc.stream <= new_stream[rob[id].ip_stream.thread].stream;
 					alloc_irq_stream <= TRUE;
 				end
@@ -9299,9 +9384,9 @@ begin
 				sr.ssm <= FALSE;
 				ssm_flag <= FALSE;
 				irq_resolved <= TRUE;
-				if (pgh[rob[id].pghn].ip.pc + {rob[id].ip_offs,1'b0} != kernel_vectors[sr.dbg ? 3'd4 : {1'b0,fnNextOm(sr.om)}]) begin
+				if (pgh[rob[id].pghn].ip.cap.offset + {rob[id].ip_offs,1'b0} != kernel_vectors[sr.dbg ? 3'd4 : {1'b0,fnNextOm(sr.om)}]) begin
 					excmiss <= TRUE;
-					excmisspc.pc <= kernel_vectors[sr.dbg ? 3'd4 : {1'b0,fnNextOm(sr.om)}];//[$bits(pc_address_t)-1:8] + 4'd11,8'h0};
+					excmisspc.cap.offset <= kernel_vectors[sr.dbg ? 3'd4 : {1'b0,fnNextOm(sr.om)}];//[$bits(pc_address_t)-1:8] + 4'd11,8'h0};
 					excmisspc.stream <= new_stream[rob[id].ip_stream.thread].stream;
 					alloc_irq_stream <= TRUE;
 				end
@@ -9322,7 +9407,7 @@ begin
 			excir <= rob[id].op;
 			excid <= id;
 			excmissgrp <= rob[id].pghn;
-			excmisspc.pc <= rob[id].eip;
+			excmisspc.cap.offset <= rob[id].eip;
 			excmiss <= TRUE;
 			irq_resolved <= TRUE;
 			set_pending_ipl <= TRUE;
@@ -9623,17 +9708,17 @@ begin
 	m6 = (ndx + Qupls4_pkg::ROB_ENTRIES + 6) % Qupls4_pkg::ROB_ENTRIES;
 	m7 = (ndx + Qupls4_pkg::ROB_ENTRIES + 7) % Qupls4_pkg::ROB_ENTRIES;
 	dst <= p1;	// the last ROB entry it could be
-	if (rob[m1].sn > rob[ndx].sn && rob[m1].v==rob[ndx].v && pgh[rob[m1].pghn].ip.pc + {rob[m1].ip_offs,1'b0} == rob[ndx].brtgt && rob[m1].ip_stream==rob[ndx].ip_stream)
+	if (rob[m1].sn > rob[ndx].sn && rob[m1].v==rob[ndx].v && pgh[rob[m1].pghn].ip.cap.offset + {rob[m1].ip_offs,1'b0} == rob[ndx].brtgt && rob[m1].ip_stream==rob[ndx].ip_stream)
 		found = 3'd1;
-	else if (rob[m2].sn > rob[ndx].sn && rob[m2].v==rob[ndx].v && pgh[rob[m2].pghn].ip.pc + {rob[m2].ip_offs,1'b0} == rob[ndx].brtgt && rob[m2].ip_stream==rob[ndx].ip_stream)
+	else if (rob[m2].sn > rob[ndx].sn && rob[m2].v==rob[ndx].v && pgh[rob[m2].pghn].ip.cap.offset + {rob[m2].ip_offs,1'b0} == rob[ndx].brtgt && rob[m2].ip_stream==rob[ndx].ip_stream)
 		found = 3'd2;
-	else if (rob[m3].sn > rob[ndx].sn && rob[m3].v==rob[ndx].v && pgh[rob[m3].pghn].ip.pc + {rob[m3].ip_offs,1'b0} == rob[ndx].brtgt && rob[m3].ip_stream==rob[ndx].ip_stream)
+	else if (rob[m3].sn > rob[ndx].sn && rob[m3].v==rob[ndx].v && pgh[rob[m3].pghn].ip.cap.offset + {rob[m3].ip_offs,1'b0} == rob[ndx].brtgt && rob[m3].ip_stream==rob[ndx].ip_stream)
 		found = 3'd3;
-	else if (rob[m4].sn > rob[ndx].sn && rob[m4].v==rob[ndx].v && pgh[rob[m4].pghn].ip.pc + {rob[m4].ip_offs,1'b0} == rob[ndx].brtgt && rob[m4].ip_stream==rob[ndx].ip_stream)
+	else if (rob[m4].sn > rob[ndx].sn && rob[m4].v==rob[ndx].v && pgh[rob[m4].pghn].ip.cap.offset + {rob[m4].ip_offs,1'b0} == rob[ndx].brtgt && rob[m4].ip_stream==rob[ndx].ip_stream)
 		found = 3'd4;
-	else if (rob[m5].sn > rob[ndx].sn && rob[m5].v==rob[ndx].v && pgh[rob[m5].pghn].ip.pc + {rob[m5].ip_offs,1'b0} == rob[ndx].brtgt && rob[m5].ip_stream==rob[ndx].ip_stream)
+	else if (rob[m5].sn > rob[ndx].sn && rob[m5].v==rob[ndx].v && pgh[rob[m5].pghn].ip.cap.offset + {rob[m5].ip_offs,1'b0} == rob[ndx].brtgt && rob[m5].ip_stream==rob[ndx].ip_stream)
 		found = 3'd5;
-	else if (rob[m6].sn > rob[ndx].sn && rob[m6].v==rob[ndx].v && pgh[rob[m6].pghn].ip.pc + {rob[m6].ip_offs,1'b0} == rob[ndx].brtgt && rob[m6].ip_stream==rob[ndx].ip_stream)
+	else if (rob[m6].sn > rob[ndx].sn && rob[m6].v==rob[ndx].v && pgh[rob[m6].pghn].ip.cap.offset + {rob[m6].ip_offs,1'b0} == rob[ndx].brtgt && rob[m6].ip_stream==rob[ndx].ip_stream)
 		found = 3'd6;
 
 	case(found)
