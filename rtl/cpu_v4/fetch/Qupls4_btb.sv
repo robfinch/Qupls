@@ -50,7 +50,8 @@ module Qupls4_btb(rst, clk, en, clk_en,
 	commit_pc3, commit_brtgt3, commit_takb3, commit_grp3, commit_br3, commit_ret3, commit_jmp3, commit_call3,
 	strm_bitmap, act_stream, pcs,
 	new_stream, alloc_stream, free_stream, thread_probability, dep_stream,
-	is_buffered
+	is_buffered,
+	excv, exc
 );
 parameter DEP=2048;
 parameter MWIDTH = 4;
@@ -120,6 +121,8 @@ output pc_address_ex_t [XSTREAMS*THREADS-1:0] pcs;
 input [7:0] thread_probability [0:7];
 output dep_stream_t [XSTREAMS-1:0] dep_stream;
 input is_buffered;
+output reg excv;
+output Qupls4_pkg::cause_code_t exc;
 
 typedef struct packed {
 	logic takb;
@@ -363,6 +366,11 @@ generate begin : gPCs
 	for (g = 0; g < XSTREAMS*THREADS; g = g + 1) begin
 		always_ff @(posedge clk)
 		if (rst) begin
+			pcs[g] <= {$bits(pc_address_ex_t){1'b0}};
+			pcs[g].cap.perms <= 16'hFFFF;
+			pcs[g].cap.otype <= 18'h3ffff;
+			pcs[g].cap.top <= 65'h10000000000000000;
+			pcs[g].cap.base <= 64'd0;
 			pcs[g].stream.stream <= 5'd1;
 			pcs[g].stream.thread = g >> $clog2(XSTREAMS);
 			pcs[g].cap.offset <= RSTPC;
@@ -377,6 +385,11 @@ endgenerate
 
 always_ff @(posedge clk)
 	if (rst) begin
+		pc <= {$bits(pc_address_ex_t){1'b0}};
+		pc.cap.perms <= 16'hffff;
+		pc.cap.otype <= 18'h3ffff;
+		pc.cap.top <= 65'h10000000000000000;
+		pc.cap.base <= 64'd0;
 		pc.cap.offset <= Qupls4_pkg::RSTPC;
 		pc.stream <= act_stream;
 	end
@@ -384,6 +397,28 @@ always_ff @(posedge clk)
 //		if (get_next_pc)
 			pc <= next_pcs[next_act_stream];
 	end
+
+// Detect a faulty PC transition.
+always_ff @(posedge clk)
+if (rst) begin
+	excv <= FALSE;
+	exc <= FLT_NONE;
+end
+else begin
+	if (advance_pc) begin
+		// bounds okay?
+		if (next_pcs[next_act_stream].cap.offset < next_pcs[next_act_stream].cap.base ||
+			next_pcs[next_act_stream].cap.offset > next_pcs[next_act_stream].cap.top - 6) begin
+			excv <= TRUE;
+			exc <= FLT_CBOUNDS;
+		end
+		// execute permitted?
+		if (!next_pcs[next_act_stream].cap.perms[1]) begin
+			excv <= TRUE;
+			exc <= FLT_CPEXEC;
+		end
+	end
+end
 
 // Manage thread updates.
 always_ff @(posedge clk)

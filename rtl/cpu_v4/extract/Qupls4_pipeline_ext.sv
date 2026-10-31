@@ -49,7 +49,7 @@ module Qupls4_pipeline_ext(rst_i, clk_i, ihit_fet, ihit_ext, en_i,
 	irq_fet, irq_in_fet, irq_sn_fet, ipl_fet, sr, pt_ext, pt_dec, p_override, po_bno,
 	branchmiss, misspc_fet, flush_fet, active_irq_vector, irq_i,
 	micro_machine_active, cline_fet, cline_ext, new_cline_ext,
-	reglist_active, grp_i, grp_o, btb_pc,
+	reglist_active, grp_i, grp_o, btb_pc, exc_i, excv_i, exc_o, excv_o,
 	takb_fet, vl, branch_resolved, live_stream,
 	pc0_fet, uop_num_fet, uop_num_ext,
 	ls_bmf_i, pack_regs_i, scale_regs_i, regcnt_i,
@@ -114,6 +114,10 @@ output reg do_call;
 input get;
 input pc_stream_t [THREADS-1:0] new_stream;
 output reg alloc_stream;
+input excv_i;
+input Qupls4_pkg::cause_code_t exc_i;
+output reg excv_o;
+output Qupls4_pkg::cause_code_t exc_o;
 
 genvar g;
 integer nn,hh,n1,n2,n3,n4,n5,n6,n7;
@@ -534,6 +538,18 @@ begin
 	p_override = p_override0123|p_override123|p_override23|p_override3|chgflow3;
 	*/
 	p_override = en && chgflow && new_address_o != btb_pc.cap.offset;
+end
+
+always_ff @(posedge clk)
+if (rst_i) begin
+	excv_o <= FALSE;
+	exc_o <= FLT_NONE;
+end
+else begin
+	if (en) begin
+		excv_o <= excv_i;
+		exc_o <= exc_i;
+	end
 end
 
 endmodule

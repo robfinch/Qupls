@@ -43,7 +43,8 @@ module Qupls4_pipeline_fet(rst, clk, ihit, ihit_fet, en,
 	irq_in_ic, irq_ic, irq_in_fet, irq_fet, irq_sn_ic, irq_sn_fet,
 	pc_i, misspc, misspc_fet, uop_num_ic, uop_num_fet, flush_i,flush_fet,
 	pc0_fet, pc1_fet, pc2_fet, pc3_fet, pc4_fet, stomp_fet, kept_stream, ic_carry_mod,
-	inject_cl, ic_line_i, inj_line_i, ic_line_fet, nmi_i, carry_mod_fet
+	inject_cl, ic_line_i, inj_line_i, ic_line_fet, nmi_i, carry_mod_fet,
+	excv_i, exc_i, excv_o, exc_o
 );
 input rst;
 input clk;
@@ -77,6 +78,10 @@ output reg [1023:0] ic_line_fet;
 input nmi_i;
 output reg [31:0] carry_mod_fet;
 output reg ihit_fet;
+input excv_i;
+input Qupls4_pkg::cause_code_t exc_i;
+output reg excv_o;
+output Qupls4_pkg::cause_code_t exc_o;
 
 pc_address_ex_t pc0_f;
 pc_address_ex_t pc1_f;
@@ -243,6 +248,18 @@ if (rst)
 else begin
 	if (en)
 		ihit_fet <= ihit;
+end
+
+always_ff @(posedge clk)
+if (rst) begin
+	excv_o <= FALSE;
+	exc_o <= FLT_NONE;
+end
+else begin
+	if (en) begin
+		excv_o <= excv_i;
+		exc_o <= exc_i;
+	end
 end
 
 endmodule

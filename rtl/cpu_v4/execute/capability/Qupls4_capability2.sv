@@ -51,6 +51,7 @@ output Qupls4_pkg::reservation_station_entry_t rse_o;
 output cpu_types_pkg::[63:0] o;
 output cpu_types_pkg::flags_t flags;
 
+Qupls4_pkg::reservation_station_entry_t rse = rse_i;
 reg [63:0] a;
 reg [63:0] b;
 reg [63:0] c;
@@ -65,6 +66,7 @@ assign d = rse.arg[4].val;
 assign i = rse.argI.val;
 assign c_flags = rse.arg[2].flags;
 assign d_flags = rse.arg[4].flags;
+reg [63:0] jmp_dst;
 
 Qupls4_pkg::micro_op_t iro;
 reg [63:0] ao,bo,co,do;
@@ -415,47 +417,9 @@ always_comb
 always_comb
 	isInBounds = b >= base && b <= top - 6;
 
-always_ff @(posedge clk)
-if (rst) begin
-	ac <= uc64_capability_t'(256'd0);
-	bc <= uc64_capability_t'(256'd0);
-	cc <= uc64_capability_t'(256'd0);
-	dc <= uc64_capability_t'(256'd0);
-end
-else begin
-	case(ir.byteno)
-	6'd1:
-		begin
-			ac[63:0] <= a;
-			bc[63:0] <= b;
-			cc[63:0] <= c;
-			dc[63:0] <= d;
-		end
-	6'd2:
-		begin
-			ac[127:64] <= a;
-			bc[127:64] <= b;
-			cc[127:64] <= c;
-			dc[127:64] <= d;
-		end
-	6'd3:
-		begin
-			ac[191:128] <= a;
-			bc[191:128] <= b;
-			cc[191:128] <= c;
-			dc[191:128] <= d;
-		end
-	6'd4:
-		begin
-			ac[255:192] <= a;
-			bc[255:192] <= b;
-			cc[255:192] <= c;
-			dc[255:192] <= d;
-			cc_flags <= c_flags;
-			dc_flags <= d_flags;
-		end
-	endcase
-end
+always_comb
+	jmp_dst = {{29{rse.uop.imm[34]}},rse.uop.imm[34:0]};
+
 
 always_ff @(posedge clk)
 if (rst) begin
@@ -537,7 +501,7 @@ else begin
 		end
 	CAP_GETLENGTH:
 		begin
-			if (ac_top[61])
+			if (ac_top[64])
 				busf.ovf <= TRUE;
 			bus.offset <= ac.top - ac.base;
 			wrgpr <= TRUE;
@@ -564,6 +528,7 @@ else begin
 		end
 	CAP_GETTOP:
 		begin
+			busf.ovf <= ac.top[64];
 			bus.offset <= ac.top;
 			wrgpr <= TRUE;
 		end
@@ -615,7 +580,7 @@ else begin
 		end 
 		else if (ac.offset < ac.base || ac.offset > ac.top - 6) begin
 			excv <= TRUE;
-			exc <= FLT_CLENGTH;
+			exc <= FLT_CBOUNDS;
 		end
 	CAP_CINVOKE:
 		begin
@@ -645,7 +610,7 @@ else begin
 			end 
 			else if (ac.offset < ac.base || ac.offset > ac.top - 6) begin
 				excv <= TRUE;
-				exc <= FLT_CLENGTH;
+				exc <= FLT_CBOUNDS;
 			end
 			else begin
 				bus <= bc;
@@ -692,25 +657,25 @@ else begin
 			bus <= ac;
 			bus.offset <= bc.offset;
 		end
-	CAP_CHKBOUNNDS:
+	CAP_CHKBOUNDS:
 		if (!ac_flags.cap) begin
 			excv <= TRUE;
 			exc <= FLT_CTAG;
 		end
 		else if (bc.offset < ac.base || bc.offset > ac.top - 6) begin
 			excv <= TRUE;
-			exc <= FLT_CLENGTH;
+			exc <= FLT_CBOUNDS;
 		end
 	CAP_SETBOUNDS:
 		begin
 			busf <= ac_flags;
 			if (fnUcIsSealed(ac))
 				busf.cap <= FALSE;
-			else if (ac.offset + bc.offset < ac.base || ac.offset + bc.offset > ac.top - 6)
+			else if (bc.offset + cc.offset < ac.base || bc.offset + cc.offset > ac.top - 6)
 				busf.cap <= FALSE;
 			bus <= ac;
-			bus.base <= ac.offset;
-			bus.top <= ac.offset + bc.offset;
+			bus.base <= bc.offset;
+			bus.top <= bc.offset + cc.offset;
 		end
 	CAP_SETEQUALSEXACT:
 		begin
@@ -777,9 +742,17 @@ else begin
 	case(ir.opcode)
 	// Operation is done by branchmiss_pc, but we still need to save the return
 	// address.
-	OP_JSR:
+	OP_CJSR:
 		begin
-			bus.offset <= rse_i.pc.offset + 4'd6;
+			if (jmp_dst < rse.pc.base || jmp_dst > rse.pc.top - 6) begin
+				excv <= TRUE;
+				exc <= FLT_CBOUNDS;
+			end
+			else if (jmp_dst[0]) begin
+				excv <= TRUE;
+				exc <= FLT_CALGN;
+			end
+			bus.offset <= rse.pc.offset + 4'd6;
 		end
 	endcase
 end

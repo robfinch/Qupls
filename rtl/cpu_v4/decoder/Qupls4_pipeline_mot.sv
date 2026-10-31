@@ -42,7 +42,7 @@ import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
 module Qupls4_pipeline_mot(rst, clk, en, stomp, stomp2, cline_ext, cline_mot,
-	ihit_ext, ihit_mot, pc_mot, branch_resolved, live_stream,
+	ihit_ext, ihit_mot, pc_mot, branch_resolved, live_stream, exc_i, excv_i,
     pg_ext, pg_mot, advance_ext, uop_buf, uop_mark, head);
 parameter MWIDTH = Qupls4_pkg::MWIDTH;
 parameter MICROOPS_PER_INSTR = 16;
@@ -66,6 +66,8 @@ output reg advance_ext;
 output Qupls4_pkg::micro_op_t [MAX_MICROOPS-1:0] uop_buf;
 output [2:0] uop_mark [0:MAX_MICROOPS-1];
 output [3:0] head [0:MWIDTH-1];
+input excv_i;
+input Qupls4_pkg::cause_code_t exc_i;
 
 integer n1;
 genvar g;
@@ -130,6 +132,12 @@ generate begin : gComb
 				pg_mot1.hdr.v <= INV;
 			foreach (pg_mot1.pr[n1]) begin
 				if (stomp) begin
+					pg_mot1.pr[n1].stomped <= TRUE;
+					pg_mot1.pr[n1].done <= 2'b11;
+				end
+				if (excv_i) begin
+					pg_mot1.pr[n1].excv <= TRUE;
+					pg_mot1.pr[n1].exc <= exc_i;
 					pg_mot1.pr[n1].stomped <= TRUE;
 					pg_mot1.pr[n1].done <= 2'b11;
 				end

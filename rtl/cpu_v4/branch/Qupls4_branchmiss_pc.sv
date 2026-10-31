@@ -167,6 +167,7 @@ end
 always_ff @(posedge clk)
 begin
 	live_stream <= 7'd0;
+	misspc <= {$bits(pc_address_ex_t){1'b0}};
 	misspc.cap.offset <= Qupls4_pkg::RSTPC;
 	misspc.stream <= 7'd1;
 	case(1'b1)
@@ -191,6 +192,7 @@ begin
 			// Transition the current PC from unknown to live.
 			2'b00,2'b11:
 				begin
+					misspc <= pc;
 					live_stream <= current_pc.stream;
 				end
 			// Predicted as not taken, but resolved as taken:
@@ -208,8 +210,8 @@ begin
 			//   was assigned as a new stream for the branch is no longer valid.
 			2'b10:
 				begin
+					misspc <= dstpc;
 					misspc.cap.offset <= pc.cap.offset + 4'd6;
-					misspc.stream <= dstpc.stream;
 					live_stream <= dstpc.stream;
 				end
 			endcase
@@ -218,8 +220,7 @@ begin
 	// Unconditional branches will always allocate a new stream.
 	default:
 		begin
-			misspc.cap.offset <= dstpc.cap.offset;
-			misspc.stream = dstpc.stream;
+			misspc <= dstpc;
 		end
 	endcase
 end
