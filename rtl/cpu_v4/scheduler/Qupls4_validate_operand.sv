@@ -40,7 +40,8 @@ import const_pkg::*;
 import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_validate_operand(rf_oper_i, oper_i, oper_o, wp_hist_i, bypass_i);
+module Qupls4_validate_operand(rf_oper_i, oper_i, oper_o, operh_i, operh_o,
+	wp_hist_i, bypass_i);
 parameter MWIDTH = 4;
 parameter NBPI = 8;					// number of bypassing inputs
 parameter NENTRY = 3;
@@ -51,39 +52,49 @@ input Qupls4_pkg::operand_t [NREG_WPORTS-1:0] wp_hist_i [0:4];
 input Qupls4_pkg::operand_t [NREG_PORTS-1:0] rf_oper_i;
 input Qupls4_pkg::operand_t [NENTRY-1:0] oper_i;
 output Qupls4_pkg::operand_t [NENTRY-1:0] oper_o;
+input Qupls4_pkg::operand_t [NENTRY-1:0] operh_i;
+output Qupls4_pkg::operand_t [NENTRY-1:0] operh_o;
 input Qupls4_pkg::operand_t [NBPI-1:0] bypass_i;
 
 integer nn,jj,kk;
 
 always_comb
 begin
-	foreach (oper_o[nn]) begin
-		oper_o[nn] = oper_i[nn];
-		oper_o[nn].val = value_zero;
-		oper_o[nn].flags = {$bits(flags_t){1'b0}};
-		if (oper_i[nn].z)
-			oper_o[nn].v = VAL;
-		else if (oper_i[nn].is_const) begin
-			oper_o[nn].v = VAL;
-			oper_o[nn].val = oper_i[nn].val;
+	foreach (oper_o[nn])
+		tOper(oper_i[nn],oper_o[nn]);
+	foreach (operh_o[nn])
+		tOper(operh_i[nn],operh_o[nn]);
+end
+
+task tOper;
+input Qupls4_pkg::operand_t operi;
+output Qupls4_pkg::operand_t opero;
+begin
+	opero = operi;
+	opero.val = value_zero;
+	opero.flags = {$bits(flags_t){1'b0}};
+	if (operi.z)
+		opero.v = VAL;
+	else if (operi.is_const) begin
+		opero.v = VAL;
+		opero.val = operi.val;
+	end
+	foreach (rf_oper_i[jj]) begin
+		if (operi.pRn==rf_oper_i[jj].pRn && rf_oper_i[jj].v && !operi.v) begin
+			opero = rf_oper_i[jj];
+			opero.v = VAL;
 		end
-		foreach (rf_oper_i[jj]) begin
-			if (oper_i[nn].pRn==rf_oper_i[jj].pRn && rf_oper_i[jj].v && !oper_i[nn].v) begin
-				oper_o[nn] = rf_oper_i[jj];
-				oper_o[nn].v = VAL;
-			end
-			else if ((pFPCSR & rf_oper_i[jj].fpcsr) && rf_oper_i[jj].v && !oper_i[nn].v) begin
-				oper_o[nn] = rf_oper_i[jj];
-				oper_o[nn].v = VAL;
-			end
+		else if ((pFPCSR & rf_oper_i[jj].fpcsr) && rf_oper_i[jj].v && !operi.v) begin
+			opero = rf_oper_i[jj];
+			opero.v = VAL;
 		end
-		// Check if operand matches incoming write port history.
-		foreach (wp_hist_i[jj]) begin
-			for (kk = 0; kk < 4; kk = kk + 1) begin
-				if (oper_i[nn].pRn==wp_hist_i[jj][kk].pRn && wp_hist_i[jj][kk].v && !oper_i[nn].v) begin
-					oper_o[nn] = wp_hist_i[jj][kk];
-					oper_o[nn].v = VAL;
-				end
+	end
+	// Check if operand matches incoming write port history.
+	foreach (wp_hist_i[jj]) begin
+		for (kk = 0; kk < 4; kk = kk + 1) begin
+			if (operi.pRn==wp_hist_i[jj][kk].pRn && wp_hist_i[jj][kk].v && !operi.v) begin
+				opero = wp_hist_i[jj][kk];
+				opero.v = VAL;
 			end
 		end
 	end
@@ -94,15 +105,14 @@ begin
 	// 14 functional units that could be bypassed.
 	// However, there is bypassing from the output of the first SAU.
 	if (Qupls4_pkg::PERFORMANCE) begin
-		for (nn = 0; nn < NENTRY; nn = nn + 1) begin
-			for (jj = 0; jj < NBPI; jj = jj + 1) begin //check phys reg???
-				if (oper_i[nn].pRn==bypass_i[jj].pRn && bypass_i[jj].v && !oper_i[nn].v) begin
-					oper_o[nn] = bypass_i[jj];
-					oper_o[nn].v = VAL;
-				end
+		for (jj = 0; jj < NBPI; jj = jj + 1) begin //check phys reg???
+			if (operi.pRn==bypass_i[jj].pRn && bypass_i[jj].v && !operi.v) begin
+				opero = bypass_i[jj];
+				opero.v = VAL;
 			end
 		end
 	end
 end
+endtask
 
 endmodule

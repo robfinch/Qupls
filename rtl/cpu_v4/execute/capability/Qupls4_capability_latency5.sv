@@ -39,19 +39,13 @@ import const_pkg::*;
 import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_capability_latency5(rst, clk, ir, a, b, c, c_flags, d, d_flags, 
-	pcc, pcch, o, flags);
+module Qupls4_capability_latency5(rst, clk, rse, pcc, pcch, o, flags);
 input rst;
 input clk;
+input Qupls4_pkg::reservation_station_entry_t rse;
 input Qupls4_pkg::micro_op_t ir;
-input [63:0] a;
-input [63:0] b;
-input [63:0] c;
-input [63:0] d;
 input pc_address_t pcc;
 input cpu_types_pkg::capability_high64_t pcch;
-input cpu_types_pkg::flags_t c_flags;
-input cpu_types_pkg::flags_t d_flags;
 output cpu_types_pkg::[63:0] o;
 output cpu_types_pkg::flags_t flags;
 
@@ -69,6 +63,19 @@ begin
 end
 endfunction
 
+reg [63:0] a;
+reg [63:0] b;
+reg [63:0] c;
+reg [63:0] d;
+cpu_types_pkg::flags_t c_flags;
+cpu_types_pkg::flags_t d_flags;
+assign a = rse.arg[0].val;
+assign b = rse.arg[1].val;
+assign c = rse.arg[2].val;
+assign d = rse.arg[4].val;
+assign c_flags = rse.arg[2].flags;
+assign d_flags = rse.arg[4].flags;
+
 Qupls4_pkg::micro_op_t iro;
 reg [63:0] ao,bo,co,do;
 reg chg;
@@ -84,6 +91,9 @@ wire done8;
 wire invoke = ir.func==CAP_INVOKE;
 wire setbounds = ir.func==CAP_SETBOUNDS;
 reg isInvokeInBounds, isInBounds;
+capability_pkg::uc64_capability_t ac,bc,cc,dc;
+cpu_types_pkg::flags_t cc_flags;
+cpu_types_pkg::flags_t dc_flags;
 
 always_ff @(posedge clk) ao <= a;
 always_ff @(posedge clk) bo <= b;
@@ -415,6 +425,48 @@ always_comb
 
 always_ff @(posedge clk)
 if (rst) begin
+	ac <= uc64_capability_t'(256'd0);
+	bc <= uc64_capability_t'(256'd0);
+	cc <= uc64_capability_t'(256'd0);
+	dc <= uc64_capability_t'(256'd0);
+end
+else begin
+	case(ir.byteno)
+	6'd1:
+		begin
+			ac[63:0] <= a;
+			bc[63:0] <= b;
+			cc[63:0] <= c;
+			dc[63:0] <= d;
+		end
+	6'd2:
+		begin
+			ac[127:64] <= a;
+			bc[127:64] <= b;
+			cc[127:64] <= c;
+			dc[127:64] <= d;
+		end
+	6'd3:
+		begin
+			ac[191:128] <= a;
+			bc[191:128] <= b;
+			cc[191:128] <= c;
+			dc[191:128] <= d;
+		end
+	6'd4:
+		begin
+			ac[255:192] <= a;
+			bc[255:192] <= b;
+			cc[255:192] <= c;
+			dc[255:192] <= d;
+			cc_flags <= c_flags;
+			dc_flags <= d_flags;
+		end
+	endcase
+end
+
+always_ff @(posedge clk)
+if (rst) begin
 	busf <= 8'h00;
 	bus <= 64'd0;
 end
@@ -425,16 +477,17 @@ else begin
 	CAP_GETBASE:
 		begin
 			busf <= 8'h00;
-			bus <= base;			
+			bus <= ac.base;
 		end
 	CAP_GETTOP:
 		begin
 			busf <= 8'h00;
-			bus <= top;
+			bus <= ac.top;
 		end
 	CAP_GETLENGTH:
 		begin
 			busf <= 8'h00;
+			bus = {ac.top - ac.base,3'b0};
 			if ((E < 49) && ((top[64:63]-base[63]) > 1))
 				bus <= {~top[64],top[63:0]} - base;
 			else

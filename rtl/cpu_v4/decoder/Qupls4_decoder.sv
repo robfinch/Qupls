@@ -416,6 +416,10 @@ begin
 	dbo.cause = Qupls4_pkg::FLT_NONE;
 //	dbo.mem0 = db.v2p|db.vv2p|db.vvn2p;
 	dbo.load_canary = SUPPORT_CANARY && instr.opcode==Qupls4_pkg::OP_LOAD && instr.byteno[2];
+	dbo.cload = instr.opcode==Qupls4_pkg::OP_CLOAD;
+	dbo.cload_tags = SUPPORT_CAPABILITIES && instr.opcode==Qupls4_pkg::OP_CLOAD && instr.func==Qupls4_pkg::CAP_LOADTAGS; 
+	dbo.cstore = instr.opcode==Qupls4_pkg::OP_CSTORE;
+	dbo.cap = instr.opcode==Qupls4_pkg::OP_CAP; 
 	dbo.v2p = instr.opcode==Qupls4_pkg::OP_V2P;
 	dbo.vv2p = instr.opcode==Qupls4_pkg::OP_VV2P;
 	dbo.amo = instr.opcode==Qupls4_pkg::OP_AMO;

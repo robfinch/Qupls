@@ -150,6 +150,8 @@ Qupls4_validate_operand #(
 	.rf_oper_i(rf_oper_i),
 	.oper_i(rse_argA),
 	.oper_o(arg[0]),
+	.operh_i(rse_argA),
+	.operh_o(),
 	.bypass_i(bypass_i)
 );
 
@@ -166,6 +168,8 @@ Qupls4_validate_operand #(
 	.rf_oper_i(rf_oper_i),
 	.oper_i(rse_argB),
 	.oper_o(arg[1]),
+	.operh_i(rse_argB),
+	.operh_o(),
 	.bypass_i(bypass_i)
 );
 else begin
@@ -185,6 +189,8 @@ Qupls4_validate_operand #(
 	.rf_oper_i(rf_oper_i),
 	.oper_i(rse_argC),
 	.oper_o(arg[2]),
+	.operh_i(rse_argC),
+	.operh_o(),
 	.bypass_i(bypass_i)
 );
 else begin
@@ -205,6 +211,8 @@ Qupls4_validate_operand #(
 	.rf_oper_i(rf_oper_i),
 	.oper_i(rse_argD),
 	.oper_o(arg[3]),
+	.operh_i(rse_argD),
+	.operh_o(),
 	.bypass_i(bypass_i)
 );
 else begin
@@ -229,6 +237,8 @@ Qupls4_validate_operand #(
 	.rf_oper_i(rf_oper_i),
 	.oper_i(rse_argT),
 	.oper_o(arg[4]),
+	.operh_i(rse_argT),
+	.operh_o(),
 	.bypass_i(bypass_i)
 );
 
@@ -245,6 +255,8 @@ Qupls4_validate_operand #(
 	.rf_oper_i(rf_fpcsr_i),
 	.oper_i(rse_argS),
 	.oper_o(arg[5]),
+	.operh_i(rse_argS),
+	.operh_o(),
 	.bypass_i(bypass_i)
 );
 end

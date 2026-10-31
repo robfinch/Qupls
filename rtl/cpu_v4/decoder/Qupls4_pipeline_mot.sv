@@ -208,8 +208,24 @@ Qupls4_micro_op_queue3 #(.MICROOPS_PER_INSTR(MICROOPS_PER_INSTR)) umoq1
 	.head(head)
 );
 
+// rd_more just pulses for a single cycle.
+// We want to hold onto the rd_more signal until the extract stage advances.
+// The extract stage should only advance if the next stage is ready to
+// advance too.
+
+reg did_rd_more;
+always_ff @(posedge clk)
+if (rst)
+	did_rd_more <= FALSE;
+else begin
+	if (rd_more)
+		did_rd_more <= TRUE;
+	if (en)
+		did_rd_more <= FALSE;
+end
+
 always_comb
-	advance_ext = rd_more;
+	advance_ext = rd_more|did_rd_more;
 
 always_ff @(posedge clk)
 if (rst)

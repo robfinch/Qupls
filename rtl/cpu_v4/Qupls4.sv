@@ -345,14 +345,6 @@ pc_address_ex_t pc0_f;
 pc_address_ex_t brtgt;
 reg pc_in_sync;
 reg advance_pipeline, advance_pipeline_seg2;
-reg advance_icache;
-reg advance_fetch;
-reg advance_extract;
-wire advance_extract2;
-reg advance_mot;
-reg advance_decode;
-reg advance_rename;
-reg advance_enqueue;
 reg do_bsr_h;
 reg set_pending_ipl;
 reg [5:0] next_pending_ipl;
@@ -437,6 +429,7 @@ wire [3:0] mc_regx2;
 wire [3:0] mc_regx3;
 wire [15:0] rs_busy;
 Qupls4_pkg::reservation_station_entry_t [DISPATCH_WIDTH-1:0] rse;
+Qupls4_pkg::cap_reservation_station_entry_t [0:0] cap_rse;
 
 // ALU done and idle are almost the same, but idle is sticky and set
 // if the ALU is not busy, whereas done pulses at the end of an ALU
@@ -1344,7 +1337,7 @@ always_comb
 always_comb
 	nmi_addr = kernel_vectors[sr.dbg ? 4 : fnNextOm(sr.om)];
 
-edge_det unmied1 (.clk(clk), .rst(irst), .ce(advance_fetch), .i(nmi), .pe(pe_nmi), .ne(), .ee());
+edge_det unmied1 (.clk(clk), .rst(irst), .ce(advance_pipeline), .i(nmi), .pe(pe_nmi), .ne(), .ee());
 
 always_ff @(posedge clk)
 if (irst)
@@ -1722,20 +1715,20 @@ else begin
 end
 
 always_ff @(posedge clk)
-if (advance_fetch) begin
+if (advance_pipeline) begin
 	ic_carry_mod <= icarry_mod;
 end
 else
 	ic_carry_mod <= ic_carry_mod;
 reg [2:0] uop_num_ic, iuop_num;
 always_ff @(posedge clk)
-if (advance_fetch) begin
+if (advance_pipeline) begin
 	uop_num_ic <= iuop_num;
 end
 else
 	iuop_num <= iuop_num;
 always_ff @(posedge clk)
-if (advance_fetch) begin
+if (advance_pipeline) begin
 	ic_irq_sn <= irq_sn;
 end
 
@@ -1789,10 +1782,10 @@ Qupls4_btb ubtb1
 (
 	.rst(irst),
 	.clk(clk),
-	.clk_en(advance_fetch),
+	.clk_en(advance_pipeline),
 	.en(1'b1),
 	.rclk(clk),
-	.advance_pc(advance_fetch),
+	.advance_pc(advance_pipeline & ihito),
 	.get_next_pc(get_next_pc),
 	.micro_machine_active(1'b0),
 	.igrp(igrp),
@@ -1893,7 +1886,7 @@ always_ff @(posedge clk)
 if (irst)
 	ihit_que <= FALSE;
 else begin
-	if (advance_enqueue)
+	if (advance_pipeline)
 		ihit_que <= ihit_ren;
 end
 
@@ -1950,15 +1943,15 @@ Qupls4_stomp ustmp1
 	.clk(clk),
 	.clk2x(clk),
 	.ihit(is_buffered),
-	.advance_icache(advance_icache),
-	.advance_fetch(advance_fetch),
-	.advance_extract(advance_extract),
-	.advance_mot(advance_mot),
-	.advance_decode(advance_decode),
-	.advance_rename(advance_rename),
-	.advance_enqueue(advance_enqueue),
+	.advance_icache(advance_pipeline),
+	.advance_fetch(advance_pipeline),
+	.advance_extract(advance_pipeline),
+	.advance_mot(advance_pipeline),
+	.advance_decode(advance_pipeline),
+	.advance_rename(advance_pipeline),
+	.advance_enqueue(advance_pipeline),
 	.advance_pipeline(advance_pipeline),
-	.advance_pipeline_seg2(advance_pipeline_seg2), // currently same as above
+	.advance_pipeline_seg2(advance_pipeline), // currently same as above
 	.found_destination(fcu_found_destination),
 	.destination_rndx(fcu_dst),
 	.branch_resolved(branch_resolved),
@@ -2261,7 +2254,7 @@ end
 // -----------------------------------------------------------------------------
 
 wire flush_fet;
-pc_address_ex_t misspc_fet;
+pc_address_ex_t misspc_fet, prev_ip;
 wire [1023:0] ic_line_fet;
 pc_address_t ic_hwipc, hwipc_fet;
 wire micro_machine_active_fet;
@@ -2280,6 +2273,15 @@ always_ff @(posedge clk)
 	irq_ic <= hirq;
 always_ff @(posedge clk)
 	irq_in_ic <= irq_in;
+always_ff @(posedge clk)
+if (irst) begin
+	prev_ip.stream <= 7'd1;
+	prev_ip.pc <= RSTPC;
+end
+else begin
+	if (advance_pipeline)
+		prev_ip <= ip;
+end
 
 pregno_t pred_reg;
 pc_address_ex_t pc_fet;
@@ -2288,6 +2290,7 @@ Qupls4_instruction_buffer uib1
 (
 	.rst_i(irst),
 	.clk_i(clk),
+	.ce_i(advance_pipeline),
 	.invce(invce),
 	.invalidate(ic_invall|ic_invline),
 	.ihit_i(ihito),
@@ -2315,7 +2318,7 @@ Qupls4_pipeline_fet ufet1
 	.irq_fet(irq_fet),
 	.irq_sn_ic(ic_irq_sn),
 	.irq_sn_fet(irq_sn_fet),
-	.en(advance_fetch & is_icip_buffered),
+	.en(advance_pipeline),
 	.uop_num_ic(uop_num_ic),
 	.uop_num_fet(uop_num_fet),
 	.pc_i(pc_fet),
@@ -2326,6 +2329,9 @@ Qupls4_pipeline_fet ufet1
 //	.hwipc(ic_hwipc),
 //	.hwipc_fet(hwipc_fet),
 	.pc0_fet(pc0_fet),
+	.pc1_fet(),
+	.pc2_fet(),
+	.pc3_fet(),
 	.stomp_fet(stomp_fet),
 	.kept_stream(kept_stream),
 	.inject_cl(1'b0),
@@ -2394,7 +2400,7 @@ Qupls4_pipeline_ext #(.MWIDTH(MWIDTH)) uiext1
 	.rst_i(irst),
 	.clk_i(clk),
 	.flush_fet(flush_fet),
-	.en_i(advance_extract),
+	.en_i(advance_pipeline),
 	.branch_resolved(branch_resolved),
 	.live_stream(live_stream),
 	.ihit_fet(ihit_fet),
@@ -2464,7 +2470,7 @@ umot1
 (
 	.rst(irst),
 	.clk(clk),
-	.en(advance_mot),
+	.en(advance_pipeline),
 	.branch_resolved(branch_resolved),
 	.live_stream(live_stream),
 	.ihit_ext(ihit_ext),
@@ -2478,7 +2484,7 @@ umot1
 	.pg_mot(pg_mot),
 	.uop_buf(uop_buf),
 	.uop_mark(uop_mark),
-	.advance_ext(advance_extract2),
+	.advance_ext(advance_extract2),	// rd_more , should maybe rename
 	.head(uop_head)
 );
 
@@ -2502,7 +2508,7 @@ udecstg1
 	.rst_i(rst_i),
 	.rst(irst),
 	.clk(clk),
-	.en(advance_decode),
+	.en(advance_pipeline),
 	.branch_resolved(branch_resolved),
 	.regFPCSR(regFPCSR),
 	.ihit_mot(ihit_mot),
@@ -2687,61 +2693,19 @@ reg room_for_lsq_queue;
 Qupls4_pkg::lsq_ndx_t lsq_head;
 Qupls4_pkg::lsq_ndx_t lsq_tail, lsq_tail0;
 
-always_comb	advance_enqueue =
+// The pipeline cannot move if there is no room to enqueue instructions.
+
+always_comb	advance_pipeline =
+	 first_icache | (
 	 rstcnt[5] &&			// not resetting
+	 ihit &&					// there is a hit on the instruction cache
+   is_icip_buffered &&	// an instruction is buffered
 	!sync_ndxv &&			// there is no sync instruction in the re-order buffer
 	!rat_stallq &&		// not stalled on register alias
-	room_for_que && 	// and there is room to queue
-	(DISPATCH_STRATEGY==0 ? !stall_dsp : TRUE)	// not stalled dispatching
+ 	 room_for_que	&&		// and there is room to queue
+ 	 advance_extract2		// advance_extract2 (rd_more) set by mot stage
+ 	)
 	;	
-
-always_comb	advance_rename =
-	 rstcnt[5] &&			// not resetting
-	!sync_ndxv &&			// there is no sync instruction in the re-order buffer
-	!rat_stallq &&		// not stalled on register alias
-	(DISPATCH_STRATEGY==0 ? !stall_dsp : TRUE) && // not stalled dispatching
-	advance_enqueue
-	;	
-
-always_comb	advance_decode =
-	 rstcnt[5] &&			// not resetting
-	!sync_ndxv &&			// there is no sync instruction in the re-order buffer
-	!rat_stallq &&		// not stalled on register alias
-	(DISPATCH_STRATEGY==0 ? !stall_dsp : TRUE) && // not stalled dispatching
-	advance_rename
-	;	
-
-always_comb	advance_mot =
-	rstcnt[5] &&
-	advance_decode
-	;
-
-always_comb advance_extract =
-	is_icip_buffered & 
-	advance_extract2 &		// advance_extract set by mot stage
-	rstcnt[5]
-	;
-
-always_comb advance_fetch =
-	advance_extract
-	;
-
-always_comb advance_icache =
-	first_icache | (
-	ihit & 
-	advance_extract2 &		// advance_extract set by mot stage
-	rstcnt[5])
-	;
-
-always_comb advance_pipeline =
-
-	 rstcnt[5] &&			// not resetting
-	!sync_ndxv &&			// there is no sync instruction in the re-order buffer
-	!rat_stallq &&		// not stalled on register alias
-//	!vec_stallq &&		// I think this was on vector lookup
-//	!ns_stall &&			// not stalled supplying register names
-	room_for_que && 	// and there is room to queue
-	(DISPATCH_STRATEGY==0 ? !stall_dsp : TRUE);				// not stalled dispatching
 
 always_comb advance_pipeline_seg2 = advance_pipeline;// || dc_get;//(!stallq && !vec_stallq) || dc_get;
 always_comb vec_stallq = !ic_dhit || vec_stall2;
@@ -2969,7 +2933,7 @@ Qupls4_pipeline_ren #(.MWIDTH(MWIDTH)) uren1
 	.clk(clk),
 	.clk5x(clk5x),
 	.ph4(ph4),
-	.en(advance_rename),
+	.en(advance_pipeline),
 	.ihit_dec(ihit_dec),
 	.ihit_ren(ihit_ren),
 	.nq(nq),
@@ -3000,7 +2964,7 @@ Qupls4_pipeline_ren #(.MWIDTH(MWIDTH)) uren1
 	
 	.cmtav(cmtav),
 	.cmtaiv(cmtaiv),
-	.cmtaa(amtaa),
+	.cmtaa(cmtaa),
 	.cmtap(cmtap),
 	.cmta_cp(cmta_cp),
 
@@ -3130,7 +3094,7 @@ else begin
 	pc0_f <= pc_fet;//pc0;
 end
 
-rob_bitmask_t rob_dispatched, rob_unimplemented;
+rob_bitmask_t rob_dispatched, rob_unimplemented, cap_rob_dispatched;
 Qupls4_pkg::rob_bitmask_t rob_dispatched_stomped;
 
 // The cycle after the length is calculated
@@ -4268,6 +4232,24 @@ Qupls4_instruction_dispatcher #(.MWIDTH(MWIDTH), .DISPATCH_COUNT(DISPATCH_WIDTH)
 	.rob_unimplemented_o(rob_unimplemented)
 );
 assign stall_dsp = FALSE;
+
+generate begin : gCapDispatcher
+	if (SUPPORT_CAPABILITIES) begin
+Qupls4_cap_instruction_dispatcher #(.MWIDTH(MWIDTH), .DISPATCH_COUNT(1)) uid1
+(
+	.rst(irst),
+	.clk(clk),
+	.stomp(robentry_stomp),
+	.pgh(pgh),
+	.rob(rob),
+	.busy(rs_busy),
+	.rse_o(cap_rse),
+	.rob_dispatched_o(rob_cap_dispatched),
+	.rob_unimplemented_o()
+);
+	end
+end
+endgenerate
 
 generate begin : gDispatcher
 	if (DISPATCH_STRATEGY==0) begin
@@ -6312,7 +6294,7 @@ reg [7:0] hwi_ndx;
 
 always_ff @(posedge clk)
 begin
-	if (advance_enqueue) begin
+	if (advance_pipeline) begin
 		foreach (pgh[n55])
 			pgh[n55].sn <= pgh[n55].sn - 1;
 			// Enqeue the group header.
@@ -6436,7 +6418,7 @@ else begin
 //		if (|robentry_stomp)
 //			tails[0] <= stail;		// computed above
 //	else
-	if (advance_enqueue) begin
+	if (advance_pipeline) begin
 		//if (!stomp_que || stomp_quem) 
 		begin
 			// Decrement sequence numbers.
@@ -6565,6 +6547,8 @@ else begin
 			(|rob[nn].v || rob[nn].stomped) &&
 			// and checkpoint index valid...
 			pgh[rob[nn].pghn].cndxv &&
+			// must not be a capability instruction
+			!rob[nn].op.decbus.cap &&
 			// and not done already...
 		  !(&rob[nn].done) &&
 			// and not out already...
@@ -6581,9 +6565,32 @@ else begin
 			(rob[(nn + Qupls4_pkg::ROB_ENTRIES - 1) % Qupls4_pkg::ROB_ENTRIES].op.decbus.rext ? &rob[(nn + Qupls4_pkg::ROB_ENTRIES - 1) % Qupls4_pkg::ROB_ENTRIES].done : TRUE)
 			;
 
+	foreach (rob[nn])
+		rob[nn].cap_dispatchable <= 
+			// Valid stream or stomped on
+			(|rob[nn].v || rob[nn].stomped) &&
+			// and checkpoint index valid...
+			pgh[rob[nn].pghn].cndxv &&
+			// must be a capability instruction
+			rob[nn].op.decbus.cap &&
+			// and not done already...
+		  !(&rob[nn].done) &&
+			// and not out already...
+			!(|rob[nn].out) &&
+			// and predicate is valid...
+//			rob[nn].pred_bitv &&
+			// and no sync dependency
+			!rob[nn].sync_depv &&
+			// if a store, then no previous flow control dependency
+			(rob[nn].op.decbus.cstore ? !rob[nn].fc_dep : TRUE) &&
+			// if serializing the previous instruction must be done...
+			(Qupls4_pkg::SERIALIZE ? &rob[(nn + Qupls4_pkg::ROB_ENTRIES-1)%Qupls4_pkg::ROB_ENTRIES].done || ~|rob[(nn + Qupls4_pkg::ROB_ENTRIES-1)%Qupls4_pkg::ROB_ENTRIES].v : TRUE) &&
+			// A REXT prefix must be done
+			(rob[(nn + Qupls4_pkg::ROB_ENTRIES - 1) % Qupls4_pkg::ROB_ENTRIES].op.decbus.rext ? &rob[(nn + Qupls4_pkg::ROB_ENTRIES - 1) % Qupls4_pkg::ROB_ENTRIES].done : TRUE)
+			;
 
 	foreach (rob[nn])
-		if (rob_dispatched[nn])
+		if (rob_dispatched[nn]|cap_rob_dispatched[nn])
 			rob[nn].out <= {2{VAL}};
 
 	foreach (rob[nn])
@@ -7739,7 +7746,7 @@ always_ff @(posedge clk) begin: clock_n_debug
 	if (1) begin	
 	$display("----- Physical Registers -----");
 	for (i=0; i< 511; i=i+8)
-		if (i < 16 || i >= 240 && i < 256)
+		if (i < 64 || i >= 240 && i < 256)
 	    $display("%d: %h %d: %h %d: %h %d: %h %d: %h %d: %h %d: %h %d: %h #",
 	    	i[9:0]+10'd0, fnRegVal(i+0), i[9:0]+10'd1, fnRegVal(i+1), i[9:0]+10'd2, fnRegVal(i+2), i[9:0]+10'd3, fnRegVal(i+3),
 	    	i[9:0]+10'd4, fnRegVal(i+4), i[9:0]+10'd5, fnRegVal(i+5), i[9:0]+10'd6, fnRegVal(i+6), i[9:0]+10'd7, fnRegVal(i+7)

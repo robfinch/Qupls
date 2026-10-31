@@ -38,12 +38,13 @@ import const_pkg::*;
 import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_instruction_buffer(rst_i, clk_i, ihit_i, stream_i, ips_i, ip_i,
-	invce, invalidate,
+module Qupls4_instruction_buffer(rst_i, clk_i, ce_i, ihit_i, stream_i,
+	ips_i, ip_i, invce, invalidate,
 	icip_i, line_i, line_o, ip_o, is_buffered_o, is_icip_buffered_o,
 	next_is_buffered_o);
 input rst_i;
 input clk_i;
+input ce_i;
 input ihit_i;
 input cpu_types_pkg::pc_stream_t stream_i;
 input cpu_types_pkg::pc_address_ex_t ip_i;
@@ -80,6 +81,10 @@ end
 always_comb
 begin
 	is_icip_buffered_o = FALSE;
+	// if icip_i matches the output from the cache, then the line will be
+	// passed to the output, so it is a match.
+	if (icip_i.pc==ip_i.pc)
+		is_icip_buffered_o = TRUE;
 	foreach (ip_buf[n43])
 		if (icip_i.pc >= ip_buf[n43] && icip_i.pc < ip_buf[n43] + 8'd64)
 			is_icip_buffered_o = TRUE;
@@ -103,23 +108,25 @@ if (rst_i) begin
 	end
 end
 else begin
-	if (~is_icip_buffered_o & ihit_i) begin
-		foreach (line_buf[n1]) begin
-			if (n1==$size(line_buf)-1) begin
-				line_buf[n1] <= line_i;
-				ip_buf[n1] <= {icip_i.pc[$bits(cpu_types_pkg::pc_address_t)-1:6],6'd0};
-			end
-			else begin
-				line_buf[n1] <= line_buf[n1+1];
-				ip_buf[n1] <= ip_buf[n1+1];
+	if (ce_i) begin
+		if (~is_icip_buffered_o & ihit_i) begin
+			foreach (line_buf[n1]) begin
+				if (n1==$size(line_buf)-1) begin
+					line_buf[n1] <= line_i;
+					ip_buf[n1] <= {icip_i.pc[$bits(cpu_types_pkg::pc_address_t)-1:6],6'd0};
+				end
+				else begin
+					line_buf[n1] <= line_buf[n1+1];
+					ip_buf[n1] <= ip_buf[n1+1];
+				end
 			end
 		end
+		if (invce & invalidate)
+			foreach (line_buf[n1]) begin
+				line_buf[n1] = {1024{1'b1}};	// NOPs
+				ip_buf[n1] = 32'h0;
+			end
 	end
-	if (invce & invalidate)
-		foreach (line_buf[n1]) begin
-			line_buf[n1] = {1024{1'b1}};	// NOPs
-			ip_buf[n1] = 32'h0;
-		end
 end
 
 endmodule

@@ -180,8 +180,8 @@ begin
 	lsq[n12r][n12c].load <= rob.op.decbus.load|rob.excv;
 	lsq[n12r][n12c].loadz <= rob.op.decbus.loadz|rob.excv;
 	lsq[n12r][n12c].load_canary <= rob.op.decbus.load_canary;
-	lsq[n12r][n12c].cload <= rob.excv;
-	lsq[n12r][n12c].cload_tags <= rob.excv;
+	lsq[n12r][n12c].cload <= rob.op.decbus.cload|rob.excv;
+	lsq[n12r][n12c].cload_tags <= rob.op.decbus.cload_tags|rob.excv;
 	lsq[n12r][n12c].store <= rob.op.decbus.store;
 	lsq[n12r][n12c].stptr <= rob.op.decbus.stptr;
 	lsq[n12r][n12c].cstore <= 1'b0;
