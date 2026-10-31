@@ -47,8 +47,8 @@ input clk_i;
 input ce_i;
 input ihit_i;
 input cpu_types_pkg::pc_stream_t stream_i;
-input cpu_types_pkg::pc_address_ex_t ip_i;
-input cpu_types_pkg::pc_address_ex_t icip_i;
+input Qupls4_pkg::pc_address_ex_t ip_i;
+input Qupls4_pkg::pc_address_ex_t icip_i;
 input invce;
 input invalidate;
 input [1023:0] line_i;
@@ -71,7 +71,7 @@ begin
 	ip_o = ip_i;
 	is_buffered_o = FALSE;
 	foreach (ip_buf[n43])
-		if (ip_i.pc >= ip_buf[n43] && ip_i.pc < ip_buf[n43] + 8'd64) begin
+		if (ip_i.cap.offset[$bits(cpu_types_pkg::pc_address_t)-1:0] >= ip_buf[n43] && ip_i.cap.offset[$bits(cpu_types_pkg::pc_address_t)-1:0] < ip_buf[n43] + 8'd64) begin
 			line_o = line_buf[n43];
 			ip_o = ip_i;
 			is_buffered_o = TRUE;
@@ -83,10 +83,10 @@ begin
 	is_icip_buffered_o = FALSE;
 	// if icip_i matches the output from the cache, then the line will be
 	// passed to the output, so it is a match.
-	if (icip_i.pc==ip_i.pc)
+	if (icip_i.cap.offset==ip_i.cap.offset)
 		is_icip_buffered_o = TRUE;
 	foreach (ip_buf[n43])
-		if (icip_i.pc >= ip_buf[n43] && icip_i.pc < ip_buf[n43] + 8'd64)
+		if (icip_i.cap.offset[$bits(cpu_types_pkg::pc_address_t)-1:0] >= ip_buf[n43] && icip_i.cap.offset[$bits(cpu_types_pkg::pc_address_t)-1:0] < ip_buf[n43] + 8'd64)
 			is_icip_buffered_o = TRUE;
 end
 
@@ -94,7 +94,7 @@ always_comb
 begin
 	next_is_buffered_o = FALSE;
 	foreach (ip_buf[n44])
-		if (ips_i[stream_i.stream].pc >= ip_buf[n44] && ips_i[stream_i.stream].pc < ip_buf[n44] + 8'd64)
+		if (ips_i[stream_i.stream].cap.offset[$bits(cpu_types_pkg::pc_address_t)-1:0] >= ip_buf[n44] && ips_i[stream_i.stream].cap.offset[$bits(cpu_types_pkg::pc_address_t)-1:0] < ip_buf[n44] + 8'd64)
 			next_is_buffered_o = TRUE;
 end
 
@@ -113,7 +113,7 @@ else begin
 			foreach (line_buf[n1]) begin
 				if (n1==$size(line_buf)-1) begin
 					line_buf[n1] <= line_i;
-					ip_buf[n1] <= {icip_i.pc[$bits(cpu_types_pkg::pc_address_t)-1:6],6'd0};
+					ip_buf[n1] <= {icip_i.cap.offset[$bits(cpu_types_pkg::pc_address_t)-1:6],6'd0};
 				end
 				else begin
 					line_buf[n1] <= line_buf[n1+1];

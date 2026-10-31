@@ -91,28 +91,28 @@ end
 always_comb 
 begin
 	pc1_f = pc0_f;
-	pc1_f.pc = pc0_f.pc + 6'd6;
+	pc1_f.cap.offset = pc0_f.cap.offset + 6'd6;
 end
 always_comb
 begin
 	pc2_f = pc0_f;
-	pc2_f.pc = pc0_f.pc + 6'd12;
+	pc2_f.cap.offset = pc0_f.cap.offset + 6'd12;
 end
 always_comb
 begin
 	pc3_f = pc0_f;
-	pc3_f.pc = pc0_f.pc + 6'd18;
+	pc3_f.cap.offset = pc0_f.cap.offset + 6'd18;
 end
 always_comb
 begin
 	pc4_f = pc0_f;
-	pc4_f.pc = pc0_f.pc + 6'd24;
+	pc4_f.cap.offset = pc0_f.cap.offset + 6'd24;
 end
 
 always_ff @(posedge clk)
 if (rst) begin
 	pc0_fet.stream <= pc_stream_t'(7'd1);
-	pc0_fet.pc <= RSTPC;
+	pc0_fet.cap.offset <= RSTPC;
 end
 else begin
 	if (en)
@@ -121,44 +121,44 @@ end
 always_ff @(posedge clk)
 if (rst) begin
 	pc1_fet.stream <= pc_stream_t'(7'd1);
-	pc1_fet.pc <= RSTPC + 6'd6;
+	pc1_fet.cap.offset <= RSTPC + 6'd6;
 end
 else begin
 	if (en) begin
 		pc1_fet <= pc_i;
-		pc1_fet.pc <= pc1_f;
+		pc1_fet.cap.offset <= pc1_f.cap.offset;
 	end
 end
 always_ff @(posedge clk)
 if (rst) begin
 	pc2_fet.stream <= pc_stream_t'(7'd1);
-	pc2_fet.pc <= RSTPC + 6'd12;
+	pc2_fet.cap.offset <= RSTPC + 6'd12;
 end
 else begin
 	if (en) begin
 		pc2_fet <= pc_i;
-		pc2_fet.pc <= pc2_f;
+		pc2_fet.cap.offset <= pc2_f.cap.offset;
 	end
 end
 always_ff @(posedge clk)
 if (rst) begin
 	pc3_fet.stream <= pc_stream_t'(7'd1);
-	pc3_fet.pc <= RSTPC + 6'd18;
+	pc3_fet.cap.offset <= RSTPC + 6'd18;
 end
 else begin
 	if (en) begin
 		pc3_fet <= pc_i;
-		pc3_fet.pc <= pc3_f;
+		pc3_fet.cap.offset <= pc3_f.cap.offset;
 	end
 end
 always_ff @(posedge clk)
 if (rst) begin
 	pc4_fet.stream <= pc_stream_t'(7'd1);
-	pc4_fet.pc <= RSTPC + 6'd24;
+	pc4_fet.cap.offset <= RSTPC + 6'd24;
 end
 else begin
 	if (en)
-		pc4_fet.pc <= pc4_f;
+		pc4_fet.cap.offset <= pc4_f.cap.offset;
 end
 
 always_ff @(posedge clk)

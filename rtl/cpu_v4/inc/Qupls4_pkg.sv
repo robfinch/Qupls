@@ -435,6 +435,11 @@ typedef struct packed
 	cpu_types_pkg::pregndx_t [Qupls4_pkg::AREGS-1:0] regmap;
 } reg_map2_t;
 
+typedef struct packed {
+	cpu_types_pkg::pc_stream_t stream;	// instruction fetch stream number
+	capability_pkg::uc64_capability_t cap;
+} pc_address_ex_t;
+
 typedef struct packed
 {
 	logic [1:0] resv;
@@ -890,14 +895,18 @@ typedef enum logic [6:0] {
 typedef enum logic [6:0] {
 	CAP_CHKINVOKE = 7'd4,
 	CAP_CHKBOUNDS = 7'd6,
+	CAP_INCOFFSETI = 7'd11,
 	CAP_ANDPERM = 7'd32,
+	CAP_BUILDCAP = 7'd33,
 	CAP_COPYTYPE = 7'd34,
 	CAP_INCOFFSET = 7'd35,
 	CAP_SEAL = 7'd36,
 	CAP_SETADDR = 7'd37,
 	CAP_SETBOUNDS = 7'd38,
 	CAP_SETFLAGS = 7'd39,
-	CAP_INCOFFSETI = 7'd45,
+	CAP_SETHIGH = 7'd40,
+	CAP_TESTSUBSET = 7'd45,
+	CAP_SETEQUALSEXACT = 7'd46,
 	CAP_CLEARTAG = 7'd64,
 	CAP_GETFLAGS = 7'd65,
 	CAP_GETHIGH = 7'd66,
@@ -1546,7 +1555,7 @@ typedef struct packed {
 */
 
 typedef struct packed {
-	cpu_types_pkg::pc_address_ex_t pc;
+	Qupls4_pkg::pc_address_ex_t pc;
 	logic [5:0] pred_btst;
 	micro_op_t ins;
 } ex_instruction_t;
@@ -1569,6 +1578,7 @@ typedef enum logic [7:0] {
 	FLT_DBZ		= 8'h10,
 	FLT_FLOAT = 8'h11,
 	FLT_CHK		= 8'h43,
+	
 	FLT_CTAG	= 8'hC0,
 	FLT_CSEAL	= 8'hC1,
 	FLT_CTYPE	= 8'hC2,
@@ -1576,13 +1586,11 @@ typedef enum logic [7:0] {
 	FLT_CPEXEC	= 8'hC4,
 	FLT_CALGN		= 8'hC5,
 	FLT_CLENGTH	= 8'hC6,
+	FLT_CBOUNDS = 8'hC7,
+	FLT_CPERMS	= 8'hC8,
+
 	FLT_PRED  = 8'hDE,
 	FLT_BADREG = 8'hDF,
-	FLT_CAPTAG = 8'hE0,
-	FLT_CAPOTYPE = 8'hE1,
-	FLT_CAPPERMS = 8'hE2,
-	FLT_CAPBOUNDS = 8'hE4,
-	FLT_CAPSEALED = 8'hE5,
 	FLT_NONE 	= 8'hFF
 } cause_code_t;
 
@@ -1662,6 +1670,22 @@ typedef struct packed
 	cpu_types_pkg::pregno_t pRn;
 	cpu_types_pkg::value_t val;
 } operand_t;
+
+// Capabilities operand
+typedef struct packed
+{
+	logic v;
+	logic aRnv;
+	logic z;											// operand should be zero
+	logic is_const;								// operand is a constant value in val
+	logic from_fu;
+	logic fpcsr;
+	cpu_types_pkg::flags_t flags;
+	cpu_types_pkg::aregno_t aRn;
+	// pRn[8:5]=FU id pRn[4:0]=tag
+	cpu_types_pkg::pregno_t pRn;
+	capability_pkg::uc64_capability_t val;
+} cap_operand_t;
 
 
 // Holds the sizes of lanes for vector operations.
@@ -1765,6 +1789,7 @@ typedef struct packed
 	logic erc;
 	logic fence;
 	logic mcb;					// micro-code branch
+	logic cap;					// capabilities instruction
 
 	logic cjb;					// call, jmp, or bra
 	logic jsri;					// indirect subroutine call
@@ -1821,7 +1846,7 @@ typedef struct packed {
 	logic argC_v;
 	cpu_types_pkg::checkpt_ndx_t cndx;				// checkpoint index
 	ex_instruction_t op;			// original instruction
-	cpu_types_pkg::pc_address_ex_t pc;			// PC of instruction
+	Qupls4_pkg::pc_address_ex_t pc;			// PC of instruction
 	cpu_types_pkg::mc_address_t mcip;				// Micro-code IP address
 } beb_entry_t;
 
@@ -1848,7 +1873,7 @@ typedef struct packed {
 	logic vstore;
 	logic vstore_ndx;
 
-	cpu_types_pkg::pc_address_ex_t pc;
+	Qupls4_pkg::pc_address_ex_t pc;
 	memop_t func;					// operation to perform
 	logic [3:0] func2;		// more resolution to function
 	cause_code_t cause;
@@ -1979,8 +2004,8 @@ typedef struct packed
 	logic pRd2v;							// second destination reg valid
 	logic nRd2v;
 	logic [5:0] cli;												// 16-bit parcel cache line index of instruction
-//	cpu_types_pkg::pc_address_ex_t pc;			// PC of instruction
-	cpu_types_pkg::pc_address_ex_t hwipc;		// PC of instruction
+//	Qupls4_pkg::pc_address_ex_t pc;			// PC of instruction
+	Qupls4_pkg::pc_address_ex_t hwipc;		// PC of instruction
 	micro_op_t uop;
 	decode_bus_t decbus;
 } pipeline_reg_t;
@@ -2053,7 +2078,7 @@ typedef struct packed {
 	logic we;
 	operating_mode_t om;						// needed for mem ops
 	fround_t rm;										// needed for float-ops
-	cpu_types_pkg::pc_address_ex_t pc;
+	Qupls4_pkg::pc_address_ex_t pc;
 //	logic [63:0] pch;
 	cpu_types_pkg::value_t argI;
 	operand_t [6:0] arg;						// +1 for status A,B,C,T,D,T,S,T2
@@ -2062,6 +2087,71 @@ typedef struct packed {
 	reg [5:0] vcount;								// vector count
 	reg [5:0] laneno;								// lane number for vector operations
 } reservation_station_entry_t;
+
+typedef struct packed {
+	logic v;
+	logic busy;
+	logic ready;
+	logic [3:0] funcunit;							// functional unit dispatched to
+	logic [2:0] age;
+	cpu_types_pkg::seqnum_t irq_sn;
+	cpu_types_pkg::rob_ndx_t rndx;		// associated ROB entry
+	cpu_types_pkg::checkpt_ndx_t cndx;
+	micro_op_t uop;
+//	logic has_rext;
+	cause_code_t exc;
+	logic excv;					// 1=a valid cause code is present
+	logic nan;
+	// needed only for mem
+	logic virt2phys;
+	logic iprel;				// IP relative addressing Rs1 spec'd as r31
+	logic load;
+	logic store;
+	logic mem;
+	logic [2:0] count;
+	logic [2:0] fclass;
+	// decodes only needed for branch
+	logic ibcc;					// incrementing branch
+	logic dbcc;					// decrementing branch
+	logic bcc;					// conditional branch
+	logic mbcc;					// masked branch
+	logic cjb;					// call, jmp, or bra
+	logic jsri;					// indirect subroutine call
+	logic bsr;
+	logic jsr;
+	logic br;
+	logic pbr;
+	logic ret;
+	logic boi;
+	logic sys;
+	logic eret;
+	logic cinvoke;
+
+	logic bt;												
+	
+	logic rext;				// extended register postfix
+	// - - - - - - - - - - - - - - - - 
+	memsz_t prc;
+	logic [$bits(cpu_types_pkg::value_t)/8-1:0] copydst;
+	logic aRdv;
+	logic Rs1z;
+	logic Rs1ip;
+	logic Rs2z;
+	logic Rs3z;
+	cpu_types_pkg::aregno_t aRd;
+	cpu_types_pkg::pregno_t nRd;
+	logic we;
+	operating_mode_t om;						// needed for mem ops
+	fround_t rm;										// needed for float-ops
+	Qupls4_pkg::pc_address_ex_t pc;
+//	logic [63:0] pch;
+	cpu_types_pkg::value_t argI;
+	cap_operand_t [6:0] arg;				// +1 for status A,B,C,T,D,T,S,T2
+//	operand_t [NOPER:0] argH;			// high order 64-bits of 128-bit arg
+	reg [1:0] velesz;								// vector element size code
+	reg [5:0] vcount;								// vector count
+	reg [5:0] laneno;								// lane number for vector operations
+} cap_reservation_station_entry_t;
 
 typedef struct packed {
 	// The following fields may change state while an instruction is processed.
@@ -2085,6 +2175,7 @@ typedef struct packed {
 	logic pred_bit;						// 1 once previous predicate is true or ignored
 	logic pred_bitv;					// 1 if predicate bitis valid
 	logic dispatchable;				// 1 if instruction can be dispatched
+	logic cap_dispatchable;	  // 1 if instruction can be dispatched to capability unit
 
 	cpu_types_pkg::rob_ndx_t orid;						// ROB id of originating macro-instruction
 	logic cmt;								// 1=rROB entry was committed
@@ -2192,7 +2283,7 @@ typedef struct packed
 	cpu_types_pkg::checkpt_ndx_t cndx;	// checkpoint index
 	logic chkpt_freed;
 	logic has_branch;
-	cpu_types_pkg::pc_address_ex_t ip;			// Instruction pointer of group
+	Qupls4_pkg::pc_address_ex_t ip;			// Instruction pointer of group
 } pipeline_group_hdr_t;
 
 typedef struct packed
@@ -2603,8 +2694,8 @@ begin
 end
 endfunction
 
-function cpu_types_pkg::pc_address_ex_t fnDecDest;
-input cpu_types_pkg::pc_address_ex_t pc;
+function Qupls4_pkg::pc_address_ex_t fnDecDest;
+input Qupls4_pkg::pc_address_ex_t pc;
 input Qupls4_pkg::rob_entry_t pr;
 reg jsr,bsr,bcc;
 begin
@@ -2613,10 +2704,10 @@ begin
 	bsr = fnDecBsr(pr.op);
 	bcc = fnIsBranch(pr.op.uop);
 	case(1'b1)
-	jsr:	fnDecDest.pc = {{29{pr.op.uop.imm[34]}},pr.op.uop.imm,1'b0};
-	bsr: 	fnDecDest.pc = pc.pc + {{29{pr.op.uop.imm[34]}},pr.op.uop.imm,1'b0};
-	bcc:	fnDecDest.pc = pc.pc + {{44{pr.op.uop.imm[19]}},pr.op.uop.imm,1'b0};
-	default:	fnDecDest.pc = Qupls4_pkg::RSTPC;
+	jsr:	fnDecDest.cap.offset = {{29{pr.op.uop.imm[34]}},pr.op.uop.imm,1'b0};
+	bsr: 	fnDecDest.cap.offset = pc.cap.offset + {{29{pr.op.uop.imm[34]}},pr.op.uop.imm,1'b0};
+	bcc:	fnDecDest.cap.offset = pc.cap.offset + {{44{pr.op.uop.imm[19]}},pr.op.uop.imm,1'b0};
+	default:	fnDecDest.cap.offset = Qupls4_pkg::RSTPC;
 	endcase
 end
 endfunction

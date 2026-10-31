@@ -48,7 +48,7 @@ import Qupls4_pkg::*;
 
 module Qupls4_ext_decode(ip, instr, bsr, jsr, bra, jmp, bcc, rtd, nop,
 	bsr_tgt, jsr_tgt, bcc_tgt);
-input cpu_types_pkg::pc_address_ex_t ip;
+input Qupls4_pkg::pc_address_ex_t ip;
 input [47:0] instr;
 output reg bsr;
 output reg jsr;
@@ -57,9 +57,9 @@ output reg jmp;
 output reg bcc;
 output reg rtd;
 output reg nop;
-output cpu_types_pkg::pc_address_ex_t bsr_tgt;
-output cpu_types_pkg::pc_address_ex_t jsr_tgt;
-output cpu_types_pkg::pc_address_ex_t bcc_tgt;
+output Qupls4_pkg::pc_address_ex_t bsr_tgt;
+output Qupls4_pkg::pc_address_ex_t jsr_tgt;
+output Qupls4_pkg::pc_address_ex_t bcc_tgt;
 
 always_comb nop = instr[6:0]==Qupls4_pkg::OP_NOP;
 always_comb bsr = instr[6:0]==Qupls4_pkg::OP_BSR && ~&instr[12:7];
@@ -76,8 +76,8 @@ always_comb
 		bcc = FALSE;
 	endcase
 always_comb rtd = instr[6:0]==Qupls4_pkg::OP_RTD;
-always_comb begin bsr_tgt = ip; bsr_tgt.pc = ip.pc + {{29{instr[47]}},instr[47:13],1'b0}; end
-always_comb begin jsr_tgt = ip; jsr_tgt.pc = {{29{instr[47]}},instr[47:13],1'b0}; end
-always_comb begin bcc_tgt = ip; bcc_tgt.pc = ip.pc + {{41{instr[46]}},instr[46:25],1'b0}; end
+always_comb begin bsr_tgt = ip; bsr_tgt.cap.offset = ip.cap.offset + {{29{instr[47]}},instr[47:13],1'b0}; end
+always_comb begin jsr_tgt = ip; jsr_tgt.cap.offset = {{29{instr[47]}},instr[47:13],1'b0}; end
+always_comb begin bcc_tgt = ip; bcc_tgt.cap.offset = ip.cap.offset + {{41{instr[46]}},instr[46:25],1'b0}; end
 
 endmodule

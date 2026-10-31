@@ -187,10 +187,12 @@ typedef struct packed {
 	logic [4:0] stream;
 } pc_stream_t;
 
+/*
 typedef struct packed {
 //	capability_high64_t caphi;
 	pc_stream_t stream;				// instruction fetch stream number
 	pc_address_t pc;
 } pc_address_ex_t;
+*/
 
 endpackage

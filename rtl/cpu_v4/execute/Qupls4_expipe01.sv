@@ -140,7 +140,7 @@ always_comb
 generate begin : gAgen
 	if (PIPE==3'd4 || PIPE==3'd5) begin
 always_ff @(posedge clk)
-	as <= rse_i.Rs1z ? value_zero : rse_i.Rs1ip ? rse_i.pc : rse_i.arg[0].val;
+	as <= rse_i.Rs1z ? value_zero : rse_i.Rs1ip ? rse_i.pc.cap.offset : rse_i.arg[0].val;
 
 always_ff @(posedge clk)
 	bs <= rse_i.Rs2z ? value_zero : (rse_i.arg[1].val * ({rse_i.uop.sc==3'd0,rse_i.uop.sc}));

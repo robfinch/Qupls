@@ -75,7 +75,7 @@ input flags_t t_flags;
 input [WID-1:0] qres;
 input [63:0] mask;
 input [2:0] cs;
-input cpu_types_pkg::pc_address_ex_t pc;
+input Qupls4_pkg::pc_address_ex_t pc;
 input capability32_t pcc;
 input [WID-1:0] csr;
 input [7:0] cpl;
@@ -1821,9 +1821,9 @@ always_ff @(posedge clk)
 	case(WID)
 	8: o = bus;
 	16:	o = bus;
-	32:	o = bus_nan ? bus | (fnBitRev({64'd0,pc.pc}) >> 6'd48) : bus;
-	64:	o = bus_nan ? bus | (fnBitRev({64'd0,pc.pc}) >> 6'd20) : bus;
-	128:	o = bus_nan ? bus | fnBitRev({64'd0,pc.pc}) : bus;
+	32:	o = bus_nan ? bus | (fnBitRev({64'd0,pc.cap.offset}) >> 6'd48) : bus;
+	64:	o = bus_nan ? bus | (fnBitRev({64'd0,pc.cap.offset}) >> 6'd20) : bus;
+	128:	o = bus_nan ? bus | fnBitRev({64'd0,pc.cap.offset}) : bus;
 	default:	o = zero;
 	endcase
 

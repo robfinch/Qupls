@@ -37,10 +37,30 @@
 
 package capability_pkg;
 
+typedef struct packed
+{
+	logic [7:0] priv_lvl;
+	logic [23:0] perms;
+	logic [3:0] flags;
+	logic [23:0] otype;
+	logic [2:0] resv;
+	logic [64:0] top;
+	logic [63:0] base;
+	logic [63:0] offset;
+} uc64_capability_t;
+
+
 function fnIsSealed;
 input [63:0] cap;
 begin
 	fnIsSealed = (cap[44:27]==18'h3fffe || cap[44:27] < 18'h3FFEF);
+end
+endfunction
+
+function fnUcIsSealed;
+input uc64_capability_t cap;
+begin
+	fnUcIsSealed = (cap.otype==18'h3fffe || cap.otype < 18'h3FFEF);
 end
 endfunction
 
@@ -55,6 +75,13 @@ function fnIsReserved;
 input [63:0] cap;
 begin
 	fnIsReserved = cap[44:27]<=18'h3fffd && cap[44:27] >= 18'h3fff0;
+end
+endfunction
+
+function fnUcIsReserved;
+input uc64_capability_t cap;
+begin
+	fnUcIsReserved = cap.otype<=18'h3fffd && cap.otype >= 18'h3fff0;
 end
 endfunction
 
@@ -77,6 +104,13 @@ begin
 	else
 		E = 8'd0;
 	fnAlignMask = ~((64'd1 << (E+3)) - 64'd1);
+end
+endfunction
+
+function [63:0] fnUcAlignMask;
+input uc64_capability_t cap;
+begin
+	fnUcAlignMask = -64'd1 << 3;
 end
 endfunction
 

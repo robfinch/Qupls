@@ -63,9 +63,9 @@ input advance_pc;
 input micro_machine_active;
 output reg [2:0] igrp;
 input get_next_pc;
-output cpu_types_pkg::pc_address_ex_t pc;
-input cpu_types_pkg::pc_address_ex_t pc0;
-output cpu_types_pkg::pc_address_ex_t next_pc;
+output Qupls4_pkg::pc_address_ex_t pc;
+input Qupls4_pkg::pc_address_ex_t pc0;
+output Qupls4_pkg::pc_address_ex_t next_pc;
 input p_override;
 input [6:0] po_bno [0:3];
 output reg takb0;
@@ -76,33 +76,33 @@ input pc_address_ex_t new_address_ext;
 input predicted_correctly_dec;
 input pc_address_ex_t new_address_dec;
 input branchmiss;
-input cpu_types_pkg::pc_address_ex_t misspc;
-input cpu_types_pkg::pc_address_ex_t commit_pc0;
-input cpu_types_pkg::pc_address_ex_t commit_brtgt0;
+input Qupls4_pkg::pc_address_ex_t misspc;
+input Qupls4_pkg::pc_address_ex_t commit_pc0;
+input Qupls4_pkg::pc_address_ex_t commit_brtgt0;
 input commit_takb0;
 input commit_br0;
 input commit_call0;
 input commit_ret0;
 input commit_jmp0;
 input [2:0] commit_grp0;
-input cpu_types_pkg::pc_address_ex_t commit_pc1;
-input cpu_types_pkg::pc_address_ex_t commit_brtgt1;
+input Qupls4_pkg::pc_address_ex_t commit_pc1;
+input Qupls4_pkg::pc_address_ex_t commit_brtgt1;
 input commit_takb1;
 input commit_br1;
 input commit_call1;
 input commit_ret1;
 input commit_jmp1;
 input [2:0] commit_grp1;
-input cpu_types_pkg::pc_address_ex_t commit_pc2;
-input cpu_types_pkg::pc_address_ex_t commit_brtgt2;
+input Qupls4_pkg::pc_address_ex_t commit_pc2;
+input Qupls4_pkg::pc_address_ex_t commit_brtgt2;
 input commit_takb2;
 input commit_br2;
 input commit_call2;
 input commit_ret2;
 input commit_jmp2;
 input [2:0] commit_grp2;
-input cpu_types_pkg::pc_address_ex_t commit_pc3;
-input cpu_types_pkg::pc_address_ex_t commit_brtgt3;
+input Qupls4_pkg::pc_address_ex_t commit_pc3;
+input Qupls4_pkg::pc_address_ex_t commit_brtgt3;
 input commit_takb3;
 input commit_br3;
 input commit_call3;
@@ -263,7 +263,7 @@ endgenerate
 
 
 always_comb//ff @(posedge clk)
-	addrb0 = pc0.pc[11:1];
+	addrb0 = pc0.cap.offset[11:1];
 
 
 Qupls4_btb_stream_bitmap usb1
@@ -339,13 +339,13 @@ begin
 		next_pcs[new_address_ext.stream.stream] = new_address_ext;
 	// Now the target predictions
 	// Note the stream cannot be recorded in the BTB table.
-	else if (pc0.pc==doutb0.pc) begin
+	else if (pc0.cap.offset==doutb0.pc) begin
 		if (doutb0.ret)
-			next_pcs[pc0.stream].pc = ras_pc;
+			next_pcs[pc0.stream].cap.offset = ras_pc;
 		else if (doutb0.call|doutb0.jmp)
-			next_pcs[pc0.stream].pc = doutb0.tgt;
+			next_pcs[pc0.stream].cap.offset = doutb0.tgt;
 		else begin
-			next_pcs[pc0.stream].pc = doutb0.tgt;
+			next_pcs[pc0.stream].cap.offset = doutb0.tgt;
 			takb0 = doutb0.takb;		// record branch taken fact (for bt)
 		end
 		next_pcs[pc0.stream].stream = next_act_stream;
@@ -353,7 +353,7 @@ begin
 	// Advance program counter.
 	else begin
 		next_pcs[pc.stream.stream] = pc;
-		next_pcs[pc.stream.stream].pc = pc.pc + MWIDTH*6;	// four instructions
+		next_pcs[pc.stream.stream].cap.offset = pc.cap.offset + MWIDTH*6;	// four instructions
 	end
 end
 
@@ -365,7 +365,7 @@ generate begin : gPCs
 		if (rst) begin
 			pcs[g].stream.stream <= 5'd1;
 			pcs[g].stream.thread = g >> $clog2(XSTREAMS);
-			pcs[g].pc <= RSTPC;
+			pcs[g].cap.offset <= RSTPC;
 		end
 		else if (advance_pc) begin
 //			if (get_next_pc)
@@ -377,7 +377,7 @@ endgenerate
 
 always_ff @(posedge clk)
 	if (rst) begin
-		pc.pc <= Qupls4_pkg::RSTPC;
+		pc.cap.offset <= Qupls4_pkg::RSTPC;
 		pc.stream <= act_stream;
 	end
 	else if (advance_pc) begin
@@ -404,8 +404,8 @@ end
 // The RAS
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-always_comb do_ret = advance_pc && get_next_pc && pc0.pc==doutb0.pc && doutb0.ret;
-always_comb do_call = advance_pc && get_next_pc && pc0.pc==doutb0.pc && doutb0.call;
+always_comb do_ret = advance_pc && get_next_pc && pc0.cap.offset==doutb0.pc && doutb0.ret;
+always_comb do_call = advance_pc && get_next_pc && pc0.cap.offset==doutb0.pc && doutb0.call;
 
 always_ff @(posedge clk)
 if (rst)
@@ -426,17 +426,17 @@ if (rst) begin
 end
 else begin
 	if (do_call)
-		ras[ras_sp - 2'd1] <= pc0.pc + 4'd6;
+		ras[ras_sp - 2'd1] <= pc0.cap.offset + 4'd6;
 end
 
 always_ff @(posedge clk)
 if (rst) begin
-	ras_pc.pc <= RSTPC;
+	ras_pc.cap.offset <= RSTPC;
 	ras_pc.stream.thread <= 2'd0;
 	ras_pc.stream.stream <= 5'd1;
 end
 else begin
-	ras_pc.pc <= ras[ras_sp];
+	ras_pc.cap.offset <= ras[ras_sp];
 	ras_pc.stream <= pc0.stream;
 end
 
@@ -461,47 +461,47 @@ else begin
 	tmp0.grp <= 3'd0;
 	addra <= 11'd0;
 	if (commit_jmp0|commit_call0|commit_ret0|commit_br0) begin
-		tmp0.pc <= commit_pc0.pc;
+		tmp0.pc <= commit_pc0.cap.offset;
 		tmp0.takb <= commit_takb0;
-		tmp0.tgt <= commit_brtgt0.pc;
+		tmp0.tgt <= commit_brtgt0.cap.offset;
 		tmp0.grp <= commit_grp0;
 		tmp0.jmp <= commit_jmp0;
 		tmp0.call <= commit_call0;
 		tmp0.ret <= commit_ret0;
-		addra <= commit_pc0.pc[11:1];
+		addra <= commit_pc0.cap.offset[11:1];
 		w0 <= TRUE;
 	end
 	else if (commit_jmp1|commit_call1|commit_ret1|commit_br1) begin
-		tmp0.pc <= commit_pc1.pc;
+		tmp0.pc <= commit_pc1.cap.offset;
 		tmp0.takb <= commit_takb1;
-		tmp0.tgt <= commit_brtgt1.pc;
+		tmp0.tgt <= commit_brtgt1.cap.offset;
 		tmp0.grp <= commit_grp1;
 		tmp0.jmp <= commit_jmp1;
 		tmp0.call <= commit_call1;
 		tmp0.ret <= commit_ret1;
-		addra <= commit_pc1.pc[11:1];
+		addra <= commit_pc1.cap.offset[11:1];
 		w0 <= TRUE;
 	end
 	else if (commit_jmp2|commit_call2|commit_ret2|commit_br2) begin
-		tmp0.pc <= commit_pc2.pc;
+		tmp0.pc <= commit_pc2.cap.offset;
 		tmp0.takb <= commit_takb2;
-		tmp0.tgt <= commit_brtgt2.pc;
+		tmp0.tgt <= commit_brtgt2.cap.offset;
 		tmp0.grp <= commit_grp2;
 		tmp0.jmp <= commit_jmp2;
 		tmp0.call <= commit_call2;
 		tmp0.ret <= commit_ret2;
-		addra <= commit_pc2.pc[11:1];
+		addra <= commit_pc2.cap.offset[11:1];
 		w0 <= TRUE;
 	end
 	else if (commit_jmp3|commit_call3|commit_ret3|commit_br3) begin
-		tmp0.pc <= commit_pc3.pc;
+		tmp0.pc <= commit_pc3.cap.offset;
 		tmp0.takb <= commit_takb3;
-		tmp0.tgt <= commit_brtgt3.pc;
+		tmp0.tgt <= commit_brtgt3.cap.offset;
 		tmp0.grp <= commit_grp3;
 		tmp0.jmp <= commit_jmp3;
 		tmp0.call <= commit_call3;
 		tmp0.ret <= commit_ret3;
-		addra <= commit_pc3.pc[11:1];
+		addra <= commit_pc3.cap.offset[11:1];
 		w0 <= TRUE;
 	end
 end

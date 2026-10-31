@@ -49,7 +49,7 @@ module Qupls4_pipeline_ext(rst_i, clk_i, ihit_fet, ihit_ext, en_i,
 	irq_fet, irq_in_fet, irq_sn_fet, ipl_fet, sr, pt_ext, pt_dec, p_override, po_bno,
 	branchmiss, misspc_fet, flush_fet, active_irq_vector, irq_i,
 	micro_machine_active, cline_fet, cline_ext, new_cline_ext,
-	reglist_active, grp_i, grp_o,
+	reglist_active, grp_i, grp_o, btb_pc,
 	takb_fet, vl, branch_resolved, live_stream,
 	pc0_fet, uop_num_fet, uop_num_ext,
 	ls_bmf_i, pack_regs_i, scale_regs_i, regcnt_i,
@@ -74,19 +74,20 @@ input stomp_ext;
 output reg nop_o;
 input [31:0] carry_mod_fet;
 input ssm_flag;
-input cpu_types_pkg::pc_address_ex_t hwipc_fet;
+input Qupls4_pkg::pc_address_ex_t hwipc_fet;
 input micro_machine_active;
 input Qupls4_pkg::status_reg_t sr;
 input reglist_active;
 input branchmiss;
-input cpu_types_pkg::pc_address_ex_t misspc_fet;
+input Qupls4_pkg::pc_address_ex_t misspc_fet;
 input flush_fet;
 input [1023:0] cline_fet;
 output reg [1023:0] cline_ext;
 output reg new_cline_ext;
 input [2:0] grp_i;
 output reg [2:0] grp_o;
-input cpu_types_pkg::pc_address_ex_t pc0_fet;
+input Qupls4_pkg::pc_address_ex_t btb_pc;
+input Qupls4_pkg::pc_address_ex_t pc0_fet;
 input [2:0] uop_num_fet;
 output reg [2:0] uop_num_ext;
 input [3:0] takb_fet;
@@ -106,7 +107,7 @@ output cpu_types_pkg::mc_address_t mcip1_o;
 output cpu_types_pkg::mc_address_t mcip2_o;
 output cpu_types_pkg::mc_address_t mcip3_o;
 */
-output cpu_types_pkg::pc_address_ex_t new_address_o;
+output Qupls4_pkg::pc_address_ex_t new_address_o;
 output reg do_ret;
 output pc_address_ex_t ret_pc;
 output reg do_call;
@@ -116,8 +117,8 @@ output reg alloc_stream;
 
 genvar g;
 integer nn,hh,n1,n2,n3,n4,n5,n6,n7;
-cpu_types_pkg::pc_address_ex_t [MWIDTH-1:0] pc_fet;
-cpu_types_pkg::pc_address_ex_t [MWIDTH-1:0] pc_ext;
+Qupls4_pkg::pc_address_ex_t [MWIDTH-1:0] pc_fet;
+Qupls4_pkg::pc_address_ex_t [MWIDTH-1:0] pc_ext;
 reg [5:0] ipl_ext;
 Qupls4_pkg::irq_info_packet_t irq_in_ext;
 cpu_types_pkg::seqnum_t irq_sn_ext;
@@ -154,14 +155,14 @@ always_comb
 begin
 	foreach (pc_fet[n5]) begin
 		pc_fet[n5].stream = pc0_fet.stream;
-		pc_fet[n5].pc = pc0_fet.pc + n5*6;
+		pc_fet[n5].cap.offset = pc0_fet.cap.offset + n5*6;
 	end
 end
 
 always_ff @(posedge clk)
 if (rst_i) begin
 	foreach(pc_ext[n6]) begin
-		pc_ext[n6].pc <= Qupls4_pkg::RSTPC;
+		pc_ext[n6].cap.offset <= Qupls4_pkg::RSTPC;
 		pc_ext[n6].stream.stream <= 5'd1;
 		pc_ext[n6].stream.thread <= 3'd0;
 	end
@@ -197,7 +198,7 @@ end
 always_comb regcnt = regcnt_i;
 
 always_comb 
-	ic_line_aligned = {{64{1'd1,Qupls4_pkg::OP_NOP}},cline_fet} >> {pc0_fet.pc[5:1],4'd0};
+	ic_line_aligned = {{64{1'd1,Qupls4_pkg::OP_NOP}},cline_fet} >> {pc0_fet.cap.offset[5:1],4'd0};
 
 pc_address_ex_t prev_pc0_fet;
 always_ff @(posedge clk_i)
@@ -287,7 +288,7 @@ always_comb nop3 = (stomp_fet && pc3_fet.bno_t!=stomp_bno) || (branchmiss && mis
 // Stomp on instructions in the same instruction group following the overrride location.
 generate begin : gNop
 	for (g = 0; g < MWIDTH; g = g + 1)
-		always_comb nop_lead[g] = (branchmiss && misspc_fet.pc > pc_fet[g].pc);
+		always_comb nop_lead[g] = (branchmiss && misspc_fet.cap.offset > pc_fet[g].cap.offset);
 end
 endgenerate
 /*
@@ -301,7 +302,7 @@ reg jsrr0,jsrr1,jsrr2,jsrr3;
 reg jsri0,jsri1,jsri2,jsri3;
 reg jmpr0,jmpr1,jmpr2,jmpr3;
 reg jmpi0,jmpi1,jmpi2,jmpi3;
-cpu_types_pkg::pc_address_ex_t [MWIDTH-1:0] bsr_tgts,jsr_tgts,bcc_tgts,btgts;
+Qupls4_pkg::pc_address_ex_t [MWIDTH-1:0] bsr_tgts,jsr_tgts,bcc_tgts,btgts;
 
 generate begin : gExtDecode
 	for (g = 0; g < MWIDTH; g = g + 1) begin
@@ -376,9 +377,9 @@ begin
 	override_pos = 3'd7;
 	if (chgflow0|chgflowi) begin
 		if (chgflowi)
-			new_address_o.pc = active_irq_vector;
+			new_address_o.cap.offset = active_irq_vector;
 		else
-			new_address_o.pc = btgts[0].pc;
+			new_address_o.cap.offset = btgts[0].cap.offset;
 		if (pt_ext[0] || !(bcc[0]|chgflowi))
 			new_address_o.stream = pc0_fet.stream;
 		else begin
@@ -418,7 +419,7 @@ begin
 		override_pos = 3'd3;
 	end
 	else begin
-		new_address_o.pc = RSTPC;
+		new_address_o.cap.offset = RSTPC;
 		new_address_o.stream = 5'd1;
 	end
 end
@@ -427,11 +428,11 @@ end
 always_comb
 begin
 	ret_pc.stream = pc0_fet.stream;
-	ret_pc.pc = RSTPC;
+	ret_pc.cap.offset = RSTPC;
 	ret_pc.stream = 5'd1;
 	for (n3 = MWIDTH-1; n3 >= 0; n3 = n3 - 1)
 		if (bsr[n3]|jsr[n3])
-			ret_pc.pc = pc_ext[n3].pc + 4'd6;
+			ret_pc.cap.offset = pc_ext[n3].cap.offset + 4'd6;
 end
 
 always_comb
@@ -459,9 +460,9 @@ else if (en) begin
 	pg_ext.hdr.irq <= irq_in_ext;
 	pg_ext.hdr.old_ipl <= ipl_ext;
 	pg_ext.hdr.hwi <= irq_ext;
-	pg_ext.hdr.ip <= pc_ext[0];
+	pg_ext.hdr.ip <= pc_fet[0];
 	foreach (pg_ext.pr[n2]) begin
-		pg_ext.pr[n2] <= {$bits(Qupls4_pkg::rob_entry_t){1'b0}};
+//		pg_ext.pr[n2] <= {$bits(Qupls4_pkg::rob_entry_t){1'b0}};
 //		pg_ext.pr[n2] <= ins_fet[n2];
 		pg_ext.pr[n2] <= pr_ext[n2];	
 		pg_ext.pr[n2].v <= pc0_fet.stream.stream;
@@ -475,17 +476,17 @@ else if (en) begin
 		end
 		pg_ext.pr[n2].op.bt <= takb_fet[n2];
 		pg_ext.pr[n2].op.decbus.cause <= Qupls4_pkg::FLT_NONE;
-		pg_ext.pr[n2].v <= pc_ext[n2].stream.stream;
+		pg_ext.pr[n2].v <= pc_fet[n2].stream.stream;
 		pg_ext.pr[n2].stomped <= stomp_ext || nop_lead[n2] || nop2[n2] || bra[n2] || jmp[n2];
 		pg_ext.pr[n2].wh <= n2;
-		pg_ext.pr[n2].ip_stream <= pc_ext[n2].stream;
+		pg_ext.pr[n2].ip_stream <= pc_fet[n2].stream;
 		pg_ext.pr[n2].ip_offs <= n2 * 3;	// wyde offset
-		pg_ext.pr[n2].eip <= pc_ext[0].pc + (n2*6);
+		pg_ext.pr[n2].eip <= pc_fet[0].cap.offset + (n2*6);
 		// Jumps and branches are done as they do not need to update the regfile.
 		if (bra[n2]|jmp[n2]|stomp_ext|nop[n2]|nop2[n2])
 			pg_ext.pr[n2].done <= 2'b11;
 		if (branch_resolved) begin
-			if (pc_ext[n2].stream.thread==live_stream.thread && pc_ext[n2].stream.stream != live_stream.stream) begin
+			if (pc_fet[n2].stream.thread==live_stream.thread && pc_fet[n2].stream.stream != live_stream.stream) begin
 				pg_ext.pr[n2].stomped <= TRUE;
 				pg_ext.pr[n2].done <= 2'b11;
 			end
@@ -525,11 +526,14 @@ end
 
 always_comb
 begin
+	/*
 	p_override0123 = chgflowi;
 	p_override123 = chgflow0 & ~nop_lead[0] ? pc_fet[1].pc != new_address_o : FALSE;
 	p_override23 = chgflow1 & ~nop_lead[1] ? pc_fet[2].pc != new_address_o : FALSE;
 	p_override3 = chgflow2 & !nop_lead[2] ? pc_fet[3].pc != new_address_o : FALSE;
 	p_override = p_override0123|p_override123|p_override23|p_override3|chgflow3;
+	*/
+	p_override = en && chgflow && new_address_o != btb_pc.cap.offset;
 end
 
 endmodule

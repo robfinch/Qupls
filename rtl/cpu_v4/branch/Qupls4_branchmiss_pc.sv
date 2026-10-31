@@ -88,7 +88,7 @@ begin
 		else
 		*/
 		begin
-			dstpc.pc = pc.pc + {{47{ir.imm[16]}},ir.imm[16:0]};
+			dstpc.cap.offset = pc.cap.offset + {{47{ir.imm[16]}},ir.imm[16:0]};
 			dstpc.stream = rse.pc.stream;
 		end
 
@@ -96,32 +96,32 @@ begin
 	// the raw micro-op translation code.
 	rse.mbcc:
 		if (ir.ms[2]) begin
-			dstpc.pc = argC;
+			dstpc.cap.offset = argC;
 			dstpc.stream = rse.pc.stream;
 		end
 		else begin
-			dstpc.pc = pc.pc + {{51{ir.imm[12]}},ir.imm[12:0]};
+			dstpc.cap.offset = pc.cap.offset + {{51{ir.imm[12]}},ir.imm[12:0]};
 			dstpc.stream = rse.pc.stream;
 		end
 
 	rse.bcc:
 		if (ir.ms[2]) begin
-			dstpc.pc = argC;
+			dstpc.cap.offset = argC;
 			dstpc.stream = rse.pc.stream;
 		end
 		else begin
-			dstpc.pc = pc.pc + {{47{ir.imm[16]}},ir.imm[16:0]};
+			dstpc.cap.offset = pc.cap.offset + {{47{ir.imm[16]}},ir.imm[16:0]};
 			dstpc.stream = rse.pc.stream;
 		end
 
 	rse.bsr:
 		begin
-			dstpc.pc = pc.pc + {{29{ir.imm[34]}},ir.imm[34:0]};
+			dstpc.cap.offset = pc.cap.offset + {{29{ir.imm[34]}},ir.imm[34:0]};
 			dstpc.stream = rse.pc.stream;
 		end
 	rse.jsr:
 		begin
-			dstpc.pc = {{29{ir.imm[34]}},ir.imm[34:0]};
+			dstpc.cap.offset = {{29{ir.imm[34]}},ir.imm[34:0]};
 			dstpc.stream = rse.pc.stream;
 		end
 
@@ -130,17 +130,17 @@ begin
 			case(ir.Rd)
 			6'h02,6'h22:
 				begin
-					dstpc.pc = syscall_vector[Qupls4_pkg::fnNextOm(rse.om)];
+					dstpc.cap.offset = syscall_vector[Qupls4_pkg::fnNextOm(rse.om)];
 					dstpc.stream = rse.pc.stream;
 				end
 			6'h03,6'h23:
 				begin
-					dstpc.pc = kernel_vector[Qupls4_pkg::fnNextOm(rse.om)];
+					dstpc.cap.offset = kernel_vector[Qupls4_pkg::fnNextOm(rse.om)];
 					dstpc.stream = rse.pc.stream;
 				end
 			default:
 				begin
-					dstpc.pc = kernel_vector[Qupls4_pkg::fnNextOm(rse.om)];
+					dstpc.cap.offset = kernel_vector[Qupls4_pkg::fnNextOm(rse.om)];
 					dstpc.stream = rse.pc.stream;
 				end
 			endcase
@@ -148,17 +148,17 @@ begin
 	// Must be tested before Ret
 	rse.eret:
 		begin
-			dstpc.pc = (ir[28:17]==12'd3 ? pc_stack[1].pc : pc_stack[0].pc) + (ir[10:7] * 3'd6);
+			dstpc.cap.offset = (ir[28:17]==12'd3 ? pc_stack[1].cap.offset : pc_stack[0].cap.offset) + (ir[10:7] * 3'd6);
 			dstpc.stream = rse.pc.stream;
 		end
 	rse.ret:
 		begin
-			dstpc.pc = argA;
+			dstpc.cap.offset = argA;
 			dstpc.stream = rse.pc.stream;
 		end
 	default:
 		begin
-			dstpc.pc = RSTPC;
+			dstpc.cap.offset = RSTPC;
 			dstpc.stream = 5'd1;
 		end
 	endcase
@@ -167,7 +167,7 @@ end
 always_ff @(posedge clk)
 begin
 	live_stream <= 7'd0;
-	misspc.pc <= Qupls4_pkg::RSTPC;
+	misspc.cap.offset <= Qupls4_pkg::RSTPC;
 	misspc.stream <= 7'd1;
 	case(1'b1)
 	/*+
@@ -208,7 +208,7 @@ begin
 			//   was assigned as a new stream for the branch is no longer valid.
 			2'b10:
 				begin
-					misspc.pc <= pc.pc + 4'd6;
+					misspc.cap.offset <= pc.cap.offset + 4'd6;
 					misspc.stream <= dstpc.stream;
 					live_stream <= dstpc.stream;
 				end
@@ -218,7 +218,7 @@ begin
 	// Unconditional branches will always allocate a new stream.
 	default:
 		begin
-			misspc.pc <= dstpc.pc;
+			misspc.cap.offset <= dstpc.cap.offset;
 			misspc.stream = dstpc.stream;
 		end
 	endcase

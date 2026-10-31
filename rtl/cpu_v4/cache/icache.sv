@@ -48,6 +48,8 @@
 import const_pkg::*;
 import wishbone_pkg::*;
 import cache_pkg::*;
+import capability_pkg::*;
+import Qupls4_pkg::*;
 
 module icache(rst,clk,ce,invce,snoop_adr,snoop_v,snoop_tid,invall,invline,
 	nop,nop_o,
@@ -77,9 +79,9 @@ input snoop_v;
 input wishbone_pkg::wb_tranid_t snoop_tid;
 input invall;
 input invline;
-input cpu_types_pkg::pc_address_ex_t ip;
+input Qupls4_pkg::pc_address_ex_t ip;
 input cpu_types_pkg::asid_t ip_asid;
-output cpu_types_pkg::pc_address_ex_t ip_o;
+output Qupls4_pkg::pc_address_ex_t ip_o;
 output reg ihit_o;
 output reg ihit;
 output ICacheLine ic_line_hi_o;
@@ -157,7 +159,7 @@ assign nop_o = nop2;
 always_ff @(posedge clk)
 if (rst) begin
 	ip_o.stream <= 7'd1;
-	ip_o.pc <= RSTPC;
+	ip_o.cap.offset <= RSTPC;
 end
 else begin
 	if (ce)
@@ -228,7 +230,7 @@ sram_512x256_1rw1r uicme
 	.ce(ce),
 	.wr(icache_wre),
 	.wadr({wway,ic_line_i.vtag[HIBIT:LOBIT]}),
-	.radr({ic_rwaye,ip.pc[HIBIT:LOBIT]+ip.pc[LOBIT-1]}),
+	.radr({ic_rwaye,ip.cap.offset[HIBIT:LOBIT]+ip.cap.offset[LOBIT-1]}),
 	.i(ic_line_i.data),
 	.o(ic_eline.data),
 	.wo(victim_eline.data)
@@ -241,7 +243,7 @@ sram_512x256_1rw1r uicmo
 	.ce(ce),
 	.wr(icache_wro),
 	.wadr({wway,ic_line_i.vtag[HIBIT:LOBIT]}),
-	.radr({ic_rwayo,ip.pc[HIBIT:LOBIT]}),
+	.radr({ic_rwayo,ip.cap.offset[HIBIT:LOBIT]}),
 	.i(ic_line_i.data),
 	.o(ic_oline.data),
 	.wo(victim_oline.data)
@@ -326,7 +328,7 @@ uvc1
 	.snoop_v(snoop_v),
 	.snoop_tid(snoop_tid),
 	.snoop_adr(snoop_adr),
-	.ip(ip.pc),
+	.ip(ip.cap.offset),
 	.vce(vce),
 	.vco(vco),
 	.eline_o(victim_cache_eline),
@@ -375,7 +377,7 @@ else begin
 			else begin
 				ic_line_hi_o = {$bits(ICacheLine){1'b0}};
 				ic_line_hi_o.v = {4{ihit2o}};
-				ic_line_hi_o.vtag = {ip_o[$bits(cpu_types_pkg::address_t)-1:LOBIT],1'b1,{LOBIT-1{1'b0}}};
+				ic_line_hi_o.vtag = {ip_o.cap.offset[$bits(cpu_types_pkg::address_t)-1:LOBIT],1'b1,{LOBIT-1{1'b0}}};
 				ic_line_hi_o.data = ic_oline.data;
 			end
 			if (vce) begin
@@ -385,7 +387,7 @@ else begin
 			else begin
 				ic_line_lo_o = {$bits(ICacheLine){1'b0}};
 				ic_line_lo_o.v = {4{ihit2e}};
-				ic_line_lo_o.vtag = {ip_o[$bits(cpu_types_pkg::address_t)-1:LOBIT],{LOBIT{1'b0}}};
+				ic_line_lo_o.vtag = {ip_o.cap.offset[$bits(cpu_types_pkg::address_t)-1:LOBIT],{LOBIT{1'b0}}};
 				ic_line_lo_o.data = ic_eline.data;
 			end
 		end
@@ -398,7 +400,7 @@ else begin
 			else begin
 				ic_line_hi_o = {$bits(ICacheLine){1'b0}};
 				ic_line_hi_o.v = {4{ihit2e}};
-				ic_line_hi_o.vtag = {ip_o[$bits(cpu_types_pkg::address_t)-1:LOBIT]+1'b1,{LOBIT{1'b0}}};
+				ic_line_hi_o.vtag = {ip_o.cap.offset[$bits(cpu_types_pkg::address_t)-1:LOBIT]+1'b1,{LOBIT{1'b0}}};
 				ic_line_hi_o.data = ic_eline.data;
 			end
 			if (vco) begin
@@ -408,7 +410,7 @@ else begin
 			else begin
 				ic_line_lo_o = {$bits(ICacheLine){1'b0}};
 				ic_line_lo_o.v = {4{ihit2o}};
-				ic_line_lo_o.vtag = {ip_o[$bits(cpu_types_pkg::address_t)-1:LOBIT],1'b1,{LOBIT-1{1'b0}}};
+				ic_line_lo_o.vtag = {ip_o.cap.offset[$bits(cpu_types_pkg::address_t)-1:LOBIT],1'b1,{LOBIT-1{1'b0}}};
 				ic_line_lo_o.data = ic_oline.data;
 			end
 		end
@@ -441,7 +443,7 @@ uictage
 	.padr_i(ic_line_i.ptag),
 	.way(wway),
 	.rclk(clk),
-	.ndx(ip.pc[HIBIT:LOBIT]+ip.pc[LOBIT-1]),	// virtual index (same bits as physical address)
+	.ndx(ip.cap.offset[HIBIT:LOBIT]+ip.cap.offset[LOBIT-1]),	// virtual index (same bits as physical address)
 	.tag(victage),
 	.sndx(snoop_adr[HIBIT:LOBIT]),
 	.ptag(ptagse)
@@ -464,7 +466,7 @@ uictago
 	.padr_i(ic_line_i.ptag),
 	.way(wway),
 	.rclk(clk),
-	.ndx(ip.pc[HIBIT:LOBIT]),		// virtual index (same bits as physical address)
+	.ndx(ip.cap.offset[HIBIT:LOBIT]),		// virtual index (same bits as physical address)
 	.tag(victago),
 	.sndx(snoop_adr[HIBIT:LOBIT]),
 	.ptag(ptagso)
@@ -502,8 +504,8 @@ cache_hit
 uichite
 (
 	.clk(clk),
-	.adr(ip.pc),
-	.ndx(ip.pc[HIBIT:LOBIT]+ip.pc[LOBIT-1]),
+	.adr(ip.cap.offset),
+	.ndx(ip.cap.offset[HIBIT:LOBIT]+ip.cap.offset[LOBIT-1]),
 	.tag(victage),
 	.valid(valide),
 	.hit(ihit1e),
@@ -520,8 +522,8 @@ cache_hit
 uichito
 (
 	.clk(clk),
-	.adr(ip.pc),
-	.ndx(ip.pc[HIBIT:LOBIT]),
+	.adr(ip.cap.offset),
+	.ndx(ip.cap.offset[HIBIT:LOBIT]),
 	.tag(victago),
 	.valid(valido),
 	.hit(ihit1o),
@@ -634,9 +636,9 @@ end
 always_ff @(posedge clk)
 begin
 	if (!ihit1e)
-		miss_vadr <= {ip.pc[$bits(cpu_types_pkg::address_t)-1:LOBIT]+ip.pc[LOBIT-1],1'b0,{LOBIT-1{1'b0}}};
+		miss_vadr <= {ip.cap.offset[$bits(cpu_types_pkg::address_t)-1:LOBIT]+ip.cap.offset[LOBIT-1],1'b0,{LOBIT-1{1'b0}}};
 	else if (!ihit1o)
-		miss_vadr <= {ip.pc[$bits(cpu_types_pkg::address_t)-1:LOBIT],1'b1,{LOBIT-1{1'b0}}};
+		miss_vadr <= {ip.cap.offset[$bits(cpu_types_pkg::address_t)-1:LOBIT],1'b1,{LOBIT-1{1'b0}}};
 //	else if (!dhit1)
 //		miss_vadr = {dp[$bits(cpu_types_pkg::address_t)-1:LOBIT-1],{LOBIT-1{1'b0}}};
 	else

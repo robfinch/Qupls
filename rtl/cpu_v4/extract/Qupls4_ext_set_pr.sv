@@ -13,7 +13,7 @@ input [47:0] carry_mod;
 input [MWIDTH*48-1:0] ic_line;
 input redundant_group;
 input ssm_flag;
-input cpu_types_pkg::pc_address_ex_t [MWIDTH-1:0] pc;
+input Qupls4_pkg::pc_address_ex_t [MWIDTH-1:0] pc;
 output Qupls4_pkg::rob_entry_t [MWIDTH-1:0] pr;
 
 integer n1,n4;
@@ -78,7 +78,7 @@ else begin
 	if (!redundant_group) begin
 		// Allow only one instruction through when single stepping.
 		if (ssm_flag & ~prev_ssm_flag) begin
-			pr[0].op.cli = pc[0].pc[6:1];
+			pr[0].op.cli = pc[0].cap.offset[6:1];
 			pr[0].op.uop = fnMapRawToUop(ic_line[ 47:  0]);
 			for (n1 = 1; n1 < MWIDTH; n1 = n1 + 1) begin
 				pr[n1] = {$bits(Qupls4_pkg::rob_entry_t){1'b0}};
@@ -121,7 +121,7 @@ else begin
 			// Compute index of instruction on cache-line.
 			// Note! the index is in terms of 16-bit parcels.
 			foreach(pr[n1]) begin
-				pr[n1].op.cli = pc[n1].pc[6:1];
+				pr[n1].op.cli = pc[n1].cap.offset[6:1];
 				pr[n1].op.uop = fnMapRawToUop(48'(ic_line >> (n1*48)));
 			end
 		end
