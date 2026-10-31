@@ -29,7 +29,7 @@
 extern char* qual[MAX_QUALIFIERS];
 extern int qual_len[MAX_QUALIFIERS];
 
-const char *cpu_copyright="vasm Qupls4 cpu backend v0.13 (c) in 2025-2026 Robert Finch";
+const char *cpu_copyright="vasm Qupls4 cpu backend v0.14 (c) in 2025-2026 Robert Finch";
 
 const char *cpuname="Qupls4";
 int bitsperbyte=8;
@@ -1869,7 +1869,7 @@ static thuge make_reloc(int reloctype,operand *op,section *sec,
       	case B2:
       	case BL2:
 	      	add_extnreloc_masked(reloclist,base,addend.lo,reloctype,
-                         14,34,0,0x7fffffffeLL);
+                         14,34,0,0x3ffffffffLL);
           break;
       	/* Unconditional jump */
         case J2:
@@ -1881,7 +1881,7 @@ static thuge make_reloc(int reloctype,operand *op,section *sec,
         case J4:
         case JL4:
 		      add_extnreloc_masked(reloclist,base,val.lo,reloctype,
-                           14,34,0,0x7fffffffeLL);
+                           14,34,0,0x3ffffffffLL);
           break;
 				/* Short conditional jump */
       	case J3:
