@@ -241,7 +241,7 @@ always_comb
 reg redundant_group;
 always_comb
 if (prev_pc0_fet==pc0_fet && prev_ic_line_aligned==ic_line_aligned)
-	redundant_group = FALSE;
+	redundant_group = TRUE;
 else
 	redundant_group = FALSE;
 //wire redundant_group = {prev_pc0_fet,prev_ic_line_aligned}=={pc0_fet,ic_line_aligned};
@@ -388,7 +388,7 @@ begin
 	new_address_o = pc0_fet;
 	if (chgflow0|chgflowi) begin
 		if (chgflowi)
-			new_address_o.cap.offset = active_irq_vector - pc0_fet.base;
+			new_address_o.cap.offset = active_irq_vector - pc0_fet.cap.base;
 		else
 			new_address_o.cap.offset = btgts[0].cap.offset;
 		if (pt_ext[0] || !(bcc[0]|chgflowi))
@@ -440,7 +440,7 @@ always_comb
 begin
 	ret_pc = pc0_fet;
 	ret_pc.stream = pc0_fet.stream;
-	ret_pc.cap.offset = RSTPC - pc0_fet.base;
+	ret_pc.cap.offset = RSTPC - pc0_fet.cap.base;
 	ret_pc.stream = 5'd1;
 	for (n3 = MWIDTH-1; n3 >= 0; n3 = n3 - 1)
 		if (bsr[n3]|jsr[n3])
