@@ -42,7 +42,8 @@ import capability_pkg::*;
 import Qupls4_pkg::*;
 
 module Qupls4_cap_reservation_station(rst, clk, available, busy, issue, stall,
-	rse_i, rse_o, stomp, rf_oper_i, bypass_i, wp_oper_tap_i, req_pRn, req_pRnv,
+	rse_i, rse_o, stomp, rf_oper_i, gpr_rf_oper_i,
+	bypass_i, wp_oper_tap_i, gpr_wp_oper_tap_i, req_pRn, req_pRnv,
 	fp_sync, req_FPCSRndx, req_FPCSRv, FPCSR, FPCSRv
 );
 parameter MWIDTH = 4;
@@ -52,7 +53,7 @@ parameter NBPI = 4;			// number of bypasssing inputs
 parameter NSARG = 3;		// number of source operands
 parameter RL_STRATEGY = 1;	// register lookup strategy
 parameter NREG_RPORTS = RL_STRATEGY==0 ? 0 : 16;
-parameter NREG_WPORTS = 13;
+parameter NREG_WPORTS = 1;
 parameter RC = 1'b0;
 parameter DISPATCH_COUNT=1;	// number of lanes of dispatching
 // The following controls which lanes to look at. It depends on which lanes are
@@ -66,12 +67,14 @@ input available;
 input stall;
 input Qupls4_pkg::cap_reservation_station_entry_t [DISPATCH_COUNT-1:0] rse_i;
 input Qupls4_pkg::rob_bitmask_t stomp;
-input Qupls4_pkg::operand_t [NREG_RPORTS-1:0] rf_oper_i;
-input Qupls4_pkg::operand_t [NBPI-1:0] bypass_i;
-input Qupls4_pkg::operand_t [NREG_WPORTS-1:0] wp_oper_tap_i [0:4];
+input Qupls4_pkg::cap_operand_t [NREG_RPORTS-1:0] rf_oper_i;
+input Qupls4_pkg::operand_t [NREG_RPORTS-1:0] gpr_rf_oper_i;
+input Qupls4_pkg::cap_operand_t [NBPI-1:0] bypass_i;
+input Qupls4_pkg::cap_operand_t [NREG_WPORTS-1:0] wp_oper_tap_i [0:4];
+input Qupls4_pkg::operand_t [NREG_WPORTS-1:0] gpr_wp_oper_tap_i [0:4];
 output reg busy;
 output reg issue;
-output Qupls4_pkg::reservation_station_entry_t rse_o;
+output Qupls4_pkg::cap_reservation_station_entry_t rse_o;
 output pregno_t [3:0] req_pRn;
 output reg [3:0] req_pRnv;
 output rob_ndx_t req_FPCSRndx;
@@ -86,20 +89,23 @@ genvar g;
 reg idle;
 reg dispatch;
 reg pstall;
-Qupls4_pkg::operand_t [NRSE-1:0] arg [0:5];
+Qupls4_pkg::cap_operand_t [NRSE-1:0] arg [0:5];
+Qupls4_pkg::operand_t [NRSE-1:0] gpr_arg [0:1];
 pregno_t [3:0] req_pRnu;
 reg [3:0] req_pRnuv;
 
 wire [16:0] lfsro;
-Qupls4_pkg::reservation_station_entry_t [NRSE-1:0] rse;
-Qupls4_pkg::operand_t [NRSE-1:0] rse_argA;
-Qupls4_pkg::operand_t [NRSE-1:0] rse_argB;
-Qupls4_pkg::operand_t [NRSE-1:0] rse_argC;
-Qupls4_pkg::operand_t [NRSE-1:0] rse_argD;
-Qupls4_pkg::operand_t [NRSE-1:0] rse_argT;
-Qupls4_pkg::operand_t [NRSE-1:0] rse_argS;		// status (for round mode)
-Qupls4_pkg::reservation_station_entry_t rsei;
-Qupls4_pkg::operand_t [NREG_RPORTS-1:0] rf_fpcsr_i;
+Qupls4_pkg::cap_reservation_station_entry_t [NRSE-1:0] rse;
+Qupls4_pkg::cap_operand_t [NRSE-1:0] rse_argA;
+Qupls4_pkg::cap_operand_t [NRSE-1:0] rse_argB;
+Qupls4_pkg::cap_operand_t [NRSE-1:0] rse_argC;
+Qupls4_pkg::cap_operand_t [NRSE-1:0] rse_argD;
+Qupls4_pkg::cap_operand_t [NRSE-1:0] rse_argT;
+Qupls4_pkg::cap_operand_t [NRSE-1:0] rse_argS;		// status (for round mode)
+Qupls4_pkg::cap_reservation_station_entry_t rsei;
+Qupls4_pkg::cap_operand_t [NREG_RPORTS-1:0] rf_fpcsr_i;
+Qupls4_pkg::operand_t [NRSE-1:0] gpr_rse_argA;
+Qupls4_pkg::operand_t [NRSE-1:0] gpr_rse_argB;
 
 always_comb
 foreach (rf_fpcsr_i[n4]) begin
@@ -118,6 +124,8 @@ begin
 	rse_argD[nn] = rse[nn].arg[3];
 	rse_argT[nn] = rse[nn].arg[4];
 	rse_argS[nn] = rse[nn].arg[5];
+	gpr_rse_argA[nn] <= rse[nn].gpr_arg[0];
+	gpr_rse_argB[nn] <= rse[nn].gpr_arg[1];
 end
 
 always_comb
@@ -143,7 +151,7 @@ lfsr17 ulfsr1
 
 // Always assume at least one source operand.
 
-Qupls4_validate_operand #(
+Qupls4_validate_cap_operand #(
 	.NBPI(NBPI), .NENTRY(NRSE), .NREG_PORTS(NREG_RPORTS),
 	.NREG_WPORTS(NREG_WPORTS)) uvsrcA
 (
@@ -151,15 +159,24 @@ Qupls4_validate_operand #(
 	.rf_oper_i(rf_oper_i),
 	.oper_i(rse_argA),
 	.oper_o(arg[0]),
-	.operh_i(rse_argA),
-	.operh_o(),
 	.bypass_i(bypass_i)
+);
+
+Qupls4_validate_operand #(
+	.NBPI(NBPI), .NENTRY(NRSE), .NREG_PORTS(NREG_RPORTS),
+	.NREG_WPORTS(NREG_WPORTS)) uvsrcA
+(
+	.wp_hist_i(gpr_wp_oper_tap_i),
+	.rf_oper_i(gpr_rf_oper_i),
+	.oper_i(gpr_rse_argA),
+	.oper_o(gpr_arg[0]),
+	.bypass_i()
 );
 
 generate begin : gOperands
 
-if (NSARG > 1)
-Qupls4_validate_operand #(
+if (NSARG > 1) begin
+Qupls4_validate_cap_operand #(
 	.NBPI(NBPI), .NENTRY(NRSE),
 	.NREG_PORTS(NREG_RPORTS),
 	.NREG_WPORTS(NREG_WPORTS)
@@ -169,20 +186,29 @@ Qupls4_validate_operand #(
 	.rf_oper_i(rf_oper_i),
 	.oper_i(rse_argB),
 	.oper_o(arg[1]),
-	.operh_i(rse_argB),
-	.operh_o(),
 	.bypass_i(bypass_i)
 );
+Qupls4_validate_operand #(
+	.NBPI(NBPI), .NENTRY(NRSE), .NREG_PORTS(NREG_RPORTS),
+	.NREG_WPORTS(NREG_WPORTS)) ugprvsrcB
+(
+	.wp_hist_i(gpr_wp_oper_tap_i),
+	.rf_oper_i(gpr_rf_oper_i),
+	.oper_i(gpr_rse_argB),
+	.oper_o(gpr_arg[1]),
+	.bypass_i()
+);
+end
 else begin
 	for (g = 0; g < NRSE; g = g + 1) begin
 		assign arg[1][g].v = VAL;
-		assign arg[1][g].val = value_zero;
+		assign arg[1][g].val.offset = value_zero;
 		assign arg[1][g].flags = 8'd0;
 	end
 end
 
 if (NSARG > 2)
-Qupls4_validate_operand #(
+Qupls4_validate_cap_operand #(
 	.NBPI(NBPI), .NENTRY(NRSE), .NREG_PORTS(NREG_RPORTS),
 	.NREG_WPORTS(NREG_WPORTS)) uvsrcC
 (
@@ -190,20 +216,18 @@ Qupls4_validate_operand #(
 	.rf_oper_i(rf_oper_i),
 	.oper_i(rse_argC),
 	.oper_o(arg[2]),
-	.operh_i(rse_argC),
-	.operh_o(),
 	.bypass_i(bypass_i)
 );
 else begin
 	for (g = 0; g < NRSE; g = g + 1) begin
 		assign arg[2][g].v = VAL;
-		assign arg[2][g].val = value_zero;
+		assign arg[2][g].val.offset = value_zero;
 		assign arg[2][g].flags = 8'd0;
 	end
 end
 
 if (NSARG > 3)
-Qupls4_validate_operand #(
+Qupls4_validate_cap_operand #(
 	.NBPI(NBPI), .NENTRY(NRSE), .NREG_PORTS(NREG_RPORTS),
 	.NREG_WPORTS(NREG_WPORTS)
 ) uvsrcD
@@ -212,14 +236,12 @@ Qupls4_validate_operand #(
 	.rf_oper_i(rf_oper_i),
 	.oper_i(rse_argD),
 	.oper_o(arg[3]),
-	.operh_i(rse_argD),
-	.operh_o(),
 	.bypass_i(bypass_i)
 );
 else begin
 	for (g = 0; g < NRSE; g = g + 1) begin
 		assign arg[3][g].v = VAL;
-		assign arg[3][g].val = value_zero;
+		assign arg[3][g].val.offset = value_zero;
 		assign arg[3][g].flags = 8'd0;
 	end
 end
@@ -229,7 +251,7 @@ endgenerate
 
 // Destination operand which sometimes needs to be read.
 
-Qupls4_validate_operand #(
+Qupls4_validate_cap_operand #(
 	.NBPI(NBPI), .NENTRY(NRSE), .NREG_PORTS(NREG_RPORTS),
 	.NREG_WPORTS(NREG_WPORTS)
 ) uvsrcT
@@ -238,15 +260,13 @@ Qupls4_validate_operand #(
 	.rf_oper_i(rf_oper_i),
 	.oper_i(rse_argT),
 	.oper_o(arg[4]),
-	.operh_i(rse_argT),
-	.operh_o(),
 	.bypass_i(bypass_i)
 );
 
 // Status operand which sometimes needs to be read.
 generate begin : gStat
 	if (RC > 0)
-Qupls4_validate_operand #(
+Qupls4_validate_cap_operand #(
 	.NBPI(NBPI), .NENTRY(NRSE), .NREG_PORTS(NREG_RPORTS),
 	.NREG_WPORTS(NREG_WPORTS),
 	.pFPCSR(TRUE)
@@ -256,8 +276,6 @@ Qupls4_validate_operand #(
 	.rf_oper_i(rf_fpcsr_i),
 	.oper_i(rse_argS),
 	.oper_o(arg[5]),
-	.operh_i(rse_argS),
-	.operh_o(),
 	.bypass_i(bypass_i)
 );
 end
@@ -269,7 +287,7 @@ endgenerate
 
 always_comb
 begin
-	rsei = {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
+	rsei = {$bits(Qupls4_pkg::cap_reservation_station_entry_t){1'b0}};
 	dispatch = FALSE;
 	foreach (rse_i[n1])
 		if (DISPATCH_MAP[n1] && rse_i[n1].funcunit==FUNCUNIT) begin
@@ -296,8 +314,8 @@ end
 always_ff @(posedge clk)
 if (rst) begin
 	foreach (rse[pp])
-  	rse[pp] <= {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
-  rse_o <= {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
+  	rse[pp] <= {$bits(Qupls4_pkg::cap_reservation_station_entry_t){1'b0}};
+  rse_o <= {$bits(Qupls4_pkg::cap_reservation_station_entry_t){1'b0}};
 	issue <= FALSE;
   pstall <= FALSE;
 end
@@ -458,14 +476,14 @@ begin
 end
 endfunction
 
-Qupls4_choose_ready_rse #(.NRSE(NRSE)) uchrdy1
+Qupls4_choose_ready_cap_rse #(.NRSE(NRSE)) uchrdy1
 (
 	.rse(rse),
 	.rdy(rdy)
 );
 
 function integer fnChooseIdle;
-input Qupls4_pkg::reservation_station_entry_t [NRSE-1:0] rse;
+input Qupls4_pkg::cap_reservation_station_entry_t [NRSE-1:0] rse;
 integer nn;
 begin
 	fnChooseIdle = -1;

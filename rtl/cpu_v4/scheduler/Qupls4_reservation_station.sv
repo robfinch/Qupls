@@ -41,7 +41,9 @@ import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
 module Qupls4_reservation_station(rst, clk, available, busy, issue, stall,
-	rse_i, rse_o, stomp, rf_oper_i, bypass_i, wp_oper_tap_i, req_pRn, req_pRnv,
+	rse_i, rse_o, stomp, rf_oper_i, cap_rf_oper_i,
+	bypass_i, wp_oper_tap_i, cap_wp_oper_tap_i,
+	req_pRn, req_pRnv,
 	fp_sync, req_FPCSRndx, req_FPCSRv, FPCSR, FPCSRv
 );
 parameter MWIDTH = 4;
@@ -66,8 +68,10 @@ input stall;
 input Qupls4_pkg::reservation_station_entry_t [DISPATCH_COUNT-1:0] rse_i;
 input Qupls4_pkg::rob_bitmask_t stomp;
 input Qupls4_pkg::operand_t [NREG_RPORTS-1:0] rf_oper_i;
+input Qupls4_pkg::cap_operand_t [NREG_RPORTS-1:0] cap_rf_oper_i;
 input Qupls4_pkg::operand_t [NBPI-1:0] bypass_i;
 input Qupls4_pkg::operand_t [NREG_WPORTS-1:0] wp_oper_tap_i [0:4];
+input Qupls4_pkg::operand_t [0:0] cap_wp_oper_tap_i [0:4];
 output reg busy;
 output reg issue;
 output Qupls4_pkg::reservation_station_entry_t rse_o;
@@ -86,6 +90,7 @@ reg idle;
 reg dispatch;
 reg pstall;
 Qupls4_pkg::operand_t [NRSE-1:0] arg [0:5];
+Qupls4_pkg::cap_operand_t [NRSE-1:0] cap_arg;
 pregno_t [3:0] req_pRnu;
 reg [3:0] req_pRnuv;
 
@@ -99,6 +104,7 @@ Qupls4_pkg::operand_t [NRSE-1:0] rse_argT;
 Qupls4_pkg::operand_t [NRSE-1:0] rse_argS;		// status (for round mode)
 Qupls4_pkg::reservation_station_entry_t rsei;
 Qupls4_pkg::operand_t [NREG_RPORTS-1:0] rf_fpcsr_i;
+Qupls4_pkg::cap_operand_t [NRSE-1:0] rse_cap_arg;
 
 always_comb
 foreach (rf_fpcsr_i[n4]) begin
@@ -154,6 +160,21 @@ Qupls4_validate_operand #(
 	.operh_o(),
 	.bypass_i(bypass_i)
 );
+
+generate begin : gCapvo
+	if (SUPPORT_CAPABILITIES)
+Qupls4_validate_cap_operand #(
+	.NBPI(NBPI), .NENTRY(NRSE), .NREG_PORTS(NREG_RPORTS),
+	.NREG_WPORTS(1)) uvsrcA
+(
+	.wp_hist_i(cap_wp_oper_tap_i),
+	.rf_oper_i(cap_rf_oper_i),
+	.oper_i(rse_cap_arg),
+	.oper_o(cap_arg),
+	.bypass_i()
+);
+end
+endgenerate
 
 generate begin : gOperands
 

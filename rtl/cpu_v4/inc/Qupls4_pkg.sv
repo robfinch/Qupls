@@ -2084,6 +2084,7 @@ typedef struct packed {
 //	logic [63:0] pch;
 	cpu_types_pkg::value_t argI;
 	operand_t [6:0] arg;						// +1 for status A,B,C,T,D,T,S,T2
+	cap_operand_t cap_arg;					// 1 arg allowed for capability
 //	operand_t [NOPER:0] argH;			// high order 64-bits of 128-bit arg
 	reg [1:0] velesz;								// vector element size code
 	reg [5:0] vcount;								// vector count

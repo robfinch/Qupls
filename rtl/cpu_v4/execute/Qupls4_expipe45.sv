@@ -229,6 +229,8 @@ else begin
 		else if ((rse1.load && !perms[2]) || (rse1.store && !perms[3])) begin	// permit load(2) or store(3)
 			excv <= VAL;
 			exc <= Qupls4_pkg::FLT_CPERMS;
+			agen_rse.excv <= VAL;
+			agen_rse.exc <= Qupls4_pkg::FLT_CPERMS;
 		end
 	end
 end

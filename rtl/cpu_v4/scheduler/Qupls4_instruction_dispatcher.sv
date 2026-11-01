@@ -156,7 +156,7 @@ begin
 	rse[kk].excv = rob[nn].excv;
 	rse[kk].om = rob[nn].om;
 	rse[kk].rm = rob[nn].rm;
-	rse[kk].pc.pc = pgh[mm].ip + rob[nn].ip_offs;
+	rse[kk].pc.cap.offset = pgh[mm].ip.cap.offset + rob[nn].ip_offs;
 	rse[kk].pc.stream = rob[nn].ip_stream;
 	rse[kk].prc = rob[nn].op.decbus.prc;
 	rse[kk].cndx = pgh[mm].cndx;
@@ -193,6 +193,10 @@ begin
 			rse[kk].arg[xx].v = VAL;
 			rse[kk].arg[xx].aRnv = INV;
 //					rse[kk].argH[xx].v = VAL;
+		end
+		if (SUPPORT_CAPABILITIES) begin
+			rse[kk].cap_arg.v <= VAL;
+			rse[kk].cap_arg.aRnv <= INV;
 		end
 	end
 	else begin
@@ -241,6 +245,13 @@ begin
 		rse[kk].argBh_v = !rob[nn].op.decbus.b128;
 		rse[kk].argCh_v = !rob[nn].op.decbus.b128;
 		*/
+		if (SUPPORT_CAPABILITIES) begin
+			rse[kk].cap_arg.v <= rob[nn].argA_v;
+			rse[kk].cap_arg.aRnv = rob[nn].op.uop.src[0];
+			rse[kk].cap_arg.aRn = rob[nn].op.uop.Rs1;
+			rse[kk].cap_arg.z = rob[nn].op.decbus.Rs1z;
+			rse[kk].cap_arg.pRn = rob[nn].op.pRs1;
+		end
 	end
 	rse[kk].arg[3].aRnv = rob[nn].op.uop.src[3];
 	rse[kk].arg[3].v = rob[nn].argT_v;
