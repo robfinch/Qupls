@@ -342,7 +342,7 @@ begin
 		next_pcs[new_address_ext.stream.stream] = new_address_ext;
 	// Now the target predictions
 	// Note the stream cannot be recorded in the BTB table.
-	else if (pc0.cap.offset==doutb0.pc) begin
+	else if (pc0.cap.offset+pc0.cap.base==doutb0.pc) begin
 		if (doutb0.ret)
 			next_pcs[pc0.stream].cap.offset = ras_pc;
 		else if (doutb0.call|doutb0.jmp)
@@ -416,6 +416,10 @@ else begin
 		if (!next_pcs[next_act_stream].cap.perms[1]) begin
 			excv <= TRUE;
 			exc <= FLT_CPEXEC;
+		end
+		if (next_pcs[next_act_stream].cap.offset[0]) begin
+			excv <= TRUE;
+			exc <= FLT_CALGN;
 		end
 	end
 end

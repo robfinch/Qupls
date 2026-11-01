@@ -38,7 +38,7 @@
 import const_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_expipe45(rst, clk, clk3x, idle, stomp, rse_i, rse_o, rm,
+module Qupls4_expipe45(rst, clk, clk3x, idle, stomp, rse_i, rse_o, rm, ddc,
 	z, cptgt, o, sto, ust, otag, we_o, done, exc,
 	tlb_v, adr, adrv, agen_rse,
 	mem_rse_i, mem_done_i, mem_res_i, mem_flags_i);
@@ -55,6 +55,7 @@ input Qupls4_pkg::rob_bitmask_t stomp;
 input Qupls4_pkg::reservation_station_entry_t rse_i;
 output Qupls4_pkg::reservation_station_entry_t rse_o;
 input [2:0] rm;
+input uc64_capability_t ddc;
 input z;
 input [WID-1:0] cptgt;
 output reg [WID-1:0] o;
@@ -98,7 +99,9 @@ reg idiv_ld, tex_ld;
 wire idiv_done, tex_done1;
 reg tex_done;
 
-cpu_types_pkg::address_t as, bs, bsv;
+reg excv = INV;
+Qupls4_pkg::cause_code_t exc;
+cpu_types_pkg::address_t as, bs, bsv, base, top;
 cpu_types_pkg::address_t res1;
 reg [5:0] shift;
 
@@ -140,6 +143,7 @@ genvar g,mm;
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 reg resv1;
+reg [23:0] perms;
 
 always_ff @(posedge clk) 
 	rse1 <= rse_i;
@@ -151,7 +155,12 @@ always_comb
 //generate begin : gAgen
 //	if (PIPE==3'd4 || PIPE==3'd5) begin
 always_ff @(posedge clk)
-	as <= rse_i.Rs1z ? value_zero : rse_i.Rs1ip ? rse_i.pc.cap.offset : rse_i.arg[0].val;
+casez({rse_i.pc.cap.flags[0],rse_i.Rs1ip,rse_i.Rs1z})
+3'b??1:	as <= value_zero;
+3'b?10:	as <= rse_i.pc.cap.offset + rse_i.pc.cap.base;
+3'b100:	as <= rse_i.arg[0].val + ddc.base;
+3'b000:	as <= rse_i.arg[0].val + ddc.base;
+endcase
 
 always_ff @(posedge clk)
 	bs <= rse_i.Rs2z ? value_zero : (rse_i.arg[1].val * ({rse_i.uop.sc==3'd0,rse_i.uop.sc}));
@@ -160,6 +169,12 @@ always_ff @(posedge clk)
 always_ff @(posedge clk)
 	bsv <= rse_i.Rs2z ? value_zero : (rse_i.arg[1].val * rse_i.uop.imm2[5:0]);
 
+always_ff @(posedge clk)
+	base <= rse_i.pc.cap.flags[0] ? ddc.base : ddc.base;
+always_ff @(posedge clk)
+	top <= rse_i.pc.cap.flags[0] ? ddc.top : ddc.top;
+always_ff @(posedge clk)
+	perms <= rse_i.pc.cap.flags[0] ? ddc.perms : ddc.perms;
 
 always_comb
 	case(rse1.velesz)
@@ -195,8 +210,28 @@ always_ff @(posedge clk)
 		adr <= res1;
 
 always_ff @(posedge clk)
-	if (rse1.vlsndx|rse1.vls|rse1.amo|rse1.load|rse1.store)
+if (rst) begin
+	excv <= INV;
+	exc <= Qupls4_pkg::FLT_NONE;
+	agen_rse <= {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
+end
+else begin
+	if (rse1.vlsndx|rse1.vls|rse1.amo|rse1.load|rse1.store) begin
 		agen_rse <= rse1;
+		excv <= INV;
+		exc <= Qupls4_pkg::FLT_NONE;
+		if (res1 < base || res1 >= top) begin
+			excv <= VAL;
+			exc <= Qupls4_pkg::FLT_CBOUNDS;
+			agen_rse.excv <= VAL;
+			agen_rse.exc <= Qupls4_pkg::FLT_CBOUNDS;
+		end
+		else if ((rse1.load && !perms[2]) || (rse1.store && !perms[3])) begin	// permit load(2) or store(3)
+			excv <= VAL;
+			exc <= Qupls4_pkg::FLT_CPERMS;
+		end
+	end
+end
 
 // Make Agen valid sticky
 // The agen takes a clock cycle to compute after the out signal is valid.

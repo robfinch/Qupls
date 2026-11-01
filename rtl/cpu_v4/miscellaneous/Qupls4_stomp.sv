@@ -48,7 +48,7 @@ module Qupls4_stomp(rst, clk, clk2x, ihit, advance_pipeline, advance_pipeline_se
 	dep_stream,
 	branch_resolved, branchmiss, found_destination, destination_rndx,
 	misspc, predicted_correctly_dec, predicted_match_ext,
-	pc, pc_f, pc_fet, pc_ext, pc_mot, pc_mot2, pc_dec, pc_ren,
+	pc, pc_f, pc_fet, pc_ext, pc_mot, pc_mot2, pc_dec, pc_ren, stomp_alnr,
 	stomp_fet, stomp_ext, stomp_mot, stomp_mot2, stomp_dec, stomp_ren, stomp_que, stomp_quem,
 	fcu_idv, fcu_id, missid, missid_v, kept_stream, takb, rob, robentry_stomp,
 	stomped
@@ -86,6 +86,7 @@ input pc_address_ex_t pc_mot2;
 input pc_address_ex_t pc_dec;
 input pc_address_ex_t pc_ren;
 input dep_stream_t [XSTREAMS-1:0] dep_stream;
+output stomp_alnr;
 output reg stomp_fet;
 output reg stomp_ext;			// IRQ / micro-code Mux stage
 output reg stomp_mot;
@@ -107,7 +108,6 @@ output Qupls4_pkg::rob_bitmask_t robentry_stomp;
 integer nn, n4;
 pc_address_ex_t [6:0] misspcr;
 reg stomp_aln;
-reg stomp_alnr;
 reg stomp_fetr;
 reg stomp_extr;
 reg stomp_motr;
@@ -121,6 +121,8 @@ reg stomp_quemr;
 reg stomp_pipeline;
 reg [3:0] spl;
 wire pe_stomp_pipeline;
+
+assign stomp_alnr = stomp_fetr;
 
 //------------------------------------------------------------------------------
 // Front-end stomps
@@ -142,16 +144,23 @@ always_ff @(posedge clk)
 	// Compute dependencies to stomp.
 	stomped <= fnComputeBranchDependencies(kept_stream.stream);
 
-always_ff @(posedge clk2x)
+always_ff @(posedge clk)
 if (rst) begin
 	foreach (misspcr[nn]) begin
+		misspcr[nn] <= {$bits(pc_address_ex_t){1'b0}};
+		misspcr[nn].cap.perms <= 16'hffff;
+		misspcr[nn].cap.otype <= 18'h3ffff;
+		misspcr[nn].cap.top <= 65'h10000000000000000;
+		misspcr[nn].cap.base <= 64'd0;
 		misspcr[nn].stream <= pc_stream_t'(7'd1);
-		misspcr[nn].pc <= RSTPC;
+		misspcr[nn].cap.offset <= RSTPC;
 	end
 end
 else begin
 	if (pe_stomp_pipeline)
 		misspcr[0] <= misspc;
+	else if (advance_icache)
+		misspcr[0] <= pc;
 	if (advance_fetch|pe_stomp_pipeline)
 		misspcr[1] <= misspcr[0];
 	if (advance_extract|pe_stomp_pipeline)
@@ -184,119 +193,63 @@ wire hwi_at_fet = di_inst && ic_irq;
 wire hwi_at_aln = di_inst && hirq;
 */
 // kept_stream is the stream we want to keep.
+// If align stage is going to be on a different stream than the prediction
+// mismatch, then do not stomp on it.
 always_comb
 	stomp_aln = stomped[pc.stream] ||
-		(pe_stomp_pipeline || stomp_alnr || !predicted_match_ext || !predicted_correctly_dec) && (pc != misspcr[0]);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_fet && !hwi_at_aln;
+		(pe_stomp_pipeline || (!predicted_match_ext && (pc.stream==pc_ext.stream)) || (!predicted_correctly_dec && pc.stream==pc_dec.stream));// && !hwi_at_ren && !hwi_at_dec && !hwi_at_fet && !hwi_at_aln;
 always_comb
 	stomp_fet = stomped[pc_f.stream] ||
-		(pe_stomp_pipeline || stomp_fetr || !predicted_match_ext || !predicted_correctly_dec) && (pc_f != misspcr[1]);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_fet;
+		(pe_stomp_pipeline || stomp_fetr || (!predicted_match_ext && (pc.stream==pc_ext.stream)) || (!predicted_correctly_dec && pc.stream==pc_dec.stream));// && !hwi_at_ren && !hwi_at_dec && !hwi_at_fet;
 always_comb
 	stomp_ext = stomped[pc_fet.stream] ||
-		(pe_stomp_pipeline || stomp_extr || !predicted_correctly_dec) && (pc_fet != misspcr[2]);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_ext;
+		(pe_stomp_pipeline || stomp_extr || (!predicted_match_ext && (pc.stream==pc_ext.stream)) || (!predicted_correctly_dec && pc.stream==pc_dec.stream));// && !hwi_at_ren && !hwi_at_dec && !hwi_at_ext;
 always_comb
 	stomp_mot = stomped[pc_ext.stream] ||
-		(pe_stomp_pipeline || stomp_motr || !predicted_correctly_dec) && (pc_ext != misspcr[3]);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_ext;
+		(pe_stomp_pipeline || stomp_motr || (!predicted_correctly_dec && pc.stream==pc_dec.stream));// && !hwi_at_ren && !hwi_at_dec && !hwi_at_ext;
 always_comb
 	stomp_mot2 = stomped[pc_mot.stream] ||
-		(pe_stomp_pipeline || stomp_mot2r || !predicted_correctly_dec) && (pc_mot != misspcr[4]);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_ext;
+		(pe_stomp_pipeline || stomp_mot2r || (!predicted_correctly_dec && pc.stream==pc_dec.stream));// && !hwi_at_ren && !hwi_at_dec && !hwi_at_ext;
 always_comb
 	stomp_dec = stomped[pc_mot2.stream] ||
-	 (pe_stomp_pipeline || stomp_decr || !predicted_correctly_dec) && (pc_mot2 != misspcr[5]);// && !hwi_at_ren && !hwi_at_dec;
+	 (pe_stomp_pipeline || stomp_decr || (!predicted_correctly_dec && pc.stream==pc_dec.stream));// && !hwi_at_ren && !hwi_at_dec;
 always_comb
 	stomp_ren = stomped[pc_dec.stream] ||
-		(pe_stomp_pipeline || stomp_renr) && (pc_dec != misspcr[6]);// && !hwi_at_ren;
+		(pe_stomp_pipeline || stomp_renr);// && !hwi_at_ren;
 
 // On a cache miss, the fetch stage is stomped on, but not if micro-code is
 // active. Micro-code does not require the cache-line data.
 // Invalidate the fetch stage on an unconditional subroutine call.
 
-reg ff1;
 pc_address_ex_t prev_pc;
-always_ff @(posedge clk2x)
+always_ff @(posedge clk)
 if (rst) begin
-	stomp_alnr <= FALSE;
 	stomp_fetr <= TRUE;
 	stomp_extr <= TRUE;
 	stomp_motr <= TRUE;
 	stomp_mot2r <= TRUE;
 	stomp_decr <= TRUE;
 	stomp_renr <= TRUE;
-	ff1 <= FALSE;
 end
 else begin
 	
-	if (advance_icache|pe_stomp_pipeline) begin
-		if (pe_stomp_pipeline) begin
-//			stomp_alnr <= TRUE;
-			ff1 <= pc.stream==misspcr[0].stream;
-		end
-		else if (pc == misspcr[0])
-			stomp_alnr <= FALSE;
-		else if (!ff1)
-			stomp_alnr <= FALSE;
-	end
+	if (advance_fetch|pe_stomp_pipeline)
+		stomp_fetr <= stomp_aln;
 
-	if (advance_fetch|pe_stomp_pipeline) begin
-		if (pe_stomp_pipeline)
-			stomp_fetr <= pc.stream==misspcr[1].stream;
-		else if (pc_f == misspcr[1] || !stomp_aln)
-			stomp_fetr <= FALSE;
-		else if (!ff1)
-			stomp_fetr <= stomp_aln;
-	end
+	if (advance_extract|pe_stomp_pipeline)
+		stomp_extr <= stomp_fet;
 
-	if (advance_extract|pe_stomp_pipeline) begin
-		if (pe_stomp_pipeline)
-			stomp_extr <= pc_fet.stream==misspcr[2].stream;
-		else if (pc_fet == misspcr[2] || !stomp_fet) // (next_stomp_ext)
-			stomp_extr <= FALSE;
-//		else
-//			stomp_extr <= stomp_fet;
-		if (!ff1)
-			stomp_extr <= stomp_fet;
-	end
+	if (advance_mot|pe_stomp_pipeline)
+		stomp_motr <= stomp_ext;
 
-// If a micro-code instruction is decoded stomp on the next decode stage.
-// An instruction group following the micro-code was at the fetch stage and
-// would be propagated to decode before the micro-code becomes active.
+	if (advance_mot|pe_stomp_pipeline)
+		stomp_mot2r <= stomp_mot;
 
-	if (advance_mot|pe_stomp_pipeline) begin
-		if (pe_stomp_pipeline)
-			stomp_motr <= pc_ext.stream==misspcr[3].stream;
-		else if (pc_ext == misspcr[3] || !stomp_ext)
-			stomp_motr <= FALSE;
-		if (!ff1)
-			stomp_motr <= stomp_ext;
-	end
+	if (advance_decode|pe_stomp_pipeline)
+		stomp_decr <= stomp_mot2;
 
-	if (advance_mot|pe_stomp_pipeline) begin
-		if (pe_stomp_pipeline)
-			stomp_mot2r <= pc_mot.stream==misspcr[4].stream;
-		else if (pc_mot == misspcr[4] || !stomp_mot)
-			stomp_mot2r <= FALSE;
-		if (!ff1)
-			stomp_mot2r <= stomp_mot;
-	end
-
-	if (advance_decode|pe_stomp_pipeline) begin
-		if (pe_stomp_pipeline)
-			stomp_decr <= pc_mot2.stream==misspcr[5].stream;
-		else if (pc_mot2 == misspcr[5] || !stomp_mot2)
-			stomp_decr <= FALSE;
-		if (!ff1)
-			stomp_decr <= stomp_mot2;
-	end
-
-	if (advance_rename|pe_stomp_pipeline) begin
-		if (pe_stomp_pipeline)
-			stomp_renr <= pc_dec.stream==misspcr[6].stream;
-		else if (pc_dec == misspcr[6] || !stomp_dec) begin
-			stomp_renr <= FALSE;
-			ff1 <= FALSE;
-		end
-		if (!ff1)
-			stomp_renr <= stomp_dec;
-	end
+	if (advance_rename|pe_stomp_pipeline)
+		stomp_renr <= stomp_dec;
 end
 
 // Q cannot be stomped on in the same manner as the other stages as rename
@@ -305,7 +258,7 @@ end
 // instruction was stomped on before the rename stage, it does not need to
 // be queued.
 
-always_ff @(posedge clk2x)
+always_ff @(posedge clk)
 if (rst)
 	stomp_quer <= TRUE;
 else begin
@@ -317,7 +270,7 @@ else begin
 	end
 end	
 
-always_ff @(posedge clk2x)
+always_ff @(posedge clk)
 if (rst)
 	stomp_quemr <= TRUE;
 else begin
@@ -331,7 +284,7 @@ end
 always_comb
 	stomp_quem = pe_stomp_pipeline || stomp_quemr;
 
-always_ff @(posedge clk2x)
+always_ff @(posedge clk)
 if (rst)
 	stomp_rrr <= TRUE;
 else begin

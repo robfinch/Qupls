@@ -51,7 +51,7 @@ module Qupls4_pipeline_ext(rst_i, clk_i, ihit_fet, ihit_ext, en_i,
 	micro_machine_active, cline_fet, cline_ext, new_cline_ext,
 	reglist_active, grp_i, grp_o, btb_pc, exc_i, excv_i, exc_o, excv_o,
 	takb_fet, vl, branch_resolved, live_stream,
-	pc0_fet, uop_num_fet, uop_num_ext,
+	pc0_fet, uop_num_fet, uop_num_ext, stomp_alnr,
 	ls_bmf_i, pack_regs_i, scale_regs_i, regcnt_i,
 	pg_ext, new_stream, alloc_stream,
 	new_address_o, do_ret, ret_pc, do_call, get);
@@ -118,6 +118,7 @@ input excv_i;
 input Qupls4_pkg::cause_code_t exc_i;
 output reg excv_o;
 output Qupls4_pkg::cause_code_t exc_o;
+input stomp_alnr;
 
 genvar g;
 integer nn,hh,n1,n2,n3,n4,n5,n6,n7;
@@ -158,7 +159,7 @@ Qupls4_pkg::rob_entry_t nopi;
 always_comb
 begin
 	foreach (pc_fet[n5]) begin
-		pc_fet[n5].stream = pc0_fet.stream;
+		pc_fet[n5] = pc0_fet;
 		pc_fet[n5].cap.offset = pc0_fet.cap.offset + n5*6;
 	end
 end
@@ -166,6 +167,11 @@ end
 always_ff @(posedge clk)
 if (rst_i) begin
 	foreach(pc_ext[n6]) begin
+		pc_ext[n6] <= {$bits(pc_address_ex_t){1'b0}};
+		pc_ext[n6].cap.perms <= 16'hffff;
+		pc_ext[n6].cap.otype <= 18'h3ffff;
+		pc_ext[n6].cap.top <= 65'h10000000000000000;
+		pc_ext[n6].cap.base <= 64'd0;
 		pc_ext[n6].cap.offset <= Qupls4_pkg::RSTPC;
 		pc_ext[n6].stream.stream <= 5'd1;
 		pc_ext[n6].stream.thread <= 3'd0;
@@ -235,7 +241,7 @@ always_comb
 reg redundant_group;
 always_comb
 if (prev_pc0_fet==pc0_fet && prev_ic_line_aligned==ic_line_aligned)
-	redundant_group = TRUE;
+	redundant_group = FALSE;
 else
 	redundant_group = FALSE;
 //wire redundant_group = {prev_pc0_fet,prev_ic_line_aligned}=={pc0_fet,ic_line_aligned};
@@ -379,9 +385,10 @@ always_comb
 begin
 	alloc_stream = 1'b0;
 	override_pos = 3'd7;
+	new_address_o = pc0_fet;
 	if (chgflow0|chgflowi) begin
 		if (chgflowi)
-			new_address_o.cap.offset = active_irq_vector;
+			new_address_o.cap.offset = active_irq_vector - pc0_fet.base;
 		else
 			new_address_o.cap.offset = btgts[0].cap.offset;
 		if (pt_ext[0] || !(bcc[0]|chgflowi))
@@ -431,8 +438,9 @@ end
 // Compute return PC for subroutine call.
 always_comb
 begin
+	ret_pc = pc0_fet;
 	ret_pc.stream = pc0_fet.stream;
-	ret_pc.cap.offset = RSTPC;
+	ret_pc.cap.offset = RSTPC - pc0_fet.base;
 	ret_pc.stream = 5'd1;
 	for (n3 = MWIDTH-1; n3 >= 0; n3 = n3 - 1)
 		if (bsr[n3]|jsr[n3])
@@ -528,6 +536,8 @@ else begin
 		ihit_ext <= ihit_fet;
 end
 
+// Once p_override goes TRUE stomp_aln will go TRUE. Once the stomp has been
+// recognized we want the override to end. stomp_fet indicates that 
 always_comb
 begin
 	/*
@@ -537,7 +547,7 @@ begin
 	p_override3 = chgflow2 & !nop_lead[2] ? pc_fet[3].pc != new_address_o : FALSE;
 	p_override = p_override0123|p_override123|p_override23|p_override3|chgflow3;
 	*/
-	p_override = en && chgflow && new_address_o != btb_pc.cap.offset;
+	p_override = (en && chgflow && new_address_o != btb_pc.cap.offset) && !stomp_alnr;
 end
 
 always_ff @(posedge clk)

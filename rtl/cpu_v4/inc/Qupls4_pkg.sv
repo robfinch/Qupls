@@ -896,6 +896,7 @@ typedef enum logic [6:0] {
 	CAP_CHKINVOKE = 7'd4,
 	CAP_CHKBOUNDS = 7'd6,
 	CAP_INCOFFSETI = 7'd11,
+	CAP_INVOKE = 7'd12,
 	CAP_ANDPERM = 7'd32,
 	CAP_BUILDCAP = 7'd33,
 	CAP_COPYTYPE = 7'd34,
@@ -921,7 +922,8 @@ typedef enum logic [6:0] {
 	CAP_SEALENTRY = 7'd76,
 	CAP_GETBASE = 7'd77,
 	CAP_GETSEALED = 7'd78,
-	CAP_MOVE = 7'd79
+	CAP_MOVE = 7'd79,
+	CAP_GETADDR = 7'd80
 } capability_e;
 
 parameter NOP_INSN = {41'd0,OP_NOP};
@@ -3366,23 +3368,152 @@ begin
 			fnMapRawToUop.src = 7'b000001;
 			fnMapRawToUop.dst = 1'b0;
 		end
+// Vn bits, 1= scalar register
+// +---+---+---+---+
+// | 3 | 2 | 1 | 0 |
+// +---+---+---+---+
+// |Rs3|Rs2|Rs1|Rd |
+// +---+---+---+---+
 	Qupls4_pkg::OP_CAP:
 		begin
 			case(raw[47:41])	// func code
 			CAP_ANDPERM:
 				begin
 					fnMapRawToUop.Rd = {2'd0,raw[13:7]};
-					fnMapRawToUop.Rd2 = {2'd0,raw[13:7]+1};
 					fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
 					fnMapRawToUop.Rs2 = {2'd0,raw[27:21]};
-					fnMapRawToUop.Rs3 = {2'd0,raw[20:14]+1};
-					fnMapRawToUop.Rs4 = {2'd0,raw[27:21]+1};
 					fnMapRawToUop.op3 = raw[37:35];
 					fnMapRawToUop.rmd = raw[37:35];			// for ASR
 					fnMapRawToUop.ms = raw[40:38];
 					fnMapRawToUop.func = raw[47:41];
 					fnMapRawToUop.prc = raw[1:0];
-					fnMapRawToUop.src = 7'b1011111;
+					fnMapRawToUop.src = 7'b0001011;
+					fnMapRawToUop.dst = 1'b1;
+					fnMapRawToUop.vn = 4'b0100;
+				end
+			CAP_BUILDCAP:
+				begin
+					fnMapRawToUop.Rd = {2'd0,raw[13:7]};
+					fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
+					fnMapRawToUop.Rs2 = {2'd0,raw[27:21]};
+					fnMapRawToUop.op3 = raw[37:35];
+					fnMapRawToUop.rmd = raw[37:35];
+					fnMapRawToUop.ms = raw[40:38];
+					fnMapRawToUop.func = raw[47:41];
+					fnMapRawToUop.prc = raw[1:0];
+					fnMapRawToUop.src = 7'b0001011;
+					fnMapRawToUop.dst = 1'b1;
+					fnMapRawToUop.vn = 4'b0000;
+				end
+			CAP_CLEARTAG:
+				begin
+					fnMapRawToUop.Rd = {2'd0,raw[13:7]};
+					fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
+					fnMapRawToUop.op3 = raw[37:35];
+					fnMapRawToUop.rmd = raw[37:35];
+					fnMapRawToUop.ms = raw[40:38];
+					fnMapRawToUop.func = raw[47:41];
+					fnMapRawToUop.prc = raw[1:0];
+					fnMapRawToUop.src = 7'b0001001;
+					fnMapRawToUop.dst = 1'b1;
+					fnMapRawToUop.vn = 4'b0000;
+				end
+			CAP_CHKBOUNDS:
+				begin
+					fnMapRawToUop.Rd = {2'd0,raw[13:7]};
+					fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
+					fnMapRawToUop.Rs2 = {2'd0,raw[27:21]};
+					fnMapRawToUop.op3 = raw[37:35];
+					fnMapRawToUop.rmd = raw[37:35];
+					fnMapRawToUop.ms = raw[40:38];
+					fnMapRawToUop.func = raw[47:41];
+					fnMapRawToUop.prc = raw[1:0];
+					fnMapRawToUop.src = 7'b0000011;
+					fnMapRawToUop.dst = 1'b0;
+					fnMapRawToUop.vn = 4'b0000;
+				end
+			CAP_COPYTYPE:
+				begin
+					fnMapRawToUop.Rd = {2'd0,raw[13:7]};
+					fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
+					fnMapRawToUop.Rs2 = {2'd0,raw[27:21]};
+					fnMapRawToUop.op3 = raw[37:35];
+					fnMapRawToUop.rmd = raw[37:35];
+					fnMapRawToUop.ms = raw[40:38];
+					fnMapRawToUop.func = raw[47:41];
+					fnMapRawToUop.prc = raw[1:0];
+					fnMapRawToUop.src = 7'b0001011;
+					fnMapRawToUop.dst = 1'b1;
+					fnMapRawToUop.vn = 4'b0000;
+				end
+			CAP_GETBASE,CAP_GETFLAGS,CAP_GETLENGTH,CAP_GETOFFSET,CAP_GETPERMS,
+			CAP_GETSEALED,CAP_GETTAG,CAP_GETTOP,CAP_GETTYPE:
+				begin
+					fnMapRawToUop.Rd = {2'd0,raw[13:7]};
+					fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
+					fnMapRawToUop.Rs2 = {2'd0,raw[27:21]};
+					fnMapRawToUop.op3 = raw[37:35];
+					fnMapRawToUop.rmd = raw[37:35];
+					fnMapRawToUop.ms = raw[40:38];
+					fnMapRawToUop.func = raw[47:41];
+					fnMapRawToUop.prc = raw[1:0];
+					fnMapRawToUop.src = 7'b0001001;
+					fnMapRawToUop.dst = 1'b1;
+					fnMapRawToUop.vn = 4'b0001;
+				end
+			CAP_INCOFFSET:
+				begin
+					fnMapRawToUop.Rd = {2'd0,raw[13:7]};
+					fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
+					fnMapRawToUop.Rs2 = {2'd0,raw[27:21]};
+					fnMapRawToUop.op3 = raw[37:35];
+					fnMapRawToUop.rmd = raw[37:35];
+					fnMapRawToUop.ms = raw[40:38];
+					fnMapRawToUop.func = raw[47:41];
+					fnMapRawToUop.prc = raw[1:0];
+					fnMapRawToUop.src = 7'b0001011;
+					fnMapRawToUop.dst = 1'b1;
+					fnMapRawToUop.vn = 4'b0100;
+				end
+			CAP_INCOFFSETI:
+				begin
+					fnMapRawToUop.Rd = {2'd0,raw[13:7]};
+					fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
+					fnMapRawToUop.imm = {{49{raw[40]}},raw[40:21]};
+					fnMapRawToUop.op3 = raw[37:35];
+					fnMapRawToUop.rmd = raw[37:35];
+					fnMapRawToUop.ms = raw[40:38];
+					fnMapRawToUop.func = raw[47:41];
+					fnMapRawToUop.prc = raw[1:0];
+					fnMapRawToUop.src = 7'b0001001;
+					fnMapRawToUop.dst = 1'b1;
+					fnMapRawToUop.vn = 4'b0000;
+				end
+			CAP_CHKINVOKE:
+				begin
+					fnMapRawToUop.Rd = {2'd0,raw[13:7]};
+					fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
+					fnMapRawToUop.Rs2 = {2'd0,raw[27:21]};
+					fnMapRawToUop.op3 = raw[37:35];
+					fnMapRawToUop.rmd = raw[37:35];
+					fnMapRawToUop.ms = raw[40:38];
+					fnMapRawToUop.func = raw[47:41];
+					fnMapRawToUop.prc = raw[1:0];
+					fnMapRawToUop.src = 7'b0000011;
+					fnMapRawToUop.dst = 1'b0;
+					fnMapRawToUop.vn = 4'b0000;
+				end
+			CAP_INVOKE:
+				begin
+					fnMapRawToUop.Rd = {2'd0,raw[13:7]};
+					fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
+					fnMapRawToUop.Rs2 = {2'd0,raw[27:21]};
+					fnMapRawToUop.op3 = raw[37:35];
+					fnMapRawToUop.rmd = raw[37:35];
+					fnMapRawToUop.ms = raw[40:38];
+					fnMapRawToUop.func = raw[47:41];
+					fnMapRawToUop.prc = raw[1:0];
+					fnMapRawToUop.src = 7'b0001011;
 					fnMapRawToUop.dst = 1'b1;
 					fnMapRawToUop.vn = 4'b0000;
 				end

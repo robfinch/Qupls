@@ -126,7 +126,6 @@ always_ff @(posedge clk)
 	rse_o <= rse_i;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-// AGEN logic
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 reg resv1;
@@ -137,69 +136,6 @@ always_ff @(posedge clk)
 always_comb
 	rse_o = rse2;
 */
-generate begin : gAgen
-	if (PIPE==3'd4 || PIPE==3'd5) begin
-always_ff @(posedge clk)
-	as <= rse_i.Rs1z ? value_zero : rse_i.Rs1ip ? rse_i.pc.cap.offset : rse_i.arg[0].val;
-
-always_ff @(posedge clk)
-	bs <= rse_i.Rs2z ? value_zero : (rse_i.arg[1].val * ({rse_i.uop.sc==3'd0,rse_i.uop.sc}));
-
-always_comb
-	case(rse_i.velesz)
-	2'd0:	shift = {rse_i.laneno,3'd0};
-	2'd1:	shift = {rse_i.laneno,4'd0};
-	2'd2:	shift = {rse_i.laneno,5'd0};
-	2'd3:	shift = 6'd0;
-	endcase
-
-always_comb
-begin
-	if (rse1.vlsndx)
-		res1 = as + (bs >> shift) + rse1.argI;
-	else if (rse1.amo)
-		res1 = as;				// just [Rs1]
-	// Lane number is 1 for non-vector load/store
-	else if (rse1.load|rse1.store)
-		res1 = as + bs * rse1.laneno + rse1.argI;
-	else
-		res1 = 64'd0;
-end
-
-always_ff @(posedge clk)
-	if (resv1)
-		adr <= res1;
-
-always_ff @(posedge clk)
-	if (rse1.vlsndx|rse1.amo|rse1.load|rse1.store)
-		agen_rse <= rse1;
-
-// Make Agen valid sticky
-// The agen takes a clock cycle to compute after the out signal is valid.
-always_ff @(posedge clk) 
-if (rst) begin
-	resv1 <= INV;
-end
-else begin
-	if (rse_i.vlsndx|rse_i.amo|rse_i.load|rse_i.store)
-		resv1 <= VAL;
-	if (tlb_v)
-		resv1 <= INV;
-end
-
-always_ff @(posedge clk) 
-if (rst)
-	adrv <= INV;
-else begin
-	adrv <= resv1;
-	if (tlb_v)
-		adrv <= INV;
-end
-
-end
-end
-endgenerate
-
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // FCU logic
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

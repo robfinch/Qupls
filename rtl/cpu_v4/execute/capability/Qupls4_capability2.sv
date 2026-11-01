@@ -511,6 +511,11 @@ else begin
 			bus.offset = ac.offset;
 			wrgpr <= TRUE;
 		end
+	CAP_GETADDR:
+		begin
+			bus.offset = ac.offset + ac.base;
+			wrgpr <= TRUE;
+		end
 	CAP_GETPERMS:
 		begin
 			bus.offset = ac.perms;
@@ -652,10 +657,10 @@ else begin
 	CAP_SETADDR:
 		begin
 			busf <= ac_flags;
-			if (fnUcIsSealed(ac) || !fnUsIsRepresentable(ac,bc.offset-ac.offset))	// permit seal?
+			if (fnUcIsSealed(ac) || !fnUsIsRepresentable(ac,bc.offset-ac.base))	// permit seal?
 				busf.cap = FALSE;
 			bus <= ac;
-			bus.offset <= bc.offset;
+			bus.offset <= bc.offset - ac.base;
 		end
 	CAP_CHKBOUNDS:
 		if (!ac_flags.cap) begin
