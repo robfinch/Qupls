@@ -213,7 +213,7 @@ always_comb
 pc_address_ex_t prev_pc0_fet;
 always_ff @(posedge clk_i)
 if (rst_i) begin
-	prev_ic_line_aligned <= 160'd0;
+	prev_ic_line_aligned <= 320'd0;
 	prev_pc0_fet <= {$bits(pc_address_ex_t){1'b0}};
 end
 else begin
@@ -240,10 +240,14 @@ always_comb
 
 reg redundant_group;
 always_comb
-if (prev_pc0_fet==pc0_fet && prev_ic_line_aligned==ic_line_aligned)
-	redundant_group = TRUE;
-else
+if (rst_i)
 	redundant_group = FALSE;
+else begin
+	if (prev_pc0_fet==pc0_fet && prev_ic_line_aligned==ic_line_aligned)
+		redundant_group = en;
+	else
+		redundant_group = FALSE;
+end
 //wire redundant_group = {prev_pc0_fet,prev_ic_line_aligned}=={pc0_fet,ic_line_aligned};
 
 // Map instructions to micro-ops

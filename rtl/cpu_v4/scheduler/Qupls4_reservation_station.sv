@@ -71,7 +71,7 @@ input Qupls4_pkg::operand_t [NREG_RPORTS-1:0] rf_oper_i;
 input Qupls4_pkg::cap_operand_t [NREG_RPORTS-1:0] cap_rf_oper_i;
 input Qupls4_pkg::operand_t [NBPI-1:0] bypass_i;
 input Qupls4_pkg::operand_t [NREG_WPORTS-1:0] wp_oper_tap_i [0:4];
-input Qupls4_pkg::operand_t [0:0] cap_wp_oper_tap_i [0:4];
+input Qupls4_pkg::cap_operand_t [0:0] cap_wp_oper_tap_i [0:4];
 output reg busy;
 output reg issue;
 output Qupls4_pkg::reservation_station_entry_t rse_o;

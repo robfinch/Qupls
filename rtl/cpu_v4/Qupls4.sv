@@ -45,6 +45,7 @@ import wishbone_pkg::*;
 import cpu_types_pkg::*;
 import cache_pkg::*;
 import mmu_pkg::*;
+import capability_pkg::*;
 import Qupls4_pkg::*;
 
 `undef ZERO
@@ -126,7 +127,7 @@ integer nn,mm,n2,n3,n4,m4,n5,n6,n8,n9,n10,n11,n12,n13,n14,n15,n17;
 integer n16r, n16c, n12r, n12c, n14r, n14c, n17r, n17c, n18r, n18c;
 integer n19,n20,n21,n22,n23,n24,n25,n26,n27,n28,n29,i,n30,n31,n32,n33;
 integer n34,n35,n36,n37,n38,n39,n40,n41,n42,n43,n44,n45,n46,n47,n48;
-integer n49,n50,n51,n52,n53,n54,n55,n56,n57,n58;
+integer n49,n50,n51,n52,n53,n54,n55,n56,n57,n58,n59,n60;
 integer jj,kk;
 
 genvar g,h,gvg;
@@ -195,11 +196,18 @@ rob_ndx_t nonNop;		// ROB index of the next non-NOP instruction.
 // prn comes from the renamer. (prn = physical register number)
 // rf_reg is an alias.
 pregno_t [NREG_RPORTS-1:0] prn;		// ports from the rename stage / reservation station request
+pregno_t [NREG_RPORTS+2:0] prn2;	// ports from the rename stage / reservation station request
 
 pregno_t [63:0] pRs = {10*128{1'b0}};
 reg [63:0] pRsv;
 pregno_t [3:0] bRs [0:15];// = {8*52{1'b0}};
 wire [3:0] bRsv [0:15];
+
+pregno_t [63:0] cap_pRs = {10*128{1'b0}};
+reg [63:0] cap_pRsv;
+pregno_t [3:0] cap_bRs [0:0];// = {8*52{1'b0}};
+wire [3:0] cap_bRsv [0:0];
+
 pregno_t [3:0] bRs1 [0:3];
 pregno_t [3:0] bRs2 [0:3];
 reg [3:0] bRsv1 [0:3];
@@ -306,6 +314,7 @@ cpu_types_pkg::flags_t [NREG_RPORTS-1:0] rfo_flags;
 
 capability_pkg::uc64_capability_t [2:0] cap_rfo;
 cpu_types_pkg::flags_t [2:0] cap_rfo_flags;
+pregno_t [2:0] cap_rf_reg;
 pregno_t [2:0] cap_rf_rego;
 reg [2:0] cap_rf_regv;
 
@@ -331,6 +340,7 @@ wire [XSTREAMS-1:0] dead_streams;
 pc_stream_t kept_stream, live_stream;
 always_comb
 	kept_stream = pc.stream;
+wire stomp_alnr;
 wire stomp_fet, stomp_ext, stomp_mot, stomp_mot2, stomp_x4;
 wire stomp_dec, stomp_ren, stomp_que, stomp_quem;
 Qupls4_pkg::rob_bitmask_t robentry_issue;
@@ -433,6 +443,7 @@ wire [3:0] mc_regx1;
 wire [3:0] mc_regx2;
 wire [3:0] mc_regx3;
 wire [15:0] rs_busy;
+wire cap_rs_busy;
 Qupls4_pkg::reservation_station_entry_t [DISPATCH_WIDTH-1:0] rse;
 Qupls4_pkg::cap_reservation_station_entry_t [0:0] cap_rse;
 
@@ -512,7 +523,8 @@ Qupls4_pkg::reservation_station_entry_t xpipe4_rse, xpipe4_rse2;
 Qupls4_pkg::reservation_station_entry_t xpipe5_rse, xpipe5_rse2;
 Qupls4_pkg::reservation_station_entry_t [5:0] xpipe_rse;//, xpipe0_rse2;
 Qupls4_pkg::reservation_station_entry_t [5:0] xpipe_rseo;//, xpipe0_rse2;
-Qupls4_pkg::reservation_station_entry_t cap_xpipe_rseo;
+Qupls4_pkg::cap_reservation_station_entry_t cap_xpipe_rse;
+Qupls4_pkg::cap_reservation_station_entry_t cap_xpipe_rseo;
 reg sel_cap_xpipe;
 reg stall_cap_xpipe;
 
@@ -964,7 +976,7 @@ Qupls4_pkg::fp_status_reg_t fpcsr, fpcsr_value;
 wire [2:0] swstk = sr.swstk;
 wire paging_en = sr.page_en;
 wire pebble_en = sr.pebble_en;
-pc_address_t [ISTACK_DEPTH-1:0] pc_stack;
+pc_address_ex_t [ISTACK_DEPTH-1:0] pc_stack;
 reg [5:0] pending_ipl;				// pending interrupt level.
 wire [5:0] im = sr.ipl;
 reg [7:0] thread_probability [0:7];
@@ -992,10 +1004,10 @@ wire alt_ihit;
 wire pe_bsdone;
 reg [4:0] vl;
 // 16 vectors for 5 operating modes (debug has its own set))
-pc_address_t [4:0] kernel_vectors;
-pc_address_t [4:0] syscall_vectors;
+pc_address_ex_t [4:0] kernel_vectors;
+pc_address_ex_t [4:0] syscall_vectors;
 pc_address_t active_irq_vector;
-assign active_irq_vector = kernel_vectors[sr.dbg ? 3'd4 : {1'b0,fnNextOm(sr.om)}];
+assign active_irq_vector = kernel_vectors[sr.dbg ? 3'd4 : {1'b0,fnNextOm(sr.om)}].cap.offset;
 
 reg [31:0] carry_mod, csr_carry_mod, exc_ret_carry_mod, icarry_mod;
 wire [6:0] carry_reg = 7'd92|carry_mod[25:24];
@@ -1038,8 +1050,12 @@ end
 
 generate begin : gRf_reg
 	if (RL_STRATEGY==1) begin
-		always_comb
-			rf_reg = prn;
+		always_comb begin
+			foreach(rf_reg[n60])
+				rf_reg[n60] = prn[n60];
+			foreach(cap_rf_reg[n60])
+				cap_rf_reg = prn[n60];
+		end
 	end
 end
 endgenerate
@@ -1342,9 +1358,9 @@ wire do_commit;
 always_comb
 	nmi = irq_i==6'd63;
 always_comb
-	irq_addr = irq ? ivect_i[63:0]  : kernel_vectors[sr.dbg ? 4 : fnNextOm(sr.om)];
+	irq_addr = irq ? ivect_i[63:0]  : kernel_vectors[sr.dbg ? 4 : fnNextOm(sr.om)].cap.offset;
 always_comb
-	nmi_addr = kernel_vectors[sr.dbg ? 4 : fnNextOm(sr.om)];
+	nmi_addr = kernel_vectors[sr.dbg ? 4 : fnNextOm(sr.om)].cap.offset;
 
 edge_det unmied1 (.clk(clk), .rst(irst), .ce(advance_pipeline), .i(nmi), .pe(pe_nmi), .ne(), .ee());
 
@@ -1661,6 +1677,7 @@ reg [XSTREAMS*THREADS-1:0] used_streams;
 pc_address_ex_t [XSTREAMS*THREADS-1:0] pcs;
 pc_address_ex_t ip;
 pc_stream_t fet_stream;
+uc64_capability_t ddc;			// default data capability
 // Buffers the instruction cache line to allow fetching along alternate paths.
 reg first_icache;
 wire is_buffered, is_icip_buffered;
@@ -1899,13 +1916,13 @@ gselectPredictor ugsp1
 	.takb1(commit_takb1),
 	.takb2(commit_takb2),
 	.takb3(commit_takb3),
-	.ip0(pc0_f.cap.offset),
+	.ip0(pg_ext.hdr.ip.cap.offset),
 	.predict_taken0(pt0_ext),
-	.ip1(pc0_f.cap.offset + 6'd6),
+	.ip1(pg_ext.hdr.ip.cap.offset + 6'd6),
 	.predict_taken1(pt1_ext),
-	.ip2(pc0_f.cap.offset + 6'd12),
+	.ip2(pg_ext.hdr.ip.cap.offset + 6'd12),
 	.predict_taken2(pt2_ext),
-	.ip3(pc0_f.cap.offset + 6'd18),
+	.ip3(pg_ext.hdr.ip.cap.offset + 6'd18),
 	.predict_taken3(pt3_ext)
 );
 
@@ -1995,6 +2012,7 @@ Qupls4_stomp ustmp1
 	.pc_dec(pg_dec.hdr.ip),
 	.pc_ren(pg_ren.hdr.ip),
 	.dep_stream(dep_stream),
+	.stomp_alnr(stomp_alnr),
 	.stomp_fet(stomp_fet),
 	.stomp_ext(stomp_ext),
 	.stomp_mot(stomp_mot),
@@ -2379,28 +2397,9 @@ Qupls4_pipeline_fet ufet1
 // -----------------------------------------------------------------------------
 
 wire exti_nop;	
-pc_address_ex_t pc0_f1;
-pc_address_ex_t pc0_f2;
-pc_address_ex_t pc0_f3;
 wire new_cline_ext;
 wire [1023:0] cline_ext;
 wire [2:0] uop_num_ext;
-
-always_comb
-begin
-	pc0_f1 = pc0_f;
-	pc0_f1.cap.offset = pc0_f.cap.offset + 6'd6;
-end
-always_comb
-begin
-	pc0_f2 = pc0_f;
-	pc0_f2.cap.offset = pc0_f.cap.offset + 6'd12;
-end
-always_comb
-begin
-	pc0_f3 = pc0_f;
-	pc0_f3.cap.offset = pc0_f.cap.offset + 6'd18;
-end
 
 always_ff @(posedge clk)
 	takb_pc <= ntakb;
@@ -2448,6 +2447,7 @@ Qupls4_pipeline_ext #(.MWIDTH(MWIDTH)) uiext1
 	.uop_num_ext(uop_num_ext),
 	.carry_mod_fet(carry_mod_fet),
 	.kept_stream(kept_stream),
+	.stomp_alnr(stomp_alnr),
 	.stomp_ext(stomp_ext),/*icnop||brtgtv||fetch_new_block_x*/
 	.nop_o(exti_nop),
 //	.nmi_i(pe_nmi),
@@ -2574,15 +2574,18 @@ udecstg1
 );
 
 reg [NREG_WPORTS-1:0] wrport0_v;
+reg [0:0] cap_wrport0_v;
 reg wrport4_v;
 reg wrport5_v;
 reg [8:0] wrport0_we [0:NREG_WPORTS-1];
 reg [8:0] wrport4_we;
 reg [8:0] wrport5_we;
 value_t [NREG_WPORTS-1:0] wrport0_res;
+uc64_capability_t [0:0] cap_wrport0_res;
 value_t wrport4_res;
 value_t wrport5_res;
 pregno_t [NREG_WPORTS-1:0] wrport0_Rt;
+pregno_t [0:0] cap_wrport0_Rt;
 pregno_t wrport4_Rt;
 pregno_t wrport5_Rt;
 aregno_t [NREG_WPORTS-1:0] wrport0_aRt;
@@ -2590,15 +2593,18 @@ aregno_t wrport4_aRt;
 aregno_t wrport5_aRt;
 checkpt_ndx_t [NREG_WPORTS-1:0] wrport0_cp;
 cpu_types_pkg::flags_t [NREG_WPORTS-1:0] wrport0_tag;
+cpu_types_pkg::flags_t [0:0] cap_wrport0_tag;
 
 wire [MWIDTH-1:0] stomps;
 
 Qupls4_pkg::operand_t [NREG_RPORTS-1:0] rf_oper;
-pregno_t [NREG_RPORTS-1:0] prn1,prnd;
+Qupls4_pkg::cap_operand_t [NREG_RPORTS-1:0] cap_rf_oper;
+pregno_t [NREG_RPORTS+2:0] prn1,prnd;
 checkpt_ndx_t [NREG_RPORTS-1:0] rn_cp;
-wire [NREG_RPORTS-1:0] prnv;
+wire [NREG_RPORTS+2:0] prnv;
 wire [NREG_RPORTS-1:0] rf_regvo;
-reg [NREG_RPORTS-1:0] prnvd;
+wire [NREG_RPORTS-1:0] cap_rf_regvo;
+reg [NREG_RPORTS+2:0] prnvd;
 wire [0:0] arnbank [NREG_RPORTS-1:0];
 checkpt_ndx_t [3:0] cndx_ren;
 checkpt_ndx_t pcndx_ren;
@@ -2610,12 +2616,21 @@ always_ff @(posedge clk)
 
 // Operand bus loading. Supplies the reservation stations.
 always_ff @(posedge clk)
+begin
 	foreach (rf_oper[n37]) begin
 		rf_oper[n37].pRn <= rf_rego[n37];
 		rf_oper[n37].val <= rfo[n37];
 		rf_oper[n37].flags <= rfo_flags[n37];
 		rf_oper[n37].v <= rf_regvo[n37];
 	end
+	if (SUPPORT_CAPABILITIES)
+		foreach (cap_rf_oper[n37]) begin
+			cap_rf_oper[n37].pRn <= cap_rf_rego[n37];
+			cap_rf_oper[n37].val <= cap_rfo[n37];
+			cap_rf_oper[n37].flags <= cap_rfo_flags[n37];
+			cap_rf_oper[n37].v <= cap_rf_regvo[n37];
+		end
+end
 /*
 always_comb
 begin
@@ -2683,6 +2698,8 @@ end
 */
 Qupls4_pkg::operand_t [NREG_WPORTS-1:0] wp;
 Qupls4_pkg::operand_t [NREG_WPORTS-1:0] wp_tap [0:4];
+Qupls4_pkg::cap_operand_t [0:0] cap_wp;
+Qupls4_pkg::cap_operand_t [0:0] cap_wp_tap [0:4];
 
 always_comb
 begin
@@ -2695,24 +2712,56 @@ begin
 		wp[n49].aRnv = FALSE;
 	end
 end
+always_comb
+begin
+	foreach (cap_wp[n49]) begin
+		cap_wp[n49].val = cap_wrport0_res[n49];
+		cap_wp[n49].flags = cap_wrport0_tag[n49];
+		cap_wp[n49].pRn = cap_wrport0_Rt[n49];
+		cap_wp[n49].v = cap_wrport0_v[n49];
+		cap_wp[n49].aRn = 8'd00;		// we don't know this one, but it is not needed
+		cap_wp[n49].aRnv = FALSE;
+	end
+end
 Qupls4_wp_history_tap #(.NR_WPORTS(NREG_WPORTS)) uwph1
 (
 	.clk(clk),
 	.wp_i(wp),
 	.wp_tap_o(wp_tap)
 );
+generate begin : gCapHT
+	if (SUPPORT_CAPABILITIES)
+Qupls4_cap_wp_history_tap #(.NR_WPORTS(1)) uwph1
+(
+	.clk(clk),
+	.wp_i(cap_wp),
+	.wp_tap_o(cap_wp_tap)
+);
+end
+endgenerate
 
 // Change 16 groups of four port requests into one big linear group. (Just wires).
+// Use the first eight ports for capabilities.
+// A bit under construction here.
 always_comb
 begin
 	pRs = {64*10{1'b0}};
 	pRsv = 64'd0;
 	for (jj = 0; jj < 64; jj = jj + 1) begin
-		pRs[jj] = bRs[jj[5:2]][jj[1:0]];
-		pRsv[jj] = bRsv[jj[5:2]][jj[1:0]];
+		if (FALSE && jj < 8) begin
+			pRs[jj] = cap_bRs[0][jj[1:0]];
+			pRsv[jj] = cap_bRsv[0][jj[1:0]];
+		end
+		else begin
+			// -2 comes from 8/4, first 8 ports are for caps
+			pRs[jj] = bRs[jj[5:2]-2][jj[1:0]];
+			pRsv[jj] = bRsv[jj[5:2]-2][jj[1:0]];
+		end
 	end
 end
 // Dynamic port selection.
+// The dynamic port selector uses groups of eight registers. The minimum number
+// of fixed ports is then eight, but we only need three.
 Qupls4_read_port_select #(.FIXED_PORTS(0), .NPORTO(NREG_RPORTS), .NPORTI(NREG_RPORTS*4)) urps1
 (
 	.rst(irst),
@@ -2722,6 +2771,16 @@ Qupls4_read_port_select #(.FIXED_PORTS(0), .NPORTO(NREG_RPORTS), .NPORTI(NREG_RP
 	.pReg_o(prn),
 	.regAck_o()
 );
+
+// Under construction
+// Rearrange the port numbers with wires
+always_comb
+	foreach(prn[n61])
+		if (n61 < 3)
+			prn2[n61] = prn[n61];
+		else if (n61 > 7)
+			prn2[n61-5] = prn[n61];
+
 
 reg vec_stallq;
 reg vec_stall2;
@@ -3019,9 +3078,7 @@ Qupls4_pipeline_ren #(.MWIDTH(MWIDTH)) uren1
 	.alloc_chkpt(alloc_chkpt),
 	.cndx(cndx),
 	.rcndx(ns_cndx),
-	.miss_cp(miss_cp),
-
-	.args(rfo)
+	.miss_cp(miss_cp)
 );
 
 /*
@@ -3123,29 +3180,22 @@ end
 */
 always_ff @(posedge clk)
 if (irst) begin
-	pc0_f.stream <= 7'd1;
+	pc0_f <= {$bits(pc_address_ex_t){1'b0}};
+	pc0_f.cap.perms <= 16'hffff;
+	pc0_f.cap.otype <= 18'h3ffff;
+	pc0_f.cap.top <= 65'h10000000000000000;
+	pc0_f.cap.base <= 64'd0;
 	pc0_f.cap.offset <= Qupls4_pkg::RSTPC;
+	pc0_f.stream.stream <= 5'd1;
+	pc0_f.stream.thread <= 3'd0;
 end
 else begin
-//	if (advance_f)
-	pc0_f <= pc_fet;//pc0;
+	if (advance_pipeline)
+		pc0_f <= pc;
 end
 
 rob_bitmask_t rob_dispatched, rob_unimplemented, cap_rob_dispatched;
 Qupls4_pkg::rob_bitmask_t rob_dispatched_stomped;
-
-// The cycle after the length is calculated
-// instruction extract inputs
-pc_address_ex_t pc0_x1;
-always_ff @(posedge clk)
-if (irst) begin
-	pc0_x1.stream <= 7'd1;
-	pc0_x1.cap.offset <= Qupls4_pkg::RSTPC;
-end
-else begin
-	if (advance_pipeline)
-		pc0_x1 <= pc0_f;
-end
 
 always_ff @(posedge clk)
 if (advance_pipeline)
@@ -3898,10 +3948,10 @@ generate begin : gWrPort
 	for (g = 0; g < $size(wrport0_v); g = g + 1) begin
 		if (NREG_WPORTS >= NFRQ) begin
 			always_ff @(posedge clk) wrport0_v[g] <= ~(sel_cap_xpipe & ~stall_cap_xpipe ? cap_fuq_empty : fuq_empty[g]);
-			always_ff @(posedge clk) wrport0_we[g] <= sel_cap_xpipe & ~stall_cap_xpipe  ? cap_fuq_we : fuq_we[g]; 
+			always_ff @(posedge clk) wrport0_we[g] <= sel_cap_xpipe & ~stall_cap_xpipe  ? cap_fuq_we[8:0] : fuq_we[g]; 
 			always_ff @(posedge clk) wrport0_Rt[g] <= sel_cap_xpipe & ~stall_cap_xpipe  ? cap_fuq_pRt : fuq_pRt[g]; 
 			always_ff @(posedge clk) wrport0_aRt[g] <= sel_cap_xpipe & ~stall_cap_xpipe  ? cap_fuq_aRt : fuq_aRt[g]; 
-			always_ff @(posedge clk) wrport0_res[g] <= sel_cap_xpipe & ~stall_cap_xpipe  ? cap_fuq_res : fuq_res[g]; 
+			always_ff @(posedge clk) wrport0_res[g] <= sel_cap_xpipe & ~stall_cap_xpipe  ? cap_fuq_res[63:0] : fuq_res[g]; 
 			always_ff @(posedge clk) wrport0_cp[g] <= sel_cap_xpipe & ~stall_cap_xpipe  ? cap_fuq_cp : fuq_cp[g]; 
 			always_ff @(posedge clk) wrport0_tag[g] <= sel_cap_xpipe & ~stall_cap_xpipe  ? cap_fuq_tag : fuq_tag[g]; 
 		end
@@ -3936,7 +3986,7 @@ Qupls4_regfileMwNr #(.RPORTS(NREG_RPORTS), .WPORTS(NREG_WPORTS)) urf1 (
 
 generate begin : gCapRegfile
 	if (SUPPORT_CAPABILITIES)
-Qupls4_cap_regfileMwNr #(.RPORTS(3), .WPORTS(1)) ucaprf1 (
+Qupls4_cap_regfileMwNr #(.RPORTS(NREG_RPORTS), .WPORTS(1)) ucaprf1 (
 	.rst(irst),
 	.clk(clk), 
 	.wr(~cap_fuq_empty),
@@ -4619,6 +4669,7 @@ Qupls4_expipe45 #(.PIPE(3'd4)) uxpipe4
 	.rse_i(xpipe_rse[4]),
 	.rse_o(xpipe_rseo[4]),
 	.rm(),
+	.ddc(ddc),
 	.z(),
 	.cptgt(xpipe4_cptgt),
 	.o(xpipe_res[4]),
@@ -4660,6 +4711,7 @@ Qupls4_expipe45 #(.PIPE(3'd5)) uxpipe5
 	.rse_i(xpipe_rse[5]),
 	.rse_o(xpipe_rseo[5]),
 	.rm(),
+	.ddc(ddc),
 	.z(),
 	.cptgt(xpipe5_cptgt),
 	.o(xpipe_res[5]),
@@ -5682,6 +5734,8 @@ uxpipe0st
 	.rf_oper_i(rf_oper),
 	.bypass_i(),
 	.wp_oper_tap_i(wp_tap),
+	.cap_rf_oper_i(cap_rf_oper),
+	.cap_wp_oper_tap_i(cap_wp_tap),
 	.req_pRn(bRs[0]),
 	.req_pRnv(bRsv[0]),
 	.req_FPCSRndx(),
@@ -5798,6 +5852,8 @@ generate begin : gXpipe1Station
 			.rf_oper_i(rf_oper),
 			.bypass_i(),
 			.wp_oper_tap_i(wp_tap),
+			.cap_rf_oper_i(cap_rf_oper),
+			.cap_wp_oper_tap_i(cap_wp_tap),
 			.req_pRn(bRs[1]),
 			.req_pRnv(bRsv[1]),
 			.fp_sync(1'b0),
@@ -5841,6 +5897,8 @@ generate begin : gXpipe2Station
 			.rf_oper_i(rf_oper),
 			.bypass_i(),
 			.wp_oper_tap_i(wp_tap),
+			.cap_rf_oper_i(cap_rf_oper),
+			.cap_wp_oper_tap_i(cap_wp_tap),
 			.req_pRn(bRs[2]),
 			.req_pRnv(bRsv[2]),
 			.fp_sync(1'b0),
@@ -5884,6 +5942,8 @@ generate begin : gXpipe3Station
 			.rf_oper_i(rf_oper),
 			.bypass_i(),
 			.wp_oper_tap_i(wp_tap),
+			.cap_rf_oper_i(cap_rf_oper),
+			.cap_wp_oper_tap_i(cap_wp_tap),
 			.req_pRn(bRs[3]),
 			.req_pRnv(bRsv[3]),
 			.fp_sync(1'b0),
@@ -6176,6 +6236,8 @@ uxpipe4st
 	.rf_oper_i(rf_oper),
 	.bypass_i(),
 	.wp_oper_tap_i(wp_tap),
+	.cap_rf_oper_i(cap_rf_oper),
+	.cap_wp_oper_tap_i(cap_wp_tap),
 	.req_pRn(bRs[4]),
 	.req_pRnv(bRsv[4]),
 	.fp_sync(1'b0),
@@ -6220,6 +6282,8 @@ uxpipe5st2
 	.rf_oper_i(rf_oper),
 	.bypass_i(),
 	.wp_oper_tap_i(wp_tap),
+	.cap_rf_oper_i(cap_rf_oper),
+	.cap_wp_oper_tap_i(cap_wp_tap),
 	.req_pRn(bRs[5]),
 	.req_pRnv(bRsv[5]),
 	.fp_sync(1'b0),
@@ -6232,6 +6296,50 @@ else begin
 	assign xpipe_rse[5] = {$bits(Qupls4_pkg::reservation_station_entry_t){1'b0}};
 	assign bRs[5] = 36'd0;
 	assign bRsv[5] = 4'b0;
+end
+end
+endgenerate
+
+generate begin : gCapRS
+if (Qupls4_pkg::SUPPORT_CAPABILITIES)
+Qupls4_cap_reservation_station #(
+	.MWIDTH(MWIDTH),
+	.FUNCUNIT(4'd6),
+	.NRSE(NRSE_CAP_XPIPE),
+	.NSARG(3),
+	.NREG_RPORTS(RS_NREG_RPORTS),
+	.NREG_WPORTS(1),
+	.RC(0),
+	.DISPATCH_MAP(1'b1),
+	.RL_STRATEGY(RL_STRATEGY)
+)
+ucapxpipest
+(
+	.rst(irst),
+	.clk(clk),
+	.available(1'b1),
+	.busy(cap_rs_busy),
+	.stall(1'b0),
+	.stomp(robentry_stomp),
+	.issue(),//robentry_issue[sau0_rndx]),
+	.rse_i(cap_rse),
+	.rse_o(cap_xpipe_rse),
+	.rf_oper_i(cap_rf_oper),
+	.bypass_i(),
+	.wp_oper_tap_i(wp_tap),
+	.cap_wp_oper_tap_i(cap_wp_tap),
+	.req_pRn(bRs[6]),
+	.req_pRnv(bRsv[6]),
+	.fp_sync(1'b0),
+	.req_FPCSRndx(),
+	.req_FPCSRv(),
+	.FPCSR(64'd0),
+	.FPCSRv(INV)
+);
+else begin
+	assign cap_xpipe_rse = {$bits(Qupls4_pkg::cap_reservation_station_entry_t){1'b0}};
+//	assign cap_bRs = 36'd0;
+//	assign cap_bRsv = 4'b0;
 end
 end
 endgenerate
@@ -6250,9 +6358,9 @@ always_comb
 		;
 
 always_comb
-	agen0_done = agen0_rse.v ? tlb0_v | (|pg_fault && pg_faultq==2'd1) : TRUE;
+	agen0_done = agen0_rse.v ? tlb0_v | (|pg_fault && pg_faultq==2'd1) | agen0_rse.excv : TRUE;
 always_comb
-	agen1_done = agen1_rse.v ? tlb1_v | (|pg_fault && pg_faultq==2'd2) : TRUE;
+	agen1_done = agen1_rse.v ? tlb1_v | (|pg_fault && pg_faultq==2'd2) | agen1_rse.excv : TRUE;
 
 // Validation of the STORE source operand.
 
@@ -6931,7 +7039,13 @@ else begin
 		!rob[agen0_rse.rndx].done[0] &&
 		rob[agen0_rse.rndx].op.decbus.mem &&
 		agen0_rse.v) begin
-		if (|pg_fault && pg_faultq==2'd1) begin
+		if (agen0_rse.excv) begin
+			rob[agen0_rse.rndx].exc <= agen0_rse.exc;
+			rob[agen0_rse.rndx].excv <= VAL;
+			rob[agen0_rse.rndx].done <= 2'b11;
+			rob[agen0_rse.rndx].out[0] <= 1'b0;
+		end
+		else if (|pg_fault && pg_faultq==2'd1) begin
 			if (!rob[agen0_rse.rndx].excv) begin
 				rob[agen0_rse.rndx].exc <= Qupls4_pkg::FLT_PAGE;
 				rob[agen0_rse.rndx].excv <= TRUE;
@@ -6995,7 +7109,13 @@ else begin
 
 	if (Qupls4_pkg::SUPPORT_MEM5) begin
 		if (tlb1_v && agen1_rse.v) begin
-			if (|pg_fault && pg_faultq==2'd2) begin
+			if (agen1_rse.excv) begin
+				rob[agen1_rse.rndx].exc <= agen1_rse.exc;
+				rob[agen1_rse.rndx].excv <= VAL;
+				rob[agen1_rse.rndx].done <= 2'b11;
+				rob[agen1_rse.rndx].out[0] <= 1'b0;
+			end
+			else if (|pg_fault && pg_faultq==2'd2) begin
 				if (!rob[agen1_rse.rndx].excv) begin
 					rob[agen1_rse.rndx].exc <= Qupls4_pkg::FLT_PAGE;
 					rob[agen1_rse.rndx].excv <= TRUE;
@@ -8544,8 +8664,20 @@ begin
 	vl <= 5'd8;
 	macro_queued <= FALSE;
 	for (n14 = 0; n14 < 5; n14 = n14 + 1) begin
-		kernel_vectors[n14] <= 32'hFFFFFC00;
-		syscall_vectors[n14] <= 32'hFFFFFC00;
+		kernel_vectors[n14].cap.base <= 64'd0;
+		kernel_vectors[n14].cap.top <= 65'h10000000000000000;
+		kernel_vectors[n14].cap.offset <= 64'hffffffffFFFFFC00;
+		kernel_vectors[n14].cap.perms <= 24'hffffff;
+		kernel_vectors[n14].cap.otype <= 24'hffffff;
+		kernel_vectors[n14].cap.flags <= 4'h1;	// Use DDC
+		kernel_vectors[n14].stream <= 7'd1;
+		syscall_vectors[n14].cap.base <= 64'h0;
+		syscall_vectors[n14].cap.top <= 65'h10000000000000000;
+		syscall_vectors[n14].cap.offset <= 64'hffffffffFFFFFC00;
+		syscall_vectors[n14].cap.perms = 24'hffffff;
+		syscall_vectors[n14].cap.otype = 24'hffffff;
+		syscall_vectors[n14].cap.flags = 4'h1;
+		syscall_vectors[n14].stream <= 7'd1;
 	end
 	next_pending_ipl <= 6'd63;
 	err_mask <= 64'd0;
@@ -8967,6 +9099,11 @@ begin
 	// under construction
 	// What gets put into the ROB gets put into the dispatch buffer.
 //	dbf[dtail] <= next_robe;
+	ddc <= {$bits(uc64_capability_t){1'b0}};
+	ddc.base <= 64'd0;
+	ddc.top <= 65'h10000000000000000;
+	ddc.perms <= 24'hffffff;
+	ddc.otype <= 24'hffffff;
 end
 endtask
 
@@ -9061,12 +9198,20 @@ begin
 			fpcsr <= rob[head].argFPCSR;
 		if (!rob[head].op.decbus.cpytgt) begin
 			if (rob[head].op.decbus.csr) begin
-				case(rob[head].op.uop.op3[1:0])
-				2'd0:	;	// readCSR
-				2'd1:	tWriteCSR(rob[head].arg,{2'b0,rob[head].op.uop.imm2[13:0]});
-				2'd2:	tSetbitCSR(rob[head].arg,{2'b0,rob[head].op.uop.imm2[13:0]});
-				2'd3:	tClrbitCSR(rob[head].arg,{2'b0,rob[head].op.uop.imm2[13:0]});
-				endcase
+				if (rob[head].op.decbus.Rs2==7'd0)
+					case(rob[head].op.uop.op3[1:0])
+					2'd0:	;	// readCSR
+					2'd1:	tWriteCSR(rob[head].arg[63:0],{2'b0,rob[head].op.uop.imm2[13:0]});
+					2'd2:	tSetbitCSR(rob[head].arg[63:0],{2'b0,rob[head].op.uop.imm2[13:0]});
+					2'd3:	tClrbitCSR(rob[head].arg[63:0],{2'b0,rob[head].op.uop.imm2[13:0]});
+					endcase
+				else if (SUPPORT_CAPABILITIES && rob[head].op.decbus.Rs2==7'd1)
+					case(rob[head].op.uop.op3[1:0])
+					2'd0:	;	// readCSR
+					2'd1:	tWriteCapCSR(rob[head].arg,{2'b0,rob[head].op.uop.imm2[13:0]});
+					2'd2:	;
+					2'd3:	;
+					endcase
 			end
 			else if (rob[head].op.decbus.irq)
 				;
@@ -9115,13 +9260,13 @@ begin
 			res = {thread_probability[7],thread_probability[6],thread_probability[5],thread_probability[4],
 						thread_probability[3],thread_probability[2],thread_probability[1],thread_probability[0]};
 		16'h3080:	res = sr_stack[0];
-		(Qupls4_pkg::CSR_MEPC+0):	res = pc_stack[0];
-		16'b0011000000110???:	res = kernel_vectors[regno[2:0]];
-		16'b0010000000110???:	res = kernel_vectors[regno[2:0]];
-		16'b0001000000110???:	res = kernel_vectors[regno[2:0]];
-		16'b0011000000111???:	res = syscall_vectors[regno[2:0]];
-		16'b0010000000111???:	res = syscall_vectors[regno[2:0]];
-		16'b0001000000111???:	res = syscall_vectors[regno[2:0]];
+		(Qupls4_pkg::CSR_MEPC+0):	res = pc_stack[0].cap.offset;
+		16'b0011000000110???:	res = kernel_vectors[regno[2:0]].cap.offset;
+		16'b0010000000110???:	res = kernel_vectors[regno[2:0]].cap.offset;
+		16'b0001000000110???:	res = kernel_vectors[regno[2:0]].cap.offset;
+		16'b0011000000111???:	res = syscall_vectors[regno[2:0]].cap.offset;
+		16'b0010000000111???:	res = syscall_vectors[regno[2:0]].cap.offset;
+		16'b0001000000111???:	res = syscall_vectors[regno[2:0]].cap.offset;
 		/*
 		CSR_SCRATCH:	res = scratch[regno[13:12]];
 		CSR_MHARTID: res = hartid_i;
@@ -9164,6 +9309,29 @@ begin
 	end
 	else
 		res = 64'd0;
+end
+endtask
+
+task tReadCapCSR;
+output uc64_capability_t res;
+input [15:0] regno;
+begin
+	if (Qupls4_pkg::operating_mode_t'(regno[13:12]) <= sr.om) begin
+		$display("regno: %h, om=%d", regno, sr.om);
+		casez(regno[15:0])
+		(Qupls4_pkg::CSR_MEPC+0):	res = pc_stack[0].cap;
+		16'b0011000000110???:	res = kernel_vectors[regno[2:0]].cap;
+		16'b0010000000110???:	res = kernel_vectors[regno[2:0]].cap;
+		16'b0001000000110???:	res = kernel_vectors[regno[2:0]].cap;
+		16'b0011000000111???:	res = syscall_vectors[regno[2:0]].cap;
+		16'b0010000000111???:	res = syscall_vectors[regno[2:0]].cap;
+		16'b0001000000111???:	res = syscall_vectors[regno[2:0]].cap;
+		CSR_DDC:	res = ddc;
+		default:	res = 256'd0;
+		endcase
+	end
+	else
+		res = 256'd0;
 end
 endtask
 
@@ -9235,6 +9403,25 @@ begin
 //		CSR_DSTUFF0:	stuff0 <= val;
 //		CSR_DSTUFF1:	stuff1 <= val;
 		*/
+		default:	;
+		endcase
+	end
+end
+endtask
+
+task tWriteCapCSR;
+input uc64_capability_t val;
+input [15:0] regno;
+begin
+	if (Qupls4_pkg::operating_mode_t'(regno[13:12]) <= sr.om) begin
+		casez(regno[15:0])
+		Qupls4_pkg::CSR_MEPC:	pc_stack[0].cap <= val;
+		16'b0011000000110???:	kernel_vectors[regno[2:0]].cap <= val;
+		16'b0010000000110???:	kernel_vectors[regno[2:0]].cap <= val;
+		16'b0001000000110???:	kernel_vectors[regno[2:0]].cap <= val;
+		16'b0011000000111???:	syscall_vectors[regno[2:0]].cap <= val;
+		16'b0010000000111???:	syscall_vectors[regno[2:0]].cap <= val;
+		16'b0001000000111???:	syscall_vectors[regno[2:0]].cap <= val;
 		default:	;
 		endcase
 	end

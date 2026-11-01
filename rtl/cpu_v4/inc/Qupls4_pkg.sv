@@ -1513,6 +1513,7 @@ parameter CSR_MSP		= 16'h3060;
 parameter CSR_SR_STACK		= 16'h308?;
 parameter CSR_MCIR_STACK 	= 16'h309?;
 parameter CSR_MEPC	= 16'h3108;
+parameter CSR_DDC		= 16'h3120;
 parameter CSR_TOTINSN = 16'h3F00;
 parameter CSR_TOTVALIDINSN = 16'h3F01;
 parameter CSR_CPYDST = 16'h3F02;
