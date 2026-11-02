@@ -615,6 +615,7 @@ typedef enum logic [6:0] {
 
 	OP_BSR = 7'd32,
 	OP_JSR = 7'd33,
+	OP_CJSR = 7'd34,
 	OP_JSRN = 7'd36,
 	OP_RTD = 7'd35,
 	
@@ -897,6 +898,10 @@ typedef enum logic [6:0] {
 	CAP_CHKBOUNDS = 7'd6,
 	CAP_INCOFFSETI = 7'd11,
 	CAP_INVOKE = 7'd12,
+	CAP_DECOMP64 = 7'd16,
+	CAP_DECOMP32 = 7'd17,
+	CAP_COMP64 = 7'd20,
+	CAP_COMP32 = 7'd21,
 	CAP_ANDPERM = 7'd32,
 	CAP_BUILDCAP = 7'd33,
 	CAP_COPYTYPE = 7'd34,
@@ -1741,7 +1746,7 @@ typedef struct packed
 	cpu_types_pkg::value_t immc;
 	cpu_types_pkg::value_t immd;		// for store immediate
 	logic we;
-	logic [5:0] expipe;		// execution pipe
+	logic [6:0] expipe;		// execution pipe
 	logic [2:0] fclass;		// class of instruction for FENCE
 	logic csr;				// CSR instruction
 	logic nop;				// NOP semantics
@@ -1806,6 +1811,9 @@ typedef struct packed
 	logic ret;
 	logic boi;
 	logic eret;
+	
+	logic cjsr;					// capabilities JSR
+	logic cret;					// capabilities RET
 	
 	logic brk;
 	logic irq;

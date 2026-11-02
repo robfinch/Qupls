@@ -159,7 +159,13 @@ assign nop_o = nop2;
 always_ff @(posedge clk)
 if (rst) begin
 	ip_o.stream <= 7'd1;
-	ip_o.cap.offset <= RSTPC;
+	ip_o.cap.base <= 64'h0;
+	ip_o.cap.top <= 65'h10000000000000000;
+	ip_o.cap.perms <= 24'hffffff;
+	ip_o.cap.flags <= 4'h0;
+	ip_o.cap.otype <= 24'hffffff;
+	ip_o.cap.resv <= 3'b0;
+	ip_o.cap.offset <= 64'h0;
 end
 else begin
 	if (ce)

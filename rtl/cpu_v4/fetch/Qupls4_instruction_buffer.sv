@@ -38,13 +38,15 @@ import const_pkg::*;
 import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_instruction_buffer(rst_i, clk_i, ce_i, ihit_i, stream_i,
+module Qupls4_instruction_buffer(rst_i, clk_i, ce_i, first_icache,
+	ihit_i, stream_i,
 	ips_i, ip_i, invce, invalidate,
 	icip_i, line_i, line_o, ip_o, is_buffered_o, is_icip_buffered_o,
 	next_is_buffered_o);
 input rst_i;
 input clk_i;
 input ce_i;
+input first_icache;
 input ihit_i;
 input cpu_types_pkg::pc_stream_t stream_i;
 input Qupls4_pkg::pc_address_ex_t ip_i;

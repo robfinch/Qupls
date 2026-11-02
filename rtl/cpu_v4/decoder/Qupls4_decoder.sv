@@ -419,6 +419,7 @@ begin
 	dbo.cload = instr.opcode==Qupls4_pkg::OP_CLOAD;
 	dbo.cload_tags = SUPPORT_CAPABILITIES && instr.opcode==Qupls4_pkg::OP_CLOAD && instr.func==Qupls4_pkg::CAP_LOADTAGS; 
 	dbo.cstore = instr.opcode==Qupls4_pkg::OP_CSTORE;
+	dbo.cjsr = instr.opcode==Qupls4_pkg::OP_CJSR;
 	dbo.cap = instr.opcode==Qupls4_pkg::OP_CAP; 
 	dbo.v2p = instr.opcode==Qupls4_pkg::OP_V2P;
 	dbo.vv2p = instr.opcode==Qupls4_pkg::OP_VV2P;

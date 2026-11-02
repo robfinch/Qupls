@@ -38,14 +38,14 @@ import Qupls4_pkg::*;
 
 module Qupls4_decode_expipe(instr, expipe);
 input Qupls4_pkg::micro_op_t instr;
-output [5:0] expipe;
+output [6:0] expipe;
 
-function [5:0] fnExPipe;
+function [6:0] fnExPipe;
 input Qupls4_pkg::micro_op_t ir;
 begin
 	case(ir.opcode)
 	Qupls4_pkg::OP_BFLD:
-		fnExPipe = {4'b0000,Qupls4_pkg::SUPPORT_BFLD1[0],Qupls4_pkg::SUPPORT_BFLD1[0]};
+		fnExPipe = {5'b00000,Qupls4_pkg::SUPPORT_BFLD1[0],Qupls4_pkg::SUPPORT_BFLD1[0]};
 	Qupls4_pkg::OP_R3B,Qupls4_pkg::OP_R3W,Qupls4_pkg::OP_R3T,Qupls4_pkg::OP_R3O,
 	Qupls4_pkg::OP_R3BP,Qupls4_pkg::OP_R3WP,Qupls4_pkg::OP_R3TP,Qupls4_pkg::OP_R3OP,
 	Qupls4_pkg::OP_R3VVV,Qupls4_pkg::OP_R3VVS:
@@ -54,42 +54,42 @@ begin
 		FN_NAND,FN_NOR,FN_XNOR,
 		FN_CMP,FN_ADD,FN_SUB,FN_CMPU,
 		FN_MOVE:
-			fnExPipe = 6'b111111;
+			fnExPipe = 7'b0111111;
 		FN_MUL,FN_MULU,FN_MULSU:
-			fnExPipe = 6'b001100;
+			fnExPipe = 7'b0001100;
 		FN_DIV,FN_DIVU,FN_DIVSU:
-			fnExPipe = 6'b110000;
+			fnExPipe = 7'b0110000;
 		FN_NNA_MTWT,FN_NNA_MTIN,FN_NNA_MTBIAS,
 		FN_NNA_MTFB,FN_NNA_MTMC,FN_NNA_MTBC:
-			fnExPipe = 6'b000100;
+			fnExPipe = 7'b0000100;
 		FN_ROL,FN_ROR,FN_ASR,FN_ASL,FN_LSR:
-			fnExPipe = 6'b000011;
+			fnExPipe = 7'b0000011;
 		FN_REDAND,FN_REDOR,FN_REDEOR,
 		FN_REDMINU,FN_REDSUM,FN_REDMAXU,FN_REDMIN,FN_REDMAX:
-			fnExPipe = 6'b000001;
+			fnExPipe = 7'b0000001;
 		FN_PEEKQ,FN_POPQ,FN_PUSHQ,FN_RESETQ,
 		FN_STATQ,FN_READQ,FN_WRITEQ:
-			fnExPipe = 6'b001000;
+			fnExPipe = 7'b0001000;
 		FN_SEQ,FN_SNE,FN_SLT,FN_SLE,FN_SLTU,FN_SLEU:
-			fnExPipe = 6'b111111;
+			fnExPipe = 7'b0111111;
 		default:
-			fnExPipe = 6'b111111;
+			fnExPipe = 7'b0111111;
 		endcase
 	Qupls4_pkg::OP_FLTH,Qupls4_pkg::OP_FLTS,Qupls4_pkg::OP_FLTD,Qupls4_pkg::OP_FLTQ,
 	Qupls4_pkg::OP_FLTPH,Qupls4_pkg::OP_FLTPS,Qupls4_pkg::OP_FLTPD,Qupls4_pkg::OP_FLTPQ,
 	Qupls4_pkg::OP_FLTVVV,Qupls4_pkg::OP_FLTVVS:
 		case(ir.func)
 		Qupls4_pkg::FLT_FMA,Qupls4_pkg::FLT_FMS,Qupls4_pkg::FLT_FNMA,Qupls4_pkg::FLT_FNMS:
-			fnExPipe = 6'b111100;
+			fnExPipe = 7'b0111100;
 		Qupls4_pkg::FLT_CMP,
 		Qupls4_pkg::FLT_ABS,Qupls4_pkg::FLT_NEG:
-			fnExPipe = 6'b111111;
-		default:	fnExPipe = 6'b000000;
+			fnExPipe = 7'b0111111;
+		default:	fnExPipe = 7'b000000;
 		endcase
 	Qupls4_pkg::OP_FADDI:
-		fnExPipe = 6'b111100;
+		fnExPipe = 7'b0111100;
 	Qupls4_pkg::OP_CHK:
-		fnExPipe = 6'b000001;
+		fnExPipe = 7'b0000001;
 	Qupls4_pkg::OP_ADDI,
 	Qupls4_pkg::OP_SUBFI,
 	Qupls4_pkg::OP_CMPI,
@@ -98,13 +98,13 @@ begin
 	Qupls4_pkg::OP_ANDI,
 	Qupls4_pkg::OP_ORI,
 	Qupls4_pkg::OP_XORI:
-		fnExPipe = 6'b111111;
+		fnExPipe = 7'b0111111;
 	Qupls4_pkg::OP_SHIFT:
-		fnExPipe = {4'b0000,Qupls4_pkg::SUPPORT_SHIFT1[0],Qupls4_pkg::SUPPORT_SHIFT0[0]};
+		fnExPipe = {5'b00000,Qupls4_pkg::SUPPORT_SHIFT1[0],Qupls4_pkg::SUPPORT_SHIFT0[0]};
 	Qupls4_pkg::OP_CSR:
-		fnExPipe = {4'b0000,Qupls4_pkg::SUPPORT_CSR1[0],Qupls4_pkg::SUPPORT_CSR0[0]};
+		fnExPipe = {5'b00000,Qupls4_pkg::SUPPORT_CSR1[0],Qupls4_pkg::SUPPORT_CSR0[0]};
 	Qupls4_pkg::OP_FENCE:
-		fnExPipe = 6'b000001;
+		fnExPipe = 7'b0000001;
 	Qupls4_pkg::OP_LDB,Qupls4_pkg::OP_LDBZ,Qupls4_pkg::OP_LDW,Qupls4_pkg::OP_LDWZ,
 	Qupls4_pkg::OP_LDT,Qupls4_pkg::OP_LDTZ,Qupls4_pkg::OP_LOAD,
 	Qupls4_pkg::OP_STB,Qupls4_pkg::OP_STW,
@@ -114,16 +114,58 @@ begin
 	Qupls4_pkg::OP_V2P,
 	Qupls4_pkg::OP_VV2P,
 	Qupls4_pkg::OP_AMO:
-		fnExPipe = 6'b110000;
+		fnExPipe = 7'b0110000;
 	// Branches must be supported on at least one pipe.
 	Qupls4_pkg::OP_BCC,Qupls4_pkg::OP_BCCU,Qupls4_pkg::OP_FBCC,Qupls4_pkg::OP_MBCC,
 	Qupls4_pkg::OP_BSR,Qupls4_pkg::OP_JSR,Qupls4_pkg::OP_JSRN,
 	Qupls4_pkg::OP_SYS,
 	Qupls4_pkg::OP_BRK,
 	Qupls4_pkg::OP_RTD:
-		fnExPipe = Qupls4_pkg::SUPPORT_BRANCH1 ? 6'b000010 : 6'b000001;
+		fnExPipe = Qupls4_pkg::SUPPORT_BRANCH1 ? 7'b0000010 : 7'b0000001;
+	Qupls4_pkg::OP_CAP:
+		case(ir.func)
+		// The following read one cap op and write to the GPR.
+		Qupls4_pkg::CAP_GETBASE:		fnExPipe = 7'b0110000;
+		Qupls4_pkg::CAP_GETFLAGS:		fnExPipe = 7'b0110000;
+		Qupls4_pkg::CAP_GETTYPE:		fnExPipe = 7'b0110000;
+		Qupls4_pkg::CAP_GETLENGTH:	fnExPipe = 7'b0110000;
+		Qupls4_pkg::CAP_GETOFFSET:	fnExPipe = 7'b0110000;
+		Qupls4_pkg::CAP_GETADDR:		fnExPipe = 7'b0110000;
+		Qupls4_pkg::CAP_GETPERMS:		fnExPipe = 7'b0110000;
+		Qupls4_pkg::CAP_GETTAG:			fnExPipe = 7'b0110000;
+		Qupls4_pkg::CAP_GETTOP:			fnExPipe = 7'b0110000;
+		Qupls4_pkg::CAP_GETHIGH:		fnExPipe = 7'b0110000;
+		Qupls4_pkg::CAP_ALGNMASK:		fnExPipe = 7'b0110000;
+		Qupls4_pkg::CAP_GETSEALED:	fnExPipe = 7'b0110000;
+		// The following read two cap ops and write to the CAP file.
+		Qupls4_pkg::CAP_SETEQUALSEXACT:	fnExPipe = 7'b1000000;
+		Qupls4_pkg::CAP_TESTSUBSET:	fnExPipe = 7'b1000000;
+		// Reads one cap writes to CAP file.
+		Qupls4_pkg::CAP_MOVE:		fnExPipe = 7'b1000000;
+		// Reads two caps no write, may exception.
+		Qupls4_pkg::CAP_CHKINVOKE:	fnExPipe = 7'b1000000;
+		Qupls4_pkg::CAP_CHKBOUNDS:	fnExPipe = 7'b1000000;
+		
+		Qupls4_pkg::CAP_INCOFFSET:	fnExPipe = 7'b1000000;
+		Qupls4_pkg::CAP_INCOFFSETI:	fnExPipe = 7'b1000000;
+		Qupls4_pkg::CAP_INVOKE:	fnExPipe = 7'b1000000;
+		Qupls4_pkg::CAP_ANDPERM:	fnExPipe = 7'b1000000;
+		Qupls4_pkg::CAP_BUILDCAP:	fnExPipe = 7'b1000000;
+		Qupls4_pkg::CAP_COPYTYPE:	fnExPipe = 7'b1000000;
+		Qupls4_pkg::CAP_SEAL:	fnExPipe = 7'b1000000;
+		Qupls4_pkg::CAP_SETADDR:	fnExPipe = 7'b1000000;
+		Qupls4_pkg::CAP_SETBOUNDS:	fnExPipe = 7'b1000000;
+		Qupls4_pkg::CAP_SETFLAGS:	fnExPipe = 7'b1000000;
+		Qupls4_pkg::CAP_SETHIGH:	fnExPipe = 7'b1000000;
+		Qupls4_pkg::CAP_INCOFFSETI:	fnExPipe = 7'b1000000;
+		Qupls4_pkg::CAP_CLEARTAG:	fnExPipe = 7'b1000000;
+		Qupls4_pkg::CAP_LOADTAGS:	fnExPipe = 7'b0110000;
+		Qupls4_pkg::CAP_SEALENTRY:	fnExPipe = 7'b1000000;
+		default:
+			fnExPipe = 7'b0000000;
+		endcase
 	default:
-		fnExPipe = 6'b000000;
+		fnExPipe = 7'b0000000;
 	endcase
 end
 endfunction

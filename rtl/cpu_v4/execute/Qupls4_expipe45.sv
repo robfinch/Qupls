@@ -179,7 +179,7 @@ always_ff @(posedge clk)
 always_ff @(posedge clk)
 	perms <= rse_i.Rs1z ? 24'h0 : rse_i.pc.cap.flags[0] || !SUPPORT_CAPABILITIES  ? ddc.perms : rse_i.cap_arg.val.perms;
 always_ff @(posedge clk)
-	tags_bad <= !rse_i.cap_arg.val.tag || rse_i.arg[2].val.tag;
+	tags_bad <= !rse_i.cap_arg.flags.cap || rse_i.arg[2].flags.cap;
 
 always_comb
 	case(rse1.velesz)

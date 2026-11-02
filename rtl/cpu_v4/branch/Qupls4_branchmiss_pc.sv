@@ -48,8 +48,8 @@ input [63:0] vector;
 input bt;
 input takb;
 input pc_address_ex_t current_pc;
-input pc_address_t [4:0] syscall_vector;
-input pc_address_t [4:0] kernel_vector;
+input pc_address_ex_t  [4:0] syscall_vector;
+input pc_address_ex_t  [4:0] kernel_vector;
 output pc_address_ex_t misspc;
 output reg [2:0] missgrp;
 output pc_address_ex_t dstpc;
@@ -130,17 +130,17 @@ begin
 			case(ir.Rd)
 			6'h02,6'h22:
 				begin
-					dstpc.cap.offset = syscall_vector[Qupls4_pkg::fnNextOm(rse.om)];
+					dstpc = syscall_vector[Qupls4_pkg::fnNextOm(rse.om)];
 					dstpc.stream = rse.pc.stream;
 				end
 			6'h03,6'h23:
 				begin
-					dstpc.cap.offset = kernel_vector[Qupls4_pkg::fnNextOm(rse.om)];
+					dstpc = kernel_vector[Qupls4_pkg::fnNextOm(rse.om)];
 					dstpc.stream = rse.pc.stream;
 				end
 			default:
 				begin
-					dstpc.cap.offset = kernel_vector[Qupls4_pkg::fnNextOm(rse.om)];
+					dstpc = kernel_vector[Qupls4_pkg::fnNextOm(rse.om)];
 					dstpc.stream = rse.pc.stream;
 				end
 			endcase

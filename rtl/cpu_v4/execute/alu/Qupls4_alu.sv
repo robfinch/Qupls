@@ -42,7 +42,7 @@ import capability_pkg::*;
 import Qupls4_pkg::*;
 
 module Qupls4_alu(rst, clk, clk2x, chunk, om, ld, ir, div, Ra, a, b, bi, c,
-	a_flags, b_flags, c_flags, t_flags, i, t, qres,
+	a_flags, b_flags, c_flags, t_flags, i, t, qres, capa, capa_flags,
 	mask, cs, pc, pcc, csr, cpl, coreno, canary, velsz, o, o_flags, exc_o, did_op);
 parameter PIPE = 3'd0;
 parameter SUPPORT_SHIFT = (PIPE==3'd0 && SUPPORT_SHIFT0) || (PIPE==3'd1 && SUPPORT_SHIFT1);
@@ -1824,7 +1824,7 @@ begin
 			case(ir.func)
 			CAP_GETFLAGS:
 				begin
-					bus = capa.flag;
+					bus = capa_flags;
 					did_op = TRUE;
 				end
 			CAP_GETBASE:

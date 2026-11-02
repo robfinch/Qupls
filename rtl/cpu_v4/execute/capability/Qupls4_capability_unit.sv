@@ -41,7 +41,7 @@ import capability_pkg::*;
 import Qupls4_pkg::*;
 
 module Qupls4_capability_unit(rst, clk, rse_i, rse_o, pcc, pcch, o, o_flags,
-	excv, exc);
+	excv, exc, done);
 input rst;
 input clk;
 input Qupls4_pkg::reservation_station_entry_t rse_i;
@@ -53,6 +53,7 @@ output uc64_capability_t o;
 output cpu_types_pkg::flags_t o_flags;
 output reg excv;
 output Qupls4_pkg::cause_code_t exc;
+output reg done;
 
 Qupls4_pkg::reservation_station_entry_t rse = rse_i;
 reg [63:0] a;
@@ -87,7 +88,6 @@ reg isInvokeInBounds, isInBounds;
 capability_pkg::uc64_capability_t ac,bc,cc,dc,tc;
 cpu_types_pkg::flags_t cc_flags;
 cpu_types_pkg::flags_t dc_flags;
-reg op_done;
 
 always_ff @(posedge clk) ao <= a;
 always_ff @(posedge clk) bo <= b;
@@ -113,12 +113,7 @@ begin
 		done <= FALSE;
 	else begin
 		case(ir.func)
-		CAP_GETBASE:		done <= donef[4];
-		CAP_GETTOP:			done <= donef[4];
-		CAP_GETLENGTH:	done <= donef[4];
-		CAP_INCOFFSET:	done <= donef[8];
-		CAP_INCOFFSETI:	done <= donef[8];
-		CAP_SETBOUNDS:	done <= donef[4];
+		CAP_DECOMPRESS:	done <= donef[5];
 		default:	done <= TRUE;
 		endcase
 	end
