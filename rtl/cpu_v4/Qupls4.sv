@@ -1986,6 +1986,7 @@ Qupls4_stomp ustmp1
 	.rst(irst),
 	.clk(clk),
 	.clk2x(clk),
+	.first_icache(first_icache),
 	.ihit(is_buffered),
 	.advance_icache(advance_pipeline),
 	.advance_fetch(advance_pipeline),
