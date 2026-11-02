@@ -1091,6 +1091,7 @@ else begin
 `include "Qupls4_microop_mem_LSV.sv"
 `include "Qupls4_microop_mem_LSVN.sv"
 `include "Qupls4_microop_mem_PUSHPOP.sv"
+`include "Qupls4_microop_mem_CAP.sv"
 	Qupls4_pkg::OP_LDB,Qupls4_pkg::OP_LDBZ,Qupls4_pkg::OP_LDW,Qupls4_pkg::OP_LDWZ,
 	Qupls4_pkg::OP_LDT,Qupls4_pkg::OP_LDTZ,Qupls4_pkg::OP_LOAD:
 		begin
@@ -1312,13 +1313,27 @@ else begin
 				end
 			default:
 				if (insert_boi) begin
-					next_count = 4'd2;
+					next_count = 4'd3;
 					next_uop[0] = uop_boi;
 					next_uop[1] = uop1;
+					next_uop[2] = uop1;
+					next_uop[2].lead = FALSE;
+					next_uop[2].num = 5'd2;
+					next_uop[2].Rd = uop1.Rd + 9'd1;
+					next_uop[2].Rs1 = uop1.Rs1 + 9'd1;
+					next_uop[2].Rs2 = uop1.Rs2 + 9'd1;
+					next_uop[2].Rs3 = uop1.Rs3 + 9'd1;
 				end
 				else begin
-					next_count = 4'd1;
+					next_count = 4'd2;
 					next_uop[0] = uop0;
+					next_uop[1] = uop0;
+					next_uop[1].lead = FALSE;
+					next_uop[1].num = 5'd1;
+					next_uop[1].Rd = uop0.Rd + 9'd1;
+					next_uop[1].Rs1 = uop0.Rs1 + 9'd1;
+					next_uop[1].Rs2 = uop0.Rs2 + 9'd1;
+					next_uop[1].Rs3 = uop0.Rs3 + 9'd1;
 				end
 			endcase
 		end
