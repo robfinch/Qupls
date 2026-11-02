@@ -35,6 +35,7 @@
 // ============================================================================
 
 import cpu_types_pkg::*;
+import capability_pkg::*;
 import Qupls4_pkg::*;
 
 module Qupls4_branchmiss_pc(clk, rse, pc_stack, bt, takb, current_pc,
@@ -62,6 +63,7 @@ value_t argA = rse.arg[0].val;
 value_t argB = rse.arg[1].val;
 value_t argC = rse.arg[2].val;
 value_t argI = rse.argI;
+uc64_capability_t capa = rse.cap_arg.val;
 
 always_comb
 	ir = rse.uop;
@@ -124,6 +126,11 @@ begin
 			dstpc.cap.offset = {{29{ir.imm[34]}},ir.imm[34:0]};
 			dstpc.stream = rse.pc.stream;
 		end
+	rse.cjsr:
+		begin
+			dstpc.cap.offset = {{29{ir.imm[34]}},ir.imm[34:0]} - rse.pc.cap.base;
+			dstpc.stream = rse.pc.stream;
+		end
 
 	rse.sys:
 		begin
@@ -154,6 +161,11 @@ begin
 	rse.ret:
 		begin
 			dstpc.cap.offset = argA;
+			dstpc.stream = rse.pc.stream;
+		end
+	rse.cret:
+		begin
+			dstpc.cap.offset = capa.offset;
 			dstpc.stream = rse.pc.stream;
 		end
 	default:

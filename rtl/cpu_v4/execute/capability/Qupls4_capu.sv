@@ -40,59 +40,46 @@ import cpu_types_pkg::*;
 import capability_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_capability_unit(rst, clk, rse_i, rse_o, pcc, pcch, o, o_flags,
-	excv, exc, done);
+module Qupls4_capu(rst, clk, ir, ip, ac, bc, ac_flags, bc_flags, agp, bgp,
+	o, o_flags, excv, exc, done);
 input rst;
 input clk;
-input Qupls4_pkg::reservation_station_entry_t rse_i;
 input Qupls4_pkg::micro_op_t ir;
-input pc_address_t pcc;
-input cpu_types_pkg::capability_high64_t pcch;
-output Qupls4_pkg::reservation_station_entry_t rse_o;
+input pc_address_ex_t ip;
+input uc64_capability_t ac;
+input uc64_capability_t bc;
+input cpu_types_pkg::flags_t ac_flags;
+input cpu_types_pkg::flags_t bc_flags;
+input cpu_types_pkg::value_t agp;
+input cpu_types_pkg::value_t bgp;
 output uc64_capability_t o;
 output cpu_types_pkg::flags_t o_flags;
 output reg excv;
 output Qupls4_pkg::cause_code_t exc;
 output reg done;
 
-Qupls4_pkg::reservation_station_entry_t rse = rse_i;
-reg [63:0] a;
-reg [63:0] b;
-reg [63:0] c;
-reg [63:0] d;
-reg [63:0] i;
-cpu_types_pkg::flags_t c_flags;
-cpu_types_pkg::flags_t d_flags;
-assign a = rse.arg[0].val;
-assign b = rse.arg[1].val;
-assign c = rse.arg[2].val;
-assign d = rse.arg[4].val;
-assign i = rse.argI.val;
-assign c_flags = rse.arg[2].flags;
-assign d_flags = rse.arg[4].flags;
 reg [63:0] jmp_dst;
 
-Qupls4_pkg::micro_op_t iro;
-reg [63:0] ao,bo,co,do;
 reg chg;
 reg [11:0] donef;
 wire [63:0] base;
 wire [64:0] top;
 wire [7:0] E;
-cpu_types_pkg::capability_high64_t c64 = capability_high64_t'(c);
-cpu_types_pkg::capability_high64_t c64d4, higho, ch4, dh4;
 wire done8;
 wire invoke = ir.func==CAP_INVOKE;
 wire setbounds = ir.func==CAP_SETBOUNDS;
 reg isInvokeInBounds, isInBounds;
 capability_pkg::uc64_capability_t ac,bc,cc,dc,tc;
+capability_pkg::uc64_capability_t ao,bo,co,do;		// older versions
 cpu_types_pkg::flags_t cc_flags;
 cpu_types_pkg::flags_t dc_flags;
+reg bcz;
 
-always_ff @(posedge clk) ao <= a;
-always_ff @(posedge clk) bo <= b;
-always_ff @(posedge clk) co <= c;
-always_ff @(posedge clk) do <= d;
+always_comb bcz = bc==256'd0;
+always_ff @(posedge clk) ao <= ac;
+always_ff @(posedge clk) bo <= bc;
+always_ff @(posedge clk) co <= cc;
+always_ff @(posedge clk) do <= dc;
 always_ff @(posedge clk) iro <= ir;
 
 always_comb
@@ -104,16 +91,20 @@ begin
 	if (chg)
 		donef <= {11'b0,1'b1};
 	else
-		donef <= {donef[10:0],1'b0};
+		donef <= {donef[10:0],1'b1};
 end
-	
+
+// Currently the only thing requireing multiple clocks is compress/decompress.
 always_ff @(posedge clk)
 begin
 	if (chg)
 		done <= FALSE;
 	else begin
 		case(ir.func)
-		CAP_DECOMPRESS:	done <= donef[5];
+		CAP_DECOMPRESS64:	done <= donef[5];
+		CAP_COMPRESS64: done <= donef[5];
+		CAP_DECOMPRESS32:	done <= donef[5];
+		CAP_COMPRESS32: done <= donef[5];
 		default:	done <= TRUE;
 		endcase
 	end
@@ -122,261 +113,7 @@ end
 delay4 #(.WID(64)) udly1 (.clk(clk), .ce(1'b1), .i(c64), .o(c64d));
 delay4 #(.WID(64)) udly2 (.clk(clk), .ce(1'b1), .i(d), .o(dh4));
 assign ch4 = c64d;
-
-
-// Decompress the base field of a capability.
-module modCalcBase(rst, clk, cap, adr, base, Eo);
-input rst;
-input clk;
-input [63:0] cap;
-input [63:0] adr;
-output reg [63:0] base;
-output reg [7:0] Eo;
-
-reg Ie;
-reg [7:0] E, E2, E3;
-reg [16:0] B;
-reg [63:0] amid,amid3;
-reg [63:0] atop,atop3;
-integer A3;
-integer B3;
-integer R;
-reg [63:0] cb;
-reg [63:0] adrd;
-
-always_comb
-	Ie = cap[26];		// convenience rename
-
-always_ff @(posedge clk)
-if (rst)
-	base <= 64'd0;
-else begin
-	// Pipeline clock #1
-	if (Ie) begin
-		E <= {2'b00,cap[16:14],cap[2:0]};
-		B[5:0] <= 6'b0;
-	end
-	else begin
-		E <= 8'd0;
-		B[5:0] <= {cap[2:0],3'b0};
-	end
-	B[16:6] <= cap[13:3];
-	adrd <= adr;
-
-	// Pipeline clock #2
-	A3 <= (adr >> (E + 14)) & 7;
-	B3 <= B[16:14];
-	R <= B[16:14] - 1;
-	amid <= {50'd0,B} << E;
-	atop <= adr & ~((64'd1 << (E+17)) - 64'd1);
-	E2 <= E;
-
-	// Pipeline clock #3
-	case ({A3 < R,B3 < R})
-	2'b00:	cb <= 64'd0;
-	2'b01:	cb <= 64'd1 << (E2+14);
-	2'b10:	cb <= -64'd1 << (E2+14);
-	2'b11:	cb <= 64'd0;
-	endcase
-	amid3 <= amid;
-	atop3 <= atop;
-	E3 <= E2;
-
-	// Pipeline clock #4
-	base <= (atop + cb) | amid;
-	Eo <= E3;
-end
-endmodule
-
-// Decompress the top field of a capability.
-module modCalcTop(rst, clk, cap, adr, top, Eo);
-input rst;
-input clk;
-input [63:0] cap;
-input [63:0] adr;
-output reg [64:0] top;
-output reg [7:0] Eo;
-
-reg Ie;
-reg [7:0] E, E2, E3;
-reg [16:0] B,T,T2;
-reg [63:0] amid,amid3;
-reg [63:0] atop,atop3;
-integer A3;
-integer B3,T3;
-integer R;
-reg [63:0] ct;
-reg [63:0] adrd;
-reg Lcarryout;
-reg Lmsb;
-
-always_comb
-	Ie = cap[26];		// convenience rename
-
-always_ff @(posedge clk)
-if (rst)
-	base <= 64'd0;
-else begin
-	// Pipeline clock #1
-	if (Ie) begin
-		E <= {2'b00,cap[16:14],cap[2:0]};
-		B[5:0] <= 6'b0;
-		T[5:0] <= 6'b0;
-		Lcarryout <= cap[25:17] < cap[11:3];	// T[14:6] < B[14:6]
-	end
-	else begin
-		E <= 8'd0;
-		B[5:0] <= {cap[ 2: 0],3'b0};
-		T[5:0] <= {cap[16:14],3'b0};
-		Lcarryout <= cap[25:14] < cap[11:0];	// T[14:3] < B[14:3]
-	end
-	Lmsb <= Ie;
-	B[16:6] <= cap[13: 3];
-	T[14:6] <= cap[25:17];
-	adrd <= adr;
-
-	// Pipeline clock #2
-	T2[14:0] <= T[14:0];
-	T2[16:15] <= B[16:15] + Lcarryout + Lmsb;
-	A3 <= (adr >> (E + 14)) & 7;
-	B3 <= B[16:14];
-	T3 <= (B[16:15] + Lcarryout + Lmsb,T[14]};
-	R <= B[16:14] - 1;
-	amid <= {50'd0,B} << E;
-	atop <= adr & ~((64'd1 << (E+17)) - 64'd1);
-	E2 <= E;
-
-	// Pipeline clock #3
-	case ({A3 < R,T3 < R})
-	2'b00:	ct <= 64'd0;
-	2'b01:	ct <= 64'd1 << (E2+14);
-	2'b10:	ct <= -64'd1 << (E2+14);
-	2'b11:	ct <= 64'd0;
-	endcase
-	amid3 <= amid;
-	atop3 <= atop;
-	E3 <= E2;
-	
-	// pipeline clock #4
-	top <= (atop + ct) | amid;
-	Eo <= E3;
-	
-end
-endmodule
-
-module modCalcHigh(base, length, otype, flag, perm, high);
-input [63:0] base;
-input [64:0] length;
-input [17:0] otype;
-input flag;
-input [15:0] perm;
-output [63:0] high;
-
-reg [7:0] E, E2, E3;
-reg [16:0] B, T, B3, T3;
-reg [64:0] L2,L3,base1,base2,base3,length_rnd;
-reg [17:0] otype1, otype2, otype3, otype4;
-reg flag1,flag2,flag3,flag4;
-reg [15:0] perm1,perm2,perm3,perm4;
-reg Ie, Ie2, Ie3, Ie4;
-reg exact;
-wire [6:0] clzo,clzoL3,clzo1,clzo2,clzo3;
-wire [64:0] top = base + length;
-reg [64:0] top1,top2,top3,top3a;
-
-cntlz64 uclz1 (.i(length[64:17]), .o(clzo));
-cntlz64 uclz2 (.i(L3[64:17]), .o(clzoL3));
-
-// Was a bit added to the length?
-always_comb
-	if (clzoL3 < clzo3) begin
-		top3a = base3 + L3;
-	else
-		top3a = top3;
-// Calc "extra" rounding bits for length alignment.
-always_comb
-	length_rnd = L2 & ((64'd1 << E2) - 64'd1);
-
-always_comb
-	if (Ie4)
-		high = {perm4,flag4,2'b0,otype4,Ie4,T4[14:6],E4[5:3],B4[16:6],E4[2:0]};
-always_comb
-	L2 = ((top2 + (|Rnd[63:0] << E2)) - base2;
-
-always_ff @(posedge clk)
-begin
-	// pipeline clock #1
-	E <= 64'd48 - clzo;
-	if (64'd48 - clzo == 64'd0 && length[16]==1'b0)
-		Ie <= 1'b0;
-	else
-		Ie <= 1'b1;
-	clzo1 <= clzo;
-	base1 <= base;
-	top1 <= top;
-	otype1 <= otype;
-	flag1 <= flag;
-	perm1 <= perm;
-		
-	// pipeline clock #2
-	if (Ie==1'b0) begin
-		B <= {base[16:3],3'b0};
-		T <= {top[14:3],3'b0};
-	end
-	else begin
-		B <= base[63:3] >> E;
-		T <= top[64:3] >> E;
-		Rnd <= {top[63:3],64'd0} >> E;
-	end
-	Ie2 <= Ie;
-	E2 <= E;
-	// Mask off and round up length.
-	clzo2 <= clzo1;
-	base2 <= base1;
-	top2 <= top1;
-	otype2 <= otype1;
-	flag2 <= flag1;
-	perm2 <= perm1;
-	
-	// If any set bits round top up
-	if (|Rnd[63:0])
-		T3 <= T + 1'b1;
-	else
-		T3 <= T;
-	T3[16:15] <= 2'b00;
-	B3 <= B;
-	E3 <= E2;
-	L3 <= (L2 & ~((64'd1 << E2) - 64'd1)) + (|length_rnd << E2);
-	Ie3 <= Ie2;
-	clzo3 <= clzo2;
-	base3 <= base2;
-	top3 <= top2;
-	otype3 <= otype2;
-	flag3 <= flag2;
-	perm3 <= perm2;
-
-	// pipeline clock #4
-	if (Ie3==1'b0) begin
-		B4 <= {base3[16:3],3'b0};
-		T4 <= {top3a[14:3],3'b0};
-	end
-	else begin
-		B4 <= base3[63:3] >> E3;
-		T4 <= top3a[64:3] >> E3;
-	end
-	T4[16:15] <= 2'b00;
-	Ie4 <= Ie3;
-	E4 <= E3;
-	otype4 <= otype3;
-	flag4 <= flag3;
-	perm4 <= perm3;
-
-end
-
-endmodule
-
-module 
-
+/*
 modCalcBase ucb1
 (
 	.rst(rst),
@@ -406,9 +143,9 @@ modCalcHigh uch1
 	.perm(c64d4.perms),
 	.high(higho)
 );
-
+*/
 always_comb
-	isInvokeInBounds = pcc >= base && pcc <= top - 6;
+	isInvokeInBounds = ip.offset >= base && ip.offset <= top - 6;
 always_comb
 	isInBounds = b >= base && b <= top - 6;
 
@@ -434,7 +171,7 @@ else begin
 			o_flags = ac_flags;
 			if (fnIsSealed(ac))
 				o_flags.cap = 1'b0;
-			o.otype = 18'h3fffe;						// seal
+			o.otype = 24'hfffffe;						// seal
 			o.perms = ac.perms & bc.offset;	// and perms
 		end
 	CAP_BUILDCAP:
@@ -456,7 +193,7 @@ else begin
 				o.perms <= bc.perms;
 				o.flag <= bc.flag;
 				if (fnIsSentry(bc))
-					o.otype <= 18'h3fffe;				// seal as sentry
+					o.otype <= 24'hfffffe;				// seal as sentry
 			end
 		end
 	CAP_CLEARTAG:
@@ -470,7 +207,7 @@ else begin
 			excv <= TRUE;
 			exc <= FLT_CTAG;
 		end
-		else if (bc.offset < ac.base || bc.offset >= ac.top - 6) begin
+		else if (bc.offset < ac.base || bc.offset + bc.base >= ac.top - 6) begin
 			excv <= TRUE;
 			exc <= FLT_CLENGTH;
 		end
@@ -538,13 +275,24 @@ else begin
 		end
 */
 	CAP_INCOFFSET:
-		begin
-			o_flags <= ac_flags;
-			if (fnUcIsSealed(ac))
-				o_flags.cap <= FALSE;
-			o <= ac;
-			o.offset <= ac.offset + bc.offset;
-		end
+		case(ir.op3)
+		3'd0:
+			begin
+				o_flags <= ac_flags;
+				if (fnUcIsSealed(ac))
+					o_flags.cap <= FALSE;
+				o <= ac;
+				o.offset <= ac.offset + bc.offset;
+			end
+		3'd1:
+			begin
+				o_flags <= ac_flags;
+				if (fnUcIsSealed(ac))
+					o_flags.cap <= FALSE;
+				o <= ac;
+				o.offset <= ac.offset + agp;
+			end
+		endcase
 	CAP_INCOFFSETI:
 		begin
 			o_flags <= ac_flags;
@@ -614,9 +362,9 @@ else begin
 			end
 			else begin
 				o <= bc;
-				o.otype <= 18'h3ffff;	// unsealed
+				o.otype <= 24'hffffff;	// unsealed
 				rse_o.pc.pc <= ac;
-				rse_o.pc.pc.otype <= 18'h3ffff;	// unsealed
+				rse_o.pc.pc.otype <= 24'hffffff;	// unsealed
 			end
 		end
 	CAP_MOVE:
@@ -632,8 +380,36 @@ else begin
 */
 	CAP_RET:
 		begin
-			o <= bc;
-			o.otype <= 18'h3ffff;	// unsealed
+			if (~ac_flags.cap|(~bc_flags.cap & !bcz)) begin
+				excv <= TRUE;
+				exc <= FLT_CTAG;
+			end
+			else if (fnUcIsReserved(ac) || (fnUcIsReserved(bc) & !bcz)) begin
+				excv <= TRUE;
+				exc <= FLT_CSEAL;
+			end
+			else if (ac.otype != bc.otype && !bcz) begin
+				excv <= TRUE;
+				exc <= FLT_CTYPE;
+			end
+			else if (~ac.perms[1]|(bc.perms[1] & ~bcz)) begin
+				excv <= TRUE;
+				exc <= FLT_CPEXEC;
+			end
+			else if (ac.offset[0]) begin
+				excv <= TRUE;
+				exc <= FLT_CALGN;
+			end 
+			else if (ac.offset < ac.base || ac.offset > ac.top - 6) begin
+				excv <= TRUE;
+				exc <= FLT_CBOUNDS;
+			end
+			else begin
+				o <= bc;
+				o.otype <= 24'hffffff;	// unsealed
+				rse_o.pc.pc <= ac;
+				rse_o.pc.pc.otype <= 24'hffffff;	// unsealed
+			end
 		end
 	CAP_SEAL:
 		begin
@@ -649,7 +425,7 @@ else begin
 			if (fnUcIsSealed(ac))	// permit seal?
 				o_flags.cap = FALSE;
 			o <= ac;
-			o.otype <= 18'h3FFFE;	// SENTRY value
+			o.otype <= 24'hFFFFFE;	// SENTRY value
 		end
 	CAP_SETADDR:
 		begin
@@ -664,7 +440,7 @@ else begin
 			excv <= TRUE;
 			exc <= FLT_CTAG;
 		end
-		else if (bc.offset < ac.base || bc.offset > ac.top - 6) begin
+		else if (bc.offset < ac.base || bc.offset + bc.base > ac.top - 6) begin
 			excv <= TRUE;
 			exc <= FLT_CBOUNDS;
 		end
@@ -673,16 +449,18 @@ else begin
 			o_flags <= ac_flags;
 			if (fnUcIsSealed(ac))
 				o_flags.cap <= FALSE;
-			else if (bc.offset + cc.offset < ac.base || bc.offset + cc.offset > ac.top - 6)
+			else if (agp < ac.base || agp > ac.top - 6)
+				o_flags.cap <= FALSE;
+			else if (bgp < ac.base || bgp > ac.top - 6)
 				o_flags.cap <= FALSE;
 			o <= ac;
-			o.base <= bc.offset;
-			o.top <= bc.offset + cc.offset;
+			o.base <= agp;
+			o.top <= bgp;
 		end
 	// See the testsub operation for a description of implementation.
 	CAP_SETEQUALSEXACT:
 		begin
-			if (ac.otype==18'h3ffff)	// is unsealed
+			if (ac.otype==24'hffffff)	// is unsealed
 				o_flags.ovf <= FALSE;
 			else
 				o_flags.ovf <= TRUE;
@@ -722,7 +500,7 @@ else begin
 				(ac.perms & bc.perms==ac.perms) &&				// permissions are a subset
 				(ac.base >= bc.base && ac.top <= bc.top))	// bounds are a subset
 				o.offset <= TRUE;
-			if (ac.otype==18'h3ffff)	// is unsealed
+			if (ac.otype==24'hffffff)	// is unsealed
 				o_flags.ovf <= FALSE;
 			else
 				o_flags.ovf <= TRUE;
@@ -730,7 +508,7 @@ else begin
 	CAP_UNSEAL:
 		begin
 			o <= ac;
-			o.otype <= 18'h3ffff;		// unsealed
+			o.otype <= 24'hfffff;		// unsealed
 			if (!bc.perms[0])
 				o.perms[0] <= FALSE;
 			o_flags <= ac_flags;
@@ -739,8 +517,8 @@ else begin
 				!fnUcSealed(bc) ||	// Rs2 sealed?
 				 fnUcIsReserved(bc) || // Rs2 a reserved otype?
 				 bc.offset!=ac.otype || // otype match?
-				 bc.offset < bc.base ||	// cursor out of bounds?
-				 bc.offset >= bc.top
+				 ((bc.offset + bc.base) < bc.base) ||	// cursor out of bounds?
+				 ((bc.offset + bc.base) >= bc.top)
 				)					
 				o_flags.cap <= FALSE;
 		end
@@ -758,6 +536,7 @@ else begin
 				excv <= TRUE;
 				exc <= FLT_CALGN;
 			end
+			o <= rse.pc;
 			o.offset <= rse.pc.offset + 4'd6;
 		end
 	endcase
