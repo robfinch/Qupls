@@ -38,6 +38,7 @@
 import const_pkg::*;
 import fp64Pkg::*;
 import cpu_types_pkg::*;
+import capability_pkg::*;
 import Qupls4_pkg::*;
 
 module Qupls4_alu(rst, clk, clk2x, chunk, om, ld, ir, div, Ra, a, b, bi, c,
@@ -62,6 +63,8 @@ input ld;
 input Qupls4_pkg::micro_op_t ir;
 input div;
 input [6:0] Ra;
+input uc64_capability_t capa;
+input cpu_types_pkg::flags_t capa_flags;
 input [WID-1:0] a;
 input [WID-1:0] b;
 input [WID-1:0] bi;
@@ -1704,7 +1707,10 @@ begin
 */
 	Qupls4_pkg::OP_LOADA:
 		begin
-			bus = a + i + (b * {~|ir[47:44],ir[47:44]});
+			if (Ra==7'd0)
+				bus = i + (b * {~|ir[47:44],ir[47:44]});
+			else
+				bus = capa.base+capa.offset + i + (b * {~|ir[47:44],ir[47:44]});
 			did_op = TRUE;
 			o_flags.inx = FALSE;
 			o_flags.unf = FALSE;
@@ -1813,6 +1819,71 @@ begin
 				o_flags.cap = FALSE;
 			end			
 		endcase
+	OP_CAP:
+		if (SUPPORT_CAPABILITIES)
+			case(ir.func)
+			CAP_GETFLAGS:
+				begin
+					bus = capa.flag;
+					did_op = TRUE;
+				end
+			CAP_GETBASE:
+				begin
+					bus = capa.base;
+					did_op = TRUE;
+				end
+			CAP_GETLENGTH:
+				begin
+					if (capa.top[64])
+						o_flags.ovf = TRUE;
+					bus = capa.top - capa.base;
+					did_op = TRUE;
+				end
+			CAP_GETOFFSET:
+				begin
+					bus = capa.offset;
+					did_op = TRUE;
+				end
+			CAP_GETADDR:
+				begin
+					bus = capa.offset + capa.base;
+					did_op = TRUE;
+				end
+			CAP_GETPERMS:
+				begin
+					bus = capa.perms;
+					did_op = TRUE;
+				end
+			CAP_GETSEALED:
+				begin
+					bus = fnUcIsSealed(capa);
+					did_op = TRUE;
+				end
+			CAP_GETTAG:
+				begin
+					bus = capa_flags.cap;
+					did_op = TRUE;
+				end
+			CAP_GETTOP:
+				begin
+					o_flags.ovf <= capa.top[64];
+					bus = capa.top;
+					did_op = TRUE;
+				end
+			CAP_GETTYPE:
+				begin
+					bus = capa.otype;
+					did_op = TRUE;
+				end
+			CAP_ALGNMASK:
+				begin
+					bus = fnUcAlignMask(capa);
+					did_op = TRUE;
+				end
+			default:	bus = {(WID/16){16'hDEAD}};
+			endcase
+		else
+			bus = {(WID/16){16'hDEAD}};
 	default:	bus = {(WID/16){16'hDEAD}};
 	endcase
 end
