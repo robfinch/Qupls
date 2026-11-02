@@ -101,8 +101,10 @@ reg tex_done;
 
 reg excv = INV;
 Qupls4_pkg::cause_code_t exc;
-cpu_types_pkg::address_t as, bs, bsv, base, top;
+cpu_types_pkg::address_t as, bs, bsv;
 cpu_types_pkg::address_t res1;
+reg [63:0] base;
+reg [64:0] top;
 reg [5:0] shift;
 
 always_ff @(posedge clk)
@@ -144,6 +146,7 @@ genvar g,mm;
 
 reg resv1;
 reg [23:0] perms;
+reg tags_bad;
 
 always_ff @(posedge clk) 
 	rse1 <= rse_i;
@@ -155,11 +158,11 @@ always_comb
 //generate begin : gAgen
 //	if (PIPE==3'd4 || PIPE==3'd5) begin
 always_ff @(posedge clk)
-casez({rse_i.pc.cap.flags[0],rse_i.Rs1ip,rse_i.Rs1z})
+casez({rse_i.pc.cap.flags[0] || !SUPPORT_CAPABILITIES,rse_i.Rs1ip,rse_i.Rs1z})
 3'b??1:	as <= value_zero;
 3'b?10:	as <= rse_i.pc.cap.offset + rse_i.pc.cap.base;
 3'b100:	as <= rse_i.arg[0].val + ddc.base;
-3'b000:	as <= rse_i.arg[0].val + ddc.base;
+3'b000:	as <= rse_i.cap_arg.val.offset + rse_i.cap_arg.val.base;
 endcase
 
 always_ff @(posedge clk)
@@ -170,11 +173,13 @@ always_ff @(posedge clk)
 	bsv <= rse_i.Rs2z ? value_zero : (rse_i.arg[1].val * rse_i.uop.imm2[5:0]);
 
 always_ff @(posedge clk)
-	base <= rse_i.pc.cap.flags[0] ? ddc.base : ddc.base;
+	base <= rse_i.Rs1z ? 64'd0 : rse_i.pc.cap.flags[0] || !SUPPORT_CAPABILITIES ? ddc.base : rse_i.cap_arg.val.base;
 always_ff @(posedge clk)
-	top <= rse_i.pc.cap.flags[0] ? ddc.top : ddc.top;
+	top <= rse_i.Rs1z ? 65'h10000000000000000 : rse_i.pc.cap.flags[0] || !SUPPORT_CAPABILITIES  ? ddc.top : rse_i.cap_arg.val.top;
 always_ff @(posedge clk)
-	perms <= rse_i.pc.cap.flags[0] ? ddc.perms : ddc.perms;
+	perms <= rse_i.Rs1z ? 24'h0 : rse_i.pc.cap.flags[0] || !SUPPORT_CAPABILITIES  ? ddc.perms : rse_i.cap_arg.val.perms;
+always_ff @(posedge clk)
+	tags_bad <= !rse_i.cap_arg.val.tag || rse_i.arg[2].val.tag;
 
 always_comb
 	case(rse1.velesz)
@@ -220,7 +225,14 @@ else begin
 		agen_rse <= rse1;
 		excv <= INV;
 		exc <= Qupls4_pkg::FLT_NONE;
-		if (res1 < base || res1 >= top) begin
+		// If Rs1 is not a capability, or if Rs2 is)
+		if (tags_bad) begin
+			excv <= VAL;
+			exc <= Qupls4_pkg::FLT_CTAG;
+			agen_rse.excv <= VAL;
+			agen_rse.exc <= Qupls4_pkg::FLT_CTAG;
+		end
+		else if (res1 < base || res1 >= top) begin
 			excv <= VAL;
 			exc <= Qupls4_pkg::FLT_CBOUNDS;
 			agen_rse.excv <= VAL;
