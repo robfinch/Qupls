@@ -41,7 +41,8 @@
 import const_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_stomp(rst, clk, clk2x, ihit, advance_pipeline, advance_pipeline_seg2, 
+module Qupls4_stomp(rst, clk, clk2x, ihit, first_icache,
+	advance_pipeline, advance_pipeline_seg2, 
 	advance_icache, advance_fetch, advance_extract, advance_mot, advance_decode,
 	advance_rename, advance_enqueue,
 //	irq_in_pipe, di_inst,
@@ -58,6 +59,7 @@ input rst;
 input clk;
 input clk2x;
 input ihit;
+input first_icache;
 //input irq_in_pipe;
 //input di_inst;
 input advance_icache;
@@ -196,25 +198,25 @@ wire hwi_at_aln = di_inst && hirq;
 // If align stage is going to be on a different stream than the prediction
 // mismatch, then do not stomp on it.
 always_comb
-	stomp_aln = stomped[pc.stream] ||
+	stomp_aln = stomped[pc.stream] || first_icache ||
 		(pe_stomp_pipeline || (!predicted_match_ext && (pc.stream==pc_ext.stream)) || (!predicted_correctly_dec && pc.stream==pc_dec.stream));// && !hwi_at_ren && !hwi_at_dec && !hwi_at_fet && !hwi_at_aln;
 always_comb
-	stomp_fet = stomped[pc_f.stream] ||
+	stomp_fet = stomped[pc_f.stream] || first_icache ||
 		(pe_stomp_pipeline || stomp_fetr || (!predicted_match_ext && (pc.stream==pc_ext.stream)) || (!predicted_correctly_dec && pc.stream==pc_dec.stream));// && !hwi_at_ren && !hwi_at_dec && !hwi_at_fet;
 always_comb
-	stomp_ext = stomped[pc_fet.stream] ||
+	stomp_ext = stomped[pc_fet.stream] || first_icache ||
 		(pe_stomp_pipeline || stomp_extr || (!predicted_match_ext && (pc.stream==pc_ext.stream)) || (!predicted_correctly_dec && pc.stream==pc_dec.stream));// && !hwi_at_ren && !hwi_at_dec && !hwi_at_ext;
 always_comb
-	stomp_mot = stomped[pc_ext.stream] ||
+	stomp_mot = stomped[pc_ext.stream] || first_icache ||
 		(pe_stomp_pipeline || stomp_motr || (!predicted_correctly_dec && pc.stream==pc_dec.stream));// && !hwi_at_ren && !hwi_at_dec && !hwi_at_ext;
 always_comb
-	stomp_mot2 = stomped[pc_mot.stream] ||
+	stomp_mot2 = stomped[pc_mot.stream] || first_icache ||
 		(pe_stomp_pipeline || stomp_mot2r || (!predicted_correctly_dec && pc.stream==pc_dec.stream));// && !hwi_at_ren && !hwi_at_dec && !hwi_at_ext;
 always_comb
-	stomp_dec = stomped[pc_mot2.stream] ||
+	stomp_dec = stomped[pc_mot2.stream] || first_icache ||
 	 (pe_stomp_pipeline || stomp_decr || (!predicted_correctly_dec && pc.stream==pc_dec.stream));// && !hwi_at_ren && !hwi_at_dec;
 always_comb
-	stomp_ren = stomped[pc_dec.stream] ||
+	stomp_ren = stomped[pc_dec.stream] || first_icache ||
 		(pe_stomp_pipeline || stomp_renr);// && !hwi_at_ren;
 
 // On a cache miss, the fetch stage is stomped on, but not if micro-code is
