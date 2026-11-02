@@ -244,7 +244,7 @@ if (rst_i)
 	redundant_group = FALSE;
 else begin
 	if (prev_pc0_fet==pc0_fet && prev_ic_line_aligned==ic_line_aligned)
-		redundant_group = FALSE;
+		redundant_group = TRUE;
 	else
 		redundant_group = FALSE;
 end

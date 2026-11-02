@@ -64,7 +64,7 @@ else begin
 		pr[n1] = {$bits(Qupls4_pkg::rob_entry_t){1'b0}};
 		pr[n1].op = {$bits(Qupls4_pkg::pipeline_reg_t){1'b0}};
 		pr[n1].op.exc = Qupls4_pkg::FLT_NONE;
-		pr[n1].op.uop = {41'd0,Qupls4_pkg::OP_NOP};
+		pr[n1].op.uop.opcode = Qupls4_pkg::OP_NOP;
 		pr[n1].op.decbus.nop = TRUE;
 		pr[n1].op.decbus.cause = Qupls4_pkg::FLT_NONE;
 		pr[n1].op.uop.lead = 1'd1;
@@ -75,7 +75,7 @@ else begin
 		pr[n1].stomped = TRUE;
 		pr[n1].v = pc[n1].stream.stream;
 	end
-	if (!redundant_group) begin
+	if (!(redundant_group & en)) begin
 		// Allow only one instruction through when single stepping.
 		if (ssm_flag & ~prev_ssm_flag) begin
 			pr[0].op.cli = pc[0].cap.offset[6:1];
@@ -123,6 +123,8 @@ else begin
 			foreach(pr[n1]) begin
 				pr[n1].op.cli = pc[n1].cap.offset[6:1];
 				pr[n1].op.uop = fnMapRawToUop(48'(ic_line >> (n1*48)));
+				pr[n1].done <= 2'b00;
+				pr[n1].stomped <= FALSE;
 			end
 		end
 	end
