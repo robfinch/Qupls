@@ -50,8 +50,8 @@ module Qupls4_btb(rst, clk, en, clk_en,
 	commit_pc3, commit_brtgt3, commit_takb3, commit_grp3, commit_br3, commit_ret3, commit_jmp3, commit_call3,
 	strm_bitmap, act_stream, pcs,
 	new_stream, alloc_stream, free_stream, thread_probability, dep_stream,
-	is_buffered,
-	excv, exc
+	buffered_streams,
+	excv, exc, next_act_stream
 );
 parameter DEP=2048;
 parameter MWIDTH = 4;
@@ -120,9 +120,10 @@ output pc_address_ex_t [XSTREAMS*THREADS-1:0] pcs;
 
 input [7:0] thread_probability [0:7];
 output dep_stream_t [XSTREAMS-1:0] dep_stream;
-input is_buffered;
+input [(XSTREAMS*THREADS)-1:0] buffered_streams;
 output reg excv;
 output Qupls4_pkg::cause_code_t exc;
+output pc_stream_t next_act_stream;
 
 typedef struct packed {
 	logic takb;
@@ -140,7 +141,6 @@ reg [4:0] ras_sp;
 reg do_call, do_ret;
 
 pc_address_ex_t [XSTREAMS*THREADS-1:0] next_pcs;
-pc_stream_t next_act_stream;
 pc_stream_t next_alt_strm;
 reg [XSTREAMS*THREADS-1:0] next_strm_bitmap;
 pc_stream_t prev_act_stream;
@@ -291,7 +291,7 @@ Qupls4_btb_choose_stream ucs1
 	.rst(rst), 
 	.clk(clk),
 	.thread_probability(thread_probability),
-	.is_buffered(is_buffered),
+	.buffered_streams(buffered_streams),
 	.act_stream(act_stream),
 	.next_act_stream(next_act_stream),
 	.strm_bitmap(strm_bitmap),

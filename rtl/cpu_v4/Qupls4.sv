@@ -1680,9 +1680,12 @@ pc_stream_t fet_stream;
 uc64_capability_t ddc;			// default data capability
 // Buffers the instruction cache line to allow fetching along alternate paths.
 reg first_icache;
-wire is_buffered, is_icip_buffered;
+wire is_buffered;
+wire [XSTREAMS*THREADS-1:0] buffered_streams;
+wire is_icip_buffered;
 wire next_is_buffered;
 dep_stream_t [XSTREAMS-1:0] dep_stream;
+pc_stream_t next_act_stream;
 
 // Choose a stream of execution. Give precedence to streams that have
 // buffered cache lines.
@@ -1872,9 +1875,10 @@ Qupls4_btb ubtb1
 	.pcs(pcs),
 	.thread_probability(thread_probability),
 	.dep_stream(dep_stream),
-	.is_buffered(is_buffered),
+	.buffered_streams(buffered_streams),
 	.excv(btb_excv),
-	.exc(btb_exc)
+	.exc(btb_exc),
+	.next_act_stream(next_act_stream)
 );
 
 always_ff @(posedge clk)
@@ -2350,7 +2354,9 @@ Qupls4_instruction_buffer uib1
 	.ip_o(pc_fet),
 	.is_buffered_o(is_buffered),
 	.is_icip_buffered_o(is_icip_buffered),
-	.next_is_buffered_o(next_is_buffered)
+	.next_is_buffered_o(next_is_buffered),
+	.next_act_stream(next_act_stream),
+	.buffered_streams(buffered_streams)
 );
 
 Qupls4_pipeline_fet ufet1

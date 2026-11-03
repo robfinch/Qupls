@@ -36,12 +36,12 @@
 
 import Qupls4_pkg::*;
 
-module Qupls4_btb_choose_stream(rst, clk, thread_probability, is_buffered,
+module Qupls4_btb_choose_stream(rst, clk, thread_probability, buffered_streams,
 	act_stream, next_act_stream, strm_bitmap, pcs);
 input rst;
 input clk;
 input [7:0] thread_probability [0:7];
-input is_buffered;
+input [Qupls4_pkg::XSTREAMS*Qupls4_pkg::THREADS-1:0] buffered_streams;
 input pc_stream_t act_stream;
 output pc_stream_t next_act_stream;
 input [Qupls4_pkg::XSTREAMS*Qupls4_pkg::THREADS-1:0] strm_bitmap;
@@ -66,7 +66,7 @@ else begin
 		// Choose any stream of the thread at 1/8 probability to allow alternate
 		// branch paths to be fetched. Happens only if the fetch is coming from a 
 		// fetch buffer instead of the cache.
-		if (is_buffered && strm_bitmap[n2] && (lfsro[7:0] < thread_probability[thrd] >> 3))
+		if (buffered_streams[n2] && strm_bitmap[n2] && (lfsro[7:0] < thread_probability[thrd] >> 3))
 			next_act_stream = pc_stream_t'(n2);
 		// Choose the primary stream of the thread according to probability,
 		// this will override the selection of the alternate path.

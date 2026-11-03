@@ -39,16 +39,17 @@ import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
 module Qupls4_instruction_buffer(rst_i, clk_i, ce_i, first_icache,
-	ihit_i, stream_i,
+	ihit_i, stream_i, next_act_stream,
 	ips_i, ip_i, invce, invalidate,
 	icip_i, line_i, line_o, ip_o, is_buffered_o, is_icip_buffered_o,
-	next_is_buffered_o);
+	next_is_buffered_o, buffered_streams);
 input rst_i;
 input clk_i;
 input ce_i;
 input first_icache;
 input ihit_i;
 input cpu_types_pkg::pc_stream_t stream_i;
+input cpu_types_pkg::pc_stream_t next_act_stream;
 input Qupls4_pkg::pc_address_ex_t ip_i;
 input Qupls4_pkg::pc_address_ex_t icip_i;
 input invce;
@@ -60,12 +61,26 @@ output pc_address_ex_t ip_o;
 output reg is_buffered_o;
 output reg is_icip_buffered_o;
 output reg next_is_buffered_o;
+output reg [Qupls4_pkg::XSTREAMS*Qupls4_pkg::THREADS-1:0] buffered_streams;
 
-integer n1,n43,n44;
-reg [Qupls4_pkg::XSTREAMS*Qupls4_pkg::THREADS-1:0] buffered;
+integer n1,n2,n43,n44;
+
 // Buffers the instruction cache line to allow fetching along alternate paths.
 reg [1023:0] line_buf [0:3];
 cpu_types_pkg::pc_address_t ip_buf [0:3];
+
+// Compute bitmap which streams are buffered. IF there is a buffered stream, 
+// it can advance. The stream choosen to advance is done in the BTB. It comes
+// back here as the choosen IP.
+always_comb
+foreach (ips_i[n2]) begin
+	buffered_streams[n2] = FALSE;
+	foreach(ip_buf[n43]) begin
+		if (ips_i[n2].cap.offset[$bits(cpu_types_pkg::pc_address_t)-1:0]+ips_i[n2].cap.base[$bits(cpu_types_pkg::pc_address_t)-1:0] >= ip_buf[n43] &&
+			ips_i[n2].cap.offset[$bits(cpu_types_pkg::pc_address_t)-1:0]+ips_i[n2].cap.base[$bits(cpu_types_pkg::pc_address_t)-1:0] < ip_buf[n43] + 8'd64)
+		buffered_streams[n2] = TRUE;
+	end
+end
 
 always_comb
 begin
@@ -85,7 +100,7 @@ begin
 	is_icip_buffered_o = FALSE;
 	// if icip_i matches the output from the cache, then the line will be
 	// passed to the output, so it is a match.
-	if (icip_i.cap.offset==ip_i.cap.offset)
+	if (icip_i.cap.offset==ip_i.cap.offset && is_buffered_o)
 		is_icip_buffered_o = TRUE;
 	foreach (ip_buf[n43])
 		if (icip_i.cap.offset[$bits(cpu_types_pkg::pc_address_t)-1:0] >= ip_buf[n43] && icip_i.cap.offset[$bits(cpu_types_pkg::pc_address_t)-1:0] < ip_buf[n43] + 8'd64)
