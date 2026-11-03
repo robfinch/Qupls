@@ -2484,9 +2484,7 @@ Qupls4_pipeline_ext #(.MWIDTH(MWIDTH)) uiext1
 	.new_stream(new_stream),
 	.alloc_stream(alloc_stream),
 	.exc_i(exc_fet),
-	.excv_i(excv_fet),
-	.exc_o(exc_ext),
-	.excv_o(excv_ext)
+	.excv_i(excv_fet)
 );
 
 // ----------------------------------------------------------------------------
@@ -2522,9 +2520,7 @@ umot1
 	.uop_buf(uop_buf),
 	.uop_mark(uop_mark),
 	.advance_ext(advance_extract2),	// rd_more , should maybe rename
-	.head(uop_head),
-	.exc_i(exc_ext),
-	.excv_i(excv_ext)
+	.head(uop_head)
 );
 
 // ----------------------------------------------------------------------------

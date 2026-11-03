@@ -49,7 +49,7 @@ module Qupls4_pipeline_ext(rst_i, clk_i, ihit_fet, ihit_ext, en_i,
 	irq_fet, irq_in_fet, irq_sn_fet, ipl_fet, sr, pt_ext, pt_dec, p_override, po_bno,
 	branchmiss, misspc_fet, flush_fet, active_irq_vector, irq_i,
 	micro_machine_active, cline_fet, cline_ext, new_cline_ext,
-	reglist_active, grp_i, grp_o, btb_pc, exc_i, excv_i, exc_o, excv_o,
+	reglist_active, grp_i, grp_o, btb_pc, exc_i, excv_i,
 	takb_fet, vl, branch_resolved, live_stream,
 	pc0_fet, uop_num_fet, uop_num_ext, stomp_alnr,
 	ls_bmf_i, pack_regs_i, scale_regs_i, regcnt_i,
@@ -116,8 +116,6 @@ input pc_stream_t [THREADS-1:0] new_stream;
 output reg alloc_stream;
 input excv_i;
 input Qupls4_pkg::cause_code_t exc_i;
-output reg excv_o;
-output Qupls4_pkg::cause_code_t exc_o;
 input stomp_alnr;
 
 genvar g;
@@ -532,21 +530,31 @@ else begin
 			pg_ext.pr[n2].ip_stream <= pc_fet[n2].stream;
 			pg_ext.pr[n2].ip_offs <= n2 * 3;	// wyde offset
 			pg_ext.pr[n2].eip <= pc_fet[0].cap.offset + (n2*6);
-			// Jumps and branches are done as they do not need to update the regfile.
-			// They are also resolved already as they are unconditional.
-			if (bra[n2]|jmp[n2]|stomp_ext|nop[n2]|nop2[n2]) begin
-				pg_ext.pr[n2].stomped <= TRUE;
-				pg_ext.pr[n2].done <= 2'b11;
-			end
 			// Branches need to set the pipeline invalid if the instruction stream
 			// does not match the one resolved to be active. Note the thread must
 			// also match. If the stream is for a different thread we do not want to
 			// invalidate.
-			if (branch_resolved) begin
-				if (pc_fet[n2].stream.thread==live_stream.thread && pc_fet[n2].stream.stream != live_stream.stream) begin
-					pg_ext.pr[n2].stomped <= TRUE;
-					pg_ext.pr[n2].done <= 2'b11;
-				end
+			if (branch_resolved &&
+				pc_fet[n2].stream.thread==live_stream.thread && pc_fet[n2].stream.stream != live_stream.stream) begin
+				pg_ext.pr[n2].stomped <= TRUE;
+				pg_ext.pr[n2].done <= 2'b11;
+			end
+			// Jumps and branches are done as they do not need to update the regfile.
+			// They are also resolved already as they are unconditional.
+			else if (bra[n2]|jmp[n2]|stomp_ext|nop[n2]|nop2[n2]) begin
+				pg_ext.pr[n2].stomped <= TRUE;
+				pg_ext.pr[n2].done <= 2'b11;
+			end
+			// Exception earlier in the pipeline? (Bad IP detected in BTB)
+			// Consume the exception.
+			// We want this last in the priority tree, as if the instruction stream
+			// got invalidated (stomp or branch) then we do not care about this
+			// exception.
+			else if (excv_i) begin
+				pg_ext.pr[n2].excv <= VAL;
+				pg_ext.pr[n2].exc <= exc_i;
+				pg_ext.pr[n2].stomped <= TRUE;
+				pg_ext.pr[n2].done <= 2'b11;
 			end
 		end
 	end
@@ -599,18 +607,6 @@ begin
 	p_override = p_override0123|p_override123|p_override23|p_override3|chgflow3;
 	*/
 	p_override = (en && chgflow && new_address_o != btb_pc.cap.offset) && !stomp_alnr;
-end
-
-always_ff @(posedge clk)
-if (rst_i) begin
-	excv_o <= FALSE;
-	exc_o <= FLT_NONE;
-end
-else begin
-	if (en) begin
-		excv_o <= excv_i;
-		exc_o <= exc_i;
-	end
 end
 
 endmodule

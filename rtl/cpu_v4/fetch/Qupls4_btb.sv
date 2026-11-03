@@ -342,7 +342,7 @@ begin
 		next_pcs[new_address_ext.stream.stream] = new_address_ext;
 	// Now the target predictions
 	// Note the stream cannot be recorded in the BTB table.
-	else if (pc0.cap.offset+pc0.cap.base==doutb0.pc) begin
+	else if (pc0.cap.offset==doutb0.pc) begin
 		if (doutb0.ret)
 			next_pcs[pc0.stream].cap.offset = ras_pc;
 		else if (doutb0.call|doutb0.jmp)
@@ -386,8 +386,9 @@ endgenerate
 always_ff @(posedge clk)
 	if (rst) begin
 		pc <= {$bits(pc_address_ex_t){1'b0}};
-		pc.cap.perms <= 16'hffff;
-		pc.cap.otype <= 18'h3ffff;
+		pc.cap.perms <= 24'hffffff;
+		pc.cap.otype <= 24'hffffff;
+		pc.cap.flags <= 4'h0;		// use capabilities for data
 		pc.cap.top <= 65'h10000000000000000;
 		pc.cap.base <= 64'd0;
 		pc.cap.offset <= Qupls4_pkg::RSTPC;
@@ -408,7 +409,7 @@ else begin
 	if (advance_pc) begin
 		// bounds okay?
 		if (next_pcs[next_act_stream].cap.offset < next_pcs[next_act_stream].cap.base ||
-			next_pcs[next_act_stream].cap.offset > next_pcs[next_act_stream].cap.top - 6) begin
+			next_pcs[next_act_stream].cap.offset > next_pcs[next_act_stream].cap.top - 24) begin
 			excv <= TRUE;
 			exc <= FLT_CBOUNDS;
 		end

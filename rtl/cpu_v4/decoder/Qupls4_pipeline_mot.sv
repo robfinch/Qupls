@@ -42,11 +42,11 @@ import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
 module Qupls4_pipeline_mot(rst, clk, en, stomp, stomp2, cline_ext, cline_mot,
-	ihit_ext, ihit_mot, pc_mot, branch_resolved, live_stream, exc_i, excv_i,
-    pg_ext, pg_mot, advance_ext, uop_buf, uop_mark, head);
+	ihit_ext, ihit_mot, pc_mot, branch_resolved, live_stream,
+    pg_ext, pg_mot, pg_mot1, advance_ext, uop_buf, uop_mark, head);
 parameter MWIDTH = Qupls4_pkg::MWIDTH;
 parameter MICROOPS_PER_INSTR = 16;
-parameter MAX_MICROOPS = 12;
+parameter MAX_MICROOPS = 8;
 parameter COMB = 0;
 input rst;
 input clk;
@@ -59,23 +59,21 @@ output pc_address_ex_t pc_mot;
 input stomp;
 input stomp2;
 input [1023:0] cline_ext;
-output reg [1023:0] cline_mot;
+output reg [1023:0] cline_mot = {1024{1'b1}};
 input Qupls4_pkg::pipeline_group_reg_t pg_ext;
 output Qupls4_pkg::pipeline_group_reg_t pg_mot;
+output Qupls4_pkg::pipeline_group_reg_t pg_mot1;
 output reg advance_ext;
 output Qupls4_pkg::micro_op_t [MAX_MICROOPS-1:0] uop_buf;
 output [2:0] uop_mark [0:MAX_MICROOPS-1];
 output [3:0] head [0:MWIDTH-1];
-input excv_i;
-input Qupls4_pkg::cause_code_t exc_i;
 
 integer n1;
 genvar g;
 wire rd_more;
-reg [1023:0] cline_mot1;
-Qupls4_pkg::pipeline_group_reg_t pg_mot1;
+reg [1023:0] cline_mot1 = {1024{1'b1}};
 reg [5:0] uop_count [0:MWIDTH-1];
-Qupls4_pkg::micro_op_t [MICROOPS_PER_INSTR-1:0] uop [0:MWIDTH-1];
+Qupls4_pkg::micro_op_t [MICROOPS_PER_INSTR-1:0] uop [MWIDTH-1:0];
 Qupls4_pkg::rob_entry_t nopi;
 
 // Define a NOP instruction.
@@ -98,7 +96,7 @@ begin
 	nopi.decbus.alu = 1'b1;
 	*/
 end
-
+/*{
 generate begin : gComb
 	if (FALSE & COMB) begin
 		always_comb
@@ -115,6 +113,7 @@ generate begin : gComb
 		end
 	end
 	else begin
+*/
 		always_ff @(posedge clk)
 			if (en) cline_mot1 <= cline_ext;
 		always_ff @(posedge clk)
@@ -132,12 +131,6 @@ generate begin : gComb
 				pg_mot1.hdr.v <= INV;
 			foreach (pg_mot1.pr[n1]) begin
 				if (stomp) begin
-					pg_mot1.pr[n1].stomped <= TRUE;
-					pg_mot1.pr[n1].done <= 2'b11;
-				end
-				if (excv_i) begin
-					pg_mot1.pr[n1].excv <= TRUE;
-					pg_mot1.pr[n1].exc <= exc_i;
 					pg_mot1.pr[n1].stomped <= TRUE;
 					pg_mot1.pr[n1].done <= 2'b11;
 				end
@@ -164,6 +157,7 @@ generate begin : gComb
 			if (stomp2)
 				pg_mot.hdr.v <= INV;
 			foreach (pg_mot.pr[n1]) begin
+				pg_mot.pr[n1].op.uop <= uop_buf[n1];
 				if (stomp2) begin
 					pg_mot.pr[n1].stomped <= TRUE;
 					pg_mot.pr[n1].done <= 2'b11;
@@ -176,12 +170,11 @@ generate begin : gComb
 				end
 			end
 		end
-	end
-end
-endgenerate
+//end
+//endgenerate
 
 generate begin : gMicroopMem
-	for (g = 0; g < $size(uop); g = g + 1)
+	for (g = 0; g < MWIDTH; g = g + 1)
 Qupls4_microop_mem #(
 	.COMB(COMB),
 	.MICROOPS_PER_INSTR(MICROOPS_PER_INSTR)
