@@ -29,7 +29,7 @@
 extern char* qual[MAX_QUALIFIERS];
 extern int qual_len[MAX_QUALIFIERS];
 
-const char *cpu_copyright="vasm Qupls4 cpu backend v0.14 (c) in 2025-2026 Robert Finch";
+const char *cpu_copyright="vasm Qupls4 cpu backend v0.15 (c) in 2025-2026 Robert Finch";
 
 const char *cpuname="Qupls4";
 int bitsperbyte=8;
@@ -3348,16 +3348,17 @@ static size_t encode_branch_B(instruction_buf* insn, operand* op, int64_t val, i
 				hg = huge_from_int(val);
 				// BNEZ / BEQZ shortcuts have a maximum of nine-bits displacement
 				// If displacement is too large convert to larger branch format
-				if (is_nbit(hg,19))
-  				insn->opcode |= ((val & 0x7ffffLL) << 28LL);
-  			else if (is_nbit(hg,58)) {
-  				insn->opcode |= ((val & 0x7ffffLL) << 28LL);
-					encode_cpfx(insn,((val >> 19LL) << 9LL) | 62LL);
+				// Note val is already divided by two for a wyde displacement
+				if (is_nbit(hg,17))
+  				insn->opcode |= ((val & 0x1ffffLL) << 28LL);
+  			else if (is_nbit(hg,56)) {
+  				insn->opcode |= ((val & 0x1ffffLL) << 28LL);
+					encode_cpfx(insn,((val >> 17LL) << 9LL) | 62LL);
 				}
 				else {
-  				insn->opcode |= ((val & 0x7ffffLL) << 28LL);
-					encode_cpfx(insn,((val >> 19LL) << 9LL) | 62LL);
-					encode_cpfx(insn,((val >> 58LL) << 9LL) | 62LL | 64LL);
+  				insn->opcode |= ((val & 0x1ffffLL) << 28LL);
+					encode_cpfx(insn,((val >> 17LL) << 9LL) | 62LL);
+					encode_cpfx(insn,((val >> 56LL) << 9LL) | 62LL | 64LL);
 				}
   		}
 			break;
