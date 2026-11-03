@@ -16,7 +16,8 @@ input ssm_flag;
 input Qupls4_pkg::pc_address_ex_t [MWIDTH-1:0] pc;
 output Qupls4_pkg::rob_entry_t [MWIDTH-1:0] pr;
 
-integer n1,n4;
+integer n1,n2,n4;
+Qupls4_pkg::rob_entry_t [MWIDTH-1:0] lpr;
 
 Qupls4_pkg::rob_entry_t nopi;
 reg prev_ssm_flag;
@@ -56,13 +57,6 @@ if (rst) begin
 	for (n1 = 0; n1 < MWIDTH; n1 = n1 + 1) begin
 		pr[n1] = {$bits(rob_entry_t){1'b0}};
 		pr[n1].op = {$bits(Qupls4_pkg::pipeline_reg_t){1'b0}};
-	end
-end
-else begin
-	n1 = 0;
-	foreach(pr[n1]) begin
-		pr[n1] = {$bits(Qupls4_pkg::rob_entry_t){1'b0}};
-		pr[n1].op = {$bits(Qupls4_pkg::pipeline_reg_t){1'b0}};
 		pr[n1].op.exc = Qupls4_pkg::FLT_NONE;
 		pr[n1].op.uop.opcode = Qupls4_pkg::OP_NOP;
 		pr[n1].op.decbus.nop = TRUE;
@@ -75,7 +69,10 @@ else begin
 		pr[n1].stomped = TRUE;
 		pr[n1].v = pc[n1].stream.stream;
 	end
-	if (!(redundant_group & en)) begin
+end
+else begin
+	n1 = 0;
+	if (en) begin
 		// Allow only one instruction through when single stepping.
 		if (ssm_flag & ~prev_ssm_flag) begin
 			pr[0].op.cli = pc[0].cap.offset[6:1];
@@ -128,6 +125,8 @@ else begin
 			end
 		end
 	end
+	else
+		pr = lpr;
 /*
 	pr[0].hwi_level = irq_fet;
 	pr[1].hwi_level = irq_fet;
@@ -156,6 +155,17 @@ else begin
 	pr4_ext.hwi = nmi_i||irqf_fet;
 */
 	pr[0].op.carry_mod = carry_mod;
+end
+
+always_ff @(posedge clk)
+if (rst) begin
+	for (n2 = 0; n2 < MWIDTH; n2 = n2 + 1) begin
+		lpr[n2] <= {$bits(rob_entry_t){1'b0}};
+		lpr[n2].op <= {$bits(Qupls4_pkg::pipeline_reg_t){1'b0}};
+	end
+end
+else begin
+	lpr <= pr;
 end
 
 endmodule

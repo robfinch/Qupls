@@ -384,11 +384,51 @@ always_comb jsri3 = ins_ext[3].ins.opcode==OP_JSRI && ins_ext[3].ins.Rt!=3'd0;
 // Figure whether a subroutine call, or return is being performed. Note
 // precedence. Only the first one to be performed is detected.
 
-// Compute target PC for subroutine call or jump.
+// Determine the point at which subsequent instructions are invalidated.
+// Interrupts are treated as if they occurred in the first slot of the
+// group.
+always_comb
+begin
+	// Default beyond the number of instructions in a group.
+	override_pos = 3'd7;
+	if (chgflow0|chgflowi)
+		override_pos = 3'd0;
+	else if (chgflow1)
+		override_pos = 3'd1;
+	else if (chgflow2)
+		override_pos = 3'd2;
+	else if (chgflow3)
+		override_pos = 3'd3;
+end
+
+// Detect when a new stream of instruction execution is needed. A new stream is
+// needed only for conditional branches where it is unknown which stream is
+// valid until the branch resolves. Unconditional transfers maintain the same
+// stream.
 always_comb
 begin
 	alloc_stream = 1'b0;
-	override_pos = 3'd7;
+	if (chgflow0|chgflowi) begin
+		if (!(pt_ext[0] || !(bcc[0]|chgflowi)))
+			alloc_stream = 1'b1;
+	end
+	else if (chgflow1) begin
+		if (!(pt_ext[1] || ~bcc[1]))
+			alloc_stream = 1'b1;
+	end
+	else if (chgflow2) begin
+		if (!(pt_ext[2] || ~bcc[2]))
+			alloc_stream = 1'b1;
+	end
+	else if (chgflow3) begin
+		if (!(pt_ext[3] || ~bcc[3]))
+			alloc_stream = 1'b1;
+	end
+end
+
+// Compute target PC for subroutine call or jump.
+always_comb
+begin
 	new_address_o = pc0_fet;
 	if (chgflow0|chgflowi) begin
 		if (chgflowi)
@@ -397,45 +437,29 @@ begin
 			new_address_o.cap.offset = btgts[0].cap.offset;
 		if (pt_ext[0] || !(bcc[0]|chgflowi))
 			new_address_o.stream = pc0_fet.stream;
-		else begin
+		else
 			new_address_o.stream = new_stream[new_address_o.stream.thread].stream;
-			alloc_stream = 1'b1;
-		end
-		override_pos = 3'd0;
 	end
 	else if (chgflow1) begin
 		new_address_o = btgts[1];
 		if (pt_ext[1] || ~bcc[1])
 			new_address_o.stream = pc0_fet.stream;
-		else begin
+		else
 			new_address_o.stream = new_stream[new_address_o.stream.thread].stream;
-			alloc_stream = 1'b1;
-		end
-		override_pos = 3'd1;
 	end
 	else if (chgflow2) begin
 		new_address_o = btgts[2];
 		if (pt_ext[2] || ~bcc[2])
 			new_address_o.stream = pc0_fet.stream;
-		else begin
+		else
 			new_address_o.stream = new_stream[new_address_o.stream.thread].stream;
-			alloc_stream = 1'b1;
-		end
-		override_pos = 3'd2;
 	end
 	else if (chgflow3) begin
 		new_address_o = btgts[3];
 		if (pt_ext[3] || ~bcc[3])
 			new_address_o.stream = pc0_fet.stream;
-		else begin
+		else
 			new_address_o.stream = new_stream[new_address_o.stream.thread].stream;
-			alloc_stream = 1'b1;
-		end
-		override_pos = 3'd3;
-	end
-	else begin
-		new_address_o.cap.offset = RSTPC;
-		new_address_o.stream = 5'd1;
 	end
 end
 
@@ -461,55 +485,75 @@ else begin
 		po_bno[n7] = pc0_fet.stream.stream;
 end
 
+// Set the pipeline register.
+// On reset the pipeline is loaded with NOPs. Otherwise it is advanced based on
+// inputs from the previous stage. Hold onto the value if the pipeline is not
+// advanced.
+// Invalidating the pipeline here is simple because there have been no renamed
+// registers assigned. Therefore, we can just mark invalidated by setting the
+// done and stomp status.
 always_ff @(posedge clk)
 if (rst_i) begin
 	pg_ext <= {$bits(Qupls4_pkg::pipeline_group_reg_t){1'b0}};
 	foreach (pg_ext.pr[n2])
 		pg_ext.pr[n2] <= nopi;
 end
-else if (en) begin
-	pg_ext <= {$bits(Qupls4_pkg::pipeline_group_reg_t){1'b0}};
-	pg_ext.flush <= flush_fet;
-	pg_ext.hdr <= {$bits(Qupls4_pkg::pipeline_group_hdr_t){1'b0}};
-	pg_ext.hdr.v <= !stomp_ext;
-	pg_ext.hdr.irq_sn <= irq_sn_ext;
-	pg_ext.hdr.irq <= irq_in_ext;
-	pg_ext.hdr.old_ipl <= ipl_ext;
-	pg_ext.hdr.hwi <= irq_ext;
-	pg_ext.hdr.ip <= pc_fet[0];
-	foreach (pg_ext.pr[n2]) begin
-//		pg_ext.pr[n2] <= {$bits(Qupls4_pkg::rob_entry_t){1'b0}};
-//		pg_ext.pr[n2] <= ins_fet[n2];
-		pg_ext.pr[n2] <= pr_ext[n2];	
-		pg_ext.pr[n2].v <= pc0_fet.stream.stream;
-		if (stomp_ext || (branch_resolved && (pc0_fet.stream.thread == live_stream.thread && pc0_fet.stream.stream != live_stream.stream))) begin
-			pg_ext.pr[n2].done <= 2'b11;
-			pg_ext.pr[n2].op.v <= 1'b0;
-		end
-		else begin
-			pg_ext.pr[n2].done <= 2'b00;
-			pg_ext.pr[n2].op.v <= 1'b1;
-		end
-		pg_ext.pr[n2].op.bt <= takb_fet[n2];
-		pg_ext.pr[n2].op.decbus.cause <= Qupls4_pkg::FLT_NONE;
-		pg_ext.pr[n2].v <= pc_fet[n2].stream.stream;
-		pg_ext.pr[n2].stomped <= stomp_ext || nop_lead[n2] || nop2[n2] || bra[n2] || jmp[n2];
-		pg_ext.pr[n2].wh <= n2;
-		pg_ext.pr[n2].ip_stream <= pc_fet[n2].stream;
-		pg_ext.pr[n2].ip_offs <= n2 * 3;	// wyde offset
-		pg_ext.pr[n2].eip <= pc_fet[0].cap.offset + (n2*6);
-		// Jumps and branches are done as they do not need to update the regfile.
-		if (bra[n2]|jmp[n2]|stomp_ext|nop[n2]|nop2[n2])
-			pg_ext.pr[n2].done <= 2'b11;
-		if (branch_resolved) begin
-			if (pc_fet[n2].stream.thread==live_stream.thread && pc_fet[n2].stream.stream != live_stream.stream) begin
+else begin
+	if (en) begin
+		pg_ext <= {$bits(Qupls4_pkg::pipeline_group_reg_t){1'b0}};
+		pg_ext.flush <= flush_fet;
+		// Fill in the header.
+		pg_ext.hdr <= {$bits(Qupls4_pkg::pipeline_group_hdr_t){1'b0}};
+		pg_ext.hdr.v <= !stomp_ext;
+		pg_ext.hdr.irq_sn <= irq_sn_ext;
+		pg_ext.hdr.irq <= irq_in_ext;
+		pg_ext.hdr.old_ipl <= ipl_ext;
+		pg_ext.hdr.hwi <= irq_ext;
+		pg_ext.hdr.ip <= pc_fet[0];
+		// Fill in the pipeline slots.
+		foreach (pg_ext.pr[n2]) begin
+	//		pg_ext.pr[n2] <= {$bits(Qupls4_pkg::rob_entry_t){1'b0}};
+	//		pg_ext.pr[n2] <= ins_fet[n2];
+			pg_ext.pr[n2] <= pr_ext[n2];	
+			pg_ext.pr[n2].v <= pc0_fet.stream.stream;
+			if (stomp_ext || (branch_resolved && (pc0_fet.stream.thread == live_stream.thread && pc0_fet.stream.stream != live_stream.stream))) begin
+				pg_ext.pr[n2].done <= 2'b11;
+				pg_ext.pr[n2].op.v <= 1'b0;
+			end
+			else begin
+				pg_ext.pr[n2].done <= 2'b00;
+				pg_ext.pr[n2].op.v <= 1'b1;
+			end
+			pg_ext.pr[n2].op.bt <= takb_fet[n2];
+			pg_ext.pr[n2].op.decbus.cause <= Qupls4_pkg::FLT_NONE;
+			pg_ext.pr[n2].v <= pc_fet[n2].stream.stream;
+			pg_ext.pr[n2].stomped <= stomp_ext || nop_lead[n2] || nop2[n2] || bra[n2] || jmp[n2];
+			pg_ext.pr[n2].wh <= n2;
+			pg_ext.pr[n2].ip_stream <= pc_fet[n2].stream;
+			pg_ext.pr[n2].ip_offs <= n2 * 3;	// wyde offset
+			pg_ext.pr[n2].eip <= pc_fet[0].cap.offset + (n2*6);
+			// Jumps and branches are done as they do not need to update the regfile.
+			// They are also resolved already as they are unconditional.
+			if (bra[n2]|jmp[n2]|stomp_ext|nop[n2]|nop2[n2]) begin
 				pg_ext.pr[n2].stomped <= TRUE;
 				pg_ext.pr[n2].done <= 2'b11;
+			end
+			// Branches need to set the pipeline invalid if the instruction stream
+			// does not match the one resolved to be active. Note the thread must
+			// also match. If the stream is for a different thread we do not want to
+			// invalidate.
+			if (branch_resolved) begin
+				if (pc_fet[n2].stream.thread==live_stream.thread && pc_fet[n2].stream.stream != live_stream.stream) begin
+					pg_ext.pr[n2].stomped <= TRUE;
+					pg_ext.pr[n2].done <= 2'b11;
+				end
 			end
 		end
 	end
 end
 
+// Advance the IRQ signals in the pipeline.
+// These could maybe be moved into the pipeline group register.
 always_ff @(posedge clk) if (rst_i) irq_sn_ext <= {$bits(cpu_types_pkg::seqnum_t){1'b0}}; else if (en) irq_sn_ext <= irq_sn_fet;
 always_ff @(posedge clk) if (rst_i) irq_in_ext <= {$bits(Qupls4_pkg::irq_info_packet_t){1'b0}}; else if (en) irq_in_ext <= irq_in_fet;
 always_ff @(posedge clk) if (rst_i) irq_ext <= 1'b0; else if (en) irq_ext <= irq_fet;
@@ -541,7 +585,10 @@ else begin
 end
 
 // Once p_override goes TRUE stomp_aln will go TRUE. Once the stomp has been
-// recognized we want the override to end. stomp_fet indicates that 
+// recognized we want the override to end. stomp_alnr indicates that. 
+// Note if the new address turned out to be the one predicted by the BTB
+// then there is no need to override.
+// This signal may also be called !predicted_match_ext.
 always_comb
 begin
 	/*

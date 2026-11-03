@@ -82,7 +82,7 @@ localparam NREG_RPORTS = Qupls4_pkg::NREG_RPORTS;
 parameter NREG_WPORTS = Qupls4_pkg::NREG_WPORTS;
 localparam RS_NREG_RPORTS = Qupls4_pkg::NREG_RPORTS;
 parameter MICROOPS_PER_INSTR = Qupls4_pkg::MICROOPS_PER_INSTR;
-parameter MAX_MICROOPS = 12;
+parameter MAX_MICROOPS = 8;
 parameter XSTREAMS = Qupls4_pkg::XSTREAMS;
 parameter SUPPORT_XPIPE = {Qupls4_pkg::SUPPORT_XPIPE5,Qupls4_pkg::SUPPORT_XPIPE4,Qupls4_pkg::SUPPORT_XPIPE3,
 	Qupls4_pkg::SUPPORT_XPIPE2,Qupls4_pkg::SUPPORT_XPIPE1,Qupls4_pkg::SUPPORT_XPIPE0};
@@ -1815,7 +1815,7 @@ Qupls4_btb ubtb1
 	.clk_en(advance_pipeline),
 	.en(1'b1),
 	.rclk(clk),
-	.advance_pc(advance_pipeline & ihito),
+	.advance_pc(advance_pipeline),// & ihito),
 	.get_next_pc(get_next_pc),
 	.micro_machine_active(1'b0),
 	.igrp(igrp),
@@ -1986,7 +1986,7 @@ Qupls4_stomp ustmp1
 	.rst(irst),
 	.clk(clk),
 	.clk2x(clk),
-	.first_icache(first_icache),
+	.first_icache(first_icache & ~ihit_fet),
 	.ihit(is_buffered),
 	.advance_icache(advance_pipeline),
 	.advance_fetch(advance_pipeline),
@@ -2336,6 +2336,7 @@ Qupls4_instruction_buffer uib1
 (
 	.rst_i(irst),
 	.clk_i(clk),
+	.first_icache(first_icache),
 	.ce_i(advance_pipeline),
 	.invce(invce),
 	.invalidate(ic_invall|ic_invline),
@@ -2796,6 +2797,7 @@ always_comb	advance_pipeline =
 	 first_icache | (
 	 rstcnt[5] &&			// not resetting
 	 ihit &&					// there is a hit on the instruction cache
+	 ihito &&
    is_icip_buffered &&	// an instruction is buffered
 	!sync_ndxv &&			// there is no sync instruction in the re-order buffer
 	!rat_stallq &&		// not stalled on register alias
