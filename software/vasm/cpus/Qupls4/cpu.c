@@ -29,7 +29,7 @@
 extern char* qual[MAX_QUALIFIERS];
 extern int qual_len[MAX_QUALIFIERS];
 
-const char *cpu_copyright="vasm Qupls4 cpu backend v0.15 (c) in 2025-2026 Robert Finch";
+const char *cpu_copyright="vasm Qupls4 cpu backend v0.16 (c) in 2025-2026 Robert Finch";
 
 const char *cpuname="Qupls4";
 int bitsperbyte=8;
@@ -263,9 +263,6 @@ mnemonic mnemonics[]={
 	"divu", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,0,R2FUNC(20LL)|OPC(2LL),8},	
 	"divu", {OP_REG,OP_REG,OP_IMM,0,0}, {RI,CPU_ALL,0,0,OPC(21LL),8},
 
-	"djmp",	{OP_IMM,0,0,0,0},{J2,CPU_ALL,0,0,0x000000000021LL,8},
-	"djmp",	{OP_LK,OP_IMM,0,0,0},{JL2,CPU_ALL,0,0,0x000000000021LL,8},
-
 	"enor", {OP_REG,OP_REG,OP_REG,0,0}, {R2,CPU_ALL,0,0,R2FUNC(2LL)|OPC(2LL),8,SZ_UNSIZED,0},	
 	"enor", {OP_REG,OP_IMM,OP_REG,0,0}, {RIA,CPU_ALL,0,0,R2FUNC(2LL)|OPC(2LL),8,SZ_UNSIZED,0},	
 	"enor", {OP_REG,OP_REG,OP_IMM,0,0}, {RIB,CPU_ALL,0,0,R2FUNC(2LL)|OPC(2LL),8,SZ_UNSIZED,0},	
@@ -315,9 +312,9 @@ mnemonic mnemonics[]={
 
 	"itof", {OP_VREG|OP_REG,OP_VREG|OP_REG,0,0,0}, {R2,CPU_ALL,0,0,RB(3LL)|FUNC5(1LL)|OPC(12LL),8,SZ_FLTALL,SZ_DOUBLE,FLG_FP},	
 
-	"jmp",	{OP_REGIND,0,0,0,0}, {J2,CPU_ALL,0,0,RD(63LL)|OPC(38LL),6, SZ_UNSIZED,0},
-	"jmp",	{OP_REG,0,0,0,0}, {J2,CPU_ALL,0,0,RD(63LL)|OPC(38LL),6, SZ_UNSIZED,0},
-	"jmp",	{OP_IMM,0,0,0,0}, {J4,CPU_ALL,0,0,RD(63LL)|OPC(33LL),6, SZ_UNSIZED,0},
+	"jmp",	{OP_REGIND,0,0,0,0}, {J2,CPU_ALL,0,0,RD(127LL)|OPC(38LL),6, SZ_UNSIZED,0},
+	"jmp",	{OP_REG,0,0,0,0}, {J2,CPU_ALL,0,0,RD(127LL)|OPC(38LL),6, SZ_UNSIZED,0},
+	"jmp",	{OP_IMM,0,0,0,0}, {J4,CPU_ALL,0,0,RD(127LL)|OPC(33LL),6, SZ_UNSIZED,0},
 	"jsr",	{OP_REGIND,0,0,0}, {J2,CPU_ALL,0,0,OPC(38LL),6, SZ_UNSIZED,0},
 	"jsr",	{OP_LK,OP_IND_SCNDX,0,0,0}, {JSCNDX,CPU_ALL,0,0,R2FUNC(24LL)|0x80000000L|OPC(2LL),6, SZ_UNSIZED,0},
 	"jsr",	{OP_LK,OP_REGIND,0,0,0}, {JL2,CPU_ALL,0,0,OPC(38LL),6, SZ_UNSIZED,0},
@@ -1875,7 +1872,7 @@ static thuge make_reloc(int reloctype,operand *op,section *sec,
         case J2:
         case JL2:
 		      add_extnreloc_masked(reloclist,base,val.lo,reloctype,
-                           11,37,0,0x1fffffffffLL);
+                           14,34,0,0x3ffffffffLL);
           break;
           
         case J4:
@@ -3413,10 +3410,10 @@ static int encode_J2(instruction_buf* insn, operand* op, int64_t val, int i, int
   		uint64_t tgt;
   		//*insn |= CA(mnemo->ext.format==B2 ? 0x7 : 0x0);
     	//tgt = ((val & 0xffffffLL) << 24LL) | (2LL << 22LL);
- 			tgt = ((val & 0x1ffffffffffff8LL) << 11LL);
+ 			tgt = ((val & 0x7fffffffeLL) << 14LL);
   		insn->opcode |= tgt;
   	}
-  	if (!is_nbit(hg,29LL)) {
+  	if (!is_nbit(hg,34LL)) {
   		encode_ipfx(&insn->pfxb,hg,1);
   		*isize = insn->pfxb.size + 6;
   	}
