@@ -1990,7 +1990,7 @@ Qupls4_stomp ustmp1
 	.rst(irst),
 	.clk(clk),
 	.clk2x(clk),
-	.first_icache(first_icache & ~ihit_fet),
+	.first_icache(first_icache & ~ihito),
 	.ihit(is_buffered),
 	.advance_icache(advance_pipeline),
 	.advance_fetch(advance_pipeline),
@@ -2340,7 +2340,7 @@ Qupls4_instruction_buffer uib1
 (
 	.rst_i(irst),
 	.clk_i(clk),
-	.first_icache(first_icache),
+	.first_icache(first_icache & ~ihito),
 	.ce_i(advance_pipeline),
 	.invce(invce),
 	.invalidate(ic_invall|ic_invline),
@@ -2796,11 +2796,11 @@ Qupls4_pkg::lsq_ndx_t lsq_tail, lsq_tail0;
 // The pipeline cannot move if there is no room to enqueue instructions.
 
 always_comb	advance_pipeline =
-	 first_icache | (
+//	 first_icache |
+	 (
 	 rstcnt[5] &&			// not resetting
-	 ihit &&					// there is a hit on the instruction cache
-	 ihito &&
-   is_icip_buffered &&	// an instruction is buffered
+	 ((ihit && ihito) ||	// there is a hit on the instruction cache
+   is_icip_buffered) &&	// or an instruction is buffered
 	!sync_ndxv &&			// there is no sync instruction in the re-order buffer
 	!rat_stallq &&		// not stalled on register alias
  	 room_for_que	&&		// and there is room to queue
@@ -9510,23 +9510,23 @@ begin
 	if (rob[id].op.ssm) begin
 		sr.ssm <= FALSE;
 		ssm_flag <= FALSE;
-		excmisspc.cap.offset <= kernel_vectors[sr.dbg ? 3'd4:{1'b0,fnNextOm(sr.om)}];
+		excmisspc.cap <= kernel_vectors[sr.dbg ? 3'd4:{1'b0,fnNextOm(sr.om)}];
 		excmiss <= TRUE;
 //		excmisspc.pc <= {kvec[sr.dbg ? 4 : nom][$bits(pc_address_t)-1:8] + 4'd1,8'h0};
 //		excmiss <= TRUE;
 	end
 	else if (rob[id].op.decbus.sys) begin
 		case(rob[id].op.decbus.Rd)
-		6'h00,6'h20: excmisspc.cap.offset <= rob[id].brtgt;
-		6'h01,6'h21: excmisspc.cap.offset <= rob[id].brtgt;
-		6'h02,6'h22:	excmisspc.cap.offset <= syscall_vectors[{1'b0,fnNextOm(sr.om)}];
-		6'h03,6'h23:	excmisspc.cap.offset <= kernel_vectors[{1'b0,fnNextOm(sr.om)}];
-		default:	excmisspc.cap.offset <= kernel_vectors[{1'b0,fnNextOm(sr.om)}];
+		6'h00,6'h20: excmisspc.cap.offset <= rob[id].brtgt - excmisspc.cap.base;
+		6'h01,6'h21: excmisspc.cap.offset <= rob[id].brtgt - excmisspc.cap.base;
+		6'h02,6'h22:	excmisspc.cap <= syscall_vectors[{1'b0,fnNextOm(sr.om)}];
+		6'h03,6'h23:	excmisspc.cap <= kernel_vectors[{1'b0,fnNextOm(sr.om)}];
+		default:	excmisspc.cap <= kernel_vectors[{1'b0,fnNextOm(sr.om)}];
 		endcase
 		excmiss <= TRUE;
 	end
 	else begin
-		excmisspc.cap.offset <= kernel_vectors[{1'b0,fnNextOm(sr.om)}];
+		excmisspc.cap <= kernel_vectors[{1'b0,fnNextOm(sr.om)}];
 		excmiss <= TRUE;
 		//excmisspc.pc <= {kvec[sr.dbg ? 4 : nom][$bits(pc_address_t)-1:8] + 4'd13,8'h0};
 		//excmiss <= TRUE;
