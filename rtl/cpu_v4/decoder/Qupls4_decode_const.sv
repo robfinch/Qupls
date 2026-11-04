@@ -441,7 +441,7 @@ begin
 		begin
 			has_immb = TRUE;
 			if (SUPPORT_POSTFIX & has_cnstb)
-				immb = {cnstb,ins.imm[23:0]};
+				immb = {cnstb,ins.imm[24:0]};
 			else
 				immb = ins.imm;//{{39{ins.imm[24]}},ins.imm[24:0]};
 		end
@@ -495,9 +495,9 @@ begin
 			end
 			has_immc = TRUE;
 			if (SUPPORT_POSTFIX & has_cnstc)
-				immc = {cnstc,ins.imm[15:0]};
+				immc = {cnstc,ins.imm[14:0]};
 			else
-				immc = {{48{ins.imm[15]}},ins.imm[15:0]};
+				immc = {{49{ins.imm[14]}},ins.imm[14:0]};
 		end
 
 	Qupls4_pkg::OP_STB,
@@ -527,9 +527,9 @@ begin
 			end
 			has_immc = TRUE;
 			if (SUPPORT_POSTFIX & has_cnstc)
-				immc = {cnstc,ins.imm[15:0]};
+				immc = {cnstc,ins.imm[14:0]};
 			else
-				immc = {{48{ins.imm[15]}},ins.imm[15:0]};
+				immc = {{45{ins.imm[14]}},ins.imm[14:0]};
 			if (has_cnstd) begin
 				has_immd = TRUE;
 				immd = {cnstd,ins.Rd[6:0]};
@@ -552,9 +552,9 @@ begin
 			end
 			has_immc = TRUE;
 			if (SUPPORT_POSTFIX & has_cnstc)
-				immc = {cnstc,ins.imm[15:0]};
+				immc = {cnstc,ins.imm[14:0]};
 			else
-				immc = {{48{ins.imm[15]}},ins.imm[15:0]};
+				immc = {{49{ins.imm[14]}},ins.imm[14:0]};
 			has_immd = TRUE;
 			immd = {{59{ins.Rd[4]}},ins.Rd[4:0]};
 		end
@@ -583,7 +583,7 @@ begin
 				has_immc = TRUE;
 			end
 			else if (ins.ms[2]) begin
-				immc = {{44{ins.imm[19]}},ins.imm[19:0]};
+				immc = {{46{ins.imm[17]}},ins.imm[17:0]};
 				has_immc = TRUE;
 			end
 		end
@@ -627,7 +627,7 @@ begin
 				has_immc = TRUE;
 			end
 			else if (ins.ms[2]) begin
-				immc = {{44{ins.imm[19]}},ins.imm[19:0]};
+				immc = {{46{ins.imm[17]}},ins.imm[17:0]};
 				has_immc = TRUE;
 			end
 		end
@@ -635,7 +635,7 @@ begin
 	Qupls4_pkg::OP_BSR,Qupls4_pkg::OP_JSR:
 		begin
 			has_imma = TRUE;
-			imma = {{29{ins.imm[34]}},ins.imm};
+			imma = {{29{ins.imm[34]}},ins.imm[34:0]};
 			if (SUPPORT_POSTFIX & has_cnsta)
 				imma = {cnsta,ins.imm[34:0]};
 		end
