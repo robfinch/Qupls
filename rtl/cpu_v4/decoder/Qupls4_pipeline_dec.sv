@@ -447,6 +447,12 @@ else begin
 //		insm[3] <= (stomp_dec && pg_mot.pr[3].pc.bno_t==stomp_bno) ? nopi : pg_mot.pr[3];
 end
 */
+reg [63:0] bsr0_tgt, bsr1_tgt, bsr2_tgt;
+reg [63:0] jsr0_tgt, jsr1_tgt, jsr2_tgt;
+reg [63:0] new_address;
+
+reg predicted_correctly;
+
 
 always_comb
 if (rst) begin
@@ -938,42 +944,28 @@ else begin
 		pr_dec[3].uop.opcode = Qupls4_pkg::OP_NOP;
 		pr_dec[3].decbus.nop = TRUE;
 	end
-end
 
-reg [63:0] bsr0_tgt, bsr1_tgt, bsr2_tgt;
-reg [63:0] jsr0_tgt, jsr1_tgt, jsr2_tgt;
-reg [63:0] new_address;
-// Note constant imm has already been shifted left once.
-always_comb bsr0_tgt = {pr_dec[0].decbus.imma} + pg_dec2.hdr.ip.cap.offset + {pg_dec2.pr[0].ip_offs,1'b0};
-always_comb bsr1_tgt = {pr_dec[1].decbus.imma} + pg_dec2.hdr.ip.cap.offset + {pg_dec2.pr[1].ip_offs,1'b0};
-always_comb bsr2_tgt = {pr_dec[2].decbus.imma} + pg_dec2.hdr.ip.cap.offset + {pg_dec2.pr[2].ip_offs,1'b0};
-always_comb jsr0_tgt = {pr_dec[0].decbus.imma};
-always_comb jsr1_tgt = {pr_dec[1].decbus.imma};
-always_comb jsr2_tgt = {pr_dec[2].decbus.imma};
-
-reg predicted_correctly;
-
-always_comb
-begin
 	new_address_o = Qupls4_pkg::RSTPC;
 	predicted_correctly_o = TRUE;
-	if (pr_dec[0].decbus.bsr|pr_dec[0].decbus.jsr) begin
-		predicted_correctly_o = FALSE;
-		new_address_o = pr_dec[0].decbus.bsr ? bsr0_tgt : jsr0_tgt;
-		if (new_address_o==(pg_mot.hdr.ip.cap.offset + {pg_mot.pr[0].ip_offs,1'b0}))
-			predicted_correctly_o = TRUE;
-	end
-	else if (pr_dec[1].decbus.bsr|pr_dec[1].decbus.jsr) begin
-		predicted_correctly_o = FALSE;
-		new_address_o = pr_dec[1].decbus.bsr ? bsr1_tgt : jsr1_tgt;
-		if (new_address_o==(pg_mot.hdr.ip.cap.offset + {pg_mot.pr[0].ip_offs,1'b0}))
-			predicted_correctly_o = TRUE;
-	end
-	else if (pr_dec[2].decbus.bsr|pr_dec[2].decbus.jsr) begin
-		predicted_correctly_o = FALSE;
-		new_address_o = pr_dec[2].decbus.bsr ? bsr2_tgt : jsr2_tgt;
-		if (new_address_o==(pg_mot.hdr.ip.cap.offset + {pg_mot.pr[0].ip_offs,1'b0}))
-			predicted_correctly_o = TRUE;
+	if (en) begin
+		if ((pg_dec.pr[0].op.decbus.bsr|pg_dec.pr[0].op.decbus.jsr) && !pg_dec.pr[0].stomped) begin
+			predicted_correctly_o = FALSE;
+			new_address_o = pg_dec.pr[0].op.decbus.bsr ? bsr0_tgt : jsr0_tgt;
+			if (new_address_o==(pg_mot.hdr.ip.cap.offset + {pg_mot.pr[0].ip_offs,1'b0}))
+				predicted_correctly_o = TRUE;
+		end
+		else if ((pg_dec.pr[1].op.decbus.bsr|pg_dec.pr[1].op.decbus.jsr) && !pg_dec.pr[1].stomped) begin
+			predicted_correctly_o = FALSE;
+			new_address_o = pg_dec.pr[1].op.decbus.bsr ? bsr1_tgt : jsr1_tgt;
+			if (new_address_o==(pg_mot.hdr.ip.cap.offset + {pg_mot.pr[0].ip_offs,1'b0}))
+				predicted_correctly_o = TRUE;
+		end
+		else if ((pg_dec.pr[2].op.decbus.bsr|pg_dec.pr[2].op.decbus.jsr) && !pg_dec.pr[2].stomped) begin
+			predicted_correctly_o = FALSE;
+			new_address_o = pg_dec.pr[2].op.decbus.bsr ? bsr2_tgt : jsr2_tgt;
+			if (new_address_o==(pg_mot.hdr.ip.cap.offset + {pg_mot.pr[0].ip_offs,1'b0}))
+				predicted_correctly_o = TRUE;
+		end
 	end
 end
 
@@ -982,6 +974,12 @@ if (rst) begin
 	pg_dec <= {$bits(pipeline_group_reg_t){1'b0}};
 	foreach (pg_dec.pr[n10])
 		pg_dec.pr[n10] <= nopi2;
+	bsr0_tgt <= RSTPC;
+	bsr1_tgt <= RSTPC;
+	bsr2_tgt <= RSTPC;
+	jsr0_tgt <= RSTPC;
+	jsr1_tgt <= RSTPC;
+	jsr2_tgt <= RSTPC;
 end
 else begin
 	if (en) begin
@@ -1015,6 +1013,13 @@ else begin
 					tStomp(n10);
 			end
 		end
+		// Note constant imm has already been shifted left once.
+		bsr0_tgt <= {pr_dec[0].decbus.imma} + pg_mot.hdr.ip.cap.offset + {pg_mot.pr[0].ip_offs,1'b0};
+		bsr1_tgt <= {pr_dec[1].decbus.imma} + pg_mot.hdr.ip.cap.offset + {pg_mot.pr[1].ip_offs,1'b0};
+		bsr2_tgt <= {pr_dec[2].decbus.imma} + pg_mot.hdr.ip.cap.offset + {pg_mot.pr[2].ip_offs,1'b0};
+		jsr0_tgt <= {pr_dec[0].decbus.imma};
+		jsr1_tgt <= {pr_dec[1].decbus.imma};
+		jsr2_tgt <= {pr_dec[2].decbus.imma};
 	end
 end
 

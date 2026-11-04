@@ -680,7 +680,6 @@ wire agen1_full;
 Qupls4_pkg::ex_instruction_t agen1_op;
 wire agen1_virt2phys;
 reg agen1_load_store;
-reg agen1_amo;
 reg agen1_vlsndx;
 rob_ndx_t agen1_id;
 Qupls4_pkg::operating_mode_t agen1_om;
@@ -4262,7 +4261,7 @@ assign aRs[31] = 8'd0;
 // EXECUTE stage combo logic
 // ----------------------------------------------------------------------------
 
-value_t csr_res0 csr_res1;
+value_t csr_res0, csr_res1;
 wire div_dbz;
 
 generate begin : gReadCsr
