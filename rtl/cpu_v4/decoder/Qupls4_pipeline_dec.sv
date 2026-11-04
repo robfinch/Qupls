@@ -943,12 +943,13 @@ end
 reg [63:0] bsr0_tgt, bsr1_tgt, bsr2_tgt;
 reg [63:0] jsr0_tgt, jsr1_tgt, jsr2_tgt;
 reg [63:0] new_address;
-always_comb bsr0_tgt = {pr_dec[0].decbus.imma,1'b0} + pg_dec2.hdr.ip.cap.offset + {pg_dec2.pr[0].ip_offs,1'b0};
-always_comb bsr1_tgt = {pr_dec[1].decbus.imma,1'b0} + pg_dec2.hdr.ip.cap.offset + {pg_dec2.pr[1].ip_offs,1'b0};
-always_comb bsr2_tgt = {pr_dec[2].decbus.imma,1'b0} + pg_dec2.hdr.ip.cap.offset + {pg_dec2.pr[2].ip_offs,1'b0};
-always_comb jsr0_tgt = {pr_dec[0].decbus.imma,1'b0};
-always_comb jsr1_tgt = {pr_dec[1].decbus.imma,1'b0};
-always_comb jsr2_tgt = {pr_dec[2].decbus.imma,1'b0};
+// Note constant imm has already been shifted left once.
+always_comb bsr0_tgt = {pr_dec[0].decbus.imma} + pg_dec2.hdr.ip.cap.offset + {pg_dec2.pr[0].ip_offs,1'b0};
+always_comb bsr1_tgt = {pr_dec[1].decbus.imma} + pg_dec2.hdr.ip.cap.offset + {pg_dec2.pr[1].ip_offs,1'b0};
+always_comb bsr2_tgt = {pr_dec[2].decbus.imma} + pg_dec2.hdr.ip.cap.offset + {pg_dec2.pr[2].ip_offs,1'b0};
+always_comb jsr0_tgt = {pr_dec[0].decbus.imma};
+always_comb jsr1_tgt = {pr_dec[1].decbus.imma};
+always_comb jsr2_tgt = {pr_dec[2].decbus.imma};
 
 reg predicted_correctly;
 

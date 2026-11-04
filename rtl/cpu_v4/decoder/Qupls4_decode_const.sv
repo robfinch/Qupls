@@ -88,6 +88,16 @@ fpCvt32To64 ucvt32x64a(cnst1[31:0], imm32x64a);
 fpCvt32To64 ucvt32x64b(cnst2[31:0], imm32x64b);
 fpCvt32To64 ucvt32x64C(cnst3[31:0], imm32x64c);
 */
+FP64 c64Rs1,c64Rs2,c64Rs3;
+FP32 c32Rs1,c32Rs2,c32Rs3;
+// Design cannot route with constant ROMs
+//fpConstROM64 ucr1 (.a(ins.Rs1), .o(c64Rs1));
+//fpConstROM64 ucr2 (.a(ins.Rs2), .o(c64Rs2));
+//fpConstROM64 ucr3 (.a(ins.Rs3), .o(c64Rs3));
+//fpConstROM32 ucr4 (.a(ins.Rs1), .o(c32Rs1));
+//fpConstROM32 ucr5 (.a(ins.Rs2), .o(c32Rs2));
+//fpConstROM32 ucr6 (.a(ins.Rs3), .o(c32Rs3));
+
 reg [47:0] cpfx [0:7];
 reg [1:0] q;
 reg [1:0] wh;
@@ -134,114 +144,276 @@ begin
 	Qupls4_pkg::OP_R3VVV,Qupls4_pkg::OP_R3VVS,
 	Qupls4_pkg::OP_CHK:
 		begin
-			if (has_cnsta) begin
+			if (SUPPORT_POSTFIX & has_cnsta) begin
 				imma = {cnsta,ins.Rs1[6:0]};
 				has_imma = TRUE;
 			end
-			if (has_cnstb) begin
+			else if (ins.ms[0]) begin
+				imma = {{57{ins.Rs1[6]}},ins.Rs1[6:0]};
+				has_imma = TRUE;
+			end
+			if (SUPPORT_POSTFIX & has_cnstb) begin
 				immb = {cnstb,ins.Rs2[6:0]};
 				has_immb = TRUE;
 			end
-			if (has_cnstc) begin
+			else if (ins.ms[1]) begin
+				immb = {{57{ins.Rs2[6]}},ins.Rs2[6:0]};
+				has_immb = TRUE;
+			end
+			if (SUPPORT_POSTFIX & has_cnstc) begin
 				immc = {cnstc,ins.Rs3[6:0]};
+				has_immc = TRUE;
+			end
+			else if (ins.ms[2]) begin
+				immc = {{57{ins.Rs3[6]}},ins.Rs3[6:0]};
 				has_immc = TRUE;
 			end
 		end
 
 	Qupls4_pkg::OP_FLTH:
 		begin
-			if (has_cnsta) begin
-				imma = {cnsta,ins.Rs1[6:0]};
-				has_imma = TRUE;
-			end
+			case(ins.Rs1[6:0])
+			7'd0:
+				begin
+					imma = 64'd0;									// +0.0
+					has_imma = TRUE;
+				end
+			7'd1:
+				begin
+					imma = 64'h7fffffffffff3c00;	// +1.0 Nan boxed
+					has_imma = TRUE;
+				end
+			default:
+				if (SUPPORT_POSTFIX & has_cnsta) begin
+					imma = {cnsta,ins.Rs1[6:0]};
+					has_imma = TRUE;
+				end
+			endcase
+			/*
 			else if (ins.ms[0]) begin
-				imma = {ins.Rs1[6],47'h7FFFFFFFFFFF,ins.Rs1[6],5'h0F+ins.Rs1[5:3],ins.Rs1[2:0],7'b0};
+				if (ins.Rs1==7'd0)
+					imma = 64'd0;
+				else
+					imma = {ins.Rs1[6],47'h7FFFFFFFFFFF,ins.Rs1[6],5'h0C+ins.Rs1[5:3],ins.Rs1[2:0],7'b0};
 				has_imma = TRUE;
 			end
-			if (has_cnstb) begin
-				immb = {cnstb,ins.Rs1[6:0]};
-				has_immb = TRUE;
-			end
+			*/
+			case(ins.Rs2[6:0])
+			7'd0:
+				begin
+					immb = 64'd0;									// +0.0
+					has_immb = TRUE;
+				end
+			7'd1:
+				begin
+					immb = 64'h7fffffffffff3c00;	// +1.0 Nan boxed
+					has_immb = TRUE;
+				end
+			default:
+				if (SUPPORT_POSTFIX & has_cnstb) begin
+					immb = {cnstb,ins.Rs2[6:0]};
+					has_immb = TRUE;
+				end
+			endcase
+			/*
 			else if (ins.ms[1]) begin
-				immb = {ins.Rs2[6],47'h7FFFFFFFFFFF,ins.Rs2[6],5'h0F+ins.Rs2[5:3],ins.Rs2[2:0],7'b0};
+				if (ins.Rs2==7'd0)
+					immb = 64'd0;
+				else
+					immb = {ins.Rs2[6],47'h7FFFFFFFFFFF,ins.Rs2[6],5'h0C+ins.Rs2[5:3],ins.Rs2[2:0],7'b0};
 				has_immb = TRUE;
 			end
-			if (has_cnstc) begin
-				immc = {cnstc,ins.Rs1[6:0]};
-				has_immc = TRUE;
-			end
+			*/
+			case(ins.Rs3[6:0])
+			7'd0:
+				begin
+					immc = 64'd0;									// +0.0
+					has_immc = TRUE;
+				end
+			7'd1:
+				begin
+					immc = 64'h7fffffffffff3c00;	// +1.0 Nan boxed
+					has_immc = TRUE;
+				end
+			default:
+				if (SUPPORT_POSTFIX & has_cnstc) begin
+					immc = {cnstc,ins.Rs3[6:0]};
+					has_immc = TRUE;
+				end
+			endcase
+			/*
 			else if (ins.ms[2]) begin
-				immc = {ins.Rs3[6],47'h7FFFFFFFFFFF,ins.Rs3[6],5'h0F+ins.Rs3[5:3],ins.Rs3[2:0],7'b0};
+				if (ins.Rs3==7'd0)
+					immc = 64'd0;
+				else
+					immc = {ins.Rs3[6],47'h7FFFFFFFFFFF,ins.Rs3[6],5'h0C+ins.Rs3[5:3],ins.Rs3[2:0],7'b0};
 				has_immc = TRUE;
 			end
+			*/
 		end
+
 	Qupls4_pkg::OP_FLTS:
 		begin
-			if (has_cnsta) begin
-				imma = {cnsta,ins.Rs1[6:0]};
-				has_imma = TRUE;
-			end
+			case(ins.Rs1[6:0])
+			7'd0:
+				begin
+					imma = 64'd0;									// +0.0
+					has_imma = TRUE;
+				end
+			7'd1:
+				begin
+					imma = 64'h7fffffff3f800000;	// +1.0 Nan boxed
+					has_imma = TRUE;
+				end
+			default:
+				if (SUPPORT_POSTFIX & has_cnsta) begin
+					imma = {cnsta,ins.Rs1[6:0]};
+					has_imma = TRUE;
+				end
+			endcase
+			/*
 			else if (ins.ms[0]) begin
-				imma = {ins.Rs1[6],31'h7FFFFFFF,ins.Rs1[6],8'h7F+ins.Rs1[5:3],ins.Rs1[2:0],20'b0};
+				imma = c32Rs1;
 				has_imma = TRUE;
 			end
-			if (has_cnstb) begin
-				immb = {cnstb,ins.Rs2[6:0]};
-				has_immb = TRUE;
-			end
+			*/
+			case(ins.Rs2[6:0])
+			7'd0:
+				begin
+					immb = 64'd0;									// +0.0
+					has_immb = TRUE;
+				end
+			7'd1:
+				begin
+					immb = 64'h7fffffff3f800000;	// +1.0 Nan boxed
+					has_immb = TRUE;
+				end
+			default:
+				if (SUPPORT_POSTFIX & has_cnstb) begin
+					immb = {cnstb,ins.Rs2[6:0]};
+					has_immb = TRUE;
+				end
+			endcase
+			/*
 			else if (ins.ms[1]) begin
-				immb = {ins.Rs2[6],31'h7FFFFFFF,ins.Rs2[6],8'h7F+ins.Rs2[5:3],ins.Rs2[2:0],20'b0};
+				immb = c32Rs2;
 				has_immb = TRUE;
 			end
-			if (has_cnstc) begin
-				immc = {cnstc,ins.Rs3[6:0]};
-				has_immc = TRUE;
-			end
+			*/
+			case(ins.Rs3[6:0])
+			7'd0:
+				begin
+					immc = 64'd0;									// +0.0
+					has_immc = TRUE;
+				end
+			7'd1:
+				begin
+					immc = 64'h7fffffff3f800000;	// +1.0 Nan boxed
+					has_immc = TRUE;
+				end
+			default:
+				if (SUPPORT_POSTFIX & has_cnstc) begin
+					immc = {cnstc,ins.Rs3[6:0]};
+					has_immc = TRUE;
+				end
+			endcase
+			/*
 			else if (ins.ms[2]) begin
-				immc = {ins.Rs3[6],31'h7FFFFFFF,ins.Rs3[6],8'h7F+ins.Rs3[5:3],ins.Rs3[2:0],20'b0};
+				immc = c32Rs3;
 				has_immc = TRUE;
 			end
+			*/
 		end
+
 	Qupls4_pkg::OP_FLTD:
 		begin
-			if (has_cnsta & cnsta85) begin
-				imma = {cnsta,ins.Rs1[6:0]};
-				has_imma = TRUE;
-			end
+			case(ins.Rs1[6:0])
+			7'd0:
+				begin
+					imma = 64'd0;									// +0.0
+					has_imma = TRUE;
+				end
+			7'd1:
+				begin
+					imma = 64'h3ff0000000000000;	// +1.0
+					has_imma = TRUE;
+				end
+			default:
+				if (SUPPORT_POSTFIX & has_cnsta & cnsta85) begin
+					imma = {cnsta,ins.Rs1[6:0]};
+					has_imma = TRUE;
+				end
+			endcase
+			/*
 			else if (has_cnsta) begin
 				imma = {cnsta,ins.Rs1[6:0],18'd0};
 				has_imma = TRUE;
 			end
+			*/
+			/*
 			else if (ins.ms[0]) begin
-				imma = {ins.Rs1[6],11'h3FF+ins.Rs1[5:3],ins.Rs1[2:0],49'b0};
+				imma = c64Rs1;
 				has_imma = TRUE;
 			end
-			if (has_cnstb & cnstb85) begin
-				immb = {cnstb,ins.Rs2[6:0]};
-				has_immb = TRUE;
-			end
+			*/
+			case(ins.Rs2[6:0])
+			7'd0:
+				begin
+					immb = 64'd0;									// +0.0
+					has_immb = TRUE;
+				end
+			7'd1:
+				begin
+					immb = 64'h3ff0000000000000;	// +1.0
+					has_immb = TRUE;
+				end
+			default:
+				if (SUPPORT_POSTFIX & has_cnstb & cnstb85) begin
+					immb = {cnstb,ins.Rs2[6:0]};
+					has_immb = TRUE;
+				end
+			endcase
+			/*
 			else if (has_cnstb) begin
 				immb = {cnstb,ins.Rs2[6:0],18'd0};
 				has_immb = TRUE;
 			end
 			else if (ins.ms[1]) begin
-				immb = {ins.Rs2[6],11'h3FF+ins.Rs2[5:3],ins.Rs2[2:0],49'b0};
+				immb = c64Rs2;
 				has_immb = TRUE;
 			end
-			if (has_cnstc & cnstc85) begin
-				immc = {cnstc,ins.Rs3[6:0]};
-				has_immc = TRUE;
-			end
+			*/
+			case(ins.Rs3[6:0])
+			7'd0:
+				begin
+					immc = 64'd0;									// +0.0
+					has_immc = TRUE;
+				end
+			7'd1:
+				begin
+					immc = 64'h3ff0000000000000;	// +1.0
+					has_immc = TRUE;
+				end
+			default:
+				if (SUPPORT_POSTFIX & has_cnstc & cnstc85) begin
+					immc = {cnstc,ins.Rs3[6:0]};
+					has_immc = TRUE;
+				end
+			endcase
+			/*
 			else if (has_cnstc) begin
 				immc = {cnstc,ins.Rs3[6:0],18'd0};
 				has_immc = TRUE;
 			end
 			else if (ins.ms[2]) begin
-				immc = {ins.Rs3[6],11'h3FF+ins.Rs3[5:3],ins.Rs3[2:0],49'b0};
+				immc = c64Rs3;
 				has_immc = TRUE;
 			end
+			*/
 		end
+
 	// ToDo: encoding for parallel and quad precision.
+/*
 	Qupls4_pkg::OP_FLTQ,
 	Qupls4_pkg::OP_FLTPH,Qupls4_pkg::OP_FLTPS,Qupls4_pkg::OP_FLTPD,Qupls4_pkg::OP_FLTPQ,
 	Qupls4_pkg::OP_FLTVVV,Qupls4_pkg::OP_FLTVVS:
@@ -259,7 +431,7 @@ begin
 				has_immc = TRUE;
 			end
 		end
-
+*/
 	// Quick immediate mode		Rd=Rs1+imm
 	Qupls4_pkg::OP_ADDI,Qupls4_pkg::OP_MULI,Qupls4_pkg::OP_DIVI,
 	Qupls4_pkg::OP_SUBFI,Qupls4_pkg::OP_CMPI,
@@ -268,27 +440,27 @@ begin
 	Qupls4_pkg::OP_ANDI:
 		begin
 			has_immb = TRUE;
-			if (has_cnstb)
-				immb = {cnstb,ins.imm[27:0]};
+			if (SUPPORT_POSTFIX & has_cnstb)
+				immb = {cnstb,ins.imm[23:0]};
 			else
-				immb = {{36{ins.imm[27]}},ins.imm[27:0]};
+				immb = ins.imm;//{{39{ins.imm[24]}},ins.imm[24:0]};
 		end
-
+/*
 	Qupls4_pkg::OP_LOADI:
 		begin
-			if (has_cnstb)
-				immb = {cnstb,ins.imm[27:0]};
+			if (SUPPORT_POSTFIX & has_cnstb)
+				immb = {cnstb,ins.imm[24:0]};
 			else
-				immb = {{36{ins.imm[27]}},ins.imm[27:0]};
+				immb = ins.imm;//{{39{ins.imm[24]}},ins.imm[24:0]};
 			has_immb = TRUE;
 			imma = value_zero;
 			has_imma = TRUE;
 		end
-
+*/
 	Qupls4_pkg::OP_CSR:
 		begin
 			// ToDo: fix
-			if (has_cnstb)
+			if (SUPPORT_POSTFIX & has_cnstb)
 				immb = cnstb;
 			else
 				immb = {57'd0,ins[22:16]};
@@ -309,23 +481,23 @@ begin
 				imma = ip;
 				has_imma = TRUE;
 			end
-			if (has_cnsta) begin
+			if (SUPPORT_POSTFIX & has_cnsta) begin
 				imma = {cnsta,ins.Rs1[6:0]};
 				has_imma = TRUE;
 			end
-			if (ins.Rs2==8'd63) begin
+			if (ins.Rs2==8'd0) begin
 				immb = value_zero;
 				has_immb = TRUE;
 			end
-			if (has_cnstb) begin
+			if (SUPPORT_POSTFIX & has_cnstb) begin
 				immb = {cnstb,ins.Rs2[6:0]};
 				has_immb = TRUE;
 			end
 			has_immc = TRUE;
-			if (has_cnstc)
-				immc = {cnstc,ins.imm[19:0]};
+			if (SUPPORT_POSTFIX & has_cnstc)
+				immc = {cnstc,ins.imm[15:0]};
 			else
-				immc = {{44{ins.imm[19]}},ins.imm[19:0]};
+				immc = {{48{ins.imm[15]}},ins.imm[15:0]};
 		end
 
 	Qupls4_pkg::OP_STB,
@@ -341,23 +513,23 @@ begin
 				imma = ip;
 				has_imma = TRUE;
 			end
-			if (has_cnsta) begin
+			if (SUPPORT_POSTFIX & has_cnsta) begin
 				imma = {cnsta,ins.Rs1[6:0]};
 				has_imma = TRUE;
 			end
-			if (ins.Rs2==8'd63) begin
+			if (ins.Rs2==9'd0) begin
 				immb = value_zero;
 				has_immb = TRUE;
 			end
-			if (has_cnstb) begin
+			if (SUPPORT_POSTFIX & has_cnstb) begin
 				immb = {cnstb,ins.Rs2[6:0]};
 				has_immb = TRUE;
 			end
 			has_immc = TRUE;
-			if (has_cnstc)
-				immc = {cnstc,ins.imm[19:0]};
+			if (SUPPORT_POSTFIX & has_cnstc)
+				immc = {cnstc,ins.imm[15:0]};
 			else
-				immc = {{44{ins.imm[19]}},ins.imm[19:0]};
+				immc = {{48{ins.imm[15]}},ins.imm[15:0]};
 			if (has_cnstd) begin
 				has_immd = TRUE;
 				immd = {cnstd,ins.Rd[6:0]};
@@ -370,53 +542,111 @@ begin
 				imma = value_zero;
 				has_imma = TRUE;
 			end
+			else if (ins.Rs1==8'd127) begin
+				imma = ip;
+				has_imma = TRUE;
+			end
 			if (ins.Rs2==8'd0) begin
 				immb = value_zero;
 				has_immb = TRUE;
 			end
 			has_immc = TRUE;
-			immc = {{44{ins.imm[19]}},ins.imm[19:0]};
+			if (SUPPORT_POSTFIX & has_cnstc)
+				immc = {cnstc,ins.imm[15:0]};
+			else
+				immc = {{48{ins.imm[15]}},ins.imm[15:0]};
 			has_immd = TRUE;
-			immd = {{60{ins.Rd[3]}},ins.Rd[3:0]};
+			immd = {{59{ins.Rd[4]}},ins.Rd[4:0]};
 		end
 
 	Qupls4_pkg::OP_BCC,
-	Qupls4_pkg::OP_BCCU,
-	Qupls4_pkg::OP_FBCC:
+	Qupls4_pkg::OP_BCCU:
 		begin
-			if (ins.Rs1==8'd0) begin
-				imma = value_zero;
-				has_imma = TRUE;
-			end
-			if (has_cnsta) begin
+			if (SUPPORT_POSTFIX & has_cnsta) begin
 				imma = {cnsta,ins.Rs1[6:0]};
 				has_imma = TRUE;
 			end
-			if (ins.Rs2==8'd127) begin
-				immb = value_zero;
-				has_immb = TRUE;
+			else if (ins.ms[0]) begin
+				imma = {{57{ins.Rs1[6]}},ins.Rs1[6:0]};
+				has_imma = TRUE;
 			end
-			if (has_cnstb) begin
+			if (SUPPORT_POSTFIX & has_cnstb) begin
 				immb = {cnstb,ins.Rs2[6:0]};
 				has_immb = TRUE;
+			end
+			else if (ins.ms[1]) begin
+				immb = {{57{ins.Rs2[6]}},ins.Rs2[6:0]};
+				has_immb = TRUE;
+			end
+			if (SUPPORT_POSTFIX & has_cnstc) begin
+				immc = {cnstc,ins.Rs3[6:0]};
+				has_immc = TRUE;
+			end
+			else if (ins.ms[2]) begin
+				immc = {{44{ins.imm[19]}},ins.imm[19:0]};
+				has_immc = TRUE;
+			end
+		end
+
+	Qupls4_pkg::OP_FBCC:
+		begin
+			if (SUPPORT_POSTFIX & has_cnsta & cnsta85) begin
+				imma = {cnsta,ins.Rs1[6:0]};
+				has_imma = TRUE;
+			end
+			/*
+			else if (has_cnsta) begin
+				imma = {cnsta,ins.Rs1[6:0],18'd0};
+				has_imma = TRUE;
+			end
+			*/
+			/*
+			else if (ins.ms[0]) begin
+				imma = c64Rs1;
+				has_imma = TRUE;
+			end
+			*/
+			if (SUPPORT_POSTFIX & has_cnstb & cnstb85) begin
+				immb = {cnstb,ins.Rs2[6:0]};
+				has_immb = TRUE;
+			end
+			/*
+			else if (has_cnstb) begin
+				immb = {cnstb,ins.Rs2[6:0],18'd0};
+				has_immb = TRUE;
+			end
+			*/
+			/*
+			else if (ins.ms[1]) begin
+				immb = c64Rs2;
+				has_immb = TRUE;
+			end
+			*/
+			if (SUPPORT_POSTFIX & has_cnstc) begin
+				immc = {cnstc,ins.Rs3[6:0]};
+				has_immc = TRUE;
+			end
+			else if (ins.ms[2]) begin
+				immc = {{44{ins.imm[19]}},ins.imm[19:0]};
+				has_immc = TRUE;
 			end
 		end
 
 	Qupls4_pkg::OP_BSR,Qupls4_pkg::OP_JSR:
 		begin
 			has_imma = TRUE;
-			imma = {{24{ins.imm[39]}},ins.imm};
-			if (has_cnsta)
-				imma = {cnsta,ins.imm[39:0]};
+			imma = {{29{ins.imm[34]}},ins.imm};
+			if (SUPPORT_POSTFIX & has_cnsta)
+				imma = {cnsta,ins.imm[34:0]};
 		end
 		
 	Qupls4_pkg::OP_RTD:
 		begin
 			has_immb = TRUE;
-			if (has_cnstb)
-				immb = {cnstb,ins.imm[24:3],3'd0};
+			if (SUPPORT_POSTFIX & has_cnstb)
+				immb = {cnstb,ins.imm[24:0]};
 			else
-				immb = {{39{ins.imm[24]}},ins.imm[24:3],3'd0};
+				immb = {{39{ins.imm[24]}},ins.imm[24:0]};
 		end
 
 	Qupls4_pkg::OP_FENCE:
@@ -431,18 +661,20 @@ begin
 	// Limit of six postfixes
 	// A postfix is not valid unless there is a valid postfix before it.
 	vpfx = 8'h00;
-	if (cpfx[0][7:2]==6'd15) begin
+	if (SUPPORT_POSTFIX) begin
+	if (cpfx[0][6:2]==5'd15) begin
 		vpfx[0] = VAL;
-	if (cpfx[1][7:2]==6'd15) begin
+	if (cpfx[1][6:2]==5'd15) begin
 		vpfx[1] = VAL;
-	if (cpfx[2][7:2]==6'd15) begin
+	if (cpfx[2][6:2]==5'd15) begin
 		vpfx[2] = VAL;
-	if (cpfx[3][7:2]==6'd15) begin
+	if (cpfx[3][6:2]==5'd15) begin
 		vpfx[3] = VAL;
-	if (cpfx[4][7:2]==6'd15) begin
+	if (cpfx[4][6:2]==5'd15) begin
 		vpfx[4] = VAL;
-	if (cpfx[5][7:2]==6'd15) begin
+	if (cpfx[5][6:2]==5'd15) begin
 		vpfx[5] = VAL;
+	end
 	end
 	end
 	end
@@ -451,7 +683,7 @@ begin
 	end
 
 	foreach (cpfx[n])
-		if (vpfx[n]) begin
+		if (SUPPORT_POSTFIX & vpfx[n]) begin
 			wh = cpfx[n][1:0];
 			q = cpfx[n][8:7];
 			case({q,wh})

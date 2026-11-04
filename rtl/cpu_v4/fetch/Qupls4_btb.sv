@@ -215,7 +215,7 @@ endgenerate
       .WRITE_MODE_B("no_change"),     // String
       .WRITE_PROTECT(1)               // DECIMAL
    )
-   btb_table (
+   btb_table0 (
       .dbiterrb(),             // 1-bit output: Status signal to indicate double bit error occurrence
                                        // on the data output of port B.
 
@@ -349,10 +349,17 @@ begin
 			next_pcs[pc0.stream].cap.offset = doutb0.tgt;
 		else begin
 			next_pcs[pc0.stream].cap.offset = doutb0.tgt;
-			takb0 = doutb0.takb;		// record branch taken fact (for bt)
+			// record branch taken fact (for bt)
+			case(doutb0.grp)
+			2'd0:	takb0 = doutb0.takb;
+			2'd1:	takb1 = doutb0.takb;
+			2'd2:	takb2 = doutb0.takb;
+			2'd3:	takb3 = doutb0.takb;
+			endcase
 		end
 		next_pcs[pc0.stream].stream = next_act_stream;
 	end
+	// ToDo: extend to other branches.
 	// Advance program counter.
 	else begin
 		next_pcs[pc.stream.stream] = pc;

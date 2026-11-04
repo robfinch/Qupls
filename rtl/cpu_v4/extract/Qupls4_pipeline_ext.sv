@@ -500,6 +500,7 @@ else begin
 			pg_ext.pr[n2] <= pr_ext[n2];	
 			pg_ext.pr[n2].v <= pc0_fet.stream.stream;
 			if (stomp_ext || (branch_resolved && (pc0_fet.stream.thread == live_stream.thread && pc0_fet.stream.stream != live_stream.stream))) begin
+				pg_ext.pr[n2].stomped <= TRUE;
 				pg_ext.pr[n2].done <= 2'b11;
 				pg_ext.pr[n2].op.v <= 1'b0;
 			end
@@ -523,12 +524,14 @@ else begin
 				pc_fet[n2].stream.thread==live_stream.thread && pc_fet[n2].stream.stream != live_stream.stream) begin
 				pg_ext.pr[n2].stomped <= TRUE;
 				pg_ext.pr[n2].done <= 2'b11;
+				pg_ext.pr[n2].op.v <= 1'b0;
 			end
 			// Jumps and branches are done as they do not need to update the regfile.
 			// They are also resolved already as they are unconditional.
-			else if (bra[n2]|jmp[n2]|stomp_ext|nop[n2]|nop2[n2]) begin
+			else if (bra[n2]|jmp[n2]|nop[n2]|nop2[n2]) begin
 				pg_ext.pr[n2].stomped <= TRUE;
 				pg_ext.pr[n2].done <= 2'b11;
+				pg_ext.pr[n2].op.v <= 1'b0;
 			end
 			// Exception earlier in the pipeline? (Bad IP detected in BTB)
 			// Consume the exception.
@@ -540,6 +543,17 @@ else begin
 				pg_ext.pr[n2].exc <= exc_i;
 				pg_ext.pr[n2].stomped <= TRUE;
 				pg_ext.pr[n2].done <= 2'b11;
+				pg_ext.pr[n2].op.v <= 1'b0;
+			end
+			// Stomp on instructions following the one causing a change of flow.
+			// If it is an unconditional branch we will always stomp on following
+			// instructions. If it is a conditional branch instructions will be
+			// stomped on only if the branch is predicted taken.
+			if (override_pos != 3'd7 && n2 > override_pos && p_override && (!bcc[override_pos] ||
+				takb_fet[override_pos])) begin
+				pg_ext.pr[n2].stomped <= TRUE;
+				pg_ext.pr[n2].done <= 2'b11;
+				pg_ext.pr[n2].op.v <= 1'b0;
 			end
 		end
 	end

@@ -29,7 +29,7 @@
 extern char* qual[MAX_QUALIFIERS];
 extern int qual_len[MAX_QUALIFIERS];
 
-const char *cpu_copyright="vasm Qupls4 cpu backend v0.16 (c) in 2025-2026 Robert Finch";
+const char *cpu_copyright="vasm Qupls4 cpu backend v0.17 (c) in 2025-2026 Robert Finch";
 
 const char *cpuname="Qupls4";
 int bitsperbyte=8;
@@ -1877,7 +1877,7 @@ static thuge make_reloc(int reloctype,operand *op,section *sec,
           
         case J4:
         case JL4:
-		      add_extnreloc_masked(reloclist,base,val.lo,reloctype,
+		      add_extnreloc_masked(reloclist,base,val.lo>>1LL,reloctype,
                            14,34,0,0x3ffffffffLL);
           break;
 				/* Short conditional jump */
@@ -2872,7 +2872,7 @@ static size_t encode_immed (
 			return (isize);
 		case J4:
 			if (insn)
-				insn->opcode = insn->opcode | (((val.lo >> 1LL) & 0x7ffffffffLL) << 13LL);
+				insn->opcode = insn->opcode | (((val.lo >> 1LL) & 0x3ffffffffLL) << 14LL);
 			break;
 		case RI:
 			isize = encode_immed_RI(insn, val, i, pc, sec, ip);
@@ -3106,7 +3106,7 @@ static size_t encode_immed (
 		}
 		else if (mnemo->ext.format==J4) {
 			if (insn)
-				insn->opcode = insn->opcode | (((val.lo >> 1LL) & 0x7ffffffffLL) << 13LL);
+				insn->opcode = insn->opcode | (((val.lo >> 1LL) & 0x3ffffffffLL) << 14LL);
 		}
 		else if (mnemo->ext.format==R2) {
 			if (mnemo->ext.opcode==0x5D) {	// SLLH
@@ -3442,10 +3442,10 @@ static int encode_J4(instruction_buf* insn, operand* op, int64_t val, int i, int
   		uint64_t tgt;
   		//*insn |= CA(mnemo->ext.format==B2 ? 0x7 : 0x0);
     	//tgt = ((val & 0xffffffLL) << 24LL) | (2LL << 22LL);
- 			tgt = ((val & 0xffffffffeLL) << 12LL);
+ 			tgt = ((val & 0x7fffffffeLL) << 13LL);
   		insn->opcode |= tgt;
   	}
-  	if (!is_nbit(hg,36LL)) {
+  	if (!is_nbit(hg,35LL)) {
   		encode_ipfx(&insn->pfxb,hg,1);
   		*isize = insn->pfxb.size + 6;
   	}
