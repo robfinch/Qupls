@@ -42,10 +42,10 @@ import Qupls4_pkg::*;
 `define SUPPORT_RAT	1
 
 module Qupls4_pipeline_ren(
-	rst, clk, clk5x, ph4, en, ihit_dec, ihit_ren, nq, restore,
+	rst, clk, clk5x, ph4, en, nq, restore,
 	unavail_list,
 	chkpt_amt, tail0, rob, avail_reg, sr, branch_resolved,
-	stomp_ren, kept_stream, flush_dec, flush_ren,
+	stomp_ren, live_stream, flush_dec, flush_ren,
 //	arn, arng, arnv,
 	rn_cp, prn_i, prnv,
 	Rt0_ren, Rt0_renv, 
@@ -65,9 +65,7 @@ module Qupls4_pipeline_ren(
 	tags2free, freevals, backout, fcu_id,
 	bo_wr, bo_areg, bo_preg, bo_nreg,
 	rat_stallq,
-	alloc_chkpt, cndx, rcndx, miss_cp,
-	
-	args
+	alloc_chkpt, cndx, rcndx, miss_cp
 );
 parameter MWIDTH = Qupls4_pkg::MWIDTH;
 parameter NREG_RPORT = Qupls4_pkg::NREG_RPORTS;
@@ -77,8 +75,6 @@ input clk;
 input clk5x;
 input [4:0] ph4;
 input en;
-input ihit_dec;
-output reg ihit_ren;
 input flush_dec;
 output reg flush_ren;
 input nq;
@@ -91,7 +87,7 @@ input [Qupls4_pkg::PREGS-1:0] avail_reg;
 input Qupls4_pkg::status_reg_t sr;
 input branch_resolved;
 input stomp_ren;
-input pc_stream_t kept_stream;
+input pc_stream_t live_stream;
 //input aregno_t [NPORT-1:0] arn;
 //input [2:0] arng [0:NPORT-1];
 //input [NPORT-1:0] arnv;
@@ -126,11 +122,10 @@ input alloc_chkpt;
 input checkpt_ndx_t cndx;
 input checkpt_ndx_t [3:0] rcndx;
 input checkpt_ndx_t miss_cp;
-input value_t [NRENAME-1:0] args; 
 
 
 genvar g;
-integer jj,n1,n2,n3,n5,n6,n7,n8,n9;
+integer jj,n1,n2,n3,n5,n6,n7,n8,n9,nn;
 aregno_t [MWIDTH-1:0] aRd_dec;
 pregno_t [MWIDTH-1:0] pRd_dec;
 wire [MWIDTH-1:0] pRd_decv;
@@ -377,15 +372,17 @@ else begin
 			// These still need to update the regfile.
 //			if (pg_ren.pr[0].op.decbus.bsr|pg_ren.pr[0].op.decbus.jsr)
 //				pg_ren.pr[0].done <= 2'b11;
+
+		// Renaming has been done, so it is necessary to turn instructions into
+		// copy-targets to preserve the register values. That means we still 
+		// want to dispatch and execute the instruction. Therefore, the
+		// instruction is not marked invalid.
 		if (stomp_ren) begin
 			pg_ren.pr[0].stomped <= TRUE;
 			pg_ren.pr[0].op.decbus.cpytgt <= TRUE;
 		end
-		if (~|pg_dec.pr[0].v) begin
-			pg_ren.pr[0].stomped <= TRUE;
-			pg_ren.pr[0].op.decbus.cpytgt <= FALSE;
-			pg_ren.pr[0].done <= 2'b11;
-		end
+		if (~|pg_dec.pr[0].v)
+			tStomp(0);
 		// Even if stomped on, we want to retain the destination register for
 		// copy purposes.
 		pg_ren.pr[0].op.nRd <= pRd_dec[0];
@@ -413,11 +410,8 @@ else begin
 				pg_ren.pr[1].stomped <= TRUE;
 				pg_ren.pr[1].op.decbus.cpytgt <= TRUE;
 			end
-			if (~|pg_dec.pr[1].v) begin
-				pg_ren.pr[1].stomped <= TRUE;
-				pg_ren.pr[1].op.decbus.cpytgt <= FALSE;
-				pg_ren.pr[1].done <= 2'b11;
-			end
+			if (~|pg_dec.pr[1].v)
+				tStomp(1);
 			if (pg_dec.pr[0].op.decbus.bsr|pg_dec.pr[0].op.decbus.jsr) begin
 				pg_ren.pr[1].stomped <= TRUE;
 				pg_ren.pr[1].op.decbus.cpytgt <= TRUE;
@@ -441,11 +435,8 @@ else begin
 				pg_ren.pr[2].stomped <= TRUE;
 				pg_ren.pr[2].op.decbus.cpytgt <= TRUE;
 			end
-			if (~|pg_dec.pr[2].v) begin
-				pg_ren.pr[2].stomped <= TRUE;
-				pg_ren.pr[2].op.decbus.cpytgt <= FALSE;
-				pg_ren.pr[2].done <= 2'b11;
-			end
+			if (~|pg_dec.pr[2].v)
+				tStomp(2);
 			if (pg_dec.pr[0].op.decbus.bsr || pg_dec.pr[1].op.decbus.bsr || pg_dec.pr[0].op.decbus.jsr || pg_dec.pr[1].op.decbus.jsr) begin
 				pg_ren.pr[2].stomped <= TRUE;
 				pg_ren.pr[2].op.decbus.cpytgt <= TRUE;
@@ -470,11 +461,8 @@ else begin
 				pg_ren.pr[3].stomped <= TRUE;
 				pg_ren.pr[3].op.decbus.cpytgt <= TRUE;
 			end
-			if (~|pg_dec.pr[3].v) begin
-				pg_ren.pr[3].stomped <= TRUE;
-				pg_ren.pr[3].op.decbus.cpytgt <= FALSE;
-				pg_ren.pr[3].done <= 2'b11;
-			end
+			if (~|pg_dec.pr[3].v)
+				tStomp(3);
 			if (pg_dec.pr[0].op.decbus.bsr || pg_dec.pr[1].op.decbus.bsr || pg_dec.pr[2].op.decbus.bsr ||
 				pg_dec.pr[0].op.decbus.jsr || pg_dec.pr[1].op.decbus.jsr || pg_dec.pr[2].op.decbus.jsr) begin
 				pg_ren.pr[3].stomped <= TRUE;
@@ -493,8 +481,39 @@ else begin
 			pg_ren.pr[3].op.pRd <= prn[23];
 		end
 	end
+	// At the rename stage destination rename registers have already been assigned
+	// and dependencies determined. So, we do not want to mark the instruction as
+	// stomped because we want to copy the destination register to the renamed one.
 	if (branch_resolved)
-		tInvalidateRen(kept_stream);//misspc.bno_t);
+//		tInvalidateRen(kept_stream);//misspc.bno_t);
+		foreach (pg_ren.pr[nn]) begin
+			if (pg_dec.pr[nn].ip_stream.stream!=live_stream.stream && live_stream.thread==pg_dec.pr[nn].ip_stream.thread) begin
+				pg_ren.pr[nn].op.excv <= INV;
+				if (Qupls4_pkg::SUPPORT_BACKOUT) begin
+					pg_ren.pr[nn].stomped <= TRUE;
+					pg_ren.pr[nn].op <= {$bits(Qupls4_pkg::pipeline_reg_t){1'b0}};
+					pg_ren.pr[nn].op.v <= VAL;
+					pg_ren.pr[nn].op.exc <= Qupls4_pkg::FLT_NONE;
+					pg_ren.pr[nn].op.uop <= {$bits(Qupls4_pkg::micro_op_t){1'b0}};
+					pg_ren.pr[nn].op.uop.opcode <= Qupls4_pkg::OP_NOP;
+					pg_ren.pr[nn].op.uop.v <= VAL;
+					pg_ren.pr[nn].op.uop.lead <= TRUE;
+					pg_ren.pr[nn].op.decbus <= {$bits(Qupls4_pkg::decode_bus_t){1'b0}};
+					pg_ren.pr[nn].op.decbus.v <= VAL;
+					pg_ren.pr[nn].op.decbus.nop <= TRUE;
+					pg_ren.pr[nn].op.decbus.sau <= TRUE;
+					pg_ren.pr[nn].op.decbus.cause <= Qupls4_pkg::FLT_NONE;
+					pg_ren.pr[nn].op.decbus.cpytgt <= TRUE;
+				end
+				else begin
+					pg_ren.pr[nn].op.decbus.cpytgt <= TRUE;
+					pg_ren.pr[nn].op.decbus.sau <= TRUE;
+					pg_ren.pr[nn].op.decbus.fpu <= FALSE;
+					pg_ren.pr[nn].op.decbus.fc <= FALSE;
+					pg_ren.pr[nn].op.decbus.mem <= FALSE;
+				end
+			end
+		end
 
 end
 
@@ -513,7 +532,18 @@ begin
 			pg_ren.pr[nn].op.excv <= INV;
 			if (Qupls4_pkg::SUPPORT_BACKOUT) begin
 				pg_ren.pr[nn].stomped <= TRUE;
-				pg_ren.pr[nn].op <= nopi;
+				pg_ren.pr[nn].op <= {$bits(Qupls4_pkg::pipeline_reg_t){1'b0}};
+				pg_ren.pr[nn].op.v <= VAL;
+				pg_ren.pr[nn].op.exc <= Qupls4_pkg::FLT_NONE;
+				pg_ren.pr[nn].op.uop <= {$bits(Qupls4_pkg::micro_op_t){1'b0}};
+				pg_ren.pr[nn].op.uop.opcode <= Qupls4_pkg::OP_NOP;
+				pg_ren.pr[nn].op.uop.v <= VAL;
+				pg_ren.pr[nn].op.uop.lead <= TRUE;
+				pg_ren.pr[nn].op.decbus <= {$bits(Qupls4_pkg::decode_bus_t){1'b0}};
+				pg_ren.pr[nn].op.decbus.v <= VAL;
+				pg_ren.pr[nn].op.decbus.nop <= TRUE;
+				pg_ren.pr[nn].op.decbus.sau <= TRUE;
+				pg_ren.pr[nn].op.decbus.cause <= Qupls4_pkg::FLT_NONE;
 				pg_ren.pr[nn].op.decbus.cpytgt <= TRUE;
 			end
 			else begin
@@ -528,13 +558,20 @@ begin
 end
 endtask
 
-always_ff @(posedge clk)
-if (rst)
-	ihit_ren <= FALSE;
-else begin
-	if (en)
-		ihit_ren <= ihit_dec;
+// Rename does not take place for invalid instructions so they can just be
+// stomped on if invalid.
+
+task tStomp;
+input integer n;
+begin
+	pg_ren.pr[n].excv <= INV;
+	pg_ren.pr[n].stomped <= TRUE;
+	pg_ren.pr[n].op.v <= INV;
+	pg_ren.pr[n].op.decbus.cpytgt <= FALSE;
+	pg_ren.pr[n].op.excv <= INV;
+	pg_ren.pr[n].done <= 2'b11;
 end
+endtask
 
 endmodule
 

@@ -522,17 +522,12 @@ else begin
 			// invalidate.
 			if (branch_resolved &&
 				pc_fet[n2].stream.thread==live_stream.thread && pc_fet[n2].stream.stream != live_stream.stream) begin
-				pg_ext.pr[n2].stomped <= TRUE;
-				pg_ext.pr[n2].done <= 2'b11;
-				pg_ext.pr[n2].op.v <= 1'b0;
+				tStomp(n2);
 			end
 			// Jumps and branches are done as they do not need to update the regfile.
 			// They are also resolved already as they are unconditional.
-			else if (bra[n2]|jmp[n2]|nop[n2]|nop2[n2]) begin
-				pg_ext.pr[n2].stomped <= TRUE;
-				pg_ext.pr[n2].done <= 2'b11;
-				pg_ext.pr[n2].op.v <= 1'b0;
-			end
+			else if (bra[n2]|jmp[n2]|nop[n2]|nop2[n2])
+				tStomp(n2);
 			// Exception earlier in the pipeline? (Bad IP detected in BTB)
 			// Consume the exception.
 			// We want this last in the priority tree, as if the instruction stream
@@ -551,9 +546,7 @@ else begin
 			// stomped on only if the branch is predicted taken.
 			if (override_pos != 3'd7 && n2 > override_pos && p_override && (!bcc[override_pos] ||
 				takb_fet[override_pos])) begin
-				pg_ext.pr[n2].stomped <= TRUE;
-				pg_ext.pr[n2].done <= 2'b11;
-				pg_ext.pr[n2].op.v <= 1'b0;
+				tStomp(n2);
 			end
 		end
 	end
@@ -599,5 +592,16 @@ begin
 	*/
 	p_override = (en && chgflow && new_address_o != btb_pc.cap.offset) && !stomp_alnr;
 end
+
+task tStomp;
+input integer n2;
+begin
+	pg_ext.pr[n2].excv <= INV;
+	pg_ext.pr[n2].op.excv <= INV;
+	pg_ext.pr[n2].stomped <= TRUE;
+	pg_ext.pr[n2].done <= 2'b11;
+	pg_ext.pr[n2].op.v <= 1'b0;
+end
+endtask
 
 endmodule

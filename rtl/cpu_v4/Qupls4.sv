@@ -156,10 +156,8 @@ reg ssm_flag;
 reg hirq;
 pc_address_ex_t ret_pc;
 pc_address_ex_t misspc;
-wire [$bits(pc_address_t)-1:6] missblock;
-reg [2:0] missgrp;
-wire [2:0] missino;
 reg restore_en = 1'b1;
+pc_address_ex_t pc_fet;
 
 wire [15:0] q_rst;
 wire [15:0] q_trigger;
@@ -174,11 +172,6 @@ Qupls4_pkg::ex_instruction_t missir;
 wire [39:0] TotInsn;		// Committed instructions
 wire [39:0] TotValidInsn;	// Valid committed instructions
 
-Qupls4_pkg::reg_bitmask_t livetarget;
-Qupls4_pkg::reg_bitmask_t [Qupls4_pkg::ROB_ENTRIES-1:0] rob_livetarget;
-Qupls4_pkg::reg_bitmask_t [Qupls4_pkg::ROB_ENTRIES-1:0] rob_latestID;
-Qupls4_pkg::reg_bitmask_t [Qupls4_pkg::ROB_ENTRIES-1:0] rob_cumulative;
-Qupls4_pkg::reg_bitmask_t [Qupls4_pkg::ROB_ENTRIES-1:0] rob_out;
 wire [Qupls4_pkg::PREGS-1:0] unavail_list;			// list of registers made unavailable via copy-targets
 
 wire inject_cl = 1'b0;
@@ -186,10 +179,6 @@ wire inject_cl = 1'b0;
 rob_ndx_t agen0_rndx, agen1_rndx;
 reg [7:0] scan;
 rob_ndx_t nonNop;		// ROB index of the next non-NOP instruction.
-
-//op_src_t sau0_argA_src;
-//op_src_t sau0_argB_src;
-//op_src_t sau0_argC_src;
 
 // prn looks up the register value and causes the value from the register file
 // to be output within the same clock cycle.
@@ -215,85 +204,11 @@ reg [3:0] bRsv2 [0:3];
 rob_ndx_t bFPCSRndx;
 wire [15:0] bFPCSRv;
 
-value_t rfo_sau0_argA;
-value_t rfo_sau0_argB;
-value_t rfo_sau0_argC;
-value_t rfo_sau0_argD;
-value_t rfo_sau0_argM;
-value_t rfo_sau1_argA;
-value_t rfo_sau1_argB;
-value_t rfo_sau1_argC;
-value_t rfo_sau1_argD;
-value_t rfo_sau1_argM;
-value_t rfo_fpu0_argA;
-value_t rfo_fpu0_argB;
-value_t rfo_fpu0_argC;
-value_t rfo_fpu0_argM;
-value_t rfo_fpu1_argA;
-value_t rfo_fpu1_argB;
-value_t rfo_fpu1_argC;
-value_t rfo_fpu1_argD;
-value_t rfo_fpu1_argM;
-value_t rfo_fcu_argA;
-value_t rfo_fcu_argB;
-value_t rfo_agen0_argA;
-value_t rfo_agen1_argA;
-value_t rfo_agen0_argM;
-value_t rfo_agen0_argB;
-value_t rfo_agen0_argC;
-value_t rfo_agen1_argB;
-value_t rfo_agen1_argC;
-value_t rfo_agen1_argM;
-cpu_types_pkg::flags_t rfo_sau0_argA_flags;
-cpu_types_pkg::flags_t rfo_sau0_argB_flags;
-cpu_types_pkg::flags_t rfo_sau1_argA_flags;
-cpu_types_pkg::flags_t rfo_sau1_argB_flags;
-cpu_types_pkg::flags_t rfo_fpu0_argA_flags;
-cpu_types_pkg::flags_t rfo_fpu0_argB_flags;
-cpu_types_pkg::flags_t rfo_agen0_argA_flags;
-cpu_types_pkg::flags_t rfo_agen0_argB_flags;
-cpu_types_pkg::flags_t rfo_agen0_argC_flags;
-cpu_types_pkg::flags_t rfo_agen1_argA_flags;
-cpu_types_pkg::flags_t rfo_agen1_argB_flags;
-cpu_types_pkg::flags_t rfo_store_argC_flags;
 value_t store_argC;
 value_t load_res;
 value_t ma0,ma1;				// memory address
 wire store_argC_v;
 
-pregno_t sau0_argA_reg;
-pregno_t sau0_argB_reg;
-pregno_t sau0_argC_reg;
-pregno_t sau0_argD_reg;
-pregno_t sau0_argT_reg;
-pregno_t sau0_argM_reg;
-
-pregno_t sau1_argA_reg;
-pregno_t sau1_argB_reg;
-pregno_t sau1_argC_reg;
-pregno_t sau1_argD_reg;
-pregno_t sau1_argT_reg;
-pregno_t sau1_argM_reg;
-
-pregno_t fpu0_argA_reg;
-pregno_t fpu0_argB_reg;
-pregno_t fpu0_argC_reg;
-pregno_t fpu0_argD_reg;
-pregno_t fpu0_argT_reg;
-pregno_t fpu0_argM_reg;
-
-pregno_t fpu1_argA_reg;
-pregno_t fpu1_argB_reg;
-pregno_t fpu1_argC_reg;
-pregno_t fpu1_argM_reg;
-
-pregno_t fcu_argA_reg;
-pregno_t fcu_argB_reg;
-
-pregno_t agen0_argA_reg;
-pregno_t agen0_argB_reg;
-pregno_t agen0_argC_reg;
-pregno_t agen0_argM_reg;
 cpu_types_pkg::flags_t agen0_argC_flags;
 
 pregno_t agen1_argA_reg;
@@ -319,34 +234,31 @@ pregno_t [2:0] cap_rf_rego;
 reg [2:0] cap_rf_regv;
 
 rob_ndx_t mc_orid;
-pc_address_ex_t mc_adr;
-pc_address_ex_t tgtpc;
+
+// ROB - reorder buffer signals
 (* keep *)
 Qupls4_pkg::rob_entry_t [Qupls4_pkg::ROB_ENTRIES-1:0] rob;
 (* keep *)
 Qupls4_pkg::pipeline_group_hdr_t [Qupls4_pkg::ROB_ENTRIES/MWIDTH-1:0] pgh;
+Qupls4_pkg::rob_bitmask_t robentry_stomp;
+Qupls4_pkg::rob_bitmask_t robentry_cpydst;
+
+// BEB
 Qupls4_pkg::beb_entry_t beb_buf;
 reg [1:0] beb_status [0:63];
 
-Qupls4_pkg::ex_instruction_t [3:0] macro_ins_bus;
-reg macro_queued;
-
-reg [1:0] robentry_islot [0:Qupls4_pkg::ROB_ENTRIES-1];
-wire [1:0] next_robentry_islot [0:Qupls4_pkg::ROB_ENTRIES-1];
-Qupls4_pkg::rob_bitmask_t robentry_stomp;
-Qupls4_pkg::rob_bitmask_t robentry_cpydst;
+// Streams
 stream_state_t [XSTREAMS-1:0] stream_states;
 wire [XSTREAMS-1:0] dead_streams;
 pc_stream_t kept_stream, live_stream;
 always_comb
 	kept_stream = pc.stream;
+
 wire stomp_alnr;
-wire stomp_fet, stomp_ext, stomp_mot, stomp_mot2, stomp_x4;
+wire stomp_fet, stomp_ext, stomp_mot, stomp_mot2;
 wire stomp_dec, stomp_ren, stomp_que, stomp_quem;
-Qupls4_pkg::rob_bitmask_t robentry_issue;
-Qupls4_pkg::rob_bitmask_t robentry_fpu_issue;
-Qupls4_pkg::rob_bitmask_t robentry_fcu_issue;
-Qupls4_pkg::rob_bitmask_t robentry_agen_issue;
+
+// LSQ
 Qupls4_pkg::lsq_entry_t [1:0] lsq [0:Qupls4_pkg::LSQ_ENTRIES-1];
 Qupls4_pkg::lsq_ndx_t lq_tail, lq_head;
 integer lsq_cmd_ndx;
@@ -474,18 +386,6 @@ reg sau0_dataready;
 Qupls4_pkg::ex_instruction_t sau0_instr;
 wire sau0_div;
 wire sau0_capA, sau0_capB, sau0_capC;
-value_t sau0_argA;
-value_t sau0_argB;
-value_t sau0_argBI;
-value_t sau0_argC;
-value_t sau0_argT;
-value_t sau0_argI;
-value_t sau0_argD;
-pregno_t sau0_Rt;
-aregno_t sau0_aRdA, sau0_aRdB, sau0_aRdC;
-pregno_t sau0_RdA;
-pregno_t sau0_RtB;
-pregno_t sau0_RtC;
 Qupls4_pkg::operating_mode_t sau0_om;
 cpu_types_pkg::flags_t sau0_argA_flags;
 cpu_types_pkg::flags_t sau0_argB_flags;
@@ -512,9 +412,6 @@ wire [7:0] xpipe2_cptgt = 8'h00;
 wire [7:0] xpipe3_cptgt = 8'h00;
 wire [7:0] xpipe4_cptgt = 8'h00;
 wire [7:0] xpipe5_cptgt = 8'h00;
-Qupls4_pkg::memsz_t sau0_prc;
-cpu_types_pkg::flags_t sau0_flags;
-wire sau0_args_valid;
 Qupls4_pkg::reservation_station_entry_t xpipe0_rse, xpipe0_rse2;
 Qupls4_pkg::reservation_station_entry_t xpipe1_rse, xpipe1_rse2;
 Qupls4_pkg::reservation_station_entry_t xpipe2_rse, xpipe2_rse2;
@@ -545,20 +442,6 @@ reg sau1_dataready;
 Qupls4_pkg::ex_instruction_t sau1_instr;
 wire sau1_div;
 wire sau1_capA, sau1_capB, sau1_capC;
-value_t sau1_argA;
-value_t sau1_argB;
-value_t sau1_argBI;
-value_t sau1_argC;
-value_t sau1_argD;
-value_t sau1_argT;
-value_t sau1_argI;
-pregno_t sau1_Rt;
-aregno_t sau1_aRdA;
-aregno_t sau1_aRdB;
-aregno_t sau1_aRdC;
-pregno_t sau1_RdA;
-pregno_t sau1_RtB;
-pregno_t sau1_RtC;
 Qupls4_pkg::operating_mode_t sau1_om;
 reg sau1_aRdv;
 checkpt_ndx_t sau1_cp;
@@ -650,23 +533,6 @@ reg fpu0_available = 1'b1;
 Qupls4_pkg::ex_instruction_t fpu0_instr;
 reg [2:0] fpu0_rmd;
 Qupls4_pkg::operating_mode_t fpu0_om;
-value_t fpu0_argA;
-value_t fpu0_argB;
-value_t fpu0_argC;
-value_t fpu0_argD;
-value_t fpu0_argT;
-value_t fpu0_argP;
-value_t fpu0_argI;	// only used by BEQ
-value_t fpu0_argM;
-reg fpu0_argA_tag;
-reg fpu0_argB_tag;
-pregno_t fpu0_Rt;
-aregno_t fpu0_aRdA;
-aregno_t fpu0_aRdB;
-aregno_t fpu0_aRdC;
-pregno_t fpu0_RdA;
-pregno_t fpu0_RdB;
-pregno_t fpu0_RdC;
 reg fpu0_aRdv;
 pregno_t fpu0_Rt1;
 aregno_t fpu0_aRd1;
@@ -715,16 +581,6 @@ reg fpu1_available;
 reg fpu1_dataready;
 Qupls4_pkg::ex_instruction_t fpu1_instr;
 reg [2:0] fpu1_rmd;
-value_t fpu1_argA;
-value_t fpu1_argB;
-value_t fpu1_argC;
-value_t fpu1_argD;
-value_t fpu1_argT;
-value_t fpu1_argP;
-value_t fpu1_argI;	// only used by BEQ
-value_t fpu1_argM;
-cpu_types_pkg::flags_t fpu1_argA_flags;
-cpu_types_pkg::flags_t fpu1_argB_flags;
 pregno_t fpu1_Rt, fpu1_Rt1;
 aregno_t fpu1_aRdA, fpu1_aRdB, fpu1_aRdC;
 pregno_t fpu1_RdA, fpu1_RdB, fpu1_RdC;
@@ -1001,7 +857,8 @@ wire ihito,ihit,ic_dhit;
 wire alt_ihit;
 wire pe_bsdone;
 reg [4:0] vl;
-// 16 vectors for 5 operating modes (debug has its own set))
+
+// vectors for 5 operating modes (debug has its own set))
 pc_address_ex_t [4:0] kernel_vectors;
 pc_address_ex_t [4:0] syscall_vectors;
 pc_address_t active_irq_vector;
@@ -1652,8 +1509,6 @@ Qupls4_pkg::pc_address_ex_t new_address_dec;
 Qupls4_pkg::pc_address_ex_t new_address_ext;
 wire ic_port;
 wire ftaim_full, ftadm_full;
-reg ihit_que;
-reg fetch_alt;
 wire icnop;
 pc_address_ex_t icpc;
 wire [2:0] igrp;
@@ -1684,7 +1539,7 @@ pc_stream_t next_act_stream;
 // buffered cache lines.
 
 always_comb
-	ip = pcs[fet_stream];
+	ip = pc;//pcs[fet_stream];
 
 icache
 #(
@@ -1916,23 +1771,15 @@ gselectPredictor ugsp1
 	.takb1(commit_takb1),
 	.takb2(commit_takb2),
 	.takb3(commit_takb3),
-	.ip0(pg_ext.hdr.ip.cap.offset),
+	.ip0(pc_fet.cap.offset),
 	.predict_taken0(pt0_ext),
-	.ip1(pg_ext.hdr.ip.cap.offset + 6'd6),
+	.ip1(pc_fet.cap.offset + 6'd6),
 	.predict_taken1(pt1_ext),
-	.ip2(pg_ext.hdr.ip.cap.offset + 6'd12),
+	.ip2(pc_fet.cap.offset + 6'd12),
 	.predict_taken2(pt2_ext),
-	.ip3(pg_ext.hdr.ip.cap.offset + 6'd18),
+	.ip3(pc_fet.cap.offset + 6'd18),
 	.predict_taken3(pt3_ext)
 );
-
-always_ff @(posedge clk)
-if (irst)
-	ihit_que <= FALSE;
-else begin
-	if (advance_pipeline)
-		ihit_que <= FALSE;
-end
 
 // Do not stomp on instructions is the PC matches the desired PC.
 // The PC might be correct if the BTB picked the correct PC.
@@ -2329,7 +2176,6 @@ else begin
 end
 
 pregno_t pred_reg;
-pc_address_ex_t pc_fet;
 
 Qupls4_instruction_buffer uib1
 (
@@ -4024,7 +3870,6 @@ Qupls4_branchmiss_pc umisspc1
 	.syscall_vector(syscall_vectors),
 	.kernel_vector(kernel_vectors),
 	.missgrp(fcu_missgrp),
-	.dstpc(tgtpc),
 	.live_stream(live_stream)
 );
 
@@ -4130,11 +3975,6 @@ always_ff @(posedge clk)
 	default:	misspc <= fcu_misspc1;
 	endcase
 
-always_comb
-if (irst)
-	missgrp <= 5'd0;
-else
-	missgrp <= excmiss ? excmissgrp : fcu_missgrp;
 /*
 always_ff @(posedge clk)
 if (irst)
@@ -4374,43 +4214,6 @@ end
 endgenerate
 
 /*
-assign sau0_argA_reg = rob[sau0_rndx].op.pRa;
-assign sau0_argB_reg = rob[sau0_rndx].op.pRb;
-assign sau0_argC_reg = rob[sau0_rndx].op.pRc;
-assign sau0_argM_reg = rob[sau0_rndx].op.pRm;
-
-assign sau1_argA_reg = rob[sau1_rndx].op.pRa;
-assign sau1_argB_reg = rob[sau1_rndx].op.pRb;
-assign sau1_argC_reg = rob[sau1_rndx].op.pRc;
-assign sau1_argM_reg = rob[sau1_rndx].op.pRm;
-
-assign fpu0_argA_reg = rob[fpu0_rndx].op.pRa;
-assign fpu0_argB_reg = rob[fpu0_rndx].op.pRb;
-assign fpu0_argC_reg = rob[fpu0_rndx].op.pRc;
-assign fpu0_argM_reg = rob[fpu0_rndx].op.pRm;
-
-assign fpu1_argA_reg = rob[fpu1_rndx].op.pRa;
-assign fpu1_argB_reg = rob[fpu1_rndx].op.pRb;
-assign fpu1_argC_reg = rob[fpu1_rndx].op.pRc;
-assign fpu1_argM_reg = rob[fpu1_rndx].op.pRm;
-
-assign fcu_argA_reg = rob[fcu_rndx].op.pRa;
-assign fcu_argB_reg = rob[fcu_rndx].op.pRb;
-
-assign agen0_argA_reg = rob[agen0_rndx].op.pRa;
-assign agen0_argB_reg = rob[agen0_rndx].op.pRb;
-assign agen0_argC_reg = rob[agen0_rndx].op.pRc;
-assign agen0_argM_reg = rob[agen0_rndx].op.pRm;
-
-assign agen1_argA_reg = rob[agen1_rndx].op.pRa;
-assign agen1_argB_reg = rob[agen1_rndx].op.pRb;
-assign agen1_argM_reg = rob[agen1_rndx].op.pRm;
-
-assign sau0_argD_reg = rob[sau0_rndx].op.pRt;
-assign sau1_argD_reg = rob[sau1_rndx].op.pRt;
-assign fpu0_argD_reg = rob[fpu0_rndx].op.pRt;
-*/
-/*
 assign aRs[0] = rob[sau0_rndx].op.decbus.Rs1;
 assign aRs[7] = rob[sau0_rndx].op.decbus.Rs2;
 assign aRs[3] = rob[sau0_rndx].op.decbus.Rs3;
@@ -4459,11 +4262,28 @@ assign aRs[31] = 8'd0;
 // EXECUTE stage combo logic
 // ----------------------------------------------------------------------------
 
-value_t csr_res;
+value_t csr_res0 csr_res1;
 wire div_dbz;
 
+generate begin : gReadCsr
+begin
+	if (SUPPORT_XPIPE0 && SUPPORT_CSR0)
+		always_comb
+			tReadCSR(csr_res0,xpipe_rse[0].argI[15:0]);
+	else
+		assign csr_res0 = value_zero;
+	if (SUPPORT_XPIPE1 && SUPPORT_CSR1)
+		always_comb
+			tReadCSR(csr_res1,xpipe_rse[1].argI[15:0]);
+	else
+		assign csr_res1 = value_zero;
+end
+end
+endgenerate
+
 always_comb
-	tReadCSR(csr_res,sau0_argI[15:0]);
+	if (!((SUPPORT_XPIPE0 && SUPPORT_CSR0) || (SUPPORT_XPIPE1 && SUPPORT_CSR1)))
+		$display("Qupls4 Warning: no CSR access supported.");
 
 generate begin : gExPipe0
 	if (SUPPORT_XPIPE0)
@@ -4480,7 +4300,7 @@ Qupls4_expipe01 #(.PIPE(3'd0)) uxpipe0
 	.z(sau0_predz),
 	.cptgt(xpipe0_cptgt),
 	.o(xpipe_res[0]),
-	.csr(csr_res),
+	.csr(csr_res0),
 	.cpl(sr.pl),
 	.sto(),
 	.ust(),
@@ -4523,7 +4343,7 @@ Qupls4_expipe01 #(.PIPE(3'd1)) uxpipe1
 	.z(sau1_predz),
 	.cptgt(xpipe1_cptgt),
 	.o(xpipe_res[1]),
-	.csr(csr_res),
+	.csr(csr_res1),
 	.cpl(sr.pl),
 	.sto(),
 	.ust(),
@@ -7610,7 +7430,6 @@ else begin
 	//												&& !stomp_i[g]
 				&& rob[n3].argT_v 
 				//&& fnPredFalse(g)
-				&& !robentry_issue[n3]
 //				&& ~rob[n3].pred_bit
 //		    && rob[n3].pred_bitv
 				&& Qupls4_pkg::SUPPORT_PRED
@@ -7978,10 +7797,21 @@ always_ff @(posedge clk) begin: clock_n_debug
 //	$display("----- Queue Time ----- %s", (stomp_que && !stomp_quem) ? stompstr : no_stompstr);
 	$display("----- Queue ----- ");
 	for (i = 0; i < Qupls4_pkg::ROB_ENTRIES; i = i + 1) begin
-    $display("%c%c%c sn:%h %d: %c%c%c%c%c%c %c %c%c %d %c %c%d Rd%d/%d %h Rs%d/%d %h%c Rs1%d/%d=%h %c Rs2%d/%d=%h %c Rs3%d/%d=%h %c I=%h %h.%h cp:%h ins=%h #",
-			(i[4:0]==head[0])?67:46, (i[4:0]==tails[0])?81:46, rob[i].rstp ? "r" : " ", rob[i].sn, i[5:0],
-			rob[i].v?"v":"-", rob[i].done[0]?"d":"-", rob[i].done[1]?"d":"-", rob[i].out[0]?"o":"-", rob[i].out[1]?"o":"-", rob[i].bt?"t":"-", rob_memissue[i]?"i":"-", rob[i].lsq?"q":"-", (robentry_issue[i]|robentry_agen_issue[i])?"i":"-",
-			robentry_islot[i], rob[i].stomped ? "S" : robentry_stomp[i]?"s":"-",
+    $display("%c%c%c sn:%h %d: %c%c%c%c%c%c %c lsq:%c %c %c%d Rd%d/%d %h Rs%d/%d %h%c Rs1%d/%d=%h %c Rs2%d/%d=%h %c Rs3%d/%d=%h %c I=%h %h.%h cp:%h ins=%h #",
+			(i[4:0]==head[0])?67:46,
+			(i[4:0]==tails[0])?81:46,
+			rob[i].rstp ? "r" : " ",
+			rob[i].sn,
+			i[5:0],
+			rob[i].v?"v":"-",
+			rob[i].done[0]?"d":"-",
+			rob[i].done[1]?"d":"-",
+			rob[i].out[0]?"o":"-",
+			rob[i].out[1]?"o":"-",
+			rob[i].bt?"t":"-",
+			rob_memissue[i]?"i":"-",
+			rob[i].lsq?"q":"-",
+			rob[i].stomped ? "S" : robentry_stomp[i]?"s":"-",
 			(rob[i].op.decbus.cpytgt ? "c" : rob[i].op.decbus.fc ? "b" : rob[i].op.decbus.mem ? "m" : "a"),
 			rob[i].op.uop.opcode, 
 			rob[i].op.decbus.Rd, rob[i].op.nRd, rob[i].exc,
@@ -7991,7 +7821,9 @@ always_ff @(posedge clk) begin: clock_n_debug
 			rob[i].op.decbus.Rs3, rob[i].op.pRs3, rob[i].argC, rob[i].argC_v?"v":" ",
 			rob[i].op.decbus.immb,//argI,
 			rob[i].ip_stream, pgh[rob[i].pghn].ip.cap.offset + {rob[i].ip_offs,1'b0},
-			rob[i].cndx, rob[i].op.uop[63:0]);
+			rob[i].cndx,
+			rob[i].op.uop[63:0]
+		);
 	end
 	$display("----- Dispatch -----");
 	foreach (rse[i]) begin
@@ -8626,7 +8458,6 @@ endtask
 task tReset;
 begin
 	vl <= 5'd8;
-	macro_queued <= FALSE;
 	for (n14 = 0; n14 < 5; n14 = n14 + 1) begin
 		kernel_vectors[n14].cap.base <= 64'd0;
 		kernel_vectors[n14].cap.top <= 65'h10000000000000000;

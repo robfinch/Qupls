@@ -960,19 +960,19 @@ begin
 	if (pr_dec[0].decbus.bsr|pr_dec[0].decbus.jsr) begin
 		predicted_correctly_o = FALSE;
 		new_address_o = pr_dec[0].decbus.bsr ? bsr0_tgt : jsr0_tgt;
-		if (new_address_o[31:0]==(pg_mot.hdr.ip.cap.offset + {pg_mot.pr[0].ip_offs,1'b0}) & 64'h0FFFFFFFF)
+		if (new_address_o==(pg_mot.hdr.ip.cap.offset + {pg_mot.pr[0].ip_offs,1'b0}))
 			predicted_correctly_o = TRUE;
 	end
 	else if (pr_dec[1].decbus.bsr|pr_dec[1].decbus.jsr) begin
 		predicted_correctly_o = FALSE;
 		new_address_o = pr_dec[1].decbus.bsr ? bsr1_tgt : jsr1_tgt;
-		if (new_address_o[31:0]==(pg_mot.hdr.ip.cap.offset + {pg_mot.pr[0].ip_offs,1'b0}) & 64'h0FFFFFFFF)
+		if (new_address_o==(pg_mot.hdr.ip.cap.offset + {pg_mot.pr[0].ip_offs,1'b0}))
 			predicted_correctly_o = TRUE;
 	end
 	else if (pr_dec[2].decbus.bsr|pr_dec[2].decbus.jsr) begin
 		predicted_correctly_o = FALSE;
 		new_address_o = pr_dec[2].decbus.bsr ? bsr2_tgt : jsr2_tgt;
-		if (new_address_o[31:0]==(pg_mot.hdr.ip.cap.offset + {pg_mot.pr[0].ip_offs,1'b0}) & 64'h0FFFFFFFF)
+		if (new_address_o==(pg_mot.hdr.ip.cap.offset + {pg_mot.pr[0].ip_offs,1'b0}))
 			predicted_correctly_o = TRUE;
 	end
 end
@@ -999,24 +999,35 @@ else begin
 //			pg_dec.pr[n10].v <= stomp_dec ? 5'd0 : pg_mot.pr[n10].v;
 //			pg_dec.pr[n10].op <= insm[n10].op;
 			pg_dec.pr[n10].op <= pr_dec[n10];
-			if (stomp_dec||pr_dec[n10].decbus.nop) begin
+			if (stomp_dec)
+				tStomp(n10);
+			else if (pr_dec[n10].decbus.nop) begin
 				pg_dec.pr[n10].stomped <= TRUE;
 				pg_dec.pr[n10].done <= 2'b11;
+				pg_dec.pr[n10].op.v <= INV;
 			end
 			if (pr_dec[n10].uop.opcode==Qupls4_pkg::OP_NOP && !pr_dec[n10].decbus.nop) begin
 				$display("Missed flagging NOP as NOP");
 				$finish;
 			end
 			if (branch_resolved) begin
-				if (pg_mot.pr[n10].ip_stream.stream!=live_stream.stream && pg_mot.pr[n10].ip_stream.thread==live_stream.thread) begin
-					pg_dec.pr[n10].op.excv <= INV;
-					pg_dec.pr[n10].stomped <= TRUE;
-					pg_dec.pr[n10].done <= 2'b11;
-				end
+				if (pg_mot.pr[n10].ip_stream.stream!=live_stream.stream && pg_mot.pr[n10].ip_stream.thread==live_stream.thread)
+					tStomp(n10);
 			end
 		end
 	end
 end
+
+task tStomp;
+input integer n10;
+begin
+	pg_dec.pr[n10].excv <= INV;
+	pg_dec.pr[n10].op.excv <= INV;
+	pg_dec.pr[n10].op.v <= INV;
+	pg_dec.pr[n10].stomped <= TRUE;
+	pg_dec.pr[n10].done <= 2'b11;
+end
+endtask
 
 endmodule
 
