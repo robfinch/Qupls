@@ -2,7 +2,7 @@ import const_pkg::*;
 import Qupls4_pkg::*;
 
 module Qupls4_ext_set_pr(rst, clk, en, irq, stomp, carry_mod,
-	ic_line, redundant_group, ssm_flag, pc, pr);
+	ic_line, ssm_flag, pc, pr);
 parameter MWIDTH = Qupls4_pkg::MWIDTH;
 input rst;
 input clk;
@@ -11,7 +11,6 @@ input irq;
 input stomp;
 input [47:0] carry_mod;
 input [MWIDTH*48-1:0] ic_line;
-input redundant_group;
 input ssm_flag;
 input Qupls4_pkg::pc_address_ex_t [MWIDTH-1:0] pc;
 output Qupls4_pkg::rob_entry_t [MWIDTH-1:0] pr;

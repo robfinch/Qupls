@@ -60,10 +60,10 @@ output Qupls4_pkg::pc_address_ex_t jsr_tgt;
 output Qupls4_pkg::pc_address_ex_t bcc_tgt;
 
 always_comb nop = instr[6:0]==Qupls4_pkg::OP_NOP;
-always_comb bsr = instr[6:0]==Qupls4_pkg::OP_BSR &&  |instr[13:7];
-always_comb bra = instr[6:0]==Qupls4_pkg::OP_BSR && ~|instr[13:7];
-always_comb jsr = instr[6:0]==Qupls4_pkg::OP_JSR &&  |instr[13:7];
-always_comb jmp = instr[6:0]==Qupls4_pkg::OP_JSR && ~|instr[13:7];
+always_comb bsr = instr[6:0]==Qupls4_pkg::OP_BSR &&  ~&instr[13:7];
+always_comb bra = instr[6:0]==Qupls4_pkg::OP_BSR &&   &instr[13:7];
+always_comb jsr = instr[6:0]==Qupls4_pkg::OP_JSR &&  ~&instr[13:7];
+always_comb jmp = instr[6:0]==Qupls4_pkg::OP_JSR && 	&instr[13:7];
 // For conditional branches we have to detect if it is a branch-to-register
 // value. If so, the address cannot be predicted at this stage. It will
 // need to wait until it resolves.
@@ -80,8 +80,8 @@ always_comb
 always_comb rtd = instr[6:0]==Qupls4_pkg::OP_RTD;
 // To compute the virtual address the offset is added to the base, so it needs
 // to be subtracted off when set.
-always_comb begin bsr_tgt = ip; bsr_tgt.cap.offset = ip.cap.offset + {{29{instr[47]}},instr[47:13],1'b0} - ip.cap.base; end
-always_comb begin jsr_tgt = ip; jsr_tgt.cap.offset = {{29{instr[47]}},instr[47:13],1'b0} - jsr_tgt.cap.base; end
-always_comb begin bcc_tgt = ip; bcc_tgt.cap.offset = ip.cap.offset + {{41{instr[46]}},instr[46:25],1'b0} - ip.cap.base; end
+always_comb begin bsr_tgt = ip; bsr_tgt.cap.offset = ip.cap.offset + {{29{instr[47]}},instr[47:14],1'b0} - ip.cap.base; end
+always_comb begin jsr_tgt = ip; jsr_tgt.cap.offset = {{29{instr[47]}},instr[47:14],1'b0} - ip.cap.base; end
+always_comb begin bcc_tgt = ip; bcc_tgt.cap.offset = ip.cap.offset + {{46{instr[44]}},instr[44:28],1'b0} - ip.cap.base; end
 
 endmodule

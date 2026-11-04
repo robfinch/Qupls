@@ -66,13 +66,14 @@ else begin
 		// Choose any stream of the thread at 1/8 probability to allow alternate
 		// branch paths to be fetched. Happens only if the fetch is coming from a 
 		// fetch buffer instead of the cache.
-		if (buffered_streams[n2] && strm_bitmap[n2] && (lfsro[7:0] < thread_probability[thrd] >> 3))
-			next_act_stream = pc_stream_t'(n2);
-		// Choose the primary stream of the thread according to probability,
-		// this will override the selection of the alternate path.
-		if (strm_bitmap[n2] && pcs[n2].stream==n2 &&
-			(lfsro[7:0] < thread_probability[thrd]))
-			next_act_stream = pc_stream_t'(n2);
+		if (buffered_streams[n2] && strm_bitmap[n2]) begin
+			if (lfsro[7:0] < thread_probability[thrd] >> 3)
+				next_act_stream = pc_stream_t'(n2);
+			// Choose the primary stream of the thread according to probability,
+			// this will override the selection of the alternate path.
+			if (pcs[n2].stream==n2 &&	(lfsro[7:0] < thread_probability[thrd]))
+				next_act_stream = pc_stream_t'(n2);
+		end
 	end
 	// If nothing got choosen, keep with the same stream.
 	if (next_act_stream.stream==5'd0)

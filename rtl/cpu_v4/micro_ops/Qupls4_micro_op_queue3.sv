@@ -40,13 +40,13 @@ import Qupls4_pkg::*;
 module Qupls4_micro_op_queue3(rst, clk, en, rd_more, uop, uop_count,
 	uop_buf, uop_mark, head);
 parameter MWIDTH = Qupls4_pkg::MWIDTH;
-parameter MAX_MICROOPS = 12;
+parameter MAX_MICROOPS = 8;
 parameter MICROOPS_PER_INSTR = 16;
 input rst;
 input clk;
 input en;
 output reg rd_more;
-input Qupls4_pkg::micro_op_t [MICROOPS_PER_INSTR-1:0] uop [0:MWIDTH-1];
+input Qupls4_pkg::micro_op_t [MICROOPS_PER_INSTR-1:0] uop [MWIDTH-1:0];
 input [5:0] uop_count [0:MWIDTH-1];
 output Qupls4_pkg::micro_op_t [MAX_MICROOPS-1:0] uop_buf;
 output reg [2:0] uop_mark [0:MAX_MICROOPS-1];

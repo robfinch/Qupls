@@ -359,7 +359,7 @@ reg brtgtv;
 pc_address_ex_t pc0_f;
 pc_address_ex_t brtgt;
 reg pc_in_sync;
-reg advance_pipeline, advance_pipeline_seg2;
+reg advance_pipeline;
 reg do_bsr_h;
 reg set_pending_ipl;
 reg [5:0] next_pending_ipl;
@@ -525,8 +525,6 @@ Qupls4_pkg::reservation_station_entry_t [5:0] xpipe_rse;//, xpipe0_rse2;
 Qupls4_pkg::reservation_station_entry_t [5:0] xpipe_rseo;//, xpipe0_rse2;
 Qupls4_pkg::cap_reservation_station_entry_t cap_xpipe_rse;
 Qupls4_pkg::cap_reservation_station_entry_t cap_xpipe_rseo;
-reg sel_cap_xpipe;
-reg stall_cap_xpipe;
 
 reg sau1_idle;
 reg sau1_idle1;
@@ -1118,9 +1116,6 @@ cpu_types_pkg::address_t agen0_adr, agen1_adr;
 wire tlb_miss0, tlb_miss1;
 wire tlb_missack;
 tlb_entry_t tlb_entry1, tlb_entry;
-wire tlb0_load, tlb0_store;
-wire tlb1_load, tlb1_store;
-reg stall_load, stall_store;
 reg stall_tlb0 =1'd0, stall_tlb1=1'd0;
 
 seqnum_t groupno;
@@ -1658,7 +1653,6 @@ Qupls4_pkg::pc_address_ex_t new_address_ext;
 wire ic_port;
 wire ftaim_full, ftadm_full;
 reg ihit_que;
-wire ihit_fet, ihit_ext, ihit_mot, ihit_dec, ihit_ren; 
 reg fetch_alt;
 wire icnop;
 pc_address_ex_t icpc;
@@ -1682,7 +1676,6 @@ uc64_capability_t ddc;			// default data capability
 reg first_icache;
 wire is_buffered;
 wire [XSTREAMS*THREADS-1:0] buffered_streams;
-wire is_icip_buffered;
 wire next_is_buffered;
 dep_stream_t [XSTREAMS-1:0] dep_stream;
 pc_stream_t next_act_stream;
@@ -1794,11 +1787,14 @@ icctrl1
 	.snoop_cid(snoop_cid)
 );
 
-// Executing NMI handler?
+// Executing NMI/IRQ handler?
+pc_address_t pc2;
 always_comb
-	exe_nmi = pc.cap.offset[$bits(pc_address_t)-1:8]==nmi_addr[$bits(pc_address_t)-1:8];
+	pc2 = fnUcGetAddress(pc.cap);
 always_comb
-	exe_irq = pc.cap.offset[$bits(pc_address_t)-1:8]==irq_addr[$bits(pc_address_t)-1:8];
+	exe_nmi = pc2[$bits(pc_address_t)-1:8]==nmi_addr[$bits(pc_address_t)-1:8];
+always_comb
+	exe_irq = pc2[$bits(pc_address_t)-1:8]==irq_addr[$bits(pc_address_t)-1:8];
 
 // Executing IRQ handler?
 always_comb
@@ -1935,7 +1931,7 @@ if (irst)
 	ihit_que <= FALSE;
 else begin
 	if (advance_pipeline)
-		ihit_que <= ihit_ren;
+		ihit_que <= FALSE;
 end
 
 // Do not stomp on instructions is the PC matches the desired PC.
@@ -1999,8 +1995,7 @@ Qupls4_stomp ustmp1
 	.advance_decode(advance_pipeline),
 	.advance_rename(advance_pipeline),
 	.advance_enqueue(advance_pipeline),
-	.advance_pipeline(advance_pipeline),
-	.advance_pipeline_seg2(advance_pipeline), // currently same as above
+	.advance_pipeline(advance_pipeline), // currently same as above
 	.found_destination(fcu_found_destination),
 	.destination_rndx(fcu_dst),
 	.branch_resolved(branch_resolved),
@@ -2044,7 +2039,7 @@ begin
 	if (((branchmiss && !fcu_found_destination)) && |robentry_stomp)
 		;
 //	else if ((ihito || mipv || mipv2 || mipv3 || mipv4) && !stallq)
-	else if (advance_pipeline_seg2)
+	else if (advance_pipeline)
 		case (~cqd)
 
 //    4'b0000: ; // do nothing
@@ -2126,7 +2121,7 @@ always_ff @(posedge clk)
 if (irst)
 	cqd <= {MWIDTH{1'd0}};
 else begin
-	if (advance_pipeline_seg2) begin
+	if (advance_pipeline) begin
 		cqd <= next_cqd;
 		if (next_cqd == {MWIDTH{1'b1}})
 			cqd <= {MWIDTH{1'd0}};
@@ -2134,7 +2129,7 @@ else begin
 end
 
 reg allqd;
-edge_det ued1 (.rst(irst), .clk(clk), .ce(advance_pipeline_seg2), .i(next_cqd=={MWIDTH{1'b1}}), .pe(pe_allqd), .ne(), .ee());
+edge_det ued1 (.rst(irst), .clk(clk), .ce(advance_pipeline), .i(next_cqd=={MWIDTH{1'b1}}), .pe(pe_allqd), .ne(), .ee());
 
 always_comb
 	fetch_new = (ihito & ~hirq & (pe_allqd|allqd));
@@ -2155,7 +2150,7 @@ always_ff @(posedge clk)
 always_ff @(posedge clk)
 if (irst)
 	allqd <= 1'b1;
-else if(advance_pipeline_seg2) begin
+else if(advance_pipeline) begin
 	if (pe_allqd & ~(ihito & ~hirq))
 		allqd <= 1'b1;
 	if (next_cqd=={MWIDTH{1'b1}})
@@ -2353,7 +2348,6 @@ Qupls4_instruction_buffer uib1
 	.line_o(ic_line),
 	.ip_o(pc_fet),
 	.is_buffered_o(is_buffered),
-	.is_icip_buffered_o(is_icip_buffered),
 	.next_is_buffered_o(next_is_buffered),
 	.next_act_stream(next_act_stream),
 	.buffered_streams(buffered_streams)
@@ -2363,8 +2357,7 @@ Qupls4_pipeline_fet ufet1
 (
 	.rst(irst),
 	.clk(clk),
-	.ihit(is_icip_buffered),
-	.ihit_fet(ihit_fet),
+	.ihit(is_buffered),
 	.irq_in_ic(irq_in_ic),
 	.irq_ic(irq_ic),
 	.irq_in_fet(irq_in_fet),
@@ -2441,8 +2434,6 @@ Qupls4_pipeline_ext #(.MWIDTH(MWIDTH)) uiext1
 	.en_i(advance_pipeline),
 	.branch_resolved(branch_resolved),
 	.live_stream(live_stream),
-	.ihit_fet(ihit_fet),
-	.ihit_ext(ihit_ext),
 	.cline_fet(ic_line_fet),
 	.new_cline_ext(new_cline_ext),
 	.cline_ext(cline_ext),
@@ -2514,8 +2505,6 @@ umot1
 	.en(advance_pipeline),
 	.branch_resolved(branch_resolved),
 	.live_stream(live_stream),
-	.ihit_ext(ihit_ext),
-	.ihit_mot(ihit_mot),
 	.pc_mot(pc_mot),
 	.stomp(stomp_mot),
 	.stomp2(stomp_mot2),
@@ -2552,8 +2541,6 @@ udecstg1
 	.en(advance_pipeline),
 	.branch_resolved(branch_resolved),
 	.regFPCSR(regFPCSR),
-	.ihit_mot(ihit_mot),
-	.ihit_dec(ihit_dec),
 	.new_cline_ext(new_cline_ext),
 	.cline(cline_mot),
 	.sr(sr),
@@ -2800,7 +2787,7 @@ always_comb	advance_pipeline =
 	 (
 	 rstcnt[5] &&			// not resetting
 	 ((ihit && ihito) ||	// there is a hit on the instruction cache
-   is_icip_buffered) &&	// or an instruction is buffered
+   is_buffered) &&	// or an instruction is buffered
 	!sync_ndxv &&			// there is no sync instruction in the re-order buffer
 	!rat_stallq &&		// not stalled on register alias
  	 room_for_que	&&		// and there is room to queue
@@ -2808,7 +2795,6 @@ always_comb	advance_pipeline =
  	)
 	;	
 
-always_comb advance_pipeline_seg2 = advance_pipeline;// || dc_get;//(!stallq && !vec_stallq) || dc_get;
 always_comb vec_stallq = !ic_dhit || vec_stall2;
 reg nq0,nq1,nq2,nq3;
 always_comb nq0 = TRUE;
@@ -2900,14 +2886,14 @@ always_ff @(posedge clk)
 if (irst)
 	stomp0_q <= FALSE;
 else begin
-	if (advance_pipeline_seg2)
+	if (advance_pipeline)
 		stomp0_q <= stomp0_r;
 end
 always_ff @(posedge clk)
 if (irst)
 	stomp1_q <= FALSE;
 else begin
-	if (advance_pipeline_seg2)
+	if (advance_pipeline)
 		stomp1_q <= stomp1_r;
 end
 always_ff @(posedge clk) if (advance_pipeline) stomp2_q <= stomp2_r;
@@ -3035,8 +3021,6 @@ Qupls4_pipeline_ren #(.MWIDTH(MWIDTH)) uren1
 	.clk5x(clk5x),
 	.ph4(ph4),
 	.en(advance_pipeline),
-	.ihit_dec(ihit_dec),
-	.ihit_ren(ihit_ren),
 	.nq(nq),
 	.restore(restore),
 	.tail0(tails[0]),
@@ -3209,23 +3193,23 @@ always_ff @(posedge clk)
 if (advance_pipeline)
 	qd_d <= qd_x;
 always_ff @(posedge clk)
-if (advance_pipeline_seg2)
+if (advance_pipeline)
 	qd_r <= qd_d;
 always_ff @(posedge clk)
-if (advance_pipeline_seg2)
+if (advance_pipeline)
 	qd_q <= qd_r;
 
 always_ff @(posedge clk)
-if (advance_pipeline_seg2)
+if (advance_pipeline)
 	pt_r[0] <= pt_dec[0];
 always_ff @(posedge clk)
-if (advance_pipeline_seg2)
+if (advance_pipeline)
 	pt_r[1] <= pt_dec[1];
 always_ff @(posedge clk)
-if (advance_pipeline_seg2)
+if (advance_pipeline)
 	pt_r[2] <= pt_dec[2];
 always_ff @(posedge clk)
-if (advance_pipeline_seg2)
+if (advance_pipeline)
 	pt_r[3] <= pt_dec[3];
 
 /*
@@ -3248,23 +3232,23 @@ Qupls4_pipeline_que uque1
 */
 
 always_ff @(posedge clk)
-if (advance_pipeline_seg2)
+if (advance_pipeline)
 	pt_q[0] <= pt_r[0];
 always_ff @(posedge clk)
-if (advance_pipeline_seg2)
+if (advance_pipeline)
 	pt_q[1] <= pt_r[1];
 always_ff @(posedge clk)
-if (advance_pipeline_seg2)
+if (advance_pipeline)
 	pt_q[2] <= pt_r[2];
 always_ff @(posedge clk)
-if (advance_pipeline_seg2)
+if (advance_pipeline)
 	pt_q[3] <= pt_r[3];
 
 always_ff @(posedge clk)
-if (advance_pipeline_seg2)
+if (advance_pipeline)
 	grp_q <= grp_r;
 always_ff @(posedge clk)
-if (advance_pipeline_seg2)
+if (advance_pipeline)
 	grp_r <= grp_d;
 
 reg sau0_wrA, sau0_wrB, sau0_wrC;
@@ -3922,43 +3906,18 @@ end
 end
 endgenerate
 */
-// Detect when it is needed to update the GPR from the capabilities pipeline.
-always_comb
-begin
-	if (cap_fuq_we==33'hFF || cap_fuq_we==33'h1FF)
-		sel_cap_xpipe = TRUE;
-	else
-		sel_cap_xpipe = FALSE;
-end
-
-// Detect when a stall is needed because there is no available write port on 
-// the GPR file.
-always_comb
-begin
-	if (sel_cap_xpipe && !(
-		SUPPORT_XPIPE0 && (fuq_we[0]==9'd0)	||	
-		SUPPORT_XPIPE1 && (fuq_we[1]==9'd0)	||	
-		SUPPORT_XPIPE2 && (fuq_we[2]==9'd0)	||	
-		SUPPORT_XPIPE3 && (fuq_we[3]==9'd0)	||	
-		SUPPORT_XPIPE4 && (fuq_we[4]==9'd0)	||	
-		SUPPORT_XPIPE5 && (fuq_we[5]==9'd0)
-	))
-		stall_cap_xpipe = TRUE;
-	else
-		stall_cap_xpipe = FALSE;
-end
 
 // Mux the queue outputs onto the register file inputs.
 generate begin : gWrPort
 	for (g = 0; g < $size(wrport0_v); g = g + 1) begin
 		if (NREG_WPORTS >= NFRQ) begin
-			always_ff @(posedge clk) wrport0_v[g] <= ~(sel_cap_xpipe & ~stall_cap_xpipe ? cap_fuq_empty : fuq_empty[g]);
-			always_ff @(posedge clk) wrport0_we[g] <= sel_cap_xpipe & ~stall_cap_xpipe  ? cap_fuq_we[8:0] : fuq_we[g]; 
-			always_ff @(posedge clk) wrport0_Rt[g] <= sel_cap_xpipe & ~stall_cap_xpipe  ? cap_fuq_pRt : fuq_pRt[g]; 
-			always_ff @(posedge clk) wrport0_aRt[g] <= sel_cap_xpipe & ~stall_cap_xpipe  ? cap_fuq_aRt : fuq_aRt[g]; 
-			always_ff @(posedge clk) wrport0_res[g] <= sel_cap_xpipe & ~stall_cap_xpipe  ? cap_fuq_res[63:0] : fuq_res[g]; 
-			always_ff @(posedge clk) wrport0_cp[g] <= sel_cap_xpipe & ~stall_cap_xpipe  ? cap_fuq_cp : fuq_cp[g]; 
-			always_ff @(posedge clk) wrport0_tag[g] <= sel_cap_xpipe & ~stall_cap_xpipe  ? cap_fuq_tag : fuq_tag[g]; 
+			always_ff @(posedge clk) wrport0_v[g] <= fuq_empty[g];
+			always_ff @(posedge clk) wrport0_we[g] <= fuq_we[g]; 
+			always_ff @(posedge clk) wrport0_Rt[g] <= fuq_pRt[g]; 
+			always_ff @(posedge clk) wrport0_aRt[g] <= fuq_aRt[g]; 
+			always_ff @(posedge clk) wrport0_res[g] <= fuq_res[g]; 
+			always_ff @(posedge clk) wrport0_cp[g] <= fuq_cp[g]; 
+			always_ff @(posedge clk) wrport0_tag[g] <= fuq_tag[g]; 
 		end
 		else begin
 			always_ff @(posedge clk) wrport0_v[g] <= frq_upd[g]==5'd31 ? 1'b0 : ~fuq_empty[frq_upd[g]];
@@ -5681,7 +5640,7 @@ wire pe_vec_stall;
 edge_det edvs1 (
 	.rst(irst),
 	.clk(clk),
-	.ce(advance_pipeline_seg2),
+	.ce(advance_pipeline),
 	.i(|rob[head[0]].v && (rob[head[0]].op.decbus.rex || rob[head[0]].excv)),
 	.pe(pe_vec_stall),
 	.ne(),
@@ -6584,7 +6543,7 @@ else begin
 		fpu1_done1 <= FALSE;
 	// Fcu op may have been stomped on after issue, so check valid flag.
   if (~hirq) begin
-  	if ((pe_allqd|allqd) && advance_pipeline_seg2)
+  	if ((pe_allqd|allqd) && advance_pipeline)
   		excret <= FALSE;
 	end
 	sau0_stomp <= FALSE;
@@ -6595,7 +6554,7 @@ else begin
 	dram1_stomp <= FALSE;
 
 	// This test in sync with PC update
-	if (!branchmiss && ihito && !hirq && ((pe_allqd|allqd) && advance_pipeline_seg2))
+	if (!branchmiss && ihito && !hirq && ((pe_allqd|allqd) && advance_pipeline))
 		brtgtv <= FALSE;	// PC has been updated
 
 	load_lsq_argc <= FALSE;
@@ -7912,12 +7871,12 @@ always_ff @(posedge clk) begin: clock_n_debug
 	$display("MOT: 0:%h  1:%h  2:%h  3:%h", pg_mot.pr[0].op.uop, pg_mot.pr[1].op.uop, pg_mot.pr[2].op.uop, pg_mot.pr[3].op.uop);
 	$display("DEC: 0:%h  1:%h  2:%h  3:%h", pg_dec.pr[0].op.uop, pg_dec.pr[1].op.uop, pg_dec.pr[2].op.uop, pg_dec.pr[3].op.uop);
 	$display("REN: 0:%h  1:%h  2:%h  3:%h", pg_ren.pr[0].op.uop, pg_ren.pr[1].op.uop, pg_ren.pr[2].op.uop, pg_ren.pr[3].op.uop);
-	$display("----- Fetch %c----- %s", ihit_fet ? "h":" ", stomp_fet ? stompstr : no_stompstr);
+	$display("----- Fetch ----- %s", stomp_fet ? stompstr : no_stompstr);
 	$display("i$ pc input:  %h.%h stream:%d#", pcs[fet_stream].stream,pcs[fet_stream].cap.offset, fet_stream);
 	$display("i$ pc output: %h %s #", pc_fet.cap.offset, ihito ? "ihit" : "    ");
 	$display("cacheL: %x", ic_line[511:0]);
 	$display("cacheH: %x", ic_line[1023:512]);
-	$display("----- Instruction Extract %c ----- %s", ihit_ext ? "h":" ", stomp_ext ? stompstr : no_stompstr);
+	$display("----- Instruction Extract ----- %s", stomp_ext ? stompstr : no_stompstr);
 	$display("ip 0: %h.%h  1: %h.%h  2: %h.%h  3: %h.%h",
 		uiext1.pc_fet[0].stream, uiext1.pc_fet[0].cap.offset,
 		uiext1.pc_fet[1].stream, uiext1.pc_fet[1].cap.offset,
@@ -7926,7 +7885,7 @@ always_ff @(posedge clk) begin: clock_n_debug
 	$display("lineL: %h", ic_line_fet[511:0]);
 	$display("lineH: %h", ic_line_fet[1023:512]);
 	$display("align: %x", uiext1.ic_line_aligned);
-	$display("----- Micro-op Translate %c ----- %s", ihit_mot ? "h":" ", stomp_mot ? stompstr : no_stompstr);
+	$display("----- Micro-op Translate ----- %s", stomp_mot ? stompstr : no_stompstr);
 	$display("ip: %h.%h", pg_ext.hdr.ip.stream.stream, pg_ext.hdr.ip.cap.offset);
 	$display("lineL: %h", cline_ext[511:0]);
 	$display("lineH: %h", cline_ext[1023:512]);
@@ -7940,7 +7899,7 @@ always_ff @(posedge clk) begin: clock_n_debug
 	*/
 	if (p_override)
 		$display("BSR %h  pc0_fet=%h", new_address_ext, uiext1.pg_ext.hdr.ip.cap.offset+{uiext1.pg_ext.pr[0].ip_offs,1'b0});
-	$display("----- Decode %c ----- %s", ihit_dec ? "h":" ", stomp_dec ? stompstr : no_stompstr);
+	$display("----- Decode ----- %s", stomp_dec ? stompstr : no_stompstr);
 	$display("ip:%h.%h", pg_mot.hdr.ip.stream.stream,pg_mot.hdr.ip.cap.offset);
 	$display("lineL: %h", cline_mot[511:0]);
 	$display("lineH: %h", cline_mot[1023:512]);
@@ -7986,7 +7945,7 @@ always_ff @(posedge clk) begin: clock_n_debug
 			i[7:0]+8'd7, fnPreg(i+7), fnArchRegVal(i+7), fnArchRegV(i+7)?"v":" "
 			);
 
-	$display("----- Rename %c ----- %s", ihit_ren ? "h":" ", stomp_ren ? stompstr : no_stompstr);
+	$display("----- Rename ----- %s", stomp_ren ? stompstr : no_stompstr);
 	$display("ip:%h.%h", pg_ren.hdr.ip.stream.stream,pg_ren.hdr.ip.cap.offset);
 	$display("REN: 0:%h  1:%h  2:%h  3:%h", pg_ren.pr[0].op.uop, pg_ren.pr[1].op.uop, pg_ren.pr[2].op.uop, pg_ren.pr[3].op.uop);
 	/*
@@ -8017,7 +7976,7 @@ always_ff @(posedge clk) begin: clock_n_debug
 		pg_ren.pr[3].aRc, prn[14], prnv[14]?"v":" ");
 	*/
 //	$display("----- Queue Time ----- %s", (stomp_que && !stomp_quem) ? stompstr : no_stompstr);
-	$display("----- Queue %c ----- %h", ihit_que ? "h":" ", qd);
+	$display("----- Queue ----- ");
 	for (i = 0; i < Qupls4_pkg::ROB_ENTRIES; i = i + 1) begin
     $display("%c%c%c sn:%h %d: %c%c%c%c%c%c %c %c%c %d %c %c%d Rd%d/%d %h Rs%d/%d %h%c Rs1%d/%d=%h %c Rs2%d/%d=%h %c Rs3%d/%d=%h %c I=%h %h.%h cp:%h ins=%h #",
 			(i[4:0]==head[0])?67:46, (i[4:0]==tails[0])?81:46, rob[i].rstp ? "r" : " ", rob[i].sn, i[5:0],

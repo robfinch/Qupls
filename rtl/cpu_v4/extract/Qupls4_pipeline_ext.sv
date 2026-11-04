@@ -44,7 +44,7 @@ import const_pkg::*;
 import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_pipeline_ext(rst_i, clk_i, ihit_fet, ihit_ext, en_i,
+module Qupls4_pipeline_ext(rst_i, clk_i, en_i,
 	kept_stream, stomp_ext, nop_o, carry_mod_fet, ssm_flag, hwipc_fet,
 	irq_fet, irq_in_fet, irq_sn_fet, ipl_fet, sr, pt_ext, pt_dec, p_override, po_bno,
 	branchmiss, misspc_fet, flush_fet, active_irq_vector, irq_i,
@@ -58,8 +58,6 @@ module Qupls4_pipeline_ext(rst_i, clk_i, ihit_fet, ihit_ext, en_i,
 parameter MWIDTH = Qupls4_pkg::MWIDTH;
 input rst_i;
 input clk_i;
-input ihit_fet;
-output reg ihit_ext;
 input irq_fet;
 input Qupls4_pkg::irq_info_packet_t irq_in_fet;
 input cpu_types_pkg::seqnum_t irq_sn_fet;
@@ -236,18 +234,6 @@ end
 always_comb
 	new_cline_ext = cline_ext_r != cline_ext;
 
-reg redundant_group;
-always_comb
-if (rst_i)
-	redundant_group = FALSE;
-else begin
-	if (prev_pc0_fet==pc0_fet && prev_ic_line_aligned==ic_line_aligned)
-		redundant_group = TRUE;
-	else
-		redundant_group = FALSE;
-end
-//wire redundant_group = {prev_pc0_fet,prev_ic_line_aligned}=={pc0_fet,ic_line_aligned};
-
 // Map instructions to micro-ops
 // Set instruction valid bit.
 
@@ -262,7 +248,6 @@ Qupls4_ext_set_pr #(.MWIDTH(MWIDTH)) usetpr1
 	.stomp(stomp_ext),
 	.carry_mod(carry_mod_fet),
 	.ic_line(ic_line_aligned[MWIDTH*48-1:0]),
-	.redundant_group(redundant_group),
 	.ssm_flag(ssm_flag),
 	.pc(pc_fet),
 	.pr(pr_ext)
@@ -582,14 +567,6 @@ if (rst_i)
 else begin
 	if (en)
 		pt_dec <= pt_ext;
-end
-
-always_ff @(posedge clk)
-if (rst_i)
-	ihit_ext <= FALSE;
-else begin
-	if (en)
-		ihit_ext <= ihit_fet;
 end
 
 // Once p_override goes TRUE stomp_aln will go TRUE. Once the stomp has been

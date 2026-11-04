@@ -39,7 +39,7 @@ import const_pkg::*;
 import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_pipeline_fet(rst, clk, ihit, ihit_fet, en,
+module Qupls4_pipeline_fet(rst, clk, en, ihit,
 	irq_in_ic, irq_ic, irq_in_fet, irq_fet, irq_sn_ic, irq_sn_fet,
 	pc_i, misspc, misspc_fet, uop_num_ic, uop_num_fet, flush_i,flush_fet,
 	pc0_fet, pc1_fet, pc2_fet, pc3_fet, pc4_fet, stomp_fet, kept_stream, ic_carry_mod,
@@ -48,8 +48,8 @@ module Qupls4_pipeline_fet(rst, clk, ihit, ihit_fet, en,
 );
 input rst;
 input clk;
-input ihit;
 input en;
+input ihit;
 input irq_ic;
 output reg irq_fet;
 input cpu_types_pkg::seqnum_t irq_sn_ic;
@@ -77,7 +77,6 @@ input [511:0] inj_line_i;
 output reg [1023:0] ic_line_fet;
 input nmi_i;
 output reg [31:0] carry_mod_fet;
-output reg ihit_fet;
 input excv_i;
 input Qupls4_pkg::cause_code_t exc_i;
 output reg excv_o;
@@ -240,14 +239,6 @@ if (rst)
 else begin
 	if (en)
 		irq_sn_fet <= irq_sn_ic;
-end
-
-always_ff @(posedge clk)
-if (rst)
-	ihit_fet <= FALSE;
-else begin
-	if (en)
-		ihit_fet <= ihit;
 end
 
 always_ff @(posedge clk)

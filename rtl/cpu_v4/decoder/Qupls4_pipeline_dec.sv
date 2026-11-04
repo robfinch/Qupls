@@ -41,7 +41,7 @@ import Qupls4_pkg::*;
 
 module Qupls4_pipeline_dec(rst_i, rst, clk, en, regFPCSR,
 	new_cline_ext, cline, branch_resolved, live_stream,
-	sr, uop_num, ihit_mot, ihit_dec,
+	sr, uop_num,
 	tags2free, freevals, bo_wr, bo_preg,
 	stomp_dec, stomp_ext, kept_stream, pg_mot,
 	pg_dec,
@@ -50,15 +50,13 @@ module Qupls4_pipeline_dec(rst_i, rst, clk, en, regFPCSR,
 	uop_buf, uop_mark, uop_head
 );
 parameter MWIDTH = 4;		// Machine width, under construction
-parameter MAX_MICROOPS = 12;
+parameter MAX_MICROOPS = 8;
 parameter MICROOPS_PER_INSTR = 16;
 input rst_i;
 input rst;
 input clk;
 input en;
 input aregno_t regFPCSR;
-input ihit_mot;
-output reg ihit_dec;
 input new_cline_ext;
 input [1023:0] cline;
 input Qupls4_pkg::status_reg_t sr;
@@ -1017,14 +1015,6 @@ else begin
 			end
 		end
 	end
-end
-
-always_ff @(posedge clk)
-if (rst)
-	ihit_dec <= FALSE;
-else begin
-	if (en)
-		ihit_dec <= ihit_mot;
 end
 
 endmodule

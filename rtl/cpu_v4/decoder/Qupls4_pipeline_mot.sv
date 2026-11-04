@@ -42,7 +42,7 @@ import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
 module Qupls4_pipeline_mot(rst, clk, en, stomp, stomp2, cline_ext, cline_mot,
-	ihit_ext, ihit_mot, pc_mot, branch_resolved, live_stream,
+	pc_mot, branch_resolved, live_stream,
     pg_ext, pg_mot, pg_mot1, advance_ext, uop_buf, uop_mark, head);
 parameter MWIDTH = Qupls4_pkg::MWIDTH;
 parameter MICROOPS_PER_INSTR = 16;
@@ -53,8 +53,6 @@ input clk;
 input en;
 input branch_resolved;
 input cpu_types_pkg::pc_stream_t live_stream;
-input ihit_ext;
-output reg ihit_mot;
 output pc_address_ex_t pc_mot;
 input stomp;
 input stomp2;
@@ -227,13 +225,5 @@ end
 
 always_comb
 	advance_ext = rd_more|did_rd_more;
-
-always_ff @(posedge clk)
-if (rst)
-	ihit_mot <= FALSE;
-else begin
-	if (en)
-		ihit_mot <= ihit_ext;
-end
 
 endmodule

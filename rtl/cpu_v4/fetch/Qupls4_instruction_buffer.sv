@@ -41,7 +41,7 @@ import Qupls4_pkg::*;
 module Qupls4_instruction_buffer(rst_i, clk_i, ce_i, first_icache,
 	ihit_i, stream_i, next_act_stream,
 	ips_i, ip_i, invce, invalidate,
-	icip_i, line_i, line_o, ip_o, is_buffered_o, is_icip_buffered_o,
+	icip_i, line_i, line_o, ip_o, is_buffered_o,
 	next_is_buffered_o, buffered_streams);
 input rst_i;
 input clk_i;
@@ -59,59 +59,83 @@ output reg [1023:0] line_o;
 input pc_address_ex_t [Qupls4_pkg::XSTREAMS*Qupls4_pkg::THREADS-1:0] ips_i;
 output pc_address_ex_t ip_o;
 output reg is_buffered_o;
-output reg is_icip_buffered_o;
 output reg next_is_buffered_o;
 output reg [Qupls4_pkg::XSTREAMS*Qupls4_pkg::THREADS-1:0] buffered_streams;
 
-integer n1,n2,n43,n44;
+integer n1,n2,n4,n43,n44;
 
 // Buffers the instruction cache line to allow fetching along alternate paths.
-reg [1023:0] line_buf [0:3];
-cpu_types_pkg::pc_address_t ip_buf [0:3];
+reg [1023:0] line_buf [0:4];
+cpu_types_pkg::pc_address_t ip_buf [0:4];
+reg is_icip_buffered;
+reg is_buffered;
 
 // Compute bitmap which streams are buffered. IF there is a buffered stream, 
 // it can advance. The stream choosen to advance is done in the BTB. It comes
 // back here as the choosen IP.
 always_comb
-foreach (ips_i[n2]) begin
-	buffered_streams[n2] = FALSE;
-	foreach(ip_buf[n43]) begin
-		if (ips_i[n2].cap.offset[$bits(cpu_types_pkg::pc_address_t)-1:0]+ips_i[n2].cap.base[$bits(cpu_types_pkg::pc_address_t)-1:0] >= ip_buf[n43] &&
-			ips_i[n2].cap.offset[$bits(cpu_types_pkg::pc_address_t)-1:0]+ips_i[n2].cap.base[$bits(cpu_types_pkg::pc_address_t)-1:0] < ip_buf[n43] + 8'd64)
-		buffered_streams[n2] = TRUE;
+begin
+	foreach (ips_i[n2]) begin
+		buffered_streams[n2] = FALSE;
+		foreach(ip_buf[n43]) begin
+			if (ips_i[n2].cap.offset[$bits(cpu_types_pkg::pc_address_t)-1:0]+ips_i[n2].cap.base[$bits(cpu_types_pkg::pc_address_t)-1:0] >= ip_buf[n43] &&
+				ips_i[n2].cap.offset[$bits(cpu_types_pkg::pc_address_t)-1:0]+ips_i[n2].cap.base[$bits(cpu_types_pkg::pc_address_t)-1:0] < ip_buf[n43] + 8'd64) begin
+				buffered_streams[n2] = TRUE;
+			end
+		end
 	end
 end
 
+// Compute if the incoming cache line is already buffered. This is used to
+// disable buffering the cache line again.
 always_comb
 begin
-	line_o = line_i;
-	ip_o = ip_i;
-	is_buffered_o = FALSE;
+	is_buffered = FALSE;
 	foreach (ip_buf[n43])
-		if (ip_i.cap.offset[$bits(cpu_types_pkg::pc_address_t)-1:0] >= ip_buf[n43] && ip_i.cap.offset[$bits(cpu_types_pkg::pc_address_t)-1:0] < ip_buf[n43] + 8'd64) begin
-			line_o = line_buf[n43];
-			ip_o = ip_i;
-			is_buffered_o = TRUE;
+		if (ip_i.cap.offset[$bits(cpu_types_pkg::pc_address_t)-1:0]+
+			ip_i.cap.base[$bits(cpu_types_pkg::pc_address_t)-1:0] >= ip_buf[n43] &&
+			ip_i.cap.offset[$bits(cpu_types_pkg::pc_address_t)-1:0]+
+			ip_i.cap.base[$bits(cpu_types_pkg::pc_address_t)-1:0] < ip_buf[n43] + 8'd64) begin
+			is_buffered = TRUE;
 		end
 end
 
+// Compute if the cache line can come from an entry in the instruction buffer.
 always_comb
 begin
-	is_icip_buffered_o = FALSE;
-	// if icip_i matches the output from the cache, then the line will be
-	// passed to the output, so it is a match.
-	if (icip_i.cap.offset==ip_i.cap.offset && is_buffered_o)
-		is_icip_buffered_o = TRUE;
+	n4 = 4;	// Select the NOP line
+	is_icip_buffered = FALSE;
 	foreach (ip_buf[n43])
-		if (icip_i.cap.offset[$bits(cpu_types_pkg::pc_address_t)-1:0] >= ip_buf[n43] && icip_i.cap.offset[$bits(cpu_types_pkg::pc_address_t)-1:0] < ip_buf[n43] + 8'd64)
-			is_icip_buffered_o = TRUE;
+		if (icip_i.cap.offset[$bits(cpu_types_pkg::pc_address_t)-1:0]+
+			icip_i.cap.base[$bits(cpu_types_pkg::pc_address_t)-1:0] >= ip_buf[n43] &&
+			icip_i.cap.offset[$bits(cpu_types_pkg::pc_address_t)-1:0]+
+			icip_i.cap.base[$bits(cpu_types_pkg::pc_address_t)-1:0] < ip_buf[n43] + 8'd64) begin
+			is_icip_buffered = TRUE;
+			n4 = n43;
+		end
 end
+
+// Select line output. This will normally be the one detected buffered, but
+// might be the incoming cache line.
+always_comb
+begin
+	line_o = line_buf[n4];
+	ip_o = icip_i;
+end
+
+// Output buffer detect signal. IF there was an ihit then the incoming cache
+// line is desired. The IP must have matched.
+always_comb
+	is_buffered_o = is_icip_buffered & is_buffered;
 
 always_comb
 begin
 	next_is_buffered_o = FALSE;
 	foreach (ip_buf[n44])
-		if (ips_i[stream_i.stream].cap.offset[$bits(cpu_types_pkg::pc_address_t)-1:0] >= ip_buf[n44] && ips_i[stream_i.stream].cap.offset[$bits(cpu_types_pkg::pc_address_t)-1:0] < ip_buf[n44] + 8'd64)
+		if (ips_i[stream_i.stream].cap.offset[$bits(cpu_types_pkg::pc_address_t)-1:0]+
+			ips_i[stream_i.stream].cap.base[$bits(cpu_types_pkg::pc_address_t)-1:0] >= ip_buf[n44] &&
+			ips_i[stream_i.stream].cap.offset[$bits(cpu_types_pkg::pc_address_t)-1:0]+
+			ips_i[stream_i.stream].cap.base[$bits(cpu_types_pkg::pc_address_t)-1:0] < ip_buf[n44] + 8'd64)
 			next_is_buffered_o = TRUE;
 end
 
@@ -121,27 +145,33 @@ always_ff @(posedge clk_i)
 if (rst_i) begin
 	foreach (line_buf[n1]) begin
 		line_buf[n1] = {1024{1'b1}};	// NOPs
-		ip_buf[n1] = 32'h0;
+		ip_buf[n1] = {$bits(pc_address_t){1'b1}};
 	end
 end
 else begin
 	if (ce_i) begin
-		if (~is_icip_buffered_o & ihit_i) begin
+		if (~is_buffered & ihit_i) begin
 			foreach (line_buf[n1]) begin
-				if (n1==$size(line_buf)-1) begin
-					line_buf[n1] <= line_i;
-					ip_buf[n1] <= {icip_i.cap.offset[$bits(cpu_types_pkg::pc_address_t)-1:6],6'd0};
-				end
-				else begin
-					line_buf[n1] <= line_buf[n1+1];
-					ip_buf[n1] <= ip_buf[n1+1];
-				end
+				case(n1)
+				($size(line_buf)-1):	;
+				($size(line_buf)-2):
+					begin
+						line_buf[n1] <= line_i;
+						ip_buf[n1] <= {icip_i.cap.offset[$bits(cpu_types_pkg::pc_address_t)-1:6]+
+							icip_i.cap.base[$bits(cpu_types_pkg::pc_address_t)-1:6],6'd0};
+					end
+				default:
+					begin
+						line_buf[n1] <= line_buf[n1+1];
+						ip_buf[n1] <= ip_buf[n1+1];
+					end
+				endcase
 			end
 		end
 		if (invce & invalidate)
 			foreach (line_buf[n1]) begin
 				line_buf[n1] = {1024{1'b1}};	// NOPs
-				ip_buf[n1] = 32'h0;
+				ip_buf[n1] = {$bits(pc_address_t){1'b1}};
 			end
 	end
 end

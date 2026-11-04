@@ -60,7 +60,7 @@ endfunction
 function fnUcIsSealed;
 input uc64_capability_t cap;
 begin
-	fnUcIsSealed = (cap.otype==18'h3fffe || cap.otype < 18'h3FFEF);
+	fnUcIsSealed = (cap.otype==24'hfffffe || cap.otype < 23'hFFFFEF);
 end
 endfunction
 
@@ -81,7 +81,14 @@ endfunction
 function fnUcIsReserved;
 input uc64_capability_t cap;
 begin
-	fnUcIsReserved = cap.otype<=18'h3fffd && cap.otype >= 18'h3fff0;
+	fnUcIsReserved = cap.otype<=24'hfffffd && cap.otype >= 24'hfffff0;
+end
+endfunction
+
+function [63:0] fnUcGetAddress;
+input uc64_capability_t cap;
+begin
+	fnUcGetAddress = cap.offset + cap.base;
 end
 endfunction
 

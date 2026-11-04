@@ -90,7 +90,7 @@ begin
 		else
 		*/
 		begin
-			dstpc.cap.offset = pc.cap.offset + {{47{ir.imm[16]}},ir.imm[16:0]};
+			dstpc.cap.offset = pc.cap.offset + {{46{ir.imm[17]}},ir.imm[17:0]};
 			dstpc.stream = rse.pc.stream;
 		end
 
@@ -102,7 +102,7 @@ begin
 			dstpc.stream = rse.pc.stream;
 		end
 		else begin
-			dstpc.cap.offset = pc.cap.offset + {{51{ir.imm[12]}},ir.imm[12:0]};
+			dstpc.cap.offset = pc.cap.offset + {{50{ir.imm[13]}},ir.imm[13:0]};
 			dstpc.stream = rse.pc.stream;
 		end
 
@@ -112,7 +112,7 @@ begin
 			dstpc.stream = rse.pc.stream;
 		end
 		else begin
-			dstpc.cap.offset = pc.cap.offset + {{47{ir.imm[16]}},ir.imm[16:0]};
+			dstpc.cap.offset = pc.cap.offset + {{46{ir.imm[17]}},ir.imm[17:0]};
 			dstpc.stream = rse.pc.stream;
 		end
 
@@ -123,7 +123,7 @@ begin
 		end
 	rse.jsr:
 		begin
-			dstpc.cap.offset = {{29{ir.imm[34]}},ir.imm[34:0]};
+			dstpc.cap.offset = {{29{ir.imm[34]}},ir.imm[34:0]} - rse.pc.cap.base;
 			dstpc.stream = rse.pc.stream;
 		end
 	rse.cjsr:
