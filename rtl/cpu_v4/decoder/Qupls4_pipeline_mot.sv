@@ -41,9 +41,11 @@ import const_pkg::*;
 import cpu_types_pkg::*;
 import Qupls4_pkg::*;
 
-module Qupls4_pipeline_mot(rst, clk, en, stomp, stomp2, cline_ext, cline_mot,
+module Qupls4_pipeline_mot(rst, clk, en,
+	stomp_trn, stomp_moq1, stomp_moq2, stomp_mot,
+	cline_ext, cline_mot,
 	pc_mot, branch_resolved, live_stream,
-    pg_ext, pg_mot, pg_mot1, advance_ext, uop_buf, uop_mark, head);
+  pg_ext, pg_mot, pg_mot1, advance_ext, uop_buf, uop_mark, head);
 parameter MWIDTH = Qupls4_pkg::MWIDTH;
 parameter MICROOPS_PER_INSTR = 16;
 parameter MAX_MICROOPS = 8;
@@ -54,8 +56,10 @@ input en;
 input branch_resolved;
 input cpu_types_pkg::pc_stream_t live_stream;
 output pc_address_ex_t pc_mot;
-input stomp;
-input stomp2;
+input stomp_trn;
+input stomp_moq1;
+input stomp_moq2;
+input stomp_mot;
 input [1023:0] cline_ext;
 output reg [1023:0] cline_mot = {1024{1'b1}};
 input Qupls4_pkg::pipeline_group_reg_t pg_ext;
@@ -73,6 +77,7 @@ reg [1023:0] cline_mot1 = {1024{1'b1}};
 reg [5:0] uop_count [0:MWIDTH-1];
 Qupls4_pkg::micro_op_t [MICROOPS_PER_INSTR-1:0] uop [MWIDTH-1:0];
 Qupls4_pkg::rob_entry_t nopi;
+Qupls4_pkg::pipeline_group_reg_t pg_trn,pg_moq;
 
 // Define a NOP instruction.
 always_comb
@@ -118,31 +123,7 @@ generate begin : gComb
 			if (en) cline_mot <= cline_mot1;
 
 		always_ff @(posedge clk)
-		if (rst) begin
-			pg_mot1 <= {$bits(pipeline_group_reg_t){1'b0}};
-			foreach(pg_mot.pr[n1])
-				pg_mot1.pr[n1] <= nopi;
-		end
-		else if (en) begin
-			pg_mot1 <= pg_ext;
-			if (stomp)
-				pg_mot1.hdr.v <= INV;
-			foreach (pg_mot1.pr[n1]) begin
-				if (stomp) begin
-					pg_mot1.pr[n1].stomped <= TRUE;
-					pg_mot1.pr[n1].done <= 2'b11;
-				end
-				if (branch_resolved) begin
-					if (pg_ext.pr[n1].ip_stream.thread==live_stream.thread && pg_ext.pr[n1].ip_stream.stream != live_stream.stream) begin
-						pg_mot1.pr[n1].stomped <= TRUE;
-						pg_mot1.pr[n1].done <= 2'b11;
-					end
-				end
-			end
-		end
-
-		always_ff @(posedge clk)
-			pc_mot <= pg_ext.hdr.ip;
+			pc_mot <= pg_moq.hdr.ip;
 
 		always_ff @(posedge clk)
 		if (rst) begin
@@ -151,17 +132,17 @@ generate begin : gComb
 				pg_mot.pr[n1] <= nopi;
 		end
 		else if (en) begin
-			pg_mot <= pg_mot1;
-			if (stomp2)
+			pg_mot <= pg_moq;
+			if (stomp_mot)
 				pg_mot.hdr.v <= INV;
 			foreach (pg_mot.pr[n1]) begin
 				pg_mot.pr[n1].op.uop <= uop_buf[n1];
-				if (stomp2) begin
+				if (stomp_mot) begin
 					pg_mot.pr[n1].stomped <= TRUE;
 					pg_mot.pr[n1].done <= 2'b11;
 				end
 				if (branch_resolved) begin
-					if (pg_mot1.pr[n1].ip_stream.thread==live_stream.thread && pg_mot1.pr[n1].ip_stream.stream != live_stream.stream) begin
+					if (pg_moq.pr[n1].ip_stream.thread==live_stream.thread && pg_moq.pr[n1].ip_stream.stream != live_stream.stream) begin
 						pg_mot.pr[n1].stomped <= TRUE;
 						pg_mot.pr[n1].done <= 2'b11;
 					end
@@ -174,7 +155,7 @@ generate begin : gComb
 generate begin : gMicroopMem
 	for (g = 0; g < MWIDTH; g = g + 1)
 Qupls4_microop_mem #(
-	.COMB(COMB),
+	.COMB(FALSE),
 	.MICROOPS_PER_INSTR(MICROOPS_PER_INSTR)
 ) uuop1
 (
@@ -189,7 +170,12 @@ Qupls4_microop_mem #(
 	.carry_in(1'b0),
 	.count(uop_count[g]),
 	.uop(uop[g]),
-	.thread(pg_ext.pr[g].ip_stream.thread)
+	.thread(pg_ext.pr[g].ip_stream.thread),
+	.stomp(stomp_trn),
+  .pg_ext(pg_ext),
+	.pg_trn(pg_trn),
+	.live_stream(live_stream),
+	.branch_resolved(branch_resolved)
 );
 end
 endgenerate
@@ -204,7 +190,13 @@ Qupls4_micro_op_queue3 #(.MICROOPS_PER_INSTR(MICROOPS_PER_INSTR)) umoq1
 	.uop_count(uop_count),
 	.uop_buf(uop_buf),
 	.uop_mark(uop_mark),
-	.head(head)
+	.head(head),
+	.stomp_moq1(stomp_moq1),
+	.stomp_moq2(stomp_moq2),
+	.pg_trn(pg_trn),
+	.pg_moq(pg_moq),
+	.live_stream(live_stream),
+	.branch_resolved(branch_resolved)
 );
 
 // rd_more just pulses for a single cycle.

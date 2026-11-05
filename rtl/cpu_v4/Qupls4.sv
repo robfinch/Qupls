@@ -254,8 +254,7 @@ pc_stream_t kept_stream, live_stream;
 always_comb
 	kept_stream = pc.stream;
 
-wire stomp_alnr;
-wire stomp_fet, stomp_ext, stomp_mot, stomp_mot2;
+wire stomp_fet, stomp_ext, stomp_trn, stomp_moq1, stomp_moq2, stomp_mot;
 wire stomp_dec, stomp_ren, stomp_que, stomp_quem;
 
 // LSQ
@@ -1858,11 +1857,12 @@ Qupls4_stomp ustmp1
 	.pc_dec(pg_dec.hdr.ip),
 	.pc_ren(pg_ren.hdr.ip),
 	.dep_stream(dep_stream),
-	.stomp_alnr(stomp_alnr),
 	.stomp_fet(stomp_fet),
 	.stomp_ext(stomp_ext),
+	.stomp_trn(stomp_trn),
+	.stomp_moq1(stomp_moq1),
+	.stomp_moq2(stomp_moq2),
 	.stomp_mot(stomp_mot),
-	.stomp_mot2(stomp_mot2),
 	.stomp_dec(stomp_dec),
 	.stomp_ren(stomp_ren),
 	.stomp_que(stomp_que),
@@ -2291,7 +2291,6 @@ Qupls4_pipeline_ext #(.MWIDTH(MWIDTH)) uiext1
 	.uop_num_ext(uop_num_ext),
 	.carry_mod_fet(carry_mod_fet),
 	.kept_stream(kept_stream),
-	.stomp_alnr(stomp_alnr),
 	.stomp_ext(stomp_ext),/*icnop||brtgtv||fetch_new_block_x*/
 	.nop_o(exti_nop),
 //	.nmi_i(pe_nmi),
@@ -2351,8 +2350,10 @@ umot1
 	.branch_resolved(branch_resolved),
 	.live_stream(live_stream),
 	.pc_mot(pc_mot),
-	.stomp(stomp_mot),
-	.stomp2(stomp_mot2),
+	.stomp_trn(stomp_trn),
+	.stomp_moq1(stomp_moq1),
+	.stomp_moq2(stomp_moq2),
+	.stomp_mot(stomp_mot),
 	.cline_ext(cline_ext),
 	.cline_mot(cline_mot),
 	.pg_ext(pg_ext),

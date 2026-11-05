@@ -104,6 +104,7 @@ Qupls4_pkg::regs_t fregs_i;
 Qupls4_pkg::regs_t fregs_o;
 Qupls4_pkg::pipeline_group_reg_t pg_dec1,pg_dec2,pg_dec3,pg_dec4;
 reg [1023:0] cline1,cline2,cline3,cline4;
+reg p_override, p_overrided;
 
 always @(posedge clk)
 if (rst)
@@ -470,6 +471,12 @@ if (rst) begin
 	end
 	foreach (pr_dec[n9])
 		pr_dec[n9] = nopi;
+	bsr0_tgt = Qupls4_pkg::RSTPC;
+	bsr1_tgt = Qupls4_pkg::RSTPC;
+	bsr2_tgt = Qupls4_pkg::RSTPC;
+	jsr0_tgt = Qupls4_pkg::RSTPC;
+	jsr1_tgt = Qupls4_pkg::RSTPC;
+	jsr2_tgt = Qupls4_pkg::RSTPC;
 end
 else begin
 	hwi_ignore = FALSE;
@@ -945,41 +952,55 @@ else begin
 		pr_dec[3].decbus.nop = TRUE;
 	end
 
+	// Note constant imm has already been shifted left once.
+	bsr0_tgt = {pr_dec[0].decbus.imma} + pg_mot.hdr.ip.cap.offset + {pg_mot.pr[0].ip_offs,1'b0};
+	bsr1_tgt = {pr_dec[1].decbus.imma} + pg_mot.hdr.ip.cap.offset + {pg_mot.pr[1].ip_offs,1'b0};
+	bsr2_tgt = {pr_dec[2].decbus.imma} + pg_mot.hdr.ip.cap.offset + {pg_mot.pr[2].ip_offs,1'b0};
+	jsr0_tgt = {pr_dec[0].decbus.imma};
+	jsr1_tgt = {pr_dec[1].decbus.imma};
+	jsr2_tgt = {pr_dec[2].decbus.imma};
+
+	// We want to match the new address against what the MOT stage address was in 
+	// the previous cycle.
 	new_address_o = Qupls4_pkg::RSTPC;
-	predicted_correctly_o = TRUE;
-	if (en) begin
-		if ((pg_dec.pr[0].op.decbus.bsr|pg_dec.pr[0].op.decbus.jsr) && !pg_dec.pr[0].stomped) begin
-			predicted_correctly_o = FALSE;
-			new_address_o = pg_dec.pr[0].op.decbus.bsr ? bsr0_tgt : jsr0_tgt;
-			if (new_address_o==(pg_mot.hdr.ip.cap.offset + {pg_mot.pr[0].ip_offs,1'b0}))
-				predicted_correctly_o = TRUE;
+	p_override = FALSE;
+	if (pg_mot.hdr.ip.stream == pg_dec.hdr.ip.stream && !stomp_dec) begin
+		if (pr_dec[0].decbus.bsr|pr_dec[0].decbus.jsr) begin
+			new_address_o = pr_dec[0].decbus.bsr ? bsr0_tgt : jsr0_tgt;
+			if (new_address_o!=(pg_mot.hdr.ip.cap.offset + {pg_mot.pr[0].ip_offs,1'b0}))
+				p_override = TRUE;
 		end
-		else if ((pg_dec.pr[1].op.decbus.bsr|pg_dec.pr[1].op.decbus.jsr) && !pg_dec.pr[1].stomped) begin
-			predicted_correctly_o = FALSE;
-			new_address_o = pg_dec.pr[1].op.decbus.bsr ? bsr1_tgt : jsr1_tgt;
-			if (new_address_o==(pg_mot.hdr.ip.cap.offset + {pg_mot.pr[0].ip_offs,1'b0}))
-				predicted_correctly_o = TRUE;
+		else if (pr_dec[1].decbus.bsr|pr_dec[1].decbus.jsr) begin
+			new_address_o = pr_dec[1].decbus.bsr ? bsr1_tgt : jsr1_tgt;
+			if (new_address_o!=(pg_mot.hdr.ip.cap.offset + {pg_mot.pr[0].ip_offs,1'b0}))
+				p_override = TRUE;
 		end
-		else if ((pg_dec.pr[2].op.decbus.bsr|pg_dec.pr[2].op.decbus.jsr) && !pg_dec.pr[2].stomped) begin
-			predicted_correctly_o = FALSE;
+		else if (pr_dec[2].decbus.bsr|pr_dec[2].decbus.jsr) begin
 			new_address_o = pg_dec.pr[2].op.decbus.bsr ? bsr2_tgt : jsr2_tgt;
-			if (new_address_o==(pg_mot.hdr.ip.cap.offset + {pg_mot.pr[0].ip_offs,1'b0}))
-				predicted_correctly_o = TRUE;
+			if (new_address_o!=(pg_dec.hdr.ip.cap.offset + {pg_dec.pr[0].ip_offs,1'b0}))
+				p_override = TRUE;
 		end
 	end
 end
+
+// We want the override to pulse.
+// Locally generated.
+always_ff @(posedge clk)
+if (rst)
+	p_overrided <= TRUE;
+else begin
+	if (en)
+		p_overrided <= p_override;
+end
+
+always_comb
+	predicted_correctly_o = !(en && p_override && !p_overrided);
 
 always_ff @(posedge clk)
 if (rst) begin
 	pg_dec <= {$bits(pipeline_group_reg_t){1'b0}};
 	foreach (pg_dec.pr[n10])
 		pg_dec.pr[n10] <= nopi2;
-	bsr0_tgt <= RSTPC;
-	bsr1_tgt <= RSTPC;
-	bsr2_tgt <= RSTPC;
-	jsr0_tgt <= RSTPC;
-	jsr1_tgt <= RSTPC;
-	jsr2_tgt <= RSTPC;
 end
 else begin
 	if (en) begin
@@ -1013,13 +1034,6 @@ else begin
 					tStomp(n10);
 			end
 		end
-		// Note constant imm has already been shifted left once.
-		bsr0_tgt <= {pr_dec[0].decbus.imma} + pg_mot.hdr.ip.cap.offset + {pg_mot.pr[0].ip_offs,1'b0};
-		bsr1_tgt <= {pr_dec[1].decbus.imma} + pg_mot.hdr.ip.cap.offset + {pg_mot.pr[1].ip_offs,1'b0};
-		bsr2_tgt <= {pr_dec[2].decbus.imma} + pg_mot.hdr.ip.cap.offset + {pg_mot.pr[2].ip_offs,1'b0};
-		jsr0_tgt <= {pr_dec[0].decbus.imma};
-		jsr1_tgt <= {pr_dec[1].decbus.imma};
-		jsr2_tgt <= {pr_dec[2].decbus.imma};
 	end
 end
 

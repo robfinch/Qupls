@@ -65,6 +65,7 @@ begin
 	Qupls4_pkg::OP_FLTVVV,Qupls4_pkg::OP_FLTVVS:
 		fnClass = 3'd2;
 	Qupls4_pkg::OP_FADDI:		fnClass = 3'd2;
+	Qupls4_pkg::OP_FMULI:		fnClass = 3'd2;
 	Qupls4_pkg::OP_CHK:	fnClass = 3'd1;
 	Qupls4_pkg::OP_ADDI:		fnClass = 3'd1;
 	Qupls4_pkg::OP_SUBFI:	fnClass = 3'd1;
@@ -75,7 +76,6 @@ begin
 	Qupls4_pkg::OP_XORI:		fnClass = 3'd1;
 	Qupls4_pkg::OP_SHIFT:	fnClass = 3'd1;
 	Qupls4_pkg::OP_CSR:		fnClass = 3'd1;
-	Qupls4_pkg::OP_MOVMR:		fnClass = 3'd1;
 	Qupls4_pkg::OP_LOADA:	fnClass = 3'd1;
 	Qupls4_pkg::OP_FENCE:
 		fnClass = 3'd1;

@@ -610,7 +610,7 @@ typedef enum logic [6:0] {
 	OP_LOADA = 7'd20,
 	OP_DIVUI = 7'd21,
 	OP_FADDI = 7'd22,
-	OP_MOVMR = 7'd23,
+	OP_FMULI = 7'd23,
 //	OP_TRAP = 7'd28,
 
 	OP_BSR = 7'd32,
@@ -931,6 +931,11 @@ typedef enum logic [6:0] {
 	CAP_MOVE = 7'd79,
 	CAP_GETADDR = 7'd80
 } capability_e;
+
+typedef enum logic [6:0] {
+	AMO_ADD = 5'd0,
+	AMO_CAS = 5'd16
+} amo_e;
 
 parameter NOP_INSN = {41'd0,OP_NOP};
 
@@ -3229,19 +3234,6 @@ begin
 			fnMapRawToUop.src = 7'b0011111;
 			fnMapRawToUop.dst = 1'b1;
 		end
-/*
-	Qupls4_pkg::OP_MOVMR:
-		begin
-			fnMapRawToUop.Rd = {2'd0,raw[12:7],1'b0};
-			fnMapRawToUop.Rs1 = {2'd0,raw[18:13],1'b0};
-			fnMapRawToUop.Rd2 = {2'd0,raw[24:19],1'b0};
-			fnMapRawToUop.Rs2 = {2'd0,raw[30:25],1'b0};
-			fnMapRawToUop.Rs3 = {2'd0,raw[36:31],1'b0};
-			fnMapRawToUop.Rs4 = {2'd0,raw[42:37],1'b0};
-			fnMapRawToUop.src = 7'b0011111;
-			fnMapRawToUop.dst = 1'b1;
-		end
-*/
 	Qupls4_pkg::OP_FLTH,Qupls4_pkg::OP_FLTS,Qupls4_pkg::OP_FLTD,Qupls4_pkg::OP_FLTQ,
 	Qupls4_pkg::OP_FLTPH,Qupls4_pkg::OP_FLTPS,Qupls4_pkg::OP_FLTPD,Qupls4_pkg::OP_FLTPQ:
 		begin

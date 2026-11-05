@@ -38,7 +38,8 @@ import const_pkg::*;
 import Qupls4_pkg::*;
 
 module Qupls4_micro_op_queue3(rst, clk, en, rd_more, uop, uop_count,
-	uop_buf, uop_mark, head);
+	uop_buf, uop_mark, head, stomp_moq1, stomp_moq2, pg_trn, pg_moq,
+	branch_resolved, live_stream);
 parameter MWIDTH = Qupls4_pkg::MWIDTH;
 parameter MAX_MICROOPS = 8;
 parameter MICROOPS_PER_INSTR = 16;
@@ -51,6 +52,12 @@ input [5:0] uop_count [0:MWIDTH-1];
 output Qupls4_pkg::micro_op_t [MAX_MICROOPS-1:0] uop_buf;
 output reg [2:0] uop_mark [0:MAX_MICROOPS-1];
 output reg [3:0] head [0:MWIDTH-1];
+input stomp_moq1;
+input stomp_moq2;
+input Qupls4_pkg::pipeline_group_reg_t pg_trn;
+output Qupls4_pkg::pipeline_group_reg_t pg_moq;
+input branch_resolved;
+input pc_stream_t live_stream;
 
 integer kk,n2,n3,n4,n5,n11,n12,n13;
 integer ul;		// use upper or lower half of buf4
@@ -65,6 +72,29 @@ reg [2:0] uop_mark2 [0:MICROOPS_PER_INSTR*8-1];
 reg [2:0] uop_mark3 [0:MICROOPS_PER_INSTR*8-1];
 reg [6:0] ndx0,ndx1,ndx2,ndx3;
 reg [5:0] room;
+Qupls4_pkg::pipeline_group_reg_t pg_moq1;
+Qupls4_pkg::rob_entry_t nopi;
+
+// Define a NOP instruction.
+always_comb
+begin
+	nopi = {$bits(Qupls4_pkg::rob_entry_t){1'b0}};
+	nopi.op.exc = Qupls4_pkg::FLT_NONE;
+	nopi.op.uop = {41'd0,Qupls4_pkg::OP_NOP};
+	nopi.op.decbus.nop = TRUE;
+	nopi.op.decbus.cause = Qupls4_pkg::FLT_NONE;
+	nopi.op.uop.lead = 1'd1;
+	nopi.op.v = 1'b1;
+	nopi.v = 5'd1;
+	nopi.exc = Qupls4_pkg::FLT_NONE;
+	nopi.excv = INV;
+	nopi.done = 2'b11;
+	/* NOP will be decoded later
+	nopi.decbus.Rdz = 1'b1;
+	nopi.decbus.nop = 1'b1;
+	nopi.decbus.alu = 1'b1;
+	*/
+end
 
 always_comb
 	if (head[0] > tail)
@@ -215,6 +245,54 @@ else begin
 		uop_mark[1] <= uop_mark3[ndx1];
 		uop_mark[2] <= uop_mark3[ndx2];
 		uop_mark[3] <= uop_mark3[ndx3];
+	end
+end
+
+always_ff @(posedge clk)
+if (rst) begin
+	pg_moq1 <= {$bits(pipeline_group_reg_t){1'b0}};
+	foreach(pg_moq1.pr[n1])
+		pg_moq1.pr[n1] <= nopi;
+end
+else if (en) begin
+	pg_moq1 <= pg_trn;
+	if (stomp_moq1)
+		pg_moq1.hdr.v <= INV;
+	foreach (pg_moq1.pr[n1]) begin
+		if (stomp_moq1) begin
+			pg_moq1.pr[n1].stomped <= TRUE;
+			pg_moq1.pr[n1].done <= 2'b11;
+		end
+		if (branch_resolved) begin
+			if (pg_trn.pr[n1].ip_stream.thread==live_stream.thread && pg_trn.pr[n1].ip_stream.stream != live_stream.stream) begin
+				pg_moq1.pr[n1].stomped <= TRUE;
+				pg_moq1.pr[n1].done <= 2'b11;
+			end
+		end
+	end
+end
+
+always_ff @(posedge clk)
+if (rst) begin
+	pg_moq <= {$bits(pipeline_group_reg_t){1'b0}};
+	foreach(pg_moq1.pr[n1])
+		pg_moq.pr[n1] <= nopi;
+end
+else if (en) begin
+	pg_moq <= pg_moq1;
+	if (stomp_moq2)
+		pg_moq.hdr.v <= INV;
+	foreach (pg_moq.pr[n1]) begin
+		if (stomp_moq2) begin
+			pg_moq.pr[n1].stomped <= TRUE;
+			pg_moq.pr[n1].done <= 2'b11;
+		end
+		if (branch_resolved) begin
+			if (pg_moq1.pr[n1].ip_stream.thread==live_stream.thread && pg_moq1.pr[n1].ip_stream.stream != live_stream.stream) begin
+				pg_moq.pr[n1].stomped <= TRUE;
+				pg_moq.pr[n1].done <= 2'b11;
+			end
+		end
 	end
 end
 

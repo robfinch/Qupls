@@ -51,7 +51,7 @@ module Qupls4_pipeline_ext(rst_i, clk_i, en_i,
 	micro_machine_active, cline_fet, cline_ext, new_cline_ext,
 	reglist_active, grp_i, grp_o, btb_pc, exc_i, excv_i,
 	takb_fet, vl, branch_resolved, live_stream,
-	pc0_fet, uop_num_fet, uop_num_ext, stomp_alnr,
+	pc0_fet, uop_num_fet, uop_num_ext,
 	ls_bmf_i, pack_regs_i, scale_regs_i, regcnt_i,
 	pg_ext, new_stream, alloc_stream,
 	new_address_o, do_ret, ret_pc, do_call, get);
@@ -114,7 +114,6 @@ input pc_stream_t [THREADS-1:0] new_stream;
 output reg alloc_stream;
 input excv_i;
 input Qupls4_pkg::cause_code_t exc_i;
-input stomp_alnr;
 
 genvar g;
 integer nn,hh,n1,n2,n3,n4,n5,n6,n7;
@@ -137,6 +136,7 @@ reg [319:0] ic_line_aligned;
 reg [319:0] prev_ic_line_aligned;
 reg ld;
 reg [2:0] override_pos;
+reg p_overrided;
 reg [MWIDTH-1:0] nop;
 
 wire [MWIDTH-1:0] bsr;
@@ -576,22 +576,25 @@ else begin
 		pt_dec <= pt_ext;
 end
 
-// Once p_override goes TRUE stomp_aln will go TRUE. Once the stomp has been
-// recognized we want the override to end. stomp_alnr indicates that. 
-// Note if the new address turned out to be the one predicted by the BTB
-// then there is no need to override.
-// This signal may also be called !predicted_match_ext.
-always_comb
-begin
-	/*
-	p_override0123 = chgflowi;
-	p_override123 = chgflow0 & ~nop_lead[0] ? pc_fet[1].pc != new_address_o : FALSE;
-	p_override23 = chgflow1 & ~nop_lead[1] ? pc_fet[2].pc != new_address_o : FALSE;
-	p_override3 = chgflow2 & !nop_lead[2] ? pc_fet[3].pc != new_address_o : FALSE;
-	p_override = p_override0123|p_override123|p_override23|p_override3|chgflow3;
-	*/
-	p_override = (en && chgflow && new_address_o != btb_pc.cap.offset) && !stomp_alnr;
+// We just want p_override to pulse for long enough that the new address is set
+// in the BTB. This is the next pipeline advance.
+// Produce this signal locally.
+always_ff @(posedge clk)
+if (rst_i)
+	p_overrided <= TRUE;
+else begin
+	if (en)
+		p_overrided <= p_override;
 end
+
+// Note if the new address turned out to be the one predicted by the BTB
+// then there is no need to override. The address predicted by the BTB
+// will be the one in the fetch stage used to load extract!
+// p_override signal may also be called !predicted_match_ext.
+always_comb
+	p_override = (en && chgflow && new_address_o != pc_fet[0].cap.offset + pc_fet[0].cap.base &&
+		// We must be staying in the same stream too.
+		pc_fet[0].stream==pg_ext.hdr.ip.stream) && !p_overrided;
 
 task tStomp;
 input integer n2;

@@ -411,7 +411,38 @@ begin
 			end
 			*/
 		end
-
+/*
+	Qupls4_pkg::OP_FADDI,Qupls4_pkg::OP_FMULI:
+		begin
+			case(ins.Rs1[6:0])
+			7'd0:
+				begin
+					imma = 64'd0;									// +0.0
+					has_imma = TRUE;
+				end
+			7'd1:
+				begin
+					imma = 64'h3ff0000000000000;	// +1.0
+					has_imma = TRUE;
+				end
+			default:
+				if (SUPPORT_POSTFIX & has_cnsta) begin
+					imma = {ins.Rs1[6:0],cnsta[63:7]};
+					has_imma = TRUE;
+				end
+			endcase
+			has_immb = TRUE;
+			if (SUPPORT_POSTFIX & has_cnstb) begin
+				case(ins.prc[1:0])
+				2'd0:	imma = ins.imm[15:0];
+				2'd1:	imma = {ins.imm[24:0],cnstb[63:57]};	// single
+				2'd2:	imma = {ins.imm[24:0],cnstb[63:25]};	// double
+				//2'd3:	imma = {ins.imm[24:0],cnstb[]}
+				default:	;
+				endcase
+			end
+		end
+*/
 	// ToDo: encoding for parallel and quad precision.
 /*
 	Qupls4_pkg::OP_FLTQ,

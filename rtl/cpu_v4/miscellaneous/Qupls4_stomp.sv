@@ -49,8 +49,9 @@ module Qupls4_stomp(rst, clk, clk2x, ihit, first_icache,
 	dep_stream,
 	branch_resolved, branchmiss, found_destination, destination_rndx,
 	misspc, predicted_correctly_dec, predicted_match_ext,
-	pc, pc_f, pc_fet, pc_ext, pc_mot, pc_mot2, pc_dec, pc_ren, stomp_alnr,
-	stomp_fet, stomp_ext, stomp_mot, stomp_mot2, stomp_dec, stomp_ren, stomp_que, stomp_quem,
+	pc, pc_f, pc_fet, pc_ext, pc_mot, pc_mot2, pc_dec, pc_ren,
+	stomp_fet, stomp_ext, stomp_trn, stomp_moq1, stomp_moq2, stomp_mot,
+	stomp_dec, stomp_ren, stomp_que, stomp_quem,
 	fcu_idv, fcu_id, missid, missid_v, kept_stream, takb, rob, robentry_stomp,
 	stomped
 	);
@@ -88,11 +89,12 @@ input pc_address_ex_t pc_mot2;
 input pc_address_ex_t pc_dec;
 input pc_address_ex_t pc_ren;
 input dep_stream_t [XSTREAMS-1:0] dep_stream;
-output stomp_alnr;
 output reg stomp_fet;
 output reg stomp_ext;			// IRQ / micro-code Mux stage
+output reg stomp_trn;
+output reg stomp_moq1;
+output reg stomp_moq2;
 output reg stomp_mot;
-output reg stomp_mot2;
 output reg stomp_dec;
 output reg stomp_ren;
 output reg stomp_que;
@@ -108,12 +110,14 @@ input Qupls4_pkg::rob_entry_t [Qupls4_pkg::ROB_ENTRIES-1:0] rob;
 output Qupls4_pkg::rob_bitmask_t robentry_stomp;
 
 integer nn, n4;
-pc_address_ex_t [6:0] misspcr;
+pc_address_ex_t [8:0] misspcr;
 reg stomp_aln;
 reg stomp_fetr;
 reg stomp_extr;
+reg stomp_trnr;
+reg stomp_moq1r;
+reg stomp_moq2r;
 reg stomp_motr;
-reg stomp_mot2r;
 reg stomp_decr;
 reg stomp_renr;
 reg stomp_quer;
@@ -124,7 +128,6 @@ reg stomp_pipeline;
 reg [3:0] spl;
 wire pe_stomp_pipeline;
 
-assign stomp_alnr = stomp_fetr;
 
 //------------------------------------------------------------------------------
 // Front-end stomps
@@ -133,8 +136,7 @@ always_comb
 	stomp_pipeline = (branchmiss && !found_destination);
 wire next_stomp_ext = (stomp_fet) || stomp_pipeline;
 wire next_stomp_mot = (stomp_ext) || stomp_pipeline;
-wire next_stomp_mot2 = (stomp_mot) || stomp_pipeline;
-wire next_stomp_dec = (stomp_mot2) || stomp_pipeline;
+wire next_stomp_dec = (stomp_moq2) || stomp_pipeline;
 wire next_stomp_ren = (stomp_dec) || stomp_pipeline;
 wire next_stomp_quem = (stomp_ren) || stomp_pipeline;
 
@@ -171,10 +173,14 @@ else begin
 		misspcr[3] <= misspcr[2];
 	if (advance_mot|pe_stomp_pipeline)
 		misspcr[4] <= misspcr[3];
-	if (advance_decode|pe_stomp_pipeline)
+	if (advance_mot|pe_stomp_pipeline)
 		misspcr[5] <= misspcr[4];
-	if (advance_rename|pe_stomp_pipeline)
+	if (advance_mot|pe_stomp_pipeline)
 		misspcr[6] <= misspcr[5];
+	if (advance_decode|pe_stomp_pipeline)
+		misspcr[7] <= misspcr[6];
+	if (advance_rename|pe_stomp_pipeline)
+		misspcr[8] <= misspcr[7];
 end
 
 always_ff @(posedge clk2x)
@@ -196,25 +202,32 @@ wire hwi_at_aln = di_inst && hirq;
 */
 // kept_stream is the stream we want to keep.
 // If align stage is going to be on a different stream than the prediction
-// mismatch, then do not stomp on it.
+// mismatch, then do not stomp on it. (This is checked in the mismatch signal 
+// originator.)
 always_comb
 	stomp_aln = stomped[pc.stream] || first_icache ||
-		(pe_stomp_pipeline || (!predicted_match_ext && (pc.stream==pc_ext.stream)) || (!predicted_correctly_dec && pc.stream==pc_dec.stream));// && !hwi_at_ren && !hwi_at_dec && !hwi_at_fet && !hwi_at_aln;
+		(pe_stomp_pipeline || !predicted_match_ext || !predicted_correctly_dec);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_fet && !hwi_at_aln;
 always_comb
 	stomp_fet = stomped[pc_f.stream] || first_icache ||
-		(pe_stomp_pipeline || stomp_fetr || (!predicted_match_ext && (pc.stream==pc_ext.stream)) || (!predicted_correctly_dec && pc.stream==pc_dec.stream));// && !hwi_at_ren && !hwi_at_dec && !hwi_at_fet;
+		(pe_stomp_pipeline || stomp_fetr || !predicted_match_ext || !predicted_correctly_dec);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_fet;
 always_comb
 	stomp_ext = stomped[pc_fet.stream] || first_icache ||
-		(pe_stomp_pipeline || stomp_extr || (!predicted_match_ext && (pc.stream==pc_ext.stream)) || (!predicted_correctly_dec && pc.stream==pc_dec.stream));// && !hwi_at_ren && !hwi_at_dec && !hwi_at_ext;
+		(pe_stomp_pipeline || stomp_extr || !predicted_match_ext || !predicted_correctly_dec);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_ext;
+always_comb
+	stomp_trn = stomped[pc_fet.stream] || first_icache ||
+		(pe_stomp_pipeline || stomp_trnr || !predicted_correctly_dec);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_ext;
+always_comb
+	stomp_moq1 = stomped[pc_fet.stream] || first_icache ||
+		(pe_stomp_pipeline || stomp_moq1r || !predicted_correctly_dec);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_ext;
+always_comb
+	stomp_moq2 = stomped[pc_fet.stream] || first_icache ||
+		(pe_stomp_pipeline || stomp_moq2r || !predicted_correctly_dec);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_ext;
 always_comb
 	stomp_mot = stomped[pc_ext.stream] || first_icache ||
-		(pe_stomp_pipeline || stomp_motr || (!predicted_correctly_dec && pc.stream==pc_dec.stream));// && !hwi_at_ren && !hwi_at_dec && !hwi_at_ext;
-always_comb
-	stomp_mot2 = stomped[pc_mot.stream] || first_icache ||
-		(pe_stomp_pipeline || stomp_mot2r || (!predicted_correctly_dec && pc.stream==pc_dec.stream));// && !hwi_at_ren && !hwi_at_dec && !hwi_at_ext;
+		(pe_stomp_pipeline || stomp_motr || !predicted_correctly_dec);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_ext;
 always_comb
 	stomp_dec = stomped[pc_mot2.stream] || first_icache ||
-	 (pe_stomp_pipeline || stomp_decr || (!predicted_correctly_dec && pc.stream==pc_dec.stream));// && !hwi_at_ren && !hwi_at_dec;
+	 (pe_stomp_pipeline || stomp_decr || !predicted_correctly_dec);// && !hwi_at_ren && !hwi_at_dec;
 always_comb
 	stomp_ren = stomped[pc_dec.stream] || first_icache ||
 		(pe_stomp_pipeline || stomp_renr);// && !hwi_at_ren;
@@ -228,8 +241,10 @@ always_ff @(posedge clk)
 if (rst) begin
 	stomp_fetr <= TRUE;
 	stomp_extr <= TRUE;
+	stomp_trnr <= TRUE;
+	stomp_moq1r <= TRUE;
+	stomp_moq2r <= TRUE;
 	stomp_motr <= TRUE;
-	stomp_mot2r <= TRUE;
 	stomp_decr <= TRUE;
 	stomp_renr <= TRUE;
 end
@@ -242,13 +257,19 @@ else begin
 		stomp_extr <= stomp_fet;
 
 	if (advance_mot|pe_stomp_pipeline)
-		stomp_motr <= stomp_ext;
+		stomp_trnr <= stomp_ext;
 
 	if (advance_mot|pe_stomp_pipeline)
-		stomp_mot2r <= stomp_mot;
+		stomp_moq1r <= stomp_trn;
+
+	if (advance_mot|pe_stomp_pipeline)
+		stomp_moq2r <= stomp_moq1;
+
+	if (advance_mot|pe_stomp_pipeline)
+		stomp_motr <= stomp_moq2;
 
 	if (advance_decode|pe_stomp_pipeline)
-		stomp_decr <= stomp_mot2;
+		stomp_decr <= stomp_mot;
 
 	if (advance_rename|pe_stomp_pipeline)
 		stomp_renr <= stomp_dec;

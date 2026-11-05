@@ -41,7 +41,8 @@ import const_pkg::*;
 import Qupls4_pkg::*;
 
 module Qupls4_microop_mem(rst, clk, en, om, ir, num, carry_reg, carry_out, carry_in,
-	vlen_reg, velsz, count, uop, thread);
+	vlen_reg, velsz, count, uop, thread, stomp, pg_ext, pg_trn, live_stream,
+	branch_resolved);
 parameter MICROOPS_PER_INSTR = 16;
 parameter COMB = 0;
 input rst;
@@ -58,8 +59,13 @@ input [63:0] velsz;
 input [2:0] thread;
 output reg [5:0] count;
 output Qupls4_pkg::micro_op_t [MICROOPS_PER_INSTR-1:0] uop;
+input stomp;
+input Qupls4_pkg::pipeline_group_reg_t pg_ext;
+output Qupls4_pkg::pipeline_group_reg_t pg_trn;
+input pc_stream_t live_stream;
+input branch_resolved;
 
-integer nn, kk, n1;
+integer nn, kk, n1, n2;
 reg [5:0] next_count;
 Qupls4_pkg::micro_op_t [MICROOPS_PER_INSTR-1:0] next_uop;
 
@@ -103,6 +109,7 @@ wire [8:0] mot2_reg = 9'd123;
 reg [8:0] vRd, vRs1, vRs2, vRs3;
 reg [8:0] Rd, Rs1, Rs2, Rs3;
 reg vRdi, vRs1i, vRs2i, vRs3i;		// whether to increment the register spec or not.
+Qupls4_pkg::rob_entry_t pr_nopi;
 
 Qupls4_pkg::micro_op_t uop0;
 Qupls4_pkg::micro_op_t uop1;
@@ -781,6 +788,7 @@ else begin
 			next_uop[0].lead = TRUE;
 			next_count = 3'd1;
 		end
+/*
 	Qupls4_pkg::OP_MOVMR:
 		begin
 			if (insert_boi) begin
@@ -850,6 +858,7 @@ else begin
 				next_uop[2].num = 5'd2;
 			end
 		end
+*/
 	Qupls4_pkg::OP_EXTD:
 		begin
 			if (SUPPORT_VECTOR) begin
@@ -1356,7 +1365,31 @@ else begin
 	end	
 end
 
+// Define a NOP instruction.
+always_comb
+begin
+	pr_nopi = {$bits(Qupls4_pkg::rob_entry_t){1'b0}};
+	pr_nopi.op.exc = Qupls4_pkg::FLT_NONE;
+	pr_nopi.op.uop = {41'd0,Qupls4_pkg::OP_NOP};
+	pr_nopi.op.decbus.nop = TRUE;
+	pr_nopi.op.decbus.cause = Qupls4_pkg::FLT_NONE;
+	pr_nopi.op.uop.lead = 1'd1;
+	pr_nopi.op.v = 1'b1;
+	pr_nopi.v = 5'd1;
+	pr_nopi.exc = Qupls4_pkg::FLT_NONE;
+	pr_nopi.excv = INV;
+	pr_nopi.done = 2'b11;
+	pr_nopi.stomped = TRUE;
+	/* NOP will be decoded later
+	nopi.decbus.Rdz = 1'b1;
+	nopi.decbus.nop = 1'b1;
+	nopi.decbus.alu = 1'b1;
+	*/
+end
+
+
 generate begin : gComb
+	// ToDo: finish off comb logic
 	if (COMB && FALSE) begin
 		always_comb
 		if (rst) begin
@@ -1371,6 +1404,7 @@ generate begin : gComb
 			count = next_count;
 			foreach (uop[n1])
 				uop[n1] = next_uop[n1];
+			pg_trn = pg_ext;
 		end
 	end
 	else begin
@@ -1379,15 +1413,32 @@ generate begin : gComb
 			count <= 5'd0;
 			foreach (uop[n1])
 				uop[n1] <= next_uop[n1];
+			pg_trn <= {$bits(pipeline_group_reg_t){1'b0}};
+			foreach(pg_trn.pr[n1])
+				pg_trn.pr[n1] <= nopi;
 		end
 		else if (en) begin
 			count <= next_count;
 			foreach (uop[n1])
 				uop[n1] <= next_uop[n1];
+			pg_trn <= pg_ext;
+			if (stomp)
+				pg_trn.hdr.v <= INV;
+			foreach (pg_ext.pr[n1]) begin
+				if (stomp) begin
+					pg_trn.pr[n1].stomped <= TRUE;
+					pg_trn.pr[n1].done <= 2'b11;
+				end
+				if (branch_resolved) begin
+					if (pg_ext.pr[n1].ip_stream.thread==live_stream.thread && pg_ext.pr[n1].ip_stream.stream != live_stream.stream) begin
+						pg_trn.pr[n1].stomped <= TRUE;
+						pg_trn.pr[n1].done <= 2'b11;
+					end
+				end
+			end
 		end
 	end
 end
 endgenerate
-
 
 endmodule
