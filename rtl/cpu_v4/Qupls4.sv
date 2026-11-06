@@ -107,6 +107,7 @@ input wb_tranid_t snoop_tid;
 
 Qupls4_pkg::irq_info_packet_t irq_in = {irq_i,om_i,swstk_i,ivect_i};
 
+wire [5:0] snoop_cid = snoop_tid.channel;
 wire ren_rst_busy;
 reg irst;
 always_comb irst = rst_i;//|ren_rst_busy;
@@ -127,7 +128,7 @@ integer nn,mm,n2,n3,n4,m4,n5,n6,n8,n9,n10,n11,n12,n13,n14,n15,n17;
 integer n16r, n16c, n12r, n12c, n14r, n14c, n17r, n17c, n18r, n18c;
 integer n19,n20,n21,n22,n23,n24,n25,n26,n27,n28,n29,i,n30,n31,n32,n33;
 integer n34,n35,n36,n37,n38,n39,n40,n41,n42,n43,n44,n45,n46,n47,n48;
-integer n49,n50,n51,n52,n53,n54,n55,n56,n57,n58,n59,n60;
+integer n49,n50,n51,n52,n53,n54,n55,n56,n57,n58,n59,n60,n61,n62;
 integer jj,kk;
 
 genvar g,h,gvg;
@@ -271,6 +272,7 @@ pc_address_ex_t pc0_f;
 pc_address_ex_t brtgt;
 reg pc_in_sync;
 reg advance_pipeline;
+wire advance_extract2;
 reg do_bsr_h;
 reg set_pending_ipl;
 reg [5:0] next_pending_ipl;
@@ -298,7 +300,7 @@ Qupls4_pkg::pipeline_reg_t pr_ext0,pr_ext1,pr_ext2,pr_ext3;
 Qupls4_pkg::pipeline_reg_t pr_dec0,pr_dec1,pr_dec2,pr_dec3;
 Qupls4_pkg::pipeline_reg_t pr_ren0,pr_ren1,pr_ren2,pr_ren3;
 Qupls4_pkg::pipeline_reg_t pr_que0,pr_que1,pr_que2,pr_que3;
-
+/*
 always_comb tails[1] = (tails[0] + 1) % Qupls4_pkg::ROB_ENTRIES;
 always_comb tails[2] = (tails[0] + 2) % Qupls4_pkg::ROB_ENTRIES;
 always_comb tails[3] = (tails[0] + 3) % Qupls4_pkg::ROB_ENTRIES;
@@ -310,6 +312,8 @@ always_comb tails[8] = (tails[0] + 8) % Qupls4_pkg::ROB_ENTRIES;
 always_comb tails[9] = (tails[0] + 9) % Qupls4_pkg::ROB_ENTRIES;
 always_comb tails[10] = (tails[0] + 10) % Qupls4_pkg::ROB_ENTRIES;
 always_comb tails[11] = (tails[0] + 11) % Qupls4_pkg::ROB_ENTRIES;
+*/
+/*
 always_comb head[1] = (head[0] + 1) % Qupls4_pkg::ROB_ENTRIES;
 always_comb head[2] = (head[0] + 2) % Qupls4_pkg::ROB_ENTRIES;
 always_comb head[3] = (head[0] + 3) % Qupls4_pkg::ROB_ENTRIES;
@@ -317,13 +321,13 @@ always_comb head[4] = (head[0] + 4) % Qupls4_pkg::ROB_ENTRIES;
 always_comb head[5] = (head[0] + 5) % Qupls4_pkg::ROB_ENTRIES;
 always_comb head[6] = (head[0] + 6) % Qupls4_pkg::ROB_ENTRIES;
 always_comb head[7] = (head[0] + 7) % Qupls4_pkg::ROB_ENTRIES;
-
+*/
 Qupls4_pkg::ex_instruction_t [7:0] ex_ins;
 
 Qupls4_pkg::decode_bus_t db0_r, db1_r, db2_r, db3_r;				// Regfetch/rename stage inputs
 Qupls4_pkg::pipeline_reg_t ins4_d, ins5_d, ins6_d, ins7_d, ins8_d;
 Qupls4_pkg::pipeline_reg_t ins0_que, ins1_que, ins2_que, ins3_que;
-Qupls4_pkg::pipeline_group_reg_t pg_ext, pg_mot, pg_dec, pg_ren, pg_dsp, pg_reg, pg_que;
+Qupls4_pkg::pipeline_group_reg_t pg_ext, pg_trn, pg_moq1, pg_moq2, pg_mot, pg_dec, pg_ren, pg_dsp, pg_reg, pg_que;
 
 reg backout;
 wire bo_wr;
@@ -450,6 +454,10 @@ pc_address_ex_t sau1_pc;
 rob_ndx_t sau1_id;
 reg sau1_idv;
 wire [63:0] xpipe1_exc;
+wire [63:0] xpipe2_exc;
+wire [63:0] xpipe3_exc;
+wire [63:0] xpipe4_exc;
+wire [63:0] xpipe5_exc;
 reg sau1_out;
 wire mul1_done;
 value_t div1_q,div1_r;
@@ -646,6 +654,7 @@ Qupls4_pkg::ex_instruction_t agen0_op;
 wire agen0_virt2phys;
 reg agen0_load_store;
 reg agen0_amo;
+wire agen0_adrv;
 reg agen0_vlsndx;
 rob_ndx_t agen0_id;
 Qupls4_pkg::operating_mode_t agen0_om;
@@ -680,6 +689,7 @@ Qupls4_pkg::ex_instruction_t agen1_op;
 wire agen1_virt2phys;
 reg agen1_load_store;
 reg agen1_vlsndx;
+wire agen1_adrv;
 rob_ndx_t agen1_id;
 Qupls4_pkg::operating_mode_t agen1_om;
 wire agen1_we;
@@ -917,7 +927,7 @@ endgenerate
 // FETCH
 //
 
-pc_address_ex_t pc, pc0, pc1, pc2, pc3, pc4, pc5, pc6, pc7, pc8;
+pc_address_ex_t pc, pc0, pc5, pc6, pc7, pc8;
 reg [5:0] off0, off1, off2, off3, off4, off5, off6, off7;
 pc_address_ex_t pc0_fet, pc1_fet, pc2_fet, pc3_fet, pc4_fet;
 pc_address_ex_t next_pc;
@@ -1637,7 +1647,7 @@ icctrl1
 	.line_o(ic_line_o),
 	.snoop_adr(snoop_adr),
 	.snoop_v(snoop_v),
-	.snoop_cid(snoop_cid)
+	.snoop_tid(snoop_tid)
 );
 
 // Executing NMI/IRQ handler?
@@ -2112,26 +2122,6 @@ always_comb
 wire [2:0] igrp2;
 
 always_comb pc0 = pcs[fet_stream];
-always_comb 
-begin
-	pc1 = pc0;
-	pc1.cap.offset = pc0.cap.offset + 6'd6;
-end
-always_comb
-begin
-	pc2 = pc0;
-	pc2.cap.offset = pc0.cap.offset + 6'd12;
-end
-always_comb
-begin
-	pc3 = pc0;
-	pc3.cap.offset = pc0.cap.offset + 6'd18;
-end
-always_comb
-begin
-	pc4 = pc0;
-	pc4.cap.offset = pc0.cap.offset + 6'd24;
-end
 
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
@@ -2330,6 +2320,7 @@ Qupls4_pipeline_ext #(.MWIDTH(MWIDTH)) uiext1
 
 // ----------------------------------------------------------------------------
 // Micro-op translate and queue stage
+// This stage takes four clocks.
 // ----------------------------------------------------------------------------
 
 wire [1023:0] cline_mot;
@@ -2357,6 +2348,9 @@ umot1
 	.cline_ext(cline_ext),
 	.cline_mot(cline_mot),
 	.pg_ext(pg_ext),
+	.pg_trn(pg_trn),
+	.pg_moq1(pg_moq1),
+	.pg_moq2(pg_moq2),
 	.pg_mot(pg_mot),
 	.uop_buf(uop_buf),
 	.uop_mark(uop_mark),
@@ -2648,6 +2642,7 @@ always_comb nq1 = TRUE;
 always_comb nq2 = TRUE;
 always_comb nq3 = TRUE;
 
+checkpt_ndx_t cndx;
 always_comb
 	cndx0 = cndx;
 
@@ -2801,7 +2796,6 @@ assign arnv[20] = !stomps[3];
 
 assign arnv[16] = 1'b1;
 */
-assign arnv = 16'hFFFF;
 wire [1:0] backout_st2;
 pregno_t [MWIDTH-1:0] Rt0_ren;
 wire [MWIDTH-1:0] Rt0_renv;
@@ -2830,7 +2824,6 @@ end
 
 wire alloc_chkpt;
 wire free_chkpt;
-checkpt_ndx_t cndx;
 checkpt_ndx_t fchkpt;
 checkpt_ndx_t miss_cp;
 rob_ndx_t chkpt_rndx;
@@ -3029,7 +3022,7 @@ else begin
 		pc0_f <= pc;
 end
 
-rob_bitmask_t rob_dispatched, rob_unimplemented, cap_rob_dispatched;
+rob_bitmask_t rob_dispatched, rob_unimplemented, rob_cap_dispatched;
 Qupls4_pkg::rob_bitmask_t rob_dispatched_stomped;
 
 always_ff @(posedge clk)
@@ -3815,7 +3808,7 @@ else begin
 	assign cap_rfo = 'd0;
 	assign cap_rfo_flags = 'd0;
 	assign cap_rf_rego = 'd0;
-	assign cap_rd_regov = 'd0;
+	assign cap_rf_regvo = 'd0;
 end
 end
 endgenerate
@@ -4207,7 +4200,7 @@ udps1
 	.busy(rs_busy),
 	.rse_o(rse),
 	.rob_dispatched_o(rob_dispatched),
-	.rob_dispatched_v_o(rob_dispatched_v)
+	.rob_dispatched_v_o()
 );
 end
 end
@@ -5149,7 +5142,7 @@ mmu #(.CORENO(CORENO), .CHANNEL(3)) ummu1
 	.commit2_idv(commit2_idv),
 	.commit3_id(commit3_id),
 	.commit3_idv(commit3_idv),
-	.ftas_req(fta_req),
+	.ftas_req(),
 	.ftas_resp(ptable_resp),
 	.ftam_req(ftatm_req),
 	.ftam_resp(ftatm_resp),
@@ -6089,7 +6082,7 @@ if (Qupls4_pkg::SUPPORT_CAPABILITIES)
 Qupls4_cap_reservation_station #(
 	.MWIDTH(MWIDTH),
 	.FUNCUNIT(4'd6),
-	.NRSE(NRSE_CAP_XPIPE),
+	.NRSE(NRSE_XPIPE6),
 	.NSARG(3),
 	.NREG_RPORTS(RS_NREG_RPORTS),
 	.NREG_WPORTS(1),
@@ -6419,8 +6412,7 @@ else begin
 					fc_ndxv = VAL;
 				end
 			end
-		
-			tails[0] <= (tails[0] + MWIDTH) % Qupls4_pkg::ROB_ENTRIES;
+
 			groupno <= ((tails[0] + MWIDTH) % Qupls4_pkg::ROB_ENTRIES) / MWIDTH;//groupno + 2'd1;
 //			if (groupno >= Qupls4_pkg::ROB_ENTRIES / MWIDTH - 1)
 //				groupno <= 8'd0;
@@ -6565,7 +6557,7 @@ else begin
 			;
 
 	foreach (rob[nn])
-		if (rob_dispatched[nn]|cap_rob_dispatched[nn])
+		if (rob_dispatched[nn]|rob_cap_dispatched[nn])
 			rob[nn].out <= {2{VAL}};
 
 	foreach (rob[nn])
@@ -7100,8 +7092,6 @@ else begin
 			tCommits(13, head[5]);
 			group_len <= group_len - 6;
 		end
-		head[0] <= (head[0] + cmtcnt) % Qupls4_pkg::ROB_ENTRIES;	
-//		head[0] <= (head[0] + 3'd4) % ROB_ENTRIES;	
 		if (group_len <= 0)
 			group_len <= rob[head[0]].group_len;
 		// Commit oddball instructions
@@ -7176,21 +7166,6 @@ else begin
 		end
 	end
 
-	// If the re-order buffer is empty, the the commit pointer should remain
-	// where it is until new instructions are queued. Otherwise, if the commit
-	// pointer is not pointing at a valid instruction something must have gone
-	// wrong with hardware.
-	if (!rob_empty) begin
-		if (rob[head[0]].v==5'd0)
-			head[0] <= (head[0] + 4'd1) % Qupls4_pkg::ROB_ENTRIES;	
-		if (rob[head[0]].v==5'd0 && rob[head[1]].v==5'd0)
-			head[0] <= (head[0] + 4'd2) % Qupls4_pkg::ROB_ENTRIES;	
-		if (rob[head[0]].v==5'd0 && rob[head[1]].v==5'd0 && rob[head[2]].v==5'd0)
-			head[0] <= (head[0] + 4'd3) % Qupls4_pkg::ROB_ENTRIES;	
-		if (rob[head[0]].v==5'd0 && rob[head[1]].v==5'd0 && rob[head[2]].v==5'd0 && rob[head[3]].v==5'd0)
-			head[0] <= (head[0] + 4'd4) % Qupls4_pkg::ROB_ENTRIES;	
-	end
-	
 	// ToDo: fix LSQ head update.
 	if (lsq[lsq_head.row][lsq_head.col].v==INV && lsq_head != lsq_tail)
 		lsq_head.row <= lsq_head.row + 1;
@@ -7412,7 +7387,7 @@ else begin
 
 		foreach (rob[n3]) begin
 			rob[n3].could_issue <=
-					rob[n3].v
+					|rob[n3].v
 				&& !robentry_stomp[n3]
 				&& !(&rob[n3].done)
 				&& (rob[n3].op.decbus.cpytgt ? (rob[n3].argT_v /*|| rob[g].op.nRt==9'd0*/) : rob[n3].all_args_valid && rob[n3].pred_bit)
@@ -7455,6 +7430,65 @@ else begin
 	if (inject_cl|(~copro_stall & copro_stall1))
 		cp_stall <= 1'b0;
 end
+
+
+// ----------------------------------------------------------------------------
+// Manage head indexes.
+// ----------------------------------------------------------------------------
+
+always_ff @(posedge clk)
+if (irst) begin
+	foreach(head[n61])
+		head[n61] <= 5'(n61);
+end
+else begin
+	// Advance the heads on commit.
+	if (do_commit)
+		foreach(head[n61])
+			head[n61] <= (head[n61] + cmtcnt) % Qupls4_pkg::ROB_ENTRIES;	
+
+	// If the re-order buffer is empty, the the commit pointer should remain
+	// where it is until new instructions are queued. Otherwise, if the commit
+	// pointer is not pointing at a valid instruction something must have gone
+	// wrong with hardware. It may be "fixed" by advancing the head indexes
+	// over invalid entries.
+	if (!rob_empty) begin
+		if (rob[head[0]].v==5'd0 && rob[head[1]].v==5'd0 && rob[head[2]].v==5'd0 && rob[head[3]].v==5'd0) begin
+			foreach(head[n61])
+				head[n61] <= (head[n61] + 4'd4) % Qupls4_pkg::ROB_ENTRIES;	
+		end
+		else if (rob[head[0]].v==5'd0 && rob[head[1]].v==5'd0 && rob[head[2]].v==5'd0) begin
+			foreach(head[n61])
+				head[n61] <= (head[n61] + 4'd3) % Qupls4_pkg::ROB_ENTRIES;	
+		end
+		else if (rob[head[0]].v==5'd0 && rob[head[1]].v==5'd0) begin
+			foreach(head[n61])
+				head[n61] <= (head[n61] + 4'd2) % Qupls4_pkg::ROB_ENTRIES;	
+		end
+		else if (rob[head[0]].v==5'd0) begin
+			foreach(head[n61])
+				head[n61] <= (head[n61] + 4'd1) % Qupls4_pkg::ROB_ENTRIES;	
+		end
+	end
+end
+
+
+// ----------------------------------------------------------------------------
+// Manage tail indexes.
+// ----------------------------------------------------------------------------
+
+always_ff @(posedge clk)
+if (irst) begin
+	foreach(tails[n62])
+		tails[n62] <= 5'(n62);
+end
+else begin
+	// Move tail indexes.		
+	if (advance_pipeline)
+		foreach (tails[n62])
+			tails[n62] <= (tails[n62] + MWIDTH) % Qupls4_pkg::ROB_ENTRIES;
+end
+
 
 // ----------------------------------------------------------------------------
 // External bus arbiter. mux is round-robin.
@@ -7683,13 +7717,16 @@ always_ff @(posedge clk) begin: clock_n_debug
 	$display("TIME %0d", $time);
 	$display("Instruction sequence");
 	$display("--------------------");
-	$display("FET:");
+	$display("FET: %c%h.%h", stomp_fet?"S":"-",pc_fet.stream.stream, pc_fet.cap.offset);
 	$display("   cacheL: %x", ic_line[511:0]);
 	$display("   cacheH: %x", ic_line[1023:512]);
-	$display("EXT: 0:%h  1:%h  2:%h  3:%h", pg_ext.pr[0].op.uop, pg_ext.pr[1].op.uop, pg_ext.pr[2].op.uop, pg_ext.pr[3].op.uop);
-	$display("MOT: 0:%h  1:%h  2:%h  3:%h", pg_mot.pr[0].op.uop, pg_mot.pr[1].op.uop, pg_mot.pr[2].op.uop, pg_mot.pr[3].op.uop);
-	$display("DEC: 0:%h  1:%h  2:%h  3:%h", pg_dec.pr[0].op.uop, pg_dec.pr[1].op.uop, pg_dec.pr[2].op.uop, pg_dec.pr[3].op.uop);
-	$display("REN: 0:%h  1:%h  2:%h  3:%h", pg_ren.pr[0].op.uop, pg_ren.pr[1].op.uop, pg_ren.pr[2].op.uop, pg_ren.pr[3].op.uop);
+	$display("EXT  %c%h.%h  0:%h  1:%h  2:%h  3:%h", stomp_ext?"S":"-",pg_ext.hdr.ip.stream.stream, pg_ext.hdr.ip.cap.offset,pg_ext.pr[0].op.uop, pg_ext.pr[1].op.uop, pg_ext.pr[2].op.uop, pg_ext.pr[3].op.uop);
+	$display("TRN  %c%h.%h", stomp_trn?"S":"-",pg_trn.hdr.ip.stream.stream, pg_trn.hdr.ip.cap.offset);
+	$display("MOQ1 %c%h.%h  0:%h  1:%h  2:%h  3:%h", stomp_moq1?"S":"-",pg_moq1.hdr.ip.stream.stream, pg_moq1.hdr.ip.cap.offset,pg_moq1.pr[0].op.uop, pg_moq1.pr[1].op.uop, pg_moq1.pr[2].op.uop, pg_moq1.pr[3].op.uop);
+	$display("MOQ2 %c%h.%h  0:%h  1:%h  2:%h  3:%h", stomp_moq2?"S":"-",pg_moq2.hdr.ip.stream.stream, pg_moq2.hdr.ip.cap.offset,pg_moq2.pr[0].op.uop, pg_moq2.pr[1].op.uop, pg_moq2.pr[2].op.uop, pg_moq2.pr[3].op.uop);
+	$display("MOT  %c%h.%h  0:%h  1:%h  2:%h  3:%h", stomp_mot?"S":"-",pg_mot.hdr.ip.stream.stream, pg_mot.hdr.ip.cap.offset,pg_mot.pr[0].op.uop, pg_mot.pr[1].op.uop, pg_mot.pr[2].op.uop, pg_mot.pr[3].op.uop);
+	$display("DEC  %c%h.%h  0:%h  1:%h  2:%h  3:%h", stomp_dec?"S":"-",pg_dec.hdr.ip.stream.stream, pg_dec.hdr.ip.cap.offset,pg_dec.pr[0].op.uop, pg_dec.pr[1].op.uop, pg_dec.pr[2].op.uop, pg_dec.pr[3].op.uop);
+	$display("REN  %c%h.%h  0:%h  1:%h  2:%h  3:%h", stomp_ren?"S":"-",pg_ren.hdr.ip.stream.stream, pg_ren.hdr.ip.cap.offset,pg_ren.pr[0].op.uop, pg_ren.pr[1].op.uop, pg_ren.pr[2].op.uop, pg_ren.pr[3].op.uop);
 	$display("----- Fetch ----- %s", stomp_fet ? stompstr : no_stompstr);
 	$display("i$ pc input:  %h.%h stream:%d#", pcs[fet_stream].stream,pcs[fet_stream].cap.offset, fet_stream);
 	$display("i$ pc output: %h %s #", pc_fet.cap.offset, ihito ? "ihit" : "    ");
@@ -7704,12 +7741,27 @@ always_ff @(posedge clk) begin: clock_n_debug
 	$display("lineL: %h", ic_line_fet[511:0]);
 	$display("lineH: %h", ic_line_fet[1023:512]);
 	$display("align: %x", uiext1.ic_line_aligned);
-	$display("----- Micro-op Translate ----- %s", stomp_mot ? stompstr : no_stompstr);
+	$display("----- Micro-op Translate ----- %s", stomp_trn ? stompstr : no_stompstr);
+	$display("input:");
 	$display("ip: %h.%h", pg_ext.hdr.ip.stream.stream, pg_ext.hdr.ip.cap.offset);
 	$display("lineL: %h", cline_ext[511:0]);
 	$display("lineH: %h", cline_ext[1023:512]);
+	$display("output:");
+	$display("ip: %h.%h", pg_trn.hdr.ip.stream.stream, pg_trn.hdr.ip.cap.offset);
 	$display("Raw instructions");
-	$display("0:%h  1:%h  2:%h  3:%h", pg_ext.pr[0].op.uop, pg_ext.pr[1].op.uop, pg_ext.pr[2].op.uop, pg_ext.pr[3].op.uop);
+	$display("0:%h  1:%h  2:%h  3:%h", pg_trn.pr[0].op.uop, pg_trn.pr[1].op.uop, pg_trn.pr[2].op.uop, pg_trn.pr[3].op.uop);
+	$display("----- Micro-op Queue1 ----- %s", stomp_moq1 ? stompstr : no_stompstr);
+	$display("ip: %h.%h", pg_moq1.hdr.ip.stream.stream, pg_moq1.hdr.ip.cap.offset);
+	$display("Raw instructions");
+	$display("0:%h  1:%h  2:%h  3:%h", pg_moq1.pr[0].op.uop, pg_moq1.pr[1].op.uop, pg_moq1.pr[2].op.uop, pg_moq1.pr[3].op.uop);
+	$display("----- Micro-op Queue2 ----- %s", stomp_moq2 ? stompstr : no_stompstr);
+	$display("ip: %h.%h", pg_moq2.hdr.ip.stream.stream, pg_moq2.hdr.ip.cap.offset);
+	$display("Raw instructions");
+	$display("0:%h  1:%h  2:%h  3:%h", pg_moq2.pr[0].op.uop, pg_moq2.pr[1].op.uop, pg_moq2.pr[2].op.uop, pg_moq2.pr[3].op.uop);
+	$display("----- Micro-op MOT output ----- %s", stomp_mot ? stompstr : no_stompstr);
+	$display("ip: %h.%h", pg_mot.hdr.ip.stream.stream, pg_mot.hdr.ip.cap.offset);
+	$display("Raw instructions");
+	$display("0:%h  1:%h  2:%h  3:%h", pg_mot.pr[0].op.uop, pg_mot.pr[1].op.uop, pg_mot.pr[2].op.uop, pg_mot.pr[3].op.uop);
 	/*
 	$display("pc0: %h.%h ins0: %h", uiext1.pg_ext.pr[0].pc.pc[23:0], uiext1.pg_ext.pr[0].mcip, uiext1.pg_ext.pr[0].uop[47:0]);
 	$display("pc1: %h.%h ins1: %h", uiext1.pg_ext.pr[1].pc.pc[23:0], uiext1.pg_ext.pr[1].mcip, uiext1.pg_ext.pr[1].uop[47:0]);
@@ -7718,13 +7770,8 @@ always_ff @(posedge clk) begin: clock_n_debug
 	*/
 	if (p_override)
 		$display("BSR %h  pc0_fet=%h", new_address_ext, uiext1.pg_ext.hdr.ip.cap.offset+{uiext1.pg_ext.pr[0].ip_offs,1'b0});
-	$display("----- Decode ----- %s", stomp_dec ? stompstr : no_stompstr);
-	$display("ip:%h.%h", pg_mot.hdr.ip.stream.stream,pg_mot.hdr.ip.cap.offset);
-	$display("lineL: %h", cline_mot[511:0]);
-	$display("lineH: %h", cline_mot[1023:512]);
-	$display("MOT 0:%h  1:%h  2:%h  3:%h", pg_mot.pr[0].op.uop, pg_mot.pr[1].op.uop, pg_mot.pr[2].op.uop, pg_mot.pr[3].op.uop);
-	$display("DEC 0:%h  1:%h  2:%h  3:%h", pg_dec.pr[0].op.uop, pg_dec.pr[1].op.uop, pg_dec.pr[2].op.uop, pg_dec.pr[3].op.uop);
-	$display("TPR 0:%h  1:%h  2:%h  3:%h", udecstg1.tpr[0].op.uop, udecstg1.tpr[1].op.uop, udecstg1.tpr[2].op.uop, udecstg1.tpr[3].op.uop);
+	$display("   ");
+	$display("TPR   %h.%h  0:%h  1:%h  2:%h  3:%h", "-",pg_dec.hdr.ip.stream,pg_dec.hdr.ip.cap.offset,udecstg1.tpr[0].op.uop, udecstg1.tpr[1].op.uop, udecstg1.tpr[2].op.uop, udecstg1.tpr[3].op.uop);
 	/*
 	$display("pc0: %h.%h ins0: %h", pg_dec.pr[0].pc.pc[23:0], pg_dec.pr[0].mcip, pg_dec.pr[0].uop[47:0]);
 	$display("pc1: %h.%h ins1: %h", pg_dec.pr[1].pc.pc[23:0], pg_dec.pr[1].mcip, pg_dec.pr[1].uop[47:0]);
@@ -7908,9 +7955,14 @@ always_ff @(posedge clk) begin: clock_n_debug
 	$display("3: %h #", commit3_id);
 
 	$display("----- Stats -----");	
-//	IPC = real'(TotInsn)/real'(/*iact_cnt*/tick);
-	PIPC = PIPC > IPC ? PIPC : IPC;
-	$display("Clock ticks: %d Instructions: %d:%d IPC: %d.%d Peak: %f", tick, TotInsn, TotValidInsn, TotInsn/tick, TotInsn%tick, PIPC);
+`ifdef IS_SIM
+	IPC = real'(TotInsn)/real'(tick);
+	PIPC = (PIPC > IPC) ? PIPC : IPC;
+`else
+	IPC = 4;
+	PIPC = 4;
+`endif
+	$display("Clock ticks: %d Instructions: %d:%d IPC: %f Peak: %f", tick, TotInsn, TotValidInsn, IPC, PIPC);
 	$display("Copy targets: %d", cpytgts);
 	$display("Stomped instructions: %d", stomped_insn);
 	$display("Stalls for checkpoints: %d", rat_stalls);
@@ -8569,8 +8621,6 @@ begin
 	last[1] <= 1'b1;
 	last[2] <= 1'b1;
 	last[3] <= 1'b1;
-	tails[0] <= 5'd0;
-	head[0] <= 5'd0;
 	lsq_head <= 3'd0;
 	sau0_idle1 <= TRUE;
 	sau1_idle1 <= TRUE;
