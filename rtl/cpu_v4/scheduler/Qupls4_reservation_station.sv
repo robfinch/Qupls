@@ -32,7 +32,7 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 5101 LUTs / 1975 FFs (RL_STRATEGY 1)
+// 9424 LUTs / 3200 FFs (RL_STRATEGY 1)
 // 5101 LUTs / 1975 FFs (RL_STRATEGY 0)
 // ============================================================================
 
@@ -52,7 +52,7 @@ parameter FUNCUNIT = 4'd0;
 parameter NBPI = 4;			// number of bypasssing inputs
 parameter NSARG = 3;		// number of source operands
 parameter RL_STRATEGY = 1;	// register lookup strategy
-parameter NREG_RPORTS = RL_STRATEGY==0 ? 0 : 16;
+parameter NREG_RPORTS = RL_STRATEGY==0 ? 12 : 12;
 parameter NREG_WPORTS = 13;
 parameter RC = 1'b0;
 parameter DISPATCH_COUNT=6;	// number of lanes of dispatching
@@ -428,6 +428,11 @@ else begin
 end
 
 // Request register reads for missing arguments.
+// For RL_STRATEGY=0 register reads do not need to be requested. The requests
+// are tracked according to the ROB argument valid flags in the mainline RTL
+// code. That means the request logic can be removed from every reservation
+// station. But, then there is request logic in the mainline. TBD which is
+// smaller and which is faster.
 
 always_comb
 begin
@@ -438,18 +443,20 @@ begin
 	req_pRnu[3] = 8'd0;
 	req_pRnuv = 4'd0;
 	req_FPCSRv = INV;
-	for (jj = 0; jj < NRSE; jj = jj + 1) begin
-		for (pp = 0; pp < 6; pp = pp + 1) begin
-			if (fnSrc(rse[jj].uop,pp)) begin
-				if (rse[jj].busy && !rse[jj].arg[pp].v) begin
-					if(kk < 4) begin
-						req_pRnu[kk] = rse[jj].arg[pp].pRn;
-						req_pRnuv[kk] = VAL;
-						kk = kk + 1;
-					end
-					if (pp==5) begin
-						req_FPCSRndx = rse[jj].rndx;
-						req_FPCSRv = VAL;
+	if (RL_STRATEGY==1) begin
+		for (jj = 0; jj < NRSE; jj = jj + 1) begin
+			for (pp = 0; pp < 6; pp = pp + 1) begin
+				if (fnSrc(rse[jj].uop,pp)) begin
+					if (rse[jj].busy && !rse[jj].arg[pp].v) begin
+						if(kk < 4) begin
+							req_pRnu[kk] = rse[jj].arg[pp].pRn;
+							req_pRnuv[kk] = VAL;
+							kk = kk + 1;
+						end
+						if (pp==5) begin
+							req_FPCSRndx = rse[jj].rndx;
+							req_FPCSRv = VAL;
+						end
 					end
 				end
 			end

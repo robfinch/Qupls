@@ -121,7 +121,7 @@ localparam DISPATCH_STRATEGY = 1;
 // Register lookup strategy used by the reservation stations for missing data.
 // 0=use register file write port history
 // 1=use extra register file read ports
-localparam RL_STRATEGY = 1;
+localparam RL_STRATEGY = 0;
 
 // 1=move interrupt to the start of the instruction (recommended).
 // 2=defer interrupts to the start of the next instruction.

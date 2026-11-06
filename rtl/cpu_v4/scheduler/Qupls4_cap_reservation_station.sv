@@ -164,7 +164,7 @@ Qupls4_validate_cap_operand #(
 
 Qupls4_validate_operand #(
 	.NBPI(NBPI), .NENTRY(NRSE), .NREG_PORTS(NREG_RPORTS),
-	.NREG_WPORTS(NREG_WPORTS)) uvsrcA
+	.NREG_WPORTS(NREG_WPORTS)) ugvsrcA
 (
 	.wp_hist_i(gpr_wp_oper_tap_i),
 	.rf_oper_i(gpr_rf_oper_i),

@@ -43,8 +43,8 @@ package Qupls4_pkg;
 `define QUPLS4	1'b1
 `define STARK_PKG 1'b1
 `undef IS_SIM
-parameter SIM = 1'b1;
-`define IS_SIM	1
+parameter SIM = 1'b0;
+//`define IS_SIM	1
 
 `include "Qupls4_config.sv"
 /*

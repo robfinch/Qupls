@@ -105,6 +105,16 @@ input cpu_types_pkg::address_t snoop_adr;
 input snoop_v;
 input wb_tranid_t snoop_tid;
 
+// Register read list structure.
+// Records the rob entry and operand that needed a read. This is for the benefit
+// of easily marking the arguments valid.
+typedef struct packed {
+	rob_ndx_t rndx;
+	logic [2:0] ondx;
+	pregno_t regno;
+} rrl_t;
+rrl_t [NREG_RPORTS-1:0] rrl;
+
 Qupls4_pkg::irq_info_packet_t irq_in = {irq_i,om_i,swstk_i,ivect_i};
 
 wire [5:0] snoop_cid = snoop_tid.channel;
@@ -128,7 +138,8 @@ integer nn,mm,n2,n3,n4,m4,n5,n6,n8,n9,n10,n11,n12,n13,n14,n15,n17;
 integer n16r, n16c, n12r, n12c, n14r, n14c, n17r, n17c, n18r, n18c;
 integer n19,n20,n21,n22,n23,n24,n25,n26,n27,n28,n29,i,n30,n31,n32,n33;
 integer n34,n35,n36,n37,n38,n39,n40,n41,n42,n43,n44,n45,n46,n47,n48;
-integer n49,n50,n51,n52,n53,n54,n55,n56,n57,n58,n59,n60,n61,n62;
+integer n49,n50,n51,n52,n53,n54,n55,n56,n57,n58,n59,n60,n61,n62,n63;
+integer n64,n65,n66;
 integer jj,kk;
 
 genvar g,h,gvg;
@@ -912,14 +923,23 @@ initial begin: Init
 end
 
 generate begin : gRf_reg
-	if (RL_STRATEGY==1) begin
+	case(RL_STRATEGY)
+	0:
+		always_comb begin
+			foreach(rf_reg[n60])
+				rf_reg[n60] = rrl[n60].regno;
+			foreach(cap_rf_reg[n60])
+				cap_rf_reg[n60] = rrl[n60].regno;
+		end
+	1:
 		always_comb begin
 			foreach(rf_reg[n60])
 				rf_reg[n60] = prn[n60];
 			foreach(cap_rf_reg[n60])
-				cap_rf_reg = prn[n60];
+				cap_rf_reg[n60] = prn[n60];
 		end
-	end
+	default:	;
+	endcase
 end
 endgenerate
 
@@ -2590,18 +2610,30 @@ begin
 		end
 	end
 end
-// Dynamic port selection.
-// The dynamic port selector uses groups of eight registers. The minimum number
-// of fixed ports is then eight, but we only need three.
-Qupls4_read_port_select #(.FIXED_PORTS(0), .NPORTO(NREG_RPORTS), .NPORTI(NREG_RPORTS*4)) urps1
-(
-	.rst(irst),
-	.clk(clk),
-	.pReg_i(pRs),
-	.pRegv_i(pRsv),
-	.pReg_o(prn),
-	.regAck_o()
-);
+
+generate begin : gDRP
+	case (RL_STRATEGY)
+	0:
+		always_comb
+			foreach (prn[n66])
+				prn[n66] = rrl[n66].regno;
+	1:
+		// Dynamic port selection.
+		// The dynamic port selector uses groups of eight registers. The minimum number
+		// of fixed ports is then eight, but we only need three.
+		Qupls4_read_port_select #(.FIXED_PORTS(0), .NPORTO(NREG_RPORTS), .NPORTI(NREG_RPORTS*4)) urps1
+		(
+			.rst(irst),
+			.clk(clk),
+			.pReg_i(pRs),
+			.pRegv_i(pRsv),
+			.pReg_o(prn),
+			.regAck_o()
+		);
+	default:	;
+	endcase
+end
+endgenerate
 
 // Under construction
 // Rearrange the port numbers with wires
@@ -3789,7 +3821,7 @@ Qupls4_regfileMwNr #(.RPORTS(NREG_RPORTS), .WPORTS(NREG_WPORTS)) urf1 (
 
 generate begin : gCapRegfile
 	if (SUPPORT_CAPABILITIES)
-Qupls4_cap_regfileMwNr #(.RPORTS(NREG_RPORTS), .WPORTS(1)) ucaprf1 (
+Qupls4_cap_regfile #(.RPORTS(NREG_RPORTS), .WPORTS(1)) ucaprf1 (
 	.rst(irst),
 	.clk(clk), 
 	.wr(~cap_fuq_empty),
@@ -3818,6 +3850,46 @@ begin
 	for (n44 = 0; n44 < NREG_WPORTS; n44 = n44 + 1)
 		$display("wr%d:%d Rt=%d/%d res=%x",// sc_done=%d Rtz2=%d",
 			n44[2:0], wrport0_v[n44], wrport0_aRt[n44], wrport0_Rt[n44], wrport0_res[n44]);//, sau0_sc_done2[n44], sau0_aRdv2[n44]);
+end
+
+// Build a list of registers that need to be read.
+always_comb
+begin
+	n64 = 0;
+	foreach (rob[n63]) begin
+		if (rob[n63].v && !rob[n63].stomped) begin
+			if (n64 < 12 && !rob[n63].argA_v) begin
+				rrl[n64].rndx = n63;
+				rrl[n64].ondx = 3'd0;
+				rrl[n64].regno = rob[n63].op.pRs1;
+				n64 = n64 + 1;
+			end
+			if (n64 < 12 && !rob[n63].argB_v) begin
+				rrl[n64].rndx = n63;
+				rrl[n64].ondx = 3'd1;
+				rrl[n64].regno = rob[n63].op.pRs2;
+				n64 = n64 + 1;
+			end
+			if (n64 < 12 && !rob[n63].argC_v) begin
+				rrl[n64].rndx = n63;
+				rrl[n64].ondx = 3'd2;
+				rrl[n64].regno = rob[n63].op.pRs3;
+				n64 = n64 + 1;
+			end
+			if (n64 < 12 && !rob[n63].argD_v) begin
+				rrl[n64].rndx = n63;
+				rrl[n64].ondx = 3'd3;
+				rrl[n64].regno = rob[n63].op.pRs4;
+				n64 = n64 + 1;
+			end
+			if (n64 < 12 && !rob[n63].argT_v) begin
+				rrl[n64].rndx = n63;
+				rrl[n64].ondx = 3'd4;
+				rrl[n64].regno = rob[n63].op.pRd;
+				n64 = n64 + 1;
+			end
+		end
+	end
 end
 
 Qupls4_copydst ucpydst1
@@ -6515,7 +6587,7 @@ else begin
 			// and checkpoint index valid...
 			pgh[rob[nn].pghn].cndxv &&
 			// must not be a capability instruction
-			!rob[nn].op.decbus.cap &&
+			!rob[nn].op.decbus.expipe[6] &&
 			// and not done already...
 		  !(&rob[nn].done) &&
 			// and not out already...
@@ -6539,7 +6611,7 @@ else begin
 			// and checkpoint index valid...
 			pgh[rob[nn].pghn].cndxv &&
 			// must be a capability instruction
-			rob[nn].op.decbus.cap &&
+			rob[nn].op.decbus.expipe[6] &&
 			// and not done already...
 		  !(&rob[nn].done) &&
 			// and not out already...
@@ -6686,6 +6758,25 @@ else begin
 // ----------------------------------------------------------------------------
 // Register file Read
 // ----------------------------------------------------------------------------
+	// For strategy zero, a group of registers to read is selected from the ROB.
+	// The selected group of operands is marked as valid as thier values will
+	// soon be read from the register file. The operand validation in the
+	// reservation stations will detect when a register value is present and
+	// hence also be marked valid in the reservation station. Once all the args
+	// are valid the instruction can issue.
+	// Argument valid indicators are tracked in two spots: the ROB and the RS.
+	if (RL_STRATEGY==0) begin
+		foreach (rrl[nn]) begin
+			case(rrl[nn].ondx)
+			3'd0:	rob[rrl[nn].rndx].argA_v <= prnv[nn];
+			3'd1:	rob[rrl[nn].rndx].argB_v <= prnv[nn];
+			3'd2:	rob[rrl[nn].rndx].argC_v <= prnv[nn];
+			3'd3:	rob[rrl[nn].rndx].argD_v <= prnv[nn];
+			3'd4:	rob[rrl[nn].rndx].argT_v <= prnv[nn];
+			default:	;
+			endcase
+		end
+	end
 	// For the first register lookup strategy which uses the register file write
 	// port history to fill in unknown values.
 	//
