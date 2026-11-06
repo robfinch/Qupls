@@ -53,7 +53,7 @@ end
 
 always_comb
 if (rst) begin
-	for (n1 = 0; n1 < MWIDTH; n1 = n1 + 1) begin
+	foreach (pr[n1]) begin
 		pr[n1] = {$bits(rob_entry_t){1'b0}};
 		pr[n1].op = {$bits(Qupls4_pkg::pipeline_reg_t){1'b0}};
 		pr[n1].op.exc = Qupls4_pkg::FLT_NONE;
@@ -72,6 +72,7 @@ if (rst) begin
 end
 else begin
 	n1 = 0;
+	pr = lpr;
 	if (en) begin
 		// Allow only one instruction through when single stepping.
 		if (ssm_flag & ~prev_ssm_flag) begin
@@ -125,8 +126,6 @@ else begin
 			end
 		end
 	end
-	else
-		pr = lpr;
 /*
 	pr[0].hwi_level = irq_fet;
 	pr[1].hwi_level = irq_fet;
