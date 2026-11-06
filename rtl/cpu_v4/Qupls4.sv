@@ -3853,11 +3853,13 @@ begin
 end
 
 // Build a list of registers that need to be read.
+// We look for needed registers from the ROB where the instruction has been
+// dispatched already (out!=0) and it is a valid non-stomped on instruction.
 always_comb
 begin
 	n64 = 0;
 	foreach (rob[n63]) begin
-		if (rob[n63].v && !rob[n63].stomped) begin
+		if (rob[n63].v && !rob[n63].stomped && |rob[n63].out) begin
 			if (n64 < 12 && !rob[n63].argA_v) begin
 				rrl[n64].rndx = n63;
 				rrl[n64].ondx = 3'd0;
@@ -3886,6 +3888,12 @@ begin
 				rrl[n64].rndx = n63;
 				rrl[n64].ondx = 3'd4;
 				rrl[n64].regno = rob[n63].op.pRd;
+				n64 = n64 + 1;
+			end
+			if (n64 < 12 && !rob[n63].argS_v) begin
+				rrl[n64].rndx = n63;
+				rrl[n64].ondx = 3'd5;
+				rrl[n64].regno = rob[n63].op.pRm;
 				n64 = n64 + 1;
 			end
 		end
@@ -6773,6 +6781,7 @@ else begin
 			3'd2:	rob[rrl[nn].rndx].argC_v <= prnv[nn];
 			3'd3:	rob[rrl[nn].rndx].argD_v <= prnv[nn];
 			3'd4:	rob[rrl[nn].rndx].argT_v <= prnv[nn];
+			3'd5:	rob[rrl[nn].rndx].argS_v <= prnv[nn];
 			default:	;
 			endcase
 		end
