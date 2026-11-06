@@ -7096,23 +7096,23 @@ else begin
 			group_len <= rob[head[0]].group_len;
 		// Commit oddball instructions
 		if ((rob[head[0]].op.decbus.oddball && !rob[head[0]].excv) || rob[head[0]].op.hwi)
-			tOddballCommit(rob[head[0]].v, head[0]);
+			tOddballCommit(|rob[head[0]].v, head[0]);
 		else if ((rob[head[1]].op.decbus.oddball && !rob[head[1]].excv && cmtcnt > 3'd1) || rob[head[1]].op.hwi)
-			tOddballCommit(rob[head[1]].v, head[1]);
+			tOddballCommit(|rob[head[1]].v, head[1]);
 		else if ((rob[head[2]].op.decbus.oddball && !rob[head[2]].excv && cmtcnt > 3'd2) || rob[head[2]].op.hwi)
-			tOddballCommit(rob[head[2]].v, head[2]);
+			tOddballCommit(|rob[head[2]].v, head[2]);
 		else if ((rob[head[3]].op.decbus.oddball && !rob[head[3]].excv && cmtcnt > 3'd3) || rob[head[3]].op.hwi)
-			tOddballCommit(rob[head[3]].v, head[3]);
+			tOddballCommit(|rob[head[3]].v, head[3]);
 		// Trigger exception processing for last instruction in group.
-		if (rob[head[0]].excv && rob[head[0]].v)
+		if (rob[head[0]].excv && |rob[head[0]].v)
 //			err_mask[head[0]] <= 1'b1;
 //			if (rob[head[0]].last)
 			tProcessExc(head[0],pgh[rob[head[0]].pghn].ip.cap.offset+{rob[head[0]].ip_offs,1'b0},rob[head[0]].op.uop.num);
-		else if (rob[head[1]].excv && cmtcnt > 3'd1 && rob[head[1]].v)
+		else if (rob[head[1]].excv && cmtcnt > 3'd1 && |rob[head[1]].v)
 			tProcessExc(head[1],pgh[rob[head[1]].pghn].ip.cap.offset+{rob[head[1]].ip_offs,1'b0},rob[head[1]].op.uop.num);
-		else if (rob[head[2]].excv && cmtcnt > 3'd2 && rob[head[2]].v)
+		else if (rob[head[2]].excv && cmtcnt > 3'd2 && |rob[head[2]].v)
 			tProcessExc(head[2],pgh[rob[head[2]].pghn].ip.cap.offset+{rob[head[2]].ip_offs,1'b0},rob[head[2]].op.uop.num);
-		else if (rob[head[3]].excv && cmtcnt > 3'd3 && rob[head[3]].v)
+		else if (rob[head[3]].excv && cmtcnt > 3'd3 && |rob[head[3]].v)
 			tProcessExc(head[3],pgh[rob[head[3]].pghn].ip.cap.offset+{rob[head[3]].ip_offs,1'b0},rob[head[3]].op.uop.num);
 			
 		if (rob[head[0]].op.ssm)
