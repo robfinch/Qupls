@@ -66,7 +66,8 @@ if (rst) begin
 		pr[n1].excv = INV;
 		pr[n1].done = 2'b11;
 		pr[n1].stomped = TRUE;
-		pr[n1].v = pc[n1].stream.stream;
+		pr[n1].v = VAL;
+		pr[n1].ip_stream = pc[n1].stream.stream;
 	end
 end
 else begin
@@ -136,13 +137,13 @@ else begin
 // If an NMI or IRQ is happening, invalidate instruction and mark as
 // interrupted by external hardware.
 	if (!(!(irq) && !stomp && !(ssm_flag && !(ssm_flag && !prev_ssm_flag)))) begin
-		pr[0].v = 5'd0;
+		pr[0].v = INV;
 		pr[0].stomped = TRUE;
 		pr[0].done = 2'b11;
 	end
 	for (n4 = 1; n4 < MWIDTH; n4 = n4 + 1)
 		if (!(!irq && !stomp && !ssm_flag)) begin
-			pr[n4].v = 5'd0;
+			pr[n4].v = INV;
 			pr[n4].stomped = TRUE;
 			pr[n4].done = 2'b11;
 		end

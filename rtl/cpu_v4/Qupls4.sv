@@ -901,7 +901,7 @@ initial begin: Init
 	integer i,j;
 
 	foreach (rob[i]) begin
-  	rob[i].v = 5'd0;
+  	rob[i].v = INV;
 	end
 
 //	dram2 = 0;
@@ -1353,10 +1353,10 @@ always_comb
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 reg [8:0] nan_log_addr;
 reg do_log_nan = 1'b0;
-wire nan0 = |rob[head[0]].v && cmtcnt > 3'd0 && rob[head[0]].nan;
-wire nan1 = |rob[head[1]].v && cmtcnt > 3'd1 && rob[head[1]].nan;
-wire nan2 = |rob[head[2]].v && cmtcnt > 3'd2 && rob[head[2]].nan;
-wire nan3 = |rob[head[3]].v && cmtcnt > 3'd3 && rob[head[3]].nan;
+wire nan0 = rob[head[0]].v && cmtcnt > 3'd0 && rob[head[0]].nan;
+wire nan1 = rob[head[1]].v && cmtcnt > 3'd1 && rob[head[1]].nan;
+wire nan2 = rob[head[2]].v && cmtcnt > 3'd2 && rob[head[2]].nan;
+wire nan3 = rob[head[3]].v && cmtcnt > 3'd3 && rob[head[3]].nan;
 cpu_types_pkg::pc_address_t nan1e, nan2e;
 wire log_nan = (nan0|nan1|nan2|nan3) && do_commit && cmtcnt > 3'd0 && do_log_nan;
 
@@ -1935,7 +1935,7 @@ begin
     4'b0111:
     	panic <= Qupls4_pkg::PANIC_INVALIDIQSTATE;
     4'b1000:
-    	if (rob[tails[3]].v==5'd0)
+    	if (rob[tails[3]].v==INV)
 	   		qd = 4'b1000;
 	  // Cannot have an instruction in the middle that has not queued.
     4'b1001:
@@ -1945,10 +1945,10 @@ begin
     4'b1011:
     	panic <= Qupls4_pkg::PANIC_INVALIDIQSTATE;
     4'b1100:
-    	if (rob[tails[2]].v==5'd0) begin
+    	if (rob[tails[2]].v==INV) begin
     		qd = 4'b0100;
     		if (!pt_q[2] && !pg_ren.pr[2].op.decbus.regs) begin
-    			if (rob[tails[3]].v==5'd0) begin
+    			if (rob[tails[3]].v==INV) begin
 	    			qd = 4'b1100;
 	    		end
 	    	end
@@ -1956,13 +1956,13 @@ begin
     4'b1101:
     	panic <= Qupls4_pkg::PANIC_INVALIDIQSTATE;
     4'b1110:
-    	if (rob[tails[1]].v==5'd0) begin
+    	if (rob[tails[1]].v==INV) begin
     		qd = 4'b0010;
     		if (!pt_q[1] && !pg_ren.pr[1].op.decbus.regs) begin
-    			if (rob[tails[2]].v==5'd0) begin
+    			if (rob[tails[2]].v==INV) begin
 		    		qd = 4'b0110;
 	    			if (!pt_q[2] && !pg_ren.pr[2].op.decbus.regs) begin
-	    				if (rob[tails[3]].v==5'd0) begin
+	    				if (rob[tails[3]].v==INV) begin
 			    			qd = 4'b1110;
 			    		end
 			    	end
@@ -1970,16 +1970,16 @@ begin
     		end
     	end
     default:
-    	if (rob[tails[0]].v==5'd0) begin
+    	if (rob[tails[0]].v==INV) begin
     		qd = 4'b0001;
     		if (!pt_q[0] && !pg_ren.pr[0].op.decbus.regs) begin
-    			if (rob[tails[1]].v==5'd0) begin
+    			if (rob[tails[1]].v==INV) begin
 	    			qd = 4'b0011;
 	    			if (!pt_q[1] && !pg_ren.pr[1].op.decbus.regs) begin
-	    				if (rob[tails[2]].v==5'd0) begin
+	    				if (rob[tails[2]].v==INV) begin
 			    			qd = 4'b0111;
 		    				if (!pt_q[2] && !pg_ren.pr[2].op.decbus.regs) begin
-		    					if (rob[tails[3]].v==5'd0)
+		    					if (rob[tails[3]].v==INV)
 				    				qd = 4'b1111;
 				    		end
 			    		end
@@ -2878,8 +2878,8 @@ pregno_t [MWIDTH-1:0] cmtap;
 checkpt_ndx_t [MWIDTH-1:0] cmta_cp;
 always_comb
 	for (n46 = 0; n46 < MWIDTH; n46 = n46 + 1) begin
-		cmtav[n46] = do_commit && |rob[head[n46]].v && cmtcnt > n46;
-		cmtaiv[n46] = do_commit && rob[head[n46]].v==5'd0 && cmtcnt > n46;
+		cmtav[n46] = do_commit && rob[head[n46]].v && cmtcnt > n46;
+		cmtaiv[n46] = do_commit && rob[head[n46]].v==INV && cmtcnt > n46;
 		cmtaa[n46] = rob[head[n46]].op.decbus.Rd;
 		cmtap[n46] = rob[head[n46]].op.nRd;
 		cmta_cp[n46] = rob[head[n46]].cndx;
@@ -5455,7 +5455,7 @@ Qupls4_pkg::rob_bitmask_t empty_bmp;
 reg rob_empty;
 always_comb
 foreach (rob[n1])
-	empty_bmp[n1] = ~|rob[n1].v;
+	empty_bmp[n1] = ~rob[n1].v;
 always_comb
 	rob_empty = &empty_bmp;
 
@@ -5479,7 +5479,7 @@ always_comb
 */
 always_comb
 	foreach(cmttlb[n51])
-		cmttlb[n51] = (|rob[head[n51]].v && rob[head[n51]].lsq && !lsq[rob[head[n51]].lsqndx.row][rob[head[n51]].lsqndx.col].agen);
+		cmttlb[n51] = (rob[head[n51]].v && rob[head[n51]].lsq && !lsq[rob[head[n51]].lsqndx.row][rob[head[n51]].lsqndx.col].agen);
 
 Qupls4_commit_count
 #(.COMMIT_WIDTH(COMMIT_WIDTH))
@@ -5511,19 +5511,19 @@ end
 always_comb
 begin
 	int_commit = 1'b0;
-	if (|rob[head[0]].v && &rob[head[0]].done && rob[head[0]].op.hwi_level > sr.ipl)//fnIsIrq(rob[head[0]].op.ins))
+	if (rob[head[0]].v && &rob[head[0]].done && rob[head[0]].op.hwi_level > sr.ipl)//fnIsIrq(rob[head[0]].op.ins))
 		int_commit = 1'b1;
-	else if (((|rob[head[0]].v && &rob[head[0]].done) || ! (|rob[head[0]].v)) &&
-					(|rob[head[1]].v && &rob[head[1]].done && rob[head[1]].op.hwi_level > sr.ipl /*fnIsIrq(rob[head[1]].op.ins*/))
+	else if (((rob[head[0]].v && &rob[head[0]].done) || !rob[head[0]].v) &&
+					(rob[head[1]].v && &rob[head[1]].done && rob[head[1]].op.hwi_level > sr.ipl /*fnIsIrq(rob[head[1]].op.ins*/))
 		int_commit = MWIDTH > 1;
-	else if (((|rob[head[0]].v && &rob[head[0]].done) || ! (|rob[head[0]].v)) &&
-					 ((|rob[head[1]].v && &rob[head[1]].done) || ! (|rob[head[1]].v)) &&
-					(|rob[head[2]].v && &rob[head[2]].done && rob[head[2]].op.hwi_level > sr.ipl /*fnIsIrq(rob[head[2]].op.ins*/))
+	else if (((rob[head[0]].v && &rob[head[0]].done) || !rob[head[0]].v) &&
+					 ((rob[head[1]].v && &rob[head[1]].done) || !rob[head[1]].v) &&
+					(rob[head[2]].v && &rob[head[2]].done && rob[head[2]].op.hwi_level > sr.ipl /*fnIsIrq(rob[head[2]].op.ins*/))
 		int_commit = MWIDTH > 2;
-	else if (((|rob[head[0]].v && &rob[head[0]].done) || ! (|rob[head[0]].v)) &&
-					 ((|rob[head[1]].v && &rob[head[1]].done) || ! (|rob[head[1]].v)) &&
-					 ((|rob[head[2]].v && &rob[head[2]].done) || ! (|rob[head[2]].v)) &&
-					(|rob[head[3]].v && &rob[head[3]].done && rob[head[3]].op.hwi_level > sr.ipl /*fnIsIrq(rob[head[3]].op.ins*/))
+	else if (((rob[head[0]].v && &rob[head[0]].done) || !rob[head[0]].v) &&
+					 ((rob[head[1]].v && &rob[head[1]].done) || !rob[head[1]].v) &&
+					 ((rob[head[2]].v && &rob[head[2]].done) || !rob[head[2]].v) &&
+					(rob[head[3]].v && &rob[head[3]].done && rob[head[3]].op.hwi_level > sr.ipl /*fnIsIrq(rob[head[3]].op.ins*/))
 		int_commit = MWIDTH > 3;
 end
 
@@ -5534,7 +5534,7 @@ edge_det edvs1 (
 	.rst(irst),
 	.clk(clk),
 	.ce(advance_pipeline),
-	.i(|rob[head[0]].v && (rob[head[0]].op.decbus.rex || rob[head[0]].excv)),
+	.i(rob[head[0]].v && (rob[head[0]].op.decbus.rex || rob[head[0]].excv)),
 	.pe(pe_vec_stall),
 	.ne(),
 	.ee()
@@ -6525,7 +6525,7 @@ else begin
 				pred_done[nn] <= TRUE;
 		foreach (rob[nn]) begin
 			// Predicate resolved?
-			if (|rob[nn].v && rob[nn].op.decbus.pred) begin
+			if (rob[nn].v && rob[nn].op.decbus.pred) begin
 				if (rob[nn].out!=2'b00 && pred_done[rob[nn].ip_stream.stream]) begin
 					pred_buf[rob[nn].ip_stream.stream] <= value_zero;
 					pred_done[rob[nn].ip_stream.stream] <= FALSE;
@@ -6533,7 +6533,7 @@ else begin
 				end
 			end
 			// Track which predicated instructions are done.
-			if (|rob[nn].v && rob[nn].done==2'b11)
+			if (rob[nn].v && rob[nn].done==2'b11)
 				pred_ins_done[rob[nn].ip_stream.stream][rob[nn].op.decbus.pred_no] <= TRUE;
 
 			for (mm = 0; mm < 32; mm = mm + 1) begin
@@ -6591,7 +6591,7 @@ else begin
 	foreach (rob[nn])
 		rob[nn].dispatchable <= 
 			// Valid stream or stomped on
-			(|rob[nn].v || rob[nn].stomped) &&
+			(rob[nn].v || rob[nn].stomped) &&
 			// and checkpoint index valid...
 			pgh[rob[nn].pghn].cndxv &&
 			// must not be a capability instruction
@@ -6615,7 +6615,7 @@ else begin
 	foreach (rob[nn])
 		rob[nn].cap_dispatchable <= 
 			// Valid stream or stomped on
-			(|rob[nn].v || rob[nn].stomped) &&
+			(rob[nn].v || rob[nn].stomped) &&
 			// and checkpoint index valid...
 			pgh[rob[nn].pghn].cndxv &&
 			// must be a capability instruction
@@ -6665,7 +6665,7 @@ else begin
 			if (!(&rob[nn].done) &&			// not done
 				rob[nn].op.decbus.rext		// and an extended register prefix
 			) begin
-				if (|rob[(nn+1)%ROB_ENTRIES].v && rob[(nn+1)%ROB_ENTRIES].sn == (rob[nn].sn +1) % ROB_ENTRIES) begin	// valid and in sequence?
+				if (rob[(nn+1)%ROB_ENTRIES].v && rob[(nn+1)%ROB_ENTRIES].sn == (rob[nn].sn +1) % ROB_ENTRIES) begin	// valid and in sequence?
 					rob[(nn+1)%ROB_ENTRIES].op.pRs4 <= rob[nn].op.pRs1;
 					rob[(nn+1)%ROB_ENTRIES].op.Rs4z <= rob[nn].op.decbus.Rs1z;
 					rob[(nn+1)%ROB_ENTRIES].op.pRd2 <= rob[nn].op.pRd;
@@ -6678,7 +6678,7 @@ else begin
 				// The REXT was not followed by a valid instruction. Treat as a NOP.
 				// Just mark it done. Note: the next instruction may not be queued yet,
 				// so test for a following instruction before marking.
-				else if (|rob[(nn+1)%ROB_ENTRIES].v && rob[(nn + 1) % Qupls4_pkg::ROB_ENTRIES].sn > rob[nn].sn)
+				else if (rob[(nn+1)%ROB_ENTRIES].v && rob[(nn + 1) % Qupls4_pkg::ROB_ENTRIES].sn > rob[nn].sn)
 					rob[nn].done <= 2'b11;
 			end
 		end
@@ -6899,19 +6899,19 @@ else begin
 	// If data for stomped instruction, ignore
 	// dram_vn will be false for stomped data
 	if (Qupls4_pkg::SUPPORT_MEM4) begin
-		if (dram0_done && |rob[ dram0_work.rndx ].v && dram0_work.rndxv)
+		if (dram0_done && rob[ dram0_work.rndx ].v && dram0_work.rndxv)
 			tSetROBMemDone(6, dram0_work,dram0_oper,dram0_oper.exc,dram0_oper.state);
 	end
 	
 	if (Qupls4_pkg::SUPPORT_MEM5) begin
-		if (dram1_done && |rob[ dram1_work.rndx ].v && dram1_work.rndxv)
+		if (dram1_done && rob[ dram1_work.rndx ].v && dram1_work.rndxv)
 			tSetROBMemDone(7, dram1_work,dram1_oper,dram1_oper.exc,dram1_oper.state);
 	end
 
 	// Store TLB translation in LSQ
 	// If there is a TLB miss it could be a number of cycles before output
 	// becomes valid.
-	if (tlb0_v && |rob[agen0_rse.rndx].v &&
+	if (tlb0_v && rob[agen0_rse.rndx].v &&
 		!rob[agen0_rse.rndx].done[0] &&
 		rob[agen0_rse.rndx].op.decbus.mem &&
 		agen0_rse.v) begin
@@ -7196,23 +7196,23 @@ else begin
 			group_len <= rob[head[0]].group_len;
 		// Commit oddball instructions
 		if ((rob[head[0]].op.decbus.oddball && !rob[head[0]].excv) || rob[head[0]].op.hwi)
-			tOddballCommit(|rob[head[0]].v, head[0]);
+			tOddballCommit(rob[head[0]].v, head[0]);
 		else if ((rob[head[1]].op.decbus.oddball && !rob[head[1]].excv && cmtcnt > 3'd1) || rob[head[1]].op.hwi)
-			tOddballCommit(|rob[head[1]].v, head[1]);
+			tOddballCommit(rob[head[1]].v, head[1]);
 		else if ((rob[head[2]].op.decbus.oddball && !rob[head[2]].excv && cmtcnt > 3'd2) || rob[head[2]].op.hwi)
-			tOddballCommit(|rob[head[2]].v, head[2]);
+			tOddballCommit(rob[head[2]].v, head[2]);
 		else if ((rob[head[3]].op.decbus.oddball && !rob[head[3]].excv && cmtcnt > 3'd3) || rob[head[3]].op.hwi)
-			tOddballCommit(|rob[head[3]].v, head[3]);
+			tOddballCommit(rob[head[3]].v, head[3]);
 		// Trigger exception processing for last instruction in group.
-		if (rob[head[0]].excv && |rob[head[0]].v)
+		if (rob[head[0]].excv && rob[head[0]].v)
 //			err_mask[head[0]] <= 1'b1;
 //			if (rob[head[0]].last)
 			tProcessExc(head[0],pgh[rob[head[0]].pghn].ip.cap.offset+{rob[head[0]].ip_offs,1'b0},rob[head[0]].op.uop.num);
-		else if (rob[head[1]].excv && cmtcnt > 3'd1 && |rob[head[1]].v)
+		else if (rob[head[1]].excv && cmtcnt > 3'd1 && rob[head[1]].v)
 			tProcessExc(head[1],pgh[rob[head[1]].pghn].ip.cap.offset+{rob[head[1]].ip_offs,1'b0},rob[head[1]].op.uop.num);
-		else if (rob[head[2]].excv && cmtcnt > 3'd2 && |rob[head[2]].v)
+		else if (rob[head[2]].excv && cmtcnt > 3'd2 && rob[head[2]].v)
 			tProcessExc(head[2],pgh[rob[head[2]].pghn].ip.cap.offset+{rob[head[2]].ip_offs,1'b0},rob[head[2]].op.uop.num);
-		else if (rob[head[3]].excv && cmtcnt > 3'd3 && |rob[head[3]].v)
+		else if (rob[head[3]].excv && cmtcnt > 3'd3 && rob[head[3]].v)
 			tProcessExc(head[3],pgh[rob[head[3]].pghn].ip.cap.offset+{rob[head[3]].ip_offs,1'b0},rob[head[3]].op.uop.num);
 			
 		if (rob[head[0]].op.ssm)
@@ -7487,7 +7487,7 @@ else begin
 
 		foreach (rob[n3]) begin
 			rob[n3].could_issue <=
-					|rob[n3].v
+					rob[n3].v
 				&& !robentry_stomp[n3]
 				&& !(&rob[n3].done)
 				&& (rob[n3].op.decbus.cpytgt ? (rob[n3].argT_v /*|| rob[g].op.nRt==9'd0*/) : rob[n3].all_args_valid && rob[n3].pred_bit)
@@ -7553,19 +7553,19 @@ else begin
 	// wrong with hardware. It may be "fixed" by advancing the head indexes
 	// over invalid entries.
 	if (!rob_empty) begin
-		if (rob[head[0]].v==5'd0 && rob[head[1]].v==5'd0 && rob[head[2]].v==5'd0 && rob[head[3]].v==5'd0) begin
+		if (rob[head[0]].v==INV && rob[head[1]].v==INV && rob[head[2]].v==INV && rob[head[3]].v==INV) begin
 			foreach(head[n61])
 				head[n61] <= (head[n61] + 4'd4) % Qupls4_pkg::ROB_ENTRIES;	
 		end
-		else if (rob[head[0]].v==5'd0 && rob[head[1]].v==5'd0 && rob[head[2]].v==5'd0) begin
+		else if (rob[head[0]].v==INV && rob[head[1]].v==INV && rob[head[2]].v==INV) begin
 			foreach(head[n61])
 				head[n61] <= (head[n61] + 4'd3) % Qupls4_pkg::ROB_ENTRIES;	
 		end
-		else if (rob[head[0]].v==5'd0 && rob[head[1]].v==5'd0) begin
+		else if (rob[head[0]].v==INV && rob[head[1]].v==INV) begin
 			foreach(head[n61])
 				head[n61] <= (head[n61] + 4'd2) % Qupls4_pkg::ROB_ENTRIES;	
 		end
-		else if (rob[head[0]].v==5'd0) begin
+		else if (rob[head[0]].v==INV) begin
 			foreach(head[n61])
 				head[n61] <= (head[n61] + 4'd1) % Qupls4_pkg::ROB_ENTRIES;	
 		end
@@ -8098,7 +8098,7 @@ integer n;
 begin
 	fnPriorFC = FALSE;
 	foreach (rob[n])
-		if (rob[n].v==rob[ndx].v && rob[n].sn < rob[ndx].sn && rob[n].op.decbus.fc && !(&rob[n].done))
+		if (rob[n].ip_stream==rob[ndx].ip_stream && rob[n].sn < rob[ndx].sn && rob[n].op.decbus.fc && !(&rob[n].done))
 			fnPriorFC = TRUE;
 end
 endfunction
@@ -8109,7 +8109,7 @@ integer n;
 begin
 	fnPriorMem = FALSE;
 	foreach (rob[n])
-		if (rob[n].v==rob[ndx].v && rob[n].sn < rob[ndx].sn && rob[n].op.decbus.mem && !(&rob[n].done))
+		if (rob[n].ip_stream==rob[ndx].ip_stream && rob[n].sn < rob[ndx].sn && rob[n].op.decbus.mem && !(&rob[n].done))
 			fnPriorMem = TRUE;
 end
 endfunction
@@ -8120,7 +8120,7 @@ integer n;
 begin
 	fnPriorSync = FALSE;
 	foreach (rob[n])
-		if (rob[n].v==rob[ndx].v && rob[n].sn < rob[ndx].sn && rob[n].op.decbus.sync)
+		if (rob[n].ip_stream==rob[ndx].ip_stream && rob[n].sn < rob[ndx].sn && rob[n].op.decbus.sync)
 			fnPriorSync = TRUE;
 end
 endfunction
@@ -8242,7 +8242,7 @@ function fnStuckOut;
 input rob_ndx_t n;
 begin
 	fnStuckOut = FALSE;
-	if (|rob[n].out && rob[n].done==2'b00 && |rob[n].v && 
+	if (|rob[n].out && rob[n].done==2'b00 && rob[n].v && 
 		!((n==sau0_id && !sau0_idle)
 			|| (n==sau1_id && !sau1_idle)
 			|| (n==fpu0_id && !fpu0_idle)
@@ -8494,7 +8494,7 @@ task tInvalidateQE;
 input rob_ndx_t ndx;
 begin
 	rob[ndx].stomped <= FALSE;
-	rob[ndx].v <= 5'd0;
+	rob[ndx].v <= INV;
 	rob[ndx].done <= {INV,INV};
 	rob[ndx].out <= {INV,INV};
 //	rob[ndx].lsq <= INV;
@@ -8511,7 +8511,7 @@ endtask
 task tCheckQFExtDone;
 input rob_ndx_t head;
 begin
-	if (|rob[head].v && rob[head].op.decbus.qfext && !rob[(head+1)%Qupls4_pkg::ROB_ENTRIES].op.decbus.fpu && sau0_id==head) begin
+	if (rob[head].v && rob[head].op.decbus.qfext && !rob[(head+1)%Qupls4_pkg::ROB_ENTRIES].op.decbus.fpu && sau0_id==head) begin
 		if (rob[head].done!=2'b11) begin
 			sau0_idle1 <= TRUE;
 			sau0_idv <= INV;
@@ -9642,70 +9642,70 @@ begin
 		m6 = (ndx + Qupls4_pkg::ROB_ENTRIES - 6) % Qupls4_pkg::ROB_ENTRIES;
 		m7 = (ndx + Qupls4_pkg::ROB_ENTRIES - 7) % Qupls4_pkg::ROB_ENTRIES;
 		m8 = (ndx + Qupls4_pkg::ROB_ENTRIES - 8) % Qupls4_pkg::ROB_ENTRIES;
-		if (rob[m1].v==rob[ndx].v && rob[m1].sn < rob[ndx].sn && rob[m1].op.decbus.pred) begin
+		if (rob[m1].ip_stream==rob[ndx].ip_stream && rob[m1].sn < rob[ndx].sn && rob[m1].op.decbus.pred) begin
 			if (rob[m1].op.decbus.pred_mask[1:0]==2'd0) begin
 				rob[ndx].pred_bit <= TRUE;
 				rob[ndx].pred_bitv <= VAL;
 			end
 			else if (rob[m1].done==2'b11 && rob[m1].op.decbus.pred_mask[1:0]!=2'b00) begin
-				rob[ndx].v <= 5'd0;
+				rob[ndx].v <= INV;
 			end
 		end
-		else if (rob[m2].v==rob[ndx].v && rob[m2].sn < rob[ndx].sn && rob[m2].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 1) begin
+		else if (rob[m2].ip_stream==rob[ndx].ip_stream && rob[m2].sn < rob[ndx].sn && rob[m2].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 1) begin
 			if (rob[m2].op.decbus.pred_mask[3:2]==2'd0) begin
 				rob[ndx].pred_bit <= TRUE;
 				rob[ndx].pred_bitv <= VAL;
 			end
 			else if (rob[m2].done==2'b11 && rob[m2].op.decbus.pred_mask[3:2]!=2'b00) begin
-				rob[ndx].v <= 5'd0;
+				rob[ndx].v <= INV;
 			end
 		end
-		else if (rob[m3].v==rob[ndx].v && rob[m3].sn < rob[ndx].sn && rob[m3].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 2) begin
+		else if (rob[m3].ip_stream==rob[ndx].ip_stream && rob[m3].sn < rob[ndx].sn && rob[m3].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 2) begin
 			if (rob[m3].op.decbus.pred_mask[5:4]==2'd0) begin
 				rob[ndx].pred_bit <= TRUE;
 				rob[ndx].pred_bitv <= VAL;
 			end
 			else if (rob[m3].done==2'b11 && rob[m3].op.decbus.pred_mask[5:4]!=2'b00) begin
-				rob[ndx].v <= 5'd0;
+				rob[ndx].v <= INV;
 			end
 		end
-		else if (rob[m4].v==rob[ndx].v && rob[m4].sn < rob[ndx].sn && rob[m4].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 3) begin
+		else if (rob[m4].ip_stream==rob[ndx].ip_stream && rob[m4].sn < rob[ndx].sn && rob[m4].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 3) begin
 			if (rob[m4].op.decbus.pred_mask[7:6]==2'd0) begin
 				rob[ndx].pred_bit <= TRUE;
 				rob[ndx].pred_bitv <= VAL;
 			end
 			else if (rob[m4].done==2'b11 && rob[m4].op.decbus.pred_mask[7:6]!=2'b00) begin
-				rob[ndx].v <= 5'd0;
+				rob[ndx].v <= INV;
 			end
 		end
-		else if (rob[m5].v==rob[ndx].v && rob[m5].sn < rob[ndx].sn && rob[m5].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 4) begin
+		else if (rob[m5].ip_stream==rob[ndx].ip_stream && rob[m5].sn < rob[ndx].sn && rob[m5].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 4) begin
 			if (rob[m5].op.decbus.pred_mask[9:8]==2'd0) begin
 				rob[ndx].pred_bit <= TRUE;
 				rob[ndx].pred_bitv <= VAL;
 			end
 			else if (rob[m5].done==2'b11 && rob[m5].op.decbus.pred_mask[9:8]!=2'b00) begin
-				rob[ndx].v <= 5'd0;
+				rob[ndx].v <= INV;
 			end
 		end
-		else if (rob[m6].v==rob[ndx].v && rob[m6].sn < rob[ndx].sn && rob[m6].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 5) begin
+		else if (rob[m6].ip_stream==rob[ndx].ip_stream && rob[m6].sn < rob[ndx].sn && rob[m6].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 5) begin
 			if (rob[m6].op.decbus.pred_mask[11:10]==2'd0) begin
 				rob[ndx].pred_bit <= TRUE;
 				rob[ndx].pred_bitv <= VAL;
 			end
 			else if (rob[m6].done==2'b11 && rob[m6].op.decbus.pred_mask[11:10]!=2'b00) begin
-				rob[ndx].v <= 5'd0;
+				rob[ndx].v <= INV;
 			end
 		end
-		else if (rob[m7].v==rob[ndx].v && rob[m6].sn < rob[ndx].sn && rob[m7].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 6) begin
+		else if (rob[m7].ip_stream==rob[ndx].ip_stream && rob[m6].sn < rob[ndx].sn && rob[m7].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 6) begin
 			if (rob[m7].op.decbus.pred_mask[13:12]==2'd0) begin
 				rob[ndx].pred_bit <= TRUE;
 				rob[ndx].pred_bitv <= VAL;
 			end
 			else if (rob[m7].done==2'b11 && rob[m7].op.decbus.pred_mask[13:12]!=2'b00) begin
-				rob[ndx].v <= 5'd0;
+				rob[ndx].v <= INV;
 			end
 		end
-		else if (rob[m8].v==rob[ndx].v && rob[m8].sn < rob[ndx].sn) begin
+		else if (rob[m8].ip_stream==rob[ndx].ip_stream && rob[m8].sn < rob[ndx].sn) begin
 			rob[ndx].pred_bit <= TRUE;
 			rob[ndx].pred_bitv <= VAL;
 		end
@@ -9741,22 +9741,22 @@ begin
 		m6 = (ndx + Qupls4_pkg::ROB_ENTRIES - 6) % Qupls4_pkg::ROB_ENTRIES;
 		m7 = (ndx + Qupls4_pkg::ROB_ENTRIES - 7) % Qupls4_pkg::ROB_ENTRIES;
 		m8 = (ndx + Qupls4_pkg::ROB_ENTRIES - 8) % Qupls4_pkg::ROB_ENTRIES;
-		if (rob[m1].v==rob[ndx].v && rob[m1].sn < rob[ndx].sn && rob[m1].op.decbus.pred) begin
+		if (rob[m1].ip_stream==rob[ndx].ip_stream && rob[m1].sn < rob[ndx].sn && rob[m1].op.decbus.pred) begin
 			rob[m1].op.decbus.pred_mask <= 14'd0;
 		end
-		else if (rob[m2].v==rob[ndx].v && rob[m2].sn < rob[ndx].sn && rob[m2].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 1) begin
+		else if (rob[m2].ip_stream==rob[ndx].ip_stream && rob[m2].sn < rob[ndx].sn && rob[m2].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 1) begin
 			rob[m1].pred_bit <= TRUE;
 			rob[m1].pred_bitv <= VAL;
 			rob[m2].op.decbus.pred_mask <= 14'd0;
 		end
-		else if (rob[m3].v==rob[ndx].v && rob[m3].sn < rob[ndx].sn && rob[m3].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 2) begin
+		else if (rob[m3].ip_stream==rob[ndx].ip_stream && rob[m3].sn < rob[ndx].sn && rob[m3].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 2) begin
 			rob[m1].pred_bit <= TRUE;
 			rob[m1].pred_bitv <= VAL;
 			rob[m2].pred_bit <= TRUE;
 			rob[m2].pred_bitv <= VAL;
 			rob[m3].op.decbus.pred_mask <= 14'd0;
 		end
-		else if (rob[m4].v==rob[ndx].v && rob[m4].sn < rob[ndx].sn && rob[m4].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 3) begin
+		else if (rob[m4].ip_stream==rob[ndx].ip_stream && rob[m4].sn < rob[ndx].sn && rob[m4].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 3) begin
 			rob[m1].pred_bit <= TRUE;
 			rob[m1].pred_bitv <= VAL;
 			rob[m2].pred_bit <= TRUE;
@@ -9765,7 +9765,7 @@ begin
 			rob[m3].pred_bitv <= VAL;
 			rob[m4].op.decbus.pred_mask <= 14'd0;
 		end
-		else if (rob[m5].v==rob[ndx].v && rob[m5].sn < rob[ndx].sn && rob[m5].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 4) begin
+		else if (rob[m5].ip_stream==rob[ndx].ip_stream && rob[m5].sn < rob[ndx].sn && rob[m5].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 4) begin
 			rob[m1].pred_bit <= TRUE;
 			rob[m1].pred_bitv <= VAL;
 			rob[m2].pred_bit <= TRUE;
@@ -9776,7 +9776,7 @@ begin
 			rob[m4].pred_bitv <= VAL;
 			rob[m5].op.decbus.pred_mask <= 14'd0;
 		end
-		else if (rob[m6].v==rob[ndx].v && rob[m6].sn < rob[ndx].sn && rob[m6].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 5) begin
+		else if (rob[m6].ip_stream==rob[ndx].ip_stream && rob[m6].sn < rob[ndx].sn && rob[m6].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 5) begin
 			rob[m1].pred_bit <= TRUE;
 			rob[m1].pred_bitv <= VAL;
 			rob[m2].pred_bit <= TRUE;
@@ -9789,7 +9789,7 @@ begin
 			rob[m5].pred_bitv <= VAL;
 			rob[m6].op.decbus.pred_mask <= 14'd0;
 		end
-		else if (rob[m7].v==rob[ndx].v && rob[m7].sn < rob[ndx].sn && rob[m7].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 6) begin
+		else if (rob[m7].ip_stream==rob[ndx].ip_stream && rob[m7].sn < rob[ndx].sn && rob[m7].op.decbus.pred && Qupls4_pkg::PRED_SHADOW > 6) begin
 			rob[m1].pred_bit <= TRUE;
 			rob[m1].pred_bitv <= VAL;
 			rob[m2].pred_bit <= TRUE;
@@ -9840,17 +9840,17 @@ begin
 	m6 = (ndx + Qupls4_pkg::ROB_ENTRIES + 6) % Qupls4_pkg::ROB_ENTRIES;
 	m7 = (ndx + Qupls4_pkg::ROB_ENTRIES + 7) % Qupls4_pkg::ROB_ENTRIES;
 	dst <= p1;	// the last ROB entry it could be
-	if (rob[m1].sn > rob[ndx].sn && rob[m1].v==rob[ndx].v && pgh[rob[m1].pghn].ip.cap.offset + {rob[m1].ip_offs,1'b0} == rob[ndx].brtgt && rob[m1].ip_stream==rob[ndx].ip_stream)
+	if (rob[m1].sn > rob[ndx].sn && rob[m1].ip_stream==rob[ndx].ip_stream && pgh[rob[m1].pghn].ip.cap.offset + {rob[m1].ip_offs,1'b0} == rob[ndx].brtgt && rob[m1].ip_stream==rob[ndx].ip_stream)
 		found = 3'd1;
-	else if (rob[m2].sn > rob[ndx].sn && rob[m2].v==rob[ndx].v && pgh[rob[m2].pghn].ip.cap.offset + {rob[m2].ip_offs,1'b0} == rob[ndx].brtgt && rob[m2].ip_stream==rob[ndx].ip_stream)
+	else if (rob[m2].sn > rob[ndx].sn && rob[m2].ip_stream==rob[ndx].ip_stream && pgh[rob[m2].pghn].ip.cap.offset + {rob[m2].ip_offs,1'b0} == rob[ndx].brtgt && rob[m2].ip_stream==rob[ndx].ip_stream)
 		found = 3'd2;
-	else if (rob[m3].sn > rob[ndx].sn && rob[m3].v==rob[ndx].v && pgh[rob[m3].pghn].ip.cap.offset + {rob[m3].ip_offs,1'b0} == rob[ndx].brtgt && rob[m3].ip_stream==rob[ndx].ip_stream)
+	else if (rob[m3].sn > rob[ndx].sn && rob[m3].ip_stream==rob[ndx].ip_stream && pgh[rob[m3].pghn].ip.cap.offset + {rob[m3].ip_offs,1'b0} == rob[ndx].brtgt && rob[m3].ip_stream==rob[ndx].ip_stream)
 		found = 3'd3;
-	else if (rob[m4].sn > rob[ndx].sn && rob[m4].v==rob[ndx].v && pgh[rob[m4].pghn].ip.cap.offset + {rob[m4].ip_offs,1'b0} == rob[ndx].brtgt && rob[m4].ip_stream==rob[ndx].ip_stream)
+	else if (rob[m4].sn > rob[ndx].sn && rob[m4].ip_stream==rob[ndx].ip_stream && pgh[rob[m4].pghn].ip.cap.offset + {rob[m4].ip_offs,1'b0} == rob[ndx].brtgt && rob[m4].ip_stream==rob[ndx].ip_stream)
 		found = 3'd4;
-	else if (rob[m5].sn > rob[ndx].sn && rob[m5].v==rob[ndx].v && pgh[rob[m5].pghn].ip.cap.offset + {rob[m5].ip_offs,1'b0} == rob[ndx].brtgt && rob[m5].ip_stream==rob[ndx].ip_stream)
+	else if (rob[m5].sn > rob[ndx].sn && rob[m5].ip_stream==rob[ndx].ip_stream && pgh[rob[m5].pghn].ip.cap.offset + {rob[m5].ip_offs,1'b0} == rob[ndx].brtgt && rob[m5].ip_stream==rob[ndx].ip_stream)
 		found = 3'd5;
-	else if (rob[m6].sn > rob[ndx].sn && rob[m6].v==rob[ndx].v && pgh[rob[m6].pghn].ip.cap.offset + {rob[m6].ip_offs,1'b0} == rob[ndx].brtgt && rob[m6].ip_stream==rob[ndx].ip_stream)
+	else if (rob[m6].sn > rob[ndx].sn && rob[m6].ip_stream==rob[ndx].ip_stream && pgh[rob[m6].pghn].ip.cap.offset + {rob[m6].ip_offs,1'b0} == rob[ndx].brtgt && rob[m6].ip_stream==rob[ndx].ip_stream)
 		found = 3'd6;
 
 	case(found)
@@ -9864,7 +9864,7 @@ begin
 	endcase
 	fnd <= |found;
 	foreach (rob[nn])
-		if (rob[nn].sn > rob[ndx].sn && rob[nn].v==rob[ndx].v && rob[nn].sn < rob[dst].sn)
+		if (rob[nn].sn > rob[ndx].sn && rob[nn].ip_stream==rob[ndx].ip_stream && rob[nn].sn < rob[dst].sn)
 			skip_list[nn] <= 1'b1;
 end
 endtask
@@ -9974,9 +9974,9 @@ begin
 		fc_ndxv = INV;
 	if (rob[ndx].op.decbus.sync)
 		tClearSyncDep(ndx);
-	rob[ndx].cmt <= |rob[ndx].v;
+	rob[ndx].cmt <= rob[ndx].v;
 	if (rob[ndx].lsq)
-		tInvalidateLSQ(head, ndx, FALSE, |rob[ndx].v, value_zero);
+		tInvalidateLSQ(head, ndx, FALSE, rob[ndx].v, value_zero);
 end
 endtask
 

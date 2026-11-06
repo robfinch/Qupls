@@ -2181,7 +2181,7 @@ typedef struct packed {
 typedef struct packed {
 	// The following fields may change state while an instruction is processed.
 	logic stomped;
-	logic [4:0] v;						// 0=entry is invalid, otherwise instruction stream number in use
+	logic v;									// 0=entry is invalid
 	logic [2:0] wh;						// which instruction of group this is.
 	cpu_types_pkg::seqnum_t sn;							// sequence number, decrements when instructions que
 	cpu_types_pkg::rob_ndx_t this_ndx;

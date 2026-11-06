@@ -498,19 +498,18 @@ else begin
 	//		pg_ext.pr[n2] <= {$bits(Qupls4_pkg::rob_entry_t){1'b0}};
 	//		pg_ext.pr[n2] <= ins_fet[n2];
 			pg_ext.pr[n2] <= pr_ext[n2];	
-			pg_ext.pr[n2].v <= pc0_fet.stream.stream;
+			pg_ext.pr[n2].ip_stream <= pc0_fet.stream;
 			if (stomp_ext || (branch_resolved && (pc0_fet.stream.thread == live_stream.thread && pc0_fet.stream.stream != live_stream.stream))) begin
 				pg_ext.pr[n2].stomped <= TRUE;
 				pg_ext.pr[n2].done <= 2'b11;
-				pg_ext.pr[n2].op.v <= 1'b0;
+				pg_ext.pr[n2].op.v <= INV;
 			end
 			else begin
 				pg_ext.pr[n2].done <= 2'b00;
-				pg_ext.pr[n2].op.v <= 1'b1;
+				pg_ext.pr[n2].op.v <= VAL;
 			end
 			pg_ext.pr[n2].op.bt <= takb_fet[n2];
 			pg_ext.pr[n2].op.decbus.cause <= Qupls4_pkg::FLT_NONE;
-			pg_ext.pr[n2].v <= pc_fet[n2].stream.stream;
 			pg_ext.pr[n2].stomped <= stomp_ext || nop_lead[n2] || nop2[n2] || bra[n2] || jmp[n2];
 			pg_ext.pr[n2].wh <= n2;
 			pg_ext.pr[n2].ip_stream <= pc_fet[n2].stream;
