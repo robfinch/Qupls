@@ -62,7 +62,7 @@ localparam BRANCH_LEVELS = 8;
 // architectural ones, or performance will suffer due to stalls.
 // Must be a multiple of four. If it is not 512 or 256 then the renamer logic will
 // need to be modified.
-localparam PREGS = 256;
+localparam PREGS = 512;
 
 localparam IP_REG = 8'd127;
 
@@ -119,9 +119,10 @@ localparam RENAMER = 4;
 localparam DISPATCH_STRATEGY = 1;
 
 // Register lookup strategy used by the reservation stations for missing data.
-// 0=use register file write port history
-// 1=use extra register file read ports
-localparam RL_STRATEGY = 1;
+// Both also read the register file write port history
+// 0=use out-of-order register fetch, ROB is searched for invalid args
+// 1=use extra register file read ports, spec'd by the reservation stations.
+localparam RL_STRATEGY = 0;
 
 // 1=move interrupt to the start of the instruction (recommended).
 // 2=defer interrupts to the start of the next instruction.
@@ -148,13 +149,15 @@ localparam PERFORMANCE = 1'b0;
 //		0 = none
 //		1 = backwards branch predictor (accuracy < 60%)
 //		2 = g select predictor
+//		3 = g share predictor
+//		4 = perceptron predictor
 localparam BRANCH_PREDICTOR = 0;
 
 // The following allows the core to process flow control ops in any order
 // to reduce the size of the core. Set to zero to restrict flow control ops
 // to be processed in order. If processed out of order a branch may 
 // speculate incorrectly leading to lower performance.
-localparam SUPPORT_OOOFC = 1'b0;
+localparam SUPPORT_OOOFC = 0;
 
 // The following indicates  to support shifted immediate values for the
 // immediate mode instructions.
@@ -163,7 +166,7 @@ localparam SUPPORT_SHIFTED_IMMED = 1'b0;
 
 // The following indicates whether to support postfix instructions or not.
 // Supporting postfix instructions increases the size of the core and reduces
-// the code density. (Deprecated - the core does not support POSTFIXES).
+// the code density.
 localparam SUPPORT_POSTFIX = 1;
 
 // =============================================================================
@@ -199,13 +202,14 @@ localparam SUPPORT_STORE_FORWARDING = 0;
 
 // Support mutiple precisions for SAU and FPU operations. If not supported only
 // 64-bit precision will be supported. Suppporting multiple precisions adds
-// considerable size to the SAU / FPU. Eg. 5x larger.
+// considerable size to the ALU / FPU. Eg. 5x larger.
 localparam SUPPORT_PREC = 1'b0;
 
 // Support for NaN tracing
-localparam SUPPORT_NAN_TRACE = 1'b0;
+localparam SUPPORT_NAN_TRACE = 0;
 
 // Support insertion of IRQ polling instructions into the micro-op stream.
+// This is relatively costly hardware wise.
 localparam SUPPORT_IRQ_POLLING = 1'b0;
 
 // The following controls the size of the reordering buffer.
@@ -228,7 +232,7 @@ localparam SCHED_WINDOW_SIZE = 8;
 // will result if there are insufficient checkpoints for the number of
 // outstanding branches. More checkpoints will only consume resources without
 // improving performance significantly.
-localparam NCHECK = 8;			// number of checkpoints
+localparam NCHECK = 8;
 
 localparam LOADQ_ENTRIES = 8;
 localparam STOREQ_ENTRIES = 8;
@@ -309,8 +313,8 @@ localparam SUPPORT_CANARY = 0;
 // operations. Each vector register needs four registers.
 //localparam NREGS = 40*THREADS+(SUPPORT_VECTOR ? 128 : 0);
 //localparam AREGS = 40*THREADS+(SUPPORT_VECTOR ? 128 : 0);
-localparam NREGS = 64;
-localparam AREGS = 64;
+localparam NREGS = 128;
+localparam AREGS = 128;
 localparam REGFILE_LATENCY = 2;
 
 
@@ -372,3 +376,5 @@ localparam NRSE_XPIPE5 = 1;
 localparam NRSE_XPIPE6 = 1;
 
 localparam MICROOPS_PER_INSTR = 16;
+
+localparam SUPPORTED_PRECISIONS = "___O_";

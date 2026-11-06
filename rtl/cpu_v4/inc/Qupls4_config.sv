@@ -52,10 +52,10 @@ localparam COMMIT_WIDTH = 4;
 localparam THREADS = 2;
 
 // Number of streams of execution. Alternate branch paths create streams.
-localparam XSTREAMS = 16;
+localparam XSTREAMS = 8;
 
 // Number of levels of branches that can be speculated across.
-localparam BRANCH_LEVELS = 16;
+localparam BRANCH_LEVELS = 8;
 
 // Number of physical registers supporting the architectural ones and used in
 // register renaming. There must be significantly more physical registers than
@@ -119,8 +119,9 @@ localparam RENAMER = 4;
 localparam DISPATCH_STRATEGY = 1;
 
 // Register lookup strategy used by the reservation stations for missing data.
-// 0=use register file write port history
-// 1=use extra register file read ports
+// Both also read the register file write port history
+// 0=use out-of-order register fetch, ROB is searched for invalid args
+// 1=use extra register file read ports, spec'd by the reservation stations.
 localparam RL_STRATEGY = 0;
 
 // 1=move interrupt to the start of the instruction (recommended).
@@ -148,6 +149,8 @@ localparam PERFORMANCE = 1'b0;
 //		0 = none
 //		1 = backwards branch predictor (accuracy < 60%)
 //		2 = g select predictor
+//		3 = g share predictor
+//		4 = perceptron predictor
 localparam BRANCH_PREDICTOR = 0;
 
 // The following allows the core to process flow control ops in any order
@@ -173,7 +176,7 @@ localparam SUPPORT_POSTFIX = 1;
 localparam SUPPORT_PRED = 0;
 localparam SUPPORT_ATOM = 0;
 localparam SUPPORT_CARRY = 0;
-localparam SUPPORT_REXT = 1'b0;
+localparam SUPPORT_REXT = 0;
 localparam SUPPORT_VMASK = 0;
 
 // The PRED_SHADOW localparam controls the maximum number of instructions
@@ -192,11 +195,14 @@ localparam SUPPORT_BUS_TO = 1'b1;
 // This localparam enables support for quad (128-bit) precision operations.
 localparam SUPPORT_QUAD_PRECISION = 1'b0;
 
+// Supporting store forwarding may improve performance, but will also increase the
+// size of the core and make it more vulnerable to security attacks.
+// stores are forwarded only when there is an exact match to a store.
 localparam SUPPORT_STORE_FORWARDING = 0;
 
 // Support mutiple precisions for SAU and FPU operations. If not supported only
 // 64-bit precision will be supported. Suppporting multiple precisions adds
-// considerable size to the SAU / FPU. Eg. 5x larger.
+// considerable size to the ALU / FPU. Eg. 5x larger.
 localparam SUPPORT_PREC = 1'b0;
 
 // Support for NaN tracing
@@ -294,15 +300,6 @@ localparam SUPPORT_MEM4 = 1;
 localparam SUPPORT_MEM5 = 0;
 localparam SUPPORT_BFLD0 = 0;
 localparam SUPPORT_BFLD1 = 0;
-/*
-localparam SUPPORT_IMUL = 1;
-localparam SUPPORT_IDIV = 0;
-localparam SUPPORT_ISQRT = 0;
-localparam SUPPORT_TRIG = 0;
-localparam SUPPORT_FDP = 0;
-localparam SUPPORT_FLOAT = 0;
-localparam SUPPORT_NNA = 0;
-*/
 
 localparam SUPPORT_PFX3 = 0;
 localparam SUPPORT_CANARY = 0;

@@ -3401,6 +3401,7 @@ Qupls4_func_result_queue ufrq5
 end
 endgenerate
 
+
 generate begin : gCAPFRQ
 	if (SUPPORT_CAPABILITIES)
 Qupls4_cap_func_result_queue ucapfrq1
@@ -7029,6 +7030,33 @@ else begin
 	  	end
   	end
   end
+  
+  // Set the arg field in the ROB for CSR type instructions.
+  // If there are multiple CSR instructions updating then the updates will not
+  // be correct as this just uses a priority selector to select which update
+  // gets done. CSR updates should be followed by a sync instruction to 
+  // ensure they are the only one doing an update.
+	casez({
+		rob[xpipe_rseo[0].rndx].v && !rob[xpipe_rseo[0].rndx].stomped,
+		rob[xpipe_rseo[0].rndx].op.uop.opcode==Qupls4_pkg::OP_CSR,
+		rob[xpipe_rseo[0].rndx].op.uop.op3[2],
+		rob[xpipe_rseo[0].rndx].op.uop.Rs2==9'd0,
+		rob[xpipe_rseo[1].rndx].v && !rob[xpipe_rseo[1].rndx].stomped,
+		rob[xpipe_rseo[1].rndx].op.uop.opcode==Qupls4_pkg::OP_CSR,
+		rob[xpipe_rseo[1].rndx].op.uop.op3[2],
+		rob[xpipe_rseo[1].rndx].op.uop.Rs2==9'd0,
+		rob[cap_xpipe_rseo.rndx].v && !rob[cap_xpipe_rseo.rndx].stomped && SUPPORT_CAPABILITIES,
+		rob[cap_xpipe_rseo.rndx].op.uop.opcode==Qupls4_pkg::OP_CSR,
+		rob[cap_xpipe_rseo.rndx].op.uop.op3[2],
+		rob[cap_xpipe_rseo.rndx].op.uop.Rs2==9'd1
+	})
+	12'b1101????????:	rob[xpipe_rseo[0].rndx].arg <= xpipe_res[0];
+	12'b111?????????:	rob[xpipe_rseo[0].rndx].arg <= xpipe_res[0];
+	12'b?0??1101????:	rob[xpipe_rseo[1].rndx].arg <= xpipe_res[1];
+	12'b?0??111?????:	rob[xpipe_rseo[1].rndx].arg <= xpipe_res[1];
+	12'b?0???0??1101: rob[cap_xpipe_rseo.rndx].arg <= cap_xpipe_res;
+	default:	;
+	endcase
 
 // -----------------------------------------------------------------------------
 // MEMORY
