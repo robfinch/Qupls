@@ -203,6 +203,7 @@ localparam SUPPORT_PREC = 1'b0;
 localparam SUPPORT_NAN_TRACE = 0;
 
 // Support insertion of IRQ polling instructions into the micro-op stream.
+// This is relatively costly hardware wise.
 localparam SUPPORT_IRQ_POLLING = 1'b0;
 
 // The following controls the size of the reordering buffer.
@@ -359,6 +360,7 @@ localparam SUPPORT_XPIPE2 = 1'b1;
 localparam SUPPORT_XPIPE3 = 1'b0;
 localparam SUPPORT_XPIPE4 = 1'b1;
 localparam SUPPORT_XPIPE5 = 1'b0;
+localparam SUPPORT_XPIPE6 = 1'b0;
 
 localparam RAS_DEPTH	= 4;
 
@@ -373,6 +375,7 @@ localparam NRSE_XPIPE2 = 1;
 localparam NRSE_XPIPE3 = 1;
 localparam NRSE_XPIPE4 = 1;
 localparam NRSE_XPIPE5 = 1;
+localparam NRSE_XPIPE6 = 1;
 
 localparam MICROOPS_PER_INSTR = 16;
 

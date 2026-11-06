@@ -209,7 +209,7 @@ always_comb
 		(pe_stomp_pipeline || !predicted_match_ext || !predicted_correctly_dec);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_fet && !hwi_at_aln;
 always_comb
 	stomp_fet = stomped[pc_f.stream] || first_icache ||
-		(pe_stomp_pipeline || stomp_fetr || !predicted_match_ext || !predicted_correctly_dec);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_fet;
+		(pe_stomp_pipeline || !predicted_match_ext || !predicted_correctly_dec);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_fet;
 always_comb
 	stomp_ext = stomped[pc_fet.stream] || first_icache ||
 		(pe_stomp_pipeline || stomp_extr || !predicted_match_ext || !predicted_correctly_dec);// && !hwi_at_ren && !hwi_at_dec && !hwi_at_ext;

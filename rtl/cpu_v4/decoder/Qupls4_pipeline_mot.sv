@@ -45,7 +45,8 @@ module Qupls4_pipeline_mot(rst, clk, en,
 	stomp_trn, stomp_moq1, stomp_moq2, stomp_mot,
 	cline_ext, cline_mot,
 	pc_mot, branch_resolved, live_stream,
-  pg_ext, pg_mot, pg_mot1, advance_ext, uop_buf, uop_mark, head);
+  pg_ext, pg_trn, pg_moq1, pg_moq2, pg_mot, pg_mot1,
+  advance_ext, uop_buf, uop_mark, head);
 parameter MWIDTH = Qupls4_pkg::MWIDTH;
 parameter MICROOPS_PER_INSTR = 16;
 parameter MAX_MICROOPS = 8;
@@ -63,6 +64,9 @@ input stomp_mot;
 input [1023:0] cline_ext;
 output reg [1023:0] cline_mot = {1024{1'b1}};
 input Qupls4_pkg::pipeline_group_reg_t pg_ext;
+output Qupls4_pkg::pipeline_group_reg_t pg_trn;
+output Qupls4_pkg::pipeline_group_reg_t pg_moq1;
+output Qupls4_pkg::pipeline_group_reg_t pg_moq2;
 output Qupls4_pkg::pipeline_group_reg_t pg_mot;
 output Qupls4_pkg::pipeline_group_reg_t pg_mot1;
 output reg advance_ext;
@@ -77,7 +81,6 @@ reg [1023:0] cline_mot1 = {1024{1'b1}};
 reg [5:0] uop_count [0:MWIDTH-1];
 Qupls4_pkg::micro_op_t [MICROOPS_PER_INSTR-1:0] uop [MWIDTH-1:0];
 Qupls4_pkg::rob_entry_t nopi;
-Qupls4_pkg::pipeline_group_reg_t pg_trn,pg_moq;
 
 // Define a NOP instruction.
 always_comb
@@ -123,7 +126,7 @@ generate begin : gComb
 			if (en) cline_mot <= cline_mot1;
 
 		always_ff @(posedge clk)
-			pc_mot <= pg_moq.hdr.ip;
+			pc_mot <= pg_moq2.hdr.ip;
 
 		always_ff @(posedge clk)
 		if (rst) begin
@@ -132,17 +135,20 @@ generate begin : gComb
 				pg_mot.pr[n1] <= nopi;
 		end
 		else if (en) begin
-			pg_mot <= pg_moq;
+			pg_mot <= pg_moq2;
 			if (stomp_mot)
 				pg_mot.hdr.v <= INV;
 			foreach (pg_mot.pr[n1]) begin
+				pg_mot.pr[n1].op.v <= VAL;
 				pg_mot.pr[n1].op.uop <= uop_buf[n1];
 				if (stomp_mot) begin
+					pg_mot.pr[n1].op.v <= INV;
 					pg_mot.pr[n1].stomped <= TRUE;
 					pg_mot.pr[n1].done <= 2'b11;
 				end
 				if (branch_resolved) begin
-					if (pg_moq.pr[n1].ip_stream.thread==live_stream.thread && pg_moq.pr[n1].ip_stream.stream != live_stream.stream) begin
+					if (pg_moq2.pr[n1].ip_stream.thread==live_stream.thread && pg_moq2.pr[n1].ip_stream.stream != live_stream.stream) begin
+						pg_mot.pr[n1].op.v <= INV;
 						pg_mot.pr[n1].stomped <= TRUE;
 						pg_mot.pr[n1].done <= 2'b11;
 					end
@@ -194,7 +200,8 @@ Qupls4_micro_op_queue3 #(.MICROOPS_PER_INSTR(MICROOPS_PER_INSTR)) umoq1
 	.stomp_moq1(stomp_moq1),
 	.stomp_moq2(stomp_moq2),
 	.pg_trn(pg_trn),
-	.pg_moq(pg_moq),
+	.pg_moq1(pg_moq1),
+	.pg_moq2(pg_moq2),
 	.live_stream(live_stream),
 	.branch_resolved(branch_resolved)
 );

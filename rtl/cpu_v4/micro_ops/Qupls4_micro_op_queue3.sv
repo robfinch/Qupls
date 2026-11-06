@@ -38,7 +38,7 @@ import const_pkg::*;
 import Qupls4_pkg::*;
 
 module Qupls4_micro_op_queue3(rst, clk, en, rd_more, uop, uop_count,
-	uop_buf, uop_mark, head, stomp_moq1, stomp_moq2, pg_trn, pg_moq,
+	uop_buf, uop_mark, head, stomp_moq1, stomp_moq2, pg_trn, pg_moq1, pg_moq2,
 	branch_resolved, live_stream);
 parameter MWIDTH = Qupls4_pkg::MWIDTH;
 parameter MAX_MICROOPS = 8;
@@ -55,7 +55,8 @@ output reg [3:0] head [0:MWIDTH-1];
 input stomp_moq1;
 input stomp_moq2;
 input Qupls4_pkg::pipeline_group_reg_t pg_trn;
-output Qupls4_pkg::pipeline_group_reg_t pg_moq;
+output Qupls4_pkg::pipeline_group_reg_t pg_moq1;
+output Qupls4_pkg::pipeline_group_reg_t pg_moq2;
 input branch_resolved;
 input pc_stream_t live_stream;
 
@@ -72,7 +73,6 @@ reg [2:0] uop_mark2 [0:MICROOPS_PER_INSTR*8-1];
 reg [2:0] uop_mark3 [0:MICROOPS_PER_INSTR*8-1];
 reg [6:0] ndx0,ndx1,ndx2,ndx3;
 reg [5:0] room;
-Qupls4_pkg::pipeline_group_reg_t pg_moq1;
 Qupls4_pkg::rob_entry_t nopi;
 
 // Define a NOP instruction.
@@ -274,23 +274,23 @@ end
 
 always_ff @(posedge clk)
 if (rst) begin
-	pg_moq <= {$bits(pipeline_group_reg_t){1'b0}};
+	pg_moq2 <= {$bits(pipeline_group_reg_t){1'b0}};
 	foreach(pg_moq1.pr[n1])
-		pg_moq.pr[n1] <= nopi;
+		pg_moq2.pr[n1] <= nopi;
 end
 else if (en) begin
-	pg_moq <= pg_moq1;
+	pg_moq2 <= pg_moq1;
 	if (stomp_moq2)
-		pg_moq.hdr.v <= INV;
-	foreach (pg_moq.pr[n1]) begin
+		pg_moq2.hdr.v <= INV;
+	foreach (pg_moq2.pr[n1]) begin
 		if (stomp_moq2) begin
-			pg_moq.pr[n1].stomped <= TRUE;
-			pg_moq.pr[n1].done <= 2'b11;
+			pg_moq2.pr[n1].stomped <= TRUE;
+			pg_moq2.pr[n1].done <= 2'b11;
 		end
 		if (branch_resolved) begin
 			if (pg_moq1.pr[n1].ip_stream.thread==live_stream.thread && pg_moq1.pr[n1].ip_stream.stream != live_stream.stream) begin
-				pg_moq.pr[n1].stomped <= TRUE;
-				pg_moq.pr[n1].done <= 2'b11;
+				pg_moq2.pr[n1].stomped <= TRUE;
+				pg_moq2.pr[n1].done <= 2'b11;
 			end
 		end
 	end

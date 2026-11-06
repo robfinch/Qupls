@@ -69,6 +69,8 @@ input [7:0] irq_sn;
 output takb;
 output cpu_types_pkg::value_t adr;
 
+reg [255:0] capa;
+cpu_types_pkg::flags_t capa_flags;
 reg [WID-1:0] a;
 reg [WID-1:0] b;
 reg [WID-1:0] bi;
@@ -84,6 +86,8 @@ aregno_t aRd_i;
 Qupls4_pkg::micro_op_t ir;
 wire [8:0] fcu_we;
 always_comb ir = rse_i.uop;
+always_comb capa = rse_i.cap_arg.val;
+always_comb capa_flags = rse_i.cap_arg.flags;
 always_comb a = rse_i.arg[0].val;
 always_comb b = rse_i.arg[1].val;
 always_comb bi = rse_i.arg[1].val|rse_i.argI;
@@ -275,6 +279,8 @@ reg [WID-1:0] c1;
 			.mask(c),
 			.om(rse_i.om),
 			.ir(ir),
+			.capa(256'd0),
+			.capa_flags(8'h00),
 			.a(a[g*8+7:g*8]),
 			.b(b[g*8+7:g*8]),
 			.bi(bi[g*8+7:g*8]),
@@ -383,6 +389,8 @@ reg [WID-1:0] c1;
 			.mask(c),
 			.om(rse_i.om),
 			.ir(ir),
+			.capa(256'd0),
+			.capa_flags(8'h00),
 			.a(a[g*16+15:g*16]),
 			.b(b[g*16+15:g*16]),
 			.bi(bi[g*16+15:g*16]),
@@ -468,6 +476,8 @@ reg [WID-1:0] c1;
 			.mask(c),
 			.om(rse_i.om),
 			.ir(ir),
+			.capa(256'd0),
+			.capa_flags(8'h00),
 			.a(a[g*32+31:g*32]),
 			.b(b[g*32+31:g*32]),
 			.bi(bi[g*32+31:g*32]),
@@ -531,6 +541,8 @@ reg [WID-1:0] c1;
 			.mask(c),
 			.om(rse_i.om),
 			.ir(ir),
+			.capa(capa),
+			.capa_flags(capa_flags),
 			.a(a[g*64+63:g*64]),
 			.b(b[g*64+63:g*64]),
 			.bi(bi[g*64+63:g*64]),
@@ -594,6 +606,8 @@ generate begin : g128
 			.mask(c),
 			.om(rse_i.om),
 			.ir(ir),
+			.capa(capa),
+			.capa_flags(capa_flags),
 			.a(a[g*128+127:g*128]),
 			.b(b[g*128+127:g*128]),
 			.bi(bi[g*128+127:g*128]),
@@ -721,7 +735,7 @@ generate begin : gExc
 	for (xx = 0; xx < WID/8; xx = xx + 1)
     always_comb
     begin
-    	exc = {8{FLT_NONE}};
+//    	exc[xx*8+7:xx*8] = FLT_NONE;
 //      if (cptgt[xx])
 //        exc[xx*8+7:xx*8] = Qupls4_pkg::FLT_NONE;
 //      else

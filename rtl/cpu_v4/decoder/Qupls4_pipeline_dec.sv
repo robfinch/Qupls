@@ -507,10 +507,12 @@ else begin
 	pr_dec[2] = insm[2].op;
 	pr_dec[3] = insm[3].op;
 	
-	pr_dec[0].v = !stomp_dec;
-	pr_dec[1].v = !stomp_dec;
-	pr_dec[2].v = !stomp_dec;
-	pr_dec[3].v = !stomp_dec;
+	if (stomp_dec) begin
+		pr_dec[0].v = INV;
+		pr_dec[1].v = INV;
+		pr_dec[2].v = INV;
+		pr_dec[3].v = INV;
+	end
 
 	pr_dec[0].decbus = dec[0];
 	pr_dec[1].decbus = dec[1];

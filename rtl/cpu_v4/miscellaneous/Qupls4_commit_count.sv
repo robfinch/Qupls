@@ -63,16 +63,16 @@ wire nan1 = |rob[head1].v && rob[head1].nan && !rob[head1].stomped;
 wire nan2 = |rob[head2].v && rob[head2].nan && !rob[head2].stomped;
 wire nan3 = |rob[head3].v && rob[head3].nan && !rob[head3].stomped;
 
-always_comb cmt0 = (rob[head0].stomped || &rob[head0].done);
-always_comb cmt1 = COMMIT_WIDTH > 1 && (rob[head1].stomped || (&rob[head1].done &&
+always_comb cmt0 = (rob[head0].stomped  || !(|rob[head0].v) || &rob[head0].done);
+always_comb cmt1 = COMMIT_WIDTH > 1 && (rob[head1].stomped  || !(|rob[head1].v) || (&rob[head1].done &&
 										!rob[head0].op.decbus.oddball && !rob[head0].excv))
 										;
-always_comb cmt2 = COMMIT_WIDTH > 2 && (rob[head2].stomped || (&rob[head2].done &&
+always_comb cmt2 = COMMIT_WIDTH > 2 && (rob[head2].stomped  || !(|rob[head2].v) || (&rob[head2].done &&
 										!rob[head0].op.decbus.oddball && !rob[head1].op.decbus.oddball &&
 										!rob[head0].excv && !rob[head1].excv &&
 										!(nan0 && nan1)))
 										;
-always_comb cmt3 = COMMIT_WIDTH > 3 && (rob[head3].stomped || (&rob[head3].done &&
+always_comb cmt3 = COMMIT_WIDTH > 3 && (rob[head3].stomped  || !(|rob[head3].v) || (&rob[head3].done &&
 										!rob[head0].op.decbus.oddball && !rob[head1].op.decbus.oddball && !rob[head2].op.decbus.oddball &&
 										!rob[head0].excv && !rob[head1].excv && !rob[head2].excv &&
 										!((nan0 && nan1) || (nan0 && nan2) || (nan1 && nan2))))
@@ -102,13 +102,13 @@ always_comb htcolls = fnColls(head0, tails[0]);
 // Commit only by instructions with the same checkpoint index. The RAT can
 // currently handle only one checkpoint index spec for update.
 
-always_ff @(posedge clk)
+always_comb//ff @(posedge clk)
 if (rst) begin
-	cmtcnt <= 3'd0;
-	do_commit <= FALSE;
+	cmtcnt = 3'd0;
+	do_commit = FALSE;
 end
 else begin
-	cmtcnt <= 3'd0;
+	cmtcnt = 3'd0;
 	if (TRUE || !htcolls) begin
 		casez({cmt0,
 			cmt1 && ((rob[head1].ip_stream.stream==rob[head0].ip_stream.stream)|rob[head1].stomped),
@@ -116,18 +116,18 @@ else begin
 			cmt3 && ((rob[head3].ip_stream.stream==rob[head0].ip_stream.stream)|rob[head3].stomped),
 			cmt4 && ((rob[head4].ip_stream.stream==rob[head0].ip_stream.stream)|rob[head4].stomped),
 			cmt5 && ((rob[head5].ip_stream.stream==rob[head0].ip_stream.stream)|rob[head5].stomped)})
-		6'b111111:	cmtcnt <= 3'd6;
-		6'b111110:	cmtcnt <= 3'd5;
-		6'b11110?:	cmtcnt <= 3'd4;
-		6'b1110??:	cmtcnt <= 3'd3;
-		6'b110???:	cmtcnt <= 3'd2;
-		6'b10????:	cmtcnt <= 3'd1;
-		default:	cmtcnt <= 3'd0;
+		6'b111111:	cmtcnt = 3'd6;
+		6'b111110:	cmtcnt = 3'd5;
+		6'b11110?:	cmtcnt = 3'd4;
+		6'b1110??:	cmtcnt = 3'd3;
+		6'b110???:	cmtcnt = 3'd2;
+		6'b10????:	cmtcnt = 3'd1;
+		default:	cmtcnt = 3'd0;
 		endcase
-		do_commit <= cmt0;
+		do_commit = cmt0;
 	end
 	else
-		do_commit <= FALSE;
+		do_commit = FALSE;
 end
 
 endmodule

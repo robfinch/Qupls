@@ -353,6 +353,7 @@ localparam SUPPORT_XPIPE2 = 1'b1;
 localparam SUPPORT_XPIPE3 = 1'b0;
 localparam SUPPORT_XPIPE4 = 1'b1;
 localparam SUPPORT_XPIPE5 = 1'b0;
+localparam SUPPORT_XPIPE6 = 1'b0;
 
 
 localparam RAS_DEPTH	= 4;
@@ -368,5 +369,6 @@ localparam NRSE_XPIPE2 = 1;
 localparam NRSE_XPIPE3 = 1;
 localparam NRSE_XPIPE4 = 1;
 localparam NRSE_XPIPE5 = 1;
+localparam NRSE_XPIPE6 = 1;
 
 localparam MICROOPS_PER_INSTR = 16;
