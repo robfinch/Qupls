@@ -410,6 +410,7 @@ value_t sau0_cmpo;
 pc_address_ex_t sau0_pc;
 value_t [5:0] xpipe_res;
 wire [255:0] cap_xpipe_res;
+cpu_types_pkg::flags_t cap_xpipe_res_flags;
 rob_ndx_t sau0_id;
 reg sau0_idv;
 wire [63:0] xpipe0_exc;
@@ -426,6 +427,7 @@ wire [7:0] xpipe2_cptgt = 8'h00;
 wire [7:0] xpipe3_cptgt = 8'h00;
 wire [7:0] xpipe4_cptgt = 8'h00;
 wire [7:0] xpipe5_cptgt = 8'h00;
+wire [7:0] xpipe6_cptgt = 8'h00;
 Qupls4_pkg::reservation_station_entry_t xpipe0_rse, xpipe0_rse2;
 Qupls4_pkg::reservation_station_entry_t xpipe1_rse, xpipe1_rse2;
 Qupls4_pkg::reservation_station_entry_t xpipe2_rse, xpipe2_rse2;
@@ -4337,6 +4339,8 @@ assign aRs[31] = 8'd0;
 // ----------------------------------------------------------------------------
 
 value_t csr_res0, csr_res1;
+reg [255:0] csr_res6;
+cpu_types_pkg::flags_t csr_res_flags6;
 wire div_dbz;
 
 generate begin : gReadCsr
@@ -4351,6 +4355,13 @@ begin
 			tReadCSR(csr_res1,xpipe_rse[1].argI[15:0]);
 	else
 		assign csr_res1 = value_zero;
+	if (SUPPORT_XPIPE6)
+		always_comb
+			tReadCapCSR(csr_res6,csr_res_flags6,cap_xpipe_rse.argI[15:0]);
+	else begin
+		assign csr_res_flags6 = 8'h00;
+		assign csr_res6 = 256'd0;
+	end
 end
 end
 endgenerate
@@ -4595,6 +4606,40 @@ else begin
 	assign agen1_adr = 64'd0;
 	assign agen1_adrv = INV;
 	assign agen1_rse = {$bits(reservation_station_entry_t){1'b0}};
+end
+end
+endgenerate
+
+generate begin : gExPipe6
+	if (SUPPORT_XPIPE6)
+Qupls4_expipe6 #(.PIPE(3'd6)) uxpipe6
+(
+	.rst(irst),
+	.clk(clk),
+	.clk3x(clk2x),
+	.idle(),
+	.stomp(robentry_stomp),
+	.rse_i(cap_xpipe_rse),
+	.rse_o(cap_xpipe_rseo),
+	.rm(),
+	.ddc(ddc),
+	.z(),
+	.cptgt(xpipe5_cptgt),
+	.o(cap_xpipe_res),
+	.o_flags(cap_xpipe_res_flags),
+	.csr(csr_res6),
+	.csr_flags(csr_res_flags6),
+	.sto(),
+	.ust(),
+	.otag(),
+	.we_o(xpipe5_we),
+	.done(xpipe5_done),
+	.exc(xpipe5_exc)
+);
+else begin
+	assign cap_xpipe_rseo = {$bits(cap_reservation_station_entry_t){1'b0}};
+	assign xpipe6_we = 33'd0;
+	assign cap_xpipe_res = 256'd0;
 end
 end
 endgenerate
@@ -6181,7 +6226,7 @@ ucapxpipest
 	.stomp(robentry_stomp),
 	.issue(),//robentry_issue[sau0_rndx]),
 	.rse_i(cap_rse),
-	.rse_o(cap_xpipe_rse),
+	.rse_o(xpipe_rse[6]),
 	.rf_oper_i(cap_rf_oper),
 	.bypass_i(),
 	.wp_oper_tap_i(wp_tap),
@@ -6195,7 +6240,7 @@ ucapxpipest
 	.FPCSRv(INV)
 );
 else begin
-	assign cap_xpipe_rse = {$bits(Qupls4_pkg::cap_reservation_station_entry_t){1'b0}};
+	assign xpipe_rse[6] = {$bits(Qupls4_pkg::cap_reservation_station_entry_t){1'b0}};
 //	assign cap_bRs = 36'd0;
 //	assign cap_bRsv = 4'b0;
 end
@@ -7045,7 +7090,7 @@ else begin
 		rob[xpipe_rseo[1].rndx].op.uop.opcode==Qupls4_pkg::OP_CSR,
 		rob[xpipe_rseo[1].rndx].op.uop.op3[2],
 		rob[xpipe_rseo[1].rndx].op.uop.Rs2==9'd0,
-		rob[cap_xpipe_rseo.rndx].v && !rob[cap_xpipe_rseo.rndx].stomped && SUPPORT_CAPABILITIES,
+		rob[xpipe_rseo[6].rndx].v && !rob[cap_xpipe_rseo.rndx].stomped && SUPPORT_CAPABILITIES,
 		rob[cap_xpipe_rseo.rndx].op.uop.opcode==Qupls4_pkg::OP_CSR,
 		rob[cap_xpipe_rseo.rndx].op.uop.op3[2],
 		rob[cap_xpipe_rseo.rndx].op.uop.Rs2==9'd1
@@ -9287,20 +9332,22 @@ endtask
 
 task tReadCapCSR;
 output uc64_capability_t res;
+output cpu_types_pkg::flags_t res_flags;
 input [15:0] regno;
 begin
+	res_flags = 8'h00;
 	if (Qupls4_pkg::operating_mode_t'(regno[13:12]) <= sr.om) begin
 		$display("regno: %h, om=%d", regno, sr.om);
 		casez(regno[15:0])
-		(Qupls4_pkg::CSR_MEPC+0):	res = pc_stack[0].cap;
-		16'b0011000000110???:	res = kernel_vectors[regno[2:0]].cap;
-		16'b0010000000110???:	res = kernel_vectors[regno[2:0]].cap;
-		16'b0001000000110???:	res = kernel_vectors[regno[2:0]].cap;
-		16'b0011000000111???:	res = syscall_vectors[regno[2:0]].cap;
-		16'b0010000000111???:	res = syscall_vectors[regno[2:0]].cap;
-		16'b0001000000111???:	res = syscall_vectors[regno[2:0]].cap;
-		CSR_DDC:	res = ddc;
-		default:	res = 256'd0;
+		(Qupls4_pkg::CSR_MEPC+0):	begin res = pc_stack[0].cap; res_flags = 8'hC0; end
+		16'b0011000000110???:	begin res = kernel_vectors[regno[2:0]].cap; res_flags = 8'hC0; end
+		16'b0010000000110???:	begin res = kernel_vectors[regno[2:0]].cap; res_flags = 8'hC0; end
+		16'b0001000000110???:	begin res = kernel_vectors[regno[2:0]].cap; res_flags = 8'hC0; end
+		16'b0011000000111???:	begin res = syscall_vectors[regno[2:0]].cap; res_flags = 8'hC0; end
+		16'b0010000000111???:	begin res = syscall_vectors[regno[2:0]].cap; res_flags = 8'hC0; end
+		16'b0001000000111???:	begin res = syscall_vectors[regno[2:0]].cap; res_flags = 8'hC0; end
+		CSR_DDC:	begin res = ddc; res_flags = 8'hC0; end
+		default:	begin res = 256'd0; res_flags = 8'h00; end
 		endcase
 	end
 	else

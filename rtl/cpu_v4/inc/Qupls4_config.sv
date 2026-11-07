@@ -49,7 +49,7 @@ localparam MWIDTH = 4;
 localparam COMMIT_WIDTH = 4;
 
 // Number of threads supported. (Under construction < 5)
-localparam THREADS = 2;
+localparam THREADS = 1;
 
 // Number of streams of execution. Alternate branch paths create streams.
 localparam XSTREAMS = 8;
@@ -193,7 +193,7 @@ localparam SUPPORT_UNALIGNED_MEMORY = 1'b1;
 localparam SUPPORT_BUS_TO = 1'b1;
 
 // This localparam enables support for quad (128-bit) precision operations.
-localparam SUPPORT_QUAD_PRECISION = 1'b0;
+localparam SUPPORT_QUAD_PRECISION = 0;
 
 // Supporting store forwarding may improve performance, but will also increase the
 // size of the core and make it more vulnerable to security attacks.
@@ -261,12 +261,12 @@ const cpu_types_pkg::address_t RSTSP = 32'hFFFF9000;
 // size of the core. An FPU must also be enabled.
 localparam SUPPORT_CAPABILITIES = 1'b0;
 
-localparam SUPPORT_SIMD = 1;
+localparam SUPPORT_SIMD = 0;
 // Support for vector operations.
-localparam SUPPORT_VECTOR = 1;
-localparam SUPPORT_GRAPHICS = 1;
+localparam SUPPORT_VECTOR = 0;
+localparam SUPPORT_GRAPHICS = 0;
 localparam SUPPORT_FDP = 0;
-localparam SUPPORT_FLOAT = 1;
+localparam SUPPORT_FLOAT = 0;
 localparam SUPPORT_CSR = 1;
 localparam SUPPORT_CSR0 = 0;
 localparam SUPPORT_CSR1 = 1;

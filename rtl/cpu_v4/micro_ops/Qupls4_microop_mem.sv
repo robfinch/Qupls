@@ -1114,6 +1114,19 @@ else begin
 				next_uop[0] = uop0;
 			end
 		end
+
+	Qupls4_pkg::OP_CSR:
+		begin
+			if (insert_boi) begin
+				next_count = 4'd2;
+				next_uop[0] = uop_boi;
+				next_uop[1] = uop1;
+			end
+			else begin
+				next_count = 4'd1;
+				next_uop[0] = uop0;
+			end
+		end
 		/*
 			case(ir[47:41])
 			Qupls4_pkg::FN_ADD,Qupls4_pkg::FN_SUB,Qupls4_pkg::FN_MUL,Qupls4_pkg::FN_DIV,
@@ -1139,7 +1152,6 @@ else begin
 	Qupls4_pkg::OP_SUBFI,
 	Qupls4_pkg::OP_CMPI,
 	Qupls4_pkg::OP_CMPUI,
-	Qupls4_pkg::OP_CSR,
 	Qupls4_pkg::OP_ANDI,
 	Qupls4_pkg::OP_ORI,
 	Qupls4_pkg::OP_XORI,
@@ -1404,7 +1416,6 @@ generate begin : gComb
 			count = next_count;
 			foreach (uop[n1])
 				uop[n1] = next_uop[n1];
-			pg_trn = pg_ext;
 		end
 	end
 	else begin

@@ -894,6 +894,7 @@ typedef enum logic [6:0] {
 } graphics_e;
 
 typedef enum logic [6:0] {
+	CAP_SWAP = 7'd2,
 	CAP_CHKINVOKE = 7'd4,
 	CAP_CHKBOUNDS = 7'd6,
 	CAP_RET = 7'd8,
@@ -912,6 +913,9 @@ typedef enum logic [6:0] {
 	CAP_SETBOUNDS = 7'd38,
 	CAP_SETFLAGS = 7'd39,
 	CAP_SETHIGH = 7'd40,
+	CAP_SETOFFSET = 7'd41,
+	CAP_UNSEAL = 7'd43,
+	CAP_COMPARE = 7'd44,
 	CAP_TESTSUBSET = 7'd45,
 	CAP_SETEQUALSEXACT = 7'd46,
 	CAP_CLEARTAG = 7'd64,
@@ -925,6 +929,7 @@ typedef enum logic [6:0] {
 	CAP_GETTYPE = 7'd72,
 	CAP_LOADTAGS = 7'd73,
 	CAP_ALGNMASK = 7'd74,
+	CAP_ROUNDLEN = 7'd75,
 	CAP_SEALENTRY = 7'd76,
 	CAP_GETBASE = 7'd77,
 	CAP_GETSEALED = 7'd78,
@@ -2281,6 +2286,7 @@ typedef struct packed {
 */
 	logic rat_v;							// 1=checked with RAT for valid reg arg.
 	logic reg_read_done;
+	// If capabilities are supported, needs a 256-bit value here
 	cpu_types_pkg::value_t arg;							// argument value for CSR instruction
 	// The following fields are loaded at enqueue time, but otherwise do not change.
 	logic last;								// 1=last instruction in group (not used)

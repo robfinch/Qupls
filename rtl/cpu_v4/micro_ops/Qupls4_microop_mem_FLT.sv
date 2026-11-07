@@ -1,17 +1,18 @@
 	Qupls4_pkg::OP_FLTH,Qupls4_pkg::OP_FLTS,Qupls4_pkg::OP_FLTD,Qupls4_pkg::OP_FLTQ:
 		if (SUPPORT_FLOAT) begin
-			// Add postfix for second write port if status recording is set.
-			if (instr.func[6]) begin
+			// Add second micro-op to accrue flags in the fp_status_reg.
+			if (~instr.func[6]) begin
 				next_count = 4'd2;
 				next_uop[0] = uop0;
-				// Select value 0 for all source regs.
 				next_uop[1] = uop1;
-				next_uop[1].ms = 3'b111;
-				next_uop[1].Rs1 = 9'd00;
-				next_uop[1].Rs2 = 9'd00;
+				next_uop[1].ms = 3'b100;
+				next_uop[1].Rs1 = fp_status_reg;	// FP status reg
+				next_uop[1].Rs2 = instr.Rd;
 				next_uop[1].Rs3 = 9'd00;
 				next_uop[1].Rd = fp_status_reg;		// FP status reg
-				next_uop[1].opcode = Qupls4_pkg::OP_REXT;
+				next_uop[1].opcode = Qupls4_pkg::OP_R3O;
+				next_uop[1].func = Qupls4_pkg::FN_MOVE;
+				next_uop[1].op3 = 3'd1;	// MOVE_ORF
 			end
 			else begin
 				next_count = 4'd1;
@@ -20,7 +21,7 @@
 			case(instr.func[5:0])
 			FLT_DIV:
 				begin
-					next_count = 4'd13;
+					next_count = instr.func[6] ? 4'd11 : 4'd12;
 					next_uop[0].lead = TRUE;
 					next_uop[0].num = 5'd0;
 					next_uop[0].opcode = instr.opcode;
@@ -110,13 +111,23 @@
 					next_uop[10].Rs3 = zero_reg;
 					next_uop[10].func = FLT_FMA;
 
+					if (instr.func[6]) begin
+						next_uop[11].num = 5'd11;
+						next_uop[11].Rs1 = fp_status_reg;	// FP status reg
+						next_uop[11].Rs2 = instr.Rd;
+						next_uop[11].Rs3 = 9'd00;
+						next_uop[11].Rd = fp_status_reg;		// FP status reg
+						next_uop[11].opcode = Qupls4_pkg::OP_R3O;
+						next_uop[11].func = Qupls4_pkg::FN_MOVE;
+						next_uop[11].op3 = 3'd1;	// MOVE_ORF
+					end
 				end
 			FLT_RSQRTA:
 				case(ir.opcode)
 				OP_FLTD:
 					begin
 						// t2 = i>>1;
-						next_count = 4'd3;
+						next_count = 4'd3 + ~instr.func[6];
 						next_uop[0].lead = TRUE;
 						next_uop[0].num = 5'd0;
 						next_uop[0].opcode = OP_R3O;
@@ -143,6 +154,17 @@
 						next_uop[2].Rs2 = 7'b0011000;	// +1.0
 						next_uop[2].Rs3 = mot2_reg;
 						next_uop[2].ms = 3'b010;
+
+						if (instr.func[6]) begin
+							next_uop[3].num = 5'd3;
+							next_uop[3].Rs1 = fp_status_reg;	// FP status reg
+							next_uop[3].Rs2 = instr.Rd;
+							next_uop[3].Rs3 = 9'd00;
+							next_uop[3].Rd = fp_status_reg;		// FP status reg
+							next_uop[3].opcode = Qupls4_pkg::OP_R3O;
+							next_uop[3].func = Qupls4_pkg::FN_MOVE;
+							next_uop[3].op3 = 3'd1;	// MOVE_ORF
+						end
 					end
 				endcase
 			FLT_RM:

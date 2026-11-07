@@ -1307,7 +1307,7 @@ begin
 				3'd0:	begin bus = a; o_flags = a_flags; did_op = TRUE; end
 				3'd1:	begin bus = a | b_flags; o_flags = a_flags; did_op = TRUE; end
 				3'd2: begin bus = a; o_flags = b[7:0]; did_op = TRUE; end
-				3'd3:	begin bus = {capa_flags,capa} >> {b[2:0],6'd0}; did_op = TRUE; end
+				3'd3:	begin bus = {capa_flags,capa} >> {b[2:0],6'd0}; o_flags = capa_flags; did_op = TRUE; end
 				default:	bus = zero;
 				endcase
 			end
