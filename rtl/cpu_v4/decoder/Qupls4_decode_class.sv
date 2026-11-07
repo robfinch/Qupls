@@ -48,7 +48,6 @@ begin
 	Qupls4_pkg::OP_LDT,Qupls4_pkg::OP_LDTZ,Qupls4_pkg::OP_LOAD,
 	Qupls4_pkg::OP_STB,Qupls4_pkg::OP_STW,
 	Qupls4_pkg::OP_STT,Qupls4_pkg::OP_STORE,
-	Qupls4_pkg::OP_STI,
 	Qupls4_pkg::OP_STPTR,
 	Qupls4_pkg::OP_V2P,
 	Qupls4_pkg::OP_VV2P,

@@ -632,7 +632,6 @@ typedef enum logic [6:0] {
 	OP_FLTPQ = 7'd51,
 
 	OP_ENTER = 7'd52,
-	OP_EXIT = 7'd53,
 	OP_PUSH = 7'd54,
 	OP_POP = 7'd55,
 	OP_FLTH = 7'd56,
@@ -650,8 +649,7 @@ typedef enum logic [6:0] {
 	OP_LDBZ = 7'd68,
 	OP_LDWZ = 7'd69,
 	OP_LDTZ = 7'd70,
-	OP_LDIP = 7'd72,
-	OP_CLOAD = 7'd73,
+	OP_CLOAD = 7'd72,
 	OP_FLDH = 7'd74,
 	OP_FLDS = 7'd76,
 	OP_FLDD = 7'd77,
@@ -662,8 +660,7 @@ typedef enum logic [6:0] {
 	OP_STW = 7'd81,
 	OP_STT = 7'd82,
 	OP_STORE = 7'd83,
-	OP_STI = 7'd84,
-	OP_CSTORE = 7'd85,
+	OP_CSTORE = 7'd84,
 	OP_STIP = 7'd87,
 	OP_STPTR = 7'd86,
 
@@ -747,6 +744,13 @@ typedef enum logic [6:0] {
 	FN_ASR = 7'd82,
 	FN_ASL = 7'd83,
 	FN_LSR = 7'd84,
+	
+	FN_COM = 7'd89,
+	FN_EXTZ = 7'd90,
+	FN_EXT = 7'd91,
+	FN_DEP = 7'd92,
+	FN_SET = 7'd93,
+	
 	FN_REDAND = 7'd96,
 	FN_REDOR = 7'd97,
 	FN_REDEOR = 7'd98,
@@ -2474,10 +2478,8 @@ function fnIsStimm;
 input micro_op_t ins;
 begin
 	case(ins.opcode)
-	OP_STI:
-		fnIsStimm = 1'b0;
 	default:
-		fnIsStimm = 1'b1;
+		fnIsStimm = 1'b0;
 	endcase
 end
 endfunction
@@ -2808,8 +2810,6 @@ begin
 	case(ir.opcode)
 	OP_R3B,OP_R3W,OP_R3T,OP_R3O:
 		fnImmc = ir.ms[2] == 1'b1 && ir.Rs3[5] == 1'b1;
-	OP_STI:
-		fnImmc = 1'b1;
 	default:	fnImmc = 1'b0;
 	endcase
 end
@@ -2850,9 +2850,9 @@ begin
 	OP_BCCU:
 		fnSourceRs1v = fnConstReg(ir.Rs1) || fnImma(ir);
 	OP_LOADA,
-	OP_LDB,OP_LDBZ,OP_LDW,OP_LDWZ,OP_LDT,OP_LDTZ,OP_LOAD:
+	OP_LDB,OP_LDBZ,OP_LDW,OP_LDWZ,OP_LDT,OP_LDTZ,OP_LOAD,OP_CLOAD:
 		fnSourceRs1v = fnConstReg(ir.Rs1);
-	OP_STB,OP_STW,OP_STT,OP_STORE,OP_STI,OP_STPTR:
+	OP_STB,OP_STW,OP_STT,OP_STORE,OP_STPTR,OP_CSTORE:
 		fnSourceRs1v = fnConstReg(ir.Rs1);
 	default:	fnSourceRs1v = 1'b1;
 	endcase
@@ -2875,9 +2875,9 @@ begin
 	OP_BCCU:
 		fnSourceRs2v = fnConstReg(ir.Rs2) || fnImmb(ir);
 	OP_LOADA,
-	OP_LDB,OP_LDBZ,OP_LDW,OP_LDWZ,OP_LDT,OP_LDTZ,OP_LOAD:
+	OP_LDB,OP_LDBZ,OP_LDW,OP_LDWZ,OP_LDT,OP_LDTZ,OP_LOAD,OP_CLOAD:
 		fnSourceRs2v = fnConstReg(ir.Rs2);
-	OP_STB,OP_STW,OP_STT,OP_STORE,OP_STI,OP_STPTR:
+	OP_STB,OP_STW,OP_STT,OP_STORE,OP_STPTR,OP_CSTORE:
 		fnSourceRs2v = fnConstReg(ir.Rs2);
 	default:	fnSourceRs2v = 1'b1;
 	endcase
@@ -2893,8 +2893,6 @@ begin
 	OP_CHK:	fnSourceRs3v = fnConstReg(ir.Rs3);
 //	OP_RTD:
 //		fnSourceRs3v = 1'd0;
-	OP_STI:
-		fnSourceRs3v = 1'b1;
 	default:
 		fnSourceRs3v = 1'b1;
 	endcase
@@ -3564,6 +3562,18 @@ begin
 					fnMapRawToUop.vn = 4'b0000;
 				end
 			endcase
+		end
+	Qupls4_pkg::OP_ENTER:	// and EXIT
+		begin
+			fnMapRawToUop.Rd = {2'd0,raw[13:7]};
+			fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
+			fnMapRawToUop.Rs2 = {2'd0,raw[27:21]};
+			fnMapRawToUop.Rs3 = {2'd0,raw[34:28]};
+			fnMapRawToUop.imm = raw[43:29];
+			fnMapRawToUop.func = raw[47:41];
+			fnMapRawToUop.src = 7'b0001111;
+			fnMapRawToUop.dst = 1'b1;
+			fnMapRawToUop.byteno = raw[28] ? 6'd1 : 6'd0;	// EXIT(1)
 		end
 	default:
 		begin

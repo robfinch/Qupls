@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2026  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -48,7 +48,7 @@ begin
 	case(op.opcode)
 	Qupls4_pkg::OP_STB,Qupls4_pkg::OP_STW,
 	Qupls4_pkg::OP_STT,Qupls4_pkg::OP_STORE,
-	Qupls4_pkg::OP_STI,
+	Qupls4_pkg::OP_CSTORE,
 	Qupls4_pkg::OP_STIP,
 	Qupls4_pkg::OP_STPTR:
 		fnIsStore = 1'b1;

@@ -60,7 +60,7 @@ begin
 	else
 		case(ir.opcode)
 		Qupls4_pkg::OP_STB,Qupls4_pkg::OP_STW,
-		Qupls4_pkg::OP_STT,Qupls4_pkg::OP_STORE,Qupls4_pkg::OP_STI,
+		Qupls4_pkg::OP_STT,Qupls4_pkg::OP_STORE,Qupls4_pkg::OP_CSTORE,
 		Qupls4_pkg::OP_STPTR:
 			fnRs3 = has_rext ? instr_raw[48+34:48+28] : {2'b00,ir.Rd};
 		Qupls4_pkg::OP_R3B,Qupls4_pkg::OP_R3W,Qupls4_pkg::OP_R3T,Qupls4_pkg::OP_R3O:

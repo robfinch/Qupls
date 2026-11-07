@@ -45,11 +45,11 @@ input Qupls4_pkg::micro_op_t op;
 begin
 	case(op.opcode)
 	Qupls4_pkg::OP_LDB,Qupls4_pkg::OP_LDBZ,Qupls4_pkg::OP_LDW,Qupls4_pkg::OP_LDWZ,
-	Qupls4_pkg::OP_LDT,Qupls4_pkg::OP_LDTZ,Qupls4_pkg::OP_LOAD,Qupls4_pkg::OP_LDIP,
+	Qupls4_pkg::OP_LDT,Qupls4_pkg::OP_LDTZ,Qupls4_pkg::OP_LOAD,Qupls4_pkg::OP_CLOAD,
 	Qupls4_pkg::OP_FLDS,Qupls4_pkg::OP_FLDD,
 	Qupls4_pkg::OP_LDV,Qupls4_pkg::OP_LDVN,
 	Qupls4_pkg::OP_STB,Qupls4_pkg::OP_STW,Qupls4_pkg::OP_STT,Qupls4_pkg::OP_STORE,
-	Qupls4_pkg::OP_STV,Qupls4_pkg::OP_STVN,
+	Qupls4_pkg::OP_STV,Qupls4_pkg::OP_STVN,Qupls4_pkg::OP_CSTORE,
 	Qupls4_pkg::OP_STPTR,Qupls4_pkg::OP_V2P,Qupls4_pkg::OP_VV2P:
 		fnIsMem = 1'b1;
 	default:

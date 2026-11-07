@@ -45,7 +45,7 @@ input Qupls4_pkg::micro_op_t ir;
 begin
 	case(ir.opcode)
 	Qupls4_pkg::OP_PUSH,Qupls4_pkg::OP_POP,Qupls4_pkg::OP_PUSHC,
-	Qupls4_pkg::OP_ENTER,Qupls4_pkg::OP_EXIT:
+	Qupls4_pkg::OP_ENTER:
 		fnIsMacro = 1'b1;
 	default:	fnIsMacro = 1'b0;
 	endcase

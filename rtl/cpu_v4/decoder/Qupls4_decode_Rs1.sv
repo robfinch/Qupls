@@ -84,9 +84,9 @@ begin
 		Qupls4_pkg::OP_LDB,Qupls4_pkg::OP_LDBZ,
 		Qupls4_pkg::OP_LDW,Qupls4_pkg::OP_LDWZ,
 		Qupls4_pkg::OP_LDT,Qupls4_pkg::OP_LDTZ,
-		Qupls4_pkg::OP_LOAD,Qupls4_pkg::OP_LOADA,
+		Qupls4_pkg::OP_LOAD,Qupls4_pkg::OP_LOADA,Qupls4_pkg::OP_CLOAD,
 		Qupls4_pkg::OP_AMO,Qupls4_pkg::OP_CMPSWAP,
-		Qupls4_pkg::OP_STB,Qupls4_pkg::OP_STW,Qupls4_pkg::OP_STT,Qupls4_pkg::OP_STORE,Qupls4_pkg::OP_STI,
+		Qupls4_pkg::OP_STB,Qupls4_pkg::OP_STW,Qupls4_pkg::OP_STT,Qupls4_pkg::OP_STORE,,Qupls4_pkg::OP_CSTORE,
 		Qupls4_pkg::OP_STPTR:
 			fnRs1 = has_rext ? instr_raw[61:55] : {1'b0,ir.Rs1};
 

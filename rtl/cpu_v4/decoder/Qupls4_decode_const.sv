@@ -502,7 +502,8 @@ begin
 	Qupls4_pkg::OP_LDB,Qupls4_pkg::OP_LDBZ,
 	Qupls4_pkg::OP_LDW,Qupls4_pkg::OP_LDWZ,
 	Qupls4_pkg::OP_LDT,Qupls4_pkg::OP_LDTZ,
-	Qupls4_pkg::OP_LOAD:
+	Qupls4_pkg::OP_LOAD,
+	Qupls4_pkg::OP_CLOAD:
 		begin
 			if (ins.Rs1==8'd0) begin
 				imma = value_zero;
@@ -534,7 +535,8 @@ begin
 	Qupls4_pkg::OP_STB,
 	Qupls4_pkg::OP_STW,
 	Qupls4_pkg::OP_STT,
-	Qupls4_pkg::OP_STORE:
+	Qupls4_pkg::OP_STORE,
+	Qupls4_pkg::OP_CSTORE:
 		begin
 			if (ins.Rs1==8'd0) begin
 				imma = value_zero;
@@ -566,7 +568,7 @@ begin
 				immd = {cnstd,ins.Rd[6:0]};
 			end
 		end
-
+/*
 	Qupls4_pkg::OP_STI:
 		begin
 			if (ins.Rs1==8'd0) begin
@@ -589,7 +591,7 @@ begin
 			has_immd = TRUE;
 			immd = {{59{ins.Rd[4]}},ins.Rd[4:0]};
 		end
-
+*/
 	Qupls4_pkg::OP_BCC,
 	Qupls4_pkg::OP_BCCU:
 		begin

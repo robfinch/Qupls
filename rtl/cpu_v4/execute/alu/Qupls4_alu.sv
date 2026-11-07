@@ -50,6 +50,7 @@ parameter SUPPORT_COUNT = (PIPE==3'd0 && SUPPORT_COUNT0) || (PIPE==3'd1 && SUPPO
 parameter SUPPORT_CRYPTO = (PIPE==3'd1 && SUPPORT_CRYPTO1) || (PIPE==3'd0 && SUPPORT_CRYPTO0);
 parameter SUPPORT_INFO = (PIPE==3'd0 && SUPPORT_INFO0) || (PIPE==3'd1 && SUPPORT_INFO1);
 parameter SUPPORT_CSR = (PIPE==3'd0 && SUPPORT_CSR0) || (PIPE==3'd1 && SUPPORT_CSR1);
+parameter SUPPORT_BFLD = (PIPE==3'd0 && SUPPORT_BFLD0) || (PIPE==3'd1 && SUPPORT_BFLD1);
 parameter SUPPORT_BRANCH = PIPE==3'd1;
 parameter WID=64;
 parameter LANE=0;
@@ -186,6 +187,62 @@ always_comb
 always_comb
 	asr = {{64{a[63]}},a,64'd0} >> b[5:0];
 
+reg [WID+8-1:0] t1;
+reg [WID+8-1:0] bfldo;
+reg [6:0] bflen;
+reg [6:0] bfst,bfnd;
+reg [WID+8-1:0] af;
+reg [WID+8-1:0] op3;
+
+// Handle clr, set, com, ext, extz, dep
+generate begin : gBlfd
+	if (WID==64 && SUPPORT_BFLD)
+		always_comb
+		begin
+			bfst = (ir.ms[1] ? ir.Rs2 : b[6:0]);
+			bfnd = (ir.ms[2] ? ir.Rs3 : c[6:0]);
+			bflen = bfnd - bfst;
+			af = {a_flags,a};
+			op3 = {{WID+8-3{ir.op3[2]}},ir.op3};
+			t1 = af >> (ir.ms[1] ? ir.Rs2 : b[6:0]);	// srl
+			for (jj = 0; jj < WID+8; jj = jj + 1)
+				case(ir.func)
+				Qupls4_pkg::FN_SET:
+					if (jj >= bfst && jj <= bfnd)
+						bfldo[jj] = op3[jj-bfst];
+					else
+						bfldo[jj] = af[jj];
+				Qupls4_pkg::FN_COM:
+					if (jj >= bfst && jj <= bfnd)
+						bfldo[jj] = ~af[jj];
+					else
+						bfldo[jj] = af[jj];
+				Qupls4_pkg::FN_DEP:
+					if (jj >= bfst && jj <= bfnd)
+						bfldo[jj] = af[jj-bfst];
+					else
+						bfldo[jj] = t[jj];
+				Qupls4_pkg::FN_EXTZ:	bfldo[jj] = jj > bflen ? 1'b0 : t1[jj];
+				Qupls4_pkg::FN_EXT:		bfldo[jj] = jj > bflen ? t1[bflen] : t1[jj];
+				default:	bfldo = {8'h00,zero};
+				endcase
+		end
+	else begin
+		always_comb
+		begin
+			bfst = 7'd0;
+			bfnd = 7'd0;	
+			bflen = 7'd0;
+			af = {WID+8{1'b0}};
+			t1 = {WID+8{1'b0}};
+			bfldo = {WID+8{1'b0}};
+			op3 = {WID+8{1'b0}};
+		end
+	end
+end
+endgenerate
+
+
 wire a_dn, b_dn;
 wire az, bz;
 wire aInf,bInf;
@@ -224,25 +281,6 @@ endgenerate
 
 reg [$clog2(WID):0] locnt,lzcnt,popcnt,tzcnt;
 reg loz, lzz, tzz;
-reg [WID-1:0] t1;
-reg [WID-1:0] exto, extzo;
-
-// Handle ext, extz
-always_comb
-begin
-	t1 = a >> (ir[31] ? ir[22:17] : b[5:0]);	// srl
-	for (jj = 0; jj < WID; jj = jj + 1)
-		if (ir[31:29]==3'b110)		// extz
-			extzo[jj] = jj > ir[28:23] ? 1'b0 : t1[jj];
-		else if (ir[31:25]==7'd6)	// extz
-			extzo[jj] = jj > c[5:0] ? 1'b0 : t1[jj];
-		else if (ir[31:29]==3'b111)
-			exto[jj] = jj > ir[28:23] ? t1[ir[28:23]] : t1[jj];
-		else if (ir[31:25]==7'd7)	// extz
-			exto[jj] = jj > c[5:0] ? t1[c[5:0]] : t1[jj];
-		else
-			exto[jj] = zero;
-end
 
 	
 generate begin : gffz
@@ -1301,13 +1339,26 @@ begin
 			end
 			else
 				bus = zero;
+		Qupls4_pkg::FN_SET,
+		Qupls4_pkg::FN_COM,
+		Qupls4_pkg::FN_EXT,
+		Qupls4_pkg::FN_EXTZ,
+		Qupls4_pkg::FN_DEP:
+			begin
+				bus = bfldo;
+				o_flags = {1'b0,bfldo[WID+6:WID]};
+				did_op = SUPPORT_BFLD;
+			end
 		Qupls4_pkg::FN_MOVE:
 			begin
 				case(ir.op3)
 				3'd0:	begin bus = a; o_flags = a_flags; did_op = TRUE; end
-				3'd1:	begin bus = a | b_flags; o_flags = a_flags; did_op = TRUE; end
-				3'd2: begin bus = a; o_flags = b[7:0]; did_op = TRUE; end
-				3'd3:	begin bus = {capa_flags,capa} >> {b[2:0],6'd0}; o_flags = capa_flags; did_op = TRUE; end
+				3'd2: begin bus = a; o_flags[0] = 1'b0; o_flags[6:0] = b[6:0]; did_op = TRUE; end
+				3'd3:	begin bus = {capa_flags,capa} >> {b[8:6],6'd0}; o_flags[0] = 1'b0; o_flags[6:0] = capa_flags[6:0]; did_op = TRUE; end
+				3'd4:	begin bus = a | ({64'd0,b_flags} << {b[5:3],3'd0}); o_flags[0] = 1'b0; o_flags[6:0] = a_flags[6:0]; did_op = TRUE; end
+				3'd5:	begin bus = a | ({64'd0,capa_flags} << {b[5:3],3'd0}); o_flags[0] = 1'b0; o_flags[6:0] = a_flags[6:0]; did_op = TRUE; end
+				3'd6:	begin bus = t; o_flags[0] = 1'b0; o_flags[6:0] = (a >> {b[5:3],3'd0}); did_op = TRUE; end
+				3'd7:	begin bus = t; o_flags[0] = 1'b0; o_flags[6:0] = (capa >> {b[7:3],3'd0}); did_op = TRUE; end
 				default:	bus = zero;
 				endcase
 			end

@@ -94,8 +94,8 @@ begin
 			fnHas_Rs2 = 1'b1;
 		Qupls4_pkg::OP_LDB,Qupls4_pkg::OP_LDBZ,Qupls4_pkg::OP_LDW,Qupls4_pkg::OP_LDWZ,
 		Qupls4_pkg::OP_LDT,Qupls4_pkg::OP_LDTZ,Qupls4_pkg::OP_LOAD,Qupls4_pkg::OP_LOADA,
-		Qupls4_pkg::OP_STB,Qupls4_pkg::OP_STW,
-		Qupls4_pkg::OP_STT,Qupls4_pkg::OP_STORE,
+		Qupls4_pkg::OP_STB,Qupls4_pkg::OP_STW,Qupls4_pkg::OP_CLOAD,
+		Qupls4_pkg::OP_STT,Qupls4_pkg::OP_STORE,Qupls4_pkg::OP_CSTORE,
 		Qupls4_pkg::OP_STPTR:
 			fnHas_Rs2 = 1'b1;
 		Qupls4_pkg::OP_AMO,
@@ -131,9 +131,9 @@ begin
 			fnRs2 = {1'b0,ir.Rs2};
 		Qupls4_pkg::OP_LDB,Qupls4_pkg::OP_LDBZ,Qupls4_pkg::OP_LDW,Qupls4_pkg::OP_LDWZ,
 		Qupls4_pkg::OP_LDT,Qupls4_pkg::OP_LDTZ,Qupls4_pkg::OP_LOAD,Qupls4_pkg::OP_LOADA,
-		Qupls4_pkg::OP_AMO,Qupls4_pkg::OP_CMPSWAP,
+		Qupls4_pkg::OP_AMO,Qupls4_pkg::OP_CMPSWAP,Qupls4_pkg::OP_CLOAD,
 		Qupls4_pkg::OP_STB,Qupls4_pkg::OP_STW,
-		Qupls4_pkg::OP_STT,Qupls4_pkg::OP_STORE,Qupls4_pkg::OP_STI,
+		Qupls4_pkg::OP_STT,Qupls4_pkg::OP_STORE,Qupls4_pkg::OP_CSTORE,
 		Qupls4_pkg::OP_STPTR:
 			fnRs2 = {1'b0,ir.Rs2};
 		default:
