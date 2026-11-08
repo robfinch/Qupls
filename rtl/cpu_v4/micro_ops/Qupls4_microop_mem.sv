@@ -71,6 +71,7 @@ Qupls4_pkg::micro_op_t [MICROOPS_PER_INSTR-1:0] next_uop;
 
 reg insert_boi;
 reg [7:0] boi_count = 8'd0;
+reg [6:0] st_opcode, ld_opcode;
 Qupls4_pkg::micro_op_t nopi, uop_boi;
 Qupls4_pkg::micro_op_t floadi1;
 Qupls4_pkg::micro_op_t push1,push2,push3,push4,push5,push6,push7;
@@ -84,6 +85,7 @@ Qupls4_pkg::micro_op_t fp_eq_sp, sp_eq_fp;
 Qupls4_pkg::micro_op_t instr;
 Qupls4_pkg::micro_op_t vsins;
 Qupls4_pkg::micro_op_t vls;
+reg [1:0] cap_sz;
 reg is_vector;
 reg is_reduction;
 reg is_vs, is_masked;
@@ -526,22 +528,26 @@ end
 // ENTER instructions
 always_comb
 begin
+	cap_sz = pg_ext.ip.cap.flags[0] ? 2'd2 : pg_ext.ip.cap.flags[2:1];
+	st_opcode = pg_ext.ip.cap.flags[0] ? OP_STORE : OP_CSTORE;
+	ld_opcode = pg_ext.ip.cap.flags[0] ? OP_LOAD : OP_CLOAD;
+	
 	enter_st_fp = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
 	enter_st_fp.v = VAL;
-	enter_st_fp.opcode = Qupls4_pkg::OP_STORE;
+	enter_st_fp.opcode = st_opcode;
 	enter_st_fp.Rd = fp;
 	enter_st_fp.Rs1 = ssp;
 	enter_st_fp.Rs2 = zero_reg;
-	enter_st_fp.imm = -64'd128;
+	enter_st_fp.imm = -64'd128 >> cap_sz;
 	enter_st_fp.sc = 3'd0;
 
 	enter_st_lr = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
 	enter_st_lr.v = VAL;
-	enter_st_lr.opcode = Qupls4_pkg::OP_STORE;
+	enter_st_lr.opcode = st_opcode;
 	enter_st_lr.Rd = lr1;
 	enter_st_lr.Rs1 = ssp;
 	enter_st_lr.Rs2 = zero_reg;
-	enter_st_lr.imm = -64'd96;
+	enter_st_lr.imm = -64'd96 >> cap_sz;
 	enter_st_lr.sc = 3'd0;
 
 	fp_eq_sp = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
@@ -1143,6 +1149,7 @@ else begin
 `include "Qupls4_microop_mem_FLTV.sv"
 `include "Qupls4_microop_mem_LSV.sv"
 `include "Qupls4_microop_mem_LSVN.sv"
+`include "Qupls4_microop_mem_ENTER.sv"	// and EXIT
 `include "Qupls4_microop_mem_PUSHPOP.sv"
 `include "Qupls4_microop_mem_CAP.sv"
 	Qupls4_pkg::OP_LDB,Qupls4_pkg::OP_LDBZ,Qupls4_pkg::OP_LDW,Qupls4_pkg::OP_LDWZ,
@@ -1274,56 +1281,6 @@ else begin
 			next_uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,ir};
 		end
 */			
-	Qupls4_pkg::OP_ENTER:
-		begin
-			// ENTER:
-			if (instr.byteno==6'd0) begin
-				case(pg_ext.ip.cap.flags[2:1])
-				2'd0:
-					begin
-						next_count = 4'd5;
-						next_uop[0] = enter_st_fp;
-						next_uop[0].lead = TRUE;
-						next_uop[1] = fp_eq_sp;
-						next_uop[1].num = 5'd1;
-						next_uop[2] = enter_st_lr;
-						next_uop[2].num = 5'd2;
-						next_uop[3] = decssp128;
-						next_uop[3].num = 5'd3;
-						next_uop[4].opcode = Qupls4_pkg::OP_ADDI;
-						next_uop[4].Rd = ir[13:7];					// SP
-						next_uop[4].Rs1 = ir[13:7];					// SP
-						next_uop[4].num = 5'd4;
-						next_uop[4].imm = instr.imm;
-					end
-				default:	;
-				endcase
-			end
-			// EXIT:
-			else begin
-				case(pg_ext.ip.cap.flags[2:1])
-				2'd0:
-					begin
-						next_count = 4'd5;
-						next_uop[0] = sp_eq_fp;
-						next_uop[0].lead = TRUE;
-						next_uop[1] = exit_ld_fp;
-						next_uop[1].num = 5'd1;
-						next_uop[2] = exit_ld_lr;
-						next_uop[2].num = 5'd2;
-						next_uop[3] = incssp128;
-						next_uop[3].num = 5'd3;
-						next_uop[4].opcode = Qupls4_pkg::OP_RTD;	// change EXIT into RTD
-						next_uop[4].Rd = ir[13:7];
-						next_uop[4].Rs1 = ir[27:21];					// link register
-						next_uop[4].imm = instr.imm;
-						next_uop[4].num = 5'd4;
-					end
-				default:	;
-				endcase
-			end
-		end
-
 	Qupls4_pkg::OP_MOD,Qupls4_pkg::OP_NOP:
 		begin
 			if (insert_boi) begin
