@@ -106,13 +106,13 @@ wire [8:0] ip_reg = 9'd127;
 wire [8:0] zero_reg = 9'd0;
 wire [8:0] num_scalar_reg = 9'd25;
 wire [8:0] mot0_reg = 9'd120;
-wire [8:0] mot1_reg = 9'd112;
-wire [8:0] mot2_reg = 9'd111;
+wire [8:0] mot1_reg = 9'd121;
+wire [8:0] mot2_reg = 9'd122;
 reg [8:0] vRd, vRs1, vRs2, vRs3;
 reg [8:0] Rd, Rs1, Rs2, Rs3;
 reg vRdi, vRs1i, vRs2i, vRs3i;		// whether to increment the register spec or not.
 Qupls4_pkg::rob_entry_t pr_nopi;
-
+reg [6:0] dc_opcode, dc_func;
 Qupls4_pkg::micro_op_t uop0;
 Qupls4_pkg::micro_op_t uop1;
 
@@ -811,6 +811,8 @@ if (rst) begin
 	next_count = 3'd0;
 	ble = 9'd0;
 	kk = 0;
+	dc_opcode = Qupls4_pkg::OP_NOP;
+	dc_func = 7'd0;
 	foreach (next_uop[n1]) begin
 		next_uop[n1] = {$bits(Qupls4_pkg::micro_op_t){1'b0}};
 		next_uop[n1].lead = n1==0;
