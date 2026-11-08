@@ -3,7 +3,7 @@
 			// ENTER:
 			if (instr.byteno==6'd0) begin
 				dc_func = 7'd0;
-				case({SUPPORT_CAPABILITIES,pg_ext.ip.cap.flags[2:0]})
+				casez({SUPPORT_CAPABILITIES,pg_ext.ip.cap.flags[2:0]})
 				3'b0??:	dc_opcode = Qupls4_pkg::OP_NOP;
 				3'b100:	dc_opcode = Qupls4_pkg::OP_NOP;	// uncompressed
 				3'b101:
@@ -97,7 +97,7 @@
 				ld_opcode = pg_ext.ip.cap.flags[0] || !SUPPORT_CAPABILITIES ? OP_LOAD : OP_CLOAD;
 				cap_sz = pg_ext.ip.cap.flags[0] || !SUPPORT_CAPABILITIES ? 2'd2 : pg_ext.ip.cap.flags[2:1];
 				dc_func = 7'd0;
-				case({SUPPORT_CAPABILITIES,pg_ext.ip.cap.flags[2:0]})
+				casez({SUPPORT_CAPABILITIES,pg_ext.ip.cap.flags[2:0]})
 				3'b0??:	dc_opcode = Qupls4_pkg::OP_NOP;
 				3'b100:	dc_opcode = Qupls4_pkg::OP_NOP;	// uncompressed
 				3'b101:
