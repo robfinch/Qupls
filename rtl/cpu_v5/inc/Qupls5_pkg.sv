@@ -1432,6 +1432,7 @@ typedef struct packed		// 237 bits
 	logic exc;
 	logic lead;
 	logic [4:0] num;
+	logic [1:0] vlen;			// vector length
 	logic [8:0] ble;			// byte lane enable
 	logic [5:0] byteno;		// byte number uop begins at
 	logic [63:0] imm2;		// second immediate / CSR register numnber (14 bits)) / lane number
@@ -3153,7 +3154,6 @@ begin
 		end
 	// R3 also includes shifts, BMAP
 	Qupls5_pkg::OP_R3B,Qupls5_pkg::OP_R3W,Qupls5_pkg::OP_R3T,Qupls5_pkg::OP_R3O,
-	Qupls5_pkg::OP_R3BP,Qupls5_pkg::OP_R3WP,Qupls5_pkg::OP_R3TP,Qupls5_pkg::OP_R3OP,
 	Qupls5_pkg::OP_CHK:
 		begin
 			fnMapRawToUop.Rd = {2'd0,raw[13:7]};
@@ -3170,13 +3170,12 @@ begin
 			fnMapRawToUop.src = 7'b0001111;
 			fnMapRawToUop.dst = 1'b1;
 		end
-	Qupls5_pkg::OP_VSR3B,Qupls5_pkg::OP_VSR3W,Qupls5_pkg::OP_VSR3T,Qupls5_pkg::OP_VSR3O:
+	Qupls5_pkg::OP_VR3B,Qupls5_pkg::OP_VR3W,Qupls5_pkg::OP_VR3T,Qupls5_pkg::OP_VR3O:
 		begin
 			fnMapRawToUop.Rd = {2'd0,raw[13:7]};
 			fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
 			fnMapRawToUop.Rs2 = {2'd0,raw[27:21]};
-			fnMapRawToUop.Rs3 = {2'd0,raw[34:28]};
-			fnMapRawToUop.Rs4 = {2'd0,raw[41:35]};	// graphics
+			fnMapRawToUop.Rs3 = {4'd0,raw[32:28]};
 			fnMapRawToUop.op3 = raw[37:35];
 			fnMapRawToUop.rmd = raw[37:35];			// for ASR
 			fnMapRawToUop.ms = raw[40:38];
@@ -3185,16 +3184,16 @@ begin
 			fnMapRawToUop.src = 7'b0001111;
 			fnMapRawToUop.dst = 1'b1;
 			fnMapRawToUop.vn = 4'b0111;
+			fnMapRawToUop.vlen = raw[34:33];
 			if (raw[47:41] >= 7'd120)
 				fnMapRawToUop.vn[0] = 1'b0;
 		end
-	Qupls5_pkg::OP_R3VVS:
+	Qupls5_pkg::OP_VSR3B,Qupls5_pkg::OP_VSR3W,Qupls5_pkg::OP_VSR3T,Qupls5_pkg::OP_VSR3O:
 		begin
 			fnMapRawToUop.Rd = {2'd0,raw[13:7]};
 			fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
 			fnMapRawToUop.Rs2 = {2'd0,raw[27:21]};
-			fnMapRawToUop.Rs3 = {2'd0,raw[34:28]};
-			fnMapRawToUop.Rs4 = {2'd0,raw[41:35]};	// graphics
+			fnMapRawToUop.Rs3 = {4'd0,raw[32:28]};
 			fnMapRawToUop.op3 = raw[37:35];
 			fnMapRawToUop.rmd = raw[37:35];			// for ASR
 			fnMapRawToUop.ms = raw[40:38];
@@ -3203,6 +3202,7 @@ begin
 			fnMapRawToUop.src = 7'b0001111;
 			fnMapRawToUop.dst = 1'b1;
 			fnMapRawToUop.vn = 4'b0011;
+			fnMapRawToUop.vlen = raw[34:33];
 			if (raw[47:41] >= 7'd120)
 				fnMapRawToUop.vn[0] = 1'b0;
 		end

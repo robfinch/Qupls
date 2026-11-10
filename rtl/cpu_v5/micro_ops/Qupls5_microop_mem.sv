@@ -671,7 +671,8 @@ end
 always_comb
 begin
 	case (instr.opcode)
-	Qupls5_pkg::OP_R3VVV,Qupls5_pkg::OP_R3VVS,
+	Qupls5_pkg::OP_VR3B,Qupls5_pkg::OP_VR3W,Qupls5_pkg::OP_VR3T,Qupls5_pkg::OP_VR3O,
+	Qupls5_pkg::OP_VSR3B,Qupls5_pkg::OP_VSR3W,Qupls5_pkg::OP_VSR3T,Qupls5_pkg::OP_VSR3O,
 	Qupls5_pkg::OP_FLTVVV,Qupls5_pkg::OP_FLTVVS:
 		is_vector = 1'b1;
 	default:	is_vector = 1'b0;
@@ -714,7 +715,7 @@ begin
 			default:	;
 			endcase
 		end
-	Qupls5_pkg::OP_R3VVV:
+	Qupls5_pkg::OP_VR3B,Qupls5_pkg::OP_VR3W,Qupls5_pkg::OP_VR3T,Qupls5_pkg::OP_VR3O:
 		begin
 			instr.opcode = Qupls5_pkg::OP_R3BP | velsz[1:0];
 			instr.vn = ir.vn;
