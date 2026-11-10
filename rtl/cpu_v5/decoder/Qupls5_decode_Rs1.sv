@@ -1,0 +1,114 @@
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2021-2026  Robert Finch, Waterloo
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+//
+// BSD 3-Clause License
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are met:
+//
+// 1. Redistributions of source code must retain the above copyright notice, this
+//    list of conditions and the following disclaimer.
+//
+// 2. Redistributions in binary form must reproduce the above copyright notice,
+//    this list of conditions and the following disclaimer in the documentation
+//    and/or other materials provided with the distribution.
+//
+// 3. Neither the name of the copyright holder nor the names of its
+//    contributors may be used to endorse or promote products derived from
+//    this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+// FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+// DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+// SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+// CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+// OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+// 25 LUTs
+// ============================================================================
+
+import cpu_types_pkg::*;
+import Qupls5_pkg::*;
+
+module Qupls5_decode_Rs1(om, instr, instr_raw, has_imma, Rs1, Rs1z, Rs1ip);
+input Qupls5_pkg::operating_mode_t om;
+input Qupls5_pkg::micro_op_t instr;
+input [431:0] instr_raw;
+input has_imma;
+output aregno_t Rs1;
+output reg Rs1z;
+output reg Rs1ip;
+
+Qupls5_pkg::operating_mode_t om1;
+
+function aregno_t fnRs1;
+input Qupls5_pkg::micro_op_t ins;
+input [431:0] instr_raw;
+input has_imma;
+Qupls5_pkg::micro_op_t ir;
+reg has_rext;
+begin
+	ir = ins;
+	has_rext = instr_raw[54:48] == OP_REXT;
+	if (has_imma)
+		fnRs1 = 8'd0;
+	else
+		case(ir.opcode)
+/*			
+		Qupls5_pkg::OP_MOV:
+			if (ir[28:26] < 3'd4)
+				fnRs1 = {ir[20:19],ir[15:11]};
+			else
+				fnRs1 = {2'b00,ir[15:11]};
+*/				
+		Qupls5_pkg::OP_FLTH,Qupls5_pkg::OP_FLTS,Qupls5_pkg::OP_FLTD,Qupls5_pkg::OP_FLTQ:
+			fnRs1 = has_rext ? instr_raw[61:55] : {1'b0,ir.Rs1};
+		Qupls5_pkg::OP_CSR:
+			fnRs1 = has_rext ? instr_raw[61:55] : {1'b0,ir.Rs1};
+		Qupls5_pkg::OP_ADDI,Qupls5_pkg::OP_SUBFI,Qupls5_pkg::OP_CMPI,Qupls5_pkg::OP_CMPUI,
+		Qupls5_pkg::OP_ANDI,Qupls5_pkg::OP_ORI,Qupls5_pkg::OP_XORI,
+		Qupls5_pkg::OP_MULI,Qupls5_pkg::OP_MULUI,Qupls5_pkg::OP_DIVI,Qupls5_pkg::OP_DIVUI,
+		Qupls5_pkg::OP_SHIFT:
+			fnRs1 = has_rext ? instr_raw[61:55] : {1'b0,ir.Rs1};
+		Qupls5_pkg::OP_BCC,
+		Qupls5_pkg::OP_BCCU:
+			fnRs1 = has_rext ? instr_raw[61:55] : {1'b0,ir.Rs1};
+		Qupls5_pkg::OP_LDB,Qupls5_pkg::OP_LDBZ,
+		Qupls5_pkg::OP_LDW,Qupls5_pkg::OP_LDWZ,
+		Qupls5_pkg::OP_LDT,Qupls5_pkg::OP_LDTZ,
+		Qupls5_pkg::OP_LOAD,Qupls5_pkg::OP_LOADA,Qupls5_pkg::OP_CLOAD,
+		Qupls5_pkg::OP_AMO,Qupls5_pkg::OP_CMPSWAP,
+		Qupls5_pkg::OP_STB,Qupls5_pkg::OP_STW,Qupls5_pkg::OP_STT,Qupls5_pkg::OP_STORE,,Qupls5_pkg::OP_CSTORE,
+		Qupls5_pkg::OP_STPTR:
+			fnRs1 = has_rext ? instr_raw[61:55] : {1'b0,ir.Rs1};
+
+		Qupls5_pkg::OP_PUSH,Qupls5_pkg::OP_POP:
+			fnRs1 = 7'd0;
+		default:
+			fnRs1 = 7'd0;
+		endcase
+end
+endfunction
+
+always_comb
+begin
+	Rs1 = fnRs1(instr, instr_raw, has_imma);
+	/*
+	if (instr.ins.opcode==Qupls5_pkg::OP_MOV && instr.ins[28:26]==3'd1)	// MOVEMD?
+		om1 = Qupls5_pkg::operating_mode_t'(instr.ins[24:23]);
+    else
+        om1 = om;
+  */
+	Rs1z = ~|Rs1[6:0];
+	Rs1ip = Rs1==IP_REG;
+end
+
+endmodule
