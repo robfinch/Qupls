@@ -1,0 +1,506 @@
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2023-2026  Robert Finch, Waterloo
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+//
+// BSD 3-Clause License
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are met:
+//
+// 1. Redistributions of source code must retain the above copyright notice, this
+//    list of conditions and the following disclaimer.
+//
+// 2. Redistributions in binary form must reproduce the above copyright notice,
+//    this list of conditions and the following disclaimer in the documentation
+//    and/or other materials provided with the distribution.
+//
+// 3. Neither the name of the copyright holder nor the names of its
+//    contributors may be used to endorse or promote products derived from
+//    this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+// FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+// DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+// SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+// CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+// OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+// 9424 LUTs / 3200 FFs (RL_STRATEGY 1)
+// 5101 LUTs / 1975 FFs (RL_STRATEGY 0)
+// ============================================================================
+
+import const_pkg::*;
+import cpu_types_pkg::*;
+import Qupls5_pkg::*;
+
+module Qupls5_reservation_station(rst, clk, available, busy, issue, stall,
+	rse_i, rse_o, stomp, rf_oper_i, cap_rf_oper_i,
+	bypass_i, wp_oper_tap_i, cap_wp_oper_tap_i,
+	req_pRn, req_pRnv,
+	fp_sync, req_FPCSRndx, req_FPCSRv, FPCSR, FPCSRv
+);
+parameter MWIDTH = 4;
+parameter NRSE = 1;
+parameter FUNCUNIT = 4'd0;
+parameter NBPI = 4;			// number of bypasssing inputs
+parameter NSARG = 3;		// number of source operands
+parameter RL_STRATEGY = 1;	// register lookup strategy
+parameter NREG_RPORTS = RL_STRATEGY==0 ? 12 : 12;
+parameter NREG_WPORTS = 13;
+parameter RC = 1'b0;
+parameter DISPATCH_COUNT=6;	// number of lanes of dispatching
+// The following controls which lanes to look at. It depends on which lanes are
+// setup in the instruction dispatcher. Specific lanes target specific functional
+// unit types. For instance lane #4 is used for floating-point.
+parameter DISPATCH_MAP=6'b100001;
+parameter FPUNIT = FALSE;
+input rst;
+input clk;
+input available;
+input stall;
+input Qupls5_pkg::reservation_station_entry_t [DISPATCH_COUNT-1:0] rse_i;
+input Qupls5_pkg::rob_bitmask_t stomp;
+input Qupls5_pkg::operand_t [NREG_RPORTS-1:0] rf_oper_i;
+input Qupls5_pkg::cap_operand_t [NREG_RPORTS-1:0] cap_rf_oper_i;
+input Qupls5_pkg::operand_t [NBPI-1:0] bypass_i;
+input Qupls5_pkg::operand_t [NREG_WPORTS-1:0] wp_oper_tap_i [0:4];
+input Qupls5_pkg::cap_operand_t [0:0] cap_wp_oper_tap_i [0:4];
+output reg busy;
+output reg issue;
+output Qupls5_pkg::reservation_station_entry_t rse_o;
+output pregno_t [3:0] req_pRn;
+output reg [3:0] req_pRnv;
+output rob_ndx_t req_FPCSRndx;
+output reg req_FPCSRv;
+input fp_sync;
+input Qupls5_pkg::fp_status_reg_t FPCSR;
+input FPCSRv;
+
+integer kk,jj,nn,mm,pp,qq,n1,n2,n3,n4;
+wire [3:0] rdy;
+genvar g;
+reg idle;
+reg dispatch;
+reg pstall;
+Qupls5_pkg::operand_t [NRSE-1:0] arg [0:5];
+Qupls5_pkg::cap_operand_t [NRSE-1:0] cap_arg;
+pregno_t [3:0] req_pRnu;
+reg [3:0] req_pRnuv;
+
+wire [16:0] lfsro;
+Qupls5_pkg::reservation_station_entry_t [NRSE-1:0] rse;
+Qupls5_pkg::operand_t [NRSE-1:0] rse_argA;
+Qupls5_pkg::operand_t [NRSE-1:0] rse_argB;
+Qupls5_pkg::operand_t [NRSE-1:0] rse_argC;
+Qupls5_pkg::operand_t [NRSE-1:0] rse_argD;
+Qupls5_pkg::operand_t [NRSE-1:0] rse_argT;
+Qupls5_pkg::operand_t [NRSE-1:0] rse_argS;		// status (for round mode)
+Qupls5_pkg::reservation_station_entry_t rsei;
+Qupls5_pkg::operand_t [NREG_RPORTS-1:0] rf_fpcsr_i;
+Qupls5_pkg::cap_operand_t [NRSE-1:0] rse_cap_arg;
+
+always_comb
+foreach (rf_fpcsr_i[n4]) begin
+	rf_fpcsr_i[n4].val = FPCSR;
+	rf_fpcsr_i[n4].pRn = 9'd0;
+	rf_fpcsr_i[n4].fpcsr = TRUE;
+	rf_fpcsr_i[n4].v = FPCSRv;
+end
+
+always_comb
+foreach (rse[nn])
+begin
+	rse_argA[nn] = rse[nn].arg[0];
+	rse_argB[nn] = rse[nn].arg[1];
+	rse_argC[nn] = rse[nn].arg[2];
+	rse_argD[nn] = rse[nn].arg[3];
+	rse_argT[nn] = rse[nn].arg[4];
+	rse_argS[nn] = rse[nn].arg[5];
+end
+
+always_comb
+begin
+	busy = 1'b1;
+	foreach (rse[n2])
+		busy = busy & rse[n2].busy;
+end
+always_comb
+	idle = !busy;
+
+//always_comb
+//	next_cptgt <= {8{cpytgt|rob.decbus.cpytgt}} | ~{8{rob.pred_bit}};
+
+lfsr17 ulfsr1
+(
+	.rst(rst),
+	.clk(clk),
+	.ce(1'b1), 
+	.cyc(1'b0),
+	.o(lfsro)
+);
+
+// Always assume at least one source operand.
+
+Qupls5_validate_operand #(
+	.NBPI(NBPI), .NENTRY(NRSE), .NREG_PORTS(NREG_RPORTS),
+	.NREG_WPORTS(NREG_WPORTS)) uvsrcA
+(
+	.wp_hist_i(wp_oper_tap_i),
+	.rf_oper_i(rf_oper_i),
+	.oper_i(rse_argA),
+	.oper_o(arg[0]),
+	.operh_i(rse_argA),
+	.operh_o(),
+	.bypass_i(bypass_i)
+);
+
+generate begin : gCapvo
+	if (SUPPORT_CAPABILITIES)
+Qupls5_validate_cap_operand #(
+	.NBPI(NBPI), .NENTRY(NRSE), .NREG_PORTS(NREG_RPORTS),
+	.NREG_WPORTS(1)) uvsrcA
+(
+	.wp_hist_i(cap_wp_oper_tap_i),
+	.rf_oper_i(cap_rf_oper_i),
+	.oper_i(rse_cap_arg),
+	.oper_o(cap_arg),
+	.bypass_i()
+);
+end
+endgenerate
+
+generate begin : gOperands
+
+if (NSARG > 1)
+Qupls5_validate_operand #(
+	.NBPI(NBPI), .NENTRY(NRSE),
+	.NREG_PORTS(NREG_RPORTS),
+	.NREG_WPORTS(NREG_WPORTS)
+) uvsrcB
+(
+	.wp_hist_i(wp_oper_tap_i),
+	.rf_oper_i(rf_oper_i),
+	.oper_i(rse_argB),
+	.oper_o(arg[1]),
+	.operh_i(rse_argB),
+	.operh_o(),
+	.bypass_i(bypass_i)
+);
+else begin
+	for (g = 0; g < NRSE; g = g + 1) begin
+		assign arg[1][g].v = VAL;
+		assign arg[1][g].val = value_zero;
+		assign arg[1][g].flags = 8'd0;
+	end
+end
+
+if (NSARG > 2)
+Qupls5_validate_operand #(
+	.NBPI(NBPI), .NENTRY(NRSE), .NREG_PORTS(NREG_RPORTS),
+	.NREG_WPORTS(NREG_WPORTS)) uvsrcC
+(
+	.wp_hist_i(wp_oper_tap_i),
+	.rf_oper_i(rf_oper_i),
+	.oper_i(rse_argC),
+	.oper_o(arg[2]),
+	.operh_i(rse_argC),
+	.operh_o(),
+	.bypass_i(bypass_i)
+);
+else begin
+	for (g = 0; g < NRSE; g = g + 1) begin
+		assign arg[2][g].v = VAL;
+		assign arg[2][g].val = value_zero;
+		assign arg[2][g].flags = 8'd0;
+	end
+end
+
+if (NSARG > 3)
+Qupls5_validate_operand #(
+	.NBPI(NBPI), .NENTRY(NRSE), .NREG_PORTS(NREG_RPORTS),
+	.NREG_WPORTS(NREG_WPORTS)
+) uvsrcD
+(
+	.wp_hist_i(wp_oper_tap_i),
+	.rf_oper_i(rf_oper_i),
+	.oper_i(rse_argD),
+	.oper_o(arg[3]),
+	.operh_i(rse_argD),
+	.operh_o(),
+	.bypass_i(bypass_i)
+);
+else begin
+	for (g = 0; g < NRSE; g = g + 1) begin
+		assign arg[3][g].v = VAL;
+		assign arg[3][g].val = value_zero;
+		assign arg[3][g].flags = 8'd0;
+	end
+end
+
+end
+endgenerate
+
+// Destination operand which sometimes needs to be read.
+
+Qupls5_validate_operand #(
+	.NBPI(NBPI), .NENTRY(NRSE), .NREG_PORTS(NREG_RPORTS),
+	.NREG_WPORTS(NREG_WPORTS)
+) uvsrcT
+(
+	.wp_hist_i(wp_oper_tap_i),
+	.rf_oper_i(rf_oper_i),
+	.oper_i(rse_argT),
+	.oper_o(arg[4]),
+	.operh_i(rse_argT),
+	.operh_o(),
+	.bypass_i(bypass_i)
+);
+
+// Status operand which sometimes needs to be read.
+generate begin : gStat
+	if (RC > 0)
+Qupls5_validate_operand #(
+	.NBPI(NBPI), .NENTRY(NRSE), .NREG_PORTS(NREG_RPORTS),
+	.NREG_WPORTS(NREG_WPORTS),
+	.pFPCSR(TRUE)
+) uvsrcS
+(
+	.wp_hist_i(),
+	.rf_oper_i(rf_fpcsr_i),
+	.oper_i(rse_argS),
+	.oper_o(arg[5]),
+	.operh_i(rse_argS),
+	.operh_o(),
+	.bypass_i(bypass_i)
+);
+end
+endgenerate
+
+
+// Check for instruction dispatches. Select dispatch input and set dispatch
+// flags if dispatch is available.
+
+always_comb
+begin
+	rsei = {$bits(Qupls5_pkg::reservation_station_entry_t){1'b0}};
+	dispatch = FALSE;
+	foreach (rse_i[n1])
+		if (DISPATCH_MAP[n1] && rse_i[n1].funcunit==FUNCUNIT) begin
+			rsei = rse_i[n1];
+			dispatch = TRUE;
+		end
+end
+
+/*
+		if (cpytgt) begin
+			instr.uop.ins <= {26'd0,OP_NOP};
+//			pred <= FALSE;
+//			predz <= rob.op.decbus.cpytgt ? FALSE : rob.decbus.predz;
+			div <= FALSE;
+		end
+		else
+			instr <= rob.op;
+		// Done even if multi-cycle if it is just a copy-target.
+		if (!rob.op.decbus.multicycle || (&next_cptgt))
+			sc_done <= TRUE;
+		else
+			idle_false <= TRUE;
+*/
+always_ff @(posedge clk)
+if (rst) begin
+	foreach (rse[pp])
+  	rse[pp] <= {$bits(Qupls5_pkg::reservation_station_entry_t){1'b0}};
+  rse_o <= {$bits(Qupls5_pkg::reservation_station_entry_t){1'b0}};
+	issue <= FALSE;
+  pstall <= FALSE;
+end
+else begin
+	issue <= FALSE;
+	pstall <= stall;
+	if (available && dispatch && idle) begin
+		// Load up the reservation stations.
+		qq = fnChooseIdle(rse);
+		if (qq >= 0) begin
+			foreach (rse[mm])
+				rse[mm].age <= rse[mm].age + 2'd1;
+			rse[qq] <= rsei;
+			rse[qq].age <= 3'd0;
+			rse[qq].busy <= rsei.v;
+			rse[qq].ready <= rsei.arg[0].v && rsei.arg[1].v && (rsei.arg[2].v||rsei.store) && rsei.arg[3].v && rsei.arg[4].v && rsei.arg[5].v;
+			if (stomp[rsei.rndx])
+				rse[qq].uop.opcode <= Qupls5_pkg::OP_NOP;
+		end
+	end
+	for (pp = 0; pp < 6; pp = pp + 1) begin
+		foreach (rse[mm])
+			if (arg[pp][mm].v) begin
+				rse[mm].arg[pp] <= arg[pp][mm];
+				rse[mm].arg[pp].v <= VAL;
+			end
+	end
+	foreach (rse[mm]) begin
+		rse[mm].ready <= FALSE;
+		if (rse[mm].arg[0].v && rse[mm].arg[1].v && (rse[mm].arg[2].v|rse[mm].store) && rse[mm].arg[3].v && rse[mm].arg[4].v && rse[mm].arg[5].v)
+			rse[mm].ready <= rse[mm].v;
+	end
+
+	// Unused stations are never ready.
+	/*
+	if (NRSE < 2) begin
+		rse[1].busy <= TRUE;
+		rse[2].busy <= TRUE;
+		rse[1].ready <= FALSE;
+		rse[2].ready <= FALSE;
+		rse[1].argA_v <= VAL;
+		rse[1].argB_v <= VAL;
+		rse[1].argC_v <= VAL;
+		rse[1].argD_v <= VAL;
+		rse[1].argT_v <= VAL;
+		rse[2].argA_v <= VAL;
+		rse[2].argB_v <= VAL;
+		rse[2].argC_v <= VAL;
+		rse[2].argD_v <= VAL;
+		rse[2].argT_v <= VAL;
+	end
+	if (NRSE < 3) begin
+		rse[2].busy <= TRUE;
+		rse[2].ready <= FALSE;
+		rse[2].argA_v <= VAL;
+		rse[2].argB_v <= VAL;
+		rse[2].argC_v <= VAL;
+		rse[2].argD_v <= VAL;
+		rse[2].argT_v <= VAL;
+	end
+	*/
+	// Issue scheduling: if there is only one ready easy: pick the ready one.
+	// If there are ties: pick oldest one.
+	// Once choosen, the RSE entry is no longer valid.
+	// If it is an FP unit and there is an FP sync instruction in the pipeline,
+	// the refuse to issue.
+	rse_o.v <= INV;
+	casez({pstall,stall})
+	2'b10:	;
+	2'b01:	;
+	2'b11:	;
+	default:
+		begin
+			if (~&rdy) begin
+				// For a vector load / store only issue for when mask indicates so.
+				if (!(fp_sync && rse[rdy].fclass==3'd2)) begin
+					if (rse[rdy].vls) begin
+						if (rse[rdy].arg[2][rse[rdy].laneno]) begin
+							issue <= TRUE;
+							rse_o <= rse[rdy];
+							rse_o.v <= !stomp[rse[rdy].rndx] & rse[rdy].v;
+							rse[rdy].arg[2][rse[rdy].laneno] <= 1'b0;
+						end
+						if (rse[rdy].arg[2]==value_zero) begin
+							rse[rdy].v <= INV;
+							rse_o.uop <= {26'd0,Qupls5_pkg::OP_NOP};
+						end
+					end
+					else begin
+						issue <= TRUE;
+						rse_o <= rse[rdy];
+						rse[rdy].v <= INV;
+						rse_o.v <= !stomp[rse[rdy].rndx] & rse[rdy].v;
+					end
+					if (rse[rdy].vcount==6'd0) begin
+						rse[rdy].busy <= FALSE;
+					end
+					else begin
+						rse[rdy].vcount <= rse[rdy].vcount - 6'd1;
+						rse[rdy].laneno <= rse[rdy].laneno + 6'd1;
+					end
+					if (stomp[rse[rdy].rndx])
+						rse_o.uop <= {26'd0,Qupls5_pkg::OP_NOP};
+				end
+			end
+		end
+	endcase
+end
+
+// Request register reads for missing arguments.
+// For RL_STRATEGY=0 register reads do not need to be requested. The requests
+// are tracked according to the ROB argument valid flags in the mainline RTL
+// code. That means the request logic can be removed from every reservation
+// station. But, then there is request logic in the mainline. TBD which is
+// smaller and which is faster.
+
+always_comb
+begin
+	kk = 0;
+	req_pRnu[0] = 8'd0;
+	req_pRnu[1] = 8'd0;
+	req_pRnu[2] = 8'd0;
+	req_pRnu[3] = 8'd0;
+	req_pRnuv = 4'd0;
+	req_FPCSRv = INV;
+	if (RL_STRATEGY==1) begin
+		for (jj = 0; jj < NRSE; jj = jj + 1) begin
+			for (pp = 0; pp < 6; pp = pp + 1) begin
+				if (fnSrc(rse[jj].uop,pp)) begin
+					if (rse[jj].busy && !rse[jj].arg[pp].v) begin
+						if(kk < 4) begin
+							req_pRnu[kk] = rse[jj].arg[pp].pRn;
+							req_pRnuv[kk] = VAL;
+							kk = kk + 1;
+						end
+						if (pp==5) begin
+							req_FPCSRndx = rse[jj].rndx;
+							req_FPCSRv = VAL;
+						end
+					end
+				end
+			end
+		end
+	end
+end
+
+always_ff @(posedge clk)
+	req_pRn <= req_pRnu;
+always_ff @(posedge clk)
+	req_pRnv <= req_pRnuv;
+
+function fnSrc;
+input micro_op_t op;
+input [2:0] n;
+begin
+	case(n)
+	3'd0:	fnSrc = op.src[1];
+	3'd1:	fnSrc = op.src[2];
+	3'd2:	fnSrc = op.src[3];
+	3'd3:	fnSrc = op.src[4];
+	3'd4:	fnSrc = op.src[0];
+	3'd5:	fnSrc = op.src[5];
+	default:	fnSrc = 1'b0;
+	endcase
+end
+endfunction
+
+Qupls5_choose_ready_rse #(.NRSE(NRSE)) uchrdy1
+(
+	.rse(rse),
+	.rdy(rdy)
+);
+
+function integer fnChooseIdle;
+input Qupls5_pkg::reservation_station_entry_t [NRSE-1:0] rse;
+integer nn;
+begin
+	fnChooseIdle = -1;
+	for (nn = 0; nn < NRSE; nn = nn + 1) begin
+		if (!rse[nn].busy || !rse[nn].v)
+			fnChooseIdle = nn;
+	end
+end
+endfunction
+
+endmodule

@@ -1,0 +1,376 @@
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2024-2026  Robert Finch, Waterloo
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+// BSD 3-Clause License
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are met:
+//
+// 1. Redistributions of source code must retain the above copyright notice, this
+//    list of conditions and the following disclaimer.
+//
+// 2. Redistributions in binary form must reproduce the above copyright notice,
+//    this list of conditions and the following disclaimer in the documentation
+//    and/or other materials provided with the distribution.
+//
+// 3. Neither the name of the copyright holder nor the names of its
+//    contributors may be used to endorse or promote products derived from
+//    this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+// FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+// DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+// SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+// CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+// OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+// Allocate up to four registers per clock.
+// We need to be able to free many more registers than are allocated in the 
+// event of a pipeline flush. Normally up to four register values will be
+// committed to the register file.
+//
+// A bitmap of available registers is used, which is divided into four equal 
+// parts. 
+// One available register is selected "popped" from each part of the bitmap
+// when needed using a find-first-one module.
+// Freeing the register, a "push", is simple, the register is just marked
+// available in the bitmap.
+// 
+// 4025 LUTs / 385 FFs / 0 BRAMS / (512 regs = 16 vec regs)
+// ============================================================================
+//
+import const_pkg::*;
+import cpu_types_pkg::*;
+import Qupls5_pkg::*;
+
+module Qupls5_vecreg_name_supplier(rst,clk,en,aregno,tags2free,freevals,
+	ns_alloc_req, ns_dstreg, ns_dstregv,avail,stall
+);
+parameter NFTAGS = 4;			// Number of register freed per clock.
+parameter VPREGS = Qupls5_pkg::VPREGS;
+input rst;
+input clk;
+input en;
+input vec_aregno_t [3:0] aregno;
+input cpu_types_pkg::vec_pregno_t [NFTAGS-1:0] tags2free;		// register tags to free
+input [NFTAGS-1:0] freevals;					// bitmnask indicating which tags to free
+input [3:0] ns_alloc_req;
+output cpu_types_pkg::vec_pregno_t [3:0] ns_dstreg;
+output reg [3:0] ns_dstregv;
+output reg [7:0] avail [0:VPREGS/8-1];
+output reg stall;											// stall enqueue while waiting for register availability
+
+integer n1,n2,n3,n4;
+genvar g;
+
+cpu_types_pkg::vec_pregno_t [3:0] o;
+reg [3:0] ov;
+reg next_stall;
+cpu_types_pkg::vec_pregno_t [NFTAGS-1:0] rtags2free;
+reg [3:0] fpop = 4'd0;
+reg stalla0 = 1'b0;
+reg stalla1 = 1'b0;
+reg stalla2 = 1'b0;
+reg stalla3 = 1'b0;
+reg [7:0] next_avail [0:VPREGS/8-1];
+reg [3:0] freevals1;
+reg [$clog2(Qupls5_pkg::VPREGS)-3:0] freeCnt;
+reg [2:0] ffreeCnt;
+reg [Qupls5_pkg::VPREGS-1:0] next_toFreeList;
+reg [Qupls5_pkg::VPREGS-1:0] toFreeList;
+reg [3:0] ffree;
+reg [3:0] fpush;
+reg [3:0] ovr;
+reg [3:0] nofree;
+
+always_comb next_stall = stalla0|stalla1|stalla2|stalla3;
+always_ff @(posedge clk)
+	stall <= next_stall;
+
+always_comb
+if (Qupls5_pkg::VPREGS != 1024 && Qupls5_pkg::VPREGS != 512 && Qupls5_pkg::VPREGS != 256 && Qupls5_pkg::VPREGS != 128) begin
+	$display("Qupls5 CPU renamer: number of registers must be 128, 256, 512 or 1024");
+	$finish;
+end
+
+always_comb
+begin
+	// Not a stall if not allocating.
+	// Stall if same register name choosen on more than one port. It means there
+	// were not enough register names available.
+	stalla0 = ((~avail[o[0][$bits(vec_pregno_t)-1:3]][o[0][2:0]]|nofree[0]) & ns_alloc_req[0]);// || (ns_alloc_req[0] && (o[0]==o[2] || o[0]==o[3] || o[0]==o[1]));
+	stalla1 = ((~avail[o[1][$bits(vec_pregno_t)-1:3]][o[1][2:0]]|nofree[1]) & ns_alloc_req[1]);// || (ns_alloc_req[1] && (o[1]==o[2] || o[1]==o[3] || o[1]==o[0]));
+	stalla2 = ((~avail[o[2][$bits(vec_pregno_t)-1:3]][o[2][2:0]]|nofree[2]) & ns_alloc_req[2]);// || (ns_alloc_req[2] && (o[2]==o[0] || o[2]==o[1] || o[2]==o[3]));
+	stalla3 = ((~avail[o[3][$bits(vec_pregno_t)-1:3]][o[3][2:0]]|nofree[3]) & ns_alloc_req[3]);// || (ns_alloc_req[3] && (o[3]==o[0] || o[3]==o[1] || o[3]==o[2]));
+	ov[0] = ((avail[o[0][$bits(vec_pregno_t)-1:3]][o[0][2:0]] & ns_alloc_req[0]) | (ovr[0] & ~en));
+	ov[1] = ((avail[o[1][$bits(vec_pregno_t)-1:3]][o[1][2:0]] & ns_alloc_req[1]) | (ovr[1] & ~en));
+	ov[2] = ((avail[o[2][$bits(vec_pregno_t)-1:3]][o[2][2:0]] & ns_alloc_req[2]) | (ovr[2] & ~en));
+	ov[3] = ((avail[o[3][$bits(vec_pregno_t)-1:3]][o[3][2:0]] & ns_alloc_req[3]) | (ovr[3] & ~en));
+end
+
+// Do not do a pop if stalling on another slot.
+// Do a pop only if allocating
+always_comb fpop[0] = (ns_alloc_req[0] & en & ~next_stall) | (ns_alloc_req[0] & stalla0);
+always_comb fpop[1] = (ns_alloc_req[1] & en & ~next_stall) | (ns_alloc_req[1] & stalla1);
+always_comb fpop[2] = (ns_alloc_req[2] & en & ~next_stall) | (ns_alloc_req[2] & stalla2);
+always_comb fpop[3] = (ns_alloc_req[3] & en & ~next_stall) | (ns_alloc_req[3] & stalla3);
+
+always_ff @(posedge clk)
+if (rst)
+	ovr <= 4'h0;
+else begin
+	if (en)
+		ovr <= 4'h0;
+	else
+		ovr <= ov;
+end
+
+generate begin : gAvail
+case(VPREGS)
+1024:
+ begin
+		wire [3:0] ffo0 [0:127];
+		wire [3:0] ffo1 [0:127];
+		wire [3:0] ffo2 [0:127];
+		wire [3:0] ffo3 [0:127];
+		for (g = 0; g < 128; g = g + 1) begin
+			ffo12 uffo0 (.i({4'h0,avail[g]}), .o(ffo0[g]));
+			ffo12 uffo1 (.i({4'h0,avail[g] & ~(12'd1 << ffo0[g])}), .o(ffo1[g]));
+			ffo12 uffo2 (.i({4'h0,avail[g] & ~(12'd1 << ffo1[g])}), .o(ffo2[g]));
+			ffo12 uffo3 (.i({4'h0,avail[g] & ~(12'd1 << ffo2[g])}), .o(ffo3[g]));
+		end
+
+		always_comb o[0] = {aregno[0][7:1],ffo0[aregno[0][7:1]][2:0]};
+		always_comb o[1] = {aregno[1][7:1],ffo1[aregno[1][7:1]][2:0]};
+		always_comb o[2] = {aregno[2][7:1],ffo2[aregno[2][7:1]][2:0]};
+		always_comb o[3] = {aregno[3][7:1],ffo3[aregno[3][7:1]][2:0]};
+		always_comb nofree[0] = ffo0[aregno[0][7:1]]==4'd15;
+		always_comb nofree[1] = ffo1[aregno[1][7:1]]==4'd15;
+		always_comb nofree[2] = ffo2[aregno[2][7:1]]==4'd15;
+		always_comb nofree[3] = ffo3[aregno[3][7:1]]==4'd15;
+
+		always_ff @(posedge clk)
+		foreach (ns_dstreg[n1])
+		begin
+			ns_dstregv[n1] <= INV;
+			ns_dstreg[n1] <= 9'd0;
+			if (ns_alloc_req[n1]) begin
+				ns_dstreg[n1] <= o[n1];
+				ns_dstregv[n1] <= ov[n1];
+			end
+		end
+	end
+512:
+ begin
+		wire [3:0] ffo0 [0:63];
+		wire [3:0] ffo1 [0:63];
+		wire [3:0] ffo2 [0:63];
+		wire [3:0] ffo3 [0:63];
+		for (g = 0; g < 64; g = g + 1) begin
+			ffo12 uffo0 (.i({4'h0,avail[g]}), .o(ffo0[g]));
+			ffo12 uffo1 (.i({4'h0,avail[g] & ~(12'd1 << ffo0[g])}), .o(ffo1[g]));
+			ffo12 uffo2 (.i({4'h0,avail[g] & ~(12'd1 << ffo1[g])}), .o(ffo2[g]));
+			ffo12 uffo3 (.i({4'h0,avail[g] & ~(12'd1 << ffo2[g])}), .o(ffo3[g]));
+		end
+
+		always_comb o[0] = {aregno[0][6:1],ffo0[aregno[0][6:1]][2:0]};
+		always_comb o[1] = {aregno[1][6:1],ffo1[aregno[1][6:1]][2:0]};
+		always_comb o[2] = {aregno[2][6:1],ffo2[aregno[2][6:1]][2:0]};
+		always_comb o[3] = {aregno[3][6:1],ffo3[aregno[3][6:1]][2:0]};
+		always_comb nofree[0] = ffo0[aregno[0][6:1]]==4'd15;
+		always_comb nofree[1] = ffo1[aregno[1][6:1]]==4'd15;
+		always_comb nofree[2] = ffo2[aregno[2][6:1]]==4'd15;
+		always_comb nofree[3] = ffo3[aregno[3][6:1]]==4'd15;
+
+		always_ff @(posedge clk)
+		foreach (ns_dstreg[n1])
+		begin
+			ns_dstregv[n1] <= INV;
+			ns_dstreg[n1] <= 9'd0;
+			if (ns_alloc_req[n1]) begin
+				ns_dstreg[n1] <= o[n1];
+				ns_dstregv[n1] <= ov[n1];
+			end
+		end
+	end
+
+// Each pair of registers has a pool of eight physical registers assigned to it
+// for renaming.
+256:
+ begin
+		wire [3:0] ffo0 [0:31];
+		wire [3:0] ffo1 [0:31];
+		wire [3:0] ffo2 [0:31];
+		wire [3:0] ffo3 [0:31];
+		for (g = 0; g < 32; g = g + 1) begin
+			ffo12 uffo0 (.i({4'h0,avail[g]}), .o(ffo0[g]));
+			ffo12 uffo1 (.i({4'h0,avail[g] & ~(12'd1 << ffo0[g])}), .o(ffo1[g]));
+			ffo12 uffo2 (.i({4'h0,avail[g] & ~(12'd1 << ffo1[g])}), .o(ffo2[g]));
+			ffo12 uffo3 (.i({4'h0,avail[g] & ~(12'd1 << ffo2[g])}), .o(ffo3[g]));
+		end
+
+		always_comb o[0] = {aregno[0][5:1],ffo0[aregno[0][5:1]][2:0]};
+		always_comb o[1] = {aregno[1][5:1],ffo1[aregno[1][5:1]][2:0]};
+		always_comb o[2] = {aregno[2][5:1],ffo2[aregno[2][5:1]][2:0]};
+		always_comb o[3] = {aregno[3][5:1],ffo3[aregno[3][5:1]][2:0]};
+
+		always_ff @(posedge clk)
+		foreach (ns_dstreg[n1])
+		begin
+			ns_dstregv[n1] <= INV;
+			ns_dstreg[n1] <= 9'd0;
+			if (ns_alloc_req[n1]) begin
+				ns_dstreg[n1] <= o[n1];
+				ns_dstregv[n1] <= ov[n1];
+			end
+		end
+	end
+// Each pair of registers has a pool of eight physical registers assigned to it
+// for renaming.
+128:
+ begin
+		wire [3:0] ffo0 [0:15];
+		wire [3:0] ffo1 [0:15];
+		wire [3:0] ffo2 [0:15];
+		wire [3:0] ffo3 [0:15];
+		for (g = 0; g < 16; g = g + 1) begin
+			ffo12 uffo0 (.i({4'h0,avail[g]}), .o(ffo0[g]));
+			ffo12 uffo1 (.i({4'h0,avail[g] & ~(12'd1 << ffo0[g])}), .o(ffo1[g]));
+			ffo12 uffo2 (.i({4'h0,avail[g] & ~(12'd1 << ffo1[g])}), .o(ffo2[g]));
+			ffo12 uffo3 (.i({4'h0,avail[g] & ~(12'd1 << ffo2[g])}), .o(ffo3[g]));
+		end
+
+		always_comb o[0] = {aregno[0][4:1],ffo0[aregno[0][4:1]][2:0]};
+		always_comb o[1] = {aregno[1][4:1],ffo1[aregno[1][4:1]][2:0]};
+		always_comb o[2] = {aregno[2][4:1],ffo2[aregno[2][4:1]][2:0]};
+		always_comb o[3] = {aregno[3][4:1],ffo3[aregno[3][4:1]][2:0]};
+
+		always_ff @(posedge clk)
+		foreach (ns_dstreg[n1])
+		begin
+			ns_dstregv[n1] <= INV;
+			ns_dstreg[n1] <= 9'd0;
+			if (ns_alloc_req[n1]) begin
+				ns_dstreg[n1] <= o[n1];
+				ns_dstregv[n1] <= ov[n1];
+			end
+		end
+	end
+/*
+256:
+	begin
+
+		wire [7:0] ffo [0:3];
+		ffo144 uffo0 (.i({16'd0,avail[127:  0]}), .o(ffo[0]));
+		flo144 uffo1 (.i({16'd0,avail[127:  0]}), .o(ffo[1]));
+		ffo144 uffo2 (.i({16'd0,avail[255:128]}), .o(ffo[2]));
+		flo144 uffo3 (.i({16'd0,avail[255:128]}), .o(ffo[3]));
+
+		always_comb o[0] = {1'd0,ffo[0][6:0]};
+		always_comb o[1] = {1'd0,ffo[1][6:0]};
+		always_comb o[2] = {1'd1,ffo[2][6:0]};
+		always_comb o[3] = {1'd1,ffo[3][6:0]};
+
+		always_ff @(posedge clk)
+		for (n1 = 0; n1 < 4; n1 = n1 + 1)
+		begin
+			ns_dstregv[n1] <= INV;
+			ns_dstreg[n1] <= 8'd0;
+			if (ns_alloc_req[n1]) begin
+				ns_dstreg[n1] <= o[n1];
+				ns_dstregv[n1] <= ov[n1];
+			end
+		end
+
+	end
+
+128:
+	begin
+		wire [7:0] ffo [0:3];
+		wire [127:0] excl0 = (128'd1 << ffo[0]);
+		wire [127:0] excl1 = (128'd1 << ffo[1]);
+		wire [127:0] excl2 = (128'd1 << ffo[2]);
+		
+		ffo144 uffo0 (.i({16'd0,avail[127:  0]}), .o(ffo[0]));
+		ffo144 uffo1 (.i({16'd0,avail[127:  0]} & ~excl0), .o(ffo[1]));
+		flo144 uffo2 (.i({16'd0,avail[127:  0]}), .o(ffo[2]));
+		flo144 uffo3 (.i({16'd0,avail[127:  0]} & ~excl2), .o(ffo[3]));
+
+		always_comb o[0] = ffo[0][6:0];
+		always_comb o[1] = ffo[1][6:0];
+		always_comb o[2] = ffo[2][6:0];
+		always_comb o[3] = ffo[3][6:0];
+
+		always_ff @(posedge clk)
+		for (n1 = 0; n1 < 4; n1 = n1 + 1)
+		begin
+			ns_dstregv[n1] <= INV;
+			ns_dstreg[n1] <= 7'd0;
+			if (ns_alloc_req[n1]) begin
+				ns_dstreg[n1] <= o[n1];
+				ns_dstregv[n1] <= ov[n1];
+			end
+		end
+	end
+*/
+endcase
+end
+endgenerate
+
+// The following checks should always fail as it is not possible in properly
+// running hardware to get the same register on a different port.
+always_comb
+if (0) begin
+	if (o[0]==o[1] || o[0]==o[2] || o[0]==o[3]) begin
+		$display("Qupls5 CPU: matching rename registers");
+		$finish;
+	end
+	if (o[1]==o[2] || o[1]==o[3]) begin
+		$display("Qupls5 CPU: matching rename registers");
+		$finish;
+	end
+	if (o[2]==o[3]) begin
+		$display("Qupls5 CPU: matching rename registers");
+		$finish;
+	end
+end
+
+always_comb
+begin
+	next_avail = avail;
+
+	if (ov[0] & en) next_avail[o[0][$bits(vec_pregno_t)-1:3]][o[0][2:0]] = 1'b0;
+	if (ov[1] & en) next_avail[o[1][$bits(vec_pregno_t)-1:3]][o[1][2:0]] = 1'b0;
+	if (ov[2] & en) next_avail[o[2][$bits(vec_pregno_t)-1:3]][o[2][2:0]] = 1'b0;
+	if (ov[3] & en) next_avail[o[3][$bits(vec_pregno_t)-1:3]][o[3][2:0]] = 1'b0;
+
+	if (fpush[0]) next_avail[rtags2free[0][$bits(vec_pregno_t)-1:3]][rtags2free[0][2:0]] = 1'b1;
+	if (fpush[1]) next_avail[rtags2free[1][$bits(vec_pregno_t)-1:3]][rtags2free[1][2:0]] = 1'b1;
+	if (fpush[2]) next_avail[rtags2free[2][$bits(vec_pregno_t)-1:3]][rtags2free[2][2:0]] = 1'b1;
+	if (fpush[3]) next_avail[rtags2free[3][$bits(vec_pregno_t)-1:3]][rtags2free[3][2:0]] = 1'b1;
+
+end
+
+// Freed tags cannot be reused for 15 clock cycles.
+vtdl #(.WID($bits(cpu_types_pkg::vec_pregno_t)), .DEP(16)) uaramp1 (.clk(clk), .ce(1'b1), .a(15), .d(tags2free[0]), .q(rtags2free[0]));
+vtdl #(.WID($bits(cpu_types_pkg::vec_pregno_t)), .DEP(16)) uaramp2 (.clk(clk), .ce(1'b1), .a(15), .d(tags2free[1]), .q(rtags2free[1]));
+vtdl #(.WID($bits(cpu_types_pkg::vec_pregno_t)), .DEP(16)) uaramp3 (.clk(clk), .ce(1'b1), .a(15), .d(tags2free[2]), .q(rtags2free[2]));
+vtdl #(.WID($bits(cpu_types_pkg::vec_pregno_t)), .DEP(16)) uaramp4 (.clk(clk), .ce(1'b1), .a(15), .d(tags2free[3]), .q(rtags2free[3]));
+vtdl #(.WID(4), .DEP(16)) uaramp5 (.clk(clk), .ce(1'b1), .a(15), .d(freevals), .q(fpush));
+
+always_ff @(posedge clk)
+if (rst) begin
+	foreach (avail[n4])
+		avail[n4] <= 8'hFF;
+end
+else
+	avail <= next_avail;
+
+endmodule
