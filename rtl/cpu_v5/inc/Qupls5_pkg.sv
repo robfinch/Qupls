@@ -3170,7 +3170,7 @@ begin
 			fnMapRawToUop.src = 7'b0001111;
 			fnMapRawToUop.dst = 1'b1;
 		end
-	Qupls5_pkg::OP_R3VVV:
+	Qupls5_pkg::OP_VSR3B,Qupls5_pkg::OP_VSR3W,Qupls5_pkg::OP_VSR3T,Qupls5_pkg::OP_VSR3O:
 		begin
 			fnMapRawToUop.Rd = {2'd0,raw[13:7]};
 			fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};

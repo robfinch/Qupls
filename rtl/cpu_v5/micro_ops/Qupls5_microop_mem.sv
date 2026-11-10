@@ -645,7 +645,9 @@ end
 always_comb
 begin
 	case (instr.opcode)
-	Qupls5_pkg::OP_R3VVV,Qupls5_pkg::OP_R3VVS,Qupls5_pkg::OP_FLTVVS:
+	Qupls5_pkg::OP_VR3B,Qupls5_pkg::OP_VR3W,Qupls5_pkg::OP_VR3T,Qupls5_pkg::OP_VR3O,
+	Qupls5_pkg::OP_VSR3B,Qupls5_pkg::OP_VSR3W,Qupls5_pkg::OP_VSR3T,Qupls5_pkg::OP_VSR3O,
+	Qupls5_pkg::OP_FLTVVS:
 		is_masked = ir.op3==3'd6;
 	default:	is_masked = 1'b0;
 	endcase
@@ -654,7 +656,8 @@ end
 always_comb
 begin
 	case (instr.opcode)
-	Qupls5_pkg::OP_R3VVV,Qupls5_pkg::OP_R3VVS:
+	Qupls5_pkg::OP_VR3B,Qupls5_pkg::OP_VR3W,Qupls5_pkg::OP_VR3T,Qupls5_pkg::OP_VR3O,
+	Qupls5_pkg::OP_VSR3B,Qupls5_pkg::OP_VSR3W,Qupls5_pkg::OP_VSR3T,Qupls5_pkg::OP_VSR3O:
 		case(ir.func)
 		Qupls5_pkg::FN_REDSUM,Qupls5_pkg::FN_REDAND,Qupls5_pkg::FN_REDOR,Qupls5_pkg::FN_REDEOR,
 		Qupls5_pkg::FN_REDMIN,Qupls5_pkg::FN_REDMAX,Qupls5_pkg::FN_REDMINU,Qupls5_pkg::FN_REDMAXU:

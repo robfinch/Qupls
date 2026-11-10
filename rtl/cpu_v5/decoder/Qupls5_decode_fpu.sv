@@ -45,8 +45,8 @@ input Qupls5_pkg::micro_op_t ir;
 begin
 	case(ir.opcode)
 	Qupls5_pkg::OP_R3B,Qupls5_pkg::OP_R3W,Qupls5_pkg::OP_R3T,Qupls5_pkg::OP_R3O,
-	Qupls5_pkg::OP_R3BP,Qupls5_pkg::OP_R3WP,Qupls5_pkg::OP_R3TP,Qupls5_pkg::OP_R3OP,
-	Qupls5_pkg::OP_R3VVV,Qupls5_pkg::OP_R3VVS:
+	Qupls5_pkg::OP_VR3B,Qupls5_pkg::OP_VR3W,Qupls5_pkg::OP_VR3T,Qupls5_pkg::OP_VR3O,
+	Qupls5_pkg::OP_VSR3B,Qupls5_pkg::OP_VSR3W,Qupls5_pkg::OP_VSR3T,Qupls5_pkg::OP_VSR3O:
 		case(ir.func)
 		Qupls5_pkg::FN_MUL: 	fnIsFpu = 1'b1;
 		Qupls5_pkg::FN_MULU:	fnIsFpu = 1'b1;

@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2021-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2021-2026  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -49,12 +49,14 @@ begin
 		ir.opcode==Qupls5_pkg::OP_R3W||
 		ir.opcode==Qupls5_pkg::OP_R3T||
 		ir.opcode==Qupls5_pkg::OP_R3O||
-		ir.opcode==Qupls5_pkg::OP_R3BP||
-		ir.opcode==Qupls5_pkg::OP_R3WP||
-		ir.opcode==Qupls5_pkg::OP_R3TP||
-		ir.opcode==Qupls5_pkg::OP_R3OP||
-		ir.opcode==Qupls5_pkg::OP_R3VVV ||
-		ir.opcode==Qupls5_pkg::OP_R3VVS
+		ir.opcode==Qupls5_pkg::OP_VR3B||
+		ir.opcode==Qupls5_pkg::OP_VR3W||
+		ir.opcode==Qupls5_pkg::OP_VR3T||
+		ir.opcode==Qupls5_pkg::OP_VR3O||
+		ir.opcode==Qupls5_pkg::OP_VSR3B||
+		ir.opcode==Qupls5_pkg::OP_VSR3W||
+		ir.opcode==Qupls5_pkg::OP_VSR3T||
+		ir.opcode==Qupls5_pkg::OP_VSR3O
 		) && ir.func==FN_DIV)
 		;
 end

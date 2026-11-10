@@ -1,5 +1,5 @@
-	Qupls5_pkg::OP_R3VVS,
-	Qupls5_pkg::OP_R3VVV:
+	Qupls5_pkg::OP_VR3B,Qupls5_pkg::OP_VR3W,Qupls5_pkg::OP_VR3T,Qupls5_pkg::OP_VR3O,
+	Qupls5_pkg::OP_VSR3B,Qupls5_pkg::OP_VSR3W,Qupls5_pkg::OP_VSR3T,Qupls5_pkg::OP_VSR3O:
 		if (SUPPORT_VECTOR) begin
 			case({VREGS > 4,vlen1[6:3]})
 			5'd1:

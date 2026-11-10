@@ -321,8 +321,8 @@ begin
 	bus = {WID{1'd0}};
 	case(ird.opcode)
 	Qupls5_pkg::OP_R3B,Qupls5_pkg::OP_R3W,Qupls5_pkg::OP_R3T,Qupls5_pkg::OP_R3O,
-	Qupls5_pkg::OP_R3BP,Qupls5_pkg::OP_R3WP,Qupls5_pkg::OP_R3TP,Qupls5_pkg::OP_R3OP,
-	Qupls5_pkg::OP_R3VVV,Qupls5_pkg::OP_R3VVS:
+	Qupls5_pkg::OP_VR3B,Qupls5_pkg::OP_VR3W,Qupls5_pkg::OP_VR3T,Qupls5_pkg::OP_VR3O,
+	Qupls5_pkg::OP_VSR3B,Qupls5_pkg::OP_VSR3W,Qupls5_pkg::OP_VSR3T,Qupls5_pkg::OP_VSR3O:
 		case(ird.func)
 		Qupls5_pkg::FN_MUL: 	bus = prod[WID-1:0];
 		Qupls5_pkg::FN_MULU:	bus = produ[WID-1:0];
