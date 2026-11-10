@@ -52,6 +52,9 @@ module Qupls5_pipeline_dec(rst_i, rst, clk, en, regFPCSR,
 parameter MWIDTH = 4;		// Machine width, under construction
 parameter MAX_MICROOPS = 8;
 parameter MICROOPS_PER_INSTR = 16;
+parameter SUPPORT_ATOM = Qupls5_pkg::SUPPORT_ATOM;
+parameter SUPPORT_CARRY = Qupls5_pkg::SUPPORT_CARRY;
+parameter SUPPORT_VMASK = Qupls5_pkg::SUPPORT_VMASK;
 input rst_i;
 input rst;
 input clk;
@@ -1000,7 +1003,7 @@ always_comb
 
 always_ff @(posedge clk)
 if (rst) begin
-	pg_dec <= {$bits(pipeline_group_reg_t){1'b0}};
+	pg_dec <= {$bits(Qupls5_pkg::pipeline_group_reg_t){1'b0}};
 	foreach (pg_dec.pr[n10])
 		pg_dec.pr[n10] <= nopi2;
 end

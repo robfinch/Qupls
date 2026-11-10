@@ -46,7 +46,7 @@ begin
 	case(ir.opcode)
 	Qupls5_pkg::OP_FLTH,Qupls5_pkg::OP_FLTS,Qupls5_pkg::OP_FLTD,Qupls5_pkg::OP_FLTQ,
 	Qupls5_pkg::OP_FLTPH,Qupls5_pkg::OP_FLTPS,Qupls5_pkg::OP_FLTPD,Qupls5_pkg::OP_FLTPQ:
-		fnIsFMA = ir.func==FLT_FMA;
+		fnIsFMA = ir.func==Qupls5_pkg::FLT_FMA;
 	default:	fnIsFMA = 1'b0;
 	endcase
 end

@@ -2240,7 +2240,7 @@ typedef struct packed {
 	cpu_types_pkg::pc_address_t brtgt;
 //	cpu_types_pkg::mc_address_t mcbrtgt;			// micro-code branch target
 	logic takb;								// 1=branch evaluated to taken
-	cause_code_t exc;					// non-zero indicate exception
+	Qupls5_pkg::cause_code_t exc;					// non-zero indicate exception
 	logic excv;								// 1=exception
 	logic nan;								// FP op generated a NaN
 `ifdef IS_SIM
@@ -2358,7 +2358,7 @@ function Qupls5_pkg::operating_mode_t fnNextOm;
 input Qupls5_pkg::operating_mode_t om;
 begin
 	fnNextOm = om;
-	if (om != 2'd3)
+	if (om != Qupls5_pkg::OM_SECURE)
 	   case(om)
 	   Qupls5_pkg::OM_APP: fnNextOm = Qupls5_pkg::OM_SUPERVISOR;
 	   Qupls5_pkg::OM_SUPERVISOR: fnNextOm = Qupls5_pkg::OM_HYPERVISOR;

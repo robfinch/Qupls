@@ -57,7 +57,7 @@ Qupls5_pkg::micro_op_t ir;
 reg has_rext;
 begin
 	ir = ins;
-	has_rext = instr_raw[54:48] == OP_REXT;
+	has_rext = instr_raw[54:48] == Qupls5_pkg::OP_REXT;
 	if (has_imma)
 		fnRs1 = 8'd0;
 	else
@@ -86,7 +86,7 @@ begin
 		Qupls5_pkg::OP_LDT,Qupls5_pkg::OP_LDTZ,
 		Qupls5_pkg::OP_LOAD,Qupls5_pkg::OP_LOADA,Qupls5_pkg::OP_CLOAD,
 		Qupls5_pkg::OP_AMO,Qupls5_pkg::OP_CMPSWAP,
-		Qupls5_pkg::OP_STB,Qupls5_pkg::OP_STW,Qupls5_pkg::OP_STT,Qupls5_pkg::OP_STORE,,Qupls5_pkg::OP_CSTORE,
+		Qupls5_pkg::OP_STB,Qupls5_pkg::OP_STW,Qupls5_pkg::OP_STT,Qupls5_pkg::OP_STORE,Qupls5_pkg::OP_CSTORE,
 		Qupls5_pkg::OP_STPTR:
 			fnRs1 = has_rext ? instr_raw[61:55] : {1'b0,ir.Rs1};
 		default:
@@ -105,7 +105,7 @@ begin
         om1 = om;
   */
 	Rs1z = ~|Rs1[6:0];
-	Rs1ip = Rs1==IP_REG;
+	Rs1ip = Rs1==Qupls4_pkg::IP_REG;
 end
 
 endmodule

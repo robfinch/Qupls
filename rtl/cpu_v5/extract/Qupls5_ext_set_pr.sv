@@ -54,7 +54,7 @@ end
 always_comb
 if (rst) begin
 	foreach (pr[n1]) begin
-		pr[n1] = {$bits(rob_entry_t){1'b0}};
+		pr[n1] = {$bits(Qupls5_pkg::rob_entry_t){1'b0}};
 		pr[n1].op = {$bits(Qupls5_pkg::pipeline_reg_t){1'b0}};
 		pr[n1].op.exc = Qupls5_pkg::FLT_NONE;
 		pr[n1].op.uop.opcode = Qupls5_pkg::OP_NOP;
@@ -77,7 +77,7 @@ else begin
 		// Allow only one instruction through when single stepping.
 		if (ssm_flag & ~prev_ssm_flag) begin
 			pr[0].op.cli = pc[0].cap.offset[6:1];
-			pr[0].op.uop = fnMapRawToUop(ic_line[ 47:  0]);
+			pr[0].op.uop = Qupls5_pkg::fnMapRawToUop(ic_line[ 47:  0]);
 			for (n1 = 1; n1 < MWIDTH; n1 = n1 + 1) begin
 				pr[n1] = {$bits(Qupls5_pkg::rob_entry_t){1'b0}};
 				pr[n1].op = {$bits(Qupls5_pkg::pipeline_reg_t){1'b0}};
@@ -120,7 +120,7 @@ else begin
 			// Note! the index is in terms of 16-bit parcels.
 			foreach(pr[n1]) begin
 				pr[n1].op.cli = pc[n1].cap.offset[6:1];
-				pr[n1].op.uop = fnMapRawToUop(48'(ic_line >> (n1*48)));
+				pr[n1].op.uop = Qupls5_pkg::fnMapRawToUop(48'(ic_line >> (n1*48)));
 				pr[n1].done <= 2'b00;
 				pr[n1].stomped <= FALSE;
 			end
@@ -159,7 +159,7 @@ end
 always_ff @(posedge clk)
 if (rst) begin
 	for (n2 = 0; n2 < MWIDTH; n2 = n2 + 1) begin
-		lpr[n2] <= {$bits(rob_entry_t){1'b0}};
+		lpr[n2] <= {$bits(Qupls5_pkg::rob_entry_t){1'b0}};
 		lpr[n2].op <= {$bits(Qupls5_pkg::pipeline_reg_t){1'b0}};
 	end
 end

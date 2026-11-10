@@ -57,7 +57,7 @@ begin
 		ir.opcode==Qupls5_pkg::OP_VSR3W||
 		ir.opcode==Qupls5_pkg::OP_VSR3T||
 		ir.opcode==Qupls5_pkg::OP_VSR3O
-		) && ir.func==FN_DIVU)
+		) && ir.func==Qupls5_pkg::FN_DIVU)
 		;
 end
 endfunction

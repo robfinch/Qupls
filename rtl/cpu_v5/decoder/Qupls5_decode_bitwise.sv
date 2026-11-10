@@ -53,7 +53,7 @@ begin
 		Qupls5_pkg::FN_XOR:	fnIsBitwise = 1'b1;
 		Qupls5_pkg::FN_NAND:	fnIsBitwise = 1'b1;
 		Qupls5_pkg::FN_NOR:		fnIsBitwise = 1'b1;
-		Qupls5_pkg::FN_NXOR:	fnIsBitwise = 1'b1;
+		Qupls5_pkg::FN_XNOR:	fnIsBitwise = 1'b1;
 		default:	fnIsBitwise = 1'b0;
 		endcase
 	Qupls5_pkg::OP_ANDI:	fnIsBitwise = 1'b1;

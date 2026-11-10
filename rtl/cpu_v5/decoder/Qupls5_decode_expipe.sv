@@ -50,27 +50,27 @@ begin
 	Qupls5_pkg::OP_VR3B,Qupls5_pkg::OP_VR3W,Qupls5_pkg::OP_VR3T,Qupls5_pkg::OP_VR3O,
 	Qupls5_pkg::OP_VSR3B,Qupls5_pkg::OP_VSR3W,Qupls5_pkg::OP_VSR3T,Qupls5_pkg::OP_VSR3O:
 		case(ir.func)
-		FN_AND,FN_OR,FN_XOR,
-		FN_NAND,FN_NOR,FN_XNOR,
-		FN_CMP,FN_ADD,FN_SUB,FN_CMPU,
-		FN_MOVE:
+		Qupls5_pkg::FN_AND,Qupls5_pkg::FN_OR,Qupls5_pkg::FN_XOR,
+		Qupls5_pkg::FN_NAND,Qupls5_pkg::FN_NOR,Qupls5_pkg::FN_XNOR,
+		Qupls5_pkg::FN_CMP,Qupls5_pkg::FN_ADD,Qupls5_pkg::FN_SUB,Qupls5_pkg::FN_CMPU,
+		Qupls5_pkg::FN_MOVE:
 			fnExPipe = 7'b0111111;
-		FN_MUL,FN_MULU,FN_MULSU:
+		Qupls5_pkg::FN_MUL,Qupls5_pkg::FN_MULU,Qupls5_pkg::FN_MULSU:
 			fnExPipe = 7'b0001100;
-		FN_DIV,FN_DIVU,FN_DIVSU:
+		Qupls5_pkg::FN_DIV,Qupls5_pkg::FN_DIVU,Qupls5_pkg::FN_DIVSU:
 			fnExPipe = 7'b0110000;
-		FN_NNA_MTWT,FN_NNA_MTIN,FN_NNA_MTBIAS,
-		FN_NNA_MTFB,FN_NNA_MTMC,FN_NNA_MTBC:
+		Qupls5_pkg::FN_NNA_MTWT,Qupls5_pkg::FN_NNA_MTIN,Qupls5_pkg::FN_NNA_MTBIAS,
+		Qupls5_pkg::FN_NNA_MTFB,Qupls5_pkg::FN_NNA_MTMC,Qupls5_pkg::FN_NNA_MTBC:
 			fnExPipe = 7'b0000100;
-		FN_ROL,FN_ROR,FN_ASR,FN_ASL,FN_LSR:
+		Qupls5_pkg::FN_ROL,Qupls5_pkg::FN_ROR,Qupls5_pkg::FN_ASR,Qupls5_pkg::FN_ASL,Qupls5_pkg::FN_LSR:
 			fnExPipe = 7'b0000011;
-		FN_REDAND,FN_REDOR,FN_REDEOR,
-		FN_REDMINU,FN_REDSUM,FN_REDMAXU,FN_REDMIN,FN_REDMAX:
+		Qupls5_pkg::FN_REDAND,Qupls5_pkg::FN_REDOR,Qupls5_pkg::FN_REDEOR,
+		Qupls5_pkg::FN_REDMINU,Qupls5_pkg::FN_REDSUM,Qupls5_pkg::FN_REDMAXU,Qupls5_pkg::FN_REDMIN,Qupls5_pkg::FN_REDMAX:
 			fnExPipe = 7'b0000001;
-		FN_PEEKQ,FN_POPQ,FN_PUSHQ,FN_RESETQ,
-		FN_STATQ,FN_READQ,FN_WRITEQ:
+		Qupls5_pkg::FN_PEEKQ,Qupls5_pkg::FN_POPQ,Qupls5_pkg::FN_PUSHQ,Qupls5_pkg::FN_RESETQ,
+		Qupls5_pkg::FN_STATQ,Qupls5_pkg::FN_READQ,Qupls5_pkg::FN_WRITEQ:
 			fnExPipe = 7'b0001000;
-		FN_SEQ,FN_SNE,FN_SLT,FN_SLE,FN_SLTU,FN_SLEU:
+		Qupls5_pkg::FN_SEQ,Qupls5_pkg::FN_SNE,Qupls5_pkg::FN_SLT,Qupls5_pkg::FN_SLE,Qupls5_pkg::FN_SLTU,Qupls5_pkg::FN_SLEU:
 			fnExPipe = 7'b0111111;
 		default:
 			fnExPipe = 7'b0111111;

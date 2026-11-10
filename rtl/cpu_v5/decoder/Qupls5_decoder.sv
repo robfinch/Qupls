@@ -38,6 +38,7 @@ import cpu_types_pkg::*;
 import Qupls5_pkg::*;
 
 module Qupls5_decoder(rst, clk, regFPCSR, en, ip, om, ipl, instr, instr_raw, dbo);
+parameter SUPPORT_CANARY = Qupls5_pkg::SUPPORT_CANARY;
 input rst;
 input clk;
 input aregno_t regFPCSR;
@@ -223,10 +224,10 @@ Stark_decode_branch_tgt_src udbts1
 );
 */
 
-Qupls5_decode_sau usaudec1
+Qupls5_decode_alu usaudec1
 (
 	.instr(instr),
-	.sau(dbo.sau)
+	.alu(dbo.sau)
 );
 
 Qupls5_decode_sau0 udcsau0

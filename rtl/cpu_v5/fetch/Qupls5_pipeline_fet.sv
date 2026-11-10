@@ -244,7 +244,7 @@ end
 always_ff @(posedge clk)
 if (rst) begin
 	excv_o <= FALSE;
-	exc_o <= FLT_NONE;
+	exc_o <= Qupls5_pkg::FLT_NONE;
 end
 else begin
 	if (en) begin

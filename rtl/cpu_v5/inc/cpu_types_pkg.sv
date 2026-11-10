@@ -37,7 +37,7 @@
 // ============================================================================
 
 //`define STARK_CPU		1'b1
-`define QUPLS4	1'b1
+`define QUPLS5	1'b1
 `define CPU_TYPES_PKG	1'b1
 //`define TINY_MMU	1'b1
 `define SMALL_MMU	1'b1
@@ -65,7 +65,7 @@ typedef logic [31:0] virtual_address_t;
 typedef logic [31:0] physical_address_t;
 `endif
 typedef logic [11:0] mc_address_t;
-`ifdef QUPLS4
+`ifdef QUPLS5
 typedef struct packed
 {
 	logic cap;		// capabilities tag
@@ -80,8 +80,10 @@ typedef struct packed
 } flags_t;
 
 typedef logic [2:0] pregndx_t;
-typedef logic [9:0] pregno_t;
+typedef logic [8:0] pregno_t;
 typedef logic [6:0] aregno_t;
+typedef logic [9:0] vec_pregno_t;
+typedef logic [7:0] vec_aregno_t;
 typedef logic [127:0] value_pair_t;
 typedef logic [63:0] value_t;
 typedef logic [31:0] half_value_t;

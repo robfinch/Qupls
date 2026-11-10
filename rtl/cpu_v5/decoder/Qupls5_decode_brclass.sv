@@ -42,8 +42,10 @@ output Qupls5_pkg::brclass_t brclass;
 
 always_comb
 	case(instr.opcode)
-	Qupls5_pkg::OP_BCC8,Qupls5_pkg::OP_BCC16,Qupls5_pkg::OP_BCC32,Qupls5_pkg::OP_BCC64,
-	Qupls5_pkg::OP_BCCU8,Qupls5_pkg::OP_BCCU16,Qupls5_pkg::OP_BCCU32,Qupls5_pkg::OP_BCCU64:
+	Qupls5_pkg::OP_FBCC,
+	Qupls5_pkg::OP_MBCC,
+	Qupls5_pkg::OP_BCC,
+	Qupls5_pkg::OP_BCCU:
 		begin
 			if (instr.md)
 				brclass = Qupls5_pkg::BRC_BCCR;

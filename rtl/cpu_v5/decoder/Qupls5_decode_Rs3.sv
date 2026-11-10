@@ -54,7 +54,7 @@ Qupls5_pkg::micro_op_t ir;
 reg has_rext;
 begin
 	ir = instr;
-	has_rext = instr_raw[54:48]==OP_REXT;
+	has_rext = instr_raw[54:48]==Qupls5_pkg::OP_REXT;
 	if (has_immc)
 		fnRs3 = 7'd0;
 	else

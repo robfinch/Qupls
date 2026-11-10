@@ -46,6 +46,7 @@ import fp64Pkg::*;
 
 module Qupls5_decode_const(instr_raw, ip, ins, imma, immb, immc, immd,
 	has_imma, has_immb, has_immc, has_immd);
+parameter SUPPORT_POSTFIX = Qupls5_pkg::SUPPORT_POSTFIX;
 input cpu_types_pkg::pc_address_t ip;
 input [431:0] instr_raw;
 input Qupls5_pkg::micro_op_t ins;

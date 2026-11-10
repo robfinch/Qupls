@@ -112,7 +112,7 @@ generate begin : gComb
 
 		always_ff @(posedge clk)
 		if (rst) begin
-			pg_mot <= {$bits(pipeline_group_reg_t){1'b0}};
+			pg_mot <= {$bits(Qupls5_pkg::pipeline_group_reg_t){1'b0}};
 			foreach(pg_mot.pr[n1])
 				pg_mot.pr[n1] <= nopi;
 		end
