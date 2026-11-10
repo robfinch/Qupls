@@ -52,7 +52,7 @@ begin
        fnIsNop = 1'b1;
      default: fnIsNop = 1'b0;
 	   endcase
-	Qupls5_pkg::OP_NOP,Qupls5_pkg::OP_PUSH,Qupls5_pkg::OP_POP,
+	Qupls5_pkg::OP_NOP,
 	Qupls5_pkg::OP_REXT:
 		fnIsNop = 1'b1;
 	default:	fnIsNop = 1'b0;

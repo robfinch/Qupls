@@ -63,7 +63,8 @@ begin
 			fnRd = {2'b00,ir[10:6]};
 */			
 	Qupls5_pkg::OP_FLTH,Qupls5_pkg::OP_FLTS,Qupls5_pkg::OP_FLTD,Qupls5_pkg::OP_FLTQ,
-	Qupls5_pkg::OP_FLTVVV,Qupls5_pkg::OP_FLTVVS:
+	Qupls5_pkg::OP_VFLTH,Qupls5_pkg::OP_VFLTS,Qupls5_pkg::OP_VFLTD,
+	Qupls5_pkg::OP_VFLTSH,Qupls5_pkg::OP_VFLTSS,Qupls5_pkg::OP_VFLTSD:
 		fnRd2 = ir[47] ? regFPCSR : 7'd0;
 	default:
 		fnRd2 = 7'd0;
@@ -88,7 +89,8 @@ begin
 			fnRd = {2'b00,ir[10:6]};
 */			
 	Qupls5_pkg::OP_FLTH,Qupls5_pkg::OP_FLTS,Qupls5_pkg::OP_FLTD,Qupls5_pkg::OP_FLTQ,
-	Qupls5_pkg::OP_FLTVVV,Qupls5_pkg::OP_FLTVVS:
+	Qupls5_pkg::OP_VFLTH,Qupls5_pkg::OP_VFLTS,Qupls5_pkg::OP_VFLTD,
+	Qupls5_pkg::OP_VFLTSH,Qupls5_pkg::OP_VFLTSS,Qupls5_pkg::OP_VFLTSD:
 		fnRd2v = VAL;
 	default:
 		fnRd2v = INV;

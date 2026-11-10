@@ -45,8 +45,8 @@ input Qupls5_pkg::micro_op_t ir;
 begin
 	case(ir.opcode)
 	Qupls5_pkg::OP_FLTH,Qupls5_pkg::OP_FLTS,Qupls5_pkg::OP_FLTD,Qupls5_pkg::OP_FLTQ,
-	Qupls5_pkg::OP_FLTPH,Qupls5_pkg::OP_FLTPS,Qupls5_pkg::OP_FLTPD,Qupls5_pkg::OP_FLTPQ,
-	Qupls5_pkg::OP_FLTVVV,Qupls5_pkg::OP_FLTVVS:
+	Qupls5_pkg::OP_VFLTH,Qupls5_pkg::OP_VFLTS,Qupls5_pkg::OP_VFLTD,
+	Qupls5_pkg::OP_VFLTSH,Qupls5_pkg::OP_VFLTSS,Qupls5_pkg::OP_VFLTSD:
 		case(ir.func)
 		// ToDo:fix trig
 		Qupls5_pkg::FLT_SIN,Qupls5_pkg::FLT_COS,Qupls5_pkg::FLT_TAN,Qupls5_pkg::FLT_ATAN,

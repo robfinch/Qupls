@@ -89,9 +89,6 @@ begin
 		Qupls5_pkg::OP_STB,Qupls5_pkg::OP_STW,Qupls5_pkg::OP_STT,Qupls5_pkg::OP_STORE,,Qupls5_pkg::OP_CSTORE,
 		Qupls5_pkg::OP_STPTR:
 			fnRs1 = has_rext ? instr_raw[61:55] : {1'b0,ir.Rs1};
-
-		Qupls5_pkg::OP_PUSH,Qupls5_pkg::OP_POP:
-			fnRs1 = 7'd0;
 		default:
 			fnRs1 = 7'd0;
 		endcase

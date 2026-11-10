@@ -631,9 +631,10 @@ typedef enum logic [6:0] {
 	OP_FLTPD = 7'd50,
 	OP_FLTPQ = 7'd51,
 
-	OP_ENTER = 7'd52,
-	OP_PUSH = 7'd54,
-	OP_POP = 7'd55,
+	OP_VFLTSH = 7'd52,
+	OP_VFLTSS = 7'd53,
+	OP_VFLTSD = 7'd54,
+
 	OP_FLTH = 7'd56,
 	OP_FLTS = 7'd57,
 	OP_FLTD = 7'd58,
@@ -678,11 +679,10 @@ typedef enum logic [6:0] {
 	OP_VSR3T = 7'd98,
 	OP_VSR3O = 7'd99,
 	
+	OP_VFLTH = 7'd100,
+	OP_VFLTS = 7'd101,
+	OP_VFLTD = 7'd102,
 	
-	OP_R3VVS = 7'd100,
-	OP_FLTVVS = 7'd101,
-	OP_PUSHC = 7'd102,
-
 	OP_R3B = 7'd104,
 	OP_R3W = 7'd105,
 	OP_R3T = 7'd106,
@@ -698,8 +698,6 @@ typedef enum logic [6:0] {
 	OP_VR3T = 7'd118,
 	OP_VR3O = 7'd119,
 	
-	OP_FLTVVV = 7'd124,
-
 	OP_REXT = 7'd120,
 	OP_PRED = 7'd121,
 	OP_SYS = 7'd122,
@@ -2422,7 +2420,6 @@ input micro_op_t ins;
 begin
 	case(ins.opcode)
 	OP_BRK,OP_SHIFT,OP_CSR,OP_CHK,
-	OP_PUSH,OP_POP,	// ENTER,LEAVE,PUSH,POP
 	OP_FENCE,OP_BLOCK,OP_FLTD,
 	OP_AMO:	// AMO
 		fnHasExConst = 1'b0;
@@ -2455,7 +2452,6 @@ input micro_op_t ins;
 begin
 	case(ins.opcode)
 	OP_BRK,OP_SHIFT,OP_CSR,OP_CHK,
-	OP_PUSH,OP_POP,	// ENTER,LEAVE,PUSH,POP
 	OP_FENCE,OP_BLOCK,OP_FLTD,
 	OP_AMO:	// AMO
 		fnHasConstRs1 = 1'b0;
@@ -2469,7 +2465,6 @@ input micro_op_t ins;
 begin
 	case(ins.opcode)
 	OP_BRK,OP_SHIFT,OP_CSR,OP_CHK,
-	OP_PUSH,OP_POP,	// ENTER,LEAVE,PUSH,POP
 	OP_FENCE,OP_BLOCK,OP_FLTD,
 	OP_AMO:	// AMO
 		fnHasConstRs2 = 1'b0;
@@ -2483,7 +2478,6 @@ input micro_op_t ins;
 begin
 	case(ins.opcode)
 	OP_BRK,OP_SHIFT,OP_CSR,OP_CHK,
-	OP_PUSH,OP_POP,	// ENTER,LEAVE,PUSH,POP
 	OP_FENCE,OP_BLOCK,OP_FLTD,
 	OP_AMO:	// AMO
 		fnHasConstRs3 = 1'b0;
@@ -2934,8 +2928,8 @@ input micro_op_t ir;
 begin
 	case(ir.opcode)
 	OP_FLTH,OP_FLTS,OP_FLTD,OP_FLTQ,
-	OP_FLTPH,OP_FLTPS,OP_FLTPD,OP_FLTPQ,
-	OP_FLTVVV,OP_FLTVVS:
+	OP_VFLTH,OP_VFLTS,OP_VFLTD,
+	OP_VFLTSH,OP_VFLTSS,OP_VFLTSD:
 		fnSourceArgSv = ir.rmd!=3'd7 && !ir.inc;
 	default:
 		fnSourceArgSv = 1'b1;
@@ -3255,8 +3249,7 @@ begin
 			fnMapRawToUop.src = 7'b0011111;
 			fnMapRawToUop.dst = 1'b1;
 		end
-	Qupls5_pkg::OP_FLTH,Qupls5_pkg::OP_FLTS,Qupls5_pkg::OP_FLTD,Qupls5_pkg::OP_FLTQ,
-	Qupls5_pkg::OP_FLTPH,Qupls5_pkg::OP_FLTPS,Qupls5_pkg::OP_FLTPD,Qupls5_pkg::OP_FLTPQ:
+	Qupls5_pkg::OP_FLTH,Qupls5_pkg::OP_FLTS,Qupls5_pkg::OP_FLTD,Qupls5_pkg::OP_FLTQ:
 		begin
 			fnMapRawToUop.Rd = {2'd0,raw[13:7]};
 			fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
@@ -3270,7 +3263,7 @@ begin
 			fnMapRawToUop.dst = 1'b1;
 			fnMapRawToUop.inc = raw[47];
 		end
-	Qupls5_pkg::OP_FLTVVV:
+	Qupls5_pkg::OP_VFLTH,Qupls5_pkg::OP_VFLTS,Qupls5_pkg::OP_VFLTD:
 		begin
 			fnMapRawToUop.Rd = {2'd0,raw[13:7]};
 			fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
@@ -3292,7 +3285,7 @@ begin
 			if (raw[46:41] >= 6'd8 && raw[46:41] <= 6'd11)
 				fnMapRawToUop.vn[0] = 1'b0;
 		end
-	Qupls5_pkg::OP_FLTVVS:
+	Qupls5_pkg::OP_VFLTSH,Qupls5_pkg::OP_VFLTSS,Qupls5_pkg::OP_VFLTSD:
 		begin
 			fnMapRawToUop.Rd = {2'd0,raw[13:7]};
 			fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
@@ -3579,18 +3572,6 @@ begin
 					fnMapRawToUop.vn = 4'b0000;
 				end
 			endcase
-		end
-	Qupls5_pkg::OP_ENTER:	// and EXIT
-		begin
-			fnMapRawToUop.Rd = {2'd0,raw[13:7]};
-			fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
-			fnMapRawToUop.Rs2 = {2'd0,raw[27:21]};
-			fnMapRawToUop.Rs3 = {2'd0,raw[34:28]};
-			fnMapRawToUop.imm = raw[43:29];
-			fnMapRawToUop.func = raw[47:41];
-			fnMapRawToUop.src = 7'b0001111;
-			fnMapRawToUop.dst = 1'b1;
-			fnMapRawToUop.byteno = raw[28] ? 6'd1 : 6'd0;	// EXIT(1)
 		end
 	default:
 		begin

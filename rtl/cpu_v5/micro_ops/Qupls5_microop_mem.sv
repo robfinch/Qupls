@@ -673,7 +673,8 @@ begin
 	case (instr.opcode)
 	Qupls5_pkg::OP_VR3B,Qupls5_pkg::OP_VR3W,Qupls5_pkg::OP_VR3T,Qupls5_pkg::OP_VR3O,
 	Qupls5_pkg::OP_VSR3B,Qupls5_pkg::OP_VSR3W,Qupls5_pkg::OP_VSR3T,Qupls5_pkg::OP_VSR3O,
-	Qupls5_pkg::OP_FLTVVV,Qupls5_pkg::OP_FLTVVS:
+	Qupls5_pkg::OP_VFLTH,Qupls5_pkg::OP_VFLTS,Qupls5_pkg::OP_VFLTD,
+	Qupls5_pkg::OP_VFLTSH,Qupls5_pkg::OP_VFLTSS,Qupls5_pkg::OP_VFLTSD:
 		is_vector = 1'b1;
 	default:	is_vector = 1'b0;
 	endcase
@@ -723,9 +724,10 @@ begin
 			instr.func = ir.func;
 			vlen1 = vlen;
 		end
-	Qupls5_pkg::OP_FLTVVV:
+	Qupls5_pkg::OP_VFLTH,Qupls5_pkg::OP_VFLTS,Qupls5_pkg::OP_VFLTD,
+	Qupls5_pkg::OP_VFLTSH,Qupls5_pkg::OP_VFLTSS,Qupls5_pkg::OP_VFLTSD:
 		begin
-			instr.opcode = Qupls5_pkg::OP_FLTPH | velsz[9:8];
+			instr.opcode = Qupls5_pkg::OP_FLTH | instr.opcode[1:0];
 			instr.vn = ir.vn;
 			instr.rmd = ir.rmd;
 			instr.func = ir.func;
@@ -1151,15 +1153,11 @@ else begin
 				next_uop[0] = uop0;
 			end
 		end
-`include "Qupls5_microop_mem_R3P.sv"
 `include "Qupls5_microop_mem_R3V.sv"
 `include "Qupls5_microop_mem_FLT.sv"
-`include "Qupls5_microop_mem_FLTP.sv"
 `include "Qupls5_microop_mem_FLTV.sv"
 `include "Qupls5_microop_mem_LSV.sv"
 `include "Qupls5_microop_mem_LSVN.sv"
-`include "Qupls5_microop_mem_ENTER.sv"	// and EXIT
-`include "Qupls5_microop_mem_PUSHPOP.sv"
 `include "Qupls5_microop_mem_CAP.sv"
 	Qupls5_pkg::OP_LDB,Qupls5_pkg::OP_LDBZ,Qupls5_pkg::OP_LDW,Qupls5_pkg::OP_LDWZ,
 	Qupls5_pkg::OP_LDT,Qupls5_pkg::OP_LDTZ,Qupls5_pkg::OP_LOAD,Qupls5_pkg::OP_CLOAD:

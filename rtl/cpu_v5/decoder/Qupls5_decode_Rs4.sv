@@ -67,7 +67,7 @@ begin
 			default:
 				fnRs4 = 7'd0;
 			endcase
-		Qupls5_pkg::OP_PUSH,Qupls5_pkg::OP_POP,Qupls5_pkg::OP_MBCC:
+		Qupls5_pkg::OP_MBCC:
 			fnRs4 = has_rext ? instr_raw[48+41:48+35] : {2'b00,ir.Rs4};
 		default:
 			fnRs4 = 7'd0;
