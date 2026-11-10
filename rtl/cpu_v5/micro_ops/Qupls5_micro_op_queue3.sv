@@ -1,0 +1,311 @@
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2026  Robert Finch, Waterloo
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+//
+// BSD 3-Clause License
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are met:
+//
+// 1. Redistributions of source code must retain the above copyright notice, this
+//    list of conditions and the following disclaimer.
+//
+// 2. Redistributions in binary form must reproduce the above copyright notice,
+//    this list of conditions and the following disclaimer in the documentation
+//    and/or other materials provided with the distribution.
+//
+// 3. Neither the name of the copyright holder nor the names of its
+//    contributors may be used to endorse or promote products derived from
+//    this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+// FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+// DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+// SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+// CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+// OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+// ============================================================================
+
+import const_pkg::*;
+import Qupls5_pkg::*;
+
+module Qupls5_micro_op_queue3(rst, clk, en, rd_more, uop, uop_count,
+	uop_buf, uop_mark, head, stomp_moq1, stomp_moq2, pg_trn, pg_moq1, pg_moq2,
+	branch_resolved, live_stream);
+parameter MWIDTH = Qupls5_pkg::MWIDTH;
+parameter MAX_MICROOPS = 8;
+parameter MICROOPS_PER_INSTR = 16;
+input rst;
+input clk;
+input en;
+output reg rd_more;
+input Qupls5_pkg::micro_op_t [MICROOPS_PER_INSTR-1:0] uop [MWIDTH-1:0];
+input [5:0] uop_count [0:MWIDTH-1];
+output Qupls5_pkg::micro_op_t [MAX_MICROOPS-1:0] uop_buf;
+output reg [2:0] uop_mark [0:MAX_MICROOPS-1];
+output reg [3:0] head [0:MWIDTH-1];
+input stomp_moq1;
+input stomp_moq2;
+input Qupls5_pkg::pipeline_group_reg_t pg_trn;
+output Qupls5_pkg::pipeline_group_reg_t pg_moq1;
+output Qupls5_pkg::pipeline_group_reg_t pg_moq2;
+input branch_resolved;
+input pc_stream_t live_stream;
+
+integer kk,n2,n3,n4,n5,n11,n12,n13;
+integer ul;		// use upper or lower half of buf4
+integer rul;
+reg [3:0] tail;
+reg [5:0] uop_count1 [0:MWIDTH-1];
+reg [7:0] uop_count3;
+Qupls5_pkg::micro_op_t [MICROOPS_PER_INSTR*4-1:0] uop_buf2;
+Qupls5_pkg::micro_op_t [MICROOPS_PER_INSTR*8-1:0] uop_buf3;
+reg [6:0] uop_ndx2 [0:MICROOPS_PER_INSTR*8-1];
+reg [2:0] uop_mark2 [0:MICROOPS_PER_INSTR*8-1];
+reg [2:0] uop_mark3 [0:MICROOPS_PER_INSTR*8-1];
+reg [6:0] ndx0,ndx1,ndx2,ndx3;
+reg [5:0] room;
+Qupls5_pkg::rob_entry_t nopi;
+
+// Define a NOP instruction.
+always_comb
+begin
+	nopi = {$bits(Qupls5_pkg::rob_entry_t){1'b0}};
+	nopi.op.exc = Qupls5_pkg::FLT_NONE;
+	nopi.op.uop = {41'd0,Qupls5_pkg::OP_NOP};
+	nopi.op.decbus.nop = TRUE;
+	nopi.op.decbus.cause = Qupls5_pkg::FLT_NONE;
+	nopi.op.uop.lead = 1'd1;
+	nopi.op.v = 1'b1;
+	nopi.v = 5'd1;
+	nopi.exc = Qupls5_pkg::FLT_NONE;
+	nopi.excv = INV;
+	nopi.done = 2'b11;
+	/* NOP will be decoded later
+	nopi.decbus.Rdz = 1'b1;
+	nopi.decbus.nop = 1'b1;
+	nopi.decbus.alu = 1'b1;
+	*/
+end
+
+always_comb
+	if (head[0] > tail)
+		room = head[0] - tail;
+	else
+		room = MAX_MICROOPS + head[0] - tail;
+
+// Generate linear index into the micro-op buffer. The index points to valid
+// micro-ops. Referencing via the index will pack the micro-op stream.
+
+function [6:0] fnNdxVal;
+input [6:0] a;
+input [5:0] count0;
+input [5:0] count1;
+input [5:0] count2;
+begin
+	if (a < count0)
+		fnNdxVal = a;
+	else if (a < count0 + count1)
+		fnNdxVal = (a - count0) + MICROOPS_PER_INSTR;
+	else if (a < count0 + count1 + count2)
+		fnNdxVal = (a - (count0 + count1)) + MICROOPS_PER_INSTR*2;
+	else
+		fnNdxVal = (a - (count0 + count1 + count2)) + MICROOPS_PER_INSTR*3;
+end
+endfunction
+
+function [2:0] fnMark;
+input [6:0] a;
+input [5:0] count0;
+input [5:0] count1;
+input [5:0] count2;
+begin
+	if (a < count0)
+		fnMark = 3'd0;
+	else if (a < count0 + count1)
+		fnMark = 3'd1;
+	else if (a < count0 + count1 + count2)
+		fnMark = 3'd2;
+	else
+		fnMark = 3'd3;
+end
+endfunction
+
+always_ff @(posedge clk)
+if (rst) begin
+	foreach (uop_buf2[n11]) begin
+    uop_buf2[n11] <= {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+    uop_buf2[n11].v <= VAL;
+    uop_buf2[n11].lead <= 1'b1;
+		uop_buf2[n11].opcode <= Qupls5_pkg::OP_NOP;
+	end
+	foreach (uop_ndx2[n11])
+		uop_ndx2[n11] <= 64;
+	foreach (uop_mark2[n11])
+		uop_mark2[n11] <= 3'd4;
+end
+else begin
+	if (en) begin
+		for (n12 = 0; n12 < MWIDTH; n12 = n12 + 1) begin
+			for (n11 = 0; n11 < MICROOPS_PER_INSTR; n11 = n11 + 1)
+				uop_buf2[n12*MICROOPS_PER_INSTR + n11 + ul] <= uop[n12][n11];
+		end
+
+		for (n11 = 0; n11 < MICROOPS_PER_INSTR*MWIDTH; n11 = n11 + 1) begin
+			uop_ndx2[n11+ul] <= fnNdxVal(n11[6:0],uop_count[0],uop_count[1],uop_count[2]);
+			uop_mark2[n11+ul] <= fnMark(n11[6:0],uop_count[0],uop_count[1],uop_count[2]);
+		end
+	end
+end
+
+// Convert two streams into one packed stream.
+always_comb
+//if (rd_more)
+	uop_count1 = uop_count;
+always_ff @(posedge clk)
+//if (rd_more)
+	uop_count3 <= {2'b0,uop_count1[0]} + {2'b0,uop_count1[1]} + {2'b0,uop_count1[2]} + {2'b0,uop_count1[3]};
+
+// Copy micro-ops from the micro-op decoders into a buffer for further
+// processing. The micro-ops are in program order in the buffer. Which
+// instruction the micro-op belongs to is stored in an array called uop_mark.
+
+always_ff @(posedge clk)
+if (rst)
+	kk <= 0;
+else begin
+	if (en) begin
+		if (kk+4 < uop_count3)
+			kk <= kk + 4;
+		else
+			kk <= 0;
+	end
+end
+
+always_ff @(posedge clk)
+if (rst) begin
+	ul <= 0;
+	rul <= MICROOPS_PER_INSTR*MWIDTH;
+end
+else begin
+	if (en) begin
+		if (kk+4 >= uop_count3) begin
+			ul <= ul > 0 ? 0 : MICROOPS_PER_INSTR*MWIDTH;
+			rul <= ul > 0 ? MICROOPS_PER_INSTR*MWIDTH : 0;
+		end
+	end
+end
+
+always_ff @(posedge clk)
+if (rst) begin
+  foreach (uop_buf[n5]) begin
+    uop_buf[n5] <= {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+    uop_buf[n5].v <= VAL;
+    uop_buf[n5].lead <= 1'b1;
+		uop_buf[n5].opcode <= Qupls5_pkg::OP_NOP;
+  end
+	foreach (uop_mark[n5])
+    uop_mark[n5] <= 2'b00;
+   // On reset fill buffer with NOPs (0xff).
+	foreach (uop_buf3[n5]) begin
+    uop_buf3[n5] <= {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+    uop_buf3[n5].v <= VAL;
+    uop_buf3[n5].lead <= 1'b1;
+		uop_buf3[n5].opcode <= Qupls5_pkg::OP_NOP;
+	end
+	foreach (uop_mark3[n5])
+    uop_mark3[n5] <= 2'b00;
+	foreach (head[n13])
+		head[n13] <= n13;
+	tail <= 0;
+end
+else begin
+	if (en) begin
+		ndx0 <= uop_ndx2[kk+rul+0];
+		ndx1 <= uop_ndx2[kk+rul+1];
+		ndx2 <= uop_ndx2[kk+rul+2];
+		ndx3 <= uop_ndx2[kk+rul+3];
+		foreach(uop_buf2[n13]) begin
+			uop_buf3[n13+rul] <= uop_buf2[n13];
+			uop_mark3[n13+rul] <= uop_mark2[n13];
+		end
+		uop_buf[0] <= uop_buf3[ndx0];
+		uop_buf[1] <= uop_buf3[ndx1];
+		uop_buf[2] <= uop_buf3[ndx2];
+		uop_buf[3] <= uop_buf3[ndx3];
+		uop_mark[0] <= uop_mark3[ndx0];
+		uop_mark[1] <= uop_mark3[ndx1];
+		uop_mark[2] <= uop_mark3[ndx2];
+		uop_mark[3] <= uop_mark3[ndx3];
+	end
+end
+
+always_ff @(posedge clk)
+if (rst) begin
+	pg_moq1 <= {$bits(pipeline_group_reg_t){1'b0}};
+	foreach(pg_moq1.pr[n1])
+		pg_moq1.pr[n1] <= nopi;
+end
+else if (en) begin
+	pg_moq1 <= pg_trn;
+	if (stomp_moq1)
+		pg_moq1.hdr.v <= INV;
+	foreach (pg_moq1.pr[n1]) begin
+		if (stomp_moq1) begin
+			pg_moq1.pr[n1].stomped <= TRUE;
+			pg_moq1.pr[n1].done <= 2'b11;
+		end
+		if (branch_resolved) begin
+			if (pg_trn.pr[n1].ip_stream.thread==live_stream.thread && pg_trn.pr[n1].ip_stream.stream != live_stream.stream) begin
+				pg_moq1.pr[n1].stomped <= TRUE;
+				pg_moq1.pr[n1].done <= 2'b11;
+			end
+		end
+	end
+end
+
+always_ff @(posedge clk)
+if (rst) begin
+	pg_moq2 <= {$bits(pipeline_group_reg_t){1'b0}};
+	foreach(pg_moq1.pr[n1])
+		pg_moq2.pr[n1] <= nopi;
+end
+else if (en) begin
+	pg_moq2 <= pg_moq1;
+	if (stomp_moq2)
+		pg_moq2.hdr.v <= INV;
+	foreach (pg_moq2.pr[n1]) begin
+		if (stomp_moq2) begin
+			pg_moq2.pr[n1].stomped <= TRUE;
+			pg_moq2.pr[n1].done <= 2'b11;
+		end
+		if (branch_resolved) begin
+			if (pg_moq1.pr[n1].ip_stream.thread==live_stream.thread && pg_moq1.pr[n1].ip_stream.stream != live_stream.stream) begin
+				pg_moq2.pr[n1].stomped <= TRUE;
+				pg_moq2.pr[n1].done <= 2'b11;
+			end
+		end
+	end
+end
+
+always_ff @(posedge clk)
+if (rst)
+	rd_more <= TRUE;
+else begin
+	rd_more <= FALSE;
+	if (en) begin
+		if (kk+4 >= uop_count3)
+			rd_more <= TRUE;
+	end
+end
+
+endmodule
+

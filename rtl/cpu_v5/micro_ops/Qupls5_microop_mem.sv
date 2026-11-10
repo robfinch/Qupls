@@ -1,0 +1,1475 @@
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2025-2026  Robert Finch, Waterloo
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+//
+// BSD 3-Clause License
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are met:
+//
+// 1. Redistributions of source code must retain the above copyright notice, this
+//    list of conditions and the following disclaimer.
+//
+// 2. Redistributions in binary form must reproduce the above copyright notice,
+//    this list of conditions and the following disclaimer in the documentation
+//    and/or other materials provided with the distribution.
+//
+// 3. Neither the name of the copyright holder nor the names of its
+//    contributors may be used to endorse or promote products derived from
+//    this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+// FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+// DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+// SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+// CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+// OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+//  2800 LUTs / 2200 FFs (with 512-bit vectors)
+//  1050 LUTs / 0 FFs / 0 DSP (no vectors)
+// Work to do: fix register fields, check widths, make sure thread included.
+// ============================================================================
+
+import const_pkg::*;
+import Qupls5_pkg::*;
+
+module Qupls5_microop_mem(rst, clk, en, om, ir, num, carry_reg, carry_out, carry_in,
+	vlen_i, velsz_i, count, uop, thread, stomp, pg_ext, pg_trn, live_stream,
+	branch_resolved);
+parameter MICROOPS_PER_INSTR = 16;
+parameter COMB = 0;
+input rst;
+input clk;
+input en;
+input Qupls5_pkg::operating_mode_t om;
+input Qupls5_pkg::micro_op_t ir;
+input [4:0] num;
+input [8:0] carry_reg;
+input carry_out;
+input carry_in;
+input [63:0] vlen_i;
+input [63:0] velsz_i;
+input [2:0] thread;
+output reg [5:0] count;
+output Qupls5_pkg::micro_op_t [MICROOPS_PER_INSTR-1:0] uop;
+input stomp;
+input Qupls5_pkg::pipeline_group_reg_t pg_ext;
+output Qupls5_pkg::pipeline_group_reg_t pg_trn;
+input pc_stream_t live_stream;
+input branch_resolved;
+
+integer nn, kk, n1, n2;
+reg [5:0] next_count;
+Qupls5_pkg::micro_op_t [MICROOPS_PER_INSTR-1:0] next_uop;
+
+reg insert_boi;
+reg [7:0] boi_count = 8'd0;
+reg [6:0] st_opcode, ld_opcode;
+Qupls5_pkg::micro_op_t nopi, uop_boi;
+Qupls5_pkg::micro_op_t floadi1;
+Qupls5_pkg::micro_op_t push1,push2,push3,push4,push5,push6,push7;
+Qupls5_pkg::micro_op_t pop1,pop2,pop3,pop4,pop5,pop6,pop7;
+Qupls5_pkg::micro_op_t decsp8,decsp16,decsp24,decsp32,decsp40,decsp48,decsp56,decsp64,decsp72,decsp80,decsp88,decsp96,decsp128;
+Qupls5_pkg::micro_op_t incsp8,incsp16,incsp24,incsp32,incsp40,incsp48,incsp56,incsp64,incsp72,incsp80,incsp88,incsp96,incsp128;
+Qupls5_pkg::micro_op_t incssp64,decssp64,incssp32,decssp32,incssp128,decssp128;
+Qupls5_pkg::micro_op_t enter_st_fp, exit_ld_fp;
+Qupls5_pkg::micro_op_t enter_st_lr, exit_ld_lr;
+Qupls5_pkg::micro_op_t fp_eq_sp, sp_eq_fp;
+Qupls5_pkg::micro_op_t instr;
+Qupls5_pkg::micro_op_t vsins;
+Qupls5_pkg::micro_op_t vls;
+reg [1:0] cap_sz;
+reg is_vector;
+reg is_reduction;
+reg is_vs, is_masked;
+reg [8:0] ble;		// byte lane enable
+reg [7:0] vlen, fvlen, xvlen, cvlen, avlen, tvlen;
+reg [7:0] vln;
+reg [2:0] vlen2, fvlen2, xvlen2, cvlen2, avlen2, tvlen2;
+reg [7:0] vlen1;
+reg [2:0] vlen3;
+reg [3:0] velsz1;
+reg [63:0] velsz;
+//wire [8:0] mo0 = 9'd40;		// micro-op temporary
+wire [8:0] sp = 9'd31;
+wire [8:0] ssp = 9'd126;
+wire [8:0] fp = 9'd36;
+wire [8:0] fp_status_reg = 9'd33;
+wire [8:0] lr1 = 9'd1;
+wire [8:0] ip_reg = 9'd127;
+wire [8:0] zero_reg = 9'd0;
+wire [8:0] num_scalar_reg = 9'd25;
+wire [8:0] mot0_reg = 9'd120;
+wire [8:0] mot1_reg = 9'd121;
+wire [8:0] mot2_reg = 9'd122;
+reg [8:0] vRd, vRs1, vRs2, vRs3;
+reg [8:0] Rd, Rs1, Rs2, Rs3;
+reg vRdi, vRs1i, vRs2i, vRs3i;		// whether to increment the register spec or not.
+Qupls5_pkg::rob_entry_t pr_nopi;
+reg [6:0] dc_opcode, dc_func;
+Qupls5_pkg::micro_op_t uop0;
+Qupls5_pkg::micro_op_t uop1;
+
+always_ff @(posedge clk)
+	boi_count <= boi_count + 2'd1;
+always_comb
+	insert_boi = SUPPORT_IRQ_POLLING ? boi_count[4] : 1'b0;
+always_ff @(posedge clk)
+	velsz <= velsz_i;
+
+// Compute vector lengths in bits based on the selected element size and data type.
+// Convert the length in bits to a number of registers by shifting right by the
+// register width in bits. The values then reflect the number of registers or
+// chunks of the vector to process.
+// These values are essentially static, so they can be registered to improve
+// timing.
+always_ff @(posedge clk)  vlen <= (vlen_i[ 7: 0] + 3'd7) >> 3;
+always_ff @(posedge clk) fvlen <= (vlen_i[15: 8] + 3'd7) >> 3;
+always_ff @(posedge clk) xvlen <= (vlen_i[23:16] + 3'd7) >> 3;
+always_ff @(posedge clk) cvlen <= (vlen_i[31:24] + 3'd7) >> 3;
+always_ff @(posedge clk) avlen <= (vlen_i[39:32] + 3'd7) >> 3;
+always_ff @(posedge clk) tvlen <= (vlen_i[47:40] + 3'd7) >> 3;
+always_ff @(posedge clk)  vlen2 <= vlen_i[ 2: 0];
+always_ff @(posedge clk) fvlen2 <= vlen_i[10: 8];
+always_ff @(posedge clk) xvlen2 <= vlen_i[18:16];
+always_ff @(posedge clk) cvlen2 <= vlen_i[26:24];
+always_ff @(posedge clk) avlen2 <= vlen_i[34:32];
+always_ff @(posedge clk) tvlen2 <= vlen_i[42:40];
+/*
+always_ff @(posedge clk)
+	vlen = (vlen_i[7:0] * (7'd1 << velsz[1:0])) >> 4'd6;
+always_ff @(posedge clk)
+	fvlen = (vlen_i[15:8] * (7'd2 << velsz[9:8])) >> 4'd6;
+always_ff @(posedge clk)
+	xvlen = (vlen_i[23:16] * (7'd1 << velsz[17:16])) >> 4'd6;
+always_ff @(posedge clk)
+	cvlen = (vlen_i[23:16] * (7'd1 << velsz[17:16])) >> 4'd6;
+always_ff @(posedge clk)
+	avlen = (vlen_i[31:24] * (7'd1 << velsz[25:24])) >> 4'd6;
+*/
+always_comb
+begin
+	floadi1 = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+	floadi1.v = VAL;
+	floadi1[30:29] = 3'd1;
+//	floadi1.op4 = 4'd10;
+	floadi1.Rd = 5'd15;
+	floadi1.Rs2 = 5'd19;
+	floadi1.Rs1 = 5'd1;
+	floadi1.opcode = Qupls5_pkg::OP_FLTD;
+end
+always_comb
+begin
+	nopi = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+	nopi.v = 1'b1;
+	nopi.lead = 1'b1;
+	nopi.num = 5'd0;
+	nopi.opcode = Qupls5_pkg::OP_NOP;
+end
+always_comb
+begin
+	uop_boi = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+	uop_boi.v = VAL;
+	uop_boi.opcode = Qupls5_pkg::OP_BCCU;
+	uop_boi.cnd = Qupls5_pkg::CND_BOI;
+	uop_boi.lead = 1'd1;
+end
+
+always_comb
+begin
+	push1 = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+	push1.v = VAL;
+	push1.opcode = Qupls5_pkg::OP_STORE;
+	push1.Rd = {2'b0,ir[20:14]};
+	push1.Rs1 = {2'b0,ir[13:7]};
+	push1.Rs2 = zero_reg;
+	push1.imm = -64'd8;
+	push1.sc = 3'd0;
+
+	push2 = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+	push2.v = VAL;
+	push2.opcode = Qupls5_pkg::OP_STORE;
+	push2.Rd = {2'b0,ir[27:21]};
+	push2.Rs1 = {2'b0,ir[13:7]};
+	push2.Rs2 = zero_reg;
+	push2.imm = -64'd16;
+	push2.sc = 3'd0;
+
+	push3 = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+	push3.v = VAL;
+	push3.opcode = Qupls5_pkg::OP_STORE;
+	push3.Rd = {2'b0,ir[34:28]};
+	push3.Rs1 = {2'b0,ir[13:7]};
+	push3.Rs2 = zero_reg;
+	push3.imm = -64'd24;
+	push3.sc = 3'd0;
+
+	push4 = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+	push4.v = VAL;
+	push4.opcode = Qupls5_pkg::OP_STORE;
+	push4.Rd = {2'b0,ir[41:35]};
+	push4.Rs1 = {2'b0,ir[13:7]};
+	push4.Rs2 = zero_reg;
+	push4.imm = -64'd32;
+	push4.sc = 3'd0;
+
+end
+always_comb
+begin
+	pop1 = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+	pop1.v = VAL;
+	pop1.opcode = Qupls5_pkg::OP_LOAD;
+	pop1.Rd = {2'b0,ir[20:14]};
+	pop1.Rs1 = {2'b0,ir[13:7]};
+	pop1.Rs2 = zero_reg;
+	pop1.imm = 64'd0;
+	pop1.sc = 3'd0;
+	
+	pop2 = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+	pop2.v = VAL;
+	pop2.opcode = Qupls5_pkg::OP_LOAD;
+	pop2.Rd = {2'b0,ir[27:21]};
+	pop2.Rs1 = {2'b0,ir[13:7]};
+	pop2.Rs2 = zero_reg;
+	pop2.imm = 64'd8;
+	pop2.sc = 3'd0;
+	
+	pop3 = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+	pop3.v = VAL;
+	pop3.opcode = Qupls5_pkg::OP_LOAD;
+	pop3.Rd = {2'b0,ir[34:28]};
+	pop3.Rs1 = {2'b0,ir[13:7]};
+	pop3.Rs2 = zero_reg;
+	pop3.imm = 64'd16;
+	pop3.sc = 3'd0;
+	
+	pop4 = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+	pop4.v = VAL;
+	pop4.opcode = Qupls5_pkg::OP_LOAD;
+	pop4.Rd = {2'b0,ir[41:35]};
+	pop4.Rs1 = {2'b0,ir[13:7]};
+	pop4.Rs2 = zero_reg;
+	pop4.imm = 64'd24;
+	pop4.sc = 3'd0;
+	
+end
+
+always_comb
+begin
+	decsp8 = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+	decsp8.v = VAL;
+	decsp8.opcode = Qupls5_pkg::OP_ADDI;
+	decsp8.Rd = sp;
+	decsp8.Rs1 = sp;
+	decsp8.Rs2 = zero_reg;
+	decsp8.Rs3 = zero_reg;
+	decsp8.imm = -64'd8;
+	decsp8.prc = 2'd3;
+
+	decsp16 = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+	decsp16.v = VAL;
+	decsp16.opcode = Qupls5_pkg::OP_ADDI;
+	decsp16.Rd = sp;
+	decsp16.Rs1 = sp;
+	decsp16.Rs2 = zero_reg;
+	decsp16.Rs3 = zero_reg;
+	decsp16.imm = -64'd16;
+	decsp16.prc = 2'd3;
+
+	decsp24 = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+	decsp24.v = VAL;
+	decsp24.opcode = Qupls5_pkg::OP_ADDI;
+	decsp24.Rd = sp;
+	decsp24.Rs1 = sp;
+	decsp24.Rs2 = zero_reg;
+	decsp24.Rs3 = zero_reg;
+	decsp24.imm = -64'd24;
+	decsp24.prc = 2'd3;
+
+	decsp32 = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+	decsp32.v = VAL;
+	decsp32.opcode = Qupls5_pkg::OP_ADDI;
+	decsp32.Rd = sp;
+	decsp32.Rs1 = sp;
+	decsp32.Rs2 = zero_reg;
+	decsp32.Rs3 = zero_reg;
+	decsp32.imm = -64'd32;
+	decsp32.prc = 2'd3;
+
+	decsp40 = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+	decsp40.v = VAL;
+	decsp40.opcode = Qupls5_pkg::OP_ADDI;
+	decsp40.Rd = sp;
+	decsp40.Rs1 = sp;
+	decsp40.Rs2 = zero_reg;
+	decsp40.Rs3 = zero_reg;
+	decsp40.imm = -64'd40;
+	decsp40.prc = 2'd3;
+
+	decsp48 = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+	decsp48.v = VAL;
+	decsp48.opcode = Qupls5_pkg::OP_ADDI;
+	decsp48.Rd = sp;
+	decsp48.Rs1 = sp;
+	decsp48.Rs2 = zero_reg;
+	decsp48.Rs3 = zero_reg;
+	decsp48.imm = -64'd48;
+	decsp48.prc = 2'd3;
+
+	decsp56 = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+	decsp56.v = VAL;
+	decsp56.opcode = Qupls5_pkg::OP_ADDI;
+	decsp56.Rd = sp;
+	decsp56.Rs1 = sp;
+	decsp56.Rs2 = zero_reg;
+	decsp56.Rs3 = zero_reg;
+	decsp56.imm = -64'd56;
+	decsp56.prc = 2'd3;
+
+	decsp64 = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+	decsp64.v = VAL;
+	decsp64.opcode = Qupls5_pkg::OP_ADDI;
+	decsp64.Rd = sp;
+	decsp64.Rs1 = sp;
+	decsp64.Rs2 = zero_reg;
+	decsp64.Rs3 = zero_reg;
+	decsp64.imm = -64'd64;
+	decsp64.prc = 2'd3;
+
+	decsp72 = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+	decsp72.v = VAL;
+	decsp72.opcode = Qupls5_pkg::OP_ADDI;
+	decsp72.Rd = sp;
+	decsp72.Rs1 = sp;
+	decsp72.Rs2 = zero_reg;
+	decsp72.Rs3 = zero_reg;
+	decsp72.imm = -64'd72;
+	decsp72.prc = 2'd3;
+
+	decsp80 = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+	decsp80.v = VAL;
+	decsp80.opcode = Qupls5_pkg::OP_ADDI;
+	decsp80.Rd = sp;
+	decsp80.Rs1 = sp;
+	decsp80.Rs2 = zero_reg;
+	decsp80.Rs3 = zero_reg;
+	decsp80.imm = -64'd80;
+	decsp80.prc = 2'd3;
+
+	decsp88 = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+	decsp88.v = VAL;
+	decsp88.opcode = Qupls5_pkg::OP_ADDI;
+	decsp88.Rd = sp;
+	decsp88.Rs1 = sp;
+	decsp88.Rs2 = zero_reg;
+	decsp88.Rs3 = zero_reg;
+	decsp88.imm = -64'd88;
+	decsp88.prc = 2'd3;
+
+	decsp96 = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+	decsp96.v = VAL;
+	decsp96.opcode = Qupls5_pkg::OP_ADDI;
+	decsp96.Rd = sp;
+	decsp96.Rs1 = sp;
+	decsp96.Rs2 = zero_reg;
+	decsp96.Rs3 = zero_reg;
+	decsp96.imm = -64'd96;
+	decsp96.prc = 2'd3;
+
+	decsp128 = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+	decsp128.v = VAL;
+	decsp128.opcode = Qupls5_pkg::OP_ADDI;
+	decsp128.Rd = sp;
+	decsp128.Rs1 = sp;
+	decsp128.Rs2 = zero_reg;
+	decsp128.Rs3 = zero_reg;
+	decsp128.imm = -64'd128;
+	decsp128.prc = 2'd3;
+end
+
+always_comb
+begin
+	incsp8 = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+	incsp8.v = VAL;
+	incsp8.opcode = Qupls5_pkg::OP_ADDI;
+	incsp8.Rd = sp;
+	incsp8.Rs1 = sp;
+	incsp8.Rs2 = zero_reg;
+	incsp8.Rs3 = zero_reg;
+	incsp8.imm = 64'd8;
+	incsp8.prc = 2'd3;
+
+	incsp16 = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+	incsp16.v = VAL;
+	incsp16.opcode = Qupls5_pkg::OP_ADDI;
+	incsp16.Rd = sp;
+	incsp16.Rs1 = sp;
+	incsp16.Rs2 = zero_reg;
+	incsp16.Rs3 = zero_reg;
+	incsp16.imm = 64'd16;
+	incsp16.prc = 2'd3;
+
+	incsp24 = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+	incsp24.v = VAL;
+	incsp24.opcode = Qupls5_pkg::OP_ADDI;
+	incsp24.Rd = sp;
+	incsp24.Rs1 = sp;
+	incsp24.Rs2 = zero_reg;
+	incsp24.Rs3 = zero_reg;
+	incsp24.imm = 64'd24;
+	incsp24.prc = 2'd3;
+
+	incsp32 = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+	incsp32.v = VAL;
+	incsp32.opcode = Qupls5_pkg::OP_ADDI;
+	incsp32.Rd = sp;
+	incsp32.Rs1 = sp;
+	incsp32.Rs2 = zero_reg;
+	incsp32.Rs3 = zero_reg;
+	incsp32.imm = 64'd32;
+	incsp32.prc = 2'd3;
+
+	incsp40 = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+	incsp40.v = VAL;
+	incsp40.opcode = Qupls5_pkg::OP_ADDI;
+	incsp40.Rd = sp;
+	incsp40.Rs1 = sp;
+	incsp40.Rs2 = zero_reg;
+	incsp40.Rs3 = zero_reg;
+	incsp40.imm = 64'd40;
+	incsp40.prc = 2'd3;
+
+	incsp48 = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+	incsp48.v = VAL;
+	incsp48.opcode = Qupls5_pkg::OP_ADDI;
+	incsp48.Rd = sp;
+	incsp48.Rs1 = sp;
+	incsp48.Rs2 = zero_reg;
+	incsp48.Rs3 = zero_reg;
+	incsp48.imm = 64'd48;
+	incsp48.prc = 2'd3;
+
+	incsp56 = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+	incsp56.v = VAL;
+	incsp56.opcode = Qupls5_pkg::OP_ADDI;
+	incsp56.Rd = sp;
+	incsp56.Rs1 = sp;
+	incsp56.Rs2 = zero_reg;
+	incsp56.Rs3 = zero_reg;
+	incsp56.imm = 64'd56;
+	incsp56.prc = 2'd3;
+
+	incsp64 = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+	incsp64.v = VAL;
+	incsp64.opcode = Qupls5_pkg::OP_ADDI;
+	incsp64.Rd = sp;
+	incsp64.Rs1 = sp;
+	incsp64.Rs2 = zero_reg;
+	incsp64.Rs3 = zero_reg;
+	incsp64.imm = 64'd64;
+	incsp64.prc = 2'd3;
+
+	incsp72 = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+	incsp72.v = VAL;
+	incsp72.opcode = Qupls5_pkg::OP_ADDI;
+	incsp72.Rd = sp;
+	incsp72.Rs1 = sp;
+	incsp72.Rs2 = zero_reg;
+	incsp72.Rs3 = zero_reg;
+	incsp72.imm = 64'd72;
+	incsp72.prc = 2'd3;
+
+	incsp80 = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+	incsp80.v = VAL;
+	incsp80.opcode = Qupls5_pkg::OP_ADDI;
+	incsp80.Rd = sp;
+	incsp80.Rs1 = sp;
+	incsp80.Rs2 = zero_reg;
+	incsp80.Rs3 = zero_reg;
+	incsp80.imm = 64'd80;
+	incsp80.prc = 2'd3;
+
+	incsp88 = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+	incsp88.v = VAL;
+	incsp88.opcode = Qupls5_pkg::OP_ADDI;
+	incsp88.Rd = sp;
+	incsp88.Rs1 = sp;
+	incsp88.Rs2 = zero_reg;
+	incsp88.Rs3 = zero_reg;
+	incsp88.imm = 64'd88;
+	incsp88.prc = 2'd3;
+
+	incsp96 = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+	incsp96.v = VAL;
+	incsp96.opcode = Qupls5_pkg::OP_ADDI;
+	incsp96.Rd = sp;
+	incsp96.Rs1 = sp;
+	incsp96.Rs2 = zero_reg;
+	incsp96.Rs3 = zero_reg;
+	incsp96.imm = 64'd96;
+	incsp96.prc = 2'd3;
+
+	incsp128 = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+	incsp128.v = VAL;
+	incsp128.opcode = Qupls5_pkg::OP_ADDI;
+	incsp128.Rd = sp;
+	incsp128.Rs1 = sp;
+	incsp128.Rs2 = zero_reg;
+	incsp128.Rs3 = zero_reg;
+	incsp128.imm = 64'd128;
+	incsp128.prc = 2'd3;
+
+end
+
+// ENTER instructions
+always_comb
+begin
+	cap_sz = pg_ext.ip.cap.flags[0] ? 2'd2 : pg_ext.ip.cap.flags[2:1];
+	st_opcode = pg_ext.ip.cap.flags[0] ? OP_STORE : OP_CSTORE;
+	ld_opcode = pg_ext.ip.cap.flags[0] ? OP_LOAD : OP_CLOAD;
+	
+	enter_st_fp = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+	enter_st_fp.v = VAL;
+	enter_st_fp.opcode = st_opcode;
+	enter_st_fp.Rd = fp;
+	enter_st_fp.Rs1 = ssp;
+	enter_st_fp.Rs2 = zero_reg;
+	enter_st_fp.imm = -64'd128 >> cap_sz;
+	enter_st_fp.sc = 3'd0;
+
+	enter_st_lr = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+	enter_st_lr.v = VAL;
+	enter_st_lr.opcode = st_opcode;
+	enter_st_lr.Rd = lr1;
+	enter_st_lr.Rs1 = ssp;
+	enter_st_lr.Rs2 = zero_reg;
+	enter_st_lr.imm = -64'd96 >> cap_sz;
+	enter_st_lr.sc = 3'd0;
+
+	fp_eq_sp = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+	fp_eq_sp.v = VAL;
+	fp_eq_sp.opcode = Qupls5_pkg::OP_ORI;
+	fp_eq_sp.Rd = {2'b0,ir[20:14]};
+	fp_eq_sp.Rs1 = {2'b0,ir[13:7]};
+	fp_eq_sp.Rs2 = zero_reg;
+	fp_eq_sp.imm = 64'd0;
+	fp_eq_sp.prc = 2'd3;
+
+	decssp32 = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+	decssp32.v = VAL;
+	decssp32.opcode = Qupls5_pkg::OP_ADDI;
+	decssp32.Rd = ssp;
+	decssp32.Rs1 = ssp;
+	decssp32.Rs2 = zero_reg;
+	decssp32.Rs3 = zero_reg;
+	decssp32.imm = -64'd32;
+	decssp32.prc = 2'd3;
+
+	decssp128 = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+	decssp128.v = VAL;
+	decssp128.opcode = Qupls5_pkg::OP_ADDI;
+	decssp128.Rd = ssp;
+	decssp128.Rs1 = ssp;
+	decssp128.Rs2 = zero_reg;
+	decssp128.Rs3 = zero_reg;
+	decssp128.ms = 3'b110;
+	decssp128.imm = -64'd128;
+	decssp128.prc = 2'd3;
+
+	incssp32 = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+	incssp32.v = VAL;
+	incssp32.opcode = Qupls5_pkg::OP_ADDI;
+	incssp32.Rd = ssp;
+	incssp32.Rs1 = ssp;
+	incssp32.Rs2 = zero_reg;
+	incssp32.Rs3 = zero_reg;
+	incssp32.ms = 3'b110;
+	incssp32.imm = 64'd32;
+	incssp32.prc = 2'd3;
+
+	incssp128 = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+	incssp128.v = VAL;
+	incssp128.opcode = Qupls5_pkg::OP_ADDI;
+	incssp128.Rd = ssp;
+	incssp128.Rs1 = ssp;
+	incssp128.Rs2 = zero_reg;
+	incssp128.Rs3 = zero_reg;
+	incssp128.ms = 3'b110;
+	incssp128.imm = 64'd128;
+	incssp128.prc = 2'd3;
+
+	sp_eq_fp = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+	sp_eq_fp.v = VAL;
+	sp_eq_fp.opcode = Qupls5_pkg::OP_ORI;
+	sp_eq_fp.Rd = {2'b0,ir[13:7]};
+	sp_eq_fp.Rs1 = {2'b0,ir[20:14]};
+	sp_eq_fp.Rs2 = zero_reg;
+	sp_eq_fp.imm = 64'd0;
+	sp_eq_fp.prc = 2'd3;
+
+	exit_ld_fp = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+	exit_ld_fp.v = VAL;
+	exit_ld_fp.opcode = Qupls5_pkg::OP_LOAD;
+	exit_ld_fp.Rd = fp;
+	exit_ld_fp.Rs1 = ssp;
+	exit_ld_fp.Rs2 = zero_reg;
+	exit_ld_fp.imm = 64'd0;
+	exit_ld_fp.sc = 3'd0;
+	
+	exit_ld_lr = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+	exit_ld_lr.v = VAL;
+	exit_ld_lr.opcode = Qupls5_pkg::OP_LOAD;
+	exit_ld_lr.Rd = lr1;
+	exit_ld_lr.Rs1 = ssp;
+	exit_ld_lr.Rs2 = zero_reg;
+	exit_ld_lr.imm = 64'd8;
+	exit_ld_lr.sc = 3'd0;
+end
+
+always_comb
+begin
+	case (instr.opcode)
+	Qupls5_pkg::OP_R3VVS,Qupls5_pkg::OP_FLTVVS:
+		is_vs = ir.op3==3'd1;
+	default:	is_vs = 1'b0;
+	endcase
+end
+
+always_comb
+begin
+	case (instr.opcode)
+	Qupls5_pkg::OP_R3VVV,Qupls5_pkg::OP_R3VVS,Qupls5_pkg::OP_FLTVVS:
+		is_masked = ir.op3==3'd6;
+	default:	is_masked = 1'b0;
+	endcase
+end
+
+always_comb
+begin
+	case (instr.opcode)
+	Qupls5_pkg::OP_R3VVV,Qupls5_pkg::OP_R3VVS:
+		case(ir.func)
+		Qupls5_pkg::FN_REDSUM,Qupls5_pkg::FN_REDAND,Qupls5_pkg::FN_REDOR,Qupls5_pkg::FN_REDEOR,
+		Qupls5_pkg::FN_REDMIN,Qupls5_pkg::FN_REDMAX,Qupls5_pkg::FN_REDMINU,Qupls5_pkg::FN_REDMAXU:
+			is_reduction = 1'b1;
+		default:	is_reduction = 1'b0;
+		endcase
+	default:	is_reduction = 1'b0;
+	endcase
+end
+
+always_comb
+begin
+	case (instr.opcode)
+	Qupls5_pkg::OP_R3VVV,Qupls5_pkg::OP_R3VVS,
+	Qupls5_pkg::OP_FLTVVV,Qupls5_pkg::OP_FLTVVS:
+		is_vector = 1'b1;
+	default:	is_vector = 1'b0;
+	endcase
+end
+
+always_comb
+begin
+	instr = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+	vsins = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+	vls = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+	vsins = ir;
+	vsins.opcode = Qupls5_pkg::opcode_e'(ir[6:0]);
+	vsins.v = VAL;
+	vsins.Rd = ir.Rd;
+	vsins.Rs1 = ir.Rs1;
+	vsins.Rs2 = ir.Rs2;
+	vsins.Rs3 = ir.Rs3;
+	vls = ir;
+	vls.v = VAL;
+	vls.opcode = ir.opcode;
+	vls.Rd = ir.Rd;
+	vls.Rs1 = ir.Rs1;
+	vls.Rs2 = ir.Rs2;
+	vls.Rs3 = ir.Rs3;
+	instr = ir;
+	instr.v = VAL;
+	instr.opcode = ir.opcode;
+	instr.Rd = {ir.Rd};
+	instr.Rs1 = {ir.Rs1};
+	instr.Rs2 = {ir.Rs2};
+	instr.Rs3 = {ir.Rs3};
+	case(ir.opcode)
+	Qupls5_pkg::OP_EXTD:
+		begin
+			vlen1 = vlen;	// use integer length
+			case(instr.op3)
+			Qupls5_pkg::EX_VSHLV:	vsins.op3 = Qupls5_pkg::EX_ASLC;
+			Qupls5_pkg::EX_VSHRV:	vsins.op3 = Qupls5_pkg::EX_LSRC;
+			default:	;
+			endcase
+		end
+	Qupls5_pkg::OP_R3VVV:
+		begin
+			instr.opcode = Qupls5_pkg::OP_R3BP | velsz[1:0];
+			instr.vn = ir.vn;
+			instr.op3 = ir.op3;
+			instr.func = ir.func;
+			vlen1 = vlen;
+		end
+	Qupls5_pkg::OP_FLTVVV:
+		begin
+			instr.opcode = Qupls5_pkg::OP_FLTPH | velsz[9:8];
+			instr.vn = ir.vn;
+			instr.rmd = ir.rmd;
+			instr.func = ir.func;
+			vlen1 = fvlen;
+		end
+	Qupls5_pkg::OP_R3BP,Qupls5_pkg::OP_R3WP,Qupls5_pkg::OP_R3TP,Qupls5_pkg::OP_R3OP:
+		begin
+			instr.opcode = ir.opcode;
+			instr.vn = ir.vn;
+			instr.op3 = ir.op3;
+			instr.func = ir.func;
+			vlen1 = vlen;
+		end
+	Qupls5_pkg::OP_FLTPH,Qupls5_pkg::OP_FLTPS,Qupls5_pkg::OP_FLTPD,Qupls5_pkg::OP_FLTPQ:
+		begin
+			instr.opcode = ir[6:0];
+			instr.vn = ir.vn;
+			instr.rmd = ir.rmd;
+			instr.func = ir.func;
+			vlen1 = fvlen;
+		end
+	Qupls5_pkg::OP_LDV,Qupls5_pkg::OP_STV,
+	Qupls5_pkg::OP_LDVN,Qupls5_pkg::OP_STVN:
+	   begin
+		case(vls.dt)
+		3'd0:	vlen1 = vlen;
+		3'd1:	vlen1 = fvlen;
+		3'd2:	vlen1 = xvlen;
+		3'd3:	vlen1 = cvlen;
+		3'd4:	vlen1 = avlen;
+		3'd5:	vlen1 = tvlen;
+		default:	vlen1 = vlen;
+		endcase
+		case(vls.dt)
+		3'd0:	vlen3 = vlen2;
+		3'd1:	vlen3 = fvlen2;
+		3'd2:	vlen3 = xvlen2;
+		3'd3:	vlen3 = cvlen2;
+		3'd4:	vlen3 = avlen2;
+		3'd5:	vlen3 = tvlen2;
+		default:	vlen3 = vlen2;
+		endcase
+		case(vls.dt)
+		3'd0:	velsz1 = velsz[ 3: 0];
+		3'd1:	velsz1 = velsz[11: 8];
+		3'd2:	velsz1 = velsz[19:16];
+		3'd3:	velsz1 = velsz[27:24];
+		3'd4:	velsz1 = velsz[35:32];
+		3'd5:	velsz1 = velsz[43:40];
+		default:	velsz1 = velsz[ 3: 0];
+   	endcase
+		case(vls.dt)
+		3'd0:	vln = vlen_i[ 7: 0];
+		3'd1:	vln = vlen_i[11: 8];
+		3'd2:	vln = vlen_i[23:16];
+		3'd3:	vln = vlen_i[31:24];
+		3'd4:	vln = vlen_i[39:32];
+		3'd5:	vln = vlen_i[47:40];
+		default:	vln = vlen_i[ 7: 0];
+   	endcase
+    end
+    default:
+        begin
+        vlen1 = 10'd0;
+        vlen3 = 3'd0;
+        velsz1 = 4'd8;
+        end
+    endcase
+	// Copy instruction to micro-op verbatium. The register fields need to be
+	// expanded by two bits each.
+  uop0 = instr;
+  uop0.lead = 1'b1;
+  uop1 = instr;
+  uop1.num = 5'd1;
+end
+
+always_comb vRd = {3'b0,instr.Rd};
+always_comb vRs1 = {3'b0,instr.Rs1};
+always_comb vRs2 = {3'b0,instr.Rs2};
+always_comb vRs3 = {3'b0,instr.Rs3};
+always_comb vRdi = instr.vn[0];
+
+// Don't increment a constant field.
+always_comb vRs1i = (instr.vn[1] & ~instr.ms[0]);
+always_comb vRs2i = (instr.vn[2] & ~instr.ms[1]);
+always_comb vRs3i = (instr.vn[3] & ~instr.ms[2]);
+
+always_comb
+if (rst) begin
+	next_count = 3'd0;
+	ble = 9'd0;
+	kk = 0;
+	dc_opcode = Qupls5_pkg::OP_NOP;
+	dc_func = 7'd0;
+	foreach (next_uop[n1]) begin
+		next_uop[n1] = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+		next_uop[n1].lead = n1==0;
+		next_uop[n1].opcode = Qupls5_pkg::OP_NOP;
+		next_uop[n1].ble = 9'b0;
+		next_uop[n1].v = VAL;
+	end
+end
+else begin
+	next_count = 3'd0;
+	ble = 9'd0;
+	kk = 0;
+	foreach (next_uop[n1]) begin
+		next_uop[n1] = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+		next_uop[n1].lead = n1==0;
+		next_uop[n1].opcode = Qupls5_pkg::OP_NOP;
+		next_uop[n1].ble = 9'b0;
+		next_uop[n1].v = VAL;
+	end
+
+	case(ir.opcode)
+	Qupls5_pkg::OP_BRK:
+		begin
+			next_uop[0] = ir;
+			next_uop[0].lead = TRUE;
+			next_count = 3'd1;
+		end
+/*
+	Qupls5_pkg::OP_MOVMR:
+		begin
+			if (insert_boi) begin
+				kk = 1;
+				next_uop[0] = uop_boi;
+				if (ir[47:46] > 2'd0) begin
+					next_uop[kk] = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+					next_uop[kk].opcode = Qupls5_pkg::OP_R3H;
+					next_uop[kk].Rd = {9'(thread*40+ir.Rd)};
+					next_uop[kk].Rs1 = {9'(thread*40+ir.Rs1)};
+					next_uop[kk].func = Qupls5_pkg::FN_MOVE;
+					kk = kk + 1;
+				end
+				if (ir[47:46] > 2'd1) begin
+					next_uop[kk] = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+					next_uop[kk].opcode = Qupls5_pkg::OP_R3H;
+					next_uop[kk].Rd = {9'(thread*40+ir.Rd2)};
+					next_uop[kk].Rs1 = {9'(thread*40+ir.Rs2)};
+					next_uop[kk].func = Qupls5_pkg::FN_MOVE;
+					kk = kk + 1;
+				end
+				if (ir[47:46] > 2'd2) begin
+					next_uop[kk] = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+					next_uop[kk].opcode = Qupls5_pkg::OP_R3H;
+					next_uop[kk].Rd = {9'(thread*40+ir.Rs3)};
+					next_uop[kk].Rs1 = {9'(thread*40+ir.Rs4)};
+					next_uop[kk].func = Qupls5_pkg::FN_MOVE;
+					kk = kk + 1;
+				end
+				next_count = kk[3:0];
+				next_uop[0].lead = 1'd1;
+				next_uop[0].num = 5'd0;
+				next_uop[1].num = 5'd1;
+				next_uop[2].num = 5'd2;
+				next_uop[3].num = 5'd3;
+			end
+			else begin
+				kk = 0;
+				if (ir[47:46] > 2'd0) begin
+					next_uop[kk] = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+					next_uop[kk].opcode = Qupls5_pkg::OP_R3H;
+					next_uop[kk].Rd = {9'(thread*40+ir.Rd)};
+					next_uop[kk].Rs1 = {9'(thread*40+ir.Rs1)};
+					next_uop[kk].func = Qupls5_pkg::FN_MOVE;
+					kk = kk + 1;
+				end
+				if (ir[47:46] > 2'd1) begin
+					next_uop[kk] = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+					next_uop[kk].opcode = Qupls5_pkg::OP_R3H;
+					next_uop[kk].Rd = {9'(thread*40+ir.Rd2)};
+					next_uop[kk].Rs1 = {9'(thread*40+ir.Rs2)};
+					next_uop[kk].func = Qupls5_pkg::FN_MOVE;
+					kk = kk + 1;
+				end
+				if (ir[47:46] > 2'd2) begin
+					next_uop[kk] = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+					next_uop[kk].opcode = Qupls5_pkg::OP_R3H;
+					next_uop[kk].Rd = {9'(thread*40+ir.Rs3)};
+					next_uop[kk].Rs1 = {9'(thread*40+ir.Rs4)};
+					next_uop[kk].func = Qupls5_pkg::FN_MOVE;
+					kk = kk + 1;
+				end
+				next_count = kk[3:0];
+				next_uop[0].lead = 1'd1;
+				next_uop[0].num = 5'd0;
+				next_uop[1].num = 5'd1;
+				next_uop[2].num = 5'd2;
+			end
+		end
+*/
+	Qupls5_pkg::OP_EXTD:
+		begin
+			if (SUPPORT_VECTOR) begin
+				case(instr.op3)
+				EX_VSHLV,EX_VSHRV:
+					case({VREGS > 4,vlen1[3:0]})
+					5'd1:	
+						begin
+							next_count = 4'd1;
+							next_uop[0] = vsins;
+							next_uop[0].lead = TRUE;
+							next_uop[0].Rd = vRd;
+							next_uop[0].Rs1 = vRs1;
+							next_uop[0].Rs4 = mot0_reg;
+						end
+					5'd2:	
+						begin
+							next_count = 4'd2;
+							next_uop[0] = vsins;
+							next_uop[0].lead = TRUE;
+							next_uop[0].Rd = vRd;
+							next_uop[0].Rs1 = vRs1;
+							next_uop[0].Rs4 = mot0_reg;
+							next_uop[1].num = 5'd1;
+							next_uop[1].Rd = vRd + 2'd1;
+							next_uop[1].Rs1 = vRs1 + 2'd1;
+							next_uop[1].Rs3 = mot0_reg;
+							next_uop[1].Rs4 = vsins.Rs4;
+						end
+					5'd3:	
+						begin
+							next_count = 4'd3;
+							next_uop[0] = vsins;
+							next_uop[0].lead = TRUE;
+							next_uop[0].Rd = vRd;
+							next_uop[0].Rs1 = vRs1;
+							next_uop[0].Rs4 = mot0_reg;
+							next_uop[1].num = 5'd1;
+							next_uop[1].Rd = vRd + 2'd1;
+							next_uop[1].Rs1 = vRs1 + 2'd1;
+							next_uop[1].Rs3 = mot0_reg;
+							next_uop[1].Rs4 = mot0_reg;
+							next_uop[2].num = 5'd2;
+							next_uop[2].Rd = vRd + 2'd2;
+							next_uop[2].Rs1 = vRs1 + 2'd2;
+							next_uop[2].Rs3 = mot0_reg;
+							next_uop[2].Rs4 = vsins.Rs4;
+						end
+					5'd4:	
+						begin
+							next_count = 4'd4;
+							next_uop[0] = vsins;
+							next_uop[0].lead = TRUE;
+							next_uop[0].Rd = vRd;
+							next_uop[0].Rs1 = vRs1;
+							next_uop[0].Rs4 = mot0_reg;
+							next_uop[1].num = 5'd1;
+							next_uop[1].Rd = vRd + 2'd1;
+							next_uop[1].Rs1 = vRs1 + 2'd1;
+							next_uop[1].Rs3 = mot0_reg;
+							next_uop[1].Rs4 = mot0_reg;
+							next_uop[2].num = 5'd2;
+							next_uop[2].Rd = vRd + 2'd2;
+							next_uop[2].Rs1 = vRs1 + 2'd2;
+							next_uop[2].Rs3 = mot0_reg;
+							next_uop[2].Rs4 = mot0_reg;
+							next_uop[3].num = 5'd3;
+							next_uop[3].Rd = vRd + 2'd3;
+							next_uop[3].Rs1 = vRs1 + 2'd3;
+							next_uop[3].Rs3 = mot0_reg;
+							next_uop[3].Rs4 = vsins.Rs4;
+						end
+					5'd21:	
+						begin
+							next_count = 4'd5;
+							next_uop[0] = vsins;
+							next_uop[0].lead = TRUE;
+							next_uop[0].Rd = vRd;
+							next_uop[0].Rs1 = vRs1;
+							next_uop[0].Rs4 = mot0_reg;
+							next_uop[1].num = 5'd1;
+							next_uop[1].Rd = vRd + 2'd1;
+							next_uop[1].Rs1 = vRs1 + 2'd1;
+							next_uop[1].Rs3 = mot0_reg;
+							next_uop[1].Rs4 = mot0_reg;
+							next_uop[2].num = 5'd2;
+							next_uop[2].Rd = vRd + 2'd2;
+							next_uop[2].Rs1 = vRs1 + 2'd2;
+							next_uop[2].Rs3 = mot0_reg;
+							next_uop[2].Rs4 = mot0_reg;
+							next_uop[3].num = 5'd3;
+							next_uop[3].Rd = vRd + 2'd3;
+							next_uop[3].Rs1 = vRs1 + 2'd3;
+							next_uop[3].Rs3 = mot0_reg;
+							next_uop[3].Rs4 = mot0_reg;
+							next_uop[4].num = 5'd4;
+							next_uop[4].Rd = vRd + 3'd4;
+							next_uop[4].Rs1 = vRs1 + 3'd4;
+							next_uop[4].Rs3 = mot0_reg;
+							next_uop[4].Rs4 = vsins.Rs4;
+						end
+					5'd22:	
+						begin
+							next_count = 4'd6;
+							next_uop[0].lead = TRUE;
+							next_uop[0].Rd = vRd;
+							next_uop[0].Rs1 = vRs1;
+							next_uop[0].Rs4 = mot0_reg;
+							next_uop[1].num = 5'd1;
+							next_uop[1].Rd = vRd + 2'd1;
+							next_uop[1].Rs1 = vRs1 + 2'd1;
+							next_uop[1].Rs3 = mot0_reg;
+							next_uop[1].Rs4 = mot0_reg;
+							next_uop[2].num = 5'd2;
+							next_uop[2].Rd = vRd + 2'd2;
+							next_uop[2].Rs1 = vRs1 + 2'd2;
+							next_uop[2].Rs3 = mot0_reg;
+							next_uop[2].Rs4 = mot0_reg;
+							next_uop[3].num = 5'd3;
+							next_uop[3].Rd = vRd + 2'd3;
+							next_uop[3].Rs1 = vRs1 + 2'd3;
+							next_uop[3].Rs3 = mot0_reg;
+							next_uop[3].Rs4 = mot0_reg;
+							next_uop[4].num = 5'd4;
+							next_uop[4].Rd = vRd + 3'd4;
+							next_uop[4].Rs1 = vRs1 + 3'd4;
+							next_uop[4].Rs3 = mot0_reg;
+							next_uop[4].Rs4 = mot0_reg;
+							next_uop[5].num = 5'd5;
+							next_uop[5].Rd = vRd + 3'd5;
+							next_uop[5].Rs1 = vRs1 + 3'd5;
+							next_uop[5].Rs3 = mot0_reg;
+							next_uop[5].Rs4 = vsins.Rs4;
+						end
+					5'd23:	
+						begin
+							next_count = 4'd7;
+							next_uop[0].lead = TRUE;
+							next_uop[0].Rd = vRd;
+							next_uop[0].Rs1 = vRs1;
+							next_uop[0].Rs4 = mot0_reg;
+							next_uop[1].num = 5'd1;
+							next_uop[1].Rd = vRd + 2'd1;
+							next_uop[1].Rs1 = vRs1 + 2'd1;
+							next_uop[1].Rs3 = mot0_reg;
+							next_uop[1].Rs4 = mot0_reg;
+							next_uop[2].num = 5'd2;
+							next_uop[2].Rd = vRd + 2'd2;
+							next_uop[2].Rs1 = vRs1 + 2'd2;
+							next_uop[2].Rs3 = mot0_reg;
+							next_uop[2].Rs4 = mot0_reg;
+							next_uop[3].num = 5'd3;
+							next_uop[3].Rd = vRd + 2'd3;
+							next_uop[3].Rs1 = vRs1 + 2'd3;
+							next_uop[3].Rs3 = mot0_reg;
+							next_uop[3].Rs4 = mot0_reg;
+							next_uop[4].num = 5'd4;
+							next_uop[4].Rd = vRd + 3'd4;
+							next_uop[4].Rs1 = vRs1 + 3'd4;
+							next_uop[4].Rs3 = mot0_reg;
+							next_uop[4].Rs4 = mot0_reg;
+							next_uop[5].num = 5'd5;
+							next_uop[5].Rd = vRd + 3'd5;
+							next_uop[5].Rs1 = vRs1 + 3'd5;
+							next_uop[5].Rs3 = mot0_reg;
+							next_uop[5].Rs4 = mot0_reg;
+							next_uop[6].num = 5'd6;
+							next_uop[6].Rd = vRd + 3'd6;
+							next_uop[6].Rs1 = vRs1 + 3'd6;
+							next_uop[6].Rs3 = mot0_reg;
+							next_uop[6].Rs4 = vsins.Rs4;
+						end
+					5'd24:
+						begin
+							next_count = 4'd8;
+							next_uop[0].lead = TRUE;
+							next_uop[0].Rd = vRd;
+							next_uop[0].Rs1 = vRs1;
+							next_uop[0].Rs4 = mot0_reg;
+							next_uop[1].num = 5'd1;
+							next_uop[1].Rd = vRd + 2'd1;
+							next_uop[1].Rs1 = vRs1 + 2'd1;
+							next_uop[1].Rs3 = mot0_reg;
+							next_uop[1].Rs4 = mot0_reg;
+							next_uop[2].num = 5'd2;
+							next_uop[2].Rd = vRd + 2'd2;
+							next_uop[2].Rs1 = vRs1 + 2'd2;
+							next_uop[2].Rs3 = mot0_reg;
+							next_uop[2].Rs4 = mot0_reg;
+							next_uop[3].num = 5'd3;
+							next_uop[3].Rd = vRd + 2'd3;
+							next_uop[3].Rs1 = vRs1 + 2'd3;
+							next_uop[3].Rs3 = mot0_reg;
+							next_uop[3].Rs4 = mot0_reg;
+							next_uop[4].num = 5'd4;
+							next_uop[4].Rd = vRd + 3'd4;
+							next_uop[4].Rs1 = vRs1 + 3'd4;
+							next_uop[4].Rs3 = mot0_reg;
+							next_uop[4].Rs4 = mot0_reg;
+							next_uop[5].num = 5'd5;
+							next_uop[5].Rd = vRd + 3'd5;
+							next_uop[5].Rs1 = vRs1 + 3'd5;
+							next_uop[5].Rs3 = mot0_reg;
+							next_uop[5].Rs4 = mot0_reg;
+							next_uop[6].num = 5'd6;
+							next_uop[6].Rd = vRd + 3'd6;
+							next_uop[6].Rs1 = vRs1 + 3'd6;
+							next_uop[6].Rs3 = mot0_reg;
+							next_uop[6].Rs4 = mot0_reg;
+							next_uop[7].num = 5'd7;
+							next_uop[7].Rd = vRd + 3'd7;
+							next_uop[7].Rs1 = vRs1 + 3'd7;
+							next_uop[7].Rs3 = mot0_reg;
+							next_uop[7].Rs4 = vsins.Rs4;
+						end
+					default:
+						begin
+							next_count = 4'd1;
+							next_uop[0] = nopi;
+						end
+					endcase
+				default:
+					begin
+						next_count = 4'd1;
+						next_uop[0] = uop0;
+					end
+				endcase
+			end
+			else begin
+				next_count = 4'd1;
+				next_uop[0] = uop0;
+			end
+		end
+`include "Qupls5_microop_mem_R3P.sv"
+`include "Qupls5_microop_mem_R3V.sv"
+`include "Qupls5_microop_mem_FLT.sv"
+`include "Qupls5_microop_mem_FLTP.sv"
+`include "Qupls5_microop_mem_FLTV.sv"
+`include "Qupls5_microop_mem_LSV.sv"
+`include "Qupls5_microop_mem_LSVN.sv"
+`include "Qupls5_microop_mem_ENTER.sv"	// and EXIT
+`include "Qupls5_microop_mem_PUSHPOP.sv"
+`include "Qupls5_microop_mem_CAP.sv"
+	Qupls5_pkg::OP_LDB,Qupls5_pkg::OP_LDBZ,Qupls5_pkg::OP_LDW,Qupls5_pkg::OP_LDWZ,
+	Qupls5_pkg::OP_LDT,Qupls5_pkg::OP_LDTZ,Qupls5_pkg::OP_LOAD,Qupls5_pkg::OP_CLOAD:
+		begin
+			if (insert_boi) begin
+				next_count = 4'd2;
+				next_uop[0] = uop_boi;
+				next_uop[1] = uop1;
+			end
+			else begin
+				next_count = 4'd1;
+				next_uop[0] = uop0;
+			end
+		end
+
+	Qupls5_pkg::OP_CSR:
+		begin
+			if (insert_boi) begin
+				next_count = 4'd2;
+				next_uop[0] = uop_boi;
+				next_uop[1] = uop1;
+			end
+			else begin
+				next_count = 4'd1;
+				next_uop[0] = uop0;
+			end
+		end
+		/*
+			case(ir[47:41])
+			Qupls5_pkg::FN_ADD,Qupls5_pkg::FN_SUB,Qupls5_pkg::FN_MUL,Qupls5_pkg::FN_DIV,
+			Qupls5_pkg::FN_MULU,Qupls5_pkg::FN_DIVU,Qupls5_pkg::FN_MULSU,Qupls5_pkg::FN_DIVSU,
+			Qupls5_pkg::FN_AND,Qupls5_pkg::FN_OR,Qupls5_pkg::FN_XOR:
+				begin
+			endcase
+		*/
+	/*
+	Qupls5_pkg::OP_R3B,Qupls5_pkg::OP_R3W,Qupls5_pkg::OP_R3T,Qupls5_pkg::OP_R3O:
+		begin
+			case(ir[47:41])
+			Qupls5_pkg::FN_AND,Qupls5_pkg::FN_OR,Qupls5_pkg::FN_XOR:
+				begin
+					next_count = 3'd2;
+					next_uop[0] = {1'b1,1'b0,3'd1,3'd0,5'h00,4'd0,ir};
+					next_uop[1] = {1'b1,1'b0,3'd1,3'd0,5'h01,4'd0,ir & ~48'hFFFFFFFFE000};
+				end
+			endcase
+		end
+	*/
+	Qupls5_pkg::OP_ADDI,
+	Qupls5_pkg::OP_SUBFI,
+	Qupls5_pkg::OP_CMPI,
+	Qupls5_pkg::OP_CMPUI,
+	Qupls5_pkg::OP_ANDI,
+	Qupls5_pkg::OP_ORI,
+	Qupls5_pkg::OP_XORI,
+	Qupls5_pkg::OP_FADDI,
+	Qupls5_pkg::OP_LOADA,
+	Qupls5_pkg::OP_AMO,Qupls5_pkg::OP_CMPSWAP:
+		begin
+			if (insert_boi) begin
+				next_count = 4'd2;
+				next_uop[0] = uop_boi;
+				next_uop[1] = uop1;
+			end
+			else begin
+				next_count = 4'd1;
+				next_uop[0] = uop0;
+			end
+		end
+/*
+	Qupls5_pkg::OP_LOAD:
+		if (insert_boi) begin
+			next_count = 4'd3;
+			next_uop[0] = uop_boi;
+			next_uop[1] = uop1;
+			next_uop[2] = uop1;
+			next_uop[2].num = 5'd2;
+			next_uop[2].Rd[0] = 1'b1;
+			next_uop[2].imm = next_uop[1].imm + 4'd8;
+		end
+		else begin
+			next_count = 4'd2;
+			next_uop[0] = uop0;
+			next_uop[1] = uop0;
+			next_uop[1].num = 5'd2;
+			next_uop[1].Rd[0] = 1'b1;
+			next_uop[1].imm = next_uop[0].imm + 4'd8;
+		end
+*/
+	Qupls5_pkg::OP_CHK,
+	Qupls5_pkg::OP_STB,Qupls5_pkg::OP_STW,
+	Qupls5_pkg::OP_STT,Qupls5_pkg::OP_STORE,Qupls5_pkg::OP_CSTORE,
+	Qupls5_pkg::OP_STPTR,
+	Qupls5_pkg::OP_FENCE:
+		if (insert_boi) begin
+			next_count = 4'd2;
+			next_uop[0] = uop_boi;
+			next_uop[1] = uop1;
+		end
+		else begin
+			next_count = 4'd1;
+			next_uop[0] = uop0;
+		end
+/*
+	Qupls5_pkg::OP_STORE,Qupls5_pkg::OP_STPTR:
+		if (insert_boi) begin
+			next_count = 4'd3;
+			next_uop[0] = uop_boi;
+			next_uop[1] = uop1;
+			next_uop[2] = uop1;
+			next_uop[2].num = 5'd2;
+			next_uop[2].Rd[0] = 1'b1;
+			next_uop[2].imm = next_uop[1].imm + 4'd8;
+		end
+		else begin
+			next_count = 4'd2;
+			next_uop[0] = uop0;
+			next_uop[1] = uop0;
+			next_uop[1].num = 5'd2;
+			next_uop[1].Rd[0] = 1'b1;
+			next_uop[1].imm = next_uop[0].imm + 4'd8;
+		end
+*/
+/*		
+	Qupls5_pkg::OP_MOV:
+		begin
+			next_count = 4'd1;
+			next_uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,ir};
+		end
+*/			
+	Qupls5_pkg::OP_MOD,Qupls5_pkg::OP_NOP:
+		begin
+			if (insert_boi) begin
+				next_count = 4'd2;
+				next_uop[0] = uop_boi;
+				next_uop[1] = uop1;
+			end
+			else begin
+				next_count = 4'd1;
+				next_uop[0] = uop0;
+			end
+		end
+
+	Qupls5_pkg::OP_R3H:
+		begin
+			case(ir.func)
+			// Note the use of the OR instruction instead of MOVE.
+			// MOVES are done by renaming registers which is not what we want in 
+			// this case. Reading and writing of the same register is taking place
+			// as far as rename is concerned.
+			FN_EXG:
+				if (insert_boi) begin
+					next_count = 4'd4;
+					next_uop[0] = uop_boi;
+					// mot0 = Rd
+					next_uop[1] = uop1;
+					next_uop[1].func = Qupls5_pkg::FN_MOVE;
+					next_uop[1].Rd = mot0_reg;	
+					next_uop[1].Rs1 = uop1.Rd;
+					next_uop[1].Rs2 = zero_reg;
+					next_uop[1].Rs3 = zero_reg;
+					// Rd = Rs1
+					next_uop[2] = uop1;
+					next_uop[2].func = Qupls5_pkg::FN_MOVE;
+					next_uop[2].Rs2 = zero_reg;
+					next_uop[2].Rs3 = zero_reg;
+					// Rs1 = mot0
+					next_uop[3] = uop1;
+					next_uop[3].func = Qupls5_pkg::FN_MOVE;
+					next_uop[3].Rd = uop1.Rs1;
+					next_uop[3].Rs1 = mot0_reg;
+					next_uop[3].Rs2 = zero_reg;
+					next_uop[3].Rs3 = zero_reg;
+				end
+				else begin
+					next_count = 4'd3;
+					// mot0 = Rd
+					next_uop[0] = uop1;
+					next_uop[0].func = Qupls5_pkg::FN_MOVE;
+					next_uop[0].Rd = mot0_reg;	
+					next_uop[0].Rs1 = uop1.Rd;
+					next_uop[0].Rs2 = zero_reg;
+					next_uop[0].Rs3 = zero_reg;
+					// Rd = Rs1
+					next_uop[1] = uop1;
+					next_uop[1].func = Qupls5_pkg::FN_MOVE;
+					next_uop[1].Rs2 = zero_reg;
+					next_uop[1].Rs3 = zero_reg;
+					// Rs1 = mot0
+					next_uop[2] = uop1;
+					next_uop[2].func = Qupls5_pkg::FN_MOVE;
+					next_uop[2].Rd = uop1.Rs1;
+					next_uop[2].Rs1 = mot0_reg;
+					next_uop[2].Rs2 = zero_reg;
+					next_uop[2].Rs3 = zero_reg;
+				end
+			default:
+				if (insert_boi) begin
+					next_count = 4'd3;
+					next_uop[0] = uop_boi;
+					next_uop[1] = uop1;
+					next_uop[2] = uop1;
+					next_uop[2].lead = FALSE;
+					next_uop[2].num = 5'd2;
+					next_uop[2].Rd = uop1.Rd + 9'd1;
+					next_uop[2].Rs1 = uop1.Rs1 + 9'd1;
+					next_uop[2].Rs2 = uop1.Rs2 + 9'd1;
+					next_uop[2].Rs3 = uop1.Rs3 + 9'd1;
+				end
+				else begin
+					next_count = 4'd2;
+					next_uop[0] = uop0;
+					next_uop[1] = uop0;
+					next_uop[1].lead = FALSE;
+					next_uop[1].num = 5'd1;
+					next_uop[1].Rd = uop0.Rd + 9'd1;
+					next_uop[1].Rs1 = uop0.Rs1 + 9'd1;
+					next_uop[1].Rs2 = uop0.Rs2 + 9'd1;
+					next_uop[1].Rs3 = uop0.Rs3 + 9'd1;
+				end
+			endcase
+		end
+	default:
+		begin
+			if (insert_boi) begin
+				next_count = 4'd2;
+				next_uop[0] = uop_boi;
+				next_uop[1] = uop1;
+			end
+			else begin
+				next_count = 4'd1;
+				next_uop[0] = uop0;
+			end
+		end
+	endcase
+	foreach (next_uop[nn]) begin
+		if (nn >= next_count)
+			next_uop[nn].v = 1'b0;
+	end	
+end
+
+// Define a NOP instruction.
+always_comb
+begin
+	pr_nopi = {$bits(Qupls5_pkg::rob_entry_t){1'b0}};
+	pr_nopi.op.exc = Qupls5_pkg::FLT_NONE;
+	pr_nopi.op.uop = {41'd0,Qupls5_pkg::OP_NOP};
+	pr_nopi.op.decbus.nop = TRUE;
+	pr_nopi.op.decbus.cause = Qupls5_pkg::FLT_NONE;
+	pr_nopi.op.uop.lead = 1'd1;
+	pr_nopi.op.v = 1'b1;
+	pr_nopi.v = 5'd1;
+	pr_nopi.exc = Qupls5_pkg::FLT_NONE;
+	pr_nopi.excv = INV;
+	pr_nopi.done = 2'b11;
+	pr_nopi.stomped = TRUE;
+	/* NOP will be decoded later
+	nopi.decbus.Rdz = 1'b1;
+	nopi.decbus.nop = 1'b1;
+	nopi.decbus.alu = 1'b1;
+	*/
+end
+
+
+generate begin : gComb
+	// ToDo: finish off comb logic
+	if (COMB && FALSE) begin
+		always_comb
+		if (rst) begin
+			count = 3'd0;
+			foreach (uop[n1]) begin
+				uop[n1] = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+				uop[n1].opcode = Qupls5_pkg::OP_NOP;
+				uop[n1].v = VAL;
+			end
+		end
+		else begin
+			count = next_count;
+			foreach (uop[n1])
+				uop[n1] = next_uop[n1];
+		end
+	end
+	else begin
+		always_ff @(posedge clk)
+		if (rst) begin
+			count <= 5'd0;
+			foreach (uop[n1])
+				uop[n1] <= next_uop[n1];
+			pg_trn <= {$bits(pipeline_group_reg_t){1'b0}};
+			foreach(pg_trn.pr[n1])
+				pg_trn.pr[n1] <= nopi;
+		end
+		else if (en) begin
+			count <= next_count;
+			foreach (uop[n1])
+				uop[n1] <= next_uop[n1];
+			pg_trn <= pg_ext;
+			if (stomp)
+				pg_trn.hdr.v <= INV;
+			foreach (pg_ext.pr[n1]) begin
+				if (stomp) begin
+					pg_trn.pr[n1].stomped <= TRUE;
+					pg_trn.pr[n1].done <= 2'b11;
+				end
+				if (branch_resolved) begin
+					if (pg_ext.pr[n1].ip_stream.thread==live_stream.thread && pg_ext.pr[n1].ip_stream.stream != live_stream.stream) begin
+						pg_trn.pr[n1].stomped <= TRUE;
+						pg_trn.pr[n1].done <= 2'b11;
+					end
+				end
+			end
+		end
+	end
+end
+endgenerate
+
+endmodule

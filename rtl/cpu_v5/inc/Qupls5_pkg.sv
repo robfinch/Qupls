@@ -1,0 +1,3669 @@
+`timescale 1ns / 10ps
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2023-2026  Robert Finch, Waterloo
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+//
+// BSD 3-Clause License
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are met:
+//
+// 1. Redistributions of source code must retain the above copyright notice, this
+//    list of conditions and the following disclaimer.
+//
+// 2. Redistributions in binary form must reproduce the above copyright notice,
+//    this list of conditions and the following disclaimer in the documentation
+//    and/or other materials provided with the distribution.
+//
+// 3. Neither the name of the copyright holder nor the names of its
+//    contributors may be used to endorse or promote products derived from
+//    this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+// FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+// DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+// SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+// CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+// OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+// ============================================================================
+
+`ifndef CPU_TYPES_PKG
+import  cpu_types_pkg::*;
+`endif
+
+package Qupls5_pkg;
+`define QUPLS4	1'b1
+`define STARK_PKG 1'b1
+`undef IS_SIM
+parameter SIM = 1'b0;
+//`define IS_SIM	1
+
+`include "Qupls5_config.sv"
+/*
+
+// Comment out to remove the sigmoid approximate function
+//`define SIGMOID	1
+
+// 4 is the only setting (under construction)
+parameter MWIDTH = 4;
+
+// Number of threads supported. (Under construction < 5)
+parameter THREADS = 2;
+
+// Number of streams of execution. Alternate branch paths create streams.
+parameter XSTREAMS = 8;
+
+// Number of levels of branches that can be speculated across.
+parameter BRANCH_LEVELS = 8;
+
+// Number of physical registers supporting the architectural ones and used in
+// register renaming. There must be significantly more physical registers than
+// architectural ones, or performance will suffer due to stalls.
+// Must be a multiple of four. If it is not 512 or 256 then the renamer logic will
+// need to be modified.
+parameter PREGS = THREADS > 4 ? 1024 : 512;
+
+parameter IP_REG = 8'd31;
+
+// Number of operands (including destination) a micro-op can have.
+parameter NOPER = 5;
+
+// Length of a vector register in bits.
+parameter VLEN = 256;
+parameter VREGS = (VLEN/$bits(cpu_types_pkg::value_t));
+
+`define L1CacheLines	1024
+`define L1CacheLineSize		256
+
+`define L1ICacheLineSize	256
+`define L1ICacheLines	1024
+`define L1ICacheWays 4
+
+`define L1DCacheWays 4
+
+parameter SUPPORT_4B_PTE = 1'b0;
+parameter SUPPORT_8B_PTE = 1'b1;
+parameter SUPPORT_16B_PTE = 1'b0;
+parameter SUPPORT_TLBLVL2	= 1'b0;
+
+// =============================================================================
+// Debugging Options
+// =============================================================================
+// Set the following parameter to one to serialize operation of the CPU.
+// Meant for debugging purposes.
+parameter SERIALIZE = 0;
+
+// Set the following parameter to disable invocation of the single step
+// routine. Meant for debugging purposes.
+parameter SSM_DEBUG = 1;
+
+// Enables register renaming to remove false dependencies.
+parameter SUPPORT_RENAMER = 1;
+
+// Register name supplier
+// 3 = SRL based circular list, smaller less performant
+// 4 = FIFO based, larger, does not work correctly yet
+// 			(sometimes supplies the same register twice)
+// 6 = FFO / Bitmap, a find-first-ones approach with a bitmap
+parameter RENAMER = 4;
+
+// Comment out the following to remove the RAT
+`define SUPPORT_RAT 1;
+
+// =============================================================================
+// =============================================================================
+
+// 1=out of order dispatch, maybe better performance, but huge size
+// 0=in-order pipeline unit, much smaller but may stall
+parameter DISPATCH_STRATEGY = 0;
+
+// Register lookup strategy used by the reservation stations for missing data.
+// 0=use register file write port history
+// 1=use extra register file read ports
+parameter RL_STRATEGY = 1;
+
+// 1=move interrupt to the start of the instruction (recommended).
+// 2=defer interrupts to the start of the next instruction.
+// 3=record micro-op number for instruction restart (not recommended).
+parameter UOP_STRATEGY = 1;	// micro-op strategy
+
+// 1=no interrupts allowed when micro-code machine active
+parameter UCM_STRATEGY = 1;	// micro-code machine strategy
+
+// Set the following to one to support backout and restore branch handling.
+// backout / restore is not 100% working yet. Supporting backout / restore
+// makes the core larger.
+parameter SUPPORT_BACKOUT = 1'b1;
+
+// Select building for performance or size.
+// If this is set to one extra logic will be included to improve performance.
+// Allows simple ALU ops to be performed on the FPU and simple FPU ops to be
+// performed on an ALU. 
+parameter PERFORMANCE = 1'b0;
+
+// Predictor
+// This is for the late stage predicator. The branch-target-buffer is always
+// present.
+//		0 = none
+//		1 = backwards branch predictor (accuracy < 60%)
+//		2 = g select predictor
+parameter BRANCH_PREDICTOR = 0;
+
+// The following indicates whether to support postfix instructions or not.
+// Supporting postfix instructions increases the size of the core and reduces
+// the code density. (Deprecated - the core does not support POSTFIXES).
+parameter SUPPORT_POSTFIX = 0;
+
+// The following allows the core to process flow control ops in any order
+// to reduce the size of the core. Set to zero to restrict flow control ops
+// to be processed in order. If processed out of order a branch may 
+// speculate incorrectly leading to lower performance.
+parameter SUPPORT_OOOFC = 1'b0;
+
+// =============================================================================
+// Instruction Modifier Support
+// =============================================================================
+// The following parameter enables support for predicated logic in the core.
+parameter SUPPORT_PRED = 1'b1;
+parameter SUPPORT_ATOM = 1'b1;
+parameter SUPPORT_CARRY = 1'b0;
+
+// The PRED_SHADOW parameter controls the maximum number of instructions
+// following the predicate that are affected by it. Increasing the shadow
+// increases the amount of logic generated for the core in a more than
+// linear fashion. The maximum is seven instructions as that is all that
+// can be encoded in the instruction. The minimum is one.
+parameter PRED_SHADOW = 4;
+
+// =============================================================================
+// =============================================================================
+// Allowing unaligned memory access increases the size of the core.
+parameter SUPPORT_UNALIGNED_MEMORY = 1'b1;
+parameter SUPPORT_BUS_TO = 1'b1;
+
+// This parameter enables support for quad (128-bit) precision operations.
+parameter SUPPORT_QUAD_PRECISION = 1'b0;
+
+// Supporting load bypassing may improve performance, but will also increase the
+// size of the core and make it more vulnerable to security attacks.
+// Loads are bypassed only when there is an exact match to a store.
+parameter SUPPORT_LOAD_BYPASSING = 1'b1;
+
+// Support mutiple precisions for SAU and FPU operations. If not supported only
+// 64-bit precision will be supported. Suppporting multiple precisions adds
+// considerable size to the SAU / FPU. Eg. 5x larger.
+parameter SUPPORT_PREC = 1'b0;
+
+// Support for NaN tracing
+parameter SUPPORT_NAN_TRACE = 1'b0;
+
+// Support insertion of IRQ polling instructions into the micro-op stream.
+parameter SUPPORT_IRQ_POLLING = 1'b0;
+
+// The following controls the size of the reordering buffer.
+// Setting ROB_ENTRIES below 12 may not work. Setting the number of entries over
+// 63 may require changing the sequence number type. For ideal construction 
+// should be a multiple of the machine width (4).
+parameter ROB_ENTRIES = 4 * MWIDTH;
+
+// Number of entries in dispatch buffer. Must be a multiple of machine width (4).
+parameter DBF_ENTRIES = 4 * MWIDTH;
+
+// Number of entries supporting block operate instructions.
+parameter BEB_ENTRIES = 4;
+
+// The following is the number of ROB entries that are examined by the 
+// scheduler when determining what to issue. The schedule window is
+// between the head of the queue and WINDOW_SIZE entries backwards.
+// Decreasing the window size may reduce hardware but will cost performance.
+parameter SCHED_WINDOW_SIZE = 8;
+
+// The following is the number of branch checkpoints to support. 16 is the
+// recommended maximum. Fewer checkpoints may reduce core performance as stalls
+// will result if there are insufficient checkpoints for the number of
+// outstanding branches. More checkpoints will only consume resources without
+// improving performance significantly.
+parameter NCHECK = 16;			// number of checkpoints
+
+parameter LOADQ_ENTRIES = 8;
+parameter STOREQ_ENTRIES = 8;
+parameter LSQ_ENTRIES = 8;
+parameter LSQ2 = 1'b0;			// Queue two LSQ entries at once?
+
+parameter pL1CacheLines = `L1CacheLines;
+parameter pL1LineSize = `L1CacheLineSize;
+parameter pL1ICacheLines = `L1CacheLines;
+// The following arrived at as 512+32 bits for word at end of cache line, plus
+// 40 bits for a possible constant postfix
+parameter pL1ICacheLineSize = `L1ICacheLineSize;
+parameter pL1Imsb = $clog2(`L1ICacheLines-1)-1+6;
+parameter pL1ICacheWays = `L1ICacheWays;
+parameter pL1DCacheWays = `L1DCacheWays;
+
+parameter INSN_LEN = 8'd6;
+
+const cpu_types_pkg::pc_address_t RSTPC	= 32'hFFFFFD80;
+const cpu_types_pkg::address_t RSTSP = 32'hFFFF9000;
+
+
+// =============================================================================
+// Instruction Support
+// =============================================================================
+
+// This parameter adds support for capabilities instructions. Increases the
+// size of the core. An FPU must also be enabled.
+parameter SUPPORT_CAPABILITIES = 1'b0;
+
+// Support for vector operations.
+parameter SUPPORT_VECTOR = 1'b1;
+
+parameter SUPPORT_IDIV = 1;
+parameter SUPPORT_TRIG = 0;
+parameter SUPPORT_FDP = 0;
+parameter SUPPORT_FLOAT = 1;
+
+// =============================================================================
+// Resources
+// =============================================================================
+
+// Number of architectural registers including registers to support vector
+// operations. Each vector register needs four registers.
+parameter NREGS = 40*THREADS+(SUPPORT_VECTOR ? 128 : 0);
+parameter AREGS = 40*THREADS+(SUPPORT_VECTOR ? 128 : 0);
+parameter REGFILE_LATENCY = 2;
+
+
+// Number of register read ports. More ports allows more simultaneous reads
+// (obvious) and may increase performance. However, most instructions will
+// have two or fewer arguments, and allowing for four instructions at once
+// means an average of eight ports per cycle.
+parameter NREG_RPORTS = MWIDTH*5;
+
+// Number of register write ports. Mort ports allows more simultabeous writes
+// and may increase performance. The default is set to the machine width.
+// Note: not all instruction write the register file so it may be possible
+// to use fewer write ports without losing too much performance.
+parameter NREG_WPORTS = MWIDTH;
+
+// Number of data ports should be 1 or 2. 2 ports will allow two simulataneous
+// reads, but still only a single write.
+parameter NDATA_PORTS = 1;
+// Number of AGENs should be 1 or 2. There is little value in having more agens
+// than there are data ports.
+parameter NAGEN = 1;
+// Increasing the number of SAUs will increase performance. There must be at
+// least one SAU.
+// Note that adding an FPU may also increase integer performance if PERFORMANCE
+// is set to 1.
+parameter NSAU = 2;			// 1 or 2
+parameter NFPU = 0;			// 0 or 1
+parameter NFMA = 0;			// 0, 1 or 2
+parameter NDFPU = 0;		// 0 or 1
+parameter NLSQ_PORTS = 1;
+
+parameter RAS_DEPTH	= 4;
+
+parameter SUPPORT_RSB = 0;
+
+// Depth of internal stack for exceptionb processing.
+parameter ISTACK_DEPTH = 16;
+*/
+
+// =============================================================================
+// define PANIC types
+// =============================================================================
+
+parameter PANIC_NONE		= 4'd0;
+parameter PANIC_FETCHBUFBEQ	= 4'd1;
+parameter PANIC_INVALIDISLOT	= 4'd2;
+parameter PANIC_MEMORYRACE	= 4'd3;
+parameter PANIC_IDENTICALDRAMS	= 4'd4;
+parameter PANIC_OVERRUN		 = 4'd5;
+parameter PANIC_HALTINSTRUCTION	= 4'd6;
+parameter PANIC_INVALIDMEMOP	= 4'd7;
+parameter PANIC_INVALIDFBSTATE = 4'd8;
+parameter PANIC_INVALIDIQSTATE = 4'd9;
+parameter PANIC_BRANCHBACK = 4'd10;
+parameter PANIC_BADTARGETID	 = 4'd12;
+parameter PANIC_COMMIT = 4'd13;
+parameter PANIC_CHECKPOINT_INDEX = 4'd14;
+
+// =============================================================================
+// Constants
+// =============================================================================
+
+// Register accessibility
+parameter REG_U = 4'h1;
+parameter REG_S = 4'h2;
+parameter REG_H = 4'h4;
+parameter REG_M = 4'h8;
+parameter REG_SHM = REG_S|REG_H|REG_M;
+parameter REG_USHM = REG_U|REG_S|REG_H|REG_M;
+
+// =============================================================================
+// Type declarations
+// =============================================================================
+
+typedef enum logic [1:0] {
+	STR_UNKNOWN = 2'd0,
+	STR_ALIVE = 2'd1,
+	STR_DEAD = 2'd2
+} stream_state_t;
+
+typedef enum logic [2:0] {
+	DRAMSLOT_AVAIL = 3'd0,
+	DRAMSLOT_READY = 3'd1,
+	DRAMSLOT_ACTIVE = 3'd2,
+	DRAMSLOT_DELAY = 3'd3,
+	DRAMSLOT_ACTIVE2 = 3'd4,
+	DRAMSLOT_DELAY2 = 3'd5
+} dram_state_t;
+
+typedef struct packed
+{
+	logic vb;									// valid bypass
+	logic [2:0] row;
+	logic col;
+} lsq_ndx_t;
+
+typedef enum logic [1:0] {
+	OM_APP = 2'd0,
+	OM_SUPERVISOR = 2'd1,
+	OM_HYPERVISOR = 2'd2,
+	OM_SECURE = 2'd3
+} operating_mode_t;
+
+typedef struct packed
+{
+	logic inv;
+	logic [6:0] rg;
+} regspec_t;
+
+typedef enum logic [1:0] {
+	RL_NONE = 2'd0,
+	RL_SEQNUM = 2'd1,
+	RL_V = 2'd2
+} reglookup_t;
+
+typedef logic [NREGS-1:1] reg_bitmask_t;
+typedef logic [ROB_ENTRIES-1:0] rob_bitmask_t;
+typedef logic [LSQ_ENTRIES-1:0] lsq_bitmask_t;
+typedef logic [3:0] beb_ndx_t;
+
+parameter LSQ_CMD_NONE = 3'd0;
+parameter LSQ_CMD_INV = 3'd1;
+parameter LSQ_CMD_ENQ = 3'd2;
+parameter LSQ_CMD_SETADR = 3'd3;
+parameter LSQ_CMD_SETRES = 3'd4;
+parameter LSQ_CMD_INCADR = 3'd5;
+
+typedef struct packed {
+	logic [2:0] cmd;
+	logic [1:0] n;
+	logic can;
+	logic cmt;
+	lsq_ndx_t lndx;
+	cpu_types_pkg::rob_ndx_t rndx;
+	cpu_types_pkg::value_t data;
+	cpu_types_pkg::value_t mask;
+	logic [7:0] flags;
+	logic datav;
+} lsq_cmd_t;
+
+typedef struct packed
+{
+//	cpu_types_pkg::pregno_t [AREGS-1:0] p2regmap;
+	cpu_types_pkg::pregno_t [Qupls5_pkg::AREGS-1:0] pregmap;
+	cpu_types_pkg::pregno_t [Qupls5_pkg::AREGS-1:0] regmap;
+} checkpoint_t;
+
+typedef struct packed
+{
+	cpu_types_pkg::pregno_t [Qupls5_pkg::AREGS-1:0] regmap;
+} reg_map_t;
+
+typedef struct packed
+{
+	cpu_types_pkg::pregndx_t [Qupls5_pkg::AREGS-1:0] regmap;
+} reg_map2_t;
+
+typedef struct packed {
+	cpu_types_pkg::pc_stream_t stream;	// instruction fetch stream number
+	capability_pkg::uc64_capability_t cap;
+} pc_address_ex_t;
+
+typedef struct packed
+{
+	logic [1:0] resv;
+	logic gt;
+	logic ge;
+	logic le;
+	logic lt;
+	logic ne;
+	logic eq;				// _xnor
+} condition_byte_t;
+
+typedef struct packed
+{
+	condition_byte_t _secure;
+	condition_byte_t _hyper;
+	condition_byte_t _super;
+	condition_byte_t _app;
+} condition_reg_t;
+
+typedef struct packed
+{
+	logic pebble_en;		// PBL enable
+	logic page_en;			// paging enable
+	logic [3:0] resv_state;
+	logic [1:0] vx;			// vector state
+	logic [1:0] fx;			// floating-point extension state
+	//------------------ 32
+	logic [7:0] pl;			// privilege level
+	logic [2:0] swstk;	// software stack
+	logic [2:0] mprv;		// memory access priv indicator	
+	logic dbg;					// debug mode indicator
+	logic [1:0] ptrsz;	// pointer size 0=32,1=64,2=96
+	operating_mode_t om;	// operating mode
+	logic trace_en;			// instruction trace enable
+	logic ssm;					// single step mode
+	logic [5:0] ipl;		// interrupt privilege level
+	logic die;					// debug interrupt enable
+	logic mie;					// machine interrupt enable
+	logic hie;					// hypervisor interrupt enable
+	logic sie;					// supervisor interrupt enable
+	logic uie;					// user interrupt enable
+} status_reg_t;				// 32 bits
+
+typedef enum logic [2:0] {
+	RND_NE = 3'd0,		// nearest ties to even
+	RND_ZR = 3'd1,		// round to zero (truncate)
+	RND_PL = 3'd2,		// round to plus infinity
+	RND_MI = 3'd3,		// round to minus infinity
+	RND_MM = 3'd4,		// round to maxumum magnitude (nearest ties away from zero)
+	RND_XG = 3'd5,		// externally guided
+	RND_FL = 3'd7			// round according to flags register
+} fround_t;
+
+typedef struct packed
+{
+	logic [10:0] st_resv;	// reserved bits
+	logic inexact;	// inexact
+	logic dbz;			// divide by zero
+	logic under;		// underflow
+	logic over;			// overflow
+	logic invop;		// invalid operation
+	fround_t rm;
+	logic nanxe;		// any NaN exception enable
+	logic inexe;		// inexact exception enable
+	logic dbzxe;		// divide by zero exception enable
+	logic underxe;	// underflow exception enable
+	logic overxe;		// overflow exception enable
+	logic invopxe;	// invalid operation exception enable
+	//- - - - - - - 
+	logic ns;
+	// Result status
+	logic [4:0] rs_resv;	// reserved bits
+	logic fractie;	// last instruction rounded intermediate result
+	logic rawayz;		// rounded away from zero
+	logic c;				// denormalized, negative zero, or quiet nan
+	logic neg;			// result is negative
+	logic pos;			// result is positive
+	logic zero;			// result is zero
+	logic inf;			// result is infinite
+	// Exception occurrance
+	logic [4:0] xo_resv;	// reserved bits
+	logic swt;			// set this bit to trigger an invalid operation
+	logic inerx;		// inexact result exception occurred (sticky)
+	logic dbzx;			// divide by zero exception occurred
+	logic underx;		// underflow exception occurred
+	logic overx;		// overflow exception occurred
+	logic giopx;		// global invalid operation exception
+	logic gx;				// global exception indicator, set for any exception
+	logic sumx;			// summary exception
+	// Exception type resolution
+	logic xt_resv;	// reserved bit
+	logic [3:0] nan_cause;	// encoded cause of NaN
+	logic cvt;			// attempt to convert NaN or too large integer
+	logic sqrtx;		// square root of non-zero negative
+	logic nancmp;		// comparison of NaNs not using unordered comparisons
+	logic infzero;	// multiply infinity by zero
+	logic zerozero;	// divide zero by zero
+	logic infdiv;		// division of infinities
+	logic subinfx;	// subtraction of infinities
+	logic snanx;		// signaling nan
+} fp_status_reg_t;	// 64 bits
+
+typedef struct packed
+{
+	logic invop;		// invalid operation
+	logic dbz;			// divide by zero
+	logic over;			// overflow
+	logic under;		// underflow
+	logic inexact;	// inexact
+} fp_status_t;
+
+typedef enum logic [2:0] {
+	BTS_NONE = 3'd0,
+	BTS_BCC = 3'd1,
+	BTS_REG = 3'd2,
+	BTS_BSR = 3'd3,
+	BTS_JSR = 3'd4,
+	BTS_CALL = 3'd5,
+	BTS_RET = 3'd6,
+	BTS_ERET = 3'd7
+} bts_t;
+
+typedef enum logic [9:0] {
+	BRC_NONE = 10'h000,
+	BRC_JSR = 10'h001,
+	BRC_JSRN = 10'h002,
+	BRC_BSR = 10'h004,
+	BRC_BCCD = 10'h008,
+	BRC_BCCR = 10'h010,
+	BRC_RTD = 10'h040,
+	BRC_ERET = 10'h100,
+	BRC_ECALL = 10'h200
+} brclass_t;
+
+parameter BRC_BLR = 1'b0;
+parameter BRC_BCC = BRC_BCCR|BRC_BCCD;
+parameter BRC_RET = BRC_RTD;
+
+typedef enum logic [2:0] {
+	BS_IDLE = 3'd0,
+	BS_CHKPT_RESTORE = 3'd1,
+	BS_CHKPT_RESTORED = 3'd2,
+	BS_STATE3 = 3'd3,
+	BS_CAPTURE_MISSPC = 3'd4,
+	BS_DONE = 3'd5,
+	BS_DONE2 = 3'd6
+} branch_state_t;
+
+typedef enum logic [6:0] {
+	OP_BRK = 7'd0,
+	OP_CAP = 7'd1,
+	OP_R3H = 7'd2,
+	OP_BFLD = 7'd3,
+	OP_ADDI = 7'd4,
+	OP_SUBFI = 7'd5,
+	OP_MULI = 7'd6,
+	OP_CSR = 7'd7,
+	OP_ANDI = 7'd8,
+	OP_ORI = 7'd9,
+	OP_XORI = 7'd10,
+	OP_CMPI = 7'd11,
+	OP_EXTD = 7'd12,
+	OP_DIVI = 7'd13,
+	OP_MULUI = 7'd14,
+	OP_GRAPHICS = 7'd15,
+	OP_SHIFT = 7'd16,
+	OP_CMPUI = 7'd19,
+	OP_LOADA = 7'd20,
+	OP_DIVUI = 7'd21,
+	OP_FADDI = 7'd22,
+	OP_FMULI = 7'd23,
+//	OP_TRAP = 7'd28,
+
+	OP_BSR = 7'd32,
+	OP_JSR = 7'd33,
+	OP_CJSR = 7'd34,
+	OP_JSRN = 7'd36,
+	OP_RTD = 7'd35,
+	
+	OP_BCCU = 7'd40,
+	OP_BCC = 7'd41,
+	OP_FBCC = 7'd42,
+	OP_MBCC = 7'd43,
+	
+	OP_CHK = 7'd47,
+
+	OP_FLTPH = 7'd48,
+	OP_FLTPS = 7'd49,
+	OP_FLTPD = 7'd50,
+	OP_FLTPQ = 7'd51,
+
+	OP_ENTER = 7'd52,
+	OP_PUSH = 7'd54,
+	OP_POP = 7'd55,
+	OP_FLTH = 7'd56,
+	OP_FLTS = 7'd57,
+	OP_FLTD = 7'd58,
+	OP_FLTQ = 7'd59,
+
+	OP_PFX = 7'd61,
+	OP_MOD = 7'd62,
+
+	OP_LDB = 7'd64,
+	OP_LDW = 7'd65,
+	OP_LDT = 7'd66,
+	OP_LOAD = 7'd67,
+	OP_LDBZ = 7'd68,
+	OP_LDWZ = 7'd69,
+	OP_LDTZ = 7'd70,
+	OP_CLOAD = 7'd72,
+	OP_FLDH = 7'd74,
+	OP_FLDS = 7'd76,
+	OP_FLDD = 7'd77,
+	OP_LDV = 7'd78,
+	OP_LDVN = 7'd79,
+	
+	OP_STB = 7'd80,
+	OP_STW = 7'd81,
+	OP_STT = 7'd82,
+	OP_STORE = 7'd83,
+	OP_CSTORE = 7'd84,
+	OP_STIP = 7'd87,
+	OP_STPTR = 7'd86,
+
+	OP_STV = 7'd88,
+	OP_STVN = 7'd89,
+	OP_V2P = 7'd90,
+	OP_VV2P = 7'd91,
+
+	OP_AMO = 7'd92,
+	OP_CMPSWAP = 7'd93,
+	OP_FLDG = 7'd95,
+
+	OP_VSR3B = 7'd96,
+	OP_VSR3W = 7'd97,
+	OP_VSR3T = 7'd98,
+	OP_VSR3O = 7'd99,
+	
+	
+	OP_R3VVS = 7'd100,
+	OP_FLTVVS = 7'd101,
+	OP_PUSHC = 7'd102,
+
+	OP_R3B = 7'd104,
+	OP_R3W = 7'd105,
+	OP_R3T = 7'd106,
+	OP_R3O = 7'd107,
+	OP_BLOCK = 7'd111,
+	OP_R3BP = 7'd112,
+	OP_R3WP = 7'd113,
+	OP_R3TP = 7'd114,
+	OP_R3OP = 7'd115,
+
+	OP_VR3B = 7'd116,
+	OP_VR3W = 7'd117,
+	OP_VR3T = 7'd118,
+	OP_VR3O = 7'd119,
+	
+	OP_FLTVVV = 7'd124,
+
+	OP_REXT = 7'd120,
+	OP_PRED = 7'd121,
+	OP_SYS = 7'd122,
+	OP_FENCE = 7'd123,
+	OP_NOP = 7'd127
+} opcode_e;
+
+typedef enum logic [6:0] {
+	EX_ADC = 7'd0,
+	EX_ASLC = 7'd1,
+	EX_ASRC = 7'd2,
+	EX_LSRC = 7'd3,
+	EX_VSHLV = 7'd6,
+	EX_VSHRV = 7'd7
+} extdop_e;
+
+typedef enum logic [6:0] {
+	FN_AND = 7'd0,
+	FN_OR = 7'd1,
+	FN_XOR = 7'd2,
+	FN_CMP = 7'd3,
+	FN_ADD = 7'd4,
+	FN_SUB = 7'd5,
+	FN_CMPU = 7'd6,
+	FN_NAND = 7'd8,
+	FN_NOR = 7'd9,
+	FN_XNOR = 7'd10,
+	FN_MOVE = 7'd15,
+	FN_MUL = 7'd16,
+	FN_DIV = 7'd17,
+	FN_MULU = 7'd19,
+	FN_DIVU = 7'd20,
+	FN_MULSU = 7'd21,
+	FN_DIVSU = 7'd22,
+	FN_MOD = 7'd25,
+	FN_R1 = 7'd26,
+	FN_MODU = 7'd28,
+	FN_EXG = 7'd31,
+	FN_MUX = 7'd33,
+	FN_BMAP = 7'd35,
+
+	FN_NNA_MTWT = 7'd40,
+	FN_NNA_MTIN = 7'd41,
+	FN_NNA_MTBIAS = 7'd42,
+	FN_NNA_MTFB = 7'd43,
+	FN_NNA_MTMC = 7'd44,
+	FN_NNA_MTBC = 7'd45,
+
+	FN_VEX = 7'd50,	
+	FN_VEINS = 7'd51,
+	FN_VGNDX = 7'd52,
+	FN_VSETMASK = 7'd58,
+
+	FN_BMAPH = 7'd72,
+	FN_CLSR = 7'd74,
+	
+	FN_ROL = 7'd80,
+	FN_ROR = 7'd81,
+	FN_ASR = 7'd82,
+	FN_ASL = 7'd83,
+	FN_LSR = 7'd84,
+	
+	FN_COM = 7'd89,
+	FN_EXTZ = 7'd90,
+	FN_EXT = 7'd91,
+	FN_DEP = 7'd92,
+	FN_SET = 7'd93,
+	
+	FN_REDAND = 7'd96,
+	FN_REDOR = 7'd97,
+	FN_REDEOR = 7'd98,
+	FN_REDMINU = 7'd99,
+	FN_REDSUM = 7'd100,
+	FN_REDMAXU = 7'd101,
+	FN_REDMIN = 7'd102,
+	FN_REDMAX = 7'd103,
+	FN_PEEKQ = 7'd104,
+	FN_POPQ = 7'd105,
+	FN_PUSHQ = 7'd106,
+	FN_RESETQ = 7'd107,
+	FN_STATQ = 7'd108,
+	FN_READQ = 7'd110,
+	FN_WRITEQ = 7'd111,
+	FN_ANDC = 7'd114,
+	FN_ORC = 7'd115,
+	FN_SEQ = 7'd120,
+	FN_SNE = 7'd121,
+	FN_SLT = 7'd122,
+	FN_SLE = 7'd123,
+	FN_SLTU = 7'd124,
+	FN_SLEU = 7'd125
+} func_e;
+
+typedef enum logic [6:0] {
+	R1_CNTLZ = 7'd0,
+	R1_CNTLO = 7'd1,
+	R1_CNTPOP = 7'd2,
+	R1_SQRT = 7'd4,
+	R1_REVBIT = 7'd5,
+	R1_CNTTZ = 7'd6,
+	R1_NOT = 7'd7,
+	// NNA
+	R1_NNA_TRIG = 7'd8,
+	R1_NNA_STAT = 7'd9,
+	R1_NNA_MFACT = 7'd10,
+
+	R1_MKBOOL = 7'd12,
+	// Crypto
+	R1_SM3P1 = 7'd14,
+	R1_SM3PO = 7'd15
+} r1_e;
+
+typedef enum logic [5:0] {
+	FLT_POLY = 6'd1,
+	FLT_MIN = 6'd2,
+	FLT_MAX = 6'd3,
+	FLT_DIV = 6'd7,
+	FLT_SEQ = 6'd8,
+	FLT_SNE = 6'd9,
+	FLT_SLT = 6'd10,
+	FLT_CMP = 6'd13,
+	FLT_SGNJ = 6'd16,
+	FLT_SGNJN = 6'd17,
+	FLT_SGNJX = 6'd18,
+	FLT_SCALEB = 6'd20,
+	FLT_STAT = 6'd22,
+	FLT_SIN = 6'd24,
+	FLT_COS = 6'd25,
+	FLT_TAN = 6'd26,
+	FLT_ATAN = 6'd27,
+	FLT_FMA = 6'd28,
+	FLT_FMS = 6'd29,
+	FLT_FNMA = 6'd30,
+	FLT_FNMS = 6'd31,
+	FLT_ABS = 6'd32,
+	FLT_NEG = 6'd33,
+	FLT_FTOI = 6'd34,
+	FLT_ITOF = 6'd35,
+	FLT_CONST = 6'd36,
+	FLT_SIGN = 6'd38,
+	FLT_SIG = 6'd39,
+	FLT_SQRT = 6'd40,
+	FLT_CVTS2D = 6'd41,
+	FLT_ISNAN = 6'd46,
+	FLT_FINITE = 6'd47,
+	FLT_TRUNC = 6'd53,
+	FLT_RSQRTA = 6'd54,
+	FLT_RCPA = 6'd55,
+	FLT_SIGMOID = 6'd56,
+	FLT_CVTD2S = 6'd57,
+	FLT_CLASS = 6'd62,
+	FLT_RM = 6'd63
+} flt_e;
+
+typedef enum logic [3:0] {
+	FOP4_FADD = 4'd4,
+	FOP4_FSUB = 4'd5,
+	FOP4_FMUL = 4'd6,
+	FOP4_FDIV = 4'd7,
+	FOP4_G8 = 4'd8,
+	FOP4_G10 = 4'd10,
+	FOP4_TRIG = 4'd11
+} float_t;
+
+typedef enum logic [2:0] {
+	FG8_FSGNJ = 3'd0,
+	FG8_FSGNJN = 3'd1,
+	FG8_FSGNJX = 3'd2,
+	FG8_FSCALEB = 3'd3
+} float_g8_t;
+
+typedef enum logic [4:0] {
+	FG10_FCVTF2I = 5'd0,
+	FG10_FCVTI2F = 5'd1,
+	FG10_FSIGN = 5'd16,
+	FG10_FSQRT = 5'd17,
+	FG10_FTRUNC = 5'd18
+} float_g10_t;
+
+typedef enum logic [4:0] {
+	FTRIG_FCOS = 5'd0,
+	FTRIG_FSIN = 5'd1
+} float_trig_t;
+
+typedef enum logic [3:0] {
+	CND_EQ = 4'd0,
+	CND_NE = 4'd1,
+	CND_LT = 4'd2,
+	CND_LE = 4'd3,
+	CND_GE = 4'd4,
+	CND_GT = 4'd5,
+	CND_BBC = 4'd6,
+	CND_BBS = 4'd7,
+	CND_NAND = 4'd8,
+	CND_AND = 4'd9,
+	CND_NOR = 4'd10,
+	CND_OR = 4'd11,
+	CND_BOI = 4'd15
+} cnd_e;
+
+typedef enum logic [6:0] {
+	GR_BLEND = 7'd0,
+	GR_TRANSFORM_NEWX = 7'd1,
+	GR_TRANSFORM_NEWY = 7'd2,
+	GR_TRANSFORM_NEWZ = 7'd3,
+	GR_TRANSFORM_GETCOEFF = 7'd4,
+	GR_TRANSFORM_SETCOEFF = 7'd5,
+	GR_TEX0 = 7'd8,
+	GR_TEX1 = 7'd9,
+	GR_RGBCVT = 7'd10,
+	GR_PACK64160 = 7'd12,
+	GR_PACK64161 = 7'd13
+} graphics_e;
+
+typedef enum logic [6:0] {
+	CAP_SWAP = 7'd2,
+	CAP_CHKINVOKE = 7'd4,
+	CAP_CHKBOUNDS = 7'd6,
+	CAP_RET = 7'd8,
+	CAP_INCOFFSETI = 7'd11,
+	CAP_INVOKE = 7'd12,
+	CAP_DECOMP64 = 7'd16,
+	CAP_DECOMP32 = 7'd17,
+	CAP_COMP64 = 7'd20,
+	CAP_COMP32 = 7'd21,
+	CAP_ANDPERM = 7'd32,
+	CAP_BUILDCAP = 7'd33,
+	CAP_COPYTYPE = 7'd34,
+	CAP_INCOFFSET = 7'd35,
+	CAP_SEAL = 7'd36,
+	CAP_SETADDR = 7'd37,
+	CAP_SETBOUNDS = 7'd38,
+	CAP_SETFLAGS = 7'd39,
+	CAP_SETHIGH = 7'd40,
+	CAP_SETOFFSET = 7'd41,
+	CAP_UNSEAL = 7'd43,
+	CAP_COMPARE = 7'd44,
+	CAP_TESTSUBSET = 7'd45,
+	CAP_SETEQUALSEXACT = 7'd46,
+	CAP_CLEARTAG = 7'd64,
+	CAP_GETFLAGS = 7'd65,
+	CAP_GETHIGH = 7'd66,
+	CAP_GETLENGTH = 7'd67,
+	CAP_GETOFFSET = 7'd68,
+	CAP_GETPERMS = 7'd69,
+	CAP_GETTAG = 7'd70,
+	CAP_GETTOP = 7'd71,
+	CAP_GETTYPE = 7'd72,
+	CAP_LOADTAGS = 7'd73,
+	CAP_ALGNMASK = 7'd74,
+	CAP_ROUNDLEN = 7'd75,
+	CAP_SEALENTRY = 7'd76,
+	CAP_GETBASE = 7'd77,
+	CAP_GETSEALED = 7'd78,
+	CAP_MOVE = 7'd79,
+	CAP_GETADDR = 7'd80
+} capability_e;
+
+typedef enum logic [6:0] {
+	AMO_ADD = 5'd0,
+	AMO_CAS = 5'd16
+} amo_e;
+
+parameter NOP_INSN = {41'd0,OP_NOP};
+
+/*
+typedef struct packed
+{
+	logic v;
+	logic exc;
+	logic lead;
+	logic [4:0] num;
+	logic [49:0] payload;
+	logic [6:0] opcode;
+} anyinst_t;
+
+typedef struct packed
+{
+	logic v;
+	logic exc;
+	logic lead;
+	logic [4:0] num;
+	logic resv2;
+	logic [1:0] prc;
+	logic md;
+	logic [3:0] resv;
+	logic [19:0] disp;
+	regspec_t Rs2;
+	regspec_t Rs1;
+	logic [1:0] ms;
+	logic [3:0] cnd;
+	opcode_e opcode;
+} br_inst_t;
+
+typedef struct packed
+{
+	logic v;
+	logic exc;
+	logic lead;
+	logic [4:0] num;
+	logic resv2;
+	logic [1:0] prc;
+	logic md;
+	logic [15:0] resv;
+	regspec_t Rs3;
+	regspec_t Rs2;
+	regspec_t Rs1;
+	logic [1:0] ms;
+	logic [3:0] cnd;
+	opcode_e opcode;
+} brr_inst_t;
+
+typedef struct packed
+{
+	logic v;
+	logic exc;
+	logic lead;
+	logic [4:0] num;
+	logic resv2;
+	logic [5:0] resv;
+	logic [34:0] disp;
+	regspec_t Rd;
+	opcode_e opcode;
+} bsr_inst_t;
+
+typedef struct packed
+{
+	logic [15:0] mor;
+	logic zero;
+	logic [1:0] maskhi;
+	logic [2:0] one3;
+	logic [5:0] ipl;
+	logic [10:0] masklo;
+	logic [2:0] seven;
+	logic [4:0] opcode;
+	logic m0;
+	
+	logic v;
+	logic exc;
+	logic lead;
+	logic [4:0] num;
+	logic resv2;
+	logic [43:0] resv;
+	logic [3:0] count;
+	logic resv1;
+	opcode_e opcode;
+} atom_inst_t;
+
+typedef struct packed
+{
+	logic v;
+	logic exc;
+	logic lead;
+	logic [4:0] num;
+	logic resv2;
+	logic [2:0] sc;
+	logic ms;
+	logic [1:0] resv;
+	logic [18:0] disp;
+	regspec_t Rs2;
+	regspec_t Rs1;
+	regspec_t Rsd;
+	opcode_e opcode;
+} ls_inst_t;
+
+typedef struct packed
+{
+	logic v;
+	logic exc;
+	logic lead;
+	logic [4:0] num;
+	logic resv2;
+	logic [6:0] func;
+	logic [2:0] ms;
+	logic [2:0] ar;
+	logic [3:0] vn;
+	regspec_t Rs3;
+	regspec_t Rs2;
+	regspec_t Rs1;
+	regspec_t Rd;
+	opcode_e opcode;
+} amo_inst_t;
+
+typedef struct packed
+{
+	logic v;
+	logic exc;
+	logic lead;
+	logic [4:0] num;
+	logic resv2;
+	logic [6:0] func;
+	logic [2:0] ms;
+	logic [2:0] ar;
+	logic [3:0] vn;
+	regspec_t Rs3;
+	regspec_t Rs2;
+	regspec_t Rs1;
+	regspec_t Rd;
+	opcode_e opcode;
+} cas_inst_t;
+
+typedef struct packed
+{
+	logic v;
+	logic exc;
+	logic lead;
+	logic [4:0] num;
+	logic resv2;
+	logic [1:0] pr;
+	logic [3:0] resv;
+	logic [26:0] imm;
+	regspec_t Rs1;
+	regspec_t Rd;
+	opcode_e opcode;
+} alui_inst_t;
+
+typedef struct packed
+{
+	logic v;
+	logic exc;
+	logic lead;
+	logic [4:0] num;
+	logic resv2;
+	logic [6:0] func;
+	logic [2:0] ms;
+	logic [2:0] op3;
+	logic [3:0] vn;
+	regspec_t Rs3;
+	regspec_t Rs2;
+	regspec_t Rs1;
+	regspec_t Rd;
+	opcode_e opcode;
+} alu_inst_t;
+
+typedef struct packed
+{
+	logic v;
+	logic exc;
+	logic lead;
+	logic [4:0] num;
+	logic resv2;
+	logic [6:0] func;
+	logic [2:0] ms;
+	logic [2:0] op3;
+	logic [3:0] vn;
+	regspec_t Rs3;
+	regspec_t Rs2;
+	regspec_t Rs1;
+	regspec_t Rd;
+	opcode_e opcode;
+} r3_inst_t;
+
+typedef struct packed
+{
+	logic v;
+	logic exc;
+	logic lead;
+	logic [4:0] num;
+	logic resv2;
+	logic rc;
+	flt_e func;
+	logic [2:0] ms;
+	logic [2:0] rm;
+	logic [3:0] vn;
+	regspec_t Rs3;
+	regspec_t Rs2;
+	regspec_t Rs1;
+	regspec_t Rd;
+	opcode_e opcode;
+} f3_inst_t;
+
+typedef struct packed
+{
+	logic v;
+	logic exc;
+	logic lead;
+	logic [4:0] num;
+	logic resv2;
+	logic [6:0] func;
+	logic [2:0] ms;
+	logic [2:0] op3;
+	logic [3:0] vn;
+	regspec_t Rs3;
+	regspec_t Rs2;
+	regspec_t Rs1;
+	regspec_t Rd;
+	opcode_e opcode;
+} sh_inst_t;
+
+typedef struct packed
+{
+	logic v;
+	logic exc;
+	logic lead;
+	logic [4:0] num;
+	logic resv2;
+	logic [6:0] func;
+	logic [2:0] ms;
+	logic [2:0] rm;
+	logic [3:0] vn;
+	regspec_t Rs3;
+	regspec_t Rs2;
+	regspec_t Rs1;
+	regspec_t Rd;
+	opcode_e opcode;
+} sra_inst_t;
+
+typedef struct packed
+{
+	logic v;
+	logic exc;
+	logic lead;
+	logic [4:0] num;
+	logic resv2;
+	logic [2:0] op3;
+	logic [2:0] ms;
+	logic [13:0] regno;
+	logic [12:0] resv;
+	regspec_t Rs1;
+	regspec_t Rd;
+	opcode_e opcode;
+} csr_inst_t;
+
+typedef struct packed
+{
+	logic v;
+	logic exc;
+	logic lead;
+	logic [4:0] num;
+	logic resv2;
+	logic [2:0] op3;
+	logic [2:0] immH;
+	logic [13:0] regno;
+	logic [5:0] resv;
+	logic [14:0] imm;
+	regspec_t Rd;
+	opcode_e opcode;
+} csri_inst_t;
+
+typedef struct packed
+{
+	logic v;
+	logic exc;
+	logic lead;
+	logic [4:0] num;
+	logic resv2;
+	logic [48:0] resv;
+	opcode_e opcode;
+} brk_inst_t;
+
+typedef struct packed
+{
+	logic v;
+	logic exc;
+	logic lead;
+	logic [4:0] num;
+	logic resv2;
+	logic [6:0] func;
+	logic [2:0] ms;
+	logic [2:0] op3;
+	logic [3:0] vn;
+	regspec_t Rs3;
+	regspec_t Rs2;
+	regspec_t Rs1;
+	regspec_t Rd;
+	opcode_e opcode;
+} chk_inst_t;
+
+typedef struct packed
+{
+	logic v;
+	logic exc;
+	logic lead;
+	logic [4:0] num;
+	logic resv2;
+	logic [1:0] resv;
+	logic [22:0] imm;
+	regspec_t Rs2;
+	regspec_t Rs1;
+	regspec_t Rd;
+	opcode_e opcode;
+} enter_inst_t;
+
+typedef struct packed
+{
+	logic v;
+	logic exc;
+	logic lead;
+	logic [4:0] num;
+	logic resv2;
+	logic [6:0] func;
+	logic [2:0] ms;
+	logic [2:0] op3;
+	logic [3:0] vn;
+	regspec_t Rs3;
+	regspec_t Rs2;
+	regspec_t Rs1;
+	regspec_t Rd;
+	opcode_e opcode;
+} cmov_inst_t;
+
+typedef struct packed
+{
+	logic v;
+	logic exc;
+	logic lead;
+	logic [4:0] num;
+	logic resv2;
+	logic [6:0] func;
+	logic [2:0] ms;
+	logic [2:0] op3;
+	logic [3:0] vn;
+	regspec_t Rs3;
+	logic [3:0] resv;
+	logic [1:0] Rs1h;
+	logic [1:0] Rdh;
+	regspec_t Rs1;
+	regspec_t Rd;
+	opcode_e opcode;
+} move_inst_t;
+
+typedef struct packed
+{
+	logic v;
+	logic exc;
+	logic lead;
+	logic [4:0] num;
+	logic resv2;
+	logic [6:0] func;
+	logic [2:0] ms;
+	logic [2:0] op3;
+	logic [3:0] vn;
+	regspec_t Rs3;
+	regspec_t Rs2;
+	regspec_t Rs1;
+	regspec_t Rd;
+	opcode_e opcode;
+} bmap_inst_t;
+
+typedef struct packed
+{
+	logic v;
+	logic exc;
+	logic lead;
+	logic [4:0] num;
+	logic resv2;
+	logic [6:0] func;
+	logic [2:0] ms;
+	fround_t rm;
+	logic [3:0] vn;
+	regspec_t Rs3;
+	regspec_t Rs2;
+	regspec_t Rs1;
+	regspec_t Rd;
+	opcode_e opcode;
+} fpu_inst_t;
+
+typedef struct packed
+{
+	logic v;
+	logic exc;
+	logic lead;
+	logic [4:0] num;
+	regspec_t Rs4;
+	logic [2:0] ms;
+	logic [2:0] op3;
+	logic [3:0] vn;
+	regspec_t Rs3;
+	regspec_t Rs2;
+	regspec_t Rs1;
+	regspec_t Rd;
+	opcode_e opcode;
+} extd_inst_t;
+
+typedef struct packed
+{
+	logic v;
+	logic exc;
+	logic lead;
+	logic [4:0] num;
+	logic resv2;
+	logic [2:0] sc;
+	logic ms;
+	logic [9:0] disp;
+	logic [2:0] dt;
+	regspec_t Rs3;
+	regspec_t Rs2;
+	regspec_t Rs1;
+	regspec_t Rd;
+	opcode_e opcode;
+} vls_inst_t;
+
+typedef struct packed
+{
+	logic v;
+	logic exc;
+	logic lead;
+	logic [4:0] num;
+	logic [6:0] resv2;
+	logic z;
+	logic [2:0] ms;
+	logic [2:0] op3;
+	logic [3:0] resv1;
+	logic [15:0] mask;
+	regspec_t Rs1;
+	regspec_t Rd;				// not used for PRED
+	opcode_e opcode;
+} pred_inst_t;
+
+typedef struct packed
+{
+	logic v;
+	logic exc;
+	logic lead;
+	logic [4:0] num;
+	logic resv2;
+	logic [1:0] pr;
+	logic [3:0] resv;
+	logic [23:0] imm;
+	logic [2:0] op3;
+	regspec_t Rs1;
+	regspec_t Rd;
+	opcode_e opcode;
+} rtd_inst_t;
+*/
+
+typedef struct packed		// 237 bits
+{
+	logic v;
+	logic exc;
+	logic lead;
+	logic [4:0] num;
+	logic [8:0] ble;			// byte lane enable
+	logic [5:0] byteno;		// byte number uop begins at
+	logic [63:0] imm2;		// second immediate / CSR register numnber (14 bits)) / lane number
+	logic [63:0] imm;			// immediate / displacement / mask
+	logic inc;						// increment / decrement for conditional branch, record bit for floats
+	logic [3:0] sc;				// index scaling
+	logic [2:0] dt;				// data type, vector load / store
+	logic [2:0] prc;			// precision
+	logic [3:0] vn;				// vector or scalar register indicator
+	logic [3:0] ms;				// immediate override indicators
+	logic [8:0] Rm;				// round mode
+	logic [8:0] Rs4;			// fourth source register
+	logic [8:0] Rs3;			// Third source register
+	logic [8:0] Rs2;			// second source register
+	logic [8:0] Rs1;			// first source register
+	logic [8:0] Rd2;			// second destination register
+	logic [8:0] Rd;				// destination register
+	logic [6:0] src;			// which register fields are active sources, including dest.
+	logic dst;						// 1 if destination register active as dest
+	logic [2:0] rmd;			// round mode (floating-point)
+	logic [2:0] op3;			// op field found in some instructions / ar for AMO operations
+	logic [3:0] cnd;			// branch condition
+	logic [6:0] func;			// primary function code
+	logic [6:0] opcode;		// primary opcode
+} micro_op_t;
+
+/*
+typedef union packed
+{
+	alui_inst_t cmpi;
+	alu_inst_t cmp;
+	br_inst_t br;
+	brr_inst_t brr;
+	bsr_inst_t bsr;
+	bsr_inst_t jsr;
+	atom_inst_t atom;
+	ls_inst_t ls;
+	amo_inst_t amo;
+	cas_inst_t cas;
+	alui_inst_t alui;
+	alu_inst_t alu;
+	r3_inst_t r3;
+	f3_inst_t f3;
+	fpu_inst_t fpu;
+	sh_inst_t sh;
+	sra_inst_t sra;
+	sh_inst_t rot;
+	csri_inst_t csri;
+	csr_inst_t csr;
+	brk_inst_t brk;
+	chk_inst_t chk;
+	enter_inst_t enter;
+	enter_inst_t leave;
+	move_inst_t move;
+	cmov_inst_t cmov;
+	bmap_inst_t bmap;
+	extd_inst_t extd;
+	vls_inst_t vls;
+	pred_inst_t pred;
+	rtd_inst_t rtd;
+	anyinst_t any;
+} micro_op_t;
+*/
+
+parameter CSR_SR		= 16'h?004;
+parameter CSR_CAUSE	= 16'h?006;
+parameter CSR_REPBUF = 16'h0008;
+parameter CSR_FPCSR = 16'h0009;
+parameter CSR_VCFG_NUM	= 16'h0200;
+parameter CSR_VCFG_CAT= 16'h0201;
+parameter CSR_SEMA	= 16'h?00C;
+parameter CSR_PTBR	= 16'h1003;
+parameter CSR_HMASK	= 16'h1005;
+parameter CSR_FSTAT	= 16'h?014;
+parameter CSR_ASID	= 16'h101F;
+parameter CSR_KEYS	= 16'b00010000001000??;
+parameter CSR_KEYTBL= 16'h1024;
+parameter CSR_SCRATCH=16'h?041;
+parameter CSR_MCR0	= 16'h3000;
+parameter CSR_MHARTID = 16'h3001;
+parameter CSR_MCORENO = 16'h3001;
+parameter CSR_TICK	= 16'h3002;
+parameter CSR_MBADADDR	= 16'h3007;
+parameter CSR_THREAD_WEIGHT = 16'h3017;
+parameter CSR_MTVEC = 16'b00110000001100??;
+parameter CSR_MDBAD	= 16'b00110000000110??;
+parameter CSR_MDBAM	= 16'b00110000000111??;
+parameter CSR_MDBCR	= 16'h3020;
+parameter CSR_MDBSR	= 16'h3021;
+parameter CSR_KVEC3 = 16'h3033;
+parameter CSR_MPLSTACK	= 16'h303F;
+parameter CSR_MPMSTACK	= 16'h3040;
+parameter CSR_MSTUFF0	= 16'h3042;
+parameter CSR_MSTUFF1	= 16'h3043;
+parameter CSR_USTATUS	= 16'h0044;
+parameter CSR_SSTATUS	= 16'h1044;
+parameter CSR_HSTATUS	= 16'h2044;
+parameter CSR_MSTATUS	= 16'h3044;
+parameter CSR_MVSTEP= 16'h3046;
+parameter CSR_MVTMP	= 16'h3047;
+parameter CSR_MEIP	=	16'h3048;
+parameter CSR_MECS	= 16'h3049;
+parameter CSR_MPCS	= 16'h304A;
+parameter CSR_UCA		=	16'b00000001000?????;
+parameter CSR_SCA		=	16'b00010001000?????;
+parameter CSR_HCA		=	16'b00100001000?????;
+parameter CSR_MCA		=	16'b00110001000?????;
+parameter CSR_MSEL	= 16'b0011010000100???;
+parameter CSR_MTCBPTR=16'h3050;
+parameter CSR_MGDT	= 16'h3051;
+parameter CSR_MLDT	= 16'h3052;
+parameter CSR_MTCB	= 16'h3054;
+parameter CSR_CTX		= 16'h3053;
+parameter CSR_MBVEC	= 16'b0011000001011???;
+parameter CSR_MSP		= 16'h3060;
+parameter CSR_SR_STACK		= 16'h308?;
+parameter CSR_MCIR_STACK 	= 16'h309?;
+parameter CSR_MEPC	= 16'h3108;
+parameter CSR_DDC		= 16'h3120;
+parameter CSR_TOTINSN = 16'h3F00;
+parameter CSR_TOTVALIDINSN = 16'h3F01;
+parameter CSR_CPYDST = 16'h3F02;
+parameter CSR_TIME	= 16'h?FE0;
+parameter CSR_MTIME	= 16'h3FE0;
+parameter CSR_MTIMECMP	= 16'h3FE1;
+
+/*
+typedef struct packed {
+	logic v;
+	logic exc;
+	logic [2:0] count;
+	logic [2:0] num;
+	logic [3:0] xop4;
+	logic [7:0] Rs4;
+	logic [2:0] ms;
+	logic [2:0] op3;
+	logic [3:0] vn;
+	logic [7:0] Rs3;
+	logic [7:0] Rs2;
+	logic [7:0] Rs1;
+	logic [7:0] Rd;
+	logic [6:0] opcode;
+} micro_op_t;
+
+typedef struct packed {
+	logic v;
+	logic exc;
+	logic [2:0] count;
+	logic [2:0] num;
+	logic [3:0] xop4;
+	logic [2:0] sc;
+	logic ms;
+	logic [5:0] disp;
+	logic [2:0] dt;
+	logic [7:0] Rs3;
+	logic [7:0] Rs2;
+	logic [7:0] Rs1;
+	logic [7:0] Rd;
+	logic [6:0] opcode;
+} vls_uop_t;
+*/
+
+typedef struct packed {
+	Qupls5_pkg::pc_address_ex_t pc;
+	logic [5:0] pred_btst;
+	micro_op_t ins;
+} ex_instruction_t;
+
+typedef enum logic [7:0] {
+	FLT_DBG		= 8'h00,
+	FLT_SSM		= 8'h01,
+	FLT_BERR	= 8'h02,
+	FLT_ALN		= 8'h03,
+	FLT_UNIMP	= 8'h04,
+	FLT_PRIV	= 8'h05,
+	FLT_PAGE	= 8'h06,
+	FLT_TRACE	= 8'h07,
+	FLT_CANARY= 8'h08,
+	FLT_ABORT	= 8'h09,
+	FLT_IRQ		= 8'h0A,
+	FLT_NMI		= 8'h0B,
+	FLT_RST		= 8'h0C,
+	FLT_ALT		= 8'h0D,
+	FLT_DBZ		= 8'h10,
+	FLT_FLOAT = 8'h11,
+	FLT_CHK		= 8'h43,
+	
+	FLT_CTAG	= 8'hC0,
+	FLT_CSEAL	= 8'hC1,
+	FLT_CTYPE	= 8'hC2,
+	FLT_CPINVOKE = 8'hC3,
+	FLT_CPEXEC	= 8'hC4,
+	FLT_CALGN		= 8'hC5,
+	FLT_CLENGTH	= 8'hC6,
+	FLT_CBOUNDS = 8'hC7,
+	FLT_CPERMS	= 8'hC8,
+
+	FLT_PRED  = 8'hDE,
+	FLT_BADREG = 8'hDF,
+	FLT_NONE 	= 8'hFF
+} cause_code_t;
+
+typedef enum logic [4:0] {
+	MR_NOP = 5'd0,
+	MR_LOAD = 5'd1,
+	MR_LOADZ = 5'd2,
+	MR_STORE = 5'd3,
+	MR_STOREPTR = 5'd4,
+//	MR_TLBRD = 5'd4,
+//	MR_TLBRW = 5'd5,
+	MR_TLB = 5'd6,
+	MR_LEA = 5'd7,
+	MR_MOVLD = 5'd8,
+	MR_MOVST = 5'd9,
+	MR_RGN = 5'd10,
+	MR_ICACHE_LOAD = 5'd11,
+	MR_PTG = 5'd12,
+	MR_CACHE = 5'd13,
+	MR_ADD = 5'd16,
+	MR_AND = 5'd17,
+	MR_OR	= 5'd18,
+	MR_EOR = 5'd19,
+	MR_ASL = 5'd20,
+	MR_LSR = 5'd21,
+	MR_MIN = 5'd22,
+	MR_MAX = 5'd23,
+	MR_CAS = 5'd24
+} memop_t;
+
+typedef enum logic [3:0] {
+	nul = 4'd0,
+	byt = 4'd1,
+	wyde = 4'd2,
+	tetra = 4'd3,
+	penta = 4'd4,
+	octa = 4'd5,
+	hexi = 4'd6,
+	dodeca = 4'd7,
+	char = 4'd8,
+	vect = 4'd10,
+	mem72 = 4'd11
+} memsz_t;
+
+typedef struct packed
+{
+	logic v;
+	logic [4:0] Rs4;
+	logic [4:0] Rs3;
+	logic [4:0] Rd2;
+} regs_t;
+
+typedef struct packed
+{
+	logic [$bits(cpu_types_pkg::value_t)-($bits(cpu_types_pkg::aregno_t)+$bits(cpu_types_pkg::pregno_t))-1:0] resv;
+	cpu_types_pkg::aregno_t aRn;	// 8 bits
+	cpu_types_pkg::pregno_t pRn;	// 9 bits
+} aprpair_t;
+
+typedef union packed
+{
+	aprpair_t rg;
+	cpu_types_pkg::value_t val;
+} valreg_u;
+
+typedef struct packed
+{
+	logic v;
+	logic aRnv;
+	logic z;											// operand should be zero
+	logic is_const;								// operand is a constant value in val
+	logic from_fu;
+	logic fpcsr;
+	cpu_types_pkg::flags_t flags;
+	cpu_types_pkg::aregno_t aRn;
+	// pRn[8:5]=FU id pRn[4:0]=tag
+	cpu_types_pkg::pregno_t pRn;
+	cpu_types_pkg::value_t val;
+} operand_t;
+
+// Capabilities operand
+typedef struct packed
+{
+	logic v;
+	logic aRnv;
+	logic z;											// operand should be zero
+	logic is_const;								// operand is a constant value in val
+	logic from_fu;
+	logic fpcsr;
+	cpu_types_pkg::flags_t flags;
+	cpu_types_pkg::aregno_t aRn;
+	// pRn[8:5]=FU id pRn[4:0]=tag
+	cpu_types_pkg::pregno_t pRn;
+	capability_pkg::uc64_capability_t val;
+} cap_operand_t;
+
+
+// Holds the sizes of lanes for vector operations.
+
+typedef struct packed
+{
+	logic [39:0] reserved;
+	logic [4:0] resv3;
+	logic [2:0] address_size;
+	logic [4:0] resv2;
+	logic [2:0] float_size;
+	logic [4:0] resv1;
+	logic [2:0] int_size;
+} velsz_t;
+
+typedef struct packed
+{
+	logic v;
+	cpu_types_pkg::aregno_t Rci;		// carry input
+	cpu_types_pkg::aregno_t Rs1;
+	cpu_types_pkg::aregno_t Rs2;
+	cpu_types_pkg::aregno_t Rs3;
+	cpu_types_pkg::aregno_t Rs4;
+	cpu_types_pkg::aregno_t Rm;
+	cpu_types_pkg::aregno_t Vm;			// vector mask register
+	cpu_types_pkg::aregno_t Rd;
+	cpu_types_pkg::aregno_t Rd2;
+	cpu_types_pkg::aregno_t Rd3;
+	cpu_types_pkg::aregno_t Rco;		// carry output
+	logic Rs1z;
+	logic Rs1ip;
+	logic Rs2z;
+	logic Rs3z;
+	logic Rs4z;
+	logic Rmz;
+	logic Vmz;
+	logic Rdv;
+	logic Rdz;
+	logic Rd2v;
+	logic Rd2z;
+	logic Rd3z;
+	logic has_Rs2;
+	logic has_imm;
+	logic has_imma;
+	logic has_immb;
+	logic has_immc;
+	logic has_immd;
+	cpu_types_pkg::value_t imma;
+	cpu_types_pkg::value_t immb;
+	cpu_types_pkg::value_t immc;
+	cpu_types_pkg::value_t immd;		// for store immediate
+	logic we;
+	logic [6:0] expipe;		// execution pipe
+	logic [2:0] fclass;		// class of instruction for FENCE
+	logic csr;				// CSR instruction
+	logic nop;				// NOP semantics
+	logic move;
+	logic fc;					// flow control op
+	logic backbr;			// backwards target branch
+	bts_t bts;				// branch target source
+	logic macro;			// true if macro instruction
+	logic sau;				// true if instruction must use sau (sau or mem)
+	logic sau0;				// true if instruction must use only sau #0
+	logic sqrt;
+	logic alu_pair;		// true if instruction requires pair of ALUs
+	logic fpu;				// FPU op
+	logic fpu0;				// true if instruction must use only fpu #0
+	logic fma;
+	logic trig;
+	logic rc;					// condition record indicator for float ops.
+	fround_t rm;
+	memsz_t prc;			// precision of operation
+	logic mul;
+	logic mula;
+	logic div;
+	logic diva;
+	logic bitwise;		// true if a bitwise operator (and, or, eor)
+	logic multicycle;
+	logic mem;
+	logic mem0;				// true if instruction must use only port #0
+	logic v2p;				// virtual to physical instruction
+	logic vv2p;				// vector virtual to physical
+	logic vvn2p;			// indexed vector virtual to physical
+	logic amo;
+	logic iprel;
+	logic load;
+	logic loadz;
+	logic load_canary;
+	logic cload;
+	logic cload_tags;
+	logic vload;				// vector load
+	logic vload_ndx;		// indexed vector load
+	logic store;
+	logic stptr;
+	logic cstore;
+	logic vstore;				// vector store
+	logic vstore_ndx;		// indexed vector store
+	logic bstore;
+	logic cls;
+	logic loada;
+	logic erc;
+	logic fence;
+	logic mcb;					// micro-code branch
+	logic cap;					// capabilities instruction
+
+	logic cjb;					// call, jmp, or bra
+	logic jsri;					// indirect subroutine call
+	logic br;						// conditional branch
+	logic ibr;					// inc conditional branch
+	logic dbr;					// dec conditional branch
+	logic bsr;
+	logic jsr;
+	logic sys;
+	logic pbr;
+	logic ret;
+	logic boi;
+	logic eret;
+	
+	logic cinvoke;
+	logic cjsr;					// capabilities JSR
+	logic cret;					// capabilities RET
+	
+	logic brk;
+	logic irq;
+	logic rex;
+	logic pfx;
+	logic sync;
+	logic oddball;
+	logic vmask;						// vmask modifier
+	logic [7:0] vect_mask;	// bitmap
+	logic pred;					// predicate instruction
+	logic [15:0] pred_mask;
+	logic [4:0] pred_shadow_size;
+	logic [4:0] pred_no;	// pipeline predicate register number
+	logic carry;
+	logic atom;
+	logic rext;					// REXT postfix
+	logic regs;
+	logic fregs;
+	regs_t xregs;				// "extra" registers from fregs/regs instruction
+	logic cpytgt;
+	logic qfext;				// true if QFEXT modifier
+	cause_code_t cause;
+} decode_bus_t;
+
+typedef struct packed {
+	logic v;
+	logic excv;								// 1=exception
+	logic [5:0] handle;
+	logic [1:0] nstate;				// number of states
+	logic [1:0] state;				// current state
+	decode_bus_t decbus;			// decoded instruction
+	logic done;
+	cpu_types_pkg::value_t argA;
+	cpu_types_pkg::value_t argB;
+	cpu_types_pkg::value_t argC;
+	cpu_types_pkg::value_t argI;
+	cpu_types_pkg::value_t argD;
+	cpu_types_pkg::value_t argM;
+	cpu_types_pkg::value_t res;
+	cpu_types_pkg::pregno_t pRc;
+	logic argC_v;
+	cpu_types_pkg::checkpt_ndx_t cndx;				// checkpoint index
+	ex_instruction_t op;			// original instruction
+	Qupls5_pkg::pc_address_ex_t pc;			// PC of instruction
+	cpu_types_pkg::mc_address_t mcip;				// Micro-code IP address
+} beb_entry_t;
+
+typedef struct packed {
+	logic v;
+	logic [1:0] state;		// 00=run first bus cycle, 01=run second bus cycle, 11=done
+	cpu_types_pkg::seqnum_t sn;
+	logic agen;						// address generated through to physical address
+	cpu_types_pkg::rob_ndx_t rndx;				// reference to related ROB entry
+	cpu_types_pkg::virtual_address_t vadr;
+	cpu_types_pkg::physical_address_t padr;
+	// micro-op decodes
+	logic v2p;						// 1=doing a virtual to physical address translation
+	logic load;						// 1=load
+	logic loadz;
+	logic load_canary;
+	logic cload;					// 1=cload
+	logic cload_tags;
+	logic store;
+	logic stptr;
+	logic cstore;
+	logic vload;
+	logic vload_ndx;
+	logic vstore;
+	logic vstore_ndx;
+
+	Qupls5_pkg::pc_address_ex_t pc;
+	memop_t func;					// operation to perform
+	logic [3:0] func2;		// more resolution to function
+	cause_code_t cause;
+//	logic [3:0] cache_type;
+	logic [63:0] sel;			// +16 for unaligned accesses
+//	cpu_types_pkg::asid_t asid;
+//	cpu_types_pkg::code_address_t vcadr;		// victim cache address
+//	logic dchit;
+	memsz_t memsz;				// indicates size of data
+	logic [7:0] bytcnt;		// byte count of data to load/store
+	logic [6:0] shift;		// amount to shift data (0 to 64)
+	logic [6:0] shift2;		// amount to shift data for second cycle.
+	cpu_types_pkg::pregno_t Rt;
+	cpu_types_pkg::aregno_t aRt;					// reference for freeing
+	logic aRtz;
+	cpu_types_pkg::aregno_t aRc;
+	cpu_types_pkg::pregno_t pRc;					// 'C' register for store
+	cpu_types_pkg::checkpt_ndx_t cndx;
+	operating_mode_t om;	// operating mode
+	cpu_types_pkg::flags_t flags;	// capabilities tag / carry / overflow / parity
+	logic loadv;					// load data is valid
+	logic datav;					// store data is valid
+	logic [63:0] mask;		// load / store mask for vector operations
+	logic [511:0] res;		// stores unaligned data as well (must be last field)
+} lsq_entry_t;
+
+typedef struct packed
+{
+	logic [1:0] state;
+	operand_t oper;
+	operating_mode_t om;
+	cause_code_t exc;
+	cpu_types_pkg::checkpt_ndx_t cndx;
+	cpu_types_pkg::rob_ndx_t rndx;
+} dram_oper_t;
+
+typedef struct packed
+{
+	logic v;
+	cause_code_t exc;
+	operating_mode_t om;
+	cpu_types_pkg::rob_ndx_t rndx;
+	logic rndxv;
+	cpu_types_pkg::checkpt_ndx_t cndx;
+	cpu_types_pkg::aregno_t pRd;
+	cpu_types_pkg::aregno_t aRd;
+	logic aRdv;
+	logic bank;
+	micro_op_t op;
+	cpu_types_pkg::pc_address_t pc;
+	logic load;
+	logic loadz;
+	logic load_canary;
+	logic vload;
+	logic vload_ndx;
+	logic cload;
+	logic cload_tags;
+	logic store;
+	logic stptr;
+	logic vstore;
+	logic vstore_ndx;
+	logic cstore;
+	logic erc;
+	logic hi;
+	logic [79:0] sel;
+	logic [79:0] selh;
+	cpu_types_pkg::virtual_address_t vaddr;
+	cpu_types_pkg::virtual_address_t vaddrh;
+	cpu_types_pkg::physical_address_t paddr;
+	cpu_types_pkg::physical_address_t paddrh;
+	logic [767:0] data;
+	logic [767:0] datah;
+	logic [8:0] shift;
+	logic ctag;
+	memsz_t memsz;
+	wishbone_pkg::wb_tranid_t tid;
+	logic [11:0] tocnt;
+}	dram_work_t;
+
+typedef struct packed
+{
+	logic v;
+	logic rstp;								// indicate physical register reset required
+	cpu_types_pkg::pc_address_t brtgt;
+	logic takb;								// 1=branch evaluated to taken
+	logic ssm;								// 1=single step mode active
+	logic [15:0] pred_mask;		// predicate mask
+	logic hwi;
+	logic [5:0] hwi_level;
+	logic [5:0] hwi_olevel;		// old IRQ level
+	logic [2:0] hwi_swstk;		// software stack
+	cause_code_t exc;					// non-0xFF indicate exception
+	logic excv;								// 1=exception
+	// The following fields are loaded at enqueue time, but otherwise do not change.
+	logic bt;									// branch to be taken as predicted
+	operating_mode_t om;			// operating mode
+	reg [31:0] carry_mod;			// carry modifier remnant
+	reg [3:0] atom_count;			// interrupt masking by ATOM instruction
+
+	cpu_types_pkg::pregno_t pRs1;							// physical registers (see decode bus for arch. regs)
+	cpu_types_pkg::pregno_t pRs2;
+	cpu_types_pkg::pregno_t pRs3;
+	cpu_types_pkg::pregno_t pRs4;
+	cpu_types_pkg::pregno_t pRm;
+
+	cpu_types_pkg::pregno_t pRd;						// current Rd value
+	cpu_types_pkg::pregno_t nRd;						// new Rd
+	cpu_types_pkg::pregno_t pRd2;						// current Rd value
+	cpu_types_pkg::pregno_t nRd2;						// new Rd
+/*	
+	reglookup_t pRs1st;
+	reglookup_t pRs2st;
+	reglookup_t pRs3st;
+	reglookup_t pSst;
+	reglookup_t pRdst;
+	reglookup_t pRd2st;
+	reglookup_t nRdst;
+	reglookup_t nRd2st;
+*/
+	logic pRs1v;
+	logic pRs2v;
+	logic pRs3v;
+	logic pRs4v;
+	logic Rs4z;								// Rs4 should be zero.
+	logic pRmv;
+	logic pRdv;
+	logic nRdv;
+	logic pRd2v;							// second destination reg valid
+	logic nRd2v;
+	logic [5:0] cli;												// 16-bit parcel cache line index of instruction
+//	Qupls5_pkg::pc_address_ex_t pc;			// PC of instruction
+	Qupls5_pkg::pc_address_ex_t hwipc;		// PC of instruction
+	micro_op_t uop;
+	decode_bus_t decbus;
+} pipeline_reg_t;
+
+typedef struct packed
+{
+	logic [5:0] level;
+	logic [2:0] om;
+	logic [2:0] swstk;
+	logic [63:0] vector;
+} irq_info_packet_t;
+
+typedef struct packed {
+	logic v;
+	logic busy;
+	logic ready;
+	logic [3:0] funcunit;							// functional unit dispatched to
+	logic [2:0] age;
+	cpu_types_pkg::seqnum_t irq_sn;
+	cpu_types_pkg::rob_ndx_t rndx;		// associated ROB entry
+	cpu_types_pkg::checkpt_ndx_t cndx;
+	micro_op_t uop;
+//	logic has_rext;
+	cause_code_t exc;
+	logic excv;					// 1=a valid cause code is present
+	logic nan;
+	// needed only for mem
+	logic virt2phys;
+	logic iprel;				// IP relative addressing Rs1 spec'd as r31
+	logic load;
+	logic store;
+	logic vls;					// vector load / store
+	logic vlsndx;				// indexed vector load / store
+	logic amo;
+	logic push;
+	logic pop;
+	logic mem;
+	logic [2:0] count;
+	logic [2:0] fclass;
+	// decodes only needed for branch
+	logic ibcc;					// incrementing branch
+	logic dbcc;					// decrementing branch
+	logic bcc;					// conditional branch
+	logic mbcc;					// masked branch
+	logic cjb;					// call, jmp, or bra
+	logic jsri;					// indirect subroutine call
+	logic bsr;
+	logic jsr;
+	logic br;
+	logic pbr;
+	logic ret;
+	logic boi;
+	logic sys;
+	logic eret;
+
+	logic cinvoke;
+	logic cjsr;
+	logic cret;
+
+	logic bt;												
+	
+	logic rext;				// extended register postfix
+	// - - - - - - - - - - - - - - - - 
+	memsz_t prc;
+	logic [$bits(cpu_types_pkg::value_t)/8-1:0] copydst;
+	logic aRdv;
+	logic Rs1z;
+	logic Rs1ip;
+	logic Rs2z;
+	logic Rs3z;
+	cpu_types_pkg::aregno_t aRd;
+	cpu_types_pkg::pregno_t nRd;
+	logic we;
+	operating_mode_t om;						// needed for mem ops
+	fround_t rm;										// needed for float-ops
+	Qupls5_pkg::pc_address_ex_t pc;
+//	logic [63:0] pch;
+	cpu_types_pkg::value_t argI;
+	operand_t [6:0] arg;						// +1 for status A,B,C,T,D,T,S,T2
+	cap_operand_t cap_arg;					// 1 arg allowed for capability
+//	operand_t [NOPER:0] argH;			// high order 64-bits of 128-bit arg
+	reg [1:0] velesz;								// vector element size code
+	reg [5:0] vcount;								// vector count
+	reg [5:0] laneno;								// lane number for vector operations
+} reservation_station_entry_t;
+
+typedef struct packed {
+	logic v;
+	logic busy;
+	logic ready;
+	logic [3:0] funcunit;							// functional unit dispatched to
+	logic [2:0] age;
+	cpu_types_pkg::seqnum_t irq_sn;
+	cpu_types_pkg::rob_ndx_t rndx;		// associated ROB entry
+	cpu_types_pkg::checkpt_ndx_t cndx;
+	micro_op_t uop;
+//	logic has_rext;
+	cause_code_t exc;
+	logic excv;					// 1=a valid cause code is present
+	logic nan;
+	// needed only for mem
+	logic virt2phys;
+	logic iprel;				// IP relative addressing Rs1 spec'd as r31
+	logic load;
+	logic store;
+	logic mem;
+	logic [2:0] count;
+	logic [2:0] fclass;
+	// decodes only needed for branch
+	logic ibcc;					// incrementing branch
+	logic dbcc;					// decrementing branch
+	logic bcc;					// conditional branch
+	logic mbcc;					// masked branch
+	logic cjb;					// call, jmp, or bra
+	logic jsri;					// indirect subroutine call
+	logic bsr;
+	logic jsr;
+	logic br;
+	logic pbr;
+	logic ret;
+	logic boi;
+	logic sys;
+	logic eret;
+
+	logic cinvoke;
+	logic cjsr;
+	logic cret;
+
+	logic bt;												
+	
+	logic rext;				// extended register postfix
+	// - - - - - - - - - - - - - - - - 
+	memsz_t prc;
+	logic [$bits(cpu_types_pkg::value_t)/8-1:0] copydst;
+	logic aRdv;
+	logic Rs1z;
+	logic Rs1ip;
+	logic Rs2z;
+	logic Rs3z;
+	cpu_types_pkg::aregno_t aRd;
+	cpu_types_pkg::pregno_t nRd;
+	logic we;
+	operating_mode_t om;						// needed for mem ops
+	fround_t rm;										// needed for float-ops
+	Qupls5_pkg::pc_address_ex_t pc;
+//	logic [63:0] pch;
+	cpu_types_pkg::value_t argI;
+	cap_operand_t [6:0] arg;				// +1 for status A,B,C,T,D,T,S,T2
+//	operand_t [NOPER:0] argH;			// high order 64-bits of 128-bit arg
+	reg [1:0] velesz;								// vector element size code
+	reg [5:0] vcount;								// vector count
+	reg [5:0] laneno;								// lane number for vector operations
+} cap_reservation_station_entry_t;
+
+typedef struct packed {
+	// The following fields may change state while an instruction is processed.
+	logic stomped;
+	logic v;									// 0=entry is invalid
+	logic [2:0] wh;						// which instruction of group this is.
+	cpu_types_pkg::seqnum_t sn;							// sequence number, decrements when instructions que
+	cpu_types_pkg::rob_ndx_t this_ndx;
+	logic [4:0] pghn;					// pipeline group header index
+	logic [4:0] pghn_irq;			// pipeline group header index of interrupt (in case moved)
+	cpu_types_pkg::pc_stream_t ip_stream;		// stream associated with instruction
+	logic [4:0] ip_offs;			// offset in wydes from group IP (0, 3, 6 or 9)
+	cpu_types_pkg::pc_address_t eip;				// exception return address
+	logic flush;
+	cpu_types_pkg::rob_ndx_t sync_dep;			// sync instruction dependency
+	logic sync_depv;				// sync dependency valid
+	logic fc_dep;						// flow control dependency - relevant only for mem ops
+	logic [3:0] predino;			// predicated instruction number (1 to 8)
+	cpu_types_pkg::rob_ndx_t predrndx;				// ROB index of associate PRED instruction
+	logic [1:0] pred_tf;			// true(1)/false(2)/unknown(0)
+	logic pred_bit;						// 1 once previous predicate is true or ignored
+	logic pred_bitv;					// 1 if predicate bitis valid
+	logic dispatchable;				// 1 if instruction can be dispatched
+	logic cap_dispatchable;	  // 1 if instruction can be dispatched to capability unit
+
+	cpu_types_pkg::rob_ndx_t orid;						// ROB id of originating macro-instruction
+	logic cmt;								// 1=rROB entry was committed
+	logic lsq;								// 1=instruction has associated LSQ entry
+	lsq_ndx_t lsqndx;					// index to LSQ entry
+	cpu_types_pkg::value_t load_data;
+	logic [1:0] out;					// 1=instruction is being executed
+	logic [1:0] done;					// 2'b11=instruction is finished executing
+	logic rstp;								// indicate physical register reset required
+	logic [1:0] vn;						// vector index
+	logic chkpt_freed;
+	cpu_types_pkg::pc_address_t brtgt;
+//	cpu_types_pkg::mc_address_t mcbrtgt;			// micro-code branch target
+	logic takb;								// 1=branch evaluated to taken
+	cause_code_t exc;					// non-zero indicate exception
+	logic excv;								// 1=exception
+	logic nan;								// FP op generated a NaN
+`ifdef IS_SIM
+	cpu_types_pkg::value_t argA;
+	cpu_types_pkg::value_t argB;
+	cpu_types_pkg::value_t argT;
+	cpu_types_pkg::value_t argI;
+`endif
+	/*
+	cpu_types_pkg::value_t argA;
+	cpu_types_pkg::value_t argB;
+	cpu_types_pkg::value_t argC;	// for stores
+	cpu_types_pkg::value_t argD;
+	cpu_types_pkg::value_t argT;
+	cpu_types_pkg::value_t argS;
+	cpu_types_pkg::value_t argI;
+	*/
+//	cpu_types_pkg::value_t res;
+	/*
+	logic updAv;
+	logic updBv;
+	logic updCv;
+	cpu_types_pkg::value_t updA;
+	cpu_types_pkg::value_t updB;
+	cpu_types_pkg::value_t updC;
+	cpu_types_pkg::value_t updD;
+	cpu_types_pkg::pregno_t updAreg;
+	cpu_types_pkg::pregno_t updBreg;
+	cpu_types_pkg::pregno_t updCreg;
+	cpu_types_pkg::pregno_t updDreg;
+	*/
+	logic all_args_valid;			// 1 if all args are valid
+	logic could_issue;				// 1 if instruction ready to issue
+	logic could_issue_nm;			// 1 if instruction ready to issue NOP
+	logic prior_sync;					// 1 if instruction has sync prior to it
+	logic prior_fc;						// 1 if instruction has fc prior to it
+	/*
+	logic argA_vp;						// 1=argument A valid pending
+	logic argB_vp;
+	logic argC_vp;
+	logic argD_vp;
+	logic argT_vp;
+	*/
+	logic argA_v;							// 1=argument A valid
+	logic argB_v;
+	logic argC_v;
+	logic argD_v;
+	logic argS_v;							// status register valid
+	logic argT_v;
+	logic argT2_v;
+	cpu_types_pkg::value_t argC;
+	logic argFPCSR_v;					// true if FPCSR valid or not needed
+	logic argFPCSR_vv;				// true if FPCSR valid
+	cpu_types_pkg::value_t argFPCSR;
+/* How they should be setup...
+	operand_t operA;
+	operand_t operB;
+	operand_t operC;
+	operand_t operD;
+	operand_t operS;
+	operand_t operT;
+	operand_t operT2;
+*/
+	logic rat_v;							// 1=checked with RAT for valid reg arg.
+	logic reg_read_done;
+	// If capabilities are supported, needs a 256-bit value here
+	cpu_types_pkg::value_t arg;							// argument value for CSR instruction
+	// The following fields are loaded at enqueue time, but otherwise do not change.
+	logic last;								// 1=last instruction in group (not used)
+	cpu_types_pkg::rob_ndx_t group_len;			// length of instruction group (not used)
+	logic bt;									// branch to be taken as predicted
+	logic [7:0] laneno;				// current lane number
+	logic [5:0] data_bitpos;	// position of data to load / store
+	operating_mode_t om;			// operating mode
+	fround_t rm;							// float round mode
+	cpu_types_pkg::checkpt_ndx_t cndx;				// checkpoint index
+	cpu_types_pkg::checkpt_ndx_t br_cndx;		// checkpoint index branch owns
+	cpu_types_pkg::seqnum_t grp;							// instruction group
+	pipeline_reg_t op;			// original instruction
+} rob_entry_t;
+
+typedef struct packed
+{
+	logic v;														// group header is valid
+	cpu_types_pkg::seqnum_t sn;					// sequence number, decrements when instructions que
+	cpu_types_pkg::seqnum_t irq_sn;			// sequence number, increments for each interrupt
+	reg [5:0] old_ipl;
+	logic hwi;													// hardware interrupt occured during fetch
+	irq_info_packet_t irq;							// the level of the hardware interrupt
+	logic cndxv;												// checkpoint index is valid
+	cpu_types_pkg::checkpt_ndx_t cndx;	// checkpoint index
+	logic chkpt_freed;
+	logic has_branch;
+	Qupls5_pkg::pc_address_ex_t ip;			// Instruction pointer of group
+} pipeline_group_hdr_t;
+
+typedef struct packed
+{
+	logic flush;												// pipeline is being flushed
+	pipeline_group_hdr_t hdr;
+	rob_entry_t [MWIDTH-1:0] pr;
+} pipeline_group_reg_t;
+
+typedef struct packed
+{
+	logic [4:0] parent;
+	logic [31:0] deps;
+} dep_stream_t;
+
+// ============================================================================
+// Support Functions
+// ============================================================================
+
+function Qupls5_pkg::operating_mode_t fnNextOm;
+input Qupls5_pkg::operating_mode_t om;
+begin
+	fnNextOm = om;
+	if (om != 2'd3)
+	   case(om)
+	   Qupls5_pkg::OM_APP: fnNextOm = Qupls5_pkg::OM_SUPERVISOR;
+	   Qupls5_pkg::OM_SUPERVISOR: fnNextOm = Qupls5_pkg::OM_HYPERVISOR;
+	   Qupls5_pkg::OM_HYPERVISOR: fnNextOm = Qupls5_pkg::OM_SECURE;
+	   Qupls5_pkg::OM_SECURE: fnNextOm = Qupls5_pkg::OM_SECURE;
+	   endcase
+end
+endfunction
+
+function cpu_types_pkg::pc_address_t fnAddToIP;
+input cpu_types_pkg::pc_address_t ip;
+input [5:0] amt;
+begin
+	fnAddToIP = ip + amt;
+	/*
+	case(amt)
+	6'd6:
+		case (ip[5:0])
+		6'd54:	fnAddToIP = ip + 64'd10;
+		default:	fnAddToIP = ip + amt;
+		endcase
+	6'd12:
+		case (ip[5:0])
+		6'd48:	fnAddToIP = ip + 64'd16;
+		6'd54:	fnAddToIP = ip + 64'd22;
+		default:	fnAddToIP = ip + amt;
+		endcase
+	6'd18:
+		case (ip[5:0])
+		6'd42:	fnAddToIP = ip + 64'd22;
+		6'd48:	fnAddToIP = ip + 64'd28;
+		6'd54:	fnAddToIP = ip + 64'd28;
+		default:	fnAddToIP = ip + amt;
+		endcase
+	6'd24:
+		case (ip[5:0])
+		6'd36:	fnAddToIP = ip + 64'd28;
+		6'd42:	fnAddToIP = ip + 64'd34;
+		6'd48:	fnAddToIP = ip + 64'd34;
+		6'd54:	fnAddToIP = ip + 64'd34;
+		default:	fnAddToIP = ip + amt;
+		endcase
+	default:	fnAddToIP = ip;
+	endcase
+	*/
+end
+endfunction
+
+function cpu_types_pkg::pc_address_t fnTargetIP;
+input cpu_types_pkg::pc_address_t ip;
+input cpu_types_pkg::value_t tgt;
+begin
+	fnTargetIP = ip+{tgt,1'b0};
+end
+endfunction
+
+function fnHasExConst;
+input micro_op_t ins;
+begin
+	case(ins.opcode)
+	OP_BRK,OP_SHIFT,OP_CSR,OP_CHK,
+	OP_PUSH,OP_POP,	// ENTER,LEAVE,PUSH,POP
+	OP_FENCE,OP_BLOCK,OP_FLTD,
+	OP_AMO:	// AMO
+		fnHasExConst = 1'b0;
+	default:	fnHasExConst = 1'b1;
+	endcase
+end
+endfunction
+
+function fnIsShift;
+input micro_op_t ins;
+begin
+	fnIsShift = ins.opcode == OP_SHIFT;
+end
+endfunction
+
+function [2:0] fnDecMs;
+input micro_op_t ins;
+begin
+	if (fnIsShift(ins))
+		fnDecMs = ins[41:39];
+	else if (fnIsBranch(ins))
+		fnDecMs = {1'b0,ins[12:11]};
+	else
+		fnDecMs = ins[40:38];
+end
+endfunction
+
+function fnHasConstRs1;
+input micro_op_t ins;
+begin
+	case(ins.opcode)
+	OP_BRK,OP_SHIFT,OP_CSR,OP_CHK,
+	OP_PUSH,OP_POP,	// ENTER,LEAVE,PUSH,POP
+	OP_FENCE,OP_BLOCK,OP_FLTD,
+	OP_AMO:	// AMO
+		fnHasConstRs1 = 1'b0;
+	default:	fnHasConstRs1 = 1'b1;
+	endcase
+end
+endfunction
+
+function fnHasConstRs2;
+input micro_op_t ins;
+begin
+	case(ins.opcode)
+	OP_BRK,OP_SHIFT,OP_CSR,OP_CHK,
+	OP_PUSH,OP_POP,	// ENTER,LEAVE,PUSH,POP
+	OP_FENCE,OP_BLOCK,OP_FLTD,
+	OP_AMO:	// AMO
+		fnHasConstRs2 = 1'b0;
+	default:	fnHasConstRs2 = 1'b1;
+	endcase
+end
+endfunction
+
+function fnHasConstRs3;
+input micro_op_t ins;
+begin
+	case(ins.opcode)
+	OP_BRK,OP_SHIFT,OP_CSR,OP_CHK,
+	OP_PUSH,OP_POP,	// ENTER,LEAVE,PUSH,POP
+	OP_FENCE,OP_BLOCK,OP_FLTD,
+	OP_AMO:	// AMO
+		fnHasConstRs3 = 1'b0;
+	default:	fnHasConstRs3 = 1'b1;
+	endcase
+end
+endfunction
+
+function fnIsStimm;
+input micro_op_t ins;
+begin
+	case(ins.opcode)
+	default:
+		fnIsStimm = 1'b0;
+	endcase
+end
+endfunction
+
+
+// Decodes the constant position from an instruction.
+// Three positions are returned. The lower four bits are the base constant
+// position, and the upper four bits are the location of a store immediate
+// constant.
+
+function [11:0] fnConstPos;
+input micro_op_t ins;
+reg [2:0] ms;
+begin
+	ms = fnDecMs(ins);
+	fnConstPos = 8'd0;
+	if (Qupls5_pkg::fnHasConstRs1(ins)) begin	// does instruction have an extendable constant?
+		if (ms[0])
+			fnConstPos[3:0] = ins.Rs1[3:0];
+	end
+	if (Qupls5_pkg::fnHasConstRs2(ins)) begin	// does instruction have an extendable constant?
+		if (ms[1])
+			fnConstPos[7:4] = ins.Rs2[3:0];
+	end
+	if (Qupls5_pkg::fnHasConstRs3(ins)) begin	// does instruction have an extendable constant?
+		if (ms[2])
+			fnConstPos[11:8] = ins.Rs3[3:0];
+	end
+	if (fnIsStimm(ins))
+		fnConstPos[3:0] = ins.Rd[3:0];
+end
+endfunction
+
+function [5:0] fnConstSize;
+input micro_op_t ins;
+reg [2:0] ms;
+begin
+	ms = fnDecMs(ins);
+	fnConstSize = 6'd0;
+	if (Qupls5_pkg::fnHasConstRs1(ins)) begin	// does instruction have an extendable constant?
+		if (ms[0])
+			fnConstSize[1:0] = ins.Rs1[5:4];
+	end
+	if (Qupls5_pkg::fnHasConstRs2(ins)) begin	// does instruction have an extendable constant?
+		if (ms[1])
+			fnConstSize[3:2] = ins.Rs2[5:4];
+	end
+	if (Qupls5_pkg::fnHasConstRs3(ins)) begin	// does instruction have an extendable constant?
+		if (ms[2])
+			fnConstSize[5:4] = ins.Rs3[5:4];
+	end
+	if (fnIsStimm(ins))
+		fnConstSize[1:0] = ins.Rd[5:4];
+end
+endfunction
+
+// ATOM
+function fnIsAtom;
+input micro_op_t ir;
+begin
+	fnIsAtom = ir.opcode[5:1]==5'd12 && ir[8:6]==3'd7 && ir[31:29]==3'd0 && ir[28:26]==3'd1;
+end
+endfunction
+
+function fnIsCarry;
+input micro_op_t ir;
+begin
+	fnIsCarry = ir.opcode[5:1]==5'd12 && ir[8:6]==3'd7 && ir[31:29]==3'd0 && ir[28:26]==3'd2;
+end
+endfunction
+
+// Sign or zero extend data as needed according to op.
+function [63:0] fnDati;
+input more;
+input micro_op_t ins;
+input cpu_types_pkg::value_t dat;
+case(ins.opcode[2])
+1'b0:
+	case(ins.byteno[5:0])
+	6'd1:	fnDati = {{56{dat[ 7]}},dat[ 7:0]};
+	6'd2:	fnDati = {{48{dat[15]}},dat[15:0]};
+	6'd3:	fnDati = {{40{dat[23]}},dat[23:0]};
+	6'd4:	fnDati = {{32{dat[31]}},dat[31:0]};
+	6'd5:	fnDati = {{24{dat[39]}},dat[39:0]};
+	6'd6:	fnDati = {{16{dat[47]}},dat[47:0]};
+	6'd7:	fnDati = {{ 8{dat[55]}},dat[55:0]};
+	default:	fnDati = dat[63:0];
+	endcase
+1'b1:
+	case(ins.byteno[5:0])
+	6'd1:	fnDati = {56'd0,dat[ 7:0]};
+	6'd2:	fnDati = {48'd0,dat[15:0]};
+	6'd3:	fnDati = {40'd0,dat[23:0]};
+	6'd4:	fnDati = {32'd0,dat[31:0]};
+	6'd5:	fnDati = {24'd0,dat[39:0]};
+	6'd6:	fnDati = {16'd0,dat[47:0]};
+	6'd7:	fnDati = { 8'd0,dat[55:0]};
+	default:	fnDati = dat[63:0];
+	endcase
+default:    fnDati = dat;
+endcase
+endfunction
+
+function memsz_t fnMemsz;
+input micro_op_t ir;
+begin
+	case(ir.opcode)
+	OP_LDV,OP_STV,
+	OP_LDVN,OP_STVN:
+		fnMemsz = octa;
+	default:
+		case(ir.byteno[5:0])
+		6'd0:	fnMemsz = nul;
+		6'd1:	fnMemsz = byt;
+		6'd2:	fnMemsz = wyde;
+		6'd3:	fnMemsz = tetra;
+		6'd4:	fnMemsz = tetra;
+		6'd5:	fnMemsz = octa;
+		6'd6:	fnMemsz = octa;
+		6'd7:	fnMemsz = octa;
+		6'd8:	fnMemsz = octa;
+		6'd16:	fnMemsz = hexi;
+		default:	fnMemsz = octa;
+		endcase
+	endcase
+end
+endfunction
+
+function [31:0] fnSel;
+input micro_op_t ir;
+input [7:0] mask;
+begin
+	case(ir.opcode)
+	OP_LDV,OP_STV,
+	OP_LDVN,OP_STVN:
+		fnSel = {24'd0,ir.ble[7:0] & mask};
+	default:	fnSel = (32'd2 << ir.byteno) - 32'd1;
+	endcase
+end
+endfunction
+
+function fnIsLoad;
+input micro_op_t ir;
+begin
+	case(ir.opcode)
+	OP_LDB,OP_LDW,OP_LDT,OP_LOAD,
+	OP_LDBZ,OP_LDWZ,OP_LDTZ,7'd71,
+	OP_CLOAD:
+		fnIsLoad = 1'b1;
+	default:
+		fnIsLoad = 1'b0;
+	endcase
+end
+endfunction
+
+function fnIsStore;
+input micro_op_t ir;
+begin
+	case(ir.opcode)
+	OP_STB,OP_STW,OP_STT,OP_STORE,
+	OP_CSTORE:
+		fnIsStore = 1'b1;
+	default:
+		fnIsStore = 1'b0;
+	endcase
+end
+endfunction
+
+function fnIsBranch;
+input micro_op_t ir;
+begin
+	case(ir.opcode)
+	OP_BCC,
+	OP_BCCU,
+	OP_FBCC,
+	OP_MBCC:
+		fnIsBranch = 1'b1;
+	default:
+		fnIsBranch = 1'b0;
+	endcase
+end
+endfunction
+
+function fnDecBsr;
+input Qupls5_pkg::pipeline_reg_t mux;
+begin
+	fnDecBsr = mux.uop.opcode == OP_BSR && mux.uop.Rd!=8'd0;
+end
+endfunction
+
+function fnDecBra;
+input Qupls5_pkg::pipeline_reg_t mux;
+begin
+	fnDecBra = mux.uop.opcode == OP_BSR && mux.uop.Rd==8'd0;
+end
+endfunction
+
+function fnDecJmp;
+input Qupls5_pkg::pipeline_reg_t mux;
+begin
+	fnDecJmp = mux.uop.opcode==OP_JSR && mux.uop.Rd==8'd0;
+end
+endfunction
+
+function fnDecJmpr;
+input Qupls5_pkg::pipeline_reg_t mux;
+begin
+	fnDecJmpr = 1'b0;
+end
+endfunction
+
+function fnDecJsr;
+input Qupls5_pkg::pipeline_reg_t mux;
+begin
+	fnDecJsr = mux.uop.opcode==OP_JSR && mux.uop.Rd!=8'd0;
+end
+endfunction
+
+function fnDecJsrr;
+input Qupls5_pkg::pipeline_reg_t mux;
+begin
+	fnDecJsrr = 1'b0;
+end
+endfunction
+
+function fnDecBra2;
+input Qupls5_pkg::pipeline_reg_t mux;
+begin
+	fnDecBra2 = 1'b0;
+end
+endfunction
+
+function fnDecBsr2;
+input Qupls5_pkg::pipeline_reg_t mux;
+begin
+	fnDecBsr2 = 1'b0;
+end
+endfunction
+
+function fnDecRet;
+input Qupls5_pkg::pipeline_reg_t mux;
+begin
+	fnDecRet =
+		mux.uop.opcode==OP_RTD;
+end
+endfunction
+
+function Qupls5_pkg::pc_address_ex_t fnDecDest;
+input Qupls5_pkg::pc_address_ex_t pc;
+input Qupls5_pkg::rob_entry_t pr;
+reg jsr,bsr,bcc;
+begin
+	fnDecDest = pc;
+	jsr = fnDecJsr(pr.op);
+	bsr = fnDecBsr(pr.op);
+	bcc = fnIsBranch(pr.op.uop);
+	case(1'b1)
+	jsr:	fnDecDest.cap.offset = {{29{pr.op.uop.imm[34]}},pr.op.uop.imm,1'b0};
+	bsr: 	fnDecDest.cap.offset = pc.cap.offset + {{29{pr.op.uop.imm[34]}},pr.op.uop.imm,1'b0};
+	bcc:	fnDecDest.cap.offset = pc.cap.offset + {{44{pr.op.uop.imm[19]}},pr.op.uop.imm,1'b0};
+	default:	fnDecDest.cap.offset = Qupls5_pkg::RSTPC;
+	endcase
+end
+endfunction
+
+function fnIsPredBranch;
+input Qupls5_pkg::micro_op_t ir;
+begin
+	fnIsPredBranch = 1'b0;
+end
+endfunction
+
+function fnIsBccR;
+input micro_op_t ir;
+begin
+	fnIsBccR = fnIsBranch(ir) && 1'b0;//ir[39:36]==4'h7;
+end
+endfunction
+
+function fnIsDBcc;
+input micro_op_t ir;
+begin
+	fnIsDBcc = fnIsBranch(ir) && ir[25:23]!=3'd2 && ir[25:23]!=3'd5;
+end
+endfunction
+
+function fnIsEret;
+input micro_op_t ir;
+begin
+	fnIsEret = ir.opcode==OP_BRK &&  ir[28:18]==11'd1;	// eret or eret2
+end
+endfunction
+
+function fnIsRet;
+input micro_op_t ir;
+begin
+	fnIsRet = ir.opcode==OP_RTD;
+end
+endfunction
+
+function fnImma;
+input micro_op_t ir;
+begin
+	fnImma = 1'b0;
+end
+endfunction
+
+function fnImmb;
+input micro_op_t ir;
+begin
+	fnImmb = 1'b0;
+	case(ir.opcode)
+	OP_ADDI,OP_CMPI,OP_MULI,OP_DIVI,OP_SUBFI:
+		fnImmb = 1'b1;
+	OP_R3B,OP_R3W,OP_R3T,OP_R3O:
+		fnImmb = ir.ms[1] == 1'b1 && ir.Rs2[5] == 1'b1;
+//	OP_RTD:
+//		fnImmb = 1'b1;
+	default:	fnImmb = 1'b0;
+	endcase
+end
+endfunction
+
+function fnImmc;
+input micro_op_t ir;
+begin
+	fnImmc = 1'b0;
+	case(ir.opcode)
+	OP_R3B,OP_R3W,OP_R3T,OP_R3O:
+		fnImmc = ir.ms[2] == 1'b1 && ir.Rs3[5] == 1'b1;
+	default:	fnImmc = 1'b0;
+	endcase
+end
+endfunction
+
+function fnImmd;
+input micro_op_t ir;
+begin
+	fnImmd = 1'b0;
+end
+endfunction
+
+// Registers that are essentially constant
+// r0 and the PC alias
+function fnConstReg;
+input [7:0] Rn;
+begin
+	fnConstReg = Rn==8'd0 || Rn==8'd39 || Rn==8'd135 || Rn==8'd175 || Rn==8'd215;
+end
+endfunction
+
+//
+// 1 if the the operand is automatically valid, 
+// 0 if we need a RF value
+function fnSourceRs1v;
+input micro_op_t ir;
+begin
+	case(ir.opcode)
+	OP_ADDI,OP_CMPI,OP_MULI,OP_DIVI,OP_SUBFI:	fnSourceRs1v = 1'b1;
+	OP_CHK:	fnSourceRs1v = fnConstReg(ir.Rs1) || fnImma(ir);
+//	OP_RTD:		fnSourceRs1v = fnConstReg(ir.ins.rtd.Ra.num) || fnImma(ir);
+//	OP_JSR:		fnSourceRs1v = fnConstReg(ir.ins.Ra.num) || fnImma(ir);
+	OP_R3B,OP_R3W,OP_R3T,OP_R3O:
+			fnSourceRs1v = fnConstReg(ir.Rs1) || fnImma(ir);
+	OP_SHIFT:	fnSourceRs1v = fnConstReg(ir.Rs1) || fnImma(ir);
+//	OP_MOV:		fnSourceRs1v = fnConstReg({ir.ins.move.Rs1h,ir.ins.move.Rs1}) || fnImma(ir);
+	OP_BCC,
+	OP_BCCU:
+		fnSourceRs1v = fnConstReg(ir.Rs1) || fnImma(ir);
+	OP_LOADA,
+	OP_LDB,OP_LDBZ,OP_LDW,OP_LDWZ,OP_LDT,OP_LDTZ,OP_LOAD,OP_CLOAD:
+		fnSourceRs1v = fnConstReg(ir.Rs1);
+	OP_STB,OP_STW,OP_STT,OP_STORE,OP_STPTR,OP_CSTORE:
+		fnSourceRs1v = fnConstReg(ir.Rs1);
+	default:	fnSourceRs1v = 1'b1;
+	endcase
+end
+endfunction
+
+function fnSourceRs2v;
+input micro_op_t ir;
+begin
+	case(ir.opcode)
+	OP_CHK:	fnSourceRs2v = fnConstReg(ir.Rs2) || fnImmb(ir);
+//	OP_RTD:		fnSourceRs2v = 1'b0;
+//	OP_JSR,OP_BSR,
+	OP_ADDI,OP_CMPI,OP_MULI,OP_DIVI,OP_SUBFI:
+		fnSourceRs2v = 1'b1;
+	OP_R3B,OP_R3W,OP_R3T,OP_R3O:
+			fnSourceRs2v = fnConstReg(ir.Rs2) || fnImmb(ir);
+	OP_SHIFT:	fnSourceRs2v = fnConstReg(ir.Rs2) || ir[31];
+	OP_BCC,
+	OP_BCCU:
+		fnSourceRs2v = fnConstReg(ir.Rs2) || fnImmb(ir);
+	OP_LOADA,
+	OP_LDB,OP_LDBZ,OP_LDW,OP_LDWZ,OP_LDT,OP_LDTZ,OP_LOAD,OP_CLOAD:
+		fnSourceRs2v = fnConstReg(ir.Rs2);
+	OP_STB,OP_STW,OP_STT,OP_STORE,OP_STPTR,OP_CSTORE:
+		fnSourceRs2v = fnConstReg(ir.Rs2);
+	default:	fnSourceRs2v = 1'b1;
+	endcase
+end
+endfunction
+
+function fnSourceRs3v;
+input micro_op_t ir;
+begin
+	case(ir.opcode)
+	OP_R3B,OP_R3W,OP_R3T,OP_R3O:
+			fnSourceRs3v = fnConstReg(ir.Rs3) || fnImmc(ir);
+	OP_CHK:	fnSourceRs3v = fnConstReg(ir.Rs3);
+//	OP_RTD:
+//		fnSourceRs3v = 1'd0;
+	default:
+		fnSourceRs3v = 1'b1;
+	endcase
+end
+endfunction
+
+function fnSourceRs4v;
+input micro_op_t ir;
+begin
+	case(ir.opcode)
+	OP_EXTD:
+			fnSourceRs4v = fnConstReg(ir.Rs4) || fnImmd(ir);
+	default:
+		fnSourceRs4v = 1'b1;
+	endcase
+end
+endfunction
+
+function fnSourceArgSv;
+input micro_op_t ir;
+begin
+	case(ir.opcode)
+	OP_FLTH,OP_FLTS,OP_FLTD,OP_FLTQ,
+	OP_FLTPH,OP_FLTPS,OP_FLTPD,OP_FLTPQ,
+	OP_FLTVVV,OP_FLTVVS:
+		fnSourceArgSv = ir.rmd!=3'd7 && !ir.inc;
+	default:
+		fnSourceArgSv = 1'b1;
+	endcase
+end
+endfunction
+
+function fnSourceRdv;
+input micro_op_t ir;
+begin
+	fnSourceRdv = 1'b1;
+end
+endfunction
+
+function fnSourceRciv;
+input ex_instruction_t ir;
+begin
+	fnSourceRciv = 1'b1;
+end
+endfunction
+
+function fnRegExc;
+input operating_mode_t om;
+input [6:0] a;
+begin
+	fnRegExc = 1'b0;
+	case (om)
+	OM_APP:	fnRegExc = a==7'd45 || (a >= 7'd50 && a <= 7'd55);
+	OM_SUPERVISOR: fnRegExc = a > 7'd63;
+	OM_HYPERVISOR: fnRegExc = a > 7'd63;
+	OM_SECURE: fnRegExc = a > 7'd63;
+	endcase
+end
+endfunction
+
+// Not as complex as it looks. Mainly wires.
+// Some routing as fields in the micro-op may be wider than the raw instruction.
+//
+// Source bits
+// +---+---+---+---+---+---+---+
+// | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
+// +---+---+---+---+---+---+---+
+// |Rd2| S |Rs4|Rd |Rs3|Rs2|Rs1|
+// +---+---+---+---+---+---+---+
+
+function micro_op_t fnMapRawToUop;
+input [47:0] raw;
+begin
+	fnMapRawToUop = {$bits(micro_op_t){1'b0}};
+	fnMapRawToUop.opcode = raw[6:0];
+	case(raw[6:0])
+	// Immediate operate
+	Qupls5_pkg::OP_ADDI,Qupls5_pkg::OP_SUBFI,
+	Qupls5_pkg::OP_CMPI,Qupls5_pkg::OP_CMPUI,
+	Qupls5_pkg::OP_MULI,Qupls5_pkg::OP_MULUI,
+	Qupls5_pkg::OP_DIVI,Qupls5_pkg::OP_DIVUI,
+	Qupls5_pkg::OP_ORI,Qupls5_pkg::OP_XORI:
+		begin
+			fnMapRawToUop.Rd = {2'd0,raw[13:7]};
+			fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
+			fnMapRawToUop.Rs2 = 9'd0;
+			fnMapRawToUop.Rs3 = 9'd0;
+			if (SUPPORT_SHIFTED_IMMED)
+				fnMapRawToUop.imm = {{44{raw[45]}},raw[45:23]} << ({raw[22:21],1'b0,raw[22:21],1'b0} + {raw[22:21],2'h0});
+			else
+				fnMapRawToUop.imm = {{44{raw[45]}},raw[45:21]};
+			fnMapRawToUop.ms = 3'b0;
+			fnMapRawToUop.prc = raw[47:46];
+			fnMapRawToUop.src = {6'b001001};
+			fnMapRawToUop.dst = 1'b1;
+		end
+	Qupls5_pkg::OP_ANDI:
+		begin
+			fnMapRawToUop.Rd = {2'd0,raw[13:7]};
+			fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
+			fnMapRawToUop.Rs2 = 9'd0;
+			fnMapRawToUop.Rs3 = 9'd0;
+			if (SUPPORT_SHIFTED_IMMED)
+				fnMapRawToUop.imm = ({{44{raw[45]}},raw[45:23]} << ({raw[22:21],1'b0,raw[22:21],1'b0} + {raw[22:21],2'h0})) |
+							((64'd1 << ({raw[22:21],1'b0,raw[22:21],1'b0} + {raw[22:21],2'h0})) - 64'd1);
+			else
+				fnMapRawToUop.imm = {{44{raw[45]}},raw[45:21]};
+			fnMapRawToUop.ms = 3'b0;
+			fnMapRawToUop.prc = raw[47:46];
+			fnMapRawToUop.src = {6'b001001};
+			fnMapRawToUop.dst = 1'b1;
+		end
+	// Loads and stores
+	Qupls5_pkg::OP_LDB,Qupls5_pkg::OP_LDW,Qupls5_pkg::OP_LDT,Qupls5_pkg::OP_LOAD,
+	Qupls5_pkg::OP_LDBZ,Qupls5_pkg::OP_LDWZ,Qupls5_pkg::OP_LDTZ:
+		begin
+			fnMapRawToUop.Rd = {2'd0,raw[13:7]};
+			fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
+			fnMapRawToUop.Rs2 = {2'd0,raw[27:21]};
+			fnMapRawToUop.Rs3 = 9'd0;
+			fnMapRawToUop.imm = raw[43:29];
+			fnMapRawToUop.ms = 3'b0;
+			fnMapRawToUop.sc = raw[47:44];
+			fnMapRawToUop.src = 7'b0001011;
+			fnMapRawToUop.dst = 1'b1;
+			case({raw[28],raw[1:0]})
+			3'b000:	fnMapRawToUop.byteno = 6'd1;
+			3'b001:	fnMapRawToUop.byteno = 6'd2;
+			3'b010:	fnMapRawToUop.byteno = 6'd4;
+			3'b011:	fnMapRawToUop.byteno = 6'd8;
+			3'b100:	fnMapRawToUop.byteno = 6'd3;
+			3'b101:	fnMapRawToUop.byteno = 6'd5;
+			3'b110:	fnMapRawToUop.byteno = 6'd6;
+			3'b111:	fnMapRawToUop.byteno = 6'd7;
+			endcase
+		end
+	Qupls5_pkg::OP_STB,Qupls5_pkg::OP_STW,Qupls5_pkg::OP_STT,Qupls5_pkg::OP_STORE:
+		begin
+			fnMapRawToUop.Rd = {2'd0,raw[13:7]};
+			fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
+			fnMapRawToUop.Rs2 = {2'd0,raw[27:21]};
+			fnMapRawToUop.Rs3 = 9'd0;
+			fnMapRawToUop.imm = raw[43:29];
+			fnMapRawToUop.ms = 3'd0;
+			fnMapRawToUop.sc = raw[47:44];
+			fnMapRawToUop.src = 7'b0001011;
+			fnMapRawToUop.dst = 1'b0;
+			case({raw[28],raw[1:0]})
+			3'b000:	fnMapRawToUop.byteno = 6'd1;
+			3'b001:	fnMapRawToUop.byteno = 6'd2;
+			3'b010:	fnMapRawToUop.byteno = 6'd4;
+			3'b011:	fnMapRawToUop.byteno = 6'd8;
+			3'b100:	fnMapRawToUop.byteno = 6'd3;
+			3'b101:	fnMapRawToUop.byteno = 6'd5;
+			3'b110:	fnMapRawToUop.byteno = 6'd6;
+			3'b111:	fnMapRawToUop.byteno = 6'd7;
+			endcase
+		end
+	// Vector loads and stores
+	Qupls5_pkg::OP_LDV:
+		begin
+			fnMapRawToUop.Rd = {2'd0,raw[13:7]};
+			fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
+			fnMapRawToUop.Rs2 = {2'd0,raw[27:21]};
+			fnMapRawToUop.Rs3 = {2'd0,raw[34:28]};
+			fnMapRawToUop.dt = raw[37:35];
+			fnMapRawToUop.imm = raw[47:38];
+			fnMapRawToUop.ms = 3'd0;
+			fnMapRawToUop.sc = 4'd1;
+			fnMapRawToUop.src = 7'b0001111;
+			fnMapRawToUop.dst = 1'b1;
+			fnMapRawToUop.vn = 4'b0001;
+		end
+	Qupls5_pkg::OP_STV:
+		begin
+			fnMapRawToUop.Rd = {2'd0,raw[13:7]};
+			fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
+			fnMapRawToUop.Rs2 = {2'd0,raw[27:21]};
+			fnMapRawToUop.Rs3 = {2'd0,raw[34:28]};
+			fnMapRawToUop.dt = raw[37:35];
+			fnMapRawToUop.imm = raw[47:38];
+			fnMapRawToUop.ms = 3'd0;
+			fnMapRawToUop.sc = 4'd1;
+			fnMapRawToUop.src = 7'b0001111;
+			fnMapRawToUop.dst = 1'b0;
+			fnMapRawToUop.vn = 4'b0001;
+		end
+	Qupls5_pkg::OP_LDVN:
+		begin
+			fnMapRawToUop.Rd = {2'd0,raw[13:7]};
+			fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
+			fnMapRawToUop.Rs2 = {2'd0,raw[27:21]};
+			fnMapRawToUop.Rs3 = {2'd0,raw[34:28]};
+			fnMapRawToUop.dt = raw[37:35];
+			fnMapRawToUop.imm = raw[47:38];
+			fnMapRawToUop.ms = 3'd0;
+			fnMapRawToUop.sc = 4'd1;
+			fnMapRawToUop.src = 7'b0001111;
+			fnMapRawToUop.dst = 1'b1;
+			fnMapRawToUop.vn = 4'b0101;
+		end
+	Qupls5_pkg::OP_STVN:
+		begin
+			fnMapRawToUop.Rd = {2'd0,raw[13:7]};
+			fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
+			fnMapRawToUop.Rs2 = {2'd0,raw[27:21]};
+			fnMapRawToUop.Rs3 = {2'd0,raw[34:28]};
+			fnMapRawToUop.dt = raw[37:35];
+			fnMapRawToUop.imm = raw[47:38];
+			fnMapRawToUop.ms = 3'd0;
+			fnMapRawToUop.sc = 4'd1;
+			fnMapRawToUop.src = 7'b0001111;
+			fnMapRawToUop.dst = 1'b0;
+			fnMapRawToUop.vn = 4'b0101;
+		end
+	Qupls5_pkg::OP_AMO:
+		begin
+			fnMapRawToUop.Rd = {2'd0,raw[13:7]};
+			fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
+			fnMapRawToUop.Rs2 = {2'd0,raw[27:21]};
+			fnMapRawToUop.Rs3 = {2'd0,raw[34:28]};
+			fnMapRawToUop.vn = 4'd0;
+			fnMapRawToUop.op3 = raw[37:35];
+			fnMapRawToUop.ms = raw[40:38];
+			fnMapRawToUop.func = raw[47:41];
+			fnMapRawToUop.src = 7'b0001111;
+			fnMapRawToUop.dst = 1'b1;
+		end
+	Qupls5_pkg::OP_CMPSWAP:
+		begin
+			fnMapRawToUop.Rd = {2'd0,raw[13:7]};
+			fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
+			fnMapRawToUop.Rs2 = {2'd0,raw[27:21]};
+			fnMapRawToUop.Rs3 = {2'd0,raw[34:28]};
+			fnMapRawToUop.vn = 4'd0;
+			fnMapRawToUop.op3 = raw[37:35];
+			fnMapRawToUop.ms = raw[40:38];
+			fnMapRawToUop.func = raw[47:41];
+			fnMapRawToUop.src = 7'b0001111;
+			fnMapRawToUop.dst = 1'b1;
+		end
+	// R3 also includes shifts, BMAP
+	Qupls5_pkg::OP_R3B,Qupls5_pkg::OP_R3W,Qupls5_pkg::OP_R3T,Qupls5_pkg::OP_R3O,
+	Qupls5_pkg::OP_R3BP,Qupls5_pkg::OP_R3WP,Qupls5_pkg::OP_R3TP,Qupls5_pkg::OP_R3OP,
+	Qupls5_pkg::OP_CHK:
+		begin
+			fnMapRawToUop.Rd = {2'd0,raw[13:7]};
+			fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
+			fnMapRawToUop.Rs2 = {2'd0,raw[27:21]};
+			fnMapRawToUop.Rs3 = {2'd0,raw[34:28]};
+			fnMapRawToUop.Rs4 = {2'd0,raw[41:35]};	// graphics
+			fnMapRawToUop.vn = 4'd0;
+			fnMapRawToUop.op3 = raw[37:35];
+			fnMapRawToUop.rmd = raw[37:35];			// for ASR
+			fnMapRawToUop.ms = raw[40:38];
+			fnMapRawToUop.func = raw[47:41];
+			fnMapRawToUop.prc = raw[1:0];
+			fnMapRawToUop.src = 7'b0001111;
+			fnMapRawToUop.dst = 1'b1;
+		end
+	Qupls5_pkg::OP_R3VVV:
+		begin
+			fnMapRawToUop.Rd = {2'd0,raw[13:7]};
+			fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
+			fnMapRawToUop.Rs2 = {2'd0,raw[27:21]};
+			fnMapRawToUop.Rs3 = {2'd0,raw[34:28]};
+			fnMapRawToUop.Rs4 = {2'd0,raw[41:35]};	// graphics
+			fnMapRawToUop.op3 = raw[37:35];
+			fnMapRawToUop.rmd = raw[37:35];			// for ASR
+			fnMapRawToUop.ms = raw[40:38];
+			fnMapRawToUop.func = raw[47:41];
+			fnMapRawToUop.prc = raw[1:0];
+			fnMapRawToUop.src = 7'b0001111;
+			fnMapRawToUop.dst = 1'b1;
+			fnMapRawToUop.vn = 4'b0111;
+			if (raw[47:41] >= 7'd120)
+				fnMapRawToUop.vn[0] = 1'b0;
+		end
+	Qupls5_pkg::OP_R3VVS:
+		begin
+			fnMapRawToUop.Rd = {2'd0,raw[13:7]};
+			fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
+			fnMapRawToUop.Rs2 = {2'd0,raw[27:21]};
+			fnMapRawToUop.Rs3 = {2'd0,raw[34:28]};
+			fnMapRawToUop.Rs4 = {2'd0,raw[41:35]};	// graphics
+			fnMapRawToUop.op3 = raw[37:35];
+			fnMapRawToUop.rmd = raw[37:35];			// for ASR
+			fnMapRawToUop.ms = raw[40:38];
+			fnMapRawToUop.func = raw[47:41];
+			fnMapRawToUop.prc = raw[1:0];
+			fnMapRawToUop.src = 7'b0001111;
+			fnMapRawToUop.dst = 1'b1;
+			fnMapRawToUop.vn = 4'b0011;
+			if (raw[47:41] >= 7'd120)
+				fnMapRawToUop.vn[0] = 1'b0;
+		end
+	Qupls5_pkg::OP_SHIFT:
+		begin
+			fnMapRawToUop.Rd = {2'd0,raw[13:7]};
+			fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
+			fnMapRawToUop.Rs2 = {2'd0,raw[27:21]};
+			fnMapRawToUop.Rs3 = {2'd0,raw[34:28]};
+			fnMapRawToUop.vn = 4'd0;
+			fnMapRawToUop.op3 = raw[37:35];
+			fnMapRawToUop.ms = raw[40:38];
+			fnMapRawToUop.func = raw[47:41];
+			fnMapRawToUop.prc = raw[1:0];
+			fnMapRawToUop.src = 7'b0001111;
+			fnMapRawToUop.dst = 1'b1;
+		end
+	Qupls5_pkg::OP_CSR:
+		begin
+			fnMapRawToUop.Rd = {2'd0,raw[13:7]};
+			fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
+			fnMapRawToUop.Rs2 = 9'd0;
+			fnMapRawToUop.Rs3 = 9'd0;
+			fnMapRawToUop.imm = {raw[44:42],raw[27:14]};
+			fnMapRawToUop.imm2 = raw[41:28];
+			fnMapRawToUop.ms = raw[44:42];
+			fnMapRawToUop.op3 = raw[47:45];
+			fnMapRawToUop.src = 7'b0001001;
+			fnMapRawToUop.dst = 1'b1;
+		end
+	Qupls5_pkg::OP_BRK:
+		begin
+			fnMapRawToUop.Rs1 = 9'd0;
+			fnMapRawToUop.Rs2 = 9'd0;
+			fnMapRawToUop.Rs3 = 9'd0;
+			fnMapRawToUop.imm = raw[47:7];
+			fnMapRawToUop.src = 7'b0000000;
+			fnMapRawToUop.dst = 1'b0;
+		end
+	Qupls5_pkg::OP_EXTD:
+		begin
+			fnMapRawToUop.Rd = {2'd0,raw[13:7]};
+			fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
+			fnMapRawToUop.Rs2 = {2'd0,raw[27:21]};
+			fnMapRawToUop.Rs3 = {2'd0,raw[34:28]};
+			fnMapRawToUop.Rs4 = {2'd0,raw[47:41]};
+			fnMapRawToUop.vn = 4'd0;
+			fnMapRawToUop.op3 = raw[37:35];
+			fnMapRawToUop.ms = raw[40:38];
+			fnMapRawToUop.src = 7'b0011111;
+			fnMapRawToUop.dst = 1'b1;
+		end
+	Qupls5_pkg::OP_FLTH,Qupls5_pkg::OP_FLTS,Qupls5_pkg::OP_FLTD,Qupls5_pkg::OP_FLTQ,
+	Qupls5_pkg::OP_FLTPH,Qupls5_pkg::OP_FLTPS,Qupls5_pkg::OP_FLTPD,Qupls5_pkg::OP_FLTPQ:
+		begin
+			fnMapRawToUop.Rd = {2'd0,raw[13:7]};
+			fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
+			fnMapRawToUop.Rs2 = {2'd0,raw[27:21]};
+			fnMapRawToUop.Rs3 = {2'd0,raw[34:28]};
+			fnMapRawToUop.vn = 4'd0;
+			fnMapRawToUop.rmd = raw[37:35];
+			fnMapRawToUop.ms = raw[40:38];
+			fnMapRawToUop.func = raw[46:41];
+			fnMapRawToUop.src = {1'b0,raw[37:35]==3'b111,5'b01111};	// read from fp status?
+			fnMapRawToUop.dst = 1'b1;
+			fnMapRawToUop.inc = raw[47];
+		end
+	Qupls5_pkg::OP_FLTVVV:
+		begin
+			fnMapRawToUop.Rd = {2'd0,raw[13:7]};
+			fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
+			fnMapRawToUop.Rs2 = {2'd0,raw[27:21]};
+			fnMapRawToUop.Rs3 = {2'd0,raw[34:28]};
+			fnMapRawToUop.rmd = raw[37:35];
+			fnMapRawToUop.ms = raw[40:38];
+			fnMapRawToUop.func = raw[46:41];
+			fnMapRawToUop.src = {1'b0,raw[37:35]==3'b111,5'b01111};	// read from fp status?
+			fnMapRawToUop.dst = 1'b1;
+			fnMapRawToUop.inc = raw[47];
+			case(raw[46:41])
+			Qupls5_pkg::FLT_FMA,Qupls5_pkg::FLT_FMS,
+			Qupls5_pkg::FLT_FNMA,Qupls5_pkg::FLT_FNMS:
+				fnMapRawToUop.vn = 4'b1111;
+			default:
+				fnMapRawToUop.vn = 4'b0111;
+			endcase
+			if (raw[46:41] >= 6'd8 && raw[46:41] <= 6'd11)
+				fnMapRawToUop.vn[0] = 1'b0;
+		end
+	Qupls5_pkg::OP_FLTVVS:
+		begin
+			fnMapRawToUop.Rd = {2'd0,raw[13:7]};
+			fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
+			fnMapRawToUop.Rs2 = {2'd0,raw[27:21]};
+			fnMapRawToUop.Rs3 = {2'd0,raw[34:28]};
+			fnMapRawToUop.rmd = raw[37:35];
+			fnMapRawToUop.ms = raw[40:38];
+			fnMapRawToUop.func = raw[46:41];
+			fnMapRawToUop.src = {1'b0,raw[37:35]==3'b111,5'b01111};	// read from fp status?
+			fnMapRawToUop.dst = 1'b1;
+			fnMapRawToUop.inc = raw[47];
+			fnMapRawToUop.vn = 4'b0011;
+			case(raw[46:41])
+			Qupls5_pkg::FLT_FMA,Qupls5_pkg::FLT_FMS,
+			Qupls5_pkg::FLT_FNMA,Qupls5_pkg::FLT_FNMS:
+				fnMapRawToUop.vn = 4'b1111;
+			default:
+				fnMapRawToUop.vn = 4'b0111;
+			endcase
+			if (raw[46:41] >= 6'd8 && raw[46:41] <= 6'd11)
+				fnMapRawToUop.vn[0] = 1'b0;
+		end
+	Qupls5_pkg::OP_BCC:
+		begin
+			fnMapRawToUop.cnd = raw[10:7];
+			// Detect increment / decrement branches here.
+			fnMapRawToUop.Rd = raw[10:8]==3'd6 ? {2'd0,raw[20:14]} : 9'd0;
+			fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
+			fnMapRawToUop.Rs2 = {2'd0,raw[27:21]};
+			fnMapRawToUop.Rs3 = raw[13] ? 9'd0 : {2'd0,raw[34:28]};
+			fnMapRawToUop.prc = raw[47:45];
+			fnMapRawToUop.imm = {raw[44:28],1'b0};
+			fnMapRawToUop.ms = raw[13:11];
+			fnMapRawToUop.src = 7'b0000011;
+			fnMapRawToUop.src[2] = ~raw[13];
+			fnMapRawToUop.dst = raw[10:8]==3'd6;
+			fnMapRawToUop.inc = raw[10:8]==3'd6;
+		end
+	Qupls5_pkg::OP_BCCU:
+		begin
+			fnMapRawToUop.cnd = raw[10:7];
+			// Detect increment / decrement branches here.
+			fnMapRawToUop.Rd = raw[10:8]==3'd6 ? {2'd0,raw[20:14]} : 9'd0;
+			fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
+			fnMapRawToUop.Rs2 = {2'd0,raw[27:21]};
+			fnMapRawToUop.Rs3 = raw[13] ? 9'd0 : {2'd0,raw[34:28]};
+			fnMapRawToUop.prc = raw[47:45];
+			fnMapRawToUop.imm = {raw[44:28],1'b0};
+			fnMapRawToUop.ms = raw[13:11];
+			fnMapRawToUop.src = 7'b0000011;
+			fnMapRawToUop.src[2] = ~raw[13];
+			fnMapRawToUop.dst = raw[10:8]==3'd6;
+			fnMapRawToUop.inc = raw[10:8]==3'd6;
+		end
+	Qupls5_pkg::OP_FBCC:
+		begin
+			fnMapRawToUop.cnd = raw[10:7];
+			fnMapRawToUop.Rd = 9'd0;
+			fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
+			fnMapRawToUop.Rs2 = {2'd0,raw[27:21]};
+			fnMapRawToUop.Rs3 = raw[13] ? 9'd0 : {2'd0,raw[34:28]};
+			fnMapRawToUop.prc = raw[47:45];
+			fnMapRawToUop.imm = {raw[44:28],1'b0};
+			fnMapRawToUop.ms = raw[13:11];
+			fnMapRawToUop.src = 7'b0000011;
+			fnMapRawToUop.src[2] = ~raw[13];
+			fnMapRawToUop.dst = 1'b0;
+			fnMapRawToUop.inc = 1'b0;
+		end
+	Qupls5_pkg::OP_MBCC:
+		begin
+			fnMapRawToUop.cnd = raw[10:7];
+			fnMapRawToUop.Rd = 9'd0;
+			fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
+			fnMapRawToUop.Rs2 = {2'd0,raw[27:21]};
+			fnMapRawToUop.Rs3 = raw[13] ? 9'd0 : {2'd0,raw[34:28]};
+			fnMapRawToUop.Rs4 = raw[41:35];
+			fnMapRawToUop.imm = raw[13] ? {raw[47:42],raw[34:28],1'b0} : 64'd0;
+			fnMapRawToUop.ms = raw[13:11];
+			fnMapRawToUop.src = 7'b0010011;
+			fnMapRawToUop.src[2] = ~raw[13];
+			fnMapRawToUop.dst = 1'b0;
+			fnMapRawToUop.inc = 1'b0;
+		end
+	Qupls5_pkg::OP_BSR,Qupls5_pkg::OP_JSR:
+		begin
+			fnMapRawToUop.Rs1 = 9'd0;
+			fnMapRawToUop.Rs2 = 9'd0;
+			fnMapRawToUop.Rs3 = 9'd0;
+			fnMapRawToUop.Rd = {2'd0,raw[13:7]};
+			fnMapRawToUop.imm = {raw[47:14],1'b0};
+			fnMapRawToUop.src = 7'h00;
+			fnMapRawToUop.dst = |raw[13:7];
+		end
+// Source bits
+// +---+---+---+---+---+---+---+
+// | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
+// +---+---+---+---+---+---+---+
+// |Rd2| S |Rs4|Rd |Rs3|Rs2|Rs1|
+// +---+---+---+---+---+---+---+
+	Qupls5_pkg::OP_RTD:
+		begin
+			fnMapRawToUop.Rd = {2'd0,raw[13:7]};
+			fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
+			fnMapRawToUop.Rs2 = 9'd0;
+			fnMapRawToUop.Rs3 = 9'd0;
+			if (SUPPORT_SHIFTED_IMMED)
+				fnMapRawToUop.imm = {{44{raw[45]}},raw[45:26],3'b0} << ({raw[22:21],1'b0,raw[22:21],1'b0} + {raw[22:21],2'h0});
+			else
+				fnMapRawToUop.imm = {{44{raw[45]}},raw[45:26],3'b0};
+			fnMapRawToUop.prc = 2'd3;
+			fnMapRawToUop.src = 7'b0001001;
+			fnMapRawToUop.dst = |raw[13:7];
+		end
+	Qupls5_pkg::OP_FENCE:
+		begin
+			fnMapRawToUop.Rs1 = 9'd0;
+			fnMapRawToUop.Rs2 = 9'd0;
+			fnMapRawToUop.Rs3 = 9'd0;
+			fnMapRawToUop.op3 = raw[31:28];
+			fnMapRawToUop.func = raw[47:41];
+			fnMapRawToUop.imm = raw[23:8];
+			fnMapRawToUop.src = 7'b0000000;
+			fnMapRawToUop.dst = 1'b0;
+		end
+	Qupls5_pkg::OP_PRED:
+		begin
+			fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
+			fnMapRawToUop.Rs2 = 9'd0;
+			fnMapRawToUop.Rs3 = 9'd0;
+			fnMapRawToUop.imm = raw[34:19];
+			fnMapRawToUop.ms = raw[40:38];
+			fnMapRawToUop.func = raw[47:41];
+			fnMapRawToUop.src = 7'b000001;
+			fnMapRawToUop.dst = 1'b0;
+		end
+// Vn bits, 1= scalar register
+// +---+---+---+---+
+// | 3 | 2 | 1 | 0 |
+// +---+---+---+---+
+// |Rs3|Rs2|Rs1|Rd |
+// +---+---+---+---+
+	Qupls5_pkg::OP_CAP:
+		begin
+			case(raw[47:41])	// func code
+			CAP_ANDPERM:
+				begin
+					fnMapRawToUop.Rd = {2'd0,raw[13:7]};
+					fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
+					fnMapRawToUop.Rs2 = {2'd0,raw[27:21]};
+					fnMapRawToUop.op3 = raw[37:35];
+					fnMapRawToUop.rmd = raw[37:35];			// for ASR
+					fnMapRawToUop.ms = raw[40:38];
+					fnMapRawToUop.func = raw[47:41];
+					fnMapRawToUop.prc = raw[1:0];
+					fnMapRawToUop.src = 7'b0001011;
+					fnMapRawToUop.dst = 1'b1;
+					fnMapRawToUop.vn = 4'b0100;
+				end
+			CAP_BUILDCAP:
+				begin
+					fnMapRawToUop.Rd = {2'd0,raw[13:7]};
+					fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
+					fnMapRawToUop.Rs2 = {2'd0,raw[27:21]};
+					fnMapRawToUop.op3 = raw[37:35];
+					fnMapRawToUop.rmd = raw[37:35];
+					fnMapRawToUop.ms = raw[40:38];
+					fnMapRawToUop.func = raw[47:41];
+					fnMapRawToUop.prc = raw[1:0];
+					fnMapRawToUop.src = 7'b0001011;
+					fnMapRawToUop.dst = 1'b1;
+					fnMapRawToUop.vn = 4'b0000;
+				end
+			CAP_CLEARTAG:
+				begin
+					fnMapRawToUop.Rd = {2'd0,raw[13:7]};
+					fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
+					fnMapRawToUop.op3 = raw[37:35];
+					fnMapRawToUop.rmd = raw[37:35];
+					fnMapRawToUop.ms = raw[40:38];
+					fnMapRawToUop.func = raw[47:41];
+					fnMapRawToUop.prc = raw[1:0];
+					fnMapRawToUop.src = 7'b0001001;
+					fnMapRawToUop.dst = 1'b1;
+					fnMapRawToUop.vn = 4'b0000;
+				end
+			CAP_CHKBOUNDS:
+				begin
+					fnMapRawToUop.Rd = {2'd0,raw[13:7]};
+					fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
+					fnMapRawToUop.Rs2 = {2'd0,raw[27:21]};
+					fnMapRawToUop.op3 = raw[37:35];
+					fnMapRawToUop.rmd = raw[37:35];
+					fnMapRawToUop.ms = raw[40:38];
+					fnMapRawToUop.func = raw[47:41];
+					fnMapRawToUop.prc = raw[1:0];
+					fnMapRawToUop.src = 7'b0000011;
+					fnMapRawToUop.dst = 1'b0;
+					fnMapRawToUop.vn = 4'b0000;
+				end
+			CAP_COPYTYPE:
+				begin
+					fnMapRawToUop.Rd = {2'd0,raw[13:7]};
+					fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
+					fnMapRawToUop.Rs2 = {2'd0,raw[27:21]};
+					fnMapRawToUop.op3 = raw[37:35];
+					fnMapRawToUop.rmd = raw[37:35];
+					fnMapRawToUop.ms = raw[40:38];
+					fnMapRawToUop.func = raw[47:41];
+					fnMapRawToUop.prc = raw[1:0];
+					fnMapRawToUop.src = 7'b0001011;
+					fnMapRawToUop.dst = 1'b1;
+					fnMapRawToUop.vn = 4'b0000;
+				end
+			CAP_GETBASE,CAP_GETFLAGS,CAP_GETLENGTH,CAP_GETOFFSET,CAP_GETPERMS,
+			CAP_GETSEALED,CAP_GETTAG,CAP_GETTOP,CAP_GETTYPE:
+				begin
+					fnMapRawToUop.Rd = {2'd0,raw[13:7]};
+					fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
+					fnMapRawToUop.Rs2 = {2'd0,raw[27:21]};
+					fnMapRawToUop.op3 = raw[37:35];
+					fnMapRawToUop.rmd = raw[37:35];
+					fnMapRawToUop.ms = raw[40:38];
+					fnMapRawToUop.func = raw[47:41];
+					fnMapRawToUop.prc = raw[1:0];
+					fnMapRawToUop.src = 7'b0001001;
+					fnMapRawToUop.dst = 1'b1;
+					fnMapRawToUop.vn = 4'b0001;
+				end
+			CAP_INCOFFSET:
+				begin
+					fnMapRawToUop.Rd = {2'd0,raw[13:7]};
+					fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
+					fnMapRawToUop.Rs2 = {2'd0,raw[27:21]};
+					fnMapRawToUop.op3 = raw[37:35];
+					fnMapRawToUop.rmd = raw[37:35];
+					fnMapRawToUop.ms = raw[40:38];
+					fnMapRawToUop.func = raw[47:41];
+					fnMapRawToUop.prc = raw[1:0];
+					fnMapRawToUop.src = 7'b0001011;
+					fnMapRawToUop.dst = 1'b1;
+					fnMapRawToUop.vn = 4'b0100;
+				end
+			CAP_INCOFFSETI:
+				begin
+					fnMapRawToUop.Rd = {2'd0,raw[13:7]};
+					fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
+					fnMapRawToUop.imm = {{49{raw[40]}},raw[40:21]};
+					fnMapRawToUop.op3 = raw[37:35];
+					fnMapRawToUop.rmd = raw[37:35];
+					fnMapRawToUop.ms = raw[40:38];
+					fnMapRawToUop.func = raw[47:41];
+					fnMapRawToUop.prc = raw[1:0];
+					fnMapRawToUop.src = 7'b0001001;
+					fnMapRawToUop.dst = 1'b1;
+					fnMapRawToUop.vn = 4'b0000;
+				end
+			CAP_CHKINVOKE:
+				begin
+					fnMapRawToUop.Rd = {2'd0,raw[13:7]};
+					fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
+					fnMapRawToUop.Rs2 = {2'd0,raw[27:21]};
+					fnMapRawToUop.op3 = raw[37:35];
+					fnMapRawToUop.rmd = raw[37:35];
+					fnMapRawToUop.ms = raw[40:38];
+					fnMapRawToUop.func = raw[47:41];
+					fnMapRawToUop.prc = raw[1:0];
+					fnMapRawToUop.src = 7'b0000011;
+					fnMapRawToUop.dst = 1'b0;
+					fnMapRawToUop.vn = 4'b0000;
+				end
+			CAP_INVOKE:
+				begin
+					fnMapRawToUop.Rd = {2'd0,raw[13:7]};
+					fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
+					fnMapRawToUop.Rs2 = {2'd0,raw[27:21]};
+					fnMapRawToUop.op3 = raw[37:35];
+					fnMapRawToUop.rmd = raw[37:35];
+					fnMapRawToUop.ms = raw[40:38];
+					fnMapRawToUop.func = raw[47:41];
+					fnMapRawToUop.prc = raw[1:0];
+					fnMapRawToUop.src = 7'b0001011;
+					fnMapRawToUop.dst = 1'b1;
+					fnMapRawToUop.vn = 4'b0000;
+				end
+			endcase
+		end
+	Qupls5_pkg::OP_ENTER:	// and EXIT
+		begin
+			fnMapRawToUop.Rd = {2'd0,raw[13:7]};
+			fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
+			fnMapRawToUop.Rs2 = {2'd0,raw[27:21]};
+			fnMapRawToUop.Rs3 = {2'd0,raw[34:28]};
+			fnMapRawToUop.imm = raw[43:29];
+			fnMapRawToUop.func = raw[47:41];
+			fnMapRawToUop.src = 7'b0001111;
+			fnMapRawToUop.dst = 1'b1;
+			fnMapRawToUop.byteno = raw[28] ? 6'd1 : 6'd0;	// EXIT(1)
+		end
+	default:
+		begin
+			fnMapRawToUop.Rd = {2'd0,raw[13:7]};
+			fnMapRawToUop.Rs1 = {2'd0,raw[20:14]};
+			fnMapRawToUop.Rs2 = {2'd0,raw[27:21]};
+			fnMapRawToUop.Rs3 = {2'd0,raw[34:28]};
+			fnMapRawToUop.vn = 4'd0;
+			fnMapRawToUop.op3 = raw[37:35];
+			fnMapRawToUop.ms = raw[40:38];
+			fnMapRawToUop.func = raw[47:41];
+			fnMapRawToUop.src = 7'b0001111;
+			fnMapRawToUop.dst = 1'b1;
+		end
+	endcase
+end
+endfunction
+
+
+// ============================================================================
+// Support Tasks
+// ============================================================================
+
+// Maps a register spec to a logical register number depending on the mode and
+// checks for register accessibility.
+
+task tRegmap;
+input operating_mode_t om;
+input [6:0] a;
+output reg [7:0] o;
+output reg exc;
+begin
+	exc = 1'b0;
+	case(om)
+	OM_APP:	
+		begin
+			o = a;
+		end
+	OM_SUPERVISOR:
+		begin
+			if (a >= 7'd0 && a <= 7'd7)
+				o = a;
+			else if (a >= 7'd48) begin
+				exc = 1'b1;
+				o = 7'd0;
+			end
+			else
+				o = 8'd96 + a;
+		end
+	OM_HYPERVISOR:
+		begin
+			if (a >= 7'd50 && a <= 7'd63 || a >= 7'd0 && a <= 7'd7)
+				o = a;
+			else if (a >= 7'd48) begin
+				exc = 1'b1;
+				o = 7'd0;
+			end
+			else
+				o = 8'd136 + a;
+		end
+	OM_SECURE:
+		begin
+			if (a >= 7'd50 && a <= 7'd63 || a >= 7'd0 && a <= 7'd7)
+				o = a;
+			else if (a >= 7'd55) begin
+				exc = 1'b1;
+				o = 7'd0;
+			end
+			else
+				o = 8'd176 + a;
+		end
+	endcase
+end
+endtask
+
+endpackage

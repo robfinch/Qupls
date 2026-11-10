@@ -1,0 +1,609 @@
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2023-2026  Robert Finch, Waterloo
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+//
+// BSD 3-Clause License
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are met:
+//
+// 1. Redistributions of source code must retain the above copyright notice, this
+//    list of conditions and the following disclaimer.
+//
+// 2. Redistributions in binary form must reproduce the above copyright notice,
+//    this list of conditions and the following disclaimer in the documentation
+//    and/or other materials provided with the distribution.
+//
+// 3. Neither the name of the copyright holder nor the names of its
+//    contributors may be used to endorse or promote products derived from
+//    this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+// FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+// DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+// SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+// CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+// OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+//
+// Multiplex a hardware interrupt into the instruction stream.s
+// Multiplex micro-code instructions into the instruction stream.
+// Modify instructions for register bit lists.
+//
+// 3350 LUTs / 3525 FFs / 270 MHz
+// ============================================================================
+
+import const_pkg::*;
+import cpu_types_pkg::*;
+import Qupls5_pkg::*;
+
+module Qupls5_pipeline_ext(rst_i, clk_i, en_i,
+	kept_stream, stomp_ext, nop_o, carry_mod_fet, ssm_flag, hwipc_fet,
+	irq_fet, irq_in_fet, irq_sn_fet, ipl_fet, sr, pt_ext, pt_dec, p_override, po_bno,
+	branchmiss, misspc_fet, flush_fet, active_irq_vector, irq_i,
+	micro_machine_active, cline_fet, cline_ext, new_cline_ext,
+	reglist_active, grp_i, grp_o, btb_pc, exc_i, excv_i,
+	takb_fet, vl, branch_resolved, live_stream,
+	pc0_fet, uop_num_fet, uop_num_ext,
+	ls_bmf_i, pack_regs_i, scale_regs_i, regcnt_i,
+	pg_ext, new_stream, alloc_stream,
+	new_address_o, do_ret, ret_pc, do_call, get);
+parameter MWIDTH = Qupls5_pkg::MWIDTH;
+input rst_i;
+input clk_i;
+input irq_fet;
+input Qupls5_pkg::irq_info_packet_t irq_in_fet;
+input cpu_types_pkg::seqnum_t irq_sn_fet;
+input [5:0] ipl_fet;
+input pc_address_t active_irq_vector;
+input [5:0] irq_i;
+input en_i;
+input branch_resolved;
+input pc_stream_t live_stream;
+input pc_stream_t kept_stream;
+input stomp_ext;
+output reg nop_o;
+input [31:0] carry_mod_fet;
+input ssm_flag;
+input Qupls5_pkg::pc_address_ex_t hwipc_fet;
+input micro_machine_active;
+input Qupls5_pkg::status_reg_t sr;
+input reglist_active;
+input branchmiss;
+input Qupls5_pkg::pc_address_ex_t misspc_fet;
+input flush_fet;
+input [1023:0] cline_fet;
+output reg [1023:0] cline_ext;
+output reg new_cline_ext;
+input [2:0] grp_i;
+output reg [2:0] grp_o;
+input Qupls5_pkg::pc_address_ex_t btb_pc;
+input Qupls5_pkg::pc_address_ex_t pc0_fet;
+input [2:0] uop_num_fet;
+output reg [2:0] uop_num_ext;
+input [3:0] takb_fet;
+input [3:0] pt_ext;
+output reg [3:0] pt_dec;
+output reg p_override;
+output reg [6:0] po_bno [0:3];
+input [4:0] vl;
+input ls_bmf_i;
+input pack_regs_i;
+input [2:0] scale_regs_i;
+input cpu_types_pkg::aregno_t regcnt_i;
+output Qupls5_pkg::pipeline_group_reg_t pg_ext;
+/*
+output cpu_types_pkg::mc_address_t mcip0_o;
+output cpu_types_pkg::mc_address_t mcip1_o;
+output cpu_types_pkg::mc_address_t mcip2_o;
+output cpu_types_pkg::mc_address_t mcip3_o;
+*/
+output Qupls5_pkg::pc_address_ex_t new_address_o;
+output reg do_ret;
+output pc_address_ex_t ret_pc;
+output reg do_call;
+input get;
+input pc_stream_t [THREADS-1:0] new_stream;
+output reg alloc_stream;
+input excv_i;
+input Qupls5_pkg::cause_code_t exc_i;
+
+genvar g;
+integer nn,hh,n1,n2,n3,n4,n5,n6,n7;
+Qupls5_pkg::pc_address_ex_t [MWIDTH-1:0] pc_fet;
+Qupls5_pkg::pc_address_ex_t [MWIDTH-1:0] pc_ext;
+reg [5:0] ipl_ext;
+Qupls5_pkg::irq_info_packet_t irq_in_ext;
+cpu_types_pkg::seqnum_t irq_sn_ext;
+reg irq_ext;
+wire [5:0] jj;
+reg [5:0] kk;
+wire clk = clk_i;
+wire en = en_i;// & !mux_stallq;
+wire ls_bmf = ls_bmf_i;
+wire pack_regs = pack_regs_i;
+cpu_types_pkg::aregno_t regcnt;
+Qupls5_pkg::rob_entry_t [MWIDTH-1:0] ins_ext;
+Qupls5_pkg::rob_entry_t [MWIDTH-1:0] ins_fet;
+reg [319:0] ic_line_aligned;
+reg [319:0] prev_ic_line_aligned;
+reg ld;
+reg [2:0] override_pos;
+reg p_overrided;
+reg [MWIDTH-1:0] nop;
+
+wire [MWIDTH-1:0] bsr;
+wire [MWIDTH-1:0] jsr;
+wire [MWIDTH-1:0] bra;
+wire [MWIDTH-1:0] jmp;
+wire [MWIDTH-1:0] bcc;
+wire [MWIDTH-1:0] rtd;
+reg [MWIDTH-1:0] nop_lead;	// NOP out leading instructions
+wire [MWIDTH-1:0] nop2;
+reg chgflow,chgflow0,chgflow1,chgflow2,chgflow3,chgflowi;
+reg p_override0123,p_override123,p_override23,p_override3;
+
+Qupls5_pkg::rob_entry_t nopi;
+
+always_comb
+begin
+	foreach (pc_fet[n5]) begin
+		pc_fet[n5] = pc0_fet;
+		pc_fet[n5].cap.offset = pc0_fet.cap.offset + n5*6;
+	end
+end
+
+always_ff @(posedge clk)
+if (rst_i) begin
+	foreach(pc_ext[n6]) begin
+		pc_ext[n6] <= {$bits(pc_address_ex_t){1'b0}};
+		pc_ext[n6].cap.perms <= 16'hffff;
+		pc_ext[n6].cap.otype <= 18'h3ffff;
+		pc_ext[n6].cap.top <= 65'h10000000000000000;
+		pc_ext[n6].cap.base <= 64'd0;
+		pc_ext[n6].cap.offset <= Qupls5_pkg::RSTPC;
+		pc_ext[n6].stream.stream <= 5'd1;
+		pc_ext[n6].stream.thread <= 3'd0;
+	end
+end
+else begin
+	foreach(pc_ext[n6])
+		if (en)
+			pc_ext[n6] <= pc_fet[n6];
+end
+
+// Define a NOP instruction.
+always_comb
+begin
+	nopi = {$bits(Qupls5_pkg::rob_entry_t){1'b0}};
+	nopi.op.exc = Qupls5_pkg::FLT_NONE;
+	nopi.op.uop = {41'd0,Qupls5_pkg::OP_NOP};
+	nopi.op.decbus.nop = TRUE;
+	nopi.op.decbus.cause = Qupls5_pkg::FLT_NONE;
+	nopi.op.uop.lead = 1'd1;
+	nopi.op.v = 1'b1;
+	nopi.v = 5'd1;
+	nopi.exc = Qupls5_pkg::FLT_NONE;
+	nopi.excv = INV;
+	nopi.done = 2'b11;
+	nopi.stomped = TRUE;
+	/* NOP will be decoded later
+	nopi.decbus.Rdz = 1'b1;
+	nopi.decbus.nop = 1'b1;
+	nopi.decbus.alu = 1'b1;
+	*/
+end
+
+always_comb regcnt = regcnt_i;
+
+always_comb 
+	ic_line_aligned = {{64{1'd1,Qupls5_pkg::OP_NOP}},cline_fet} >> {pc0_fet.cap.offset[5:1],4'd0};
+
+pc_address_ex_t prev_pc0_fet;
+always_ff @(posedge clk_i)
+if (rst_i) begin
+	prev_ic_line_aligned <= 320'd0;
+	prev_pc0_fet <= {$bits(pc_address_ex_t){1'b0}};
+end
+else begin
+	if (en) begin
+		prev_ic_line_aligned <= ic_line_aligned;
+		prev_pc0_fet <= pc0_fet;
+	end
+end
+
+reg [1023:0] cline_ext_r;
+always_ff @(posedge clk_i)
+if (rst_i) begin
+	cline_ext <= 1024'd0;
+	cline_ext_r <= 1024'd0;
+end
+else begin
+	if (en) begin
+		cline_ext_r <= cline_ext;
+		cline_ext <= cline_fet;
+	end
+end
+always_comb
+	new_cline_ext = cline_ext_r != cline_ext;
+
+// Map instructions to micro-ops
+// Set instruction valid bit.
+
+Qupls5_pkg::rob_entry_t [MWIDTH-1:0] pr_ext;
+
+Qupls5_ext_set_pr #(.MWIDTH(MWIDTH)) usetpr1
+(
+	.rst(rst_i),
+	.clk(clk_i),
+	.en(en),
+	.irq(irq_fet),
+	.stomp(stomp_ext),
+	.carry_mod(carry_mod_fet),
+	.ic_line(ic_line_aligned[MWIDTH*48-1:0]),
+	.ssm_flag(ssm_flag),
+	.pc(pc_fet),
+	.pr(pr_ext)
+);
+
+/* Under construction
+reg [3:0] p_override1, p_override2;
+reg [4:0] po_bno1 [0:3];
+reg [4:0] po_bno2 [0:3];
+*/
+reg p_override_dummy;
+reg [6:0] po_bno_dummy;
+
+/* under construction
+always_ff @(posedge clk_i)
+if (rst_i)
+else begin
+	if (en_i) begin
+		p_override1 <= p_override && ;
+		p_override2 <= p_override1;
+		po_bno1 <= po_bno;
+		po_bno2 <= po_bno1;
+	end
+end
+*/
+
+// If there was a branch miss, instructions before the miss PC should not be
+// executed.
+/*
+always_comb nop0 = (stomp_fet && pc0_fet.bno_t!=stomp_bno) || (branchmiss && misspc_fet.pc > pc0_fet.pc);
+always_comb nop1 = (stomp_fet && pc1_fet.bno_t!=stomp_bno) || (branchmiss && misspc_fet.pc > pc1_fet.pc);
+always_comb nop2 = (stomp_fet && pc2_fet.bno_t!=stomp_bno) || (branchmiss && misspc_fet.pc > pc2_fet.pc);
+always_comb nop3 = (stomp_fet && pc3_fet.bno_t!=stomp_bno) || (branchmiss && misspc_fet.pc > pc3_fet.pc);
+*/
+// Stomp on instructions in the same instruction group following the overrride location.
+generate begin : gNop
+	for (g = 0; g < MWIDTH; g = g + 1)
+		always_comb nop_lead[g] = (branchmiss && misspc_fet.cap.offset > pc_fet[g].cap.offset);
+end
+endgenerate
+/*
+always_comb nop0 = FALSE;
+always_comb nop1 = FALSE;
+always_comb nop2 = FALSE;
+always_comb nop3 = FALSE;
+*/
+reg bsr02,bsr12,bsr22,bsr32;
+reg jsrr0,jsrr1,jsrr2,jsrr3;
+reg jsri0,jsri1,jsri2,jsri3;
+reg jmpr0,jmpr1,jmpr2,jmpr3;
+reg jmpi0,jmpi1,jmpi2,jmpi3;
+Qupls5_pkg::pc_address_ex_t [MWIDTH-1:0] bsr_tgts,jsr_tgts,bcc_tgts,btgts;
+
+generate begin : gExtDecode
+	for (g = 0; g < MWIDTH; g = g + 1) begin
+		Qupls5_ext_decode usd1
+			(
+				.ip(pc_fet[g]),
+				.instr(ic_line_aligned[g*48+47:g*48]),
+				.bsr(bsr[g]),
+				.jsr(jsr[g]),
+				.bra(bra[g]),
+				.jmp(jmp[g]),
+				.bcc(bcc[g]),
+				.rtd(rtd[g]),
+				.nop(nop2[g]),
+				.bsr_tgt(bsr_tgts[g]),
+				.jsr_tgt(jsr_tgts[g]),
+				.bcc_tgt(bcc_tgts[g])
+			);
+			
+		always_comb
+			case(1'b1)
+			bsr[g]:	btgts[g] = bsr_tgts[g];
+			bra[g]: btgts[g] = bsr_tgts[g];
+			jsr[g]: btgts[g] = jsr_tgts[g];
+			jmp[g]: btgts[g] = jsr_tgts[g];
+			bcc[g]: btgts[g] = bcc_tgts[g];
+			default:	btgts[g] = RSTPC;
+			endcase
+	end
+end
+endgenerate
+
+
+assign bsr02 = Qupls5_pkg::fnDecBsr2(ins_ext[0].op);
+assign bsr12 = Qupls5_pkg::fnDecBsr2(ins_ext[1].op);
+assign bsr22 = Qupls5_pkg::fnDecBsr2(ins_ext[2].op);
+assign bsr32 = Qupls5_pkg::fnDecBsr2(ins_ext[3].op);
+assign jmpr0 = Qupls5_pkg::fnDecJmpr(ins_ext[0].op);
+assign jmpr1 = Qupls5_pkg::fnDecJmpr(ins_ext[1].op);
+assign jmpr2 = Qupls5_pkg::fnDecJmpr(ins_ext[2].op);
+assign jmpr3 = Qupls5_pkg::fnDecJmpr(ins_ext[3].op);
+assign jsrr0 = Qupls5_pkg::fnDecJsrr(ins_ext[0].op);
+assign jsrr1 = Qupls5_pkg::fnDecJsrr(ins_ext[1].op);
+assign jsrr2 = Qupls5_pkg::fnDecJsrr(ins_ext[2].op);
+assign jsrr3 = Qupls5_pkg::fnDecJsrr(ins_ext[3].op);
+
+assign chgflow0 = bsr[0] | jsr[0] | bcc[0] | bra[0] | jmp[0];
+assign chgflow1 = bsr[1] | jsr[1] | bcc[1] | bra[1] | jmp[1];
+assign chgflow2 = bsr[2] | jsr[2] | bcc[2] | bra[2] | jmp[2];
+assign chgflow3 = bsr[3] | jsr[3] | bcc[3] | bra[3] | jmp[3];
+assign chgflowi = irq_i > ipl_fet || irq_i==6'd63;
+assign chgflow = chgflow0|chgflow1|chgflow2|chgflow3 | chgflowi;
+
+/*
+always_comb jmpi0 = ins_ext[0].ins.opcode==OP_JSRI && ins_ext[0].ins.Rt==3'd0;
+always_comb jmpi1 = ins_ext[1].ins.opcode==OP_JSRI && ins_ext[1].ins.Rt==3'd0;
+always_comb jmpi2 = ins_ext[2].ins.opcode==OP_JSRI && ins_ext[2].ins.Rt==3'd0;
+always_comb jmpi3 = ins_ext[3].ins.opcode==OP_JSRI && ins_ext[3].ins.Rt==3'd0;
+always_comb jsri0 = ins_ext[0].ins.opcode==OP_JSRI && ins_ext[0].ins.Rt!=3'd0;
+always_comb jsri1 = ins_ext[1].ins.opcode==OP_JSRI && ins_ext[1].ins.Rt!=3'd0;
+always_comb jsri2 = ins_ext[2].ins.opcode==OP_JSRI && ins_ext[2].ins.Rt!=3'd0;
+always_comb jsri3 = ins_ext[3].ins.opcode==OP_JSRI && ins_ext[3].ins.Rt!=3'd0;
+*/
+
+// Figure whether a subroutine call, or return is being performed. Note
+// precedence. Only the first one to be performed is detected.
+
+// Determine the point at which subsequent instructions are invalidated.
+// Interrupts are treated as if they occurred in the first slot of the
+// group.
+always_comb
+begin
+	// Default beyond the number of instructions in a group.
+	override_pos = 3'd7;
+	if (chgflow0|chgflowi)
+		override_pos = 3'd0;
+	else if (chgflow1)
+		override_pos = 3'd1;
+	else if (chgflow2)
+		override_pos = 3'd2;
+	else if (chgflow3)
+		override_pos = 3'd3;
+end
+
+// Detect when a new stream of instruction execution is needed. A new stream is
+// needed only for conditional branches where it is unknown which stream is
+// valid until the branch resolves. Unconditional transfers maintain the same
+// stream.
+always_comb
+begin
+	alloc_stream = 1'b0;
+	if (chgflow0|chgflowi) begin
+		if (!(pt_ext[0] || !(bcc[0]|chgflowi)))
+			alloc_stream = 1'b1;
+	end
+	else if (chgflow1) begin
+		if (!(pt_ext[1] || ~bcc[1]))
+			alloc_stream = 1'b1;
+	end
+	else if (chgflow2) begin
+		if (!(pt_ext[2] || ~bcc[2]))
+			alloc_stream = 1'b1;
+	end
+	else if (chgflow3) begin
+		if (!(pt_ext[3] || ~bcc[3]))
+			alloc_stream = 1'b1;
+	end
+end
+
+// Compute target PC for subroutine call or jump.
+always_comb
+begin
+	new_address_o = pc0_fet;
+	if (chgflow0|chgflowi) begin
+		if (chgflowi)
+			new_address_o.cap.offset = active_irq_vector - pc0_fet.cap.base;
+		else
+			new_address_o.cap.offset = btgts[0].cap.offset;
+		if (pt_ext[0] || !(bcc[0]|chgflowi))
+			new_address_o.stream = pc0_fet.stream;
+		else
+			new_address_o.stream = new_stream[new_address_o.stream.thread].stream;
+	end
+	else if (chgflow1) begin
+		new_address_o = btgts[1];
+		if (pt_ext[1] || ~bcc[1])
+			new_address_o.stream = pc0_fet.stream;
+		else
+			new_address_o.stream = new_stream[new_address_o.stream.thread].stream;
+	end
+	else if (chgflow2) begin
+		new_address_o = btgts[2];
+		if (pt_ext[2] || ~bcc[2])
+			new_address_o.stream = pc0_fet.stream;
+		else
+			new_address_o.stream = new_stream[new_address_o.stream.thread].stream;
+	end
+	else if (chgflow3) begin
+		new_address_o = btgts[3];
+		if (pt_ext[3] || ~bcc[3])
+			new_address_o.stream = pc0_fet.stream;
+		else
+			new_address_o.stream = new_stream[new_address_o.stream.thread].stream;
+	end
+end
+
+// Compute return PC for subroutine call.
+always_comb
+begin
+	ret_pc = pc0_fet;
+	ret_pc.stream = pc0_fet.stream;
+	ret_pc.cap.offset = RSTPC - pc0_fet.cap.base;
+	ret_pc.stream = 5'd1;
+	for (n3 = MWIDTH-1; n3 >= 0; n3 = n3 - 1)
+		if (bsr[n3]|jsr[n3])
+			ret_pc.cap.offset = pc_ext[n3].cap.offset + 4'd6;
+end
+
+always_comb
+if (rst_i) begin
+	foreach(po_bno[n7])
+		po_bno[n7] = 7'd0;
+end
+else begin
+	foreach(po_bno[n7])
+		po_bno[n7] = pc0_fet.stream.stream;
+end
+
+// Set the pipeline register.
+// On reset the pipeline is loaded with NOPs. Otherwise it is advanced based on
+// inputs from the previous stage. Hold onto the value if the pipeline is not
+// advanced.
+// Invalidating the pipeline here is simple because there have been no renamed
+// registers assigned. Therefore, we can just mark invalidated by setting the
+// done and stomp status.
+always_ff @(posedge clk)
+if (rst_i) begin
+	pg_ext <= {$bits(Qupls5_pkg::pipeline_group_reg_t){1'b0}};
+	foreach (pg_ext.pr[n2])
+		pg_ext.pr[n2] <= nopi;
+end
+else begin
+	if (en) begin
+		pg_ext <= {$bits(Qupls5_pkg::pipeline_group_reg_t){1'b0}};
+		pg_ext.flush <= flush_fet;
+		// Fill in the header.
+		pg_ext.hdr <= {$bits(Qupls5_pkg::pipeline_group_hdr_t){1'b0}};
+		pg_ext.hdr.v <= !stomp_ext;
+		pg_ext.hdr.irq_sn <= irq_sn_ext;
+		pg_ext.hdr.irq <= irq_in_ext;
+		pg_ext.hdr.old_ipl <= ipl_ext;
+		pg_ext.hdr.hwi <= irq_ext;
+		pg_ext.hdr.ip <= pc_fet[0];
+		// Fill in the pipeline slots.
+		foreach (pg_ext.pr[n2]) begin
+	//		pg_ext.pr[n2] <= {$bits(Qupls5_pkg::rob_entry_t){1'b0}};
+	//		pg_ext.pr[n2] <= ins_fet[n2];
+			pg_ext.pr[n2] <= pr_ext[n2];	
+			pg_ext.pr[n2].ip_stream <= pc0_fet.stream;
+			if (stomp_ext || (branch_resolved && (pc0_fet.stream.thread == live_stream.thread && pc0_fet.stream.stream != live_stream.stream))) begin
+				pg_ext.pr[n2].stomped <= TRUE;
+				pg_ext.pr[n2].done <= 2'b11;
+				pg_ext.pr[n2].op.v <= INV;
+			end
+			else begin
+				pg_ext.pr[n2].done <= 2'b00;
+				pg_ext.pr[n2].op.v <= VAL;
+			end
+			pg_ext.pr[n2].op.bt <= takb_fet[n2];
+			pg_ext.pr[n2].op.decbus.cause <= Qupls5_pkg::FLT_NONE;
+			pg_ext.pr[n2].stomped <= stomp_ext || nop_lead[n2] || nop2[n2] || bra[n2] || jmp[n2];
+			pg_ext.pr[n2].wh <= n2;
+			pg_ext.pr[n2].ip_stream <= pc_fet[n2].stream;
+			pg_ext.pr[n2].ip_offs <= n2 * 3;	// wyde offset
+			pg_ext.pr[n2].eip <= pc_fet[0].cap.offset + (n2*6);
+			// Branches need to set the pipeline invalid if the instruction stream
+			// does not match the one resolved to be active. Note the thread must
+			// also match. If the stream is for a different thread we do not want to
+			// invalidate.
+			if (branch_resolved &&
+				pc_fet[n2].stream.thread==live_stream.thread && pc_fet[n2].stream.stream != live_stream.stream) begin
+				tStomp(n2);
+			end
+			// Jumps and branches are done as they do not need to update the regfile.
+			// They are also resolved already as they are unconditional.
+			else if (bra[n2]|jmp[n2]|nop[n2]|nop2[n2])
+				tStomp(n2);
+			// Exception earlier in the pipeline? (Bad IP detected in BTB)
+			// Consume the exception.
+			// We want this last in the priority tree, as if the instruction stream
+			// got invalidated (stomp or branch) then we do not care about this
+			// exception.
+			else if (excv_i) begin
+				pg_ext.pr[n2].excv <= VAL;
+				pg_ext.pr[n2].exc <= exc_i;
+				pg_ext.pr[n2].stomped <= TRUE;
+				pg_ext.pr[n2].done <= 2'b11;
+				pg_ext.pr[n2].op.v <= 1'b0;
+			end
+			// Stomp on instructions following the one causing a change of flow.
+			// If it is an unconditional branch we will always stomp on following
+			// instructions. If it is a conditional branch instructions will be
+			// stomped on only if the branch is predicted taken.
+			if (override_pos != 3'd7 && n2 > override_pos && p_override && (!bcc[override_pos] ||
+				takb_fet[override_pos])) begin
+				tStomp(n2);
+			end
+		end
+	end
+end
+
+// Advance the IRQ signals in the pipeline.
+// These could maybe be moved into the pipeline group register.
+always_ff @(posedge clk) if (rst_i) irq_sn_ext <= {$bits(cpu_types_pkg::seqnum_t){1'b0}}; else if (en) irq_sn_ext <= irq_sn_fet;
+always_ff @(posedge clk) if (rst_i) irq_in_ext <= {$bits(Qupls5_pkg::irq_info_packet_t){1'b0}}; else if (en) irq_in_ext <= irq_in_fet;
+always_ff @(posedge clk) if (rst_i) irq_ext <= 1'b0; else if (en) irq_ext <= irq_fet;
+always_ff @(posedge clk) if (rst_i) ipl_ext <= 6'd0; else if (en) ipl_ext <= ipl_fet;
+always_ff @(posedge clk) if (rst_i) nop_o <= TRUE; else if (en) nop_o <= stomp_ext;
+
+always_ff @(posedge clk)
+if (rst_i)
+	uop_num_ext <= 3'b0;
+else begin
+	if (en)
+		uop_num_ext <= uop_num_fet;
+end
+
+always_ff @(posedge clk)
+if (rst_i)
+	pt_dec <= 4'h0;
+else begin
+	if (en)
+		pt_dec <= pt_ext;
+end
+
+// We just want p_override to pulse for long enough that the new address is set
+// in the BTB. This is the next pipeline advance.
+// Produce this signal locally.
+always_ff @(posedge clk)
+if (rst_i)
+	p_overrided <= TRUE;
+else begin
+	if (en)
+		p_overrided <= p_override;
+end
+
+// Note if the new address turned out to be the one predicted by the BTB
+// then there is no need to override. The address predicted by the BTB
+// will be the one in the fetch stage used to load extract!
+// p_override signal may also be called !predicted_match_ext.
+always_comb
+	p_override = (en && chgflow && new_address_o != pc_fet[0].cap.offset + pc_fet[0].cap.base &&
+		// We must be staying in the same stream too.
+		pc_fet[0].stream==pg_ext.hdr.ip.stream) && !p_overrided;
+
+task tStomp;
+input integer n2;
+begin
+	pg_ext.pr[n2].excv <= INV;
+	pg_ext.pr[n2].op.excv <= INV;
+	pg_ext.pr[n2].stomped <= TRUE;
+	pg_ext.pr[n2].done <= 2'b11;
+	pg_ext.pr[n2].op.v <= 1'b0;
+end
+endtask
+
+endmodule
