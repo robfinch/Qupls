@@ -32,6 +32,7 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
+// 3900 LUTs / 6400 FFs
 // ============================================================================
 
 import cpu_types_pkg::*;

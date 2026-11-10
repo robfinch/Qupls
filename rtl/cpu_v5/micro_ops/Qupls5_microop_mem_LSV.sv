@@ -30,7 +30,7 @@
 			4'd4:	ble = vlen3[2] ? 8'b00001111: 8'b11111111;
 			4'd8:	ble = 8'b11111111;
 			endcase
-			case({VREGS > 4,vlen1})
+			case({Qupls5_pkg::VREGS > 4,vlen1})
 			5'd0:	next_uop[0].ble = 8'b00000000;
 			5'd1:
 				begin

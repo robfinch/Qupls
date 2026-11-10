@@ -12,7 +12,7 @@
 			next_uop[5].imm2 = vln;
 			next_uop[6].imm2 = vln;
 			next_uop[7].imm2 = vln;
-			case({VREGS > 4,vlen1[3:0]})
+			case({Qupls5_pkg::VREGS > 4,vlen1[3:0]})
 			5'd0:	next_uop[0].ble = 8'b00000000;
 			5'd1:
 				begin

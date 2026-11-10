@@ -19,7 +19,7 @@
 				next_uop[0] = uop0;
 			end
 			case(instr.func[5:0])
-			FLT_DIV:
+			Qupls5_pkg::FLT_DIV:
 				begin
 					next_count = instr.func[6] ? 4'd11 : 4'd12;
 					next_uop[0].lead = TRUE;
@@ -28,21 +28,21 @@
 					next_uop[0].Rd = instr.Rd;					
 					next_uop[0].Rs1 = instr.Rs1;					
 					next_uop[0].Rs2 = instr.Rs2;	
-					next_uop[0].func = FLT_RCPA;
+					next_uop[0].func = Qupls5_pkg::FLT_RCPA;
 
 					next_uop[1].num = 5'd1;
 					next_uop[1].opcode = instr.opcode;
 					next_uop[1].Rd = instr.Rs2;					
 					next_uop[1].Rs1 = instr.Rs2;					
 					next_uop[1].Rs2 = zero_reg;	
-					next_uop[1].func = FLT_NEG;
+					next_uop[1].func = Qupls5_pkg::FLT_NEG;
 
 					next_uop[2].num = 5'd2;
 					next_uop[2].opcode = instr.opcode;
 					next_uop[2].Rd = mot0_reg;
 					next_uop[2].Rs1 = 8'd2;			// 2.0
 					next_uop[2].Rs2 = zero_reg;
-					next_uop[2].func = FLT_CONST;
+					next_uop[2].func = Qupls5_pkg::FLT_CONST;
 					
 					// NR Iter #1
 					// FMA tmp2,Rd,Rs2,tmp1
@@ -52,7 +52,7 @@
 					next_uop[3].Rs1 = instr.Rd;
 					next_uop[3].Rs2 = instr.Rs2;
 					next_uop[3].Rs3 = mot0_reg;
-					next_uop[3].func = FLT_FMA;
+					next_uop[3].func = Qupls5_pkg::FLT_FMA;
 
 					next_uop[4].num = 5'd4;
 					next_uop[4].opcode = instr.opcode;
@@ -60,7 +60,7 @@
 					next_uop[4].Rs1 = instr.Rd;
 					next_uop[4].Rs2 = mot1_reg;
 					next_uop[4].Rs3 = zero_reg;
-					next_uop[4].func = FLT_FMA;
+					next_uop[4].func = Qupls5_pkg::FLT_FMA;
 
 					// NR Iter #2
 					next_uop[5].num = 5'd5;
@@ -69,7 +69,7 @@
 					next_uop[5].Rs1 = instr.Rd;
 					next_uop[5].Rs2 = instr.Rs2;
 					next_uop[5].Rs3 = mot0_reg;
-					next_uop[5].func = FLT_FMA;
+					next_uop[5].func = Qupls5_pkg::FLT_FMA;
 
 					next_uop[6].num = 5'd6;
 					next_uop[6].opcode = instr.opcode;
@@ -77,7 +77,7 @@
 					next_uop[6].Rs1 = instr.Rd;
 					next_uop[6].Rs2 = mot1_reg;
 					next_uop[6].Rs3 = zero_reg;
-					next_uop[6].func = FLT_FMA;
+					next_uop[6].func = Qupls5_pkg::FLT_FMA;
 
 					// NR Iter #3
 					next_uop[7].num = 5'd7;
@@ -86,7 +86,7 @@
 					next_uop[7].Rs1 = instr.Rd;
 					next_uop[7].Rs2 = instr.Rs2;
 					next_uop[7].Rs3 = mot0_reg;
-					next_uop[7].func = FLT_FMA;
+					next_uop[7].func = Qupls5_pkg::FLT_FMA;
 
 					next_uop[8].num = 5'd8;
 					next_uop[8].opcode = instr.opcode;
@@ -94,14 +94,14 @@
 					next_uop[8].Rs1 = instr.Rd;
 					next_uop[8].Rs2 = mot1_reg;
 					next_uop[8].Rs3 = zero_reg;
-					next_uop[8].func = FLT_FMA;
+					next_uop[8].func = Qupls5_pkg::FLT_FMA;
 
 					next_uop[9].num = 5'd9;
 					next_uop[9].opcode = instr.opcode;
 					next_uop[9].Rd = instr.Rs2;					
 					next_uop[9].Rs1 = instr.Rs2;					
 					next_uop[9].Rs2 = zero_reg;	
-					next_uop[9].func = FLT_NEG;
+					next_uop[9].func = Qupls5_pkg::FLT_NEG;
 
 					next_uop[10].num = 5'd10;
 					next_uop[10].opcode = instr.opcode;
@@ -109,7 +109,7 @@
 					next_uop[10].Rs1 = instr.Rd;
 					next_uop[10].Rs2 = instr.Rs2;
 					next_uop[10].Rs3 = zero_reg;
-					next_uop[10].func = FLT_FMA;
+					next_uop[10].func = Qupls5_pkg::FLT_FMA;
 
 					if (instr.func[6]) begin
 						next_uop[11].num = 5'd11;
@@ -122,16 +122,16 @@
 						next_uop[11].op3 = 3'd1;	// MOVE_ORF
 					end
 				end
-			FLT_RSQRTA:
+			Qupls5_pkg::FLT_RSQRTA:
 				case(ir.opcode)
-				OP_FLTD:
+				Qupls5_pkg::OP_FLTD:
 					begin
 						// t2 = i>>1;
 						next_count = 4'd3 + ~instr.func[6];
 						next_uop[0].lead = TRUE;
 						next_uop[0].num = 5'd0;
-						next_uop[0].opcode = OP_R3O;
-						next_uop[0].func = FN_LSR;
+						next_uop[0].opcode = Qupls5_pkg::OP_R3O;
+						next_uop[0].func = Qupls5_pkg::FN_LSR;
 						next_uop[0].Rd = mot2_reg;
 						next_uop[0].Rs1 = instr.Rs1;
 						next_uop[0].Rs2 = 7'd1;
@@ -139,16 +139,16 @@
 						
 						// t0 = lomont magic number
 						next_uop[1].num = 5'd1;
-						next_uop[1].opcode = OP_FLTD;
-						next_uop[1].func = FLT_CONST;
+						next_uop[1].opcode = Qupls5_pkg::OP_FLTD;
+						next_uop[1].func = Qupls5_pkg::FLT_CONST;
 						next_uop[1].Rd = mot0_reg;
 						next_uop[1].Rs1 = 7'd4;			// Lomont reciprocal square root magic number
 						next_uop[1].ms = 3'b001;
 						
 						// y = MAGIC * 1.0 - t2
 						next_uop[2].num = 5'd2;
-						next_uop[2].opcode = OP_FLTD;
-						next_uop[2].func = FLT_FMS;
+						next_uop[2].opcode = Qupls5_pkg::OP_FLTD;
+						next_uop[2].func = Qupls5_pkg::FLT_FMS;
 						next_uop[2].Rd = instr.Rd;
 						next_uop[2].Rs1 = mot0_reg;	
 						next_uop[2].Rs2 = 7'b0011000;	// +1.0
@@ -167,7 +167,7 @@
 						end
 					end
 				endcase
-			FLT_RM:
+			Qupls5_pkg::FLT_RM:
 				begin
 					next_count = 4'd2;
 					next_uop[0] = uop0;
@@ -181,13 +181,13 @@
 					next_uop[1].opcode = Qupls5_pkg::OP_FENCE;
 					next_uop[1].imm = 8'h22;	// FP sync
 				end
-			FLT_POLY:
+			Qupls5_pkg::FLT_POLY:
 				begin
 					next_count = ((uop0.Rs3 & 5'd7) +2'd1);
 					next_uop[0].lead = 1'b1;
 					next_uop[0].num = 5'd0;
 					next_uop[0].opcode = uop0.Rs3[6] ? Qupls5_pkg::OP_NOP : Qupls5_pkg::OP_R3O;
-					next_uop[0].func = FN_OR;
+					next_uop[0].func = Qupls5_pkg::FN_OR;
 					next_uop[0].Rd = uop0.Rd;
 					next_uop[0].Rs1 = uop0.Rs2;	// a0
 					next_uop[0].Rs2 = 7'd0;
@@ -197,7 +197,7 @@
 					
 					next_uop[1].num = 5'd1;
 					next_uop[1].opcode = uop0.opcode;
-					next_uop[1].func = FLT_FMA;
+					next_uop[1].func = Qupls5_pkg::FLT_FMA;
 					next_uop[1].Rd = uop0.Rd;
 					next_uop[1].Rs1 = uop0.Rd;
 					next_uop[1].Rs2 = uop0.Rs1;
@@ -207,7 +207,7 @@
 
 					next_uop[2].num = 5'd2;
 					next_uop[2].opcode = uop0.opcode;
-					next_uop[2].func = FLT_FMA;
+					next_uop[2].func = Qupls5_pkg::FLT_FMA;
 					next_uop[2].Rd = uop0.Rd;
 					next_uop[2].Rs1 = uop0.Rd;
 					next_uop[2].Rs2 = uop0.Rs1;
@@ -217,7 +217,7 @@
 
 					next_uop[3].num = 5'd3;
 					next_uop[3].opcode = uop0.opcode;
-					next_uop[3].func = FLT_FMA;
+					next_uop[3].func = Qupls5_pkg::FLT_FMA;
 					next_uop[3].Rd = uop0.Rd;
 					next_uop[3].Rs1 = uop0.Rd;
 					next_uop[3].Rs2 = uop0.Rs1;
@@ -227,7 +227,7 @@
 
 					next_uop[4].num = 5'd4;
 					next_uop[4].opcode = uop0.opcode;
-					next_uop[4].func = FLT_FMA;
+					next_uop[4].func = Qupls5_pkg::FLT_FMA;
 					next_uop[4].Rd = uop0.Rd;
 					next_uop[4].Rs1 = uop0.Rd;
 					next_uop[4].Rs2 = uop0.Rs1;
@@ -237,7 +237,7 @@
 
 					next_uop[5].num = 5'd5;
 					next_uop[5].opcode = uop0.opcode;
-					next_uop[5].func = FLT_FMA;
+					next_uop[5].func = Qupls5_pkg::FLT_FMA;
 					next_uop[5].Rd = uop0.Rd;
 					next_uop[5].Rs1 = uop0.Rd;
 					next_uop[5].Rs2 = uop0.Rs1;
@@ -247,7 +247,7 @@
 
 					next_uop[6].num = 5'd6;
 					next_uop[6].opcode = uop0.opcode;
-					next_uop[6].func = FLT_FMA;
+					next_uop[6].func = Qupls5_pkg::FLT_FMA;
 					next_uop[6].Rd = uop0.Rd;
 					next_uop[6].Rs1 = uop0.Rd;
 					next_uop[6].Rs2 = uop0.Rs1;
@@ -257,7 +257,7 @@
 
 					next_uop[7].num = 5'd7;
 					next_uop[7].opcode = uop0.opcode;
-					next_uop[7].func = FLT_FMA;
+					next_uop[7].func = Qupls5_pkg::FLT_FMA;
 					next_uop[7].Rd = uop0.Rd;
 					next_uop[7].Rs1 = uop0.Rd;
 					next_uop[7].Rs2 = uop0.Rs1;
@@ -267,7 +267,7 @@
 
 					next_uop[8].num = 5'd8;
 					next_uop[8].opcode = uop0.opcode;
-					next_uop[8].func = FLT_FMA;
+					next_uop[8].func = Qupls5_pkg::FLT_FMA;
 					next_uop[8].Rd = uop0.Rd;
 					next_uop[8].Rs1 = uop0.Rd;
 					next_uop[8].Rs2 = uop0.Rs1;

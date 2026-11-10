@@ -250,7 +250,7 @@ end
 
 always_ff @(posedge clk)
 if (rst) begin
-	pg_moq1 <= {$bits(pipeline_group_reg_t){1'b0}};
+	pg_moq1 <= {$bits(Qupls5_pkg::pipeline_group_reg_t){1'b0}};
 	foreach(pg_moq1.pr[n1])
 		pg_moq1.pr[n1] <= nopi;
 end
@@ -274,7 +274,7 @@ end
 
 always_ff @(posedge clk)
 if (rst) begin
-	pg_moq2 <= {$bits(pipeline_group_reg_t){1'b0}};
+	pg_moq2 <= {$bits(Qupls5_pkg::pipeline_group_reg_t){1'b0}};
 	foreach(pg_moq1.pr[n1])
 		pg_moq2.pr[n1] <= nopi;
 end

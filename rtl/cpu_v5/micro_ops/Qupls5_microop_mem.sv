@@ -45,6 +45,9 @@ module Qupls5_microop_mem(rst, clk, en, om, ir, num, carry_reg, carry_out, carry
 	branch_resolved);
 parameter MICROOPS_PER_INSTR = 16;
 parameter COMB = 0;
+parameter SUPPORT_IRQ_POLLING = Qupls5_pkg::SUPPORT_IRQ_POLLING;
+parameter SUPPORT_FLOAT = Qupls5_pkg::SUPPORT_FLOAT;
+parameter SUPPORT_VECTOR = Qupls5_pkg::SUPPORT_VECTOR;
 input rst;
 input clk;
 input en;
@@ -531,9 +534,9 @@ end
 // ENTER instructions
 always_comb
 begin
-	cap_sz = pg_ext.ip.cap.flags[0] ? 2'd2 : pg_ext.ip.cap.flags[2:1];
-	st_opcode = pg_ext.ip.cap.flags[0] ? OP_STORE : OP_CSTORE;
-	ld_opcode = pg_ext.ip.cap.flags[0] ? OP_LOAD : OP_CLOAD;
+	cap_sz = pg_ext.hdr.ip.cap.flags[0] ? 2'd2 : pg_ext.hdr.ip.cap.flags[2:1];
+	st_opcode = pg_ext.hdr.ip.cap.flags[0] ? Qupls5_pkg::OP_STORE : Qupls5_pkg::OP_CSTORE;
+	ld_opcode = pg_ext.hdr.ip.cap.flags[0] ? Qupls5_pkg::OP_LOAD : Qupls5_pkg::OP_CLOAD;
 	
 	enter_st_fp = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
 	enter_st_fp.v = VAL;
@@ -636,7 +639,8 @@ end
 always_comb
 begin
 	case (instr.opcode)
-	Qupls5_pkg::OP_R3VVS,Qupls5_pkg::OP_FLTVVS:
+	Qupls5_pkg::OP_VSR3B,Qupls5_pkg::OP_VSR3W,Qupls5_pkg::OP_VSR3T,Qupls5_pkg::OP_VSR3O,
+	Qupls5_pkg::OP_VFLTSH,Qupls5_pkg::OP_VFLTSS,Qupls5_pkg::OP_VFLTSD:
 		is_vs = ir.op3==3'd1;
 	default:	is_vs = 1'b0;
 	endcase
@@ -647,7 +651,8 @@ begin
 	case (instr.opcode)
 	Qupls5_pkg::OP_VR3B,Qupls5_pkg::OP_VR3W,Qupls5_pkg::OP_VR3T,Qupls5_pkg::OP_VR3O,
 	Qupls5_pkg::OP_VSR3B,Qupls5_pkg::OP_VSR3W,Qupls5_pkg::OP_VSR3T,Qupls5_pkg::OP_VSR3O,
-	Qupls5_pkg::OP_FLTVVS:
+	Qupls5_pkg::OP_VFLTH,Qupls5_pkg::OP_VFLTS,Qupls5_pkg::OP_VFLTD,
+	Qupls5_pkg::OP_VFLTSH,Qupls5_pkg::OP_VFLTSS,Qupls5_pkg::OP_VFLTSD:
 		is_masked = ir.op3==3'd6;
 	default:	is_masked = 1'b0;
 	endcase
@@ -924,8 +929,8 @@ else begin
 		begin
 			if (SUPPORT_VECTOR) begin
 				case(instr.op3)
-				EX_VSHLV,EX_VSHRV:
-					case({VREGS > 4,vlen1[3:0]})
+				Qupls5_pkg::EX_VSHLV,Qupls5_pkg::EX_VSHRV:
+					case({Qupls5_pkg::VREGS > 4,vlen1[3:0]})
 					5'd1:	
 						begin
 							next_count = 4'd1;
@@ -1308,7 +1313,7 @@ else begin
 			// MOVES are done by renaming registers which is not what we want in 
 			// this case. Reading and writing of the same register is taking place
 			// as far as rename is concerned.
-			FN_EXG:
+			Qupls5_pkg::FN_EXG:
 				if (insert_boi) begin
 					next_count = 4'd4;
 					next_uop[0] = uop_boi;
@@ -1446,7 +1451,7 @@ generate begin : gComb
 			count <= 5'd0;
 			foreach (uop[n1])
 				uop[n1] <= next_uop[n1];
-			pg_trn <= {$bits(pipeline_group_reg_t){1'b0}};
+			pg_trn <= {$bits(Qupls5_pkg::pipeline_group_reg_t){1'b0}};
 			foreach(pg_trn.pr[n1])
 				pg_trn.pr[n1] <= nopi;
 		end
