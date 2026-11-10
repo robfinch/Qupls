@@ -1,24 +1,35 @@
-# Welcome to Qupls4 (Q+)
+# Welcome to Qupls5 (Q+)
 
 ## Overview
 Qupls is an implementation of the Qupls instruction set architecture. The ISA is for a 64-bit general purpose machine.
-The Qupls ISA supports SIMD and vector operations.
+The Qupls ISA supports vector operations.
 
 ### Versions
-Qupls4 is the most recently worked on version. Qupls4 is the 2026 version of the Thor processor which has evolved over the years.
+Qupls5 is the most recently worked on version. Qupls5 is the 2026 version of the Thor processor which has evolved over the years.
 Different versions are completely incompatible with one another as the author has learned and gained more experience.
 
 ### History
-Qupls4 is the most recently worked on version beginning in November 2025. Work started on Qupls2 in February of 2025; then Qupls3 started in March.
+Qupls5 is the most recently worked on version beginning in November 2026.
+Work started on Qupls4 in November of 2025;
+Work started on Qupls2 in February of 2025; then Qupls3 started in March.
 Work started on Qupls in November of 2023. Many years of work have gone into prior CPUs.
 
-### Recent Additions
-The more recent addition is multiple threads of execution, and multiple streams (branch paths) of execution.
-Provision for capabilities instructions were added to the instruction set.
-The capabilities version of the core requires 128-bit registers as a 64-bit capability is part of the register.
-This increases the size of the core considerably and turns Qupls into a 128-bit machine.
+### Upcoming Changes
+The register file will likely be split into separate files for integer and float operations.
+It is desired to support 128-bit float arithmetic better.
+The author is working out the best way to achieve this.
 
-### Features Superscalar Out-of-Order version (Qupls4.sv)
+### Recent Additions / Changes
+Most recently parallel SIMD instructions have been removed from the ISA.
+They were redundant as vector operations with a length of one register perform almost identically, except
+for two bits in the instruction.
+The vector length and precision (element size) are both now encoded in the instruction.
+Older additions are multiple threads of execution, and multiple streams (branch paths) of execution.
+Provision for capabilities instructions were added to the instruction set.
+The capabilities version of the core requires 256-bit registers as a 64-bit capability is part of the register.
+This increases the size of the core considerably and turns Qupls into a 256-bit machine.
+
+### Features Superscalar Out-of-Order version (Qupls5.sv)
 * Fixed 48-bit parcel length instruction set. (postfixes may make it considered to be variable length).
 * 64-bit datapath / support for 128-bit floats (128-bit datapath for capabilities)
 * 16 entry (or more) reorder entry buffer (ROB)
@@ -29,7 +40,7 @@ This increases the size of the core considerably and turns Qupls into a 128-bit 
 * Standard suite of ALU operations, add, subtract, compare, multiply and divide.
 * Arithmetic right shift with round.
 * Bitfield operations.
-* Conditional relative branch instructions with 17-bit displacements
+* Conditional relative branch instructions with 18-bit displacements
 * Vector operations.
 * 4-way Out-of-order execution of instructions
 * 1024 entry, three way TLB for virtual memory support, shared between instruction and data
@@ -38,10 +49,9 @@ This increases the size of the core considerably and turns Qupls into a 128-bit 
 
 ## Out-of-Order Version
 ### Status
-Qupls4 is primarily begin designed with some code inherited from Qupls2 / Stark and other projects.
+Qupls5 is primarily begin designed with some code inherited from Qupls4 and other projects.
 The Qupls4 OoO machine is currently in development. A long way to go yet. Some synthesis runs have been performed to get a general idea of the size and timing.
 The goal is 100 MHz operation.
-Qupls4 will have 128 GPRs instead of 64.
 ### Historic Changes
 Masked value branches were added.
 The most recent major change was to the register organization.
@@ -73,7 +83,8 @@ There is now demultiplexing of read ports for reading.
 
 The register file contains 128 architectural registers, and is unified, supporting integer and floating-point operations using the same set of registers. 
 126 registers may be assigned by the compiler without restriction.
-Register #0 always reads as the value +0.0 for float operations and as a memory base or index register.
+Register #0 always reads as the value for a memory base or index register.
+For other instructions the constant zero may be selected instead of R0.
 Register #1 reads as +1.0 for float operations.
 Instruction pointer may be selected as a base register for memory operations - register code 127.
 
@@ -89,7 +100,7 @@ Hence the move back to a fixed instruction length. However, the instruction set 
 
 ### Instruction alignment
 Instructions are aligned on wyde (16-bit) boundaries. Conditional branch displacements are in terms of wydes.
-Conditional branches have effectively a 17 bit range. For software compatibility a critical 18 bits range was needed.
+Conditional branches have effectively a 18 bit range. For software compatibility a critical 18 bits range was needed.
 Subroutines may be aligned on any wyde boundary, allowing position independent code placement.
 Unconditional branch and jump displacements are in terms of wydes to accomodate the location of subroutines.
 
@@ -98,7 +109,7 @@ Code is relocatable at any wyde boundary; however, within a subroutine or functi
 
 ### Pipeline
 Yikes!
-There are roughly ten stages in the pipeline, fetch, extract (parse), translate, decode, rename, dispatch, queue, issue, execute and writeback.
+There are roughly nine stages in the pipeline, fetch, extract (parse), translate, decode, rename, dispatch, issue, execute and writeback.
 The first few stages (up to rename) are in-order stages.
 #### Fetch / Extract Stages
 The first step for an instruction is instruction fetch.
@@ -111,6 +122,7 @@ If there is a hardware interrupt, it is flagged on the instruction where the int
 #### Translate Stage
 At this stage ISA instructions are translated into groups of micro-ops. There is currently a maximum of 16 micro-ops for any instruction.
 Most instructions are a direct 1:1 translation but some instructions require more micro-ops.
+Vector instructions are expanded from 1 ISA instruction into multiple micro-ops depending on vector length.
 16 micro-ops should be enough to allow some FP iterative operations like NR-divide.
 #### Decode Stage
 After instruction fetch, extract and translate the instructions are decoded. 
@@ -125,10 +137,6 @@ Instructions are dispatched to reservation stations by this stage.
 Not every combination of four instructions is supported within a single clock cycle.
 The dispatcher may dispatch up to six micro-op instructions per clock cycle.
 Disatch is currently out-of-order. Out-of-order dispatch does not stall the pipeline.
-#### Queue Stage
-The queue stage is a place holder for the most recent instructions that have been queued in the reorder buffer.
-Instructions are queued from the rename stage. The queue state overlaps the contents of the ROB.
-It is less expensive to process the instructions from the queue buffer rather than multiplexing from the ROB.
 #### Issue Stage
 Once instructions are queued in the ROB they may be scheduled for execution.
 The instruction scheduler is now distributed amongst the reservation stations which become active when instructions with valid arguments are ready.
@@ -183,6 +191,7 @@ Many register-register operate instructions support dual operations on the regis
 They are of the form: Rt = (Ra op Rb) op Rc.
 For instance, the AND_OR instruction performs an AND operation followed by an OR operation.
 The compiler treats the processor as if it has only two source operands.
+In many cases, the third operand is used as a mask register for vector operations.
 Later in the optimization phase instructions that can be turned into dual-operations are dectected.
 
 ### Arithmetic Operations
@@ -209,7 +218,7 @@ Any of the three source registers may be turned into a constant.
 ### Branches
 Conditional branches are a fused compare-and-branch instruction. Values of two registers are compared, then a branch is made depending on the relationship between the two.
 Branches may work with different precisions.
-The branch displacement is 17 bits. Branch-to-register is also supported.
+The branch displacement is 18 bits. Branch-to-register is also supported.
 Some branches may increment or decrement the first source register. (iblt ibltu ible ibleu dbne dbnez).
 A masked value form of branches is supported where the values to be compared are first masked against the contents of another register.
 Masked value branches allow selection of the bits significant to the branch operation.
