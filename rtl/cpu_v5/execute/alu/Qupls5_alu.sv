@@ -1,0 +1,2060 @@
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2023-2026  Robert Finch, Waterloo
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+//
+// BSD 3-Clause License
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are met:
+//
+// 1. Redistributions of source code must retain the above copyright notice, this
+//    list of conditions and the following disclaimer.
+//
+// 2. Redistributions in binary form must reproduce the above copyright notice,
+//    this list of conditions and the following disclaimer in the documentation
+//    and/or other materials provided with the distribution.
+//
+// 3. Neither the name of the copyright holder nor the names of its
+//    contributors may be used to endorse or promote products derived from
+//    this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+// FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+// DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+// SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+// CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+// OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+// 4000 LUTs / 70 FFs	ALU
+// ============================================================================
+
+import const_pkg::*;
+import fp64Pkg::*;
+import cpu_types_pkg::*;
+import capability_pkg::*;
+import Qupls5_pkg::*;
+
+module Qupls5_alu(rst, clk, clk2x, chunk, om, ld, ir, div, Ra, a, b, bi, c,
+	a_flags, b_flags, c_flags, t_flags, i, t, qres, capa, capa_flags,
+	mask, cs, pc, pcc, csr, cpl, coreno, canary, velsz, o, o_flags, exc_o, did_op);
+parameter PIPE = 3'd0;
+parameter SUPPORT_SHIFT = (PIPE==3'd0 && SUPPORT_SHIFT0) || (PIPE==3'd1 && SUPPORT_SHIFT1);
+parameter SUPPORT_COUNT = (PIPE==3'd0 && SUPPORT_COUNT0) || (PIPE==3'd1 && SUPPORT_COUNT1);
+parameter SUPPORT_CRYPTO = (PIPE==3'd1 && SUPPORT_CRYPTO1) || (PIPE==3'd0 && SUPPORT_CRYPTO0);
+parameter SUPPORT_INFO = (PIPE==3'd0 && SUPPORT_INFO0) || (PIPE==3'd1 && SUPPORT_INFO1);
+parameter SUPPORT_CSR = (PIPE==3'd0 && SUPPORT_CSR0) || (PIPE==3'd1 && SUPPORT_CSR1);
+parameter SUPPORT_BFLD = (PIPE==3'd0 && SUPPORT_BFLD0) || (PIPE==3'd1 && SUPPORT_BFLD1);
+parameter SUPPORT_BRANCH = PIPE==3'd1;
+parameter WID=64;
+parameter LANE=0;
+parameter NUM_LANES=1;
+input rst;
+input clk;
+input clk2x;
+input [2:0] chunk;
+input Qupls5_pkg::operating_mode_t om;
+input ld;
+input Qupls5_pkg::micro_op_t ir;
+input div;
+input [6:0] Ra;
+input uc64_capability_t capa;
+input cpu_types_pkg::flags_t capa_flags;
+input [WID-1:0] a;
+input [WID-1:0] b;
+input [WID-1:0] bi;
+input [WID-1:0] c;
+input [WID-1:0] i;
+input [WID-1:0] t;
+input flags_t a_flags;
+input flags_t b_flags;
+input flags_t c_flags;
+input flags_t t_flags;
+input [WID-1:0] qres;
+input [63:0] mask;
+input [2:0] cs;
+input Qupls5_pkg::pc_address_ex_t pc;
+input capability32_t pcc;
+input [WID-1:0] csr;
+input [7:0] cpl;
+input [WID-1:0] coreno;
+input [WID-1:0] canary;
+input [63:0] velsz;
+output reg [WID-1:0] o;
+output flags_t o_flags;
+output Qupls5_pkg::cause_code_t exc_o;
+output reg did_op;
+
+genvar g;
+integer nn,kk,jj,n1;
+integer element_number;
+wire [5:0] lane = LANE;
+reg [63:0] c1;
+reg [7:0] cm;
+reg [63:0] mask1;
+reg [WID-1:0] mask2;
+reg [5:0] base_eleno;
+reg [6:0] elesz;
+Qupls5_pkg::cause_code_t exc;
+wire [WID:0] zero = {WID+1{1'b0}};
+wire [WID:0] dead = {1'b0,{WID/16{16'hdead}}};
+wire cd_args;
+value_t cc;
+reg [WID*2-1:0] shl, shr, asr;
+wire [WID-1:0] cmpo;
+reg [WID:0] bus;
+reg [WID-1:0] busx;
+wire bus_nan;
+reg [22:0] ii;
+reg [WID-1:0] sd;
+reg [WID-1:0] sum_ab;
+reg [WID+1:0] sum_gc;
+reg [WID-1:0] chndx;
+reg [WID-1:0] chndx2;
+reg [WID-1:0] chrndxv;
+reg [WID-1:0] bmap;
+wire [WID-1:0] info;
+wire [WID-1:0] vmasko;
+wire [WID-1:0] blendo;
+reg [WID-1:0] tmp;
+reg [6:0] y;
+wire [63:0] cryptoo;
+reg [3:0] ele_per_reg;
+
+/*
+wire [63:0] txu = (a[35:0] * c[17:0]) >> 18;
+wire [63:0] txv = (b[35:0] * c[41:24]) >> 18;
+wire [63:0] txv1 = txv * c[17:0];
+wire [63:0] txn = (txu+txv1) * c[63:60];
+*/
+function [WID-1:0] fnBitRev;
+input [WID-1:0] i;
+integer nn;
+begin
+	for (nn = 0; nn < WID/2; nn = nn + 1)
+		fnBitRev[nn] = i[WID-1-nn];
+end
+endfunction
+
+// If the signs of the operands are the same, and the sign of the result does
+// not match the operands sign.
+function fnAddOverflow;
+input r;
+input a;
+input b;
+	fnAddOverflow = (r ^ b) & (1'b1 ^ a ^ b);
+endfunction
+
+// If the signs of the operands are different and sign of the result does not
+// match the first operand.
+function fnSubOverflow;
+input r;
+input a;
+input b;
+	fnSubOverflow = (r ^ a) & (a ^ b);
+endfunction
+
+reg ibranch;
+reg dbranch;
+
+always_comb
+begin
+	ibranch = FALSE;
+	dbranch = FALSE;
+	case(ir.cnd)
+	CND_NE:	dbranch = ir.inc;
+	CND_LT:	ibranch = ir.inc;
+	CND_LE:	ibranch = ir.inc;
+	default:	;
+	endcase
+end
+
+
+always_comb
+	ii = {{6{i[WID-1]}},i};
+always_comb
+	sum_ab = a + b;
+always_comb
+	sum_gc = a + b + c;
+
+always_comb
+	shl = {{WID{1'b0}},a} << b[5:0];
+always_comb
+	shr = {a,{WID{1'b0}}} >> b[5:0];
+always_comb
+	asr = {{64{a[63]}},a,64'd0} >> b[5:0];
+
+always_comb
+if (elesz < 6'd9)
+	ele_per_reg = 4'd8;
+else if (elesz < 6'd17)
+	ele_per_reg = 4'd4;
+else if (elesz < 6'd33)
+	ele_per_reg = 4'd2;
+else
+	ele_per_reg = 4'd1;
+
+reg [WID+8-1:0] t1;
+reg [WID+8-1:0] bfldo;
+reg [6:0] bflen;
+reg [6:0] bfst,bfnd;
+reg [WID+8-1:0] af;
+reg [WID+8-1:0] op3;
+
+// Handle clr, set, com, ext, extz, dep
+generate begin : gBlfd
+	if (WID==64) begin
+		always_comb
+		if (SUPPORT_BFLD || SUPPORT_VECTOR) begin
+			case(ir.func)
+			Qupls5_pkg::FN_VEX:
+				begin
+					bflen = elesz;
+					bfst = (b[5:0] - base_eleno) * elesz;
+					bfnd = bfst + elesz;
+				end
+			Qupls5_pkg::FN_VEINS:
+				begin
+					bflen = elesz;
+					bfst = (c[5:0] - base_eleno) * elesz;
+					bfnd = bfst + elesz;
+				end
+			default:
+				begin
+					bfst = (ir.ms[1] ? ir.Rs2 : b[6:0]);
+					bfnd = (ir.ms[2] ? ir.Rs3 : c[6:0]);
+					bflen = bfnd - bfst;
+				end
+			endcase
+			af = {a_flags,a};
+			op3 = {{WID+8-3{ir.op3[2]}},ir.op3};
+			t1 = af >> (ir.ms[1] ? ir.Rs2 : b[6:0]);	// srl
+			for (jj = 0; jj < WID+8; jj = jj + 1)
+				case(ir.func)
+				Qupls5_pkg::FN_SET:
+					if (jj >= bfst && jj < bfnd)
+						bfldo[jj] = op3[jj-bfst];
+					else
+						bfldo[jj] = af[jj];
+				Qupls5_pkg::FN_COM:
+					if (jj >= bfst && jj < bfnd)
+						bfldo[jj] = ~af[jj];
+					else
+						bfldo[jj] = af[jj];
+				Qupls5_pkg::FN_DEP:
+					if (jj >= bfst && jj < bfnd)
+						bfldo[jj] = af[jj-bfst];
+					else
+						bfldo[jj] = t[jj];
+				Qupls5_pkg::FN_EXTZ:	bfldo[jj] = jj > bflen ? 1'b0 : t1[jj];
+				Qupls5_pkg::FN_EXT:		bfldo[jj] = jj > bflen ? t1[bflen] : t1[jj];
+				Qupls5_pkg::FN_VEINS:
+					if (jj >= bfst && jj < bfnd)
+						bfldo[jj] = b[jj-bfst];
+					else
+						bfldo[jj] = af[jj];
+				default:	bfldo = {8'h00,zero};
+				endcase
+		end
+	end
+	else begin
+		always_comb
+		begin
+			bfst = 7'd0;
+			bfnd = 7'd0;	
+			bflen = 7'd0;
+			af = {WID+8{1'b0}};
+			t1 = {WID+8{1'b0}};
+			bfldo = {WID+8{1'b0}};
+			op3 = {WID+8{1'b0}};
+		end
+	end
+end
+endgenerate
+
+// Make sure to always find a one.
+reg [6:0] ffoa, ffob;
+ffo96 uffoa1 (.i({95'd0,a,1'b1}), .o(ffoa));
+ffo96 uffob1 (.i({95'd0,b,1'b1}), .o(ffob));
+
+wire a_dn, b_dn;
+wire az, bz;
+wire aInf,bInf;
+wire aNan,bNan;
+wire asNan,bsNan;
+wire aqNan,bqNan;
+wire [WID-1:0] can_nan = {1'b0,{WID-1{1'b1}}};	// Quiet NaN as MSB of fract is set
+reg [WID-1:0] fmin,fmax;
+
+Qupls5_cmp #(.WID(WID)) ualu_cmp
+(
+	.ir(ir),
+	.om(om),
+	.cr(t),
+	.a(a),
+	.b(b),
+	.i(i),
+	.o(cmpo)
+);
+
+generate begin : gBlend
+	if (WID==64) begin
+Qupls5_blend ublend1
+(
+	.a(a),
+	.b(b),
+	.c(c),
+	.o(blendo)
+);
+	end
+	else begin
+		assign blendo = zero;
+	end
+end
+endgenerate
+
+reg [$clog2(WID):0] locnt,lzcnt,popcnt,tzcnt;
+reg loz, lzz, tzz;
+
+	
+generate begin : gffz
+//	for (g = WID-1; g >= 0; g = g - 1)
+  case(WID)
+  16:	
+  	begin
+  	cntpop16 upopcnt16 (.i({a[WID-1:0]}),.o(popcnt));
+		assign cryptoo = 64'd0;
+  	end
+  32:
+  	begin
+  	cntpop32 upopcnt32 (.i({a[WID-1:0]}),.o(popcnt));
+		assign cryptoo = 64'd0;
+  	end
+  64:
+  	begin
+		FP64 fa,fb;
+  	wire fasig_hidden,fbsig_hidden;
+  	cntpop64 upopcnt64 (.i({a[WID-1:0]}),.o(popcnt));
+
+		if (SUPPORT_CRYPTO) begin
+			Qupls5_crypto uCrypto1
+			(
+				.ir(ir),
+				.a(a),
+				.b(b),
+				.c(c),
+				.o(cryptoo)
+			);
+		end
+		else
+			assign cryptoo = 64'd0;
+ 
+		fpDecomp64 udc1a (
+			.i(a),
+			.sgn(fa.sign),
+			.exp(fa.exp),
+			.fract({fasig_hidden,fa.sig}),
+			.xz(a_dn),
+			.xinf(),
+			.vz(az),
+			.man(),
+			.mz(),
+			.inf(aInf),
+			.nan(aNan),
+			.snan(asNan),
+			.qnan(aqNan)
+		);
+
+		fpDecomp64 udc1b (
+			.i(b),
+			.sgn(fb.sign),
+			.exp(fb.exp),
+			.fract({fbsig_hidden,fb.sig}),
+			.xz(b_dn),
+			.xinf(),
+			.vz(bz),
+			.man(),
+			.mz(),
+			.inf(bInf),
+			.nan(bNan),
+			.snan(bsNan),
+			.qnan(bqNan)
+		);
+
+		fpDecomp64 udc1bus (
+			.i(bus[63:0]),
+			.sgn(),
+			.exp(),
+			.fract(),
+			.xz(),
+			.xinf(),
+			.vz(),
+			.man(),
+			.mz(),
+			.inf(),
+			.nan(bus_nan),
+			.snan(),
+			.qnan()
+		);
+
+  	end
+  128:
+  	begin
+  	cntpop128 upopcnt128 (.i({a[WID-1:0]}),.o(popcnt));
+		assign cryptoo = 64'd0;
+  	end
+	endcase
+  case(WID)
+  16:	
+  	begin
+  	ffz24 uffz16 (.i({8'hFF,a[WID-1:0]}),.o(locnt));
+  	end
+  32:
+  	begin
+  	ffz48 uffz32 (.i({16'hFFFF,a[WID-1:0]}),.o(locnt));
+  	end
+  64:
+  	begin
+  	ffz96 uffo64 (.i({32'hFFFFFFFF,a[WID-1:0]}),.o(locnt));
+  	end
+  128:
+  	begin
+  	ffz144 uffo128 (.i({16'hFFFF,a[WID-1:0]}),.o(locnt));
+  	end
+  default:
+  	begin
+  	ffz96 uffo64 (.i({32'hFFFFFFFF,a[WID-1:0]}),.o(locnt));
+  	end
+	endcase
+  case(WID)
+  16:	
+  	begin
+  	ffo24 uffo16 (.i({8'h00,a[WID-1:0]}),.o(lzcnt));
+  	end
+  32:
+  	begin
+  	ffo48 uffo32 (.i({16'h0000,a[WID-1:0]}),.o(lzcnt));
+  	end
+  64:
+  	begin
+  	ffo96 uffo64 (.i({32'h00000000,a[WID-1:0]}),.o(lzcnt));
+  	end
+  128:
+  	begin
+  	ffo144 uffo128 (.i({16'h0000,a[WID-1:0]}),.o(lzcnt));
+  	end
+  default:
+  	begin
+  	ffo96 uffo64 (.i({32'h00000000,a[WID-1:0]}),.o(lzcnt));
+  	end
+	endcase
+  case(WID)
+  16:	
+  	begin
+  	flo24 uflo16 (.i({8'hFF,a[WID-1:0]}),.o(tzcnt));
+  	end
+  32:
+  	begin
+  	flo48 uflo32 (.i({16'hFFFF,a[WID-1:0]}),.o(tzcnt));
+  	end
+  64:
+  	begin
+  	flo96 uflo64 (.i({32'hFFFFFFFF,a[WID-1:0]}),.o(tzcnt));
+  	end
+  128:
+  	begin
+  	flo144 uflo128 (.i({16'hFFFF,a[WID-1:0]}),.o(tzcnt));
+  	end
+  default:
+  	begin
+  	flo96 uflo64 (.i({32'hFFFFFFFF,a[WID-1:0]}),.o(tzcnt));
+  	end
+	endcase
+end
+endgenerate
+
+// FMIN
+always_comb
+	if ((asNan|bsNan)||(aqNan&bqNan))
+		fmin <= can_nan;	// canonical NaN
+	else if (aqNan & !bNan)
+		fmin <= b;
+	else if (!aNan & bqNan)
+		fmin <= a;
+	else if (cmpo[1])
+		fmin <= a;
+	else
+		fmin <= b;
+
+// FMAX
+always_comb
+	if ((asNan|bsNan)||(aqNan&bqNan))
+		fmax <= can_nan;	// canonical NaN
+	else if (aqNan & !bNan)
+		fmax <= b;
+	else if (!aNan & bqNan)
+		fmax <= a;
+	else if (cmpo[1])
+		fmax <= b;
+	else
+		fmax <= a;
+
+
+generate begin : gInfoBlend
+	if (WID != 64) begin
+		assign info = {WID{1'b0}};
+	end
+	else begin
+		if (SUPPORT_INFO) begin
+			Qupls5_info uinfo1 (
+				.ndx(a[4:0]+b[4:0]+ir[26:22]),
+				.coreno(coreno),
+				.thread(pc.stream.thread),
+				.o(info)
+			);
+		end
+	end
+end
+endgenerate
+
+
+generate begin : gElement
+	for (g = 0; g < 64/WID; g = g + 1)
+		always_comb begin
+			case(Ra[1:0])
+			2'd0:	cm[g] = c[g];
+			2'd1:	cm[g] = c[g+64/WID*1];
+			2'd2:	cm[g] = c[g+64/WID*2];
+			2'd3:	cm[g] = c[g+64/WID*3];
+			endcase
+		end
+end
+endgenerate
+
+reg [2:0] dt;
+
+always_comb
+begin
+	did_op = FALSE;
+	exc = Qupls5_pkg::FLT_NONE;
+	bus = {(WID/16){16'h0000}};
+	o_flags = t_flags;
+	dt = 3'd0;
+	elesz = (velsz >> {dt,3'b0}) & 8'hff;
+	case(elesz)
+	8'd8:	base_eleno = {chunk,3'd0};
+	8'd16:base_eleno = {chunk,2'd0};
+	8'd32:base_eleno = {chunk,1'd0};
+	8'd64:base_eleno = chunk;
+	endcase
+	mask1 = c >> base_eleno;
+	case(ir.opcode)
+	Qupls5_pkg::OP_R3BP,Qupls5_pkg::OP_R3WP,Qupls5_pkg::OP_R3TP,Qupls5_pkg::OP_R3OP,
+	Qupls5_pkg::OP_R3VVV,Qupls5_pkg::OP_R3VVS:
+		case(ir.func)
+		Qupls5_pkg::FN_BMAP:
+			begin
+				case(WID)
+				64:
+					begin
+						bus = zero;
+						bmap[ 7: 0] = a >> {b[ 2: 0],3'b0};
+						bmap[15: 8] = a >> {b[ 6: 4],3'b0};
+						bmap[23:16] = a >> {b[10: 8],3'b0};
+						bmap[31:24] = a >> {b[14:12],3'b0};
+						bmap[39:32] = a >> {b[18:16],3'b0};
+						bmap[47:40] = a >> {b[22:20],3'b0};
+						bmap[55:48] = a >> {b[26:24],3'b0};
+						bmap[63:56] = a >> {b[30:28],3'b0};
+					end
+				32:
+					begin
+						bus = zero;
+						bmap[ 7: 0] = a >> {b[ 2: 0],3'b0};
+						bmap[15: 8] = a >> {b[ 6: 4],3'b0};
+						bmap[23:16] = a >> {b[10: 8],3'b0};
+						bmap[31:24] = a >> {b[14:12],3'b0};
+					end
+				16:
+					begin
+						bus = zero;
+						bmap[ 7: 0] = a >> {b[ 2: 0],3'b0};
+						bmap[15: 8] = a >> {b[ 6: 4],3'b0};
+					end
+				8:
+					begin
+						bus = zero;
+						bmap[ 7: 0] = a >> {b[ 2: 0],3'b0};
+					end
+				endcase
+				case(ir.op3)
+				3'd0:	bus = bmap & c;
+				3'd1:	bus = bmap | c;
+				3'd2: bus = bmap ^ c;
+				3'd3:	bus = bmap + c;
+				3'd4:	bus = bmap << c[5:0];
+				default:	bus = zero;
+				endcase
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+		Qupls5_pkg::FN_BMAPH:
+			begin
+				case(WID)
+				64:
+					begin
+						bus = zero;
+						bmap[ 7: 0] = {b,a} >> {c[ 3: 0],3'b0};
+						bmap[15: 8] = {b,a} >> {c[ 7: 4],3'b0};
+						bmap[23:16] = {b,a} >> {c[11: 8],3'b0};
+						bmap[31:24] = {b,a} >> {c[15:12],3'b0};
+						bmap[39:32] = {b,a} >> {c[19:16],3'b0};
+						bmap[47:40] = {b,a} >> {c[23:20],3'b0};
+						bmap[55:48] = {b,a} >> {c[27:24],3'b0};
+						bmap[63:56] = {b,a} >> {c[31:28],3'b0};
+					end
+				32:
+					begin
+						bus = zero;
+						bmap[ 7: 0] = {b,a} >> {c[ 3: 0],3'b0};
+						bmap[15: 8] = {b,a} >> {c[ 7: 4],3'b0};
+						bmap[23:16] = {b,a} >> {c[11: 8],3'b0};
+						bmap[31:24] = {b,a} >> {c[15:12],3'b0};
+					end
+				16:
+					begin
+						bus = zero;
+						bmap[ 7: 0] = {b,a} >> {c[ 3: 0],3'b0};
+						bmap[15: 8] = {b,a} >> {c[ 7: 4],3'b0};
+					end
+				8:
+					begin
+						bus = zero;
+						bmap[ 7: 0] = {b,a} >> {c[ 3: 0],3'b0};
+					end
+				endcase
+				bus = bmap;
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+		Qupls5_pkg::FN_CMP,Qupls5_pkg::FN_CMPU:
+			begin
+				bus = t;
+				case(ir.op3)
+				3'd0:	bus = cmpo & c;
+				3'd1:	bus = cmpo | c;
+				3'd2:	bus = cmpo ^ c;
+				3'd6: bus = mask1[LANE] ? cmpo : t;
+				default:	bus = zero;
+				endcase
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+
+		Qupls5_pkg::FN_SEQ:
+			begin
+				bus = t;
+				case(ir.op3)
+				3'd0:	bus = ($signed(a) == $signed(b)) & c;
+				3'd1:	bus = ($signed(a) == $signed(b)) | c;
+				3'd2:	bus = ($signed(a) == $signed(b)) ^ c;
+				3'd3:	bus = ($signed(a) == $signed(b)) + c;
+				3'd6:	bus[base_eleno + LANE] = mask1[LANE] ? $signed(a) == $signed(b) : t;
+				3'd7:	bus[base_eleno + LANE] = mask1[LANE] && $signed(a) == $signed(b) ? 1 : t;
+				default:	bus = zero;
+				endcase
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+
+		Qupls5_pkg::FN_SNE:
+			begin
+				bus = t;
+				case(ir.op3)
+				3'd0:	bus = ($signed(a) != $signed(b)) & c;
+				3'd1:	bus = ($signed(a) != $signed(b)) | c;
+				3'd2:	bus = ($signed(a) != $signed(b)) ^ c;
+				3'd3:	bus = ($signed(a) != $signed(b)) + c;
+				3'd6:	bus[base_eleno + LANE] = mask1[LANE] ? $signed(a) != $signed(b) : t;
+				3'd7:	bus[base_eleno + LANE] = mask1[LANE] && $signed(a) != $signed(b) ? 1 : t;
+				default:	bus = zero;
+				endcase
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+
+		Qupls5_pkg::FN_SLT:
+			begin
+				bus = t;
+				case(ir.op3)
+				3'd0:	bus = ($signed(a) < $signed(b)) & c;
+				3'd1:	bus = ($signed(a) < $signed(b)) | c;
+				3'd2:	bus = ($signed(a) < $signed(b)) ^ c;
+				3'd3:	bus = ($signed(a) < $signed(b)) + c;
+				3'd6:	bus[base_eleno + LANE] = mask1[LANE] ? $signed(a) < $signed(b) : t;
+				3'd7:	bus[base_eleno + LANE] = mask1[LANE] && $signed(a) < $signed(b) ? 1 : t;
+				default:	bus = zero;
+				endcase
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+
+		Qupls5_pkg::FN_SLE:
+			begin
+				bus = t;
+				case(ir.op3)
+				3'd0:	bus = ($signed(a) <= $signed(b)) & c;
+				3'd1:	bus = ($signed(a) <= $signed(b)) | c;
+				3'd2:	bus = ($signed(a) <= $signed(b)) ^ c;
+				3'd3:	bus = ($signed(a) <= $signed(b)) + c;
+				3'd6:	bus[base_eleno + LANE] = mask1[LANE] ? $signed(a) <= $signed(b) : t;
+				3'd7:	bus[base_eleno + LANE] = mask1[LANE] && $signed(a) <= $signed(b) ? 1 : t;
+				default:	bus = zero;
+				endcase
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+
+		Qupls5_pkg::FN_SLTU:
+			begin
+				bus = t;
+				case(ir.op3)
+				3'd0:	bus = (a < b) & c;
+				3'd1:	bus = (a < b) | c;
+				3'd2:	bus = (a < b) ^ c;
+				3'd3:	bus = (a < b) + c;
+				3'd6:	bus[base_eleno + LANE] = mask1[LANE] ? a < b : t;
+				3'd7:	bus[base_eleno + LANE] = mask1[LANE] && a < b ? 1 : t;
+				default:	bus = zero;
+				endcase
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+
+		Qupls5_pkg::FN_SLEU:
+			begin
+				bus = t;
+				case(ir.op3)
+				3'd0:	bus = (a <= b) & c;
+				3'd1:	bus = (a <= b) | c;
+				3'd2:	bus = (a <= b) ^ c;
+				3'd3:	bus = (a <= b) + c;
+				3'd6:	bus[base_eleno + LANE] = mask1[LANE] ? a <= b : t;
+				3'd7:	bus[base_eleno + LANE] = mask1[LANE] && a <= b ? 1 : t;
+				default:	bus = zero;
+				endcase
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+
+		Qupls5_pkg::FN_ADD:
+			begin
+				case(ir.op3)
+				3'd0:	bus = (a + b) & c;
+				3'd1:	bus = (a + b) | c;
+				3'd2:	bus = (a + b) ^ c;
+				3'd3:	bus = (a + b) + c;
+				3'd6:	bus = mask1[LANE] ? a + b : t;
+				default:	bus = zero;
+				endcase
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = fnAddOverflow(bus[WID-1],a[WID-1],b[WID-1]);
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = bus[WID];
+				o_flags.ptr = a_flags.ptr ^ b_flags.ptr;
+				o_flags.cap = FALSE;
+			end
+
+		Qupls5_pkg::FN_SUB:
+			begin
+				case(ir.op3)
+				3'd0:	bus = (a - b) & c;
+				3'd1:	bus = (a - b) | c;
+				3'd2:	bus = (a - b) ^ c;
+				3'd3:	bus = (a - b) - c;
+				3'd6:	bus = mask1[LANE] ? a - b : t;
+				default:	bus = zero;
+				endcase
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = fnSubOverflow(bus[WID-1],a[WID-1],b[WID-1]);
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = bus[WID];
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+
+		Qupls5_pkg::FN_AND:
+			begin
+				case(ir.op3)
+				3'd0:	bus = (a & b) & c;
+				3'd1:	bus = (a & b) | c;
+				3'd2:	bus = (a & b) ^ c;
+				3'd3:	bus = (a & b) + c;
+				3'd6:	bus = mask1[LANE] ? a & b : t;
+				default:	bus = zero;
+				endcase
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+
+		Qupls5_pkg::FN_OR:
+			begin
+				case(ir.op3)
+				3'd0:	bus = (a | b) & c;
+				3'd1:	bus = (a | b) | c;
+				3'd2:	bus = (a | b) ^ c;
+				3'd3:	bus = (a | b) + c;
+				3'd6:	bus = mask1[LANE] ? a | b : t;
+				default:	bus = zero;
+				endcase
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+
+		Qupls5_pkg::FN_XOR:
+			begin
+				case(ir.op3)
+				3'd0:	bus = (a ^ b) & c;
+				3'd1:	bus = (a ^ b) | c;
+				3'd2:	bus = (a ^ b) ^ c;
+				3'd3:	bus = (a ^ b) + c;
+				3'd6:	bus = mask1[LANE] ? a ^ b : t;
+				default:	bus = zero;
+				endcase
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+			
+		Qupls5_pkg::FN_ASL:
+			if (SUPPORT_SHIFT) begin
+				case(ir.op3)
+				3'd0:	bus = shl & c;
+				3'd1:	bus = shl | c;
+				3'd2:	bus = shl ^ c;
+				3'd3:	bus = shl + c;
+				3'd6:	bus = mask1[LANE] ? shl : t;
+				default:	bus = zero;
+				endcase
+				did_op = TRUE;
+				mask2 = ({{WID-1{1'b0}},1'b1} << b[5:0]) - 1;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				// Overflow: if any of the bits shifted out are not equal to the sign bit.
+				o_flags.ovf = bus[WID-1] ? (shl[WID*2-1:WID] & mask2) != ({WID{1'b1}} & mask2) :
+																	(shl[WID*2-1:WID] & mask2) != {WID{1'b0}};
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = |shl[WID*2-1:WID];
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+
+		Qupls5_pkg::FN_LSR:
+			if (SUPPORT_SHIFT) begin
+				case(ir.op3)
+				3'd0:	bus = shr[WID*2-1:WID] & c;
+				3'd1:	bus = shr[WID*2-1:WID] | c;
+				3'd2:	bus = shr[WID*2-1:WID] ^ c;
+				3'd3:	bus = shr[WID*2-1:WID] + c;
+				3'd6:	bus = mask1[LANE] ? shr[WID*2-1:WID] : t;
+				default:	bus = zero;
+				endcase
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = |shr[WID-1:0];
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+
+		Qupls5_pkg::FN_ASR:
+			if (SUPPORT_SHIFT) begin
+				case(ir.op3)
+				3'd0: bus = asr[WID*2-1:WID];
+				3'd1:	bus = asr[WID*2-1:WID];
+				3'd2:	bus = asr[WID*2-1:WID];
+				3'd3:	bus = asr[WID*2-1:WID];
+				3'd6:	bus = mask1[LANE] ? asr[WID*2-1:WID] : t;
+				default:	bus = zero;
+				endcase
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = |asr[WID-1:0];
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+
+		Qupls5_pkg::FN_ROL:
+			if (SUPPORT_SHIFT) begin
+				case(ir.op3)
+				3'd0: bus = (shl | shl[WID*2-1:WID]) & c;
+				3'd1:	bus = (shl | shl[WID*2-1:WID]) | c;
+				3'd2:	bus = (shl | shl[WID*2-1:WID]) ^ c;
+				3'd3:	bus = (shl | shl[WID*2-1:WID]) + c;
+				3'd6:	bus = mask1[LANE] ? (shl | shl[WID*2-1:WID]) : t;
+				default:	bus = zero;
+				endcase
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = |shl[WID*2-1:WID];
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+
+		Qupls5_pkg::FN_ROR:
+			if (SUPPORT_SHIFT) begin
+				case(ir.op3)
+				3'd0: bus = (shr | shr[WID*2-1:WID]) & c;
+				3'd1:	bus = (shr | shr[WID*2-1:WID]) | c;
+				3'd2:	bus = (shr | shr[WID*2-1:WID]) ^ c;
+				3'd3:	bus = (shr | shr[WID*2-1:WID]) + c;
+				3'd6:	bus = mask1[LANE] ? (shr | shr[WID*2-1:WID]) : t;
+				default:	bus = zero;
+				endcase
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = |shr[WID-1:0];
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+			
+		Qupls5_pkg::FN_MOVE:
+			begin
+				bus = b;
+				did_op = TRUE;
+				o_flags = b_flags;
+			end
+
+		default:	bus = zero;
+		endcase
+
+	Qupls5_pkg::OP_R3B,Qupls5_pkg::OP_R3W,Qupls5_pkg::OP_R3T,Qupls5_pkg::OP_R3O:
+		case(ir.func)
+		Qupls5_pkg::FN_R1:
+			if (SUPPORT_COUNT) begin
+				case(ir.Rs3)
+				Qupls5_pkg::R1_CNTLZ:	bus = lzcnt;
+				Qupls5_pkg::R1_CNTPOP:	bus = popcnt;
+				Qupls5_pkg::R1_CNTLO:	bus = locnt;
+				Qupls5_pkg::R1_CNTTZ:	bus = tzcnt;
+				default:	;
+				endcase
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+			else
+				bus = zero;
+		Qupls5_pkg::FN_CMP:	
+			begin
+				bus = cmpo;
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+		Qupls5_pkg::FN_CMPU:
+			begin
+				bus = cmpo;
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+		Qupls5_pkg::FN_SEQ:
+			begin
+				bus = a==b;
+				did_op = TRUE; 
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+		Qupls5_pkg::FN_SNE:
+			begin
+				bus = a != b;
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+		Qupls5_pkg::FN_SLT:
+			begin
+				bus = $signed(a) < $signed(b);
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+		Qupls5_pkg::FN_SLE:
+			begin
+				bus = $signed(a) <= $signed(b);
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+		Qupls5_pkg::FN_SLTU:
+			begin
+				bus = a < b;
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+		Qupls5_pkg::FN_SLEU:
+			begin
+				bus = a <= b;
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+		Qupls5_pkg::FN_ADD:
+			begin
+				case(ir.op3)
+				3'd0: bus = (a + b) & c;
+				3'd1:	bus = (a + b) | c;
+				3'd2:	bus = (a + b) ^ c;
+				3'd3:	bus = a + b + c;
+				default:	bus = zero;
+				endcase
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = fnAddOverflow(bus[WID-1],a[WID-1],b[WID-1]);
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = bus[WID];
+				o_flags.ptr = a_flags.ptr ^ b_flags.ptr;
+				o_flags.cap = FALSE;
+			end
+		Qupls5_pkg::FN_SUB:
+			begin
+				case(ir.op3)
+				3'd0: bus = (a - b) & c;
+				3'd1:	bus = (a - b) | c;
+				3'd2:	bus = (a - b) ^ c;
+				3'd3:	bus = a - b - c;
+				default:	bus = zero;
+				endcase
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = fnSubOverflow(bus[WID-1],a[WID-1],b[WID-1]);
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = bus[WID];
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+		Qupls5_pkg::FN_AND:
+			begin
+				case(ir.op3)
+				3'd0: bus = (a & b) & c;
+				3'd1:	bus = (a & b) | c;
+				3'd2:	bus = (a & b) ^ c;
+				3'd3:	bus = (a & b) + c;
+				default:	bus = zero;
+				endcase
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+		Qupls5_pkg::FN_OR:
+			begin
+				case(ir.op3)
+				3'd0: bus = (a | b) & c;
+				3'd1:	bus = (a | b) | c;
+				3'd2:	bus = (a | b) ^ c;
+				3'd3:	bus = (a | b) + c;
+				default:	bus = zero;
+				endcase
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+		Qupls5_pkg::FN_XOR:
+			begin
+				case(ir.op3)
+				3'd0: bus = (a ^ b) & c;
+				3'd1:	bus = (a ^ b) | c;
+				3'd2:	bus = (a ^ b) ^ c;
+				3'd3:	bus = (a ^ b) + c;
+				default:	bus = zero;
+				endcase
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+		Qupls5_pkg::FN_ASL:
+			if (SUPPORT_SHIFT) begin
+				case(ir.op3)
+				3'd0: bus = shl & c;
+				3'd1:	bus = shl | c;
+				3'd2:	bus = shl ^ c;
+				3'd3:	bus = shl + c;
+				default:	bus = zero;
+				endcase
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				// Overflow: if any of the bits shifted out are not equal to the sign bit.
+				o_flags.ovf = bus[WID-1] ? (shl[WID*2-1:WID] & mask2) != ({WID{1'b1}} & mask2) :
+																	(shl[WID*2-1:WID] & mask2) != {WID{1'b0}};
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = |shl[WID*2-1:WID];
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+			else
+				bus = zero;
+		Qupls5_pkg::FN_ASR:
+			if (SUPPORT_SHIFT) begin
+				case(ir.op3)
+				3'd0: bus = asr;
+				3'd1:	bus = asr;
+				3'd2:	bus = asr;
+				3'd3:	bus = asr;
+				default:	bus = zero;
+				endcase
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = |asr[WID-1:0];
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+			else
+				bus = zero;
+		Qupls5_pkg::FN_LSR:
+			if (SUPPORT_SHIFT) begin
+				case(ir.op3)
+				3'd0: bus = shr & c;
+				3'd1:	bus = shr | c;
+				3'd2:	bus = shr ^ c;
+				3'd3:	bus = shr + c;
+				default:	bus = zero;
+				endcase
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = |shr[WID-1:0];
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+			else
+				bus = zero;
+		Qupls5_pkg::FN_ROL:
+			if (SUPPORT_SHIFT) begin
+				case(ir.op3)
+				3'd0: bus = (shl | shl[WID*2-1:WID]) & c;
+				3'd1:	bus = (shl | shl[WID*2-1:WID]) | c;
+				3'd2:	bus = (shl | shl[WID*2-1:WID]) ^ c;
+				3'd3:	bus = (shl | shl[WID*2-1:WID]) + c;
+				default:	bus = zero;
+				endcase
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = |shl[WID*2-1:WID];
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+			else
+				bus = zero;
+		Qupls5_pkg::FN_ROR:
+			if (SUPPORT_SHIFT) begin
+				case(ir.op3)
+				3'd0: bus = (shr | shr[WID*2-1:WID]) & c;
+				3'd1:	bus = (shr | shr[WID*2-1:WID]) | c;
+				3'd2:	bus = (shr | shr[WID*2-1:WID]) ^ c;
+				3'd3:	bus = (shr | shr[WID*2-1:WID]) + c;
+				default:	bus = zero;
+				endcase
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = |shr[WID-1:0];
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+			else
+				bus = zero;
+		Qupls5_pkg::FN_CLSR:
+			if (SUPPORT_SHIFT) begin
+				case(ir.op3)
+				3'd0: bus = b==c ? a << 2'd1 : a;
+				3'd1:	bus = b!=c ? a << 2'd1 : a;
+				3'd2:	bus = $signed(b) < $signed(c) ? a << 2'd1 : a;
+				3'd3:	bus = $signed(b) <= $signed(c) ? a << 2'd1 : a;
+				3'd4:	bus = $signed(b) > $signed(c) ? a << 2'd1 : a;
+				3'd5:	bus = $signed(b) >= $signed(c) ? a << 2'd1 : a;
+				default:	bus = zero;
+				endcase
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+			else
+				bus = zero;
+		Qupls5_pkg::FN_SET,
+		Qupls5_pkg::FN_COM,
+		Qupls5_pkg::FN_EXT,
+		Qupls5_pkg::FN_EXTZ,
+		Qupls5_pkg::FN_DEP:
+			if (SUPPORT_BFLD) begin
+				bus = bfldo;
+				o_flags = {1'b0,bfldo[WID+6:WID]};
+				did_op = TRUE;
+			end
+		Qupls5_pkg::FN_VEX:
+			if (SUPPORT_VECTOR) begin
+				dt = ir.op3;
+				if (b[5:0] >= base_eleno && b[5:0] < base_eleno + ele_per_reg)
+					bus = bfldo;
+				else
+					bus = t;
+				did_op = TRUE;
+			end
+		Qupls5_pkg::FN_VEINS:
+			if (SUPPORT_VECTOR) begin
+				dt = ir.op3;
+				if (c[5:0] >= base_eleno && c[5:0] < base_eleno + ele_per_reg)
+					bus = bfldo;
+				else
+					bus = t;
+				did_op = TRUE;
+			end
+		Qupls5_pkg::FN_VGNDX:
+			if (SUPPORT_VECTOR) begin
+				dt = ir.op3;
+				y = 7'd0;
+				elesz = (velsz >> {3'd4,3'b0}) & 8'hff;
+				case(elesz)
+				8'd8:	base_eleno = {chunk,3'd0};
+				8'd16:base_eleno = {chunk,2'd0};
+				8'd32:base_eleno = {chunk,1'd0};
+				8'd64:base_eleno = chunk;
+				endcase
+				for (n1 = 0; n1 < WID; n1 = n1 + 1) begin
+					y = y + c[n1];
+					// compute value to insert
+					tmp = a + {40'd0,b[25:0]} * y;// & ((65'd2 << ((n1-base_eleno) * elesz) - 64'd1));
+					if (n1 >= base_eleno && n1 < base_eleno + ele_per_reg)
+						bus = bus | (tmp << ((n1-base_eleno) * elesz));
+					else
+						bus = t;
+				end
+				did_op = TRUE;
+			end
+		Qupls5_pkg::FN_MOVE:
+			begin
+				case(ir.op3)
+				3'd0:	begin bus = a; o_flags = a_flags; did_op = TRUE; end
+				3'd2: begin bus = a; o_flags[0] = 1'b0; o_flags[6:0] = b[6:0]; did_op = TRUE; end
+				3'd3:
+					begin
+						bus = {capa_flags,capa} >> {b[2:0],6'd0};
+						o_flags[0] = 1'b0;
+						o_flags[6:0] = capa_flags[6:0];
+						did_op = TRUE;
+					end
+				3'd4:	begin bus = a | ({64'd0,b_flags} << {b[2:0],3'd0}); o_flags[0] = 1'b0; o_flags[6:0] = a_flags[6:0]; did_op = TRUE; end
+				3'd5:	begin bus = a | ({64'd0,capa_flags} << {b[3:2],3'd0}); o_flags[0] = 1'b0; o_flags[6:0] = a_flags[6:0]; did_op = TRUE; end
+				3'd6:	begin bus = t; o_flags[0] = 1'b0; o_flags[6:0] = (a >> {b[2:0],3'd0}); did_op = TRUE; end
+				3'd7:	begin bus = t; o_flags[0] = 1'b0; o_flags[6:0] = (capa >> {b[4:0],3'd0}); did_op = TRUE; end
+				default:	bus = zero;
+				endcase
+			end
+		default:	bus = zero;
+		endcase
+
+	Qupls5_pkg::OP_FLTH,Qupls5_pkg::OP_FLTS,Qupls5_pkg::OP_FLTD,Qupls5_pkg::OP_FLTQ:
+		case(ir.func)
+		Qupls5_pkg::FLT_MIN:
+			begin
+				bus = fmin;
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+		Qupls5_pkg::FLT_MAX:
+			begin
+				bus = fmax;
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+		Qupls5_pkg::FLT_NEG:
+			begin
+				bus = (aNan ? a : {~a[WID-1],a[WID-2:0]});
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+		Qupls5_pkg::FLT_SEQ:
+			begin	
+				bus = ((aNan|bNan) ? 1'b0 : cmpo[0]);
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+		Qupls5_pkg::FLT_SNE:
+			begin	
+				bus = ((aNan|bNan) ? 1'b0 : cmpo[8]);
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+		Qupls5_pkg::FLT_SLT:
+			begin	
+				bus = ((aNan|bNan) ? 1'b0 : cmpo[1]);
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+		Qupls5_pkg::FLT_SGNJ:
+			begin	
+				bus = (aNan ? a : bNan ? b : {a[WID-1],b[WID-2:0]});
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+		default:	bus = zero;
+		endcase
+	
+	Qupls5_pkg::OP_FLTPH,Qupls5_pkg::OP_FLTPS,Qupls5_pkg::OP_FLTPD,Qupls5_pkg::OP_FLTPQ,
+	Qupls5_pkg::OP_FLTVVV,Qupls5_pkg::OP_FLTVVS:
+		case(ir.func)
+		Qupls5_pkg::FLT_MIN:
+			begin
+				bus = mask1[LANE] ? fmin : t;
+				did_op = TRUE;
+				if (mask1[LANE]) begin
+					o_flags.inx = FALSE;
+					o_flags.unf = FALSE;
+					o_flags.ovf = FALSE;
+					o_flags.dbz = FALSE;
+					o_flags.inv = FALSE;
+					o_flags.cry = FALSE;
+					o_flags.ptr = FALSE;
+					o_flags.cap = FALSE;
+				end
+				else
+					o_flags = t_flags;
+			end
+		Qupls5_pkg::FLT_MAX:
+			begin
+				bus = mask1[LANE] ? fmax : t;
+				did_op = TRUE;
+				if (mask1[LANE]) begin
+					o_flags.inx = FALSE;
+					o_flags.unf = FALSE;
+					o_flags.ovf = FALSE;
+					o_flags.dbz = FALSE;
+					o_flags.inv = FALSE;
+					o_flags.cry = FALSE;
+					o_flags.ptr = FALSE;
+					o_flags.cap = FALSE;
+				end
+				else
+					o_flags = t_flags;
+			end
+		Qupls5_pkg::FLT_NEG:
+			begin
+				bus = mask1[LANE] ? (aNan ? a : {~a[WID-1],a[WID-2:0]}) : t;
+				did_op = TRUE;
+				if (mask1[LANE]) begin
+					o_flags.inx = FALSE;
+					o_flags.unf = FALSE;
+					o_flags.ovf = FALSE;
+					o_flags.dbz = FALSE;
+					o_flags.inv = FALSE;
+					o_flags.cry = FALSE;
+					o_flags.ptr = FALSE;
+					o_flags.cap = FALSE;
+				end
+				else
+					o_flags = t_flags;
+			end
+		Qupls5_pkg::FLT_SEQ:
+			begin	
+				bus = t;
+				bus[base_eleno + LANE] = mask1[LANE] ? ((aNan|bNan) ? 1'b0 : cmpo[0]) : t[LANE];
+				did_op = TRUE;
+				if (mask1[LANE]) begin
+					o_flags.inx = FALSE;
+					o_flags.unf = FALSE;
+					o_flags.ovf = FALSE;
+					o_flags.dbz = FALSE;
+					o_flags.inv = FALSE;
+					o_flags.cry = FALSE;
+					o_flags.ptr = FALSE;
+					o_flags.cap = FALSE;
+				end
+				else
+					o_flags = t_flags;
+			end
+		Qupls5_pkg::FLT_SNE:
+			begin	
+				bus = t;
+				bus[base_eleno + LANE] = mask1[LANE] ? ((aNan|bNan) ? 1'b0 : cmpo[8]) : t[LANE];
+				did_op = TRUE;
+				if (mask1[LANE]) begin
+					o_flags.inx = FALSE;
+					o_flags.unf = FALSE;
+					o_flags.ovf = FALSE;
+					o_flags.dbz = FALSE;
+					o_flags.inv = FALSE;
+					o_flags.cry = FALSE;
+					o_flags.ptr = FALSE;
+					o_flags.cap = FALSE;
+				end
+				else
+					o_flags = t_flags;
+			end
+		Qupls5_pkg::FLT_SLT:
+			begin	
+				bus = t;
+				bus[base_eleno + LANE] = mask1[LANE] ? ((aNan|bNan) ? 1'b0 : cmpo[1]) : t[LANE];
+				did_op = TRUE;
+				if (mask1[LANE]) begin
+					o_flags.inx = FALSE;
+					o_flags.unf = FALSE;
+					o_flags.ovf = FALSE;
+					o_flags.dbz = FALSE;
+					o_flags.inv = FALSE;
+					o_flags.cry = FALSE;
+					o_flags.ptr = FALSE;
+					o_flags.cap = FALSE;
+				end
+				else
+					o_flags = t_flags;
+			end
+		Qupls5_pkg::FLT_SGNJ:
+			begin	
+				bus = mask1[LANE] ? (aNan ? a : bNan ? b : {a[WID-1],b[WID-2:0]}) : t;
+				did_op = TRUE;
+				if (mask1[LANE]) begin
+					o_flags.inx = FALSE;
+					o_flags.unf = FALSE;
+					o_flags.ovf = FALSE;
+					o_flags.dbz = FALSE;
+					o_flags.inv = FALSE;
+					o_flags.cry = FALSE;
+					o_flags.ptr = FALSE;
+					o_flags.cap = FALSE;
+				end
+				else
+					o_flags = t_flags;
+			end
+		default:	bus = zero;
+		endcase
+
+	/*
+	Qupls5_pkg::OP_FLTH,Qupls5_pkg::OP_FLTS,Qupls5_pkg::OP_FLTD,Qupls5_pkg::OP_FLTQ:
+		case(ir.op4)
+		FOP4_G8:	
+			case (ir.op3)
+			FG8_FSGNJ:	bus = {b[WID-1],a[WID-2:0]};
+			FG8_FSGNJN:	bus = {~b[WID-1],a[WID-2:0]};
+			FG8_FSGNJX:	bus = {b[WID-1]^a[WID-1],a[WID-2:0]};
+			default:	 bus = zero;
+			endcase
+		default:	bus = zero;
+		endcase
+	*/
+	Qupls5_pkg::OP_CHK:
+		begin
+			case(ir.Rd)
+			4'd0:	if (!(a >= b && a < c)) exc = Qupls5_pkg::FLT_CHK;
+			4'd1: if (!(a >= b && a <= c)) exc = Qupls5_pkg::FLT_CHK;
+			4'd2: if (!(a > b && a < c)) exc = Qupls5_pkg::FLT_CHK;
+			4'd3: if (!(a > b && a <= c)) exc = Qupls5_pkg::FLT_CHK;
+			4'd4:	if (a >= b && a < c) exc = Qupls5_pkg::FLT_CHK;
+			4'd5: if (a >= b && a <= c) exc = Qupls5_pkg::FLT_CHK;
+			4'd6: if (a > b && a < c) exc = Qupls5_pkg::FLT_CHK;
+			4'd7: if (a > b && a <= c) exc = Qupls5_pkg::FLT_CHK;
+			4'd8:	if (!(a >= cpl)) exc = Qupls5_pkg::FLT_CHK;
+			4'd9:	if (!(a <= cpl)) exc = Qupls5_pkg::FLT_CHK;
+			4'd10:	if (!(a==canary)) exc = Qupls5_pkg::FLT_CHK;
+			default:	exc = Qupls5_pkg::FLT_UNIMP;
+			endcase
+			did_op = TRUE;
+		end
+	Qupls5_pkg::OP_CSR:	
+		if (SUPPORT_CSR) begin
+			bus = csr;
+			did_op = TRUE;
+			o_flags.inx = FALSE;
+			o_flags.unf = FALSE;
+			o_flags.ovf = FALSE;
+			o_flags.dbz = FALSE;
+			o_flags.inv = FALSE;
+			o_flags.cry = FALSE;
+			o_flags.ptr = FALSE;
+			o_flags.cap = FALSE;
+		end
+		else
+			bus = zero;
+
+	Qupls5_pkg::OP_ADDI:
+		begin
+			bus = a + i;
+			did_op = TRUE;
+			o_flags.inx = FALSE;
+			o_flags.unf = FALSE;
+			o_flags.ovf = fnAddOverflow(bus[WID-1],a[WID-1],i[WID-1]);
+			o_flags.dbz = FALSE;
+			o_flags.inv = FALSE;
+			o_flags.cry = bus[WID];
+			o_flags.ptr = a_flags.ptr;
+			o_flags.cap = FALSE;
+		end
+	Qupls5_pkg::OP_ANDI:
+		begin
+			bus = a & i;
+			did_op = TRUE;
+			o_flags.inx = FALSE;
+			o_flags.unf = FALSE;
+			o_flags.ovf = FALSE;
+			o_flags.dbz = FALSE;
+			o_flags.inv = FALSE;
+			o_flags.cry = FALSE;
+			o_flags.ptr = FALSE;
+			o_flags.cap = FALSE;
+		end
+	Qupls5_pkg::OP_ORI:	
+		begin
+			bus = a | i;
+			did_op = TRUE;
+			o_flags.inx = FALSE;
+			o_flags.unf = FALSE;
+			o_flags.ovf = FALSE;
+			o_flags.dbz = FALSE;
+			o_flags.inv = FALSE;
+			o_flags.cry = FALSE;
+			o_flags.ptr = FALSE;
+			o_flags.cap = FALSE;
+		end
+	Qupls5_pkg::OP_XORI:
+		begin
+			bus = a ^ i;
+			did_op = TRUE;
+			o_flags.inx = FALSE;
+			o_flags.unf = FALSE;
+			o_flags.ovf = FALSE;
+			o_flags.dbz = FALSE;
+			o_flags.inv = FALSE;
+			o_flags.cry = FALSE;
+			o_flags.ptr = FALSE;
+			o_flags.cap = FALSE;
+		end
+	Qupls5_pkg::OP_SUBFI:
+		begin
+			bus = i - a;
+			did_op = TRUE;
+			o_flags.inx = FALSE;
+			o_flags.unf = FALSE;
+			o_flags.ovf = fnSubOverflow(bus[WID-1],i[WID-1],a[WID-1]);
+			o_flags.dbz = FALSE;
+			o_flags.inv = FALSE;
+			o_flags.cry = bus[WID];
+			o_flags.ptr = a_flags.ptr;
+			o_flags.cap = FALSE;
+		end
+	Qupls5_pkg::OP_CMPI:
+		begin
+			bus = cmpo;
+			did_op = TRUE;
+			o_flags.inx = FALSE;
+			o_flags.unf = FALSE;
+			o_flags.ovf = FALSE;
+			o_flags.dbz = FALSE;
+			o_flags.inv = FALSE;
+			o_flags.cry = FALSE;
+			o_flags.ptr = FALSE;
+			o_flags.cap = FALSE;
+		end
+	Qupls5_pkg::OP_CMPUI:
+		begin
+			bus = cmpo;
+			did_op = TRUE;
+			o_flags.inx = FALSE;
+			o_flags.unf = FALSE;
+			o_flags.ovf = FALSE;
+			o_flags.dbz = FALSE;
+			o_flags.inv = FALSE;
+			o_flags.cry = FALSE;
+			o_flags.ptr = FALSE;
+			o_flags.cap = FALSE;
+		end
+/*	
+	Qupls5_pkg::OP_MOV:
+		if (ir[31]) begin
+			case(ir.move.op3)
+			3'd0:	// MOVE / XCHG
+				begin
+					bus = a;	// MOVE
+				end
+			3'd1:	// XCHGMD / MOVEMD
+				begin	
+					bus = a;
+				end
+			3'd2:	bus = zero;		// MOVSX
+			3'd3:	bus = zero;		// MOVZX
+			3'd4:	bus = ~|a ? i : t;	// CMOVZ
+			3'd5:	bus =  |a ? i : t;	// CMOVNZ
+			3'd6:	bus = zero;		// BMAP
+			default:
+				begin
+					bus = zero;
+				end
+			endcase
+		end
+		else
+			case(ir.move.op3)
+			3'd4:	bus = ~|a ? b : t;	// CMOVZ
+			3'd5:	bus =  |a ? b : t;	// CMOVNZ
+			default:
+				begin
+					bus = zero;
+				end
+			endcase	
+*/
+	Qupls5_pkg::OP_LOADA:
+		begin
+			if (Ra==7'd0)
+				bus = i + (b * {~|ir[47:44],ir[47:44]});
+			else
+				bus = capa.base+capa.offset + i + (b * {~|ir[47:44],ir[47:44]});
+			did_op = TRUE;
+			o_flags.inx = FALSE;
+			o_flags.unf = FALSE;
+			o_flags.ovf = FALSE;
+			o_flags.dbz = FALSE;
+			o_flags.inv = FALSE;
+			o_flags.cry = FALSE;
+			o_flags.ptr = FALSE;
+			o_flags.cap = FALSE;
+		end
+/*
+	Qupls5_pkg::OP_LOADI:
+		begin
+			case(Ra)
+			6'd0:	bus = i;
+			6'd1:	bus = i + pc.pc;
+			default:	bus = zero;
+			endcase
+			did_op = TRUE;
+			o_flags.inx = FALSE;
+			o_flags.unf = FALSE;
+			o_flags.ovf = FALSE;
+			o_flags.dbz = FALSE;
+			o_flags.inv = FALSE;
+			o_flags.cry = FALSE;
+			o_flags.ptr = FALSE;
+			o_flags.cap = FALSE;
+		end
+*/
+	Qupls5_pkg::OP_NOP:
+		begin
+			bus = t;
+			o_flags = t_flags;
+			did_op = TRUE;
+		end	// in case of copy target
+	// Branches
+	Qupls5_pkg::OP_BCC,Qupls5_pkg::OP_BCCU,Qupls5_pkg::OP_FBCC,Qupls5_pkg::OP_MBCC:
+		if (SUPPORT_BRANCH) begin
+			if (ir.inc) begin
+				if (ibranch)
+					bus = a + 2'd1;
+				else
+					bus = a - 2'd1;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+			else begin
+				bus = t;
+				o_flags = t_flags;
+			end
+			did_op = TRUE;
+		end
+		else
+			bus = zero;
+	Qupls5_pkg::OP_GRAPHICS:
+		case(ir.func)
+		GR_BLEND:
+			if (SUPPORT_GRAPHICS) begin
+				bus = blendo;
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end
+		GR_RGBCVT:
+			if (SUPPORT_GRAPHICS) begin
+				if (WID>=64)
+				case(b[6:0])
+				// To 16.16.16.16
+				7'd0:	bus = {a[31:24],8'h00,a[23:16],8'h00,a[15:8],8'h00,a[7:0],8'h00};	// from 8.8.8.8
+				7'd1:	bus = {16'h00,a[23:16],8'h00,a[15:8],8'h00,a[7:0],8'h00};					// from 8.8.8
+				7'd2:	bus = {16'h00,a[15:11],11'h00,a[10:5],10'h00,a[4:0],11'h00};			// from 5.6.5
+				7'd3:	bus = {a[15],15'h00,a[14:10],11'h00,a[9:5],11'h0,a[4:0],11'h00};	// from 1.5.5.5
+				7'd4:	bus = {16'h00,a[14:10],11'h00,a[9:5],11'h0,a[4:0],11'h00};				// from 5.5.5
+				7'd5:	bus = {16'h0,a[7:5],13'h0,a[4:2],13'h0,a[1:0],14'h0};							// from 3.3.2
+				7'd6:	bus = {a[15:11],12'h00,a[11:8],12'h00,a[7:4],12'h0,a[3:0],12'h00};// from 4,4.4.4
+				7'd7:	bus = {16'h00,a[11:8],12'h00,a[7:4],12'h0,a[3:0],12'h00};					// from 4.4.4
+				// From 16.16.16.16
+				7'd64:	bus = {a[63:56],a[47:40],a[31:24],a[15:8]};	// to 8.8.8.8
+				7'd65:	bus = {8'h00,a[47:40],a[31:24],a[15:8]};		// to 8.8.8
+				7'd66:	bus = {a[47:43],a[31:26],a[15:11]};					// to 5.6.5
+				7'd67:	bus = {a[63],a[47:43],a[31:25],a[15:11]};		// to 1.5.5.5
+				7'd68:	bus = {1'b0,a[47:43],a[31:25],a[15:11]};		// to 5.5.5
+				7'd69:	bus = {a[47:45],a[31:29],a[15:14]};					// to 3.2.2
+				default:	bus = a;
+				endcase					
+				did_op = TRUE;
+				o_flags.inx = FALSE;
+				o_flags.unf = FALSE;
+				o_flags.ovf = FALSE;
+				o_flags.dbz = FALSE;
+				o_flags.inv = FALSE;
+				o_flags.cry = FALSE;
+				o_flags.ptr = FALSE;
+				o_flags.cap = FALSE;
+			end			
+		endcase
+	OP_CAP:
+		if (SUPPORT_CAPABILITIES)
+			case(ir.func)
+			CAP_GETFLAGS:
+				begin
+					bus = capa_flags;
+					did_op = TRUE;
+				end
+			CAP_GETBASE:
+				begin
+					bus = capa.base;
+					did_op = TRUE;
+				end
+			CAP_GETLENGTH:
+				begin
+					if (capa.top[64])
+						o_flags.ovf = TRUE;
+					bus = capa.top - capa.base;
+					did_op = TRUE;
+				end
+			CAP_GETOFFSET:
+				begin
+					bus = capa.offset;
+					did_op = TRUE;
+				end
+			CAP_GETADDR:
+				begin
+					bus = capa.offset + capa.base;
+					did_op = TRUE;
+				end
+			CAP_GETPERMS:
+				begin
+					bus = capa.perms;
+					did_op = TRUE;
+				end
+			CAP_GETSEALED:
+				begin
+					bus = fnUcIsSealed(capa);
+					did_op = TRUE;
+				end
+			CAP_GETTAG:
+				begin
+					bus = capa_flags.cap;
+					did_op = TRUE;
+				end
+			CAP_GETTOP:
+				begin
+					o_flags.ovf <= capa.top[64];
+					bus = capa.top;
+					did_op = TRUE;
+				end
+			CAP_GETTYPE:
+				begin
+					bus = capa.otype;
+					did_op = TRUE;
+				end
+			CAP_ALGNMASK:
+				begin
+					bus = fnUcAlignMask(capa);
+					did_op = TRUE;
+				end
+			default:	bus = {(WID/16){16'hDEAD}};
+			endcase
+		else
+			bus = {(WID/16){16'hDEAD}};
+	default:	bus = {(WID/16){16'hDEAD}};
+	endcase
+end
+
+always_ff @(posedge clk)
+	case(WID)
+	8: o = bus;
+	16:	o = bus;
+	32:	o = bus_nan ? bus | (fnBitRev({64'd0,pc.cap.offset}) >> 6'd48) : bus;
+	64:	o = bus_nan ? bus | (fnBitRev({64'd0,pc.cap.offset}) >> 6'd20) : bus;
+	128:	o = bus_nan ? bus | fnBitRev({64'd0,pc.cap.offset}) : bus;
+	default:	o = zero;
+	endcase
+
+always_ff @(posedge clk)
+	if (!did_op)
+		exc_o = Qupls5_pkg::FLT_UNIMP;
+	else
+		exc_o = exc;
+
+endmodule
