@@ -134,24 +134,24 @@ begin
 			end
 		4:
 			begin
-				qo <= {sgn|sgnus ? {2{a[WID-1]} : 2'b0,a[WID-1:2]};
+				qo <= {sgn|sgnus ? {2{a[WID-1]}} : 2'b0,a[WID-1:2]};
 				ro <= a[1:0];
 				state <= DONE;
 			end
 		8:
 			begin
-				qo <= {sgn|sgnus ? {3{a[WID-1]} : 3'b0,a[WID-1:3]};
+				qo <= {sgn|sgnus ? {3{a[WID-1]}} : 3'b0,a[WID-1:3]};
 				qo <= a[WID-1:3];
 				ro <= a[2:0];
 				state <= DONE;
 			end
 		16:
 			begin
-				qo <= {sgn|sgnus ? {4{a[WID-1]} : 4'b0,a[WID-1:4]};
+				qo <= {sgn|sgnus ? {4{a[WID-1]}} : 4'b0,a[WID-1:4]};
 				ro <= a[3:0];
 				state <= DONE;
 			end
-		default:
+		default:  ;
 		endcase
 	end
 

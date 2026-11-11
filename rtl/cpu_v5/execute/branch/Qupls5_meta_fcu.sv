@@ -46,7 +46,7 @@ input rst;
 input clk;
 input Qupls5_pkg::reservation_station_entry_t rse_i;
 output Qupls5_pkg::reservation_station_entry_t rse_o;
-input status_reg_t sr;
+input Qupls5_pkg::status_reg_t sr;
 input [5:0] ic_irq;
 input [7:0] irq_sn;
 output takb;
@@ -110,27 +110,27 @@ else begin
 		if (SUPPORT_CAPABILITIES && rse_i.cinvoke) begin
 			if (~c_flags.cap|~d_flags.cap) begin
 				rse_o.excv <= TRUE;
-				rse_o.exc <= FLT_CTAG;
+				rse_o.exc <= Qupls5_pkg::FLT_CTAG;
 			end
 			else if (fnIsReserved(ch) || fnIsReserved(dh)) begin
 				rse_o.excv <= TRUE;
-				rse_o.exc <= FLT_CSEAL;
+				rse_o.exc <= Qupls5_pkg::FLT_CSEAL;
 			end
 			else if (ch.otype != dh.otype) begin
 				rse_o.excv <= TRUE;
-				rse_o.exc <= FLT_CTYPE;
+				rse_o.exc <= Qupls5_pkg::FLT_CTYPE;
 			end
 			else if (~ch.perms[8]|~dh.perms[8]) begin
 				rse_o.excv <= TRUE;
-				rse_o.exc <= FLT_CPINVOKE;
+				rse_o.exc <= Qupls5_pkg::FLT_CPINVOKE;
 			end
 			else if (~ch.perms[1]|dh.perms[1]) begin
 				rse_o.excv <= TRUE;
-				rse_o.exc <= FLT_CPEXEC;
+				rse_o.exc <= Qupls5_pkg::FLT_CPEXEC;
 			end
 			else if (a[0]) begin
 				rse_o.excv <= TRUE;
-				rse_o.exc <= FLT_CALGN;
+				rse_o.exc <= Qupls5_pkg::FLT_CALGN;
 			end 
 		end
 	end

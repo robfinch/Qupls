@@ -43,10 +43,10 @@ module Qupls5_expipe23(rst, clk, clk3x, idle, stomp, rse_i, rse_o, rm,
 	tlb_v, adr, adrv, agen_rse);
 parameter WID=Qupls5_pkg::SUPPORT_QUAD_PRECISION|Qupls5_pkg::SUPPORT_CAPABILITIES ? 128 : 64;
 parameter PIPE = 3'd2;
-parameter SUPPORT_IMUL = (PIPE==3'd2 && SUPPORT_IMUL2) || (PIPE==3'd3 && SUPPORT_IMUL3);
-parameter SUPPORT_NNA = (PIPE==3'd2 && SUPPORT_NNA2) || (PIPE==3'd3 && SUPPORT_NNA3);
-parameter SUPPORT_FRCPA = (PIPE==3'd2 && SUPPORT_FRCPA2) || (PIPE==3'd3 && SUPPORT_FRCPA3);
-parameter SUPPORT_FMA = (PIPE==3'd2 && SUPPORT_FMA2) || (PIPE==3'd3 && SUPPORT_FMA3);
+parameter SUPPORT_IMUL = (PIPE==3'd2 && Qupls5_pkg::SUPPORT_IMUL2) || (PIPE==3'd3 && Qupls5_pkg::SUPPORT_IMUL3);
+parameter SUPPORT_NNA = (PIPE==3'd2 && Qupls5_pkg::SUPPORT_NNA2) || (PIPE==3'd3 && Qupls5_pkg::SUPPORT_NNA3);
+parameter SUPPORT_FRCPA = (PIPE==3'd2 && Qupls5_pkg::SUPPORT_FRCPA2) || (PIPE==3'd3 && Qupls5_pkg::SUPPORT_FRCPA3);
+parameter SUPPORT_FMA = (PIPE==3'd2 && Qupls5_pkg::SUPPORT_FMA2) || (PIPE==3'd3 && Qupls5_pkg::SUPPORT_FMA3);
 input rst;
 input clk;
 input clk3x;
@@ -306,7 +306,7 @@ end
 endgenerate
 
 generate begin : gIMul
-if ((Qupls5_pkg::SUPPORT_IMUL2 && PIPE==3'd2) || (SUPPORT_IMUL3 && PIPE==3'd3))
+if ((Qupls5_pkg::SUPPORT_IMUL2 && PIPE==3'd2) || (Qupls5_pkg::SUPPORT_IMUL3 && PIPE==3'd3))
 	Qupls5_meta_imul uimul0
 	(
 		.rst(irst),
@@ -322,7 +322,7 @@ if ((Qupls5_pkg::SUPPORT_IMUL2 && PIPE==3'd2) || (SUPPORT_IMUL3 && PIPE==3'd3))
 		.mul_done()
 	);
 else begin
-	assign imul0_res2 = {$bits(reservation_station_entry_t){1'b0}};
+	assign imul0_res2 = {$bits(Qupls5_pkg::reservation_station_entry_t){1'b0}};
 	assign imul0_we = FALSE;
 	assign imul0_res = value_zero;
 end
@@ -346,7 +346,7 @@ begin
 		case(ir5.func)
 		Qupls5_pkg::FN_R1:
 			case(ir5.Rs2)
-			R1_NNA_TRIG,R1_NNA_STAT,R1_NNA_MFACT:
+			Qupls5_pkg::R1_NNA_TRIG,Qupls5_pkg::R1_NNA_STAT,Qupls5_pkg::R1_NNA_MFACT:
 				if (SUPPORT_NNA) begin
 					o1 = nna_od;
 				end
@@ -359,7 +359,7 @@ begin
 				end
 			endcase
 
-		FN_MUL,FN_MULU,FN_MULSU:
+		Qupls5_pkg::FN_MUL,Qupls5_pkg::FN_MULU,Qupls5_pkg::FN_MULSU:
 			if (SUPPORT_IMUL) begin
 				o1 = imul_res;
 			end
@@ -367,8 +367,8 @@ begin
 				o1 = value_zero;
 			end
 
-		FN_NNA_MTWT,FN_NNA_MTIN,FN_NNA_MTBIAS,FN_NNA_MTFB,FN_NNA_MTMC,
-		FN_NNA_MTBC:
+		Qupls5_pkg::FN_NNA_MTWT,Qupls5_pkg::FN_NNA_MTIN,Qupls5_pkg::FN_NNA_MTBIAS,Qupls5_pkg::FN_NNA_MTFB,Qupls5_pkg::FN_NNA_MTMC,
+		Qupls5_pkg::FN_NNA_MTBC:
 			if (SUPPORT_NNA) begin
 				o1 = nna_od;
 			end
@@ -470,11 +470,11 @@ always_comb
 // Detect the first exception from the ALU.
 always_comb
 begin
-	exc = FLT_NONE;
+	exc = Qupls5_pkg::FLT_NONE;
 	exc_mask = {WID/8{1'b1}};
 	for (n = WID-8; n >= 0; n = n - 8)
-		if (cause_code_t'(alu_exc >> n) != FLT_NONE) begin
-			exc = cause_code_t'(alu_exc >> n);
+		if (Qupls5_pkg::cause_code_t'(alu_exc >> n) != Qupls5_pkg::FLT_NONE) begin
+			exc = Qupls5_pkg::cause_code_t'(alu_exc >> n);
 			exc_mask = ~((32'd2 << (n >> 3)) - 32'd1);
 		end
 end

@@ -84,7 +84,7 @@ begin
 	dispatch_slot_v = 1'b0;
 	rse = {$bits(Qupls5_pkg::cap_reservation_station_entry_t){1'b0}};
 
-	rse[Qupls5_pkg::ROB_ENTRIES] = {$bits(rob_entry_t){1'b0}};
+	rse[Qupls5_pkg::ROB_ENTRIES] = {$bits(Qupls5_pkg::rob_entry_t){1'b0}};
 	cpy.rse = Qupls5_pkg::ROB_ENTRIES;
 	cpy.rob = rob_ndx_t'(0);
 	cpy.fu = 4'd0;

@@ -2622,12 +2622,43 @@ endfunction
 
 function [31:0] fnSel;
 input micro_op_t ir;
-input [7:0] mask;
+input [63:0] mask;
+integer n;
+reg [63:0] bytemask;
 begin
+	// The mask is in terms of lanes, it needs to be translated to a byte mask.
+	if (mask[n])
+		case(ir.prc)
+		2'd0:	bytemask = mask;	// already bytes
+		2'd1:
+			for (n = 0; n < 32; n = n + 1) begin
+				bytemask[n*2+0] = mask[n];
+				bytemask[n*2+1] = mask[n];
+			end
+		2'd2:
+			for (n = 0; n < 16; n = n + 1) begin
+				bytemask[n*4+0] = mask[n];
+				bytemask[n*4+1] = mask[n];
+				bytemask[n*4+2] = mask[n];
+				bytemask[n*4+3] = mask[n];
+			end
+		2'd3:
+			for (n = 0; n < 8; n = n + 1) begin
+				bytemask[n*8+0] = mask[n];
+				bytemask[n*8+1] = mask[n];
+				bytemask[n*8+2] = mask[n];
+				bytemask[n*8+3] = mask[n];
+				bytemask[n*8+4] = mask[n];
+				bytemask[n*8+5] = mask[n];
+				bytemask[n*8+6] = mask[n];
+				bytemask[n*8+7] = mask[n];
+			end
+		endcase
 	case(ir.opcode)
-	OP_LDV,OP_STV,
-	OP_LDVN,OP_STVN:
-		fnSel = {24'd0,ir.ble[7:0] & mask};
+	OP_LDV,OP_STV:
+	// ir.byteno contains the starting byte number within the vector
+		fnSel = {24'd0,8'(bytemask >> ir.byteno)};
+	// ir.byteno contains the number of bytes (1 to 8) of the octa to load or store
 	default:	fnSel = (32'd2 << ir.byteno) - 32'd1;
 	endcase
 end
@@ -2637,6 +2668,7 @@ function fnIsLoad;
 input micro_op_t ir;
 begin
 	case(ir.opcode)
+	OP_LDV,
 	OP_LDB,OP_LDW,OP_LDT,OP_LOAD,
 	OP_LDBZ,OP_LDWZ,OP_LDTZ,7'd71,
 	OP_CLOAD:
@@ -2651,6 +2683,7 @@ function fnIsStore;
 input micro_op_t ir;
 begin
 	case(ir.opcode)
+	OP_STV,
 	OP_STB,OP_STW,OP_STT,OP_STORE,
 	OP_CSTORE:
 		fnIsStore = 1'b1;

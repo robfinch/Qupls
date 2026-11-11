@@ -39,7 +39,7 @@ import const_pkg::*;
 import cpu_types_pkg::*;
 import Qupls5_pkg::*;
 
-`define SUPPORT_RAT	1
+//`define SUPPORT_RAT	1
 
 module Qupls5_pipeline_ren(
 	rst, clk, clk5x, ph4, en, nq, restore,
@@ -350,7 +350,7 @@ urat1
 
 always_ff @(posedge clk)
 if (rst) begin
-	pg_ren <= {$bits(pipeline_group_reg_t){1'b0}};
+	pg_ren <= {$bits(Qupls5_pkg::pipeline_group_reg_t){1'b0}};
 	pg_ren.hdr <= {$bits(Qupls5_pkg::pipeline_group_hdr_t){1'b0}};
 	foreach (pg_ren.pr[n7]) begin
 		pg_ren.pr[n7] <= {$bits(Qupls5_pkg::rob_entry_t){1'b0}};

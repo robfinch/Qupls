@@ -37,7 +37,7 @@
 // ============================================================================
 
 import const_pkg::*;
-import capability_t::*;
+import capability_pkg::*;
 import Qupls5_pkg::*;
 
 module Qupls5_expipe6(rst, clk, idle, stomp, rse_i, rse_o,
@@ -61,6 +61,7 @@ output Qupls5_pkg::cause_code_t exc;
 output Qupls5_pkg::reservation_station_entry_t fcu_rse;
 output takb;
 output cpu_types_pkg::value_t fcu_adr;
+output done;
 
 integer n;
 Qupls5_pkg::reservation_station_entry_t rse1,rse2;
@@ -70,6 +71,7 @@ uc64_capability_t a;
 uc64_capability_t b;
 uc64_capability_t c;
 uc64_capability_t t;
+uc64_capability_t capu_o;
 cpu_types_pkg::value_t gpra, gprb;
 aregno_t aRd_i;
 reg [1:0] stomp_con;	// stomp conveyor
@@ -113,7 +115,7 @@ always_ff @(posedge clk)
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 generate begin : gFCU
-	if (PIPE==3'd1 ? SUPPORT_BRANCH1 : SUPPORT_BRANCH0)
+	if (PIPE==3'd1 ? Qupls5_pkg::SUPPORT_BRANCH1 : Qupls5_pkg::SUPPORT_BRANCH0)
 Qupls5_meta_fcu ufcu1
 (
 	.rst(rst),

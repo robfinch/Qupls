@@ -39,13 +39,13 @@
 import Qupls5_pkg::*;
 
 module Qupls5_lsq_queue_room(lsq, head, tail, room);
-input lsq_entry_t [1:0] lsq [0:Qupls5_pkg::LSQ_ENTRIES-1];
-input lsq_ndx_t head;
-input lsq_ndx_t tail;
+input Qupls5_pkg::lsq_entry_t [1:0] lsq [0:Qupls5_pkg::LSQ_ENTRIES-1];
+input Qupls5_pkg::lsq_ndx_t head;
+input Qupls5_pkg::lsq_ndx_t tail;
 output reg [3:0] room;
 
 integer n;
-lsq_ndx_t t;
+Qupls5_pkg::lsq_ndx_t t;
 reg [3:0] enqueue_room;
 
 always_comb

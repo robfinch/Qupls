@@ -44,9 +44,9 @@ module Qupls5_expipe45(rst, clk, clk3x, idle, stomp, rse_i, rse_o, rm, ddc,
 	mem_rse_i, mem_done_i, mem_res_i, mem_flags_i);
 parameter WID=Qupls5_pkg::SUPPORT_QUAD_PRECISION|Qupls5_pkg::SUPPORT_CAPABILITIES ? 128 : 64;
 parameter PIPE = 3'd4;
-parameter SUPPORT_ISQRT = (PIPE==3'd4 && SUPPORT_ISQRT4) || (PIPE==3'd5 && SUPPORT_ISQRT5);
-parameter SUPPORT_FMA = (PIPE==3'd4 && SUPPORT_FMA4) || (PIPE==3'd5 && SUPPORT_FMA5);
-parameter SUPPORT_IDIV = (PIPE==3'd4 && SUPPORT_IDIV4) || (PIPE==3'd5 && SUPPORT_IDIV5);
+parameter SUPPORT_ISQRT = (PIPE==3'd4 && Qupls5_pkg::SUPPORT_ISQRT4) || (PIPE==3'd5 && Qupls5_pkg::SUPPORT_ISQRT5);
+parameter SUPPORT_FMA = (PIPE==3'd4 && Qupls5_pkg::SUPPORT_FMA4) || (PIPE==3'd5 && Qupls5_pkg::SUPPORT_FMA5);
+parameter SUPPORT_IDIV = (PIPE==3'd4 && Qupls5_pkg::SUPPORT_IDIV4) || (PIPE==3'd5 && Qupls5_pkg::SUPPORT_IDIV5);
 input rst;
 input clk;
 input clk3x;
@@ -100,7 +100,6 @@ wire idiv_done, tex_done1;
 reg tex_done;
 
 reg excv = INV;
-Qupls5_pkg::cause_code_t exc;
 cpu_types_pkg::address_t as, bs, bsv;
 cpu_types_pkg::address_t res1;
 reg [63:0] base;
@@ -497,7 +496,7 @@ begin
 			end
 		Qupls5_pkg::FN_R1:
 			case(ir5.Rs2)
-			R1_SQRT:
+			Qupls5_pkg::R1_SQRT:
 				begin
 					o1 = isqrt_o;
 					done64 = isqrt_done;
@@ -562,7 +561,7 @@ begin
 	Qupls5_pkg::OP_GRAPHICS:
 		if (SUPPORT_GRAPHICS) begin
 			case(ir5.func)
-			GR_TEX0,GR_TEX1:
+			Qupls5_pkg::GR_TEX0,Qupls5_pkg::GR_TEX1:
 				begin
 					o1 = tex_o;
 					done64 = tex_done;
@@ -629,11 +628,11 @@ always_comb
 // Detect the first exception from the ALU.
 always_comb
 begin
-	exc = FLT_NONE;
+	exc = Qupls5_pkg::FLT_NONE;
 	exc_mask = {WID/8{1'b1}};
 	for (n = WID-8; n >= 0; n = n - 8)
-		if (cause_code_t'(exc64 >> n) != FLT_NONE) begin
-			exc = cause_code_t'(exc64 >> n);
+		if (Qupls5_pkg::cause_code_t'(exc64 >> n) != Qupls5_pkg::FLT_NONE) begin
+			exc = Qupls5_pkg::cause_code_t'(exc64 >> n);
 			exc_mask = ~((32'd2 << (n >> 3)) - 32'd1);
 		end
 end

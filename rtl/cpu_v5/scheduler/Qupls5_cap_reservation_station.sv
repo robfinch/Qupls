@@ -461,7 +461,7 @@ always_ff @(posedge clk)
 	req_pRnv <= req_pRnuv;
 
 function fnSrc;
-input micro_op_t op;
+input Qupls5_pkg::micro_op_t op;
 input [2:0] n;
 begin
 	case(n)

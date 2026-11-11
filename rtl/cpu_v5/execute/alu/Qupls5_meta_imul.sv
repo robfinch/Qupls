@@ -55,7 +55,7 @@ output reg [WID-1:0] o;
 output reg [WID/8:0] we_o;
 output reg mul_done;
 
-Qupls5_pkg::reservation_station_entry_t rse1,rse2,rse3;
+Qupls5_pkg::reservation_station_entry_t rse1,rse2,rse3,rse4;
 Qupls5_pkg::memsz_t prc;
 Qupls5_pkg::micro_op_t ir;
 reg [WID-1:0] a;

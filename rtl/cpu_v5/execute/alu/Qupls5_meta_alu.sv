@@ -45,6 +45,7 @@ module Qupls5_meta_alu(rst, clk, rse_i, rse_o, lane, cptgt, z, stomp,
 	fcu_rse_o, sr, ic_irq, irq_sn, takb, adr);
 parameter PIPE = 3'd0;	
 parameter WID=$bits(cpu_types_pkg::value_t); 
+parameter SUPPORTED_PRECISIONS=Qupls5_pkg::SUPPORTED_PRECISIONS;
 input rst;
 input clk;
 input Qupls5_pkg::reservation_station_entry_t rse_i;
@@ -63,7 +64,7 @@ output checkpt_ndx_t cp_o;
 output reg [WID/8:0] we_o;			// extra bit for tag update
 output reg [WID-1:0] exc;
 output Qupls5_pkg::reservation_station_entry_t fcu_rse_o;
-input status_reg_t sr;
+input Qupls5_pkg::status_reg_t sr;
 input [5:0] ic_irq;
 input [7:0] irq_sn;
 output takb;
@@ -92,7 +93,7 @@ always_comb a = rse_i.arg[0].val;
 always_comb b = rse_i.arg[1].val;
 always_comb bi = rse_i.arg[1].val|rse_i.argI;
 always_comb c = rse_i.arg[2].val;
-always_comb t = rse_i.arg[NOPER-1].val;
+always_comb t = rse_i.arg[Qupls5_pkg::NOPER-1].val;
 always_comb i = rse_i.argI;
 always_comb pc = rse_i.pc;
 always_comb cp_i = rse_i.cndx;

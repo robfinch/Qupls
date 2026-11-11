@@ -61,7 +61,7 @@ integer col,row,rw,co;
 reg [3:0] q;
 
 Qupls5_pkg::rob_bitmask_t memready;		// mask of ready to go instructions.
-Qupls5_pkg::lsq_ndx_t [LSQ_ENTRIES-1:0] lsq_heads;
+Qupls5_pkg::lsq_ndx_t [Qupls5_pkg::LSQ_ENTRIES-1:0] lsq_heads;
 reg [7:0] issued;											// which data port instruction issued on.
 reg [7:0] stores;											// counts the number of stores issued.
 rob_ndx_t rn;
@@ -246,7 +246,7 @@ end
 
 always_ff @(posedge clk)
 if (rst) begin
-	memissue <= {$bits(rob_entry_t){1'b0}};
+	memissue <= {$bits(Qupls5_pkg::rob_entry_t){1'b0}};
 	
 	ndx0 <= 'd0;
 	ndx1 <= 'd0;

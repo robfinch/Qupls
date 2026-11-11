@@ -45,6 +45,8 @@ module Qupls5_expipe01(rst, clk, clk3x, idle, stomp, rse_i, rse_o, rm,
 	fcu_rse, sr, ic_irq, irq_sn, takb, fcu_adr);
 parameter WID=Qupls5_pkg::SUPPORT_QUAD_PRECISION|Qupls5_pkg::SUPPORT_CAPABILITIES ? 128 : 64;
 parameter PIPE = 3'd0;
+parameter SUPPORT_BRANCH0 = Qupls5_pkg::SUPPORT_BRANCH0;
+parameter SUPPORT_BRANCH1 = Qupls5_pkg::SUPPORT_BRANCH1;
 input rst;
 input clk;
 input clk3x;
@@ -69,7 +71,7 @@ output cpu_types_pkg::address_t adr;
 output reg adrv;
 output Qupls5_pkg::reservation_station_entry_t agen_rse;
 output Qupls5_pkg::reservation_station_entry_t fcu_rse;
-input status_reg_t sr;
+input Qupls5_pkg::status_reg_t sr;
 input [5:0] ic_irq;
 input [7:0] irq_sn;
 output takb;
@@ -240,11 +242,11 @@ always_comb
 // Detect the first exception from the ALU.
 always_comb
 begin
-	exc = FLT_NONE;
+	exc = Qupls5_pkg::FLT_NONE;
 	exc_mask = {WID/8{1'b1}};
 	for (n = WID-8; n >= 0; n = n - 8)
-		if (cause_code_t'(alu_exc >> n) != FLT_NONE) begin
-			exc = cause_code_t'(alu_exc >> n);
+		if (Qupls5_pkg::cause_code_t'(alu_exc >> n) != Qupls5_pkg::FLT_NONE) begin
+			exc = Qupls5_pkg::cause_code_t'(alu_exc >> n);
 			exc_mask = ~((32'd2 << (n >> 3)) - 32'd1);
 		end
 end

@@ -1162,7 +1162,6 @@ else begin
 `include "Qupls5_microop_mem_FLT.sv"
 `include "Qupls5_microop_mem_FLTV.sv"
 `include "Qupls5_microop_mem_LSV.sv"
-`include "Qupls5_microop_mem_LSVN.sv"
 `include "Qupls5_microop_mem_CAP.sv"
 	Qupls5_pkg::OP_LDB,Qupls5_pkg::OP_LDBZ,Qupls5_pkg::OP_LDW,Qupls5_pkg::OP_LDWZ,
 	Qupls5_pkg::OP_LDT,Qupls5_pkg::OP_LDTZ,Qupls5_pkg::OP_LOAD,Qupls5_pkg::OP_CLOAD:

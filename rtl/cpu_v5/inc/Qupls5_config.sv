@@ -270,6 +270,7 @@ localparam SUPPORT_VECTOR = 0;
 localparam SUPPORT_GRAPHICS = 0;
 localparam SUPPORT_FDP = 0;
 localparam SUPPORT_FLOAT = 0;
+localparam SUPPORT_TRIG = 0;
 localparam SUPPORT_CSR = 1;
 localparam SUPPORT_CSR0 = 0;
 localparam SUPPORT_CSR1 = 1;

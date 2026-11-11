@@ -41,6 +41,7 @@ module Qupls5_set_dram_oper(rst_i, clk_i, cpu_dat_i, lsq_i, cndx_i,
 	dram_more_i, dram_state_i, dram_ack_i, dram_work_i, dram_stomp_i, dram_oper_o);
 parameter CORENO = 6'd1;
 parameter LSQNO = 2'd0;
+parameter SUPPORT_CANARY = Qupls5_pkg::SUPPORT_CANARY;
 input rst_i;
 input clk_i;
 input [511:0] cpu_dat_i;
@@ -49,10 +50,10 @@ input checkpt_ndx_t cndx_i;
 input dram_more_i;
 input Qupls5_pkg::dram_state_t dram_state_i;
 input dram_ack_i;
-input dram_work_t dram_work_i;
+input Qupls5_pkg::dram_work_t dram_work_i;
 input dram_stomp_i;
 (* keep *)
-output dram_oper_t dram_oper_o;
+output Qupls5_pkg::dram_oper_t dram_oper_o;
 
 cpu_types_pkg::value_t val;
 

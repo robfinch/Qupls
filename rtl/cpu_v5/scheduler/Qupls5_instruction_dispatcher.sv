@@ -87,7 +87,7 @@ begin
 	foreach (rse[nn])
 		rse[nn] = {$bits(Qupls5_pkg::reservation_station_entry_t){1'b0}};
 
-	rse[Qupls5_pkg::ROB_ENTRIES] = {$bits(rob_entry_t){1'b0}};
+	rse[Qupls5_pkg::ROB_ENTRIES] = {$bits(Qupls5_pkg::rob_entry_t){1'b0}};
 	foreach (cpy[nn]) begin
 		cpy[nn].rse = Qupls5_pkg::ROB_ENTRIES;
 		cpy[nn].rob = rob_ndx_t'(0);
