@@ -146,34 +146,34 @@ begin
 	Qupls5_pkg::OP_CHK:
 		begin
 			if (SUPPORT_POSTFIX & has_cnsta) begin
-				imma = {cnsta,ins.Rs1[6:0]};
+				imma = {cnsta,ins.Rs1[5:0]};
 				has_imma = TRUE;
 			end
 			else if (ins.ms[0]) begin
-				imma = {{57{ins.Rs1[6]}},ins.Rs1[6:0]};
+				imma = {{58{ins.Rs1[5]}},ins.Rs1[5:0]};
 				has_imma = TRUE;
 			end
 			if (SUPPORT_POSTFIX & has_cnstb) begin
-				immb = {cnstb,ins.Rs2[6:0]};
+				immb = {cnstb,ins.Rs2[5:0]};
 				has_immb = TRUE;
 			end
 			else if (ins.ms[1]) begin
-				immb = {{57{ins.Rs2[6]}},ins.Rs2[6:0]};
+				immb = {{58{ins.Rs2[5]}},ins.Rs2[5:0]};
 				has_immb = TRUE;
 			end
 			if (SUPPORT_POSTFIX & has_cnstc) begin
-				immc = {cnstc,ins.Rs3[6:0]};
+				immc = {cnstc,ins.Rs3[5:0]};
 				has_immc = TRUE;
 			end
 			else if (ins.ms[2]) begin
-				immc = {{57{ins.Rs3[6]}},ins.Rs3[6:0]};
+				immc = {{58{ins.Rs3[5]}},ins.Rs3[5:0]};
 				has_immc = TRUE;
 			end
 		end
 
 	Qupls5_pkg::OP_FLTH:
 		begin
-			case(ins.Rs1[6:0])
+			case(ins.Rs1[5:0])
 			7'd0:
 				begin
 					imma = 64'd0;									// +0.0
@@ -186,7 +186,7 @@ begin
 				end
 			default:
 				if (SUPPORT_POSTFIX & has_cnsta) begin
-					imma = {cnsta,ins.Rs1[6:0]};
+					imma = {cnsta,ins.Rs1[5:0]};
 					has_imma = TRUE;
 				end
 			endcase
@@ -195,11 +195,11 @@ begin
 				if (ins.Rs1==7'd0)
 					imma = 64'd0;
 				else
-					imma = {ins.Rs1[6],47'h7FFFFFFFFFFF,ins.Rs1[6],5'h0C+ins.Rs1[5:3],ins.Rs1[2:0],7'b0};
+					imma = {ins.Rs1[5],47'h7FFFFFFFFFFF,ins.Rs1[5],5'h0C+ins.Rs1[5:3],ins.Rs1[2:0],7'b0};
 				has_imma = TRUE;
 			end
 			*/
-			case(ins.Rs2[6:0])
+			case(ins.Rs2[5:0])
 			7'd0:
 				begin
 					immb = 64'd0;									// +0.0
@@ -212,7 +212,7 @@ begin
 				end
 			default:
 				if (SUPPORT_POSTFIX & has_cnstb) begin
-					immb = {cnstb,ins.Rs2[6:0]};
+					immb = {cnstb,ins.Rs2[5:0]};
 					has_immb = TRUE;
 				end
 			endcase
@@ -221,11 +221,11 @@ begin
 				if (ins.Rs2==7'd0)
 					immb = 64'd0;
 				else
-					immb = {ins.Rs2[6],47'h7FFFFFFFFFFF,ins.Rs2[6],5'h0C+ins.Rs2[5:3],ins.Rs2[2:0],7'b0};
+					immb = {ins.Rs2[5],47'h7FFFFFFFFFFF,ins.Rs2[5],5'h0C+ins.Rs2[5:3],ins.Rs2[2:0],7'b0};
 				has_immb = TRUE;
 			end
 			*/
-			case(ins.Rs3[6:0])
+			case(ins.Rs3[5:0])
 			7'd0:
 				begin
 					immc = 64'd0;									// +0.0
@@ -238,7 +238,7 @@ begin
 				end
 			default:
 				if (SUPPORT_POSTFIX & has_cnstc) begin
-					immc = {cnstc,ins.Rs3[6:0]};
+					immc = {cnstc,ins.Rs3[5:0]};
 					has_immc = TRUE;
 				end
 			endcase
@@ -247,7 +247,7 @@ begin
 				if (ins.Rs3==7'd0)
 					immc = 64'd0;
 				else
-					immc = {ins.Rs3[6],47'h7FFFFFFFFFFF,ins.Rs3[6],5'h0C+ins.Rs3[5:3],ins.Rs3[2:0],7'b0};
+					immc = {ins.Rs3[5],47'h7FFFFFFFFFFF,ins.Rs3[5],5'h0C+ins.Rs3[5:3],ins.Rs3[2:0],7'b0};
 				has_immc = TRUE;
 			end
 			*/
@@ -255,7 +255,7 @@ begin
 
 	Qupls5_pkg::OP_FLTS:
 		begin
-			case(ins.Rs1[6:0])
+			case(ins.Rs1[5:0])
 			7'd0:
 				begin
 					imma = 64'd0;									// +0.0
@@ -268,7 +268,7 @@ begin
 				end
 			default:
 				if (SUPPORT_POSTFIX & has_cnsta) begin
-					imma = {cnsta,ins.Rs1[6:0]};
+					imma = {cnsta,ins.Rs1[5:0]};
 					has_imma = TRUE;
 				end
 			endcase
@@ -278,7 +278,7 @@ begin
 				has_imma = TRUE;
 			end
 			*/
-			case(ins.Rs2[6:0])
+			case(ins.Rs2[5:0])
 			7'd0:
 				begin
 					immb = 64'd0;									// +0.0
@@ -291,7 +291,7 @@ begin
 				end
 			default:
 				if (SUPPORT_POSTFIX & has_cnstb) begin
-					immb = {cnstb,ins.Rs2[6:0]};
+					immb = {cnstb,ins.Rs2[5:0]};
 					has_immb = TRUE;
 				end
 			endcase
@@ -301,7 +301,7 @@ begin
 				has_immb = TRUE;
 			end
 			*/
-			case(ins.Rs3[6:0])
+			case(ins.Rs3[5:0])
 			7'd0:
 				begin
 					immc = 64'd0;									// +0.0
@@ -314,7 +314,7 @@ begin
 				end
 			default:
 				if (SUPPORT_POSTFIX & has_cnstc) begin
-					immc = {cnstc,ins.Rs3[6:0]};
+					immc = {cnstc,ins.Rs3[5:0]};
 					has_immc = TRUE;
 				end
 			endcase
@@ -328,7 +328,7 @@ begin
 
 	Qupls5_pkg::OP_FLTD:
 		begin
-			case(ins.Rs1[6:0])
+			case(ins.Rs1[5:0])
 			7'd0:
 				begin
 					imma = 64'd0;									// +0.0
@@ -341,13 +341,13 @@ begin
 				end
 			default:
 				if (SUPPORT_POSTFIX & has_cnsta & cnsta85) begin
-					imma = {cnsta,ins.Rs1[6:0]};
+					imma = {cnsta,ins.Rs1[5:0]};
 					has_imma = TRUE;
 				end
 			endcase
 			/*
 			else if (has_cnsta) begin
-				imma = {cnsta,ins.Rs1[6:0],18'd0};
+				imma = {cnsta,ins.Rs1[5:0],18'd0};
 				has_imma = TRUE;
 			end
 			*/
@@ -357,7 +357,7 @@ begin
 				has_imma = TRUE;
 			end
 			*/
-			case(ins.Rs2[6:0])
+			case(ins.Rs2[5:0])
 			7'd0:
 				begin
 					immb = 64'd0;									// +0.0
@@ -370,13 +370,13 @@ begin
 				end
 			default:
 				if (SUPPORT_POSTFIX & has_cnstb & cnstb85) begin
-					immb = {cnstb,ins.Rs2[6:0]};
+					immb = {cnstb,ins.Rs2[5:0]};
 					has_immb = TRUE;
 				end
 			endcase
 			/*
 			else if (has_cnstb) begin
-				immb = {cnstb,ins.Rs2[6:0],18'd0};
+				immb = {cnstb,ins.Rs2[5:0],18'd0};
 				has_immb = TRUE;
 			end
 			else if (ins.ms[1]) begin
@@ -384,7 +384,7 @@ begin
 				has_immb = TRUE;
 			end
 			*/
-			case(ins.Rs3[6:0])
+			case(ins.Rs3[5:0])
 			7'd0:
 				begin
 					immc = 64'd0;									// +0.0
@@ -397,13 +397,13 @@ begin
 				end
 			default:
 				if (SUPPORT_POSTFIX & has_cnstc & cnstc85) begin
-					immc = {cnstc,ins.Rs3[6:0]};
+					immc = {cnstc,ins.Rs3[5:0]};
 					has_immc = TRUE;
 				end
 			endcase
 			/*
 			else if (has_cnstc) begin
-				immc = {cnstc,ins.Rs3[6:0],18'd0};
+				immc = {cnstc,ins.Rs3[5:0],18'd0};
 				has_immc = TRUE;
 			end
 			else if (ins.ms[2]) begin
@@ -415,7 +415,7 @@ begin
 /*
 	Qupls5_pkg::OP_FADDI,Qupls5_pkg::OP_FMULI:
 		begin
-			case(ins.Rs1[6:0])
+			case(ins.Rs1[5:0])
 			7'd0:
 				begin
 					imma = 64'd0;									// +0.0
@@ -428,7 +428,7 @@ begin
 				end
 			default:
 				if (SUPPORT_POSTFIX & has_cnsta) begin
-					imma = {ins.Rs1[6:0],cnsta[63:7]};
+					imma = {ins.Rs1[5:0],cnsta[63:7]};
 					has_imma = TRUE;
 				end
 			endcase
@@ -436,7 +436,7 @@ begin
 			if (SUPPORT_POSTFIX & has_cnstb) begin
 				case(ins.prc[1:0])
 				2'd0:	imma = ins.imm[15:0];
-				2'd1:	imma = {ins.imm[24:0],cnstb[63:57]};	// single
+				2'd1:	imma = {ins.imm[24:0],cnstb[63:58]};	// single
 				2'd2:	imma = {ins.imm[24:0],cnstb[63:25]};	// double
 				//2'd3:	imma = {ins.imm[24:0],cnstb[]}
 				default:	;
@@ -448,18 +448,18 @@ begin
 /*
 	Qupls5_pkg::OP_FLTQ,
 	Qupls5_pkg::OP_VFLTH,Qupls5_pkg::OP_VFLTS,Qupls5_pkg::OP_VFLTD,
-	Qupls5_pkg::OP_VFLTSH,Qupls5_pkg::OP_VFLTSS,Qupls5_pkg::OP_VFLTSD:
+	Qupls5_pkg::OP_VSFLTH,Qupls5_pkg::OP_VSFLTS,Qupls5_pkg::OP_VSFLTD:
 		begin
 			if (has_cnsta) begin
-				imma = {cnsta,ins.Rs1[6:0]};
+				imma = {cnsta,ins.Rs1[5:0]};
 				has_imma = TRUE;
 			end
 			if (has_cnstb) begin
-				immb = {cnstb,ins.Rs2[6:0]};
+				immb = {cnstb,ins.Rs2[5:0]};
 				has_immb = TRUE;
 			end
 			if (has_cnstc) begin
-				immc = {cnstc,ins.Rs3[6:0]};
+				immc = {cnstc,ins.Rs3[5:0]};
 				has_immc = TRUE;
 			end
 		end
@@ -473,7 +473,7 @@ begin
 		begin
 			has_immb = TRUE;
 			if (SUPPORT_POSTFIX & has_cnstb)
-				immb = {cnstb,ins.imm[24:0]};
+				immb = {cnstb,ins.imm[26:0]};
 			else
 				immb = ins.imm;//{{39{ins.imm[24]}},ins.imm[24:0]};
 		end
@@ -495,7 +495,7 @@ begin
 			if (SUPPORT_POSTFIX & has_cnstb)
 				immb = cnstb;
 			else
-				immb = {57'd0,ins[22:16]};
+				immb = {58'd0,ins[22:16]};
 			has_immb = 1'b0;
 		end
 
@@ -510,12 +510,12 @@ begin
 				imma = value_zero;
 				has_imma = TRUE;
 			end
-			else if (ins.Rs1==8'd127) begin
+			else if (ins.Rs1==Qupls5_pkg::IP_REG) begin
 				imma = ip;
 				has_imma = TRUE;
 			end
 			if (SUPPORT_POSTFIX & has_cnsta) begin
-				imma = {cnsta,ins.Rs1[6:0]};
+				imma = {cnsta,ins.Rs1[5:0]};
 				has_imma = TRUE;
 			end
 			if (ins.Rs2==8'd0) begin
@@ -523,7 +523,7 @@ begin
 				has_immb = TRUE;
 			end
 			if (SUPPORT_POSTFIX & has_cnstb) begin
-				immb = {cnstb,ins.Rs2[6:0]};
+				immb = {cnstb,ins.Rs2[5:0]};
 				has_immb = TRUE;
 			end
 			has_immc = TRUE;
@@ -543,12 +543,12 @@ begin
 				imma = value_zero;
 				has_imma = TRUE;
 			end
-			else if (ins.Rs1==8'd127) begin
+			else if (ins.Rs1==Qupls5_pkg::IP_REG) begin
 				imma = ip;
 				has_imma = TRUE;
 			end
 			if (SUPPORT_POSTFIX & has_cnsta) begin
-				imma = {cnsta,ins.Rs1[6:0]};
+				imma = {cnsta,ins.Rs1[5:0]};
 				has_imma = TRUE;
 			end
 			if (ins.Rs2==9'd0) begin
@@ -556,7 +556,7 @@ begin
 				has_immb = TRUE;
 			end
 			if (SUPPORT_POSTFIX & has_cnstb) begin
-				immb = {cnstb,ins.Rs2[6:0]};
+				immb = {cnstb,ins.Rs2[5:0]};
 				has_immb = TRUE;
 			end
 			has_immc = TRUE;
@@ -566,7 +566,7 @@ begin
 				immc = {{45{ins.imm[14]}},ins.imm[14:0]};
 			if (has_cnstd) begin
 				has_immd = TRUE;
-				immd = {cnstd,ins.Rd[6:0]};
+				immd = {cnstd,ins.Rd[5:0]};
 			end
 		end
 /*
@@ -597,23 +597,23 @@ begin
 	Qupls5_pkg::OP_BCCU:
 		begin
 			if (SUPPORT_POSTFIX & has_cnsta) begin
-				imma = {cnsta,ins.Rs1[6:0]};
+				imma = {cnsta,ins.Rs1[5:0]};
 				has_imma = TRUE;
 			end
 			else if (ins.ms[0]) begin
-				imma = {{57{ins.Rs1[6]}},ins.Rs1[6:0]};
+				imma = {{58{ins.Rs1[5]}},ins.Rs1[5:0]};
 				has_imma = TRUE;
 			end
 			if (SUPPORT_POSTFIX & has_cnstb) begin
-				immb = {cnstb,ins.Rs2[6:0]};
+				immb = {cnstb,ins.Rs2[5:0]};
 				has_immb = TRUE;
 			end
 			else if (ins.ms[1]) begin
-				immb = {{57{ins.Rs2[6]}},ins.Rs2[6:0]};
+				immb = {{58{ins.Rs2[5]}},ins.Rs2[5:0]};
 				has_immb = TRUE;
 			end
 			if (SUPPORT_POSTFIX & has_cnstc) begin
-				immc = {cnstc,ins.Rs3[6:0]};
+				immc = {cnstc,ins.Rs3[5:0]};
 				has_immc = TRUE;
 			end
 			else if (ins.ms[2]) begin
@@ -625,12 +625,12 @@ begin
 	Qupls5_pkg::OP_FBCC:
 		begin
 			if (SUPPORT_POSTFIX & has_cnsta & cnsta85) begin
-				imma = {cnsta,ins.Rs1[6:0]};
+				imma = {cnsta,ins.Rs1[5:0]};
 				has_imma = TRUE;
 			end
 			/*
 			else if (has_cnsta) begin
-				imma = {cnsta,ins.Rs1[6:0],18'd0};
+				imma = {cnsta,ins.Rs1[5:0],18'd0};
 				has_imma = TRUE;
 			end
 			*/
@@ -641,12 +641,12 @@ begin
 			end
 			*/
 			if (SUPPORT_POSTFIX & has_cnstb & cnstb85) begin
-				immb = {cnstb,ins.Rs2[6:0]};
+				immb = {cnstb,ins.Rs2[5:0]};
 				has_immb = TRUE;
 			end
 			/*
 			else if (has_cnstb) begin
-				immb = {cnstb,ins.Rs2[6:0],18'd0};
+				immb = {cnstb,ins.Rs2[5:0],18'd0};
 				has_immb = TRUE;
 			end
 			*/
@@ -657,7 +657,7 @@ begin
 			end
 			*/
 			if (SUPPORT_POSTFIX & has_cnstc) begin
-				immc = {cnstc,ins.Rs3[6:0]};
+				immc = {cnstc,ins.Rs3[5:0]};
 				has_immc = TRUE;
 			end
 			else if (ins.ms[2]) begin

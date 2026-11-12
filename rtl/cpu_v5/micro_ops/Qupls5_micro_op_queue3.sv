@@ -66,14 +66,20 @@ integer rul;
 reg [3:0] tail;
 reg [5:0] uop_count1 [0:MWIDTH-1];
 reg [7:0] uop_count3;
-Qupls5_pkg::micro_op_t [MICROOPS_PER_INSTR*4-1:0] uop_buf2;
-Qupls5_pkg::micro_op_t [MICROOPS_PER_INSTR*8-1:0] uop_buf3;
-reg [6:0] uop_ndx2 [0:MICROOPS_PER_INSTR*8-1];
-reg [2:0] uop_mark2 [0:MICROOPS_PER_INSTR*8-1];
-reg [2:0] uop_mark3 [0:MICROOPS_PER_INSTR*8-1];
+Qupls5_pkg::micro_op_t [MICROOPS_PER_INSTR*MWIDTH-1:0] uop_buf2;
+Qupls5_pkg::micro_op_t [MICROOPS_PER_INSTR*MWIDTH*2-1:0] uop_buf3;
+reg [6:0] uop_ndx2 [0:MICROOPS_PER_INSTR*MWIDTH*2-1];
+reg [2:0] uop_mark2 [0:MICROOPS_PER_INSTR*MWIDTH*2-1];
+reg [2:0] uop_mark3 [0:MICROOPS_PER_INSTR*MWIDTH*2-1];
 reg [6:0] ndx0,ndx1,ndx2,ndx3;
 reg [5:0] room;
 Qupls5_pkg::rob_entry_t nopi;
+
+always_comb
+	if ($bits(Qupls5_pkg::micro_op_t) > 256) begin
+		$display("Micro-op too large.");
+		$finish;
+	end
 
 // Define a NOP instruction.
 always_comb

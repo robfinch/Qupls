@@ -80,8 +80,8 @@ typedef struct packed
 } flags_t;
 
 typedef logic [2:0] pregndx_t;
-typedef logic [8:0] pregno_t;
-typedef logic [6:0] aregno_t;
+typedef logic [9:0] pregno_t;
+typedef logic [7:0] aregno_t;
 typedef logic [9:0] vec_pregno_t;
 typedef logic [7:0] vec_aregno_t;
 typedef logic [127:0] value_pair_t;

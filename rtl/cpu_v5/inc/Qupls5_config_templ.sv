@@ -57,13 +57,6 @@ localparam XSTREAMS = 8;
 // Number of levels of branches that can be speculated across.
 localparam BRANCH_LEVELS = 8;
 
-// Number of physical registers supporting the architectural ones and used in
-// register renaming. There must be significantly more physical registers than
-// architectural ones, or performance will suffer due to stalls.
-// Must be a multiple of four. If it is not 512 or 256 then the renamer logic will
-// need to be modified.
-localparam PREGS = 512;
-
 localparam IP_REG = 8'd127;
 
 // Number of operands (including destination) a micro-op can have.
@@ -318,6 +311,12 @@ localparam NREGS = 128;
 localparam AREGS = 128;
 localparam REGFILE_LATENCY = 2;
 
+// Number of physical registers supporting the architectural ones and used in
+// register renaming. There must be significantly more physical registers than
+// architectural ones, or performance will suffer due to stalls.
+// Must be a multiple of four. If it is not 512 or 256 then the renamer logic will
+// need to be modified.
+localparam PREGS = AREGS * 4;
 
 // Number of register read ports. More ports allows more simultaneous reads
 // (obvious) and may increase performance. However, most instructions will

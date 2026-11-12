@@ -49,7 +49,7 @@ begin
 	ibranch = FALSE;
 	dbranch = FALSE;
 	if (branch)
-		case(instr.cnd)
+		case(instr.func)
 		CND_NE:	dbranch = instr.inc;
 		CND_LT:	ibranch = instr.inc;
 		CND_LE:	ibranch = instr.inc;

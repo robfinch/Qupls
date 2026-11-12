@@ -386,7 +386,7 @@ begin
 
 	Qupls5_pkg::OP_FLTH,Qupls5_pkg::OP_FLTS,Qupls5_pkg::OP_FLTD,
 	Qupls5_pkg::OP_VFLTH,Qupls5_pkg::OP_VFLTS,Qupls5_pkg::OP_VFLTD,
-	Qupls5_pkg::OP_VFLTSH,Qupls5_pkg::OP_VFLTSS,Qupls5_pkg::OP_VFLTSD:
+	Qupls5_pkg::OP_VSFLTH,Qupls5_pkg::OP_VSFLTS,Qupls5_pkg::OP_VSFLTD:
 		case(ir5.func)
 		Qupls5_pkg::FLT_FMA,Qupls5_pkg::FLT_FMS,Qupls5_pkg::FLT_FNMA,Qupls5_pkg::FLT_FNMS:
 			if (SUPPORT_FMA) begin

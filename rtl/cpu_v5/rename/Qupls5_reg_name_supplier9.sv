@@ -46,6 +46,7 @@
 // 4610 LUTs / 660 FFs / 0 BRAMs / 210 MHz (512 regs)
 // 1953 LUTs / 229 FFs / 0 BRAMS / (128 regs)
 // 1953 LUTs / 229 FFs / 0 BRAMS / (256 regs)
+// 1700 LUTs / 250 FFs / 0 BRAMS / (256 arch regs, 1024 phys)
 // ============================================================================
 //
 import const_pkg::*;
@@ -166,6 +167,40 @@ case(Qupls5_pkg::PREGS)
 		end
 	end
 */
+1024:
+ begin
+		wire [3:0] ffo0 [0:127];
+		wire [3:0] ffo1 [0:127];
+		wire [3:0] ffo2 [0:127];
+		wire [3:0] ffo3 [0:127];
+		for (g = 0; g < 128; g = g + 1) begin
+			ffo12 uffo0 (.i({4'h0,avail[g]}), .o(ffo0[g]));
+			ffo12 uffo1 (.i({4'h0,avail[g] & ~(12'd1 << ffo0[g])}), .o(ffo1[g]));
+			ffo12 uffo2 (.i({4'h0,avail[g] & ~(12'd1 << ffo1[g])}), .o(ffo2[g]));
+			ffo12 uffo3 (.i({4'h0,avail[g] & ~(12'd1 << ffo2[g])}), .o(ffo3[g]));
+		end
+
+		always_comb o[0] = {aregno[0][$bits(aregno_t)-1:1],ffo0[aregno[0][$bits(aregno_t)-1:1]][2:0]};
+		always_comb o[1] = {aregno[1][$bits(aregno_t)-1:1],ffo1[aregno[1][$bits(aregno_t)-1:1]][2:0]};
+		always_comb o[2] = {aregno[2][$bits(aregno_t)-1:1],ffo2[aregno[2][$bits(aregno_t)-1:1]][2:0]};
+		always_comb o[3] = {aregno[3][$bits(aregno_t)-1:1],ffo3[aregno[3][$bits(aregno_t)-1:1]][2:0]};
+		always_comb nofree[0] = ffo0[aregno[0][$bits(aregno_t)-1:1]]==4'd15;
+		always_comb nofree[1] = ffo1[aregno[1][$bits(aregno_t)-1:1]]==4'd15;
+		always_comb nofree[2] = ffo2[aregno[2][$bits(aregno_t)-1:1]]==4'd15;
+		always_comb nofree[3] = ffo3[aregno[3][$bits(aregno_t)-1:1]]==4'd15;
+
+		always_ff @(posedge clk)
+		foreach (ns_dstreg[n1])
+		begin
+			ns_dstregv[n1] <= INV;
+			ns_dstreg[n1] <= 9'd0;
+			if (ns_alloc_req[n1]) begin
+				ns_dstreg[n1] <= o[n1];
+				ns_dstregv[n1] <= ov[n1];
+			end
+		end
+	end
+
 512:
  begin
 		wire [3:0] ffo0 [0:63];

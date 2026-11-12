@@ -62,25 +62,40 @@ begin
 		fnRs1 = 8'd0;
 	else
 		case(ir.opcode)
-/*			
-		Qupls5_pkg::OP_MOV:
-			if (ir[28:26] < 3'd4)
-				fnRs1 = {ir[20:19],ir[15:11]};
-			else
-				fnRs1 = {2'b00,ir[15:11]};
-*/				
-		Qupls5_pkg::OP_FLTH,Qupls5_pkg::OP_FLTS,Qupls5_pkg::OP_FLTD,Qupls5_pkg::OP_FLTQ:
-			fnRs1 = has_rext ? instr_raw[61:55] : {1'b0,ir.Rs1};
+		// Integer
+		Qupls5_pkg::OP_R3B,Qupls5_pkg::OP_R3W,Qupls5_pkg::OP_R3T,Qupls5_pkg::OP_R3O:
+			case(ir.func)
+			Qupls5_pkg::FN_MOVE:
+				case(ir.op3)
+				3'd1:	fnRs1 = {2'b01,ir.Rs1};				// move from float
+				default:	fnRs1 = {2'b00,ir.Rs1};
+				endcase
+			default:	fnRs1 = {2'b00,ir.Rs1};
+			endcase
+		Qupls5_pkg::OP_VR3B,Qupls5_pkg::OP_VR3W,Qupls5_pkg::OP_VR3T,Qupls5_pkg::OP_VR3O:
+			fnRs1 = {1'b1,ir.Rs1[4:0],2'b00};
+		Qupls5_pkg::OP_VSR3B,Qupls5_pkg::OP_VSR3W,Qupls5_pkg::OP_VSR3T,Qupls5_pkg::OP_VSR3O:
+			fnRs1 = {1'b1,ir.Rs1[4:0],2'b00};
 		Qupls5_pkg::OP_CSR:
-			fnRs1 = has_rext ? instr_raw[61:55] : {1'b0,ir.Rs1};
+			fnRs1 = {2'b0,ir.Rs1};
 		Qupls5_pkg::OP_ADDI,Qupls5_pkg::OP_SUBFI,Qupls5_pkg::OP_CMPI,Qupls5_pkg::OP_CMPUI,
 		Qupls5_pkg::OP_ANDI,Qupls5_pkg::OP_ORI,Qupls5_pkg::OP_XORI,
 		Qupls5_pkg::OP_MULI,Qupls5_pkg::OP_MULUI,Qupls5_pkg::OP_DIVI,Qupls5_pkg::OP_DIVUI,
 		Qupls5_pkg::OP_SHIFT:
-			fnRs1 = has_rext ? instr_raw[61:55] : {1'b0,ir.Rs1};
+			fnRs1 = {2'b0,ir.Rs1};
+		// Float
+		Qupls5_pkg::OP_FLTH,Qupls5_pkg::OP_FLTS,Qupls5_pkg::OP_FLTD,Qupls5_pkg::OP_FLTQ:
+			fnRs1 = {2'b1,ir.Rs1};
+		Qupls5_pkg::OP_VFLTH,Qupls5_pkg::OP_VFLTS,Qupls5_pkg::OP_VFLTD,Qupls5_pkg::OP_VFLTQ,
+		Qupls5_pkg::OP_VSFLTH,Qupls5_pkg::OP_VSFLTS,Qupls5_pkg::OP_VSFLTD,Qupls5_pkg::OP_VSFLTQ:
+			fnRs1 = {1'b1,ir.Rs1[4:0],2'b00};
+		// Branch
+		Qupls5_pkg::OP_MBCC,
 		Qupls5_pkg::OP_BCC,
 		Qupls5_pkg::OP_BCCU:
-			fnRs1 = has_rext ? instr_raw[61:55] : {1'b0,ir.Rs1};
+			fnRs1 = {2'b0,ir.Rs1};
+		Qupls5_pkg::OP_FBCC:
+			fnRs1 = {2'b1,ir.Rs1};
 		Qupls5_pkg::OP_LDB,Qupls5_pkg::OP_LDBZ,
 		Qupls5_pkg::OP_LDW,Qupls5_pkg::OP_LDWZ,
 		Qupls5_pkg::OP_LDT,Qupls5_pkg::OP_LDTZ,
@@ -88,9 +103,9 @@ begin
 		Qupls5_pkg::OP_AMO,Qupls5_pkg::OP_CMPSWAP,
 		Qupls5_pkg::OP_STB,Qupls5_pkg::OP_STW,Qupls5_pkg::OP_STT,Qupls5_pkg::OP_STORE,Qupls5_pkg::OP_CSTORE,
 		Qupls5_pkg::OP_STPTR:
-			fnRs1 = has_rext ? instr_raw[61:55] : {1'b0,ir.Rs1};
+			fnRs1 = {2'b0,ir.Rs1};
 		default:
-			fnRs1 = 7'd0;
+			fnRs1 = 8'd0;
 		endcase
 end
 endfunction
@@ -104,7 +119,7 @@ begin
     else
         om1 = om;
   */
-	Rs1z = ~|Rs1[6:0];
+	Rs1z = ~|Rs1[5:0];
 	Rs1ip = Rs1==Qupls4_pkg::IP_REG;
 end
 

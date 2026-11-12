@@ -52,8 +52,6 @@ input Qupls5_pkg::cap_operand_t [NREG_WPORTS-1:0] wp_hist_i [0:4];
 input Qupls5_pkg::cap_operand_t [NREG_PORTS-1:0] rf_oper_i;
 input Qupls5_pkg::cap_operand_t [NENTRY-1:0] oper_i;
 output Qupls5_pkg::cap_operand_t [NENTRY-1:0] oper_o;
-input Qupls5_pkg::cap_operand_t [NENTRY-1:0] operh_i;
-output Qupls5_pkg::cap_operand_t [NENTRY-1:0] operh_o;
 input Qupls5_pkg::cap_operand_t [NBPI-1:0] bypass_i;
 
 integer nn,jj,kk;

@@ -36,7 +36,8 @@
 //
 // Research shows having 16 checkpoints is almost as good as infinity.
 //
-// 14300 LUTs / 2000 FFs / 0 BRAMS / 240 MHz (512p regs, 8 checkpoints) 250
+// 31600 LUTs / 3400 FFs / 0 BRAMS / 240 MHz (1024p regs, 8 checkpoints) 250
+// 14800 LUTs / 2000 FFs / 0 BRAMS / 240 MHz (512p regs, 8 checkpoints) 250
 // 5900 LUTs / 900 FFs / 0 BRAMS / 240 MHz (128p regs, 8 checkpoints) 250
 // ============================================================================
 //

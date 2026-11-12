@@ -56,17 +56,39 @@ begin
 	ir = instr;
 	has_rext = instr_raw[54:48]==Qupls5_pkg::OP_REXT;
 	if (has_immc)
-		fnRs3 = 7'd0;
+		fnRs3 = 8'd0;
 	else
 		case(ir.opcode)
+		// Integer
+		Qupls5_pkg::OP_R3B,Qupls5_pkg::OP_R3W,Qupls5_pkg::OP_R3T,Qupls5_pkg::OP_R3O:
+			fnRs3 = has_rext ? instr_raw[48+34:48+28] : {2'b00,ir.Rs3};
+		Qupls5_pkg::OP_VR3B,Qupls5_pkg::OP_VR3W,Qupls5_pkg::OP_VR3T,Qupls5_pkg::OP_VR3O:
+			fnRs3 = has_rext ? instr_raw[48+34:48+28] : {2'b00,ir.Rs3[5:0]};
+		Qupls5_pkg::OP_VSR3B,Qupls5_pkg::OP_VSR3W,Qupls5_pkg::OP_VSR3T,Qupls5_pkg::OP_VSR3O:
+			fnRs3 = has_rext ? instr_raw[48+34:48+28] : {2'b00,ir.Rs3[5:0]};
+		// Floating-point
+		Qupls5_pkg::OP_FLTH,Qupls5_pkg::OP_FLTS,Qupls5_pkg::OP_FLTD,Qupls5_pkg::OP_FLTQ:
+			case(ir.func)
+			Qupls5_pkg::FLT_FMA,Qupls5_pkg::FLT_FMS,Qupls5_pkg::FLT_FNMA,Qupls5_pkg::FLT_FNMS:
+				fnRs3 = {2'b01,ir.Rs3};
+			default:
+				fnRs3 = {2'b00,ir.Rs3};
+			endcase
+		Qupls5_pkg::OP_VFLTH,Qupls5_pkg::OP_VFLTS,Qupls5_pkg::OP_VFLTD,Qupls5_pkg::OP_VFLTQ,
+		Qupls5_pkg::OP_VSFLTH,Qupls5_pkg::OP_VSFLTS,Qupls5_pkg::OP_VSFLTD,Qupls5_pkg::OP_VSFLTQ:
+			case(ir.func)
+			Qupls5_pkg::FLT_FMA,Qupls5_pkg::FLT_FMS,Qupls5_pkg::FLT_FNMA,Qupls5_pkg::FLT_FNMS:
+				fnRs3 = {2'b01,ir.Rs3};
+			default:
+				fnRs3 = {2'b00,ir.Rs3};
+			endcase
+		// Load / store
 		Qupls5_pkg::OP_STB,Qupls5_pkg::OP_STW,
 		Qupls5_pkg::OP_STT,Qupls5_pkg::OP_STORE,Qupls5_pkg::OP_CSTORE,
 		Qupls5_pkg::OP_STPTR:
 			fnRs3 = has_rext ? instr_raw[48+34:48+28] : {2'b00,ir.Rd};
-		Qupls5_pkg::OP_R3B,Qupls5_pkg::OP_R3W,Qupls5_pkg::OP_R3T,Qupls5_pkg::OP_R3O:
-			fnRs3 = has_rext ? instr_raw[48+34:48+28] : {2'b00,ir.Rs3};
 		default:
-			fnRs3 = 7'd0;
+			fnRs3 = 8'd0;
 		endcase
 end
 endfunction
@@ -74,7 +96,7 @@ endfunction
 always_comb
 begin
 	Rs3 = fnRs3(instr, instr_raw, has_immc);
-	Rs3z = ~|Rs3[6:0];
+	Rs3z = ~|Rs3[5:0];
 end
 
 endmodule

@@ -56,7 +56,7 @@ begin
 	Qupls5_pkg::OP_MULUI:	fnIsFpu = 1'b1;
 	Qupls5_pkg::OP_FLTH,Qupls5_pkg::OP_FLTS,Qupls5_pkg::OP_FLTD,Qupls5_pkg::OP_FLTQ,
 	Qupls5_pkg::OP_VFLTH,Qupls5_pkg::OP_VFLTS,Qupls5_pkg::OP_VFLTD,
-	Qupls5_pkg::OP_VFLTSH,Qupls5_pkg::OP_VFLTSS,Qupls5_pkg::OP_VFLTSD:
+	Qupls5_pkg::OP_VSFLTH,Qupls5_pkg::OP_VSFLTS,Qupls5_pkg::OP_VSFLTD:
 		fnIsFpu = 1'b1;
 	Qupls5_pkg::OP_ADDI:	fnIsFpu = Qupls5_pkg::PERFORMANCE;
 	Qupls5_pkg::OP_CMPI:	fnIsFpu = Qupls5_pkg::PERFORMANCE;

@@ -62,7 +62,7 @@ begin
 	Qupls5_pkg::OP_FLTH,Qupls5_pkg::OP_FLTS,Qupls5_pkg::OP_FLTD,Qupls5_pkg::OP_FLTQ,
 	Qupls5_pkg::OP_FLTPH,Qupls5_pkg::OP_FLTPS,Qupls5_pkg::OP_FLTPD,Qupls5_pkg::OP_FLTPQ,
 	Qupls5_pkg::OP_VFLTH,Qupls5_pkg::OP_VFLTS,Qupls5_pkg::OP_VFLTD,
-	Qupls5_pkg::OP_VFLTSH,Qupls5_pkg::OP_VFLTSS,Qupls5_pkg::OP_VFLTSD:
+	Qupls5_pkg::OP_VSFLTH,Qupls5_pkg::OP_VSFLTS,Qupls5_pkg::OP_VSFLTD:
 		fnClass = 3'd2;
 	Qupls5_pkg::OP_FADDI:		fnClass = 3'd2;
 	Qupls5_pkg::OP_FMULI:		fnClass = 3'd2;

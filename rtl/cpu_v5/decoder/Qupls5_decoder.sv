@@ -32,7 +32,6 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-// 3900 LUTs / 6400 FFs
 // ============================================================================
 
 import cpu_types_pkg::*;
@@ -406,7 +405,7 @@ always_comb//ff @(posedge clk)
 begin
 	dbo.v = VAL;
 	dbo.rext = instr.opcode==Qupls5_pkg::OP_REXT;
-	dbo.boi = instr.opcode==Qupls5_pkg::OP_BCCU && instr.cnd==Qupls5_pkg::CND_BOI;
+	dbo.boi = instr.opcode==Qupls5_pkg::OP_BCCU && instr.func==Qupls5_pkg::CND_BOI;
 	dbo.bsr = instr.opcode==Qupls5_pkg::OP_BSR;
 	dbo.jsr = instr.opcode==Qupls5_pkg::OP_JSR;
 	dbo.sys = instr.opcode==Qupls5_pkg::OP_SYS;

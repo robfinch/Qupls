@@ -35,6 +35,7 @@
 // Micro-op Translation Stage
 // Translate raw instructions to micro-ops.
 // 4450 LUTs / 8200 FFs / 4 DSPs / 133 MHz
+// 42000 LUTs / 76000 FFs / 
 // ============================================================================
 
 import const_pkg::*;

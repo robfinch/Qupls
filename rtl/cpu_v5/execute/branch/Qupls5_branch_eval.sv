@@ -52,7 +52,7 @@ wire [WID-1:0] bc = b & c;
 always_comb
 	case(instr.opcode)
 	Qupls5_pkg::OP_BCCU:	// integer unsigned branches
-		case(instr.cnd)
+		case(instr.func)
 		CND_EQ:	takb = a[WID-1:0] == b;
 		CND_NE:	takb = a[WID-1:0] != b;
 		CND_LT:	takb = a[WID-1:0] < b;
@@ -71,7 +71,7 @@ always_comb
 		default:	takb = 1'b0;
 		endcase
 	Qupls5_pkg::OP_BCC:	// integer signed branches
-		case(instr.cnd)
+		case(instr.func)
 		CND_EQ:	takb = a[WID-1:0] == b;
 		CND_NE:	takb = a[WID-1:0] != b;
 		CND_LT:	takb = $signed(a[WID-1:0]) < $signed(b);
@@ -86,7 +86,7 @@ always_comb
 		default:	takb = 1'b0;
 		endcase
 	Qupls5_pkg::OP_MBCC:
-		case(instr.cnd)
+		case(instr.func)
 		CND_EQ:	takb = (ac[WID-1:0] & c) == bc;
 		CND_NE:	takb = (ac[WID-1:0] & c) != bc;
 		CND_LT:	takb = $signed(ac[WID-1:0]) < $signed(bc);

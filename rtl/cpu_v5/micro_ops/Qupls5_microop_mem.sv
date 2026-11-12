@@ -133,12 +133,12 @@ always_ff @(posedge clk)
 // chunks of the vector to process.
 // These values are essentially static, so they can be registered to improve
 // timing.
-always_ff @(posedge clk)  vlen <= (vlen_i[ 7: 0] + 3'd7) >> 3;
-always_ff @(posedge clk) fvlen <= (vlen_i[15: 8] + 3'd7) >> 3;
-always_ff @(posedge clk) xvlen <= (vlen_i[23:16] + 3'd7) >> 3;
-always_ff @(posedge clk) cvlen <= (vlen_i[31:24] + 3'd7) >> 3;
-always_ff @(posedge clk) avlen <= (vlen_i[39:32] + 3'd7) >> 3;
-always_ff @(posedge clk) tvlen <= (vlen_i[47:40] + 3'd7) >> 3;
+always_ff @(posedge clk)  vlen <= ir.vlen;//(vlen_i[ 7: 0] + 3'd7) >> 3;
+always_ff @(posedge clk) fvlen <= ir.vlen;//(vlen_i[15: 8] + 3'd7) >> 3;
+always_ff @(posedge clk) xvlen <= ir.vlen;//(vlen_i[23:16] + 3'd7) >> 3;
+always_ff @(posedge clk) cvlen <= ir.vlen;//(vlen_i[31:24] + 3'd7) >> 3;
+always_ff @(posedge clk) avlen <= ir.vlen;//(vlen_i[39:32] + 3'd7) >> 3;
+always_ff @(posedge clk) tvlen <= ir.vlen;//(vlen_i[47:40] + 3'd7) >> 3;
 always_ff @(posedge clk)  vlen2 <= vlen_i[ 2: 0];
 always_ff @(posedge clk) fvlen2 <= vlen_i[10: 8];
 always_ff @(posedge clk) xvlen2 <= vlen_i[18:16];
@@ -181,7 +181,7 @@ begin
 	uop_boi = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
 	uop_boi.v = VAL;
 	uop_boi.opcode = Qupls5_pkg::OP_BCCU;
-	uop_boi.cnd = Qupls5_pkg::CND_BOI;
+	uop_boi.func = Qupls5_pkg::CND_BOI;
 	uop_boi.lead = 1'd1;
 end
 
@@ -640,7 +640,7 @@ always_comb
 begin
 	case (instr.opcode)
 	Qupls5_pkg::OP_VSR3B,Qupls5_pkg::OP_VSR3W,Qupls5_pkg::OP_VSR3T,Qupls5_pkg::OP_VSR3O,
-	Qupls5_pkg::OP_VFLTSH,Qupls5_pkg::OP_VFLTSS,Qupls5_pkg::OP_VFLTSD:
+	Qupls5_pkg::OP_VSFLTH,Qupls5_pkg::OP_VSFLTS,Qupls5_pkg::OP_VSFLTD:
 		is_vs = ir.op3==3'd1;
 	default:	is_vs = 1'b0;
 	endcase
@@ -652,7 +652,7 @@ begin
 	Qupls5_pkg::OP_VR3B,Qupls5_pkg::OP_VR3W,Qupls5_pkg::OP_VR3T,Qupls5_pkg::OP_VR3O,
 	Qupls5_pkg::OP_VSR3B,Qupls5_pkg::OP_VSR3W,Qupls5_pkg::OP_VSR3T,Qupls5_pkg::OP_VSR3O,
 	Qupls5_pkg::OP_VFLTH,Qupls5_pkg::OP_VFLTS,Qupls5_pkg::OP_VFLTD,
-	Qupls5_pkg::OP_VFLTSH,Qupls5_pkg::OP_VFLTSS,Qupls5_pkg::OP_VFLTSD:
+	Qupls5_pkg::OP_VSFLTH,Qupls5_pkg::OP_VSFLTS,Qupls5_pkg::OP_VSFLTD:
 		is_masked = ir.op3==3'd6;
 	default:	is_masked = 1'b0;
 	endcase
@@ -679,7 +679,7 @@ begin
 	Qupls5_pkg::OP_VR3B,Qupls5_pkg::OP_VR3W,Qupls5_pkg::OP_VR3T,Qupls5_pkg::OP_VR3O,
 	Qupls5_pkg::OP_VSR3B,Qupls5_pkg::OP_VSR3W,Qupls5_pkg::OP_VSR3T,Qupls5_pkg::OP_VSR3O,
 	Qupls5_pkg::OP_VFLTH,Qupls5_pkg::OP_VFLTS,Qupls5_pkg::OP_VFLTD,
-	Qupls5_pkg::OP_VFLTSH,Qupls5_pkg::OP_VFLTSS,Qupls5_pkg::OP_VFLTSD:
+	Qupls5_pkg::OP_VSFLTH,Qupls5_pkg::OP_VSFLTS,Qupls5_pkg::OP_VSFLTD:
 		is_vector = 1'b1;
 	default:	is_vector = 1'b0;
 	endcase
@@ -723,28 +723,20 @@ begin
 		end
 	Qupls5_pkg::OP_VR3B,Qupls5_pkg::OP_VR3W,Qupls5_pkg::OP_VR3T,Qupls5_pkg::OP_VR3O:
 		begin
-			instr.opcode = Qupls5_pkg::OP_R3BP | velsz[1:0];
+			instr.opcode = Qupls5_pkg::OP_R3BP | instr.opcode[1:0];
 			instr.vn = ir.vn;
 			instr.op3 = ir.op3;
 			instr.func = ir.func;
 			vlen1 = vlen;
 		end
 	Qupls5_pkg::OP_VFLTH,Qupls5_pkg::OP_VFLTS,Qupls5_pkg::OP_VFLTD,
-	Qupls5_pkg::OP_VFLTSH,Qupls5_pkg::OP_VFLTSS,Qupls5_pkg::OP_VFLTSD:
+	Qupls5_pkg::OP_VSFLTH,Qupls5_pkg::OP_VSFLTS,Qupls5_pkg::OP_VSFLTD:
 		begin
 			instr.opcode = Qupls5_pkg::OP_FLTH | instr.opcode[1:0];
 			instr.vn = ir.vn;
 			instr.rmd = ir.rmd;
 			instr.func = ir.func;
 			vlen1 = fvlen;
-		end
-	Qupls5_pkg::OP_R3BP,Qupls5_pkg::OP_R3WP,Qupls5_pkg::OP_R3TP,Qupls5_pkg::OP_R3OP:
-		begin
-			instr.opcode = ir.opcode;
-			instr.vn = ir.vn;
-			instr.op3 = ir.op3;
-			instr.func = ir.func;
-			vlen1 = vlen;
 		end
 	Qupls5_pkg::OP_FLTPH,Qupls5_pkg::OP_FLTPS,Qupls5_pkg::OP_FLTPD,Qupls5_pkg::OP_FLTPQ:
 		begin
@@ -754,45 +746,12 @@ begin
 			instr.func = ir.func;
 			vlen1 = fvlen;
 		end
-	Qupls5_pkg::OP_LDV,Qupls5_pkg::OP_STV,
-	Qupls5_pkg::OP_LDVN,Qupls5_pkg::OP_STVN:
+	Qupls5_pkg::OP_LDV,Qupls5_pkg::OP_STV:
 	   begin
-		case(vls.dt)
-		3'd0:	vlen1 = vlen;
-		3'd1:	vlen1 = fvlen;
-		3'd2:	vlen1 = xvlen;
-		3'd3:	vlen1 = cvlen;
-		3'd4:	vlen1 = avlen;
-		3'd5:	vlen1 = tvlen;
-		default:	vlen1 = vlen;
-		endcase
-		case(vls.dt)
-		3'd0:	vlen3 = vlen2;
-		3'd1:	vlen3 = fvlen2;
-		3'd2:	vlen3 = xvlen2;
-		3'd3:	vlen3 = cvlen2;
-		3'd4:	vlen3 = avlen2;
-		3'd5:	vlen3 = tvlen2;
-		default:	vlen3 = vlen2;
-		endcase
-		case(vls.dt)
-		3'd0:	velsz1 = velsz[ 3: 0];
-		3'd1:	velsz1 = velsz[11: 8];
-		3'd2:	velsz1 = velsz[19:16];
-		3'd3:	velsz1 = velsz[27:24];
-		3'd4:	velsz1 = velsz[35:32];
-		3'd5:	velsz1 = velsz[43:40];
-		default:	velsz1 = velsz[ 3: 0];
-   	endcase
-		case(vls.dt)
-		3'd0:	vln = vlen_i[ 7: 0];
-		3'd1:	vln = vlen_i[11: 8];
-		3'd2:	vln = vlen_i[23:16];
-		3'd3:	vln = vlen_i[31:24];
-		3'd4:	vln = vlen_i[39:32];
-		3'd5:	vln = vlen_i[47:40];
-		default:	vln = vlen_i[ 7: 0];
-   	endcase
+		vlen1 = vls.vlen;
+		vlen3 = vls.vlen;
+		velsz1 = 8'd1 << vls.prc;
+		vln = vls.vlen;
     end
     default:
         begin

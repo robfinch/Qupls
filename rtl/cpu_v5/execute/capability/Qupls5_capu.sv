@@ -40,7 +40,7 @@ import cpu_types_pkg::*;
 import capability_pkg::*;
 import Qupls5_pkg::*;
 
-module Qupls5_capu(rst, clk, ir, ip, ac, bc, ac_flags, bc_flags, agp, bgp,
+module Qupls5_capu(rst, clk, ir, ip, ac, bc, ac_flags, bc_flags, agp, bgp, i,
 	o, o_flags, csr, excv, exc, done);
 input rst;
 input clk;
@@ -53,6 +53,7 @@ input cpu_types_pkg::flags_t ac_flags;
 input cpu_types_pkg::flags_t bc_flags;
 input cpu_types_pkg::value_t agp;
 input cpu_types_pkg::value_t bgp;
+input cpu_types_pkg::value_t i;
 output uc64_capability_t o;
 output cpu_types_pkg::flags_t o_flags;
 output reg excv;
@@ -67,11 +68,12 @@ wire [63:0] base;
 wire [64:0] top;
 wire [7:0] E;
 wire done8;
-wire invoke = ir.func==CAP_INVOKE;
-wire setbounds = ir.func==CAP_SETBOUNDS;
+Qupls5_pkg::micro_op_t iro;
+wire invoke = ir.func==Qupls5_pkg::CAP_INVOKE;
+wire setbounds = ir.func==Qupls5_pkg::CAP_SETBOUNDS;
 reg isInvokeInBounds, isInBounds;
-capability_pkg::uc64_capability_t ac,bc,cc,dc,tc;
-capability_pkg::uc64_capability_t ao,bo,co,do;		// older versions
+capability_pkg::uc64_capability_t cc,dc,tc;
+capability_pkg::uc64_capability_t ao,bo,co,dco;		// older versions
 cpu_types_pkg::flags_t cc_flags;
 cpu_types_pkg::flags_t dc_flags;
 reg bcz;
@@ -80,11 +82,11 @@ always_comb bcz = bc==256'd0;
 always_ff @(posedge clk) ao <= ac;
 always_ff @(posedge clk) bo <= bc;
 always_ff @(posedge clk) co <= cc;
-always_ff @(posedge clk) do <= dc;
+always_ff @(posedge clk) dco <= dc;
 always_ff @(posedge clk) iro <= ir;
 
 always_comb
-	chg = {ir,a,b,c,d} != {iro,ao,bo,co,do};
+	chg = {ir,ac,bc} != {iro,ao,bo};
 
 // Create a delayed done signal.
 always_ff @(posedge clk)
@@ -102,10 +104,10 @@ begin
 		done <= FALSE;
 	else begin
 		case(ir.func)
-		CAP_DECOMPRESS64:	done <= donef[5];
-		CAP_COMPRESS64: done <= donef[5];
-		CAP_DECOMPRESS32:	done <= donef[5];
-		CAP_COMPRESS32: done <= donef[5];
+		Qupls5_pkg::CAP_DECOMP64:	done <= donef[5];
+		Qupls5_pkg::CAP_COMP64: done <= donef[5];
+		Qupls5_pkg::CAP_DECOMP32:	done <= donef[5];
+		Qupls5_pkg::CAP_COMP32: done <= donef[5];
 		default:	done <= TRUE;
 		endcase
 	end
@@ -148,7 +150,7 @@ modCalcHigh uch1
 always_comb
 	isInvokeInBounds = ip.offset >= base && ip.offset <= top - 6;
 always_comb
-	isInBounds = b >= base && b <= top - 6;
+	isInBounds = bc.offset+bc.base >= base && bc.offset+bc.base <= top - 6;
 
 always_comb
 	jmp_dst = {{29{rse.uop.imm[34]}},rse.uop.imm[34:0]};
@@ -167,7 +169,7 @@ else begin
 	o_flags <= 8'h00;
 	o <= {$bits(uc64_capability_t){1'b0}};
 	case(ir.func)
-	CAP_ANDPERM:
+	Qupls5_pkg::CAP_ANDPERM:
 		begin
 			o_flags = ac_flags;
 			if (fnIsSealed(ac))
@@ -175,11 +177,11 @@ else begin
 			o.otype = 24'hfffffe;						// seal
 			o.perms = ac.perms & bc.offset;	// and perms
 		end
-	CAP_BUILDCAP:
+	Qupls5_pkg::CAP_BUILDCAP:
 		begin
 			if (fnIsSealed(ac) ||
 				((bc.perms & ac.perms) != bc.perms)	||	// perms must be subset
-				(bc.base >= ac.base && bc.top <= ac.top)	// bounds must be within
+				(!(bc.base >= ac.base && bc.top <= ac.top)) ||	// bounds must be within
 				!ac_flags.cap)
 			begin
 				o_flags.cap <= 1'b0;
@@ -197,22 +199,22 @@ else begin
 					o.otype <= 24'hfffffe;				// seal as sentry
 			end
 		end
-	CAP_CLEARTAG:
+	Qupls5_pkg::CAP_CLEARTAG:
 		begin
 			o_flags = ac_flags;
 			o_flags.cap = FALSE;
 			o = ac;
 		end
-	CAP_CHKBOUNDS:
+	Qupls5_pkg::CAP_CHKBOUNDS:
 		if (~ac_flags.cap) begin
 			excv <= TRUE;
-			exc <= FLT_CTAG;
+			exc <= Qupls5_pkg::FLT_CTAG;
 		end
 		else if (bc.offset < ac.base || bc.offset + bc.base >= ac.top - 6) begin
 			excv <= TRUE;
-			exc <= FLT_CLENGTH;
+			exc <= Qupls5_pkg::FLT_CBOUNDS;
 		end
-	CAP_COPYTYPE:
+	Qupls5_pkg::CAP_COPYTYPE:
 		begin
 			o <= ac;
 			o.offset <= bc.otype;
@@ -275,7 +277,7 @@ else begin
 			wrgpr <= TRUE;
 		end
 */
-	CAP_INCOFFSET:
+	Qupls5_pkg::CAP_INCOFFSET:
 		case(ir.op3)
 		3'd0:
 			begin
@@ -294,7 +296,7 @@ else begin
 				o.offset <= ac.offset + agp;
 			end
 		endcase
-	CAP_INCOFFSETI:
+	Qupls5_pkg::CAP_INCOFFSETI:
 		begin
 			o_flags <= ac_flags;
 			if (fnUcIsSealed(ac))
@@ -302,64 +304,64 @@ else begin
 			o <= ac;
 			o.offset <= ac.offset + i;
 		end
-	CAP_CHKINVOKE:
+	Qupls5_pkg::CAP_CHKINVOKE:
 		if (~ac_flags.cap|~bc_flags.cap) begin
 			excv <= TRUE;
-			exc <= FLT_CTAG;
+			exc <= Qupls5_pkg::FLT_CTAG;
 		end
 		else if (fnUcIsReserved(ac) || fnUcIsReserved(bc)) begin
 			excv <= TRUE;
-			exc <= FLT_CSEAL;
+			exc <= Qupls5_pkg::FLT_CSEAL;
 		end
 		else if (ac.otype != bc.otype) begin
 			excv <= TRUE;
-			exc <= FLT_CTYPE;
+			exc <= Qupls5_pkg::FLT_CTYPE;
 		end
 		else if (~ac.perms[8]|~bc.perms[8]) begin
 			excv <= TRUE;
-			exc <= FLT_CPINVOKE;
+			exc <= Qupls5_pkg::FLT_CPINVOKE;
 		end
 		else if (~ac.perms[1]|bc.perms[1]) begin
 			excv <= TRUE;
-			exc <= FLT_CPEXEC;
+			exc <= Qupls5_pkg::FLT_CPEXEC;
 		end
 		else if (ac.offset[0]) begin
 			excv <= TRUE;
-			exc <= FLT_CALGN;
+			exc <= Qupls5_pkg::FLT_CALGN;
 		end 
 		else if (ac.offset < ac.base || ac.offset > ac.top - 6) begin
 			excv <= TRUE;
-			exc <= FLT_CBOUNDS;
+			exc <= Qupls5_pkg::FLT_CBOUNDS;
 		end
-	CAP_CINVOKE:
+	Qupls5_pkg::CAP_INVOKE:
 		begin
 			if (~ac_flags.cap|~bc_flags.cap) begin
 				excv <= TRUE;
-				exc <= FLT_CTAG;
+				exc <= Qupls5_pkg::FLT_CTAG;
 			end
 			else if (fnUcIsReserved(ac) || fnUcIsReserved(bc)) begin
 				excv <= TRUE;
-				exc <= FLT_CSEAL;
+				exc <= Qupls5_pkg::FLT_CSEAL;
 			end
 			else if (ac.otype != bc.otype) begin
 				excv <= TRUE;
-				exc <= FLT_CTYPE;
+				exc <= Qupls5_pkg::FLT_CTYPE;
 			end
 			else if (~ac.perms[8]|~bc.perms[8]) begin
 				excv <= TRUE;
-				exc <= FLT_CPINVOKE;
+				exc <= Qupls5_pkg::FLT_CPINVOKE;
 			end
 			else if (~ac.perms[1]|bc.perms[1]) begin
 				excv <= TRUE;
-				exc <= FLT_CPEXEC;
+				exc <= Qupls5_pkg::FLT_CPEXEC;
 			end
 			else if (ac.offset[0]) begin
 				excv <= TRUE;
-				exc <= FLT_CALGN;
+				exc <= Qupls5_pkg::FLT_CALGN;
 			end 
 			else if (ac.offset < ac.base || ac.offset > ac.top - 6) begin
 				excv <= TRUE;
-				exc <= FLT_CBOUNDS;
+				exc <= Qupls5_pkg::FLT_CBOUNDS;
 			end
 			else begin
 				o <= bc;
@@ -368,7 +370,7 @@ else begin
 				rse_o.pc.pc.otype <= 24'hffffff;	// unsealed
 			end
 		end
-	CAP_MOVE:
+	Qupls5_pkg::CAP_MOVE:
 		begin
 			o <= ac;
 		end
@@ -379,31 +381,31 @@ else begin
 			wrgpr <= TRUE;
 		end
 */
-	CAP_RET:
+	Qupls5_pkg::CAP_RET:
 		begin
 			if (~ac_flags.cap|(~bc_flags.cap & !bcz)) begin
 				excv <= TRUE;
-				exc <= FLT_CTAG;
+				exc <= Qupls5_pkg::FLT_CTAG;
 			end
 			else if (fnUcIsReserved(ac) || (fnUcIsReserved(bc) & !bcz)) begin
 				excv <= TRUE;
-				exc <= FLT_CSEAL;
+				exc <= Qupls5_pkg::FLT_CSEAL;
 			end
 			else if (ac.otype != bc.otype && !bcz) begin
 				excv <= TRUE;
-				exc <= FLT_CTYPE;
+				exc <= Qupls5_pkg::FLT_CTYPE;
 			end
 			else if (~ac.perms[1]|(bc.perms[1] & ~bcz)) begin
 				excv <= TRUE;
-				exc <= FLT_CPEXEC;
+				exc <= Qupls5_pkg::FLT_CPEXEC;
 			end
 			else if (ac.offset[0]) begin
 				excv <= TRUE;
-				exc <= FLT_CALGN;
+				exc <= Qupls5_pkg::FLT_CALGN;
 			end 
 			else if (ac.offset < ac.base || ac.offset > ac.top - 6) begin
 				excv <= TRUE;
-				exc <= FLT_CBOUNDS;
+				exc <= Qupls5_pkg::FLT_CBOUNDS;
 			end
 			else begin
 				o <= bc;
@@ -412,7 +414,7 @@ else begin
 				rse_o.pc.pc.otype <= 24'hffffff;	// unsealed
 			end
 		end
-	CAP_SEAL:
+	Qupls5_pkg::CAP_SEAL:
 		begin
 			o_flags <= ac_flags;
 			if (fnUcIsSealed(ac) || !bc.perms[7])	// permit seal?
@@ -420,7 +422,7 @@ else begin
 			o <= ac;
 			o.otype <= bc.offset;
 		end
-	CAP_SEALENTRY:
+	Qupls5_pkg::CAP_SEALENTRY:
 		begin
 			o_flags <= ac_flags;
 			if (fnUcIsSealed(ac))	// permit seal?
@@ -428,7 +430,7 @@ else begin
 			o <= ac;
 			o.otype <= 24'hFFFFFE;	// SENTRY value
 		end
-	CAP_SETADDR:
+	Qupls5_pkg::CAP_SETADDR:
 		begin
 			o_flags <= ac_flags;
 			if (fnUcIsSealed(ac) || !fnUsIsRepresentable(ac,bc.offset-ac.base))	// permit seal?
@@ -436,16 +438,16 @@ else begin
 			o <= ac;
 			o.offset <= bc.offset - ac.base;
 		end
-	CAP_CHKBOUNDS:
+	Qupls5_pkg::CAP_CHKBOUNDS:
 		if (!ac_flags.cap) begin
 			excv <= TRUE;
-			exc <= FLT_CTAG;
+			exc <= Qupls5_pkg::FLT_CTAG;
 		end
 		else if (bc.offset < ac.base || bc.offset + bc.base > ac.top - 6) begin
 			excv <= TRUE;
-			exc <= FLT_CBOUNDS;
+			exc <= Qupls5_pkg::FLT_CBOUNDS;
 		end
-	CAP_SETBOUNDS:
+	Qupls5_pkg::CAP_SETBOUNDS:
 		begin
 			o_flags <= ac_flags;
 			if (fnUcIsSealed(ac))
@@ -459,7 +461,7 @@ else begin
 			o.top <= bgp;
 		end
 	// See the testsub operation for a description of implementation.
-	CAP_SETEQUALSEXACT:
+	Qupls5_pkg::CAP_SETEQUALSEXACT:
 		begin
 			if (ac.otype==24'hffffff)	// is unsealed
 				o_flags.ovf <= FALSE;
@@ -467,22 +469,22 @@ else begin
 				o_flags.ovf <= TRUE;
 			o.offset <= ac==bc && ac_flags.cap==bc_flags.cap;
 		end
-	CAP_SETFLAGS:
+	Qupls5_pkg::CAP_SETFLAGS:
 		begin
 			o_flags = ac_flags;
 			if (fnUcIsSealed(ac))
-				o_flags.cap = FALSE:
+				o_flags.cap = FALSE;
 			o <= ac;
 			o.flag <= bc.offset[0];
 		end
-	CAP_SETHIGH:
+	Qupls5_pkg::CAP_SETHIGH:
 		begin
 			o <= ac;
 			o[255:192] <= bc.offset;
 			o_flags <= ac_flags;
 			o_flags.cap <= FALSE;
 		end
-	CAP_SETOFFSET:
+	Qupls5_pkg::CAP_SETOFFSET:
 		begin
 			o_flags <= ac_flags;
 			if (fnUcIsSealed(ac) || !fnUsIsRepresentable(ac,bc.offset-ac.offset))	// permit seal?
@@ -495,7 +497,7 @@ else begin
 	// This case will be writing to a MOT (micro-op temporary) register.
 	// Using this mechanism the capabilities unit does not need to update the
 	// general-purpose register file.
-	CAP_TESTSUBSET:
+	Qupls5_pkg::CAP_TESTSUBSET:
 		begin
 			if (ac_flags.cap==bc_flags.cap &&						// tags are the same
 				(ac.perms & bc.perms==ac.perms) &&				// permissions are a subset
@@ -506,7 +508,7 @@ else begin
 			else
 				o_flags.ovf <= TRUE;
 		end
-	CAP_UNSEAL:
+	Qupls5_pkg::CAP_UNSEAL:
 		begin
 			o <= ac;
 			o.otype <= 24'hfffff;		// unsealed
@@ -527,15 +529,15 @@ else begin
 	case(ir.opcode)
 	// Operation is done by branchmiss_pc, but we still need to save the return
 	// address.
-	OP_CJSR:
+	Qupls5_pkg::OP_CJSR:
 		begin
 			if (jmp_dst < rse.pc.base || jmp_dst > rse.pc.top - 6) begin
 				excv <= TRUE;
-				exc <= FLT_CBOUNDS;
+				exc <= Qupls5_pkg::FLT_CBOUNDS;
 			end
 			else if (jmp_dst[0]) begin
 				excv <= TRUE;
-				exc <= FLT_CALGN;
+				exc <= Qupls5_pkg::FLT_CALGN;
 			end
 			o <= rse.pc;
 			o.offset <= rse.pc.offset + 4'd6;
@@ -556,7 +558,7 @@ else begin
 			default:
 				begin
 					excv <= TRUE;
-					exc <= FLT_UNIMP;
+					exc <= Qupls5_pkg::FLT_UNIMP;
 				end
 			endcase
 		end

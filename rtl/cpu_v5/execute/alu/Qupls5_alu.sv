@@ -167,7 +167,7 @@ always_comb
 begin
 	ibranch = FALSE;
 	dbranch = FALSE;
-	case(ir.cnd)
+	case(ir.func)
 	CND_NE:	dbranch = ir.inc;
 	CND_LT:	ibranch = ir.inc;
 	CND_LE:	ibranch = ir.inc;
@@ -228,7 +228,7 @@ generate begin : gBlfd
 			default:
 				begin
 					bfst = (ir.ms[1] ? ir.Rs2 : b[6:0]);
-					bfnd = (ir.ms[2] ? ir.Rs3 : c[6:0]);
+					bfnd = (ir.ms[2] ? ir.Rs3 : c[6:0]) + 2'd1;
 					bflen = bfnd - bfst;
 				end
 			endcase
@@ -1560,7 +1560,7 @@ begin
 		endcase
 	
 	Qupls5_pkg::OP_VFLTH,Qupls5_pkg::OP_VFLTS,Qupls5_pkg::OP_VFLTD,
-	Qupls5_pkg::OP_VFLTSH,Qupls5_pkg::OP_VFLTSS,Qupls5_pkg::OP_VFLTSD:
+	Qupls5_pkg::OP_VSFLTH,Qupls5_pkg::OP_VSFLTS,Qupls5_pkg::OP_VSFLTD:
 		case(ir.func)
 		Qupls5_pkg::FLT_MIN:
 			begin

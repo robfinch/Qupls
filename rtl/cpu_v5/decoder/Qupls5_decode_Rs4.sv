@@ -78,7 +78,7 @@ endfunction
 always_comb
 begin
 	Rs4 = fnRs4(instr, instr_raw, has_immd);
-	Rs4z = ~|Rs4[6:0];
+	Rs4z = ~|Rs4[5:0];
 end
 
 endmodule
