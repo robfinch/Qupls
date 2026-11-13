@@ -33,7 +33,7 @@ This increases the size of the core considerably and turns Qupls into a 256-bit 
 * Fixed 48-bit parcel length instruction set. (postfixes may make it considered to be variable length).
 * 64-bit datapath / support for 128-bit floats (128-bit datapath for capabilities)
 * 16 entry (or more) reorder entry buffer (ROB)
-* 128 general purpose registers, unified integer and float register file
+* 32 integer register, 32 floating-point registers, and 23 vector registers
 * Constants may be substituted for registers, using constant postfix instructions.
 * Register renaming to remove dependencies.
 * Dual operation instructions: Rt = Ra op Rb op Rc
@@ -53,9 +53,11 @@ Qupls5 is primarily begin designed with some code inherited from Qupls4 and othe
 The Qupls4 OoO machine is currently in development. A long way to go yet. Some synthesis runs have been performed to get a general idea of the size and timing.
 The goal is 100 MHz operation.
 ### Historic Changes
+r0 may be used as a GPR.
+The vector register file has it own set of registers.
 Masked value branches were added.
 The most recent major change was to the register organization.
-There are now 128 GPRs instead of 32 and no explicit vector registers.
+->not true anymore. There are now 128 GPRs instead of 32 and no explicit vector registers.
 r0 is once again the value zero.
 #### Previous changes
 The most recent major change to the ISA was a switch back to fixed length instructions.
@@ -80,27 +82,54 @@ The register file is 12r6w (12 read ports and 6 write ports).
 Register file read ports are dynamically connected; up to 48 read port requests are fed into a 4:1 mux.
 (The number of read and write ports on the register file is configurable).
 There is now demultiplexing of read ports for reading.
+The physical register file is split into four logical files: integers, floats, vectors, and special.
 
-The register file contains 128 architectural registers, and is unified, supporting integer and floating-point operations using the same set of registers. 
-126 registers may be assigned by the compiler without restriction.
-Register #0 always reads as the value for a memory base or index register.
-For other instructions the constant zero may be selected instead of R0.
-Register #1 reads as +1.0 for float operations.
-Instruction pointer may be selected as a base register for memory operations - register code 127.
+#### Integer Registers
+There are 32 integer registers.
+None of the registers have dedicated purposes or meanings.
+There are some suggestions on which registers should be used for linkage and stack pointer.
+
+#### FLoating-Point Registers
+There are 32 floating-point registers.
+None of the registers have dedicated purposes or meanings.
+
+#### Vector Registers - 23?
+There are 23 vector registers. 
+The author supposes that the number of vector registers could have been limited to 16 but that would leave unused physical registers.
+They are there, so why not use them? Other combinations for vector registers are possible.
+Register specifications in the ISA limit the choice to 32 max.
+It may seem like an odd number but it is due to the limit of 1024 physical registers.
+Registers are dived up for integer, float and special use registers which are allocated out of the 1024 available.
+What is left over is used for the vector register file. Each vector register requires 32 physical registers once register rename is taken into consideration. 
+736/32 = 23.
+
+#### Logical Registers
+| Log.| Phys. | Bits |                               |
+|-----|-------|------|-------------------------------|
+|  32 |  128  |  64  | integer registers,            |
+|  32 |  128  |  64  | floating-point registers      |
+|  23 |  736  | 512  | vector registers              |
+|   8 |   32  |  64  | specially dedicated registers |
+|-----|-------|------|-------------------------------|
+|     | 1024  |      | total                         |
+
 
 #### Physical Register File
 The physical register file is configurable as 256,512, or 1024 registers.
+If configured with less than 1024 registers then the vector registers are not supported.
 For the default configuration the physical register file contains 512x64-bit registers.
 Architectural registers are renamed using the physical registers to remove dependencies.
-There are 128 architectural registers, giving 4.0 physical registers for each architectural one.
+There are 72 architectural registers, giving 4.0 physical registers for each architectural one.
 
 ### Instruction Length
 The author has found that in an FPGA the decode of variable length instruction length was on the critical timing path, limiting the maximum clock frequency and performance.
+The author has done a little more work on this and it seems possible to do fast enough.
+But an issue is predicting the next IP value.
 Hence the move back to a fixed instruction length. However, the instruction set may be viewed as variable length once postfixes are considered.
 
 ### Instruction alignment
 Instructions are aligned on wyde (16-bit) boundaries. Conditional branch displacements are in terms of wydes.
-Conditional branches have effectively a 18 bit range. For software compatibility a critical 18 bits range was needed.
+Conditional branches have effectively a 22 bit range. For software compatibility a critical 18 bits range was needed.
 Subroutines may be aligned on any wyde boundary, allowing position independent code placement.
 Unconditional branch and jump displacements are in terms of wydes to accomodate the location of subroutines.
 
@@ -110,6 +139,9 @@ Code is relocatable at any wyde boundary; however, within a subroutine or functi
 ### Pipeline
 Yikes!
 There are roughly nine stages in the pipeline, fetch, extract (parse), translate, decode, rename, dispatch, issue, execute and writeback.
+However two stages (extract and rename) are clocked on the negative edge of the clock as the preceeding stage is fast enough.
+Fetch and decode are plenty fast.
+This effectively eliminates two stages timing-wise from the pipeline.
 The first few stages (up to rename) are in-order stages.
 #### Fetch / Extract Stages
 The first step for an instruction is instruction fetch.
@@ -125,8 +157,10 @@ Most instructions are a direct 1:1 translation but some instructions require mor
 Vector instructions are expanded from 1 ISA instruction into multiple micro-ops depending on vector length.
 16 micro-ops should be enough to allow some FP iterative operations like NR-divide.
 #### Decode Stage
-After instruction fetch, extract and translate the instructions are decoded. 
-Constants are also decoded from constant postfxes following the instruction.
+After instruction fetch, extract and translate the instructions are decoded. Not all decoding is done here.
+Some decoding is left to the execute stage. It is more compact to pass an encoded value to execute than a wide decode bus.
+Execute locally decodes some signals.
+The decode stage also decodes constants and constant postfxes following the instruction.
 #### Rename Stage
 Target logical registers are assigned names from a name supplier component which can supply up to four names per clock cycle.
 Target name mappings are stored in the RAT.
@@ -149,7 +183,7 @@ Other instructions are issued and executed while waiting for an instruction miss
 This is the out-of-order feature of the processor.
 Execution of instructions can be multi-cycle as for loads, stores, multiplies and divides.
 Many instructions may be in the process of being executed at the same time, for example 6.
-There are six execution pipelines. They are organized as three pairs of pipelines. Each pipeline in a pair is identical.
+There are six execution pipelines. They are organized as three pairs of pipelines. Each pipeline in a pair is identical (depending on config).
 The pipelines are organized according to instruction latency. The first pair supports instruction of single cycle latency.
 The second pair supports instruction requiring up to five cycles of latency. The last pair of pipelines supports variable latency instructions.
 Note that many simpler instructions can execute on any pipeline.
@@ -166,7 +200,8 @@ Up to six instructions may be committed in a clock cycle. Four instructions of a
 Note that interrupts are processed at the first micro-op of an instruction which may contain multiple micro-ops.
 This ensures the previous instruction is complete before the interrupt is processed.
 ### Branch Prediction
-There are two branch predictors, A BTB, branch-target-buffer predictor used early in the pipeline, and a gselect predictor used later.
+There are two branch predictors, A BTB, branch-target-buffer predictor used early in the pipelineto select the next IP,
+and a gselect predictor used later.
 The BTB has 1024 entries. The gselect predictor is a (2,2) correlating predictor with a 512 entry history table.
 Even if the branch is correctly predicted a number of instructions may end up being stomped on the ROB.
 Currently the gselect branch prediction is disabled while work is being done on other aspects of the core.
@@ -174,7 +209,7 @@ Currently the gselect branch prediction is disabled while work is being done on 
 ### Interrupts and Exceptions
 Interrupts and exceptions are precise.
 There is a separate exception vector table for each operating mode of the CPU.
-The exception vector table address is programmable. At reset the vector table is placed high in memory.
+The exception vector table address is built in to the CPU and accessible as CSRs.
 There are sixty-three interrupt levels supported.
 Interrupts are message signaled (QMSI).
 A message is sent by a device to an interrupt controller which then feeds the CPU core.
@@ -205,7 +240,7 @@ Floating-point compares may be performed in an ALU.
 The ISA supports floating-point add, subtract, multiply and divide instructions.
 Several floating-point ops have been added to the core, including fused multiply-add, reciprocal and reciprocal square root estimates and sine and cosine functions.
 Four precisions are directly supported: half, single, double, and quad.
-Quad precision operations are supported using even/odd register pairs.
+Quad precision operations are supported using even/odd register pairs. (Quad precision is a WIP).
 The even/odd pair is stored in the reservation station as a pair.
 The FPU can also perform many of the simpler ALU operations, this increases the number of instructions that can be handled in parallel.
 
@@ -218,7 +253,8 @@ Any of the three source registers may be turned into a constant.
 ### Branches
 Conditional branches are a fused compare-and-branch instruction. Values of two registers are compared, then a branch is made depending on the relationship between the two.
 Branches may work with different precisions.
-The branch displacement is 18 bits. Branch-to-register is also supported.
+The branch displacement is 22 bits. Branch-to-register is also supported.
+Having an at least 18-bit displacement was deemed critical for software compatibility.
 Some branches may increment or decrement the first source register. (iblt ibltu ible ibleu dbne dbnez).
 A masked value form of branches is supported where the values to be compared are first masked against the contents of another register.
 Masked value branches allow selection of the bits significant to the branch operation.
@@ -274,8 +310,8 @@ Unaligned access support is a configurable option as it increases the core size.
 Accesses spanning a memory page boundary (8kb) take longer to process.
 
 # Software
-Qupls4 will use vasm and vlink to assemble and link programs. vlink is used 'out of the box'.
-A Qupls4 backend is being written for vasm.
+Qupls5 will use vasm and vlink to assemble and link programs. vlink is used 'out of the box'.
+A Qupls5 backend is being written for vasm.
 The Arpl compiler may be used for high-level work and compiles to vasm compatible source code.
 
 # Core Size
@@ -298,8 +334,8 @@ There are many components to the CPU core.
 Some components are generic library components found elsewhere in Github repositories.
 All components germaine to Qupls begin with name prefix "Qupls" and are in the Qupls repository.
 
-Qupls4.sv is the top level for the CPU. Minimum of about 200k LUTs.
-Qupls4_mpu.sv is the top level for the MPU which contains the CPU, timers, and interrupt controller.
+Qupls5.sv is the top level for the CPU. Minimum of about 200k LUTs.
+Qupls5_mpu.sv is the top level for the MPU which contains the CPU, timers, and interrupt controller.
 
 # Issues
 * Instructions are too wide. The instruction set has been simply designed, having almost some VLIW aspects to it.
@@ -307,4 +343,5 @@ It would be better if instructions were 32-bit.
 48-bits is 50% wider than 32, however some instruction sequences requiring two instruction in a 32-bit ISA can be done using only a single instruction.
 So, code is somewhat less than 50% more (35% larger would be a ballpark estimate).
 * Dual-operation instructions are not used very often. They consume LUT resources and likely extra power.
+* There are a lot of physical registers, perhaps too many. There may be a better way to implement the vector registers.
 * Core does not work yet, a long ways to go.
