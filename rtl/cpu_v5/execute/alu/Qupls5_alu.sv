@@ -41,7 +41,7 @@ import cpu_types_pkg::*;
 import capability_pkg::*;
 import Qupls5_pkg::*;
 
-module Qupls5_alu(rst, clk, clk2x, chunk, om, ld, ir, div, Ra, a, b, bi, c,
+module Qupls5_alu(rst, clk, clk2x, chunk, cr0, ld, ir, div, Ra, a, b, bi, c,
 	a_flags, b_flags, c_flags, t_flags, i, t, qres, capa, capa_flags,
 	mask, cs, pc, pcc, csr, cpl, coreno, canary, velsz, o, o_flags, exc_o, did_op);
 parameter PIPE = 3'd0;
@@ -59,7 +59,7 @@ input rst;
 input clk;
 input clk2x;
 input [2:0] chunk;
-input Qupls5_pkg::operating_mode_t om;
+input Qupls5_pkg::status_reg_t cr0;
 input ld;
 input Qupls5_pkg::micro_op_t ir;
 input div;
@@ -247,11 +247,13 @@ generate begin : gBlfd
 						bfldo[jj] = ~af[jj];
 					else
 						bfldo[jj] = af[jj];
+				Qupls5_pkg::FN_DEPISPR,
 				Qupls5_pkg::FN_DEP:
 					if (jj >= bfst && jj < bfnd)
 						bfldo[jj] = af[jj-bfst];
 					else
 						bfldo[jj] = t[jj];
+				Qupls5_pkg::FN_EXTOSPR,
 				Qupls5_pkg::FN_EXTZ:	bfldo[jj] = jj > bflen ? 1'b0 : t1[jj];
 				Qupls5_pkg::FN_EXT:		bfldo[jj] = jj > bflen ? t1[bflen] : t1[jj];
 				Qupls5_pkg::FN_VEINS:
@@ -295,7 +297,7 @@ reg [WID-1:0] fmin,fmax;
 Qupls5_cmp #(.WID(WID)) ualu_cmp
 (
 	.ir(ir),
-	.om(om),
+	.om(cr0.om),
 	.cr(t),
 	.a(a),
 	.b(b),
@@ -1391,6 +1393,13 @@ begin
 			end
 			else
 				bus = zero;
+		Qupls5_pkg::FN_DEPISPR,
+		Qupls5_pkg::FN_EXTOSPR:
+			begin
+				bus = bfldo;
+				o_flags = {1'b0,bfldo[WID+6:WID]};
+				did_op = TRUE;
+			end
 		Qupls5_pkg::FN_SET,
 		Qupls5_pkg::FN_COM,
 		Qupls5_pkg::FN_EXT,

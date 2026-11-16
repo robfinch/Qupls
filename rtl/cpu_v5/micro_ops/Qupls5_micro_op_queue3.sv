@@ -32,6 +32,8 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
+// 20200 LUTs / 31300 FFs / 230 MHz	(8 microops per instruction)
+// 9900 LUTs / 23100 FFs / 230 MHz	(4 microops per instruction - no float)
 // ============================================================================
 
 import const_pkg::*;
@@ -42,7 +44,7 @@ module Qupls5_micro_op_queue3(rst, clk, en, rd_more, uop, uop_count,
 	branch_resolved, live_stream);
 parameter MWIDTH = Qupls5_pkg::MWIDTH;
 parameter MAX_MICROOPS = 8;
-parameter MICROOPS_PER_INSTR = 16;
+parameter MICROOPS_PER_INSTR = Qupls5_pkg::MICROOPS_PER_INSTR;
 input rst;
 input clk;
 input en;

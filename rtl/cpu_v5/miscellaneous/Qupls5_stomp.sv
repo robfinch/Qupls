@@ -240,27 +240,22 @@ pc_address_ex_t prev_pc;
 always_ff @(posedge clk)
 if (rst) begin
 	stomp_fetr <= TRUE;
-	stomp_extr <= TRUE;
 	stomp_trnr <= TRUE;
 	stomp_moq1r <= TRUE;
 	stomp_moq2r <= TRUE;
 	stomp_motr <= TRUE;
 	stomp_decr <= TRUE;
-	stomp_renr <= TRUE;
 end
 else begin
 	
 	if (advance_fetch|pe_stomp_pipeline)
 		stomp_fetr <= stomp_aln;
 
-	if (advance_extract|pe_stomp_pipeline)
-		stomp_extr <= stomp_fet;
-
 	if (advance_mot|pe_stomp_pipeline)
 		stomp_trnr <= stomp_ext;
 
 	if (advance_mot|pe_stomp_pipeline)
-		stomp_moq1r <= stomp_trn;
+		stomp_moq1r <= stomp_ext;	// tran is combo logic
 
 	if (advance_mot|pe_stomp_pipeline)
 		stomp_moq2r <= stomp_moq1;
@@ -271,10 +266,23 @@ else begin
 	if (advance_decode|pe_stomp_pipeline)
 		stomp_decr <= stomp_mot;
 
+end
+
+always_ff @(posedge clk)
+if (rst) begin
+	stomp_extr <= TRUE;
+	stomp_renr <= TRUE;
+end
+else begin
+	
+	if (advance_extract|pe_stomp_pipeline)
+		stomp_extr <= stomp_fet;
+
 	if (advance_rename|pe_stomp_pipeline)
 		stomp_renr <= stomp_dec;
 end
 
+// Q cannot be stomped on in the same manner as the other stages as rename
 // Q cannot be stomped on in the same manner as the other stages as rename
 // has already taken place. Instead the instructions must be allowed to 
 // queue and they are turned into copy targets. However if we know the 

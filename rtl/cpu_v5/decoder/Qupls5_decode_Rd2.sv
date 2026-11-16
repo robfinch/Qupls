@@ -43,14 +43,14 @@ module Qupls5_decode_Rd2(om, regFPCSR, instr, instr_raw, Rd2, Rd2v, Rd2z);
 input Qupls5_pkg::operating_mode_t om;
 input aregno_t regFPCSR;
 input Qupls5_pkg::micro_op_t instr;
-input [431:0] instr_raw;
+input [335:0] instr_raw;
 output aregno_t Rd2;
 output reg Rd2v;
 output reg Rd2z;
 
 function aregno_t fnRd2;
 input Qupls5_pkg::micro_op_t instr;
-input [431:0] instr_raw;
+input [335:0] instr_raw;
 Qupls5_pkg::micro_op_t ir;
 begin
 	ir = instr;

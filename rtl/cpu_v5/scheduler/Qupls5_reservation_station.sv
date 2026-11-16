@@ -41,6 +41,7 @@ import cpu_types_pkg::*;
 import Qupls5_pkg::*;
 
 module Qupls5_reservation_station(rst, clk, available, busy, issue, stall,
+	ipl_setting_i, rcg_ipl_o,
 	rse_i, rse_o, stomp, rf_oper_i, cap_rf_oper_i,
 	bypass_i, wp_oper_tap_i, cap_wp_oper_tap_i,
 	req_pRn, req_pRnv,
@@ -65,6 +66,8 @@ input rst;
 input clk;
 input available;
 input stall;
+input [5:0] ipl_setting_i;
+output reg [5:0] rcg_ipl_o;				// recognized ipl
 input Qupls5_pkg::reservation_station_entry_t [DISPATCH_COUNT-1:0] rse_i;
 input Qupls5_pkg::rob_bitmask_t stomp;
 input Qupls5_pkg::operand_t [NREG_RPORTS-1:0] rf_oper_i;
@@ -283,7 +286,6 @@ Qupls5_validate_operand #(
 end
 endgenerate
 
-
 // Check for instruction dispatches. Select dispatch input and set dispatch
 // flags if dispatch is available.
 
@@ -320,6 +322,7 @@ if (rst) begin
   rse_o <= {$bits(Qupls5_pkg::reservation_station_entry_t){1'b0}};
 	issue <= FALSE;
   pstall <= FALSE;
+	rcg_ipl_o <= 6'd0;
 end
 else begin
 	issue <= FALSE;
@@ -333,21 +336,24 @@ else begin
 			rse[qq] <= rsei;
 			rse[qq].age <= 3'd0;
 			rse[qq].busy <= rsei.v;
-			rse[qq].ready <= rsei.arg[0].v && rsei.arg[1].v && (rsei.arg[2].v||rsei.store) && rsei.arg[3].v && rsei.arg[4].v && rsei.arg[5].v;
+			rse[qq].ready <= rsei.arg[0].v && rsei.arg[1].v && (rsei.arg[2].v||rsei.store) &&
+				rsei.arg[3].v && rsei.arg[4].v && rsei.arg[5].v;
 			if (stomp[rsei.rndx])
 				rse[qq].uop.opcode <= Qupls5_pkg::OP_NOP;
 		end
 	end
 	for (pp = 0; pp < 6; pp = pp + 1) begin
-		foreach (rse[mm])
+		foreach (rse[mm]) begin
 			if (arg[pp][mm].v) begin
 				rse[mm].arg[pp] <= arg[pp][mm];
 				rse[mm].arg[pp].v <= VAL;
 			end
+		end
 	end
 	foreach (rse[mm]) begin
 		rse[mm].ready <= FALSE;
-		if (rse[mm].arg[0].v && rse[mm].arg[1].v && (rse[mm].arg[2].v|rse[mm].store) && rse[mm].arg[3].v && rse[mm].arg[4].v && rse[mm].arg[5].v)
+		if (rse[mm].arg[0].v && rse[mm].arg[1].v && (rse[mm].arg[2].v|rse[mm].store)
+			&& rse[mm].arg[3].v && rse[mm].arg[4].v && rse[mm].arg[5].v)
 			rse[mm].ready <= rse[mm].v;
 	end
 
@@ -391,6 +397,9 @@ else begin
 	2'b11:	;
 	default:
 		begin
+			// All the bits are set in rdy if there are no ready rses.
+			// Otherwise rdy holds the index of the selected ready rse.
+			// The number of rses supported is limited to 2^n-1
 			if (~&rdy) begin
 				// For a vector load / store only issue for when mask indicates so.
 				if (!(fp_sync && rse[rdy].fclass==3'd2)) begin
@@ -411,6 +420,21 @@ else begin
 						rse_o <= rse[rdy];
 						rse[rdy].v <= INV;
 						rse_o.v <= !stomp[rse[rdy].rndx] & rse[rdy].v;
+						// Marking the arg invalid will cause the entry to no longer be ready
+						// and cause a fetch of the next register value.
+						// Note the renamer only sees the first destination chunk for a vector
+						// register. It will leave the next seven physical registers unassigned
+						// as the destination is a multiple of eight. Also, essentially a block
+						// of 32 regs is assigned for the vector. The increment is by the group
+						// number because the renamer will choose the next register of a group.
+						// Cannot just increment by one because the reg no would be overlapping
+						// with other operands.
+						if (Qupls5_pkg::VECTOR_STRATEGY==1) begin
+							if (rse[rdy].uop.vn[0]) begin rse[rdy].arg[4].v <= INV; rse[rdy].arg[4].pRn[4:3] <= rse[rdy].arg[4].pRn[4:3] + 2'd1; end
+							if (rse[rdy].uop.vn[1]) begin rse[rdy].arg[0].v <= INV; rse[rdy].arg[0].pRn[4:3] <= rse[rdy].arg[0].pRn[4:3] + 2'd1; end
+							if (rse[rdy].uop.vn[2]) begin rse[rdy].arg[1].v <= INV; rse[rdy].arg[1].pRn[4:3] <= rse[rdy].arg[1].pRn[4:3] + 2'd1; end
+							if (rse[rdy].uop.vn[3]) begin rse[rdy].arg[2].v <= INV; rse[rdy].arg[2].pRn[4:3] <= rse[rdy].arg[2].pRn[4:3] + 2'd1; end
+						end
 					end
 					if (rse[rdy].vcount==6'd0) begin
 						rse[rdy].busy <= FALSE;
@@ -445,7 +469,7 @@ begin
 	req_FPCSRv = INV;
 	if (RL_STRATEGY==1) begin
 		for (jj = 0; jj < NRSE; jj = jj + 1) begin
-			for (pp = 0; pp < 6; pp = pp + 1) begin
+			for (pp = 0; pp < 7; pp = pp + 1) begin
 				if (fnSrc(rse[jj].uop,pp)) begin
 					if (rse[jj].busy && !rse[jj].arg[pp].v) begin
 						if(kk < 4) begin
@@ -453,10 +477,13 @@ begin
 							req_pRnuv[kk] = VAL;
 							kk = kk + 1;
 						end
+						/* Dead code: 
+							From when the FP status register was updated in the ROB.
 						if (pp==5) begin
 							req_FPCSRndx = rse[jj].rndx;
 							req_FPCSRv = VAL;
 						end
+						*/
 					end
 				end
 			end

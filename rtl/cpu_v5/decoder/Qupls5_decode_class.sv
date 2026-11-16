@@ -79,11 +79,15 @@ begin
 	Qupls5_pkg::OP_LOADA:	fnClass = 3'd1;
 	Qupls5_pkg::OP_FENCE:
 		fnClass = 3'd1;
+    Qupls5_pkg::OP_CAP:
+        case(ir.func)
+        Qupls5_pkg::CAP_RET:    fnClass = 3'd3;
+        default:    fnClass = 3'd7;
+        endcase
 	Qupls5_pkg::OP_BCC,Qupls5_pkg::OP_BCCU,Qupls5_pkg::OP_FBCC,
-	Qupls5_pkg::OP_BSR,Qupls5_pkg::OP_JSR,Qupls5_pkg::OP_JSRN,
+	Qupls5_pkg::OP_BSR,Qupls5_pkg::OP_JSR,
 	Qupls5_pkg::OP_SYS,
-	Qupls5_pkg::OP_BRK,
-	Qupls5_pkg::OP_RTD:
+	Qupls5_pkg::OP_BRK:
 		fnClass = 3'd3;
 	default:
 		fnClass = 3'd7;

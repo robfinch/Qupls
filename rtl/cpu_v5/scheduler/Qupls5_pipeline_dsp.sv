@@ -342,7 +342,7 @@ begin
 		rse[kk].arg[2].v = pg_ren.pr[nn].argC_v;
 		rse[kk].arg[3].v = pg_ren.pr[nn].argT_v;
 		rse[kk].arg[4].v = pg_ren.pr[nn].argD_v;
-		rse[kk].arg[5].v = pg_ren.pr[nn].argS_v;
+		rse[kk].arg[5].v = pg_ren.pr[nn].argDRM_v;
 		rse[kk].arg[6].v = pg_ren.pr[nn].argT2_v;
 		rse[kk].arg[0].aRnv = pg_ren.pr[nn].op.uop.src[0];
 		rse[kk].arg[1].aRnv = pg_ren.pr[nn].op.uop.src[1];
@@ -370,7 +370,7 @@ begin
 		rse[kk].arg[3].pRn = pg_ren.pr[nn].op.pRd;
 		rse[kk].arg[4].pRn = pg_ren.pr[nn].op.pRs4;
 		rse[kk].arg[5].pRn = pg_ren.pr[nn].op.pS;
-		rse[kk].arg[6].pRn = pg_ren.pr[nn].op.pRd2;
+		rse[kk].arg[6].pRn = pg_ren.pr[nn].op.pCR0;
 		
 		/*
 		rse[kk].argAh_v = !pg_ren.pr[nn].op.decbus.b128;

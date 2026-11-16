@@ -35,15 +35,16 @@
 // 15 LUTs
 // ============================================================================
 
+import const_pkg::*;
 import cpu_types_pkg::*;
 import Qupls5_pkg::*;
 
-module Qupls5_decode_Rm(instr, Rm, Rmz);
+module Qupls5_decode_Rmd(instr, Rmd, Rmd_used);
 input Qupls5_pkg::micro_op_t instr;
-output aregno_t Rm;
-output reg Rmz;
+output aregno_t Rmd;
+output reg Rmd_used;
 
-function aregno_t fnRm;
+function aregno_t fnRmd_used;
 input Qupls5_pkg::micro_op_t instr;
 Qupls5_pkg::micro_op_t ir;
 reg has_rext;
@@ -54,18 +55,25 @@ begin
 	Qupls5_pkg::OP_FLTPH,Qupls5_pkg::OP_FLTPS,Qupls5_pkg::OP_FLTPD,Qupls5_pkg::OP_FLTPQ,
 	Qupls5_pkg::OP_VFLTH,Qupls5_pkg::OP_VFLTS,Qupls5_pkg::OP_VFLTD,
 	Qupls5_pkg::OP_VSFLTH,Qupls5_pkg::OP_VSFLTS,Qupls5_pkg::OP_VSFLTD:
-		fnRm = ir.rmd==3'b111 ? 7'd125 : 7'd0;
+		case(ir.func)
+		Qupls5_pkg::FLT_FMA,Qupls5_pkg::FLT_FNMA,Qupls5_pkg::FLT_FMS,Qupls5_pkg::FLT_FNMS,
+		Qupls5_pkg::FLT_ADD,Qupls5_pkg::FLT_SUB,
+//		Qupls5_pkg::FLT_CVTQ2D,Qupls5_pkg::FLT_CVTQ2H,Qupls5_pkg::FLT_CVTQ2S,
+		Qupls5_pkg::FLT_DIV,Qupls5_pkg::FLT_MUL,Qupls5_pkg::FLT_POLY,Qupls5_pkg::FLT_REDADD,
+		Qupls5_pkg::FLT_SQRT,Qupls5_pkg::FLT_TRUNC:	
+			fnRmd_used = TRUE;
+		endcase
 	// ToDo: ASR round mode
 	default:
-		fnRm = 7'd0;
+		fnRmd_used = FALSE;
 	endcase
 end
 endfunction
 
 always_comb
 begin
-	Rm = fnRm(instr);
-	Rmz = ~|Rm[6:0];
+	Rmd = 8'b11111111;
+	Rmd_used = fnRmd_used(instr);
 end
 
 endmodule

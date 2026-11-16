@@ -126,6 +126,13 @@ localparam UOP_STRATEGY = 1;	// micro-op strategy
 // 1=no interrupts allowed when micro-code machine active
 localparam UCM_STRATEGY = 1;	// micro-code machine strategy
 
+// 0= process vectors as micro-ops
+//    vector instructions will be streamed into the instruction
+//    stream.
+// 1= process vectors in reservation stations
+//    this may allow a smaller core size, but may cost performance
+localparam VECTOR_STRATEGY = 0;
+
 // Set the following to one to support backout and restore branch handling.
 // backout / restore is not 100% working yet. Supporting backout / restore
 // makes the core larger.
@@ -307,8 +314,8 @@ localparam SUPPORT_CANARY = 0;
 // operations. Each vector register needs four registers.
 //localparam NREGS = 40*THREADS+(SUPPORT_VECTOR ? 128 : 0);
 //localparam AREGS = 40*THREADS+(SUPPORT_VECTOR ? 128 : 0);
-localparam NREGS = 128;
-localparam AREGS = 128;
+localparam NREGS = SUPPORT_VECTOR ? 328 : SUPPORT_FLOAT ? 72 : 40;
+localparam AREGS = SUPPORT_VECTOR ? 328 : SUPPORT_FLOAT ? 72 : 40;
 localparam REGFILE_LATENCY = 2;
 
 
@@ -380,6 +387,6 @@ localparam NRSE_XPIPE4 = 1;
 localparam NRSE_XPIPE5 = 1;
 localparam NRSE_XPIPE6 = 1;
 
-localparam MICROOPS_PER_INSTR = 16;
+localparam MICROOPS_PER_INSTR = SUPPORT_VECTOR | SUPPORT_FLOAT ? 16 : 4;
 
 localparam SUPPORTED_PRECISIONS = "___O_";

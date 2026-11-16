@@ -34,6 +34,7 @@
 //
 // ============================================================================
 
+import const_pkg::*;
 import Qupls5_pkg::*;
 
 module Qupls5_decode_nop(instr, nop);
@@ -53,6 +54,7 @@ begin
      default: fnIsNop = 1'b0;
 	   endcase
 	Qupls5_pkg::OP_NOP,
+	Qupls5_pkg::OP_EXTOP,
 	Qupls5_pkg::OP_REXT:
 		fnIsNop = 1'b1;
 	default:	fnIsNop = 1'b0;
@@ -60,6 +62,6 @@ begin
 end
 endfunction
 
-assign nop = fnIsNop(instr);
+assign nop = instr.v ? fnIsNop(instr) : TRUE;
 
 endmodule

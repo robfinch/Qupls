@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2025-2026  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -74,6 +74,7 @@ foreach (rob[n1]) begin
 			ns_cndx[kk] = pgh[n1>>2].cndx;
 			kk = kk + 1;
 		end
+		/*
 		if (!rob[n1].op.pRd2v && kk < 4 && !m1 && !m2 && !m3 && !m4) begin
 			ns_alloc_req[kk] = 1'b1;
 			ns_whrndx[kk] = n1;
@@ -81,6 +82,7 @@ foreach (rob[n1]) begin
 			ns_cndx[kk] = pgh[n1>>2].cndx;
 			kk = kk + 1;
 		end
+		*/
 	end
 end
 end

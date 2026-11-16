@@ -41,7 +41,7 @@ import Qupls5_pkg::*;
 module Qupls5_decode_Rs2(om, instr, instr_raw, has_immb, Rs2, Rs2z, has_Rs2);
 input Qupls5_pkg::operating_mode_t om;
 input Qupls5_pkg::micro_op_t instr;
-input [431:0] instr_raw;
+input [335:0] instr_raw;
 input has_immb;
 output aregno_t Rs2;
 output reg Rs2z;
@@ -60,8 +60,6 @@ begin
 		case(ir.opcode)
 		// Integer
 		Qupls5_pkg::OP_R3B,Qupls5_pkg::OP_R3W,Qupls5_pkg::OP_R3T,Qupls5_pkg::OP_R3O:
-			fnHas_Rs2 = 1'b1;
-		Qupls5_pkg::OP_VR3B,Qupls5_pkg::OP_VR3W,Qupls5_pkg::OP_VR3T,Qupls5_pkg::OP_VR3O:
 			fnHas_Rs2 = 1'b1;
 		Qupls5_pkg::OP_VSR3B,Qupls5_pkg::OP_VSR3W,Qupls5_pkg::OP_VSR3T,Qupls5_pkg::OP_VSR3O:
 			fnHas_Rs2 = 1'b1;
@@ -126,33 +124,33 @@ begin
 		case(ir.opcode)
 		// Integer
 		Qupls5_pkg::OP_R3B,Qupls5_pkg::OP_R3W,Qupls5_pkg::OP_R3T,Qupls5_pkg::OP_R3O:
-			fnRs2 = {2'b00,ir.Rs2};
+			fnRs2 = {3'b00,ir.Rs2};
 		Qupls5_pkg::OP_VR3B,Qupls5_pkg::OP_VR3W,Qupls5_pkg::OP_VR3T,Qupls5_pkg::OP_VR3O:
-			fnRs2 = {1'b1,ir.Rs2[4:0],2'b00};
+			fnRs2 = {ir.Rs2[4:0],3'b00} + 8'd64;
 		Qupls5_pkg::OP_VSR3B,Qupls5_pkg::OP_VSR3W,Qupls5_pkg::OP_VSR3T,Qupls5_pkg::OP_VSR3O:
-			fnRs2 = {1'b1,ir.Rs2[4:0],2'b00};
+			fnRs2 = {ir.Rs2[4:0],3'b00} + 8'd64;
 		Qupls5_pkg::OP_ADDI,Qupls5_pkg::OP_SUBFI,Qupls5_pkg::OP_CMPI,Qupls5_pkg::OP_CMPUI,
 		Qupls5_pkg::OP_ANDI,Qupls5_pkg::OP_ORI,Qupls5_pkg::OP_XORI,
 		Qupls5_pkg::OP_MULI,Qupls5_pkg::OP_MULUI,Qupls5_pkg::OP_DIVI,Qupls5_pkg::OP_DIVUI,
 		Qupls5_pkg::OP_SHIFT:
-			fnRs2 = {1'b0,ir.Rs2};
+			fnRs2 = {3'b0,ir.Rs2};
 		// Floating-point
 		Qupls5_pkg::OP_FLTH,Qupls5_pkg::OP_FLTS,Qupls5_pkg::OP_FLTD,Qupls5_pkg::OP_FLTQ:
 			if (ir.func==Qupls5_pkg::FLT_SCALEB)
-				fnRs2 = {2'b00,ir.Rs2};
+				fnRs2 = {3'b00,ir.Rs2};
 			else
-				fnRs2 = {2'b01,ir.Rs2};
+				fnRs2 = {3'b01,ir.Rs2};
 		Qupls5_pkg::OP_VFLTH,Qupls5_pkg::OP_VFLTS,Qupls5_pkg::OP_VFLTD,Qupls5_pkg::OP_VFLTQ:
-			fnRs2 = {1'b1,ir.Rs2[4:0],2'd00};
+			fnRs2 = {ir.Rs2[4:0],3'd00} + 8'd64;
 		Qupls5_pkg::OP_VSFLTH,Qupls5_pkg::OP_VSFLTS,Qupls5_pkg::OP_VSFLTD,Qupls5_pkg::OP_VSFLTQ:
 			if (ir.func==Qupls5_pkg::FLT_SCALEB)
-				fnRs2 = {2'b00,ir.Rs2};
+				fnRs2 = {3'b00,ir.Rs2};
 			else
-				fnRs2 = {2'b01,ir.Rs2};
+				fnRs2 = {3'b01,ir.Rs2};
 		// Branch
 		Qupls5_pkg::OP_BCC,
 		Qupls5_pkg::OP_BCCU:
-			fnRs2 = {2'b0,ir.Rs2};
+			fnRs2 = {3'b0,ir.Rs2};
 		// Load / store
 		Qupls5_pkg::OP_LDB,Qupls5_pkg::OP_LDBZ,Qupls5_pkg::OP_LDW,Qupls5_pkg::OP_LDWZ,
 		Qupls5_pkg::OP_LDT,Qupls5_pkg::OP_LDTZ,Qupls5_pkg::OP_LOAD,Qupls5_pkg::OP_LOADA,
@@ -160,7 +158,7 @@ begin
 		Qupls5_pkg::OP_STB,Qupls5_pkg::OP_STW,
 		Qupls5_pkg::OP_STT,Qupls5_pkg::OP_STORE,Qupls5_pkg::OP_CSTORE,
 		Qupls5_pkg::OP_STPTR:
-			fnRs2 = {2'b0,ir.Rs2};
+			fnRs2 = {3'b0,ir.Rs2};
 		default:
 			begin
 				fnRs2 = 8'd0;
@@ -173,7 +171,7 @@ always_comb
 begin
 	has_Rs2 = fnHas_Rs2(instr, has_immb);
 	Rs2 = fnRs2(instr, instr_raw, has_immb);
-	Rs2z = ~|Rs2[5:0];
+	Rs2z = ~|Rs2[4:0];
 end
 
 endmodule

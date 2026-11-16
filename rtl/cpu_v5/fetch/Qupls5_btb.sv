@@ -365,7 +365,7 @@ begin
 	// Advance program counter.
 	else begin
 		next_pcs[pc.stream.stream] = pc;
-		next_pcs[pc.stream.stream].cap.offset = pc.cap.offset + MWIDTH*6;	// four instructions
+		next_pcs[pc.stream.stream].cap.offset = pc.cap.offset + MWIDTH*4;	// four instructions
 	end
 end
 
@@ -412,24 +412,24 @@ always_ff @(posedge clk)
 always_ff @(posedge clk)
 if (rst) begin
 	excv <= FALSE;
-	exc <= FLT_NONE;
+	exc <= Qupls5_pkg::FLT_NONE;
 end
 else begin
 	if (advance_pc) begin
 		// bounds okay?
 		if (next_pcs[next_act_stream].cap.offset < next_pcs[next_act_stream].cap.base ||
-			next_pcs[next_act_stream].cap.offset > next_pcs[next_act_stream].cap.top - 24) begin
+			next_pcs[next_act_stream].cap.offset > next_pcs[next_act_stream].cap.top - 16) begin
 			excv <= TRUE;
-			exc <= FLT_CBOUNDS;
+			exc <= Qupls5_pkg::FLT_CBOUNDS;
 		end
 		// execute permitted?
 		if (!next_pcs[next_act_stream].cap.perms[1]) begin
 			excv <= TRUE;
-			exc <= FLT_CPEXEC;
+			exc <= Qupls5_pkg::FLT_CPEXEC;
 		end
 		if (next_pcs[next_act_stream].cap.offset[0]) begin
 			excv <= TRUE;
-			exc <= FLT_CALGN;
+			exc <= Qupls5_pkg::FLT_CALGN;
 		end
 	end
 end
@@ -475,7 +475,7 @@ if (rst) begin
 end
 else begin
 	if (do_call)
-		ras[ras_sp - 2'd1] <= pc0.cap.offset + 4'd6;
+		ras[ras_sp - 2'd1] <= pc0.cap.offset + 4'd4;
 end
 
 always_ff @(posedge clk)
@@ -517,7 +517,7 @@ else begin
 		tmp0.jmp <= commit_jmp0;
 		tmp0.call <= commit_call0;
 		tmp0.ret <= commit_ret0;
-		addra <= commit_pc0.cap.offset[11:1];
+		addra <= commit_pc0.cap.offset[12:2];
 		w0 <= TRUE;
 	end
 	else if (commit_jmp1|commit_call1|commit_ret1|commit_br1) begin
@@ -528,7 +528,7 @@ else begin
 		tmp0.jmp <= commit_jmp1;
 		tmp0.call <= commit_call1;
 		tmp0.ret <= commit_ret1;
-		addra <= commit_pc1.cap.offset[11:1];
+		addra <= commit_pc1.cap.offset[12:2];
 		w0 <= TRUE;
 	end
 	else if (commit_jmp2|commit_call2|commit_ret2|commit_br2) begin
@@ -539,7 +539,7 @@ else begin
 		tmp0.jmp <= commit_jmp2;
 		tmp0.call <= commit_call2;
 		tmp0.ret <= commit_ret2;
-		addra <= commit_pc2.cap.offset[11:1];
+		addra <= commit_pc2.cap.offset[12:2];
 		w0 <= TRUE;
 	end
 	else if (commit_jmp3|commit_call3|commit_ret3|commit_br3) begin
@@ -550,7 +550,7 @@ else begin
 		tmp0.jmp <= commit_jmp3;
 		tmp0.call <= commit_call3;
 		tmp0.ret <= commit_ret3;
-		addra <= commit_pc3.cap.offset[11:1];
+		addra <= commit_pc3.cap.offset[12:2];
 		w0 <= TRUE;
 	end
 end

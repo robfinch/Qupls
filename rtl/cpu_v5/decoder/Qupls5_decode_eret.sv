@@ -45,8 +45,8 @@ input Qupls5_pkg::micro_op_t ir;
 begin
 	fnIsEret = 1'b0;
 	case(ir.opcode)
-	Qupls5_pkg::OP_RTD:
-		fnIsEret = ir.op3==3'd1 || ir.op3==3'd2;
+	Qupls5_pkg::OP_CAP:
+		fnIsEret = ir.func==7'd2 || ir.func==7'd3;
 	default:
 		fnIsEret = 1'b0;
 	endcase

@@ -58,7 +58,7 @@ module Qupls5_rat2(rst, clk,
 	nq, 
 	qbr,
 	
-	// From reservation read requests: 
+	// From decode read requests: 
 	rn,				// architectural register number
 	rnv,			// reg number request valid
 	rng,			// instruction number within group

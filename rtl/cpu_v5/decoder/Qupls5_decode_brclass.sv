@@ -54,10 +54,13 @@ always_comb
 		end
 	Qupls5_pkg::OP_JSR:
 		brclass = Qupls5_pkg::BRC_JSR;
-	Qupls5_pkg::OP_JSRN:
-		brclass = Qupls5_pkg::BRC_JSRN;
-	Qupls5_pkg::OP_RTD:
-		brclass = Qupls5_pkg::BRC_RTD;
+	Qupls5_pkg::OP_CAP:
+	   case(instr.func)
+	   Qupls5_pkg::CAP_RET:
+		  brclass = Qupls5_pkg::BRC_RTD;
+	   default:
+	       brclass = Qupls5_pkg::BRC_NONE;
+	   endcase
 	Qupls5_pkg::OP_BRK:
 		if (instr[28:18]==11'd1)
 			brclass = Qupls5_pkg::BRC_ERET;

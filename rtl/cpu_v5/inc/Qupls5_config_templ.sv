@@ -260,7 +260,7 @@ localparam SUPPORT_VECTOR = 1;
 localparam SUPPORT_GRAPHICS = 1;
 
 localparam SUPPORT_FDP = 0;
-localparam SUPPORT_FLOAT = 1;
+localparam SUPPORT_FLOAT = 0;
 localparam SUPPORT_TRIG = 0;
 localparam SUPPORT_CSR = 1;
 localparam SUPPORT_CSR0 = 0;
@@ -307,8 +307,8 @@ localparam SUPPORT_CANARY = 0;
 // operations. Each vector register needs four registers.
 //localparam NREGS = 40*THREADS+(SUPPORT_VECTOR ? 128 : 0);
 //localparam AREGS = 40*THREADS+(SUPPORT_VECTOR ? 128 : 0);
-localparam NREGS = 128;
-localparam AREGS = 128;
+localparam NREGS = SUPPORT_VECTOR ? 328 : SUPPORT_FLOAT ? 72 : 40;
+localparam AREGS = SUPPORT_VECTOR ? 328 : SUPPORT_FLOAT ? 72 : 40;
 localparam REGFILE_LATENCY = 2;
 
 // Number of physical registers supporting the architectural ones and used in
@@ -377,6 +377,6 @@ localparam NRSE_XPIPE4 = 1;
 localparam NRSE_XPIPE5 = 1;
 localparam NRSE_XPIPE6 = 1;
 
-localparam MICROOPS_PER_INSTR = 16;
+localparam MICROOPS_PER_INSTR = SUPPORT_VECTOR | SUPPORT_FLOAT ? 16 : 8;
 
 localparam SUPPORTED_PRECISIONS = "___O_";

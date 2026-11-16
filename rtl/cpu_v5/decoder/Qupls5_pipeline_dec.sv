@@ -41,7 +41,7 @@ import Qupls5_pkg::*;
 
 module Qupls5_pipeline_dec(rst_i, rst, clk, en, regFPCSR,
 	new_cline_ext, cline, branch_resolved, live_stream,
-	sr, uop_num,
+	cr0, uop_num,
 	tags2free, freevals, bo_wr, bo_preg,
 	stomp_dec, stomp_ext, kept_stream, pg_mot,
 	pg_dec,
@@ -62,7 +62,7 @@ input en;
 input aregno_t regFPCSR;
 input new_cline_ext;
 input [1023:0] cline;
-input Qupls5_pkg::status_reg_t sr;
+input Qupls5_pkg::status_reg_t cr0;
 input [4:0] uop_num;
 input stomp_dec;
 input stomp_ext;
@@ -431,15 +431,16 @@ Qupls5_decoder udeci0
 	.clk(clk),
 	.regFPCSR(regFPCSR),
 	.en(en),
-	.ip(pg_mot.hdr.ip.cap.offset + {pg_mot.pr[g].ip_offs,1'b0}),
-	.om(sr.om),
-	.ipl(sr.ipl),
+	.ip(pg_mot.hdr.ip.cap.offset + pg_mot.pr[g].ip_offs),
+	.om(cr0.om),
+	.ipl(cr0.ipl),
 	.instr(tpr[g].op.uop),
-	.instr_raw(432'(cline >> {tpr[g].op.cli,4'b0})),
+	.instr_raw(336'(cline >> {tpr[g].op.cli,3'b0})),
 	.dbo(dec[g])
 );
 end
 endgenerate
+
 /*
 always_ff @(posedge clk)
 if (rst_i) begin
@@ -521,31 +522,6 @@ else begin
 	pr_dec[1].decbus = dec[1];
 	pr_dec[2].decbus = dec[2];
 	pr_dec[3].decbus = dec[3];
-
-	if (stomp_dec) begin
-		// Clear the branch flags so that a new checkpoint is not assigned and
-		// the checkpoint will not be freed.
-		/*
-		pr_dec[0].decbus.br = FALSE;
-		pr_dec[0].decbus.cjb = FALSE;
-		pr_dec[1].decbus.br = FALSE;
-		pr_dec[1].decbus.cjb = FALSE;
-		pr_dec[2].decbus.br = FALSE;
-		pr_dec[2].decbus.cjb = FALSE;
-		pr_dec[3].decbus.br = FALSE;
-		pr_dec[3].decbus.cjb = FALSE;
-		*/
-		pr_dec[0].decbus.Rci = dec[0].Rci;
-		pr_dec[1].decbus.Rci = dec[1].Rci;
-		pr_dec[2].decbus.Rci = dec[2].Rci;
-		pr_dec[3].decbus.Rci = dec[3].Rci;
-	end
-	else begin
-		pr_dec[0].decbus.Rci = dec[0].Rci;
-		pr_dec[1].decbus.Rci = dec[1].Rci;
-		pr_dec[2].decbus.Rci = dec[2].Rci;
-		pr_dec[3].decbus.Rci = dec[3].Rci;
-	end
 
 	// Apply interrupt masking.
 	// Done by clearing the hardware interrupt flag.
@@ -819,17 +795,6 @@ else begin
 	// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 	if (SUPPORT_CARRY) begin
 		pr_dec[0].carry_mod = carry_mod_i;
-		if (pr_dec[0].v)
-		case ({pr_dec[0].carry_mod[9],pr_dec[0].carry_mod[0]})
-		2'd0:	;
-		2'd1:	pr_dec[0].decbus.Rci = pr_dec[0].carry_mod[25:24]|7'd40;
-		2'd2:	pr_dec[0].decbus.Rco = pr_dec[0].carry_mod[25:24]|7'd40;
-		2'd3:
-			begin
-				pr_dec[0].decbus.Rci = pr_dec[0].carry_mod[25:24]|7'd40;
-				pr_dec[0].decbus.Rco = pr_dec[0].carry_mod[25:24]|7'd40;
-			end
-		endcase
 		if (dec[0].carry && pr_dec[0].v) begin
 			pr_dec[1].carry_mod = insm[0].op.uop;
 		end
@@ -840,17 +805,6 @@ else begin
 				pr_dec[1].carry_mod[23:9] = {2'd0,pr_dec[0].carry_mod[23:11]};
 			end
 		end
-		if (pr_dec[1].v)
-		case ({pr_dec[1].carry_mod[9],pr_dec[1].carry_mod[0]})
-		2'd0:	;
-		2'd1:	pr_dec[1].decbus.Rci = pr_dec[1].carry_mod[25:24]|7'd40;
-		2'd2:	pr_dec[1].decbus.Rco = pr_dec[1].carry_mod[25:24]|7'd40;
-		2'd3:
-			begin
-				pr_dec[1].decbus.Rci = pr_dec[1].carry_mod[25:24]|7'd40;
-				pr_dec[1].decbus.Rco = pr_dec[1].carry_mod[25:24]|7'd40;
-			end
-		endcase
 		if (dec[1].carry && pr_dec[1].v) begin
 			pr_dec[2].carry_mod = insm[1].op.uop;
 		end
@@ -861,17 +815,6 @@ else begin
 				pr_dec[2].carry_mod[23:9] = {2'd0,pr_dec[1].carry_mod[23:11]};
 			end
 		end
-		if (pr_dec[2].v)
-		case ({pr_dec[2].carry_mod[9],pr_dec[2].carry_mod[0]})
-		2'd0:	;
-		2'd1:	pr_dec[2].decbus.Rci = pr_dec[1].carry_mod[25:24]|7'd40;
-		2'd2:	pr_dec[2].decbus.Rco = pr_dec[1].carry_mod[25:24]|7'd40;
-		2'd3:
-			begin
-				pr_dec[2].decbus.Rci = pr_dec[1].carry_mod[25:24]|7'd40;
-				pr_dec[2].decbus.Rco = pr_dec[1].carry_mod[25:24]|7'd40;
-			end
-		endcase
 		if (dec[2].carry && pr_dec[2].v) begin
 			pr_dec[3].carry_mod = insm[2].op.uop;
 		end
@@ -883,16 +826,6 @@ else begin
 			end
 		end
 		if (pr_dec[3].v)
-		case ({pr_dec[3].carry_mod[9],pr_dec[3].carry_mod[0]})
-		2'd0:	;
-		2'd1:	pr_dec[3].decbus.Rci = pr_dec[2].carry_mod[25:24]|7'd40;
-		2'd2:	pr_dec[3].decbus.Rco = pr_dec[2].carry_mod[25:24]|7'd40;
-		2'd3:
-			begin
-				pr_dec[3].decbus.Rci = pr_dec[2].carry_mod[25:24]|7'd40;
-				pr_dec[3].decbus.Rco = pr_dec[2].carry_mod[25:24]|7'd40;
-			end
-		endcase
 		if (dec[3].carry & pr_dec[3].v) begin
 			carry_mod_o = insm[3].op.uop;
 		end
@@ -923,10 +856,10 @@ else begin
 	if (ins2_d_inv) pr_dec[2].v = FALSE;
 	if (ins3_d_inv) pr_dec[3].v = FALSE;
 */
-	pr_dec[0].om = sr.om;
-	pr_dec[1].om = sr.om;
-	pr_dec[2].om = sr.om;
-	pr_dec[3].om = sr.om;
+	pr_dec[0].om = cr0.om;
+	pr_dec[1].om = cr0.om;
+	pr_dec[2].om = cr0.om;
+	pr_dec[3].om = cr0.om;
 
 	// Instructions following a BSR / JSR in the same pipeline group are never
 	// executed, whether predicted correctly or not.
@@ -958,9 +891,9 @@ else begin
 	end
 
 	// Note constant imm has already been shifted left once.
-	bsr0_tgt = {pr_dec[0].decbus.imma} + pg_mot.hdr.ip.cap.offset + {pg_mot.pr[0].ip_offs,1'b0};
-	bsr1_tgt = {pr_dec[1].decbus.imma} + pg_mot.hdr.ip.cap.offset + {pg_mot.pr[1].ip_offs,1'b0};
-	bsr2_tgt = {pr_dec[2].decbus.imma} + pg_mot.hdr.ip.cap.offset + {pg_mot.pr[2].ip_offs,1'b0};
+	bsr0_tgt = {pr_dec[0].decbus.imma} + pg_mot.hdr.ip.cap.offset + pg_mot.pr[0].ip_offs;
+	bsr1_tgt = {pr_dec[1].decbus.imma} + pg_mot.hdr.ip.cap.offset + pg_mot.pr[1].ip_offs;
+	bsr2_tgt = {pr_dec[2].decbus.imma} + pg_mot.hdr.ip.cap.offset + pg_mot.pr[2].ip_offs;
 	jsr0_tgt = {pr_dec[0].decbus.imma};
 	jsr1_tgt = {pr_dec[1].decbus.imma};
 	jsr2_tgt = {pr_dec[2].decbus.imma};
@@ -972,17 +905,17 @@ else begin
 	if (pg_mot.hdr.ip.stream == pg_dec.hdr.ip.stream && !stomp_dec) begin
 		if (pr_dec[0].decbus.bsr|pr_dec[0].decbus.jsr) begin
 			new_address_o = pr_dec[0].decbus.bsr ? bsr0_tgt : jsr0_tgt;
-			if (new_address_o!=(pg_mot.hdr.ip.cap.offset + {pg_mot.pr[0].ip_offs,1'b0}))
+			if (new_address_o!=(pg_mot.hdr.ip.cap.offset + pg_mot.pr[0].ip_offs))
 				p_override = TRUE;
 		end
 		else if (pr_dec[1].decbus.bsr|pr_dec[1].decbus.jsr) begin
 			new_address_o = pr_dec[1].decbus.bsr ? bsr1_tgt : jsr1_tgt;
-			if (new_address_o!=(pg_mot.hdr.ip.cap.offset + {pg_mot.pr[0].ip_offs,1'b0}))
+			if (new_address_o!=(pg_mot.hdr.ip.cap.offset + pg_mot.pr[0].ip_offs))
 				p_override = TRUE;
 		end
 		else if (pr_dec[2].decbus.bsr|pr_dec[2].decbus.jsr) begin
 			new_address_o = pg_dec.pr[2].op.decbus.bsr ? bsr2_tgt : jsr2_tgt;
-			if (new_address_o!=(pg_dec.hdr.ip.cap.offset + {pg_dec.pr[0].ip_offs,1'b0}))
+			if (new_address_o!=(pg_dec.hdr.ip.cap.offset + pg_dec.pr[0].ip_offs))
 				p_override = TRUE;
 		end
 	end

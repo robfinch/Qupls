@@ -50,9 +50,9 @@ begin
 	Qupls5_pkg::OP_BCCU,
 	Qupls5_pkg::OP_FBCC:
 //	Qupls5_pkg::OP_TRAP:
-		fnIsFlowCtrl = 1'b1;	
-	Qupls5_pkg::OP_BSR,Qupls5_pkg::OP_JSR,
-	Qupls5_pkg::OP_JSRN:
+		fnIsFlowCtrl = 1'b1;
+	Qupls5_pkg::OP_BRA,Qupls5_pkg::OP_JMP,	
+	Qupls5_pkg::OP_BSR,Qupls5_pkg::OP_JSR:
 		fnIsFlowCtrl = 1'b1;	
 	default:
 		fnIsFlowCtrl = 1'b0;

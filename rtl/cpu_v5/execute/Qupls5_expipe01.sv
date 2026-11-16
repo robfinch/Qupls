@@ -42,7 +42,7 @@ import Qupls5_pkg::*;
 module Qupls5_expipe01(rst, clk, clk3x, idle, stomp, rse_i, rse_o, rm,
 	z, cptgt, o, csr, cpl, canary, sto, ust, otag, we_o, exc,
 	tlb_v, adr, adrv, agen_rse,
-	fcu_rse, sr, ic_irq, irq_sn, takb, fcu_adr);
+	fcu_rse, cr0, ic_irq, irq_sn, takb, fcu_adr);
 parameter WID=Qupls5_pkg::SUPPORT_QUAD_PRECISION|Qupls5_pkg::SUPPORT_CAPABILITIES ? 128 : 64;
 parameter PIPE = 3'd0;
 parameter SUPPORT_BRANCH0 = Qupls5_pkg::SUPPORT_BRANCH0;
@@ -71,7 +71,7 @@ output cpu_types_pkg::address_t adr;
 output reg adrv;
 output Qupls5_pkg::reservation_station_entry_t agen_rse;
 output Qupls5_pkg::reservation_station_entry_t fcu_rse;
-input Qupls5_pkg::status_reg_t sr;
+input Qupls5_pkg::status_reg_t cr0;
 input [5:0] ic_irq;
 input [7:0] irq_sn;
 output takb;
@@ -156,7 +156,7 @@ Qupls5_meta_fcu ufcu1
 	.clk(clk),
 	.rse_i(rse_i),
 	.rse_o(fcu_rse),
-	.sr(sr),
+	.cr0(cr0),
 	.ic_irq(ic_irq),
 	.irq_sn(irq_sn),
 	.takb(takb),
@@ -195,7 +195,7 @@ Qupls5_meta_alu #(.PIPE(PIPE)) umalu1
 	.we_o(alu_we),
 	.exc(alu_exc),
 	.fcu_rse_o(),
-	.sr(64'd0),
+	.cr0(64'd0),
 	.ic_irq(6'd0),
 	.irq_sn(8'h00),
 	.takb(),

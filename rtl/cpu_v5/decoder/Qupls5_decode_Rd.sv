@@ -42,7 +42,7 @@ import Qupls5_pkg::*;
 module Qupls5_decode_Rd(om, instr, instr_raw, Rd, Rdv, Rdz, we);
 input Qupls5_pkg::operating_mode_t om;
 input Qupls5_pkg::micro_op_t instr;
-input [431:0] instr_raw;
+input [335:0] instr_raw;
 output aregno_t Rd;
 output reg Rdv;
 output reg Rdz;
@@ -50,20 +50,30 @@ output reg we;
 
 function aregno_t fnRd;
 input Qupls5_pkg::micro_op_t instr;
-input [431:0] instr_raw;
+input [335:0] instr_raw;
 Qupls5_pkg::micro_op_t ir;
 begin
 	ir = instr;
 	case(ir.opcode)
 	// Integer instructions
 	Qupls5_pkg::OP_R3B,Qupls5_pkg::OP_R3W,Qupls5_pkg::OP_R3T,Qupls5_pkg::OP_R3O:
-		fnRd = {2'b00,ir.Rd};
-	Qupls5_pkg::OP_VR3B,Qupls5_pkg::OP_VR3W,Qupls5_pkg::OP_VR3T,Qupls5_pkg::OP_VR3O:
-		fnRd = {1'b1,ir.Rd[4:0],2'b00};
-	Qupls5_pkg::OP_VSR3B,Qupls5_pkg::OP_VSR3W,Qupls5_pkg::OP_VSR3T,Qupls5_pkg::OP_VSR3O:
-		fnRd = {1'b1,ir.Rd[4:0],2'b00};
+		case(ir.func)
+		Qupls5_pkg::FN_DEPISPR:
+			begin
+				casez(ir.Rd)
+				5'b00???:	fnRd = (Qupls5_pkg::SUPPORT_VECTOR ? 9'd320 : 
+					Qupls5_pkg::SUPPORT_FLOAT ? 9'd64 : 9'd32) + ir.Rd[2:0];
+				default:	fnRd = {3'b000,ir.Rd};
+				endcase
+			end
+		default:
+			if (ir.vn[0])
+				fnRd = {1'b0,ir.Rd,3'd0} + 9'd64;
+			else
+				fnRd = {4'b000,ir.Rd};
+		endcase
 	Qupls5_pkg::OP_CSR:
-		fnRd = {2'd0,ir.Rd};
+		fnRd = {3'd0,ir.Rd};
 	Qupls5_pkg::OP_ADDI,Qupls5_pkg::OP_SUBFI,Qupls5_pkg::OP_CMPI,Qupls5_pkg::OP_CMPUI,
 	Qupls5_pkg::OP_ANDI,Qupls5_pkg::OP_ORI,Qupls5_pkg::OP_XORI,
 	Qupls5_pkg::OP_MULI,Qupls5_pkg::OP_MULUI,Qupls5_pkg::OP_DIVI,Qupls5_pkg::OP_DIVUI,
@@ -83,40 +93,30 @@ begin
 		Qupls5_pkg::FLT_FTOI,
 		Qupls5_pkg::FLT_ISNAN,
 		Qupls5_pkg::FLT_CMP:
-			fnRd = {2'd0,ir.Rd};
-		default: fnRd = {2'd1,ir.Rd};
-		endcase
-	Qupls5_pkg::OP_VFLTH,Qupls5_pkg::OP_VFLTS,Qupls5_pkg::OP_VFLTD,Qupls5_pkg::OP_VFLTQ,
-	Qupls5_pkg::OP_VSFLTH,Qupls5_pkg::OP_VSFLTS,Qupls5_pkg::OP_VSFLTD,Qupls5_pkg::OP_VSFLTQ:
-		case(ir.func)
-		Qupls5_pkg::FLT_CLASS,
-		Qupls5_pkg::FLT_FINITE,
-		Qupls5_pkg::FLT_RM,
-		Qupls5_pkg::FLT_SEQ,
-		Qupls5_pkg::FLT_SLE,
-		Qupls5_pkg::FLT_SLT,
-		Qupls5_pkg::FLT_SNE,
-		Qupls5_pkg::FLT_SIG,
-		Qupls5_pkg::FLT_FTOI,
-		Qupls5_pkg::FLT_ISNAN,
-		Qupls5_pkg::FLT_CMP:
-			fnRd = {1'd1,ir.Rd[4:0],2'd0};
-		default: fnRd = {1'd1,ir.Rd[4:0],2'd0};
+			if (ir.vn[0])
+				fnRd = {1'b0,ir.Rd,3'd0} + 9'd64;
+			else
+				fnRd = {4'd0,ir.Rd};
+		default:
+			if (ir.vn[0])
+				fnRd = {1'b0,ir.Rd,3'd0} + 9'd64;
+			else
+				fnRd = {4'b000,ir.Rd} + 9'd32;
 		endcase
 	// Branch instructions
 	Qupls5_pkg::OP_BSR,Qupls5_pkg::OP_JSR:
-		fnRd = {2'd0,ir.Rd};
+		fnRd = {3'd0,ir.Rd};
 	Qupls5_pkg::OP_BCCU,Qupls5_pkg::OP_BCC,Qupls5_pkg::OP_MBCC:
-		fnRd = ir.inc ? {2'd0,ir.Rs1} : 8'd0;
+		fnRd = ir.inc ? {3'd0,ir.Rs1} : 8'd0;
 	Qupls5_pkg::OP_FBCC:
-		fnRd = {2'd1,ir.Rs1};
+		fnRd = {3'd1,ir.Rs1};
 	// Load / store instructions
 	Qupls5_pkg::OP_LDB,Qupls5_pkg::OP_LDBZ,Qupls5_pkg::OP_LDW,Qupls5_pkg::OP_LDWZ,
 	Qupls5_pkg::OP_LDT,Qupls5_pkg::OP_LDTZ,Qupls5_pkg::OP_LOAD,Qupls5_pkg::OP_LOADA,
 	Qupls5_pkg::OP_AMO,Qupls5_pkg::OP_CMPSWAP:
 		fnRd = ir.Rd;
 	Qupls5_pkg::OP_LDV:
-		fnRd = {1'b1,ir.Rd[4:0],2'd0};
+		fnRd = {ir.Rd[4:0],3'd0} + 9'd64;
 	default:
 		fnRd = 8'd0;
 	endcase
@@ -126,7 +126,7 @@ endfunction
 // ToDo: Fix these
 function aregno_t fnRdv;
 input Qupls5_pkg::micro_op_t instr;
-input [431:0] instr_raw;
+input [335:0] instr_raw;
 Qupls5_pkg::micro_op_t ir;
 begin
 	fnRdv = INV;
@@ -173,8 +173,8 @@ always_comb
 begin
 	Rd = fnRd(instr, instr_raw);
 	Rdv = fnRdv(instr, instr_raw);
-	Rdz = ~|Rd[5:0];
-	we = |Rd[5:0] & Rdv;
+	Rdz = ~|Rd[4:0];
+	we = Rdv;
 end
 
 endmodule

@@ -295,7 +295,7 @@ Qupls5_meta_alu #(.PIPE(PIPE)) umalu1
 	.we_o(alu_we),
 	.exc(alu_exc),
 	.fcu_rse_o(),
-	.sr(64'd0),
+	.cr0(64'd0),
 	.ic_irq(6'd0),
 	.irq_sn(8'h00),
 	.takb(),

@@ -42,7 +42,7 @@ import Qupls5_pkg::*;
 
 module Qupls5_meta_alu(rst, clk, rse_i, rse_o, lane, cptgt, z, stomp,
 	qres, cs, csr, cpl, canary, o, cp_o, we_o, exc,
-	fcu_rse_o, sr, ic_irq, irq_sn, takb, adr);
+	fcu_rse_o, cr0, ic_irq, irq_sn, takb, adr);
 parameter PIPE = 3'd0;	
 parameter WID=$bits(cpu_types_pkg::value_t); 
 parameter SUPPORTED_PRECISIONS=Qupls5_pkg::SUPPORTED_PRECISIONS;
@@ -64,7 +64,7 @@ output checkpt_ndx_t cp_o;
 output reg [WID/8:0] we_o;			// extra bit for tag update
 output reg [WID-1:0] exc;
 output Qupls5_pkg::reservation_station_entry_t fcu_rse_o;
-input Qupls5_pkg::status_reg_t sr;
+input Qupls5_pkg::status_reg_t cr0;
 input [5:0] ic_irq;
 input [7:0] irq_sn;
 output takb;
@@ -224,7 +224,7 @@ Qupls5_meta_fcu ufcu1
 	.clk(clk),
 	.rse_i(rse_i),
 	.rse_o(fcu_rse_o),
-	.sr(sr),
+	.cr0(cr0),
 	.ic_irq(ic_irq),
 	.irq_sn(irq_sn),
 	.takb(takb),
@@ -278,7 +278,7 @@ reg [WID-1:0] c1;
 			.clk(clk),
 			.chunk(chunk),
 			.mask(c),
-			.om(rse_i.om),
+			.cr0(rse_i.arg[6].val),
 			.ir(ir),
 			.capa(256'd0),
 			.capa_flags(8'h00),
@@ -388,7 +388,7 @@ reg [WID-1:0] c1;
 			.clk(clk),
 			.chunk(chunk),
 			.mask(c),
-			.om(rse_i.om),
+			.cr0(rse_i.arg[6].val),
 			.ir(ir),
 			.capa(256'd0),
 			.capa_flags(8'h00),
@@ -475,7 +475,7 @@ reg [WID-1:0] c1;
 			.clk(clk),
 			.chunk(chunk),
 			.mask(c),
-			.om(rse_i.om),
+			.cr0(rse_i.arg[6].val),
 			.ir(ir),
 			.capa(256'd0),
 			.capa_flags(8'h00),
@@ -540,7 +540,7 @@ reg [WID-1:0] c1;
 			.clk(clk),
 			.chunk(chunk),
 			.mask(c),
-			.om(rse_i.om),
+			.cr0(rse_i.arg[6].val),
 			.ir(ir),
 			.capa(capa),
 			.capa_flags(capa_flags),
@@ -605,7 +605,7 @@ generate begin : g128
 			.clk(clk),
 			.chunk(chunk),
 			.mask(c),
-			.om(rse_i.om),
+			.cr0(rse_i.arg[6].val),
 			.ir(ir),
 			.capa(capa),
 			.capa_flags(capa_flags),

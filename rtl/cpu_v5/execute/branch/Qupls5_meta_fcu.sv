@@ -40,13 +40,13 @@ import capability_pkg::*;
 import Qupls5_pkg::*;
 
 
-module Qupls5_meta_fcu(rst, clk, rse_i, rse_o, sr, ic_irq, irq_sn, takb, res, we_o);
+module Qupls5_meta_fcu(rst, clk, rse_i, rse_o, cr0, ic_irq, irq_sn, takb, res, we_o);
 parameter WID = 64;
 input rst;
 input clk;
 input Qupls5_pkg::reservation_station_entry_t rse_i;
 output Qupls5_pkg::reservation_station_entry_t rse_o;
-input Qupls5_pkg::status_reg_t sr;
+input Qupls5_pkg::status_reg_t cr0;
 input [5:0] ic_irq;
 input [7:0] irq_sn;
 output takb;
@@ -85,7 +85,7 @@ Qupls5_meta_branch_eval ube1
 	.a(a),
 	.b(b),
 	.c(d),
-	.irq(ic_irq > sr.ipl && sr.mie && irq_sn!=rse_i.irq_sn || ic_irq==6'd63),
+	.irq(ic_irq > cr0.ipl && cr0.mie && irq_sn!=rse_i.irq_sn || ic_irq==6'd63),
 	.takb(takb)
 );
 

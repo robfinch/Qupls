@@ -116,13 +116,12 @@ begin
 		fnExPipe = 7'b0110000;
 	// Branches must be supported on at least one pipe.
 	Qupls5_pkg::OP_BCC,Qupls5_pkg::OP_BCCU,Qupls5_pkg::OP_FBCC,Qupls5_pkg::OP_MBCC,
-	Qupls5_pkg::OP_BSR,Qupls5_pkg::OP_JSR,Qupls5_pkg::OP_JSRN,
+	Qupls5_pkg::OP_BSR,Qupls5_pkg::OP_JSR,
 	Qupls5_pkg::OP_SYS,
 	Qupls5_pkg::OP_BRK,
-	Qupls5_pkg::OP_RTD:
-		fnExPipe = Qupls5_pkg::SUPPORT_BRANCH1 ? 7'b0000010 : 7'b0000001;
 	Qupls5_pkg::OP_CAP:
 		case(ir.func)
+		Qupls5_pkg::CAP_RET: fnExPipe = Qupls5_pkg::SUPPORT_BRANCH1 ? 7'b0000010 : 7'b0000001;
 		// The following read one cap op and write to the GPR.
 		Qupls5_pkg::CAP_GETBASE:		fnExPipe = 7'b0110000;
 		Qupls5_pkg::CAP_GETFLAGS:		fnExPipe = 7'b0110000;

@@ -34,6 +34,7 @@
 //
 // ============================================================================
 
+import const_pkg::*;
 import Qupls5_pkg::*;
 
 module Qupls5_decode_alu(instr, alu);
@@ -79,6 +80,6 @@ begin
 end
 endfunction
 
-assign alu = fnIsAlu(instr);
+assign alu = instr.v ? fnIsAlu(instr) : TRUE;
 
 endmodule

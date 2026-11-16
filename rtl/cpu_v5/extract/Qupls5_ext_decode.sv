@@ -60,10 +60,10 @@ output Qupls5_pkg::pc_address_ex_t jsr_tgt;
 output Qupls5_pkg::pc_address_ex_t bcc_tgt;
 
 always_comb nop = instr[6:0]==Qupls5_pkg::OP_NOP;
-always_comb bsr = instr[6:0]==Qupls5_pkg::OP_BSR &&  ~&instr[13:7];
-always_comb bra = instr[6:0]==Qupls5_pkg::OP_BSR &&   &instr[13:7];
-always_comb jsr = instr[6:0]==Qupls5_pkg::OP_JSR &&  ~&instr[13:7];
-always_comb jmp = instr[6:0]==Qupls5_pkg::OP_JSR && 	&instr[13:7];
+always_comb bsr = instr[6:0]==Qupls5_pkg::OP_BSR;
+always_comb bra = instr[6:0]==Qupls5_pkg::OP_BRA;
+always_comb jsr = instr[6:0]==Qupls5_pkg::OP_JSR;
+always_comb jmp = instr[6:0]==Qupls5_pkg::OP_JMP;
 // For conditional branches we have to detect if it is a branch-to-register
 // value. If so, the address cannot be predicted at this stage. It will
 // need to wait until it resolves.
@@ -77,7 +77,7 @@ always_comb
 	default:
 		bcc = FALSE;
 	endcase
-always_comb rtd = instr[6:0]==Qupls5_pkg::OP_RTD;
+always_comb rtd = instr[6:0]==Qupls5_pkg::OP_CAP && instr[31:25]==Qupls5_pkg::CAP_RET;
 // To compute the virtual address the offset is added to the base, so it needs
 // to be subtracted off when set.
 always_comb begin bsr_tgt = ip; bsr_tgt.cap.offset = ip.cap.offset + {{29{instr[47]}},instr[47:14],1'b0} - ip.cap.base; end

@@ -32,6 +32,7 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
+// 490 LUTs
 // ============================================================================
 
 import cpu_types_pkg::*;
@@ -47,7 +48,7 @@ input cpu_types_pkg::pc_address_t ip;
 input Qupls5_pkg::operating_mode_t om;
 input [5:0] ipl;
 input Qupls5_pkg::micro_op_t instr;
-input [431:0] instr_raw;
+input [335:0] instr_raw;
 output Qupls5_pkg::decode_bus_t dbo;
 
 Qupls5_pkg::decode_bus_t db;
@@ -118,11 +119,11 @@ Qupls5_decode_Rs4 udcr4
 	.Rs4z(dbo.Rs4z)
 );
 
-Qupls5_decode_Rm udcrt
+Qupls5_decode_Rmd udcrt
 (
 	.instr(instr),
-	.Rm(dbo.Rm),
-	.Rmz(dbo.Rmz)
+	.Rmd(dbo.Rm),
+	.Rmd_used()
 );
 
 Qupls5_decode_Rd udcrm
@@ -134,17 +135,6 @@ Qupls5_decode_Rd udcrm
 	.Rdv(dbo.Rdv),
 	.Rdz(dbo.Rdz),
 	.we(dbo.we)
-);
-
-Qupls5_decode_Rd2 udcrd2
-(
-	.om(om),
-	.regFPCSR(regFPCSR),
-	.instr(instr),
-	.instr_raw(instr_raw),
-	.Rd2(dbo.Rd2),
-	.Rd2v(dbo.Rd2v),
-	.Rd2z(dbo.Rd2z)
 );
 
 Qupls5_decode_has_imm uhi
@@ -404,13 +394,16 @@ Qupls5_decode_macro udecmacro
 always_comb//ff @(posedge clk)
 begin
 	dbo.v = VAL;
+	dbo.irq = instr.opcode==Qupls5_pkg::OP_IRQ;
 	dbo.rext = instr.opcode==Qupls5_pkg::OP_REXT;
+	dbo.extop = instr.opcode==Qupls5_pkg::OP_EXTOP;
 	dbo.boi = instr.opcode==Qupls5_pkg::OP_BCCU && instr.func==Qupls5_pkg::CND_BOI;
+	dbo.pfx = instr.opcode==Qupls5_pkg::OP_REXT;
 	dbo.bsr = instr.opcode==Qupls5_pkg::OP_BSR;
 	dbo.jsr = instr.opcode==Qupls5_pkg::OP_JSR;
 	dbo.sys = instr.opcode==Qupls5_pkg::OP_SYS;
 	dbo.brk = instr.opcode==Qupls5_pkg::OP_BRK;
-	dbo.ret = instr.opcode==Qupls5_pkg::OP_RTD;
+	dbo.ret = instr.opcode==Qupls5_pkg::OP_CAP && instr.func==Qupls5_pkg::CAP_RET;
 	dbo.stptr = instr.opcode==Qupls5_pkg::OP_STPTR;
 	dbo.csr = instr.opcode==Qupls5_pkg::OP_CSR;
 	dbo.iprel = FALSE;
@@ -428,6 +421,8 @@ begin
 
 	dbo.v2p = instr.opcode==Qupls5_pkg::OP_V2P;
 	dbo.vv2p = instr.opcode==Qupls5_pkg::OP_VV2P;
+	dbo.vlen = instr.vlen;
+	dbo.vn = instr.vn;
 	dbo.amo = instr.opcode==Qupls5_pkg::OP_AMO;
 	dbo.sync = instr.opcode==Qupls5_pkg::OP_FENCE && instr.func==7'd0 && instr[15:8]==8'hFF;
 	dbo.cpytgt = 1'b0;
@@ -436,15 +431,14 @@ begin
 		dbo.cause = Qupls5_pkg::FLT_BADREG;
 	dbo.rc = instr.func[6];
 		dbo.cause = Qupls5_pkg::FLT_NONE;
+	dbo.pred_shadow_size = 4'd0;
 	// Is the predicate shadow count within range?
 	if (pred_shadow_count >= Qupls5_pkg::PRED_SHADOW)
 		dbo.cause = Qupls5_pkg::FLT_UNIMP;
 	else
 		dbo.pred_shadow_size = pred_shadow_count;
 	if (!instr.v) begin
-		dbo = {$bits(dbo){1'd0}};	// in case a signal was missed / unused.
-		dbo.nop = TRUE;
-		dbo.sau = TRUE;
+//		dbo = {$bits(dbo){1'd0}};	// in case a signal was missed / unused.
 		dbo.cause = Qupls5_pkg::FLT_NONE;
 	end
 	/*

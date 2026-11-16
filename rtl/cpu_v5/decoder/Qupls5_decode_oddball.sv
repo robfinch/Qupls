@@ -48,7 +48,7 @@ begin
 	case(ir.opcode)
 	Qupls5_pkg::OP_CSR:	fnIsOddball = 1'b1;
 	Qupls5_pkg::OP_BRK:	fnIsOddball = 1'b1;
-	Qupls5_pkg::OP_RTD:	fnIsOddball = ir.imm[2:0]==3'd1 || ir.imm[2:0]==3'd2;	// RTE ERET
+	Qupls5_pkg::OP_CAP:	fnIsOddball = ir.func==7'd2 || ir.func==7'd3;	// RTE ERET
 	Qupls5_pkg::OP_SYS:	fnIsOddball = 1'b1;	// TRAP, REX, ECALL
 	default:	fnIsOddball = 1'b0;
 	endcase

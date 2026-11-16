@@ -36,6 +36,7 @@
 // Translate raw instructions to micro-ops.
 // 4450 LUTs / 8200 FFs / 4 DSPs / 133 MHz
 // 42000 LUTs / 76000 FFs / 
+// 23600 LUTs / 30300 FFs / 0 DSPs / 230 MHz (4 uops/insn)
 // ============================================================================
 
 import const_pkg::*;
@@ -49,9 +50,9 @@ module Qupls5_pipeline_mot(rst, clk, en, vcfg_num, vcfg_cat,
   pg_ext, pg_trn, pg_moq1, pg_moq2, pg_mot, pg_mot1,
   advance_ext, uop_buf, uop_mark, head);
 parameter MWIDTH = Qupls5_pkg::MWIDTH;
-parameter MICROOPS_PER_INSTR = 16;
+parameter MICROOPS_PER_INSTR = Qupls5_pkg::MICROOPS_PER_INSTR;
 parameter MAX_MICROOPS = 8;
-parameter COMB = 0;
+parameter COMB = 1;	// Use combo logic in the translate stage.
 input rst;
 input clk;
 input en;
@@ -185,7 +186,7 @@ always_comb velsz = {
 generate begin : gMicroopMem
 	for (g = 0; g < MWIDTH; g = g + 1)
 Qupls5_microop_mem #(
-	.COMB(FALSE),
+	.COMB(COMB),
 	.MICROOPS_PER_INSTR(MICROOPS_PER_INSTR)
 ) uuop1
 (

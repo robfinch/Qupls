@@ -33,6 +33,8 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 // 55900 LUTs / 11500 FFs / 0 BRAMs / 160 MHz
+// 45100 LUTs / 11300 FFs / 0 BRAMS / 100 MHz (1312 phys. regs)
+// 5200 LUTs / 8100 FFs / 0 BRAMS / 120 MHZ (160 phys. regs)
 // ============================================================================
 
 import const_pkg::*;
@@ -44,7 +46,7 @@ import Qupls5_pkg::*;
 module Qupls5_pipeline_ren(
 	rst, clk, clk5x, ph4, en, nq, restore,
 	unavail_list,
-	chkpt_amt, tail0, rob, avail_reg, sr, branch_resolved,
+	chkpt_amt, tail0, rob, avail_reg, branch_resolved,
 	stomp_ren, live_stream, flush_dec, flush_ren,
 //	arn, arng, arnv,
 	rn_cp, prn_i, prnv,
@@ -84,7 +86,6 @@ input [2:0] chkpt_amt;
 input rob_ndx_t tail0;
 input Qupls5_pkg::rob_entry_t [Qupls5_pkg::ROB_ENTRIES-1:0] rob;
 input [Qupls5_pkg::PREGS-1:0] avail_reg;
-input Qupls5_pkg::status_reg_t sr;
 input branch_resolved;
 input stomp_ren;
 input pc_stream_t live_stream;
@@ -166,7 +167,6 @@ begin
 	nopi.uop.Rs3 = 8'd0;
 	nopi.uop.Rs4 = 8'd0;
 	nopi.uop.Rd = 8'd0;
-	nopi.uop.Rd2 = 8'd0;
 	nopi.decbus = {$bits(Qupls5_pkg::decode_bus_t){1'b0}};
 	nopi.decbus.v = VAL;
 	nopi.decbus.Rs1 = 8'd0;
@@ -391,7 +391,7 @@ else begin
 		pg_ren.pr[0].op.pRs2 <= prn[1];
 		pg_ren.pr[0].op.pRs3 <= prn[2];
 		pg_ren.pr[0].op.pRs4 <= prn[3];
-		pg_ren.pr[0].op.pRm <= prn[4];
+		pg_ren.pr[0].op.pDRM <= prn[4];
 		pg_ren.pr[0].op.pRd <= prn[5];
 	/*
 	if (bo_wr) begin
@@ -426,7 +426,7 @@ else begin
 			pg_ren.pr[1].op.pRs2 <= prn[7];
 			pg_ren.pr[1].op.pRs3 <= prn[8];
 			pg_ren.pr[1].op.pRs4 <= prn[9];
-			pg_ren.pr[1].op.pRm <= prn[10];
+			pg_ren.pr[1].op.pDRM <= prn[10];
 			pg_ren.pr[1].op.pRd <= prn[11];
 		end
 	
@@ -451,7 +451,7 @@ else begin
 			pg_ren.pr[2].op.pRs2 <= prn[13];
 			pg_ren.pr[2].op.pRs3 <= prn[14];
 			pg_ren.pr[2].op.pRs4 <= prn[15];
-			pg_ren.pr[2].op.pRm <= prn[16];
+			pg_ren.pr[2].op.pDRM <= prn[16];
 //				pg_ren.pr[2].op.uop.Rs4 = prn[13];
 			pg_ren.pr[2].op.pRd <= prn[17];
 		end
@@ -478,7 +478,7 @@ else begin
 			pg_ren.pr[3].op.pRs2 <= prn[19];
 			pg_ren.pr[3].op.pRs3 <= prn[20];
 			pg_ren.pr[3].op.pRs4 <= prn[21];
-			pg_ren.pr[3].op.pRm <= prn[22];
+			pg_ren.pr[3].op.pDRM <= prn[22];
 			pg_ren.pr[3].op.pRd <= prn[23];
 		end
 	end

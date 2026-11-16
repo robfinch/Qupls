@@ -45,7 +45,8 @@ input Qupls5_pkg::micro_op_t ir;
 begin
 	fnIsCJB = 1'b0;
 	case(ir.opcode)
-	Qupls5_pkg::OP_BSR,Qupls5_pkg::OP_JSR,Qupls5_pkg::OP_JSRN:
+	Qupls5_pkg::OP_BRA,Qupls5_pkg::OP_JMP,
+	Qupls5_pkg::OP_BSR,Qupls5_pkg::OP_JSR:
 		fnIsCJB = 1'b1;
 	default:	fnIsCJB = 1'b0;
 	endcase

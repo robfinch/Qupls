@@ -187,7 +187,7 @@
 					next_uop[0].lead = 1'b1;
 					next_uop[0].num = 5'd0;
 					next_uop[0].opcode = uop0.Rs3[6] ? Qupls5_pkg::OP_NOP : Qupls5_pkg::OP_R3O;
-					next_uop[0].func = Qupls5_pkg::FN_OR;
+					next_uop[0].func = Qupls5_pkg::FN_OR;   // MOVE
 					next_uop[0].Rd = uop0.Rd;
 					next_uop[0].Rs1 = uop0.Rs2;	// a0
 					next_uop[0].Rs2 = 7'd0;

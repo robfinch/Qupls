@@ -20,6 +20,7 @@ It is desired to support 128-bit float arithmetic better.
 The author is working out the best way to achieve this.
 
 ### Recent Additions / Changes
+Instructions are now 32-bit!
 Most recently parallel SIMD instructions have been removed from the ISA.
 They were redundant as vector operations with a length of one register perform almost identically, except
 for two bits in the instruction.
@@ -30,17 +31,17 @@ The capabilities version of the core requires 256-bit registers as a 64-bit capa
 This increases the size of the core considerably and turns Qupls into a 256-bit machine.
 
 ### Features Superscalar Out-of-Order version (Qupls5.sv)
-* Fixed 48-bit parcel length instruction set. (postfixes may make it considered to be variable length).
+* Fixed 32-bit parcel length instruction set. (prefixes/postfixes may make it considered to be variable length).
 * 64-bit datapath / support for 128-bit floats (128-bit datapath for capabilities)
 * 16 entry (or more) reorder entry buffer (ROB)
-* 32 integer register, 32 floating-point registers, and 23 vector registers
+* 32 integer register, 32 floating-point registers, and 32 vector registers
 * Constants may be substituted for registers, using constant postfix instructions.
 * Register renaming to remove dependencies.
-* Dual operation instructions: Rt = Ra op Rb op Rc
+* Dual operation instructions (with prefix): Rt = Ra op Rb op Rc
 * Standard suite of ALU operations, add, subtract, compare, multiply and divide.
 * Arithmetic right shift with round.
 * Bitfield operations.
-* Conditional relative branch instructions with 18-bit displacements
+* Conditional relative branch instructions with 8-bit displacements
 * Vector operations.
 * 4-way Out-of-order execution of instructions
 * 1024 entry, three way TLB for virtual memory support, shared between instruction and data
@@ -93,29 +94,22 @@ There are some suggestions on which registers should be used for linkage and sta
 There are 32 floating-point registers.
 None of the registers have dedicated purposes or meanings.
 
-#### Vector Registers - 23?
-There are 23 vector registers. 
-The author supposes that the number of vector registers could have been limited to 16 but that would leave unused physical registers.
-They are there, so why not use them? Other combinations for vector registers are possible.
-Register specifications in the ISA limit the choice to 32 max.
-It may seem like an odd number but it is due to the limit of 1024 physical registers.
-Registers are dived up for integer, float and special use registers which are allocated out of the 1024 available.
-What is left over is used for the vector register file. Each vector register requires 32 physical registers once register rename is taken into consideration. 
-736/32 = 23.
+#### Vector Registers - 32
+There are 32 vector registers. 
 
 #### Logical Registers
 | Log.| Phys. | Bits |                               |
 |-----|-------|------|-------------------------------|
 |  32 |  128  |  64  | integer registers,            |
 |  32 |  128  |  64  | floating-point registers      |
-|  23 |  736  | 512  | vector registers              |
+|  32 | 1024  | 512  | vector registers              |
 |   8 |   32  |  64  | specially dedicated registers |
 |-----|-------|------|-------------------------------|
-|     | 1024  |      | total                         |
+|     | 1312  |      | total                         |
 
 
 #### Physical Register File
-The physical register file is configurable as 256,512, or 1024 registers.
+The physical register file is configurable.
 If configured with less than 1024 registers then the vector registers are not supported.
 For the default configuration the physical register file contains 512x64-bit registers.
 Architectural registers are renamed using the physical registers to remove dependencies.
@@ -128,31 +122,30 @@ But an issue is predicting the next IP value.
 Hence the move back to a fixed instruction length. However, the instruction set may be viewed as variable length once postfixes are considered.
 
 ### Instruction alignment
-Instructions are aligned on wyde (16-bit) boundaries. Conditional branch displacements are in terms of wydes.
-Conditional branches have effectively a 22 bit range. For software compatibility a critical 18 bits range was needed.
-Subroutines may be aligned on any wyde boundary, allowing position independent code placement.
-Unconditional branch and jump displacements are in terms of wydes to accomodate the location of subroutines.
+Instructions are aligned on tetra (32-bit) boundaries. Conditional branch displacements are in terms of tetras.
+Conditional branches have effectively a 10 bit range. However this can be extended to 33 bits with a postfix.
+For software compatibility a critical 18 bits range was needed.
+Subroutines may be aligned on any tetra boundary, allowing position independent code placement.
+Unconditional branch and jump displacements are in terms of tetras to accomodate the location of subroutines.
 
 ### Position Independant Code
-Code is relocatable at any wyde boundary; however, within a subroutine or function the instructions should be contiguous, a multiple of six bytes.
+Code is relocatable at any wyde boundary; however, within a subroutine or function the instructions should be contiguous, a multiple of four bytes.
 
 ### Pipeline
 Yikes!
 There are roughly nine stages in the pipeline, fetch, extract (parse), translate, decode, rename, dispatch, issue, execute and writeback.
-However two stages (extract and rename) are clocked on the negative edge of the clock as the preceeding stage is fast enough.
-Fetch and decode are plenty fast.
-This effectively eliminates two stages timing-wise from the pipeline.
 The first few stages (up to rename) are in-order stages.
 #### Fetch / Extract Stages
 The first step for an instruction is instruction fetch.
 At instruction fetch two instruction cache lines are fetched to accomodate instructions spanning cache lines.
-That means up to 21 instructions are fetched, but only four are processed further.
+That means up to 32 instructions are fetched, but only four are processed further.
 Instructions that were fetched from the cache are buffered, this helps to allow alternate patch fetching.
 Four instructions are extracted from the cache lines. The fetched instructions are right aligned as a block according to the instruction pointer value.
 A portion of the cache line following the instruction is also associated with the instruction so that constants may be decoded.
 If there is a hardware interrupt, it is flagged on the instruction where the interrupt occurred.
+Instruction prefixes are fused into the next instruction.
 #### Translate Stage
-At this stage ISA instructions are translated into groups of micro-ops. There is currently a maximum of 16 micro-ops for any instruction.
+At this stage ISA instructions are translated into groups of micro-ops. There is currently a configurable maximum of 16 micro-ops for any instruction.
 Most instructions are a direct 1:1 translation but some instructions require more micro-ops.
 Vector instructions are expanded from 1 ISA instruction into multiple micro-ops depending on vector length.
 16 micro-ops should be enough to allow some FP iterative operations like NR-divide.
@@ -174,6 +167,7 @@ Disatch is currently out-of-order. Out-of-order dispatch does not stall the pipe
 #### Issue Stage
 Once instructions are queued in the ROB they may be scheduled for execution.
 The instruction scheduler is now distributed amongst the reservation stations which become active when instructions with valid arguments are ready.
+Vector instructions issue multiple times. They are held in a reservation station until complete.
 #### Execute Stage
 The next stage is execution. Note that the execute stage waits until all the instruction arguments are valid before trying to execute the instruction.
 (This is checked by the scheduler). The predicate register must be valid.
@@ -222,7 +216,7 @@ Most instructions apply for either scalar or vector operations.
 Vector or scalar registers are selected depending on the opcode.
 
 ### Dual Operation Instructions
-Many register-register operate instructions support dual operations on the registers.
+Many register-register operate instructions support dual operations on the registers via a prefix instruction.
 They are of the form: Rt = (Ra op Rb) op Rc.
 For instance, the AND_OR instruction performs an AND operation followed by an OR operation.
 The compiler treats the processor as if it has only two source operands.
@@ -247,13 +241,13 @@ The FPU can also perform many of the simpler ALU operations, this increases the 
 ### Large Constants
 Large constants are supported by embedding them in the instruction stream using constant postfixes following the instruction.
 The constant postfix specifies which register is overridden.
-There is currently a maximum of four postfixes allowed which is enough for two 64-bit constants.
+There is currently a maximum of six postfixes allowed which is enough for two 64-bit constants.
 Any of the three source registers may be turned into a constant.
 
 ### Branches
 Conditional branches are a fused compare-and-branch instruction. Values of two registers are compared, then a branch is made depending on the relationship between the two.
 Branches may work with different precisions.
-The branch displacement is 22 bits. Branch-to-register is also supported.
+The branch displacement is only 10 bits. Extending the displacement is possible. Branch-to-register is also supported.
 Having an at least 18-bit displacement was deemed critical for software compatibility.
 Some branches may increment or decrement the first source register. (iblt ibltu ible ibleu dbne dbnez).
 A masked value form of branches is supported where the values to be compared are first masked against the contents of another register.
@@ -317,7 +311,7 @@ The Arpl compiler may be used for high-level work and compiles to vasm compatibl
 # Core Size
 The unoptimized minimum core size (done by selecting run-time-optimized with no heirarchy flatten) is around 400k LUTS (640k LC's).
 It looks like an area optimized core will be under 200k LUTs (minimal core is about 230k LUTs).
-The minimum core size includes only basic integer instructions.
+The minimum core size includes only basic integer instructions, and only three pipelines.
 The minimum size does not allow for much parallelism.
 Better performance may be had using a pipelined in-order processor which is much smaller.
 The core size seems to be constantly increasing as updates occur.
@@ -338,10 +332,6 @@ Qupls5.sv is the top level for the CPU. Minimum of about 200k LUTs.
 Qupls5_mpu.sv is the top level for the MPU which contains the CPU, timers, and interrupt controller.
 
 # Issues
-* Instructions are too wide. The instruction set has been simply designed, having almost some VLIW aspects to it.
-It would be better if instructions were 32-bit.
-48-bits is 50% wider than 32, however some instruction sequences requiring two instruction in a 32-bit ISA can be done using only a single instruction.
-So, code is somewhat less than 50% more (35% larger would be a ballpark estimate).
 * Dual-operation instructions are not used very often. They consume LUT resources and likely extra power.
 * There are a lot of physical registers, perhaps too many. There may be a better way to implement the vector registers.
 * Core does not work yet, a long ways to go.

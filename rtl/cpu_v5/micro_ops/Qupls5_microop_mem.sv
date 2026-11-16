@@ -43,11 +43,12 @@ import Qupls5_pkg::*;
 module Qupls5_microop_mem(rst, clk, en, om, ir, num, carry_reg, carry_out, carry_in,
 	vlen_i, velsz_i, count, uop, thread, stomp, pg_ext, pg_trn, live_stream,
 	branch_resolved);
-parameter MICROOPS_PER_INSTR = 16;
+parameter MICROOPS_PER_INSTR = Qupls5_pkg::MICROOPS_PER_INSTR;
 parameter COMB = 0;
 parameter SUPPORT_IRQ_POLLING = Qupls5_pkg::SUPPORT_IRQ_POLLING;
 parameter SUPPORT_FLOAT = Qupls5_pkg::SUPPORT_FLOAT;
 parameter SUPPORT_VECTOR = Qupls5_pkg::SUPPORT_VECTOR;
+parameter VECTOR_STRATEGY = Qupls5_pkg::VECTOR_STRATEGY;
 input rst;
 input clk;
 input en;
@@ -649,7 +650,6 @@ end
 always_comb
 begin
 	case (instr.opcode)
-	Qupls5_pkg::OP_VR3B,Qupls5_pkg::OP_VR3W,Qupls5_pkg::OP_VR3T,Qupls5_pkg::OP_VR3O,
 	Qupls5_pkg::OP_VSR3B,Qupls5_pkg::OP_VSR3W,Qupls5_pkg::OP_VSR3T,Qupls5_pkg::OP_VSR3O,
 	Qupls5_pkg::OP_VFLTH,Qupls5_pkg::OP_VFLTS,Qupls5_pkg::OP_VFLTD,
 	Qupls5_pkg::OP_VSFLTH,Qupls5_pkg::OP_VSFLTS,Qupls5_pkg::OP_VSFLTD:
@@ -661,7 +661,6 @@ end
 always_comb
 begin
 	case (instr.opcode)
-	Qupls5_pkg::OP_VR3B,Qupls5_pkg::OP_VR3W,Qupls5_pkg::OP_VR3T,Qupls5_pkg::OP_VR3O,
 	Qupls5_pkg::OP_VSR3B,Qupls5_pkg::OP_VSR3W,Qupls5_pkg::OP_VSR3T,Qupls5_pkg::OP_VSR3O:
 		case(ir.func)
 		Qupls5_pkg::FN_REDSUM,Qupls5_pkg::FN_REDAND,Qupls5_pkg::FN_REDOR,Qupls5_pkg::FN_REDEOR,
@@ -676,7 +675,6 @@ end
 always_comb
 begin
 	case (instr.opcode)
-	Qupls5_pkg::OP_VR3B,Qupls5_pkg::OP_VR3W,Qupls5_pkg::OP_VR3T,Qupls5_pkg::OP_VR3O,
 	Qupls5_pkg::OP_VSR3B,Qupls5_pkg::OP_VSR3W,Qupls5_pkg::OP_VSR3T,Qupls5_pkg::OP_VSR3O,
 	Qupls5_pkg::OP_VFLTH,Qupls5_pkg::OP_VFLTS,Qupls5_pkg::OP_VFLTD,
 	Qupls5_pkg::OP_VSFLTH,Qupls5_pkg::OP_VSFLTS,Qupls5_pkg::OP_VSFLTD:
@@ -721,14 +719,6 @@ begin
 			default:	;
 			endcase
 		end
-	Qupls5_pkg::OP_VR3B,Qupls5_pkg::OP_VR3W,Qupls5_pkg::OP_VR3T,Qupls5_pkg::OP_VR3O:
-		begin
-			instr.opcode = Qupls5_pkg::OP_R3BP | instr.opcode[1:0];
-			instr.vn = ir.vn;
-			instr.op3 = ir.op3;
-			instr.func = ir.func;
-			vlen1 = vlen;
-		end
 	Qupls5_pkg::OP_VFLTH,Qupls5_pkg::OP_VFLTS,Qupls5_pkg::OP_VFLTD,
 	Qupls5_pkg::OP_VSFLTH,Qupls5_pkg::OP_VSFLTS,Qupls5_pkg::OP_VSFLTD:
 		begin
@@ -768,10 +758,10 @@ begin
   uop1.num = 5'd1;
 end
 
-always_comb vRd = {3'b0,instr.Rd};
-always_comb vRs1 = {3'b0,instr.Rs1};
-always_comb vRs2 = {3'b0,instr.Rs2};
-always_comb vRs3 = {3'b0,instr.Rs3};
+always_comb vRd =  instr.vn[0] ? {1'b0,instr.Rd,3'd0} + 9'd64 : {4'b0,instr.Rd};
+always_comb vRs1 = instr.vn[1] ? {1'b0,instr.Rs1,3'd0} + 9'd64 : {4'b0,instr.Rs1};
+always_comb vRs2 = instr.vn[2] ? {1'b0,instr.Rs2,3'd0} + 9'd64 : {4'b0,instr.Rs2};
+always_comb vRs3 = instr.vn[3] ? {1'b0,instr.Rs3,3'd0} + 9'd64 : {4'b0,instr.Rs3};
 always_comb vRdi = instr.vn[0];
 
 // Don't increment a constant field.
@@ -1117,7 +1107,21 @@ else begin
 				next_uop[0] = uop0;
 			end
 		end
+	Qupls5_pkg::OP_R3B,Qupls5_pkg::OP_R3W,Qupls5_pkg::OP_R3T,Qupls5_pkg::OP_R3O:
+		if (SUPPORT_VECTOR && VECTOR_STRATEGY==0 && |ir.vn)	begin // vector?
 `include "Qupls5_microop_mem_R3V.sv"
+		end
+		else begin
+			if (insert_boi) begin
+				next_count = 4'd2;
+				next_uop[0] = uop_boi;
+				next_uop[1] = uop1;
+			end
+			else begin
+				next_count = 4'd1;
+				next_uop[0] = uop0;
+			end
+		end
 `include "Qupls5_microop_mem_FLT.sv"
 `include "Qupls5_microop_mem_FLTV.sv"
 `include "Qupls5_microop_mem_LSV.sv"
@@ -1387,20 +1391,38 @@ end
 
 generate begin : gComb
 	// ToDo: finish off comb logic
-	if (COMB && FALSE) begin
+	if (COMB) begin
 		always_comb
 		if (rst) begin
-			count = 3'd0;
+			count = 5'd0;
 			foreach (uop[n1]) begin
 				uop[n1] = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
 				uop[n1].opcode = Qupls5_pkg::OP_NOP;
 				uop[n1].v = VAL;
 			end
+			pg_trn = {$bits(Qupls5_pkg::pipeline_group_reg_t){1'b0}};
+			foreach(pg_trn.pr[n1])
+				pg_trn.pr[n1] = nopi;
 		end
 		else begin
 			count = next_count;
 			foreach (uop[n1])
 				uop[n1] = next_uop[n1];
+			pg_trn = pg_ext;
+			if (stomp)
+				pg_trn.hdr.v = INV;
+			foreach (pg_ext.pr[n1]) begin
+				if (stomp) begin
+					pg_trn.pr[n1].stomped = TRUE;
+					pg_trn.pr[n1].done = 2'b11;
+				end
+				if (branch_resolved) begin
+					if (pg_ext.pr[n1].ip_stream.thread==live_stream.thread && pg_ext.pr[n1].ip_stream.stream != live_stream.stream) begin
+						pg_trn.pr[n1].stomped = TRUE;
+						pg_trn.pr[n1].done = 2'b11;
+					end
+				end
+			end
 		end
 	end
 	else begin

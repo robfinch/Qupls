@@ -187,23 +187,20 @@ begin
 		rse[kk].arg[2].v = rob[nn].argC_v;
 		rse[kk].arg[3].v = rob[nn].argT_v;
 		rse[kk].arg[4].v = rob[nn].argD_v;
-		rse[kk].arg[5].v = rob[nn].argS_v;
-		rse[kk].arg[6].v = rob[nn].argT2_v;
+		rse[kk].arg[5].v = rob[nn].argDRM_v;
 		rse[kk].arg[0].aRnv = rob[nn].op.uop.src[0];
 		rse[kk].arg[1].aRnv = rob[nn].op.uop.src[1];
 		rse[kk].arg[2].aRnv = rob[nn].op.uop.src[2];
 		rse[kk].arg[3].aRnv = rob[nn].op.uop.src[3];
 		rse[kk].arg[4].aRnv = rob[nn].op.uop.src[4];
 		rse[kk].arg[5].aRnv = rob[nn].op.uop.src[5];
-		rse[kk].arg[6].aRnv = rob[nn].op.uop.src[6];
 		
 		rse[kk].arg[0].aRn = rob[nn].op.uop.Rs1;
 		rse[kk].arg[1].aRn = rob[nn].op.uop.Rs2;
 		rse[kk].arg[2].aRn = rob[nn].op.uop.Rs3;
 		rse[kk].arg[3].aRn = rob[nn].op.uop.Rd;
 		rse[kk].arg[4].aRn = rob[nn].op.uop.Rs4;
-		rse[kk].arg[5].aRn = rob[nn].op.uop.Rm;
-		rse[kk].arg[6].aRn = rob[nn].op.uop.Rd2;
+		rse[kk].arg[5].aRn = {3'b111,5'b11111};
 
 		rse[kk].arg[0].z = rob[nn].op.decbus.Rs1z;
 		rse[kk].arg[1].z = rob[nn].op.decbus.Rs2z;
@@ -215,8 +212,7 @@ begin
 		rse[kk].arg[2].pRn = rob[nn].op.pRs3;
 		rse[kk].arg[3].pRn = rob[nn].op.pRd;
 		rse[kk].arg[4].pRn = rob[nn].op.pRs4;
-		rse[kk].arg[5].pRn = rob[nn].op.pRm;
-		rse[kk].arg[6].pRn = rob[nn].op.pRd2;
+		rse[kk].arg[5].pRn = rob[nn].op.pDRM;
 		/*
 		rse[kk].argAh_v = !rob[nn].op.decbus.b128;
 		rse[kk].argBh_v = !rob[nn].op.decbus.b128;

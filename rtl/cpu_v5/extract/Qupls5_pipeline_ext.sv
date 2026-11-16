@@ -37,7 +37,7 @@
 // Multiplex micro-code instructions into the instruction stream.
 // Modify instructions for register bit lists.
 //
-// 3350 LUTs / 3525 FFs / 270 MHz
+// 4000 LUTs / 4300 FFs / 250 MHz
 // ============================================================================
 
 import const_pkg::*;
@@ -46,7 +46,7 @@ import Qupls5_pkg::*;
 
 module Qupls5_pipeline_ext(rst_i, clk_i, en_i,
 	kept_stream, stomp_ext, nop_o, carry_mod_fet, ssm_flag, hwipc_fet,
-	irq_fet, irq_in_fet, irq_sn_fet, ipl_fet, sr, pt_ext, pt_dec, p_override, po_bno,
+	irq_fet, irq_in_fet, irq_sn_fet, ipl_fet, pt_ext, pt_dec, p_override, po_bno,
 	branchmiss, misspc_fet, flush_fet, active_irq_vector, irq_i,
 	micro_machine_active, cline_fet, cline_ext, new_cline_ext,
 	reglist_active, grp_i, grp_o, btb_pc, exc_i, excv_i,
@@ -74,7 +74,6 @@ input [31:0] carry_mod_fet;
 input ssm_flag;
 input Qupls5_pkg::pc_address_ex_t hwipc_fet;
 input micro_machine_active;
-input Qupls5_pkg::status_reg_t sr;
 input reglist_active;
 input branchmiss;
 input Qupls5_pkg::pc_address_ex_t misspc_fet;
@@ -132,8 +131,8 @@ wire pack_regs = pack_regs_i;
 cpu_types_pkg::aregno_t regcnt;
 Qupls5_pkg::rob_entry_t [MWIDTH-1:0] ins_ext;
 Qupls5_pkg::rob_entry_t [MWIDTH-1:0] ins_fet;
-reg [319:0] ic_line_aligned;
-reg [319:0] prev_ic_line_aligned;
+reg [255:0] ic_line_aligned;
+reg [255:0] prev_ic_line_aligned;
 reg ld;
 reg [2:0] override_pos;
 reg p_overrided;
@@ -156,7 +155,7 @@ always_comb
 begin
 	foreach (pc_fet[n5]) begin
 		pc_fet[n5] = pc0_fet;
-		pc_fet[n5].cap.offset = pc0_fet.cap.offset + n5*6;
+		pc_fet[n5].cap.offset = pc0_fet.cap.offset + n5*4;
 	end
 end
 
@@ -204,12 +203,12 @@ end
 always_comb regcnt = regcnt_i;
 
 always_comb 
-	ic_line_aligned = {{64{1'd1,Qupls5_pkg::OP_NOP}},cline_fet} >> {pc0_fet.cap.offset[5:1],4'd0};
+	ic_line_aligned = {{64{1'd1,Qupls5_pkg::OP_NOP}},cline_fet} >> {pc0_fet.cap.offset[5:2],5'd0};
 
 pc_address_ex_t prev_pc0_fet;
 always_ff @(posedge clk_i)
 if (rst_i) begin
-	prev_ic_line_aligned <= 320'd0;
+	prev_ic_line_aligned <= 256'd0;
 	prev_pc0_fet <= {$bits(pc_address_ex_t){1'b0}};
 end
 else begin
@@ -238,6 +237,9 @@ always_comb
 // Set instruction valid bit.
 
 Qupls5_pkg::rob_entry_t [MWIDTH-1:0] pr_ext;
+Qupls5_pkg::micro_op_t prev_xop;
+pc_address_ex_t prev_xop_addr;
+reg xop_v;
 
 Qupls5_ext_set_pr #(.MWIDTH(MWIDTH)) usetpr1
 (
@@ -247,7 +249,9 @@ Qupls5_ext_set_pr #(.MWIDTH(MWIDTH)) usetpr1
 	.irq(irq_fet),
 	.stomp(stomp_ext),
 	.carry_mod(carry_mod_fet),
-	.ic_line(ic_line_aligned[MWIDTH*48-1:0]),
+	.prev_xop_v(xop_v),
+	.prev_xop(prev_xop),
+	.ic_line(ic_line_aligned[MWIDTH*32-1:0]),
 	.ssm_flag(ssm_flag),
 	.pc(pc_fet),
 	.pr(pr_ext)
@@ -284,7 +288,7 @@ always_comb nop3 = (stomp_fet && pc3_fet.bno_t!=stomp_bno) || (branchmiss && mis
 */
 // Stomp on instructions in the same instruction group following the overrride location.
 generate begin : gNop
-	for (g = 0; g < MWIDTH; g = g + 1)
+	for (g = 0; g < MWIDTH+1; g = g + 1)
 		always_comb nop_lead[g] = (branchmiss && misspc_fet.cap.offset > pc_fet[g].cap.offset);
 end
 endgenerate
@@ -306,7 +310,7 @@ generate begin : gExtDecode
 		Qupls5_ext_decode usd1
 			(
 				.ip(pc_fet[g]),
-				.instr(ic_line_aligned[g*48+47:g*48]),
+				.instr(ic_line_aligned[g*32+31:g*32]),
 				.bsr(bsr[g]),
 				.jsr(jsr[g]),
 				.bra(bra[g]),
@@ -453,9 +457,9 @@ begin
 	ret_pc.stream = pc0_fet.stream;
 	ret_pc.cap.offset = RSTPC - pc0_fet.cap.base;
 	ret_pc.stream = 5'd1;
-	for (n3 = MWIDTH-1; n3 >= 0; n3 = n3 - 1)
+	for (n3 = MWIDTH; n3 >= 0; n3 = n3 - 1)
 		if (bsr[n3]|jsr[n3])
-			ret_pc.cap.offset = pc_ext[n3].cap.offset + 4'd6;
+			ret_pc.cap.offset = pc_ext[n3].cap.offset + 4'd4;
 end
 
 always_comb
@@ -467,6 +471,30 @@ else begin
 	foreach(po_bno[n7])
 		po_bno[n7] = pc0_fet.stream.stream;
 end
+
+always_ff @(posedge clk)
+if (rst_i) begin
+	prev_xop <= {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+	prev_xop_addr <= {$bits(Qupls5_pkg::pc_address_ex_t){1'b0}};
+end
+else begin
+	if (en) begin
+		// If there was a XOP at the end of the previous bundle record for future
+		// use. Otherwise clear the XOP.
+		if (pr_ext[MWIDTH-1].op.uop.prefix && !chgflow) begin
+			prev_xop <= pr_ext[MWIDTH-1].op.uop;
+			prev_xop_addr <= pc_fet[MWIDTH-1];
+		end
+		else begin
+			prev_xop <= {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+		end
+	end
+end
+
+// To be valid the XOP must be just before the first instruction of the next
+// sequential bundle.
+always_comb
+	xop_v = prev_xop_addr==pc_fet[0].cap.offset-4'd4 && prev_xop.prefix;
 
 // Set the pipeline register.
 // On reset the pipeline is loaded with NOPs. Otherwise it is advanced based on
@@ -513,8 +541,7 @@ else begin
 			pg_ext.pr[n2].stomped <= stomp_ext || nop_lead[n2] || nop2[n2] || bra[n2] || jmp[n2];
 			pg_ext.pr[n2].wh <= n2;
 			pg_ext.pr[n2].ip_stream <= pc_fet[n2].stream;
-			pg_ext.pr[n2].ip_offs <= n2 * 3;	// wyde offset
-			pg_ext.pr[n2].eip <= pc_fet[0].cap.offset + (n2*6);
+			pg_ext.pr[n2].eip <= pc_fet[0].cap.offset + pr_ext[n2].ip_offs;//(n2*6);
 			// Branches need to set the pipeline invalid if the instruction stream
 			// does not match the one resolved to be active. Note the thread must
 			// also match. If the stream is for a different thread we do not want to

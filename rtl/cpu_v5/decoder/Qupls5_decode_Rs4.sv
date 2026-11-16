@@ -41,7 +41,7 @@ import Qupls5_pkg::*;
 module Qupls5_decode_Rs4(om, instr, instr_raw, has_immd, Rs4, Rs4z);
 input Qupls5_pkg::operating_mode_t om;
 input Qupls5_pkg::micro_op_t instr;
-input [431:0] instr_raw;
+input [335:0] instr_raw;
 input has_immd;
 output aregno_t Rs4;
 output reg Rs4z;
@@ -78,7 +78,7 @@ endfunction
 always_comb
 begin
 	Rs4 = fnRs4(instr, instr_raw, has_immd);
-	Rs4z = ~|Rs4[5:0];
+	Rs4z = ~|Rs4[4:0];
 end
 
 endmodule
