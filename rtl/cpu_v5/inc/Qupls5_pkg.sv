@@ -657,18 +657,20 @@ typedef enum logic [6:0] {
 	OP_FLDS = 7'd76,
 	OP_FLDD = 7'd77,
 	OP_LDV = 7'd78,
-	OP_LDVN = 7'd79,
+	OP_LOADN = 7'd79,
 	
 	OP_STB = 7'd80,
 	OP_STW = 7'd81,
 	OP_STT = 7'd82,
 	OP_STORE = 7'd83,
 	OP_CSTORE = 7'd84,
-	OP_STIP = 7'd87,
 	OP_STPTR = 7'd86,
 
+	OP_LOADZN = 7'd87,
+	
 	OP_STV = 7'd88,
-	OP_STVN = 7'd89,
+	OP_STOREN = 7'd89,
+
 	OP_V2P = 7'd90,
 	OP_VV2P = 7'd91,
 
@@ -1438,7 +1440,7 @@ typedef struct packed
 } rtd_inst_t;
 */
 
-typedef struct packed		// about 155 bits
+typedef struct packed		// about 156 bits
 {
 	logic v;
 	logic exc;
@@ -1454,6 +1456,7 @@ typedef struct packed		// about 155 bits
 	logic [35:0] imm;			// immediate / displacement / mask
 	logic prefix;					// instruction is a prefix
 	logic inc;						// increment / decrement for conditional branch, record bit for floats
+	logic iprel;					// ip relative addressing (base register)
 	logic [3:0] sc;				// index scaling
 	logic [2:0] prc;			// precision
 	logic [3:0] ms;				// immediate override indicators
@@ -1471,7 +1474,7 @@ typedef struct packed		// about 155 bits
 	logic [6:0] func;			// primary function code / branch condition
 	logic [6:0] opcode;		// primary opcode
 } micro_op_t;
-// about 155 bits
+// about 156 bits
 /*
 typedef union packed
 {
@@ -2612,8 +2615,7 @@ function memsz_t fnMemsz;
 input micro_op_t ir;
 begin
 	case(ir.opcode)
-	OP_LDV,OP_STV,
-	OP_LDVN,OP_STVN:
+	OP_LDV,OP_STV:
 		fnMemsz = octa;
 	default:
 		case(ir.byteno[5:0])
@@ -2682,6 +2684,7 @@ input micro_op_t ir;
 begin
 	case(ir.opcode)
 	OP_LDV,
+	OP_LOADN,OP_LOADZN,
 	OP_LDB,OP_LDW,OP_LDT,OP_LOAD,
 	OP_LDBZ,OP_LDWZ,OP_LDTZ,7'd71,
 	OP_CLOAD:
@@ -2698,6 +2701,7 @@ begin
 	case(ir.opcode)
 	OP_STV,
 	OP_STB,OP_STW,OP_STT,OP_STORE,
+	OP_STOREN,
 	OP_CSTORE:
 		fnIsStore = 1'b1;
 	default:
@@ -2907,9 +2911,10 @@ begin
 	OP_BCC,
 	OP_BCCU:
 		fnSourceRs1v = fnConstReg(ir.Rs1) || fnImma(ir);
-	OP_LOADA,
+	OP_LOADA,OP_LOADN,OP_LOADZN,
 	OP_LDB,OP_LDBZ,OP_LDW,OP_LDWZ,OP_LDT,OP_LDTZ,OP_LOAD,OP_CLOAD:
 		fnSourceRs1v = fnConstReg(ir.Rs1);
+	OP_STOREN,
 	OP_STB,OP_STW,OP_STT,OP_STORE,OP_STPTR,OP_CSTORE:
 		fnSourceRs1v = fnConstReg(ir.Rs1);
 	default:	fnSourceRs1v = 1'b1;
@@ -2932,10 +2937,10 @@ begin
 	OP_BCC,
 	OP_BCCU:
 		fnSourceRs2v = fnConstReg(ir.Rs2) || fnImmb(ir);
-	OP_LOADA,
+	OP_LOADA,OP_LOADN,OP_LOADZN,
 	OP_LDB,OP_LDBZ,OP_LDW,OP_LDWZ,OP_LDT,OP_LDTZ,OP_LOAD,OP_CLOAD:
 		fnSourceRs2v = fnConstReg(ir.Rs2);
-	OP_STB,OP_STW,OP_STT,OP_STORE,OP_STPTR,OP_CSTORE:
+	OP_STB,OP_STW,OP_STT,OP_STORE,OP_STOREN,OP_STPTR,OP_CSTORE:
 		fnSourceRs2v = fnConstReg(ir.Rs2);
 	default:	fnSourceRs2v = 1'b1;
 	endcase
@@ -3085,6 +3090,30 @@ begin
 			fnMapRawToUop.src = 7'b0001001;
 			fnMapRawToUop.dst = 1'b1;
 			case({raw[17],raw[1:0]})
+			3'b000:	fnMapRawToUop.byteno = 6'd8;
+			3'b001:	fnMapRawToUop.byteno = 6'd1;
+			3'b010:	fnMapRawToUop.byteno = 6'd2;
+			3'b011:	fnMapRawToUop.byteno = 6'd3;
+			3'b100:	fnMapRawToUop.byteno = 6'd4;
+			3'b101:	fnMapRawToUop.byteno = 6'd5;
+			3'b110:	fnMapRawToUop.byteno = 6'd6;
+			3'b111:	fnMapRawToUop.byteno = 6'd7;
+			endcase
+		end
+	Qupls5_pkg::OP_LOADN,Qupls5_pkg::OP_LOADZN,
+	Qupls5_pkg::OP_STOREN:
+		begin
+			fnMapRawToUop.Rd = raw[11:7];
+			fnMapRawToUop.Rs1 = raw[16:12];
+			fnMapRawToUop.Rs2 = raw[21:17];
+			fnMapRawToUop.ms = 4'b0000;
+			fnMapRawToUop.sc = raw[31:29];
+			fnMapRawToUop.src = 7'b0001011;
+			fnMapRawToUop.dst = 1'b1;
+			fnMapRawToUop.vn[1] = raw[25];
+			fnMapRawToUop.vlen = 6'd8;
+			fnMapRawToUop.iprel = raw[26];
+			case(raw[24:22])
 			3'b000:	fnMapRawToUop.byteno = 6'd8;
 			3'b001:	fnMapRawToUop.byteno = 6'd1;
 			3'b010:	fnMapRawToUop.byteno = 6'd2;

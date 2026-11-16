@@ -50,9 +50,9 @@ begin
 	dbranch = FALSE;
 	if (branch)
 		case(instr.func)
-		CND_NE:	dbranch = instr.inc;
-		CND_LT:	ibranch = instr.inc;
-		CND_LE:	ibranch = instr.inc;
+		Qupls5_pkg::CND_NE:	dbranch = instr.inc;
+		Qupls5_pkg::CND_LT:	ibranch = instr.inc;
+		Qupls5_pkg::CND_LE:	ibranch = instr.inc;
 		default:	;
 		endcase
 end

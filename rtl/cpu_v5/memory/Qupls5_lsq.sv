@@ -40,9 +40,10 @@ import Qupls5_pkg::*;
 
 module Qupls5_lsq(rst, clk, cmd, pgh, rob, lsq, lsq_tail);
 parameter MWIDTH = Qupls5_pkg::MWIDTH;
+parameter SUPPORT_STORE_FORWARDING = Qupls5_pkg::SUPPORT_STORE_FORWARDING;
 input rst;
 input clk;
-input lsq_cmd_t [14:0] cmd;
+input Qupls5_pkg::lsq_cmd_t [14:0] cmd;
 input Qupls5_pkg::pipeline_group_hdr_t [Qupls5_pkg::ROB_ENTRIES/MWIDTH-1:0] pgh;
 input Qupls5_pkg::rob_entry_t [Qupls5_pkg::ROB_ENTRIES-1:0] rob;
 (* keep *)
@@ -55,7 +56,7 @@ integer n14r, n14c, n1r, n1c;
 initial begin
 	for (n1r = 0; n1r < Qupls5_pkg::LSQ_ENTRIES; n1r = n1r + 1)
 		for (n1c = 0; n1c < 2; n1c = n1c + 1)
-			lsq[n1r][n1c] = {$bits(lsq_entry_t){1'b0}};
+			lsq[n1r][n1c] = {$bits(Qupls5_pkg::lsq_entry_t){1'b0}};
 end
 
 always_ff @(posedge clk)
@@ -175,7 +176,7 @@ begin
 	lsq[n12r][n12c].v <= VAL;
 	lsq[n12r][n12c].state <= 2'b00;
 	lsq[n12r][n12c].agen <= FALSE;
-	lsq[n12r][n12c].pc <= pgh[rob.pghn].ip.cap.offset + {rob.ip_offs,1'b0};
+	lsq[n12r][n12c].pc <= pgh[rob.pghn].ip.cap.offset + rob.ip_offs;
 	lsq[n12r][n12c].loadv <= INV;
 	lsq[n12r][n12c].load <= rob.op.decbus.load|rob.excv;
 	lsq[n12r][n12c].loadz <= rob.op.decbus.loadz|rob.excv;
@@ -384,7 +385,7 @@ task tForwardStore;
 input rob_ndx_t id;
 integer n17r, n17c;
 integer n18r, n18c;
-lsq_ndx_t sid;
+Qupls5_pkg::lsq_ndx_t sid;
 seqnum_t ssn;
 reg dis;
 begin

@@ -45,7 +45,7 @@ module Qupls5_capu(rst, clk, ir, ip, ac, bc, ac_flags, bc_flags, agp, bgp, i,
 input rst;
 input clk;
 input Qupls5_pkg::micro_op_t ir;
-input pc_address_ex_t ip;
+input Qupls5_pkg::pc_address_ex_t ip;
 input uc64_capability_t ac;
 input uc64_capability_t bc;
 input uc64_capability_t csr;

@@ -49,7 +49,7 @@ import const_pkg::*;
 import wishbone_pkg::*;
 import cache_pkg::*;
 import capability_pkg::*;
-import Qupls4_pkg::*;
+import Qupls5_pkg::*;
 
 module icache(rst,clk,ce,invce,snoop_adr,snoop_v,snoop_tid,invall,invline,
 	nop,nop_o,
@@ -79,9 +79,9 @@ input snoop_v;
 input wishbone_pkg::wb_tranid_t snoop_tid;
 input invall;
 input invline;
-input Qupls4_pkg::pc_address_ex_t ip;
+input Qupls5_pkg::pc_address_ex_t ip;
 input cpu_types_pkg::asid_t ip_asid;
-output Qupls4_pkg::pc_address_ex_t ip_o;
+output Qupls5_pkg::pc_address_ex_t ip_o;
 output reg ihit_o;
 output reg ihit;
 output ICacheLine ic_line_hi_o;
@@ -354,25 +354,25 @@ if (rst) begin
 	ic_line_hi_o.data = {64{NOP}};
 	ic_line_hi_o.v = 4'hF;
 	ic_line_hi_o.m = 1'b0;
-	ic_line_hi_o.vtag = RSTPC;
-	ic_line_hi_o.ptag = RSTPC;
+	ic_line_hi_o.vtag = Qupls5_pkg::RSTPC;
+	ic_line_hi_o.ptag = Qupls5_pkg::RSTPC;
 	ic_line_lo_o.data = {64{NOP}};
 	ic_line_lo_o.v = 4'hF;
 	ic_line_lo_o.m = 1'b0;
-	ic_line_lo_o.vtag = RSTPC;
-	ic_line_lo_o.ptag = RSTPC;
+	ic_line_lo_o.vtag = Qupls5_pkg::RSTPC;
+	ic_line_lo_o.ptag = Qupls5_pkg::RSTPC;
 end
 else begin
 	ic_line_hi_o.data = {64{NOP}};
 	ic_line_hi_o.v = 4'hF;
 	ic_line_hi_o.m = 1'b0;
-	ic_line_hi_o.vtag = RSTPC;
-	ic_line_hi_o.ptag = RSTPC;
+	ic_line_hi_o.vtag = Qupls5_pkg::RSTPC;
+	ic_line_hi_o.ptag = Qupls5_pkg::RSTPC;
 	ic_line_lo_o.data = {64{NOP}};
 	ic_line_lo_o.v = 4'hF;
 	ic_line_lo_o.m = 1'b0;
-	ic_line_lo_o.vtag = RSTPC;
-	ic_line_lo_o.ptag = RSTPC;
+	ic_line_lo_o.vtag = Qupls5_pkg::RSTPC;
+	ic_line_lo_o.ptag = Qupls5_pkg::RSTPC;
 	case(iel)
 	1'b0:	
 		begin

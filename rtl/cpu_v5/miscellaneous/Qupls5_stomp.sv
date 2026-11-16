@@ -56,6 +56,7 @@ module Qupls5_stomp(rst, clk, clk2x, ihit, first_icache,
 	stomped
 	);
 parameter MWIDTH = Qupls5_pkg::MWIDTH;
+parameter XSTREAMS = Qupls5_pkg::XSTREAMS;
 input rst;
 input clk;
 input clk2x;
@@ -77,18 +78,18 @@ input found_destination;	// true if destination was found in ROB
 input rob_ndx_t destination_rndx;
 input branch_resolved;
 input branchmiss;
-input pc_address_ex_t misspc;
+input Qupls5_pkg::pc_address_ex_t misspc;
 input predicted_correctly_dec;
 input predicted_match_ext;
-input pc_address_ex_t pc;
-input pc_address_ex_t pc_f;
-input pc_address_ex_t pc_fet;
-input pc_address_ex_t pc_ext;
-input pc_address_ex_t pc_mot;
-input pc_address_ex_t pc_mot2;
-input pc_address_ex_t pc_dec;
-input pc_address_ex_t pc_ren;
-input dep_stream_t [XSTREAMS-1:0] dep_stream;
+input Qupls5_pkg::pc_address_ex_t pc;
+input Qupls5_pkg::pc_address_ex_t pc_f;
+input Qupls5_pkg::pc_address_ex_t pc_fet;
+input Qupls5_pkg::pc_address_ex_t pc_ext;
+input Qupls5_pkg::pc_address_ex_t pc_mot;
+input Qupls5_pkg::pc_address_ex_t pc_mot2;
+input Qupls5_pkg::pc_address_ex_t pc_dec;
+input Qupls5_pkg::pc_address_ex_t pc_ren;
+input Qupls5_pkg::dep_stream_t [XSTREAMS-1:0] dep_stream;
 output reg stomp_fet;
 output reg stomp_ext;			// IRQ / micro-code Mux stage
 output reg stomp_trn;
@@ -103,14 +104,14 @@ input fcu_idv;
 input rob_ndx_t fcu_id;
 input rob_ndx_t missid;
 input missid_v;
-input pc_stream_t kept_stream;
+input cpu_types_pkg::pc_stream_t kept_stream;
 output reg [XSTREAMS-1:0] stomped;
 input takb;
 input Qupls5_pkg::rob_entry_t [Qupls5_pkg::ROB_ENTRIES-1:0] rob;
 output Qupls5_pkg::rob_bitmask_t robentry_stomp;
 
 integer nn, n4;
-pc_address_ex_t [8:0] misspcr;
+Qupls5_pkg::pc_address_ex_t [8:0] misspcr;
 reg stomp_aln;
 reg stomp_fetr;
 reg stomp_extr;
@@ -151,13 +152,13 @@ always_ff @(posedge clk)
 always_ff @(posedge clk)
 if (rst) begin
 	foreach (misspcr[nn]) begin
-		misspcr[nn] <= {$bits(pc_address_ex_t){1'b0}};
+		misspcr[nn] <= {$bits(Qupls5_pkg::pc_address_ex_t){1'b0}};
 		misspcr[nn].cap.perms <= 16'hffff;
 		misspcr[nn].cap.otype <= 18'h3ffff;
 		misspcr[nn].cap.top <= 65'h10000000000000000;
 		misspcr[nn].cap.base <= 64'd0;
-		misspcr[nn].stream <= pc_stream_t'(7'd1);
-		misspcr[nn].cap.offset <= RSTPC;
+		misspcr[nn].stream <= cpu_types_pkg::pc_stream_t'(7'd1);
+		misspcr[nn].cap.offset <= Qupls5_pkg::RSTPC;
 	end
 end
 else begin
@@ -236,7 +237,7 @@ always_comb
 // active. Micro-code does not require the cache-line data.
 // Invalidate the fetch stage on an unconditional subroutine call.
 
-pc_address_ex_t prev_pc;
+Qupls5_pkg::pc_address_ex_t prev_pc;
 always_ff @(posedge clk)
 if (rst) begin
 	stomp_fetr <= TRUE;

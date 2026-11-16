@@ -42,6 +42,9 @@ module Qupls5_expipe45(rst, clk, clk3x, idle, stomp, rse_i, rse_o, rm, ddc,
 	z, cptgt, o, sto, ust, otag, we_o, done, exc,
 	tlb_v, adr, adrv, agen_rse,
 	mem_rse_i, mem_done_i, mem_res_i, mem_flags_i);
+parameter SUPPORT_CAPABILITIES = Qupls5_pkg::SUPPORT_CAPABILITIES;
+parameter SUPPORT_VECTOR = Qupls5_pkg::SUPPORT_VECTOR;
+parameter SUPPORT_GRAPHICS = Qupls5_pkg::SUPPORT_GRAPHICS;
 parameter WID=Qupls5_pkg::SUPPORT_QUAD_PRECISION|Qupls5_pkg::SUPPORT_CAPABILITIES ? 128 : 64;
 parameter PIPE = 3'd4;
 parameter SUPPORT_ISQRT = (PIPE==3'd4 && Qupls5_pkg::SUPPORT_ISQRT4) || (PIPE==3'd5 && Qupls5_pkg::SUPPORT_ISQRT5);
@@ -157,19 +160,22 @@ always_comb
 //generate begin : gAgen
 //	if (PIPE==3'd4 || PIPE==3'd5) begin
 always_ff @(posedge clk)
-casez({rse_i.pc.cap.flags[0] || !SUPPORT_CAPABILITIES,rse_i.Rs1ip,rse_i.Rs1z})
+casez({rse_i.pc.cap.flags[0] || !SUPPORT_CAPABILITIES,rse_i.uop.iprel,rse_i.Rs1z})
 3'b??1:	as <= value_zero;
 3'b?10:	as <= rse_i.pc.cap.offset + rse_i.pc.cap.base;
 3'b100:	as <= rse_i.arg[0].val + ddc.base;
 3'b000:	as <= rse_i.cap_arg.val.offset + rse_i.cap_arg.val.base;
 endcase
 
+reg [8:0] scale;
+always_comb
+	scale = 9'd1 << rse_i.uop.sc;
 always_ff @(posedge clk)
-	bs <= rse_i.Rs2z ? value_zero : (rse_i.arg[1].val * ({rse_i.uop.sc==3'd0,rse_i.uop.sc}));
+	bs <= rse_i.Rs2z ? value_zero : (rse_i.arg[1].val * scale[8:1]);
 
 // imm2 = vlen
 always_ff @(posedge clk)
-	bsv <= rse_i.Rs2z ? value_zero : (rse_i.arg[1].val * rse_i.uop.imm2[5:0]);
+	bsv <= rse_i.Rs2z ? value_zero : (rse_i.arg[1].val * {rse_i.uop.vlen,3'b0});
 
 always_ff @(posedge clk)
 	base <= rse_i.Rs1z ? 64'd0 : rse_i.pc.cap.flags[0] || !SUPPORT_CAPABILITIES ? ddc.base : rse_i.cap_arg.val.base;
@@ -478,7 +484,7 @@ delay5 #(.WID($bits(Qupls5_pkg::memsz_t))) udly4 (.clk(clk), .ce(1'b1), .i(prc),
 always_comb
 begin
 	done64 = FALSE;
-	exc64 = {8{FLT_NONE}};
+	exc64 = {8{Qupls5_pkg::FLT_NONE}};
 	case(ir5.opcode)
 	Qupls5_pkg::OP_VR3B,Qupls5_pkg::OP_VR3W,Qupls5_pkg::OP_VR3T,Qupls5_pkg::OP_VR3O,
 	Qupls5_pkg::OP_VSR3B,Qupls5_pkg::OP_VSR3W,Qupls5_pkg::OP_VSR3T,Qupls5_pkg::OP_VSR3O,
@@ -546,6 +552,7 @@ begin
 			o1 = value_zero;
 			done64 = TRUE;
 		end
+	Qupls5_pkg::OP_LOADN,Qupls5_pkg::OP_LOADZN,Qupls5_pkg::OP_STOREN,
 	Qupls5_pkg::OP_LDB,Qupls5_pkg::OP_LDBZ,Qupls5_pkg::OP_LDW,Qupls5_pkg::OP_LDWZ,
 	Qupls5_pkg::OP_LDT,Qupls5_pkg::OP_LDTZ,Qupls5_pkg::OP_LOAD,Qupls5_pkg::OP_CLOAD,
 	Qupls5_pkg::OP_STB,Qupls5_pkg::OP_STW,

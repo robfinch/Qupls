@@ -48,8 +48,8 @@ begin
 	case(op.opcode)
 	Qupls5_pkg::OP_STB,Qupls5_pkg::OP_STW,
 	Qupls5_pkg::OP_STT,Qupls5_pkg::OP_STORE,
+	Qupls5_pkg::OP_STOREN,
 	Qupls5_pkg::OP_CSTORE,
-	Qupls5_pkg::OP_STIP,
 	Qupls5_pkg::OP_STPTR:
 		fnIsStore = 1'b1;
 	default:

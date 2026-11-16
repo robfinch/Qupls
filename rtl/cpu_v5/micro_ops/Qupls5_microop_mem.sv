@@ -45,6 +45,7 @@ module Qupls5_microop_mem(rst, clk, en, om, ir, num, carry_reg, carry_out, carry
 	branch_resolved);
 parameter MICROOPS_PER_INSTR = Qupls5_pkg::MICROOPS_PER_INSTR;
 parameter COMB = 0;
+parameter SUPPORT_CAPABILITIES = Qupls5_pkg::SUPPORT_CAPABILITIES;
 parameter SUPPORT_IRQ_POLLING = Qupls5_pkg::SUPPORT_IRQ_POLLING;
 parameter SUPPORT_FLOAT = Qupls5_pkg::SUPPORT_FLOAT;
 parameter SUPPORT_VECTOR = Qupls5_pkg::SUPPORT_VECTOR;
@@ -1126,6 +1127,7 @@ else begin
 `include "Qupls5_microop_mem_FLTV.sv"
 `include "Qupls5_microop_mem_LSV.sv"
 `include "Qupls5_microop_mem_CAP.sv"
+	Qupls5_pkg::OP_LOADN,Qupls5_pkg::OP_LOADZN,
 	Qupls5_pkg::OP_LDB,Qupls5_pkg::OP_LDBZ,Qupls5_pkg::OP_LDW,Qupls5_pkg::OP_LDWZ,
 	Qupls5_pkg::OP_LDT,Qupls5_pkg::OP_LDTZ,Qupls5_pkg::OP_LOAD,Qupls5_pkg::OP_CLOAD:
 		begin
@@ -1217,6 +1219,7 @@ else begin
 	Qupls5_pkg::OP_CHK,
 	Qupls5_pkg::OP_STB,Qupls5_pkg::OP_STW,
 	Qupls5_pkg::OP_STT,Qupls5_pkg::OP_STORE,Qupls5_pkg::OP_CSTORE,
+	Qupls5_pkg::OP_STOREN,
 	Qupls5_pkg::OP_STPTR,
 	Qupls5_pkg::OP_FENCE:
 		if (insert_boi) begin

@@ -401,7 +401,7 @@ begin
 			if (SUPPORT_POSTFIX & has_cnstb)
 				immb = {cnstb,ins.imm[12:0]};
 			else
-				immb = ins.imm;//{{39{ins.imm[24]}},ins.imm[24:0]};
+				immb = {{51{ins.imm[12]}},ins.imm[12:0]};
 		end
 /*
 	Qupls5_pkg::OP_LOADI:
@@ -458,6 +458,26 @@ begin
 				immc = {cnstc,ins.imm[13:0]};
 			else
 				immc = {{50{ins.imm[13]}},ins.imm[13:0]};
+		end
+	Qupls5_pkg::OP_LOADN,Qupls5_pkg::OP_LOADZN,
+	Qupls5_pkg::OP_STOREN:
+		begin
+			if (ins.Rs1==8'd0) begin
+				imma = value_zero;
+				has_imma = TRUE;
+			end
+			if (SUPPORT_POSTFIX & has_cnsta) begin
+				imma = {cnsta,ins.Rs1[4:0]};
+				has_imma = TRUE;
+			end
+			if (ins.Rs2==8'd0) begin
+				immb = value_zero;
+				has_immb = TRUE;
+			end
+			if (SUPPORT_POSTFIX & has_cnstb) begin
+				immb = {cnstb,ins.Rs2[4:0]};
+				has_immb = TRUE;
+			end
 		end
 
 	Qupls5_pkg::OP_STB,
@@ -662,10 +682,10 @@ begin
 			4'b0001:	begin cnstb = {{39{cpfx[n][31]}},cpfx[n][31:9]}; has_cnstb = TRUE; end
 			4'b0010:	begin cnstc = {{39{cpfx[n][31]}},cpfx[n][31:9]}; has_cnstc = TRUE; end
 			4'b0011:	begin cnstd = {{39{cpfx[n][31]}},cpfx[n][31:9]}; has_cnstd = TRUE; end
-			4'b0100:	begin cnsta = {cpfx[n][31:9],cnsta[22:0]}; has_cnsta = TRUE; end
-			4'b0101:	begin cnstb = {cpfx[n][31:9],cnstb[22:0]}; has_cnstb = TRUE; end
-			4'b0110:	begin cnstc = {cpfx[n][31:9],cnstc[22:0]}; has_cnstc = TRUE; end
-			4'b0111:	begin cnstd = {cpfx[n][31:9],cnstd[22:0]}; has_cnstd = TRUE; end
+			4'b0100:	begin cnsta = {{18{cpfx[n][31]}},cpfx[n][31:9],cnsta[22:0]}; has_cnsta = TRUE; end
+			4'b0101:	begin cnstb = {{18{cpfx[n][31]}},cpfx[n][31:9],cnstb[22:0]}; has_cnstb = TRUE; end
+			4'b0110:	begin cnstc = {{18{cpfx[n][31]}},cpfx[n][31:9],cnstc[22:0]}; has_cnstc = TRUE; end
+			4'b0111:	begin cnstd = {{18{cpfx[n][31]}},cpfx[n][31:9],cnstd[22:0]}; has_cnstd = TRUE; end
 			4'b1000:	begin cnsta = {cpfx[n][31:9],cnsta[45:0]}; has_cnsta = TRUE; cnsta85 = TRUE; end
 			4'b1001:	begin cnstb = {cpfx[n][31:9],cnstb[45:0]}; has_cnstb = TRUE; cnstb85 = TRUE; end
 			4'b1010:	begin cnstc = {cpfx[n][31:9],cnstc[45:0]}; has_cnstc = TRUE; cnstc85 = TRUE; end

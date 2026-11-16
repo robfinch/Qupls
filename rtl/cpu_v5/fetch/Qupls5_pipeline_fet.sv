@@ -56,18 +56,18 @@ input cpu_types_pkg::seqnum_t irq_sn_ic;
 output cpu_types_pkg::seqnum_t irq_sn_fet;
 input Qupls5_pkg::irq_info_packet_t irq_in_ic;
 output Qupls5_pkg::irq_info_packet_t irq_in_fet;
-input pc_address_ex_t pc_i;
-input pc_address_ex_t misspc;
-output pc_address_ex_t misspc_fet;
+input Qupls5_pkg::pc_address_ex_t pc_i;
+input Qupls5_pkg::pc_address_ex_t misspc;
+output Qupls5_pkg::pc_address_ex_t misspc_fet;
 input [2:0] uop_num_ic;
 output reg [2:0] uop_num_fet;
 input flush_i;
 output reg flush_fet;
-output pc_address_ex_t pc0_fet;
-output pc_address_ex_t pc1_fet;
-output pc_address_ex_t pc2_fet;
-output pc_address_ex_t pc3_fet;
-output pc_address_ex_t pc4_fet;
+output Qupls5_pkg::pc_address_ex_t pc0_fet;
+output Qupls5_pkg::pc_address_ex_t pc1_fet;
+output Qupls5_pkg::pc_address_ex_t pc2_fet;
+output Qupls5_pkg::pc_address_ex_t pc3_fet;
+output Qupls5_pkg::pc_address_ex_t pc4_fet;
 input stomp_fet;
 input pc_stream_t kept_stream;
 input [31:0] ic_carry_mod;
@@ -82,11 +82,11 @@ input Qupls5_pkg::cause_code_t exc_i;
 output reg excv_o;
 output Qupls5_pkg::cause_code_t exc_o;
 
-pc_address_ex_t pc0_f;
-pc_address_ex_t pc1_f;
-pc_address_ex_t pc2_f;
-pc_address_ex_t pc3_f;
-pc_address_ex_t pc4_f;
+Qupls5_pkg::pc_address_ex_t pc0_f;
+Qupls5_pkg::pc_address_ex_t pc1_f;
+Qupls5_pkg::pc_address_ex_t pc2_f;
+Qupls5_pkg::pc_address_ex_t pc3_f;
+Qupls5_pkg::pc_address_ex_t pc4_f;
 
 always_comb
 begin
@@ -95,28 +95,28 @@ end
 always_comb 
 begin
 	pc1_f = pc0_f;
-	pc1_f.cap.offset = pc0_f.cap.offset + 6'd6;
+	pc1_f.cap.offset = pc0_f.cap.offset + 6'd4;
 end
 always_comb
 begin
 	pc2_f = pc0_f;
-	pc2_f.cap.offset = pc0_f.cap.offset + 6'd12;
+	pc2_f.cap.offset = pc0_f.cap.offset + 6'd8;
 end
 always_comb
 begin
 	pc3_f = pc0_f;
-	pc3_f.cap.offset = pc0_f.cap.offset + 6'd18;
+	pc3_f.cap.offset = pc0_f.cap.offset + 6'd12;
 end
 always_comb
 begin
 	pc4_f = pc0_f;
-	pc4_f.cap.offset = pc0_f.cap.offset + 6'd24;
+	pc4_f.cap.offset = pc0_f.cap.offset + 6'd16;
 end
 
 always_ff @(posedge clk)
 if (rst) begin
 	pc0_fet.stream <= pc_stream_t'(7'd1);
-	pc0_fet.cap.offset <= RSTPC;
+	pc0_fet.cap.offset <= Qupls5_pkg::RSTPC;
 end
 else begin
 	if (en)
@@ -125,7 +125,7 @@ end
 always_ff @(posedge clk)
 if (rst) begin
 	pc1_fet.stream <= pc_stream_t'(7'd1);
-	pc1_fet.cap.offset <= RSTPC + 6'd6;
+	pc1_fet.cap.offset <= Qupls5_pkg::RSTPC + 6'd4;
 end
 else begin
 	if (en) begin
@@ -136,7 +136,7 @@ end
 always_ff @(posedge clk)
 if (rst) begin
 	pc2_fet.stream <= pc_stream_t'(7'd1);
-	pc2_fet.cap.offset <= RSTPC + 6'd12;
+	pc2_fet.cap.offset <= Qupls5_pkg::RSTPC + 6'd8;
 end
 else begin
 	if (en) begin
@@ -147,7 +147,7 @@ end
 always_ff @(posedge clk)
 if (rst) begin
 	pc3_fet.stream <= pc_stream_t'(7'd1);
-	pc3_fet.cap.offset <= RSTPC + 6'd18;
+	pc3_fet.cap.offset <= Qupls5_pkg::RSTPC + 6'd12;
 end
 else begin
 	if (en) begin
@@ -158,7 +158,7 @@ end
 always_ff @(posedge clk)
 if (rst) begin
 	pc4_fet.stream <= pc_stream_t'(7'd1);
-	pc4_fet.cap.offset <= RSTPC + 6'd24;
+	pc4_fet.cap.offset <= Qupls5_pkg::RSTPC + 6'd16;
 end
 else begin
 	if (en)
@@ -168,7 +168,7 @@ end
 always_ff @(posedge clk)
 if (rst) begin
 	misspc_fet.stream <= pc_stream_t'(7'd1);
-	misspc_fet <= RSTPC;
+	misspc_fet <= Qupls5_pkg::RSTPC;
 end
 else begin
 	if (en)

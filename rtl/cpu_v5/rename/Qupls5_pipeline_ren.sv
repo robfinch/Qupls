@@ -322,13 +322,13 @@ urat1
 	assign prnv = 24'hFFFFFF;
 	always_ff @(posedge clk)
 	if (rst) begin
-		for (n5 = 0; n5 < NPORT; n5 = n5 + 1)
+		foreach (prn[n5])
 			prn[n5] <= 9'd0;
 	end
 	else begin
 		if (en)
 		begin
-			for (n5 = 0; n5 < NPORT; n5 = n5 + 1)
+			foreach (prn[n5])
 				prn[n5] <= {1'b0,arn[n5]};
 		end
 	end

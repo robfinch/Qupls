@@ -53,54 +53,54 @@ always_comb
 	case(instr.opcode)
 	Qupls5_pkg::OP_BCCU:	// integer unsigned branches
 		case(instr.func)
-		CND_EQ:	takb = a[WID-1:0] == b;
-		CND_NE:	takb = a[WID-1:0] != b;
-		CND_LT:	takb = a[WID-1:0] < b;
-		CND_LE:	takb = a[WID-1:0] <= b;
-		CND_GE: takb = a[WID-1:0] >= b;
-		CND_GT:	takb = a[WID-1:0] > b;
+		Qupls5_pkg::CND_EQ:	takb = a[WID-1:0] == b;
+		Qupls5_pkg::CND_NE:	takb = a[WID-1:0] != b;
+		Qupls5_pkg::CND_LT:	takb = a[WID-1:0] < b;
+		Qupls5_pkg::CND_LE:	takb = a[WID-1:0] <= b;
+		Qupls5_pkg::CND_GE: takb = a[WID-1:0] >= b;
+		Qupls5_pkg::CND_GT:	takb = a[WID-1:0] > b;
 		// Bit set or clear
-		CND_BBC:	takb = ~a[b[6:0]];
-		CND_BBS:	takb =  a[b[6:0]];
+		Qupls5_pkg::CND_BBC:	takb = ~a[b[6:0]];
+		Qupls5_pkg::CND_BBS:	takb =  a[b[6:0]];
 		// Logical 0 or 1
-		CND_NAND:	takb = ~(|a[WID-1:0] & |b);
-		CND_AND:	takb = |a[WID-1:0] & |b;
-		CND_NOR:	takb = ~(|a[WID-1:0] | |b);
-		CND_OR:	takb = |a[WID-1:0] | |b;
-		CND_BOI:	takb = irq;
+		Qupls5_pkg::CND_NAND:	takb = ~(|a[WID-1:0] & |b);
+		Qupls5_pkg::CND_AND:	takb = |a[WID-1:0] & |b;
+		Qupls5_pkg::CND_NOR:	takb = ~(|a[WID-1:0] | |b);
+		Qupls5_pkg::CND_OR:	takb = |a[WID-1:0] | |b;
+		Qupls5_pkg::CND_BOI:	takb = irq;
 		default:	takb = 1'b0;
 		endcase
 	Qupls5_pkg::OP_BCC:	// integer signed branches
 		case(instr.func)
-		CND_EQ:	takb = a[WID-1:0] == b;
-		CND_NE:	takb = a[WID-1:0] != b;
-		CND_LT:	takb = $signed(a[WID-1:0]) < $signed(b);
-		CND_LE:	takb = $signed(a[WID-1:0]) <= $signed(b);
-		CND_GE: takb = $signed(a[WID-1:0]) >= $signed(b);
-		CND_GT:	takb = $signed(a[WID-1:0]) > $signed(b);
+		Qupls5_pkg::CND_EQ:	takb = a[WID-1:0] == b;
+		Qupls5_pkg::CND_NE:	takb = a[WID-1:0] != b;
+		Qupls5_pkg::CND_LT:	takb = $signed(a[WID-1:0]) < $signed(b);
+		Qupls5_pkg::CND_LE:	takb = $signed(a[WID-1:0]) <= $signed(b);
+		Qupls5_pkg::CND_GE: takb = $signed(a[WID-1:0]) >= $signed(b);
+		Qupls5_pkg::CND_GT:	takb = $signed(a[WID-1:0]) > $signed(b);
 		// Bitwise 0 or 1
-		CND_NAND:	takb = ~|(a[WID-1:0] & b);
-		CND_AND:	takb = |(a[WID-1:0] & b);
-		CND_NOR:	takb = ~|(a[WID-1:0] | b);
-		CND_OR:	takb = |(a[WID-1:0] | b);
+		Qupls5_pkg::CND_NAND:	takb = ~|(a[WID-1:0] & b);
+		Qupls5_pkg::CND_AND:	takb = |(a[WID-1:0] & b);
+		Qupls5_pkg::CND_NOR:	takb = ~|(a[WID-1:0] | b);
+		Qupls5_pkg::CND_OR:	takb = |(a[WID-1:0] | b);
 		default:	takb = 1'b0;
 		endcase
 	Qupls5_pkg::OP_MBCC:
 		case(instr.func)
-		CND_EQ:	takb = (ac[WID-1:0] & c) == bc;
-		CND_NE:	takb = (ac[WID-1:0] & c) != bc;
-		CND_LT:	takb = $signed(ac[WID-1:0]) < $signed(bc);
-		CND_LE:	takb = $signed(ac[WID-1:0]) <= $signed(bc);
-		CND_GE: takb = $signed(ac[WID-1:0]) >= $signed(bc);
-		CND_GT:	takb = $signed(ac[WID-1:0]) > $signed(bc);
+		Qupls5_pkg::CND_EQ:	takb = (ac[WID-1:0] & c) == bc;
+		Qupls5_pkg::CND_NE:	takb = (ac[WID-1:0] & c) != bc;
+		Qupls5_pkg::CND_LT:	takb = $signed(ac[WID-1:0]) < $signed(bc);
+		Qupls5_pkg::CND_LE:	takb = $signed(ac[WID-1:0]) <= $signed(bc);
+		Qupls5_pkg::CND_GE: takb = $signed(ac[WID-1:0]) >= $signed(bc);
+		Qupls5_pkg::CND_GT:	takb = $signed(ac[WID-1:0]) > $signed(bc);
 		// Bit set or clear
-		CND_BBC:	takb = ~ac[b[6:0]];
-		CND_BBS:	takb =  ac[b[6:0]];
+		Qupls5_pkg::CND_BBC:	takb = ~ac[b[6:0]];
+		Qupls5_pkg::CND_BBS:	takb =  ac[b[6:0]];
 		// Bitwise 0 or 1
-		CND_NAND:	takb = ~|(ac[WID-1:0] & bc);
-		CND_AND:	takb = |(ac[WID-1:0] & bc);
-		CND_NOR:	takb = ~|(ac[WID-1:0] | bc);
-		CND_OR:	takb = |(ac[WID-1:0] | bc);
+		Qupls5_pkg::CND_NAND:	takb = ~|(ac[WID-1:0] & bc);
+		Qupls5_pkg::CND_AND:	takb = |(ac[WID-1:0] & bc);
+		Qupls5_pkg::CND_NOR:	takb = ~|(ac[WID-1:0] | bc);
+		Qupls5_pkg::CND_OR:	takb = |(ac[WID-1:0] | bc);
 		default:	takb = 1'b0;
 		endcase
 	default:	takb = 1'b0;

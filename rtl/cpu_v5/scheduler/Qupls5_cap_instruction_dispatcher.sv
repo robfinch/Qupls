@@ -54,6 +54,7 @@ module Qupls5_cap_instruction_dispatcher(rst, clk, pgh, rob, stomp, busy, rse_o,
 	rob_dispatched_o, rob_unimplemented_o);
 parameter DISPATCH_COUNT=1;
 parameter MWIDTH=Qupls5_pkg::MWIDTH;
+parameter SUPPORT_CAPABILITIES = Qupls5_pkg::SUPPORT_CAPABILITIES;
 input rst;
 input clk;
 input Qupls5_pkg::pipeline_group_hdr_t [Qupls5_pkg::ROB_ENTRIES/MWIDTH-1:0] pgh;
@@ -79,8 +80,8 @@ cpy_t cpy;
 
 always_comb
 begin
-	rob_dispatched = {$bits(rob_bitmask_t){1'b0}};
-	rob_unimplemented = {$bits(rob_bitmask_t){1'b0}};
+	rob_dispatched = {$bits(Qupls5_pkg::rob_bitmask_t){1'b0}};
+	rob_unimplemented = {$bits(Qupls5_pkg::rob_bitmask_t){1'b0}};
 	dispatch_slot_v = 1'b0;
 	rse = {$bits(Qupls5_pkg::cap_reservation_station_entry_t){1'b0}};
 

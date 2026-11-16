@@ -415,6 +415,7 @@ begin
 				o1 = alu_od;
 			end
 		endcase
+	Qupls5_pkg::OP_LOADN,Qupls5_pkg::OP_LOADZN,Qupls5_pkg::OP_STOREN,
 	Qupls5_pkg::OP_LDB,Qupls5_pkg::OP_LDBZ,Qupls5_pkg::OP_LDW,Qupls5_pkg::OP_LDWZ,
 	Qupls5_pkg::OP_LDT,Qupls5_pkg::OP_LDTZ,Qupls5_pkg::OP_LOAD,Qupls5_pkg::OP_CLOAD,
 	Qupls5_pkg::OP_STB,Qupls5_pkg::OP_STW,

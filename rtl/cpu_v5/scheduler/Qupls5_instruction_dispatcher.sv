@@ -55,6 +55,7 @@ parameter DISPATCH_COUNT=6;
 parameter MWIDTH=Qupls5_pkg::MWIDTH;
 parameter SUPPORT_XPIPE = {Qupls5_pkg::SUPPORT_XPIPE5,Qupls5_pkg::SUPPORT_XPIPE4,Qupls5_pkg::SUPPORT_XPIPE3,
 	Qupls5_pkg::SUPPORT_XPIPE2,Qupls5_pkg::SUPPORT_XPIPE1,Qupls5_pkg::SUPPORT_XPIPE0};
+parameter SUPPORT_CAPABILITIES = Qupls5_pkg::SUPPORT_CAPABILITIES;
 parameter SUPPORT_VECTOR = Qupls5_pkg::SUPPORT_VECTOR;
 input rst;
 input clk;
@@ -82,8 +83,8 @@ cpy_t [DISPATCH_COUNT-1:0] cpy;
 
 always_comb
 begin
-	rob_dispatched = {$bits(rob_bitmask_t){1'b0}};
-	rob_unimplemented = {$bits(rob_bitmask_t){1'b0}};
+	rob_dispatched = {$bits(Qupls5_pkg::rob_bitmask_t){1'b0}};
+	rob_unimplemented = {$bits(Qupls5_pkg::rob_bitmask_t){1'b0}};
 	dispatch_slot_v = {DISPATCH_COUNT{1'b0}};
 	foreach (rse[nn])
 		rse[nn] = {$bits(Qupls5_pkg::reservation_station_entry_t){1'b0}};

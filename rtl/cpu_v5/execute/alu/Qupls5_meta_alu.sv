@@ -635,7 +635,7 @@ endgenerate
 always_comb
 begin
 	o1 = zero;
-	exc1 = FLT_NONE;
+	exc1 = Qupls5_pkg::FLT_NONE;
 	if (Qupls5_pkg::SUPPORT_PREC) begin
 		case({isflt,issimd})
 		2'b00:

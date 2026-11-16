@@ -55,6 +55,7 @@ parameter MICROOPS_PER_INSTR = 16;
 parameter SUPPORT_ATOM = Qupls5_pkg::SUPPORT_ATOM;
 parameter SUPPORT_CARRY = Qupls5_pkg::SUPPORT_CARRY;
 parameter SUPPORT_VMASK = Qupls5_pkg::SUPPORT_VMASK;
+parameter SUPPORT_PRED = Qupls5_pkg::SUPPORT_PRED;
 input rst_i;
 input rst;
 input clk;

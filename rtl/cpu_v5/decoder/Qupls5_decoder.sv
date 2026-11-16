@@ -40,6 +40,7 @@ import Qupls5_pkg::*;
 
 module Qupls5_decoder(rst, clk, regFPCSR, en, ip, om, ipl, instr, instr_raw, dbo);
 parameter SUPPORT_CANARY = Qupls5_pkg::SUPPORT_CANARY;
+parameter SUPPORT_CAPABILITIES = Qupls5_pkg::SUPPORT_CAPABILITIES;
 input rst;
 input clk;
 input aregno_t regFPCSR;

@@ -56,18 +56,19 @@ module Qupls5_pipeline_ext(rst_i, clk_i, en_i,
 	pg_ext, new_stream, alloc_stream,
 	new_address_o, do_ret, ret_pc, do_call, get);
 parameter MWIDTH = Qupls5_pkg::MWIDTH;
+parameter THREADS = Qupls5_pkg::THREADS;
 input rst_i;
 input clk_i;
 input irq_fet;
 input Qupls5_pkg::irq_info_packet_t irq_in_fet;
 input cpu_types_pkg::seqnum_t irq_sn_fet;
 input [5:0] ipl_fet;
-input pc_address_t active_irq_vector;
+input cpu_types_pkg::pc_address_t active_irq_vector;
 input [5:0] irq_i;
 input en_i;
 input branch_resolved;
-input pc_stream_t live_stream;
-input pc_stream_t kept_stream;
+input cpu_types_pkg::pc_stream_t live_stream;
+input cpu_types_pkg::pc_stream_t kept_stream;
 input stomp_ext;
 output reg nop_o;
 input [31:0] carry_mod_fet;
@@ -106,10 +107,10 @@ output cpu_types_pkg::mc_address_t mcip3_o;
 */
 output Qupls5_pkg::pc_address_ex_t new_address_o;
 output reg do_ret;
-output pc_address_ex_t ret_pc;
+output Qupls5_pkg::pc_address_ex_t ret_pc;
 output reg do_call;
 input get;
-input pc_stream_t [THREADS-1:0] new_stream;
+input cpu_types_pkg::pc_stream_t [THREADS-1:0] new_stream;
 output reg alloc_stream;
 input excv_i;
 input Qupls5_pkg::cause_code_t exc_i;
@@ -162,7 +163,7 @@ end
 always_ff @(posedge clk)
 if (rst_i) begin
 	foreach(pc_ext[n6]) begin
-		pc_ext[n6] <= {$bits(pc_address_ex_t){1'b0}};
+		pc_ext[n6] <= {$bits(Qupls5_pkg::pc_address_ex_t){1'b0}};
 		pc_ext[n6].cap.perms <= 16'hffff;
 		pc_ext[n6].cap.otype <= 18'h3ffff;
 		pc_ext[n6].cap.top <= 65'h10000000000000000;
@@ -205,11 +206,11 @@ always_comb regcnt = regcnt_i;
 always_comb 
 	ic_line_aligned = {{64{1'd1,Qupls5_pkg::OP_NOP}},cline_fet} >> {pc0_fet.cap.offset[5:2],5'd0};
 
-pc_address_ex_t prev_pc0_fet;
+Qupls5_pkg::pc_address_ex_t prev_pc0_fet;
 always_ff @(posedge clk_i)
 if (rst_i) begin
 	prev_ic_line_aligned <= 256'd0;
-	prev_pc0_fet <= {$bits(pc_address_ex_t){1'b0}};
+	prev_pc0_fet <= {$bits(Qupls5_pkg::pc_address_ex_t){1'b0}};
 end
 else begin
 	if (en) begin
@@ -238,7 +239,7 @@ always_comb
 
 Qupls5_pkg::rob_entry_t [MWIDTH-1:0] pr_ext;
 Qupls5_pkg::micro_op_t prev_xop;
-pc_address_ex_t prev_xop_addr;
+Qupls5_pkg::pc_address_ex_t prev_xop_addr;
 reg xop_v;
 
 Qupls5_ext_set_pr #(.MWIDTH(MWIDTH)) usetpr1
@@ -330,7 +331,7 @@ generate begin : gExtDecode
 			jsr[g]: btgts[g] = jsr_tgts[g];
 			jmp[g]: btgts[g] = jsr_tgts[g];
 			bcc[g]: btgts[g] = bcc_tgts[g];
-			default:	btgts[g] = RSTPC;
+			default:	btgts[g] = Qupls5_pkg::RSTPC;
 			endcase
 	end
 end
@@ -455,7 +456,7 @@ always_comb
 begin
 	ret_pc = pc0_fet;
 	ret_pc.stream = pc0_fet.stream;
-	ret_pc.cap.offset = RSTPC - pc0_fet.cap.base;
+	ret_pc.cap.offset = Qupls5_pkg::RSTPC - pc0_fet.cap.base;
 	ret_pc.stream = 5'd1;
 	for (n3 = MWIDTH; n3 >= 0; n3 = n3 - 1)
 		if (bsr[n3]|jsr[n3])

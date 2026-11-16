@@ -56,7 +56,9 @@ module Qupls5_btb(rst, clk, en, clk_en,
 	excv, exc, next_act_stream
 );
 parameter DEP=2048;
-parameter MWIDTH = 4;
+parameter MWIDTH = Qupls5_pkg::MWIDTH;
+parameter XSTREAMS = Qupls5_pkg::XSTREAMS;
+parameter THREADS = Qupls5_pkg::THREADS;
 input rst;
 input clk;
 input en;
@@ -75,9 +77,9 @@ output reg takb0;
 output reg takb1;
 output reg takb2;
 output reg takb3;
-input pc_address_ex_t new_address_ext;
+input Qupls5_pkg::pc_address_ex_t new_address_ext;
 input predicted_correctly_dec;
-input pc_address_ex_t new_address_dec;
+input Qupls5_pkg::pc_address_ex_t new_address_dec;
 input branchmiss;
 input Qupls5_pkg::pc_address_ex_t misspc;
 input Qupls5_pkg::pc_address_ex_t commit_pc0;
@@ -114,18 +116,18 @@ input commit_jmp3;
 input [2:0] commit_grp3;
 
 output [XSTREAMS*THREADS-1:0] strm_bitmap;
-output pc_stream_t act_stream;
-output pc_stream_t [THREADS-1:0] new_stream;
+output cpu_types_pkg::pc_stream_t act_stream;
+output cpu_types_pkg::pc_stream_t [THREADS-1:0] new_stream;
 input alloc_stream;
 input [XSTREAMS*THREADS-1:0] free_stream;
-output pc_address_ex_t [XSTREAMS*THREADS-1:0] pcs;
+output Qupls5_pkg::pc_address_ex_t [XSTREAMS*THREADS-1:0] pcs;
 
 input [7:0] thread_probability [0:7];
-output dep_stream_t [XSTREAMS-1:0] dep_stream;
+output Qupls5_pkg::dep_stream_t [XSTREAMS-1:0] dep_stream;
 input [(XSTREAMS*THREADS)-1:0] buffered_streams;
 output reg excv;
 output Qupls5_pkg::cause_code_t exc;
-output pc_stream_t next_act_stream;
+output cpu_types_pkg::pc_stream_t next_act_stream;
 
 typedef struct packed {
 	logic takb;
@@ -137,15 +139,15 @@ typedef struct packed {
 	cpu_types_pkg::pc_address_t tgt;
 } btb_entry_t;
 
-pc_address_t [31:0] ras;
-pc_address_ex_t ras_pc;
+cpu_types_pkg::pc_address_t [31:0] ras;
+Qupls5_pkg::pc_address_ex_t ras_pc;
 reg [4:0] ras_sp;
 reg do_call, do_ret;
 
-pc_address_ex_t [XSTREAMS*THREADS-1:0] next_pcs;
-pc_stream_t next_alt_strm;
+Qupls5_pkg::pc_address_ex_t [XSTREAMS*THREADS-1:0] next_pcs;
+cpu_types_pkg::pc_stream_t next_alt_strm;
 reg [XSTREAMS*THREADS-1:0] next_strm_bitmap;
-pc_stream_t prev_act_stream;
+cpu_types_pkg::pc_stream_t prev_act_stream;
 reg [10:0] addrb0;
 reg [10:0] addra;
 btb_entry_t doutb0;
@@ -307,7 +309,7 @@ if (rst) begin
 	for (nn = 0; nn < XSTREAMS*THREADS; nn = nn + 1) begin
 		next_pcs[nn].stream.thread = (nn >> $clog2(XSTREAMS));
 		next_pcs[nn].stream.stream = 5'd1;
-		next_pcs[nn].pc = RSTPC;
+		next_pcs[nn].pc = Qupls5_pkg::RSTPC;
 	end
 	takb0 = 1'b0;
 	takb1 = 1'b0;
@@ -375,14 +377,14 @@ generate begin : gPCs
 	for (g = 0; g < XSTREAMS*THREADS; g = g + 1) begin
 		always_ff @(posedge clk)
 		if (rst) begin
-			pcs[g] <= {$bits(pc_address_ex_t){1'b0}};
+			pcs[g] <= {$bits(Qupls5_pkg::pc_address_ex_t){1'b0}};
 			pcs[g].cap.perms <= 16'hFFFF;
 			pcs[g].cap.otype <= 18'h3ffff;
 			pcs[g].cap.top <= 65'h10000000000000000;
 			pcs[g].cap.base <= 64'd0;
 			pcs[g].stream.stream <= 5'd1;
 			pcs[g].stream.thread = g >> $clog2(XSTREAMS);
-			pcs[g].cap.offset <= RSTPC;
+			pcs[g].cap.offset <= Qupls5_pkg::RSTPC;
 		end
 		else if (advance_pc) begin
 //			if (get_next_pc)
@@ -394,7 +396,7 @@ endgenerate
 
 always_ff @(posedge clk)
 	if (rst) begin
-		pc <= {$bits(pc_address_ex_t){1'b0}};
+		pc <= {$bits(Qupls5_pkg::pc_address_ex_t){1'b0}};
 		pc.cap.perms <= 24'hffffff;
 		pc.cap.otype <= 24'hffffff;
 		pc.cap.flags <= 4'h0;		// use capabilities for data
@@ -471,7 +473,7 @@ end
 always_ff @(posedge clk)
 if (rst) begin
 	for (jj = 0; jj < 32; jj = jj + 1)
-		ras[jj] <= RSTPC;
+		ras[jj] <= Qupls5_pkg::RSTPC;
 end
 else begin
 	if (do_call)
@@ -480,7 +482,7 @@ end
 
 always_ff @(posedge clk)
 if (rst) begin
-	ras_pc.cap.offset <= RSTPC;
+	ras_pc.cap.offset <= Qupls5_pkg::RSTPC;
 	ras_pc.stream.thread <= 2'd0;
 	ras_pc.stream.stream <= 5'd1;
 end

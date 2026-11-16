@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2024-2025  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2024-2026  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -207,10 +207,10 @@ case(state)
 // Reset: 512 cycles
 RESET:
  	begin
- 		web <= !SIM;
- 		enb <= !SIM;
+ 		web <= !Qupls5_pkg::SIM;
+ 		enb <= !Qupls5_pkg::SIM;
  		// It is a pita to wait 512 cycles during simulation
- 		if (SIM) begin
+ 		if (Qupls5_pkg::SIM) begin
  			for (n1 = 0; n1 < DEP; n1 = n1 + 1)
  				tag[n1] = 13'd0;
 			state <= IDLE;

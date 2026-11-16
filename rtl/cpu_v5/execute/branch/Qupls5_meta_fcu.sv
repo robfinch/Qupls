@@ -42,6 +42,7 @@ import Qupls5_pkg::*;
 
 module Qupls5_meta_fcu(rst, clk, rse_i, rse_o, cr0, ic_irq, irq_sn, takb, res, we_o);
 parameter WID = 64;
+parameter SUPPORT_CAPABILITIES = Qupls5_pkg::SUPPORT_CAPABILITIES;
 input rst;
 input clk;
 input Qupls5_pkg::reservation_station_entry_t rse_i;

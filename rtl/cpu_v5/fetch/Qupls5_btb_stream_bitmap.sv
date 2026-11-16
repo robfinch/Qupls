@@ -50,7 +50,7 @@ input cpu_types_pkg::pc_stream_t act_stream;
 input alloc_stream;
 input [XSTREAMS*THREADS-1:0] free_stream;
 output cpu_types_pkg::pc_stream_t [THREADS-1:0] new_stream;
-output dep_stream_t [XSTREAMS-1:0] dep_stream;
+output Qupls5_pkg::dep_stream_t [XSTREAMS-1:0] dep_stream;
 output reg [XSTREAMS*THREADS-1:0] strm_bitmap;
 output reg [XSTREAMS*THREADS-1:0] next_strm_bitmap;
 
@@ -91,7 +91,7 @@ always_ff @(posedge clk)
 always_ff @(posedge clk)
 if (rst) begin
 	foreach (dep_stream[n3])
-		dep_stream[n3] <= {$bits(dep_stream_t){1'b0}};
+		dep_stream[n3] <= {$bits(Qupls5_pkg::dep_stream_t){1'b0}};
 end
 else begin
 	if (clk_en) begin

@@ -73,17 +73,35 @@ module Qupls5(coreno_i, rst_i, clk_i, clk2x_i, clk3x_i, clk5x_i, ipl, irq, irq_a
 	wb_req, wb_resp, snoop_adr, snoop_v, snoop_tid);
 parameter CORENO = 6'd1;
 parameter CHANNEL = 6'd1;
+parameter SIM = Qupls5_pkg::SIM;
 parameter MWIDTH = Qupls5_pkg::MWIDTH;
 parameter COMMIT_WIDTH = Qupls5_pkg::COMMIT_WIDTH;
+parameter ROB_ENTRIES = Qupls5_pkg::ROB_ENTRIES;
 parameter ISTACK_DEPTH = 16;
+parameter DISPATCH_STRATEGY = Qupls5_pkg::DISPATCH_STRATEGY;
 parameter DISPATCH_WIDTH = 6;
 parameter RL_STRATEGY = Qupls5_pkg::RL_STRATEGY;
 localparam NREG_RPORTS = Qupls5_pkg::NREG_RPORTS;
 parameter NREG_WPORTS = Qupls5_pkg::NREG_WPORTS;
+parameter NDATA_PORTS = Qupls5_pkg::NDATA_PORTS;
+parameter NFRQ = Qupls5_pkg::NFRQ;
 localparam RS_NREG_RPORTS = Qupls5_pkg::NREG_RPORTS;
 parameter MICROOPS_PER_INSTR = Qupls5_pkg::MICROOPS_PER_INSTR;
 parameter MAX_MICROOPS = 8;
 parameter XSTREAMS = Qupls5_pkg::XSTREAMS;
+parameter THREADS = Qupls5_pkg::THREADS;
+parameter SUPPORT_CAPABILITIES = Qupls5_pkg::SUPPORT_CAPABILITIES;
+parameter SUPPORT_CSR0 = Qupls5_pkg::SUPPORT_CSR0;
+parameter SUPPORT_CSR1 = Qupls5_pkg::SUPPORT_CSR1;
+parameter SUPPORT_REXT = Qupls5_pkg::SUPPORT_REXT;
+parameter SUPPORT_PRED = Qupls5_pkg::SUPPORT_PRED;
+parameter SUPPORT_XPIPE0 = Qupls5_pkg::SUPPORT_XPIPE0;
+parameter SUPPORT_XPIPE1 = Qupls5_pkg::SUPPORT_XPIPE1;
+parameter SUPPORT_XPIPE2 = Qupls5_pkg::SUPPORT_XPIPE2;
+parameter SUPPORT_XPIPE3 = Qupls5_pkg::SUPPORT_XPIPE3;
+parameter SUPPORT_XPIPE4 = Qupls5_pkg::SUPPORT_XPIPE4;
+parameter SUPPORT_XPIPE5 = Qupls5_pkg::SUPPORT_XPIPE5;
+parameter SUPPORT_XPIPE6 = Qupls5_pkg::SUPPORT_XPIPE6;
 parameter SUPPORT_XPIPE = {Qupls5_pkg::SUPPORT_XPIPE5,Qupls5_pkg::SUPPORT_XPIPE4,Qupls5_pkg::SUPPORT_XPIPE3,
 	Qupls5_pkg::SUPPORT_XPIPE2,Qupls5_pkg::SUPPORT_XPIPE1,Qupls5_pkg::SUPPORT_XPIPE0};
 input [63:0] coreno_i;
@@ -166,10 +184,10 @@ reg ssm_flag;
 // hirq squashes the pc increment if there's an irq.
 // Normally atom_count is zero.
 reg hirq;
-pc_address_ex_t ret_pc;
-pc_address_ex_t misspc;
+Qupls5_pkg::pc_address_ex_t ret_pc;
+Qupls5_pkg::pc_address_ex_t misspc;
 reg restore_en = 1'b1;
-pc_address_ex_t pc_fet;
+Qupls5_pkg::pc_address_ex_t pc_fet;
 
 wire [15:0] q_rst;
 wire [15:0] q_trigger;
@@ -260,9 +278,9 @@ Qupls5_pkg::beb_entry_t beb_buf;
 reg [1:0] beb_status [0:63];
 
 // Streams
-stream_state_t [XSTREAMS-1:0] stream_states;
+Qupls5_pkg::stream_state_t [XSTREAMS-1:0] stream_states;
 wire [XSTREAMS-1:0] dead_streams;
-pc_stream_t kept_stream, live_stream;
+cpu_types_pkg::pc_stream_t kept_stream, live_stream;
 always_comb
 	kept_stream = pc.stream;
 
@@ -279,8 +297,8 @@ wire nq;
 reg [3:0] wnq;
 
 reg brtgtv;
-pc_address_ex_t pc0_f;
-pc_address_ex_t brtgt;
+Qupls5_pkg::pc_address_ex_t pc0_f;
+Qupls5_pkg::pc_address_ex_t brtgt;
 reg pc_in_sync;
 reg advance_pipeline;
 wire advance_extract2;
@@ -407,7 +425,7 @@ reg sau0_aRdv;
 checkpt_ndx_t sau0_cp;
 reg sau0_bank;
 value_t sau0_cmpo;
-pc_address_ex_t sau0_pc;
+Qupls5_pkg::pc_address_ex_t sau0_pc;
 value_t [5:0] xpipe_res;
 wire [255:0] cap_xpipe_res;
 cpu_types_pkg::flags_t cap_xpipe_res_flags;
@@ -463,7 +481,7 @@ reg sau1_aRdv;
 checkpt_ndx_t sau1_cp;
 reg sau1_bank;
 value_t sau1_cmpo;
-pc_address_ex_t sau1_pc;
+Qupls5_pkg::pc_address_ex_t sau1_pc;
 rob_ndx_t sau1_id;
 reg sau1_idv;
 wire [63:0] xpipe1_exc;
@@ -560,7 +578,7 @@ reg fpu0_aRdv1;
 checkpt_ndx_t fpu0_cp;
 reg [2:0] fpu0_cs;
 reg fpu0_bank;
-pc_address_ex_t fpu0_pc;
+Qupls5_pkg::pc_address_ex_t fpu0_pc;
 value_t fpu0_resA, fpu0_resH;
 value_t fpu0_resB;
 value_t fpu0_resC;
@@ -607,7 +625,7 @@ pregno_t fpu1_RdA, fpu1_RdB, fpu1_RdC;
 reg fpu1_aRdv, fpu1_aRdv1;
 reg [2:0] fpu1_cs;
 reg fpu1_bank;
-pc_address_ex_t fpu1_pc;
+Qupls5_pkg::pc_address_ex_t fpu1_pc;
 value_t fpu1_resA;
 value_t fpu1_resB;
 value_t fpu1_resC;
@@ -638,13 +656,13 @@ value_t fcu_argBr;
 value_t fcu_argI;
 wire fcu_aRtzA,fcu_aRtzB;
 reg fcu_done;
-pc_address_ex_t fcu_pc;
+Qupls5_pkg::pc_address_ex_t fcu_pc;
 reg fcu_wrA,fcu_wrB;
 reg fcu_idv;
 Qupls5_pkg::cause_code_t fcu_exc;
 reg fcu_state1, fcu_branch_resolved, fcu_v3, fcu_v4, fcu_v5, fcu_v6;
 wire fcu_branchmiss;
-pc_address_ex_t fcu_misspc, fcu_misspc1;
+Qupls5_pkg::pc_address_ex_t fcu_misspc, fcu_misspc1;
 mc_address_t fcu_miss_mcip, fcu_miss_mcip1;
 reg [2:0] fcu_missgrp;
 reg [2:0] fcu_missino;
@@ -735,14 +753,14 @@ address_t tlb0_res, tlb1_res;
 
 pc_address_t icdp;
 rob_ndx_t excid;
-pc_address_ex_t excmisspc;
+Qupls5_pkg::pc_address_ex_t excmisspc;
 reg [4:0] excmissgrp;
 reg excmiss;
 Qupls5_pkg::ex_instruction_t excir;
 reg excret;
-pc_address_ex_t exc_ret_pc;
+Qupls5_pkg::pc_address_ex_t exc_ret_pc;
 wire do_ret, do_call;
-pc_address_ex_t bsr_tgt;
+Qupls5_pkg::pc_address_ex_t bsr_tgt;
 mc_address_t exc_ret_mcip;
 Qupls5_pkg::micro_op_t exc_ret_mcir;
 reg dc_get;
@@ -799,11 +817,11 @@ wire [63:0] dramN_tagsi [0:Qupls5_pkg::NDATA_PORTS-1];
 rob_ndx_t [Qupls5_pkg::NDATA_PORTS-1:0] dramN_id;
 
 wire [2:0] cmtcnt;
-pc_address_ex_t commit_pc0, commit_pc1, commit_pc2, commit_pc3;
-pc_address_ex_t commit_brtgt0;
-pc_address_ex_t commit_brtgt1;
-pc_address_ex_t commit_brtgt2;
-pc_address_ex_t commit_brtgt3;
+Qupls5_pkg::pc_address_ex_t commit_pc0, commit_pc1, commit_pc2, commit_pc3;
+Qupls5_pkg::pc_address_ex_t commit_brtgt0;
+Qupls5_pkg::pc_address_ex_t commit_brtgt1;
+Qupls5_pkg::pc_address_ex_t commit_brtgt2;
+Qupls5_pkg::pc_address_ex_t commit_brtgt3;
 reg commit_br0;
 reg commit_br1;
 reg commit_br2;
@@ -851,7 +869,7 @@ Qupls5_pkg::fp_status_reg_t fpcsr, fpcsr_value;
 wire [2:0] swstk = cr0.swstk;
 wire paging_en = cr0.page_en;
 wire pebble_en = cr0.pebble_en;
-pc_address_ex_t [ISTACK_DEPTH-1:0] pc_stack;
+Qupls5_pkg::pc_address_ex_t [ISTACK_DEPTH-1:0] pc_stack;
 reg [5:0] pending_ipl;				// pending interrupt level.
 wire [5:0] im = cr0.ipl;
 reg [7:0] thread_probability [0:7];
@@ -882,8 +900,8 @@ wire pe_bsdone;
 reg [4:0] vl;
 
 // vectors for 5 operating modes (debug has its own set))
-pc_address_ex_t [4:0] kernel_vectors;
-pc_address_ex_t [4:0] syscall_vectors;
+Qupls5_pkg::pc_address_ex_t [4:0] kernel_vectors;
+Qupls5_pkg::pc_address_ex_t [4:0] syscall_vectors;
 pc_address_t active_irq_vector;
 assign active_irq_vector = pc_address_t'(kernel_vectors[cr0.dbg ? 3'd4 : {1'b0,Qupls5_pkg::fnNextOm(cr0.om)}].cap.offset);
 
@@ -951,10 +969,10 @@ endgenerate
 // FETCH
 //
 
-pc_address_ex_t pc, pc0, pc5, pc6, pc7, pc8;
+Qupls5_pkg::pc_address_ex_t pc, pc0, pc5, pc6, pc7, pc8;
 reg [5:0] off0, off1, off2, off3, off4, off5, off6, off7;
-pc_address_ex_t pc0_fet, pc1_fet, pc2_fet, pc3_fet, pc4_fet;
-pc_address_ex_t next_pc;
+Qupls5_pkg::pc_address_ex_t pc0_fet, pc1_fet, pc2_fet, pc3_fet, pc4_fet;
+Qupls5_pkg::pc_address_ex_t next_pc;
 mc_address_t mcip0_f;
 mc_address_t mcip0_ext, mcip1_ext,mcip2_ext,mcip3_ext;
 mc_address_t mcip0_ren, mcip1_ren,mcip2_ren,mcip3_ren;
@@ -1542,7 +1560,7 @@ Qupls5_pkg::pc_address_ex_t new_address_ext;
 wire ic_port;
 wire ftaim_full, ftadm_full;
 wire icnop;
-pc_address_ex_t icpc;
+Qupls5_pkg::pc_address_ex_t icpc;
 wire [2:0] igrp;
 reg [7:0] length_byte;
 reg [63:0] vec_dat;
@@ -1551,21 +1569,21 @@ reg [31:0] ic_carry_mod;
 cpu_types_pkg::seqnum_t ic_irq_sn;
 reg get_next_pc;
 
-pc_stream_t [THREADS-1:0] new_stream;
+cpu_types_pkg::pc_stream_t [THREADS-1:0] new_stream;
 wire alloc_stream;
 reg alloc_irq_stream;
 reg [XSTREAMS*THREADS-1:0] used_streams;
-pc_address_ex_t [XSTREAMS*THREADS-1:0] pcs;
-pc_address_ex_t ip;
-pc_stream_t fet_stream;
+Qupls5_pkg::pc_address_ex_t [XSTREAMS*THREADS-1:0] pcs;
+Qupls5_pkg::pc_address_ex_t ip;
+cpu_types_pkg::pc_stream_t fet_stream;
 uc64_capability_t ddc;			// default data capability
 // Buffers the instruction cache line to allow fetching along alternate paths.
 reg first_icache;
 wire is_buffered;
 wire [XSTREAMS*THREADS-1:0] buffered_streams;
 wire next_is_buffered;
-dep_stream_t [XSTREAMS-1:0] dep_stream;
-pc_stream_t next_act_stream;
+Qupls5_pkg::dep_stream_t [XSTREAMS-1:0] dep_stream;
+cpu_types_pkg::pc_stream_t next_act_stream;
 
 // Choose a stream of execution. Give precedence to streams that have
 // buffered cache lines.
@@ -1767,7 +1785,7 @@ Qupls5_btb ubtb1
 always_ff @(posedge clk)
 if (irst) begin
 	ic_excv <= FALSE;
-	ic_exc <= Qupls5_pkg::cause_code_t'(FLT_NONE);
+	ic_exc <= Qupls5_pkg::cause_code_t'(Qupls5_pkg::FLT_NONE);
 end
 else begin
 	if (advance_pipeline) begin
@@ -1844,7 +1862,7 @@ else begin
 	end
 end
 
-pc_address_ex_t pc_mot;
+Qupls5_pkg::pc_address_ex_t pc_mot;
 reg branch_resolved, irq_resolved;
 always_ff @(posedge clk) branch_resolved <= fcu_branch_resolved|irq_resolved;
 
@@ -2159,7 +2177,7 @@ always_comb pc0 = pcs[fet_stream];
 // -----------------------------------------------------------------------------
 
 wire flush_fet;
-pc_address_ex_t misspc_fet, prev_ip;
+Qupls5_pkg::pc_address_ex_t misspc_fet, prev_ip;
 wire [1023:0] ic_line_fet;
 pc_address_t ic_hwipc, hwipc_fet;
 wire micro_machine_active_fet;
@@ -2181,7 +2199,7 @@ always_ff @(posedge clk)
 always_ff @(posedge clk)
 if (irst) begin
 	prev_ip.stream <= 7'd1;
-	prev_ip.cap.offset <= RSTPC;
+	prev_ip.cap.offset <= Qupls5_pkg::RSTPC;
 end
 else begin
 	if (advance_pipeline)
@@ -3044,7 +3062,7 @@ end
 */
 always_ff @(posedge clk)
 if (irst) begin
-	pc0_f <= {$bits(pc_address_ex_t){1'b0}};
+	pc0_f <= {$bits(Qupls5_pkg::pc_address_ex_t){1'b0}};
 	pc0_f.cap.perms <= 16'hffff;
 	pc0_f.cap.otype <= 18'h3ffff;
 	pc0_f.cap.top <= 65'h10000000000000000;
@@ -3058,7 +3076,7 @@ else begin
 		pc0_f <= pc;
 end
 
-rob_bitmask_t rob_dispatched, rob_unimplemented, rob_cap_dispatched;
+Qupls5_pkg::rob_bitmask_t rob_dispatched, rob_unimplemented, rob_cap_dispatched;
 Qupls5_pkg::rob_bitmask_t rob_dispatched_stomped;
 
 always_ff @(posedge clk)
@@ -3243,7 +3261,7 @@ wire cap_xpipe_full;
 // Look for queues containing values, and select from a queue using a rotating selector.
 // DEAD code
 generate begin : gFrqSelect
-	if (NFRQ > NREG_WPORTS)
+	if (Qupls5_pkg::NFRQ > NREG_WPORTS)
 		Qupls5_frq_select
 		#(
 			.NFRQ(NREG_WPORTS),
@@ -6428,7 +6446,7 @@ else begin
 	alloc_irq_stream <= FALSE;
 	lsq_cmd_ndx = 8;
 	foreach (lsq_cmd[n12])
-		lsq_cmd[n12] <= {$bits(lsq_cmd_t){1'b0}};
+		lsq_cmd[n12] <= {$bits(Qupls5_pkg::lsq_cmd_t){1'b0}};
 
 	/*
 	advance_msi <= FALSE;
@@ -6720,7 +6738,6 @@ else begin
 //					rob[(nn+1)%ROB_ENTRIES].op.pRd2 <= rob[nn].op.pRd;
 					rob[(nn+1)%ROB_ENTRIES].op.pDRM <= rob[nn].op.pRs2;
 					rob[(nn+1)%ROB_ENTRIES].op.pRs4v <= VAL;
-					rob[(nn+1)%ROB_ENTRIES].op.pRd2v <= VAL;
 					rob[(nn+1)%ROB_ENTRIES].op.pRmv <= VAL;
 					rob[nn].done <= 2'b11;
 				end
@@ -6898,7 +6915,7 @@ else begin
 	if (lsq[store_argC_id1.row][store_argC_id1.col].v==VAL && lsq[store_argC_id1.row][store_argC_id1.col].store && lsq[store_argC_id1.row][store_argC_id1.col].datav==INV) begin
 	if (store_opero.v) begin //load_lsq_argc) begin//prnv[23]) begin
 		$display("Qupls5: LSQ Rc=%h from r%d/%d", store_opero.val, lsq[store_argC_id1.row][store_argC_id1.col].aRc, lsq[store_argC_id1.row][store_argC_id1.col].pRc);
-		lsq_cmd[2].cmd <= LSQ_CMD_SETRES;
+		lsq_cmd[2].cmd <= Qupls5_pkg::LSQ_CMD_SETRES;
 		lsq_cmd[2].lndx <= {store_argC_id1.row,store_argC_id1.col};
 		lsq_cmd[2].rndx <= 0;
 		lsq_cmd[2].n <= 0;
@@ -7066,7 +7083,7 @@ else begin
 	  		foreach (wrport0_v[n45]) begin
 		  		if (lsq[n3][n12].datav==INV && lsq[n3][n12].pRc==wrport0_Rt[n45] && wrport0_v[n45]==VAL) begin
 		  			$display("Qupls5: LSQ bypass from wrport0=%h r%d", wrport0_res[n45], wrport0_Rt[n45]);
-						lsq_cmd[3].cmd <= LSQ_CMD_SETRES;
+						lsq_cmd[3].cmd <= Qupls5_pkg::LSQ_CMD_SETRES;
 						lsq_cmd[3].lndx <= {n3,n12[0]};
 						lsq_cmd[3].rndx <= 0;
 						lsq_cmd[3].n <= 0;
@@ -8616,7 +8633,7 @@ begin
 	n18c = rob[id].lsqndx.col;
 	rob[id].lsq <= FALSE;
 //	if (lsq[n18r][n18c].v==VAL) begin
-		lsq_cmd[n].cmd <= LSQ_CMD_INV;
+		lsq_cmd[n].cmd <= Qupls5_pkg::LSQ_CMD_INV;
 		lsq_cmd[n].lndx <= rob[id].lsqndx;
 		lsq_cmd[n].rndx <= id;
 		lsq_cmd[n].n <= 0;
@@ -8645,7 +8662,7 @@ task tIncLSQAddr;
 input integer n;
 input rob_ndx_t id;
 begin
-	lsq_cmd[n].cmd <= LSQ_CMD_INCADR;
+	lsq_cmd[n].cmd <= Qupls5_pkg::LSQ_CMD_INCADR;
 	lsq_cmd[n].lndx <= rob[id].lsqndx;
 	lsq_cmd[n].rndx <= id;
 	lsq_cmd[n].n <= 0;
@@ -8667,7 +8684,7 @@ input integer n;
 input rob_ndx_t id;
 input address_t padr;
 begin
-	lsq_cmd[n].cmd <= LSQ_CMD_SETADR;
+	lsq_cmd[n].cmd <= Qupls5_pkg::LSQ_CMD_SETADR;
 	lsq_cmd[n].lndx <= rob[id].lsqndx;
 	lsq_cmd[n].rndx <= id;
 	lsq_cmd[n].n <= 0;
@@ -9166,7 +9183,7 @@ input cpu_types_pkg::virtual_address_t vadr;
 input cpu_types_pkg::value_t mask;
 integer n1;
 begin
-	lsq_cmd[n].cmd <= LSQ_CMD_ENQ;
+	lsq_cmd[n].cmd <= Qupls5_pkg::LSQ_CMD_ENQ;
 	lsq_cmd[n].lndx <= ndx;
 	lsq_cmd[n].rndx <= id;
 	lsq_cmd[n].n <= n;
@@ -9353,7 +9370,7 @@ begin
 		16'b0011000000111???:	begin res = syscall_vectors[regno[2:0]].cap; res_flags = 8'hC0; end
 		16'b0010000000111???:	begin res = syscall_vectors[regno[2:0]].cap; res_flags = 8'hC0; end
 		16'b0001000000111???:	begin res = syscall_vectors[regno[2:0]].cap; res_flags = 8'hC0; end
-		CSR_DDC:	begin res = ddc; res_flags = 8'hC0; end
+		Qupls5_pkg::CSR_DDC:	begin res = ddc; res_flags = 8'hC0; end
 		default:	begin res = 256'd0; res_flags = 8'h00; end
 		endcase
 	end
@@ -10089,8 +10106,8 @@ endtask
 
 task tSetROBMemDone;
 input integer n;
-input dram_work_t dram_work;
-input dram_oper_t dram_oper;
+input Qupls5_pkg::dram_work_t dram_work;
+input Qupls5_pkg::dram_oper_t dram_oper;
 input Qupls5_pkg::cause_code_t cause;
 input [1:0] done;
 begin

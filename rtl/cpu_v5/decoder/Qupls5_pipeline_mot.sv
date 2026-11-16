@@ -60,7 +60,7 @@ input [63:0] vcfg_num;
 input [63:0] vcfg_cat;
 input branch_resolved;
 input cpu_types_pkg::pc_stream_t live_stream;
-output pc_address_ex_t pc_mot;
+output Qupls5_pkg::pc_address_ex_t pc_mot;
 input stomp_trn;
 input stomp_moq1;
 input stomp_moq2;

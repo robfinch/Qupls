@@ -44,6 +44,7 @@ module Qupls5_set_dram_work(rst_i, clk_i, rob_i, stomp_i, lsndxv_i,
 );
 parameter CORENO = 6'd1;
 parameter LSQNO = 2'd0;
+parameter ROB_ENTRIES = Qupls5_pkg::ROB_ENTRIES;
 input rst_i;
 input clk_i;
 input Qupls5_pkg::rob_entry_t [ROB_ENTRIES-1:0] rob_i;

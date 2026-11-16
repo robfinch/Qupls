@@ -95,6 +95,7 @@ begin
 		Qupls5_pkg::OP_BCCU:
 			fnHas_Rs2 = 1'b1;
 		// Load / store
+		Qupls5_pkg::OP_LOADN,Qupls5_pkg::OP_LOADZN,Qupls5_pkg::OP_STOREN,
 		Qupls5_pkg::OP_LDB,Qupls5_pkg::OP_LDBZ,Qupls5_pkg::OP_LDW,Qupls5_pkg::OP_LDWZ,
 		Qupls5_pkg::OP_LDT,Qupls5_pkg::OP_LDTZ,Qupls5_pkg::OP_LOAD,Qupls5_pkg::OP_LOADA,
 		Qupls5_pkg::OP_STB,Qupls5_pkg::OP_STW,Qupls5_pkg::OP_CLOAD,
@@ -152,6 +153,7 @@ begin
 		Qupls5_pkg::OP_BCCU:
 			fnRs2 = {3'b0,ir.Rs2};
 		// Load / store
+		Qupls5_pkg::OP_LOADN,Qupls5_pkg::OP_LOADZN,Qupls5_pkg::OP_STOREN,
 		Qupls5_pkg::OP_LDB,Qupls5_pkg::OP_LDBZ,Qupls5_pkg::OP_LDW,Qupls5_pkg::OP_LDWZ,
 		Qupls5_pkg::OP_LDT,Qupls5_pkg::OP_LDTZ,Qupls5_pkg::OP_LOAD,Qupls5_pkg::OP_LOADA,
 		Qupls5_pkg::OP_AMO,Qupls5_pkg::OP_CMPSWAP,Qupls5_pkg::OP_CLOAD,

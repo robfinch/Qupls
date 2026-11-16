@@ -45,6 +45,21 @@ module Qupls5_alu(rst, clk, clk2x, chunk, cr0, ld, ir, div, Ra, a, b, bi, c,
 	a_flags, b_flags, c_flags, t_flags, i, t, qres, capa, capa_flags,
 	mask, cs, pc, pcc, csr, cpl, coreno, canary, velsz, o, o_flags, exc_o, did_op);
 parameter PIPE = 3'd0;
+parameter SUPPORT_CAPABILITIES = Qupls5_pkg::SUPPORT_CAPABILITIES;
+parameter SUPPORT_SHIFT0 = Qupls5_pkg::SUPPORT_SHIFT0;
+parameter SUPPORT_SHIFT1 = Qupls5_pkg::SUPPORT_SHIFT1;
+parameter SUPPORT_COUNT0 = Qupls5_pkg::SUPPORT_COUNT0;
+parameter SUPPORT_COUNT1 = Qupls5_pkg::SUPPORT_COUNT1;
+parameter SUPPORT_CRYPTO0 = Qupls5_pkg::SUPPORT_CRYPTO0;
+parameter SUPPORT_CRYPTO1 = Qupls5_pkg::SUPPORT_CRYPTO1;
+parameter SUPPORT_INFO0 = Qupls5_pkg::SUPPORT_INFO0;
+parameter SUPPORT_INFO1 = Qupls5_pkg::SUPPORT_INFO1;
+parameter SUPPORT_CSR0 = Qupls5_pkg::SUPPORT_CSR0;
+parameter SUPPORT_CSR1 = Qupls5_pkg::SUPPORT_CSR1;
+parameter SUPPORT_BFLD0 = Qupls5_pkg::SUPPORT_BFLD0;
+parameter SUPPORT_BFLD1 = Qupls5_pkg::SUPPORT_BFLD1;
+parameter SUPPORT_VECTOR = Qupls5_pkg::SUPPORT_VECTOR;
+parameter SUPPORT_GRAPHICS = Qupls5_pkg::SUPPORT_GRAPHICS;
 parameter SUPPORT_SHIFT = (PIPE==3'd0 && SUPPORT_SHIFT0) || (PIPE==3'd1 && SUPPORT_SHIFT1);
 parameter SUPPORT_COUNT = (PIPE==3'd0 && SUPPORT_COUNT0) || (PIPE==3'd1 && SUPPORT_COUNT1);
 parameter SUPPORT_CRYPTO = (PIPE==3'd1 && SUPPORT_CRYPTO1) || (PIPE==3'd0 && SUPPORT_CRYPTO0);
@@ -168,9 +183,9 @@ begin
 	ibranch = FALSE;
 	dbranch = FALSE;
 	case(ir.func)
-	CND_NE:	dbranch = ir.inc;
-	CND_LT:	ibranch = ir.inc;
-	CND_LE:	ibranch = ir.inc;
+	Qupls5_pkg::CND_NE:	dbranch = ir.inc;
+	Qupls5_pkg::CND_LT:	ibranch = ir.inc;
+	Qupls5_pkg::CND_LE:	ibranch = ir.inc;
 	default:	;
 	endcase
 end
@@ -1935,7 +1950,7 @@ begin
 			bus = zero;
 	Qupls5_pkg::OP_GRAPHICS:
 		case(ir.func)
-		GR_BLEND:
+		Qupls5_pkg::GR_BLEND:
 			if (SUPPORT_GRAPHICS) begin
 				bus = blendo;
 				did_op = TRUE;
@@ -1948,7 +1963,7 @@ begin
 				o_flags.ptr = FALSE;
 				o_flags.cap = FALSE;
 			end
-		GR_RGBCVT:
+		Qupls5_pkg::GR_RGBCVT:
 			if (SUPPORT_GRAPHICS) begin
 				if (WID>=64)
 				case(b[6:0])
@@ -1981,63 +1996,63 @@ begin
 				o_flags.cap = FALSE;
 			end			
 		endcase
-	OP_CAP:
+	Qupls5_pkg::OP_CAP:
 		if (SUPPORT_CAPABILITIES)
 			case(ir.func)
-			CAP_GETFLAGS:
+			Qupls5_pkg::CAP_GETFLAGS:
 				begin
 					bus = capa_flags;
 					did_op = TRUE;
 				end
-			CAP_GETBASE:
+			Qupls5_pkg::CAP_GETBASE:
 				begin
 					bus = capa.base;
 					did_op = TRUE;
 				end
-			CAP_GETLENGTH:
+			Qupls5_pkg::CAP_GETLENGTH:
 				begin
 					if (capa.top[64])
 						o_flags.ovf = TRUE;
 					bus = capa.top - capa.base;
 					did_op = TRUE;
 				end
-			CAP_GETOFFSET:
+			Qupls5_pkg::CAP_GETOFFSET:
 				begin
 					bus = capa.offset;
 					did_op = TRUE;
 				end
-			CAP_GETADDR:
+			Qupls5_pkg::CAP_GETADDR:
 				begin
 					bus = capa.offset + capa.base;
 					did_op = TRUE;
 				end
-			CAP_GETPERMS:
+			Qupls5_pkg::CAP_GETPERMS:
 				begin
 					bus = capa.perms;
 					did_op = TRUE;
 				end
-			CAP_GETSEALED:
+			Qupls5_pkg::CAP_GETSEALED:
 				begin
 					bus = fnUcIsSealed(capa);
 					did_op = TRUE;
 				end
-			CAP_GETTAG:
+			Qupls5_pkg::CAP_GETTAG:
 				begin
 					bus = capa_flags.cap;
 					did_op = TRUE;
 				end
-			CAP_GETTOP:
+			Qupls5_pkg::CAP_GETTOP:
 				begin
 					o_flags.ovf <= capa.top[64];
 					bus = capa.top;
 					did_op = TRUE;
 				end
-			CAP_GETTYPE:
+			Qupls5_pkg::CAP_GETTYPE:
 				begin
 					bus = capa.otype;
 					did_op = TRUE;
 				end
-			CAP_ALGNMASK:
+			Qupls5_pkg::CAP_ALGNMASK:
 				begin
 					bus = fnUcAlignMask(capa);
 					did_op = TRUE;

@@ -46,10 +46,11 @@ begin
 	case(op.opcode)
 	Qupls5_pkg::OP_LDB,Qupls5_pkg::OP_LDBZ,Qupls5_pkg::OP_LDW,Qupls5_pkg::OP_LDWZ,
 	Qupls5_pkg::OP_LDT,Qupls5_pkg::OP_LDTZ,Qupls5_pkg::OP_LOAD,Qupls5_pkg::OP_CLOAD,
+	Qupls5_pkg::OP_LOADN,Qupls5_pkg::OP_LOADZN,
 	Qupls5_pkg::OP_FLDS,Qupls5_pkg::OP_FLDD,
-	Qupls5_pkg::OP_LDV,Qupls5_pkg::OP_LDVN,
+	Qupls5_pkg::OP_LDV,
 	Qupls5_pkg::OP_STB,Qupls5_pkg::OP_STW,Qupls5_pkg::OP_STT,Qupls5_pkg::OP_STORE,
-	Qupls5_pkg::OP_STV,Qupls5_pkg::OP_STVN,Qupls5_pkg::OP_CSTORE,
+	Qupls5_pkg::OP_STV,Qupls5_pkg::OP_CSTORE,Qupls5_pkg::OP_STOREN,
 	Qupls5_pkg::OP_STPTR,Qupls5_pkg::OP_V2P,Qupls5_pkg::OP_VV2P:
 		fnIsMem = 1'b1;
 	default:

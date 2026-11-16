@@ -7,6 +7,7 @@ import Qupls5_pkg::*;
 
 module Qupls5_count_stomped(rst, clk, ce, cmtcnt, head, rob, stomp, count);
 parameter WID=40;
+parameter ROB_ENTRIES = Qupls5_pkg::ROB_ENTRIES;
 input rst;
 input clk;
 input ce;

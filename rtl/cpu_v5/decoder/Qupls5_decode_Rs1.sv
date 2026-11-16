@@ -103,10 +103,12 @@ begin
 			fnRs1 = {3'b0,ir.Rs1};
 		Qupls5_pkg::OP_FBCC:
 			fnRs1 = {3'b1,ir.Rs1};
+		Qupls5_pkg::OP_LOADN,Qupls5_pkg::OP_LOADZN,
 		Qupls5_pkg::OP_LDB,Qupls5_pkg::OP_LDBZ,
 		Qupls5_pkg::OP_LDW,Qupls5_pkg::OP_LDWZ,
 		Qupls5_pkg::OP_LDT,Qupls5_pkg::OP_LDTZ,
 		Qupls5_pkg::OP_LOAD,Qupls5_pkg::OP_LOADA,Qupls5_pkg::OP_CLOAD,
+		Qupls5_pkg::OP_STOREN,
 		Qupls5_pkg::OP_AMO,Qupls5_pkg::OP_CMPSWAP,
 		Qupls5_pkg::OP_STB,Qupls5_pkg::OP_STW,Qupls5_pkg::OP_STT,Qupls5_pkg::OP_STORE,Qupls5_pkg::OP_CSTORE,
 		Qupls5_pkg::OP_STPTR:
@@ -127,7 +129,7 @@ begin
         om1 = om;
   */
 	Rs1z = ~|Rs1[4:0];
-	Rs1ip = Rs1==Qupls4_pkg::IP_REG;
+	Rs1ip = Rs1==Qupls5_pkg::IP_REG;
 end
 
 endmodule

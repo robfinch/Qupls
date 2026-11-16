@@ -45,7 +45,7 @@ input [Qupls5_pkg::XSTREAMS*Qupls5_pkg::THREADS-1:0] buffered_streams;
 input cpu_types_pkg::pc_stream_t act_stream;
 output cpu_types_pkg::pc_stream_t next_act_stream;
 input [Qupls5_pkg::XSTREAMS*Qupls5_pkg::THREADS-1:0] strm_bitmap;
-input pc_address_ex_t [Qupls5_pkg::XSTREAMS*Qupls5_pkg::THREADS-1:0] pcs;
+input Qupls5_pkg::pc_address_ex_t [Qupls5_pkg::XSTREAMS*Qupls5_pkg::THREADS-1:0] pcs;
 
 // Used to select streams "randomly"
 wire [26:0] lfsro;

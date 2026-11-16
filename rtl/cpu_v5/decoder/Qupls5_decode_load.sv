@@ -71,8 +71,6 @@ function fnIsVLoadNdx;
 input Qupls5_pkg::micro_op_t op;
 begin
 	case(op.opcode)
-	Qupls5_pkg::OP_LDVN:
-		fnIsVLoadNdx = 1'b1;
 	default:
 		fnIsVLoadNdx = 1'b0;
 	endcase

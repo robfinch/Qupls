@@ -62,6 +62,7 @@ parameter DISPATCH_COUNT=6;	// number of lanes of dispatching
 // unit types. For instance lane #4 is used for floating-point.
 parameter DISPATCH_MAP=6'b100001;
 parameter FPUNIT = FALSE;
+parameter SUPPORT_CAPABILITIES = Qupls5_pkg::SUPPORT_CAPABILITIES;
 input rst;
 input clk;
 input available;
