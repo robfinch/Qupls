@@ -24,7 +24,8 @@ Instructions are now 32-bit!
 Most recently parallel SIMD instructions have been removed from the ISA.
 They were redundant as vector operations with a length of one register perform almost identically, except
 for two bits in the instruction.
-The vector length and precision (element size) are both now encoded in the instruction.
+The vector length and precision (element size) are both now encoded in a prefix instruction.
+If the prefix is not present, then the vector length is assumed to be 512 bits.
 Older additions are multiple threads of execution, and multiple streams (branch paths) of execution.
 Provision for capabilities instructions were added to the instruction set.
 The capabilities version of the core requires 256-bit registers as a 64-bit capability is part of the register.
@@ -42,6 +43,7 @@ This increases the size of the core considerably and turns Qupls into a 256-bit 
 * Arithmetic right shift with round.
 * Bitfield operations.
 * Conditional relative branch instructions with 8-bit displacements
+* Load / store 1 to 8 bytes. Indexed and IP relative addressing available.
 * Vector operations.
 * 4-way Out-of-order execution of instructions
 * 1024 entry, three way TLB for virtual memory support, shared between instruction and data
@@ -88,6 +90,7 @@ The physical register file is split into four logical files: integers, floats, v
 #### Integer Registers
 There are 32 integer registers.
 None of the registers have dedicated purposes or meanings.
+But r0 reads as zero when used as a base register in memory operations.
 There are some suggestions on which registers should be used for linkage and stack pointer.
 
 #### FLoating-Point Registers
@@ -129,7 +132,7 @@ Subroutines may be aligned on any tetra boundary, allowing position independent 
 Unconditional branch and jump displacements are in terms of tetras to accomodate the location of subroutines.
 
 ### Position Independant Code
-Code is relocatable at any wyde boundary; however, within a subroutine or function the instructions should be contiguous, a multiple of four bytes.
+Code is relocatable at any tetra boundary; however, within a subroutine or function the instructions should be contiguous, a multiple of four bytes.
 
 ### Pipeline
 Yikes!
@@ -215,6 +218,9 @@ The QMSI controller snoops the response bus for interrupt messages, which are si
 Most instructions apply for either scalar or vector operations.
 Vector or scalar registers are selected depending on the opcode.
 
+### Formats
+Some basic instruction formats should give an idea.
+![Instruction Formats](./doc/Qupls5ifmts.jpg)
 ### Dual Operation Instructions
 Many register-register operate instructions support dual operations on the registers via a prefix instruction.
 They are of the form: Rt = (Ra op Rb) op Rc.
@@ -269,6 +275,51 @@ For instance, a vector slide instruction may slide the operand a maximum of 64-b
 How many elements are slid depends on the element size.
 The CPU has logic to trap on unimplemented instructions.
 
+### Example Code
+```
+start:
+# set global pointers
+	loadi %sp,$0xFFFFFFFFFFFEFFF0
+	loada %gp,_start_bss
+	loadi %t0,exit_adr
+	move %lr1,%t0
+	loadi %t0,$20
+	add %t1,%t1,$1
+	add %t3,%t3,$1
+	add %t3,%t3,$1
+	add %t3,%t3,$1
+	add %t3,%t3,$1
+	add %t1,%t1,$1
+	subtract %sp,%sp,$8
+	store %t0,[%sp]
+	bsr _ClearScreen
+	bsr _Fibonacci
+	bsr _Delay3s
+	bsr _Delay3s
+	bsr _ClearScreen
+	subtract %sp,%sp,$8
+	loadi %t3,$0
+	loadi %t0,$13
+	loadi %t1,$2
+.testloop:
+	store %t1,$0xFFFFFFFFFEDFFF00
+	add %t3,%t3,$1
+	add %t3,%t3,$1
+	add %t3,%t3,$1
+	add %t3,%t3,$1
+	add %t1,%t1,$1
+	blt %t1,%t0,.testloop
+.rept 32
+	nop
+.endr
+	store %t0,[%sp]
+	bra _Fibonacci
+#	bra _bootrom
+exit_adr:
+.rept 32
+	nop
+.endr
+```
 ## Memory Management
 The core uses virtual addresses which are translated by a TLB.
 The MMU is internal to the core.
