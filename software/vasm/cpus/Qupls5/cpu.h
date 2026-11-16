@@ -1,4 +1,4 @@
-/* (c) in 2021-2025 by Robert Finch */
+/* (c) in 2021-2026 by Robert Finch */
 #define BITSPERBYTE 8
 #define FLOAT_PARSER 1
 #include "hugeint.h"
@@ -131,14 +131,10 @@ typedef struct {
 typedef struct {
 	uint8_t size;
 	uint8_t opcode_size;
-  uint64_t pfx6;
-  uint64_t pfx5;
   uint64_t pfx4;
   uint64_t pfx3;
   uint64_t pfx2;
   uint64_t pfx1;
-  char pfx6v;
-  char pfx5v;
   char pfx4v;
   char pfx3v;
   char pfx2v;
@@ -146,6 +142,9 @@ typedef struct {
 	uint64_t opcode;
   uint64_t short_opcode;
 	thuge val;
+	postfix_buf pfxa;
+	postfix_buf pfxb;
+	postfix_buf pfxc;
 } instruction_buf;
 
 typedef struct {
@@ -265,35 +264,31 @@ typedef struct {
 #define R2S			78
 #define R6			79
 #define R7			80
-#define RIC			81
-#define RID			82
 
 #define LN(x)		((x) & 0LL)
+#define LSSIZE(x)	((((x) & 4LL) << 16LL) | (((x) & 3LL) << 0LL))
 #define OPC(x)	(((x) & 0x7fLL) << 0LL)
-#define OPC2(x)	(((x) & 0x7fLL) << 32LL)
 #define RD(x)		(((x) & 0x1fLL) << 7LL)
 #define RT(x)		(((x) & 0x1fLL) << 7LL)
 #define RTSR(x)	(((x) & 0x1fLL) << 7LL)
-#define INCDEC(x)	(((x) & 3LL) << 11LL)
+#define INCDEC(x)	(((x) & 1LL) << 46LL)
 #define NRT(x)	(((x) & 1LL) << 15LL)
 #define RA(x)		(((x) & 0x1fLL) << 12LL)
 #define RS1(x)	(((x) & 0x1fLL) << 12LL)
-#define RAS(x)	(((x) & 0x1fLL) << 14LL)
+#define RAS(x)	(((x) & 0x1fLL) << 12LL)
 #define NRA(x)	(((x) & 1LL) << 24LL)
 #define RB(x)		(((x) & 0x1fLL) << 17LL)
-#define RS2(x)	(((x) & 0x3fLL) << 17LL)
+#define RS2(x)	(((x) & 0x1fLL) << 17LL)
 #define RBS(x)	(((x) & 0x1fLL) << 17LL)
-#define MS2(x)	(((x) & 0x3LL) << 22LL)
 #define IPR(x)	(((x) & 3LL) << 23LL)
 #define NRB(x)	(((x) & 1LL) << 33LL)
 #define BRDISP(x)	(((x) & 0x3fffffLL) << 25LL)
-#define RC(x)		(((x) & 0x3fLL) << 25LL)
-#define RS3(x)	(((x) & 0x3fLL) << 24LL)
-#define RS4(x)	(((x) & 0x3fLL) << 29LL)
-#define RS5(x)	(((x) & 0x3fLL) << 34LL)
-#define RS6(x)	(((x) & 0x3fLL) << 39LL)
-#define MS3(x)	(((x) & 0x7LL) << 38LL)
-#define BRMS(x)	(((x) & 3LL) << 11LL)
+#define RC(x)		(((x) & 0x1fLL) << 22LL)
+#define RS3(x)	(((x) & 0x1fLL) << 22LL)
+#define RS4(x)	(((x) & 0x1fLL) << 26LL)
+#define RS4a(x)	(((x) & 0x7fLL) << 41LL)
+#define MS3(x)	(((x) & 0x7LL) << 23LL)
+#define BRMS(x)	(((x) & 7LL) << 29LL)
 #define NRC(x)	(((x) & 1LL) << 42LL)
 #define PRCI(x)	(((x) & 3LL) << 46LL)
 #define LKT(x)	(((x) & 7LL) << 7LL)
@@ -303,22 +298,21 @@ typedef struct {
 #define COND(x)	(((x) & 0xfLL) << 7LL)
 #define CND3(x)	(((x) & 0x7LL) << 9LL)
 #define IM2(x)		(((x) & 3LL) << 25LL)
-#define S(x)			(((x) & 7LL) << 25LL)
+#define S(x)			(((x) & 15LL) << 44LL)
 #define SC(x)			(((x) & 3LL) << 22LL)
 #define PREDF(x)		(((x) & 0x7LL) << 54LL)
 #define PREDI(x)		(((x) & 0x7LL) << 25LL)
 #define PREDSI(x)		(((x) & 0x7LL) << 16LL)
 #define SHI(x)		(((x) & 1LL) << 43LL)
 #define SHFUNC(x)	(((x) & 0xfLL) << 60LL)
-#define R1FUNC(x)	(((x) & 0xffLL) << 32LL)
+#define R1FUNC(x)	(((x) & 0x7fLL) << 21LL)
 #define OP3(x)		(((x) & 0x7LL) << 35LL)
 #define OP4(x)		(((x) & 0xfLL) << 37LL)
 #define R2FUNC(x)	(((x) & 0x7fLL) << 25LL)
-#define R3FUNC(x)	(((x) & 0x7fLL) << 41LL)
+#define R3FUNC(x)	(((x) & 0x7fLL) << 25LL)
 #define LSFUNC(x)	(((x) & 0xfLL) << 60LL)
 #define LSTYPE(x)	(((x) & 3LL) << 37LL)
-#define LSDISP(x)	(((x) & 0xffffffLL) << 40LL)
-#define LSSIZE(x)	(((x) & 3LL) << 30LL)
+#define LSDISP(x)	(((x) & 0xffffLL) << 28LL)
 #define FMT2(x)		(((x) & 3LL) << 38LL)
 #define FMT3(x)		(((x) & 7LL) << 37LL)
 #define FUNC2(x)	(((x) & 0x7LL) << 37LL)
@@ -327,11 +321,11 @@ typedef struct {
 #define FLT1(x)	(((x) & 0x1fLL) << 22LL)
 #define CA(x)		(((x) & 7LL) << 29LL)
 #define CAB(x)		(((x) & 7LL) << 24LL)
-#define BFOFFS(x)	(((x) & 0x1fLL) << 22LL)
-#define BFWID(x)	(((x) & 0x1fLL) << 29LL)
-#define BFMB(x)	((((x) & 0x1fLL) << 22LL)|((((x) >> 5LL) & 1LL) << 30LL))
-#define BFME(x)	(((x) & 0x3fLL) << 29LL)
-#define BFFUNC(x)	(((x) & 0xfLL) << 44LL)
+#define BFOFFS(x)	(((x) & 0x7fLL) << 21LL)
+#define BFWID(x)	(((x) & 0x7fLL) << 28LL)
+#define BFMB(x)	(((x) & 0x7fLL) << 21LL)
+#define BFME(x)	(((x) & 0x7fLL) << 28LL)
+#define BFFUNC(x)	(((x) & 0x7fLL) << 41LL)
 #define RTYPE(x)	(((x) & 3LL) << 13LL)
 #define RK(x)			(((x) & 0x3fLL) << 40LL)
 #define SK(x)			(((x) & 1LL) << 46LL)
