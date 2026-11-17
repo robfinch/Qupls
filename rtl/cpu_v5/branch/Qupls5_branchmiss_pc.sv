@@ -117,12 +117,14 @@ begin
 			dstpc.stream = rse.pc.stream;
 		end
 
-	rse.bsr:
+	rse.bsr,
+	rse.bra:
 		begin
 			dstpc.cap.offset = pc.cap.offset + ir.imm;
 			dstpc.stream = rse.pc.stream;
 		end
-	rse.jsr:
+	rse.jsr,
+	rse.jmp:
 		begin
 			dstpc.cap.offset = ir.imm - rse.pc.cap.base;
 			dstpc.stream = rse.pc.stream;

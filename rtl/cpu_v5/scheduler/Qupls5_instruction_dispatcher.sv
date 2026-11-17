@@ -187,6 +187,8 @@ begin
 	rse[kk].cjb = rob[nn].op.decbus.cjb;
 	rse[kk].bsr = rob[nn].op.decbus.bsr;
 	rse[kk].jsr = rob[nn].op.decbus.jsr;
+	rse[kk].bra = rob[nn].op.decbus.bra;
+	rse[kk].jmp = rob[nn].op.decbus.jmp;
 	rse[kk].sys = rob[nn].op.decbus.sys;
 	if (rob[nn].op.decbus.cpytgt|stomp[nn]) begin
 		rse[kk].copydst = 8'hFF;

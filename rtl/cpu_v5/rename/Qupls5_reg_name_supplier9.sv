@@ -190,6 +190,10 @@ default:
 		always_comb o[1] = {aregno[1][$bits(aregno_t)-1:1],ffo1[aregno[1][$bits(aregno_t)-1:1]][2:0]};
 		always_comb o[2] = {aregno[2][$bits(aregno_t)-1:1],ffo2[aregno[2][$bits(aregno_t)-1:1]][2:0]};
 		always_comb o[3] = {aregno[3][$bits(aregno_t)-1:1],ffo3[aregno[3][$bits(aregno_t)-1:1]][2:0]};
+		always_comb nofree[0] = ffo0[aregno[0][$bits(aregno_t)-1:1]]==4'd15;
+		always_comb nofree[1] = ffo1[aregno[1][$bits(aregno_t)-1:1]]==4'd15;
+		always_comb nofree[2] = ffo2[aregno[2][$bits(aregno_t)-1:1]]==4'd15;
+		always_comb nofree[3] = ffo3[aregno[3][$bits(aregno_t)-1:1]]==4'd15;
 
 		always_ff @(posedge clk)
 		foreach (ns_dstreg[n1])

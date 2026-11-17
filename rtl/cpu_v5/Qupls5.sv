@@ -6569,7 +6569,7 @@ else begin
 		if (fcu_found_destination) begin
 			foreach (rob[n3]) begin
 				if (fcu_skip_list[n3])
-					rob[n3].eip <= fcu_misspc1;
+					rob[n3].eip_offs <= fcu_misspc1;
 			end
 		end
 	end
@@ -9060,9 +9060,9 @@ begin
 	next_robe.could_issue_nm = FALSE;
 	// "static" fields, these fields remain constant after enqueue
 	next_robe.grp = grp;
-	next_robe.brtgt = Qupls5_pkg::fnTargetIP(pgh[robe.pghn].ip.cap.offset + robe.ip_offs,db.immc);
+	next_robe.brtgt = Qupls5_pkg::fnTargetIP(pgh[robe.pghn].ip.cap.offset + pgh[robe.pghn].ip.cap.base + robe.ip_offs,db.immc);
 	// Set the interrupt return address to this instruction.
-	next_robe.eip = pgh[robe.pghn].ip.cap.offset + robe.ip_offs;
+	next_robe.eip_offs = robe.eip_offs;
 	next_robe.om = cr0.om;
 	next_robe.rm = db.rm==3'd7 ? fpcsr.rm : db.rm;
 `ifdef IS_SIM
@@ -9531,7 +9531,7 @@ endtask
 
 task tProcessExc;
 input rob_ndx_t id;
-input pc_address_t retpc;
+input [4:0] retpc;
 input [2:0] uop_num;
 integer nn;
 reg [7:0] vecno;
@@ -9543,7 +9543,8 @@ begin
 	sr_stack[0] <= cr0;
 	for (nn = 1; nn < ISTACK_DEPTH; nn = nn + 1)
 		pc_stack[nn] <= pc_stack[nn-1];
-	pc_stack[0] <= retpc;
+	pc_stack[0] <= pgh[rob[id]].ip;
+	pc_stack[0].cap.offset <= pc_stack[0].cap.offset + {{64{retpc[4]}},retpc};
 	cr0.pl <= 8'hFF;
 	cr0.om <= Qupls5_pkg::fnNextOm(cr0.om);
 	excir <= rob[id].op;
@@ -9600,7 +9601,8 @@ begin
 			sr_stack[0] <= cr0;
 			for (nn = 1; nn < ISTACK_DEPTH; nn = nn + 1)
 				pc_stack[nn] <= pc_stack[nn-1];
-			pc_stack[0] <= rob[id].eip;
+			pc_stack[0] <= pgh[rob[id]].ip;
+			pc_stack[0].cap.offset <= pc_stack[0].cap.offset + {{64{rob[id].eip_offs[4]}},rob[id].eip_offs};
 			cr0.pl <= 8'hFF;
 			cr0.om <= Qupls5_pkg::fnNextOm(cr0.om);
 			csr_carry_mod <= rob[id].op.carry_mod;
@@ -9644,14 +9646,15 @@ begin
 			excir <= rob[id].op;
 			excid <= id;
 			excmissgrp <= rob[id].pghn;
-			excmisspc.cap.offset <= rob[id].eip;
+			excmisspc.cap <= pgh[rob[id]].ip;
+			excmisspc.cap.offset <= pgh[rob[id]].ip.cap.offset + {{64{rob[id].eip_offs[4]}},rob[id].eip_offs};
 			excmiss <= TRUE;
 			irq_resolved <= TRUE;
 			set_pending_ipl <= TRUE;
 			next_pending_ipl <= pgh[rob[id].pghn_irq].old_ipl;	// restore IPL
 			cr0.ipl <= pgh[rob[id].pghn_irq].old_ipl;
 			if (irq_downcount_base[7])
-				tProcessExc(id,rob[id].eip,rob[id].op.uop.num);
+				tProcessExc(id,rob[id].eip_offs,rob[id].op.uop.num);
 		end
 	// If the instruction got invalidated (eg branch) there is not an easy way to
 	// know what address a hardware interrupt should change flow to. So,
@@ -9668,7 +9671,7 @@ begin
 			next_pending_ipl <= pgh[rob[id].pghn_irq].old_ipl;	// restore IPL
 			cr0.ipl <= pgh[rob[id].pghn_irq].old_ipl;
 			if (irq_downcount_base[7])
-				tProcessExc(id,rob[id].eip,rob[id].op.uop.num);
+				tProcessExc(id,rob[id].eip_offs,rob[id].op.uop.num);
 		end
 	default:	;
 	endcase

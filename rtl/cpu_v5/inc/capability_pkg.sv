@@ -60,7 +60,7 @@ endfunction
 function fnUcIsSealed;
 input uc64_capability_t cap;
 begin
-	fnUcIsSealed = (cap.otype==24'hfffffe || cap.otype < 23'hFFFFEF);
+	fnUcIsSealed = (cap.otype==24'hfffffe || cap.otype < 24'hFFFFEF);
 end
 endfunction
 
@@ -103,7 +103,7 @@ end
 endfunction
 
 function [63:0] fnAlignMask;
-input cpu_types_pkg::capability_high64_t cap;
+input cpu_types_pkg::capability64_t cap;
 reg [7:0] E;
 begin
 	if (cap.Ie)
@@ -122,7 +122,7 @@ end
 endfunction
 
 function fnIsInRange;
-input cpu_types_pkg::capability_high64_t cap;
+input cpu_types_pkg::capability64_t cap;
 input [63:0] inc;
 reg [7:0] E;
 reg [63:0] mask;
@@ -139,7 +139,7 @@ end
 endfunction
 
 function fnIsInLimit;
-input cpu_types_pkg::capability_high64_t cap;
+input cpu_types_pkg::capability64_t cap;
 input [63:0] adr;
 input [63:0] inc;
 reg [7:0] E;
@@ -168,7 +168,7 @@ end
 endfunction
 
 function fnIsRepresentable;
-input cpu_types_pkg::capability_high64_t cap;
+input cpu_types_pkg::capability64_t cap;
 input [63:0] adr;
 input [63:0] inc;
 reg [7:0] E;

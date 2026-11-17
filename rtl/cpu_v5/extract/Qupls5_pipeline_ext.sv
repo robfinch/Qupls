@@ -542,7 +542,20 @@ else begin
 			pg_ext.pr[n2].stomped <= stomp_ext || nop_lead[n2] || nop2[n2] || bra[n2] || jmp[n2];
 			pg_ext.pr[n2].wh <= n2;
 			pg_ext.pr[n2].ip_stream <= pc_fet[n2].stream;
-			pg_ext.pr[n2].eip <= pc_fet[0].cap.offset + pr_ext[n2].ip_offs;//(n2*6);
+			// Point the EIP to the previous instruction if it was a prefix instruction.
+			// Should maybe use capability for EIP.
+			if (n2==0) begin
+				if (xop_v)
+					pg_ext.pr[n2].eip_offs <= pr_ext[n2].ip_offs - 4'd4;//(n2*6);
+				else
+					pg_ext.pr[n2].eip_offs <= pr_ext[n2].ip_offs;//(n2*6);
+			end
+			else begin
+				if (pr_ext[n2-1].op.uop.prefix)
+					pg_ext.pr[n2].eip_offs <= pr_ext[n2].ip_offs - 4'd4;//(n2*6);
+				else
+					pg_ext.pr[n2].eip_offs <= pr_ext[n2].ip_offs;//(n2*6);
+			end
 			// Branches need to set the pipeline invalid if the instruction stream
 			// does not match the one resolved to be active. Note the thread must
 			// also match. If the stream is for a different thread we do not want to
@@ -619,7 +632,7 @@ end
 // will be the one in the fetch stage used to load extract!
 // p_override signal may also be called !predicted_match_ext.
 always_comb
-	p_override = (en && chgflow && new_address_o != pc_fet[0].cap.offset + pc_fet[0].cap.base &&
+	p_override = (en && chgflow && new_address_o != fnUcGetAddress(pc_fet[0].cap) &&
 		// We must be staying in the same stream too.
 		pc_fet[0].stream==pg_ext.hdr.ip.stream) && !p_overrided;
 

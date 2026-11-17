@@ -402,6 +402,8 @@ begin
 	dbo.pfx = instr.opcode==Qupls5_pkg::OP_REXT;
 	dbo.bsr = instr.opcode==Qupls5_pkg::OP_BSR;
 	dbo.jsr = instr.opcode==Qupls5_pkg::OP_JSR;
+	dbo.bra = instr.opcode==Qupls5_pkg::OP_BRA;
+	dbo.jmp = instr.opcode==Qupls5_pkg::OP_JMP;
 	dbo.sys = instr.opcode==Qupls5_pkg::OP_SYS;
 	dbo.brk = instr.opcode==Qupls5_pkg::OP_BRK;
 	dbo.ret = instr.opcode==Qupls5_pkg::OP_CAP && instr.func==Qupls5_pkg::CAP_RET;

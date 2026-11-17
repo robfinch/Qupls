@@ -1851,6 +1851,8 @@ typedef struct packed
 	logic dbr;					// dec conditional branch
 	logic bsr;
 	logic jsr;
+	logic bra;
+	logic jmp;
 	logic sys;
 	logic pbr;
 	logic ret;
@@ -2113,6 +2115,8 @@ typedef struct packed {
 	logic jsri;					// indirect subroutine call
 	logic bsr;
 	logic jsr;
+	logic bra;
+	logic jmp;
 	logic br;
 	logic pbr;
 	logic ret;
@@ -2231,7 +2235,7 @@ typedef struct packed {
 	cpu_types_pkg::pc_stream_t ip_stream;		// stream associated with instruction
 	logic [4:0] ip_offs;			// offset in bytes from group IP (0 to 18)
 	logic is40bit;
-	cpu_types_pkg::pc_address_t eip;				// exception return address
+	logic [4:0] eip_offs;			// exception return address offset from header IP
 	logic flush;
 	cpu_types_pkg::rob_ndx_t sync_dep;			// sync instruction dependency
 	logic sync_depv;				// sync dependency valid

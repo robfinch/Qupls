@@ -47,7 +47,7 @@ import Qupls5_pkg::*;
 module Qupls5_ext_decode(ip, instr, bsr, jsr, bra, jmp, bcc, rtd, nop,
 	bsr_tgt, jsr_tgt, bcc_tgt);
 input Qupls5_pkg::pc_address_ex_t ip;
-input [47:0] instr;
+input [31:0] instr;
 output reg bsr;
 output reg jsr;
 output reg bra;
@@ -81,7 +81,7 @@ always_comb rtd = instr[6:0]==Qupls5_pkg::OP_CAP && instr[31:25]==Qupls5_pkg::CA
 // To compute the virtual address the offset is added to the base, so it needs
 // to be subtracted off when set.
 always_comb begin bsr_tgt = ip; bsr_tgt.cap.offset = ip.cap.offset + {{42{instr[31]}},instr[31:12],2'b0} - ip.cap.base; end
-always_comb begin jsr_tgt = ip; jsr_tgt.cap.offset = {{42{instr[31]}},instr[31:12],1'b0} - ip.cap.base; end
+always_comb begin jsr_tgt = ip; jsr_tgt.cap.offset = {{42{instr[31]}},instr[31:12],2'b0} - ip.cap.base; end
 always_comb begin bcc_tgt = ip; bcc_tgt.cap.offset = ip.cap.offset + {{54{instr[28]}},instr[28:22],instr[11],2'b0} - ip.cap.base; end
 
 endmodule
