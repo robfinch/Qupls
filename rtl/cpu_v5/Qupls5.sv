@@ -1040,12 +1040,12 @@ begin
 	$display("Number of FPUs: %d", Qupls5_pkg::NFPU);
 	$display("Number of data ports: %d", Qupls5_pkg::NDATA_PORTS);
 	if (Qupls5_pkg::SUPPORT_RENAMER) begin
-`ifdef SUPPORT_RAT
-		$display("Qupls5: RAT available.");
-`else
-		$display("Qupls5: Error: RAT must be present if registers are renamed.");
-		$finish;
-`endif
+		if (Qupls5_pkg::SUPPORT_RAT)
+			$display("Qupls5: RAT available.");
+		else begin
+			$display("Qupls5: Error: RAT must be present if registers are renamed.");
+			$finish;
+		end
 	end
 	if (Qupls5_pkg::NCHECK > 32) begin
 		$display("Qupls5: Error: more than 32 checkpoints configured.");
@@ -7840,7 +7840,7 @@ Qupls5_cpytgt_count #(.WID(40)) uctc1
 
 // The following only works for simulation. The code needs to be commented
 // out for synthesis.
-`ifdef IS_SIM
+`ifndef SYNTHESIS
 // We only want the live value of the register for display.
 function value_t fnRegVal;
 input pregno_t regno;
@@ -7857,20 +7857,22 @@ begin
 end
 endfunction
 
-`ifdef SUPPORT_RAT
+generate begin : gRAT
+	if (Qupls5_pkg::SUPPORT_RAT) begin
 function fnPregv;
 input pregno_t regno;
 begin
-	fnPregv = uren1.urat1.currentRegvalid[regno];
+	fnPregv = uren1.gRAT.genblk1.urat1.currentRegvalid[regno];
 end
 endfunction
 function pregno_t fnPreg;
 input aregno_t regno;
 begin
-	fnPreg = {regno[6:2],uren1.urat1.currentMap.regmap[regno]};
+	fnPreg = {regno[6:2],uren1.gRAT.genblk1.urat1.currentMap.regmap[regno]};
 end
 endfunction
-`else
+end
+else begin
 function fnPregv;
 input pregno_t regno;
 begin
@@ -7883,26 +7885,28 @@ begin
 	fnPreg = {1'b0,regno};
 end
 endfunction
-`endif
+end
+end
+endgenerate
 
 function value_t fnArchRegV;
 input aregno_t regno;
 begin
-	fnArchRegV = fnPregv(fnPreg(regno));
+	fnArchRegV = gRAT.genblk1.fnPregv(gRAT.genblk1.fnPreg(regno));
 end
 endfunction
 
 function value_t fnArchRegVal;
 input aregno_t regno;
 begin
-	fnArchRegVal = fnRegVal(fnPreg(regno));
+	fnArchRegVal = fnRegVal(gRAT.genblk1.fnPreg(regno));
 end
 endfunction
 
 
 generate begin : gDisplay
 begin
-always_ff @(posedge clk2x_i) begin: clock_n_debug
+always_ff @(posedge clk_i) begin: clock_n_debug
 	integer i;
 	integer j;
 
@@ -7994,14 +7998,14 @@ always_ff @(posedge clk2x_i) begin: clock_n_debug
 		*/
 			$display("v%d -> %d/%d: %h%c %d/%d: %h%c %d/%d: %h%c %d/%d: %h%c %d/%d: %h%c %d/%d: %h%c %d/%d: %h%c %d/%d: %h%c #",
 			i[7:0] >> 3'd3,
-			i[7:0]+8'd0, fnPreg(i+0), fnArchRegVal(i+0), fnArchRegV(i+0)?"v":" ",
-			i[7:0]+8'd1, fnPreg(i+1), fnArchRegVal(i+1), fnArchRegV(i+1)?"v":" ",
-			i[7:0]+8'd2, fnPreg(i+2), fnArchRegVal(i+2), fnArchRegV(i+2)?"v":" ",
-			i[7:0]+8'd3, fnPreg(i+3), fnArchRegVal(i+3), fnArchRegV(i+3)?"v":" ",
-			i[7:0]+8'd4, fnPreg(i+4), fnArchRegVal(i+4), fnArchRegV(i+4)?"v":" ",
-			i[7:0]+8'd5, fnPreg(i+5), fnArchRegVal(i+5), fnArchRegV(i+5)?"v":" ",
-			i[7:0]+8'd6, fnPreg(i+6), fnArchRegVal(i+6), fnArchRegV(i+6)?"v":" ",
-			i[7:0]+8'd7, fnPreg(i+7), fnArchRegVal(i+7), fnArchRegV(i+7)?"v":" "
+			i[7:0]+8'd0, gRAT.genblk1.fnPreg(i+0), fnArchRegVal(i+0), fnArchRegV(i+0)?"v":" ",
+			i[7:0]+8'd1, gRAT.genblk1.fnPreg(i+1), fnArchRegVal(i+1), fnArchRegV(i+1)?"v":" ",
+			i[7:0]+8'd2, gRAT.genblk1.fnPreg(i+2), fnArchRegVal(i+2), fnArchRegV(i+2)?"v":" ",
+			i[7:0]+8'd3, gRAT.genblk1.fnPreg(i+3), fnArchRegVal(i+3), fnArchRegV(i+3)?"v":" ",
+			i[7:0]+8'd4, gRAT.genblk1.fnPreg(i+4), fnArchRegVal(i+4), fnArchRegV(i+4)?"v":" ",
+			i[7:0]+8'd5, gRAT.genblk1.fnPreg(i+5), fnArchRegVal(i+5), fnArchRegV(i+5)?"v":" ",
+			i[7:0]+8'd6, gRAT.genblk1.fnPreg(i+6), fnArchRegVal(i+6), fnArchRegV(i+6)?"v":" ",
+			i[7:0]+8'd7, gRAT.genblk1.fnPreg(i+7), fnArchRegVal(i+7), fnArchRegV(i+7)?"v":" "
 			);
 
 	$display("----- Rename ----- %s", stomp_ren ? stompstr : no_stompstr);
@@ -8148,7 +8152,7 @@ always_ff @(posedge clk2x_i) begin: clock_n_debug
 	$display("3: %h #", commit3_id);
 
 	$display("----- Stats -----");	
-`ifdef IS_SIM
+`ifndef SYNTHESIS
 	IPC = real'(TotInsn)/real'(tick);
 	PIPC = (PIPC > IPC) ? PIPC : IPC;
 `else

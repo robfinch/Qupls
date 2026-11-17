@@ -1,3 +1,39 @@
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2026  Robert Finch, Waterloo
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+//
+// BSD 3-Clause License
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are met:
+//
+// 1. Redistributions of source code must retain the above copyright notice, this
+//    list of conditions and the following disclaimer.
+//
+// 2. Redistributions in binary form must reproduce the above copyright notice,
+//    this list of conditions and the following disclaimer in the documentation
+//    and/or other materials provided with the distribution.
+//
+// 3. Neither the name of the copyright holder nor the names of its
+//    contributors may be used to endorse or promote products derived from
+//    this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+// FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+// DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+// SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+// CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+// OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+// ============================================================================
+
 import const_pkg::*;
 import Qupls5_pkg::*;
 
@@ -14,11 +50,11 @@ input [(MWIDTH+1)*32-1:0] ic_line;
 input ssm_flag;
 input prev_xop_v;
 input Qupls5_pkg::micro_op_t prev_xop;
-input Qupls5_pkg::pc_address_ex_t [MWIDTH:0] pc;
-output Qupls5_pkg::rob_entry_t [MWIDTH:0] pr;
+input Qupls5_pkg::pc_address_ex_t [MWIDTH-1:0] pc;
+output Qupls5_pkg::rob_entry_t [MWIDTH-1:0] pr;
 
 integer n1,n2,n4;
-Qupls5_pkg::rob_entry_t [MWIDTH:0] lpr;
+Qupls5_pkg::rob_entry_t [MWIDTH-1:0] lpr;
 
 Qupls5_pkg::rob_entry_t nopi;
 reg prev_ssm_flag;
@@ -106,7 +142,7 @@ else begin
 		// Allow only one instruction through when single stepping.
 		if (ssm_flag & ~prev_ssm_flag) begin
 			pr[0].op.cli = pc[0].cap.offset[6:0];
-			pr[0].op.uop = Qupls5_pkg::fnMapRawToUop(ic_line[ 47:  0]);
+			pr[0].op.uop = Qupls5_pkg::fnMapRawToUop(32'(ic_line >> (pr[0].op.cli<<3)));
 			for (n1 = 1; n1 < MWIDTH; n1 = n1 + 1) begin
 				pr[n1] = {$bits(Qupls5_pkg::rob_entry_t){1'b0}};
 				pr[n1].op = {$bits(Qupls5_pkg::pipeline_reg_t){1'b0}};
@@ -155,29 +191,66 @@ else begin
 				pr[n1].stomped = FALSE;
 			end
 			if (prev_xop.prefix && prev_xop_v) begin
-					pr[0].op.uop.Rs3 = prev_xop.Rs1;
-					pr[0].op.uop.Rs4 = prev_xop.Rs2;
-					pr[0].op.uop.vlen = prev_xop.vlen;
-					pr[0].op.uop.vn[3:2] = prev_xop.vn[1:0];
-					pr[0].op.uop.sc = prev_xop.sc;
-					pr[0].op.uop.op3 = prev_xop.op3;
-					pr[0].op.uop.ms[3:2] = prev_xop.ms[1:0];
-					pr[0].op.uop.src[2] = prev_xop.src[0];
-					pr[0].op.uop.src[4] = prev_xop.src[1];
+					case(prev_xop.opcode)
+					Qupls5_pkg::OP_EXTOP:
+					begin
+						pr[0].op.uop.Rs3 = prev_xop.Rs3;
+						pr[0].op.uop.Rs4 = prev_xop.Rs4;
+						pr[0].op.uop.vlen = prev_xop.vlen;
+						pr[0].op.uop.vn[3:2] = prev_xop.vn[3:2];
+						pr[0].op.uop.sc = prev_xop.sc;
+						pr[0].op.uop.op3 = prev_xop.op3;
+						pr[0].op.uop.ms[3:2] = prev_xop.ms[3:2];
+						pr[0].op.uop.src[2] = prev_xop.src[2];
+						pr[0].op.uop.src[4] = prev_xop.src[4];
+					end
+					Qupls5_pkg::OP_NDX:
+					begin
+						pr[0].op.uop.Rs2 = prev_xop.Rs2;
+						pr[0].op.uop.Rs3 = prev_xop.Rs3;
+						pr[0].op.uop.vlen = prev_xop.vlen;
+						pr[0].op.uop.vn[2:1] = prev_xop.vn[2:1];
+						pr[0].op.uop.sc = prev_xop.sc;
+						pr[0].op.uop.op3 = prev_xop.op3;
+						pr[0].op.uop.ms[2:1] = prev_xop.ms[2:1];
+						pr[0].op.uop.src[1] = prev_xop.src[1];
+						pr[0].op.uop.src[2] = prev_xop.src[2];
+					end
+					default:	;
+					endcase
 			end
 			// Fuse an XOP prefix into the next instruction.
 			foreach(pr[n1]) begin
 				if (n1 < MWIDTH-1 && pr[n1].op.uop.prefix) begin
-					pr[n1+1].op.uop.Rs3 = pr[n1].op.uop.Rs1;
-					pr[n1+1].op.uop.Rs4 = pr[n1].op.uop.Rs2;
-					pr[n1+1].op.uop.vlen = pr[n1].op.uop.vlen;
-					pr[n1+1].op.uop.vn[3:2] = pr[n1].op.uop.vn[1:0];
-					pr[n1+1].op.uop.sc = pr[n1].op.uop.sc;
-					pr[n1+1].op.uop.op3 = pr[n1].op.uop.op3;
-					pr[n1+1].op.uop.ms[3:2] = pr[n1].op.uop.ms[1:0];
-					pr[n1+1].op.uop.src[2] = pr[n1].op.uop.src[0];
-					pr[n1+1].op.uop.src[4] = pr[n1].op.uop.src[1];
-					pr[n1].done = 2'b11;
+					case(pr[n1].op.uop.opcode)
+					Qupls5_pkg::OP_EXTOP:
+					begin
+						pr[n1+1].op.uop.Rs3 = pr[n1].op.uop.Rs3;
+						pr[n1+1].op.uop.Rs4 = pr[n1].op.uop.Rs4;
+						pr[n1+1].op.uop.vlen = pr[n1].op.uop.vlen;
+						pr[n1+1].op.uop.vn[3:2] = pr[n1].op.uop.vn[3:2];
+						pr[n1+1].op.uop.sc = pr[n1].op.uop.sc;
+						pr[n1+1].op.uop.op3 = pr[n1].op.uop.op3;
+						pr[n1+1].op.uop.ms[3:2] = pr[n1].op.uop.ms[3:2];
+						pr[n1+1].op.uop.src[2] = pr[n1].op.uop.src[2];
+						pr[n1+1].op.uop.src[4] = pr[n1].op.uop.src[4];
+						pr[n1].done = 2'b11;
+					end
+					Qupls5_pkg::OP_NDX:
+					begin
+						pr[n1+1].op.uop.Rs2 = pr[n1].op.uop.Rs2;
+						pr[n1+1].op.uop.Rs3 = pr[n1].op.uop.Rs3;
+						pr[n1+1].op.uop.vlen = pr[n1].op.uop.vlen;
+						pr[n1+1].op.uop.vn[2:1] = pr[n1].op.uop.vn[2:1];
+						pr[n1+1].op.uop.sc = pr[n1].op.uop.sc;
+						pr[n1+1].op.uop.op3 = pr[n1].op.uop.op3;
+						pr[n1+1].op.uop.ms[2:1] = pr[n1].op.uop.ms[2:1];
+						pr[n1+1].op.uop.src[1] = pr[n1].op.uop.src[1];
+						pr[n1+1].op.uop.src[3] = pr[n1].op.uop.src[2];
+						pr[n1].done = 2'b11;
+					end
+					default:	;
+					endcase
 				end
 				// Prefix was last in bundle. Cannot fuse into next, but it will be
 				// fetched for the next bundle. So, just mark done in this bundle.

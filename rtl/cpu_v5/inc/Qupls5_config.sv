@@ -102,8 +102,8 @@ localparam SUPPORT_RENAMER = 1;
 // 6 = FFO / Bitmap, a find-first-ones approach with a bitmap
 localparam RENAMER = 4;
 
-// Comment out the following to remove the RAT
-`define SUPPORT_RAT 1;
+// 1= enable RAT
+localparam SUPPORT_RAT = 1;
 
 // =============================================================================
 // =============================================================================

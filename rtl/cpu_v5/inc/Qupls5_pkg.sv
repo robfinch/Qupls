@@ -40,11 +40,11 @@ import  cpu_types_pkg::*;
 `endif
 
 package Qupls5_pkg;
-`define QUPLS4	1'b1
+`define QUPLS5	1'b1
 `define STARK_PKG 1'b1
 `undef IS_SIM
-parameter SIM = 1'b0;
-//`define IS_SIM	1
+parameter SIM = 1'b1;
+`define IS_SIM	1
 
 `include "Qupls5_config.sv"
 /*
@@ -2735,14 +2735,14 @@ endfunction
 function fnDecBra;
 input Qupls5_pkg::pipeline_reg_t mux;
 begin
-	fnDecBra = mux.uop.opcode == OP_BSR && mux.uop.Rd==8'd0;
+	fnDecBra = mux.uop.opcode == OP_BRA;
 end
 endfunction
 
 function fnDecJmp;
 input Qupls5_pkg::pipeline_reg_t mux;
 begin
-	fnDecJmp = mux.uop.opcode==OP_JSR && mux.uop.Rd==8'd0;
+	fnDecJmp = mux.uop.opcode==OP_JMP;
 end
 endfunction
 
@@ -3020,30 +3020,37 @@ endfunction
 // +---+---+---+---+---+---+---+
 
 function micro_op_t fnMapRawToUop;
-input [47:0] raw;
+input [31:0] raw;
 begin
 	fnMapRawToUop = {$bits(micro_op_t){1'b0}};
 	fnMapRawToUop.opcode = raw[6:0];
+	fnMapRawToUop.Rs4 = 5'd31;	// -1
+	fnMapRawToUop.ms[3] = 1'b1;	// Rs4 = constant
 	case(raw[6:0])
 	Qupls5_pkg::OP_EXTOP:
 		begin
 			fnMapRawToUop.op3 = raw[9:7];
 			fnMapRawToUop.prefix = 1'b1;
-			fnMapRawToUop.ms = raw[11:10];
-			fnMapRawToUop.Rs1 = raw[16:12];
-			fnMapRawToUop.Rs2 = raw[21:17];
-			fnMapRawToUop.vn = raw[25:22];
+			fnMapRawToUop.ms[3:2] = raw[11:10];
+			fnMapRawToUop.Rs3 = raw[16:12];
+			fnMapRawToUop.Rs4 = raw[21:17];
+			fnMapRawToUop.vn[3:2] = raw[25:24];
 			fnMapRawToUop.vlen = raw[31:26];
+			fnMapRawToUop.src[2] = ~raw[10];
+			fnMapRawToUop.src[4] = ~raw[11];
 		end
 	Qupls5_pkg::OP_NDX:
 		begin
 			fnMapRawToUop.op3 = raw[9:7];
 			fnMapRawToUop.prefix = 1'b1;
-			fnMapRawToUop.ms = raw[11:10];
-			fnMapRawToUop.Rs1 = raw[16:12];
-			fnMapRawToUop.Rs2 = raw[21:17];
-			fnMapRawToUop.sc = raw[25:22];
+			fnMapRawToUop.ms[2:1] = raw[11:10];
+			fnMapRawToUop.Rs2 = raw[16:12];
+			fnMapRawToUop.Rs3 = raw[21:17];
+			fnMapRawToUop.sc = raw[24:22];
+			fnMapRawToUop.vn[1] = raw[25];
 			fnMapRawToUop.vlen = raw[31:26];
+			fnMapRawToUop.src[1] = ~raw[10];
+			fnMapRawToUop.src[2] = ~raw[11];
 		end
 	// Immediate operate
 	Qupls5_pkg::OP_ADDI,Qupls5_pkg::OP_SUBFI,

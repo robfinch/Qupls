@@ -69,6 +69,7 @@ module Qupls5_pipeline_ren(
 	rat_stallq,
 	alloc_chkpt, cndx, rcndx, miss_cp
 );
+parameter SUPPORT_RAT = Qupls5_pkg::SUPPORT_RAT;
 parameter MWIDTH = Qupls5_pkg::MWIDTH;
 parameter NREG_RPORT = Qupls5_pkg::NREG_RPORTS;
 localparam NRENAME = MWIDTH*6;
@@ -242,7 +243,8 @@ always_comb
 foreach (qbr[n6])
 	qbr[n6] = pg_dec.pr[n6].op.decbus.br|pg_dec.pr[n6].op.decbus.cjb;
 
-`ifdef SUPPORT_RAT
+generate begin : gRAT
+	if (SUPPORT_RAT) begin
 Qupls5_reg_name_supplier9 uns4
 (
 	.rst(rst),
@@ -313,7 +315,8 @@ urat1
 	.bo_preg(bo_preg),
 	.bo_nreg(bo_nreg)	
 );
-`else
+end
+else begin
 	assign rat_stallq = FALSE;
 	assign cndx0 = 4'd0;
 	assign bo_wr = FALSE;
@@ -346,7 +349,9 @@ urat1
 		end
 	end
 	*/
-`endif
+end
+end
+endgenerate
 
 always_ff @(posedge clk)
 if (rst) begin

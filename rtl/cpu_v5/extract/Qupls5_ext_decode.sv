@@ -73,15 +73,15 @@ always_comb
 	Qupls5_pkg::OP_BCCU,
 	Qupls5_pkg::OP_MBCC,
 	Qupls5_pkg::OP_FBCC:
-		bcc = instr[13];	// Constant or register value?
+		bcc = instr[31];	// Constant or register value?
 	default:
 		bcc = FALSE;
 	endcase
 always_comb rtd = instr[6:0]==Qupls5_pkg::OP_CAP && instr[31:25]==Qupls5_pkg::CAP_RET;
 // To compute the virtual address the offset is added to the base, so it needs
 // to be subtracted off when set.
-always_comb begin bsr_tgt = ip; bsr_tgt.cap.offset = ip.cap.offset + {{29{instr[47]}},instr[47:14],1'b0} - ip.cap.base; end
-always_comb begin jsr_tgt = ip; jsr_tgt.cap.offset = {{29{instr[47]}},instr[47:14],1'b0} - ip.cap.base; end
-always_comb begin bcc_tgt = ip; bcc_tgt.cap.offset = ip.cap.offset + {{46{instr[44]}},instr[44:28],1'b0} - ip.cap.base; end
+always_comb begin bsr_tgt = ip; bsr_tgt.cap.offset = ip.cap.offset + {{42{instr[31]}},instr[31:12],2'b0} - ip.cap.base; end
+always_comb begin jsr_tgt = ip; jsr_tgt.cap.offset = {{42{instr[31]}},instr[31:12],1'b0} - ip.cap.base; end
+always_comb begin bcc_tgt = ip; bcc_tgt.cap.offset = ip.cap.offset + {{54{instr[28]}},instr[28:22],instr[11],2'b0} - ip.cap.base; end
 
 endmodule
