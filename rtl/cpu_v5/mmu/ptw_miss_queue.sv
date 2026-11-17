@@ -39,7 +39,7 @@ import const_pkg::*;
 import wishbone_pkg::*;
 import mmu_pkg::*;
 import cpu_types_pkg::*;
-import Qupls4_pkg::*;
+import Qupls5_pkg::*;
 import ptable_walker_pkg::*;
 
 module ptw_miss_queue(rst, clk, state, ptbr, ptattr,
@@ -342,7 +342,7 @@ else begin
 					$display("PTW: walk level=%d", miss_queue[sel_qe].lvl);
 					miss_queue[sel_qe].o <= 1'b1;
 					miss_queue[sel_qe].lvl <= miss_queue[sel_qe].lvl - 1;
-					if (tranbuf[sel_tran].pte.typ==PTP_SHORTCUT && Qupls4_pkg::SUPPORT_TLBLVL2)
+					if (tranbuf[sel_tran].pte.typ==PTP_SHORTCUT && Qupls5_pkg::SUPPORT_TLBLVL2)
 						miss_queue[sel_qe].lvl <= 3'd0;
 				end
 				else if (miss_queue[sel_qe].bc < 3'd2) begin

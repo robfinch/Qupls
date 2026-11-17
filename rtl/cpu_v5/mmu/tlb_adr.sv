@@ -38,7 +38,7 @@ import const_pkg::*;
 import wishbone_pkg::*;
 import mmu_pkg::*;
 import cpu_types_pkg::*;
-import Qupls4_pkg::*;
+import Qupls5_pkg::*;
 
 // These bits are passed through verbatium
 `define VADR_PBITS_LVL1 12:0
@@ -62,8 +62,8 @@ input virtual_address_t vadr;
 output physical_address_t padr;
 output reg padrv;
 output reg tlb_v;
-input Qupls4_pkg::micro_op_t op_i;
-output Qupls4_pkg::micro_op_t op_o;
+input Qupls5_pkg::micro_op_t op_i;
+output Qupls5_pkg::micro_op_t op_o;
 output virtual_address_t miss_adr;
 output reg miss_v;
 
@@ -81,10 +81,10 @@ else begin
 	if (paging_en) begin
 		padr_v <= L1hit;
 		tlb_v <= INV;
-		op_o.opcode <= Qupls4_pkg::OP_NOP;
+		op_o.opcode <= Qupls5_pkg::OP_NOP;
 		load_o <= FALSE;
 		store_o <= FALSE;
-		omd_o <= Qupls4_pkg::OM_SECURE;
+		omd_o <= Qupls5_pkg::OM_SECURE;
 		agen_rndx_o <= 6'd63;
 		if (L1tlb[ndx].pte.l2.lvl==3'd2)
 			padr <= {L1tlb[ndx].pte.l2.ppn,vadr[`VADR_PBITS_LVL2]};

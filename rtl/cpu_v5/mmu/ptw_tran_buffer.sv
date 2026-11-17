@@ -39,7 +39,7 @@ import const_pkg::*;
 import wishbone_pkg::*;
 import mmu_pkg::*;
 import cpu_types_pkg::*;
-import Qupls4_pkg::*;
+import Qupls5_pkg::*;
 import ptable_walker_pkg::*;
 
 module ptw_tran_buffer(rst, clk, ptattr, state, access_state, ptw_vv, ptw_pv, ptw_ppv, tranbuf,

@@ -40,7 +40,7 @@ import const_pkg::*;
 import wishbone_pkg::*;
 import mmu_pkg::*;
 import cpu_types_pkg::*;
-import Qupls4_pkg::*;
+import Qupls5_pkg::*;
 
 // The lowest 11 bits of the VPN are not needed for comparison at L2. They are
 // stored because they are needed at L1.
@@ -92,9 +92,9 @@ output tlb_entry_t entry_o;
 input address_t vadr0;
 input address_t vadr1;
 input address_t vadr2;
-input Qupls4_pkg::operating_mode_t omd0;
-input Qupls4_pkg::operating_mode_t omd1;
-input Qupls4_pkg::operating_mode_t omd2;
+input Qupls5_pkg::operating_mode_t omd0;
+input Qupls5_pkg::operating_mode_t omd1;
+input Qupls5_pkg::operating_mode_t omd2;
 input asid_t asid0;
 input asid_t asid1;
 input asid_t asid2;
@@ -112,10 +112,10 @@ output reg padr0_v;
 output reg padr1_v;
 output reg padr2_v;
 output reg pswt_v;
-input Qupls4_pkg::micro_op_t op0;
-input Qupls4_pkg::micro_op_t op1;
-output Qupls4_pkg::micro_op_t tlb0_op;
-output Qupls4_pkg::micro_op_t tlb1_op;
+input Qupls5_pkg::micro_op_t op0;
+input Qupls5_pkg::micro_op_t op1;
+output Qupls5_pkg::micro_op_t tlb0_op;
+output Qupls5_pkg::micro_op_t tlb1_op;
 output physical_address_t padr0;
 output physical_address_t padr1;
 output physical_address_t padr2;
@@ -171,7 +171,7 @@ reg [1:0] missqn [0:MISSQ_ENTRIES-1];
 rob_ndx_t [MISSQ_ENTRIES-1:0] missid;
 REGION region0, region1, region2;
 wire [7:0] sel0, sel1, sel2;
-Qupls4_pkg::operating_mode_t omd0a, omd1a, pc_omda;
+Qupls5_pkg::operating_mode_t omd0a, omd1a, pc_omda;
 reg [10:0] rstcnt;
 reg web0a=1'b0, web0b=1'b0, web0c=1'b0;
 reg web1a=1'b0, web1b=1'b0, web1c=1'b0;
@@ -547,7 +547,7 @@ always_ff @(posedge clk) store1r <= store1_i;
 
    // Level 2 entries
 generate begin : gTLBLVL2
-if (Qupls4_pkg::SUPPORT_TLBLVL2) begin
+if (Qupls5_pkg::SUPPORT_TLBLVL2) begin
    xpm_memory_tdpram #(
       .ADDR_WIDTH_A(TLB_L2_ABITS),               // DECIMAL
       .ADDR_WIDTH_B(TLB_L2_ABITS),               // DECIMAL
@@ -920,11 +920,11 @@ else cdrstcnt <= cdrstcnt + 2'd1;
 change_det #(.WID($bits(virtual_address_t)-LOG_PAGE_SIZE)) ucd1 (.rst(rst), .clk(clk), .ce(1'b1), .i(miss_adr[VMSB:BMSB]), .cd(cd_miss_adr));
 always_ff @(posedge clk) miss_en_miss_adr <= cd_miss_adr|cdrstcnt[4:0]==5'h1f;
 
-wire hit0aL2 =(t0aL2.vpn.vpn[`L2_VPN_BITS]==miss_adr_r[`L2_VADR_BITS] && t0aL2.vpn.asid==miss_asid && t0aL2.pte.l2.v && t0aL2.pte.l2.s && Qupls4_pkg::SUPPORT_TLBLVL2);
+wire hit0aL2 =(t0aL2.vpn.vpn[`L2_VPN_BITS]==miss_adr_r[`L2_VADR_BITS] && t0aL2.vpn.asid==miss_asid && t0aL2.pte.l2.v && t0aL2.pte.l2.s && Qupls5_pkg::SUPPORT_TLBLVL2);
 wire hit0a =	(t0a.vpn.vpn[`VPN_BITS]==miss_adr_r[`VADR_BITS] && t0a.vpn.asid==miss_asid && t0a.pte.l1.v);
-wire hit0bL2 =(t0bL2.vpn.vpn[`L2_VPN_BITS]==miss_adr_r[`L2_VADR_BITS] && t0bL2.vpn.asid==miss_asid && t0bL2.pte.l2.v && t0bL2.pte.l2.s && Qupls4_pkg::SUPPORT_TLBLVL2);
+wire hit0bL2 =(t0bL2.vpn.vpn[`L2_VPN_BITS]==miss_adr_r[`L2_VADR_BITS] && t0bL2.vpn.asid==miss_asid && t0bL2.pte.l2.v && t0bL2.pte.l2.s && Qupls5_pkg::SUPPORT_TLBLVL2);
 wire hit0b = 	(t0b.vpn.vpn[`VPN_BITS]==miss_adr_r[`VADR_BITS] && t0b.vpn.asid==miss_asid && t0b.pte.l1.v);
-wire hit0cL2=	(t0cL2.vpn.vpn[`L2_VPN_BITS]==miss_adr_r[`L2_VADR_BITS] && t0cL2.vpn.asid==miss_asid && t0cL2.pte.l2.v && t0cL2.pte.l2.s && Qupls4_pkg::SUPPORT_TLBLVL2);
+wire hit0cL2=	(t0cL2.vpn.vpn[`L2_VPN_BITS]==miss_adr_r[`L2_VADR_BITS] && t0cL2.vpn.asid==miss_asid && t0cL2.pte.l2.v && t0cL2.pte.l2.s && Qupls5_pkg::SUPPORT_TLBLVL2);
 wire hit0c = 	(t0c.vpn.vpn[`VPN_BITS]==miss_adr_r[`VADR_BITS] && t0c.vpn.asid==miss_asid && t0c.pte.l1.v);
 
 always_comb web0a = hit0a & !cd_miss_adr;
@@ -947,13 +947,13 @@ generate begin : gL1tlb
 		always_comb
 			begin
 				hits[0][g1] = ((L1tlb[g1].vpn.vpn[`L1_VPN_BITS]==vadr0[`L1_VADR_BITS] && L1tlb[g1].pte.l1.lvl==3'd1) ||	// Level1 hit or
-											 (L1tlb[g1].vpn.vpn[`L1_VPN_BITS_LVL2]==vadr0[`L1_VADR_BITS_LVL2] && L1tlb[g1].pte.l2.lvl==3'd2 && L1tlb[g1].pte.l2.s==1'd1 && Qupls4_pkg::SUPPORT_TLBLVL2)) &&	// Level2 shortcut hit
+											 (L1tlb[g1].vpn.vpn[`L1_VPN_BITS_LVL2]==vadr0[`L1_VADR_BITS_LVL2] && L1tlb[g1].pte.l2.lvl==3'd2 && L1tlb[g1].pte.l2.s==1'd1 && Qupls5_pkg::SUPPORT_TLBLVL2)) &&	// Level2 shortcut hit
 											L1tlb[g1].vpn.asid==asid0;
 				hits[1][g1] = ((L1tlb[g1].vpn.vpn[`L1_VPN_BITS]==vadr1[`L1_VADR_BITS] && L1tlb[g1].pte.l1.lvl==3'd1) ||	// Level1 hit or
-											 (L1tlb[g1].vpn.vpn[`L1_VPN_BITS_LVL2]==vadr1[`L1_VADR_BITS_LVL2] && L1tlb[g1].pte.l2.lvl==3'd2 && L1tlb[g1].pte.l2.s==1'd1 && Qupls4_pkg::SUPPORT_TLBLVL2)) &&	// Level2 shortcut hit
+											 (L1tlb[g1].vpn.vpn[`L1_VPN_BITS_LVL2]==vadr1[`L1_VADR_BITS_LVL2] && L1tlb[g1].pte.l2.lvl==3'd2 && L1tlb[g1].pte.l2.s==1'd1 && Qupls5_pkg::SUPPORT_TLBLVL2)) &&	// Level2 shortcut hit
 											L1tlb[g1].vpn.asid==asid1;
 				hits[2][g1] = ((L1tlb[g1].vpn.vpn[`L1_VPN_BITS]==vadr2[`L1_VADR_BITS] && L1tlb[g1].pte.l1.lvl==3'd1) ||	// Level1 hit or
-											 (L1tlb[g1].vpn.vpn[`L1_VPN_BITS_LVL2]==vadr2[`L1_VADR_BITS_LVL2] && L1tlb[g1].pte.l2.lvl==3'd2 && L1tlb[g1].pte.l2.s==1'd1 && Qupls4_pkg::SUPPORT_TLBLVL2)) &&	// Level2 shortcut hit
+											 (L1tlb[g1].vpn.vpn[`L1_VPN_BITS_LVL2]==vadr2[`L1_VADR_BITS_LVL2] && L1tlb[g1].pte.l2.lvl==3'd2 && L1tlb[g1].pte.l2.s==1'd1 && Qupls5_pkg::SUPPORT_TLBLVL2)) &&	// Level2 shortcut hit
 											L1tlb[g1].vpn.asid==asid2;
 			end
 end
@@ -1091,7 +1091,7 @@ tCount(t2b,t2bw,hit2b,1'b0);
 tCount(t2c,t2cw,hit2c,1'b0);
 end
 generate begin : gTLBLVL2Count
-if (Qupls4_pkg::SUPPORT_TLBLVL2) begin
+if (Qupls5_pkg::SUPPORT_TLBLVL2) begin
 always_comb
 begin
 tCount(t0aL2,t0awL2,hit0aL2,store0r);
@@ -1127,8 +1127,8 @@ if (rst) begin
 	pc_padr_v1 <= TRUE;
 	pc_tlb_entry_o <= {$bits(tlb_entry_t){1'b0}};
 	
-	omd0a <= Qupls4_pkg::OM_SECURE;
-	omd1a <= Qupls4_pkg::OM_SECURE;
+	omd0a <= Qupls5_pkg::OM_SECURE;
+	omd1a <= Qupls5_pkg::OM_SECURE;
 	
 	agen0_rndx_o <= 'd0;
 	agen1_rndx_o <= 'd0;
@@ -1162,11 +1162,11 @@ else begin
 			L1tlb[wway] <= t0b;
 		else if (hit0c & agen0_v)
 			L1tlb[wway] <= t0c;
-		else if (hit0aL2 & agen0_v && Qupls4_pkg::SUPPORT_TLBLVL2)
+		else if (hit0aL2 & agen0_v && Qupls5_pkg::SUPPORT_TLBLVL2)
 			L1tlb[wway] <= t0aL2;
-		else if (hit0bL2 & agen0_v && Qupls4_pkg::SUPPORT_TLBLVL2)
+		else if (hit0bL2 & agen0_v && Qupls5_pkg::SUPPORT_TLBLVL2)
 			L1tlb[wway] <= t0bL2;
-		else if (hit0cL2 & agen0_v && Qupls4_pkg::SUPPORT_TLBLVL2)
+		else if (hit0cL2 & agen0_v && Qupls5_pkg::SUPPORT_TLBLVL2)
 			L1tlb[wway] <= t0cL2;
 	end
 

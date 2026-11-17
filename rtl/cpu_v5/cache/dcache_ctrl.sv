@@ -65,7 +65,7 @@ input [3:0] acr;
 input hit;
 input modified;
 output reg cache_load;
-input Qupls4_pkg::rob_bitmask_t cpu_request_cancel;
+input Qupls5_pkg::rob_bitmask_t cpu_request_cancel;
 input rob_ndx_t cpu_request_rndx;
 input wb_cmd_request512_t cpu_request_i;
 input cpu_types_pkg::virtual_address_t cpu_request_vadr;
@@ -404,7 +404,7 @@ else begin
 	end
 
 	if (|cpu_request_cancel) begin
-		for (nn10 = 0; nn10 < Qupls4_pkg::ROB_ENTRIES; nn10 = nn10 + 1) begin
+		for (nn10 = 0; nn10 < Qupls5_pkg::ROB_ENTRIES; nn10 = nn10 + 1) begin
 			if (cpu_request_cancel[nn10]) begin
 				for (nn11 = 0; nn11 < 3'd4; nn11 = nn11 + 1) begin
 					if (cpu_req_queue[nn11].rndx==nn10) begin

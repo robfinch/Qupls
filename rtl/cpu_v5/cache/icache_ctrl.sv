@@ -42,7 +42,7 @@ import cache_pkg::*;
 
 module icache_ctrl(rst, clk, wbm_req, wbm_resp, ftam_full,
 	hit, tlb_v, miss_v, miss_vadr, miss_padr, miss_asid, port, port_o,
-	wr_ic, way, line_o, snoop_adr, snoop_v, snoop_cid);
+	wr_ic, way, line_o, snoop_adr, snoop_v, snoop_tid);
 parameter WAYS = 4;
 parameter CORENO = 6'd1;
 parameter CHANNEL = 6'd0;
@@ -64,7 +64,7 @@ output [LOG_WAYS-1:0] way;
 output ICacheLine line_o;
 input cpu_types_pkg::physical_address_t snoop_adr;
 input snoop_v;
-input [5:0] snoop_cid;
+input wb_tranid_t snoop_tid;
 output reg port_o;
 
 wire cpu_types_pkg::virtual_address_t [15:0] vtags;

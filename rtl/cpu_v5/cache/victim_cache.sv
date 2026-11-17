@@ -68,7 +68,7 @@ reg [3:0] vcne, vcno;
 
 always_comb
 	if (NVICTIM > 14) begin
-		$display("Qupls4 Icache: victim cache too large.");
+		$display("Qupls5 Icache: victim cache too large.");
 		$finish;
 	end
 

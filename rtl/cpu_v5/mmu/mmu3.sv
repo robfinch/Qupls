@@ -244,7 +244,7 @@ else begin
 	end
 end
 
-Qupls4_copro2
+Qupls5_copro2
 #(
 	.LOG_PAGESIZE(LOG_PAGESIZE),
 	.LOG_TLB_ENTRIES(LOG_TLB_ENTRIES)
