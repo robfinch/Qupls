@@ -38,7 +38,7 @@
 
 import const_pkg::*;
 import fta_bus_pkg::*;
-import Qupls4_pkg::*;
+import Qupls5_pkg::*;
 
 module flags_cache(rst, clk, wr, wr_cap, adr, load_tags, hit, tagi, tago, tagso, req, resp);
 parameter WID=64;
@@ -49,8 +49,8 @@ input wr_cap;
 input [31:0] adr;
 input load_tags;
 output reg hit;
-input Qupls4_pkg::flags_t tagi;
-output Qupls4_pkg::flags_t tago;
+input Qupls5_pkg::flags_t tagi;
+output Qupls5_pkg::flags_t tago;
 output reg [WID-1:0] tagso;
 output fta_cmd_request256_t req;
 input fta_cmd_response256_t resp;
@@ -83,12 +83,12 @@ reg [12:0] adrh;
 reg [8:0] addra;
 reg [31:0] addrb;
 reg wr_capb;
-Qupls4_pkg::flags_t tagib;
+Qupls5_pkg::flags_t tagib;
 reg [31:0] adr1;
 wire [255:0] douta, doutb;
 reg [255:0] dinb;
-Qupls4_pkg::flags_t [63:0] doutat;
-Qupls4_pkg::flags_t [63:0] dinbt;
+Qupls5_pkg::flags_t [63:0] doutat;
+Qupls5_pkg::flags_t [63:0] dinbt;
 fta_cmd_request256_t reqw;
 fta_tranid_t tid;
 reg modified;

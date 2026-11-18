@@ -54,6 +54,7 @@ input [335:0] instr_raw;
 Qupls5_pkg::micro_op_t ir;
 begin
 	ir = instr;
+	fnRd = 6'd0;
 	case(ir.opcode)
 	// Integer instructions
 	Qupls5_pkg::OP_R3B,Qupls5_pkg::OP_R3W,Qupls5_pkg::OP_R3T,Qupls5_pkg::OP_R3O:
@@ -117,6 +118,18 @@ begin
 		fnRd = ir.Rd;
 	Qupls5_pkg::OP_LDV:
 		fnRd = {ir.Rd[4:0],3'd0} + 9'd64;
+`ifdef PowerISA
+	Qupls5_pkg::OP_31:
+		case(ir.func)
+		Qupls5_pkg::FN_MTSPR:
+			case(ir.spr)
+			10'd8:	fnRd = 6'd33;		// LR
+			10'd9:	fnRd = 6'd34;		// CTR
+			10'd815:	fnRd = 6'd35;	// TAR
+			endcase
+		default:;
+		endcase
+`endif
 	default:
 		fnRd = 8'd0;
 	endcase
@@ -163,6 +176,18 @@ begin
 	Qupls5_pkg::OP_LDV,
 	Qupls5_pkg::OP_AMO,Qupls5_pkg::OP_CMPSWAP:
 		fnRdv = VAL;
+`ifdef PowerISA
+	Qupls5_pkg::OP_31:
+		case(ir.func)
+		Qupls5_pkg::FN_MTSPR:
+			case(ir.spr)
+			10'd8:	fnRdv = VAL;		// LR
+			10'd9:	fnRdv = VAL;		// CTR
+			10'd815:	fnRdv = VAL;	// TAR
+			endcase
+		default:;
+		endcase
+`endif
 	default:
 		fnRdv = INV;
 	endcase

@@ -177,7 +177,7 @@ ucpu1
 	.irq_i(ipri),
 	.ivect_i(ivect),
 	.swstk_i(swstk),
-	.om_i(2'd3),
+	.om_i(3'd3),
 	.wb_req(cpu_req),
 	.wb_resp(cpu_resp),
 	.snoop_v(snoop_v),

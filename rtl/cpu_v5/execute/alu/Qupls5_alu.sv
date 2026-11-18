@@ -2061,6 +2061,36 @@ begin
 			endcase
 		else
 			bus = {(WID/16){16'hDEAD}};
+`ifdef PowerISA
+	Qupls5_pkg::OP_PPC_ADDI:
+		begin
+			bus = a + {{{48{i[15]}},i[15:0]};
+			did_op = TRUE;
+		end
+	Qupls5_pkg::OP_PPC_ADDIS:
+		begin
+			bus = a + {{{48{i[15]}},i[15:0],16'd0};
+			did_op = TRUE;
+		end
+	Qupls5_pkg::OP_PPC_ORI:
+		begin
+			bus = a | i[15:0];
+			did_op = TRUE;
+		end
+	Qupls5_pkg::OP_PPC_ORIS:
+		begin
+			bus = a | {{{48{i[15]}},i[15:0],16'd0};
+			did_op = TRUE;
+		end
+	Qupls5_pkg::OP_31:
+		case(ir.func)
+		Qupls5_pkg::FN_MTPSPR:
+			begin
+				bus = a;
+				did_op = TRUE;
+			end
+		endcase	
+`endif			
 	default:	bus = {(WID/16){16'hDEAD}};
 	endcase
 end

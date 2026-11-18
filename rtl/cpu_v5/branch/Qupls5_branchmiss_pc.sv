@@ -94,7 +94,13 @@ begin
 			dstpc.cap.offset = pc.cap.offset + ir.imm;
 			dstpc.stream = rse.pc.stream;
 		end
-
+`ifdef PowerISA
+	rse.bcc:
+		begin
+			dstpc.cap.offset = pc.cap.offset + ir.imm;
+			dstpc.stream = rse.pc.stream;
+		end
+`else
 	// Note: zero has already been appended to the imm constant for branches by
 	// the raw micro-op translation code.
 	rse.mbcc:
@@ -116,7 +122,7 @@ begin
 			dstpc.cap.offset = pc.cap.offset + ir.imm;
 			dstpc.stream = rse.pc.stream;
 		end
-
+`endif
 	rse.bsr,
 	rse.bra:
 		begin

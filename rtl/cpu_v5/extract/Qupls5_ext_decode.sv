@@ -59,14 +59,26 @@ output Qupls5_pkg::pc_address_ex_t bsr_tgt;
 output Qupls5_pkg::pc_address_ex_t jsr_tgt;
 output Qupls5_pkg::pc_address_ex_t bcc_tgt;
 
+`ifdef PowerISA
+always_comb nop = instr[5:0]==Qupls5_pkg::OP_PPC_ORI && instr[25:0]==26'd0;
+always_comb bsr = instr[5:0]==Qupls5_pkg::OP_BL & ~instr.aa;
+always_comb bra = instr[5:0]==Qupls5_pkg::OP_B & ~instr.aa;
+always_comb jsr = instr[5:0]==Qupls5_pkg::OP_BL && instr.aa;
+always_comb jmp = instr[5:0]==Qupls5_pkg::OP_B && instr.aa;
+`else
 always_comb nop = instr[6:0]==Qupls5_pkg::OP_NOP;
 always_comb bsr = instr[6:0]==Qupls5_pkg::OP_BSR;
 always_comb bra = instr[6:0]==Qupls5_pkg::OP_BRA;
 always_comb jsr = instr[6:0]==Qupls5_pkg::OP_JSR;
 always_comb jmp = instr[6:0]==Qupls5_pkg::OP_JMP;
+`endif
+
 // For conditional branches we have to detect if it is a branch-to-register
 // value. If so, the address cannot be predicted at this stage. It will
 // need to wait until it resolves.
+`ifdef PowerISA
+always_comb bcc = FALSE;
+`else
 always_comb
 	case(instr[6:0])
 	Qupls5_pkg::OP_BCC,
@@ -77,11 +89,18 @@ always_comb
 	default:
 		bcc = FALSE;
 	endcase
+`endif
 always_comb rtd = instr[6:0]==Qupls5_pkg::OP_CAP && instr[31:25]==Qupls5_pkg::CAP_RET;
 // To compute the virtual address the offset is added to the base, so it needs
 // to be subtracted off when set.
+`ifdef PowerISA
+always_comb begin bsr_tgt = ip; bsr_tgt.cap.offset = ip.cap.offset + {{38{instr[25]}},instr[25:2],2'b0} - ip.cap.base; end
+always_comb begin jsr_tgt = ip; jsr_tgt.cap.offset = {{38{instr[25]}},instr[25:2],2'b0} - ip.cap.base; end
+always_comb begin bcc_tgt = ip; bcc_tgt.cap.offset = ip.cap.offset + {{48{instr[15]}},instr[15:2],2'b0} - ip.cap.base; end
+`else
 always_comb begin bsr_tgt = ip; bsr_tgt.cap.offset = ip.cap.offset + {{42{instr[31]}},instr[31:12],2'b0} - ip.cap.base; end
 always_comb begin jsr_tgt = ip; jsr_tgt.cap.offset = {{42{instr[31]}},instr[31:12],2'b0} - ip.cap.base; end
 always_comb begin bcc_tgt = ip; bcc_tgt.cap.offset = ip.cap.offset + {{54{instr[28]}},instr[28:22],instr[11],2'b0} - ip.cap.base; end
+`endif
 
 endmodule

@@ -188,6 +188,23 @@ begin
 end
 
 always_comb
+/*
+if (rst) begin
+	next_count = 3'd0;
+	ble = 9'd0;
+	kk = 0;
+	dc_opcode = Qupls5_pkg::OP_NOP;
+	dc_func = 7'd0;
+	foreach (next_uop[n1]) begin
+		next_uop[n1] = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+		next_uop[n1].lead = n1==0;
+		next_uop[n1].opcode = Qupls5_pkg::OP_NOP;
+		next_uop[n1].ble = 9'b0;
+		next_uop[n1].v = VAL;
+	end
+end
+else begin
+*/
 begin
 	push1 = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
 	push1.v = VAL;
@@ -225,9 +242,6 @@ begin
 	push4.imm = -64'd32;
 	push4.sc = 3'd0;
 
-end
-always_comb
-begin
 	pop1 = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
 	pop1.v = VAL;
 	pop1.opcode = Qupls5_pkg::OP_LOAD;
@@ -264,10 +278,6 @@ begin
 	pop4.imm = 64'd24;
 	pop4.sc = 3'd0;
 	
-end
-
-always_comb
-begin
 	decsp8 = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
 	decsp8.v = VAL;
 	decsp8.opcode = Qupls5_pkg::OP_ADDI;
@@ -397,10 +407,7 @@ begin
 	decsp128.Rs3 = zero_reg;
 	decsp128.imm = -64'd128;
 	decsp128.prc = 2'd3;
-end
 
-always_comb
-begin
 	incsp8 = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
 	incsp8.v = VAL;
 	incsp8.opcode = Qupls5_pkg::OP_ADDI;
@@ -531,11 +538,8 @@ begin
 	incsp128.imm = 64'd128;
 	incsp128.prc = 2'd3;
 
-end
 
 // ENTER instructions
-always_comb
-begin
 	cap_sz = pg_ext.hdr.ip.cap.flags[0] ? 2'd2 : pg_ext.hdr.ip.cap.flags[2:1];
 	st_opcode = pg_ext.hdr.ip.cap.flags[0] ? Qupls5_pkg::OP_STORE : Qupls5_pkg::OP_CSTORE;
 	ld_opcode = pg_ext.hdr.ip.cap.flags[0] ? Qupls5_pkg::OP_LOAD : Qupls5_pkg::OP_CLOAD;
@@ -636,56 +640,8 @@ begin
 	exit_ld_lr.Rs2 = zero_reg;
 	exit_ld_lr.imm = 64'd8;
 	exit_ld_lr.sc = 3'd0;
-end
 
-always_comb
-begin
-	case (instr.opcode)
-	Qupls5_pkg::OP_VSR3B,Qupls5_pkg::OP_VSR3W,Qupls5_pkg::OP_VSR3T,Qupls5_pkg::OP_VSR3O,
-	Qupls5_pkg::OP_VSFLTH,Qupls5_pkg::OP_VSFLTS,Qupls5_pkg::OP_VSFLTD:
-		is_vs = ir.op3==3'd1;
-	default:	is_vs = 1'b0;
-	endcase
-end
 
-always_comb
-begin
-	case (instr.opcode)
-	Qupls5_pkg::OP_VSR3B,Qupls5_pkg::OP_VSR3W,Qupls5_pkg::OP_VSR3T,Qupls5_pkg::OP_VSR3O,
-	Qupls5_pkg::OP_VFLTH,Qupls5_pkg::OP_VFLTS,Qupls5_pkg::OP_VFLTD,
-	Qupls5_pkg::OP_VSFLTH,Qupls5_pkg::OP_VSFLTS,Qupls5_pkg::OP_VSFLTD:
-		is_masked = ir.op3==3'd6;
-	default:	is_masked = 1'b0;
-	endcase
-end
-
-always_comb
-begin
-	case (instr.opcode)
-	Qupls5_pkg::OP_VSR3B,Qupls5_pkg::OP_VSR3W,Qupls5_pkg::OP_VSR3T,Qupls5_pkg::OP_VSR3O:
-		case(ir.func)
-		Qupls5_pkg::FN_REDSUM,Qupls5_pkg::FN_REDAND,Qupls5_pkg::FN_REDOR,Qupls5_pkg::FN_REDEOR,
-		Qupls5_pkg::FN_REDMIN,Qupls5_pkg::FN_REDMAX,Qupls5_pkg::FN_REDMINU,Qupls5_pkg::FN_REDMAXU:
-			is_reduction = 1'b1;
-		default:	is_reduction = 1'b0;
-		endcase
-	default:	is_reduction = 1'b0;
-	endcase
-end
-
-always_comb
-begin
-	case (instr.opcode)
-	Qupls5_pkg::OP_VSR3B,Qupls5_pkg::OP_VSR3W,Qupls5_pkg::OP_VSR3T,Qupls5_pkg::OP_VSR3O,
-	Qupls5_pkg::OP_VFLTH,Qupls5_pkg::OP_VFLTS,Qupls5_pkg::OP_VFLTD,
-	Qupls5_pkg::OP_VSFLTH,Qupls5_pkg::OP_VSFLTS,Qupls5_pkg::OP_VSFLTD:
-		is_vector = 1'b1;
-	default:	is_vector = 1'b0;
-	endcase
-end
-
-always_comb
-begin
 	instr = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
 	vsins = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
 	vls = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
@@ -757,35 +713,52 @@ begin
   uop0.lead = 1'b1;
   uop1 = instr;
   uop1.num = 5'd1;
-end
 
-always_comb vRd =  instr.vn[0] ? {1'b0,instr.Rd,3'd0} + 9'd64 : {4'b0,instr.Rd};
-always_comb vRs1 = instr.vn[1] ? {1'b0,instr.Rs1,3'd0} + 9'd64 : {4'b0,instr.Rs1};
-always_comb vRs2 = instr.vn[2] ? {1'b0,instr.Rs2,3'd0} + 9'd64 : {4'b0,instr.Rs2};
-always_comb vRs3 = instr.vn[3] ? {1'b0,instr.Rs3,3'd0} + 9'd64 : {4'b0,instr.Rs3};
-always_comb vRdi = instr.vn[0];
+	case (instr.opcode)
+	Qupls5_pkg::OP_VSR3B,Qupls5_pkg::OP_VSR3W,Qupls5_pkg::OP_VSR3T,Qupls5_pkg::OP_VSR3O,
+	Qupls5_pkg::OP_VSFLTH,Qupls5_pkg::OP_VSFLTS,Qupls5_pkg::OP_VSFLTD:
+		is_vs = ir.op3==3'd1;
+	default:	is_vs = 1'b0;
+	endcase
+
+	case (instr.opcode)
+	Qupls5_pkg::OP_VSR3B,Qupls5_pkg::OP_VSR3W,Qupls5_pkg::OP_VSR3T,Qupls5_pkg::OP_VSR3O,
+	Qupls5_pkg::OP_VFLTH,Qupls5_pkg::OP_VFLTS,Qupls5_pkg::OP_VFLTD,
+	Qupls5_pkg::OP_VSFLTH,Qupls5_pkg::OP_VSFLTS,Qupls5_pkg::OP_VSFLTD:
+		is_masked = ir.op3==3'd6;
+	default:	is_masked = 1'b0;
+	endcase
+
+	case (instr.opcode)
+	Qupls5_pkg::OP_VSR3B,Qupls5_pkg::OP_VSR3W,Qupls5_pkg::OP_VSR3T,Qupls5_pkg::OP_VSR3O:
+		case(ir.func)
+		Qupls5_pkg::FN_REDSUM,Qupls5_pkg::FN_REDAND,Qupls5_pkg::FN_REDOR,Qupls5_pkg::FN_REDEOR,
+		Qupls5_pkg::FN_REDMIN,Qupls5_pkg::FN_REDMAX,Qupls5_pkg::FN_REDMINU,Qupls5_pkg::FN_REDMAXU:
+			is_reduction = 1'b1;
+		default:	is_reduction = 1'b0;
+		endcase
+	default:	is_reduction = 1'b0;
+	endcase
+
+	case (instr.opcode)
+	Qupls5_pkg::OP_VSR3B,Qupls5_pkg::OP_VSR3W,Qupls5_pkg::OP_VSR3T,Qupls5_pkg::OP_VSR3O,
+	Qupls5_pkg::OP_VFLTH,Qupls5_pkg::OP_VFLTS,Qupls5_pkg::OP_VFLTD,
+	Qupls5_pkg::OP_VSFLTH,Qupls5_pkg::OP_VSFLTS,Qupls5_pkg::OP_VSFLTD:
+		is_vector = 1'b1;
+	default:	is_vector = 1'b0;
+	endcase
+
+	vRd =  instr.vn[0] ? {1'b0,instr.Rd,3'd0} + 9'd64 : {4'b0,instr.Rd};
+	vRs1 = instr.vn[1] ? {1'b0,instr.Rs1,3'd0} + 9'd64 : {4'b0,instr.Rs1};
+	vRs2 = instr.vn[2] ? {1'b0,instr.Rs2,3'd0} + 9'd64 : {4'b0,instr.Rs2};
+	vRs3 = instr.vn[3] ? {1'b0,instr.Rs3,3'd0} + 9'd64 : {4'b0,instr.Rs3};
+	vRdi = instr.vn[0];
 
 // Don't increment a constant field.
-always_comb vRs1i = (instr.vn[1] & ~instr.ms[0]);
-always_comb vRs2i = (instr.vn[2] & ~instr.ms[1]);
-always_comb vRs3i = (instr.vn[3] & ~instr.ms[2]);
+	vRs1i = (instr.vn[1] & ~instr.ms[0]);
+	vRs2i = (instr.vn[2] & ~instr.ms[1]);
+	vRs3i = (instr.vn[3] & ~instr.ms[2]);
 
-always_comb
-if (rst) begin
-	next_count = 3'd0;
-	ble = 9'd0;
-	kk = 0;
-	dc_opcode = Qupls5_pkg::OP_NOP;
-	dc_func = 7'd0;
-	foreach (next_uop[n1]) begin
-		next_uop[n1] = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
-		next_uop[n1].lead = n1==0;
-		next_uop[n1].opcode = Qupls5_pkg::OP_NOP;
-		next_uop[n1].ble = 9'b0;
-		next_uop[n1].v = VAL;
-	end
-end
-else begin
 	next_count = 3'd0;
 	ble = 9'd0;
 	kk = 0;
@@ -1175,6 +1148,27 @@ else begin
 			endcase
 		end
 	*/
+`ifdef PowerISA
+	Qupls5_pkg::OP_BC:
+		begin
+			if (~ir.bo[2]) begin
+				next_count = 5'd2;
+				next_uop[0].lead = 1'b1;
+				next_uop[0].opcode = Qupls5_pkg::OP_PPC_ADDI:
+				next_uop[0].imm = -1;
+				next_uop[0].Rd = 6'd34;		//CTR
+				next_uop[0].Rs1 = 6'd34;	//CTR
+				next_uop[0].src[0]=1'b1;
+				next_uop[0].src[3]=1'b1;
+				next_uop[0].dst=1'b1;
+				next_uop[1] = uop1;
+			end
+			else begin
+				next_count = 5'd1;
+				next_uop[0] = uop0;
+			end
+		end
+`endif
 	Qupls5_pkg::OP_ADDI,
 	Qupls5_pkg::OP_SUBFI,
 	Qupls5_pkg::OP_CMPI,

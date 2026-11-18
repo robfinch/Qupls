@@ -74,6 +74,10 @@ begin
 	Qupls5_pkg::OP_LOADA:	fnIsAlu = 1'b1;
 	Qupls5_pkg::OP_FENCE:
 		fnIsAlu = 1'b1;
+`ifdef PowerISA
+	Qupls5_pkg::OP_31:
+		fnIsAlu = 1'b1;
+`endif
 	default:
 		fnIsAlu = 1'b0;
 	endcase

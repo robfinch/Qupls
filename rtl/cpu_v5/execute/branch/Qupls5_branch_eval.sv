@@ -48,9 +48,14 @@ output reg takb;
 
 wire [WID-1:0] ac = a[WID-1:0] & c;
 wire [WID-1:0] bc = b & c;
+wire ctrok = instr.bo[2] || ((b!=64'd0)^instr.bo[1]);
+wire condok = instr.bo[4] || a[instr.bi]==instr.bo[3];
 
 always_comb
 	case(instr.opcode)
+`ifdef PowerISA
+	Qupls5_pkg::OP_BC:	takb = ctrok & condok;
+`else
 	Qupls5_pkg::OP_BCCU:	// integer unsigned branches
 		case(instr.func)
 		Qupls5_pkg::CND_EQ:	takb = a[WID-1:0] == b;
@@ -103,6 +108,7 @@ always_comb
 		Qupls5_pkg::CND_OR:	takb = |(ac[WID-1:0] | bc);
 		default:	takb = 1'b0;
 		endcase
+`endif		
 	default:	takb = 1'b0;
 	endcase
 
