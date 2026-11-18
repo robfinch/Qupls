@@ -701,13 +701,26 @@ typedef enum logic [6:0] {
 } opcode_e;
 
 typedef enum logic [5:0] {
+	OP_PPC_SUBFIC = 6'd8,
+	OP_PPC_CMPLI = 6'd10,
+	OP_PPC_CMPI = 6'd11,
+	OP_PPC_ADDIC = 6'd12,
+	OP_PPC_ADDICR = 6'd13,
 	OP_PPC_ADDI = 6'd14,
 	OP_PPC_ADDIS = 6'd15,
 	OP_BC = 6'd16,
 	OP_B = 6'd18,
 	OP_BCLR = 6'd19,
+	OP_PPC_RLWIMI = 6'd20,
+	OP_PPC_RLWINM = 6'd21,
+	OP_PPC_RLWNM = 6'd23,
 	OP_PPC_ORI = 6'd24,
 	OP_PPC_ORIS = 6'd25,
+	OP_PPC_XORI = 6'd26,
+	OP_PPC_XORIS = 6'd27,
+	OP_PPC_ANDI = 6'd28,
+	OP_PPC_ANDIS = 6'd29,
+	OP_PPC_RLDIC = 6'd30,
 	OP_31 = 6'd31
 } opcode_ppc_e;
 
@@ -802,10 +815,58 @@ typedef enum logic [6:0] {
 
 typedef enum logic [9:0] {
 	FN_BCLR = 10'd16,
-	FN_MTSPR = 10'd467,
 	FN_BCCTR = 10'd528,
 	FN_BCTAR = 10'd560
 } func10_e;
+
+typedef enum logic [9:0] {
+	FN31_CMP = 10'd0,
+	FN31_MFCR = 10'd19,
+	FN31_SLW = 10'd24,
+	FN31_CNTLZW = 10'd26,
+	FN31_SLD = 10'd27,
+	FN31_AND = 10'd28,
+	FN31_CMPL = 10'd32,
+	FN31_CNTLZD = 10'd58,
+	Fn31_CNTLZDM = 10'd59,
+	FN31_ANDC = 10'd60,
+	FN31_POPCNTB = 10'd122,
+	FN31_NOR = 10'd124,
+	FN31_PRTYW = 10'd154,
+	FN31_BRW = 10'd155,
+	FN31_PDEPD = 10'd156,
+	FN31_PRTYD = 10'd186,
+	FN31_BRD = 10'd187,
+	FN31_PEXTD = 10'd188,
+	FN31_BRH = 10'd219,
+	FN31_CFUGED = 10'd220,
+	FN31_BPERMD = 10'd252,
+	FN31_ADD = 10'd266,
+	FN31_EQV = 10'd284,
+	FN31_XOR = 10'd316,
+	FN31_MFSPR = 10'd339,
+	FN31_POPCNTW = 10'd378,
+	FN31_ORC = 10'd412,
+	FN31_SRADI = 10'd413,
+	FN31_OR = 10'd444,
+	FN31_EXTSWSLI = 10'd445,
+	FN31_MTSPR = 10'd467,
+	FN31_NAND = 10'd476,
+	FN31_POPCNTD = 10'd506,
+	FN31_CMPB = 10'd508,
+	FN31_SRW = 10'd536,
+	FN31_SRD = 10'd539,
+	FN31_CNTTZW = 10'd538,
+	FN31_CNTTZD = 10'd570,
+	FN31_CNTTZDM = 10'd571,
+	FN31_ADDO = 10'd778,
+	FN31_SRAW = 10'd792,
+	FN31_SRAD = 10'd794,
+	FN31_SRAWI = 10'd824,
+	FN31_EXTSH = 10'd922,
+	FN31_EXTSB = 10'd954,
+	FN31_EXTSW = 10'd986
+} op31_e;
 
 typedef enum logic [6:0] {
 	R1_CNTLZ = 7'd0,
@@ -1478,6 +1539,8 @@ typedef struct packed		// about 156 bits
 	logic dst;						// 1 if destination register active as dest
 	logic [2:0] rmd;			// round mode (floating-point)
 	logic [2:0] op3;			// op field found in some instructions / ar for AMO operations
+	logic rc;							// 1= record in cr
+	logic l;							// 'l' bit found in some instructions
 	logic aa;
 	logic lk;
 	logic [4:0] bi;
@@ -3037,57 +3100,132 @@ begin
 	fnMapRawToUop = {$bits(micro_op_t){1'b0}};
 	fnMapRawToUop.opcode = raw[5:0];
 	fnMapRawToUop.ms[3] = 1'b1;	// Rs4 = constant
-	case(raw[6:0])
-	Qupls5_pkg::OP_EXTOP:
-		begin
-			fnMapRawToUop.op3 = raw[9:7];
-			fnMapRawToUop.prefix = 1'b1;
-			fnMapRawToUop.ms[3:2] = raw[11:10];
-			fnMapRawToUop.Rs3 = raw[16:12];
-			fnMapRawToUop.Rs4 = raw[21:17];
-			fnMapRawToUop.vn[3:2] = raw[25:24];
-			fnMapRawToUop.vlen = raw[31:26];
-			fnMapRawToUop.src[2] = ~raw[10];
-			fnMapRawToUop.src[4] = ~raw[11];
-		end
-	Qupls5_pkg::OP_NDX:
-		begin
-			fnMapRawToUop.op3 = raw[9:7];
-			fnMapRawToUop.prefix = 1'b1;
-			fnMapRawToUop.ms[2:1] = raw[11:10];
-			fnMapRawToUop.Rs2 = raw[16:12];
-			fnMapRawToUop.Rs3 = raw[21:17];
-			fnMapRawToUop.sc = raw[24:22];
-			fnMapRawToUop.vn[1] = raw[25];
-			fnMapRawToUop.vlen = raw[31:26];
-			fnMapRawToUop.src[1] = ~raw[10];
-			fnMapRawToUop.src[2] = ~raw[11];
-		end
+	case(raw[31:26])
+`ifdef PowerISA
 	// Immediate operate
-	Qupls5_pkg::OP_ADDI,Qupls5_pkg::OP_SUBFI,
-	Qupls5_pkg::OP_CMPI,Qupls5_pkg::OP_CMPUI,
+	Qupls5_pkg::OP_PPC_ADDI,
+	Qupls5_pkg::OP_PPC_ADDIS,
+	Qupls5_pkg::OP_PPC_SUBFIC:
+		begin
+			fnMapRawToUop.Rd = {1'b0,raw[25:21]};
+			fnMapRawToUop.Rs1 = {1'b0,raw[20:16]};
+			fnMapRawToUop.Rs2 = 6'd36;	// XER
+			fnMapRawToUop.imm = raw[15:0];
+			fnMapRawToUop.src[0] = 1'b1;
+			fnMapRawToUop.src[1] = 1'b1;
+			fnMapRawToUop.src[3] = 1'b1;
+			fnMapRawToUop.dst = 1'b1;
+		end
+	Qupls5_pkg::OP_PPC_ANDI,
+	Qupls5_pkg::OP_PPC_ANDIS,
+	Qupls5_pkg::OP_PPC_ORI,
+	Qupls5_pkg::OP_PPC_ORIS,
+	Qupls5_pkg::OP_PPC_XORI,
+	Qupls5_pkg::OP_PPC_XORIS:
+		begin
+			fnMapRawToUop.Rd = {1'b0,raw[20:16]};
+			fnMapRawToUop.Rs1 = {1'b0,raw[25:21]};
+			fnMapRawToUop.imm = raw[15:0];
+			fnMapRawToUop.src[0] = 1'b1;
+			fnMapRawToUop.src[3] = 1'b1;
+			fnMapRawToUop.dst = 1'b1;
+		end
+	Qupls5_pkg::OP_PPC_CMPI,
+	Qupls5_pkg::OP_PPC_CMPLI:
+		begin
+			fnMapRawToUop.bo = raw[25:21];		// BF field
+			fnMapRawToUop.Rd = 6'd32;					// CR
+			fnMapRawToUop.Rs1 = {1'b0,raw[20:16]};
+			fnMapRawToUop.Rs2 = 6'd36;				// XER
+			fnMapRawToUop.imm = raw[15:0];
+			fnMapRawToUop.src[0] = 1'b1;
+			fnMapRawToUop.src[1] = 1'b1;
+			fnMapRawToUop.src[3] = 1'b1;
+			fnMapRawToUop.dst = 1'b1;
+		end
+	Qupls5_pkg::OP_B:
+		begin
+			fnMapRawToUop.lk = raw[0];
+			fnMapRawToUop.aa = raw[1];
+			fnMapRawToUop.Rd = 6'd33;	// link register
+			fnMapRawToUop.imm = {{38{raw[25]}},raw[25:2],2'b0};
+			fnMapRawToUop.src[0] = raw[0];
+			fnMapRawToUop.dst = raw[0];
+		end
+	Qupls5_pkg::OP_BC:
+		begin
+			fnMapRawToUop.lk = raw[0];
+			fnMapRawToUop.aa = raw[1];
+			fnMapRawToUop.Rd = 6'd33;	// link register
+			fnMapRawToUop.Rs1 = 6'd32;
+			if (~raw[23]) begin
+				fnMapRawToUop.src[1] = 1'b1;
+				fnMapRawToUop.Rs2 = 6'd34;	// count register
+			end
+			fnMapRawToUop.imm = {{48{raw[15]}},raw[15:2],2'b0};
+			fnMapRawToUop.bi = raw[20:16];
+			fnMapRawToUop.bo = raw[25:21];
+			fnMapRawToUop.src[0] = 1'b1;
+			fnMapRawToUop.src[3] = raw[0];
+			fnMapRawToUop.dst = raw[0];
+		end
+	Qupls5_pkg::OP_BCLR:
+		begin
+			fnMapRawToUop.func = raw[10:1];
+			fnMapRawToUop.lk = raw[0];
+			fnMapRawToUop.Rd = 6'd33;	// link register
+			fnMapRawToUop.bh = raw[12:11];
+			fnMapRawToUop.bi = raw[20:16];
+			fnMapRawToUop.bo = raw[25:21];
+			fnMapRawToUop.src[0] = raw[0];
+			fnMapRawToUop.dst = raw[0];
+		end
+	Qupls5_pkg::OP_31:
+		casez(raw[10:1])
+		FN31_MTSPR:
+			begin
+				fnMapRawToUop.func = raw[10:1];
+				fnMapRawToUop.Rs1 = raw[25:21];
+				fnMapRawToUop.spr = raw[20:11];
+				fnMapRawToUop.src[0]=1'b1;
+				fnMapRawToUop.src[3]=1'b1;
+				fnMapRawToUop.dst = 1'b1;
+			end
+		FN31_ADD,FN31_ADDO:
+			begin
+				fnMapRawToUop.func = raw[10:1];
+				fnMapRawToUop.Rd = raw[25:21];
+				fnMapRawToUop.Rs1 = raw[20:16];
+				fnMapRawToUop.Rs2 = raw[15:11];
+				fnMapRawToUop.rc = raw[0];
+				fnMapRawToUop.src[0]=1'b1;
+				fnMapRawToUop.src[1]=1'b1;
+				fnMapRawToUop.src[3]=1'b1;
+				fnMapRawToUop.dst = 1'b1;
+			end
+		10'b??????1111:	// ISEL
+			begin
+				fnMapRawToUop.func = raw[10:1];
+				fnMapRawToUop.Rd = raw[25:21];
+				fnMapRawToUop.Rs1 = raw[20:16];
+				fnMapRawToUop.Rs2 = raw[15:11];
+				fnMapRawToUop.Rs3 = 6'd32;	// CR
+				fnMapRawToUop.src[0]=1'b1;
+				fnMapRawToUop.src[1]=1'b1;
+				fnMapRawToUop.src[2]=1'b1;
+				fnMapRawToUop.src[3]=1'b1;
+				fnMapRawToUop.src[4]=1'b1;
+				fnMapRawToUop.dst = 1'b1;
+			end
+		endcase
+`else
 	Qupls5_pkg::OP_MULI,Qupls5_pkg::OP_MULUI,
 	Qupls5_pkg::OP_DIVI,Qupls5_pkg::OP_DIVUI,
-	Qupls5_pkg::OP_ORI,Qupls5_pkg::OP_XORI:
 		begin
 			fnMapRawToUop.Rd = raw[11:7];
 			fnMapRawToUop.Rs1 = raw[16:12];
 			if (SUPPORT_SHIFTED_IMMED)
 				fnMapRawToUop.imm = {{44{raw[45]}},raw[45:23]} << ({raw[22:21],1'b0,raw[22:21],1'b0} + {raw[22:21],2'h0});
-			else
-				fnMapRawToUop.imm = {{51{raw[29]}},raw[29:17]};
-			fnMapRawToUop.ms = 3'b0;
-			fnMapRawToUop.prc = raw[31:30];
-			fnMapRawToUop.src = {6'b001001};
-			fnMapRawToUop.dst = 1'b1;
-		end
-	Qupls5_pkg::OP_ANDI:
-		begin
-			fnMapRawToUop.Rd = raw[11:7];
-			fnMapRawToUop.Rs1 = raw[16:12];
-			if (SUPPORT_SHIFTED_IMMED)
-				fnMapRawToUop.imm = ({{44{raw[45]}},raw[45:23]} << ({raw[22:21],1'b0,raw[22:21],1'b0} + {raw[22:21],2'h0})) |
-							((64'd1 << ({raw[22:21],1'b0,raw[22:21],1'b0} + {raw[22:21],2'h0})) - 64'd1);
 			else
 				fnMapRawToUop.imm = {{51{raw[29]}},raw[29:17]};
 			fnMapRawToUop.ms = 3'b0;
@@ -3352,55 +3490,6 @@ begin
 			fnMapRawToUop.inc = raw[31];
 			fnMapRawToUop.vn = 5'b00111;
 		end
-	Qupls5_pkg::OP_B:
-		begin
-			fnMapRawToUop.lk = raw[0];
-			fnMapRawToUop.aa = raw[1];
-			fnMapRawToUop.Rd = 6'd33;	// link register
-			fnMapRawToUop.imm = {{38{raw[25]}},raw[25:2],2'b0};
-			fnMapRawToUop.src[0] = raw[0];
-			fnMapRawToUop.dst = raw[0];
-		end
-	Qupls5_pkg::OP_BC:
-		begin
-			fnMapRawToUop.lk = raw[0];
-			fnMapRawToUop.aa = raw[1];
-			fnMapRawToUop.Rd = 6'd33;	// link register
-			fnMapRawToUop.Rs1 = 6'd32;
-			if (~raw[23]) begin
-				fnMapRawToUop.src[1] = 1'b1;
-				fnMapRawToUop.Rs2 = 6'd34;	// count register
-			end
-			fnMapRawToUop.imm = {{48{raw[15]}},raw[15:2],2'b0};
-			fnMapRawToUop.bi = raw[20:16];
-			fnMapRawToUop.bo = raw[25:21];
-			fnMapRawToUop.src[0] = 1'b1;
-			fnMapRawToUop.src[3] = raw[0];
-			fnMapRawToUop.dst = raw[0];
-		end
-	Qupls5_pkg::OP_BCLR:
-		begin
-			fnMapRawToUop.func = raw[10:1];
-			fnMapRawToUop.lk = raw[0];
-			fnMapRawToUop.Rd = 6'd33;	// link register
-			fnMapRawToUop.bh = raw[12:11];
-			fnMapRawToUop.bi = raw[20:16];
-			fnMapRawToUop.bo = raw[25:21];
-			fnMapRawToUop.src[0] = raw[0];
-			fnMapRawToUop.dst = raw[0];
-		end
-	Qupls5_pkg::OP_31:
-		case(raw[10:1])
-		FN_MTSPR:
-			begin
-				fnMapRawToUop.func = raw[10:1];
-				fnMapRawToUop.Rs1 = raw[25:21];
-				fnMapRawToUop.spr = raw[20:11];
-				fnMapRawToUop.src[0]=1'b1;
-				fnMapRawToUop.src[3]=1'b1;
-				fnMapRawToUop.dst = 1'b1;
-			end
-		endcase
 // Source bits
 // +---+---+---+---+---+---+---+
 // | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
@@ -3577,6 +3666,7 @@ begin
 				end
 			endcase
 		end
+`endif		
 	default:
 		begin
 			fnMapRawToUop.Rd = raw[12:7];

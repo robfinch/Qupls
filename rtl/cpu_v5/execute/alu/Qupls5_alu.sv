@@ -127,6 +127,7 @@ reg [WID:0] bus;
 reg [WID-1:0] busx;
 wire bus_nan;
 reg [22:0] ii;
+reg [WID-1:0] aa,bb;
 reg [WID-1:0] sd;
 reg [WID-1:0] sum_ab;
 reg [WID+1:0] sum_gc;
@@ -141,6 +142,8 @@ reg [WID-1:0] tmp;
 reg [6:0] y;
 wire [63:0] cryptoo;
 reg [3:0] ele_per_reg;
+reg [2:0] cr;
+reg cy,ov;				// carry and overflow bit
 
 /*
 wire [63:0] txu = (a[35:0] * c[17:0]) >> 18;
@@ -564,6 +567,7 @@ begin
 	o_flags = t_flags;
 	dt = 3'd0;
 	elesz = (velsz >> {dt,3'b0}) & 8'hff;
+	cr = 3'b0;
 	case(elesz)
 	8'd8:	base_eleno = {chunk,3'd0};
 	8'd16:base_eleno = {chunk,2'd0};
@@ -572,6 +576,200 @@ begin
 	endcase
 	mask1 = c >> base_eleno;
 	case(ir.opcode)
+`ifdef PowerISA
+	Quspl5_pkg::OP_PPC_CMPI:
+		begin
+			aa = ir.l ? a : {{32{a[31]}},a[31:0]};
+			if ($signed(aa) < $signed({{48{i[15]}},i[15:0]})) cr = 3'b100;
+			else if ($signed(aa) > $signed({{48{i[15]}},i[15:0]})) cr = 3'b010;
+			else cr = 3'b001;
+			casez(ir.bo)
+			5'b000??:	begin bus[31:28] = {cr,b[31]};	// b[31]=XER.SO
+			5'b001??:	begin bus[27:24] = {cr,b[31]};	// b[31]=XER.SO
+			5'b010??:	begin bus[23:20] = {cr,b[31]};	// b[31]=XER.SO
+			5'b011??:	begin bus[19:16] = {cr,b[31]};	// b[31]=XER.SO
+			5'b100??:	begin bus[15:12] = {cr,b[31]};	// b[31]=XER.SO
+			5'b101??:	begin bus[11: 8] = {cr,b[31]};	// b[31]=XER.SO
+			5'b110??:	begin bus[ 7: 4] = {cr,b[31]};	// b[31]=XER.SO
+			5'b111??:	begin bus[ 3: 0] = {cr,b[31]};	// b[31]=XER.SO
+			endcase
+		end
+	Quspl5_pkg::OP_PPC_CMPLI:
+		begin
+			aa = ir.l ? a : {{32{1'b0}},a[31:0]};
+			if (aa < {{48{1'b0}},i[15:0]}) cr = 3'b100;
+			else if (aa > {{1'b0}},i[15:0]}) cr = 3'b010;
+			else cr = 3'b001;
+			casez(ir.bo)
+			5'b000??:	begin bus[31:28] = {cr,b[31]};	// b[31]=XER.SO
+			5'b001??:	begin bus[27:24] = {cr,b[31]};	// b[31]=XER.SO
+			5'b010??:	begin bus[23:20] = {cr,b[31]};	// b[31]=XER.SO
+			5'b011??:	begin bus[19:16] = {cr,b[31]};	// b[31]=XER.SO
+			5'b100??:	begin bus[15:12] = {cr,b[31]};	// b[31]=XER.SO
+			5'b101??:	begin bus[11: 8] = {cr,b[31]};	// b[31]=XER.SO
+			5'b110??:	begin bus[ 7: 4] = {cr,b[31]};	// b[31]=XER.SO
+			5'b111??:	begin bus[ 3: 0] = {cr,b[31]};	// b[31]=XER.SO
+			endcase
+		end
+	Qupls5_pkg::OP_PPC_ADDI:
+		begin
+			bus = a + {{{48{i[15]}},i[15:0]};
+			cy = bus[WID];
+			if (ir.bo==5'd1) begin
+				bus = b;
+				if (fnAddOverflow(a,{{{48{i[15]}},i[15:0]}))
+					bus[31] = 1'b1;
+				bus[30] = fnAddOverflow(a,{{{48{i[15]}},i[15:0]});
+				bus[29] = cy;
+				bus[20] = bus[31];	// 32-bit overflow flag
+				bus[19] = bus[30];	
+				bus[18] = cy;				// 32-bit carry flag
+			end
+			did_op = TRUE;
+		end
+	Qupls5_pkg::OP_PPC_ADDIS:
+		begin
+			bus = a + {{{32{i[15]}},i[15:0],16'd0};
+			cy = bus[WID];
+			if (ir.bo==5'd1) begin
+				bus = b;
+				if (fnAddOverflow(a,{{{48{i[15]}},i[15:0]}))
+					bus[31] = 1'b1;
+				bus[30] = fnAddOverflow(a,{{{48{i[15]}},i[15:0]});
+				bus[29] = cy;
+				bus[20] = bus[31];	// 32-bit overflow flag
+				bus[19] = bus[30];	
+				bus[18] = cy;				// 32-bit carry flag
+			end
+			did_op = TRUE;
+		end
+	Qupls5_pkg::OP_PPC_SUBFIC:
+		begin
+			bus = {{{48{i[15]}},i[15:0]} - a;
+			cy = bus[WID];
+			if (ir.bo==5'd1) begin
+				bus = b;
+				if (fnSubOverflow({{{48{i[15]}},i[15:0]}),a)
+					bus[31] = 1'b1;
+				bus[30] = fnSubOverflow({{{48{i[15]}},i[15:0]},a);
+				bus[29] = cy;
+				bus[20] = bus[31];	// 32-bit overflow flag
+				bus[19] = bus[30];	
+				bus[18] = cy;				// 32-bit carry flag
+			end
+			did_op = TRUE;
+		end
+	Qupls5_pkg::OP_PPC_ANDI:
+		begin
+			bus = a & {{{48{1'b0}},i[15:0]};
+			did_op = TRUE;
+		end
+	Qupls5_pkg::OP_PPC_ANDIS:
+		begin
+			bus = a & {{{48{1'b0}},i[15:0],16'd0};
+			did_op = TRUE;
+		end
+	Qupls5_pkg::OP_PPC_ORI:
+		begin
+			bus = a | i[15:0];
+			did_op = TRUE;
+		end
+	Qupls5_pkg::OP_PPC_ORIS:
+		begin
+			bus = a | {{{48{1'b0}},i[15:0],16'd0};
+			did_op = TRUE;
+		end
+	Qupls5_pkg::OP_PPC_XORI:
+		begin
+			bus = a ^ i[15:0];
+			did_op = TRUE;
+		end
+	Qupls5_pkg::OP_PPC_XORIS:
+		begin
+			bus = a ^ {{{48{1'b0}},i[15:0],16'd0};
+			did_op = TRUE;
+		end
+	Qupls5_pkg::OP_31:
+		casez(ir.func)
+		Qupls5_pkg::FN31_MTSPR:
+			begin
+				bus = a;
+				did_op = TRUE;
+			end
+		Qupls5_pkg::FN31_ADD,Qupls5_pkg::FN31_ADDO:
+			begin
+				if (ir.l) begin
+					aa = a;
+					bb = b;
+					bus = a + b;
+				end
+				else begin
+					aa = {{32{a[31]}},a[31:0]};
+					bb = {{32{b[31]}},b[31:0]};
+				end
+				bus = aa + bb;
+				cy = bus[WID];
+				if (ir.l)
+					ov = fnAddOverflow(aa,bb);
+				else
+					ov = fnAddOverflow(aa[31:0],bb[31:0])
+				if (ir.bo==5'd1) begin
+					bus = c;
+					if (ov)
+						bus[31] = 1'b1;
+					bus[30] = ov;
+					bus[29] = cy;
+					bus[20] = bus[31];	// 32-bit overflow flag
+					bus[19] = bus[30];	
+					bus[18] = cy;				// 32-bit carry flag
+				end
+				did_op = TRUE;
+			end
+		Quspl5_pkg::FN31_CMP:
+			begin
+				aa = ir.l ? a : {{32{a[31]}},a[31:0]};
+				bb = ir.l ? b : {{32{b[31]}},b[31:0]};
+				if ($signed(aa) < $signed(bb)) cr = 3'b100;
+				else if ($signed(aa) > $signed(bb)) cr = 3'b010;
+				else cr = 3'b001;
+				casez(ir.bo)
+				5'b000??:	begin bus[31:28] = {cr,c[31]};	// b[31]=XER.SO
+				5'b001??:	begin bus[27:24] = {cr,c[31]};	// b[31]=XER.SO
+				5'b010??:	begin bus[23:20] = {cr,c[31]};	// b[31]=XER.SO
+				5'b011??:	begin bus[19:16] = {cr,c[31]};	// b[31]=XER.SO
+				5'b100??:	begin bus[15:12] = {cr,c[31]};	// b[31]=XER.SO
+				5'b101??:	begin bus[11: 8] = {cr,c[31]};	// b[31]=XER.SO
+				5'b110??:	begin bus[ 7: 4] = {cr,c[31]};	// b[31]=XER.SO
+				5'b111??:	begin bus[ 3: 0] = {cr,c[31]};	// b[31]=XER.SO
+				endcase
+				did_op = TRUE;
+			end
+		Quspl5_pkg::FN31_CMPL:
+			begin
+				aa = ir.l ? a : {32'd0,a[31:0]};
+				bb = ir.l ? b : {32'd0,b[31:0]};
+				if (aa < bb) cr = 3'b100;
+				else if (aa > bb) cr = 3'b010;
+				else cr = 3'b001;
+				casez(ir.bo)
+				5'b000??:	begin bus[31:28] = {cr,c[31]};	// b[31]=XER.SO
+				5'b001??:	begin bus[27:24] = {cr,c[31]};	// b[31]=XER.SO
+				5'b010??:	begin bus[23:20] = {cr,c[31]};	// b[31]=XER.SO
+				5'b011??:	begin bus[19:16] = {cr,c[31]};	// b[31]=XER.SO
+				5'b100??:	begin bus[15:12] = {cr,c[31]};	// b[31]=XER.SO
+				5'b101??:	begin bus[11: 8] = {cr,c[31]};	// b[31]=XER.SO
+				5'b110??:	begin bus[ 7: 4] = {cr,c[31]};	// b[31]=XER.SO
+				5'b111??:	begin bus[ 3: 0] = {cr,c[31]};	// b[31]=XER.SO
+				endcase
+				did_op = TRUE;
+			end
+		10'b??????1111:	// ISEL
+			begin
+				bus = c[ir.func[10:5]] ? a : b;
+				did_op = TRUE;
+			end
+		endcase
+`else
 	Qupls5_pkg::OP_VR3B,Qupls5_pkg::OP_VR3W,Qupls5_pkg::OP_VR3T,Qupls5_pkg::OP_VR3O,
 	Qupls5_pkg::OP_VSR3B,Qupls5_pkg::OP_VSR3W,Qupls5_pkg::OP_VSR3T,Qupls5_pkg::OP_VSR3O:
 		case(ir.func)
@@ -2061,35 +2259,6 @@ begin
 			endcase
 		else
 			bus = {(WID/16){16'hDEAD}};
-`ifdef PowerISA
-	Qupls5_pkg::OP_PPC_ADDI:
-		begin
-			bus = a + {{{48{i[15]}},i[15:0]};
-			did_op = TRUE;
-		end
-	Qupls5_pkg::OP_PPC_ADDIS:
-		begin
-			bus = a + {{{48{i[15]}},i[15:0],16'd0};
-			did_op = TRUE;
-		end
-	Qupls5_pkg::OP_PPC_ORI:
-		begin
-			bus = a | i[15:0];
-			did_op = TRUE;
-		end
-	Qupls5_pkg::OP_PPC_ORIS:
-		begin
-			bus = a | {{{48{i[15]}},i[15:0],16'd0};
-			did_op = TRUE;
-		end
-	Qupls5_pkg::OP_31:
-		case(ir.func)
-		Qupls5_pkg::FN_MTPSPR:
-			begin
-				bus = a;
-				did_op = TRUE;
-			end
-		endcase	
 `endif			
 	default:	bus = {(WID/16){16'hDEAD}};
 	endcase
