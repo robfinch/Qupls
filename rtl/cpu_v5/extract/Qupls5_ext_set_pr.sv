@@ -46,7 +46,7 @@ input en;
 input irq;
 input stomp;
 input [47:0] carry_mod;
-input [(MWIDTH+1)*32-1:0] ic_line;
+input [MWIDTH*32-1:0] ic_line;
 input ssm_flag;
 input prev_xop_v;
 input Qupls5_pkg::micro_op_t prev_xop;
@@ -139,6 +139,22 @@ else begin
 	endcase
 	*/
 	if (en) begin
+		foreach (pr[n1]) begin
+			pr[n1] = {$bits(Qupls5_pkg::rob_entry_t){1'b0}};
+			pr[n1].op = {$bits(Qupls5_pkg::pipeline_reg_t){1'b0}};
+			pr[n1].op.exc = Qupls5_pkg::FLT_NONE;
+			pr[n1].op.uop.opcode = Qupls5_pkg::OP_NOP;
+			pr[n1].op.decbus.nop = TRUE;
+			pr[n1].op.decbus.cause = Qupls5_pkg::FLT_NONE;
+			pr[n1].op.uop.lead = 1'd1;
+			pr[n1].op.v = 1'b1;
+			pr[n1].exc = Qupls5_pkg::FLT_NONE;
+			pr[n1].excv = INV;
+			pr[n1].done = 2'b11;
+			pr[n1].stomped = TRUE;
+			pr[n1].v = VAL;
+			pr[n1].ip_stream = pc[n1].stream.stream;
+		end
 		// Allow only one instruction through when single stepping.
 		if (ssm_flag & ~prev_ssm_flag) begin
 			pr[0].op.cli = pc[0].cap.offset[6:0];
@@ -165,6 +181,7 @@ else begin
 			foreach(pr[n1]) begin
 				pr[n1] = {$bits(Qupls5_pkg::rob_entry_t){1'b0}};
 				pr[n1].op = {$bits(Qupls5_pkg::pipeline_reg_t){1'b0}};
+				pr[n1].v = VAL;
 				pr[n1].op.exc = Qupls5_pkg::FLT_NONE;
 				pr[n1].op.uop = {41'd0,Qupls5_pkg::OP_NOP};
 				pr[n1].op.decbus.nop = TRUE;
@@ -184,9 +201,12 @@ else begin
 			// Compute index of instruction on cache-line.
 			// Note! the index is in terms of 32-bit parcels.
 			foreach(pr[n1]) begin
-				pr[n1].op.cli = pc[0].cap.offset + (n1 * 4);
+				pr[n1].v = VAL;
+				pr[n1].op.cli = fnUcGetAddress(pc[0].cap) + (n1 * 4);
 				pr[n1].ip_offs = n1 * 4;
-				pr[n1].op.uop = Qupls5_pkg::fnMapRawToUop(32'(ic_line >> (pr[n1].op.cli<<3)));
+				// note ic_line is pre-aligned to the first instruction address. Need 
+				// to use the offset from that address to shift some more.
+				pr[n1].op.uop = Qupls5_pkg::fnMapRawToUop(32'(ic_line >> ({4'd0,pr[n1].ip_offs}<<3'd3)));
 				pr[n1].done = 2'b00;
 				pr[n1].stomped = FALSE;
 			end

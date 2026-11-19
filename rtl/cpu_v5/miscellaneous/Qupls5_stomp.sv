@@ -240,12 +240,12 @@ always_comb
 Qupls5_pkg::pc_address_ex_t prev_pc;
 always_ff @(posedge clk)
 if (rst) begin
-	stomp_fetr <= TRUE;
-	stomp_trnr <= TRUE;
-	stomp_moq1r <= TRUE;
-	stomp_moq2r <= TRUE;
-	stomp_motr <= TRUE;
-	stomp_decr <= TRUE;
+	stomp_fetr <= FALSE;
+	stomp_trnr <= FALSE;
+	stomp_moq1r <= FALSE;
+	stomp_moq2r <= FALSE;
+	stomp_motr <= FALSE;
+	stomp_decr <= FALSE;
 end
 else begin
 	
@@ -271,8 +271,8 @@ end
 
 always_ff @(posedge clk)
 if (rst) begin
-	stomp_extr <= TRUE;
-	stomp_renr <= TRUE;
+	stomp_extr <= FALSE;
+	stomp_renr <= FALSE;
 end
 else begin
 	

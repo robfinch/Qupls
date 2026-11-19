@@ -139,6 +139,7 @@ wire [WID-1:0] info;
 wire [WID-1:0] vmasko;
 wire [WID-1:0] blendo;
 reg [WID-1:0] tmp;
+reg [WID-1:0] mask;
 reg [6:0] y;
 wire [63:0] cryptoo;
 reg [3:0] ele_per_reg;
@@ -224,10 +225,110 @@ reg [6:0] bflen;
 reg [6:0] bfst,bfnd;
 reg [WID+8-1:0] af;
 reg [WID+8-1:0] op3;
+reg [5:0] sh;
 
 // Handle clr, set, com, ext, extz, dep
 generate begin : gBlfd
 	if (WID==64) begin
+`ifdef PowerISA
+		always_comb
+		begin
+			if (ir.opcode==Qupls5_pkg::OP_PPC_RLDIC) begin
+				case(ir.func[3:1])
+				3'd0:
+					begin
+						bfst = ir.func[10:4];
+						bfnd = 6'd63;
+						sh = {ir.Rs2,ir.func[0]};
+					end
+				3'd1:	
+					begin
+						bfnd = ir.func[10:4];
+						bfst = 6'd0;
+						sh = {ir.Rs2,ir.func[0]};
+					end
+				3'd2:
+					begin
+						bfst = ir.func[10:4];
+						bfnd = 7'd63 - {ir.Rs2,ir.func[0]};
+						sh = {ir.Rs2,ir.func[0]};
+					end
+				3'd3:
+					begin
+						bfst = ir.func[10:4];
+						bfnd = 7'd63 - {ir.Rs2,ir.func[0]};
+						sh = {ir.Rs2,ir.func[0]};
+					end
+				3'd4:
+					begin
+						if (ir.func[0]) begin
+							bfst = 7'd0;
+							bfnd = ir.func[10:4];
+							sh = b[5:0];
+						end
+						else begin
+							bfst = ir.func[10:4];
+							bfnd = 7'd63;
+							sh = b[5:0];
+						end
+					end
+				default:
+					begin
+						bfst = ir.func[10:4];
+						bfnd = 6'd63;
+					end
+				endcase
+			end
+			else begin
+				bfst = ir.func[10:5];
+				bfnd = ir.func[ 4:0];
+			end
+			mask = 64'd0;
+			for (jj = 0; jj < 64; jj = jj + 1)
+				if (bfst <= bfnd) begin
+					if (jj >= bfst && jj <= bfnd)
+						mask[jj] = 1'b1;
+				end
+				else begin
+					if (jj >= bfst || jj <= bfnd)
+						mask[jj] = 1'b1;
+				end
+			case(ir.opcode)
+			Qupls5_pkg::OP_PPC_RLWIMI:
+				begin
+					sh = ir.Rs2;
+					bfldo = (a[31:0] << sh) | (a[31:0] >> (7'd32-sh));
+					foreach (bfldo[jj])
+						bfldo[jj] = mask[jj] ? bfldo[jj] : t[jj];
+					bfldo[63:32] = 32'd0;
+				end
+			Qupls5_pkg::OP_PPC_RLWINM:
+				begin
+					sh = ir.Rs2;
+					bfldo = (a[31:0] << sh) | (a[31:0] >> (7'd32-sh));
+					bfldo = bfldo & mask;
+					bfldo[63:32] = 32'd0;
+				end
+			Qupls5_pkg::OP_PPC_RLWNM:
+				begin
+					sh = b[4:0];
+					bfldo = (a[31:0] << sh) | (a[31:0] >> (7'd32-sh));
+					bfldo = bfldo & mask;
+					bfldo[63:32] = 32'd0;
+				end
+			Qupls5_pkg::OP_PPC_RLDIC:
+				begin
+					bfldo = (a << sh) | (a >> (7'd64-sh));
+					if (ir.func[3:1]==3'd3) begin
+						foreach (bfldo[jj])
+							bfldo[jj] = mask[jj] ? bfldo[jj] : t[jj];
+					end
+					else
+						bfldo = bfldo & mask;
+				end			
+			endcase
+		end
+`else
 		always_comb
 		if (SUPPORT_BFLD || SUPPORT_VECTOR) begin
 			case(ir.func)
@@ -283,6 +384,7 @@ generate begin : gBlfd
 				endcase
 		end
 	end
+`endif
 	else begin
 		always_comb
 		begin
@@ -583,6 +685,7 @@ begin
 			if ($signed(aa) < $signed({{48{i[15]}},i[15:0]})) cr = 3'b100;
 			else if ($signed(aa) > $signed({{48{i[15]}},i[15:0]})) cr = 3'b010;
 			else cr = 3'b001;
+			bus = t;
 			casez(ir.bo)
 			5'b000??:	begin bus[31:28] = {cr,b[31]};	// b[31]=XER.SO
 			5'b001??:	begin bus[27:24] = {cr,b[31]};	// b[31]=XER.SO
@@ -600,15 +703,16 @@ begin
 			if (aa < {{48{1'b0}},i[15:0]}) cr = 3'b100;
 			else if (aa > {{1'b0}},i[15:0]}) cr = 3'b010;
 			else cr = 3'b001;
+			bus = t;
 			casez(ir.bo)
 			5'b000??:	begin bus[31:28] = {cr,b[31]};	// b[31]=XER.SO
-			5'b001??:	begin bus[27:24] = {cr,b[31]};	// b[31]=XER.SO
-			5'b010??:	begin bus[23:20] = {cr,b[31]};	// b[31]=XER.SO
-			5'b011??:	begin bus[19:16] = {cr,b[31]};	// b[31]=XER.SO
-			5'b100??:	begin bus[15:12] = {cr,b[31]};	// b[31]=XER.SO
-			5'b101??:	begin bus[11: 8] = {cr,b[31]};	// b[31]=XER.SO
-			5'b110??:	begin bus[ 7: 4] = {cr,b[31]};	// b[31]=XER.SO
-			5'b111??:	begin bus[ 3: 0] = {cr,b[31]};	// b[31]=XER.SO
+			5'b001??:	begin bus[27:24] = {cr,b[31]};
+			5'b010??:	begin bus[23:20] = {cr,b[31]};
+			5'b011??:	begin bus[19:16] = {cr,b[31]};
+			5'b100??:	begin bus[15:12] = {cr,b[31]};
+			5'b101??:	begin bus[11: 8] = {cr,b[31]};
+			5'b110??:	begin bus[ 7: 4] = {cr,b[31]};
+			5'b111??:	begin bus[ 3: 0] = {cr,b[31]};
 			endcase
 		end
 	Qupls5_pkg::OP_PPC_ADDI:
@@ -689,6 +793,14 @@ begin
 			bus = a ^ {{{48{1'b0}},i[15:0],16'd0};
 			did_op = TRUE;
 		end
+	Qupls5_pkg::OP_PPC_RLWINM,
+	Qupls5_pkg::OP_PPC_RLWNM,
+	Qupls5_pkg::OP_PPC_RLWIMI,
+	Qupls5_pkg::OP_PPC_RLDIC:
+		begin
+			bus = bfldo;
+			did_op = TRUE;
+		end
 	Qupls5_pkg::OP_31:
 		casez(ir.func)
 		Qupls5_pkg::FN31_MTSPR:
@@ -732,15 +844,16 @@ begin
 				if ($signed(aa) < $signed(bb)) cr = 3'b100;
 				else if ($signed(aa) > $signed(bb)) cr = 3'b010;
 				else cr = 3'b001;
+				bus = t;
 				casez(ir.bo)
 				5'b000??:	begin bus[31:28] = {cr,c[31]};	// b[31]=XER.SO
-				5'b001??:	begin bus[27:24] = {cr,c[31]};	// b[31]=XER.SO
-				5'b010??:	begin bus[23:20] = {cr,c[31]};	// b[31]=XER.SO
-				5'b011??:	begin bus[19:16] = {cr,c[31]};	// b[31]=XER.SO
-				5'b100??:	begin bus[15:12] = {cr,c[31]};	// b[31]=XER.SO
-				5'b101??:	begin bus[11: 8] = {cr,c[31]};	// b[31]=XER.SO
-				5'b110??:	begin bus[ 7: 4] = {cr,c[31]};	// b[31]=XER.SO
-				5'b111??:	begin bus[ 3: 0] = {cr,c[31]};	// b[31]=XER.SO
+				5'b001??:	begin bus[27:24] = {cr,c[31]};
+				5'b010??:	begin bus[23:20] = {cr,c[31]};
+				5'b011??:	begin bus[19:16] = {cr,c[31]};
+				5'b100??:	begin bus[15:12] = {cr,c[31]};
+				5'b101??:	begin bus[11: 8] = {cr,c[31]};
+				5'b110??:	begin bus[ 7: 4] = {cr,c[31]};
+				5'b111??:	begin bus[ 3: 0] = {cr,c[31]};
 				endcase
 				did_op = TRUE;
 			end
@@ -751,16 +864,57 @@ begin
 				if (aa < bb) cr = 3'b100;
 				else if (aa > bb) cr = 3'b010;
 				else cr = 3'b001;
+				bus = t;
 				casez(ir.bo)
 				5'b000??:	begin bus[31:28] = {cr,c[31]};	// b[31]=XER.SO
-				5'b001??:	begin bus[27:24] = {cr,c[31]};	// b[31]=XER.SO
-				5'b010??:	begin bus[23:20] = {cr,c[31]};	// b[31]=XER.SO
-				5'b011??:	begin bus[19:16] = {cr,c[31]};	// b[31]=XER.SO
-				5'b100??:	begin bus[15:12] = {cr,c[31]};	// b[31]=XER.SO
-				5'b101??:	begin bus[11: 8] = {cr,c[31]};	// b[31]=XER.SO
-				5'b110??:	begin bus[ 7: 4] = {cr,c[31]};	// b[31]=XER.SO
-				5'b111??:	begin bus[ 3: 0] = {cr,c[31]};	// b[31]=XER.SO
+				5'b001??:	begin bus[27:24] = {cr,c[31]};
+				5'b010??:	begin bus[23:20] = {cr,c[31]};
+				5'b011??:	begin bus[19:16] = {cr,c[31]};
+				5'b100??:	begin bus[15:12] = {cr,c[31]};
+				5'b101??:	begin bus[11: 8] = {cr,c[31]};
+				5'b110??:	begin bus[ 7: 4] = {cr,c[31]};
+				5'b111??:	begin bus[ 3: 0] = {cr,c[31]};
 				endcase
+				did_op = TRUE;
+			end
+		Qupls5_pkg::FN31_AND:
+			begin
+				bus = a & b;
+				did_op = TRUE;
+			end
+		Qupls5_pkg::FN31_ANDC:
+			begin
+				bus = a & ~b;
+				did_op = TRUE;
+			end
+		Qupls5_pkg::FN31_OR:
+			begin
+				bus = a | b;
+				did_op = TRUE;
+			end
+		Qupls5_pkg::FN31_ORC:
+			begin
+				bus = a | ~b;
+				did_op = TRUE;
+			end
+		Qupls5_pkg::FN31_XOR:
+			begin
+				bus = a ^ b;
+				did_op = TRUE;
+			end
+		Qupls5_pkg::FN31_EQV:
+			begin
+				bus = ~(a ^ b);
+				did_op = TRUE;
+			end
+		Qupls5_pkg::FN31_NAND:
+			begin
+				bus = ~(a & b);
+				did_op = TRUE;
+			end
+		Qupls5_pkg::FN31_NOR:
+			begin
+				bus = ~(a | b);
 				did_op = TRUE;
 			end
 		10'b??????1111:	// ISEL

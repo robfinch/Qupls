@@ -1520,6 +1520,8 @@ typedef struct packed		// about 156 bits
 	// We do not need to store a whole 640bit constant. It will be sign/zero or
 	// postfix extended in decode.
 	logic [15:0] imm2;		// second immediate / CSR register numnber (14 bits)) / lane number
+	logic [5:0] mb;				// mask begin
+	logic [5:0] me;				// mask end
 	logic [35:0] imm;			// immediate / displacement / mask
 	logic prefix;					// instruction is a prefix
 	logic inc;						// increment / decrement for conditional branch, record bit for floats
@@ -3098,8 +3100,7 @@ function micro_op_t fnMapRawToUop;
 input [31:0] raw;
 begin
 	fnMapRawToUop = {$bits(micro_op_t){1'b0}};
-	fnMapRawToUop.opcode = raw[5:0];
-	fnMapRawToUop.ms[3] = 1'b1;	// Rs4 = constant
+	fnMapRawToUop.opcode = raw[31:26];
 	case(raw[31:26])
 `ifdef PowerISA
 	// Immediate operate
@@ -3109,10 +3110,8 @@ begin
 		begin
 			fnMapRawToUop.Rd = {1'b0,raw[25:21]};
 			fnMapRawToUop.Rs1 = {1'b0,raw[20:16]};
-			fnMapRawToUop.Rs2 = 6'd36;	// XER
 			fnMapRawToUop.imm = raw[15:0];
 			fnMapRawToUop.src[0] = 1'b1;
-			fnMapRawToUop.src[1] = 1'b1;
 			fnMapRawToUop.src[3] = 1'b1;
 			fnMapRawToUop.dst = 1'b1;
 		end
@@ -3191,11 +3190,49 @@ begin
 				fnMapRawToUop.src[3]=1'b1;
 				fnMapRawToUop.dst = 1'b1;
 			end
+		FN31_MFSPR:
+			begin
+				fnMapRawToUop.func = raw[10:1];
+				fnMapRawToUop.Rs1 = raw[25:21];
+				fnMapRawToUop.spr = raw[20:11];
+				fnMapRawToUop.src[0]=1'b1;
+				fnMapRawToUop.src[3]=1'b1;
+				fnMapRawToUop.dst = 1'b1;
+			end
 		FN31_ADD,FN31_ADDO:
 			begin
 				fnMapRawToUop.func = raw[10:1];
 				fnMapRawToUop.Rd = raw[25:21];
 				fnMapRawToUop.Rs1 = raw[20:16];
+				fnMapRawToUop.Rs2 = raw[15:11];
+				fnMapRawToUop.rc = raw[0];
+				fnMapRawToUop.src[0]=1'b1;
+				fnMapRawToUop.src[1]=1'b1;
+				fnMapRawToUop.src[3]=1'b1;
+				fnMapRawToUop.dst = 1'b1;
+			end
+		FN31_CMP,FN31_CMPL:
+			begin
+				fnMapRawToUop.func = raw[10:1];
+				fnMapRawToUop.Rd = 6'd32;					// CR
+				fnMapRawToUop.Rs1 = raw[25:21];
+				fnMapRawToUop.Rs2 = raw[15:11];
+				fnMapRawToUop.Rs3 = 6'd36;				// XER (for overflow)
+				fnMapRawToUop.rc = raw[0];
+				fnMapRawToUop.src[0]=1'b1;
+				fnMapRawToUop.src[1]=1'b1;
+				fnMapRawToUop.src[2]=1'b1;
+				fnMapRawToUop.src[3]=1'b1;
+				fnMapRawToUop.dst = 1'b1;
+			end
+		FN31_AND,FN31_ANDC,
+		FN31_OR,FN31_ORC,
+		FN31_XOR,FN31_EQV,
+		FN31_NAND,FN31_NOR:
+			begin
+				fnMapRawToUop.func = raw[10:1];
+				fnMapRawToUop.Rd = raw[20:16];
+				fnMapRawToUop.Rs1 = raw[25:21];
 				fnMapRawToUop.Rs2 = raw[15:11];
 				fnMapRawToUop.rc = raw[0];
 				fnMapRawToUop.src[0]=1'b1;
@@ -3669,15 +3706,8 @@ begin
 `endif		
 	default:
 		begin
-			fnMapRawToUop.Rd = raw[12:7];
-			fnMapRawToUop.Rs1 = raw[18:13];
-			fnMapRawToUop.Rs2 = raw[24:19];
-			fnMapRawToUop.Rs3 = raw[30:25];
-			fnMapRawToUop.op3 = raw[37:35];
-			fnMapRawToUop.ms = raw[40:38];
-			fnMapRawToUop.func = raw[47:41];
-			fnMapRawToUop.src = 7'b0001111;
-			fnMapRawToUop.dst = 1'b1;
+			fnMapRawToUop = {$bits(micro_op_t){1'b0}};
+			fnMapRawToUop.opcode = raw[31:26];
 		end
 	endcase
 end
