@@ -3,6 +3,7 @@
 ## Overview
 Qupls is an implementation of the Qupls instruction set architecture. The ISA is for a 64-bit general purpose machine.
 The Qupls ISA supports vector operations.
+A work in progress is support for the PowerISA instruction set.
 
 ### Versions
 Qupls5 is the most recently worked on version. Qupls5 is the 2026 version of the Thor processor which has evolved over the years.
@@ -15,6 +16,7 @@ Work started on Qupls2 in February of 2025; then Qupls3 started in March.
 Work started on Qupls in November of 2023. Many years of work have gone into prior CPUs.
 
 ### Upcoming Changes
+Support for the PowerISA instruction set is in the works.
 The register file will likely be split into separate files for integer and float operations.
 It is desired to support 128-bit float arithmetic better.
 The author is working out the best way to achieve this.
