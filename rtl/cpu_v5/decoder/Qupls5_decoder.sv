@@ -398,14 +398,15 @@ begin
 	dbo.irq = instr.opcode==Qupls5_pkg::OP_IRQ;
 	dbo.rext = instr.opcode==Qupls5_pkg::OP_REXT;
 	dbo.extop = instr.opcode==Qupls5_pkg::OP_EXTOP;
-	dbo.pfx = instr.opcode==Qupls5_pkg::OP_REXT;
 `ifdef PowerISA
+	dbo.pfx = Qupls5_pkg::OP_PPC_PREFIX;
 	dbo.boi = FALSE;
 	dbo.bsr = instr.opcode==Qupls5_pkg::OP_B && instr.lk && ~instr.aa;
 	dbo.jsr = instr.opcode==Qupls5_pkg::OP_B && instr.lk && instr.aa;
-	dbo.bra = instr.opcode==Qupls5_pkg::OP_B && ~instr.lk &&& ~instr.aa;
+	dbo.bra = instr.opcode==Qupls5_pkg::OP_B && ~instr.lk && ~instr.aa;
 	dbo.jmp = instr.opcode==Qupls5_pkg::OP_B && ~instr.lk && instr.aa;
 `else
+	dbo.pfx = instr.opcode==Qupls5_pkg::OP_REXT || instr.opcode==Qupls5_pkg::OP_EXTOP;
 	dbo.boi = instr.opcode==Qupls5_pkg::OP_BCCU && instr.func==Qupls5_pkg::CND_BOI;
 	dbo.bsr = instr.opcode==Qupls5_pkg::OP_BSR;
 	dbo.jsr = instr.opcode==Qupls5_pkg::OP_JSR;

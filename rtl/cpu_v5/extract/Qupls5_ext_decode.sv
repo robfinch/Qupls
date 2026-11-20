@@ -61,10 +61,10 @@ output Qupls5_pkg::pc_address_ex_t bcc_tgt;
 
 `ifdef PowerISA
 always_comb nop = instr[5:0]==Qupls5_pkg::OP_PPC_ORI && instr[25:0]==26'd0;
-always_comb bsr = instr[5:0]==Qupls5_pkg::OP_BL & ~instr.aa;
-always_comb bra = instr[5:0]==Qupls5_pkg::OP_B & ~instr.aa;
-always_comb jsr = instr[5:0]==Qupls5_pkg::OP_BL && instr.aa;
-always_comb jmp = instr[5:0]==Qupls5_pkg::OP_B && instr.aa;
+always_comb bsr = instr[5:0]==Qupls5_pkg::OP_B && !instr.aa && instr.lk;
+always_comb bra = instr[5:0]==Qupls5_pkg::OP_B && !instr.aa && !instr.lk;
+always_comb jsr = instr[5:0]==Qupls5_pkg::OP_B && instr.aa && instr.lk;
+always_comb jmp = instr[5:0]==Qupls5_pkg::OP_B && instr.aa && !instr.lk;
 `else
 always_comb nop = instr[6:0]==Qupls5_pkg::OP_NOP;
 always_comb bsr = instr[6:0]==Qupls5_pkg::OP_BSR;

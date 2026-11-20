@@ -43,9 +43,9 @@ import const_pkg::*;
 import cpu_types_pkg::*;
 import Qupls5_pkg::*;
 
-module Qupls5_pipeline_mot(rst, clk, en, vcfg_num, vcfg_cat,
+module Qupls5_pipeline_mot(rst, clk, en, en2, vcfg_num, vcfg_cat,
 	stomp_trn, stomp_moq1, stomp_moq2, stomp_mot,
-	cline_ext, cline_mot,
+	cline_ext, cline_mot, uopc_invalidate,
 	pc_mot, branch_resolved, live_stream,
   pg_ext, pg_trn, pg_moq1, pg_moq2, pg_mot, pg_mot1,
   advance_ext, uop_buf, uop_mark, head);
@@ -56,11 +56,13 @@ parameter COMB = 1;	// Use combo logic in the translate stage.
 input rst;
 input clk;
 input en;
+input en2;
 input [63:0] vcfg_num;
 input [63:0] vcfg_cat;
 input branch_resolved;
 input cpu_types_pkg::pc_stream_t live_stream;
 output Qupls5_pkg::pc_address_ex_t pc_mot;
+input uopc_invalidate;
 input stomp_trn;
 input stomp_moq1;
 input stomp_moq2;
@@ -138,23 +140,34 @@ generate begin : gComb
 			foreach(pg_mot.pr[n1])
 				pg_mot.pr[n1] <= nopi;
 		end
-		else if (en) begin
+		else if (en2) begin
 			pg_mot <= pg_moq2;
 			if (stomp_mot)
 				pg_mot.hdr.v <= INV;
 			foreach (pg_mot.pr[n1]) begin
 				pg_mot.pr[n1].op.v <= VAL;
-				pg_mot.pr[n1].op.uop <= uop_buf[n1];
 				if (stomp_mot) begin
 					pg_mot.pr[n1].op.v <= INV;
 					pg_mot.pr[n1].stomped <= TRUE;
 					pg_mot.pr[n1].done <= 2'b11;
 				end
-				if (branch_resolved) begin
-					if (pg_moq2.pr[n1].ip_stream.thread==live_stream.thread && pg_moq2.pr[n1].ip_stream.stream != live_stream.stream) begin
-						pg_mot.pr[n1].op.v <= INV;
-						pg_mot.pr[n1].stomped <= TRUE;
-						pg_mot.pr[n1].done <= 2'b11;
+				// If there are no more micro-ops available, feed NOPs into the pipe.
+				if (rd_more) begin
+`ifdef PowerISA					
+					pg_mot.pr[n1].op.uop.opcode=Qupls5_pkg::OP_PPC_ORI;
+`else
+					pg_mot.pr[n1].op.uop.opcode=Qupls5_pkg::OP_NOP;
+`endif
+					pg_mot.pr[n1].done <= 2'b11;
+				end
+				else begin
+					pg_mot.pr[n1].op.uop <= uop_buf[n1];
+					if (branch_resolved) begin
+						if (pg_moq2.pr[n1].ip_stream.thread==live_stream.thread && pg_moq2.pr[n1].ip_stream.stream != live_stream.stream) begin
+							pg_mot.pr[n1].op.v <= INV;
+							pg_mot.pr[n1].stomped <= TRUE;
+							pg_mot.pr[n1].done <= 2'b11;
+						end
 					end
 				end
 			end
@@ -213,11 +226,32 @@ Qupls5_microop_mem #(
 end
 endgenerate
 
+Qupls5_micro_op_cache #(.MICROOPS_PER_INSTR(MICROOPS_PER_INSTR)) umoq1
+(
+	.rst(rst),
+	.clk(clk),
+	.en(en),
+	.rd_more(rd_more),
+	.uop(uop),
+	.uop_count(uop_count),
+	.stomp_moq1(stomp_moq1),
+	.stomp_moq2(stomp_moq2),
+	.pg_ext(pg_ext),
+	.pg_trn(pg_trn),
+	.pg_moq1(pg_moq1),
+	.pg_moq2(pg_moq2),
+	.live_stream(live_stream),
+	.branch_resolved(branch_resolved),
+	.invalidate(uopc_invalidate)
+);
+
+/*
 Qupls5_micro_op_queue3 #(.MICROOPS_PER_INSTR(MICROOPS_PER_INSTR)) umoq1
 (
 	.rst(rst),
 	.clk(clk),
 	.en(en),
+	.en2(en2),
 	.rd_more(rd_more),
 	.uop(uop),
 	.uop_count(uop_count),
@@ -232,6 +266,7 @@ Qupls5_micro_op_queue3 #(.MICROOPS_PER_INSTR(MICROOPS_PER_INSTR)) umoq1
 	.live_stream(live_stream),
 	.branch_resolved(branch_resolved)
 );
+*/
 
 // rd_more just pulses for a single cycle.
 // We want to hold onto the rd_more signal until the extract stage advances.

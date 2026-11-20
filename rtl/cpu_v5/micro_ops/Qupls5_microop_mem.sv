@@ -771,6 +771,365 @@ begin
 	end
 
 	case(ir.opcode)
+`ifdef PowerISA
+	Qupls5_pkg::OP_PPC_ADDI,Qupls5_pkg::OP_PPC_ADDIS,
+	Qupls5_pkg::OP_PPC_SUBFIC:
+		begin
+			next_count = 5'd3;
+			// First update the XER
+			next_uop[0].v = VAL;
+			next_uop[0].lead = 1'b1;
+			next_uop[0].opcode = uop0.opcode;
+			next_uop[0].bo = 5'd1;			// write CA,SO in XER
+			next_uop[0].imm = uop0.imm;
+			next_uop[0].Rd = 6'd36;			// XER
+			next_uop[0].Rs1 = uop0.Rs1;
+			next_uop[0].Rs2 = 6'd36;		// XER
+			next_uop[0].src[0]=1'b1;
+			next_uop[0].src[1]=1'b1;
+			next_uop[0].src[3]=1'b1;
+			next_uop[0].dst=1'b1;
+			// Perform op
+			next_uop[1].v = VAL;
+			next_uop[1].num = 5'd1;
+			next_uop[1].opcode = uop0.opcode;
+			next_uop[1].imm = uop0.imm;
+			next_uop[1].Rd = uop0.Rd;
+			next_uop[1].Rs1 = uop0.Rs1;
+			next_uop[1].src[0]=1'b1;
+			next_uop[1].src[3]=1'b1;
+			next_uop[1].dst=1'b1;
+			// update cr0
+			next_uop[2].v = VAL;
+			next_uop[2].num = 5'd2;
+			next_uop[2].opcode = Qupls5_pkg::OP_PPC_CMPI;
+			next_uop[2].l = 1'b1;				// 64 bit compare
+			next_uop[2].bo = 5'h0;			// update CR0
+			next_uop[2].imm = 0;
+			next_uop[2].Rd = 6'd32;			// CR
+			next_uop[2].Rs1 = uop0.Rd;
+			next_uop[2].Rs2 = 6'd36;		// XER
+			next_uop[2].src[0]=1'b1;
+			next_uop[2].src[1]=1'b1;
+			next_uop[2].src[3]=1'b1;
+			next_uop[2].dst=1'b1;
+		end
+	Qupls5_pkg::OP_PPC_ANDI,Qupls5_pkg::OP_PPC_ANDIS,
+	Qupls5_pkg::OP_PPC_ORI,Qupls5_pkg::OP_PPC_ORIS,
+	Qupls5_pkg::OP_PPC_XORI,Qupls5_pkg::OP_PPC_XORIS:
+		begin
+			next_count = 5'd2;
+			next_uop[0] = uop0;
+			next_uop[1].v = VAL;
+			next_uop[1].num = 5'd1;
+			next_uop[1].opcode = Qupls5_pkg::OP_PPC_CMPI;
+			next_uop[1].l = 1'b1;				// 64 bit compare
+			next_uop[1].bo = 5'h0;			// update CR0
+			next_uop[1].imm = 0;
+			next_uop[1].Rd = 6'd32;			// CR
+			next_uop[1].Rs1 = uop0.Rd;
+			next_uop[1].Rs2 = 6'd36;		// XER
+			next_uop[1].src[0]=1'b1;
+			next_uop[1].src[1]=1'b1;
+			next_uop[1].src[3]=1'b1;
+			next_uop[1].dst=1'b1;
+		end
+	Qupls5_pkg::OP_B:
+		begin
+			next_count = 5'd1;
+			next_uop[0] = uop0;
+		end
+	Qupls5_pkg::OP_BC:
+		begin
+			if (~ir.bo[2]) begin
+				next_count = 5'd2;
+				next_uop[0].v = VAL;
+				next_uop[0].lead = 1'b1;
+				next_uop[0].opcode = Qupls5_pkg::OP_PPC_ADDI;
+				next_uop[0].imm = -1;
+				next_uop[0].Rd = 6'd34;		//CTR
+				next_uop[0].Rs1 = 6'd34;	//CTR
+				next_uop[0].src[0]=1'b1;
+				next_uop[0].src[3]=1'b1;
+				next_uop[0].dst=1'b1;
+				next_uop[1] = uop1;
+			end
+			else begin
+				next_count = 5'd1;
+				next_uop[0] = uop0;
+			end
+		end
+	Qupls5_pkg::OP_19:
+		case(ir.func)
+		Qupls5_pkg::FN19_BCLR,
+		Qupls5_pkg::FN19_BCCTR,
+		Qupls5_pkg::FN19_BCTAR:
+			begin
+				if (~ir.bo[2]) begin
+					next_count = 5'd2;
+					next_uop[0].v = VAL;
+					next_uop[0].lead = 1'b1;
+					next_uop[0].opcode = Qupls5_pkg::OP_PPC_ADDI;
+					next_uop[0].imm = -1;
+					next_uop[0].Rd = 6'd34;		//CTR
+					next_uop[0].Rs1 = 6'd34;	//CTR
+					next_uop[0].src[0]=1'b1;
+					next_uop[0].src[3]=1'b1;
+					next_uop[0].dst=1'b1;
+					next_uop[1] = uop1;
+				end
+				else begin
+					next_count = 5'd1;
+					next_uop[0] = uop0;
+				end
+			end
+		default:
+			begin
+				next_count = 5'd1;
+				next_uop[0] = uop0;
+				next_uop[0].exc = TRUE;	// unimplmented
+			end
+		endcase
+	Qupls5_pkg::OP_31:
+		case(ir.func)
+		Qupls5_pkg::FN31_ADD,Qupls5_pkg::FN31_ADDO:
+			begin
+				if (ir.rc & ir.func[9])
+					next_count = 5'd3;
+				else if (ir.rc | ir.func[9])
+					next_count = 5'd2;
+				else
+					next_count = 5'd1;
+				if (ir.func[9]) begin
+					next_uop[0].v = VAL;
+					next_uop[0].lead = 1'b1;
+					next_uop[0].opcode = uop0.opcode;
+					next_uop[0].func = uop0.func;
+					next_uop[0].bo = 5'd1;			// write CA,SO in XER
+					next_uop[0].Rd = 6'd36;			// XER
+					next_uop[0].Rs1 = uop0.Rs1;
+					next_uop[0].Rs2 = uop0.Rs2;
+					next_uop[0].Rs3 = 6'd36;		// XER
+					next_uop[0].src[0]=1'b1;
+					next_uop[0].src[1]=1'b1;
+					next_uop[0].src[2]=1'b1;
+					next_uop[0].src[3]=1'b1;
+					next_uop[0].dst=1'b1;
+					// Perform op
+					next_uop[1].v = VAL;
+					next_uop[1].num = 5'd1;
+					next_uop[1].opcode = uop0.opcode;
+					next_uop[1].func = uop0.func;
+					next_uop[1].imm = uop0.imm;
+					next_uop[1].Rd = uop0.Rd;
+					next_uop[1].Rs1 = uop0.Rs1;
+					next_uop[1].Rs2 = uop0.Rs2;
+					next_uop[1].src[0]=1'b1;
+					next_uop[1].src[1]=1'b1;
+					next_uop[1].src[3]=1'b1;
+					next_uop[1].dst=1'b1;
+					if (ir.rc) begin
+						// update cr0
+						next_uop[2].v = VAL;
+						next_uop[2].num = 5'd2;
+						next_uop[2].opcode = Qupls5_pkg::OP_PPC_CMPI;
+						next_uop[2].l = 1'b1;				// 64 bit compare
+						next_uop[2].bo = 5'h0;			// update CR0
+						next_uop[2].Rd = 6'd32;			// CR
+						next_uop[2].Rs1 = uop0.Rd;
+						next_uop[2].Rs2 = 6'd36;		// XER
+						next_uop[2].src[0]=1'b1;
+						next_uop[2].src[1]=1'b1;
+						next_uop[2].src[3]=1'b1;
+						next_uop[2].dst=1'b1;
+					end
+				end
+				else begin
+					// Perform op
+					next_uop[0].v = VAL;
+					next_uop[0].lead = 5'd1;
+					next_uop[0].opcode = uop0.opcode;
+					next_uop[0].func = uop0.func;
+					next_uop[0].imm = uop0.imm;
+					next_uop[0].Rd = uop0.Rd;
+					next_uop[0].Rs1 = uop0.Rs1;
+					next_uop[0].Rs2 = uop0.Rs2;
+					next_uop[0].src[0]=1'b1;
+					next_uop[0].src[1]=1'b1;
+					next_uop[0].src[3]=1'b1;
+					next_uop[0].dst=1'b1;
+					if (ir.rc) begin
+						// update cr0
+						next_uop[1].v = VAL;
+						next_uop[1].num = 5'd1;
+						next_uop[1].opcode = Qupls5_pkg::OP_PPC_CMPI;
+						next_uop[1].l = 1'b1;				// 64 bit compare
+						next_uop[1].bo = 5'h0;			// update CR0
+						next_uop[1].Rd = 6'd32;			// CR
+						next_uop[1].Rs1 = uop0.Rs1;
+						next_uop[1].Rs2 = 6'd36;		// XER for SO
+						next_uop[1].src[0]=1'b1;
+						next_uop[1].src[1]=1'b1;
+						next_uop[1].src[3]=1'b1;
+						next_uop[1].dst=1'b1;
+					end
+				end
+			end
+		Qupls5_pkg::FN31_NEG,Qupls5_pkg::FN31_NEGO:
+			begin
+				if (ir.rc & ir.func[9])
+					next_count = 5'd3;
+				else if (ir.rc | ir.func[9])
+					next_count = 5'd2;
+				else
+					next_count = 5'd1;
+				if (ir.func[9]) begin
+					next_uop[0].v = VAL;
+					next_uop[0].lead = 1'b1;
+					next_uop[0].opcode = uop0.opcode;
+					next_uop[0].func = uop0.func;
+					next_uop[0].bo = 5'd1;			// write CA,SO in XER
+					next_uop[0].Rd = 6'd36;			// XER
+					next_uop[0].Rs1 = uop0.Rs1;
+					next_uop[0].Rs2 = 6'd36;
+					next_uop[0].src[0]=1'b1;
+					next_uop[0].src[1]=1'b1;
+					next_uop[0].src[3]=1'b1;
+					next_uop[0].dst=1'b1;
+					// Perform op
+					next_uop[1].v = VAL;
+					next_uop[1].num = 5'd1;
+					next_uop[1].opcode = uop0.opcode;
+					next_uop[1].func = uop0.func;
+					next_uop[1].imm = uop0.imm;
+					next_uop[1].Rd = uop0.Rd;
+					next_uop[1].Rs1 = uop0.Rs1;
+					next_uop[1].Rs2 = 6'd36;
+					next_uop[1].src[0]=1'b1;
+					next_uop[1].src[1]=1'b1;
+					next_uop[1].src[3]=1'b1;
+					next_uop[1].dst=1'b1;
+					if (ir.rc) begin
+						// update cr0
+						next_uop[2].v = VAL;
+						next_uop[2].num = 5'd2;
+						next_uop[2].opcode = Qupls5_pkg::OP_PPC_CMPI;
+						next_uop[2].l = 1'b1;				// 64 bit compare
+						next_uop[2].bo = 5'h0;			// update CR0
+						next_uop[2].Rd = 6'd32;			// CR
+						next_uop[2].Rs1 = uop0.Rd;
+						next_uop[2].Rs2 = 6'd36;		// XER
+						next_uop[2].src[0]=1'b1;
+						next_uop[2].src[1]=1'b1;
+						next_uop[2].src[3]=1'b1;
+						next_uop[2].dst=1'b1;
+					end
+				end
+				else begin
+					// Perform op
+					next_uop[0].v = VAL;
+					next_uop[0].lead = 5'd1;
+					next_uop[0].opcode = uop0.opcode;
+					next_uop[0].func = uop0.func;
+					next_uop[0].imm = uop0.imm;
+					next_uop[0].Rd = uop0.Rd;
+					next_uop[0].Rs1 = uop0.Rs1;
+					next_uop[0].Rs2 = 6'd36;
+					next_uop[0].src[0]=1'b1;
+					next_uop[0].src[1]=1'b1;
+					next_uop[0].src[3]=1'b1;
+					next_uop[0].dst=1'b1;
+					if (ir.rc) begin
+						// update cr0
+						next_uop[1].v = VAL;
+						next_uop[1].num = 5'd1;
+						next_uop[1].opcode = Qupls5_pkg::OP_PPC_CMPI;
+						next_uop[1].l = 1'b1;				// 64 bit compare
+						next_uop[1].bo = 5'h0;			// update CR0
+						next_uop[1].Rd = 6'd32;			// CR
+						next_uop[1].Rs1 = uop0.Rs1;
+						next_uop[1].Rs2 = 6'd36;		// XER for SO
+						next_uop[1].src[0]=1'b1;
+						next_uop[1].src[1]=1'b1;
+						next_uop[1].src[3]=1'b1;
+						next_uop[1].dst=1'b1;
+					end
+				end
+			end
+		Qupls5_pkg::FN31_LBZX,
+		Qupls5_pkg::FN31_LHZX,
+		Qupls5_pkg::FN31_LHAX,
+		Qupls5_pkg::FN31_LWZX,
+		Qupls5_pkg::FN31_STBX,
+		Qupls5_pkg::FN31_STHX,
+		Qupls5_pkg::FN31_STWX:
+			begin
+				next_count = 5'd1;
+				next_uop[0] = uop0;
+			end
+		Qupls5_pkg::FN31_LBZUX,
+		Qupls5_pkg::FN31_LHZUX,
+		Qupls5_pkg::FN31_LHAUX,
+		Qupls5_pkg::FN31_LWZUX,
+		Qupls5_pkg::FN31_STBUX,
+		Qupls5_pkg::FN31_STHUX,
+		Qupls5_pkg::FN31_STWUX:
+			begin
+				next_count = 5'd2;
+				next_uop[0] = uop0;
+				next_uop[1].v = VAL;
+				next_uop[1].num = 5'd1;
+				next_uop[1].opcode = Qupls5_pkg::OP_31;
+				next_uop[1].func = Qupls5_pkg::FN31_ADD;
+				next_uop[1].Rd = uop0.Rs1;
+				next_uop[1].Rs1 = uop0.Rs1;
+				next_uop[1].Rs2 = uop0.Rs2;
+			end
+		default:
+			begin
+				next_count = 5'd1;
+				next_uop[0] = uop0;
+				next_uop[0].exc = TRUE;
+			end
+		endcase
+	Qupls5_pkg::OP_PPC_LBZ,
+	Qupls5_pkg::OP_PPC_LHZ,
+	Qupls5_pkg::OP_PPC_LHA,
+	Qupls5_pkg::OP_PPC_LWZ,
+	Qupls5_pkg::OP_PPC_LWA,
+	Qupls5_pkg::OP_PPC_LQ,
+	Qupls5_pkg::OP_PPC_STB,
+	Qupls5_pkg::OP_PPC_STH,
+	Qupls5_pkg::OP_PPC_STW,
+	Qupls5_pkg::OP_PPC_STQ:
+		begin
+			next_count = 5'd1;
+			next_uop[0] = uop0;
+		end
+	Qupls5_pkg::OP_PPC_LBZU,
+	Qupls5_pkg::OP_PPC_LHZU,
+	Qupls5_pkg::OP_PPC_LHAU,
+	Qupls5_pkg::OP_PPC_LWZU,
+	Qupls5_pkg::OP_PPC_STBU,
+	Qupls5_pkg::OP_PPC_STHU,
+	Qupls5_pkg::OP_PPC_STWU:
+		begin
+			next_count = 5'd2;
+			next_uop[0] = uop0;
+			next_uop[1].v = VAL;
+			next_uop[1].num = 5'd1;
+			next_uop[1].opcode = Qupls5_pkg::OP_ADDI;
+			next_uop[1].Rd = uop0.Rs1;
+			next_uop[1].Rs1 = uop0.Rs1;
+			next_uop[1].imm = uop0.imm;
+		end
+	default:
+		begin
+			next_count = 5'd1;
+			next_uop[0] = uop0;
+			next_uop[0].exc = TRUE;	// unimplmented
+		end
+`else
 	Qupls5_pkg::OP_BRK:
 		begin
 			next_uop[0] = ir;
@@ -1148,171 +1507,6 @@ begin
 			endcase
 		end
 	*/
-`ifdef PowerISA
-	Qupls5_pkg::OP_PPC_ADDI,Qupls5_pkg::OP_PPC_ADDIS,
-	Qupls5_pkg::OP_PPC_SUBFIC:
-		begin
-			next_count = 5'd3;
-			// First update the XER
-			next_uop[0].lead = 1'b1;
-			next_uop[0].opcode = uop0.opcode;
-			next_uop[0].bo = 5'd1;			// write CA,SO in XER
-			next_uop[0].imm = uop0.imm;
-			next_uop[0].Rd = 6'd36;			// XER
-			next_uop[0].Rs1 = uop0.Rs1;
-			next_uop[0].Rs2 = 6'd36;		// XER
-			next_uop[0].src[0]=1'b1;
-			next_uop[0].src[1]=1'b1;
-			next_uop[0].src[3]=1'b1;
-			next_uop[0].dst=1'b1;
-			// Perform op
-			next_uop[1].num = 5'd1;
-			next_uop[1].opcode = uop0.opcode;
-			next_uop[1].imm = uop0.imm;
-			next_uop[1].Rd = uop0.Rd;
-			next_uop[1].Rs1 = uop0.Rs1;
-			next_uop[1].src[0]=1'b1;
-			next_uop[1].src[3]=1'b1;
-			next_uop[1].dst=1'b1;
-			// update cr0
-			next_uop[2].num = 5'd2;
-			next_uop[2].opcode = Qupls5_pkg::OP_PCC_CMPI;
-			next_uop[2].l = 1'b1;				// 64 bit compare
-			next_uop[2].bo = 5'h0;			// update CR0
-			next_uop[2].imm = 0;
-			next_uop[2].Rd = 6'd32;			// CR
-			next_uop[2].Rs1 = uop0.Rd;
-			next_uop[2].Rs2 = 6'd36;		// XER
-			next_uop[2].src[0]=1'b1;
-			next_uop[2].src[1]=1'b1;
-			next_uop[2].src[3]=1'b1;
-			next_uop[2].dst=1'b1;
-		end
-	Qupls5_pkg::OP_PPC_ANDI,Qupls5_pkg::OP_PPC_ANDIS,
-	Qupls5_pkg::OP_PPC_ORI,Qupls5_pkg::OP_PPC_ORIS,
-	Qupls5_pkg::OP_PPC_XORI,Qupls5_pkg::OP_PPC_XORIS:
-		begin
-			next_count = 5'd2;
-			next_uop[0] = uop0;
-			next_uop[1].num = 5'd1;
-			next_uop[1].opcode = Qupls5_pkg::OP_PCC_CMPI;
-			next_uop[1].l = 1'b1;				// 64 bit compare
-			next_uop[1].bo = 5'h0;			// update CR0
-			next_uop[1].imm = 0;
-			next_uop[1].Rd = 6'd32;			// CR
-			next_uop[1].Rs1 = uop0.Rd;
-			next_uop[1].Rs2 = 6'd36;		// XER
-			next_uop[1].src[0]=1'b1;
-			next_uop[1].src[1]=1'b1;
-			next_uop[1].src[3]=1'b1;
-			next_uop[1].dst=1'b1;
-		end
-	Qupls5_pkg::OP_BC:
-		begin
-			if (~ir.bo[2]) begin
-				next_count = 5'd2;
-				next_uop[0].lead = 1'b1;
-				next_uop[0].opcode = Qupls5_pkg::OP_PPC_ADDI:
-				next_uop[0].imm = -1;
-				next_uop[0].Rd = 6'd34;		//CTR
-				next_uop[0].Rs1 = 6'd34;	//CTR
-				next_uop[0].src[0]=1'b1;
-				next_uop[0].src[3]=1'b1;
-				next_uop[0].dst=1'b1;
-				next_uop[1] = uop1;
-			end
-			else begin
-				next_count = 5'd1;
-				next_uop[0] = uop0;
-			end
-		end
-	Qupls5_pkg::OP_31:
-		case(ir.func)
-		Qupls5_pkg::FN31_ADD,Qupls5_pkg::FN31_ADDO:
-			begin
-				if (ir.rc & ir.func[9])
-					next_count = 5'd3;
-				else if (ir.rc | ir.func[9])
-					next_count = 5'd2;
-				else
-					next_count = 5'd1;
-				if (ir.func[9]) begin
-					next_uop[0].lead = 1'b1;
-					next_uop[0].opcode = uop0.opcode;
-					next_uop[0].func = uop0.func;
-					next_uop[0].bo = 5'd1;			// write CA,SO in XER
-					next_uop[0].Rd = 6'd36;			// XER
-					next_uop[0].Rs1 = uop0.Rs1;
-					next_uop[0].Rs2 = uop0.Rs2;
-					next_uop[0].Rs3 = 6'd36;		// XER
-					next_uop[0].src[0]=1'b1;
-					next_uop[0].src[1]=1'b1;
-					next_uop[0].src[2]=1'b1;
-					next_uop[0].src[3]=1'b1;
-					next_uop[0].dst=1'b1;
-					// Perform op
-					next_uop[1].num = 5'd1;
-					next_uop[1].opcode = uop0.opcode;
-					next_uop[1].func = uop0.func;
-					next_uop[1].imm = uop0.imm;
-					next_uop[1].Rd = uop0.Rd;
-					next_uop[1].Rs1 = uop0.Rs1;
-					next_uop[1].Rs2 = uop0.Rs2;
-					next_uop[1].src[0]=1'b1;
-					next_uop[1].src[1]=1'b1;
-					next_uop[1].src[3]=1'b1;
-					next_uop[1].dst=1'b1;
-					if (ir.rc) begin
-						// update cr0
-						next_uop[2].num = 5'd2;
-						next_uop[2].opcode = Qupls5_pkg::OP_PCC_CMPI;
-						next_uop[2].l = 1'b1;				// 64 bit compare
-						next_uop[2].bo = 5'h0;			// update CR0
-						next_uop[2].Rd = 6'd32;			// CR
-						next_uop[2].Rs1 = uop0.Rd;
-						next_uop[2].Rs2 = 6'd36;		// XER
-						next_uop[2].src[0]=1'b1;
-						next_uop[2].src[1]=1'b1;
-						next_uop[2].src[3]=1'b1;
-						next_uop[2].dst=1'b1;
-					end
-				end
-				else begin
-					// Perform op
-					next_uop[0].lead = 5'd1;
-					next_uop[0].opcode = uop0.opcode;
-					next_uop[0].func = uop0.func;
-					next_uop[0].imm = uop0.imm;
-					next_uop[0].Rd = uop0.Rd;
-					next_uop[0].Rs1 = uop0.Rs1;
-					next_uop[0].Rs2 = uop0.Rs2;
-					next_uop[0].src[0]=1'b1;
-					next_uop[0].src[1]=1'b1;
-					next_uop[0].src[3]=1'b1;
-					next_uop[0].dst=1'b1;
-					if (ir.rc) begin
-						// update cr0
-						next_uop[1].num = 5'd1;
-						next_uop[1].opcode = Qupls5_pkg::OP_PCC_CMPI;
-						next_uop[1].l = 1'b1;				// 64 bit compare
-						next_uop[1].bo = 5'h0;			// update CR0
-						next_uop[1].Rd = 6'd32;			// CR
-						next_uop[1].Rs1 = uop0.Rs1;
-						next_uop[1].Rs2 = 6'd36;		// XER for SO
-						next_uop[1].src[0]=1'b1;
-						next_uop[1].src[1]=1'b1;
-						next_uop[1].src[3]=1'b1;
-						next_uop[1].dst=1'b1;
-					end
-				end
-			end
-		default:
-			begin
-				next_count = 5'd1;
-				next_uop[0] = uop0;
-			end
-		endcase
-`endif
 	Qupls5_pkg::OP_ADDI,
 	Qupls5_pkg::OP_SUBFI,
 	Qupls5_pkg::OP_CMPI,
@@ -1501,9 +1695,11 @@ begin
 			end
 		end
 	endcase
+`endif	
 	foreach (next_uop[nn]) begin
 		if (nn >= next_count)
-			next_uop[nn].v = 1'b0;
+			next_uop[nn].v = INV;
+			next_uop[nn].opcode = fnNop();
 	end	
 end
 

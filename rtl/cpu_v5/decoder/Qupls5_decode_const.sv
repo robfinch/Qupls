@@ -140,6 +140,20 @@ begin
 	finsC = 1'd0;
 
 	case(ins.opcode)
+`ifdef PowerISA
+	Qupls5_pkg::OP_PPC_ADDI,Qupls5_pkg::OP_PPC_ANDI,Qupls5_pkg::OP_PPC_ORI,Qupls5_pkg::OP_PPC_XORI,
+	Qupls5_pkg::OP_PPC_SUBFIC,Qupls5_pkg::OP_PPC_CMPI,Qupls5_pkg::OP_PPC_CMPLI,
+	Qupls5_pkg::OP_PPC_ADDIS,Qupls5_pkg::OP_PPC_ANDIS,Qupls5_pkg::OP_PPC_ORIS,Qupls5_pkg::OP_PPC_XORIS:
+		begin
+			if (ins.R) begin
+				imma = ip;
+				has_imma = TRUE;
+			end
+			immb = {{30{ins.imm[33]}},ins.imm[33:0]};
+			has_immb = TRUE;
+		end
+	default:	;
+`else
 	Qupls5_pkg::OP_R3B,Qupls5_pkg::OP_R3W,Qupls5_pkg::OP_R3T,Qupls5_pkg::OP_R3O,
 	Qupls5_pkg::OP_VR3B,Qupls5_pkg::OP_VR3W,Qupls5_pkg::OP_VR3T,Qupls5_pkg::OP_VR3O,
 	Qupls5_pkg::OP_VSR3B,Qupls5_pkg::OP_VSR3W,Qupls5_pkg::OP_VSR3T,Qupls5_pkg::OP_VSR3O,
@@ -647,6 +661,7 @@ begin
 		end
 	default:
 		immb = 64'd0;
+`endif
 	endcase
 
 	// Limit of six postfixes

@@ -64,7 +64,7 @@ always_comb
 begin
 	nopi = {$bits(Qupls5_pkg::rob_entry_t){1'b0}};
 	nopi.op.exc = Qupls5_pkg::FLT_NONE;
-	nopi.op.uop = {41'd0,Qupls5_pkg::OP_NOP};
+	nopi.op.uop.opcode = fnNop();
 	nopi.op.decbus.nop = TRUE;
 	nopi.op.decbus.cause = Qupls5_pkg::FLT_NONE;
 	nopi.op.uop.lead = 1'd1;
@@ -98,7 +98,7 @@ if (rst) begin
 		pr[n1] = {$bits(Qupls5_pkg::rob_entry_t){1'b0}};
 		pr[n1].op = {$bits(Qupls5_pkg::pipeline_reg_t){1'b0}};
 		pr[n1].op.exc = Qupls5_pkg::FLT_NONE;
-		pr[n1].op.uop.opcode = Qupls5_pkg::OP_NOP;
+		pr[n1].op.uop.opcode = fnNop();
 		pr[n1].op.decbus.nop = TRUE;
 		pr[n1].op.decbus.cause = Qupls5_pkg::FLT_NONE;
 		pr[n1].op.uop.lead = 1'd1;
@@ -143,7 +143,7 @@ else begin
 			pr[n1] = {$bits(Qupls5_pkg::rob_entry_t){1'b0}};
 			pr[n1].op = {$bits(Qupls5_pkg::pipeline_reg_t){1'b0}};
 			pr[n1].op.exc = Qupls5_pkg::FLT_NONE;
-			pr[n1].op.uop.opcode = Qupls5_pkg::OP_NOP;
+			pr[n1].op.uop.opcode = fnNop();
 			pr[n1].op.decbus.nop = TRUE;
 			pr[n1].op.decbus.cause = Qupls5_pkg::FLT_NONE;
 			pr[n1].op.uop.lead = 1'd1;
@@ -156,14 +156,16 @@ else begin
 			pr[n1].ip_stream = pc[n1].stream.stream;
 		end
 		// Allow only one instruction through when single stepping.
+		// ToDo: fix single stepping to allow prefixes.
 		if (ssm_flag & ~prev_ssm_flag) begin
 			pr[0].op.cli = pc[0].cap.offset[6:0];
-			pr[0].op.uop = Qupls5_pkg::fnMapRawToUop(32'(ic_line >> (pr[0].op.cli<<3)));
+			pr[0].ip_offs = 8'd0;
+			pr[0].op.uop = Qupls5_pkg::fnMapRawToUop(32'(ic_line >> ({4'd0,pr[0].ip_offs}<<3'd3)));
 			for (n1 = 1; n1 < MWIDTH; n1 = n1 + 1) begin
 				pr[n1] = {$bits(Qupls5_pkg::rob_entry_t){1'b0}};
 				pr[n1].op = {$bits(Qupls5_pkg::pipeline_reg_t){1'b0}};
 				pr[n1].op.exc = Qupls5_pkg::FLT_NONE;
-				pr[n1].op.uop = {41'd0,Qupls5_pkg::OP_NOP};
+				pr[n1].op.uop.opcode = fnNop();
 				pr[n1].op.decbus.nop = TRUE;
 				pr[n1].op.decbus.cause = Qupls5_pkg::FLT_NONE;
 				pr[n1].op.uop.lead = 1'd1;
@@ -183,7 +185,7 @@ else begin
 				pr[n1].op = {$bits(Qupls5_pkg::pipeline_reg_t){1'b0}};
 				pr[n1].v = VAL;
 				pr[n1].op.exc = Qupls5_pkg::FLT_NONE;
-				pr[n1].op.uop = {41'd0,Qupls5_pkg::OP_NOP};
+				pr[n1].op.uop.opcode = fnNop();
 				pr[n1].op.decbus.nop = TRUE;
 				pr[n1].op.decbus.cause = Qupls5_pkg::FLT_NONE;
 				pr[n1].op.uop.lead = 1'd1;
@@ -210,71 +212,17 @@ else begin
 				pr[n1].done = 2'b00;
 				pr[n1].stomped = FALSE;
 			end
-			if (prev_xop.prefix && prev_xop_v) begin
-					case(prev_xop.opcode)
-					Qupls5_pkg::OP_EXTOP:
-					begin
-						pr[0].op.uop.Rs3 = prev_xop.Rs3;
-						pr[0].op.uop.Rs4 = prev_xop.Rs4;
-						pr[0].op.uop.vlen = prev_xop.vlen;
-						pr[0].op.uop.vn[3:2] = prev_xop.vn[3:2];
-						pr[0].op.uop.sc = prev_xop.sc;
-						pr[0].op.uop.op3 = prev_xop.op3;
-						pr[0].op.uop.ms[3:2] = prev_xop.ms[3:2];
-						pr[0].op.uop.src[2] = prev_xop.src[2];
-						pr[0].op.uop.src[4] = prev_xop.src[4];
-					end
-					Qupls5_pkg::OP_NDX:
-					begin
-						pr[0].op.uop.Rs2 = prev_xop.Rs2;
-						pr[0].op.uop.Rs3 = prev_xop.Rs3;
-						pr[0].op.uop.vlen = prev_xop.vlen;
-						pr[0].op.uop.vn[2:1] = prev_xop.vn[2:1];
-						pr[0].op.uop.sc = prev_xop.sc;
-						pr[0].op.uop.op3 = prev_xop.op3;
-						pr[0].op.uop.ms[2:1] = prev_xop.ms[2:1];
-						pr[0].op.uop.src[1] = prev_xop.src[1];
-						pr[0].op.uop.src[2] = prev_xop.src[2];
-					end
-					default:	;
-					endcase
-			end
+			if (prev_xop.prefix && prev_xop_v)
+				tPrefix(prev_xop,0);
 			// Fuse an XOP prefix into the next instruction.
 			foreach(pr[n1]) begin
 				if (n1 < MWIDTH-1 && pr[n1].op.uop.prefix) begin
-					case(pr[n1].op.uop.opcode)
-					Qupls5_pkg::OP_EXTOP:
-					begin
-						pr[n1+1].op.uop.Rs3 = pr[n1].op.uop.Rs3;
-						pr[n1+1].op.uop.Rs4 = pr[n1].op.uop.Rs4;
-						pr[n1+1].op.uop.vlen = pr[n1].op.uop.vlen;
-						pr[n1+1].op.uop.vn[3:2] = pr[n1].op.uop.vn[3:2];
-						pr[n1+1].op.uop.sc = pr[n1].op.uop.sc;
-						pr[n1+1].op.uop.op3 = pr[n1].op.uop.op3;
-						pr[n1+1].op.uop.ms[3:2] = pr[n1].op.uop.ms[3:2];
-						pr[n1+1].op.uop.src[2] = pr[n1].op.uop.src[2];
-						pr[n1+1].op.uop.src[4] = pr[n1].op.uop.src[4];
-						pr[n1].done = 2'b11;
-					end
-					Qupls5_pkg::OP_NDX:
-					begin
-						pr[n1+1].op.uop.Rs2 = pr[n1].op.uop.Rs2;
-						pr[n1+1].op.uop.Rs3 = pr[n1].op.uop.Rs3;
-						pr[n1+1].op.uop.vlen = pr[n1].op.uop.vlen;
-						pr[n1+1].op.uop.vn[2:1] = pr[n1].op.uop.vn[2:1];
-						pr[n1+1].op.uop.sc = pr[n1].op.uop.sc;
-						pr[n1+1].op.uop.op3 = pr[n1].op.uop.op3;
-						pr[n1+1].op.uop.ms[2:1] = pr[n1].op.uop.ms[2:1];
-						pr[n1+1].op.uop.src[1] = pr[n1].op.uop.src[1];
-						pr[n1+1].op.uop.src[3] = pr[n1].op.uop.src[2];
-						pr[n1].done = 2'b11;
-					end
-					default:	;
-					endcase
+					tPrefix(pr[n1].op.uop,n1+1);
+					pr[n1].done = 2'b11;
 				end
 				// Prefix was last in bundle. Cannot fuse into next, but it will be
 				// fetched for the next bundle. So, just mark done in this bundle.
-				else if (pr[n1].op.uop.opcode==Qupls5_pkg::OP_EXTOP) begin
+				else if (pr[n1].op.uop.prefix) begin
 					pr[n1].done = 2'b11;
 				end
 			end
@@ -320,5 +268,47 @@ end
 else begin
 	lpr <= pr;
 end
+
+task tPrefix;
+input Qupls5_pkg::micro_op_t prefix;
+input integer ndx;
+begin
+	case(prefix.opcode)
+`ifdef PowerISA
+	Qupls5_pkg::OP_PPC_PREFIX:
+		begin
+			pr[ndx].op.uop.R = prefix.R;
+			pr[ndx].op.uop.imm[33:16] = prefix.imm;
+		end
+`else
+	Qupls5_pkg::OP_EXTOP:
+	begin
+		pr[ndx].op.uop.Rs3 = prefix.Rs3;
+		pr[ndx].op.uop.Rs4 = prefix.Rs4;
+		pr[ndx].op.uop.vlen = prefix.vlen;
+		pr[ndx].op.uop.vn[3:2] = prefix.vn[3:2];
+		pr[ndx].op.uop.sc = prefix.sc;
+		pr[ndx].op.uop.op3 = prefix.op3;
+		pr[ndx].op.uop.ms[3:2] = prefix.ms[3:2];
+		pr[ndx].op.uop.src[2] = prefix.src[2];
+		pr[ndx].op.uop.src[4] = prefix.src[4];
+	end
+	Qupls5_pkg::OP_NDX:
+	begin
+		pr[ndx].op.uop.Rs2 = prefix.Rs2;
+		pr[ndx].op.uop.Rs3 = prefix.Rs3;
+		pr[ndx].op.uop.vlen = prefix.vlen;
+		pr[ndx].op.uop.vn[2:1] = prefix.vn[2:1];
+		pr[ndx].op.uop.sc = prefix.sc;
+		pr[ndx].op.uop.op3 = prefix.op3;
+		pr[ndx].op.uop.ms[2:1] = prefix.ms[2:1];
+		pr[ndx].op.uop.src[1] = prefix.src[1];
+		pr[ndx].op.uop.src[2] = prefix.src[2];
+	end
+`endif	
+	default:	;
+	endcase
+end
+endtask
 
 endmodule

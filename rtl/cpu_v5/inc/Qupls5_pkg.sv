@@ -54,4 +54,24 @@ parameter SIM = 1'b1;
 `include "Qupls5_pkg_qp5.sv"
 `endif
 
+function [6:0] fnNop;
+begin
+`ifdef PowerISA
+		fnNop = Qupls5_pkg::OP_PPC_ORI;
+`else		    
+		fnNop = Qupls5_pkg::OP_NOP;
+`endif
+end
+endfunction
+
+function [31:0] fnNopInsn;
+begin
+`ifdef PowerISA
+		fnNopInsn = {Qupls5_pkg::OP_PPC_ORI,26'd0};
+`else		    
+		fnNopInsn = {25'd0,Qupls5_pkg::OP_NOP};
+`endif
+end
+endfunction
+
 endpackage

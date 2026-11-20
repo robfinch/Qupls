@@ -121,7 +121,7 @@ begin
 `ifdef PowerISA
 	Qupls5_pkg::OP_31:
 		case(ir.func)
-		Qupls5_pkg::FN_MTSPR:
+		Qupls5_pkg::FN31_MTSPR:
 			case(ir.spr)
 			10'd8:	fnRd = 6'd33;		// LR
 			10'd9:	fnRd = 6'd34;		// CTR
@@ -179,7 +179,7 @@ begin
 `ifdef PowerISA
 	Qupls5_pkg::OP_31:
 		case(ir.func)
-		Qupls5_pkg::FN_MTSPR:
+		Qupls5_pkg::FN31_MTSPR:
 			case(ir.spr)
 			10'd8:	fnRdv = VAL;		// LR
 			10'd9:	fnRdv = VAL;		// CTR

@@ -259,7 +259,7 @@ else begin
 		stomp_moq1r <= stomp_ext;	// tran is combo logic
 
 	if (advance_mot|pe_stomp_pipeline)
-		stomp_moq2r <= stomp_moq1;
+		stomp_moq2r <= stomp_ext;
 
 	if (advance_mot|pe_stomp_pipeline)
 		stomp_motr <= stomp_moq2;

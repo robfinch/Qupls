@@ -202,9 +202,12 @@ begin
 end
 
 always_comb regcnt = regcnt_i;
-
+reg [63:0] adr;
 always_comb 
-	ic_line_aligned = {{64{1'd1,Qupls5_pkg::OP_NOP}},cline_fet} >> {pc0_fet.cap.offset[5:2],5'd0};
+begin
+	adr = fnUcGetAddress(pc0_fet.cap);
+	ic_line_aligned = {{16{fnNopInsn()}},cline_fet} >> {adr[5:2],5'd0};
+end
 
 Qupls5_pkg::pc_address_ex_t prev_pc0_fet;
 always_ff @(posedge clk_i)

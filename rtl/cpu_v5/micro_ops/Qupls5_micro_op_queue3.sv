@@ -39,7 +39,7 @@
 import const_pkg::*;
 import Qupls5_pkg::*;
 
-module Qupls5_micro_op_queue3(rst, clk, en, rd_more, uop, uop_count,
+module Qupls5_micro_op_queue3(rst, clk, en, en2, rd_more, uop, uop_count,
 	uop_buf, uop_mark, head, stomp_moq1, stomp_moq2, pg_trn, pg_moq1, pg_moq2,
 	branch_resolved, live_stream);
 parameter MWIDTH = Qupls5_pkg::MWIDTH;
@@ -48,6 +48,7 @@ parameter MICROOPS_PER_INSTR = Qupls5_pkg::MICROOPS_PER_INSTR;
 input rst;
 input clk;
 input en;
+input en2;
 output reg rd_more;
 input Qupls5_pkg::micro_op_t [MICROOPS_PER_INSTR-1:0] uop [MWIDTH-1:0];
 input [5:0] uop_count [0:MWIDTH-1];
@@ -62,7 +63,7 @@ output Qupls5_pkg::pipeline_group_reg_t pg_moq2;
 input branch_resolved;
 input pc_stream_t live_stream;
 
-integer kk,n2,n3,n4,n5,n11,n12,n13;
+integer rd_ndx,n2,n3,n4,n5,n11,n12,n13;
 integer ul;		// use upper or lower half of buf4
 integer rul;
 reg [3:0] tail;
@@ -75,6 +76,7 @@ reg [2:0] uop_mark2 [0:MICROOPS_PER_INSTR*MWIDTH*2-1];
 reg [2:0] uop_mark3 [0:MICROOPS_PER_INSTR*MWIDTH*2-1];
 reg [6:0] ndx0,ndx1,ndx2,ndx3;
 reg [5:0] room;
+reg next_rd_more;
 Qupls5_pkg::rob_entry_t nopi;
 
 always_comb
@@ -188,13 +190,13 @@ always_ff @(posedge clk)
 
 always_ff @(posedge clk)
 if (rst)
-	kk <= 0;
+	rd_ndx <= 0;
 else begin
-	if (en) begin
-		if (kk+4 < uop_count3)
-			kk <= kk + 4;
+	if (en2) begin
+		if (rd_ndx+4 < uop_count3)
+			rd_ndx <= rd_ndx + 4;
 		else
-			kk <= 0;
+			rd_ndx <= 0;
 	end
 end
 
@@ -204,8 +206,8 @@ if (rst) begin
 	rul <= MICROOPS_PER_INSTR*MWIDTH;
 end
 else begin
-	if (en) begin
-		if (kk+4 >= uop_count3) begin
+	if (en2) begin
+		if (rd_ndx+4 >= uop_count3) begin
 			ul <= ul > 0 ? 0 : MICROOPS_PER_INSTR*MWIDTH;
 			rul <= ul > 0 ? MICROOPS_PER_INSTR*MWIDTH : 0;
 		end
@@ -236,11 +238,11 @@ if (rst) begin
 	tail <= 0;
 end
 else begin
-	if (en) begin
-		ndx0 <= uop_ndx2[kk+rul+0];
-		ndx1 <= uop_ndx2[kk+rul+1];
-		ndx2 <= uop_ndx2[kk+rul+2];
-		ndx3 <= uop_ndx2[kk+rul+3];
+	if (en2) begin
+		ndx0 <= uop_ndx2[rd_ndx+rul+0];
+		ndx1 <= uop_ndx2[rd_ndx+rul+1];
+		ndx2 <= uop_ndx2[rd_ndx+rul+2];
+		ndx3 <= uop_ndx2[rd_ndx+rul+3];
 		foreach(uop_buf2[n13]) begin
 			uop_buf3[n13+rul] <= uop_buf2[n13];
 			uop_mark3[n13+rul] <= uop_mark2[n13];
@@ -304,13 +306,16 @@ else if (en) begin
 	end
 end
 
+always_comb
+	next_rd_more = rd_ndx+4 >= uop_count3;
+
 always_ff @(posedge clk)
 if (rst)
 	rd_more <= TRUE;
 else begin
 	rd_more <= FALSE;
-	if (en) begin
-		if (kk+4 >= uop_count3)
+	if (en2) begin
+		if (next_rd_more)
 			rd_more <= TRUE;
 	end
 end

@@ -187,7 +187,7 @@ reg hirq;
 Qupls5_pkg::pc_address_ex_t ret_pc;
 Qupls5_pkg::pc_address_ex_t misspc;
 reg restore_en = 1'b1;
-Qupls5_pkg::pc_address_ex_t pc_fet;
+Qupls5_pkg::pc_address_ex_t pc_fet, pc, prev_pc;
 
 wire [15:0] q_rst;
 wire [15:0] q_trigger;
@@ -300,7 +300,7 @@ reg brtgtv;
 Qupls5_pkg::pc_address_ex_t pc0_f;
 Qupls5_pkg::pc_address_ex_t brtgt;
 reg pc_in_sync;
-reg advance_pipeline;
+reg advance_pipeline,advance_pipeline_seg2;
 wire advance_extract2;
 reg do_bsr_h;
 reg set_pending_ipl;
@@ -969,7 +969,7 @@ endgenerate
 // FETCH
 //
 
-Qupls5_pkg::pc_address_ex_t pc, pc0, pc5, pc6, pc7, pc8;
+Qupls5_pkg::pc_address_ex_t pc0, pc5, pc6, pc7, pc8;
 reg [5:0] off0, off1, off2, off3, off4, off5, off6, off7;
 Qupls5_pkg::pc_address_ex_t pc0_fet, pc1_fet, pc2_fet, pc3_fet, pc4_fet;
 Qupls5_pkg::pc_address_ex_t next_pc;
@@ -1883,15 +1883,15 @@ Qupls5_stomp ustmp1
 	.rst(irst),
 	.clk(clk),
 	.clk2x(clk),
-	.first_icache(first_icache & ~ihito),
+	.first_icache(first_icache & ~ihit),
 	.ihit(is_buffered),
 	.advance_icache(advance_pipeline),
 	.advance_fetch(advance_pipeline),
 	.advance_extract(advance_pipeline),
 	.advance_mot(advance_pipeline),
-	.advance_decode(advance_pipeline),
-	.advance_rename(advance_pipeline),
-	.advance_enqueue(advance_pipeline),
+	.advance_decode(advance_pipeline_seg2),
+	.advance_rename(advance_pipeline_seg2),
+	.advance_enqueue(advance_pipeline_seg2),
 	.advance_pipeline(advance_pipeline), // currently same as above
 	.found_destination(fcu_found_destination),
 	.destination_rndx(fcu_dst),
@@ -2368,6 +2368,18 @@ wire [1023:0] cline_mot;
 Qupls5_pkg::micro_op_t [MAX_MICROOPS-1:0] uop_buf;
 wire [2:0] uop_mark [0:MAX_MICROOPS-1];
 wire [3:0] uop_head [0:MWIDTH-1];
+reg uopc_invalidate;
+
+// If the PC is not sequential coming out of the BTB invalidate the uop cache.
+always_ff @(posedge clk)
+if (irst)
+	prev_pc <= {$bits(Qupls5_pkg::pc_address_ex_t){1'b0}};
+else begin
+	if (advance_pipeline)
+		prev_pc <= pc;
+end
+always_comb
+	uopc_invalidate = FALSE;//fnUcGetAddress(prev_pc.cap)+5'd16!=fnUcGetAddress(pc.cap);
 
 Qupls5_pipeline_mot #(
 	.COMB(0),
@@ -2379,6 +2391,7 @@ umot1
 	.rst(irst),
 	.clk(clk),
 	.en(advance_pipeline),
+	.en2(advance_pipeline_seg2),
 	.vcfg_num(vcfg_num),
 	.vcfg_cat(vcfg_cat),
 	.branch_resolved(branch_resolved),
@@ -2398,7 +2411,8 @@ umot1
 	.uop_buf(uop_buf),
 	.uop_mark(uop_mark),
 	.advance_ext(advance_extract2),	// rd_more , should maybe rename
-	.head(uop_head)
+	.head(uop_head),
+	.uopc_invalidate(uopc_invalidate)
 );
 
 // ----------------------------------------------------------------------------
@@ -2421,7 +2435,7 @@ udecstg1
 	.rst_i(rst_i),
 	.rst(irst),
 	.clk(clk),
-	.en(advance_pipeline),
+	.en(advance_pipeline_seg2),
 	.branch_resolved(branch_resolved),
 	.regFPCSR(regFPCSR),
 	.new_cline_ext(new_cline_ext),
@@ -2689,6 +2703,13 @@ always_comb	advance_pipeline =
  	 advance_extract2		// advance_extract2 (rd_more) set by mot stage
  	)
 	;	
+always_comb
+	advance_pipeline_seg2 =
+		rstcnt[5] &&
+ 	 !sync_ndxv &&			// there is no sync instruction in the re-order buffer
+	 !rat_stallq &&			// not stalled on register alias
+ 	  room_for_que			// and there is room to queue
+	;
 
 always_comb vec_stallq = !ic_dhit || vec_stall2;
 reg nq0,nq1,nq2,nq3;
@@ -2914,7 +2935,7 @@ Qupls5_pipeline_ren #(.MWIDTH(MWIDTH)) uren1
 	.clk(clk),
 	.clk5x(clk5x),
 	.ph4(ph4),
-	.en(advance_pipeline),
+	.en(advance_pipeline_seg2),
 	.nq(nq),
 	.restore(restore),
 	.tail0(tails[0]),
@@ -6406,7 +6427,7 @@ reg [7:0] hwi_ndx;
 
 always_ff @(posedge clk)
 begin
-	if (advance_pipeline) begin
+	if (advance_pipeline_seg2) begin
 		foreach (pgh[n55])
 			pgh[n55].sn <= pgh[n55].sn - 1;
 			// Enqeue the group header.
@@ -6529,7 +6550,7 @@ else begin
 //		if (|robentry_stomp)
 //			tails[0] <= stail;		// computed above
 //	else
-	if (advance_pipeline) begin
+	if (advance_pipeline_seg2) begin
 		//if (!stomp_que || stomp_quem) 
 		begin
 			// Decrement sequence numbers.
@@ -7677,7 +7698,7 @@ if (irst) begin
 end
 else begin
 	// Move tail indexes.		
-	if (advance_pipeline)
+	if (advance_pipeline_seg2)
 		foreach (tails[n62])
 			tails[n62] <= (tails[n62] + MWIDTH) % Qupls5_pkg::ROB_ENTRIES;
 end
