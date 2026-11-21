@@ -305,6 +305,9 @@ parameter SUPPORT_RSB = 0;
 parameter ISTACK_DEPTH = 16;
 */
 
+// Reverse instruction byte order.
+parameter RIOB = 1;
+
 // =============================================================================
 // define PANIC types
 // =============================================================================
@@ -714,7 +717,7 @@ typedef enum logic [5:0] {
 	OP_PPC_ADDIS = 6'd15,
 	OP_BC = 6'd16,
 	OP_B = 6'd18,
-	OP_BCLR = 6'd19,
+	OP_19 = 6'd19,
 	OP_PPC_RLWIMI = 6'd20,
 	OP_PPC_RLWINM = 6'd21,
 	OP_PPC_RLWNM = 6'd23,
@@ -853,6 +856,9 @@ typedef enum logic [9:0] {
 
 typedef enum logic [9:0] {
 	FN31_CMP = 10'd0,
+	FN31_SUBFC = 10'd8,
+	FN31_ADDC = 10'd10,
+	FN31_MULHWU = 10'd11,
 	FN31_MFCR = 10'd19,
 	FN31_LDX = 10'd21,
 	FN31_LWZX = 10'd23,
@@ -861,28 +867,38 @@ typedef enum logic [9:0] {
 	FN31_SLD = 10'd27,
 	FN31_AND = 10'd28,
 	FN31_CMPL = 10'd32,
+	FN31_SUBF = 10'd40,
 	FN31_LDUX = 10'd53,
 	FN31_LWZUX = 10'd55,
 	FN31_CNTLZD = 10'd58,
-	Fn31_CNTLZDM = 10'd59,
+	FN31_CNTLZDM = 10'd59,
 	FN31_ANDC = 10'd60,
+	FN31_MULHW = 10'd75,
 	FN31_LBZX = 10'd87,
 	FN31_NEG = 10'd104,
 	FN31_LBZUX = 10'd119,
 	FN31_POPCNTB = 10'd122,
 	FN31_NOR = 10'd124,
+	FN31_SUBFE = 10'd136,
+	FN31_ADDE = 10'd138,
 	FN31_STDX = 10'd149,
 	FN31_STWX = 10'd151,
 	FN31_PRTYW = 10'd154,
 	FN31_BRW = 10'd155,
 	FN31_PDEPD = 10'd156,
+	FN31_ADDEX = 10'd170,
 	FN31_STWUX = 10'd183,
 	FN31_PRTYD = 10'd186,
 	FN31_BRD = 10'd187,
 	FN31_PEXTD = 10'd188,
+	FN31_SUBFZE = 10'd200,
+	FN31_ADDZE = 10'd202,
 	FN31_STBX = 10'd215,
 	FN31_BRH = 10'd219,
 	FN31_CFUGED = 10'd220,
+	FN31_SUBFME = 10'd232,
+	FN31_ADDME = 10'd234,
+	FN31_MULLW = 10'd235,
 	FN31_STBUX = 10'd247,
 	FN31_BPERMD = 10'd252,
 	FN31_ADD = 10'd266,
@@ -896,29 +912,47 @@ typedef enum logic [9:0] {
 	FN31_LWAUX = 10'd373,
 	FN31_LHAUX = 10'd375,
 	FN31_POPCNTW = 10'd378,
+	FN31_DIVWEU = 10'd395,
 	FN31_STHX = 10'd407,
 	FN31_ORC = 10'd412,
 	FN31_SRADI = 10'd413,
+	FN31_DIVWE = 10'd427,
 	FN31_STHUX = 10'd439,
 	FN31_OR = 10'd444,
 	FN31_EXTSWSLI = 10'd445,
+	FN31_DIVWU = 10'd459,
 	FN31_MTSPR = 10'd467,
 	FN31_NAND = 10'd476,
+	FN31_DIVW = 10'd491,
 	FN31_POPCNTD = 10'd506,
 	FN31_CMPB = 10'd508,
+	FN31_SUBFCO = 10'd520,
+	FN31_ADDCO = 10'd522,
 	FN31_SRW = 10'd536,
 	FN31_SRD = 10'd539,
 	FN31_CNTTZW = 10'd538,
+	FN31_SUBFO = 10'd552,
 	FN31_CNTTZD = 10'd570,
 	FN31_CNTTZDM = 10'd571,
 	FN31_NEGO = 10'd616,
+	FN31_SUBFEO = 10'd648,
+	FN31_ADDEO = 10'd650,
+	FN31_SUBFZEO = 10'd712,
+	FN31_ADDZEO = 10'd714,
+	FN31_SUBFMEO = 10'd744,
+	FN31_ADDMEO = 10'd746,
+	FN31_MULLWO = 10'd747,
 	FN31_ADDO = 10'd778,
 	FN31_SRAW = 10'd792,
 	FN31_SRAD = 10'd794,
 	FN31_SRAWI = 10'd824,
+	FN31_DIVWEUO = 10'd907,
 	FN31_EXTSH = 10'd922,
+	FN31_DIVWEO = 10'd939,
 	FN31_EXTSB = 10'd954,
-	FN31_EXTSW = 10'd986
+	FN31_DIVWUO = 10'd971,
+	FN31_EXTSW = 10'd986,
+	FN31_DIVWO = 10'd1003
 } op31_e;
 
 typedef enum logic [6:0] {
@@ -1565,6 +1599,7 @@ typedef struct packed		// about 156 bits
 	logic v;
 	logic exc;
 	logic lead;						// 1=first micro-op of instruction
+	logic last;						// 1=last micro-op of instruction
 	logic [3:0] num;			// ordinal number of micro-op within instruction
 	logic [5:0] vlen;			// vector length
 	logic [8:0] ble;			// byte lane enable
@@ -1575,11 +1610,7 @@ typedef struct packed		// about 156 bits
 	logic [15:0] imm2;		// second immediate / CSR register numnber (14 bits)) / lane number
 	logic [5:0] mb;				// mask begin
 	logic [5:0] me;				// mask end
-`ifdef PowerISA
 	logic [33:0] imm;			// immediate / displacement / mask
-`else
-	logic [35:0] imm;			// immediate / displacement / mask
-`endif
 	logic prefix;					// instruction is a prefix
 	logic inc;						// increment / decrement for conditional branch, record bit for floats
 	logic iprel;					// ip relative addressing (base register)
@@ -3160,7 +3191,6 @@ begin
 	fnMapRawToUop = {$bits(micro_op_t){1'b0}};
 	fnMapRawToUop.opcode = raw[31:26];
 	case(raw[31:26])
-`ifdef PowerISA
 	Qupls5_pkg::OP_PPC_PREFIX:
 		begin
 			fnMapRawToUop.prefix = 1'b1;
@@ -3171,6 +3201,8 @@ begin
 	// Immediate operate
 	Qupls5_pkg::OP_PPC_ADDI,
 	Qupls5_pkg::OP_PPC_ADDIS,
+	Qupls5_pkg::OP_PPC_ADDIC,
+	Qupls5_pkg::OP_PPC_ADDICR,
 	Qupls5_pkg::OP_PPC_SUBFIC:
 		begin
 			fnMapRawToUop.Rd = {1'b0,raw[25:21]};
@@ -3487,455 +3519,6 @@ begin
 			2'd2:	fnMapRawToUop.byteno = 6'd16;		// STQ
 			endcase
 		end
-`else
-	Qupls5_pkg::OP_MULI,Qupls5_pkg::OP_MULUI,
-	Qupls5_pkg::OP_DIVI,Qupls5_pkg::OP_DIVUI,
-		begin
-			fnMapRawToUop.Rd = raw[11:7];
-			fnMapRawToUop.Rs1 = raw[16:12];
-			if (SUPPORT_SHIFTED_IMMED)
-				fnMapRawToUop.imm = {{44{raw[45]}},raw[45:23]} << ({raw[22:21],1'b0,raw[22:21],1'b0} + {raw[22:21],2'h0});
-			else
-				fnMapRawToUop.imm = {{51{raw[29]}},raw[29:17]};
-			fnMapRawToUop.ms = 3'b0;
-			fnMapRawToUop.prc = raw[31:30];
-			fnMapRawToUop.src = {6'b001001};
-			fnMapRawToUop.dst = 1'b1;
-		end
-	// Loads and stores
-	Qupls5_pkg::OP_LDB,Qupls5_pkg::OP_LDW,Qupls5_pkg::OP_LDT,Qupls5_pkg::OP_LOAD,
-	Qupls5_pkg::OP_LDBZ,Qupls5_pkg::OP_LDWZ,Qupls5_pkg::OP_LDTZ:
-		begin
-			fnMapRawToUop.Rd = raw[11:7];
-			fnMapRawToUop.Rs1 = raw[16:12];
-			fnMapRawToUop.Rs2 = 5'd0;
-			fnMapRawToUop.imm = {{50{raw[31]}},raw[31:18]};
-			fnMapRawToUop.ms = 4'b0010;
-			fnMapRawToUop.sc = 3'd0;
-			fnMapRawToUop.src = 7'b0001001;
-			fnMapRawToUop.dst = 1'b1;
-			case({raw[17],raw[1:0]})
-			3'b000:	fnMapRawToUop.byteno = 6'd8;
-			3'b001:	fnMapRawToUop.byteno = 6'd1;
-			3'b010:	fnMapRawToUop.byteno = 6'd2;
-			3'b011:	fnMapRawToUop.byteno = 6'd3;
-			3'b100:	fnMapRawToUop.byteno = 6'd4;
-			3'b101:	fnMapRawToUop.byteno = 6'd5;
-			3'b110:	fnMapRawToUop.byteno = 6'd6;
-			3'b111:	fnMapRawToUop.byteno = 6'd7;
-			endcase
-		end
-	Qupls5_pkg::OP_LOADN,Qupls5_pkg::OP_LOADZN,
-	Qupls5_pkg::OP_STOREN:
-		begin
-			fnMapRawToUop.Rd = raw[11:7];
-			fnMapRawToUop.Rs1 = raw[16:12];
-			fnMapRawToUop.Rs2 = raw[21:17];
-			fnMapRawToUop.ms = 4'b0000;
-			fnMapRawToUop.sc = raw[31:29];
-			fnMapRawToUop.src = 7'b0001011;
-			fnMapRawToUop.dst = 1'b1;
-			fnMapRawToUop.vn[1] = raw[25];
-			fnMapRawToUop.vlen = 6'd8;
-			fnMapRawToUop.iprel = raw[26];
-			case(raw[24:22])
-			3'b000:	fnMapRawToUop.byteno = 6'd8;
-			3'b001:	fnMapRawToUop.byteno = 6'd1;
-			3'b010:	fnMapRawToUop.byteno = 6'd2;
-			3'b011:	fnMapRawToUop.byteno = 6'd3;
-			3'b100:	fnMapRawToUop.byteno = 6'd4;
-			3'b101:	fnMapRawToUop.byteno = 6'd5;
-			3'b110:	fnMapRawToUop.byteno = 6'd6;
-			3'b111:	fnMapRawToUop.byteno = 6'd7;
-			endcase
-		end
-	Qupls5_pkg::OP_STB,Qupls5_pkg::OP_STW,Qupls5_pkg::OP_STT,Qupls5_pkg::OP_STORE:
-		begin
-			fnMapRawToUop.Rd = raw[11:7];
-			fnMapRawToUop.Rs1 = raw[16:12];
-			fnMapRawToUop.Rs2 = 5'd0;
-			fnMapRawToUop.imm = {{50{raw[31]}},raw[31:18]};
-			fnMapRawToUop.sc = 3'd0;
-			fnMapRawToUop.src = 7'b0001001;
-			fnMapRawToUop.dst = 1'b0;
-			case({raw[17],raw[1:0]})
-			3'b000:	fnMapRawToUop.byteno = 6'd8;
-			3'b001:	fnMapRawToUop.byteno = 6'd1;
-			3'b010:	fnMapRawToUop.byteno = 6'd2;
-			3'b011:	fnMapRawToUop.byteno = 6'd3;
-			3'b100:	fnMapRawToUop.byteno = 6'd4;
-			3'b101:	fnMapRawToUop.byteno = 6'd5;
-			3'b110:	fnMapRawToUop.byteno = 6'd6;
-			3'b111:	fnMapRawToUop.byteno = 6'd7;
-			endcase
-		end
-	// Vector loads and stores
-	Qupls5_pkg::OP_LDV:
-		begin
-			fnMapRawToUop.Rd = {1'b0,raw[11:7]};
-			fnMapRawToUop.Rs1 = raw[16:12];
-			fnMapRawToUop.Rs2 = 5'd0;
-			fnMapRawToUop.Rs3 = 5'd0;
-			fnMapRawToUop.vlen = 6'd8;
-			fnMapRawToUop.imm = {{50{raw[31]}},raw[31:18]};
-			fnMapRawToUop.ms = 4'b1110;
-			fnMapRawToUop.sc = 3'd0;
-			fnMapRawToUop.src = 7'b0001001;
-			fnMapRawToUop.dst = 1'b1;
-			fnMapRawToUop.vn = 5'b0001;
-		end
-	Qupls5_pkg::OP_STV:
-		begin
-			fnMapRawToUop.Rd = {1'd0,raw[11:7]};
-			fnMapRawToUop.Rs1 = raw[16:12];
-			fnMapRawToUop.Rs2 = 5'd0;
-			fnMapRawToUop.Rs3 = 5'd0;
-			fnMapRawToUop.vlen = 6'd8;
-			fnMapRawToUop.imm = {{50{raw[31]}},raw[31:18]};
-			fnMapRawToUop.ms = 4'b1110;
-			fnMapRawToUop.sc = 4'd0;
-			fnMapRawToUop.src = 7'b0001001;
-			fnMapRawToUop.dst = 1'b0;
-			fnMapRawToUop.vn = 5'b0001;
-		end
-	Qupls5_pkg::OP_AMO:
-		begin
-			fnMapRawToUop.Rd = raw[11:7];
-			fnMapRawToUop.Rs1 = raw[16:12];
-			fnMapRawToUop.Rs2 = 5'd0;
-			fnMapRawToUop.Rs3 = 5'd0;
-			fnMapRawToUop.op3 = 3'd1;
-			fnMapRawToUop.ms = 4'b1110;
-			fnMapRawToUop.func = raw[31:25];
-			fnMapRawToUop.src = 7'b0001001;
-			fnMapRawToUop.dst = 1'b1;
-		end
-	Qupls5_pkg::OP_CMPSWAP:
-		begin
-			fnMapRawToUop.Rd = raw[11:7];
-			fnMapRawToUop.Rs1 = raw[16:12];
-			fnMapRawToUop.Rs2 = 5'd0;
-			fnMapRawToUop.Rs3 = 5'd0;
-			fnMapRawToUop.op3 = 3'd1;
-			fnMapRawToUop.ms = 4'b1110;
-			fnMapRawToUop.func = raw[31:25];
-			fnMapRawToUop.src = 7'b0001001;
-			fnMapRawToUop.dst = 1'b1;
-		end
-	// R3 also includes shifts, BMAP
-	Qupls5_pkg::OP_R3B,Qupls5_pkg::OP_R3W,Qupls5_pkg::OP_R3T,Qupls5_pkg::OP_R3O,
-	Qupls5_pkg::OP_CHK:
-		begin
-			fnMapRawToUop.Rd = raw[11:7];
-			fnMapRawToUop.Rs1 = raw[16:12];
-			fnMapRawToUop.Rs2 = raw[21:17];
-			fnMapRawToUop.Rs3 = 5'd0;
-			fnMapRawToUop.Rs4 = 5'd0;	// graphics
-			fnMapRawToUop.op3 = 3'd1;
-			fnMapRawToUop.rmd = 3'd0;			// for ASR
-			fnMapRawToUop.ms = 4'b1110;
-			fnMapRawToUop.func = raw[31:25];
-			fnMapRawToUop.prc = raw[1:0];
-			fnMapRawToUop.src = 7'b0001001;
-			fnMapRawToUop.dst = 1'b1;
-		end
-	Qupls5_pkg::OP_VR3B,Qupls5_pkg::OP_VR3W,Qupls5_pkg::OP_VR3T,Qupls5_pkg::OP_VR3O:
-		begin
-			fnMapRawToUop.Rd = raw[11:7];
-			fnMapRawToUop.Rs1 = raw[16:12];
-			fnMapRawToUop.Rs2 = raw[21:17];
-			fnMapRawToUop.Rs3 = 5'd0;
-			fnMapRawToUop.Rs4 = 5'd0;	// graphics
-			fnMapRawToUop.vlen = 6'd8;
-			fnMapRawToUop.op3 = 3'd1;
-			fnMapRawToUop.rmd = 3'd0;			// for ASR
-			fnMapRawToUop.ms = 4'b1110;
-			fnMapRawToUop.func = raw[31:25];
-			fnMapRawToUop.prc = raw[1:0];
-			fnMapRawToUop.src = 7'b0001001;
-			fnMapRawToUop.dst = 1'b1;
-			fnMapRawToUop.vn = 5'b0101;
-			fnMapRawToUop.vn[1] = raw[22];
-		end
-	Qupls5_pkg::OP_VSR3B,Qupls5_pkg::OP_VSR3W,Qupls5_pkg::OP_VSR3T,Qupls5_pkg::OP_VSR3O:
-		begin
-			fnMapRawToUop.Rd = raw[11:7];
-			fnMapRawToUop.Rs1 = raw[16:12];
-			fnMapRawToUop.Rs2 = raw[21:17];
-			fnMapRawToUop.Rs3 = 5'd0;
-			fnMapRawToUop.Rs4 = 5'd0;	// graphics
-			fnMapRawToUop.vlen = 6'd8;
-			fnMapRawToUop.op3 = 3'd1;
-			fnMapRawToUop.rmd = 3'd0;			// for ASR
-			fnMapRawToUop.ms = 4'b1110;
-			fnMapRawToUop.func = raw[31:25];
-			fnMapRawToUop.prc = raw[1:0];
-			fnMapRawToUop.src = 7'b0001001;
-			fnMapRawToUop.dst = 1'b1;
-			fnMapRawToUop.vn = 5'b0001;
-			fnMapRawToUop.vn[1] = raw[22];
-		end
-	Qupls5_pkg::OP_SHIFT:
-		begin
-			fnMapRawToUop.Rd = raw[11:7];
-			fnMapRawToUop.Rs1 = raw[16:12];
-			fnMapRawToUop.Rs2 = raw[21:17];
-			fnMapRawToUop.Rs3 = 5'd0;
-			fnMapRawToUop.op3 = 3'd1;
-			fnMapRawToUop.ms = 4'b1100;
-			fnMapRawToUop.ms[1:0] = raw[24:23];
-			fnMapRawToUop.func = raw[31:25];
-			fnMapRawToUop.prc = raw[1:0];
-			fnMapRawToUop.src = 7'b0001001;
-			fnMapRawToUop.dst = 1'b1;
-		end
-	Qupls5_pkg::OP_CSR:
-		begin
-			fnMapRawToUop.Rd = raw[11:7];
-			fnMapRawToUop.Rs1 = raw[16:12];
-			fnMapRawToUop.Rs2 = raw[21:17];
-			fnMapRawToUop.ms = raw[24:23];
-			fnMapRawToUop.op3 = 3'd1;
-			fnMapRawToUop.src = 7'b0001001;
-			fnMapRawToUop.dst = 1'b1;
-		end
-	Qupls5_pkg::OP_BRK:
-		begin
-			fnMapRawToUop.imm = raw[31:7];
-			fnMapRawToUop.src = 7'b0000000;
-			fnMapRawToUop.dst = 1'b0;
-		end
-	Qupls5_pkg::OP_EXTD:
-		begin
-			fnMapRawToUop.Rd = raw[11:7];
-			fnMapRawToUop.Rs1 = raw[16:12];
-			fnMapRawToUop.Rs2 = raw[21:17];
-			fnMapRawToUop.Rs3 = raw[30:25];
-			fnMapRawToUop.Rs4 = 5'd0;
-			fnMapRawToUop.op3 = 3'd1;
-			fnMapRawToUop.ms = 4'b0000;
-			fnMapRawToUop.src = 7'b0010001;
-			fnMapRawToUop.dst = 1'b1;
-		end
-	Qupls5_pkg::OP_FLTH,Qupls5_pkg::OP_FLTS,Qupls5_pkg::OP_FLTD,Qupls5_pkg::OP_FLTQ:
-		begin
-			fnMapRawToUop.Rd = raw[11:7];
-			fnMapRawToUop.Rs1 = raw[16:12];
-			fnMapRawToUop.Rs2 = raw[21:17];
-			fnMapRawToUop.rmd = raw[24:22];
-			fnMapRawToUop.ms = 4'b0000;
-			fnMapRawToUop.func = raw[30:25];
-			fnMapRawToUop.src = {1'b0,raw[24:22]==3'b111,5'b01001};	// read from fp status?
-			fnMapRawToUop.dst = 1'b1;
-			fnMapRawToUop.inc = raw[31];
-		end
-	Qupls5_pkg::OP_VFLTH,Qupls5_pkg::OP_VFLTS,Qupls5_pkg::OP_VFLTD:
-		begin
-			fnMapRawToUop.Rd = {1'd0,raw[11:7]};
-			fnMapRawToUop.Rs1 = {1'd0,raw[16:12]};
-			fnMapRawToUop.Rs2 = {1'd0,raw[21:17]};
-			fnMapRawToUop.Rs3 = 3'd0;
-			fnMapRawToUop.vlen = 6'd8;
-			fnMapRawToUop.rmd = raw[24:22];
-			fnMapRawToUop.ms = 4'b0000;
-			fnMapRawToUop.func = raw[30:25];
-			fnMapRawToUop.src = {1'b0,raw[24:22]==3'b111,5'b01001};	// read from fp status?
-			fnMapRawToUop.dst = 1'b1;
-			fnMapRawToUop.inc = raw[31];
-			fnMapRawToUop.vn = 5'b00111;
-		end
-	Qupls5_pkg::OP_VSFLTH,Qupls5_pkg::OP_VSFLTS,Qupls5_pkg::OP_VSFLTD:
-		begin
-			fnMapRawToUop.Rd = {1'd0,raw[11:7]};
-			fnMapRawToUop.Rs1 = {1'd0,raw[16:12]};
-			fnMapRawToUop.Rs2 = {1'd0,raw[21:17]};
-			fnMapRawToUop.Rs3 = 3'd0;
-			fnMapRawToUop.vlen = 6'd8;
-			fnMapRawToUop.rmd = raw[24:22];
-			fnMapRawToUop.ms = 4'b0000;
-			fnMapRawToUop.func = raw[30:25];
-			fnMapRawToUop.src = {1'b0,raw[24:22]==3'b111,5'b01001};	// read from fp status?
-			fnMapRawToUop.dst = 1'b1;
-			fnMapRawToUop.inc = raw[31];
-			fnMapRawToUop.vn = 5'b00111;
-		end
-// Source bits
-// +---+---+---+---+---+---+---+
-// | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
-// +---+---+---+---+---+---+---+
-// |Rd2| S |Rs4|Rd |Rs3|Rs2|Rs1|
-// +---+---+---+---+---+---+---+
-	Qupls5_pkg::OP_FENCE:
-		begin
-			fnMapRawToUop.op3 = raw[24:22];
-			fnMapRawToUop.func = raw[31:25];
-			fnMapRawToUop.imm = raw[21:8];
-			fnMapRawToUop.src = 7'b0000000;
-			fnMapRawToUop.dst = 1'b0;
-		end
-	Qupls5_pkg::OP_PRED:
-		begin
-			fnMapRawToUop.Rs1 = raw[16:12];
-			fnMapRawToUop.imm = raw[31:17];
-			fnMapRawToUop.ms = 4'b0000;
-			fnMapRawToUop.func = raw[31:25];
-			fnMapRawToUop.src = 7'b000001;
-			fnMapRawToUop.dst = 1'b0;
-		end
-// Vn bits, 1= scalar register
-// +---+---+---+---+
-// | 3 | 2 | 1 | 0 |
-// +---+---+---+---+
-// |Rs3|Rs2|Rs1|Rd |
-// +---+---+---+---+
-	Qupls5_pkg::OP_CAP:
-		begin
-			case(raw[47:41])	// func code
-            Qupls5_pkg::CAP_RET:
-                begin
-                    fnMapRawToUop.Rd = raw[11:7];
-                    fnMapRawToUop.Rs1 = raw[16:12];
-                    if (SUPPORT_SHIFTED_IMMED)
-                        fnMapRawToUop.imm = {{44{raw[45]}},raw[45:22],3'b0} << ({raw[22:21],1'b0,raw[22:21],1'b0} + {raw[22:21],2'h0});
-                    else
-                        fnMapRawToUop.imm = {{44{raw[45]}},raw[45:22],3'b0};
-                    fnMapRawToUop.prc = 2'd3;
-                    fnMapRawToUop.src = 7'b0001001;
-                    fnMapRawToUop.dst = ~&raw[12:7];
-                end
-            CAP_ANDPERM:
-                begin
-					fnMapRawToUop.Rd = raw[11:7];
-					fnMapRawToUop.Rs1 = raw[16:12];
-					fnMapRawToUop.Rs2 = raw[21:17];
-					fnMapRawToUop.op3 = 3'd1;
-					fnMapRawToUop.rmd = raw[24:22];			// for ASR
-					fnMapRawToUop.ms = raw[24:23];
-					fnMapRawToUop.func = raw[31:25];
-					fnMapRawToUop.prc = raw[1:0];
-					fnMapRawToUop.src = 7'b0001001;
-					fnMapRawToUop.dst = 1'b1;
-				end
-			CAP_BUILDCAP:
-				begin
-					fnMapRawToUop.Rd = raw[11:7];
-					fnMapRawToUop.Rs1 = raw[16:12];
-					fnMapRawToUop.Rs2 = raw[21:17];
-					fnMapRawToUop.op3 = 3'd1;
-					fnMapRawToUop.rmd = raw[24:22];
-					fnMapRawToUop.ms = raw[24:23];
-					fnMapRawToUop.func = raw[31:25];
-					fnMapRawToUop.prc = raw[1:0];
-					fnMapRawToUop.src = 7'b0001001;
-					fnMapRawToUop.dst = 1'b1;
-				end
-			CAP_CLEARTAG:
-				begin
-					fnMapRawToUop.Rd = raw[12:7];
-					fnMapRawToUop.Rs1 = raw[18:13];
-					fnMapRawToUop.op3 = 3'd1;
-					fnMapRawToUop.rmd = raw[24:22];
-					fnMapRawToUop.ms = raw[24:23];
-					fnMapRawToUop.func = raw[31:25];
-					fnMapRawToUop.prc = raw[1:0];
-					fnMapRawToUop.src = 7'b0001001;
-					fnMapRawToUop.dst = 1'b1;
-				end
-			CAP_CHKBOUNDS:
-				begin
-					fnMapRawToUop.Rd = raw[11:7];
-					fnMapRawToUop.Rs1 = raw[16:12];
-					fnMapRawToUop.Rs2 = raw[21:17];
-					fnMapRawToUop.op3 = 3'd1;
-					fnMapRawToUop.rmd = raw[24:22];
-					fnMapRawToUop.ms = raw[24:23];
-					fnMapRawToUop.func = raw[31:25];
-					fnMapRawToUop.prc = raw[1:0];
-					fnMapRawToUop.src = 7'b0000001;
-					fnMapRawToUop.dst = 1'b0;
-				end
-			CAP_COPYTYPE:
-				begin
-					fnMapRawToUop.Rd = raw[11:7];
-					fnMapRawToUop.Rs1 = raw[16:12];
-					fnMapRawToUop.Rs2 = raw[21:17];
-					fnMapRawToUop.op3 = 3'd1;
-					fnMapRawToUop.rmd = raw[24:22];
-					fnMapRawToUop.ms = raw[23:22];
-					fnMapRawToUop.func = raw[31:25];
-					fnMapRawToUop.prc = raw[1:0];
-					fnMapRawToUop.src = 7'b0001001;
-					fnMapRawToUop.dst = 1'b1;
-				end
-			CAP_GETBASE,CAP_GETFLAGS,CAP_GETLENGTH,CAP_GETOFFSET,CAP_GETPERMS,
-			CAP_GETSEALED,CAP_GETTAG,CAP_GETTOP,CAP_GETTYPE:
-				begin
-					fnMapRawToUop.Rd = raw[11:7];
-					fnMapRawToUop.Rs1 = raw[16:12];
-					fnMapRawToUop.Rs2 = raw[21:17];
-					fnMapRawToUop.op3 = 3'd1;
-					fnMapRawToUop.rmd = raw[24:22];
-					fnMapRawToUop.ms = raw[24:23];
-					fnMapRawToUop.func = raw[31:25];
-					fnMapRawToUop.prc = raw[1:0];
-					fnMapRawToUop.src = 7'b0001001;
-					fnMapRawToUop.dst = 1'b1;
-				end
-			CAP_INCOFFSET:
-				begin
-					fnMapRawToUop.Rd = raw[11:7];
-					fnMapRawToUop.Rs1 = raw[16:12];
-					fnMapRawToUop.Rs2 = raw[21:17];
-					fnMapRawToUop.op3 = 3'd1;
-					fnMapRawToUop.rmd = raw[24:22];
-					fnMapRawToUop.ms = raw[24:23];
-					fnMapRawToUop.func = raw[31:25];
-					fnMapRawToUop.prc = raw[1:0];
-					fnMapRawToUop.src = 7'b0001001;
-					fnMapRawToUop.dst = 1'b1;
-				end
-			CAP_INCOFFSETI:
-				begin
-					fnMapRawToUop.Rd = raw[11:7];
-					fnMapRawToUop.Rs1 = raw[16:12];
-					fnMapRawToUop.imm = {{59{raw[21]}},raw[21:17]};
-					fnMapRawToUop.op3 = 3'd1;
-					fnMapRawToUop.rmd = raw[24:22];
-					fnMapRawToUop.ms = raw[24:23];
-					fnMapRawToUop.func = raw[31:25];
-					fnMapRawToUop.prc = raw[1:0];
-					fnMapRawToUop.src = 7'b0001001;
-					fnMapRawToUop.dst = 1'b1;
-				end
-			CAP_CHKINVOKE:
-				begin
-					fnMapRawToUop.Rd = raw[11:7];
-					fnMapRawToUop.Rs1 = raw[16:12];
-					fnMapRawToUop.Rs2 = raw[21:17];
-					fnMapRawToUop.op3 = 3'd1;
-					fnMapRawToUop.rmd = raw[24:22];
-					fnMapRawToUop.ms = raw[24:23];
-					fnMapRawToUop.func = raw[31:25];
-					fnMapRawToUop.prc = raw[1:0];
-					fnMapRawToUop.src = 7'b0000001;
-					fnMapRawToUop.dst = 1'b0;
-				end
-			CAP_INVOKE:
-				begin
-					fnMapRawToUop.Rd = raw[11:7];
-					fnMapRawToUop.Rs1 = raw[16:12];
-					fnMapRawToUop.Rs2 = raw[21:17];
-					fnMapRawToUop.op3 = 3'd1;
-					fnMapRawToUop.rmd = raw[24:22];
-					fnMapRawToUop.ms = raw[24:23];
-					fnMapRawToUop.func = raw[31:25];
-					fnMapRawToUop.prc = raw[1:0];
-					fnMapRawToUop.src = 7'b0001001;
-					fnMapRawToUop.dst = 1'b1;
-				end
-			endcase
-		end
-`endif		
 	default:
 		begin
 			fnMapRawToUop = {$bits(micro_op_t){1'b0}};

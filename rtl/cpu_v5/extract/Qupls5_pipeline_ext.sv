@@ -132,8 +132,8 @@ wire pack_regs = pack_regs_i;
 cpu_types_pkg::aregno_t regcnt;
 Qupls5_pkg::rob_entry_t [MWIDTH-1:0] ins_ext;
 Qupls5_pkg::rob_entry_t [MWIDTH-1:0] ins_fet;
-reg [255:0] ic_line_aligned;
-reg [255:0] prev_ic_line_aligned;
+reg [1023:0] ic_line_aligned;
+reg [1023:0] prev_ic_line_aligned;
 reg ld;
 reg [2:0] override_pos;
 reg p_overrided;
@@ -184,7 +184,8 @@ always_comb
 begin
 	nopi = {$bits(Qupls5_pkg::rob_entry_t){1'b0}};
 	nopi.op.exc = Qupls5_pkg::FLT_NONE;
-	nopi.op.uop = {41'd0,Qupls5_pkg::OP_NOP};
+	nopi.op.uop.opcode = Qupls5_pkg::fnNop();
+	nopi.op.uop.last = TRUE;
 	nopi.op.decbus.nop = TRUE;
 	nopi.op.decbus.cause = Qupls5_pkg::FLT_NONE;
 	nopi.op.uop.lead = 1'd1;
@@ -206,7 +207,8 @@ reg [63:0] adr;
 always_comb 
 begin
 	adr = fnUcGetAddress(pc0_fet.cap);
-	ic_line_aligned = {{16{fnNopInsn()}},cline_fet} >> {adr[5:2],5'd0};
+//	ic_line_aligned = {{16{fnRibo(fnNopInsn())}},cline_fet} >> {adr[5:2],5'd0};
+	ic_line_aligned = cline_fet >> {adr[5:2],5'd0};
 end
 
 Qupls5_pkg::pc_address_ex_t prev_pc0_fet;
@@ -314,7 +316,7 @@ generate begin : gExtDecode
 		Qupls5_ext_decode usd1
 			(
 				.ip(pc_fet[g]),
-				.instr(ic_line_aligned[g*32+31:g*32]),
+				.instr(fnRibo(ic_line_aligned[g*32+31:g*32])),
 				.bsr(bsr[g]),
 				.jsr(jsr[g]),
 				.bra(bra[g]),

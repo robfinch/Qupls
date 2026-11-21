@@ -351,24 +351,24 @@ always_comb
 // Get even/odd lines and swap them into hi,lo based on address.
 always_comb
 if (rst) begin
-	ic_line_hi_o.data = {64{NOP}};
+	ic_line_hi_o.data = {16{Qupls5_pkg::fnNopInsn()}};
 	ic_line_hi_o.v = 4'hF;
 	ic_line_hi_o.m = 1'b0;
 	ic_line_hi_o.vtag = Qupls5_pkg::RSTPC;
 	ic_line_hi_o.ptag = Qupls5_pkg::RSTPC;
-	ic_line_lo_o.data = {64{NOP}};
+	ic_line_lo_o.data = {16{Qupls5_pkg::fnNopInsn()}};
 	ic_line_lo_o.v = 4'hF;
 	ic_line_lo_o.m = 1'b0;
 	ic_line_lo_o.vtag = Qupls5_pkg::RSTPC;
 	ic_line_lo_o.ptag = Qupls5_pkg::RSTPC;
 end
 else begin
-	ic_line_hi_o.data = {64{NOP}};
+	ic_line_hi_o.data = {16{Qupls5_pkg::fnNopInsn()}};
 	ic_line_hi_o.v = 4'hF;
 	ic_line_hi_o.m = 1'b0;
 	ic_line_hi_o.vtag = Qupls5_pkg::RSTPC;
 	ic_line_hi_o.ptag = Qupls5_pkg::RSTPC;
-	ic_line_lo_o.data = {64{NOP}};
+	ic_line_lo_o.data = {16{Qupls5_pkg::fnNopInsn()}};
 	ic_line_lo_o.v = 4'hF;
 	ic_line_lo_o.m = 1'b0;
 	ic_line_lo_o.vtag = Qupls5_pkg::RSTPC;

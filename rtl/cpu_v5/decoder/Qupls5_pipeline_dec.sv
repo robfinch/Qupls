@@ -319,7 +319,7 @@ end
 always_comb
 begin
 	nopi = {$bits(Qupls5_pkg::pipeline_reg_t){1'b0}};
-	nopi.uop = {41'd0,Qupls5_pkg::OP_NOP};
+	nopi.uop.opcode = Qupls5_pkg::fnNop();
 	nopi.uop.lead = 3'd1;
 	nopi.v = 1'b1;
 	nopi.decbus.Rdv = 1'b0;
@@ -335,7 +335,7 @@ always_comb
 begin
 	nopi2 = {$bits(Qupls5_pkg::rob_entry_t){1'b0}};
 	nopi2.op.exc = Qupls5_pkg::FLT_NONE;
-	nopi2.op.uop = {41'd0,Qupls5_pkg::OP_NOP};
+	nopi2.op.uop.opcode = Qupls5_pkg::fnNop();
 	nopi2.op.decbus.nop = TRUE;
 	nopi2.op.decbus.cause = Qupls5_pkg::FLT_NONE;
 	nopi2.op.uop.lead = 1'd1;
@@ -495,7 +495,6 @@ else begin
     // For now, there are only four fixed buffers to choose from so we can
     // simplify things here.
         tpr[n7] = pg_mot.pr[n7];
-        tpr[n7].op.uop = uop_buf[n7];
 	end
 	foreach (insm[n9]) begin
 		insm[n9] = tpr[n9];

@@ -1,4 +1,4 @@
-`timescale 1ns / 10ps
+`timescale 1ns / 1ps
 // ============================================================================
 //        __
 //   \\__/ o\    (C) 2023-2026  Robert Finch, Waterloo
@@ -48,29 +48,25 @@ parameter SIM = 1'b1;
 `define IS_SIM	1
 
 `include "Qupls5_config.sv"
-`ifdef PowerISA
 `include "Qupls5_pkg_ppc.sv"
-`else
-`include "Qupls5_pkg_qp5.sv"
-`endif
+
+// Reverse the order of instruction bytes coning in for convenience.
+function [31:0] fnRibo;
+input [31:0] insn;
+begin
+	fnRibo = {insn[7:0],insn[15:8],insn[23:16],insn[31:24]};
+end
+endfunction
 
 function [6:0] fnNop;
 begin
-`ifdef PowerISA
 		fnNop = Qupls5_pkg::OP_PPC_ORI;
-`else		    
-		fnNop = Qupls5_pkg::OP_NOP;
-`endif
 end
 endfunction
 
 function [31:0] fnNopInsn;
 begin
-`ifdef PowerISA
 		fnNopInsn = {Qupls5_pkg::OP_PPC_ORI,26'd0};
-`else		    
-		fnNopInsn = {25'd0,Qupls5_pkg::OP_NOP};
-`endif
 end
 endfunction
 

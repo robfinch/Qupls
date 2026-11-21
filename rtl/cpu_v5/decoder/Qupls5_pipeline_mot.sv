@@ -46,7 +46,7 @@ import Qupls5_pkg::*;
 module Qupls5_pipeline_mot(rst, clk, en, en2, vcfg_num, vcfg_cat,
 	stomp_trn, stomp_moq1, stomp_moq2, stomp_mot,
 	cline_ext, cline_mot, uopc_invalidate,
-	pc_mot, branch_resolved, live_stream,
+	pc_mot, branch_resolved, live_stream, pc_fet,
   pg_ext, pg_trn, pg_moq1, pg_moq2, pg_mot, pg_mot1,
   advance_ext, uop_buf, uop_mark, head);
 parameter MWIDTH = Qupls5_pkg::MWIDTH;
@@ -69,6 +69,7 @@ input stomp_moq2;
 input stomp_mot;
 input [1023:0] cline_ext;
 output reg [1023:0] cline_mot = {1024{1'b1}};
+input Qupls5_pkg::pc_address_ex_t pc_fet;
 input Qupls5_pkg::pipeline_group_reg_t pg_ext;
 output Qupls5_pkg::pipeline_group_reg_t pg_trn;
 output Qupls5_pkg::pipeline_group_reg_t pg_moq1;
@@ -82,7 +83,7 @@ output [3:0] head [0:MWIDTH-1];
 
 integer n1;
 genvar g;
-wire rd_more;
+wire rd_more,next_rd_more;
 reg [1023:0] cline_mot1 = {1024{1'b1}};
 reg [5:0] uop_count [0:MWIDTH-1];
 Qupls5_pkg::micro_op_t [MICROOPS_PER_INSTR-1:0] uop [MWIDTH-1:0];
@@ -97,6 +98,7 @@ begin
 	nopi.op.decbus.nop = TRUE;
 	nopi.op.decbus.cause = Qupls5_pkg::FLT_NONE;
 	nopi.op.uop.lead = 1'd1;
+	nopi.op.uop.last = 1'd1;
 	nopi.op.v = 1'b1;
 	nopi.v = 5'd1;
 	nopi.exc = Qupls5_pkg::FLT_NONE;
@@ -153,15 +155,12 @@ generate begin : gComb
 				end
 				// If there are no more micro-ops available, feed NOPs into the pipe.
 				if (rd_more) begin
-`ifdef PowerISA					
-					pg_mot.pr[n1].op.uop.opcode=Qupls5_pkg::OP_PPC_ORI;
-`else
-					pg_mot.pr[n1].op.uop.opcode=Qupls5_pkg::OP_NOP;
-`endif
+					pg_mot.pr[n1].op.uop.opcode=Qupls5_pkg::fnNop();
+					pg_mot.pr[n1].op.uop.lead = TRUE;
+					pg_mot.pr[n1].op.uop.last = TRUE;
 					pg_mot.pr[n1].done <= 2'b11;
 				end
 				else begin
-					pg_mot.pr[n1].op.uop <= uop_buf[n1];
 					if (branch_resolved) begin
 						if (pg_moq2.pr[n1].ip_stream.thread==live_stream.thread && pg_moq2.pr[n1].ip_stream.stream != live_stream.stream) begin
 							pg_mot.pr[n1].op.v <= INV;
@@ -236,6 +235,7 @@ Qupls5_micro_op_cache #(.MICROOPS_PER_INSTR(MICROOPS_PER_INSTR)) umoq1
 	.uop_count(uop_count),
 	.stomp_moq1(stomp_moq1),
 	.stomp_moq2(stomp_moq2),
+	.pc_fet(pc_fet),
 	.pg_ext(pg_ext),
 	.pg_trn(pg_trn),
 	.pg_moq1(pg_moq1),

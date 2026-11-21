@@ -378,8 +378,8 @@ generate begin : gPCs
 		always_ff @(posedge clk)
 		if (rst) begin
 			pcs[g] <= {$bits(Qupls5_pkg::pc_address_ex_t){1'b0}};
-			pcs[g].cap.perms <= 16'hFFFF;
-			pcs[g].cap.otype <= 18'h3ffff;
+			pcs[g].cap.perms <= 24'hFFFFFF;
+			pcs[g].cap.otype <= 23'hffffff;
 			pcs[g].cap.top <= 65'h10000000000000000;
 			pcs[g].cap.base <= 64'd0;
 			pcs[g].stream.stream <= 5'd1;

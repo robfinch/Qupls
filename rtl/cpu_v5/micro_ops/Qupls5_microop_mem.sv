@@ -176,7 +176,7 @@ begin
 	nopi.v = 1'b1;
 	nopi.lead = 1'b1;
 	nopi.num = 5'd0;
-	nopi.opcode = Qupls5_pkg::OP_NOP;
+	nopi.opcode = Qupls5_pkg::fnNop();
 end
 always_comb
 begin
@@ -711,6 +711,7 @@ begin
 	// expanded by two bits each.
   uop0 = instr;
   uop0.lead = 1'b1;
+  uop0.v = VAL;
   uop1 = instr;
   uop1.num = 5'd1;
 
@@ -765,15 +766,48 @@ begin
 	foreach (next_uop[n1]) begin
 		next_uop[n1] = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
 		next_uop[n1].lead = n1==0;
-		next_uop[n1].opcode = Qupls5_pkg::OP_NOP;
+		next_uop[n1].opcode = Qupls5_pkg::fnNop();
 		next_uop[n1].ble = 9'b0;
 		next_uop[n1].v = VAL;
 	end
 
 	case(ir.opcode)
-`ifdef PowerISA
-	Qupls5_pkg::OP_PPC_ADDI,Qupls5_pkg::OP_PPC_ADDIS,
+	Qupls5_pkg::OP_PPC_ADDI,Qupls5_pkg::OP_PPC_ADDIS:
+		begin
+			next_count = 5'd1;
+			next_uop[0] = uop0;
+			next_uop[0].last = TRUE;
+		end
+	Qupls5_pkg::OP_PPC_ADDIC,
 	Qupls5_pkg::OP_PPC_SUBFIC:
+		begin
+			next_count = 5'd2;
+			// First update the XER
+			next_uop[0].v = VAL;
+			next_uop[0].lead = 1'b1;
+			next_uop[0].opcode = uop0.opcode;
+			next_uop[0].bo = 5'd1;			// write CA,SO in XER
+			next_uop[0].imm = uop0.imm;
+			next_uop[0].Rd = 6'd36;			// XER
+			next_uop[0].Rs1 = uop0.Rs1;
+			next_uop[0].Rs2 = 6'd36;		// XER
+			next_uop[0].src[0]=1'b1;
+			next_uop[0].src[1]=1'b1;
+			next_uop[0].src[3]=1'b1;
+			next_uop[0].dst=1'b1;
+			// Perform op
+			next_uop[1].v = VAL;
+			next_uop[1].num = 5'd1;
+			next_uop[1].opcode = uop0.opcode;
+			next_uop[1].imm = uop0.imm;
+			next_uop[1].Rd = uop0.Rd;
+			next_uop[1].Rs1 = uop0.Rs1;
+			next_uop[1].src[0]=1'b1;
+			next_uop[1].src[3]=1'b1;
+			next_uop[1].dst=1'b1;
+			next_uop[1].last = TRUE;
+		end
+	Qupls5_pkg::OP_PPC_ADDICR:
 		begin
 			next_count = 5'd3;
 			// First update the XER
@@ -813,10 +847,9 @@ begin
 			next_uop[2].src[1]=1'b1;
 			next_uop[2].src[3]=1'b1;
 			next_uop[2].dst=1'b1;
+			next_uop[2].last = TRUE;
 		end
-	Qupls5_pkg::OP_PPC_ANDI,Qupls5_pkg::OP_PPC_ANDIS,
-	Qupls5_pkg::OP_PPC_ORI,Qupls5_pkg::OP_PPC_ORIS,
-	Qupls5_pkg::OP_PPC_XORI,Qupls5_pkg::OP_PPC_XORIS:
+	Qupls5_pkg::OP_PPC_ANDI,Qupls5_pkg::OP_PPC_ANDIS:
 		begin
 			next_count = 5'd2;
 			next_uop[0] = uop0;
@@ -833,11 +866,20 @@ begin
 			next_uop[1].src[1]=1'b1;
 			next_uop[1].src[3]=1'b1;
 			next_uop[1].dst=1'b1;
+			next_uop[1].last = TRUE;
+		end
+	Qupls5_pkg::OP_PPC_ORI,Qupls5_pkg::OP_PPC_ORIS,
+	Qupls5_pkg::OP_PPC_XORI,Qupls5_pkg::OP_PPC_XORIS:
+		begin
+			next_count = 5'd1;
+			next_uop[0] = uop0;
+			next_uop[0].last = TRUE;
 		end
 	Qupls5_pkg::OP_B:
 		begin
 			next_count = 5'd1;
 			next_uop[0] = uop0;
+			next_uop[0].last = TRUE;
 		end
 	Qupls5_pkg::OP_BC:
 		begin
@@ -853,10 +895,12 @@ begin
 				next_uop[0].src[3]=1'b1;
 				next_uop[0].dst=1'b1;
 				next_uop[1] = uop1;
+				next_uop[1].last = TRUE;
 			end
 			else begin
 				next_count = 5'd1;
 				next_uop[0] = uop0;
+				next_uop[0].last = TRUE;
 			end
 		end
 	Qupls5_pkg::OP_19:
@@ -877,10 +921,13 @@ begin
 					next_uop[0].src[3]=1'b1;
 					next_uop[0].dst=1'b1;
 					next_uop[1] = uop1;
+					next_uop[1].v = VAL;
+					next_uop[1].last = TRUE;
 				end
 				else begin
 					next_count = 5'd1;
 					next_uop[0] = uop0;
+					next_uop[0].last = TRUE;
 				end
 			end
 		default:
@@ -888,11 +935,21 @@ begin
 				next_count = 5'd1;
 				next_uop[0] = uop0;
 				next_uop[0].exc = TRUE;	// unimplmented
+				next_uop[0].last = TRUE;
 			end
 		endcase
 	Qupls5_pkg::OP_31:
 		case(ir.func)
-		Qupls5_pkg::FN31_ADD,Qupls5_pkg::FN31_ADDO:
+		Qupls5_pkg::FN31_ADD,Qupls5_pkg::FN31_ADDO,
+		Qupls5_pkg::FN31_ADDC,Qupls5_pkg::FN31_ADDCO,
+		Qupls5_pkg::FN31_ADDE,Qupls5_pkg::FN31_ADDEO,
+		Qupls5_pkg::FN31_ADDME,Qupls5_pkg::FN31_ADDMEO,
+		Qupls5_pkg::FN31_ADDZE,Qupls5_pkg::FN31_ADDZEO,
+		Qupls5_pkg::FN31_SUBF,Qupls5_pkg::FN31_SUBFO,
+		Qupls5_pkg::FN31_SUBFC,Qupls5_pkg::FN31_SUBFCO,
+		Qupls5_pkg::FN31_SUBFME,Qupls5_pkg::FN31_SUBFMEO,
+		Qupls5_pkg::FN31_SUBFE,Qupls5_pkg::FN31_SUBFEO,
+		Qupls5_pkg::FN31_SUBFZE,Qupls5_pkg::FN31_SUBFZEO:
 			begin
 				if (ir.rc & ir.func[9])
 					next_count = 5'd3;
@@ -928,6 +985,7 @@ begin
 					next_uop[1].src[1]=1'b1;
 					next_uop[1].src[3]=1'b1;
 					next_uop[1].dst=1'b1;
+					next_uop[1].last = ~ir.rc;
 					if (ir.rc) begin
 						// update cr0
 						next_uop[2].v = VAL;
@@ -942,6 +1000,7 @@ begin
 						next_uop[2].src[1]=1'b1;
 						next_uop[2].src[3]=1'b1;
 						next_uop[2].dst=1'b1;
+						next_uop[2].last = TRUE;
 					end
 				end
 				else begin
@@ -958,6 +1017,7 @@ begin
 					next_uop[0].src[1]=1'b1;
 					next_uop[0].src[3]=1'b1;
 					next_uop[0].dst=1'b1;
+					next_uop[0].last = ~ir.rc;
 					if (ir.rc) begin
 						// update cr0
 						next_uop[1].v = VAL;
@@ -972,6 +1032,7 @@ begin
 						next_uop[1].src[1]=1'b1;
 						next_uop[1].src[3]=1'b1;
 						next_uop[1].dst=1'b1;
+						next_uop[1].last = TRUE;
 					end
 				end
 			end
@@ -1009,6 +1070,7 @@ begin
 					next_uop[1].src[1]=1'b1;
 					next_uop[1].src[3]=1'b1;
 					next_uop[1].dst=1'b1;
+					next_uop[1].last = ~ir.rc;
 					if (ir.rc) begin
 						// update cr0
 						next_uop[2].v = VAL;
@@ -1023,6 +1085,7 @@ begin
 						next_uop[2].src[1]=1'b1;
 						next_uop[2].src[3]=1'b1;
 						next_uop[2].dst=1'b1;
+						next_uop[2].last = TRUE;
 					end
 				end
 				else begin
@@ -1039,6 +1102,7 @@ begin
 					next_uop[0].src[1]=1'b1;
 					next_uop[0].src[3]=1'b1;
 					next_uop[0].dst=1'b1;
+					next_uop[0].last = ~ir.rc;
 					if (ir.rc) begin
 						// update cr0
 						next_uop[1].v = VAL;
@@ -1053,8 +1117,30 @@ begin
 						next_uop[1].src[1]=1'b1;
 						next_uop[1].src[3]=1'b1;
 						next_uop[1].dst=1'b1;
+						next_uop[1].last = TRUE;
 					end
 				end
+			end
+		Qupls5_pkg::FN31_AND,Qupls5_pkg::FN31_OR,Qupls5_pkg::FN31_XOR,
+		Qupls5_pkg::FN31_NAND,Qupls5_pkg::FN31_NOR,Qupls5_pkg::FN31_EQV,
+		Qupls5_pkg::FN31_ANDC,Qupls5_pkg::FN31_ORC:
+			begin
+				next_count = uop0.rc ? 5'd2 : 5'd1;
+				next_uop[0] = uop0;
+				next_uop[1].v = uop0.rc;
+				next_uop[1].num = 5'd1;
+				next_uop[1].opcode = Qupls5_pkg::OP_PPC_CMPI;
+				next_uop[1].l = 1'b1;				// 64 bit compare
+				next_uop[1].bo = 5'h0;			// update CR0
+				next_uop[1].imm = 0;
+				next_uop[1].Rd = 6'd32;			// CR
+				next_uop[1].Rs1 = uop0.Rd;
+				next_uop[1].Rs2 = 6'd36;		// XER
+				next_uop[1].src[0]=1'b1;
+				next_uop[1].src[1]=1'b1;
+				next_uop[1].src[3]=1'b1;
+				next_uop[1].dst=1'b1;
+				next_uop[1].last = TRUE;
 			end
 		Qupls5_pkg::FN31_LBZX,
 		Qupls5_pkg::FN31_LHZX,
@@ -1066,6 +1152,7 @@ begin
 			begin
 				next_count = 5'd1;
 				next_uop[0] = uop0;
+				next_uop[0].last = TRUE;
 			end
 		Qupls5_pkg::FN31_LBZUX,
 		Qupls5_pkg::FN31_LHZUX,
@@ -1084,12 +1171,14 @@ begin
 				next_uop[1].Rd = uop0.Rs1;
 				next_uop[1].Rs1 = uop0.Rs1;
 				next_uop[1].Rs2 = uop0.Rs2;
+				next_uop[1].last = TRUE;
 			end
 		default:
 			begin
 				next_count = 5'd1;
 				next_uop[0] = uop0;
 				next_uop[0].exc = TRUE;
+				next_uop[0].last = TRUE;
 			end
 		endcase
 	Qupls5_pkg::OP_PPC_LBZ,
@@ -1101,10 +1190,11 @@ begin
 	Qupls5_pkg::OP_PPC_STB,
 	Qupls5_pkg::OP_PPC_STH,
 	Qupls5_pkg::OP_PPC_STW,
-	Qupls5_pkg::OP_PPC_STQ:
+	Qupls5_pkg::OP_PPC_STD:
 		begin
 			next_count = 5'd1;
 			next_uop[0] = uop0;
+			next_uop[0].last = TRUE;
 		end
 	Qupls5_pkg::OP_PPC_LBZU,
 	Qupls5_pkg::OP_PPC_LHZU,
@@ -1122,580 +1212,16 @@ begin
 			next_uop[1].Rd = uop0.Rs1;
 			next_uop[1].Rs1 = uop0.Rs1;
 			next_uop[1].imm = uop0.imm;
+			next_uop[1].last = TRUE;
 		end
 	default:
 		begin
 			next_count = 5'd1;
 			next_uop[0] = uop0;
 			next_uop[0].exc = TRUE;	// unimplmented
-		end
-`else
-	Qupls5_pkg::OP_BRK:
-		begin
-			next_uop[0] = ir;
-			next_uop[0].lead = TRUE;
-			next_count = 3'd1;
-		end
-/*
-	Qupls5_pkg::OP_MOVMR:
-		begin
-			if (insert_boi) begin
-				kk = 1;
-				next_uop[0] = uop_boi;
-				if (ir[47:46] > 2'd0) begin
-					next_uop[kk] = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
-					next_uop[kk].opcode = Qupls5_pkg::OP_R3H;
-					next_uop[kk].Rd = {9'(thread*40+ir.Rd)};
-					next_uop[kk].Rs1 = {9'(thread*40+ir.Rs1)};
-					next_uop[kk].func = Qupls5_pkg::FN_MOVE;
-					kk = kk + 1;
-				end
-				if (ir[47:46] > 2'd1) begin
-					next_uop[kk] = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
-					next_uop[kk].opcode = Qupls5_pkg::OP_R3H;
-					next_uop[kk].Rd = {9'(thread*40+ir.Rd2)};
-					next_uop[kk].Rs1 = {9'(thread*40+ir.Rs2)};
-					next_uop[kk].func = Qupls5_pkg::FN_MOVE;
-					kk = kk + 1;
-				end
-				if (ir[47:46] > 2'd2) begin
-					next_uop[kk] = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
-					next_uop[kk].opcode = Qupls5_pkg::OP_R3H;
-					next_uop[kk].Rd = {9'(thread*40+ir.Rs3)};
-					next_uop[kk].Rs1 = {9'(thread*40+ir.Rs4)};
-					next_uop[kk].func = Qupls5_pkg::FN_MOVE;
-					kk = kk + 1;
-				end
-				next_count = kk[3:0];
-				next_uop[0].lead = 1'd1;
-				next_uop[0].num = 5'd0;
-				next_uop[1].num = 5'd1;
-				next_uop[2].num = 5'd2;
-				next_uop[3].num = 5'd3;
-			end
-			else begin
-				kk = 0;
-				if (ir[47:46] > 2'd0) begin
-					next_uop[kk] = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
-					next_uop[kk].opcode = Qupls5_pkg::OP_R3H;
-					next_uop[kk].Rd = {9'(thread*40+ir.Rd)};
-					next_uop[kk].Rs1 = {9'(thread*40+ir.Rs1)};
-					next_uop[kk].func = Qupls5_pkg::FN_MOVE;
-					kk = kk + 1;
-				end
-				if (ir[47:46] > 2'd1) begin
-					next_uop[kk] = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
-					next_uop[kk].opcode = Qupls5_pkg::OP_R3H;
-					next_uop[kk].Rd = {9'(thread*40+ir.Rd2)};
-					next_uop[kk].Rs1 = {9'(thread*40+ir.Rs2)};
-					next_uop[kk].func = Qupls5_pkg::FN_MOVE;
-					kk = kk + 1;
-				end
-				if (ir[47:46] > 2'd2) begin
-					next_uop[kk] = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
-					next_uop[kk].opcode = Qupls5_pkg::OP_R3H;
-					next_uop[kk].Rd = {9'(thread*40+ir.Rs3)};
-					next_uop[kk].Rs1 = {9'(thread*40+ir.Rs4)};
-					next_uop[kk].func = Qupls5_pkg::FN_MOVE;
-					kk = kk + 1;
-				end
-				next_count = kk[3:0];
-				next_uop[0].lead = 1'd1;
-				next_uop[0].num = 5'd0;
-				next_uop[1].num = 5'd1;
-				next_uop[2].num = 5'd2;
-			end
-		end
-*/
-	Qupls5_pkg::OP_EXTD:
-		begin
-			if (SUPPORT_VECTOR) begin
-				case(instr.op3)
-				Qupls5_pkg::EX_VSHLV,Qupls5_pkg::EX_VSHRV:
-					case({Qupls5_pkg::VREGS > 4,vlen1[3:0]})
-					5'd1:	
-						begin
-							next_count = 4'd1;
-							next_uop[0] = vsins;
-							next_uop[0].lead = TRUE;
-							next_uop[0].Rd = vRd;
-							next_uop[0].Rs1 = vRs1;
-							next_uop[0].Rs4 = mot0_reg;
-						end
-					5'd2:	
-						begin
-							next_count = 4'd2;
-							next_uop[0] = vsins;
-							next_uop[0].lead = TRUE;
-							next_uop[0].Rd = vRd;
-							next_uop[0].Rs1 = vRs1;
-							next_uop[0].Rs4 = mot0_reg;
-							next_uop[1].num = 5'd1;
-							next_uop[1].Rd = vRd + 2'd1;
-							next_uop[1].Rs1 = vRs1 + 2'd1;
-							next_uop[1].Rs3 = mot0_reg;
-							next_uop[1].Rs4 = vsins.Rs4;
-						end
-					5'd3:	
-						begin
-							next_count = 4'd3;
-							next_uop[0] = vsins;
-							next_uop[0].lead = TRUE;
-							next_uop[0].Rd = vRd;
-							next_uop[0].Rs1 = vRs1;
-							next_uop[0].Rs4 = mot0_reg;
-							next_uop[1].num = 5'd1;
-							next_uop[1].Rd = vRd + 2'd1;
-							next_uop[1].Rs1 = vRs1 + 2'd1;
-							next_uop[1].Rs3 = mot0_reg;
-							next_uop[1].Rs4 = mot0_reg;
-							next_uop[2].num = 5'd2;
-							next_uop[2].Rd = vRd + 2'd2;
-							next_uop[2].Rs1 = vRs1 + 2'd2;
-							next_uop[2].Rs3 = mot0_reg;
-							next_uop[2].Rs4 = vsins.Rs4;
-						end
-					5'd4:	
-						begin
-							next_count = 4'd4;
-							next_uop[0] = vsins;
-							next_uop[0].lead = TRUE;
-							next_uop[0].Rd = vRd;
-							next_uop[0].Rs1 = vRs1;
-							next_uop[0].Rs4 = mot0_reg;
-							next_uop[1].num = 5'd1;
-							next_uop[1].Rd = vRd + 2'd1;
-							next_uop[1].Rs1 = vRs1 + 2'd1;
-							next_uop[1].Rs3 = mot0_reg;
-							next_uop[1].Rs4 = mot0_reg;
-							next_uop[2].num = 5'd2;
-							next_uop[2].Rd = vRd + 2'd2;
-							next_uop[2].Rs1 = vRs1 + 2'd2;
-							next_uop[2].Rs3 = mot0_reg;
-							next_uop[2].Rs4 = mot0_reg;
-							next_uop[3].num = 5'd3;
-							next_uop[3].Rd = vRd + 2'd3;
-							next_uop[3].Rs1 = vRs1 + 2'd3;
-							next_uop[3].Rs3 = mot0_reg;
-							next_uop[3].Rs4 = vsins.Rs4;
-						end
-					5'd21:	
-						begin
-							next_count = 4'd5;
-							next_uop[0] = vsins;
-							next_uop[0].lead = TRUE;
-							next_uop[0].Rd = vRd;
-							next_uop[0].Rs1 = vRs1;
-							next_uop[0].Rs4 = mot0_reg;
-							next_uop[1].num = 5'd1;
-							next_uop[1].Rd = vRd + 2'd1;
-							next_uop[1].Rs1 = vRs1 + 2'd1;
-							next_uop[1].Rs3 = mot0_reg;
-							next_uop[1].Rs4 = mot0_reg;
-							next_uop[2].num = 5'd2;
-							next_uop[2].Rd = vRd + 2'd2;
-							next_uop[2].Rs1 = vRs1 + 2'd2;
-							next_uop[2].Rs3 = mot0_reg;
-							next_uop[2].Rs4 = mot0_reg;
-							next_uop[3].num = 5'd3;
-							next_uop[3].Rd = vRd + 2'd3;
-							next_uop[3].Rs1 = vRs1 + 2'd3;
-							next_uop[3].Rs3 = mot0_reg;
-							next_uop[3].Rs4 = mot0_reg;
-							next_uop[4].num = 5'd4;
-							next_uop[4].Rd = vRd + 3'd4;
-							next_uop[4].Rs1 = vRs1 + 3'd4;
-							next_uop[4].Rs3 = mot0_reg;
-							next_uop[4].Rs4 = vsins.Rs4;
-						end
-					5'd22:	
-						begin
-							next_count = 4'd6;
-							next_uop[0].lead = TRUE;
-							next_uop[0].Rd = vRd;
-							next_uop[0].Rs1 = vRs1;
-							next_uop[0].Rs4 = mot0_reg;
-							next_uop[1].num = 5'd1;
-							next_uop[1].Rd = vRd + 2'd1;
-							next_uop[1].Rs1 = vRs1 + 2'd1;
-							next_uop[1].Rs3 = mot0_reg;
-							next_uop[1].Rs4 = mot0_reg;
-							next_uop[2].num = 5'd2;
-							next_uop[2].Rd = vRd + 2'd2;
-							next_uop[2].Rs1 = vRs1 + 2'd2;
-							next_uop[2].Rs3 = mot0_reg;
-							next_uop[2].Rs4 = mot0_reg;
-							next_uop[3].num = 5'd3;
-							next_uop[3].Rd = vRd + 2'd3;
-							next_uop[3].Rs1 = vRs1 + 2'd3;
-							next_uop[3].Rs3 = mot0_reg;
-							next_uop[3].Rs4 = mot0_reg;
-							next_uop[4].num = 5'd4;
-							next_uop[4].Rd = vRd + 3'd4;
-							next_uop[4].Rs1 = vRs1 + 3'd4;
-							next_uop[4].Rs3 = mot0_reg;
-							next_uop[4].Rs4 = mot0_reg;
-							next_uop[5].num = 5'd5;
-							next_uop[5].Rd = vRd + 3'd5;
-							next_uop[5].Rs1 = vRs1 + 3'd5;
-							next_uop[5].Rs3 = mot0_reg;
-							next_uop[5].Rs4 = vsins.Rs4;
-						end
-					5'd23:	
-						begin
-							next_count = 4'd7;
-							next_uop[0].lead = TRUE;
-							next_uop[0].Rd = vRd;
-							next_uop[0].Rs1 = vRs1;
-							next_uop[0].Rs4 = mot0_reg;
-							next_uop[1].num = 5'd1;
-							next_uop[1].Rd = vRd + 2'd1;
-							next_uop[1].Rs1 = vRs1 + 2'd1;
-							next_uop[1].Rs3 = mot0_reg;
-							next_uop[1].Rs4 = mot0_reg;
-							next_uop[2].num = 5'd2;
-							next_uop[2].Rd = vRd + 2'd2;
-							next_uop[2].Rs1 = vRs1 + 2'd2;
-							next_uop[2].Rs3 = mot0_reg;
-							next_uop[2].Rs4 = mot0_reg;
-							next_uop[3].num = 5'd3;
-							next_uop[3].Rd = vRd + 2'd3;
-							next_uop[3].Rs1 = vRs1 + 2'd3;
-							next_uop[3].Rs3 = mot0_reg;
-							next_uop[3].Rs4 = mot0_reg;
-							next_uop[4].num = 5'd4;
-							next_uop[4].Rd = vRd + 3'd4;
-							next_uop[4].Rs1 = vRs1 + 3'd4;
-							next_uop[4].Rs3 = mot0_reg;
-							next_uop[4].Rs4 = mot0_reg;
-							next_uop[5].num = 5'd5;
-							next_uop[5].Rd = vRd + 3'd5;
-							next_uop[5].Rs1 = vRs1 + 3'd5;
-							next_uop[5].Rs3 = mot0_reg;
-							next_uop[5].Rs4 = mot0_reg;
-							next_uop[6].num = 5'd6;
-							next_uop[6].Rd = vRd + 3'd6;
-							next_uop[6].Rs1 = vRs1 + 3'd6;
-							next_uop[6].Rs3 = mot0_reg;
-							next_uop[6].Rs4 = vsins.Rs4;
-						end
-					5'd24:
-						begin
-							next_count = 4'd8;
-							next_uop[0].lead = TRUE;
-							next_uop[0].Rd = vRd;
-							next_uop[0].Rs1 = vRs1;
-							next_uop[0].Rs4 = mot0_reg;
-							next_uop[1].num = 5'd1;
-							next_uop[1].Rd = vRd + 2'd1;
-							next_uop[1].Rs1 = vRs1 + 2'd1;
-							next_uop[1].Rs3 = mot0_reg;
-							next_uop[1].Rs4 = mot0_reg;
-							next_uop[2].num = 5'd2;
-							next_uop[2].Rd = vRd + 2'd2;
-							next_uop[2].Rs1 = vRs1 + 2'd2;
-							next_uop[2].Rs3 = mot0_reg;
-							next_uop[2].Rs4 = mot0_reg;
-							next_uop[3].num = 5'd3;
-							next_uop[3].Rd = vRd + 2'd3;
-							next_uop[3].Rs1 = vRs1 + 2'd3;
-							next_uop[3].Rs3 = mot0_reg;
-							next_uop[3].Rs4 = mot0_reg;
-							next_uop[4].num = 5'd4;
-							next_uop[4].Rd = vRd + 3'd4;
-							next_uop[4].Rs1 = vRs1 + 3'd4;
-							next_uop[4].Rs3 = mot0_reg;
-							next_uop[4].Rs4 = mot0_reg;
-							next_uop[5].num = 5'd5;
-							next_uop[5].Rd = vRd + 3'd5;
-							next_uop[5].Rs1 = vRs1 + 3'd5;
-							next_uop[5].Rs3 = mot0_reg;
-							next_uop[5].Rs4 = mot0_reg;
-							next_uop[6].num = 5'd6;
-							next_uop[6].Rd = vRd + 3'd6;
-							next_uop[6].Rs1 = vRs1 + 3'd6;
-							next_uop[6].Rs3 = mot0_reg;
-							next_uop[6].Rs4 = mot0_reg;
-							next_uop[7].num = 5'd7;
-							next_uop[7].Rd = vRd + 3'd7;
-							next_uop[7].Rs1 = vRs1 + 3'd7;
-							next_uop[7].Rs3 = mot0_reg;
-							next_uop[7].Rs4 = vsins.Rs4;
-						end
-					default:
-						begin
-							next_count = 4'd1;
-							next_uop[0] = nopi;
-						end
-					endcase
-				default:
-					begin
-						next_count = 4'd1;
-						next_uop[0] = uop0;
-					end
-				endcase
-			end
-			else begin
-				next_count = 4'd1;
-				next_uop[0] = uop0;
-			end
-		end
-	Qupls5_pkg::OP_R3B,Qupls5_pkg::OP_R3W,Qupls5_pkg::OP_R3T,Qupls5_pkg::OP_R3O:
-		if (SUPPORT_VECTOR && VECTOR_STRATEGY==0 && |ir.vn)	begin // vector?
-`include "Qupls5_microop_mem_R3V.sv"
-		end
-		else begin
-			if (insert_boi) begin
-				next_count = 4'd2;
-				next_uop[0] = uop_boi;
-				next_uop[1] = uop1;
-			end
-			else begin
-				next_count = 4'd1;
-				next_uop[0] = uop0;
-			end
-		end
-`include "Qupls5_microop_mem_FLT.sv"
-`include "Qupls5_microop_mem_FLTV.sv"
-`include "Qupls5_microop_mem_LSV.sv"
-`include "Qupls5_microop_mem_CAP.sv"
-	Qupls5_pkg::OP_LOADN,Qupls5_pkg::OP_LOADZN,
-	Qupls5_pkg::OP_LDB,Qupls5_pkg::OP_LDBZ,Qupls5_pkg::OP_LDW,Qupls5_pkg::OP_LDWZ,
-	Qupls5_pkg::OP_LDT,Qupls5_pkg::OP_LDTZ,Qupls5_pkg::OP_LOAD,Qupls5_pkg::OP_CLOAD:
-		begin
-			if (insert_boi) begin
-				next_count = 4'd2;
-				next_uop[0] = uop_boi;
-				next_uop[1] = uop1;
-			end
-			else begin
-				next_count = 4'd1;
-				next_uop[0] = uop0;
-			end
-		end
-
-	Qupls5_pkg::OP_CSR:
-		begin
-			if (insert_boi) begin
-				next_count = 4'd2;
-				next_uop[0] = uop_boi;
-				next_uop[1] = uop1;
-			end
-			else begin
-				next_count = 4'd1;
-				next_uop[0] = uop0;
-			end
-		end
-		/*
-			case(ir[47:41])
-			Qupls5_pkg::FN_ADD,Qupls5_pkg::FN_SUB,Qupls5_pkg::FN_MUL,Qupls5_pkg::FN_DIV,
-			Qupls5_pkg::FN_MULU,Qupls5_pkg::FN_DIVU,Qupls5_pkg::FN_MULSU,Qupls5_pkg::FN_DIVSU,
-			Qupls5_pkg::FN_AND,Qupls5_pkg::FN_OR,Qupls5_pkg::FN_XOR:
-				begin
-			endcase
-		*/
-	/*
-	Qupls5_pkg::OP_R3B,Qupls5_pkg::OP_R3W,Qupls5_pkg::OP_R3T,Qupls5_pkg::OP_R3O:
-		begin
-			case(ir[47:41])
-			Qupls5_pkg::FN_AND,Qupls5_pkg::FN_OR,Qupls5_pkg::FN_XOR:
-				begin
-					next_count = 3'd2;
-					next_uop[0] = {1'b1,1'b0,3'd1,3'd0,5'h00,4'd0,ir};
-					next_uop[1] = {1'b1,1'b0,3'd1,3'd0,5'h01,4'd0,ir & ~48'hFFFFFFFFE000};
-				end
-			endcase
-		end
-	*/
-	Qupls5_pkg::OP_ADDI,
-	Qupls5_pkg::OP_SUBFI,
-	Qupls5_pkg::OP_CMPI,
-	Qupls5_pkg::OP_CMPUI,
-	Qupls5_pkg::OP_ANDI,
-	Qupls5_pkg::OP_ORI,
-	Qupls5_pkg::OP_XORI,
-	Qupls5_pkg::OP_FADDI,
-	Qupls5_pkg::OP_LOADA,
-	Qupls5_pkg::OP_AMO,Qupls5_pkg::OP_CMPSWAP:
-		begin
-			if (insert_boi) begin
-				next_count = 4'd2;
-				next_uop[0] = uop_boi;
-				next_uop[1] = uop1;
-			end
-			else begin
-				next_count = 4'd1;
-				next_uop[0] = uop0;
-			end
-		end
-/*
-	Qupls5_pkg::OP_LOAD:
-		if (insert_boi) begin
-			next_count = 4'd3;
-			next_uop[0] = uop_boi;
-			next_uop[1] = uop1;
-			next_uop[2] = uop1;
-			next_uop[2].num = 5'd2;
-			next_uop[2].Rd[0] = 1'b1;
-			next_uop[2].imm = next_uop[1].imm + 4'd8;
-		end
-		else begin
-			next_count = 4'd2;
-			next_uop[0] = uop0;
-			next_uop[1] = uop0;
-			next_uop[1].num = 5'd2;
-			next_uop[1].Rd[0] = 1'b1;
-			next_uop[1].imm = next_uop[0].imm + 4'd8;
-		end
-*/
-	Qupls5_pkg::OP_CHK,
-	Qupls5_pkg::OP_STB,Qupls5_pkg::OP_STW,
-	Qupls5_pkg::OP_STT,Qupls5_pkg::OP_STORE,Qupls5_pkg::OP_CSTORE,
-	Qupls5_pkg::OP_STOREN,
-	Qupls5_pkg::OP_STPTR,
-	Qupls5_pkg::OP_FENCE:
-		if (insert_boi) begin
-			next_count = 4'd2;
-			next_uop[0] = uop_boi;
-			next_uop[1] = uop1;
-		end
-		else begin
-			next_count = 4'd1;
-			next_uop[0] = uop0;
-		end
-/*
-	Qupls5_pkg::OP_STORE,Qupls5_pkg::OP_STPTR:
-		if (insert_boi) begin
-			next_count = 4'd3;
-			next_uop[0] = uop_boi;
-			next_uop[1] = uop1;
-			next_uop[2] = uop1;
-			next_uop[2].num = 5'd2;
-			next_uop[2].Rd[0] = 1'b1;
-			next_uop[2].imm = next_uop[1].imm + 4'd8;
-		end
-		else begin
-			next_count = 4'd2;
-			next_uop[0] = uop0;
-			next_uop[1] = uop0;
-			next_uop[1].num = 5'd2;
-			next_uop[1].Rd[0] = 1'b1;
-			next_uop[1].imm = next_uop[0].imm + 4'd8;
-		end
-*/
-/*		
-	Qupls5_pkg::OP_MOV:
-		begin
-			next_count = 4'd1;
-			next_uop[0] = {1'b1,1'b0,3'd1,3'd0,4'd0,ir};
-		end
-*/			
-	Qupls5_pkg::OP_MOD,Qupls5_pkg::OP_NOP:
-		begin
-			if (insert_boi) begin
-				next_count = 4'd2;
-				next_uop[0] = uop_boi;
-				next_uop[1] = uop1;
-			end
-			else begin
-				next_count = 4'd1;
-				next_uop[0] = uop0;
-			end
-		end
-
-	Qupls5_pkg::OP_R3H:
-		begin
-			case(ir.func)
-			// Note the use of the OR instruction instead of MOVE.
-			// MOVES are done by renaming registers which is not what we want in 
-			// this case. Reading and writing of the same register is taking place
-			// as far as rename is concerned.
-			Qupls5_pkg::FN_EXG:
-				if (insert_boi) begin
-					next_count = 4'd4;
-					next_uop[0] = uop_boi;
-					// mot0 = Rd
-					next_uop[1] = uop1;
-					next_uop[1].func = Qupls5_pkg::FN_MOVE;
-					next_uop[1].Rd = mot0_reg;	
-					next_uop[1].Rs1 = uop1.Rd;
-					next_uop[1].Rs2 = zero_reg;
-					next_uop[1].Rs3 = zero_reg;
-					// Rd = Rs1
-					next_uop[2] = uop1;
-					next_uop[2].func = Qupls5_pkg::FN_MOVE;
-					next_uop[2].Rs2 = zero_reg;
-					next_uop[2].Rs3 = zero_reg;
-					// Rs1 = mot0
-					next_uop[3] = uop1;
-					next_uop[3].func = Qupls5_pkg::FN_MOVE;
-					next_uop[3].Rd = uop1.Rs1;
-					next_uop[3].Rs1 = mot0_reg;
-					next_uop[3].Rs2 = zero_reg;
-					next_uop[3].Rs3 = zero_reg;
-				end
-				else begin
-					next_count = 4'd3;
-					// mot0 = Rd
-					next_uop[0] = uop1;
-					next_uop[0].func = Qupls5_pkg::FN_MOVE;
-					next_uop[0].Rd = mot0_reg;	
-					next_uop[0].Rs1 = uop1.Rd;
-					next_uop[0].Rs2 = zero_reg;
-					next_uop[0].Rs3 = zero_reg;
-					// Rd = Rs1
-					next_uop[1] = uop1;
-					next_uop[1].func = Qupls5_pkg::FN_MOVE;
-					next_uop[1].Rs2 = zero_reg;
-					next_uop[1].Rs3 = zero_reg;
-					// Rs1 = mot0
-					next_uop[2] = uop1;
-					next_uop[2].func = Qupls5_pkg::FN_MOVE;
-					next_uop[2].Rd = uop1.Rs1;
-					next_uop[2].Rs1 = mot0_reg;
-					next_uop[2].Rs2 = zero_reg;
-					next_uop[2].Rs3 = zero_reg;
-				end
-			default:
-				if (insert_boi) begin
-					next_count = 4'd3;
-					next_uop[0] = uop_boi;
-					next_uop[1] = uop1;
-					next_uop[2] = uop1;
-					next_uop[2].lead = FALSE;
-					next_uop[2].num = 5'd2;
-					next_uop[2].Rd = uop1.Rd + 9'd1;
-					next_uop[2].Rs1 = uop1.Rs1 + 9'd1;
-					next_uop[2].Rs2 = uop1.Rs2 + 9'd1;
-					next_uop[2].Rs3 = uop1.Rs3 + 9'd1;
-				end
-				else begin
-					next_count = 4'd2;
-					next_uop[0] = uop0;
-					next_uop[1] = uop0;
-					next_uop[1].lead = FALSE;
-					next_uop[1].num = 5'd1;
-					next_uop[1].Rd = uop0.Rd + 9'd1;
-					next_uop[1].Rs1 = uop0.Rs1 + 9'd1;
-					next_uop[1].Rs2 = uop0.Rs2 + 9'd1;
-					next_uop[1].Rs3 = uop0.Rs3 + 9'd1;
-				end
-			endcase
-		end
-	default:
-		begin
-			if (insert_boi) begin
-				next_count = 4'd2;
-				next_uop[0] = uop_boi;
-				next_uop[1] = uop1;
-			end
-			else begin
-				next_count = 4'd1;
-				next_uop[0] = uop0;
-			end
+			next_uop[0].last = TRUE;
 		end
 	endcase
-`endif	
 	foreach (next_uop[nn]) begin
 		if (nn >= next_count)
 			next_uop[nn].v = INV;
@@ -1708,10 +1234,11 @@ always_comb
 begin
 	pr_nopi = {$bits(Qupls5_pkg::rob_entry_t){1'b0}};
 	pr_nopi.op.exc = Qupls5_pkg::FLT_NONE;
-	pr_nopi.op.uop = {41'd0,Qupls5_pkg::OP_NOP};
+	pr_nopi.op.uop.opcode = Qupls5_pkg::fnNop();
 	pr_nopi.op.decbus.nop = TRUE;
 	pr_nopi.op.decbus.cause = Qupls5_pkg::FLT_NONE;
 	pr_nopi.op.uop.lead = 1'd1;
+	pr_nopi.op.uop.last = 1'd1;
 	pr_nopi.op.v = 1'b1;
 	pr_nopi.v = 5'd1;
 	pr_nopi.exc = Qupls5_pkg::FLT_NONE;
@@ -1734,8 +1261,9 @@ generate begin : gComb
 			count = 5'd0;
 			foreach (uop[n1]) begin
 				uop[n1] = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
-				uop[n1].opcode = Qupls5_pkg::OP_NOP;
+				uop[n1].opcode = Qupls5_pkg::fnNop();
 				uop[n1].v = VAL;
+				uop[n1].last = TRUE;
 			end
 			pg_trn = {$bits(Qupls5_pkg::pipeline_group_reg_t){1'b0}};
 			foreach(pg_trn.pr[n1])

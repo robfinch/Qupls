@@ -65,6 +65,7 @@ begin
 	nopi = {$bits(Qupls5_pkg::rob_entry_t){1'b0}};
 	nopi.op.exc = Qupls5_pkg::FLT_NONE;
 	nopi.op.uop.opcode = fnNop();
+	nopi.op.uop.last = TRUE;
 	nopi.op.decbus.nop = TRUE;
 	nopi.op.decbus.cause = Qupls5_pkg::FLT_NONE;
 	nopi.op.uop.lead = 1'd1;
@@ -90,6 +91,7 @@ else begin
 end
 
 reg [3:0] len40;
+reg [31:0] insn;
 
 always_comb
 if (rst) begin
@@ -102,6 +104,7 @@ if (rst) begin
 		pr[n1].op.decbus.nop = TRUE;
 		pr[n1].op.decbus.cause = Qupls5_pkg::FLT_NONE;
 		pr[n1].op.uop.lead = 1'd1;
+		pr[n1].op.uop.last = TRUE;
 		pr[n1].op.v = 1'b1;
 		pr[n1].exc = Qupls5_pkg::FLT_NONE;
 		pr[n1].excv = INV;
@@ -147,6 +150,7 @@ else begin
 			pr[n1].op.decbus.nop = TRUE;
 			pr[n1].op.decbus.cause = Qupls5_pkg::FLT_NONE;
 			pr[n1].op.uop.lead = 1'd1;
+			pr[n1].op.uop.last = TRUE;
 			pr[n1].op.v = 1'b1;
 			pr[n1].exc = Qupls5_pkg::FLT_NONE;
 			pr[n1].excv = INV;
@@ -160,7 +164,7 @@ else begin
 		if (ssm_flag & ~prev_ssm_flag) begin
 			pr[0].op.cli = pc[0].cap.offset[6:0];
 			pr[0].ip_offs = 8'd0;
-			pr[0].op.uop = Qupls5_pkg::fnMapRawToUop(32'(ic_line >> ({4'd0,pr[0].ip_offs}<<3'd3)));
+			pr[0].op.uop = Qupls5_pkg::fnMapRawToUop(fnRibo(32'(ic_line >> ({4'd0,pr[0].ip_offs}<<3'd3))));
 			for (n1 = 1; n1 < MWIDTH; n1 = n1 + 1) begin
 				pr[n1] = {$bits(Qupls5_pkg::rob_entry_t){1'b0}};
 				pr[n1].op = {$bits(Qupls5_pkg::pipeline_reg_t){1'b0}};
@@ -169,6 +173,7 @@ else begin
 				pr[n1].op.decbus.nop = TRUE;
 				pr[n1].op.decbus.cause = Qupls5_pkg::FLT_NONE;
 				pr[n1].op.uop.lead = 1'd1;
+				pr[n1].op.uop.last = TRUE;
 				pr[n1].op.v = 1'b1;
 				pr[n1].exc = Qupls5_pkg::FLT_NONE;
 				pr[n1].excv = INV;
@@ -189,6 +194,7 @@ else begin
 				pr[n1].op.decbus.nop = TRUE;
 				pr[n1].op.decbus.cause = Qupls5_pkg::FLT_NONE;
 				pr[n1].op.uop.lead = 1'd1;
+				pr[n1].op.uop.last = TRUE;
 				pr[n1].op.v = 1'b1;
 				pr[n1].exc = Qupls5_pkg::FLT_NONE;
 				pr[n1].excv = INV;
@@ -208,7 +214,8 @@ else begin
 				pr[n1].ip_offs = n1 * 4;
 				// note ic_line is pre-aligned to the first instruction address. Need 
 				// to use the offset from that address to shift some more.
-				pr[n1].op.uop = Qupls5_pkg::fnMapRawToUop(32'(ic_line >> ({4'd0,pr[n1].ip_offs}<<3'd3)));
+				insn = ic_line >> {4'd0,pr[n1].ip_offs,3'b0};
+				pr[n1].op.uop = Qupls5_pkg::fnMapRawToUop(Qupls5_pkg::fnRibo(insn));
 				pr[n1].done = 2'b00;
 				pr[n1].stomped = FALSE;
 			end

@@ -2198,8 +2198,13 @@ always_ff @(posedge clk)
 	irq_in_ic <= irq_in;
 always_ff @(posedge clk)
 if (irst) begin
+	prev_ip <= {$bits(pc_address_ex_t){1'b0}};
 	prev_ip.stream <= 7'd1;
 	prev_ip.cap.offset <= Qupls5_pkg::RSTPC;
+	prev_ip.cap.top <= 65'h10000000000000000;
+	prev_ip.cap.base <= 64'd0;
+	prev_ip.cap.perms <= 24'hFFFFFF;
+	prev_ip.cap.otype <= 24'hFFFFFF;
 end
 else begin
 	if (advance_pipeline)
@@ -2208,6 +2213,7 @@ end
 
 pregno_t pred_reg;
 
+/*
 Qupls5_instruction_buffer uib1
 (
 	.rst_i(irst),
@@ -2229,12 +2235,14 @@ Qupls5_instruction_buffer uib1
 	.next_act_stream(next_act_stream),
 	.buffered_streams(buffered_streams)
 );
+*/
+assign ic_line = {ic_clineh.data,ic_clinel.data};
 
 Qupls5_pipeline_fet ufet1
 (
 	.rst(irst),
 	.clk(clk),
-	.ihit(is_buffered),
+	.ihit(ihit&ihito),//is_buffered),
 	.irq_in_ic(irq_in_ic),
 	.irq_ic(irq_ic),
 	.irq_in_fet(irq_in_fet),
@@ -2244,7 +2252,7 @@ Qupls5_pipeline_fet ufet1
 	.en(advance_pipeline),
 	.uop_num_ic(uop_num_ic),
 	.uop_num_fet(uop_num_fet),
-	.pc_i(pc_fet),
+	.pc_i(prev_ip),//pc_fet),
 	.misspc(misspc),
 	.misspc_fet(misspc_fet),
 	.ic_carry_mod(ic_carry_mod),
@@ -2253,8 +2261,6 @@ Qupls5_pipeline_fet ufet1
 //	.hwipc_fet(hwipc_fet),
 	.pc0_fet(pc0_fet),
 	.pc1_fet(),
-	.pc2_fet(),
-	.pc3_fet(),
 	.stomp_fet(stomp_fet),
 	.kept_stream(kept_stream),
 	.inject_cl(1'b0),
@@ -2382,7 +2388,7 @@ always_comb
 	uopc_invalidate = FALSE;//fnUcGetAddress(prev_pc.cap)+5'd16!=fnUcGetAddress(pc.cap);
 
 Qupls5_pipeline_mot #(
-	.COMB(0),
+	.COMB(1),
 	.MICROOPS_PER_INSTR(MICROOPS_PER_INSTR),
 	.MAX_MICROOPS(MAX_MICROOPS)
 )
@@ -2403,6 +2409,7 @@ umot1
 	.stomp_mot(stomp_mot),
 	.cline_ext(cline_ext),
 	.cline_mot(cline_mot),
+	.pc_fet(pc0_fet),
 	.pg_ext(pg_ext),
 	.pg_trn(pg_trn),
 	.pg_moq1(pg_moq1),
@@ -2695,12 +2702,13 @@ always_comb	advance_pipeline =
 //	 first_icache |
 	 (
 	 rstcnt[5] &&			// not resetting
-	 ((ihit && ihito) ||	// there is a hit on the instruction cache
-   is_buffered) &&	// or an instruction is buffered
+	 (ihit && ihito) &&
+	  //||	// there is a hit on the instruction cache
+   //is_buffered) &&	// or an instruction is buffered
 	!sync_ndxv &&			// there is no sync instruction in the re-order buffer
 	!rat_stallq &&		// not stalled on register alias
- 	 room_for_que	&&		// and there is room to queue
- 	 advance_extract2		// advance_extract2 (rd_more) set by mot stage
+ 	 room_for_que	//	&&		// and there is room to queue
+// 	 advance_extract2		// advance_extract2 (rd_more) set by mot stage
  	)
 	;	
 always_comb
@@ -7940,7 +7948,6 @@ always_ff @(posedge clk_i) begin: clock_n_debug
 	$display("   cacheH: %x", ic_line[1023:512]);
 	$display("EXT  %c%h.%h  0:%h  1:%h  2:%h  3:%h", stomp_ext?"S":"-",pg_ext.hdr.ip.stream.stream, pg_ext.hdr.ip.cap.offset,pg_ext.pr[0].op.uop, pg_ext.pr[1].op.uop, pg_ext.pr[2].op.uop, pg_ext.pr[3].op.uop);
 	$display("TRN  %c%h.%h", stomp_trn?"S":"-",pg_trn.hdr.ip.stream.stream, pg_trn.hdr.ip.cap.offset);
-	$display("MOQ1 %c%h.%h  0:%h  1:%h  2:%h  3:%h", stomp_moq1?"S":"-",pg_moq1.hdr.ip.stream.stream, pg_moq1.hdr.ip.cap.offset,pg_moq1.pr[0].op.uop, pg_moq1.pr[1].op.uop, pg_moq1.pr[2].op.uop, pg_moq1.pr[3].op.uop);
 	$display("MOQ2 %c%h.%h  0:%h  1:%h  2:%h  3:%h", stomp_moq2?"S":"-",pg_moq2.hdr.ip.stream.stream, pg_moq2.hdr.ip.cap.offset,pg_moq2.pr[0].op.uop, pg_moq2.pr[1].op.uop, pg_moq2.pr[2].op.uop, pg_moq2.pr[3].op.uop);
 	$display("MOT  %c%h.%h  0:%h  1:%h  2:%h  3:%h", stomp_mot?"S":"-",pg_mot.hdr.ip.stream.stream, pg_mot.hdr.ip.cap.offset,pg_mot.pr[0].op.uop, pg_mot.pr[1].op.uop, pg_mot.pr[2].op.uop, pg_mot.pr[3].op.uop);
 	$display("DEC  %c%h.%h  0:%h  1:%h  2:%h  3:%h", stomp_dec?"S":"-",pg_dec.hdr.ip.stream.stream, pg_dec.hdr.ip.cap.offset,pg_dec.pr[0].op.uop, pg_dec.pr[1].op.uop, pg_dec.pr[2].op.uop, pg_dec.pr[3].op.uop);
@@ -7968,14 +7975,10 @@ always_ff @(posedge clk_i) begin: clock_n_debug
 	$display("ip: %h.%h", pg_trn.hdr.ip.stream.stream, pg_trn.hdr.ip.cap.offset);
 	$display("Raw instructions");
 	$display("0:%h  1:%h  2:%h  3:%h", pg_trn.pr[0].op.uop, pg_trn.pr[1].op.uop, pg_trn.pr[2].op.uop, pg_trn.pr[3].op.uop);
-	$display("----- Micro-op Queue1 ----- %s", stomp_moq1 ? stompstr : no_stompstr);
-	$display("ip: %h.%h", pg_moq1.hdr.ip.stream.stream, pg_moq1.hdr.ip.cap.offset);
-	$display("Raw instructions");
-	$display("0:%h  1:%h  2:%h  3:%h", pg_moq1.pr[0].op.uop, pg_moq1.pr[1].op.uop, pg_moq1.pr[2].op.uop, pg_moq1.pr[3].op.uop);
-	$display("----- Micro-op Queue2 ----- %s", stomp_moq2 ? stompstr : no_stompstr);
+	$display("----- Micro-op Cache ----- %s", stomp_moq2 ? stompstr : no_stompstr);
 	$display("ip: %h.%h", pg_moq2.hdr.ip.stream.stream, pg_moq2.hdr.ip.cap.offset);
 	$display("Raw instructions");
-	$display("0:%h  1:%h  2:%h  3:%h", pg_moq2.pr[0].op.uop, pg_moq2.pr[1].op.uop, pg_moq2.pr[2].op.uop, pg_moq2.pr[3].op.uop);
+	$display("0:%h  1:%h  2:%h  3:%h", umot1.uop_buf[0], umot1.uop_buf[1], umot1.uop_buf[2], umot1.uop_buf[3]);
 	$display("----- Micro-op MOT output ----- %s", stomp_mot ? stompstr : no_stompstr);
 	$display("ip: %h.%h", pg_mot.hdr.ip.stream.stream, pg_mot.hdr.ip.cap.offset);
 	$display("Raw instructions");

@@ -35,18 +35,6 @@
 //
 // ============================================================================
 
-`ifndef CPU_TYPES_PKG
-import  cpu_types_pkg::*;
-`endif
-
-package Qupls5_pkg;
-`define QUPLS5	1'b1
-`define STARK_PKG 1'b1
-`undef IS_SIM
-parameter SIM = 1'b1;
-`define IS_SIM	1
-
-`include "Qupls5_config.sv"
 /*
 
 // Comment out to remove the sigmoid approximate function
@@ -3649,6 +3637,3 @@ endfunction
 // ============================================================================
 // Support Tasks
 // ============================================================================
-
-
-endpackage
