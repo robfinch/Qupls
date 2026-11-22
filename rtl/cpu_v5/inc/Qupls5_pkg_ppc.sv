@@ -2965,8 +2965,8 @@ begin
 	bsr = fnDecBsr(pr.op);
 	bcc = fnIsBranch(pr.op.uop);
 	case(1'b1)
-	jsr:	fnDecDest.cap.offset = {{29{pr.op.uop.imm[34]}},pr.op.uop.imm,1'b0};
-	bsr: 	fnDecDest.cap.offset = pc.cap.offset + {{29{pr.op.uop.imm[34]}},pr.op.uop.imm,1'b0};
+	jsr:	fnDecDest.cap.offset = {{30{pr.op.uop.imm[33]}},pr.op.uop.imm,1'b0};
+	bsr: 	fnDecDest.cap.offset = pc.cap.offset + {{30{pr.op.uop.imm[33]}},pr.op.uop.imm,1'b0};
 	bcc:	fnDecDest.cap.offset = pc.cap.offset + {{44{pr.op.uop.imm[19]}},pr.op.uop.imm,1'b0};
 	default:	fnDecDest.cap.offset = Qupls5_pkg::RSTPC;
 	endcase

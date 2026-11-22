@@ -64,7 +64,7 @@ always_comb
 begin
 	nopi = {$bits(Qupls5_pkg::rob_entry_t){1'b0}};
 	nopi.op.exc = Qupls5_pkg::FLT_NONE;
-	nopi.op.uop.opcode = fnNop();
+	nopi.op.uop.opcode = Qupls5_pkg::fnNop();
 	nopi.op.uop.last = TRUE;
 	nopi.op.decbus.nop = TRUE;
 	nopi.op.decbus.cause = Qupls5_pkg::FLT_NONE;
@@ -214,8 +214,9 @@ else begin
 				pr[n1].ip_offs = n1 * 4;
 				// note ic_line is pre-aligned to the first instruction address. Need 
 				// to use the offset from that address to shift some more.
-				insn = ic_line >> {4'd0,pr[n1].ip_offs,3'b0};
+				insn = ic_line >> {4'd0,n1[5:0],5'b0};
 				pr[n1].op.uop = Qupls5_pkg::fnMapRawToUop(Qupls5_pkg::fnRibo(insn));
+				pr[n1].op.uop.v = VAL;
 				pr[n1].done = 2'b00;
 				pr[n1].stomped = FALSE;
 			end
@@ -273,7 +274,8 @@ if (rst) begin
 	end
 end
 else begin
-	lpr <= pr;
+	if (en)
+		lpr <= pr;
 end
 
 task tPrefix;
@@ -281,38 +283,11 @@ input Qupls5_pkg::micro_op_t prefix;
 input integer ndx;
 begin
 	case(prefix.opcode)
-`ifdef PowerISA
 	Qupls5_pkg::OP_PPC_PREFIX:
 		begin
 			pr[ndx].op.uop.R = prefix.R;
 			pr[ndx].op.uop.imm[33:16] = prefix.imm;
 		end
-`else
-	Qupls5_pkg::OP_EXTOP:
-	begin
-		pr[ndx].op.uop.Rs3 = prefix.Rs3;
-		pr[ndx].op.uop.Rs4 = prefix.Rs4;
-		pr[ndx].op.uop.vlen = prefix.vlen;
-		pr[ndx].op.uop.vn[3:2] = prefix.vn[3:2];
-		pr[ndx].op.uop.sc = prefix.sc;
-		pr[ndx].op.uop.op3 = prefix.op3;
-		pr[ndx].op.uop.ms[3:2] = prefix.ms[3:2];
-		pr[ndx].op.uop.src[2] = prefix.src[2];
-		pr[ndx].op.uop.src[4] = prefix.src[4];
-	end
-	Qupls5_pkg::OP_NDX:
-	begin
-		pr[ndx].op.uop.Rs2 = prefix.Rs2;
-		pr[ndx].op.uop.Rs3 = prefix.Rs3;
-		pr[ndx].op.uop.vlen = prefix.vlen;
-		pr[ndx].op.uop.vn[2:1] = prefix.vn[2:1];
-		pr[ndx].op.uop.sc = prefix.sc;
-		pr[ndx].op.uop.op3 = prefix.op3;
-		pr[ndx].op.uop.ms[2:1] = prefix.ms[2:1];
-		pr[ndx].op.uop.src[1] = prefix.src[1];
-		pr[ndx].op.uop.src[2] = prefix.src[2];
-	end
-`endif	
 	default:	;
 	endcase
 end

@@ -48,7 +48,7 @@ module Qupls5_pipeline_mot(rst, clk, en, en2, vcfg_num, vcfg_cat,
 	cline_ext, cline_mot, uopc_invalidate,
 	pc_mot, branch_resolved, live_stream, pc_fet,
   pg_ext, pg_trn, pg_moq1, pg_moq2, pg_mot, pg_mot1,
-  advance_ext, uop_buf, uop_mark, head);
+  advance_ext, uop_buf, uop_mark, head, uoc_miss);
 parameter MWIDTH = Qupls5_pkg::MWIDTH;
 parameter MICROOPS_PER_INSTR = Qupls5_pkg::MICROOPS_PER_INSTR;
 parameter MAX_MICROOPS = 8;
@@ -80,6 +80,7 @@ output reg advance_ext;
 output Qupls5_pkg::micro_op_t [MAX_MICROOPS-1:0] uop_buf;
 output [2:0] uop_mark [0:MAX_MICROOPS-1];
 output [3:0] head [0:MWIDTH-1];
+output uoc_miss;
 
 integer n1;
 genvar g;
@@ -88,6 +89,7 @@ reg [1023:0] cline_mot1 = {1024{1'b1}};
 reg [5:0] uop_count [0:MWIDTH-1];
 Qupls5_pkg::micro_op_t [MICROOPS_PER_INSTR-1:0] uop [MWIDTH-1:0];
 Qupls5_pkg::rob_entry_t nopi;
+Qupls5_pkg::pipeline_group_reg_t [MWIDTH-1:0] pg_trn2;
 
 // Define a NOP instruction.
 always_comb
@@ -131,7 +133,7 @@ generate begin : gComb
 		always_ff @(posedge clk)
 			if (en) cline_mot1 <= cline_ext;
 		always_ff @(posedge clk)
-			if (en) cline_mot <= cline_mot1;
+			if (en2) cline_mot <= cline_mot1;
 
 		always_ff @(posedge clk)
 			pc_mot <= pg_moq2.hdr.ip;
@@ -144,17 +146,17 @@ generate begin : gComb
 		end
 		else if (en2) begin
 			pg_mot <= pg_moq2;
-			if (stomp_mot)
+			if (stomp_mot|uoc_miss)
 				pg_mot.hdr.v <= INV;
 			foreach (pg_mot.pr[n1]) begin
 				pg_mot.pr[n1].op.v <= VAL;
-				if (stomp_mot) begin
+				if (stomp_mot|uoc_miss) begin
 					pg_mot.pr[n1].op.v <= INV;
 					pg_mot.pr[n1].stomped <= TRUE;
 					pg_mot.pr[n1].done <= 2'b11;
 				end
 				// If there are no more micro-ops available, feed NOPs into the pipe.
-				if (rd_more) begin
+				if (uoc_miss) begin
 					pg_mot.pr[n1].op.uop.opcode=Qupls5_pkg::fnNop();
 					pg_mot.pr[n1].op.uop.lead = TRUE;
 					pg_mot.pr[n1].op.uop.last = TRUE;
@@ -218,31 +220,30 @@ Qupls5_microop_mem #(
 	.thread(pg_ext.pr[g].ip_stream.thread),
 	.stomp(stomp_trn),
   .pg_ext(pg_ext),
-	.pg_trn(pg_trn),
+	.pg_trn(pg_trn2[g]),
 	.live_stream(live_stream),
 	.branch_resolved(branch_resolved)
 );
 end
 endgenerate
 
-Qupls5_micro_op_cache #(.MICROOPS_PER_INSTR(MICROOPS_PER_INSTR)) umoq1
+Qupls5_micro_op_cache #(.MICROOPS_PER_INSTR(MICROOPS_PER_INSTR)) umoc1
 (
 	.rst(rst),
 	.clk(clk),
 	.en(en),
+	.en2(en2),
 	.rd_more(rd_more),
 	.uop(uop),
 	.uop_count(uop_count),
-	.stomp_moq1(stomp_moq1),
 	.stomp_moq2(stomp_moq2),
 	.pc_fet(pc_fet),
-	.pg_ext(pg_ext),
-	.pg_trn(pg_trn),
-	.pg_moq1(pg_moq1),
+	.pg_trn(pg_trn2[0]),
 	.pg_moq2(pg_moq2),
 	.live_stream(live_stream),
 	.branch_resolved(branch_resolved),
-	.invalidate(uopc_invalidate)
+	.invalidate(uopc_invalidate),
+	.miss_o(uoc_miss)
 );
 
 /*

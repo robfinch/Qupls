@@ -709,12 +709,6 @@ begin
     endcase
 	// Copy instruction to micro-op verbatium. The register fields need to be
 	// expanded by two bits each.
-  uop0 = instr;
-  uop0.lead = 1'b1;
-  uop0.v = VAL;
-  uop1 = instr;
-  uop1.num = 5'd1;
-
 	case (instr.opcode)
 	Qupls5_pkg::OP_VSR3B,Qupls5_pkg::OP_VSR3W,Qupls5_pkg::OP_VSR3T,Qupls5_pkg::OP_VSR3O,
 	Qupls5_pkg::OP_VSFLTH,Qupls5_pkg::OP_VSFLTS,Qupls5_pkg::OP_VSFLTD:
@@ -763,19 +757,26 @@ begin
 	next_count = 3'd0;
 	ble = 9'd0;
 	kk = 0;
-	foreach (next_uop[n1]) begin
+	foreach (next_uop[n1])
+	begin
 		next_uop[n1] = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
 		next_uop[n1].lead = n1==0;
 		next_uop[n1].opcode = Qupls5_pkg::fnNop();
 		next_uop[n1].ble = 9'b0;
 		next_uop[n1].v = VAL;
 	end
+  uop0 = instr;
+  uop0.lead = 1'b1;
+  uop0.v = VAL;
+  uop1 = instr;
+  uop1.num = 5'd1;
 
 	case(ir.opcode)
 	Qupls5_pkg::OP_PPC_ADDI,Qupls5_pkg::OP_PPC_ADDIS:
 		begin
 			next_count = 5'd1;
-			next_uop[0] = uop0;
+			next_uop[0] = ir;
+			next_uop[0].lead = TRUE;
 			next_uop[0].last = TRUE;
 		end
 	Qupls5_pkg::OP_PPC_ADDIC,
@@ -872,7 +873,8 @@ begin
 	Qupls5_pkg::OP_PPC_XORI,Qupls5_pkg::OP_PPC_XORIS:
 		begin
 			next_count = 5'd1;
-			next_uop[0] = uop0;
+			next_uop[0] = ir;
+			next_uop[0].lead = TRUE;
 			next_uop[0].last = TRUE;
 		end
 	Qupls5_pkg::OP_B:
@@ -1223,9 +1225,10 @@ begin
 		end
 	endcase
 	foreach (next_uop[nn]) begin
-		if (nn >= next_count)
+		if (nn >= next_count) begin
 			next_uop[nn].v = INV;
 			next_uop[nn].opcode = fnNop();
+		end
 	end	
 end
 
@@ -1263,6 +1266,7 @@ generate begin : gComb
 				uop[n1] = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
 				uop[n1].opcode = Qupls5_pkg::fnNop();
 				uop[n1].v = VAL;
+				uop[n1].lead = TRUE;
 				uop[n1].last = TRUE;
 			end
 			pg_trn = {$bits(Qupls5_pkg::pipeline_group_reg_t){1'b0}};

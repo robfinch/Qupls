@@ -302,6 +302,7 @@ Qupls5_pkg::pc_address_ex_t brtgt;
 reg pc_in_sync;
 reg advance_pipeline,advance_pipeline_seg2;
 wire advance_extract2;
+wire uoc_miss;			// micro-op cache miss
 reg do_bsr_h;
 reg set_pending_ipl;
 reg [5:0] next_pending_ipl;
@@ -452,8 +453,8 @@ Qupls5_pkg::reservation_station_entry_t xpipe2_rse, xpipe2_rse2;
 Qupls5_pkg::reservation_station_entry_t xpipe3_rse, xpipe3_rse2;
 Qupls5_pkg::reservation_station_entry_t xpipe4_rse, xpipe4_rse2;
 Qupls5_pkg::reservation_station_entry_t xpipe5_rse, xpipe5_rse2;
-Qupls5_pkg::reservation_station_entry_t [5:0] xpipe_rse;//, xpipe0_rse2;
-Qupls5_pkg::reservation_station_entry_t [5:0] xpipe_rseo;//, xpipe0_rse2;
+Qupls5_pkg::reservation_station_entry_t [6:0] xpipe_rse;//, xpipe0_rse2;
+Qupls5_pkg::reservation_station_entry_t [6:0] xpipe_rseo;//, xpipe0_rse2;
 Qupls5_pkg::cap_reservation_station_entry_t cap_xpipe_rse;
 Qupls5_pkg::cap_reservation_station_entry_t cap_xpipe_rseo;
 
@@ -1655,8 +1656,12 @@ end
 else
 	iuop_num <= iuop_num;
 always_ff @(posedge clk)
-if (advance_pipeline) begin
-	ic_irq_sn <= irq_sn;
+if (irst)
+	ic_irq_sn <= 8'd0;
+else begin
+	if (advance_pipeline) begin
+		ic_irq_sn <= irq_sn;
+	end
 end
 
 // ic_miss_adr is one clock in front of the translation pc_tlb_res.
@@ -2419,7 +2424,8 @@ umot1
 	.uop_mark(uop_mark),
 	.advance_ext(advance_extract2),	// rd_more , should maybe rename
 	.head(uop_head),
-	.uopc_invalidate(uopc_invalidate)
+	.uopc_invalidate(uopc_invalidate),
+	.uoc_miss(uoc_miss)
 );
 
 // ----------------------------------------------------------------------------
@@ -2707,8 +2713,8 @@ always_comb	advance_pipeline =
    //is_buffered) &&	// or an instruction is buffered
 	!sync_ndxv &&			// there is no sync instruction in the re-order buffer
 	!rat_stallq &&		// not stalled on register alias
- 	 room_for_que	//	&&		// and there is room to queue
-// 	 advance_extract2		// advance_extract2 (rd_more) set by mot stage
+ 	 room_for_que	&&		// and there is room to queue
+ 	 advance_extract2		// advance_extract2 (rd_more) set by mot stage
  	)
 	;	
 always_comb
@@ -2716,6 +2722,7 @@ always_comb
 		rstcnt[5] &&
  	 !sync_ndxv &&			// there is no sync instruction in the re-order buffer
 	 !rat_stallq &&			// not stalled on register alias
+	 !uoc_miss &&
  	  room_for_que			// and there is room to queue
 	;
 
@@ -4000,31 +4007,7 @@ Qupls5_branchmiss_pc umisspc1
 
 always_comb
 	fcu_missir <= fcu_instr;
-/* now in ALU #1
-Qupls5_meta_fcu umfcu1
-(
-	.rst(irst),
-	.clk(clk),
-	.rse_i(fcu_rse),
-	.rse_o(fcu_rse2),
-	.cr0(cr0),
-	.ic_irq(ic_irq),
-	.irq_sn(irq_sn),
-	.takb(takb),
-	.res(fcu_res),
-	.we_o(fcu_we)
-);
-*/
 
-/*
-Stark_branch_eval ube1
-(
-	.instr(fcu_instr.ins),
-	.a(fcu_argA),
-	.b(fcu_argBr),
-	.takb(takb)
-);
-*/
 wire cd_fcu_id;
 reg takbr1;
 reg takbr;
@@ -9558,8 +9541,8 @@ input rob_ndx_t id;
 input [4:0] retpc;
 input [2:0] uop_num;
 integer nn;
-reg [7:0] vecno;
 begin
+/*
 	//vecno = rob[id].imm ? rob[id].a0[8:0] : rob[id].a1[8:0];
 	//vecno <= rob[id].exc;
 	for (nn = 1; nn < ISTACK_DEPTH; nn = nn + 1)
@@ -9602,6 +9585,7 @@ begin
 		//excmiss <= TRUE;
 	end
 //		excmisspc <= {avec[$bits(pc_address_t)-1:16] + vecno,3'h0};
+*/
 end
 endtask
 

@@ -132,8 +132,8 @@ wire pack_regs = pack_regs_i;
 cpu_types_pkg::aregno_t regcnt;
 Qupls5_pkg::rob_entry_t [MWIDTH-1:0] ins_ext;
 Qupls5_pkg::rob_entry_t [MWIDTH-1:0] ins_fet;
-reg [1023:0] ic_line_aligned;
-reg [1023:0] prev_ic_line_aligned;
+reg [255:0] ic_line_aligned;
+reg [255:0] prev_ic_line_aligned;
 reg ld;
 reg [2:0] override_pos;
 reg p_overrided;
@@ -189,6 +189,7 @@ begin
 	nopi.op.decbus.nop = TRUE;
 	nopi.op.decbus.cause = Qupls5_pkg::FLT_NONE;
 	nopi.op.uop.lead = 1'd1;
+	nopi.op.uop.last = 1'd1;
 	nopi.op.v = 1'b1;
 	nopi.v = 5'd1;
 	nopi.exc = Qupls5_pkg::FLT_NONE;
@@ -294,7 +295,7 @@ always_comb nop3 = (stomp_fet && pc3_fet.bno_t!=stomp_bno) || (branchmiss && mis
 */
 // Stomp on instructions in the same instruction group following the overrride location.
 generate begin : gNop
-	for (g = 0; g < MWIDTH+1; g = g + 1)
+	for (g = 0; g < MWIDTH; g = g + 1)
 		always_comb nop_lead[g] = (branchmiss && misspc_fet.cap.offset > pc_fet[g].cap.offset);
 end
 endgenerate

@@ -45,18 +45,6 @@ function fnIsNop;
 input Qupls5_pkg::micro_op_t ir;
 begin
 	case(ir.opcode)
-	Qupls5_pkg::OP_R3B,Qupls5_pkg::OP_R3W,Qupls5_pkg::OP_R3T,Qupls5_pkg::OP_R3O,
-	Qupls5_pkg::OP_VR3B,Qupls5_pkg::OP_VR3W,Qupls5_pkg::OP_VR3T,Qupls5_pkg::OP_VR3O,
-	Qupls5_pkg::OP_VSR3B,Qupls5_pkg::OP_VSR3W,Qupls5_pkg::OP_VSR3T,Qupls5_pkg::OP_VSR3O:
-	   case(ir.func)
-     Qupls5_pkg::FN_MOVE:
-       fnIsNop = 1'b1;
-     default: fnIsNop = 1'b0;
-	   endcase
-	Qupls5_pkg::OP_NOP,
-	Qupls5_pkg::OP_EXTOP,
-	Qupls5_pkg::OP_REXT:
-		fnIsNop = 1'b1;
 	default:	fnIsNop = 1'b0;
 	endcase
 end
