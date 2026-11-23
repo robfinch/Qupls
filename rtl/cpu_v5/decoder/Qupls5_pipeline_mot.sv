@@ -90,31 +90,9 @@ wire rd_more,next_rd_more;
 reg [1023:0] cline_mot1 = {1024{1'b1}};
 reg [5:0] uop_count [0:MWIDTH-1];
 Qupls5_pkg::micro_op_t [MICROOPS_PER_INSTR-1:0] uop [MWIDTH-1:0];
-Qupls5_pkg::rob_entry_t nopi;
 Qupls5_pkg::pipeline_group_reg_t [MWIDTH-1:0] pg_trn2;
 reg [7:0] last_seqnum;
 
-// Define a NOP instruction.
-always_comb
-begin
-	nopi = {$bits(Qupls5_pkg::rob_entry_t){1'b0}};
-	nopi.op.exc = Qupls5_pkg::FLT_NONE;
-	nopi.op.uop = {41'd0,Qupls5_pkg::OP_NOP};
-	nopi.op.decbus.nop = TRUE;
-	nopi.op.decbus.cause = Qupls5_pkg::FLT_NONE;
-	nopi.op.uop.lead = 1'd1;
-	nopi.op.uop.last = 1'd1;
-	nopi.op.v = 1'b1;
-	nopi.v = 5'd1;
-	nopi.exc = Qupls5_pkg::FLT_NONE;
-	nopi.excv = INV;
-	nopi.done = 2'b11;
-	/* NOP will be decoded later
-	nopi.decbus.Rdz = 1'b1;
-	nopi.decbus.nop = 1'b1;
-	nopi.decbus.alu = 1'b1;
-	*/
-end
 /*{
 generate begin : gComb
 	if (FALSE & COMB) begin
@@ -145,7 +123,7 @@ generate begin : gComb
 		if (rst) begin
 			pg_mot <= {$bits(Qupls5_pkg::pipeline_group_reg_t){1'b0}};
 			foreach(pg_mot.pr[n1])
-				pg_mot.pr[n1] <= nopi;
+				pg_mot.pr[n1] <= fnROBNop;
 			last_seqnum <= 8'h00;
 		end
 		else if (en2) begin

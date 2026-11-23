@@ -937,12 +937,12 @@
 			default:	
 				begin
 			next_count = 4'd1;
-			next_uop[0] = nopi;
+			next_uop[0] = Qupls5_pkg::fnUopNop();
 				end
 			endcase
 		end
 		// Should really exception here.
 		else begin
 			next_count = 4'd1;
-			next_uop[0] = nopi;
+			next_uop[0] = Qupls5_pkg::fnUopNop();
 		end

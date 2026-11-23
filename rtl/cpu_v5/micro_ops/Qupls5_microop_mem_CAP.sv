@@ -102,6 +102,6 @@
 		end
 		else begin
 			next_count = 4'd1;
-			next_uop[0] = nopi;
+			next_uop[0] = fnUopNop();
 		end
 

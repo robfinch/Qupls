@@ -78,7 +78,7 @@ Qupls5_pkg::micro_op_t [MICROOPS_PER_INSTR-1:0] next_uop;
 reg insert_boi;
 reg [7:0] boi_count = 8'd0;
 reg [6:0] st_opcode, ld_opcode;
-Qupls5_pkg::micro_op_t nopi, uop_boi;
+Qupls5_pkg::micro_op_t uop_boi;
 Qupls5_pkg::micro_op_t floadi1;
 Qupls5_pkg::micro_op_t push1,push2,push3,push4,push5,push6,push7;
 Qupls5_pkg::micro_op_t pop1,pop2,pop3,pop4,pop5,pop6,pop7;
@@ -118,7 +118,6 @@ wire [8:0] mot2_reg = 9'd122;
 reg [8:0] vRd, vRs1, vRs2, vRs3;
 reg [8:0] Rd, Rs1, Rs2, Rs3;
 reg vRdi, vRs1i, vRs2i, vRs3i;		// whether to increment the register spec or not.
-Qupls5_pkg::rob_entry_t pr_nopi;
 reg [6:0] dc_opcode, dc_func;
 Qupls5_pkg::micro_op_t uop0;
 Qupls5_pkg::micro_op_t uop1;
@@ -174,14 +173,7 @@ begin
 	floadi1.Rs1 = 5'd1;
 	floadi1.opcode = Qupls5_pkg::OP_FLTD;
 end
-always_comb
-begin
-	nopi = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
-	nopi.v = 1'b1;
-	nopi.lead = 1'b1;
-	nopi.num = 5'd0;
-	nopi.opcode = Qupls5_pkg::fnNop();
-end
+
 always_comb
 begin
 	uop_boi = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
@@ -1237,28 +1229,6 @@ begin
 	end	
 end
 
-// Define a NOP instruction.
-always_comb
-begin
-	pr_nopi = {$bits(Qupls5_pkg::rob_entry_t){1'b0}};
-	pr_nopi.op.exc = Qupls5_pkg::FLT_NONE;
-	pr_nopi.op.uop.opcode = Qupls5_pkg::fnNop();
-	pr_nopi.op.decbus.nop = TRUE;
-	pr_nopi.op.decbus.cause = Qupls5_pkg::FLT_NONE;
-	pr_nopi.op.uop.lead = 1'd1;
-	pr_nopi.op.uop.last = 1'd1;
-	pr_nopi.op.v = 1'b1;
-	pr_nopi.v = VAL;
-	pr_nopi.exc = Qupls5_pkg::FLT_NONE;
-	pr_nopi.excv = INV;
-	pr_nopi.done = 2'b11;
-	/* NOP will be decoded later
-	nopi.decbus.Rdz = 1'b1;
-	nopi.decbus.nop = 1'b1;
-	nopi.decbus.alu = 1'b1;
-	*/
-end
-
 
 generate begin : gComb
 	// ToDo: finish off comb logic
@@ -1267,15 +1237,11 @@ generate begin : gComb
 		if (rst) begin
 			count = 5'd0;
 			foreach (uop[n1]) begin
-				uop[n1] = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
-				uop[n1].opcode = Qupls5_pkg::fnNop();
-				uop[n1].v = VAL;
-				uop[n1].lead = TRUE;
-				uop[n1].last = TRUE;
+				uop[n1] = fnUopNop();
 			end
 			pg_trn = {$bits(Qupls5_pkg::pipeline_group_reg_t){1'b0}};
 			foreach(pg_trn.pr[n1])
-				pg_trn.pr[n1] = nopi;
+				pg_trn.pr[n1] = fnROBNop();
 		end
 		else begin
 			count = next_count;
@@ -1304,7 +1270,7 @@ generate begin : gComb
 				uop[n1] <= next_uop[n1];
 			pg_trn <= {$bits(Qupls5_pkg::pipeline_group_reg_t){1'b0}};
 			foreach(pg_trn.pr[n1])
-				pg_trn.pr[n1] <= nopi;
+				pg_trn.pr[n1] <= fnROBNop();
 		end
 		else if (en) begin
 			count <= next_count;

@@ -137,7 +137,6 @@ wire rat_stallq1;
 wire ns_stall;
 assign rat_stallq = rat_stallq1|ns_stall;
 
-Qupls5_pkg::pipeline_reg_t nopi;
 
 always_comb
 	foreach (pg_dec.pr[n1])
@@ -153,35 +152,6 @@ always_comb
 always_comb
 	foreach (pg_dec.pr[n1])
 		is_move[n1] = pg_dec.pr[n1].op.decbus.move;
-
-// Define a NOP instruction.
-always_comb
-begin
-	nopi = {$bits(Qupls5_pkg::pipeline_reg_t){1'b0}};
-	nopi.v = 1'b1;
-	nopi.uop = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
-	nopi.uop.opcode = Qupls5_pkg::OP_NOP;
-	nopi.uop.v = VAL;
-	nopi.uop.lead = 1'd1;
-	nopi.uop.Rs1 = 8'd0;
-	nopi.uop.Rs2 = 8'd0;
-	nopi.uop.Rs3 = 8'd0;
-	nopi.uop.Rs4 = 8'd0;
-	nopi.uop.Rd = 8'd0;
-	nopi.decbus = {$bits(Qupls5_pkg::decode_bus_t){1'b0}};
-	nopi.decbus.v = VAL;
-	nopi.decbus.Rs1 = 8'd0;
-	nopi.decbus.Rs2 = 8'd0;
-	nopi.decbus.Rs3 = 8'd0;
-	nopi.decbus.Rs1z = 1'd0;
-	nopi.decbus.Rs2z = 1'd0;
-	nopi.decbus.Rs3z = 1'd0;
-	nopi.decbus.Rdv = 1'b0;
-	nopi.decbus.nop = 1'b1;
-	nopi.decbus.sau = 1'b1;
-	nopi.decbus.cause = Qupls5_pkg::FLT_NONE;
-	nopi.exc = Qupls5_pkg::FLT_NONE;
-end
 
 always_ff @(posedge clk)
 if (rst)
@@ -361,7 +331,7 @@ if (rst) begin
 		pg_ren.pr[n7] <= {$bits(Qupls5_pkg::rob_entry_t){1'b0}};
 		pg_ren.pr[n7].v <= VAL;
 		pg_ren.pr[n7].ip_stream <= 7'd1;
-		pg_ren.pr[n7].op <= nopi;
+		pg_ren.pr[n7].op <= Qupls5_pkg::fnPregNop();
 		pg_ren.pr[n7].exc <= Qupls5_pkg::FLT_NONE;
 		pg_ren.pr[n7].stomped <= TRUE;
 		pg_ren.pr[n7].done <= 2'b11;

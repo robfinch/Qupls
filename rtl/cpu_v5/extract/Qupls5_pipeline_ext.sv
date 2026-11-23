@@ -150,7 +150,6 @@ reg [MWIDTH-1:0] nop_lead;	// NOP out leading instructions
 reg chgflow,chgflow0,chgflow1,chgflow2,chgflow3,chgflowi;
 reg p_override0123,p_override123,p_override23,p_override3;
 
-//Qupls5_pkg::rob_entry_t nopi;
 
 always_comb
 begin
@@ -170,29 +169,6 @@ else begin
 		if (en)
 			pc_ext[n6] <= pc_fet[n6];
 end
-
-// Define a NOP instruction.
-function Qupls5_pkg::rob_entry_t nopi;
-begin
-	nopi = {$bits(Qupls5_pkg::rob_entry_t){1'b0}};
-	nopi.op.exc = Qupls5_pkg::FLT_NONE;
-	nopi.op.uop.opcode = Qupls5_pkg::fnNop();
-	nopi.op.decbus.nop = TRUE;
-	nopi.op.decbus.cause = Qupls5_pkg::FLT_NONE;
-	nopi.op.uop.lead = 1'd1;
-	nopi.op.uop.last = 1'd1;
-	nopi.op.v = 1'b1;
-	nopi.v = VAL;
-	nopi.exc = Qupls5_pkg::FLT_NONE;
-	nopi.excv = INV;
-	nopi.done = 2'b11;
-	/* NOP will be decoded later
-	nopi.decbus.Rdz = 1'b1;
-	nopi.decbus.nop = 1'b1;
-	nopi.decbus.alu = 1'b1;
-	*/
-end
-endfunction
 
 always_comb regcnt = regcnt_i;
 reg [63:0] adr;
@@ -507,7 +483,7 @@ if (rst_i) begin
 	seq_num <= 8'd0;
 	pg_ext <= {$bits(Qupls5_pkg::pipeline_group_reg_t){1'b0}};
 	foreach (pg_ext.pr[n2])
-		pg_ext.pr[n2] <= nopi();
+		pg_ext.pr[n2] <= fnROBNop();
 end
 else begin
 	if (en) begin

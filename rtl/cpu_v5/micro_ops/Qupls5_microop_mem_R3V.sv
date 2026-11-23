@@ -2,11 +2,7 @@
 		4'd0:
 			begin
 		next_count = 4'd1;
-		next_uop[0] = nopi;
-		next_uop[0].v = VAL;
-		next_uop[0].lead = TRUE;
-		next_uop[0].num = 5'd0;
-		next_uop[0].opcode = Qupls5_pkg::OP_NOP;
+		next_uop[0] = Qupls5_pkg::fnUopNop();
 		     end
 		4'd1:
 			begin
@@ -359,7 +355,7 @@
 		default:	
 			begin
 		next_count = 4'd1;
-		next_uop[0] = nopi;
+		next_uop[0] = Qupls5_pkg::fnUopNop();
 			end
 		endcase
 

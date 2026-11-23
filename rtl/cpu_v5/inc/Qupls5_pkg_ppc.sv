@@ -2554,6 +2554,61 @@ begin
 end
 endfunction
 
+function automatic [5:0] fnNop;
+begin
+		fnNop = Qupls5_pkg::OP_PPC_ORI;
+end
+endfunction
+
+function automatic [31:0] fnNopInsn;
+begin
+		fnNopInsn = {Qupls5_pkg::OP_PPC_ORI,26'd0};
+end
+endfunction
+
+function Qupls5_pkg::micro_op_t fnUopNop;
+begin
+	fnUopNop = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
+	fnUopNop.v = 1'b1;
+	fnUopNop.lead = 1'b1;
+	fnUopNop.last = 1'b1;
+	fnUopNop.num = 5'd0;
+	fnUopNop.opcode = Qupls5_pkg::fnNop();
+end
+endfunction
+
+// Define a constant NOP instruction.
+function Qupls5_pkg::pipeline_reg_t fnPregNop;
+begin
+	fnPregNop = {$bits(Qupls5_pkg::pipeline_reg_t){1'b0}};
+	fnPregNop.uop = Qupls5_pkg::fnUopNop();
+	fnPregNop.v = 1'b1;
+	fnPregNop.decbus.Rdv = 1'b0;
+	fnPregNop.decbus.nop = 1'b1;
+	fnPregNop.decbus.sau = 1'b1;
+	fnPregNop.decbus.cause = Qupls5_pkg::FLT_NONE;
+	fnPregNop.exc = Qupls5_pkg::FLT_NONE;
+	fnPregNop.excv = 1'b0;
+end
+endfunction
+
+function Qupls5_pkg::rob_entry_t fnROBNop;
+begin
+	fnROBNop = {$bits(Qupls5_pkg::rob_entry_t){1'b0}};
+	fnROBNop.op = Qupls5_pkg::fnPregNop();
+	fnROBNop.v = 5'd1;
+	fnROBNop.exc = Qupls5_pkg::FLT_NONE;
+	fnROBNop.excv = 1'b0;
+	fnROBNop.done = 2'b11;
+	fnROBNop.ip = Qupls5_pkg::RSTPC;
+	/* NOP will be decoded later
+	nopi.decbus.Rdz = 1'b1;
+	nopi.decbus.nop = 1'b1;
+	nopi.decbus.alu = 1'b1;
+	*/
+end
+endfunction
+
 function Qupls5_pkg::operating_mode_t fnNextOm;
 input Qupls5_pkg::operating_mode_t om;
 begin

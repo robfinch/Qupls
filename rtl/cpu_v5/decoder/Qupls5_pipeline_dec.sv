@@ -186,8 +186,6 @@ end
 
 Qupls5_pkg::rob_entry_t [MWIDTH-1:0] insm;
 Qupls5_pkg::pipeline_reg_t ins4d;
-Qupls5_pkg::pipeline_reg_t nopi;
-Qupls5_pkg::rob_entry_t nopi2;
 Qupls5_pkg::decode_bus_t [MWIDTH-1:0] dec;
 Qupls5_pkg::pipeline_reg_t [MWIDTH-1:0] pr_dec;
 Qupls5_pkg::rob_entry_t [MWIDTH-1:0] tpr;
@@ -316,38 +314,6 @@ end
 */
 //reg stomp_dec;
 
-// Define a NOP instruction.
-always_comb
-begin
-	nopi = {$bits(Qupls5_pkg::pipeline_reg_t){1'b0}};
-	nopi.uop.opcode = Qupls5_pkg::fnNop();
-	nopi.uop.lead = 3'd1;
-	nopi.v = 1'b1;
-	nopi.decbus.Rdv = 1'b0;
-	nopi.decbus.nop = 1'b1;
-	nopi.decbus.sau = 1'b1;
-	nopi.decbus.cause = Qupls5_pkg::FLT_NONE;
-	nopi.exc = Qupls5_pkg::FLT_NONE;
-	nopi.excv = INV;
-end
-
-// Define a NOP instruction.
-always_comb
-begin
-	nopi2 = {$bits(Qupls5_pkg::rob_entry_t){1'b0}};
-	nopi2.op.exc = Qupls5_pkg::FLT_NONE;
-	nopi2.op.uop.opcode = Qupls5_pkg::fnNop();
-	nopi2.op.decbus.nop = TRUE;
-	nopi2.op.decbus.cause = Qupls5_pkg::FLT_NONE;
-	nopi2.op.uop.lead = 1'd1;
-	nopi2.op.v = 1'b1;
-	nopi2.v = 5'd1;
-	nopi2.exc = Qupls5_pkg::FLT_NONE;
-	nopi2.excv = INV;
-	nopi2.done = 2'b11;
-end
-
-
 /*
 	Renaming has moved to Qupls5 mainline as asynch process.
 */
@@ -465,18 +431,18 @@ always_comb
 if (rst) begin
 	foreach (tpr[n7]) begin
 		tpr[n7] = {$bits(Qupls5_pkg::rob_entry_t){1'b0}};
-		tpr[n7].op = nopi;
+		tpr[n7].op = fnPregNop;
 		tpr[n7].done = 2'b11;
 		tpr[n7].stomped = TRUE;
 	end
 	foreach (insm[n9]) begin
 		insm[n9] = {$bits(Qupls5_pkg::rob_entry_t){1'b0}};
-		insm[n9].op = nopi;
+		insm[n9].op = fnPregNop;
 		insm[n9].done = 2'b11;
 		insm[n9].stomped = TRUE;
 	end
 	foreach (pr_dec[n9])
-		pr_dec[n9] = nopi;
+		pr_dec[n9] = fnPregNop;
 	bsr0_tgt = Qupls5_pkg::RSTPC;
 	bsr1_tgt = Qupls5_pkg::RSTPC;
 	bsr2_tgt = Qupls5_pkg::RSTPC;
@@ -501,7 +467,7 @@ else begin
 		insm[n9] = tpr[n9];
 		if (stomp_ext && FALSE) begin
 			if (tpr[n9].ip_stream!=kept_stream) begin
-				insm[n9].op = nopi;
+				insm[n9].op = fnPregNop;
 				insm[n9].done = 2'b11;
 				insm[n9].stomped = TRUE;
 			end
@@ -939,7 +905,7 @@ always_ff @(posedge clk)
 if (rst) begin
 	pg_dec <= {$bits(Qupls5_pkg::pipeline_group_reg_t){1'b0}};
 	foreach (pg_dec.pr[n10])
-		pg_dec.pr[n10] <= nopi2;
+		pg_dec.pr[n10] <= fnROBNop;
 	last_seqnum = 8'h00;
 end
 else begin

@@ -104,39 +104,6 @@ typedef struct packed {
 // Constants.
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 
-Qupls5_pkg::micro_op_t uop_nop;
-Qupls5_pkg::rob_entry_t nopi;		// A NOP instruction (constant)
-
-always_comb
-begin
-	uop_nop = {$bits(Qupls5_pkg::micro_op_t){1'b0}};
-	uop_nop.opcode = Qupls5_pkg::fnNop();
-	uop_nop.v = VAL;
-end
-
-// Define a constant NOP instruction.
-always_comb
-begin
-	nopi = {$bits(Qupls5_pkg::rob_entry_t){1'b0}};
-	nopi.op.exc = Qupls5_pkg::FLT_NONE;
-	nopi.op.uop.opcode = Qupls5_pkg::fnNop();
-	nopi.op.decbus.nop = TRUE;
-	nopi.op.decbus.cause = Qupls5_pkg::FLT_NONE;
-	nopi.op.uop.lead = 1'd1;
-	nopi.op.uop.last = 1'd1;
-	nopi.op.v = 1'b1;
-	nopi.v = 5'd1;
-	nopi.exc = Qupls5_pkg::FLT_NONE;
-	nopi.excv = INV;
-	nopi.done = 2'b11;
-	nopi.ip = Qupls5_pkg::RSTPC;
-	/* NOP will be decoded later
-	nopi.decbus.Rdz = 1'b1;
-	nopi.decbus.nop = 1'b1;
-	nopi.decbus.alu = 1'b1;
-	*/
-end
-
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 // Variables.
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
@@ -257,31 +224,31 @@ begin
 				end
 			end
 			else
-				iuop[3] = uop_nop;
+				iuop[3] = Qupls5_pkg::fnUopNop();
 		end
 		else begin
-			iuop[2] = uop_nop;
-			iuop[3] = uop_nop;
+			iuop[2] = Qupls5_pkg::fnUopNop();
+			iuop[3] = Qupls5_pkg::fnUopNop();
 		end
 	end
 	else begin
-		iuop[1] = uop_nop;
-		iuop[2] = uop_nop;
-		iuop[3] = uop_nop;
+		iuop[1] = Qupls5_pkg::fnUopNop();
+		iuop[2] = Qupls5_pkg::fnUopNop();
+		iuop[3] = Qupls5_pkg::fnUopNop();
 	end
 	// If the uop IP's are not valid set following micro-ops to NOPs.
 	// Likely hit a missing cookie at the last micro-op.
 	if (!uop_ip[1].v) begin
-		iuop[1] = uop_nop;
-		iuop[2] = uop_nop;
-		iuop[3] = uop_nop;
+		iuop[1] = Qupls5_pkg::fnUopNop();
+		iuop[2] = Qupls5_pkg::fnUopNop();
+		iuop[3] = Qupls5_pkg::fnUopNop();
 	end
 	if (!uop_ip[2].v) begin
-		iuop[2] = uop_nop;
-		iuop[3] = uop_nop;
+		iuop[2] = Qupls5_pkg::fnUopNop();
+		iuop[3] = Qupls5_pkg::fnUopNop();
 	end
 	if (!uop_ip[3].v)
-		iuop[3] = uop_nop;
+		iuop[3] = Qupls5_pkg::fnUopNop();
 	valid = {iuop[3].v,iuop[2].v,iuop[1].v,iuop[0].v};
 	miss = ~(iuop[0].v & iuop[1].v & iuop[2].v & iuop[3].v & uop_ip[0].v);
 end
@@ -438,7 +405,7 @@ begin
 	cache.line[n].clip <= FALSE;
 	// Pack micro-ops at load time.
 	for (n8 = 0; n8 < 16; n8 = n8 + 1)
-		cache.line[n].uop[n8] <= uop_nop;
+		cache.line[n].uop[n8] <= Qupls5_pkg::fnUopNop();
 	// copy first four micro-ops
 	for (n8 = 0; n8 < 4; n8 = n8 + 1) begin
 		cache.line[n].uop[n8] <= uop[0][n8];
@@ -475,7 +442,7 @@ always_ff @(posedge clk)
 if (rst) begin
 	pg_moq2 <= {$bits(Qupls5_pkg::pipeline_group_reg_t){1'b0}};
 	foreach(pg_moq2.pr[n1])
-		pg_moq2.pr[n1] <= nopi;
+		pg_moq2.pr[n1] <= fnROBNop();
 end
 else begin
 	if (en2) begin	// segment 2 enable.

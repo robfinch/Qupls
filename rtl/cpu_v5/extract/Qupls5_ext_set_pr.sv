@@ -58,29 +58,6 @@ Qupls5_pkg::rob_entry_t [MWIDTH-1:0] lpr;
 
 reg prev_ssm_flag;
 
-// Define a NOP instruction.
-function automatic Qupls5_pkg::rob_entry_t nopi;
-begin
-	nopi = {$bits(Qupls5_pkg::rob_entry_t){1'b0}};
-	nopi.op.exc = Qupls5_pkg::FLT_NONE;
-	nopi.op.uop.opcode = Qupls5_pkg::fnNop();
-	nopi.op.uop.last = TRUE;
-	nopi.op.decbus.nop = TRUE;
-	nopi.op.decbus.cause = Qupls5_pkg::FLT_NONE;
-	nopi.op.uop.lead = TRUE;
-	nopi.op.v = VAL;
-	nopi.v = VAL;
-	nopi.exc = Qupls5_pkg::FLT_NONE;
-	nopi.excv = INV;
-	nopi.done = 2'b11;
-	/* NOP will be decoded later
-	nopi.decbus.Rdz = 1'b1;
-	nopi.decbus.nop = 1'b1;
-	nopi.decbus.alu = 1'b1;
-	*/
-end
-endfunction
-
 always_ff @(posedge clk)
 if (rst)
 	prev_ssm_flag <= 1'b0;
@@ -95,7 +72,7 @@ reg [31:0] insn;
 always_comb
 if (rst) begin
 	foreach (pr[n1]) begin
-		pr[n1] = nopi();
+		pr[n1] = fnROBNop();
 		pr[n1].ip_stream = pc[n1].stream.stream;
 	end
 end
@@ -105,7 +82,7 @@ else begin
 	if (en) begin
 /*
 		foreach (pr[n1]) begin
-			pr[n1] = nopi();
+			pr[n1] = fnROBNop();
 			pr[n1].v = VAL;
 			pr[n1].ip_stream = pc[n1].stream.stream;
 		end
@@ -117,15 +94,14 @@ else begin
 			pr[0].ip = fnUcGetAddress(pc[0].cap);
 			pr[0].op.uop = Qupls5_pkg::fnMapRawToUop(fnRibo(32'(ic_line)));
 			for (n1 = 1; n1 < MWIDTH; n1 = n1 + 1) begin
-				pr[n1] = nopi();
+				pr[n1] = fnROBNop();
 				pr[n1].op.ssm = TRUE;
-				pr[n1].done = 2'b11;
 				pr[n1].ip_stream = pc[n1].stream.stream;
 			end
 		end
 		else if (ssm_flag) begin
 			foreach(pr[n1]) begin
-				pr[n1] = nopi();
+				pr[n1] = fnROBNop();
 				pr[n1].op.ssm = TRUE;
 				pr[n1].ip_stream = pc[n1].stream.stream;
 			end

@@ -58,16 +58,4 @@ begin
 end
 endfunction
 
-function automatic [6:0] fnNop;
-begin
-		fnNop = Qupls5_pkg::OP_PPC_ORI;
-end
-endfunction
-
-function automatic [31:0] fnNopInsn;
-begin
-		fnNopInsn = {Qupls5_pkg::OP_PPC_ORI,26'd0};
-end
-endfunction
-
 endpackage
