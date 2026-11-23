@@ -176,7 +176,7 @@ begin
 	lsq[n12r][n12c].v <= VAL;
 	lsq[n12r][n12c].state <= 2'b00;
 	lsq[n12r][n12c].agen <= FALSE;
-	lsq[n12r][n12c].pc <= pgh[rob.pghn].ip.cap.offset + rob.ip_offs;
+	lsq[n12r][n12c].pc <= rob.ip;
 	lsq[n12r][n12c].loadv <= INV;
 	lsq[n12r][n12c].load <= rob.op.decbus.load|rob.excv;
 	lsq[n12r][n12c].loadz <= rob.op.decbus.loadz|rob.excv;

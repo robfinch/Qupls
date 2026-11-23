@@ -45,7 +45,7 @@ import Qupls5_pkg::*;
 
 module Qupls5_pipeline_mot(rst, clk, en, en2, vcfg_num, vcfg_cat,
 	stomp_trn, stomp_moq1, stomp_moq2, stomp_mot,
-	cline_ext, cline_mot, uopc_invalidate,
+	cline_ext, cline_mot, uopc_invalidate, uoc_stall, uoc_full,
 	pc_mot, branch_resolved, live_stream, pc_fet,
   pg_ext, pg_trn, pg_moq1, pg_moq2, pg_mot, pg_mot1,
   advance_ext, uop_buf, uop_mark, head, uoc_miss);
@@ -81,6 +81,8 @@ output Qupls5_pkg::micro_op_t [MAX_MICROOPS-1:0] uop_buf;
 output [2:0] uop_mark [0:MAX_MICROOPS-1];
 output [3:0] head [0:MWIDTH-1];
 output uoc_miss;
+output uoc_stall;
+output uoc_full;
 
 integer n1;
 genvar g;
@@ -90,6 +92,7 @@ reg [5:0] uop_count [0:MWIDTH-1];
 Qupls5_pkg::micro_op_t [MICROOPS_PER_INSTR-1:0] uop [MWIDTH-1:0];
 Qupls5_pkg::rob_entry_t nopi;
 Qupls5_pkg::pipeline_group_reg_t [MWIDTH-1:0] pg_trn2;
+reg [7:0] last_seqnum;
 
 // Define a NOP instruction.
 always_comb
@@ -143,8 +146,10 @@ generate begin : gComb
 			pg_mot <= {$bits(Qupls5_pkg::pipeline_group_reg_t){1'b0}};
 			foreach(pg_mot.pr[n1])
 				pg_mot.pr[n1] <= nopi;
+			last_seqnum <= 8'h00;
 		end
 		else if (en2) begin
+			last_seqnum <= pg_moq2.hdr.sn;
 			pg_mot <= pg_moq2;
 			if (stomp_mot|uoc_miss)
 				pg_mot.hdr.v <= INV;
@@ -152,21 +157,23 @@ generate begin : gComb
 				pg_mot.pr[n1].op.v <= VAL;
 				if (stomp_mot|uoc_miss) begin
 					pg_mot.pr[n1].op.v <= INV;
-					pg_mot.pr[n1].stomped <= TRUE;
 					pg_mot.pr[n1].done <= 2'b11;
 				end
+				/*
 				// If there are no more micro-ops available, feed NOPs into the pipe.
 				if (uoc_miss) begin
+					pg_mot.pr[n1].op.v <= INV;
 					pg_mot.pr[n1].op.uop.opcode=Qupls5_pkg::fnNop();
 					pg_mot.pr[n1].op.uop.lead = TRUE;
 					pg_mot.pr[n1].op.uop.last = TRUE;
 					pg_mot.pr[n1].done <= 2'b11;
 				end
-				else begin
+				else
+				*/
+				begin
 					if (branch_resolved) begin
 						if (pg_moq2.pr[n1].ip_stream.thread==live_stream.thread && pg_moq2.pr[n1].ip_stream.stream != live_stream.stream) begin
 							pg_mot.pr[n1].op.v <= INV;
-							pg_mot.pr[n1].stomped <= TRUE;
 							pg_mot.pr[n1].done <= 2'b11;
 						end
 					end
@@ -201,7 +208,8 @@ generate begin : gMicroopMem
 	for (g = 0; g < MWIDTH; g = g + 1)
 Qupls5_microop_mem #(
 	.COMB(COMB),
-	.MICROOPS_PER_INSTR(MICROOPS_PER_INSTR)
+	.MICROOPS_PER_INSTR(MICROOPS_PER_INSTR),
+	.WHICH(g)
 ) uuop1
 (
 	.rst(rst),
@@ -243,7 +251,9 @@ Qupls5_micro_op_cache #(.MICROOPS_PER_INSTR(MICROOPS_PER_INSTR)) umoc1
 	.live_stream(live_stream),
 	.branch_resolved(branch_resolved),
 	.invalidate(uopc_invalidate),
-	.miss_o(uoc_miss)
+	.miss_o(uoc_miss),
+	.stall(uoc_stall),
+	.uoc_full(uoc_full)
 );
 
 /*
@@ -286,6 +296,6 @@ else begin
 end
 
 always_comb
-	advance_ext = rd_more|did_rd_more;
+	advance_ext = TRUE;//rd_more|did_rd_more;
 
 endmodule

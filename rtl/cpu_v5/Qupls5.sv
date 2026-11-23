@@ -303,6 +303,8 @@ reg pc_in_sync;
 reg advance_pipeline,advance_pipeline_seg2;
 wire advance_extract2;
 wire uoc_miss;			// micro-op cache miss
+wire uoc_stall;
+wire uoc_full;
 reg do_bsr_h;
 reg set_pending_ipl;
 reg [5:0] next_pending_ipl;
@@ -2425,7 +2427,9 @@ umot1
 	.advance_ext(advance_extract2),	// rd_more , should maybe rename
 	.head(uop_head),
 	.uopc_invalidate(uopc_invalidate),
-	.uoc_miss(uoc_miss)
+	.uoc_miss(uoc_miss),
+	.uoc_stall(uoc_stall),
+	.uoc_full(uoc_full)
 );
 
 // ----------------------------------------------------------------------------
@@ -2714,7 +2718,8 @@ always_comb	advance_pipeline =
 	!sync_ndxv &&			// there is no sync instruction in the re-order buffer
 	!rat_stallq &&		// not stalled on register alias
  	 room_for_que	&&		// and there is room to queue
- 	 advance_extract2		// advance_extract2 (rd_more) set by mot stage
+ 	 advance_extract2	&&	// advance_extract2 (rd_more) set by mot stage
+ 	!uoc_full
  	)
 	;	
 always_comb
@@ -2723,6 +2728,7 @@ always_comb
  	 !sync_ndxv &&			// there is no sync instruction in the re-order buffer
 	 !rat_stallq &&			// not stalled on register alias
 	 !uoc_miss &&
+	 !uoc_stall &&
  	  room_for_que			// and there is room to queue
 	;
 
@@ -7238,10 +7244,10 @@ else begin
 		commit3_idv <= cmttlb[3];
 	end
 	if (do_commit) begin
-		commit_pc0 <= pgh[rob[head[0]].pghn].ip.cap.offset + rob[head[0]].ip_offs;
-		commit_pc1 <= pgh[rob[head[1]].pghn].ip.cap.offset + rob[head[1]].ip_offs;
-		commit_pc2 <= pgh[rob[head[2]].pghn].ip.cap.offset + rob[head[2]].ip_offs;
-		commit_pc3 <= pgh[rob[head[3]].pghn].ip.cap.offset + rob[head[3]].ip_offs;
+		commit_pc0 <= rob[head[0]].ip;
+		commit_pc1 <= rob[head[1]].ip;
+		commit_pc2 <= rob[head[2]].ip;
+		commit_pc3 <= rob[head[3]].ip;
 		commit_brtgt0 <= rob[head[0]].brtgt;
 		commit_brtgt1 <= rob[head[1]].brtgt;
 		commit_brtgt2 <= rob[head[2]].brtgt;
@@ -7312,16 +7318,16 @@ else begin
 		if (rob[head[0]].excv && rob[head[0]].v)
 //			err_mask[head[0]] <= 1'b1;
 //			if (rob[head[0]].last)
-			tProcessExc(head[0],pgh[rob[head[0]].pghn].ip.cap.offset+rob[head[0]].ip_offs,rob[head[0]].op.uop.num);
+			tProcessExc(head[0],rob[head[0]].ip,rob[head[0]].op.uop.num);
 		else if (rob[head[1]].excv && cmtcnt > 3'd1 && rob[head[1]].v)
-			tProcessExc(head[1],pgh[rob[head[1]].pghn].ip.cap.offset+rob[head[1]].ip_offs,rob[head[1]].op.uop.num);
+			tProcessExc(head[1],rob[head[1]].ip,rob[head[1]].op.uop.num);
 		else if (rob[head[2]].excv && cmtcnt > 3'd2 && rob[head[2]].v)
-			tProcessExc(head[2],pgh[rob[head[2]].pghn].ip.cap.offset+rob[head[2]].ip_offs,rob[head[2]].op.uop.num);
+			tProcessExc(head[2],rob[head[2]].ip,rob[head[2]].op.uop.num);
 		else if (rob[head[3]].excv && cmtcnt > 3'd3 && rob[head[3]].v)
-			tProcessExc(head[3],pgh[rob[head[3]].pghn].ip.cap.offset+rob[head[3]].ip_offs,rob[head[3]].op.uop.num);
+			tProcessExc(head[3],rob[head[3]].ip,rob[head[3]].op.uop.num);
 			
 		if (rob[head[0]].op.ssm)
-			tProcessExc(head[0],Qupls5_pkg::SSM_DEBUG ? pgh[rob[head[0]].pghn].ip.cap.offset+{rob[head[0]].ip_offs,1'b0} : rob[head[0]].op.hwipc,rob[head[0]].op.uop.num);
+			tProcessExc(head[0],Qupls5_pkg::SSM_DEBUG ? rob[head[0]].ip : rob[head[0]].op.hwipc,rob[head[0]].op.uop.num);
 
 		/*
 		if (FALSE) begin
@@ -7973,7 +7979,7 @@ always_ff @(posedge clk_i) begin: clock_n_debug
 	$display("pc3: %h.%h ins3: %h", uiext1.pg_ext.pr[3].pc.pc[23:0], uiext1.pg_ext.pr[3].mcip, uiext1.pg_ext.pr[3].uop[47:0]);
 	*/
 	if (p_override)
-		$display("BSR %h  pc0_fet=%h", new_address_ext, uiext1.pg_ext.hdr.ip.cap.offset+{uiext1.pg_ext.pr[0].ip_offs,1'b0});
+		$display("BSR %h  pc0_fet=%h", new_address_ext, {uiext1.pg_ext.pr[0].ip});
 	$display("   ");
 	$display("TPR   %h.%h  0:%h  1:%h  2:%h  3:%h", "-",pg_dec.hdr.ip.stream,pg_dec.hdr.ip.cap.offset,udecstg1.tpr[0].op.uop, udecstg1.tpr[1].op.uop, udecstg1.tpr[2].op.uop, udecstg1.tpr[3].op.uop);
 	/*
@@ -8071,7 +8077,7 @@ always_ff @(posedge clk_i) begin: clock_n_debug
 			rob[i].op.decbus.Rs2, rob[i].op.pRs2, rob[i].argB, rob[i].argB_v?"v":" ",
 			rob[i].op.decbus.Rs3, rob[i].op.pRs3, rob[i].argC, rob[i].argC_v?"v":" ",
 			rob[i].op.decbus.immb,//argI,
-			rob[i].ip_stream, pgh[rob[i].pghn].ip.cap.offset + rob[i].ip_offs,
+			rob[i].ip_stream, rob[i].op.uop.ip,
 			rob[i].cndx,
 			rob[i].op.uop[63:0]
 		);
@@ -9067,7 +9073,7 @@ begin
 	next_robe.could_issue_nm = FALSE;
 	// "static" fields, these fields remain constant after enqueue
 	next_robe.grp = grp;
-	next_robe.brtgt = Qupls5_pkg::fnTargetIP(pgh[robe.pghn].ip.cap.offset + pgh[robe.pghn].ip.cap.base + robe.ip_offs,db.immc);
+	next_robe.brtgt = Qupls5_pkg::fnTargetIP(robe.ip,db.immc);
 	// Set the interrupt return address to this instruction.
 	next_robe.eip_offs = robe.eip_offs;
 	next_robe.om = cr0.om;
@@ -9267,9 +9273,9 @@ begin
 			else if (rob[head].op.decbus.irq)
 				tProcessHwi(head,rob[head].op.uop.num,{rob[head].op.uop.Rs2[0],rob[head].op.uop.Rs1}==6'd63 ? 4'b0001 : 4'b0010);
 			else if (rob[head].op.decbus.brk)
-				tProcessExc(head,pgh[rob[head].pghn].ip.cap.offset+rob[head].ip_offs+32'd6,rob[head].op.uop.num);
+				tProcessExc(head,rob[head].ip+32'd4,rob[head].op.uop.num);
 			else if (rob[head].op.decbus.sys)
-				tProcessExc(head,pgh[rob[head].pghn].ip.cap.offset+rob[head].ip_offs+32'd6,rob[head].op.uop.num);
+				tProcessExc(head,rob[head].ip+32'd4,rob[head].op.uop.num);
 			else if (rob[head].op.decbus.eret)
 				tProcessEret(rob[head].op[22:19]==5'd2,rob[head].op[23]==1'b1);
 			else if (rob[head].op.decbus.rex)
@@ -9619,7 +9625,7 @@ begin
 				cr0.ssm <= FALSE;
 				ssm_flag <= FALSE;
 				irq_resolved <= TRUE;
-				if (pgh[rob[id].pghn].ip.cap.offset + rob[id].ip_offs != kernel_vectors[cr0.dbg ? 3'd4 : {1'b0,Qupls5_pkg::fnNextOm(cr0.om)}]) begin
+				if (rob[id].ip != kernel_vectors[cr0.dbg ? 3'd4 : {1'b0,Qupls5_pkg::fnNextOm(cr0.om)}]) begin
 					excmiss <= TRUE;
 					excmisspc.cap.offset <= kernel_vectors[cr0.dbg ? 3'd4 : {1'b0,Qupls5_pkg::fnNextOm(cr0.om)}];//[$bits(pc_address_t)-1:8] + 4'd11,8'h0};
 					excmisspc.stream <= new_stream[rob[id].ip_stream.thread].stream;
@@ -9631,7 +9637,7 @@ begin
 				cr0.ssm <= FALSE;
 				ssm_flag <= FALSE;
 				irq_resolved <= TRUE;
-				if (pgh[rob[id].pghn].ip.cap.offset + rob[id].ip_offs != kernel_vectors[cr0.dbg ? 3'd4 : {1'b0,Qupls5_pkg::fnNextOm(cr0.om)}]) begin
+				if (rob[id].ip != kernel_vectors[cr0.dbg ? 3'd4 : {1'b0,Qupls5_pkg::fnNextOm(cr0.om)}]) begin
 					excmiss <= TRUE;
 					excmisspc.cap.offset <= kernel_vectors[cr0.dbg ? 3'd4 : {1'b0,Qupls5_pkg::fnNextOm(cr0.om)}];//[$bits(pc_address_t)-1:8] + 4'd11,8'h0};
 					excmisspc.stream <= new_stream[rob[id].ip_stream.thread].stream;
@@ -9956,17 +9962,17 @@ begin
 	m6 = (ndx + Qupls5_pkg::ROB_ENTRIES + 6) % Qupls5_pkg::ROB_ENTRIES;
 	m7 = (ndx + Qupls5_pkg::ROB_ENTRIES + 7) % Qupls5_pkg::ROB_ENTRIES;
 	dst <= p1;	// the last ROB entry it could be
-	if (rob[m1].sn > rob[ndx].sn && rob[m1].ip_stream==rob[ndx].ip_stream && pgh[rob[m1].pghn].ip.cap.offset + rob[m1].ip_offs == rob[ndx].brtgt && rob[m1].ip_stream==rob[ndx].ip_stream)
+	if (rob[m1].sn > rob[ndx].sn && rob[m1].ip_stream==rob[ndx].ip_stream && rob[m1].ip == rob[ndx].brtgt && rob[m1].ip_stream==rob[ndx].ip_stream)
 		found = 3'd1;
-	else if (rob[m2].sn > rob[ndx].sn && rob[m2].ip_stream==rob[ndx].ip_stream && pgh[rob[m2].pghn].ip.cap.offset + rob[m2].ip_offs == rob[ndx].brtgt && rob[m2].ip_stream==rob[ndx].ip_stream)
+	else if (rob[m2].sn > rob[ndx].sn && rob[m2].ip_stream==rob[ndx].ip_stream && rob[m2].ip == rob[ndx].brtgt && rob[m2].ip_stream==rob[ndx].ip_stream)
 		found = 3'd2;
-	else if (rob[m3].sn > rob[ndx].sn && rob[m3].ip_stream==rob[ndx].ip_stream && pgh[rob[m3].pghn].ip.cap.offset + rob[m3].ip_offs == rob[ndx].brtgt && rob[m3].ip_stream==rob[ndx].ip_stream)
+	else if (rob[m3].sn > rob[ndx].sn && rob[m3].ip_stream==rob[ndx].ip_stream && rob[m3].ip == rob[ndx].brtgt && rob[m3].ip_stream==rob[ndx].ip_stream)
 		found = 3'd3;
-	else if (rob[m4].sn > rob[ndx].sn && rob[m4].ip_stream==rob[ndx].ip_stream && pgh[rob[m4].pghn].ip.cap.offset + rob[m4].ip_offs == rob[ndx].brtgt && rob[m4].ip_stream==rob[ndx].ip_stream)
+	else if (rob[m4].sn > rob[ndx].sn && rob[m4].ip_stream==rob[ndx].ip_stream && rob[m4].ip == rob[ndx].brtgt && rob[m4].ip_stream==rob[ndx].ip_stream)
 		found = 3'd4;
-	else if (rob[m5].sn > rob[ndx].sn && rob[m5].ip_stream==rob[ndx].ip_stream && pgh[rob[m5].pghn].ip.cap.offset + rob[m5].ip_offs == rob[ndx].brtgt && rob[m5].ip_stream==rob[ndx].ip_stream)
+	else if (rob[m5].sn > rob[ndx].sn && rob[m5].ip_stream==rob[ndx].ip_stream && rob[m5].ip == rob[ndx].brtgt && rob[m5].ip_stream==rob[ndx].ip_stream)
 		found = 3'd5;
-	else if (rob[m6].sn > rob[ndx].sn && rob[m6].ip_stream==rob[ndx].ip_stream && pgh[rob[m6].pghn].ip.cap.offset + rob[m6].ip_offs == rob[ndx].brtgt && rob[m6].ip_stream==rob[ndx].ip_stream)
+	else if (rob[m6].sn > rob[ndx].sn && rob[m6].ip_stream==rob[ndx].ip_stream && rob[m6].ip == rob[ndx].brtgt && rob[m6].ip_stream==rob[ndx].ip_stream)
 		found = 3'd6;
 
 	case(found)

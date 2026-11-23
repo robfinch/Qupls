@@ -56,11 +56,10 @@ output Qupls5_pkg::rob_entry_t [MWIDTH-1:0] pr;
 integer n1,n2,n4;
 Qupls5_pkg::rob_entry_t [MWIDTH-1:0] lpr;
 
-Qupls5_pkg::rob_entry_t nopi;
 reg prev_ssm_flag;
 
 // Define a NOP instruction.
-always_comb
+function automatic Qupls5_pkg::rob_entry_t nopi;
 begin
 	nopi = {$bits(Qupls5_pkg::rob_entry_t){1'b0}};
 	nopi.op.exc = Qupls5_pkg::FLT_NONE;
@@ -68,19 +67,19 @@ begin
 	nopi.op.uop.last = TRUE;
 	nopi.op.decbus.nop = TRUE;
 	nopi.op.decbus.cause = Qupls5_pkg::FLT_NONE;
-	nopi.op.uop.lead = 1'd1;
-	nopi.op.v = 1'b1;
-	nopi.v = 5'd1;
+	nopi.op.uop.lead = TRUE;
+	nopi.op.v = VAL;
+	nopi.v = VAL;
 	nopi.exc = Qupls5_pkg::FLT_NONE;
 	nopi.excv = INV;
 	nopi.done = 2'b11;
-	nopi.stomped = TRUE;
 	/* NOP will be decoded later
 	nopi.decbus.Rdz = 1'b1;
 	nopi.decbus.nop = 1'b1;
 	nopi.decbus.alu = 1'b1;
 	*/
 end
+endfunction
 
 always_ff @(posedge clk)
 if (rst)
@@ -95,114 +94,40 @@ reg [31:0] insn;
 
 always_comb
 if (rst) begin
-	len40 = 4'h0;
 	foreach (pr[n1]) begin
-		pr[n1] = {$bits(Qupls5_pkg::rob_entry_t){1'b0}};
-		pr[n1].op = {$bits(Qupls5_pkg::pipeline_reg_t){1'b0}};
-		pr[n1].op.exc = Qupls5_pkg::FLT_NONE;
-		pr[n1].op.uop.opcode = fnNop();
-		pr[n1].op.decbus.nop = TRUE;
-		pr[n1].op.decbus.cause = Qupls5_pkg::FLT_NONE;
-		pr[n1].op.uop.lead = 1'd1;
-		pr[n1].op.uop.last = TRUE;
-		pr[n1].op.v = 1'b1;
-		pr[n1].exc = Qupls5_pkg::FLT_NONE;
-		pr[n1].excv = INV;
-		pr[n1].done = 2'b11;
-		pr[n1].stomped = TRUE;
-		pr[n1].v = VAL;
+		pr[n1] = nopi();
 		pr[n1].ip_stream = pc[n1].stream.stream;
 	end
 end
 else begin
 	n1 = 0;
 	pr = lpr;
-	len40 = 4'h0;
-	/*
-	len40[0] = fnIs40Bit(ic_line[6:0]);
-	if (len40[0])
-		len40[1] = fnIs40Bit(ic_line[46:40]);
-	else
-		len40[1] = fnIs40Bit(ic_line[53:48]);
-	case(len40[1:0])
-	2'b00:	len40[2] = fnIs40Bit(ic_line[102:96]);
-	2'b01:	len40[2] = fnIs40Bit(ic_line[94:88]);
-	2'b10:	len40[2] = fnIs40Bit(ic_line[94:88]);
-	2'b11:	len40[2] = fnIs40Bit(ic_line[86:80]);
-	endcase
-	case(len40[2:0])
-	3'b000:	len40[3] = fnIs40Bit(ic_line[150:144]);
-	3'b001:	len40[3] = fnIs40Bit(ic_line[142:136]);
-	3'b010:	len40[3] = fnIs40Bit(ic_line[142:136]);
-	3'b011:	len40[3] = fnIs40Bit(ic_line[134:128]);
-	3'b100:	len40[3] = fnIs40Bit(ic_line[142:136]);
-	3'b101:	len40[3] = fnIs40Bit(ic_line[134:128]);
-	3'b110:	len40[3] = fnIs40Bit(ic_line[134:128]);
-	3'b101:	len40[3] = fnIs40Bit(ic_line[126:120]);
-	endcase
-	*/
 	if (en) begin
+/*
 		foreach (pr[n1]) begin
-			pr[n1] = {$bits(Qupls5_pkg::rob_entry_t){1'b0}};
-			pr[n1].op = {$bits(Qupls5_pkg::pipeline_reg_t){1'b0}};
-			pr[n1].op.exc = Qupls5_pkg::FLT_NONE;
-			pr[n1].op.uop.opcode = fnNop();
-			pr[n1].op.decbus.nop = TRUE;
-			pr[n1].op.decbus.cause = Qupls5_pkg::FLT_NONE;
-			pr[n1].op.uop.lead = 1'd1;
-			pr[n1].op.uop.last = TRUE;
-			pr[n1].op.v = 1'b1;
-			pr[n1].exc = Qupls5_pkg::FLT_NONE;
-			pr[n1].excv = INV;
-			pr[n1].done = 2'b11;
-			pr[n1].stomped = TRUE;
+			pr[n1] = nopi();
 			pr[n1].v = VAL;
 			pr[n1].ip_stream = pc[n1].stream.stream;
 		end
+*/		
 		// Allow only one instruction through when single stepping.
 		// ToDo: fix single stepping to allow prefixes.
 		if (ssm_flag & ~prev_ssm_flag) begin
 			pr[0].op.cli = pc[0].cap.offset[6:0];
-			pr[0].ip_offs = 8'd0;
-			pr[0].op.uop = Qupls5_pkg::fnMapRawToUop(fnRibo(32'(ic_line >> ({4'd0,pr[0].ip_offs}<<3'd3))));
+			pr[0].ip = fnUcGetAddress(pc[0].cap);
+			pr[0].op.uop = Qupls5_pkg::fnMapRawToUop(fnRibo(32'(ic_line)));
 			for (n1 = 1; n1 < MWIDTH; n1 = n1 + 1) begin
-				pr[n1] = {$bits(Qupls5_pkg::rob_entry_t){1'b0}};
-				pr[n1].op = {$bits(Qupls5_pkg::pipeline_reg_t){1'b0}};
-				pr[n1].op.exc = Qupls5_pkg::FLT_NONE;
-				pr[n1].op.uop.opcode = fnNop();
-				pr[n1].op.decbus.nop = TRUE;
-				pr[n1].op.decbus.cause = Qupls5_pkg::FLT_NONE;
-				pr[n1].op.uop.lead = 1'd1;
-				pr[n1].op.uop.last = TRUE;
-				pr[n1].op.v = 1'b1;
-				pr[n1].exc = Qupls5_pkg::FLT_NONE;
-				pr[n1].excv = INV;
-				pr[n1].done = 2'b11;
-				pr[n1].stomped = TRUE;
-//				pr[n1] = nopi;
+				pr[n1] = nopi();
 				pr[n1].op.ssm = TRUE;
 				pr[n1].done = 2'b11;
+				pr[n1].ip_stream = pc[n1].stream.stream;
 			end
 		end
 		else if (ssm_flag) begin
 			foreach(pr[n1]) begin
-				pr[n1] = {$bits(Qupls5_pkg::rob_entry_t){1'b0}};
-				pr[n1].op = {$bits(Qupls5_pkg::pipeline_reg_t){1'b0}};
-				pr[n1].v = VAL;
-				pr[n1].op.exc = Qupls5_pkg::FLT_NONE;
-				pr[n1].op.uop.opcode = fnNop();
-				pr[n1].op.decbus.nop = TRUE;
-				pr[n1].op.decbus.cause = Qupls5_pkg::FLT_NONE;
-				pr[n1].op.uop.lead = 1'd1;
-				pr[n1].op.uop.last = TRUE;
-				pr[n1].op.v = 1'b1;
-				pr[n1].exc = Qupls5_pkg::FLT_NONE;
-				pr[n1].excv = INV;
-				pr[n1].done = 2'b11;
-				pr[n1].stomped = TRUE;
-//				pr[n1] = nopi;
+				pr[n1] = nopi();
 				pr[n1].op.ssm = TRUE;
-				pr[n1].done = 2'b11;
+				pr[n1].ip_stream = pc[n1].stream.stream;
 			end
 		end
 		else begin
@@ -211,7 +136,7 @@ else begin
 			foreach(pr[n1]) begin
 				pr[n1].v = VAL;
 				pr[n1].op.cli = fnUcGetAddress(pc[0].cap) + (n1 * 4);
-				pr[n1].ip_offs = n1 * 4;
+				pr[n1].ip = fnUcGetAddress(pc[0].cap) + n1 * 4;
 				// note ic_line is pre-aligned to the first instruction address. Need 
 				// to use the offset from that address to shift some more.
 				insn = ic_line >> {4'd0,n1[5:0],5'b0};
@@ -247,13 +172,11 @@ else begin
 // interrupted by external hardware.
 	if (!(!(irq) && !stomp && !(ssm_flag && !(ssm_flag && !prev_ssm_flag)))) begin
 		pr[0].v = INV;
-		pr[0].stomped = TRUE;
 		pr[0].done = 2'b11;
 	end
 	for (n4 = 1; n4 < MWIDTH; n4 = n4 + 1)
 		if (!(!irq && !stomp && !ssm_flag)) begin
 			pr[n4].v = INV;
-			pr[n4].stomped = TRUE;
 			pr[n4].done = 2'b11;
 		end
 /*	

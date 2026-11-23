@@ -41,7 +41,7 @@ import const_pkg::*;
 import Qupls5_pkg::*;
 
 module Qupls5_micro_op_cache(rst, clk, en, en2, rd_more,
-	uop, uop_count,
+	uop, uop_count, stall, uoc_full,
 	miss_o, stomp_moq2, pc_fet, pg_trn, pg_moq2,
 	branch_resolved, live_stream, invalidate);
 parameter MWIDTH = Qupls5_pkg::MWIDTH;
@@ -66,6 +66,8 @@ input branch_resolved;
 // Which instruction stream is the one in use.
 input pc_stream_t live_stream;
 input invalidate;			// invalidate the micro-op cache
+output reg stall;
+output reg uoc_full;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 // Variable type declarations.
@@ -87,6 +89,7 @@ typedef struct packed {
 // Note the address in the header is used as the tag. It is the same value so,
 // there is no point in having an explicit tag.
 typedef struct packed {
+	logic clip;														// cache line can be clipped.
 	logic [31:0] next_ip;									// next bundle prediction
 	Qupls5_pkg::pipeline_group_hdr_t hdr;	// pipeline header, contains address tag
 	Qupls5_pkg::micro_op_t [15:0] uop;		// array of micro-ops for instr.
@@ -126,6 +129,7 @@ begin
 	nopi.exc = Qupls5_pkg::FLT_NONE;
 	nopi.excv = INV;
 	nopi.done = 2'b11;
+	nopi.ip = Qupls5_pkg::RSTPC;
 	/* NOP will be decoded later
 	nopi.decbus.Rdz = 1'b1;
 	nopi.decbus.nop = 1'b1;
@@ -140,11 +144,12 @@ end
 // Generic integers used in foreach() loops
 integer n,n1,n2,n3,n4,n5,n6,n7,n8,n9,n10,n11,n12,n13,n14,n15,n16,n17,n18;
 
+reg [2:0] work_row;
 // The micro-op cache itself.
 uop_cache_t cache;
 // Micro-op instruction pointers.
 uop_ip_t [4:0] uop_ip;
-uop_ip_t last_uop_ip, hold_ip;
+uop_ip_t last_uop_ip, hold_ip, new_ip;
 // micro-ops selected from the cache destined for pipeline.
 Qupls5_pkg::micro_op_t [3:0] iuop;
 // Which selected micro-ops are valid. Note as soon as an invalid micro-op is
@@ -152,12 +157,14 @@ Qupls5_pkg::micro_op_t [3:0] iuop;
 // an instruction which has invalid micro-ops in the middle.
 reg [3:0] valid;
 // Signals to advance or stall the pipeline.
-reg rd_more2,did_rd_more,did_rd_more2;
+reg rd_more2,did_rd_more,did_rd_more2,did_rd_more3;
 reg miss, rmiss;			// micro-op cache miss and registered miss signals.
 // Signal that indicates a cache line must be evicted so new data can be placed.
 reg evict;
 integer ev;		// for the foreach() loop
 integer row1,row2;
+reg [7:0] last_seq_num;
+reg cache_full;
 
 // Lets make sure our micro-op is sane. If it is too large it will take forever to
 // compile and simulate.
@@ -166,6 +173,9 @@ always_comb
 		$display("Micro-op too large.");
 		$finish;
 	end
+
+always_comb
+	uoc_full = cache_full;
 
 // Fetch up to four micro-ops from the cache.
 // The complicated part is calculating the indexes into the cache of each micro-op.
@@ -195,19 +205,11 @@ begin
 	// If there was a miss, we want to repeat the last access until there is a hit,
 	// at which point the index can advance to just past the last index value.
 	// An "extra" index is used to record the position.
-	if (miss) begin
-		uop_ip[0] = hold_ip;			// registered signal, see below.
-		uop_ip[1] = hold_ip;
-		uop_ip[2] = hold_ip;
-		uop_ip[3] = hold_ip;
-		uop_ip[4] = hold_ip;
-	end
-	else begin
-		uop_ip[0] = last_uop_ip;	// registered signal 
-		uop_ip[1] = last_uop_ip;
-		uop_ip[2] = last_uop_ip;
-		uop_ip[3] = last_uop_ip;
-		uop_ip[4] = last_uop_ip;
+	begin
+		uop_ip[1] = uop_ip[0];	// registered signal, see below.
+		uop_ip[2] = uop_ip[0];
+		uop_ip[3] = uop_ip[0];
+		uop_ip[4] = uop_ip[0];
 	end
 
 	if (cache.line[uop_ip[0].row].hdr.v)
@@ -222,7 +224,7 @@ begin
 	end
 	if (uop_ip[1].v) begin
 		if (cache.line[uop_ip[1].row].hdr.v)
-			iuop[1] = cache.line[uop_ip[1].row][uop_ip[1].col];
+			iuop[1] = cache.line[uop_ip[1].row].uop[uop_ip[1].col];
 		else
 			iuop[1].v = INV;
 		if (cache.line[uop_ip[1].row].uop[uop_ip[1].col].last)
@@ -233,7 +235,7 @@ begin
 		end
 		if (uop_ip[2].v) begin
 			if (cache.line[uop_ip[1].row].hdr.v)
-				iuop[2] = cache.line[uop_ip[2].row][uop_ip[2].col];
+				iuop[2] = cache.line[uop_ip[2].row].uop[uop_ip[2].col];
 			else
 				iuop[2].v = INV;
 			if (cache.line[uop_ip[2].row].uop[uop_ip[2].col].last)
@@ -247,6 +249,12 @@ begin
 					iuop[3] = cache.line[uop_ip[3].row].uop[uop_ip[3].col];
 				else
 					iuop[3].v = INV;
+				if (cache.line[uop_ip[3].row].uop[uop_ip[3].col].last)
+					uop_ip[4] = cache.cookies[uop_ip[3].row];
+				else begin
+					uop_ip[4].row = uop_ip[3].row;
+					uop_ip[4].col = uop_ip[3].col + 1;
+				end
 			end
 			else
 				iuop[3] = uop_nop;
@@ -275,7 +283,7 @@ begin
 	if (!uop_ip[3].v)
 		iuop[3] = uop_nop;
 	valid = {iuop[3].v,iuop[2].v,iuop[1].v,iuop[0].v};
-	miss = ~(iuop[0].v & iuop[1].v & iuop[2].v & iuop[3].v);
+	miss = ~(iuop[0].v & iuop[1].v & iuop[2].v & iuop[3].v & uop_ip[0].v);
 end
 
 // Micro-op instruction pointer.
@@ -288,26 +296,37 @@ if (rst) begin
 	hold_ip.col <= 5'd0;
 	hold_ip.v <= VAL;
 	rmiss <= FALSE;
+	uop_ip[0] <= {1'b0,3'd3,5'd0};
+	new_ip <= {1'b0,3'd3,5'd0};
 end
 else begin
-	if (en2) begin
-		rmiss <= miss;
+	rmiss <= miss;
+	// If not a miss continue the counter from the last location. Otherwise
+	// use the value of the miss address.
+	if (new_ip.v) begin
+		uop_ip[0] <= new_ip;
+		new_ip.v <= INV;
+	end
+	else if (en2) begin
+		if (miss_o)
+			uop_ip[0] <= uop_ip[0];
+		else
+			uop_ip[0] <= uop_ip[4];
+	end
+	if (en)
+	begin
 		// If we got a miss the entire bundle is not in the cache. It will need to
 		// be read. The pipeline will advance until the bundle is placed in the 
 		// cache.
-		if (miss||rmiss) begin
-			hold_ip <= uop_ip[0];
-			if (pg_trn.hdr.v & ~pg_trn.pr[0].stomped) begin
+		if (miss_o) begin
+			uop_ip[0] <= uop_ip[0];
+			if (evict) begin// & ~pg_trn.pr[0].done[1]) begin
 //				last_uop_ip <= uop_ip[0];
-				last_uop_ip.row = CACHE_LINES-1;
-				last_uop_ip.col = 5'd0;
-				last_uop_ip.v = VAL;
+				new_ip.v <= VAL;
+				new_ip.row <= CACHE_LINES-1;
+				new_ip.col <= 5'd0;
 			end
 		end
-		// If not a miss continue the counter from the last location. Otherwise
-		// use the value of the miss address.
-		else
-			last_uop_ip <= uop_ip[4];
 	end
 end
 
@@ -323,32 +342,53 @@ begin
 			evict = FALSE;	// we can overwrite
 end
 
+always_comb
+	cache_full =
+		cache.line[0].hdr.v &&
+		cache.line[1].hdr.v &&
+		cache.line[2].hdr.v &&
+		cache.line[3].hdr.v
+		;
+
 // Cache update
 // Cache is managed as a LRU cache with 4 fully associative entries.
 // Accomplished by shifting cache lines down when loading due to amiss.
 always_ff @(posedge clk)
 if (rst) begin
+	last_seq_num <= 8'd255;
+	work_row <= 3'd0;
 	foreach (cache.line[n8])
 		cache.line[n8] <= {$bits(uop_cache_line_t){1'b0}};
 	foreach (cache.cookies[n8])
 		cache.cookies[n8] <= {$bits(uop_ip_t){1'b0}};
 end
 else begin
-	if (en) begin
+//	if (en) 
+	begin
 		if (invalidate)
 			foreach (cache.line[n8])
 				cache.line[n8].hdr.v <= INV;
 		// Incming from the pipe valid?
-		if (pg_trn.hdr.v & ~pg_trn.pr[0].stomped) begin
-			if (evict) begin
+//		if (pg_trn.hdr.v & ~pg_trn.pr[0].stomped && pg_trn.hdr.sn!=last_seq_num)
+		if (en) begin
+			last_seq_num <= pg_trn.hdr.sn;
+			if (!cache_full) begin
 				// Open up a space in the cache by shifting lines down.
 				foreach (cache.line[n8]) begin
 					cache.cookies[n8].v <= INV;
-					if (n8 < CACHE_LINES-1)
-						cache.line[n8] <= cache.line[n8+1];
+//					if (n8 < CACHE_LINES-1)
+//						cache.line[n8] <= cache.line[n8+1];
 				end
+				if (!cache.line[3].hdr.v)
+					tSetCacheLine(3);
+				else if (!cache.line[2].hdr.v)
+					tSetCacheLine(2);
+				else if (!cache.line[1].hdr.v)
+					tSetCacheLine(1);
+				else if (!cache.line[0].hdr.v)
+					tSetCacheLine(0);
 				// And insert the new data
-				tSetCacheLine(CACHE_LINES-1);
+//				tSetCacheLine(CACHE_LINES-1);
 			end
 			// Not evicting a line, overwrite existing data.
 			else begin
@@ -365,20 +405,25 @@ else begin
 					if (cache.line[n8].hdr.ip.stream.thread==live_stream.thread && cache.line[n8].hdr.ip.stream.stream != live_stream.stream)
 						cache.line[n8].hdr.v <= INV;
 
-		// Set cache cookies
-		// After inserting a new cache line, the cookies won't be valid. They will
-		// be made valid in the next clock cycle.
-		foreach(cache.line[row1]) begin
-			cache.cookies[row1].v <= INV;
-			cache.cookies[row1].row <= 3'd0;
-			cache.cookies[row1].col <= 3'd0;
-			foreach(cache.line[row2])
-				if (fnUcGetAddress(cache.line[row1].hdr.ip.cap)==cache.line[row2].next_ip) begin
-					cache.cookies[row2].v <= VAL;
-					cache.cookies[row2].row <= row1;
-					cache.cookies[row2].col <= 3'd0;
-				end
-		end
+	end
+	// Set cache cookies
+	// After inserting a new cache line, the cookies won't be valid. They will
+	// be made valid in the next clock cycle.
+	foreach(cache.line[row1]) begin
+		cache.cookies[row1].v <= INV;
+		cache.cookies[row1].row <= 3'd0;
+		cache.cookies[row1].col <= 3'd0;
+		foreach(cache.line[row2])
+			if (fnUcGetAddress(cache.line[row1].hdr.ip.cap)==cache.line[row2].next_ip) begin
+				cache.cookies[row2].v <= VAL;
+				cache.cookies[row2].row <= row1;
+				cache.cookies[row2].col <= 3'd0;
+			end
+	end
+	// If finished processing a row, mark the row potentially overwritable.
+	if (uop_ip[0].row != work_row) begin
+		work_row <= uop_ip[0].row;
+		cache.line[work_row].hdr.v = INV;
 	end
 end
 
@@ -390,23 +435,40 @@ begin
 	// pc_fet because trn and ext are the same stage
 	cache.line[n].next_ip <= fnUcGetAddress(pc_fet.cap);
 	cache.line[n].hdr <= pg_trn.hdr;
+	cache.line[n].clip <= FALSE;
 	// Pack micro-ops at load time.
 	for (n8 = 0; n8 < 16; n8 = n8 + 1)
 		cache.line[n].uop[n8] <= uop_nop;
 	// copy first four micro-ops
-	for (n8 = 0; n8 < 4; n8 = n8 + 1)
+	for (n8 = 0; n8 < 4; n8 = n8 + 1) begin
 		cache.line[n].uop[n8] <= uop[0][n8];
+		cache.line[n].uop[n8].last <= FALSE;
+	end
 	// copy second four micro-ops
-	for (n8 = 0; n8 < 4; n8 = n8 + 1)
+	for (n8 = 0; n8 < 4; n8 = n8 + 1) begin
 		cache.line[n].uop[n8+uop_count[0]] <= uop[1][n8];
+		cache.line[n].uop[n8+uop_count[0]].last <= FALSE;
+	end
 	// copy third four micro-ops
-	for (n8 = 0; n8 < 4; n8 = n8 + 1)
+	for (n8 = 0; n8 < 4; n8 = n8 + 1) begin
 		cache.line[n].uop[n8+uop_count[0]+uop_count[1]] <= uop[2][n8];
+		cache.line[n].uop[n8+uop_count[0]+uop_count[1]].last <= FALSE;
+	end
 	// copy fourth four micro-ops
-	for (n8 = 0; n8 < 4; n8 = n8 + 1)
+	for (n8 = 0; n8 < 4; n8 = n8 + 1) begin
 		cache.line[n].uop[n8+uop_count[0]+uop_count[1]+uop_count[2]] <= uop[3][n8];
+		cache.line[n].uop[n8+uop_count[0]+uop_count[1]+uop_count[2]].last <= FALSE;
+	end
+	cache.line[n].uop[uop_count[0]+uop_count[1]+uop_count[2]+uop_count[3]-1].last <= TRUE;
 end
 endtask
+
+function isNop;
+input Qupls5_pkg::micro_op_t uop;
+begin
+	isNop = uop.opcode==Qupls5_pkg::OP_PPC_ORI && uop.Rd==6'd0 && uop.Rs1==6'd0 && uop.imm==34'd0;
+end
+endfunction
 
 // Setup the output pipeline register. Pass selected instructions down the pipe.
 always_ff @(posedge clk)
@@ -420,7 +482,7 @@ else begin
 		// If selected first cache line valid...
 		if (uop_ip[0].v) begin
 			pg_moq2.hdr <= cache.line[uop_ip[0].row].hdr;
-			pg_moq2.hdr.v <= ~miss;
+			pg_moq2.hdr.v <= VAL;//~miss;
 		end
 		// If selected first cache line not valid, set pipeline reg invalid.
 		else begin
@@ -437,15 +499,15 @@ else begin
 		foreach (pg_moq2.pr[n1]) begin
 			pg_moq2.pr[n1].v <= VAL;
 			pg_moq2.pr[n1].op.uop <= iuop[n1];	// copy selected micro-op into pipe reg.
-			if (stomp_moq2) begin
-				pg_moq2.pr[n1].stomped <= TRUE;
+			pg_moq2.pr[n1].ip <= iuop[n1].ip;
+			pg_moq2.pr[n1].done <= 2'b00;
+			if (stomp_moq2||!uop_ip[0].v||isNop(iuop[n1])) begin
 				pg_moq2.pr[n1].done <= 2'b11;			// If it got stomped on it's finished.
 			end
 			// Finally, did a branch resolve?
 			if (branch_resolved && uop_ip[0].v) begin
 				if (cache.line[uop_ip[0].row].hdr.ip.stream.thread==live_stream.thread &&
 				 cache.line[uop_ip[0].row].hdr.ip.stream.stream != live_stream.stream) begin
-					pg_moq2.pr[n1].stomped <= TRUE;
 					pg_moq2.pr[n1].done <= 2'b11;
 				end
 			end
@@ -453,6 +515,8 @@ else begin
 	end
 end
 
+always_comb
+	stall = ~uop_ip[0].v;
 
 // Reading more signal used to advance the front end so the cache can be loaded.
 // We need to read more only if there was a cache miss. Otherwise we could 
@@ -463,15 +527,17 @@ if (rst) begin
 	rd_more2 <= TRUE;
 	did_rd_more <= FALSE;
 	did_rd_more2 <= FALSE;
+	did_rd_more3 <= FALSE;
 end
 else begin
 //	rd_more <= FALSE;
-	if (en2)
+//	if (en2)
 	begin
 //		rd_more <= miss;
-//		rd_more2 <= miss;
+		rd_more2 <= miss;
 		did_rd_more <= rd_more;
 		did_rd_more2 <= did_rd_more;
+		did_rd_more3 <= did_rd_more2;
 	end
 end
 
@@ -479,7 +545,7 @@ end
 // pipeline stage. So wait a couple of clocks after asserting rd_more
 // before asserting it again.
 always_comb
-	rd_more = miss & ~did_rd_more & ~did_rd_more2;
+	rd_more = (~uop_ip[0].v | miss | did_rd_more | did_rd_more2 | ~cache_full) & ~did_rd_more3;
 
 endmodule
 

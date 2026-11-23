@@ -1600,6 +1600,7 @@ typedef struct packed		// about 156 bits
 	logic exc;
 	logic lead;						// 1=first micro-op of instruction
 	logic last;						// 1=last micro-op of instruction
+	logic [47:0] ip;			// instruction pointer value of micro-op
 	logic [3:0] num;			// ordinal number of micro-op within instruction
 	logic [5:0] vlen;			// vector length
 	logic [8:0] ble;			// byte lane enable
@@ -2399,7 +2400,7 @@ typedef struct packed {
 	logic [4:0] pghn;					// pipeline group header index
 	logic [4:0] pghn_irq;			// pipeline group header index of interrupt (in case moved)
 	cpu_types_pkg::pc_stream_t ip_stream;		// stream associated with instruction
-	logic [4:0] ip_offs;			// offset in bytes from group IP (0 to 18)
+	logic [47:0] ip;					// 
 	logic is40bit;
 	logic [4:0] eip_offs;			// exception return address offset from header IP
 	logic flush;
@@ -2539,6 +2540,19 @@ typedef struct packed
 // ============================================================================
 // Support Functions
 // ============================================================================
+
+function automatic Qupls5_pkg::pc_address_ex_t fnRstIP;
+begin
+	fnRstIP = {$bits(Qupls5_pkg::pc_address_ex_t){1'b0}};
+	fnRstIP.cap.perms = 24'hffffff;
+	fnRstIP.cap.otype = 24'hffffff;
+	fnRstIP.cap.top = 65'h10000000000000000;
+	fnRstIP.cap.base = 64'd0;
+	fnRstIP.cap.offset = 65'(Qupls5_pkg::RSTPC);
+	fnRstIP.stream.stream = 5'd1;
+	fnRstIP.stream.thread = 3'd0;
+end
+endfunction
 
 function Qupls5_pkg::operating_mode_t fnNextOm;
 input Qupls5_pkg::operating_mode_t om;

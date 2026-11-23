@@ -142,7 +142,7 @@ begin
 	rse[kk].excv = rob[nn].excv;
 	rse[kk].om = rob[nn].om;
 	rse[kk].rm = rob[nn].rm;
-	rse[kk].pc.pc = pgh[mm].ip + rob[nn].ip_offs;
+	rse[kk].pc.pc = rob[nn].ip;
 	rse[kk].pc.stream = rob[nn].ip_stream;
 	rse[kk].prc = rob[nn].op.decbus.prc;
 	rse[kk].cndx = pgh[mm].cndx;

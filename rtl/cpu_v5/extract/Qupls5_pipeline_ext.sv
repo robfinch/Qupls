@@ -137,7 +137,7 @@ reg [255:0] prev_ic_line_aligned;
 reg ld;
 reg [2:0] override_pos;
 reg p_overrided;
-reg [MWIDTH-1:0] nop;
+reg [7:0] seq_num;
 
 wire [MWIDTH-1:0] bsr;
 wire [MWIDTH-1:0] jsr;
@@ -145,12 +145,12 @@ wire [MWIDTH-1:0] bra;
 wire [MWIDTH-1:0] jmp;
 wire [MWIDTH-1:0] bcc;
 wire [MWIDTH-1:0] rtd;
+wire [MWIDTH-1:0] nop;
 reg [MWIDTH-1:0] nop_lead;	// NOP out leading instructions
-wire [MWIDTH-1:0] nop2;
 reg chgflow,chgflow0,chgflow1,chgflow2,chgflow3,chgflowi;
 reg p_override0123,p_override123,p_override23,p_override3;
 
-Qupls5_pkg::rob_entry_t nopi;
+//Qupls5_pkg::rob_entry_t nopi;
 
 always_comb
 begin
@@ -162,16 +162,8 @@ end
 
 always_ff @(posedge clk)
 if (rst_i) begin
-	foreach(pc_ext[n6]) begin
-		pc_ext[n6] <= {$bits(Qupls5_pkg::pc_address_ex_t){1'b0}};
-		pc_ext[n6].cap.perms <= 16'hffff;
-		pc_ext[n6].cap.otype <= 18'h3ffff;
-		pc_ext[n6].cap.top <= 65'h10000000000000000;
-		pc_ext[n6].cap.base <= 64'd0;
-		pc_ext[n6].cap.offset <= Qupls5_pkg::RSTPC;
-		pc_ext[n6].stream.stream <= 5'd1;
-		pc_ext[n6].stream.thread <= 3'd0;
-	end
+	foreach(pc_ext[n6])
+		pc_ext[n6] <= fnRstIP();
 end
 else begin
 	foreach(pc_ext[n6])
@@ -180,28 +172,27 @@ else begin
 end
 
 // Define a NOP instruction.
-always_comb
+function Qupls5_pkg::rob_entry_t nopi;
 begin
 	nopi = {$bits(Qupls5_pkg::rob_entry_t){1'b0}};
 	nopi.op.exc = Qupls5_pkg::FLT_NONE;
 	nopi.op.uop.opcode = Qupls5_pkg::fnNop();
-	nopi.op.uop.last = TRUE;
 	nopi.op.decbus.nop = TRUE;
 	nopi.op.decbus.cause = Qupls5_pkg::FLT_NONE;
 	nopi.op.uop.lead = 1'd1;
 	nopi.op.uop.last = 1'd1;
 	nopi.op.v = 1'b1;
-	nopi.v = 5'd1;
+	nopi.v = VAL;
 	nopi.exc = Qupls5_pkg::FLT_NONE;
 	nopi.excv = INV;
 	nopi.done = 2'b11;
-	nopi.stomped = TRUE;
 	/* NOP will be decoded later
 	nopi.decbus.Rdz = 1'b1;
 	nopi.decbus.nop = 1'b1;
 	nopi.decbus.alu = 1'b1;
 	*/
 end
+endfunction
 
 always_comb regcnt = regcnt_i;
 reg [63:0] adr;
@@ -324,7 +315,7 @@ generate begin : gExtDecode
 				.jmp(jmp[g]),
 				.bcc(bcc[g]),
 				.rtd(rtd[g]),
-				.nop(nop2[g]),
+				.nop(nop[g]),
 				.bsr_tgt(bsr_tgts[g]),
 				.jsr_tgt(jsr_tgts[g]),
 				.bcc_tgt(bcc_tgts[g])
@@ -512,9 +503,11 @@ always_comb
 // done and stomp status.
 always_ff @(posedge clk)
 if (rst_i) begin
+    n2 = 0;
+	seq_num <= 8'd0;
 	pg_ext <= {$bits(Qupls5_pkg::pipeline_group_reg_t){1'b0}};
 	foreach (pg_ext.pr[n2])
-		pg_ext.pr[n2] <= nopi;
+		pg_ext.pr[n2] <= nopi();
 end
 else begin
 	if (en) begin
@@ -528,14 +521,13 @@ else begin
 		pg_ext.hdr.old_ipl <= ipl_ext;
 		pg_ext.hdr.hwi <= irq_ext;
 		pg_ext.hdr.ip <= pc_fet[0];
+		pg_ext.hdr.sn <= seq_num;
+		seq_num <= seq_num + 2'd1;
 		// Fill in the pipeline slots.
 		foreach (pg_ext.pr[n2]) begin
-	//		pg_ext.pr[n2] <= {$bits(Qupls5_pkg::rob_entry_t){1'b0}};
-	//		pg_ext.pr[n2] <= ins_fet[n2];
 			pg_ext.pr[n2] <= pr_ext[n2];	
 			pg_ext.pr[n2].ip_stream <= pc0_fet.stream;
 			if (stomp_ext || (branch_resolved && (pc0_fet.stream.thread == live_stream.thread && pc0_fet.stream.stream != live_stream.stream))) begin
-				pg_ext.pr[n2].stomped <= TRUE;
 				pg_ext.pr[n2].done <= 2'b11;
 				pg_ext.pr[n2].op.v <= INV;
 			end
@@ -545,22 +537,23 @@ else begin
 			end
 			pg_ext.pr[n2].op.bt <= takb_fet[n2];
 			pg_ext.pr[n2].op.decbus.cause <= Qupls5_pkg::FLT_NONE;
-			pg_ext.pr[n2].stomped <= stomp_ext || nop_lead[n2] || nop2[n2] || bra[n2] || jmp[n2];
+			if (stomp_ext || nop_lead[n2] || nop[n2] || bra[n2] || jmp[n2])
+				pg_ext.pr[n2].done <= 2'b11;
 			pg_ext.pr[n2].wh <= n2;
 			pg_ext.pr[n2].ip_stream <= pc_fet[n2].stream;
 			// Point the EIP to the previous instruction if it was a prefix instruction.
 			// Should maybe use capability for EIP.
 			if (n2==0) begin
 				if (xop_v)
-					pg_ext.pr[n2].eip_offs <= pr_ext[n2].ip_offs - 4'd4;//(n2*6);
+					pg_ext.pr[n2].eip_offs <= -5'd4;//(n2*6);
 				else
-					pg_ext.pr[n2].eip_offs <= pr_ext[n2].ip_offs;//(n2*6);
+					pg_ext.pr[n2].eip_offs <= 5'd0;//(n2*6);
 			end
 			else begin
 				if (pr_ext[n2-1].op.uop.prefix)
-					pg_ext.pr[n2].eip_offs <= pr_ext[n2].ip_offs - 4'd4;//(n2*6);
+					pg_ext.pr[n2].eip_offs <= -5'd4;//(n2*6);
 				else
-					pg_ext.pr[n2].eip_offs <= pr_ext[n2].ip_offs;//(n2*6);
+					pg_ext.pr[n2].eip_offs <= 5'd0;//(n2*6);
 			end
 			// Branches need to set the pipeline invalid if the instruction stream
 			// does not match the one resolved to be active. Note the thread must
@@ -568,23 +561,27 @@ else begin
 			// invalidate.
 			if (branch_resolved &&
 				pc_fet[n2].stream.thread==live_stream.thread && pc_fet[n2].stream.stream != live_stream.stream) begin
-				tStomp(n2);
+				tBranchStomp(n2);
 			end
 			// Jumps and branches are done as they do not need to update the regfile.
 			// They are also resolved already as they are unconditional.
-			else if (bra[n2]|jmp[n2]|nop[n2]|nop2[n2])
-				tStomp(n2);
+			else begin
+				if (bra[n2]|jmp[n2])
+					tBranchStomp(n2);
+				else if (nop[n2])
+					tNopStomp(n2,pg_ext,pg_ext);
 			// Exception earlier in the pipeline? (Bad IP detected in BTB)
 			// Consume the exception.
 			// We want this last in the priority tree, as if the instruction stream
 			// got invalidated (stomp or branch) then we do not care about this
 			// exception.
-			else if (excv_i) begin
-				pg_ext.pr[n2].excv <= VAL;
-				pg_ext.pr[n2].exc <= exc_i;
-				pg_ext.pr[n2].stomped <= TRUE;
-				pg_ext.pr[n2].done <= 2'b11;
-				pg_ext.pr[n2].op.v <= 1'b0;
+				else if (excv_i) begin
+					pg_ext.pr[n2].excv <= VAL;
+					pg_ext.pr[n2].exc <= exc_i;
+					pg_ext.pr[n2].stomped <= TRUE;
+					pg_ext.pr[n2].done <= 2'b11;
+					pg_ext.pr[n2].op.v <= 1'b0;
+				end
 			end
 			// Stomp on instructions following the one causing a change of flow.
 			// If it is an unconditional branch we will always stomp on following
@@ -592,7 +589,7 @@ else begin
 			// stomped on only if the branch is predicted taken.
 			if (override_pos != 3'd7 && n2 > override_pos && p_override && (!bcc[override_pos] ||
 				takb_fet[override_pos])) begin
-				tStomp(n2);
+				tBranchStomp(n2);
 			end
 		end
 	end
@@ -642,14 +639,31 @@ always_comb
 		// We must be staying in the same stream too.
 		pc_fet[0].stream==pg_ext.hdr.ip.stream) && !p_overrided;
 
-task tStomp;
+task tBranchStomp;
 input integer n2;
+integer n;
 begin
-	pg_ext.pr[n2].excv <= INV;
-	pg_ext.pr[n2].op.excv <= INV;
-	pg_ext.pr[n2].stomped <= TRUE;
-	pg_ext.pr[n2].done <= 2'b11;
-	pg_ext.pr[n2].op.v <= 1'b0;
+	foreach(pg_ext.pr[n]) begin
+		if (n >= n2) begin
+			pg_ext.pr[n].excv <= INV;
+			pg_ext.pr[n].op.excv <= INV;
+			pg_ext.pr[n].done <= 2'b11;
+			pg_ext.pr[n].op.v <= 1'b0;
+		end
+	end
+end
+endtask
+
+task tNopStomp;
+input integer n2;
+input Qupls5_pkg::pipeline_group_reg_t pg_ext_i;
+output Qupls5_pkg::pipeline_group_reg_t pg_ext_o;
+begin
+	pg_ext_o <= pg_ext_i;
+	pg_ext_o.pr[n2].excv <= INV;
+	pg_ext_o.pr[n2].op.excv <= INV;
+	pg_ext_o.pr[n2].done <= 2'b11;
+	pg_ext_o.pr[n2].op.v <= 1'b0;
 end
 endtask
 

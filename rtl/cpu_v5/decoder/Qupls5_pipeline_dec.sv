@@ -109,6 +109,7 @@ Qupls5_pkg::regs_t fregs_o;
 Qupls5_pkg::pipeline_group_reg_t pg_dec1,pg_dec2,pg_dec3,pg_dec4;
 reg [1023:0] cline1,cline2,cline3,cline4;
 reg p_override, p_overrided;
+reg [7:0] last_seqnum;
 
 always @(posedge clk)
 if (rst)
@@ -432,7 +433,7 @@ Qupls5_decoder udeci0
 	.clk(clk),
 	.regFPCSR(regFPCSR),
 	.en(en),
-	.ip(pg_mot.hdr.ip.cap.offset + pg_mot.pr[g].ip_offs),
+	.ip(pg_mot.pr[g].ip),
 	.om(cr0.om),
 	.ipl(cr0.ipl),
 	.instr(tpr[g].op.uop),
@@ -891,9 +892,9 @@ else begin
 	end
 
 	// Note constant imm has already been shifted left once.
-	bsr0_tgt = {pr_dec[0].decbus.imma} + pg_mot.hdr.ip.cap.offset + pg_mot.pr[0].ip_offs;
-	bsr1_tgt = {pr_dec[1].decbus.imma} + pg_mot.hdr.ip.cap.offset + pg_mot.pr[1].ip_offs;
-	bsr2_tgt = {pr_dec[2].decbus.imma} + pg_mot.hdr.ip.cap.offset + pg_mot.pr[2].ip_offs;
+	bsr0_tgt = {pr_dec[0].decbus.imma} + pg_mot.pr[0].ip;
+	bsr1_tgt = {pr_dec[1].decbus.imma} + pg_mot.pr[1].ip;
+	bsr2_tgt = {pr_dec[2].decbus.imma} + pg_mot.pr[2].ip;
 	jsr0_tgt = {pr_dec[0].decbus.imma};
 	jsr1_tgt = {pr_dec[1].decbus.imma};
 	jsr2_tgt = {pr_dec[2].decbus.imma};
@@ -905,17 +906,17 @@ else begin
 	if (pg_mot.hdr.ip.stream == pg_dec.hdr.ip.stream && !stomp_dec) begin
 		if (pr_dec[0].decbus.bsr|pr_dec[0].decbus.jsr) begin
 			new_address_o = pr_dec[0].decbus.bsr ? bsr0_tgt : jsr0_tgt;
-			if (new_address_o!=(pg_mot.hdr.ip.cap.offset + pg_mot.pr[0].ip_offs))
+			if (new_address_o!=(pg_mot.pr[0].ip))
 				p_override = TRUE;
 		end
 		else if (pr_dec[1].decbus.bsr|pr_dec[1].decbus.jsr) begin
 			new_address_o = pr_dec[1].decbus.bsr ? bsr1_tgt : jsr1_tgt;
-			if (new_address_o!=(pg_mot.hdr.ip.cap.offset + pg_mot.pr[0].ip_offs))
+			if (new_address_o!=(pg_mot.pr[0].ip))
 				p_override = TRUE;
 		end
 		else if (pr_dec[2].decbus.bsr|pr_dec[2].decbus.jsr) begin
 			new_address_o = pg_dec.pr[2].op.decbus.bsr ? bsr2_tgt : jsr2_tgt;
-			if (new_address_o!=(pg_dec.hdr.ip.cap.offset + pg_dec.pr[0].ip_offs))
+			if (new_address_o!=(pg_dec.pr[0].ip))
 				p_override = TRUE;
 		end
 	end
@@ -939,9 +940,11 @@ if (rst) begin
 	pg_dec <= {$bits(Qupls5_pkg::pipeline_group_reg_t){1'b0}};
 	foreach (pg_dec.pr[n10])
 		pg_dec.pr[n10] <= nopi2;
+	last_seqnum = 8'h00;
 end
 else begin
-	if (en) begin
+	if (en && pg_mot.hdr.sn != last_seqnum) begin
+		last_seqnum <= pg_mot.hdr.sn;
 		pg_dec <= pg_mot;
 //		if (stomp_dec)
 //			pg_dec.hdr.v <= INV;
@@ -981,7 +984,6 @@ begin
 	pg_dec.pr[n10].excv <= INV;
 	pg_dec.pr[n10].op.excv <= INV;
 	pg_dec.pr[n10].op.v <= INV;
-	pg_dec.pr[n10].stomped <= TRUE;
 	pg_dec.pr[n10].done <= 2'b11;
 end
 endtask

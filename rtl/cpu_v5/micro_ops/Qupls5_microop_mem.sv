@@ -50,6 +50,7 @@ parameter SUPPORT_IRQ_POLLING = Qupls5_pkg::SUPPORT_IRQ_POLLING;
 parameter SUPPORT_FLOAT = Qupls5_pkg::SUPPORT_FLOAT;
 parameter SUPPORT_VECTOR = Qupls5_pkg::SUPPORT_VECTOR;
 parameter VECTOR_STRATEGY = Qupls5_pkg::VECTOR_STRATEGY;
+parameter WHICH = 0;
 input rst;
 input clk;
 input en;
@@ -122,6 +123,9 @@ reg [6:0] dc_opcode, dc_func;
 Qupls5_pkg::micro_op_t uop0;
 Qupls5_pkg::micro_op_t uop1;
 
+always_comb
+	ir.ip = fnUcGetAddress(pg_ext.hdr.ip.cap) + WHICH * 4;
+	
 always_ff @(posedge clk)
 	boi_count <= boi_count + 2'd1;
 always_comb
@@ -764,6 +768,7 @@ begin
 		next_uop[n1].opcode = Qupls5_pkg::fnNop();
 		next_uop[n1].ble = 9'b0;
 		next_uop[n1].v = VAL;
+		next_uop[n1].ip = fnUcGetAddress(pg_ext.hdr.ip.cap) + WHICH * 4;
 	end
   uop0 = instr;
   uop0.lead = 1'b1;
@@ -1243,11 +1248,10 @@ begin
 	pr_nopi.op.uop.lead = 1'd1;
 	pr_nopi.op.uop.last = 1'd1;
 	pr_nopi.op.v = 1'b1;
-	pr_nopi.v = 5'd1;
+	pr_nopi.v = VAL;
 	pr_nopi.exc = Qupls5_pkg::FLT_NONE;
 	pr_nopi.excv = INV;
 	pr_nopi.done = 2'b11;
-	pr_nopi.stomped = TRUE;
 	/* NOP will be decoded later
 	nopi.decbus.Rdz = 1'b1;
 	nopi.decbus.nop = 1'b1;
@@ -1282,12 +1286,10 @@ generate begin : gComb
 				pg_trn.hdr.v = INV;
 			foreach (pg_ext.pr[n1]) begin
 				if (stomp) begin
-					pg_trn.pr[n1].stomped = TRUE;
 					pg_trn.pr[n1].done = 2'b11;
 				end
 				if (branch_resolved) begin
 					if (pg_ext.pr[n1].ip_stream.thread==live_stream.thread && pg_ext.pr[n1].ip_stream.stream != live_stream.stream) begin
-						pg_trn.pr[n1].stomped = TRUE;
 						pg_trn.pr[n1].done = 2'b11;
 					end
 				end

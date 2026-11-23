@@ -158,7 +158,7 @@ begin
 	rse[kk].excv = rob[nn].excv;
 	rse[kk].om = rob[nn].om;
 	rse[kk].rm = rob[nn].rm;
-	rse[kk].pc.cap.offset = pgh[mm].ip.cap.offset + rob[nn].ip_offs;
+	rse[kk].pc.cap.offset = rob[nn].op.uop.ip - pgh[mm].ip.cap.base;
 	rse[kk].pc.stream = rob[nn].ip_stream;
 	rse[kk].prc = rob[nn].op.decbus.prc;
 	rse[kk].cndx = pgh[mm].cndx;

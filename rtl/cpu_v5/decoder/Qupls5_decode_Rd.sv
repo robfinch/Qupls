@@ -56,69 +56,22 @@ begin
 	ir = instr;
 	fnRd = 6'd0;
 	case(ir.opcode)
-	// Integer instructions
-	Qupls5_pkg::OP_R3B,Qupls5_pkg::OP_R3W,Qupls5_pkg::OP_R3T,Qupls5_pkg::OP_R3O:
-		case(ir.func)
-		Qupls5_pkg::FN_DEPISPR:
-			begin
-				casez(ir.Rd)
-				5'b00???:	fnRd = (Qupls5_pkg::SUPPORT_VECTOR ? 9'd320 : 
-					Qupls5_pkg::SUPPORT_FLOAT ? 9'd64 : 9'd32) + ir.Rd[2:0];
-				default:	fnRd = {3'b000,ir.Rd};
-				endcase
-			end
-		default:
-			if (ir.vn[0])
-				fnRd = {1'b0,ir.Rd,3'd0} + 9'd64;
-			else
-				fnRd = {4'b000,ir.Rd};
-		endcase
-	Qupls5_pkg::OP_CSR:
-		fnRd = {3'd0,ir.Rd};
-	Qupls5_pkg::OP_ADDI,Qupls5_pkg::OP_SUBFI,Qupls5_pkg::OP_CMPI,Qupls5_pkg::OP_CMPUI,
-	Qupls5_pkg::OP_ANDI,Qupls5_pkg::OP_ORI,Qupls5_pkg::OP_XORI,
-	Qupls5_pkg::OP_MULI,Qupls5_pkg::OP_MULUI,Qupls5_pkg::OP_DIVI,Qupls5_pkg::OP_DIVUI,
-	Qupls5_pkg::OP_SHIFT:
+	Qupls5_pkg::OP_PPC_ADDI,Qupls5_pkg::OP_PPC_ADDIS,
+	Qupls5_pkg::OP_PPC_ANDI,Qupls5_pkg::OP_PPC_ANDIS,
+	Qupls5_pkg::OP_PPC_ORI,Qupls5_pkg::OP_PPC_ORIS,
+	Qupls5_pkg::OP_PPC_XORI,Qupls5_pkg::OP_PPC_XORIS:
 		fnRd = {2'd0,ir.Rd};
-	// FLoating-point instructions
-	Qupls5_pkg::OP_FLTH,Qupls5_pkg::OP_FLTS,Qupls5_pkg::OP_FLTD,Qupls5_pkg::OP_FLTQ:
-		case(ir.func)
-		Qupls5_pkg::FLT_CLASS,
-		Qupls5_pkg::FLT_FINITE,
-		Qupls5_pkg::FLT_RM,
-		Qupls5_pkg::FLT_SEQ,
-		Qupls5_pkg::FLT_SLE,
-		Qupls5_pkg::FLT_SLT,
-		Qupls5_pkg::FLT_SNE,
-		Qupls5_pkg::FLT_SIG,
-		Qupls5_pkg::FLT_FTOI,
-		Qupls5_pkg::FLT_ISNAN,
-		Qupls5_pkg::FLT_CMP:
-			if (ir.vn[0])
-				fnRd = {1'b0,ir.Rd,3'd0} + 9'd64;
-			else
-				fnRd = {4'd0,ir.Rd};
-		default:
-			if (ir.vn[0])
-				fnRd = {1'b0,ir.Rd,3'd0} + 9'd64;
-			else
-				fnRd = {4'b000,ir.Rd} + 9'd32;
-		endcase
+	Qupls5_pkg::OP_PPC_CMPI,Qupls5_pkg::OP_PPC_CMPLI:
+		fnRd = {2'd0,6'd32};
+	Qupls5_pkg::OP_PPC_RLWINM,
+	Qupls5_pkg::OP_PPC_RLWNM,
+	Qupls5_pkg::OP_PPC_RLWIMI,
+	Qupls5_pkg::OP_PPC_RLDIC:
+		fnRd = {2'd0,ir.Rd};
 	// Branch instructions
-	Qupls5_pkg::OP_BSR,Qupls5_pkg::OP_JSR:
-		fnRd = {3'd0,ir.Rd};
-	Qupls5_pkg::OP_BCCU,Qupls5_pkg::OP_BCC,Qupls5_pkg::OP_MBCC:
-		fnRd = ir.inc ? {3'd0,ir.Rs1} : 8'd0;
-	Qupls5_pkg::OP_FBCC:
-		fnRd = {3'd1,ir.Rs1};
+	Qupls5_pkg::OP_B:
+		fnRd = 6'd33;
 	// Load / store instructions
-	Qupls5_pkg::OP_LDB,Qupls5_pkg::OP_LDBZ,Qupls5_pkg::OP_LDW,Qupls5_pkg::OP_LDWZ,
-	Qupls5_pkg::OP_LDT,Qupls5_pkg::OP_LDTZ,Qupls5_pkg::OP_LOAD,Qupls5_pkg::OP_LOADA,
-	Qupls5_pkg::OP_AMO,Qupls5_pkg::OP_CMPSWAP:
-		fnRd = ir.Rd;
-	Qupls5_pkg::OP_LDV:
-		fnRd = {ir.Rd[4:0],3'd0} + 9'd64;
-`ifdef PowerISA
 	Qupls5_pkg::OP_31:
 		case(ir.func)
 		Qupls5_pkg::FN31_MTSPR:
@@ -129,7 +82,6 @@ begin
 			endcase
 		default:;
 		endcase
-`endif
 	default:
 		fnRd = 8'd0;
 	endcase
@@ -146,37 +98,19 @@ begin
 	ir = instr;
 	case(ir.opcode)
 	// Integer instructions
-	Qupls5_pkg::OP_R3B,Qupls5_pkg::OP_R3W,Qupls5_pkg::OP_R3T,Qupls5_pkg::OP_R3O:
+	Qupls5_pkg::OP_PPC_ADDI,Qupls5_pkg::OP_PPC_ADDIS,
+	Qupls5_pkg::OP_PPC_ANDI,Qupls5_pkg::OP_PPC_ANDIS,
+	Qupls5_pkg::OP_PPC_ORI,Qupls5_pkg::OP_PPC_ORIS,
+	Qupls5_pkg::OP_PPC_XORI,Qupls5_pkg::OP_PPC_XORIS:
 		fnRdv = VAL;
-	Qupls5_pkg::OP_VR3B,Qupls5_pkg::OP_VR3W,Qupls5_pkg::OP_VR3T,Qupls5_pkg::OP_VR3O:
+	Qupls5_pkg::OP_PPC_CMPI,Qupls5_pkg::OP_PPC_CMPLI:
 		fnRdv = VAL;
-	Qupls5_pkg::OP_VSR3B,Qupls5_pkg::OP_VSR3W,Qupls5_pkg::OP_VSR3T,Qupls5_pkg::OP_VSR3O:
+	Qupls5_pkg::OP_PPC_RLWINM,
+	Qupls5_pkg::OP_PPC_RLWNM,
+	Qupls5_pkg::OP_PPC_RLWIMI,
+	Qupls5_pkg::OP_PPC_RLDIC:
 		fnRdv = VAL;
-	Qupls5_pkg::OP_CSR:
-		fnRdv = VAL;
-	Qupls5_pkg::OP_ADDI,Qupls5_pkg::OP_SUBFI,Qupls5_pkg::OP_CMPI,Qupls5_pkg::OP_CMPUI,
-	Qupls5_pkg::OP_ANDI,Qupls5_pkg::OP_ORI,Qupls5_pkg::OP_XORI,
-	Qupls5_pkg::OP_MULI,Qupls5_pkg::OP_MULUI,Qupls5_pkg::OP_DIVI,Qupls5_pkg::OP_DIVUI,
-	Qupls5_pkg::OP_SHIFT:
-		fnRdv = VAL;
-
-	Qupls5_pkg::OP_FLTH,Qupls5_pkg::OP_FLTS,Qupls5_pkg::OP_FLTD,Qupls5_pkg::OP_FLTQ:
-		fnRdv = VAL;
-	Qupls5_pkg::OP_VFLTH,Qupls5_pkg::OP_VFLTS,Qupls5_pkg::OP_VFLTD,Qupls5_pkg::OP_VFLTQ,
-	Qupls5_pkg::OP_VSFLTH,Qupls5_pkg::OP_VSFLTS,Qupls5_pkg::OP_VSFLTD,Qupls5_pkg::OP_VSFLTQ:
-		fnRdv = VAL;
-
-	Qupls5_pkg::OP_BSR,Qupls5_pkg::OP_JSR:
-		fnRdv = ~&ir.Rd;
-	Qupls5_pkg::OP_BCCU,Qupls5_pkg::OP_BCC,Qupls5_pkg::OP_MBCC:
-		fnRdv = ir.inc ? VAL : INV;
-
-	Qupls5_pkg::OP_LDB,Qupls5_pkg::OP_LDBZ,Qupls5_pkg::OP_LDW,Qupls5_pkg::OP_LDWZ,
-	Qupls5_pkg::OP_LDT,Qupls5_pkg::OP_LDTZ,Qupls5_pkg::OP_LOAD,Qupls5_pkg::OP_LOADA,
-	Qupls5_pkg::OP_LDV,
-	Qupls5_pkg::OP_AMO,Qupls5_pkg::OP_CMPSWAP:
-		fnRdv = VAL;
-`ifdef PowerISA
+	// Load / store instructions
 	Qupls5_pkg::OP_31:
 		case(ir.func)
 		Qupls5_pkg::FN31_MTSPR:
@@ -187,7 +121,9 @@ begin
 			endcase
 		default:;
 		endcase
-`endif
+	// Branch instructions
+	Qupls5_pkg::OP_B:
+		fnRdv = ir.lk;
 	default:
 		fnRdv = INV;
 	endcase
