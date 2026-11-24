@@ -85,11 +85,22 @@ begin
         Qupls5_pkg::CAP_RET:    fnClass = 3'd3;
         default:    fnClass = 3'd7;
         endcase
-	Qupls5_pkg::OP_BCC,Qupls5_pkg::OP_BCCU,Qupls5_pkg::OP_FBCC,
-	Qupls5_pkg::OP_BSR,Qupls5_pkg::OP_JSR,
 	Qupls5_pkg::OP_SYS,
 	Qupls5_pkg::OP_BRK:
 		fnClass = 3'd3;
+
+	Qupls5_pkg::OP_B,
+	Qupls5_pkg::OP_BC:
+		fnClass = 3'd3;
+	Qupls5_pkg::OP_19:
+		case(ir.func)
+		Qupls5_pkg::FN19_BCLR,
+		Qupls5_pkg::FN19_BCCTR,
+		Qupls5_pkg::FN19_BCTAR:
+			fnClass = 3'd3;
+		default:
+			fnClass = 3'd7;
+		endcase
 	default:
 		fnClass = 3'd7;
 	endcase

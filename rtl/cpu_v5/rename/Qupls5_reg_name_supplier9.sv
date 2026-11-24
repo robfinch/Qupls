@@ -195,9 +195,9 @@ default:
 		always_comb nofree[2] = ffo2[aregno[2][$bits(aregno_t)-1:1]]==4'd15;
 		always_comb nofree[3] = ffo3[aregno[3][$bits(aregno_t)-1:1]]==4'd15;
 
-		always_ff @(posedge clk)
+		always_comb//ff @(posedge clk)
 		foreach (ns_dstreg[n1])
-		begin
+		if (en) begin
 			ns_dstregv[n1] <= INV;
 			ns_dstreg[n1] <= 9'd0;
 			if (ns_alloc_req[n1]) begin

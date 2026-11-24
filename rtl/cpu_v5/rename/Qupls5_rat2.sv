@@ -44,6 +44,8 @@
 import const_pkg::*;
 import Qupls5_pkg::*;
 
+`define BYPASS
+
 module Qupls5_rat2(rst, clk,
 	// Pipeline control
 	en, en2, stall,
@@ -435,11 +437,13 @@ wire [NRENAME-1:0] cdrn;
 generate begin : gRRN
 	for (g = 0; g < $size(rn); g = g + 1) begin
 change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g]), .cd(cdrn[g]));
+`ifndef BYPASS
 		always_comb
  			if (rst)
 				next_prn[g] = 10'd0;
 			else
      		next_prn[g] = {rn[g][$bits(cpu_types_pkg::aregno_t)-1:1],currentMap.regmap[rn[g]]};
+`endif     		
 		always_ff @(posedge clk)
 			if (rst) begin
 				prn[g] <= 9'd0;
@@ -455,7 +459,7 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 				next_prn[g] = 10'd0;
 			// If there is a pipeline bubble.
 			else begin
-				next_prn[g] = 10'd0;
+//				next_prn[g] = 10'd0;
 				begin
 					// Do we need the checkpoint to match?
 					// Compute bypassing requirements.
@@ -500,7 +504,7 @@ change_det #($bits(aregno_t)) ucdrn1 (.rst(rst), .clk(clk), .ce(1'b1), .i(rn[g])
 					3'd1: if (MWIDTH > 1)
 							next_prn[g] = 
 								// Intra group bypass
-								(rn[g]==wra && wr[0]) ? wrra :
+								(rn[g]==wra[0] && wr[0]) ? wrra[0] :
 //								(rn[g]==wra1 && wr01) ? wrra1 :
 								// Intergroup bypass, needed as the map RAM has not updated in
 								// time for the next group of instructions.

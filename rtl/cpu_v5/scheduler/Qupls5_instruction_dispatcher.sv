@@ -233,7 +233,9 @@ begin
 		rse[kk].arg[0].z = rob[nn].op.decbus.Rs1z;
 		rse[kk].arg[1].z = rob[nn].op.decbus.Rs2z;
 		rse[kk].arg[2].z = rob[nn].op.decbus.Rs3z;
+		rse[kk].arg[3].z = FALSE;
 		rse[kk].arg[4].z = rob[nn].op.Rs4z;
+		rse[kk].arg[5].z = FALSE;
 
 		rse[kk].arg[0].pRn = rob[nn].op.pRs1;
 		rse[kk].arg[1].pRn = rob[nn].op.pRs2;

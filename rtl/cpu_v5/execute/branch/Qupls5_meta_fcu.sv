@@ -92,11 +92,9 @@ Qupls5_meta_branch_eval ube1
 
 always_ff @(posedge clk)
 	case(1'b1)
-	rse_i.bsr:	res <= rse_i.pc.cap.offset + 4'd6;
-	rse_i.jsr:	res <= rse_i.pc.cap.offset + 4'd6;
-	rse_i.cjb:	res <= rse_i.pc.cap.offset + 4'd6;
-	rse_i.ibcc:	res <= a + 2'd1;		// destination register is Rs1
-	rse_i.dbcc:	res <= a - 2'd1;		// destination register is Rs1
+	rse_i.bsr:	res <= rse_i.pc.cap.offset + 4'd4;
+	rse_i.jsr:	res <= rse_i.pc.cap.offset + 4'd4;
+	rse_i.cjb:	res <= rse_i.pc.cap.offset + 4'd4;
 	rse_i.ret:	res <= t + i;			// destination is Rd	(SP)
 	default:	res <= value_zero;
 	endcase
@@ -142,8 +140,6 @@ end
 always_ff @(posedge clk)
 begin
 	case(1'b1)
-	rse_i.ibcc:	we_o <= {9{rse_i.we}};
-	rse_i.dbcc:	we_o <= {9{rse_i.we}};
 	rse_i.ret:	we_o <= {9{rse_i.we}};
 	rse_i.bsr:	we_o <= {9{rse_i.we}};
 	rse_i.jsr:	we_o <= {9{rse_i.we}};

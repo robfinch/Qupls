@@ -157,7 +157,7 @@ integer n16r, n16c, n12r, n12c, n14r, n14c, n17r, n17c, n18r, n18c;
 integer n19,n20,n21,n22,n23,n24,n25,n26,n27,n28,n29,i,n30,n31,n32,n33;
 integer n34,n35,n36,n37,n38,n39,n40,n41,n42,n43,n44,n45,n46,n47,n48;
 integer n49,n50,n51,n52,n53,n54,n55,n56,n57,n58,n59,n60,n61,n62,n63;
-integer n64,n65,n66,n67;
+integer n64,n65,n66,n67,n68;
 integer jj,kk;
 
 genvar g,h,gvg;
@@ -393,6 +393,7 @@ wire [15:0] rs_busy;
 wire cap_rs_busy;
 Qupls5_pkg::reservation_station_entry_t [DISPATCH_WIDTH-1:0] rse;
 Qupls5_pkg::cap_reservation_station_entry_t [0:0] cap_rse;
+Qupls5_pkg::rob_bitmask_t [6:0] lfa;
 
 // ALU done and idle are almost the same, but idle is sticky and set
 // if the ALU is not busy, whereas done pulses at the end of an ALU
@@ -1828,13 +1829,13 @@ gselectPredictor ugsp1
 	.takb1(commit_takb1),
 	.takb2(commit_takb2),
 	.takb3(commit_takb3),
-	.ip0(pc_fet.cap.offset),
+	.ip0(fnUcGetAddress(pc_fet.cap.offset)),
 	.predict_taken0(pt0_ext),
-	.ip1(pc_fet.cap.offset + 6'd6),
+	.ip1(fnUcGetAddress(pc_fet.cap.offset) + 6'd4),
 	.predict_taken1(pt1_ext),
-	.ip2(pc_fet.cap.offset + 6'd12),
+	.ip2(fnUcGetAddress(pc_fet.cap.offset) + 6'd8),
 	.predict_taken2(pt2_ext),
-	.ip3(pc_fet.cap.offset + 6'd18),
+	.ip3(fnUcGetAddress(pc_fet.cap.offset) + 6'd12),
 	.predict_taken3(pt3_ext)
 );
 
@@ -2603,18 +2604,24 @@ end
 */
 Qupls5_pkg::operand_t [NREG_WPORTS-1:0] wp;
 Qupls5_pkg::operand_t [NREG_WPORTS-1:0] wp_tap [0:4];
+//Qupls5_pkg::wp_hist_t wp;
+//Qupls5_pkg::wp_hist_t [4:0] wp_tap [0:4];
+
 Qupls5_pkg::cap_operand_t [0:0] cap_wp;
 Qupls5_pkg::cap_operand_t [0:0] cap_wp_tap [0:4];
 
 always_comb
 begin
 	foreach (wp[n49]) begin
-		wp[n49].val = wrport0_res[n49];
-		wp[n49].flags = wrport0_tag[n49];
-		wp[n49].pRn = wrport0_Rt[n49];
-		wp[n49].v = wrport0_v[n49];
-		wp[n49].aRn = 8'd00;		// we don't know this one, but it is not needed
-		wp[n49].aRnv = FALSE;
+		wp[n49] = {$bits(Qupls5_pkg::operand_t){1'b0}};
+		if (SUPPORT_XPIPE[n49]) begin
+			wp[n49].val = wrport0_res[n49];
+			wp[n49].flags = wrport0_tag[n49];
+			wp[n49].pRn = wrport0_Rt[n49];
+			wp[n49].v = wrport0_v[n49];
+			wp[n49].aRn = 8'd00;		// we don't know this one, but it is not needed
+			wp[n49].aRnv = FALSE;
+		end
 	end
 end
 always_comb
@@ -3120,6 +3127,8 @@ end
 
 Qupls5_pkg::rob_bitmask_t rob_dispatched, rob_unimplemented, rob_cap_dispatched;
 Qupls5_pkg::rob_bitmask_t rob_dispatched_stomped;
+Qupls5_pkg::rob_bitmask_t rob_dispatched3, rob_cap_dispatched3;
+vtdl #(.WID($bits(rob_bitmask_t))) udly3(.clk(clk), .ce(1'b1), .a(4'd2), .d(rob_dispatched), .q(rob_dispatched3));
 
 always_ff @(posedge clk)
 if (advance_pipeline)
@@ -3847,7 +3856,7 @@ endgenerate
 generate begin : gWrPort
 	for (g = 0; g < $size(wrport0_v); g = g + 1) begin
 		if (NREG_WPORTS >= NFRQ) begin
-			always_ff @(posedge clk) wrport0_v[g] <= fuq_empty[g];
+			always_ff @(posedge clk) wrport0_v[g] <= ~fuq_empty[g];
 			always_ff @(posedge clk) wrport0_we[g] <= fuq_we[g]; 
 			always_ff @(posedge clk) wrport0_Rt[g] <= fuq_pRt[g]; 
 			always_ff @(posedge clk) wrport0_aRt[g] <= fuq_aRt[g]; 
@@ -3920,11 +3929,21 @@ end
 // Build a list of registers that need to be read.
 // We look for needed registers from the ROB where the instruction has been
 // dispatched already (out!=0) and it is a valid non-stomped on instruction.
+Qupls5_pkg::rob_bitmask_t lfa2;
+always_comb
+begin
+	lfa2 = 64'd0;
+	foreach (lfa[n68])
+		lfa2 |= lfa[n68];
+end
+
 always_comb
 begin
 	n64 = 0;
+	foreach(rrl[n63])
+		rrl = {$bits(rrl_t){1'b0}};
 	foreach (rob[n63]) begin
-		if (rob[n63].v && !rob[n63].stomped && |rob[n63].out) begin
+		if (rob[n63].v && !rob[n63].stomped && &rob[n63].out && lfa2[n63]) begin
 			if (n64 < 12 && !rob[n63].argA_v) begin
 				rrl[n64].rndx = n63;
 				rrl[n64].ondx = 3'd0;
@@ -5680,12 +5699,14 @@ uxpipe0st
 	.req_FPCSRv(),
 	.fp_sync(1'b0),
 	.FPCSR(64'd0),
-	.FPCSRv(INV)
+	.FPCSRv(INV),
+	.lfa(lfa[0])
 );
 	end
 	else begin
 		assign bRs[0] = 36'd0;
 		assign bRsv[0] = 4'b0;
+		assign lfa[0] = 64'd0;
 	end
 end
 endgenerate
@@ -5763,6 +5784,7 @@ end
 end
 endgenerate
 */
+
 generate begin : gXpipe1Station
 	if (Qupls5_pkg::SUPPORT_XPIPE1) begin
 		Qupls5_reservation_station #(
@@ -5798,12 +5820,14 @@ generate begin : gXpipe1Station
 			.req_FPCSRndx(),
 			.req_FPCSRv(),
 			.FPCSR(64'd0),
-			.FPCSRv(INV)
+			.FPCSRv(INV),
+			.lfa(lfa[1])
 		);
 	end
 	else begin
 		assign bRs[1] = 36'd0;
 		assign bRsv[1] = 4'b0;
+		assign lfa[1] = 64'd0;
 	end
 end
 endgenerate
@@ -5821,7 +5845,7 @@ generate begin : gXpipe2Station
 			.DISPATCH_MAP(6'b000100),
 			.RL_STRATEGY(RL_STRATEGY)
 		)
-		uxpipe2st1
+		uxpipe2st
 		(
 			.rst(irst),
 			.clk(clk),
@@ -5843,12 +5867,14 @@ generate begin : gXpipe2Station
 			.req_FPCSRndx(),
 			.req_FPCSRv(),
 			.FPCSR(64'd0),
-			.FPCSRv(INV)
+			.FPCSRv(INV),
+			.lfa(lfa[2])
 		);
 	end
 	else begin
 		assign bRs[2] = 36'd0;
 		assign bRsv[2] = 4'b0;
+		assign lfa[2] = 64'd0;
 	end
 end
 endgenerate
@@ -5888,12 +5914,14 @@ generate begin : gXpipe3Station
 			.req_FPCSRndx(),
 			.req_FPCSRv(),
 			.FPCSR(64'd0),
-			.FPCSRv(INV)
+			.FPCSRv(INV),
+			.lfa(lfa[3])
 		);
 	end
 	else begin
 		assign bRs[3] = 36'd0;
 		assign bRsv[3] = 4'b0;
+		assign lfa[3] = 64'd0;
 	end
 end
 endgenerate
@@ -6182,12 +6210,14 @@ uxpipe4st
 	.req_FPCSRndx(),
 	.req_FPCSRv(),
 	.FPCSR(64'd0),
-	.FPCSRv(INV)
+	.FPCSRv(INV),
+	.lfa(lfa[4])
 );
 else begin
 	assign xpipe_rse[4] = {$bits(Qupls5_pkg::reservation_station_entry_t){1'b0}};
 	assign bRs[4] = 36'd0;
 	assign bRsv[4] = 4'b0;
+	assign lfa[4] = 64'd0;
 end
 end
 endgenerate
@@ -6206,7 +6236,7 @@ Qupls5_reservation_station #(
 	.DISPATCH_MAP(6'b100000),
 	.RL_STRATEGY(RL_STRATEGY)
 )
-uxpipe5st2
+uxpipe5st
 (
 	.rst(irst),
 	.clk(clk),
@@ -6228,12 +6258,14 @@ uxpipe5st2
 	.req_FPCSRndx(),
 	.req_FPCSRv(),
 	.FPCSR(64'd0),
-	.FPCSRv(INV)
+	.FPCSRv(INV),
+	.lfa(lfa[5])
 );
 else begin
 	assign xpipe_rse[5] = {$bits(Qupls5_pkg::reservation_station_entry_t){1'b0}};
 	assign bRs[5] = 36'd0;
 	assign bRsv[5] = 4'b0;
+	assign lfa[5] = 64'd0;
 end
 end
 endgenerate
@@ -6273,6 +6305,7 @@ ucapxpipest
 	.req_FPCSRv(),
 	.FPCSR(64'd0),
 	.FPCSRv(INV)
+//	.lfa(lfa[6])
 );
 else begin
 	assign xpipe_rse[6] = {$bits(Qupls5_pkg::cap_reservation_station_entry_t){1'b0}};
@@ -6281,6 +6314,7 @@ else begin
 end
 end
 endgenerate
+assign lfa[6] = 64'd0;
 
 /*
 reg fcu_reset_state;
@@ -6717,9 +6751,19 @@ else begin
 			(rob[(nn + Qupls5_pkg::ROB_ENTRIES - 1) % Qupls5_pkg::ROB_ENTRIES].op.decbus.pfx ? &rob[(nn + Qupls5_pkg::ROB_ENTRIES - 1) % Qupls5_pkg::ROB_ENTRIES].done : TRUE)
 			;
 
+	// Must delay an extra cycle for RL_STRATEGY(0). The dispatch needs a cycle to latch
+	// into the reservation station.
 	foreach (rob[nn])
-		if (rob_dispatched[nn]|rob_cap_dispatched[nn])
-			rob[nn].out <= {2{VAL}};
+		if (RL_STRATEGY==0) begin
+			if (rob_dispatched[nn]|rob_cap_dispatched[nn])
+				rob[nn].out[0] <= VAL;
+			if (rob_dispatched3[nn]|rob_cap_dispatched3[nn])
+				rob[nn].out[1] <= VAL;
+		end
+		else begin
+			if (rob_dispatched[nn]|rob_cap_dispatched[nn])
+				rob[nn].out <= {2{VAL}};
+		end
 
 	foreach (rob[nn])
 		if (rob_unimplemented[nn]) begin
@@ -6860,14 +6904,71 @@ else begin
 	if (RL_STRATEGY==0) begin
 		foreach (rrl[nn]) begin
 			case(rrl[nn].ondx)
-			3'd0:	rob[rrl[nn].rndx].argA_v <= prnv[nn];
-			3'd1:	rob[rrl[nn].rndx].argB_v <= prnv[nn];
-			3'd2:	rob[rrl[nn].rndx].argC_v <= prnv[nn];
-			3'd3:	rob[rrl[nn].rndx].argD_v <= prnv[nn];
-			3'd4:	rob[rrl[nn].rndx].argT_v <= prnv[nn];
-			3'd5:	rob[rrl[nn].rndx].argDRM_v <= prnv[nn];
+			3'd0:	if (prnv[nn]) rob[rrl[nn].rndx].argA_v <= VAL;
+			3'd1:	if (prnv[nn]) rob[rrl[nn].rndx].argB_v <= VAL;
+			3'd2:	if (prnv[nn]) rob[rrl[nn].rndx].argC_v <= VAL;
+			3'd3:	if (prnv[nn]) rob[rrl[nn].rndx].argD_v <= VAL;
+			3'd4:	if (prnv[nn]) rob[rrl[nn].rndx].argT_v <= VAL;
+			3'd5:	if (prnv[nn]) rob[rrl[nn].rndx].argDRM_v <= VAL;
 			default:	;
 			endcase
+		end
+		foreach (wp_tap[nn]) begin
+			foreach (rob[n69]) begin
+				if (rob[n69].v && &rob[n69].out) begin
+					if (wp_tap[nn][0].pRn==rob[n69].op.pRs1 && wp_tap[nn][0].v)
+						rob[n69].argA_v <= VAL;
+					if (wp_tap[nn][1].pRn==rob[n69].op.pRs2 && wp_tap[nn][0].v)
+						rob[n69].argB_v <= VAL;
+					if (wp_tap[nn][2].pRn==rob[n69].op.pRs3 && wp_tap[nn][0].v)
+						rob[n69].argC_v <= VAL;
+					if (wp_tap[nn][3].pRn==rob[n69].op.pRs4 && wp_tap[nn][0].v)
+						rob[n69].argD_v <= VAL;
+					if (wp_tap[nn][4].pRn==rob[n69].op.pRd && wp_tap[nn][0].v)
+						rob[n69].argT_v <= VAL;
+					if (wp_tap[nn][5].pRn==rob[n69].op.pDRM && wp_tap[nn][0].v)
+						rob[n69].argDRM_v <= VAL;
+				end
+			end
+		end
+		// If still looking for args when all the args have been marked valid,
+		// then it is a hardware issue of some sort. Flag an exception and
+		// try the lookups again. If there is still an issue then mark the
+		// instruction done as well so the CPU can forge ahead.
+		foreach(lfa2[nn]) begin
+			if (lfa2[nn] && (
+				rob[nn].argA_v & rob[nn].argB_v & rob[nn].argC_v &
+				rob[nn].argD_v & rob[nn].argT_v & rob[nn].argDRM_v
+			))
+			begin
+				rob[nn].excv <= VAL;
+				rob[nn].exc <= Qupls5_pkg::FLT_RL;
+				if (!rob[nn].excv) begin
+					rob[nn].argA_v <= INV;
+					rob[nn].argB_v <= INV;
+					rob[nn].argC_v <= INV;
+					rob[nn].argD_v <= INV;
+					rob[nn].argT_v <= INV;
+					rob[nn].argDRM_v <= INV;
+				end
+				else begin
+					rob[nn].out <= 2'b00;
+					rob[nn].done <= 2'b11;
+				end
+			end
+			// If not looking for any args, but the ROB indicates that there
+			// are args needed, then flag an exception.
+			/*
+			if (!lfa2[nn] && !(
+				rob[nn].argA_v && rob[nn].argB_v && rob[nn].argC_v &&
+				rob[nn].argD_v && rob[nn].argT_v && rob[nn].argDRM_v
+			)) begin
+				rob[nn].excv <= VAL;
+				rob[nn].exc <= Qupls5_pkg::FLT_RL;
+				rob[nn].out <= 2'b00;
+				rob[nn].done <= 2'b11;
+			end
+			*/
 		end
 	end
 	// For the first register lookup strategy which uses the register file write
@@ -7863,7 +7964,14 @@ Qupls5_cpytgt_count #(.WID(40)) uctc1
 function value_t fnRegVal;
 input pregno_t regno;
 begin
-	fnRegVal = urf1.gRF.genblk1[0].genblk1[0].urf0.mem[regno];
+	case(urf1.lvt[regno])
+	0:	fnRegVal = urf1.gRF.genblk1[0].genblk1[0].urf0.mem[regno];
+	1:	fnRegVal = urf1.gRF.genblk1[0].genblk1[1].urf0.mem[regno];
+	2:	fnRegVal = urf1.gRF.genblk1[0].genblk1[2].urf0.mem[regno];
+	3:	fnRegVal = urf1.gRF.genblk1[0].genblk1[3].urf0.mem[regno];
+	4:	fnRegVal = urf1.gRF.genblk1[0].genblk1[4].urf0.mem[regno];
+	5:	fnRegVal = urf1.gRF.genblk1[0].genblk1[5].urf0.mem[regno];
+	endcase
 	/*
 	case (urf1.lvt[regno])
 	2'd0:	fnRegVal = urf1.gRF.genblk1[0].urf0.mem[regno];
@@ -7886,7 +7994,7 @@ endfunction
 function pregno_t fnPreg;
 input aregno_t regno;
 begin
-	fnPreg = {regno[6:2],uren1.gRAT.genblk1.urat1.currentMap.regmap[regno]};
+	fnPreg = {regno[6:1],uren1.gRAT.genblk1.urat1.currentMap.regmap[regno]};
 end
 endfunction
 end
@@ -8072,10 +8180,10 @@ always_ff @(posedge clk_i) begin: clock_n_debug
 			(rob[i].op.decbus.cpytgt ? "c" : rob[i].op.decbus.fc ? "b" : rob[i].op.decbus.mem ? "m" : "a"),
 			rob[i].op.uop.opcode, 
 			rob[i].op.decbus.Rd, rob[i].op.nRd, rob[i].exc,
-			rob[i].op.decbus.Rd, rob[i].op.pRd, rob[i].argT, rob[i].argT_v?"v":" ",
-			rob[i].op.decbus.Rs1, rob[i].op.pRs1, rob[i].argA, rob[i].argA_v?"v":" ",
-			rob[i].op.decbus.Rs2, rob[i].op.pRs2, rob[i].argB, rob[i].argB_v?"v":" ",
-			rob[i].op.decbus.Rs3, rob[i].op.pRs3, rob[i].argC, rob[i].argC_v?"v":" ",
+			rob[i].op.decbus.Rd, rob[i].op.pRd, fnRegVal(rob[i].op.pRd), rob[i].argT_v?"v":" ",
+			rob[i].op.decbus.Rs1, rob[i].op.pRs1, fnRegVal(rob[i].op.pRs1), rob[i].argA_v?"v":" ",
+			rob[i].op.decbus.Rs2, rob[i].op.pRs2, fnRegVal(rob[i].op.pRs2), rob[i].argB_v?"v":" ",
+			rob[i].op.decbus.Rs3, rob[i].op.pRs3, fnRegVal(rob[i].op.pRs3), rob[i].argC_v?"v":" ",
 			rob[i].op.decbus.immb,//argI,
 			rob[i].ip_stream, rob[i].op.uop.ip,
 			rob[i].cndx,
@@ -8093,8 +8201,59 @@ always_ff @(posedge clk_i) begin: clock_n_debug
 				rse[i].arg[0].aRn, rse[i].arg[0].pRn,
 				rse[i].arg[1].aRn, rse[i].arg[1].pRn,
 				rse[i].arg[2].aRn, rse[i].arg[2].pRn,
-				rse[i].arg[1].val
+				rse[i].argI
 			);
+	end
+	$display("----- Reservation Stations -----");
+	foreach (rse[i]) begin
+		if (SUPPORT_XPIPE[i]) begin
+			case(i)
+			1:
+				begin
+					$display("%d: arg[0]: %h %c  arg[1]: %h %c  argI: %h ", i,
+						gXpipe1Station.genblk1.uxpipe1st.rse[0].arg[0].val,
+						gXpipe1Station.genblk1.uxpipe1st.rse[0].arg[0].v?"v":"-",
+						gXpipe1Station.genblk1.uxpipe1st.rse[0].arg[1].val,
+						gXpipe1Station.genblk1.uxpipe1st.rse[0].arg[1].v?"v":"-",
+						gXpipe1Station.genblk1.uxpipe1st.rse[0].argI
+				);
+				$display("----------------------------");
+				end
+			2:
+				begin
+					$display("%d: arg[0]: %h %c  arg[1]: %h %c  argI: %h ", i,
+						gXpipe2Station.genblk1.uxpipe2st.rse[0].arg[0].val,
+						gXpipe2Station.genblk1.uxpipe2st.rse[0].arg[0].v?"v":"-",
+						gXpipe2Station.genblk1.uxpipe2st.rse[0].arg[1].val,
+						gXpipe2Station.genblk1.uxpipe2st.rse[0].arg[1].v?"v":"-",
+						gXpipe2Station.genblk1.uxpipe2st.rse[0].argI
+				);
+				end
+			4:
+				begin
+					$display("%d: arg[0]: %h %c  arg[1]: %h %c  argI: %h ", i,
+						gXpipe4RS.genblk1.uxpipe4st.rse[0].arg[0].val,
+						gXpipe4RS.genblk1.uxpipe4st.rse[0].arg[0].v?"v":"-",
+						gXpipe4RS.genblk1.uxpipe4st.rse[0].arg[1].val,
+						gXpipe4RS.genblk1.uxpipe4st.rse[0].arg[1].v?"v":"-",
+						gXpipe4RS.genblk1.uxpipe4st.rse[0].argI
+				);
+				end
+			/*
+			5:
+				begin
+					$display("%d: arg[0]: %h %c  arg[1]: %h %c  argI: %h", i,
+						gXpipe5RS.genblk1.uxpipe5st.rse[0].arg[0].val,
+						gXpipe5RS.genblk1.uxpipe5st.rse[0].arg[0].v?"v":"-",
+						gXpipe5RS.genblk1.uxpipe5st.rse[0].arg[1].val,
+						gXpipe5RS.genblk1.uxpipe5st.rse[0].arg[1].v?"v":"-",
+						gXpipe5RS.genblk1.uxpipe5st.rse[0].argI
+				);
+				end
+			*/
+			default:	;
+			endcase
+		end
 	end
 	$display("----- LSQ -----");
 	for (i = 0; i < Qupls5_pkg::LSQ_ENTRIES; i = i + 1) begin
@@ -9078,7 +9237,7 @@ begin
 	next_robe.eip_offs = robe.eip_offs;
 	next_robe.om = cr0.om;
 	next_robe.rm = db.rm==3'd7 ? fpcsr.rm : db.rm;
-`ifdef IS_SIM
+`ifndef SYNTHESIS
 	next_robe.argI = db.immb;
 `endif	
 //	next_robe.rmd = fpscr.rmd;

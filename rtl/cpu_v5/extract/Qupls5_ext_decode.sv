@@ -74,6 +74,6 @@ always_comb rtd = instr[6:0]==Qupls5_pkg::OP_CAP && instr[31:25]==Qupls5_pkg::CA
 // to be subtracted off when set.
 always_comb begin bsr_tgt = ip; bsr_tgt.cap.offset = ip.cap.offset + {{38{instr[25]}},instr[25:2],2'b0}; end
 always_comb begin jsr_tgt = ip; jsr_tgt.cap.offset = {{38{instr[25]}},instr[25:2],2'b0} - ip.cap.base; end
-always_comb begin bcc_tgt = ip; bcc_tgt.cap.offset = ip.cap.offset + {{48{instr[15]}},instr[15:2],2'b0} - ip.cap.base; end
+always_comb begin bcc_tgt = ip; bcc_tgt.cap.offset = ip.cap.offset + {{48{instr[15]}},instr[15:2],2'b0}; end
 
 endmodule

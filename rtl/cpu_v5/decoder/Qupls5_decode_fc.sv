@@ -44,16 +44,17 @@ function fnIsFlowCtrl;
 input Qupls5_pkg::micro_op_t ir;
 begin
 	case(ir.opcode)
-	Qupls5_pkg::OP_BRK,
-	Qupls5_pkg::OP_CHK:	fnIsFlowCtrl = 1'b1;
-	Qupls5_pkg::OP_BCC,
-	Qupls5_pkg::OP_BCCU,
-	Qupls5_pkg::OP_FBCC:
-//	Qupls5_pkg::OP_TRAP:
+	Qupls5_pkg::OP_B,
+	Qupls5_pkg::OP_BC:
 		fnIsFlowCtrl = 1'b1;
-	Qupls5_pkg::OP_BRA,Qupls5_pkg::OP_JMP,	
-	Qupls5_pkg::OP_BSR,Qupls5_pkg::OP_JSR:
-		fnIsFlowCtrl = 1'b1;	
+	Qupls5_pkg::OP_19:
+		case(ir.func)
+		Qupls5_pkg::FN19_BCLR,
+		Qupls5_pkg::FN19_BCCTR,
+		Qupls5_pkg::FN19_BCTAR:
+			fnIsFlowCtrl = 1'b1;
+		default:	fnIsFlowCtrl = 1'b0;
+		endcase
 	default:
 		fnIsFlowCtrl = 1'b0;
 	endcase

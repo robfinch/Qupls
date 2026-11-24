@@ -127,12 +127,13 @@ input checkpt_ndx_t miss_cp;
 
 
 genvar g;
-integer jj,n1,n2,n3,n5,n6,n7,n8,n9,nn;
+integer jj,n1,n2,n3,n5,n6,n7,n8,n9,nn,n10;
 aregno_t [MWIDTH-1:0] aRd_dec;
 pregno_t [MWIDTH-1:0] pRd_dec;
 wire [MWIDTH-1:0] pRd_decv;
 reg [MWIDTH-1:0] aRd_decv;
 reg [MWIDTH-1:0] is_move;
+aregno_t [MWIDTH-1:0] aRd_decr;
 wire rat_stallq1;
 wire ns_stall;
 assign rat_stallq = rat_stallq1|ns_stall;
@@ -187,7 +188,7 @@ pregno_t [NRENAME-1:0] prn;
 always_comb
 begin
 	arnv = {MWIDTH*6{1'b1}};
-	for (n8 = 0; n8 < MWIDTH; n8 = n8 + 1) begin
+	foreach (pg_dec.pr[n8]) begin
 		arn[n8*6+0] = pg_dec.pr[n8].op.decbus.Rs1;
 		arn[n8*6+1] = pg_dec.pr[n8].op.decbus.Rs2;
 		arn[n8*6+2] = pg_dec.pr[n8].op.decbus.Rs3;
@@ -201,6 +202,16 @@ begin
 		arng[n8*6+4] = n8;
 		arng[n8*6+5] = n8;
 	end
+end
+
+always_comb//ff @(posedge clk)
+if (rst)
+	foreach(aRd_dec[n10])
+		aRd_decr[n10] <= 9'd0;
+else begin
+	if (en) 
+		foreach(aRd_dec[n10])
+			aRd_decr[n10] <= aRd_dec[n10];
 end
 
 checkpt_ndx_t cndx1, cndx2, cndx3;

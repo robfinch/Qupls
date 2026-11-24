@@ -48,15 +48,6 @@ always_comb
 begin
 	ibranch = FALSE;
 	dbranch = FALSE;
-`ifndef PowerISA	
-	if (branch)
-		case(instr.func)
-		Qupls5_pkg::CND_NE:	dbranch = instr.inc;
-		Qupls5_pkg::CND_LT:	ibranch = instr.inc;
-		Qupls5_pkg::CND_LE:	ibranch = instr.inc;
-		default:	;
-		endcase
-`endif
 end
 
 endmodule

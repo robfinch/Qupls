@@ -45,7 +45,8 @@ module Qupls5_reservation_station(rst, clk, available, busy, issue, stall,
 	rse_i, rse_o, stomp, rf_oper_i, cap_rf_oper_i,
 	bypass_i, wp_oper_tap_i, cap_wp_oper_tap_i,
 	req_pRn, req_pRnv,
-	fp_sync, req_FPCSRndx, req_FPCSRv, FPCSR, FPCSRv
+	fp_sync, req_FPCSRndx, req_FPCSRv, FPCSR, FPCSRv,
+	lfa
 );
 parameter MWIDTH = 4;
 parameter NRSE = 1;
@@ -86,6 +87,7 @@ output reg req_FPCSRv;
 input fp_sync;
 input Qupls5_pkg::fp_status_reg_t FPCSR;
 input FPCSRv;
+output Qupls5_pkg::rob_bitmask_t lfa;	// looking for args
 
 integer kk,jj,nn,mm,pp,qq,n1,n2,n3,n4;
 wire [3:0] rdy;
@@ -324,6 +326,8 @@ if (rst) begin
 	issue <= FALSE;
   pstall <= FALSE;
 	rcg_ipl_o <= 6'd0;
+	lfa <= 64'd0;
+	qq  = -1;
 end
 else begin
 	issue <= FALSE;
@@ -343,12 +347,21 @@ else begin
 				rse[qq].uop.opcode <= Qupls5_pkg::OP_NOP;
 		end
 	end
+	foreach (rse[mm]) begin
+		lfa <= 64'd0;
+		if (rse[mm].v & ~rse[mm].ready)
+			lfa[mm] <= TRUE;
+	end
 	for (pp = 0; pp < 6; pp = pp + 1) begin
 		foreach (rse[mm]) begin
-			if (arg[pp][mm].v) begin
-				rse[mm].arg[pp] <= arg[pp][mm];
-				rse[mm].arg[pp].v <= VAL;
+			if (rse[mm].v) begin
+				if (arg[pp][mm].v) begin
+					rse[mm].arg[pp] <= arg[pp][mm];
+					rse[mm].arg[pp].v <= VAL;
+				end
 			end
+			else if (mm != qq)
+				rse[mm].arg[pp].v <= INV;
 		end
 	end
 	foreach (rse[mm]) begin
@@ -502,11 +515,11 @@ input Qupls5_pkg::micro_op_t op;
 input [2:0] n;
 begin
 	case(n)
-	3'd0:	fnSrc = op.src[1];
-	3'd1:	fnSrc = op.src[2];
-	3'd2:	fnSrc = op.src[3];
+	3'd0:	fnSrc = op.src[0];
+	3'd1:	fnSrc = op.src[1];
+	3'd2:	fnSrc = op.src[2];
 	3'd3:	fnSrc = op.src[4];
-	3'd4:	fnSrc = op.src[0];
+	3'd4:	fnSrc = op.src[3];
 	3'd5:	fnSrc = op.src[5];
 	default:	fnSrc = 1'b0;
 	endcase

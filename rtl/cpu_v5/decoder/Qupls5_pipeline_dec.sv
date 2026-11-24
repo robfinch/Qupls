@@ -110,6 +110,7 @@ Qupls5_pkg::pipeline_group_reg_t pg_dec1,pg_dec2,pg_dec3,pg_dec4;
 reg [1023:0] cline1,cline2,cline3,cline4;
 reg p_override, p_overrided;
 reg [7:0] last_seqnum;
+reg [63:0] br_tgt [0:3];
 
 always @(posedge clk)
 if (rst)

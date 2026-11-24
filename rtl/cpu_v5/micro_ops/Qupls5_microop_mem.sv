@@ -914,8 +914,8 @@ begin
 					next_uop[0].lead = 1'b1;
 					next_uop[0].opcode = Qupls5_pkg::OP_PPC_ADDI;
 					next_uop[0].imm = -1;
-					next_uop[0].Rd = 6'd34;		//CTR
-					next_uop[0].Rs1 = 6'd34;	//CTR
+					next_uop[0].Rd = 6'd33;		//CTR
+					next_uop[0].Rs1 = 6'd33;	//CTR
 					next_uop[0].src[0]=1'b1;
 					next_uop[0].src[3]=1'b1;
 					next_uop[0].dst=1'b1;
@@ -939,6 +939,30 @@ begin
 		endcase
 	Qupls5_pkg::OP_31:
 		case(ir.func)
+		Qupls5_pkg::FN31_MFSPR:
+			begin
+				next_count = 5'd1;
+				next_uop[0] = uop0;
+				case(uop0.spr)
+				10'd256:	next_uop[0].Rs1 = 6'd33;
+				10'd288:	next_uop[0].Rs1 = 6'd34;
+				10'd815:	next_uop[0].Rs1 = 6'd35;
+				default:	next_uop[0].Rs1 = 6'd33;
+				endcase
+				next_uop[0].last = TRUE;
+			end
+		Qupls5_pkg::FN31_MTSPR:
+			begin
+				next_count = 5'd1;
+				next_uop[0] = uop0;
+				case(uop0.spr)
+				10'd256:	next_uop[0].Rd = 6'd33;
+				10'd288:	next_uop[0].Rd = 6'd34;
+				10'd815:	next_uop[0].Rd = 6'd35;
+				default:	next_uop[0].Rd = 6'd33;
+				endcase
+				next_uop[0].last = TRUE;
+			end
 		Qupls5_pkg::FN31_ADD,Qupls5_pkg::FN31_ADDO,
 		Qupls5_pkg::FN31_ADDC,Qupls5_pkg::FN31_ADDCO,
 		Qupls5_pkg::FN31_ADDE,Qupls5_pkg::FN31_ADDEO,

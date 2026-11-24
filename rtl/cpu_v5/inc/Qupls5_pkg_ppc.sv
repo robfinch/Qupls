@@ -1813,6 +1813,7 @@ typedef enum logic [7:0] {
 	FLT_CBOUNDS = 8'hC7,
 	FLT_CPERMS	= 8'hC8,
 
+	FLT_RL = 8'hDC,					// register lookup issue (hardware)
 	FLT_PRED  = 8'hDE,
 	FLT_BADREG = 8'hDF,
 	FLT_NONE 	= 8'hFF
@@ -1911,6 +1912,12 @@ typedef struct packed
 	capability_pkg::uc64_capability_t val;
 } cap_operand_t;
 
+/*
+typedef struct packed {
+	rob_ndx_t [NREG_WPORTS-1:0] rndx;
+	operand_t [NREG_WPORTS-1:0] arg;
+} wp_hist_t;
+*/
 
 // Holds the sizes of lanes for vector operations.
 
@@ -3135,24 +3142,7 @@ function fnSourceRs1v;
 input micro_op_t ir;
 begin
 	case(ir.opcode)
-	OP_ADDI,OP_CMPI,OP_MULI,OP_DIVI,OP_SUBFI:	fnSourceRs1v = 1'b1;
-	OP_CHK:	fnSourceRs1v = fnConstReg(ir.Rs1) || fnImma(ir);
-//	OP_RTD:		fnSourceRs1v = fnConstReg(ir.ins.rtd.Ra.num) || fnImma(ir);
-//	OP_JSR:		fnSourceRs1v = fnConstReg(ir.ins.Ra.num) || fnImma(ir);
-	OP_R3B,OP_R3W,OP_R3T,OP_R3O:
-			fnSourceRs1v = fnConstReg(ir.Rs1) || fnImma(ir);
-	OP_SHIFT:	fnSourceRs1v = fnConstReg(ir.Rs1) || fnImma(ir);
-//	OP_MOV:		fnSourceRs1v = fnConstReg({ir.ins.move.Rs1h,ir.ins.move.Rs1}) || fnImma(ir);
-	OP_BCC,
-	OP_BCCU:
-		fnSourceRs1v = fnConstReg(ir.Rs1) || fnImma(ir);
-	OP_LOADA,OP_LOADN,OP_LOADZN,
-	OP_LDB,OP_LDBZ,OP_LDW,OP_LDWZ,OP_LDT,OP_LDTZ,OP_LOAD,OP_CLOAD:
-		fnSourceRs1v = fnConstReg(ir.Rs1);
-	OP_STOREN,
-	OP_STB,OP_STW,OP_STT,OP_STORE,OP_STPTR,OP_CSTORE:
-		fnSourceRs1v = fnConstReg(ir.Rs1);
-	default:	fnSourceRs1v = 1'b1;
+	default:	fnSourceRs1v = ~ir.src[0];
 	endcase
 end
 endfunction
@@ -3161,23 +3151,7 @@ function fnSourceRs2v;
 input micro_op_t ir;
 begin
 	case(ir.opcode)
-	OP_CHK:	fnSourceRs2v = fnConstReg(ir.Rs2) || fnImmb(ir);
-//	OP_RTD:		fnSourceRs2v = 1'b0;
-//	OP_JSR,OP_BSR,
-	OP_ADDI,OP_CMPI,OP_MULI,OP_DIVI,OP_SUBFI:
-		fnSourceRs2v = 1'b1;
-	OP_R3B,OP_R3W,OP_R3T,OP_R3O:
-			fnSourceRs2v = fnConstReg(ir.Rs2) || fnImmb(ir);
-	OP_SHIFT:	fnSourceRs2v = fnConstReg(ir.Rs2) || ir[31];
-	OP_BCC,
-	OP_BCCU:
-		fnSourceRs2v = fnConstReg(ir.Rs2) || fnImmb(ir);
-	OP_LOADA,OP_LOADN,OP_LOADZN,
-	OP_LDB,OP_LDBZ,OP_LDW,OP_LDWZ,OP_LDT,OP_LDTZ,OP_LOAD,OP_CLOAD:
-		fnSourceRs2v = fnConstReg(ir.Rs2);
-	OP_STB,OP_STW,OP_STT,OP_STORE,OP_STOREN,OP_STPTR,OP_CSTORE:
-		fnSourceRs2v = fnConstReg(ir.Rs2);
-	default:	fnSourceRs2v = 1'b1;
+	default:	fnSourceRs2v = ~ir.src[1];
 	endcase
 end
 endfunction
@@ -3186,11 +3160,6 @@ function fnSourceRs3v;
 input micro_op_t ir;
 begin
 	case(ir.opcode)
-	OP_R3B,OP_R3W,OP_R3T,OP_R3O:
-			fnSourceRs3v = fnConstReg(ir.Rs3) || fnImmc(ir);
-	OP_CHK:	fnSourceRs3v = fnConstReg(ir.Rs3);
-//	OP_RTD:
-//		fnSourceRs3v = 1'd0;
 	default:
 		fnSourceRs3v = 1'b1;
 	endcase
@@ -3201,8 +3170,6 @@ function fnSourceRs4v;
 input micro_op_t ir;
 begin
 	case(ir.opcode)
-	OP_EXTD:
-			fnSourceRs4v = fnConstReg(ir.Rs4) || fnImmd(ir);
 	default:
 		fnSourceRs4v = 1'b1;
 	endcase
@@ -3226,7 +3193,7 @@ endfunction
 function fnSourceRdv;
 input micro_op_t ir;
 begin
-	fnSourceRdv = 1'b1;
+	fnSourceRdv = ~ir.dst;
 end
 endfunction
 
@@ -3341,32 +3308,38 @@ begin
 				fnMapRawToUop.func = raw[10:1];
 				fnMapRawToUop.lk = raw[0];
 				fnMapRawToUop.Rd = 6'd33;	// link register
+				fnMapRawToUop.Rs1 = 6'd33;
 				fnMapRawToUop.bh = raw[12:11];
 				fnMapRawToUop.bi = raw[20:16];
 				fnMapRawToUop.bo = raw[25:21];
-				fnMapRawToUop.src[0] = raw[0];
+				fnMapRawToUop.src[0] = 1'b1;
+				fnMapRawToUop.src[3] = raw[0];
 				fnMapRawToUop.dst = raw[0];
 			end
 		Qupls5_pkg::FN19_BCCTR:
 			begin
 				fnMapRawToUop.func = raw[10:1];
 				fnMapRawToUop.lk = raw[0];
-				fnMapRawToUop.Rd = 6'd34;	// link register
+				fnMapRawToUop.Rd = 6'd33;
+				fnMapRawToUop.Rs1 = 6'd34;
 				fnMapRawToUop.bh = raw[12:11];
 				fnMapRawToUop.bi = raw[20:16];
 				fnMapRawToUop.bo = raw[25:21];
-				fnMapRawToUop.src[0] = raw[0];
+				fnMapRawToUop.src[0] = 1'b1;
+				fnMapRawToUop.src[3] = raw[0];
 				fnMapRawToUop.dst = raw[0];
 			end
 		Qupls5_pkg::FN19_BCTAR:
 			begin
 				fnMapRawToUop.func = raw[10:1];
 				fnMapRawToUop.lk = raw[0];
-				fnMapRawToUop.Rd = 6'd35;	// link register
+				fnMapRawToUop.Rd = 6'd33;
+				fnMapRawToUop.Rs1 = 6'd35;
 				fnMapRawToUop.bh = raw[12:11];
 				fnMapRawToUop.bi = raw[20:16];
 				fnMapRawToUop.bo = raw[25:21];
-				fnMapRawToUop.src[0] = raw[0];
+				fnMapRawToUop.src[0] = 1'b1;
+				fnMapRawToUop.src[3] = raw[0];
 				fnMapRawToUop.dst = raw[0];
 			end
 		endcase
