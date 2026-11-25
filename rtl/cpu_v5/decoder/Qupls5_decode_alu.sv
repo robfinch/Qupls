@@ -46,38 +46,24 @@ input Qupls5_pkg::micro_op_t ir;
 begin
 	fnIsAlu = 1'b0;
 	case(ir.opcode)
-	Qupls5_pkg::OP_BFLD:
+	Qupls5_pkg::OP_PPC_ADDI:		fnIsAlu = 1'b1;
+	Qupls5_pkg::OP_PPC_ADDIS:		fnIsAlu = 1'b1;
+	Qupls5_pkg::OP_PPC_SUBFIC:	fnIsAlu = 1'b1;
+	Qupls5_pkg::OP_PPC_CMPI:		fnIsAlu = 1'b1;
+	Qupls5_pkg::OP_PPC_CMPLI:		fnIsAlu = 1'b1;
+	Qupls5_pkg::OP_PPC_ANDI:		fnIsAlu = 1'b1;
+	Qupls5_pkg::OP_PPC_ANDIS:		fnIsAlu = 1'b1;
+	Qupls5_pkg::OP_PPC_ORI:		fnIsAlu = 1'b1;
+	Qupls5_pkg::OP_PPC_ORIS:		fnIsAlu = 1'b1;
+	Qupls5_pkg::OP_PPC_XORI:		fnIsAlu = 1'b1;
+	Qupls5_pkg::OP_PPC_XORIS:		fnIsAlu = 1'b1;
+	Qupls5_pkg::OP_PPC_RLWINM,
+	Qupls5_pkg::OP_PPC_RLWNM,
+	Qupls5_pkg::OP_PPC_RLWIMI,
+	Qupls5_pkg::OP_PPC_RLDIC:
 		fnIsAlu = 1'b1;
-	Qupls5_pkg::OP_R3B,Qupls5_pkg::OP_R3W,Qupls5_pkg::OP_R3T,Qupls5_pkg::OP_R3O,
-	Qupls5_pkg::OP_VR3B,Qupls5_pkg::OP_VR3W,Qupls5_pkg::OP_VR3T,Qupls5_pkg::OP_VR3O,
-	Qupls5_pkg::OP_VSR3B,Qupls5_pkg::OP_VSR3W,Qupls5_pkg::OP_VSR3T,Qupls5_pkg::OP_VSR3O:
-		fnIsAlu = 1'b1;
-	Qupls5_pkg::OP_FLTH,Qupls5_pkg::OP_FLTS,Qupls5_pkg::OP_FLTD,Qupls5_pkg::OP_FLTQ,
-	Qupls5_pkg::OP_VFLTH,Qupls5_pkg::OP_VFLTS,Qupls5_pkg::OP_VFLTD,
-	Qupls5_pkg::OP_VSFLTH,Qupls5_pkg::OP_VSFLTS,Qupls5_pkg::OP_VSFLTD:
-		case(ir.func)
-		Qupls5_pkg::FLT_CMP,
-		Qupls5_pkg::FLT_ABS,Qupls5_pkg::FLT_NEG:
-			fnIsAlu = 1'b1;
-		default:	fnIsAlu = 1'b0;
-		endcase
-	Qupls5_pkg::OP_CHK:	fnIsAlu = 1'b1;
-	Qupls5_pkg::OP_ADDI:		fnIsAlu = 1'b1;
-	Qupls5_pkg::OP_SUBFI:	fnIsAlu = 1'b1;
-	Qupls5_pkg::OP_CMPI:		fnIsAlu = 1'b1;
-	Qupls5_pkg::OP_CMPUI:		fnIsAlu = 1'b1;
-	Qupls5_pkg::OP_ANDI:		fnIsAlu = 1'b1;
-	Qupls5_pkg::OP_ORI:		fnIsAlu = 1'b1;
-	Qupls5_pkg::OP_XORI:		fnIsAlu = 1'b1;
-	Qupls5_pkg::OP_SHIFT:	fnIsAlu = 1'b1;
-	Qupls5_pkg::OP_CSR:		fnIsAlu = 1'b1;
-	Qupls5_pkg::OP_LOADA:	fnIsAlu = 1'b1;
-	Qupls5_pkg::OP_FENCE:
-		fnIsAlu = 1'b1;
-`ifdef PowerISA
 	Qupls5_pkg::OP_31:
 		fnIsAlu = 1'b1;
-`endif
 	default:
 		fnIsAlu = 1'b0;
 	endcase

@@ -2961,6 +2961,15 @@ input micro_op_t ir;
 begin
 	case(ir.opcode)
 	OP_BC:	fnIsBranch = 1'b1;
+	OP_19:
+		case(ir.func)
+		FN19_BCLR,
+		FN19_BCCTR,
+		FN19_BCTAR:
+			fnIsBranch = 1'b1;
+		default:
+			fnIsBranch = 1'b0;
+		endcase
 	default:
 		fnIsBranch = 1'b0;
 	endcase

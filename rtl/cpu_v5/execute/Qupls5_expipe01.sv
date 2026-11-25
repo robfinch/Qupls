@@ -124,8 +124,8 @@ reg alu_did_op, alu_did_opd;
 wire [8:0] fcu_we;
 genvar g,mm;
 
-always_ff @(posedge clk) 
-	rse_o <= rse_i;
+//always_ff @(posedge clk) 
+//	rse_o <= rse_i;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -220,8 +220,10 @@ generate begin : gCptgt
 end
 endgenerate
 
-always_ff @(posedge clk)
-	we = {9{rse_i.we}};
+delay3 #(.WID($bits(Qupls5_pkg::reservation_station_entry_t))) udly4 (.clk(clk), .ce(1'b1), .i(rse_i), .o(rse_o));
+
+always_comb
+	we = {9{rse_o.we}};
 
 always_ff @(posedge clk)
 begin

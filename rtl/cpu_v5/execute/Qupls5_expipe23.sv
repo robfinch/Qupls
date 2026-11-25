@@ -126,8 +126,6 @@ always_ff @(posedge clk)
 	rse1 <= rse_i;
 always_ff @(posedge clk)
 	rse2 <= rse1;
-always_comb
-	rse_o = rse2;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -334,97 +332,20 @@ delay5 #(.WID($bits(Qupls5_pkg::micro_op_t))) udly3 (.clk(clk), .ce(1'b1), .i(ir
 delay5 #(.WID($bits(Qupls5_pkg::memsz_t))) udly4 (.clk(clk), .ce(1'b1), .i(prc), .o(prc5));
 delay5 #(.WID($bits(cpu_types_pkg::value_t))) udly5 (.clk(clk), .ce(1'b1), .i(nna_o), .o(nna_od));
 delay3 #(.WID($bits(cpu_types_pkg::value_t))) udly6 (.clk(clk), .ce(1'b1), .i(frcpa_o), .o(frcpa_od));
+delay5 #(.WID($bits(Qupls5_pkg::reservation_station_entry_t))) udly7 (.clk(clk), .ce(1'b1), .i(rse_i), .o(rse_o));
 
 
 always_comb
 begin
 	flags = 8'h00;
 	case(ir5.opcode)
-	Qupls5_pkg::OP_VR3B,Qupls5_pkg::OP_VR3W,Qupls5_pkg::OP_VR3T,Qupls5_pkg::OP_VR3O,
-	Qupls5_pkg::OP_VSR3B,Qupls5_pkg::OP_VSR3W,Qupls5_pkg::OP_VSR3T,Qupls5_pkg::OP_VSR3O,
-	Qupls5_pkg::OP_R3B,Qupls5_pkg::OP_R3W,Qupls5_pkg::OP_R3T,Qupls5_pkg::OP_R3O:
-		case(ir5.func)
-		Qupls5_pkg::FN_R1:
-			case(ir5.Rs2)
-			Qupls5_pkg::R1_NNA_TRIG,Qupls5_pkg::R1_NNA_STAT,Qupls5_pkg::R1_NNA_MFACT:
-				if (SUPPORT_NNA) begin
-					o1 = nna_od;
-				end
-				else begin
-					o1 = value_zero;
-				end
-			default:	
-				begin
-					o1 = alu_od;
-				end
-			endcase
-
-		Qupls5_pkg::FN_MUL,Qupls5_pkg::FN_MULU,Qupls5_pkg::FN_MULSU:
-			if (SUPPORT_IMUL) begin
-				o1 = imul_res;
-			end
-			else begin
-				o1 = value_zero;
-			end
-
-		Qupls5_pkg::FN_NNA_MTWT,Qupls5_pkg::FN_NNA_MTIN,Qupls5_pkg::FN_NNA_MTBIAS,Qupls5_pkg::FN_NNA_MTFB,Qupls5_pkg::FN_NNA_MTMC,
-		Qupls5_pkg::FN_NNA_MTBC:
-			if (SUPPORT_NNA) begin
-				o1 = nna_od;
-			end
-			else begin
-				o1 = value_zero;
-			end
-		endcase
-	Qupls5_pkg::OP_MULI,Qupls5_pkg::OP_MULUI:
-		if (SUPPORT_IMUL) begin
-			o1 = imul_res;
-		end
-		else begin
-			o1 = value_zero;
-		end
-
-	Qupls5_pkg::OP_FLTH,Qupls5_pkg::OP_FLTS,Qupls5_pkg::OP_FLTD,
-	Qupls5_pkg::OP_VFLTH,Qupls5_pkg::OP_VFLTS,Qupls5_pkg::OP_VFLTD,
-	Qupls5_pkg::OP_VSFLTH,Qupls5_pkg::OP_VSFLTS,Qupls5_pkg::OP_VSFLTD:
-		case(ir5.func)
-		Qupls5_pkg::FLT_FMA,Qupls5_pkg::FLT_FMS,Qupls5_pkg::FLT_FNMA,Qupls5_pkg::FLT_FNMS:
-			if (SUPPORT_FMA) begin
-				case(prc)
-				2'd0:	 o1 = fma_o16;
-				2'd1:	 o1 = fma_o32;
-				2'd2:	 o1 = fma_o64;
-				2'd3:   ;
-				endcase
-			end
-			else begin
-				o1 = value_zero;
-			end
-
-		Qupls5_pkg::FLT_RCPA:
-			if (SUPPORT_FRCPA) begin
-				o1 = frcpa_od;
-				flags = 8'h00;
-				flags.dbz = b[62:0]==0;
-			end
-			else begin
-				o1 = value_zero;
-			end
-		default:
-			begin
-				o1 = alu_od;
-			end
-		endcase
-	Qupls5_pkg::OP_LOADN,Qupls5_pkg::OP_LOADZN,Qupls5_pkg::OP_STOREN,
-	Qupls5_pkg::OP_LDB,Qupls5_pkg::OP_LDBZ,Qupls5_pkg::OP_LDW,Qupls5_pkg::OP_LDWZ,
-	Qupls5_pkg::OP_LDT,Qupls5_pkg::OP_LDTZ,Qupls5_pkg::OP_LOAD,Qupls5_pkg::OP_CLOAD,
-	Qupls5_pkg::OP_STB,Qupls5_pkg::OP_STW,
-	Qupls5_pkg::OP_STT,Qupls5_pkg::OP_STORE,Qupls5_pkg::OP_CSTORE,
-	Qupls5_pkg::OP_STPTR,
-	Qupls5_pkg::OP_V2P,
-	Qupls5_pkg::OP_VV2P,
-	Qupls5_pkg::OP_AMO:
-		;
+	Qupls5_pkg::OP_PPC_ADDI,Qupls5_pkg::OP_PPC_ADDIS,
+	Qupls5_pkg::OP_PPC_ANDI,Qupls5_pkg::OP_PPC_ANDIS,
+	Qupls5_pkg::OP_PPC_ORI,Qupls5_pkg::OP_PPC_ORIS,
+	Qupls5_pkg::OP_PPC_XORI,Qupls5_pkg::OP_PPC_XORIS:
+		o1 = alu_od;
+	Qupls5_pkg::OP_31:
+		o1 = alu_od;
 	default:
 		begin
 			o1 = alu_od;
@@ -447,7 +368,7 @@ generate begin : gCptgt
 end
 endgenerate
 
-delay5 #(.WID(WID/8+1)) udly7 (.clk(clk), .ce(1'b1), .i(we), .o(we2));
+delay5 #(.WID(WID/8+1)) udly8 (.clk(clk), .ce(1'b1), .i(we), .o(we2));
 
 always_comb
 	we = {9{rse_i.we}};

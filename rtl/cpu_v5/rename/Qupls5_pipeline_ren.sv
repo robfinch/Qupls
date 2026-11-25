@@ -72,6 +72,7 @@ module Qupls5_pipeline_ren(
 parameter SUPPORT_RAT = Qupls5_pkg::SUPPORT_RAT;
 parameter MWIDTH = Qupls5_pkg::MWIDTH;
 parameter NREG_RPORT = Qupls5_pkg::NREG_RPORTS;
+parameter NREG_WPORT = Qupls5_pkg::NREG_WPORTS;
 localparam NRENAME = MWIDTH*6;
 input rst;
 input clk;
@@ -100,11 +101,11 @@ input Qupls5_pkg::pipeline_group_reg_t pg_dec;
 output Qupls5_pkg::pipeline_group_reg_t pg_ren;
 output pregno_t [MWIDTH-1:0] Rt0_ren;
 output reg [MWIDTH-1:0] Rt0_renv;
-input [MWIDTH-1:0] wrport0_v;
-input aregno_t [MWIDTH-1:0] wrport0_aRt;
-input pregno_t [MWIDTH-1:0] wrport0_Rt;
-input value_t [MWIDTH-1:0] wrport0_res;
-input checkpt_ndx_t [MWIDTH-1:0] wrport0_cp;
+input [NREG_WPORT-1:0] wrport0_v;
+input aregno_t [NREG_WPORT-1:0] wrport0_aRt;
+input pregno_t [NREG_WPORT-1:0] wrport0_Rt;
+input value_t [NREG_WPORT-1:0] wrport0_res;
+input checkpt_ndx_t [NREG_WPORT-1:0] wrport0_cp;
 input [MWIDTH-1:0] cmtav;
 input [MWIDTH-1:0] cmtaiv;
 input aregno_t [MWIDTH-1:0] cmtaa;
@@ -245,7 +246,8 @@ Qupls5_rat2
 #(
 	.MWIDTH(MWIDTH),
 	.NRENAME(NRENAME),
-	.NREG_RPORT(NREG_RPORT)
+	.NREG_RPORT(NREG_RPORT),
+	.NREG_WPORT(NREG_WPORT)
 )
 urat1
 (	

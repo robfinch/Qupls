@@ -100,6 +100,7 @@ module Qupls5_rat2(rst, clk,
 parameter MWIDTH = Qupls5_pkg::MWIDTH;
 parameter NRENAME = MWIDTH*6;
 parameter NREG_RPORT = MWIDTH*3;
+parameter NREG_WPORT = Qupls5_pkg::NREG_WPORTS;
 localparam RBIT=$clog2(Qupls5_pkg::PREGS);
 input rst;
 input clk;
@@ -124,11 +125,11 @@ input [MWIDTH-1:0] is_move;
 input checkpt_ndx_t [MWIDTH-1:0] wra_cp;
 input cpu_types_pkg::aregno_t [MWIDTH-1:0] wra;		// architectural register
 input cpu_types_pkg::pregno_t [MWIDTH-1:0] wrra;	// physical register
-input [MWIDTH-1:0] wrport_v;
-input aregno_t [MWIDTH-1:0] wrport_aRt;
-input pregno_t [MWIDTH-1:0] wrport_Rt;
-input checkpt_ndx_t [MWIDTH-1:0] wrport_cp;
-input value_t [MWIDTH-1:0] wrport_res;
+input [NREG_WPORT-1:0] wrport_v;
+input aregno_t [NREG_WPORT-1:0] wrport_aRt;
+input pregno_t [NREG_WPORT-1:0] wrport_Rt;
+input checkpt_ndx_t [NREG_WPORT-1:0] wrport_cp;
+input value_t [NREG_WPORT-1:0] wrport_res;
 input [MWIDTH-1:0] cmtav;							// commit valid
 input [MWIDTH-1:0] cmtaiv;							// commit invalid instruction
 input checkpt_ndx_t [MWIDTH-1:0] cmta_cp;

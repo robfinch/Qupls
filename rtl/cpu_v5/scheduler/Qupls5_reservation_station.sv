@@ -303,6 +303,18 @@ begin
 		end
 end
 
+function fnIsReady;
+input Qupls5_pkg::reservation_station_entry_t rsei;
+begin
+	fnIsReady = (rsei.arg[0].v || !rsei.uop.src[0]) &&
+				(rsei.arg[1].v || !rsei.uop.src[1]) &&
+				(rsei.arg[2].v||rsei.store||!rsei.uop.src[2]) &&
+				(rsei.arg[3].v || !rsei.uop.src[4]) &&
+				(rsei.arg[4].v || !rsei.uop.src[3]) &&
+				(rsei.arg[5].v || !rsei.uop.src[5]);
+end
+endfunction
+
 /*
 		if (cpytgt) begin
 			instr.uop.ins <= {26'd0,OP_NOP};
@@ -318,8 +330,10 @@ end
 		else
 			idle_false <= TRUE;
 */
+reg [2:0] last_issued;
 always_ff @(posedge clk)
 if (rst) begin
+	last_issued <= 3'd7;
 	foreach (rse[pp])
   	rse[pp] <= {$bits(Qupls5_pkg::reservation_station_entry_t){1'b0}};
   rse_o <= {$bits(Qupls5_pkg::reservation_station_entry_t){1'b0}};
@@ -332,6 +346,11 @@ end
 else begin
 	issue <= FALSE;
 	pstall <= stall;
+	if (rse[last_issued].vcount==6'd0) begin
+		rse[last_issued].busy <= FALSE;
+		rse[last_issued].v <= FALSE;
+		last_issued <= 3'd7;
+	end
 	if (available && dispatch && idle) begin
 		// Load up the reservation stations.
 		qq = fnChooseIdle(rse);
@@ -341,8 +360,7 @@ else begin
 			rse[qq] <= rsei;
 			rse[qq].age <= 3'd0;
 			rse[qq].busy <= rsei.v;
-			rse[qq].ready <= rsei.arg[0].v && rsei.arg[1].v && (rsei.arg[2].v||rsei.store) &&
-				rsei.arg[3].v && rsei.arg[4].v && rsei.arg[5].v;
+			rse[qq].ready <= fnIsReady(rsei);
 			if (stomp[rsei.rndx])
 				rse[qq].uop.opcode <= Qupls5_pkg::OP_NOP;
 		end
@@ -350,7 +368,7 @@ else begin
 	foreach (rse[mm]) begin
 		lfa <= 64'd0;
 		if (rse[mm].v & ~rse[mm].ready)
-			lfa[mm] <= TRUE;
+			lfa[rse[mm].rndx] <= TRUE;
 	end
 	for (pp = 0; pp < 6; pp = pp + 1) begin
 		foreach (rse[mm]) begin
@@ -366,8 +384,7 @@ else begin
 	end
 	foreach (rse[mm]) begin
 		rse[mm].ready <= FALSE;
-		if (rse[mm].arg[0].v && rse[mm].arg[1].v && (rse[mm].arg[2].v|rse[mm].store)
-			&& rse[mm].arg[3].v && rse[mm].arg[4].v && rse[mm].arg[5].v)
+		if (fnIsReady(rse[mm]))
 			rse[mm].ready <= rse[mm].v;
 	end
 
@@ -415,6 +432,7 @@ else begin
 			// Otherwise rdy holds the index of the selected ready rse.
 			// The number of rses supported is limited to 2^n-1
 			if (~&rdy) begin
+				last_issued <= rdy;
 				// For a vector load / store only issue for when mask indicates so.
 				if (!(fp_sync && rse[rdy].fclass==3'd2)) begin
 					if (rse[rdy].vls) begin
@@ -452,6 +470,7 @@ else begin
 					end
 					if (rse[rdy].vcount==6'd0) begin
 						rse[rdy].busy <= FALSE;
+						rse[rdy].v <= FALSE;
 					end
 					else begin
 						rse[rdy].vcount <= rse[rdy].vcount - 6'd1;

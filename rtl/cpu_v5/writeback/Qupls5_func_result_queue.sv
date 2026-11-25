@@ -41,7 +41,7 @@ import Qupls5_pkg::*;
 
 module Qupls5_func_result_queue(rst_i, clk_i, stomp_i, rd_i, we_i, rse_i,
 	tag_i, res_i, cp_i, we_o, pRt_o, aRt_o, tag_o, res_o, cp_o, empty, full);
-parameter DEP = 5'd0;
+parameter DEP = 5'd8;
 input rst_i;
 input clk_i;
 input Qupls5_pkg::rob_bitmask_t stomp_i;

@@ -338,7 +338,7 @@ localparam NREG_RPORTS = 12;
 // and may increase performance. The default is set to the machine width.
 // Note: not all instruction write the register file so it may be possible
 // to use fewer write ports without losing too much performance.
-localparam NREG_WPORTS = 6;//MWIDTH;
+localparam NREG_WPORTS = 4;//MWIDTH;
 localparam NREG_FP_WPORTS = 1;//MWIDTH;
 localparam NREG_EXT_WPORTS = 1;//MWIDTH;
 

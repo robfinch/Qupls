@@ -39,7 +39,7 @@ import const_pkg::*;
 import Qupls5_pkg::*;
 
 module Qupls5_frq_select(rst, clk, frq_empty, upd, upd_bitmap);
-parameter NFRQ=16;
+parameter NFRQ=6;
 parameter NWRITE_PORTS=4;
 input rst;
 input clk;

@@ -3128,7 +3128,7 @@ end
 Qupls5_pkg::rob_bitmask_t rob_dispatched, rob_unimplemented, rob_cap_dispatched;
 Qupls5_pkg::rob_bitmask_t rob_dispatched_stomped;
 Qupls5_pkg::rob_bitmask_t rob_dispatched3, rob_cap_dispatched3;
-vtdl #(.WID($bits(rob_bitmask_t))) udly3(.clk(clk), .ce(1'b1), .a(4'd2), .d(rob_dispatched), .q(rob_dispatched3));
+vtdl #(.WID($bits(rob_bitmask_t))) udly3(.clk(clk), .ce(1'b1), .a(4'd3), .d(rob_dispatched), .q(rob_dispatched3));
 
 always_ff @(posedge clk)
 if (advance_pipeline)
@@ -3289,15 +3289,15 @@ always_comb wt12A = !fpu0_rse2.aRdv && !fpu0_idle && Qupls5_pkg::NFPU > 0;
 
 
 // Functional unit result queues management variables.
-reg [12:0] fuq_empty;
+reg [6:0] fuq_empty;
 wire [4:0] frq_upd [0:NREG_WPORTS-1];
-reg [12:0] fuq_rd;
+reg [6:0] fuq_rd;
 wire [8:0] fuq_we [0:12];
-pregno_t [12:0] fuq_pRt;
-aregno_t [12:0] fuq_aRt;
-wire [7:0] fuq_tag [0:12];
-value_t [12:0] fuq_res;
-cpu_types_pkg::checkpt_ndx_t fuq_cp [0:12];
+pregno_t [6:0] fuq_pRt;
+aregno_t [6:0] fuq_aRt;
+wire [7:0] fuq_tag [0:6];
+value_t [6:0] fuq_res;
+cpu_types_pkg::checkpt_ndx_t fuq_cp [0:6];
 
 reg cap_fuq_rd;
 wire cap_fuq_empty;
@@ -3315,7 +3315,7 @@ generate begin : gFrqSelect
 	if (Qupls5_pkg::NFRQ > NREG_WPORTS)
 		Qupls5_frq_select
 		#(
-			.NFRQ(NREG_WPORTS),
+			.NFRQ(Qupls5_pkg::NFRQ),
 			.NWRITE_PORTS(NREG_WPORTS)
 		)
 		ufrqsel1
@@ -3399,6 +3399,8 @@ Qupls5_func_result_queue ufrq2
 	.empty(fuq_empty[2]),
 	.full(xpipe2_full)
 );
+else
+	assign fuq_empty[2]=1'b1;
 end
 endgenerate
 
@@ -3423,6 +3425,8 @@ Qupls5_func_result_queue ufrq3
 	.empty(fuq_empty[3]),
 	.full(xpipe3_full)
 );
+else
+	assign fuq_empty[3]=1'b1;
 end
 endgenerate
 
@@ -3447,6 +3451,8 @@ Qupls5_func_result_queue ufrq4
 	.empty(fuq_empty[4]),
 	.full(xpipe4_full)
 );
+else
+	assign fuq_empty[4]=1'b1;
 end
 endgenerate
 
@@ -3471,6 +3477,8 @@ Qupls5_func_result_queue ufrq5
 	.empty(fuq_empty[5]),
 	.full(xpipe5_full)
 );
+else
+	assign fuq_empty[5]=1'b1;
 end
 endgenerate
 
@@ -3863,6 +3871,39 @@ generate begin : gWrPort
 			always_ff @(posedge clk) wrport0_res[g] <= fuq_res[g]; 
 			always_ff @(posedge clk) wrport0_cp[g] <= fuq_cp[g]; 
 			always_ff @(posedge clk) wrport0_tag[g] <= fuq_tag[g]; 
+			/*
+			always_ff @(posedge clk) wrport0_v[0] <= ~fuq_empty[0];
+			always_ff @(posedge clk) wrport0_we[0] <= fuq_we[0]; 
+			always_ff @(posedge clk) wrport0_Rt[0] <= fuq_pRt[0]; 
+			always_ff @(posedge clk) wrport0_aRt[0] <= fuq_aRt[0]; 
+			always_ff @(posedge clk) wrport0_res[0] <= fuq_res[0]; 
+			always_ff @(posedge clk) wrport0_cp[0] <= fuq_cp[0]; 
+			always_ff @(posedge clk) wrport0_tag[0] <= fuq_tag[0]; 
+
+			always_ff @(posedge clk) wrport0_v[1] <= ~fuq_empty[1];
+			always_ff @(posedge clk) wrport0_we[1] <= fuq_we[1]; 
+			always_ff @(posedge clk) wrport0_Rt[1] <= fuq_pRt[1]; 
+			always_ff @(posedge clk) wrport0_aRt[1] <= fuq_aRt[1]; 
+			always_ff @(posedge clk) wrport0_res[1] <= fuq_res[1]; 
+			always_ff @(posedge clk) wrport0_cp[1] <= fuq_cp[1]; 
+			always_ff @(posedge clk) wrport0_tag[1] <= fuq_tag[1]; 
+
+			always_ff @(posedge clk) wrport0_v[2] <= ~fuq_empty[2];
+			always_ff @(posedge clk) wrport0_we[2] <= fuq_we[2]; 
+			always_ff @(posedge clk) wrport0_Rt[2] <= fuq_pRt[2]; 
+			always_ff @(posedge clk) wrport0_aRt[2] <= fuq_aRt[2]; 
+			always_ff @(posedge clk) wrport0_res[2] <= fuq_res[2]; 
+			always_ff @(posedge clk) wrport0_cp[2] <= fuq_cp[2]; 
+			always_ff @(posedge clk) wrport0_tag[2] <= fuq_tag[2]; 
+
+			always_ff @(posedge clk) wrport0_v[3] <= ~fuq_empty[4];
+			always_ff @(posedge clk) wrport0_we[3] <= fuq_we[4]; 
+			always_ff @(posedge clk) wrport0_Rt[3] <= fuq_pRt[4]; 
+			always_ff @(posedge clk) wrport0_aRt[3] <= fuq_aRt[4]; 
+			always_ff @(posedge clk) wrport0_res[3] <= fuq_res[4]; 
+			always_ff @(posedge clk) wrport0_cp[3] <= fuq_cp[4]; 
+			always_ff @(posedge clk) wrport0_tag[3] <= fuq_tag[4]; 
+			*/
 		end
 		else begin
 			always_ff @(posedge clk) wrport0_v[g] <= frq_upd[g]==5'd31 ? 1'b0 : ~fuq_empty[frq_upd[g]];
@@ -6194,7 +6235,7 @@ uxpipe4st
 	.clk(clk),
 	.available(1'b1),
 	.busy(rs_busy[4]),
-	.stall(!agen0_idle),
+	.stall(!agen0_idle|!xpipe4_done),
 	.stomp(robentry_stomp),
 	.issue(),//robentry_issue[sau0_rndx]),
 	.rse_i(rse),
@@ -6242,7 +6283,7 @@ uxpipe5st
 	.clk(clk),
 	.available(1'b1),
 	.busy(rs_busy[5]),
-	.stall(!agen1_idle),
+	.stall(!agen1_idle|!xpipe5_done),
 	.stomp(robentry_stomp),
 	.issue(),//robentry_issue[sau0_rndx]),
 	.rse_i(rse),
@@ -7969,8 +8010,8 @@ begin
 	1:	fnRegVal = urf1.gRF.genblk1[0].genblk1[1].urf0.mem[regno];
 	2:	fnRegVal = urf1.gRF.genblk1[0].genblk1[2].urf0.mem[regno];
 	3:	fnRegVal = urf1.gRF.genblk1[0].genblk1[3].urf0.mem[regno];
-	4:	fnRegVal = urf1.gRF.genblk1[0].genblk1[4].urf0.mem[regno];
-	5:	fnRegVal = urf1.gRF.genblk1[0].genblk1[5].urf0.mem[regno];
+//	4:	fnRegVal = urf1.gRF.genblk1[0].genblk1[4].urf0.mem[regno];
+//	5:	fnRegVal = urf1.gRF.genblk1[0].genblk1[5].urf0.mem[regno];
 	endcase
 	/*
 	case (urf1.lvt[regno])
@@ -8311,7 +8352,7 @@ always_ff @(posedge clk_i) begin: clock_n_debug
 	$display("----- Writeback -----");
 	$display("frq rd=%b empty=%b", fuq_rd, fuq_empty);
 	foreach(wrport0_v[i]) begin
-		if (SUPPORT_XPIPE[i])
+//		if (SUPPORT_XPIPE[i])
 			$display("%d: %c we%h R%d=%h %h",
 				i[3:0], wrport0_v[i] ? "v" : " ", wrport0_we[i], wrport0_Rt[i], wrport0_res[i], wrport0_tag[i]
 			);

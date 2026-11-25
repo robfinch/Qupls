@@ -108,6 +108,58 @@ cpu_types_pkg::address_t res1;
 reg [63:0] base;
 reg [64:0] top;
 reg [5:0] shift;
+reg [4:0] state;
+
+always_ff @(posedge clk)
+if (rst) begin
+	state <= 5'd0;
+	done <= TRUE;
+	rse_o <= {$bits(reservation_station_entry_t){1'b0}};
+end
+else begin
+	case(state)
+	5'd0:
+		if (rse_i.v) begin
+			state <= 5'd1;
+			rse_o <= rse_i;
+			done <= FALSE;
+		end
+	5'd1:
+		state <= 5'd2;
+	5'd2:
+		begin
+			if (rse_i.mem) begin
+				if (mem_done_i)
+					done <= TRUE;
+					state <= 5'd7;
+			end
+			else begin
+				state <= 5'd3;
+			end
+		end
+	5'd3:
+		state <= 5'd4;
+	5'd4:
+		state <= 5'd5;
+	5'd5:
+		state <= 5'd6;
+	5'd6:
+		begin
+			done <= TRUE;
+			state <= 5'd7;
+		end
+	// Wait a couple of clock cycles after done asserted for rse to clear.
+	5'd7:	state <= 5'd8;
+	5'd8:
+		begin
+			state <= 5'd9;
+			rse_o <= {$bits(reservation_station_entry_t){1'b0}};
+		end
+	5'd9:	state <= 5'd0;
+	default:	state <= 5'd0;
+	endcase
+end
+
 
 always_ff @(posedge clk)
 	lastarg <= {a,b,bi,c};
@@ -118,18 +170,18 @@ always_ff @(posedge clk)
 always_ff @(posedge clk)
 	tex_ld <= lastargd != {a,b,c,d};
 	
-always_comb om = rse_i.om;
-always_comb ir = rse_i.uop;
-always_comb a = rse_i.arg[0].val;
-always_comb b = rse_i.arg[1].val;
-always_comb c = rse_i.arg[2].val;
-always_comb d = rse_i.arg[3].val;
-always_comb t = rse_i.arg[4].val;
-always_comb s = rse_i.arg[5].val;
-always_comb i = rse_i.argI;
-always_comb bi = rse_i.arg[1].val|rse_i.argI;
-always_comb aRd_i = rse_i.aRd;
-always_comb prc = rse_i.prc;
+always_comb om = rse_o.om;
+always_comb ir = rse_o.uop;
+always_comb a = rse_o.arg[0].val;
+always_comb b = rse_o.arg[1].val;
+always_comb c = rse_o.arg[2].val;
+always_comb d = rse_o.arg[3].val;
+always_comb t = rse_o.arg[4].val;
+always_comb s = rse_o.arg[5].val;
+always_comb i = rse_o.argI;
+always_comb bi = rse_o.arg[1].val|rse_o.argI;
+always_comb aRd_i = rse_o.aRd;
+always_comb prc = rse_o.prc;
 
 reg [WID/8-1:0] exc128,exc64;
 reg [WID-1:0] o1;
@@ -151,7 +203,7 @@ reg [23:0] perms;
 reg tags_bad;
 
 always_ff @(posedge clk) 
-	rse1 <= rse_i;
+	rse1 <= rse_o;
 always_ff @(posedge clk)
 	rse2 <= rse1;
 always_comb
@@ -160,31 +212,31 @@ always_comb
 //generate begin : gAgen
 //	if (PIPE==3'd4 || PIPE==3'd5) begin
 always_ff @(posedge clk)
-casez({rse_i.pc.cap.flags[0] || !SUPPORT_CAPABILITIES,rse_i.uop.iprel,rse_i.Rs1z})
+casez({rse_o.pc.cap.flags[0] || !SUPPORT_CAPABILITIES,rse_o.uop.iprel,rse_o.Rs1z})
 3'b??1:	as <= value_zero;
-3'b?10:	as <= rse_i.pc.cap.offset + rse_i.pc.cap.base;
-3'b100:	as <= rse_i.arg[0].val + ddc.base;
-3'b000:	as <= rse_i.cap_arg.val.offset + rse_i.cap_arg.val.base;
+3'b?10:	as <= rse_o.pc.cap.offset + rse_o.pc.cap.base;
+3'b100:	as <= rse_o.arg[0].val + ddc.base;
+3'b000:	as <= rse_o.cap_arg.val.offset + rse_o.cap_arg.val.base;
 endcase
 
 reg [8:0] scale;
 always_comb
-	scale = 9'd1 << rse_i.uop.sc;
+	scale = 9'd1 << rse_o.uop.sc;
 always_ff @(posedge clk)
-	bs <= rse_i.Rs2z ? value_zero : (rse_i.arg[1].val * scale[8:1]);
+	bs <= rse_o.Rs2z ? value_zero : (rse_o.arg[1].val * scale[8:1]);
 
 // imm2 = vlen
 always_ff @(posedge clk)
-	bsv <= rse_i.Rs2z ? value_zero : (rse_i.arg[1].val * {rse_i.uop.vlen,3'b0});
+	bsv <= rse_o.Rs2z ? value_zero : (rse_o.arg[1].val * {rse_o.uop.vlen,3'b0});
 
 always_ff @(posedge clk)
-	base <= rse_i.Rs1z ? 64'd0 : rse_i.pc.cap.flags[0] || !SUPPORT_CAPABILITIES ? ddc.base : rse_i.cap_arg.val.base;
+	base <= rse_o.Rs1z ? 64'd0 : rse_o.pc.cap.flags[0] || !SUPPORT_CAPABILITIES ? ddc.base : rse_o.cap_arg.val.base;
 always_ff @(posedge clk)
-	top <= rse_i.Rs1z ? 65'h10000000000000000 : rse_i.pc.cap.flags[0] || !SUPPORT_CAPABILITIES  ? ddc.top : rse_i.cap_arg.val.top;
+	top <= rse_o.Rs1z ? 65'h10000000000000000 : rse_o.pc.cap.flags[0] || !SUPPORT_CAPABILITIES  ? ddc.top : rse_o.cap_arg.val.top;
 always_ff @(posedge clk)
-	perms <= rse_i.Rs1z ? 24'h0 : rse_i.pc.cap.flags[0] || !SUPPORT_CAPABILITIES  ? ddc.perms : rse_i.cap_arg.val.perms;
+	perms <= rse_o.Rs1z ? 24'h0 : rse_o.pc.cap.flags[0] || !SUPPORT_CAPABILITIES  ? ddc.perms : rse_o.cap_arg.val.perms;
 always_ff @(posedge clk)
-	tags_bad <= !rse_i.cap_arg.flags.cap || rse_i.arg[2].flags.cap;
+	tags_bad <= !rse_o.cap_arg.flags.cap || rse_o.arg[2].flags.cap;
 
 always_comb
 	case(rse1.velesz)
@@ -259,7 +311,7 @@ if (rst) begin
 	resv1 <= INV;
 end
 else begin
-	if (rse_i.vlsndx|rse_i.vls|rse_i.amo|rse_i.load|rse_i.store)
+	if (rse_o.vlsndx|rse_o.vls|rse_o.amo|rse_o.load|rse_o.store)
 		resv1 <= VAL;
 	if (tlb_v)
 		resv1 <= INV;
@@ -285,9 +337,9 @@ Qupls5_meta_alu #(.PIPE(PIPE)) umalu1
 (
 	.rst(rst),
 	.clk(clk),
-	.rse_i(rse_i),
+	.rse_i(rse_o),
 	.rse_o(),
-	.lane(rse_i.uop.num),
+	.lane(rse_o.uop.num),
 	.cptgt(8'h00),
 	.z(1'b0),
 	.stomp(stomp),
@@ -317,7 +369,7 @@ if (Qupls5_pkg::SUPPORT_PREC) begin
 			fpFMA16LN ufma16 (
 				.clk(clk),
 				.op(ir[30]),		// 0=add,1=sub c
-				.rm(rse_i.rm),
+				.rm(rse_o.rm),
 				.a(a[g*16+15:g*16]),
 				.b(b[g*16+15:g*16]),
 				.c(c[g*16+15:g*16]),
@@ -335,7 +387,7 @@ if (Qupls5_pkg::SUPPORT_PREC) begin
 				fpFMA32LN ufma32 (
 					.clk(clk),
 					.op(ir[30]),		// 0=add,1=sub c
-					.rm(rse_i.rm),
+					.rm(rse_o.rm),
 					.a(a[g*32+31:g*32]),
 					.b(b[g*32+31:g*32]),
 					.c(c[g*32+31:g*32]),
@@ -351,7 +403,7 @@ if (Qupls5_pkg::SUPPORT_PREC) begin
 					fpFMA64LN ufma64 (
 						.clk(clk),
 						.op(ir[30]),		// 0=add,1=sub c
-						.rm(rse_i.rm),
+						.rm(rse_o.rm),
 						.a(a[g*64+63:g*64]),
 						.b(b[g*64+63:g*64]),
 						.c(c[g*64+63:g*64]),
@@ -369,7 +421,7 @@ else begin
 	fpFMA64LN ufma64 (
 		.clk(clk),
 		.op(ir[30]),		// 0=add,1=sub c
-		.rm(rse_i.rm),
+		.rm(rse_o.rm),
 		.a(a[g*64+63:g*64]),
 		.b(b[g*64+63:g*64]),
 		.c(c[g*64+63:g*64]),
@@ -393,7 +445,7 @@ Qupls5_meta_idiv uidiv0
 	.clk(clk),
 	.clk2x(clk3x),
 	.ld(idiv_ld),
-	.rse_i(rse_i),
+	.rse_i(rse_o),
 	.rse_o(),
 	.cptgt(8'h00),
 	.z(1'b0),
@@ -433,9 +485,9 @@ if (SUPPORT_ISQRT)
 		.rst(irst),
 		.clk(clk),
 		.stomp(stomp),
-		.rse_i(rse_i),
+		.rse_i(rse_o),
 		.rse_o(),
-		.lane(rse_i.uop.num),
+		.lane(rse_o.uop.num),
 		.cptgt(cptgt),
 		.z(1'b0),//isqrt_predz),
 		.o(isqrt_o),
@@ -476,72 +528,25 @@ endgenerate
 always_comb
 	tex_done = !tex_ld ? lastargd=={a,b,c,d} : tex_done1;
 
-delay4 #(.WID(WID)) udly1 (.clk(clk), .ce(1'b1), .i(alu_o64), .o(aluo_64d));
-delay5 #(.WID($bits(Qupls5_pkg::micro_op_t))) udly3 (.clk(clk), .ce(1'b1), .i(ir), .o(ir5));
-delay5 #(.WID($bits(Qupls5_pkg::memsz_t))) udly4 (.clk(clk), .ce(1'b1), .i(prc), .o(prc5));
-
-
 always_comb
 begin
 	done64 = FALSE;
 	exc64 = {8{Qupls5_pkg::FLT_NONE}};
-	case(ir5.opcode)
-	Qupls5_pkg::OP_VR3B,Qupls5_pkg::OP_VR3W,Qupls5_pkg::OP_VR3T,Qupls5_pkg::OP_VR3O,
-	Qupls5_pkg::OP_VSR3B,Qupls5_pkg::OP_VSR3W,Qupls5_pkg::OP_VSR3T,Qupls5_pkg::OP_VSR3O,
-	Qupls5_pkg::OP_R3B,Qupls5_pkg::OP_R3W,Qupls5_pkg::OP_R3T,Qupls5_pkg::OP_R3O:
-		case(ir5.func)
-		Qupls5_pkg::FN_DIV,Qupls5_pkg::FN_DIVU:
-			if (SUPPORT_IDIV) begin
-				o1 = idiv_o;
-				done64 = idiv_done;
-				exc64 = div_exc;
-			end
-			else begin
-				o1 = value_zero;
-				done64 = TRUE;
-			end
-		Qupls5_pkg::FN_R1:
-			case(ir5.Rs2)
-			Qupls5_pkg::R1_SQRT:
-				begin
-					o1 = isqrt_o;
-					done64 = isqrt_done;
-				end
-			default:	
-				begin
-					o1 = value_zero;
-					done64 = TRUE;
-					exc64 = alu_exc;
-				end
-			endcase
-		default:	
-			begin
-				o1 = value_zero;
-				done64 = TRUE;
-				exc64 = alu_exc;
-			end
-		endcase
-
-	Qupls5_pkg::OP_FLTH,Qupls5_pkg::OP_FLTS,Qupls5_pkg::OP_FLTD,
-	Qupls5_pkg::OP_VFLTH,Qupls5_pkg::OP_VFLTS,Qupls5_pkg::OP_VFLTD,
-	Qupls5_pkg::OP_VSFLTH,Qupls5_pkg::OP_VSFLTS,Qupls5_pkg::OP_VSFLTD:
-		case(ir5.func)
-		Qupls5_pkg::FLT_FMA,Qupls5_pkg::FLT_FMS,Qupls5_pkg::FLT_FNMA,Qupls5_pkg::FLT_FNMS:
-			begin
-				case(prc)
-				2'd0:	 o1 = fma_o16;
-				2'd1:	 o1 = fma_o32;
-				2'd2:	 o1 = fma_o64;
-				2'd3:   ;
-				endcase
-				done64 = TRUE;
-			end
-		default:
-			begin
-				o1 = alu_o64d;
-				done64 = TRUE;
-			end
-		endcase
+	case(ir.opcode)
+	Qupls5_pkg::OP_PPC_ADDI,Qupls5_pkg::OP_PPC_ADDIS,
+	Qupls5_pkg::OP_PPC_ANDI,Qupls5_pkg::OP_PPC_ANDIS,
+	Qupls5_pkg::OP_PPC_ORI,Qupls5_pkg::OP_PPC_ORIS,
+	Qupls5_pkg::OP_PPC_XORI,Qupls5_pkg::OP_PPC_XORIS:
+		begin
+			done64 = done;
+			o1 = alu_o64;
+		end
+	Qupls5_pkg::OP_31:
+		begin
+			done64 = done;
+			o1 = o64;
+		end
+	/*
 	Qupls5_pkg::OP_DIVI,Qupls5_pkg::OP_DIVUI:
 		if (SUPPORT_IDIV) begin
 			o1 = idiv_o;
@@ -552,37 +557,11 @@ begin
 			o1 = value_zero;
 			done64 = TRUE;
 		end
-	Qupls5_pkg::OP_LOADN,Qupls5_pkg::OP_LOADZN,Qupls5_pkg::OP_STOREN,
-	Qupls5_pkg::OP_LDB,Qupls5_pkg::OP_LDBZ,Qupls5_pkg::OP_LDW,Qupls5_pkg::OP_LDWZ,
-	Qupls5_pkg::OP_LDT,Qupls5_pkg::OP_LDTZ,Qupls5_pkg::OP_LOAD,Qupls5_pkg::OP_CLOAD,
-	Qupls5_pkg::OP_STB,Qupls5_pkg::OP_STW,
-	Qupls5_pkg::OP_STT,Qupls5_pkg::OP_STORE,Qupls5_pkg::OP_CSTORE,
-	Qupls5_pkg::OP_STPTR,
-	Qupls5_pkg::OP_V2P,
-	Qupls5_pkg::OP_VV2P,
-	Qupls5_pkg::OP_AMO:
+	*/
+	Qupls5_pkg::OP_PPC_LWZ:
 		begin
 			o1 = mem_res_i;
-			done64 = mem_done_i;
-		end
-	Qupls5_pkg::OP_GRAPHICS:
-		if (SUPPORT_GRAPHICS) begin
-			case(ir5.func)
-			Qupls5_pkg::GR_TEX0,Qupls5_pkg::GR_TEX1:
-				begin
-					o1 = tex_o;
-					done64 = tex_done;
-				end
-			default:
-				begin
-					o1 = value_zero;
-					done64 = TRUE;
-				end
-			endcase
-		end
-		else begin
-			o1 = value_zero;
-			done64 = TRUE;
+			done64 = done;
 		end
 	default:
 		begin
@@ -601,7 +580,7 @@ always_comb done128 = TRUE;
 generate begin : gCptgt
 	for (mm = 0; mm < WID/8; mm = mm + 1) begin
     always_comb
-    	if (stomp_con[1]||rse2.uop.opcode==Qupls5_pkg::OP_NOP)
+    	if (stomp_con[1]||rse_o.uop.opcode==Qupls5_pkg::fnNop())
         o[mm*8+7:mm*8] = t[mm*8+7:mm*8];
 //      else if (cptgt[mm])
 //        o[mm*8+7:mm*8] = z ? 8'h00 : t[mm*8+7:mm*8];
@@ -611,14 +590,12 @@ generate begin : gCptgt
 end
 endgenerate
 
-delay5 #(.WID(WID/8+1)) udly6 (.clk(clk), .ce(1'b1), .i(we), .o(we2));
-
 always_comb
-	we = rse_i.vlsndx|rse_i.vls ? {rse_i.uop.ble & {9{rse_i.we}}} : {9{rse_i.we}};
+	we = rse_o.vlsndx|rse_o.vls ? {rse_o.uop.ble & {9{rse_o.we}}} : {9{rse_o.we}};
 
 always_ff @(posedge clk)
 begin
-	if (~|aRd_i || stomp[rse_i.rndx])
+	if (~|aRd_i || stomp[rse_o.rndx])
 		stomp_con[0] <= 1'b1;
 	else
 		stomp_con[0] <= 1'b0;
@@ -630,7 +607,7 @@ end
 
 // Do not allow exceptioned lanes to update the register file.
 always_comb
-	we_o = rse_o.v ? we2 & {1'b1,exc_mask} : 9'h000;
+	we_o = rse_o.v && state==5'd7 ? we & {1'b1,exc_mask} : 9'h000;
 
 // Detect the first exception from the ALU.
 always_comb
@@ -644,9 +621,5 @@ begin
 		end
 end
 
-
-always_comb
-	done = done64;
-//	done = ~sr64[6];
 
 endmodule

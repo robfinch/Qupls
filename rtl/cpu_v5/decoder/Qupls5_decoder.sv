@@ -399,7 +399,7 @@ begin
 	dbo.rext = instr.opcode==Qupls5_pkg::OP_REXT;
 	dbo.extop = instr.opcode==Qupls5_pkg::OP_EXTOP;
 
-	dbo.pfx = Qupls5_pkg::OP_PPC_PREFIX;
+	dbo.pfx = instr.opcode==Qupls5_pkg::OP_PPC_PREFIX;
 	dbo.boi = FALSE;
 	dbo.bsr = instr.opcode==Qupls5_pkg::OP_B && instr.lk && ~instr.aa;
 	dbo.jsr = instr.opcode==Qupls5_pkg::OP_B && instr.lk && instr.aa;
