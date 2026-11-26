@@ -53,7 +53,7 @@ module Qupls5_pipeline_ext(rst_i, clk_i, en_i,
 	takb_fet, vl, branch_resolved, live_stream,
 	pc0_fet, uop_num_fet, uop_num_ext,
 	ls_bmf_i, pack_regs_i, scale_regs_i, regcnt_i,
-	pg_ext, new_stream, alloc_stream,
+	pg_ext, new_stream, alloc_stream, do_stomp,
 	new_address_o, do_ret, ret_pc, do_call, get);
 parameter MWIDTH = Qupls5_pkg::MWIDTH;
 parameter THREADS = Qupls5_pkg::THREADS;
@@ -105,6 +105,7 @@ output cpu_types_pkg::mc_address_t mcip1_o;
 output cpu_types_pkg::mc_address_t mcip2_o;
 output cpu_types_pkg::mc_address_t mcip3_o;
 */
+output reg do_stomp;
 output Qupls5_pkg::pc_address_ex_t new_address_o;
 output reg do_ret;
 output Qupls5_pkg::pc_address_ex_t ret_pc;
@@ -117,7 +118,7 @@ input Qupls5_pkg::cause_code_t exc_i;
 
 genvar g;
 integer nn,hh,n1,n2,n3,n4,n5,n6,n7;
-Qupls5_pkg::pc_address_ex_t [MWIDTH-1:0] pc_fet;
+Qupls5_pkg::pc_address_ex_t [MWIDTH:0] pc_fet;
 Qupls5_pkg::pc_address_ex_t [MWIDTH-1:0] pc_ext;
 reg [5:0] ipl_ext;
 Qupls5_pkg::irq_info_packet_t irq_in_ext;
@@ -144,8 +145,10 @@ wire [MWIDTH-1:0] jsr;
 wire [MWIDTH-1:0] bra;
 wire [MWIDTH-1:0] jmp;
 wire [MWIDTH-1:0] bcc;
+wire [MWIDTH-1:0] bcc_reg;
 wire [MWIDTH-1:0] rtd;
 wire [MWIDTH-1:0] nop;
+reg bcr;
 reg [MWIDTH-1:0] nop_lead;	// NOP out leading instructions
 reg chgflow,chgflow0,chgflow1,chgflow2,chgflow3,chgflowi;
 reg p_override0123,p_override123,p_override23,p_override3;
@@ -290,6 +293,7 @@ generate begin : gExtDecode
 				.bra(bra[g]),
 				.jmp(jmp[g]),
 				.bcc(bcc[g]),
+				.bcc_reg(bcc_reg[g]),
 				.rtd(rtd[g]),
 				.nop(nop[g]),
 				.bsr_tgt(bsr_tgts[g]),
@@ -304,6 +308,7 @@ generate begin : gExtDecode
 			jsr[g]: btgts[g] = jsr_tgts[g];
 			jmp[g]: btgts[g] = jsr_tgts[g];
 			bcc[g]: btgts[g] = bcc_tgts[g];
+			bcc_reg[g]: btgts[g] = pc_fet[g+1];
 			default:	btgts[g] = Qupls5_pkg::RSTPC;
 			endcase
 	end
@@ -324,10 +329,10 @@ assign jsrr1 = Qupls5_pkg::fnDecJsrr(ins_ext[1].op);
 assign jsrr2 = Qupls5_pkg::fnDecJsrr(ins_ext[2].op);
 assign jsrr3 = Qupls5_pkg::fnDecJsrr(ins_ext[3].op);
 
-assign chgflow0 = bsr[0] | jsr[0] | bcc[0] | bra[0] | jmp[0];
-assign chgflow1 = bsr[1] | jsr[1] | bcc[1] | bra[1] | jmp[1];
-assign chgflow2 = bsr[2] | jsr[2] | bcc[2] | bra[2] | jmp[2];
-assign chgflow3 = bsr[3] | jsr[3] | bcc[3] | bra[3] | jmp[3];
+assign chgflow0 = bsr[0] | jsr[0] | bcc[0] | bra[0] | jmp[0] | bcc_reg[0];
+assign chgflow1 = bsr[1] | jsr[1] | bcc[1] | bra[1] | jmp[1] | bcc_reg[1];
+assign chgflow2 = bsr[2] | jsr[2] | bcc[2] | bra[2] | jmp[2] | bcc_reg[2];
+assign chgflow3 = bsr[3] | jsr[3] | bcc[3] | bra[3] | jmp[3] | bcc_reg[3];
 assign chgflowi = irq_i > ipl_fet || irq_i==6'd63;
 assign chgflow = chgflow0|chgflow1|chgflow2|chgflow3 | chgflowi;
 
@@ -366,24 +371,38 @@ end
 // needed only for conditional branches where it is unknown which stream is
 // valid until the branch resolves. Unconditional transfers maintain the same
 // stream.
+// For a branch to register, a stream is always allocated.
 always_comb
 begin
 	alloc_stream = 1'b0;
+	bcr = 1'b0;
 	if (chgflow0|chgflowi) begin
-		if (!(pt_ext[0] || !(bcc[0]|chgflowi)))
+		if (!(pt_ext[0] || !(bcc[0]|chgflowi)) || bcc_reg[0]) begin
 			alloc_stream = 1'b1;
+			if (bcc_reg[0])
+				bcr = 1'b1;
+		end
 	end
 	else if (chgflow1) begin
-		if (!(pt_ext[1] || ~bcc[1]))
+		if (!(pt_ext[1] || ~bcc[1]) || bcc_reg[1]) begin
 			alloc_stream = 1'b1;
+			if (bcc_reg[1])
+				bcr = 1'b1;
+		end
 	end
 	else if (chgflow2) begin
-		if (!(pt_ext[2] || ~bcc[2]))
+		if (!(pt_ext[2] || ~bcc[2])||bcc_reg[2]) begin
 			alloc_stream = 1'b1;
+			if (bcc_reg[2])
+				bcr = 1'b1;
+		end
 	end
 	else if (chgflow3) begin
-		if (!(pt_ext[3] || ~bcc[3]))
+		if (!(pt_ext[3] || ~bcc[3])||bcc_reg[3]) begin
 			alloc_stream = 1'b1;
+			if (bcc_reg[3])
+				bcr = 1'b1;
+		end
 	end
 end
 
@@ -396,28 +415,28 @@ begin
 			new_address_o.cap.offset = active_irq_vector - pc0_fet.cap.base;
 		else
 			new_address_o.cap.offset = btgts[0].cap.offset;
-		if (pt_ext[0] || !(bcc[0]|chgflowi))
+		if ((pt_ext[0] || !(bcc[0]|chgflowi)) && !bcc_reg[0])
 			new_address_o.stream = pc0_fet.stream;
 		else
 			new_address_o.stream = new_stream[new_address_o.stream.thread].stream;
 	end
 	else if (chgflow1) begin
 		new_address_o = btgts[1];
-		if (pt_ext[1] || ~bcc[1])
+		if ((pt_ext[1] || ~bcc[1]) && !bcc_reg[1])
 			new_address_o.stream = pc0_fet.stream;
 		else
 			new_address_o.stream = new_stream[new_address_o.stream.thread].stream;
 	end
 	else if (chgflow2) begin
 		new_address_o = btgts[2];
-		if (pt_ext[2] || ~bcc[2])
+		if ((pt_ext[2] || ~bcc[2]) && !bcc_reg[2])
 			new_address_o.stream = pc0_fet.stream;
 		else
 			new_address_o.stream = new_stream[new_address_o.stream.thread].stream;
 	end
 	else if (chgflow3) begin
 		new_address_o = btgts[3];
-		if (pt_ext[3] || ~bcc[3])
+		if ((pt_ext[3] || ~bcc[3]) && !bcc_reg[3])
 			new_address_o.stream = pc0_fet.stream;
 		else
 			new_address_o.stream = new_stream[new_address_o.stream.thread].stream;
@@ -511,6 +530,7 @@ else begin
 				pg_ext.pr[n2].done <= 2'b00;
 				pg_ext.pr[n2].op.v <= VAL;
 			end
+			pg_ext.hdr.bt[n2] <= takb_fet[n2];
 			pg_ext.pr[n2].op.bt <= takb_fet[n2];
 			pg_ext.pr[n2].op.decbus.cause <= Qupls5_pkg::FLT_NONE;
 			if (stomp_ext || nop_lead[n2] || nop[n2] || bra[n2] || jmp[n2])
@@ -611,9 +631,11 @@ end
 // will be the one in the fetch stage used to load extract!
 // p_override signal may also be called !predicted_match_ext.
 always_comb
-	p_override = (en && chgflow && new_address_o != fnUcGetAddress(pc_fet[0].cap) &&
+	p_override = (en && chgflow && fnUcGetAddress(new_address_o.cap) != fnUcGetAddress(pc_fet[override_pos+2'd1].cap) &&
 		// We must be staying in the same stream too.
 		pc_fet[0].stream==pg_ext.hdr.ip.stream) && !p_overrided;
+always_comb
+	do_stomp = p_override & ~bcr;
 
 task tBranchStomp;
 input integer n2;

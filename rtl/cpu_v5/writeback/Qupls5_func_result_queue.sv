@@ -96,7 +96,7 @@ begin
 	din.pRd <= rse_i.nRd;
 	din.aRd <= rse_i.aRd;
 	din.tag <= tag_i;
-	din.argT <= rse_i.arg[4].val; 
+	din.argT <= rse_i.arg[3].val; 
 	din.res <= res_i;
 	din.rndx <= rse_i.rndx;
 	din.cndx <= rse_i.cndx;
@@ -108,7 +108,7 @@ begin
 	din2.pRd = rse_i.nRd;
 	din2.aRd = rse_i.aRd;
 	din2.tag = tag_i;
-	din2.argT = rse_i.arg[4].val; 
+	din2.argT = rse_i.arg[3].val; 
 	din2.res = res_i;
 	din2.rndx = rse_i.rndx;
 	din2.cndx = rse_i.cndx;

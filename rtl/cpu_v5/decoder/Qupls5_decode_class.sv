@@ -44,53 +44,40 @@ function [2:0] fnClass;
 input Qupls5_pkg::micro_op_t ir;
 begin
 	case(ir.opcode)
-	Qupls5_pkg::OP_LDB,Qupls5_pkg::OP_LDBZ,Qupls5_pkg::OP_LDW,Qupls5_pkg::OP_LDWZ,
-	Qupls5_pkg::OP_LDT,Qupls5_pkg::OP_LDTZ,Qupls5_pkg::OP_LOAD,
-	Qupls5_pkg::OP_LOADN,Qupls5_pkg::OP_LOADZN,
-	Qupls5_pkg::OP_STB,Qupls5_pkg::OP_STW,
-	Qupls5_pkg::OP_STT,Qupls5_pkg::OP_STORE,Qupls5_pkg::OP_STOREN,
-	Qupls5_pkg::OP_STPTR,
-	Qupls5_pkg::OP_V2P,
-	Qupls5_pkg::OP_VV2P,
-	Qupls5_pkg::OP_AMO:
+	// Load / store
+	Qupls5_pkg::OP_PPC_LBZ,Qupls5_pkg::OP_PPC_LHZ,Qupls5_pkg::OP_PPC_LHA,Qupls5_pkg::OP_PPC_LWZ,
+	Qupls5_pkg::OP_PPC_STB,Qupls5_pkg::OP_PPC_STH,Qupls5_pkg::OP_PPC_STW:
 		fnClass = 3'd0;
-	Qupls5_pkg::OP_BFLD:
+	// Shift / rotate / bitfield
+	Qupls5_pkg::OP_PPC_RLWINM,
+	Qupls5_pkg::OP_PPC_RLWNM,
+	Qupls5_pkg::OP_PPC_RLWIMI,
+	Qupls5_pkg::OP_PPC_RLDIC:
 		fnClass = 3'd1;
-	Qupls5_pkg::OP_R3B,Qupls5_pkg::OP_R3W,Qupls5_pkg::OP_R3T,Qupls5_pkg::OP_R3O,
-	Qupls5_pkg::OP_VR3B,Qupls5_pkg::OP_VR3W,Qupls5_pkg::OP_VR3T,Qupls5_pkg::OP_VR3O,
-	Qupls5_pkg::OP_VSR3B,Qupls5_pkg::OP_VSR3W,Qupls5_pkg::OP_VSR3T,Qupls5_pkg::OP_VSR3O:
+	// Floating point
+//		fnClass = 3'd2;
+	Qupls5_pkg::OP_PPC_ADDI,
+	Qupls5_pkg::OP_PPC_ADDIS,
+	Qupls5_pkg::OP_PPC_SUBFIC,
+	Qupls5_pkg::OP_PPC_CMPI,
+	Qupls5_pkg::OP_PPC_CMPLI,
+	Qupls5_pkg::OP_PPC_ANDI,
+	Qupls5_pkg::OP_PPC_ANDIS,
+	Qupls5_pkg::OP_PPC_ORI,
+	Qupls5_pkg::OP_PPC_ORIS,
+	Qupls5_pkg::OP_PPC_XORI,
+	Qupls5_pkg::OP_PPC_XORIS:
 		fnClass = 3'd1;
-	Qupls5_pkg::OP_FLTH,Qupls5_pkg::OP_FLTS,Qupls5_pkg::OP_FLTD,Qupls5_pkg::OP_FLTQ,
-	Qupls5_pkg::OP_FLTPH,Qupls5_pkg::OP_FLTPS,Qupls5_pkg::OP_FLTPD,Qupls5_pkg::OP_FLTPQ,
-	Qupls5_pkg::OP_VFLTH,Qupls5_pkg::OP_VFLTS,Qupls5_pkg::OP_VFLTD,
-	Qupls5_pkg::OP_VSFLTH,Qupls5_pkg::OP_VSFLTS,Qupls5_pkg::OP_VSFLTD:
-		fnClass = 3'd2;
-	Qupls5_pkg::OP_FADDI:		fnClass = 3'd2;
-	Qupls5_pkg::OP_FMULI:		fnClass = 3'd2;
-	Qupls5_pkg::OP_CHK:	fnClass = 3'd1;
-	Qupls5_pkg::OP_ADDI:		fnClass = 3'd1;
-	Qupls5_pkg::OP_SUBFI:	fnClass = 3'd1;
-	Qupls5_pkg::OP_CMPI:		fnClass = 3'd1;
-	Qupls5_pkg::OP_CMPUI:		fnClass = 3'd1;
-	Qupls5_pkg::OP_ANDI:		fnClass = 3'd1;
-	Qupls5_pkg::OP_ORI:		fnClass = 3'd1;
-	Qupls5_pkg::OP_XORI:		fnClass = 3'd1;
-	Qupls5_pkg::OP_SHIFT:	fnClass = 3'd1;
-	Qupls5_pkg::OP_CSR:		fnClass = 3'd1;
-	Qupls5_pkg::OP_LOADA:	fnClass = 3'd1;
-	Qupls5_pkg::OP_FENCE:
-		fnClass = 3'd1;
-    Qupls5_pkg::OP_CAP:
-        case(ir.func)
-        Qupls5_pkg::CAP_RET:    fnClass = 3'd3;
-        default:    fnClass = 3'd7;
-        endcase
-	Qupls5_pkg::OP_SYS,
-	Qupls5_pkg::OP_BRK:
-		fnClass = 3'd3;
-
-	Qupls5_pkg::OP_B,
-	Qupls5_pkg::OP_BC:
+	/*
+  Qupls5_pkg::OP_CAP:
+      case(ir.func)
+      Qupls5_pkg::CAP_RET:    fnClass = 3'd3;
+      default:    fnClass = 3'd7;
+      endcase
+  */
+	Qupls5_pkg::OP_PPC_SC,
+	Qupls5_pkg::OP_PPC_B,
+	Qupls5_pkg::OP_PPC_BC:
 		fnClass = 3'd3;
 	Qupls5_pkg::OP_19:
 		case(ir.func)

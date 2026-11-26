@@ -44,7 +44,7 @@ import cpu_types_pkg::*;
 import Qupls5_pkg::*;
 
 module Qupls5_pipeline_mot(rst, clk, en, en2, vcfg_num, vcfg_cat,
-	stomp_trn, stomp_moq1, stomp_moq2, stomp_mot,
+	stomp_trn, stomp_moq1, stomp_moq2, stomp_mot, branchmiss,
 	cline_ext, cline_mot, uopc_invalidate, uoc_stall, uoc_full,
 	pc_mot, branch_resolved, live_stream, pc_fet,
   pg_ext, pg_trn, pg_moq1, pg_moq2, pg_mot, pg_mot1,
@@ -62,6 +62,7 @@ input [63:0] vcfg_cat;
 input branch_resolved;
 input cpu_types_pkg::pc_stream_t live_stream;
 output Qupls5_pkg::pc_address_ex_t pc_mot;
+input branchmiss;
 input uopc_invalidate;
 input stomp_trn;
 input stomp_moq1;
@@ -231,7 +232,8 @@ Qupls5_micro_op_cache #(.MICROOPS_PER_INSTR(MICROOPS_PER_INSTR)) umoc1
 	.invalidate(uopc_invalidate),
 	.miss_o(uoc_miss),
 	.stall(uoc_stall),
-	.uoc_full(uoc_full)
+	.uoc_full(uoc_full),
+	.branchmiss(branchmiss)
 );
 
 /*

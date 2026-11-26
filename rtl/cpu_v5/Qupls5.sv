@@ -187,7 +187,7 @@ reg hirq;
 Qupls5_pkg::pc_address_ex_t ret_pc;
 Qupls5_pkg::pc_address_ex_t misspc;
 reg restore_en = 1'b1;
-Qupls5_pkg::pc_address_ex_t pc_fet, pc, prev_pc;
+Qupls5_pkg::pc_address_ex_t pc, prev_pc;
 
 wire [15:0] q_rst;
 wire [15:0] q_trigger;
@@ -251,7 +251,6 @@ reg store_aRegv;
 Qupls5_pkg::lsq_ndx_t store_argC_id;
 Qupls5_pkg::lsq_ndx_t store_argC_id1;
 
-pregno_t [NREG_RPORTS-1:0] rf_reg;
 pregno_t [NREG_RPORTS-1:0] rf_rego;
 reg [NREG_RPORTS-1:0] rf_regv;
 value_t [NREG_RPORTS-1:0] rfo;
@@ -947,27 +946,6 @@ initial begin: Init
 	message[ `PANIC_MEMORYRACE ]		= "MEMORYRACE      ";
 
 end
-
-generate begin : gRf_reg
-	case(RL_STRATEGY)
-	0:
-		always_comb begin
-			foreach(rf_reg[n60])
-				rf_reg[n60] = rrl[n60].regno;
-			foreach(cap_rf_reg[n60])
-				cap_rf_reg[n60] = rrl[n60].regno;
-		end
-	1:
-		always_comb begin
-			foreach(rf_reg[n60])
-				rf_reg[n60] = prn[n60];
-			foreach(cap_rf_reg[n60])
-				cap_rf_reg[n60] = prn[n60];
-		end
-	default:	;
-	endcase
-end
-endgenerate
 
 //
 // FETCH
@@ -1829,13 +1807,13 @@ gselectPredictor ugsp1
 	.takb1(commit_takb1),
 	.takb2(commit_takb2),
 	.takb3(commit_takb3),
-	.ip0(fnUcGetAddress(pc_fet.cap.offset)),
+	.ip0(fnUcGetAddress(pc.cap.offset)),
 	.predict_taken0(pt0_ext),
-	.ip1(fnUcGetAddress(pc_fet.cap.offset) + 6'd4),
+	.ip1(fnUcGetAddress(pc.cap.offset) + 6'd4),
 	.predict_taken1(pt1_ext),
-	.ip2(fnUcGetAddress(pc_fet.cap.offset) + 6'd8),
+	.ip2(fnUcGetAddress(pc.cap.offset) + 6'd8),
 	.predict_taken2(pt2_ext),
-	.ip3(fnUcGetAddress(pc_fet.cap.offset) + 6'd12),
+	.ip3(fnUcGetAddress(pc.cap.offset) + 6'd12),
 	.predict_taken3(pt3_ext)
 );
 
@@ -1885,6 +1863,8 @@ Qupls5_stream_manager usm1
 	.dead_streams(dead_streams),
 	.stream_states(stream_states)
 );
+
+wire ext_do_stomp;
 
 Qupls5_stomp ustmp1
 (
@@ -2354,6 +2334,7 @@ Qupls5_pipeline_ext #(.MWIDTH(MWIDTH)) uiext1
 	.pt_ext(pt_ext),
 	.pt_dec(pt_dec),
 	.p_override(p_override),
+	.do_stomp(ext_do_stomp),
 	.po_bno(po_bno),
 	.vl(vl),
 	.ls_bmf_i(ls_bmf),
@@ -2406,6 +2387,7 @@ umot1
 	.clk(clk),
 	.en(advance_pipeline),
 	.en2(advance_pipeline_seg2),
+	.branchmiss(branchmissd),
 	.vcfg_num(vcfg_num),
 	.vcfg_cat(vcfg_cat),
 	.branch_resolved(branch_resolved),
@@ -2524,6 +2506,7 @@ always_ff @(posedge clk)
 always_ff @(posedge clk)
 begin
 	foreach (rf_oper[n37]) begin
+		rf_oper[n37] <= {$bits(Qupls5_pkg::operand_t){1'b0}};
 		rf_oper[n37].pRn <= rf_rego[n37];
 		rf_oper[n37].val <= rfo[n37];
 		rf_oper[n37].flags <= rfo_flags[n37];
@@ -2535,6 +2518,8 @@ begin
 			cap_rf_oper[n37].val <= cap_rfo[n37];
 			cap_rf_oper[n37].flags <= cap_rfo_flags[n37];
 			cap_rf_oper[n37].v <= cap_rf_regvo[n37];
+			cap_rf_oper[n37].is_const <= FALSE;
+			cap_rf_oper[n37].z <= FALSE;
 		end
 end
 /*
@@ -2627,6 +2612,7 @@ end
 always_comb
 begin
 	foreach (cap_wp[n49]) begin
+		cap_wp[n49] = {$bits(Qupls5_pkg::operand_t){1'b0}};
 		cap_wp[n49].val = cap_wrport0_res[n49];
 		cap_wp[n49].flags = cap_wrport0_tag[n49];
 		cap_wp[n49].pRn = cap_wrport0_Rt[n49];
@@ -2676,7 +2662,7 @@ generate begin : gDRP
 	case (RL_STRATEGY)
 	0:
 		always_comb
-			foreach (prn[n66])
+			foreach (rrl[n66])
 				prn[n66] = rrl[n66].regno;
 	1:
 		// Dynamic port selection.
@@ -2936,6 +2922,8 @@ always_comb
 assign cndx1 = cndx0;
 assign cndx2 = cndx0;
 assign cndx3 = cndx0;
+wire [MWIDTH-1:0] pwr00;
+pregno_t [MWIDTH-1:0] pwrra0;
 
 wire [3:0] ns_alloc_req;
 rob_ndx_t [3:0] ns_whrndx;
@@ -2948,14 +2936,19 @@ reg [MWIDTH-1:0] cmtav,cmtaiv;
 aregno_t [MWIDTH-1:0] cmtaa;
 pregno_t [MWIDTH-1:0] cmtap;
 checkpt_ndx_t [MWIDTH-1:0] cmta_cp;
-always_comb
+value_t [MWIDTH-1:0] cmtaval;
+/*
 	for (n46 = 0; n46 < MWIDTH; n46 = n46 + 1) begin
-		cmtav[n46] = do_commit && rob[head[n46]].v && cmtcnt > n46;
-		cmtaiv[n46] = do_commit && rob[head[n46]].v==INV && cmtcnt > n46;
-		cmtaa[n46] = rob[head[n46]].op.decbus.Rd;
-		cmtap[n46] = rob[head[n46]].op.nRd;
-		cmta_cp[n46] = rob[head[n46]].cndx;
+		if (rob[head[n46]].op.decbus.Rdv) begin
+			cmtav[n46] = do_commit && rob[head[n46]].v && cmtcnt > n46;
+			cmtaiv[n46] = do_commit && rob[head[n46]].v==INV && cmtcnt > n46;
+			cmtaa[n46] = rob[head[n46]].op.decbus.Rd;
+			cmtap[n46] = rob[head[n46]].op.nRd;
+			cmta_cp[n46] = rob[head[n46]].cndx;
+			cmtaval[n46] = 64'd0;
+		end
 	end
+*/
 
 Qupls5_pipeline_ren #(.MWIDTH(MWIDTH)) uren1
 (
@@ -2994,6 +2987,7 @@ Qupls5_pipeline_ren #(.MWIDTH(MWIDTH)) uren1
 	.cmtaa(cmtaa),
 	.cmtap(cmtap),
 	.cmta_cp(cmta_cp),
+	.cmtaval(cmtaval),
 
 	.cmtbr(cmtbr),
 	.tags2free(tags2free),
@@ -3009,22 +3003,11 @@ Qupls5_pipeline_ren #(.MWIDTH(MWIDTH)) uren1
 	.alloc_chkpt(alloc_chkpt),
 	.cndx(cndx),
 	.rcndx(ns_cndx),
-	.miss_cp(miss_cp)
+	.miss_cp(miss_cp),
+	
+	.pwr00(pwr00),
+	.pwrra0(pwrra0)
 );
-
-/*
-Qupls5_pipeline_reg #(.MWIDTH(MWIDTH)) uplreg1
-(
-	.rst(irst),
-	.clk(clk),
-	.pg_ren(pg_ren),
-	.pg_reg(pg_reg),
-//	.tails_i(tails),
-//	.tails_o(reg_tails),
-	.rf_reg(rf_reg),
-	.rf_regv(rf_regv)
-);
-*/
 
 wire pgh_setcp;
 wire [5:0] pgh_setcp_grp;
@@ -3127,8 +3110,22 @@ end
 
 Qupls5_pkg::rob_bitmask_t rob_dispatched, rob_unimplemented, rob_cap_dispatched;
 Qupls5_pkg::rob_bitmask_t rob_dispatched_stomped;
+Qupls5_pkg::rob_bitmask_t rob_dispatched1, rob_cap_dispatched1;
+Qupls5_pkg::rob_bitmask_t rob_dispatched2, rob_cap_dispatched2;
 Qupls5_pkg::rob_bitmask_t rob_dispatched3, rob_cap_dispatched3;
-vtdl #(.WID($bits(rob_bitmask_t))) udly3(.clk(clk), .ce(1'b1), .a(4'd3), .d(rob_dispatched), .q(rob_dispatched3));
+//vtdl #(.WID($bits(rob_bitmask_t))) udly3(.clk(clk), .ce(1'b1), .a(4'd3), .d(rob_dispatched), .q(rob_dispatched3));
+always_ff @(posedge clk)
+	rob_dispatched1 <= rob_dispatched & ~rob_dispatched1;
+always_ff @(posedge clk)
+	rob_dispatched2 <= rob_dispatched1 & ~rob_dispatched2;
+always_ff @(posedge clk)
+	rob_cap_dispatched1 <= rob_cap_dispatched & ~rob_cap_dispatched1;
+always_ff @(posedge clk)
+	rob_cap_dispatched2 <= rob_cap_dispatched1 & ~rob_cap_dispatched2;
+always_comb
+	rob_dispatched3 = rob_dispatched2;
+always_comb
+	rob_cap_dispatched3 = rob_cap_dispatched2;
 
 always_ff @(posedge clk)
 if (advance_pipeline)
@@ -3981,10 +3978,13 @@ end
 always_comb
 begin
 	n64 = 0;
-	foreach(rrl[n63])
-		rrl = {$bits(rrl_t){1'b0}};
+	foreach(rrl[n63]) begin
+		rrl[n63].rndx = 6'd63;
+		rrl[n63].ondx = 3'd7;
+		rrl[n63].regno = 6'd63;
+	end
 	foreach (rob[n63]) begin
-		if (rob[n63].v && !rob[n63].stomped && &rob[n63].out && lfa2[n63]) begin
+		if (rob[n63].v && !rob[n63].stomped && &rob[n63].out && lfa2[n63] && ~|rob[n63].cmt) begin
 			if (n64 < 12 && !rob[n63].argA_v) begin
 				rrl[n64].rndx = n63;
 				rrl[n64].ondx = 3'd0;
@@ -4134,20 +4134,42 @@ Qupls5_restore_flag urstf1
 reg brtgtvr;
 always_comb
 	branchmiss = irst ? FALSE: (excmiss | fcu_branchmiss);// & ~branchmiss;
-always_ff @(posedge clk)
-	branchmissd <= branchmiss;
 
+reg ap2;
 always_ff @(posedge clk)
-	missid = irst ? 8'd0 : excmiss ? excid : fcu_rse.rndx;
+	ap2 <= advance_pipeline;
+	
 always_ff @(posedge clk)
-	missid_v = irst ? 1'b0 : excmiss ? VAL : fcu_rse.v;
-
-
-always_ff @(posedge clk)
+if (irst)
+	branchmissd <= FALSE;
+else begin
 	case(1'b1)
-	excmiss: misspc <= excmisspc;
-	default:	misspc <= fcu_misspc1;
+	excmiss: branchmissd <= TRUE;
+	fcu_branchmiss: branchmissd <= TRUE;
+	ap2: branchmissd <= FALSE;
 	endcase
+end
+
+always_ff @(posedge clk)
+	missid <= irst ? 8'd0 : excmiss ? excid : fcu_rse.rndx;
+always_ff @(posedge clk)
+	missid_v <= irst ? 1'b0 : excmiss ? VAL : fcu_rse.v;
+
+
+always_ff @(posedge clk)
+if (irst) begin
+	misspc <= {$bits(Qupls5_pkg::pc_address_ex_t){1'b0}};
+	misspc.stream.stream = 5'd1;
+end
+else begin
+	if (branchmiss|branchmissd) begin
+		case(1'b1)
+		excmiss: misspc <= excmisspc;
+		fcu_branchmiss:	misspc <= fcu_misspc1;
+		endcase
+		$display("Qupls5: fcu_misspc=%h",fcu_misspc1);
+	end
+end
 
 /*
 always_ff @(posedge clk)
@@ -5741,7 +5763,8 @@ uxpipe0st
 	.fp_sync(1'b0),
 	.FPCSR(64'd0),
 	.FPCSRv(INV),
-	.lfa(lfa[0])
+	.lfa(lfa[0]),
+	.rob(rob)
 );
 	end
 	else begin
@@ -5862,7 +5885,8 @@ generate begin : gXpipe1Station
 			.req_FPCSRv(),
 			.FPCSR(64'd0),
 			.FPCSRv(INV),
-			.lfa(lfa[1])
+			.lfa(lfa[1]),
+			.rob(rob)
 		);
 	end
 	else begin
@@ -5909,7 +5933,8 @@ generate begin : gXpipe2Station
 			.req_FPCSRv(),
 			.FPCSR(64'd0),
 			.FPCSRv(INV),
-			.lfa(lfa[2])
+			.lfa(lfa[2]),
+			.rob(rob)
 		);
 	end
 	else begin
@@ -5956,7 +5981,8 @@ generate begin : gXpipe3Station
 			.req_FPCSRv(),
 			.FPCSR(64'd0),
 			.FPCSRv(INV),
-			.lfa(lfa[3])
+			.lfa(lfa[3]),
+			.rob(rob)
 		);
 	end
 	else begin
@@ -6252,7 +6278,8 @@ uxpipe4st
 	.req_FPCSRv(),
 	.FPCSR(64'd0),
 	.FPCSRv(INV),
-	.lfa(lfa[4])
+	.lfa(lfa[4]),
+	.rob(rob)
 );
 else begin
 	assign xpipe_rse[4] = {$bits(Qupls5_pkg::reservation_station_entry_t){1'b0}};
@@ -6300,7 +6327,8 @@ uxpipe5st
 	.req_FPCSRv(),
 	.FPCSR(64'd0),
 	.FPCSRv(INV),
-	.lfa(lfa[5])
+	.lfa(lfa[5]),
+	.rob(rob)
 );
 else begin
 	assign xpipe_rse[5] = {$bits(Qupls5_pkg::reservation_station_entry_t){1'b0}};
@@ -6560,7 +6588,7 @@ else begin
 
 	// The reorder buffer is not updated with the argument values. This is done
 	// just for debugging in SIM. All values come from the register file.
-`ifdef IS_SIM
+`ifndef SYNTHESIS
 	if (xpipe0_available && sau0_issue) begin
 		rob[xpipe_rse[0].rndx].argA <= xpipe_rse[0].arg[0].val;
 		rob[xpipe_rse[0].rndx].argB <= xpipe_rse[0].arg[1].val;
@@ -6746,8 +6774,11 @@ else begin
 	// pipeline.
 	foreach (rob[nn])
 		rob[nn].dispatchable <= 
+			!rob_dispatched[nn] &&
 			// Valid stream or stomped on
 			(rob[nn].v || rob[nn].stomped) &&
+			// not committed already
+			rob[nn].cmt==2'b00 &&
 			// and checkpoint index valid...
 			pgh[rob[nn].pghn].cndxv &&
 			// must not be a capability instruction
@@ -6770,8 +6801,11 @@ else begin
 
 	foreach (rob[nn])
 		rob[nn].cap_dispatchable <= 
+			!rob_cap_dispatched[nn] &&
 			// Valid stream or stomped on
 			(rob[nn].v || rob[nn].stomped) &&
+			// not committed already
+			rob[nn].cmt==2'b00 &&
 			// and checkpoint index valid...
 			pgh[rob[nn].pghn].cndxv &&
 			// must be a capability instruction
@@ -6945,15 +6979,16 @@ else begin
 	if (RL_STRATEGY==0) begin
 		foreach (rrl[nn]) begin
 			case(rrl[nn].ondx)
-			3'd0:	if (prnv[nn]) rob[rrl[nn].rndx].argA_v <= VAL;
-			3'd1:	if (prnv[nn]) rob[rrl[nn].rndx].argB_v <= VAL;
-			3'd2:	if (prnv[nn]) rob[rrl[nn].rndx].argC_v <= VAL;
-			3'd3:	if (prnv[nn]) rob[rrl[nn].rndx].argD_v <= VAL;
-			3'd4:	if (prnv[nn]) rob[rrl[nn].rndx].argT_v <= VAL;
-			3'd5:	if (prnv[nn]) rob[rrl[nn].rndx].argDRM_v <= VAL;
+			3'd0:	if (rf_oper[nn].v) rob[rrl[nn].rndx].argA_v <= VAL;
+			3'd1:	if (rf_oper[nn].v) rob[rrl[nn].rndx].argB_v <= VAL;
+			3'd2:	if (rf_oper[nn].v) rob[rrl[nn].rndx].argC_v <= VAL;
+			3'd3:	if (rf_oper[nn].v) rob[rrl[nn].rndx].argD_v <= VAL;
+			3'd4:	if (rf_oper[nn].v) rob[rrl[nn].rndx].argT_v <= VAL;
+			3'd5:	if (rf_oper[nn].v) rob[rrl[nn].rndx].argDRM_v <= VAL;
 			default:	;
 			endcase
 		end
+		/*
 		foreach (wp_tap[nn]) begin
 			foreach (rob[n69]) begin
 				if (rob[n69].v && &rob[n69].out) begin
@@ -6972,10 +7007,12 @@ else begin
 				end
 			end
 		end
+		*/
 		// If still looking for args when all the args have been marked valid,
 		// then it is a hardware issue of some sort. Flag an exception and
 		// try the lookups again. If there is still an issue then mark the
 		// instruction done as well so the CPU can forge ahead.
+		/*
 		foreach(lfa2[nn]) begin
 			if (lfa2[nn] && (
 				rob[nn].argA_v & rob[nn].argB_v & rob[nn].argC_v &
@@ -6997,6 +7034,7 @@ else begin
 					rob[nn].done <= 2'b11;
 				end
 			end
+			*/
 			// If not looking for any args, but the ROB indicates that there
 			// are args needed, then flag an exception.
 			/*
@@ -7010,7 +7048,7 @@ else begin
 				rob[nn].done <= 2'b11;
 			end
 			*/
-		end
+//		end
 	end
 	// For the first register lookup strategy which uses the register file write
 	// port history to fill in unknown values.
@@ -7373,6 +7411,31 @@ else begin
 // Trigger page walk TLB update for outstanding agen request. Must be done when
 // the instruction is at the commit stage to mitigate Spectre attacks.
 // Clear the sync dependencies for any instructions dependent on a sync.
+	begin
+		foreach (rob[n46]) begin
+			if (rob[n46].cmt==2'b01) begin
+				tCmt(0,n46);
+				if (rob[(n46+1)%ROB_ENTRIES].cmt==2'b01) begin
+					tCmt(1,(n46+1)%ROB_ENTRIES);
+					if (rob[(n46+2)%ROB_ENTRIES].cmt==2'b01) begin
+						tCmt(2,(n46+2)%ROB_ENTRIES);
+						if (rob[(n46+3)%ROB_ENTRIES].cmt==2'b01)
+							tCmt(3,(n46+3)%ROB_ENTRIES);
+					end
+				end
+				break;
+			end
+		end
+	end
+
+	foreach (rob[nn])
+		if (rob[nn].cmt==2'b11) begin
+			rob[nn].cmt <= 2'b00;
+			rob[nn].stomped <= FALSE;
+			rob[nn].v <= INV;
+			rob[nn].done <= {INV,INV};
+			rob[nn].out <= {INV,INV};
+		end
 
 	if (!htcolls) begin
 		// This commit_id and commit_idv used only to update the MMU for TLB access.
@@ -7549,7 +7612,8 @@ else begin
 	// So, for now, if an instruction makes it to the commit stage and there
 	// seems to be no way for its arguments to be marked valid, then the args
 	// are marked valid here. It prevents the machine from locking up.
-	if (SIM) begin
+`ifndef SYNTHESIS	
+	if (FALSE) begin
 		if (rob[head[0]].v) begin
 			if (!rob[head[0]].argA_v && !fnFindSource(head[0], rob[head[0]].op.decbus.Rs1)) begin
 				rob[head[0]].argA_v <= VAL;
@@ -7580,6 +7644,7 @@ else begin
 			end
 		end
 	end
+`endif
 	
 	// Set the predicate bits for an instruction. The instruction must be queued
 	// already. An instruction is queued with its predicate bits set FALSE. If
@@ -7740,7 +7805,8 @@ else begin
 
 		foreach (rob[n3]) begin
 			rob[n3].could_issue <=
-					rob[n3].v
+					rob[n3].v &&
+					rob[n3].cmt==2'b00
 				&& !robentry_stomp[n3]
 				&& !(&rob[n3].done)
 				&& (rob[n3].op.decbus.cpytgt ? (rob[n3].argT_v /*|| rob[g].op.nRt==9'd0*/) : rob[n3].all_args_valid && rob[n3].pred_bit)
@@ -7805,6 +7871,7 @@ else begin
 	// pointer is not pointing at a valid instruction something must have gone
 	// wrong with hardware. It may be "fixed" by advancing the head indexes
 	// over invalid entries.
+	/*
 	if (!rob_empty) begin
 		if (rob[head[0]].v==INV && rob[head[1]].v==INV && rob[head[2]].v==INV && rob[head[3]].v==INV) begin
 			foreach(head[n61])
@@ -7823,6 +7890,7 @@ else begin
 				head[n61] <= (head[n61] + 4'd1) % Qupls5_pkg::ROB_ENTRIES;	
 		end
 	end
+	*/
 end
 
 
@@ -8081,7 +8149,7 @@ always_ff @(posedge clk_i) begin: clock_n_debug
 	$display("TIME %0d", $time);
 	$display("Instruction sequence");
 	$display("--------------------");
-	$display("FET: %c%h.%h", stomp_fet?"S":"-",pc_fet.stream.stream, pc_fet.cap.offset);
+	$display("FET: %c%h.%h", stomp_fet?"S":"-",pc.stream.stream, pc.cap.offset);
 	$display("   cacheL: %x", ic_line[511:0]);
 	$display("   cacheH: %x", ic_line[1023:512]);
 	$display("EXT  %c%h.%h  0:%h  1:%h  2:%h  3:%h", stomp_ext?"S":"-",pg_ext.hdr.ip.stream.stream, pg_ext.hdr.ip.cap.offset,pg_ext.pr[0].op.uop, pg_ext.pr[1].op.uop, pg_ext.pr[2].op.uop, pg_ext.pr[3].op.uop);
@@ -8092,7 +8160,7 @@ always_ff @(posedge clk_i) begin: clock_n_debug
 	$display("REN  %c%h.%h  0:%h  1:%h  2:%h  3:%h", stomp_ren?"S":"-",pg_ren.hdr.ip.stream.stream, pg_ren.hdr.ip.cap.offset,pg_ren.pr[0].op.uop, pg_ren.pr[1].op.uop, pg_ren.pr[2].op.uop, pg_ren.pr[3].op.uop);
 	$display("----- Fetch ----- %s", stomp_fet ? stompstr : no_stompstr);
 	$display("i$ pc input:  %h.%h stream:%d#", pcs[fet_stream].stream,pcs[fet_stream].cap.offset, fet_stream);
-	$display("i$ pc output: %h %s #", pc_fet.cap.offset, ihito ? "ihit" : "    ");
+	$display("i$ pc output: %h %s #", pc.cap.offset, ihito ? "ihit" : "    ");
 	$display("cacheL: %x", ic_line[511:0]);
 	$display("cacheH: %x", ic_line[1023:512]);
 	$display("----- Instruction Extract ----- %s", stomp_ext ? stompstr : no_stompstr);
@@ -8221,10 +8289,10 @@ always_ff @(posedge clk_i) begin: clock_n_debug
 			(rob[i].op.decbus.cpytgt ? "c" : rob[i].op.decbus.fc ? "b" : rob[i].op.decbus.mem ? "m" : "a"),
 			rob[i].op.uop.opcode, 
 			rob[i].op.decbus.Rd, rob[i].op.nRd, rob[i].exc,
-			rob[i].op.decbus.Rd, rob[i].op.pRd, fnRegVal(rob[i].op.pRd), rob[i].argT_v?"v":" ",
-			rob[i].op.decbus.Rs1, rob[i].op.pRs1, fnRegVal(rob[i].op.pRs1), rob[i].argA_v?"v":" ",
-			rob[i].op.decbus.Rs2, rob[i].op.pRs2, fnRegVal(rob[i].op.pRs2), rob[i].argB_v?"v":" ",
-			rob[i].op.decbus.Rs3, rob[i].op.pRs3, fnRegVal(rob[i].op.pRs3), rob[i].argC_v?"v":" ",
+			rob[i].op.decbus.Rd, rob[i].op.pRd, fnArchRegVal(rob[i].op.pRd), rob[i].argT_v?"v":" ",
+			rob[i].op.decbus.Rs1, rob[i].op.pRs1, fnArchRegVal(rob[i].op.pRs1), rob[i].argA_v?"v":" ",
+			rob[i].op.decbus.Rs2, rob[i].op.pRs2, fnArchRegVal(rob[i].op.pRs2), rob[i].argB_v?"v":" ",
+			rob[i].op.decbus.Rs3, rob[i].op.pRs3, fnArchRegVal(rob[i].op.pRs3), rob[i].argC_v?"v":" ",
 			rob[i].op.decbus.immb,//argI,
 			rob[i].ip_stream, rob[i].op.uop.ip,
 			rob[i].cndx,
@@ -8238,7 +8306,7 @@ always_ff @(posedge clk_i) begin: clock_n_debug
 				i[2:0],rse[i].v?"v":" ",xpipe_rse[i].v?"v":" ",rse[i].rndx,
 				rse[i].pc.stream.thread,rse[i].pc.stream.stream,rse[i].pc.cap.offset[31:0],
 				rse[i].uop.opcode,
-				rse[i].arg[3].aRn, rse[i].arg[3].pRn,
+				rse[i].arg[3].aRn, rse[i].nRd,
 				rse[i].arg[0].aRn, rse[i].arg[0].pRn,
 				rse[i].arg[1].aRn, rse[i].arg[1].pRn,
 				rse[i].arg[2].aRn, rse[i].arg[2].pRn,
@@ -8246,38 +8314,44 @@ always_ff @(posedge clk_i) begin: clock_n_debug
 			);
 	end
 	$display("----- Reservation Stations -----");
-	foreach (rse[i]) begin
+	for (i = 0; i < 6; i = i + 1) begin
 		if (SUPPORT_XPIPE[i]) begin
 			case(i)
 			1:
 				begin
-					$display("%d: arg[0]: %h %c  arg[1]: %h %c  argI: %h ", i,
-						gXpipe1Station.genblk1.uxpipe1st.rse[0].arg[0].val,
-						gXpipe1Station.genblk1.uxpipe1st.rse[0].arg[0].v?"v":"-",
-						gXpipe1Station.genblk1.uxpipe1st.rse[0].arg[1].val,
-						gXpipe1Station.genblk1.uxpipe1st.rse[0].arg[1].v?"v":"-",
-						gXpipe1Station.genblk1.uxpipe1st.rse[0].argI
+					for (j = 0; j < NRSE_XPIPE1; j = j + 1)
+					$display("%d%c: arg[0]: r%d %h %c  arg[1]: r%d %h %c  argI: %h ", i,
+						rs_busy[1]?"b":" ",
+						gXpipe1Station.genblk1.uxpipe1st.rse[j].arg[0].pRn,gXpipe1Station.genblk1.uxpipe1st.rse[0].arg[0].val,
+						gXpipe1Station.genblk1.uxpipe1st.rse[j].arg[0].v?"v":"-",
+						gXpipe1Station.genblk1.uxpipe1st.rse[j].arg[1].pRn,gXpipe1Station.genblk1.uxpipe1st.rse[0].arg[1].val,
+						gXpipe1Station.genblk1.uxpipe1st.rse[j].arg[1].v?"v":"-",
+						gXpipe1Station.genblk1.uxpipe1st.rse[j].argI
 				);
 				$display("----------------------------");
 				end
 			2:
 				begin
-					$display("%d: arg[0]: %h %c  arg[1]: %h %c  argI: %h ", i,
-						gXpipe2Station.genblk1.uxpipe2st.rse[0].arg[0].val,
-						gXpipe2Station.genblk1.uxpipe2st.rse[0].arg[0].v?"v":"-",
-						gXpipe2Station.genblk1.uxpipe2st.rse[0].arg[1].val,
-						gXpipe2Station.genblk1.uxpipe2st.rse[0].arg[1].v?"v":"-",
-						gXpipe2Station.genblk1.uxpipe2st.rse[0].argI
+					for (j = 0; j < NRSE_XPIPE2; j = j + 1)
+					$display("%d%c: arg[0]: r%d %h %c  arg[1]: r%d %h %c  argI: %h ", i,
+						rs_busy[2]?"b":" ",
+						gXpipe2Station.genblk1.uxpipe2st.rse[j].arg[0].pRn,gXpipe2Station.genblk1.uxpipe2st.rse[0].arg[0].val,
+						gXpipe2Station.genblk1.uxpipe2st.rse[j].arg[0].v?"v":"-",
+						gXpipe2Station.genblk1.uxpipe2st.rse[j].arg[1].pRn,gXpipe2Station.genblk1.uxpipe2st.rse[0].arg[1].val,
+						gXpipe2Station.genblk1.uxpipe2st.rse[j].arg[1].v?"v":"-",
+						gXpipe2Station.genblk1.uxpipe2st.rse[j].argI
 				);
 				end
 			4:
 				begin
-					$display("%d: arg[0]: %h %c  arg[1]: %h %c  argI: %h ", i,
-						gXpipe4RS.genblk1.uxpipe4st.rse[0].arg[0].val,
-						gXpipe4RS.genblk1.uxpipe4st.rse[0].arg[0].v?"v":"-",
-						gXpipe4RS.genblk1.uxpipe4st.rse[0].arg[1].val,
-						gXpipe4RS.genblk1.uxpipe4st.rse[0].arg[1].v?"v":"-",
-						gXpipe4RS.genblk1.uxpipe4st.rse[0].argI
+					for (j = 0; j < NRSE_XPIPE4; j = j + 1)
+					$display("%d%c: arg[0]: r%d %h %c  arg[1]: r%d %h %c  argI: %h ", i,
+						rs_busy[4]?"b":" ",
+						gXpipe4RS.genblk1.uxpipe4st.rse[j].arg[0].pRn,gXpipe4RS.genblk1.uxpipe4st.rse[0].arg[0].val,
+						gXpipe4RS.genblk1.uxpipe4st.rse[j].arg[0].v?"v":"-",
+						gXpipe4RS.genblk1.uxpipe4st.rse[j].arg[1].pRn,gXpipe4RS.genblk1.uxpipe4st.rse[0].arg[1].val,
+						gXpipe4RS.genblk1.uxpipe4st.rse[j].arg[1].v?"v":"-",
+						gXpipe4RS.genblk1.uxpipe4st.rse[j].argI
 				);
 				end
 			/*
@@ -8804,7 +8878,8 @@ task tInvalidateQE;
 input rob_ndx_t ndx;
 begin
 	rob[ndx].stomped <= FALSE;
-	rob[ndx].v <= INV;
+	if (rob[ndx].v)
+		rob[ndx].cmt <= 2'b01;
 	rob[ndx].done <= {INV,INV};
 	rob[ndx].out <= {INV,INV};
 //	rob[ndx].lsq <= INV;
@@ -9224,6 +9299,7 @@ begin
 	next_robe.out = {INV,INV};
 	next_robe.lsq = INV;
 	next_robe.takb = 1'b0;
+	next_robe.op.bt <= pt;
 
 	// Check for decode exception, but not if it is being stomped on.
 	// If it is stomped on, we do not care.
@@ -9245,22 +9321,31 @@ begin
 	next_robe.argFPCSR_vv = FALSE;
 	if (db.Rs1z)
 		next_robe.argA_v = VAL;
+	/*
 	if (db.Rs2z)
 		next_robe.argB_v = VAL;
 	if (db.Rs3z)
 		next_robe.argC_v = VAL;
+	*/
 	// In some cases all the register values are essentially valid already, so
 	// indicate that the register read is done. This lets dispatch dispatch the
 	// instruction sooner.
 	next_robe.reg_read_done = RL_STRATEGY == 1 ? TRUE : 
-		(Qupls5_pkg::fnSourceRs1v(robe.op) | db.has_imma) && 
+		(Qupls5_pkg::fnSourceRs1v(robe.op) | db.has_imma | db.Rs1z) && 
 		(Qupls5_pkg::fnSourceRs2v(robe.op) | (db.has_Rs2 ? 1'b0 : db.has_immb)) && 
 		(Qupls5_pkg::fnSourceRs3v(robe.op) | db.has_immc) &&
 		Qupls5_pkg::fnSourceRs4v(robe.op) && 
 		Qupls5_pkg::fnSourceArgSv(robe.op) &&
 		Qupls5_pkg::fnSourceRdv(robe.op)
 		;
-	next_robe.all_args_valid = FALSE;
+	next_robe.all_args_valid = RL_STRATEGY == 1 ? TRUE : 
+		(Qupls5_pkg::fnSourceRs1v(robe.op) | db.has_imma | db.Rs1z) && 
+		(Qupls5_pkg::fnSourceRs2v(robe.op) | (db.has_Rs2 ? 1'b0 : db.has_immb)) && 
+		(Qupls5_pkg::fnSourceRs3v(robe.op) | db.has_immc) &&
+		Qupls5_pkg::fnSourceRs4v(robe.op) && 
+		Qupls5_pkg::fnSourceArgSv(robe.op) &&
+		Qupls5_pkg::fnSourceRdv(robe.op)
+		;
 	/*
 		(fnSourceRs1v(ins) | db.has_imma) &&
 		(fnSourceRs2v(ins) | (db.has_Rb ? 1'b0 : db.has_immb)) &&
@@ -9292,10 +9377,14 @@ begin
 	next_robe.last = last;
 //	next_robe.v = Qupls5_pkg::SUPPORT_BACKOUT ? (robe.op.v ? robe.ip_stream : 5'd0): (robe.op.v ? robe.ip_stream & ~{8{stomp}} : 5'd0);
 	next_robe.v = robe.v;
+	if (robe.v)
+		next_robe.cmt = 2'b00;
+	else
+		next_robe.cmt = 2'b01;
 //	next_robe.v = 5'd1;
 	if (!stomp && db.v && !brtgtv) begin
 		if (db.br & pt) begin
-			next_brtgt = Qupls5_pkg::fnTargetIP(pgh[robe.pghn].ip.cap.offset,db.immc);
+			next_brtgt = Qupls5_pkg::fnTargetIP(robe.ip,db.immc);
 			next_brtgtv = VAL;	// ToDo: Fix
 		end
 	end
@@ -9970,7 +10059,7 @@ begin
 				rob[ndx].pred_bitv <= VAL;
 			end
 			else if (rob[m1].done==2'b11 && rob[m1].op.decbus.pred_mask[1:0]!=2'b00) begin
-				rob[ndx].v <= INV;
+				tInvalidateQE(ndx);
 			end
 		end
 		else if (rob[m2].ip_stream==rob[ndx].ip_stream && rob[m2].sn < rob[ndx].sn && rob[m2].op.decbus.pred && Qupls5_pkg::PRED_SHADOW > 1) begin
@@ -9979,7 +10068,7 @@ begin
 				rob[ndx].pred_bitv <= VAL;
 			end
 			else if (rob[m2].done==2'b11 && rob[m2].op.decbus.pred_mask[3:2]!=2'b00) begin
-				rob[ndx].v <= INV;
+				tInvalidateQE(ndx);
 			end
 		end
 		else if (rob[m3].ip_stream==rob[ndx].ip_stream && rob[m3].sn < rob[ndx].sn && rob[m3].op.decbus.pred && Qupls5_pkg::PRED_SHADOW > 2) begin
@@ -9988,7 +10077,7 @@ begin
 				rob[ndx].pred_bitv <= VAL;
 			end
 			else if (rob[m3].done==2'b11 && rob[m3].op.decbus.pred_mask[5:4]!=2'b00) begin
-				rob[ndx].v <= INV;
+				tInvalidateQE(ndx);
 			end
 		end
 		else if (rob[m4].ip_stream==rob[ndx].ip_stream && rob[m4].sn < rob[ndx].sn && rob[m4].op.decbus.pred && Qupls5_pkg::PRED_SHADOW > 3) begin
@@ -9997,7 +10086,7 @@ begin
 				rob[ndx].pred_bitv <= VAL;
 			end
 			else if (rob[m4].done==2'b11 && rob[m4].op.decbus.pred_mask[7:6]!=2'b00) begin
-				rob[ndx].v <= INV;
+				tInvalidateQE(ndx);
 			end
 		end
 		else if (rob[m5].ip_stream==rob[ndx].ip_stream && rob[m5].sn < rob[ndx].sn && rob[m5].op.decbus.pred && Qupls5_pkg::PRED_SHADOW > 4) begin
@@ -10006,7 +10095,7 @@ begin
 				rob[ndx].pred_bitv <= VAL;
 			end
 			else if (rob[m5].done==2'b11 && rob[m5].op.decbus.pred_mask[9:8]!=2'b00) begin
-				rob[ndx].v <= INV;
+				tInvalidateQE(ndx);
 			end
 		end
 		else if (rob[m6].ip_stream==rob[ndx].ip_stream && rob[m6].sn < rob[ndx].sn && rob[m6].op.decbus.pred && Qupls5_pkg::PRED_SHADOW > 5) begin
@@ -10015,7 +10104,7 @@ begin
 				rob[ndx].pred_bitv <= VAL;
 			end
 			else if (rob[m6].done==2'b11 && rob[m6].op.decbus.pred_mask[11:10]!=2'b00) begin
-				rob[ndx].v <= INV;
+				tInvalidateQE(ndx);
 			end
 		end
 		else if (rob[m7].ip_stream==rob[ndx].ip_stream && rob[m6].sn < rob[ndx].sn && rob[m7].op.decbus.pred && Qupls5_pkg::PRED_SHADOW > 6) begin
@@ -10024,7 +10113,7 @@ begin
 				rob[ndx].pred_bitv <= VAL;
 			end
 			else if (rob[m7].done==2'b11 && rob[m7].op.decbus.pred_mask[13:12]!=2'b00) begin
-				rob[ndx].v <= INV;
+				tInvalidateQE(ndx);
 			end
 		end
 		else if (rob[m8].ip_stream==rob[ndx].ip_stream && rob[m8].sn < rob[ndx].sn) begin
@@ -10283,20 +10372,36 @@ begin
 end
 endtask
 
+task tCmt;
+input integer cmtrel;
+input rob_ndx_t n46;
+begin
+	cmtav[cmtrel] <= rob[n46].v;
+	cmtaiv[cmtrel] <= rob[n46].v==INV;
+	cmtaa[cmtrel] <= rob[n46].op.decbus.Rd;
+	cmtap[cmtrel] <= rob[n46].op.nRd;
+	cmta_cp[cmtrel] <= rob[n46].cndx;
+	cmtaval[cmtrel] <= 64'd0;
+	// Advance state machine.
+	rob[n46].cmt <= 2'b11;
+end
+endtask
+
 // Commit logic the same for every head.
 
 task tCommits;
 input integer head;
 input rob_ndx_t ndx;
 begin
-	tInvalidateQE(ndx);
+//	tInvalidateQE(ndx);
 	if (sync_ndx==ndx)
 		sync_ndxv = INV;
 	if (fc_ndx==ndx)
 		fc_ndxv = INV;
 	if (rob[ndx].op.decbus.sync)
 		tClearSyncDep(ndx);
-	rob[ndx].cmt <= rob[ndx].v;
+	if (rob[ndx].v)
+		rob[ndx].cmt <= 2'b01;//rob[ndx].v;
 	if (rob[ndx].lsq)
 		tInvalidateLSQ(head, ndx, FALSE, rob[ndx].v, value_zero);
 end

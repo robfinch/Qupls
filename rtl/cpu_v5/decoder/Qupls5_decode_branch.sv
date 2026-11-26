@@ -41,7 +41,7 @@ input Qupls5_pkg::micro_op_t instr;
 output b;
 output bc;
 
-assign b = instr.opcode==Qupls5_pkg::OP_B;
-assign bc = instr.opcode==Qupls5_pkg::OP_BC;
+assign b = instr.opcode==Qupls5_pkg::OP_PPC_B;
+assign bc = instr.opcode==Qupls5_pkg::OP_PPC_BC;
 
 endmodule

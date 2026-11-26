@@ -69,8 +69,8 @@ begin
 	Qupls5_pkg::OP_PPC_STBU,Qupls5_pkg::OP_PPC_STHU,Qupls5_pkg::OP_PPC_STWU:
 		fnExPipe = 7'b0110000;
 	// Branches must be supported on at least one pipe.
-	Qupls5_pkg::OP_B,
-	Qupls5_pkg::OP_BC,
+	Qupls5_pkg::OP_PPC_B,
+	Qupls5_pkg::OP_PPC_BC,
 	Qupls5_pkg::OP_19:
 		fnExPipe = 7'b0000011;
 	Qupls5_pkg::OP_31:

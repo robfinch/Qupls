@@ -876,13 +876,13 @@ begin
 			next_uop[0] = uop0;
 			next_uop[0].last = TRUE;
 		end
-	Qupls5_pkg::OP_B:
+	Qupls5_pkg::OP_PPC_B:
 		begin
 			next_count = 5'd1;
 			next_uop[0] = uop0;
 			next_uop[0].last = TRUE;
 		end
-	Qupls5_pkg::OP_BC:
+	Qupls5_pkg::OP_PPC_BC:
 		begin
 			if (~ir.bo[2]) begin
 				next_count = 5'd2;

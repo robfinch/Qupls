@@ -172,8 +172,7 @@ Qupls5_decode_conditional_branch udecbr
 (
 	.instr(instr),
 	.branch(dbo.br),
-	.ibranch(dbo.ibr),
-	.dbranch(dbo.dbr)
+	.branch_reg(dbo.br_reg)
 );
 
 Qupls5_decode_pred upred1
@@ -401,12 +400,12 @@ begin
 
 	dbo.pfx = instr.opcode==Qupls5_pkg::OP_PPC_PREFIX;
 	dbo.boi = FALSE;
-	dbo.bsr = instr.opcode==Qupls5_pkg::OP_B && instr.lk && ~instr.aa;
-	dbo.jsr = instr.opcode==Qupls5_pkg::OP_B && instr.lk && instr.aa;
-	dbo.bra = instr.opcode==Qupls5_pkg::OP_B && ~instr.lk && ~instr.aa;
-	dbo.jmp = instr.opcode==Qupls5_pkg::OP_B && ~instr.lk && instr.aa;
+	dbo.bsr = instr.opcode==Qupls5_pkg::OP_PPC_B && instr.lk && ~instr.aa;
+	dbo.jsr = instr.opcode==Qupls5_pkg::OP_PPC_B && instr.lk && instr.aa;
+	dbo.bra = instr.opcode==Qupls5_pkg::OP_PPC_B && ~instr.lk && ~instr.aa;
+	dbo.jmp = instr.opcode==Qupls5_pkg::OP_PPC_B && ~instr.lk && instr.aa;
 
-	dbo.sys = instr.opcode==Qupls5_pkg::OP_SYS;
+	dbo.sys = instr.opcode==Qupls5_pkg::OP_PPC_SC;
 	dbo.brk = instr.opcode==Qupls5_pkg::OP_BRK;
 	dbo.ret = instr.opcode==Qupls5_pkg::OP_CAP && instr.func==Qupls5_pkg::CAP_RET;
 	dbo.stptr = instr.opcode==Qupls5_pkg::OP_STPTR;

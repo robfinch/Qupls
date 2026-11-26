@@ -217,7 +217,7 @@ localparam SUPPORT_IRQ_POLLING = 1'b0;
 // Setting ROB_ENTRIES below 12 may not work. Setting the number of entries over
 // 63 may require changing the sequence number type. For ideal construction 
 // should be a multiple of the machine width (4).
-localparam ROB_ENTRIES = 16;
+localparam ROB_ENTRIES = 20;
 
 // Number of entries supporting block operate instructions.
 localparam BEB_ENTRIES = 4;
@@ -380,10 +380,10 @@ localparam SUPPORT_RSB = 0;
 localparam ISTACK_DEPTH = 16;
 
 localparam NRSE_XPIPE0 = 1;
-localparam NRSE_XPIPE1 = 1;
-localparam NRSE_XPIPE2 = 1;
+localparam NRSE_XPIPE1 = 3;
+localparam NRSE_XPIPE2 = 3;
 localparam NRSE_XPIPE3 = 1;
-localparam NRSE_XPIPE4 = 1;
+localparam NRSE_XPIPE4 = 3;
 localparam NRSE_XPIPE5 = 1;
 localparam NRSE_XPIPE6 = 1;
 

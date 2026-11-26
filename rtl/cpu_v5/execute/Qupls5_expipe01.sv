@@ -32,6 +32,8 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
+// This pipe has a latency of one cycle.
+//
 // 46500 LUTs / 11500 FFs / 210 DSPs (quad supported + prec)
 // 10200 LUTs / 4020 FFs / 70 DSPs (no quad or prec, 64-bit fp only)
 // ============================================================================
@@ -220,7 +222,7 @@ generate begin : gCptgt
 end
 endgenerate
 
-delay3 #(.WID($bits(Qupls5_pkg::reservation_station_entry_t))) udly4 (.clk(clk), .ce(1'b1), .i(rse_i), .o(rse_o));
+delay1 #(.WID($bits(Qupls5_pkg::reservation_station_entry_t))) udly4 (.clk(clk), .ce(1'b1), .i(rse_i), .o(rse_o));
 
 always_comb
 	we = {9{rse_o.we}};

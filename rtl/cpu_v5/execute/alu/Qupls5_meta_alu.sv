@@ -32,6 +32,8 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
+// ALU with latency of one.
+//
 // 41000 LUTs / 2000 FFs / 239 DSPs	-	SAU0 (128-bit)
 // 21900 LUTs / 810 FFs / 0 DSPs (64-bit, full precision support)
 // 7200 LUTs / 650 FFs / 0 DSPs (64-bit, no precision support)
@@ -85,7 +87,9 @@ cpu_types_pkg::pc_address_t pc;
 checkpt_ndx_t cp_i;
 aregno_t aRd_i;
 Qupls5_pkg::micro_op_t ir;
+Qupls5_pkg::reservation_station_entry_t rse1;
 wire [8:0] fcu_we;
+reg [8:0] we1;
 always_comb ir = rse_i.uop;
 always_comb capa = rse_i.cap_arg.val;
 always_comb capa_flags = rse_i.cap_arg.flags;
@@ -700,20 +704,12 @@ delay1 #(.WID($bits(Qupls5_pkg::rob_bitmask_t))) udly5 (.clk(clk), .ce(1'b1), .i
 
 always_ff @(posedge clk)
 	if (~rse_i.v)
-		we_o <= 9'h000;
-/*
-	else if (aRd_i >= 8'd56 && aRd_i <= 8'd63)
-		case(rse_i.om)
-		Qupls5_pkg::OM_APP:				we_o <= 9'h001;
-		Qupls5_pkg::OM_SUPERVISOR:	we_o <= 9'h003;
-		Qupls5_pkg::OM_HYPERVISOR:	we_o <= 9'h007;
-		Qupls5_pkg::OM_SECURE:			we_o <= 9'h1FF;
-		endcase
-*/		
-	else if (|aRd_i)
-		we_o <= 9'h1FF;
+		we1 <= 9'h000;
 	else
-		we_o <= 9'h000|fcu_we;
+		we1 <= {9{rse_i.we}};
+		
+always_comb
+	we_o = we1|fcu_we;
 
 generate begin : gCptgt
 	for (mm = 0; mm < WID/8; mm = mm + 1) begin

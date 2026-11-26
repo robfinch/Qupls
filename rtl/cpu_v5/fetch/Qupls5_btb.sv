@@ -146,6 +146,7 @@ reg do_call, do_ret;
 
 Qupls5_pkg::pc_address_ex_t [XSTREAMS*THREADS-1:0] next_pcs;
 cpu_types_pkg::pc_stream_t next_alt_strm;
+cpu_types_pkg::pc_stream_t next_strm;
 reg [XSTREAMS*THREADS-1:0] next_strm_bitmap;
 cpu_types_pkg::pc_stream_t prev_act_stream;
 reg [10:0] addrb0;
@@ -325,6 +326,7 @@ begin
 	takb3 = 1'b0;
 	for (nn = 0; nn < XSTREAMS*THREADS; nn = nn + 1)
 		next_pcs[nn] = pcs[nn];
+  next_strm = act_stream;
 	// Handle change of flow on interrupt. (Too slow, due to added multiplexing)
 	/*
 	if (nmi) begin
@@ -338,12 +340,18 @@ begin
 	else
 	*/
 	// Decode stage corrections override mux stage.
-	if (branchmiss)
+	if (branchmiss) begin
 		next_pcs[misspc.stream.stream] = misspc;
-	else if (!predicted_correctly_dec)
+		next_strm = misspc.stream;
+    end
+	else if (!predicted_correctly_dec) begin
 		next_pcs[new_address_dec.stream.stream] = new_address_dec;
-	else if (p_override)
+		next_strm = new_address_dec.stream;
+	end
+	else if (p_override) begin
 		next_pcs[new_address_ext.stream.stream] = new_address_ext;
+		next_strm = new_address_ext.stream;
+	end
 	// Now the target predictions
 	// Note the stream cannot be recorded in the BTB table.
 	else if (pc0.cap.offset==doutb0.pc) begin
@@ -386,9 +394,8 @@ generate begin : gPCs
 			pcs[g].stream.thread = g >> $clog2(XSTREAMS);
 			pcs[g].cap.offset <= Qupls5_pkg::RSTPC;
 		end
-		else if (advance_pc) begin
-//			if (get_next_pc)
-				pcs[g] <= next_pcs[g];
+		else if (advance_pc|branchmiss) begin
+			pcs[g] <= next_pcs[g];
 		end
 	end
 end
@@ -405,9 +412,12 @@ always_ff @(posedge clk)
 		pc.cap.offset <= Qupls5_pkg::RSTPC;
 		pc.stream <= act_stream;
 	end
-	else if (advance_pc) begin
+	else if (advance_pc|branchmiss) begin
 //		if (get_next_pc)
-			pc <= next_pcs[next_act_stream];
+        if (branchmiss)
+            pc <= next_pcs[next_strm.stream];
+        else
+			pc <= next_pcs[next_act_stream.stream];
 	end
 
 // Detect a faulty PC transition.
@@ -447,7 +457,10 @@ end
 else begin
 	if (clk_en) begin
 		prev_act_stream <= act_stream;
-		act_stream <= next_act_stream;
+		if (branchmiss)
+		  act_stream <= next_strm;
+		else
+    		act_stream <= next_act_stream;
 	end
 end
 

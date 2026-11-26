@@ -46,7 +46,7 @@ module Qupls5_reservation_station(rst, clk, available, busy, issue, stall,
 	bypass_i, wp_oper_tap_i, cap_wp_oper_tap_i,
 	req_pRn, req_pRnv,
 	fp_sync, req_FPCSRndx, req_FPCSRv, FPCSR, FPCSRv,
-	lfa
+	lfa, rob
 );
 parameter MWIDTH = 4;
 parameter NRSE = 1;
@@ -88,8 +88,9 @@ input fp_sync;
 input Qupls5_pkg::fp_status_reg_t FPCSR;
 input FPCSRv;
 output Qupls5_pkg::rob_bitmask_t lfa;	// looking for args
+input Qupls5_pkg::rob_entry_t [Qupls5_pkg::ROB_ENTRIES-1:0] rob;
 
-integer kk,jj,nn,mm,pp,qq,n1,n2,n3,n4;
+integer kk,jj,nn,mm,pp,qq,n1,n2,n3,n4,n5;
 wire [3:0] rdy;
 genvar g;
 reg idle;
@@ -297,21 +298,21 @@ begin
 	rsei = {$bits(Qupls5_pkg::reservation_station_entry_t){1'b0}};
 	dispatch = FALSE;
 	foreach (rse_i[n1])
-		if (DISPATCH_MAP[n1] && rse_i[n1].funcunit==FUNCUNIT) begin
+		if (rse_i[n1].funcunit==FUNCUNIT && rse_i[n1].v) begin
 			rsei = rse_i[n1];
 			dispatch = TRUE;
 		end
 end
 
 function fnIsReady;
-input Qupls5_pkg::reservation_station_entry_t rsei;
+input Qupls5_pkg::reservation_station_entry_t rs;
 begin
-	fnIsReady = (rsei.arg[0].v || !rsei.uop.src[0]) &&
-				(rsei.arg[1].v || !rsei.uop.src[1]) &&
-				(rsei.arg[2].v||rsei.store||!rsei.uop.src[2]) &&
-				(rsei.arg[3].v || !rsei.uop.src[4]) &&
-				(rsei.arg[4].v || !rsei.uop.src[3]) &&
-				(rsei.arg[5].v || !rsei.uop.src[5]);
+	fnIsReady = (rs.arg[0].v) &&
+				(rs.arg[1].v) &&
+				(rs.arg[2].v) &&
+				(rs.arg[3].v) &&
+				(rs.arg[4].v) &&
+				(rs.arg[5].v);
 end
 endfunction
 
@@ -330,10 +331,13 @@ endfunction
 		else
 			idle_false <= TRUE;
 */
+always_comb
+	qq = fnChooseIdle(rse);
+
 reg [2:0] last_issued;
 always_ff @(posedge clk)
 if (rst) begin
-	last_issued <= 3'd7;
+	last_issued <= 3'd0;
 	foreach (rse[pp])
   	rse[pp] <= {$bits(Qupls5_pkg::reservation_station_entry_t){1'b0}};
   rse_o <= {$bits(Qupls5_pkg::reservation_station_entry_t){1'b0}};
@@ -341,45 +345,83 @@ if (rst) begin
   pstall <= FALSE;
 	rcg_ipl_o <= 6'd0;
 	lfa <= 64'd0;
-	qq  = -1;
 end
 else begin
 	issue <= FALSE;
 	pstall <= stall;
+	/*
 	if (rse[last_issued].vcount==6'd0) begin
 		rse[last_issued].busy <= FALSE;
+		rse[last_issued].ready <= FALSE;
 		rse[last_issued].v <= FALSE;
 		last_issued <= 3'd7;
 	end
-	if (available && dispatch && idle) begin
+	*/
+	if (available && dispatch && idle & rsei.v) begin
 		// Load up the reservation stations.
-		qq = fnChooseIdle(rse);
 		if (qq >= 0) begin
 			foreach (rse[mm])
 				rse[mm].age <= rse[mm].age + 2'd1;
 			rse[qq] <= rsei;
+//			for (pp = 0; pp < 6; pp = pp + 1)
+//				rse[qq].arg[pp].v <= INV;
+//			if (rob[rsei.rndx].v)
+			// Some of the operands might have been automatically valid. So, we only
+			// set the arguments valid, not invalid. They will have been set invalid
+			// already at the dispatcher.
+			begin
+				/*
+				if (rob[rsei.rndx].argA_v) rse[qq].arg[0].v <= VAL;
+				if (rob[rsei.rndx].argB_v) rse[qq].arg[1].v <= VAL;
+				if (rob[rsei.rndx].argC_v) rse[qq].arg[2].v <= VAL;
+				if (rob[rsei.rndx].argD_v) rse[qq].arg[3].v <= VAL;
+				if (rob[rsei.rndx].argT_v) rse[qq].arg[4].v <= VAL;
+				if (rob[rsei.rndx].argDRM_v) rse[qq].arg[5].v <= VAL;
+				*/
+				rse[qq].arg[0].v <= rob[rsei.rndx].argA_v;
+				rse[qq].arg[1].v <= rob[rsei.rndx].argB_v;
+				rse[qq].arg[2].v <= rob[rsei.rndx].argC_v;
+				rse[qq].arg[3].v <= rob[rsei.rndx].argD_v;
+				rse[qq].arg[4].v <= rob[rsei.rndx].argT_v;
+				rse[qq].arg[5].v <= rob[rsei.rndx].argDRM_v;
+				
+			end
 			rse[qq].age <= 3'd0;
-			rse[qq].busy <= rsei.v;
-			rse[qq].ready <= fnIsReady(rsei);
+			rse[qq].busy <= TRUE;
 			if (stomp[rsei.rndx])
-				rse[qq].uop.opcode <= Qupls5_pkg::OP_NOP;
+				rse[qq].uop.opcode <= Qupls5_pkg::fnNop();
 		end
 	end
+	lfa <= 64'd0;
 	foreach (rse[mm]) begin
-		lfa <= 64'd0;
-		if (rse[mm].v & ~rse[mm].ready)
+		if (rse[mm].v & ~fnIsReady(rse[mm]))//.ready)
 			lfa[rse[mm].rndx] <= TRUE;
 	end
 	for (pp = 0; pp < 6; pp = pp + 1) begin
 		foreach (rse[mm]) begin
 			if (rse[mm].v) begin
-				if (arg[pp][mm].v) begin
-					rse[mm].arg[pp] <= arg[pp][mm];
-					rse[mm].arg[pp].v <= VAL;
+//				if (mm != qq)
+				begin
+					if (arg[pp][mm].v)
+						rse[mm].arg[pp] <= arg[pp][mm];
 				end
+				rse[mm].arg[0].v <= rob[rse[mm].rndx].argA_v;
+				rse[mm].arg[1].v <= rob[rse[mm].rndx].argB_v;
+				rse[mm].arg[2].v <= rob[rse[mm].rndx].argC_v;
+				rse[mm].arg[3].v <= rob[rse[mm].rndx].argD_v;
+				rse[mm].arg[4].v <= rob[rse[mm].rndx].argT_v;
+				rse[mm].arg[5].v <= rob[rse[mm].rndx].argDRM_v;
+				/*
+				if (rob[rse[mm].rndx].argA_v) rse[qq].arg[0].v <= VAL;
+				if (rob[rse[mm].rndx].argB_v) rse[qq].arg[1].v <= VAL;
+				if (rob[rse[mm].rndx].argC_v) rse[qq].arg[2].v <= VAL;
+				if (rob[rse[mm].rndx].argD_v) rse[qq].arg[3].v <= VAL;
+				if (rob[rse[mm].rndx].argT_v) rse[qq].arg[4].v <= VAL;
+				if (rob[rse[mm].rndx].argDRM_v) rse[qq].arg[5].v <= VAL;
+				*/
 			end
-			else if (mm != qq)
-				rse[mm].arg[pp].v <= INV;
+//			else if (mm != qq)
+//				rse[mm].arg[pp].v <= INV;
 		end
 	end
 	foreach (rse[mm]) begin
@@ -421,7 +463,7 @@ else begin
 	// Once choosen, the RSE entry is no longer valid.
 	// If it is an FP unit and there is an FP sync instruction in the pipeline,
 	// the refuse to issue.
-	rse_o.v <= INV;
+  rse_o <= {$bits(Qupls5_pkg::reservation_station_entry_t){1'b0}};
 	casez({pstall,stall})
 	2'b10:	;
 	2'b01:	;
@@ -450,7 +492,7 @@ else begin
 					else begin
 						issue <= TRUE;
 						rse_o <= rse[rdy];
-						rse[rdy].v <= INV;
+						//rse[rdy].v <= INV;
 						rse_o.v <= !stomp[rse[rdy].rndx] & rse[rdy].v;
 						// Marking the arg invalid will cause the entry to no longer be ready
 						// and cause a fetch of the next register value.
@@ -470,14 +512,21 @@ else begin
 					end
 					if (rse[rdy].vcount==6'd0) begin
 						rse[rdy].busy <= FALSE;
+						rse[rdy].ready <= FALSE;
 						rse[rdy].v <= FALSE;
+						rse[rdy].arg[0].v <= INV;
+						rse[rdy].arg[1].v <= INV;
+						rse[rdy].arg[2].v <= INV;
+						rse[rdy].arg[3].v <= INV;
+						rse[rdy].arg[4].v <= INV;
+						rse[rdy].arg[5].v <= INV;
 					end
 					else begin
 						rse[rdy].vcount <= rse[rdy].vcount - 6'd1;
 						rse[rdy].laneno <= rse[rdy].laneno + 6'd1;
 					end
 					if (stomp[rse[rdy].rndx])
-						rse_o.uop <= {26'd0,Qupls5_pkg::OP_NOP};
+						rse_o.uop.opcode = Qupls5_pkg::fnNop();
 				end
 			end
 		end
@@ -537,8 +586,8 @@ begin
 	3'd0:	fnSrc = op.src[0];
 	3'd1:	fnSrc = op.src[1];
 	3'd2:	fnSrc = op.src[2];
-	3'd3:	fnSrc = op.src[4];
-	3'd4:	fnSrc = op.src[3];
+	3'd3:	fnSrc = op.src[3];
+	3'd4:	fnSrc = op.src[4];
 	3'd5:	fnSrc = op.src[5];
 	default:	fnSrc = 1'b0;
 	endcase
@@ -556,8 +605,8 @@ input Qupls5_pkg::reservation_station_entry_t [NRSE-1:0] rse;
 integer nn;
 begin
 	fnChooseIdle = -1;
-	for (nn = 0; nn < NRSE; nn = nn + 1) begin
-		if (!rse[nn].busy || !rse[nn].v)
+	foreach (rse[nn]) begin
+		if (!rse[nn].busy)
 			fnChooseIdle = nn;
 	end
 end

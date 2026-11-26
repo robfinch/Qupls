@@ -61,13 +61,14 @@ module Qupls5_pipeline_ren(
 
 	cmtav, cmtaa,
 	cmtap, cmta_cp,
-	cmtaiv,
+	cmtaiv, cmtaval,
 
 	cmtbr,
 	tags2free, freevals, backout, fcu_id,
 	bo_wr, bo_areg, bo_preg, bo_nreg,
 	rat_stallq,
-	alloc_chkpt, cndx, rcndx, miss_cp
+	alloc_chkpt, cndx, rcndx, miss_cp,
+	pwr00, pwrra0
 );
 parameter SUPPORT_RAT = Qupls5_pkg::SUPPORT_RAT;
 parameter MWIDTH = Qupls5_pkg::MWIDTH;
@@ -111,6 +112,7 @@ input [MWIDTH-1:0] cmtaiv;
 input aregno_t [MWIDTH-1:0] cmtaa;
 input pregno_t [MWIDTH-1:0] cmtap;
 input checkpt_ndx_t [MWIDTH-1:0] cmta_cp;
+input value_t [MWIDTH-1:0] cmtaval;
 input cmtbr;
 output pregno_t [3:0] tags2free;
 output [3:0] freevals;
@@ -125,7 +127,9 @@ input alloc_chkpt;
 input checkpt_ndx_t cndx;
 input checkpt_ndx_t [3:0] rcndx;
 input checkpt_ndx_t miss_cp;
-
+// Registers being made invalid
+output [MWIDTH-1:0] pwr00;
+output pregno_t [MWIDTH-1:0] pwrra0;
 
 genvar g;
 integer jj,n1,n2,n3,n5,n6,n7,n8,n9,nn,n10;
@@ -286,7 +290,7 @@ urat1
 	.cmtaiv(cmtaiv),
 	.cmtaa(cmtaa),
 	.cmtap(cmtap),
-	.cmtaval(64'd0),
+	.cmtaval(cmtaval),
 	.cmta_cp(cmta_cp),
 	.cmtbr(cmtbr),
 	.tags2free(tags2free),
@@ -296,7 +300,9 @@ urat1
 	.bo_wr(bo_wr),
 	.bo_areg(bo_areg),
 	.bo_preg(bo_preg),
-	.bo_nreg(bo_nreg)	
+	.bo_nreg(bo_nreg),
+	.pwr00(pwr00),
+	.pwrra0(pwrra0)	
 );
 end
 else begin

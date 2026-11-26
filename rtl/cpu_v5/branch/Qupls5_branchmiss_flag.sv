@@ -46,6 +46,7 @@ output reg miss_flag;
 
 always_comb
 	case(1'b1)
+	rse.v & rse.bcc:	miss_flag = miss_det;
 	rse.v & rse.br:		miss_flag = miss_det;
 	rse.v & rse.bsr:	miss_flag = FALSE;
 	rse.v & rse.jsr:	miss_flag = FALSE;

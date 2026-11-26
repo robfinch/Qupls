@@ -51,7 +51,7 @@ begin
 	rdy = 4'hF;
 	age = 3'd0;
 	for (nn = 0; nn < NRSE; nn = nn + 1) begin
-		if (rse[nn].ready && rse[nn].age >= age) begin
+		if (rse[nn].v && rse[nn].ready && rse[nn].age >= age) begin
 			rdy = nn;
 			age = rse[nn].age;
 		end

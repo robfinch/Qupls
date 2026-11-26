@@ -32,6 +32,7 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
+// This ALU has a one cycle latency.
 // 4000 LUTs / 70 FFs	ALU
 // ============================================================================
 
@@ -125,7 +126,8 @@ reg [WID*2-1:0] shl, shr, asr;
 wire [WID-1:0] cmpo;
 reg [WID:0] bus;
 reg [WID-1:0] busx;
-wire bus_nan;
+wire bus_nan1;
+reg bus_nan;
 reg [22:0] ii;
 reg [WID-1:0] aa,bb;
 reg [WID-1:0] sd;
@@ -463,7 +465,7 @@ generate begin : gffz
 			.man(),
 			.mz(),
 			.inf(),
-			.nan(bus_nan),
+			.nan(bus_nan1),
 			.snan(),
 			.qnan()
 		);
@@ -609,6 +611,7 @@ begin
 	did_op = FALSE;
 	exc = Qupls5_pkg::FLT_NONE;
 	bus = {(WID/16){16'h0000}};
+	bus_nan = 1'b0;
 	o_flags = t_flags;
 	dt = 3'd0;
 	elesz = (velsz >> {dt,3'b0}) & 8'hff;
@@ -906,12 +909,12 @@ end
 
 always_ff @(posedge clk)
 	case(WID)
-	8: o = bus;
-	16:	o = bus;
-	32:	o = bus_nan ? bus | (fnBitRev({64'd0,pc.cap.offset}) >> 6'd48) : bus;
-	64:	o = bus_nan ? bus | (fnBitRev({64'd0,pc.cap.offset}) >> 6'd20) : bus;
-	128:	o = bus_nan ? bus | fnBitRev({64'd0,pc.cap.offset}) : bus;
-	default:	o = zero;
+	8: o <= bus;
+	16:	o <= bus;
+	32:	o <= bus_nan ? bus | (fnBitRev({64'd0,pc.cap.offset}) >> 6'd48) : bus;
+	64:	o <= bus_nan ? bus | (fnBitRev({64'd0,pc.cap.offset}) >> 6'd20) : bus;
+	128:	o <= bus_nan ? bus | fnBitRev({64'd0,pc.cap.offset}) : bus;
+	default:	o <= zero;
 	endcase
 
 always_ff @(posedge clk)

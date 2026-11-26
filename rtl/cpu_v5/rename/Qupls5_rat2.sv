@@ -96,7 +96,10 @@ module Qupls5_rat2(rst, clk,
 	restore,			// signal to restore a checkpoint
 	tags2free, freevals, backout,
 	fcu_id,		// the ROB index of the instruction causing backout
-	bo_wr, bo_areg, bo_preg, bo_nreg);
+	bo_wr, bo_areg, bo_preg, bo_nreg,
+	
+	pwr00, pwrra0
+);
 parameter MWIDTH = Qupls5_pkg::MWIDTH;
 parameter NRENAME = MWIDTH*6;
 parameter NREG_RPORT = MWIDTH*3;
@@ -153,6 +156,9 @@ output bo_wr;
 output aregno_t bo_areg;
 output pregno_t bo_preg;
 output pregno_t bo_nreg;
+// Registers being made invalid
+output reg [MWIDTH-1:0] pwr00;
+output pregno_t [MWIDTH-1:0] pwrra0;
 
 /*
 integer n7,n8,n9,n10;
@@ -245,11 +251,11 @@ reg pbackout, pbackout2;
 cpu_types_pkg::pregno_t [NRENAME-1:0] next_prn;	// physical register name
 cpu_types_pkg::pregno_t [NRENAME-1:0] prnd;			// delayed physical register name
 cpu_types_pkg::aregno_t [NRENAME-1:0] prev_rn;
-reg [MWIDTH-1:0] pwr00,p2wr0;
+reg [MWIDTH-1:0] p2wr0;
 reg [MWIDTH-1:0] pwr01,p2wr01;
 aregno_t [MWIDTH-1:0] pwra0,p2wra;
 aregno_t [MWIDTH-1:0] pwra1,p2wra1;
-pregno_t [MWIDTH-1:0] pwrra0,p2wrra;
+pregno_t [MWIDTH-1:0] p2wrra;
 pregno_t [MWIDTH-1:0] pwrra1,p2wrra1;
 checkpt_ndx_t [MWIDTH-1:0] pwra_cp,p2wra_cp;
 

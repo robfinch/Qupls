@@ -41,7 +41,7 @@ import const_pkg::*;
 import Qupls5_pkg::*;
 
 module Qupls5_micro_op_cache(rst, clk, en, en2, rd_more,
-	uop, uop_count, stall, uoc_full,
+	uop, uop_count, stall, uoc_full, branchmiss,
 	miss_o, stomp_moq2, pc_fet, pg_trn, pg_moq2,
 	branch_resolved, live_stream, invalidate);
 parameter MWIDTH = Qupls5_pkg::MWIDTH;
@@ -68,6 +68,7 @@ input pc_stream_t live_stream;
 input invalidate;			// invalidate the micro-op cache
 output reg stall;
 output reg uoc_full;
+input branchmiss;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 // Variable type declarations.
@@ -280,7 +281,15 @@ else begin
 		else
 			uop_ip[0] <= uop_ip[4];
 	end
-	if (en)
+	// On a branch miss the cache will eventually be updated, the value of the
+	// IP will be pointing to the updated cache line. There may be a cache miss
+	// but the front end no longer needs to be stalled.
+	if (branchmiss) begin
+		new_ip.v <= VAL;
+		new_ip.row <= CACHE_LINES-1;
+		new_ip.col <= 5'd0;
+	end
+	else if (en)
 	begin
 		// If we got a miss the entire bundle is not in the cache. It will need to
 		// be read. The pipeline will advance until the bundle is placed in the 

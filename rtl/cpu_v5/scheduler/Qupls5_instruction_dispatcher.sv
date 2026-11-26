@@ -80,6 +80,7 @@ Qupls5_pkg::reservation_station_entry_t [Qupls5_pkg::ROB_ENTRIES:0] rse;
 Qupls5_pkg::rob_bitmask_t rob_dispatched, rob_dispatched2, rob_unimplemented;
 reg [DISPATCH_COUNT-1:0] dispatch_slot_v;
 cpy_t [DISPATCH_COUNT-1:0] cpy;
+reg [5:0] branchno;
 
 always_comb
 begin
@@ -89,11 +90,10 @@ begin
 	foreach (rse[nn])
 		rse[nn] = {$bits(Qupls5_pkg::reservation_station_entry_t){1'b0}};
 
-	rse[Qupls5_pkg::ROB_ENTRIES] = {$bits(Qupls5_pkg::rob_entry_t){1'b0}};
 	foreach (cpy[nn]) begin
-		cpy[nn].rse = Qupls5_pkg::ROB_ENTRIES;
-		cpy[nn].rob = rob_ndx_t'(0);
-		cpy[nn].fu = 4'd0;
+		cpy[nn].rse = 3'd7;
+		cpy[nn].rob = rob_ndx_t'(8'd63);
+		cpy[nn].fu = 3'd7;
 	end
 
 	foreach (rob[nn]) begin
@@ -105,7 +105,7 @@ begin
 			!rob_dispatched_o[nn] &&
 			!rob_dispatched2[nn]
 		) begin
-			for (pipe = 0; pipe < 6; pipe = pipe + 1)
+			for (pipe = 0; pipe < 6; pipe = pipe + 1) begin
 				if ((rob[nn].op.decbus.expipe[pipe] & SUPPORT_XPIPE[pipe]) && !busy[pipe] && !dispatch_slot_v[pipe] && !rob_dispatched[nn]) begin
 					cpy[pipe].rob = nn;
 					cpy[pipe].rse = pipe;
@@ -114,6 +114,7 @@ begin
 					rob_dispatched[nn] = VAL;
 					dispatch_slot_v[pipe] = VAL;
 				end
+			end
 			// Ensure instruction is supported in a pipe somewhere.
 			// Mark the instruction as unimplemented if not supported in any pipe.
 			if ((rob[nn].op.decbus.expipe & SUPPORT_XPIPE)==6'd0)	begin	// Is it supported?
@@ -121,11 +122,22 @@ begin
 				rob_dispatched[nn] = VAL;
 			end
 			
+			foreach (rob[nn])
+				tLoadRse(nn,nn);
 		end
 	end
 
-	foreach (rob[nn])
-		tLoadRse(nn,nn);
+end
+
+always_ff @(posedge clk)
+if (rst)
+	branchno <= 6'd0;
+else begin
+	foreach (rse_o[mm])
+		if (rse_o[mm]) begin
+			if (rse_o[mm].fclass==3'd3)
+				branchno <= branchno + 6'd1;
+		end
 end
 
 always_ff @(posedge clk)
@@ -134,9 +146,13 @@ if (rst) begin
 		rse_o[mm] <= {$bits(Qupls5_pkg::reservation_station_entry_t){1'b0}};
 end
 else begin
+	foreach (rse_o[mm])
+		rse_o[mm] <= {$bits(Qupls5_pkg::reservation_station_entry_t){1'b0}};
 	foreach (cpy[mm]) begin
-		rse_o[cpy[mm].rse] <= rse[cpy[mm].rob];
-		rse_o[cpy[mm].rse].funcunit <= cpy[mm].fu;
+		if (cpy[mm].fu!=3'd7) begin
+			rse_o[cpy[mm].rse] <= rse[cpy[mm].rob];
+			rse_o[cpy[mm].rse].funcunit <= cpy[mm].fu;
+		end
 	end
 end
 always_ff @(posedge clk)
@@ -158,8 +174,8 @@ begin
 	rse[kk].excv = rob[nn].excv;
 	rse[kk].om = rob[nn].om;
 	rse[kk].rm = rob[nn].rm;
+	rse[kk].pc = pgh[mm].ip;
 	rse[kk].pc.cap.offset = rob[nn].op.uop.ip - pgh[mm].ip.cap.base;
-	rse[kk].pc.stream = rob[nn].ip_stream;
 	rse[kk].prc = rob[nn].op.decbus.prc;
 	rse[kk].cndx = pgh[mm].cndx;
 	rse[kk].rndx = nn;
@@ -181,6 +197,7 @@ begin
 	// branch specific
 	rse[kk].bt = rob[nn].bt;
 	rse[kk].bcc = rob[nn].op.decbus.br;
+	rse[kk].bcc_reg = rob[nn].op.decbus.br & rob[nn].op.decbus.br_reg;
 	rse[kk].mbcc = rob[nn].op.decbus.br & rob[nn].op.uop.opcode==Qupls5_pkg::OP_MBCC;
 	rse[kk].ibcc = rob[nn].op.decbus.ibr;
 	rse[kk].dbcc = rob[nn].op.decbus.dbr;
@@ -210,38 +227,40 @@ begin
 		rse[kk].store = rob[nn].op.decbus.store;
 		rse[kk].rext = rob[nn].op.decbus.rext;
 
+		rse[kk].ready = rob[nn].argA_v & rob[nn].argB_v & rob[nn].argC_v &
+			rob[nn].argD_v & rob[nn].argT_v & rob[nn].argDRM_v;
 		rse[kk].arg[0].v = rob[nn].argA_v;
 		rse[kk].arg[1].v = rob[nn].argB_v;
 		rse[kk].arg[2].v = rob[nn].argC_v;
-		rse[kk].arg[3].v = rob[nn].argT_v;
-		rse[kk].arg[4].v = rob[nn].argD_v;
+		rse[kk].arg[3].v = rob[nn].argD_v;
+		rse[kk].arg[4].v = rob[nn].argT_v;
 		rse[kk].arg[5].v = rob[nn].argDRM_v;
 		rse[kk].arg[0].aRnv = rob[nn].op.uop.src[0];
 		rse[kk].arg[1].aRnv = rob[nn].op.uop.src[1];
 		rse[kk].arg[2].aRnv = rob[nn].op.uop.src[2];
-		rse[kk].arg[3].aRnv = rob[nn].op.uop.src[3];
-		rse[kk].arg[4].aRnv = rob[nn].op.uop.src[4];
+		rse[kk].arg[3].aRnv = rob[nn].op.uop.src[4];
+		rse[kk].arg[4].aRnv = rob[nn].op.uop.src[3];
 		rse[kk].arg[5].aRnv = rob[nn].op.uop.src[5];
 		
 		rse[kk].arg[0].aRn = rob[nn].op.uop.Rs1;
 		rse[kk].arg[1].aRn = rob[nn].op.uop.Rs2;
 		rse[kk].arg[2].aRn = rob[nn].op.uop.Rs3;
-		rse[kk].arg[3].aRn = rob[nn].op.uop.Rd;
-		rse[kk].arg[4].aRn = rob[nn].op.uop.Rs4;
+		rse[kk].arg[3].aRn = rob[nn].op.uop.Rs4;
+		rse[kk].arg[4].aRn = rob[nn].op.uop.Rd;
 		rse[kk].arg[5].aRn = {3'b111,5'b11111};
 
 		rse[kk].arg[0].z = rob[nn].op.decbus.Rs1z;
 		rse[kk].arg[1].z = rob[nn].op.decbus.Rs2z;
 		rse[kk].arg[2].z = rob[nn].op.decbus.Rs3z;
-		rse[kk].arg[3].z = FALSE;
-		rse[kk].arg[4].z = rob[nn].op.Rs4z;
+		rse[kk].arg[3].z = rob[nn].op.Rs4z;
+		rse[kk].arg[4].z = FALSE;
 		rse[kk].arg[5].z = FALSE;
 
 		rse[kk].arg[0].pRn = rob[nn].op.pRs1;
 		rse[kk].arg[1].pRn = rob[nn].op.pRs2;
 		rse[kk].arg[2].pRn = rob[nn].op.pRs3;
-		rse[kk].arg[3].pRn = rob[nn].op.pRd;
-		rse[kk].arg[4].pRn = rob[nn].op.pRs4;
+		rse[kk].arg[3].pRn = rob[nn].op.pRs4;
+		rse[kk].arg[4].pRn = rob[nn].op.pRd;
 		rse[kk].arg[5].pRn = rob[nn].op.pDRM;
 		/*
 		rse[kk].argAh_v = !rob[nn].op.decbus.b128;
@@ -282,6 +301,8 @@ begin
 		rse[kk].arg[4].is_const = TRUE;
 		rse[kk].arg[4].val = rob[nn].op.decbus.immd;
 	end
+	if (rob[nn].op.decbus.fclass==3'd3)
+		rse[kk].laneno = branchno;
 //	rse[kk].funcunit = 4'd15;???
 end
 endtask

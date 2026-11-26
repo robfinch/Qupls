@@ -57,7 +57,8 @@ begin
 	fnRd = 6'd0;
 	case(ir.opcode)
 	// Integer instructions
-	Qupls5_pkg::OP_PPC_ADDI,Qupls5_pkg::OP_PPC_ADDIS,
+	Qupls5_pkg::OP_PPC_ADDI,Qupls5_pkg::OP_PPC_ADDIS:
+		fnRd = {2'd0,ir.Rd};
 	Qupls5_pkg::OP_PPC_ANDI,Qupls5_pkg::OP_PPC_ANDIS,
 	Qupls5_pkg::OP_PPC_ORI,Qupls5_pkg::OP_PPC_ORIS,
 	Qupls5_pkg::OP_PPC_XORI,Qupls5_pkg::OP_PPC_XORIS:
@@ -70,7 +71,7 @@ begin
 	Qupls5_pkg::OP_PPC_RLDIC:
 		fnRd = {2'd0,ir.Rd};
 	// Branch instructions
-	Qupls5_pkg::OP_B:
+	Qupls5_pkg::OP_PPC_B:
 		fnRd = 6'd33;
 	// Load / store instructions
 	Qupls5_pkg::OP_PPC_LBZ,Qupls5_pkg::OP_PPC_LWZ,Qupls5_pkg::OP_PPC_LHZ,Qupls5_pkg::OP_PPC_LHA,Qupls5_pkg::OP_PPC_LQ:
@@ -79,10 +80,21 @@ begin
 		case(ir.func)
 		Qupls5_pkg::FN31_MTSPR:
 			case(ir.spr)
-			10'd8:	fnRd = 6'd33;		// LR
-			10'd9:	fnRd = 6'd34;		// CTR
+			10'd256:	fnRd = 6'd33;		// LR
+			10'd288:	fnRd = 6'd34;		// CTR
 			10'd815:	fnRd = 6'd35;	// TAR
 			endcase
+	Qupls5_pkg::OP_19:
+		case(ir.func)
+		Qupls5_pkg::FN19_BCLR:
+			fnRd = 6'd33;
+		Qupls5_pkg::FN19_BCCTR:
+			fnRd = 6'd33;
+		Qupls5_pkg::FN19_BCTAR:
+			fnRd = 6'd33;
+		default:
+			fnRd = 6'd0;
+		endcase
 		Qupls5_pkg::FN31_CMP,
 		Qupls5_pkg::FN31_SUBFC,
 		Qupls5_pkg::FN31_ADDC,
@@ -201,8 +213,9 @@ begin
 	case(ir.opcode)
 	// Integer instructions
 	Qupls5_pkg::OP_PPC_ADDI,Qupls5_pkg::OP_PPC_ADDIS,
+	Qupls5_pkg::OP_PPC_ORI,Qupls5_pkg::OP_PPC_ORIS:
+		fnRdv = |ir.Rd ? VAL : INV;
 	Qupls5_pkg::OP_PPC_ANDI,Qupls5_pkg::OP_PPC_ANDIS,
-	Qupls5_pkg::OP_PPC_ORI,Qupls5_pkg::OP_PPC_ORIS,
 	Qupls5_pkg::OP_PPC_XORI,Qupls5_pkg::OP_PPC_XORIS:
 		fnRdv = VAL;
 	Qupls5_pkg::OP_PPC_CMPI,Qupls5_pkg::OP_PPC_CMPLI:
@@ -217,8 +230,8 @@ begin
 		case(ir.func)
 		Qupls5_pkg::FN31_MTSPR:
 			case(ir.spr)
-			10'd8:	fnRdv = VAL;		// LR
-			10'd9:	fnRdv = VAL;		// CTR
+			10'd256:	fnRdv = VAL;		// LR
+			10'd288:	fnRdv = VAL;		// CTR
 			10'd815:	fnRdv = VAL;	// TAR
 			endcase
 		Qupls5_pkg::FN31_CMP,
@@ -323,8 +336,17 @@ begin
 		default:;
 		endcase
 	// Branch instructions
-	Qupls5_pkg::OP_B:
+	Qupls5_pkg::OP_PPC_B:
 		fnRdv = ir.lk;
+	Qupls5_pkg::OP_19:
+		case(ir.func)
+		Qupls5_pkg::FN19_BCLR,
+		Qupls5_pkg::FN19_BCCTR,
+		Qupls5_pkg::FN19_BCTAR:
+			fnRdv = ir.lk;
+		default:
+			fnRdv = FALSE;
+		endcase
 	// Load / store instructions
 	Qupls5_pkg::OP_PPC_LBZ,Qupls5_pkg::OP_PPC_LWZ,Qupls5_pkg::OP_PPC_LHZ,Qupls5_pkg::OP_PPC_LHA,Qupls5_pkg::OP_PPC_LQ:
 		fnRdv = VAL;
@@ -334,11 +356,25 @@ begin
 end
 endfunction
 
+// Detect when Rd should be treated as not updateable.
+function fnRdz;
+input Qupls5_pkg::micro_op_t instr;
+begin
+	case(instr.opcode)
+	// Integer instructions
+	Qupls5_pkg::OP_PPC_ADDI,Qupls5_pkg::OP_PPC_ADDIS,
+	Qupls5_pkg::OP_PPC_ORI,Qupls5_pkg::OP_PPC_ORIS:
+		fnRdz = TRUE;
+	default:	fnRdz = FALSE;
+	endcase
+end
+endfunction
+
 always_comb
 begin
 	Rd = fnRd(instr, instr_raw);
 	Rdv = fnRdv(instr, instr_raw);
-	Rdz = ~|Rd[4:0];
+	Rdz = fnRdz(instr);
 	we = Rdv;
 end
 

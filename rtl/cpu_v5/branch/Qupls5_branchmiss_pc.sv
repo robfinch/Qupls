@@ -38,7 +38,7 @@ import cpu_types_pkg::*;
 import capability_pkg::*;
 import Qupls5_pkg::*;
 
-module Qupls5_branchmiss_pc(clk, rse, pc_stack, bt, takb, current_pc,
+module Qupls5_branchmiss_pc(clk, rse, pc_stack, takb, current_pc,
 	misspc, missgrp, vector, live_stream, new_stream,
 	syscall_vector, kernel_vector);
 parameter ABITS=32;
@@ -47,7 +47,6 @@ input clk;
 input Qupls5_pkg::reservation_station_entry_t rse;
 input Qupls5_pkg::pc_address_ex_t [Qupls5_pkg::ISTACK_DEPTH-1:0] pc_stack;
 input [63:0] vector;
-input bt;
 input takb;
 input Qupls5_pkg::pc_address_ex_t current_pc;
 input Qupls5_pkg::pc_address_ex_t  [4:0] syscall_vector;
@@ -59,15 +58,19 @@ input cpu_types_pkg::pc_stream_t new_stream;
 
 Qupls5_pkg::pc_address_ex_t dstpc;
 Qupls5_pkg::micro_op_t ir;
-Qupls5_pkg::pc_address_ex_t pc = rse.pc;
-value_t argA = rse.arg[0].val;
-value_t argB = rse.arg[1].val;
-value_t argC = rse.arg[2].val;
-value_t argI = rse.argI;
-uc64_capability_t capa = rse.cap_arg.val;
+value_t argA;
+value_t argB;
+value_t argC;
+value_t argI;
+uc64_capability_t capa;
 
 always_comb
 	ir = rse.uop;
+always_comb argA = rse.arg[0].val;
+always_comb argB = rse.arg[1].val;
+always_comb argC = rse.arg[2].val;
+always_comb argI = rse.argI;
+always_comb capa = rse.cap_arg;
 
 reg [5:0] ino;
 reg [5:0] ino5;
@@ -75,10 +78,10 @@ reg [63:0] disp;
 reg [ABITS-1:0] rg;
 
 always_comb
-begin
+if (rse.v) begin
 //	disp = {{38{instr.ins.immHi[3]}},instr.ins.immHi,instr.ins.immLo};
 //	misspc.bno_f = 6'd1;
-	dstpc = pc;					// copy bno fields
+	dstpc = rse.pc;					// copy bno fields
 
 	case(1'b1)
 
@@ -91,30 +94,31 @@ begin
 		else
 		*/
 		begin
-			dstpc.cap.offset = pc.cap.offset + ir.imm;
+			dstpc.cap.offset = rse.pc.cap.offset + ir.imm;
 			dstpc.stream = rse.pc.stream;
 		end
 	rse.bcc:
 		begin
-			dstpc.cap.offset = pc.cap.offset + ir.imm;
-			dstpc.stream = rse.pc.stream;
+			if (rse.bcc_reg)
+				dstpc.cap.offset = argA - dstpc.cap.base;
+			else
+				dstpc.cap.offset = rse.pc.cap.offset + ir.imm;
+			$display("Qupls5: branching to: %h", dstpc.cap.offset);
+			$display("  rse.pc=%h", rse.pc.cap.offset);
 		end
 	rse.bsr,
 	rse.bra:
 		begin
-			dstpc.cap.offset = pc.cap.offset + ir.imm;
-			dstpc.stream = rse.pc.stream;
+			dstpc.cap.offset = rse.pc.cap.offset + ir.imm;
 		end
 	rse.jsr,
 	rse.jmp:
 		begin
 			dstpc.cap.offset = ir.imm - rse.pc.cap.base;
-			dstpc.stream = rse.pc.stream;
 		end
 	rse.cjsr:
 		begin
 			dstpc.cap.offset = ir.imm - rse.pc.cap.base;
-			dstpc.stream = rse.pc.stream;
 		end
 
 	rse.sys:
@@ -160,13 +164,18 @@ begin
 		end
 	endcase
 end
+else
+	dstpc = current_pc;
 
 always_ff @(posedge clk)
 begin
-	live_stream <= 7'd0;
-	misspc <= {$bits(Qupls5_pkg::pc_address_ex_t){1'b0}};
-	misspc.cap.offset <= Qupls5_pkg::RSTPC;
-	misspc.stream <= 7'd1;
+	live_stream <= current_pc.stream.stream;
+//	misspc <= {$bits(Qupls5_pkg::pc_address_ex_t){1'b0}};
+//	misspc.cap.offset <= Qupls5_pkg::RSTPC;
+//	misspc.stream <= 7'd1;
+	misspc <= current_pc;
+	misspc.cap.offset <= current_pc.cap.offset + 4'd4;
+	if (rse.v)
 	case(1'b1)
 	/*+
 	BTS_REG:
@@ -175,9 +184,9 @@ begin
 		end
 	*/
 	// rse.bcc also includes rse.mbcc
-	rse.boi,rse.bcc:
+	rse.boi,rse.bcc,rse.bcc_reg:
 		begin
-			case({bt,takb})
+			case({rse.bt,takb})
 			// Predicted as not taken, and resolved as not taken:
 			// 		stay in the same stream. We had the right stream to begin with. No
 			//    branch is taking place. Nothing missed.
@@ -189,8 +198,8 @@ begin
 			// Transition the current PC from unknown to live.
 			2'b00,2'b11:
 				begin
-					misspc <= pc;
-					live_stream <= current_pc.stream;
+					misspc <= rse.pc;
+					live_stream <= rse.pc.stream.stream;
 				end
 			// Predicted as not taken, but resolved as taken:
 			//	 we need to update the PC to the new destination and allocate a new
@@ -199,7 +208,7 @@ begin
 			2'b01:
 				begin
 					misspc <= dstpc;
-					live_stream <= dstpc.stream;
+					live_stream <= dstpc.stream.stream;
 				end
 			// Predicted as taken, but resolved as not taken:
 			//   we need to back up to the last PC (the instruction after the branch).
@@ -208,8 +217,8 @@ begin
 			2'b10:
 				begin
 					misspc <= dstpc;
-					misspc.cap.offset <= pc.cap.offset + 4'd4;
-					live_stream <= dstpc.stream;
+					misspc.cap.offset <= rse.pc.cap.offset + 4'd4;
+					live_stream <= dstpc.stream.stream;
 				end
 			endcase
 //			misspc = bt ? pc + 4'd5 : pc + {{47{instr[39]}},instr[39:25],instr[12:11]};

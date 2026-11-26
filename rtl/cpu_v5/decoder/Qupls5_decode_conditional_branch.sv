@@ -36,18 +36,23 @@
 
 import Qupls5_pkg::*;
 
-module Qupls5_decode_conditional_branch(instr, branch, ibranch, dbranch);
+module Qupls5_decode_conditional_branch(instr, branch, branch_reg);
 input Qupls5_pkg::micro_op_t instr;
 output branch;
-output reg ibranch;
-output reg dbranch;
+output reg branch_reg;
 
 assign branch = Qupls5_pkg::fnIsBranch(instr);
 
 always_comb
 begin
-	ibranch = FALSE;
-	dbranch = FALSE;
+	case(instr.func)
+	Qupls5_pkg::FN19_BCLR,
+	Qupls5_pkg::FN19_BCCTR,
+	Qupls5_pkg::FN19_BCTAR:
+		branch_reg = 1'b1;
+	default:
+		branch_reg = 1'b0;
+	endcase
 end
 
 endmodule

@@ -44,7 +44,7 @@
 import const_pkg::*;
 import Qupls5_pkg::*;
 
-module Qupls5_ext_decode(ip, instr, bsr, jsr, bra, jmp, bcc, rtd, nop,
+module Qupls5_ext_decode(ip, instr, bsr, jsr, bra, jmp, bcc, bcc_reg, rtd, nop,
 	bsr_tgt, jsr_tgt, bcc_tgt);
 input Qupls5_pkg::pc_address_ex_t ip;
 input [31:0] instr;
@@ -53,6 +53,7 @@ output reg jsr;
 output reg bra;
 output reg jmp;
 output reg bcc;
+output reg bcc_reg;
 output reg rtd;
 output reg nop;
 output Qupls5_pkg::pc_address_ex_t bsr_tgt;
@@ -60,15 +61,16 @@ output Qupls5_pkg::pc_address_ex_t jsr_tgt;
 output Qupls5_pkg::pc_address_ex_t bcc_tgt;
 
 always_comb nop = instr[31:26]==Qupls5_pkg::OP_PPC_ORI && instr[25:0]==26'd0;
-always_comb bsr = instr[31:26]==Qupls5_pkg::OP_B && !instr[1] && instr[0];
-always_comb bra = instr[31:26]==Qupls5_pkg::OP_B && !instr[1] && !instr[0];
-always_comb jsr = instr[31:26]==Qupls5_pkg::OP_B && instr[1] && instr[0];
-always_comb jmp = instr[31:26]==Qupls5_pkg::OP_B && instr[1] && !instr[0];
+always_comb bsr = instr[31:26]==Qupls5_pkg::OP_PPC_B && !instr[1] && instr[0];
+always_comb bra = instr[31:26]==Qupls5_pkg::OP_PPC_B && !instr[1] && !instr[0];
+always_comb jsr = instr[31:26]==Qupls5_pkg::OP_PPC_B && instr[1] && instr[0];
+always_comb jmp = instr[31:26]==Qupls5_pkg::OP_PPC_B && instr[1] && !instr[0];
 
 // For conditional branches we have to detect if it is a branch-to-register
 // value. If so, the address cannot be predicted at this stage. It will
 // need to wait until it resolves.
-always_comb bcc = FALSE;
+always_comb bcc = instr[31:26]==Qupls5_pkg::OP_PPC_BC;
+always_comb bcc_reg = instr[31:26]==Qupls5_pkg::OP_19;
 always_comb rtd = instr[6:0]==Qupls5_pkg::OP_CAP && instr[31:25]==Qupls5_pkg::CAP_RET;
 // To compute the virtual address the offset is added to the base, so it needs
 // to be subtracted off when set.

@@ -169,34 +169,30 @@ begin
 		opero.v = VAL;
 		opero.val = operi.val;
 	end
-	else begin
+	else
+	begin
 		// Check if operand matches incoming write port history.
 		if (!opero.v)
 			foreach (wp_hist_i[jj]) begin
 				for (kk = 0; kk < 4; kk = kk + 1) begin
-					if (operi.pRn==wp_hist_i[jj][kk].pRn && wp_hist_i[jj][kk].v) begin
-						if (operi.pRn==10'd7)
-							$display("wp_hist:%c",wp_hist_i[jj][kk].v?"v":"-");
+					if (opero.pRn==wp_hist_i[jj][kk].pRn && wp_hist_i[jj][kk].v) begin
 						opero = wp_hist_i[jj][kk];
-						opero.v = VAL;
 						break;
 					end
 				end
 			end
 		if (!opero.v)
 			foreach (rf_oper_i[jj]) begin
-				if (operi.pRn==rf_oper_i[jj].pRn && rf_oper_i[jj].v) begin
-					if (operi.pRn==10'd7)
-						$display("rf_oper:%c",rf_oper_i[jj].v?"v":"-");
+				if (opero.pRn==rf_oper_i[jj].pRn && rf_oper_i[jj].v) begin
 					opero = rf_oper_i[jj];
-					opero.v = VAL;
 					break;
 				end
+				/*
 				else if ((pFPCSR & rf_oper_i[jj].fpcsr) && rf_oper_i[jj].v) begin
 					opero = rf_oper_i[jj];
-					opero.v = VAL;
 					break;
 				end
+				*/
 			end
 		// Bypassing from the input to the register file trims a clock cycle off
 		// latency.
@@ -204,8 +200,8 @@ begin
 		// This is not done here due to the size of the bypass network. There are
 		// 14 functional units that could be bypassed.
 		// However, there is bypassing from the output of the first SAU.
-		if (!opero.v)
-			if (Qupls5_pkg::PERFORMANCE) begin
+		if (Qupls5_pkg::PERFORMANCE) begin
+			if (!opero.v)
 				for (jj = 0; jj < NBPI; jj = jj + 1) begin //check phys reg???
 					if (operi.pRn==bypass_i[jj].pRn && bypass_i[jj].v) begin
 						opero = bypass_i[jj];

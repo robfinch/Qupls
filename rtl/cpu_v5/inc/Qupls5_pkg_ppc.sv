@@ -715,8 +715,9 @@ typedef enum logic [5:0] {
 	OP_PPC_ADDICR = 6'd13,
 	OP_PPC_ADDI = 6'd14,
 	OP_PPC_ADDIS = 6'd15,
-	OP_BC = 6'd16,
-	OP_B = 6'd18,
+	OP_PPC_BC = 6'd16,
+	OP_PPC_SC = 6'd17,
+	OP_PPC_B = 6'd18,
 	OP_19 = 6'd19,
 	OP_PPC_RLWIMI = 6'd20,
 	OP_PPC_RLWINM = 6'd21,
@@ -2021,6 +2022,7 @@ typedef struct packed
 	logic cjb;					// call, jmp, or bra
 	logic jsri;					// indirect subroutine call
 	logic br;						// conditional branch
+	logic br_reg;				// branch to register
 	logic ibr;					// inc conditional branch
 	logic dbr;					// dec conditional branch
 	logic bsr;
@@ -2284,6 +2286,7 @@ typedef struct packed {
 	logic ibcc;					// incrementing branch
 	logic dbcc;					// decrementing branch
 	logic bcc;					// conditional branch
+	logic bcc_reg;			// branch to register
 	logic mbcc;					// masked branch
 	logic cjb;					// call, jmp, or bra
 	logic jsri;					// indirect subroutine call
@@ -2407,7 +2410,7 @@ typedef struct packed {
 	logic [4:0] pghn;					// pipeline group header index
 	logic [4:0] pghn_irq;			// pipeline group header index of interrupt (in case moved)
 	cpu_types_pkg::pc_stream_t ip_stream;		// stream associated with instruction
-	logic [47:0] ip;					// 
+	cpu_types_pkg::pc_address_t ip;					// for forming branches
 	logic is40bit;
 	logic [4:0] eip_offs;			// exception return address offset from header IP
 	logic flush;
@@ -2423,7 +2426,7 @@ typedef struct packed {
 	logic cap_dispatchable;	  // 1 if instruction can be dispatched to capability unit
 
 	cpu_types_pkg::rob_ndx_t orid;						// ROB id of originating macro-instruction
-	logic cmt;								// 1=rROB entry was committed
+	logic [1:0] cmt;					// 1=rROB entry was committed
 	logic lsq;								// 1=instruction has associated LSQ entry
 	lsq_ndx_t lsqndx;					// index to LSQ entry
 	cpu_types_pkg::value_t load_data;
@@ -2522,6 +2525,7 @@ typedef struct packed
 	cpu_types_pkg::seqnum_t sn;					// sequence number, decrements when instructions que
 	cpu_types_pkg::seqnum_t irq_sn;			// sequence number, increments for each interrupt
 	reg [5:0] old_ipl;
+	reg [MWIDTH-1:0] bt;								// Branch taken, needed here to propagate through cache
 	logic hwi;													// hardware interrupt occured during fetch
 	irq_info_packet_t irq;							// the level of the hardware interrupt
 	logic cndxv;												// checkpoint index is valid
@@ -2673,7 +2677,7 @@ function cpu_types_pkg::pc_address_t fnTargetIP;
 input cpu_types_pkg::pc_address_t ip;
 input cpu_types_pkg::value_t tgt;
 begin
-	fnTargetIP = ip+{tgt,1'b0};
+	fnTargetIP = ip+tgt;
 end
 endfunction
 
@@ -2929,11 +2933,8 @@ function fnIsLoad;
 input micro_op_t ir;
 begin
 	case(ir.opcode)
-	OP_LDV,
-	OP_LOADN,OP_LOADZN,
-	OP_LDB,OP_LDW,OP_LDT,OP_LOAD,
-	OP_LDBZ,OP_LDWZ,OP_LDTZ,7'd71,
-	OP_CLOAD:
+	OP_PPC_LBZ,OP_PPC_LHZ,OP_PPC_LHA,OP_PPC_LWZ,
+	OP_PPC_LBZU,OP_PPC_LHZU,OP_PPC_LWZU:
 		fnIsLoad = 1'b1;
 	default:
 		fnIsLoad = 1'b0;
@@ -2945,10 +2946,7 @@ function fnIsStore;
 input micro_op_t ir;
 begin
 	case(ir.opcode)
-	OP_STV,
-	OP_STB,OP_STW,OP_STT,OP_STORE,
-	OP_STOREN,
-	OP_CSTORE:
+	OP_PPC_STB,OP_PPC_STH,OP_PPC_STW:
 		fnIsStore = 1'b1;
 	default:
 		fnIsStore = 1'b0;
@@ -2960,7 +2958,7 @@ function fnIsBranch;
 input micro_op_t ir;
 begin
 	case(ir.opcode)
-	OP_BC:	fnIsBranch = 1'b1;
+	OP_PPC_BC:	fnIsBranch = 1'b1;
 	OP_19:
 		case(ir.func)
 		FN19_BCLR,
@@ -2979,21 +2977,21 @@ endfunction
 function fnDecBsr;
 input Qupls5_pkg::pipeline_reg_t mux;
 begin
-	fnDecBsr = mux.uop.opcode == OP_B && mux.uop.lk && ~mux.uop.aa;
+	fnDecBsr = mux.uop.opcode == OP_PPC_B && mux.uop.lk && ~mux.uop.aa;
 end
 endfunction
 
 function fnDecBra;
 input Qupls5_pkg::pipeline_reg_t mux;
 begin
-	fnDecBra = mux.uop.opcode == OP_B && ~mux.uop.lk && ~mux.uop.aa;
+	fnDecBra = mux.uop.opcode == OP_PPC_B && ~mux.uop.lk && ~mux.uop.aa;
 end
 endfunction
 
 function fnDecJmp;
 input Qupls5_pkg::pipeline_reg_t mux;
 begin
-	fnDecJmp = mux.uop.opcode==OP_B && ~mux.uop.lk && mux.uop.aa;
+	fnDecJmp = mux.uop.opcode==OP_PPC_B && ~mux.uop.lk && mux.uop.aa;
 end
 endfunction
 
@@ -3007,7 +3005,7 @@ endfunction
 function fnDecJsr;
 input Qupls5_pkg::pipeline_reg_t mux;
 begin
-	fnDecJsr = mux.uop.opcode==OP_B && mux.uop.lk && mux.uop.aa;
+	fnDecJsr = mux.uop.opcode==OP_PPC_B && mux.uop.lk && mux.uop.aa;
 end
 endfunction
 
@@ -3284,7 +3282,7 @@ begin
 			fnMapRawToUop.src[3] = 1'b1;
 			fnMapRawToUop.dst = 1'b1;
 		end
-	Qupls5_pkg::OP_B:
+	Qupls5_pkg::OP_PPC_B:
 		begin
 			fnMapRawToUop.lk = raw[0];
 			fnMapRawToUop.aa = raw[1];
@@ -3293,7 +3291,7 @@ begin
 			fnMapRawToUop.src[0] = raw[0];
 			fnMapRawToUop.dst = raw[0];
 		end
-	Qupls5_pkg::OP_BC:
+	Qupls5_pkg::OP_PPC_BC:
 		begin
 			fnMapRawToUop.lk = raw[0];
 			fnMapRawToUop.aa = raw[1];

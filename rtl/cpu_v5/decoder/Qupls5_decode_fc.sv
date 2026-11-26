@@ -44,8 +44,9 @@ function fnIsFlowCtrl;
 input Qupls5_pkg::micro_op_t ir;
 begin
 	case(ir.opcode)
-	Qupls5_pkg::OP_B,
-	Qupls5_pkg::OP_BC:
+	Qupls5_pkg::OP_PPC_SC,
+	Qupls5_pkg::OP_PPC_B,
+	Qupls5_pkg::OP_PPC_BC:
 		fnIsFlowCtrl = 1'b1;
 	Qupls5_pkg::OP_19:
 		case(ir.func)

@@ -64,6 +64,7 @@ cpu_types_pkg::capability_high64_t ch, dh;
 cpu_types_pkg::pc_address_t pc;
 Qupls5_pkg::micro_op_t ir;
 cpu_types_pkg::flags_t c_flags, d_flags;
+reg [5:0] last_branchno;
 
 always_comb ir = rse_i.uop;
 always_comb a = {rse_i.arg[0].flags,rse_i.arg[0].val};
@@ -86,13 +87,12 @@ Qupls5_meta_branch_eval ube1
 	.a(a),
 	.b(b),
 	.c(d),
-	.irq(ic_irq > cr0.ipl && cr0.mie && irq_sn!=rse_i.irq_sn || ic_irq==6'd63),
 	.takb(takb)
 );
 
 always_ff @(posedge clk)
 	case(1'b1)
-	rse_i.bsr:	res <= rse_i.pc.cap.offset + 4'd4;
+	rse_i.bsr:	res <= fnUcGetAddress(rse_i.pc.cap) + 4'd4;
 	rse_i.jsr:	res <= rse_i.pc.cap.offset + 4'd4;
 	rse_i.cjb:	res <= rse_i.pc.cap.offset + 4'd4;
 	rse_i.ret:	res <= t + i;			// destination is Rd	(SP)
@@ -101,10 +101,13 @@ always_ff @(posedge clk)
 
 // Filter out branches
 always_ff @(posedge clk)
-if (rst)
+if (rst) begin
 	rse_o <= {$bits(Qupls5_pkg::reservation_station_entry_t){1'b0}};
+	last_branchno <= 6'd63;
+end
 else begin
-	if (rse_i.fclass==3'd3) begin
+	if (rse_i.fclass==3'd3 && rse_i.v && last_branchno != rse_i.laneno) begin
+		last_branchno <= rse_i.laneno;
 		rse_o <= rse_i;
 		if (SUPPORT_CAPABILITIES && rse_i.cinvoke) begin
 			if (~c_flags.cap|~d_flags.cap) begin

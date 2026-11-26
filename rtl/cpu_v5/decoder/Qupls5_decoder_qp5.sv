@@ -57,13 +57,13 @@ wire excRs1, excRs2, excRs3, excRd, excRd2, excRd3;
 wire [3:0] pred_shadow_count;
 
 
-Qupls5_decode_expipe uexpipe1
+Qupls5_decode_expipe_qp5 uexpipe1
 (
 	.instr(instr),
 	.expipe(dbo.expipe)
 );
 
-Qupls5_decode_const udcimm
+Qupls5_decode_const_qp5 udcimm
 (
 	.ins(instr),
 	.instr_raw(instr_raw),
@@ -78,7 +78,7 @@ Qupls5_decode_const udcimm
 	.has_immd(dbo.has_immd)
 );
 
-Qupls5_decode_Rs1 udcra
+Qupls5_decode_Rs1_qp5 udcra
 (
 	.om(om),
 	.instr(instr),
@@ -89,7 +89,7 @@ Qupls5_decode_Rs1 udcra
 	.Rs1ip(dbo.Rs1ip)
 );
 
-Qupls5_decode_Rs2 udcrb
+Qupls5_decode_Rs2_qp5 udcrb
 (
 	.om(om),
 	.instr(instr),
@@ -100,7 +100,7 @@ Qupls5_decode_Rs2 udcrb
 	.has_Rs2(dbo.has_Rs2)
 );
 
-Qupls5_decode_Rs3 udcrc
+Qupls5_decode_Rs3_qp5 udcrc
 (
 	.om(om),
 	.instr(instr),
@@ -110,7 +110,7 @@ Qupls5_decode_Rs3 udcrc
 	.Rs3z(dbo.Rs3z)
 );
 
-Qupls5_decode_Rs4 udcr4
+Qupls5_decode_Rs4_qp5 udcr4
 (
 	.om(om),
 	.instr(instr),
@@ -120,14 +120,14 @@ Qupls5_decode_Rs4 udcr4
 	.Rs4z(dbo.Rs4z)
 );
 
-Qupls5_decode_Rmd udcrt
+Qupls5_decode_Rmd_qp5 udcrt
 (
 	.instr(instr),
 	.Rmd(dbo.Rm),
 	.Rmd_used()
 );
 
-Qupls5_decode_Rd udcrm
+Qupls5_decode_Rd_qp5 udcrm
 (
 	.om(om),
 	.instr(instr),
@@ -398,21 +398,12 @@ begin
 	dbo.irq = instr.opcode==Qupls5_pkg::OP_IRQ;
 	dbo.rext = instr.opcode==Qupls5_pkg::OP_REXT;
 	dbo.extop = instr.opcode==Qupls5_pkg::OP_EXTOP;
-`ifdef PowerISA
-	dbo.pfx = Qupls5_pkg::OP_PPC_PREFIX;
-	dbo.boi = FALSE;
-	dbo.bsr = instr.opcode==Qupls5_pkg::OP_B && instr.lk && ~instr.aa;
-	dbo.jsr = instr.opcode==Qupls5_pkg::OP_B && instr.lk && instr.aa;
-	dbo.bra = instr.opcode==Qupls5_pkg::OP_B && ~instr.lk && ~instr.aa;
-	dbo.jmp = instr.opcode==Qupls5_pkg::OP_B && ~instr.lk && instr.aa;
-`else
 	dbo.pfx = instr.opcode==Qupls5_pkg::OP_REXT || instr.opcode==Qupls5_pkg::OP_EXTOP;
 	dbo.boi = instr.opcode==Qupls5_pkg::OP_BCCU && instr.func==Qupls5_pkg::CND_BOI;
 	dbo.bsr = instr.opcode==Qupls5_pkg::OP_BSR;
 	dbo.jsr = instr.opcode==Qupls5_pkg::OP_JSR;
 	dbo.bra = instr.opcode==Qupls5_pkg::OP_BRA;
 	dbo.jmp = instr.opcode==Qupls5_pkg::OP_JMP;
-`endif
 	dbo.sys = instr.opcode==Qupls5_pkg::OP_SYS;
 	dbo.brk = instr.opcode==Qupls5_pkg::OP_BRK;
 	dbo.ret = instr.opcode==Qupls5_pkg::OP_CAP && instr.func==Qupls5_pkg::CAP_RET;

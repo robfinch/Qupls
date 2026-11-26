@@ -32,6 +32,7 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
+// This pipe has a latency of five cycles.
 // 3100 LUTs / 3600 FFs / 19 DSPs
 // ============================================================================
 
@@ -88,7 +89,7 @@ wire [WID-1:0] alu_o64, alu_od, fma_o64, fma_o16, fma_o32;
 wire [WID-1:0] imul_res;
 wire [WID-1:0] alu_o;
 wire [WID/8:0] alu_we;
-wire [WID-1:0] alu_exc;
+wire [WID-1:0] alu_exc, alu_exc5;
 reg [WID/8-1:0] exc_mask;
 
 cpu_types_pkg::address_t as, bs;
@@ -328,6 +329,7 @@ end
 endgenerate
 
 delay4 #(.WID(WID)) udly1 (.clk(clk), .ce(1'b1), .i(alu_o), .o(alu_od));
+delay4 #(.WID(WID)) udly9 (.clk(clk), .ce(1'b1), .i(alu_exc), .o(alu_exc5));
 delay5 #(.WID($bits(Qupls5_pkg::micro_op_t))) udly3 (.clk(clk), .ce(1'b1), .i(ir), .o(ir5));
 delay5 #(.WID($bits(Qupls5_pkg::memsz_t))) udly4 (.clk(clk), .ce(1'b1), .i(prc), .o(prc5));
 delay5 #(.WID($bits(cpu_types_pkg::value_t))) udly5 (.clk(clk), .ce(1'b1), .i(nna_o), .o(nna_od));
@@ -395,8 +397,8 @@ begin
 	exc = Qupls5_pkg::FLT_NONE;
 	exc_mask = {WID/8{1'b1}};
 	for (n = WID-8; n >= 0; n = n - 8)
-		if (Qupls5_pkg::cause_code_t'(alu_exc >> n) != Qupls5_pkg::FLT_NONE) begin
-			exc = Qupls5_pkg::cause_code_t'(alu_exc >> n);
+		if (Qupls5_pkg::cause_code_t'(alu_exc5 >> n) != Qupls5_pkg::FLT_NONE) begin
+			exc = Qupls5_pkg::cause_code_t'(alu_exc5 >> n);
 			exc_mask = ~((32'd2 << (n >> 3)) - 32'd1);
 		end
 end
