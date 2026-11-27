@@ -703,7 +703,7 @@ typedef enum logic [6:0] {
 	OP_NOP = 7'd127
 } opcode_e;
 
-typedef enum logic [5:0] {
+typedef enum logic [6:0] {
 	OP_PPC_PREFIX = 6'd1,
 	OP_PCC_TDI = 6'd2,
 	OP_PPC_TWI = 6'd3,
@@ -757,7 +757,11 @@ typedef enum logic [5:0] {
 	OP_PPC_STFDU = 6'd55,
 	OP_PPC_LQ = 6'd56,
 	OP_PPC_LWA = 6'd58,
-	OP_PPC_STD = 6'd62
+	OP_PPC_STD = 6'd62,
+	OP_63 = 6'd63,
+
+	// "Extra" micro-op instructions	
+	OP_MTFPSCR = 7'd64
 } opcode_ppc_e;
 
 typedef enum logic [6:0] {
@@ -955,6 +959,10 @@ typedef enum logic [9:0] {
 	FN31_EXTSW = 10'd986,
 	FN31_DIVWO = 10'd1003
 } op31_e;
+
+typedef enum logic [4:0] {
+	FN63_FRCPA = 5'd24
+} op63_e;
 
 typedef enum logic [6:0] {
 	R1_CNTLZ = 7'd0,
@@ -1640,7 +1648,7 @@ typedef struct packed		// about 156 bits
 	logic [4:0] bo;
 	logic [1:0] bh;				// branch hint
 	logic [9:0] func;			// primary function code / branch condition
-	logic [5:0] opcode;		// primary opcode
+	logic [6:0] opcode;		// primary opcode
 } micro_op_t;
 // about 156 bits
 /*
@@ -3244,6 +3252,16 @@ begin
 	// Immediate operate
 	Qupls5_pkg::OP_PPC_ADDI,
 	Qupls5_pkg::OP_PPC_ADDIS,
+	Qupls5_pkg::OP_PPC_ORI,
+	Qupls5_pkg::OP_PPC_ORIS:
+		begin
+			fnMapRawToUop.Rd = {1'b0,raw[25:21]};
+			fnMapRawToUop.Rs1 = {1'b0,raw[20:16]};
+			fnMapRawToUop.imm = {{18{raw[15]}},raw[15:0]};
+			fnMapRawToUop.src[0] = |raw[20:16];
+			fnMapRawToUop.src[3] = 1'b1;
+			fnMapRawToUop.dst = 1'b1;
+		end
 	Qupls5_pkg::OP_PPC_ADDIC,
 	Qupls5_pkg::OP_PPC_ADDICR,
 	Qupls5_pkg::OP_PPC_SUBFIC:
@@ -3257,8 +3275,6 @@ begin
 		end
 	Qupls5_pkg::OP_PPC_ANDI,
 	Qupls5_pkg::OP_PPC_ANDIS,
-	Qupls5_pkg::OP_PPC_ORI,
-	Qupls5_pkg::OP_PPC_ORIS,
 	Qupls5_pkg::OP_PPC_XORI,
 	Qupls5_pkg::OP_PPC_XORIS:
 		begin
@@ -3568,6 +3584,19 @@ begin
 			2'd2:	fnMapRawToUop.byteno = 6'd16;		// STQ
 			endcase
 		end
+	OP_63:
+		case(raw[5:1])
+		FN63_FRCPA:
+			begin
+				fnMapRawToUop.func = {5'd0,raw[5:1]};
+				fnMapRawToUop.Rd = raw[25:21] + 8'd40;
+				fnMapRawToUop.Rs1 = raw[20:16] + 8'd40;
+				fnMapRawToUop.Rs2 = 5'd0;
+				fnMapRawToUop.src = 7'b0001001;
+				fnMapRawToUop.dst = 1'b1;
+				fnMapRawToUop.rc = raw[0];
+			end
+		endcase
 	default:
 		begin
 			fnMapRawToUop = {$bits(micro_op_t){1'b0}};

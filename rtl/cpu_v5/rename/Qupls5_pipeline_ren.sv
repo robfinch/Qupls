@@ -141,6 +141,8 @@ reg [MWIDTH-1:0] is_move;
 aregno_t [MWIDTH-1:0] aRd_decr;
 wire rat_stallq1;
 wire ns_stall;
+reg [MWIDTH-1:0] wr;
+wire [MWIDTH-1:0] pwr;
 assign rat_stallq = rat_stallq1|ns_stall;
 
 
@@ -219,6 +221,18 @@ else begin
 			aRd_decr[n10] <= aRd_dec[n10];
 end
 
+// ToDo: fix this.
+// write for only a single cycle. But allow pipelined writes.
+reg en3;
+always_ff @(posedge clk)
+	en3 <= en;
+generate begin : gEd1
+	for (g = 0; g < MWIDTH; g = g + 1)
+edge_det ued1 (.rst(rst), .clk(clk), .ce(1'b1), .i(pRd_decv[g]), .pe(pwr[g]), .ne(), .ee());
+end
+endgenerate
+
+
 checkpt_ndx_t cndx1, cndx2, cndx3;
 assign cndx1 = cndx;
 assign cndx2 = cndx;
@@ -277,7 +291,7 @@ urat1
 	.prn_i(prn_i),
 	.prv(prnv),
 	.is_move(is_move),
-	.wr(pRd_decv),		// && !stomp0 && ~pg_ren.pr[0].decbus.Rtz),
+	.wr(pwr),		// && !stomp0 && ~pg_ren.pr[0].decbus.Rtz),
 	.wra(aRd_dec),
 	.wrra(pRd_dec),
 	.wra_cp(rcndx),

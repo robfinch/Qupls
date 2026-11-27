@@ -71,7 +71,7 @@ output reg adrv;
 output Qupls5_pkg::reservation_station_entry_t agen_rse;
 
 integer n;
-Qupls5_pkg::reservation_station_entry_t rse1,rse2;
+Qupls5_pkg::reservation_station_entry_t rse1,rse2,rse3,rse4,rse5;
 Qupls5_pkg::operating_mode_t om;
 Qupls5_pkg::memsz_t prc,prc5;
 Qupls5_pkg::micro_op_t ir,ir5;
@@ -83,7 +83,7 @@ reg [WID-1:0] s;
 reg [WID-1:0] i;
 cpu_types_pkg::flags_t flags;
 aregno_t aRd_i;
-reg [1:0] stomp_con;	// stomp conveyor
+reg [4:0] stomp_con;	// stomp conveyor
 reg [WID/8:0] we,we1,we2;
 wire [WID-1:0] alu_o64, alu_od, fma_o64, fma_o16, fma_o32;
 wire [WID-1:0] imul_res;
@@ -127,6 +127,12 @@ always_ff @(posedge clk)
 	rse1 <= rse_i;
 always_ff @(posedge clk)
 	rse2 <= rse1;
+always_ff @(posedge clk)
+	rse3 <= rse2;
+always_ff @(posedge clk)
+	rse4 <= rse3;
+always_ff @(posedge clk)
+	rse5 <= rse4;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -341,17 +347,14 @@ always_comb
 begin
 	flags = 8'h00;
 	case(ir5.opcode)
-	Qupls5_pkg::OP_PPC_ADDI,Qupls5_pkg::OP_PPC_ADDIS,
-	Qupls5_pkg::OP_PPC_ANDI,Qupls5_pkg::OP_PPC_ANDIS,
-	Qupls5_pkg::OP_PPC_ORI,Qupls5_pkg::OP_PPC_ORIS,
-	Qupls5_pkg::OP_PPC_XORI,Qupls5_pkg::OP_PPC_XORIS:
-		o1 = alu_od;
-	Qupls5_pkg::OP_31:
-		o1 = alu_od;
-	default:
-		begin
+	Qupls5_pkg::OP_63:
+		case(ir5.func)
+		FN63_FRCPA:	o1 = frcpa_od;
+		default:
 			o1 = alu_od;
-		end
+		endcase
+	default:
+		o1 = alu_od;
 	endcase
 end
 
@@ -360,7 +363,7 @@ end
 generate begin : gCptgt
 	for (mm = 0; mm < WID/8; mm = mm + 1) begin
     always_comb
-    	if (stomp_con[1]||rse2.uop.opcode==Qupls5_pkg::OP_NOP)
+    	if (stomp_con[4]||rse5.uop.opcode==Qupls5_pkg::fnNop())
         o[mm*8+7:mm*8] = t[mm*8+7:mm*8];
 //      else if (cptgt[mm])
 //        o[mm*8+7:mm*8] = z ? 8'h00 : t[mm*8+7:mm*8];
@@ -375,9 +378,10 @@ delay5 #(.WID(WID/8+1)) udly8 (.clk(clk), .ce(1'b1), .i(we), .o(we2));
 always_comb
 	we = {9{rse_i.we}};
 
+// Stomp conveyor belt.
 always_ff @(posedge clk)
 begin
-	if (~|aRd_i || stomp[rse_i.rndx])
+	if (stomp[rse_i.rndx])
 		stomp_con[0] <= 1'b1;
 	else
 		stomp_con[0] <= 1'b0;
@@ -385,6 +389,18 @@ begin
 		stomp_con[1] <= 1'b1;
 	else
 		stomp_con[1] <= stomp_con[0];
+	if (stomp[rse2.rndx])
+		stomp_con[2] <= 1'b1;
+	else
+		stomp_con[2] <= stomp_con[1];
+	if (stomp[rse3.rndx])
+		stomp_con[3] <= 1'b1;
+	else
+		stomp_con[3] <= stomp_con[2];
+	if (stomp[rse4.rndx])
+		stomp_con[4] <= 1'b1;
+	else
+		stomp_con[4] <= stomp_con[3];
 end
 
 // Do not allow exceptioned lanes to update the register file.

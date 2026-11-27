@@ -68,6 +68,7 @@ Qupls5_decode_const udcimm
 	.ins(instr),
 	.instr_raw(instr_raw),
 	.ip(ip),
+	.Rs1z(dbo.Rs1z),
 	.imma(dbo.imma),
 	.immb(dbo.immb),
 	.immc(dbo.immc),

@@ -131,7 +131,7 @@ typedef struct packed {
 	logic [2:0] ondx;
 	pregno_t regno;
 } rrl_t;
-rrl_t [NREG_RPORTS-1:0] rrl;
+rrl_t [NREG_RPORTS-1:0] rrl,rrl_r;
 
 Qupls5_pkg::irq_info_packet_t irq_in = {irq_i,om_i,swstk_i,ivect_i};
 
@@ -2521,6 +2521,8 @@ begin
 			cap_rf_oper[n37].is_const <= FALSE;
 			cap_rf_oper[n37].z <= FALSE;
 		end
+	foreach (rrl[n37])
+		rrl_r[n37] <= rrl[n37];
 end
 /*
 always_comb
@@ -2660,10 +2662,12 @@ end
 
 generate begin : gDRP
 	case (RL_STRATEGY)
-	0:
+	0,
+	/*
 		always_comb
 			foreach (rrl[n66])
 				prn[n66] = rrl[n66].regno;
+	*/
 	1:
 		// Dynamic port selection.
 		// The dynamic port selector uses groups of eight registers. The minimum number
@@ -2937,6 +2941,7 @@ aregno_t [MWIDTH-1:0] cmtaa;
 pregno_t [MWIDTH-1:0] cmtap;
 checkpt_ndx_t [MWIDTH-1:0] cmta_cp;
 value_t [MWIDTH-1:0] cmtaval;
+
 /*
 	for (n46 = 0; n46 < MWIDTH; n46 = n46 + 1) begin
 		if (rob[head[n46]].op.decbus.Rdv) begin
@@ -4021,6 +4026,48 @@ begin
 				rrl[n64].regno = rob[n63].op.pDRM;
 				n64 = n64 + 1;
 			end
+			/*
+			// Here, all the operands were marked valid in the ROB, yet the RS is still
+			// looking for one. Try picking them for lookup.
+			if (rrl[n64].ondx==3'd7) begin
+				foreach(lfa2[n70]) begin
+					rrl[n64].rndx = n70;
+					rrl[n64].ondx = 3'd0;	// argA
+					rrl[n64].regno = rob[n63].op.pRs1;
+					n64 = n64 + 1;
+					if (n64 < 12) begin
+						rrl[n64].rndx = n70;
+						rrl[n64].ondx = 3'd1;	// argB
+						rrl[n64].regno = rob[n63].op.pRs2;
+						n64 = n64 + 1;
+					end
+					if (n64 < 12) begin
+						rrl[n64].rndx = n70;
+						rrl[n64].ondx = 3'd2;	// argC
+						rrl[n64].regno = rob[n63].op.pRs3;
+						n64 = n64 + 1;
+					end
+					if (n64 < 12) begin
+						rrl[n64].rndx = n70;
+						rrl[n64].ondx = 3'd3;	// argD
+						rrl[n64].regno = rob[n63].op.pRs4;
+						n64 = n64 + 1;
+					end
+					if (n64 < 12) begin
+						rrl[n64].rndx = n70;
+						rrl[n64].ondx = 3'd4;
+						rrl[n64].regno = rob[n63].op.pRd;
+						n64 = n64 + 1;
+					end
+					if (n64 < 12) begin
+						rrl[n64].rndx = n70;
+						rrl[n64].ondx = 3'd5;
+						rrl[n64].regno = rob[n63].op.pDRM;
+						n64 = n64 + 1;
+					end
+				end
+			end
+			*/
 		end
 	end
 end
@@ -6976,18 +7023,20 @@ else begin
 	// hence also be marked valid in the reservation station. Once all the args
 	// are valid the instruction can issue.
 	// Argument valid indicators are tracked in two spots: the ROB and the RS.
+	/*
 	if (RL_STRATEGY==0) begin
-		foreach (rrl[nn]) begin
-			case(rrl[nn].ondx)
-			3'd0:	if (rf_oper[nn].v) rob[rrl[nn].rndx].argA_v <= VAL;
-			3'd1:	if (rf_oper[nn].v) rob[rrl[nn].rndx].argB_v <= VAL;
-			3'd2:	if (rf_oper[nn].v) rob[rrl[nn].rndx].argC_v <= VAL;
-			3'd3:	if (rf_oper[nn].v) rob[rrl[nn].rndx].argD_v <= VAL;
-			3'd4:	if (rf_oper[nn].v) rob[rrl[nn].rndx].argT_v <= VAL;
-			3'd5:	if (rf_oper[nn].v) rob[rrl[nn].rndx].argDRM_v <= VAL;
+		foreach (rrl_r[nn]) begin
+			case(rrl_r[nn].ondx)
+			3'd0:	if (rf_oper[nn].v) rob[rrl_r[nn].rndx].argA_v <= VAL;
+			3'd1:	if (rf_oper[nn].v) rob[rrl_r[nn].rndx].argB_v <= VAL;
+			3'd2:	if (rf_oper[nn].v) rob[rrl_r[nn].rndx].argC_v <= VAL;
+			3'd3:	if (rf_oper[nn].v) rob[rrl_r[nn].rndx].argD_v <= VAL;
+			3'd4:	if (rf_oper[nn].v) rob[rrl_r[nn].rndx].argT_v <= VAL;
+			3'd5:	if (rf_oper[nn].v) rob[rrl_r[nn].rndx].argDRM_v <= VAL;
 			default:	;
 			endcase
 		end
+	*/
 		/*
 		foreach (wp_tap[nn]) begin
 			foreach (rob[n69]) begin
@@ -7049,7 +7098,7 @@ else begin
 			end
 			*/
 //		end
-	end
+//	end
 	// For the first register lookup strategy which uses the register file write
 	// port history to fill in unknown values.
 	//
@@ -8209,9 +8258,15 @@ always_ff @(posedge clk_i) begin: clock_n_debug
 	$display("----- Physical Registers -----");
 	for (i=0; i< 511; i=i+8)
 		if (i < 64 || i >= 240 && i < 256)
-	    $display("%d: %h %d: %h %d: %h %d: %h %d: %h %d: %h %d: %h %d: %h #",
-	    	i[9:0]+10'd0, fnRegVal(i+0), i[9:0]+10'd1, fnRegVal(i+1), i[9:0]+10'd2, fnRegVal(i+2), i[9:0]+10'd3, fnRegVal(i+3),
-	    	i[9:0]+10'd4, fnRegVal(i+4), i[9:0]+10'd5, fnRegVal(i+5), i[9:0]+10'd6, fnRegVal(i+6), i[9:0]+10'd7, fnRegVal(i+7)
+	    $display("%d: %h%c %d: %h%c %d: %h%c %d: %h%c %d: %h%c %d: %h%c %d: %h%c %d: %h%c #",
+	    	i[9:0]+10'd0, fnRegVal(i+0), gRAT.genblk1.fnPregv(i+0) ? "v" : " ",
+	    	i[9:0]+10'd1, fnRegVal(i+1), gRAT.genblk1.fnPregv(i+1) ? "v" : " ",
+	    	i[9:0]+10'd2, fnRegVal(i+2), gRAT.genblk1.fnPregv(i+2) ? "v" : " ",
+	    	i[9:0]+10'd3, fnRegVal(i+3), gRAT.genblk1.fnPregv(i+3) ? "v" : " ",
+	    	i[9:0]+10'd4, fnRegVal(i+4), gRAT.genblk1.fnPregv(i+4) ? "v" : " ",
+	    	i[9:0]+10'd5, fnRegVal(i+5), gRAT.genblk1.fnPregv(i+5) ? "v" : " ",
+	    	i[9:0]+10'd6, fnRegVal(i+6), gRAT.genblk1.fnPregv(i+6) ? "v" : " ",
+	    	i[9:0]+10'd7, fnRegVal(i+7), gRAT.genblk1.fnPregv(i+7) ? "v" : " "
 	    );
 	end
 
@@ -8289,10 +8344,10 @@ always_ff @(posedge clk_i) begin: clock_n_debug
 			(rob[i].op.decbus.cpytgt ? "c" : rob[i].op.decbus.fc ? "b" : rob[i].op.decbus.mem ? "m" : "a"),
 			rob[i].op.uop.opcode, 
 			rob[i].op.decbus.Rd, rob[i].op.nRd, rob[i].exc,
-			rob[i].op.decbus.Rd, rob[i].op.pRd, fnArchRegVal(rob[i].op.pRd), rob[i].argT_v?"v":" ",
-			rob[i].op.decbus.Rs1, rob[i].op.pRs1, fnArchRegVal(rob[i].op.pRs1), rob[i].argA_v?"v":" ",
-			rob[i].op.decbus.Rs2, rob[i].op.pRs2, fnArchRegVal(rob[i].op.pRs2), rob[i].argB_v?"v":" ",
-			rob[i].op.decbus.Rs3, rob[i].op.pRs3, fnArchRegVal(rob[i].op.pRs3), rob[i].argC_v?"v":" ",
+			rob[i].op.decbus.Rd, rob[i].op.pRd, fnArchRegVal(rob[i].op.decbus.Rd), rob[i].argT_v?"v":" ",
+			rob[i].op.decbus.Rs1, rob[i].op.pRs1, fnArchRegVal(rob[i].op.decbus.Rs1), rob[i].argA_v?"v":" ",
+			rob[i].op.decbus.Rs2, rob[i].op.pRs2, fnArchRegVal(rob[i].op.decbus.Rs2), rob[i].argB_v?"v":" ",
+			rob[i].op.decbus.Rs3, rob[i].op.pRs3, fnArchRegVal(rob[i].op.decbus.Rs3), rob[i].argC_v?"v":" ",
 			rob[i].op.decbus.immb,//argI,
 			rob[i].ip_stream, rob[i].op.uop.ip,
 			rob[i].cndx,
@@ -9311,6 +9366,8 @@ begin
 		next_robe.exc = Qupls5_pkg::FLT_NONE;
 		next_robe.excv = FALSE;
 	end
+	if (db.has_imma)
+		next_robe.op.uop.src[0] = 1'b0;
 	next_robe.argA_v = Qupls5_pkg::fnSourceRs1v(robe.op.uop) | db.has_imma;
 	next_robe.argB_v = Qupls5_pkg::fnSourceRs2v(robe.op.uop) | (db.has_Rs2 ? 1'b0 : db.has_immb);
 	next_robe.argC_v = Qupls5_pkg::fnSourceRs3v(robe.op.uop) | db.has_immc;
@@ -9319,8 +9376,6 @@ begin
 	next_robe.argT_v = Qupls5_pkg::fnSourceRdv(robe.op.uop);
 	next_robe.argFPCSR_v = Qupls5_pkg::fnSourceArgSv(robe.op.uop);
 	next_robe.argFPCSR_vv = FALSE;
-	if (db.Rs1z)
-		next_robe.argA_v = VAL;
 	/*
 	if (db.Rs2z)
 		next_robe.argB_v = VAL;

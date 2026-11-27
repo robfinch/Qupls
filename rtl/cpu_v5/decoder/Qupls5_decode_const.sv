@@ -44,11 +44,12 @@ import fp16Pkg::*;
 import fp32Pkg::*;
 import fp64Pkg::*;
 
-module Qupls5_decode_const(instr_raw, ip, ins, imma, immb, immc, immd,
+module Qupls5_decode_const(instr_raw, ip, ins, Rs1z, imma, immb, immc, immd,
 	has_imma, has_immb, has_immc, has_immd);
 parameter SUPPORT_POSTFIX = Qupls5_pkg::SUPPORT_POSTFIX;
 input cpu_types_pkg::pc_address_t ip;
 input [335:0] instr_raw;
+input Rs1z;
 input Qupls5_pkg::micro_op_t ins;
 output reg [63:0] imma;
 output reg [63:0] immb;
@@ -140,9 +141,22 @@ begin
 	finsC = 1'd0;
 
 	case(ins.opcode)
-	Qupls5_pkg::OP_PPC_ADDI,Qupls5_pkg::OP_PPC_ANDI,Qupls5_pkg::OP_PPC_ORI,Qupls5_pkg::OP_PPC_XORI,
+	Qupls5_pkg::OP_PPC_ADDI,Qupls5_pkg::OP_PPC_ADDIS,Qupls5_pkg::OP_PPC_ORI,Qupls5_pkg::OP_PPC_ORIS:
+		begin
+			if (Rs1z) begin
+				imma = value_zero;
+				has_imma = TRUE;
+			end
+			else if (ins.R) begin
+				imma = ip;
+				has_imma = TRUE;
+			end
+			immb = {{30{ins.imm[33]}},ins.imm[33:0]};
+			has_immb = TRUE;
+		end
+	Qupls5_pkg::OP_PPC_ANDI,Qupls5_pkg::OP_PPC_XORI,
 	Qupls5_pkg::OP_PPC_SUBFIC,Qupls5_pkg::OP_PPC_CMPI,Qupls5_pkg::OP_PPC_CMPLI,
-	Qupls5_pkg::OP_PPC_ADDIS,Qupls5_pkg::OP_PPC_ANDIS,Qupls5_pkg::OP_PPC_ORIS,Qupls5_pkg::OP_PPC_XORIS:
+	Qupls5_pkg::OP_PPC_ANDIS,Qupls5_pkg::OP_PPC_XORIS:
 		begin
 			if (ins.R) begin
 				imma = ip;

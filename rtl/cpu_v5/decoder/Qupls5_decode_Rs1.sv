@@ -35,6 +35,7 @@
 // 25 LUTs
 // ============================================================================
 
+import const_pkg::*;
 import cpu_types_pkg::*;
 import Qupls5_pkg::*;
 
@@ -75,8 +76,16 @@ begin
     else
         om1 = om;
   */
-	Rs1z = ~|Rs1[4:0];
-	Rs1ip = Rs1==Qupls5_pkg::IP_REG;
+  case(instr.opcode)
+  Qupls5_pkg::OP_PPC_ADDI,Qupls5_pkg::OP_PPC_ADDIS,
+  Qupls5_pkg::OP_PPC_ORI,Qupls5_pkg::OP_PPC_ORIS,
+  Qupls5_pkg::OP_PPC_LBZ,Qupls5_pkg::OP_PPC_LWZ,Qupls5_pkg::OP_PPC_LWA,
+  Qupls5_pkg::OP_PPC_LHZ,Qupls5_pkg::OP_PPC_LHA,
+  Qupls5_pkg::OP_PPC_STB,Qupls5_pkg::OP_PPC_STH,Qupls5_pkg::OP_PPC_STW:
+  	Rs1z = ~|Rs1;
+  default:	Rs1z = FALSE;
+	endcase
+	Rs1ip = instr.R;
 end
 
 endmodule

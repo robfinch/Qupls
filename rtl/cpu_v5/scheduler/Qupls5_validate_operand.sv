@@ -32,6 +32,10 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
+// Operand value filtering.
+// Only when the physical register is correct, is the operand value output along
+// with a valid signal.
+//
 // 1860 LUTs / 0 FFs (0 bypassing inputs)
 // 5010 LUTs / 0 FFs (8 bypassing inputs) performance
 // ============================================================================
@@ -58,9 +62,14 @@ input Qupls5_pkg::operand_t [NBPI-1:0] bypass_i;
 
 genvar g;
 
+// The same logic is requred for both halves of a double-word operand. So, it is
+// made into a module.
+
 generate begin : gOper
-	for (g = 0; g < NENTRY; g = g + 1)
-		modOper #(
+begin
+	for (g = 0; g < NENTRY; g = g + 1) begin
+		// Lower hald of double-word operand
+		modOperFilter #(
 			.MWIDTH(MWIDTH),
 			.NBPI(NBPI),
 			.NENTRY(NENTRY),
@@ -68,81 +77,37 @@ generate begin : gOper
 			.NREG_WPORTS(NREG_WPORTS),
 			.pFPCSR(pFPCSR)
 		)
-		umod1 (
+		umod1l (
 			oper_i[g],
 			oper_o[g],
 			rf_oper_i,
 			wp_hist_i,
 			bypass_i
 		);
+		// Upper half of operand
+		modOperFilter #(
+			.MWIDTH(MWIDTH),
+			.NBPI(NBPI),
+			.NENTRY(NENTRY),
+			.NREG_PORTS(NREG_PORTS),
+			.NREG_WPORTS(NREG_WPORTS),
+			.pFPCSR(pFPCSR)
+		)
+		umod1h (
+			operh_i[g],
+			operh_o[g],
+			rf_oper_i,
+			wp_hist_i,
+			bypass_i
+		);
+	end
+end
 end
 endgenerate
-/*
-always_comb
-begin
-	foreach (oper_o[nn])
-		tOper(oper_i[nn],oper_o[nn],rf_oper_i);
-	foreach (operh_o[nn])
-		tOper(operh_i[nn],operh_o[nn],rf_oper_i);
-end
-
-task tOper;
-input Qupls5_pkg::operand_t operi;
-output Qupls5_pkg::operand_t opero;
-input Qupls5_pkg::operand_t [NREG_PORTS-1:0] rf_oper_i;
-integer jj;
-begin
-	opero = operi;
-	opero.val = value_zero;
-	opero.flags = {$bits(flags_t){1'b0}};
-	if (operi.z)
-		opero.v = VAL;
-	else if (operi.is_const) begin
-		opero.v = VAL;
-		opero.val = operi.val;
-	end
-	for (jj = 0; jj < NREG_PORTS; jj = jj + 1) begin
-//	foreach (rf_oper_i[jj]) begin
-		if (operi.pRn==rf_oper_i[jj].pRn && rf_oper_i[jj].v && !operi.v) begin
-			opero = rf_oper_i[jj];
-			opero.v = VAL;
-		end
-		else if ((pFPCSR & rf_oper_i[jj].fpcsr) && rf_oper_i[jj].v && !operi.v) begin
-			opero = rf_oper_i[jj];
-			opero.v = VAL;
-		end
-	end
-	// Check if operand matches incoming write port history.
-	for (jj = 0; jj < NREG_WPORTS; jj = jj + 1) begin
-//	foreach (wp_hist_i[jj]) begin
-		for (kk = 0; kk < 4; kk = kk + 1) begin
-			if (operi.pRn==wp_hist_i[jj][kk].pRn && wp_hist_i[jj][kk].v && !operi.v) begin
-				opero = wp_hist_i[jj][kk];
-				opero.v = VAL;
-			end
-		end
-	end
-	// Bypassing from the input to the register file trims a clock cycle off
-	// latency.
-	// We could also bypass directly from the outputs of the functional units.
-	// This is not done here due to the size of the bypass network. There are
-	// 14 functional units that could be bypassed.
-	// However, there is bypassing from the output of the first SAU.
-	if (Qupls5_pkg::PERFORMANCE) begin
-		for (jj = 0; jj < NBPI; jj = jj + 1) begin //check phys reg???
-			if (operi.pRn==bypass_i[jj].pRn && bypass_i[jj].v && !operi.v) begin
-				opero = bypass_i[jj];
-				opero.v = VAL;
-			end
-		end
-	end
-end
-endtask
-*/
 
 endmodule
 
-module modOper(operi, opero, rf_oper_i, wp_hist_i, bypass_i);
+module modOperFilter(operi, opero, rf_oper_i, wp_hist_i, bypass_i);
 parameter MWIDTH = 4;
 parameter NBPI = 8;					// number of bypassing inputs
 parameter NENTRY = 3;
@@ -181,6 +146,7 @@ begin
 					end
 				end
 			end
+		// Check if operand matches requested register feedback.
 		if (!opero.v)
 			foreach (rf_oper_i[jj]) begin
 				if (opero.pRn==rf_oper_i[jj].pRn && rf_oper_i[jj].v) begin

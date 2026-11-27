@@ -379,6 +379,9 @@ localparam SUPPORT_RSB = 0;
 // Depth of internal stack for exceptionb processing.
 localparam ISTACK_DEPTH = 16;
 
+// Default number of reservation station entries in a reservation station.
+localparam NRSE = 1;
+// Numbers of RSE's for specific pipes
 localparam NRSE_XPIPE0 = 1;
 localparam NRSE_XPIPE1 = 3;
 localparam NRSE_XPIPE2 = 3;

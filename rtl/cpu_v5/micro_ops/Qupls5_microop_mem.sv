@@ -769,7 +769,8 @@ begin
   uop1.num = 5'd1;
 
 	case(ir.opcode)
-	Qupls5_pkg::OP_PPC_ADDI,Qupls5_pkg::OP_PPC_ADDIS:
+	Qupls5_pkg::OP_PPC_ADDI,Qupls5_pkg::OP_PPC_ADDIS,
+	Qupls5_pkg::OP_PPC_ORI,Qupls5_pkg::OP_PPC_ORIS:
 		begin
 			next_count = 5'd1;
 			next_uop[0] = ir;
@@ -866,7 +867,6 @@ begin
 			next_uop[1].dst=1'b1;
 			next_uop[1].last = TRUE;
 		end
-	Qupls5_pkg::OP_PPC_ORI,Qupls5_pkg::OP_PPC_ORIS,
 	Qupls5_pkg::OP_PPC_XORI,Qupls5_pkg::OP_PPC_XORIS:
 		begin
 			next_count = 5'd1;
@@ -1195,6 +1195,8 @@ begin
 				next_uop[1].Rs1 = uop0.Rs1;
 				next_uop[1].Rs2 = uop0.Rs2;
 				next_uop[1].last = TRUE;
+				next_uop[1].src = 7'b0001011;
+				next_uop[1].dst = 1'b1;
 			end
 		default:
 			begin
@@ -1236,7 +1238,27 @@ begin
 			next_uop[1].Rs1 = uop0.Rs1;
 			next_uop[1].imm = uop0.imm;
 			next_uop[1].last = TRUE;
+			next_uop[1].src = 7'b0001001;
+			next_uop[1].dst = 1'b1;
 		end
+	Qupls5_pkg::OP_63:
+		case(ir.func)
+		FN63_FRCPA:
+			begin
+				if (ir.rc)
+					next_count = 5'd2;
+				else
+					next_count = 5'd1;
+				next_uop[0] = uop0;
+				next_uop[0].last = ~ir.rc;
+				next_uop[1].last = 1'b1;
+				next_uop[1].opcode = Qupls5_pkg::OP_MTFPSCR;
+				next_uop[1].Rd = 8'd40+8'd32;
+				next_uop[1].Rs1 = uop0.Rd;
+				next_uop[1].src = 7'b0001001;
+				next_uop[1].dst = 1'b1;
+			end
+		endcase
 	default:
 		begin
 			next_count = 5'd1;

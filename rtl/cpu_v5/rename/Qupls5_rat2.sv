@@ -242,7 +242,7 @@ else
 */
 
 reg restored;
-reg en2d;
+reg en2d,en2r;
 reg [Qupls5_pkg::NCHECK-1:0] avail_chkpts;
 checkpt_ndx_t [3:0] chkptn;
 reg chkpt_stall;
@@ -376,10 +376,13 @@ begin
 end
 
 reg stall_same_reg = 1'b0;	// same register marked valid and invalid at same time.
+reg ival;
 
 always_ff @(posedge clk)
-if (rst)
+if (rst) begin
 	currentRegvalid <= {Qupls5_pkg::PREGS{1'b1}};
+	ival <= 1'b0;
+end
 else begin
 
 	if (restore)
@@ -406,9 +409,10 @@ else begin
 		// If detected at the rename stage that the destination register will be
 		// updated, then mark it invalid.
 		if (en2) begin
-			foreach (pwr00[n14])
+			foreach (pwr00[n14]) begin
 				if (pwr00[n14])
 					currentRegvalid[pwrra0[n14]] <= INV;
+			end
 		end
 		
 	end
@@ -689,7 +693,7 @@ generate begin : gRRV
 						case(rng[g])
 						// First instruction of group, no bypass needed.
 						3'd0:	
-						
+/*						
 							if (prn_i[g]==cmtap[3] && cmtav[3])
 								prv[g] = VAL;
 							else if (prn[g]==cmtap[2] && cmtav[2])
@@ -698,9 +702,10 @@ generate begin : gRRV
 								prv[g] = VAL;
 							else if (prn[g]==cmtap[0] && cmtav[0])
 								prv[g] = VAL;
+*/							
 							
-							
-							else if (prn_i[g]==pwrra0[3] && pwr00[3])
+//							else
+							if (prn_i[g]==pwrra0[3] && pwr00[3])
 								prv[g] = INV;
 							else if (prn[g]==pwrra0[2] && pwr00[2])
 								prv[g] = INV;
@@ -757,9 +762,9 @@ generate begin : gRRV
 						if (MWIDTH > 1) begin							
 							if (prn_i[g]==bo_nreg && bo_wr)
 								prv[g] = VAL;
-							else if (prn_i[g]==wrport_Rt[0] && wrport_v[0])
-								prv[g] = VAL;					
-								
+//							else if (prn_i[g]==wrport_Rt[0] && wrport_v[0])
+//								prv[g] = VAL;					
+/*								
 							else if (prn_i[g]==cmtap[3] && cmtav[3])
 								prv[g] = VAL;
 							else if (prn[g]==cmtap[2] && cmtav[2])
@@ -768,7 +773,7 @@ generate begin : gRRV
 								prv[g] = VAL;
 							else if (prn[g]==cmtap[0] && cmtav[0])
 								prv[g] = VAL;
-							
+*/							
 							
 							else if (prn_i[g]==pwrra0[3] && pwr00[3])
 								prv[g] = INV;
@@ -835,12 +840,12 @@ generate begin : gRRV
 						if (MWIDTH > 2) begin
 							if (prn_i[g]==bo_nreg && bo_wr)
 								prv[g] = VAL;
-							else if (prn_i[g]==wrport_Rt[1] && wrport_v[1])
-								prv[g] = VAL;					
-							else if (prn_i[g]==wrport_Rt[0] && wrport_v[0])
-								prv[g] = VAL;					
+//							else if (prn_i[g]==wrport_Rt[1] && wrport_v[1])
+//								prv[g] = VAL;					
+//							else if (prn_i[g]==wrport_Rt[0] && wrport_v[0])
+//								prv[g] = VAL;					
 								
-								
+/*								
 							else if (prn_i[g]==cmtap[3] && cmtav[3])
 								prv[g] = VAL;
 							else if (prn_i[g]==cmtap[2] && cmtav[2])
@@ -849,7 +854,7 @@ generate begin : gRRV
 								prv[g] = VAL;
 							else if (prn_i[g]==cmtap[0] && cmtav[0])
 								prv[g] = VAL;
-							
+*/							
 							
 							else if (prn_i[g]==pwrra0[3] && pwr00[3])
 								prv[g] = INV;
@@ -909,13 +914,13 @@ generate begin : gRRV
 						if (MWIDTH > 3) begin
 							if (prn_i[g]==bo_nreg && bo_wr)
 								prv[g] = VAL;
-							else if (prn_i[g]==wrport_Rt[2] && wrport_v[2])
-								prv[g] = VAL;					
-							else if (prn_i[g]==wrport_Rt[1] && wrport_v[1])
-								prv[g] = VAL;					
-							else if (prn_i[g]==wrport_Rt[0] && wrport_v[0])
-								prv[g] = VAL;					
-							
+//							else if (prn_i[g]==wrport_Rt[2] && wrport_v[2])
+//								prv[g] = VAL;					
+//							else if (prn_i[g]==wrport_Rt[1] && wrport_v[1])
+//								prv[g] = VAL;					
+//							else if (prn_i[g]==wrport_Rt[0] && wrport_v[0])
+//								prv[g] = VAL;					
+/*							
 							else if (prn_i[g]==cmtap[3] && cmtav[3])
 								prv[g] = VAL;
 							else if (prn_i[g]==cmtap[2] && cmtav[2])
@@ -924,7 +929,7 @@ generate begin : gRRV
 								prv[g] = VAL;
 							else if (prn_i[g]==cmtap[0] && cmtav[0])
 								prv[g] = VAL;
-							
+*/							
 							else if (prn_i[g]==pwrra0[3] && pwr00[3])
 								prv[g] = INV;
 							else if (prn_i[g]==pwrra0[2] && pwr00[2])
@@ -1166,6 +1171,12 @@ if (rst)
 	en2d = 1'b0;
 else
 	en2d = en2;
+
+always_ff @(posedge clk)
+if (rst)
+	en2r = 1'b0;
+else
+	en2r = en2;
 
 always_ff @(posedge clk)
 if (rst) begin
